@@ -5,7 +5,7 @@
 <title>Fonteyn Douanepapier Tool</title>
 <style>
   :root {
-    --bg: #7CFC00;
+    --bg: #f7f7f5;
     --panel: #ffffff;
     --ink: #1f2937;
     --muted: #6b7280;
@@ -202,7 +202,8 @@
 
   <section class="panel hidden" id="action-panel">
     <div class="actions">
-      <button id="generate">Genereer douane-PDF</button>
+      <button id="generate-passion">Genereer Passion Spas pdf</button>
+      <button id="generate-fonteyn">Genereer Fonteyn pdf</button>
       <button id="reset" class="secondary">Opnieuw beginnen</button>
       <span class="status" id="gen-status"></span>
     </div>
@@ -846,26 +847,62 @@ function formatLogic4Address(addr) {
   const line3 = addr.CountryCode || "";
   return [line1, line2, line3].filter(Boolean).join("\n");
 }
-function mapLogic4Order(orderHeader, orderRows) {
+// Logic4 gebruikt verschillende veldnamen voor dezelfde info, afhankelijk van
+// versie en account. Pak de eerste die niet leeg is. Geeft "" als geen enkele
+// kandidaat een waarde heeft — zo blijft veiligheidsnet "Manon vult zelf in"
+// werken voor velden die ontbreken.
+function pickFirst(obj, keys) {
+  if (!obj) return "";
+  for (const k of keys) {
+    const v = k.split(".").reduce((o, p) => (o == null ? o : o[p]), obj);
+    if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+  }
+  return "";
+}
+function mapLogic4Order(orderHeader, orderRows, debtorResp) {
   // orderHeader = j.order (array, neem eerste); rows kunnen ook in header.OrderRows zitten.
   const o = Array.isArray(orderHeader) ? orderHeader[0] : orderHeader;
   if (!o) throw new Error("Geen order in response.");
   const rows = (orderRows && orderRows.length ? orderRows : (o.OrderRows || []));
+  const debtor = Array.isArray(debtorResp) ? debtorResp[0] : (debtorResp || {});
 
   const deliver = o.DeliveryAddress || o.AccountAddress || {};
   const invoice = o.InvoiceAddress || o.AccountAddress || {};
+
+  // EORI: zit meestal op de debtor (klant), soms op het delivery- of invoice-adres,
+  // zelden op de order zelf. We proberen alle plekken; eerste niet-lege wint.
+  const eori = pickFirst(debtor,  ["EoriNumber", "EORINumber", "EoriNr", "EORI"])
+            || pickFirst(deliver, ["EoriNumber", "EORINumber", "EoriNr", "EORI"])
+            || pickFirst(invoice, ["EoriNumber", "EORINumber", "EoriNr", "EORI"])
+            || pickFirst(o,       ["EoriNumber", "EORINumber", "EoriNr", "EORI"]);
+
+  // ETA: leveringsdatum / "promised delivery" — verschillende veldnamen mogelijk
+  const etaRaw = pickFirst(o, [
+    "DeliveryDate", "DeliveryDateRequested", "PromisedDeliveryDate",
+    "RequestedDeliveryDate", "ExpectedDeliveryDate", "ETA"
+  ]);
+
+  // Advisor: salesperson / account manager — Logic4 noemt dit op verschillende manieren
+  const advisor = pickFirst(o, [
+    "UserName", "Username", "SalesEmployeeName", "SalesPersonName",
+    "AccountManagerName", "AccountManager.Name", "Owner.Name", "User.Name"
+  ]);
+  const advisorEmail = pickFirst(o, [
+    "UserEmail", "User.Email", "SalesEmployeeEmail", "AccountManagerEmail",
+    "AccountManager.Email", "Owner.Email", "SalespersonEmail"
+  ]);
 
   const metadata = {
     invoiceNumber: String(o.Id || ""),
     dateOfOrder:   formatLogic4Date(o.CreationDate),
     debtorNr:      String(o.DebtorId || ""),
-    eoriNr:        "", // Niet in Logic4-response — Manon vult zelf in
-    hsCode:        "", // Idem
+    eoriNr:        String(eori || "").trim(),
+    hsCode:        "", // (nog) niet uit Logic4 — Manon vult zelf in
     shippingMethod:(o.ShippingMethod && o.ShippingMethod.Name) || "",
     paymentMethod: (o.PaymentMethod && o.PaymentMethod.Description) || "",
-    eta:           "",
-    advisor:       "",
-    advisorEmail:  "",
+    eta:           etaRaw ? formatLogic4Date(etaRaw) : "",
+    advisor:       String(advisor || "").trim(),
+    advisorEmail:  String(advisorEmail || "").trim(),
     customerEmail: deliver.Email || invoice.Email || "",
     customerName:  invoice.CompanyName || invoice.ContactName || "",
     customerAddress: formatLogic4Address(invoice),
@@ -931,15 +968,32 @@ async function fetchOrderFromLogic4() {
     }
     console.log("Logic4 order response:", j);
 
+    // Debtor (klant) los ophalen — daar zit het EORI-nummer in. Niet kritiek:
+    // als de call faalt of de klant heeft geen EORI, gaat de rest gewoon door.
+    let debtor = null;
+    const orderHeader = Array.isArray(j.order) ? j.order[0] : j.order;
+    const debtorId = orderHeader && orderHeader.DebtorId;
+    if (debtorId) {
+      try {
+        const dr = await fetch(HELPER_BASE + "/api/debtor/" + debtorId);
+        const dj = await dr.json();
+        if (dr.ok && dj.ok) debtor = dj.raw;
+      } catch (de) {
+        console.warn("Debtor niet ophaalbaar:", de.message);
+      }
+    }
+
     // Ruwe response onderaan voor inspectie blijft handig tijdens de eerste weken.
     document.getElementById("debug-text").textContent =
       "--- LOGIC4 ORDER-HEADER — order " + nr + " ---\n" +
       JSON.stringify(j.order, null, 2) +
       "\n\n--- LOGIC4 ORDERREGELS — order " + nr + " ---\n" +
-      JSON.stringify(j.rows, null, 2);
+      JSON.stringify(j.rows, null, 2) +
+      "\n\n--- LOGIC4 DEBTOR — order " + nr + " ---\n" +
+      JSON.stringify(debtor, null, 2);
 
     // Mapping → state, zelfde flow als bij PDF-drop.
-    const parsed = mapLogic4Order(j.order, j.rows);
+    const parsed = mapLogic4Order(j.order, j.rows, debtor);
     state.metadata  = parsed.metadata;
     state.lineItems = parsed.lineItems;
     state.bundles   = detectBundles(state.lineItems);
@@ -1015,35 +1069,84 @@ document.getElementById("reset").addEventListener("click", () => {
 // ============================================================
 // PDF GENERATION
 // ============================================================
-document.getElementById("generate").addEventListener("click", async () => {
+// Twee knoppen, één pijplijn — kies merk via parameter.
+async function generatePdfFor(brand) {
   const status = document.getElementById("gen-status");
   try {
     status.textContent = "Genereren…"; status.className = "status";
-    const bytes = await buildPdf();
+    const bytes = await buildPdf(brand);
     const blob = new Blob([bytes], {type: "application/pdf"});
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     const invNr = state.metadata.invoiceNumber || "invoice";
+    const brandSuffix = brand === "fonteyn" ? "Fonteyn" : "Passion Spas";
     a.href = url;
-    a.download = `${invNr} Invoice.pdf`;
+    a.download = `${invNr} Invoice ${brandSuffix}.pdf`;
     document.body.appendChild(a); a.click(); a.remove();
-    status.textContent = `Klaar — ${invNr} Invoice.pdf gedownload.`;
+    status.textContent = `Klaar — ${invNr} Invoice ${brandSuffix}.pdf gedownload.`;
     status.className = "status ok";
   } catch (e) {
     console.error(e);
     status.textContent = "Fout: " + e.message;
     status.className = "status bad";
   }
-});
+}
+document.getElementById("generate-passion").addEventListener("click", () => generatePdfFor("passion"));
+document.getElementById("generate-fonteyn").addEventListener("click", () => generatePdfFor("fonteyn"));
 
-async function buildPdf() {
+// Brand-specifieke gegevens — de rest van de PDF is identiek voor beide merken.
+const BRANDS = {
+  passion: {
+    name: "Passion Spas",
+    leftLines: [
+      "Meervelderweg 52",
+      "3888 NK Uddel",
+      "The Netherlands",
+      "Telephone:+31 577 456040"
+    ],
+    rightLines: [
+      "E-mail: info@passionspas.com",
+      "Internet: www.passionspas.com",
+      "IBAN $: NL54INGB0020101619",
+      "IBAN \u20AC: NL34INGB0679207473",
+      "BIC: INGBNL2A",
+      "KvK: 08053333",
+      "TAX nr. NL815219180B01"
+    ]
+  },
+  fonteyn: {
+    name: "Fonteyn",
+    leftLines: [
+      "Meervelderweg 52",
+      "3888 NK Uddel",
+      "The Netherlands",
+      "Telephone:+31 577 456040"
+    ],
+    rightLines: [
+      "E-mail: ishop@fonteyn.nl",
+      "Internet: www.fonteyn.nl",
+      "IBAN \u20AC: NL34INGB0679207473",
+      "BIC: INGBNL2A",
+      "KvK: 08053333",
+      "TAX nr. NL815219180B01"
+    ]
+  }
+};
+
+async function buildPdf(brand = "passion") {
+  const brandConf = BRANDS[brand] || BRANDS.passion;
   const { PDFDocument, StandardFonts, rgb } = PDFLib;
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const italic = await doc.embedFont(StandardFonts.HelveticaOblique);
-  const logoBytes = Uint8Array.from(atob(LOGO_B64), c => c.charCodeAt(0));
-  const logoImg = await doc.embedJpg(logoBytes);
+  // Serif voor het Fonteyn-tekstlogo (in plaats van een afbeelding)
+  const serifBold = await doc.embedFont(StandardFonts.TimesRomanBold);
+  // Passion Spas heeft wél een ingebakken logo; voor Fonteyn renderen we
+  // bovenaan een groot serif-tekstlogo in plaats van een afbeelding.
+  const logoImg = brand === "passion"
+    ? await doc.embedJpg(Uint8Array.from(atob(LOGO_B64), c => c.charCodeAt(0)))
+    : null;
 
   // A4
   const W = 595, H = 842;
@@ -1084,29 +1187,31 @@ async function buildPdf() {
   }
 
   // =========== HEADER (first page) ============
-  // Left block: Passion Spas details
-  text("Passion Spas", MARGIN_X, y, {bold: true, size: 11});
-  text("Meervelderweg 52",       MARGIN_X, y - 14);
-  text("3888 NK Uddel",          MARGIN_X, y - 26);
-  text("The Netherlands",        MARGIN_X, y - 38);
-  text("Telephone:+31 577 456040", MARGIN_X, y - 50);
+  // Left block: brand naam + adresgegevens
+  text(brandConf.name, MARGIN_X, y, {bold: true, size: 11});
+  brandConf.leftLines.forEach((ln, i) => text(ln, MARGIN_X, y - 14 - i * 12));
 
-  // Logo middle (centered-ish)
-  const logoW = 160, logoH = logoImg.height * (logoW / logoImg.width);
-  page.drawImage(logoImg, { x: (W - logoW) / 2, y: y - logoH + 10, width: logoW, height: logoH });
+  // Midden: logo (Passion Spas) of tekst-logo (Fonteyn)
+  if (logoImg) {
+    const logoW = 160, logoH = logoImg.height * (logoW / logoImg.width);
+    page.drawImage(logoImg, { x: (W - logoW) / 2, y: y - logoH + 10, width: logoW, height: logoH });
+  } else {
+    // "Fonteyn" als groot serif-tekstlogo, gecentreerd
+    const logoText = brandConf.name;
+    const logoSize = 36;
+    const logoTextW = serifBold.widthOfTextAtSize(logoText, logoSize);
+    page.drawText(logoText, {
+      x: (W - logoTextW) / 2,
+      y: y - 30,
+      size: logoSize,
+      font: serifBold,
+      color: INK
+    });
+  }
 
   // Right block: contact/banking
   const rx = W - MARGIN_X;
-  const rightLines = [
-    "E-mail: info@passionspas.com",
-    "Internet: www.passionspas.com",
-    "IBAN $: NL54INGB0020101619",
-    "IBAN €: NL34INGB0679207473",
-    "BIC: INGBNL2A",
-    "KvK: 08053333",
-    "TAX nr. NL815219180B01"
-  ];
-  rightLines.forEach((l, i) => textRight(l, rx, y - i * 12));
+  brandConf.rightLines.forEach((l, i) => textRight(l, rx, y - i * 12));
 
   y -= 90;
 
@@ -1145,7 +1250,7 @@ async function buildPdf() {
 
   // --- Rechterkolom metadata — start op dezelfde y als labels ---
   let ry = y;
-  const metaRows = [
+  const allMetaRows = [
     ["ETA:",              m.eta],
     ["Invoice number:",   m.invoiceNumber],
     ["Date of order:",    m.dateOfOrder],
@@ -1155,6 +1260,13 @@ async function buildPdf() {
     ["Shipping method:",  m.shippingMethod],
     ["Payment method:",   m.paymentMethod]
   ];
+  // EORI-regel helemaal weglaten als hij leeg is — anders staat er op de PDF
+  // "EORI nr:" zonder waarde, en dat wil Manon expliciet niet.
+  // Andere velden (HS code, ETA, …) tonen we wél leeg, zodat duidelijk is
+  // dat ze nog ingevuld moeten worden indien nodig.
+  const metaRows = allMetaRows.filter(([k, v]) =>
+    !(k === "EORI nr:" && (!v || !String(v).trim()))
+  );
   for (const [k, v] of metaRows) {
     textRight(k, rxMetaLbl, ry);
     const s = (v || "").toString();
