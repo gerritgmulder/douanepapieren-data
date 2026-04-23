@@ -1,0 +1,1341 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Fonteyn Douanepapier Tool</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --accent: #d4441c;
+    --accent-dark: #a43512;
+    --ok: #15803d;
+    --warn: #b45309;
+    --bad: #b91c1c;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+  header { background: #fff; border-bottom: 1px solid var(--border); padding: 18px 28px; display: flex; align-items: center; gap: 18px; }
+  header img { height: 38px; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .sub { color: var(--muted); font-size: 13px; margin-left: auto; }
+
+  main { max-width: 1280px; margin: 24px auto 80px; padding: 0 20px; }
+
+  /* Logic4 connection indicator + order-fetch box */
+  .conn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; padding: 4px 10px; border-radius: 999px;
+    background: #f3f4f6; color: var(--muted);
+  }
+  .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; }
+  .conn.ok  { background: #dcfce7; color: #15803d; }
+  .conn.ok  .dot { background: #15803d; }
+  .conn.bad { background: #fee2e2; color: #b91c1c; }
+  .conn.bad .dot { background: #b91c1c; }
+
+  .fetch-row {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .fetch-row input[type="text"] {
+    border: 1px solid var(--border); border-radius: 6px; padding: 9px 11px;
+    font: inherit; color: var(--ink); background: #fff; width: 180px;
+  }
+  .fetch-row input[type="text"]:focus { outline: none; border-color: var(--accent); }
+  .or-divider {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--muted); font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.08em; margin: 14px 0;
+  }
+  .or-divider::before, .or-divider::after {
+    content: ""; flex: 1; height: 1px; background: var(--border);
+  }
+
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; margin-bottom: 20px; }
+  .panel h2 { margin: 0 0 10px; font-size: 15px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+
+  #dropzone {
+    border: 2px dashed #cbd5e1; border-radius: 10px; padding: 40px; text-align: center;
+    background: #fff; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  #dropzone:hover, #dropzone.drag { border-color: var(--accent); background: #fff6f1; }
+  #dropzone p { margin: 4px 0; color: var(--muted); }
+  #dropzone strong { color: var(--ink); font-size: 15px; }
+  #fileinput { display: none; }
+
+  .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 28px; }
+  .meta-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .meta-grid input, .meta-grid textarea { border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; font: inherit; color: var(--ink); background: #fff; }
+  .meta-grid textarea { min-height: 54px; resize: vertical; }
+
+  table.items { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.items th { text-align: left; font-weight: 600; color: var(--muted); padding: 8px 6px; border-bottom: 1px solid var(--border); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+  table.items td { padding: 6px; border-bottom: 1px solid #f1f1ee; vertical-align: top; }
+  table.items td input { width: 100%; border: 1px solid transparent; padding: 5px 6px; border-radius: 4px; background: transparent; font: inherit; color: var(--ink); }
+  table.items td input:focus { border-color: var(--border); background: #fffbea; outline: none; }
+  table.items td input.missing { background: #fef3c7; border-color: #facc15; }
+  table.items tr.bundle-parent td { background: #fee2e2; color: #991b1b; }
+  table.items tr.bundle-parent td.strike { text-decoration: line-through; }
+  table.items tr.bundle-child td { background: #fef9c3; }
+  table.items tr.service td { color: var(--muted); font-style: italic; }
+  table.items td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.items td.code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  table.items td.desc { max-width: 340px; }
+  .badge { display: inline-block; background: #eef2ff; color: #3730a3; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 6px; font-weight: 600; letter-spacing: 0.02em; }
+  .badge.bundle-parent { background: #fecaca; color: #991b1b; }
+  .badge.bundle-child { background: #fef08a; color: #854d0e; }
+  .badge.service { background: #e0e7ff; color: #3730a3; }
+
+  .bundles { display: flex; flex-direction: column; gap: 10px; }
+  .bundle-card { border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 6px; padding: 10px 14px; background: #fafaf8; }
+  .bundle-card h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+  .bundle-card .note { font-size: 12px; color: var(--muted); margin: 4px 0 8px; }
+  .bundle-card table { width: 100%; font-size: 12px; }
+  .bundle-card td { padding: 3px 4px; }
+  .bundle-card td.amt { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .totals { display: grid; grid-template-columns: 1fr auto auto; gap: 6px 20px; margin-top: 8px; font-size: 13px; }
+  .totals .row { display: contents; }
+  .totals .row.strong > * { font-weight: 700; }
+  .totals .row > :nth-child(2) { text-align: right; color: var(--muted); }
+  .totals .row > :nth-child(3) { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .actions { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+  button {
+    background: var(--accent); color: #fff; border: 0; padding: 10px 18px; border-radius: 7px; font: inherit;
+    font-weight: 600; cursor: pointer; transition: background 0.15s;
+  }
+  button:hover:not(:disabled) { background: var(--accent-dark); }
+  button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--border); }
+  button.secondary:hover:not(:disabled) { background: #f3f4f6; }
+  button:disabled { background: #d1d5db; color: #6b7280; cursor: not-allowed; }
+
+  .status { font-size: 12px; color: var(--muted); }
+  .status.ok { color: var(--ok); }
+  .status.bad { color: var(--bad); }
+
+  details.debug { margin-top: 14px; }
+  details.debug summary { font-size: 12px; color: var(--muted); cursor: pointer; }
+  details.debug pre { font-size: 11px; background: #f3f4f6; padding: 10px; border-radius: 6px; max-height: 300px; overflow: auto; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <img id="logo" alt="Passion Spas" />
+  <h1>Fonteyn Douanepapier Tool</h1>
+  <span class="sub">v0.2 — Logic4-koppeling</span>
+  <span id="conn-indicator" class="conn" style="margin-left: 12px">
+    <span class="dot"></span><span id="conn-label">Helper-server checken…</span>
+  </span>
+</header>
+
+<main>
+
+  <section class="panel" id="fetch-panel">
+    <h2>Order ophalen uit Logic4</h2>
+    <div class="fetch-row">
+      <input type="text" id="order-input" placeholder="Ordernummer (bv. 3486568)" inputmode="numeric" autocomplete="off">
+      <button id="fetch-btn">Haal op uit Logic4</button>
+      <span class="status" id="fetch-status"></span>
+    </div>
+    <p style="color:var(--muted);font-size:12px;margin:10px 0 0">
+      Tip: typ het ordernummer en druk Enter. De helper-server (lokaal) praat met Logic4 — geen handmatige PDF-export meer nodig.
+    </p>
+    <div class="or-divider">of — sleep de PDF zoals voorheen</div>
+    <div id="dropzone">
+      <strong>Sleep de Logic4-PDF hier of klik om te kiezen</strong>
+      <p>Fallback voor als de Logic4-koppeling even niet werkt.</p>
+      <input type="file" id="fileinput" accept="application/pdf,.pdf">
+    </div>
+    <div class="status" id="parse-status"></div>
+  </section>
+
+  <section class="panel hidden" id="meta-panel">
+    <h2>Orderinformatie</h2>
+    <div class="meta-grid" id="meta-grid"></div>
+  </section>
+
+  <section class="panel hidden" id="bundles-panel">
+    <h2>Gedetecteerde pakketten</h2>
+    <p class="note" style="color:var(--muted);font-size:12px;margin-top:-4px">
+      Hoofdpakket wordt automatisch verwijderd en de waarde wordt verdeeld over subpakketten in ronde bedragen (,00).
+      Pas de verdeling hieronder aan indien nodig.
+    </p>
+    <div class="bundles" id="bundles"></div>
+  </section>
+
+  <section class="panel hidden" id="items-panel">
+    <h2>Regels</h2>
+    <p style="color:var(--muted);font-size:12px;margin-top:-4px">
+      Velden in geel missen nog en moeten worden ingevuld. Edits worden lokaal bewaard voor volgende keer.
+    </p>
+    <table class="items">
+      <thead>
+        <tr>
+          <th style="width:40px">Qty</th>
+          <th style="width:90px">Code</th>
+          <th>Omschrijving</th>
+          <th style="width:90px">Artikelcode</th>
+          <th style="width:120px">Afmetingen</th>
+          <th style="width:65px">GW (KG)</th>
+          <th style="width:65px">NW (KG)</th>
+          <th style="width:110px">HS-code</th>
+          <th style="width:70px">Origin</th>
+          <th style="width:80px">Unit $</th>
+          <th style="width:80px">Total $</th>
+        </tr>
+      </thead>
+      <tbody id="items-body"></tbody>
+    </table>
+  </section>
+
+  <section class="panel hidden" id="totals-panel">
+    <h2>Totalen</h2>
+    <div class="totals" id="totals"></div>
+  </section>
+
+  <section class="panel hidden" id="action-panel">
+    <div class="actions">
+      <button id="generate">Genereer douane-PDF</button>
+      <button id="reset" class="secondary">Opnieuw beginnen</button>
+      <span class="status" id="gen-status"></span>
+    </div>
+  </section>
+
+  <details class="debug">
+    <summary>Debug: rauwe PDF-tekst</summary>
+    <pre id="debug-text">(nog geen bestand geladen)</pre>
+  </details>
+
+</main>
+
+<!-- External libs -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+<!-- Embedded assets & app -->
+<script>
+// ============================================================
+// Embedded logo (Passion Spas)
+// ============================================================
+const LOGO_B64 = "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nR69F8DaO9vbnUrnBkn/ANV7JWR4W8IPdTJfajGI4R92H+9/9jXpQAxgdK9rLcvtL21T5HzebY6L/cU/mL2rxT4n+GX07VDrVrF/ol3/AK7/AGJf/sq9rqrfWVvqNlLaXMQkgkG10PcV7kocx89I+WXeoq67xn4EvvDVzLPD5txpr/dm/wCef+9XH1hyHNMKZRRQQFNooqgCiiigDpPAH/I9aR/18V9MV8z+AP8AketI/wCvivpitYHRR+EWiiiqNgooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA+eaKKK+LP0YKKKKACnLFu+5RRTRFX3VodNY+A9Zu/9YbeFPRn/wDiRXa6L4M03TNk5Bup16PJ0X/dHaiivpMPgqMI8yWp8fi8wxFX3G7LyOoAAHSloorvPMCiiigCCaON4XjlRWjKfMrDIrzzxD8I9L1KR5tJl/s64I4j27oj9B/D/niiipkJxT3PO9Z+HPiLR13S28M8X/PSGVV/md1ck6bKKKyOapFR2G0UUUGYUUUUAdJ4A/5HrSP+vivpiiitYHRR+EWiiiqNgooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooAKKKKACiiigAooooA//2Q==";
+
+// ============================================================
+// Seed product spec database (per productcode)
+// Extends via localStorage for anything Manon adds later.
+// ============================================================
+const SEED_SPECS = {
+  "100250": {sku:"SKT339G7",    hs:"9019101000", origin:"China", dims:"500x228x155 CM", gw:1600, nw:1400},
+  "100522": {sku:"SKT339G13",   hs:"9019101000", origin:"China", dims:"394x226x120 CM", gw:1200, nw:1175},
+  "101254": {sku:"SKT329EA",    hs:"9019101000", origin:"China", dims:"204x204x85 CM",  gw:300,  nw:275},
+  "101252": {sku:"SKT329FA",    hs:"9019101000", origin:"China", dims:"200x200x90 CM",  gw:300,  nw:275},
+  "100517": {sku:"SKT888A-4S",  hs:"9019101000", origin:"China", dims:"220x100x180 CM", gw:300,  nw:275},
+  "101249": {sku:"SKT335HA",    hs:"9019101000", origin:"China", dims:"208x155x83 CM",  gw:300,  nw:275},
+  "150368": {sku:"RD801-8500-YC", hs:"9033009000", origin:"China", dims:"80x60x20 CM",  gw:25,   nw:20},
+  "150478": {sku:"SpaCov",      hs:"9019101000", origin:"China", dims:"200x100x20 CM",  gw:25,   nw:20},
+  "151704": {sku:"skt335fa",    hs:"9019101000", origin:"China", dims:"200x100x20 CM",  gw:25,   nw:20},
+  "152240": {sku:"PLF6CH-940",  hs:"9033009000", origin:"China", dims:"15x10x5 CM",     gw:2,    nw:1},
+  "153753": {sku:"P29B70",      hs:"9033009000", origin:"China", dims:"5x5x5 CM",       gw:1,    nw:1},
+  "157050": {sku:"SPANREL",     hs:"90191010",   origin:"China", dims:"203x84x5 CM",    gw:5,    nw:5},
+  "150031": {sku:"VL260",       hs:"9019101000", origin:"China", dims:"20x15x5 CM",     gw:1,    nw:1},
+  "151102": {sku:"VL260-OL",    hs:"9019101000", origin:"China", dims:"20x15x2 CM",     gw:1,    nw:1},
+  "450297": {sku:"HPC900400",   hs:"9406100000", origin:"China", dims:"40x40x60 CM",    gw:20,   nw:20},
+  "452065": {sku:"HPC900400E",  hs:"9406100000", origin:"China", dims:"40x40x60 CM",    gw:20,   nw:20},
+  "452350": {sku:"AC3000",      hs:"9406100000", origin:"China", dims:"20x20x40 CM",    gw:20,   nw:20}
+};
+
+// Non-physical items: freight, discount, warranty/service credits, garantie.
+// These never get HS/dims/GW/NW — they're purely financial line items.
+// We catch them op twee manieren: via een explicit set met productcodes die
+// we kennen (789462 = Freight Spas, 789464 = Freight Surcharge Spas, 7894565
+// = Packingskosten, 8866 = oudere freight-code), en via een regex op de
+// description voor codes die we nog niet hebben gezien.
+const SERVICE_CODES = new Set(["789462", "789464", "7894565", "8866", "Korting", "Garantie"]);
+const SERVICE_DESC_RE = /freight|surcharge|packing(s|kost)|verzend|transport|korting|garantie|warranty/i;
+function isServiceItem(code, description) {
+  if (SERVICE_CODES.has(code)) return true;
+  if (/korting|garantie/i.test(code || "")) return true;
+  if (description && SERVICE_DESC_RE.test(description)) return true;
+  return false;
+}
+// Houd de oude naam aan voor backwards compat — code-only check
+function isServiceCode(code) {
+  return isServiceItem(code, "");
+}
+
+// ============================================================
+// Set logo src
+// ============================================================
+document.getElementById("logo").src = "data:image/jpeg;base64," + LOGO_B64;
+
+// ============================================================
+// pdfjs worker
+// ============================================================
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ============================================================
+// State
+// ============================================================
+const state = {
+  metadata: {},
+  lineItems: [],
+  bundles: [],
+  rawText: "",
+  userSpecs: loadUserSpecs(),
+  // articleCodes: lookup van productcode → {sku, merk, omschrijving}.
+  // Wordt bij startup geladen uit de helper. 880+ entries uit de
+  // door Manon onderhouden Excel "Spanamen en artikelcodes".
+  articleCodes: {},
+  // specDatabase: lookup van model-naam → {dims, dryWeight, fullWeight, brand}.
+  // Geparsed uit /Spa documentatie/.../*.pdf (Serene 5.pdf, Aquatic 5.pdf, etc.).
+  specDatabase: {}
+};
+
+function loadUserSpecs() {
+  try { return JSON.parse(localStorage.getItem("fonteyn_specs") || "{}"); }
+  catch { return {}; }
+}
+function saveUserSpecs() {
+  localStorage.setItem("fonteyn_specs", JSON.stringify(state.userSpecs));
+}
+// getSpec geeft altijd een spec-object terug (nooit null) waarbij waarden uit
+// drie lagen worden gemerged, in volgorde van prioriteit:
+//   1. userSpecs (handmatig door Manon ingevuld, hoogste prio)
+//   2. SEED_SPECS (in deze file gehard-coded, voor de oudste verzendingen)
+//   3. articleCodes (uit de Excel, levert vooral de SKU)
+// Een veld is "missing" zodra geen van deze lagen het invult. LEGE waarden in
+// een hogere laag overschrijven NIET — anders blanket een eerder per ongeluk
+// opgeslagen "{sku:""}" de fallback uit de Excel.
+function mergeNonEmpty(target, source) {
+  if (!source) return;
+  for (const k of Object.keys(source)) {
+    const v = source[k];
+    if (v === "" || v == null) continue;
+    target[k] = v;
+  }
+}
+// Extract model-naam (bv. "Serene 5", "Aquatic 1", "Bliss") uit een omschrijving
+// zoals "Serene 5 Spa | Solid White with GREY/oak trim". We zoeken in de
+// spec-database-keys naar de langste match aan het begin van de omschrijving,
+// zodat "Aquatic 12" eerder wordt gekozen dan "Aquatic 1" bij een string als
+// "Aquatic 12 Swim Spa | ...".
+const _sortedModelKeysCache = { keys: null, fromLen: 0 };
+function findSpaModel(description) {
+  if (!description) return null;
+  const db = state.specDatabase;
+  if (!db || !Object.keys(db).length) return null;
+  let keys = _sortedModelKeysCache.keys;
+  if (!keys || _sortedModelKeysCache.fromLen !== Object.keys(db).length) {
+    keys = Object.keys(db).sort((a, b) => b.length - a.length);
+    _sortedModelKeysCache.keys = keys;
+    _sortedModelKeysCache.fromLen = Object.keys(db).length;
+  }
+  for (const k of keys) {
+    const esc = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp("^" + esc + "\\b", "i").test(description)) return k;
+  }
+  return null;
+}
+
+function getSpec(code) {
+  const merged = {};
+
+  // Laag 1 (laagste prio): artikelcode-DB levert de SKU.
+  const fromArticles = state.articleCodes[code];
+  if (fromArticles && fromArticles.sku) merged.sku = fromArticles.sku;
+
+  // Laag 2: spa-spec-database via modelnaam in omschrijving.
+  // Levert afmetingen en gewicht. Defaults voor spas: HS-code en origin.
+  if (fromArticles && fromArticles.omschrijving) {
+    const model = findSpaModel(fromArticles.omschrijving);
+    if (model) {
+      const sd = state.specDatabase[model];
+      if (sd) {
+        if (sd.dims)      merged.dims = sd.dims;
+        // NW = Dry Weight (spa zonder water). GW zetten we default gelijk aan
+        // NW; voor shipping is de kratgewicht-optelling klein en mag Manon
+        // tweaken als ze de exacte kratgewichten kent.
+        if (sd.dryWeight) { merged.nw = sd.dryWeight; merged.gw = sd.dryWeight; }
+        // Spas vallen altijd onder 9019.10 (mechano-therapy) en komen uit China.
+        merged.hs = "9019101000";
+        merged.origin = "China";
+      }
+    }
+  }
+
+  // Laag 3: SEED_SPECS (oude hardcoded defaults per productcode).
+  mergeNonEmpty(merged, SEED_SPECS[code]);
+  // Laag 4 (hoogste prio): handmatige overrides van Manon.
+  mergeNonEmpty(merged, state.userSpecs[code]);
+  return merged;
+}
+
+// ============================================================
+// Drag & drop + file input
+// ============================================================
+const dropzone = document.getElementById("dropzone");
+const fileinput = document.getElementById("fileinput");
+dropzone.addEventListener("click", () => fileinput.click());
+dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("drag"); });
+dropzone.addEventListener("dragleave", () => dropzone.classList.remove("drag"));
+dropzone.addEventListener("drop", (e) => {
+  e.preventDefault(); dropzone.classList.remove("drag");
+  const f = e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fileinput.addEventListener("change", (e) => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+async function handleFile(file) {
+  const status = document.getElementById("parse-status");
+  status.textContent = "PDF wordt ingelezen…";
+  status.className = "status";
+  try {
+    const buf = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+    const pages = await extractLines(pdf);
+    state.rawText = pages.map((p, i) => `--- PAGE ${i+1} ---\n${p.join("\n")}`).join("\n\n");
+    document.getElementById("debug-text").textContent = state.rawText;
+
+    const parsed = parseLogic4(pages);
+    state.metadata = parsed.metadata;
+    state.lineItems = parsed.lineItems;
+    state.bundles = detectBundles(state.lineItems);
+    // Auto-distribute
+    for (const b of state.bundles) distributeBundle(b);
+
+    renderAll();
+    status.textContent = `${state.lineItems.filter(i => !i.dropped).length} regels ingelezen.`;
+    status.className = "status ok";
+  } catch (e) {
+    console.error(e);
+    status.textContent = "Fout bij inlezen: " + e.message;
+    status.className = "status bad";
+  }
+}
+
+// ============================================================
+// PDF text extraction — group items by Y to get lines
+// ============================================================
+async function extractLines(pdf) {
+  // Cluster items by y-coordinate with a tolerance. pdfjs returns adjacent
+  // table-column items at slightly different y values (font metrics / italics
+  // offsets), so a strict integer round would split one visual row into two
+  // logical lines and break price-parsing downstream.
+  const Y_TOL = 3.0;
+  const pages = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const pts = [];
+    for (const it of content.items) {
+      if (!it.str || !it.str.trim()) continue;
+      pts.push({y: it.transform[5], x: it.transform[4], str: it.str});
+    }
+    // Sort top-down (higher y first in PDF user space)
+    pts.sort((a,b) => b.y - a.y);
+    const clusters = [];
+    for (const pt of pts) {
+      const c = clusters[clusters.length-1];
+      if (c && Math.abs(c.y - pt.y) <= Y_TOL) {
+        c.items.push(pt);
+        c.y = (c.y * (c.items.length-1) + pt.y) / c.items.length;
+      } else {
+        clusters.push({y: pt.y, items: [pt]});
+      }
+    }
+    const lines = clusters.map(c => {
+      const its = c.items.slice().sort((a,b) => a.x - b.x);
+      return its.map(i => i.str).join(" ").replace(/\s+/g, " ").trim();
+    }).filter(l => l);
+    pages.push(lines);
+  }
+  return pages;
+}
+
+// ============================================================
+// Parser: Logic4 invoice text -> metadata + line items
+// ============================================================
+function parsePrice(s) {
+  // "$ 10.999,00" -> 10999.00 ; "-$ 784,00" -> -784.00
+  const neg = /^-/.test(s);
+  const digits = s.replace(/[^\d,.-]/g, "").replace(/^-/, "");
+  // Dutch format: "." thousands, "," decimal
+  const cleaned = digits.replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(cleaned);
+  return neg ? -n : n;
+}
+function formatPrice(n, {sign=true, symbol="$"} = {}) {
+  const neg = n < 0;
+  const abs = Math.abs(n);
+  const parts = abs.toFixed(2).split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const body = parts.join(",");
+  const prefix = neg ? "-" : (sign ? "" : "");
+  return `${prefix}${symbol} ${body}`;
+}
+
+function parseLogic4(pages) {
+  const allLines = pages.flat();
+  const metadata = parseMetadata(pages[0]);
+
+  // Reject lines that belong to the repeating header/footer. These patterns
+  // appear on every page; we want to capture line items only.
+  const headerPatterns = [
+    /^E-mail:/i, /^Passion Spas$/, /^Internet:/i, /^Meervelderweg /,
+    /^IBAN [$€]:/, /^3888 NK Uddel/, /^The Netherlands$/, /^BIC:/, /^Telephone:/,
+    /^KvK:/, /^TAX nr\./, /^Invoice$/, /^Invoice\/Packing List$/,
+    /^Ordered by:/, /^Deliver to:/, /^Garibaldi street/, /^MRS /, /^Malta$/,
+    /^ETA:/, /^Invoice number:/, /^Advisor /, /^Date of order:/,
+    /^@/, /^Debtor nr:/, /^EORI nr:/, /^HS code:/, /^Shipping method:/,
+    /^Payment method:/, /^Het openstaande bedrag/, /^werkdagen v/, /^op onze bankrekening/,
+    /^Quantity Productcode/,
+    /^Order memo:/, /^Delivery memo:/, /^The Fitness/, /will be from the stock/,
+    /from the stock/, /From Arno reserved/, /approved it/,
+    /^On all offers, deliveries/, /^filed with the Chamber/, /^Fonteyn is a trademark/,
+    /^VAT amount/, /^BTW bedrag/,
+    /^Total:/, /^Shippingcosts:/, /^Total in USD/, /^Total in EUR/,
+    /^\d+\s*$/, /^[a-z@.\-\d]+\.(nl|com|net)/i, /^\d{10,}$/
+  ];
+  function isHeader(line) {
+    return headerPatterns.some(re => re.test(line));
+  }
+
+  // Match product line:
+  //   QTY CODE DESCRIPTION $ PRICE $ TOTAL
+  //   or with leading '-' prices for negatives.
+  // description is non-greedy, capturing up to the last pair of $ amounts.
+  const lineRe = /^(\d+)\s+(\S+)\s+(.+?)\s+(-?\$\s*[\d.,]+)\s+(-?\$\s*[\d.,]+)\s*$/;
+
+  const items = [];
+  let prev = null;
+  for (const rawLine of allLines) {
+    if (!rawLine) continue;
+    const line = rawLine.replace(/\s+/g, " ").trim();
+    const m = line.match(lineRe);
+    if (m) {
+      const [, qty, code, desc, up, tot] = m;
+      prev = {
+        qty: parseInt(qty, 10),
+        code,
+        description: desc.trim(),
+        unitPrice: parsePrice(up),
+        total: parsePrice(tot),
+        bundleChild: desc.trim().startsWith("*"),
+        service: isServiceCode(code),
+        dropped: false
+      };
+      items.push(prev);
+    } else if (prev && !isHeader(line)) {
+      // possible continuation of previous description (wrapped)
+      const openParens = (prev.description.match(/\(/g) || []).length;
+      const closeParens = (prev.description.match(/\)/g) || []).length;
+      if (openParens > closeParens) {
+        prev.description += " " + line;
+      }
+    }
+  }
+  return { metadata, lineItems: items };
+}
+
+function parseMetadata(page1Lines) {
+  const text = page1Lines.join("\n");
+  function field(re) {
+    const m = text.match(re);
+    return m ? m[1].trim() : "";
+  }
+  // Multi-line "Ordered by" block: from "Ordered by:" up to "Deliver to:"
+  // pdfjs ordering may put "Ordered by: X" and "Deliver to: Y" on the same line.
+  const meta = {
+    invoiceNumber: field(/Invoice number:\s*([^\n]+)/),
+    dateOfOrder:   field(/Date of order:\s*([^\n]+)/),
+    debtorNr:      field(/Debtor nr:\s*([^\n]+)/),
+    eoriNr:        field(/EORI nr:\s*([^\n]+)/),
+    hsCode:        field(/HS code:\s*([^\n]+)/),
+    shippingMethod:field(/Shipping method:\s*([^\n]+)/),
+    paymentMethod: field(/Payment method:\s*([^\n]+(?:\n(?!ETA:|Shipping|Invoice|Quantity)[^\n]+)*)/),
+    eta:           field(/ETA:\s*([^\n]+)/),
+    advisor:       field(/Advisor\s+([A-Z][A-Za-z'\-]*)/),
+    advisorEmail:  field(/([a-zA-Z0-9._-]+@fonteyn\.nl)/),
+    customerEmail: field(/([a-zA-Z0-9._-]+@(?!fonteyn\.nl|passionspas)\S+)/),
+    customerName:  "",
+    customerAddress: "",
+    deliverName: "",
+    deliverAddress: ""
+  };
+  // Try to parse Ordered by / Deliver to lines.
+  // Typical structure in pdfjs output:
+  //   "Ordered by: Dolphin Pools Limited Deliver to: Dolphin Pools Limited"
+  const odMatch = text.match(/Ordered by:\s*(.+?)\s+Deliver to:\s*(.+)/);
+  if (odMatch) {
+    meta.customerName = odMatch[1].split(" Deliver")[0].trim();
+    meta.deliverName = odMatch[2].split("\n")[0].trim();
+  }
+  // Following lines tend to mix addresses. Keep it simple: collect lines
+  // after customerName until "ETA:" or "Invoice number:" etc., user can edit.
+  const addrBlock = text.split(/Ordered by:[^\n]*\n/)[1]?.split(/\n(?:ETA:|Invoice number:|Advisor|Shipping|Payment|HS code:|EORI|Debtor)/)[0] || "";
+  meta.addressBlock = addrBlock.trim();
+  return meta;
+}
+
+// ============================================================
+// Bundle detection
+// A "bundle parent" is a non-starred line directly followed by 1+ starred
+// children with $0,00 value (optionally interleaved with more children).
+// ============================================================
+function detectBundles(items) {
+  const bundles = [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it.bundleChild) continue;
+    if (it.total <= 0) continue;
+    // Look ahead for starred zero-value children
+    const children = [];
+    let j = i + 1;
+    while (j < items.length && items[j].bundleChild && items[j].total === 0) {
+      children.push(items[j]);
+      j++;
+    }
+    if (children.length >= 1) {
+      bundles.push({parent: it, children, startIdx: i});
+      i = j - 1;
+    }
+  }
+  return bundles;
+}
+
+// Distribute parent price over children in round ,00 amounts
+function distributeBundle(bundle) {
+  const total = Math.round(bundle.parent.total * 100) / 100; // expect round $
+  const n = bundle.children.length;
+  // In whole dollars: floor each, give remainder to last
+  const totalDollars = Math.round(total); // expected whole $
+  const base = Math.floor(totalDollars / n);
+  const remainder = totalDollars - base * n;
+  bundle.children.forEach((c, idx) => {
+    c.unitPrice = base;
+    c.total = base;
+  });
+  // Add remainder onto the last child so amounts stay round
+  if (remainder !== 0) {
+    bundle.children[n - 1].unitPrice += remainder;
+    bundle.children[n - 1].total += remainder;
+  }
+  // Drop parent from output
+  bundle.parent.dropped = true;
+}
+
+// ============================================================
+// Rendering the UI
+// ============================================================
+function renderAll() {
+  document.getElementById("meta-panel").classList.remove("hidden");
+  document.getElementById("items-panel").classList.remove("hidden");
+  document.getElementById("totals-panel").classList.remove("hidden");
+  document.getElementById("action-panel").classList.remove("hidden");
+  renderMeta();
+  renderItems();
+  renderBundles();
+  renderTotals();
+}
+
+function renderMeta() {
+  const m = state.metadata;
+  const grid = document.getElementById("meta-grid");
+  const fields = [
+    ["invoiceNumber", "Invoice number"],
+    ["dateOfOrder", "Date of order"],
+    ["eta", "ETA"],
+    ["debtorNr", "Debtor nr"],
+    ["eoriNr", "EORI nr"],
+    ["hsCode", "HS code (order-level)"],
+    ["shippingMethod", "Shipping method"],
+    ["paymentMethod", "Payment method"],
+    ["customerName", "Ordered by — Name"],
+    ["deliverName", "Deliver to — Name"],
+    ["addressBlock", "Adresblok (klant)"],
+    ["advisor", "Advisor"],
+    ["advisorEmail", "Advisor email"],
+    ["customerEmail", "Customer email"]
+  ];
+  grid.innerHTML = fields.map(([key, label]) => {
+    const isLong = key === "paymentMethod" || key === "addressBlock";
+    const val = (m[key] || "").replace(/"/g, "&quot;");
+    if (isLong) {
+      return `<label>${label}<textarea data-meta="${key}">${val}</textarea></label>`;
+    }
+    return `<label>${label}<input data-meta="${key}" value="${val}"></label>`;
+  }).join("");
+  grid.querySelectorAll("[data-meta]").forEach(el => {
+    el.addEventListener("input", () => {
+      state.metadata[el.dataset.meta] = el.value;
+      renderTotals();
+    });
+  });
+}
+
+function renderBundles() {
+  const panel = document.getElementById("bundles-panel");
+  const container = document.getElementById("bundles");
+  if (state.bundles.length === 0) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  container.innerHTML = state.bundles.map((b, bi) => `
+    <div class="bundle-card">
+      <h3>${escapeHtml(b.parent.description)}</h3>
+      <div class="note">Hoofdregel (${formatPrice(b.parent.total)}) verwijderd. Verdeeld over ${b.children.length} subpakket${b.children.length === 1 ? "" : "ten"}.</div>
+      <table>
+        ${b.children.map((c, ci) => `
+          <tr>
+            <td>${ci + 1}.</td>
+            <td>${escapeHtml(c.code)}</td>
+            <td>${escapeHtml(c.description)}</td>
+            <td class="amt">
+              <input data-bundle="${bi}" data-child="${ci}" value="${c.total}" style="width:70px;text-align:right;border:1px solid var(--border);border-radius:4px;padding:3px 5px">
+            </td>
+          </tr>
+        `).join("")}
+        <tr style="font-weight:600"><td colspan="3" style="text-align:right">Som</td><td class="amt" id="bundle-sum-${bi}">${formatPrice(b.children.reduce((s,c) => s+c.total, 0))}</td></tr>
+      </table>
+    </div>
+  `).join("");
+  // Wire up change handlers
+  container.querySelectorAll("[data-bundle]").forEach(el => {
+    el.addEventListener("input", () => {
+      const b = state.bundles[+el.dataset.bundle];
+      const c = b.children[+el.dataset.child];
+      const v = parseFloat(el.value) || 0;
+      c.unitPrice = v;
+      c.total = v;
+      document.getElementById(`bundle-sum-${el.dataset.bundle}`).textContent =
+        formatPrice(b.children.reduce((s,c) => s+c.total, 0));
+      renderTotals();
+      renderItems(); // reflect updated child totals
+    });
+  });
+}
+
+function renderItems() {
+  const body = document.getElementById("items-body");
+  body.innerHTML = state.lineItems.map((it, idx) => {
+    if (it.dropped) {
+      return `<tr class="bundle-parent">
+        <td colspan="11" style="text-align:center">
+          <span class="badge bundle-parent">HOOFDREGEL VERWIJDERD</span>
+          ${escapeHtml(it.description)} — ${formatPrice(it.total)} verdeeld over subpakketten
+        </td>
+      </tr>`;
+    }
+    const isService = it.service;
+    const spec = getSpec(it.code) || {};
+    const badge = it.bundleChild ? `<span class="badge bundle-child">SUB</span>` :
+                  isService ? `<span class="badge service">SERVICE</span>` :
+                  "";
+    const specCells = isService
+      ? `<td colspan="6" style="color:var(--muted);font-style:italic">geen fysiek product</td>`
+      : ["sku","dims","gw","nw","hs","origin"].map(k => {
+          const val = spec[k] != null ? spec[k] : "";
+          const missing = val === "" ? "missing" : "";
+          return `<td><input class="${missing}" data-item="${idx}" data-spec="${k}" value="${String(val).replace(/"/g,"&quot;")}"></td>`;
+        }).join("");
+    const rowClass = it.bundleChild ? "bundle-child" : (isService ? "service" : "");
+    return `<tr class="${rowClass}">
+      <td class="num">${it.qty}</td>
+      <td class="code">${escapeHtml(it.code)}</td>
+      <td class="desc">${escapeHtml(it.description)} ${badge}</td>
+      ${specCells}
+      <td class="num">${formatPrice(it.unitPrice)}</td>
+      <td class="num">${formatPrice(it.total)}</td>
+    </tr>`;
+  }).join("");
+  body.querySelectorAll("[data-item]").forEach(el => {
+    el.addEventListener("input", () => {
+      const idx = +el.dataset.item;
+      const key = el.dataset.spec;
+      const it = state.lineItems[idx];
+      state.userSpecs[it.code] = state.userSpecs[it.code] || {...(SEED_SPECS[it.code] || {})};
+      const raw = el.value;
+      state.userSpecs[it.code][key] = (key === "gw" || key === "nw") ? (parseFloat(raw) || 0) : raw;
+      saveUserSpecs();
+      el.classList.toggle("missing", raw.trim() === "");
+      renderTotals();
+    });
+  });
+}
+
+function renderTotals() {
+  const box = document.getElementById("totals");
+  const items = state.lineItems.filter(i => !i.dropped);
+  const totalUSD = items.reduce((s,i) => s + i.total, 0);
+  // Colli: sum of quantities of non-service physical items
+  const colli = items.filter(i => !i.service).reduce((s,i) => s + i.qty, 0);
+  const gw = items.filter(i => !i.service).reduce((s,i) => {
+    const spec = getSpec(i.code); return s + (spec && spec.gw ? spec.gw * i.qty : 0);
+  }, 0);
+  const nw = items.filter(i => !i.service).reduce((s,i) => {
+    const spec = getSpec(i.code); return s + (spec && spec.nw ? spec.nw * i.qty : 0);
+  }, 0);
+  box.innerHTML = `
+    <div class="row"><span></span><span>${colli} Colli — Total:</span><span>${formatPrice(totalUSD)}</span></div>
+    <div class="row"><span></span><span>Total gross weight:</span><span>${gw} KG</span></div>
+    <div class="row"><span></span><span>Total netto weight:</span><span>${nw} KG</span></div>
+    <div class="row"><span></span><span>Shippingcosts:</span><span>${formatPrice(0)}</span></div>
+    <div class="row strong"><span></span><span>Total in USD:</span><span>${formatPrice(totalUSD)}</span></div>
+    <div class="row"><span></span><span>VAT amount 0%:</span><span>${formatPrice(0)}</span></div>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+// ============================================================
+// Logic4 helper-server: health check + order fetch
+// ============================================================
+const HELPER_BASE = ""; // same-origin: served by index.js on :3737
+
+async function checkHelperHealth() {
+  const ind = document.getElementById("conn-indicator");
+  const lbl = document.getElementById("conn-label");
+  try {
+    const r = await fetch(HELPER_BASE + "/api/health");
+    const j = await r.json();
+    if (j.ok) {
+      ind.className = "conn ok";
+      lbl.textContent = "Helper verbonden — Logic4 credentials oké";
+    } else {
+      ind.className = "conn bad";
+      const missing = (j.missing || []).join(", ");
+      lbl.textContent = "Credentials onvolledig" + (missing ? `: ${missing}` : "");
+      lbl.title = "Vul deze waarden in server/.env in en herstart de helper.";
+    }
+  } catch (e) {
+    ind.className = "conn bad";
+    lbl.textContent = "Helper-server niet bereikbaar";
+    lbl.title = "Open de tool via http://localhost:3737/ — start anders eerst start.command of start.bat.";
+  }
+}
+
+// ============================================================
+// Logic4-response → tool-state mapping
+// Bouwt {metadata, lineItems} in dezelfde vorm als parseLogic4(pdf-tekst)
+// zodat de bestaande render/PDF-pijplijn er ongewijzigd op werkt.
+// ============================================================
+function formatLogic4Date(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const pad = (n) => String(n).padStart(2, "0");
+  return pad(d.getDate()) + "-" + pad(d.getMonth() + 1) + "-" + d.getFullYear();
+}
+function formatLogic4Address(addr) {
+  if (!addr) return "";
+  const street = (addr.Street || addr.Address1 || "").trim();
+  const huisnr = [addr.HouseNumber, addr.HouseNumberAddition].filter(Boolean).join("");
+  const line1 = [street, huisnr].filter(Boolean).join(" ").trim();
+  const line2 = [addr.Zipcode, addr.City].filter(Boolean).join(" ").trim();
+  const line3 = addr.CountryCode || "";
+  return [line1, line2, line3].filter(Boolean).join("\n");
+}
+function mapLogic4Order(orderHeader, orderRows) {
+  // orderHeader = j.order (array, neem eerste); rows kunnen ook in header.OrderRows zitten.
+  const o = Array.isArray(orderHeader) ? orderHeader[0] : orderHeader;
+  if (!o) throw new Error("Geen order in response.");
+  const rows = (orderRows && orderRows.length ? orderRows : (o.OrderRows || []));
+
+  const deliver = o.DeliveryAddress || o.AccountAddress || {};
+  const invoice = o.InvoiceAddress || o.AccountAddress || {};
+
+  const metadata = {
+    invoiceNumber: String(o.Id || ""),
+    dateOfOrder:   formatLogic4Date(o.CreationDate),
+    debtorNr:      String(o.DebtorId || ""),
+    eoriNr:        "", // Niet in Logic4-response — Manon vult zelf in
+    hsCode:        "", // Idem
+    shippingMethod:(o.ShippingMethod && o.ShippingMethod.Name) || "",
+    paymentMethod: (o.PaymentMethod && o.PaymentMethod.Description) || "",
+    eta:           "",
+    advisor:       "",
+    advisorEmail:  "",
+    customerEmail: deliver.Email || invoice.Email || "",
+    customerName:  invoice.CompanyName || invoice.ContactName || "",
+    customerAddress: formatLogic4Address(invoice),
+    deliverName:   deliver.CompanyName || deliver.ContactName || "",
+    deliverAddress: formatLogic4Address(deliver),
+    addressBlock:  formatLogic4Address(deliver),
+    orderMemo:     (o.Notes || "").trim()
+  };
+
+  const lineItems = rows.map((r) => {
+    const isChild = r.ComposedProductOrderRowParentId != null;
+    const code    = String(r.ProductCode || "");
+    const desc    = (r.Description || r.Description2 || "").trim();
+    const qty     = Number(r.Qty || 0);
+    const unit    = Number(r.NettPrice || 0);
+    const total   = Math.round(qty * unit * 100) / 100;
+    return {
+      qty,
+      code,
+      // Sterretje voorop voor sub-pakketten zodat het in de UI hetzelfde oogt als
+      // de PDF-flow (en eventuele extra logica die op "*" let blijft werken).
+      description: isChild && !desc.startsWith("*") ? "* " + desc : desc,
+      unitPrice: unit,
+      total,
+      bundleChild: isChild,
+      // Service-detectie: code-only zou Freight Surcharge / Packingskosten missen
+      // als die nieuwe codes hebben. Dus check óók de description.
+      service: isServiceItem(code, desc),
+      dropped: false
+    };
+  });
+
+  return { metadata, lineItems };
+}
+
+async function fetchOrderFromLogic4() {
+  const input  = document.getElementById("order-input");
+  const status = document.getElementById("fetch-status");
+  const btn    = document.getElementById("fetch-btn");
+  const nr = input.value.trim();
+  if (!/^\d+$/.test(nr)) {
+    status.textContent = "Vul een numeriek ordernummer in.";
+    status.className = "status bad";
+    return;
+  }
+  status.textContent = "Order " + nr + " ophalen…";
+  status.className = "status";
+  btn.disabled = true;
+  try {
+    // Als artikelcode- of spec-database nog niet geladen zijn (bv. helper net
+    // opnieuw gestart, of startup-load heeft gefaald), nu nog een keer proberen.
+    // Anders blijven velden onnodig leeg.
+    if (Object.keys(state.articleCodes).length === 0) {
+      await loadArticleCodesFromHelper();
+    }
+    if (Object.keys(state.specDatabase).length === 0) {
+      await loadSpecDatabaseFromHelper();
+    }
+    const r = await fetch(HELPER_BASE + "/api/order/" + nr);
+    const j = await r.json();
+    if (!r.ok || !j.ok) {
+      throw new Error(j.error || ("HTTP " + r.status));
+    }
+    console.log("Logic4 order response:", j);
+
+    // Ruwe response onderaan voor inspectie blijft handig tijdens de eerste weken.
+    document.getElementById("debug-text").textContent =
+      "--- LOGIC4 ORDER-HEADER — order " + nr + " ---\n" +
+      JSON.stringify(j.order, null, 2) +
+      "\n\n--- LOGIC4 ORDERREGELS — order " + nr + " ---\n" +
+      JSON.stringify(j.rows, null, 2);
+
+    // Mapping → state, zelfde flow als bij PDF-drop.
+    const parsed = mapLogic4Order(j.order, j.rows);
+    state.metadata  = parsed.metadata;
+    state.lineItems = parsed.lineItems;
+    state.bundles   = detectBundles(state.lineItems);
+    for (const b of state.bundles) distributeBundle(b);
+    state.rawText   = "(Geladen via Logic4 API — order " + nr + ")";
+
+    renderAll();
+    const visibleCount = state.lineItems.filter(i => !i.dropped).length;
+    status.textContent = "Order " + nr + " geladen — " + visibleCount + " regels.";
+    status.className = "status ok";
+  } catch (e) {
+    console.error(e);
+    status.textContent = "Fout: " + e.message;
+    status.className = "status bad";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById("fetch-btn").addEventListener("click", fetchOrderFromLogic4);
+document.getElementById("order-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") fetchOrderFromLogic4();
+});
+
+// Bij startup: check helper en laad de artikelcodes- en spec-database. Alles
+// parallel zodat een trage helper de UI niet blokkeert.
+checkHelperHealth();
+loadArticleCodesFromHelper();
+loadSpecDatabaseFromHelper();
+
+async function loadArticleCodesFromHelper() {
+  try {
+    const r = await fetch(HELPER_BASE + "/api/article-codes");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    state.articleCodes = j || {};
+    console.log(`Artikelcodes geladen: ${Object.keys(state.articleCodes).length} entries`);
+    if (state.lineItems.length) renderItems();
+  } catch (e) {
+    console.warn("Kon artikelcodes niet laden van helper:", e.message);
+  }
+}
+
+async function loadSpecDatabaseFromHelper() {
+  try {
+    const r = await fetch(HELPER_BASE + "/api/spec-database");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    state.specDatabase = j || {};
+    console.log(`Spec-database geladen: ${Object.keys(state.specDatabase).length} modellen`);
+    if (state.lineItems.length) renderItems();
+  } catch (e) {
+    console.warn("Kon spec-database niet laden van helper:", e.message);
+  }
+}
+
+// ============================================================
+// Reset
+// ============================================================
+document.getElementById("reset").addEventListener("click", () => {
+  state.metadata = {}; state.lineItems = []; state.bundles = []; state.rawText = "";
+  document.getElementById("meta-panel").classList.add("hidden");
+  document.getElementById("items-panel").classList.add("hidden");
+  document.getElementById("totals-panel").classList.add("hidden");
+  document.getElementById("action-panel").classList.add("hidden");
+  document.getElementById("bundles-panel").classList.add("hidden");
+  document.getElementById("parse-status").textContent = "";
+  document.getElementById("gen-status").textContent = "";
+  document.getElementById("debug-text").textContent = "(nog geen bestand geladen)";
+  fileinput.value = "";
+});
+
+// ============================================================
+// PDF GENERATION
+// ============================================================
+document.getElementById("generate").addEventListener("click", async () => {
+  const status = document.getElementById("gen-status");
+  try {
+    status.textContent = "Genereren…"; status.className = "status";
+    const bytes = await buildPdf();
+    const blob = new Blob([bytes], {type: "application/pdf"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const invNr = state.metadata.invoiceNumber || "invoice";
+    a.href = url;
+    a.download = `${invNr} Invoice.pdf`;
+    document.body.appendChild(a); a.click(); a.remove();
+    status.textContent = `Klaar — ${invNr} Invoice.pdf gedownload.`;
+    status.className = "status ok";
+  } catch (e) {
+    console.error(e);
+    status.textContent = "Fout: " + e.message;
+    status.className = "status bad";
+  }
+});
+
+async function buildPdf() {
+  const { PDFDocument, StandardFonts, rgb } = PDFLib;
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const italic = await doc.embedFont(StandardFonts.HelveticaOblique);
+  const logoBytes = Uint8Array.from(atob(LOGO_B64), c => c.charCodeAt(0));
+  const logoImg = await doc.embedJpg(logoBytes);
+
+  // A4
+  const W = 595, H = 842;
+  const MARGIN_X = 40;
+  let page = doc.addPage([W, H]);
+  let y = H - 40;
+
+  const INK = rgb(0.1, 0.1, 0.12);
+  const MUTED = rgb(0.45, 0.45, 0.48);
+
+  // WinAnsi-veilig maken: strip alle control-chars (incl. \n, \r, \t) en
+  // vervang courante Unicode-curiosa door ASCII-equivalenten. Voorkomt
+  // "WinAnsi cannot encode ..." fouten bij drawText.
+  function sanitize(str) {
+    return String(str)
+      .replace(/\r\n|\r|\n|\t/g, " ")
+      .replace(/[\u2018\u2019\u201A\u201B]/g, "'")
+      .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+      .replace(/[\u2013\u2014]/g, "-")
+      .replace(/\u2022/g, "-")
+      .replace(/\u00A0/g, " ")
+      .replace(/[\x00-\x1F\x7F]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  function text(str, x, yPos, opts = {}) {
+    page.drawText(sanitize(str), {
+      x, y: yPos, size: opts.size || 9,
+      font: opts.bold ? bold : (opts.italic ? italic : font),
+      color: opts.color || INK,
+      maxWidth: opts.maxWidth
+    });
+  }
+  function textRight(str, xRight, yPos, opts = {}) {
+    const s = sanitize(str);
+    const w = (opts.bold ? bold : font).widthOfTextAtSize(s, opts.size || 9);
+    text(s, xRight - w, yPos, opts);
+  }
+
+  // =========== HEADER (first page) ============
+  // Left block: Passion Spas details
+  text("Passion Spas", MARGIN_X, y, {bold: true, size: 11});
+  text("Meervelderweg 52",       MARGIN_X, y - 14);
+  text("3888 NK Uddel",          MARGIN_X, y - 26);
+  text("The Netherlands",        MARGIN_X, y - 38);
+  text("Telephone:+31 577 456040", MARGIN_X, y - 50);
+
+  // Logo middle (centered-ish)
+  const logoW = 160, logoH = logoImg.height * (logoW / logoImg.width);
+  page.drawImage(logoImg, { x: (W - logoW) / 2, y: y - logoH + 10, width: logoW, height: logoH });
+
+  // Right block: contact/banking
+  const rx = W - MARGIN_X;
+  const rightLines = [
+    "E-mail: info@passionspas.com",
+    "Internet: www.passionspas.com",
+    "IBAN $: NL54INGB0020101619",
+    "IBAN €: NL34INGB0679207473",
+    "BIC: INGBNL2A",
+    "KvK: 08053333",
+    "TAX nr. NL815219180B01"
+  ];
+  rightLines.forEach((l, i) => textRight(l, rx, y - i * 12));
+
+  y -= 90;
+
+  // Title
+  textRight("Invoice/Packing List", (W / 2) + 60, y, {bold: true, size: 20});
+  y -= 28;
+
+  // Ordered by / Deliver to / Metadata — drie schone kolommen
+  const m = state.metadata;
+  const lx  = MARGIN_X;          // 40  — linkerkolom "Ordered by"
+  const mx  = MARGIN_X + 200;    // 240 — middenkolom "Deliver to"
+  const rxMetaLbl = W - 130;     // 465 — rechtzijde labels (right-aligned)
+  const rxMetaVal = rxMetaLbl + 5;   // 470 — waarden starten hier
+  const wrapMeta  = (W - MARGIN_X) - rxMetaVal; // 85 px voor wrap
+
+  // --- Labels op bovenste regel ---
+  text("Ordered by:", lx, y, {bold: true});
+  text("Deliver to:", mx, y, {bold: true});
+
+  // --- Namen en adressen eronder, elk in eigen kolom (geen overlap) ---
+  const custName = m.customerName || "";
+  const delName  = m.deliverName || custName;
+  const addr = (m.addressBlock || "")
+    .split(/\n/)
+    .map(l => l.trim())
+    .filter(Boolean)
+    .slice(0, 6);
+
+  const orderedLines = [custName, ...addr];
+  const deliverLines = [delName, ...addr]; // zelfde adres tenzij later apart ingevoerd
+
+  const LINE_H = 11;
+  orderedLines.forEach((ln, i) => text(ln, lx, y - 13 - i * LINE_H));
+  deliverLines.forEach((ln, i) => text(ln, mx, y - 13 - i * LINE_H));
+  const blockHeight = 13 + Math.max(orderedLines.length, deliverLines.length) * LINE_H;
+
+  // --- Rechterkolom metadata — start op dezelfde y als labels ---
+  let ry = y;
+  const metaRows = [
+    ["ETA:",              m.eta],
+    ["Invoice number:",   m.invoiceNumber],
+    ["Date of order:",    m.dateOfOrder],
+    ["Debtor nr:",        m.debtorNr],
+    ["EORI nr:",          m.eoriNr],
+    ["HS code:",          m.hsCode],
+    ["Shipping method:",  m.shippingMethod],
+    ["Payment method:",   m.paymentMethod]
+  ];
+  for (const [k, v] of metaRows) {
+    textRight(k, rxMetaLbl, ry);
+    const s = (v || "").toString();
+    if (k === "Payment method:") {
+      let lineY = ry;
+      const paragraphs = s.split(/\r?\n/);
+      for (const para of paragraphs) {
+        const words = para.split(/\s+/).filter(Boolean);
+        let line = "";
+        for (const w of words) {
+          const test = line ? line + " " + w : w;
+          if (font.widthOfTextAtSize(test, 9) > wrapMeta) {
+            if (line) { text(line, rxMetaVal, lineY); lineY -= 11; }
+            line = w;
+          } else line = test;
+        }
+        if (line) { text(line, rxMetaVal, lineY); lineY -= 11; }
+      }
+      ry = lineY - 2;
+    } else {
+      text(s, rxMetaVal, ry);
+      ry -= 12;
+    }
+  }
+
+  // --- Advisor-blok onder ordered-by ---
+  const advY = y - blockHeight - 4;
+  text("Advisor " + (m.advisor || ""), lx, advY);
+  text(m.advisorEmail || "",           lx, advY - 12);
+  if (m.customerEmail) text(m.customerEmail, lx, advY - 24);
+
+  // y zakt tot onder beide kolommen
+  y = Math.min(advY - 36, ry - 8);
+
+  // Horizontal rule
+  page.drawLine({start: {x: MARGIN_X, y}, end: {x: W - MARGIN_X, y}, thickness: 0.5, color: MUTED});
+  y -= 14;
+
+  // =========== TABLE HEADER ============
+  const COL = { qty: MARGIN_X + 5, code: MARGIN_X + 45, desc: MARGIN_X + 115, up: W - 170, tot: W - 90 };
+  function drawTableHeader() {
+    text("Quantity",    COL.qty, y, {bold: true, size: 9});
+    text("Productcode", COL.code, y, {bold: true, size: 9});
+    text("Description", COL.desc, y, {bold: true, size: 9});
+    textRight("Unit price", COL.up + 50, y, {bold: true, size: 9});
+    textRight("Total",      COL.tot + 40, y, {bold: true, size: 9});
+    y -= 4;
+    page.drawLine({start: {x: MARGIN_X, y}, end: {x: W - MARGIN_X, y}, thickness: 0.5, color: MUTED});
+    y -= 12;
+  }
+  drawTableHeader();
+
+  // =========== LINE ITEMS ============
+  function ensureSpace(heightNeeded) {
+    if (y - heightNeeded < 100) {
+      page = doc.addPage([W, H]);
+      y = H - 50;
+      // No repeating header — clean continuation pages.
+    }
+  }
+
+  const items = state.lineItems.filter(i => !i.dropped);
+  for (const it of items) {
+    const spec = getSpec(it.code);
+    // hasSpec = niet-service én spec heeft minstens één bruikbaar veld.
+    // (getSpec geeft tegenwoordig altijd een object terug, dus alleen op
+    // bestaan checken is niet meer voldoende.)
+    const hasSpec = !it.service && spec && (spec.sku || spec.dims || spec.gw || spec.nw || spec.hs || spec.origin);
+    const rowH = hasSpec ? 26 : 16;
+    ensureSpace(rowH);
+
+    text(String(it.qty), COL.qty, y);
+    text(it.code, COL.code, y);
+    // wrap description if needed
+    const desc = it.description;
+    const maxDescW = (COL.up - 10) - COL.desc;
+    const wrapped = wrapText(desc, maxDescW, 9);
+    wrapped.forEach((ln, i) => text(ln, COL.desc, y - i * 11));
+    textRight(formatPrice(it.unitPrice), COL.up + 50, y);
+    textRight(formatPrice(it.total), COL.tot + 40, y);
+
+    // spec sub-row — verdeel over vaste kolommen zodat het makkelijk leest
+    if (hasSpec) {
+      const subY = y - Math.max(12, wrapped.length * 11);
+      const subOpts = {size: 8, color: MUTED};
+      // Kolompositie voor subregel (benut breedte desc..up)
+      const SUB_SKU  = COL.code;
+      const SUB_DIMS = COL.desc;
+      const SUB_GW   = COL.desc + 110;
+      const SUB_NW   = COL.desc + 160;
+      const SUB_HS   = COL.desc + 210;
+      if (spec.sku)  text(spec.sku, SUB_SKU, subY, subOpts);
+      if (spec.dims) text(spec.dims, SUB_DIMS, subY, subOpts);
+      if (spec.gw)   text(`GW ${spec.gw} KG`, SUB_GW, subY, subOpts);
+      if (spec.nw)   text(`NW ${spec.nw} KG`, SUB_NW, subY, subOpts);
+      if (spec.hs) {
+        const hsTxt = `${spec.hs}${spec.origin ? " / " + spec.origin : ""}`;
+        text(hsTxt, SUB_HS, subY, subOpts);
+      }
+      y = subY - 12;
+    } else {
+      y -= Math.max(14, wrapped.length * 11 + 4);
+    }
+  }
+
+  // =========== TOTALS ============
+  y -= 10;
+  page.drawLine({start: {x: W - 260, y}, end: {x: W - MARGIN_X, y}, thickness: 0.5, color: MUTED});
+  y -= 14;
+
+  const totalUSD = items.reduce((s,i) => s + i.total, 0);
+  const colli = items.filter(i => !i.service).reduce((s,i) => s + i.qty, 0);
+  const gw = items.filter(i => !i.service).reduce((s,i) => {
+    const sp = getSpec(i.code); return s + (sp && sp.gw ? sp.gw * i.qty : 0);
+  }, 0);
+  const nw = items.filter(i => !i.service).reduce((s,i) => {
+    const sp = getSpec(i.code); return s + (sp && sp.nw ? sp.nw * i.qty : 0);
+  }, 0);
+
+  ensureSpace(90);
+  const tx1 = MARGIN_X, tx2 = W - 180, tx3 = W - MARGIN_X;
+  text(`${colli} Colli`, tx1, y);
+  textRight("Total:", tx2, y);
+  textRight(formatPrice(totalUSD), tx3, y);
+  y -= 12;
+  text(`Total gross weight: ${gw} KG`, tx1, y);
+  textRight("Shippingcosts:", tx2, y);
+  textRight(formatPrice(0), tx3, y);
+  y -= 12;
+  text(`Total netto weight: ${nw} KG`, tx1, y);
+  textRight("Total in USD", tx2, y, {bold: true});
+  textRight(formatPrice(totalUSD), tx3, y, {bold: true});
+  y -= 20;
+
+  // =========== ORDER MEMO / DELIVERY MEMO ============
+  ensureSpace(80);
+  text("Order memo:", MARGIN_X, y, {bold: true});
+  const memo = (state.metadata.orderMemo || defaultOrderMemo()).split("\n");
+  memo.forEach((ln, i) => text(ln, MARGIN_X + 80, y - i * 11, {italic: true}));
+  // VAT line on right
+  textRight("VAT amount  0 %  :  " + formatPrice(0), W - MARGIN_X, y);
+  y -= Math.max(40, memo.length * 11 + 8);
+
+  text("Delivery memo:", MARGIN_X, y, {bold: true});
+  y -= 30;
+
+  // =========== DISCLAIMER ============
+  const disclaimer = [
+    "On all offers, deliveries and agreements concluded with our General Conditions of Sale,",
+    "filed with the Chamber of Commerce under number: 08,053,333.",
+    "Fonteyn is a trademark of Fonteyn B.V."
+  ];
+  disclaimer.forEach((ln, i) => textRight(ln, W - MARGIN_X - 30, 60 - i * 11, {italic: true, color: MUTED, size: 9}));
+
+  return await doc.save();
+}
+
+function defaultOrderMemo() {
+  return "";
+}
+
+function wrapText(s, maxWidth, size) {
+  // naive word-wrap using Helvetica
+  const font = PDFLib.StandardFonts.Helvetica; // placeholder — we approximate with char widths
+  // Approximate: helvetica average char width ~5.2 at size 9
+  const charW = size * 0.52;
+  const maxChars = Math.floor(maxWidth / charW);
+  const words = String(s).split(/\s+/);
+  const lines = [];
+  let line = "";
+  for (const w of words) {
+    const test = line ? line + " " + w : w;
+    if (test.length > maxChars) {
+      if (line) lines.push(line);
+      line = w;
+    } else line = test;
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+
+</script>
+</body>
+</html>
