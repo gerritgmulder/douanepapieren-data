@@ -1,0 +1,1105 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Fonteyn — Inkomende goederen</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --accent: #d4441c;
+    --accent-dark: #a43512;
+    --ok: #15803d;
+    --bad: #b91c1c;
+    --border: #e5e7eb;
+    --fonteyn-green: #113328;
+    --fonteyn-gold: #ecd48a;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); min-height: 100vh; }
+
+  /* ─── Header (gelijk aan douane.html stijl) ───────────────── */
+  header {
+    background: #fff; border-bottom: 1px solid var(--border);
+    padding: 18px 28px; display: flex; align-items: center; gap: 18px;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .back-link {
+    color: var(--muted); text-decoration: none; font-size: 13px;
+    padding: 6px 10px; border-radius: 6px; transition: background 0.15s;
+  }
+  header .back-link:hover { background: #f3f4f6; color: var(--ink); }
+  header .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  header .user-chip { color: var(--muted); font-size: 13px; }
+  header .user-chip b { color: var(--ink); font-weight: 600; }
+  header button.logout {
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  header button.logout:hover { background: #f3f4f6; color: var(--ink); }
+
+  main { max-width: 1200px; margin: 28px auto 80px; padding: 0 24px; }
+
+  .panel {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px 28px; margin-bottom: 22px;
+  }
+  .panel h2 { margin: 0 0 14px; font-size: 16px; font-weight: 600; }
+  .panel .sub { color: var(--muted); font-size: 13px; margin-top: -8px; margin-bottom: 14px; }
+
+  /* ─── Upload-zone ────────────────────────────────────────── */
+  .dropzone {
+    display: block;
+    border: 2px dashed #d1d5db; border-radius: 10px;
+    padding: 40px 20px; text-align: center; color: var(--muted);
+    transition: border-color 0.15s, background 0.15s;
+    cursor: pointer;
+  }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: #fff8f4; color: var(--ink); }
+  .dropzone input[type=file] { display: none; }
+  .dropzone .big { font-size: 15px; margin-bottom: 4px; color: var(--ink); font-weight: 500; }
+  .dropzone .small { font-size: 12px; }
+
+  .status-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-radius: 8px;
+    background: #eef2f3; color: var(--ink); font-size: 13px;
+    margin-top: 14px;
+  }
+  .status-row.ok  { background: #f0fdf4; color: #166534; }
+  .status-row.bad { background: #fef2f2; color: #991b1b; }
+
+  /* ─── Debug-paneel (verschijnt alleen bij Logic4-fout) ──── */
+  .debug-panel {
+    margin-top: 14px; padding: 14px 16px;
+    background: #fffbeb; border: 1px solid #fbbf24; border-radius: 8px;
+    font-size: 13px; color: #78350f;
+  }
+  .debug-panel h3 { margin: 0 0 8px; font-size: 14px; color: #7c2d12; }
+  .debug-panel pre {
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 6px;
+    padding: 10px; font-size: 11px; max-height: 220px; overflow: auto;
+    white-space: pre-wrap; word-break: break-word; margin: 8px 0;
+  }
+  .debug-panel button {
+    background: #f59e0b; color: #fff; border: none; padding: 6px 12px;
+    border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;
+  }
+  .debug-panel button:hover { background: #d97706; }
+
+  /* ─── Order-info summary ────────────────────────────────── */
+  .order-meta {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 14px; margin-bottom: 18px;
+  }
+  .order-meta .m-item { background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .order-meta .m-item .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .order-meta .m-item .val { font-size: 14px; font-weight: 500; margin-top: 2px; }
+
+  .bulk-actions {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  .bulk-actions .grow { flex-grow: 1; }
+  .bulk-actions .count { color: var(--muted); font-size: 13px; }
+
+  button {
+    background: var(--accent); color: #fff; border: 0; padding: 9px 14px; border-radius: 7px;
+    font: inherit; font-weight: 600; cursor: pointer; transition: background 0.15s;
+  }
+  button:hover:not(:disabled) { background: var(--accent-dark); }
+  button:disabled { background: #d1d5db; cursor: not-allowed; }
+  button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--border); font-weight: 500; }
+  button.secondary:hover:not(:disabled) { background: #f3f4f6; }
+
+  /* ─── Label-lijst (editable rows) ────────────────────────── */
+  .labels-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .label-row {
+    display: grid;
+    grid-template-columns: 30px 260px 1fr 90px 110px 110px;
+    gap: 10px; align-items: center;
+    padding: 10px; border: 1px solid var(--border); border-radius: 8px;
+    background: #fff;
+  }
+  .label-row.pending { background: #fffbeb; border-color: #fde68a; }
+  .label-row.removed { opacity: 0.45; }
+
+  .label-row .check { width: 18px; height: 18px; accent-color: var(--accent); }
+  .label-row input[type=text] {
+    width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+    font: inherit; color: var(--ink); background: #fff;
+  }
+  .label-row input[type=text]:focus { outline: none; border-color: var(--accent); }
+  .label-row input[type=number] {
+    width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+    font: inherit; color: var(--ink); background: #fff; text-align: right;
+  }
+  .label-row .desc { font-size: 13px; }
+  .label-row .code-hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .label-row button.mini { padding: 5px 9px; font-size: 12px; font-weight: 500; }
+
+  .label-row-header {
+    display: grid;
+    grid-template-columns: 30px 260px 1fr 90px 110px 110px;
+    gap: 10px;
+    padding: 0 10px 8px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
+  }
+
+  /* ─── Print-preview (op scherm & print) ──────────────────── */
+  .preview-wrap {
+    margin-top: 18px;
+  }
+  .preview-wrap .preview-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .preview-wrap .preview-header h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .preview-wrap .preview-header .tip { font-size: 12px; color: var(--muted); }
+
+  .preview-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 14px;
+  }
+
+  /*
+   * ═══════════════════════════════════════════════════════════
+   * HET LABEL zelf (A6 landscape, 148mm × 105mm)
+   * Eén .label wordt zowel on-screen getoond (via transform:scale)
+   * als op A6 geprint. Bij printen = exact formaat.
+   * ═══════════════════════════════════════════════════════════
+   */
+  .label {
+    width: 148mm; height: 105mm;
+    background: #fff;
+    display: grid; grid-template-columns: 42mm 1fr;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    color: #111;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* On-screen preview: schaal naar ~360px breed */
+  .preview-grid .label-frame {
+    background: #f3f4f6; border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px;
+    overflow: hidden;
+  }
+  .preview-grid .label-frame .scale {
+    transform: scale(0.65);
+    transform-origin: top left;
+    width: calc(148mm * 0.65);
+    height: calc(105mm * 0.65);
+  }
+  .preview-grid .label-frame .label { box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+  /* ── Groen paneel links (doorgetrokken tot onderkant) ── */
+  .label .green {
+    background: var(--fonteyn-green);
+    color: #fff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 6mm 4mm;
+  }
+  .label .green img.logo { width: 32mm; height: auto; display: block; }
+
+  /* ── Rechts: content ── */
+  .label .content {
+    padding: 7mm 7mm 7mm 7mm;
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    gap: 3mm;
+  }
+  .label .title {
+    font-size: 14pt; font-weight: 700; line-height: 1.2;
+    color: #111;
+    word-break: break-word;
+  }
+  .label .fields {
+    display: grid; grid-template-columns: 32mm 1fr; gap: 2mm 3mm;
+    font-size: 11pt;
+  }
+  .label .fields .k { color: #111; }
+  .label .fields .v { color: #111; font-weight: 600; }
+  .label .barcode-wrap {
+    display: flex; justify-content: flex-end; align-items: flex-end;
+    padding-top: 2mm;
+  }
+  .label .barcode-wrap svg { max-width: 70mm; height: 18mm; }
+
+  /* ─── Print-regels ───────────────────────────────────────── */
+  @media print {
+    @page { size: A6 landscape; margin: 0; }
+
+    html, body { background: #fff !important; margin: 0; padding: 0; }
+
+    /* DWING de browser om achtergrondkleuren en logo-afbeelding mee te
+       printen (anders verdwijnt het groene paneel en wordt het logo leeg). */
+    *, *::before, *::after {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+
+    /* Alles verbergen behalve de print-container */
+    body > *:not(#printArea) { display: none !important; }
+    #printArea { display: block !important; }
+
+    /* Elke .label = één A6-pagina */
+    #printArea .label {
+      page-break-after: always;
+      break-after: page;
+      box-shadow: none !important;
+      border: 0 !important;
+      width: 148mm; height: 105mm;
+    }
+    #printArea .label:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+    #printArea .label-frame { display: none; }
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ════════════ HEADER ════════════ -->
+<header>
+  <a href="dashboard.html" class="back-link">← Terug naar dashboard</a>
+  <h1>Inkomende goederen — labels printen</h1>
+  <div class="right">
+    <div class="user-chip">Ingelogd als <b id="hdr-user">—</b></div>
+    <button class="logout" id="hdr-logout" type="button">Uitloggen</button>
+  </div>
+</header>
+
+<main id="mainView">
+
+  <!-- ───── STAP 1: upload ───── -->
+  <div class="panel" id="step1">
+    <h2>1. Upload de inkooporder</h2>
+    <div class="sub">Sleep een PDF hierin of klik om te kiezen. De app parseert de regels en haalt automatisch de Fonteyn-artikelcodes op uit Logic4.</div>
+
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept="application/pdf">
+      <div class="big">📄 Sleep inkooporder.pdf hierheen</div>
+      <div class="small">of klik om een bestand te kiezen</div>
+    </label>
+
+    <div id="uploadStatus" class="status-row hidden"></div>
+  </div>
+
+  <!-- ───── STAP 2: regels bewerken ───── -->
+  <div class="panel hidden" id="step2">
+    <h2>2. Controleer de labels</h2>
+    <div class="sub">Pas velden aan als dat nodig is. Vink uit wat je niet wil printen. Elke regel = één label (bij meerdere colli krijg je meerdere labels: "Colli 1 van N" enz.).</div>
+
+    <div class="order-meta" id="orderMeta"></div>
+
+    <div class="bulk-actions">
+      <button type="button" class="secondary" id="selectAllBtn">Alles aanvinken</button>
+      <button type="button" class="secondary" id="selectNoneBtn">Alles uitvinken</button>
+      <span class="count" id="selectionCount">0 labels geselecteerd</span>
+      <div class="grow"></div>
+      <button type="button" id="previewBtn">Voorbeeld tonen ↓</button>
+    </div>
+
+    <div class="label-row-header">
+      <div></div>
+      <div>Omschrijving</div>
+      <div>PO · Supplier · Fonteyn-code</div>
+      <div style="text-align:right">Aantal colli</div>
+      <div></div>
+      <div></div>
+    </div>
+    <div class="labels-list" id="labelsList"></div>
+  </div>
+
+  <!-- ───── STAP 3: preview + print ───── -->
+  <div class="panel hidden" id="step3">
+    <div class="preview-wrap">
+      <div class="preview-header">
+        <h3>Voorbeeld van de labels</h3>
+        <div class="tip">Bij print: A6 landscape, 1 label per pagina. Zet je printer ook op A6 (of "Alleen selectie / meerdere pagina's per A4" als je dat wil).</div>
+      </div>
+      <div class="preview-grid" id="previewGrid"></div>
+
+      <div class="bulk-actions" style="margin-top: 18px; border-bottom: 0; padding-bottom: 0;">
+        <button type="button" class="secondary" id="backToEditBtn">← Terug naar bewerken</button>
+        <div class="grow"></div>
+        <span class="count" id="printCount">0 labels klaar voor print</span>
+        <button type="button" id="printBtn">🖨️ Alle labels printen</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ════════════ Print-container (alleen gevuld bij klik op Print) ════════════ -->
+<div id="printArea"></div>
+
+<!-- ═════════════════════════════════════════════════════════════════════════════
+     Externe libs via CDN:
+       • pdf.js  — parseert de Logic4-inkooporder-PDF
+       • JsBarcode — tekent CODE128-barcode in SVG
+     Beide worden door Electron's renderer uit cache gehaald na eerste fetch.
+     ═════════════════════════════════════════════════════════════════════════════ -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   Session-guard: zonder sessie terug naar dashboard.
+   ═══════════════════════════════════════════════════════════════ */
+const HELPER_BASE = "";
+const SESSION_KEY = "fp.session";
+const EMAIL_KEY   = "fp.email";
+
+(function sessionGuard() {
+  const sessionId = localStorage.getItem(SESSION_KEY);
+  if (!sessionId) {
+    window.location.replace("dashboard.html");
+    throw new Error("Geen sessie — doorverwijzen naar dashboard");
+  }
+})();
+
+// Monkey-patch fetch: /api/* krijgen automatisch de Bearer-header,
+// en bij 401 worden we teruggestuurd naar het dashboard.
+const _origFetch = window.fetch.bind(window);
+window.fetch = async function(input, init = {}) {
+  const url = typeof input === "string" ? input : input.url;
+  const isApi = url && url.startsWith("/api/");
+  if (isApi) {
+    const id = localStorage.getItem(SESSION_KEY);
+    init.headers = { ...(init.headers || {}), "Authorization": "Bearer " + id };
+  }
+  const r = await _origFetch(input, init);
+  if (isApi && r.status === 401) {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(EMAIL_KEY);
+    window.location.replace("dashboard.html");
+  }
+  return r;
+};
+
+// Header: user + logout
+document.addEventListener("DOMContentLoaded", () => {
+  const email = localStorage.getItem(EMAIL_KEY) || "—";
+  const hdrUser = document.getElementById("hdr-user");
+  if (hdrUser) hdrUser.textContent = email;
+  const hdrLogout = document.getElementById("hdr-logout");
+  if (hdrLogout) hdrLogout.addEventListener("click", async () => {
+    try { await fetch("/api/logout", { method: "POST" }); } catch {}
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(EMAIL_KEY);
+    window.location.replace("dashboard.html");
+  });
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   pdf.js worker-config
+   ═══════════════════════════════════════════════════════════════ */
+if (window.pdfjsLib) {
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STATE
+   rows = array van {
+     supplierCode, description, aantal,
+     fonteynCode, po, print (bool), lookupTried (bool)
+   }
+   Eén rij kan meerdere labels opleveren (aantal × "Colli X van N").
+   ═══════════════════════════════════════════════════════════════ */
+const state = {
+  rows: [],
+  meta: { poNumber: "", supplier: "", createdOn: "", crediteurNr: "" }
+};
+
+const $ = (id) => document.getElementById(id);
+
+/* ═══════════════════════════════════════════════════════════════
+   STAP 1: upload-handling + PDF-parse
+   ═══════════════════════════════════════════════════════════════ */
+const dropzone = $("dropzone");
+const fileInput = $("fileInput");
+
+["dragenter", "dragover"].forEach(ev => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); dropzone.classList.add("drag");
+}));
+["dragleave", "drop"].forEach(ev => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); dropzone.classList.remove("drag");
+}));
+dropzone.addEventListener("drop", (e) => {
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener("change", (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (f) handleFile(f);
+});
+
+function setStatus(msg, tone) {
+  const s = $("uploadStatus");
+  s.className = "status-row" + (tone ? " " + tone : "");
+  s.textContent = msg;
+  s.classList.remove("hidden");
+}
+
+async function handleFile(file) {
+  if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
+    setStatus("Dit is geen PDF — kies een inkooporder-PDF.", "bad");
+    return;
+  }
+  setStatus("PDF inlezen…");
+  try {
+    const buf = await file.arrayBuffer();
+    const parsed = await parsePurchaseOrder(buf);
+    if (!parsed.rows.length) {
+      setStatus("Geen regels gevonden — is dit wel een Fonteyn inkooporder?", "bad");
+      return;
+    }
+    state.rows = parsed.rows.map(r => ({
+      supplierCode: r.code,
+      description: r.description,
+      aantal: r.aantal,
+      fonteynCode: "",
+      po: parsed.meta.poNumber || "",
+      print: true,
+      lookupTried: false
+    }));
+    state.meta = parsed.meta;
+    setStatus(`✓ ${parsed.rows.length} regels gevonden · PO ${parsed.meta.poNumber || "—"} · bezig met ophalen uit Logic4…`, "ok");
+    renderStep2();
+
+    // Probeer eerst de PO direct uit Logic4 te halen (één call, Logic4 kent
+    // de complete mapping supplier↔Fonteyn voor deze order).
+    if (parsed.meta.poNumber) {
+      const filledByPO = await fillFromPurchaseOrder(parsed.meta.poNumber);
+      if (!filledByPO) {
+        // NIET meer terugvallen op catalogus-scan — die werkt niet en maskeert
+        // bovendien de echte PO-fout. Status laten staan zodat user de debug
+        // info ziet.
+        setStatus(`⚠ Fonteyn-codes niet automatisch opgehaald — zie oranje vak onderaan, of vul handmatig in.`, "bad");
+      }
+    } else {
+      setStatus(`✓ ${state.rows.length} regels geladen · Geen PO-nummer in PDF gevonden — vul Fonteyn-codes handmatig in.`, "ok");
+    }
+  } catch (e) {
+    console.error(e);
+    setStatus("PDF-inlezen mislukt: " + e.message, "bad");
+  }
+}
+
+async function fillFromPurchaseOrder(poNumber) {
+  try {
+    const r = await fetch(`/api/purchase-order-lines?po=${encodeURIComponent(poNumber)}`);
+    const body = await r.text();
+    let j = null;
+    try { j = JSON.parse(body); } catch {}
+    if (!r.ok || !j || !j.ok) {
+      showDebugPanel({
+        stap: `PO ${poNumber} ophalen uit Logic4 faalde`,
+        httpStatus: r.status,
+        response: body.slice(0, 2000)
+      });
+      return false;
+    }
+    if (!j.lines || !j.lines.length) {
+      showDebugPanel({
+        stap: `Logic4 vond geen regels bij PO ${poNumber}`,
+        rawCount: j.rawCount,
+        endpointsTried: j.endpointsTried,
+        urlUsed: j.urlUsed,
+        sampleRawLine: j.sampleRawLine,
+        sampleFieldNames: j.sampleFieldNames
+      });
+      return false;
+    }
+
+    // Match Logic4-regels op supplier-code met wat de PDF gaf. Als de
+    // supplier-codes 100% matchen: vullen we Fonteyn-code + description aan.
+    // Als niet: nemen we de Logic4-regels als waarheid (Logic4 is authoritatief).
+    const bySupplier = new Map(
+      j.lines
+        .filter(l => l.supplierCode)
+        .map(l => [l.supplierCode.toLowerCase(), l])
+    );
+    let matched = 0;
+    for (const row of state.rows) {
+      const hit = bySupplier.get((row.supplierCode || "").toLowerCase());
+      if (hit) {
+        row.fonteynCode = hit.fonteynCode;
+        if (hit.description) row.description = hit.description;
+        row.lookupTried = true;
+        matched++;
+      }
+    }
+    if (matched === 0) {
+      // PDF-supplier-codes matchen niet met Logic4-regels — dan Logic4 als
+      // leidend nemen en de rows vervangen.
+      state.rows = j.lines.map(l => ({
+        supplierCode: l.supplierCode,
+        fonteynCode: l.fonteynCode,
+        description: l.description,
+        aantal: l.aantal,
+        po: poNumber,
+        print: true,
+        lookupTried: true
+      }));
+    }
+    const withCode = state.rows.filter(r => r.fonteynCode).length;
+    if (withCode === state.rows.length && withCode > 0) {
+      setStatus(`✓ PO ${poNumber} geladen uit Logic4 — alle ${withCode} Fonteyn-codes ingevuld.`, "ok");
+      hideDebugPanel();
+    } else {
+      setStatus(`✓ PO ${poNumber} geladen · ${withCode} van ${state.rows.length} Fonteyn-codes ingevuld.`, "ok");
+    }
+    renderStep2();
+    return true;
+  } catch (e) {
+    showDebugPanel({ stap: "Netwerkfout bij ophalen PO", error: e.message });
+    return false;
+  }
+}
+
+/* ─── PDF-parser (Logic4 inkooporder-formaat) ─── */
+async function parsePurchaseOrder(arrayBuffer) {
+  const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+
+  // Verzamel alle tekst-items met (x, y, str) over alle pagina's
+  const all = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const content = await page.getTextContent();
+    const viewport = page.getViewport({ scale: 1 });
+    for (const it of content.items) {
+      // transform = [a,b,c,d,e,f] — e=x, f=y (PDF-coordinaten, y=van onder)
+      const x = it.transform[4];
+      const y = it.transform[5];
+      all.push({ page: p, x, y: viewport.height - y, str: it.str.trim() });
+    }
+  }
+
+  // Meta uitlezen (PO-nummer, crediteurnr, supplier, gemaakt op)
+  const meta = {
+    poNumber: "",
+    supplier: "",
+    createdOn: "",
+    crediteurNr: ""
+  };
+  // Zoek op label-tekst, pak het laatste zinnige item rechts op dezelfde regel.
+  // "Laatste" i.p.v. "eerste" omdat Logic4 bij sommige labels een sub-woord
+  // heeft (bv. "Gemaakt op:" → "op:" rechts van "Gemaakt" maar de echte waarde
+  // "15-04-2026" staat dáár weer rechts van).
+  function valueRightOf(labelMatch) {
+    const idx = all.findIndex(t => t.page === 1 && labelMatch.test(t.str));
+    if (idx < 0) return "";
+    const anchor = all[idx];
+    const candidates = all.filter(t =>
+      t.page === 1 &&
+      Math.abs(t.y - anchor.y) < 4 &&
+      t.x > anchor.x + 3 &&
+      t.str && t.str.length > 0 &&
+      !/^[a-z]+:$/i.test(t.str) // skip sub-labels zoals "op:"
+    ).sort((a, b) => a.x - b.x);
+    return candidates.length ? candidates[0].str : "";
+  }
+  meta.poNumber    = valueRightOf(/^Inkoopordernr/i);
+  meta.crediteurNr = valueRightOf(/^Crediteurnr/i);
+  meta.createdOn   = valueRightOf(/^Gemaakt op/i);
+
+  // Supplier: pak de hele regel waar de eerste "B.V."/"N.V."/"GmbH" etc. op staat.
+  // Let op:
+  //   - geen trailing \b bij "B.V." — die matcht niet tegen een afsluitende punt
+  //   - alleen items in de LINKER kolom (x < 300) meenemen zodat we niet
+  //     "Gemaakt door: Afhaal" uit de rechterkolom meepakken
+  const supplierAnchor = all.find(t => t.page === 1 && /(?:\bB\.V\.|\bN\.V\.|\bGmbH\b|\bS\.A\.|\bLtd\.?|\bSrl\b)/i.test(t.str));
+  if (supplierAnchor) {
+    meta.supplier = all
+      .filter(t => t.page === 1 && Math.abs(t.y - supplierAnchor.y) < 2.5 && t.x < 300 && t.str)
+      .sort((a, b) => a.x - b.x)
+      .map(t => t.str)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // "Gemaakt op" is in pdfjs opgesplitst in 2 items ("Gemaakt" en "op:"); de
+  // valueRightOf-helper pakt dan "Afhaal" (want dat is de eerste niet-label-
+  // achtige buur). We zoeken liever direct naar een datum-pattern op pagina 1.
+  if (!meta.createdOn || /^[A-Z][a-z]+$/.test(meta.createdOn)) {
+    const dateItem = all.find(t => t.page === 1 && /^\d{1,2}-\d{1,2}-\d{4}$/.test(t.str));
+    if (dateItem) meta.createdOn = dateItem.str;
+  }
+
+  // ─── Regels uitlezen ───
+  // Logic4 legt het uit in drie kolommen: Code (links), Omschrijving (midden), Aantal (rechts).
+  // We zoeken eerst de X van de kolom-headers "Code", "Omschrijving", "Aantal".
+  const headerCode   = all.find(t => /^Code$/.test(t.str));
+  const headerDesc   = all.find(t => /^Omschrijving$/.test(t.str));
+  const headerAantal = all.find(t => /^Aantal$/.test(t.str));
+  if (!headerCode || !headerDesc || !headerAantal) {
+    // Fallback: gebruik heuristiek — code-kolom heeft cijfers, aantal-kolom heeft "x,0" patroon
+    return { rows: extractRowsHeuristic(all), meta };
+  }
+
+  const codeX   = headerCode.x;
+  const descX   = headerDesc.x;
+  const aantalX = headerAantal.x;
+
+  // Groepeer items per page+y (tolerantie: 2.5pt)
+  const lines = [];
+  const sorted = [...all].sort((a, b) => a.page - b.page || a.y - b.y || a.x - b.x);
+  for (const t of sorted) {
+    const last = lines[lines.length - 1];
+    if (last && last.page === t.page && Math.abs(last.y - t.y) < 2.5) {
+      last.items.push(t);
+    } else {
+      lines.push({ page: t.page, y: t.y, items: [t] });
+    }
+  }
+
+  // Verzamel rows. Belangrijk:
+  //  - De kolomheader "Omschrijving" staat op x ≈ 137 maar de tekst-items in
+  //    die kolom beginnen op x ≈ 110. We anchoren descItems daarom op
+  //    (codeX + 30) < x < (aantalX - 10) — zo pakken we "Taste" etc. ook op.
+  //  - Logic4 herhaalt bij een pagina-overgang de laatste rij bovenaan de
+  //    volgende pagina. We dedupliceren achteraf op code.
+  //  - curDescExtra wordt per pagina gereset zodat header-regels van pagina 2
+  //    niet per ongeluk als vervolg-regel aan de laatste rij van pagina 1
+  //    worden geplakt.
+  const rows = [];
+  let curDescExtra = null;
+  let curPage = null;
+  for (const L of lines) {
+    if (L.page !== curPage) {
+      curPage = L.page;
+      curDescExtra = null;
+    }
+    // Skip de header-regel zelf (alleen op de pagina waar ie op staat)
+    if (L.page === headerCode.page && L.y <= headerCode.y + 2) continue;
+
+    const codeItem = L.items.find(t => Math.abs(t.x - codeX) < 5 && isProductCode(t.str));
+    const aantalItem = L.items.find(t => Math.abs(t.x - aantalX) < 30 && /^\d+([,.]\d+)?$/.test(t.str.replace(/\s/g, "")));
+    const descItems = L.items
+      .filter(t => t.x > codeX + 30 && t.x < aantalX - 10)
+      .sort((a, b) => a.x - b.x);
+    const descText = descItems.map(t => t.str).join(" ").trim();
+    const firstDescX = descItems.length ? descItems[0].x : Infinity;
+    // Een vervolg-regel moet beginnen in de desc-kolom (tolerantie ±30pt rond descX).
+    // Zo voorkomen we dat een adressen-regel ("Hadrianussingel 29 ...") per ongeluk
+    // als vervolg-beschrijving wordt gezien.
+    const looksLikeDescContinuation = firstDescX >= descX - 30 && firstDescX <= descX + 30;
+
+    if (codeItem && aantalItem) {
+      // Nieuwe regel
+      rows.push({
+        code: codeItem.str.trim(),
+        description: descText,
+        aantal: parseNlNumber(aantalItem.str)
+      });
+      curDescExtra = rows[rows.length - 1];
+    } else if (!codeItem && !aantalItem && descText && curDescExtra && looksLikeDescContinuation) {
+      // Vervolg-regel van de beschrijving
+      curDescExtra.description = (curDescExtra.description + " " + descText).replace(/\s+/g, " ").trim();
+    } else {
+      curDescExtra = null;
+    }
+  }
+
+  // Deduplicate: als dezelfde code meerdere keren voorkomt (page-break-herhaling
+  // van Logic4), hou de versie met de langste beschrijving — dat is degene die
+  // z'n continuation-regel ook heeft meegekregen.
+  const seen = new Map();
+  const deduped = [];
+  for (const r of rows) {
+    const existing = seen.get(r.code);
+    if (!existing) {
+      seen.set(r.code, r);
+      deduped.push(r);
+    } else if (r.description.length > existing.description.length) {
+      existing.description = r.description;
+      existing.aantal = r.aantal;
+    }
+  }
+
+  return { rows: deduped, meta };
+}
+
+function isProductCode(s) {
+  // Logic4-codes beginnen altijd met 4+ cijfers, soms gevolgd door een
+  // suffix-letters achter een streepje (bv. "91829-top", "91829-base").
+  return /^\d{4,}(-[a-z]+)?$/i.test(String(s).trim());
+}
+
+function parseNlNumber(s) {
+  const cleaned = String(s).replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? Math.round(n) : 0;
+}
+
+// Fallback als de kolom-headers niet gevonden worden (kan gebeuren als Logic4
+// het formaat ooit wijzigt). Pakt de eerste nummer-achtige + tekst + aantal per lijn.
+function extractRowsHeuristic(all) {
+  const byLine = new Map();
+  for (const t of all) {
+    const k = `${t.page}:${Math.round(t.y)}`;
+    if (!byLine.has(k)) byLine.set(k, []);
+    byLine.get(k).push(t);
+  }
+  const rows = [];
+  for (const [, items] of byLine) {
+    items.sort((a, b) => a.x - b.x);
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (!first || !last) continue;
+    if (!isProductCode(first.str)) continue;
+    if (!/^\d+([,.]\d+)?$/.test(last.str.replace(/\s/g, ""))) continue;
+    const descText = items.slice(1, -1).map(t => t.str).join(" ").trim();
+    rows.push({ code: first.str.trim(), description: descText, aantal: parseNlNumber(last.str) });
+  }
+  return rows;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Fonteyn-code lookup via backend
+   ═══════════════════════════════════════════════════════════════ */
+async function lookupFonteynCodes() {
+  const codes = [...new Set(state.rows.map(r => r.supplierCode).filter(Boolean))];
+  if (!codes.length) return;
+  let httpStatus = 0, rawBody = "";
+  try {
+    const r = await fetch(`/api/products-by-supplier-code?codes=${encodeURIComponent(codes.join(","))}`);
+    httpStatus = r.status;
+    rawBody = await r.text();
+    let j = null;
+    try { j = JSON.parse(rawBody); } catch {}
+    if (!r.ok || !j || !j.ok) {
+      setStatus(`⚠ Logic4-opzoeken faalde — scroll naar beneden voor details.`, "bad");
+      showDebugPanel({
+        stap: "HTTP-response van backend",
+        httpStatus,
+        url: `/api/products-by-supplier-code?codes=${codes.join(",")}`,
+        response: rawBody.slice(0, 2000)
+      });
+      return;
+    }
+    let foundCount = 0;
+    for (const row of state.rows) {
+      const hit = j.mapping[row.supplierCode];
+      if (hit && hit.fonteynCode) {
+        row.fonteynCode = hit.fonteynCode;
+        foundCount++;
+      }
+      row.lookupTried = true;
+    }
+    if (foundCount === state.rows.length) {
+      setStatus(`✓ Alle ${foundCount} Fonteyn-codes gevonden — klaar om te printen.`, "ok");
+      hideDebugPanel();
+    } else if (foundCount === 0) {
+      setStatus(`⚠ Geen matches gevonden na scannen van ${j.productsScanned} producten. Details onderaan.`, "bad");
+      showDebugPanel({
+        stap: "Catalogus gescand, geen supplier-code-veld gevonden dat matched",
+        httpStatus,
+        gezochte_supplier_codes: codes,
+        producten_gescand: j.productsScanned,
+        paginas_opgehaald: j.pagesFetched,
+        diagnostics: j.diagnostics,
+        toelichting: "Claude kijkt naar 'sampleProductFieldNames' om de juiste veldnaam te vinden waarin Fonteyns leveranciers-code staat."
+      });
+    } else {
+      setStatus(`✓ ${foundCount} van ${state.rows.length} Fonteyn-codes gevonden — vul de ontbrekende handmatig in.`, "ok");
+      hideDebugPanel();
+    }
+    renderStep2();
+  } catch (e) {
+    setStatus(`⚠ Fout bij ophalen Fonteyn-codes — scroll naar beneden voor details.`, "bad");
+    showDebugPanel({
+      stap: "Netwerkfout (backend onbereikbaar?)",
+      error: e.message,
+      httpStatus,
+      rawBody: rawBody.slice(0, 2000)
+    });
+  }
+}
+
+function showDebugPanel(info) {
+  let panel = document.getElementById("debugPanel");
+  if (!panel) {
+    panel = document.createElement("div");
+    panel.id = "debugPanel";
+    panel.className = "debug-panel";
+    document.getElementById("step2").appendChild(panel);
+  }
+  const text = JSON.stringify(info, null, 2);
+  panel.innerHTML = `
+    <h3>Details voor Gerrit (stuur deze aan Claude):</h3>
+    <pre id="debugContent"></pre>
+    <button type="button" id="copyDebugBtn">📋 Kopieer naar klembord</button>
+    <span id="copyDebugHint" style="margin-left:10px; font-size:12px;"></span>
+  `;
+  panel.querySelector("#debugContent").textContent = text;
+  panel.querySelector("#copyDebugBtn").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      panel.querySelector("#copyDebugHint").textContent = "✓ Gekopieerd — nu plakken in het chatvenster";
+    } catch {
+      panel.querySelector("#copyDebugHint").textContent = "Kon niet kopiëren — selecteer de tekst handmatig";
+    }
+  });
+}
+
+function hideDebugPanel() {
+  const panel = document.getElementById("debugPanel");
+  if (panel) panel.remove();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STAP 2: tabel renderen + editable
+   ═══════════════════════════════════════════════════════════════ */
+function renderStep2() {
+  $("step2").classList.remove("hidden");
+
+  // Meta-box
+  const meta = state.meta;
+  $("orderMeta").innerHTML = `
+    <div class="m-item"><div class="lbl">Inkoopordernr.</div><div class="val">${escape(meta.poNumber || "—")}</div></div>
+    <div class="m-item"><div class="lbl">Leverancier</div><div class="val">${escape(meta.supplier || "—")}</div></div>
+    <div class="m-item"><div class="lbl">Crediteurnr.</div><div class="val">${escape(meta.crediteurNr || "—")}</div></div>
+    <div class="m-item"><div class="lbl">Gemaakt op</div><div class="val">${escape(meta.createdOn || "—")}</div></div>
+  `;
+
+  const list = $("labelsList");
+  list.innerHTML = "";
+  state.rows.forEach((row, idx) => list.appendChild(rowElement(row, idx)));
+  updateCount();
+}
+
+function rowElement(row, idx) {
+  const wrap = document.createElement("div");
+  wrap.className = "label-row" + (row.fonteynCode ? "" : " pending");
+  wrap.innerHTML = `
+    <input type="checkbox" class="check" ${row.print ? "checked" : ""} aria-label="Printen">
+    <div>
+      <input type="text" class="desc in-desc" value="${escapeAttr(row.description)}">
+      <div class="code-hint">Supplier: <b>${escape(row.supplierCode || "—")}</b></div>
+    </div>
+    <div>
+      <input type="text" class="in-po" value="${escapeAttr(row.po)}" placeholder="PO-nummer">
+      <div class="code-hint">Fonteyn-code: <input type="text" class="in-fonteyn" value="${escapeAttr(row.fonteynCode)}" placeholder="bv. 770873" style="width: 110px; padding: 2px 6px; font-size: 12px;"></div>
+    </div>
+    <input type="number" class="in-aantal" min="1" max="999" value="${row.aantal || 1}">
+    <button type="button" class="mini secondary previewOne">Voorbeeld</button>
+    <button type="button" class="mini secondary removeOne">Verwijderen</button>
+  `;
+
+  wrap.querySelector(".check").addEventListener("change", (e) => {
+    row.print = e.target.checked;
+    updateCount();
+  });
+  wrap.querySelector(".in-desc").addEventListener("input", (e) => row.description = e.target.value);
+  wrap.querySelector(".in-po").addEventListener("input", (e) => row.po = e.target.value);
+  wrap.querySelector(".in-fonteyn").addEventListener("input", (e) => {
+    row.fonteynCode = e.target.value.trim();
+    wrap.classList.toggle("pending", !row.fonteynCode);
+    updateCount();
+  });
+  wrap.querySelector(".in-aantal").addEventListener("input", (e) => {
+    const n = parseInt(e.target.value, 10);
+    row.aantal = Number.isFinite(n) && n > 0 ? n : 1;
+    updateCount();
+  });
+  wrap.querySelector(".removeOne").addEventListener("click", () => {
+    state.rows.splice(idx, 1);
+    renderStep2();
+  });
+  wrap.querySelector(".previewOne").addEventListener("click", () => {
+    // Tijdelijke preview van enkel deze rij
+    const only = [row];
+    showPreview(only);
+  });
+
+  return wrap;
+}
+
+function updateCount() {
+  // Voor "Voorbeeld tonen": elke aangevinkte regel mag — ook zonder Fonteyn-code.
+  // De user moet 'm juist kunnen zien om te weten wat er nog handmatig bij moet.
+  const nSelected = state.rows
+    .filter(r => r.print)
+    .reduce((sum, r) => sum + (r.aantal || 1), 0);
+  // Voor "Alle labels printen": alleen regels mét Fonteyn-code tellen mee
+  // (zonder code is de barcode waardeloos).
+  const nPrintable = state.rows
+    .filter(r => r.print && r.fonteynCode)
+    .reduce((sum, r) => sum + (r.aantal || 1), 0);
+  $("selectionCount").textContent = `${nSelected} labels geselecteerd`;
+  $("printCount").textContent = `${nPrintable} labels klaar voor print`;
+  $("previewBtn").disabled = nSelected === 0;
+  $("printBtn").disabled = nPrintable === 0;
+}
+
+$("selectAllBtn").addEventListener("click", () => {
+  state.rows.forEach(r => r.print = true);
+  renderStep2();
+});
+$("selectNoneBtn").addEventListener("click", () => {
+  state.rows.forEach(r => r.print = false);
+  renderStep2();
+});
+$("previewBtn").addEventListener("click", () => {
+  const toPrint = state.rows.filter(r => r.print && r.fonteynCode);
+  showPreview(toPrint);
+});
+$("backToEditBtn").addEventListener("click", () => {
+  $("step3").classList.add("hidden");
+  $("step2").scrollIntoView({ behavior: "smooth" });
+});
+$("printBtn").addEventListener("click", doPrint);
+
+/* ═══════════════════════════════════════════════════════════════
+   STAP 3: preview renderen
+   ═══════════════════════════════════════════════════════════════ */
+function showPreview(rows) {
+  const grid = $("previewGrid");
+  grid.innerHTML = "";
+
+  let labelCount = 0;
+  for (const row of rows) {
+    const total = Math.max(1, row.aantal || 1);
+    for (let i = 1; i <= total; i++) {
+      const frame = document.createElement("div");
+      frame.className = "label-frame";
+      const scale = document.createElement("div");
+      scale.className = "scale";
+      scale.appendChild(buildLabel(row, i, total));
+      frame.appendChild(scale);
+      grid.appendChild(frame);
+      labelCount++;
+    }
+  }
+
+  $("step3").classList.remove("hidden");
+  $("step3").scrollIntoView({ behavior: "smooth" });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Één label bouwen als HTML-element
+   ═══════════════════════════════════════════════════════════════ */
+function buildLabel(row, colliIdx, colliTotal) {
+  const label = document.createElement("div");
+  label.className = "label";
+
+  // Groene kolom + logo
+  const green = document.createElement("div");
+  green.className = "green";
+  green.innerHTML = fonteynLogoSvg();
+  label.appendChild(green);
+
+  // Content
+  const content = document.createElement("div");
+  content.className = "content";
+
+  const title = document.createElement("div");
+  title.className = "title";
+  title.textContent = row.description || "—";
+  content.appendChild(title);
+
+  const fields = document.createElement("div");
+  fields.className = "fields";
+  const rows2 = [
+    ["Art.nr. Fonteyn:", row.fonteynCode || "—"],
+    ["Art.nr. Supplier:", row.supplierCode || "—"],
+    ["PO:", row.po || "—"],
+    ["Boxnr.:", `Colli ${colliIdx} van ${colliTotal}`]
+  ];
+  for (const [k, v] of rows2) {
+    const kEl = document.createElement("div");
+    kEl.className = "k";
+    kEl.textContent = k;
+    const vEl = document.createElement("div");
+    vEl.className = "v";
+    vEl.textContent = v;
+    fields.appendChild(kEl);
+    fields.appendChild(vEl);
+  }
+  content.appendChild(fields);
+
+  // Barcode (onderaan rechts)
+  const barcodeWrap = document.createElement("div");
+  barcodeWrap.className = "barcode-wrap";
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  barcodeWrap.appendChild(svg);
+  content.appendChild(barcodeWrap);
+
+  label.appendChild(content);
+
+  // JsBarcode wil een SVG-element hebben; we doen dit asynchroon want de
+  // node moet eerst in de DOM staan voor accurate sizing.
+  setTimeout(() => {
+    try {
+      window.JsBarcode(svg, row.fonteynCode || "0", {
+        format: "CODE128",
+        displayValue: false,
+        margin: 0,
+        width: 2,
+        height: 60
+      });
+    } catch (e) {
+      svg.innerHTML = `<text x="0" y="20" font-size="10">Barcode-fout: ${e.message}</text>`;
+    }
+  }, 0);
+
+  return label;
+}
+
+/* Officieel Fonteyn-logo — uit de originele label-PDF geëxtraheerd en met
+   transparante achtergrond opgeslagen als fonteyn-logo.png naast labels.html.
+   De helper-server serveert alle bestanden uit de live-map, dus het relatieve
+   pad werkt hier gewoon. */
+function fonteynLogoSvg() {
+  return `<img class="logo" src="fonteyn-logo.png" alt="Fonteyn Outdoor Living Mall">`;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Print: bouw #printArea met echte A6-labels en trigger window.print()
+   ═══════════════════════════════════════════════════════════════ */
+function doPrint() {
+  const toPrint = state.rows.filter(r => r.print && r.fonteynCode);
+  if (!toPrint.length) {
+    alert("Geen labels geselecteerd om te printen.");
+    return;
+  }
+  const area = $("printArea");
+  area.innerHTML = "";
+  for (const row of toPrint) {
+    const total = Math.max(1, row.aantal || 1);
+    for (let i = 1; i <= total; i++) {
+      area.appendChild(buildLabel(row, i, total));
+    }
+  }
+  // Laat JsBarcode renderen voordat we printen
+  setTimeout(() => {
+    window.print();
+  }, 300);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Util
+   ═══════════════════════════════════════════════════════════════ */
+function escape(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function escapeAttr(s) {
+  return escape(s);
+}
+</script>
+</body>
+</html>
