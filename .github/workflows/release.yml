@@ -1,8 +1,8 @@
-name: Build & Release Windows installer
+name: Build & Release installers
 
-# Deze workflow draait op een Windows-machine in de cloud.
-# Hij bouwt de .exe-installer via electron-builder en publiceert 'm als
-# GitHub Release. Manon's app auto-downloadt 'm via electron-updater.
+# Deze workflow draait op zowel Windows als macOS in de cloud.
+# Beide builden een installer (NSIS .exe voor Windows, .dmg voor macOS)
+# en publiceren 'm als asset van dezelfde GitHub Release.
 #
 # Trigger 'm handmatig vanaf het Actions-tabblad → "Run workflow" →
 # versienummer invullen (bv. 0.5.1) → groene knop.
@@ -20,7 +20,14 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            script: release:win
+          - os: macos-latest
+            script: release:mac
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout source
@@ -31,19 +38,26 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Bump version in package.json
+      - name: Bump version (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $v = "${{ inputs.version }}"
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
           $pkg.version = $v
           ($pkg | ConvertTo-Json -Depth 100) | Set-Content package.json -Encoding UTF8
-          Write-Host "Set version to $v"
+
+      - name: Bump version (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          v="${{ inputs.version }}"
+          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version='$v'; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));"
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build & publish Windows installer
+      - name: Build & publish installer
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run release:win
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run ${{ matrix.script }}

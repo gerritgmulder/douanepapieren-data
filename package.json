@@ -9,7 +9,9 @@
   "scripts": {
     "start": "electron .",
     "build:win": "electron-builder --win --publish never",
-    "release:win": "electron-builder --win --publish always"
+    "release:win": "electron-builder --win --publish always",
+    "build:mac": "electron-builder --mac --publish never",
+    "release:mac": "electron-builder --mac --publish always"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
@@ -58,6 +60,22 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Fonteyn Dashboard"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity",
+      "identity": null
+    },
+    "dmg": {
+      "title": "Fonteyn Dashboard ${version}",
+      "artifactName": "Fonteyn-Dashboard-${version}.${ext}"
     },
     "publish": [
       {
