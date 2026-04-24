@@ -498,7 +498,17 @@ async function handleFile(file) {
 
 async function fillFromPurchaseOrder(poNumber) {
   try {
-    const r = await fetch(`/api/purchase-order-lines?po=${encodeURIComponent(poNumber)}`);
+    // Gebruik de generieke Logic4-proxy zodat deze tool werkt met elke .exe-
+    // versie die deze proxy heeft — nieuwe backend-changes zijn niet nodig.
+    const r = await fetch("/api/logic4-call", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        path: "/v3/BuyOrders/GetBuyOrderRows",
+        method: "POST",
+        body: parseInt(poNumber, 10)
+      })
+    });
     const body = await r.text();
     let j = null;
     try { j = JSON.parse(body); } catch {}
@@ -510,14 +520,23 @@ async function fillFromPurchaseOrder(poNumber) {
       });
       return false;
     }
-    if (!j.lines || !j.lines.length) {
+    // j.data is de rauwe Logic4-response — hier een array van BuyOrderRow
+    const rawLines = Array.isArray(j.data) ? j.data : [];
+    const lines = rawLines.map(rr => ({
+      fonteynCode: String(rr.ProductCode || ""),
+      supplierCode: String(rr.CreditorProductCode || ""),
+      description: rr.ProductDesc1 || rr.Description || rr.ProductDesc2 || "",
+      aantal: Math.round(Number(rr.QtyToDeliver ?? rr.QtyToOrder ?? 1)),
+    }));
+    j.lines = lines;
+    j.rawCount = rawLines.length;
+    j.sampleRawLine = rawLines[0] || null;
+    j.sampleFieldNames = rawLines[0] ? Object.keys(rawLines[0]) : [];
+    if (!j.lines.length) {
       showDebugPanel({
         stap: `Logic4 vond geen regels bij PO ${poNumber}`,
-        rawCount: j.rawCount,
-        endpointsTried: j.endpointsTried,
-        urlUsed: j.urlUsed,
-        sampleRawLine: j.sampleRawLine,
-        sampleFieldNames: j.sampleFieldNames
+        logic4Status: j.status,
+        sampleRawLine: j.sampleRawLine
       });
       return false;
     }

@@ -1,0 +1,49 @@
+name: Build & Release Windows installer
+
+# Deze workflow draait op een Windows-machine in de cloud.
+# Hij bouwt de .exe-installer via electron-builder en publiceert 'm als
+# GitHub Release. Manon's app auto-downloadt 'm via electron-updater.
+#
+# Trigger 'm handmatig vanaf het Actions-tabblad → "Run workflow" →
+# versienummer invullen (bv. 0.5.1) → groene knop.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versienummer (zonder 'v', bijv. 0.5.1)"
+        required: true
+        default: "0.5.0"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Bump version in package.json
+        shell: pwsh
+        run: |
+          $v = "${{ inputs.version }}"
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $pkg.version = $v
+          ($pkg | ConvertTo-Json -Depth 100) | Set-Content package.json -Encoding UTF8
+          Write-Host "Set version to $v"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build & publish Windows installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release:win

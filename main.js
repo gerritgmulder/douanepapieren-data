@@ -287,12 +287,15 @@ function setupAutoUpdater() {
   });
   autoUpdater.on("update-downloaded", (info) => {
     console.log(`[updater] ${info.version} gedownload — installatie bij afsluiten.`);
+    // Toon subtiele notificatie — geen blokkerende dialog want de update
+    // gaat automatisch bij afsluiten, dat mag ze 's avonds stilletjes doen.
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.executeJavaScript(`
         console.log("Nieuwe versie ${info.version} gedownload — wordt geïnstalleerd bij afsluiten.");
       `).catch(() => {});
     }
   });
+  // Check direct bij starten én daarna elk uur
   autoUpdater.checkForUpdates().catch(e => console.warn("[updater] check fail:", e.message));
   setInterval(() => {
     autoUpdater.checkForUpdates().catch(() => {});
@@ -302,8 +305,9 @@ function setupAutoUpdater() {
 app.whenReady().then(async () => {
   try {
     await bootstrapLiveDir();
+    // Auto-update skippen in dev — anders overschrijft GitHub onze lokale edits
     if (app.isPackaged) {
-      await fetchLiveUpdates();
+      await fetchLiveUpdates(); // fail-safe — bij offline gewoon doorgaan met cache
     }
     await startHelper();
     await waitForHelper();
