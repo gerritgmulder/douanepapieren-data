@@ -1,0 +1,71 @@
+{
+  "name": "fonteyn-dashboard",
+  "version": "0.5.0",
+  "description": "Fonteyn Dashboard — Electron desktop app die het dashboard en alle tools (Douanepapieren, Transport, 5S, Personeel, …) bundelt met een Logic4-helper.",
+  "main": "main.js",
+  "type": "module",
+  "private": true,
+  "author": "Fonteyn",
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win --publish never",
+    "release:win": "electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "electron-updater": "^6.3.9",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "electron": "^31.7.5",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.fonteyn.dashboard",
+    "productName": "Fonteyn Dashboard",
+    "artifactName": "Fonteyn-Dashboard-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "manifest.json",
+      "dashboard.html",
+      "douane.html",
+      "douanetool.html",
+      "labels.html",
+      "fonteyn-logo.png",
+      "server/**/*",
+      "!server/node_modules/**/*",
+      "node_modules/**/*",
+      "!node_modules/electron/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "deleteAppDataOnUninstall": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Fonteyn Dashboard"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "gerritgmulder",
+        "repo": "douanepapieren-data",
+        "releaseType": "release"
+      }
+    ]
+  }
+}
