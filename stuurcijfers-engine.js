@@ -443,6 +443,195 @@
   }
 
   // ════════════════════════════════════════════════════════════════
+  // OUT_Resultaten per artikelgroep
+  // ════════════════════════════════════════════════════════════════
+  // Zelfde W&V-rij-structuur als OUT_Periodebalans, maar de kolom-as is
+  // "artikelgroep" i.p.v. "maand". Excel hardcodet de artikelgroepen in rij 6;
+  // wij halen ze dynamisch uit Grootboektransacties zodat nieuwe artikelgroepen
+  // niet handmatig hoeven worden toegevoegd.
+  //
+  // Volgorde uit het datamodel (Excel rij 6) — onbekende artikelgroepen
+  // verschijnen alfabetisch achter deze lijst.
+  const ARTIKELGROEP_VOLGORDE = [
+    "Spa dealers / groothandel", "Spa Houston USA", "Spa particulieren", "Sauna's",
+    "Zwembaden", "Tuinmeubelen", "All4Spa Onderdelen", "Spa Passion 4 Life",
+    "Veranda's", "Bierbrouwerij", "Boerderij", "Buitenkeukens BBQ",
+    "Bloemisterij - Decoratie", "Tuinhuizen", "Spa Passion Icebaths", "Overige",
+    "Algemeen", "Groepsmaatschappijen",
+  ];
+
+  function getArtikelgroepen(grootboek, agCol) {
+    const seen = new Set();
+    for (const row of grootboek.rows) {
+      const v = row[agCol];
+      if (v != null && v !== "") seen.add(String(v).trim());
+    }
+    const known = ARTIKELGROEP_VOLGORDE.filter(g => seen.has(g));
+    const extra = [...seen].filter(g => !ARTIKELGROEP_VOLGORDE.includes(g)).sort();
+    return [...known, ...extra];
+  }
+
+  function calcOutResultatenPerArtikelgroep(tables) {
+    const grootboek = tables.grootboektransacties;
+    if (!grootboek?.rows?.length) {
+      return {
+        columns: ["Omschrijving", "—"],
+        rows: [["⚠ Grootboektransacties nog niet geïmporteerd.", ""]]
+      };
+    }
+    const gtRubCol = colIdx(grootboek, "Rubriek");
+    const gtAgCol  = colIdx(grootboek, "Artikelgroep");
+    const gtBedrag = colIdx(grootboek, "Bedrag");
+    if (gtAgCol < 0) {
+      return { columns: ["Fout"], rows: [["Kolom 'Artikelgroep' niet gevonden in Grootboektransacties."]] };
+    }
+    const buckets = bucketSum2(grootboek, gtRubCol, gtAgCol, gtBedrag);
+    const groepen = getArtikelgroepen(grootboek, gtAgCol);
+
+    const wvDef = getWvDef();
+    const values = {}; // key → { perGroep: [...], total }
+    const out = [];
+
+    function pushRow(label, perGroep, total) {
+      out.push([label, ...perGroep.map(v => v == null ? "" : v), total == null ? "" : total]);
+    }
+
+    for (const def of wvDef) {
+      if (def.type === "header") {
+        pushRow(def.label, groepen.map(() => ""), "");
+      } else if (def.type === "blank") {
+        pushRow("", groepen.map(() => ""), "");
+      } else if (def.type === "item") {
+        const sign = def.sign;
+        const perGroep = groepen.map(g => sign * sumIfs2(buckets, def.rubriek, g));
+        const total = perGroep.reduce((s, v) => s + v, 0);
+        if (def.key) values[def.key] = { perGroep, total };
+        pushRow(def.label, perGroep, total);
+      } else if (def.type === "subtotal") {
+        const perGroep = groepen.map(() => 0);
+        let total = 0; let any = false;
+        for (const ref of def.refs || []) {
+          const v = values[ref]; if (!v) continue;
+          for (let i = 0; i < groepen.length; i++) perGroep[i] += v.perGroep[i];
+          total += v.total;
+          any = true;
+        }
+        if (def.key) values[def.key] = { perGroep, total };
+        pushRow(def.label, any ? perGroep : groepen.map(() => null), any ? total : null);
+      } else if (def.type === "compute") {
+        const perGroep = groepen.map((_, i) => {
+          const g = {};
+          for (const k of Object.keys(values)) g[k] = values[k]?.perGroep?.[i] ?? 0;
+          return def.fn(g);
+        });
+        const totalG = {};
+        for (const k of Object.keys(values)) totalG[k] = values[k]?.total ?? 0;
+        const total = def.fn(totalG);
+        if (def.key) values[def.key] = { perGroep, total };
+        if (def.format === "pct") {
+          const fmt = (v) => Number.isFinite(v) ? (v * 100).toFixed(1) + "%" : "";
+          pushRow(def.label, perGroep.map(fmt), fmt(total));
+        } else {
+          pushRow(def.label, perGroep, total);
+        }
+      }
+    }
+
+    return {
+      columns: ["Omschrijving", ...groepen, "Totaal"],
+      rows: out,
+      meta: { values, groepen }
+    };
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // OUT_Resultaten SAMGEVAT — samenvatting bovenaan
+  // ════════════════════════════════════════════════════════════════
+  // De Excel toont een YTD-samenvatting met direct/indirect gesplitst:
+  //   - Direct = som artikelgroepen exclusief Algemeen/Groepsmaatschappijen
+  //   - Indirect = som artikelgroepen Algemeen + Groepsmaatschappijen
+  //   - Totaal = direct + indirect
+  // Plus de paar belangrijke regels: omzet, brutomarge, EBIT, EBITDA, Resultaat.
+  function calcOutResultatenSamengevat(tables) {
+    const perAg = calcOutResultatenPerArtikelgroep(tables);
+    if (!perAg.meta) return perAg; // foutmelding
+    const { values, groepen } = perAg.meta;
+
+    const indirectGroepen = new Set(["Algemeen", "Groepsmaatschappijen"]);
+    const idxIndirect = groepen.map((g, i) => indirectGroepen.has(g) ? i : -1).filter(i => i >= 0);
+    const idxDirect = groepen.map((_, i) => i).filter(i => !idxIndirect.includes(i));
+
+    function sumOver(perGroep, indices) {
+      return indices.reduce((s, i) => s + (perGroep[i] || 0), 0);
+    }
+
+    function row(label, key, opts = {}) {
+      const v = values[key];
+      if (!v) return [label, "", "", "", ""];
+      const direct   = sumOver(v.perGroep, idxDirect);
+      const indirect = sumOver(v.perGroep, idxIndirect);
+      const totaal   = direct + indirect;
+      const fmt = (n) => opts.pct ? (Number.isFinite(n) ? (n * 100).toFixed(1) + "%" : "") : n;
+      return [label, fmt(direct), fmt(indirect), fmt(totaal), opts.note || ""];
+    }
+
+    function pctRow(label, baseKey, divKey, opts = {}) {
+      const base = values[baseKey];
+      const div  = values[divKey];
+      if (!base || !div) return [label, "", "", "", opts.note || ""];
+      const directBase   = sumOver(base.perGroep, idxDirect);
+      const indirectBase = sumOver(base.perGroep, idxIndirect);
+      const totaalBase   = directBase + indirectBase;
+      const directDiv    = sumOver(div.perGroep, idxDirect);
+      const indirectDiv  = sumOver(div.perGroep, idxIndirect);
+      const totaalDiv    = directDiv + indirectDiv;
+      const f = (n, d) => d ? (n / d * 100).toFixed(1) + "%" : "";
+      return [label, f(directBase, directDiv), f(indirectBase, indirectDiv), f(totaalBase, totaalDiv), opts.note || ""];
+    }
+
+    const rows = [
+      ["", "Direct (€)", "Indirect (€)", "Totaal (€)", ""],
+      row("Omzet", "wvOmzet"),
+      row("Kortingen", "wvKortingen"),
+      row("Garanties", "wvGaranties"),
+      row("Netto-omzet", "wvNettoOmzet"),
+      ["", "", "", "", ""],
+      row("Kostprijs omzet", "wvKostprijs"),
+      row("Prijsverschillen", "wvPrijsv"),
+      row("Voorraadmutatie", "wvVoormut"),
+      row("Montage", "wvMontage"),
+      row("Inkomende transport- en vrachtkosten", "wvVracht"),
+      row("Totaal kostprijs", "wvTotKostprijs"),
+      ["", "", "", "", ""],
+      row("Brutomarge (€)", "wvBrutomarge"),
+      pctRow("Brutomarge (%)", "wvBrutomarge", "wvNettoOmzet"),
+      ["", "", "", "", ""],
+      row("Personeelskosten", "wvPers"),
+      row("Afschrijvingskosten", "wvAfschr"),
+      row("Huisvestingskosten", "wvHuis"),
+      row("Verkoopkosten", "wvVerkoop"),
+      row("Autokosten", "wvAuto"),
+      row("Magazijnkosten", "wvMag"),
+      row("Kantoorkosten", "wvKantoor"),
+      row("Algemene kosten", "wvAlg"),
+      row("Totaal bedrijfskosten", "wvTotBedr"),
+      ["", "", "", "", ""],
+      row("EBIT (€)", "wvEbit"),
+      pctRow("EBIT (%)", "wvEbit", "wvNettoOmzet"),
+      row("Financiële baten en lasten", "wvFin"),
+      row("Resultaat voor belasting", "wvResultaat"),
+      ["", "", "", "", ""],
+      row("EBITDA (€)", "wvEbitda"),
+      pctRow("EBITDA (%)", "wvEbitda", "wvNettoOmzet"),
+    ];
+
+    return {
+      columns: ["Omschrijving", "Direct (€)", "Indirect (€)", "Totaal (€)", "Toelichting"],
+      rows: rows.slice(1) // eerste rij is de extra header die we al in columns hebben
+    };
+  }
+
+  // ════════════════════════════════════════════════════════════════
   // Hoofdfunctie — bereken alle OUT_-tabellen vanuit een set inputs.
   // ════════════════════════════════════════════════════════════════
   // input: { beginbalans, grootboektransacties, ... } — zoals stuurcijfers.html ze laadt
@@ -453,7 +642,10 @@
     catch (e) { result.out_balans = errorTable("OUT_Balans", e); }
     try { result.out_periodebalans = calcOutPeriodebalans(tables); }
     catch (e) { result.out_periodebalans = errorTable("OUT_Periodebalans", e); }
-    // OUT_Resultaten per artikelgroep, OUT_Resultaten SAMGEVAT volgen.
+    try { result.out_resultaten_artikelgroep = calcOutResultatenPerArtikelgroep(tables); }
+    catch (e) { result.out_resultaten_artikelgroep = errorTable("OUT_Resultaten per artikelgroep", e); }
+    try { result.out_resultaten_samengevat = calcOutResultatenSamengevat(tables); }
+    catch (e) { result.out_resultaten_samengevat = errorTable("OUT_Resultaten SAMGEVAT", e); }
     return result;
   }
 
@@ -471,6 +663,8 @@
     recalculateAll,
     calcOutBalans,
     calcOutPeriodebalans,
+    calcOutResultatenPerArtikelgroep,
+    calcOutResultatenSamengevat,
     // Helpers voor tests / dev console
     _internals: { colIdx, bucketSum, sumIf, bucketSum2, sumIfs2 }
   };
