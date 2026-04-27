@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Logic4-velden probe (eenmalig)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --fonteyn-green: #144734;
+    --fonteyn-lime: #8bc53f;
+    --fonteyn-lime-dark: #72a531;
+    --bg: #f5f4ef;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Montserrat", -apple-system, sans-serif;
+    background: var(--bg); color: var(--ink); font-size: 14px;
+  }
+  header {
+    background: var(--fonteyn-green); color: #fff;
+    padding: 16px 28px; display: flex; align-items: center; gap: 16px;
+  }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+  header a { margin-left: auto; color: #fff; text-decoration: none;
+    border: 1px solid rgba(255,255,255,0.3); border-radius: 6px;
+    padding: 6px 14px; font-size: 12px; }
+  main { max-width: 1100px; margin: 32px auto; padding: 0 24px; }
+  h2 { color: var(--fonteyn-green); font-size: 22px; margin: 0 0 8px; }
+  .lead { color: var(--muted); margin: 0 0 20px; }
+  button {
+    background: var(--fonteyn-lime); color: var(--fonteyn-green);
+    border: 0; border-radius: 8px; padding: 12px 22px;
+    font: inherit; font-size: 14px; font-weight: 700;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--fonteyn-lime-dark); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .card {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 22px; margin: 16px 0;
+  }
+  .card h3 { margin: 0 0 8px; color: var(--fonteyn-green); font-size: 15px; }
+  .card .desc { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .field-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .field-table th { text-align: left; padding: 6px 10px;
+    background: #f3f4f6; font-weight: 600; }
+  .field-table td { padding: 5px 10px; border-bottom: 1px solid #f3f4f6;
+    vertical-align: top; }
+  .field-table .name { font-family: ui-monospace, monospace; color: #0d3325;
+    font-size: 12px; white-space: nowrap; }
+  .field-table .val { color: var(--muted); max-width: 500px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .field-table .empty { color: #d1d5db; font-style: italic; }
+  pre {
+    background: #0f172a; color: #e2e8f0; padding: 14px;
+    border-radius: 8px; overflow: auto; max-height: 320px;
+    font-size: 11px; font-family: ui-monospace, monospace;
+  }
+  .err { background: #fee2e2; border: 1px solid #fecaca; color: #991b1b;
+    padding: 10px 12px; border-radius: 8px; }
+  .copy-block {
+    background: #f8fafc; border: 1px dashed var(--border);
+    border-radius: 8px; padding: 16px; margin-top: 16px;
+    font-family: ui-monospace, monospace; font-size: 12px;
+    white-space: pre-wrap; user-select: all;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Logic4-velden probe</h1>
+  <a href="dashboard.html">← Dashboard</a>
+</header>
+<main>
+  <h2>Eenmalige probe</h2>
+  <p class="lead">Deze pagina haalt de meest recente order op uit Logic4 inclusief regels en het eerste gerelateerde product. Het doel: zien welke velden Fonteyn invult — verkoper, kostprijs, artikelgroep — zodat we weten of we een real-time bruto-marge dashboard kunnen bouwen.</p>
+
+  <button id="run">Probe uitvoeren</button>
+  <div id="status" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
+
+  <div id="result"></div>
+</main>
+
+<script>
+const SESSION_KEY = "fp.session";
+
+async function call(path, body) {
+  const session = localStorage.getItem(SESSION_KEY);
+  const r = await fetch("/api/logic4-call", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + (session || "")
+    },
+    body: JSON.stringify({ path, method: "POST", body })
+  });
+  if (!r.ok) {
+    const j = await r.json().catch(() => ({}));
+    throw new Error(`${path}: ${j.error || r.status}`);
+  }
+  const j = await r.json();
+  if (!j.ok) throw new Error(`${path}: ${j.data?.Message || j.error || JSON.stringify(j.data).slice(0, 200)}`);
+  return j.data;
+}
+
+function fieldTable(obj, title) {
+  if (!obj || typeof obj !== "object") return "";
+  const entries = Object.entries(obj);
+  const rowsHtml = entries.map(([k, v]) => {
+    const isEmpty = v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0);
+    const display = isEmpty ? '<span class="empty">— leeg —</span>'
+      : (typeof v === "object" ? JSON.stringify(v).slice(0, 200) : String(v).slice(0, 200));
+    return `<tr><td class="name">${escapeHtml(k)}</td><td class="val">${display}</td></tr>`;
+  }).join("");
+  return `
+    <div class="card">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="desc">${entries.length} velden — bekijk welke gevuld zijn voor onze use-case (verkoper, kostprijs, artikelgroep).</div>
+      <table class="field-table">
+        <thead><tr><th>Veld</th><th>Waarde</th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, ch =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+function summarize(label, obj, candidates) {
+  if (!obj) return `${label}: geen response.`;
+  const found = candidates.filter(f => obj[f] !== undefined && obj[f] !== null && obj[f] !== "");
+  const missing = candidates.filter(f => !found.includes(f));
+  return `${label}\n  ✓ aanwezig: ${found.join(", ") || "(geen)"}\n  ✗ leeg/ontbreekt: ${missing.join(", ") || "(geen)"}`;
+}
+
+document.getElementById("run").addEventListener("click", async () => {
+  const btn = document.getElementById("run");
+  const status = document.getElementById("status");
+  const result = document.getElementById("result");
+  btn.disabled = true; result.innerHTML = "";
+  status.textContent = "Laatste 3 orders ophalen…";
+
+  try {
+    // 1. Laatste 3 orders ophalen
+    const ordersResp = await call("/v3/Orders/GetOrders", { TakeRecords: 3 });
+    const orders = Array.isArray(ordersResp) ? ordersResp
+      : (Array.isArray(ordersResp?.Orders) ? ordersResp.Orders
+      : (Array.isArray(ordersResp?.OrderRows) ? ordersResp.OrderRows : []));
+    if (!orders.length) {
+      throw new Error("Geen orders teruggekregen.");
+    }
+    const firstOrder = orders[0];
+    const orderId = firstOrder.Id || firstOrder.OrderId || firstOrder.OrderID;
+    status.textContent = `Order ${orderId} ophalen — regels en productdetails…`;
+
+    // 2. Order-regels van de eerste order
+    const rowsResp = await call("/v3/Orders/GetOrderRows", { OrderId: orderId, TakeRecords: 50 });
+    const rows = Array.isArray(rowsResp) ? rowsResp
+      : (Array.isArray(rowsResp?.OrderRows) ? rowsResp.OrderRows : []);
+    const firstRow = rows[0];
+
+    // 3. Productdetails van eerste regel
+    let product = null;
+    if (firstRow) {
+      const productCode = firstRow.ProductCode || firstRow.ArticleCode;
+      if (productCode) {
+        const prodResp = await call("/v3/Products/GetProducts", { ProductCodes: [String(productCode)], TakeRecords: 1 });
+        const prods = Array.isArray(prodResp) ? prodResp
+          : (Array.isArray(prodResp?.Products) ? prodResp.Products : []);
+        product = prods[0];
+      }
+    }
+
+    status.textContent = "Klaar. Hieronder de gevonden velden.";
+
+    // Render
+    let html = "";
+
+    // Samenvatting voor onze use-case
+    const summaryParts = [];
+    summaryParts.push(summarize("ORDER (kandidaat-velden voor verkoper)",
+      firstOrder, ["UserId", "SalespersonId", "EmployeeId", "CreatedByUserId", "ContactId", "DebtorId", "InternalNote", "Reference"]));
+    if (firstRow) {
+      summaryParts.push(summarize("ORDER-REGEL (kandidaat-velden voor verkoop + kost)",
+        firstRow, ["ProductCode", "Description", "Quantity", "PriceExcl", "PriceIncl", "CostPrice", "PurchasePrice", "PriceGross", "DiscountPct"]));
+    }
+    if (product) {
+      summaryParts.push(summarize("PRODUCT (kandidaat-velden voor kostprijs + artikelgroep)",
+        product, ["CostPrice", "PurchasePrice", "LastPurchasePrice", "WeightedAveragePrice", "ProductGroup", "ProductGroupId", "ProductGroupName", "Brand", "Brandname", "ProductName1", "Description"]));
+    }
+
+    html += `<div class="card">
+      <h3>Samenvatting voor bruto-marge dashboard</h3>
+      <div class="desc">Kopieer onderstaand blok en stuur het naar mij — dan weet ik welke velden ik moet gebruiken.</div>
+      <div class="copy-block">${escapeHtml(summaryParts.join("\n\n"))}</div>
+    </div>`;
+
+    html += fieldTable(firstOrder, `Order #${orderId} — alle velden`);
+    if (firstRow) html += fieldTable(firstRow, `Eerste order-regel — alle velden`);
+    if (product) html += fieldTable(product, `Product ${firstRow?.ProductCode || ""} — alle velden`);
+
+    // Raw responses voor de zekerheid
+    html += `<div class="card">
+      <h3>Raw JSON (mocht ik nog meer detail nodig hebben)</h3>
+      <pre>${escapeHtml(JSON.stringify({ firstOrder, firstRow, product }, null, 2))}</pre>
+    </div>`;
+
+    result.innerHTML = html;
+  } catch (e) {
+    status.textContent = "";
+    result.innerHTML = `<div class="err">Probe mislukte: ${escapeHtml(e.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
