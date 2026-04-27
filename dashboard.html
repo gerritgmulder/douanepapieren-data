@@ -152,6 +152,51 @@
   .tile.disabled h3 { color: var(--muted); }
 
   .hidden { display: none !important; }
+
+  /* ─── Wachtwoord-modal voor stuurcijfers ───────────────── */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 50; padding: 20px;
+  }
+  .modal {
+    background: #fff; border-radius: 14px; padding: 28px;
+    max-width: 380px; width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  }
+  .modal h3 {
+    margin: 0 0 4px; font-size: 18px; color: var(--fonteyn-green);
+  }
+  .modal p {
+    margin: 0 0 16px; color: var(--muted); font-size: 13px;
+  }
+  .modal .err {
+    background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;
+    border-radius: 8px; padding: 8px 10px; font-size: 12px;
+    margin-bottom: 10px;
+  }
+  .modal input {
+    width: 100%; border: 1px solid var(--border); border-radius: 8px;
+    padding: 11px 12px; font: inherit; font-size: 14px;
+  }
+  .modal input:focus {
+    outline: none; border-color: var(--fonteyn-green);
+    box-shadow: 0 0 0 3px rgba(20,71,52,0.1);
+  }
+  .modal .actions { display: flex; gap: 8px; margin-top: 14px; }
+  .modal button {
+    flex: 1; border: 0; border-radius: 8px; padding: 11px;
+    font: inherit; font-weight: 600; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .modal button.primary {
+    background: var(--fonteyn-lime); color: var(--fonteyn-green-dark);
+  }
+  .modal button.primary:hover { background: var(--fonteyn-lime-dark); }
+  .modal button.secondary {
+    background: #f3f4f6; color: var(--ink);
+  }
+  .modal button.secondary:hover { background: #e5e7eb; }
 </style>
 </head>
 <body>
@@ -230,8 +275,29 @@
         <h3>Personeel</h3>
         <p>Overzicht van medewerkers, wie er aan het werk is en hoe de bungalows bezet zijn.</p>
       </div>
+
+      <!-- Stuurcijfers — alleen zichtbaar voor gerriette@ en dolf@. Klik vraagt extra wachtwoord. -->
+      <a href="#" class="tile hidden" id="tileStuurcijfers">
+        <div class="icon">📊</div>
+        <h3>Stuurcijfers</h3>
+        <p>Financiële stuurcijfers en analyses op basis van het Logic4-grootboek — direct inzicht in waar je op moet sturen.</p>
+      </a>
     </div>
   </main>
+</div>
+
+<!-- ════════════ STUURCIJFERS WACHTWOORD-MODAL ════════════ -->
+<div id="stuurModal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3>Stuurcijfers</h3>
+    <p>Voer het wachtwoord in om verder te gaan.</p>
+    <div id="stuurErr" class="err hidden"></div>
+    <input type="password" id="stuurPass" placeholder="Wachtwoord" autocomplete="off">
+    <div class="actions">
+      <button type="button" class="secondary" id="stuurCancel">Annuleren</button>
+      <button type="button" class="primary" id="stuurOk">Openen</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -311,6 +377,13 @@ function prettyNameFromEmail(email) {
     .join(" ");
 }
 
+// Welke e-mailadressen mogen de Stuurcijfers-tegel zien.
+// Server doet dezelfde check; dit hier is alleen voor de UI.
+const STUURCIJFERS_EMAILS = new Set([
+  "gerriette@fonteyn.nl",
+  "dolf@fonteyn.nl",
+]);
+
 function showDashboard(email) {
   el("loginView").classList.add("hidden");
   el("dashView").classList.remove("hidden");
@@ -320,6 +393,12 @@ function showDashboard(email) {
   const greet = h < 6 ? "Goedenacht" : h < 12 ? "Goedemorgen" : h < 18 ? "Goedemiddag" : "Goedenavond";
   const name = prettyNameFromEmail(email);
   el("greeting").textContent = name ? `${greet}, ${name}` : greet;
+  // Stuurcijfers-tegel alleen tonen voor de geautoriseerde e-mailadressen
+  if (STUURCIJFERS_EMAILS.has((email || "").toLowerCase())) {
+    el("tileStuurcijfers").classList.remove("hidden");
+  } else {
+    el("tileStuurcijfers").classList.add("hidden");
+  }
 }
 
 // ─── Helper-server health (voor login-scherm) ────────────────
@@ -416,6 +495,46 @@ document.querySelectorAll(".tile.disabled").forEach(t => {
     const name = t.querySelector("h3").textContent;
     alert(`${name} is nog in de maak — komt binnenkort beschikbaar.`);
   });
+});
+
+// ─── Stuurcijfers — wachtwoord-modal ────────────────────────
+const STUURCIJFERS_PASSWORD = "Meerveld";
+
+function openStuurModal() {
+  el("stuurErr").classList.add("hidden");
+  el("stuurPass").value = "";
+  el("stuurModal").classList.remove("hidden");
+  setTimeout(() => el("stuurPass").focus(), 50);
+}
+function closeStuurModal() {
+  el("stuurModal").classList.add("hidden");
+}
+function tryStuurUnlock() {
+  const v = el("stuurPass").value;
+  if (v === STUURCIJFERS_PASSWORD) {
+    closeStuurModal();
+    // Eenmalige unlock-vlag per session — voorkomt dat je 'm op de subpagina opnieuw moet typen
+    sessionStorage.setItem("fp.stuurUnlocked", "1");
+    window.location.href = "stuurcijfers.html";
+  } else {
+    el("stuurErr").textContent = "Onjuist wachtwoord.";
+    el("stuurErr").classList.remove("hidden");
+    el("stuurPass").select();
+  }
+}
+
+el("tileStuurcijfers").addEventListener("click", (ev) => {
+  ev.preventDefault();
+  openStuurModal();
+});
+el("stuurOk").addEventListener("click", tryStuurUnlock);
+el("stuurCancel").addEventListener("click", closeStuurModal);
+el("stuurPass").addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") { ev.preventDefault(); tryStuurUnlock(); }
+  if (ev.key === "Escape") { ev.preventDefault(); closeStuurModal(); }
+});
+el("stuurModal").addEventListener("click", (ev) => {
+  if (ev.target === el("stuurModal")) closeStuurModal();
 });
 
 boot();

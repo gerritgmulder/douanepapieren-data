@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Fonteyn Stuurcijfers</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+
+<!-- SheetJS — voor het inlezen van de Logic4-Excel in de browser. -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+
+<style>
+  :root {
+    --fonteyn-green: #144734;
+    --fonteyn-green-dark: #0d3325;
+    --fonteyn-lime: #8bc53f;
+    --fonteyn-lime-dark: #72a531;
+    --fonteyn-cream: #fff9ae;
+
+    --bg: #f5f4ef;
+    --panel: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --ok: #15803d;
+    --bad: #b91c1c;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.45;
+    color: var(--ink); background: var(--bg); min-height: 100vh;
+  }
+
+  header {
+    background: var(--fonteyn-green);
+    color: #fff;
+    padding: 16px 28px; display: flex; align-items: center; gap: 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  header .logo { height: 44px; width: auto; display: block; }
+  header h1 {
+    margin: 0; font-size: 18px; font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  header .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  header .user { color: rgba(255,255,255,0.75); font-size: 13px; }
+  header .user b { color: #fff; font-weight: 600; }
+  header a.back, header button {
+    background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 14px; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 500;
+    cursor: pointer; text-decoration: none;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  header a.back:hover, header button:hover {
+    background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5);
+  }
+
+  .layout {
+    display: grid; grid-template-columns: 280px 1fr;
+    min-height: calc(100vh - 76px);
+  }
+
+  /* ─── Sidebar ─────────────────────────────────────────── */
+  aside {
+    background: #fff; border-right: 1px solid var(--border);
+    padding: 18px 0; overflow-y: auto;
+  }
+  aside h4 {
+    margin: 0 0 6px; padding: 0 18px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  aside .group { margin-bottom: 18px; }
+  aside ul { list-style: none; margin: 0; padding: 0; }
+  aside li a {
+    display: block; padding: 8px 18px;
+    font-size: 13px; color: var(--ink); text-decoration: none;
+    border-left: 3px solid transparent;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  aside li a:hover { background: #f9fafb; }
+  aside li a.active {
+    background: rgba(20,71,52,0.06);
+    border-left-color: var(--fonteyn-lime);
+    color: var(--fonteyn-green); font-weight: 600;
+  }
+  aside li a .meta {
+    display: block; font-size: 11px; color: var(--muted); margin-top: 1px;
+  }
+
+  /* ─── Main content ────────────────────────────────────── */
+  main { padding: 28px 32px 80px; overflow-x: auto; }
+  .page-head {
+    display: flex; align-items: flex-start; gap: 16px;
+    margin-bottom: 24px;
+  }
+  .page-head h2 {
+    margin: 0 0 4px; font-size: 22px; font-weight: 700;
+    color: var(--fonteyn-green);
+  }
+  .page-head p { margin: 0; color: var(--muted); font-size: 13px; }
+  .page-head .actions { margin-left: auto; display: flex; gap: 8px; }
+  .page-head button, .page-head label.btn {
+    background: var(--fonteyn-lime); color: var(--fonteyn-green-dark);
+    border: 0; border-radius: 8px; padding: 9px 16px;
+    font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .page-head button:hover, .page-head label.btn:hover { background: var(--fonteyn-lime-dark); }
+  .page-head button.secondary, .page-head label.btn.secondary {
+    background: #fff; color: var(--ink); border: 1px solid var(--border);
+  }
+  .page-head button.secondary:hover, .page-head label.btn.secondary:hover { background: #f3f4f6; }
+  .page-head input[type=file] { display: none; }
+
+  .empty {
+    background: #fff; border: 1px dashed var(--border); border-radius: 12px;
+    padding: 60px 28px; text-align: center; color: var(--muted);
+  }
+  .empty h3 { margin: 0 0 6px; font-size: 16px; color: var(--ink); }
+  .empty p { margin: 0 auto; max-width: 440px; font-size: 13px; }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--fonteyn-green); color: #fff;
+    padding: 12px 18px; border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+    font-size: 13px; opacity: 0; transform: translateY(8px);
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.bad { background: #b91c1c; }
+
+  /* ─── Tabel-editor (komt in fase 2) ───────────────────── */
+  .table-wrap {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    overflow: auto; max-height: calc(100vh - 240px);
+  }
+  table.editor {
+    width: 100%; border-collapse: collapse; font-size: 12.5px;
+  }
+  table.editor th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--fonteyn-green); color: #fff;
+    padding: 8px 10px; text-align: left; font-weight: 600;
+    border-right: 1px solid rgba(255,255,255,0.1);
+    white-space: nowrap;
+  }
+  table.editor td {
+    padding: 6px 10px; border-bottom: 1px solid #f3f4f6;
+    border-right: 1px solid #f9fafb;
+    vertical-align: top; white-space: nowrap;
+  }
+  table.editor tr:nth-child(even) td { background: #fafafa; }
+  table.editor td[contenteditable="true"]:hover { background: #fef9c3; }
+  table.editor td[contenteditable="true"]:focus {
+    outline: 2px solid var(--fonteyn-lime); outline-offset: -2px;
+    background: #fffce0;
+  }
+  table.editor td.dirty { background: #fef3c7 !important; }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="fonteyn-logo.png" alt="Fonteyn" class="logo">
+  <h1>Stuurcijfers</h1>
+  <div class="right">
+    <div class="user">Ingelogd als <b id="userEmail">—</b></div>
+    <a href="dashboard.html" class="back">← Dashboard</a>
+  </div>
+</header>
+
+<div class="layout">
+  <aside>
+    <div class="group">
+      <h4>Overzicht</h4>
+      <ul>
+        <li><a href="#" class="active" data-view="overview">Stuurcijfers</a></li>
+      </ul>
+    </div>
+
+    <div class="group">
+      <h4>Bron-data</h4>
+      <ul id="navBron"></ul>
+    </div>
+
+    <div class="group">
+      <h4>Configuratie</h4>
+      <ul id="navConfig"></ul>
+    </div>
+
+    <div class="group">
+      <h4>Berekend (read-only)</h4>
+      <ul id="navOut"></ul>
+    </div>
+  </aside>
+
+  <main>
+    <div class="page-head">
+      <div>
+        <h2 id="pageTitle">Stuurcijfers</h2>
+        <p id="pageSub">Overzicht van de financiële tabellen die het model voeden.</p>
+      </div>
+      <div class="actions" id="pageActions">
+        <label class="btn secondary" for="excelInput">📥 Logic4-Excel importeren</label>
+        <input type="file" id="excelInput" accept=".xlsx,.xlsm,.xls">
+      </div>
+    </div>
+
+    <div id="content">
+      <div class="empty" id="emptyState">
+        <h3>Nog geen data geladen</h3>
+        <p>Importeer de meest recente Logic4-export (de Excel die je voorheen handmatig bijwerkte) om te beginnen. Daarna kun je elk tabblad bekijken en bewerken.</p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SESSION_KEY = "fp.session";
+const EMAIL_KEY   = "fp.email";
+const UNLOCK_KEY  = "fp.stuurUnlocked";
+
+const el = (id) => document.getElementById(id);
+
+// ─── Session-helpers (gedeeld met dashboard) ────────────────
+function getSession() { return localStorage.getItem(SESSION_KEY) || ""; }
+async function apiFetch(path, opts = {}) {
+  const session = getSession();
+  const headers = { ...(opts.headers || {}) };
+  if (session) headers["Authorization"] = "Bearer " + session;
+  if (opts.body && !(opts.body instanceof FormData) && typeof opts.body === "object") {
+    headers["Content-Type"] = "application/json";
+    opts = { ...opts, body: JSON.stringify(opts.body) };
+  }
+  return fetch(path, { ...opts, headers });
+}
+
+function toast(msg, bad = false) {
+  const t = el("toast");
+  t.textContent = msg;
+  t.classList.toggle("bad", !!bad);
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove("show"), 2400);
+}
+
+// ─── Tabel-mapping: sheet-naam in Excel → interne naam → categorie ───
+// De volgorde hieronder bepaalt de volgorde in de sidebar.
+const TABLES = [
+  // BRON-data — direct uit Logic4 / boekhouding
+  { name: "grootboektransacties",        sheet: "Grootboektransacties",            label: "Grootboektransacties",         category: "bron" },
+  { name: "beginbalans",                 sheet: "Beginbalans",                     label: "Beginbalans",                  category: "bron" },
+  { name: "korting_per_factuur",         sheet: "Korting per factuur",             label: "Korting per factuur",          category: "bron" },
+  { name: "toerekening_korting_garantie", sheet: "Toerekening korting en garantie", label: "Toerekening korting/garantie", category: "bron" },
+  { name: "rubriceringen_logic",         sheet: "Rubriceringen Logic",             label: "Rubriceringen Logic",          category: "bron" },
+
+  // CONFIGURATIE — parameters die je tweakt
+  { name: "koppelen_groepen",            sheet: "KOPPELEN_GROEPEN",                label: "Koppelen groepen",             category: "config" },
+  { name: "koppelen_rubrieken",          sheet: "KOPPELEN_RUBRIEKEN",              label: "Koppelen rubrieken",           category: "config" },
+  { name: "stamgegevens",                sheet: "Stamgegevens",                    label: "Stamgegevens",                 category: "config" },
+  { name: "correctie_voorraadtelling",   sheet: "Correctie voorraadtelling",       label: "Correctie voorraadtelling",    category: "config" },
+  { name: "normalisaties",               sheet: "Normalisaties",                   label: "Normalisaties",                category: "config" },
+  { name: "rekenblad",                   sheet: "Rekenblad",                       label: "Rekenblad",                    category: "config" },
+  { name: "verkoopkosten_verdeeld",      sheet: "Verkoopkosten verdeeld",          label: "Verkoopkosten verdeeld",       category: "config" },
+  { name: "verkoopkosten_onverdeeld",    sheet: "Verkoopkosten onverdeeld",        label: "Verkoopkosten onverdeeld",     category: "config" },
+  { name: "verdeling_verkoopkosten",     sheet: "Verdeling verkoopkosten",         label: "Verdeling verkoopkosten",      category: "config" },
+  { name: "bedrijfskosten_verdeeld",     sheet: "Bedrijfskosten verdeeld",         label: "Bedrijfskosten verdeeld",      category: "config" },
+  { name: "bedrijfskosten_onverdeeld",   sheet: "Bedrijfskosten onverdeeld",       label: "Bedrijfskosten onverdeeld",    category: "config" },
+
+  // OUT — berekend (read-only). Komen later uit JS-port van de Excel-formules.
+  { name: "out_balans",                  sheet: "OUT_Balans",                      label: "Balans",                       category: "out", readOnly: true },
+  { name: "out_periodebalans",           sheet: "OUT_Periodebalans",               label: "Winst- en verliesrekening",    category: "out", readOnly: true },
+  { name: "out_resultaten_artikelgroep", sheet: "OUT_Resultaten per artikelgroep", label: "Resultaten per artikelgroep",  category: "out", readOnly: true },
+  { name: "out_resultaten_samengevat",   sheet: "OUT_Resultaten SAMGEVAT",         label: "Resultaten samengevat",        category: "out", readOnly: true },
+];
+
+const TABLES_BY_NAME = Object.fromEntries(TABLES.map(t => [t.name, t]));
+
+// ─── Boot ──────────────────────────────────────────────────
+async function boot() {
+  // Niet ingelogd? → terug naar login.
+  if (!getSession()) {
+    window.location.href = "dashboard.html";
+    return;
+  }
+  // Wachtwoord-unlock vereist (gezet in dashboard.html bij modal-OK).
+  if (sessionStorage.getItem(UNLOCK_KEY) !== "1") {
+    window.location.href = "dashboard.html";
+    return;
+  }
+  // Sessie valideren + e-mail check (aan UI-kant; server doet hetzelfde)
+  const ALLOWED = new Set(["gerriette@fonteyn.nl", "dolf@fonteyn.nl"]);
+  try {
+    const r = await apiFetch("/api/me");
+    if (!r.ok) { window.location.href = "dashboard.html"; return; }
+    const j = await r.json();
+    const email = (j.user?.email || "").toLowerCase();
+    if (!ALLOWED.has(email)) {
+      sessionStorage.removeItem(UNLOCK_KEY);
+      window.location.href = "dashboard.html";
+      return;
+    }
+    el("userEmail").textContent = j.user?.email || "—";
+    buildSidebar();
+    await refreshTables();
+  } catch (e) {
+    toast("Helper-server onbereikbaar.", true);
+    buildSidebar();
+  }
+}
+
+// ─── Sidebar opbouwen ──────────────────────────────────────
+function buildSidebar() {
+  const groups = { bron: el("navBron"), config: el("navConfig"), out: el("navOut") };
+  for (const t of TABLES) {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = "#";
+    a.dataset.table = t.name;
+    a.innerHTML = `${t.label}<span class="meta" data-meta="${t.name}">—</span>`;
+    a.addEventListener("click", (ev) => { ev.preventDefault(); selectTable(t.name); });
+    li.appendChild(a);
+    groups[t.category]?.appendChild(li);
+  }
+  // Overview-link bovenin
+  document.querySelector('[data-view="overview"]').addEventListener("click", (ev) => {
+    ev.preventDefault(); showOverview();
+  });
+}
+
+let _currentTable = null;
+function setActiveNav(name) {
+  document.querySelectorAll("aside a").forEach(a => a.classList.remove("active"));
+  if (name === "__overview__") {
+    document.querySelector('[data-view="overview"]').classList.add("active");
+  } else {
+    document.querySelector(`aside a[data-table="${name}"]`)?.classList.add("active");
+  }
+}
+
+// ─── Tabellen-meta ophalen ────────────────────────────────
+async function refreshTables() {
+  try {
+    const r = await apiFetch("/api/stuurcijfers/tables");
+    if (r.status === 403) { toast("Geen toegang tot stuurcijfers.", true); return; }
+    if (!r.ok) return;
+    const j = await r.json();
+    const map = Object.fromEntries((j.tables || []).map(t => [t.name, t]));
+    for (const t of TABLES) {
+      const meta = map[t.name];
+      const span = document.querySelector(`[data-meta="${t.name}"]`);
+      if (!span) continue;
+      if (!meta || meta.rows === 0) span.textContent = "leeg";
+      else if (meta.rows === -1) span.textContent = "veel rijen";
+      else span.textContent = meta.rows.toLocaleString("nl-NL") + " rijen";
+    }
+  } catch {}
+}
+
+// ─── Overzichtspagina ─────────────────────────────────────
+function showOverview() {
+  setActiveNav("__overview__");
+  _currentTable = null;
+  el("pageTitle").textContent = "Stuurcijfers";
+  el("pageSub").textContent = "Overzicht van de financiële tabellen die het model voeden.";
+  el("content").innerHTML = `
+    <div class="empty">
+      <h3>Welkom — fase 1 staat live</h3>
+      <p>De tegel + dubbele auth + opslag-laag werken. Klik <b>Logic4-Excel importeren</b> om je laatste export in te lezen, of selecteer een tabel in het menu links. De OUT_-tabellen zijn nu nog leeg — die volgen zodra de formules zijn omgezet.</p>
+    </div>`;
+  refreshTables();
+}
+
+// ─── Tabel openen (placeholder — fase 2 vult dit) ─────────
+async function selectTable(name) {
+  setActiveNav(name);
+  _currentTable = name;
+  const def = TABLES_BY_NAME[name];
+  if (!def) return;
+  el("pageTitle").textContent = def.label;
+  el("pageSub").textContent = def.readOnly
+    ? "Berekende output — kan niet rechtstreeks worden bewerkt."
+    : "Klik op een cel om te bewerken. Wijzigingen gaan automatisch op.";
+  el("content").innerHTML = `<div class="empty"><h3>${def.label}</h3><p>Tabel-editor wordt in de volgende fase gebouwd. Voor nu kun je de Logic4-Excel importeren — daarmee wordt deze tabel gevuld.</p></div>`;
+
+  // Voor nu: alleen bevestigen of er data is.
+  const r = await apiFetch(`/api/stuurcijfers/tables/${name}`);
+  if (!r.ok) return;
+  const j = await r.json();
+  if (j.rows && j.rows.length) {
+    el("content").innerHTML = `
+      <div class="empty">
+        <h3>${def.label}</h3>
+        <p>${j.rows.length.toLocaleString("nl-NL")} rijen geladen, ${j.columns?.length || 0} kolommen. Tabel-editor volgt in fase 2.</p>
+      </div>`;
+  }
+}
+
+// ─── Excel-import ──────────────────────────────────────────
+el("excelInput").addEventListener("change", async (ev) => {
+  const file = ev.target.files?.[0];
+  if (!file) return;
+  ev.target.value = ""; // reset, anders kun je dezelfde file niet opnieuw kiezen
+
+  toast("Excel inlezen…");
+  let workbook;
+  try {
+    const buf = await file.arrayBuffer();
+    workbook = XLSX.read(buf, { type: "array" });
+  } catch (e) {
+    toast("Kon Excel niet lezen: " + e.message, true);
+    return;
+  }
+
+  const importable = TABLES.filter(t => !t.readOnly);
+  let saved = 0; let skipped = 0; const errors = [];
+  for (const t of importable) {
+    const ws = workbook.Sheets[t.sheet];
+    if (!ws) { skipped++; continue; }
+    // Eerste rij = headers, rest = data
+    const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    if (!aoa.length) { skipped++; continue; }
+    const columns = (aoa[0] || []).map(v => v == null ? "" : String(v));
+    const rows = aoa.slice(1);
+    // Lege trailing rijen wegfilteren
+    while (rows.length && rows[rows.length - 1].every(v => v === null || v === "")) rows.pop();
+    try {
+      toast(`Opslaan: ${t.label} (${rows.length.toLocaleString("nl-NL")} rijen)…`);
+      const r = await apiFetch(`/api/stuurcijfers/tables/${t.name}`, {
+        method: "PUT",
+        body: { columns, rows }
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        errors.push(`${t.label}: ${j.error || r.status}`);
+      } else {
+        saved++;
+      }
+    } catch (e) {
+      errors.push(`${t.label}: ${e.message}`);
+    }
+  }
+
+  if (errors.length) {
+    toast(`${saved} tabellen opgeslagen, ${errors.length} fout(en).`, true);
+    console.error("Stuurcijfers-import errors:", errors);
+  } else {
+    toast(`${saved} tabellen geïmporteerd, ${skipped} overgeslagen.`);
+  }
+  await refreshTables();
+});
+
+boot();
+</script>
+</body>
+</html>

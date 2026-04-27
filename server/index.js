@@ -32,9 +32,15 @@ const PORT = parseInt(process.env.PORT || "3737", 10);
 // "klassieke" paden in de project-folder.
 const HTML_DIR = process.env.HTML_DIR || PARENT_DIR;
 const DATA_DIR = process.env.DATA_DIR || __dirname;
+// Stuurcijfers-opslag: aparte dir die NIET door GitHub auto-update wordt overschreven.
+// Standaard onder de projectmap voor dev; Electron's main.js zet deze naar userData/stuurcijfers in productie.
+const STUURCIJFERS_DIR = process.env.STUURCIJFERS_DIR || path.join(PARENT_DIR, ".stuurcijfers-data");
+fs.mkdirSync(STUURCIJFERS_DIR, { recursive: true });
 
 const app = express();
-app.use(express.json());
+// Stuurcijfers-tabellen kunnen groot zijn (Grootboektransacties ~50MB JSON).
+// Default 100kb body-limit van express.json is niet genoeg.
+app.use(express.json({ limit: "200mb" }));
 
 // ============================================================
 // Sessie-beheer (in-memory, non-persistent)
@@ -409,6 +415,112 @@ app.get("/api/products-by-supplier-code", requireAuth, async (req, res) => {
     });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ============================================================
+// Stuurcijfers — JSON-opslag voor de financiële tabellen
+// ============================================================
+// Toegang: ingelogd én gerriette@fonteyn.nl of dolf@fonteyn.nl.
+// De extra wachtwoord-laag ('Meerveld') zit aan de frontend-kant; hier checken
+// we alleen op e-mail om te voorkomen dat een ander Logic4-account toch de
+// endpoints aanroept met een gestolen sessie-id.
+const STUURCIJFERS_ALLOWED_EMAILS = new Set([
+  "gerriette@fonteyn.nl",
+  "dolf@fonteyn.nl",
+]);
+
+// Whitelist van geldige tabel-namen (= sheet-namen uit het datamodel).
+// Voorkomt dat iemand met path-traversal naar willekeurige files schrijft.
+const STUURCIJFERS_TABLES = new Set([
+  // Bron-data
+  "rubriceringen_logic",
+  "beginbalans",
+  "grootboektransacties",
+  "korting_per_factuur",
+  "toerekening_korting_garantie",
+  // Configuratie
+  "koppelen_groepen",
+  "koppelen_rubrieken",
+  "correctie_voorraadtelling",
+  "normalisaties",
+  "rekenblad",
+  "verkoopkosten_verdeeld",
+  "verkoopkosten_onverdeeld",
+  "verdeling_verkoopkosten",
+  "bedrijfskosten_verdeeld",
+  "bedrijfskosten_onverdeeld",
+  "stamgegevens",
+  // Berekende output (read-only — wordt door JS-formules gevuld vanuit bovenstaande)
+  "out_balans",
+  "out_periodebalans",
+  "out_resultaten_artikelgroep",
+  "out_resultaten_samengevat",
+]);
+
+function requireStuurAuth(req, res, next) {
+  if (!STUURCIJFERS_ALLOWED_EMAILS.has((req.auth?.username || "").toLowerCase())) {
+    return res.status(403).json({ ok: false, error: "Geen toegang tot stuurcijfers." });
+  }
+  next();
+}
+
+function stuurFilePath(name) {
+  if (!STUURCIJFERS_TABLES.has(name)) return null;
+  return path.join(STUURCIJFERS_DIR, `${name}.json`);
+}
+
+// Lijst alle tabellen + meta (rij-aantal, laatste wijziging) — voor de overzichtspagina.
+app.get("/api/stuurcijfers/tables", requireAuth, requireStuurAuth, (req, res) => {
+  const tables = [];
+  for (const name of STUURCIJFERS_TABLES) {
+    const p = stuurFilePath(name);
+    let rows = 0;
+    let updatedAt = null;
+    if (p && fs.existsSync(p)) {
+      try {
+        const stat = fs.statSync(p);
+        updatedAt = stat.mtime.toISOString();
+        // Snelle rij-telling: parse alleen als file < 5MB; anders hopen we dat de UI dat zelf telt
+        if (stat.size < 5 * 1024 * 1024) {
+          const data = JSON.parse(fs.readFileSync(p, "utf-8"));
+          if (Array.isArray(data?.rows)) rows = data.rows.length;
+        } else {
+          rows = -1; // 'groot' — UI vraagt dit zelf op als je de tabel opent
+        }
+      } catch {}
+    }
+    tables.push({ name, rows, updatedAt });
+  }
+  res.json({ ok: true, tables });
+});
+
+// Eén tabel ophalen.
+app.get("/api/stuurcijfers/tables/:name", requireAuth, requireStuurAuth, (req, res) => {
+  const p = stuurFilePath(req.params.name);
+  if (!p) return res.status(400).json({ ok: false, error: "Onbekende tabel." });
+  if (!fs.existsSync(p)) return res.json({ ok: true, name: req.params.name, columns: [], rows: [] });
+  try {
+    const data = JSON.parse(fs.readFileSync(p, "utf-8"));
+    res.json({ ok: true, name: req.params.name, ...data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "Kon tabel niet lezen: " + e.message });
+  }
+});
+
+// Eén tabel opslaan (overschrijft volledig). Body: { columns: [...], rows: [[...]] }
+app.put("/api/stuurcijfers/tables/:name", requireAuth, requireStuurAuth, (req, res) => {
+  const p = stuurFilePath(req.params.name);
+  if (!p) return res.status(400).json({ ok: false, error: "Onbekende tabel." });
+  const { columns, rows } = req.body || {};
+  if (!Array.isArray(columns) || !Array.isArray(rows)) {
+    return res.status(400).json({ ok: false, error: "Body moet { columns: [], rows: [[...]] } zijn." });
+  }
+  try {
+    fs.writeFileSync(p, JSON.stringify({ columns, rows, savedAt: new Date().toISOString() }));
+    res.json({ ok: true, rows: rows.length });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "Kon tabel niet opslaan: " + e.message });
   }
 });
 
