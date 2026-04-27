@@ -199,6 +199,8 @@
     { type: "subtotal", label: "TOTAAL PASSIVA",                      refs: ["totLangPassiva", "totKortPassiva"], key: "totPassiva", bold: true, double: true },
 
     // ─── WINST- & VERLIESREKENING (cumulatief) ────────────────
+    // Deze rijen worden ook hergebruikt in OUT_Periodebalans (W&V per maand).
+    // Zie WV_DEF hieronder voor dezelfde structuur zonder de balans-prefix.
     { type: "blank" },
     { type: "section", label: "WINST- EN VERLIESREKENING (cumulatief)", colHeaders: ["", "", "", "Cumulatief (€)"] },
 
@@ -334,6 +336,113 @@
   }
 
   // ════════════════════════════════════════════════════════════════
+  // OUT_Periodebalans — W&V per maand (Jan..Dec + YTD)
+  // ════════════════════════════════════════════════════════════════
+  // Hergebruikt de W&V-rij-definities uit OUT_BALANS_DEF: alles vanaf de
+  // "WINST- EN VERLIESREKENING"-section tot het einde. Subtotalen, computes
+  // en items werken precies hetzelfde, alleen worden de bedragen per maand
+  // berekend i.p.v. cumulatief.
+  function getWvDef() {
+    const out = [];
+    let started = false;
+    for (const def of OUT_BALANS_DEF) {
+      if (def.type === "section" && def.label.toLowerCase().includes("winst")) {
+        started = true;
+        continue; // section header zelf overslaan — periodebalans heeft eigen header
+      }
+      if (started) out.push(def);
+    }
+    return out;
+  }
+
+  const MONTHS = ["Januari", "Februari", "Maart", "April", "Mei", "Juni",
+                  "Juli", "Augustus", "September", "Oktober", "November", "December"];
+
+  function calcOutPeriodebalans(tables) {
+    const grootboek = tables.grootboektransacties;
+    if (!grootboek?.rows?.length) {
+      return {
+        columns: ["Omschrijving", ...MONTHS, "Totaal"],
+        rows: [["⚠ Grootboektransacties nog niet geïmporteerd.", ...MONTHS.map(() => ""), ""]]
+      };
+    }
+
+    const gtRubCol  = colIdx(grootboek, "Rubriek");
+    const gtMaCol   = colIdx(grootboek, "Maand");
+    const gtBedrag  = colIdx(grootboek, "Bedrag");
+    // Index op (Rubriek, Maand) — één scan, dan O(1) lookup per cel.
+    const buckets = bucketSum2(grootboek, gtRubCol, gtMaCol, gtBedrag);
+
+    const wvDef = getWvDef();
+    // Eerste pass: items per maand (en totaal). values[key] = { months: [m1..m12], total }
+    const values = {};
+    const out = [];
+
+    function pushRow(label, monthVals, total) {
+      const row = [label];
+      for (const v of monthVals) row.push(v == null ? "" : v);
+      row.push(total == null ? "" : total);
+      out.push(row);
+    }
+
+    for (const def of wvDef) {
+      if (def.type === "header") {
+        pushRow(def.label, MONTHS.map(() => ""), "");
+      } else if (def.type === "blank") {
+        pushRow("", MONTHS.map(() => ""), "");
+      } else if (def.type === "item") {
+        const sign = def.sign;
+        const months = MONTHS.map((_, i) => sign * sumIfs2(buckets, def.rubriek, i + 1));
+        // Maand kan ook stringified zijn — probeer ook stringified maand-keys
+        for (let i = 0; i < 12; i++) {
+          if (months[i] === 0) {
+            const alt = sign * sumIfs2(buckets, def.rubriek, String(i + 1));
+            if (alt !== 0) months[i] = alt;
+          }
+        }
+        const total = months.reduce((s, v) => s + v, 0);
+        if (def.key) values[def.key] = { months, total };
+        pushRow(def.label, months, total);
+      } else if (def.type === "subtotal") {
+        const months = MONTHS.map(() => 0);
+        let total = 0; let any = false;
+        for (const ref of def.refs || []) {
+          const v = values[ref]; if (!v) continue;
+          for (let i = 0; i < 12; i++) months[i] += v.months[i];
+          total += v.total;
+          any = true;
+        }
+        if (def.key) values[def.key] = { months, total };
+        pushRow(def.label, any ? months : MONTHS.map(() => null), any ? total : null);
+      } else if (def.type === "compute") {
+        // Computes werken op de "d"-waarde in OUT_Balans (cumulatief). In de
+        // periodebalans rekenen we per maand. We voeden de fn dus per maand.
+        const monthVals = MONTHS.map((_, i) => {
+          const g = {};
+          for (const k of Object.keys(values)) g[k] = values[k]?.months?.[i] ?? 0;
+          return def.fn(g);
+        });
+        const totalG = {};
+        for (const k of Object.keys(values)) totalG[k] = values[k]?.total ?? 0;
+        const total = def.fn(totalG);
+        if (def.key) values[def.key] = { months: monthVals, total };
+        // Procenten formatteren als "12.3%"
+        if (def.format === "pct") {
+          const fmt = (v) => Number.isFinite(v) ? (v * 100).toFixed(1) + "%" : "";
+          pushRow(def.label, monthVals.map(fmt), fmt(total));
+        } else {
+          pushRow(def.label, monthVals, total);
+        }
+      }
+    }
+
+    return {
+      columns: ["Omschrijving", ...MONTHS, "YTD totaal"],
+      rows: out
+    };
+  }
+
+  // ════════════════════════════════════════════════════════════════
   // Hoofdfunctie — bereken alle OUT_-tabellen vanuit een set inputs.
   // ════════════════════════════════════════════════════════════════
   // input: { beginbalans, grootboektransacties, ... } — zoals stuurcijfers.html ze laadt
@@ -342,7 +451,9 @@
     const result = {};
     try { result.out_balans = calcOutBalans(tables); }
     catch (e) { result.out_balans = errorTable("OUT_Balans", e); }
-    // OUT_Periodebalans, OUT_Resultaten per artikelgroep, OUT_Resultaten SAMGEVAT volgen.
+    try { result.out_periodebalans = calcOutPeriodebalans(tables); }
+    catch (e) { result.out_periodebalans = errorTable("OUT_Periodebalans", e); }
+    // OUT_Resultaten per artikelgroep, OUT_Resultaten SAMGEVAT volgen.
     return result;
   }
 
@@ -359,6 +470,7 @@
   global.StuurcijfersEngine = {
     recalculateAll,
     calcOutBalans,
+    calcOutPeriodebalans,
     // Helpers voor tests / dev console
     _internals: { colIdx, bucketSum, sumIf, bucketSum2, sumIfs2 }
   };
