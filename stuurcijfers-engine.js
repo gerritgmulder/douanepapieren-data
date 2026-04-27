@@ -255,21 +255,38 @@
   ];
 
   // ════════════════════════════════════════════════════════════════
+  // Drill-down metadata
+  // ════════════════════════════════════════════════════════════════
+  // Elke berekende cel krijgt een metadata-record dat beschrijft hoe het getal
+  // tot stand is gekomen. De UI gebruikt dit om bij klik op een cel te tonen
+  // welke transacties er onder liggen.
+  //
+  //   { kind: "filter", source, filters: [{col,value}], valueCol, sign,
+  //     description }
+  //   { kind: "compose", description, parts: [{label, value, refKey?, refRow?}] }
+  //   null  — geen drill-down (header / blank / non-numeric)
+  function metaFilter(source, filters, valueCol, sign, description) {
+    return { kind: "filter", source, filters, valueCol, sign, description };
+  }
+  function metaCompose(description, parts) {
+    return { kind: "compose", description, parts };
+  }
+
+  // ════════════════════════════════════════════════════════════════
   // OUT_Balans calculator
   // ════════════════════════════════════════════════════════════════
   function calcOutBalans(tables) {
     const beginbalans = tables.beginbalans;
     const grootboek   = tables.grootboektransacties;
 
-    // Vereisten
     if (!beginbalans?.rows?.length || !grootboek?.rows?.length) {
       return {
         columns: ["Omschrijving", "1-1 (€)", "Mutaties (€)", "Nu (€)"],
-        rows: [["⚠ Beginbalans en/of Grootboektransacties nog niet geïmporteerd.", "", "", ""]]
+        rows: [["⚠ Beginbalans en/of Grootboektransacties nog niet geïmporteerd.", "", "", ""]],
+        meta: [[null, null, null, null]]
       };
     }
 
-    // Bouw bucket-indexen één keer
     const bbRubCol = colIdx(beginbalans, "Rubriek");
     const bbValCol = colIdx(beginbalans, "Saldo");
     const gtRubCol = colIdx(grootboek, "Rubriek");
@@ -277,61 +294,99 @@
     const bbBuckets = bucketSum(beginbalans, bbRubCol, bbValCol);
     const gtBuckets = bucketSum(grootboek, gtRubCol, gtValCol);
 
-    // Eerste pass: per item-rij → bereken B (begin), Mut (mutaties), D (eind)
-    // Tweede pass: subtotalen + computes — kunnen dan terugkijken naar eerdere keys.
-    const values = {}; // key → {b, mut, d}
+    const values = {}; // key → { b, mut, d, rowIdx }
     const out = [];
+    const meta = []; // parallel met out — meta[r][c] of null
 
-    function pushRow(label, b, mut, d, opts = {}) {
+    function pushRow(label, b, mut, d, opts = {}, cellMeta = [null, null, null, null]) {
       const fmt = (v) => {
         if (opts.format === "pct") return Number.isFinite(v) ? (v * 100).toFixed(1) + "%" : "";
         if (v === undefined || v === null) return "";
         if (v === 0) return 0;
         return v;
       };
-      // Subtotalen krijgen UPPER-LABEL als markeer; verdere styling kan later
-      // op basis van label-conventies in de UI.
       out.push([label, fmt(b), fmt(mut), fmt(d)]);
+      meta.push(cellMeta);
     }
 
     for (const def of OUT_BALANS_DEF) {
       if (def.type === "section") {
-        out.push([def.label.toUpperCase(), "", "", ""]);
+        out.push([def.label.toUpperCase(), "", "", ""]); meta.push([null, null, null, null]);
       } else if (def.type === "header") {
-        out.push([def.label, "", "", ""]);
+        out.push([def.label, "", "", ""]); meta.push([null, null, null, null]);
       } else if (def.type === "blank") {
-        out.push(["", "", "", ""]);
+        out.push(["", "", "", ""]); meta.push([null, null, null, null]);
       } else if (def.type === "item") {
         const sign = def.sign;
         const begin = def.wvOnly ? null : sign * sumIf(bbBuckets, def.rubriek);
         const mut   = sign * sumIf(gtBuckets, def.rubriek);
         const end   = def.wvOnly ? mut : (begin + mut);
-        if (def.key) values[def.key] = { b: begin, mut, d: end };
-        pushRow(def.label, begin, mut, end, { wv: def.wvOnly });
+        const rowIdx = out.length;
+        if (def.key) values[def.key] = { b: begin, mut, d: end, rowIdx };
+
+        const beginMeta = def.wvOnly ? null
+          : metaFilter("beginbalans",
+              [{ col: "Rubriek", value: def.rubriek }],
+              "Saldo", sign,
+              `Beginbalans — Rubriek "${def.rubriek}"`);
+        const mutMeta = metaFilter("grootboektransacties",
+              [{ col: "Rubriek", value: def.rubriek }],
+              "Bedrag", sign,
+              `Grootboek — Rubriek "${def.rubriek}"`);
+        const endMeta = def.wvOnly ? mutMeta : metaCompose(
+              `Beginstand + mutaties`,
+              [
+                { label: "Beginstand", value: begin, refKey: def.key, refCell: 1 },
+                { label: "Mutaties",   value: mut,   refKey: def.key, refCell: 2 },
+              ]);
+
+        pushRow(def.label, begin, mut, end, { wv: def.wvOnly },
+                [null, beginMeta, mutMeta, endMeta]);
       } else if (def.type === "subtotal") {
         let b = 0, m = 0, d = 0;
         let anyB = false, anyM = false, anyD = false;
+        const parts = [];
         for (const ref of def.refs || []) {
           const v = values[ref]; if (!v) continue;
           if (v.b !== null && v.b !== undefined) { b += v.b; anyB = true; }
           if (v.mut !== null && v.mut !== undefined) { m += v.mut; anyM = true; }
           if (v.d !== null && v.d !== undefined) { d += v.d; anyD = true; }
+          parts.push({ refKey: ref, value: v.d, refRow: v.rowIdx });
         }
-        if (def.key) values[def.key] = { b: anyB ? b : null, mut: anyM ? m : null, d: anyD ? d : null };
-        pushRow(def.label, anyB ? b : null, anyM ? m : null, anyD ? d : null, def);
+        const rowIdx = out.length;
+        if (def.key) values[def.key] = { b: anyB ? b : null, mut: anyM ? m : null, d: anyD ? d : null, rowIdx };
+
+        const compose = metaCompose(
+          `Subtotaal: ${parts.length} regel(s)`,
+          parts.map(p => ({ label: p.refKey, value: p.value, refRow: p.refRow }))
+        );
+        pushRow(def.label, anyB ? b : null, anyM ? m : null, anyD ? d : null, def,
+                [null,
+                 anyB ? compose : null,
+                 anyM ? compose : null,
+                 anyD ? compose : null]);
       } else if (def.type === "compute") {
         const g = {};
-        for (const k of Object.keys(values)) g[k] = values[k]?.d ?? 0;
-        const d = def.fn(g);
-        if (def.key) values[def.key] = { b: null, mut: null, d };
-        pushRow(def.label, null, null, d, def);
+        const partsForMeta = [];
+        for (const k of Object.keys(values)) {
+          g[k] = values[k]?.d ?? 0;
+          if (values[k]?.rowIdx !== undefined) partsForMeta.push({ refKey: k, value: g[k], refRow: values[k].rowIdx });
+        }
+        const dVal = def.fn(g);
+        const rowIdx = out.length;
+        if (def.key) values[def.key] = { b: null, mut: null, d: dVal, rowIdx };
+        const cm = metaCompose(
+          `Berekening: ${def.label} (${def.fn.toString().replace(/\s+/g, " ").slice(0, 100)})`,
+          partsForMeta.slice(0, 8) // kort houden
+        );
+        pushRow(def.label, null, null, dVal, def, [null, null, null, cm]);
       }
     }
 
     return {
       columns: ["Omschrijving", "Beginstand 1-1 (€)", "Mutaties (€)", "Eindstand (€)"],
       rows: out,
-      meta: { values } // voor eventuele debug-inspectie
+      meta
     };
   }
 
@@ -374,26 +429,27 @@
     const buckets = bucketSum2(grootboek, gtRubCol, gtMaCol, gtBedrag);
 
     const wvDef = getWvDef();
-    // Eerste pass: items per maand (en totaal). values[key] = { months: [m1..m12], total }
-    const values = {};
+    const values = {}; // key → { months, total, rowIdx }
     const out = [];
+    const meta = [];
 
-    function pushRow(label, monthVals, total) {
+    function pushRow(label, monthVals, total, cellMeta) {
       const row = [label];
       for (const v of monthVals) row.push(v == null ? "" : v);
       row.push(total == null ? "" : total);
       out.push(row);
+      meta.push(cellMeta);
     }
+    const BLANK_META = () => Array(MONTHS.length + 2).fill(null);
 
     for (const def of wvDef) {
       if (def.type === "header") {
-        pushRow(def.label, MONTHS.map(() => ""), "");
+        pushRow(def.label, MONTHS.map(() => ""), "", BLANK_META());
       } else if (def.type === "blank") {
-        pushRow("", MONTHS.map(() => ""), "");
+        pushRow("", MONTHS.map(() => ""), "", BLANK_META());
       } else if (def.type === "item") {
         const sign = def.sign;
         const months = MONTHS.map((_, i) => sign * sumIfs2(buckets, def.rubriek, i + 1));
-        // Maand kan ook stringified zijn — probeer ook stringified maand-keys
         for (let i = 0; i < 12; i++) {
           if (months[i] === 0) {
             const alt = sign * sumIfs2(buckets, def.rubriek, String(i + 1));
@@ -401,22 +457,42 @@
           }
         }
         const total = months.reduce((s, v) => s + v, 0);
-        if (def.key) values[def.key] = { months, total };
-        pushRow(def.label, months, total);
+        const rowIdx = out.length;
+        if (def.key) values[def.key] = { months, total, rowIdx };
+
+        const cm = BLANK_META();
+        for (let i = 0; i < 12; i++) {
+          cm[i + 1] = metaFilter("grootboektransacties",
+            [{ col: "Rubriek", value: def.rubriek },
+             { col: "Maand", value: i + 1 }],
+            "Bedrag", sign,
+            `${def.label} — ${MONTHS[i]}`);
+        }
+        cm[MONTHS.length + 1] = metaFilter("grootboektransacties",
+          [{ col: "Rubriek", value: def.rubriek }],
+          "Bedrag", sign,
+          `${def.label} — YTD`);
+        pushRow(def.label, months, total, cm);
       } else if (def.type === "subtotal") {
         const months = MONTHS.map(() => 0);
         let total = 0; let any = false;
+        const parts = [];
         for (const ref of def.refs || []) {
           const v = values[ref]; if (!v) continue;
           for (let i = 0; i < 12; i++) months[i] += v.months[i];
           total += v.total;
           any = true;
+          parts.push({ label: ref, value: v.total, refRow: v.rowIdx });
         }
-        if (def.key) values[def.key] = { months, total };
-        pushRow(def.label, any ? months : MONTHS.map(() => null), any ? total : null);
+        const rowIdx = out.length;
+        if (def.key) values[def.key] = { months, total, rowIdx };
+        const cm = BLANK_META();
+        if (any) {
+          const compose = metaCompose(`Subtotaal van ${parts.length} regels`, parts);
+          for (let i = 1; i <= MONTHS.length + 1; i++) cm[i] = compose;
+        }
+        pushRow(def.label, any ? months : MONTHS.map(() => null), any ? total : null, cm);
       } else if (def.type === "compute") {
-        // Computes werken op de "d"-waarde in OUT_Balans (cumulatief). In de
-        // periodebalans rekenen we per maand. We voeden de fn dus per maand.
         const monthVals = MONTHS.map((_, i) => {
           const g = {};
           for (const k of Object.keys(values)) g[k] = values[k]?.months?.[i] ?? 0;
@@ -425,20 +501,26 @@
         const totalG = {};
         for (const k of Object.keys(values)) totalG[k] = values[k]?.total ?? 0;
         const total = def.fn(totalG);
-        if (def.key) values[def.key] = { months: monthVals, total };
-        // Procenten formatteren als "12.3%"
+        const rowIdx = out.length;
+        if (def.key) values[def.key] = { months: monthVals, total, rowIdx };
+        const cm = BLANK_META();
+        const composeParts = Object.keys(values).slice(0, 8).map(k =>
+          ({ label: k, value: values[k]?.total ?? 0, refRow: values[k]?.rowIdx }));
+        const cmCompose = metaCompose(`Berekening: ${def.label}`, composeParts);
+        for (let i = 1; i <= MONTHS.length + 1; i++) cm[i] = cmCompose;
         if (def.format === "pct") {
           const fmt = (v) => Number.isFinite(v) ? (v * 100).toFixed(1) + "%" : "";
-          pushRow(def.label, monthVals.map(fmt), fmt(total));
+          pushRow(def.label, monthVals.map(fmt), fmt(total), cm);
         } else {
-          pushRow(def.label, monthVals, total);
+          pushRow(def.label, monthVals, total, cm);
         }
       }
     }
 
     return {
       columns: ["Omschrijving", ...MONTHS, "YTD totaal"],
-      rows: out
+      rows: out,
+      meta
     };
   }
 
@@ -489,35 +571,60 @@
     const groepen = getArtikelgroepen(grootboek, gtAgCol);
 
     const wvDef = getWvDef();
-    const values = {}; // key → { perGroep: [...], total }
+    const values = {};
     const out = [];
+    const meta = [];
 
-    function pushRow(label, perGroep, total) {
+    function pushRow(label, perGroep, total, cellMeta) {
       out.push([label, ...perGroep.map(v => v == null ? "" : v), total == null ? "" : total]);
+      meta.push(cellMeta);
     }
+    const BLANK_META = () => Array(groepen.length + 2).fill(null);
 
     for (const def of wvDef) {
       if (def.type === "header") {
-        pushRow(def.label, groepen.map(() => ""), "");
+        pushRow(def.label, groepen.map(() => ""), "", BLANK_META());
       } else if (def.type === "blank") {
-        pushRow("", groepen.map(() => ""), "");
+        pushRow("", groepen.map(() => ""), "", BLANK_META());
       } else if (def.type === "item") {
         const sign = def.sign;
         const perGroep = groepen.map(g => sign * sumIfs2(buckets, def.rubriek, g));
         const total = perGroep.reduce((s, v) => s + v, 0);
-        if (def.key) values[def.key] = { perGroep, total };
-        pushRow(def.label, perGroep, total);
+        const rowIdx = out.length;
+        if (def.key) values[def.key] = { perGroep, total, rowIdx };
+
+        const cm = BLANK_META();
+        for (let i = 0; i < groepen.length; i++) {
+          cm[i + 1] = metaFilter("grootboektransacties",
+            [{ col: "Rubriek", value: def.rubriek },
+             { col: "Artikelgroep", value: groepen[i] }],
+            "Bedrag", sign,
+            `${def.label} — ${groepen[i]}`);
+        }
+        cm[groepen.length + 1] = metaFilter("grootboektransacties",
+          [{ col: "Rubriek", value: def.rubriek }],
+          "Bedrag", sign,
+          `${def.label} — alle artikelgroepen`);
+        pushRow(def.label, perGroep, total, cm);
       } else if (def.type === "subtotal") {
         const perGroep = groepen.map(() => 0);
         let total = 0; let any = false;
+        const parts = [];
         for (const ref of def.refs || []) {
           const v = values[ref]; if (!v) continue;
           for (let i = 0; i < groepen.length; i++) perGroep[i] += v.perGroep[i];
           total += v.total;
           any = true;
+          parts.push({ label: ref, value: v.total, refRow: v.rowIdx });
         }
-        if (def.key) values[def.key] = { perGroep, total };
-        pushRow(def.label, any ? perGroep : groepen.map(() => null), any ? total : null);
+        const rowIdx = out.length;
+        if (def.key) values[def.key] = { perGroep, total, rowIdx };
+        const cm = BLANK_META();
+        if (any) {
+          const compose = metaCompose(`Subtotaal van ${parts.length} regels`, parts);
+          for (let i = 1; i <= groepen.length + 1; i++) cm[i] = compose;
+        }
+        pushRow(def.label, any ? perGroep : groepen.map(() => null), any ? total : null, cm);
       } else if (def.type === "compute") {
         const perGroep = groepen.map((_, i) => {
           const g = {};
@@ -527,12 +634,18 @@
         const totalG = {};
         for (const k of Object.keys(values)) totalG[k] = values[k]?.total ?? 0;
         const total = def.fn(totalG);
-        if (def.key) values[def.key] = { perGroep, total };
+        const rowIdx = out.length;
+        if (def.key) values[def.key] = { perGroep, total, rowIdx };
+        const cm = BLANK_META();
+        const composeParts = Object.keys(values).slice(0, 8).map(k =>
+          ({ label: k, value: values[k]?.total ?? 0, refRow: values[k]?.rowIdx }));
+        const cmCompose = metaCompose(`Berekening: ${def.label}`, composeParts);
+        for (let i = 1; i <= groepen.length + 1; i++) cm[i] = cmCompose;
         if (def.format === "pct") {
           const fmt = (v) => Number.isFinite(v) ? (v * 100).toFixed(1) + "%" : "";
-          pushRow(def.label, perGroep.map(fmt), fmt(total));
+          pushRow(def.label, perGroep.map(fmt), fmt(total), cm);
         } else {
-          pushRow(def.label, perGroep, total);
+          pushRow(def.label, perGroep, total, cm);
         }
       }
     }
@@ -540,7 +653,9 @@
     return {
       columns: ["Omschrijving", ...groepen, "Totaal"],
       rows: out,
-      meta: { values, groepen }
+      meta,
+      _values: values,
+      _groepen: groepen,
     };
   }
 
@@ -554,8 +669,9 @@
   // Plus de paar belangrijke regels: omzet, brutomarge, EBIT, EBITDA, Resultaat.
   function calcOutResultatenSamengevat(tables) {
     const perAg = calcOutResultatenPerArtikelgroep(tables);
-    if (!perAg.meta) return perAg; // foutmelding
-    const { values, groepen } = perAg.meta;
+    if (!perAg._values) return perAg; // foutmelding-pad
+    const values = perAg._values;
+    const groepen = perAg._groepen;
 
     const indirectGroepen = new Set(["Algemeen", "Groepsmaatschappijen"]);
     const idxIndirect = groepen.map((g, i) => indirectGroepen.has(g) ? i : -1).filter(i => i >= 0);
@@ -565,20 +681,53 @@
       return indices.reduce((s, i) => s + (perGroep[i] || 0), 0);
     }
 
-    function row(label, key, opts = {}) {
+    // Gegevens-rijen + parallelle meta-array.
+    const outRows = [];
+    const outMeta = [];
+
+    function metaForFilter(rubriek, indices, label) {
+      // Geef voor klikbare cellen een filter-meta die op grootboek filtert
+      // op rubriek + (set artikelgroepen).
+      const groepenList = indices.map(i => groepen[i]).filter(Boolean);
+      if (!groepenList.length) return null;
+      return {
+        kind: "filter-multi",
+        source: "grootboektransacties",
+        filters: [{ col: "Rubriek", value: rubriek }],
+        artikelgroepen: groepenList,
+        valueCol: "Bedrag",
+        description: label,
+      };
+    }
+
+    function pushItemRow(label, key, rubriek) {
       const v = values[key];
-      if (!v) return [label, "", "", "", ""];
+      if (!v) {
+        outRows.push([label, "", "", "", ""]);
+        outMeta.push([null, null, null, null, null]);
+        return;
+      }
       const direct   = sumOver(v.perGroep, idxDirect);
       const indirect = sumOver(v.perGroep, idxIndirect);
       const totaal   = direct + indirect;
-      const fmt = (n) => opts.pct ? (Number.isFinite(n) ? (n * 100).toFixed(1) + "%" : "") : n;
-      return [label, fmt(direct), fmt(indirect), fmt(totaal), opts.note || ""];
+      outRows.push([label, direct, indirect, totaal, ""]);
+      outMeta.push([
+        null,
+        rubriek ? metaForFilter(rubriek, idxDirect, `${label} — direct`) : null,
+        rubriek ? metaForFilter(rubriek, idxIndirect, `${label} — indirect`) : null,
+        rubriek ? metaForFilter(rubriek, [...idxDirect, ...idxIndirect], `${label} — totaal`) : null,
+        null,
+      ]);
     }
-
-    function pctRow(label, baseKey, divKey, opts = {}) {
+    function pushSubtotalRow(label, key) {
+      // Subtotaal verwijst naar onderliggende keys; voor de UI volstaat een
+      // compose met de bedragen.
+      pushItemRow(label, key, null);
+    }
+    function pushPctRow(label, baseKey, divKey) {
       const base = values[baseKey];
       const div  = values[divKey];
-      if (!base || !div) return [label, "", "", "", opts.note || ""];
+      if (!base || !div) { outRows.push([label, "", "", "", ""]); outMeta.push([null, null, null, null, null]); return; }
       const directBase   = sumOver(base.perGroep, idxDirect);
       const indirectBase = sumOver(base.perGroep, idxIndirect);
       const totaalBase   = directBase + indirectBase;
@@ -586,48 +735,58 @@
       const indirectDiv  = sumOver(div.perGroep, idxIndirect);
       const totaalDiv    = directDiv + indirectDiv;
       const f = (n, d) => d ? (n / d * 100).toFixed(1) + "%" : "";
-      return [label, f(directBase, directDiv), f(indirectBase, indirectDiv), f(totaalBase, totaalDiv), opts.note || ""];
+      outRows.push([label, f(directBase, directDiv), f(indirectBase, indirectDiv), f(totaalBase, totaalDiv), ""]);
+      outMeta.push([null, null, null, null, null]);
     }
+    function pushBlank() { outRows.push(["", "", "", "", ""]); outMeta.push([null, null, null, null, null]); }
 
-    const rows = [
-      ["", "Direct (€)", "Indirect (€)", "Totaal (€)", ""],
-      row("Omzet", "wvOmzet"),
-      row("Kortingen", "wvKortingen"),
-      row("Garanties", "wvGaranties"),
-      row("Netto-omzet", "wvNettoOmzet"),
-      ["", "", "", "", ""],
-      row("Kostprijs omzet", "wvKostprijs"),
-      row("Prijsverschillen", "wvPrijsv"),
-      row("Voorraadmutatie", "wvVoormut"),
-      row("Montage", "wvMontage"),
-      row("Inkomende transport- en vrachtkosten", "wvVracht"),
-      row("Totaal kostprijs", "wvTotKostprijs"),
-      ["", "", "", "", ""],
-      row("Brutomarge (€)", "wvBrutomarge"),
-      pctRow("Brutomarge (%)", "wvBrutomarge", "wvNettoOmzet"),
-      ["", "", "", "", ""],
-      row("Personeelskosten", "wvPers"),
-      row("Afschrijvingskosten", "wvAfschr"),
-      row("Huisvestingskosten", "wvHuis"),
-      row("Verkoopkosten", "wvVerkoop"),
-      row("Autokosten", "wvAuto"),
-      row("Magazijnkosten", "wvMag"),
-      row("Kantoorkosten", "wvKantoor"),
-      row("Algemene kosten", "wvAlg"),
-      row("Totaal bedrijfskosten", "wvTotBedr"),
-      ["", "", "", "", ""],
-      row("EBIT (€)", "wvEbit"),
-      pctRow("EBIT (%)", "wvEbit", "wvNettoOmzet"),
-      row("Financiële baten en lasten", "wvFin"),
-      row("Resultaat voor belasting", "wvResultaat"),
-      ["", "", "", "", ""],
-      row("EBITDA (€)", "wvEbitda"),
-      pctRow("EBITDA (%)", "wvEbitda", "wvNettoOmzet"),
-    ];
+    // Mapping key → rubriek-naam (voor drill-down). Komt overeen met de defs in OUT_BALANS_DEF.
+    const KEY_TO_RUBRIEK = {
+      wvOmzet: "Omzet", wvKortingen: "Kortingen", wvGaranties: "Garanties",
+      wvKostprijs: "Kostprijs omzet", wvPrijsv: "Prijsverschillen", wvVoormut: "Voorraadmutatie",
+      wvMontage: "Montage", wvVracht: "Inkomende transport- en vrachtkosten",
+      wvPers: "Personeelskosten", wvAfschr: "Afschrijvingskosten", wvHuis: "Huisvestingskosten",
+      wvVerkoop: "Verkoopkosten", wvAuto: "Autokosten", wvMag: "Magazijnkosten",
+      wvKantoor: "Kantoorkosten", wvAlg: "Algemene kosten", wvFin: "Financiële baten en lasten",
+    };
+
+    pushItemRow("Omzet", "wvOmzet", KEY_TO_RUBRIEK.wvOmzet);
+    pushItemRow("Kortingen", "wvKortingen", KEY_TO_RUBRIEK.wvKortingen);
+    pushItemRow("Garanties", "wvGaranties", KEY_TO_RUBRIEK.wvGaranties);
+    pushSubtotalRow("Netto-omzet", "wvNettoOmzet");
+    pushBlank();
+    pushItemRow("Kostprijs omzet", "wvKostprijs", KEY_TO_RUBRIEK.wvKostprijs);
+    pushItemRow("Prijsverschillen", "wvPrijsv", KEY_TO_RUBRIEK.wvPrijsv);
+    pushItemRow("Voorraadmutatie", "wvVoormut", KEY_TO_RUBRIEK.wvVoormut);
+    pushItemRow("Montage", "wvMontage", KEY_TO_RUBRIEK.wvMontage);
+    pushItemRow("Inkomende transport- en vrachtkosten", "wvVracht", KEY_TO_RUBRIEK.wvVracht);
+    pushSubtotalRow("Totaal kostprijs", "wvTotKostprijs");
+    pushBlank();
+    pushSubtotalRow("Brutomarge (€)", "wvBrutomarge");
+    pushPctRow("Brutomarge (%)", "wvBrutomarge", "wvNettoOmzet");
+    pushBlank();
+    pushItemRow("Personeelskosten", "wvPers", KEY_TO_RUBRIEK.wvPers);
+    pushItemRow("Afschrijvingskosten", "wvAfschr", KEY_TO_RUBRIEK.wvAfschr);
+    pushItemRow("Huisvestingskosten", "wvHuis", KEY_TO_RUBRIEK.wvHuis);
+    pushItemRow("Verkoopkosten", "wvVerkoop", KEY_TO_RUBRIEK.wvVerkoop);
+    pushItemRow("Autokosten", "wvAuto", KEY_TO_RUBRIEK.wvAuto);
+    pushItemRow("Magazijnkosten", "wvMag", KEY_TO_RUBRIEK.wvMag);
+    pushItemRow("Kantoorkosten", "wvKantoor", KEY_TO_RUBRIEK.wvKantoor);
+    pushItemRow("Algemene kosten", "wvAlg", KEY_TO_RUBRIEK.wvAlg);
+    pushSubtotalRow("Totaal bedrijfskosten", "wvTotBedr");
+    pushBlank();
+    pushSubtotalRow("EBIT (€)", "wvEbit");
+    pushPctRow("EBIT (%)", "wvEbit", "wvNettoOmzet");
+    pushItemRow("Financiële baten en lasten", "wvFin", KEY_TO_RUBRIEK.wvFin);
+    pushSubtotalRow("Resultaat voor belasting", "wvResultaat");
+    pushBlank();
+    pushSubtotalRow("EBITDA (€)", "wvEbitda");
+    pushPctRow("EBITDA (%)", "wvEbitda", "wvNettoOmzet");
 
     return {
       columns: ["Omschrijving", "Direct (€)", "Indirect (€)", "Totaal (€)", "Toelichting"],
-      rows: rows.slice(1) // eerste rij is de extra header die we al in columns hebben
+      rows: outRows,
+      meta: outMeta,
     };
   }
 

@@ -216,6 +216,86 @@
   }
   table.editor td.dirty { background: #fde68a !important; }
   table.editor td.readonly { color: var(--muted); cursor: default; }
+  table.editor td.drill {
+    cursor: pointer; position: relative;
+    color: var(--ink); font-weight: 500;
+  }
+  table.editor td.drill:hover {
+    background: rgba(20,71,52,0.08) !important;
+    color: var(--fonteyn-green); font-weight: 600;
+  }
+  table.editor td.drill::after {
+    content: "↗"; position: absolute; right: 4px; top: 4px;
+    font-size: 10px; color: var(--fonteyn-lime); opacity: 0;
+    transition: opacity 0.1s;
+  }
+  table.editor td.drill:hover::after { opacity: 1; }
+
+  /* ─── Drill-down drawer ─────────────────────────────── */
+  .drawer-backdrop {
+    position: fixed; inset: 0; background: rgba(15,23,42,0.4);
+    z-index: 40; opacity: 0; pointer-events: none;
+    transition: opacity 0.15s;
+  }
+  .drawer-backdrop.show { opacity: 1; pointer-events: auto; }
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: 720px; max-width: 92vw; background: #fff;
+    box-shadow: -8px 0 24px rgba(0,0,0,0.15);
+    z-index: 41; display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform 0.2s ease;
+  }
+  .drawer.show { transform: translateX(0); }
+  .drawer-head {
+    background: var(--fonteyn-green); color: #fff;
+    padding: 18px 24px; display: flex; align-items: center; gap: 16px;
+  }
+  .drawer-head h3 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+  .drawer-head .sub { font-size: 12px; opacity: 0.8; }
+  .drawer-head .close {
+    margin-left: auto; background: transparent; color: #fff;
+    border: 1px solid rgba(255,255,255,0.3); border-radius: 6px;
+    padding: 5px 12px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .drawer-head .close:hover { background: rgba(255,255,255,0.1); }
+  .drawer-summary {
+    padding: 16px 24px; background: #f8fafc; border-bottom: 1px solid var(--border);
+    font-size: 13px; color: var(--ink);
+  }
+  .drawer-summary .total {
+    font-size: 22px; font-weight: 700; color: var(--fonteyn-green);
+    margin-top: 4px; font-variant-numeric: tabular-nums;
+  }
+  .drawer-summary .filter-chip {
+    display: inline-block; padding: 2px 9px; margin: 2px 4px 2px 0;
+    background: #fff; border: 1px solid var(--border); border-radius: 999px;
+    font-size: 11px; color: var(--muted);
+  }
+  .drawer-summary .filter-chip b { color: var(--ink); }
+  .drawer-body { flex: 1; overflow-y: auto; padding: 0; }
+  .drawer-body table {
+    width: 100%; border-collapse: collapse; font-size: 12px;
+  }
+  .drawer-body th {
+    position: sticky; top: 0; background: #f3f4f6;
+    text-align: left; font-weight: 600; padding: 8px 12px;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .drawer-body th.num { text-align: right; }
+  .drawer-body td {
+    padding: 6px 12px; border-bottom: 1px solid #f9fafb;
+    vertical-align: top; max-width: 280px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .drawer-body td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .drawer-body tr:hover td { background: #fafafa; }
+  .drawer-body .empty-msg {
+    padding: 40px 24px; text-align: center; color: var(--muted); font-size: 13px;
+  }
+  .drawer-foot {
+    padding: 12px 24px; border-top: 1px solid var(--border);
+    background: #f8fafc; font-size: 12px; color: var(--muted);
+  }
 
   .table-meta {
     margin-top: 8px; font-size: 12px; color: var(--muted);
@@ -282,6 +362,21 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ════════════ DRILL-DOWN DRAWER ════════════ -->
+<div class="drawer-backdrop" id="drawerBackdrop"></div>
+<div class="drawer" id="drawer" role="dialog" aria-label="Cel-detail">
+  <div class="drawer-head">
+    <div>
+      <h3 id="drawerTitle">—</h3>
+      <div class="sub" id="drawerSub">—</div>
+    </div>
+    <button type="button" class="close" id="drawerClose">Sluiten ✕</button>
+  </div>
+  <div class="drawer-summary" id="drawerSummary">—</div>
+  <div class="drawer-body" id="drawerBody"></div>
+  <div class="drawer-foot" id="drawerFoot">—</div>
+</div>
 
 <script>
 const SESSION_KEY = "fp.session";
@@ -553,6 +648,8 @@ async function saveCurrentTable() {
     setSaveStatus("saved");
     // Markeer dirty cellen als clean
     document.querySelectorAll("table.editor td.dirty").forEach(td => td.classList.remove("dirty"));
+    // Cache invalideren — net opgeslagen tabel is niet meer up-to-date
+    invalidateTableCache(editor.tableName);
     // Wijziging in een input-tabel? → OUT_-tabellen herberekenen op de achtergrond.
     if (!editor.def?.readOnly) {
       recalcOutTables().catch(e => console.warn("recalc fail:", e));
@@ -619,6 +716,7 @@ function renderTableBody() {
   const start = editor.page * editor.pageSize;
   const end = Math.min(start + editor.pageSize, editor.filteredIdx.length);
   const readOnly = !!editor.def?.readOnly;
+  const cellMeta = editor.cellMeta || null; // alleen aanwezig voor OUT_-tabellen
 
   // Build met DocumentFragment voor performance
   const frag = document.createDocumentFragment();
@@ -641,6 +739,11 @@ function renderTableBody() {
       td.dataset.row = rowIdx;
       td.dataset.col = c;
       td.textContent = formatCell(row[c], isNum);
+      // Drill-down: alleen voor OUT_-cellen die metadata hebben
+      const meta = cellMeta?.[rowIdx]?.[c];
+      if (meta && row[c] !== "" && row[c] != null) {
+        td.classList.add("drill");
+      }
       tr.appendChild(td);
     }
     frag.appendChild(tr);
@@ -737,6 +840,17 @@ function renderEditor() {
         ev.target.blur();
       }
     });
+  } else {
+    // OUT_-tabel: klik op een cel met drill-meta → drawer openen
+    const tbody = document.getElementById("editorBody");
+    tbody.addEventListener("click", (ev) => {
+      const td = ev.target.closest("td.drill");
+      if (!td) return;
+      const r = parseInt(td.dataset.row, 10);
+      const c = parseInt(td.dataset.col, 10);
+      const meta = editor.cellMeta?.[r]?.[c];
+      if (meta) openDrillDrawer(meta, editor.rows[r][0], editor.columns[c], editor.rows[r][c]);
+    });
   }
 
   applyFilter();
@@ -803,9 +917,47 @@ async function selectTable(name) {
   editor.page = 0;
   editor.dirty = false;
   editor.saving = false;
+  editor.cellMeta = null;
   if (editor.saveTimer) { clearTimeout(editor.saveTimer); editor.saveTimer = null; }
 
+  // Drill-down meta: alleen OUT_-tabellen. We berekenen client-side ipv via de
+  // server omdat de meta deterministic is uit de inputs.
+  if (def.readOnly && name.startsWith("out_") && window.StuurcijfersEngine) {
+    try {
+      const inputs = await loadInputsForRecalc();
+      const all = window.StuurcijfersEngine.recalculateAll(inputs);
+      const computed = all[name];
+      if (computed?.meta) editor.cellMeta = computed.meta;
+    } catch (e) {
+      console.warn("Kon drill-meta niet bouwen:", e.message);
+    }
+  }
+
   renderEditor();
+}
+
+// Cache voor input-tabellen (worden meermaals aangeroepen)
+const _tableCache = new Map();
+function invalidateTableCache(name) {
+  if (name) _tableCache.delete(name);
+  else _tableCache.clear();
+}
+async function getTableCached(name) {
+  if (_tableCache.has(name)) return _tableCache.get(name);
+  const r = await apiFetch(`/api/stuurcijfers/tables/${name}`);
+  if (!r.ok) return { columns: [], rows: [] };
+  const j = await r.json();
+  const t = { columns: j.columns || [], rows: j.rows || [] };
+  _tableCache.set(name, t);
+  return t;
+}
+
+async function loadInputsForRecalc() {
+  // Voor recalc + drill-down hebben we beginbalans + grootboektransacties nodig
+  return {
+    beginbalans: await getTableCached("beginbalans"),
+    grootboektransacties: await getTableCached("grootboektransacties"),
+  };
 }
 
 // Waarschuw bij navigeren weg met onopgeslagen wijzigingen.
@@ -815,6 +967,183 @@ window.addEventListener("beforeunload", (ev) => {
     ev.returnValue = "";
   }
 });
+
+// ═══════════════════════════════════════════════════════════
+// Drill-down drawer
+// ═══════════════════════════════════════════════════════════
+function openDrillDrawer(meta, rowLabel, colLabel, cellValue) {
+  el("drawerTitle").textContent = `${rowLabel || "—"} × ${colLabel || "—"}`;
+  el("drawerSub").textContent = meta.description || "";
+  el("drawer").classList.add("show");
+  el("drawerBackdrop").classList.add("show");
+
+  // Loading-state
+  el("drawerSummary").innerHTML = `<div class="total">${formatNL(cellValue)}</div><div style="margin-top:6px;color:var(--muted)">Onderliggende transacties laden…</div>`;
+  el("drawerBody").innerHTML = `<div class="empty-msg">Bezig…</div>`;
+  el("drawerFoot").textContent = "";
+
+  // Verwerk de meta
+  if (meta.kind === "filter") {
+    drillFilter(meta, cellValue);
+  } else if (meta.kind === "filter-multi") {
+    drillFilterMulti(meta, cellValue);
+  } else if (meta.kind === "compose") {
+    drillCompose(meta, cellValue);
+  } else {
+    el("drawerBody").innerHTML = `<div class="empty-msg">Voor deze cel is geen drill-down beschikbaar.</div>`;
+    el("drawerFoot").textContent = "";
+  }
+}
+
+function closeDrillDrawer() {
+  el("drawer").classList.remove("show");
+  el("drawerBackdrop").classList.remove("show");
+}
+el("drawerClose").addEventListener("click", closeDrillDrawer);
+el("drawerBackdrop").addEventListener("click", closeDrillDrawer);
+window.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && el("drawer").classList.contains("show")) closeDrillDrawer();
+});
+
+function formatNL(v) {
+  if (v == null || v === "") return "—";
+  if (typeof v === "string" && v.endsWith("%")) return v;
+  if (typeof v === "number") return new Intl.NumberFormat("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+  return String(v);
+}
+
+async function drillFilter(meta, cellValue) {
+  const src = await getTableCached(meta.source);
+  if (!src.rows.length) {
+    el("drawerBody").innerHTML = `<div class="empty-msg">Brontabel "${meta.source}" is leeg.</div>`;
+    return;
+  }
+  // Filter de rijen
+  const filterIdxs = meta.filters.map(f => src.columns.findIndex(c => String(c).toLowerCase() === f.col.toLowerCase()));
+  const valueIdx = src.columns.findIndex(c => String(c).toLowerCase() === meta.valueCol.toLowerCase());
+  const matches = [];
+  let total = 0;
+  for (const row of src.rows) {
+    let ok = true;
+    for (let i = 0; i < meta.filters.length; i++) {
+      const cell = row[filterIdxs[i]];
+      const want = meta.filters[i].value;
+      // Maand kan number of string zijn — vergelijk loose
+      const eq = (a, b) => String(a ?? "").trim() === String(b ?? "").trim();
+      if (!eq(cell, want)) { ok = false; break; }
+    }
+    if (!ok) continue;
+    const v = row[valueIdx];
+    const n = typeof v === "number" ? v : Number(v);
+    if (Number.isFinite(n)) total += n;
+    matches.push(row);
+  }
+
+  renderDrillSummary(meta, total * (meta.sign || 1), matches.length, cellValue);
+  renderDrillRows(src.columns, matches, valueIdx, meta.sign || 1);
+}
+
+async function drillFilterMulti(meta, cellValue) {
+  // Zoals filter, maar matched op één van meerdere artikelgroepen
+  const src = await getTableCached(meta.source);
+  if (!src.rows.length) {
+    el("drawerBody").innerHTML = `<div class="empty-msg">Brontabel "${meta.source}" is leeg.</div>`;
+    return;
+  }
+  const colMap = Object.fromEntries(src.columns.map((c, i) => [String(c).toLowerCase(), i]));
+  const rubriekIdx = colMap[meta.filters[0].col.toLowerCase()];
+  const agIdx = colMap["artikelgroep"];
+  const valueIdx = colMap[meta.valueCol.toLowerCase()];
+  const targetGroepen = new Set(meta.artikelgroepen.map(g => String(g).trim()));
+  const targetRubriek = String(meta.filters[0].value).trim();
+  const matches = [];
+  let total = 0;
+  for (const row of src.rows) {
+    if (String(row[rubriekIdx] ?? "").trim() !== targetRubriek) continue;
+    if (!targetGroepen.has(String(row[agIdx] ?? "").trim())) continue;
+    const v = row[valueIdx];
+    const n = typeof v === "number" ? v : Number(v);
+    if (Number.isFinite(n)) total += n;
+    matches.push(row);
+  }
+  renderDrillSummary(meta, total, matches.length, cellValue);
+  renderDrillRows(src.columns, matches, valueIdx, 1);
+}
+
+function drillCompose(meta, cellValue) {
+  el("drawerSummary").innerHTML = `<div style="font-size:13px;color:var(--muted)">${escapeHtml(meta.description)}</div><div class="total">${formatNL(cellValue)}</div>`;
+  const parts = meta.parts || [];
+  if (!parts.length) {
+    el("drawerBody").innerHTML = `<div class="empty-msg">Geen onderliggende delen gevonden.</div>`;
+    el("drawerFoot").textContent = "";
+    return;
+  }
+  const rowsHtml = parts.map(p => `
+    <tr>
+      <td>${escapeHtml(p.label || "—")}</td>
+      <td class="num">${p.value == null ? "—" : formatNL(p.value)}</td>
+    </tr>
+  `).join("");
+  el("drawerBody").innerHTML = `
+    <table>
+      <thead><tr><th>Onderdeel</th><th class="num">Bedrag (€)</th></tr></thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>`;
+  el("drawerFoot").textContent = `${parts.length} onderdelen — som = celwaarde`;
+}
+
+function renderDrillSummary(meta, totalSigned, count, cellValue) {
+  const chips = (meta.filters || []).map(f =>
+    `<span class="filter-chip"><b>${escapeHtml(f.col)}</b> = ${escapeHtml(String(f.value))}</span>`).join("");
+  const ag = meta.artikelgroepen ? `<div style="margin-top:4px;font-size:11px;color:var(--muted)">Artikelgroepen: ${meta.artikelgroepen.map(escapeHtml).join(", ")}</div>` : "";
+  el("drawerSummary").innerHTML = `
+    <div>${chips}</div>
+    ${ag}
+    <div class="total">${formatNL(cellValue)}</div>
+    <div style="margin-top:4px;font-size:12px;color:var(--muted)">${count.toLocaleString("nl-NL")} transactie(s) — som ongetekend: ${formatNL(totalSigned)}</div>
+  `;
+}
+
+function renderDrillRows(columns, rows, valueIdx, sign) {
+  if (!rows.length) {
+    el("drawerBody").innerHTML = `<div class="empty-msg">Geen transacties gevonden voor deze filter.</div>`;
+    el("drawerFoot").textContent = "0 transacties";
+    return;
+  }
+  // Toon max 500 rijen om de UI snel te houden
+  const MAX = 500;
+  const shown = rows.slice(0, MAX);
+  // Voor leesbaarheid: laat alleen de meest relevante kolommen zien
+  const KEEP = ["GB. Code", "Grootboek omschrijving", "Datum", "Bedrag", "Omschrijving", "Factuurnummer", "Maand", "Artikelgroep", "Rubriek"];
+  const colIdxs = KEEP.map(k => columns.findIndex(c => String(c).toLowerCase() === k.toLowerCase())).filter(i => i >= 0);
+  const useCols = colIdxs.length ? colIdxs : columns.map((_, i) => i);
+
+  const headHtml = useCols.map(i => {
+    const isNum = i === valueIdx;
+    return `<th class="${isNum ? "num" : ""}">${escapeHtml(columns[i] || "")}</th>`;
+  }).join("");
+
+  const NL_FORMAT = new Intl.NumberFormat("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const bodyHtml = shown.map(r => {
+    const cells = useCols.map(i => {
+      const v = r[i];
+      if (i === valueIdx && typeof v === "number") {
+        return `<td class="num">${NL_FORMAT.format(v)}</td>`;
+      }
+      return `<td>${v == null ? "" : escapeHtml(String(v))}</td>`;
+    }).join("");
+    return `<tr>${cells}</tr>`;
+  }).join("");
+
+  el("drawerBody").innerHTML = `
+    <table>
+      <thead><tr>${headHtml}</tr></thead>
+      <tbody>${bodyHtml}</tbody>
+    </table>`;
+  el("drawerFoot").textContent = rows.length > MAX
+    ? `Eerste ${MAX.toLocaleString("nl-NL")} van ${rows.length.toLocaleString("nl-NL")} transacties getoond.`
+    : `${rows.length.toLocaleString("nl-NL")} transactie(s).`;
+}
 
 // ─── Excel-import ──────────────────────────────────────────
 el("excelInput").addEventListener("change", async (ev) => {
@@ -867,6 +1196,7 @@ el("excelInput").addEventListener("change", async (ev) => {
   } else {
     toast(`${saved} tabellen geïmporteerd, OUT_-tabellen herberekenen…`);
   }
+  invalidateTableCache(); // alles vers
   await refreshTables();
   // Direct herberekenen na import — zo zien gebruikers meteen de stuurcijfers
   try {
