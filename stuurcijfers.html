@@ -136,10 +136,47 @@
   .toast.show { opacity: 1; transform: translateY(0); }
   .toast.bad { background: #b91c1c; }
 
-  /* ─── Tabel-editor (komt in fase 2) ───────────────────── */
+  /* ─── Tabel-editor ───────────────────────────────────── */
+  .editor-toolbar {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .editor-toolbar input[type=search] {
+    flex: 1; min-width: 200px; max-width: 360px;
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 8px 12px; font: inherit; font-size: 13px;
+  }
+  .editor-toolbar input[type=search]:focus {
+    outline: none; border-color: var(--fonteyn-green);
+    box-shadow: 0 0 0 3px rgba(20,71,52,0.1);
+  }
+  .editor-toolbar .pager {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--muted);
+  }
+  .editor-toolbar .pager button {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 9px; font: inherit; font-size: 12px;
+    cursor: pointer; color: var(--ink);
+  }
+  .editor-toolbar .pager button:hover:not(:disabled) { background: #f3f4f6; }
+  .editor-toolbar .pager button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .editor-toolbar .save-status {
+    margin-left: auto; font-size: 12px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .editor-toolbar .save-status .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #d1d5db;
+  }
+  .editor-toolbar .save-status.dirty .dot { background: #f59e0b; }
+  .editor-toolbar .save-status.saving .dot { background: #3b82f6; animation: pulse 1s infinite; }
+  .editor-toolbar .save-status.saved .dot { background: var(--ok); }
+  .editor-toolbar .save-status.error .dot { background: var(--bad); }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+
   .table-wrap {
     background: #fff; border: 1px solid var(--border); border-radius: 10px;
-    overflow: auto; max-height: calc(100vh - 240px);
+    overflow: auto; max-height: calc(100vh - 280px);
   }
   table.editor {
     width: 100%; border-collapse: collapse; font-size: 12.5px;
@@ -148,21 +185,39 @@
     position: sticky; top: 0; z-index: 1;
     background: var(--fonteyn-green); color: #fff;
     padding: 8px 10px; text-align: left; font-weight: 600;
-    border-right: 1px solid rgba(255,255,255,0.1);
-    white-space: nowrap;
+    border-right: 1px solid rgba(255,255,255,0.15);
+    white-space: nowrap; user-select: none;
+  }
+  table.editor th.num { text-align: right; }
+  table.editor th.row-num {
+    background: #0d3325; color: rgba(255,255,255,0.5);
+    text-align: center; font-weight: 500; min-width: 42px;
   }
   table.editor td {
-    padding: 6px 10px; border-bottom: 1px solid #f3f4f6;
+    padding: 5px 10px; border-bottom: 1px solid #f3f4f6;
     border-right: 1px solid #f9fafb;
     vertical-align: top; white-space: nowrap;
+    max-width: 360px; overflow: hidden; text-overflow: ellipsis;
   }
-  table.editor tr:nth-child(even) td { background: #fafafa; }
-  table.editor td[contenteditable="true"]:hover { background: #fef9c3; }
+  table.editor td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.editor td.row-num {
+    background: #fafafa; color: var(--muted);
+    text-align: center; font-size: 11px;
+    user-select: none; min-width: 42px;
+  }
+  table.editor tr:nth-child(even) td:not(.row-num) { background: #fafafa; }
+  table.editor td[contenteditable="true"] { cursor: text; }
+  table.editor td[contenteditable="true"]:hover { background: #fef9c3 !important; }
   table.editor td[contenteditable="true"]:focus {
     outline: 2px solid var(--fonteyn-lime); outline-offset: -2px;
-    background: #fffce0;
+    background: #fffce0 !important; max-width: none; white-space: normal;
   }
-  table.editor td.dirty { background: #fef3c7 !important; }
+  table.editor td.dirty { background: #fde68a !important; }
+  table.editor td.readonly { color: var(--muted); cursor: default; }
+
+  .table-meta {
+    margin-top: 8px; font-size: 12px; color: var(--muted);
+  }
 
   .hidden { display: none !important; }
 </style>
@@ -382,30 +437,338 @@ function showOverview() {
   refreshTables();
 }
 
-// ─── Tabel openen (placeholder — fase 2 vult dit) ─────────
+// ═══════════════════════════════════════════════════════════
+// Tabel-editor
+// ═══════════════════════════════════════════════════════════
+// State voor de actieve tabel. Heel pragmatisch: één globale state, geen reactivity-framework.
+const editor = {
+  tableName: null,    // huidige interne tabel-naam
+  def: null,          // TABLES-entry
+  columns: [],        // kolomnamen
+  rows: [],           // 2D array — rows[r][c]
+  numericCols: [],    // bool[] — col is numeriek (op basis van >= 80% getallen in eerste 200 rijen)
+  filter: "",         // huidige zoektekst
+  filteredIdx: [],    // indices in rows[] die voldoen aan filter
+  page: 0,            // huidige pagina (0-based)
+  pageSize: 200,
+  dirty: false,       // er staan onopgeslagen wijzigingen
+  saving: false,
+  saveTimer: null,    // debounce-timer voor autosave
+};
+
+// Detecteer welke kolommen "numeriek" zijn — voor rechts uitlijnen + NL-formatting.
+function detectNumericCols(rows, columns) {
+  const sample = rows.slice(0, 200);
+  return columns.map((_, c) => {
+    let total = 0, num = 0;
+    for (const row of sample) {
+      const v = row[c];
+      if (v == null || v === "") continue;
+      total++;
+      if (typeof v === "number") num++;
+      else if (typeof v === "string" && /^-?\d+([.,]\d+)?$/.test(v.trim())) num++;
+    }
+    return total > 0 && num / total >= 0.8;
+  });
+}
+
+const NL_NUM = new Intl.NumberFormat("nl-NL", { maximumFractionDigits: 2 });
+
+function formatCell(value, isNumericCol) {
+  if (value == null || value === "") return "";
+  if (isNumericCol && typeof value === "number") return NL_NUM.format(value);
+  return String(value);
+}
+
+// Inverse: parse wat de gebruiker tikt terug naar een number/string/null.
+function parseCellInput(text, isNumericCol) {
+  const t = (text ?? "").trim();
+  if (t === "") return null;
+  if (isNumericCol) {
+    // NL: "1.234,56" → 1234.56. Sta ook "1234.56" toe.
+    const normalized = t.replace(/\./g, "").replace(",", ".");
+    const n = Number(normalized);
+    if (!Number.isNaN(n)) return n;
+  }
+  // Probeer alsnog een puur getal (zonder dat de kolom als numeriek is gedetecteerd)
+  if (/^-?\d+([.,]\d+)?$/.test(t)) {
+    const n = Number(t.replace(",", "."));
+    if (!Number.isNaN(n)) return n;
+  }
+  return t;
+}
+
+function applyFilter() {
+  const f = editor.filter.trim().toLowerCase();
+  if (!f) {
+    editor.filteredIdx = editor.rows.map((_, i) => i);
+  } else {
+    editor.filteredIdx = [];
+    for (let i = 0; i < editor.rows.length; i++) {
+      const row = editor.rows[i];
+      for (const cell of row) {
+        if (cell != null && String(cell).toLowerCase().includes(f)) {
+          editor.filteredIdx.push(i);
+          break;
+        }
+      }
+    }
+  }
+  // Pagina terugzetten als out-of-range
+  const maxPage = Math.max(0, Math.ceil(editor.filteredIdx.length / editor.pageSize) - 1);
+  if (editor.page > maxPage) editor.page = maxPage;
+}
+
+function setSaveStatus(state, msg) {
+  const elS = document.getElementById("saveStatus");
+  if (!elS) return;
+  elS.className = "save-status " + state;
+  elS.querySelector(".label").textContent =
+    msg ?? (state === "saved" ? "Opgeslagen" :
+            state === "saving" ? "Opslaan…" :
+            state === "dirty" ? "Niet opgeslagen" :
+            state === "error" ? "Fout bij opslaan" : "—");
+}
+
+async function saveCurrentTable() {
+  if (!editor.tableName) return;
+  if (editor.saving) return;
+  editor.saving = true;
+  setSaveStatus("saving");
+  try {
+    const r = await apiFetch(`/api/stuurcijfers/tables/${editor.tableName}`, {
+      method: "PUT",
+      body: { columns: editor.columns, rows: editor.rows }
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      setSaveStatus("error", "Fout: " + (j.error || r.status));
+      editor.saving = false;
+      return;
+    }
+    editor.dirty = false;
+    editor.saving = false;
+    setSaveStatus("saved");
+    // Markeer dirty cellen als clean
+    document.querySelectorAll("table.editor td.dirty").forEach(td => td.classList.remove("dirty"));
+    // Sidebar-meta verversen
+    refreshTables();
+  } catch (e) {
+    editor.saving = false;
+    setSaveStatus("error", "Fout: " + e.message);
+  }
+}
+
+function scheduleSave() {
+  editor.dirty = true;
+  setSaveStatus("dirty");
+  if (editor.saveTimer) clearTimeout(editor.saveTimer);
+  editor.saveTimer = setTimeout(() => saveCurrentTable(), 800);
+}
+
+// Render alleen de body (rij-cellen) — header en toolbar staan vast.
+function renderTableBody() {
+  const tbody = document.getElementById("editorBody");
+  if (!tbody) return;
+  const start = editor.page * editor.pageSize;
+  const end = Math.min(start + editor.pageSize, editor.filteredIdx.length);
+  const readOnly = !!editor.def?.readOnly;
+
+  // Build met DocumentFragment voor performance
+  const frag = document.createDocumentFragment();
+  for (let i = start; i < end; i++) {
+    const rowIdx = editor.filteredIdx[i];
+    const row = editor.rows[rowIdx];
+    const tr = document.createElement("tr");
+
+    const tdNum = document.createElement("td");
+    tdNum.className = "row-num";
+    tdNum.textContent = (rowIdx + 1).toLocaleString("nl-NL");
+    tr.appendChild(tdNum);
+
+    for (let c = 0; c < editor.columns.length; c++) {
+      const td = document.createElement("td");
+      const isNum = editor.numericCols[c];
+      if (isNum) td.classList.add("num");
+      if (readOnly) td.classList.add("readonly");
+      else td.contentEditable = "true";
+      td.dataset.row = rowIdx;
+      td.dataset.col = c;
+      td.textContent = formatCell(row[c], isNum);
+      tr.appendChild(td);
+    }
+    frag.appendChild(tr);
+  }
+  tbody.replaceChildren(frag);
+
+  // Pager-tekst
+  const total = editor.filteredIdx.length;
+  document.getElementById("pagerInfo").textContent =
+    total === 0 ? "0 rijen"
+    : `${(start + 1).toLocaleString("nl-NL")}–${end.toLocaleString("nl-NL")} van ${total.toLocaleString("nl-NL")}`;
+  document.getElementById("pagerPrev").disabled = editor.page === 0;
+  document.getElementById("pagerNext").disabled = end >= total;
+}
+
+function onCellEdit(td) {
+  const rowIdx = parseInt(td.dataset.row, 10);
+  const colIdx = parseInt(td.dataset.col, 10);
+  const oldValue = editor.rows[rowIdx][colIdx];
+  const newValue = parseCellInput(td.textContent, editor.numericCols[colIdx]);
+  // Niets veranderd → niks doen
+  const same = (oldValue == null && (newValue == null || newValue === ""))
+            || oldValue === newValue;
+  if (same) return;
+  editor.rows[rowIdx][colIdx] = newValue;
+  td.classList.add("dirty");
+  // Hertonen geformatteerd (alleen als de cel niet de focus heeft — anders is dat irritant terwijl je tikt)
+  if (document.activeElement !== td) {
+    td.textContent = formatCell(newValue, editor.numericCols[colIdx]);
+  }
+  scheduleSave();
+}
+
+function renderEditor() {
+  const def = editor.def;
+  el("content").innerHTML = `
+    <div class="editor-toolbar">
+      <input type="search" id="editorFilter" placeholder="Filter (op alle kolommen)…" value="${editor.filter.replace(/"/g, "&quot;")}">
+      <div class="pager">
+        <button type="button" id="pagerPrev">‹ Vorige</button>
+        <span id="pagerInfo">—</span>
+        <button type="button" id="pagerNext">Volgende ›</button>
+      </div>
+      <div class="save-status ${def.readOnly ? "" : "saved"}" id="saveStatus">
+        <span class="dot"></span>
+        <span class="label">${def.readOnly ? "Read-only" : "Opgeslagen"}</span>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="editor">
+        <thead>
+          <tr>
+            <th class="row-num">#</th>
+            ${editor.columns.map((c, i) =>
+              `<th class="${editor.numericCols[i] ? "num" : ""}">${escapeHtml(c)}</th>`
+            ).join("")}
+          </tr>
+        </thead>
+        <tbody id="editorBody"></tbody>
+      </table>
+    </div>
+    <div class="table-meta">
+      ${editor.rows.length.toLocaleString("nl-NL")} rijen totaal · ${editor.columns.length} kolommen
+      ${def.readOnly ? "· read-only — wordt herberekend uit de input-tabbladen" : ""}
+    </div>
+  `;
+
+  // Wire events
+  document.getElementById("editorFilter").addEventListener("input", (ev) => {
+    editor.filter = ev.target.value;
+    editor.page = 0;
+    applyFilter();
+    renderTableBody();
+  });
+  document.getElementById("pagerPrev").addEventListener("click", () => {
+    if (editor.page > 0) { editor.page--; renderTableBody(); document.querySelector(".table-wrap").scrollTop = 0; }
+  });
+  document.getElementById("pagerNext").addEventListener("click", () => {
+    const max = Math.ceil(editor.filteredIdx.length / editor.pageSize) - 1;
+    if (editor.page < max) { editor.page++; renderTableBody(); document.querySelector(".table-wrap").scrollTop = 0; }
+  });
+
+  if (!def.readOnly) {
+    const tbody = document.getElementById("editorBody");
+    // Single delegated handler voor performance
+    tbody.addEventListener("blur", (ev) => {
+      const td = ev.target.closest("td[contenteditable=true]");
+      if (td) onCellEdit(td);
+    }, true);
+    // Enter = blur (volgende cel via tab)
+    tbody.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter" && !ev.shiftKey) {
+        ev.preventDefault();
+        ev.target.blur();
+      }
+    });
+  }
+
+  applyFilter();
+  renderTableBody();
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, ch =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
 async function selectTable(name) {
   setActiveNav(name);
   _currentTable = name;
   const def = TABLES_BY_NAME[name];
   if (!def) return;
+
+  // Onopgeslagen wijzigingen op vorige tabel? Eerst flushen.
+  if (editor.dirty && editor.tableName && editor.tableName !== name) {
+    if (editor.saveTimer) { clearTimeout(editor.saveTimer); editor.saveTimer = null; }
+    await saveCurrentTable();
+  }
+
   el("pageTitle").textContent = def.label;
   el("pageSub").textContent = def.readOnly
-    ? "Berekende output — kan niet rechtstreeks worden bewerkt."
-    : "Klik op een cel om te bewerken. Wijzigingen gaan automatisch op.";
-  el("content").innerHTML = `<div class="empty"><h3>${def.label}</h3><p>Tabel-editor wordt in de volgende fase gebouwd. Voor nu kun je de Logic4-Excel importeren — daarmee wordt deze tabel gevuld.</p></div>`;
+    ? "Berekende output — wordt automatisch herberekend uit de bron-data en configuratie."
+    : "Klik op een cel om te bewerken. Wijzigingen worden ~1 seconde na de laatste aanpassing automatisch opgeslagen.";
+  el("content").innerHTML = `<div class="empty"><h3>Bezig met laden…</h3></div>`;
 
-  // Voor nu: alleen bevestigen of er data is.
-  const r = await apiFetch(`/api/stuurcijfers/tables/${name}`);
-  if (!r.ok) return;
-  const j = await r.json();
-  if (j.rows && j.rows.length) {
+  let data;
+  try {
+    const r = await apiFetch(`/api/stuurcijfers/tables/${name}`);
+    if (!r.ok) {
+      el("content").innerHTML = `<div class="empty"><h3>Fout</h3><p>Kon tabel niet laden (status ${r.status}).</p></div>`;
+      return;
+    }
+    data = await r.json();
+  } catch (e) {
+    el("content").innerHTML = `<div class="empty"><h3>Fout</h3><p>${escapeHtml(e.message)}</p></div>`;
+    return;
+  }
+
+  const columns = data.columns || [];
+  const rows = data.rows || [];
+
+  if (!columns.length || !rows.length) {
     el("content").innerHTML = `
       <div class="empty">
-        <h3>${def.label}</h3>
-        <p>${j.rows.length.toLocaleString("nl-NL")} rijen geladen, ${j.columns?.length || 0} kolommen. Tabel-editor volgt in fase 2.</p>
+        <h3>${escapeHtml(def.label)} — nog leeg</h3>
+        <p>${def.readOnly
+          ? "Deze tabel wordt berekend uit de input-tabbladen. De formule-engine volgt in de volgende fase."
+          : "Importeer eerst de Logic4-Excel via de knop rechtsboven."}</p>
       </div>`;
+    return;
   }
+
+  // Editor-state vullen en renderen
+  editor.tableName = name;
+  editor.def = def;
+  editor.columns = columns;
+  editor.rows = rows;
+  editor.numericCols = detectNumericCols(rows, columns);
+  editor.filter = "";
+  editor.page = 0;
+  editor.dirty = false;
+  editor.saving = false;
+  if (editor.saveTimer) { clearTimeout(editor.saveTimer); editor.saveTimer = null; }
+
+  renderEditor();
 }
+
+// Waarschuw bij navigeren weg met onopgeslagen wijzigingen.
+window.addEventListener("beforeunload", (ev) => {
+  if (editor.dirty) {
+    ev.preventDefault();
+    ev.returnValue = "";
+  }
+});
 
 // ─── Excel-import ──────────────────────────────────────────
 el("excelInput").addEventListener("change", async (ev) => {
