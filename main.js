@@ -48,6 +48,7 @@ const BUNDLED_DEFAULTS = [
   { name: "douanetool.html",     path: path.join(__dirname, "douanetool.html") }, // legacy redirect
   { name: "labels.html",         path: path.join(__dirname, "labels.html") },
   { name: "stuurcijfers.html",   path: path.join(__dirname, "stuurcijfers.html") },
+  { name: "stuurcijfers-engine.js", path: path.join(__dirname, "stuurcijfers-engine.js") },
   { name: "fonteyn-logo.png",    path: path.join(__dirname, "fonteyn-logo.png") },
   { name: "article-codes.json",  path: path.join(__dirname, "server", "article-codes.json") },
   { name: "spec-database.json",  path: path.join(__dirname, "server", "spec-database.json") },

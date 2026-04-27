@@ -10,6 +10,8 @@
 
 <!-- SheetJS — voor het inlezen van de Logic4-Excel in de browser. -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<!-- Formule-engine — vervangt de Excel-formules in de OUT_-tabbladen. -->
+<script src="stuurcijfers-engine.js"></script>
 
 <style>
   :root {
@@ -551,12 +553,56 @@ async function saveCurrentTable() {
     setSaveStatus("saved");
     // Markeer dirty cellen als clean
     document.querySelectorAll("table.editor td.dirty").forEach(td => td.classList.remove("dirty"));
+    // Wijziging in een input-tabel? → OUT_-tabellen herberekenen op de achtergrond.
+    if (!editor.def?.readOnly) {
+      recalcOutTables().catch(e => console.warn("recalc fail:", e));
+    }
     // Sidebar-meta verversen
     refreshTables();
   } catch (e) {
     editor.saving = false;
     setSaveStatus("error", "Fout: " + e.message);
   }
+}
+
+// ─── Recalc: bereken alle OUT_-tabellen en sla ze op ──────────
+async function recalcOutTables() {
+  if (!window.StuurcijfersEngine) return;
+  // Laad alle input-tabellen die de engine nodig heeft. We doen dit serieel
+  // omdat het er weinig zijn en parallelle fetches naar dezelfde server geen
+  // significante winst geven.
+  const inputs = ["beginbalans", "grootboektransacties"];
+  const tables = {};
+  for (const name of inputs) {
+    try {
+      const r = await apiFetch(`/api/stuurcijfers/tables/${name}`);
+      if (!r.ok) continue;
+      const j = await r.json();
+      tables[name] = { columns: j.columns || [], rows: j.rows || [] };
+    } catch {}
+  }
+  const results = window.StuurcijfersEngine.recalculateAll(tables);
+  // Sla elk resultaat op
+  for (const [name, table] of Object.entries(results)) {
+    if (!table) continue;
+    try {
+      await apiFetch(`/api/stuurcijfers/tables/${name}`, {
+        method: "PUT",
+        body: { columns: table.columns, rows: table.rows }
+      });
+    } catch (e) {
+      console.warn(`recalc save ${name}:`, e.message);
+    }
+  }
+  // Als de huidige weergegeven tabel een OUT_-tabel is, vers herladen
+  if (editor.tableName && editor.tableName.startsWith("out_") && results[editor.tableName]) {
+    editor.columns = results[editor.tableName].columns;
+    editor.rows = results[editor.tableName].rows;
+    editor.numericCols = detectNumericCols(editor.rows, editor.columns);
+    applyFilter();
+    renderTableBody();
+  }
+  refreshTables();
 }
 
 function scheduleSave() {
@@ -819,9 +865,16 @@ el("excelInput").addEventListener("change", async (ev) => {
     toast(`${saved} tabellen opgeslagen, ${errors.length} fout(en).`, true);
     console.error("Stuurcijfers-import errors:", errors);
   } else {
-    toast(`${saved} tabellen geïmporteerd, ${skipped} overgeslagen.`);
+    toast(`${saved} tabellen geïmporteerd, OUT_-tabellen herberekenen…`);
   }
   await refreshTables();
+  // Direct herberekenen na import — zo zien gebruikers meteen de stuurcijfers
+  try {
+    await recalcOutTables();
+    toast(`Klaar — ${saved} input-tabellen + OUT_-tabellen bijgewerkt.`);
+  } catch (e) {
+    toast("Recalc faalde: " + e.message, true);
+  }
 });
 
 boot();

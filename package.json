@@ -37,6 +37,7 @@
       "douanetool.html",
       "labels.html",
       "stuurcijfers.html",
+      "stuurcijfers-engine.js",
       "fonteyn-logo.png",
       "server/**/*",
       "!server/node_modules/**/*",
