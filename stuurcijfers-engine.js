@@ -816,6 +816,198 @@
   }
 
   // ════════════════════════════════════════════════════════════════
+  // "Wat valt op?" — analyse op de berekende OUT_-data.
+  // ════════════════════════════════════════════════════════════════
+  // Output is een array Insight-objecten. Elke insight heeft:
+  //   severity:    "good" | "warning" | "info"
+  //   title:       korte kop (≤ ~60 chars)
+  //   description: 1–2 zinnen met cijfers en duiding
+  //   action?:     { table, label?, groep?, maand? }  — voor klik-door in UI
+  //
+  // De analyse is bewust conservatief: 3–6 insights, alleen significante
+  // afwijkingen, zodat de overzichtspagina niet vol staat met ruis.
+  function analyzeStuurcijfers(tables) {
+    const insights = [];
+
+    // Vereisten — zonder transacties kunnen we niets analyseren.
+    const grootboek = tables.grootboektransacties;
+    if (!grootboek?.rows?.length) return insights;
+
+    const perAg = calcOutResultatenPerArtikelgroep(tables);
+    const periode = calcOutPeriodebalans(tables);
+
+    // ─── Signaal 1: brutomarge-uitschieters per artikelgroep ───
+    if (perAg._values && perAg._groepen) {
+      const v = perAg._values;
+      const groepen = perAg._groepen;
+      const bruto = v.wvBrutomarge?.perGroep || [];
+      const omzet = v.wvNettoOmzet?.perGroep || [];
+
+      const marges = groepen.map((g, i) => {
+        const o = omzet[i];
+        const b = bruto[i];
+        // Negeer artikelgroepen met (te) weinig omzet — daar is %-vergelijking ruis
+        if (!Number.isFinite(o) || Math.abs(o) < 50000) return null;
+        return { groep: g, marge: b / o, omzet: o, bruto: b };
+      }).filter(Boolean);
+
+      if (marges.length >= 3) {
+        // Gewogen gemiddelde brutomarge over alle artikelgroepen (op basis van omzet)
+        const totOmzet = marges.reduce((s, m) => s + m.omzet, 0);
+        const totBruto = marges.reduce((s, m) => s + m.bruto, 0);
+        const avgMarge = totOmzet ? totBruto / totOmzet : 0;
+
+        const sorted = marges.slice().sort((a, b) => a.marge - b.marge);
+        const worst = sorted[0];
+        const best  = sorted[sorted.length - 1];
+
+        const SIGN_PCT = 0.05; // 5 ppt = significant
+        if (worst && worst.marge < avgMarge - SIGN_PCT) {
+          insights.push({
+            severity: "warning",
+            title: `${worst.groep}: brutomarge ${pct(worst.marge)}`,
+            description: `${pp(avgMarge - worst.marge)} ppt onder het gemiddelde van ${pct(avgMarge)}. Omzet YTD ${euro(worst.omzet)}.`,
+            action: { table: "out_resultaten_artikelgroep", groep: worst.groep, label: "Brutomarge (%)" }
+          });
+        }
+        if (best && best.marge > avgMarge + SIGN_PCT) {
+          insights.push({
+            severity: "good",
+            title: `${best.groep}: brutomarge ${pct(best.marge)}`,
+            description: `${pp(best.marge - avgMarge)} ppt boven het gemiddelde van ${pct(avgMarge)}. Omzet YTD ${euro(best.omzet)}.`,
+            action: { table: "out_resultaten_artikelgroep", groep: best.groep, label: "Brutomarge (%)" }
+          });
+        }
+      }
+    }
+
+    // ─── Signaal 2: maand-trends in omzet en brutomarge ───
+    if (periode && periode.rows) {
+      // Vind de laatst gevulde maand (laatste kolom met non-zero omzet)
+      const omzetRow = periode.rows.find(r => r[0] === "Omzet");
+      if (omzetRow) {
+        // Kolommen: 0 = label, 1..12 = Jan..Dec, 13 = YTD
+        const filledMonths = [];
+        for (let m = 1; m <= 12; m++) {
+          const v = omzetRow[m];
+          if (typeof v === "number" && Math.abs(v) > 1000) filledMonths.push(m);
+        }
+        if (filledMonths.length >= 2) {
+          const lastM = filledMonths[filledMonths.length - 1];
+          const prior = filledMonths.slice(0, -1);
+          const lastOmzet = omzetRow[lastM];
+          const avgOmzetPrior = prior.reduce((s, m) => s + omzetRow[m], 0) / prior.length;
+
+          if (avgOmzetPrior > 0) {
+            const delta = (lastOmzet - avgOmzetPrior) / avgOmzetPrior;
+            const monthName = MONTHS[lastM - 1];
+            if (Math.abs(delta) >= 0.20) {
+              insights.push({
+                severity: delta > 0 ? "good" : "warning",
+                title: `Omzet ${monthName}: ${delta > 0 ? "+" : ""}${pct(delta)} t.o.v. gemiddelde`,
+                description: `${euro(lastOmzet)} in ${monthName}, gemiddeld ${euro(avgOmzetPrior)} in ${prior.length} eerdere maanden.`,
+                action: { table: "out_periodebalans", label: "Omzet" }
+              });
+            }
+          }
+
+          // Brutomarge-trend
+          const bmRow = periode.rows.find(r => r[0] === "Brutomarge (%)");
+          if (bmRow) {
+            const parsePct = (v) => typeof v === "string" && v.endsWith("%")
+              ? parseFloat(v.replace(",", ".")) / 100 : null;
+            const lastBM = parsePct(bmRow[lastM]);
+            const priorBM = prior.map(m => parsePct(bmRow[m])).filter(Number.isFinite);
+            if (lastBM != null && priorBM.length) {
+              const avgBM = priorBM.reduce((s, v) => s + v, 0) / priorBM.length;
+              const dDelta = lastBM - avgBM;
+              const monthName = MONTHS[lastM - 1];
+              if (Math.abs(dDelta) >= 0.03) { // 3 ppt
+                insights.push({
+                  severity: dDelta > 0 ? "good" : "warning",
+                  title: `Brutomarge ${monthName}: ${pct(lastBM)}`,
+                  description: `${pp(Math.abs(dDelta))} ppt ${dDelta > 0 ? "boven" : "onder"} het gemiddelde van eerdere maanden (${pct(avgBM)}).`,
+                  action: { table: "out_periodebalans", label: "Brutomarge (%)" }
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // ─── Signaal 3: EBIT-status (positief/negatief jaar?) ───
+    if (perAg._values?.wvEbit) {
+      const ebitTotal = perAg._values.wvEbit.total;
+      const omzetTotal = perAg._values.wvNettoOmzet?.total || 0;
+      if (omzetTotal > 0) {
+        const ebitPct = ebitTotal / omzetTotal;
+        if (ebitTotal < 0) {
+          insights.push({
+            severity: "warning",
+            title: `EBIT YTD: ${euro(ebitTotal)} (verlieslatend)`,
+            description: `${pct(ebitPct)} van de netto-omzet. Bekijk welke kostenposten het grootst zijn t.o.v. de marge.`,
+            action: { table: "out_resultaten_samengevat", label: "EBIT (€)" }
+          });
+        } else if (ebitPct < 0.03) {
+          insights.push({
+            severity: "info",
+            title: `EBIT-marge YTD: ${pct(ebitPct)}`,
+            description: `Krappe winstgevendheid (${euro(ebitTotal)} op ${euro(omzetTotal)} netto-omzet). Kleine kostenwijziging heeft groot effect.`,
+            action: { table: "out_resultaten_samengevat", label: "EBIT (%)" }
+          });
+        }
+      }
+    }
+
+    // ─── Signaal 4: hoogste indirecte kostenpost ───
+    if (perAg._values && perAg._groepen) {
+      const groepen = perAg._groepen;
+      const idxIndirect = groepen.map((g, i) => ["Algemeen", "Groepsmaatschappijen"].includes(g) ? i : -1).filter(i => i >= 0);
+      const KOSTEN_KEYS = [
+        ["wvPers", "Personeelskosten"], ["wvAfschr", "Afschrijvingskosten"],
+        ["wvHuis", "Huisvestingskosten"], ["wvVerkoop", "Verkoopkosten"],
+        ["wvAuto", "Autokosten"], ["wvMag", "Magazijnkosten"],
+        ["wvKantoor", "Kantoorkosten"], ["wvAlg", "Algemene kosten"],
+      ];
+      const indirectKosten = KOSTEN_KEYS.map(([k, label]) => {
+        const v = perAg._values[k]; if (!v) return null;
+        const total = idxIndirect.reduce((s, i) => s + (v.perGroep[i] || 0), 0);
+        return { key: k, label, total };
+      }).filter(Boolean).filter(x => x.total > 0);
+      if (indirectKosten.length >= 2) {
+        indirectKosten.sort((a, b) => b.total - a.total);
+        const top = indirectKosten[0];
+        const totaal = indirectKosten.reduce((s, k) => s + k.total, 0);
+        const aandeel = top.total / totaal;
+        if (aandeel >= 0.35) {
+          insights.push({
+            severity: "info",
+            title: `${top.label}: grootste indirecte kostenpost`,
+            description: `${euro(top.total)} (${pct(aandeel)} van alle indirecte kosten). Bekijk de onderliggende boekingen voor de grootste optimalisatie-kans.`,
+            action: { table: "out_resultaten_samengevat", label: top.label }
+          });
+        }
+      }
+    }
+
+    return insights;
+  }
+
+  // ─── Formatting helpers (alleen voor analyse, geen UI-locale) ───
+  function pct(n) {
+    if (!Number.isFinite(n)) return "—";
+    return (n * 100).toFixed(1).replace(".", ",") + "%";
+  }
+  function pp(n) {
+    return (Math.abs(n) * 100).toFixed(1).replace(".", ",");
+  }
+  function euro(n) {
+    if (!Number.isFinite(n)) return "—";
+    return "€ " + Math.round(n).toLocaleString("nl-NL");
+  }
+
+  // ════════════════════════════════════════════════════════════════
   // Export
   // ════════════════════════════════════════════════════════════════
   global.StuurcijfersEngine = {
@@ -824,6 +1016,7 @@
     calcOutPeriodebalans,
     calcOutResultatenPerArtikelgroep,
     calcOutResultatenSamengevat,
+    analyzeStuurcijfers,
     // Helpers voor tests / dev console
     _internals: { colIdx, bucketSum, sumIf, bucketSum2, sumIfs2 }
   };

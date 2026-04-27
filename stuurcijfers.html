@@ -126,6 +126,67 @@
   .empty h3 { margin: 0 0 6px; font-size: 16px; color: var(--ink); }
   .empty p { margin: 0 auto; max-width: 440px; font-size: 13px; }
 
+  /* ─── Overview: insights ─────────────────────────────── */
+  .overview-section {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px 24px; margin-bottom: 18px;
+  }
+  .overview-section h3 {
+    margin: 0 0 14px; font-size: 15px; font-weight: 700;
+    color: var(--fonteyn-green);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .overview-section h3 .badge {
+    background: var(--fonteyn-cream); color: var(--fonteyn-green);
+    padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .insights {
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+  .insight {
+    border: 1px solid var(--border); border-left: 4px solid #d1d5db;
+    border-radius: 8px; padding: 14px 16px;
+    background: #fafafa; cursor: pointer;
+    transition: background 0.1s, border-color 0.1s, transform 0.1s;
+  }
+  .insight:hover { background: #fff; transform: translateY(-1px); }
+  .insight.good    { border-left-color: var(--fonteyn-lime); background: #f7fde8; }
+  .insight.warning { border-left-color: #f59e0b; background: #fffbeb; }
+  .insight.info    { border-left-color: #3b82f6; background: #eff6ff; }
+  .insight.good:hover    { background: #f0fbd9; }
+  .insight.warning:hover { background: #fef6db; }
+  .insight.info:hover    { background: #e0edff; }
+  .insight .title {
+    font-weight: 600; font-size: 13.5px; color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .insight .desc {
+    font-size: 12.5px; color: var(--muted); line-height: 1.5;
+  }
+  .insight .severity-icon {
+    display: inline-block; margin-right: 6px;
+    width: 18px; height: 18px; border-radius: 50%;
+    text-align: center; line-height: 18px;
+    font-size: 11px; font-weight: 700; vertical-align: -3px;
+  }
+  .insight.good    .severity-icon { background: var(--fonteyn-lime); color: #fff; }
+  .insight.warning .severity-icon { background: #f59e0b; color: #fff; }
+  .insight.info    .severity-icon { background: #3b82f6; color: #fff; }
+
+  .kpi-grid {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
+  .kpi {
+    background: #f8fafc; border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .kpi .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .kpi .value { font-size: 22px; font-weight: 700; color: var(--fonteyn-green);
+    margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .kpi .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
   .toast {
     position: fixed; bottom: 24px; right: 24px;
     background: var(--fonteyn-green); color: #fff;
@@ -466,9 +527,11 @@ async function boot() {
     el("userEmail").textContent = j.user?.email || "—";
     buildSidebar();
     await refreshTables();
+    showOverview();
   } catch (e) {
     toast("Helper-server onbereikbaar.", true);
     buildSidebar();
+    showOverview();
   }
 }
 
@@ -521,17 +584,146 @@ async function refreshTables() {
 }
 
 // ─── Overzichtspagina ─────────────────────────────────────
-function showOverview() {
+async function showOverview() {
   setActiveNav("__overview__");
   _currentTable = null;
   el("pageTitle").textContent = "Stuurcijfers";
-  el("pageSub").textContent = "Overzicht van de financiële tabellen die het model voeden.";
+  el("pageSub").textContent = "Overzicht en wat opvalt in de actuele cijfers.";
+  el("content").innerHTML = `<div class="empty"><h3>Bezig met laden…</h3></div>`;
+
+  // Inputs ophalen + analyse draaien
+  let inputs;
+  try {
+    inputs = await loadInputsForRecalc();
+  } catch (e) {
+    el("content").innerHTML = `<div class="empty"><h3>Fout</h3><p>${escapeHtml(e.message)}</p></div>`;
+    return;
+  }
+
+  // Geen data? — toon onboarding
+  const hasGT = inputs.grootboektransacties?.rows?.length > 0;
+  if (!hasGT) {
+    el("content").innerHTML = `
+      <div class="empty">
+        <h3>Nog geen data geladen</h3>
+        <p>Importeer de meest recente Logic4-export (de Excel die je voorheen handmatig bijwerkte) om te beginnen. Daarna verschijnen hier automatisch de stuurcijfers en wat opvalt.</p>
+      </div>`;
+    refreshTables();
+    return;
+  }
+
+  // Bereken alles
+  const all = window.StuurcijfersEngine?.recalculateAll(inputs) || {};
+  const insights = window.StuurcijfersEngine?.analyzeStuurcijfers(inputs) || [];
+  const perAg = all.out_resultaten_artikelgroep;
+  const samenvatting = all.out_resultaten_samengevat;
+  const kpis = extractKPIs(samenvatting);
+
+  // Render
   el("content").innerHTML = `
-    <div class="empty">
-      <h3>Welkom — fase 1 staat live</h3>
-      <p>De tegel + dubbele auth + opslag-laag werken. Klik <b>Logic4-Excel importeren</b> om je laatste export in te lezen, of selecteer een tabel in het menu links. De OUT_-tabellen zijn nu nog leeg — die volgen zodra de formules zijn omgezet.</p>
-    </div>`;
+    ${kpis.length ? `
+      <div class="overview-section">
+        <h3>Kerncijfers YTD</h3>
+        <div class="kpi-grid">
+          ${kpis.map(k => `
+            <div class="kpi">
+              <div class="label">${escapeHtml(k.label)}</div>
+              <div class="value">${escapeHtml(k.value)}</div>
+              ${k.sub ? `<div class="sub">${escapeHtml(k.sub)}</div>` : ""}
+            </div>
+          `).join("")}
+        </div>
+      </div>` : ""}
+
+    <div class="overview-section">
+      <h3>Wat valt op? <span class="badge">${insights.length} signaal${insights.length === 1 ? "" : "en"}</span></h3>
+      ${insights.length ? `
+        <div class="insights">
+          ${insights.map((ins, i) => `
+            <div class="insight ${ins.severity}" data-insight-idx="${i}">
+              <div class="title">
+                <span class="severity-icon">${ins.severity === "good" ? "✓" : ins.severity === "warning" ? "!" : "i"}</span>
+                ${escapeHtml(ins.title)}
+              </div>
+              <div class="desc">${escapeHtml(ins.description)}</div>
+            </div>
+          `).join("")}
+        </div>
+      ` : `
+        <p style="color:var(--muted);font-size:13px;margin:8px 0 0">
+          Geen significante afwijkingen gevonden — de cijfers liggen binnen normale bandbreedtes.
+        </p>
+      `}
+    </div>
+
+    <div class="overview-section">
+      <h3>Snel naar de details</h3>
+      <p style="color:var(--muted);font-size:13px;margin:0 0 12px">
+        Selecteer in het menu links een tabel om de cijfers in detail te bekijken. In een OUT_-tabel kun je op elk getal klikken om te zien welke transacties eraan ten grondslag liggen.
+      </p>
+    </div>
+  `;
+
+  // Klik-handlers voor insights
+  el("content").querySelectorAll(".insight").forEach(elIns => {
+    elIns.addEventListener("click", () => {
+      const idx = parseInt(elIns.dataset.insightIdx, 10);
+      const ins = insights[idx];
+      if (ins?.action?.table) {
+        // Ga naar de relevante tabel; selectTable laadt en rendert
+        selectTable(ins.action.table).then(() => {
+          // Focus op de specifieke rij/kolom als we die kunnen vinden
+          if (ins.action.label || ins.action.groep) {
+            scrollToInsightTarget(ins.action);
+          }
+        });
+      }
+    });
+  });
+
   refreshTables();
+}
+
+// Probeer in de huidige editor naar een specifieke regel te scrollen op basis
+// van het label (eerste kolom). Werkt na renderEditor() / renderTableBody().
+function scrollToInsightTarget(action) {
+  // Zet eerst een filter op het label zodat de juiste rij zichtbaar is
+  if (action.label) {
+    const filterInput = document.getElementById("editorFilter");
+    if (filterInput) {
+      filterInput.value = action.label;
+      filterInput.dispatchEvent(new Event("input"));
+    }
+  }
+}
+
+// Pak een paar belangrijke YTD-totalen uit OUT_Resultaten SAMGEVAT.
+function extractKPIs(samenvatting) {
+  if (!samenvatting?.rows) return [];
+  const findRow = (label) => samenvatting.rows.find(r => r[0] === label);
+  const eur = (n) => {
+    if (typeof n !== "number" || !Number.isFinite(n)) return "—";
+    const abs = Math.abs(n);
+    if (abs >= 1_000_000) return "€ " + (n / 1_000_000).toFixed(1).replace(".", ",") + " mln";
+    if (abs >= 10_000) return "€ " + Math.round(n / 1000).toLocaleString("nl-NL") + "k";
+    return "€ " + Math.round(n).toLocaleString("nl-NL");
+  };
+  const get = (label, col) => {
+    const r = findRow(label); if (!r) return null;
+    return r[col]; // col 3 = totaal
+  };
+  const result = [];
+  const omzet = get("Netto-omzet", 3);
+  const bm = get("Brutomarge (€)", 3);
+  const bmPct = get("Brutomarge (%)", 3);
+  const ebit = get("EBIT (€)", 3);
+  const ebitPct = get("EBIT (%)", 3);
+  const ebitda = get("EBITDA (€)", 3);
+  if (typeof omzet === "number") result.push({ label: "Netto-omzet", value: eur(omzet), sub: "YTD" });
+  if (typeof bm === "number") result.push({ label: "Brutomarge", value: eur(bm), sub: typeof bmPct === "string" ? bmPct : "" });
+  if (typeof ebit === "number") result.push({ label: "EBIT", value: eur(ebit), sub: typeof ebitPct === "string" ? ebitPct : "" });
+  if (typeof ebitda === "number") result.push({ label: "EBITDA", value: eur(ebitda), sub: "" });
+  return result;
 }
 
 // ═══════════════════════════════════════════════════════════
