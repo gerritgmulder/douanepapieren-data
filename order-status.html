@@ -3,9 +3,18 @@
 <head>
 <meta charset="utf-8">
 <title>Fonteyn — Orderstatus</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <style>
   :root {
-    --bg: #f7f7f5;
+    /* Fonteyn huisstijl */
+    --fonteyn-green: #144734;
+    --fonteyn-green-dark: #0d3325;
+    --fonteyn-lime: #8bc53f;
+    --fonteyn-gold: #ecd48a;
+
+    --bg: #f5f4ef;
     --panel: #ffffff;
     --ink: #1f2937;
     --muted: #6b7280;
@@ -17,7 +26,12 @@
     --border: #e5e7eb;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); min-height: 100vh; }
+  body {
+    margin: 0;
+    font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.45;
+    color: var(--ink); background: var(--bg); min-height: 100vh;
+  }
 
   header {
     background: #fff; border-bottom: 1px solid var(--border);
@@ -208,7 +222,7 @@
   <div id="accessDenied" class="panel hidden">
     <div class="access-denied">
       <h2>Geen toegang</h2>
-      <p>Deze pagina is alleen beschikbaar voor Don, Arno en Dolf.</p>
+      <p>Deze pagina is alleen beschikbaar voor Gerrit, Don, Arno en Dolf.</p>
       <p><a href="dashboard.html">← Terug naar dashboard</a></p>
     </div>
   </div>
@@ -319,6 +333,7 @@
 const SESSION_KEY = "fp.session";
 const EMAIL_KEY   = "fp.email";
 const ALLOWED_USERS = [
+  "gerrit@fonteyn.nl",
   "don@fonteyn.nl",
   "arno@fonteyn.nl",
   "dolf@fonteyn.nl",

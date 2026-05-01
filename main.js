@@ -47,6 +47,9 @@ const BUNDLED_DEFAULTS = [
   { name: "douane.html",         path: path.join(__dirname, "douane.html") },
   { name: "douanetool.html",     path: path.join(__dirname, "douanetool.html") }, // legacy redirect
   { name: "labels.html",         path: path.join(__dirname, "labels.html") },
+  { name: "order-status.html",   path: path.join(__dirname, "order-status.html") },
+  { name: "stuurcijfers.html",   path: path.join(__dirname, "stuurcijfers.html") },
+  { name: "stuurcijfers-engine.js", path: path.join(__dirname, "stuurcijfers-engine.js") },
   { name: "fonteyn-logo.png",    path: path.join(__dirname, "fonteyn-logo.png") },
   { name: "article-codes.json",  path: path.join(__dirname, "server", "article-codes.json") },
   { name: "spec-database.json",  path: path.join(__dirname, "server", "spec-database.json") },
@@ -190,6 +193,15 @@ async function startHelper() {
   // Helper-server moet in de live-map zoeken voor HTML en JSON-databases.
   process.env.HTML_DIR = liveDir;
   process.env.DATA_DIR = liveDir;
+  // Stuurcijfers-data leeft NIET in liveDir (die wordt overschreven door GitHub
+  // auto-update), maar in een aparte persistent dir per gebruiker.
+  // Dev-mode: in projectmap onder .stuurcijfers-data/ (gitignored).
+  const stuurDir = app.isPackaged
+    ? path.join(app.getPath("userData"), "stuurcijfers")
+    : path.join(__dirname, ".stuurcijfers-data");
+  await fs.mkdir(stuurDir, { recursive: true });
+  process.env.STUURCIJFERS_DIR = stuurDir;
+  console.log(`[stuurcijfers] data-dir: ${stuurDir}`);
   const helperPath = pathToFileURL(path.join(__dirname, "server", "index.js")).href;
   await import(helperPath);
 }

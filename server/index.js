@@ -32,9 +32,15 @@ const PORT = parseInt(process.env.PORT || "3737", 10);
 // "klassieke" paden in de project-folder.
 const HTML_DIR = process.env.HTML_DIR || PARENT_DIR;
 const DATA_DIR = process.env.DATA_DIR || __dirname;
+// Stuurcijfers-opslag: aparte dir die NIET door GitHub auto-update wordt overschreven.
+// Standaard onder de projectmap voor dev; Electron's main.js zet deze naar userData/stuurcijfers in productie.
+const STUURCIJFERS_DIR = process.env.STUURCIJFERS_DIR || path.join(PARENT_DIR, ".stuurcijfers-data");
+fs.mkdirSync(STUURCIJFERS_DIR, { recursive: true });
 
 const app = express();
-app.use(express.json());
+// Stuurcijfers-tabellen kunnen groot zijn (Grootboektransacties ~50MB JSON).
+// Default 100kb body-limit van express.json is niet genoeg.
+app.use(express.json({ limit: "200mb" }));
 
 // ============================================================
 // Sessie-beheer (in-memory, non-persistent)
@@ -413,15 +419,108 @@ app.get("/api/products-by-supplier-code", requireAuth, async (req, res) => {
 });
 
 // ============================================================
-// Debug/dev-endpoints (werken alleen als LOGIC4_USERNAME/PASSWORD in env staan)
+// Stuurcijfers — JSON-opslag voor de financiële tabellen
 // ============================================================
+// Toegang: ingelogd én gerriette@fonteyn.nl of dolf@fonteyn.nl.
+// De extra wachtwoord-laag ('Meerveld') zit aan de frontend-kant; hier checken
+// we alleen op e-mail om te voorkomen dat een ander Logic4-account toch de
+// endpoints aanroept met een gestolen sessie-id.
+const STUURCIJFERS_ALLOWED_EMAILS = new Set([
+  "gerriette@fonteyn.nl",
+  "dolf@fonteyn.nl",
+]);
 
-app.get("/api/test-auth", async (req, res) => {
+// Whitelist van geldige tabel-namen (= sheet-namen uit het datamodel).
+// Voorkomt dat iemand met path-traversal naar willekeurige files schrijft.
+const STUURCIJFERS_TABLES = new Set([
+  // Bron-data
+  "rubriceringen_logic",
+  "beginbalans",
+  "grootboektransacties",
+  "korting_per_factuur",
+  "toerekening_korting_garantie",
+  // Configuratie
+  "koppelen_groepen",
+  "koppelen_rubrieken",
+  "correctie_voorraadtelling",
+  "normalisaties",
+  "rekenblad",
+  "verkoopkosten_verdeeld",
+  "verkoopkosten_onverdeeld",
+  "verdeling_verkoopkosten",
+  "bedrijfskosten_verdeeld",
+  "bedrijfskosten_onverdeeld",
+  "stamgegevens",
+  // Berekende output (read-only — wordt door JS-formules gevuld vanuit bovenstaande)
+  "out_balans",
+  "out_periodebalans",
+  "out_resultaten_artikelgroep",
+  "out_resultaten_samengevat",
+]);
+
+function requireStuurAuth(req, res, next) {
+  if (!STUURCIJFERS_ALLOWED_EMAILS.has((req.auth?.username || "").toLowerCase())) {
+    return res.status(403).json({ ok: false, error: "Geen toegang tot stuurcijfers." });
+  }
+  next();
+}
+
+function stuurFilePath(name) {
+  if (!STUURCIJFERS_TABLES.has(name)) return null;
+  return path.join(STUURCIJFERS_DIR, `${name}.json`);
+}
+
+// Lijst alle tabellen + meta (rij-aantal, laatste wijziging) — voor de overzichtspagina.
+app.get("/api/stuurcijfers/tables", requireAuth, requireStuurAuth, (req, res) => {
+  const tables = [];
+  for (const name of STUURCIJFERS_TABLES) {
+    const p = stuurFilePath(name);
+    let rows = 0;
+    let updatedAt = null;
+    if (p && fs.existsSync(p)) {
+      try {
+        const stat = fs.statSync(p);
+        updatedAt = stat.mtime.toISOString();
+        // Snelle rij-telling: parse alleen als file < 5MB; anders hopen we dat de UI dat zelf telt
+        if (stat.size < 5 * 1024 * 1024) {
+          const data = JSON.parse(fs.readFileSync(p, "utf-8"));
+          if (Array.isArray(data?.rows)) rows = data.rows.length;
+        } else {
+          rows = -1; // 'groot' — UI vraagt dit zelf op als je de tabel opent
+        }
+      } catch {}
+    }
+    tables.push({ name, rows, updatedAt });
+  }
+  res.json({ ok: true, tables });
+});
+
+// Eén tabel ophalen.
+app.get("/api/stuurcijfers/tables/:name", requireAuth, requireStuurAuth, (req, res) => {
+  const p = stuurFilePath(req.params.name);
+  if (!p) return res.status(400).json({ ok: false, error: "Onbekende tabel." });
+  if (!fs.existsSync(p)) return res.json({ ok: true, name: req.params.name, columns: [], rows: [] });
   try {
-    const token = await getToken();
-    res.json({ ok: true, tokenPreview: token.slice(0, 24) + "..." });
+    const data = JSON.parse(fs.readFileSync(p, "utf-8"));
+    res.json({ ok: true, name: req.params.name, ...data });
   } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
+    res.status(500).json({ ok: false, error: "Kon tabel niet lezen: " + e.message });
+  }
+});
+
+// Eén tabel opslaan (overschrijft volledig). Body: { columns: [...], rows: [[...]] }
+app.put("/api/stuurcijfers/tables/:name", requireAuth, requireStuurAuth, (req, res) => {
+  const p = stuurFilePath(req.params.name);
+  if (!p) return res.status(400).json({ ok: false, error: "Onbekende tabel." });
+  const { columns, rows } = req.body || {};
+  if (!Array.isArray(columns) || !Array.isArray(rows)) {
+    return res.status(400).json({ ok: false, error: "Body moet { columns: [], rows: [[...]] } zijn." });
+  }
+  try {
+    fs.writeFileSync(p, JSON.stringify({ columns, rows, savedAt: new Date().toISOString() }));
+    res.json({ ok: true, rows: rows.length });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "Kon tabel niet opslaan: " + e.message });
   }
 });
 
@@ -432,6 +531,7 @@ app.get("/api/test-auth", async (req, res) => {
 // ============================================================
 
 const ORDERSTATUS_ALLOWED = new Set([
+  "gerrit@fonteyn.nl",
   "don@fonteyn.nl",
   "arno@fonteyn.nl",
   "dolf@fonteyn.nl",
@@ -465,7 +565,6 @@ const AUDIT_HEADER = [
 function csvEscape(v) {
   if (v == null) return "";
   const s = String(v);
-  // Quote als ; " of newline voorkomt
   if (/[;"\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
   return s;
 }
@@ -496,16 +595,11 @@ function appendAuditRow(row) {
   fs.appendFileSync(file, csvRow(row) + "\n", "utf-8");
 }
 
-// POST /api/order-status/apply — body: { changes: [{orderId, currentStatusId, newStatusId, customer, total, paid, currentStatusLabel, newStatusLabel}] }
-// Reactie: { ok, results: [{orderId, success, error?}], applied, failed }
 app.post("/api/order-status/apply", requireAuth, requireOrderStatusAccess, async (req, res) => {
   const { changes } = req.body || {};
   if (!Array.isArray(changes) || changes.length === 0) {
     return res.status(400).json({ ok: false, error: "Geen wijzigingen meegegeven." });
   }
-
-  // Audit-pad valideren — als de share niet bereikbaar is willen we NIET
-  // halverwege ontdekken dat we niets kunnen loggen. Liever vooraf falen.
   try {
     ensureAuditFile();
   } catch (e) {
@@ -514,10 +608,6 @@ app.post("/api/order-status/apply", requireAuth, requireOrderStatusAccess, async
       error: `Audit-log kan niet worden geschreven (${getAuditDir()}): ${e.message}`
     });
   }
-
-  // Token cachen voor de hele batch — anders trigger elke call een nieuwe
-  // OAuth-roundtrip. getTokenForUser cached al per-user, maar we halen 'm hier
-  // expliciet één keer op zodat eventuele auth-fouten meteen zichtbaar zijn.
   let token;
   try {
     token = await getTokenForUser(req.auth.username, req.auth.password);
@@ -525,8 +615,6 @@ app.post("/api/order-status/apply", requireAuth, requireOrderStatusAccess, async
     return res.status(500).json({ ok: false, error: "Auth bij Logic4 mislukt: " + e.message });
   }
 
-  // Sequentieel verwerken — Logic4 mag niet gehammerd worden, en bij sequentiële
-  // verwerking is de audit-CSV in dezelfde volgorde als de batch.
   const results = [];
   for (const ch of changes) {
     const orderId = parseInt(ch.orderId, 10);
@@ -549,28 +637,22 @@ app.post("/api/order-status/apply", requireAuth, requireOrderStatusAccess, async
       });
       continue;
     }
-
     let success = false;
     let errorMsg = "";
     try {
       const r = await fetch("https://api.logic4server.nl/v3/Orders/UpdateOrderStatus", {
         method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ OrderId: orderId, StatusId: newStatusId })
       });
-      if (r.ok) {
-        success = true;
-      } else {
+      if (r.ok) success = true;
+      else {
         const txt = await r.text();
         errorMsg = `HTTP ${r.status}: ${txt.slice(0, 200)}`;
       }
     } catch (e) {
       errorMsg = e.message;
     }
-
     results.push({ orderId, success, error: success ? undefined : errorMsg });
     appendAuditRow({
       timestamp: new Date().toISOString(),
@@ -587,25 +669,18 @@ app.post("/api/order-status/apply", requireAuth, requireOrderStatusAccess, async
       error: errorMsg
     });
   }
-
   const applied = results.filter(r => r.success).length;
   const failed  = results.length - applied;
   res.json({ ok: true, applied, failed, results, auditPath: getAuditCsvPath() });
 });
 
-// GET /api/order-status/audit-log?limit=200 — laatste N rijen (nieuwste boven)
 app.get("/api/order-status/audit-log", requireAuth, requireOrderStatusAccess, (req, res) => {
   const limit = Math.max(1, Math.min(2000, parseInt(req.query.limit, 10) || 200));
   const file = getAuditCsvPath();
-  if (!fs.existsSync(file)) {
-    return res.json({ ok: true, rows: [], total: 0, path: file });
-  }
+  if (!fs.existsSync(file)) return res.json({ ok: true, rows: [], total: 0, path: file });
   let raw;
-  try {
-    raw = fs.readFileSync(file, "utf-8");
-  } catch (e) {
-    return res.status(500).json({ ok: false, error: `Kon audit-log niet lezen: ${e.message}` });
-  }
+  try { raw = fs.readFileSync(file, "utf-8"); }
+  catch (e) { return res.status(500).json({ ok: false, error: `Kon audit-log niet lezen: ${e.message}` }); }
   const lines = raw.split(/\r?\n/).filter(l => l.length > 0);
   if (lines.length === 0) return res.json({ ok: true, rows: [], total: 0, path: file });
   const header = lines[0].split(";");
@@ -613,14 +688,12 @@ app.get("/api/order-status/audit-log", requireAuth, requireOrderStatusAccess, (r
   const recent = dataLines.slice(-limit).reverse();
 
   const parseCsvLine = (line) => {
-    const out = [];
-    let cur = "";
-    let inQuotes = false;
+    const out = []; let cur = ""; let inQuotes = false;
     for (let i = 0; i < line.length; i++) {
       const c = line[i];
       if (inQuotes) {
         if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
-        else if (c === '"') { inQuotes = false; }
+        else if (c === '"') inQuotes = false;
         else cur += c;
       } else {
         if (c === '"') inQuotes = true;
@@ -638,8 +711,20 @@ app.get("/api/order-status/audit-log", requireAuth, requireOrderStatusAccess, (r
     header.forEach((h, i) => { obj[h] = vals[i] ?? ""; });
     return obj;
   });
-
   res.json({ ok: true, rows, total: dataLines.length, path: file });
+});
+
+// ============================================================
+// Debug/dev-endpoints (werken alleen als LOGIC4_USERNAME/PASSWORD in env staan)
+// ============================================================
+
+app.get("/api/test-auth", async (req, res) => {
+  try {
+    const token = await getToken();
+    res.json({ ok: true, tokenPreview: token.slice(0, 24) + "..." });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 app.listen(PORT, "127.0.0.1", () => {
