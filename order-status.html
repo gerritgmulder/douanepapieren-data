@@ -134,6 +134,60 @@
     height: 100%; background: var(--accent); transition: width 0.2s;
   }
 
+  /* ─── Per-rij apply-resultaat ─── */
+  .results-table tr.applied { background: #f0fdf4 !important; }
+  .results-table tr.failed  { background: #fef2f2 !important; }
+  .results-table .row-status {
+    font-size: 12px; font-weight: 500;
+  }
+  .results-table .row-status.ok  { color: var(--ok); }
+  .results-table .row-status.bad { color: var(--bad); cursor: help; }
+
+  /* ─── Modal voor audit-log ─── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; padding: 20px;
+  }
+  .modal-content {
+    background: #fff; border-radius: 12px; max-width: 1200px; width: 100%;
+    max-height: 86vh; display: flex; flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  }
+  .modal-header {
+    display: flex; align-items: center; gap: 14px;
+    padding: 18px 24px; border-bottom: 1px solid var(--border);
+  }
+  .modal-header h2 { margin: 0; font-size: 16px; font-weight: 600; }
+  .modal-header .meta { color: var(--muted); font-size: 12px; }
+  .modal-header .close {
+    margin-left: auto; background: transparent; color: var(--muted);
+    border: 1px solid var(--border); padding: 6px 10px; border-radius: 6px;
+    font-size: 18px; cursor: pointer;
+  }
+  .modal-header .close:hover { background: #f3f4f6; color: var(--ink); }
+  .modal-body {
+    padding: 16px 24px; overflow: auto; flex: 1;
+  }
+  .audit-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .audit-table th, .audit-table td {
+    padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .audit-table th {
+    background: #f9fafb; color: var(--muted);
+    font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+    position: sticky; top: 0; z-index: 1;
+  }
+  .audit-table tr.fail-row td { background: #fef2f2; }
+  .audit-table .ok-pill, .audit-table .fail-pill {
+    display: inline-block; padding: 1px 7px; border-radius: 999px;
+    font-size: 11px; font-weight: 500;
+  }
+  .audit-table .ok-pill { background: #dcfce7; color: #166534; }
+  .audit-table .fail-pill { background: #fee2e2; color: #991b1b; }
+  .audit-table .col-num { text-align: right; font-variant-numeric: tabular-nums; }
+
   .hidden { display: none !important; }
 </style>
 </head>
@@ -173,8 +227,9 @@
 
       <div class="actions">
         <button id="btnDryRun" type="button">Dry-run starten</button>
-        <button id="btnApply" class="secondary" type="button" disabled
-                title="Wacht op UNC-pad van de G:schijf voor de audit-CSV">Doorvoeren (binnenkort)</button>
+        <button id="btnApply" type="button" disabled
+                title="Eerst een dry-run draaien om te zien wat er gewijzigd zou worden.">Doorvoeren (0)</button>
+        <button id="btnAuditLog" class="secondary" type="button">Audit-log bekijken</button>
       </div>
 
       <div id="statusBar" class="status-row hidden"></div>
@@ -184,7 +239,7 @@
     <!-- Samenvatting + tabel -->
     <div id="resultsPanel" class="panel hidden">
       <h2>Kandidaat-wijzigingen</h2>
-      <p class="sub">Selecteer welke wijzigingen je later wilt doorvoeren. Doorvoeren is nog uitgeschakeld tot de audit-CSV-locatie geregeld is.</p>
+      <p class="sub">Vink onderin de rijen die je wilt overslaan; klik daarna op <b>Doorvoeren</b> om de geselecteerde statuswijzigingen door te voeren in Logic4. Iedere wijziging wordt vastgelegd in de audit-CSV.</p>
 
       <div class="summary-grid">
         <div class="stat"><div class="lbl">Gecontroleerd</div><div class="val" id="statChecked">—</div></div>
@@ -213,6 +268,7 @@
               <th>Huidige status</th>
               <th class="col-arrow"></th>
               <th>Voorgestelde status</th>
+              <th>Resultaat</th>
             </tr>
           </thead>
           <tbody id="resultsBody"></tbody>
@@ -224,6 +280,37 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- Audit-log modal -->
+  <div id="auditModal" class="modal-overlay hidden">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Audit-log</h2>
+        <span class="meta" id="auditMeta">—</span>
+        <button class="close" id="auditClose" type="button" title="Sluiten">×</button>
+      </div>
+      <div class="modal-body">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th>Tijdstip</th>
+              <th>Door</th>
+              <th class="col-num">Order #</th>
+              <th>Klant</th>
+              <th class="col-num">Totaal</th>
+              <th class="col-num">Betaald</th>
+              <th>Van</th>
+              <th>Naar</th>
+              <th>Status</th>
+              <th>Foutmelding</th>
+            </tr>
+          </thead>
+          <tbody id="auditBody"></tbody>
+        </table>
+        <div id="auditEmpty" class="empty-state hidden">Nog geen audit-log-entries.</div>
+      </div>
+    </div>
   </div>
 
 </main>
@@ -456,6 +543,7 @@ function renderResults(checked, candidates, hiddenAmount) {
 
   for (const c of candidates) {
     const tr = document.createElement("tr");
+    tr.dataset.orderId = String(c.id);
     tr.innerHTML = `
       <td class="col-cb"><input type="checkbox" class="row-cb" data-order-id="${c.id}" checked></td>
       <td class="col-num">${c.id}</td>
@@ -466,9 +554,44 @@ function renderResults(checked, candidates, hiddenAmount) {
       <td><span class="badge from">${escapeHtml(c.currentStatusLabel)}</span></td>
       <td class="col-arrow">→</td>
       <td><span class="badge ${targetBadgeClass(c.targetStatusId)}">${escapeHtml(c.targetStatusLabel)}</span></td>
+      <td class="result-cell"></td>
     `;
     body.appendChild(tr);
   }
+  updateApplyButtonState();
+}
+
+// Update tekst en enabled-state van de Doorvoer-knop op basis van selectie
+function updateApplyButtonState() {
+  const btn = el("btnApply");
+  const selected = countSelected();
+  btn.textContent = `Doorvoeren (${selected})`;
+  btn.disabled = selected === 0;
+  btn.title = selected === 0
+    ? "Selecteer minimaal één rij om door te voeren."
+    : `${selected} statuswijziging(en) doorvoeren in Logic4 + audit-CSV vastleggen`;
+}
+
+function countSelected() {
+  return document.querySelectorAll(".row-cb:checked").length;
+}
+
+function getSelectedChanges() {
+  if (!lastResults) return [];
+  const checked = new Set();
+  document.querySelectorAll(".row-cb:checked").forEach(cb => checked.add(String(cb.dataset.orderId)));
+  return lastResults.candidates
+    .filter(c => checked.has(String(c.id)))
+    .map(c => ({
+      orderId: c.id,
+      currentStatusId: c.currentStatusId,
+      currentStatusLabel: c.currentStatusLabel,
+      newStatusId: c.targetStatusId,
+      newStatusLabel: c.targetStatusLabel,
+      customer: c.customer,
+      total: c.total,
+      paid: c.paid,
+    }));
 }
 
 function escapeHtml(s) {
@@ -514,6 +637,137 @@ el("btnDryRun").addEventListener("click", runDryRun);
 el("cbSelectAll").addEventListener("change", (ev) => {
   const checked = ev.target.checked;
   document.querySelectorAll(".row-cb").forEach(cb => { cb.checked = checked; });
+  updateApplyButtonState();
+});
+
+// Per-rij selectie wijzigen → knop-tekst bijwerken
+document.addEventListener("change", (ev) => {
+  if (ev.target && ev.target.classList && ev.target.classList.contains("row-cb")) {
+    updateApplyButtonState();
+  }
+});
+
+// ── Doorvoer-actie ──
+async function runApply() {
+  const changes = getSelectedChanges();
+  if (changes.length === 0) return;
+
+  const ok = window.confirm(
+    `${changes.length} statuswijziging(en) doorvoeren in Logic4?\n\n` +
+    `Dit wordt vastgelegd in de audit-CSV en is niet automatisch terug te draaien.`
+  );
+  if (!ok) return;
+
+  el("btnApply").disabled = true;
+  el("btnDryRun").disabled = true;
+  setStatus("", `Bezig met doorvoeren van ${changes.length} wijziging(en)…`);
+  setProgress(5);
+
+  try {
+    const r = await apiFetch("/api/order-status/apply", {
+      method: "POST",
+      body: { changes }
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) {
+      throw new Error(j.error || `HTTP ${r.status}`);
+    }
+    setProgress(95);
+
+    // Resultaten per rij visualiseren
+    const byId = new Map((j.results || []).map(x => [String(x.orderId), x]));
+    document.querySelectorAll("#resultsBody tr").forEach(tr => {
+      const id = tr.dataset.orderId;
+      if (!id) return;
+      const result = byId.get(String(id));
+      if (!result) return;
+      const cell = tr.querySelector(".result-cell");
+      if (result.success) {
+        tr.classList.add("applied");
+        if (cell) cell.innerHTML = `<span class="row-status ok">✓ Doorgevoerd</span>`;
+        // De rij hoeft niet meer geselecteerd te zijn
+        const cb = tr.querySelector(".row-cb");
+        if (cb) { cb.checked = false; cb.disabled = true; }
+      } else {
+        tr.classList.add("failed");
+        if (cell) cell.innerHTML = `<span class="row-status bad" title="${escapeHtml(result.error || "Onbekende fout")}">✗ Mislukt</span>`;
+      }
+    });
+
+    if (j.failed > 0) {
+      setStatus("warn", `Klaar — ${j.applied} doorgevoerd, ${j.failed} mislukt. Hover over "Mislukt" voor de foutmelding.`);
+    } else {
+      setStatus("ok", `Klaar — alle ${j.applied} wijziging(en) zijn doorgevoerd. Audit-CSV bijgewerkt op ${j.auditPath}.`);
+    }
+    setProgress(100);
+    setTimeout(() => setProgress(null), 800);
+  } catch (e) {
+    console.error(e);
+    setStatus("bad", "Fout bij doorvoeren: " + e.message);
+    setProgress(null);
+  } finally {
+    el("btnDryRun").disabled = false;
+    updateApplyButtonState();
+  }
+}
+
+el("btnApply").addEventListener("click", runApply);
+
+// ── Audit-log-modal ──
+async function openAuditLog() {
+  el("auditModal").classList.remove("hidden");
+  el("auditMeta").textContent = "Laden…";
+  el("auditBody").innerHTML = "";
+  el("auditEmpty").classList.add("hidden");
+  try {
+    const r = await apiFetch("/api/order-status/audit-log?limit=300");
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    renderAuditLog(j);
+  } catch (e) {
+    el("auditMeta").textContent = "Fout: " + e.message;
+  }
+}
+
+function renderAuditLog(j) {
+  const rows = j.rows || [];
+  el("auditMeta").textContent = `${rows.length} van ${j.total} entries getoond — ${j.path}`;
+  const body = el("auditBody");
+  body.innerHTML = "";
+  if (!rows.length) {
+    el("auditEmpty").classList.remove("hidden");
+    return;
+  }
+  el("auditEmpty").classList.add("hidden");
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    if (row.success !== "true") tr.classList.add("fail-row");
+    const ts = row.timestamp ? new Date(row.timestamp).toLocaleString("nl-NL") : "—";
+    const total = row.total ? fmtEur(row.total) : "—";
+    const paid  = row.paid  ? fmtEur(row.paid)  : "—";
+    const pill = row.success === "true"
+      ? `<span class="ok-pill">OK</span>`
+      : `<span class="fail-pill">Mislukt</span>`;
+    tr.innerHTML = `
+      <td>${escapeHtml(ts)}</td>
+      <td>${escapeHtml(row.user || "")}</td>
+      <td class="col-num">${escapeHtml(row.order_id || "")}</td>
+      <td>${escapeHtml(row.customer || "")}</td>
+      <td class="col-num">${escapeHtml(total)}</td>
+      <td class="col-num">${escapeHtml(paid)}</td>
+      <td>${escapeHtml(row.old_status_label || "")}</td>
+      <td>${escapeHtml(row.new_status_label || "")}</td>
+      <td>${pill}</td>
+      <td>${escapeHtml(row.error || "")}</td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+el("btnAuditLog").addEventListener("click", openAuditLog);
+el("auditClose").addEventListener("click", () => el("auditModal").classList.add("hidden"));
+el("auditModal").addEventListener("click", (ev) => {
+  if (ev.target === el("auditModal")) el("auditModal").classList.add("hidden");
 });
 
 el("logoutBtn").addEventListener("click", async () => {

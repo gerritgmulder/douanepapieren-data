@@ -425,6 +425,223 @@ app.get("/api/test-auth", async (req, res) => {
   }
 });
 
+// ============================================================
+// Orderstatus-module — apply + audit-log
+// Schrijft naar een gedeelde CSV op de Fonteyn-fileshare zodat Don/Arno/Dolf
+// (en management) altijd terug kunnen zien wat de tool heeft gewijzigd.
+// ============================================================
+
+const ORDERSTATUS_ALLOWED = new Set([
+  "don@fonteyn.nl",
+  "arno@fonteyn.nl",
+  "dolf@fonteyn.nl",
+]);
+
+function requireOrderStatusAccess(req, res, next) {
+  const email = (req.auth?.username || "").toLowerCase();
+  if (!ORDERSTATUS_ALLOWED.has(email)) {
+    return res.status(403).json({ ok: false, error: "Geen toegang tot deze actie." });
+  }
+  next();
+}
+
+function getAuditDir() {
+  if (process.env.AUDIT_DIR) return process.env.AUDIT_DIR;
+  if (process.platform === "win32") return "G:\\Fonteyn\\Orderstatus-Audit";
+  return "/Volumes/data/Fonteyn/Orderstatus-Audit"; // Mac met SMB-mount van \\fonfile\data
+}
+
+function getAuditCsvPath() {
+  return path.join(getAuditDir(), "audit.csv");
+}
+
+const AUDIT_HEADER = [
+  "timestamp", "user", "order_id", "customer", "total", "paid",
+  "old_status_id", "old_status_label",
+  "new_status_id", "new_status_label",
+  "success", "error"
+].join(";");
+
+function csvEscape(v) {
+  if (v == null) return "";
+  const s = String(v);
+  // Quote als ; " of newline voorkomt
+  if (/[;"\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+  return s;
+}
+
+function csvRow(obj) {
+  return [
+    obj.timestamp, obj.user, obj.order_id, obj.customer,
+    obj.total, obj.paid,
+    obj.old_status_id, obj.old_status_label,
+    obj.new_status_id, obj.new_status_label,
+    obj.success ? "true" : "false",
+    obj.error || ""
+  ].map(csvEscape).join(";");
+}
+
+function ensureAuditFile() {
+  const dir = getAuditDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const file = getAuditCsvPath();
+  if (!fs.existsSync(file)) {
+    fs.writeFileSync(file, AUDIT_HEADER + "\n", "utf-8");
+  }
+  return file;
+}
+
+function appendAuditRow(row) {
+  const file = ensureAuditFile();
+  fs.appendFileSync(file, csvRow(row) + "\n", "utf-8");
+}
+
+// POST /api/order-status/apply — body: { changes: [{orderId, currentStatusId, newStatusId, customer, total, paid, currentStatusLabel, newStatusLabel}] }
+// Reactie: { ok, results: [{orderId, success, error?}], applied, failed }
+app.post("/api/order-status/apply", requireAuth, requireOrderStatusAccess, async (req, res) => {
+  const { changes } = req.body || {};
+  if (!Array.isArray(changes) || changes.length === 0) {
+    return res.status(400).json({ ok: false, error: "Geen wijzigingen meegegeven." });
+  }
+
+  // Audit-pad valideren — als de share niet bereikbaar is willen we NIET
+  // halverwege ontdekken dat we niets kunnen loggen. Liever vooraf falen.
+  try {
+    ensureAuditFile();
+  } catch (e) {
+    return res.status(500).json({
+      ok: false,
+      error: `Audit-log kan niet worden geschreven (${getAuditDir()}): ${e.message}`
+    });
+  }
+
+  // Token cachen voor de hele batch — anders trigger elke call een nieuwe
+  // OAuth-roundtrip. getTokenForUser cached al per-user, maar we halen 'm hier
+  // expliciet één keer op zodat eventuele auth-fouten meteen zichtbaar zijn.
+  let token;
+  try {
+    token = await getTokenForUser(req.auth.username, req.auth.password);
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: "Auth bij Logic4 mislukt: " + e.message });
+  }
+
+  // Sequentieel verwerken — Logic4 mag niet gehammerd worden, en bij sequentiële
+  // verwerking is de audit-CSV in dezelfde volgorde als de batch.
+  const results = [];
+  for (const ch of changes) {
+    const orderId = parseInt(ch.orderId, 10);
+    const newStatusId = parseInt(ch.newStatusId, 10);
+    if (!Number.isFinite(orderId) || !Number.isFinite(newStatusId)) {
+      results.push({ orderId: ch.orderId, success: false, error: "Ongeldige orderId/newStatusId" });
+      appendAuditRow({
+        timestamp: new Date().toISOString(),
+        user: req.auth.username,
+        order_id: ch.orderId,
+        customer: ch.customer || "",
+        total: ch.total ?? "",
+        paid: ch.paid ?? "",
+        old_status_id: ch.currentStatusId ?? "",
+        old_status_label: ch.currentStatusLabel || "",
+        new_status_id: ch.newStatusId ?? "",
+        new_status_label: ch.newStatusLabel || "",
+        success: false,
+        error: "Ongeldige orderId/newStatusId"
+      });
+      continue;
+    }
+
+    let success = false;
+    let errorMsg = "";
+    try {
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/UpdateOrderStatus", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ OrderId: orderId, StatusId: newStatusId })
+      });
+      if (r.ok) {
+        success = true;
+      } else {
+        const txt = await r.text();
+        errorMsg = `HTTP ${r.status}: ${txt.slice(0, 200)}`;
+      }
+    } catch (e) {
+      errorMsg = e.message;
+    }
+
+    results.push({ orderId, success, error: success ? undefined : errorMsg });
+    appendAuditRow({
+      timestamp: new Date().toISOString(),
+      user: req.auth.username,
+      order_id: orderId,
+      customer: ch.customer || "",
+      total: ch.total ?? "",
+      paid: ch.paid ?? "",
+      old_status_id: ch.currentStatusId ?? "",
+      old_status_label: ch.currentStatusLabel || "",
+      new_status_id: newStatusId,
+      new_status_label: ch.newStatusLabel || "",
+      success,
+      error: errorMsg
+    });
+  }
+
+  const applied = results.filter(r => r.success).length;
+  const failed  = results.length - applied;
+  res.json({ ok: true, applied, failed, results, auditPath: getAuditCsvPath() });
+});
+
+// GET /api/order-status/audit-log?limit=200 — laatste N rijen (nieuwste boven)
+app.get("/api/order-status/audit-log", requireAuth, requireOrderStatusAccess, (req, res) => {
+  const limit = Math.max(1, Math.min(2000, parseInt(req.query.limit, 10) || 200));
+  const file = getAuditCsvPath();
+  if (!fs.existsSync(file)) {
+    return res.json({ ok: true, rows: [], total: 0, path: file });
+  }
+  let raw;
+  try {
+    raw = fs.readFileSync(file, "utf-8");
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: `Kon audit-log niet lezen: ${e.message}` });
+  }
+  const lines = raw.split(/\r?\n/).filter(l => l.length > 0);
+  if (lines.length === 0) return res.json({ ok: true, rows: [], total: 0, path: file });
+  const header = lines[0].split(";");
+  const dataLines = lines.slice(1);
+  const recent = dataLines.slice(-limit).reverse();
+
+  const parseCsvLine = (line) => {
+    const out = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inQuotes) {
+        if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (c === '"') { inQuotes = false; }
+        else cur += c;
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === ";") { out.push(cur); cur = ""; }
+        else cur += c;
+      }
+    }
+    out.push(cur);
+    return out;
+  };
+
+  const rows = recent.map(line => {
+    const vals = parseCsvLine(line);
+    const obj = {};
+    header.forEach((h, i) => { obj[h] = vals[i] ?? ""; });
+    return obj;
+  });
+
+  res.json({ ok: true, rows, total: dataLines.length, path: file });
+});
+
 app.listen(PORT, "127.0.0.1", () => {
   console.log("");
   console.log("┌──────────────────────────────────────────────┐");

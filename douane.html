@@ -97,30 +97,6 @@
   table.items td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   table.items td.code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
   table.items td.desc { max-width: 340px; }
-  table.items td.desc input { width: 100%; min-width: 220px; }
-
-  /* Drag handle + delete button per regel */
-  table.items td.drag {
-    width: 24px; padding: 6px 2px 6px 4px; color: #94a3b8;
-    cursor: grab; user-select: none; text-align: center; font-size: 14px;
-    line-height: 1;
-  }
-  table.items td.drag:active { cursor: grabbing; }
-  table.items tr:hover td.drag { color: var(--accent); }
-  table.items td.del { width: 32px; padding: 6px 4px; text-align: center; }
-  table.items td.del button {
-    background: transparent; border: 1px solid transparent; color: #94a3b8;
-    width: 24px; height: 24px; border-radius: 5px; padding: 0;
-    font-size: 16px; line-height: 1; cursor: pointer; font-weight: 600;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
-  }
-  table.items td.del button:hover {
-    background: #fee2e2; color: var(--bad); border-color: #fecaca;
-  }
-  /* Sleep-feedback */
-  table.items tr.dragging { opacity: 0.4; }
-  table.items tr.drag-over-top td    { box-shadow: inset 0 2px 0 var(--accent); }
-  table.items tr.drag-over-bottom td { box-shadow: inset 0 -2px 0 var(--accent); }
   .badge { display: inline-block; background: #eef2ff; color: #3730a3; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 6px; font-weight: 600; letter-spacing: 0.02em; }
   .badge.bundle-parent { background: #fecaca; color: #991b1b; }
   .badge.bundle-child { background: #fef08a; color: #854d0e; }
@@ -273,12 +249,11 @@
   <section class="panel hidden" id="items-panel">
     <h2>Regels</h2>
     <p style="color:var(--muted);font-size:12px;margin-top:-4px">
-      Velden in geel missen nog en moeten worden ingevuld. Sleep aan <span style="color:#94a3b8">⋮⋮</span> om regels te verplaatsen, of klik op <span style="color:var(--bad)">×</span> om te verwijderen. Edits worden lokaal bewaard voor volgende keer.
+      Velden in geel missen nog en moeten worden ingevuld. Edits worden lokaal bewaard voor volgende keer.
     </p>
     <table class="items">
       <thead>
         <tr>
-          <th style="width:24px"></th>
           <th style="width:40px">Qty</th>
           <th style="width:90px">Code</th>
           <th>Omschrijving</th>
@@ -290,7 +265,6 @@
           <th style="width:70px">Origin</th>
           <th style="width:80px">Unit $</th>
           <th style="width:80px">Total $</th>
-          <th style="width:32px"></th>
         </tr>
       </thead>
       <tbody id="items-body"></tbody>
@@ -423,15 +397,11 @@ function mergeNonEmpty(target, source) {
     target[k] = v;
   }
 }
-// Extract model-naam (bv. "Serene 5", "Aquatic 1", "Bliss") uit een willekeurige
-// stuk tekst (Excel-omschrijving óf Logic4 line-description). We zoeken naar de
-// langste match érgens in de tekst (met word boundaries), zodat zowel
-// "Harmony Spa | Mystic Mountain"   → "Harmony"
-// "Spa Phantom - Solid White"        → "Phantom" (als die in de db zit)
-// "Aquatic 12 Swim Spa | …"          → "Aquatic 12" (langer wint van "Aquatic 1")
-// allemaal werken. Voorheen eiste de check een match aan het BEGIN van de
-// string, waardoor de Excel-omschrijvingen die met merknaam of "Spa " starten
-// nooit matchten.
+// Extract model-naam (bv. "Serene 5", "Aquatic 1", "Bliss") uit een omschrijving
+// zoals "Serene 5 Spa | Solid White with GREY/oak trim". We zoeken in de
+// spec-database-keys naar de langste match aan het begin van de omschrijving,
+// zodat "Aquatic 12" eerder wordt gekozen dan "Aquatic 1" bij een string als
+// "Aquatic 12 Swim Spa | ...".
 const _sortedModelKeysCache = { keys: null, fromLen: 0 };
 function findSpaModel(description) {
   if (!description) return null;
@@ -439,47 +409,40 @@ function findSpaModel(description) {
   if (!db || !Object.keys(db).length) return null;
   let keys = _sortedModelKeysCache.keys;
   if (!keys || _sortedModelKeysCache.fromLen !== Object.keys(db).length) {
-    // Sorteer op lengte (langste eerst) zodat "Aquatic 12" wint van "Aquatic 1".
     keys = Object.keys(db).sort((a, b) => b.length - a.length);
     _sortedModelKeysCache.keys = keys;
     _sortedModelKeysCache.fromLen = Object.keys(db).length;
   }
   for (const k of keys) {
     const esc = k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    if (new RegExp("\\b" + esc + "\\b", "i").test(description)) return k;
+    if (new RegExp("^" + esc + "\\b", "i").test(description)) return k;
   }
   return null;
 }
 
-// getSpec krijgt code + (optioneel) de regel-omschrijving uit de PDF/Logic4.
-// Die regel-omschrijving is de meest betrouwbare bron voor de modelnaam — vaak
-// betrouwbaarder dan articleCodes (dat de Excel-omschrijving van Manon volgt en
-// soms met "Spa Muse" of "Passion | …" begint).
-function getSpec(code, description) {
+function getSpec(code) {
   const merged = {};
 
   // Laag 1 (laagste prio): artikelcode-DB levert de SKU.
   const fromArticles = state.articleCodes[code];
   if (fromArticles && fromArticles.sku) merged.sku = fromArticles.sku;
 
-  // Laag 2: spa-spec-database via modelnaam. Probeer eerst de regel-omschrijving
-  // (de tekst die Manon op haar invoice ziet), dán de Excel-omschrijving als
-  // fallback. Eerste hit wint.
-  let model = findSpaModel(description);
-  if (!model && fromArticles && fromArticles.omschrijving) {
-    model = findSpaModel(fromArticles.omschrijving);
-  }
-  if (model) {
-    const sd = state.specDatabase[model];
-    if (sd) {
-      if (sd.dims)      merged.dims = sd.dims;
-      // NW = Dry Weight (spa zonder water). GW zetten we default gelijk aan
-      // NW; voor shipping is de kratgewicht-optelling klein en mag Manon
-      // tweaken als ze de exacte kratgewichten kent.
-      if (sd.dryWeight) { merged.nw = sd.dryWeight; merged.gw = sd.dryWeight; }
-      // Spas vallen altijd onder 9019.10 (mechano-therapy) en komen uit China.
-      merged.hs = "9019101000";
-      merged.origin = "China";
+  // Laag 2: spa-spec-database via modelnaam in omschrijving.
+  // Levert afmetingen en gewicht. Defaults voor spas: HS-code en origin.
+  if (fromArticles && fromArticles.omschrijving) {
+    const model = findSpaModel(fromArticles.omschrijving);
+    if (model) {
+      const sd = state.specDatabase[model];
+      if (sd) {
+        if (sd.dims)      merged.dims = sd.dims;
+        // NW = Dry Weight (spa zonder water). GW zetten we default gelijk aan
+        // NW; voor shipping is de kratgewicht-optelling klein en mag Manon
+        // tweaken als ze de exacte kratgewichten kent.
+        if (sd.dryWeight) { merged.nw = sd.dryWeight; merged.gw = sd.dryWeight; }
+        // Spas vallen altijd onder 9019.10 (mechano-therapy) en komen uit China.
+        merged.hs = "9019101000";
+        merged.origin = "China";
+      }
     }
   }
 
@@ -842,18 +805,15 @@ function renderItems() {
   const body = document.getElementById("items-body");
   body.innerHTML = state.lineItems.map((it, idx) => {
     if (it.dropped) {
-      // Hoofdregels van een pakket-bundel: nog steeds verwijderbaar door Manon.
-      return `<tr class="bundle-parent" data-idx="${idx}">
-        <td class="drag" draggable="true" title="Sleep om te verplaatsen">⋮⋮</td>
+      return `<tr class="bundle-parent">
         <td colspan="11" style="text-align:center">
           <span class="badge bundle-parent">HOOFDREGEL VERWIJDERD</span>
           ${escapeHtml(it.description)} — ${formatPrice(it.total)} verdeeld over subpakketten
         </td>
-        <td class="del"><button type="button" data-del="${idx}" title="Regel verwijderen">×</button></td>
       </tr>`;
     }
     const isService = it.service;
-    const spec = getSpec(it.code, it.description) || {};
+    const spec = getSpec(it.code) || {};
     const badge = it.bundleChild ? `<span class="badge bundle-child">SUB</span>` :
                   isService ? `<span class="badge service">SERVICE</span>` :
                   "";
@@ -865,20 +825,16 @@ function renderItems() {
           return `<td><input class="${missing}" data-item="${idx}" data-spec="${k}" value="${String(val).replace(/"/g,"&quot;")}"></td>`;
         }).join("");
     const rowClass = it.bundleChild ? "bundle-child" : (isService ? "service" : "");
-    return `<tr class="${rowClass}" data-idx="${idx}">
-      <td class="drag" draggable="true" title="Sleep om te verplaatsen">⋮⋮</td>
+    return `<tr class="${rowClass}">
       <td class="num">${it.qty}</td>
       <td class="code">${escapeHtml(it.code)}</td>
-      <td class="desc"><input data-item="${idx}" data-desc value="${String(it.description).replace(/"/g,"&quot;")}">${badge}</td>
+      <td class="desc">${escapeHtml(it.description)} ${badge}</td>
       ${specCells}
       <td class="num">${formatPrice(it.unitPrice)}</td>
       <td class="num">${formatPrice(it.total)}</td>
-      <td class="del"><button type="button" data-del="${idx}" title="Regel verwijderen">×</button></td>
     </tr>`;
   }).join("");
-
-  // Spec-velden (sku/dims/gw/nw/hs/origin) — opslaan in userSpecs per code
-  body.querySelectorAll("[data-spec]").forEach(el => {
+  body.querySelectorAll("[data-item]").forEach(el => {
     el.addEventListener("input", () => {
       const idx = +el.dataset.item;
       const key = el.dataset.spec;
@@ -891,91 +847,6 @@ function renderItems() {
       renderTotals();
     });
   });
-
-  // Omschrijving bewerken — alleen op de huidige line item, niet persistent over orders.
-  body.querySelectorAll("[data-desc]").forEach(el => {
-    el.addEventListener("input", () => {
-      const idx = +el.dataset.item;
-      state.lineItems[idx].description = el.value;
-      renderTotals();
-    });
-    // Op blur: spec opnieuw evalueren — als Manon de modelnaam corrigeert
-    // (bv. "Harmony" toevoegt), willen we dat de gele velden meteen worden
-    // ingevuld vanuit spec-database. Re-render kost de focus, maar dat is OK
-    // op blur (gebruiker is klaar met typen).
-    el.addEventListener("change", () => {
-      renderItems();
-      renderTotals();
-    });
-  });
-
-  // Verwijderen
-  body.querySelectorAll("[data-del]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const idx = +btn.dataset.del;
-      state.lineItems.splice(idx, 1);
-      renderItems();
-      renderTotals();
-    });
-  });
-
-  // Drag & drop reordering
-  setupRowDragDrop(body);
-}
-
-// Drag-and-drop reorder voor de regel-tabel.
-// We luisteren op de drag-handle (<td class="drag" draggable>) maar verplaatsen
-// de hele <tr>. Bij dragover tonen we een dunne accent-lijn aan boven- of
-// onderkant van de target-rij om te laten zien waar de regel komt.
-function setupRowDragDrop(body) {
-  let draggingRow = null;
-
-  body.querySelectorAll("td.drag").forEach(handle => {
-    handle.addEventListener("dragstart", (e) => {
-      draggingRow = handle.closest("tr");
-      if (!draggingRow) return;
-      draggingRow.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
-      // Firefox vereist een setData-call om drag te starten
-      try { e.dataTransfer.setData("text/plain", draggingRow.dataset.idx || ""); } catch {}
-    });
-    handle.addEventListener("dragend", () => {
-      if (draggingRow) draggingRow.classList.remove("dragging");
-      body.querySelectorAll("tr.drag-over-top, tr.drag-over-bottom")
-        .forEach(r => r.classList.remove("drag-over-top", "drag-over-bottom"));
-      draggingRow = null;
-    });
-  });
-
-  body.querySelectorAll("tr[data-idx]").forEach(row => {
-    row.addEventListener("dragover", (e) => {
-      if (!draggingRow || row === draggingRow) return;
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-      const rect = row.getBoundingClientRect();
-      const isTop = (e.clientY - rect.top) < rect.height / 2;
-      row.classList.toggle("drag-over-top",    isTop);
-      row.classList.toggle("drag-over-bottom", !isTop);
-    });
-    row.addEventListener("dragleave", () => {
-      row.classList.remove("drag-over-top", "drag-over-bottom");
-    });
-    row.addEventListener("drop", (e) => {
-      if (!draggingRow || row === draggingRow) return;
-      e.preventDefault();
-      const rect = row.getBoundingClientRect();
-      const isTop = (e.clientY - rect.top) < rect.height / 2;
-      const fromIdx = +draggingRow.dataset.idx;
-      let toIdx = +row.dataset.idx;
-      const moved = state.lineItems.splice(fromIdx, 1)[0];
-      // Insert-positie corrigeren als we omhoog slepen vs. omlaag.
-      if (fromIdx < toIdx) toIdx -= 1;
-      if (!isTop) toIdx += 1;
-      state.lineItems.splice(toIdx, 0, moved);
-      renderItems();
-      renderTotals();
-    });
-  });
 }
 
 function renderTotals() {
@@ -985,10 +856,10 @@ function renderTotals() {
   // Colli: sum of quantities of non-service physical items
   const colli = items.filter(i => !i.service).reduce((s,i) => s + i.qty, 0);
   const gw = items.filter(i => !i.service).reduce((s,i) => {
-    const spec = getSpec(i.code, i.description); return s + (spec && spec.gw ? spec.gw * i.qty : 0);
+    const spec = getSpec(i.code); return s + (spec && spec.gw ? spec.gw * i.qty : 0);
   }, 0);
   const nw = items.filter(i => !i.service).reduce((s,i) => {
-    const spec = getSpec(i.code, i.description); return s + (spec && spec.nw ? spec.nw * i.qty : 0);
+    const spec = getSpec(i.code); return s + (spec && spec.nw ? spec.nw * i.qty : 0);
   }, 0);
   box.innerHTML = `
     <div class="row"><span></span><span>${colli} Colli — Total:</span><span>${formatPrice(totalUSD)}</span></div>
@@ -1535,7 +1406,7 @@ async function buildPdf(brand = "passion") {
 
   const items = state.lineItems.filter(i => !i.dropped);
   for (const it of items) {
-    const spec = getSpec(it.code, it.description);
+    const spec = getSpec(it.code);
     // hasSpec = niet-service én spec heeft minstens één bruikbaar veld.
     // (getSpec geeft tegenwoordig altijd een object terug, dus alleen op
     // bestaan checken is niet meer voldoende.)
