@@ -3,98 +3,66 @@
 <head>
 <meta charset="utf-8">
 <title>Fonteyn Dashboard</title>
-
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<!-- De titel staat al goed; deze comment is alleen een anker voor toekomstige wijzigingen -->
 
 <style>
   :root {
-    /* Fonteyn huisstijl — zie fonteyn.nl */
-    --fonteyn-green: #144734;
-    --fonteyn-green-dark: #0d3325;
-    --fonteyn-lime: #8bc53f;
-    --fonteyn-lime-dark: #72a531;
-    --fonteyn-cream: #fff9ae;
-
-    --bg: #f5f4ef;
+    --bg: #f7f7f5;
     --panel: #ffffff;
     --ink: #1f2937;
     --muted: #6b7280;
+    --accent: #d4441c;
+    --accent-dark: #a43512;
     --ok: #15803d;
     --bad: #b91c1c;
     --border: #e5e7eb;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    font-size: 14px; line-height: 1.45;
-    color: var(--ink); background: var(--bg); min-height: 100vh;
-  }
+  body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); min-height: 100vh; }
 
   header {
-    background: var(--fonteyn-green);
-    color: #fff;
-    padding: 16px 28px; display: flex; align-items: center; gap: 18px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    background: #fff; border-bottom: 1px solid var(--border);
+    padding: 18px 28px; display: flex; align-items: center; gap: 18px;
   }
-  header .logo { height: 44px; width: auto; display: block; }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.01em; }
+  header h1 .small { color: var(--muted); font-weight: 400; margin-left: 8px; font-size: 14px; }
   header .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
-  header .user { color: rgba(255,255,255,0.75); font-size: 13px; }
-  header .user b { color: #fff; font-weight: 600; }
+  header .user { color: var(--muted); font-size: 13px; }
+  header .user b { color: var(--ink); font-weight: 600; }
   header button.logout {
-    background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.3);
-    padding: 6px 14px; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 500;
-    cursor: pointer; transition: background 0.15s, border-color 0.15s;
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer;
   }
-  header button.logout:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); }
+  header button.logout:hover { background: #f3f4f6; color: var(--ink); }
 
   main { max-width: 1100px; margin: 40px auto 80px; padding: 0 24px; }
 
   /* ─── Login view ──────────────────────────────────────── */
   .login-wrap {
-    max-width: 420px; margin: 80px auto 0;
-    background: #fff; border: 1px solid var(--border); border-radius: 14px;
-    overflow: hidden;
-    box-shadow: 0 4px 20px rgba(20,71,52,0.08);
+    max-width: 420px; margin: 80px auto 0; padding: 32px 28px;
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
   }
-  .login-wrap .brand {
-    background: var(--fonteyn-green);
-    padding: 28px 24px 24px;
-    text-align: center;
-  }
-  .login-wrap .brand img { height: 64px; width: auto; display: inline-block; }
-  .login-wrap .brand .sub {
-    color: rgba(255,255,255,0.8); font-size: 12px; margin-top: 8px;
-    letter-spacing: 0.04em; text-transform: uppercase;
-  }
-  .login-wrap .body { padding: 28px 28px 26px; }
+  .login-wrap .brand { text-align: center; margin-bottom: 24px; }
+  .login-wrap .brand h1 { font-size: 22px; margin: 0 0 4px; color: var(--accent); }
+  .login-wrap .brand .sub { color: var(--muted); font-size: 13px; }
   .login-wrap form { display: flex; flex-direction: column; gap: 12px; }
-  .login-wrap label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 500; }
+  .login-wrap label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
   .login-wrap input {
-    border: 1px solid var(--border); border-radius: 8px; padding: 11px 12px;
-    font-family: inherit; font-size: 14px; color: var(--ink); background: #fff;
-    transition: border-color 0.15s, box-shadow 0.15s;
+    border: 1px solid var(--border); border-radius: 7px; padding: 10px 12px;
+    font: inherit; color: var(--ink); background: #fff;
   }
-  .login-wrap input:focus {
-    outline: none; border-color: var(--fonteyn-green);
-    box-shadow: 0 0 0 3px rgba(20,71,52,0.1);
-  }
+  .login-wrap input:focus { outline: none; border-color: var(--accent); }
   .login-wrap button {
-    margin-top: 8px;
-    background: var(--fonteyn-lime); color: var(--fonteyn-green-dark);
-    border: 0; padding: 12px 16px; border-radius: 8px;
-    font-family: inherit; font-weight: 700; font-size: 14px;
-    letter-spacing: 0.02em;
-    cursor: pointer; transition: background 0.15s, transform 0.1s;
+    margin-top: 6px;
+    background: var(--accent); color: #fff; border: 0; padding: 11px 16px; border-radius: 7px;
+    font: inherit; font-weight: 600; cursor: pointer; transition: background 0.15s;
   }
-  .login-wrap button:hover:not(:disabled) { background: var(--fonteyn-lime-dark); }
-  .login-wrap button:active:not(:disabled) { transform: translateY(1px); }
-  .login-wrap button:disabled { background: #d1d5db; color: #6b7280; cursor: not-allowed; }
+  .login-wrap button:hover:not(:disabled) { background: var(--accent-dark); }
+  .login-wrap button:disabled { background: #d1d5db; cursor: not-allowed; }
   .login-wrap .err {
     background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;
-    border-radius: 8px; padding: 10px 12px; font-size: 13px;
+    border-radius: 7px; padding: 10px 12px; font-size: 13px;
   }
   .login-wrap .helper-hint {
     margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border);
@@ -108,11 +76,8 @@
   .login-wrap .helper-hint.bad .dot { background: var(--bad); }
 
   /* ─── Tiles ───────────────────────────────────────────── */
-  .welcome { margin-bottom: 26px; }
-  .welcome h2 {
-    margin: 0 0 6px; font-size: 24px; font-weight: 700;
-    color: var(--fonteyn-green); letter-spacing: -0.01em;
-  }
+  .welcome { margin-bottom: 22px; }
+  .welcome h2 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
   .welcome p { margin: 0; color: var(--muted); font-size: 14px; }
 
   .tiles {
@@ -121,82 +86,32 @@
   }
   .tile {
     background: #fff; border: 1px solid var(--border); border-radius: 12px;
-    padding: 22px; position: relative; cursor: pointer;
+    padding: 20px; position: relative; cursor: pointer;
     transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s;
-    display: flex; flex-direction: column; gap: 8px; min-height: 150px;
+    display: flex; flex-direction: column; gap: 8px; min-height: 140px;
     text-decoration: none; color: inherit;
   }
-  .tile:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(20,71,52,0.1);
-    border-color: var(--fonteyn-lime);
-  }
+  .tile:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-color: #d6d3d1; }
   .tile .icon {
-    width: 40px; height: 40px; border-radius: 10px;
-    background: var(--fonteyn-green); color: var(--fonteyn-lime);
+    width: 36px; height: 36px; border-radius: 9px;
+    background: #fff6f1; color: var(--accent);
     display: flex; align-items: center; justify-content: center;
-    font-size: 20px; margin-bottom: 6px;
+    font-size: 20px; margin-bottom: 4px;
   }
-  .tile h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--fonteyn-green); }
-  .tile p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+  .tile h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .tile p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
 
   .tile.disabled { cursor: not-allowed; background: #fafaf8; }
   .tile.disabled:hover { transform: none; box-shadow: none; border-color: var(--border); }
   .tile .soon {
     position: absolute; top: 14px; right: 14px;
-    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
-    color: var(--fonteyn-green); background: var(--fonteyn-cream);
-    padding: 3px 9px; border-radius: 999px;
+    font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--muted); background: #f3f4f6; padding: 3px 8px; border-radius: 999px;
   }
-  .tile.disabled .icon { background: #e5e5e0; color: #9ca3af; }
+  .tile.disabled .icon { background: #f3f4f6; color: #9ca3af; }
   .tile.disabled h3 { color: var(--muted); }
 
   .hidden { display: none !important; }
-
-  /* ─── Wachtwoord-modal voor stuurcijfers ───────────────── */
-  .modal-backdrop {
-    position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 50; padding: 20px;
-  }
-  .modal {
-    background: #fff; border-radius: 14px; padding: 28px;
-    max-width: 380px; width: 100%;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-  }
-  .modal h3 {
-    margin: 0 0 4px; font-size: 18px; color: var(--fonteyn-green);
-  }
-  .modal p {
-    margin: 0 0 16px; color: var(--muted); font-size: 13px;
-  }
-  .modal .err {
-    background: #fee2e2; color: #991b1b; border: 1px solid #fecaca;
-    border-radius: 8px; padding: 8px 10px; font-size: 12px;
-    margin-bottom: 10px;
-  }
-  .modal input {
-    width: 100%; border: 1px solid var(--border); border-radius: 8px;
-    padding: 11px 12px; font: inherit; font-size: 14px;
-  }
-  .modal input:focus {
-    outline: none; border-color: var(--fonteyn-green);
-    box-shadow: 0 0 0 3px rgba(20,71,52,0.1);
-  }
-  .modal .actions { display: flex; gap: 8px; margin-top: 14px; }
-  .modal button {
-    flex: 1; border: 0; border-radius: 8px; padding: 11px;
-    font: inherit; font-weight: 600; cursor: pointer;
-    transition: background 0.15s;
-  }
-  .modal button.primary {
-    background: var(--fonteyn-lime); color: var(--fonteyn-green-dark);
-  }
-  .modal button.primary:hover { background: var(--fonteyn-lime-dark); }
-  .modal button.secondary {
-    background: #f3f4f6; color: var(--ink);
-  }
-  .modal button.secondary:hover { background: #e5e7eb; }
 </style>
 </head>
 <body>
@@ -205,31 +120,29 @@
 <div id="loginView" class="hidden">
   <div class="login-wrap">
     <div class="brand">
-      <img src="fonteyn-logo.png" alt="Fonteyn — Outdoor Living Mall">
-      <div class="sub">Dashboard</div>
+      <h1>Fonteyn</h1>
+      <div class="sub">Log in met je Logic4-account</div>
     </div>
-    <div class="body">
-      <form id="loginForm" autocomplete="on">
-        <div id="loginErr" class="err hidden"></div>
-        <label>
-          E-mailadres
-          <input type="email" id="loginEmail" required autocomplete="username" placeholder="jij@fonteyn.nl">
-        </label>
-        <label>
-          Wachtwoord
-          <input type="password" id="loginPass" required autocomplete="current-password">
-        </label>
-        <button type="submit" id="loginBtn">Inloggen</button>
-      </form>
-      <div id="helperHint" class="helper-hint"><span class="dot"></span>Helper-server checken…</div>
-    </div>
+    <form id="loginForm" autocomplete="on">
+      <div id="loginErr" class="err hidden"></div>
+      <label>
+        E-mailadres
+        <input type="email" id="loginEmail" required autocomplete="username" placeholder="jij@fonteyn.nl">
+      </label>
+      <label>
+        Wachtwoord
+        <input type="password" id="loginPass" required autocomplete="current-password">
+      </label>
+      <button type="submit" id="loginBtn">Inloggen</button>
+    </form>
+    <div id="helperHint" class="helper-hint"><span class="dot"></span>Helper-server checken…</div>
   </div>
 </div>
 
 <!-- ════════════ DASHBOARD VIEW ════════════ -->
 <div id="dashView" class="hidden">
   <header>
-    <img src="fonteyn-logo.png" alt="Fonteyn" class="logo">
+    <h1>Fonteyn Dashboard</h1>
     <div class="right">
       <div class="user">Ingelogd als <b id="userEmail">—</b></div>
       <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
@@ -255,6 +168,12 @@
         <p>Upload een inkooporder en print in één keer alle A6-labels voor binnenkomende dozen.</p>
       </a>
 
+      <a href="order-status.html" class="tile hidden" id="tileOrderStatus">
+        <div class="icon">📊</div>
+        <h3>Orderstatus</h3>
+        <p>Controleer en update de status van betaalde orders in Logic4.</p>
+      </a>
+
       <div class="tile disabled" data-module="transport">
         <div class="soon">Binnenkort</div>
         <div class="icon">🚚</div>
@@ -275,35 +194,25 @@
         <h3>Personeel</h3>
         <p>Overzicht van medewerkers, wie er aan het werk is en hoe de bungalows bezet zijn.</p>
       </div>
-
-      <!-- Stuurcijfers — alleen zichtbaar voor gerriette@ en dolf@. Klik vraagt extra wachtwoord. -->
-      <a href="#" class="tile hidden" id="tileStuurcijfers">
-        <div class="icon">📊</div>
-        <h3>Stuurcijfers</h3>
-        <p>Financiële stuurcijfers en analyses op basis van het Logic4-grootboek — direct inzicht in waar je op moet sturen.</p>
-      </a>
     </div>
   </main>
-</div>
-
-<!-- ════════════ STUURCIJFERS WACHTWOORD-MODAL ════════════ -->
-<div id="stuurModal" class="modal-backdrop hidden">
-  <div class="modal">
-    <h3>Stuurcijfers</h3>
-    <p>Voer het wachtwoord in om verder te gaan.</p>
-    <div id="stuurErr" class="err hidden"></div>
-    <input type="password" id="stuurPass" placeholder="Wachtwoord" autocomplete="off">
-    <div class="actions">
-      <button type="button" class="secondary" id="stuurCancel">Annuleren</button>
-      <button type="button" class="primary" id="stuurOk">Openen</button>
-    </div>
-  </div>
 </div>
 
 <script>
 const HELPER_BASE = ""; // same-origin
 const SESSION_KEY = "fp.session";
 const EMAIL_KEY   = "fp.email";
+
+// Tegels die alleen voor specifieke gebruikers zichtbaar zijn.
+// Voeg hier e-mailadressen toe (lowercase) wanneer iemand toegang moet krijgen.
+// Wordt later vervangen / aangevuld door een Fonteyn-Bot service-account.
+const TILE_ACCESS = {
+  tileOrderStatus: [
+    "don@fonteyn.nl",
+    "arno@fonteyn.nl",
+    "dolf@fonteyn.nl",
+  ],
+};
 
 const el = (id) => document.getElementById(id);
 
@@ -365,25 +274,6 @@ function showLogin(errMsg) {
   }, 50);
 }
 
-// Haal een nette voornaam uit het e-mailadres: "gerriette@fonteyn.nl" → "Gerriette",
-// "jan.pieter@fonteyn.nl" → "Jan Pieter". Werkt ook als de gebruiker zelf al
-// hoofdletters heeft getypt.
-function prettyNameFromEmail(email) {
-  if (!email) return "";
-  const local = email.split("@")[0];
-  return local.split(/[.\-_]/)
-    .filter(Boolean)
-    .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
-    .join(" ");
-}
-
-// Welke e-mailadressen mogen de Stuurcijfers-tegel zien.
-// Server doet dezelfde check; dit hier is alleen voor de UI.
-const STUURCIJFERS_EMAILS = new Set([
-  "gerriette@fonteyn.nl",
-  "dolf@fonteyn.nl",
-]);
-
 function showDashboard(email) {
   el("loginView").classList.add("hidden");
   el("dashView").classList.remove("hidden");
@@ -391,13 +281,18 @@ function showDashboard(email) {
   // Vriendelijke groet op basis van tijd
   const h = new Date().getHours();
   const greet = h < 6 ? "Goedenacht" : h < 12 ? "Goedemorgen" : h < 18 ? "Goedemiddag" : "Goedenavond";
-  const name = prettyNameFromEmail(email);
-  el("greeting").textContent = name ? `${greet}, ${name}` : greet;
-  // Stuurcijfers-tegel alleen tonen voor de geautoriseerde e-mailadressen
-  if (STUURCIJFERS_EMAILS.has((email || "").toLowerCase())) {
-    el("tileStuurcijfers").classList.remove("hidden");
-  } else {
-    el("tileStuurcijfers").classList.add("hidden");
+  el("greeting").textContent = `${greet}${email ? ", " + email.split("@")[0] : ""}`;
+  applyTileAccess(email);
+}
+
+// Toont/verbergt rol-gebonden tegels op basis van het e-mailadres.
+function applyTileAccess(email) {
+  const me = String(email || "").trim().toLowerCase();
+  for (const [tileId, allowed] of Object.entries(TILE_ACCESS)) {
+    const tile = el(tileId);
+    if (!tile) continue;
+    const visible = allowed.map(s => s.toLowerCase()).includes(me);
+    tile.classList.toggle("hidden", !visible);
   }
 }
 
@@ -495,46 +390,6 @@ document.querySelectorAll(".tile.disabled").forEach(t => {
     const name = t.querySelector("h3").textContent;
     alert(`${name} is nog in de maak — komt binnenkort beschikbaar.`);
   });
-});
-
-// ─── Stuurcijfers — wachtwoord-modal ────────────────────────
-const STUURCIJFERS_PASSWORD = "Meerveld";
-
-function openStuurModal() {
-  el("stuurErr").classList.add("hidden");
-  el("stuurPass").value = "";
-  el("stuurModal").classList.remove("hidden");
-  setTimeout(() => el("stuurPass").focus(), 50);
-}
-function closeStuurModal() {
-  el("stuurModal").classList.add("hidden");
-}
-function tryStuurUnlock() {
-  const v = el("stuurPass").value;
-  if (v === STUURCIJFERS_PASSWORD) {
-    closeStuurModal();
-    // Eenmalige unlock-vlag per session — voorkomt dat je 'm op de subpagina opnieuw moet typen
-    sessionStorage.setItem("fp.stuurUnlocked", "1");
-    window.location.href = "stuurcijfers.html";
-  } else {
-    el("stuurErr").textContent = "Onjuist wachtwoord.";
-    el("stuurErr").classList.remove("hidden");
-    el("stuurPass").select();
-  }
-}
-
-el("tileStuurcijfers").addEventListener("click", (ev) => {
-  ev.preventDefault();
-  openStuurModal();
-});
-el("stuurOk").addEventListener("click", tryStuurUnlock);
-el("stuurCancel").addEventListener("click", closeStuurModal);
-el("stuurPass").addEventListener("keydown", (ev) => {
-  if (ev.key === "Enter") { ev.preventDefault(); tryStuurUnlock(); }
-  if (ev.key === "Escape") { ev.preventDefault(); closeStuurModal(); }
-});
-el("stuurModal").addEventListener("click", (ev) => {
-  if (ev.target === el("stuurModal")) closeStuurModal();
 });
 
 boot();

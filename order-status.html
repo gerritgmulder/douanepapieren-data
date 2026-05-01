@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Fonteyn — Orderstatus</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --accent: #d4441c;
+    --accent-dark: #a43512;
+    --ok: #15803d;
+    --bad: #b91c1c;
+    --warn: #b45309;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); min-height: 100vh; }
+
+  header {
+    background: #fff; border-bottom: 1px solid var(--border);
+    padding: 18px 28px; display: flex; align-items: center; gap: 18px;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header .back-link {
+    color: var(--muted); text-decoration: none; font-size: 13px;
+    padding: 6px 10px; border-radius: 6px; transition: background 0.15s;
+  }
+  header .back-link:hover { background: #f3f4f6; color: var(--ink); }
+  header .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  header .user-chip { color: var(--muted); font-size: 13px; }
+  header .user-chip b { color: var(--ink); font-weight: 600; }
+  header button.logout {
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  header button.logout:hover { background: #f3f4f6; color: var(--ink); }
+
+  main { max-width: 1280px; margin: 28px auto 80px; padding: 0 24px; }
+
+  .panel {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px 28px; margin-bottom: 22px;
+  }
+  .panel h2 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+  .panel .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  button {
+    background: var(--accent); color: #fff; border: 0; padding: 9px 14px; border-radius: 7px;
+    font: inherit; font-weight: 600; cursor: pointer; transition: background 0.15s;
+  }
+  button:hover:not(:disabled) { background: var(--accent-dark); }
+  button:disabled { background: #d1d5db; cursor: not-allowed; }
+  button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--border); font-weight: 500; }
+  button.secondary:hover:not(:disabled) { background: #f3f4f6; }
+
+  .status-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; border-radius: 8px;
+    background: #eef2f3; color: var(--ink); font-size: 13px;
+    margin-top: 14px;
+  }
+  .status-row.ok  { background: #f0fdf4; color: #166534; }
+  .status-row.bad { background: #fef2f2; color: #991b1b; }
+  .status-row.warn { background: #fffbeb; color: #78350f; }
+
+  .access-denied {
+    text-align: center; padding: 60px 20px;
+    color: var(--muted);
+  }
+  .access-denied h2 { color: var(--ink); margin: 0 0 8px; }
+
+  /* ─── Resultaten-samenvatting ─── */
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px; margin-top: 14px;
+  }
+  .summary-grid .stat {
+    background: #f9fafb; border: 1px solid var(--border); border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .summary-grid .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .summary-grid .stat .val { font-size: 18px; font-weight: 600; margin-top: 4px; }
+  .summary-grid .stat.accent .val { color: var(--accent); }
+  .summary-grid .stat.ok .val { color: var(--ok); }
+
+  /* ─── Resultaat-tabel ─── */
+  .results-table {
+    width: 100%; border-collapse: collapse; margin-top: 12px;
+    font-size: 13px;
+  }
+  .results-table th, .results-table td {
+    padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .results-table th {
+    background: #f9fafb; color: var(--muted);
+    font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+    position: sticky; top: 0; z-index: 1;
+  }
+  .results-table tr:hover td { background: #fafafa; }
+  .results-table .col-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .results-table .col-cb { width: 32px; text-align: center; }
+  .results-table .col-arrow { width: 24px; text-align: center; color: var(--muted); }
+  .results-table input[type=checkbox] { cursor: pointer; }
+  .results-table .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 500; white-space: nowrap;
+  }
+  .results-table .badge.from { background: #fef3c7; color: #92400e; }
+  .results-table .badge.to-25 { background: #dbeafe; color: #1e40af; }
+  .results-table .badge.to-30 { background: #dcfce7; color: #166534; }
+  .results-table .col-customer { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .table-wrap {
+    max-height: 60vh; overflow: auto;
+    border: 1px solid var(--border); border-radius: 8px;
+    margin-top: 12px;
+  }
+
+  .empty-state {
+    padding: 50px 20px; text-align: center; color: var(--muted); font-size: 13px;
+    background: #fafaf8; border: 1px dashed var(--border); border-radius: 8px;
+  }
+
+  .progress-bar {
+    height: 4px; background: #e5e7eb; border-radius: 2px; overflow: hidden;
+    margin-top: 8px;
+  }
+  .progress-bar .fill {
+    height: 100%; background: var(--accent); transition: width 0.2s;
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <a href="dashboard.html" class="back-link">← Dashboard</a>
+  <h1>Orderstatus</h1>
+  <div class="right">
+    <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+    <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- Toegang geweigerd -->
+  <div id="accessDenied" class="panel hidden">
+    <div class="access-denied">
+      <h2>Geen toegang</h2>
+      <p>Deze pagina is alleen beschikbaar voor Don, Arno en Dolf.</p>
+      <p><a href="dashboard.html">← Terug naar dashboard</a></p>
+    </div>
+  </div>
+
+  <!-- Hoofdview -->
+  <div id="mainView" class="hidden">
+
+    <div class="panel">
+      <h2>Wat doet deze pagina?</h2>
+      <p class="sub">
+        Logic4 markeert een order pas als "officieel" zodra de status handmatig is aangepast
+        nadat er een betaling is binnengekomen. Deze tool zoekt orders die nog op
+        <b>Verkooporder</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald, en
+        adviseert de juiste status. Bij een dry-run wordt nog niets in Logic4 gewijzigd.
+      </p>
+
+      <div class="actions">
+        <button id="btnDryRun" type="button">Dry-run starten</button>
+        <button id="btnApply" class="secondary" type="button" disabled
+                title="Wacht op UNC-pad van de G:schijf voor de audit-CSV">Doorvoeren (binnenkort)</button>
+      </div>
+
+      <div id="statusBar" class="status-row hidden"></div>
+      <div id="progress" class="progress-bar hidden"><div class="fill" style="width: 0%"></div></div>
+    </div>
+
+    <!-- Samenvatting + tabel -->
+    <div id="resultsPanel" class="panel hidden">
+      <h2>Kandidaat-wijzigingen</h2>
+      <p class="sub">Selecteer welke wijzigingen je later wilt doorvoeren. Doorvoeren is nog uitgeschakeld tot de audit-CSV-locatie geregeld is.</p>
+
+      <div class="summary-grid">
+        <div class="stat"><div class="lbl">Gecontroleerd</div><div class="val" id="statChecked">—</div></div>
+        <div class="stat accent"><div class="lbl">Wijzigingen nodig</div><div class="val" id="statChanges">—</div></div>
+        <div class="stat"><div class="lbl">→ 30% aanbetaald</div><div class="val" id="statTo25">—</div></div>
+        <div class="stat ok"><div class="lbl">→ Volledig betaald</div><div class="val" id="statTo30">—</div></div>
+        <div class="stat"><div class="lbl">Totaal "verstopt"</div><div class="val" id="statHiddenAmount">—</div></div>
+      </div>
+
+      <div class="actions" style="margin-top: 18px;">
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+          <input type="checkbox" id="cbSelectAll" checked> Alles selecteren
+        </label>
+      </div>
+
+      <div class="table-wrap">
+        <table class="results-table">
+          <thead>
+            <tr>
+              <th class="col-cb"></th>
+              <th>Order #</th>
+              <th>Datum</th>
+              <th>Klant</th>
+              <th class="col-num">Totaal</th>
+              <th class="col-num">Betaald</th>
+              <th>Huidige status</th>
+              <th class="col-arrow"></th>
+              <th>Voorgestelde status</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+
+      <div id="emptyState" class="empty-state hidden">
+        Geen wijzigingen nodig — alle relevante orders staan al op de juiste status.
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<script>
+const SESSION_KEY = "fp.session";
+const EMAIL_KEY   = "fp.email";
+const ALLOWED_USERS = [
+  "don@fonteyn.nl",
+  "arno@fonteyn.nl",
+  "dolf@fonteyn.nl",
+];
+
+// Logic4-status-IDs (zie memory: logic4_api_orders.md)
+const STATUS_VERKOOPORDER = 1;
+const STATUS_30_AANBETAALD = 25;
+const STATUS_VOLLEDIG_BETAALD = 30;
+
+// Welke statussen pakken we als bron — orders die mogelijk een upgrade nodig hebben.
+const SOURCE_STATUSES = [
+  { id: STATUS_VERKOOPORDER,   label: "Verkooporder" },
+  { id: STATUS_30_AANBETAALD,  label: "30% aanbetaald" },
+];
+
+const PAGE_SIZE = 500;
+const MAX_PAGES = 20; // veiligheid: max 10.000 orders per source-status
+
+const el = (id) => document.getElementById(id);
+const fmtEur = (n) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
+const fmtDate = (s) => {
+  if (!s) return "—";
+  const d = new Date(s);
+  if (isNaN(d)) return String(s).slice(0, 10);
+  return d.toLocaleDateString("nl-NL");
+};
+
+function getSession() { return localStorage.getItem(SESSION_KEY) || ""; }
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(EMAIL_KEY);
+}
+
+async function apiFetch(path, opts = {}) {
+  const session = getSession();
+  const headers = { ...(opts.headers || {}) };
+  if (session) headers["Authorization"] = "Bearer " + session;
+  if (opts.body && !(opts.body instanceof FormData) && typeof opts.body === "object") {
+    headers["Content-Type"] = "application/json";
+    opts = { ...opts, body: JSON.stringify(opts.body) };
+  }
+  return fetch(path, { ...opts, headers });
+}
+
+// ── Generieke Logic4-call via de helper-server ──
+async function logic4(apiPath, body, method = "POST") {
+  const r = await apiFetch("/api/logic4-call", {
+    method: "POST",
+    body: { path: apiPath, method, body }
+  });
+  const j = await r.json();
+  if (!r.ok || !j.ok) {
+    const msg = j.error || (typeof j.data === "string" ? j.data : JSON.stringify(j.data));
+    throw new Error(`Logic4 ${method} ${apiPath} faalde (HTTP ${j.status || r.status}): ${msg}`);
+  }
+  return j.data;
+}
+
+function setStatus(kind, msg) {
+  const bar = el("statusBar");
+  bar.className = "status-row " + (kind || "");
+  bar.textContent = msg;
+  bar.classList.remove("hidden");
+}
+
+function setProgress(percent) {
+  const p = el("progress");
+  if (percent == null) { p.classList.add("hidden"); return; }
+  p.classList.remove("hidden");
+  p.querySelector(".fill").style.width = Math.max(0, Math.min(100, percent)) + "%";
+}
+
+// ── Veld-extractie: order kan z'n klantnaam op verschillende plekken hebben ──
+function extractCustomerName(order) {
+  const candidates = [
+    order.InvoiceAddress?.Name,
+    order.InvoiceAddress?.CompanyName,
+    order.InvoiceAddress?.LastName,
+    order.AccountAddress?.Name,
+    order.AccountAddress?.CompanyName,
+    order.DeliveryAddress?.Name,
+    order.Reference,
+  ];
+  for (const c of candidates) {
+    if (c && String(c).trim()) return String(c).trim();
+  }
+  return "—";
+}
+
+// ── Bepaal welke status een order zou moeten hebben op basis van betaling ──
+function decideTargetStatus(order) {
+  const totals = order.Totals || {};
+  const total = Number(totals.AmountIncl ?? 0);
+  const paid  = Number(totals.Calc_TotalPayed ?? 0);
+  const currentId = order.OrderStatus?.Id;
+
+  // Tolerance: 0.5 cent — door BTW/floating-point kunnen totalen minimaal afwijken
+  const epsilon = 0.005;
+
+  if (paid <= 0) return null; // nog geen betaling → geen wijziging
+  if (paid >= total - epsilon) {
+    // volledig betaald
+    if (currentId === STATUS_VOLLEDIG_BETAALD) return null;
+    return STATUS_VOLLEDIG_BETAALD;
+  }
+  // gedeeltelijk betaald (0 < paid < total)
+  if (currentId === STATUS_30_AANBETAALD) return null; // al goed
+  return STATUS_30_AANBETAALD;
+}
+
+function statusName(id) {
+  switch (id) {
+    case STATUS_VERKOOPORDER:       return "Verkooporder";
+    case STATUS_30_AANBETAALD:      return "30% aanbetaald";
+    case STATUS_VOLLEDIG_BETAALD:   return "Volledig betaald, vrijgeven leveren";
+    default:                        return `Status ${id}`;
+  }
+}
+
+function targetBadgeClass(targetId) {
+  return targetId === STATUS_VOLLEDIG_BETAALD ? "to-30" : "to-25";
+}
+
+// ── Dry-run uitvoeren ──
+let lastResults = null; // bewaar voor straks (apply-stap)
+
+async function runDryRun() {
+  el("btnDryRun").disabled = true;
+  el("resultsPanel").classList.add("hidden");
+  setStatus("", "Bezig met ophalen van orders…");
+  setProgress(0);
+
+  try {
+    const allOrders = [];
+    let pagesDone = 0;
+    const totalSourceStatuses = SOURCE_STATUSES.length;
+
+    for (let s = 0; s < totalSourceStatuses; s++) {
+      const src = SOURCE_STATUSES[s];
+      let skip = 0;
+      let page = 0;
+      while (page < MAX_PAGES) {
+        setStatus("", `Ophalen "${src.label}" — pagina ${page + 1}…`);
+        const data = await logic4("/v3/Orders/GetOrders", {
+          StatusId: src.id,
+          TakeRecords: PAGE_SIZE,
+          SkipRecords: skip,
+        });
+        const arr = Array.isArray(data) ? data : (data?.Orders || data?.SalesOrders || []);
+        if (!arr.length) break;
+        for (const o of arr) allOrders.push(o);
+        pagesDone++;
+        // Globale progress (grof): per source-status max 1 pagina aannemen voor de schatting
+        setProgress(((s * 100) / totalSourceStatuses) + (Math.min(100, (page + 1) * 20) / totalSourceStatuses));
+        if (arr.length < PAGE_SIZE) break; // laatste pagina
+        skip += PAGE_SIZE;
+        page++;
+      }
+    }
+
+    setStatus("", `Analyse — ${allOrders.length} orders gecontroleerd…`);
+    setProgress(95);
+
+    // Analyse client-side
+    const candidates = [];
+    let hiddenAmount = 0;
+    for (const o of allOrders) {
+      const target = decideTargetStatus(o);
+      if (target == null) continue;
+      const total = Number(o.Totals?.AmountIncl ?? 0);
+      const paid  = Number(o.Totals?.Calc_TotalPayed ?? 0);
+      candidates.push({
+        id: o.Id,
+        date: o.CreationDate,
+        customer: extractCustomerName(o),
+        total,
+        paid,
+        currentStatusId: o.OrderStatus?.Id,
+        currentStatusLabel: o.OrderStatus?.Value || statusName(o.OrderStatus?.Id),
+        targetStatusId: target,
+        targetStatusLabel: statusName(target),
+        rawOrder: o,
+      });
+      // "Verstopt" omzet = orders die NU nog op Verkooporder staan en daardoor
+      // niet meegeteld worden in het dashboard
+      if (o.OrderStatus?.Id === STATUS_VERKOOPORDER) {
+        hiddenAmount += total;
+      }
+    }
+    candidates.sort((a, b) => b.total - a.total); // grootste eerst
+
+    lastResults = { allOrders, candidates };
+    renderResults(allOrders.length, candidates, hiddenAmount);
+    setProgress(100);
+    setTimeout(() => setProgress(null), 600);
+    setStatus("ok", `Klaar — ${candidates.length} kandidaten gevonden uit ${allOrders.length} orders.`);
+  } catch (e) {
+    console.error(e);
+    setStatus("bad", "Fout bij dry-run: " + e.message);
+    setProgress(null);
+  } finally {
+    el("btnDryRun").disabled = false;
+  }
+}
+
+function renderResults(checked, candidates, hiddenAmount) {
+  el("resultsPanel").classList.remove("hidden");
+  el("statChecked").textContent = checked.toLocaleString("nl-NL");
+  el("statChanges").textContent = candidates.length.toLocaleString("nl-NL");
+  el("statTo25").textContent = candidates.filter(c => c.targetStatusId === STATUS_30_AANBETAALD).length.toLocaleString("nl-NL");
+  el("statTo30").textContent = candidates.filter(c => c.targetStatusId === STATUS_VOLLEDIG_BETAALD).length.toLocaleString("nl-NL");
+  el("statHiddenAmount").textContent = fmtEur(hiddenAmount);
+
+  const body = el("resultsBody");
+  body.innerHTML = "";
+  if (!candidates.length) {
+    el("emptyState").classList.remove("hidden");
+    return;
+  }
+  el("emptyState").classList.add("hidden");
+
+  for (const c of candidates) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="col-cb"><input type="checkbox" class="row-cb" data-order-id="${c.id}" checked></td>
+      <td class="col-num">${c.id}</td>
+      <td>${fmtDate(c.date)}</td>
+      <td class="col-customer" title="${escapeHtml(c.customer)}">${escapeHtml(c.customer)}</td>
+      <td class="col-num">${fmtEur(c.total)}</td>
+      <td class="col-num">${fmtEur(c.paid)}</td>
+      <td><span class="badge from">${escapeHtml(c.currentStatusLabel)}</span></td>
+      <td class="col-arrow">→</td>
+      <td><span class="badge ${targetBadgeClass(c.targetStatusId)}">${escapeHtml(c.targetStatusLabel)}</span></td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+
+// ── Boot ──
+async function boot() {
+  const session = getSession();
+  if (!session) {
+    location.href = "dashboard.html";
+    return;
+  }
+  let email = "";
+  try {
+    const r = await apiFetch("/api/me");
+    if (!r.ok) {
+      clearSession();
+      location.href = "dashboard.html";
+      return;
+    }
+    const j = await r.json();
+    email = j.user?.email || localStorage.getItem(EMAIL_KEY) || "";
+  } catch {
+    location.href = "dashboard.html";
+    return;
+  }
+
+  el("userEmail").textContent = email || "—";
+
+  const allowed = ALLOWED_USERS.map(s => s.toLowerCase()).includes(String(email).toLowerCase());
+  if (!allowed) {
+    el("accessDenied").classList.remove("hidden");
+    return;
+  }
+  el("mainView").classList.remove("hidden");
+}
+
+el("btnDryRun").addEventListener("click", runDryRun);
+
+el("cbSelectAll").addEventListener("change", (ev) => {
+  const checked = ev.target.checked;
+  document.querySelectorAll(".row-cb").forEach(cb => { cb.checked = checked; });
+});
+
+el("logoutBtn").addEventListener("click", async () => {
+  try { await apiFetch("/api/logout", { method: "POST" }); } catch {}
+  clearSession();
+  location.href = "dashboard.html";
+});
+
+boot();
+</script>
+</body>
+</html>
