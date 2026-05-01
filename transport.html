@@ -296,9 +296,9 @@
         <div class="name">GD-ITS</div>
         <div class="desc">Spa's naar Benelux of dingen die niet in de bakwagen passen.</div>
       </button>
-      <button class="carrier" type="button" data-carrier="flevobeurt">
+      <button class="carrier" type="button" data-carrier="flevobird">
         <div class="icon">🛻</div>
-        <div class="name">Flevobeurt</div>
+        <div class="name">Flevobird</div>
         <div class="desc">Kleinere spullen, ad-hoc.</div>
       </button>
     </div>
@@ -382,7 +382,7 @@ async function logic4(apiPath, body, method = "POST") {
 // State
 // ──────────────────────────────────────────────────────────────────
 const state = {
-  carrier: null,           // 'own' | 'svz' | 'gd-its' | 'flevobeurt'
+  carrier: null,           // 'own' | 'svz' | 'gd-its' | 'flevobird'
   packagingDb: null,       // { categories: [{category, products: [{name, boxes:[...]}]}] }
   flatProducts: [],        // [{name, normalized, boxes:[...], category}] gesorteerd op naam-lengte aflopend
   orders: [],              // [{nr, status, paid, total, customer, address, postcode, lines:[...], allowed, error}]
