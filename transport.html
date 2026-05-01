@@ -145,6 +145,19 @@
     border-bottom: 1px solid var(--border);
   }
   .order-card.blocked .header-row { background: #fef2f2; }
+  .order-card .block-reason {
+    padding: 14px 18px; background: #fef2f2; border-top: 1px solid #fecaca;
+    color: #7f1d1d; font-size: 13px;
+  }
+  .order-card .block-reason-title { font-weight: 700; margin-bottom: 4px; color: #991b1b; }
+  .order-card .block-reason-text { line-height: 1.4; }
+  .order-card .block-reason-advice { color: #991b1b; margin-top: 4px; line-height: 1.4; }
+  .order-card .block-reason-contact { margin-top: 10px; font-size: 12px; }
+  .order-card .contact-link {
+    color: var(--fonteyn-green); text-decoration: none; font-weight: 600;
+    border-bottom: 1px dotted var(--fonteyn-green);
+  }
+  .order-card .contact-link:hover { color: var(--fonteyn-green-dark); border-bottom-style: solid; }
   .order-card .header-row .check { width: 18px; height: 18px; cursor: pointer; accent-color: var(--fonteyn-green); }
   .order-card .header-row .nr { font-weight: 700; font-size: 14px; color: var(--fonteyn-green); }
   .order-card .header-row .customer { font-size: 13px; }
@@ -574,16 +587,36 @@ async function fetchOrder(nr) {
   const paid   = Number(o.Totals?.Calc_TotalPayed ?? 0);
   const allowed = status === STATUS_VOLLEDIG_BETAALD;
 
-  // 6) Klant/adres
+  // 6) Klant/adres + contact-info (voor "neem contact op met de klant")
   const deliver = o.DeliveryAddress || o.AccountAddress || {};
-  const customer = (o.InvoiceAddress?.CompanyName || o.InvoiceAddress?.LastName ||
+  const invoice = o.InvoiceAddress || {};
+  const customer = (invoice.CompanyName || invoice.LastName ||
                     deliver.CompanyName || deliver.LastName || "—");
   const postcode = (deliver.Zipcode || "").trim();
   const city     = (deliver.City || "").trim();
+  const email    = (invoice.Email || deliver.Email || "").trim();
+  const phone    = (invoice.Telephone || invoice.PhoneNumber || invoice.Phone ||
+                    deliver.Telephone || deliver.PhoneNumber || deliver.Phone || "").trim();
+
+  // 7) Reden waarom de order wel/niet selecteerbaar is — laat zien in de UI
+  let blockReason = null;
+  let blockAdvice = null;
+  if (status === STATUS_VERKOOPORDER) {
+    blockReason = "Status is Verkooporder — er is nog niets betaald.";
+    blockAdvice = "Klant moet eerst (aan)betalen voordat de spullen het magazijn uit mogen.";
+  } else if (status === STATUS_30_AANBETAALD) {
+    const open = total - paid;
+    blockReason = `Slechts ${fmtEur(paid)} betaald van ${fmtEur(total)} — nog ${fmtEur(open)} openstaand.`;
+    blockAdvice = "Klant moet de restbetaling doen voordat het transport vertrekt.";
+  } else if (!allowed) {
+    blockReason = `Status ${status} — onbekend of dit verzonden mag worden.`;
+    blockAdvice = "Check de orderstatus handmatig in Logic4.";
+  }
 
   return {
     nr, status, total, paid, allowed,
-    customer, postcode, city,
+    customer, postcode, city, email, phone,
+    blockReason, blockAdvice,
     lines, totalBoxes, totalVolumeM3, totalKg, unmatchedLines,
   };
 }
@@ -654,6 +687,34 @@ function renderOrderCard(o) {
   const pill = `<span class="stat-pill ${statusPillClass(o.status)}">${escapeHtml(statusName(o.status))}</span>`;
   const paidInfo = `${fmtEur(o.paid)} / ${fmtEur(o.total)}`;
 
+  // Reden-blok voor geblokkeerde orders: status-uitleg + contact-knop voor klant
+  let reasonBlock = "";
+  if (!o.allowed && o.blockReason) {
+    const contactBits = [];
+    if (o.email) {
+      const subject = encodeURIComponent(`Order ${o.nr} — restbetaling vóór verzending`);
+      const body = encodeURIComponent(
+        `Beste klant,\n\nUw order ${o.nr} (totaal ${fmtEur(o.total)}, waarvan ${fmtEur(o.paid)} ontvangen) staat klaar voor uitlevering. ` +
+        `Voor verzending kan plaatsvinden moet eerst het volledige bedrag binnen zijn — graag het openstaande deel van ${fmtEur(o.total - o.paid)} overmaken.\n\n` +
+        `Met vriendelijke groet,\nFonteyn`
+      );
+      contactBits.push(`<a href="mailto:${escapeHtml(o.email)}?subject=${subject}&body=${body}" class="contact-link">📧 ${escapeHtml(o.email)}</a>`);
+    }
+    if (o.phone) {
+      contactBits.push(`<a href="tel:${escapeHtml(o.phone)}" class="contact-link">📞 ${escapeHtml(o.phone)}</a>`);
+    }
+    if (!contactBits.length) {
+      contactBits.push(`<span style="color:var(--muted);font-style:italic;">geen contact-info in Logic4</span>`);
+    }
+    reasonBlock = `
+      <div class="block-reason">
+        <div class="block-reason-title">🚫 Niet selecteerbaar voor transport</div>
+        <div class="block-reason-text">${escapeHtml(o.blockReason)}</div>
+        ${o.blockAdvice ? `<div class="block-reason-advice">${escapeHtml(o.blockAdvice)}</div>` : ""}
+        <div class="block-reason-contact">Neem contact op met de klant: ${contactBits.join(" &nbsp;·&nbsp; ")}</div>
+      </div>`;
+  }
+
   return `<div class="order-card${blockedClass}">
     <div class="header-row">
       <input type="checkbox" class="check" data-nr="${escapeHtml(o.nr)}" ${checked} ${disabled}>
@@ -670,6 +731,7 @@ function renderOrderCard(o) {
       <div class="num"><span class="lbl">Volume</span>${fmtM3(o.totalVolumeM3)}</div>
       <div class="num"><span class="lbl">Gewicht</span>${fmtKg(o.totalKg)}</div>
     </div>
+    ${reasonBlock}
     <details>
       <summary>${o.lines.length} regels — ${o.unmatchedLines > 0 ? `<span style="color:var(--warn)">${o.unmatchedLines} zonder verpakkings-info</span>` : "alles gematched"}</summary>
       <div class="lines">${o.lines.map(ln => renderLine(ln)).join("")}</div>
