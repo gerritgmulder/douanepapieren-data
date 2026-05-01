@@ -482,7 +482,11 @@ function findSpaModel(description) {
 // Voor deze regels willen we GEEN spec-db match — anders krijgt bv.
 // "Spa Cover Refresh/Relax/Rewind" de afmetingen van de Refresh-spa zelf,
 // of "Fonteyn | Retreat 150 Combi Buiten Sauna" de spa-Retreat-data.
-const ACCESSORY_RE = /\b(spa\s*cover|cover|filter|sauna|stair|step|jet|pulsator|water\s*care|aqua\s*pure|chemical|chlor|brom|pump|heater|turbine|surcharge|freight|transport|verzend|korting|garantie|warranty|prijslijst|chiller|spec\s*sheet)\b/i;
+//
+// LET OP: bewust GEEN "pump" / "heater" — die matchen "Integrated Heat Pump"
+// in spa-omschrijvingen (feature, geen apart product), waardoor de spa-
+// data ten onrechte werd geblokkeerd.
+const ACCESSORY_RE = /\b(spa\s*cover|covers?|filters?|saunas?|stairs?|steps?|jets?|water\s*care|aqua\s*pure|surcharge|freight|transport|verzend|korting|garantie|warranty|main\s*light\s*ring)\b/i;
 
 function isAccessoryDescription(desc) {
   return desc ? ACCESSORY_RE.test(desc) : false;
