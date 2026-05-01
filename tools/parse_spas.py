@@ -26,14 +26,13 @@ SPADIR = os.environ.get(
     "Douanepapieren/Spa documentatie",
 )
 
+# Alleen EU-folders — UK-PDFs gebruiken pounds en inches en zouden de
+# metric-data overschrijven met onbruikbare getallen (681 lbs ≠ 681 kg).
 FOLDERS = [
     "2024/EU/Passion Spas",
     "2024/EU/Passion Swim Spas",
     "2024/EU/Passion Ice Baths",
     "2024/EU/Eden Spas",
-    "2024/UK/Passion Spas",
-    "2024/UK/Passion Swimspas",
-    "2024/UK/Passion Ice Baths",
     "2026 (not done yet)",
 ]
 

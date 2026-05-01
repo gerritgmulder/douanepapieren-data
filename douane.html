@@ -477,6 +477,17 @@ function findSpaModel(description) {
   return null;
 }
 
+// Accessoire-detectie: woorden die aangeven dat de regel GEEN spa is maar
+// een toebehoren (cover, filter, sauna, stairs, jets, water care, etc.).
+// Voor deze regels willen we GEEN spec-db match — anders krijgt bv.
+// "Spa Cover Refresh/Relax/Rewind" de afmetingen van de Refresh-spa zelf,
+// of "Fonteyn | Retreat 150 Combi Buiten Sauna" de spa-Retreat-data.
+const ACCESSORY_RE = /\b(spa\s*cover|cover|filter|sauna|stair|step|jet|pulsator|water\s*care|aqua\s*pure|chemical|chlor|brom|pump|heater|turbine|surcharge|freight|transport|verzend|korting|garantie|warranty|prijslijst|chiller|spec\s*sheet)\b/i;
+
+function isAccessoryDescription(desc) {
+  return desc ? ACCESSORY_RE.test(desc) : false;
+}
+
 // getSpec krijgt code + (optioneel) de regel-omschrijving uit de PDF/Logic4.
 // Die regel-omschrijving is de meest betrouwbare bron voor de modelnaam — vaak
 // betrouwbaarder dan articleCodes (dat de Excel-omschrijving van Manon volgt en
@@ -488,24 +499,31 @@ function getSpec(code, description) {
   const fromArticles = state.articleCodes[code];
   if (fromArticles && fromArticles.sku) merged.sku = fromArticles.sku;
 
-  // Laag 2: spa-spec-database via modelnaam. Probeer eerst de regel-omschrijving
-  // (de tekst die Manon op haar invoice ziet), dán de Excel-omschrijving als
-  // fallback. Eerste hit wint.
-  let model = findSpaModel(description);
-  if (!model && fromArticles && fromArticles.omschrijving) {
-    model = findSpaModel(fromArticles.omschrijving);
-  }
-  if (model) {
-    const sd = state.specDatabase[model];
-    if (sd) {
-      if (sd.dims)      merged.dims = sd.dims;
-      // NW = Dry Weight (spa zonder water). GW zetten we default gelijk aan
-      // NW; voor shipping is de kratgewicht-optelling klein en mag Manon
-      // tweaken als ze de exacte kratgewichten kent.
-      if (sd.dryWeight) { merged.nw = sd.dryWeight; merged.gw = sd.dryWeight; }
-      // Spas vallen altijd onder 9019.10 (mechano-therapy) en komen uit China.
-      merged.hs = "9019101000";
-      merged.origin = "China";
+  // Laag 2: spa-spec-database via modelnaam. Sla over als de regel een
+  // accessoire is (cover, filter, sauna, etc.) — anders matcht "Spa Cover
+  // Refresh" op de spa "Refresh" en krijg je de afmetingen van de spa zelf.
+  const isAccessory = isAccessoryDescription(description) ||
+                      isAccessoryDescription(fromArticles && fromArticles.omschrijving);
+
+  if (!isAccessory) {
+    // Probeer eerst de regel-omschrijving (de tekst die Manon op haar invoice
+    // ziet), dán de Excel-omschrijving als fallback. Eerste hit wint.
+    let model = findSpaModel(description);
+    if (!model && fromArticles && fromArticles.omschrijving) {
+      model = findSpaModel(fromArticles.omschrijving);
+    }
+    if (model) {
+      const sd = state.specDatabase[model];
+      if (sd) {
+        if (sd.dims)      merged.dims = sd.dims;
+        // NW = Dry Weight (spa zonder water). GW zetten we default gelijk aan
+        // NW; voor shipping is de kratgewicht-optelling klein en mag Manon
+        // tweaken als ze de exacte kratgewichten kent.
+        if (sd.dryWeight) { merged.nw = sd.dryWeight; merged.gw = sd.dryWeight; }
+        // Spas vallen altijd onder 9019.10 (mechano-therapy) en komen uit China.
+        merged.hs = "9019101000";
+        merged.origin = "China";
+      }
     }
   }
 
