@@ -1,5 +1,5 @@
 {
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     { "name": "dashboard.html" },
@@ -10,8 +10,10 @@
     { "name": "stuurcijfers.html", "note": "Stuurcijfers-tool (alleen voor Gerriette en Dolf, extra wachtwoord 'Meerveld')" },
     { "name": "stuurcijfers-engine.js", "note": "Formule-engine — vervangt de Excel-formules in OUT_-tabbladen" },
     { "name": "probe-logic4.html", "note": "Eenmalige probe-pagina om Logic4-velden in kaart te brengen — kan later weer verwijderd worden" },
+    { "name": "transport.html", "note": "Transport laden — bin-packing in bakwagens + routeplanning per dag" },
     { "name": "fonteyn-logo.png", "note": "Officieel Fonteyn-logo (wit op transparant), gebruikt op de A6-labels" },
     { "name": "article-codes.json", "validate": "json" },
-    { "name": "spec-database.json", "validate": "json" }
+    { "name": "spec-database.json", "validate": "json" },
+    { "name": "packaging-database.json", "validate": "json", "note": "Verpakkings-afmetingen + gewicht per product (Maten + gewichten.xlsx)" }
   ]
 }

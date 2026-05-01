@@ -240,6 +240,37 @@ app.get("/api/spec-database", requireAuth, (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════
+// Packaging-database (verpakkings-afmetingen + gewicht per product, voor
+// de Transport-laden tegel). Bron: Excel "Maten + gewichten.xlsx" → via
+// tools/parse_packaging.py omgezet naar packaging-database.json.
+// Multi-box producten (bv. Laos loungeset = 3 dozen) worden ondersteund.
+// ════════════════════════════════════════════════════════════════════
+let _packagingDatabase = null;
+function loadPackagingDatabase() {
+  if (_packagingDatabase) return _packagingDatabase;
+  const p = path.join(DATA_DIR, "packaging-database.json");
+  if (!fs.existsSync(p)) {
+    console.warn(`⚠️  packaging-database.json niet gevonden in ${DATA_DIR}.`);
+    _packagingDatabase = { categories: [] };
+    return _packagingDatabase;
+  }
+  try {
+    _packagingDatabase = JSON.parse(fs.readFileSync(p, "utf-8"));
+    const total = (_packagingDatabase.categories || []).reduce((s, c) => s + (c.products || []).length, 0);
+    console.log(`✓ Packaging-database geladen: ${total} producten in ${(_packagingDatabase.categories || []).length} categorieën`);
+  } catch (e) {
+    console.error("Kon packaging-database.json niet parsen:", e.message);
+    _packagingDatabase = { categories: [] };
+  }
+  return _packagingDatabase;
+}
+loadPackagingDatabase();
+
+app.get("/api/packaging-database", requireAuth, (req, res) => {
+  res.json(loadPackagingDatabase());
+});
+
+// ════════════════════════════════════════════════════════════════════
 // User-specs — handmatige overrides per artikelcode (sku/dims/gw/nw/
 // hs-code/origin). Vroeger lokaal in localStorage van Manon's machine,
 // nu server-side zodat alle gebruikers van de app diezelfde edits zien.

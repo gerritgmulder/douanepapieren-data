@@ -1,0 +1,739 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Fonteyn — Transport laden</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --fonteyn-green: #144734;
+    --fonteyn-green-dark: #0d3325;
+    --fonteyn-lime: #8bc53f;
+    --fonteyn-lime-dark: #72a531;
+    --fonteyn-cream: #fff9ae;
+
+    --bg: #f5f4ef;
+    --panel: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --ok: #15803d;
+    --warn: #b45309;
+    --bad: #b91c1c;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.45;
+    color: var(--ink); background: var(--bg); min-height: 100vh;
+  }
+
+  header {
+    background: var(--fonteyn-green); color: #fff;
+    padding: 14px 28px; display: flex; align-items: center; gap: 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  header img.logo { height: 40px; width: auto; display: block; }
+  header h1 { margin: 0; font-size: 17px; font-weight: 600; color: #fff; }
+  header .back-link {
+    color: rgba(255,255,255,0.85); text-decoration: none; font-size: 13px; font-weight: 500;
+    padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.25);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  header .back-link:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); color: #fff; }
+  header .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+  header .user-chip { color: rgba(255,255,255,0.75); font-size: 13px; }
+  header .user-chip b { color: #fff; font-weight: 600; }
+  header button.logout {
+    background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 14px; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  header button.logout:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); }
+
+  main { max-width: 1280px; margin: 28px auto 80px; padding: 0 24px; }
+
+  .panel {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px 28px; margin-bottom: 22px;
+  }
+  .panel h2 {
+    margin: 0 0 4px; font-size: 13px; font-weight: 700;
+    color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .panel h3 { margin: 0 0 14px; font-size: 18px; font-weight: 600; color: var(--fonteyn-green); }
+  .panel .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+
+  /* ─── Stap 1: vervoerder kiezen ────────────────────────── */
+  .carrier-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+  }
+  .carrier {
+    background: #fff; border: 2px solid var(--border); border-radius: 10px;
+    padding: 18px 16px; cursor: pointer;
+    transition: border-color 0.15s, transform 0.1s, box-shadow 0.15s;
+    text-align: left; font-family: inherit;
+  }
+  .carrier:hover {
+    border-color: var(--fonteyn-lime);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(20,71,52,0.08);
+  }
+  .carrier.selected {
+    border-color: var(--fonteyn-green);
+    background: #f0f7e8;
+  }
+  .carrier .icon { font-size: 28px; margin-bottom: 10px; line-height: 1; }
+  .carrier .name { font-weight: 700; font-size: 15px; color: var(--fonteyn-green); margin-bottom: 4px; }
+  .carrier .desc { color: var(--muted); font-size: 12px; line-height: 1.4; }
+
+  /* ─── Stap 2: order-input ──────────────────────────────── */
+  textarea.orders-input {
+    width: 100%; min-height: 90px;
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    font-family: inherit; font-size: 14px; color: var(--ink);
+    resize: vertical;
+  }
+  textarea.orders-input:focus {
+    outline: none; border-color: var(--fonteyn-green);
+    box-shadow: 0 0 0 3px rgba(20,71,52,0.1);
+  }
+  .input-hint { color: var(--muted); font-size: 12px; margin-top: 6px; }
+
+  /* ─── Buttons ──────────────────────────────────────────── */
+  button.cta {
+    background: var(--fonteyn-lime); color: var(--fonteyn-green-dark);
+    border: 0; padding: 11px 20px; border-radius: 8px;
+    font-family: inherit; font-weight: 700; font-size: 14px; letter-spacing: 0.02em;
+    cursor: pointer; transition: background 0.15s, transform 0.1s;
+  }
+  button.cta:hover:not(:disabled) { background: var(--fonteyn-lime-dark); }
+  button.cta:active:not(:disabled) { transform: translateY(1px); }
+  button.cta:disabled { background: #d1d5db; color: #6b7280; cursor: not-allowed; }
+  button.secondary {
+    background: #fff; color: var(--ink); border: 1px solid var(--border);
+    padding: 9px 14px; border-radius: 7px; font: inherit; font-weight: 500; cursor: pointer;
+  }
+  button.secondary:hover:not(:disabled) { background: #f3f4f6; }
+
+  /* ─── Status-balk ──────────────────────────────────────── */
+  .status-bar {
+    margin-top: 14px; padding: 10px 14px; border-radius: 8px;
+    background: #eef2f3; color: var(--ink); font-size: 13px;
+  }
+  .status-bar.ok  { background: #f0fdf4; color: #166534; }
+  .status-bar.bad { background: #fef2f2; color: #991b1b; }
+  .status-bar.warn { background: #fffbeb; color: #78350f; }
+
+  /* ─── Order-resultaat-tabel ────────────────────────────── */
+  .order-card {
+    border: 1px solid var(--border); border-radius: 10px;
+    margin-bottom: 14px; overflow: hidden;
+    background: #fff;
+  }
+  .order-card.blocked { border-color: #fecaca; }
+  .order-card .header-row {
+    display: grid;
+    grid-template-columns: 28px 110px 1fr 130px 90px 90px 90px;
+    gap: 14px; align-items: center;
+    padding: 14px 18px;
+    background: #fafaf8;
+    border-bottom: 1px solid var(--border);
+  }
+  .order-card.blocked .header-row { background: #fef2f2; }
+  .order-card .header-row .check { width: 18px; height: 18px; cursor: pointer; accent-color: var(--fonteyn-green); }
+  .order-card .header-row .nr { font-weight: 700; font-size: 14px; color: var(--fonteyn-green); }
+  .order-card .header-row .customer { font-size: 13px; }
+  .order-card .header-row .customer .addr { color: var(--muted); font-size: 12px; }
+  .order-card .header-row .stat-pill {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .stat-pill.paid     { background: #dcfce7; color: #15803d; }
+  .stat-pill.partial  { background: #fef3c7; color: #92400e; }
+  .stat-pill.unpaid   { background: #fee2e2; color: #991b1b; }
+  .stat-pill.unknown  { background: #f3f4f6; color: #6b7280; }
+  .order-card .header-row .num { text-align: right; font-variant-numeric: tabular-nums; font-size: 13px; }
+  .order-card .header-row .num .lbl { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; display: block; }
+
+  /* line-items detail */
+  .order-card details summary {
+    padding: 8px 18px; cursor: pointer;
+    font-size: 12px; color: var(--muted);
+    border-bottom: 1px solid transparent;
+    user-select: none;
+  }
+  .order-card details[open] summary {
+    border-bottom-color: var(--border);
+    background: #fff;
+  }
+  .order-card .lines {
+    padding: 6px 18px 14px;
+  }
+  .order-card .line {
+    display: grid;
+    grid-template-columns: 36px 1fr 100px 70px 70px 90px;
+    gap: 12px; padding: 6px 0;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 13px;
+    align-items: center;
+  }
+  .order-card .line:last-child { border-bottom: 0; }
+  .order-card .line .qty { text-align: right; color: var(--muted); }
+  .order-card .line .desc { color: var(--ink); }
+  .order-card .line.matched .desc { color: var(--ink); }
+  .order-card .line.unmatched .desc { color: var(--warn); }
+  .order-card .line.service .desc { color: var(--muted); font-style: italic; }
+  .order-card .line .match-name {
+    font-size: 11px; color: var(--muted); margin-top: 2px;
+  }
+  .order-card .line .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .order-card .line .badge {
+    display: inline-block; padding: 1px 6px; border-radius: 4px;
+    font-size: 10px; font-weight: 600; margin-left: 6px;
+  }
+  .badge.match-ok      { background: #dcfce7; color: #15803d; }
+  .badge.match-multi   { background: #dbeafe; color: #1e40af; }
+  .badge.match-fail    { background: #fef3c7; color: #92400e; }
+  .badge.service       { background: #f3f4f6; color: #6b7280; }
+
+  /* Totalen-paneel */
+  .totals-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+  }
+  .totals-grid .stat {
+    background: #f9fafb; border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .totals-grid .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .totals-grid .stat .val { font-size: 22px; font-weight: 700; margin-top: 4px; color: var(--fonteyn-green); }
+  .totals-grid .stat .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .access-denied { text-align: center; padding: 60px 20px; color: var(--muted); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- Sessie-guard + auth-wrapper -->
+<script>
+(function () {
+  const SESSION_KEY = "fp.session";
+  const EMAIL_KEY   = "fp.email";
+  const sessionId = localStorage.getItem(SESSION_KEY);
+  if (!sessionId) {
+    window.location.replace("dashboard.html");
+    throw new Error("Geen sessie — doorverwijzen naar dashboard");
+  }
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function (input, opts) {
+    const url = typeof input === "string" ? input : (input && input.url) || "";
+    if (url.startsWith("/api/") || url.startsWith(location.origin + "/api/")) {
+      opts = opts || {};
+      const headers = new Headers(opts.headers || {});
+      if (!headers.has("Authorization")) headers.set("Authorization", "Bearer " + sessionId);
+      opts = { ...opts, headers };
+    }
+    return origFetch(input, opts).then((res) => {
+      if (res.status === 401 && (url.startsWith("/api/") || url.startsWith(location.origin + "/api/"))) {
+        localStorage.removeItem(SESSION_KEY);
+        window.location.replace("dashboard.html");
+      }
+      return res;
+    });
+  };
+  window.addEventListener("DOMContentLoaded", () => {
+    const u = document.getElementById("hdr-user");
+    if (u) u.textContent = localStorage.getItem(EMAIL_KEY) || "—";
+    const btn = document.getElementById("hdr-logout");
+    if (btn) btn.addEventListener("click", async () => {
+      try { await fetch("/api/logout", { method: "POST" }); } catch {}
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(EMAIL_KEY);
+      window.location.replace("dashboard.html");
+    });
+  });
+})();
+</script>
+
+<header>
+  <a href="dashboard.html" class="back-link">← Dashboard</a>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+  <h1>Transport laden</h1>
+  <div class="right">
+    <div class="user-chip">Ingelogd als <b id="hdr-user">—</b></div>
+    <button class="logout" id="hdr-logout" type="button">Uitloggen</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ─── STAP 1: vervoerder kiezen ──────────────────────── -->
+  <section class="panel">
+    <h2>Stap 1</h2>
+    <h3>Welke vervoerder?</h3>
+    <p class="sub">Bepaalt hoe we orders straks indelen — eigen bakwagens worden volume-gepland, pakketdiensten alleen op gewicht/postcode.</p>
+
+    <div class="carrier-grid" id="carrierGrid">
+      <button class="carrier" type="button" data-carrier="own">
+        <div class="icon">🚚</div>
+        <div class="name">Eigen vervoer</div>
+        <div class="desc">Bakwagen 5×2×2,5 m. Eigen route. Maximaal 3 wagens parallel.</div>
+      </button>
+      <button class="carrier" type="button" data-carrier="svz">
+        <div class="icon">📦</div>
+        <div class="name">SVZ</div>
+        <div class="desc">Pakketdienst voor uithoeken van NL (Groningen, Limburg).</div>
+      </button>
+      <button class="carrier" type="button" data-carrier="gd-its">
+        <div class="icon">🌍</div>
+        <div class="name">GD-ITS</div>
+        <div class="desc">Spa's naar Benelux of dingen die niet in de bakwagen passen.</div>
+      </button>
+      <button class="carrier" type="button" data-carrier="flevobeurt">
+        <div class="icon">🛻</div>
+        <div class="name">Flevobeurt</div>
+        <div class="desc">Kleinere spullen, ad-hoc.</div>
+      </button>
+    </div>
+  </section>
+
+  <!-- ─── STAP 2: ordernummers invoeren ──────────────────── -->
+  <section class="panel hidden" id="step2">
+    <h2>Stap 2</h2>
+    <h3>Welke orders?</h3>
+    <p class="sub">Plak ordernummers van Logic4 (komma's, spaties of regels mogen). De app haalt per order live de betaalstatus op — alleen volledig betaalde orders mogen mee in transport.</p>
+
+    <textarea class="orders-input" id="ordersInput" placeholder="Bijv.&#10;3486568&#10;3486912, 3487004"></textarea>
+    <div class="input-hint">Status 30 (Volledig betaald) = mag verzonden. Status 1/25 (Verkooporder/30% aanbetaald) = wordt geblokkeerd.</div>
+
+    <div style="display:flex; gap:10px; align-items:center; margin-top:14px;">
+      <button class="cta" id="fetchBtn" type="button">Orders ophalen</button>
+      <button class="secondary" id="resetBtn" type="button">Reset</button>
+      <span id="fetchStatus" style="font-size:13px; color:var(--muted);"></span>
+    </div>
+  </section>
+
+  <!-- ─── STAP 3: resultaten ──────────────────────────────── -->
+  <section class="panel hidden" id="step3">
+    <h2>Stap 3</h2>
+    <h3>Orders gecontroleerd</h3>
+    <p class="sub">Vink de orders aan die je in dit transport mee wil nemen. Geblokkeerde orders kun je niet selecteren.</p>
+
+    <div id="ordersList"></div>
+  </section>
+
+  <!-- ─── Totalen ────────────────────────────────────────── -->
+  <section class="panel hidden" id="totalsPanel">
+    <h2>Totaal van geselecteerde orders</h2>
+    <div class="totals-grid">
+      <div class="stat"><div class="lbl">Orders</div><div class="val" id="tOrders">0</div></div>
+      <div class="stat"><div class="lbl">Dozen totaal</div><div class="val" id="tBoxes">0</div></div>
+      <div class="stat"><div class="lbl">Volume</div><div class="val" id="tVolume">0,00 m³</div><div class="sub" id="tVolumePct">— van 25 m³ bakwagen</div></div>
+      <div class="stat"><div class="lbl">Gewicht</div><div class="val" id="tWeight">0 kg</div></div>
+      <div class="stat"><div class="lbl">Niet-gematchte regels</div><div class="val" id="tUnmatched">0</div><div class="sub">geen verpakkings-info</div></div>
+    </div>
+
+    <div style="margin-top:18px; display:flex; gap:10px; align-items:center;">
+      <button class="cta" id="planBtn" type="button" disabled>Verder met indelen →</button>
+      <span style="font-size:12px; color:var(--muted);">(fase 2: bin-packing + route — komt eraan)</span>
+    </div>
+  </section>
+
+</main>
+
+<script>
+// ──────────────────────────────────────────────────────────────────
+// Constants
+// ──────────────────────────────────────────────────────────────────
+const STATUS_VERKOOPORDER     = 1;
+const STATUS_30_AANBETAALD    = 25;
+const STATUS_VOLLEDIG_BETAALD = 30;
+
+// Bakwagen volume voor "% benut" indicator: 5 × 2 × 2,5 = 25 m³
+const TRUCK_VOLUME_M3 = 5 * 2 * 2.5;
+
+const el = (id) => document.getElementById(id);
+
+// ──────────────────────────────────────────────────────────────────
+// Logic4-call helper — gebruikt /api/logic4-call (bestaande proxy)
+// ──────────────────────────────────────────────────────────────────
+async function logic4(apiPath, body, method = "POST") {
+  const r = await fetch("/api/logic4-call", {
+    method: "POST",
+    body: JSON.stringify({ path: apiPath, method, body }),
+    headers: { "Content-Type": "application/json" }
+  });
+  const j = await r.json();
+  if (!r.ok || !j.ok) {
+    const msg = j.error || (typeof j.data === "string" ? j.data : JSON.stringify(j.data || {}));
+    throw new Error(`Logic4 ${method} ${apiPath}: ${msg}`);
+  }
+  return j.data;
+}
+
+// ──────────────────────────────────────────────────────────────────
+// State
+// ──────────────────────────────────────────────────────────────────
+const state = {
+  carrier: null,           // 'own' | 'svz' | 'gd-its' | 'flevobeurt'
+  packagingDb: null,       // { categories: [{category, products: [{name, boxes:[...]}]}] }
+  flatProducts: [],        // [{name, normalized, boxes:[...], category}] gesorteerd op naam-lengte aflopend
+  orders: [],              // [{nr, status, paid, total, customer, address, postcode, lines:[...], allowed, error}]
+  selected: new Set(),     // ordernrs die meegenomen worden
+};
+
+// ──────────────────────────────────────────────────────────────────
+// Stap 1: vervoerder kiezen
+// ──────────────────────────────────────────────────────────────────
+el("carrierGrid").addEventListener("click", (e) => {
+  const btn = e.target.closest(".carrier");
+  if (!btn) return;
+  state.carrier = btn.dataset.carrier;
+  document.querySelectorAll(".carrier").forEach(c => c.classList.toggle("selected", c === btn));
+  el("step2").classList.remove("hidden");
+  el("ordersInput").focus();
+});
+
+// ──────────────────────────────────────────────────────────────────
+// Packaging-database ophalen & normaliseren
+// ──────────────────────────────────────────────────────────────────
+function normalizeName(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function loadPackagingDatabase() {
+  if (state.packagingDb) return state.packagingDb;
+  const r = await fetch("/api/packaging-database");
+  if (!r.ok) throw new Error("Kon packaging-database niet ophalen (HTTP " + r.status + ")");
+  state.packagingDb = await r.json();
+
+  // Bouw flat-list voor matching: lange namen eerst (zodat "Indiana bbq XL"
+  // wint van "Indiana bbq" als beide bestaan).
+  const flat = [];
+  for (const cat of (state.packagingDb.categories || [])) {
+    for (const p of (cat.products || [])) {
+      flat.push({
+        name: p.name,
+        normalized: normalizeName(p.name),
+        boxes: p.boxes,
+        category: cat.category,
+      });
+    }
+  }
+  flat.sort((a, b) => b.normalized.length - a.normalized.length);
+  state.flatProducts = flat;
+  return state.packagingDb;
+}
+
+/**
+ * Probeer een product uit de packaging-db te vinden voor één order-regel.
+ * Returns { product, multiple? } of null als niets matcht.
+ *
+ * Strategie (fase 1, naam-match):
+ *   - Normaliseer de regel-omschrijving
+ *   - Vind alle producten waarvan de genormaliseerde naam als hele woordreeks
+ *     in de omschrijving voorkomt
+ *   - Langste match wint
+ */
+function matchPackaging(description) {
+  if (!description) return null;
+  const desc = " " + normalizeName(description) + " ";
+  for (const p of state.flatProducts) {
+    // Skip ultra-korte namen (1-2 chars) om false matches te voorkomen
+    if (p.normalized.length < 3) continue;
+    if (desc.includes(" " + p.normalized + " ")) {
+      return { product: p };
+    }
+  }
+  return null;
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Stap 2: orders ophalen
+// ──────────────────────────────────────────────────────────────────
+function parseOrderNumbers(raw) {
+  return [...new Set(
+    String(raw || "")
+      .split(/[\s,;]+/)
+      .map(s => s.trim())
+      .filter(s => /^\d+$/.test(s))
+  )];
+}
+
+el("fetchBtn").addEventListener("click", async () => {
+  const nrs = parseOrderNumbers(el("ordersInput").value);
+  if (!nrs.length) {
+    setFetchStatus("Vul minstens één geldig ordernummer in.", "bad");
+    return;
+  }
+
+  el("fetchBtn").disabled = true;
+  el("ordersList").innerHTML = "";
+  state.orders = [];
+  state.selected.clear();
+  el("step3").classList.remove("hidden");
+  el("totalsPanel").classList.remove("hidden");
+
+  try {
+    setFetchStatus("Packaging-database laden…", "");
+    await loadPackagingDatabase();
+
+    for (let i = 0; i < nrs.length; i++) {
+      const nr = nrs[i];
+      setFetchStatus(`Order ${i+1} van ${nrs.length} (${nr})…`, "");
+      try {
+        const order = await fetchOrder(nr);
+        state.orders.push(order);
+        if (order.allowed) state.selected.add(nr);
+      } catch (e) {
+        console.warn("Order " + nr + " faalde:", e);
+        state.orders.push({ nr, error: e.message, allowed: false });
+      }
+      renderOrders();
+      renderTotals();
+    }
+    setFetchStatus(`Klaar — ${state.orders.length} order(s) opgehaald.`, "ok");
+  } catch (e) {
+    setFetchStatus("Fout: " + e.message, "bad");
+  } finally {
+    el("fetchBtn").disabled = false;
+  }
+});
+
+el("resetBtn").addEventListener("click", () => {
+  el("ordersInput").value = "";
+  el("ordersList").innerHTML = "";
+  state.orders = [];
+  state.selected.clear();
+  el("step3").classList.add("hidden");
+  el("totalsPanel").classList.add("hidden");
+  setFetchStatus("", "");
+});
+
+function setFetchStatus(msg, kind) {
+  const s = el("fetchStatus");
+  s.textContent = msg || "";
+  s.style.color = kind === "ok" ? "var(--ok)" : kind === "bad" ? "var(--bad)" : "var(--muted)";
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Eén order ophalen + verrijken met packaging-info
+// ──────────────────────────────────────────────────────────────────
+async function fetchOrder(nr) {
+  // 1) Order-header (heeft o.a. Totals.AmountIncl, Totals.Calc_TotalPayed,
+  //    OrderStatus.Id, DeliveryAddress, customer info).
+  const orderResp = await logic4("/v3/Orders/GetOrders", {
+    Id: parseInt(nr, 10), TakeRecords: 1
+  });
+  const o = Array.isArray(orderResp) ? orderResp[0] : orderResp;
+  if (!o) throw new Error("Order niet gevonden");
+
+  // 2) Order-rows
+  const rows = await logic4("/v3/Orders/GetOrderRows", {
+    OrderId: parseInt(nr, 10), TakeRecords: 500
+  });
+
+  // 3) Bouw line-items met packaging-match
+  const lines = (rows || []).map(r => {
+    const desc = (r.Description || r.Description2 || "").trim();
+    const code = String(r.ProductCode || "");
+    const qty  = Number(r.Qty || 0);
+    const isService = isServiceLine(code, desc);
+    const match = isService ? null : matchPackaging(desc);
+    return { code, desc, qty, isService, match };
+  });
+
+  // 4) Totalen op basis van match (per regel: qty * som van box-volumes en gewichten)
+  let totalBoxes = 0, totalVolumeM3 = 0, totalKg = 0, unmatchedLines = 0;
+  for (const ln of lines) {
+    if (ln.isService) continue;
+    if (!ln.match) { unmatchedLines++; continue; }
+    for (const box of ln.match.product.boxes) {
+      totalBoxes += ln.qty;
+      if (box.dims) {
+        totalVolumeM3 += (box.dims.l * box.dims.w * box.dims.h * ln.qty) / 1_000_000;
+      }
+      if (box.weight) totalKg += box.weight * ln.qty;
+    }
+  }
+
+  // 5) Betaalstatus
+  const status = o.OrderStatus?.Id;
+  const total  = Number(o.Totals?.AmountIncl ?? 0);
+  const paid   = Number(o.Totals?.Calc_TotalPayed ?? 0);
+  const allowed = status === STATUS_VOLLEDIG_BETAALD;
+
+  // 6) Klant/adres
+  const deliver = o.DeliveryAddress || o.AccountAddress || {};
+  const customer = (o.InvoiceAddress?.CompanyName || o.InvoiceAddress?.LastName ||
+                    deliver.CompanyName || deliver.LastName || "—");
+  const postcode = (deliver.Zipcode || "").trim();
+  const city     = (deliver.City || "").trim();
+
+  return {
+    nr, status, total, paid, allowed,
+    customer, postcode, city,
+    lines, totalBoxes, totalVolumeM3, totalKg, unmatchedLines,
+  };
+}
+
+// Zelfde lijst als in douane.html — financiële regels die geen fysiek product zijn.
+const SERVICE_CODES = new Set(["789462", "789464", "7894565", "8866", "Korting", "Garantie"]);
+const SERVICE_RE = /freight|surcharge|packing(s|kost)|verzend|transport|korting|garantie|warranty/i;
+function isServiceLine(code, desc) {
+  if (SERVICE_CODES.has(code)) return true;
+  if (/korting|garantie/i.test(code)) return true;
+  if (desc && SERVICE_RE.test(desc)) return true;
+  return false;
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Rendering
+// ──────────────────────────────────────────────────────────────────
+function statusName(id) {
+  switch (id) {
+    case STATUS_VERKOOPORDER:     return "Verkooporder";
+    case STATUS_30_AANBETAALD:    return "30% aanbetaald";
+    case STATUS_VOLLEDIG_BETAALD: return "Volledig betaald";
+    default:                      return "Status " + id;
+  }
+}
+function statusPillClass(id) {
+  if (id === STATUS_VOLLEDIG_BETAALD) return "paid";
+  if (id === STATUS_30_AANBETAALD)    return "partial";
+  if (id === STATUS_VERKOOPORDER)     return "unpaid";
+  return "unknown";
+}
+const fmtEur = (n) => new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
+const fmtKg  = (n) => Math.round(Number(n) || 0).toLocaleString("nl-NL") + " kg";
+const fmtM3  = (n) => (Number(n) || 0).toFixed(2).replace(".", ",") + " m³";
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+
+function renderOrders() {
+  const container = el("ordersList");
+  container.innerHTML = state.orders.map(o => renderOrderCard(o)).join("");
+  // Wire up checkboxes
+  container.querySelectorAll("input[type=checkbox][data-nr]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const nr = cb.dataset.nr;
+      if (cb.checked) state.selected.add(nr); else state.selected.delete(nr);
+      renderTotals();
+    });
+  });
+}
+
+function renderOrderCard(o) {
+  if (o.error) {
+    return `<div class="order-card blocked">
+      <div class="header-row">
+        <span></span>
+        <span class="nr">${escapeHtml(o.nr)}</span>
+        <span class="customer" style="color:var(--bad)">Fout: ${escapeHtml(o.error)}</span>
+        <span></span><span></span><span></span><span></span>
+      </div>
+    </div>`;
+  }
+
+  const checked = state.selected.has(o.nr) ? "checked" : "";
+  const disabled = o.allowed ? "" : "disabled";
+  const blockedClass = o.allowed ? "" : " blocked";
+  const pill = `<span class="stat-pill ${statusPillClass(o.status)}">${escapeHtml(statusName(o.status))}</span>`;
+  const paidInfo = `${fmtEur(o.paid)} / ${fmtEur(o.total)}`;
+
+  return `<div class="order-card${blockedClass}">
+    <div class="header-row">
+      <input type="checkbox" class="check" data-nr="${escapeHtml(o.nr)}" ${checked} ${disabled}>
+      <div>
+        <div class="nr">${escapeHtml(o.nr)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px;">${pill}</div>
+      </div>
+      <div class="customer">
+        <div>${escapeHtml(o.customer)}</div>
+        <div class="addr">${escapeHtml(o.postcode)} ${escapeHtml(o.city)}</div>
+      </div>
+      <div class="num"><span class="lbl">Betaald</span>${escapeHtml(paidInfo)}</div>
+      <div class="num"><span class="lbl">Dozen</span>${o.totalBoxes}</div>
+      <div class="num"><span class="lbl">Volume</span>${fmtM3(o.totalVolumeM3)}</div>
+      <div class="num"><span class="lbl">Gewicht</span>${fmtKg(o.totalKg)}</div>
+    </div>
+    <details>
+      <summary>${o.lines.length} regels — ${o.unmatchedLines > 0 ? `<span style="color:var(--warn)">${o.unmatchedLines} zonder verpakkings-info</span>` : "alles gematched"}</summary>
+      <div class="lines">${o.lines.map(ln => renderLine(ln)).join("")}</div>
+    </details>
+  </div>`;
+}
+
+function renderLine(ln) {
+  let badge = "";
+  let cls = "matched";
+  let dims = "—", weight = "—", boxesText = "—";
+  if (ln.isService) {
+    badge = `<span class="badge service">SERVICE</span>`;
+    cls = "service";
+  } else if (ln.match) {
+    const boxes = ln.match.product.boxes;
+    badge = boxes.length > 1
+      ? `<span class="badge match-multi">${boxes.length} dozen</span>`
+      : `<span class="badge match-ok">match</span>`;
+    if (boxes.length === 1 && boxes[0].dims) {
+      dims = `${boxes[0].dims.l}×${boxes[0].dims.w}×${boxes[0].dims.h}`;
+    } else if (boxes.length > 1) {
+      dims = `${boxes.length}×`;
+    }
+    const totalBoxWeight = boxes.reduce((s, b) => s + (b.weight || 0), 0);
+    weight = totalBoxWeight ? Math.round(totalBoxWeight) + " kg" : "—";
+    boxesText = ln.match.product.name;
+  } else {
+    badge = `<span class="badge match-fail">geen match</span>`;
+    cls = "unmatched";
+  }
+  return `<div class="line ${cls}">
+    <div class="qty">${ln.qty}×</div>
+    <div class="desc">${escapeHtml(ln.desc)}${badge}<div class="match-name">${escapeHtml(boxesText)}</div></div>
+    <div class="num">${escapeHtml(dims)}</div>
+    <div class="num">${escapeHtml(weight)}</div>
+    <div class="num">${escapeHtml(ln.code)}</div>
+    <div class="num"></div>
+  </div>`;
+}
+
+function renderTotals() {
+  const sel = state.orders.filter(o => state.selected.has(o.nr) && !o.error);
+  const orders = sel.length;
+  const boxes = sel.reduce((s, o) => s + (o.totalBoxes || 0), 0);
+  const volume = sel.reduce((s, o) => s + (o.totalVolumeM3 || 0), 0);
+  const weight = sel.reduce((s, o) => s + (o.totalKg || 0), 0);
+  const unmatched = sel.reduce((s, o) => s + (o.unmatchedLines || 0), 0);
+  el("tOrders").textContent = orders;
+  el("tBoxes").textContent  = boxes;
+  el("tVolume").textContent = fmtM3(volume);
+  el("tVolumePct").textContent = orders
+    ? `${(volume / TRUCK_VOLUME_M3 * 100).toFixed(0)}% van 25 m³ bakwagen`
+    : "— van 25 m³ bakwagen";
+  el("tWeight").textContent = fmtKg(weight);
+  el("tUnmatched").textContent = unmatched;
+  el("planBtn").disabled = orders === 0;
+}
+
+// Placeholder voor fase 2
+el("planBtn").addEventListener("click", () => {
+  alert("Fase 2 (bin-packing in bakwagens + routeplanning) komt eraan. " +
+        "Voor nu zie je hier de geselecteerde orders en de totalen.");
+});
+</script>
+</body>
+</html>

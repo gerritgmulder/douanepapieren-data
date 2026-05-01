@@ -1,0 +1,4818 @@
+{
+  "categories": [
+    {
+      "category": "BBQ",
+      "products": [
+        {
+          "name": "Indiana bbq",
+          "boxes": [
+            {
+              "dims": {
+                "l": 75.0,
+                "w": 72.0,
+                "h": 65.0
+              },
+              "weight": 61.0
+            }
+          ]
+        },
+        {
+          "name": "Ironwood 885",
+          "boxes": [
+            {
+              "dims": {
+                "l": 124.0,
+                "w": 57.0,
+                "h": 32.0
+              },
+              "weight": 89.0
+            }
+          ]
+        },
+        {
+          "name": "Bronson 20",
+          "boxes": [
+            {
+              "dims": {
+                "l": 97.0,
+                "w": 53.0,
+                "h": 63.0
+              },
+              "weight": 45.0
+            }
+          ]
+        },
+        {
+          "name": "Multitasker 11002 Brute",
+          "boxes": [
+            {
+              "dims": {
+                "l": 160.0,
+                "w": 50.0,
+                "h": 70.0
+              },
+              "weight": 92.0
+            }
+          ]
+        },
+        {
+          "name": "Classic Joe II",
+          "boxes": [
+            {
+              "dims": {
+                "l": 85.0,
+                "w": 85.0,
+                "h": 90.0
+              },
+              "weight": 130.0
+            }
+          ]
+        },
+        {
+          "name": "ligorio gas outdoor kitchen",
+          "boxes": [
+            {
+              "dims": {
+                "l": 85.0,
+                "w": 65.0,
+                "h": 130.0
+              },
+              "weight": 90.0
+            }
+          ]
+        },
+        {
+          "name": "bbq module kast 1 drs 62",
+          "boxes": [
+            {
+              "dims": {
+                "l": 65.0,
+                "w": 90.0,
+                "h": 10.0
+              },
+              "weight": 18.0
+            }
+          ]
+        },
+        {
+          "name": "freestyle 365 bbq +zijbrander",
+          "boxes": [
+            {
+              "dims": {
+                "l": 75.0,
+                "w": 75.0,
+                "h": 65.0
+              },
+              "weight": 65.0
+            }
+          ]
+        },
+        {
+          "name": "manometer",
+          "boxes": [
+            {
+              "dims": {
+                "l": 20.0,
+                "w": 20.0,
+                "h": 20.0
+              },
+              "weight": 1.0
+            }
+          ]
+        },
+        {
+          "name": "freestyle bbq 425",
+          "boxes": [
+            {
+              "dims": {
+                "l": 85.0,
+                "w": 64.0,
+                "h": 115.0
+              },
+              "weight": 65.0
+            }
+          ]
+        },
+        {
+          "name": "hoes+borstel+mat in 1 doos",
+          "boxes": [
+            {
+              "dims": {
+                "l": 30.0,
+                "w": 40.0,
+                "h": 50.0
+              },
+              "weight": 5.0
+            }
+          ]
+        },
+        {
+          "name": "bbq master touch",
+          "boxes": [
+            {
+              "dims": {
+                "l": 75.0,
+                "w": 75.0,
+                "h": 60.0
+              },
+              "weight": 50.0
+            }
+          ]
+        },
+        {
+          "name": "weber bbq spirit E220",
+          "boxes": [
+            {
+              "dims": {
+                "l": 122.0,
+                "w": 69.0,
+                "h": 113.0
+              },
+              "weight": 80.0
+            }
+          ]
+        },
+        {
+          "name": "smoker bbq minnesota",
+          "boxes": [
+            {
+              "dims": {
+                "l": 184.0,
+                "w": 153.0,
+                "h": 88.0
+              },
+              "weight": 120.0
+            }
+          ]
+        },
+        {
+          "name": "El fuego Minnesota",
+          "boxes": [
+            {
+              "label": "El fuego Minnesota",
+              "dims": {
+                "l": 114.0,
+                "w": 61.0,
+                "h": 68.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "BBQ Ohio",
+          "boxes": [
+            {
+              "label": "BBQ Ohio",
+              "dims": {
+                "l": 73.0,
+                "w": 47.0,
+                "h": 54.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "BBQ west. Virginia",
+          "boxes": [
+            {
+              "label": "BBQ west. Virginia",
+              "dims": {
+                "l": 74.0,
+                "w": 54.0,
+                "h": 47.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "el fuego San angelo",
+          "boxes": [
+            {
+              "label": "el fuego San angelo",
+              "dims": {
+                "l": 62.0,
+                "w": 54.0,
+                "h": 26.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "el fuego Burlington",
+          "boxes": [
+            {
+              "label": "el fuego Burlington",
+              "dims": {
+                "l": 79.0,
+                "w": 59.0,
+                "h": 52.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "tucson duo bbq",
+          "boxes": [
+            {
+              "dims": {
+                "l": 122.0,
+                "w": 57.0,
+                "h": 50.0
+              },
+              "weight": 99.0
+            }
+          ]
+        },
+        {
+          "name": "kamado bbq shorty",
+          "boxes": [
+            {
+              "dims": {
+                "l": 49.0,
+                "w": 46.0,
+                "h": 62.0
+              },
+              "weight": 46.0
+            }
+          ]
+        },
+        {
+          "name": "Kamado classic joe |||",
+          "boxes": [
+            {
+              "dims": {
+                "l": 80.0,
+                "w": 80.0,
+                "h": 120.0
+              },
+              "weight": 45.0
+            }
+          ]
+        },
+        {
+          "name": "Kamado medium",
+          "boxes": [
+            {
+              "dims": {
+                "l": 55.0,
+                "w": 51.0,
+                "h": 61.0
+              },
+              "weight": 60.0
+            }
+          ]
+        },
+        {
+          "name": "Kamado Big 25''",
+          "boxes": [
+            {
+              "dims": {
+                "l": 57.0,
+                "w": 80.0,
+                "h": 120.0
+              },
+              "weight": 95.0
+            }
+          ]
+        },
+        {
+          "name": "Joe junior",
+          "boxes": [
+            {
+              "dims": {
+                "l": 70.0,
+                "w": 70.0,
+                "h": 60.0
+              },
+              "weight": 45.0
+            }
+          ]
+        },
+        {
+          "name": "Pelletgril 700",
+          "boxes": [
+            {
+              "dims": {
+                "l": 117.0,
+                "w": 57.0,
+                "h": 63.0
+              },
+              "weight": 76.0
+            }
+          ]
+        },
+        {
+          "name": "eurom Meat & Beat",
+          "boxes": [
+            {
+              "label": "eurom Meat & Beat",
+              "dims": {
+                "l": 82.0,
+                "w": 25.0,
+                "h": 20.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ottawael fuego",
+          "boxes": [
+            {
+              "dims": {
+                "l": 61.0,
+                "w": 37.0,
+                "h": 30.0
+              },
+              "weight": 21.0
+            }
+          ]
+        },
+        {
+          "name": "el fuego Sunset beach",
+          "boxes": [
+            {
+              "label": "el fuego Sunset beach",
+              "dims": {
+                "l": 70.0,
+                "w": 59.0,
+                "h": 52.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trager ironwood 650",
+          "boxes": [
+            {
+              "label": "Trager ironwood 650",
+              "dims": {
+                "l": 117.0,
+                "w": 57.0,
+                "h": 70.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trager pro 780",
+          "boxes": [
+            {
+              "label": "Trager pro 780",
+              "dims": {
+                "l": 122.0,
+                "w": 57.0,
+                "h": 70.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "el fuego Brookline",
+          "boxes": [
+            {
+              "label": "el fuego Brookline",
+              "dims": {
+                "l": 68.0,
+                "w": 55.0,
+                "h": 52.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "el fuego OHawa S",
+          "boxes": [
+            {
+              "dims": {
+                "l": 61.0,
+                "w": 44.0,
+                "h": 37.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "Infrarood heatpanel 3200",
+          "boxes": [
+            {
+              "label": "Infrarood heatpanel 3200",
+              "dims": {
+                "l": 208.0,
+                "w": 23.0,
+                "h": 10.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Indus bright  terrasverwarmer",
+          "boxes": [
+            {
+              "label": "Indus bright  terrasverwarmer",
+              "dims": {
+                "l": 136.0,
+                "w": 47.0,
+                "h": 34.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buschbeck vuurkorf aslade rus",
+          "boxes": [
+            {
+              "dims": {
+                "l": 36.0,
+                "w": 56.0,
+                "h": 12.0
+              },
+              "weight": 4.5
+            }
+          ]
+        },
+        {
+          "name": "Boretti ceramic 21 inch",
+          "boxes": [
+            {
+              "label": "Boretti ceramic 21 inch",
+              "dims": {
+                "l": 75.0,
+                "w": 85.0,
+                "h": 60.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Napoleon pro285 bk",
+          "boxes": [
+            {
+              "label": "Napoleon pro285 bk",
+              "dims": {
+                "l": 80.0,
+                "w": 60.0,
+                "h": 40.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Kettle joe",
+          "boxes": [
+            {
+              "dims": {
+                "l": 60.0,
+                "w": 60.0,
+                "h": 65.0
+              },
+              "weight": 45.0
+            }
+          ]
+        },
+        {
+          "name": "Weber traveler",
+          "boxes": [
+            {
+              "dims": {
+                "l": 110.0,
+                "w": 56.0,
+                "h": 37.0
+              },
+              "weight": 20.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Tuinmeubelen",
+      "products": [
+        {
+          "name": "Palma Loungeset",
+          "boxes": [
+            {
+              "dims": {
+                "l": 170.0,
+                "w": 84.0,
+                "h": 68.0
+              },
+              "weight": 58.0
+            }
+          ]
+        },
+        {
+          "name": "Palma tussenelement",
+          "boxes": [
+            {
+              "dims": {
+                "l": 82.0,
+                "w": 73.0,
+                "h": 32.0
+              },
+              "weight": 11.0
+            }
+          ]
+        },
+        {
+          "name": "Laos loungeset",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 182.0,
+                "w": 80.0,
+                "h": 60.0
+              },
+              "weight": 55.0
+            },
+            {
+              "label": "Doos 2",
+              "dims": {
+                "l": 123.0,
+                "w": 70.0,
+                "h": 13.0
+              },
+              "weight": 22.0
+            },
+            {
+              "label": "Doos 3",
+              "dims": {
+                "l": 82.0,
+                "w": 42.0,
+                "h": 42.0
+              },
+              "weight": 8.0
+            }
+          ]
+        },
+        {
+          "name": "2 in een doos",
+          "boxes": [
+            {
+              "dims": {
+                "l": 63.0,
+                "w": 61.0,
+                "h": 53.0
+              },
+              "weight": 12.0
+            }
+          ]
+        },
+        {
+          "name": "2-zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 110.0,
+                "w": 75.0,
+                "h": 65.0
+              },
+              "weight": 16.0
+            }
+          ]
+        },
+        {
+          "name": "Hoekelement",
+          "boxes": [
+            {
+              "dims": {
+                "l": 73.0,
+                "w": 73.0,
+                "h": 63.0
+              },
+              "weight": 11.0
+            }
+          ]
+        },
+        {
+          "name": "2x 2-Zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 135.0,
+                "w": 75.0,
+                "h": 64.0
+              },
+              "weight": 28.0
+            }
+          ]
+        },
+        {
+          "name": "Hoek+Voet",
+          "boxes": [
+            {
+              "dims": {
+                "l": 73.0,
+                "w": 73.0,
+                "h": 67.0
+              },
+              "weight": 19.0
+            }
+          ]
+        },
+        {
+          "name": "loungestoel connor",
+          "boxes": [
+            {
+              "dims": {
+                "l": 83.0,
+                "w": 83.0,
+                "h": 64.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "Hoekelement",
+          "boxes": [
+            {
+              "dims": {
+                "l": 84.0,
+                "w": 84.0,
+                "h": 72.0
+              },
+              "weight": 19.0
+            }
+          ]
+        },
+        {
+          "name": "Voetenbank",
+          "boxes": [
+            {
+              "dims": {
+                "l": 76.0,
+                "w": 76.0,
+                "h": 54.0
+              },
+              "weight": 17.0
+            }
+          ]
+        },
+        {
+          "name": "Koffietafel+krukken",
+          "boxes": [
+            {
+              "dims": {
+                "l": 124.0,
+                "w": 69.0,
+                "h": 68.0
+              },
+              "weight": 27.0
+            }
+          ]
+        },
+        {
+          "name": "Tussenelement",
+          "boxes": [
+            {
+              "dims": {
+                "l": 84.0,
+                "w": 78.0,
+                "h": 72.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "XL hoek",
+          "boxes": [
+            {
+              "dims": {
+                "l": 105.0,
+                "w": 105.0,
+                "h": 72.0
+              },
+              "weight": 24.0
+            }
+          ]
+        },
+        {
+          "name": "2-zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 170.0,
+                "w": 103.0,
+                "h": 73.0
+              },
+              "weight": 45.0
+            }
+          ]
+        },
+        {
+          "name": "Hoekelement",
+          "boxes": [
+            {
+              "dims": {
+                "l": 102.0,
+                "w": 102.0,
+                "h": 72.0
+              },
+              "weight": 35.0
+            }
+          ]
+        },
+        {
+          "name": "Voetenbank",
+          "boxes": [
+            {
+              "dims": {
+                "l": 95.0,
+                "w": 95.0,
+                "h": 60.0
+              },
+              "weight": 19.0
+            }
+          ]
+        },
+        {
+          "name": "Koffietafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 110.0,
+                "w": 50.0,
+                "h": 60.0
+              },
+              "weight": 27.0
+            }
+          ]
+        },
+        {
+          "name": "Loungebank",
+          "boxes": [
+            {
+              "dims": {
+                "l": 150.0,
+                "w": 50.0,
+                "h": 80.0
+              },
+              "weight": 35.0
+            }
+          ]
+        },
+        {
+          "name": "Loungestoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 70.0,
+                "w": 90.0,
+                "h": 90.0
+              },
+              "weight": 30.0
+            }
+          ]
+        },
+        {
+          "name": "Empoli",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 230.0,
+                "w": 77.0,
+                "h": 51.0
+              },
+              "weight": 52.0
+            },
+            {
+              "label": "Doos 2",
+              "dims": {
+                "l": 130.0,
+                "w": 90.0,
+                "h": 40.0
+              },
+              "weight": 34.0
+            }
+          ]
+        },
+        {
+          "name": "Dax",
+          "boxes": [
+            {
+              "label": "Doos 1",
+              "dims": {
+                "l": 244.0,
+                "w": 105.0,
+                "h": 18.0
+              },
+              "weight": 50.0
+            },
+            {
+              "label": "Doos 2",
+              "dims": {
+                "l": 186.0,
+                "w": 76.0,
+                "h": 31.0
+              },
+              "weight": 20.0
+            }
+          ]
+        },
+        {
+          "name": "3-zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 235.0,
+                "w": 85.0,
+                "h": 64.0
+              },
+              "weight": 35.0
+            }
+          ]
+        },
+        {
+          "name": "Tussenelement",
+          "boxes": [
+            {
+              "dims": {
+                "l": 80.0,
+                "w": 60.0,
+                "h": 70.0
+              },
+              "weight": 16.0
+            }
+          ]
+        },
+        {
+          "name": "hoekelement",
+          "boxes": [
+            {
+              "dims": {
+                "l": 70.0,
+                "w": 70.0,
+                "h": 80.0
+              },
+              "weight": 26.0
+            }
+          ]
+        },
+        {
+          "name": "XL-hoekelement",
+          "boxes": [
+            {
+              "dims": {
+                "l": 120.0,
+                "w": 90.0,
+                "h": 75.0
+              },
+              "weight": 34.0
+            }
+          ]
+        },
+        {
+          "name": "Voeten",
+          "boxes": [
+            {
+              "dims": {
+                "l": 60.0,
+                "w": 60.0,
+                "h": 55.0
+              },
+              "weight": 8.0
+            }
+          ]
+        },
+        {
+          "name": "Krukje",
+          "boxes": [
+            {
+              "dims": {
+                "l": 46.0,
+                "w": 46.0,
+                "h": 44.0
+              },
+              "weight": 4.0
+            }
+          ]
+        },
+        {
+          "name": "Stoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 88.0,
+                "w": 85.0,
+                "h": 65.0
+              },
+              "weight": 30.0
+            }
+          ]
+        },
+        {
+          "name": "2x hoek",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 100.0,
+                "h": 65.0
+              },
+              "weight": 30.0
+            }
+          ]
+        },
+        {
+          "name": "2x tussen",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 70.0,
+                "h": 65.0
+              },
+              "weight": 23.0
+            }
+          ]
+        },
+        {
+          "name": "1x hoek+voet",
+          "boxes": [
+            {
+              "dims": {
+                "l": 160.0,
+                "w": 95.0,
+                "h": 65.0
+              },
+              "weight": 29.0
+            }
+          ]
+        },
+        {
+          "name": "salou ligbed",
+          "boxes": [
+            {
+              "dims": {
+                "l": 200.0,
+                "w": 80.0,
+                "h": 20.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "2.5 zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 166.0,
+                "w": 100.0,
+                "h": 68.0
+              },
+              "weight": 47.0
+            }
+          ]
+        },
+        {
+          "name": "Koffietafel 120",
+          "boxes": [
+            {
+              "dims": {
+                "l": 122.0,
+                "w": 95.0,
+                "h": 10.0
+              },
+              "weight": 23.0
+            }
+          ]
+        },
+        {
+          "name": "2022-05-01 00:00:00",
+          "boxes": [
+            {
+              "dims": {
+                "l": 210.0,
+                "w": 241.0,
+                "h": 50.0
+              },
+              "weight": 10.0
+            }
+          ]
+        },
+        {
+          "name": "2022-05-02 00:00:00",
+          "boxes": [
+            {
+              "dims": {
+                "l": 210.0,
+                "w": 231.0,
+                "h": 50.0
+              },
+              "weight": 16.0
+            }
+          ]
+        },
+        {
+          "name": "2022-05-03 00:00:00",
+          "boxes": [
+            {
+              "dims": {
+                "l": 205.0,
+                "w": 133.0,
+                "h": 33.0
+              },
+              "weight": 12.0
+            }
+          ]
+        },
+        {
+          "name": "2022-05-04 00:00:00",
+          "boxes": [
+            {
+              "dims": {
+                "l": 118.0,
+                "w": 192.0,
+                "h": 16.0
+              },
+              "weight": 4.0
+            }
+          ]
+        },
+        {
+          "name": "2022-05-05 00:00:00",
+          "boxes": [
+            {
+              "dims": {
+                "l": 110.0,
+                "w": 80.0,
+                "h": 80.0
+              },
+              "weight": 10.0
+            }
+          ]
+        },
+        {
+          "name": "lounge tuintafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 145.0,
+                "w": 84.0,
+                "h": 18.0
+              },
+              "weight": 27.0
+            }
+          ]
+        },
+        {
+          "name": "Loungebank 3 zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 185.0,
+                "w": 90.0,
+                "h": 102.0
+              },
+              "weight": 38.0
+            }
+          ]
+        },
+        {
+          "name": "Tuinstoel White Grey 762309",
+          "boxes": [
+            {
+              "dims": {
+                "l": 103.0,
+                "w": 62.0,
+                "h": 61.0
+              },
+              "weight": 14.0
+            }
+          ]
+        },
+        {
+          "name": "Bonito Eettafel Suns 1011.18.098.168.38",
+          "boxes": [
+            {
+              "dims": {
+                "l": 186.0,
+                "w": 99.0,
+                "h": 11.0
+              },
+              "weight": 34.0
+            }
+          ]
+        },
+        {
+          "name": "Loungebank 3 zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 220.0,
+                "w": 75.0,
+                "h": 65.0
+              },
+              "weight": 46.0
+            }
+          ]
+        },
+        {
+          "name": "Loungestoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 75.0,
+                "h": 65.0
+              },
+              "weight": 23.0
+            }
+          ]
+        },
+        {
+          "name": "koffietafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 131.0,
+                "w": 39.0,
+                "h": 65.0
+              },
+              "weight": 19.0
+            }
+          ]
+        },
+        {
+          "name": "Bite ligbed",
+          "boxes": [
+            {
+              "dims": {
+                "l": 203.0,
+                "w": 90.0,
+                "h": 38.0
+              },
+              "weight": 35.0
+            }
+          ]
+        },
+        {
+          "name": "Bite XL",
+          "boxes": [
+            {
+              "dims": {
+                "l": 203.0,
+                "w": 144.0,
+                "h": 38.0
+              },
+              "weight": 54.0
+            }
+          ]
+        },
+        {
+          "name": "Miami tuinbank",
+          "boxes": [
+            {
+              "dims": {
+                "l": 120.0,
+                "w": 30.0,
+                "h": 10.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "Denver Onderstel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 70.0,
+                "w": 65.0,
+                "h": 65.0
+              },
+              "weight": 5.0
+            }
+          ]
+        },
+        {
+          "name": "Denver bovenstel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 137.0,
+                "w": 137.0,
+                "h": 5.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "U-tafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 32.0,
+                "w": 48.0,
+                "h": 53.0
+              },
+              "weight": 5.0
+            }
+          ]
+        },
+        {
+          "name": "Mondatafel 135 doos 1",
+          "boxes": [
+            {
+              "dims": {
+                "l": 135.0,
+                "w": 135.0,
+                "h": 10.0
+              },
+              "weight": 30.0
+            }
+          ]
+        },
+        {
+          "name": "doos 2",
+          "boxes": [
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 120.0,
+                "w": 40.0,
+                "h": 30.0
+              },
+              "weight": 10.0
+            }
+          ]
+        },
+        {
+          "name": "tafel Monda",
+          "boxes": [
+            {
+              "dims": {
+                "l": 188.0,
+                "w": 109.0,
+                "h": 11.0
+              },
+              "weight": 50.0
+            }
+          ]
+        },
+        {
+          "name": "Monda 240 TOP",
+          "boxes": [
+            {
+              "dims": {
+                "l": 248.0,
+                "w": 107.0,
+                "h": 13.0
+              },
+              "weight": 65.0
+            }
+          ]
+        },
+        {
+          "name": "frame",
+          "boxes": [
+            {
+              "dims": {
+                "l": 75.0,
+                "w": 78.0,
+                "h": 14.0
+              },
+              "weight": 23.0
+            }
+          ]
+        },
+        {
+          "name": "Meria",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 82.0,
+                "w": 78.0,
+                "h": 39.0
+              },
+              "weight": 15.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 186.0,
+                "w": 95.0,
+                "h": 75.0
+              },
+              "weight": 45.0
+            }
+          ]
+        },
+        {
+          "name": "1450 L",
+          "boxes": [
+            {
+              "dims": {
+                "l": 200.0,
+                "w": 100.0,
+                "h": 10.0
+              },
+              "weight": 43.0
+            }
+          ]
+        },
+        {
+          "name": "770 L",
+          "boxes": [
+            {
+              "dims": {
+                "l": 180.0,
+                "w": 80.0,
+                "h": 8.0
+              },
+              "weight": 27.0
+            }
+          ]
+        },
+        {
+          "name": "Dagbed Relax",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 200.0,
+                "w": 100.0,
+                "h": 82.0
+              }
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 122.0,
+                "w": 119.0,
+                "h": 57.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Hoek",
+          "boxes": [
+            {
+              "dims": {
+                "l": 96.0,
+                "w": 96.0,
+                "h": 69.0
+              },
+              "weight": 34.0
+            }
+          ]
+        },
+        {
+          "name": "Tafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 146.0,
+                "w": 86.0,
+                "h": 51.0
+              },
+              "weight": 14.0
+            }
+          ]
+        },
+        {
+          "name": "Hoek + tussen (2x)",
+          "boxes": [
+            {
+              "dims": {
+                "l": 109.0,
+                "w": 96.0,
+                "h": 84.0
+              },
+              "weight": 46.0
+            }
+          ]
+        },
+        {
+          "name": "camden",
+          "boxes": [
+            {
+              "label": "2*3 zits",
+              "dims": {
+                "l": 195.0,
+                "w": 78.0,
+                "h": 78.0
+              }
+            },
+            {
+              "label": "tafel",
+              "dims": {
+                "l": 140.0,
+                "w": 80.0,
+                "h": 20.0
+              }
+            },
+            {
+              "label": "kruk",
+              "dims": {
+                "l": 40.0,
+                "w": 40.0,
+                "h": 50.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "2 zits rechts + links",
+          "boxes": [
+            {
+              "dims": {
+                "l": 190.0,
+                "w": 86.0,
+                "h": 76.0
+              },
+              "weight": 34.0
+            }
+          ]
+        },
+        {
+          "name": "hoekelement",
+          "boxes": [
+            {
+              "dims": {
+                "l": 79.0,
+                "w": 79.0,
+                "h": 72.0
+              },
+              "weight": 24.0
+            }
+          ]
+        },
+        {
+          "name": "tafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 120.0,
+                "w": 76.0,
+                "h": 38.0
+              },
+              "weight": 16.0
+            }
+          ]
+        },
+        {
+          "name": "2 zits links",
+          "boxes": [
+            {
+              "dims": {
+                "l": 245.0,
+                "w": 90.0,
+                "h": 76.0
+              },
+              "weight": 50.0
+            }
+          ]
+        },
+        {
+          "name": "2 zits recht",
+          "boxes": [
+            {
+              "dims": {
+                "l": 162.0,
+                "w": 80.0,
+                "h": 77.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "hoekbank",
+          "boxes": [
+            {
+              "dims": {
+                "l": 67.0,
+                "w": 64.0,
+                "h": 48.0
+              },
+              "weight": 10.0
+            }
+          ]
+        },
+        {
+          "name": "voetenbank",
+          "boxes": [
+            {
+              "dims": {
+                "l": 80.0,
+                "w": 78.0,
+                "h": 46.0
+              },
+              "weight": 10.0
+            }
+          ]
+        },
+        {
+          "name": "tuinstoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 67.0,
+                "w": 64.0,
+                "h": 48.0
+              },
+              "weight": 10.0
+            }
+          ]
+        },
+        {
+          "name": "houston",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 160.0,
+                "w": 85.0,
+                "h": 40.0
+              }
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 185.0,
+                "w": 85.0,
+                "h": 34.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "kansas",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 137.0,
+                "w": 76.0,
+                "h": 38.0
+              },
+              "weight": 22.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 137.0,
+                "w": 76.0,
+                "h": 38.0
+              },
+              "weight": 22.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 78.0,
+                "w": 83.0,
+                "h": 50.0
+              },
+              "weight": 15.0
+            },
+            {
+              "label": "doos 4",
+              "dims": {
+                "l": 83.0,
+                "w": 93.0,
+                "h": 114.0
+              },
+              "weight": 12.0
+            }
+          ]
+        },
+        {
+          "name": "ontario",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 180.0,
+                "w": 85.0,
+                "h": 85.0
+              },
+              "weight": 65.0
+            }
+          ]
+        },
+        {
+          "name": "serra",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 165.0,
+                "w": 90.0,
+                "h": 90.0
+              },
+              "weight": 25.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 95.0,
+                "w": 80.0,
+                "h": 90.0
+              },
+              "weight": 15.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 60.0,
+                "w": 76.0,
+                "h": 45.0
+              },
+              "weight": 8.0
+            },
+            {
+              "label": "doos 4",
+              "dims": {
+                "l": 111.0,
+                "w": 40.0,
+                "h": 63.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "rimini/monaco",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 170.0,
+                "w": 85.0,
+                "h": 85.0
+              },
+              "weight": 32.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 85.0,
+                "w": 85.0,
+                "h": 72.0
+              },
+              "weight": 12.0
+            }
+          ]
+        },
+        {
+          "name": "spanje",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 180.0,
+                "w": 90.0,
+                "h": 85.0
+              },
+              "weight": 45.0
+            }
+          ]
+        },
+        {
+          "name": "prato",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 226.0,
+                "w": 97.0,
+                "h": 82.0
+              },
+              "weight": 35.0
+            }
+          ]
+        },
+        {
+          "name": "dakota",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 178.0,
+                "w": 107.0,
+                "h": 78.0
+              },
+              "weight": 50.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 178.0,
+                "w": 107.0,
+                "h": 78.0
+              },
+              "weight": 50.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 100.0,
+                "w": 106.0,
+                "h": 76.0
+              },
+              "weight": 25.0
+            },
+            {
+              "label": "doos 4",
+              "dims": {
+                "l": 102.0,
+                "w": 102.0,
+                "h": 50.0
+              },
+              "weight": 20.0
+            }
+          ]
+        },
+        {
+          "name": "koffietafel+ 2 zits rechts en links",
+          "boxes": [
+            {
+              "dims": {
+                "l": 130.0,
+                "w": 110.0,
+                "h": 110.0
+              },
+              "weight": 35.0
+            }
+          ]
+        },
+        {
+          "name": "hoek + tussenelement",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 100.0,
+                "h": 100.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "monaco",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 190.0,
+                "w": 100.0,
+                "h": 100.0
+              },
+              "weight": 26.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 100.0,
+                "w": 90.0,
+                "h": 90.0
+              },
+              "weight": 13.0
+            }
+          ]
+        },
+        {
+          "name": "tafel (3delen)",
+          "boxes": [
+            {
+              "dims": {
+                "l": 120.0,
+                "w": 120.0,
+                "h": 5.0
+              },
+              "weight": 20.0
+            }
+          ]
+        },
+        {
+          "name": "(zonder naam @Tuinmeubelen:185)",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 50.0,
+                "w": 50.0,
+                "h": 5.0
+              },
+              "weight": 5.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 75.0,
+                "w": 80.0,
+                "h": 80.0
+              },
+              "weight": 5.0
+            }
+          ]
+        },
+        {
+          "name": "stoel (1pcs)",
+          "boxes": [
+            {
+              "dims": {
+                "l": 60.0,
+                "w": 75.0,
+                "h": 96.0
+              },
+              "weight": 12.0
+            }
+          ]
+        },
+        {
+          "name": "Axel koffietafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 110.0,
+                "w": 60.0,
+                "h": 20.0
+              },
+              "weight": 10.0
+            }
+          ]
+        },
+        {
+          "name": "georgia",
+          "boxes": [
+            {
+              "label": "doos 1 bank",
+              "dims": {
+                "l": 145.0,
+                "w": 33.0,
+                "h": 68.0
+              },
+              "weight": 20.0
+            },
+            {
+              "label": "doos 2 stoel",
+              "dims": {
+                "l": 84.0,
+                "w": 68.0,
+                "h": 45.0
+              },
+              "weight": 10.0
+            },
+            {
+              "label": "doos 3 tafel",
+              "dims": {
+                "l": 112.0,
+                "w": 8.0,
+                "h": 61.0
+              },
+              "weight": 10.0
+            }
+          ]
+        },
+        {
+          "name": "4x stoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 60.0,
+                "w": 60.0,
+                "h": 120.0
+              },
+              "weight": 32.0
+            }
+          ]
+        },
+        {
+          "name": "tafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 130.0,
+                "w": 130.0,
+                "h": 15.0
+              },
+              "weight": 16.0
+            }
+          ]
+        },
+        {
+          "name": "Orlando Bank",
+          "boxes": [
+            {
+              "dims": {
+                "l": 220.0,
+                "w": 75.0,
+                "h": 85.0
+              },
+              "weight": 22.0
+            }
+          ]
+        },
+        {
+          "name": "Antwerpen loungeset",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 80.0,
+                "h": 60.0
+              },
+              "weight": 43.0
+            }
+          ]
+        },
+        {
+          "name": "2-zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 134.0,
+                "w": 75.0,
+                "h": 61.0
+              },
+              "weight": 34.0
+            }
+          ]
+        },
+        {
+          "name": "stoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 75.0,
+                "w": 75.0,
+                "h": 61.0
+              },
+              "weight": 19.0
+            }
+          ]
+        },
+        {
+          "name": "sicilie loungeset",
+          "boxes": [
+            {
+              "dims": {
+                "l": 177.0,
+                "w": 113.0,
+                "h": 96.0
+              },
+              "weight": 73.0
+            }
+          ]
+        },
+        {
+          "name": "palermo loungeset ( dark grey)",
+          "boxes": [
+            {
+              "dims": {
+                "l": 93.0,
+                "w": 83.0,
+                "h": 78.0
+              },
+              "weight": 40.0
+            }
+          ]
+        },
+        {
+          "name": "(zonder naam @Tuinmeubelen:212)",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 93.0,
+                "w": 73.0,
+                "h": 78.0
+              },
+              "weight": 50.0
+            }
+          ]
+        },
+        {
+          "name": "2 en 3 zits in 1 doos",
+          "boxes": [
+            {
+              "dims": {
+                "l": 240.0,
+                "w": 82.0,
+                "h": 60.0
+              },
+              "weight": 73.0
+            }
+          ]
+        },
+        {
+          "name": "loungestoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 102.0,
+                "w": 82.0,
+                "h": 60.0
+              },
+              "weight": 21.0
+            }
+          ]
+        },
+        {
+          "name": "ceramic koffietafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 124.0,
+                "w": 54.0,
+                "h": 40.0
+              },
+              "weight": 26.0
+            }
+          ]
+        },
+        {
+          "name": "wing loungebank 2,5 zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 170.0,
+                "w": 93.0,
+                "h": 68.0
+              },
+              "weight": 46.0
+            }
+          ]
+        },
+        {
+          "name": "nora loungestoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 105.0,
+                "h": 15.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "nora zit en rugkussen loungestoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 105.0,
+                "h": 15.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "trento tuintafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 250.0,
+                "w": 100.0,
+                "h": 18.0
+              },
+              "weight": 27.0
+            }
+          ]
+        },
+        {
+          "name": "cucina koffietafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 120.0,
+                "w": 70.0,
+                "h": 25.0
+              },
+              "weight": 22.0
+            }
+          ]
+        },
+        {
+          "name": "lima tuinstoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 62.0,
+                "w": 55.0,
+                "h": 65.0
+              },
+              "weight": 9.0
+            }
+          ]
+        },
+        {
+          "name": "sempre voetenbank",
+          "boxes": [
+            {
+              "dims": {
+                "l": 65.0,
+                "w": 59.0,
+                "h": 47.0
+              },
+              "weight": 8.0
+            }
+          ]
+        },
+        {
+          "name": "Tutti barkruk",
+          "boxes": [
+            {
+              "dims": {
+                "l": 60.0,
+                "w": 55.0,
+                "h": 20.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "bite ligbed grey flanelle",
+          "boxes": [
+            {
+              "dims": {
+                "l": 200.0,
+                "w": 85.0,
+                "h": 60.0
+              },
+              "weight": 34.0
+            }
+          ]
+        },
+        {
+          "name": "alice ligbed hoog",
+          "boxes": [
+            {
+              "dims": {
+                "l": 145.0,
+                "w": 80.0,
+                "h": 25.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "coral ligbed blush",
+          "boxes": [
+            {
+              "dims": {
+                "l": 205.0,
+                "w": 82.0,
+                "h": 41.0
+              },
+              "weight": 34.0
+            }
+          ]
+        },
+        {
+          "name": "mooy/eco koffietafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 125.0,
+                "w": 60.0,
+                "h": 40.0
+              },
+              "weight": 27.0
+            }
+          ]
+        },
+        {
+          "name": "cosiloft table top teak",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 100.0,
+                "h": 10.0
+              },
+              "weight": 20.0
+            }
+          ]
+        },
+        {
+          "name": "dagbed loop mint subrella",
+          "boxes": [
+            {
+              "dims": {
+                "l": 110.0,
+                "w": 110.0,
+                "h": 73.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "san remo loungestoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 88.0,
+                "w": 96.0,
+                "h": 70.0
+              },
+              "weight": 20.0
+            }
+          ]
+        },
+        {
+          "name": "vera tuinbank 2-zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 150.0,
+                "w": 40.0,
+                "h": 20.0
+              },
+              "weight": 18.0
+            }
+          ]
+        },
+        {
+          "name": "milou barkruk",
+          "boxes": [
+            {
+              "dims": {
+                "l": 55.0,
+                "w": 60.0,
+                "h": 110.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "san miguel loungeset",
+          "boxes": [
+            {
+              "dims": {
+                "l": 220.0,
+                "w": 100.0,
+                "h": 200.0
+              },
+              "weight": 250.0
+            }
+          ]
+        },
+        {
+          "name": "garden textile care kit",
+          "boxes": [
+            {
+              "dims": {
+                "l": 30.0,
+                "w": 20.0,
+                "h": 10.0
+              },
+              "weight": 1.0
+            }
+          ]
+        },
+        {
+          "name": "Derby sportbank",
+          "boxes": [
+            {
+              "dims": {
+                "l": 215.0,
+                "w": 45.0,
+                "h": 15.0
+              },
+              "weight": 10.0
+            }
+          ]
+        },
+        {
+          "name": "fabrice loungebank 2,5 zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 150.0,
+                "w": 87.0,
+                "h": 75.0
+              },
+              "weight": 45.0
+            }
+          ]
+        },
+        {
+          "name": "keter Borneo",
+          "boxes": [
+            {
+              "label": "keter Borneo",
+              "dims": {
+                "l": 131.0,
+                "w": 73.0,
+                "h": 16.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "keter Sumatra",
+          "boxes": [
+            {
+              "label": "keter Sumatra",
+              "dims": {
+                "l": 147.0,
+                "w": 75.0,
+                "h": 15.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "tuinbank Havana",
+          "boxes": [
+            {
+              "label": "tuinbank Havana",
+              "dims": {
+                "l": 129.0,
+                "w": 49.0,
+                "h": 36.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tutti stapelstoel Suns",
+          "boxes": [
+            {
+              "label": "Tutti stapelstoel Suns",
+              "dims": {
+                "l": 86.0,
+                "w": 57.0,
+                "h": 70.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Orlando bank",
+          "boxes": [
+            {
+              "label": "Orlando bank",
+              "dims": {
+                "l": 216.0,
+                "w": 74.0,
+                "h": 25.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sun parasol",
+          "boxes": [
+            {
+              "label": "Sun parasol",
+              "dims": {
+                "l": 153.0,
+                "w": 15.0,
+                "h": 15.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Hawaii dagbed doos 1",
+          "boxes": [
+            {
+              "dims": {
+                "l": 202.0,
+                "w": 102.0,
+                "h": 53.0
+              },
+              "weight": 39.0
+            }
+          ]
+        },
+        {
+          "name": "doos 2",
+          "boxes": [
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 47.0,
+                "w": 40.0,
+                "h": 69.0
+              },
+              "weight": 5.0
+            }
+          ]
+        },
+        {
+          "name": "Platinum sorrento parasolvoet met wielen",
+          "boxes": [
+            {
+              "dims": {
+                "l": 80.0,
+                "w": 80.0,
+                "h": 10.0
+              },
+              "weight": 90.0
+            }
+          ]
+        },
+        {
+          "name": "Bologna parasolvoet graniet",
+          "boxes": [
+            {
+              "dims": {
+                "l": 90.0,
+                "w": 90.0,
+                "h": 10.0
+              },
+              "weight": 90.0
+            }
+          ]
+        },
+        {
+          "name": "Fontana 1/4",
+          "boxes": [
+            {
+              "label": "Fontana 1/4",
+              "dims": {
+                "l": 160.0,
+                "w": 80.0,
+                "h": 30.0
+              }
+            },
+            {
+              "label": "2024-04-02 00:00:00",
+              "dims": {
+                "l": 160.0,
+                "w": 80.0,
+                "h": 30.0
+              }
+            },
+            {
+              "label": "2024-04-03 00:00:00",
+              "dims": {
+                "l": 80.0,
+                "w": 80.0,
+                "h": 40.0
+              }
+            },
+            {
+              "label": "2024-04-04 00:00:00",
+              "dims": {
+                "l": 80.0,
+                "w": 80.0,
+                "h": 30.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Monna loungeset",
+          "boxes": [
+            {
+              "label": "doos 1 (stoelen+bank)",
+              "dims": {
+                "l": 195.0,
+                "w": 95.0,
+                "h": 75.0
+              }
+            },
+            {
+              "label": "doos 2 (koffietafel)",
+              "dims": {
+                "l": 95.0,
+                "w": 75.0,
+                "h": 10.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Noha hangstoel",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 120.0,
+                "w": 90.0,
+                "h": 90.0
+              },
+              "weight": 10.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 180.0,
+                "w": 5.0,
+                "h": 5.0
+              },
+              "weight": 10.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 90.0,
+                "w": 90.0,
+                "h": 5.0
+              },
+              "weight": 10.0
+            }
+          ]
+        },
+        {
+          "name": "Rooty loungestoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 80.0,
+                "w": 105.0,
+                "h": 92.0
+              },
+              "weight": 20.0
+            }
+          ]
+        },
+        {
+          "name": "Aruba parasol",
+          "boxes": [
+            {
+              "dims": {
+                "l": 147.0,
+                "w": 10.0,
+                "h": 10.0
+              },
+              "weight": 5.0
+            }
+          ]
+        },
+        {
+          "name": "Riva parasol 300x200",
+          "boxes": [
+            {
+              "dims": {
+                "l": 15.5,
+                "w": 15.5,
+                "h": 184.0
+              },
+              "weight": 40.0
+            }
+          ]
+        },
+        {
+          "name": "4SO Accor loungebank",
+          "boxes": [
+            {
+              "dims": {
+                "l": 133.0,
+                "w": 80.0,
+                "h": 83.0
+              },
+              "weight": 29.0
+            }
+          ]
+        },
+        {
+          "name": "Brussel tuintafel",
+          "boxes": [
+            {
+              "label": "Brussel tuintafel",
+              "dims": {
+                "l": 25.0,
+                "w": 23.0,
+                "h": 15.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Brussel tuinstoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 20.0,
+                "w": 24.0,
+                "h": 42.0
+              },
+              "weight": 24.0
+            }
+          ]
+        },
+        {
+          "name": "platinum sorrento parasolvoet",
+          "boxes": [
+            {
+              "dims": {
+                "l": 90.0,
+                "w": 90.0,
+                "h": 10.0
+              },
+              "weight": 90.0
+            }
+          ]
+        },
+        {
+          "name": "shadow zweefparasol",
+          "boxes": [
+            {
+              "dims": {
+                "l": 250.0,
+                "w": 40.0,
+                "h": 20.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "Mateo koffietafel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 124.0,
+                "w": 64.0,
+                "h": 37.0
+              },
+              "weight": 10.0
+            }
+          ]
+        },
+        {
+          "name": "Mateo loungebank 3 zits",
+          "boxes": [
+            {
+              "dims": {
+                "l": 206.0,
+                "w": 57.0,
+                "h": 57.0
+              },
+              "weight": 28.0
+            }
+          ]
+        },
+        {
+          "name": "M ateo loungestoel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 96.0,
+                "h": 58.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "Dante loungeset",
+          "boxes": [
+            {
+              "label": "Dante koffietafel",
+              "dims": {
+                "l": 96.0,
+                "w": 98.0,
+                "h": 20.0
+              }
+            },
+            {
+              "label": "Dante kussen voetenbank",
+              "dims": {
+                "l": 98.0,
+                "w": 98.0,
+                "h": 38.0
+              }
+            },
+            {
+              "label": "Dante hoekelement",
+              "dims": {
+                "l": 98.0,
+                "w": 98.0,
+                "h": 71.0
+              }
+            },
+            {
+              "label": "Dante tussenelement",
+              "dims": {
+                "l": 98.0,
+                "w": 97.0,
+                "h": 71.0
+              }
+            },
+            {
+              "label": "Dante voetenbank",
+              "dims": {
+                "l": 98.0,
+                "w": 98.0,
+                "h": 39.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tuinstoel Dalia",
+          "boxes": [
+            {
+              "label": "Tuinstoel Dalia",
+              "dims": {
+                "l": 62.0,
+                "w": 61.0,
+                "h": 80.0
+              }
+            },
+            {
+              "label": "Tuinstoel Sanjo",
+              "dims": {
+                "l": 57.0,
+                "w": 56.0,
+                "h": 82.0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Tuinhuizen",
+      "products": [
+        {
+          "name": "Drenthe",
+          "boxes": [
+            {
+              "dims": {
+                "l": 210.0,
+                "w": 118.0,
+                "h": 30.0
+              },
+              "weight": 127.0
+            }
+          ]
+        },
+        {
+          "name": "Tineke",
+          "boxes": [
+            {
+              "dims": {
+                "l": 170.0,
+                "w": 78.0,
+                "h": 12.0
+              },
+              "weight": 53.0
+            }
+          ]
+        },
+        {
+          "name": "Nikkie",
+          "boxes": [
+            {
+              "dims": {
+                "l": 193.0,
+                "w": 115.0,
+                "h": 20.0
+              },
+              "weight": 46.0
+            }
+          ]
+        },
+        {
+          "name": "Naomi",
+          "boxes": [
+            {
+              "dims": {
+                "l": 200.0,
+                "w": 100.0,
+                "h": 20.0
+              },
+              "weight": 89.0
+            }
+          ]
+        },
+        {
+          "name": "Denise",
+          "boxes": [
+            {
+              "dims": {
+                "l": 170.0,
+                "w": 72.0,
+                "h": 12.0
+              },
+              "weight": 63.0
+            }
+          ]
+        },
+        {
+          "name": "Rico",
+          "boxes": [
+            {
+              "dims": {
+                "l": 198.0,
+                "w": 110.0,
+                "h": 24.0
+              },
+              "weight": 80.0
+            }
+          ]
+        },
+        {
+          "name": "Keter Midi",
+          "boxes": [
+            {
+              "dims": {
+                "l": 130.0,
+                "w": 75.0,
+                "h": 22.0
+              },
+              "weight": 20.0
+            }
+          ]
+        },
+        {
+          "name": "Artisan 7*7",
+          "boxes": [
+            {
+              "dims": {
+                "l": 228.0,
+                "w": 132.0,
+                "h": 30.0
+              },
+              "weight": 150.0
+            }
+          ]
+        },
+        {
+          "name": "Bjarne/Sierra 693",
+          "boxes": [
+            {
+              "dims": {
+                "l": 310.0,
+                "w": 65.0,
+                "h": 18.0
+              },
+              "weight": 71.0
+            }
+          ]
+        },
+        {
+          "name": "1 pak",
+          "boxes": [
+            {
+              "dims": {
+                "l": 105.0,
+                "w": 35.0,
+                "h": 7.0
+              },
+              "weight": 29.0
+            }
+          ]
+        },
+        {
+          "name": "Manor 64",
+          "boxes": [
+            {
+              "dims": {
+                "l": 200.0,
+                "w": 115.0,
+                "h": 15.0
+              },
+              "weight": 42.0
+            }
+          ]
+        },
+        {
+          "name": "Manor 46",
+          "boxes": [
+            {
+              "dims": {
+                "l": 192.0,
+                "w": 130.0,
+                "h": 15.0
+              },
+              "weight": 55.0
+            }
+          ]
+        },
+        {
+          "name": "Manor 43",
+          "boxes": [
+            {
+              "dims": {
+                "l": 200.0,
+                "w": 120.0,
+                "h": 12.0
+              },
+              "weight": 36.0
+            }
+          ]
+        },
+        {
+          "name": "Con",
+          "boxes": [
+            {
+              "dims": {
+                "l": 175.0,
+                "w": 73.0,
+                "h": 17.0
+              },
+              "weight": 109.0
+            }
+          ]
+        },
+        {
+          "name": "Marijam",
+          "boxes": [
+            {
+              "dims": {
+                "l": 176.0,
+                "w": 73.0,
+                "h": 12.0
+              },
+              "weight": 89.0
+            }
+          ]
+        },
+        {
+          "name": "Harmony tuinkas",
+          "boxes": [
+            {
+              "dims": {
+                "l": 173.0,
+                "w": 65.0,
+                "h": 12.0
+              },
+              "weight": 55.0
+            }
+          ]
+        },
+        {
+          "name": "manor 68",
+          "boxes": [
+            {
+              "dims": {
+                "l": 240.0,
+                "w": 115.0,
+                "h": 20.0
+              },
+              "weight": 75.0
+            }
+          ]
+        },
+        {
+          "name": "rockwood 570 L",
+          "boxes": [
+            {
+              "label": "rockwood 570 L",
+              "dims": {
+                "l": 62.0,
+                "w": 29.0,
+                "h": 6.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "store it out midi",
+          "boxes": [
+            {
+              "label": "store it out midi",
+              "dims": {
+                "l": 51.0,
+                "w": 29.0,
+                "h": 9.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "elite-store 1150 l",
+          "boxes": [
+            {
+              "label": "elite-store 1150 l",
+              "dims": {
+                "l": 56.0,
+                "w": 33.0,
+                "h": 8.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Berging dubbel hardhout",
+          "boxes": [
+            {
+              "dims": {
+                "l": 160.0,
+                "w": 100.0,
+                "h": 20.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "manor 68 tuinhuis",
+          "boxes": [
+            {
+              "dims": {
+                "l": 186.0,
+                "w": 237.0,
+                "h": 227.0
+              },
+              "weight": 43.0
+            }
+          ]
+        },
+        {
+          "name": "heidy 300x300",
+          "boxes": [
+            {
+              "dims": {
+                "l": 280.0,
+                "w": 50.0,
+                "h": 30.0
+              },
+              "weight": 35.0
+            }
+          ]
+        },
+        {
+          "name": "petra plat dak",
+          "boxes": [
+            {
+              "label": "containerberging triple HG",
+              "dims": {
+                "l": 114.0,
+                "w": 71.0,
+                "h": 31.0
+              }
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 113.0,
+                "w": 82.0,
+                "h": 15.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mariska metalen tuinhuis",
+          "boxes": [
+            {
+              "label": "Mariska metalen tuinhuis",
+              "dims": {
+                "l": 173.0,
+                "w": 71.0,
+                "h": 11.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Trudy kunststof tuinhuis",
+          "boxes": [
+            {
+              "label": "Trudy kunststof tuinhuis",
+              "dims": {
+                "l": 194.0,
+                "w": 109.0,
+                "h": 21.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Evert kunststof tuinhuis",
+          "boxes": [
+            {
+              "label": "Evert kunststof tuinhuis",
+              "dims": {
+                "l": 191.0,
+                "w": 110.0,
+                "h": 22.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Rose kunststof tuinhuis",
+          "boxes": [
+            {
+              "label": "Rose kunststof tuinhuis",
+              "dims": {
+                "l": 187.0,
+                "w": 113.0,
+                "h": 21.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tuindeco containerberging",
+          "boxes": [
+            {
+              "dims": {
+                "l": 160.0,
+                "w": 90.0,
+                "h": 20.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "Harmony 6x4 tuinkas silver",
+          "boxes": [
+            {
+              "dims": {
+                "l": 174.0,
+                "w": 65.0,
+                "h": 9.0
+              },
+              "weight": 20.0
+            }
+          ]
+        },
+        {
+          "name": "Factor 63",
+          "boxes": [
+            {
+              "dims": {
+                "l": 170.0,
+                "w": 100.0,
+                "h": 20.0
+              },
+              "weight": 64.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "spa",
+      "products": [
+        {
+          "name": "relax cover",
+          "boxes": [
+            {
+              "dims": {
+                "l": 203.0,
+                "w": 100.0,
+                "h": 28.0
+              },
+              "weight": 23.0
+            }
+          ]
+        },
+        {
+          "name": "Pleasure cover",
+          "boxes": [
+            {
+              "dims": {
+                "l": 213.0,
+                "w": 100.0,
+                "h": 25.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "Aquatic 1 A+B",
+          "boxes": [
+            {
+              "dims": {
+                "l": 230.0,
+                "w": 100.0,
+                "h": 28.0
+              },
+              "weight": 27.0
+            }
+          ]
+        },
+        {
+          "name": "cover spa key largo",
+          "boxes": [
+            {
+              "dims": {
+                "l": 210.0,
+                "w": 110.0,
+                "h": 20.0
+              },
+              "weight": 17.0
+            }
+          ]
+        },
+        {
+          "name": "CM2 Lifter",
+          "boxes": [
+            {
+              "dims": {
+                "l": 73.0,
+                "w": 98.0,
+                "h": 10.0
+              },
+              "weight": 12.0
+            }
+          ]
+        },
+        {
+          "name": "Luxery step",
+          "boxes": [
+            {
+              "dims": {
+                "l": 74.0,
+                "w": 42.0,
+                "h": 22.0
+              },
+              "weight": 7.0
+            }
+          ]
+        },
+        {
+          "name": "cover spa tenerife",
+          "boxes": [
+            {
+              "dims": {
+                "l": 200.0,
+                "w": 100.0,
+                "h": 20.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "cover spa miracle",
+          "boxes": [
+            {
+              "dims": {
+                "l": 215.0,
+                "w": 110.0,
+                "h": 25.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "cover spa malta (182cm)",
+          "boxes": [
+            {
+              "dims": {
+                "l": 80.0,
+                "w": 80.0,
+                "h": 10.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "cover spa aquatic deel A en B",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 45.0,
+                "h": 15.0
+              },
+              "weight": 20.0
+            }
+          ]
+        },
+        {
+          "name": "cover spa sensation/amore",
+          "boxes": [
+            {
+              "dims": {
+                "l": 230.0,
+                "w": 100.0,
+                "h": 25.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "cover spa tornado",
+          "boxes": [
+            {
+              "dims": {
+                "l": 180.0,
+                "w": 120.0,
+                "h": 25.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "Spa cover",
+          "boxes": [
+            {
+              "dims": {
+                "l": 200.0,
+                "w": 100.0,
+                "h": 20.0
+              },
+              "weight": 20.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Zwembaden",
+      "products": [
+        {
+          "name": "Lay-z St. Moritz",
+          "boxes": [
+            {
+              "dims": {
+                "l": 79.0,
+                "w": 58.0,
+                "h": 58.0
+              },
+              "weight": 46.0
+            }
+          ]
+        },
+        {
+          "name": "Lay-z Miami",
+          "boxes": [
+            {
+              "dims": {
+                "l": 75.0,
+                "w": 48.0,
+                "h": 63.0
+              },
+              "weight": 34.0
+            }
+          ]
+        },
+        {
+          "name": "Lay-z Honolulu",
+          "boxes": [
+            {
+              "dims": {
+                "l": 76.0,
+                "w": 56.0,
+                "h": 58.0
+              },
+              "weight": 42.0
+            }
+          ]
+        },
+        {
+          "name": "Lay-z Hawaii",
+          "boxes": [
+            {
+              "dims": {
+                "l": 76.0,
+                "w": 56.0,
+                "h": 58.0
+              },
+              "weight": 43.0
+            }
+          ]
+        },
+        {
+          "name": "Lay-z Palm Springs",
+          "boxes": [
+            {
+              "dims": {
+                "l": 76.0,
+                "w": 56.0,
+                "h": 58.0
+              },
+              "weight": 42.0
+            }
+          ]
+        },
+        {
+          "name": "Lay-z Aruba",
+          "boxes": [
+            {
+              "dims": {
+                "l": 81.0,
+                "w": 46.0,
+                "h": 58.0
+              },
+              "weight": 32.0
+            }
+          ]
+        },
+        {
+          "name": "Lay-z Paris",
+          "boxes": [
+            {
+              "dims": {
+                "l": 87.0,
+                "w": 42.0,
+                "h": 64.0
+              },
+              "weight": 40.0
+            }
+          ]
+        },
+        {
+          "name": "Steel pro zwembad 400x211x81",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 40.0,
+                "h": 40.0
+              },
+              "weight": 35.0
+            }
+          ]
+        },
+        {
+          "name": "power steel zwembad 404x202x100",
+          "boxes": [
+            {
+              "dims": {
+                "l": 129.0,
+                "w": 58.0,
+                "h": 37.0
+              },
+              "weight": 78.0
+            }
+          ]
+        },
+        {
+          "name": "steel pro zwembad 300x201x66",
+          "boxes": [
+            {
+              "dims": {
+                "l": 103.0,
+                "w": 33.0,
+                "h": 22.0
+              },
+              "weight": 18.0
+            }
+          ]
+        },
+        {
+          "name": "power steel vista zwembad 549x274x122",
+          "boxes": [
+            {
+              "dims": {
+                "l": 127.0,
+                "w": 61.0,
+                "h": 57.0
+              },
+              "weight": 80.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Sauna",
+      "products": [
+        {
+          "name": "Diamond kachel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 63.0,
+                "w": 36.0,
+                "h": 23.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "Ivar 1",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 185.0,
+                "w": 96.0,
+                "h": 32.0
+              },
+              "weight": 73.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 100.0,
+                "w": 100.0,
+                "h": 20.0
+              },
+              "weight": 21.0
+            }
+          ]
+        },
+        {
+          "name": "Ivar 2",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 180.0,
+                "w": 127.0,
+                "h": 32.0
+              },
+              "weight": 89.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 130.0,
+                "w": 122.0,
+                "h": 20.0
+              },
+              "weight": 32.0
+            }
+          ]
+        },
+        {
+          "name": "Ivar 3",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 160.0,
+                "w": 130.0,
+                "h": 20.0
+              },
+              "weight": 42.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 190.0,
+                "w": 160.0,
+                "h": 35.0
+              },
+              "weight": 90.0
+            }
+          ]
+        },
+        {
+          "name": "Bril 1",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 196.0,
+                "w": 112.0,
+                "h": 15.0
+              },
+              "weight": 52.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 94.0,
+                "w": 94.0,
+                "h": 20.0
+              },
+              "weight": 24.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 193.0,
+                "w": 70.0,
+                "h": 5.0
+              },
+              "weight": 38.0
+            }
+          ]
+        },
+        {
+          "name": "brilliant corner",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 153.0,
+                "w": 188.0,
+                "h": 15.0
+              }
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 155.0,
+                "w": 157.0,
+                "h": 20.0
+              }
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 196.0,
+                "w": 66.0,
+                "h": 5.0
+              }
+            },
+            {
+              "label": "doos 4",
+              "dims": {
+                "l": 114.0,
+                "w": 33.0,
+                "h": 22.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "ultimate plus 2",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 191.0,
+                "w": 132.0,
+                "h": 20.0
+              }
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 191.0,
+                "w": 109.0,
+                "h": 18.0
+              }
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 114.0,
+                "w": 130.0,
+                "h": 33.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "ultimate plus 3",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 193.0,
+                "w": 162.0,
+                "h": 20.0
+              }
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 193.0,
+                "w": 112.0,
+                "h": 18.0
+              }
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 157.0,
+                "w": 114.0,
+                "h": 33.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "ultimate 3",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 191.0,
+                "w": 153.0,
+                "h": 20.0
+              }
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 193.0,
+                "w": 91.0,
+                "h": 13.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "diamond corner",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 185.0,
+                "w": 91.0,
+                "h": 33.0
+              },
+              "weight": 20.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 153.0,
+                "w": 165.0,
+                "h": 18.0
+              },
+              "weight": 20.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 180.0,
+                "w": 89.0,
+                "h": 5.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Diamond 3",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 198.0,
+                "w": 98.0,
+                "h": 11.0
+              },
+              "weight": 35.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 198.0,
+                "w": 98.0,
+                "h": 15.0
+              },
+              "weight": 40.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 198.0,
+                "w": 56.0,
+                "h": 11.0
+              },
+              "weight": 40.0
+            },
+            {
+              "label": "doos 4",
+              "dims": {
+                "l": 165.0,
+                "w": 140.0,
+                "h": 20.0
+              },
+              "weight": 50.0
+            },
+            {
+              "label": "doos 5",
+              "dims": {
+                "l": 195.0,
+                "w": 67.0,
+                "h": 5.0
+              },
+              "weight": 45.0
+            }
+          ]
+        },
+        {
+          "name": "Levi 2",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 105.0,
+                "w": 90.0,
+                "h": 17.0
+              },
+              "weight": 42.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 210.0,
+                "w": 90.0,
+                "h": 16.0
+              },
+              "weight": 62.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 210.0,
+                "w": 105.0,
+                "h": 21.0
+              },
+              "weight": 87.0
+            }
+          ]
+        },
+        {
+          "name": "Levi 2 +",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 105.0,
+                "w": 100.0,
+                "h": 16.0
+              },
+              "weight": 47.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 210.0,
+                "w": 100.0,
+                "h": 17.0
+              },
+              "weight": 65.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 210.0,
+                "w": 120.0,
+                "h": 21.0
+              },
+              "weight": 90.0
+            }
+          ]
+        },
+        {
+          "name": "Levi 3",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 205.0,
+                "w": 154.0,
+                "h": 22.0
+              },
+              "weight": 97.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 205.0,
+                "w": 115.0,
+                "h": 16.0
+              },
+              "weight": 57.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 148.0,
+                "w": 117.0,
+                "h": 17.0
+              },
+              "weight": 36.0
+            }
+          ]
+        },
+        {
+          "name": "Levi 4 exclusive",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 210.0,
+                "w": 190.0,
+                "h": 20.0
+              },
+              "weight": 105.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 200.0,
+                "w": 120.0,
+                "h": 16.0
+              },
+              "weight": 62.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 180.0,
+                "w": 120.0,
+                "h": 18.0
+              },
+              "weight": 45.0
+            }
+          ]
+        },
+        {
+          "name": "Joanne 1",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 195.0,
+                "w": 104.0,
+                "h": 18.0
+              },
+              "weight": 58.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 195.0,
+                "w": 93.0,
+                "h": 12.0
+              },
+              "weight": 52.0
+            }
+          ]
+        },
+        {
+          "name": "Joanne 2",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 195.0,
+                "w": 134.0,
+                "h": 18.0
+              },
+              "weight": 71.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 195.0,
+                "w": 93.0,
+                "h": 12.0
+              },
+              "weight": 52.0
+            }
+          ]
+        },
+        {
+          "name": "Joanne 4",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 147.0,
+                "w": 122.0,
+                "h": 28.0
+              }
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 196.0,
+                "w": 94.0,
+                "h": 23.0
+              }
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 160.0,
+                "w": 155.0,
+                "h": 10.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bjorn 1",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 190.0,
+                "w": 97.0,
+                "h": 20.0
+              },
+              "weight": 62.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 183.0,
+                "w": 89.0,
+                "h": 15.0
+              },
+              "weight": 28.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 100.0,
+                "w": 100.0,
+                "h": 18.0
+              },
+              "weight": 21.0
+            }
+          ]
+        },
+        {
+          "name": "Bjorn 2",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 128.0,
+                "w": 110.0,
+                "h": 19.0
+              },
+              "weight": 31.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 185.0,
+                "w": 127.0,
+                "h": 21.0
+              },
+              "weight": 65.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 185.0,
+                "w": 105.0,
+                "h": 15.0
+              },
+              "weight": 26.0
+            }
+          ]
+        },
+        {
+          "name": "Bjorn 3",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 160.0,
+                "w": 117.0,
+                "h": 18.0
+              }
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 188.0,
+                "w": 150.0,
+                "h": 20.0
+              }
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 186.0,
+                "w": 107.0,
+                "h": 15.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "luxor 220",
+          "boxes": [
+            {
+              "label": "colli 1",
+              "dims": {
+                "l": 221.0,
+                "w": 104.0,
+                "h": 74.0
+              }
+            },
+            {
+              "label": "colli 2",
+              "dims": {
+                "l": 224.0,
+                "w": 152.0,
+                "h": 65.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "luxor 200",
+          "boxes": [
+            {
+              "label": "colli 1",
+              "dims": {
+                "l": 224.0,
+                "w": 109.0,
+                "h": 69.0
+              }
+            },
+            {
+              "label": "colli 2",
+              "dims": {
+                "l": 224.0,
+                "w": 142.0,
+                "h": 64.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "mirage",
+          "boxes": [
+            {
+              "label": "colli 1",
+              "dims": {
+                "l": 226.0,
+                "w": 140.0,
+                "h": 66.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "marriott 220",
+          "boxes": [
+            {
+              "label": "colli 1",
+              "dims": {
+                "l": 229.0,
+                "w": 163.0,
+                "h": 74.0
+              }
+            },
+            {
+              "label": "colli 2",
+              "dims": {
+                "l": 224.0,
+                "w": 170.0,
+                "h": 71.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "marriott 200",
+          "boxes": [
+            {
+              "label": "colli 1",
+              "dims": {
+                "l": 234.0,
+                "w": 188.0,
+                "h": 76.0
+              }
+            },
+            {
+              "label": "colli 2",
+              "dims": {
+                "l": 208.0,
+                "w": 165.0,
+                "h": 71.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Barrel 4ft",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 207.0,
+                "w": 123.0,
+                "h": 31.0
+              },
+              "weight": 245.0
+            }
+          ]
+        },
+        {
+          "name": "Barrel 6 ft",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 191.0,
+                "w": 123.0,
+                "h": 43.0
+              },
+              "weight": 305.0
+            }
+          ]
+        },
+        {
+          "name": "Barrel 8 ft",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 224.0,
+                "w": 96.0,
+                "h": 54.0
+              },
+              "weight": 380.0
+            }
+          ]
+        },
+        {
+          "name": "Barrel 7+1 ft",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 224.0,
+                "w": 96.0,
+                "h": 54.0
+              },
+              "weight": 380.0
+            }
+          ]
+        },
+        {
+          "name": "Barrel 7+3 ft",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 304.0,
+                "w": 94.0,
+                "h": 34.0
+              },
+              "weight": 285.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 213.0,
+                "w": 87.0,
+                "h": 52.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "panorama 1800",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 180.0,
+                "w": 240.0,
+                "h": 90.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "panorama 2400",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 245.0,
+                "w": 230.0,
+                "h": 85.0
+              }
+            }
+          ]
+        },
+        {
+          "name": "Retreat 150",
+          "boxes": [
+            {
+              "dims": {
+                "l": 224.0,
+                "w": 118.0,
+                "h": 50.0
+              },
+              "weight": 320.0
+            }
+          ]
+        },
+        {
+          "name": "Retreat 180",
+          "boxes": [
+            {
+              "dims": {
+                "l": 224.0,
+                "w": 130.0,
+                "h": 50.0
+              },
+              "weight": 360.0
+            }
+          ]
+        },
+        {
+          "name": "Revital sauna 220",
+          "boxes": [
+            {
+              "dims": {
+                "l": 225.0,
+                "w": 125.0,
+                "h": 48.0
+              },
+              "weight": 520.0
+            }
+          ]
+        },
+        {
+          "name": "Oase sauna 320",
+          "boxes": [
+            {
+              "dims": {
+                "l": 225.0,
+                "w": 125.0,
+                "h": 72.0
+              },
+              "weight": 800.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "Veranda",
+      "products": [
+        {
+          "name": "Milano 3*3",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 193.0,
+                "w": 81.0,
+                "h": 56.0
+              },
+              "weight": 40.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 193.0,
+                "w": 81.0,
+                "h": 79.0
+              },
+              "weight": 40.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 193.0,
+                "w": 81.0,
+                "h": 79.0
+              },
+              "weight": 40.0
+            },
+            {
+              "label": "doos 4",
+              "dims": {
+                "l": 193.0,
+                "w": 81.0,
+                "h": 66.0
+              },
+              "weight": 40.0
+            }
+          ]
+        },
+        {
+          "name": "Milano 3*4",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 395.0,
+                "w": 26.0,
+                "h": 22.0
+              },
+              "weight": 49.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 282.0,
+                "w": 32.0,
+                "h": 39.0
+              },
+              "weight": 43.0
+            },
+            {
+              "label": "doos 3",
+              "dims": {
+                "l": 282.0,
+                "w": 32.0,
+                "h": 39.0
+              },
+              "weight": 43.0
+            },
+            {
+              "label": "doos 4",
+              "dims": {
+                "l": 276.0,
+                "w": 32.0,
+                "h": 26.0
+              },
+              "weight": 56.0
+            }
+          ]
+        },
+        {
+          "name": "Screen 3*2.5",
+          "boxes": [
+            {
+              "dims": {
+                "l": 282.0,
+                "w": 15.0,
+                "h": 23.0
+              },
+              "weight": 23.0
+            }
+          ]
+        },
+        {
+          "name": "Fm3",
+          "boxes": [
+            {
+              "dims": {
+                "l": 204.0,
+                "w": 100.0,
+                "h": 7.0
+              },
+              "weight": 27.0
+            }
+          ]
+        },
+        {
+          "name": "Bova",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 300.0,
+                "w": 37.0,
+                "h": 13.0
+              },
+              "weight": 35.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 300.0,
+                "w": 60.0,
+                "h": 5.0
+              },
+              "weight": 18.0
+            }
+          ]
+        },
+        {
+          "name": "Rimini overkapping",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "dims": {
+                "l": 290.0,
+                "w": 40.0,
+                "h": 30.0
+              },
+              "weight": 80.0
+            },
+            {
+              "label": "doos 2",
+              "dims": {
+                "l": 290.0,
+                "w": 40.0,
+                "h": 30.0
+              },
+              "weight": 80.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category": "overige",
+      "products": [
+        {
+          "name": "Cortina keter 757L",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 16.0,
+                "h": 160.0
+              },
+              "weight": 23.0
+            }
+          ]
+        },
+        {
+          "name": "opbergbox  270 liter bruin",
+          "boxes": [
+            {
+              "dims": {
+                "l": 115.0,
+                "w": 45.0,
+                "h": 6.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "opbergbox  770 liter",
+          "boxes": [
+            {
+              "dims": {
+                "l": 180.0,
+                "w": 80.0,
+                "h": 8.0
+              },
+              "weight": 27.0
+            }
+          ]
+        },
+        {
+          "name": "opbergbox  570 liter",
+          "boxes": [
+            {
+              "dims": {
+                "l": 160.0,
+                "w": 100.0,
+                "h": 20.0
+              },
+              "weight": 22.0
+            }
+          ]
+        },
+        {
+          "name": "Opbergbox 1450 liter",
+          "boxes": [
+            {
+              "dims": {
+                "l": 200.0,
+                "w": 100.0,
+                "h": 20.0
+              },
+              "weight": 43.0
+            }
+          ]
+        },
+        {
+          "name": "hottubkachel",
+          "boxes": [
+            {
+              "dims": {
+                "l": 80.0,
+                "w": 60.0,
+                "h": 60.0
+              },
+              "weight": 50.0
+            }
+          ]
+        },
+        {
+          "name": "oostenrijk wandhaard",
+          "boxes": [
+            {
+              "dims": {
+                "l": 100.0,
+                "w": 80.0,
+                "h": 10.0
+              },
+              "weight": 22.0
+            }
+          ]
+        },
+        {
+          "name": "infrarood heatpanel 1800",
+          "boxes": [
+            {
+              "dims": {
+                "l": 115.0,
+                "w": 5.0,
+                "h": 20.0
+              },
+              "weight": 8.0
+            }
+          ]
+        },
+        {
+          "name": "siesta parasolvoet",
+          "boxes": [
+            {
+              "dims": {
+                "l": 60.0,
+                "w": 60.0,
+                "h": 10.0
+              },
+              "weight": 90.0
+            }
+          ]
+        },
+        {
+          "name": "modena parasolvoet xl graniet",
+          "boxes": [
+            {
+              "dims": {
+                "l": 70.0,
+                "w": 70.0,
+                "h": 20.0
+              },
+              "weight": 150.0
+            }
+          ]
+        },
+        {
+          "name": "(zonder naam @overige:19)",
+          "boxes": [
+            {
+              "label": "doos 1",
+              "weight": 120.0
+            }
+          ]
+        },
+        {
+          "name": "Rome parasolvoet",
+          "boxes": [
+            {
+              "dims": {
+                "l": 50.0,
+                "w": 50.0,
+                "h": 15.0
+              },
+              "weight": 40.0
+            }
+          ]
+        },
+        {
+          "name": "zweefparasol manhattan 400x300",
+          "boxes": [
+            {
+              "dims": {
+                "l": 273.0,
+                "w": 42.0,
+                "h": 15.0
+              },
+              "weight": 50.0
+            }
+          ]
+        },
+        {
+          "name": "aerocover parasolhoes",
+          "boxes": [
+            {
+              "dims": {
+                "l": 60.0,
+                "w": 65.0,
+                "h": 292.0
+              },
+              "weight": 2.0
+            }
+          ]
+        },
+        {
+          "name": "cosiscoop pillar L",
+          "boxes": [
+            {
+              "dims": {
+                "l": 35.0,
+                "w": 35.0,
+                "h": 106.0
+              },
+              "weight": 36.0
+            }
+          ]
+        },
+        {
+          "name": "alluminium deur dubbel 3/4 glas",
+          "boxes": [
+            {
+              "dims": {
+                "l": 195.0,
+                "w": 170.0,
+                "h": 10.0
+              },
+              "weight": 75.0
+            }
+          ]
+        },
+        {
+          "name": "agni vuurhaard",
+          "boxes": [
+            {
+              "dims": {
+                "l": 153.0,
+                "w": 70.0,
+                "h": 36.0
+              },
+              "weight": 30.0
+            }
+          ]
+        },
+        {
+          "name": "agni ombouwrand",
+          "boxes": [
+            {
+              "dims": {
+                "l": 50.0,
+                "w": 28.0,
+                "h": 29.0
+              },
+              "weight": 3.0
+            }
+          ]
+        },
+        {
+          "name": "funderingsbalk 26 mm kunststof",
+          "boxes": [
+            {
+              "dims": {
+                "l": 3.0,
+                "w": 10.0,
+                "h": 10.0
+              },
+              "weight": 25.0
+            }
+          ]
+        },
+        {
+          "name": "Heater Indus II hanging 3000",
+          "boxes": [
+            {
+              "dims": {
+                "l": 130.0,
+                "w": 43.0,
+                "h": 33.0
+              },
+              "weight": 15.0
+            }
+          ]
+        },
+        {
+          "name": "Aruba parasol",
+          "boxes": [
+            {
+              "dims": {
+                "l": 117.0,
+                "w": 12.0,
+                "h": 12.0
+              },
+              "weight": 3.0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -50,9 +50,11 @@ const BUNDLED_DEFAULTS = [
   { name: "order-status.html",   path: path.join(__dirname, "order-status.html") },
   { name: "stuurcijfers.html",   path: path.join(__dirname, "stuurcijfers.html") },
   { name: "stuurcijfers-engine.js", path: path.join(__dirname, "stuurcijfers-engine.js") },
-  { name: "fonteyn-logo.png",    path: path.join(__dirname, "fonteyn-logo.png") },
-  { name: "article-codes.json",  path: path.join(__dirname, "server", "article-codes.json") },
-  { name: "spec-database.json",  path: path.join(__dirname, "server", "spec-database.json") },
+  { name: "fonteyn-logo.png",       path: path.join(__dirname, "fonteyn-logo.png") },
+  { name: "article-codes.json",     path: path.join(__dirname, "server", "article-codes.json") },
+  { name: "spec-database.json",     path: path.join(__dirname, "server", "spec-database.json") },
+  { name: "packaging-database.json", path: path.join(__dirname, "packaging-database.json") },
+  { name: "transport.html",         path: path.join(__dirname, "transport.html") },
 ];
 
 let liveDir = null;
