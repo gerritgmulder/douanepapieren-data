@@ -416,7 +416,7 @@ const state = {
   lineItems: [],
   bundles: [],
   rawText: "",
-  userSpecs: loadUserSpecs(),
+  userSpecs: loadUserSpecsFromLocalCache(),
   // articleCodes: lookup van productcode → {sku, merk, omschrijving}.
   // Wordt bij startup geladen uit de helper. 880+ entries uit de
   // door Manon onderhouden Excel "Spanamen en artikelcodes".
@@ -426,12 +426,60 @@ const state = {
   specDatabase: {}
 };
 
-function loadUserSpecs() {
+// User-specs (handmatige overrides per artikelcode) leven nu op de server,
+// zodat álle gebruikers van de app dezelfde edits zien. localStorage blijft
+// als offline-cache: bij eerste load gebruiken we 'm direct, en bij elke
+// edit schrijven we ook lokaal voor snelle UI-feedback. Server is leidend.
+function loadUserSpecsFromLocalCache() {
   try { return JSON.parse(localStorage.getItem("fonteyn_specs") || "{}"); }
   catch { return {}; }
 }
-function saveUserSpecs() {
-  localStorage.setItem("fonteyn_specs", JSON.stringify(state.userSpecs));
+function saveUserSpecsToLocalCache() {
+  try { localStorage.setItem("fonteyn_specs", JSON.stringify(state.userSpecs)); }
+  catch {}
+}
+
+// Pull alle server-specs binnen, vervang in-memory state. Wordt bij startup
+// aangeroepen; faalt 'ie (bv. helper offline), behouden we de localStorage-
+// cache van de vorige sessie.
+async function loadUserSpecsFromServer() {
+  try {
+    const r = await fetch(HELPER_BASE + "/api/user-specs");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    state.userSpecs = j || {};
+    saveUserSpecsToLocalCache(); // sync local cache met server
+    console.log(`User-specs van server: ${Object.keys(state.userSpecs).length} codes`);
+    if (state.lineItems.length) renderItems();
+  } catch (e) {
+    console.warn("Kon user-specs niet van server laden — fallback naar localStorage:", e.message);
+  }
+}
+
+// Per-code debounced PUT naar de server. Opslaan gebeurt 500ms na de laatste
+// edit op een code, zodat we geen request per toetsaanslag versturen.
+const _userSpecsPutTimers = new Map();
+function queueUserSpecsServerSave(code) {
+  if (_userSpecsPutTimers.has(code)) clearTimeout(_userSpecsPutTimers.get(code));
+  _userSpecsPutTimers.set(code, setTimeout(() => {
+    _userSpecsPutTimers.delete(code);
+    const entry = state.userSpecs[code] || {};
+    fetch(HELPER_BASE + "/api/user-specs/" + encodeURIComponent(code), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(entry)
+    }).then(r => {
+      if (!r.ok) console.warn(`User-specs PUT ${code}: HTTP ${r.status}`);
+    }).catch(e => {
+      console.warn(`User-specs PUT ${code} faalde — blijft alleen lokaal opgeslagen:`, e.message);
+    });
+  }, 500));
+}
+
+// Edit-handler aanroep — bewaar lokaal direct, queue server-save met debounce.
+function saveUserSpecs(changedCode) {
+  saveUserSpecsToLocalCache();
+  if (changedCode) queueUserSpecsServerSave(changedCode);
 }
 // getSpec geeft altijd een spec-object terug (nooit null) waarbij waarden uit
 // drie lagen worden gemerged, in volgorde van prioriteit:
@@ -959,7 +1007,7 @@ function renderItems() {
       state.userSpecs[it.code] = state.userSpecs[it.code] || {...(SEED_SPECS[it.code] || {})};
       const raw = el.value;
       state.userSpecs[it.code][key] = (key === "gw" || key === "nw") ? (parseFloat(raw) || 0) : raw;
-      saveUserSpecs();
+      saveUserSpecs(it.code);
       el.classList.toggle("missing", raw.trim() === "");
       renderTotals();
     });
@@ -1239,6 +1287,9 @@ async function fetchOrderFromLogic4() {
     if (Object.keys(state.specDatabase).length === 0) {
       await loadSpecDatabaseFromHelper();
     }
+    // Server-side user-specs altijd opnieuw ophalen vóór een nieuwe order —
+    // andere gebruikers (Manon) kunnen tussendoor entries hebben toegevoegd.
+    await loadUserSpecsFromServer();
     const r = await fetch(HELPER_BASE + "/api/order/" + nr);
     const j = await r.json();
     if (!r.ok || !j.ok) {
@@ -1301,6 +1352,7 @@ document.getElementById("order-input").addEventListener("keydown", (e) => {
 checkHelperHealth();
 loadArticleCodesFromHelper();
 loadSpecDatabaseFromHelper();
+loadUserSpecsFromServer();
 
 async function loadArticleCodesFromHelper() {
   try {

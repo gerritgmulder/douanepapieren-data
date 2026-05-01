@@ -202,6 +202,15 @@ async function startHelper() {
   await fs.mkdir(stuurDir, { recursive: true });
   process.env.STUURCIJFERS_DIR = stuurDir;
   console.log(`[stuurcijfers] data-dir: ${stuurDir}`);
+  // Douanepapieren user-specs: handmatige overrides per artikelcode die Manon
+  // invult (sku/dims/gw/nw/hs-code/origin). Server-side opslag zodat élke
+  // gebruiker van de app diezelfde data ziet — niet meer per-machine.
+  const userSpecsDir = app.isPackaged
+    ? path.join(app.getPath("userData"), "user-specs")
+    : path.join(__dirname, ".user-specs");
+  await fs.mkdir(userSpecsDir, { recursive: true });
+  process.env.USER_SPECS_DIR = userSpecsDir;
+  console.log(`[user-specs] data-dir: ${userSpecsDir}`);
   const helperPath = pathToFileURL(path.join(__dirname, "server", "index.js")).href;
   await import(helperPath);
 }

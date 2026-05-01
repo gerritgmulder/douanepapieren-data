@@ -239,6 +239,92 @@ app.get("/api/spec-database", requireAuth, (req, res) => {
   res.json(loadSpecDatabase());
 });
 
+// ════════════════════════════════════════════════════════════════════
+// User-specs — handmatige overrides per artikelcode (sku/dims/gw/nw/
+// hs-code/origin). Vroeger lokaal in localStorage van Manon's machine,
+// nu server-side zodat alle gebruikers van de app diezelfde edits zien.
+// Manon vult 1x in, Don/Dolf/Gerrit zien 't bij volgende order.
+//
+// Storage: user-specs.json in USER_SPECS_DIR (set door Electron's main.js
+// naar userData/user-specs in productie; dev: .user-specs/ in projectroot).
+// ════════════════════════════════════════════════════════════════════
+const USER_SPECS_DIR = process.env.USER_SPECS_DIR || path.join(PARENT_DIR, ".user-specs");
+fs.mkdirSync(USER_SPECS_DIR, { recursive: true });
+const USER_SPECS_FILE = path.join(USER_SPECS_DIR, "user-specs.json");
+
+function loadUserSpecs() {
+  try {
+    if (!fs.existsSync(USER_SPECS_FILE)) return {};
+    return JSON.parse(fs.readFileSync(USER_SPECS_FILE, "utf-8"));
+  } catch (e) {
+    console.warn("[user-specs] kon niet lezen:", e.message);
+    return {};
+  }
+}
+
+function saveUserSpecs(data) {
+  // Atomic write: schrijf naar tijdelijk bestand en hernoem. Voorkomt
+  // corrupte JSON als de helper crasht midden in een schrijfactie.
+  const tmp = USER_SPECS_FILE + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, USER_SPECS_FILE);
+}
+
+// Geldig formaat voor één spec-entry. We accepteren losse velden; ontbrekende
+// velden blijven ongezet zodat een latere PUT alleen wat ie krijgt overschrijft.
+const USER_SPEC_FIELDS = ["sku", "dims", "gw", "nw", "hs", "origin"];
+
+app.get("/api/user-specs", requireAuth, (req, res) => {
+  res.json(loadUserSpecs());
+});
+
+app.put("/api/user-specs/:code", requireAuth, (req, res) => {
+  const code = String(req.params.code || "").trim();
+  if (!code || code.length > 50) {
+    return res.status(400).json({ error: "ongeldige code" });
+  }
+  const incoming = req.body || {};
+  // Filter alleen bekende velden — geen prototype-pollution etc.
+  const cleaned = {};
+  for (const k of USER_SPEC_FIELDS) {
+    if (incoming[k] !== undefined && incoming[k] !== null) {
+      // gw/nw zijn nummers, rest strings. Lege strings = veld unset (laat weg).
+      if (k === "gw" || k === "nw") {
+        const n = parseFloat(incoming[k]);
+        if (!isNaN(n)) cleaned[k] = n;
+      } else {
+        const s = String(incoming[k]).trim();
+        if (s) cleaned[k] = s;
+      }
+    }
+  }
+  const all = loadUserSpecs();
+  if (Object.keys(cleaned).length === 0) {
+    // Niets te bewaren → behandel als delete (cleared all fields)
+    delete all[code];
+  } else {
+    all[code] = cleaned;
+  }
+  try {
+    saveUserSpecs(all);
+    res.json({ ok: true, code, spec: all[code] || null });
+  } catch (e) {
+    console.error("[user-specs] save fail:", e);
+    res.status(500).json({ error: "opslaan mislukt: " + e.message });
+  }
+});
+
+app.delete("/api/user-specs/:code", requireAuth, (req, res) => {
+  const code = String(req.params.code || "").trim();
+  const all = loadUserSpecs();
+  if (code in all) {
+    delete all[code];
+    try { saveUserSpecs(all); }
+    catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+  res.json({ ok: true, code });
+});
+
 /**
  * ═══════════════════════════════════════════════════════════════════════
  * Generieke Logic4-proxy.
@@ -427,8 +513,9 @@ app.get("/api/products-by-supplier-code", requireAuth, async (req, res) => {
 // endpoints aanroept met een gestolen sessie-id.
 // Accepteert zowel email-form als Logic4-username, zoals ORDERSTATUS_ALLOWED.
 const STUURCIJFERS_ALLOWED_EMAILS = new Set([
-  "gerriette@fonteyn.nl", "gerriette",
-  "dolf@fonteyn.nl",      "fonteyn.dolf",
+  "gerriette@fonteyn.nl",  "gerriette",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
 // Whitelist van geldige tabel-namen (= sheet-namen uit het datamodel).
@@ -534,10 +621,11 @@ app.put("/api/stuurcijfers/tables/:name", requireAuth, requireStuurAuth, (req, r
 // Accepteert zowel email-form als Logic4-username (bv. "fonteyn.don"),
 // zodat de check werkt ongeacht in welk format de gebruiker bij Logic4 inlogt.
 const ORDERSTATUS_ALLOWED = new Set([
-  "gerrit@fonteyn.nl",  "gerrit",
-  "don@fonteyn.nl",     "fonteyn.don",
-  "arno@fonteyn.nl",    "fonteyn.arno",
-  "dolf@fonteyn.nl",    "fonteyn.dolf",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "don@fonteyn.nl",        "fonteyn.don",
+  "arno@fonteyn.nl",       "fonteyn.arno",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
 function requireOrderStatusAccess(req, res, next) {

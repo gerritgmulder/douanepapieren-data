@@ -392,17 +392,19 @@ function prettyNameFromEmail(email) {
 // We accepteren zowel het e-mailadres ALS de Logic4-username (bv. "fonteyn.dolf"),
 // zodat het werkt ongeacht in welk format Logic4 die gebruiker laat inloggen.
 const STUURCIJFERS_EMAILS = new Set([
-  "gerriette@fonteyn.nl", "gerriette",
-  "dolf@fonteyn.nl",      "fonteyn.dolf",
+  "gerriette@fonteyn.nl",  "gerriette",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
 // Welke logins mogen de Orderstatus-tegel zien.
 // Server (server/index.js → ORDERSTATUS_ALLOWED) doet dezelfde check.
 const ORDERSTATUS_EMAILS = new Set([
-  "gerrit@fonteyn.nl",  "gerrit",  "Gerrit".toLowerCase(),
-  "don@fonteyn.nl",     "fonteyn.don",
-  "arno@fonteyn.nl",    "fonteyn.arno",
-  "dolf@fonteyn.nl",    "fonteyn.dolf",
+  "gerrit@fonteyn.nl",     "gerrit",  "Gerrit".toLowerCase(),
+  "don@fonteyn.nl",        "fonteyn.don",
+  "arno@fonteyn.nl",       "fonteyn.arno",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
 function showDashboard(email) {
