@@ -212,8 +212,8 @@
       <form id="loginForm" autocomplete="on">
         <div id="loginErr" class="err hidden"></div>
         <label>
-          E-mailadres
-          <input type="email" id="loginEmail" required autocomplete="username" placeholder="jij@fonteyn.nl">
+          Logic4-gebruikersnaam
+          <input type="text" id="loginEmail" required autocomplete="username" placeholder="bv. fonteyn.don of jij@fonteyn.nl">
         </label>
         <label>
           Wachtwoord
@@ -372,32 +372,37 @@ function showLogin(errMsg) {
   }, 50);
 }
 
-// Haal een nette voornaam uit het e-mailadres: "gerriette@fonteyn.nl" → "Gerriette",
-// "jan.pieter@fonteyn.nl" → "Jan Pieter". Werkt ook als de gebruiker zelf al
-// hoofdletters heeft getypt.
+// Haal een nette voornaam uit het e-mailadres OF de Logic4-username:
+// "gerriette@fonteyn.nl" → "Gerriette"
+// "fonteyn.don"          → "Don"  (de "fonteyn."-prefix valt weg)
+// "Gerrit"               → "Gerrit"
 function prettyNameFromEmail(email) {
   if (!email) return "";
-  const local = email.split("@")[0];
+  let local = email.split("@")[0];
+  // Strip leading "fonteyn." voor namen in firstname.lastname-stijl
+  local = local.replace(/^fonteyn\./i, "");
   return local.split(/[.\-_]/)
     .filter(Boolean)
     .map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase())
     .join(" ");
 }
 
-// Welke e-mailadressen mogen de Stuurcijfers-tegel zien.
+// Welke logins mogen de Stuurcijfers-tegel zien.
 // Server doet dezelfde check; dit hier is alleen voor de UI.
+// We accepteren zowel het e-mailadres ALS de Logic4-username (bv. "fonteyn.dolf"),
+// zodat het werkt ongeacht in welk format Logic4 die gebruiker laat inloggen.
 const STUURCIJFERS_EMAILS = new Set([
-  "gerriette@fonteyn.nl",
-  "dolf@fonteyn.nl",
+  "gerriette@fonteyn.nl", "gerriette",
+  "dolf@fonteyn.nl",      "fonteyn.dolf",
 ]);
 
-// Welke e-mailadressen mogen de Orderstatus-tegel zien.
+// Welke logins mogen de Orderstatus-tegel zien.
 // Server (server/index.js → ORDERSTATUS_ALLOWED) doet dezelfde check.
 const ORDERSTATUS_EMAILS = new Set([
-  "gerrit@fonteyn.nl",
-  "don@fonteyn.nl",
-  "arno@fonteyn.nl",
-  "dolf@fonteyn.nl",
+  "gerrit@fonteyn.nl",  "gerrit",  "Gerrit".toLowerCase(),
+  "don@fonteyn.nl",     "fonteyn.don",
+  "arno@fonteyn.nl",    "fonteyn.arno",
+  "dolf@fonteyn.nl",    "fonteyn.dolf",
 ]);
 
 function showDashboard(email) {

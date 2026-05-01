@@ -425,9 +425,10 @@ app.get("/api/products-by-supplier-code", requireAuth, async (req, res) => {
 // De extra wachtwoord-laag ('Meerveld') zit aan de frontend-kant; hier checken
 // we alleen op e-mail om te voorkomen dat een ander Logic4-account toch de
 // endpoints aanroept met een gestolen sessie-id.
+// Accepteert zowel email-form als Logic4-username, zoals ORDERSTATUS_ALLOWED.
 const STUURCIJFERS_ALLOWED_EMAILS = new Set([
-  "gerriette@fonteyn.nl",
-  "dolf@fonteyn.nl",
+  "gerriette@fonteyn.nl", "gerriette",
+  "dolf@fonteyn.nl",      "fonteyn.dolf",
 ]);
 
 // Whitelist van geldige tabel-namen (= sheet-namen uit het datamodel).
@@ -530,11 +531,13 @@ app.put("/api/stuurcijfers/tables/:name", requireAuth, requireStuurAuth, (req, r
 // (en management) altijd terug kunnen zien wat de tool heeft gewijzigd.
 // ============================================================
 
+// Accepteert zowel email-form als Logic4-username (bv. "fonteyn.don"),
+// zodat de check werkt ongeacht in welk format de gebruiker bij Logic4 inlogt.
 const ORDERSTATUS_ALLOWED = new Set([
-  "gerrit@fonteyn.nl",
-  "don@fonteyn.nl",
-  "arno@fonteyn.nl",
-  "dolf@fonteyn.nl",
+  "gerrit@fonteyn.nl",  "gerrit",
+  "don@fonteyn.nl",     "fonteyn.don",
+  "arno@fonteyn.nl",    "fonteyn.arno",
+  "dolf@fonteyn.nl",    "fonteyn.dolf",
 ]);
 
 function requireOrderStatusAccess(req, res, next) {
