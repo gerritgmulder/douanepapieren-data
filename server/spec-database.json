@@ -1,4 +1,32 @@
 {
+"Activity 1 - 1 Deep": {
+"brand": "Passion Swim Spas",
+"dims": "394x226x120 CM",
+"dryWeight": 1200,
+"fullWeight": 8700,
+"source": "2024/EU/Passion Swim Spas/Activity 1 - 1 Deep.pdf"
+},
+"Activity 1 - Deep": {
+"brand": "Passion Swimspas",
+"dims": null,
+"dryWeight": 2646,
+"fullWeight": 19180,
+"source": "2024/UK/Passion Swimspas/Activity 1 - Deep.pdf"
+},
+"Activity 2 - 2 Deep": {
+"brand": "Passion Swim Spas",
+"dims": "549x226x120 CM",
+"dryWeight": 1400,
+"fullWeight": 13900,
+"source": "2024/EU/Passion Swim Spas/Activity 2 - 2 Deep.pdf"
+},
+"Activity 2 - Deep": {
+"brand": "Passion Swimspas",
+"dims": null,
+"dryWeight": 3086,
+"fullWeight": 30644,
+"source": "2024/UK/Passion Swimspas/Activity 2 - Deep.pdf"
+},
 "Admire": {
 "brand": "Passion Spas",
 "dims": "229x229x91 CM",
@@ -7,32 +35,67 @@
 "source": "2024/EU/Passion Spas/Admire.pdf"
 },
 "Aquatic 1": {
-"brand": "Passion Swim Spas",
+"brand": "Passion Spas",
 "dims": "400x228x126 CM",
 "dryWeight": 1200,
 "fullWeight": 8700,
-"source": "2024/EU/Passion Swim Spas/Aquatic 1.pdf"
+"source": "2024/EU/Passion Spas/Aquatic 1.pdf"
+},
+"Aquatic 2": {
+"brand": "Passion Swim Spas",
+"dims": "600x228x126 CM",
+"dryWeight": 1400,
+"fullWeight": 13900,
+"source": "2024/EU/Passion Swim Spas/Aquatic 2.pdf"
 },
 "Aquatic 3": {
 "brand": "Passion Spas",
-"dims": null,
+"dims": "580x224x126 CM",
 "dryWeight": 1550,
 "fullWeight": 14050,
 "source": "2024/EU/Passion Spas/Aquatic 3.pdf"
 },
-"Aquatic 5": {
+"Aquatic 3 - 3 Deep": {
 "brand": "Passion Swim Spas",
+"dims": "580x224x126 CM",
+"dryWeight": 1550,
+"fullWeight": 14050,
+"source": "2024/EU/Passion Swim Spas/Aquatic 3 - 3 Deep.pdf"
+},
+"Aquatic 3 - Deep": {
+"brand": "Passion Swimspas",
+"dims": null,
+"dryWeight": 3417,
+"fullWeight": 30975,
+"source": "2024/UK/Passion Swimspas/Aquatic 3 - Deep.pdf"
+},
+"Aquatic 5": {
+"brand": "Passion Spas",
 "dims": "580x228x155 CM",
 "dryWeight": 1250,
 "fullWeight": 15500,
-"source": "2024/EU/Passion Swim Spas/Aquatic 5.pdf"
+"source": "2024/EU/Passion Spas/Aquatic 5.pdf"
 },
 "Aquatic 6": {
-"brand": "Passion Swim Spas",
+"brand": "Passion Spas",
 "dims": "780x228x155 CM",
 "dryWeight": 1650,
 "fullWeight": 19650,
-"source": "2024/EU/Passion Swim Spas/Aquatic 6.pdf"
+"source": "2024/EU/Passion Spas/Aquatic 6.pdf"
+},
+"Aquatic 7": {
+"brand": "Passion Swim Spas",
+"dims": "580x220x126 CM",
+"dryWeight": 1550,
+"fullWeight": 14050,
+"source": "2024/EU/Passion Swim Spas/Aquatic 7.pdf"
+},
+"Balance": {
+"brand": "Passion Swim Spas",
+"dims": "600x228x138 CM",
+"dryWeight": 1400,
+"fullWeight": null,
+"source": "2024/EU/Passion Swim Spas/Balance.pdf"
 },
 "Bliss": {
 "brand": "Passion Spas",
@@ -64,10 +127,52 @@
 },
 "Devotion": {
 "brand": "Passion Spas",
+"dims": "230x230x91 CM",
+"dryWeight": 360,
+"fullWeight": 1840,
+"source": "2024/EU/Passion Spas/Devotion.pdf"
+},
+"Dynamic - Deep": {
+"brand": "Passion Swimspas",
 "dims": null,
-"dryWeight": 794,
-"fullWeight": 4057,
-"source": "2024/UK/Passion Spas/Devotion.pdf"
+"dryWeight": 2866,
+"fullWeight": 30865,
+"source": "2024/UK/Passion Swimspas/Dynamic - Deep.pdf"
+},
+"Dynamic - Dynamic Deep": {
+"brand": "Passion Swim Spas",
+"dims": "590x227x120 CM",
+"dryWeight": 1300,
+"fullWeight": 14800,
+"source": "2024/EU/Passion Swim Spas/Dynamic - Dynamic Deep.pdf"
+},
+"EU The Aurora": {
+"brand": "Eden Spas",
+"dims": "234x234x91 CM",
+"dryWeight": 550,
+"fullWeight": 2300,
+"source": "2024/EU/Eden Spas/EU The Aurora.pdf"
+},
+"EU The Lagoon": {
+"brand": "Eden Spas",
+"dims": "234x234x91 CM",
+"dryWeight": 550,
+"fullWeight": 2300,
+"source": "2024/EU/Eden Spas/EU The Lagoon.pdf"
+},
+"EU The Oasis": {
+"brand": "Eden Spas",
+"dims": "274x230x91 CM",
+"dryWeight": 700,
+"fullWeight": 2800,
+"source": "2024/EU/Eden Spas/EU The Oasis.pdf"
+},
+"EU The Summit": {
+"brand": "Eden Spas",
+"dims": "215x215x91 CM",
+"dryWeight": 500,
+"fullWeight": 2150,
+"source": "2024/EU/Eden Spas/EU The Summit.pdf"
 },
 "Ecstatic MW": {
 "brand": "Passion Spas",
@@ -75,6 +180,27 @@
 "dryWeight": 500,
 "fullWeight": 2150,
 "source": "2024/EU/Passion Spas/Ecstatic MW.pdf"
+},
+"Energy - Deep": {
+"brand": "Passion Swimspas",
+"dims": null,
+"dryWeight": 4000,
+"fullWeight": 34502,
+"source": "2024/UK/Passion Swimspas/Energy - Deep.pdf"
+},
+"Energy - Energy Deep": {
+"brand": "Passion Swim Spas",
+"dims": "720x228x128 CM",
+"dryWeight": 1650,
+"fullWeight": 15650,
+"source": "2024/EU/Passion Swim Spas/Energy - Energy Deep.pdf"
+},
+"Euphoria": {
+"brand": "Passion Spas",
+"dims": null,
+"dryWeight": 893,
+"fullWeight": 4630,
+"source": "2024/UK/Passion Spas/Euphoria.pdf"
 },
 "Euphoria MW": {
 "brand": "Passion Spas",
@@ -90,6 +216,13 @@
 "fullWeight": 1840,
 "source": "2024/EU/Passion Spas/Excite MW.pdf"
 },
+"Exercise": {
+"brand": "Passion Swim Spas",
+"dims": "250x226x165 CM",
+"dryWeight": 525,
+"fullWeight": 4325,
+"source": "2024/EU/Passion Swim Spas/Exercise.pdf"
+},
 "Exhilarate": {
 "brand": "Passion Spas",
 "dims": "230x230x91 CM",
@@ -97,12 +230,61 @@
 "fullWeight": 2100,
 "source": "2024/EU/Passion Spas/Exhilarate.pdf"
 },
+"Exhilarate MW": {
+"brand": "Passion Spas",
+"dims": null,
+"dryWeight": 882,
+"fullWeight": 4630,
+"source": "2024/UK/Passion Spas/Exhilarate MW.pdf"
+},
+"Exstatic": {
+"brand": "Passion Spas",
+"dims": null,
+"dryWeight": 1102,
+"fullWeight": 4630,
+"source": "2024/UK/Passion Spas/Exstatic.pdf"
+},
+"Felicity": {
+"brand": "Passion Spas",
+"dims": null,
+"dryWeight": 681,
+"fullWeight": 4145,
+"source": "2024/UK/Passion Spas/Felicity.pdf"
+},
 "Felicity MW": {
 "brand": "Passion Spas",
 "dims": "213x213x91 CM",
 "dryWeight": 390,
 "fullWeight": 1880,
 "source": "2024/EU/Passion Spas/Felicity MW.pdf"
+},
+"Fitness 1 - 1 Deep": {
+"brand": "Passion Swim Spas",
+"dims": "400x228x126 CM",
+"dryWeight": 1200,
+"fullWeight": 8700,
+"source": "2024/EU/Passion Swim Spas/Fitness 1 - 1 Deep.pdf"
+},
+"Fitness 1 - Deep": {
+"brand": "Passion Swimspas",
+"dims": null,
+"dryWeight": 2700,
+"fullWeight": null,
+"source": "2024/UK/Passion Swimspas/Fitness 1 - Deep.pdf"
+},
+"Fitness 2 - 2 Deep": {
+"brand": "Passion Swim Spas",
+"dims": "500x228x126 CM",
+"dryWeight": 1400,
+"fullWeight": 11400,
+"source": "2024/EU/Passion Swim Spas/Fitness 2 - 2 Deep.pdf"
+},
+"Fitness 2 - Deep": {
+"brand": "Passion Swimspas",
+"dims": null,
+"dryWeight": 3100,
+"fullWeight": 25133,
+"source": "2024/UK/Passion Swimspas/Fitness 2 - Deep.pdf"
 },
 "Flame": {
 "brand": "Passion Spas",
@@ -119,11 +301,11 @@
 "source": "2024/EU/Passion Spas/Happy.pdf"
 },
 "Harmony": {
-"brand": "2026 (not done yet)",
-"dims": null,
+"brand": "Passion Spas",
+"dims": "300x228x91 CM",
 "dryWeight": 520,
 "fullWeight": null,
-"source": "2026 (not done yet)/Harmony.pdf"
+"source": "2024/EU/Passion Spas/Harmony.pdf"
 },
 "Heart": {
 "brand": "Passion Spas",
@@ -153,12 +335,19 @@
 "fullWeight": 1740,
 "source": "2024/EU/Passion Spas/Joy.pdf"
 },
+"Passion Ice baths Spec Sheets": {
+"brand": "Passion Ice Baths",
+"dims": "118x83x112 CM",
+"dryWeight": 145,
+"fullWeight": 345,
+"source": "2024/EU/Passion Ice Baths/Passion Ice baths Spec Sheets.pdf"
+},
 "Pleasure": {
-"brand": "2026 (not done yet)",
+"brand": "Passion Spas",
 "dims": "215x200x91 CM",
 "dryWeight": 320,
 "fullWeight": 1590,
-"source": "2026 (not done yet)/Pleasure.pdf"
+"source": "2024/EU/Passion Spas/Pleasure.pdf"
 },
 "Recharge": {
 "brand": "Passion Spas",
@@ -167,6 +356,13 @@
 "fullWeight": 1560,
 "source": "2024/EU/Passion Spas/Recharge.pdf"
 },
+"Reflect": {
+"brand": "2026 (not done yet)",
+"dims": "228x228x85 CM",
+"dryWeight": 310,
+"fullWeight": 1790,
+"source": "2026 (not done yet)/Reflect.pdf"
+},
 "Refresh": {
 "brand": "Passion Spas",
 "dims": "200x200x85 CM",
@@ -174,12 +370,19 @@
 "fullWeight": 1630,
 "source": "2024/EU/Passion Spas/Refresh.pdf"
 },
-"Relax": {
+"Rejoice": {
 "brand": "2026 (not done yet)",
-"dims": "200x200x83 CM",
+"dims": "205x205x73 CM",
+"dryWeight": 200,
+"fullWeight": 1050,
+"source": "2026 (not done yet)/Rejoice.pdf"
+},
+"Relax": {
+"brand": "Passion Spas",
+"dims": "204x204x85 CM",
 "dryWeight": 275,
 "fullWeight": 1575,
-"source": "2026 (not done yet)/Relax.pdf"
+"source": "2024/EU/Passion Spas/Relax.pdf"
 },
 "Renew": {
 "brand": "Passion Spas",
@@ -194,6 +397,20 @@
 "dryWeight": 375,
 "fullWeight": 1875,
 "source": "2024/EU/Passion Spas/Repose.pdf"
+},
+"Resettle": {
+"brand": "2026 (not done yet)",
+"dims": "228x228x85 CM",
+"dryWeight": 310,
+"fullWeight": 1830,
+"source": "2026 (not done yet)/Resettle.pdf"
+},
+"Retreat": {
+"brand": "2026 (not done yet)",
+"dims": "228x228x85 CM",
+"dryWeight": 310,
+"fullWeight": 1750,
+"source": "2026 (not done yet)/Retreat.pdf"
 },
 "Rewind": {
 "brand": "Passion Spas",
@@ -258,89 +475,33 @@
 "fullWeight": null,
 "source": "2024/EU/Passion Spas/Spark.pdf"
 },
-"Activity 1 - 1 Deep": {
-"brand": "Passion Swim Spas",
+"Spirit - Deep": {
+"brand": "Passion Swimspas",
 "dims": null,
-"dryWeight": 1200,
-"fullWeight": 8700,
-"source": "2024/EU/Passion Swim Spas/Activity 1 - 1 Deep.pdf"
-},
-"Activity 2 - 2 Deep": {
-"brand": "Passion Swim Spas",
-"dims": null,
-"dryWeight": 1400,
-"fullWeight": 13900,
-"source": "2024/EU/Passion Swim Spas/Activity 2 - 2 Deep.pdf"
-},
-"Aquatic 2": {
-"brand": "Passion Swim Spas",
-"dims": "600x228x126 CM",
-"dryWeight": 1400,
-"fullWeight": 13900,
-"source": "2024/EU/Passion Swim Spas/Aquatic 2.pdf"
-},
-"Aquatic 3 - 3 Deep": {
-"brand": "Passion Swim Spas",
-"dims": null,
-"dryWeight": 1550,
-"fullWeight": 14050,
-"source": "2024/EU/Passion Swim Spas/Aquatic 3 - 3 Deep.pdf"
-},
-"Aquatic 7": {
-"brand": "Passion Swim Spas",
-"dims": "580x220x126 CM",
-"dryWeight": 1550,
-"fullWeight": 14050,
-"source": "2024/EU/Passion Swim Spas/Aquatic 7.pdf"
-},
-"Balance": {
-"brand": "Passion Swim Spas",
-"dims": "600x228x138 CM",
-"dryWeight": 1400,
-"fullWeight": null,
-"source": "2024/EU/Passion Swim Spas/Balance.pdf"
-},
-"Dynamic - Dynamic Deep": {
-"brand": "Passion Swim Spas",
-"dims": null,
-"dryWeight": 1300,
-"fullWeight": 14800,
-"source": "2024/EU/Passion Swim Spas/Dynamic - Dynamic Deep.pdf"
-},
-"Energy - Energy Deep": {
-"brand": "Passion Swim Spas",
-"dims": null,
-"dryWeight": 1650,
-"fullWeight": 15650,
-"source": "2024/EU/Passion Swim Spas/Energy - Energy Deep.pdf"
-},
-"Exercise": {
-"brand": "Passion Swim Spas",
-"dims": "250x226x165 CM",
-"dryWeight": 525,
-"fullWeight": 4325,
-"source": "2024/EU/Passion Swim Spas/Exercise.pdf"
-},
-"Fitness 1 - 1 Deep": {
-"brand": "Passion Swim Spas",
-"dims": null,
-"dryWeight": 1200,
-"fullWeight": 8700,
-"source": "2024/EU/Passion Swim Spas/Fitness 1 - 1 Deep.pdf"
-},
-"Fitness 2 - 2 Deep": {
-"brand": "Passion Swim Spas",
-"dims": null,
-"dryWeight": 1400,
-"fullWeight": 11400,
-"source": "2024/EU/Passion Swim Spas/Fitness 2 - 2 Deep.pdf"
+"dryWeight": 3400,
+"fullWeight": 13550,
+"source": "2024/UK/Passion Swimspas/Spirit - Deep.pdf"
 },
 "Spirit - Spirit Deep": {
 "brand": "Passion Swim Spas",
-"dims": null,
+"dims": "540x228x128 CM",
 "dryWeight": 1550,
 "fullWeight": 13550,
 "source": "2024/EU/Passion Swim Spas/Spirit - Spirit Deep.pdf"
+},
+"Sydney": {
+"brand": "Passion Swim Spas",
+"dims": null,
+"dryWeight": 2315,
+"fullWeight": 15540,
+"source": "2024/EU/Passion Swim Spas/Sydney.pdf"
+},
+"Team Ice Vital-Ice": {
+"brand": "Passion Ice Baths",
+"dims": "390x228x155 CM",
+"dryWeight": 1200,
+"fullWeight": 8700,
+"source": "2024/EU/Passion Ice Baths/Team Ice Vital-Ice.pdf"
 },
 "Theater": {
 "brand": "Passion Swim Spas",
@@ -349,26 +510,19 @@
 "fullWeight": 5750,
 "source": "2024/EU/Passion Swim Spas/Theater.pdf"
 },
+"Vitality - Deep": {
+"brand": "Passion Swimspas",
+"dims": null,
+"dryWeight": 3528,
+"fullWeight": 32187,
+"source": "2024/UK/Passion Swimspas/Vitality - Deep.pdf"
+},
 "Vitality - Vitality Deep": {
 "brand": "Passion Swim Spas",
-"dims": null,
+"dims": "708x227x126 CM",
 "dryWeight": 1600,
 "fullWeight": 14600,
 "source": "2024/EU/Passion Swim Spas/Vitality - Vitality Deep.pdf"
-},
-"Passion Ice baths Spec Sheets": {
-"brand": "Passion Ice Baths",
-"dims": "118x83x112 CM",
-"dryWeight": 145,
-"fullWeight": 345,
-"source": "2024/EU/Passion Ice Baths/Passion Ice baths Spec Sheets.pdf"
-},
-"Team Ice Vital-Ice": {
-"brand": "Passion Ice Baths",
-"dims": "390x228x155 CM",
-"dryWeight": 1200,
-"fullWeight": 8700,
-"source": "2024/EU/Passion Ice Baths/Team Ice Vital-Ice.pdf"
 },
 "Wim Hof's Ice Barrel": {
 "brand": "Passion Ice Baths",
@@ -411,61 +565,5 @@
 "dryWeight": 145,
 "fullWeight": 345,
 "source": "2024/EU/Passion Ice Baths/Wim Hof's Ice Revive.pdf"
-},
-"EU The Aurora": {
-"brand": "Eden Spas",
-"dims": "234x234x91 CM",
-"dryWeight": 550,
-"fullWeight": 2300,
-"source": "2024/EU/Eden Spas/EU The Aurora.pdf"
-},
-"EU The Lagoon": {
-"brand": "Eden Spas",
-"dims": "234x234x91 CM",
-"dryWeight": 550,
-"fullWeight": 2300,
-"source": "2024/EU/Eden Spas/EU The Lagoon.pdf"
-},
-"EU The Oasis": {
-"brand": "Eden Spas",
-"dims": "274x230x91 CM",
-"dryWeight": 700,
-"fullWeight": 2800,
-"source": "2024/EU/Eden Spas/EU The Oasis.pdf"
-},
-"EU The Summit": {
-"brand": "Eden Spas",
-"dims": "215x215x91 CM",
-"dryWeight": 500,
-"fullWeight": 2150,
-"source": "2024/EU/Eden Spas/EU The Summit.pdf"
-},
-"Reflect": {
-"brand": "2026 (not done yet)",
-"dims": "228x228x85 CM",
-"dryWeight": 310,
-"fullWeight": 1790,
-"source": "2026 (not done yet)/Reflect.pdf"
-},
-"Rejoice": {
-"brand": "2026 (not done yet)",
-"dims": "205x205x73 CM",
-"dryWeight": 200,
-"fullWeight": 1050,
-"source": "2026 (not done yet)/Rejoice.pdf"
-},
-"Resettle": {
-"brand": "2026 (not done yet)",
-"dims": "228x228x85 CM",
-"dryWeight": 310,
-"fullWeight": 1830,
-"source": "2026 (not done yet)/Resettle.pdf"
-},
-"Retreat": {
-"brand": "2026 (not done yet)",
-"dims": "228x228x85 CM",
-"dryWeight": 310,
-"fullWeight": 1750,
-"source": "2026 (not done yet)/Retreat.pdf"
 }
 }
