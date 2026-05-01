@@ -492,6 +492,23 @@ function isAccessoryDescription(desc) {
   return desc ? ACCESSORY_RE.test(desc) : false;
 }
 
+// Extract afmetingen uit een regel-omschrijving als die er zelf in staan.
+// Veel accessoires (covers, mats, etc.) hebben "197 x 227 cm" of
+// "200 x 250 x 24 cm" letterlijk in de tekst. Voor die regels kunnen we de
+// dims direct uitlezen — handiger dan handmatig invullen.
+//
+// We accepteren 2D (LxB) of 3D (LxBxH). Voor 2D vullen we geen hoogte in
+// (laat veld leeg zodat Manon de dikte/hoogte zelf kan toevoegen).
+const DIMS_IN_DESC_RE = /\b(\d{2,4})\s*[x×]\s*(\d{2,4})(?:\s*[x×]\s*(\d{1,4}))?\s*cm\b/i;
+
+function extractDimsFromDescription(desc) {
+  if (!desc) return null;
+  const m = DIMS_IN_DESC_RE.exec(desc);
+  if (!m) return null;
+  const [, l, w, h] = m;
+  return h ? `${l}x${w}x${h} CM` : `${l}x${w} CM`;
+}
+
 // getSpec krijgt code + (optioneel) de regel-omschrijving uit de PDF/Logic4.
 // Die regel-omschrijving is de meest betrouwbare bron voor de modelnaam — vaak
 // betrouwbaarder dan articleCodes (dat de Excel-omschrijving van Manon volgt en
@@ -535,6 +552,14 @@ function getSpec(code, description) {
   mergeNonEmpty(merged, SEED_SPECS[code]);
   // Laag 4 (hoogste prio): handmatige overrides van Manon.
   mergeNonEmpty(merged, state.userSpecs[code]);
+
+  // Laag 5 (laatste redmiddel): afmetingen uit de regel-omschrijving zelf
+  // ("Spa Cover Dynamic 197 x 227 cm"). Alleen als nog niets gevuld.
+  // Vult NIET gewichten of HS-code in — die kennen we niet uit de tekst.
+  if (!merged.dims) {
+    const fromDesc = extractDimsFromDescription(description);
+    if (fromDesc) merged.dims = fromDesc;
+  }
   return merged;
 }
 
