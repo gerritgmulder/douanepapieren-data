@@ -3,42 +3,59 @@
 <head>
 <meta charset="utf-8">
 <title>Fonteyn — Inkomende goederen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <style>
   :root {
-    --bg: #f7f7f5;
+    /* Fonteyn huisstijl */
+    --fonteyn-green: #144734;
+    --fonteyn-green-dark: #0d3325;
+    --fonteyn-lime: #8bc53f;
+    --fonteyn-lime-dark: #72a531;
+    --fonteyn-gold: #ecd48a;
+
+    --bg: #f5f4ef;
     --panel: #ffffff;
     --ink: #1f2937;
     --muted: #6b7280;
-    --accent: #d4441c;
-    --accent-dark: #a43512;
+    --accent: var(--fonteyn-lime);
+    --accent-dark: var(--fonteyn-lime-dark);
     --ok: #15803d;
     --bad: #b91c1c;
     --border: #e5e7eb;
-    --fonteyn-green: #113328;
-    --fonteyn-gold: #ecd48a;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; color: var(--ink); background: var(--bg); min-height: 100vh; }
+  body {
+    margin: 0;
+    font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.45;
+    color: var(--ink); background: var(--bg); min-height: 100vh;
+  }
 
-  /* ─── Header (gelijk aan douane.html stijl) ───────────────── */
+  /* ─── Header (Fonteyn huisstijl) ───────────────── */
   header {
-    background: #fff; border-bottom: 1px solid var(--border);
-    padding: 18px 28px; display: flex; align-items: center; gap: 18px;
+    background: var(--fonteyn-green); color: #fff;
+    padding: 14px 28px; display: flex; align-items: center; gap: 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   }
-  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header img.logo { height: 40px; width: auto; display: block; }
+  header h1 { margin: 0; font-size: 17px; font-weight: 600; color: #fff; }
   header .back-link {
-    color: var(--muted); text-decoration: none; font-size: 13px;
-    padding: 6px 10px; border-radius: 6px; transition: background 0.15s;
+    color: rgba(255,255,255,0.85); text-decoration: none; font-size: 13px; font-weight: 500;
+    padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.25);
+    transition: background 0.15s, border-color 0.15s;
   }
-  header .back-link:hover { background: #f3f4f6; color: var(--ink); }
+  header .back-link:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); color: #fff; }
   header .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
-  header .user-chip { color: var(--muted); font-size: 13px; }
-  header .user-chip b { color: var(--ink); font-weight: 600; }
+  header .user-chip { color: rgba(255,255,255,0.75); font-size: 13px; }
+  header .user-chip b { color: #fff; font-weight: 600; }
   header button.logout {
-    background: transparent; color: var(--muted); border: 1px solid var(--border);
-    padding: 6px 12px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer;
+    background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 14px; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
   }
-  header button.logout:hover { background: #f3f4f6; color: var(--ink); }
+  header button.logout:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); }
 
   main { max-width: 1200px; margin: 28px auto 80px; padding: 0 24px; }
 
@@ -57,7 +74,7 @@
     transition: border-color 0.15s, background 0.15s;
     cursor: pointer;
   }
-  .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: #fff8f4; color: var(--ink); }
+  .dropzone:hover, .dropzone.drag { border-color: var(--fonteyn-green); background: #f0f7e8; color: var(--ink); }
   .dropzone input[type=file] { display: none; }
   .dropzone .big { font-size: 15px; margin-bottom: 4px; color: var(--ink); font-weight: 500; }
   .dropzone .small { font-size: 12px; }
@@ -106,10 +123,10 @@
   .bulk-actions .count { color: var(--muted); font-size: 13px; }
 
   button {
-    background: var(--accent); color: #fff; border: 0; padding: 9px 14px; border-radius: 7px;
-    font: inherit; font-weight: 600; cursor: pointer; transition: background 0.15s;
+    background: var(--fonteyn-lime); color: var(--fonteyn-green-dark); border: 0; padding: 9px 14px; border-radius: 7px;
+    font: inherit; font-weight: 700; letter-spacing: 0.02em; cursor: pointer; transition: background 0.15s;
   }
-  button:hover:not(:disabled) { background: var(--accent-dark); }
+  button:hover:not(:disabled) { background: var(--fonteyn-lime-dark); }
   button:disabled { background: #d1d5db; cursor: not-allowed; }
   button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--border); font-weight: 500; }
   button.secondary:hover:not(:disabled) { background: #f3f4f6; }
@@ -127,12 +144,12 @@
   .label-row.pending { background: #fffbeb; border-color: #fde68a; }
   .label-row.removed { opacity: 0.45; }
 
-  .label-row .check { width: 18px; height: 18px; accent-color: var(--accent); }
+  .label-row .check { width: 18px; height: 18px; accent-color: var(--fonteyn-green); }
   .label-row input[type=text] {
     width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
     font: inherit; color: var(--ink); background: #fff;
   }
-  .label-row input[type=text]:focus { outline: none; border-color: var(--accent); }
+  .label-row input[type=text]:focus { outline: none; border-color: var(--fonteyn-green); }
   .label-row input[type=number] {
     width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
     font: inherit; color: var(--ink); background: #fff; text-align: right;
@@ -269,7 +286,8 @@
 
 <!-- ════════════ HEADER ════════════ -->
 <header>
-  <a href="dashboard.html" class="back-link">← Terug naar dashboard</a>
+  <a href="dashboard.html" class="back-link">← Dashboard</a>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
   <h1>Inkomende goederen — labels printen</h1>
   <div class="right">
     <div class="user-chip">Ingelogd als <b id="hdr-user">—</b></div>

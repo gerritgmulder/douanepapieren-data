@@ -12,14 +12,15 @@
     --fonteyn-green: #144734;
     --fonteyn-green-dark: #0d3325;
     --fonteyn-lime: #8bc53f;
+    --fonteyn-lime-dark: #72a531;
     --fonteyn-gold: #ecd48a;
 
     --bg: #f5f4ef;
     --panel: #ffffff;
     --ink: #1f2937;
     --muted: #6b7280;
-    --accent: #d4441c;
-    --accent-dark: #a43512;
+    --accent: var(--fonteyn-lime);
+    --accent-dark: var(--fonteyn-lime-dark);
     --ok: #15803d;
     --bad: #b91c1c;
     --warn: #b45309;
@@ -34,23 +35,27 @@
   }
 
   header {
-    background: #fff; border-bottom: 1px solid var(--border);
-    padding: 18px 28px; display: flex; align-items: center; gap: 18px;
+    background: var(--fonteyn-green); color: #fff;
+    padding: 14px 28px; display: flex; align-items: center; gap: 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   }
-  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header img.logo { height: 40px; width: auto; display: block; }
+  header h1 { margin: 0; font-size: 17px; font-weight: 600; color: #fff; }
   header .back-link {
-    color: var(--muted); text-decoration: none; font-size: 13px;
-    padding: 6px 10px; border-radius: 6px; transition: background 0.15s;
+    color: rgba(255,255,255,0.85); text-decoration: none; font-size: 13px; font-weight: 500;
+    padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.25);
+    transition: background 0.15s, border-color 0.15s;
   }
-  header .back-link:hover { background: #f3f4f6; color: var(--ink); }
+  header .back-link:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); color: #fff; }
   header .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
-  header .user-chip { color: var(--muted); font-size: 13px; }
-  header .user-chip b { color: var(--ink); font-weight: 600; }
+  header .user-chip { color: rgba(255,255,255,0.75); font-size: 13px; }
+  header .user-chip b { color: #fff; font-weight: 600; }
   header button.logout {
-    background: transparent; color: var(--muted); border: 1px solid var(--border);
-    padding: 6px 12px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer;
+    background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 14px; border-radius: 6px; font: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
   }
-  header button.logout:hover { background: #f3f4f6; color: var(--ink); }
+  header button.logout:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); }
 
   main { max-width: 1280px; margin: 28px auto 80px; padding: 0 24px; }
 
@@ -63,10 +68,10 @@
 
   .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   button {
-    background: var(--accent); color: #fff; border: 0; padding: 9px 14px; border-radius: 7px;
-    font: inherit; font-weight: 600; cursor: pointer; transition: background 0.15s;
+    background: var(--fonteyn-lime); color: var(--fonteyn-green-dark); border: 0; padding: 9px 14px; border-radius: 7px;
+    font: inherit; font-weight: 700; letter-spacing: 0.02em; cursor: pointer; transition: background 0.15s;
   }
-  button:hover:not(:disabled) { background: var(--accent-dark); }
+  button:hover:not(:disabled) { background: var(--fonteyn-lime-dark); }
   button:disabled { background: #d1d5db; cursor: not-allowed; }
   button.secondary { background: #fff; color: var(--ink); border: 1px solid var(--border); font-weight: 500; }
   button.secondary:hover:not(:disabled) { background: #f3f4f6; }
@@ -209,6 +214,7 @@
 
 <header>
   <a href="dashboard.html" class="back-link">← Dashboard</a>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
   <h1>Orderstatus</h1>
   <div class="right">
     <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
