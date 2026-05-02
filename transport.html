@@ -6,6 +6,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<!-- Three.js voor 3D bin-packing visualisatie. Importmap zodat we de moderne
+     module-import 'import * as THREE from "three"' kunnen gebruiken zonder
+     bundler. -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
 <style>
   :root {
     --fonteyn-green: #144734;
@@ -152,7 +163,8 @@
   .order-card .block-reason-title { font-weight: 700; margin-bottom: 4px; color: #991b1b; }
   .order-card .block-reason-text { line-height: 1.4; }
   .order-card .block-reason-advice { color: #991b1b; margin-top: 4px; line-height: 1.4; }
-  .order-card .block-reason-contact { margin-top: 10px; font-size: 12px; }
+  .order-card .block-reason-name { margin-top: 8px; font-size: 12px; color: #7f1d1d; }
+  .order-card .block-reason-contact { margin-top: 6px; font-size: 12px; }
   .order-card .contact-link {
     color: var(--fonteyn-green); text-decoration: none; font-weight: 600;
     border-bottom: 1px dotted var(--fonteyn-green);
@@ -213,6 +225,9 @@
   .badge.match-multi   { background: #dbeafe; color: #1e40af; }
   .badge.match-fail    { background: #fef3c7; color: #92400e; }
   .badge.service       { background: #f3f4f6; color: #6b7280; }
+  .badge.bundle-parent { background: #fee2e2; color: #991b1b; font-size: 9px; }
+  .order-card .line.bundle-parent { opacity: 0.6; }
+  .order-card .line.bundle-parent .desc { text-decoration: line-through; color: var(--muted); }
 
   /* Totalen-paneel */
   .totals-grid {
@@ -228,6 +243,69 @@
   .totals-grid .stat .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
 
   .access-denied { text-align: center; padding: 60px 20px; color: var(--muted); }
+
+  /* ─── Plan-paneel (fase 2: bin-packing + 3D) ────────────── */
+  .truck-grid { display: flex; flex-direction: column; gap: 18px; }
+  .truck-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden;
+  }
+  .truck-card .truck-header {
+    padding: 14px 18px; background: var(--fonteyn-green); color: #fff;
+    display: flex; align-items: center; gap: 18px;
+  }
+  .truck-card .truck-header h4 { margin: 0; font-size: 15px; font-weight: 700; }
+  .truck-card .truck-header .stats { margin-left: auto; display: flex; gap: 18px; font-size: 12px; }
+  .truck-card .truck-header .stats span { color: rgba(255,255,255,0.85); }
+  .truck-card .truck-header .stats b { color: #fff; }
+  .truck-card .truck-body { display: grid; grid-template-columns: 1fr 280px; gap: 0; }
+  .truck-card .truck-canvas {
+    width: 100%; height: 360px; background: #f9fafb; cursor: grab;
+  }
+  .truck-card .truck-canvas:active { cursor: grabbing; }
+  .truck-card .truck-list {
+    border-left: 1px solid var(--border); padding: 12px 14px;
+    max-height: 360px; overflow-y: auto; font-size: 12px;
+  }
+  .truck-card .truck-list h5 {
+    margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); font-weight: 700;
+  }
+  .truck-card .truck-list .order-row {
+    padding: 6px 0; border-bottom: 1px solid #f3f4f6;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .truck-card .truck-list .order-row:last-child { border-bottom: 0; }
+  .truck-card .truck-list .swatch {
+    width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+  }
+  .truck-card .truck-list .order-info { flex: 1; min-width: 0; }
+  .truck-card .truck-list .order-info .nr { font-weight: 600; color: var(--ink); }
+  .truck-card .truck-list .order-info .sub { color: var(--muted); font-size: 11px; }
+  .truck-card .truck-list .order-info .boxcount { color: var(--muted); }
+
+  .unplaced-warn {
+    background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
+    padding: 12px 14px; color: #7f1d1d; font-size: 13px;
+  }
+  .unplaced-warn b { color: #991b1b; }
+
+  .parcel-list-card {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 18px;
+  }
+  .parcel-list-card .order-row {
+    padding: 8px 0; border-bottom: 1px solid #f3f4f6;
+    display: grid; grid-template-columns: 100px 1fr 100px 90px 90px;
+    gap: 12px; align-items: center; font-size: 13px;
+  }
+  .parcel-list-card .order-row:last-child { border-bottom: 0; }
+  .parcel-list-card .order-row.head {
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    padding-bottom: 6px; border-bottom-color: var(--border);
+  }
+  .parcel-list-card .num { text-align: right; font-variant-numeric: tabular-nums; }
 
   .hidden { display: none !important; }
 </style>
@@ -355,8 +433,16 @@
 
     <div style="margin-top:18px; display:flex; gap:10px; align-items:center;">
       <button class="cta" id="planBtn" type="button" disabled>Verder met indelen →</button>
-      <span style="font-size:12px; color:var(--muted);">(fase 2: bin-packing + route — komt eraan)</span>
+      <span style="font-size:12px; color:var(--muted);">(route-planning fase 3)</span>
     </div>
+  </section>
+
+  <!-- ─── STAP 4: indeling + 3D visualisatie ──────────────── -->
+  <section class="panel hidden" id="planPanel">
+    <h2>Stap 4</h2>
+    <h3 id="planTitle">Indeling</h3>
+    <p class="sub" id="planSub">—</p>
+    <div id="planContent"></div>
   </section>
 
 </main>
@@ -401,6 +487,9 @@ const state = {
   orders: [],              // [{nr, status, paid, total, customer, address, postcode, lines:[...], allowed, error}]
   selected: new Set(),     // ordernrs die meegenomen worden
 };
+// Expose voor het module-script (Three.js + bin-packing) hieronder. Een
+// classic-script-`const` zit niet op window, dus expliciet aanhangen.
+window._transportState = state;
 
 // ──────────────────────────────────────────────────────────────────
 // Stap 1: vervoerder kiezen
@@ -557,20 +646,36 @@ async function fetchOrder(nr) {
     OrderId: parseInt(nr, 10), TakeRecords: 500
   });
 
-  // 3) Bouw line-items met packaging-match
+  // 3) Bundle-parent detectie: als andere regels deze regel als parent
+  //    aanwijzen (ComposedProductOrderRowParentId), is dit een hoofd-pakket
+  //    waarvan de inhoud al in de DEEL A/B/C-regels staat. Zou je 'm wél
+  //    meetellen, dan tel je 'm dubbel — dus markeren als bundle-parent en
+  //    overslaan in totalen.
+  const parentIds = new Set();
+  for (const r of (rows || [])) {
+    const pid = r.ComposedProductOrderRowParentId;
+    if (pid != null) parentIds.add(pid);
+  }
+
+  // 4) Bouw line-items met packaging-match en bundle-info
   const lines = (rows || []).map(r => {
     const desc = (r.Description || r.Description2 || "").trim();
     const code = String(r.ProductCode || "");
     const qty  = Number(r.Qty || 0);
     const isService = isServiceLine(code, desc);
-    const match = isService ? null : matchPackaging(desc);
-    return { code, desc, qty, isService, match };
+    const isBundleParent = parentIds.has(r.Id);
+    const isBundleChild  = r.ComposedProductOrderRowParentId != null;
+    // Parents worden niet gematched (kinderen tellen al). Service ook niet.
+    const match = (isService || isBundleParent) ? null : matchPackaging(desc);
+    return { code, desc, qty, isService, isBundleParent, isBundleChild, match };
   });
 
-  // 4) Totalen op basis van match (per regel: qty * som van box-volumes en gewichten)
+  // 5) Totalen op basis van match (per regel: qty * som van box-volumes en gewichten).
+  //    Bundle-parents worden overgeslagen — kinderen bevatten de echte dozen.
   let totalBoxes = 0, totalVolumeM3 = 0, totalKg = 0, unmatchedLines = 0;
   for (const ln of lines) {
     if (ln.isService) continue;
+    if (ln.isBundleParent) continue;
     if (!ln.match) { unmatchedLines++; continue; }
     for (const box of ln.match.product.boxes) {
       totalBoxes += ln.qty;
@@ -590,13 +695,18 @@ async function fetchOrder(nr) {
   // 6) Klant/adres + contact-info (voor "neem contact op met de klant")
   const deliver = o.DeliveryAddress || o.AccountAddress || {};
   const invoice = o.InvoiceAddress || {};
-  const customer = (invoice.CompanyName || invoice.LastName ||
-                    deliver.CompanyName || deliver.LastName || "—");
+  // Bedrijfsnaam (voor weergave) + persoonlijke aanhef (voor mail).
+  const company = (invoice.CompanyName || deliver.CompanyName || "").trim();
+  const firstName = (invoice.FirstName || deliver.FirstName || "").trim();
+  const lastName  = (invoice.LastName  || deliver.LastName  || "").trim();
+  const fullName  = [firstName, lastName].filter(Boolean).join(" ").trim();
+  const customer  = company || fullName || "—";
   const postcode = (deliver.Zipcode || "").trim();
   const city     = (deliver.City || "").trim();
   const email    = (invoice.Email || deliver.Email || "").trim();
   const phone    = (invoice.Telephone || invoice.PhoneNumber || invoice.Phone ||
-                    deliver.Telephone || deliver.PhoneNumber || deliver.Phone || "").trim();
+                    deliver.Telephone || deliver.PhoneNumber || deliver.Phone ||
+                    invoice.Mobile || deliver.Mobile || "").trim();
 
   // 7) Reden waarom de order wel/niet selecteerbaar is — laat zien in de UI
   let blockReason = null;
@@ -615,7 +725,8 @@ async function fetchOrder(nr) {
 
   return {
     nr, status, total, paid, allowed,
-    customer, postcode, city, email, phone,
+    customer, company, firstName, lastName, fullName,
+    postcode, city, email, phone,
     blockReason, blockAdvice,
     lines, totalBoxes, totalVolumeM3, totalKg, unmatchedLines,
   };
@@ -690,28 +801,45 @@ function renderOrderCard(o) {
   // Reden-blok voor geblokkeerde orders: status-uitleg + contact-knop voor klant
   let reasonBlock = "";
   if (!o.allowed && o.blockReason) {
+    // Persoonlijke aanhef: "Beste Jan" / "Beste mevrouw De Vries" als we 'm hebben.
+    // Anders: "Beste klant".
+    const greeting = o.firstName ? `Beste ${o.firstName}`
+                  : o.lastName  ? `Beste ${o.lastName}`
+                  : "Beste klant";
+    // Naam-label voor weergave: "Jan de Vries" of bedrijf, of allebei.
+    const nameLabel = (o.fullName && o.company && o.fullName !== o.company)
+      ? `${o.company} — t.a.v. ${o.fullName}`
+      : (o.fullName || o.company || "");
+
     const contactBits = [];
     if (o.email) {
       const subject = encodeURIComponent(`Order ${o.nr} — restbetaling vóór verzending`);
       const body = encodeURIComponent(
-        `Beste klant,\n\nUw order ${o.nr} (totaal ${fmtEur(o.total)}, waarvan ${fmtEur(o.paid)} ontvangen) staat klaar voor uitlevering. ` +
+        `${greeting},\n\n` +
+        `Uw order ${o.nr} (totaal ${fmtEur(o.total)}, waarvan ${fmtEur(o.paid)} ontvangen) staat klaar voor uitlevering. ` +
         `Voor verzending kan plaatsvinden moet eerst het volledige bedrag binnen zijn — graag het openstaande deel van ${fmtEur(o.total - o.paid)} overmaken.\n\n` +
         `Met vriendelijke groet,\nFonteyn`
       );
       contactBits.push(`<a href="mailto:${escapeHtml(o.email)}?subject=${subject}&body=${body}" class="contact-link">📧 ${escapeHtml(o.email)}</a>`);
     }
     if (o.phone) {
-      contactBits.push(`<a href="tel:${escapeHtml(o.phone)}" class="contact-link">📞 ${escapeHtml(o.phone)}</a>`);
+      // tel: link werkt het best zonder spaties/streepjes
+      const telHref = o.phone.replace(/[^\d+]/g, "");
+      contactBits.push(`<a href="tel:${escapeHtml(telHref)}" class="contact-link">📞 ${escapeHtml(o.phone)}</a>`);
     }
     if (!contactBits.length) {
       contactBits.push(`<span style="color:var(--muted);font-style:italic;">geen contact-info in Logic4</span>`);
     }
+    const nameLine = nameLabel
+      ? `<div class="block-reason-name">Contactpersoon: <b>${escapeHtml(nameLabel)}</b></div>`
+      : "";
     reasonBlock = `
       <div class="block-reason">
         <div class="block-reason-title">🚫 Niet selecteerbaar voor transport</div>
         <div class="block-reason-text">${escapeHtml(o.blockReason)}</div>
         ${o.blockAdvice ? `<div class="block-reason-advice">${escapeHtml(o.blockAdvice)}</div>` : ""}
-        <div class="block-reason-contact">Neem contact op met de klant: ${contactBits.join(" &nbsp;·&nbsp; ")}</div>
+        ${nameLine}
+        <div class="block-reason-contact">Neem contact op: ${contactBits.join(" &nbsp;·&nbsp; ")}</div>
       </div>`;
   }
 
@@ -743,7 +871,10 @@ function renderLine(ln) {
   let badge = "";
   let cls = "matched";
   let dims = "—", weight = "—", boxesText = "—";
-  if (ln.isService) {
+  if (ln.isBundleParent) {
+    badge = `<span class="badge bundle-parent">HOOFDPAKKET — wordt niet meegeteld (sub-regels hieronder)</span>`;
+    cls = "bundle-parent";
+  } else if (ln.isService) {
     badge = `<span class="badge service">SERVICE</span>`;
     cls = "service";
   } else if (ln.match) {
@@ -791,10 +922,388 @@ function renderTotals() {
   el("planBtn").disabled = orders === 0;
 }
 
-// Placeholder voor fase 2
+</script>
+
+<!-- ──────────────────────────────────────────────────────────────
+     Fase 2: bin-packing + 3D visualisatie. Aparte module-script
+     omdat we Three.js via importmap als ES-module laden.
+     ────────────────────────────────────────────────────────────── -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// State + helpers uit het classic-script zijn op `window` plaatst.
+// We moeten ze hier opnieuw refereren zodat dit module-script erbij kan.
+const state = window._transportState;
+const el = (id) => document.getElementById(id);
+
+// Bakwagen-afmetingen (cm). LxBxH = 500 × 200 × 250.
+const TRUCK = { l: 500, w: 200, h: 250 };
+const MAX_TRUCKS = 3;
+
+// ──────────────────────────────────────────────────────────────
+// Bin-packing — Eenvoudige 3D FFD met "extreme corner points".
+// ──────────────────────────────────────────────────────────────
+//
+// Voor elke geplaatste box voegen we 3 mogelijke nieuwe corners toe
+// (rechts, achter, boven). Voor een nieuw box proberen we eerst de
+// laagste-leftmost-frontmost vrije corner. Niet optimaal, maar
+// voor 10-50 dozen per wagen voldoende en snel.
+function packTrucks(boxes) {
+  // Sort op grootste volume eerst — typische FFD heuristiek.
+  const sorted = [...boxes].sort((a, b) => boxVol(b) - boxVol(a));
+  const trucks = [];
+  const unplaced = [];
+
+  for (const box of sorted) {
+    let placed = false;
+    // Probeer in elke bestaande wagen
+    for (const truck of trucks) {
+      const pos = findFit(truck, box);
+      if (pos) {
+        truck.placedBoxes.push({ ...box, ...pos });
+        truck.usedVolume += boxVol(box);
+        truck.usedWeight += (box.weight || 0);
+        placed = true;
+        break;
+      }
+    }
+    // Geen plek gevonden → nieuwe wagen openen (als max niet bereikt is)
+    if (!placed && trucks.length < MAX_TRUCKS) {
+      const truck = { id: trucks.length, placedBoxes: [], usedVolume: 0, usedWeight: 0 };
+      const pos = findFit(truck, box);
+      if (pos) {
+        truck.placedBoxes.push({ ...box, ...pos });
+        truck.usedVolume = boxVol(box);
+        truck.usedWeight = (box.weight || 0);
+        trucks.push(truck);
+        placed = true;
+      }
+    }
+    if (!placed) unplaced.push(box);
+  }
+  return { trucks, unplaced };
+}
+
+function boxVol(b) { return b.l * b.w * b.h; }
+
+function findFit(truck, box) {
+  // Kandidaten: oorsprong + alle "extreme corners" van geplaatste dozen
+  const cands = [{ x: 0, y: 0, z: 0 }];
+  for (const p of truck.placedBoxes) {
+    cands.push({ x: p.x + p.l, y: p.y,       z: p.z       });
+    cands.push({ x: p.x,       y: p.y + p.w, z: p.z       });
+    cands.push({ x: p.x,       y: p.y,       z: p.z + p.h });
+  }
+  // Laag (vloer) eerst, dan links-voor
+  cands.sort((a, b) => a.z - b.z || a.x - b.x || a.y - b.y);
+  for (const c of cands) {
+    if (boxFits(truck, box, c)) return c;
+  }
+  return null;
+}
+
+function boxFits(truck, box, pos) {
+  if (pos.x + box.l > TRUCK.l) return false;
+  if (pos.y + box.w > TRUCK.w) return false;
+  if (pos.z + box.h > TRUCK.h) return false;
+  for (const p of truck.placedBoxes) {
+    if (pos.x < p.x + p.l && pos.x + box.l > p.x &&
+        pos.y < p.y + p.w && pos.y + box.w > p.y &&
+        pos.z < p.z + p.h && pos.z + box.h > p.z) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// ──────────────────────────────────────────────────────────────
+// Boxes verzamelen uit geselecteerde orders.
+// Per order krijgt élke (qty × box) een aparte entry — bin-packer
+// werkt op individuele dozen.
+// ──────────────────────────────────────────────────────────────
+function collectBoxesFromSelection() {
+  const boxes = [];
+  const selOrders = state.orders.filter(o => state.selected.has(o.nr) && !o.error);
+  for (const o of selOrders) {
+    for (const ln of o.lines) {
+      if (ln.isService || ln.isBundleParent || !ln.match) continue;
+      for (const pkgBox of ln.match.product.boxes) {
+        if (!pkgBox.dims) continue; // zonder afmetingen kunnen we niet packen
+        for (let i = 0; i < ln.qty; i++) {
+          boxes.push({
+            l: pkgBox.dims.l,
+            w: pkgBox.dims.w,
+            h: pkgBox.dims.h,
+            weight: pkgBox.weight || 0,
+            label: ln.match.product.name + (pkgBox.label ? ` (${pkgBox.label})` : ""),
+            orderNr: o.nr,
+            color: colorForOrder(o.nr),
+          });
+        }
+      }
+    }
+  }
+  return { boxes, orders: selOrders };
+}
+
+// Stabiele kleur per ordernummer — same nr → same color in UI.
+function colorForOrder(nr) {
+  let hash = 0;
+  for (const ch of String(nr)) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 65%, 55%)`;
+}
+function hslToHex(hsl) {
+  // Eenvoudig: laat de browser dit doen via een tijdelijk element
+  const tmp = document.createElement("div");
+  tmp.style.color = hsl;
+  document.body.appendChild(tmp);
+  const rgb = getComputedStyle(tmp).color;
+  document.body.removeChild(tmp);
+  const m = rgb.match(/\d+/g);
+  if (!m) return 0xff0000;
+  return (parseInt(m[0]) << 16) | (parseInt(m[1]) << 8) | parseInt(m[2]);
+}
+
+// ──────────────────────────────────────────────────────────────
+// Three.js scene per wagen
+// ──────────────────────────────────────────────────────────────
+const _activeScenes = []; // voor cleanup bij re-render
+
+function clearScenes() {
+  for (const s of _activeScenes) {
+    if (s.controls) s.controls.dispose();
+    if (s.renderer) s.renderer.dispose();
+    if (s.frame) cancelAnimationFrame(s.frame);
+  }
+  _activeScenes.length = 0;
+}
+
+function renderTruck3D(canvas, truck) {
+  const w = canvas.clientWidth || 600;
+  const h = canvas.clientHeight || 360;
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(w, h, false);
+  renderer.setClearColor(0xf9fafb);
+
+  const scene = new THREE.Scene();
+
+  // Camera: shotglob-achtig schuin van bovenaf
+  const camera = new THREE.PerspectiveCamera(40, w / h, 10, 5000);
+  camera.position.set(TRUCK.l * 1.4, TRUCK.h * 1.6, TRUCK.w * 2.2);
+  camera.lookAt(TRUCK.l / 2, 0, TRUCK.w / 2);
+
+  // Licht
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
+  dir.position.set(TRUCK.l, TRUCK.h * 2, TRUCK.w);
+  scene.add(dir);
+
+  // Bakwagen-frame (wireframe)
+  const truckGeo = new THREE.BoxGeometry(TRUCK.l, TRUCK.h, TRUCK.w);
+  const edges = new THREE.EdgesGeometry(truckGeo);
+  const truckLines = new THREE.LineSegments(
+    edges,
+    new THREE.LineBasicMaterial({ color: 0x144734, linewidth: 2 })
+  );
+  truckLines.position.set(TRUCK.l / 2, TRUCK.h / 2, TRUCK.w / 2);
+  scene.add(truckLines);
+
+  // Vloer (subtiel)
+  const floorGeo = new THREE.PlaneGeometry(TRUCK.l, TRUCK.w);
+  const floor = new THREE.Mesh(floorGeo, new THREE.MeshBasicMaterial({
+    color: 0xe5e7eb, transparent: true, opacity: 0.5
+  }));
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.set(TRUCK.l / 2, 0.1, TRUCK.w / 2);
+  scene.add(floor);
+
+  // Boxes plaatsen
+  for (const b of truck.placedBoxes) {
+    const geo = new THREE.BoxGeometry(b.l, b.h, b.w);
+    const mat = new THREE.MeshLambertMaterial({ color: hslToHex(b.color) });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(b.x + b.l / 2, b.z + b.h / 2, b.y + b.w / 2);
+    scene.add(mesh);
+    // Outline voor zichtbaarheid
+    const lineGeo = new THREE.EdgesGeometry(geo);
+    const line = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: 0x1f2937, opacity: 0.4, transparent: true }));
+    line.position.copy(mesh.position);
+    scene.add(line);
+  }
+
+  // OrbitControls
+  const controls = new OrbitControls(camera, canvas);
+  controls.target.set(TRUCK.l / 2, TRUCK.h / 2, TRUCK.w / 2);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.update();
+
+  const sceneRef = { renderer, scene, camera, controls, frame: 0 };
+  _activeScenes.push(sceneRef);
+
+  function loop() {
+    controls.update();
+    renderer.render(scene, camera);
+    sceneRef.frame = requestAnimationFrame(loop);
+  }
+  loop();
+
+  // Resize-listener (één keer per render — niet ideaal maar werkt)
+  const onResize = () => {
+    const nw = canvas.clientWidth, nh = canvas.clientHeight;
+    if (nw && nh) {
+      renderer.setSize(nw, nh, false);
+      camera.aspect = nw / nh;
+      camera.updateProjectionMatrix();
+    }
+  };
+  window.addEventListener("resize", onResize);
+}
+
+// ──────────────────────────────────────────────────────────────
+// Plan-paneel renderen
+// ──────────────────────────────────────────────────────────────
+function renderPlan() {
+  clearScenes();
+  const panel = el("planPanel");
+  const content = el("planContent");
+  const title = el("planTitle");
+  const sub = el("planSub");
+  panel.classList.remove("hidden");
+
+  const carrier = state.carrier;
+  const carrierLabel = ({
+    own: "Eigen vervoer",
+    svz: "SVZ",
+    "gd-its": "GD-ITS",
+    flevobird: "Flevobird",
+  })[carrier] || carrier;
+  title.textContent = `Indeling — ${carrierLabel}`;
+
+  const { boxes, orders } = collectBoxesFromSelection();
+  const noPackagingCount = orders.reduce((s, o) => s + o.unmatchedLines, 0);
+
+  if (carrier !== "own") {
+    // Pakketdienst — geen 3D-bin-packing nodig, alleen lijstje.
+    sub.textContent = `${orders.length} order(s) → ${boxes.length} dozen klaar voor ${carrierLabel}.` +
+      (noPackagingCount ? ` ${noPackagingCount} regel(s) zonder verpakkings-info — geef die handmatig door aan de pakketdienst.` : "");
+    content.innerHTML = renderParcelList(orders);
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+
+  // Eigen vervoer: pak in 1-3 bakwagens
+  if (!boxes.length) {
+    sub.textContent = "Geen dozen om te plaatsen — alle geselecteerde regels missen verpakkings-info.";
+    content.innerHTML = `<div class="unplaced-warn"><b>Niets gevonden om te plaatsen.</b> Vul afmetingen + gewicht handmatig in op de regels of voeg de producten toe aan de packaging-database.</div>`;
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+
+  const { trucks, unplaced } = packTrucks(boxes);
+  sub.textContent = `${boxes.length} dozen verdeeld over ${trucks.length} bakwagen(s)` +
+    (unplaced.length ? ` — ⚠️ ${unplaced.length} doos/dozen passen niet in 3 wagens.` : ".");
+
+  content.innerHTML = `
+    <div class="truck-grid">
+      ${trucks.map((t, i) => renderTruckCard(t, i)).join("")}
+    </div>
+    ${unplaced.length ? renderUnplaced(unplaced) : ""}
+  `;
+
+  // Render 3D scenes (na innerHTML zetten zodat de canvases bestaan)
+  trucks.forEach((t, i) => {
+    const canvas = document.getElementById(`truckCanvas${i}`);
+    if (canvas) renderTruck3D(canvas, t);
+  });
+
+  panel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderTruckCard(truck, idx) {
+  const volPct = Math.round((truck.usedVolume / (TRUCK.l * TRUCK.w * TRUCK.h)) * 100);
+  // Per order: aantal dozen
+  const perOrder = new Map();
+  for (const b of truck.placedBoxes) {
+    if (!perOrder.has(b.orderNr)) perOrder.set(b.orderNr, { count: 0, color: b.color });
+    perOrder.get(b.orderNr).count++;
+  }
+  const orderRows = [...perOrder].map(([nr, info]) => {
+    const order = state.orders.find(o => o.nr === nr);
+    const customer = order?.customer || "—";
+    const city = order?.city || "";
+    return `<div class="order-row">
+      <div class="swatch" style="background:${info.color}"></div>
+      <div class="order-info">
+        <div class="nr">${nr}</div>
+        <div class="sub">${customer} · ${city}</div>
+      </div>
+      <div class="boxcount">${info.count} ${info.count === 1 ? "doos" : "dozen"}</div>
+    </div>`;
+  }).join("");
+
+  return `
+    <div class="truck-card">
+      <div class="truck-header">
+        <h4>🚚 Bakwagen ${idx + 1}</h4>
+        <div class="stats">
+          <span><b>${truck.placedBoxes.length}</b> dozen</span>
+          <span><b>${(truck.usedVolume / 1_000_000).toFixed(2).replace(".", ",")}</b> m³ <i style="color:rgba(255,255,255,0.5)">(${volPct}%)</i></span>
+          <span><b>${Math.round(truck.usedWeight)}</b> kg</span>
+          <span><b>${perOrder.size}</b> order(s)</span>
+        </div>
+      </div>
+      <div class="truck-body">
+        <canvas class="truck-canvas" id="truckCanvas${idx}"></canvas>
+        <div class="truck-list">
+          <h5>Orders in deze wagen</h5>
+          ${orderRows}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderUnplaced(unplaced) {
+  const summary = unplaced.map(b =>
+    `<li>${b.label} — ${b.l}×${b.w}×${b.h} cm, ${Math.round(b.weight || 0)} kg (order ${b.orderNr})</li>`
+  ).join("");
+  return `
+    <div class="unplaced-warn" style="margin-top:14px;">
+      <b>${unplaced.length} doos/dozen passen niet in 3 wagens.</b>
+      Splits de transporten op of zet ze door naar GD-ITS.
+      <ul style="margin:8px 0 0 20px;padding:0;">${summary}</ul>
+    </div>
+  `;
+}
+
+function renderParcelList(orders) {
+  const rows = orders.map(o => {
+    return `<div class="order-row">
+      <div><b>${o.nr}</b></div>
+      <div>${o.customer}<br><span style="color:var(--muted);font-size:11px;">${o.postcode} ${o.city}</span></div>
+      <div class="num">${o.totalBoxes} dozen</div>
+      <div class="num">${(o.totalVolumeM3).toFixed(2).replace(".", ",")} m³</div>
+      <div class="num">${Math.round(o.totalKg)} kg</div>
+    </div>`;
+  }).join("");
+  return `
+    <div class="parcel-list-card">
+      <div class="order-row head">
+        <div>Order</div><div>Klant</div><div class="num">Dozen</div><div class="num">Volume</div><div class="num">Gewicht</div>
+      </div>
+      ${rows}
+    </div>
+  `;
+}
+
+// Knop koppelen — vervangt de oude placeholder
 el("planBtn").addEventListener("click", () => {
-  alert("Fase 2 (bin-packing in bakwagens + routeplanning) komt eraan. " +
-        "Voor nu zie je hier de geselecteerde orders en de totalen.");
+  if (!state.carrier) { alert("Kies eerst een vervoerder."); return; }
+  renderPlan();
 });
 </script>
 </body>
