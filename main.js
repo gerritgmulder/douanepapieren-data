@@ -256,8 +256,20 @@ function createWindow() {
     backgroundColor: "#f6f6f8",
     webPreferences: {
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      // Mac-trackpad: laat Chromium de native overscroll-back/forward
+      // animatie tonen + rubber-band scroll-effect.
+      scrollBounce: true,
+      enableBlinkFeatures: "OverscrollHistoryNavigation"
     }
+  });
+
+  // Mac trackpad / Magic Mouse: 2-vinger swipe links/rechts → vorige/volgende
+  // pagina in de in-app history. macOS-only event; op Windows/Linux geen-op.
+  mainWindow.webContents.on("swipe", (_e, direction) => {
+    const wc = mainWindow.webContents;
+    if (direction === "right" && wc.canGoBack())    wc.goBack();
+    if (direction === "left"  && wc.canGoForward()) wc.goForward();
   });
 
   // Externe links in de standaard-browser openen
