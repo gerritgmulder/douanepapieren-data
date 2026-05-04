@@ -452,19 +452,91 @@ function houseStatus(house) {
 // ──────────────────────────────────────────────────────────────────
 // Initial load
 // ──────────────────────────────────────────────────────────────────
-// Feature-detectie voor de iCal-sync endpoints (toegevoegd in bundled-server v0.16.0).
-// Oudere installs hebben deze endpoints niet — dan blijft de sync-knop verborgen.
-async function hasSyncEndpoints() {
-  try {
-    const r = await fetch("/api/eikensingel/ical-feeds");
-    if (r.status === 404) return false;
-    if (r.status === 401 || r.status === 403) return true; // endpoint bestaat, alleen geen toegang
-    if (!r.ok) return false;
-    await r.json(); // moet parsable JSON zijn — anders is dit een SPA-fallback HTML
-    return true;
-  } catch {
-    return false;
+// ──────────────────────────────────────────────────────────────────
+// Client-side AirBnB iCal-sync
+// ──────────────────────────────────────────────────────────────────
+// We doen de sync volledig in de browser: feed-URL per huis staat in
+// house.icalFeedUrl en wordt via de bestaande PUT /api/eikensingel/houses/:id
+// opgeslagen — werkt op elke server-versie. Daardoor kan deze feature
+// over-the-air uitgerold worden zonder bundled-server-update.
+//
+// Eventueel knelpunt: AirBnB's iCal-export-URLs hebben geen CORS-headers,
+// dan blokkeert de browser de fetch en zien we dat in het catch-blok.
+// In de Electron-shell van Fonteyn Dashboard staat webSecurity op default
+// (= aan), dus dezelfde CORS-regel als een gewone Chrome.
+
+function parseIcal(text) {
+  const out = [];
+  if (!text || typeof text !== "string") return out;
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const unfolded = [];
+  for (const ln of lines) {
+    if (/^[ \t]/.test(ln) && unfolded.length) unfolded[unfolded.length - 1] += ln.slice(1);
+    else unfolded.push(ln);
   }
+  const toIsoDate = (v) => {
+    const m = String(v || "").match(/^(\d{4})(\d{2})(\d{2})/);
+    return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+  };
+  let cur = null;
+  for (const ln of unfolded) {
+    if (ln === "BEGIN:VEVENT") { cur = {}; continue; }
+    if (ln === "END:VEVENT") { if (cur) out.push(cur); cur = null; continue; }
+    if (!cur) continue;
+    const idx = ln.indexOf(":");
+    if (idx < 0) continue;
+    const left = ln.slice(0, idx);
+    const value = ln.slice(idx + 1);
+    const keyName = left.split(";")[0].toUpperCase();
+    if (keyName === "DTSTART") cur.from = toIsoDate(value);
+    else if (keyName === "DTEND") cur.to = toIsoDate(value);
+    else if (keyName === "UID") cur.uid = value.trim();
+    else if (keyName === "SUMMARY") cur.summary = value.trim();
+  }
+  return out;
+}
+
+// Sync één huis. Idempotent op icalUid: bestaande synced bookings blijven staan.
+// Returnt {added, skipped, error}. Sla nieuwe state niet hier op — caller doet PUT.
+async function syncHouseIcal(house) {
+  const url = (house.icalFeedUrl || "").trim();
+  if (!url) return { added: 0, skipped: 0, error: null };
+  if (!/^https?:\/\//.test(url)) return { added: 0, skipped: 0, error: "ongeldige URL" };
+  let text;
+  try {
+    const r = await fetch(url, { mode: "cors" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    text = await r.text();
+  } catch (e) {
+    // CORS-fout heeft typisch message "Failed to fetch" — geef de gebruiker
+    // een duidelijkere uitleg dan dat.
+    const isCors = /Failed to fetch|NetworkError|CORS/i.test(e.message || "");
+    return { added: 0, skipped: 0, error: isCors ? "AirBnB blokkeert browser-fetch (CORS) — laat Gerrit weten dat je de URL hebt ingevuld" : e.message };
+  }
+  const events = parseIcal(text);
+  if (!Array.isArray(house.bookings)) house.bookings = [];
+  let added = 0, skipped = 0;
+  for (const ev of events) {
+    if (!ev.uid || !ev.from || !ev.to) continue;
+    if (/not available/i.test(ev.summary || "")) continue;
+    if (house.bookings.some(b => b.icalUid === ev.uid)) { skipped++; continue; }
+    house.bookings.push({
+      id: `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      guestName: "",
+      from: ev.from,
+      to: ev.to,
+      source: "airbnb",
+      paid: true,
+      cleanedBefore: false,
+      amount: 0,
+      phone: "",
+      email: "",
+      notes: "via Airbnb iCal",
+      icalUid: ev.uid,
+    });
+    added++;
+  }
+  return { added, skipped, error: null };
 }
 
 async function load() {
@@ -501,8 +573,9 @@ async function load() {
     alert("Kon Eikensingel-data niet laden: " + e.message);
     state.parkState = { houses: {} };
   }
-  // Sync-balkje alleen voor full-rol én alleen als de bundled server iCal-sync kent
-  if (state.role === "full" && await hasSyncEndpoints()) {
+  // Sync-balkje voor full-rol — sync draait volledig in de browser, dus geen
+  // server-version-check nodig.
+  if (state.role === "full") {
     el("icalBar").classList.remove("hidden");
     updateIcalStatus();
   }
@@ -528,21 +601,26 @@ function updateNowDisplay() {
 }
 
 function updateIcalStatus() {
-  const last = state.parkState?.lastIcalSync;
-  const lastResult = state.parkState?.lastIcalSyncResult;
-  if (last) {
-    const d = new Date(last);
-    const minsAgo = Math.round((Date.now() - d.getTime()) / 60000);
-    const ago = minsAgo < 1 ? "< 1 min" : minsAgo < 60 ? `${minsAgo} min` : `${Math.round(minsAgo/60)} u`;
-    let txt = `AirBnB sync: ${ago} geleden`;
-    if (lastResult) {
-      if (lastResult.added) txt += ` — ${lastResult.added} nieuw`;
-      if (lastResult.errors && lastResult.errors.length) txt += ` ⚠️ ${lastResult.errors.length} fouten`;
-    }
-    el("icalStatus").textContent = txt;
-  } else {
-    el("icalStatus").textContent = "AirBnB nog niet gesynchroniseerd";
+  // Last-sync wordt per huis bijgehouden (house.lastIcalSync). Pak de meest
+  // recente sync van alle huizen voor het globale balkje.
+  const houses = Object.values(state.parkState?.houses || {});
+  const withSync = houses.filter(h => h.lastIcalSync);
+  const configured = houses.filter(h => (h.icalFeedUrl || "").trim()).length;
+  if (configured === 0) {
+    el("icalStatus").textContent = "AirBnB iCal nog niet ingesteld — open een huis om de feed-URL in te vullen";
+    return;
   }
+  if (!withSync.length) {
+    el("icalStatus").textContent = `${configured} feed${configured === 1 ? "" : "s"} ingesteld — nog niet gesynchroniseerd`;
+    return;
+  }
+  const lastIso = withSync.map(h => h.lastIcalSync).sort().slice(-1)[0];
+  const minsAgo = Math.round((Date.now() - new Date(lastIso).getTime()) / 60000);
+  const ago = minsAgo < 1 ? "< 1 min" : minsAgo < 60 ? `${minsAgo} min` : `${Math.round(minsAgo/60)} u`;
+  const errors = houses.filter(h => h.lastIcalError).length;
+  let txt = `AirBnB sync: ${ago} geleden`;
+  if (errors) txt += ` ⚠️ ${errors} fout${errors === 1 ? "" : "en"}`;
+  el("icalStatus").textContent = txt;
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -668,6 +746,8 @@ function renderModal() {
       </select>
       <label>Notities</label>
       <textarea data-meta="notes" placeholder="Bijzonderheden, sleutels, etc." ${ro}>${escapeHtml(h.notes || "")}</textarea>
+      <label>AirBnB iCal-feed URL ${h.lastIcalError ? `<span style="color:#dc2626;font-weight:600;">⚠️ ${escapeHtml(h.lastIcalError)}</span>` : ""}</label>
+      <input type="url" data-meta="icalFeedUrl" value="${escapeHtml(h.icalFeedUrl || "")}" placeholder="https://www.airbnb.com/calendar/ical/…" ${ro}>
     </div>
   `;
 
@@ -896,21 +976,39 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !el("modalOverlay").classList.contains("hidden")) closeModal();
 });
 
-// "🔄 Sync AirBnB" knop — handmatige trigger
+// "🔄 Sync AirBnB" knop — fetcht alle iCal-feeds in de browser, parsed,
+// en slaat nieuwe bookings via PUT /houses/:id op (= zelfde endpoint als
+// alle andere edits gebruiken — werkt op elke server-versie).
 el("icalSyncBtn").addEventListener("click", async () => {
   const btn = el("icalSyncBtn");
   btn.disabled = true; btn.textContent = "Synchroniseren…";
+  let totalAdded = 0, totalSkipped = 0;
+  const errors = [];
+  const nowIso = new Date().toISOString();
   try {
-    const r = await fetch("/api/eikensingel/sync", { method: "POST" });
-    const j = await r.json();
-    if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
-    // State opnieuw ophalen om de nieuwe boekingen te zien
-    const r2 = await fetch("/api/eikensingel");
-    if (r2.ok) state.parkState = await r2.json();
+    const houses = Object.values(state.parkState?.houses || {})
+      .filter(h => (h.icalFeedUrl || "").trim());
+    if (!houses.length) {
+      alert("Nog geen iCal-feed-URLs ingesteld. Open een huis en plak de AirBnB-kalender-export-URL in het iCal-feed-veld.");
+      return;
+    }
+    for (const h of houses) {
+      const res = await syncHouseIcal(h);
+      h.lastIcalSync = nowIso;
+      h.lastIcalError = res.error || "";
+      totalAdded += res.added;
+      totalSkipped += res.skipped;
+      if (res.error) errors.push(`huis ${h.id}: ${res.error}`);
+      // Schrijf direct na elk huis weg — dan zie je voortgang en gaat er
+      // bij netwerk-issue niet alles tegelijk verloren. saveHouseImmediate
+      // doet een synchrone PUT zonder debounce.
+      await saveHouseImmediate(h);
+    }
     renderPark();
     updateIcalStatus();
-    let msg = `Klaar — ${j.added} nieuw, ${j.skipped} al bekend`;
-    if (j.errors && j.errors.length) msg += `\n\nFouten:\n${j.errors.join("\n")}`;
+    if (state.openHouseId) renderModal();
+    let msg = `Klaar — ${totalAdded} nieuw, ${totalSkipped} al bekend`;
+    if (errors.length) msg += `\n\nFouten:\n${errors.join("\n")}`;
     alert(msg);
   } catch (e) {
     alert("Sync mislukt: " + e.message);
@@ -918,6 +1016,17 @@ el("icalSyncBtn").addEventListener("click", async () => {
     btn.disabled = false; btn.textContent = "🔄 Sync AirBnB";
   }
 });
+
+// PUT zonder debounce — voor sync-flow waar we direct moeten schrijven
+async function saveHouseImmediate(h) {
+  state.parkState.houses[h.id] = h;
+  const r = await fetch("/api/eikensingel/houses/" + encodeURIComponent(h.id), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(h),
+  });
+  if (!r.ok) throw new Error("Opslaan huis " + h.id + " mislukt: HTTP " + r.status);
+}
 
 load();
 </script>
