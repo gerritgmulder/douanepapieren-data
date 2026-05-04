@@ -243,19 +243,20 @@
     </div>
 
     <div class="tiles">
-      <a href="douane.html" class="tile" id="tileDouane">
+      <!-- Logistieke tegels — alleen zichtbaar voor het logistiek-team (zie LOGISTIEK_EMAILS). -->
+      <a href="douane.html" class="tile hidden" id="tileDouane">
         <div class="icon">📄</div>
         <h3>Douanepapieren</h3>
         <p>Genereer douanepapieren voor Fonteyn en Passion Spa's op basis van een Logic4-order.</p>
       </a>
 
-      <a href="labels.html" class="tile" id="tileLabels">
+      <a href="labels.html" class="tile hidden" id="tileLabels">
         <div class="icon">🏷️</div>
         <h3>Inkomende goederen</h3>
         <p>Upload een inkooporder en print in één keer alle A6-labels voor binnenkomende dozen.</p>
       </a>
 
-      <a href="transport.html" class="tile" id="tileTransport">
+      <a href="transport.html" class="tile hidden" id="tileTransport">
         <div class="icon">🚚</div>
         <h3>Transport laden</h3>
         <p>Slim inlaadplan voor eigen vervoer of pakketdienst — bin-packing in de bakwagen + routeplanning per dag.</p>
@@ -392,6 +393,19 @@ function prettyNameFromEmail(email) {
     .join(" ");
 }
 
+// Welke logins mogen de logistieke tegels (Douane / Labels / Transport) zien.
+// De tools zelf zijn niet server-gated (iedereen met Logic4-login zou ze kunnen
+// openen), dus dit is puur om het dashboard schoon te houden voor mensen die
+// niets met logistiek doen. Server-side gating zit op Logic4-niveau zelf.
+const LOGISTIEK_EMAILS = new Set([
+  "gerrit@fonteyn.nl",     "gerrit",
+  "manon@fonteyn.nl",      "manon",   "fonteyn.manon",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "don@fonteyn.nl",        "fonteyn.don",
+  "arno@fonteyn.nl",       "fonteyn.arno",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Welke logins mogen de Stuurcijfers-tegel zien.
 // Server doet dezelfde check; dit hier is alleen voor de UI.
 // We accepteren zowel het e-mailadres ALS de Logic4-username (bv. "fonteyn.dolf"),
@@ -438,6 +452,11 @@ function showDashboard(email) {
   const name = prettyNameFromEmail(email);
   el("greeting").textContent = name ? `${greet}, ${name}` : greet;
   const lc = (email || "").toLowerCase();
+  // Logistieke tegels (Douane / Labels / Transport) alleen voor het logistiek-team
+  const isLogistiek = LOGISTIEK_EMAILS.has(lc);
+  el("tileDouane").classList.toggle("hidden", !isLogistiek);
+  el("tileLabels").classList.toggle("hidden", !isLogistiek);
+  el("tileTransport").classList.toggle("hidden", !isLogistiek);
   // Stuurcijfers-tegel alleen tonen voor de geautoriseerde e-mailadressen
   el("tileStuurcijfers").classList.toggle("hidden", !STUURCIJFERS_EMAILS.has(lc));
   // Orderstatus-tegel alleen tonen voor de geautoriseerde e-mailadressen
