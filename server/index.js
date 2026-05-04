@@ -1170,13 +1170,12 @@ app.get("/api/products-by-supplier-code", requireAuth, async (req, res) => {
 // ============================================================
 // Stuurcijfers — JSON-opslag voor de financiële tabellen
 // ============================================================
-// Toegang: ingelogd én gerriette@fonteyn.nl of dolf@fonteyn.nl.
+// Toegang: ingelogd én dolf@fonteyn.nl of fonteynbot.
 // De extra wachtwoord-laag ('Meerveld') zit aan de frontend-kant; hier checken
 // we alleen op e-mail om te voorkomen dat een ander Logic4-account toch de
 // endpoints aanroept met een gestolen sessie-id.
 // Accepteert zowel email-form als Logic4-username, zoals ORDERSTATUS_ALLOWED.
 const STUURCIJFERS_ALLOWED_EMAILS = new Set([
-  "gerriette@fonteyn.nl",  "gerriette",
   "dolf@fonteyn.nl",       "fonteyn.dolf",
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
