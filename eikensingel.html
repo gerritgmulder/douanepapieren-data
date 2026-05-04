@@ -452,12 +452,41 @@ function houseStatus(house) {
 // ──────────────────────────────────────────────────────────────────
 // Initial load
 // ──────────────────────────────────────────────────────────────────
+// Feature-detectie voor de iCal-sync endpoints (toegevoegd in bundled-server v0.16.0).
+// Oudere installs hebben deze endpoints niet — dan blijft de sync-knop verborgen.
+async function hasSyncEndpoints() {
+  try {
+    const r = await fetch("/api/eikensingel/ical-feeds");
+    if (r.status === 404) return false;
+    if (r.status === 401 || r.status === 403) return true; // endpoint bestaat, alleen geen toegang
+    if (!r.ok) return false;
+    await r.json(); // moet parsable JSON zijn — anders is dit een SPA-fallback HTML
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function load() {
-  // Rol ophalen — bepaalt of UI bewerkbaar is of read+add
+  // Rol ophalen — bepaalt of UI bewerkbaar is of read+add.
+  // Pre-v0.14.0 servers kennen dit endpoint niet (geen role-gating); daar
+  // mocht iedereen alles. Default daar naar "full" zodat de UI bewerkbaar
+  // blijft tot de bundled server via auto-update meekomt.
   try {
     const rr = await fetch("/api/eikensingel/role");
-    if (rr.ok) state.role = (await rr.json()).role || "none";
-  } catch {}
+    if (rr.ok) {
+      try {
+        state.role = (await rr.json()).role || "none";
+      } catch {
+        state.role = "full"; // 200 OK maar geen JSON → oude server
+      }
+    } else if (rr.status === 404) {
+      state.role = "full";
+    }
+    // 401/403 → state.role blijft "none" (bewust geen toegang)
+  } catch {
+    state.role = "full"; // netwerk-fout — optimistisch, andere fetches faalden dan ook
+  }
   // Park-state ophalen
   try {
     const r = await fetch("/api/eikensingel");
@@ -469,11 +498,11 @@ async function load() {
     state.parkState = await r.json();
   } catch (e) {
     console.error(e);
-    alert("Kon Eikensingel-data niet laden: " + e.message + "\n\nUpdate de Fonteyn Dashboard-app naar de laatste versie.");
+    alert("Kon Eikensingel-data niet laden: " + e.message);
     state.parkState = { houses: {} };
   }
-  // Sync-balkje alleen voor full-rol (mag handmatig synchroniseren)
-  if (state.role === "full") {
+  // Sync-balkje alleen voor full-rol én alleen als de bundled server iCal-sync kent
+  if (state.role === "full" && await hasSyncEndpoints()) {
     el("icalBar").classList.remove("hidden");
     updateIcalStatus();
   }
