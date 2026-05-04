@@ -1,5 +1,5 @@
 {
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     { "name": "dashboard.html" },
@@ -11,6 +11,7 @@
     { "name": "stuurcijfers-engine.js", "note": "Formule-engine — vervangt de Excel-formules in OUT_-tabbladen" },
     { "name": "probe-logic4.html", "note": "Eenmalige probe-pagina om Logic4-velden in kaart te brengen — kan later weer verwijderd worden" },
     { "name": "transport.html", "note": "Transport laden — bin-packing in bakwagens + routeplanning per dag" },
+    { "name": "eikensingel.html", "note": "Eikensingel-vakantiepark — bovenaanzicht 10 bungalows, boekingen + schoonmaak + betalingen" },
     { "name": "fonteyn-logo.png", "note": "Officieel Fonteyn-logo (wit op transparant), gebruikt op de A6-labels" },
     { "name": "article-codes.json", "validate": "json" },
     { "name": "spec-database.json", "validate": "json" },

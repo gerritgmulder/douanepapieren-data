@@ -424,6 +424,103 @@ app.delete("/api/packaging-overrides/:code", requireAuth, (req, res) => {
   res.json({ ok: true, code });
 });
 
+// ════════════════════════════════════════════════════════════════════
+// Eikensingel-vakantiepark — 10 bungalows, multi-booking per huis,
+// schoonmaak- en betaalstatus voor de beheerders/schoonmakers.
+//
+// Storage: state.json in EIKENSINGEL_DIR. Whole-state get/put — concurrency
+// is laag (1-2 beheerders), last-write-wins prima.
+// ════════════════════════════════════════════════════════════════════
+const EIKENSINGEL_DIR = process.env.EIKENSINGEL_DIR || path.join(PARENT_DIR, ".eikensingel-data");
+fs.mkdirSync(EIKENSINGEL_DIR, { recursive: true });
+const EIKENSINGEL_FILE = path.join(EIKENSINGEL_DIR, "state.json");
+
+// Default: 10 huizen, 1+2 voor buitenlandse medewerkers, 3-10 voor verhuur.
+function defaultEikensingelState() {
+  const houses = {};
+  for (let i = 1; i <= 10; i++) {
+    houses[String(i)] = (i === 1 || i === 2)
+      ? { id: i, type: "employee", occupant: "", notes: "", bookings: [] }
+      : { id: i, type: "rental", notes: "", bookings: [] };
+  }
+  return { houses, lastUpdated: null };
+}
+
+function loadEikensingelState() {
+  try {
+    if (!fs.existsSync(EIKENSINGEL_FILE)) {
+      const def = defaultEikensingelState();
+      fs.writeFileSync(EIKENSINGEL_FILE, JSON.stringify(def, null, 2));
+      return def;
+    }
+    return JSON.parse(fs.readFileSync(EIKENSINGEL_FILE, "utf-8"));
+  } catch (e) {
+    console.warn("[eikensingel] kon niet lezen:", e.message);
+    return defaultEikensingelState();
+  }
+}
+
+function saveEikensingelState(data) {
+  data.lastUpdated = new Date().toISOString();
+  const tmp = EIKENSINGEL_FILE + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, EIKENSINGEL_FILE);
+}
+
+// Sanitize één house-payload: filter onbekende velden, valideer bookings.
+function sanitizeHouse(input, defaults) {
+  const out = { ...defaults };
+  if (input.type === "employee" || input.type === "rental") out.type = input.type;
+  if (typeof input.occupant === "string") out.occupant = input.occupant.slice(0, 200);
+  if (typeof input.notes === "string") out.notes = input.notes.slice(0, 1000);
+  if (Array.isArray(input.bookings)) {
+    out.bookings = input.bookings.map(b => sanitizeBooking(b)).filter(Boolean);
+  }
+  return out;
+}
+
+function sanitizeBooking(b) {
+  if (!b || typeof b !== "object") return null;
+  // Datums valideren als YYYY-MM-DD
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRe.test(String(b.from || ""))) return null;
+  if (!dateRe.test(String(b.to || "")))   return null;
+  const cleanedSource = ["airbnb", "booking", "website", "direct", "other"].includes(b.source) ? b.source : "other";
+  return {
+    id: typeof b.id === "string" && b.id ? b.id.slice(0, 50) : `b_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    guestName: String(b.guestName || "").slice(0, 200),
+    from: b.from,
+    to: b.to,
+    source: cleanedSource,
+    paid: Boolean(b.paid),
+    cleanedBefore: Boolean(b.cleanedBefore),
+    amount: Number.isFinite(+b.amount) && +b.amount >= 0 ? +b.amount : 0,
+    phone: String(b.phone || "").slice(0, 50),
+    email: String(b.email || "").slice(0, 200),
+    notes: String(b.notes || "").slice(0, 1000),
+  };
+}
+
+app.get("/api/eikensingel", requireAuth, (req, res) => {
+  res.json(loadEikensingelState());
+});
+
+app.put("/api/eikensingel/houses/:id", requireAuth, (req, res) => {
+  const id = String(req.params.id || "").trim();
+  if (!/^([1-9]|10)$/.test(id)) return res.status(400).json({ error: "ongeldige huisnummer (1-10)" });
+  const state = loadEikensingelState();
+  const cur = state.houses[id] || { id: parseInt(id, 10), type: "rental", notes: "", bookings: [] };
+  state.houses[id] = sanitizeHouse(req.body || {}, cur);
+  state.houses[id].id = parseInt(id, 10);
+  try {
+    saveEikensingelState(state);
+    res.json({ ok: true, house: state.houses[id] });
+  } catch (e) {
+    console.error("[eikensingel] save fail:", e);
+    res.status(500).json({ error: "opslaan mislukt: " + e.message });
+  }
+});
+
 /**
  * ═══════════════════════════════════════════════════════════════════════
  * Generieke Logic4-proxy.

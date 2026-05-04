@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Fonteyn — Eikensingel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --fonteyn-green: #144734;
+    --fonteyn-green-dark: #0d3325;
+    --fonteyn-lime: #8bc53f;
+    --fonteyn-lime-dark: #72a531;
+    --fonteyn-cream: #fff9ae;
+
+    --bg: #f5f4ef;
+    --panel: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --ok: #15803d;
+    --warn: #b45309;
+    --bad: #b91c1c;
+    --border: #e5e7eb;
+
+    --status-green: #16a34a;
+    --status-orange: #ea580c;
+    --status-red: #dc2626;
+    --status-grey: #94a3b8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px; line-height: 1.45;
+    color: var(--ink); background: var(--bg); min-height: 100vh;
+  }
+  header {
+    background: var(--fonteyn-green); color: #fff;
+    padding: 14px 28px; display: flex; align-items: center; gap: 18px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  header img.logo { height: 40px; width: auto; display: block; }
+  header h1 { margin: 0; font-size: 17px; font-weight: 600; color: #fff; }
+  header .back-link {
+    color: rgba(255,255,255,0.85); text-decoration: none; font-size: 13px; font-weight: 500;
+    padding: 6px 12px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.25);
+  }
+  header .back-link:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); color: #fff; }
+  header .right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+  header .user-chip { color: rgba(255,255,255,0.75); font-size: 13px; }
+  header .user-chip b { color: #fff; }
+  header button.logout {
+    background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 14px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  header button.logout:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); }
+
+  main { max-width: 1400px; margin: 24px auto 80px; padding: 0 24px; }
+
+  .top-bar {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    margin-bottom: 22px;
+  }
+  .top-bar h2 {
+    margin: 0; font-size: 22px; font-weight: 700;
+    color: var(--fonteyn-green); letter-spacing: -0.01em;
+  }
+  .top-bar .now {
+    font-size: 12px; color: var(--muted);
+    background: #fff; border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 12px;
+  }
+  .top-bar .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-left: auto; }
+  .top-bar .legend .lg { display: flex; align-items: center; gap: 5px; }
+  .top-bar .legend .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .lg-green  .dot { background: var(--status-green); }
+  .lg-orange .dot { background: var(--status-orange); }
+  .lg-red    .dot { background: var(--status-red); }
+  .lg-grey   .dot { background: var(--status-grey); }
+
+  /* ─── Top-down park layout ───────────────────────────────── */
+  .park-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 1100px) { .park-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 720px)  { .park-grid { grid-template-columns: repeat(2, 1fr); } }
+
+  .house {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden; cursor: pointer;
+    transition: transform 0.1s, box-shadow 0.15s, border-color 0.15s;
+    position: relative;
+  }
+  .house:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(20,71,52,0.1); }
+  .house .roof {
+    height: 14px; background: var(--fonteyn-green-dark);
+    background-image: linear-gradient(135deg, var(--fonteyn-green-dark) 25%, var(--fonteyn-green) 25%, var(--fonteyn-green) 50%, var(--fonteyn-green-dark) 50%, var(--fonteyn-green-dark) 75%, var(--fonteyn-green) 75%);
+    background-size: 12px 12px;
+  }
+  .house .body { padding: 14px 16px; min-height: 160px; display: flex; flex-direction: column; gap: 8px; }
+  .house .top-row { display: flex; align-items: center; gap: 8px; }
+  .house .nr { font-size: 22px; font-weight: 700; color: var(--fonteyn-green); line-height: 1; }
+  .house .type-pill {
+    font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .house .type-pill.rental   { background: #f0f7e8; color: var(--fonteyn-green); }
+  .house .type-pill.employee { background: #e0e7ff; color: #3730a3; }
+  .house .status-dot {
+    width: 16px; height: 16px; border-radius: 50%; margin-left: auto;
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+  }
+  .house.s-green  .status-dot { background: var(--status-green);  box-shadow: 0 0 0 3px #dcfce7; }
+  .house.s-orange .status-dot { background: var(--status-orange); box-shadow: 0 0 0 3px #ffedd5; }
+  .house.s-red    .status-dot { background: var(--status-red);    box-shadow: 0 0 0 3px #fee2e2; }
+  .house.s-grey   .status-dot { background: var(--status-grey);   box-shadow: 0 0 0 3px #f1f5f9; }
+  .house.s-orange { border-color: #fdba74; }
+  .house.s-red    { border-color: #fca5a5; }
+
+  .house .current,
+  .house .next {
+    font-size: 12px; line-height: 1.4;
+  }
+  .house .label {
+    font-size: 10px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .house .guest { font-weight: 600; color: var(--ink); }
+  .house .period { color: var(--muted); }
+  .house .flags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+  .flag {
+    font-size: 10px; padding: 2px 6px; border-radius: 4px;
+    font-weight: 600;
+  }
+  .flag.ok   { background: #dcfce7; color: #15803d; }
+  .flag.todo { background: #fef3c7; color: #92400e; }
+  .flag.bad  { background: #fee2e2; color: #991b1b; }
+  .flag.info { background: #f3f4f6; color: #4b5563; }
+
+  .house .empty {
+    color: var(--muted); font-style: italic; font-size: 12px;
+  }
+
+  /* ─── Modal voor huis-detail ─────────────────────────────── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(15,23,42,0.55);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; padding: 20px;
+  }
+  .modal-content {
+    background: #fff; border-radius: 14px; max-width: 720px; width: 100%;
+    max-height: 90vh; display: flex; flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+  }
+  .modal-header {
+    background: var(--fonteyn-green); color: #fff;
+    padding: 18px 24px; display: flex; align-items: center; gap: 14px;
+    border-radius: 14px 14px 0 0;
+  }
+  .modal-header h2 { margin: 0; font-size: 18px; font-weight: 700; color: #fff; }
+  .modal-header .meta { color: rgba(255,255,255,0.75); font-size: 12px; }
+  .modal-header .close {
+    margin-left: auto; background: transparent; color: #fff; border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; font: inherit; font-size: 12px;
+  }
+  .modal-header .close:hover { background: rgba(255,255,255,0.1); }
+  .modal-body { padding: 20px 24px; overflow-y: auto; flex: 1; }
+  .modal-body h3 {
+    margin: 0 0 8px; font-size: 12px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  /* House meta (type, occupant for employee, notes) */
+  .meta-grid {
+    display: grid; grid-template-columns: 140px 1fr; gap: 8px 14px;
+    margin-bottom: 18px; align-items: center;
+  }
+  .meta-grid label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .meta-grid input,
+  .meta-grid textarea,
+  .meta-grid select {
+    border: 1px solid var(--border); border-radius: 6px; padding: 7px 10px;
+    font: inherit; font-size: 13px; color: var(--ink); background: #fff; width: 100%;
+  }
+  .meta-grid input:focus,
+  .meta-grid textarea:focus,
+  .meta-grid select:focus {
+    outline: none; border-color: var(--fonteyn-green);
+    box-shadow: 0 0 0 3px rgba(20,71,52,0.1);
+  }
+  .meta-grid textarea { min-height: 50px; resize: vertical; }
+
+  /* Bookings list */
+  .bookings { display: flex; flex-direction: column; gap: 10px; }
+  .booking-card {
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px;
+    background: #fafaf8;
+  }
+  .booking-card.current { background: #f0fdf4; border-color: #bbf7d0; }
+  .booking-card.upcoming { background: #fffbeb; border-color: #fde68a; }
+  .booking-card.past { opacity: 0.55; }
+  .booking-card .row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px;
+    align-items: center;
+  }
+  .booking-card .row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .booking-card label { font-size: 11px; color: var(--muted); font-weight: 500; }
+  .booking-card label.full { grid-column: 1 / -1; }
+  .booking-card input[type=text],
+  .booking-card input[type=date],
+  .booking-card input[type=number],
+  .booking-card input[type=email],
+  .booking-card input[type=tel],
+  .booking-card select,
+  .booking-card textarea {
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px;
+    font: inherit; font-size: 13px; color: var(--ink); background: #fff; width: 100%;
+  }
+  .booking-card textarea { min-height: 40px; resize: vertical; }
+  .booking-card input:focus,
+  .booking-card select:focus,
+  .booking-card textarea:focus {
+    outline: none; border-color: var(--fonteyn-green);
+    box-shadow: 0 0 0 3px rgba(20,71,52,0.1);
+  }
+  .booking-card .checkboxes {
+    display: flex; gap: 16px; align-items: center; margin-top: 8px;
+    font-size: 13px;
+  }
+  .booking-card .checkboxes label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); }
+  .booking-card .checkboxes input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--fonteyn-green); }
+  .booking-card .actions-row {
+    display: flex; align-items: center; gap: 10px; margin-top: 10px;
+    padding-top: 10px; border-top: 1px solid var(--border);
+  }
+  .booking-card .badge-active {
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+    background: var(--fonteyn-green); color: #fff; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .booking-card .badge-upcoming {
+    font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+    background: #fef3c7; color: #92400e; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+
+  button.cta {
+    background: var(--fonteyn-lime); color: var(--fonteyn-green-dark);
+    border: 0; padding: 9px 16px; border-radius: 7px;
+    font: inherit; font-weight: 700; font-size: 13px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  button.cta:hover:not(:disabled) { background: var(--fonteyn-lime-dark); }
+  button.danger {
+    background: transparent; color: var(--bad); border: 1px solid #fecaca;
+    padding: 6px 12px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  button.danger:hover { background: #fef2f2; }
+  button.secondary {
+    background: #fff; color: var(--ink); border: 1px solid var(--border);
+    padding: 7px 12px; border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  button.secondary:hover { background: #f3f4f6; }
+
+  .toolbar {
+    display: flex; align-items: center; gap: 10px;
+    margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border);
+  }
+  .save-status {
+    font-size: 12px; color: var(--muted); margin-left: auto;
+  }
+  .save-status.ok { color: var(--ok); }
+  .save-status.bad { color: var(--bad); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- Sessie-guard + auth-wrapper -->
+<script>
+(function () {
+  const SESSION_KEY = "fp.session";
+  const EMAIL_KEY   = "fp.email";
+  const sessionId = localStorage.getItem(SESSION_KEY);
+  if (!sessionId) {
+    window.location.replace("dashboard.html");
+    throw new Error("Geen sessie — doorverwijzen naar dashboard");
+  }
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function (input, opts) {
+    const url = typeof input === "string" ? input : (input && input.url) || "";
+    if (url.startsWith("/api/") || url.startsWith(location.origin + "/api/")) {
+      opts = opts || {};
+      const headers = new Headers(opts.headers || {});
+      if (!headers.has("Authorization")) headers.set("Authorization", "Bearer " + sessionId);
+      opts = { ...opts, headers };
+    }
+    return origFetch(input, opts).then((res) => {
+      if (res.status === 401 && (url.startsWith("/api/") || url.startsWith(location.origin + "/api/"))) {
+        localStorage.removeItem(SESSION_KEY);
+        window.location.replace("dashboard.html");
+      }
+      return res;
+    });
+  };
+  window.addEventListener("DOMContentLoaded", () => {
+    const u = document.getElementById("hdr-user");
+    if (u) u.textContent = localStorage.getItem(EMAIL_KEY) || "—";
+    const btn = document.getElementById("hdr-logout");
+    if (btn) btn.addEventListener("click", async () => {
+      try { await fetch("/api/logout", { method: "POST" }); } catch {}
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(EMAIL_KEY);
+      window.location.replace("dashboard.html");
+    });
+  });
+})();
+</script>
+
+<header>
+  <a href="dashboard.html" class="back-link">← Dashboard</a>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+  <h1>Eikensingel</h1>
+  <div class="right">
+    <div class="user-chip">Ingelogd als <b id="hdr-user">—</b></div>
+    <button class="logout" id="hdr-logout" type="button">Uitloggen</button>
+  </div>
+</header>
+
+<main>
+  <div class="top-bar">
+    <h2>Bovenaanzicht — 10 bungalows</h2>
+    <div class="now" id="nowDisplay">—</div>
+    <div class="legend">
+      <div class="lg lg-green"><span class="dot"></span> in orde</div>
+      <div class="lg lg-orange"><span class="dot"></span> aandacht</div>
+      <div class="lg lg-red"><span class="dot"></span> urgent</div>
+      <div class="lg lg-grey"><span class="dot"></span> leeg / medewerker</div>
+    </div>
+  </div>
+
+  <div class="park-grid" id="parkGrid">
+    <!-- 10 huisjes worden hier gerenderd -->
+  </div>
+</main>
+
+<!-- Modal voor huis-detail -->
+<div class="modal-overlay hidden" id="modalOverlay">
+  <div class="modal-content" id="modalContent">
+    <!-- Wordt gevuld door JS -->
+  </div>
+</div>
+
+<script>
+// ──────────────────────────────────────────────────────────────────
+// State + helpers
+// ──────────────────────────────────────────────────────────────────
+const el = (id) => document.getElementById(id);
+const state = {
+  parkState: null,    // { houses: { "1": {...}, ... } }
+  openHouseId: null,  // id van het huis dat in de modal openstaat
+};
+
+// Default check-in tijd: 15:00 NL. Status-logic gebruikt dit voor het
+// berekenen van "uren tot aankomst".
+const CHECKIN_HOUR = 15;
+
+const SOURCE_LABELS = {
+  airbnb: "Airbnb", booking: "Booking.com", website: "Fonteyn-website",
+  direct: "Direct contact", other: "Anders",
+};
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+function formatDateNL(s) {
+  if (!s) return "";
+  const d = new Date(s + "T12:00:00");
+  if (isNaN(d)) return s;
+  return d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+}
+function formatPeriode(b) {
+  if (!b) return "";
+  return `${formatDateNL(b.from)} — ${formatDateNL(b.to)}`;
+}
+function todayISO() {
+  const d = new Date();
+  return d.toISOString().slice(0, 10);
+}
+function arrivalDateTime(b) {
+  // Aankomst = from-datum @ CHECKIN_HOUR
+  const d = new Date(b.from + "T00:00:00");
+  d.setHours(CHECKIN_HOUR, 0, 0, 0);
+  return d;
+}
+function nowMs() { return Date.now(); }
+
+// ──────────────────────────────────────────────────────────────────
+// Status-bepaling per huis (groen/oranje/rood/grijs)
+// ──────────────────────────────────────────────────────────────────
+function houseStatus(house) {
+  if (house.type === "employee") return { color: "grey", reason: "Medewerkershuis" };
+  const today = todayISO();
+  const bookings = (house.bookings || []).slice().sort((a, b) => a.from.localeCompare(b.from));
+  if (!bookings.length) return { color: "grey", reason: "Geen boekingen" };
+
+  // 1) Huidige boeking (today tussen from incl en to incl)
+  const current = bookings.find(b => b.from <= today && today <= b.to);
+  // 2) Volgende boeking (from in de toekomst)
+  const next = bookings.find(b => b.from > today);
+
+  // Als er nu een gast is en niet betaald → rood
+  if (current && !current.paid) {
+    return { color: "red", reason: `Huidige gast (${current.guestName}) heeft niet betaald` };
+  }
+
+  // Volgende boeking aankomt: hoeveel uur tot check-in?
+  if (next) {
+    const hoursToArrival = (arrivalDateTime(next).getTime() - nowMs()) / (1000 * 3600);
+    if (!next.cleanedBefore) {
+      if (hoursToArrival < 3)  return { color: "red",    reason: `Nog niet schoongemaakt — ${next.guestName} komt over <3 u` };
+      if (hoursToArrival < 6)  return { color: "orange", reason: `Nog niet schoongemaakt — ${next.guestName} komt over <6 u` };
+    }
+    if (!next.paid) {
+      const hoursToArrivalAbs = Math.max(0, hoursToArrival);
+      if (hoursToArrivalAbs < 24) return { color: "red",    reason: `${next.guestName} (volgende gast) heeft niet betaald, komt <24 u` };
+      if (hoursToArrivalAbs < 48) return { color: "orange", reason: `${next.guestName} (volgende gast) heeft niet betaald, komt <48 u` };
+    }
+  }
+
+  // Als huidige gast er is en alles klopt
+  if (current) return { color: "green", reason: `Gast ${current.guestName} verblijft hier` };
+  // Anders: lege of klaar voor volgende
+  if (next)    return { color: "green", reason: `Klaar voor volgende gast: ${next.guestName}` };
+  return { color: "grey", reason: "Geen actuele boekingen" };
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Initial load
+// ──────────────────────────────────────────────────────────────────
+async function load() {
+  try {
+    const r = await fetch("/api/eikensingel");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    state.parkState = await r.json();
+  } catch (e) {
+    console.error(e);
+    alert("Kon Eikensingel-data niet laden: " + e.message + "\n\nUpdate de Fonteyn Dashboard-app naar de laatste versie.");
+    state.parkState = { houses: {} };
+  }
+  renderPark();
+  // Refresh elke minuut zodat de stoplichten meegaan met de tijd
+  setInterval(renderPark, 60_000);
+  updateNowDisplay();
+  setInterval(updateNowDisplay, 30_000);
+}
+
+function updateNowDisplay() {
+  el("nowDisplay").textContent = "Nu: " + new Date().toLocaleString("nl-NL", {
+    weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Top-down park-grid renderen
+// ──────────────────────────────────────────────────────────────────
+function renderPark() {
+  const houses = state.parkState?.houses || {};
+  const grid = el("parkGrid");
+  const cards = [];
+  for (let i = 1; i <= 10; i++) {
+    const h = houses[String(i)] || { id: i, type: "rental", bookings: [] };
+    cards.push(renderHouseCard(h));
+  }
+  grid.innerHTML = cards.join("");
+  grid.querySelectorAll(".house").forEach(card => {
+    card.addEventListener("click", () => openHouseModal(card.dataset.id));
+  });
+}
+
+function renderHouseCard(h) {
+  const status = houseStatus(h);
+  const today = todayISO();
+  const bookings = (h.bookings || []).slice().sort((a, b) => a.from.localeCompare(b.from));
+  const current = bookings.find(b => b.from <= today && today <= b.to);
+  const next    = bookings.find(b => b.from > today);
+
+  let body = "";
+  if (h.type === "employee") {
+    body = `
+      <div class="current">
+        <div class="label">Medewerker</div>
+        <div class="guest">${escapeHtml(h.occupant) || `<span class="empty">— niet ingevuld —</span>`}</div>
+      </div>
+    `;
+  } else {
+    body = `
+      <div class="current">
+        <div class="label">Nu</div>
+        ${current
+          ? `<div class="guest">${escapeHtml(current.guestName)}</div>
+             <div class="period">${escapeHtml(formatPeriode(current))}</div>
+             <div class="flags">
+               ${current.paid ? `<span class="flag ok">betaald</span>` : `<span class="flag bad">niet betaald</span>`}
+               ${current.cleanedBefore ? `<span class="flag ok">schoon</span>` : `<span class="flag todo">nog niet schoon</span>`}
+               <span class="flag info">${escapeHtml(SOURCE_LABELS[current.source] || current.source)}</span>
+             </div>`
+          : `<div class="empty">— leeg —</div>`}
+      </div>
+      <div class="next">
+        <div class="label">Volgende</div>
+        ${next
+          ? `<div class="guest">${escapeHtml(next.guestName)}</div>
+             <div class="period">${escapeHtml(formatPeriode(next))}</div>
+             <div class="flags">
+               ${next.paid ? `<span class="flag ok">betaald</span>` : `<span class="flag todo">betaling open</span>`}
+               ${next.cleanedBefore ? `<span class="flag ok">huis schoon</span>` : `<span class="flag todo">schoonmaak open</span>`}
+             </div>`
+          : `<div class="empty">— niets gepland —</div>`}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="house s-${status.color}" data-id="${h.id}" title="${escapeHtml(status.reason)}">
+      <div class="roof"></div>
+      <div class="body">
+        <div class="top-row">
+          <div class="nr">${h.id}</div>
+          <span class="type-pill ${h.type}">${h.type === "employee" ? "medewerker" : "verhuur"}</span>
+          <span class="status-dot"></span>
+        </div>
+        ${body}
+      </div>
+    </div>
+  `;
+}
+
+// ──────────────────────────────────────────────────────────────────
+// Modal: huis-detail bewerken
+// ──────────────────────────────────────────────────────────────────
+function openHouseModal(id) {
+  state.openHouseId = String(id);
+  renderModal();
+  el("modalOverlay").classList.remove("hidden");
+}
+function closeModal() {
+  el("modalOverlay").classList.add("hidden");
+  state.openHouseId = null;
+}
+el("modalOverlay").addEventListener("click", (e) => {
+  if (e.target === el("modalOverlay")) closeModal();
+});
+
+function renderModal() {
+  const id = state.openHouseId;
+  const h = state.parkState.houses[id] || { id: parseInt(id, 10), type: "rental", bookings: [] };
+  const today = todayISO();
+  const bookings = (h.bookings || []).slice().sort((a, b) => a.from.localeCompare(b.from));
+
+  const bookingCards = bookings.map(b => renderBookingCard(b, today)).join("");
+
+  const employeeFields = h.type === "employee" ? `
+    <div class="meta-grid">
+      <label>Type</label>
+      <select data-meta="type">
+        <option value="rental"   ${h.type === "rental"   ? "selected" : ""}>Verhuur</option>
+        <option value="employee" ${h.type === "employee" ? "selected" : ""}>Medewerker</option>
+      </select>
+      <label>Bewoner (medewerker)</label>
+      <input type="text" data-meta="occupant" value="${escapeHtml(h.occupant || "")}" placeholder="Naam medewerker">
+      <label>Notities</label>
+      <textarea data-meta="notes" placeholder="Bijzonderheden, sleutels, etc.">${escapeHtml(h.notes || "")}</textarea>
+    </div>
+  ` : `
+    <div class="meta-grid">
+      <label>Type</label>
+      <select data-meta="type">
+        <option value="rental"   ${h.type === "rental"   ? "selected" : ""}>Verhuur</option>
+        <option value="employee" ${h.type === "employee" ? "selected" : ""}>Medewerker</option>
+      </select>
+      <label>Notities</label>
+      <textarea data-meta="notes" placeholder="Bijzonderheden, sleutels, etc.">${escapeHtml(h.notes || "")}</textarea>
+    </div>
+  `;
+
+  el("modalContent").innerHTML = `
+    <div class="modal-header">
+      <h2>🏡 Huis ${h.id}</h2>
+      <div class="meta">${h.type === "employee" ? "Medewerkershuis" : "Verhuurhuis"}</div>
+      <button class="close" type="button" onclick="window._closeModal()">Sluiten</button>
+    </div>
+    <div class="modal-body">
+      <h3>Algemeen</h3>
+      ${employeeFields}
+
+      ${h.type === "rental" ? `
+        <h3>Boekingen</h3>
+        <div class="bookings" id="bookingsList">
+          ${bookingCards || `<div style="color:var(--muted);font-style:italic;padding:14px;text-align:center;background:#fafaf8;border-radius:8px;">Nog geen boekingen — voeg er één toe ↓</div>`}
+        </div>
+        <div class="toolbar">
+          <button class="cta" type="button" onclick="window._addBooking()">+ Nieuwe boeking</button>
+          <span class="save-status" id="saveStatus"></span>
+        </div>
+      ` : `<div class="toolbar"><span class="save-status" id="saveStatus"></span></div>`}
+    </div>
+  `;
+
+  // Handlers koppelen
+  el("modalContent").querySelectorAll("[data-meta]").forEach(inp => {
+    inp.addEventListener("change", () => {
+      const field = inp.dataset.meta;
+      h[field] = inp.value;
+      saveHouse(h);
+      // type-switch → herrender modal zodat employee/rental UI klopt
+      if (field === "type") renderModal();
+    });
+  });
+  el("modalContent").querySelectorAll("[data-booking]").forEach(inp => {
+    inp.addEventListener("change", () => {
+      const bid = inp.dataset.booking;
+      const field = inp.dataset.field;
+      const b = h.bookings.find(x => x.id === bid);
+      if (!b) return;
+      if (field === "paid" || field === "cleanedBefore") {
+        b[field] = inp.checked;
+      } else if (field === "amount") {
+        b[field] = parseFloat(inp.value) || 0;
+      } else {
+        b[field] = inp.value;
+      }
+      saveHouse(h);
+    });
+  });
+  el("modalContent").querySelectorAll("[data-delete-booking]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const bid = btn.dataset.deleteBooking;
+      const b = h.bookings.find(x => x.id === bid);
+      if (!b) return;
+      if (!confirm(`Boeking van ${b.guestName || "(zonder naam)"} verwijderen?`)) return;
+      h.bookings = h.bookings.filter(x => x.id !== bid);
+      saveHouse(h);
+      renderModal();
+    });
+  });
+}
+
+function renderBookingCard(b, today) {
+  const isPast    = b.to < today;
+  const isCurrent = b.from <= today && today <= b.to;
+  const isUpcoming = b.from > today;
+  const cls = isCurrent ? "current" : isPast ? "past" : "upcoming";
+  const badge = isCurrent ? `<span class="badge-active">Nu actief</span>`
+              : isUpcoming ? `<span class="badge-upcoming">Komt nog</span>`
+              : "";
+  const sourceOpts = ["airbnb","booking","website","direct","other"]
+    .map(s => `<option value="${s}" ${b.source === s ? "selected" : ""}>${SOURCE_LABELS[s]}</option>`)
+    .join("");
+  return `
+    <div class="booking-card ${cls}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        ${badge}
+        <span style="font-size:11px;color:var(--muted);">id: ${escapeHtml(b.id)}</span>
+        <button class="danger" type="button" data-delete-booking="${escapeHtml(b.id)}" style="margin-left:auto;">Verwijderen</button>
+      </div>
+      <div class="row three">
+        <div>
+          <label>Naam gast</label>
+          <input type="text" data-booking="${escapeHtml(b.id)}" data-field="guestName" value="${escapeHtml(b.guestName || "")}" placeholder="Voor- en achternaam">
+        </div>
+        <div>
+          <label>Van</label>
+          <input type="date" data-booking="${escapeHtml(b.id)}" data-field="from" value="${escapeHtml(b.from || "")}">
+        </div>
+        <div>
+          <label>Tot</label>
+          <input type="date" data-booking="${escapeHtml(b.id)}" data-field="to" value="${escapeHtml(b.to || "")}">
+        </div>
+      </div>
+      <div class="row three" style="margin-top:8px;">
+        <div>
+          <label>Geboekt via</label>
+          <select data-booking="${escapeHtml(b.id)}" data-field="source">${sourceOpts}</select>
+        </div>
+        <div>
+          <label>Bedrag (€)</label>
+          <input type="number" min="0" step="1" data-booking="${escapeHtml(b.id)}" data-field="amount" value="${b.amount || ""}">
+        </div>
+        <div>
+          <label>Telefoon</label>
+          <input type="tel" data-booking="${escapeHtml(b.id)}" data-field="phone" value="${escapeHtml(b.phone || "")}" placeholder="06…">
+        </div>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <div>
+          <label>Email</label>
+          <input type="email" data-booking="${escapeHtml(b.id)}" data-field="email" value="${escapeHtml(b.email || "")}">
+        </div>
+        <div>
+          <label>Notities</label>
+          <input type="text" data-booking="${escapeHtml(b.id)}" data-field="notes" value="${escapeHtml(b.notes || "")}" placeholder="Bijzonderheden">
+        </div>
+      </div>
+      <div class="checkboxes">
+        <label><input type="checkbox" data-booking="${escapeHtml(b.id)}" data-field="paid" ${b.paid ? "checked" : ""}> Betaald</label>
+        <label><input type="checkbox" data-booking="${escapeHtml(b.id)}" data-field="cleanedBefore" ${b.cleanedBefore ? "checked" : ""}> Schoon­gemaakt vóór deze gast</label>
+      </div>
+    </div>
+  `;
+}
+
+// Globaal voor de inline onclicks in het modal
+window._closeModal = closeModal;
+window._addBooking = () => {
+  const h = state.parkState.houses[state.openHouseId];
+  if (!h) return;
+  if (!Array.isArray(h.bookings)) h.bookings = [];
+  const today = todayISO();
+  const tomorrow = (() => { const d = new Date(); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); })();
+  const newBooking = {
+    id: `b_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    guestName: "",
+    from: today,
+    to: tomorrow,
+    source: "website",
+    paid: false,
+    cleanedBefore: false,
+    amount: 0,
+    phone: "",
+    email: "",
+    notes: "",
+  };
+  h.bookings.push(newBooking);
+  saveHouse(h);
+  renderModal();
+};
+
+// ──────────────────────────────────────────────────────────────────
+// Save house — debounced PUT naar de server
+// ──────────────────────────────────────────────────────────────────
+let _saveTimer = null;
+function saveHouse(h) {
+  // Update parkState meteen voor instantane UI-feedback
+  state.parkState.houses[h.id] = h;
+  renderPark();
+  // Status-balkje
+  const ss = el("saveStatus");
+  if (ss) { ss.textContent = "Opslaan…"; ss.className = "save-status"; }
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(async () => {
+    try {
+      const r = await fetch("/api/eikensingel/houses/" + encodeURIComponent(h.id), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(h),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || "HTTP " + r.status);
+      if (ss) { ss.textContent = "✓ opgeslagen"; ss.className = "save-status ok"; }
+    } catch (e) {
+      console.error(e);
+      if (ss) { ss.textContent = "Opslaan mislukt: " + e.message; ss.className = "save-status bad"; }
+    }
+  }, 400);
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !el("modalOverlay").classList.contains("hidden")) closeModal();
+});
+
+load();
+</script>
+</body>
+</html>

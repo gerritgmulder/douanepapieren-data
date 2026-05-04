@@ -1,6 +1,6 @@
 {
   "name": "fonteyn-dashboard",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Fonteyn Dashboard — Electron desktop app die het dashboard en alle tools (Douanepapieren, Transport, 5S, Personeel, …) bundelt met een Logic4-helper.",
   "main": "main.js",
   "type": "module",
@@ -41,6 +41,7 @@
       "stuurcijfers-engine.js",
       "probe-logic4.html",
       "transport.html",
+      "eikensingel.html",
       "fonteyn-logo.png",
       "packaging-database.json",
       "server/**/*",

@@ -55,6 +55,7 @@ const BUNDLED_DEFAULTS = [
   { name: "spec-database.json",     path: path.join(__dirname, "server", "spec-database.json") },
   { name: "packaging-database.json", path: path.join(__dirname, "packaging-database.json") },
   { name: "transport.html",         path: path.join(__dirname, "transport.html") },
+  { name: "eikensingel.html",       path: path.join(__dirname, "eikensingel.html") },
 ];
 
 let liveDir = null;
@@ -213,6 +214,13 @@ async function startHelper() {
   await fs.mkdir(userSpecsDir, { recursive: true });
   process.env.USER_SPECS_DIR = userSpecsDir;
   console.log(`[user-specs] data-dir: ${userSpecsDir}`);
+  // Eikensingel-vakantiepark-state (boekingen, schoonmaak, betalingen per huis).
+  const eikensingelDir = app.isPackaged
+    ? path.join(app.getPath("userData"), "eikensingel")
+    : path.join(__dirname, ".eikensingel-data");
+  await fs.mkdir(eikensingelDir, { recursive: true });
+  process.env.EIKENSINGEL_DIR = eikensingelDir;
+  console.log(`[eikensingel] data-dir: ${eikensingelDir}`);
   const helperPath = pathToFileURL(path.join(__dirname, "server", "index.js")).href;
   await import(helperPath);
 }
