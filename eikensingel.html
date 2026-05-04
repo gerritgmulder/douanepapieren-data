@@ -71,6 +71,7 @@
     background: #fff; border: 1px solid var(--border); border-radius: 8px;
     padding: 6px 12px;
   }
+  .top-bar .ical-bar { display: flex; align-items: center; gap: 10px; }
   .top-bar .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-left: auto; }
   .top-bar .legend .lg { display: flex; align-items: center; gap: 5px; }
   .top-bar .legend .dot { width: 10px; height: 10px; border-radius: 50%; }
@@ -334,6 +335,10 @@
   <div class="top-bar">
     <h2>Bovenaanzicht — 10 bungalows</h2>
     <div class="now" id="nowDisplay">—</div>
+    <div class="ical-bar hidden" id="icalBar">
+      <span id="icalStatus" style="font-size:12px;color:var(--muted);"></span>
+      <button id="icalSyncBtn" type="button" class="cta" style="padding:6px 12px;font-size:12px;">🔄 Sync AirBnB</button>
+    </div>
     <div class="legend">
       <div class="lg lg-green"><span class="dot"></span> in orde</div>
       <div class="lg lg-orange"><span class="dot"></span> aandacht</div>
@@ -467,6 +472,11 @@ async function load() {
     alert("Kon Eikensingel-data niet laden: " + e.message + "\n\nUpdate de Fonteyn Dashboard-app naar de laatste versie.");
     state.parkState = { houses: {} };
   }
+  // Sync-balkje alleen voor full-rol (mag handmatig synchroniseren)
+  if (state.role === "full") {
+    el("icalBar").classList.remove("hidden");
+    updateIcalStatus();
+  }
   // Toon role-banner als de gebruiker beperkt is
   if (state.role === "booker") {
     const banner = document.createElement("div");
@@ -485,6 +495,25 @@ function updateNowDisplay() {
   el("nowDisplay").textContent = "Nu: " + new Date().toLocaleString("nl-NL", {
     weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
   });
+  updateIcalStatus();
+}
+
+function updateIcalStatus() {
+  const last = state.parkState?.lastIcalSync;
+  const lastResult = state.parkState?.lastIcalSyncResult;
+  if (last) {
+    const d = new Date(last);
+    const minsAgo = Math.round((Date.now() - d.getTime()) / 60000);
+    const ago = minsAgo < 1 ? "< 1 min" : minsAgo < 60 ? `${minsAgo} min` : `${Math.round(minsAgo/60)} u`;
+    let txt = `AirBnB sync: ${ago} geleden`;
+    if (lastResult) {
+      if (lastResult.added) txt += ` — ${lastResult.added} nieuw`;
+      if (lastResult.errors && lastResult.errors.length) txt += ` ⚠️ ${lastResult.errors.length} fouten`;
+    }
+    el("icalStatus").textContent = txt;
+  } else {
+    el("icalStatus").textContent = "AirBnB nog niet gesynchroniseerd";
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -680,21 +709,30 @@ function renderBookingCard(b, today) {
   const isCurrent = b.from <= today && today <= b.to;
   const isUpcoming = b.from > today;
   const cls = isCurrent ? "current" : isPast ? "past" : "upcoming";
-  const badge = isCurrent ? `<span class="badge-active">Nu actief</span>`
+  const stateBadge = isCurrent ? `<span class="badge-active">Nu actief</span>`
               : isUpcoming ? `<span class="badge-upcoming">Komt nog</span>`
               : "";
+  // Synced uit AirBnB? Datums + bron komen daarvandaan en zijn read-only.
+  const synced = !!b.icalUid;
+  const syncedBadge = synced
+    ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:#fef3c7;color:#92400e;text-transform:uppercase;letter-spacing:.04em;">via AirBnB iCal</span>`
+    : "";
   const sourceOpts = ["airbnb","booking","website","direct","other"]
     .map(s => `<option value="${s}" ${b.source === s ? "selected" : ""}>${SOURCE_LABELS[s]}</option>`)
     .join("");
   const ro = !canEdit() ? "readonly" : "";
   const dis = !canEdit() ? "disabled" : "";
+  // Datums + bron van synced bookings altijd read-only — komen van AirBnB.
+  const dateRo = (synced || !canEdit()) ? "readonly" : "";
+  const sourceDis = (synced || !canEdit()) ? "disabled" : "";
   const deleteBtn = canEdit()
     ? `<button class="danger" type="button" data-delete-booking="${escapeHtml(b.id)}" style="margin-left:auto;">Verwijderen</button>`
     : `<span style="margin-left:auto;font-size:11px;color:var(--muted);">alleen-lezen</span>`;
   return `
     <div class="booking-card ${cls}">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-        ${badge}
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+        ${stateBadge}
+        ${syncedBadge}
         <span style="font-size:11px;color:var(--muted);">id: ${escapeHtml(b.id)}</span>
         ${deleteBtn}
       </div>
@@ -705,17 +743,17 @@ function renderBookingCard(b, today) {
         </div>
         <div>
           <label>Van</label>
-          <input type="date" data-booking="${escapeHtml(b.id)}" data-field="from" value="${escapeHtml(b.from || "")}" ${ro}>
+          <input type="date" data-booking="${escapeHtml(b.id)}" data-field="from" value="${escapeHtml(b.from || "")}" ${dateRo}>
         </div>
         <div>
           <label>Tot</label>
-          <input type="date" data-booking="${escapeHtml(b.id)}" data-field="to" value="${escapeHtml(b.to || "")}" ${ro}>
+          <input type="date" data-booking="${escapeHtml(b.id)}" data-field="to" value="${escapeHtml(b.to || "")}" ${dateRo}>
         </div>
       </div>
       <div class="row three" style="margin-top:8px;">
         <div>
           <label>Geboekt via</label>
-          <select data-booking="${escapeHtml(b.id)}" data-field="source" ${dis}>${sourceOpts}</select>
+          <select data-booking="${escapeHtml(b.id)}" data-field="source" ${sourceDis}>${sourceOpts}</select>
         </div>
         <div>
           <label>Bedrag (€)</label>
@@ -827,6 +865,29 @@ function saveHouse(h) {
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && !el("modalOverlay").classList.contains("hidden")) closeModal();
+});
+
+// "🔄 Sync AirBnB" knop — handmatige trigger
+el("icalSyncBtn").addEventListener("click", async () => {
+  const btn = el("icalSyncBtn");
+  btn.disabled = true; btn.textContent = "Synchroniseren…";
+  try {
+    const r = await fetch("/api/eikensingel/sync", { method: "POST" });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    // State opnieuw ophalen om de nieuwe boekingen te zien
+    const r2 = await fetch("/api/eikensingel");
+    if (r2.ok) state.parkState = await r2.json();
+    renderPark();
+    updateIcalStatus();
+    let msg = `Klaar — ${j.added} nieuw, ${j.skipped} al bekend`;
+    if (j.errors && j.errors.length) msg += `\n\nFouten:\n${j.errors.join("\n")}`;
+    alert(msg);
+  } catch (e) {
+    alert("Sync mislukt: " + e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = "🔄 Sync AirBnB";
+  }
 });
 
 load();

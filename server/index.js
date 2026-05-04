@@ -734,7 +734,7 @@ function sanitizeBooking(b) {
   if (!dateRe.test(String(b.from || ""))) return null;
   if (!dateRe.test(String(b.to || "")))   return null;
   const cleanedSource = ["airbnb", "booking", "website", "direct", "other"].includes(b.source) ? b.source : "other";
-  return {
+  const out = {
     id: typeof b.id === "string" && b.id ? b.id.slice(0, 50) : `b_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
     guestName: String(b.guestName || "").slice(0, 200),
     from: b.from,
@@ -747,6 +747,11 @@ function sanitizeBooking(b) {
     email: String(b.email || "").slice(0, 200),
     notes: String(b.notes || "").slice(0, 1000),
   };
+  // iCal-sync: als deze boeking via AirBnB iCal binnenkwam, bewaren we de
+  // unieke event-id zodat we 'm bij volgende sync-runs kunnen herkennen
+  // (en niet duplicaat invoegen).
+  if (b.icalUid) out.icalUid = String(b.icalUid).slice(0, 200);
+  return out;
 }
 
 // ─── Toegang Eikensingel ────────────────────────────────────────────
@@ -830,6 +835,158 @@ app.post("/api/eikensingel/houses/:id/bookings", requireAuth, requireEikensingel
     res.status(500).json({ error: "opslaan mislukt: " + e.message });
   }
 });
+
+// ════════════════════════════════════════════════════════════════════
+// AirBnB iCal-sync — fetch elke 15 min de iCal-feed per huisje en
+// importeer nieuwe boekingen automatisch. AirBnB's iCal levert alleen
+// datums + UID (geen gastnaam, geen contact); Fransje vult dat bij in
+// de UI nadat de boeking is verschenen.
+//
+// iCal-feed-URLs per huisje staan in EIKENSINGEL_DIR/ical-feeds.json:
+//   { "3": "https://www.airbnb.nl/calendar/ical/...", "4": "...", ... }
+// Niet in Git — privé per installatie.
+// ════════════════════════════════════════════════════════════════════
+const ICAL_FEEDS_FILE = path.join(EIKENSINGEL_DIR, "ical-feeds.json");
+
+function loadIcalFeeds() {
+  try {
+    if (!fs.existsSync(ICAL_FEEDS_FILE)) return {};
+    return JSON.parse(fs.readFileSync(ICAL_FEEDS_FILE, "utf-8"));
+  } catch (e) {
+    console.warn("[ical] kon feeds-file niet lezen:", e.message);
+    return {};
+  }
+}
+function saveIcalFeeds(data) {
+  const tmp = ICAL_FEEDS_FILE + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, ICAL_FEEDS_FILE);
+}
+
+// Minimale iCal-parser: alleen wat we nodig hebben uit AirBnB's feeds.
+// VEVENT-blokken met DTSTART, DTEND (dates only), UID, SUMMARY.
+function parseIcal(text) {
+  const out = [];
+  if (!text || typeof text !== "string") return out;
+  // Unfold lines: lijnen die met een spatie of tab beginnen horen bij de vorige.
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const unfolded = [];
+  for (const ln of lines) {
+    if (/^[ \t]/.test(ln) && unfolded.length) unfolded[unfolded.length - 1] += ln.slice(1);
+    else unfolded.push(ln);
+  }
+  let cur = null;
+  const toIsoDate = (v) => {
+    // Accepteer YYYYMMDD of YYYYMMDDTHHMMSSZ
+    const m = String(v || "").match(/^(\d{4})(\d{2})(\d{2})/);
+    return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+  };
+  for (const ln of unfolded) {
+    if (ln === "BEGIN:VEVENT") { cur = {}; continue; }
+    if (ln === "END:VEVENT") { if (cur) out.push(cur); cur = null; continue; }
+    if (!cur) continue;
+    // key (mogelijk met params) : value
+    const idx = ln.indexOf(":");
+    if (idx < 0) continue;
+    const left = ln.slice(0, idx);
+    const value = ln.slice(idx + 1);
+    const keyName = left.split(";")[0].toUpperCase();
+    if (keyName === "DTSTART") cur.from = toIsoDate(value);
+    else if (keyName === "DTEND") cur.to = toIsoDate(value);
+    else if (keyName === "UID") cur.uid = value.trim();
+    else if (keyName === "SUMMARY") cur.summary = value.trim();
+  }
+  return out;
+}
+
+// Sync alle iCal-feeds, voeg nieuwe boekingen toe. Idempotent op icalUid.
+async function syncEikensingelIcal() {
+  const feeds = loadIcalFeeds();
+  if (!Object.keys(feeds).length) return { ok: true, added: 0, skipped: 0, errors: [], lastSync: null };
+  const state = loadEikensingelState();
+  let added = 0, skipped = 0;
+  const errors = [];
+  for (const [houseId, url] of Object.entries(feeds)) {
+    if (!url) continue;
+    if (!/^https?:\/\//.test(url)) { errors.push(`huis ${houseId}: ongeldige URL`); continue; }
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const text = await r.text();
+      const events = parseIcal(text);
+      const house = state.houses[houseId] || (state.houses[houseId] = { id: parseInt(houseId, 10), type: "rental", notes: "", bookings: [] });
+      if (!Array.isArray(house.bookings)) house.bookings = [];
+      for (const ev of events) {
+        if (!ev.uid || !ev.from || !ev.to) continue;
+        // AirBnB voegt vaak een blokkering "Airbnb (Not available)" toe
+        // voor de turn-over dag — die slaan we over als er geen gast bij staat.
+        if (/not available/i.test(ev.summary || "")) continue;
+        // Reeds geïmporteerd? Niets doen — Fransje's edits blijven intact.
+        if (house.bookings.some(b => b.icalUid === ev.uid)) { skipped++; continue; }
+        house.bookings.push({
+          id: `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          guestName: "",
+          from: ev.from,
+          to: ev.to,
+          source: "airbnb",
+          paid: true, // Airbnb int de betaling al via hun platform
+          cleanedBefore: false,
+          amount: 0,
+          phone: "",
+          email: "",
+          notes: "via Airbnb iCal",
+          icalUid: ev.uid,
+        });
+        added++;
+      }
+    } catch (e) {
+      errors.push(`huis ${houseId}: ${e.message}`);
+    }
+  }
+  state.lastIcalSync = new Date().toISOString();
+  state.lastIcalSyncResult = { added, skipped, errors };
+  if (added > 0 || true) saveEikensingelState(state); // schrijf altijd zodat lastIcalSync up-to-date is
+  console.log(`[ical-sync] added=${added} skipped=${skipped} errors=${errors.length}`);
+  return { ok: true, added, skipped, errors, lastSync: state.lastIcalSync };
+}
+
+// Endpoints om feeds te beheren — alleen 'full' rol mag dit.
+app.get("/api/eikensingel/ical-feeds", requireAuth, requireEikensingelFull, (req, res) => {
+  res.json({ feeds: loadIcalFeeds(), lastSync: loadEikensingelState().lastIcalSync || null });
+});
+
+app.put("/api/eikensingel/ical-feeds", requireAuth, requireEikensingelFull, (req, res) => {
+  const incoming = req.body || {};
+  const cleaned = {};
+  for (const [k, v] of Object.entries(incoming)) {
+    if (!/^([1-9]|10)$/.test(String(k))) continue;
+    if (typeof v !== "string") continue;
+    const url = v.trim();
+    if (!url) continue;
+    if (!/^https?:\/\//.test(url)) continue;
+    cleaned[k] = url.slice(0, 1000);
+  }
+  try {
+    saveIcalFeeds(cleaned);
+    res.json({ ok: true, feeds: cleaned });
+  } catch (e) {
+    res.status(500).json({ error: "opslaan mislukt: " + e.message });
+  }
+});
+
+// Manual trigger: "Sync nu" knop in UI
+app.post("/api/eikensingel/sync", requireAuth, requireEikensingelFull, async (req, res) => {
+  try {
+    const result = await syncEikensingelIcal();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Achtergrond-sync: 5 sec na boot eerste run, daarna elke 15 minuten.
+setTimeout(() => { syncEikensingelIcal().catch(e => console.warn("[ical-sync] init fail:", e.message)); }, 5000);
+setInterval(() => { syncEikensingelIcal().catch(e => console.warn("[ical-sync] periodic fail:", e.message)); }, 15 * 60 * 1000);
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
