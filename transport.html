@@ -160,6 +160,12 @@
     padding: 14px 18px; background: #fef2f2; border-top: 1px solid #fecaca;
     color: #7f1d1d; font-size: 13px;
   }
+  /* Aandachts-blok: blauw, voor wel-aanvinkbare maar nog niet gecontroleerde orders */
+  .order-card .attention {
+    padding: 12px 18px; background: #eff6ff; border-top: 1px solid #bfdbfe;
+    color: #1e3a8a; font-size: 13px; line-height: 1.45;
+  }
+  .order-card .attention b { color: #1e40af; }
   .order-card .block-reason-title { font-weight: 700; margin-bottom: 4px; color: #991b1b; }
   .order-card .block-reason-text { line-height: 1.4; }
   .order-card .block-reason-advice { color: #991b1b; margin-top: 4px; line-height: 1.4; }
@@ -179,6 +185,7 @@
     font-size: 11px; font-weight: 600; white-space: nowrap;
   }
   .stat-pill.paid     { background: #dcfce7; color: #15803d; }
+  .stat-pill.tofact   { background: #dbeafe; color: #1e40af; }
   .stat-pill.partial  { background: #fef3c7; color: #92400e; }
   .stat-pill.unpaid   { background: #fee2e2; color: #991b1b; }
   .stat-pill.unknown  { background: #f3f4f6; color: #6b7280; }
@@ -489,8 +496,17 @@
 // Constants
 // ──────────────────────────────────────────────────────────────────
 const STATUS_VERKOOPORDER     = 1;
+const STATUS_TE_FACTUREREN    = 17;
 const STATUS_30_AANBETAALD    = 25;
 const STATUS_VOLLEDIG_BETAALD = 30;
+
+// Statussen die voor transport "vrijgegeven" zijn:
+//  - 30 (Volledig betaald): standaard ingang, automatisch aangevinkt
+//  - 17 (Te factureren): mag mee — maar NIET automatisch aanvinken;
+//    de Fonteyn-medewerker moet eerst handmatig controleren of de
+//    facturatie klopt voordat ze 'm meegeven met transport.
+const ALLOWED_STATUSES = new Set([STATUS_VOLLEDIG_BETAALD, STATUS_TE_FACTUREREN]);
+const AUTO_SELECT_STATUSES = new Set([STATUS_VOLLEDIG_BETAALD]);
 
 // Bakwagen volume voor "% benut" indicator: 5 × 2 × 2,5 = 25 m³
 const TRUCK_VOLUME_M3 = 5 * 2 * 2.5;
@@ -738,7 +754,10 @@ el("fetchBtn").addEventListener("click", async () => {
       try {
         const order = await fetchOrder(nr);
         state.orders.push(order);
-        if (order.allowed) state.selected.add(nr);
+        // Alleen status 30 wordt automatisch aangevinkt. Status 17 (Te
+        // factureren) is wel selecteerbaar maar de medewerker moet 'm zelf
+        // aanzetten na een handmatige controle van de facturatie.
+        if (order.autoSelect) state.selected.add(nr);
       } catch (e) {
         console.warn("Order " + nr + " faalde:", e);
         state.orders.push({ nr, error: e.message, allowed: false });
@@ -831,7 +850,12 @@ async function fetchOrder(nr) {
   const status = o.OrderStatus?.Id;
   const total  = Number(o.Totals?.AmountIncl ?? 0);
   const paid   = Number(o.Totals?.Calc_TotalPayed ?? 0);
-  const allowed = status === STATUS_VOLLEDIG_BETAALD;
+  // Toegestaan voor transport: status 30 (Volledig betaald) én 17 (Te
+  // factureren). Voor 17 moet de Fonteyn-medewerker zelf nog controleren
+  // dat alles klopt voor 'ie 'm aanvinkt — dus alleen 30 wordt
+  // auto-geselecteerd, 17 staat aan-vink-baar maar standaard uit.
+  const allowed = ALLOWED_STATUSES.has(status);
+  const autoSelect = AUTO_SELECT_STATUSES.has(status);
 
   // 6) Klant/adres + contact-info (voor "neem contact op met de klant")
   const deliver = o.DeliveryAddress || o.AccountAddress || {};
@@ -864,11 +888,19 @@ async function fetchOrder(nr) {
     blockAdvice = "Check de orderstatus handmatig in Logic4.";
   }
 
+  // Aandachts-melding voor wel-aanvinkbare maar niet-auto-geselecteerde
+  // statussen (status 17 "Te factureren"): laat de medewerker weten dat
+  // ze 'm zelf moeten controleren voor ze de checkbox aanzetten.
+  let attentionNote = null;
+  if (allowed && !autoSelect && status === STATUS_TE_FACTUREREN) {
+    attentionNote = "Te factureren — controleer eerst of de facturatie klopt voordat je deze meegeeft met transport. Vink dan handmatig aan.";
+  }
+
   return {
-    nr, status, total, paid, allowed,
+    nr, status, total, paid, allowed, autoSelect,
     customer, company, firstName, lastName, fullName,
     postcode, city, email, phone,
-    blockReason, blockAdvice,
+    blockReason, blockAdvice, attentionNote,
     lines, totalBoxes, totalVolumeM3, totalKg, unmatchedLines,
   };
 }
@@ -889,6 +921,7 @@ function isServiceLine(code, desc) {
 function statusName(id) {
   switch (id) {
     case STATUS_VERKOOPORDER:     return "Verkooporder";
+    case STATUS_TE_FACTUREREN:    return "Te factureren";
     case STATUS_30_AANBETAALD:    return "30% aanbetaald";
     case STATUS_VOLLEDIG_BETAALD: return "Volledig betaald";
     default:                      return "Status " + id;
@@ -896,6 +929,7 @@ function statusName(id) {
 }
 function statusPillClass(id) {
   if (id === STATUS_VOLLEDIG_BETAALD) return "paid";
+  if (id === STATUS_TE_FACTUREREN)    return "tofact";
   if (id === STATUS_30_AANBETAALD)    return "partial";
   if (id === STATUS_VERKOOPORDER)     return "unpaid";
   return "unknown";
@@ -1180,6 +1214,7 @@ function renderOrderCard(o) {
       <div class="num"><span class="lbl">Gewicht</span>${fmtKg(o.totalKg)}</div>
     </div>
     ${reasonBlock}
+    ${o.attentionNote ? `<div class="attention">⚠️ <b>${escapeHtml(o.attentionNote)}</b></div>` : ""}
     <details>
       <summary>${o.lines.length} regels — ${o.unmatchedLines > 0 ? `<span style="color:var(--warn)">${o.unmatchedLines} zonder verpakkings-info</span>` : "alles gematched"}</summary>
       <div class="lines">${o.lines.map(ln => renderLine(ln)).join("")}</div>
