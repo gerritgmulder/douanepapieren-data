@@ -214,6 +214,35 @@ async function startHelper() {
   await fs.mkdir(userSpecsDir, { recursive: true });
   process.env.USER_SPECS_DIR = userSpecsDir;
   console.log(`[user-specs] data-dir: ${userSpecsDir}`);
+
+  // GEDEELDE product-specs (artikelcode → SKU/HS/origin/boxes) op de netwerk-
+  // schijf zodat álle gebruikers dezelfde data delen. Eerst proberen of de
+  // share toegankelijk is, anders fallback naar lokale userData met warning.
+  const shareCandidates = process.platform === "win32"
+    ? ["G:\\Fonteyn\\Fonteyn-Dashboard-Data", "\\\\fonfile\\data\\Fonteyn\\Fonteyn-Dashboard-Data"]
+    : ["/Volumes/data/Fonteyn/Fonteyn-Dashboard-Data"];
+  let sharedDir = null;
+  for (const cand of shareCandidates) {
+    try {
+      await fs.mkdir(cand, { recursive: true });
+      // Schrijftest: schrijf en verwijder een tijdelijk bestand
+      const probe = path.join(cand, ".write-probe");
+      await fs.writeFile(probe, String(Date.now()));
+      await fs.unlink(probe);
+      sharedDir = cand;
+      console.log(`[product-specs] gedeeld op netwerkschijf: ${sharedDir}`);
+      break;
+    } catch {/* probeer volgende */ }
+  }
+  if (!sharedDir) {
+    sharedDir = app.isPackaged
+      ? path.join(app.getPath("userData"), "product-specs-fallback")
+      : path.join(__dirname, ".product-specs-fallback");
+    await fs.mkdir(sharedDir, { recursive: true });
+    console.log(`[product-specs] ⚠️  netwerkschijf niet bereikbaar — fallback naar lokaal: ${sharedDir}`);
+    console.log(`[product-specs]   data wordt NIET gedeeld met andere gebruikers tot de share weer beschikbaar is.`);
+  }
+  process.env.SHARED_SPECS_DIR = sharedDir;
   // Eikensingel-vakantiepark-state (boekingen, schoonmaak, betalingen per huis).
   const eikensingelDir = app.isPackaged
     ? path.join(app.getPath("userData"), "eikensingel")

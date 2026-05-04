@@ -271,135 +271,163 @@ app.get("/api/packaging-database", requireAuth, (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════════════
-// User-specs — handmatige overrides per artikelcode (sku/dims/gw/nw/
-// hs-code/origin). Vroeger lokaal in localStorage van Manon's machine,
-// nu server-side zodat alle gebruikers van de app diezelfde edits zien.
-// Manon vult 1x in, Don/Dolf/Gerrit zien 't bij volgende order.
+// Product-specs — UNIFIED store voor alles wat Manon handmatig invoert per
+// artikelcode: SKU, HS-code, origin, dozen (multi-box L×B×H+kg), gw, nw.
 //
-// Storage: user-specs.json in USER_SPECS_DIR (set door Electron's main.js
-// naar userData/user-specs in productie; dev: .user-specs/ in projectroot).
+// Vroeger had Douanepapieren z'n eigen user-specs.json (hs/sku/origin/gw/nw +
+// dims-string) en Transport z'n eigen packaging-overrides.json (boxes-array).
+// Manon moest dezelfde data dus 2× invoeren — onhandig en bron van fouten.
+// Nu: één bestand product-specs.json op de gedeelde netwerkschijf
+// (G:\Fonteyn\... / /Volumes/data/Fonteyn/...) zodat Manon, Gerrit, Don,
+// Dolf, Fonteynbot, etc. dezelfde data delen.
+//
+// De oude /api/user-specs en /api/packaging-overrides endpoints blijven werken
+// voor backward-compat met oudere clients — ze lezen/schrijven naar de
+// unified store met transformatie.
+//
+// Format unified product-specs.json:
+//   { "<artikelcode>": {
+//       "sku": "SKT339G7",            // optional
+//       "hs":  "9019101000",          // optional, douane HS-code
+//       "origin": "China",            // optional
+//       "boxes": [                    // 0..n dozen
+//         { "l": 500, "w": 228, "h": 155, "weight": 1400 }
+//       ],
+//       "gw": 1600,                   // optioneel — override op sum(boxes.weight)
+//       "nw": 1400,                   // optioneel
+//       "name": "Aquatic 6 Swimspa"   // optionele weergavenaam
+//   } }
 // ════════════════════════════════════════════════════════════════════
+
+// Voor backwards-compat houden we óók de oude paden bij voor migratie.
 const USER_SPECS_DIR = process.env.USER_SPECS_DIR || path.join(PARENT_DIR, ".user-specs");
 fs.mkdirSync(USER_SPECS_DIR, { recursive: true });
-const USER_SPECS_FILE = path.join(USER_SPECS_DIR, "user-specs.json");
+const LEGACY_USER_SPECS_FILE = path.join(USER_SPECS_DIR, "user-specs.json");
+const LEGACY_PACKAGING_FILE  = path.join(USER_SPECS_DIR, "packaging-overrides.json");
 
-function loadUserSpecs() {
+// Gedeelde locatie — ingesteld door main.js (netwerkschijf indien beschikbaar,
+// anders een lokale fallback-map). In dev valt 'm terug op .product-specs/.
+const SHARED_SPECS_DIR = process.env.SHARED_SPECS_DIR || path.join(PARENT_DIR, ".product-specs");
+fs.mkdirSync(SHARED_SPECS_DIR, { recursive: true });
+const PRODUCT_SPECS_FILE = path.join(SHARED_SPECS_DIR, "product-specs.json");
+const PRODUCT_SPECS_BACKUP_DIR = path.join(SHARED_SPECS_DIR, "backup");
+fs.mkdirSync(PRODUCT_SPECS_BACKUP_DIR, { recursive: true });
+
+// ─── Load / save / migrate ─────────────────────────────────────────────
+function loadProductSpecs() {
   try {
-    if (!fs.existsSync(USER_SPECS_FILE)) return {};
-    return JSON.parse(fs.readFileSync(USER_SPECS_FILE, "utf-8"));
+    if (!fs.existsSync(PRODUCT_SPECS_FILE)) return {};
+    return JSON.parse(fs.readFileSync(PRODUCT_SPECS_FILE, "utf-8"));
   } catch (e) {
-    console.warn("[user-specs] kon niet lezen:", e.message);
+    console.warn("[product-specs] kon niet lezen:", e.message);
     return {};
   }
 }
 
-function saveUserSpecs(data) {
-  // Atomic write: schrijf naar tijdelijk bestand en hernoem. Voorkomt
-  // corrupte JSON als de helper crasht midden in een schrijfactie.
-  const tmp = USER_SPECS_FILE + ".tmp";
+function saveProductSpecs(data) {
+  const tmp = PRODUCT_SPECS_FILE + ".tmp";
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, USER_SPECS_FILE);
+  fs.renameSync(tmp, PRODUCT_SPECS_FILE);
 }
 
-// Geldig formaat voor één spec-entry. We accepteren losse velden; ontbrekende
-// velden blijven ongezet zodat een latere PUT alleen wat ie krijgt overschrijft.
-const USER_SPEC_FIELDS = ["sku", "dims", "gw", "nw", "hs", "origin"];
+// Parse een dims-string ("500x228x155 CM" / "500x228x155") naar {l,w,h}
+function parseDimsString(s) {
+  if (!s) return null;
+  const m = String(s).match(/(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)/i);
+  if (!m) return null;
+  const n = (x) => parseFloat(String(x).replace(",", "."));
+  return { l: n(m[1]), w: n(m[2]), h: n(m[3]) };
+}
 
-app.get("/api/user-specs", requireAuth, (req, res) => {
-  res.json(loadUserSpecs());
-});
+// Eenmalige migratie: lees oude user-specs.json + packaging-overrides.json
+// en mergeen ze in product-specs.json. Loopt alleen als product-specs.json
+// nog niet bestaat (eerste keer dat de nieuwe server-versie draait).
+function migrateLegacyToUnified() {
+  if (fs.existsSync(PRODUCT_SPECS_FILE)) return; // al gedaan
 
-app.put("/api/user-specs/:code", requireAuth, (req, res) => {
-  const code = String(req.params.code || "").trim();
-  if (!code || code.length > 50) {
-    return res.status(400).json({ error: "ongeldige code" });
-  }
-  const incoming = req.body || {};
-  // Filter alleen bekende velden — geen prototype-pollution etc.
-  const cleaned = {};
-  for (const k of USER_SPEC_FIELDS) {
-    if (incoming[k] !== undefined && incoming[k] !== null) {
-      // gw/nw zijn nummers, rest strings. Lege strings = veld unset (laat weg).
-      if (k === "gw" || k === "nw") {
-        const n = parseFloat(incoming[k]);
-        if (!isNaN(n)) cleaned[k] = n;
-      } else {
-        const s = String(incoming[k]).trim();
-        if (s) cleaned[k] = s;
+  const merged = {};
+  let migratedFromUserSpecs = 0, migratedFromPackaging = 0;
+
+  // Lees legacy user-specs (HS-code, SKU, dims-string, gw, nw, origin)
+  if (fs.existsSync(LEGACY_USER_SPECS_FILE)) {
+    try {
+      const old = JSON.parse(fs.readFileSync(LEGACY_USER_SPECS_FILE, "utf-8"));
+      for (const [code, ov] of Object.entries(old)) {
+        if (!ov || typeof ov !== "object") continue;
+        const e = merged[code] = merged[code] || {};
+        if (ov.sku)    e.sku    = String(ov.sku);
+        if (ov.hs)     e.hs     = String(ov.hs);
+        if (ov.origin) e.origin = String(ov.origin);
+        if (ov.gw != null && +ov.gw > 0) e.gw = +ov.gw;
+        if (ov.nw != null && +ov.nw > 0) e.nw = +ov.nw;
+        const dims = parseDimsString(ov.dims);
+        if (dims) {
+          // Plaats als 1 doos. Gewicht = nw of gw als die bestaan.
+          const w = (+ov.nw > 0 ? +ov.nw : +ov.gw) || 0;
+          e.boxes = [{ l: dims.l, w: dims.w, h: dims.h, ...(w ? { weight: w } : {}) }];
+        }
+        migratedFromUserSpecs++;
       }
+    } catch (e) {
+      console.warn("[product-specs] migratie user-specs faalde:", e.message);
     }
   }
-  const all = loadUserSpecs();
-  if (Object.keys(cleaned).length === 0) {
-    // Niets te bewaren → behandel als delete (cleared all fields)
-    delete all[code];
-  } else {
-    all[code] = cleaned;
-  }
-  try {
-    saveUserSpecs(all);
-    res.json({ ok: true, code, spec: all[code] || null });
-  } catch (e) {
-    console.error("[user-specs] save fail:", e);
-    res.status(500).json({ error: "opslaan mislukt: " + e.message });
-  }
-});
 
-app.delete("/api/user-specs/:code", requireAuth, (req, res) => {
-  const code = String(req.params.code || "").trim();
-  const all = loadUserSpecs();
-  if (code in all) {
-    delete all[code];
-    try { saveUserSpecs(all); }
-    catch (e) { return res.status(500).json({ error: e.message }); }
-  }
-  res.json({ ok: true, code });
-});
-
-// ════════════════════════════════════════════════════════════════════
-// Packaging-overrides — handmatig ingevulde verpakkingsdata per art.code,
-// voor de Transport-laden tool. Format: { "<code>": { l, w, h, weight,
-// name? } } in cm/kg. Server-side opslag zodat Manon's invoer ook voor
-// Don/Dolf/Gerrit/Fonteynbot beschikbaar is.
-// ════════════════════════════════════════════════════════════════════
-const PACKAGING_OVERRIDES_FILE = path.join(USER_SPECS_DIR, "packaging-overrides.json");
-
-function loadPackagingOverrides() {
-  try {
-    if (!fs.existsSync(PACKAGING_OVERRIDES_FILE)) return {};
-    return JSON.parse(fs.readFileSync(PACKAGING_OVERRIDES_FILE, "utf-8"));
-  } catch (e) {
-    console.warn("[packaging-overrides] kon niet lezen:", e.message);
-    return {};
-  }
-}
-
-function savePackagingOverrides(data) {
-  const tmp = PACKAGING_OVERRIDES_FILE + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, PACKAGING_OVERRIDES_FILE);
-}
-
-app.get("/api/packaging-overrides", requireAuth, (req, res) => {
-  res.json(loadPackagingOverrides());
-});
-
-app.put("/api/packaging-overrides/:code", requireAuth, (req, res) => {
-  const code = String(req.params.code || "").trim();
-  if (!code || code.length > 50) return res.status(400).json({ error: "ongeldige code" });
-
-  const incoming = req.body || {};
-  const cleaned = {};
-  // Top-level (legacy) single-box velden — achterwaartse compat
-  for (const k of ["l", "w", "h", "weight"]) {
-    if (incoming[k] !== undefined && incoming[k] !== null && incoming[k] !== "") {
-      const n = parseFloat(incoming[k]);
-      if (!isNaN(n) && n > 0) cleaned[k] = n;
+  // Lees legacy packaging-overrides (boxes-array, name)
+  if (fs.existsSync(LEGACY_PACKAGING_FILE)) {
+    try {
+      const old = JSON.parse(fs.readFileSync(LEGACY_PACKAGING_FILE, "utf-8"));
+      for (const [code, ov] of Object.entries(old)) {
+        if (!ov || typeof ov !== "object") continue;
+        const e = merged[code] = merged[code] || {};
+        if (ov.name) e.name = String(ov.name);
+        // Boxes-array of legacy single-box (l/w/h/weight top-level)
+        const boxes = Array.isArray(ov.boxes) ? ov.boxes
+          : (ov.l && ov.w && ov.h ? [{ l: +ov.l, w: +ov.w, h: +ov.h, ...(ov.weight ? { weight: +ov.weight } : {}) }] : []);
+        // Transport's boxes winnen — meer recente / fijnmaziger dan douane's dims-string
+        if (boxes.length) {
+          e.boxes = boxes
+            .filter(b => +b.l > 0 && +b.w > 0 && +b.h > 0)
+            .map(b => ({ l: +b.l, w: +b.w, h: +b.h, ...(b.weight ? { weight: +b.weight } : {}) }));
+        }
+        migratedFromPackaging++;
+      }
+    } catch (e) {
+      console.warn("[product-specs] migratie packaging-overrides faalde:", e.message);
     }
   }
-  // Nieuwe multi-box format: array van dozen
-  if (Array.isArray(incoming.boxes)) {
-    const validBoxes = incoming.boxes
+
+  if (migratedFromUserSpecs || migratedFromPackaging) {
+    try {
+      saveProductSpecs(merged);
+      console.log(`[product-specs] migratie: ${migratedFromUserSpecs} uit user-specs + ${migratedFromPackaging} uit packaging-overrides → ${Object.keys(merged).length} unieke artikelcodes in ${PRODUCT_SPECS_FILE}`);
+      // Backup van de oude bestanden naast de unified store
+      try {
+        if (fs.existsSync(LEGACY_USER_SPECS_FILE)) fs.copyFileSync(LEGACY_USER_SPECS_FILE, path.join(PRODUCT_SPECS_BACKUP_DIR, `pre-unification-user-specs-${Date.now()}.json`));
+        if (fs.existsSync(LEGACY_PACKAGING_FILE))  fs.copyFileSync(LEGACY_PACKAGING_FILE,  path.join(PRODUCT_SPECS_BACKUP_DIR, `pre-unification-packaging-${Date.now()}.json`));
+      } catch (e) { console.warn("[product-specs] backup-kopie faalde:", e.message); }
+    } catch (e) {
+      console.error("[product-specs] migratie kon niet wegschrijven:", e.message);
+    }
+  }
+}
+migrateLegacyToUnified();
+
+// ─── Validation helpers ────────────────────────────────────────────────
+function sanitizeProductSpec(input, existing = {}) {
+  const out = { ...existing };
+  if (input.sku    !== undefined) { const s = String(input.sku || "").trim();    if (s) out.sku = s.slice(0, 100);    else delete out.sku; }
+  if (input.hs     !== undefined) { const s = String(input.hs || "").trim();     if (s) out.hs = s.slice(0, 30);      else delete out.hs; }
+  if (input.origin !== undefined) { const s = String(input.origin || "").trim(); if (s) out.origin = s.slice(0, 100); else delete out.origin; }
+  if (input.name   !== undefined) { const s = String(input.name || "").trim();   if (s) out.name = s.slice(0, 200);   else delete out.name; }
+  for (const k of ["gw", "nw"]) {
+    if (input[k] !== undefined) {
+      const n = parseFloat(input[k]);
+      if (!isNaN(n) && n > 0) out[k] = n; else delete out[k];
+    }
+  }
+  if (Array.isArray(input.boxes)) {
+    const valid = input.boxes
       .map(b => {
         if (!b || typeof b !== "object") return null;
         const cb = {};
@@ -409,39 +437,236 @@ app.put("/api/packaging-overrides/:code", requireAuth, (req, res) => {
             if (!isNaN(n) && n > 0) cb[k] = n;
           }
         }
-        // Box moet minstens L+B+H hebben om geldig te zijn
         return (cb.l && cb.w && cb.h) ? cb : null;
       })
       .filter(Boolean);
-    if (validBoxes.length) cleaned.boxes = validBoxes;
+    if (valid.length) out.boxes = valid;
+    else if (input.boxes.length === 0) delete out.boxes;
   }
-  if (incoming.name) cleaned.name = String(incoming.name).slice(0, 200);
+  return out;
+}
 
-  const all = loadPackagingOverrides();
-  // Niets bruikbaars opgegeven? Verwijder de hele override.
-  const hasContent = cleaned.boxes && cleaned.boxes.length
-    || (cleaned.l && cleaned.w && cleaned.h);
-  if (!hasContent) {
+// ─── Helpers voor backward-compat (oude formaten naar/van unified) ─────
+function specToLegacyUserSpec(spec) {
+  // {sku, dims, gw, nw, hs, origin}
+  if (!spec) return {};
+  const out = {};
+  if (spec.sku)    out.sku    = spec.sku;
+  if (spec.hs)     out.hs     = spec.hs;
+  if (spec.origin) out.origin = spec.origin;
+  if (spec.gw != null) out.gw = spec.gw;
+  if (spec.nw != null) out.nw = spec.nw;
+  // Dims-string alleen als er ten minste 1 doos is
+  if (spec.boxes && spec.boxes.length) {
+    const b = spec.boxes[0];
+    out.dims = `${b.l}x${b.w}x${b.h} CM`;
+    // Als we geen losse gw/nw hadden maar wel een doosgewicht, vul dat in.
+    if (out.gw == null && b.weight) out.gw = b.weight;
+    if (out.nw == null && b.weight) out.nw = b.weight;
+  }
+  return out;
+}
+
+function specToLegacyPackaging(spec) {
+  // {boxes: [...], name}
+  if (!spec) return {};
+  const out = {};
+  if (spec.name) out.name = spec.name;
+  if (spec.boxes && spec.boxes.length) out.boxes = spec.boxes;
+  return out;
+}
+
+// ─── NEW unified endpoints ─────────────────────────────────────────────
+app.get("/api/product-specs", requireAuth, (req, res) => {
+  res.json(loadProductSpecs());
+});
+
+app.put("/api/product-specs/:code", requireAuth, (req, res) => {
+  const code = String(req.params.code || "").trim();
+  if (!code || code.length > 50) return res.status(400).json({ error: "ongeldige code" });
+  const all = loadProductSpecs();
+  const merged = sanitizeProductSpec(req.body || {}, all[code] || {});
+  // Helemaal leeg? Verwijder.
+  const hasAny = merged.sku || merged.hs || merged.origin || merged.gw || merged.nw
+              || (merged.boxes && merged.boxes.length) || merged.name;
+  if (!hasAny) {
     delete all[code];
   } else {
-    // Vervangen i.p.v. mergen — de client stuurt altijd de complete state.
-    all[code] = cleaned;
+    all[code] = merged;
   }
   try {
-    savePackagingOverrides(all);
-    res.json({ ok: true, code, override: all[code] || null });
+    saveProductSpecs(all);
+    res.json({ ok: true, code, spec: all[code] || null });
   } catch (e) {
-    console.error("[packaging-overrides] save fail:", e);
+    console.error("[product-specs] save fail:", e);
+    res.status(500).json({ error: "opslaan mislukt: " + e.message });
+  }
+});
+
+app.delete("/api/product-specs/:code", requireAuth, (req, res) => {
+  const code = String(req.params.code || "").trim();
+  const all = loadProductSpecs();
+  if (code in all) {
+    delete all[code];
+    try { saveProductSpecs(all); }
+    catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+  res.json({ ok: true, code });
+});
+
+// CSV-export: alle product-specs als één tabel. Open in Excel als backup.
+app.get("/api/product-specs/export.csv", requireAuth, (req, res) => {
+  const all = loadProductSpecs();
+  // Bepaal max aantal dozen om kolommen te kunnen genereren
+  const maxBoxes = Math.max(1, ...Object.values(all).map(s => (s.boxes || []).length));
+  const headers = ["Artikelcode", "Naam", "SKU", "HS-code", "Origin", "GW (kg)", "NW (kg)", "Aantal dozen"];
+  for (let i = 1; i <= maxBoxes; i++) {
+    headers.push(`Doos ${i} L (cm)`, `Doos ${i} B (cm)`, `Doos ${i} H (cm)`, `Doos ${i} kg`);
+  }
+  const csvEsc = (s) => {
+    if (s == null) return "";
+    const str = String(s);
+    return /[",;\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+  };
+  const rows = [headers.join(";")];
+  for (const code of Object.keys(all).sort()) {
+    const s = all[code] || {};
+    const boxes = s.boxes || [];
+    const row = [code, s.name || "", s.sku || "", s.hs || "", s.origin || "", s.gw ?? "", s.nw ?? "", boxes.length];
+    for (let i = 0; i < maxBoxes; i++) {
+      const b = boxes[i] || {};
+      row.push(b.l ?? "", b.w ?? "", b.h ?? "", b.weight ?? "");
+    }
+    rows.push(row.map(csvEsc).join(";"));
+  }
+  const date = new Date().toISOString().slice(0, 10);
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="fonteyn-product-specs-${date}.csv"`);
+  // BOM zodat Excel UTF-8 herkent en accenten/€ goed toont
+  res.send("﻿" + rows.join("\n"));
+});
+
+// ─── BACKWARD-COMPAT endpoints voor oude clients ───────────────────────
+// Lezen + schrijven via de unified store met transformatie zodat OUDE
+// douane.html en transport.html (en versies <0.15) gewoon blijven werken
+// terwijl alle data in de unified store landt.
+
+app.get("/api/user-specs", requireAuth, (req, res) => {
+  const all = loadProductSpecs();
+  const out = {};
+  for (const [code, s] of Object.entries(all)) out[code] = specToLegacyUserSpec(s);
+  res.json(out);
+});
+
+app.put("/api/user-specs/:code", requireAuth, (req, res) => {
+  const code = String(req.params.code || "").trim();
+  if (!code || code.length > 50) return res.status(400).json({ error: "ongeldige code" });
+  const incoming = req.body || {};
+  const all = loadProductSpecs();
+  const cur = all[code] || {};
+  // Map oude velden naar unified. dims-string → boxes[0] (mergeen met
+  // bestaande boxes: alleen index 0 vervangen, hogere boxes intact laten).
+  const updates = {};
+  for (const k of ["sku", "hs", "origin"]) if (incoming[k] !== undefined) updates[k] = incoming[k];
+  for (const k of ["gw", "nw"]) if (incoming[k] !== undefined) updates[k] = incoming[k];
+  if (incoming.dims !== undefined) {
+    const dims = parseDimsString(incoming.dims);
+    if (dims) {
+      const existingBoxes = cur.boxes || [];
+      const w = (parseFloat(incoming.nw) > 0 ? +incoming.nw
+              : parseFloat(incoming.gw) > 0 ? +incoming.gw
+              : (existingBoxes[0] && existingBoxes[0].weight) || 0);
+      updates.boxes = [
+        { l: dims.l, w: dims.w, h: dims.h, ...(w ? { weight: w } : {}) },
+        ...existingBoxes.slice(1),
+      ];
+    } else if (!incoming.dims) {
+      // Lege dims? Verwijder boxes[0] indien aanwezig.
+      if (cur.boxes && cur.boxes.length) updates.boxes = cur.boxes.slice(1);
+    }
+  }
+  const merged = sanitizeProductSpec(updates, cur);
+  const hasAny = merged.sku || merged.hs || merged.origin || merged.gw || merged.nw
+              || (merged.boxes && merged.boxes.length) || merged.name;
+  if (!hasAny) delete all[code];
+  else all[code] = merged;
+  try {
+    saveProductSpecs(all);
+    res.json({ ok: true, code, spec: specToLegacyUserSpec(all[code]) });
+  } catch (e) {
+    res.status(500).json({ error: "opslaan mislukt: " + e.message });
+  }
+});
+
+app.delete("/api/user-specs/:code", requireAuth, (req, res) => {
+  // Verwijder alleen de douane-velden, behoud transport-velden (boxes/name).
+  const code = String(req.params.code || "").trim();
+  const all = loadProductSpecs();
+  if (all[code]) {
+    const cur = all[code];
+    const remaining = {};
+    if (cur.boxes && cur.boxes.length) remaining.boxes = cur.boxes;
+    if (cur.name) remaining.name = cur.name;
+    if (Object.keys(remaining).length) all[code] = remaining;
+    else delete all[code];
+    try { saveProductSpecs(all); }
+    catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+  res.json({ ok: true, code });
+});
+
+app.get("/api/packaging-overrides", requireAuth, (req, res) => {
+  const all = loadProductSpecs();
+  const out = {};
+  for (const [code, s] of Object.entries(all)) {
+    const legacy = specToLegacyPackaging(s);
+    if (legacy.boxes && legacy.boxes.length) out[code] = legacy;
+  }
+  res.json(out);
+});
+
+app.put("/api/packaging-overrides/:code", requireAuth, (req, res) => {
+  const code = String(req.params.code || "").trim();
+  if (!code || code.length > 50) return res.status(400).json({ error: "ongeldige code" });
+  const incoming = req.body || {};
+  const all = loadProductSpecs();
+  const cur = all[code] || {};
+  // Boxes-array (nieuw) of legacy single-box (l/w/h/weight top-level)
+  const updates = {};
+  if (Array.isArray(incoming.boxes)) {
+    updates.boxes = incoming.boxes;
+  } else if (incoming.l && incoming.w && incoming.h) {
+    updates.boxes = [{ l: incoming.l, w: incoming.w, h: incoming.h, ...(incoming.weight ? { weight: incoming.weight } : {}) }];
+  } else {
+    // Geen valide doos → verwijder boxes uit cur
+    updates.boxes = [];
+  }
+  if (incoming.name !== undefined) updates.name = incoming.name;
+  const merged = sanitizeProductSpec(updates, cur);
+  // Als er geen boxes meer zijn na sanitize, en geen douane-data, alles weg.
+  const hasAny = merged.sku || merged.hs || merged.origin || merged.gw || merged.nw
+              || (merged.boxes && merged.boxes.length) || merged.name;
+  if (!hasAny) delete all[code];
+  else all[code] = merged;
+  try {
+    saveProductSpecs(all);
+    res.json({ ok: true, code, override: specToLegacyPackaging(all[code]) });
+  } catch (e) {
     res.status(500).json({ error: "opslaan mislukt: " + e.message });
   }
 });
 
 app.delete("/api/packaging-overrides/:code", requireAuth, (req, res) => {
+  // Verwijder alleen de transport-velden (boxes/name), behoud douane-velden.
   const code = String(req.params.code || "").trim();
-  const all = loadPackagingOverrides();
-  if (code in all) {
-    delete all[code];
-    try { savePackagingOverrides(all); }
+  const all = loadProductSpecs();
+  if (all[code]) {
+    const cur = all[code];
+    const remaining = {};
+    for (const k of ["sku", "hs", "origin", "gw", "nw"]) if (cur[k] != null) remaining[k] = cur[k];
+    if (Object.keys(remaining).length) all[code] = remaining;
+    else delete all[code];
+    try { saveProductSpecs(all); }
     catch (e) { return res.status(500).json({ error: e.message }); }
   }
   res.json({ ok: true, code });
