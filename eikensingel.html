@@ -373,6 +373,12 @@ const SOURCE_LABELS = {
   direct: "Direct contact", other: "Anders",
 };
 
+// Rol van de huidige gebruiker — wordt bij load gevuld via /api/eikensingel/role
+// "full"   = Fransje, Danique, Gerrit, Bot — mogen alles
+// "booker" = de 5 collega's — mogen alleen lezen + nieuwe boeking toevoegen
+state.role = "none";
+const canEdit = () => state.role === "full";
+
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
 }
@@ -442,14 +448,31 @@ function houseStatus(house) {
 // Initial load
 // ──────────────────────────────────────────────────────────────────
 async function load() {
+  // Rol ophalen — bepaalt of UI bewerkbaar is of read+add
+  try {
+    const rr = await fetch("/api/eikensingel/role");
+    if (rr.ok) state.role = (await rr.json()).role || "none";
+  } catch {}
+  // Park-state ophalen
   try {
     const r = await fetch("/api/eikensingel");
+    if (r.status === 403) {
+      alert("Je hebt geen toegang tot Eikensingel.");
+      window.location.replace("dashboard.html"); return;
+    }
     if (!r.ok) throw new Error("HTTP " + r.status);
     state.parkState = await r.json();
   } catch (e) {
     console.error(e);
     alert("Kon Eikensingel-data niet laden: " + e.message + "\n\nUpdate de Fonteyn Dashboard-app naar de laatste versie.");
     state.parkState = { houses: {} };
+  }
+  // Toon role-banner als de gebruiker beperkt is
+  if (state.role === "booker") {
+    const banner = document.createElement("div");
+    banner.style.cssText = "background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:13px;";
+    banner.innerHTML = `ℹ️ Je kunt boekingen <b>toevoegen</b>, maar bestaande boekingen + huis-instellingen kunnen alleen door Fransje of Danique worden gewijzigd.`;
+    document.querySelector("main").insertBefore(banner, document.querySelector(".park-grid"));
   }
   renderPark();
   // Refresh elke minuut zodat de stoplichten meegaan met de tijd
@@ -562,28 +585,31 @@ function renderModal() {
   const bookings = (h.bookings || []).slice().sort((a, b) => a.from.localeCompare(b.from));
 
   const bookingCards = bookings.map(b => renderBookingCard(b, today)).join("");
+  const ro = !canEdit() ? "readonly" : "";
+  const dis = !canEdit() ? "disabled" : "";
 
+  // Voor booker-rol: alleen lezen op type/occupant/notes
   const employeeFields = h.type === "employee" ? `
     <div class="meta-grid">
       <label>Type</label>
-      <select data-meta="type">
+      <select data-meta="type" ${dis}>
         <option value="rental"   ${h.type === "rental"   ? "selected" : ""}>Verhuur</option>
         <option value="employee" ${h.type === "employee" ? "selected" : ""}>Medewerker</option>
       </select>
       <label>Bewoner (medewerker)</label>
-      <input type="text" data-meta="occupant" value="${escapeHtml(h.occupant || "")}" placeholder="Naam medewerker">
+      <input type="text" data-meta="occupant" value="${escapeHtml(h.occupant || "")}" placeholder="Naam medewerker" ${ro}>
       <label>Notities</label>
-      <textarea data-meta="notes" placeholder="Bijzonderheden, sleutels, etc.">${escapeHtml(h.notes || "")}</textarea>
+      <textarea data-meta="notes" placeholder="Bijzonderheden, sleutels, etc." ${ro}>${escapeHtml(h.notes || "")}</textarea>
     </div>
   ` : `
     <div class="meta-grid">
       <label>Type</label>
-      <select data-meta="type">
+      <select data-meta="type" ${dis}>
         <option value="rental"   ${h.type === "rental"   ? "selected" : ""}>Verhuur</option>
         <option value="employee" ${h.type === "employee" ? "selected" : ""}>Medewerker</option>
       </select>
       <label>Notities</label>
-      <textarea data-meta="notes" placeholder="Bijzonderheden, sleutels, etc.">${escapeHtml(h.notes || "")}</textarea>
+      <textarea data-meta="notes" placeholder="Bijzonderheden, sleutels, etc." ${ro}>${escapeHtml(h.notes || "")}</textarea>
     </div>
   `;
 
@@ -660,62 +686,69 @@ function renderBookingCard(b, today) {
   const sourceOpts = ["airbnb","booking","website","direct","other"]
     .map(s => `<option value="${s}" ${b.source === s ? "selected" : ""}>${SOURCE_LABELS[s]}</option>`)
     .join("");
+  const ro = !canEdit() ? "readonly" : "";
+  const dis = !canEdit() ? "disabled" : "";
+  const deleteBtn = canEdit()
+    ? `<button class="danger" type="button" data-delete-booking="${escapeHtml(b.id)}" style="margin-left:auto;">Verwijderen</button>`
+    : `<span style="margin-left:auto;font-size:11px;color:var(--muted);">alleen-lezen</span>`;
   return `
     <div class="booking-card ${cls}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
         ${badge}
         <span style="font-size:11px;color:var(--muted);">id: ${escapeHtml(b.id)}</span>
-        <button class="danger" type="button" data-delete-booking="${escapeHtml(b.id)}" style="margin-left:auto;">Verwijderen</button>
+        ${deleteBtn}
       </div>
       <div class="row three">
         <div>
           <label>Naam gast</label>
-          <input type="text" data-booking="${escapeHtml(b.id)}" data-field="guestName" value="${escapeHtml(b.guestName || "")}" placeholder="Voor- en achternaam">
+          <input type="text" data-booking="${escapeHtml(b.id)}" data-field="guestName" value="${escapeHtml(b.guestName || "")}" placeholder="Voor- en achternaam" ${ro}>
         </div>
         <div>
           <label>Van</label>
-          <input type="date" data-booking="${escapeHtml(b.id)}" data-field="from" value="${escapeHtml(b.from || "")}">
+          <input type="date" data-booking="${escapeHtml(b.id)}" data-field="from" value="${escapeHtml(b.from || "")}" ${ro}>
         </div>
         <div>
           <label>Tot</label>
-          <input type="date" data-booking="${escapeHtml(b.id)}" data-field="to" value="${escapeHtml(b.to || "")}">
+          <input type="date" data-booking="${escapeHtml(b.id)}" data-field="to" value="${escapeHtml(b.to || "")}" ${ro}>
         </div>
       </div>
       <div class="row three" style="margin-top:8px;">
         <div>
           <label>Geboekt via</label>
-          <select data-booking="${escapeHtml(b.id)}" data-field="source">${sourceOpts}</select>
+          <select data-booking="${escapeHtml(b.id)}" data-field="source" ${dis}>${sourceOpts}</select>
         </div>
         <div>
           <label>Bedrag (€)</label>
-          <input type="number" min="0" step="1" data-booking="${escapeHtml(b.id)}" data-field="amount" value="${b.amount || ""}">
+          <input type="number" min="0" step="1" data-booking="${escapeHtml(b.id)}" data-field="amount" value="${b.amount || ""}" ${ro}>
         </div>
         <div>
           <label>Telefoon</label>
-          <input type="tel" data-booking="${escapeHtml(b.id)}" data-field="phone" value="${escapeHtml(b.phone || "")}" placeholder="06…">
+          <input type="tel" data-booking="${escapeHtml(b.id)}" data-field="phone" value="${escapeHtml(b.phone || "")}" placeholder="06…" ${ro}>
         </div>
       </div>
       <div class="row" style="margin-top:8px;">
         <div>
           <label>Email</label>
-          <input type="email" data-booking="${escapeHtml(b.id)}" data-field="email" value="${escapeHtml(b.email || "")}">
+          <input type="email" data-booking="${escapeHtml(b.id)}" data-field="email" value="${escapeHtml(b.email || "")}" ${ro}>
         </div>
         <div>
           <label>Notities</label>
-          <input type="text" data-booking="${escapeHtml(b.id)}" data-field="notes" value="${escapeHtml(b.notes || "")}" placeholder="Bijzonderheden">
+          <input type="text" data-booking="${escapeHtml(b.id)}" data-field="notes" value="${escapeHtml(b.notes || "")}" placeholder="Bijzonderheden" ${ro}>
         </div>
       </div>
       <div class="checkboxes">
-        <label><input type="checkbox" data-booking="${escapeHtml(b.id)}" data-field="paid" ${b.paid ? "checked" : ""}> Betaald</label>
-        <label><input type="checkbox" data-booking="${escapeHtml(b.id)}" data-field="cleanedBefore" ${b.cleanedBefore ? "checked" : ""}> Schoon­gemaakt vóór deze gast</label>
+        <label><input type="checkbox" data-booking="${escapeHtml(b.id)}" data-field="paid" ${b.paid ? "checked" : ""} ${dis}> Betaald${b.amount ? ` (${fmtEur(b.amount)})` : ""}</label>
+        <label><input type="checkbox" data-booking="${escapeHtml(b.id)}" data-field="cleanedBefore" ${b.cleanedBefore ? "checked" : ""} ${dis}> Schoon­gemaakt vóór deze gast</label>
       </div>
     </div>
   `;
 }
 
+const fmtEur = (n) => "€" + (Number(n) || 0).toLocaleString("nl-NL");
+
 // Globaal voor de inline onclicks in het modal
 window._closeModal = closeModal;
-window._addBooking = () => {
+window._addBooking = async () => {
   const h = state.parkState.houses[state.openHouseId];
   if (!h) return;
   if (!Array.isArray(h.bookings)) h.bookings = [];
@@ -734,9 +767,33 @@ window._addBooking = () => {
     email: "",
     notes: "",
   };
-  h.bookings.push(newBooking);
-  saveHouse(h);
-  renderModal();
+
+  // Booker-rol: POST naar /bookings (server vult lijst aan, geen full-PUT)
+  // Full-rol: lokaal toevoegen + saveHouse (PUT) zoals voorheen.
+  if (canEdit()) {
+    h.bookings.push(newBooking);
+    saveHouse(h);
+    renderModal();
+    return;
+  }
+  const ss = el("saveStatus");
+  if (ss) { ss.textContent = "Boeking toevoegen…"; ss.className = "save-status"; }
+  try {
+    const r = await fetch("/api/eikensingel/houses/" + encodeURIComponent(h.id) + "/bookings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newBooking),
+    });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    state.parkState.houses[h.id] = j.house;
+    renderPark();
+    renderModal();
+    if (ss) { ss.textContent = "✓ boeking toegevoegd — laat Fransje 'm zo nodig nog aanvullen"; ss.className = "save-status ok"; }
+  } catch (e) {
+    console.error(e);
+    if (ss) { ss.textContent = "Toevoegen mislukt: " + e.message; ss.className = "save-status bad"; }
+  }
 };
 
 // ──────────────────────────────────────────────────────────────────

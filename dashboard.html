@@ -261,7 +261,7 @@
         <p>Slim inlaadplan voor eigen vervoer of pakketdienst — bin-packing in de bakwagen + routeplanning per dag.</p>
       </a>
 
-      <a href="eikensingel.html" class="tile" id="tileEikensingel">
+      <a href="eikensingel.html" class="tile hidden" id="tileEikensingel">
         <div class="icon">🏡</div>
         <h3>Eikensingel</h3>
         <p>Bovenaanzicht van de 10 bungalows op het vakantiepark — boekingen, schoonmaak en betaling in één oogopslag.</p>
@@ -412,6 +412,22 @@ const ORDERSTATUS_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Welke logins mogen de Eikensingel-tegel zien.
+// Server splitst dit verder uit in 'full' (Fransje/Danique/Gerrit/Bot) die
+// alles mogen, en 'booker' die alleen mogen lezen + boekingen toevoegen.
+// De tegel zelf is voor beide rollen zichtbaar.
+const EIKENSINGEL_EMAILS = new Set([
+  "fransje@fonteyn.nl",    "fransje",  "fonteyn.fransje",
+  "danique@fonteyn.nl",    "danique",  "fonteyn.danique",
+  "rosalie@fonteyn.nl",    "rosalie",  "fonteyn.rosalie",
+  "evelinde@fonteyn.nl",   "evelinde", "fonteyn.evelinde",
+  "fabiola@fonteyn.nl",    "fabiola",  "fonteyn.fabiola",
+  "julia@fonteyn.nl",      "julia",    "fonteyn.julia",
+  "karina@fonteyn.nl",     "karina",   "fonteyn.karina",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 function showDashboard(email) {
   el("loginView").classList.add("hidden");
   el("dashView").classList.remove("hidden");
@@ -426,6 +442,8 @@ function showDashboard(email) {
   el("tileStuurcijfers").classList.toggle("hidden", !STUURCIJFERS_EMAILS.has(lc));
   // Orderstatus-tegel alleen tonen voor de geautoriseerde e-mailadressen
   el("tileOrderStatus").classList.toggle("hidden", !ORDERSTATUS_EMAILS.has(lc));
+  // Eikensingel-tegel alleen tonen voor Fransje + team + Danique
+  el("tileEikensingel").classList.toggle("hidden", !EIKENSINGEL_EMAILS.has(lc));
 }
 
 // ─── Helper-server health (voor login-scherm) ────────────────

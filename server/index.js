@@ -524,11 +524,50 @@ function sanitizeBooking(b) {
   };
 }
 
-app.get("/api/eikensingel", requireAuth, (req, res) => {
+// ─── Toegang Eikensingel ────────────────────────────────────────────
+// Twee rollen:
+//  - "full":   ziet alles, mag alles bewerken + verwijderen + toevoegen
+//  - "booker": ziet alles, mag ALLEEN nieuwe boekingen toevoegen
+// We accepteren zowel email-form als Logic4-username (bv. "fonteyn.fransje").
+const EIKENSINGEL_FULL = new Set([
+  "fransje@fonteyn.nl", "fransje", "fonteyn.fransje",
+  "danique@fonteyn.nl", "danique", "fonteyn.danique",
+  "gerrit@fonteyn.nl",  "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+const EIKENSINGEL_BOOKER = new Set([
+  ...EIKENSINGEL_FULL,
+  "rosalie@fonteyn.nl",  "rosalie",  "fonteyn.rosalie",
+  "evelinde@fonteyn.nl", "evelinde", "fonteyn.evelinde",
+  "fabiola@fonteyn.nl",  "fabiola",  "fonteyn.fabiola",
+  "julia@fonteyn.nl",    "julia",    "fonteyn.julia",
+  "karina@fonteyn.nl",   "karina",   "fonteyn.karina",
+]);
+function eikensingelRole(req) {
+  const u = (req.auth?.username || "").toLowerCase();
+  if (EIKENSINGEL_FULL.has(u)) return "full";
+  if (EIKENSINGEL_BOOKER.has(u)) return "booker";
+  return null;
+}
+function requireEikensingelRead(req, res, next) {
+  if (!eikensingelRole(req)) return res.status(403).json({ error: "geen toegang tot Eikensingel" });
+  next();
+}
+function requireEikensingelFull(req, res, next) {
+  if (eikensingelRole(req) !== "full") return res.status(403).json({ error: "alleen Fransje/Danique mag bewerken/verwijderen" });
+  next();
+}
+
+app.get("/api/eikensingel/role", requireAuth, (req, res) => {
+  res.json({ role: eikensingelRole(req) || "none" });
+});
+
+app.get("/api/eikensingel", requireAuth, requireEikensingelRead, (req, res) => {
   res.json(loadEikensingelState());
 });
 
-app.put("/api/eikensingel/houses/:id", requireAuth, (req, res) => {
+// PUT op héél het huis: alleen 'full' (Fransje/Danique/Gerrit/Bot)
+app.put("/api/eikensingel/houses/:id", requireAuth, requireEikensingelFull, (req, res) => {
   const id = String(req.params.id || "").trim();
   if (!/^([1-9]|10)$/.test(id)) return res.status(400).json({ error: "ongeldige huisnummer (1-10)" });
   const state = loadEikensingelState();
@@ -540,6 +579,29 @@ app.put("/api/eikensingel/houses/:id", requireAuth, (req, res) => {
     res.json({ ok: true, house: state.houses[id] });
   } catch (e) {
     console.error("[eikensingel] save fail:", e);
+    res.status(500).json({ error: "opslaan mislukt: " + e.message });
+  }
+});
+
+// POST: nieuwe boeking toevoegen — booker-rol mag dit ook (read+add).
+// Body = één booking-object. Wijzigen of verwijderen kan alleen 'full' via PUT.
+app.post("/api/eikensingel/houses/:id/bookings", requireAuth, requireEikensingelRead, (req, res) => {
+  const id = String(req.params.id || "").trim();
+  if (!/^([1-9]|10)$/.test(id)) return res.status(400).json({ error: "ongeldige huisnummer (1-10)" });
+  const booking = sanitizeBooking(req.body || {});
+  if (!booking) return res.status(400).json({ error: "ongeldige boeking (datums verplicht in YYYY-MM-DD)" });
+
+  const state = loadEikensingelState();
+  if (!state.houses[id]) {
+    state.houses[id] = { id: parseInt(id, 10), type: "rental", notes: "", bookings: [] };
+  }
+  if (!Array.isArray(state.houses[id].bookings)) state.houses[id].bookings = [];
+  state.houses[id].bookings.push(booking);
+  try {
+    saveEikensingelState(state);
+    res.json({ ok: true, booking, house: state.houses[id] });
+  } catch (e) {
+    console.error("[eikensingel] add booking fail:", e);
     res.status(500).json({ error: "opslaan mislukt: " + e.message });
   }
 });
