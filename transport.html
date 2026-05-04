@@ -240,6 +240,29 @@
   .manual-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .manual-input.weight { width: 56px; }
   .manual-input:focus { outline: none; border-color: var(--fonteyn-green); background: #fff; }
+
+  /* Multi-box bewerker (boxes-array op de override) */
+  .manual-boxes-cell {
+    grid-column: 3 / span 2;   /* combineer dims+weight kolommen */
+    display: flex; flex-direction: column; gap: 4px; align-items: flex-end;
+  }
+  .manual-box-row { display: flex; align-items: center; gap: 4px; }
+  .manual-box-row .lbl-box {
+    font-size: 10px; color: var(--muted); margin-right: 4px;
+    min-width: 38px; text-align: right;
+  }
+  .manual-box-row .remove-box {
+    background: transparent; border: 1px solid transparent; color: var(--muted);
+    width: 18px; height: 18px; border-radius: 3px; padding: 0;
+    font-size: 14px; cursor: pointer; line-height: 1; margin-left: 2px;
+  }
+  .manual-box-row .remove-box:hover { background: #fee2e2; color: var(--bad); border-color: #fecaca; }
+  .manual-add-box {
+    background: transparent; border: 1px dashed var(--border); color: var(--muted);
+    padding: 2px 8px; border-radius: 4px; font: inherit; font-size: 11px;
+    cursor: pointer; align-self: flex-end;
+  }
+  .manual-add-box:hover { border-color: var(--fonteyn-lime); color: var(--fonteyn-green); background: #f0f7e8; }
   .order-card .line.bundle-parent { opacity: 0.6; }
   .order-card .line.bundle-parent .desc { text-decoration: line-through; color: var(--muted); }
 
@@ -619,16 +642,48 @@ function saveOverrideForCode(code) {
  *   1. Handmatige override op artikelcode (door Manon ingevuld) — wint altijd
  *   2. Naam-match in de packaging-database (langste match wint)
  */
+// Lees alle dozen uit een override-entry. Ondersteunt twee formaten:
+//   nieuw:  { boxes: [{l,w,h,weight}, ...] }
+//   legacy: { l, w, h, weight }   ← voor entries van vóór multi-box-support
+function getOverrideBoxes(ov) {
+  if (!ov) return null;
+  if (Array.isArray(ov.boxes) && ov.boxes.length) {
+    const out = ov.boxes
+      .filter(b => +b.l > 0 && +b.w > 0 && +b.h > 0)
+      .map(b => ({ dims: { l: +b.l, w: +b.w, h: +b.h }, weight: +b.weight || 0 }));
+    return out.length ? out : null;
+  }
+  if (+ov.l > 0 && +ov.w > 0 && +ov.h > 0) {
+    return [{ dims: { l: +ov.l, w: +ov.w, h: +ov.h }, weight: +ov.weight || 0 }];
+  }
+  return null;
+}
+
+// Geeft een normalized boxes-array op de override (mutation-friendly).
+// Migrareert legacy {l,w,h,weight} naar boxes[0] als nodig.
+function ensureOverrideBoxes(code) {
+  if (!state.packagingOverrides[code]) state.packagingOverrides[code] = { boxes: [] };
+  const ov = state.packagingOverrides[code];
+  if (!Array.isArray(ov.boxes)) ov.boxes = [];
+  // Migreer legacy l/w/h/weight naar boxes[0] als die bestaan en boxes leeg is
+  if (ov.boxes.length === 0 && (ov.l || ov.w || ov.h || ov.weight)) {
+    ov.boxes.push({ l: ov.l, w: ov.w, h: ov.h, weight: ov.weight });
+    delete ov.l; delete ov.w; delete ov.h; delete ov.weight;
+  }
+  return ov.boxes;
+}
+
 function matchPackaging(description, code) {
-  // Laag 1: code-override
-  if (code && state.packagingOverrides[code]) {
-    const ov = state.packagingOverrides[code];
-    if (ov.l && ov.w && ov.h) {
+  // Laag 1: code-override (1 of meer dozen)
+  if (code) {
+    const boxes = getOverrideBoxes(state.packagingOverrides[code]);
+    if (boxes && boxes.length) {
+      const ov = state.packagingOverrides[code] || {};
       return {
         source: "override",
         product: {
           name: ov.name || description || `Artikelcode ${code}`,
-          boxes: [{ dims: { l: ov.l, w: ov.w, h: ov.h }, weight: ov.weight || 0 }]
+          boxes,
         }
       };
     }
@@ -864,31 +919,156 @@ function renderOrders() {
       renderTotals();
     });
   });
-  // Wire up handmatige verpakkings-velden (voor unmatched/override-rijen)
-  container.querySelectorAll(".manual-input[data-code]").forEach(inp => {
+  // Wire up handmatige verpakkings-velden (multi-box editor).
+  wireManualBoxHandlers(container);
+}
+
+// Koppel input-, +box-, en ×box-handlers in een container.
+// Gebruikt event-delegation waar mogelijk zodat we na partial DOM-updates
+// niet steeds opnieuw hoeven te wiren.
+function wireManualBoxHandlers(container) {
+  // Input op één veld van één box
+  container.querySelectorAll(".manual-input[data-code][data-idx]").forEach(inp => {
+    if (inp._wired) return;
+    inp._wired = true;
     inp.addEventListener("input", () => {
-      const code = inp.dataset.code;
+      const code  = inp.dataset.code;
+      const idx   = +inp.dataset.idx;
       const field = inp.dataset.field;
-      const raw = inp.value.trim();
-      const num = parseFloat(raw);
-      const cur = state.packagingOverrides[code] || {};
+      const raw   = inp.value.trim();
+      const num   = parseFloat(raw);
+      const boxes = ensureOverrideBoxes(code);
+      while (boxes.length <= idx) boxes.push({});
       if (raw === "" || isNaN(num) || num <= 0) {
-        delete cur[field];
+        delete boxes[idx][field];
       } else {
-        cur[field] = num;
+        boxes[idx][field] = num;
       }
-      // Veld behouden of opruimen?
-      const hasAny = ["l","w","h","weight"].some(k => cur[k] != null);
-      if (hasAny) state.packagingOverrides[code] = cur;
-      else delete state.packagingOverrides[code];
+      // Lege boxes (geen enkele veld) van het einde af opruimen, tenzij dat
+      // de enige rij is — dan houden we 'm voor de invul-UI.
+      while (boxes.length > 1 && Object.keys(boxes[boxes.length - 1]).length === 0) {
+        boxes.pop();
+      }
+      // Override leeg? Volledig verwijderen.
+      const anyValid = boxes.some(b => +b.l > 0 && +b.w > 0 && +b.h > 0);
+      if (!anyValid && !boxes.some(b => +b.weight > 0)) {
+        delete state.packagingOverrides[code];
+      }
       saveOverrideForCode(code);
     });
-    // Op blur: hervaluer match + render order opnieuw zodat totalen kloppen
+    // Op blur: alleen totalen + badge bijwerken — GEEN full re-render.
+    // Daardoor blijft de uitgevouwen <details> open en blijft de focus
+    // intact wanneer Manon Tab indrukt naar het volgende veld.
     inp.addEventListener("change", () => {
+      const code = inp.dataset.code;
       recomputeOrders();
-      renderOrders();
+      updateOrderHeadersInPlace();
+      updateLineBadgeForCode(code);
       renderTotals();
     });
+  });
+
+  // "+ extra doos" knop
+  container.querySelectorAll(".manual-add-box[data-add-box]").forEach(btn => {
+    if (btn._wired) return;
+    btn._wired = true;
+    btn.addEventListener("click", () => {
+      const code = btn.dataset.addBox;
+      const boxes = ensureOverrideBoxes(code);
+      boxes.push({});
+      // Heel-klein partial re-render: vervang alleen deze cel.
+      const cell = btn.closest(".manual-boxes-cell");
+      if (cell) {
+        cell.outerHTML = renderManualBoxesCell(code);
+        // Re-wire de nieuwe cel
+        const newCell = container.querySelector(`.manual-boxes-cell[data-boxes-cell="${cssEsc(code)}"]`);
+        if (newCell) {
+          wireManualBoxHandlers(newCell.parentElement);
+          // Focus naar de eerste input van de nieuwe doos-rij
+          const last = newCell.querySelectorAll(".manual-box-row");
+          if (last.length) last[last.length - 1].querySelector("input")?.focus();
+        }
+      }
+      saveOverrideForCode(code);
+      recomputeOrders();
+      updateOrderHeadersInPlace();
+      updateLineBadgeForCode(code);
+      renderTotals();
+    });
+  });
+
+  // "×" verwijder-doos knop
+  container.querySelectorAll(".remove-box[data-remove-box]").forEach(btn => {
+    if (btn._wired) return;
+    btn._wired = true;
+    btn.addEventListener("click", () => {
+      const code = btn.dataset.removeBox;
+      const idx  = +btn.dataset.idx;
+      const boxes = ensureOverrideBoxes(code);
+      if (boxes.length > idx) boxes.splice(idx, 1);
+      if (boxes.length === 0) delete state.packagingOverrides[code];
+      const cell = btn.closest(".manual-boxes-cell");
+      if (cell) {
+        cell.outerHTML = renderManualBoxesCell(code);
+        const newCell = container.querySelector(`.manual-boxes-cell[data-boxes-cell="${cssEsc(code)}"]`);
+        if (newCell) wireManualBoxHandlers(newCell.parentElement);
+      }
+      saveOverrideForCode(code);
+      recomputeOrders();
+      updateOrderHeadersInPlace();
+      updateLineBadgeForCode(code);
+      renderTotals();
+    });
+  });
+}
+
+// CSS-escape voor in een attribute-selector
+function cssEsc(s) { return String(s).replace(/(["\\\]\[])/g, "\\$1"); }
+
+// Update de "Dozen / Volume / Gewicht" cijfers in álle order-card headers.
+// Doen we via DOM-traversal — zo hoeven we geen IDs per order.
+function updateOrderHeadersInPlace() {
+  const cards = document.querySelectorAll(".order-card");
+  cards.forEach(card => {
+    const cb = card.querySelector("input[type=checkbox][data-nr]");
+    if (!cb) return;
+    const nr = cb.dataset.nr;
+    const o = state.orders.find(x => x.nr === nr);
+    if (!o) return;
+    const nums = card.querySelectorAll(".header-row .num");
+    // Volgorde in renderOrderCard: [Betaald, Dozen, Volume, Gewicht]
+    if (nums.length >= 4) {
+      nums[1].innerHTML = `<span class="lbl">Dozen</span>${o.totalBoxes || 0}`;
+      nums[2].innerHTML = `<span class="lbl">Volume</span>${fmtM3(o.totalVolumeM3 || 0)}`;
+      nums[3].innerHTML = `<span class="lbl">Gewicht</span>${fmtKg(o.totalKg || 0)}`;
+    }
+    // Summary in <details> bijwerken
+    const summary = card.querySelector("details > summary");
+    if (summary) {
+      summary.innerHTML = `${o.lines.length} regels — ${o.unmatchedLines > 0
+        ? `<span style="color:var(--warn)">${o.unmatchedLines} zonder verpakkings-info</span>`
+        : "alles gematched"}`;
+    }
+  });
+}
+
+// Update de badge op de regel(s) met deze code (geen match → handmatig)
+function updateLineBadgeForCode(code) {
+  document.querySelectorAll(`.line[data-line-code="${cssEsc(code)}"] .badge-slot`).forEach(slot => {
+    // Vind de bijbehorende ln voor dit code (eerste de beste — dezelfde code
+    // betekent dezelfde override, dus zelfde badge-tekst overal).
+    let ln = null;
+    for (const o of state.orders) {
+      ln = (o.lines || []).find(l => l.code === code);
+      if (ln) break;
+    }
+    if (!ln) return;
+    if (ln.match && ln.match.source === "override") {
+      const n = ln.match.product.boxes.length;
+      slot.innerHTML = `<span class="badge match-override">handmatig — ${n} ${n === 1 ? "doos" : "dozen"}</span>`;
+    } else {
+      slot.innerHTML = `<span class="badge match-fail">geen match — vul handmatig in</span>`;
+    }
   });
 }
 
@@ -1021,21 +1201,23 @@ function renderLine(ln) {
   } else if (ln.match) {
     const boxes = ln.match.product.boxes;
     if (ln.match.source === "override") {
-      badge = `<span class="badge match-override">handmatig ingevuld</span>`;
+      badge = `<span class="badge match-override">handmatig — ${boxes.length} ${boxes.length === 1 ? "doos" : "dozen"}</span>`;
       isManualEditable = true; // sta toe om de override aan te passen
     } else {
       badge = boxes.length > 1
         ? `<span class="badge match-multi">${boxes.length} dozen</span>`
         : `<span class="badge match-ok">match</span>`;
     }
-    if (boxes.length === 1 && boxes[0].dims) {
-      const d = boxes[0].dims;
-      dimsHtml = `${d.l}×${d.w}×${d.h}`;
-    } else if (boxes.length > 1) {
-      dimsHtml = `${boxes.length}×`;
+    if (!isManualEditable) {
+      if (boxes.length === 1 && boxes[0].dims) {
+        const d = boxes[0].dims;
+        dimsHtml = `${d.l}×${d.w}×${d.h}`;
+      } else if (boxes.length > 1) {
+        dimsHtml = `${boxes.length}×`;
+      }
+      const totalBoxWeight = boxes.reduce((s, b) => s + (b.weight || 0), 0);
+      weightHtml = totalBoxWeight ? Math.round(totalBoxWeight) + " kg" : "—";
     }
-    const totalBoxWeight = boxes.reduce((s, b) => s + (b.weight || 0), 0);
-    weightHtml = totalBoxWeight ? Math.round(totalBoxWeight) + " kg" : "—";
     boxesText = ln.match.product.name;
   } else {
     badge = `<span class="badge match-fail">geen match — vul handmatig in</span>`;
@@ -1043,19 +1225,17 @@ function renderLine(ln) {
     isManualEditable = true;
   }
 
-  // Voor unmatched of override-rijen: input-velden voor L/B/H/Gewicht
-  // Slaat op via saveOverrideForCode op state.packagingOverrides[code].
+  // Voor bewerkbare rijen: render multi-box editor in een gecombineerde cel.
+  // Deze cel spant kolom 3+4 (dims + weight) zodat we 'm flexibel kunnen
+  // vullen met meerdere dozen + een "+ doos" knop.
   if (isManualEditable && ln.code) {
-    const ov = state.packagingOverrides[ln.code] || {};
-    const v = (k) => ov[k] != null ? String(ov[k]) : "";
-    dimsHtml = `<div class="manual-dims">
-      <input type="number" class="manual-input" data-code="${escapeHtml(ln.code)}" data-field="l" placeholder="L" value="${escapeHtml(v("l"))}" min="1" step="1">
-      <span class="x">×</span>
-      <input type="number" class="manual-input" data-code="${escapeHtml(ln.code)}" data-field="w" placeholder="B" value="${escapeHtml(v("w"))}" min="1" step="1">
-      <span class="x">×</span>
-      <input type="number" class="manual-input" data-code="${escapeHtml(ln.code)}" data-field="h" placeholder="H" value="${escapeHtml(v("h"))}" min="1" step="1">
+    return `<div class="line ${cls}" data-line-code="${escapeHtml(ln.code)}">
+      <div class="qty">${ln.qty}×</div>
+      <div class="desc">${escapeHtml(ln.desc)}<span class="badge-slot">${badge}</span><div class="match-name">${escapeHtml(boxesText)}</div></div>
+      ${renderManualBoxesCell(ln.code)}
+      <div class="num">${escapeHtml(ln.code)}</div>
+      <div class="num"></div>
     </div>`;
-    weightHtml = `<input type="number" class="manual-input weight" data-code="${escapeHtml(ln.code)}" data-field="weight" placeholder="kg" value="${escapeHtml(v("weight"))}" min="0" step="0.1">`;
   }
 
   return `<div class="line ${cls}">
@@ -1065,6 +1245,45 @@ function renderLine(ln) {
     <div class="num">${weightHtml}</div>
     <div class="num">${escapeHtml(ln.code)}</div>
     <div class="num"></div>
+  </div>`;
+}
+
+// Render de doos-editor voor één regel: alle huidige dozen (uit override of
+// 1 lege placeholder) + een "+ doos" knop. Genest in een cel die 2 kolommen
+// span (zodat we de dims- en weight-kolom samen gebruiken).
+function renderManualBoxesCell(code) {
+  const ov = state.packagingOverrides[code];
+  // Lees de boxes-array uit de override. Lege/legacy → 1 lege placeholder.
+  let boxes = [];
+  if (ov && Array.isArray(ov.boxes) && ov.boxes.length) {
+    boxes = ov.boxes;
+  } else if (ov && (ov.l || ov.w || ov.h || ov.weight)) {
+    boxes = [{ l: ov.l, w: ov.w, h: ov.h, weight: ov.weight }];
+  } else {
+    boxes = [{}]; // één lege rij om in te vullen
+  }
+  const rows = boxes.map((b, i) => renderManualBoxRow(code, b, i, boxes.length)).join("");
+  return `<div class="manual-boxes-cell" data-boxes-cell="${escapeHtml(code)}">
+    ${rows}
+    <button type="button" class="manual-add-box" data-add-box="${escapeHtml(code)}">+ extra doos</button>
+  </div>`;
+}
+
+function renderManualBoxRow(code, box, idx, total) {
+  const v = (k) => box[k] != null && box[k] !== "" ? String(box[k]) : "";
+  const lbl = total > 1 ? `<span class="lbl-box">doos ${idx + 1}</span>` : "";
+  const removeBtn = total > 1
+    ? `<button type="button" class="remove-box" data-remove-box="${escapeHtml(code)}" data-idx="${idx}" title="Doos verwijderen">×</button>`
+    : "";
+  return `<div class="manual-box-row" data-row-code="${escapeHtml(code)}" data-row-idx="${idx}">
+    ${lbl}
+    <input type="number" class="manual-input" data-code="${escapeHtml(code)}" data-idx="${idx}" data-field="l" placeholder="L" value="${escapeHtml(v("l"))}" min="1" step="1">
+    <span class="x">×</span>
+    <input type="number" class="manual-input" data-code="${escapeHtml(code)}" data-idx="${idx}" data-field="w" placeholder="B" value="${escapeHtml(v("w"))}" min="1" step="1">
+    <span class="x">×</span>
+    <input type="number" class="manual-input" data-code="${escapeHtml(code)}" data-idx="${idx}" data-field="h" placeholder="H" value="${escapeHtml(v("h"))}" min="1" step="1">
+    <input type="number" class="manual-input weight" data-code="${escapeHtml(code)}" data-idx="${idx}" data-field="weight" placeholder="kg" value="${escapeHtml(v("weight"))}" min="0" step="0.1">
+    ${removeBtn}
   </div>`;
 }
 

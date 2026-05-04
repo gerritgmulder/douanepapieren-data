@@ -390,19 +390,42 @@ app.put("/api/packaging-overrides/:code", requireAuth, (req, res) => {
 
   const incoming = req.body || {};
   const cleaned = {};
+  // Top-level (legacy) single-box velden — achterwaartse compat
   for (const k of ["l", "w", "h", "weight"]) {
     if (incoming[k] !== undefined && incoming[k] !== null && incoming[k] !== "") {
       const n = parseFloat(incoming[k]);
       if (!isNaN(n) && n > 0) cleaned[k] = n;
     }
   }
+  // Nieuwe multi-box format: array van dozen
+  if (Array.isArray(incoming.boxes)) {
+    const validBoxes = incoming.boxes
+      .map(b => {
+        if (!b || typeof b !== "object") return null;
+        const cb = {};
+        for (const k of ["l", "w", "h", "weight"]) {
+          if (b[k] != null && b[k] !== "") {
+            const n = parseFloat(b[k]);
+            if (!isNaN(n) && n > 0) cb[k] = n;
+          }
+        }
+        // Box moet minstens L+B+H hebben om geldig te zijn
+        return (cb.l && cb.w && cb.h) ? cb : null;
+      })
+      .filter(Boolean);
+    if (validBoxes.length) cleaned.boxes = validBoxes;
+  }
   if (incoming.name) cleaned.name = String(incoming.name).slice(0, 200);
 
   const all = loadPackagingOverrides();
-  if (Object.keys(cleaned).length === 0) {
+  // Niets bruikbaars opgegeven? Verwijder de hele override.
+  const hasContent = cleaned.boxes && cleaned.boxes.length
+    || (cleaned.l && cleaned.w && cleaned.h);
+  if (!hasContent) {
     delete all[code];
   } else {
-    all[code] = { ...(all[code] || {}), ...cleaned };
+    // Vervangen i.p.v. mergen — de client stuurt altijd de complete state.
+    all[code] = cleaned;
   }
   try {
     savePackagingOverrides(all);
