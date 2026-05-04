@@ -221,11 +221,25 @@
     display: inline-block; padding: 1px 6px; border-radius: 4px;
     font-size: 10px; font-weight: 600; margin-left: 6px;
   }
-  .badge.match-ok      { background: #dcfce7; color: #15803d; }
-  .badge.match-multi   { background: #dbeafe; color: #1e40af; }
-  .badge.match-fail    { background: #fef3c7; color: #92400e; }
-  .badge.service       { background: #f3f4f6; color: #6b7280; }
-  .badge.bundle-parent { background: #fee2e2; color: #991b1b; font-size: 9px; }
+  .badge.match-ok       { background: #dcfce7; color: #15803d; }
+  .badge.match-multi    { background: #dbeafe; color: #1e40af; }
+  .badge.match-fail     { background: #fef3c7; color: #92400e; }
+  .badge.match-override { background: #e0e7ff; color: #3730a3; }
+  .badge.service        { background: #f3f4f6; color: #6b7280; }
+  .badge.bundle-parent  { background: #fee2e2; color: #991b1b; font-size: 9px; }
+
+  /* Handmatige invul-velden voor regels zonder match (of met override) */
+  .manual-dims { display: flex; align-items: center; gap: 2px; justify-content: flex-end; }
+  .manual-dims .x { color: var(--muted); font-size: 11px; }
+  .manual-input {
+    width: 44px; padding: 3px 4px; border: 1px solid var(--border); border-radius: 4px;
+    font: inherit; font-size: 12px; text-align: right; background: #fffbea;
+    -moz-appearance: textfield;
+  }
+  .manual-input::-webkit-outer-spin-button,
+  .manual-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .manual-input.weight { width: 56px; }
+  .manual-input:focus { outline: none; border-color: var(--fonteyn-green); background: #fff; }
   .order-card .line.bundle-parent { opacity: 0.6; }
   .order-card .line.bundle-parent .desc { text-decoration: line-through; color: var(--muted); }
 
@@ -484,6 +498,7 @@ const state = {
   carrier: null,           // 'own' | 'svz' | 'gd-its' | 'flevobird'
   packagingDb: null,       // { categories: [{category, products: [{name, boxes:[...]}]}] }
   flatProducts: [],        // [{name, normalized, boxes:[...], category}] gesorteerd op naam-lengte aflopend
+  packagingOverrides: {},  // { "<artikelcode>": {l, w, h, weight, name?} } — handmatig ingevuld door Manon
   orders: [],              // [{nr, status, paid, total, customer, address, postcode, lines:[...], allowed, error}]
   selected: new Set(),     // ordernrs die meegenomen worden
 };
@@ -516,9 +531,29 @@ function normalizeName(s) {
 
 async function loadPackagingDatabase() {
   if (state.packagingDb) return state.packagingDb;
-  const r = await fetch("/api/packaging-database");
-  if (!r.ok) throw new Error("Kon packaging-database niet ophalen (HTTP " + r.status + ")");
-  state.packagingDb = await r.json();
+
+  // Probeer eerst de API-endpoint (nieuwe server). Faalt 'ie (HTTP 404
+  // op oudere installer-versies waar het endpoint nog niet bestaat),
+  // val dan terug op het JSON-bestand dat via static-file-serving uit
+  // de live-cache komt — beschikbaar zodra het manifest 'm heeft
+  // gedownload, ongeacht de server-versie.
+  let raw = null;
+  try {
+    const r = await fetch("/api/packaging-database");
+    if (r.ok) raw = await r.json();
+    else if (r.status !== 404) throw new Error("HTTP " + r.status);
+  } catch (e) {
+    console.warn("API-endpoint /api/packaging-database faalde, fallback naar static file:", e.message);
+  }
+  if (!raw) {
+    const r = await fetch("/packaging-database.json");
+    if (!r.ok) throw new Error(
+      "Kon packaging-database niet ophalen (HTTP " + r.status + "). " +
+      "Update de Fonteyn Dashboard-app naar de laatste versie."
+    );
+    raw = await r.json();
+  }
+  state.packagingDb = raw;
 
   // Bouw flat-list voor matching: lange namen eerst (zodat "Indiana bbq XL"
   // wint van "Indiana bbq" als beide bestaan).
@@ -538,24 +573,74 @@ async function loadPackagingDatabase() {
   return state.packagingDb;
 }
 
+// Packaging-overrides (handmatig ingevulde dims/weight per artikelcode).
+// Server-side opgeslagen zodat alle gebruikers dezelfde data zien.
+// Bij oudere servers (zonder dit endpoint) blijft de map leeg en valt
+// alles terug op localStorage.
+async function loadPackagingOverrides() {
+  try {
+    const r = await fetch("/api/packaging-overrides");
+    if (r.ok) {
+      state.packagingOverrides = await r.json();
+      try { localStorage.setItem("fp.packaging-overrides", JSON.stringify(state.packagingOverrides)); } catch {}
+      return;
+    }
+  } catch (e) {
+    console.warn("Kon packaging-overrides niet van server laden:", e.message);
+  }
+  // Fallback: localStorage cache
+  try { state.packagingOverrides = JSON.parse(localStorage.getItem("fp.packaging-overrides") || "{}"); }
+  catch { state.packagingOverrides = {}; }
+}
+
+// Per-code debounced PUT
+const _overridesPutTimers = new Map();
+function saveOverrideForCode(code) {
+  // Lokale cache direct
+  try { localStorage.setItem("fp.packaging-overrides", JSON.stringify(state.packagingOverrides)); } catch {}
+  // Server-side debounced
+  if (_overridesPutTimers.has(code)) clearTimeout(_overridesPutTimers.get(code));
+  _overridesPutTimers.set(code, setTimeout(() => {
+    _overridesPutTimers.delete(code);
+    const entry = state.packagingOverrides[code] || {};
+    fetch("/api/packaging-overrides/" + encodeURIComponent(code), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(entry)
+    }).catch(e => console.warn(`Override PUT ${code} faalde:`, e.message));
+  }, 500));
+}
+
 /**
  * Probeer een product uit de packaging-db te vinden voor één order-regel.
- * Returns { product, multiple? } of null als niets matcht.
+ * Returns { product, multiple?, source: "override"|"db" } of null als niets matcht.
  *
- * Strategie (fase 1, naam-match):
- *   - Normaliseer de regel-omschrijving
- *   - Vind alle producten waarvan de genormaliseerde naam als hele woordreeks
- *     in de omschrijving voorkomt
- *   - Langste match wint
+ * Volgorde:
+ *   1. Handmatige override op artikelcode (door Manon ingevuld) — wint altijd
+ *   2. Naam-match in de packaging-database (langste match wint)
  */
-function matchPackaging(description) {
+function matchPackaging(description, code) {
+  // Laag 1: code-override
+  if (code && state.packagingOverrides[code]) {
+    const ov = state.packagingOverrides[code];
+    if (ov.l && ov.w && ov.h) {
+      return {
+        source: "override",
+        product: {
+          name: ov.name || description || `Artikelcode ${code}`,
+          boxes: [{ dims: { l: ov.l, w: ov.w, h: ov.h }, weight: ov.weight || 0 }]
+        }
+      };
+    }
+  }
+  // Laag 2: naam-match in packaging-db
   if (!description) return null;
   const desc = " " + normalizeName(description) + " ";
   for (const p of state.flatProducts) {
     // Skip ultra-korte namen (1-2 chars) om false matches te voorkomen
     if (p.normalized.length < 3) continue;
     if (desc.includes(" " + p.normalized + " ")) {
-      return { product: p };
+      return { source: "db", product: p };
     }
   }
   return null;
@@ -590,6 +675,7 @@ el("fetchBtn").addEventListener("click", async () => {
   try {
     setFetchStatus("Packaging-database laden…", "");
     await loadPackagingDatabase();
+    await loadPackagingOverrides();
 
     for (let i = 0; i < nrs.length; i++) {
       const nr = nrs[i];
@@ -666,7 +752,7 @@ async function fetchOrder(nr) {
     const isBundleParent = parentIds.has(r.Id);
     const isBundleChild  = r.ComposedProductOrderRowParentId != null;
     // Parents worden niet gematched (kinderen tellen al). Service ook niet.
-    const match = (isService || isBundleParent) ? null : matchPackaging(desc);
+    const match = (isService || isBundleParent) ? null : matchPackaging(desc, code);
     return { code, desc, qty, isService, isBundleParent, isBundleChild, match };
   });
 
@@ -778,6 +864,60 @@ function renderOrders() {
       renderTotals();
     });
   });
+  // Wire up handmatige verpakkings-velden (voor unmatched/override-rijen)
+  container.querySelectorAll(".manual-input[data-code]").forEach(inp => {
+    inp.addEventListener("input", () => {
+      const code = inp.dataset.code;
+      const field = inp.dataset.field;
+      const raw = inp.value.trim();
+      const num = parseFloat(raw);
+      const cur = state.packagingOverrides[code] || {};
+      if (raw === "" || isNaN(num) || num <= 0) {
+        delete cur[field];
+      } else {
+        cur[field] = num;
+      }
+      // Veld behouden of opruimen?
+      const hasAny = ["l","w","h","weight"].some(k => cur[k] != null);
+      if (hasAny) state.packagingOverrides[code] = cur;
+      else delete state.packagingOverrides[code];
+      saveOverrideForCode(code);
+    });
+    // Op blur: hervaluer match + render order opnieuw zodat totalen kloppen
+    inp.addEventListener("change", () => {
+      recomputeOrders();
+      renderOrders();
+      renderTotals();
+    });
+  });
+}
+
+// Hervaluer alle al-opgehaalde orders met de huidige overrides, zodat
+// totalen direct mee-veranderen wanneer Manon een doos invult.
+function recomputeOrders() {
+  for (const o of state.orders) {
+    if (o.error || !o.lines) continue;
+    let totalBoxes = 0, totalVolumeM3 = 0, totalKg = 0, unmatchedLines = 0;
+    for (const ln of o.lines) {
+      // Re-match (override kan nu wél een hit geven die er eerst niet was)
+      if (!ln.isService && !ln.isBundleParent) {
+        ln.match = matchPackaging(ln.desc, ln.code);
+      }
+      if (ln.isService || ln.isBundleParent) continue;
+      if (!ln.match) { unmatchedLines++; continue; }
+      for (const box of ln.match.product.boxes) {
+        totalBoxes += ln.qty;
+        if (box.dims) {
+          totalVolumeM3 += (box.dims.l * box.dims.w * box.dims.h * ln.qty) / 1_000_000;
+        }
+        if (box.weight) totalKg += box.weight * ln.qty;
+      }
+    }
+    o.totalBoxes = totalBoxes;
+    o.totalVolumeM3 = totalVolumeM3;
+    o.totalKg = totalKg;
+    o.unmatchedLines = unmatchedLines;
+  }
 }
 
 function renderOrderCard(o) {
@@ -870,7 +1010,8 @@ function renderOrderCard(o) {
 function renderLine(ln) {
   let badge = "";
   let cls = "matched";
-  let dims = "—", weight = "—", boxesText = "—";
+  let dimsHtml = "—", weightHtml = "—", boxesText = "—";
+  let isManualEditable = false;
   if (ln.isBundleParent) {
     badge = `<span class="badge bundle-parent">HOOFDPAKKET — wordt niet meegeteld (sub-regels hieronder)</span>`;
     cls = "bundle-parent";
@@ -879,26 +1020,49 @@ function renderLine(ln) {
     cls = "service";
   } else if (ln.match) {
     const boxes = ln.match.product.boxes;
-    badge = boxes.length > 1
-      ? `<span class="badge match-multi">${boxes.length} dozen</span>`
-      : `<span class="badge match-ok">match</span>`;
+    if (ln.match.source === "override") {
+      badge = `<span class="badge match-override">handmatig ingevuld</span>`;
+      isManualEditable = true; // sta toe om de override aan te passen
+    } else {
+      badge = boxes.length > 1
+        ? `<span class="badge match-multi">${boxes.length} dozen</span>`
+        : `<span class="badge match-ok">match</span>`;
+    }
     if (boxes.length === 1 && boxes[0].dims) {
-      dims = `${boxes[0].dims.l}×${boxes[0].dims.w}×${boxes[0].dims.h}`;
+      const d = boxes[0].dims;
+      dimsHtml = `${d.l}×${d.w}×${d.h}`;
     } else if (boxes.length > 1) {
-      dims = `${boxes.length}×`;
+      dimsHtml = `${boxes.length}×`;
     }
     const totalBoxWeight = boxes.reduce((s, b) => s + (b.weight || 0), 0);
-    weight = totalBoxWeight ? Math.round(totalBoxWeight) + " kg" : "—";
+    weightHtml = totalBoxWeight ? Math.round(totalBoxWeight) + " kg" : "—";
     boxesText = ln.match.product.name;
   } else {
-    badge = `<span class="badge match-fail">geen match</span>`;
+    badge = `<span class="badge match-fail">geen match — vul handmatig in</span>`;
     cls = "unmatched";
+    isManualEditable = true;
   }
+
+  // Voor unmatched of override-rijen: input-velden voor L/B/H/Gewicht
+  // Slaat op via saveOverrideForCode op state.packagingOverrides[code].
+  if (isManualEditable && ln.code) {
+    const ov = state.packagingOverrides[ln.code] || {};
+    const v = (k) => ov[k] != null ? String(ov[k]) : "";
+    dimsHtml = `<div class="manual-dims">
+      <input type="number" class="manual-input" data-code="${escapeHtml(ln.code)}" data-field="l" placeholder="L" value="${escapeHtml(v("l"))}" min="1" step="1">
+      <span class="x">×</span>
+      <input type="number" class="manual-input" data-code="${escapeHtml(ln.code)}" data-field="w" placeholder="B" value="${escapeHtml(v("w"))}" min="1" step="1">
+      <span class="x">×</span>
+      <input type="number" class="manual-input" data-code="${escapeHtml(ln.code)}" data-field="h" placeholder="H" value="${escapeHtml(v("h"))}" min="1" step="1">
+    </div>`;
+    weightHtml = `<input type="number" class="manual-input weight" data-code="${escapeHtml(ln.code)}" data-field="weight" placeholder="kg" value="${escapeHtml(v("weight"))}" min="0" step="0.1">`;
+  }
+
   return `<div class="line ${cls}">
     <div class="qty">${ln.qty}×</div>
     <div class="desc">${escapeHtml(ln.desc)}${badge}<div class="match-name">${escapeHtml(boxesText)}</div></div>
-    <div class="num">${escapeHtml(dims)}</div>
-    <div class="num">${escapeHtml(weight)}</div>
+    <div class="num">${dimsHtml}</div>
+    <div class="num">${weightHtml}</div>
     <div class="num">${escapeHtml(ln.code)}</div>
     <div class="num"></div>
   </div>`;

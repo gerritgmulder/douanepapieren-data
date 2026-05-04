@@ -356,6 +356,74 @@ app.delete("/api/user-specs/:code", requireAuth, (req, res) => {
   res.json({ ok: true, code });
 });
 
+// ════════════════════════════════════════════════════════════════════
+// Packaging-overrides — handmatig ingevulde verpakkingsdata per art.code,
+// voor de Transport-laden tool. Format: { "<code>": { l, w, h, weight,
+// name? } } in cm/kg. Server-side opslag zodat Manon's invoer ook voor
+// Don/Dolf/Gerrit/Fonteynbot beschikbaar is.
+// ════════════════════════════════════════════════════════════════════
+const PACKAGING_OVERRIDES_FILE = path.join(USER_SPECS_DIR, "packaging-overrides.json");
+
+function loadPackagingOverrides() {
+  try {
+    if (!fs.existsSync(PACKAGING_OVERRIDES_FILE)) return {};
+    return JSON.parse(fs.readFileSync(PACKAGING_OVERRIDES_FILE, "utf-8"));
+  } catch (e) {
+    console.warn("[packaging-overrides] kon niet lezen:", e.message);
+    return {};
+  }
+}
+
+function savePackagingOverrides(data) {
+  const tmp = PACKAGING_OVERRIDES_FILE + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, PACKAGING_OVERRIDES_FILE);
+}
+
+app.get("/api/packaging-overrides", requireAuth, (req, res) => {
+  res.json(loadPackagingOverrides());
+});
+
+app.put("/api/packaging-overrides/:code", requireAuth, (req, res) => {
+  const code = String(req.params.code || "").trim();
+  if (!code || code.length > 50) return res.status(400).json({ error: "ongeldige code" });
+
+  const incoming = req.body || {};
+  const cleaned = {};
+  for (const k of ["l", "w", "h", "weight"]) {
+    if (incoming[k] !== undefined && incoming[k] !== null && incoming[k] !== "") {
+      const n = parseFloat(incoming[k]);
+      if (!isNaN(n) && n > 0) cleaned[k] = n;
+    }
+  }
+  if (incoming.name) cleaned.name = String(incoming.name).slice(0, 200);
+
+  const all = loadPackagingOverrides();
+  if (Object.keys(cleaned).length === 0) {
+    delete all[code];
+  } else {
+    all[code] = { ...(all[code] || {}), ...cleaned };
+  }
+  try {
+    savePackagingOverrides(all);
+    res.json({ ok: true, code, override: all[code] || null });
+  } catch (e) {
+    console.error("[packaging-overrides] save fail:", e);
+    res.status(500).json({ error: "opslaan mislukt: " + e.message });
+  }
+});
+
+app.delete("/api/packaging-overrides/:code", requireAuth, (req, res) => {
+  const code = String(req.params.code || "").trim();
+  const all = loadPackagingOverrides();
+  if (code in all) {
+    delete all[code];
+    try { savePackagingOverrides(all); }
+    catch (e) { return res.status(500).json({ error: e.message }); }
+  }
+  res.json({ ok: true, code });
+});
+
 /**
  * ═══════════════════════════════════════════════════════════════════════
  * Generieke Logic4-proxy.
