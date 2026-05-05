@@ -534,8 +534,14 @@ async function extractProductsFromInvoice() {
       // Modelnaam zit links in de rij (eerste niet-numerieke item)
       const isNonPriceText = (s) => /^[A-Za-z]/.test(s) && !/^[\$¥￥]/.test(s);
       const textItems = row.items.filter(it => isNonPriceText(it.str)).sort((a, b) => a.x - b.x);
-      const model = textItems[0]?.str || "(onbekend)";
-      const desc = textItems[1]?.str || "";
+      const modelCode = textItems[0]?.str || "";   // bv. "Barrel 120"
+      const desc      = textItems[1]?.str || "";   // bv. "Barrel Sauna"
+      // Combineer tot leesbare modelnaam: desc + nummer-suffix uit modelCode.
+      // "Barrel 120" + "Barrel Sauna" → "Barrel Sauna 120"
+      // "Cube 220-BIG" + "Cube Sauna" → "Cube Sauna 220-BIG"
+      const codeParts = modelCode.split(/\s+/);
+      const suffix = codeParts.slice(1).join(" ").trim();
+      const model = desc && suffix ? `${desc} ${suffix}` : (desc || modelCode || "(onbekend)");
       // Size = item dat lijkt op "1850*1200*1900" of "1850*1200*1900mm"
       const sizeItem = row.items.find(it => /^\d{3,4}\s*[\*x×]\s*\d{3,4}/.test(it.str));
       const size = sizeItem ? sizeItem.str.replace(/\*/g, "×").replace(/mm$/, " mm") : "";
@@ -585,18 +591,27 @@ async function extractProductsFromInvoice() {
 }
 
 function computePhotoBox(items, row, botY, viewport) {
-  // Zoek de Description-kolom-grenzen via de tabel-header
+  // Zoek de Description-kolom-grenzen via de tabel-header. De foto zit binnen
+  // de Description-kolom op de LINKER helft (~45% van de kolom-breedte); de
+  // rechter helft heeft spec-tekst die we juist niet in de foto willen.
   const descHeader = items.find(it => /^Description$/i.test(it.str));
   const sizeHeader = items.find(it => /^Size/i.test(it.str));
-  if (!descHeader || !sizeHeader) {
-    // Fallback: 25%-50% breedte
-    return { x: viewport.width * 0.18, y: row.y + 8, w: viewport.width * 0.27, h: botY - row.y - 12 };
+  let colX, colW;
+  if (descHeader && sizeHeader) {
+    colX = descHeader.x - 5;
+    colW = sizeHeader.x - descHeader.x - 5;
+  } else {
+    // Fallback: 18-45% van de pagina-breedte
+    colX = viewport.width * 0.18;
+    colW = viewport.width * 0.27;
   }
+  // Foto onder de header-tekstrij, hoogte beperkt zodat we niet over de
+  // volgende productrij heen schieten.
   return {
-    x: descHeader.x - 5,
-    y: row.y + 8,
-    w: sizeHeader.x - descHeader.x - 5,
-    h: Math.max(60, botY - row.y - 12),
+    x: colX,
+    y: row.y + 12,
+    w: colW * 0.45,
+    h: Math.max(60, Math.min(180, botY - row.y - 16)),
   };
 }
 
@@ -789,10 +804,10 @@ $("generate").addEventListener("click", async () => {
   showStatus($("genStatus"), "PDF aan het genereren…", "info");
   try {
     const blob = await generatePricelistPdf();
-    const seriesName = ($("seriesName").value || "Prijslijst").trim();
+    const seriesNameForFile = $("seriesName").value.trim() || "Prijslijst";
     const monthYear = $("monthYear").value.trim();
     const styleSuffix = $("style").value === "passion" ? "Passion" : "Fonteyn";
-    const fname = [seriesName, styleSuffix, monthYear].filter(Boolean).join(" ") + ".pdf";
+    const fname = [seriesNameForFile, styleSuffix, monthYear].filter(Boolean).join(" ") + ".pdf";
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -850,7 +865,7 @@ async function generatePricelistPdf() {
     } catch {}
   }
 
-  const seriesName = ($("seriesName").value || "Prijslijst").trim();
+  const seriesName = $("seriesName").value.trim(); // mag leeg zijn
   const monthYear = $("monthYear").value.trim();
 
   // Header-renderer per pagina
@@ -868,8 +883,8 @@ async function generatePricelistPdf() {
         font: helvBold, size: 22, color: rgb(1, 1, 1),
       });
     }
-    // Titel rechts
-    const title = `Prijslijst — ${seriesName}`;
+    // Titel rechts — alleen reeks-naam toevoegen als die is ingevuld
+    const title = seriesName ? `Prijslijst — ${seriesName}` : "Prijslijst";
     const titleW = helvBold.widthOfTextAtSize(title, 14);
     page.drawText(title, {
       x: PAGE_W - M - titleW, y: PAGE_H - 38,
