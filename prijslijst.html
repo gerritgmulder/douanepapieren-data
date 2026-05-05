@@ -372,25 +372,38 @@ async function processPdf() {
     state.pages.push({ canvas, page, viewport });
   }
 
-  // Format-detectie via tekst-inhoud van pagina 1
-  const firstPageText = await getPageText(doc, 1);
-  console.log("[prijslijst] eerste pagina tekst (500 chars):", firstPageText.slice(0, 500));
+  // Format-detectie via tekst-inhoud van álle pagina's (sommige PDF's hebben
+  // een cover op pagina 1).
+  let allText = "";
+  for (let i = 1; i <= doc.numPages; i++) {
+    allText += "\n--- PAGE " + i + " ---\n" + (await getPageText(doc, i));
+  }
+  console.log("[prijslijst] full text:", allText);
   // pdf.js splitst tabel-headers vaak in aparte items, dus we kijken alleen
   // naar individuele keywords i.p.v. exacte fraseringen.
-  const hasUSD       = /USD/i.test(firstPageText);
-  const hasRMB       = /RMB|￥|¥/i.test(firstPageText);
-  const hasInvoice   = /INVOICE/i.test(firstPageText);
-  const hasQuantity  = /Quantity/i.test(firstPageText);
-  const hasDimension = /Dimension/i.test(firstPageText);
-  const hasCapacity  = /Capacity/i.test(firstPageText);
+  const hasUSD       = /USD|\$/i.test(allText);
+  const hasRMB       = /RMB|￥|¥/i.test(allText);
+  const hasInvoice   = /INVOICE/i.test(allText);
+  const hasQuantity  = /Quantity/i.test(allText);
+  const hasDimension = /Dimension/i.test(allText);
+  const hasCapacity  = /Capacity/i.test(allText);
+  const hasModel     = /Model/i.test(allText);
   if (hasUSD && hasRMB && hasInvoice && hasQuantity) {
     state.format = "invoice";
   } else if (hasUSD && hasRMB && (hasDimension || hasCapacity)) {
     state.format = "catalog";
+  } else if (hasUSD && hasRMB && hasModel) {
+    // Best-effort fallback: we hebben USD/RMB en Model — probeer als invoice
+    state.format = "invoice";
+    console.warn("[prijslijst] format niet eenduidig, fallback op invoice");
   } else {
-    const reason = `USD=${hasUSD} RMB=${hasRMB} INVOICE=${hasInvoice} Quantity=${hasQuantity} Dimension=${hasDimension} Capacity=${hasCapacity}`;
+    const reason = `USD=${hasUSD} RMB=${hasRMB} INVOICE=${hasInvoice} Quantity=${hasQuantity} Dimension=${hasDimension} Capacity=${hasCapacity} Model=${hasModel}`;
+    const sample = escapeHtml(allText.slice(0, 800));
     showStatus($("dropStatus"),
-      `Onbekend PDF-formaat. Detectie: ${reason}. Open DevTools-console (Cmd+Opt+I) voor de eerste 500 chars van de pagina-tekst, en stuur die door zodat ik de regex kan finetunen.`,
+      `<b>Onbekend PDF-formaat.</b> Detectie: ${reason}<br><br>
+       <b>Eerste 800 chars uit de PDF:</b><br>
+       <pre style="white-space:pre-wrap;font-size:11px;background:#fff;padding:8px;border-radius:4px;max-height:240px;overflow:auto;border:1px solid #fecaca;">${sample}</pre>
+       Stuur deze tekst door zodat ik de detectie kan finetunen voor jouw PDF.`,
       "error");
     return;
   }
