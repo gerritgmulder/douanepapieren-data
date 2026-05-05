@@ -374,12 +374,24 @@ async function processPdf() {
 
   // Format-detectie via tekst-inhoud van pagina 1
   const firstPageText = await getPageText(doc, 1);
-  if (/Unit Price.*USD\/PC/i.test(firstPageText) && /Amount.*USD/i.test(firstPageText)) {
+  console.log("[prijslijst] eerste pagina tekst (500 chars):", firstPageText.slice(0, 500));
+  // pdf.js splitst tabel-headers vaak in aparte items, dus we kijken alleen
+  // naar individuele keywords i.p.v. exacte fraseringen.
+  const hasUSD       = /USD/i.test(firstPageText);
+  const hasRMB       = /RMB|￥|¥/i.test(firstPageText);
+  const hasInvoice   = /INVOICE/i.test(firstPageText);
+  const hasQuantity  = /Quantity/i.test(firstPageText);
+  const hasDimension = /Dimension/i.test(firstPageText);
+  const hasCapacity  = /Capacity/i.test(firstPageText);
+  if (hasUSD && hasRMB && hasInvoice && hasQuantity) {
     state.format = "invoice";
-  } else if (/RMB Unit Price/i.test(firstPageText) && /USD Unit Price/i.test(firstPageText)) {
+  } else if (hasUSD && hasRMB && (hasDimension || hasCapacity)) {
     state.format = "catalog";
   } else {
-    showStatus($("dropStatus"), "Onbekend PDF-formaat. Voor nu ondersteund: Fukiafu invoice (FKF…) en Fukiafu catalogus.", "error");
+    const reason = `USD=${hasUSD} RMB=${hasRMB} INVOICE=${hasInvoice} Quantity=${hasQuantity} Dimension=${hasDimension} Capacity=${hasCapacity}`;
+    showStatus($("dropStatus"),
+      `Onbekend PDF-formaat. Detectie: ${reason}. Open DevTools-console (Cmd+Opt+I) voor de eerste 500 chars van de pagina-tekst, en stuur die door zodat ik de regex kan finetunen.`,
+      "error");
     return;
   }
 
