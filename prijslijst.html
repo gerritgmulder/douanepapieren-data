@@ -410,15 +410,46 @@ async function processPdf() {
 
   showStatus($("dropStatus"), `✓ PDF geladen — formaat: ${state.format === "invoice" ? "Invoice" : "Catalogus"}, ${doc.numPages} pagina${doc.numPages === 1 ? "" : "'s"}`, "ok");
 
-  // Producten extraheren
+  // Producten extraheren — probeer eerst het gedetecteerde formaat, daarna
+  // fall back op het andere formaat. Helpt als de format-detectie via de
+  // fallback in een grijs gebied komt.
   if (state.format === "invoice") {
     await extractProductsFromInvoice();
+    if (!state.products.length) {
+      console.warn("[prijslijst] invoice-parser vond niets, probeer catalog-parser");
+      await extractProductsFromCatalog();
+      if (state.products.length) state.format = "catalog";
+    }
   } else if (state.format === "catalog") {
     await extractProductsFromCatalog();
+    if (!state.products.length) {
+      console.warn("[prijslijst] catalog-parser vond niets, probeer invoice-parser");
+      await extractProductsFromInvoice();
+      if (state.products.length) state.format = "invoice";
+    }
   }
 
   if (!state.products.length) {
-    showStatus($("dropStatus"), "Geen producten herkend in deze PDF.", "error");
+    // Diagnostiek dumpen — alle pagina-1 items met posities, in HTML zodat
+    // gerrit ziet wat de parser binnenkrijgt zonder DevTools.
+    const items = await getPageItems(1);
+    const rows = {};
+    for (const it of items) {
+      const yKey = Math.round(it.y / 5) * 5;
+      (rows[yKey] = rows[yKey] || []).push(it);
+    }
+    const yKeys = Object.keys(rows).map(Number).sort((a, b) => a - b);
+    let diag = "<b>Pagina 1 — wat de parser ziet (per rij):</b><br>";
+    diag += `<pre style="white-space:pre-wrap;font-size:11px;background:#fff;padding:8px;border-radius:4px;max-height:300px;overflow:auto;border:1px solid #fecaca;">`;
+    for (const y of yKeys) {
+      const sorted = rows[y].sort((a, b) => a.x - b.x);
+      const line = sorted.map(it => `[${Math.round(it.x)}]${it.str}`).join(" | ");
+      diag += `y=${y}: ${escapeHtml(line)}\n`;
+    }
+    diag += "</pre>";
+    showStatus($("dropStatus"),
+      `<b>Geen producten herkend</b> in deze PDF (${state.format}-formaat). De heuristiek vond geen rijen die op productrijen leken.<br><br>${diag}Stuur deze diagnostiek door — dan tune ik de parser.`,
+      "error");
     return;
   }
   applyMultiplier();
@@ -487,35 +518,33 @@ async function extractProductsFromInvoice() {
     rowsByY.sort((a, b) => a.y - b.y);
 
     // Een product begint waar een rij twee cijferige cellen heeft (Quantity + RMB/PC + RMB-totaal + USD/PC + USD-totaal).
-    // Heuristiek: rij waar minstens 2 items een $-prefix of ¥-prefix hebben.
+    // Heuristiek: rij waar minstens één $-bedrag in zit (USD-prijs).
+    // Ruimer dan eerst: pdf.js kan "$ 700", "$700", of "$700.00" teruggeven,
+    // soms ook met spatie tussen valutateken en getal.
+    const dollarRe = /^\$\s*[\d,\.]+/;
     const productHeaderRows = rowsByY.filter(r =>
-      r.items.some(it => /^\$[\d,\.]+/.test(it.str)) &&
-      r.items.some(it => /^[¥￥][\d,\.]+/.test(it.str))
+      r.items.some(it => dollarRe.test(it.str)) &&
+      // ook minstens één model-achtig item (geen $/¥, geen pure cijfers)
+      r.items.some(it => /^[A-Za-z]/.test(it.str) && !/^(Model|Description|Size|Quantity|Unit|Amount|TOTAL|Note|Bank|PAYEE|SWIFT|ACCOUNT|ADDRESS|The|Signature|Stamp)/i.test(it.str))
     );
 
     for (let idx = 0; idx < productHeaderRows.length; idx++) {
       const row = productHeaderRows[idx];
       const nextRow = productHeaderRows[idx + 1];
       // Modelnaam zit links in de rij (eerste niet-numerieke item)
-      const modelItem = row.items
-        .filter(it => !/^[\$¥￥\d]/.test(it.str))
-        .sort((a, b) => a.x - b.x)[0];
-      const model = modelItem ? modelItem.str : "(onbekend)";
-      // Description = items rechts van model maar links van Size-kolom
-      const descItem = row.items
-        .filter(it => !/^[\$¥￥\d]/.test(it.str))
-        .sort((a, b) => a.x - b.x)[1];
-      const desc = descItem ? descItem.str : "";
+      const isNonPriceText = (s) => /^[A-Za-z]/.test(s) && !/^[\$¥￥]/.test(s);
+      const textItems = row.items.filter(it => isNonPriceText(it.str)).sort((a, b) => a.x - b.x);
+      const model = textItems[0]?.str || "(onbekend)";
+      const desc = textItems[1]?.str || "";
       // Size = item dat lijkt op "1850*1200*1900" of "1850*1200*1900mm"
       const sizeItem = row.items.find(it => /^\d{3,4}\s*[\*x×]\s*\d{3,4}/.test(it.str));
       const size = sizeItem ? sizeItem.str.replace(/\*/g, "×").replace(/mm$/, " mm") : "";
-      // Unit Price (USD/PC) = laatste $-bedrag, op-1 (de allerlaatste is de Amount-totaal)
+      // Unit Price (USD/PC) = eerste $-bedrag van links (in tabel komt USD/PC vóór Amount-USD)
       const dollarItems = row.items
-        .filter(it => /^\$[\d,\.]+/.test(it.str))
+        .filter(it => /^\$\s*[\d,\.]+/.test(it.str))
         .sort((a, b) => a.x - b.x);
-      // dollarItems[0] = Unit Price USD/PC, [1] = Amount USD
       const usdRaw = dollarItems[0]?.str || "$0";
-      const usd = parseFloat(usdRaw.replace(/[\$,]/g, "")) || 0;
+      const usd = parseFloat(usdRaw.replace(/[\$,\s]/g, "")) || 0;
 
       // Specs-blok: alle items in de rij(en) tussen deze product-row en de volgende
       // (begin met "1." "2." ...).
