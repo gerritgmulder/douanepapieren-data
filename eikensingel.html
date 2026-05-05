@@ -496,6 +496,12 @@ function parseIcal(text) {
   return out;
 }
 
+// Cloudflare Worker proxy voor AirBnB iCal-feeds. AirBnB stuurt zelf geen
+// CORS-headers, dus de browser kan de feed niet rechtstreeks lezen — deze
+// worker fetcht 'm aan zijn kant en stuurt 'm terug mét CORS. Code en
+// whitelist staan in /airbnb-proxy in deze repo.
+const ICAL_PROXY = "https://fonteyn-airbnb-proxy.g-mulder.workers.dev";
+
 // Sync één huis. Idempotent op icalUid: bestaande synced bookings blijven staan.
 // Returnt {added, skipped, error}. Sla nieuwe state niet hier op — caller doet PUT.
 async function syncHouseIcal(house) {
@@ -504,14 +510,11 @@ async function syncHouseIcal(house) {
   if (!/^https?:\/\//.test(url)) return { added: 0, skipped: 0, error: "ongeldige URL" };
   let text;
   try {
-    const r = await fetch(url, { mode: "cors" });
-    if (!r.ok) throw new Error("HTTP " + r.status);
+    const r = await fetch(ICAL_PROXY + "/?url=" + encodeURIComponent(url));
+    if (!r.ok) throw new Error("HTTP " + r.status + (r.statusText ? " " + r.statusText : ""));
     text = await r.text();
   } catch (e) {
-    // CORS-fout heeft typisch message "Failed to fetch" — geef de gebruiker
-    // een duidelijkere uitleg dan dat.
-    const isCors = /Failed to fetch|NetworkError|CORS/i.test(e.message || "");
-    return { added: 0, skipped: 0, error: isCors ? "AirBnB blokkeert browser-fetch (CORS) — laat Gerrit weten dat je de URL hebt ingevuld" : e.message };
+    return { added: 0, skipped: 0, error: e.message || "fetch faalde" };
   }
   const events = parseIcal(text);
   if (!Array.isArray(house.bookings)) house.bookings = [];
