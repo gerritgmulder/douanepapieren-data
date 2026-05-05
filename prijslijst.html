@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>Fonteyn — Prijslijst maken</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --fonteyn-green:      #144734;
+  --fonteyn-green-dark: #0d3325;
+  --fonteyn-lime:       #8bc53f;
+  --fonteyn-lime-dark:  #72a531;
+  --fonteyn-cream:      #fff9ae;
+  --passion-red:        #c8102e;
+  --passion-red-dark:   #960c22;
+  --passion-charcoal:   #2b2b2b;
+  --ink:                #1d1d1d;
+  --muted:              #6b7280;
+  --border:             #e0e0d8;
+  --bg:                 #f5f4ef;
+  --card:               #ffffff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; font-family: 'Montserrat', system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+header.hdr {
+  background: var(--fonteyn-green);
+  color: #fff;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+header .brand { display: flex; align-items: center; gap: 16px; }
+header .back { color: #fff; text-decoration: none; font-size: 13px; padding: 5px 10px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; }
+header .back:hover { background: rgba(255,255,255,0.1); }
+header img.logo { height: 38px; }
+header h1 { font-size: 18px; font-weight: 600; margin: 0; }
+header .user { font-size: 13px; display: flex; align-items: center; gap: 12px; }
+header .logout { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: inherit; }
+header .logout:hover { background: rgba(255,255,255,0.1); }
+main { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
+.section-title { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 24px 0 8px; font-weight: 600; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 18px;
+}
+.settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.setting label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+.setting input, .setting select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  background: #fff;
+}
+.setting input:focus, .setting select:focus {
+  outline: none;
+  border-color: var(--fonteyn-green);
+}
+.dropzone {
+  display: block;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .15s;
+  background: #fafaf8;
+  color: var(--muted);
+}
+.dropzone:hover, .dropzone.drag {
+  border-color: var(--fonteyn-green);
+  background: #f0f7e8;
+  color: var(--ink);
+}
+.dropzone input[type=file] { display: none; }
+.dropzone .big { font-size: 17px; margin-bottom: 6px; color: var(--ink); font-weight: 500; }
+.dropzone .small { font-size: 13px; }
+.cta {
+  background: var(--fonteyn-lime);
+  color: #fff;
+  border: 0;
+  padding: 11px 22px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+}
+.cta:hover { background: var(--fonteyn-lime-dark); }
+.cta:disabled { opacity: 0.5; cursor: not-allowed; }
+.cta.secondary {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--border);
+}
+.cta.secondary:hover { background: #fafaf8; }
+.product-list { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.product-row {
+  display: grid;
+  grid-template-columns: 60px 1fr 110px 110px 110px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #fafaf8;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.product-row .thumb {
+  width: 60px;
+  height: 45px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  object-fit: contain;
+}
+.product-row .model { font-weight: 600; }
+.product-row .desc { font-size: 12px; color: var(--muted); }
+.product-row .price { text-align: right; font-variant-numeric: tabular-nums; }
+.product-row .price.usd { color: var(--muted); font-size: 12px; }
+.product-row .price.eur { color: var(--fonteyn-green); font-weight: 600; font-size: 14px; }
+.product-row input.eur-input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--fonteyn-green);
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 14px;
+  width: 100%;
+}
+.status {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.status.info { background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe; }
+.status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.status.ok { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.hidden { display: none !important; }
+.row-flex { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.row-flex > * { flex: 0 0 auto; }
+.muted { color: var(--muted); font-size: 12px; }
+.format-badge {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--fonteyn-cream);
+  color: var(--ink);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="brand">
+    <a href="dashboard.html" class="back">← Dashboard</a>
+    <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+    <h1>Prijslijst maken</h1>
+  </div>
+  <div class="user">
+    <span id="userEmail">—</span>
+    <button class="logout" id="hdr-logout">Uitloggen</button>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <div class="section-title">Instellingen</div>
+    <div class="settings">
+      <div class="setting">
+        <label>Huisstijl</label>
+        <select id="style">
+          <option value="fonteyn">Fonteyn (groen + lime)</option>
+          <option value="passion">Passion (rood + charcoal)</option>
+        </select>
+      </div>
+      <div class="setting">
+        <label>USD → EUR multiplier (retail)</label>
+        <input type="number" id="multiplier" value="1.7" min="0" step="0.05">
+      </div>
+      <div class="setting">
+        <label>Modelreeks-naam</label>
+        <input type="text" id="seriesName" placeholder="bv. Fukiafu Saunas">
+      </div>
+      <div class="setting">
+        <label>Maand-jaar (optioneel, MM-JJJJ)</label>
+        <input type="text" id="monthYear" placeholder="bv. 11-2026">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-title">Leveranciers-PDF</div>
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".pdf,application/pdf">
+      <div class="big">📄 Sleep de invoice of catalogus hier naartoe</div>
+      <div class="small">of klik om te kiezen — alleen PDF, max 10 MB</div>
+    </label>
+    <div id="dropStatus"></div>
+  </div>
+
+  <div class="card hidden" id="previewCard">
+    <div class="section-title row-flex" style="justify-content:space-between;">
+      <span>Gevonden producten <span class="format-badge" id="formatBadge"></span></span>
+      <span class="muted" id="productCount"></span>
+    </div>
+    <div class="product-list" id="productList"></div>
+    <div class="row-flex" style="margin-top:18px;">
+      <button class="cta" id="generate">Genereer prijslijst (PDF)</button>
+      <button class="cta secondary" id="reset">Andere PDF kiezen</button>
+      <span class="muted">EUR-prijzen kun je hierboven nog handmatig overrulen vóór je downloadt.</span>
+    </div>
+    <div id="genStatus"></div>
+  </div>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script>
+// ─── pdf.js worker config ────────────────────────────────────────────
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ─── Helpers ────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const showStatus = (el, msg, kind = "info") => {
+  el.innerHTML = `<div class="status ${kind}">${msg}</div>`;
+};
+const clearStatus = (el) => { el.innerHTML = ""; };
+
+// Soft-rounding voor retail-EUR: rond naar dichtstbijzijnde €10 onder €1000,
+// nearest €50 boven €1000. Werkt fijn voor productprijzen.
+function roundRetailEur(eur) {
+  if (eur < 100) return Math.round(eur);
+  if (eur < 1000) return Math.round(eur / 10) * 10;
+  if (eur < 5000) return Math.round(eur / 50) * 50;
+  return Math.round(eur / 100) * 100;
+}
+const fmtEur = (n) => "€ " + Math.round(n).toLocaleString("nl-NL");
+
+// ─── Auth check via helper-server ───────────────────────────────────
+(async () => {
+  try {
+    const r = await fetch("/api/me");
+    if (!r.ok) { window.location.replace("dashboard.html"); return; }
+    const j = await r.json();
+    $("userEmail").textContent = j.user?.email || "—";
+  } catch {
+    window.location.replace("dashboard.html");
+  }
+})();
+
+$("hdr-logout").addEventListener("click", async () => {
+  try { await fetch("/api/logout", { method: "POST" }); } catch {}
+  window.location.replace("dashboard.html");
+});
+
+// ─── State ──────────────────────────────────────────────────────────
+const state = {
+  pdfDoc: null,            // pdf.js document object
+  format: null,            // "invoice" | "catalog" | null
+  products: [],            // [{model, desc, size, specs[], usd, eur, photoCanvas, sourcePageIndex}]
+  pages: [],               // pre-rendered page canvases (full size)
+};
+
+// ─── Drop-zone handling ─────────────────────────────────────────────
+const dropzone = $("dropzone");
+const fileInput = $("fileInput");
+
+["dragenter", "dragover"].forEach(ev => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); dropzone.classList.add("drag");
+}));
+["dragleave", "drop"].forEach(ev => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); dropzone.classList.remove("drag");
+}));
+dropzone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer?.files?.[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener("change", (e) => {
+  const f = e.target.files?.[0];
+  if (f) handleFile(f);
+});
+
+async function handleFile(file) {
+  clearStatus($("dropStatus"));
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    showStatus($("dropStatus"), "Alleen PDF-bestanden worden ondersteund.", "error");
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showStatus($("dropStatus"), `PDF is groter dan 10 MB (${(file.size/1024/1024).toFixed(1)} MB).`, "error");
+    return;
+  }
+  showStatus($("dropStatus"), `📄 ${file.name} laden…`, "info");
+  try {
+    const buf = await file.arrayBuffer();
+    state.pdfDoc = await pdfjsLib.getDocument({ data: buf }).promise;
+    await processPdf();
+  } catch (e) {
+    console.error(e);
+    showStatus($("dropStatus"), "Kon PDF niet openen: " + e.message, "error");
+  }
+}
+
+// ─── PDF processing — detect format, extract products, render preview ─────
+async function processPdf() {
+  const doc = state.pdfDoc;
+  state.pages = [];
+  state.products = [];
+  state.format = null;
+
+  // Render alle pagina's naar canvas (op 2x scale voor crisp output)
+  const SCALE = 2;
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const viewport = page.getViewport({ scale: SCALE });
+    const canvas = document.createElement("canvas");
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext("2d");
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    state.pages.push({ canvas, page, viewport });
+  }
+
+  // Format-detectie via tekst-inhoud van pagina 1
+  const firstPageText = await getPageText(doc, 1);
+  if (/Unit Price.*USD\/PC/i.test(firstPageText) && /Amount.*USD/i.test(firstPageText)) {
+    state.format = "invoice";
+  } else if (/RMB Unit Price/i.test(firstPageText) && /USD Unit Price/i.test(firstPageText)) {
+    state.format = "catalog";
+  } else {
+    showStatus($("dropStatus"), "Onbekend PDF-formaat. Voor nu ondersteund: Fukiafu invoice (FKF…) en Fukiafu catalogus.", "error");
+    return;
+  }
+
+  showStatus($("dropStatus"), `✓ PDF geladen — formaat: ${state.format === "invoice" ? "Invoice" : "Catalogus"}, ${doc.numPages} pagina${doc.numPages === 1 ? "" : "'s"}`, "ok");
+
+  // Producten extraheren
+  if (state.format === "invoice") {
+    await extractProductsFromInvoice();
+  } else if (state.format === "catalog") {
+    await extractProductsFromCatalog();
+  }
+
+  if (!state.products.length) {
+    showStatus($("dropStatus"), "Geen producten herkend in deze PDF.", "error");
+    return;
+  }
+  applyMultiplier();
+  renderPreview();
+}
+
+async function getPageText(doc, pageNum) {
+  const page = await doc.getPage(pageNum);
+  const tc = await page.getTextContent();
+  return tc.items.map(it => it.str).join("\n");
+}
+
+// Helper: text-items met posities (in PDF-coords, origin top-left na transform).
+async function getPageItems(pageNum) {
+  const page = await state.pdfDoc.getPage(pageNum);
+  const viewport = page.getViewport({ scale: 1 });
+  const tc = await page.getTextContent();
+  // pdf.js geeft items met transform [a,b,c,d,e,f] waarin e=x, f=y (vanaf bottom).
+  // We transformeren naar top-down y zodat we in scherm-coords kunnen denken.
+  return tc.items.map(it => {
+    const x = it.transform[4];
+    const yFromBottom = it.transform[5];
+    const y = viewport.height - yFromBottom;
+    return { str: it.str.trim(), x, y, width: it.width, height: it.height || 10 };
+  }).filter(it => it.str);
+}
+
+// ─── INVOICE FORMAT (FKF20260420-NL4-XX-stijl) ──────────────────────
+//
+// Layout per pagina:
+//   • Top blok: SUPPLIER (links) + INVOICE titel (rechts), CUSTOMER, TRANSPORT
+//   • Tabel-header: Model | Description | Size | Quantity | Unit Price (RMB/PC)
+//                   | Amount (RMB) | Unit Price (USD/PC) | Amount (USD)
+//   • Per product: 1 header-rij met de cijfers + 1 spec-rij met 4 bullets +
+//                  productfoto in de Description-cel
+//   • Onderaan: TOTAL-rij, Bank Details, signatures
+//
+// We extraheren: model-naam, beschrijving, size, USD/PC, en de canvas-region
+// van de productfoto (bounded door de "1." spec-regel).
+
+async function extractProductsFromInvoice() {
+  const doc = state.pdfDoc;
+  for (let i = 1; i <= doc.numPages; i++) {
+    const items = await getPageItems(i);
+    const pageInfo = state.pages[i - 1];
+    const viewport = pageInfo.page.getViewport({ scale: 1 });
+    const PAGE_H = viewport.height;
+
+    // Vind de y-positie van de tabel-header (de regel met "Model")
+    const headerItem = items.find(it => /^Model$/i.test(it.str));
+    if (!headerItem) continue;
+    const headerY = headerItem.y;
+    // Vind de y-positie van TOTAL (einde producten-blok)
+    const totalItem = items.find(it => /^TOTAL$/i.test(it.str) && it.y > headerY);
+    const productsTopY = headerY + 5;
+    const productsBotY = totalItem ? totalItem.y - 5 : PAGE_H - 100;
+
+    // Group items by row using y-bucketing (5pt tolerance)
+    const inRange = items.filter(it => it.y > productsTopY && it.y < productsBotY);
+    const rowsByY = [];
+    for (const it of inRange) {
+      const found = rowsByY.find(r => Math.abs(r.y - it.y) < 5);
+      if (found) found.items.push(it);
+      else rowsByY.push({ y: it.y, items: [it] });
+    }
+    rowsByY.sort((a, b) => a.y - b.y);
+
+    // Een product begint waar een rij twee cijferige cellen heeft (Quantity + RMB/PC + RMB-totaal + USD/PC + USD-totaal).
+    // Heuristiek: rij waar minstens 2 items een $-prefix of ¥-prefix hebben.
+    const productHeaderRows = rowsByY.filter(r =>
+      r.items.some(it => /^\$[\d,\.]+/.test(it.str)) &&
+      r.items.some(it => /^[¥￥][\d,\.]+/.test(it.str))
+    );
+
+    for (let idx = 0; idx < productHeaderRows.length; idx++) {
+      const row = productHeaderRows[idx];
+      const nextRow = productHeaderRows[idx + 1];
+      // Modelnaam zit links in de rij (eerste niet-numerieke item)
+      const modelItem = row.items
+        .filter(it => !/^[\$¥￥\d]/.test(it.str))
+        .sort((a, b) => a.x - b.x)[0];
+      const model = modelItem ? modelItem.str : "(onbekend)";
+      // Description = items rechts van model maar links van Size-kolom
+      const descItem = row.items
+        .filter(it => !/^[\$¥￥\d]/.test(it.str))
+        .sort((a, b) => a.x - b.x)[1];
+      const desc = descItem ? descItem.str : "";
+      // Size = item dat lijkt op "1850*1200*1900" of "1850*1200*1900mm"
+      const sizeItem = row.items.find(it => /^\d{3,4}\s*[\*x×]\s*\d{3,4}/.test(it.str));
+      const size = sizeItem ? sizeItem.str.replace(/\*/g, "×").replace(/mm$/, " mm") : "";
+      // Unit Price (USD/PC) = laatste $-bedrag, op-1 (de allerlaatste is de Amount-totaal)
+      const dollarItems = row.items
+        .filter(it => /^\$[\d,\.]+/.test(it.str))
+        .sort((a, b) => a.x - b.x);
+      // dollarItems[0] = Unit Price USD/PC, [1] = Amount USD
+      const usdRaw = dollarItems[0]?.str || "$0";
+      const usd = parseFloat(usdRaw.replace(/[\$,]/g, "")) || 0;
+
+      // Specs-blok: alle items in de rij(en) tussen deze product-row en de volgende
+      // (begin met "1." "2." ...).
+      const specBotY = nextRow ? nextRow.y - 3 : productsBotY;
+      const specItems = items.filter(it =>
+        it.y > row.y + 3 && it.y < specBotY &&
+        /^[1-9]\./.test(it.str)
+      ).sort((a, b) => a.y - b.y || a.x - b.x);
+      // Soms zit "1. Spruce wood;..." als één item, soms gesplitst. Pak per
+      // bullet de hele restant-tekst van die y-regel.
+      const specs = [];
+      for (const sp of specItems) {
+        // Pak alle items op dezelfde y als deze bullet
+        const sameRow = items.filter(it => Math.abs(it.y - sp.y) < 3).sort((a, b) => a.x - b.x);
+        const text = sameRow.map(it => it.str).join(" ").replace(/\s+/g, " ").trim();
+        specs.push(text);
+      }
+
+      // Productfoto: het rechthoekje binnen Description-kolom, tussen row.y en
+      // de spec-bullets. Description-kolom begint waar "Description"-header zit
+      // en eindigt bij Size-kolom. We bepalen x-grenzen op basis van header-row.
+      const photoBox = computePhotoBox(items, row, specBotY, viewport);
+      const photoCanvas = cropPageCanvas(pageInfo.canvas, photoBox, viewport);
+
+      state.products.push({
+        model,
+        desc,
+        size,
+        specs,
+        usd,
+        eur: 0, // wordt straks gevuld door applyMultiplier
+        eurOverride: null,
+        photoCanvas,
+        sourcePageIndex: i - 1,
+      });
+    }
+  }
+}
+
+function computePhotoBox(items, row, botY, viewport) {
+  // Zoek de Description-kolom-grenzen via de tabel-header
+  const descHeader = items.find(it => /^Description$/i.test(it.str));
+  const sizeHeader = items.find(it => /^Size/i.test(it.str));
+  if (!descHeader || !sizeHeader) {
+    // Fallback: 25%-50% breedte
+    return { x: viewport.width * 0.18, y: row.y + 8, w: viewport.width * 0.27, h: botY - row.y - 12 };
+  }
+  return {
+    x: descHeader.x - 5,
+    y: row.y + 8,
+    w: sizeHeader.x - descHeader.x - 5,
+    h: Math.max(60, botY - row.y - 12),
+  };
+}
+
+function cropPageCanvas(srcCanvas, box, viewport) {
+  // box is in pdf-coords (scale 1). srcCanvas is op SCALE=2.
+  const SCALE = srcCanvas.width / viewport.width;
+  const sx = box.x * SCALE;
+  const sy = box.y * SCALE;
+  const sw = box.w * SCALE;
+  const sh = box.h * SCALE;
+  const out = document.createElement("canvas");
+  out.width = sw;
+  out.height = sh;
+  const ctx = out.getContext("2d");
+  ctx.drawImage(srcCanvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  return out;
+}
+
+// ─── CATALOG FORMAT (Fukiafu Indoor Saunas-stijl) ───────────────────
+//
+// Layout per pagina:
+//   • Top: "Guangdong Foshan Fukiafu Sci-Tech Ltd" + url
+//   • Tabel met links de attribuut-namen (Model, PHOTO, RMB Unit Price, ...)
+//     en daarnaast 4-5 product-kolommen
+//   • Rij-namen: Model, PHOTO, RMB Unit Price, USD Unit Price, Dimension,
+//     Capacity, Wood Type, Glass Door, Sauna Stove, 1*40HQ/PCS, Accessories
+
+async function extractProductsFromCatalog() {
+  const doc = state.pdfDoc;
+  for (let i = 1; i <= doc.numPages; i++) {
+    const items = await getPageItems(i);
+    const pageInfo = state.pages[i - 1];
+    const viewport = pageInfo.page.getViewport({ scale: 1 });
+
+    // Vind de Y-coordinaten van elke rij-naam (zoeken in linker 25% van de pagina)
+    const labelXMax = viewport.width * 0.20;
+    const findLabel = (regex) => items.find(it => it.x < labelXMax && regex.test(it.str));
+    const rModel    = findLabel(/^Model$/i);
+    const rPhoto    = findLabel(/^PHOTO$/i);
+    const rUsd      = findLabel(/USD Unit/i);
+    const rDim      = findLabel(/^Dimension/i);
+    const rCap      = findLabel(/^Capacity$/i);
+    const rWood     = findLabel(/^Wood Type$/i);
+    const rGlass    = findLabel(/^Glass Door$/i);
+    const rStove    = findLabel(/^Sauna Stove$/i);
+    const rAcc      = findLabel(/^Accessories$/i);
+    if (!rModel || !rPhoto || !rUsd || !rDim) continue;
+
+    // Voor elk product (kolom): items op rModel-Y, rechts van label-kolom
+    const modelItems = items
+      .filter(it => Math.abs(it.y - rModel.y) < 5 && it.x > labelXMax)
+      .sort((a, b) => a.x - b.x);
+
+    for (let p = 0; p < modelItems.length; p++) {
+      const modelItem = modelItems[p];
+      const colCenterX = modelItem.x;
+      const colNextX = modelItems[p + 1] ? modelItems[p + 1].x : viewport.width;
+      const colWidth = colNextX - modelItem.x;
+
+      const findInCol = (rowItem) => {
+        if (!rowItem) return "";
+        const cands = items
+          .filter(it => Math.abs(it.y - rowItem.y) < 5 && it.x >= modelItem.x - 5 && it.x < colNextX - 5)
+          .sort((a, b) => a.x - b.x);
+        return cands.map(it => it.str).join(" ").trim();
+      };
+
+      const usdStr = findInCol(rUsd);
+      const usd = parseFloat(String(usdStr).replace(/[^\d\.]/g, "")) || 0;
+      const dim = findInCol(rDim).replace(/\*/g, "×").replace(/mm$/, " mm");
+      const cap = findInCol(rCap);
+      const wood = findInCol(rWood);
+      const glass = findInCol(rGlass);
+      const stove = findInCol(rStove);
+      const acc = findInCol(rAcc);
+
+      const specs = [];
+      if (wood) specs.push(`Hout: ${wood}`);
+      if (glass) specs.push(`Glas: ${glass}`);
+      if (stove) specs.push(`Kachel: ${stove}`);
+      if (cap) specs.push(`Capaciteit: ${cap}`);
+      if (acc) specs.push(`Inclusief: ${acc}`);
+
+      // Photo box: rond rPhoto y, kolom-breedte
+      const photoTop = rPhoto.y - 5;
+      const photoBot = rUsd.y - 5;
+      const photoBox = {
+        x: modelItem.x - colWidth * 0.1,
+        y: photoTop,
+        w: colWidth * 0.95,
+        h: photoBot - photoTop,
+      };
+      const photoCanvas = cropPageCanvas(pageInfo.canvas, photoBox, viewport);
+
+      state.products.push({
+        model: modelItem.str,
+        desc: cap ? `Sauna ${cap}` : "Sauna",
+        size: dim,
+        specs,
+        usd,
+        eur: 0,
+        eurOverride: null,
+        photoCanvas,
+        sourcePageIndex: i - 1,
+      });
+    }
+  }
+}
+
+// ─── EUR-prijzen berekenen via multiplier ──────────────────────────
+function applyMultiplier() {
+  const m = parseFloat($("multiplier").value) || 1.7;
+  for (const p of state.products) {
+    if (p.eurOverride != null) continue; // user heeft 'm aangepast
+    p.eur = roundRetailEur(p.usd * m);
+  }
+}
+
+$("multiplier").addEventListener("change", () => {
+  applyMultiplier();
+  renderPreview();
+});
+
+// ─── Preview renderen ──────────────────────────────────────────────
+function renderPreview() {
+  $("formatBadge").textContent = state.format === "invoice" ? "Invoice" : "Catalogus";
+  $("productCount").textContent = `${state.products.length} producten`;
+  const list = $("productList");
+  list.innerHTML = "";
+  for (const p of state.products) {
+    const row = document.createElement("div");
+    row.className = "product-row";
+    const thumb = document.createElement("canvas");
+    thumb.className = "thumb";
+    if (p.photoCanvas) {
+      const tctx = thumb.getContext("2d");
+      const ratio = Math.min(60 / p.photoCanvas.width, 45 / p.photoCanvas.height);
+      const dw = p.photoCanvas.width * ratio;
+      const dh = p.photoCanvas.height * ratio;
+      tctx.drawImage(p.photoCanvas, (60 - dw) / 2, (45 - dh) / 2, dw, dh);
+    }
+    row.appendChild(thumb);
+    const info = document.createElement("div");
+    info.innerHTML = `<div class="model">${escapeHtml(p.model)}</div>
+                      <div class="desc">${escapeHtml(p.desc)}${p.size ? " · " + escapeHtml(p.size) : ""}</div>`;
+    row.appendChild(info);
+    const sizeCell = document.createElement("div");
+    sizeCell.className = "muted";
+    sizeCell.textContent = p.size || "—";
+    row.appendChild(sizeCell);
+    const usdCell = document.createElement("div");
+    usdCell.className = "price usd";
+    usdCell.textContent = p.usd ? "$ " + p.usd.toLocaleString("en-US") : "—";
+    row.appendChild(usdCell);
+    const eurInput = document.createElement("input");
+    eurInput.className = "eur-input";
+    eurInput.type = "number";
+    eurInput.min = "0";
+    eurInput.step = "10";
+    eurInput.value = p.eur || 0;
+    eurInput.addEventListener("change", () => {
+      p.eur = parseFloat(eurInput.value) || 0;
+      p.eurOverride = p.eur;
+    });
+    row.appendChild(eurInput);
+    list.appendChild(row);
+  }
+  $("previewCard").classList.remove("hidden");
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+$("reset").addEventListener("click", () => {
+  state.pdfDoc = null;
+  state.products = [];
+  state.pages = [];
+  state.format = null;
+  $("previewCard").classList.add("hidden");
+  $("productList").innerHTML = "";
+  $("dropStatus").innerHTML = "";
+  fileInput.value = "";
+});
+
+// ─── PDF generatie via pdf-lib ─────────────────────────────────────
+$("generate").addEventListener("click", async () => {
+  const btn = $("generate");
+  btn.disabled = true;
+  showStatus($("genStatus"), "PDF aan het genereren…", "info");
+  try {
+    const blob = await generatePricelistPdf();
+    const seriesName = ($("seriesName").value || "Prijslijst").trim();
+    const monthYear = $("monthYear").value.trim();
+    const styleSuffix = $("style").value === "passion" ? "Passion" : "Fonteyn";
+    const fname = [seriesName, styleSuffix, monthYear].filter(Boolean).join(" ") + ".pdf";
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    showStatus($("genStatus"), `✓ ${fname} gedownload.`, "ok");
+  } catch (e) {
+    console.error(e);
+    showStatus($("genStatus"), "Genereren mislukt: " + e.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+async function generatePricelistPdf() {
+  const { PDFDocument, StandardFonts, rgb } = PDFLib;
+  const doc = await PDFDocument.create();
+  const helv = await doc.embedFont(StandardFonts.Helvetica);
+  const helvBold = await doc.embedFont(StandardFonts.HelveticaBold);
+
+  // A4 in points: 595 × 842
+  const PAGE_W = 595;
+  const PAGE_H = 842;
+  const M = 36; // margin
+
+  // Brand-config
+  const brand = $("style").value === "passion"
+    ? {
+        name: "Passion Spas",
+        logoText: true, // text-placeholder tot er een passion-logo.png is
+        primary: rgb(0.78, 0.06, 0.18),
+        primaryDark: rgb(0.59, 0.05, 0.13),
+        accent: rgb(0.17, 0.17, 0.17),
+      }
+    : {
+        name: "Fonteyn",
+        logoText: false,
+        primary: rgb(0.078, 0.278, 0.204),
+        primaryDark: rgb(0.051, 0.20, 0.145),
+        accent: rgb(0.545, 0.773, 0.247),
+      };
+
+  // Probeer Fonteyn-logo embedden als image
+  let logoImg = null;
+  if (!brand.logoText) {
+    try {
+      const r = await fetch("fonteyn-logo.png");
+      if (r.ok) {
+        const ab = await r.arrayBuffer();
+        logoImg = await doc.embedPng(ab);
+      }
+    } catch {}
+  }
+
+  const seriesName = ($("seriesName").value || "Prijslijst").trim();
+  const monthYear = $("monthYear").value.trim();
+
+  // Header-renderer per pagina
+  const drawHeader = (page, pageNum, totalPages) => {
+    // Brand-balk bovenaan
+    page.drawRectangle({ x: 0, y: PAGE_H - 70, width: PAGE_W, height: 70, color: brand.primary });
+    if (logoImg) {
+      const logoH = 38;
+      const logoW = logoImg.width * (logoH / logoImg.height);
+      page.drawImage(logoImg, { x: M, y: PAGE_H - 70 + (70 - logoH) / 2, width: logoW, height: logoH });
+    } else {
+      // Text placeholder
+      page.drawText(brand.name, {
+        x: M, y: PAGE_H - 44,
+        font: helvBold, size: 22, color: rgb(1, 1, 1),
+      });
+    }
+    // Titel rechts
+    const title = `Prijslijst — ${seriesName}`;
+    const titleW = helvBold.widthOfTextAtSize(title, 14);
+    page.drawText(title, {
+      x: PAGE_W - M - titleW, y: PAGE_H - 38,
+      font: helvBold, size: 14, color: rgb(1, 1, 1),
+    });
+    if (monthYear) {
+      const myW = helv.widthOfTextAtSize(monthYear, 10);
+      page.drawText(monthYear, {
+        x: PAGE_W - M - myW, y: PAGE_H - 56,
+        font: helv, size: 10, color: rgb(0.92, 0.92, 0.92),
+      });
+    }
+    // Footer met paginanummer
+    const fStr = `Pagina ${pageNum} / ${totalPages}`;
+    const fW = helv.widthOfTextAtSize(fStr, 9);
+    page.drawText(fStr, {
+      x: (PAGE_W - fW) / 2, y: 18,
+      font: helv, size: 9, color: rgb(0.5, 0.5, 0.5),
+    });
+    // Brand naam ook in footer
+    page.drawText(brand.name, {
+      x: M, y: 18,
+      font: helv, size: 9, color: brand.primary,
+    });
+  };
+
+  // Layout: ~3 producten per A4-pagina (each ~225pt hoog incl whitespace)
+  const ROW_H = 230;
+  const ROWS_PER_PAGE = 3;
+  const totalPages = Math.ceil(state.products.length / ROWS_PER_PAGE) || 1;
+
+  for (let p = 0; p < totalPages; p++) {
+    const page = doc.addPage([PAGE_W, PAGE_H]);
+    drawHeader(page, p + 1, totalPages);
+    const productsOnPage = state.products.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE);
+    let y = PAGE_H - 70 - 24; // start onder de header
+    for (const prod of productsOnPage) {
+      await drawProductRow(doc, page, prod, M, y, PAGE_W - 2 * M, ROW_H - 14, helv, helvBold, brand);
+      y -= ROW_H;
+    }
+  }
+
+  const bytes = await doc.save();
+  return new Blob([bytes], { type: "application/pdf" });
+}
+
+async function drawProductRow(doc, page, prod, x, yTop, width, height, helv, helvBold, brand) {
+  const PAGE_H = page.getHeight();
+  const { rgb } = PDFLib;
+  // Achtergrond / kader
+  page.drawRectangle({
+    x, y: yTop - height, width, height,
+    color: rgb(1, 1, 1),
+    borderColor: rgb(0.88, 0.88, 0.85),
+    borderWidth: 0.7,
+  });
+  // Linker fotokolom (~40%)
+  const photoColW = width * 0.40;
+  if (prod.photoCanvas) {
+    try {
+      // Canvas → PNG dataURL → embed
+      const dataUrl = prod.photoCanvas.toDataURL("image/png");
+      const imgBytes = Uint8Array.from(atob(dataUrl.split(",")[1]), c => c.charCodeAt(0));
+      const img = await doc.embedPng(imgBytes);
+      // Fit binnen photoCol met aspect-ratio
+      const padX = 8, padY = 8;
+      const maxW = photoColW - 2 * padX;
+      const maxH = height - 2 * padY;
+      const ratio = Math.min(maxW / img.width, maxH / img.height);
+      const drawW = img.width * ratio;
+      const drawH = img.height * ratio;
+      page.drawImage(img, {
+        x: x + padX + (maxW - drawW) / 2,
+        y: yTop - height + padY + (maxH - drawH) / 2,
+        width: drawW, height: drawH,
+      });
+    } catch (e) {
+      console.warn("photo embed failed:", e);
+    }
+  }
+  // Rechter info-kolom
+  const infoX = x + photoColW + 14;
+  const infoW = width - photoColW - 14 - 14;
+  let ty = yTop - 18;
+  // Modelnaam (groot)
+  page.drawText(prod.model || "—", {
+    x: infoX, y: ty, font: helvBold, size: 16, color: brand.primary,
+  });
+  ty -= 19;
+  // Beschrijving + size
+  if (prod.desc || prod.size) {
+    const txt = [prod.desc, prod.size].filter(Boolean).join(" · ");
+    page.drawText(truncate(txt, infoW, helv, 11), {
+      x: infoX, y: ty, font: helv, size: 11, color: rgb(0.40, 0.40, 0.40),
+    });
+    ty -= 16;
+  }
+  // Specs
+  ty -= 4;
+  for (const spec of (prod.specs || []).slice(0, 5)) {
+    page.drawText("• " + truncate(spec, infoW - 10, helv, 9.5), {
+      x: infoX + 4, y: ty, font: helv, size: 9.5, color: rgb(0.20, 0.20, 0.20),
+    });
+    ty -= 13;
+  }
+  // EUR-prijs onderaan, rechtsuitgelijnd, in brand-color
+  const priceStr = prod.eur ? fmtEur(prod.eur) : "Op aanvraag";
+  const priceSize = 22;
+  const priceW = helvBold.widthOfTextAtSize(priceStr, priceSize);
+  page.drawText(priceStr, {
+    x: x + width - priceW - 14,
+    y: yTop - height + 14,
+    font: helvBold, size: priceSize, color: brand.primary,
+  });
+  // Klein label "Adviesprijs incl. BTW" boven de prijs
+  const lbl = "Adviesprijs (incl. BTW)";
+  const lblW = helv.widthOfTextAtSize(lbl, 8);
+  page.drawText(lbl, {
+    x: x + width - lblW - 14,
+    y: yTop - height + 14 + priceSize + 2,
+    font: helv, size: 8, color: rgb(0.5, 0.5, 0.5),
+  });
+}
+
+function truncate(s, maxW, font, size) {
+  s = String(s || "");
+  if (font.widthOfTextAtSize(s, size) <= maxW) return s;
+  while (s.length > 4 && font.widthOfTextAtSize(s + "…", size) > maxW) {
+    s = s.slice(0, -1);
+  }
+  return s + "…";
+}
+</script>
+</body>
+</html>

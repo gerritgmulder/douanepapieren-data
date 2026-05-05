@@ -12,6 +12,7 @@
     { "name": "probe-logic4.html", "note": "Eenmalige probe-pagina om Logic4-velden in kaart te brengen — kan later weer verwijderd worden" },
     { "name": "transport.html", "note": "Transport laden — bin-packing in bakwagens + routeplanning per dag" },
     { "name": "eikensingel.html", "note": "Eikensingel-vakantiepark — bovenaanzicht 10 bungalows, boekingen + schoonmaak + betalingen" },
+    { "name": "prijslijst.html", "note": "Prijslijst maken — leveranciers-PDF (invoice/catalogus) → Fonteyn/Passion-stijl prijslijst" },
     { "name": "fonteyn-logo.png", "note": "Officieel Fonteyn-logo (wit op transparant), gebruikt op de A6-labels" },
     { "name": "article-codes.json", "validate": "json" },
     { "name": "spec-database.json", "validate": "json" },

@@ -262,6 +262,12 @@
         <p>Slim inlaadplan voor eigen vervoer of pakketdienst — bin-packing in de bakwagen + routeplanning per dag.</p>
       </a>
 
+      <a href="prijslijst.html" class="tile hidden" id="tilePrijslijst">
+        <div class="icon">💶</div>
+        <h3>Prijslijst maken</h3>
+        <p>Upload een leveranciers-invoice of -catalogus en genereer in één klik een prijslijst in Fonteyn- of Passion-huisstijl.</p>
+      </a>
+
       <a href="eikensingel.html" class="tile hidden" id="tileEikensingel">
         <div class="icon">🏡</div>
         <h3>Eikensingel</h3>
@@ -451,11 +457,12 @@ function showDashboard(email) {
   const name = prettyNameFromEmail(email);
   el("greeting").textContent = name ? `${greet}, ${name}` : greet;
   const lc = (email || "").toLowerCase();
-  // Logistieke tegels (Douane / Labels / Transport) alleen voor het logistiek-team
+  // Logistieke tegels (Douane / Labels / Transport / Prijslijst) alleen voor het logistiek-team
   const isLogistiek = LOGISTIEK_EMAILS.has(lc);
   el("tileDouane").classList.toggle("hidden", !isLogistiek);
   el("tileLabels").classList.toggle("hidden", !isLogistiek);
   el("tileTransport").classList.toggle("hidden", !isLogistiek);
+  el("tilePrijslijst").classList.toggle("hidden", !isLogistiek);
   // Stuurcijfers-tegel alleen tonen voor de geautoriseerde e-mailadressen
   el("tileStuurcijfers").classList.toggle("hidden", !STUURCIJFERS_EMAILS.has(lc));
   // Orderstatus-tegel alleen tonen voor de geautoriseerde e-mailadressen
