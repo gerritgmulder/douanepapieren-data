@@ -240,6 +240,37 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
+// ─── Session-guard: zelfde pattern als labels.html / transport.html ─
+const HELPER_BASE = "";
+const SESSION_KEY = "fp.session";
+const EMAIL_KEY   = "fp.email";
+
+(function sessionGuard() {
+  const sessionId = localStorage.getItem(SESSION_KEY);
+  if (!sessionId) {
+    window.location.replace("dashboard.html");
+    throw new Error("Geen sessie — doorverwijzen naar dashboard");
+  }
+})();
+
+// Monkey-patch fetch: /api/* krijgen Bearer-header, bij 401 → dashboard
+const _origFetch = window.fetch.bind(window);
+window.fetch = async function(input, init = {}) {
+  const url = typeof input === "string" ? input : input.url;
+  const isApi = url && url.startsWith("/api/");
+  if (isApi) {
+    const id = localStorage.getItem(SESSION_KEY);
+    init.headers = { ...(init.headers || {}), "Authorization": "Bearer " + id };
+  }
+  const r = await _origFetch(input, init);
+  if (isApi && r.status === 401) {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(EMAIL_KEY);
+    window.location.replace("dashboard.html");
+  }
+  return r;
+};
+
 // ─── pdf.js worker config ────────────────────────────────────────────
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -261,20 +292,14 @@ function roundRetailEur(eur) {
 }
 const fmtEur = (n) => "€ " + Math.round(n).toLocaleString("nl-NL");
 
-// ─── Auth check via helper-server ───────────────────────────────────
-(async () => {
-  try {
-    const r = await fetch("/api/me");
-    if (!r.ok) { window.location.replace("dashboard.html"); return; }
-    const j = await r.json();
-    $("userEmail").textContent = j.user?.email || "—";
-  } catch {
-    window.location.replace("dashboard.html");
-  }
-})();
-
+// ─── Header: user + logout ──────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  $("userEmail").textContent = localStorage.getItem(EMAIL_KEY) || "—";
+});
 $("hdr-logout").addEventListener("click", async () => {
   try { await fetch("/api/logout", { method: "POST" }); } catch {}
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(EMAIL_KEY);
   window.location.replace("dashboard.html");
 });
 
