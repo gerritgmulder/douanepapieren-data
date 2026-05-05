@@ -517,39 +517,53 @@ async function extractProductsFromInvoice() {
     }
     rowsByY.sort((a, b) => a.y - b.y);
 
-    // Een product begint waar een rij twee cijferige cellen heeft (Quantity + RMB/PC + RMB-totaal + USD/PC + USD-totaal).
-    // Heuristiek: rij waar minstens één $-bedrag in zit (USD-prijs).
-    // Ruimer dan eerst: pdf.js kan "$ 700", "$700", of "$700.00" teruggeven,
-    // soms ook met spatie tussen valutateken en getal.
+    // Een product begint waar een rij minstens één $-bedrag heeft.
     const dollarRe = /^\$\s*[\d,\.]+/;
     const productHeaderRows = rowsByY.filter(r =>
       r.items.some(it => dollarRe.test(it.str)) &&
-      // ook minstens één model-achtig item (geen $/¥, geen pure cijfers)
       r.items.some(it => /^[A-Za-z]/.test(it.str) && !/^(Model|Description|Size|Quantity|Unit|Amount|TOTAL|Note|Bank|PAYEE|SWIFT|ACCOUNT|ADDRESS|The|Signature|Stamp)/i.test(it.str))
     );
+
+    // Helper: groepeer items in een rij in tabel-cellen op basis van x-gap.
+    // Items binnen één cel zitten dicht op elkaar (gap < 12pt); items in
+    // verschillende cellen hebben grotere gaten ertussen.
+    const groupCells = (rowItems, gapThreshold = 12) => {
+      const sorted = rowItems.slice().sort((a, b) => a.x - b.x);
+      const groups = [];
+      let cur = [];
+      let prevEnd = -Infinity;
+      for (const it of sorted) {
+        if (it.x - prevEnd > gapThreshold && cur.length) {
+          groups.push(cur); cur = [];
+        }
+        cur.push(it);
+        prevEnd = it.x + (it.width || 30);
+      }
+      if (cur.length) groups.push(cur);
+      return groups.map(g => g.map(it => it.str).join(" ").replace(/\s+/g, " ").trim());
+    };
 
     for (let idx = 0; idx < productHeaderRows.length; idx++) {
       const row = productHeaderRows[idx];
       const nextRow = productHeaderRows[idx + 1];
-      // Modelnaam zit links in de rij (eerste niet-numerieke item)
-      const isNonPriceText = (s) => /^[A-Za-z]/.test(s) && !/^[\$¥￥]/.test(s);
-      const textItems = row.items.filter(it => isNonPriceText(it.str)).sort((a, b) => a.x - b.x);
-      const modelCode = textItems[0]?.str || "";   // bv. "Barrel 120"
-      const desc      = textItems[1]?.str || "";   // bv. "Barrel Sauna"
-      // Combineer tot leesbare modelnaam: desc + nummer-suffix uit modelCode.
-      // "Barrel 120" + "Barrel Sauna" → "Barrel Sauna 120"
-      // "Cube 220-BIG" + "Cube Sauna" → "Cube Sauna 220-BIG"
+      // Verwacht layout: cells = [Model, Description, Size, Quantity,
+      //   ¥unit, ¥amount, $unit, $amount].
+      const cells = groupCells(row.items);
+      const modelCode = cells[0] || "";   // bv. "Barrel 120"
+      const desc      = cells[1] || "";   // bv. "Barrel Sauna"
+      const sizeRaw   = cells[2] || "";   // bv. "1850*1200*1900"
+      const size = /\d{3,4}\s*[\*x×]\s*\d{3,4}/.test(sizeRaw)
+        ? sizeRaw.replace(/\*/g, "×").replace(/mm$/, " mm").replace(/\s+/g, "").replace(/×/g, "×")
+        : "";
+      // Combineer modelCode + desc tot leesbare naam:
+      //   "Barrel 120" + "Barrel Sauna" → "Barrel Sauna 120"
+      //   "Cube 220-BIG" + "Cube Sauna" → "Cube Sauna 220-BIG"
       const codeParts = modelCode.split(/\s+/);
       const suffix = codeParts.slice(1).join(" ").trim();
       const model = desc && suffix ? `${desc} ${suffix}` : (desc || modelCode || "(onbekend)");
-      // Size = item dat lijkt op "1850*1200*1900" of "1850*1200*1900mm"
-      const sizeItem = row.items.find(it => /^\d{3,4}\s*[\*x×]\s*\d{3,4}/.test(it.str));
-      const size = sizeItem ? sizeItem.str.replace(/\*/g, "×").replace(/mm$/, " mm") : "";
-      // Unit Price (USD/PC) = eerste $-bedrag van links (in tabel komt USD/PC vóór Amount-USD)
-      const dollarItems = row.items
-        .filter(it => /^\$\s*[\d,\.]+/.test(it.str))
-        .sort((a, b) => a.x - b.x);
-      const usdRaw = dollarItems[0]?.str || "$0";
+      // Unit Price (USD/PC) = eerste $-bedrag in cells[6] (of het eerste $-cel als layout afwijkt)
+      const dollarCells = cells.filter(c => /^\$\s*[\d,\.]/.test(c));
+      const usdRaw = dollarCells[0] || "$0";
       const usd = parseFloat(usdRaw.replace(/[\$,\s]/g, "")) || 0;
 
       // Specs-blok: alle items in de rij(en) tussen deze product-row en de volgende
@@ -591,27 +605,16 @@ async function extractProductsFromInvoice() {
 }
 
 function computePhotoBox(items, row, botY, viewport) {
-  // Zoek de Description-kolom-grenzen via de tabel-header. De foto zit binnen
-  // de Description-kolom op de LINKER helft (~45% van de kolom-breedte); de
-  // rechter helft heeft spec-tekst die we juist niet in de foto willen.
-  const descHeader = items.find(it => /^Description$/i.test(it.str));
-  const sizeHeader = items.find(it => /^Size/i.test(it.str));
-  let colX, colW;
-  if (descHeader && sizeHeader) {
-    colX = descHeader.x - 5;
-    colW = sizeHeader.x - descHeader.x - 5;
-  } else {
-    // Fallback: 18-45% van de pagina-breedte
-    colX = viewport.width * 0.18;
-    colW = viewport.width * 0.27;
-  }
-  // Foto onder de header-tekstrij, hoogte beperkt zodat we niet over de
-  // volgende productrij heen schieten.
+  // De foto zit op een vaste positie in de FKF-invoice-layout: in de
+  // Description-kolom, links onder de tabel-header-tekst van het product.
+  // De pdf.js header-x-coördinaten zijn onbetrouwbaar (centered text), dus
+  // we gebruiken pagina-relatieve coördinaten die getuned zijn op de
+  // FKF-invoice (x ~ 17%, breedte ~ 20% van pagina-breedte).
   return {
-    x: colX,
-    y: row.y + 12,
-    w: colW * 0.45,
-    h: Math.max(60, Math.min(180, botY - row.y - 16)),
+    x: viewport.width * 0.17,
+    y: row.y + 14,
+    w: viewport.width * 0.20,
+    h: Math.max(80, Math.min(160, botY - row.y - 18)),
   };
 }
 
