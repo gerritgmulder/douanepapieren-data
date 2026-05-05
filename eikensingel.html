@@ -492,6 +492,11 @@ function parseIcal(text) {
     else if (keyName === "DTEND") cur.to = toIsoDate(value);
     else if (keyName === "UID") cur.uid = value.trim();
     else if (keyName === "SUMMARY") cur.summary = value.trim();
+    else if (keyName === "DESCRIPTION") {
+      // AirBnB escaped \n als letterlijke "\n" in iCal-DESCRIPTION (RFC 5545).
+      // Vervang die zodat regex-matches over meerdere "regels" werken.
+      cur.description = value.trim().replace(/\\n/g, "\n").replace(/\\,/g, ",");
+    }
   }
   return out;
 }
@@ -522,7 +527,30 @@ async function syncHouseIcal(house) {
   for (const ev of events) {
     if (!ev.uid || !ev.from || !ev.to) continue;
     if (/not available/i.test(ev.summary || "")) continue;
-    if (house.bookings.some(b => b.icalUid === ev.uid)) { skipped++; continue; }
+    // Uit AirBnB's DESCRIPTION halen we wat AirBnB exposed in de iCal:
+    //   "Reservation URL: https://www.airbnb.com/hosting/reservations/details/HM4PRYKB8K\nPhone Number (Last 4 Digits): 8884"
+    // Geen volledige naam — die zet AirBnB om privacy-redenen niet in iCal.
+    // Voor de naam moet Fransje doorklikken naar de host-pagina.
+    const desc = ev.description || "";
+    const urlMatch  = desc.match(/Reservation URL:\s*(https:\/\/[^\s\\]+)/i);
+    const codeMatch = desc.match(/\/details\/([A-Z0-9]+)/i);
+    const phoneMatch = desc.match(/Phone Number[^:]*:\s*(\d{2,6})/i);
+    const meta = {
+      airbnbUrl:         urlMatch ? urlMatch[1] : "",
+      airbnbConfirmCode: codeMatch ? codeMatch[1] : "",
+      phoneLast4:        phoneMatch ? phoneMatch[1] : "",
+    };
+
+    const existing = house.bookings.find(b => b.icalUid === ev.uid);
+    if (existing) {
+      // Bestaande synced booking: vul de nieuwe metadata-velden aan, maar
+      // overschrijf NOOIT bestaande edits van Fransje (guestName, phone, etc.).
+      if (!existing.airbnbUrl         && meta.airbnbUrl)         existing.airbnbUrl = meta.airbnbUrl;
+      if (!existing.airbnbConfirmCode && meta.airbnbConfirmCode) existing.airbnbConfirmCode = meta.airbnbConfirmCode;
+      if (!existing.phoneLast4        && meta.phoneLast4)        existing.phoneLast4 = meta.phoneLast4;
+      skipped++;
+      continue;
+    }
     house.bookings.push({
       id: `b_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       guestName: "",
@@ -536,6 +564,7 @@ async function syncHouseIcal(house) {
       email: "",
       notes: "via Airbnb iCal",
       icalUid: ev.uid,
+      ...meta,
     });
     added++;
   }
@@ -814,6 +843,31 @@ function renderModal() {
       renderModal();
     });
   });
+  // 📋 plak-knoppen — leest klembord, vult veld, slaat op. Bespaart Cmd+V
+  // wanneer je naam/tel/mail uit AirBnB hebt gekopieerd.
+  el("modalContent").querySelectorAll("[data-paste-booking]").forEach(btn => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const bid = btn.dataset.pasteBooking;
+      const field = btn.dataset.pasteField;
+      const b = h.bookings.find(x => x.id === bid);
+      if (!b) return;
+      let txt;
+      try {
+        txt = (await navigator.clipboard.readText()).trim();
+      } catch (err) {
+        alert("Kon klembord niet lezen: " + err.message + "\n\nKopieer iets en probeer opnieuw, of plak handmatig met Cmd+V in het veld.");
+        return;
+      }
+      if (!txt) { alert("Klembord is leeg."); return; }
+      // Telefoonnummer-velden krijgen wat soft-cleanup: spaties/leestekens eruit
+      // behalve een leidende '+' voor land-codes.
+      if (field === "phone") txt = txt.replace(/[^\d+]/g, "").replace(/(?!^)\+/g, "");
+      b[field] = txt;
+      saveHouse(h);
+      renderModal();
+    });
+  });
 }
 
 function renderBookingCard(b, today) {
@@ -826,9 +880,17 @@ function renderBookingCard(b, today) {
               : "";
   // Synced uit AirBnB? Datums + bron komen daarvandaan en zijn read-only.
   const synced = !!b.icalUid;
+  const code = b.airbnbConfirmCode || "";
+  const phoneHint = b.phoneLast4 ? ` · 📞 ****${b.phoneLast4}` : "";
   const syncedBadge = synced
-    ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:#fef3c7;color:#92400e;text-transform:uppercase;letter-spacing:.04em;">via AirBnB iCal</span>`
+    ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:#fef3c7;color:#92400e;text-transform:uppercase;letter-spacing:.04em;">AirBnB${code ? " · #" + escapeHtml(code) : ""}${phoneHint}</span>`
     : "";
+  const openAirbnbBtn = (synced && b.airbnbUrl) ? `
+    <a href="${escapeHtml(b.airbnbUrl)}" target="_blank" rel="noopener" style="font-size:11px;padding:3px 9px;border-radius:4px;background:#ff5a5f;color:#fff;text-decoration:none;font-weight:600;">🔗 Open in AirBnB</a>
+  ` : "";
+  // Plak-knop helper: leest klembord, vult veld, slaat op. Alleen relevant
+  // voor velden waar Fransje gegevens uit AirBnB in plakt (naam, tel, mail).
+  const pasteBtn = (field) => canEdit() ? `<button type="button" class="paste-btn" data-paste-booking="${escapeHtml(b.id)}" data-paste-field="${field}" title="Plak vanaf klembord" style="font-size:11px;padding:3px 7px;border:1px solid var(--border);background:#fafaf8;border-radius:4px;cursor:pointer;">📋</button>` : "";
   const sourceOpts = ["airbnb","booking","website","direct","other"]
     .map(s => `<option value="${s}" ${b.source === s ? "selected" : ""}>${SOURCE_LABELS[s]}</option>`)
     .join("");
@@ -845,12 +907,13 @@ function renderBookingCard(b, today) {
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
         ${stateBadge}
         ${syncedBadge}
+        ${openAirbnbBtn}
         <span style="font-size:11px;color:var(--muted);">id: ${escapeHtml(b.id)}</span>
         ${deleteBtn}
       </div>
       <div class="row three">
         <div>
-          <label>Naam gast</label>
+          <label>Naam gast ${pasteBtn("guestName")}</label>
           <input type="text" data-booking="${escapeHtml(b.id)}" data-field="guestName" value="${escapeHtml(b.guestName || "")}" placeholder="Voor- en achternaam" ${ro}>
         </div>
         <div>
@@ -872,13 +935,13 @@ function renderBookingCard(b, today) {
           <input type="number" min="0" step="1" data-booking="${escapeHtml(b.id)}" data-field="amount" value="${b.amount || ""}" ${ro}>
         </div>
         <div>
-          <label>Telefoon</label>
+          <label>Telefoon ${pasteBtn("phone")}</label>
           <input type="tel" data-booking="${escapeHtml(b.id)}" data-field="phone" value="${escapeHtml(b.phone || "")}" placeholder="06…" ${ro}>
         </div>
       </div>
       <div class="row" style="margin-top:8px;">
         <div>
-          <label>Email</label>
+          <label>Email ${pasteBtn("email")}</label>
           <input type="email" data-booking="${escapeHtml(b.id)}" data-field="email" value="${escapeHtml(b.email || "")}" ${ro}>
         </div>
         <div>
