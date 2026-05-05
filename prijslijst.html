@@ -836,65 +836,86 @@ async function generatePricelistPdf() {
   const PAGE_H = 842;
   const M = 36; // margin
 
-  // Brand-config
+  // Brand-config — Fonteyn = donkergroene header met witte logo;
+  // Passion = lichte header met de kleurrijke logo (heeft zelf zwarte tekst)
+  // en rode prijs-accent zoals "spas" in 't logo.
   const brand = $("style").value === "passion"
     ? {
         name: "Passion Spas",
-        logoText: true, // text-placeholder tot er een passion-logo.png is
-        primary: rgb(0.78, 0.06, 0.18),
-        primaryDark: rgb(0.59, 0.05, 0.13),
-        accent: rgb(0.17, 0.17, 0.17),
+        logoFile: "passion-logo.png",
+        headerBg:   rgb(1, 1, 1),                     // wit
+        headerText: rgb(0.05, 0.05, 0.05),            // bijna-zwart
+        primary:    rgb(0.89, 0.024, 0.075),          // passion-rood
+        accent:     rgb(0.10, 0.10, 0.10),
+        showHeaderName: false,                        // logo bevat al "passion"
       }
     : {
         name: "Fonteyn",
-        logoText: false,
-        primary: rgb(0.078, 0.278, 0.204),
-        primaryDark: rgb(0.051, 0.20, 0.145),
-        accent: rgb(0.545, 0.773, 0.247),
+        logoFile: "fonteyn-logo.png",
+        headerBg:   rgb(0.078, 0.278, 0.204),         // fonteyn-groen
+        headerText: rgb(1, 1, 1),                     // wit
+        primary:    rgb(0.078, 0.278, 0.204),
+        accent:     rgb(0.545, 0.773, 0.247),         // lime
+        showHeaderName: false,                        // fonteyn-logo bevat al merknaam
       };
 
-  // Probeer Fonteyn-logo embedden als image
+  // Logo embedden
   let logoImg = null;
-  if (!brand.logoText) {
-    try {
-      const r = await fetch("fonteyn-logo.png");
-      if (r.ok) {
-        const ab = await r.arrayBuffer();
-        logoImg = await doc.embedPng(ab);
-      }
-    } catch {}
-  }
+  try {
+    const r = await fetch(brand.logoFile);
+    if (r.ok) {
+      const ab = await r.arrayBuffer();
+      logoImg = await doc.embedPng(ab);
+    }
+  } catch {}
 
   const seriesName = $("seriesName").value.trim(); // mag leeg zijn
   const monthYear = $("monthYear").value.trim();
 
+  // Subtle gray voor secundaire tekst, in beide huisstijlen leesbaar
+  const subtleGray = rgb(0.55, 0.55, 0.55);
+
   // Header-renderer per pagina
   const drawHeader = (page, pageNum, totalPages) => {
+    const HEADER_H = 80;
     // Brand-balk bovenaan
-    page.drawRectangle({ x: 0, y: PAGE_H - 70, width: PAGE_W, height: 70, color: brand.primary });
+    page.drawRectangle({
+      x: 0, y: PAGE_H - HEADER_H, width: PAGE_W, height: HEADER_H,
+      color: brand.headerBg,
+      borderColor: brand.headerBg,
+    });
+    // Subtiele onderlijn voor witte/lichte headers (anders zweeft 'ie)
+    if (brand.headerBg === rgb(1, 1, 1) || (brand.headerBg.red > 0.9 && brand.headerBg.green > 0.9)) {
+      page.drawRectangle({
+        x: 0, y: PAGE_H - HEADER_H, width: PAGE_W, height: 1.5,
+        color: brand.primary,
+      });
+    }
     if (logoImg) {
-      const logoH = 38;
+      const logoH = 50;
       const logoW = logoImg.width * (logoH / logoImg.height);
-      page.drawImage(logoImg, { x: M, y: PAGE_H - 70 + (70 - logoH) / 2, width: logoW, height: logoH });
-    } else {
-      // Text placeholder
+      page.drawImage(logoImg, {
+        x: M, y: PAGE_H - HEADER_H + (HEADER_H - logoH) / 2,
+        width: logoW, height: logoH,
+      });
+    } else if (brand.showHeaderName) {
       page.drawText(brand.name, {
-        x: M, y: PAGE_H - 44,
-        font: helvBold, size: 22, color: rgb(1, 1, 1),
+        x: M, y: PAGE_H - 50,
+        font: helvBold, size: 22, color: brand.headerText,
       });
     }
     // Titel rechts — alleen reeks-naam toevoegen als die is ingevuld
     const title = seriesName ? `Prijslijst — ${seriesName}` : "Prijslijst";
     const titleW = helvBold.widthOfTextAtSize(title, 14);
     page.drawText(title, {
-      x: PAGE_W - M - titleW, y: PAGE_H - 38,
-      font: helvBold, size: 14, color: rgb(1, 1, 1),
+      x: PAGE_W - M - titleW, y: PAGE_H - 40,
+      font: helvBold, size: 14, color: brand.headerText,
     });
     if (monthYear) {
       const myW = helv.widthOfTextAtSize(monthYear, 10);
       page.drawText(monthYear, {
-        x: PAGE_W - M - myW, y: PAGE_H - 56,
-        font: helv, size: 10, color: rgb(0.92, 0.92, 0.92),
+        x: PAGE_W - M - myW, y: PAGE_H - 60,
+        font: helv, size: 10, color: brand.headerBg.red > 0.5 ? subtleGray : rgb(0.92, 0.92, 0.92),
       });
     }
     // Footer met paginanummer
@@ -902,28 +923,31 @@ async function generatePricelistPdf() {
     const fW = helv.widthOfTextAtSize(fStr, 9);
     page.drawText(fStr, {
       x: (PAGE_W - fW) / 2, y: 18,
-      font: helv, size: 9, color: rgb(0.5, 0.5, 0.5),
+      font: helv, size: 9, color: subtleGray,
     });
-    // Brand naam ook in footer
+    // Brand naam ook in footer (klein, in primary kleur)
     page.drawText(brand.name, {
       x: M, y: 18,
       font: helv, size: 9, color: brand.primary,
     });
   };
 
-  // Layout: ~3 producten per A4-pagina (each ~225pt hoog incl whitespace)
-  const ROW_H = 230;
+  // Layout: 3 producten per A4-pagina, header 80pt + footer 30pt
+  const HEADER_H = 80;
+  const FOOTER_H = 30;
+  const CONTENT_H = PAGE_H - HEADER_H - FOOTER_H;
   const ROWS_PER_PAGE = 3;
+  const ROW_H = Math.floor(CONTENT_H / ROWS_PER_PAGE) - 6;  // ~6pt gap tussen rijen
   const totalPages = Math.ceil(state.products.length / ROWS_PER_PAGE) || 1;
 
   for (let p = 0; p < totalPages; p++) {
     const page = doc.addPage([PAGE_W, PAGE_H]);
     drawHeader(page, p + 1, totalPages);
     const productsOnPage = state.products.slice(p * ROWS_PER_PAGE, (p + 1) * ROWS_PER_PAGE);
-    let y = PAGE_H - 70 - 24; // start onder de header
+    let y = PAGE_H - HEADER_H - 18;
     for (const prod of productsOnPage) {
-      await drawProductRow(doc, page, prod, M, y, PAGE_W - 2 * M, ROW_H - 14, helv, helvBold, brand);
-      y -= ROW_H;
+      await drawProductRow(doc, page, prod, M, y, PAGE_W - 2 * M, ROW_H, helv, helvBold, brand);
+      y -= ROW_H + 6;
     }
   }
 
