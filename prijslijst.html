@@ -477,6 +477,50 @@ async function getPageItems(pageNum) {
   }).filter(it => it.str);
 }
 
+// Vind alle embedded images op een pagina via de operator-list. Retourneert
+// hun PDF-coördinaten (top-down, scale 1) zodat we ze direct uit de
+// gerasterde page-canvas kunnen knippen — geen gokwerk over kolom-posities
+// meer. Werkt voor axis-aligned images (geen rotatie/scheef-getransformeerde
+// images, wat in factuur-PDFs vrijwel nooit voorkomt).
+async function findImagesOnPage(page, pageHeight) {
+  const opList = await page.getOperatorList();
+  const OPS = pdfjsLib.OPS;
+  const stack = [];
+  let ctm = [1, 0, 0, 1, 0, 0]; // current transformation matrix
+  const mul = (a, b) => [
+    a[0]*b[0] + a[2]*b[1],
+    a[1]*b[0] + a[3]*b[1],
+    a[0]*b[2] + a[2]*b[3],
+    a[1]*b[2] + a[3]*b[3],
+    a[0]*b[4] + a[2]*b[5] + a[4],
+    a[1]*b[4] + a[3]*b[5] + a[5],
+  ];
+  const out = [];
+  for (let i = 0; i < opList.fnArray.length; i++) {
+    const op = opList.fnArray[i];
+    const args = opList.argsArray[i];
+    if (op === OPS.save) {
+      stack.push(ctm.slice());
+    } else if (op === OPS.restore) {
+      ctm = stack.pop() || [1, 0, 0, 1, 0, 0];
+    } else if (op === OPS.transform) {
+      ctm = mul(ctm, args);
+    } else if (op === OPS.paintImageXObject || op === OPS.paintInlineImage || op === OPS.paintImageMaskXObject) {
+      const axisAligned = Math.abs(ctm[1]) < 0.01 && Math.abs(ctm[2]) < 0.01;
+      if (!axisAligned) continue;
+      const w = Math.abs(ctm[0]);
+      const h = Math.abs(ctm[3]);
+      // Filter mini-icons / inline-bullet-rendering — alleen substantiële images
+      if (w < 30 || h < 30) continue;
+      const x = ctm[4];
+      const yBottom = ctm[5];
+      const yTop = pageHeight - yBottom - h;
+      out.push({ x, y: yTop, w, h });
+    }
+  }
+  return out;
+}
+
 // ─── INVOICE FORMAT (FKF20260420-NL4-XX-stijl) ──────────────────────
 //
 // Layout per pagina:
@@ -497,6 +541,9 @@ async function extractProductsFromInvoice() {
     const pageInfo = state.pages[i - 1];
     const viewport = pageInfo.page.getViewport({ scale: 1 });
     const PAGE_H = viewport.height;
+    // Alle embedded images op deze pagina vinden — exacte posities, geen gokwerk
+    const pageImages = await findImagesOnPage(pageInfo.page, PAGE_H);
+    console.log(`[prijslijst] page ${i}: ${pageImages.length} images gevonden`, pageImages);
 
     // Vind de y-positie van de tabel-header (de regel met "Model")
     const headerItem = items.find(it => /^Model$/i.test(it.str));
@@ -583,11 +630,22 @@ async function extractProductsFromInvoice() {
         specs.push(text);
       }
 
-      // Productfoto: het rechthoekje binnen Description-kolom, tussen row.y en
-      // de spec-bullets. Description-kolom begint waar "Description"-header zit
-      // en eindigt bij Size-kolom. We bepalen x-grenzen op basis van header-row.
-      const photoBox = computePhotoBox(items, row, specBotY, viewport);
-      const photoCanvas = cropPageCanvas(pageInfo.canvas, photoBox, viewport);
+      // Productfoto: zoek de embedded image waarvan het verticale midden
+      // tussen row.y en specBotY valt. Pak de grootste als er meerdere zijn.
+      // Geen gokwerk over kolom-posities meer — pdf.js geeft ons de exacte
+      // image-coördinaten direct uit het PDF-object.
+      const yLow = row.y;
+      const yHigh = specBotY + 20; // wat marge naar onder voor afronding
+      const candidates = pageImages
+        .filter(img => {
+          const yCenter = img.y + img.h / 2;
+          return yCenter > yLow && yCenter < yHigh;
+        })
+        .sort((a, b) => (b.w * b.h) - (a.w * a.h));
+      const imgBox = candidates[0];
+      const photoCanvas = imgBox
+        ? cropPageCanvas(pageInfo.canvas, imgBox, viewport)
+        : null;
 
       state.products.push({
         model,
@@ -602,20 +660,6 @@ async function extractProductsFromInvoice() {
       });
     }
   }
-}
-
-function computePhotoBox(items, row, botY, viewport) {
-  // De foto zit op een vaste positie in de FKF-invoice-layout: in de
-  // Description-kolom, links onder de tabel-header-tekst van het product.
-  // De pdf.js header-x-coördinaten zijn onbetrouwbaar (centered text), dus
-  // we gebruiken pagina-relatieve coördinaten die getuned zijn op de
-  // FKF-invoice (x ~ 17%, breedte ~ 20% van pagina-breedte).
-  return {
-    x: viewport.width * 0.17,
-    y: row.y + 14,
-    w: viewport.width * 0.20,
-    h: Math.max(80, Math.min(160, botY - row.y - 18)),
-  };
 }
 
 function cropPageCanvas(srcCanvas, box, viewport) {
@@ -648,6 +692,7 @@ async function extractProductsFromCatalog() {
     const items = await getPageItems(i);
     const pageInfo = state.pages[i - 1];
     const viewport = pageInfo.page.getViewport({ scale: 1 });
+    const pageImages = await findImagesOnPage(pageInfo.page, viewport.height);
 
     // Vind de Y-coordinaten van elke rij-naam (zoeken in linker 25% van de pagina)
     const labelXMax = viewport.width * 0.20;
@@ -698,16 +743,21 @@ async function extractProductsFromCatalog() {
       if (cap) specs.push(`Capaciteit: ${cap}`);
       if (acc) specs.push(`Inclusief: ${acc}`);
 
-      // Photo box: rond rPhoto y, kolom-breedte
-      const photoTop = rPhoto.y - 5;
-      const photoBot = rUsd.y - 5;
-      const photoBox = {
-        x: modelItem.x - colWidth * 0.1,
-        y: photoTop,
-        w: colWidth * 0.95,
-        h: photoBot - photoTop,
-      };
-      const photoCanvas = cropPageCanvas(pageInfo.canvas, photoBox, viewport);
+      // Photo: zoek de embedded image die in deze product-kolom valt en
+      // qua y tussen de PHOTO-rij-label en de USD-rij ligt.
+      const photoColLeft = modelItem.x - colWidth * 0.15;
+      const photoColRight = modelItem.x + colWidth * 0.85;
+      const candidates = pageImages
+        .filter(img => {
+          const cx = img.x + img.w / 2;
+          const cy = img.y + img.h / 2;
+          return cx > photoColLeft && cx < photoColRight && cy > rPhoto.y - 10 && cy < rUsd.y + 10;
+        })
+        .sort((a, b) => (b.w * b.h) - (a.w * a.h));
+      const imgBox = candidates[0];
+      const photoCanvas = imgBox
+        ? cropPageCanvas(pageInfo.canvas, imgBox, viewport)
+        : null;
 
       state.products.push({
         model: modelItem.str,
