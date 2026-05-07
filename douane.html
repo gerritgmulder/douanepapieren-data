@@ -411,11 +411,26 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs
 // ============================================================
 // State
 // ============================================================
+// Voor douane-papieren MOET de waarde in USD staan, niet de EUR-stukprijs uit
+// Logic4. Logic4 exposeert de "Stukprijs incl. voor land" niet via z'n API, dus
+// we passen hier een conversie-koers toe (default 1.12, override-baar in de UI
+// en gepersisteerd in localStorage). Dit reproduceert wat Logic4 zelf doet
+// in z'n "Stukprijs incl. voor land"-kolom.
+const FX_KEY = "fp.douane.fxRate";
+
 const state = {
   metadata: {},
   lineItems: [],
   bundles: [],
   rawText: "",
+  // EUR → USD conversie-koers. Default 1.12 reproduceert Logic4's "Stukprijs
+  // incl. voor land"-kolom op z'n minst voor de huidige Fonteyn-instellingen.
+  // User kan 'm overrulen in renderTotals; waarde wordt persistent opgeslagen.
+  fxRate: parseFloat(localStorage.getItem(FX_KEY)) || 1.12,
+  // Colli-override: null = gebruik auto-berekend (sum van qty's van
+  // niet-service items); ingesteld getal = die waarde gebruiken.
+  // Reset op null bij elke nieuwe order-load.
+  colliOverride: null,
   userSpecs: loadUserSpecsFromLocalCache(),
   // articleCodes: lookup van productcode → {sku, merk, omschrijving}.
   // Wordt bij startup geladen uit de helper. 880+ entries uit de
@@ -425,6 +440,23 @@ const state = {
   // Geparsed uit /Spa documentatie/.../*.pdf (Serene 5.pdf, Aquatic 5.pdf, etc.).
   specDatabase: {}
 };
+
+// Past state.fxRate toe op alle line-items: berekent unitPrice en total
+// vanuit het opgeslagen eurUnitPrice. Wordt aangeroepen na het laden van
+// een order (Logic4 of PDF), na bundle-distributie, en wanneer de user
+// de koers in de UI wijzigt. Items zonder eurUnitPrice (bv. handmatig
+// ingevoerd zonder EUR-basis) behouden hun unitPrice ongewijzigd — daarvan
+// nemen we aan dat de waarde al de gewenste eindwaarde is.
+function applyFxRate(rate) {
+  if (!Number.isFinite(rate) || rate <= 0) return;
+  state.fxRate = rate;
+  localStorage.setItem(FX_KEY, String(rate));
+  for (const it of state.lineItems) {
+    if (it.eurUnitPrice == null) continue;
+    it.unitPrice = Math.round(it.eurUnitPrice * rate * 100) / 100;
+    it.total = Math.round(it.qty * it.unitPrice * 100) / 100;
+  }
+}
 
 // User-specs (handmatige overrides per artikelcode) leven nu op de server,
 // zodat álle gebruikers van de app dezelfde edits zien. localStorage blijft
@@ -642,9 +674,15 @@ async function handleFile(file) {
     const parsed = parseLogic4(pages);
     state.metadata = parsed.metadata;
     state.lineItems = parsed.lineItems;
+    state.colliOverride = null; // nieuwe order → reset user-override
     state.bundles = detectBundles(state.lineItems);
     // Auto-distribute
     for (const b of state.bundles) distributeBundle(b);
+    // EUR-basis vastleggen + koers toepassen — zelfde flow als Logic4-load
+    for (const it of state.lineItems) {
+      if (it.eurUnitPrice == null) it.eurUnitPrice = it.unitPrice;
+    }
+    applyFxRate(state.fxRate);
 
     renderAll();
     status.textContent = `${state.lineItems.filter(i => !i.dropped).length} regels ingelezen.`;
@@ -951,6 +989,9 @@ function renderBundles() {
       const v = parseFloat(el.value) || 0;
       c.unitPrice = v;
       c.total = v;
+      // De user typt in USD (huidige weergave). Synchroniseer eurUnitPrice
+      // zodat een latere koers-wijziging deze edit correct meeschaalt.
+      c.eurUnitPrice = state.fxRate ? v / state.fxRate : v;
       document.getElementById(`bundle-sum-${el.dataset.bundle}`).textContent =
         formatPrice(b.children.reduce((s,c) => s+c.total, 0));
       renderTotals();
@@ -1103,15 +1144,33 @@ function renderTotals() {
   const box = document.getElementById("totals");
   const items = state.lineItems.filter(i => !i.dropped);
   const totalUSD = items.reduce((s,i) => s + i.total, 0);
-  // Colli: sum of quantities of non-service physical items
-  const colli = items.filter(i => !i.service).reduce((s,i) => s + i.qty, 0);
+  // Colli: sum of quantities of non-service physical items (suggestie); user
+  // kan dit overrulen via state.colliOverride.
+  const autoColli = items.filter(i => !i.service).reduce((s,i) => s + i.qty, 0);
+  const colli = state.colliOverride != null ? state.colliOverride : autoColli;
   const gw = items.filter(i => !i.service).reduce((s,i) => {
     const spec = getSpec(i.code, i.description); return s + (spec && spec.gw ? spec.gw * i.qty : 0);
   }, 0);
   const nw = items.filter(i => !i.service).reduce((s,i) => {
     const spec = getSpec(i.code, i.description); return s + (spec && spec.nw ? spec.nw * i.qty : 0);
   }, 0);
+  // Hint over auto-suggestie: alleen tonen als override afwijkt
+  const colliHint = (state.colliOverride != null && state.colliOverride !== autoColli)
+    ? ` <span style="color:var(--muted);font-size:11px;">(suggestie uit order: ${autoColli})</span>`
+    : "";
   box.innerHTML = `
+    <div class="totals-config" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:10px 12px;background:#fafaf8;border-radius:8px;margin-bottom:12px;">
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);">
+        Aantal Colli${colliHint}
+        <input type="number" id="colli-input" min="0" step="1" value="${colli}"
+               style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-family:inherit;font-size:14px;font-weight:600;">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);">
+        EUR → USD koers <span style="font-size:11px;">(retail "voor land")</span>
+        <input type="number" id="fxrate-input" min="0.01" step="0.001" value="${state.fxRate}"
+               style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:4px;font-family:inherit;font-size:14px;font-weight:600;">
+      </label>
+    </div>
     <div class="row"><span></span><span>${colli} Colli — Total:</span><span>${formatPrice(totalUSD)}</span></div>
     <div class="row"><span></span><span>Total gross weight:</span><span>${gw} KG</span></div>
     <div class="row"><span></span><span>Total netto weight:</span><span>${nw} KG</span></div>
@@ -1119,6 +1178,19 @@ function renderTotals() {
     <div class="row strong"><span></span><span>Total in USD:</span><span>${formatPrice(totalUSD)}</span></div>
     <div class="row"><span></span><span>VAT amount 0%:</span><span>${formatPrice(0)}</span></div>
   `;
+  // Wire inputs (na innerHTML omdat de elementen pas dan bestaan)
+  document.getElementById("colli-input").addEventListener("change", (e) => {
+    const v = parseInt(e.target.value, 10);
+    state.colliOverride = Number.isFinite(v) && v >= 0 ? v : null;
+    renderTotals();
+  });
+  document.getElementById("fxrate-input").addEventListener("change", (e) => {
+    const r = parseFloat(e.target.value);
+    if (!Number.isFinite(r) || r <= 0) return;
+    applyFxRate(r);
+    renderItems();
+    renderTotals();
+  });
 }
 
 function escapeHtml(s) {
@@ -1243,16 +1315,20 @@ function mapLogic4Order(orderHeader, orderRows, debtorResp) {
     const code    = String(r.ProductCode || "");
     const desc    = (r.Description || r.Description2 || "").trim();
     const qty     = Number(r.Qty || 0);
-    const unit    = Number(r.NettPrice || 0);
-    const total   = Math.round(qty * unit * 100) / 100;
+    // NettPrice is de Logic4-EUR-stukprijs. Voor douanepapieren moeten
+    // we dit naar USD omrekenen (state.fxRate); applyFxRate() doet dat
+    // direct na detectBundles+distributeBundle.
+    const unitEur = Number(r.NettPrice || 0);
+    const total   = Math.round(qty * unitEur * 100) / 100;
     return {
       qty,
       code,
       // Sterretje voorop voor sub-pakketten zodat het in de UI hetzelfde oogt als
       // de PDF-flow (en eventuele extra logica die op "*" let blijft werken).
       description: isChild && !desc.startsWith("*") ? "* " + desc : desc,
-      unitPrice: unit,
-      total,
+      eurUnitPrice: unitEur,
+      unitPrice: unitEur,  // tijdelijk EUR; applyFxRate zet dit straks in USD
+      total,                // idem
       bundleChild: isChild,
       // Service-detectie: code-only zou Freight Surcharge / Packingskosten missen
       // als die nieuwe codes hebben. Dus check óók de description.
@@ -1325,8 +1401,17 @@ async function fetchOrderFromLogic4() {
     const parsed = mapLogic4Order(j.order, j.rows, debtor);
     state.metadata  = parsed.metadata;
     state.lineItems = parsed.lineItems;
+    state.colliOverride = null;  // nieuwe order → reset eventuele user-override
     state.bundles   = detectBundles(state.lineItems);
     for (const b of state.bundles) distributeBundle(b);
+    // Na distributie: EUR → USD via state.fxRate. applyFxRate verwacht dat
+    // alle items een eurUnitPrice hebben; bundle-children krijgen die hier
+    // alsnog (van hun post-distribute EUR-waarde) zodat ze ook meeschalen
+    // bij koers-wijzigingen.
+    for (const it of state.lineItems) {
+      if (it.eurUnitPrice == null) it.eurUnitPrice = it.unitPrice;
+    }
+    applyFxRate(state.fxRate);
     state.rawText   = "(Geladen via Logic4 API — order " + nr + ")";
 
     renderAll();
@@ -1708,7 +1793,9 @@ async function buildPdf(brand = "passion") {
   y -= 14;
 
   const totalUSD = items.reduce((s,i) => s + i.total, 0);
-  const colli = items.filter(i => !i.service).reduce((s,i) => s + i.qty, 0);
+  // Colli: respecteer user-override uit het totalen-paneel; anders auto-som
+  const autoColli = items.filter(i => !i.service).reduce((s,i) => s + i.qty, 0);
+  const colli = state.colliOverride != null ? state.colliOverride : autoColli;
   const gw = items.filter(i => !i.service).reduce((s,i) => {
     const sp = getSpec(i.code); return s + (sp && sp.gw ? sp.gw * i.qty : 0);
   }, 0);
