@@ -412,28 +412,73 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs
 // State
 // ============================================================
 // Voor douane-papieren MOET de waarde in USD staan, niet de EUR-stukprijs uit
-// Logic4 (Logic4's "Stukprijs incl. voor land"-kolom). Helaas exposeert
-// Logic4's v3-API dat veld niet rechtstreeks in /v3/Orders/GetOrderRows —
-// het lijkt server-side berekend op basis van een admin-koers-setting die
-// ook niet via een gevonden endpoint beschikbaar is.
+// Logic4. Logic4 toont in de UI "Stukprijs incl. voor land" maar exposeert
+// die kolom NIET via z'n v3-API (geverifieerd: 285 endpoints, 403 schemas
+// gescand — niets met country/voor-land/exchange). Logic4's desktop-client
+// rekent intern met een EUR→USD-koers die elke ochtend door administratie
+// in Logic4 wordt ingevoerd, maar die admin-setting is ook niet beschikbaar
+// via de publieke API.
 //
-// Tijdelijke aanpak: vermenigvuldig EUR met een vaste Fonteyn-koers (1.12).
-// Als Logic4's interne koers verandert, moet dit getal hier mee. Lange-
-// termijn-fix: zoek de Logic4 admin-koers-API (Configuration / Sales / etc.)
-// en haal 'm runtime op. Tot dan blijft 't hardcoded.
-const FONTEYN_EUR_TO_USD = 1.12;
-const FX_KEY = "fp.douane.fxRate";
+// Aanpak: haal de actuele EUR→USD-koers op uit een externe bron en cache
+// 24 uur. Default: Frankfurter API (free, gratis, ECB-based, geen key).
+// Geeft niet 100% dezelfde koers als Logic4 (die heeft Fonteyn-eigen
+// markup) — zodra administratie hun bron deelt swap ik de URL.
+//
+// Bij offline/falende fetch fallt 't terug op de laatst-gecachete waarde
+// of een hardgecodeerde 1.12.
+const FONTEYN_EUR_TO_USD_FALLBACK = 1.12;
+const FX_KEY = "fp.douane.fxRate";              // legacy override (handmatig)
+const FX_DAILY_KEY = "fp.douane.fxRateDaily";   // dagelijkse cache (object)
+const FX_SOURCE_URL = "https://api.frankfurter.app/latest?from=EUR&to=USD";
+const FX_SOURCE_NAME = "Frankfurter (ECB)";
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+// Haalt EUR→USD koers op (gecachet 24h). Retourneert {rate, source, fetchedAt}.
+// Werkt async, dus de eerste page-render gebruikt de fallback 1.12 — daarna
+// re-rendert de UI met de actuele waarde.
+async function fetchDailyFxRate() {
+  // Check cache eerst
+  try {
+    const cached = JSON.parse(localStorage.getItem(FX_DAILY_KEY) || "null");
+    if (cached && cached.rate > 0 && (Date.now() - cached.fetchedAt) < ONE_DAY_MS) {
+      return cached;
+    }
+  } catch {}
+  // Fetch fresh
+  try {
+    const r = await fetch(FX_SOURCE_URL);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    const rate = Number(j?.rates?.USD);
+    if (!Number.isFinite(rate) || rate <= 0) throw new Error("no USD rate in response");
+    const result = { rate, source: FX_SOURCE_NAME, fetchedAt: Date.now(), date: j.date };
+    localStorage.setItem(FX_DAILY_KEY, JSON.stringify(result));
+    return result;
+  } catch (e) {
+    console.warn("[douane] fxRate fetch faalde, val terug op cache/hardcoded:", e.message);
+    try {
+      const cached = JSON.parse(localStorage.getItem(FX_DAILY_KEY) || "null");
+      if (cached && cached.rate > 0) return cached;
+    } catch {}
+    return { rate: FONTEYN_EUR_TO_USD_FALLBACK, source: "fallback (offline)", fetchedAt: Date.now() };
+  }
+}
 
 const state = {
   metadata: {},
   lineItems: [],
   bundles: [],
   rawText: "",
-  // EUR → USD koers. Hardcoded op de Fonteyn-Logic4-koers want het echte
-  // veld "Stukprijs incl. voor land" is niet via Logic4-API beschikbaar.
-  // localStorage-override blijft mogelijk voor noodgevallen, maar in de UI
-  // tonen we 'm niet meer.
-  fxRate: parseFloat(localStorage.getItem(FX_KEY)) || FONTEYN_EUR_TO_USD,
+  // EUR → USD koers — wordt async vanuit fetchDailyFxRate() bijgewerkt
+  // bij page-load. Initiële waarde: gecachete daily-rate, anders fallback.
+  fxRate: (function() {
+    try {
+      const c = JSON.parse(localStorage.getItem(FX_DAILY_KEY) || "null");
+      if (c && c.rate > 0) return c.rate;
+    } catch {}
+    return parseFloat(localStorage.getItem(FX_KEY)) || FONTEYN_EUR_TO_USD_FALLBACK;
+  })(),
+  fxRateInfo: null, // {rate, source, fetchedAt} — gevuld na fetchDailyFxRate
   // Colli-override: null = gebruik auto-berekend (sum van qty's van
   // niet-service items); ingesteld getal = die waarde gebruiken.
   // Reset op null bij elke nieuwe order-load.
@@ -1165,6 +1210,16 @@ function renderTotals() {
   const colliHint = (state.colliOverride != null && state.colliOverride !== autoColli)
     ? ` <span style="color:var(--muted);font-size:11px;">(suggestie uit order: ${autoColli})</span>`
     : "";
+  // Koers-info (bron + tijd) — toont waar de USD-prijzen vandaan komen
+  const info = state.fxRateInfo;
+  const fxLine = info
+    ? (() => {
+        const ageMin = Math.round((Date.now() - info.fetchedAt) / 60000);
+        const ageStr = ageMin < 60 ? `${ageMin} min geleden` : `${Math.round(ageMin/60)} u geleden`;
+        const dateStr = info.date ? ` · koers van ${info.date}` : "";
+        return `EUR → USD: ${state.fxRate.toFixed(4)} — bron: ${escapeHtml(info.source)}${dateStr} · gehaald ${ageStr}`;
+      })()
+    : `EUR → USD: ${state.fxRate.toFixed(4)} — koers laden…`;
   box.innerHTML = `
     <div class="totals-config" style="display:flex;align-items:center;gap:14px;padding:10px 12px;background:#fafaf8;border-radius:8px;margin-bottom:12px;">
       <label style="display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted);max-width:220px;">
@@ -1179,6 +1234,7 @@ function renderTotals() {
     <div class="row"><span></span><span>Shippingcosts:</span><span>${formatPrice(0)}</span></div>
     <div class="row strong"><span></span><span>Total in USD:</span><span>${formatPrice(totalUSD)}</span></div>
     <div class="row"><span></span><span>VAT amount 0%:</span><span>${formatPrice(0)}</span></div>
+    <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);font-size:11px;color:var(--muted);">${fxLine}</div>
   `;
   // Wire inputs (na innerHTML omdat de elementen pas dan bestaan)
   document.getElementById("colli-input").addEventListener("change", (e) => {
@@ -1432,6 +1488,21 @@ document.getElementById("order-input").addEventListener("keydown", (e) => {
 checkHelperHealth();
 loadArticleCodesFromHelper();
 loadSpecDatabaseFromHelper();
+// Daily EUR→USD koers ophalen op de achtergrond. Update state.fxRate +
+// re-rendert de items/totals als de waarde anders is dan de initieel
+// gebruikte fallback.
+(async () => {
+  const info = await fetchDailyFxRate();
+  state.fxRateInfo = info;
+  if (info.rate && Math.abs(info.rate - state.fxRate) > 0.0001) {
+    applyFxRate(info.rate);
+    if (state.lineItems.length) {
+      renderItems();
+    }
+  }
+  // Altijd re-render totals zodat de "koers: X — bron: Y" hint klopt
+  if (state.lineItems.length) renderTotals();
+})();
 loadUserSpecsFromServer();
 
 async function loadArticleCodesFromHelper() {
