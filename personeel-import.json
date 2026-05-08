@@ -1,518 +1,670 @@
 {
+  "bron": "Roemenen en Kroaten.xlsx (tab: Nieuwe opzet)",
+  "geimporteerdOp": "2026-05-08T22:20:39.102800",
+  "cutoffDatum": "2025-12-01",
   "employees": [
     {
-      "voornaam": "Aurelian",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: WP3 (2026-06-10)"
-    },
-    {
-      "voornaam": "Cosmin",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: Kelder 3 (2026-06-10)"
-    },
-    {
-      "voornaam": "Denis",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: Kelder 3 (2026-06-10)"
-    },
-    {
-      "voornaam": "Peter",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: Kelder 4 (2026-05-27)"
-    },
-    {
-      "voornaam": "Bogdan",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: WP1 (2026-06-24)"
-    },
-    {
-      "voornaam": "Mario Eduard",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: Kelder 1 (2026-06-24)"
-    },
-    {
-      "voornaam": "Florentin",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: Kelder 1 (2026-06-10)"
-    },
-    {
-      "voornaam": "Emanuel",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: Kelder 2 (2026-06-10)"
-    },
-    {
-      "voornaam": "Zsolt",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: Kelder 2 (2026-06-24)"
-    },
-    {
+      "id": "e_adrian",
       "voornaam": "Adrian",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: Kelder 5 (2026-04-03)"
+      "actief": true
     },
     {
-      "voornaam": "Vasile",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: WP2 (2026-06-24)"
+      "id": "e_aurelian",
+      "voornaam": "Aurelian",
+      "actief": true
     },
     {
-      "voornaam": "Victor",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: WP 3 (2026-06-24)"
+      "id": "e_bogdan",
+      "voornaam": "Bogdan",
+      "actief": true
     },
     {
-      "voornaam": "Vanessa",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: schoonmaak (2026-04-29)"
+      "id": "e_cosmin",
+      "voornaam": "Cosmin",
+      "actief": true
     },
     {
-      "voornaam": "Robert",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: WP2 (2026-06-10)"
-    },
-    {
+      "id": "e_cristian",
       "voornaam": "Cristian",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": true,
-      "notities": "Auto-geïmporteerd uit Roemenen en Kroaten.xlsx — laatste plek: WP1 (2026-04-15)"
+      "actief": true
     },
     {
-      "voornaam": "Dragos",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: ? (laatste-datum: 2025-02-12)"
+      "id": "e_denis",
+      "voornaam": "Denis",
+      "actief": true
     },
     {
-      "voornaam": "Dumitru",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: Kelder 1 (laatste-datum: 2025-04-09)"
+      "id": "e_emanuel",
+      "voornaam": "Emanuel",
+      "actief": true
     },
     {
-      "voornaam": "Alexandru",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: WP1 (laatste-datum: 2025-03-12)"
+      "id": "e_florentin",
+      "voornaam": "Florentin",
+      "actief": true
     },
     {
-      "voornaam": "Georgian",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: WP1 (laatste-datum: 2025-04-09)"
+      "id": "e_marioeduard",
+      "voornaam": "Mario Eduard",
+      "actief": true
     },
     {
-      "voornaam": "Eduard",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: Kelder (laatste-datum: 2025-01-08)"
+      "id": "e_peter",
+      "voornaam": "Peter",
+      "actief": true
     },
     {
-      "voornaam": "Alexandru P",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: Kelder 2 (laatste-datum: 2025-04-09)"
+      "id": "e_robert",
+      "voornaam": "Robert",
+      "actief": true
     },
     {
-      "voornaam": "Vasile M",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: Kelder 2 (laatste-datum: 2025-10-23)"
-    },
-    {
-      "voornaam": "Vlad",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: ? (laatste-datum: 2025-02-27)"
-    },
-    {
-      "voornaam": "Viorel",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: Kelder 4 (laatste-datum: 2025-03-13)"
-    },
-    {
-      "voornaam": "Beniamin",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: Kelder 4 (laatste-datum: 2025-07-02)"
-    },
-    {
-      "voornaam": "Virgil",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: Kelder 3 (laatste-datum: 2025-07-03)"
-    },
-    {
-      "voornaam": "Sebastian",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: kelder 2 (laatste-datum: 2025-06-18)"
-    },
-    {
-      "voornaam": "Grigore",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: Kelder 5 (laatste-datum: 2025-04-09)"
-    },
-    {
-      "voornaam": "Jacek",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: ? (laatste-datum: 2025-09-07)"
-    },
-    {
-      "voornaam": "Ionut",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: WP (laatste-datum: 2025-01-13)"
-    },
-    {
+      "id": "e_samuel",
       "voornaam": "Samuel",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: WP1 (laatste-datum: 2025-12-03)"
+      "actief": true
     },
     {
-      "voornaam": "Elke",
-      "achternaam": "",
-      "geboortedatum": "",
-      "idKaart": "",
-      "email": "",
-      "telefoon": "",
-      "vertrekvliegveld": "",
-      "iban": "",
-      "bsn": "",
-      "nationaliteit": "RO",
-      "geslacht": "M",
-      "rol": "medewerker",
-      "actief": false,
-      "notities": "Auto-geïmporteerd, gestopt — laatste plek: 2 weken woensdag aankomst en vertrek dag (laatste-datum: 2025-06-04)"
+      "id": "e_vanessa",
+      "voornaam": "Vanessa",
+      "actief": true,
+      "rol": "schoonmaak",
+      "geslacht": "V"
+    },
+    {
+      "id": "e_vasile",
+      "voornaam": "Vasile",
+      "actief": true
+    },
+    {
+      "id": "e_victor",
+      "voornaam": "Victor",
+      "actief": true
     }
   ],
-  "geimporteerdOp": "2026-05-08T21:28:03.827659",
-  "bron": "Roemenen en Kroaten (1).xlsx — Nieuwe opzet"
+  "assignments": [
+    {
+      "id": "a_adrian_2026-04-01",
+      "employeeId": "e_adrian",
+      "roomId": "h1k4",
+      "vanDatum": "2026-04-01",
+      "totDatum": "2026-04-14",
+      "rawRoomTag": "Kelder 4"
+    },
+    {
+      "id": "a_adrian_2026-04-03",
+      "employeeId": "e_adrian",
+      "roomId": "h1k5",
+      "vanDatum": "2026-04-03",
+      "totDatum": "2026-04-13",
+      "rawRoomTag": "Kelder 5"
+    },
+    {
+      "id": "a_aurelian_2025-12-03",
+      "employeeId": "e_aurelian",
+      "roomId": "h2k3",
+      "vanDatum": "2025-12-03",
+      "totDatum": "2025-12-23",
+      "rawRoomTag": "WP3"
+    },
+    {
+      "id": "a_aurelian_2026-01-21",
+      "employeeId": "e_aurelian",
+      "roomId": "h2k3",
+      "vanDatum": "2026-01-21",
+      "totDatum": "2026-02-03",
+      "rawRoomTag": "WP3"
+    },
+    {
+      "id": "a_aurelian_2026-02-18",
+      "employeeId": "e_aurelian",
+      "roomId": "h2k3",
+      "vanDatum": "2026-02-18",
+      "totDatum": "2026-03-03",
+      "rawRoomTag": "WP3"
+    },
+    {
+      "id": "a_aurelian_2026-03-11",
+      "employeeId": "e_aurelian",
+      "roomId": "h2k3",
+      "vanDatum": "2026-03-11",
+      "totDatum": "2026-03-31",
+      "rawRoomTag": "WP3"
+    },
+    {
+      "id": "a_aurelian_2026-04-15",
+      "employeeId": "e_aurelian",
+      "roomId": "h2k3",
+      "vanDatum": "2026-04-15",
+      "totDatum": "2026-05-06",
+      "rawRoomTag": "WP3"
+    },
+    {
+      "id": "a_aurelian_2026-05-13",
+      "employeeId": "e_aurelian",
+      "roomId": "h2k3",
+      "vanDatum": "2026-05-13",
+      "totDatum": "2026-05-26",
+      "rawRoomTag": "WP3"
+    },
+    {
+      "id": "a_aurelian_2026-06-10",
+      "employeeId": "e_aurelian",
+      "roomId": "h2k3",
+      "vanDatum": "2026-06-10",
+      "totDatum": "2026-06-23",
+      "rawRoomTag": "WP3"
+    },
+    {
+      "id": "a_bogdan_2026-01-07",
+      "employeeId": "e_bogdan",
+      "roomId": "h2k1",
+      "vanDatum": "2026-01-07",
+      "totDatum": "2026-01-20",
+      "rawRoomTag": "WP1"
+    },
+    {
+      "id": "a_bogdan_2026-02-04",
+      "employeeId": "e_bogdan",
+      "roomId": "h2k1",
+      "vanDatum": "2026-02-04",
+      "totDatum": "2026-02-17",
+      "rawRoomTag": "WP1"
+    },
+    {
+      "id": "a_bogdan_2026-03-04",
+      "employeeId": "e_bogdan",
+      "roomId": "h2k1",
+      "vanDatum": "2026-03-04",
+      "totDatum": "2026-03-17",
+      "rawRoomTag": "WP1"
+    },
+    {
+      "id": "a_bogdan_2026-04-01",
+      "employeeId": "e_bogdan",
+      "roomId": "h2k1",
+      "vanDatum": "2026-04-01",
+      "totDatum": "2026-04-14",
+      "rawRoomTag": "WP1"
+    },
+    {
+      "id": "a_bogdan_2026-04-29",
+      "employeeId": "e_bogdan",
+      "roomId": "h2k1",
+      "vanDatum": "2026-04-29",
+      "totDatum": "2026-05-12",
+      "rawRoomTag": "WP1"
+    },
+    {
+      "id": "a_bogdan_2026-05-27",
+      "employeeId": "e_bogdan",
+      "roomId": "h2k1",
+      "vanDatum": "2026-05-27",
+      "totDatum": "2026-06-09",
+      "rawRoomTag": "WP1"
+    },
+    {
+      "id": "a_bogdan_2026-06-24",
+      "employeeId": "e_bogdan",
+      "roomId": "h2k1",
+      "vanDatum": "2026-06-24",
+      "totDatum": "2026-06-24",
+      "rawRoomTag": "WP1"
+    },
+    {
+      "id": "a_cosmin_2025-12-03",
+      "employeeId": "e_cosmin",
+      "roomId": "h1k3",
+      "vanDatum": "2025-12-03",
+      "totDatum": "2025-12-23",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_cosmin_2026-01-21",
+      "employeeId": "e_cosmin",
+      "roomId": "h1k3",
+      "vanDatum": "2026-01-21",
+      "totDatum": "2026-02-03",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_cosmin_2026-02-18",
+      "employeeId": "e_cosmin",
+      "roomId": "h1k3",
+      "vanDatum": "2026-02-18",
+      "totDatum": "2026-03-03",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_cosmin_2026-03-18",
+      "employeeId": "e_cosmin",
+      "roomId": "h1k3",
+      "vanDatum": "2026-03-18",
+      "totDatum": "2026-03-31",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_cosmin_2026-04-15",
+      "employeeId": "e_cosmin",
+      "roomId": "h1k3",
+      "vanDatum": "2026-04-15",
+      "totDatum": "2026-04-28",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_cosmin_2026-05-13",
+      "employeeId": "e_cosmin",
+      "roomId": "h1k3",
+      "vanDatum": "2026-05-13",
+      "totDatum": "2026-05-26",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_cosmin_2026-06-10",
+      "employeeId": "e_cosmin",
+      "roomId": "h1k3",
+      "vanDatum": "2026-06-10",
+      "totDatum": "2026-06-23",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_cristian_2026-04-15",
+      "employeeId": "e_cristian",
+      "roomId": "h2k1",
+      "vanDatum": "2026-04-15",
+      "totDatum": "2026-04-27",
+      "rawRoomTag": "WP1"
+    },
+    {
+      "id": "a_denis_2026-01-07",
+      "employeeId": "e_denis",
+      "roomId": "h1k3",
+      "vanDatum": "2026-01-07",
+      "totDatum": "2026-01-20",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_denis_2026-02-04",
+      "employeeId": "e_denis",
+      "roomId": "h1k3",
+      "vanDatum": "2026-02-04",
+      "totDatum": "2026-02-17",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_denis_2026-03-04",
+      "employeeId": "e_denis",
+      "roomId": "h1k3",
+      "vanDatum": "2026-03-04",
+      "totDatum": "2026-03-17",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_denis_2026-04-01",
+      "employeeId": "e_denis",
+      "roomId": "h1k3",
+      "vanDatum": "2026-04-01",
+      "totDatum": "2026-04-14",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_denis_2026-05-06",
+      "employeeId": "e_denis",
+      "roomId": "h1k3",
+      "vanDatum": "2026-05-06",
+      "totDatum": "2026-05-26",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_denis_2026-06-10",
+      "employeeId": "e_denis",
+      "roomId": "h1k3",
+      "vanDatum": "2026-06-10",
+      "totDatum": "2026-06-23",
+      "rawRoomTag": "Kelder 3"
+    },
+    {
+      "id": "a_emanuel_2025-12-03",
+      "employeeId": "e_emanuel",
+      "roomId": "h1k4",
+      "vanDatum": "2025-12-03",
+      "totDatum": "2025-12-23",
+      "rawRoomTag": "Kelder 4"
+    },
+    {
+      "id": "a_emanuel_2026-01-21",
+      "employeeId": "e_emanuel",
+      "roomId": "h1k4",
+      "vanDatum": "2026-01-21",
+      "totDatum": "2026-02-03",
+      "rawRoomTag": "Kelder 4"
+    },
+    {
+      "id": "a_emanuel_2026-02-18",
+      "employeeId": "e_emanuel",
+      "roomId": "h1k4",
+      "vanDatum": "2026-02-18",
+      "totDatum": "2026-03-03",
+      "rawRoomTag": "Kelder 4"
+    },
+    {
+      "id": "a_emanuel_2026-03-18",
+      "employeeId": "e_emanuel",
+      "roomId": "h1k4",
+      "vanDatum": "2026-03-18",
+      "totDatum": "2026-03-18",
+      "rawRoomTag": "Kelder 4"
+    },
+    {
+      "id": "a_florentin_2025-12-03",
+      "employeeId": "e_florentin",
+      "roomId": "h1k1",
+      "vanDatum": "2025-12-03",
+      "totDatum": "2025-12-23",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_florentin_2026-01-21",
+      "employeeId": "e_florentin",
+      "roomId": "h1k1",
+      "vanDatum": "2026-01-21",
+      "totDatum": "2026-02-03",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_florentin_2026-02-18",
+      "employeeId": "e_florentin",
+      "roomId": "h1k1",
+      "vanDatum": "2026-02-18",
+      "totDatum": "2026-03-03",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_florentin_2026-03-18",
+      "employeeId": "e_florentin",
+      "roomId": "h1k1",
+      "vanDatum": "2026-03-18",
+      "totDatum": "2026-03-31",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_florentin_2026-04-15",
+      "employeeId": "e_florentin",
+      "roomId": "h1k1",
+      "vanDatum": "2026-04-15",
+      "totDatum": "2026-04-28",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_florentin_2026-05-13",
+      "employeeId": "e_florentin",
+      "roomId": "h1k1",
+      "vanDatum": "2026-05-13",
+      "totDatum": "2026-05-26",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_florentin_2026-06-10",
+      "employeeId": "e_florentin",
+      "roomId": "h1k1",
+      "vanDatum": "2026-06-10",
+      "totDatum": "2026-06-23",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_marioeduard_2026-01-12",
+      "employeeId": "e_marioeduard",
+      "roomId": "h1k1",
+      "vanDatum": "2026-01-12",
+      "totDatum": "2026-01-20",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_marioeduard_2026-02-04",
+      "employeeId": "e_marioeduard",
+      "roomId": "h1k1",
+      "vanDatum": "2026-02-04",
+      "totDatum": "2026-02-17",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_marioeduard_2026-03-04",
+      "employeeId": "e_marioeduard",
+      "roomId": "h1k1",
+      "vanDatum": "2026-03-04",
+      "totDatum": "2026-03-17",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_marioeduard_2026-04-01",
+      "employeeId": "e_marioeduard",
+      "roomId": "h1k1",
+      "vanDatum": "2026-04-01",
+      "totDatum": "2026-04-14",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_marioeduard_2026-04-29",
+      "employeeId": "e_marioeduard",
+      "roomId": "h1k1",
+      "vanDatum": "2026-04-29",
+      "totDatum": "2026-05-12",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_marioeduard_2026-05-27",
+      "employeeId": "e_marioeduard",
+      "roomId": "h1k1",
+      "vanDatum": "2026-05-27",
+      "totDatum": "2026-06-09",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_marioeduard_2026-06-24",
+      "employeeId": "e_marioeduard",
+      "roomId": "h1k1",
+      "vanDatum": "2026-06-24",
+      "totDatum": "2026-06-24",
+      "rawRoomTag": "Kelder 1"
+    },
+    {
+      "id": "a_peter_2026-04-29",
+      "employeeId": "e_peter",
+      "roomId": "h1k4",
+      "vanDatum": "2026-04-29",
+      "totDatum": "2026-05-12",
+      "rawRoomTag": "Kelder 4"
+    },
+    {
+      "id": "a_peter_2026-05-27",
+      "employeeId": "e_peter",
+      "roomId": "h1k4",
+      "vanDatum": "2026-05-27",
+      "totDatum": "2026-06-09",
+      "rawRoomTag": "Kelder 4"
+    },
+    {
+      "id": "a_robert_2025-12-03",
+      "employeeId": "e_robert",
+      "roomId": "h2k2",
+      "vanDatum": "2025-12-03",
+      "totDatum": "2025-12-23",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_robert_2026-01-21",
+      "employeeId": "e_robert",
+      "roomId": "h2k2",
+      "vanDatum": "2026-01-21",
+      "totDatum": "2026-02-03",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_robert_2026-02-18",
+      "employeeId": "e_robert",
+      "roomId": "h2k2",
+      "vanDatum": "2026-02-18",
+      "totDatum": "2026-03-03",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_robert_2026-03-11",
+      "employeeId": "e_robert",
+      "roomId": "h2k2",
+      "vanDatum": "2026-03-11",
+      "totDatum": "2026-03-31",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_robert_2026-04-15",
+      "employeeId": "e_robert",
+      "roomId": "h2k2",
+      "vanDatum": "2026-04-15",
+      "totDatum": "2026-05-06",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_robert_2026-05-13",
+      "employeeId": "e_robert",
+      "roomId": "h2k2",
+      "vanDatum": "2026-05-13",
+      "totDatum": "2026-05-26",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_robert_2026-06-10",
+      "employeeId": "e_robert",
+      "roomId": "h2k2",
+      "vanDatum": "2026-06-10",
+      "totDatum": "2026-06-23",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_samuel_2025-12-03",
+      "employeeId": "e_samuel",
+      "roomId": "h2k1",
+      "vanDatum": "2025-12-03",
+      "totDatum": "2025-12-23",
+      "rawRoomTag": "WP1"
+    },
+    {
+      "id": "a_vanessa_2026-04-29",
+      "employeeId": "e_vanessa",
+      "roomId": "schoonmaak",
+      "vanDatum": "2026-04-29",
+      "totDatum": "2026-05-12",
+      "rawRoomTag": "schoonmaak"
+    },
+    {
+      "id": "a_vasile_2026-01-07",
+      "employeeId": "e_vasile",
+      "roomId": "h2k2",
+      "vanDatum": "2026-01-07",
+      "totDatum": "2026-01-20",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_vasile_2026-02-04",
+      "employeeId": "e_vasile",
+      "roomId": "h2k2",
+      "vanDatum": "2026-02-04",
+      "totDatum": "2026-02-17",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_vasile_2026-03-04",
+      "employeeId": "e_vasile",
+      "roomId": "h2k2",
+      "vanDatum": "2026-03-04",
+      "totDatum": "2026-03-17",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_vasile_2026-04-01",
+      "employeeId": "e_vasile",
+      "roomId": "h2k2",
+      "vanDatum": "2026-04-01",
+      "totDatum": "2026-04-14",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_vasile_2026-04-29",
+      "employeeId": "e_vasile",
+      "roomId": "h2k2",
+      "vanDatum": "2026-04-29",
+      "totDatum": "2026-05-12",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_vasile_2026-05-27",
+      "employeeId": "e_vasile",
+      "roomId": "h2k2",
+      "vanDatum": "2026-05-27",
+      "totDatum": "2026-06-09",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_vasile_2026-06-24",
+      "employeeId": "e_vasile",
+      "roomId": "h2k2",
+      "vanDatum": "2026-06-24",
+      "totDatum": "2026-06-24",
+      "rawRoomTag": "WP2"
+    },
+    {
+      "id": "a_victor_2026-01-07",
+      "employeeId": "e_victor",
+      "roomId": "h2k3",
+      "vanDatum": "2026-01-07",
+      "totDatum": "2026-01-20",
+      "rawRoomTag": "WP 3"
+    },
+    {
+      "id": "a_victor_2026-02-04",
+      "employeeId": "e_victor",
+      "roomId": "h2k3",
+      "vanDatum": "2026-02-04",
+      "totDatum": "2026-02-17",
+      "rawRoomTag": "WP 3"
+    },
+    {
+      "id": "a_victor_2026-03-04",
+      "employeeId": "e_victor",
+      "roomId": "h2k3",
+      "vanDatum": "2026-03-04",
+      "totDatum": "2026-03-17",
+      "rawRoomTag": "WP 3"
+    },
+    {
+      "id": "a_victor_2026-04-01",
+      "employeeId": "e_victor",
+      "roomId": "h2k3",
+      "vanDatum": "2026-04-01",
+      "totDatum": "2026-04-14",
+      "rawRoomTag": "WP 3"
+    },
+    {
+      "id": "a_victor_2026-04-29",
+      "employeeId": "e_victor",
+      "roomId": "h2k3",
+      "vanDatum": "2026-04-29",
+      "totDatum": "2026-05-12",
+      "rawRoomTag": "WP 3"
+    },
+    {
+      "id": "a_victor_2026-05-27",
+      "employeeId": "e_victor",
+      "roomId": "h2k3",
+      "vanDatum": "2026-05-27",
+      "totDatum": "2026-06-09",
+      "rawRoomTag": "WP 3"
+    },
+    {
+      "id": "a_victor_2026-06-24",
+      "employeeId": "e_victor",
+      "roomId": "h2k3",
+      "vanDatum": "2026-06-24",
+      "totDatum": "2026-06-24",
+      "rawRoomTag": "WP 3"
+    }
+  ]
 }

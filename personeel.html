@@ -178,6 +178,95 @@ table.plans th {
 .wed-card li.terug { color: #991b1b; }
 .wed-card .arrow { font-weight: 600; margin-right: 6px; }
 
+/* ─── Planning (gantt) ─── */
+.gantt-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafaf8;
+}
+.gantt {
+  border-collapse: collapse;
+  font-size: 11px;
+  table-layout: fixed;
+}
+.gantt th, .gantt td {
+  border: 1px solid #e8e6df;
+  padding: 0;
+  margin: 0;
+}
+.gantt th.empname {
+  background: #fff;
+  position: sticky; left: 0; z-index: 3;
+  width: 160px;
+  text-align: left;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  border-right: 2px solid var(--border);
+}
+.gantt th.empname.head {
+  background: var(--fonteyn-green);
+  color: #fff;
+  z-index: 4;
+}
+.gantt th.day {
+  width: 14px; height: 32px;
+  text-align: center;
+  font-weight: 500;
+  font-size: 9px;
+  color: var(--muted);
+  background: #fafaf8;
+}
+.gantt th.day.weekstart { border-left: 2px solid var(--border); }
+.gantt th.day.weekend { background: #f0eee8; color: #aaa; }
+.gantt th.month {
+  background: var(--fonteyn-green);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 6px;
+  text-align: left;
+  border: 1px solid var(--fonteyn-green-dark);
+}
+.gantt td.day {
+  width: 14px; height: 28px;
+  background: #fff;
+  cursor: default;
+}
+.gantt td.day.weekstart { border-left: 2px solid var(--border); }
+.gantt td.day.weekend { background: #f5f4ef; }
+.gantt td.day.today { box-shadow: inset 0 0 0 2px var(--fonteyn-lime); }
+.gantt td.day.assigned {
+  cursor: pointer;
+}
+.gantt td.day.assigned:hover { filter: brightness(0.85); }
+.gantt td.day.assigned-start { border-left: 2px solid rgba(0,0,0,0.25); }
+.gantt td.day.assigned-end   { border-right: 2px solid rgba(0,0,0,0.25); }
+.gantt-room-tag {
+  position: absolute;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(0,0,0,0.65);
+  white-space: nowrap;
+  pointer-events: none;
+  margin-left: 3px;
+  margin-top: 2px;
+  text-shadow: 0 0 2px rgba(255,255,255,0.7);
+}
+.gantt-row { position: relative; }
+.gantt-legend {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-top: 14px; font-size: 11px; color: var(--muted);
+}
+.gantt-legend .item {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 4px;
+  background: #fff; border: 1px solid var(--border);
+}
+.gantt-legend .swatch { width: 14px; height: 12px; border-radius: 2px; }
+
 /* Form-grid */
 .form-grid {
   display: grid;
@@ -213,6 +302,7 @@ table.plans th {
 <main>
   <div class="tabs">
     <button class="tab active" data-tab="medewerkers">Medewerkers</button>
+    <button class="tab" data-tab="planning">Planning</button>
     <button class="tab" data-tab="verdeling">Kamerverdeling</button>
     <button class="tab" data-tab="vluchten">Vluchten woensdag</button>
   </div>
@@ -257,7 +347,27 @@ table.plans th {
     </div>
   </div>
 
-  <!-- ─── TAB 2: Kamerverdeling ─── -->
+  <!-- ─── TAB 2: Planning (gantt) ─── -->
+  <div class="tab-pane" id="pane-planning">
+    <div class="card">
+      <div class="row-flex" style="justify-content:space-between;margin-bottom:8px;">
+        <h2>Planning <span class="muted" id="ganttRange" style="font-weight:400;"></span></h2>
+        <div class="row-flex">
+          <button class="cta secondary small" id="ganttPrevBtn">← 4 weken</button>
+          <button class="cta secondary small" id="ganttTodayBtn">Vandaag</button>
+          <button class="cta secondary small" id="ganttNextBtn">4 weken →</button>
+        </div>
+      </div>
+      <div class="muted" style="margin-bottom:10px;">
+        Wie zit wanneer in welke kamer. Klik op een gekleurd vakje om de toewijzing te bewerken of verwijderen.
+        Bovenaan een groene streep = vandaag.
+      </div>
+      <div class="gantt-wrap" id="ganttWrap"></div>
+      <div class="gantt-legend" id="ganttLegend"></div>
+    </div>
+  </div>
+
+  <!-- ─── TAB 3: Kamerverdeling ─── -->
   <div class="tab-pane" id="pane-verdeling">
     <div class="card">
       <h2>Kamerverdeling vandaag — <span id="todayLabel" class="muted" style="font-weight:400;"></span></h2>
@@ -387,10 +497,39 @@ document.querySelectorAll(".tab").forEach(t => {
     document.querySelectorAll(".tab-pane").forEach(x => x.classList.remove("active"));
     t.classList.add("active");
     $("pane-" + t.dataset.tab).classList.add("active");
+    if (t.dataset.tab === "planning") renderPlanning();
     if (t.dataset.tab === "verdeling") renderVerdeling();
     if (t.dataset.tab === "vluchten") renderVluchten();
   });
 });
+
+// ─── Stable per-employee kleur-palet ────────────────────────────────
+// Curated soft pastel-palet — leesbaar op wit en niet schreeuwerig.
+// Stable mapping: hash op employee.id → index in palet, zelfde persoon
+// krijgt elke render dezelfde kleur.
+const EMP_PALETTE = [
+  "#a3d9b1", // mint
+  "#fcb6b6", // coral
+  "#fddca6", // peach
+  "#a3c7e0", // soft blue
+  "#d6b8e0", // lavender
+  "#fcd49a", // amber
+  "#a8e0d6", // turquoise
+  "#f9b8c8", // pink
+  "#cce0a3", // soft lime
+  "#e0a3a3", // dusty rose
+  "#bba3e0", // periwinkle
+  "#fff0a3", // pale yellow
+  "#a3e0c7", // sage
+  "#e0bfa3", // tan
+  "#a3a3e0", // soft indigo
+];
+function colorForEmployee(empId) {
+  if (!empId) return "#cccccc";
+  let h = 0;
+  for (const ch of empId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return EMP_PALETTE[h % EMP_PALETTE.length];
+}
 
 // ─── Data load + save via Cloudflare Worker ────────────────────────
 //
@@ -564,37 +703,60 @@ $("addEmpBtn").addEventListener("click", () => {
 });
 
 $("importExcelBtn").addEventListener("click", async () => {
-  if (!confirm("Importeer alle 32 medewerkers uit het 'Roemenen en Kroaten.xlsx'-bestand?\n\nBestaande medewerkers worden niet gedupliceerd (op basis van voornaam). Verwacht ~15 actief en ~17 gestopt.")) return;
+  if (!confirm("Importeer medewerkers + planning uit het 'Roemenen en Kroaten.xlsx'-bestand?\n\nBestaande medewerkers worden niet gedupliceerd (op basis van voornaam). Bestaande planningsregels blijven staan; alleen nieuwe regels worden toegevoegd.\n\nVerwacht: ~15 medewerkers + ~70 planningsregels (vanaf december 2025).")) return;
   try {
     const r = await fetch("personeel-import.json");
     if (!r.ok) throw new Error("import-bestand niet gevonden");
     const data = await r.json();
-    const existingNames = new Set(state.employees.map(e => (e.voornaam || "").toLowerCase()));
-    let added = 0;
+    // Map oude voornaam → nieuwe employee.id zodat we de assignments kunnen
+    // koppelen aan een eventuele al-bestaande medewerker met dezelfde naam.
+    const nameToId = {};
+    let addedEmp = 0;
     for (const emp of data.employees || []) {
-      if (existingNames.has((emp.voornaam || "").toLowerCase())) continue;
+      const naam = (emp.voornaam || "").trim();
+      if (!naam) continue;
+      const existing = state.employees.find(e => (e.voornaam || "").toLowerCase() === naam.toLowerCase());
+      if (existing) {
+        nameToId[emp.id] = existing.id;
+        continue;
+      }
+      const newId = emp.id || `p_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
       state.employees.push({
-        id: `p_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
-        voornaam: emp.voornaam || "",
+        id: newId,
+        voornaam: naam,
         achternaam: emp.achternaam || "",
-        geboortedatum: "",
-        idKaart: "",
-        email: "",
-        telefoon: "",
-        vertrekvliegveld: "",
-        iban: "",
-        bsn: "",
+        geboortedatum: "", idKaart: "", email: "", telefoon: "",
+        vertrekvliegveld: "", iban: "", bsn: "",
         nationaliteit: emp.nationaliteit || "RO",
         geslacht: emp.geslacht || "M",
         rol: emp.rol || "medewerker",
-        actief: !!emp.actief,
+        actief: emp.actief !== false,
         notities: emp.notities || "",
       });
-      added++;
+      nameToId[emp.id] = newId;
+      addedEmp++;
+    }
+    // Assignments importeren — skip duplicates op basis van id
+    const existingAssignmentIds = new Set(state.assignments.map(a => a.id));
+    let addedAss = 0;
+    for (const a of data.assignments || []) {
+      if (existingAssignmentIds.has(a.id)) continue;
+      const empId = nameToId[a.employeeId] || a.employeeId;
+      // roomId valideren: als 'ie niet matcht in onze rooms, valt 't terug op de raw tag
+      const roomExists = state.rooms.some(r => r.id === a.roomId);
+      state.assignments.push({
+        id: a.id,
+        employeeId: empId,
+        roomId: roomExists ? a.roomId : (a.roomId || ""),
+        vanDatum: a.vanDatum,
+        totDatum: a.totDatum,
+        notities: a.rawRoomTag ? `Excel-import: ${a.rawRoomTag}` : "",
+      });
+      addedAss++;
     }
     saveStateDebounced();
     renderEmployees();
-    showStatus(`✓ ${added} medewerkers geïmporteerd uit Excel.`, "ok");
+    showStatus(`✓ ${addedEmp} nieuwe medewerkers + ${addedAss} planningsregels geïmporteerd. Klik 'Planning' om de gantt te zien.`, "ok");
   } catch (e) {
     showStatus("Import mislukt: " + e.message, "error");
   }
@@ -709,7 +871,158 @@ $("planAddBtn").addEventListener("click", () => {
   showStatus("✓ Toewijzing toegevoegd.", "ok");
 });
 
-// ─── TAB 3: Vluchten woensdag ───────────────────────────────────────
+// ─── TAB 2: Planning (gantt) ────────────────────────────────────────
+// Toont 16 weken in horizontale balkjes per medewerker. Standaard
+// gecentreerd rond vandaag (4 weken terug + 12 weken vooruit). Knoppen
+// schuiven het venster.
+const ganttView = {
+  startOffset: -28, // dagen vanaf vandaag waar de view begint
+  totalDays: 112,   // 16 weken
+};
+
+function ganttDates() {
+  const start = new Date();
+  start.setHours(0,0,0,0);
+  start.setDate(start.getDate() + ganttView.startOffset);
+  const out = [];
+  for (let i = 0; i < ganttView.totalDays; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    out.push(d);
+  }
+  return out;
+}
+const isoDate = (d) => d.toISOString().slice(0, 10);
+
+function renderPlanning() {
+  const wrap = $("ganttWrap");
+  const days = ganttDates();
+  const todayIso = todayISO();
+  const firstIso = isoDate(days[0]);
+  const lastIso = isoDate(days[days.length - 1]);
+  $("ganttRange").textContent =
+    `${days[0].toLocaleDateString("nl-NL", {day:"numeric",month:"short"})} – ${days[days.length-1].toLocaleDateString("nl-NL", {day:"numeric",month:"short",year:"numeric"})}`;
+
+  // Actieve medewerkers met assignments in deze range, of überhaupt actief
+  const active = state.employees.filter(e => e.actief);
+  // Sorteer op kamer-volgorde van hun huidige/laatste assignment, dan op naam
+  const sortKey = (e) => {
+    const a = state.assignments.filter(x => x.employeeId === e.id).sort((x,y) => x.vanDatum.localeCompare(y.vanDatum)).pop();
+    if (!a) return ["zzz", e.voornaam || ""];
+    const r = findRoom(a.roomId);
+    return [r ? String(r.sortOrder).padStart(3,"0") : "zzz", e.voornaam || ""];
+  };
+  active.sort((a, b) => {
+    const ka = sortKey(a), kb = sortKey(b);
+    return ka[0].localeCompare(kb[0]) || ka[1].localeCompare(kb[1]);
+  });
+
+  // Bouw maand-header (bovenste rij): per maand één cel die span't over alle dagen in die maand.
+  const monthSpans = [];
+  let curMonth = days[0].getMonth(), curStart = 0;
+  for (let i = 1; i <= days.length; i++) {
+    if (i === days.length || days[i].getMonth() !== curMonth) {
+      monthSpans.push({ start: curStart, span: i - curStart, label: days[curStart].toLocaleDateString("nl-NL", {month: "long", year: "numeric"}) });
+      if (i < days.length) { curMonth = days[i].getMonth(); curStart = i; }
+    }
+  }
+
+  let html = `<table class="gantt"><colgroup><col style="width:160px;">`;
+  for (let i = 0; i < days.length; i++) html += `<col style="width:14px;">`;
+  html += `</colgroup>`;
+  // Maand-rij
+  html += `<tr><th class="empname head" rowspan="2">Medewerker</th>`;
+  for (const m of monthSpans) {
+    html += `<th class="month" colspan="${m.span}">${escapeHtml(m.label)}</th>`;
+  }
+  html += `</tr>`;
+  // Dag-rij
+  html += `<tr>`;
+  for (let i = 0; i < days.length; i++) {
+    const d = days[i];
+    const wd = d.getDay(); // 0=zo, 6=za
+    const cls = ["day"];
+    if (wd === 1) cls.push("weekstart"); // maandag = nieuwe week-marker
+    if (wd === 0 || wd === 6) cls.push("weekend");
+    html += `<th class="${cls.join(" ")}">${d.getDate()}</th>`;
+  }
+  html += `</tr>`;
+  // Per medewerker een rij
+  for (const emp of active) {
+    const empName = (emp.voornaam || "?") + (emp.achternaam ? " " + emp.achternaam : "");
+    const empColor = colorForEmployee(emp.id);
+    // Vind alle assignments voor deze persoon die overlappen met de view-range
+    const empAssignments = state.assignments.filter(a =>
+      a.employeeId === emp.id &&
+      a.totDatum >= firstIso &&
+      a.vanDatum <= lastIso
+    );
+    html += `<tr class="gantt-row"><th class="empname">${escapeHtml(empName)}</th>`;
+    for (let i = 0; i < days.length; i++) {
+      const dIso = isoDate(days[i]);
+      const wd = days[i].getDay();
+      const cls = ["day"];
+      if (wd === 1) cls.push("weekstart");
+      if (wd === 0 || wd === 6) cls.push("weekend");
+      if (dIso === todayIso) cls.push("today");
+      // Vind assignment die deze dag bevat
+      const assigned = empAssignments.find(a => a.vanDatum <= dIso && a.totDatum >= dIso);
+      let style = "", title = "", label = "";
+      if (assigned) {
+        cls.push("assigned");
+        if (assigned.vanDatum === dIso) {
+          cls.push("assigned-start");
+          const room = findRoom(assigned.roomId);
+          label = room ? room.kamer : (assigned.roomId || "?");
+        }
+        if (assigned.totDatum === dIso) cls.push("assigned-end");
+        style = `background:${empColor};`;
+        const room = findRoom(assigned.roomId);
+        title = `${empName} · ${room ? room.huisje + " — " + room.kamer : (assigned.roomId || "?")} · ${assigned.vanDatum} → ${assigned.totDatum}`;
+      }
+      const data = assigned ? `data-aid="${escapeHtml(assigned.id)}"` : "";
+      const labelHtml = label ? `<span class="gantt-room-tag">${escapeHtml(label)}</span>` : "";
+      html += `<td class="${cls.join(" ")}" style="${style}" title="${escapeHtml(title)}" ${data}>${labelHtml}</td>`;
+    }
+    html += `</tr>`;
+  }
+  html += `</table>`;
+  wrap.innerHTML = html;
+  // Klik op assignment-cel → wijzig/verwijder
+  wrap.querySelectorAll("td.day.assigned").forEach(td => {
+    td.addEventListener("click", () => {
+      const aid = td.dataset.aid;
+      const a = state.assignments.find(x => x.id === aid);
+      if (!a) return;
+      const e = findEmployee(a.employeeId);
+      const r = findRoom(a.roomId);
+      const msg = `${e?.voornaam || "?"} — ${r?.huisje || "?"} ${r?.kamer || ""}\n${a.vanDatum} → ${a.totDatum}\n${a.notities || ""}\n\nVerwijderen?`;
+      if (confirm(msg)) {
+        state.assignments = state.assignments.filter(x => x.id !== aid);
+        saveStateDebounced();
+        renderPlanning();
+      }
+    });
+  });
+  // Legenda: per kleur welke persoon
+  const legend = $("ganttLegend");
+  legend.innerHTML = active.map(e => {
+    return `<span class="item"><span class="swatch" style="background:${colorForEmployee(e.id)};"></span>${escapeHtml((e.voornaam || "") + " " + (e.achternaam || "")).trim()}</span>`;
+  }).join("");
+  // Scroll vandaag in beeld bij eerste render
+  setTimeout(() => {
+    const todayCell = wrap.querySelector("td.day.today");
+    if (todayCell) {
+      todayCell.scrollIntoView({ behavior: "auto", inline: "center", block: "nearest" });
+    }
+  }, 50);
+}
+
+$("ganttPrevBtn").addEventListener("click", () => { ganttView.startOffset -= 28; renderPlanning(); });
+$("ganttNextBtn").addEventListener("click", () => { ganttView.startOffset += 28; renderPlanning(); });
+$("ganttTodayBtn").addEventListener("click", () => { ganttView.startOffset = -28; renderPlanning(); });
+
+// ─── TAB 4: Vluchten woensdag ───────────────────────────────────────
 function nextWednesdays(count = 4) {
   const out = [];
   const d = new Date();
