@@ -295,6 +295,13 @@
         <p>Controleer en update de status van betaalde orders in Logic4.</p>
       </a>
 
+      <!-- Bankkoppeling — finance-team (Osman/Rowan/Rico/Reinier) + admins. -->
+      <a href="bankkoppeling.html" class="tile hidden" id="tileBankkoppeling">
+        <div class="icon">🏦</div>
+        <h3>Bankkoppeling maken</h3>
+        <p>Upload een MT940-bankafschrift en koppel binnenkomende betalingen automatisch aan de juiste Logic4-orders.</p>
+      </a>
+
       <!-- Stuurcijfers — alleen zichtbaar voor gerriette@ en dolf@. Klik vraagt extra wachtwoord. -->
       <a href="#" class="tile hidden" id="tileStuurcijfers">
         <div class="icon">📊</div>
@@ -412,6 +419,21 @@ const LOGISTIEK_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Welke logins mogen de Bankkoppeling-tegel zien.
+// Finance-team (Osman/Rowan/Rico/Reinier) doet dit dagelijks; admins
+// Dolf/Don/Arno/Gerrit + bot ook toegang voor reviews.
+const BANKKOPPELING_EMAILS = new Set([
+  "osman@fonteyn.nl",      "osman",   "fonteyn.osman",
+  "rowan@fonteyn.nl",      "rowan",   "fonteyn.rowan",
+  "rico@fonteyn.nl",       "rico",    "fonteyn.rico",
+  "reinier@fonteyn.nl",    "reinier", "fonteyn.reinier",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "don@fonteyn.nl",        "fonteyn.don",
+  "arno@fonteyn.nl",       "fonteyn.arno",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Welke logins mogen de Stuurcijfers-tegel zien.
 // Server doet dezelfde check; dit hier is alleen voor de UI.
 // We accepteren zowel het e-mailadres ALS de Logic4-username (bv. "fonteyn.dolf"),
@@ -467,6 +489,8 @@ function showDashboard(email) {
   el("tileStuurcijfers").classList.toggle("hidden", !STUURCIJFERS_EMAILS.has(lc));
   // Orderstatus-tegel alleen tonen voor de geautoriseerde e-mailadressen
   el("tileOrderStatus").classList.toggle("hidden", !ORDERSTATUS_EMAILS.has(lc));
+  // Bankkoppeling-tegel — finance-team + admins
+  el("tileBankkoppeling").classList.toggle("hidden", !BANKKOPPELING_EMAILS.has(lc));
   // Eikensingel-tegel alleen tonen voor Fransje + team + Danique
   el("tileEikensingel").classList.toggle("hidden", !EIKENSINGEL_EMAILS.has(lc));
 }

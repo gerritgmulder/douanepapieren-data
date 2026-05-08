@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>Fonteyn — Bankkoppeling maken</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --fonteyn-green:      #144734;
+  --fonteyn-green-dark: #0d3325;
+  --fonteyn-lime:       #8bc53f;
+  --fonteyn-lime-dark:  #72a531;
+  --fonteyn-cream:      #fff9ae;
+  --ink:                #1d1d1d;
+  --muted:              #6b7280;
+  --border:             #e0e0d8;
+  --bg:                 #f5f4ef;
+  --card:               #ffffff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; font-family: 'Montserrat', system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+header.hdr {
+  background: var(--fonteyn-green);
+  color: #fff;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+header .brand { display: flex; align-items: center; gap: 16px; }
+header .back { color: #fff; text-decoration: none; font-size: 13px; padding: 5px 10px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; }
+header .back:hover { background: rgba(255,255,255,0.1); }
+header img.logo { height: 38px; }
+header h1 { font-size: 18px; font-weight: 600; margin: 0; }
+header .user { font-size: 13px; display: flex; align-items: center; gap: 12px; }
+header .logout { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: inherit; }
+header .logout:hover { background: rgba(255,255,255,0.1); }
+main { max-width: 1400px; margin: 0 auto; padding: 28px 24px; }
+.section-title { font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 12px; font-weight: 600; }
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 18px;
+}
+.dropzone {
+  display: block;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .15s;
+  background: #fafaf8;
+  color: var(--muted);
+}
+.dropzone:hover, .dropzone.drag {
+  border-color: var(--fonteyn-green);
+  background: #f0f7e8;
+  color: var(--ink);
+}
+.dropzone input[type=file] { display: none; }
+.dropzone .big { font-size: 17px; margin-bottom: 6px; color: var(--ink); font-weight: 500; }
+.dropzone .small { font-size: 13px; }
+.cta {
+  background: var(--fonteyn-lime);
+  color: #fff;
+  border: 0;
+  padding: 11px 22px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+}
+.cta:hover { background: var(--fonteyn-lime-dark); }
+.cta:disabled { opacity: 0.5; cursor: not-allowed; }
+.cta.secondary {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--border);
+}
+.cta.secondary:hover { background: #fafaf8; }
+.status {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.status.info { background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe; }
+.status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.status.ok { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.hidden { display: none !important; }
+.summary {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.summary .stat {
+  flex: 1 1 140px;
+  padding: 14px 16px;
+  background: #fafaf8;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.summary .stat .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin-bottom: 4px; }
+.summary .stat .val { font-size: 19px; font-weight: 700; color: var(--fonteyn-green); font-variant-numeric: tabular-nums; }
+.summary .stat.warn .val { color: #b45309; }
+.summary .stat.bad .val { color: #b91c1c; }
+.summary .stat.tussen .val { color: #1e40af; }
+
+table.tx {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+table.tx th {
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: #fafaf8;
+}
+table.tx td {
+  padding: 10px;
+  border-bottom: 1px solid #efefe8;
+  vertical-align: top;
+}
+table.tx tr:hover td { background: #fafaf8; }
+table.tx td.amount { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+table.tx td.date { white-space: nowrap; color: var(--muted); font-size: 12px; }
+table.tx td.desc { max-width: 360px; word-break: break-word; line-height: 1.4; }
+table.tx td.match { min-width: 240px; }
+.badge {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.badge.ok { background: #d1fae5; color: #065f46; }
+.badge.partial { background: #fef3c7; color: #92400e; }
+.badge.miss { background: #fee2e2; color: #991b1b; }
+.badge.tussen { background: #dbeafe; color: #1e3a8a; }
+.badge.pending { background: #f3f4f6; color: var(--muted); }
+.match-info { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.4; }
+.match-info .order-id { color: var(--ink); font-weight: 600; }
+input.klantcode {
+  width: 110px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+input.klantcode:focus { outline: none; border-color: var(--fonteyn-green); }
+.row-flex { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.muted { color: var(--muted); font-size: 12px; }
+.bank-info {
+  background: #f0f7e8;
+  border: 1px solid #bbf7d0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #14532d;
+  margin-bottom: 14px;
+}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="brand">
+    <a href="dashboard.html" class="back">← Dashboard</a>
+    <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+    <h1>Bankkoppeling maken</h1>
+  </div>
+  <div class="user">
+    <span id="userEmail">—</span>
+    <button class="logout" id="hdr-logout">Uitloggen</button>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <div class="section-title">Stap 1 — Upload MT940-bankafschrift</div>
+    <p style="margin: 0 0 14px; font-size: 13px; color: var(--muted);">
+      Sleep een MT940-bestand hieronder (of klik). De binnenkomende creditbetalingen
+      worden geparseerd en automatisch geprobeerd te koppelen aan open Logic4-orders
+      op basis van het ordernummer in de afschriftregel. Mollie- en Pay.nl-tussenrekening-
+      betalingen worden apart gegroepeerd.
+    </p>
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".sta,.940,.txt,.mt940,application/octet-stream,text/plain">
+      <div class="big">📄 Sleep MT940-bestand hierheen</div>
+      <div class="small">.sta / .940 / .mt940 / .txt — alle Nederlandse banken (ING, Rabo, ABN, Knab, …)</div>
+    </label>
+    <div id="dropStatus"></div>
+  </div>
+
+  <div class="card hidden" id="resultCard">
+    <div class="section-title">Stap 2 — Controleer de matches</div>
+    <div class="bank-info" id="bankInfo"></div>
+
+    <div class="summary" id="summary"></div>
+
+    <div style="overflow-x:auto;">
+      <table class="tx" id="txTable">
+        <thead>
+          <tr>
+            <th style="width:90px;">Datum</th>
+            <th style="width:110px; text-align:right;">Bedrag</th>
+            <th>Afschriftregel</th>
+            <th style="width:120px;">Status</th>
+            <th>Voorgestelde koppeling</th>
+            <th style="width:130px;">Klantcode</th>
+          </tr>
+        </thead>
+        <tbody id="txBody"></tbody>
+      </table>
+    </div>
+
+    <div class="row-flex" style="margin-top:18px;">
+      <button class="cta" id="exportBtn">📋 Kopieer als CSV</button>
+      <button class="cta secondary" id="exportJsonBtn">Kopieer als JSON</button>
+      <button class="cta secondary" id="resetBtn">Andere MT940 laden</button>
+      <span class="muted">Fase 1 — alleen voorstel/preview. Fase 2 (auto-boeken in Logic4) komt zodra de matches betrouwbaar zijn.</span>
+    </div>
+    <div id="actionStatus"></div>
+  </div>
+</main>
+
+<script>
+// ─── Session-guard ──────────────────────────────────────────────────
+const HELPER_BASE = "";
+const SESSION_KEY = "fp.session";
+const EMAIL_KEY   = "fp.email";
+
+(function sessionGuard() {
+  if (!localStorage.getItem(SESSION_KEY)) {
+    window.location.replace("dashboard.html");
+    throw new Error("Geen sessie");
+  }
+})();
+
+const _origFetch = window.fetch.bind(window);
+window.fetch = async function(input, init = {}) {
+  const url = typeof input === "string" ? input : input.url;
+  const isApi = url && url.startsWith("/api/");
+  if (isApi) {
+    const id = localStorage.getItem(SESSION_KEY);
+    init.headers = { ...(init.headers || {}), "Authorization": "Bearer " + id };
+  }
+  const r = await _origFetch(input, init);
+  if (isApi && r.status === 401) {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(EMAIL_KEY);
+    window.location.replace("dashboard.html");
+  }
+  return r;
+};
+
+// ─── Header ─────────────────────────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+document.addEventListener("DOMContentLoaded", () => {
+  $("userEmail").textContent = localStorage.getItem(EMAIL_KEY) || "—";
+});
+$("hdr-logout").addEventListener("click", async () => {
+  try { await fetch("/api/logout", { method: "POST" }); } catch {}
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(EMAIL_KEY);
+  window.location.replace("dashboard.html");
+});
+
+const showStatus = (el, msg, kind = "info") => {
+  el.innerHTML = `<div class="status ${kind}">${msg}</div>`;
+};
+const clearStatus = (el) => { el.innerHTML = ""; };
+const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmtEur = (n) => "€ " + (Number(n) || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// ─── State ──────────────────────────────────────────────────────────
+const state = {
+  fileName: "",
+  iban: "",
+  statementNr: "",
+  openingBalance: null,
+  closingBalance: null,
+  transactions: [],   // [{date, amount, currency, description, descRaw, kind, match}]
+};
+
+// ─── Drop-zone handling ─────────────────────────────────────────────
+const dropzone = $("dropzone");
+const fileInput = $("fileInput");
+["dragenter", "dragover"].forEach(ev => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); dropzone.classList.add("drag");
+}));
+["dragleave", "drop"].forEach(ev => dropzone.addEventListener(ev, (e) => {
+  e.preventDefault(); dropzone.classList.remove("drag");
+}));
+dropzone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer?.files?.[0];
+  if (f) handleFile(f);
+});
+fileInput.addEventListener("change", (e) => {
+  const f = e.target.files?.[0];
+  if (f) handleFile(f);
+});
+
+async function handleFile(file) {
+  clearStatus($("dropStatus"));
+  state.fileName = file.name;
+  showStatus($("dropStatus"), `📄 ${file.name} laden…`, "info");
+  try {
+    const text = await file.text();
+    const parsed = parseMT940(text);
+    state.iban = parsed.iban;
+    state.statementNr = parsed.statementNr;
+    state.openingBalance = parsed.openingBalance;
+    state.closingBalance = parsed.closingBalance;
+    state.transactions = parsed.transactions
+      // We koppelen alleen INKOMENDE betalingen (Credit). Uitgaande zijn niet
+      // relevant voor het bankkoppeling-doel.
+      .filter(t => t.amount > 0)
+      .map(t => ({ ...t, kind: classifyTx(t), match: null }));
+    if (!state.transactions.length) {
+      showStatus($("dropStatus"), "Geen inkomende creditbetalingen in dit MT940-bestand gevonden.", "error");
+      return;
+    }
+    showStatus($("dropStatus"), `✓ ${state.transactions.length} inkomende betalingen gevonden — bezig met Logic4-matching…`, "ok");
+    renderResults(); // initiële render met "pending"-status
+    await runMatchingForAll();
+    renderResults();
+    showStatus($("dropStatus"), `✓ ${state.transactions.length} betalingen verwerkt. Controleer de voorstellen hieronder.`, "ok");
+  } catch (e) {
+    console.error(e);
+    showStatus($("dropStatus"), "Kon MT940 niet inlezen: " + e.message, "error");
+  }
+}
+
+// ─── MT940 parser (SWIFT MT940-standaard) ───────────────────────────
+//
+// Format-skelet:
+//   :20:<reference>
+//   :25:<account/IBAN>
+//   :28C:<statement-nr>
+//   :60F:<C|D><YYMMDD><currency><amount>      ← opening balance
+//   herhaald per transactie:
+//     :61:<value-date YYMMDD>[<entry-date MMDD>][R]<C|D><amount>N<type><ref>
+//     :86:<description, mag multi-line>
+//   :62F:<C|D><YYMMDD><currency><amount>      ← closing balance
+//
+// :86: is bank-specifiek qua sub-formaat (ING/Rabo/ABN doen 't elk net iets
+// anders) maar we lezen het simpelweg als platte tekst — voor matching
+// hoeft alleen het ordernummer + de naam erin gevonden te worden.
+
+function parseMT940(text) {
+  // Normaliseer line endings + verwijder lege regels die geen onderdeel
+  // zijn van een :86: continuation.
+  const raw = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const lines = raw.split("\n");
+
+  // Groepeer regels per :tag: — een :86:-blok kan over meerdere regels lopen.
+  // Een nieuwe tag begint altijd met ":<digits-or-letter>:".
+  const blocks = [];
+  let cur = null;
+  for (const ln of lines) {
+    const m = ln.match(/^:(\d+[A-Z]?):(.*)$/);
+    if (m) {
+      if (cur) blocks.push(cur);
+      cur = { tag: m[1], body: m[2] };
+    } else if (cur && ln.length) {
+      // Continuatie van vorige tag
+      cur.body += "\n" + ln;
+    }
+  }
+  if (cur) blocks.push(cur);
+
+  let iban = "", statementNr = "", openingBalance = null, closingBalance = null;
+  const transactions = [];
+  let pending = null;
+
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (b.tag === "25")  iban = b.body.trim();
+    else if (b.tag === "28C") statementNr = b.body.trim();
+    else if (b.tag === "60F" || b.tag === "60M") openingBalance = parseBalance(b.body);
+    else if (b.tag === "62F" || b.tag === "62M") closingBalance = parseBalance(b.body);
+    else if (b.tag === "61") {
+      // Push de vorige transactie (zonder description) als die er was zonder :86:
+      if (pending) transactions.push(pending);
+      pending = parseTxLine(b.body);
+    } else if (b.tag === "86") {
+      if (pending) {
+        pending.descRaw = b.body;
+        pending.description = cleanDescription(b.body);
+      }
+    }
+  }
+  if (pending) transactions.push(pending);
+
+  return { iban, statementNr, openingBalance, closingBalance, transactions };
+}
+
+function parseBalance(body) {
+  // Format: <C|D><YYMMDD><currency 3 chars><amount with comma>
+  const m = body.match(/^([CD])(\d{6})([A-Z]{3})([\d,\.]+)/);
+  if (!m) return null;
+  const sign = m[1] === "C" ? 1 : -1;
+  const dateStr = "20" + m[2].slice(0, 2) + "-" + m[2].slice(2, 4) + "-" + m[2].slice(4, 6);
+  const amount = sign * parseFloat(m[4].replace(/\./g, "").replace(",", "."));
+  return { date: dateStr, currency: m[3], amount };
+}
+
+function parseTxLine(body) {
+  // :61: format kort:
+  //   YYMMDD[MMDD][R]<C|D|RC|RD>[<funds-code>]<amount>N<type 3>[<ref…>]
+  // We pakken: value-date, sign, amount.
+  const m = body.match(/^(\d{6})(\d{4})?(R?[CD])([A-Z])?([\d,\.]+)/);
+  if (!m) {
+    return { date: null, amount: 0, currency: "EUR", description: "", descRaw: body };
+  }
+  const yy = parseInt(m[1].slice(0, 2), 10);
+  const yyyy = (yy < 70 ? 2000 + yy : 1900 + yy);
+  const date = `${yyyy}-${m[1].slice(2, 4)}-${m[1].slice(4, 6)}`;
+  const dc = m[3];
+  const sign = (dc === "C" || dc === "RD") ? 1 : -1; // RD = "Reversal Debit" wordt feitelijk een credit, RC andersom
+  // Conventie: gewone C = inkomend (+), gewone D = uitgaand (−).
+  const positive = dc.endsWith("C") && !dc.startsWith("R") ? 1
+                  : dc === "RD" ? 1
+                  : -1;
+  const amount = positive * parseFloat(m[5].replace(/\./g, "").replace(",", "."));
+  return { date, amount, currency: "EUR", description: "", descRaw: "" };
+}
+
+function cleanDescription(raw) {
+  // Veel banken proppen sub-codes als /NAME/.../REMI/... in :86:. We strippen
+  // ze niet; we plakken alleen multi-line samen tot één leesbare regel.
+  return raw.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// ─── Classificatie + match-extractie ────────────────────────────────
+function classifyTx(tx) {
+  const d = (tx.description || "").toLowerCase();
+  if (/(?:^|[^a-z])mollie(?:[^a-z]|$)/.test(d) || /(?:^|[^a-z])mollie b\.?v\.?/.test(d)) return "mollie";
+  if (/(?:^|[^a-z])pay\.?nl/.test(d) || /(?:^|[^a-z])paynl/.test(d)) return "paynl";
+  return "direct";
+}
+
+function extractOrderCandidates(description) {
+  // Logic4 sales-orders zijn typisch 7-cijferig (bv. 3507187), inkooporders
+  // 5-cijferig (bv. 37386). We pakken alle aaneengesloten 5-7-cijfer-tokens
+  // uit de beschrijving en filteren op aannemelijke ranges.
+  const out = [];
+  const seen = new Set();
+  const re = /\b(\d{5,8})\b/g;
+  let m;
+  while ((m = re.exec(description)) !== null) {
+    const n = m[1];
+    if (seen.has(n)) continue;
+    // Skip pure-jaartal-achtige tokens (1900-2099)
+    if (/^(19|20)\d{2}$/.test(n)) continue;
+    // Skip te grote IBAN-achtige nummers (>99999999)
+    if (n.length > 7) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+}
+
+// ─── Matching tegen Logic4 ──────────────────────────────────────────
+async function runMatchingForAll() {
+  // Sequentieel om Logic4-rate-limits te respecteren. Beperken tot 'direct'-
+  // betalingen — Mollie/Pay.nl slaan we over omdat die altijd handmatig
+  // moeten worden uitgesplitst (de sub-orders zitten niet in de bank-
+  // afschriftregel zelf).
+  for (const tx of state.transactions) {
+    if (tx.kind !== "direct") continue;
+    tx.match = await tryMatchTransaction(tx);
+  }
+}
+
+async function tryMatchTransaction(tx) {
+  const candidates = extractOrderCandidates(tx.description);
+  if (!candidates.length) {
+    return { status: "no-candidates", candidates: [] };
+  }
+  const checked = [];
+  for (const ordnr of candidates) {
+    try {
+      const r = await fetch("/api/order/" + encodeURIComponent(ordnr));
+      if (r.status === 404) continue;
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (!j || !j.order) continue;
+      const order = Array.isArray(j.order) ? j.order[0] : j.order;
+      if (!order) continue;
+      const totalIncl = Number(order?.Totals?.AmountIncl || 0);
+      const debtorId = order?.DebtorId || order?.AccountAddress?.DebtorId;
+      const company = order?.AccountAddress?.CompanyName
+                   || order?.InvoiceAddress?.CompanyName
+                   || "";
+      checked.push({
+        orderId: ordnr,
+        debtorId: debtorId ? String(debtorId) : "",
+        companyName: company,
+        totalIncl,
+        amountMatch: Math.abs(totalIncl - tx.amount) < 0.02,
+      });
+    } catch (e) {
+      console.warn(`[bank] order ${ordnr} lookup failed:`, e.message);
+    }
+  }
+  if (!checked.length) {
+    return { status: "no-match", candidates };
+  }
+  // Beste match: amount-match wint
+  checked.sort((a, b) => (b.amountMatch ? 1 : 0) - (a.amountMatch ? 1 : 0));
+  const best = checked[0];
+  const status = best.amountMatch ? "match" : "match-amount-mismatch";
+  return { status, candidates, best, all: checked };
+}
+
+// ─── Render ─────────────────────────────────────────────────────────
+function renderResults() {
+  $("resultCard").classList.remove("hidden");
+  $("bankInfo").innerHTML = `
+    <b>Bestand:</b> ${escapeHtml(state.fileName)} ·
+    <b>IBAN:</b> ${escapeHtml(state.iban || "—")} ·
+    <b>Afschrift:</b> ${escapeHtml(state.statementNr || "—")} ·
+    <b>Saldo:</b>
+    ${state.openingBalance ? fmtEur(state.openingBalance.amount) : "—"}
+    →
+    ${state.closingBalance ? fmtEur(state.closingBalance.amount) : "—"}
+  `;
+
+  // Statistieken
+  const total = state.transactions.length;
+  const matched = state.transactions.filter(t => t.match?.status === "match").length;
+  const partial = state.transactions.filter(t => t.match?.status === "match-amount-mismatch").length;
+  const unmatched = state.transactions.filter(t => t.kind === "direct" && (!t.match || t.match.status === "no-match" || t.match.status === "no-candidates")).length;
+  const tussen = state.transactions.filter(t => t.kind !== "direct").length;
+  $("summary").innerHTML = `
+    <div class="stat"><div class="lbl">Totaal</div><div class="val">${total}</div></div>
+    <div class="stat"><div class="lbl">Match</div><div class="val">${matched}</div></div>
+    <div class="stat warn"><div class="lbl">Bedrag-mismatch</div><div class="val">${partial}</div></div>
+    <div class="stat bad"><div class="lbl">Geen match</div><div class="val">${unmatched}</div></div>
+    <div class="stat tussen"><div class="lbl">Mollie / Pay.nl</div><div class="val">${tussen}</div></div>
+  `;
+
+  const tbody = $("txBody");
+  tbody.innerHTML = "";
+  for (let i = 0; i < state.transactions.length; i++) {
+    const tx = state.transactions[i];
+    tbody.appendChild(renderRow(tx, i));
+  }
+}
+
+function renderRow(tx, idx) {
+  const tr = document.createElement("tr");
+  // Status-badge + match-info
+  let badge, info;
+  if (tx.kind === "mollie") {
+    badge = `<span class="badge tussen">Mollie 1220</span>`;
+    info = `<div class="match-info">Tussenrekening — handmatig uitsplitsen.</div>`;
+  } else if (tx.kind === "paynl") {
+    badge = `<span class="badge tussen">Pay.nl 2030</span>`;
+    info = `<div class="match-info">Tussenrekening — handmatig uitsplitsen.</div>`;
+  } else if (!tx.match) {
+    badge = `<span class="badge pending">Bezig…</span>`;
+    info = "";
+  } else if (tx.match.status === "match") {
+    badge = `<span class="badge ok">Match</span>`;
+    const b = tx.match.best;
+    info = `<div class="match-info">
+      <span class="order-id">Order ${escapeHtml(b.orderId)}</span> · ${escapeHtml(b.companyName || "—")} · totaal ${fmtEur(b.totalIncl)}
+    </div>`;
+  } else if (tx.match.status === "match-amount-mismatch") {
+    badge = `<span class="badge partial">Bedrag wijkt af</span>`;
+    const b = tx.match.best;
+    const diff = tx.amount - b.totalIncl;
+    info = `<div class="match-info">
+      <span class="order-id">Order ${escapeHtml(b.orderId)}</span> · ${escapeHtml(b.companyName || "—")} · order €${b.totalIncl.toFixed(2)} (${diff > 0 ? "+" : ""}${diff.toFixed(2)})
+    </div>`;
+  } else if (tx.match.status === "no-match") {
+    badge = `<span class="badge miss">Nrs. niet gevonden</span>`;
+    info = `<div class="match-info">Kandidaten: ${tx.match.candidates.map(escapeHtml).join(", ")}</div>`;
+  } else {
+    badge = `<span class="badge miss">Geen ordernr.</span>`;
+    info = `<div class="match-info">Geen 5-7-cijferig nummer in afschriftregel.</div>`;
+  }
+  // Pre-fill klantcode-input met de gematchte DebtorId
+  const klantcode = (tx.match?.best?.debtorId) || "";
+  tr.innerHTML = `
+    <td class="date">${escapeHtml(tx.date || "—")}</td>
+    <td class="amount">${fmtEur(tx.amount)}</td>
+    <td class="desc">${escapeHtml(tx.description || "—")}</td>
+    <td class="match">${badge}</td>
+    <td class="match">${info}</td>
+    <td>
+      <input type="text" class="klantcode" data-idx="${idx}" value="${escapeHtml(klantcode)}" placeholder="bv. 48614330">
+    </td>
+  `;
+  tr.querySelector(".klantcode").addEventListener("input", (e) => {
+    const i = parseInt(e.target.dataset.idx, 10);
+    if (!state.transactions[i].userOverride) state.transactions[i].userOverride = {};
+    state.transactions[i].userOverride.debtorId = e.target.value.trim();
+  });
+  return tr;
+}
+
+// ─── Export-knoppen ────────────────────────────────────────────────
+$("exportBtn").addEventListener("click", () => {
+  const rows = state.transactions.map(t => {
+    const debtorId = t.userOverride?.debtorId || t.match?.best?.debtorId || "";
+    const orderId = t.match?.best?.orderId || "";
+    const company = t.match?.best?.companyName || "";
+    const tussen = t.kind === "mollie" ? "Mollie 1220" : t.kind === "paynl" ? "Pay.nl 2030" : "";
+    return [t.date, t.amount.toFixed(2), debtorId, orderId, company, tussen, (t.description || "").replace(/[\r\n;]/g, " ")];
+  });
+  const header = ["Datum", "Bedrag", "Klantcode", "Order", "Bedrijf", "Tussenrekening", "Afschriftregel"];
+  const csv = [header, ...rows].map(r => r.map(c => /[;"\n]/.test(String(c)) ? `"${String(c).replace(/"/g,'""')}"` : String(c)).join(";")).join("\n");
+  navigator.clipboard.writeText(csv).then(() => {
+    showStatus($("actionStatus"), `✓ ${rows.length} regels naar klembord (CSV-formaat, separator ';' — plak in Excel).`, "ok");
+  }).catch(e => {
+    showStatus($("actionStatus"), "Klembord niet beschikbaar: " + e.message, "error");
+  });
+});
+
+$("exportJsonBtn").addEventListener("click", () => {
+  const data = state.transactions.map(t => ({
+    date: t.date,
+    amount: t.amount,
+    description: t.description,
+    kind: t.kind,
+    debtorId: t.userOverride?.debtorId || t.match?.best?.debtorId || null,
+    orderId: t.match?.best?.orderId || null,
+    company: t.match?.best?.companyName || null,
+    matchStatus: t.match?.status || (t.kind !== "direct" ? "tussenrekening" : "pending"),
+  }));
+  navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => {
+    showStatus($("actionStatus"), `✓ ${data.length} regels naar klembord (JSON).`, "ok");
+  });
+});
+
+$("resetBtn").addEventListener("click", () => {
+  state.transactions = [];
+  state.fileName = "";
+  state.iban = "";
+  state.statementNr = "";
+  $("resultCard").classList.add("hidden");
+  $("dropStatus").innerHTML = "";
+  $("actionStatus").innerHTML = "";
+  fileInput.value = "";
+});
+</script>
+</body>
+</html>
