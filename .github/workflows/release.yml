@@ -4,10 +4,14 @@ name: Build & Release installers
 # Beide builden een installer (NSIS .exe voor Windows, .dmg voor macOS)
 # en publiceren 'm als asset van dezelfde GitHub Release.
 #
-# Trigger 'm handmatig vanaf het Actions-tabblad → "Run workflow" →
-# versienummer invullen (bv. 0.5.1) → groene knop.
+# Triggers:
+#   • Tag pushen die met 'v' begint (bv. v0.17.0) → auto-build op die versie
+#   • Of handmatig vanaf het Actions-tabblad → "Run workflow" → versie invullen
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       version:
@@ -38,19 +42,35 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Bump version (Windows)
+      - name: Bepaal versie (Windows)
         if: runner.os == 'Windows'
+        id: version-win
         shell: pwsh
         run: |
-          $v = "${{ inputs.version }}"
+          # Bij tag-trigger: pak versie uit de tag-naam (strip 'refs/tags/v' prefix).
+          # Bij workflow_dispatch: gebruik de input.
+          if ("${{ github.ref }}".StartsWith("refs/tags/v")) {
+            $v = "${{ github.ref }}".Substring("refs/tags/v".Length)
+          } else {
+            $v = "${{ inputs.version }}"
+          }
+          Write-Host "Versie: $v"
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           $pkg = Get-Content package.json -Raw | ConvertFrom-Json
           $pkg.version = $v
           ($pkg | ConvertTo-Json -Depth 100) | Set-Content package.json -Encoding UTF8
 
-      - name: Bump version (macOS)
+      - name: Bepaal versie (macOS)
         if: runner.os == 'macOS'
+        id: version-mac
         run: |
-          v="${{ inputs.version }}"
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            v="${GITHUB_REF#refs/tags/v}"
+          else
+            v="${{ inputs.version }}"
+          fi
+          echo "Versie: $v"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
           node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version='$v'; fs.writeFileSync('package.json', JSON.stringify(p, null, 2));"
 
       - name: Install dependencies
