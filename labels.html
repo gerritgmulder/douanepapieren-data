@@ -1089,15 +1089,15 @@ function buildLabel(row, colliIdx, colliTotal, productIdx, productTotal) {
 
   const fields = document.createElement("div");
   fields.className = "fields";
-  // PO bewust weggelaten — dat is een intern ordernummer en hoort niet op
-  // het magazijn-label. Wel Fonteyn + Supplier-codes + boxnr.
-  const productLine = (typeof productIdx === "number" && productTotal > 1)
-    ? `Product ${productIdx} van ${productTotal} · Colli ${colliIdx} van ${colliTotal}`
-    : `Colli ${colliIdx} van ${colliTotal}`;
+  // PO bewust weggelaten — intern ordernummer, niet voor klant.
+  // Ook bewust ALLEEN "Colli A van B" tonen, GEEN "Product X van N"-prefix:
+  // de klant ziet het label op het product en daaruit mag Fonteyn-voorraad
+  // niet afleidbaar zijn. Bij meerdere producten krijgen we dus dezelfde
+  // colli-tekst op meerdere labels — dat is bewust.
   const rows2 = [
     ["Art.nr. Fonteyn:", row.fonteynCode || "—"],
     ["Art.nr. Supplier:", row.supplierCode || "—"],
-    ["Boxnr.:", productLine]
+    ["Boxnr.:", `Colli ${colliIdx} van ${colliTotal}`]
   ];
   for (const [k, v] of rows2) {
     const kEl = document.createElement("div");
