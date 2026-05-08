@@ -308,11 +308,22 @@
 
 <main id="mainView">
 
-  <!-- ───── STAP 1: upload ───── -->
+  <!-- ───── STAP 1: upload of ordernummer ───── -->
   <div class="panel" id="step1">
-    <h2>1. Upload de inkooporder</h2>
-    <div class="sub">Sleep een PDF hierin of klik om te kiezen. De app parseert de regels en haalt automatisch de Fonteyn-artikelcodes op uit Logic4.</div>
+    <h2>1. Kies een inkooporder</h2>
+    <div class="sub">Twee opties: vul het inkoopordernummer (5 cijfers, bv. 37386) in en klik <b>Order ophalen</b>, of sleep een inkooporder-PDF in de zone hieronder.</div>
 
+    <div class="po-bar" style="display:flex;gap:10px;align-items:flex-end;margin:14px 0 18px;flex-wrap:wrap;">
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:500;">
+        Inkoopordernummer
+        <input type="text" id="poInput" inputmode="numeric" pattern="\d{4,6}" maxlength="6" placeholder="bv. 37386"
+               style="width:160px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:14px;font-weight:600;letter-spacing:0.04em;">
+      </label>
+      <button type="button" id="poFetchBtn">Order ophalen</button>
+      <span style="font-size:11px;color:var(--muted);align-self:center;">— haalt regels rechtstreeks uit Logic4</span>
+    </div>
+
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px;">Of sleep een PDF</div>
     <label class="dropzone" id="dropzone">
       <input type="file" id="fileInput" accept="application/pdf">
       <div class="big">📄 Sleep inkooporder.pdf hierheen</div>
@@ -473,6 +484,32 @@ fileInput.addEventListener("change", (e) => {
   const f = e.target.files && e.target.files[0];
   if (f) handleFile(f);
 });
+
+// "Order ophalen"-knop: haalt direct uit Logic4 zonder PDF — handig als
+// Manon het ordernummer al weet. Hetzelfde flow als bij Douanepapieren.
+$("poFetchBtn").addEventListener("click", async () => {
+  await fetchByPoNumber($("poInput").value.trim());
+});
+$("poInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); $("poFetchBtn").click(); }
+});
+
+async function fetchByPoNumber(poRaw) {
+  const po = (poRaw || "").replace(/\D/g, "");
+  if (!po || po.length < 4) {
+    setStatus("Vul een geldig inkoopordernummer in (4-6 cijfers).", "bad");
+    return;
+  }
+  setStatus(`PO ${po} ophalen uit Logic4…`);
+  // State leegmaken zodat fillFromPurchaseOrder() de Logic4-regels als
+  // bron neemt (dat is het pad bij matched===0 in die functie).
+  state.rows = [];
+  state.meta = { poNumber: po, supplier: "", createdOn: "", crediteurNr: "" };
+  const ok = await fillFromPurchaseOrder(po);
+  if (!ok) {
+    setStatus(`Kon PO ${po} niet ophalen uit Logic4 — controleer het nummer of zie debug-vak.`, "bad");
+  }
+}
 
 function setStatus(msg, tone) {
   const s = $("uploadStatus");
