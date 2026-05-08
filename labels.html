@@ -136,7 +136,7 @@
 
   .label-row {
     display: grid;
-    grid-template-columns: 30px 260px 1fr 90px 110px 110px;
+    grid-template-columns: 30px 260px 1fr 80px 80px 110px 110px;
     gap: 10px; align-items: center;
     padding: 10px; border: 1px solid var(--border); border-radius: 8px;
     background: #fff;
@@ -160,7 +160,7 @@
 
   .label-row-header {
     display: grid;
-    grid-template-columns: 30px 260px 1fr 90px 110px 110px;
+    grid-template-columns: 30px 260px 1fr 80px 80px 110px 110px;
     gap: 10px;
     padding: 0 10px 8px;
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
@@ -252,12 +252,34 @@
 
     html, body { background: #fff !important; margin: 0; padding: 0; }
 
-    /* DWING de browser om achtergrondkleuren en logo-afbeelding mee te
-       printen (anders verdwijnt het groene paneel en wordt het logo leeg). */
-    *, *::before, *::after {
+    /* GERICHT print-color-adjust: alleen het groene paneel + logo dwingen
+       we expliciet te printen. Eerder stond dit op '*' wat ervoor zorgde
+       dat sommige printers het volledige label-papier gingen halftonen,
+       met als gevolg kleine puntjes in het witte deel. */
+    .label .green,
+    .label .green *,
+    .label .green img,
+    .label .green img.logo {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
       color-adjust: exact !important;
+    }
+
+    /* Witte content-zone: laat de printer dit als 'geen inkt' afhandelen
+       — eventuele halftone-dithering vermijden door background expliciet
+       transparant te zetten en text crisp te renderen. */
+    .label,
+    .label .content,
+    .label .title,
+    .label .fields,
+    .label .fields .k,
+    .label .fields .v,
+    .label .barcode-wrap {
+      background: transparent !important;
+      background-image: none !important;
+      box-shadow: none !important;
+      text-rendering: geometricPrecision;
+      -webkit-font-smoothing: antialiased;
     }
 
     /* Alles verbergen behalve de print-container */
@@ -329,8 +351,9 @@
     <div class="label-row-header">
       <div></div>
       <div>Omschrijving</div>
-      <div>PO · Supplier · Fonteyn-code</div>
-      <div style="text-align:right">Aantal colli</div>
+      <div>Supplier · Fonteyn-code</div>
+      <div style="text-align:right">Aantal producten</div>
+      <div style="text-align:right">Colli per product</div>
       <div></div>
       <div></div>
     </div>
@@ -922,6 +945,11 @@ function renderStep2() {
 function rowElement(row, idx) {
   const wrap = document.createElement("div");
   wrap.className = "label-row" + (row.fonteynCode ? "" : " pending");
+  // Backwards-compat: oude state had "aantal" als alleen colli; vanaf nu
+  // splitsen we in aantalProducten (uit Logic4) × aantalColliPerProduct
+  // (handmatig per regel — default 1 want de meeste artikelen passen in 1 doos).
+  if (row.aantalProducten == null) row.aantalProducten = row.aantal || 1;
+  if (row.aantalColliPerProduct == null) row.aantalColliPerProduct = 1;
   wrap.innerHTML = `
     <input type="checkbox" class="check" ${row.print ? "checked" : ""} aria-label="Printen">
     <div>
@@ -929,10 +957,11 @@ function rowElement(row, idx) {
       <div class="code-hint">Supplier: <b>${escape(row.supplierCode || "—")}</b></div>
     </div>
     <div>
-      <input type="text" class="in-po" value="${escapeAttr(row.po)}" placeholder="PO-nummer">
-      <div class="code-hint">Fonteyn-code: <input type="text" class="in-fonteyn" value="${escapeAttr(row.fonteynCode)}" placeholder="bv. 770873" style="width: 110px; padding: 2px 6px; font-size: 12px;"></div>
+      <div class="code-hint">Fonteyn-code:</div>
+      <input type="text" class="in-fonteyn" value="${escapeAttr(row.fonteynCode)}" placeholder="bv. 770873" style="width: 100%; padding: 4px 8px; font-size: 13px;">
     </div>
-    <input type="number" class="in-aantal" min="1" max="999" value="${row.aantal || 1}">
+    <input type="number" class="in-producten" min="1" max="999" value="${row.aantalProducten}" title="Aantal producten (uit de order)">
+    <input type="number" class="in-colliper" min="1" max="20" value="${row.aantalColliPerProduct}" title="Aantal colli per product (bv. 2 voor een tafel die in blad+poot wordt geleverd)">
     <button type="button" class="mini secondary previewOne">Voorbeeld</button>
     <button type="button" class="mini secondary removeOne">Verwijderen</button>
   `;
@@ -942,15 +971,19 @@ function rowElement(row, idx) {
     updateCount();
   });
   wrap.querySelector(".in-desc").addEventListener("input", (e) => row.description = e.target.value);
-  wrap.querySelector(".in-po").addEventListener("input", (e) => row.po = e.target.value);
   wrap.querySelector(".in-fonteyn").addEventListener("input", (e) => {
     row.fonteynCode = e.target.value.trim();
     wrap.classList.toggle("pending", !row.fonteynCode);
     updateCount();
   });
-  wrap.querySelector(".in-aantal").addEventListener("input", (e) => {
+  wrap.querySelector(".in-producten").addEventListener("input", (e) => {
     const n = parseInt(e.target.value, 10);
-    row.aantal = Number.isFinite(n) && n > 0 ? n : 1;
+    row.aantalProducten = Number.isFinite(n) && n > 0 ? n : 1;
+    updateCount();
+  });
+  wrap.querySelector(".in-colliper").addEventListener("input", (e) => {
+    const n = parseInt(e.target.value, 10);
+    row.aantalColliPerProduct = Number.isFinite(n) && n > 0 ? n : 1;
     updateCount();
   });
   wrap.querySelector(".removeOne").addEventListener("click", () => {
@@ -967,16 +1000,18 @@ function rowElement(row, idx) {
 }
 
 function updateCount() {
+  // Aantal labels per regel = producten × colli-per-product
+  const labelsForRow = (r) => Math.max(1, (r.aantalProducten || r.aantal || 1)) * Math.max(1, (r.aantalColliPerProduct || 1));
   // Voor "Voorbeeld tonen": elke aangevinkte regel mag — ook zonder Fonteyn-code.
   // De user moet 'm juist kunnen zien om te weten wat er nog handmatig bij moet.
   const nSelected = state.rows
     .filter(r => r.print)
-    .reduce((sum, r) => sum + (r.aantal || 1), 0);
+    .reduce((sum, r) => sum + labelsForRow(r), 0);
   // Voor "Alle labels printen": alleen regels mét Fonteyn-code tellen mee
   // (zonder code is de barcode waardeloos).
   const nPrintable = state.rows
     .filter(r => r.print && r.fonteynCode)
-    .reduce((sum, r) => sum + (r.aantal || 1), 0);
+    .reduce((sum, r) => sum + labelsForRow(r), 0);
   $("selectionCount").textContent = `${nSelected} labels geselecteerd`;
   $("printCount").textContent = `${nPrintable} labels klaar voor print`;
   $("previewBtn").disabled = nSelected === 0;
@@ -1010,16 +1045,19 @@ function showPreview(rows) {
 
   let labelCount = 0;
   for (const row of rows) {
-    const total = Math.max(1, row.aantal || 1);
-    for (let i = 1; i <= total; i++) {
-      const frame = document.createElement("div");
-      frame.className = "label-frame";
-      const scale = document.createElement("div");
-      scale.className = "scale";
-      scale.appendChild(buildLabel(row, i, total));
-      frame.appendChild(scale);
-      grid.appendChild(frame);
-      labelCount++;
+    const productTotal = Math.max(1, row.aantalProducten || row.aantal || 1);
+    const colliTotal   = Math.max(1, row.aantalColliPerProduct || 1);
+    for (let p = 1; p <= productTotal; p++) {
+      for (let c = 1; c <= colliTotal; c++) {
+        const frame = document.createElement("div");
+        frame.className = "label-frame";
+        const scale = document.createElement("div");
+        scale.className = "scale";
+        scale.appendChild(buildLabel(row, c, colliTotal, p, productTotal));
+        frame.appendChild(scale);
+        grid.appendChild(frame);
+        labelCount++;
+      }
     }
   }
 
@@ -1030,7 +1068,7 @@ function showPreview(rows) {
 /* ═══════════════════════════════════════════════════════════════
    Één label bouwen als HTML-element
    ═══════════════════════════════════════════════════════════════ */
-function buildLabel(row, colliIdx, colliTotal) {
+function buildLabel(row, colliIdx, colliTotal, productIdx, productTotal) {
   const label = document.createElement("div");
   label.className = "label";
 
@@ -1051,11 +1089,15 @@ function buildLabel(row, colliIdx, colliTotal) {
 
   const fields = document.createElement("div");
   fields.className = "fields";
+  // PO bewust weggelaten — dat is een intern ordernummer en hoort niet op
+  // het magazijn-label. Wel Fonteyn + Supplier-codes + boxnr.
+  const productLine = (typeof productIdx === "number" && productTotal > 1)
+    ? `Product ${productIdx} van ${productTotal} · Colli ${colliIdx} van ${colliTotal}`
+    : `Colli ${colliIdx} van ${colliTotal}`;
   const rows2 = [
     ["Art.nr. Fonteyn:", row.fonteynCode || "—"],
     ["Art.nr. Supplier:", row.supplierCode || "—"],
-    ["PO:", row.po || "—"],
-    ["Boxnr.:", `Colli ${colliIdx} van ${colliTotal}`]
+    ["Boxnr.:", productLine]
   ];
   for (const [k, v] of rows2) {
     const kEl = document.createElement("div");
@@ -1117,9 +1159,12 @@ function doPrint() {
   const area = $("printArea");
   area.innerHTML = "";
   for (const row of toPrint) {
-    const total = Math.max(1, row.aantal || 1);
-    for (let i = 1; i <= total; i++) {
-      area.appendChild(buildLabel(row, i, total));
+    const productTotal = Math.max(1, row.aantalProducten || row.aantal || 1);
+    const colliTotal   = Math.max(1, row.aantalColliPerProduct || 1);
+    for (let p = 1; p <= productTotal; p++) {
+      for (let c = 1; c <= colliTotal; c++) {
+        area.appendChild(buildLabel(row, c, colliTotal, p, productTotal));
+      }
     }
   }
   // Laat JsBarcode renderen voordat we printen
