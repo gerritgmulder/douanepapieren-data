@@ -220,7 +220,13 @@
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 6mm 4mm;
   }
-  .label .green img.logo { width: 32mm; height: auto; display: block; }
+  .label .green img.logo {
+    width: 32mm; height: auto; display: block;
+    /* Voorkom dat de printer rond logo-randen ga halftonen → puntjes
+       in het wit. Werkt op edges van de PNG, geen layout-impact. */
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
 
   /* ── Rechts: content ── */
   .label .content {
@@ -244,7 +250,12 @@
     display: flex; justify-content: flex-end; align-items: flex-end;
     padding-top: 2mm;
   }
-  .label .barcode-wrap svg { max-width: 70mm; height: 18mm; }
+  .label .barcode-wrap svg {
+    max-width: 70mm; height: 18mm;
+    /* Crisp edges op de barcode-strepen — sommige printers halftonen
+       anders de bar-randen, wat als puntjes in het wit zichtbaar wordt. */
+    shape-rendering: crispEdges;
+  }
 
   /* ─── Print-regels ───────────────────────────────────────── */
   @media print {
@@ -1146,8 +1157,27 @@ function doPrint() {
     }
   }
   // Laat JsBarcode renderen voordat we printen
-  setTimeout(() => {
-    window.print();
+  setTimeout(async () => {
+    // Probeer Electron silent-print via de preload-bridge: skipt de
+    // systeem-dialoog en stuurt direct naar de ZDesigner-printer in
+    // landscape. Bridge bestaat alleen in nieuwere bundled-shells; valt
+    // anders gewoon terug op window.print() (= oude gedrag met dialoog).
+    if (window.fonteynPrint?.isAvailable) {
+      try {
+        const r = await window.fonteynPrint.silentPrintLabels({ printerSubstring: "zdesigner" });
+        if (!r?.ok) {
+          console.warn("[labels] silent-print faalde, val terug op systeem-dialog:", r?.error);
+          window.print();
+        }
+      } catch (e) {
+        console.warn("[labels] silent-print exception, val terug op systeem-dialog:", e.message);
+        window.print();
+      }
+    } else {
+      // Geen bridge (oude bundled shell of in browser-context) — gewoon
+      // de standaard print-dialoog tonen.
+      window.print();
+    }
   }, 300);
 }
 

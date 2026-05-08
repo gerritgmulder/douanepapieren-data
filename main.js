@@ -11,7 +11,7 @@
 // 3. Start de helper-server (server/index.js) op 127.0.0.1:3737.
 // 4. Opent één venster dat de shell (dashboard.html) laadt.
 
-import { app, BrowserWindow, Menu, shell, dialog } from "electron";
+import { app, BrowserWindow, Menu, shell, dialog, ipcMain } from "electron";
 import pkg from "electron-updater";
 const { autoUpdater } = pkg;
 import path from "node:path";
@@ -286,6 +286,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, "preload.js"),
       // Mac-trackpad: laat Chromium de native overscroll-back/forward
       // animatie tonen + rubber-band scroll-effect.
       scrollBounce: true,
@@ -373,6 +374,61 @@ function setupAutoUpdater() {
     autoUpdater.checkForUpdates().catch(() => {});
   }, 60 * 60 * 1000);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// IPC: silent-print voor labels.html
+// ═══════════════════════════════════════════════════════════════
+// Het label-printer-werk in labels.html roept "Alle labels printen" en
+// dat triggert standaard `window.print()` → systeem-dialoog → user kiest
+// printer + landscape. Onhandig: de printer is altijd "ZDesigner" en de
+// orientatie is altijd landscape, dus we laten dat hier door Electron
+// rechtstreeks doen. We zoeken een printer wiens naam "zdesigner" bevat
+// (case-insensitive); is die er niet, valt 't terug op de default-printer.
+ipcMain.handle("fonteyn:list-printers", async (event) => {
+  try {
+    const wc = event.sender;
+    if (typeof wc.getPrintersAsync === "function") {
+      return await wc.getPrintersAsync();
+    }
+    // Fallback voor oudere Electron-versies (sync API):
+    return wc.getPrinters ? wc.getPrinters() : [];
+  } catch (e) {
+    console.warn("[print] list-printers faalde:", e.message);
+    return [];
+  }
+});
+
+ipcMain.handle("fonteyn:print-labels", async (event, opts = {}) => {
+  const wc = event.sender;
+  const wantedSubstring = (opts.printerSubstring || "zdesigner").toLowerCase();
+  // Zoek de juiste printer — eerst exacte match op gewenste substring,
+  // anders gewoon de system-default.
+  let deviceName = undefined;
+  try {
+    const printers = (typeof wc.getPrintersAsync === "function")
+      ? await wc.getPrintersAsync()
+      : (wc.getPrinters ? wc.getPrinters() : []);
+    const match = printers.find(p => (p.name || "").toLowerCase().includes(wantedSubstring));
+    if (match) deviceName = match.name;
+  } catch (e) {
+    console.warn("[print] kon printers niet inventariseren:", e.message);
+  }
+  // Print silently met landscape + A6
+  return new Promise((resolve) => {
+    wc.print({
+      silent: true,
+      printBackground: true,
+      deviceName,
+      landscape: true,
+      pageSize: "A6",
+      margins: { marginType: "none" },
+      copies: 1,
+    }, (success, errorType) => {
+      if (!success) console.warn("[print] mislukt:", errorType);
+      resolve({ ok: !!success, deviceName: deviceName || null, error: success ? null : errorType });
+    });
+  });
+});
 
 app.whenReady().then(async () => {
   try {
