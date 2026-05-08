@@ -988,6 +988,153 @@ app.post("/api/eikensingel/sync", requireAuth, requireEikensingelFull, async (re
 setTimeout(() => { syncEikensingelIcal().catch(e => console.warn("[ical-sync] init fail:", e.message)); }, 5000);
 setInterval(() => { syncEikensingelIcal().catch(e => console.warn("[ical-sync] periodic fail:", e.message)); }, 15 * 60 * 1000);
 
+// ════════════════════════════════════════════════════════════════════
+// Personeel — beheer van buitenlandse medewerkers (Roemenen + Kroaten)
+// die in Eikensingel-huizen verblijven volgens 2-weken-aan/2-weken-af
+// rotatie. Vervangt de "Roemenen en Kroaten.xlsx" file.
+// ════════════════════════════════════════════════════════════════════
+const PERSONEEL_DIR = process.env.PERSONEEL_DIR || path.join(PARENT_DIR, ".personeel-data");
+fs.mkdirSync(PERSONEEL_DIR, { recursive: true });
+const PERSONEEL_FILE = path.join(PERSONEEL_DIR, "state.json");
+
+function defaultPersoneelState() {
+  return {
+    employees: [],
+    rooms: [
+      // Eikensingel huisje 1 — 4 personen (Kelder 1..4)
+      { id: "h1k1", huisje: "Eikensingel huisje 1", kamer: "Kelder 1", capaciteit: 1, alleenDames: false, sortOrder: 1 },
+      { id: "h1k2", huisje: "Eikensingel huisje 1", kamer: "Kelder 2", capaciteit: 1, alleenDames: false, sortOrder: 2 },
+      { id: "h1k3", huisje: "Eikensingel huisje 1", kamer: "Kelder 3", capaciteit: 1, alleenDames: false, sortOrder: 3 },
+      { id: "h1k4", huisje: "Eikensingel huisje 1", kamer: "Kelder 4", capaciteit: 1, alleenDames: false, sortOrder: 4 },
+      { id: "h1k5", huisje: "Eikensingel huisje 1", kamer: "Kelder 5", capaciteit: 1, alleenDames: false, sortOrder: 5 },
+      // Eikensingel huisje 2 — Werknemers Paviljoen (WP1..3)
+      { id: "h2k1", huisje: "Eikensingel huisje 2", kamer: "WP 1", capaciteit: 1, alleenDames: false, sortOrder: 6 },
+      { id: "h2k2", huisje: "Eikensingel huisje 2", kamer: "WP 2", capaciteit: 1, alleenDames: false, sortOrder: 7 },
+      { id: "h2k3", huisje: "Eikensingel huisje 2", kamer: "WP 3", capaciteit: 1, alleenDames: false, sortOrder: 8 },
+      // Receptie — 2 kamers, alleen voor dames
+      { id: "rec1", huisje: "Receptie", kamer: "Kamer 1", capaciteit: 1, alleenDames: true, sortOrder: 9 },
+      { id: "rec2", huisje: "Receptie", kamer: "Kamer 2", capaciteit: 1, alleenDames: true, sortOrder: 10 },
+    ],
+    assignments: [],
+    lastUpdated: null,
+  };
+}
+
+function loadPersoneelState() {
+  try {
+    if (!fs.existsSync(PERSONEEL_FILE)) {
+      const def = defaultPersoneelState();
+      fs.writeFileSync(PERSONEEL_FILE, JSON.stringify(def, null, 2));
+      return def;
+    }
+    return JSON.parse(fs.readFileSync(PERSONEEL_FILE, "utf-8"));
+  } catch (e) {
+    console.warn("[personeel] kon niet lezen:", e.message);
+    return defaultPersoneelState();
+  }
+}
+
+function savePersoneelState(data) {
+  data.lastUpdated = new Date().toISOString();
+  const tmp = PERSONEEL_FILE + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, PERSONEEL_FILE);
+}
+
+// Toegang Personeel — finance/HR (Chantal + Manon) + admins.
+const PERSONEEL_FULL = new Set([
+  "chantal@fonteyn.nl", "chantal", "fonteyn.chantal",
+  "manon@fonteyn.nl",   "manon",   "fonteyn.manon",
+  "gerrit@fonteyn.nl",  "gerrit",
+  "dolf@fonteyn.nl",    "fonteyn.dolf",
+  "don@fonteyn.nl",     "fonteyn.don",
+  "arno@fonteyn.nl",    "fonteyn.arno",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+function personeelRole(req) {
+  const u = (req.auth?.username || "").toLowerCase();
+  return PERSONEEL_FULL.has(u) ? "full" : null;
+}
+function requirePersoneel(req, res, next) {
+  if (!personeelRole(req)) return res.status(403).json({ error: "geen toegang tot Personeel" });
+  next();
+}
+
+app.get("/api/personeel/role", requireAuth, (req, res) => {
+  res.json({ role: personeelRole(req) || "none" });
+});
+
+app.get("/api/personeel", requireAuth, requirePersoneel, (req, res) => {
+  res.json(loadPersoneelState());
+});
+
+// PUT vervangt de hele state in één keer. Sanitizen om geen onverwachte
+// velden door te laten. Schrijfconflict-risk is laag (1-2 admins).
+app.put("/api/personeel", requireAuth, requirePersoneel, (req, res) => {
+  const incoming = req.body || {};
+  const state = loadPersoneelState();
+  if (Array.isArray(incoming.employees)) state.employees = incoming.employees.map(sanitizeEmployee).filter(Boolean);
+  if (Array.isArray(incoming.rooms))     state.rooms     = incoming.rooms.map(sanitizeRoom).filter(Boolean);
+  if (Array.isArray(incoming.assignments)) state.assignments = incoming.assignments.map(sanitizeAssignment).filter(Boolean);
+  try {
+    savePersoneelState(state);
+    res.json({ ok: true, state });
+  } catch (e) {
+    console.error("[personeel] save mislukt:", e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+function sanitizeEmployee(e) {
+  if (!e || typeof e !== "object") return null;
+  const sl = (s, n = 200) => String(s || "").slice(0, n);
+  const dateOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || "")) ? s : "";
+  return {
+    id: sl(e.id, 50) || `p_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    voornaam: sl(e.voornaam, 80),
+    achternaam: sl(e.achternaam, 120),
+    geboortedatum: dateOk(e.geboortedatum),
+    idKaart: sl(e.idKaart, 50),
+    email: sl(e.email, 200),
+    telefoon: sl(e.telefoon, 50),
+    vertrekvliegveld: sl(e.vertrekvliegveld, 80),
+    iban: sl(e.iban, 40).toUpperCase(),
+    bsn: sl(e.bsn, 20),
+    nationaliteit: ["RO", "HR", "PL", "NL", "OTHER"].includes(e.nationaliteit) ? e.nationaliteit : "RO",
+    geslacht: ["M", "V", "X"].includes(e.geslacht) ? e.geslacht : "M",
+    rol: ["medewerker", "schoonmaak", "anders"].includes(e.rol) ? e.rol : "medewerker",
+    actief: Boolean(e.actief),
+    notities: sl(e.notities, 1000),
+  };
+}
+function sanitizeRoom(r) {
+  if (!r || typeof r !== "object") return null;
+  const sl = (s, n = 100) => String(s || "").slice(0, n);
+  return {
+    id: sl(r.id, 30) || `r_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    huisje: sl(r.huisje, 100),
+    kamer: sl(r.kamer, 100),
+    capaciteit: Number.isFinite(+r.capaciteit) && +r.capaciteit > 0 ? +r.capaciteit : 1,
+    alleenDames: Boolean(r.alleenDames),
+    sortOrder: Number.isFinite(+r.sortOrder) ? +r.sortOrder : 99,
+  };
+}
+function sanitizeAssignment(a) {
+  if (!a || typeof a !== "object") return null;
+  const sl = (s, n = 100) => String(s || "").slice(0, n);
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRe.test(String(a.vanDatum || ""))) return null;
+  if (!dateRe.test(String(a.totDatum || ""))) return null;
+  return {
+    id: sl(a.id, 50) || `a_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    employeeId: sl(a.employeeId, 50),
+    roomId: sl(a.roomId, 30),
+    vanDatum: a.vanDatum,
+    totDatum: a.totDatum,
+    notities: sl(a.notities, 500),
+  };
+}
+
 /**
  * ═══════════════════════════════════════════════════════════════════════
  * Generieke Logic4-proxy.

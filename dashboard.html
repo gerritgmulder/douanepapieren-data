@@ -281,12 +281,11 @@
         <p>Reorganisatie-plan voor het magazijn volgens de 5S-methodiek.</p>
       </div>
 
-      <div class="tile disabled" data-module="personeel">
-        <div class="soon">Binnenkort</div>
+      <a href="personeel.html" class="tile hidden" id="tilePersoneel">
         <div class="icon">👥</div>
         <h3>Personeel</h3>
-        <p>Overzicht van medewerkers, wie er aan het werk is en hoe de bungalows bezet zijn.</p>
-      </div>
+        <p>Buitenlandse medewerkers — gegevens, kamerverdeling Eikensingel en woensdag-vluchten in één overzicht.</p>
+      </a>
 
       <!-- Orderstatus — alleen zichtbaar voor gerrit@, don@, arno@, dolf@. -->
       <a href="order-status.html" class="tile hidden" id="tileOrderStatus">
@@ -419,6 +418,19 @@ const LOGISTIEK_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Welke logins mogen de Personeel-tegel zien.
+// Chantal + Manon zijn de dagelijkse beheerders; admins ook toegang.
+// Server (server/index.js → PERSONEEL_FULL) doet dezelfde check.
+const PERSONEEL_EMAILS = new Set([
+  "chantal@fonteyn.nl",    "chantal", "fonteyn.chantal",
+  "manon@fonteyn.nl",      "manon",   "fonteyn.manon",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "don@fonteyn.nl",        "fonteyn.don",
+  "arno@fonteyn.nl",       "fonteyn.arno",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Welke logins mogen de Bankkoppeling-tegel zien.
 // Finance-team (Osman/Rowan/Rico/Reinier) doet dit dagelijks; admins
 // Dolf/Don/Arno/Gerrit + bot ook toegang voor reviews.
@@ -491,6 +503,8 @@ function showDashboard(email) {
   el("tileOrderStatus").classList.toggle("hidden", !ORDERSTATUS_EMAILS.has(lc));
   // Bankkoppeling-tegel — finance-team + admins
   el("tileBankkoppeling").classList.toggle("hidden", !BANKKOPPELING_EMAILS.has(lc));
+  // Personeel-tegel — Chantal/Manon + admins
+  el("tilePersoneel").classList.toggle("hidden", !PERSONEEL_EMAILS.has(lc));
   // Eikensingel-tegel alleen tonen voor Fransje + team + Danique
   el("tileEikensingel").classList.toggle("hidden", !EIKENSINGEL_EMAILS.has(lc));
 }

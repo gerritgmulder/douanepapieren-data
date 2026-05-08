@@ -56,6 +56,10 @@ const BUNDLED_DEFAULTS = [
   { name: "packaging-database.json", path: path.join(__dirname, "packaging-database.json") },
   { name: "transport.html",         path: path.join(__dirname, "transport.html") },
   { name: "eikensingel.html",       path: path.join(__dirname, "eikensingel.html") },
+  { name: "prijslijst.html",        path: path.join(__dirname, "prijslijst.html") },
+  { name: "passion-logo.png",       path: path.join(__dirname, "passion-logo.png") },
+  { name: "bankkoppeling.html",     path: path.join(__dirname, "bankkoppeling.html") },
+  { name: "personeel.html",         path: path.join(__dirname, "personeel.html") },
 ];
 
 let liveDir = null;
@@ -250,6 +254,14 @@ async function startHelper() {
   await fs.mkdir(eikensingelDir, { recursive: true });
   process.env.EIKENSINGEL_DIR = eikensingelDir;
   console.log(`[eikensingel] data-dir: ${eikensingelDir}`);
+  // Personeel-state (medewerkers, kamers, toewijzingen — vervangt het
+  // 'Roemenen en Kroaten.xlsx' bestand).
+  const personeelDir = app.isPackaged
+    ? path.join(app.getPath("userData"), "personeel")
+    : path.join(__dirname, ".personeel-data");
+  await fs.mkdir(personeelDir, { recursive: true });
+  process.env.PERSONEEL_DIR = personeelDir;
+  console.log(`[personeel] data-dir: ${personeelDir}`);
   const helperPath = pathToFileURL(path.join(__dirname, "server", "index.js")).href;
   await import(helperPath);
 }

@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>Fonteyn — Personeel</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --fonteyn-green:      #144734;
+  --fonteyn-green-dark: #0d3325;
+  --fonteyn-lime:       #8bc53f;
+  --fonteyn-lime-dark:  #72a531;
+  --fonteyn-cream:      #fff9ae;
+  --ink:                #1d1d1d;
+  --muted:              #6b7280;
+  --border:             #e0e0d8;
+  --bg:                 #f5f4ef;
+  --card:               #ffffff;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; font-family: 'Montserrat', system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+header.hdr {
+  background: var(--fonteyn-green);
+  color: #fff;
+  padding: 14px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+header .brand { display: flex; align-items: center; gap: 16px; }
+header .back { color: #fff; text-decoration: none; font-size: 13px; padding: 5px 10px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px; }
+header .back:hover { background: rgba(255,255,255,0.1); }
+header img.logo { height: 38px; }
+header h1 { font-size: 18px; font-weight: 600; margin: 0; }
+header .user { font-size: 13px; display: flex; align-items: center; gap: 12px; }
+header .logout { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: inherit; }
+header .logout:hover { background: rgba(255,255,255,0.1); }
+main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+.tabs {
+  display: flex; gap: 4px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 18px;
+}
+.tab {
+  padding: 10px 18px;
+  background: transparent;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  font: inherit; font-weight: 600; font-size: 14px;
+  cursor: pointer;
+  color: var(--muted);
+  margin-bottom: -2px;
+}
+.tab:hover { color: var(--ink); }
+.tab.active { color: var(--fonteyn-green); border-bottom-color: var(--fonteyn-green); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  margin-bottom: 14px;
+}
+.card h2 { font-size: 15px; margin: 0 0 12px; color: var(--fonteyn-green); font-weight: 700; }
+.row-flex { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.muted { color: var(--muted); font-size: 12px; }
+.cta {
+  background: var(--fonteyn-lime); color: #fff; border: 0;
+  padding: 9px 16px; border-radius: 7px;
+  font-weight: 600; cursor: pointer; font-size: 13px; font-family: inherit;
+}
+.cta:hover { background: var(--fonteyn-lime-dark); }
+.cta:disabled { opacity: 0.5; cursor: not-allowed; }
+.cta.secondary { background: #fff; color: var(--ink); border: 1px solid var(--border); }
+.cta.secondary:hover { background: #fafaf8; }
+.cta.danger { background: #dc2626; }
+.cta.danger:hover { background: #991b1b; }
+.cta.small { padding: 4px 10px; font-size: 12px; }
+.status {
+  margin: 10px 0; padding: 8px 12px; border-radius: 7px; font-size: 12px;
+}
+.status.info { background: #eff6ff; color: #1e3a8a; border: 1px solid #bfdbfe; }
+.status.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+.status.ok { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.hidden { display: none !important; }
+
+/* Medewerkers-tabel */
+table.emp { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.emp th, table.emp td {
+  text-align: left; padding: 7px 8px; border-bottom: 1px solid #efefe8;
+  vertical-align: middle;
+}
+table.emp th {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted); background: #fafaf8;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+table.emp tr.inactive td { opacity: 0.45; }
+table.emp tr:hover td { background: #fafaf8; }
+table.emp input, table.emp select {
+  width: 100%; padding: 4px 6px;
+  border: 1px solid transparent; border-radius: 4px;
+  font: inherit; font-size: 13px; background: transparent;
+}
+table.emp input:focus, table.emp select:focus {
+  outline: none; border-color: var(--fonteyn-green); background: #fff;
+}
+table.emp input.short { max-width: 110px; }
+.flag-badge {
+  font-size: 10px; padding: 1px 6px; border-radius: 3px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.flag-badge.ro { background: #fee2e2; color: #991b1b; }
+.flag-badge.hr { background: #dbeafe; color: #1e3a8a; }
+.flag-badge.pl { background: #fef3c7; color: #92400e; }
+.flag-badge.nl { background: #d1fae5; color: #065f46; }
+.flag-badge.cleaner { background: #ede9fe; color: #5b21b6; }
+
+/* Kamerverdeling — grid van kamers */
+.rooms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.room-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  background: #fff;
+}
+.room-card .room-title {
+  font-weight: 600; font-size: 13px; color: var(--fonteyn-green);
+  margin-bottom: 4px;
+}
+.room-card .room-house {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.04em; margin-bottom: 8px;
+}
+.room-card .room-occupant {
+  font-size: 14px; font-weight: 600;
+  margin-bottom: 4px;
+}
+.room-card .room-occupant.empty { color: var(--muted); font-weight: 400; font-style: italic; }
+.room-card .room-period { font-size: 11px; color: var(--muted); }
+.room-card.dames {
+  background: linear-gradient(0deg, #fce7f3 0%, #fff 60%);
+  border-color: #fbcfe8;
+}
+
+/* Plannings-tabel */
+table.plans { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.plans th, table.plans td {
+  text-align: left; padding: 7px 8px; border-bottom: 1px solid #efefe8;
+}
+table.plans th {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--muted); background: #fafaf8;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+/* Vluchten woensdag */
+.wed-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+.wed-card .date { font-weight: 700; color: var(--fonteyn-green); font-size: 14px; }
+.wed-card .sub { font-size: 12px; color: var(--muted); margin-top: 2px; margin-bottom: 8px; }
+.wed-card ul { margin: 0; padding: 0; list-style: none; }
+.wed-card li { padding: 4px 0; font-size: 13px; }
+.wed-card li.heen { color: #065f46; }
+.wed-card li.terug { color: #991b1b; }
+.wed-card .arrow { font-weight: 600; margin-right: 6px; }
+
+/* Form-grid */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.form-grid label {
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 11px; color: var(--muted); font-weight: 500;
+}
+.form-grid input, .form-grid select {
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: 5px;
+  font: inherit; font-size: 13px;
+}
+.form-grid input:focus, .form-grid select:focus {
+  outline: none; border-color: var(--fonteyn-green);
+}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="brand">
+    <a href="dashboard.html" class="back">← Dashboard</a>
+    <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+    <h1>Personeel</h1>
+  </div>
+  <div class="user">
+    <span id="userEmail">—</span>
+    <button class="logout" id="hdr-logout">Uitloggen</button>
+  </div>
+</header>
+
+<main>
+  <div class="tabs">
+    <button class="tab active" data-tab="medewerkers">Medewerkers</button>
+    <button class="tab" data-tab="verdeling">Kamerverdeling</button>
+    <button class="tab" data-tab="vluchten">Vluchten woensdag</button>
+  </div>
+  <div id="globalStatus"></div>
+
+  <!-- ─── TAB 1: Medewerkers ─── -->
+  <div class="tab-pane active" id="pane-medewerkers">
+    <div class="card">
+      <div class="row-flex" style="justify-content:space-between;">
+        <h2>Medewerkers <span class="muted" id="empCount" style="font-weight:400;"></span></h2>
+        <div class="row-flex">
+          <button class="cta secondary small" id="importExcelBtn">📥 Excel-data importeren</button>
+          <button class="cta" id="addEmpBtn">➕ Nieuwe medewerker</button>
+        </div>
+      </div>
+      <div class="muted" style="margin-bottom:10px;">
+        Klik in een veld om aan te passen. Wijzigingen worden automatisch opgeslagen.
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="emp">
+          <thead>
+            <tr>
+              <th>Voornaam</th>
+              <th>Achternaam</th>
+              <th>Geslacht</th>
+              <th>Land</th>
+              <th>Geboortedatum</th>
+              <th>ID-kaart</th>
+              <th>Email</th>
+              <th>Telefoon</th>
+              <th>Vertrekvliegveld</th>
+              <th>IBAN</th>
+              <th>BSN</th>
+              <th>Rol</th>
+              <th>Actief</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="empBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── TAB 2: Kamerverdeling ─── -->
+  <div class="tab-pane" id="pane-verdeling">
+    <div class="card">
+      <h2>Kamerverdeling vandaag — <span id="todayLabel" class="muted" style="font-weight:400;"></span></h2>
+      <div class="rooms-grid" id="roomsGrid"></div>
+    </div>
+
+    <div class="card">
+      <h2>Toewijzing toevoegen / wijzigen</h2>
+      <div class="form-grid" style="grid-template-columns: 2fr 2fr 1fr 1fr 2fr auto;">
+        <label>Medewerker
+          <select id="planEmp"></select>
+        </label>
+        <label>Kamer
+          <select id="planRoom"></select>
+        </label>
+        <label>Van datum
+          <input type="date" id="planFrom">
+        </label>
+        <label>Tot datum
+          <input type="date" id="planTo">
+        </label>
+        <label>Notities (optioneel)
+          <input type="text" id="planNote" placeholder="bv. komt aan met vlucht…">
+        </label>
+        <label style="justify-content:flex-end;">
+          <span style="visibility:hidden;">.</span>
+          <button class="cta" id="planAddBtn">Opslaan</button>
+        </label>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Alle toewijzingen <span class="muted" id="planCount" style="font-weight:400;"></span></h2>
+      <div style="overflow-x:auto;">
+        <table class="plans">
+          <thead>
+            <tr>
+              <th>Medewerker</th>
+              <th>Kamer</th>
+              <th>Van</th>
+              <th>Tot</th>
+              <th>Status</th>
+              <th>Notities</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="planBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── TAB 3: Vluchten woensdag ─── -->
+  <div class="tab-pane" id="pane-vluchten">
+    <div class="card">
+      <h2>Vluchten woensdag — komende 4 woensdagen</h2>
+      <div class="muted" style="margin-bottom:14px;">
+        Per medewerker met een toewijzing die op een woensdag eindigt of begint:
+        we tonen wie er <b>opgehaald</b> moet worden van het vliegveld (heen-rit) en
+        wie er <b>weggebracht</b> moet worden (terug-rit). Het vertrekvliegveld komt
+        uit hun profiel onder Medewerkers.
+      </div>
+      <div id="wedList"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+// ─── Session-guard (gelijk aan andere modules) ───────────────────────
+const SESSION_KEY = "fp.session";
+const EMAIL_KEY   = "fp.email";
+
+(function sessionGuard() {
+  if (!localStorage.getItem(SESSION_KEY)) {
+    window.location.replace("dashboard.html");
+    throw new Error("Geen sessie");
+  }
+})();
+
+const _origFetch = window.fetch.bind(window);
+window.fetch = async function(input, init = {}) {
+  const url = typeof input === "string" ? input : input.url;
+  const isApi = url && url.startsWith("/api/");
+  if (isApi) {
+    const id = localStorage.getItem(SESSION_KEY);
+    init.headers = { ...(init.headers || {}), "Authorization": "Bearer " + id };
+  }
+  const r = await _origFetch(input, init);
+  if (isApi && r.status === 401) {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(EMAIL_KEY);
+    window.location.replace("dashboard.html");
+  }
+  return r;
+};
+
+const $ = (id) => document.getElementById(id);
+const escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+document.addEventListener("DOMContentLoaded", () => {
+  $("userEmail").textContent = localStorage.getItem(EMAIL_KEY) || "—";
+});
+$("hdr-logout").addEventListener("click", async () => {
+  try { await fetch("/api/logout", { method: "POST" }); } catch {}
+  localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY);
+  window.location.replace("dashboard.html");
+});
+
+const showStatus = (msg, kind = "info") => {
+  $("globalStatus").innerHTML = `<div class="status ${kind}">${msg}</div>`;
+  if (kind !== "error") setTimeout(() => { $("globalStatus").innerHTML = ""; }, 3500);
+};
+
+// ─── State ──────────────────────────────────────────────────────────
+const state = {
+  employees: [],
+  rooms: [],
+  assignments: [],
+  loaded: false,
+};
+
+// ─── Tab-switching ──────────────────────────────────────────────────
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".tab-pane").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    $("pane-" + t.dataset.tab).classList.add("active");
+    if (t.dataset.tab === "verdeling") renderVerdeling();
+    if (t.dataset.tab === "vluchten") renderVluchten();
+  });
+});
+
+// ─── Data load + save ───────────────────────────────────────────────
+async function loadState() {
+  const r = await fetch("/api/personeel");
+  if (r.status === 403) {
+    document.body.innerHTML = "<main style='padding:40px;text-align:center;'><h1>Geen toegang</h1><p>Vraag Gerrit om toegang tot deze module.</p><p><a href='dashboard.html'>Terug</a></p></main>";
+    return;
+  }
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const j = await r.json();
+  state.employees = j.employees || [];
+  state.rooms = j.rooms || [];
+  state.assignments = j.assignments || [];
+  state.loaded = true;
+  renderEmployees();
+}
+
+let _saveTimer = null;
+function saveStateDebounced() {
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(saveStateNow, 400);
+}
+async function saveStateNow() {
+  try {
+    const r = await fetch("/api/personeel", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        employees: state.employees,
+        rooms: state.rooms,
+        assignments: state.assignments,
+      }),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    showStatus("✓ Opgeslagen", "ok");
+  } catch (e) {
+    console.error(e);
+    showStatus("Opslaan mislukt: " + e.message, "error");
+  }
+}
+
+// ─── TAB 1: Medewerkers ─────────────────────────────────────────────
+function renderEmployees() {
+  const tbody = $("empBody");
+  tbody.innerHTML = "";
+  // Sorteer: actieven boven, daarbinnen alfabetisch op voornaam
+  const sorted = state.employees.slice().sort((a, b) => {
+    if (a.actief !== b.actief) return a.actief ? -1 : 1;
+    return (a.voornaam || "").localeCompare(b.voornaam || "");
+  });
+  for (const emp of sorted) {
+    tbody.appendChild(renderEmpRow(emp));
+  }
+  $("empCount").textContent = `(${state.employees.length} totaal, ${state.employees.filter(e => e.actief).length} actief)`;
+  refreshPlanDropdowns();
+}
+
+function renderEmpRow(emp) {
+  const tr = document.createElement("tr");
+  tr.classList.toggle("inactive", !emp.actief);
+  const inp = (field, val, type = "text") =>
+    `<input type="${type}" data-emp="${escapeHtml(emp.id)}" data-field="${field}" value="${escapeHtml(val ?? '')}">`;
+  const sel = (field, val, options) => {
+    const opts = options.map(([v, l]) => `<option value="${v}" ${val === v ? "selected" : ""}>${l}</option>`).join("");
+    return `<select data-emp="${escapeHtml(emp.id)}" data-field="${field}">${opts}</select>`;
+  };
+  tr.innerHTML = `
+    <td>${inp("voornaam", emp.voornaam)}</td>
+    <td>${inp("achternaam", emp.achternaam)}</td>
+    <td style="width:60px;">${sel("geslacht", emp.geslacht, [["M","M"],["V","V"],["X","X"]])}</td>
+    <td style="width:70px;">${sel("nationaliteit", emp.nationaliteit, [["RO","RO"],["HR","HR"],["PL","PL"],["NL","NL"],["OTHER","Anders"]])}</td>
+    <td style="width:130px;">${inp("geboortedatum", emp.geboortedatum, "date")}</td>
+    <td>${inp("idKaart", emp.idKaart)}</td>
+    <td>${inp("email", emp.email, "email")}</td>
+    <td>${inp("telefoon", emp.telefoon)}</td>
+    <td>${inp("vertrekvliegveld", emp.vertrekvliegveld)}</td>
+    <td>${inp("iban", emp.iban)}</td>
+    <td>${inp("bsn", emp.bsn)}</td>
+    <td style="width:120px;">${sel("rol", emp.rol, [["medewerker","Medewerker"],["schoonmaak","Schoonmaak"],["anders","Anders"]])}</td>
+    <td style="width:60px;text-align:center;">
+      <input type="checkbox" data-emp="${escapeHtml(emp.id)}" data-field="actief" ${emp.actief ? "checked" : ""}>
+    </td>
+    <td><button class="cta danger small" data-delete-emp="${escapeHtml(emp.id)}" title="Verwijder medewerker">×</button></td>
+  `;
+  tr.querySelectorAll("[data-emp][data-field]").forEach(el => {
+    el.addEventListener("change", () => {
+      const id = el.dataset.emp;
+      const field = el.dataset.field;
+      const e = state.employees.find(x => x.id === id);
+      if (!e) return;
+      let v = el.type === "checkbox" ? el.checked : el.value;
+      if (field === "iban" && typeof v === "string") v = v.toUpperCase();
+      e[field] = v;
+      if (field === "actief") tr.classList.toggle("inactive", !e.actief);
+      saveStateDebounced();
+    });
+  });
+  tr.querySelector("[data-delete-emp]").addEventListener("click", () => {
+    const id = tr.querySelector("[data-delete-emp]").dataset.deleteEmp;
+    const e = state.employees.find(x => x.id === id);
+    if (!confirm(`Medewerker "${e?.voornaam || ""} ${e?.achternaam || ""}" verwijderen?\n\nLet op: hun toewijzingen blijven staan in de geschiedenis maar zonder naam.`)) return;
+    state.employees = state.employees.filter(x => x.id !== id);
+    saveStateDebounced();
+    renderEmployees();
+  });
+  return tr;
+}
+
+$("addEmpBtn").addEventListener("click", () => {
+  const newId = `p_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
+  state.employees.push({
+    id: newId, voornaam: "", achternaam: "", geboortedatum: "", idKaart: "",
+    email: "", telefoon: "", vertrekvliegveld: "", iban: "", bsn: "",
+    nationaliteit: "RO", geslacht: "M", rol: "medewerker", actief: true, notities: "",
+  });
+  saveStateDebounced();
+  renderEmployees();
+  // Focus op voornaam-veld van nieuwe rij
+  setTimeout(() => {
+    const inp = document.querySelector(`input[data-emp="${newId}"][data-field="voornaam"]`);
+    if (inp) inp.focus();
+  }, 50);
+});
+
+$("importExcelBtn").addEventListener("click", async () => {
+  if (!confirm("Importeer alle 32 medewerkers uit het 'Roemenen en Kroaten.xlsx'-bestand?\n\nBestaande medewerkers worden niet gedupliceerd (op basis van voornaam). Verwacht ~15 actief en ~17 gestopt.")) return;
+  try {
+    const r = await fetch("personeel-import.json");
+    if (!r.ok) throw new Error("import-bestand niet gevonden");
+    const data = await r.json();
+    const existingNames = new Set(state.employees.map(e => (e.voornaam || "").toLowerCase()));
+    let added = 0;
+    for (const emp of data.employees || []) {
+      if (existingNames.has((emp.voornaam || "").toLowerCase())) continue;
+      state.employees.push({
+        id: `p_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+        voornaam: emp.voornaam || "",
+        achternaam: emp.achternaam || "",
+        geboortedatum: "",
+        idKaart: "",
+        email: "",
+        telefoon: "",
+        vertrekvliegveld: "",
+        iban: "",
+        bsn: "",
+        nationaliteit: emp.nationaliteit || "RO",
+        geslacht: emp.geslacht || "M",
+        rol: emp.rol || "medewerker",
+        actief: !!emp.actief,
+        notities: emp.notities || "",
+      });
+      added++;
+    }
+    saveStateDebounced();
+    renderEmployees();
+    showStatus(`✓ ${added} medewerkers geïmporteerd uit Excel.`, "ok");
+  } catch (e) {
+    showStatus("Import mislukt: " + e.message, "error");
+  }
+});
+
+// ─── TAB 2: Kamerverdeling + plannen ────────────────────────────────
+function refreshPlanDropdowns() {
+  const empSel = $("planEmp");
+  const roomSel = $("planRoom");
+  if (!empSel || !roomSel) return;
+  empSel.innerHTML = `<option value="">— kies medewerker —</option>` + state.employees
+    .filter(e => e.actief)
+    .sort((a, b) => (a.voornaam || "").localeCompare(b.voornaam || ""))
+    .map(e => `<option value="${escapeHtml(e.id)}">${escapeHtml((e.voornaam || "") + " " + (e.achternaam || "")).trim()}</option>`).join("");
+  roomSel.innerHTML = `<option value="">— kies kamer —</option>` + state.rooms
+    .slice().sort((a, b) => a.sortOrder - b.sortOrder)
+    .map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.huisje)} — ${escapeHtml(r.kamer)}${r.alleenDames ? " (alleen dames)" : ""}</option>`).join("");
+}
+
+function findEmployee(id) { return state.employees.find(e => e.id === id); }
+function findRoom(id) { return state.rooms.find(r => r.id === id); }
+
+function renderVerdeling() {
+  $("todayLabel").textContent = new Date().toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const today = todayISO();
+  // Per kamer: huidige bewoner = assignment waar today binnen [vanDatum, totDatum] valt
+  const grid = $("roomsGrid");
+  grid.innerHTML = "";
+  const sortedRooms = state.rooms.slice().sort((a, b) => a.sortOrder - b.sortOrder);
+  for (const room of sortedRooms) {
+    const current = state.assignments.find(a =>
+      a.roomId === room.id && a.vanDatum <= today && a.totDatum >= today
+    );
+    const empBlock = current ? findEmployee(current.employeeId) : null;
+    const card = document.createElement("div");
+    card.className = "room-card" + (room.alleenDames ? " dames" : "");
+    card.innerHTML = `
+      <div class="room-house">${escapeHtml(room.huisje)}</div>
+      <div class="room-title">${escapeHtml(room.kamer)}${room.alleenDames ? " · 👩 alleen dames" : ""}</div>
+      <div class="room-occupant ${empBlock ? '' : 'empty'}">
+        ${empBlock ? escapeHtml((empBlock.voornaam || "") + " " + (empBlock.achternaam || "")).trim() : "leeg"}
+      </div>
+      ${current ? `<div class="room-period">${escapeHtml(formatDateRange(current.vanDatum, current.totDatum))}</div>` : ""}
+    `;
+    grid.appendChild(card);
+  }
+  renderPlanList();
+}
+
+function formatDateRange(from, to) {
+  const f = (d) => d ? new Date(d).toLocaleDateString("nl-NL", { day: "numeric", month: "short" }) : "?";
+  return `${f(from)} → ${f(to)}`;
+}
+
+function renderPlanList() {
+  const tbody = $("planBody");
+  tbody.innerHTML = "";
+  const today = todayISO();
+  const sorted = state.assignments.slice().sort((a, b) => b.vanDatum.localeCompare(a.vanDatum));
+  for (const a of sorted) {
+    const e = findEmployee(a.employeeId);
+    const r = findRoom(a.roomId);
+    const status = a.totDatum < today ? "verleden" : a.vanDatum > today ? "komend" : "nu actief";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${e ? escapeHtml(((e.voornaam || "") + " " + (e.achternaam || "")).trim()) : `<i style="color:#999;">verwijderd</i>`}</td>
+      <td>${r ? `${escapeHtml(r.huisje)} — ${escapeHtml(r.kamer)}` : `<i style="color:#999;">verwijderd</i>`}</td>
+      <td>${escapeHtml(a.vanDatum)}</td>
+      <td>${escapeHtml(a.totDatum)}</td>
+      <td>${status === "nu actief" ? `<b style="color:var(--fonteyn-green);">${status}</b>` : `<span class="muted">${status}</span>`}</td>
+      <td>${escapeHtml(a.notities || "")}</td>
+      <td><button class="cta danger small" data-del-plan="${escapeHtml(a.id)}">×</button></td>
+    `;
+    tr.querySelector("[data-del-plan]").addEventListener("click", () => {
+      if (!confirm("Toewijzing verwijderen?")) return;
+      state.assignments = state.assignments.filter(x => x.id !== a.id);
+      saveStateDebounced();
+      renderVerdeling();
+    });
+    tbody.appendChild(tr);
+  }
+  $("planCount").textContent = `(${state.assignments.length})`;
+}
+
+$("planAddBtn").addEventListener("click", () => {
+  const empId = $("planEmp").value;
+  const roomId = $("planRoom").value;
+  const from = $("planFrom").value;
+  const to = $("planTo").value;
+  const note = $("planNote").value;
+  if (!empId) { showStatus("Kies een medewerker.", "error"); return; }
+  if (!roomId) { showStatus("Kies een kamer.", "error"); return; }
+  if (!from || !to) { showStatus("Vul beide datums in.", "error"); return; }
+  if (from > to) { showStatus("Van-datum is na tot-datum.", "error"); return; }
+  // Alleen-dames-check
+  const room = findRoom(roomId);
+  const emp = findEmployee(empId);
+  if (room?.alleenDames && emp?.geslacht !== "V") {
+    if (!confirm(`Deze kamer is gemarkeerd als 'alleen dames' maar ${emp?.voornaam || ""} is niet als V (vrouw) geregistreerd. Toch toewijzen?`)) return;
+  }
+  state.assignments.push({
+    id: `a_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,
+    employeeId: empId, roomId, vanDatum: from, totDatum: to, notities: note || "",
+  });
+  saveStateDebounced();
+  $("planEmp").value = "";
+  $("planRoom").value = "";
+  $("planFrom").value = "";
+  $("planTo").value = "";
+  $("planNote").value = "";
+  renderVerdeling();
+  showStatus("✓ Toewijzing toegevoegd.", "ok");
+});
+
+// ─── TAB 3: Vluchten woensdag ───────────────────────────────────────
+function nextWednesdays(count = 4) {
+  const out = [];
+  const d = new Date();
+  d.setHours(0,0,0,0);
+  // Verschuif naar eerstvolgende woensdag (incl. vandaag als 't woensdag is)
+  const offset = (3 - d.getDay() + 7) % 7;
+  d.setDate(d.getDate() + offset);
+  for (let i = 0; i < count; i++) {
+    out.push(d.toISOString().slice(0, 10));
+    d.setDate(d.getDate() + 7);
+  }
+  return out;
+}
+
+function renderVluchten() {
+  const list = $("wedList");
+  list.innerHTML = "";
+  const wednesdays = nextWednesdays(4);
+  for (const w of wednesdays) {
+    const card = document.createElement("div");
+    card.className = "wed-card";
+    // Heen-rit (ophalen vliegveld → Eikensingel) = mensen met assignment.vanDatum === w
+    const heen = state.assignments.filter(a => a.vanDatum === w);
+    // Terug-rit (Eikensingel → vliegveld) = mensen met assignment.totDatum === w
+    const terug = state.assignments.filter(a => a.totDatum === w);
+    const dateLabel = new Date(w).toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" });
+    const heenItems = heen.map(a => {
+      const e = findEmployee(a.employeeId);
+      const r = findRoom(a.roomId);
+      const af = e?.vertrekvliegveld || "—";
+      return `<li class="heen"><span class="arrow">✈→</span>
+        ${escapeHtml(((e?.voornaam || "") + " " + (e?.achternaam || "")).trim() || "Onbekend")}
+        — ophalen van <b>${escapeHtml(af)}</b> → ${escapeHtml(r?.kamer || "?")}</li>`;
+    }).join("");
+    const terugItems = terug.map(a => {
+      const e = findEmployee(a.employeeId);
+      const af = e?.vertrekvliegveld || "—";
+      return `<li class="terug"><span class="arrow">←✈</span>
+        ${escapeHtml(((e?.voornaam || "") + " " + (e?.achternaam || "")).trim() || "Onbekend")}
+        — wegbrengen naar <b>${escapeHtml(af)}</b></li>`;
+    }).join("");
+    card.innerHTML = `
+      <div class="date">Woensdag ${escapeHtml(dateLabel)}</div>
+      <div class="sub">${heen.length + terug.length} vluchtbewegingen</div>
+      <ul>
+        ${heenItems || '<li class="muted">Geen aankomsten.</li>'}
+        ${terugItems || '<li class="muted">Geen vertrekken.</li>'}
+      </ul>
+    `;
+    list.appendChild(card);
+  }
+}
+
+// ─── Boot ──────────────────────────────────────────────────────────
+loadState().catch(e => {
+  console.error(e);
+  showStatus("Kon Personeel-data niet laden: " + e.message, "error");
+});
+</script>
+</body>
+</html>
