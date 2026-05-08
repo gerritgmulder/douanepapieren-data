@@ -1,0 +1,9 @@
+name = "fonteyn-data-store"
+main = "src/worker.js"
+compatibility_date = "2024-09-01"
+
+# Sleutel-waarde-opslag in Cloudflare's KV. Per "bucket" (bv. "personeel")
+# één JSON-blob met de complete state van die module.
+kv_namespaces = [
+  { binding = "FONTEYN_DATA", id = "3e8fa24719f04406a167d19d7600d6fa" }
+]

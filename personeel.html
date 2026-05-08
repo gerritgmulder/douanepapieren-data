@@ -392,20 +392,66 @@ document.querySelectorAll(".tab").forEach(t => {
   });
 });
 
-// ─── Data load + save ───────────────────────────────────────────────
+// ─── Data load + save via Cloudflare Worker ────────────────────────
+//
+// We slaan de state niet meer op via de bundled-server (zou een nieuwe
+// .exe-installer vereisen voor elke gebruiker), maar via een Cloudflare
+// Worker met KV-storage. Werkt op alle installs zonder reinstall.
+// Worker-code staat in /data-worker; dit endpoint is publiek bereikbaar
+// maar afgeschermd met een shared secret die we hier mee-sturen.
+const DATA_STORE_URL = "https://fonteyn-data-store.g-mulder.workers.dev/data/personeel";
+const DATA_STORE_AUTH = "SV--QQW_xwIgrIdbjAozfgnxtloYitCZxEQ_S04gv2YupY4LY4KD7_QvfVkb8DGs";
+
+// Default-state als de KV nog leeg is bij eerste start
+const DEFAULT_ROOMS = [
+  { id: "h1k1", huisje: "Eikensingel huisje 1", kamer: "Kelder 1", capaciteit: 1, alleenDames: false, sortOrder: 1 },
+  { id: "h1k2", huisje: "Eikensingel huisje 1", kamer: "Kelder 2", capaciteit: 1, alleenDames: false, sortOrder: 2 },
+  { id: "h1k3", huisje: "Eikensingel huisje 1", kamer: "Kelder 3", capaciteit: 1, alleenDames: false, sortOrder: 3 },
+  { id: "h1k4", huisje: "Eikensingel huisje 1", kamer: "Kelder 4", capaciteit: 1, alleenDames: false, sortOrder: 4 },
+  { id: "h1k5", huisje: "Eikensingel huisje 1", kamer: "Kelder 5", capaciteit: 1, alleenDames: false, sortOrder: 5 },
+  { id: "h2k1", huisje: "Eikensingel huisje 2", kamer: "WP 1",     capaciteit: 1, alleenDames: false, sortOrder: 6 },
+  { id: "h2k2", huisje: "Eikensingel huisje 2", kamer: "WP 2",     capaciteit: 1, alleenDames: false, sortOrder: 7 },
+  { id: "h2k3", huisje: "Eikensingel huisje 2", kamer: "WP 3",     capaciteit: 1, alleenDames: false, sortOrder: 8 },
+  { id: "rec1", huisje: "Receptie",             kamer: "Kamer 1",  capaciteit: 1, alleenDames: true,  sortOrder: 9 },
+  { id: "rec2", huisje: "Receptie",             kamer: "Kamer 2",  capaciteit: 1, alleenDames: true,  sortOrder: 10 },
+];
+
 async function loadState() {
-  const r = await fetch("/api/personeel");
-  if (r.status === 403) {
+  // Eenvoudige client-side toegangscheck — server-side gating ontbreekt
+  // bij Worker-storage. We checken op het ingelogde email of die in de
+  // Personeel-toegang-set zit (zelfde lijst als dashboard.html).
+  const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
+  const allowed = new Set([
+    "chantal@fonteyn.nl", "chantal", "fonteyn.chantal",
+    "manon@fonteyn.nl", "manon", "fonteyn.manon",
+    "gerrit@fonteyn.nl", "gerrit",
+    "dolf@fonteyn.nl", "fonteyn.dolf",
+    "don@fonteyn.nl", "fonteyn.don",
+    "arno@fonteyn.nl", "fonteyn.arno",
+    "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+  ]);
+  if (!allowed.has(email)) {
     document.body.innerHTML = "<main style='padding:40px;text-align:center;'><h1>Geen toegang</h1><p>Vraag Gerrit om toegang tot deze module.</p><p><a href='dashboard.html'>Terug</a></p></main>";
     return;
   }
-  if (!r.ok) throw new Error("HTTP " + r.status);
-  const j = await r.json();
-  state.employees = j.employees || [];
-  state.rooms = j.rooms || [];
-  state.assignments = j.assignments || [];
-  state.loaded = true;
-  renderEmployees();
+  // Worker-aanroepen gaan rechtstreeks naar Cloudflare — niet via onze
+  // monkey-patched fetch (die voegt Bearer-tokens toe voor /api/* en
+  // doet redirect-bij-401 die we hier niet willen).
+  try {
+    const r = await _origFetch(DATA_STORE_URL, {
+      headers: { "X-Fonteyn-Auth": DATA_STORE_AUTH },
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    state.employees = j.employees || [];
+    state.rooms = (j.rooms && j.rooms.length) ? j.rooms : DEFAULT_ROOMS;
+    state.assignments = j.assignments || [];
+    state.loaded = true;
+    renderEmployees();
+  } catch (e) {
+    console.error(e);
+    throw e;
+  }
 }
 
 let _saveTimer = null;
@@ -415,14 +461,16 @@ function saveStateDebounced() {
 }
 async function saveStateNow() {
   try {
-    const r = await fetch("/api/personeel", {
+    const payload = {
+      employees: state.employees,
+      rooms: state.rooms,
+      assignments: state.assignments,
+      lastUpdated: new Date().toISOString(),
+    };
+    const r = await _origFetch(DATA_STORE_URL, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        employees: state.employees,
-        rooms: state.rooms,
-        assignments: state.assignments,
-      }),
+      headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": DATA_STORE_AUTH },
+      body: JSON.stringify(payload),
     });
     if (!r.ok) throw new Error("HTTP " + r.status);
     showStatus("✓ Opgeslagen", "ok");
