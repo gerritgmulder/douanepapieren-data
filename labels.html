@@ -252,34 +252,12 @@
 
     html, body { background: #fff !important; margin: 0; padding: 0; }
 
-    /* GERICHT print-color-adjust: alleen het groene paneel + logo dwingen
-       we expliciet te printen. Eerder stond dit op '*' wat ervoor zorgde
-       dat sommige printers het volledige label-papier gingen halftonen,
-       met als gevolg kleine puntjes in het witte deel. */
-    .label .green,
-    .label .green *,
-    .label .green img,
-    .label .green img.logo {
+    /* DWING de browser om achtergrondkleuren en logo-afbeelding mee te
+       printen (anders verdwijnt het groene paneel en wordt het logo leeg). */
+    *, *::before, *::after {
       -webkit-print-color-adjust: exact !important;
       print-color-adjust: exact !important;
       color-adjust: exact !important;
-    }
-
-    /* Witte content-zone: laat de printer dit als 'geen inkt' afhandelen
-       — eventuele halftone-dithering vermijden door background expliciet
-       transparant te zetten en text crisp te renderen. */
-    .label,
-    .label .content,
-    .label .title,
-    .label .fields,
-    .label .fields .k,
-    .label .fields .v,
-    .label .barcode-wrap {
-      background: transparent !important;
-      background-image: none !important;
-      box-shadow: none !important;
-      text-rendering: geometricPrecision;
-      -webkit-font-smoothing: antialiased;
     }
 
     /* Alles verbergen behalve de print-container */
