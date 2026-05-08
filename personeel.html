@@ -314,7 +314,6 @@ table.plans th {
       <div class="row-flex" style="justify-content:space-between;">
         <h2>Medewerkers <span class="muted" id="empCount" style="font-weight:400;"></span></h2>
         <div class="row-flex">
-          <button class="cta secondary small" id="importExcelBtn">📥 Excel-data importeren</button>
           <button class="cta" id="addEmpBtn">➕ Nieuwe medewerker</button>
         </div>
       </div>
@@ -702,65 +701,10 @@ $("addEmpBtn").addEventListener("click", () => {
   }, 50);
 });
 
-$("importExcelBtn").addEventListener("click", async () => {
-  if (!confirm("Importeer medewerkers + planning uit het 'Roemenen en Kroaten.xlsx'-bestand?\n\nBestaande medewerkers worden niet gedupliceerd (op basis van voornaam). Bestaande planningsregels blijven staan; alleen nieuwe regels worden toegevoegd.\n\nVerwacht: ~15 medewerkers + ~70 planningsregels (vanaf december 2025).")) return;
-  try {
-    const r = await fetch("personeel-import.json");
-    if (!r.ok) throw new Error("import-bestand niet gevonden");
-    const data = await r.json();
-    // Map oude voornaam → nieuwe employee.id zodat we de assignments kunnen
-    // koppelen aan een eventuele al-bestaande medewerker met dezelfde naam.
-    const nameToId = {};
-    let addedEmp = 0;
-    for (const emp of data.employees || []) {
-      const naam = (emp.voornaam || "").trim();
-      if (!naam) continue;
-      const existing = state.employees.find(e => (e.voornaam || "").toLowerCase() === naam.toLowerCase());
-      if (existing) {
-        nameToId[emp.id] = existing.id;
-        continue;
-      }
-      const newId = emp.id || `p_${Date.now()}_${Math.random().toString(36).slice(2,8)}`;
-      state.employees.push({
-        id: newId,
-        voornaam: naam,
-        achternaam: emp.achternaam || "",
-        geboortedatum: "", idKaart: "", email: "", telefoon: "",
-        vertrekvliegveld: "", iban: "", bsn: "",
-        nationaliteit: emp.nationaliteit || "RO",
-        geslacht: emp.geslacht || "M",
-        rol: emp.rol || "medewerker",
-        actief: emp.actief !== false,
-        notities: emp.notities || "",
-      });
-      nameToId[emp.id] = newId;
-      addedEmp++;
-    }
-    // Assignments importeren — skip duplicates op basis van id
-    const existingAssignmentIds = new Set(state.assignments.map(a => a.id));
-    let addedAss = 0;
-    for (const a of data.assignments || []) {
-      if (existingAssignmentIds.has(a.id)) continue;
-      const empId = nameToId[a.employeeId] || a.employeeId;
-      // roomId valideren: als 'ie niet matcht in onze rooms, valt 't terug op de raw tag
-      const roomExists = state.rooms.some(r => r.id === a.roomId);
-      state.assignments.push({
-        id: a.id,
-        employeeId: empId,
-        roomId: roomExists ? a.roomId : (a.roomId || ""),
-        vanDatum: a.vanDatum,
-        totDatum: a.totDatum,
-        notities: a.rawRoomTag ? `Excel-import: ${a.rawRoomTag}` : "",
-      });
-      addedAss++;
-    }
-    saveStateDebounced();
-    renderEmployees();
-    showStatus(`✓ ${addedEmp} nieuwe medewerkers + ${addedAss} planningsregels geïmporteerd. Klik 'Planning' om de gantt te zien.`, "ok");
-  } catch (e) {
-    showStatus("Import mislukt: " + e.message, "error");
-  }
-});
+// (Eerdere 'Importeer Excel-data'-knop is verwijderd nu de actieve
+// medewerkers + planning eenmalig zijn ingelezen. Nieuwe medewerkers
+// voeg je toe via '+ Nieuwe medewerker'; ze worden vanaf nu volledig
+// in 't dashboard beheerd.)
 
 // ─── TAB 2: Kamerverdeling + plannen ────────────────────────────────
 function refreshPlanDropdowns() {
