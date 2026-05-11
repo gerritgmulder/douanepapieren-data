@@ -1,0 +1,997 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Fonteyn — Koeien bij Dolf</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f4ef; --panel:#ffffff; --ink:#2a2a2a; --muted:#6b6b6b;
+    --line:#e5e0d5; --accent:#8b5e3c; --accent-soft:#d9b382;
+    --v:#c44569; --m:#1e6091;
+    --v-line:#e27ea0; --m-line:#5b95c7;
+    --ok:#2e7d32; --warn:#b26a00; --bad:#9c2b2b; --neutral:#555;
+    --chip:#f1ece0;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 10px rgba(0,0,0,.04);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:14px;line-height:1.45}
+
+  /* ─── Fonteyn-header (groene balk, identiek aan andere modules) ─── */
+  header.hdr {
+    background: #144734;
+    color: #fff;
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    font-family: 'Montserrat', system-ui, sans-serif;
+  }
+  header.hdr .brand { display: flex; align-items: center; gap: 16px; }
+  header.hdr .back  { color:#fff;text-decoration:none;font-size:13px;padding:5px 10px;
+    border:1px solid rgba(255,255,255,0.3);border-radius:6px; }
+  header.hdr .back:hover { background: rgba(255,255,255,0.1); }
+  header.hdr img.logo { height: 38px; }
+  header.hdr h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing:.2px; }
+  header.hdr .user { font-size: 13px; display: flex; align-items: center; gap: 12px; }
+  header.hdr .logout { background: transparent; border: 1px solid rgba(255,255,255,0.3);
+    color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;
+    font-family: inherit; }
+  header.hdr .logout:hover { background: rgba(255,255,255,0.1); }
+
+  /* ─── Koeien sub-header (tabs-bar) ─── */
+  .page-hdr{padding:22px 28px 0;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#faf7f0,transparent)}
+  .page-hdr h1{margin:0;font-size:22px;letter-spacing:.2px}
+  .sub{color:var(--muted);margin-top:4px;font-size:13px}
+  main{padding:18px 28px 60px;max-width:1400px;margin:0 auto}
+
+  /* Tabs */
+  .tabs{display:flex;gap:0;margin-top:14px}
+  .tab-btn{background:transparent;border:none;border-bottom:2px solid transparent;
+    padding:10px 16px;font:inherit;color:var(--muted);cursor:pointer;
+    font-weight:500;font-size:14px}
+  .tab-btn:hover{color:var(--ink)}
+  .tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600}
+
+  /* Stats */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:10px;margin:14px 0 18px}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px;box-shadow:var(--shadow)}
+  .stat .n{font-size:22px;font-weight:600}
+  .stat .l{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+
+  /* Toolbar */
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;margin-bottom:14px;box-shadow:var(--shadow)}
+  .toolbar input[type=search],.toolbar select{
+    background:#fff;border:1px solid var(--line);border-radius:6px;
+    padding:6px 10px;font:inherit;color:inherit}
+  .toolbar input[type=search]{min-width:220px}
+  .toolbar .sep{flex:1}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:6px;
+    padding:7px 12px;font:inherit;cursor:pointer}
+  .btn.secondary{background:#fff;color:var(--ink);border:1px solid var(--line)}
+  .btn:hover{filter:brightness(1.05)}
+  .view-toggle{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .view-toggle button{background:#fff;border:none;padding:7px 12px;cursor:pointer;color:var(--muted)}
+  .view-toggle button.active{background:var(--accent);color:#fff}
+
+  /* Chips */
+  .chip{display:inline-flex;align-items:center;gap:4px;
+    padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600;
+    line-height:1.7;white-space:nowrap}
+  .chip.v{background:#fbe4ec;color:var(--v)}
+  .chip.m{background:#dce9f4;color:var(--m)}
+  .chip.s-bij-dolf{background:#e1f0e3;color:var(--ok)}
+  .chip.s-afgemeld{background:#fde9cf;color:var(--warn)}
+  .chip.s-overleden{background:#f1d6d6;color:var(--bad)}
+  .chip.s-onbekend{background:#eee;color:var(--neutral)}
+  .chip.r-ja{background:#e1f0e3;color:var(--ok)}
+  .chip.r-nee{background:#f1d6d6;color:var(--bad)}
+  .chip.loc{background:var(--chip);color:#5a4a2e}
+
+  /* Table */
+  .table-wrap{background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;overflow:auto;box-shadow:var(--shadow)}
+  table{width:100%;border-collapse:collapse}
+  thead th{position:sticky;top:0;background:#fbf8f1;text-align:left;
+    font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);
+    padding:10px 12px;border-bottom:1px solid var(--line);font-weight:600}
+  tbody td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+  tbody tr:hover{background:#faf7f0}
+  tbody tr.deceased td:not(.actions){opacity:.55}
+  tbody tr.gone td:not(.actions){opacity:.7}
+  td.editable{cursor:text}
+  td.editable:hover{background:#f6efdf}
+  td[contenteditable="true"]{outline:2px solid var(--accent-soft);background:#fff}
+  td.tag{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px}
+  td select{background:transparent;border:1px solid transparent;padding:2px 4px;
+    font:inherit;color:inherit;border-radius:4px}
+  td select:hover{border-color:var(--line);background:#fff}
+  td .del{background:transparent;border:1px solid var(--line);color:var(--muted);
+    border-radius:6px;padding:3px 8px;cursor:pointer;font-size:12px}
+  td .del:hover{color:var(--bad);border-color:var(--bad)}
+
+  /* Cards (dashboard) */
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:14px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:6px;
+    position:relative;border-top:4px solid var(--accent-soft)}
+  .card.gender-v{border-top-color:var(--v)}
+  .card.gender-m{border-top-color:var(--m)}
+  .card.deceased{opacity:.6}
+  .card.gone{opacity:.75}
+  .card h3{margin:0;font-size:16px}
+  .card .tag{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--muted)}
+  .card .row{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .card .note{color:var(--muted);font-size:12.5px;margin-top:4px;font-style:italic}
+  .card .card-del{position:absolute;top:8px;right:8px;background:transparent;
+    border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1}
+  .card .card-del:hover{color:var(--bad)}
+
+  .hidden{display:none !important}
+  .empty{padding:24px;text-align:center;color:var(--muted)}
+
+  .addbar{display:none;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:12px;margin-bottom:14px;box-shadow:var(--shadow);
+    grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;align-items:end}
+  .addbar.on{display:grid}
+  .addbar label{font-size:12px;color:var(--muted);display:block}
+  .addbar input,.addbar select{width:100%;background:#fff;border:1px solid var(--line);
+    border-radius:6px;padding:6px 8px;font:inherit}
+  .addbar .actions{display:flex;gap:8px;grid-column:1/-1;justify-content:flex-end}
+
+  /* ---------- Stamboom ---------- */
+  .stamboom-toolbar{display:flex;flex-wrap:wrap;gap:14px;align-items:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:10px 14px;margin-bottom:14px;box-shadow:var(--shadow)}
+  .stamboom-toolbar .legend{display:inline-flex;gap:14px;align-items:center;color:var(--muted);font-size:12.5px}
+  .legend .swatch{display:inline-block;width:28px;height:0;margin-right:6px;vertical-align:middle;
+    border-top:2px solid var(--v-line)}
+  .legend .swatch.father{border-top:2px dashed var(--m-line)}
+  .stamboom-toolbar label{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);cursor:pointer}
+
+  .stamboom-wrap{position:relative;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;box-shadow:var(--shadow);overflow:auto}
+  .stamboom-inner{position:relative;width:max-content;min-width:100%}
+  .stamboom-grid{display:grid;
+    grid-template-columns:repeat(8, 195px);
+    grid-auto-rows:115px;
+    gap:18px 22px;
+    padding:18px;
+    position:relative;
+    z-index:2}
+  .year-h{grid-row:1;text-align:center;color:var(--muted);font-size:12px;
+    text-transform:uppercase;letter-spacing:.5px;font-weight:600;
+    align-self:center;padding-bottom:6px;border-bottom:1px solid var(--line)}
+  .stamboom-lines{position:absolute;left:0;top:0;pointer-events:none;z-index:1}
+
+  .tree-card{background:#fff;border:1px solid var(--line);border-radius:8px;
+    padding:8px 10px;box-shadow:var(--shadow);display:flex;flex-direction:column;
+    gap:2px;position:relative;border-left:4px solid var(--accent-soft);
+    overflow:hidden}
+  .tree-card.gender-v{border-left-color:var(--v)}
+  .tree-card.gender-m{border-left-color:var(--m)}
+  .tree-card.deceased{opacity:.5;background:#faf7f0}
+  .tree-card.gone{opacity:.7}
+  .tree-card .tc-head{display:flex;align-items:center;gap:6px}
+  .tree-card .tc-gender{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;line-height:1.4}
+  .tree-card.gender-v .tc-gender{background:#fbe4ec;color:var(--v)}
+  .tree-card.gender-m .tc-gender{background:#dce9f4;color:var(--m)}
+  .tree-card .tc-name{font-weight:600;font-size:13px;flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tree-card .tc-name[contenteditable="true"]{white-space:normal;overflow:visible}
+  .tree-card .tc-tag{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tree-card .tc-meta{font-size:11px;color:var(--muted);line-height:1.3;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tree-card [contenteditable="true"]{outline:2px solid var(--accent-soft);
+    background:#fff;border-radius:3px;padding:1px 3px;margin:-1px -3px}
+  .tree-card .tc-badge{position:absolute;top:3px;right:4px;font-size:9px;
+    padding:1px 4px;border-radius:3px;font-weight:600}
+  .tree-card .tc-badge.reg-nee{background:#f1d6d6;color:var(--bad)}
+  .tree-card .tc-badge.reg-ja{background:#e1f0e3;color:var(--ok)}
+  .tree-card .tc-status{position:absolute;bottom:3px;right:4px;font-size:9px;
+    padding:1px 4px;border-radius:3px;font-weight:600}
+  .tree-card .tc-status.s-afgemeld{background:#fde9cf;color:var(--warn)}
+  .tree-card .tc-status.s-overleden{background:#f1d6d6;color:var(--bad)}
+
+  footer{color:var(--muted);font-size:12px;padding:12px 28px 28px;text-align:center}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="brand">
+    <a href="dashboard.html" class="back">← Dashboard</a>
+    <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+    <h1>Koeien bij Dolf</h1>
+  </div>
+  <div class="user">
+    <span id="userEmail">—</span>
+    <button class="logout" id="hdr-logout">Uitloggen</button>
+  </div>
+</header>
+
+<header class="page-hdr">
+  <h1>Koeien bij Dolf</h1>
+  <div class="sub">Interactief overzicht. Wijzigingen worden centraal opgeslagen — Dolf, Gerrit en Fonteynbot zien dezelfde data.</div>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+    <button class="tab-btn" data-tab="stamboom">Stamboom</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ============ DASHBOARD ============ -->
+  <section id="view-dashboard">
+    <div class="stats" id="stats"></div>
+
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="Zoek op naam, tagnummer of opmerking…">
+      <select id="f-geslacht">
+        <option value="">Alle geslachten</option>
+        <option value="V">Vrouw (V)</option>
+        <option value="M">Man (M)</option>
+        <option value="?">Onbekend</option>
+      </select>
+      <select id="f-status">
+        <option value="">Alle statussen</option>
+        <option value="bij-dolf">Bij Dolf</option>
+        <option value="afgemeld">Verkocht/afgemeld</option>
+        <option value="overleden">Overleden</option>
+        <option value="onbekend">Onbekend</option>
+      </select>
+      <select id="f-reg">
+        <option value="">Aangemeld: alles</option>
+        <option value="ja">Aangemeld</option>
+        <option value="nee">Niet aangemeld</option>
+      </select>
+      <select id="f-loc">
+        <option value="">Alle locaties</option>
+        <option value="Privé (6257)">Privé (6257)</option>
+        <option value="Mosselweg (0750)">Mosselweg (0750)</option>
+        <option value="—">Geen / onbekend</option>
+      </select>
+      <span class="sep"></span>
+      <div class="view-toggle">
+        <button data-view="table" class="active">Tabel</button>
+        <button data-view="cards">Kaarten</button>
+      </div>
+      <button class="btn" id="add-btn">+ Koe toevoegen</button>
+      <button class="btn secondary" id="reset-btn" title="Terug naar oorspronkelijke data">Reset</button>
+    </div>
+
+    <div class="addbar" id="addbar">
+      <div><label>Naam</label><input id="a-naam" placeholder="Naam"></div>
+      <div><label>Tagnummer</label><input id="a-tag" placeholder="bv. NL0750201012"></div>
+      <div><label>Geslacht</label><select id="a-geslacht"><option>V</option><option>M</option><option>?</option></select></div>
+      <div><label>Geboortedatum</label><input id="a-geb" placeholder="bv. 01/05/2024 of ???"></div>
+      <div><label>Status</label><select id="a-status">
+        <option value="bij-dolf">Bij Dolf</option>
+        <option value="afgemeld">Verkocht/afgemeld</option>
+        <option value="overleden">Overleden</option>
+        <option value="onbekend">Onbekend</option>
+      </select></div>
+      <div><label>Aangemeld</label><select id="a-reg"><option value="ja">Ja</option><option value="nee">Nee</option></select></div>
+      <div><label>Locatie</label><select id="a-loc">
+        <option value="Privé (6257)">Privé (6257)</option>
+        <option value="Mosselweg (0750)">Mosselweg (0750)</option>
+        <option value="—">— (onbekend)</option>
+      </select></div>
+      <div style="grid-column:span 2"><label>Opmerking</label><input id="a-note" placeholder="Kleur, notitie…"></div>
+      <div class="actions">
+        <button class="btn secondary" id="a-cancel">Annuleren</button>
+        <button class="btn" id="a-save">Opslaan</button>
+      </div>
+    </div>
+
+    <div id="table-view" class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Naam</th>
+            <th>Tagnummer</th>
+            <th>Geslacht</th>
+            <th>Geboorte</th>
+            <th>Status</th>
+            <th>Aangemeld</th>
+            <th>Locatie</th>
+            <th>Opmerking</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty hidden" id="empty-table">Geen koeien gevonden met deze filters.</div>
+    </div>
+
+    <div id="cards-view" class="cards hidden"></div>
+  </section>
+
+  <!-- ============ STAMBOOM ============ -->
+  <section id="view-stamboom" class="hidden">
+    <div class="stamboom-toolbar">
+      <strong>Stamboom</strong>
+      <span style="color:var(--muted);font-size:13px">Klik op naam, tagnummer of geboortedatum om te bewerken.</span>
+      <span class="sep" style="flex:1"></span>
+      <label><input type="checkbox" id="show-mothers" checked> Moederlijnen</label>
+      <label><input type="checkbox" id="show-fathers" checked> Vaderlijnen</label>
+      <span class="legend"><span class="swatch"></span>moeder</span>
+      <span class="legend"><span class="swatch father"></span>vader</span>
+    </div>
+
+    <div class="stamboom-wrap" id="stamboom-wrap">
+      <div class="stamboom-inner" id="stamboom-inner">
+        <svg class="stamboom-lines" id="stamboom-lines"></svg>
+        <div class="stamboom-grid" id="stamboom-grid">
+          <div class="year-h" style="grid-column:1">Stamvaders/-moeders</div>
+          <div class="year-h" style="grid-column:2">Pre-2021</div>
+          <div class="year-h" style="grid-column:3">2021</div>
+          <div class="year-h" style="grid-column:4">2022</div>
+          <div class="year-h" style="grid-column:5">2023</div>
+          <div class="year-h" style="grid-column:6">2024</div>
+          <div class="year-h" style="grid-column:7">2025</div>
+          <div class="year-h" style="grid-column:8">2026</div>
+        </div>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:12.5px;margin-top:10px">
+      Moederlijnen zijn doorgetrokken (roze), vaderlijnen gestippeld (blauw). Voor niet-aangemelde mannetjes
+      (Pablo, Rooie Evert, Chuck) zijn de vaderlijnen bewust weggelaten — de vader is niet zeker.
+      Wijzigingen aan naam/tag/datum zijn direct zichtbaar in het dashboard.
+    </p>
+  </section>
+</main>
+
+<footer>
+  Bronbestand: <code>Koeien.xlsx</code> · Gegevens afgeleid uit tabbladen "View", "Overzicht koeien", "Opmerkingen" en "Stamboom".
+</footer>
+
+<script>
+/* ─── Session-guard + auth-fetch (identiek aan andere modules) ─── */
+const SESSION_KEY = "fp.session";
+const EMAIL_KEY   = "fp.email";
+
+(function sessionGuard() {
+  if (!localStorage.getItem(SESSION_KEY)) {
+    window.location.replace("dashboard.html");
+    throw new Error("Geen sessie");
+  }
+})();
+
+// Toegangscontrole: alleen Dolf, Gerrit en Fonteynbot mogen hier komen.
+// (Server-side gating ontbreekt voor KV-Worker, dus checken we client-side
+// op de ingelogde gebruiker — zelfde lijst als KOEIEN_EMAILS in dashboard.html.)
+const KOEIEN_ALLOWED = new Set([
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+(function accessCheck() {
+  const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
+  if (!KOEIEN_ALLOWED.has(email)) {
+    document.body.innerHTML =
+      "<main style='padding:40px;text-align:center;font-family:system-ui;'>" +
+      "<h1>Geen toegang</h1><p>Deze tegel is alleen voor Dolf, Gerrit en Fonteynbot.</p>" +
+      "<p><a href='dashboard.html'>Terug naar dashboard</a></p></main>";
+    throw new Error("Geen toegang");
+  }
+})();
+
+const _origFetch = window.fetch.bind(window);
+window.fetch = async function(input, init = {}) {
+  const url = typeof input === "string" ? input : input.url;
+  const isApi = url && url.startsWith("/api/");
+  if (isApi) {
+    const id = localStorage.getItem(SESSION_KEY);
+    init.headers = { ...(init.headers || {}), "Authorization": "Bearer " + id };
+  }
+  const r = await _origFetch(input, init);
+  if (isApi && r.status === 401) {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(EMAIL_KEY);
+    window.location.replace("dashboard.html");
+  }
+  return r;
+};
+
+/* ─── Header-binding (user-chip + logout) ─── */
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("userEmail").textContent = localStorage.getItem(EMAIL_KEY) || "—";
+  document.getElementById("hdr-logout").addEventListener("click", async () => {
+    try { await fetch("/api/logout", { method: "POST" }); } catch {}
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(EMAIL_KEY);
+    window.location.replace("dashboard.html");
+  });
+});
+
+/* ─── Centrale state-opslag via Cloudflare Worker + KV ─── */
+// Zelfde Worker als Personeel (zie data-worker/src/worker.js).
+// "koeien" zit in de ALLOWED_BUCKETS-whitelist van die Worker.
+const DATA_STORE_URL  = "https://fonteyn-data-store.g-mulder.workers.dev/data/koeien";
+const DATA_STORE_AUTH = "SV--QQW_xwIgrIdbjAozfgnxtloYitCZxEQ_S04gv2YupY4LY4KD7_QvfVkb8DGs";
+
+/* ============ Data ============ */
+const INITIAL_COWS = [
+  {id:"cowboy", naam:"L.G. Mr. Cowboy", tag:"DK04396402624", geslacht:"M", geboorte:"01/05/2019",
+    status:"overleden", aangemeld:"ja", locatie:"—",
+    opmerking:"Rood-wit. Vlees geworden (Mr. Outlaw is de nieuwe dekhengst).",
+    tree:{col:1,row:7}},
+  {id:"dirks-red-bull", naam:"Dirk's Red Bull", tag:"BE611295629", geslacht:"M", geboorte:"???",
+    status:"onbekend", aangemeld:"ja", locatie:"—", opmerking:"Vader van Mr. Outlaw (historisch).",
+    tree:{col:1,row:5}},
+  {id:"gg-5-bullets", naam:"G.G. 5 Bullets", tag:"DE0667006398", geslacht:"M", geboorte:"09/09/2016",
+    status:"overleden", aangemeld:"ja", locatie:"—", opmerking:"Geslacht op 04/08/2020.",
+    tree:{col:1,row:1}},
+  {id:"austin", naam:"'t Rozen Austin", tag:"NL548261479", geslacht:"M", geboorte:"06/07/2017",
+    status:"onbekend", aangemeld:"ja", locatie:"—", opmerking:"Vader van Miss First.",
+    tree:{col:1,row:3}},
+  {id:"philadelphia", naam:"'t Rozen Philadelphia", tag:"NL751887015", geslacht:"V", geboorte:"16/05/2015",
+    status:"bij-dolf", aangemeld:"ja", locatie:"—",
+    opmerking:"Roodbont. Hangt bij Dolf binnen. Moeder van Miss First en Madonna.",
+    tree:{col:2,row:2}},
+  {id:"starynight", naam:"Starynight", tag:"DK04396402598", geslacht:"V", geboorte:"20/10/2016",
+    status:"bij-dolf", aangemeld:"ja", locatie:"Privé (6257)",
+    opmerking:"Driekleur (zw-br / rd-wit).",
+    tree:{col:2,row:6}},
+  {id:"shania", naam:"Shania Twain", tag:"DK04569403033", geslacht:"V", geboorte:"15/04/2019",
+    status:"afgemeld", aangemeld:"ja", locatie:"—",
+    opmerking:"Rood-wit. Afgemeld op 27/06/2025 (verkocht).",
+    tree:{col:2,row:4}},
+  {id:"madonna", naam:"Madonna", tag:"NL531889404", geslacht:"V", geboorte:"01/06/2019",
+    status:"bij-dolf", aangemeld:"ja", locatie:"Privé (6257)",
+    opmerking:"Eenkleurig wit. Moeder van Benny.",
+    tree:{col:2,row:1}},
+  {id:"outlaw", naam:"Mr. Outlaw", tag:"NL595114151", geslacht:"M", geboorte:"25/02/2021",
+    status:"bij-dolf", aangemeld:"ja", locatie:"Mosselweg (0750)",
+    opmerking:"Roodbont zwart. Dekhengst.",
+    tree:{col:3,row:5}},
+  {id:"miss-first", naam:"Miss First", tag:"NL0750201005", geslacht:"V", geboorte:"16/05/2021",
+    status:"bij-dolf", aangemeld:"ja", locatie:"Privé (6257)",
+    opmerking:"Roodbont (baggerbont rood).",
+    tree:{col:3,row:3}},
+  {id:"torq", naam:"Torq", tag:"NL0750201012", geslacht:"M", geboorte:"29/01/2022",
+    status:"bij-dolf", aangemeld:"ja", locatie:"Mosselweg (0750)",
+    opmerking:"Bruin-zwart. Zoon van Shania × Cowboy.",
+    tree:{col:4,row:4}},
+  {id:"mr-jim", naam:"Mr. Jim", tag:"NL0750201029", geslacht:"M", geboorte:"05/02/2022",
+    status:"bij-dolf", aangemeld:"ja", locatie:"Mosselweg (0750)", opmerking:"Roodbont.",
+    tree:{col:4,row:6}},
+  {id:"eagle", naam:"Eagle", tag:"NL0750200994", geslacht:"M", geboorte:"12/03/2023",
+    status:"bij-dolf", aangemeld:"ja", locatie:"Mosselweg (0750)", opmerking:"Roodbont.",
+    tree:{col:5,row:6}},
+  {id:"benny", naam:"Benny 't Duveltje", tag:"NL0750200987", geslacht:"V", geboorte:"21/04/2023",
+    status:"bij-dolf", aangemeld:"ja", locatie:"Privé (6257)",
+    opmerking:"Bruin. Aangemeld.",
+    tree:{col:5,row:1}},
+  {id:"mr-wijlen", naam:"Mr. Wijlen", tag:"NL07500974", geslacht:"M", geboorte:"???",
+    status:"overleden", aangemeld:"ja", locatie:"—",
+    opmerking:"Roodbont. Overleden 23/10/2024.",
+    tree:{col:5,row:4}},
+  {id:"rooie-evert", naam:"Rooie Evert", tag:"NL0750200963", geslacht:"M", geboorte:"04/2024",
+    status:"bij-dolf", aangemeld:"nee", locatie:"Mosselweg (0750)",
+    opmerking:"Roodbont. Niet aangemeld — wordt geslacht.",
+    tree:{col:6,row:3}},
+  {id:"cheyenne", naam:"Cheyenne", tag:"NL0750201036", geslacht:"V", geboorte:"2024",
+    status:"afgemeld", aangemeld:"ja", locatie:"—",
+    opmerking:"Aangemeld in 2025, afgemeld 27/06/2025.",
+    tree:{col:6,row:4}},
+  {id:"montana", naam:"Montana", tag:"NL0625704431", geslacht:"V", geboorte:"17/08/2024",
+    status:"bij-dolf", aangemeld:"ja", locatie:"Privé (6257)",
+    opmerking:"Aangemeld als geboren op 29/10/2025.",
+    tree:{col:6,row:1}},
+  {id:"saar", naam:"Saar", tag:"NL0750201043", geslacht:"V", geboorte:"2024",
+    status:"bij-dolf", aangemeld:"ja", locatie:"Mosselweg (0750)",
+    opmerking:"Aangemeld als geboren op 03/11/2025.",
+    tree:{col:6,row:6}},
+  {id:"pablo", naam:"Pablo", tag:"NL0625704525", geslacht:"M", geboorte:"20/06/2025",
+    status:"bij-dolf", aangemeld:"nee", locatie:"Privé (6257)",
+    opmerking:"Gecastreerd (os). Niet aangemeld.",
+    tree:{col:7,row:1}},
+  {id:"chuck", naam:"Chuck", tag:"NL0750201060", geslacht:"M", geboorte:"12/08/2025",
+    status:"bij-dolf", aangemeld:"nee", locatie:"Mosselweg (0750)",
+    opmerking:"Niet aangemeld — mannetje.",
+    tree:{col:7,row:6}},
+  {id:"angel", naam:"Angel", tag:"NL0625704501", geslacht:"V", geboorte:"10/03/2026",
+    status:"bij-dolf", aangemeld:"nee", locatie:"Privé (6257)",
+    opmerking:"Nog niet aangemeld, nog geen DNA.",
+    tree:{col:8,row:1}},
+  {id:"mr-first", naam:"Mr. First", tag:"NL0625704518", geslacht:"M", geboorte:"03/2026",
+    status:"bij-dolf", aangemeld:"nee", locatie:"Privé (6257)",
+    opmerking:"Zoon van Miss First × Cowboy.",
+    tree:{col:8,row:3}},
+];
+
+/* Ouder-kind-relaties: child → {mother, father} */
+const INITIAL_RELATIONS = [
+  {child:"madonna",     mother:"philadelphia", father:"gg-5-bullets"},
+  {child:"miss-first",  mother:"philadelphia", father:"austin"},
+  {child:"outlaw",      mother:"shania",       father:"dirks-red-bull"},
+  {child:"torq",        mother:"shania",       father:"cowboy"},
+  {child:"mr-wijlen",   mother:"shania",       father:"cowboy"},
+  {child:"cheyenne",    mother:"shania",       father:"cowboy"},
+  {child:"mr-jim",      mother:"starynight",   father:"cowboy"},
+  {child:"eagle",       mother:"starynight",   father:"cowboy"},
+  {child:"benny",       mother:"madonna",      father:"cowboy"},
+  {child:"montana",     mother:"madonna",      father:"outlaw"},
+  {child:"saar",        mother:"starynight",   father:"outlaw"},
+  {child:"angel",       mother:"madonna",      father:"outlaw"},
+  {child:"mr-first",    mother:"miss-first",   father:"cowboy"},
+  // Niet-aangemelde mannetjes: vader niet zeker, geen lijn naar vader
+  {child:"rooie-evert", mother:"miss-first"},
+  {child:"pablo",       mother:"madonna"},
+  {child:"chuck",       mother:"starynight"},
+];
+
+/* ============ State ============ */
+// State wordt uit de KV-Worker geladen bij start; tot dan toe leeg.
+// init() onderaan dit bestand doet de eerste fetch en roept render() aan.
+let state = { cows: [], relations: [] };
+
+async function loadStateFromKV(){
+  try{
+    const r = await _origFetch(DATA_STORE_URL, {
+      headers: { "X-Fonteyn-Auth": DATA_STORE_AUTH },
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    // Eerste keer: KV is leeg → vul met initial data zodat Dolf direct
+    // iets ziet, en sla die initial set meteen terug op.
+    if (!j || !Array.isArray(j.cows) || j.cows.length === 0) {
+      const init = {
+        cows: JSON.parse(JSON.stringify(INITIAL_COWS)),
+        relations: JSON.parse(JSON.stringify(INITIAL_RELATIONS)),
+      };
+      state = init;
+      saveStateDebounced();
+      return;
+    }
+    state = {
+      cows: j.cows || [],
+      relations: j.relations || JSON.parse(JSON.stringify(INITIAL_RELATIONS)),
+    };
+  }catch(e){
+    console.error("[koeien] kon state niet laden:", e);
+    state = {
+      cows: JSON.parse(JSON.stringify(INITIAL_COWS)),
+      relations: JSON.parse(JSON.stringify(INITIAL_RELATIONS)),
+    };
+  }
+}
+
+let _saveTimer = null;
+function saveState(){
+  // Behoudt de originele synchrone API (loop staat vol met "saveState(); render()"),
+  // maar onder water debounce + async PUT.
+  saveStateDebounced();
+}
+function saveStateDebounced(){
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(saveStateNow, 400);
+}
+async function saveStateNow(){
+  try{
+    const payload = {
+      cows: state.cows,
+      relations: state.relations,
+      lastUpdated: new Date().toISOString(),
+    };
+    const r = await _origFetch(DATA_STORE_URL, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": DATA_STORE_AUTH },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+  }catch(e){
+    console.error("[koeien] opslaan mislukt:", e);
+  }
+}
+
+/* ============ Helpers ============ */
+const STATUS_LABEL = {
+  "bij-dolf":"Bij Dolf","afgemeld":"Verkocht/afgemeld",
+  "overleden":"Overleden","onbekend":"Onbekend",
+};
+const GESLACHT_LABEL = {"V":"Vrouw","M":"Man","?":"?"};
+
+function statusChipClass(s){return "chip s-"+s;}
+function genderChipClass(g){return "chip "+(g==="V"?"v":g==="M"?"m":"s-onbekend");}
+function regChipClass(r){return "chip "+(r==="ja"?"r-ja":"r-nee");}
+function escapeHtml(s){return (s??"").toString()
+  .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+  .replaceAll('"',"&quot;").replaceAll("'","&#39;");}
+function cowById(id){return state.cows.find(c=>c.id===id);}
+function genId(naam){
+  const base = (naam||"koe").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "koe";
+  let id = base, n=2;
+  while(state.cows.some(c=>c.id===id)){ id = base+"-"+n; n++; }
+  return id;
+}
+
+/* ============ Dashboard rendering ============ */
+const $tbody = document.getElementById("tbody");
+const $cards = document.getElementById("cards-view");
+const $stats = document.getElementById("stats");
+const $empty = document.getElementById("empty-table");
+
+function render(){
+  renderStats(); renderTable(); renderCards();
+  if(!document.getElementById("view-stamboom").classList.contains("hidden")){
+    renderStamboom();
+  }
+}
+
+function currentFilters(){
+  return {
+    q: document.getElementById("q").value.toLowerCase().trim(),
+    g: document.getElementById("f-geslacht").value,
+    s: document.getElementById("f-status").value,
+    r: document.getElementById("f-reg").value,
+    l: document.getElementById("f-loc").value,
+  };
+}
+function matches(row, f){
+  if(f.g && row.geslacht!==f.g) return false;
+  if(f.s && row.status!==f.s) return false;
+  if(f.r && row.aangemeld!==f.r) return false;
+  if(f.l && row.locatie!==f.l) return false;
+  if(f.q){
+    const hay = (row.naam+" "+row.tag+" "+(row.opmerking||"")+" "+row.locatie).toLowerCase();
+    if(!hay.includes(f.q)) return false;
+  }
+  return true;
+}
+
+function renderStats(){
+  const bij = state.cows.filter(c=>c.status==="bij-dolf");
+  const v = bij.filter(c=>c.geslacht==="V").length;
+  const m = bij.filter(c=>c.geslacht==="M").length;
+  const aang = bij.filter(c=>c.aangemeld==="ja").length;
+  const niet = bij.filter(c=>c.aangemeld==="nee").length;
+  const over = state.cows.filter(c=>c.status==="overleden").length;
+  const afg = state.cows.filter(c=>c.status==="afgemeld").length;
+  $stats.innerHTML = `
+    <div class="stat"><div class="n">${bij.length}</div><div class="l">Bij Dolf</div></div>
+    <div class="stat"><div class="n" style="color:var(--v)">${v}</div><div class="l">Vrouwen (bij Dolf)</div></div>
+    <div class="stat"><div class="n" style="color:var(--m)">${m}</div><div class="l">Mannen (bij Dolf)</div></div>
+    <div class="stat"><div class="n" style="color:var(--ok)">${aang}</div><div class="l">Aangemeld</div></div>
+    <div class="stat"><div class="n" style="color:var(--bad)">${niet}</div><div class="l">Niet aangemeld</div></div>
+    <div class="stat"><div class="n" style="color:var(--warn)">${afg}</div><div class="l">Afgemeld/verkocht</div></div>
+    <div class="stat"><div class="n" style="color:var(--neutral)">${over}</div><div class="l">Overleden/geslacht</div></div>`;
+}
+
+function renderTable(){
+  const f = currentFilters();
+  const rows = state.cows.filter(r=>matches(r,f));
+  $empty.classList.toggle("hidden", rows.length!==0);
+  $tbody.innerHTML = rows.map(r=>{
+    const rowCls = r.status==="overleden"?"deceased":r.status==="afgemeld"?"gone":"";
+    return `
+    <tr class="${rowCls}" data-id="${r.id}">
+      <td class="editable" data-f="naam"><strong>${escapeHtml(r.naam)}</strong></td>
+      <td class="editable tag" data-f="tag">${escapeHtml(r.tag)}</td>
+      <td>
+        <select data-f="geslacht">
+          ${["V","M","?"].map(g=>`<option value="${g}" ${g===r.geslacht?"selected":""}>${g}</option>`).join("")}
+        </select>
+        <span class="${genderChipClass(r.geslacht)}" style="margin-left:4px">${GESLACHT_LABEL[r.geslacht]||"?"}</span>
+      </td>
+      <td class="editable" data-f="geboorte">${escapeHtml(r.geboorte)}</td>
+      <td>
+        <select data-f="status">
+          ${Object.keys(STATUS_LABEL).map(s=>`<option value="${s}" ${s===r.status?"selected":""}>${STATUS_LABEL[s]}</option>`).join("")}
+        </select>
+      </td>
+      <td>
+        <select data-f="aangemeld">
+          <option value="ja" ${r.aangemeld==="ja"?"selected":""}>Ja</option>
+          <option value="nee" ${r.aangemeld==="nee"?"selected":""}>Nee</option>
+        </select>
+      </td>
+      <td>
+        <select data-f="locatie">
+          ${["Privé (6257)","Mosselweg (0750)","—"].map(l=>`<option value="${l}" ${l===r.locatie?"selected":""}>${l}</option>`).join("")}
+        </select>
+      </td>
+      <td class="editable" data-f="opmerking" style="max-width:360px">${escapeHtml(r.opmerking)}</td>
+      <td class="actions"><button class="del" title="Verwijderen">✕</button></td>
+    </tr>`;
+  }).join("");
+}
+
+function renderCards(){
+  const f = currentFilters();
+  const rows = state.cows.filter(r=>matches(r,f));
+  if(rows.length===0){ $cards.innerHTML = `<div class="empty">Geen koeien gevonden.</div>`; return; }
+  $cards.innerHTML = rows.map(r=>{
+    const cls = "card "+(r.geslacht==="V"?"gender-v":r.geslacht==="M"?"gender-m":"")+
+      (r.status==="overleden"?" deceased":r.status==="afgemeld"?" gone":"");
+    return `
+      <div class="${cls}" data-id="${r.id}">
+        <button class="card-del" title="Verwijderen">✕</button>
+        <h3>${escapeHtml(r.naam||"(zonder naam)")}</h3>
+        <div class="tag">${escapeHtml(r.tag||"—")}</div>
+        <div class="row">
+          <span class="${genderChipClass(r.geslacht)}">${GESLACHT_LABEL[r.geslacht]||"?"}</span>
+          <span class="${statusChipClass(r.status)}">${STATUS_LABEL[r.status]}</span>
+          <span class="${regChipClass(r.aangemeld)}">${r.aangemeld==="ja"?"Aangemeld":"Niet aangemeld"}</span>
+          ${r.locatie && r.locatie!=="—" ? `<span class="chip loc">${escapeHtml(r.locatie)}</span>`:""}
+        </div>
+        <div style="color:var(--muted);font-size:12.5px;margin-top:4px">
+          Geboren: ${escapeHtml(r.geboorte||"???")}
+        </div>
+        ${r.opmerking?`<div class="note">${escapeHtml(r.opmerking)}</div>`:""}
+      </div>`;
+  }).join("");
+}
+
+/* ============ Dashboard interactions ============ */
+$tbody.addEventListener("click",(e)=>{
+  const del = e.target.closest("button.del");
+  if(del){
+    const tr = del.closest("tr"); const id = tr.dataset.id;
+    const c = cowById(id);
+    if(confirm(`Koe "${c.naam}" verwijderen?`)){
+      state.cows = state.cows.filter(x=>x.id!==id);
+      state.relations = state.relations.filter(r=>r.child!==id && r.mother!==id && r.father!==id);
+      saveState(); render();
+    }
+    return;
+  }
+  const td = e.target.closest("td.editable");
+  if(td && !td.isContentEditable){
+    td.contentEditable="true"; td.focus();
+    const r = document.createRange(); r.selectNodeContents(td);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+});
+$tbody.addEventListener("blur",(e)=>{
+  const td = e.target.closest("td.editable");
+  if(td && td.isContentEditable){
+    td.contentEditable="false";
+    const tr = td.closest("tr"); const id = tr.dataset.id;
+    const c = cowById(id); if(!c) return;
+    c[td.dataset.f] = td.innerText.trim();
+    saveState(); render();
+  }
+},true);
+$tbody.addEventListener("keydown",(e)=>{
+  if(e.key==="Enter" && e.target.isContentEditable){
+    e.preventDefault(); e.target.blur();
+  }
+});
+$tbody.addEventListener("change",(e)=>{
+  const sel = e.target.closest("select");
+  if(!sel) return;
+  const tr = sel.closest("tr"); const id = tr.dataset.id;
+  const c = cowById(id); if(!c) return;
+  c[sel.dataset.f] = sel.value;
+  saveState(); render();
+});
+$cards.addEventListener("click",(e)=>{
+  const del = e.target.closest("button.card-del");
+  if(del){
+    const card = del.closest(".card"); const id = card.dataset.id;
+    const c = cowById(id);
+    if(confirm(`Koe "${c.naam}" verwijderen?`)){
+      state.cows = state.cows.filter(x=>x.id!==id);
+      state.relations = state.relations.filter(r=>r.child!==id && r.mother!==id && r.father!==id);
+      saveState(); render();
+    }
+  }
+});
+
+/* Filters & view toggle */
+["q","f-geslacht","f-status","f-reg","f-loc"].forEach(id=>{
+  document.getElementById(id).addEventListener("input",render);
+  document.getElementById(id).addEventListener("change",render);
+});
+document.querySelectorAll(".view-toggle button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll(".view-toggle button").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    const v = b.dataset.view;
+    document.getElementById("table-view").classList.toggle("hidden", v!=="table");
+    document.getElementById("cards-view").classList.toggle("hidden", v!=="cards");
+  });
+});
+
+/* Add cow */
+const $addbar = document.getElementById("addbar");
+document.getElementById("add-btn").addEventListener("click",()=>$addbar.classList.toggle("on"));
+document.getElementById("a-cancel").addEventListener("click",()=>$addbar.classList.remove("on"));
+document.getElementById("a-save").addEventListener("click",()=>{
+  const naam = document.getElementById("a-naam").value.trim() || "(zonder naam)";
+  const row = {
+    id: genId(naam), naam,
+    tag: document.getElementById("a-tag").value.trim() || "???",
+    geslacht: document.getElementById("a-geslacht").value,
+    geboorte: document.getElementById("a-geb").value.trim() || "???",
+    status: document.getElementById("a-status").value,
+    aangemeld: document.getElementById("a-reg").value,
+    locatie: document.getElementById("a-loc").value,
+    opmerking: document.getElementById("a-note").value.trim(),
+    tree: {col:8, row:1},
+  };
+  state.cows.push(row); saveState(); render();
+  ["a-naam","a-tag","a-geb","a-note"].forEach(id=>document.getElementById(id).value="");
+  $addbar.classList.remove("on");
+});
+
+/* Reset */
+document.getElementById("reset-btn").addEventListener("click",()=>{
+  if(confirm("Alle wijzigingen ongedaan maken?")){
+    state = {cows: JSON.parse(JSON.stringify(INITIAL_COWS)),
+             relations: JSON.parse(JSON.stringify(INITIAL_RELATIONS))};
+    saveState(); render();
+  }
+});
+
+/* ============ Tabs ============ */
+document.querySelectorAll(".tab-btn").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    const t = btn.dataset.tab;
+    document.getElementById("view-dashboard").classList.toggle("hidden", t!=="dashboard");
+    document.getElementById("view-stamboom").classList.toggle("hidden", t!=="stamboom");
+    if(t==="stamboom") renderStamboom();
+  });
+});
+
+/* ============ Stamboom rendering ============ */
+const $grid = document.getElementById("stamboom-grid");
+const $svg = document.getElementById("stamboom-lines");
+const $inner = document.getElementById("stamboom-inner");
+
+function renderStamboom(){
+  // remove old cards (keep year headers)
+  [...$grid.querySelectorAll(".tree-card")].forEach(e=>e.remove());
+
+  for(const c of state.cows){
+    const row = (c.tree && c.tree.row) ? c.tree.row : 1;
+    const col = (c.tree && c.tree.col) ? c.tree.col : 1;
+    const el = document.createElement("div");
+    el.className = "tree-card " + (c.geslacht==="V"?"gender-v":c.geslacht==="M"?"gender-m":"") +
+      (c.status==="overleden"?" deceased":c.status==="afgemeld"?" gone":"");
+    el.style.gridColumn = col;
+    el.style.gridRow = (row + 1); // +1 because row 1 is header
+    el.dataset.id = c.id;
+    el.innerHTML = `
+      <div class="tc-head">
+        <span class="tc-gender">${c.geslacht||"?"}</span>
+        <span class="tc-name" data-f="naam" title="Klik om te bewerken">${escapeHtml(c.naam)}</span>
+      </div>
+      <div class="tc-tag" data-f="tag" title="Klik om te bewerken">${escapeHtml(c.tag||"—")}</div>
+      <div class="tc-meta" data-f="geboorte" title="Klik om te bewerken">${escapeHtml(c.geboorte||"???")}</div>
+      ${c.aangemeld==="nee" ? `<span class="tc-badge reg-nee">niet aangemeld</span>`:""}
+      ${c.status==="afgemeld" ? `<span class="tc-status s-afgemeld">afgemeld</span>`
+        : c.status==="overleden" ? `<span class="tc-status s-overleden">overleden</span>` : ""}`;
+    $grid.appendChild(el);
+  }
+
+  // Resize inner to hold grid properly
+  requestAnimationFrame(drawLines);
+}
+
+function drawLines(){
+  // Size the SVG to cover the full grid
+  const gridRect = $grid.getBoundingClientRect();
+  $svg.setAttribute("width", $grid.scrollWidth);
+  $svg.setAttribute("height", $grid.scrollHeight);
+  $svg.style.width = $grid.scrollWidth+"px";
+  $svg.style.height = $grid.scrollHeight+"px";
+  $svg.innerHTML = "";
+
+  const showM = document.getElementById("show-mothers").checked;
+  const showF = document.getElementById("show-fathers").checked;
+
+  function rectFor(id){
+    const el = $grid.querySelector(`.tree-card[data-id="${id}"]`);
+    if(!el) return null;
+    const r = el.getBoundingClientRect();
+    return {
+      left: r.left - gridRect.left,
+      right: r.right - gridRect.left,
+      top: r.top - gridRect.top,
+      bottom: r.bottom - gridRect.top,
+      cy: r.top - gridRect.top + r.height/2,
+    };
+  }
+
+  for(const rel of state.relations){
+    const cR = rectFor(rel.child); if(!cR) continue;
+
+    if(rel.mother && showM){
+      const mR = rectFor(rel.mother);
+      if(mR) drawPath(mR, cR, "mother");
+    }
+    if(rel.father && showF){
+      const fR = rectFor(rel.father);
+      if(fR) drawPath(fR, cR, "father");
+    }
+  }
+}
+
+function drawPath(fromR, toR, type){
+  let x1, y1, x2, y2, d;
+  const horizontal = fromR.right <= toR.left || fromR.left >= toR.right;
+  if(fromR.right <= toR.left){
+    x1 = fromR.right; y1 = fromR.cy; x2 = toR.left;  y2 = toR.cy;
+  } else if(fromR.left >= toR.right){
+    x1 = fromR.left;  y1 = fromR.cy; x2 = toR.right; y2 = toR.cy;
+  } else {
+    // same column: draw a short vertical curve
+    x1 = (fromR.left+fromR.right)/2; x2 = (toR.left+toR.right)/2;
+    if(fromR.cy < toR.cy){ y1 = fromR.bottom; y2 = toR.top; }
+    else                 { y1 = fromR.top;    y2 = toR.bottom; }
+  }
+  if(horizontal){
+    const dx = Math.max(40, Math.abs(x2-x1)*0.45) * (x2>x1?1:-1);
+    d = `M ${x1} ${y1} C ${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`;
+  } else {
+    // vertical: slight S-curve with horizontal control points
+    const my = (y1+y2)/2;
+    d = `M ${x1} ${y1} C ${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`;
+  }
+  const p = document.createElementNS("http://www.w3.org/2000/svg","path");
+  p.setAttribute("d", d);
+  p.setAttribute("fill","none");
+  p.setAttribute("stroke", type==="mother" ? "var(--v-line)" : "var(--m-line)");
+  p.setAttribute("stroke-width","2");
+  p.setAttribute("opacity","0.75");
+  if(type==="father") p.setAttribute("stroke-dasharray","5 4");
+  $svg.appendChild(p);
+}
+
+/* Stamboom editing (contenteditable on card fields) */
+$grid.addEventListener("click",(e)=>{
+  const ed = e.target.closest("[data-f]");
+  if(ed && !ed.isContentEditable){
+    ed.contentEditable="true"; ed.focus();
+    const r = document.createRange(); r.selectNodeContents(ed);
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+});
+$grid.addEventListener("blur",(e)=>{
+  const ed = e.target.closest("[data-f]");
+  if(ed && ed.isContentEditable){
+    ed.contentEditable="false";
+    const card = ed.closest(".tree-card"); const id = card.dataset.id;
+    const c = cowById(id); if(!c) return;
+    c[ed.dataset.f] = ed.innerText.trim();
+    saveState(); render();
+  }
+},true);
+$grid.addEventListener("keydown",(e)=>{
+  if(e.key==="Enter" && e.target.isContentEditable){
+    e.preventDefault(); e.target.blur();
+  }
+});
+
+/* Line toggles */
+document.getElementById("show-mothers").addEventListener("change",drawLines);
+document.getElementById("show-fathers").addEventListener("change",drawLines);
+
+/* Redraw lines on resize */
+window.addEventListener("resize",()=>{
+  if(!document.getElementById("view-stamboom").classList.contains("hidden")) drawLines();
+});
+
+// Initial load: eerst state uit KV halen, daarna renderen.
+async function init(){
+  await loadStateFromKV();
+  render();
+}
+init();
+</script>
+</body>
+</html>

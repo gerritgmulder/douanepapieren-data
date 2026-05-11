@@ -21,6 +21,7 @@
 
 const ALLOWED_BUCKETS = new Set([
   "personeel",
+  "koeien",
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
