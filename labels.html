@@ -273,15 +273,35 @@
 
     /* Alles verbergen behalve de print-container */
     body > *:not(#printArea) { display: none !important; }
-    #printArea { display: block !important; }
+    #printArea {
+      display: block !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      /* Extra vangnet: container kan niet groter dan een page worden. */
+      overflow: hidden;
+    }
 
-    /* Elke .label = één A6-pagina */
+    /* Elke .label = één A6-pagina.
+       Hoogte 2mm onder de A6-landscape page (105mm) zodat sub-pixel
+       rendering-overflow geen lege tussenpagina veroorzaakt. Zonder die
+       buffer ziet Chromium het label als "iets te groot" en print het in
+       twee pagina's: één voor het label en één lege. 2mm is op een
+       ZDesigner label-printer (die zelf al een advance-margin heeft)
+       visueel niet zichtbaar, maar geeft genoeg speling voor
+       renderingverschillen tussen Electron-versies.
+       page-break-inside: avoid voorkomt dat de browser het label over
+       twee pagina's wil splitsen. */
     #printArea .label {
       page-break-after: always;
       break-after: page;
+      page-break-inside: avoid;
+      break-inside: avoid;
       box-shadow: none !important;
       border: 0 !important;
-      width: 148mm; height: 105mm;
+      width: 148mm; height: 103mm;
+      box-sizing: border-box;
+      margin: 0 !important;
+      padding: 0 !important;
     }
     #printArea .label:last-child {
       page-break-after: auto;
