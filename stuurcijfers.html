@@ -512,8 +512,14 @@ async function boot() {
     window.location.href = "dashboard.html";
     return;
   }
-  // Sessie valideren + e-mail check (aan UI-kant; server doet hetzelfde)
-  const ALLOWED = new Set(["gerriette@fonteyn.nl", "dolf@fonteyn.nl"]);
+  // Sessie valideren + e-mail check (aan UI-kant; server doet hetzelfde).
+  // Accepteert zowel email-form als Logic4-username — /api/me geeft hier
+  // de username terug die bij login is gebruikt (bv. "fonteyn.dolf" als
+  // Dolf via Logic4-username inlogt), dus beide moeten gematched worden.
+  const ALLOWED = new Set([
+    "dolf@fonteyn.nl",       "fonteyn.dolf",
+    "gerriette@fonteyn.nl",  "fonteyn.gerriette", "gerriette",
+  ]);
   try {
     const r = await apiFetch("/api/me");
     if (!r.ok) { window.location.href = "dashboard.html"; return; }
