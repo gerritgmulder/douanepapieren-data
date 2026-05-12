@@ -49,6 +49,9 @@
   .page-hdr h1{margin:0;font-size:22px;letter-spacing:.2px}
   .sub{color:var(--muted);margin-top:4px;font-size:13px}
   main{padding:18px 28px 60px;max-width:1400px;margin:0 auto}
+  /* In de stamboom-view willen we de volle viewportbreedte gebruiken
+     zodat de fit-to-screen-schaal niet beperkt wordt door max-width 1400 */
+  body.view-stamboom main{max-width:none;padding-left:14px;padding-right:14px}
 
   /* Tabs */
   .tabs{display:flex;gap:0;margin-top:14px}
@@ -846,6 +849,8 @@ document.querySelectorAll(".tab-btn").forEach(btn=>{
     const t = btn.dataset.tab;
     document.getElementById("view-dashboard").classList.toggle("hidden", t!=="dashboard");
     document.getElementById("view-stamboom").classList.toggle("hidden", t!=="stamboom");
+    // Body-class triggert CSS-rule die main's max-width:1400 weghaalt
+    document.body.classList.toggle("view-stamboom", t==="stamboom");
     if(t==="stamboom") renderStamboom();
   });
 });
@@ -895,14 +900,14 @@ function renderStamboom(){
 
 /* Pas een transform:scale toe op .stamboom-inner zodat de hele stamboom
    binnen .stamboom-wrap past — zowel horizontaal als verticaal. Schaalt
-   alleen omlaag (nooit groter dan 100%). */
+   alleen omlaag (nooit groter dan 100%). scrollWidth/scrollHeight zijn
+   transform-onafhankelijk (= layout-grootte), dus we hoeven de bestaande
+   transform niet te resetten — dat voorkomt een visuele flash tijdens
+   resize-drag. */
 function fitStamboomToScreen() {
   const wrap = document.getElementById("stamboom-wrap");
   const inner = document.getElementById("stamboom-inner");
   if (!wrap || !inner) return;
-  // Eerst reset zodat we de natuurlijke grootte kunnen meten.
-  inner.style.transform = "none";
-  wrap.style.height = "";
   const naturalW = inner.scrollWidth;
   const naturalH = inner.scrollHeight;
   if (!naturalW || !naturalH) return;
@@ -1015,12 +1020,11 @@ $grid.addEventListener("keydown",(e)=>{
 document.getElementById("show-mothers").addEventListener("change",drawLines);
 document.getElementById("show-fathers").addEventListener("change",drawLines);
 
-/* Redraw lines + her-fit bij window-resize */
+/* Her-fit bij window-resize. Geen drawLines nodig: de SVG met lijnen
+   zit binnen .stamboom-inner en wordt door dezelfde transform geschaald
+   als de cards — lijnen volgen automatisch. */
 window.addEventListener("resize",()=>{
   if(!document.getElementById("view-stamboom").classList.contains("hidden")){
-    const inner = document.getElementById("stamboom-inner");
-    if (inner) inner.style.transform = "none";
-    drawLines();
     fitStamboomToScreen();
   }
 });
