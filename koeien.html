@@ -159,8 +159,11 @@
   .stamboom-toolbar label{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);cursor:pointer}
 
   .stamboom-wrap{position:relative;background:var(--panel);border:1px solid var(--line);
-    border-radius:10px;box-shadow:var(--shadow);overflow:auto}
-  .stamboom-inner{position:relative;width:max-content;min-width:100%}
+    border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
+  /* Inner heeft natuurlijke grid-grootte (~1750px breed); fitStamboomToScreen()
+     past een transform:scale toe zodat alles in 1 oogopslag past op het scherm. */
+  .stamboom-inner{position:relative;width:max-content;min-width:100%;
+    transform-origin:top left;transition:transform 80ms ease-out}
   .stamboom-grid{display:grid;
     grid-template-columns:repeat(8, 195px);
     grid-auto-rows:115px;
@@ -878,8 +881,39 @@ function renderStamboom(){
     $grid.appendChild(el);
   }
 
-  // Resize inner to hold grid properly
-  requestAnimationFrame(drawLines);
+  // Resize inner to hold grid properly, dan fit-to-screen toepassen.
+  // Belangrijk: drawLines() gebruikt getBoundingClientRect() — daarom moet
+  // de transform leeg zijn tijdens het tekenen, anders krijgen we geschaalde
+  // coördinaten en lopen de lijnen scheef. We scalen pas erna.
+  requestAnimationFrame(() => {
+    const inner = document.getElementById("stamboom-inner");
+    if (inner) inner.style.transform = "none";
+    drawLines();
+    fitStamboomToScreen();
+  });
+}
+
+/* Pas een transform:scale toe op .stamboom-inner zodat de hele stamboom
+   binnen .stamboom-wrap past — zowel horizontaal als verticaal. Schaalt
+   alleen omlaag (nooit groter dan 100%). */
+function fitStamboomToScreen() {
+  const wrap = document.getElementById("stamboom-wrap");
+  const inner = document.getElementById("stamboom-inner");
+  if (!wrap || !inner) return;
+  // Eerst reset zodat we de natuurlijke grootte kunnen meten.
+  inner.style.transform = "none";
+  wrap.style.height = "";
+  const naturalW = inner.scrollWidth;
+  const naturalH = inner.scrollHeight;
+  if (!naturalW || !naturalH) return;
+  const availW = wrap.clientWidth;
+  const wrapTop = wrap.getBoundingClientRect().top;
+  // Onder de wrap nog 40px ademruimte; minimum 300 zodat het niet
+  // belachelijk klein wordt op een klein venster.
+  const availH = Math.max(300, window.innerHeight - wrapTop - 40);
+  const scale = Math.min(availW / naturalW, availH / naturalH, 1);
+  inner.style.transform = `scale(${scale})`;
+  wrap.style.height = (naturalH * scale) + "px";
 }
 
 function drawLines(){
@@ -981,9 +1015,14 @@ $grid.addEventListener("keydown",(e)=>{
 document.getElementById("show-mothers").addEventListener("change",drawLines);
 document.getElementById("show-fathers").addEventListener("change",drawLines);
 
-/* Redraw lines on resize */
+/* Redraw lines + her-fit bij window-resize */
 window.addEventListener("resize",()=>{
-  if(!document.getElementById("view-stamboom").classList.contains("hidden")) drawLines();
+  if(!document.getElementById("view-stamboom").classList.contains("hidden")){
+    const inner = document.getElementById("stamboom-inner");
+    if (inner) inner.style.transform = "none";
+    drawLines();
+    fitStamboomToScreen();
+  }
 });
 
 // Initial load: eerst state uit KV halen, daarna renderen.
