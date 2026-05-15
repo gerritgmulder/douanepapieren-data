@@ -217,6 +217,20 @@
   .audit-table .fail-pill { background: #fee2e2; color: #991b1b; }
   .audit-table .col-num { text-align: right; font-variant-numeric: tabular-nums; }
 
+  /* Doorvoer-overzicht (batches) */
+  .batches-section { margin-bottom: 22px; }
+  .batches-header {
+    font-size: 13px; font-weight: 600; color: var(--ink);
+    margin: 0 0 8px; text-transform: none; letter-spacing: 0;
+  }
+  .rows-header { margin-top: 8px; color: var(--muted); font-weight: 500; }
+  .batches-table tbody tr td { padding: 8px 10px; }
+  .batches-table .who { font-weight: 600; }
+  .batches-table .when { color: var(--ink); white-space: nowrap; }
+  .batches-table .ok-count  { color: #166534; font-weight: 600; }
+  .batches-table .fail-count { color: #991b1b; font-weight: 600; }
+  .batches-table .fail-count.zero { color: var(--muted); font-weight: 400; }
+
   .hidden { display: none !important; }
 </style>
 </head>
@@ -323,6 +337,25 @@
         <button class="close" id="auditClose" type="button" title="Sluiten">×</button>
       </div>
       <div class="modal-body">
+        <!-- Overzicht per doorvoer-actie (= cluster van audit-regels) -->
+        <div id="batchesSection" class="batches-section hidden">
+          <div class="batches-header">Doorvoer-overzicht</div>
+          <table class="audit-table batches-table">
+            <thead>
+              <tr>
+                <th>Wanneer</th>
+                <th>Door</th>
+                <th class="col-num">Regels</th>
+                <th class="col-num">Geslaagd</th>
+                <th class="col-num">Mislukt</th>
+              </tr>
+            </thead>
+            <tbody id="batchesBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Detail per regel -->
+        <div id="rowsHeader" class="batches-header rows-header hidden">Alle regels</div>
         <table class="audit-table">
           <thead>
             <tr>
@@ -810,7 +843,7 @@ async function openAuditLog() {
   el("auditBody").innerHTML = "";
   el("auditEmpty").classList.add("hidden");
   try {
-    const r = await apiFetch("/api/order-status/audit-log?limit=300");
+    const r = await apiFetch("/api/order-status/audit-log?limit=1000");
     const j = await r.json();
     if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
     renderAuditLog(j);
@@ -824,11 +857,24 @@ function renderAuditLog(j) {
   el("auditMeta").textContent = `${rows.length} van ${j.total} entries getoond — ${j.path}`;
   const body = el("auditBody");
   body.innerHTML = "";
+  el("batchesSection").classList.add("hidden");
+  el("rowsHeader").classList.add("hidden");
   if (!rows.length) {
     el("auditEmpty").classList.remove("hidden");
     return;
   }
   el("auditEmpty").classList.add("hidden");
+
+  // ─── Doorvoer-overzicht (batches) ───
+  // Groepeer aangrenzende audit-regels van dezelfde user binnen 5 min als
+  // één doorvoer-actie. Een apply-batch van 200+ rijen duurt typisch
+  // <2 min in totaal; 5 min is veilige gap-grens.
+  const batches = groupAuditBatches(rows);
+  renderBatches(batches);
+  el("batchesSection").classList.remove("hidden");
+  el("rowsHeader").classList.remove("hidden");
+
+  // ─── Detail-tabel per regel ───
   for (const row of rows) {
     const tr = document.createElement("tr");
     if (row.success !== "true") tr.classList.add("fail-row");
@@ -849,6 +895,54 @@ function renderAuditLog(j) {
       <td>${escapeHtml(row.new_status_label || "")}</td>
       <td>${pill}</td>
       <td>${escapeHtml(row.error || "")}</td>
+    `;
+    body.appendChild(tr);
+  }
+}
+
+function groupAuditBatches(rows) {
+  // Sorteer chronologisch oplopend, batch-detectie is dan stabiel.
+  const sorted = rows.slice().sort((a, b) =>
+    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  const GAP_MS = 5 * 60 * 1000;
+  const batches = [];
+  let cur = null;
+  for (const r of sorted) {
+    const t = new Date(r.timestamp).getTime();
+    if (!cur || r.user !== cur.user || t - cur.lastT > GAP_MS) {
+      cur = { user: r.user || "—", firstT: t, lastT: t, success: 0, fail: 0, count: 0 };
+      batches.push(cur);
+    } else {
+      cur.lastT = t;
+    }
+    cur.count++;
+    if (r.success === "true") cur.success++;
+    else cur.fail++;
+  }
+  return batches.reverse(); // nieuwste eerst voor weergave
+}
+
+function renderBatches(batches) {
+  const body = el("batchesBody");
+  body.innerHTML = "";
+  for (const b of batches) {
+    const tr = document.createElement("tr");
+    const firstD = new Date(b.firstT);
+    const lastD  = new Date(b.lastT);
+    // Format: "13 mei 14:32" of "13 mei 14:32–14:35" als de batch langer dan 1 min duurde
+    const dateStr = firstD.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
+    const t1 = firstD.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+    const t2 = lastD.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+    const when = (t1 === t2)
+      ? `${dateStr} · ${t1}`
+      : `${dateStr} · ${t1}–${t2}`;
+    const failClass = b.fail === 0 ? "fail-count zero" : "fail-count";
+    tr.innerHTML = `
+      <td class="when">${escapeHtml(when)}</td>
+      <td class="who">${escapeHtml(b.user)}</td>
+      <td class="col-num">${b.count}</td>
+      <td class="col-num ok-count">${b.success}</td>
+      <td class="col-num ${failClass}">${b.fail}</td>
     `;
     body.appendChild(tr);
   }
