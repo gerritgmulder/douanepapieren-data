@@ -58,6 +58,15 @@ main { max-width: 1400px; margin: 0 auto; padding: 28px 24px 60px; }
   font-variant-numeric: tabular-nums; }
 .kpi .sub { font-size: 13px; color: var(--muted); }
 .kpi.placeholder .val { color: var(--muted); }
+
+/* Targets-tabel inputs */
+input.target-input {
+  font: inherit; font-size: 13px; text-align: right;
+  padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px;
+  width: 130px; font-variant-numeric: tabular-nums;
+}
+input.target-input:focus { border-color: var(--fonteyn-green); outline: none; }
+.hidden { display: none !important; }
 .kpi .delta { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
   display: inline-block; margin-top: 4px; }
 .kpi .delta.up   { background: #dcfce7; color: var(--ok); }
@@ -189,13 +198,40 @@ table.reviews .assigned-pill {
     </div>
   </div>
 
-  <!-- ═══ Omzet & target detail ═══ -->
-  <div class="card">
-    <div class="section-title">Omzet & target — detail <span class="soon-tag">Fase 2</span></div>
-    <div class="empty">
-      Hier komt straks de breakdown: omzet per maand, lopend vs. target, vergelijking met 2025.
-      Bron: Logic4 verkooporders + handmatig ingestelde jaartargets.
+  <!-- ═══ Jaartargets per afdeling ═══ -->
+  <div class="card" id="targetsCard">
+    <div class="section-title" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+      <span>Jaartargets per afdeling (<span id="targetsYear">…</span>)</span>
+      <span id="targetsActions">
+        <span id="targetsReadonlyHint" style="font-size:11px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0;" class="hidden">Alleen Gerrit en Fonteynbot kunnen bewerken.</span>
+        <button id="btnEditTargets" class="secondary hidden" type="button" style="padding:5px 12px;font-size:12px;">✏️ Targets bewerken</button>
+        <button id="btnSaveTargets" class="cta hidden" type="button" style="padding:5px 12px;font-size:12px;">💾 Opslaan</button>
+        <button id="btnCancelTargets" class="secondary hidden" type="button" style="padding:5px 12px;font-size:12px;">Annuleren</button>
+      </span>
     </div>
+    <table class="reviews" id="targetsTable">
+      <thead>
+        <tr>
+          <th>Afdeling</th>
+          <th class="col-num">Target</th>
+          <th class="col-num">Behaald</th>
+          <th class="col-num">%</th>
+        </tr>
+      </thead>
+      <tbody id="targetsBody"></tbody>
+      <tfoot>
+        <tr style="font-weight:600;background:#f9fafb;">
+          <td>Totaal</td>
+          <td class="col-num" id="targetsSumTarget">—</td>
+          <td class="col-num" id="targetsSumBehaald">—</td>
+          <td class="col-num" id="targetsSumPct">—</td>
+        </tr>
+      </tfoot>
+    </table>
+    <p style="margin:10px 0 0;font-size:12px;color:var(--muted);">
+      "Behaald" per afdeling vereist een mapping tussen Logic4-orders en deze afdelingen — komt zodra duidelijk is welk veld (artikelgroep / verkoper / kostenplaats) we daarvoor gebruiken.
+      Voor nu is alleen het <b>Totaal</b> ingevuld op basis van de Omzet-KPI.
+    </p>
   </div>
 
   <!-- ═══ Aantallen per categorie ═══ -->
@@ -351,6 +387,25 @@ async function loadRapportageKV() {
   }
 }
 
+// PUT volledige rapportage-state naar KV. We merge zelf zodat we per save
+// niet andere data (zoals straks reviews-assignments) overschrijven.
+async function saveRapportageKV(patch) {
+  const current = await loadRapportageKV();
+  const merged = {
+    ...current,
+    ...patch,
+    lastUpdated: new Date().toISOString(),
+    updatedBy: (localStorage.getItem(EMAIL_KEY) || "").toLowerCase(),
+  };
+  const r = await _origFetch(DATA_STORE_URL, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": DATA_STORE_AUTH },
+    body: JSON.stringify(merged),
+  });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return merged;
+}
+
 /* ─── Logic4 fetch: paginated orders met gegeven status ─── */
 // Logic4 GetOrders ondersteunt TakeRecords + SkipRecords. We pagineren tot er
 // minder dan PAGE_SIZE terugkomt of we de jaargrens overschrijden.
@@ -408,6 +463,142 @@ function ytdBoundary() {
   };
 }
 
+/* ─── Afdelingen + edit-permission ─── */
+// Vaste lijst — uitbreiden kan, verwijderen liever niet (anders gaan oude
+// targets-keys verloren in KV).
+const AFDELINGEN = [
+  "Spa dealers",
+  "Spa particulieren",
+  "Spa Fonteyn Houston",
+  "Spa Fonteyn UK",
+  "All4Spa onderdelen",
+  "Sauna's",
+  "Zwembaden",
+  "Tuinmeubelen",
+  "Buitenkeukens",
+  "Garantie",
+  "Service",
+];
+
+const TARGETS_EDIT_ALLOWED = new Set([
+  "gerrit@fonteyn.nl",     "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
+function userCanEditTargets() {
+  const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
+  return TARGETS_EDIT_ALLOWED.has(email);
+}
+
+/* ─── State-cache zodat we KPI-target kunnen updaten zonder Logic4-call ─── */
+let rapportageState = {
+  omzetYtd: 0,
+  countYtd: 0,
+  targets: {}, // { "Spa dealers": 1000000, ... } voor huidig jaar
+  year: new Date().getFullYear(),
+};
+
+/* ─── Render targets-tabel ─── */
+function renderTargets() {
+  const body = $("targetsBody");
+  body.innerHTML = "";
+  $("targetsYear").textContent = rapportageState.year;
+
+  let sumTarget = 0;
+  for (const naam of AFDELINGEN) {
+    const target = Number(rapportageState.targets[naam] || 0);
+    sumTarget += target;
+    const tr = document.createElement("tr");
+    // Target-cel: in lees-modus eur-format, in edit-modus input
+    const targetCell = `<span class="target-display">${target > 0 ? fmtEur(target) : "—"}</span>` +
+      `<input type="number" class="target-input hidden" data-afd="${escapeHtml(naam)}" value="${target || ""}" placeholder="0" min="0" step="10000">`;
+    tr.innerHTML = `
+      <td>${escapeHtml(naam)}</td>
+      <td class="col-num">${targetCell}</td>
+      <td class="col-num"><span style="color:var(--muted);">—</span></td>
+      <td class="col-num"><span style="color:var(--muted);">—</span></td>
+    `;
+    body.appendChild(tr);
+  }
+  // Totaal-rij
+  $("targetsSumTarget").textContent = sumTarget > 0 ? fmtEur(sumTarget) : "—";
+  $("targetsSumBehaald").textContent = rapportageState.omzetYtd > 0 ? fmtEur(rapportageState.omzetYtd) : "—";
+  if (sumTarget > 0 && rapportageState.omzetYtd > 0) {
+    const pct = (rapportageState.omzetYtd / sumTarget) * 100;
+    $("targetsSumPct").textContent = pct.toFixed(1).replace(".", ",") + "%";
+  } else {
+    $("targetsSumPct").textContent = "—";
+  }
+
+  // Knoppen + edit-permission
+  if (userCanEditTargets()) {
+    $("btnEditTargets").classList.remove("hidden");
+    $("targetsReadonlyHint").classList.add("hidden");
+  } else {
+    $("btnEditTargets").classList.add("hidden");
+    $("targetsReadonlyHint").classList.remove("hidden");
+  }
+}
+
+function setTargetsEditMode(on) {
+  // Toggle inputs vs spans
+  document.querySelectorAll("#targetsBody .target-display").forEach(el =>
+    el.classList.toggle("hidden", on));
+  document.querySelectorAll("#targetsBody .target-input").forEach(el =>
+    el.classList.toggle("hidden", !on));
+  $("btnEditTargets").classList.toggle("hidden", on || !userCanEditTargets());
+  $("btnSaveTargets").classList.toggle("hidden", !on);
+  $("btnCancelTargets").classList.toggle("hidden", !on);
+}
+
+async function saveTargetsFromUI() {
+  const newTargets = {};
+  document.querySelectorAll("#targetsBody .target-input").forEach(inp => {
+    const naam = inp.dataset.afd;
+    const v = Number(inp.value || 0);
+    if (v > 0) newTargets[naam] = v;
+  });
+  $("btnSaveTargets").disabled = true;
+  $("btnSaveTargets").textContent = "💾 Bezig…";
+  try {
+    const year = rapportageState.year;
+    const kv = await loadRapportageKV();
+    const allTargets = { ...(kv.targets || {}) };
+    allTargets[String(year)] = newTargets;
+    await saveRapportageKV({ targets: allTargets });
+    rapportageState.targets = newTargets;
+    setTargetsEditMode(false);
+    renderTargets();
+    updateKpiTargetFromState();
+  } catch (e) {
+    alert("Opslaan mislukt: " + e.message);
+  } finally {
+    $("btnSaveTargets").disabled = false;
+    $("btnSaveTargets").textContent = "💾 Opslaan";
+  }
+}
+
+function updateKpiTargetFromState() {
+  const sumTarget = AFDELINGEN.reduce((s, n) => s + Number(rapportageState.targets[n] || 0), 0);
+  if (sumTarget > 0) {
+    const pct = (rapportageState.omzetYtd / sumTarget) * 100;
+    const pctLabel = pct.toFixed(1).replace(".", ",") + "%";
+    const cls = pct >= 100 ? "up" : (pct >= 75 ? "flat" : "down");
+    setKpi("kpiTarget", fmtEur(sumTarget), `<span class="delta ${cls}">${pctLabel} behaald</span>`);
+    $("kpiTarget").classList.remove("placeholder");
+  } else {
+    setKpi("kpiTarget", "—", `<a href="#targetsCard" style="color:var(--fonteyn-green);">Stel jaartargets in ↓</a>`);
+  }
+}
+
+// Wire up de drie target-knoppen
+$("btnEditTargets").addEventListener("click", () => setTargetsEditMode(true));
+$("btnCancelTargets").addEventListener("click", () => {
+  setTargetsEditMode(false);
+  renderTargets(); // reset inputs naar gesavede waarden
+});
+$("btnSaveTargets").addEventListener("click", saveTargetsFromUI);
+
 async function loadKPIs() {
   const { thisYearStart, lastYearStart, lastYearSameDay } = ytdBoundary();
 
@@ -457,25 +648,19 @@ async function loadKPIs() {
     }
   }
 
-  // Targets uit KV
+  // Targets uit KV (cache in state zodat we ze los kunnen bewerken zonder
+  // de Logic4-fetch opnieuw te triggeren)
   const kv = await loadRapportageKV();
-  const targets = kv.targets || {};
   const year = new Date().getFullYear();
-  const yearTargets = targets[String(year)] || {};
-  const targetTotal = Object.values(yearTargets).reduce((s, v) => s + (Number(v) || 0), 0);
+  const yearTargets = (kv.targets || {})[String(year)] || {};
+  rapportageState.year = year;
+  rapportageState.omzetYtd = omzetYtd;
+  rapportageState.countYtd = countYtd;
+  rapportageState.targets = yearTargets;
 
   // ─── KPI's renderen ───
   setKpi("kpiOmzet", fmtEur(omzetYtd), "aanbetaalde orders YTD (status 25 + 30)");
-
-  if (targetTotal > 0) {
-    const pct = (omzetYtd / targetTotal) * 100;
-    const pctLabel = pct.toFixed(1).replace(".", ",") + "%";
-    const cls = pct >= 100 ? "up" : (pct >= 75 ? "flat" : "down");
-    setKpi("kpiTarget", fmtEur(targetTotal), `<span class="delta ${cls}">${pctLabel} behaald</span>`);
-  } else {
-    setKpi("kpiTarget", "—", `<a href="#targets" style="color:var(--fonteyn-green);">Stel jaartargets in ↓</a>`);
-  }
-
+  updateKpiTargetFromState();
   setKpi("kpiAantallen", fmtInt(countYtd), "aanbetaalde orders");
 
   // Vergelijking: dit jaar YTD vs vorig jaar YTD (zelfde dag-in-jaar)
@@ -493,6 +678,9 @@ async function loadKPIs() {
   ["kpiOmzet", "kpiTarget", "kpiAantallen", "kpiVorigJaar"].forEach(id => {
     $(id).classList.remove("placeholder");
   });
+
+  // Targets-tabel renderen met de zojuist opgehaalde state
+  renderTargets();
 }
 
 function setKpi(id, val, subHtml) {
