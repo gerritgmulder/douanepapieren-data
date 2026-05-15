@@ -266,11 +266,197 @@ $("hdr-logout").addEventListener("click", async () => {
   window.location.replace("dashboard.html");
 });
 
-/* ─── Refresh-knop — placeholder; in Fase 2 koppelen aan Logic4 ─── */
+/* ─── Logic4-helper: generieke API-call via helper-server proxy ─── */
+async function logic4(path, body) {
+  const r = await fetch("/api/logic4-call", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ path, method: "POST", body }),
+  });
+  if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
+  const j = await r.json();
+  if (!j.ok) throw new Error(`${path}: ${j.data?.Message || j.error || "Onbekende fout"}`);
+  return j.data;
+}
+
+/* ─── KV-storage voor targets (Cloudflare data-worker, bucket "rapportage") ─── */
+const DATA_STORE_URL  = "https://fonteyn-data-store.g-mulder.workers.dev/data/rapportage";
+const DATA_STORE_AUTH = "SV--QQW_xwIgrIdbjAozfgnxtloYitCZxEQ_S04gv2YupY4LY4KD7_QvfVkb8DGs";
+
+async function loadRapportageKV() {
+  try {
+    const r = await _origFetch(DATA_STORE_URL, {
+      headers: { "X-Fonteyn-Auth": DATA_STORE_AUTH },
+    });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return await r.json();
+  } catch (e) {
+    console.warn("[rapportage] KV-load mislukt:", e);
+    return {};
+  }
+}
+
+/* ─── Logic4 fetch: paginated orders met gegeven status ─── */
+// Logic4 GetOrders ondersteunt TakeRecords + SkipRecords. We pagineren tot er
+// minder dan PAGE_SIZE terugkomt of we de jaargrens overschrijden.
+const PAGE_SIZE = 500;
+const MAX_PAGES = 30; // max 15.000 orders per status, ruim voor één jaar
+
+async function fetchOrdersByStatus(statusId, minCreationDate) {
+  const all = [];
+  let skip = 0;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const data = await logic4("/v3/Orders/GetOrders", {
+      StatusId: statusId,
+      TakeRecords: PAGE_SIZE,
+      SkipRecords: skip,
+    });
+    const arr = Array.isArray(data) ? data : (data?.Orders || data?.SalesOrders || []);
+    if (!arr.length) break;
+    let stop = false;
+    for (const o of arr) {
+      const d = o.CreationDate ? new Date(o.CreationDate) : null;
+      if (d && minCreationDate && d < minCreationDate) {
+        // Orders komen typisch nieuwste eerst — zodra we orders ouder dan de
+        // min-datum tegenkomen, hoeven we niet door te pagineren. Maar we
+        // doorlopen wel deze pagina helemaal voor het geval de sortering
+        // niet strikt is.
+        stop = true;
+        continue;
+      }
+      all.push(o);
+    }
+    if (stop || arr.length < PAGE_SIZE) break;
+    skip += PAGE_SIZE;
+  }
+  return all;
+}
+
+/* ─── KPI-berekening ─── */
+function fmtEur(n) {
+  return new Intl.NumberFormat("nl-NL", {
+    style: "currency", currency: "EUR", maximumFractionDigits: 0,
+  }).format(Number(n) || 0);
+}
+function fmtInt(n) {
+  return new Intl.NumberFormat("nl-NL").format(Number(n) || 0);
+}
+
+function ytdBoundary() {
+  const now = new Date();
+  return {
+    thisYearStart: new Date(now.getFullYear(), 0, 1),
+    lastYearStart: new Date(now.getFullYear() - 1, 0, 1),
+    // "Zelfde dag vorig jaar" — voor eerlijke YTD-vergelijking
+    lastYearSameDay: new Date(now.getFullYear() - 1, now.getMonth(), now.getDate(), 23, 59, 59),
+    today: now,
+  };
+}
+
+async function loadKPIs() {
+  const { thisYearStart, lastYearStart, lastYearSameDay } = ytdBoundary();
+
+  setKpi("kpiOmzet", "Laden…", "");
+  setKpi("kpiTarget", "Laden…", "");
+  setKpi("kpiAantallen", "Laden…", "");
+  setKpi("kpiVorigJaar", "Laden…", "");
+
+  // Statussen 25 (30% aanbetaald) en 30 (Volledig betaald) — beide tellen mee
+  // voor "Omzet" volgens Gerrits definitie: alles waar ≥€1 betaald is = 100% mee.
+  // Logic4 schuift de status naar 25 zodra eerste betaling binnen is.
+  const STATUS_30_AANBETAALD = 25;
+  const STATUS_VOLLEDIG_BETAALD = 30;
+
+  // Voor YTD-vorig-jaar moeten we tot lastYearStart terug; voor dit jaar tot thisYearStart.
+  // Eén pagineer-loop per status die teruggaat tot lastYearStart geeft alle data in één keer.
+  let orders25 = [];
+  let orders30 = [];
+  try {
+    [orders25, orders30] = await Promise.all([
+      fetchOrdersByStatus(STATUS_30_AANBETAALD, lastYearStart),
+      fetchOrdersByStatus(STATUS_VOLLEDIG_BETAALD, lastYearStart),
+    ]);
+  } catch (e) {
+    setKpi("kpiOmzet", "Fout", e.message);
+    setKpi("kpiTarget", "—", "Target nog niet ingesteld");
+    setKpi("kpiAantallen", "Fout", "");
+    setKpi("kpiVorigJaar", "Fout", "");
+    console.error(e);
+    return;
+  }
+  const allOrders = orders25.concat(orders30);
+
+  // Split: this year (≥ thisYearStart) en last year YTD (lastYearStart ≤ d ≤ lastYearSameDay)
+  let omzetYtd = 0, countYtd = 0;
+  let omzetLastYtd = 0, countLastYtd = 0;
+  for (const o of allOrders) {
+    if (!o.CreationDate) continue;
+    const d = new Date(o.CreationDate);
+    const amount = Number(o.Totals?.AmountIncl ?? 0);
+    if (d >= thisYearStart) {
+      omzetYtd += amount;
+      countYtd += 1;
+    } else if (d >= lastYearStart && d <= lastYearSameDay) {
+      omzetLastYtd += amount;
+      countLastYtd += 1;
+    }
+  }
+
+  // Targets uit KV
+  const kv = await loadRapportageKV();
+  const targets = kv.targets || {};
+  const year = new Date().getFullYear();
+  const yearTargets = targets[String(year)] || {};
+  const targetTotal = Object.values(yearTargets).reduce((s, v) => s + (Number(v) || 0), 0);
+
+  // ─── KPI's renderen ───
+  setKpi("kpiOmzet", fmtEur(omzetYtd), "aanbetaalde orders YTD (status 25 + 30)");
+
+  if (targetTotal > 0) {
+    const pct = (omzetYtd / targetTotal) * 100;
+    const pctLabel = pct.toFixed(1).replace(".", ",") + "%";
+    const cls = pct >= 100 ? "up" : (pct >= 75 ? "flat" : "down");
+    setKpi("kpiTarget", fmtEur(targetTotal), `<span class="delta ${cls}">${pctLabel} behaald</span>`);
+  } else {
+    setKpi("kpiTarget", "—", `<a href="#targets" style="color:var(--fonteyn-green);">Stel jaartargets in ↓</a>`);
+  }
+
+  setKpi("kpiAantallen", fmtInt(countYtd), "aanbetaalde orders");
+
+  // Vergelijking: dit jaar YTD vs vorig jaar YTD (zelfde dag-in-jaar)
+  if (omzetLastYtd > 0) {
+    const delta = ((omzetYtd - omzetLastYtd) / omzetLastYtd) * 100;
+    const deltaLabel = (delta >= 0 ? "+" : "") + delta.toFixed(1).replace(".", ",") + "%";
+    const cls = delta > 0 ? "up" : (delta < 0 ? "down" : "flat");
+    setKpi("kpiVorigJaar", fmtEur(omzetLastYtd),
+      `t/m vandaag in ${year - 1} · <span class="delta ${cls}">${deltaLabel} dit jaar</span>`);
+  } else {
+    setKpi("kpiVorigJaar", fmtEur(omzetLastYtd), `t/m vandaag in ${year - 1}`);
+  }
+
+  // Niet meer "placeholder"-stijl
+  ["kpiOmzet", "kpiTarget", "kpiAantallen", "kpiVorigJaar"].forEach(id => {
+    $(id).classList.remove("placeholder");
+  });
+}
+
+function setKpi(id, val, subHtml) {
+  $(id + "Val").textContent = val;
+  $(id + "Sub").innerHTML = subHtml || "";
+}
+
+/* ─── Refresh-knop — haalt alles opnieuw op ─── */
 $("btnRefresh").addEventListener("click", () => {
-  // TODO Fase 2: haal omzet/target/aantallen op uit Logic4, update KPI's.
-  alert("Nog niet aangesloten — komt in Fase 2 (Logic4-integratie).");
+  $("btnRefresh").disabled = true;
+  $("btnRefresh").textContent = "⟳ Bezig…";
+  loadKPIs().finally(() => {
+    $("btnRefresh").disabled = false;
+    $("btnRefresh").textContent = "↻ Vernieuwen";
+  });
 });
+
+/* ─── Initial load ─── */
+loadKPIs();
 </script>
 </body>
 </html>

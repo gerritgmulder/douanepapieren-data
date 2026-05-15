@@ -22,6 +22,7 @@
 const ALLOWED_BUCKETS = new Set([
   "personeel",
   "koeien",
+  "rapportage",       // Jaartargets per afdeling, review-toewijzingen
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
