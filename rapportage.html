@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>Fonteyn — Rapportage</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --fonteyn-green:      #144734;
+  --fonteyn-green-dark: #0d3325;
+  --fonteyn-lime:       #8bc53f;
+  --fonteyn-lime-dark:  #72a531;
+  --fonteyn-cream:      #fff9ae;
+  --ink:                #1d1d1d;
+  --muted:              #6b7280;
+  --border:             #e0e0d8;
+  --bg:                 #f5f4ef;
+  --card:               #ffffff;
+  --ok:                 #166534;
+  --bad:                #991b1b;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; font-family: 'Montserrat', system-ui, sans-serif; color: var(--ink); background: var(--bg); }
+
+header.hdr {
+  background: var(--fonteyn-green); color: #fff; padding: 14px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+header.hdr .brand { display: flex; align-items: center; gap: 16px; }
+header.hdr .back  { color:#fff;text-decoration:none;font-size:13px;padding:5px 10px;
+  border:1px solid rgba(255,255,255,0.3);border-radius:6px; }
+header.hdr .back:hover { background: rgba(255,255,255,0.1); }
+header.hdr img.logo { height: 38px; }
+header.hdr h1 { font-size: 18px; font-weight: 600; margin: 0; }
+header.hdr .user { font-size: 13px; display: flex; align-items: center; gap: 12px; }
+header.hdr .logout { background: transparent; border: 1px solid rgba(255,255,255,0.3);
+  color:#fff;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-family: inherit; }
+header.hdr .logout:hover { background: rgba(255,255,255,0.1); }
+
+main { max-width: 1400px; margin: 0 auto; padding: 28px 24px 60px; }
+.section-title { font-size: 13px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .06em; margin: 0 0 12px; font-weight: 600; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 20px; margin-bottom: 18px; }
+
+/* KPI-kaarten bovenaan */
+.kpi-grid { display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-bottom: 22px; }
+.kpi {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 20px; position: relative;
+}
+.kpi .lbl { font-size: 12px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .05em; font-weight: 600; }
+.kpi .val { font-size: 28px; font-weight: 700; margin: 6px 0 2px;
+  font-variant-numeric: tabular-nums; }
+.kpi .sub { font-size: 13px; color: var(--muted); }
+.kpi.placeholder .val { color: var(--muted); }
+.kpi .delta { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  display: inline-block; margin-top: 4px; }
+.kpi .delta.up   { background: #dcfce7; color: var(--ok); }
+.kpi .delta.down { background: #fee2e2; color: var(--bad); }
+.kpi .delta.flat { background: #f3f4f6; color: var(--muted); }
+
+/* Actie-balk */
+.toolbar { display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 18px; gap: 12px; flex-wrap: wrap; }
+.toolbar h2 { font-size: 22px; font-weight: 600; margin: 0; }
+.toolbar .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+button.cta {
+  background: var(--fonteyn-lime); color: var(--ink); border: 0;
+  padding: 8px 14px; border-radius: 6px; font: inherit; font-weight: 600;
+  font-size: 13px; cursor: pointer;
+}
+button.cta:hover { background: var(--fonteyn-lime-dark); color: #fff; }
+button.secondary {
+  background: #fff; color: var(--ink); border: 1px solid var(--border);
+  padding: 8px 14px; border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer;
+}
+
+/* Soon-tag voor placeholders */
+.soon-tag {
+  background: var(--fonteyn-cream); color: #92400e;
+  border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 600;
+  display: inline-block; margin-left: 8px;
+}
+
+/* Reviews-tabel */
+table.reviews { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.reviews th, table.reviews td {
+  padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+table.reviews th {
+  background: #f9fafb; color: var(--muted);
+  font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+}
+table.reviews .stars { color: var(--fonteyn-lime-dark); font-weight: 700; white-space: nowrap; }
+table.reviews .src { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+
+/* Empty / loading */
+.empty {
+  padding: 24px; text-align: center; color: var(--muted); font-size: 14px;
+  background: #fafaf6; border-radius: 8px;
+}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <div class="brand">
+    <a href="dashboard.html" class="back">← Dashboard</a>
+    <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+    <h1>Rapportage</h1>
+  </div>
+  <div class="user">
+    <span id="userEmail">—</span>
+    <button class="logout" id="hdr-logout">Uitloggen</button>
+  </div>
+</header>
+
+<main>
+  <div class="toolbar">
+    <h2>Fonteyn Rapportage <span id="ytdLabel" style="font-size:14px;font-weight:500;color:var(--muted);">— laden…</span></h2>
+    <div class="actions">
+      <button class="secondary" id="btnRefresh" title="Haal de meest recente cijfers op uit Logic4">↻ Vernieuwen</button>
+    </div>
+  </div>
+
+  <!-- ═══ KPI's ═══ -->
+  <div class="kpi-grid">
+    <div class="kpi placeholder" id="kpiOmzet">
+      <div class="lbl">Omzet YTD</div>
+      <div class="val" id="kpiOmzetVal">—</div>
+      <div class="sub" id="kpiOmzetSub">Komt in fase 2 (Logic4)</div>
+    </div>
+    <div class="kpi placeholder" id="kpiTarget">
+      <div class="lbl">Jaartarget</div>
+      <div class="val" id="kpiTargetVal">—</div>
+      <div class="sub" id="kpiTargetSub">% behaald</div>
+    </div>
+    <div class="kpi placeholder" id="kpiAantallen">
+      <div class="lbl">Aantallen YTD</div>
+      <div class="val" id="kpiAantallenVal">—</div>
+      <div class="sub" id="kpiAantallenSub">orders / producten</div>
+    </div>
+    <div class="kpi placeholder" id="kpiVorigJaar">
+      <div class="lbl">Vorig jaar (2025)</div>
+      <div class="val" id="kpiVorigJaarVal">—</div>
+      <div class="sub" id="kpiVorigJaarSub">totaal</div>
+    </div>
+  </div>
+
+  <!-- ═══ Omzet & target detail ═══ -->
+  <div class="card">
+    <div class="section-title">Omzet & target — detail <span class="soon-tag">Fase 2</span></div>
+    <div class="empty">
+      Hier komt straks de breakdown: omzet per maand, lopend vs. target, vergelijking met 2025.
+      Bron: Logic4 verkooporders + handmatig ingestelde jaartargets.
+    </div>
+  </div>
+
+  <!-- ═══ Aantallen per categorie ═══ -->
+  <div class="card">
+    <div class="section-title">Aantallen per categorie <span class="soon-tag">Fase 2</span></div>
+    <div class="empty">
+      Verkochte aantallen YTD per artikelgroep (Spa dealers, Spa particulieren, Sauna's, Zwembaden, Tuinmeubelen, …).
+      Klikbaar → drill-down per artikel.
+    </div>
+  </div>
+
+  <!-- ═══ Reviews ═══ -->
+  <div class="card">
+    <div class="section-title">Reviews per adviseur <span class="soon-tag">Fase 3 + 4</span></div>
+    <p style="margin:0 0 14px;font-size:13px;color:var(--muted);">
+      Reviews worden automatisch opgehaald van Google (Fonteyn / Fonteyn Spa's / Passion Spa's / Passion Icebaths),
+      Trustpilot (Fonteyn / Fonteyn Spa's) en Klantenvertellen (Fonteyn / Fonteyn Spa's / Passion Spa's).
+      Wanneer er een adviseur-naam in de review staat, doet het systeem een suggestie. Don of Arno bevestigen,
+      en de review telt mee voor de score van die adviseur (1 vijfsterren-review = 1 ster bij Fonteyn).
+    </p>
+    <table class="reviews">
+      <thead>
+        <tr>
+          <th>Adviseur</th>
+          <th>Sterren</th>
+          <th>Laatste review</th>
+          <th>Open suggesties</th>
+        </tr>
+      </thead>
+      <tbody id="reviewsBody">
+        <tr><td colspan="4" class="empty">Nog niet geactiveerd — komt in Fase 3 (scraper-infrastructuur) en Fase 4 (toewijzing-workflow).</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══ Open suggesties — Don/Arno toewijzen ═══ -->
+  <div class="card">
+    <div class="section-title">Open review-suggesties — toewijzen aan adviseur <span class="soon-tag">Fase 4</span></div>
+    <div class="empty">
+      Inkomende reviews waar het systeem een adviseur vermoedt, maar nog handmatige bevestiging nodig heeft.
+      Don/Arno bekijken hier de tekst + suggestie, klikken "Toewijzen" of "Aanpassen + toewijzen".
+    </div>
+  </div>
+</main>
+
+<script>
+/* ─── Session-guard + access-check ─── */
+const SESSION_KEY = "fp.session";
+const EMAIL_KEY   = "fp.email";
+
+(function sessionGuard() {
+  if (!localStorage.getItem(SESSION_KEY)) {
+    window.location.replace("dashboard.html");
+    throw new Error("Geen sessie");
+  }
+})();
+
+const RAPPORTAGE_ALLOWED = new Set([
+  "gerrit@fonteyn.nl",     "gerrit",
+  "don@fonteyn.nl",        "fonteyn.don",
+  "arno@fonteyn.nl",       "fonteyn.arno",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+(function accessCheck() {
+  const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
+  if (!RAPPORTAGE_ALLOWED.has(email)) {
+    document.body.innerHTML =
+      "<main style='padding:40px;text-align:center;'>" +
+      "<h1>Geen toegang</h1>" +
+      "<p>Rapportage is alleen voor Gerrit, Don, Arno, Dolf en Fonteynbot.</p>" +
+      "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
+    throw new Error("Geen toegang");
+  }
+})();
+
+/* ─── Auth-fetch (zelfde patroon als andere modules) ─── */
+const _origFetch = window.fetch.bind(window);
+window.fetch = async function(input, init = {}) {
+  const url = typeof input === "string" ? input : input.url;
+  const isApi = url && url.startsWith("/api/");
+  if (isApi) {
+    const id = localStorage.getItem(SESSION_KEY);
+    init.headers = { ...(init.headers || {}), "Authorization": "Bearer " + id };
+  }
+  const r = await _origFetch(input, init);
+  if (isApi && r.status === 401) {
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(EMAIL_KEY);
+    window.location.replace("dashboard.html");
+  }
+  return r;
+};
+
+/* ─── Header-binding ─── */
+const $ = (id) => document.getElementById(id);
+document.addEventListener("DOMContentLoaded", () => {
+  $("userEmail").textContent = localStorage.getItem(EMAIL_KEY) || "—";
+  $("ytdLabel").textContent = "— per " + new Date().toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
+});
+$("hdr-logout").addEventListener("click", async () => {
+  try { await fetch("/api/logout", { method: "POST" }); } catch {}
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(EMAIL_KEY);
+  window.location.replace("dashboard.html");
+});
+
+/* ─── Refresh-knop — placeholder; in Fase 2 koppelen aan Logic4 ─── */
+$("btnRefresh").addEventListener("click", () => {
+  // TODO Fase 2: haal omzet/target/aantallen op uit Logic4, update KPI's.
+  alert("Nog niet aangesloten — komt in Fase 2 (Logic4-integratie).");
+});
+</script>
+</body>
+</html>

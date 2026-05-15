@@ -294,6 +294,13 @@
         <p>Interactief overzicht van Dolfs koeien — status, stamboom en aantekeningen, centraal opgeslagen voor Dolf en Gerrit.</p>
       </a>
 
+      <!-- Rapportage — management-overzicht, alleen voor Gerrit/Don/Arno/Dolf/Fonteynbot. -->
+      <a href="rapportage.html" class="tile hidden" id="tileRapportage">
+        <div class="icon">📈</div>
+        <h3>Rapportage</h3>
+        <p>Omzet, jaartarget, aantallen en vergelijking met vorig jaar. Plus reviews per adviseur (Google, Trustpilot, Klantenvertellen) met toewijzing-workflow.</p>
+      </a>
+
       <!-- Orderstatus — alleen zichtbaar voor gerrit@, don@, arno@, dolf@. -->
       <a href="order-status.html" class="tile hidden" id="tileOrderStatus">
         <div class="icon">📊</div>
@@ -472,6 +479,16 @@ const KOEIEN_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Welke logins mogen de Rapportage-tegel zien.
+// Management-niveau: Gerrit, Don, Arno, Dolf + Fonteynbot.
+const RAPPORTAGE_EMAILS = new Set([
+  "gerrit@fonteyn.nl",     "gerrit",
+  "don@fonteyn.nl",        "fonteyn.don",
+  "arno@fonteyn.nl",       "fonteyn.arno",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Welke logins mogen de Orderstatus-tegel zien.
 // Server (server/index.js → ORDERSTATUS_ALLOWED) doet dezelfde check.
 const ORDERSTATUS_EMAILS = new Set([
@@ -524,6 +541,8 @@ function showDashboard(email) {
   el("tilePersoneel").classList.toggle("hidden", !PERSONEEL_EMAILS.has(lc));
   // Koeien-tegel — Dolf + Gerrit + bot
   el("tileKoeien").classList.toggle("hidden", !KOEIEN_EMAILS.has(lc));
+  // Rapportage-tegel — management + bot
+  el("tileRapportage").classList.toggle("hidden", !RAPPORTAGE_EMAILS.has(lc));
   // Eikensingel-tegel alleen tonen voor Fransje + team + Danique
   el("tileEikensingel").classList.toggle("hidden", !EIKENSINGEL_EMAILS.has(lc));
 }
