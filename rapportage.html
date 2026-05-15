@@ -719,6 +719,71 @@ const DEMO_ADVISORS = [
   { id: "a-em", voornaam: "Eva",        achternaam: "Martens",    afdeling: "Tuinmeubelen" },
 ];
 
+/* ─── Adviseurs uit Logic4 — probeert meerdere kandidaat-endpoints ─── */
+// Logic4 hanteert /v3/<Entity>/Get<Entity>-conventie. We proberen in volgorde
+// van meest-specifiek (sales-rep) → minst-specifiek (alle users). Eerste die
+// data teruggeeft wint. Resultaat wordt genormaliseerd naar dezelfde structuur
+// als DEMO_ADVISORS.
+async function loadAdvisorsFromLogic4() {
+  const candidates = [
+    "/v3/SalesEmployees/GetSalesEmployees",
+    "/v3/Users/GetUsers",
+    "/v3/Employees/GetEmployees",
+    "/v3/Personnel/GetPersonnel",
+    "/v3/Globalizations/GetUsers",
+  ];
+  for (const ep of candidates) {
+    try {
+      const data = await logic4(ep, { TakeRecords: 500 });
+      const arr = Array.isArray(data) ? data
+        : (data?.Users || data?.Employees || data?.SalesEmployees
+        || data?.Personnel || data?.Items || null);
+      if (!arr || !arr.length) continue;
+      const advisors = arr.map(u => {
+        // Logic4-velden verschillen per endpoint — pak wat we kunnen
+        const firstName = u.FirstName || u.Voornaam || "";
+        const lastName  = u.LastName  || u.Achternaam || u.Surname || "";
+        const full = (firstName + " " + lastName).trim() || u.FullName || u.Name || u.DisplayName || "";
+        const [vnFallback, ...rest] = full.split(/\s+/);
+        return {
+          id: String(u.Id ?? u.UserId ?? u.EmployeeId ?? u.Login ?? full),
+          voornaam: firstName || vnFallback || "",
+          achternaam: lastName || rest.join(" ") || "",
+          afdeling: u.Department || u.DepartmentName || u.Function || u.Role || "",
+          email: u.Email || u.EmailAddress || "",
+          raw: u,
+        };
+      }).filter(a => a.voornaam || a.achternaam);
+      if (advisors.length) {
+        console.log(`[advisors] geladen via ${ep}: ${advisors.length} adviseurs`);
+        return { endpoint: ep, advisors };
+      }
+    } catch (e) {
+      console.warn(`[advisors] ${ep} faalde:`, e.message);
+    }
+  }
+  console.warn("[advisors] geen werkend Logic4-endpoint gevonden — terugval naar DEMO_ADVISORS");
+  return null;
+}
+
+async function refreshAdvisors() {
+  try {
+    const result = await loadAdvisorsFromLogic4();
+    if (result && result.advisors.length) {
+      window.__advisors = result.advisors;
+      const tag = document.getElementById("reviewsModeTag");
+      if (tag) tag.textContent = `Adviseurs uit Logic4 (${result.advisors.length}) · demo-reviews`;
+      renderReviews();
+    } else {
+      // Demo blijft staan; tag toont expliciet wat we doen
+      const tag = document.getElementById("reviewsModeTag");
+      if (tag) tag.textContent = `Demo-data (geen Logic4-endpoint gevonden)`;
+    }
+  } catch (e) {
+    console.error("[advisors] laden mislukt:", e);
+  }
+}
+
 // Test-reviews — gemixt zodat we matching-edge-cases zien:
 //   ✓ Volledige naam in tekst (hoogste score)
 //   ✓ Alleen voornaam, redelijk uniek
@@ -877,15 +942,21 @@ function saveAssignments(map) {
 }
 
 /* ─── Render: open suggesties + aggregatie per adviseur ─── */
+// Geeft de echte adviseurs-lijst als die uit Logic4 geladen is, anders demo
+function getAdvisors() {
+  return (window.__advisors && window.__advisors.length) ? window.__advisors : DEMO_ADVISORS;
+}
+
 function renderReviews() {
+  const advisors = getAdvisors();
   const assignments = loadAssignments(); // reviewId → advisorId | "none"
-  const advisorById = Object.fromEntries(DEMO_ADVISORS.map(a => [a.id, a]));
+  const advisorById = Object.fromEntries(advisors.map(a => [a.id, a]));
 
   // Suggesties tabel
   const sBody = $("suggestionsBody");
   sBody.innerHTML = "";
   for (const r of DEMO_REVIEWS) {
-    const candidates = matchAdvisorsInText(r.text, DEMO_ADVISORS);
+    const candidates = matchAdvisorsInText(r.text, advisors);
     const top = candidates[0] || null;
     const assigned = assignments[r.id];
 
@@ -915,7 +986,7 @@ function renderReviews() {
     // Dropdown met alle adviseurs, defaults op de top-suggestie
     const defaultId = assigned ?? (top ? top.advisorId : "");
     const options = [`<option value="">— (overslaan) —</option>`]
-      .concat(DEMO_ADVISORS.map(a =>
+      .concat(advisors.map(a =>
         `<option value="${a.id}" ${a.id === defaultId ? "selected" : ""}>${escapeHtml(a.voornaam + " " + a.achternaam)}</option>`));
     const pickCell = `<select class="advisor-pick" data-review="${escapeHtml(r.id)}" ${assigned ? "disabled" : ""}>${options.join("")}</select>`;
 
@@ -939,7 +1010,7 @@ function renderReviews() {
 
   // Aggregatie per adviseur (alleen toegewezen reviews tellen mee voor sterren!)
   const aggregate = {};
-  for (const a of DEMO_ADVISORS) {
+  for (const a of advisors) {
     aggregate[a.id] = {
       advisor: a, stars: 0, count: 0, sumRating: 0, lastDate: "",
     };
@@ -999,7 +1070,8 @@ function escapeHtml(s) {
 
 /* ─── Initial load ─── */
 loadKPIs();
-renderReviews();
+renderReviews();         // direct met demo-adviseurs zodat UI niet leeg is
+refreshAdvisors();       // probeert Logic4; bij succes re-rendert met echte lijst
 </script>
 </body>
 </html>
