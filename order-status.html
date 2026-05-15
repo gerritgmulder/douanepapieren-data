@@ -66,6 +66,16 @@
   .panel h2 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
   .panel .sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
 
+  /* Subtiele info-strook: wanneer de laatste keer doorgevoerd is. */
+  .last-doorvoer {
+    font-size: 12.5px; color: var(--muted);
+    background: #f6f5f0; border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 12px; margin: 0 0 14px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .last-doorvoer.never { background: #fff7ed; color: #92400e; border-color: #fde68a; }
+  .last-doorvoer .clock { font-size: 14px; }
+
   .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   button {
     background: var(--fonteyn-lime); color: var(--fonteyn-green-dark); border: 0; padding: 9px 14px; border-radius: 7px;
@@ -244,6 +254,8 @@
         <b>Verkooporder</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald, en
         adviseert de juiste status. Bij een dry-run wordt nog niets in Logic4 gewijzigd.
       </p>
+
+      <div id="lastDoorvoer" class="last-doorvoer">Laatste doorvoer wordt geladen…</div>
 
       <div class="actions">
         <button id="btnDryRun" type="button">Dry-run starten</button>
@@ -654,6 +666,58 @@ async function boot() {
     return;
   }
   el("mainView").classList.remove("hidden");
+  refreshLastDoorvoer();
+}
+
+// ─── Laatste-doorvoer-indicator ────────────────────────────────
+function formatRelative(ms) {
+  const sec = Math.round(ms / 1000);
+  if (sec < 60)       return `${sec} sec geleden`;
+  const min = Math.round(sec / 60);
+  if (min < 60)       return `${min} min geleden`;
+  const hr  = Math.round(min / 60);
+  if (hr  < 24)       return `${hr} uur geleden`;
+  const day = Math.round(hr / 24);
+  if (day < 30)       return `${day} dag${day === 1 ? "" : "en"} geleden`;
+  const mo  = Math.round(day / 30);
+  if (mo  < 12)       return `${mo} maand${mo === 1 ? "" : "en"} geleden`;
+  const yr  = Math.round(mo / 12);
+  return `${yr} jaar geleden`;
+}
+
+function formatDateNL(d) {
+  const months = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+  const dd = d.getDate();
+  const mm = months[d.getMonth()];
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${dd} ${mm} ${hh}:${mi}`;
+}
+
+async function refreshLastDoorvoer() {
+  const box = el("lastDoorvoer");
+  if (!box) return;
+  try {
+    const r = await apiFetch("/api/order-status/audit-log?limit=1");
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    const last = (j.rows || [])[0];
+    if (!last || !last.timestamp) {
+      box.classList.add("never");
+      box.innerHTML = `<span class="clock">⏱</span><span>Nog niet eerder doorgevoerd.</span>`;
+      return;
+    }
+    const d = new Date(last.timestamp);
+    if (isNaN(d.getTime())) throw new Error("Ongeldige timestamp");
+    const rel = formatRelative(Date.now() - d.getTime());
+    const user = last.user ? ` door <b>${escapeHtml(last.user)}</b>` : "";
+    box.classList.remove("never");
+    box.title = d.toISOString();
+    box.innerHTML = `<span class="clock">⏱</span><span>Laatste doorvoer: <b>${formatDateNL(d)}</b>${user} (${rel})</span>`;
+  } catch (e) {
+    box.classList.remove("never");
+    box.innerHTML = `<span class="clock">⏱</span><span>Laatste doorvoer onbekend (${escapeHtml(e.message)}).</span>`;
+  }
 }
 
 el("btnDryRun").addEventListener("click", runDryRun);
@@ -725,6 +789,8 @@ async function runApply() {
     }
     setProgress(100);
     setTimeout(() => setProgress(null), 800);
+    // Laatste-doorvoer-indicator bijwerken (gebeurt anders pas bij volgende page-load)
+    refreshLastDoorvoer();
   } catch (e) {
     console.error(e);
     setStatus("bad", "Fout bij doorvoeren: " + e.message);
