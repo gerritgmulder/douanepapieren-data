@@ -97,8 +97,45 @@ table.reviews th {
   background: #f9fafb; color: var(--muted);
   font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
 }
+table.reviews th.col-num, table.reviews td.col-num { text-align: right; font-variant-numeric: tabular-nums; }
 table.reviews .stars { color: var(--fonteyn-lime-dark); font-weight: 700; white-space: nowrap; }
-table.reviews .src { font-size: 11px; color: var(--muted); text-transform: uppercase; }
+table.reviews .src { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+table.reviews .src.google         { color: #4285f4; }
+table.reviews .src.trustpilot     { color: #00b67a; }
+table.reviews .src.klantenvertellen { color: #d65a31; }
+table.reviews .review-text {
+  font-size: 12.5px; color: var(--ink); max-width: 380px;
+  overflow: hidden; text-overflow: ellipsis;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+table.reviews .suggestion {
+  font-size: 12px; color: var(--ink); line-height: 1.4;
+}
+table.reviews .suggestion .conf {
+  display: inline-block; padding: 1px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 600; margin-left: 6px;
+  background: #f3f4f6; color: var(--muted);
+}
+table.reviews .suggestion .conf.high { background: #dcfce7; color: var(--ok); }
+table.reviews .suggestion .conf.med  { background: #fef3c7; color: #92400e; }
+table.reviews .suggestion .conf.low  { background: #fee2e2; color: var(--bad); }
+table.reviews .suggestion .reason { color: var(--muted); font-size: 10.5px; font-style: italic; }
+table.reviews select.advisor-pick {
+  font: inherit; font-size: 12px; padding: 4px 6px;
+  border: 1px solid var(--border); border-radius: 4px; min-width: 130px;
+}
+table.reviews button.assign-btn {
+  background: var(--fonteyn-lime); color: var(--ink); border: 0;
+  padding: 5px 10px; border-radius: 4px; font: inherit; font-size: 12px;
+  font-weight: 600; cursor: pointer;
+}
+table.reviews button.assign-btn:hover { background: var(--fonteyn-lime-dark); color: #fff; }
+table.reviews tr.assigned { opacity: 0.4; }
+table.reviews tr.assigned button.assign-btn { display: none; }
+table.reviews .assigned-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  background: #dcfce7; color: var(--ok); font-size: 11px; font-weight: 600;
+}
 
 /* Empty / loading */
 .empty {
@@ -170,37 +207,55 @@ table.reviews .src { font-size: 11px; color: var(--muted); text-transform: upper
     </div>
   </div>
 
-  <!-- ═══ Reviews ═══ -->
+  <!-- ═══ Reviews per adviseur ═══ -->
   <div class="card">
-    <div class="section-title">Reviews per adviseur <span class="soon-tag">Fase 3 + 4</span></div>
+    <div class="section-title">Reviews per adviseur
+      <span class="soon-tag" id="reviewsModeTag">Demo-data</span>
+    </div>
     <p style="margin:0 0 14px;font-size:13px;color:var(--muted);">
-      Reviews worden automatisch opgehaald van Google (Fonteyn / Fonteyn Spa's / Passion Spa's / Passion Icebaths),
-      Trustpilot (Fonteyn / Fonteyn Spa's) en Klantenvertellen (Fonteyn / Fonteyn Spa's / Passion Spa's).
-      Wanneer er een adviseur-naam in de review staat, doet het systeem een suggestie. Don of Arno bevestigen,
-      en de review telt mee voor de score van die adviseur (1 vijfsterren-review = 1 ster bij Fonteyn).
+      Eén vijfsterren-review = 1 ster bij Fonteyn. Toekenning gebeurt na bevestiging
+      door Don of Arno via de tabel hieronder ("Open review-suggesties").
+      Bron-data komt straks van Google, Trustpilot en Klantenvertellen — voor nu
+      werkt de UI op een paar test-reviews zodat we de flow kunnen valideren.
     </p>
     <table class="reviews">
       <thead>
         <tr>
           <th>Adviseur</th>
-          <th>Sterren</th>
+          <th class="col-num">Sterren</th>
+          <th class="col-num">Reviews</th>
+          <th class="col-num">Gem.</th>
           <th>Laatste review</th>
-          <th>Open suggesties</th>
         </tr>
       </thead>
-      <tbody id="reviewsBody">
-        <tr><td colspan="4" class="empty">Nog niet geactiveerd — komt in Fase 3 (scraper-infrastructuur) en Fase 4 (toewijzing-workflow).</td></tr>
-      </tbody>
+      <tbody id="reviewsAggBody"></tbody>
     </table>
   </div>
 
   <!-- ═══ Open suggesties — Don/Arno toewijzen ═══ -->
   <div class="card">
-    <div class="section-title">Open review-suggesties — toewijzen aan adviseur <span class="soon-tag">Fase 4</span></div>
-    <div class="empty">
-      Inkomende reviews waar het systeem een adviseur vermoedt, maar nog handmatige bevestiging nodig heeft.
-      Don/Arno bekijken hier de tekst + suggestie, klikken "Toewijzen" of "Aanpassen + toewijzen".
+    <div class="section-title">Open review-suggesties — toewijzen aan adviseur
+      <span class="soon-tag">Demo-data</span>
     </div>
+    <p style="margin:0 0 14px;font-size:13px;color:var(--muted);">
+      Reviews waar het systeem een adviseur vermoedt op basis van de naam in de tekst.
+      Don/Arno kiezen de juiste adviseur en klikken "Toewijzen". Geen match? Selecteer
+      "—" en de review wordt overgeslagen (telt niet mee voor sterren).
+    </p>
+    <table class="reviews" id="suggestionsTable">
+      <thead>
+        <tr>
+          <th>Bron</th>
+          <th class="col-num">★</th>
+          <th>Reviewer</th>
+          <th>Tekst</th>
+          <th>Suggestie</th>
+          <th>Toewijzen aan</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="suggestionsBody"></tbody>
+    </table>
   </div>
 </main>
 
@@ -455,8 +510,308 @@ $("btnRefresh").addEventListener("click", () => {
   });
 });
 
+/* ═══════════════════════════════════════════════════════════════
+   REVIEWS — matching-engine + UI (fase 4 voorbereiding)
+   ═══════════════════════════════════════════════════════════════
+   Werkt nu op test-data zodat de UI/flow gevalideerd kan worden vóór
+   de scraper-infrastructuur (fase 3) live is. Eén pure functie
+   `matchAdvisorsInText` koppelt review-tekst aan adviseurs op basis
+   van naamtokens + context-zinnen. Geen externe afhankelijkheden,
+   makkelijk te unit-testen.
+   ═══════════════════════════════════════════════════════════════ */
+
+// Test-adviseurs — wordt straks vervangen door echte lijst (Personeel of HR).
+// Voor matching is "voornaam" + "achternaam" wat we minimaal nodig hebben;
+// "afdeling" is informatief voor toekomstige drill-down.
+const DEMO_ADVISORS = [
+  { id: "a-jp", voornaam: "Jan Pieter", achternaam: "Verschuren", afdeling: "Spa particulieren" },
+  { id: "a-rk", voornaam: "Roy",        achternaam: "Klaassen",   afdeling: "Sauna's" },
+  { id: "a-ms", voornaam: "Mariska",    achternaam: "Smit",       afdeling: "Spa particulieren" },
+  { id: "a-tb", voornaam: "Thomas",     achternaam: "Berends",    afdeling: "Zwembaden" },
+  { id: "a-em", voornaam: "Eva",        achternaam: "Martens",    afdeling: "Tuinmeubelen" },
+];
+
+// Test-reviews — gemixt zodat we matching-edge-cases zien:
+//   ✓ Volledige naam in tekst (hoogste score)
+//   ✓ Alleen voornaam, redelijk uniek
+//   ✓ Context-zin "geholpen door"
+//   ✓ Geen naam → systeem suggest niets
+//   ✓ Twee mogelijke adviseurs (ambiguïteit)
+const DEMO_REVIEWS = [
+  {
+    id: "r1", source: "google", sourceLabel: "Fonteyn Spa's",
+    rating: 5, reviewerName: "Mark de Vries", date: "2026-05-10",
+    text: "Top-service! We zijn fantastisch geholpen door Jan Pieter Verschuren bij het kiezen van onze spa. Hij nam echt de tijd en gaf eerlijk advies.",
+  },
+  {
+    id: "r2", source: "trustpilot", sourceLabel: "Fonteyn",
+    rating: 5, reviewerName: "Familie Jansen", date: "2026-05-09",
+    text: "Roy heeft ons super geholpen bij het aanschaffen van een infraroodsauna. Echt een aanrader, ga je naar Fonteyn vraag dan naar hem.",
+  },
+  {
+    id: "r3", source: "klantenvertellen", sourceLabel: "Passion Spa's",
+    rating: 4, reviewerName: "P. de Wit", date: "2026-05-08",
+    text: "Mooi product, levering verliep soepel. Wel jammer dat de installatieafspraak twee keer verzet moest worden.",
+  },
+  {
+    id: "r4", source: "google", sourceLabel: "Fonteyn",
+    rating: 5, reviewerName: "Klaas Boersma", date: "2026-05-06",
+    text: "We werden geholpen door Mariska. Goed advies, prettig contact, alles soepel verlopen.",
+  },
+  {
+    id: "r5", source: "trustpilot", sourceLabel: "Fonteyn Spa's",
+    rating: 5, reviewerName: "Lisa Vermeulen", date: "2026-05-05",
+    text: "Thomas Berends is een topper! Hele duidelijke uitleg bij het zwembad-project, ook na de oplevering nog responsief.",
+  },
+  {
+    id: "r6", source: "klantenvertellen", sourceLabel: "Fonteyn",
+    rating: 5, reviewerName: "G. van Loon", date: "2026-05-04",
+    text: "Wij willen Eva enorm bedanken — zij begreep precies wat we zochten en stuurde meerdere opties met haar advies erbij.",
+  },
+];
+
+/* ─── Matching-engine ─── */
+function escRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function tokenize(s) {
+  return (s || "").toLowerCase()
+    .replace(/[^a-zà-ÿ\s'-]/g, " ")
+    .split(/\s+/).filter(Boolean);
+}
+
+// Pure functie: geeft kandidaten gesorteerd op confidence terug.
+// Returnt array van { advisorId, advisorName, confidence (0–1), reasons[] }.
+function matchAdvisorsInText(text, advisors) {
+  if (!text) return [];
+  const lc = text.toLowerCase();
+
+  // Hoe uniek is elke voornaam binnen de adviseurs-set? Veelvoorkomende
+  // voornamen (bv. twee adviseurs heten "Jan") krijgen een penalty.
+  const firstNameCount = {};
+  for (const a of advisors) {
+    const fn = (a.voornaam || "").toLowerCase().split(" ")[0];
+    if (fn) firstNameCount[fn] = (firstNameCount[fn] || 0) + 1;
+  }
+
+  // Context-zinnen die de zekerheid verhogen ("geholpen door X").
+  // We zoeken patronen die typisch een persoonsnaam introduceren.
+  const contextPatterns = [
+    /geholpen door\s+([a-zà-ÿ' -]+)/gi,
+    /service van\s+([a-zà-ÿ' -]+)/gi,
+    /bedankt\s+([a-zà-ÿ' -]+)/gi,
+    /bedanken\s+([a-zà-ÿ' -]+)/gi,
+    /advies van\s+([a-zà-ÿ' -]+)/gi,
+    /dank(?:zij)?\s+([a-zà-ÿ' -]+)/gi,
+    /(?:^|\.\s+)([a-zà-ÿ' -]+?)\s+is een topper/gi,
+    /vraag(?:t)? naar\s+([a-zà-ÿ' -]+)/gi,
+  ];
+  const contextNames = new Set();
+  for (const pat of contextPatterns) {
+    let m;
+    while ((m = pat.exec(text)) !== null) {
+      const cleaned = m[1].toLowerCase().trim();
+      // Pak alleen de eerste twee tokens (voornaam + evt achternaam)
+      const head = cleaned.split(/\s+/).slice(0, 3).join(" ");
+      if (head) contextNames.add(head);
+    }
+  }
+
+  const candidates = [];
+  for (const a of advisors) {
+    const vn = (a.voornaam || "").toLowerCase().trim();
+    const an = (a.achternaam || "").toLowerCase().trim();
+    const full = (vn + " " + an).trim();
+    const reasons = [];
+    let confidence = 0;
+
+    // 1. Volledige naam in tekst → hoogste zekerheid
+    if (full && lc.includes(full)) {
+      confidence = 0.95;
+      reasons.push(`volledige naam "${vn} ${an}"`);
+    }
+    // 2. Voornaam EN achternaam los in de tekst (in willekeurige volgorde)
+    else if (vn && an) {
+      const reVn = new RegExp("\\b" + escRegex(vn) + "\\b", "i");
+      const reAn = new RegExp("\\b" + escRegex(an) + "\\b", "i");
+      if (reVn.test(text) && reAn.test(text)) {
+        confidence = 0.85;
+        reasons.push("voor- + achternaam los");
+      }
+      // 3. Alleen voornaam (woord-grenzen), met uniqueness-penalty
+      else if (reVn.test(text)) {
+        const dup = firstNameCount[vn.split(" ")[0]] || 1;
+        confidence = dup === 1 ? 0.55 : Math.max(0.25, 0.55 / dup);
+        reasons.push(dup === 1 ? `voornaam "${vn}"` : `voornaam "${vn}" (komt ${dup}× voor → onzeker)`);
+      }
+      // 4. Alleen achternaam (zelden gebruikt, maar mogelijk)
+      else if (reAn.test(text)) {
+        confidence = 0.6;
+        reasons.push(`achternaam "${an}"`);
+      }
+    }
+
+    // Context-boost: als de naam direct na een typisch koppel-zinnetje
+    // ("geholpen door ...") staat, +0.1 (hoogstens cap op 0.99)
+    if (confidence > 0) {
+      for (const ctxName of contextNames) {
+        if (ctxName === vn || ctxName === full || ctxName.startsWith(vn + " ")) {
+          confidence = Math.min(0.99, confidence + 0.15);
+          reasons.push("context-zin");
+          break;
+        }
+      }
+    }
+
+    if (confidence > 0) {
+      candidates.push({
+        advisorId: a.id,
+        advisorName: full,
+        afdeling: a.afdeling || "",
+        confidence,
+        reasons,
+      });
+    }
+  }
+  // Hoogste eerst
+  candidates.sort((a, b) => b.confidence - a.confidence);
+  return candidates;
+}
+
+/* ─── State + opslag voor toewijzingen ─── */
+// Voor test-modus: lokaal in-memory + sessionStorage (overleeft refresh).
+// In productie (na fase 3): KV-bucket "rapportage" → assignments.
+const ASSIGNMENTS_KEY = "fp.rapportage.assignments.demo";
+function loadAssignments() {
+  try { return JSON.parse(sessionStorage.getItem(ASSIGNMENTS_KEY) || "{}"); }
+  catch { return {}; }
+}
+function saveAssignments(map) {
+  sessionStorage.setItem(ASSIGNMENTS_KEY, JSON.stringify(map));
+}
+
+/* ─── Render: open suggesties + aggregatie per adviseur ─── */
+function renderReviews() {
+  const assignments = loadAssignments(); // reviewId → advisorId | "none"
+  const advisorById = Object.fromEntries(DEMO_ADVISORS.map(a => [a.id, a]));
+
+  // Suggesties tabel
+  const sBody = $("suggestionsBody");
+  sBody.innerHTML = "";
+  for (const r of DEMO_REVIEWS) {
+    const candidates = matchAdvisorsInText(r.text, DEMO_ADVISORS);
+    const top = candidates[0] || null;
+    const assigned = assignments[r.id];
+
+    const tr = document.createElement("tr");
+    if (assigned) tr.classList.add("assigned");
+
+    const srcCls = r.source.toLowerCase().replace(/[^a-z]/g, "");
+    const srcCell = `<span class="src ${srcCls}">${escapeHtml(r.sourceLabel)}<br>${escapeHtml(r.source)}</span>`;
+    const stars = "★".repeat(r.rating) + "☆".repeat(5 - r.rating);
+    const textCell = `<div class="review-text" title="${escapeHtml(r.text)}">${escapeHtml(r.text)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px;">${escapeHtml(r.date)} · ${escapeHtml(r.reviewerName)}</div>`;
+
+    let suggestionCell = "";
+    if (top) {
+      const confCls = top.confidence >= 0.8 ? "high" : (top.confidence >= 0.5 ? "med" : "low");
+      const confPct = Math.round(top.confidence * 100) + "%";
+      suggestionCell = `
+        <div class="suggestion">
+          <b>${escapeHtml(top.advisorName)}</b>
+          <span class="conf ${confCls}">${confPct}</span>
+          <div class="reason">${escapeHtml(top.reasons.join(" + "))}</div>
+        </div>`;
+    } else {
+      suggestionCell = `<div class="suggestion" style="color:var(--muted);">— geen naam herkend —</div>`;
+    }
+
+    // Dropdown met alle adviseurs, defaults op de top-suggestie
+    const defaultId = assigned ?? (top ? top.advisorId : "");
+    const options = [`<option value="">— (overslaan) —</option>`]
+      .concat(DEMO_ADVISORS.map(a =>
+        `<option value="${a.id}" ${a.id === defaultId ? "selected" : ""}>${escapeHtml(a.voornaam + " " + a.achternaam)}</option>`));
+    const pickCell = `<select class="advisor-pick" data-review="${escapeHtml(r.id)}" ${assigned ? "disabled" : ""}>${options.join("")}</select>`;
+
+    const actionCell = assigned
+      ? (assigned === "none"
+          ? `<span class="assigned-pill" style="background:#f3f4f6;color:var(--muted);">Overgeslagen</span>`
+          : `<span class="assigned-pill">✓ Toegewezen aan ${escapeHtml(advisorById[assigned]?.voornaam || assigned)}</span>`)
+      : `<button class="assign-btn" data-review="${escapeHtml(r.id)}">Toewijzen</button>`;
+
+    tr.innerHTML = `
+      <td>${srcCell}</td>
+      <td class="col-num"><span class="stars">${stars}</span></td>
+      <td>${escapeHtml(r.reviewerName)}</td>
+      <td>${textCell}</td>
+      <td>${suggestionCell}</td>
+      <td>${pickCell}</td>
+      <td>${actionCell}</td>
+    `;
+    sBody.appendChild(tr);
+  }
+
+  // Aggregatie per adviseur (alleen toegewezen reviews tellen mee voor sterren!)
+  const aggregate = {};
+  for (const a of DEMO_ADVISORS) {
+    aggregate[a.id] = {
+      advisor: a, stars: 0, count: 0, sumRating: 0, lastDate: "",
+    };
+  }
+  for (const r of DEMO_REVIEWS) {
+    const aid = assignments[r.id];
+    if (!aid || aid === "none") continue;
+    const agg = aggregate[aid];
+    if (!agg) continue;
+    agg.count += 1;
+    agg.sumRating += r.rating;
+    if (r.rating === 5) agg.stars += 1;
+    if (r.date > agg.lastDate) agg.lastDate = r.date;
+  }
+
+  const aBody = $("reviewsAggBody");
+  aBody.innerHTML = "";
+  const sorted = Object.values(aggregate).sort((a, b) => b.stars - a.stars);
+  for (const agg of sorted) {
+    const tr = document.createElement("tr");
+    const avg = agg.count ? (agg.sumRating / agg.count).toFixed(1).replace(".", ",") : "—";
+    const starsDisplay = agg.stars
+      ? `<span class="stars">${"★".repeat(Math.min(agg.stars, 10))}</span> ${agg.stars > 10 ? `(${agg.stars})` : ""}`
+      : `<span style="color:var(--muted);">0</span>`;
+    tr.innerHTML = `
+      <td><b>${escapeHtml(agg.advisor.voornaam + " " + agg.advisor.achternaam)}</b>
+        <div style="font-size:11px;color:var(--muted);">${escapeHtml(agg.advisor.afdeling)}</div></td>
+      <td class="col-num">${starsDisplay}</td>
+      <td class="col-num">${agg.count}</td>
+      <td class="col-num">${avg}</td>
+      <td>${escapeHtml(agg.lastDate || "—")}</td>
+    `;
+    aBody.appendChild(tr);
+  }
+}
+
+/* ─── Event-handlers voor suggesties-tabel (delegation) ─── */
+document.getElementById("suggestionsBody").addEventListener("click", (ev) => {
+  const btn = ev.target.closest("button.assign-btn");
+  if (!btn) return;
+  const reviewId = btn.dataset.review;
+  const row = btn.closest("tr");
+  const select = row.querySelector("select.advisor-pick");
+  const chosenId = select ? select.value : "";
+  const assignments = loadAssignments();
+  assignments[reviewId] = chosenId === "" ? "none" : chosenId;
+  saveAssignments(assignments);
+  renderReviews();
+});
+
+// Mini-helper voor HTML-escaping
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
 /* ─── Initial load ─── */
 loadKPIs();
+renderReviews();
 </script>
 </body>
 </html>
