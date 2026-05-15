@@ -82,6 +82,15 @@
   <div id="status" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
 
   <div id="result"></div>
+
+  <hr style="margin:40px 0;border:none;border-top:1px solid var(--border);">
+
+  <h2>Order-statussen inventariseren</h2>
+  <p class="lead">Probeert eerst een aantal officiële Logic4-endpoints; valt anders terug op een empirische sample (eerste 2000 orders → unieke statussen verzamelen). Doel: een complete lijst van status-IDs zodat we de Orderstatus-tool kunnen voeden met álle relevante bron-statussen (incl. "Wachten op minimaal 30% aanbetaling").</p>
+
+  <button id="runStatuses">Statussen ophalen</button>
+  <div id="statusesStatus" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
+  <div id="statusesResult"></div>
 </main>
 
 <script>
@@ -217,6 +226,145 @@ document.getElementById("run").addEventListener("click", async () => {
   } finally {
     btn.disabled = false;
   }
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   Statussen-probe — alle Logic4 order-statussen inventariseren
+   ═══════════════════════════════════════════════════════════════ */
+document.getElementById("runStatuses").addEventListener("click", async () => {
+  const btn = document.getElementById("runStatuses");
+  const status = document.getElementById("statusesStatus");
+  const result = document.getElementById("statusesResult");
+  btn.disabled = true; result.innerHTML = "";
+
+  // Kandidaat-endpoints — als Logic4 een formele "list statuses"-route heeft,
+  // is dit de meest waarschijnlijke naamgeving (zelfde patroon als
+  // GetOrders / GetProducts). Eerste die werkt wint.
+  const candidates = [
+    "/v3/Orders/GetOrderStatuses",
+    "/v3/Orders/GetStatuses",
+    "/v3/OrderStatus/GetOrderStatuses",
+    "/v3/Settings/GetOrderStatuses",
+    "/v3/Globalizations/GetOrderStatuses",
+    "/v1.1/Orders/GetOrderStatuses",
+  ];
+
+  const tries = [];
+  let officialList = null;
+  let officialEndpoint = null;
+
+  for (const ep of candidates) {
+    status.textContent = `Probeer ${ep}…`;
+    try {
+      const data = await call(ep, {});
+      // Logic4 geeft soms een array, soms {Statuses:[...]}, soms {OrderStatuses:[...]}
+      const arr = Array.isArray(data) ? data
+        : (Array.isArray(data?.OrderStatuses) ? data.OrderStatuses
+        : (Array.isArray(data?.Statuses) ? data.Statuses
+        : (Array.isArray(data?.Items) ? data.Items : null)));
+      tries.push({ endpoint: ep, ok: true, found: arr ? arr.length : 0, raw: data });
+      if (arr && arr.length) {
+        officialList = arr;
+        officialEndpoint = ep;
+        break;
+      }
+    } catch (e) {
+      tries.push({ endpoint: ep, ok: false, error: e.message });
+    }
+  }
+
+  // Fallback: empirisch via sampling van orders
+  let empirical = null;
+  if (!officialList) {
+    status.textContent = "Officiële endpoint niet gevonden — sample 2000 orders voor empirische lijst…";
+    try {
+      const ordersResp = await call("/v3/Orders/GetOrders", { TakeRecords: 2000 });
+      const orders = Array.isArray(ordersResp) ? ordersResp
+        : (Array.isArray(ordersResp?.Orders) ? ordersResp.Orders : []);
+      const seen = new Map(); // Id → { Id, Value, count }
+      for (const o of orders) {
+        const id = o?.OrderStatus?.Id;
+        const value = o?.OrderStatus?.Value;
+        if (id == null) continue;
+        const key = String(id);
+        if (seen.has(key)) seen.get(key).count++;
+        else seen.set(key, { Id: id, Value: value || "", count: 1 });
+      }
+      empirical = {
+        ordersSampled: orders.length,
+        statuses: [...seen.values()].sort((a, b) => Number(a.Id) - Number(b.Id)),
+      };
+    } catch (e) {
+      result.innerHTML = `<div class="err">Sample-fallback ook mislukt: ${escapeHtml(e.message)}</div>`;
+      btn.disabled = false;
+      return;
+    }
+  }
+
+  // Render
+  status.textContent = "";
+  let html = "";
+
+  // Sectie 1: kandidaten-rapport
+  html += `<div class="card">
+    <h3>Probe-resultaten per endpoint</h3>
+    <div class="desc">Welke endpoint werkte? (Eerste die data teruggaf wint.)</div>
+    <table class="field-table">
+      <thead><tr><th>Endpoint</th><th>Resultaat</th></tr></thead>
+      <tbody>
+        ${tries.map(t => `<tr>
+          <td class="name">${escapeHtml(t.endpoint)}</td>
+          <td class="val">${t.ok ? `✓ ${t.found} items` : `✗ ${escapeHtml(t.error || "")}`}</td>
+        </tr>`).join("")}
+      </tbody>
+    </table>
+  </div>`;
+
+  // Sectie 2: de eigenlijke statussen-lijst
+  if (officialList) {
+    const normalized = officialList.map(s => ({
+      Id: s.Id ?? s.OrderStatusId ?? s.StatusId ?? s.id,
+      Value: s.Value ?? s.Name ?? s.Label ?? s.Description ?? s.value,
+      raw: s,
+    }));
+    html += `<div class="card">
+      <h3>Status-lijst (uit ${escapeHtml(officialEndpoint)})</h3>
+      <div class="desc">${normalized.length} statussen — kopieer onderstaande JSON naar de chat.</div>
+      <table class="field-table">
+        <thead><tr><th>Id</th><th>Naam</th></tr></thead>
+        <tbody>
+          ${normalized.map(s => `<tr>
+            <td class="name">${escapeHtml(String(s.Id ?? ""))}</td>
+            <td class="val">${escapeHtml(s.Value ?? "")}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+      <div class="desc" style="margin-top:14px;"><b>JSON om door te sturen:</b></div>
+      <pre>${escapeHtml(JSON.stringify(normalized.map(s => ({ Id: s.Id, Value: s.Value })), null, 2))}</pre>
+      <div class="desc" style="margin-top:14px;">Raw response (voor de zekerheid):</div>
+      <pre>${escapeHtml(JSON.stringify(officialList, null, 2))}</pre>
+    </div>`;
+  } else if (empirical) {
+    html += `<div class="card">
+      <h3>Empirische status-lijst (via order-sample)</h3>
+      <div class="desc">Geen officieel endpoint gevonden — afgeleid uit ${empirical.ordersSampled} recente orders. ${empirical.statuses.length} unieke statussen waargenomen. Telling = hoe vaak elke status in de sample voorkwam.</div>
+      <table class="field-table">
+        <thead><tr><th>Id</th><th>Naam</th><th>In sample</th></tr></thead>
+        <tbody>
+          ${empirical.statuses.map(s => `<tr>
+            <td class="name">${escapeHtml(String(s.Id))}</td>
+            <td class="val">${escapeHtml(s.Value)}</td>
+            <td class="val">${s.count}×</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+      <div class="desc" style="margin-top:14px;"><b>JSON om door te sturen:</b></div>
+      <pre>${escapeHtml(JSON.stringify(empirical.statuses.map(s => ({ Id: s.Id, Value: s.Value, count: s.count })), null, 2))}</pre>
+    </div>`;
+  }
+
+  result.innerHTML = html;
+  btn.disabled = false;
 });
 </script>
 </body>
