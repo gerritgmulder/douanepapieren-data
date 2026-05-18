@@ -234,24 +234,49 @@
     display: grid;
     grid-template-rows: auto auto 1fr auto;
     gap: 3mm;
+    /* Vangnet: clip alles wat uit de content-cel zou willen kruipen
+       (bv. lange supplier-codes, te brede barcode). Voorkomt dat de
+       printer een blanco label tussendoor schiet doordat content over
+       de label-rand drukt. */
+    overflow: hidden;
+    min-width: 0;
   }
   .label .title {
     font-size: 14pt; font-weight: 700; line-height: 1.2;
     color: #111;
     word-break: break-word;
+    overflow-wrap: anywhere;
   }
   .label .fields {
     display: grid; grid-template-columns: 32mm 1fr; gap: 2mm 3mm;
     font-size: 11pt;
+    min-width: 0;
   }
   .label .fields .k { color: #111; }
-  .label .fields .v { color: #111; font-weight: 600; }
+  .label .fields .v {
+    color: #111; font-weight: 600;
+    /* Lange codes (bv. supplier-code F19100000206048298…) mogen overal
+       breken, anders lopen ze door de rechterrand van het label heen */
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
   .label .barcode-wrap {
-    display: flex; justify-content: flex-end; align-items: flex-end;
-    padding-top: 2mm;
+    /* Linksonder, zoals het oude Fonteyn-label. Padding-right zorgt dat
+       de barcode bij geen enkele code-lengte tegen de rechterrand van
+       het label kan kruipen — dat is wat de "lege labels tussendoor"
+       veroorzaakte. */
+    display: flex; justify-content: flex-start; align-items: flex-end;
+    padding-top: 2mm; padding-right: 6mm;
+    overflow: hidden;
   }
   .label .barcode-wrap svg {
-    max-width: 70mm; height: 18mm;
+    /* Expliciete mm-dimensies — JsBarcode zet zelf pixel-width/height
+       attributen op de SVG; we vervangen die in JS door een viewBox
+       zodat deze CSS-waarden bepalen wat er op de print verschijnt. */
+    width: 55mm; height: 16mm;
+    max-width: 55mm;
+    display: block;
     /* Crisp edges op de barcode-strepen — sommige printers halftonen
        anders de bar-randen, wat als puntjes in het wit zichtbaar wordt. */
     shape-rendering: crispEdges;
@@ -1177,6 +1202,19 @@ function buildLabel(row, colliIdx, colliTotal, productIdx, productTotal) {
         width: 2,
         height: 60
       });
+      // JsBarcode zet pixel-width/height attributen op de SVG. Bij print
+      // (vooral via Electron's wc.print() naar de ZDesigner) negeert
+      // Chromium soms onze CSS-mm-grootte en gebruikt die pixel-attrs
+      // direct — dan kruipt de barcode tegen of over de label-rand.
+      // Oplossing: lees de gegenereerde pixel-grootte uit, zet die als
+      // viewBox, en wis de width/height attrs zodat onze CSS (55mm × 16mm)
+      // bepaalt hoe groot de barcode visueel wordt.
+      const w = parseFloat(svg.getAttribute("width")) || 200;
+      const h = parseFloat(svg.getAttribute("height")) || 60;
+      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      svg.setAttribute("preserveAspectRatio", "xMinYMax meet");
+      svg.removeAttribute("width");
+      svg.removeAttribute("height");
     } catch (e) {
       svg.innerHTML = `<text x="0" y="20" font-size="10">Barcode-fout: ${e.message}</text>`;
     }
