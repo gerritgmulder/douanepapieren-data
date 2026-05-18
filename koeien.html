@@ -160,6 +160,14 @@
     border-top:2px solid var(--v-line)}
   .legend .swatch.father{border-top:2px dashed var(--m-line)}
   .stamboom-toolbar label{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);cursor:pointer}
+  .zoom-control{display:inline-flex;align-items:center;gap:8px;
+    background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:4px 10px}
+  .zoom-control .zoom-label{font-size:12px;color:var(--muted);font-weight:500}
+  .zoom-control input[type=range]{width:160px;accent-color:var(--accent)}
+  .zoom-control #zoom-value{font-size:12px;color:var(--ink);
+    font-variant-numeric:tabular-nums;min-width:36px;text-align:right}
+  .zoom-control .zoom-fit-btn{padding:3px 9px;font-size:12px;margin-left:4px}
 
   .stamboom-wrap{position:relative;background:var(--panel);border:1px solid var(--line);
     border-radius:10px;box-shadow:var(--shadow);overflow:hidden}
@@ -339,6 +347,12 @@
       <strong>Stamboom</strong>
       <span style="color:var(--muted);font-size:13px">Klik op naam, tagnummer of geboortedatum om te bewerken.</span>
       <span class="sep" style="flex:1"></span>
+      <span class="zoom-control">
+        <span class="zoom-label">Zoom</span>
+        <input type="range" id="zoom-slider" min="30" max="200" value="100" step="1">
+        <span id="zoom-value">100%</span>
+        <button class="btn secondary zoom-fit-btn" id="zoom-fit" type="button" title="Pas aan zodat alles in beeld past">↔ Fit</button>
+      </span>
       <label><input type="checkbox" id="show-mothers" checked> Moederlijnen</label>
       <label><input type="checkbox" id="show-fathers" checked> Vaderlijnen</label>
       <span class="legend"><span class="swatch"></span>moeder</span>
@@ -955,12 +969,34 @@ function renderStamboom(){
   });
 }
 
-/* Pas een transform:scale toe op .stamboom-inner zodat de hele stamboom
-   binnen .stamboom-wrap past — zowel horizontaal als verticaal. Schaalt
-   alleen omlaag (nooit groter dan 100%). scrollWidth/scrollHeight zijn
-   transform-onafhankelijk (= layout-grootte), dus we hoeven de bestaande
-   transform niet te resetten — dat voorkomt een visuele flash tijdens
-   resize-drag. */
+/* Pas een transform:scale toe op .stamboom-inner. setStamboomScale is de
+   "primaire" functie — fitStamboomToScreen berekent welke schaal alles
+   netjes laat passen en roept setStamboomScale aan; de zoom-slider doet
+   precies hetzelfde, alleen met een handmatig getal. */
+function setStamboomScale(scale) {
+  const wrap = document.getElementById("stamboom-wrap");
+  const inner = document.getElementById("stamboom-inner");
+  if (!wrap || !inner) return;
+  const naturalW = inner.scrollWidth;
+  const naturalH = inner.scrollHeight;
+  if (!naturalW || !naturalH) return;
+  // Cap binnen [0.10, 3.0] zodat malle slider-waarden niets stuk maken.
+  scale = Math.max(0.10, Math.min(3.0, Number(scale) || 1));
+  inner.style.transform = `scale(${scale})`;
+  // Wrap-hoogte volgt de gescalede content; wrap-breedte is 100% van de
+  // beschikbare ruimte in main (CSS), maar bij zoom > fit-grootte willen
+  // we horizontaal kunnen scrollen.
+  wrap.style.height = (naturalH * scale) + "px";
+  wrap.style.overflowX = scale > (wrap.clientWidth / naturalW) ? "auto" : "hidden";
+  // Slider + label bijwerken (kan niet door eindeloze loop ontstaan want
+  // setStamboomScale forceert geen nieuwe input-event op de slider zelf).
+  const slider = document.getElementById("zoom-slider");
+  const label  = document.getElementById("zoom-value");
+  const pct = Math.round(scale * 100);
+  if (slider && Number(slider.value) !== pct) slider.value = String(pct);
+  if (label) label.textContent = pct + "%";
+}
+
 function fitStamboomToScreen() {
   const wrap = document.getElementById("stamboom-wrap");
   const inner = document.getElementById("stamboom-inner");
@@ -974,8 +1010,7 @@ function fitStamboomToScreen() {
   // belachelijk klein wordt op een klein venster.
   const availH = Math.max(300, window.innerHeight - wrapTop - 40);
   const scale = Math.min(availW / naturalW, availH / naturalH, 1);
-  inner.style.transform = `scale(${scale})`;
-  wrap.style.height = (naturalH * scale) + "px";
+  setStamboomScale(scale);
 }
 
 function drawLines(){
@@ -1142,11 +1177,25 @@ $grid.addEventListener("keydown",(e)=>{
 document.getElementById("show-mothers").addEventListener("change",drawLines);
 document.getElementById("show-fathers").addEventListener("change",drawLines);
 
-/* Her-fit + lijnen opnieuw tekenen bij window-resize. drawLines is
-   scale-bewust dus dit blijft ook na meerdere resizes correct. */
+/* Zoom-slider (handmatige controle) — laat de gebruiker zelf inzoomen
+   tot 200% of uitzoomen naar 30%. De "Fit"-knop springt terug naar de
+   automatisch berekende fit-to-screen waarde. */
+document.getElementById("zoom-slider").addEventListener("input", (e) => {
+  const pct = Number(e.target.value);
+  setStamboomScale(pct / 100);
+  drawLines();
+});
+document.getElementById("zoom-fit").addEventListener("click", () => {
+  fitStamboomToScreen();
+  drawLines();
+});
+
+/* Bij window-resize: alleen lijnen opnieuw tekenen — de gebruiker zoom
+   blijft staan waar 'ie 'm heeft gezet. Wil de gebruiker opnieuw fitten,
+   dan klikken ze op de "Fit"-knop. Voorkomt frustratie dat ie z'n zoom
+   verliest tijdens venster-resize. */
 window.addEventListener("resize",()=>{
   if(!document.getElementById("view-stamboom").classList.contains("hidden")){
-    fitStamboomToScreen();
     drawLines();
   }
 });
