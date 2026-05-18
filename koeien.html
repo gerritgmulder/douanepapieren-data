@@ -160,11 +160,14 @@
     border-top:2px solid var(--v-line)}
   .legend .swatch.father{border-top:2px dashed var(--m-line)}
   .stamboom-toolbar label{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);cursor:pointer}
+  .line-toggle .swatch{display:inline-block;width:22px;height:0;
+    border-top:2px solid var(--v-line);margin:0 2px}
+  .line-toggle .swatch.father{border-top:2px dashed var(--m-line)}
   .zoom-control{display:inline-flex;align-items:center;gap:8px;
     background:var(--panel);border:1px solid var(--line);border-radius:8px;
     padding:4px 10px}
   .zoom-control .zoom-label{font-size:12px;color:var(--muted);font-weight:500}
-  .zoom-control input[type=range]{width:160px;accent-color:var(--accent)}
+  .zoom-control input[type=range]{width:120px;accent-color:var(--accent)}
   .zoom-control #zoom-value{font-size:12px;color:var(--ink);
     font-variant-numeric:tabular-nums;min-width:36px;text-align:right}
   .zoom-control .zoom-fit-btn{padding:3px 9px;font-size:12px;margin-left:4px}
@@ -185,7 +188,16 @@
   .year-h{grid-row:1;text-align:center;color:var(--muted);font-size:12px;
     text-transform:uppercase;letter-spacing:.5px;font-weight:600;
     align-self:center;padding-bottom:6px;border-bottom:1px solid var(--line)}
-  .stamboom-lines{position:absolute;left:0;top:0;pointer-events:none;z-index:1}
+  .stamboom-lines{position:absolute;left:0;top:0;pointer-events:none;z-index:3;overflow:visible}
+
+  /* Info-blok onder de stamboom met locatie + opmerkingen */
+  .stamboom-info{margin-top:14px;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:14px 18px;font-size:13px;color:var(--ink);box-shadow:var(--shadow)}
+  .stamboom-info h4{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--accent);
+    text-transform:uppercase;letter-spacing:.04em}
+  .stamboom-info ul{margin:0 0 10px;padding-left:18px;line-height:1.5}
+  .stamboom-info li{margin-bottom:4px}
+  .stamboom-info p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.5}
 
   .tree-card{background:#fff;border:1px solid var(--line);border-radius:8px;
     padding:8px 10px;box-shadow:var(--shadow);display:flex;flex-direction:column;
@@ -345,18 +357,21 @@
   <section id="view-stamboom" class="hidden">
     <div class="stamboom-toolbar">
       <strong>Stamboom</strong>
-      <span style="color:var(--muted);font-size:13px">Klik op naam, tagnummer of geboortedatum om te bewerken.</span>
       <span class="sep" style="flex:1"></span>
+      <label class="line-toggle">
+        <input type="checkbox" id="show-mothers" checked>
+        <span class="swatch"></span> Moederlijn
+      </label>
+      <label class="line-toggle">
+        <input type="checkbox" id="show-fathers" checked>
+        <span class="swatch father"></span> Vaderlijn
+      </label>
       <span class="zoom-control">
         <span class="zoom-label">Zoom</span>
         <input type="range" id="zoom-slider" min="30" max="200" value="100" step="1">
         <span id="zoom-value">100%</span>
         <button class="btn secondary zoom-fit-btn" id="zoom-fit" type="button" title="Pas aan zodat alles in beeld past">↔ Fit</button>
       </span>
-      <label><input type="checkbox" id="show-mothers" checked> Moederlijnen</label>
-      <label><input type="checkbox" id="show-fathers" checked> Vaderlijnen</label>
-      <span class="legend"><span class="swatch"></span>moeder</span>
-      <span class="legend"><span class="swatch father"></span>vader</span>
     </div>
 
     <div class="stamboom-wrap" id="stamboom-wrap">
@@ -375,10 +390,25 @@
       </div>
     </div>
     <p style="color:var(--muted);font-size:12.5px;margin-top:10px">
-      Moederlijnen zijn doorgetrokken (roze), vaderlijnen gestippeld (blauw). Voor niet-aangemelde mannetjes
-      (Pablo, Rooie Evert, Chuck) zijn de vaderlijnen bewust weggelaten — de vader is niet zeker.
-      Wijzigingen aan naam/tag/datum zijn direct zichtbaar in het dashboard.
+      Klik op naam, tagnummer of geboortedatum om te bewerken — wijzigingen zijn direct
+      zichtbaar in het dashboard. Hover over een kaart voor moeder/vader-info.
+      Moederlijnen zijn doorgetrokken (roze), vaderlijnen gestippeld (blauw).
+      Voor niet-aangemelde mannetjes (Pablo, Rooie Evert, Chuck) zijn de vaderlijnen bewust
+      weggelaten — de vader is niet zeker.
     </p>
+    <div class="stamboom-info">
+      <h4>Locaties</h4>
+      <ul>
+        <li><b>Privé (6257):</b> Madonna, Miss First, Benny, Montana — maximaal 5 bereikt. Angel wilden we ook hier, dus er kan wellicht een oudere naar Cor. Starynight is afgemeld.</li>
+        <li><b>Mosselweg (0750):</b> Mr. Outlaw, Eagle, Torq, Mr. Jim, Saar</li>
+        <li><b>Niet aangemeld (mannen):</b> Pablo 0452, Rooie Evert 0096, Chuck 0106 — worden ook nooit aangemeld.</li>
+      </ul>
+      <p>
+        Van de niet-aangemelde koeien weten we niet zeker wie de vader is, daarom zijn
+        de lijnen naar Mr. Cowboy weggehaald. Mr. Outlaw wordt de dekhengst — daarom zijn
+        Shania Twain en Cheyenne verkocht en Cowboy vlees geworden.
+      </p>
+    </div>
   </section>
 </main>
 
@@ -944,6 +974,20 @@ function renderStamboom(){
     el.style.gridColumn = col;
     el.style.gridRow = (row + 1); // +1 because row 1 is header
     el.dataset.id = c.id;
+    // Tooltip met ouders — getoond bij hover via native browser-tooltip.
+    const rel = state.relations.find(r => r.child === c.id);
+    const tipParts = [];
+    if (rel) {
+      if (rel.mother) {
+        const m = cowById(rel.mother);
+        tipParts.push("Moeder: " + (m ? m.naam : "(onbekend)"));
+      }
+      if (rel.father) {
+        const f = cowById(rel.father);
+        tipParts.push("Vader: "  + (f ? f.naam : "(onbekend)"));
+      }
+    }
+    if (tipParts.length) el.title = tipParts.join(" · ");
     const photoHtml = c.photo
       ? `<img src="${escapeHtml(c.photo)}" alt="${escapeHtml(c.naam)}">`
       : `📷 foto`;
@@ -1083,8 +1127,26 @@ function drawPath(fromR, toR, type){
     else                 { y1 = fromR.top;    y2 = toR.bottom; }
   }
   if(horizontal){
-    const dx = Math.max(40, Math.abs(x2-x1)*0.45) * (x2>x1?1:-1);
-    d = `M ${x1} ${y1} C ${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`;
+    // "Doorbrekende" lijn = source/target op zelfde rij, meer dan ~1 kolom-
+    // breedte uit elkaar (= er kunnen cards tussen staan). Voorbeeld:
+    // Benny 't Duveltje (kol 5) → Angelina (kol 8). Zonder omweg gaat de
+    // lijn door Montana/Pablo heen en is dan onzichtbaar. Oplossing: laat
+    // de curve omhoog over de cards heen lopen, vanuit de bovenkant van
+    // source en target, met een hoog control-point. SVG-z-index staat
+    // hoger dan tree-cards (zie CSS) zodat lijnen erover heen tekenen.
+    const sameRow = Math.abs(fromR.cy - toR.cy) < 30;
+    const farApart = Math.abs(x2 - x1) > 280; // > 1 kolombreedte (195+22 gap)
+    if (sameRow && farApart) {
+      const sx = (fromR.left + fromR.right) / 2;
+      const tx = (toR.left + toR.right) / 2;
+      // Boog 55px boven de cards, maar min 5px van de SVG-top zodat 'ie
+      // niet wordt geclipped op rij 1 (waar weinig ruimte boven zit).
+      const apexY = Math.max(5, Math.min(fromR.top, toR.top) - 55);
+      d = `M ${sx} ${fromR.top} C ${sx} ${apexY}, ${tx} ${apexY}, ${tx} ${toR.top}`;
+    } else {
+      const dx = Math.max(40, Math.abs(x2-x1)*0.45) * (x2>x1?1:-1);
+      d = `M ${x1} ${y1} C ${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`;
+    }
   } else {
     // vertical: slight S-curve with horizontal control points
     const my = (y1+y2)/2;
@@ -1095,7 +1157,7 @@ function drawPath(fromR, toR, type){
   p.setAttribute("fill","none");
   p.setAttribute("stroke", type==="mother" ? "var(--v-line)" : "var(--m-line)");
   p.setAttribute("stroke-width","2");
-  p.setAttribute("opacity","0.75");
+  p.setAttribute("opacity","0.85");
   if(type==="father") p.setAttribute("stroke-dasharray","5 4");
   $svg.appendChild(p);
 }
