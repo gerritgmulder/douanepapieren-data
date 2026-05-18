@@ -23,6 +23,7 @@ const ALLOWED_BUCKETS = new Set([
   "personeel",
   "koeien",
   "rapportage",       // Jaartargets per afdeling, review-toewijzingen
+  "douane-specs",     // Handmatig aangevulde HS/origin/gewicht/dims per artikel
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 

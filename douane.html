@@ -523,47 +523,85 @@ function saveUserSpecsToLocalCache() {
   catch {}
 }
 
-// Pull alle server-specs binnen, vervang in-memory state. Wordt bij startup
-// aangeroepen; faalt 'ie (bv. helper offline), behouden we de localStorage-
-// cache van de vorige sessie.
+// ─── Centrale opslag via Cloudflare Worker + KV ──────────────────────
+// Voorheen: helper-server endpoint /api/user-specs → product-specs.json op
+// gedeelde netwerkschijf. Werkt alleen voor mensen op de kantoorshare.
+// Nu: Cloudflare KV (bucket "douane-specs") — sync werkt overal, ook
+// thuis/onderweg, zelfde patroon als Personeel / Koeien / Rapportage.
+const USER_SPECS_KV_URL  = "https://fonteyn-data-store.g-mulder.workers.dev/data/douane-specs";
+const USER_SPECS_KV_AUTH = "SV--QQW_xwIgrIdbjAozfgnxtloYitCZxEQ_S04gv2YupY4LY4KD7_QvfVkb8DGs";
+
+// Pull alle specs uit KV. Bij eerste run (KV leeg) migreer eenmalig de oude
+// helper-server data naar KV zodat niemand z'n bestaande invoer kwijtraakt.
 async function loadUserSpecsFromServer() {
   try {
-    const r = await fetch(HELPER_BASE + "/api/user-specs");
+    const r = await fetch(USER_SPECS_KV_URL, {
+      headers: { "X-Fonteyn-Auth": USER_SPECS_KV_AUTH },
+    });
     if (!r.ok) throw new Error("HTTP " + r.status);
-    const j = await r.json();
-    state.userSpecs = j || {};
-    saveUserSpecsToLocalCache(); // sync local cache met server
-    console.log(`User-specs van server: ${Object.keys(state.userSpecs).length} codes`);
+    const fromKV = await r.json();
+
+    // Eenmalige migratie: als KV leeg is, pak de bestaande product-specs van
+    // de helper-server (gedeelde share) en push die naar KV. Daarna gebruikt
+    // iedereen — overal — diezelfde KV-state.
+    if (!fromKV || Object.keys(fromKV).length === 0) {
+      try {
+        const sr = await fetch(HELPER_BASE + "/api/user-specs");
+        if (sr.ok) {
+          const fromServer = await sr.json();
+          if (fromServer && Object.keys(fromServer).length > 0) {
+            console.log(`[user-specs] migratie: ${Object.keys(fromServer).length} codes van helper-server → KV`);
+            await pushUserSpecsToKV(fromServer);
+            state.userSpecs = fromServer;
+            saveUserSpecsToLocalCache();
+            if (state.lineItems.length) renderItems();
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("[user-specs] eenmalige migratie van helper-server faalde:", e.message);
+      }
+    }
+
+    state.userSpecs = fromKV || {};
+    saveUserSpecsToLocalCache();
+    console.log(`User-specs van KV: ${Object.keys(state.userSpecs).length} codes`);
     if (state.lineItems.length) renderItems();
   } catch (e) {
-    console.warn("Kon user-specs niet van server laden — fallback naar localStorage:", e.message);
+    console.warn("Kon user-specs niet van KV laden — fallback naar localStorage:", e.message);
   }
 }
 
-// Per-code debounced PUT naar de server. Opslaan gebeurt 500ms na de laatste
-// edit op een code, zodat we geen request per toetsaanslag versturen.
-const _userSpecsPutTimers = new Map();
-function queueUserSpecsServerSave(code) {
-  if (_userSpecsPutTimers.has(code)) clearTimeout(_userSpecsPutTimers.get(code));
-  _userSpecsPutTimers.set(code, setTimeout(() => {
-    _userSpecsPutTimers.delete(code);
-    const entry = state.userSpecs[code] || {};
-    fetch(HELPER_BASE + "/api/user-specs/" + encodeURIComponent(code), {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(entry)
-    }).then(r => {
-      if (!r.ok) console.warn(`User-specs PUT ${code}: HTTP ${r.status}`);
-    }).catch(e => {
-      console.warn(`User-specs PUT ${code} faalde — blijft alleen lokaal opgeslagen:`, e.message);
-    });
-  }, 500));
+// Push hele user-specs map naar KV. We doen geen per-code PUT (Worker
+// ondersteunt alleen hele-bucket-PUT), maar dat is OK: typisch <50 KB JSON
+// en debounced met 500ms zodat we niet bij elke toetsaanslag stuwen.
+async function pushUserSpecsToKV(data) {
+  return fetch(USER_SPECS_KV_URL, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": USER_SPECS_KV_AUTH },
+    body: JSON.stringify(data),
+  });
 }
 
-// Edit-handler aanroep — bewaar lokaal direct, queue server-save met debounce.
+let _userSpecsKvSaveTimer = null;
+function queueUserSpecsServerSave(code) {
+  // (Parameter "code" is legacy — we pushen altijd de hele state. Naam
+  // bewaard zodat de callers niet aangepast hoeven te worden.)
+  if (_userSpecsKvSaveTimer) clearTimeout(_userSpecsKvSaveTimer);
+  _userSpecsKvSaveTimer = setTimeout(async () => {
+    try {
+      const r = await pushUserSpecsToKV(state.userSpecs);
+      if (!r.ok) console.warn(`User-specs KV-save: HTTP ${r.status}`);
+    } catch (e) {
+      console.warn("User-specs KV-save faalde — blijft alleen lokaal opgeslagen:", e.message);
+    }
+  }, 500);
+}
+
+// Edit-handler aanroep — bewaar lokaal direct, queue KV-save met debounce.
 function saveUserSpecs(changedCode) {
   saveUserSpecsToLocalCache();
-  if (changedCode) queueUserSpecsServerSave(changedCode);
+  queueUserSpecsServerSave(changedCode);
 }
 // getSpec geeft altijd een spec-object terug (nooit null) waarbij waarden uit
 // drie lagen worden gemerged, in volgorde van prioriteit:
