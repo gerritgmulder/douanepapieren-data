@@ -184,32 +184,36 @@
 
   /*
    * ═══════════════════════════════════════════════════════════
-   * HET LABEL zelf (A6 landscape, 148mm × 105mm)
+   * HET LABEL zelf — fysiek 209mm × 99mm (gemeten op de echte
+   * Fonteyn-label-rol: gele drager 211×101, sticker zelf 209×99).
+   * @page-size + Electron wc.print() pageSize moeten hieraan
+   * matchen, anders schiet de printer blanco labels tussendoor
+   * om weer in lijn te komen met de perforatie.
    * Eén .label wordt zowel on-screen getoond (via transform:scale)
-   * als op A6 geprint. Bij printen = exact formaat.
+   * als geprint. Bij printen = exact formaat.
    * ═══════════════════════════════════════════════════════════
    */
   .label {
-    width: 148mm; height: 105mm;
+    width: 209mm; height: 99mm;
     background: #fff;
-    display: grid; grid-template-columns: 42mm 1fr;
+    display: grid; grid-template-columns: 50mm 1fr;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
     color: #111;
     position: relative;
     overflow: hidden;
   }
 
-  /* On-screen preview: schaal naar ~360px breed */
+  /* On-screen preview: schaal naar ~440px breed (label is nu langer dan voorheen) */
   .preview-grid .label-frame {
     background: #f3f4f6; border: 1px solid var(--border); border-radius: 8px;
     padding: 8px;
     overflow: hidden;
   }
   .preview-grid .label-frame .scale {
-    transform: scale(0.65);
+    transform: scale(0.48);
     transform-origin: top left;
-    width: calc(148mm * 0.65);
-    height: calc(105mm * 0.65);
+    width: calc(209mm * 0.48);
+    height: calc(99mm * 0.48);
   }
   .preview-grid .label-frame .label { box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
 
@@ -221,7 +225,7 @@
     padding: 6mm 4mm;
   }
   .label .green img.logo {
-    width: 32mm; height: auto; display: block;
+    width: 38mm; height: auto; display: block;
     /* Voorkom dat de printer rond logo-randen ga halftonen → puntjes
        in het wit. Werkt op edges van de PNG, geen layout-impact. */
     image-rendering: -webkit-optimize-contrast;
@@ -230,14 +234,12 @@
 
   /* ── Rechts: content ── */
   .label .content {
-    padding: 7mm 7mm 7mm 7mm;
+    padding: 6mm 8mm 6mm 8mm;
     display: grid;
     grid-template-rows: auto auto 1fr auto;
-    gap: 3mm;
+    gap: 2.5mm;
     /* Vangnet: clip alles wat uit de content-cel zou willen kruipen
-       (bv. lange supplier-codes, te brede barcode). Voorkomt dat de
-       printer een blanco label tussendoor schiet doordat content over
-       de label-rand drukt. */
+       (bv. lange supplier-codes, te brede barcode). */
     overflow: hidden;
     min-width: 0;
   }
@@ -273,9 +275,10 @@
   .label .barcode-wrap svg {
     /* Expliciete mm-dimensies — JsBarcode zet zelf pixel-width/height
        attributen op de SVG; we vervangen die in JS door een viewBox
-       zodat deze CSS-waarden bepalen wat er op de print verschijnt. */
-    width: 55mm; height: 16mm;
-    max-width: 55mm;
+       zodat deze CSS-waarden bepalen wat er op de print verschijnt.
+       Label is nu 209mm breed (was 148mm), dus meer ruimte voor barcode. */
+    width: 80mm; height: 18mm;
+    max-width: 80mm;
     display: block;
     /* Crisp edges op de barcode-strepen — sommige printers halftonen
        anders de bar-randen, wat als puntjes in het wit zichtbaar wordt. */
@@ -284,7 +287,11 @@
 
   /* ─── Print-regels ───────────────────────────────────────── */
   @media print {
-    @page { size: A6 landscape; margin: 0; }
+    /* Page-size MOET matchen met de fysieke label (209×99mm) — anders
+       schiet de printer blanco labels tussendoor om weer in lijn te
+       komen met de label-perforatie. Was eerder A6 (148×105mm), wat
+       een mismatch van 60mm/label opleverde. */
+    @page { size: 209mm 99mm; margin: 0; }
 
     html, body { background: #fff !important; margin: 0; padding: 0; }
 
@@ -306,16 +313,10 @@
       overflow: hidden;
     }
 
-    /* Elke .label = één A6-pagina.
-       Hoogte 2mm onder de A6-landscape page (105mm) zodat sub-pixel
-       rendering-overflow geen lege tussenpagina veroorzaakt. Zonder die
-       buffer ziet Chromium het label als "iets te groot" en print het in
-       twee pagina's: één voor het label en één lege. 2mm is op een
-       ZDesigner label-printer (die zelf al een advance-margin heeft)
-       visueel niet zichtbaar, maar geeft genoeg speling voor
-       renderingverschillen tussen Electron-versies.
-       page-break-inside: avoid voorkomt dat de browser het label over
-       twee pagina's wil splitsen. */
+    /* Elke .label = één label-pagina.
+       Hoogte 1mm onder de page-hoogte (99mm) zodat sub-pixel rendering-
+       overflow geen lege tussenpagina veroorzaakt. ZDesigner heeft zelf
+       advance-margin tussen labels, dus 1mm is visueel onmerkbaar. */
     #printArea .label {
       page-break-after: always;
       break-after: page;
@@ -323,7 +324,7 @@
       break-inside: avoid;
       box-shadow: none !important;
       border: 0 !important;
-      width: 148mm; height: 103mm;
+      width: 209mm; height: 98mm;
       box-sizing: border-box;
       margin: 0 !important;
       padding: 0 !important;
