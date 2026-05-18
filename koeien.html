@@ -190,6 +190,35 @@
     align-self:center;padding-bottom:6px;border-bottom:1px solid var(--line)}
   .stamboom-lines{position:absolute;left:0;top:0;pointer-events:none;z-index:3;overflow:visible}
 
+  /* Edit-ouders-knop op tree-card */
+  .tree-card .tc-edit-parents{position:absolute;top:3px;left:3px;
+    width:20px;height:20px;border-radius:50%;background:rgba(255,255,255,0.85);
+    border:1px solid var(--line);display:flex;align-items:center;justify-content:center;
+    font-size:11px;cursor:pointer;color:var(--accent);z-index:1;
+    opacity:0;transition:opacity .12s}
+  .tree-card:hover .tc-edit-parents{opacity:1}
+  .tree-card .tc-edit-parents:hover{background:#fff;color:var(--ink)}
+
+  /* Edit-ouders modal */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);
+    display:flex;align-items:center;justify-content:center;z-index:50;
+    padding:20px}
+  .modal-overlay.hidden{display:none}
+  .modal-box{background:#fff;border-radius:12px;max-width:420px;width:100%;
+    box-shadow:0 12px 40px rgba(0,0,0,0.25)}
+  .modal-box header{padding:16px 20px;border-bottom:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center}
+  .modal-box header h3{margin:0;font-size:16px;font-weight:600;color:var(--ink);
+    border:none;background:none;letter-spacing:0;text-transform:none}
+  .modal-box header button.close{background:none;border:none;font-size:22px;
+    cursor:pointer;color:var(--muted);line-height:1;padding:0 4px}
+  .modal-box .modal-body{padding:18px 20px;display:grid;gap:12px}
+  .modal-box .modal-body label{font-size:12px;color:var(--muted);display:block}
+  .modal-box .modal-body select{width:100%;background:#fff;border:1px solid var(--line);
+    border-radius:6px;padding:6px 10px;font:inherit;color:inherit;margin-top:4px}
+  .modal-box .modal-actions{padding:14px 20px;border-top:1px solid var(--line);
+    display:flex;gap:8px;justify-content:flex-end}
+
   /* Info-blok onder de stamboom met locatie + opmerkingen */
   .stamboom-info{margin-top:14px;background:var(--panel);border:1px solid var(--line);
     border-radius:10px;padding:14px 18px;font-size:13px;color:var(--ink);box-shadow:var(--shadow)}
@@ -237,7 +266,9 @@
     border:1px dashed transparent;
   }
   .tree-card .tc-photo:hover{border-color:var(--accent-soft);background:#ece5d3}
-  .tree-card .tc-photo img{width:100%;height:100%;object-fit:cover;display:block}
+  .tree-card .tc-photo img{width:100%;height:100%;object-fit:cover;display:block;
+    cursor:grab;user-select:none}
+  .tree-card .tc-photo img.dragging{cursor:grabbing}
 
   footer{color:var(--muted);font-size:12px;padding:12px 28px 28px;text-align:center}
 </style>
@@ -411,6 +442,30 @@
     </div>
   </section>
 </main>
+
+<!-- Modal: bewerk moeder/vader van een koe -->
+<div class="modal-overlay hidden" id="editParentsModal">
+  <div class="modal-box">
+    <header>
+      <h3>Ouders bewerken — <span id="ep-name"></span></h3>
+      <button class="close" id="ep-close" type="button" title="Sluiten">×</button>
+    </header>
+    <div class="modal-body">
+      <div>
+        <label>Moeder</label>
+        <select id="ep-mother"><option value="">— (onbekend) —</option></select>
+      </div>
+      <div>
+        <label>Vader</label>
+        <select id="ep-father"><option value="">— (onbekend) —</option></select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn secondary" id="ep-cancel" type="button">Annuleren</button>
+      <button class="btn" id="ep-save" type="button">Opslaan</button>
+    </div>
+  </div>
+</div>
 
 <footer>
   Bronbestand: <code>Koeien.xlsx</code> · Gegevens afgeleid uit tabbladen "View", "Overzicht koeien", "Opmerkingen" en "Stamboom".
@@ -988,11 +1043,14 @@ function renderStamboom(){
       }
     }
     if (tipParts.length) el.title = tipParts.join(" · ");
+    const ox = (typeof c.photoOffsetX === "number") ? c.photoOffsetX : 50;
+    const oy = (typeof c.photoOffsetY === "number") ? c.photoOffsetY : 50;
     const photoHtml = c.photo
-      ? `<img src="${escapeHtml(c.photo)}" alt="${escapeHtml(c.naam)}">`
+      ? `<img src="${escapeHtml(c.photo)}" alt="${escapeHtml(c.naam)}" style="object-position:${ox}% ${oy}%" draggable="false">`
       : `📷 foto`;
     el.innerHTML = `
-      <div class="tc-photo" data-photo-for="${escapeHtml(c.id)}" title="Klik om foto te uploaden">${photoHtml}</div>
+      <span class="tc-edit-parents" data-edit-parents="${escapeHtml(c.id)}" title="Bewerk moeder en vader">✎</span>
+      <div class="tc-photo" data-photo-for="${escapeHtml(c.id)}" title="${c.photo ? 'Sleep om uitsnede aan te passen, klik om te vervangen' : 'Klik om foto te uploaden'}">${photoHtml}</div>
       <div class="tc-head">
         <span class="tc-gender">${c.geslacht||"?"}</span>
         <span class="tc-name" data-f="naam" title="Klik om te bewerken">${escapeHtml(c.naam)}</span>
@@ -1204,11 +1262,137 @@ function uploadPhotoForCow(cowId) {
   inp.click();
 }
 
+/* Foto-drag: sleep de afbeelding binnen de slot om de uitsnede aan te
+   passen (bv. bovenkant van een verticale foto tonen). Werkt via CSS
+   object-position; opslag per koe als photoOffsetX/Y. */
+let _photoDrag = null;
+$grid.addEventListener("mousedown", (e) => {
+  const slot = e.target.closest(".tc-photo");
+  if (!slot) return;
+  const img = slot.querySelector("img");
+  if (!img) return; // geen foto → geen drag, valt door naar click = upload
+  e.preventDefault();
+  const cow = cowById(slot.dataset.photoFor);
+  if (!cow) return;
+  _photoDrag = {
+    cowId: cow.id,
+    img, slot,
+    startX: e.clientX, startY: e.clientY,
+    initialX: (typeof cow.photoOffsetX === "number") ? cow.photoOffsetX : 50,
+    initialY: (typeof cow.photoOffsetY === "number") ? cow.photoOffsetY : 50,
+    slotW: slot.clientWidth, slotH: slot.clientHeight,
+    moved: false,
+  };
+});
+
+document.addEventListener("mousemove", (e) => {
+  if (!_photoDrag) return;
+  const dx = e.clientX - _photoDrag.startX;
+  const dy = e.clientY - _photoDrag.startY;
+  if (!_photoDrag.moved && Math.hypot(dx, dy) < 4) return;
+  if (!_photoDrag.moved) {
+    _photoDrag.moved = true;
+    _photoDrag.img.classList.add("dragging");
+  }
+  // delta in % van slot-size; object-position 0% = links/top, 100% = rechts/bottom
+  const newX = _photoDrag.initialX - (dx / _photoDrag.slotW) * 100;
+  const newY = _photoDrag.initialY - (dy / _photoDrag.slotH) * 100;
+  const cx = Math.max(0, Math.min(100, newX));
+  const cy = Math.max(0, Math.min(100, newY));
+  _photoDrag.img.style.objectPosition = `${cx}% ${cy}%`;
+  _photoDrag.currentX = cx;
+  _photoDrag.currentY = cy;
+});
+
+document.addEventListener("mouseup", () => {
+  if (!_photoDrag) return;
+  const d = _photoDrag;
+  _photoDrag = null;
+  d.img.classList.remove("dragging");
+  if (d.moved && d.currentX != null) {
+    const cow = cowById(d.cowId);
+    if (cow) {
+      cow.photoOffsetX = d.currentX;
+      cow.photoOffsetY = d.currentY;
+      saveState();
+    }
+    // Voorkom de click die zou anders nu vuren (= file-picker open).
+    // setTimeout zodat de pending click eerst gevuurd is en we 'm
+    // kunnen onderscheppen.
+    d.slot.dataset.suppressClick = "1";
+    setTimeout(() => { delete d.slot.dataset.suppressClick; }, 50);
+  }
+});
+
+/* Edit-ouders modal: open vanuit het ✎-knopje op de tree-card, sla op in
+   state.relations. Hiermee kun je een bestaande koe corrigeren zonder
+   verwijderen + opnieuw toevoegen. */
+function openEditParents(cowId) {
+  const cow = cowById(cowId);
+  if (!cow) return;
+  document.getElementById("ep-name").textContent = cow.naam;
+  const mSel = document.getElementById("ep-mother");
+  const fSel = document.getElementById("ep-father");
+  function refill(select, geslachtFilter) {
+    while (select.options.length > 1) select.remove(1);
+    const sorted = state.cows
+      .filter(c => c.id !== cowId)
+      .filter(c => !geslachtFilter || c.geslacht === geslachtFilter)
+      .slice()
+      .sort((a, b) => (a.naam || "").localeCompare(b.naam || ""));
+    for (const c of sorted) {
+      const o = document.createElement("option");
+      o.value = c.id;
+      o.textContent = `${c.naam} (${c.tag || "?"})`;
+      select.appendChild(o);
+    }
+  }
+  refill(mSel, "V");
+  refill(fSel, "M");
+  const rel = state.relations.find(r => r.child === cowId);
+  mSel.value = rel?.mother || "";
+  fSel.value = rel?.father || "";
+  const modal = document.getElementById("editParentsModal");
+  modal.dataset.cowId = cowId;
+  modal.classList.remove("hidden");
+}
+function closeEditParents() {
+  document.getElementById("editParentsModal").classList.add("hidden");
+}
+document.getElementById("ep-close").addEventListener("click", closeEditParents);
+document.getElementById("ep-cancel").addEventListener("click", closeEditParents);
+document.getElementById("ep-save").addEventListener("click", () => {
+  const modal = document.getElementById("editParentsModal");
+  const cowId = modal.dataset.cowId;
+  if (!cowId) return;
+  const motherId = document.getElementById("ep-mother").value || null;
+  const fatherId = document.getElementById("ep-father").value || null;
+  // Verwijder oude relation-entry voor deze child en voeg eventueel nieuwe toe.
+  state.relations = state.relations.filter(r => r.child !== cowId);
+  if (motherId || fatherId) {
+    state.relations.push({
+      child: cowId,
+      ...(motherId ? { mother: motherId } : {}),
+      ...(fatherId ? { father: fatherId } : {}),
+    });
+  }
+  saveState();
+  render();
+  closeEditParents();
+});
+
 /* Stamboom editing (contenteditable on card fields) */
 $grid.addEventListener("click",(e)=>{
-  // Foto-slot → file-picker
+  // Ouders-bewerk-knop → open modal
+  const editBtn = e.target.closest(".tc-edit-parents");
+  if (editBtn) {
+    openEditParents(editBtn.dataset.editParents);
+    return;
+  }
+  // Foto-slot → file-picker (= upload of vervang). Onderdrukken na drag.
   const photoSlot = e.target.closest(".tc-photo");
   if (photoSlot) {
+    if (photoSlot.dataset.suppressClick === "1") return;
     uploadPhotoForCow(photoSlot.dataset.photoFor);
     return;
   }
