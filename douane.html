@@ -668,11 +668,22 @@ function getSpec(code, description) {
     if (model) {
       const sd = state.specDatabase[model];
       if (sd) {
-        if (sd.dims)      merged.dims = sd.dims;
-        // NW = Dry Weight (spa zonder water). GW zetten we default gelijk aan
-        // NW; voor shipping is de kratgewicht-optelling klein en mag Manon
-        // tweaken als ze de exacte kratgewichten kent.
-        if (sd.dryWeight) { merged.nw = sd.dryWeight; merged.gw = sd.dryWeight; }
+        if (sd.dims) merged.dims = sd.dims;
+        if (sd.dryWeight) {
+          // GW = brutogewicht = Dry Weight uit de PDF (spa zonder water,
+          // krat-optelling is klein en mag Manon tweaken).
+          merged.gw = sd.dryWeight;
+          // NW = nettogewicht = Dry Weight − 20 kg (spa) of − 100 kg
+          // (zwemspa) volgens de Fonteyn-regel. Nieuwere spec-database-
+          // entries hebben netWeight al voorberekend; bij oude entries
+          // valt 'ie terug op de formule via isSwimSpa / brand.
+          if (typeof sd.netWeight === "number") {
+            merged.nw = sd.netWeight;
+          } else {
+            const isSwim = !!sd.isSwimSpa || /swim/i.test(sd.brand || "");
+            merged.nw = sd.dryWeight - (isSwim ? 100 : 20);
+          }
+        }
         // Spas vallen altijd onder 9019.10 (mechano-therapy) en komen uit China.
         merged.hs = "9019101000";
         merged.origin = "China";

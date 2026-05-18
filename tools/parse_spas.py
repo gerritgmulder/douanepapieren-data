@@ -1,184 +1,167 @@
 #!/usr/bin/env python3
 """
-Parse alle Passion Spas / Eden / Ice Bath PDF spec sheets en bouw een JSON
-lookup van model-naam → {dims, dryWeight, fullWeight, brand, source}.
+Build spec-database.json from all PDFs in the Fonteyn Spa documentatie folder.
 
-Verwacht: pdfplumber (`pip install pdfplumber`).
+Reads Dimensions and Dry Weight from each PDF, derives brand from path,
+detects whether the spa is a swim spa (= zwemspa, net weight = dry - 100kg)
+or a regular spa (net weight = dry - 20kg), and writes a JSON dict keyed by
+spa-name (= filename minus .pdf, cleaned).
 
-Pas SPADIR aan naar waar jouw "Spa documentatie" map staat. Op de Mac van Gerrit
-staat die in iCloud Drive (zie default).
-
-Run:
-    python3 tools/parse_spas.py
-
-Schrijft `spec-database.json` (root) en `server/spec-database.json` (zelfde data,
-voor de helper-server). Daarna handmatig committen + naar main pushen — bij de
-volgende app-start downloadt de Electron-app het via het manifest.
+Usage: python3 build-spec-database.py
+Output: writes ./spec-database.json (next to the script)
 """
-import os, re, json, glob, sys
-import pdfplumber
+import json, os, re, subprocess, sys
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# ─── Bron-locatie ────────────────────────────────────────────────────────
-SPADIR = os.environ.get(
-    "FONTEYN_SPADIR",
-    "/Users/gmulder/Library/Mobile Documents/com~apple~CloudDocs/"
-    "Desktop/Intenza/Klanten : Prospects/Fonteyn/Logistiek/"
-    "Douanepapieren/Spa documentatie",
-)
+SPADOC = Path("/Users/gmulder/Library/Mobile Documents/com~apple~CloudDocs/Desktop/Intenza/Klanten : Prospects/Fonteyn/Dashboard/Logistiek/Douanepapieren/Spa documentatie")
+OUTPUT = Path("/Users/gmulder/Documents/GitHub/douanepapieren-data/.claude/worktrees/romantic-ardinghelli-78b097/spec-database.json")
 
-# We lopen recursief door de hele map (2023-of ouder, 2024, 2026).
-# UK/USA/imperial-PDFs worden in parse_pdf zelf herkend (Dry Weight in lbs)
-# en geweigerd — anders zouden 681 lbs als 681 kg worden opgeslagen.
-ROOT_SUBFOLDERS = [
-    "2023-of ouder",
-    "2024",
-    "2026 (not done yet)",
+# Brand-mapping: pad-segmenten → brand-naam zoals we 'm in spec willen.
+# Pakt het meest-specifieke segment (langste match).
+BRAND_FROM_PATH = [
+    # 2024 (huidige catalogus)
+    ("2024/EU/Passion Swim Spas",  "Passion Swim Spas",  True),
+    ("2024/EU/Passion Spas",       "Passion Spas",       False),
+    ("2024/EU/Passion Ice Baths",  "Passion Ice Baths",  False),
+    ("2024/EU/Eden Spas",          "Eden Spas",          False),
+    ("2024/UK/Passion Swimspas",   "Passion Swim Spas",  True),
+    ("2024/UK/Passion Spas",       "Passion Spas",       False),
+    ("2024/UK/Passion Ice Baths",  "Passion Ice Baths",  False),
+    # 2023-of ouder (legacy)
+    ("1. Tropical Spas",           "Tropic Spas",        False),
+    ("1. Storm spas",              "Storm Spas",         False),
+    ("1. Devine Spas",             "Devine Spas",        False),
+    ("1. Grizzly Spas",            "Grizzly Spas",       False),
+    ("Passion Swim Spas",          "Passion Swim Spas",  True),
+    ("Passion Spas",               "Passion Spas",       False),
+    ("Tropical Spas",              "Tropic Spas",        False),
+    ("Storm spas",                 "Storm Spas",         False),
+    ("Devine Spas",                "Devine Spas",        False),
+    ("Grizzly Spas",               "Grizzly Spas",       False),
+    # Zwemspa-detectie op naam
+    ("Swim Spa",                   "Passion Swim Spas",  True),
+    ("Swimspa",                    "Passion Swim Spas",  True),
 ]
 
-# Flexibele regexes voor metric (kg/cm) data
-RE_DIMS_METRIC = re.compile(
-    r"Dimensions\s*L\s*x\s*W\s*x\s*H[\s.]*?([0-9]{2,4})\s*x\s*([0-9]{2,4})\s*x\s*([0-9]{1,4})",
-    re.I,
-)
-# Sommige oude PDFs schrijven gewoon "L x W x H" of "Afmetingen" zonder Dimensions-prefix
-RE_DIMS_FALLBACK = re.compile(
-    r"(?:Afmetingen|Dimensions)[^0-9]{0,40}?([0-9]{2,4})\s*x\s*([0-9]{2,4})\s*x\s*([0-9]{1,4})",
-    re.I,
-)
-RE_DRY_KG  = re.compile(r"Dry\s*Weight[^0-9]*?([0-9]{2,5})", re.I)
-RE_FULL_KG = re.compile(r"Full\s*Weight[^0-9]*?([0-9]{2,5})", re.I)
+DIM_RE = re.compile(r'Dimensions\s*L?\s*x?\s*W?\s*x?\s*H?[\s\.·]*([\d]{2,4})\s*[xX×]\s*([\d]{2,4})\s*[xX×]\s*([\d]{2,4})\s*cm', re.IGNORECASE)
+DRY_RE = re.compile(r'Dry\s*Weight(?:\s*in\s*kg)?[\s\.·]*([\d]{2,5})', re.IGNORECASE)
+FULL_RE = re.compile(r'Full\s*Weight(?:\s*in\s*kg)?[\s\.·]*([\d]{2,5})', re.IGNORECASE)
 
-# Detecteer pounds → skip die PDF (zou metric vervuilen). We checken specifiek
-# op "Weight in lbs" ergens in de tekst; bij EU-PDFs staat "Weight in kg".
-RE_IMPERIAL = re.compile(r"Weight\s*in\s*lbs|in\s*inches\b", re.I)
-
-# Filenames met taal-suffix: "Serene 5 DE.pdf" → "Serene 5"
-RE_LANG_SUFFIX = re.compile(r"\s+(DE|UK|US|USA|FR|EN|NL|ES)$", re.I)
-
-# Bestanden / paden die geen spa-spec-sheet zijn — overslaan
-SKIP_FILENAMES = {
-    "Prijslijst Xtreme Green Heat Pump",
-}
-SKIP_PATH_PARTS = {
-    # Niet-spa PDFs in bovenmappen
-    "Merchandising", "Kleuren", "Covana",  # cover guides, geen spec sheets met dims/weight format
-    "AquaSun Dealer",
-    "USA - Amerikaanse maten",  # imperial, willen we niet
-    "UK English - Europese maten",  # wel EU-maten maar lbs voor weight; risico te groot
-}
-
-
-def model_name_from_filename(fn: str) -> str:
-    base = os.path.splitext(os.path.basename(fn))[0]
-    return RE_LANG_SUFFIX.sub("", base).strip()
-
-
-def brand_from_path(p: str) -> str:
-    rel = p.replace(SPADIR + "/", "")
-    parts = rel.split("/")
-    if len(parts) >= 3:
-        return parts[2]
-    return parts[0] if parts else "?"
-
-
-def parse_pdf(p: str):
+def extract_text(pdf_path):
+    """pdftotext, met timeout 8s — sneller falen dan slepende PDFs."""
     try:
-        with pdfplumber.open(p) as pdf:
-            text = ""
-            # We hebben meestal genoeg aan de eerste 2-4 pagina's;
-            # stop zodra we alle 3 de waarden hebben.
-            for page in pdf.pages[:4]:
-                text += (page.extract_text() or "") + "\n"
-                if ((RE_DIMS_METRIC.search(text) or RE_DIMS_FALLBACK.search(text))
-                        and RE_DRY_KG.search(text)
-                        and RE_FULL_KG.search(text)):
-                    break
+        result = subprocess.run(
+            ["/opt/homebrew/bin/pdftotext", "-layout", str(pdf_path), "-"],
+            capture_output=True, text=True, timeout=8
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout
+    except Exception:
+        pass
+    return ""
 
-        # Veiligheidsfilter: skip PDFs in pounds — anders vervuilen
-        # die de database met getallen alsof het kg zijn.
-        if RE_IMPERIAL.search(text):
-            return {"skipped": "imperial units"}
+def detect_brand_and_swim(path_str):
+    for marker, brand, is_swim in BRAND_FROM_PATH:
+        if marker in path_str:
+            return brand, is_swim
+    return None, False
 
-        m_dims = RE_DIMS_METRIC.search(text) or RE_DIMS_FALLBACK.search(text)
-        m_dry  = RE_DRY_KG.search(text)
-        m_full = RE_FULL_KG.search(text)
-        if not (m_dims or m_dry or m_full):
-            return None
-        return {
-            "dims":      f"{m_dims.group(1)}x{m_dims.group(2)}x{m_dims.group(3)} CM" if m_dims else None,
-            "dryWeight": int(m_dry.group(1))  if m_dry  else None,
-            "fullWeight":int(m_full.group(1)) if m_full else None,
-        }
-    except Exception as e:
-        return {"error": str(e)}
-
-
-def find_pdfs(root):
-    """Recursief alle PDFs onder root, met SKIP_PATH_PARTS-filter."""
-    for dirpath, dirnames, files in os.walk(root):
-        # Skip mappen waarvan we weten dat ze niet helpen (Merchandising, Covana...).
-        # In-place mutate dirnames om walk te sturen.
-        dirnames[:] = [d for d in dirnames if d not in SKIP_PATH_PARTS]
-        for f in files:
-            if f.lower().endswith(".pdf"):
-                yield os.path.join(dirpath, f)
+def clean_name(filename):
+    """'EU The Aurora.pdf' → 'The Aurora'. 'Bermuda.pdf' → 'Bermuda'."""
+    n = re.sub(r'\.pdf$', '', filename, flags=re.IGNORECASE)
+    # Strip leading "EU " of "UK " prefixen (Eden / UK Passion-bestanden)
+    n = re.sub(r'^(EU|UK)\s+', '', n)
+    return n.strip()
 
 def main():
-    if not os.path.isdir(SPADIR):
-        print(f"FOUT: Spa documentatie-map niet gevonden: {SPADIR}", file=sys.stderr)
-        print(f"Stel FONTEYN_SPADIR in als de map ergens anders staat.", file=sys.stderr)
+    if not SPADOC.exists():
+        print(f"ERROR: Spa documentatie folder niet gevonden op {SPADOC}", file=sys.stderr)
         sys.exit(1)
 
-    out, errors, skipped, total = {}, [], 0, 0
-    for sub in ROOT_SUBFOLDERS:
-        full = os.path.join(SPADIR, sub)
-        if not os.path.isdir(full):
-            print(f"  skip (niet aanwezig): {sub}", file=sys.stderr)
-            continue
-        for p in sorted(find_pdfs(full)):
-            total += 1
-            name = model_name_from_filename(p)
-            if name in SKIP_FILENAMES:
-                continue
-            parsed = parse_pdf(p)
-            if parsed and "skipped" in parsed:
-                skipped += 1
-                continue
-            if not parsed or "error" in parsed:
-                errors.append(f"{os.path.relpath(p, SPADIR)}: " +
-                              (parsed.get("error","leeg") if parsed else "geen velden gevonden"))
-                continue
-            existing = out.get(name)
-            if existing:
-                # Eerste gevonden wint, maar vul ontbrekende velden alsnog aan
-                for k in ("dims", "dryWeight", "fullWeight"):
-                    if not existing.get(k) and parsed.get(k):
-                        existing[k] = parsed[k]
-                continue
-            out[name] = {
-                "brand": brand_from_path(p),
-                "dims": parsed["dims"],
-                "dryWeight": parsed["dryWeight"],
-                "fullWeight": parsed["fullWeight"],
-                "source": os.path.relpath(p, SPADIR),
-            }
+    pdfs = sorted(SPADOC.rglob("*.pdf"))
+    print(f"Totaal PDFs gevonden: {len(pdfs)}", flush=True)
 
-    out = dict(sorted(out.items()))
-    repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-    for path in [os.path.join(repo_root, "spec-database.json"),
-                 os.path.join(repo_root, "server", "spec-database.json")]:
-        with open(path, "w") as f:
-            json.dump(out, f, indent=0, ensure_ascii=False)
-            f.write("\n")
-        print(f"  ✓ {os.path.relpath(path, repo_root)}")
+    def process_one(pdf):
+        rel = pdf.relative_to(SPADOC)
+        name = clean_name(pdf.name)
+        text = extract_text(pdf)
+        if not text:
+            return ("skip", str(rel), "geen tekst (scan-PDF?)")
+        m_dim = DIM_RE.search(text)
+        m_dry = DRY_RE.search(text)
+        m_full = FULL_RE.search(text)
+        if not (m_dim and m_dry):
+            return ("skip", str(rel), f"velden missen (dim={bool(m_dim)} dry={bool(m_dry)})")
+        L, W, H = m_dim.groups()
+        dims = f"{L}x{W}x{H} CM"
+        dry = int(m_dry.group(1))
+        full = int(m_full.group(1)) if m_full else None
+        brand, is_swim = detect_brand_and_swim(str(rel))
+        if "swim" in name.lower():
+            is_swim = True
+        net = dry - (100 if is_swim else 20)
+        entry = {
+            "brand": brand or "Onbekend",
+            "dims": dims,
+            "dryWeight": dry,
+            "netWeight": net,
+            "isSwimSpa": is_swim,
+            "source": str(rel),
+        }
+        if full is not None:
+            entry["fullWeight"] = full
+        return ("ok", name, entry)
 
-    print(f"\nTotaal: {total} PDFs   →   {len(out)} spas in DB   ({skipped} skipped imperial, {len(errors)} errors)")
-    if errors:
-        print("\nErrors / niet-geparsed:")
-        for e in errors[:20]:
-            print(f"  - {e}")
-        if len(errors) > 20:
-            print(f"  ... en nog {len(errors)-20} meer")
+    db = {}
+    skipped = []
+    duplicates = []
+    done = 0
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {ex.submit(process_one, p): p for p in pdfs}
+        for fut in as_completed(futures):
+            done += 1
+            kind, key, val = fut.result()
+            if kind == "skip":
+                skipped.append((key, val))
+            else:
+                name = key
+                entry = val
+                if name in db:
+                    old = db[name]
+                    old_is_2024 = "2024/" in old.get("source", "")
+                    new_is_2024 = "2024/" in entry.get("source", "")
+                    if new_is_2024 and not old_is_2024:
+                        duplicates.append((name, "→ overschreven door 2024"))
+                        db[name] = entry
+                    else:
+                        duplicates.append((name, f"genegeerd dup: {entry['source']}"))
+                else:
+                    db[name] = entry
+            if done % 50 == 0 or done == len(pdfs):
+                print(f"  {done}/{len(pdfs)} verwerkt | db={len(db)} skipped={len(skipped)}", flush=True)
+
+    pdf_count = done
+
+    # Sorteer alfabetisch voor leesbaarheid van de JSON
+    sorted_db = dict(sorted(db.items()))
+
+    OUTPUT.write_text(json.dumps(sorted_db, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"PDFs verwerkt: {pdf_count}")
+    print(f"Spec-entries geschreven: {len(sorted_db)}")
+    print(f"Skipped (geen velden / kon niet lezen): {len(skipped)}")
+    print(f"Duplicates: {len(duplicates)}")
+    print()
+    print("=== eerste 5 entries ===")
+    for k, v in list(sorted_db.items())[:5]:
+        print(f"  {k!r}: dims={v['dims']}, dry={v['dryWeight']}, net={v['netWeight']}, swim={v['isSwimSpa']}, brand={v['brand']}")
+    print()
+    if skipped:
+        print("=== eerste 10 skipped (debug) ===")
+        for path, reason in skipped[:10]:
+            print(f"  {path}: {reason}")
+    print()
+    print(f"Output: {OUTPUT}")
 
 if __name__ == "__main__":
     main()
