@@ -219,14 +219,22 @@
   .modal-box .modal-actions{padding:14px 20px;border-top:1px solid var(--line);
     display:flex;gap:8px;justify-content:flex-end}
 
-  /* Info-blok onder de stamboom met locatie + opmerkingen */
+  /* Info-blok onder de stamboom met locatie + opmerkingen — bewerkbaar */
   .stamboom-info{margin-top:14px;background:var(--panel);border:1px solid var(--line);
-    border-radius:10px;padding:14px 18px;font-size:13px;color:var(--ink);box-shadow:var(--shadow)}
-  .stamboom-info h4{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--accent);
+    border-radius:10px;padding:14px 18px 16px;font-size:13px;color:var(--ink);box-shadow:var(--shadow)}
+  .stamboom-info-hint{font-size:11px;color:var(--muted);margin-bottom:6px;
+    opacity:0.6;transition:opacity .15s}
+  .stamboom-info:hover .stamboom-info-hint{opacity:1}
+  .stamboom-info-content{outline:none;border-radius:6px;padding:6px;
+    margin:-6px;transition:background .12s}
+  .stamboom-info-content:hover{background:#fbf8ef}
+  .stamboom-info-content:focus{background:#fff;box-shadow:inset 0 0 0 2px var(--accent-soft)}
+  .stamboom-info-content h4{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--accent);
     text-transform:uppercase;letter-spacing:.04em}
-  .stamboom-info ul{margin:0 0 10px;padding-left:18px;line-height:1.5}
-  .stamboom-info li{margin-bottom:4px}
-  .stamboom-info p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.5}
+  .stamboom-info-content ul{margin:0 0 10px;padding-left:18px;line-height:1.5}
+  .stamboom-info-content li{margin-bottom:4px}
+  .stamboom-info-content p{margin:0 0 8px;color:var(--muted);font-size:12.5px;line-height:1.5}
+  .stamboom-info-content p:last-child{margin-bottom:0}
 
   .tree-card{background:#fff;border:1px solid var(--line);border-radius:8px;
     padding:8px 10px;box-shadow:var(--shadow);display:flex;flex-direction:column;
@@ -428,17 +436,8 @@
       weggelaten — de vader is niet zeker.
     </p>
     <div class="stamboom-info">
-      <h4>Locaties</h4>
-      <ul>
-        <li><b>Privé (6257):</b> Madonna, Miss First, Benny, Montana — maximaal 5 bereikt. Angel wilden we ook hier, dus er kan wellicht een oudere naar Cor. Starynight is afgemeld.</li>
-        <li><b>Mosselweg (0750):</b> Mr. Outlaw, Eagle, Torq, Mr. Jim, Saar</li>
-        <li><b>Niet aangemeld (mannen):</b> Pablo 0452, Rooie Evert 0096, Chuck 0106 — worden ook nooit aangemeld.</li>
-      </ul>
-      <p>
-        Van de niet-aangemelde koeien weten we niet zeker wie de vader is, daarom zijn
-        de lijnen naar Mr. Cowboy weggehaald. Mr. Outlaw wordt de dekhengst — daarom zijn
-        Shania Twain en Cheyenne verkocht en Cowboy vlees geworden.
-      </p>
+      <div class="stamboom-info-hint">✎ Klik om te bewerken — wijzigingen worden centraal opgeslagen voor iedereen</div>
+      <div class="stamboom-info-content" id="stamboomInfoContent" contenteditable="true"></div>
     </div>
   </section>
 </main>
@@ -648,10 +647,25 @@ const INITIAL_RELATIONS = [
   {child:"chuck",       mother:"starynight"},
 ];
 
+/* Default tekst voor het info-blok onder de stamboom. Wordt door de
+   user bewerkt en in KV opgeslagen onder state.infoHtml. Bij eerste
+   start (lege KV) wordt deze default geschreven naar KV. */
+const DEFAULT_INFO_HTML = `<h4>Locaties</h4>
+<ul>
+  <li><b>Privé (6257):</b> Madonna, Miss First, Benny, Montana — maximaal 5 bereikt. Angel wilden we ook hier, dus er kan wellicht een oudere naar Cor. Starynight is afgemeld.</li>
+  <li><b>Mosselweg (0750):</b> Mr. Outlaw, Eagle, Torq, Mr. Jim, Saar</li>
+  <li><b>Niet aangemeld (mannen):</b> Pablo 0452, Rooie Evert 0096, Chuck 0106 — worden ook nooit aangemeld.</li>
+</ul>
+<p>
+  Van de niet-aangemelde koeien weten we niet zeker wie de vader is, daarom zijn
+  de lijnen naar Mr. Cowboy weggehaald. Mr. Outlaw wordt de dekhengst — daarom zijn
+  Shania Twain en Cheyenne verkocht en Cowboy vlees geworden.
+</p>`;
+
 /* ============ State ============ */
 // State wordt uit de KV-Worker geladen bij start; tot dan toe leeg.
 // init() onderaan dit bestand doet de eerste fetch en roept render() aan.
-let state = { cows: [], relations: [] };
+let state = { cows: [], relations: [], infoHtml: "" };
 
 async function loadStateFromKV(){
   try{
@@ -666,6 +680,7 @@ async function loadStateFromKV(){
       const init = {
         cows: JSON.parse(JSON.stringify(INITIAL_COWS)),
         relations: JSON.parse(JSON.stringify(INITIAL_RELATIONS)),
+        infoHtml: DEFAULT_INFO_HTML,
       };
       state = init;
       saveStateDebounced();
@@ -674,12 +689,14 @@ async function loadStateFromKV(){
     state = {
       cows: j.cows || [],
       relations: j.relations || JSON.parse(JSON.stringify(INITIAL_RELATIONS)),
+      infoHtml: (typeof j.infoHtml === "string" && j.infoHtml.trim()) ? j.infoHtml : DEFAULT_INFO_HTML,
     };
   }catch(e){
     console.error("[koeien] kon state niet laden:", e);
     state = {
       cows: JSON.parse(JSON.stringify(INITIAL_COWS)),
       relations: JSON.parse(JSON.stringify(INITIAL_RELATIONS)),
+      infoHtml: DEFAULT_INFO_HTML,
     };
   }
 }
@@ -699,6 +716,7 @@ async function saveStateNow(){
     const payload = {
       cows: state.cows,
       relations: state.relations,
+      infoHtml: state.infoHtml || "",
       lastUpdated: new Date().toISOString(),
     };
     const r = await _origFetch(DATA_STORE_URL, {
@@ -741,10 +759,34 @@ const $empty = document.getElementById("empty-table");
 
 function render(){
   renderStats(); renderTable(); renderCards();
+  renderInfoBlock();
   if(!document.getElementById("view-stamboom").classList.contains("hidden")){
     renderStamboom();
   }
 }
+
+/* Sync state.infoHtml → DOM. Vermijd het overschrijven van de DOM
+   terwijl de gebruiker er IN aan het bewerken is (= heeft focus). */
+function renderInfoBlock(){
+  const el = document.getElementById("stamboomInfoContent");
+  if (!el) return;
+  if (document.activeElement === el) return; // niet onderbreken tijdens edit
+  const want = state.infoHtml || DEFAULT_INFO_HTML;
+  if (el.innerHTML !== want) el.innerHTML = want;
+}
+
+/* Sla op bij blur als de tekst gewijzigd is. */
+document.addEventListener("DOMContentLoaded", () => {
+  const el = document.getElementById("stamboomInfoContent");
+  if (!el) return;
+  el.addEventListener("blur", () => {
+    const next = el.innerHTML;
+    if (next !== state.infoHtml) {
+      state.infoHtml = next;
+      saveState();
+    }
+  });
+});
 
 function currentFilters(){
   return {
