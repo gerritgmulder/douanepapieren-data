@@ -169,7 +169,7 @@
     transform-origin:top left;transition:transform 80ms ease-out}
   .stamboom-grid{display:grid;
     grid-template-columns:repeat(8, 195px);
-    grid-auto-rows:115px;
+    grid-auto-rows:155px;
     gap:18px 22px;
     padding:18px;
     position:relative;
@@ -208,6 +208,16 @@
     padding:1px 4px;border-radius:3px;font-weight:600}
   .tree-card .tc-status.s-afgemeld{background:#fde9cf;color:var(--warn)}
   .tree-card .tc-status.s-overleden{background:#f1d6d6;color:var(--bad)}
+
+  /* Foto-slot op de tree-card (klik = upload of vervang) */
+  .tree-card .tc-photo{
+    width:100%;height:46px;border-radius:4px;margin-bottom:4px;
+    background:var(--chip);display:flex;align-items:center;justify-content:center;
+    color:var(--muted);font-size:16px;cursor:pointer;overflow:hidden;
+    border:1px dashed transparent;
+  }
+  .tree-card .tc-photo:hover{border-color:var(--accent-soft);background:#ece5d3}
+  .tree-card .tc-photo img{width:100%;height:100%;object-fit:cover;display:block}
 
   footer{color:var(--muted);font-size:12px;padding:12px 28px 28px;text-align:center}
 </style>
@@ -291,6 +301,8 @@
         <option value="Mosselweg (0750)">Mosselweg (0750)</option>
         <option value="—">— (onbekend)</option>
       </select></div>
+      <div><label>Moeder</label><select id="a-mother"><option value="">— (onbekend) —</option></select></div>
+      <div><label>Vader</label><select id="a-father"><option value="">— (onbekend) —</option></select></div>
       <div style="grid-column:span 2"><label>Opmerking</label><input id="a-note" placeholder="Kleur, notitie…"></div>
       <div class="actions">
         <button class="btn secondary" id="a-cancel">Annuleren</button>
@@ -812,10 +824,44 @@ document.querySelectorAll(".view-toggle button").forEach(b=>{
 
 /* Add cow */
 const $addbar = document.getElementById("addbar");
-document.getElementById("add-btn").addEventListener("click",()=>$addbar.classList.toggle("on"));
+const $aMother = document.getElementById("a-mother");
+const $aFather = document.getElementById("a-father");
+
+// Vul de moeder/vader-dropdowns met alle koeien (gefilterd op geslacht).
+// Aangeroepen wanneer addbar open gaat zodat nieuw toegevoegde koeien direct
+// als mogelijke ouder kunnen worden geselecteerd.
+function fillParentDropdowns(){
+  function refill(select, geslachtFilter){
+    const cur = select.value;
+    // Eerste optie behouden ("— onbekend —"), de rest verversen.
+    while (select.options.length > 1) select.remove(1);
+    const sorted = state.cows
+      .filter(c => !geslachtFilter || c.geslacht === geslachtFilter)
+      .slice()
+      .sort((a, b) => (a.naam||"").localeCompare(b.naam||""));
+    for (const c of sorted) {
+      const o = document.createElement("option");
+      o.value = c.id;
+      o.textContent = `${c.naam} (${c.tag || "?"})`;
+      select.appendChild(o);
+    }
+    if (cur && [...select.options].some(o => o.value === cur)) select.value = cur;
+  }
+  refill($aMother, "V");
+  refill($aFather, "M");
+}
+
+document.getElementById("add-btn").addEventListener("click",()=>{
+  fillParentDropdowns();
+  $addbar.classList.toggle("on");
+});
 document.getElementById("a-cancel").addEventListener("click",()=>$addbar.classList.remove("on"));
 document.getElementById("a-save").addEventListener("click",()=>{
   const naam = document.getElementById("a-naam").value.trim() || "(zonder naam)";
+  const motherId = $aMother.value || null;
+  const fatherId = $aFather.value || null;
+  // Plaats nieuwe koe rechts in de stamboom (volgens jaar van geboorte indien
+  // herkenbaar); standaard rechtsboven in 2026-kolom.
   const row = {
     id: genId(naam), naam,
     tag: document.getElementById("a-tag").value.trim() || "???",
@@ -827,8 +873,19 @@ document.getElementById("a-save").addEventListener("click",()=>{
     opmerking: document.getElementById("a-note").value.trim(),
     tree: {col:8, row:1},
   };
-  state.cows.push(row); saveState(); render();
+  state.cows.push(row);
+  // Voeg relations toe als ouders zijn opgegeven. Eén relation per ouder-paar
+  // zodat het bestaande model (child + mother + father) bewaard blijft.
+  if (motherId || fatherId) {
+    state.relations.push({
+      child: row.id,
+      ...(motherId ? { mother: motherId } : {}),
+      ...(fatherId ? { father: fatherId } : {}),
+    });
+  }
+  saveState(); render();
   ["a-naam","a-tag","a-geb","a-note"].forEach(id=>document.getElementById(id).value="");
+  $aMother.value = ""; $aFather.value = "";
   $addbar.classList.remove("on");
 });
 
@@ -873,7 +930,11 @@ function renderStamboom(){
     el.style.gridColumn = col;
     el.style.gridRow = (row + 1); // +1 because row 1 is header
     el.dataset.id = c.id;
+    const photoHtml = c.photo
+      ? `<img src="${escapeHtml(c.photo)}" alt="${escapeHtml(c.naam)}">`
+      : `📷 foto`;
     el.innerHTML = `
+      <div class="tc-photo" data-photo-for="${escapeHtml(c.id)}" title="Klik om foto te uploaden">${photoHtml}</div>
       <div class="tc-head">
         <span class="tc-gender">${c.geslacht||"?"}</span>
         <span class="tc-name" data-f="naam" title="Klik om te bewerken">${escapeHtml(c.naam)}</span>
@@ -886,15 +947,11 @@ function renderStamboom(){
     $grid.appendChild(el);
   }
 
-  // Resize inner to hold grid properly, dan fit-to-screen toepassen.
-  // Belangrijk: drawLines() gebruikt getBoundingClientRect() — daarom moet
-  // de transform leeg zijn tijdens het tekenen, anders krijgen we geschaalde
-  // coördinaten en lopen de lijnen scheef. We scalen pas erna.
+  // drawLines is scale-bewust (zie hieronder) en kan op elk moment worden
+  // aangeroepen — ook na fitStamboomToScreen. Geen transform-reset nodig.
   requestAnimationFrame(() => {
-    const inner = document.getElementById("stamboom-inner");
-    if (inner) inner.style.transform = "none";
-    drawLines();
     fitStamboomToScreen();
+    drawLines();
   });
 }
 
@@ -922,7 +979,22 @@ function fitStamboomToScreen() {
 }
 
 function drawLines(){
-  // Size the SVG to cover the full grid
+  // Detecteer de huidige transform-scale van de inner-container zodat we
+  // getBoundingClientRect-coordinaten kunnen normaliseren naar natural-pixel
+  // posities. SVG-paden worden in natural-pixel-coordinaten getekend; de
+  // parent transform schaalt ze daarna visueel mee met de cards. Dit maakt
+  // drawLines() bruikbaar OOK na fitStamboomToScreen — geen reset nodig en
+  // geen visuele flash bij resize.
+  const inner = document.getElementById("stamboom-inner");
+  const ct = inner ? getComputedStyle(inner).transform : "none";
+  let scale = 1;
+  if (ct && ct !== "none") {
+    // matrix(a, b, c, d, tx, ty) → a is x-scale
+    const m = ct.match(/matrix\(\s*([0-9.]+)/);
+    if (m) scale = parseFloat(m[1]) || 1;
+  }
+
+  // Size the SVG to cover the full grid (natural pixels)
   const gridRect = $grid.getBoundingClientRect();
   $svg.setAttribute("width", $grid.scrollWidth);
   $svg.setAttribute("height", $grid.scrollHeight);
@@ -937,12 +1009,14 @@ function drawLines(){
     const el = $grid.querySelector(`.tree-card[data-id="${id}"]`);
     if(!el) return null;
     const r = el.getBoundingClientRect();
+    // Deel door scale om natural-pixel coords te krijgen (consistent met
+    // de SVG die op natural-pixel-grootte staat).
     return {
-      left: r.left - gridRect.left,
-      right: r.right - gridRect.left,
-      top: r.top - gridRect.top,
-      bottom: r.bottom - gridRect.top,
-      cy: r.top - gridRect.top + r.height/2,
+      left:   (r.left   - gridRect.left) / scale,
+      right:  (r.right  - gridRect.left) / scale,
+      top:    (r.top    - gridRect.top)  / scale,
+      bottom: (r.bottom - gridRect.top)  / scale,
+      cy:     ((r.top   - gridRect.top) + r.height/2) / scale,
     };
   }
 
@@ -991,8 +1065,56 @@ function drawPath(fromR, toR, type){
   $svg.appendChild(p);
 }
 
+/* Foto-upload op tree-card. Client-side gecomprimeerd (250px max, JPEG q=0.7)
+   zodat 30 foto's totaal binnen de ~1MB KV-bucket-limiet blijven. */
+async function resizeImageDataUrl(file, maxDim, quality) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = url;
+    });
+    const ratio = Math.min(maxDim / img.width, maxDim / img.height, 1);
+    const w = Math.max(1, Math.round(img.width * ratio));
+    const h = Math.max(1, Math.round(img.height * ratio));
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    c.getContext("2d").drawImage(img, 0, 0, w, h);
+    return c.toDataURL("image/jpeg", quality);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function uploadPhotoForCow(cowId) {
+  const cow = cowById(cowId);
+  if (!cow) return;
+  const inp = document.createElement("input");
+  inp.type = "file"; inp.accept = "image/*";
+  inp.onchange = async () => {
+    const file = inp.files && inp.files[0];
+    if (!file) return;
+    try {
+      cow.photo = await resizeImageDataUrl(file, 250, 0.7);
+      saveState();
+      render();
+    } catch (e) {
+      alert("Foto uploaden mislukt: " + e.message);
+    }
+  };
+  inp.click();
+}
+
 /* Stamboom editing (contenteditable on card fields) */
 $grid.addEventListener("click",(e)=>{
+  // Foto-slot → file-picker
+  const photoSlot = e.target.closest(".tc-photo");
+  if (photoSlot) {
+    uploadPhotoForCow(photoSlot.dataset.photoFor);
+    return;
+  }
   const ed = e.target.closest("[data-f]");
   if(ed && !ed.isContentEditable){
     ed.contentEditable="true"; ed.focus();
@@ -1020,12 +1142,12 @@ $grid.addEventListener("keydown",(e)=>{
 document.getElementById("show-mothers").addEventListener("change",drawLines);
 document.getElementById("show-fathers").addEventListener("change",drawLines);
 
-/* Her-fit bij window-resize. Geen drawLines nodig: de SVG met lijnen
-   zit binnen .stamboom-inner en wordt door dezelfde transform geschaald
-   als de cards — lijnen volgen automatisch. */
+/* Her-fit + lijnen opnieuw tekenen bij window-resize. drawLines is
+   scale-bewust dus dit blijft ook na meerdere resizes correct. */
 window.addEventListener("resize",()=>{
   if(!document.getElementById("view-stamboom").classList.contains("hidden")){
     fitStamboomToScreen();
+    drawLines();
   }
 });
 
