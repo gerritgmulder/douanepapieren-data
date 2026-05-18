@@ -1191,34 +1191,35 @@ function buildLabel(row, colliIdx, colliTotal, productIdx, productTotal) {
 
   label.appendChild(content);
 
-  // JsBarcode wil een SVG-element hebben; we doen dit asynchroon want de
-  // node moet eerst in de DOM staan voor accurate sizing.
-  setTimeout(() => {
-    try {
-      window.JsBarcode(svg, row.fonteynCode || "0", {
-        format: "CODE128",
-        displayValue: false,
-        margin: 0,
-        width: 2,
-        height: 60
-      });
-      // JsBarcode zet pixel-width/height attributen op de SVG. Bij print
-      // (vooral via Electron's wc.print() naar de ZDesigner) negeert
-      // Chromium soms onze CSS-mm-grootte en gebruikt die pixel-attrs
-      // direct — dan kruipt de barcode tegen of over de label-rand.
-      // Oplossing: lees de gegenereerde pixel-grootte uit, zet die als
-      // viewBox, en wis de width/height attrs zodat onze CSS (55mm × 16mm)
-      // bepaalt hoe groot de barcode visueel wordt.
-      const w = parseFloat(svg.getAttribute("width")) || 200;
-      const h = parseFloat(svg.getAttribute("height")) || 60;
-      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-      svg.setAttribute("preserveAspectRatio", "xMinYMax meet");
-      svg.removeAttribute("width");
-      svg.removeAttribute("height");
-    } catch (e) {
-      svg.innerHTML = `<text x="0" y="20" font-size="10">Barcode-fout: ${e.message}</text>`;
-    }
-  }, 0);
+  // Barcode synchroon renderen. JsBarcode werkt op het SVG-element via
+  // DOM-API's — aanhechting aan document is niet vereist. Het was eerder
+  // in setTimeout(0) gewikkeld, maar bij grote batches (100+ labels)
+  // betekende dat dat de print-trigger soms vuurde vóór alle barcodes
+  // klaar waren — wat tot ontbrekende of misvormde labels leidde.
+  try {
+    window.JsBarcode(svg, row.fonteynCode || "0", {
+      format: "CODE128",
+      displayValue: false,
+      margin: 0,
+      width: 2,
+      height: 60
+    });
+    // JsBarcode zet pixel-width/height attributen op de SVG. Bij print
+    // (vooral via Electron's wc.print() naar de ZDesigner) negeert
+    // Chromium soms onze CSS-mm-grootte en gebruikt die pixel-attrs
+    // direct — dan kruipt de barcode tegen of over de label-rand.
+    // Oplossing: lees de gegenereerde pixel-grootte uit, zet die als
+    // viewBox, en wis de width/height attrs zodat onze CSS (55mm × 16mm)
+    // bepaalt hoe groot de barcode visueel wordt.
+    const w = parseFloat(svg.getAttribute("width")) || 200;
+    const h = parseFloat(svg.getAttribute("height")) || 60;
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.setAttribute("preserveAspectRatio", "xMinYMax meet");
+    svg.removeAttribute("width");
+    svg.removeAttribute("height");
+  } catch (e) {
+    svg.innerHTML = `<text x="0" y="20" font-size="10">Barcode-fout: ${e.message}</text>`;
+  }
 
   return label;
 }
@@ -1242,16 +1243,34 @@ function doPrint() {
   }
   const area = $("printArea");
   area.innerHTML = "";
+  let totalLabels = 0;
   for (const row of toPrint) {
     const productTotal = Math.max(1, row.aantalProducten || row.aantal || 1);
     const colliTotal   = Math.max(1, row.aantalColliPerProduct || 1);
     for (let p = 1; p <= productTotal; p++) {
       for (let c = 1; c <= colliTotal; c++) {
         area.appendChild(buildLabel(row, c, colliTotal, p, productTotal));
+        totalLabels++;
       }
     }
   }
-  // Laat JsBarcode renderen voordat we printen
+  // Sanity-check: tel de DOM-nodes terug zodat we kunnen verifiëren dat
+  // we precies zoveel labels in print-area hebben als bedoeld. Verschijnt
+  // in DevTools console; bij miscount-meldingen door Manon kunnen we
+  // direct zien of het issue in JS zit (DOM-count klopt niet) of in de
+  // print-pipeline (DOM-count klopt maar fysieke print is minder).
+  const domCount = area.querySelectorAll(".label").length;
+  console.log(`[labels] print-job aangemaakt: ${totalLabels} verwacht, ${domCount} in DOM`);
+  if (domCount !== totalLabels) {
+    console.error(`[labels] MISMATCH: bedoeld ${totalLabels}, in DOM ${domCount}`);
+  }
+
+  // Wacht dynamisch op layout-reflow voor we print() triggeren. Bij
+  // grote batches duurt het renderen van honderden barcodes + image-
+  // decodes langer. Schatting: 5ms per label, minimaal 200ms, maximaal
+  // 2500ms — bij 200 labels is dat 1 seconde extra wachten dan vroeger.
+  const waitMs = Math.min(2500, Math.max(200, totalLabels * 5));
+  console.log(`[labels] wacht ${waitMs}ms op render voor print()`);
   setTimeout(async () => {
     // Probeer Electron silent-print via de preload-bridge: skipt de
     // systeem-dialoog en stuurt direct naar de ZDesigner-printer in
@@ -1263,6 +1282,8 @@ function doPrint() {
         if (!r?.ok) {
           console.warn("[labels] silent-print faalde, val terug op systeem-dialog:", r?.error);
           window.print();
+        } else {
+          console.log(`[labels] silent-print verzonden naar ${r.deviceName || "default"} — ${totalLabels} labels`);
         }
       } catch (e) {
         console.warn("[labels] silent-print exception, val terug op systeem-dialog:", e.message);
@@ -1273,7 +1294,7 @@ function doPrint() {
       // de standaard print-dialoog tonen.
       window.print();
     }
-  }, 300);
+  }, waitMs);
 }
 
 /* ═══════════════════════════════════════════════════════════════
