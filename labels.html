@@ -414,11 +414,22 @@
       </div>
       <div class="preview-grid" id="previewGrid"></div>
 
-      <div class="bulk-actions" style="margin-top: 18px; border-bottom: 0; padding-bottom: 0;">
+      <div class="bulk-actions" style="margin-top: 18px; border-bottom: 0; padding-bottom: 0;flex-wrap:wrap;">
         <button type="button" class="secondary" id="backToEditBtn">← Terug naar bewerken</button>
         <div class="grow"></div>
         <span class="count" id="printCount">0 labels klaar voor print</span>
-        <button type="button" id="printBtn">🖨️ Alle labels printen</button>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);">
+          Start vanaf
+          <input type="number" id="printStartAt" min="1" value="1" style="width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);">
+          Aantal
+          <input type="number" id="printCountInput" min="1" placeholder="alles" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
+        </label>
+        <button type="button" id="printBtn">🖨️ Labels printen</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);padding:6px 0 0;text-align:right;">
+        <b>Bij rol-vervanging:</b> tel hoeveel labels al door de printer zijn gerold, vul dat + 1 in bij "Start vanaf" en klik opnieuw printen. Laat "Aantal" leeg om alle resterende te printen.
       </div>
     </div>
   </div>
@@ -1241,26 +1252,51 @@ function doPrint() {
     alert("Geen labels geselecteerd om te printen.");
     return;
   }
-  const area = $("printArea");
-  area.innerHTML = "";
-  let totalLabels = 0;
+
+  // Bouw eerst de volledige logische lijst van labels — daarna pak
+  // we een subset op basis van "Start vanaf" + "Aantal".
+  const allLabels = [];
   for (const row of toPrint) {
     const productTotal = Math.max(1, row.aantalProducten || row.aantal || 1);
     const colliTotal   = Math.max(1, row.aantalColliPerProduct || 1);
     for (let p = 1; p <= productTotal; p++) {
       for (let c = 1; c <= colliTotal; c++) {
-        area.appendChild(buildLabel(row, c, colliTotal, p, productTotal));
-        totalLabels++;
+        allLabels.push({ row, c, colliTotal, p, productTotal });
       }
     }
   }
+
+  // Subset op basis van inputs — voor resume-na-rolwissel
+  const startAt = Math.max(1, parseInt($("printStartAt").value, 10) || 1);
+  const countRaw = parseInt($("printCountInput").value, 10);
+  const count = Number.isFinite(countRaw) && countRaw > 0 ? countRaw : Infinity;
+  const subset = allLabels.slice(startAt - 1, startAt - 1 + count);
+  const totalAvailable = allLabels.length;
+
+  if (!subset.length) {
+    alert(`Geen labels te printen: er zijn er ${totalAvailable} in totaal, maar je start vanaf ${startAt}.`);
+    return;
+  }
+
+  if (startAt > 1 || count !== Infinity) {
+    const endAt = startAt + subset.length - 1;
+    if (!confirm(`Print labels ${startAt} t/m ${endAt} (van ${totalAvailable} totaal). Doorgaan?`)) return;
+  }
+
+  const area = $("printArea");
+  area.innerHTML = "";
+  for (const { row, c, colliTotal, p, productTotal } of subset) {
+    area.appendChild(buildLabel(row, c, colliTotal, p, productTotal));
+  }
+  const totalLabels = subset.length;
+
   // Sanity-check: tel de DOM-nodes terug zodat we kunnen verifiëren dat
   // we precies zoveel labels in print-area hebben als bedoeld. Verschijnt
   // in DevTools console; bij miscount-meldingen door Manon kunnen we
   // direct zien of het issue in JS zit (DOM-count klopt niet) of in de
   // print-pipeline (DOM-count klopt maar fysieke print is minder).
   const domCount = area.querySelectorAll(".label").length;
-  console.log(`[labels] print-job aangemaakt: ${totalLabels} verwacht, ${domCount} in DOM`);
+  console.log(`[labels] print-job aangemaakt: ${totalLabels} verwacht (van ${totalAvailable} totaal, start ${startAt}), ${domCount} in DOM`);
   if (domCount !== totalLabels) {
     console.error(`[labels] MISMATCH: bedoeld ${totalLabels}, in DOM ${domCount}`);
   }
