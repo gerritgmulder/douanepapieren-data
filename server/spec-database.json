@@ -17,15 +17,6 @@
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Admire New.pdf",
     "fullWeight": 1850
   },
-  "Admire specificaties": {
-    "brand": "Onbekend",
-    "dims": "230x230x91 CM",
-    "dryWeight": 380,
-    "netWeight": 360,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Admire specificaties.pdf",
-    "fullWeight": 1850
-  },
   "Aquatic 1": {
     "brand": "Passion Spas",
     "dims": "400x228x126 CM",
@@ -44,15 +35,6 @@
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/Aquatic 1 Swimspa.pdf",
     "fullWeight": 8700
   },
-  "Aquatic 1 specificaties": {
-    "brand": "Onbekend",
-    "dims": "400x228x126 CM",
-    "dryWeight": 1200,
-    "netWeight": 1180,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Aquatic 1 specificaties.pdf",
-    "fullWeight": 8700
-  },
   "Aquatic 2": {
     "brand": "Passion Swim Spas",
     "dims": "600x228x126 CM",
@@ -69,15 +51,6 @@
     "netWeight": 1300,
     "isSwimSpa": true,
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/Aquatic 2 Swimspa.pdf",
-    "fullWeight": 13900
-  },
-  "Aquatic 2 specificaties": {
-    "brand": "Onbekend",
-    "dims": "600x228x126 CM",
-    "dryWeight": 1400,
-    "netWeight": 1380,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Aquatic 2 specificaties.pdf",
     "fullWeight": 13900
   },
   "Aquatic 5": {
@@ -134,7 +107,7 @@
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/Aquatic 7 Swimspa.pdf",
     "fullWeight": 14050
   },
-  "Arizona UK": {
+  "Arizona": {
     "brand": "Tropic Spas",
     "dims": "204x204x85 CM",
     "dryWeight": 250,
@@ -187,15 +160,6 @@
     "source": "2024/EU/Passion Spas/Bliss.pdf",
     "fullWeight": 600
   },
-  "Bliss specificaties": {
-    "brand": "Onbekend",
-    "dims": "225x100x80 CM",
-    "dryWeight": 150,
-    "netWeight": 130,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Bliss specificaties.pdf",
-    "fullWeight": 600
-  },
   "Cabo": {
     "brand": "Passion Spas",
     "dims": "215x215x91 CM",
@@ -214,15 +178,6 @@
     "source": "2024/EU/Passion Spas/Delight.pdf",
     "fullWeight": 1800
   },
-  "Delight UK": {
-    "brand": "Tropic Spas",
-    "dims": "213x213x91 CM",
-    "dryWeight": 380,
-    "netWeight": 360,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Delight UK.pdf",
-    "fullWeight": 1800
-  },
   "Desire": {
     "brand": "Passion Spas",
     "dims": "274x228x91 CM",
@@ -230,15 +185,6 @@
     "netWeight": 470,
     "isSwimSpa": false,
     "source": "2024/EU/Passion Spas/Desire.pdf",
-    "fullWeight": 2150
-  },
-  "Desire specificaties": {
-    "brand": "Onbekend",
-    "dims": "274x228x91 CM",
-    "dryWeight": 490,
-    "netWeight": 470,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Desire specificaties.pdf",
     "fullWeight": 2150
   },
   "Devine Spas Believe Spec Sheet": {
@@ -295,16 +241,16 @@
     "source": "2024/EU/Passion Spas/Devotion.pdf",
     "fullWeight": 1840
   },
-  "Dream 7": {
-    "brand": "Tropic Spas",
+  "Dream": {
+    "brand": "Onbekend",
     "dims": "208x208x76 CM",
     "dryWeight": 135,
     "netWeight": 115,
     "isSwimSpa": false,
-    "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Dream 7.pdf",
+    "source": "2023-of ouder/DE - Europese maten/Dream DE.pdf",
     "fullWeight": 1070
   },
-  "Dream 7 specificaties": {
+  "Dream 7": {
     "brand": "Onbekend",
     "dims": "208x208x76 CM",
     "dryWeight": 135,
@@ -312,6 +258,15 @@
     "isSwimSpa": false,
     "source": "2023-of ouder/Frans - Europese maten/Dream 7 specificaties.pdf",
     "fullWeight": 1070
+  },
+  "Ecstatic": {
+    "brand": "Onbekend",
+    "dims": "305x228x91 CM",
+    "dryWeight": 500,
+    "netWeight": 480,
+    "isSwimSpa": false,
+    "source": "2023-of ouder/DE - Europese maten/Ecstatic DE.pdf",
+    "fullWeight": 2150
   },
   "Ecstatic Classic": {
     "brand": "Tropic Spas",
@@ -349,22 +304,13 @@
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Ecstatic Wave.pdf",
     "fullWeight": 2150
   },
-  "Ecstatic specificaties": {
-    "brand": "Onbekend",
-    "dims": "305x228x91 CM",
-    "dryWeight": 500,
-    "netWeight": 480,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Ecstatic specificaties.pdf",
-    "fullWeight": 2150
-  },
   "Euphoria": {
-    "brand": "Tropic Spas",
+    "brand": "Onbekend",
     "dims": "230x230x91 CM",
     "dryWeight": 405,
     "netWeight": 385,
     "isSwimSpa": false,
-    "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Euphoria.pdf",
+    "source": "2023-of ouder/DE - Europese maten/Euphoria DE.pdf",
     "fullWeight": 2100
   },
   "Euphoria MW": {
@@ -383,15 +329,6 @@
     "netWeight": 385,
     "isSwimSpa": false,
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Euphoria Mighty Wave.pdf",
-    "fullWeight": 2100
-  },
-  "Euphoria specificaties": {
-    "brand": "Onbekend",
-    "dims": "230x230x91 CM",
-    "dryWeight": 405,
-    "netWeight": 385,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Euphoria specificaties.pdf",
     "fullWeight": 2100
   },
   "Excite": {
@@ -449,12 +386,12 @@
     "fullWeight": 1980
   },
   "Felicity": {
-    "brand": "Tropic Spas",
+    "brand": "Onbekend",
     "dims": "213x213x91 CM",
     "dryWeight": 390,
     "netWeight": 370,
     "isSwimSpa": false,
-    "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Felicity.pdf",
+    "source": "2023-of ouder/DE - Europese maten/Felicity DE.pdf",
     "fullWeight": 1880
   },
   "Felicity MW": {
@@ -473,15 +410,6 @@
     "netWeight": 370,
     "isSwimSpa": false,
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Felicity Mighty Wave.pdf",
-    "fullWeight": 1880
-  },
-  "Felicity specificaties": {
-    "brand": "Onbekend",
-    "dims": "213x213x91 CM",
-    "dryWeight": 390,
-    "netWeight": 370,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Felicity specificaties.pdf",
     "fullWeight": 1880
   },
   "Flame": {
@@ -572,15 +500,6 @@
     "source": "2024/EU/Passion Spas/Heart.pdf",
     "fullWeight": 1000
   },
-  "Heart specificaties": {
-    "brand": "Onbekend",
-    "dims": "210x170x78 CM",
-    "dryWeight": 200,
-    "netWeight": 180,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Heart specificaties.pdf",
-    "fullWeight": 1000
-  },
   "Indulgence": {
     "brand": "Passion Spas",
     "dims": "214x143x63 CM",
@@ -608,15 +527,6 @@
     "source": "2024/EU/Passion Spas/Joy.pdf",
     "fullWeight": 1740
   },
-  "Joy specificaties": {
-    "brand": "Onbekend",
-    "dims": "225x225x91 CM",
-    "dryWeight": 395,
-    "netWeight": 375,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Joy specificaties.pdf",
-    "fullWeight": 1740
-  },
   "Key Largo": {
     "brand": "Tropic Spas",
     "dims": "210x210x88 CM",
@@ -625,6 +535,24 @@
     "isSwimSpa": false,
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/Key Largo.pdf",
     "fullWeight": 1480
+  },
+  "Mallorca Diamond": {
+    "brand": "Onbekend",
+    "dims": "202x202x83 CM",
+    "dryWeight": 225,
+    "netWeight": 205,
+    "isSwimSpa": false,
+    "source": "2023-of ouder/DE - Europese maten/Mallorca Diamond DE.pdf",
+    "fullWeight": 1505
+  },
+  "Mallorca Superior": {
+    "brand": "Onbekend",
+    "dims": "202x202x83 CM",
+    "dryWeight": 225,
+    "netWeight": 205,
+    "isSwimSpa": false,
+    "source": "2023-of ouder/DE - Europese maten/Mallorca Superior DE.pdf",
+    "fullWeight": 1505
   },
   "Marbella Spa, spa sales garderen": {
     "brand": "Onbekend",
@@ -654,15 +582,6 @@
     "fullWeight": 1850
   },
   "Oxford": {
-    "brand": "Tropic Spas",
-    "dims": "204x155x82 CM",
-    "dryWeight": 275,
-    "netWeight": 255,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Oxford.pdf",
-    "fullWeight": 1325
-  },
-  "Oxford specificaties": {
     "brand": "Onbekend",
     "dims": "204x155x82 CM",
     "dryWeight": 275,
@@ -687,15 +606,6 @@
     "netWeight": 300,
     "isSwimSpa": false,
     "source": "2024/EU/Passion Spas/Pleasure.pdf",
-    "fullWeight": 1590
-  },
-  "Pleasure specificaties": {
-    "brand": "Onbekend",
-    "dims": "215x200x91 CM",
-    "dryWeight": 320,
-    "netWeight": 300,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Pleasure specificaties.pdf",
     "fullWeight": 1590
   },
   "Plunge Pool": {
@@ -734,15 +644,6 @@
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Refresh Classic.pdf",
     "fullWeight": 1630
   },
-  "Refresh specificaties": {
-    "brand": "Onbekend",
-    "dims": "204x204x85 CM",
-    "dryWeight": 250,
-    "netWeight": 230,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Refresh specificaties.pdf",
-    "fullWeight": 1630
-  },
   "Rejoice": {
     "brand": "Onbekend",
     "dims": "205x205x73 CM",
@@ -779,15 +680,6 @@
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Relax New.pdf",
     "fullWeight": 1575
   },
-  "Relax specificaties": {
-    "brand": "Onbekend",
-    "dims": "204x204x85 CM",
-    "dryWeight": 275,
-    "netWeight": 255,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Relax specificaties.pdf",
-    "fullWeight": 1575
-  },
   "Renew": {
     "brand": "Passion Spas",
     "dims": "208x155x83 CM",
@@ -806,15 +698,6 @@
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Renew (New).pdf",
     "fullWeight": 1050
   },
-  "Renew specificaties": {
-    "brand": "Onbekend",
-    "dims": "204x158x83 CM",
-    "dryWeight": 200,
-    "netWeight": 180,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Renew specificaties.pdf",
-    "fullWeight": 1050
-  },
   "Repose": {
     "brand": "Passion Spas",
     "dims": "254x204x85 CM",
@@ -822,15 +705,6 @@
     "netWeight": 355,
     "isSwimSpa": false,
     "source": "2024/EU/Passion Spas/Repose.pdf",
-    "fullWeight": 1875
-  },
-  "Repose specificaties": {
-    "brand": "Onbekend",
-    "dims": "254x204x85 CM",
-    "dryWeight": 375,
-    "netWeight": 355,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Repose specificaties.pdf",
     "fullWeight": 1875
   },
   "Resettle": {
@@ -843,12 +717,12 @@
     "fullWeight": 1830
   },
   "Resort": {
-    "brand": "Tropic Spas",
+    "brand": "Onbekend",
     "dims": "204x204x85 CM",
     "dryWeight": 250,
     "netWeight": 230,
     "isSwimSpa": false,
-    "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Tropical Spas/UK English - Europese maten/Resort.pdf",
+    "source": "2023-of ouder/DE - Europese maten/Resort DE.pdf",
     "fullWeight": 1630
   },
   "Retreat": {
@@ -878,14 +752,14 @@
     "source": "2024/EU/Passion Spas/Sensation.pdf",
     "fullWeight": 1250
   },
-  "Sensation specificaties": {
+  "Serene": {
     "brand": "Onbekend",
-    "dims": "230x155x91 CM",
-    "dryWeight": 275,
-    "netWeight": 255,
+    "dims": "243x224x93 CM",
+    "dryWeight": 380,
+    "netWeight": 360,
     "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Sensation specificaties.pdf",
-    "fullWeight": 1250
+    "source": "2023-of ouder/Frans - Europese maten/Serene specificaties.pdf",
+    "fullWeight": 1850
   },
   "Serene 2": {
     "brand": "Passion Spas",
@@ -923,15 +797,6 @@
     "source": "2023-of ouder/Serene 5 (christian).pdf",
     "fullWeight": 1460
   },
-  "Serene 5 UK": {
-    "brand": "Onbekend",
-    "dims": "210x190x85 CM",
-    "dryWeight": 230,
-    "netWeight": 210,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/Control Engels (service)/BALBOA/UK English - Europese maten/Serene 5 UK.pdf",
-    "fullWeight": 1460
-  },
   "Serene 6": {
     "brand": "Passion Spas",
     "dims": "243x224x93 CM",
@@ -939,15 +804,6 @@
     "netWeight": 360,
     "isSwimSpa": false,
     "source": "2024/EU/Passion Spas/Serene 6.pdf",
-    "fullWeight": 1850
-  },
-  "Serene specificaties": {
-    "brand": "Onbekend",
-    "dims": "243x224x93 CM",
-    "dryWeight": 380,
-    "netWeight": 360,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Serene specificaties.pdf",
     "fullWeight": 1850
   },
   "Solace": {
@@ -959,7 +815,7 @@
     "source": "2024/EU/Passion Spas/Solace.pdf",
     "fullWeight": 1850
   },
-  "Solace - Kopie": {
+  "Solace Kopie": {
     "brand": "Onbekend",
     "dims": "213x213x91 CM",
     "dryWeight": 380,
@@ -977,15 +833,6 @@
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/Control Engels (service)/BALBOA/UK English - Europese maten/Solace New.pdf",
     "fullWeight": 1850
   },
-  "Solace specificaties": {
-    "brand": "Onbekend",
-    "dims": "213x213x91 CM",
-    "dryWeight": 380,
-    "netWeight": 360,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Solace specificaties.pdf",
-    "fullWeight": 1850
-  },
   "Soulmate": {
     "brand": "Passion Spas",
     "dims": "213x165x84 CM",
@@ -995,7 +842,7 @@
     "source": "2024/EU/Passion Spas/Soulmate.pdf",
     "fullWeight": 1110
   },
-  "Spec Sheets Eden Spas-Aurora": {
+  "Spec Sheets Eden Spas Aurora": {
     "brand": "Eden Spas",
     "dims": "234x234x99 CM",
     "dryWeight": 550,
@@ -1004,7 +851,7 @@
     "source": "2024/EU/Eden Spas/2026 EU Spec Sheets Eden Spas-pages/EU Spec Sheets Eden Spas-Aurora.pdf",
     "fullWeight": 2300
   },
-  "Spec Sheets Eden Spas-Lagoon": {
+  "Spec Sheets Eden Spas Lagoon": {
     "brand": "Eden Spas",
     "dims": "234x234x91 CM",
     "dryWeight": 550,
@@ -1013,7 +860,7 @@
     "source": "2024/EU/Eden Spas/2026 EU Spec Sheets Eden Spas-pages/EU Spec Sheets Eden Spas-Lagoon.pdf",
     "fullWeight": 2300
   },
-  "Spec Sheets Eden Spas-Mirage": {
+  "Spec Sheets Eden Spas Mirage": {
     "brand": "Eden Spas",
     "dims": "234x185x99 CM",
     "dryWeight": 340,
@@ -1022,7 +869,7 @@
     "source": "2024/EU/Eden Spas/2026 EU Spec Sheets Eden Spas-pages/EU Spec Sheets Eden Spas-Mirage.pdf",
     "fullWeight": 1440
   },
-  "Spec Sheets Eden Spas-Oasis": {
+  "Spec Sheets Eden Spas Oasis": {
     "brand": "Eden Spas",
     "dims": "274x230x91 CM",
     "dryWeight": 700,
@@ -1031,7 +878,7 @@
     "source": "2024/EU/Eden Spas/2026 EU Spec Sheets Eden Spas-pages/EU Spec Sheets Eden Spas-Oasis.pdf",
     "fullWeight": 2800
   },
-  "Spec Sheets Eden Spas-Summit": {
+  "Spec Sheets Eden Spas Summit": {
     "brand": "Eden Spas",
     "dims": "215x215x91 CM",
     "dryWeight": 500,
@@ -1103,7 +950,7 @@
     "source": "2023-of ouder/Spaans - Europese maten/UK English - Europese maten/1. Storm spas/Storm Spas Turbine 7.pdf",
     "fullWeight": 12500
   },
-  "Team Ice Vital-Ice": {
+  "Team Ice Vital Ice": {
     "brand": "Passion Ice Baths",
     "dims": "390x228x155 CM",
     "dryWeight": 1200,
@@ -1111,6 +958,24 @@
     "isSwimSpa": false,
     "source": "2024/EU/Passion Ice Baths/Team Ice Vital-Ice.pdf",
     "fullWeight": 8700
+  },
+  "Tenerife Diamond": {
+    "brand": "Onbekend",
+    "dims": "214x154x85 CM",
+    "dryWeight": 205,
+    "netWeight": 185,
+    "isSwimSpa": false,
+    "source": "2023-of ouder/DE - Europese maten/Tenerife Diamond DE.pdf",
+    "fullWeight": 1030
+  },
+  "Tenerife Superior": {
+    "brand": "Onbekend",
+    "dims": "214x154x85 CM",
+    "dryWeight": 205,
+    "netWeight": 185,
+    "isSwimSpa": false,
+    "source": "2023-of ouder/DE - Europese maten/Tenerife Superior DE.pdf",
+    "fullWeight": 1030
   },
   "The Aurora": {
     "brand": "Eden Spas",
@@ -1155,15 +1020,6 @@
     "netWeight": 650,
     "isSwimSpa": true,
     "source": "2024/EU/Passion Swim Spas/Theater.pdf",
-    "fullWeight": 5750
-  },
-  "Theater specificaties": {
-    "brand": "Onbekend",
-    "dims": "380x228x116 CM",
-    "dryWeight": 750,
-    "netWeight": 730,
-    "isSwimSpa": false,
-    "source": "2023-of ouder/Frans - Europese maten/Theater specificaties.pdf",
     "fullWeight": 5750
   },
   "Turbine 5": {
@@ -1247,7 +1103,7 @@
     "source": "2024/EU/Passion Ice Baths/Wim Hof's Ice Revive.pdf",
     "fullWeight": 345
   },
-  "aqua-power-swimspa-1": {
+  "aqua power swimspa 1": {
     "brand": "Onbekend",
     "dims": "400x228x126 CM",
     "dryWeight": 1200,
@@ -1256,7 +1112,7 @@
     "source": "2023-of ouder/AquaSun Dealer/aqua-power-swimspa-1.pdf",
     "fullWeight": 8700
   },
-  "aqua-power-swimspa-2": {
+  "aqua power swimspa 2": {
     "brand": "Onbekend",
     "dims": "600x223x126 CM",
     "dryWeight": 1200,
@@ -1265,7 +1121,7 @@
     "source": "2023-of ouder/AquaSun Dealer/aqua-power-swimspa-2.pdf",
     "fullWeight": 13700
   },
-  "aqua-power-swimspa-6": {
+  "aqua power swimspa 6": {
     "brand": "Onbekend",
     "dims": "780x228x155 CM",
     "dryWeight": 1650,
@@ -1274,7 +1130,7 @@
     "source": "2023-of ouder/AquaSun Dealer/aqua-power-swimspa-6.pdf",
     "fullWeight": 19650
   },
-  "tropical-spas-sheets-bermuda": {
+  "tropical spas sheets bermuda": {
     "brand": "Onbekend",
     "dims": "200x200x82 CM",
     "dryWeight": 260,

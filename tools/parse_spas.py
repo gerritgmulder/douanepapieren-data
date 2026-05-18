@@ -44,9 +44,19 @@ BRAND_FROM_PATH = [
     ("Swimspa",                    "Passion Swim Spas",  True),
 ]
 
-DIM_RE = re.compile(r'Dimensions\s*L?\s*x?\s*W?\s*x?\s*H?[\s\.·]*([\d]{2,4})\s*[xX×]\s*([\d]{2,4})\s*[xX×]\s*([\d]{2,4})\s*cm', re.IGNORECASE)
-DRY_RE = re.compile(r'Dry\s*Weight(?:\s*in\s*kg)?[\s\.·]*([\d]{2,5})', re.IGNORECASE)
-FULL_RE = re.compile(r'Full\s*Weight(?:\s*in\s*kg)?[\s\.·]*([\d]{2,5})', re.IGNORECASE)
+# Veldnamen in EN/NL/DE/ES — zelfde regex om alle taal-versies van de
+# spec-sheets te kunnen lezen. Voorbeelden:
+#   EN: "Dimensions L x W x H...... 200 x 200 x 82 cm"  /  "Dry Weight in kg... 260"
+#   NL: "Afmetingen ...... 200 x 200 x 82 cm"  /  "Droog gewicht in kg... 260"
+#   DE: "Abmessungen L x B x H... 230 x 230 x 91 cm"  /  "Trockengewicht in kg... 380"
+#   ES: "Dimensiones ........... 600 x 228 x 126 cm"  /  "Peso en vacío.......... 1400"
+DIM_LABEL  = r'(?:Dimensions|Afmetingen|Abmessungen|Dimensiones)'
+DRY_LABEL  = r'(?:Dry\s*Weight|Droog\s*gewicht|Trockengewicht|Peso\s*en\s*vac[ií]o)'
+FULL_LABEL = r'(?:Full\s*Weight|Gevuld\s*gewicht|Gef[üu]lltes\s*Gewicht|Peso\s*en\s*lleno)'
+
+DIM_RE  = re.compile(DIM_LABEL  + r'(?:\s*L?\s*x?\s*[WB]?\s*x?\s*H?)?[\s\.·]*([\d]{2,4})\s*[xX×]\s*([\d]{2,4})\s*[xX×]\s*([\d]{2,4})\s*cm', re.IGNORECASE)
+DRY_RE  = re.compile(DRY_LABEL  + r'(?:\s*in\s*kg)?[\s\.·]*([\d]{2,5})', re.IGNORECASE)
+FULL_RE = re.compile(FULL_LABEL + r'(?:\s*in\s*kg)?[\s\.·]*([\d]{2,5})', re.IGNORECASE)
 
 def extract_text(pdf_path):
     """pdftotext, met timeout 8s — sneller falen dan slepende PDFs."""
@@ -68,10 +78,24 @@ def detect_brand_and_swim(path_str):
     return None, False
 
 def clean_name(filename):
-    """'EU The Aurora.pdf' → 'The Aurora'. 'Bermuda.pdf' → 'Bermuda'."""
+    """Normaliseer filename naar spa-naam zodat DE/ES/UK-varianten van
+    dezelfde spa als dezelfde key herkend worden.
+    Voorbeelden:
+      'EU The Aurora.pdf'       → 'The Aurora'
+      'Bermuda.pdf'              → 'Bermuda'
+      'Admire DE.pdf'            → 'Admire'
+      'Aquatic-2-ES-Europe.pdf'  → 'Aquatic 2'
+      'Felicity specificaties.pdf' → 'Felicity'
+    """
     n = re.sub(r'\.pdf$', '', filename, flags=re.IGNORECASE)
     # Strip leading "EU " of "UK " prefixen (Eden / UK Passion-bestanden)
     n = re.sub(r'^(EU|UK)\s+', '', n)
+    # Strip taal/regio-suffixen
+    n = re.sub(r'[\s\-]+(DE|ES|FR|NL|UK|EU)([\s\-]+Europe)?$', '', n, flags=re.IGNORECASE)
+    n = re.sub(r'\s+specificaties$', '', n, flags=re.IGNORECASE)
+    # Normaliseer scheidingstekens: 'Aquatic-2' → 'Aquatic 2'
+    n = n.replace('-', ' ')
+    n = re.sub(r'\s+', ' ', n)
     return n.strip()
 
 def main():

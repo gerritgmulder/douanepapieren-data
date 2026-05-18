@@ -689,6 +689,29 @@ function getSpec(code, description) {
         merged.origin = "China";
       }
     }
+  } else {
+    // Accessoires krijgen geen spa-spec, MAAR voor Spa Covers kunnen we de
+    // dimensies wel afleiden van de spa waar de cover bij hoort (= "Spa Cover
+    // Bermuda" → spa "Bermuda"). Plus default HS-code + origin voor covers.
+    const isCover = /\b(?:spa\s*)?cover\b/i.test(description) ||
+                    /\b(?:spa\s*)?cover\b/i.test(fromArticles && fromArticles.omschrijving || "");
+    if (isCover) {
+      // Pak spa-naam uit de cover-omschrijving — gebruik findSpaModel maar
+      // op de tekst NA "Spa Cover". Werkt voor "Tropic Spas | Spa Cover
+      // Bermuda/Jamaica | 200 x 200 cm" → match "Bermuda" of "Jamaica".
+      const stripped = description.replace(/\b(?:spa\s*)?covers?\b/ig, " ");
+      const coverFor = findSpaModel(stripped) ||
+                       findSpaModel((fromArticles && fromArticles.omschrijving || "").replace(/\b(?:spa\s*)?covers?\b/ig, " "));
+      if (coverFor) {
+        const sd = state.specDatabase[coverFor];
+        if (sd && sd.dims) merged.dims = sd.dims; // dimensies van de spa eronder
+      }
+      // Covers vallen onder een andere HS-code (kunststof artikelen) en komen
+      // ook uit China. Gewicht laten we leeg — covers wegen veel minder dan
+      // de spa zelf en daar hebben we geen exacte data voor.
+      merged.hs = "3926909790";
+      merged.origin = "China";
+    }
   }
 
   // Laag 3: SEED_SPECS (oude hardcoded defaults per productcode).
