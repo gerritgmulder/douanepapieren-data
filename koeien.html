@@ -177,7 +177,7 @@
     transform-origin:top left;transition:transform 80ms ease-out}
   .stamboom-grid{display:grid;
     grid-template-columns:repeat(8, 195px);
-    grid-auto-rows:155px;
+    grid-auto-rows:200px;
     gap:18px 22px;
     padding:18px;
     position:relative;
@@ -219,9 +219,9 @@
 
   /* Foto-slot op de tree-card (klik = upload of vervang) */
   .tree-card .tc-photo{
-    width:100%;height:46px;border-radius:4px;margin-bottom:4px;
+    width:100%;height:90px;border-radius:4px;margin-bottom:5px;
     background:var(--chip);display:flex;align-items:center;justify-content:center;
-    color:var(--muted);font-size:16px;cursor:pointer;overflow:hidden;
+    color:var(--muted);font-size:18px;cursor:pointer;overflow:hidden;
     border:1px dashed transparent;
   }
   .tree-card .tc-photo:hover{border-color:var(--accent-soft);background:#ece5d3}
@@ -1132,7 +1132,7 @@ function uploadPhotoForCow(cowId) {
     const file = inp.files && inp.files[0];
     if (!file) return;
     try {
-      cow.photo = await resizeImageDataUrl(file, 250, 0.7);
+      cow.photo = await resizeImageDataUrl(file, 400, 0.72);
       saveState();
       render();
     } catch (e) {
