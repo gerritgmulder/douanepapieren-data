@@ -23,4 +23,8 @@ contextBridge.exposeInMainWorld("fonteynPrint", {
   isAvailable: true,
   silentPrintLabels: (opts) => ipcRenderer.invoke("fonteyn:print-labels", opts),
   listPrinters: () => ipcRenderer.invoke("fonteyn:list-printers"),
+  // Debug: schrijf de print-output naar een PDF op het bureaublad
+  // i.p.v. naar de printer. Voor het verifiëren van page-size/orientation
+  // zonder labels te verspillen.
+  printLabelsToPdf: () => ipcRenderer.invoke("fonteyn:print-labels-to-pdf"),
 });

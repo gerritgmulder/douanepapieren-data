@@ -427,10 +427,12 @@
           Aantal
           <input type="number" id="printCountInput" min="1" placeholder="alles" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
         </label>
+        <button type="button" class="secondary" id="debugPdfBtn" title="Sla de print-output op als PDF op het bureaublad — handig om vóór een grote print-batch te controleren of dimensies + oriëntatie kloppen, zonder labels te verspillen.">📄 Debug-PDF</button>
         <button type="button" id="printBtn">🖨️ Labels printen</button>
       </div>
       <div style="font-size:11.5px;color:var(--muted);padding:6px 0 0;text-align:right;">
-        <b>Bij rol-vervanging:</b> tel hoeveel labels al door de printer zijn gerold, vul dat + 1 in bij "Start vanaf" en klik opnieuw printen. Laat "Aantal" leeg om alle resterende te printen.
+        <b>Bij rol-vervanging:</b> tel hoeveel labels al door de printer zijn gerold, vul dat + 1 in bij "Start vanaf" en klik opnieuw printen. Laat "Aantal" leeg om alle resterende te printen.<br>
+        <b>📄 Debug-PDF:</b> sla de print-output op als PDF op je bureaublad — om dimensies + oriëntatie te checken zonder labels te verspillen.
       </div>
     </div>
   </div>
@@ -1118,6 +1120,59 @@ $("backToEditBtn").addEventListener("click", () => {
   $("step2").scrollIntoView({ behavior: "smooth" });
 });
 $("printBtn").addEventListener("click", doPrint);
+
+// Debug-PDF-knop: bouwt dezelfde labels op in #printArea als doPrint, maar
+// roept printToPDF aan i.p.v. wc.print. Output verschijnt als PDF op het
+// bureaublad. Handig om dimensies + oriëntatie te checken zonder labels
+// uit de printer te jagen.
+$("debugPdfBtn").addEventListener("click", async () => {
+  const toPrint = state.rows.filter(r => r.print && r.fonteynCode);
+  if (!toPrint.length) {
+    alert("Geen labels geselecteerd om naar PDF te schrijven.");
+    return;
+  }
+  if (!window.fonteynPrint?.printLabelsToPdf) {
+    alert("Debug-PDF werkt alleen vanuit de Electron-app (niet in een browser-tab).");
+    return;
+  }
+  // Hergebruik de label-build-logic uit doPrint, maar zonder daadwerkelijk
+  // print() aan te roepen.
+  const area = $("printArea");
+  area.innerHTML = "";
+  const allLabels = [];
+  for (const row of toPrint) {
+    const productTotal = Math.max(1, row.aantalProducten || row.aantal || 1);
+    const colliTotal   = Math.max(1, row.aantalColliPerProduct || 1);
+    for (let p = 1; p <= productTotal; p++) {
+      for (let c = 1; c <= colliTotal; c++) {
+        allLabels.push({ row, c, colliTotal, p, productTotal });
+      }
+    }
+  }
+  // Voor debug pakken we max 5 labels — anders wordt de PDF groot en de
+  // gebruiker hoeft alleen visueel te checken of het format klopt.
+  const subset = allLabels.slice(0, 5);
+  for (const { row, c, colliTotal, p, productTotal } of subset) {
+    area.appendChild(buildLabel(row, c, colliTotal, p, productTotal));
+  }
+  // Wacht op render
+  await new Promise(r => setTimeout(r, 500));
+  $("debugPdfBtn").disabled = true;
+  $("debugPdfBtn").textContent = "📄 Bezig…";
+  try {
+    const result = await window.fonteynPrint.printLabelsToPdf();
+    if (result?.ok) {
+      alert(`PDF opgeslagen op je bureaublad:\n\n${result.path}\n\n(${Math.round(result.bytes/1024)} KB)`);
+    } else {
+      alert("Debug-PDF mislukt: " + (result?.error || "onbekende fout"));
+    }
+  } catch (e) {
+    alert("Debug-PDF mislukt: " + e.message);
+  } finally {
+    $("debugPdfBtn").disabled = false;
+    $("debugPdfBtn").textContent = "📄 Debug-PDF";
+  }
+});
 
 /* ═══════════════════════════════════════════════════════════════
    STAP 3: preview renderen

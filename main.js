@@ -426,19 +426,19 @@ ipcMain.handle("fonteyn:print-labels", async (event, opts = {}) => {
     console.warn("[print] kon printers niet inventariseren:", e.message);
   }
   // Print silently met custom label-grootte 209mm × 99mm (matcht de
-  // fysieke Fonteyn-label-rol). Electron interpreteert pageSize-object
-  // ALTIJD als portrait, dus we geven de portrait-dimensies (smal-eerst)
-  // mee én vragen via landscape:true om 90° rotatie — net zoals het
-  // vroeger met pageSize:"A6" + landscape:true werkte. Eerder stond hier
-  // zonder landscape-flag, waardoor de labels in portrait uit de printer
-  // kwamen.
+  // fysieke Fonteyn-label-rol). We geven BEIDE landscape-dimensies in
+  // pageSize ÉN landscape:true mee. De ZDesigner-driver bleek pageSize
+  // alleen niet voldoende: zonder landscape-flag (v0.19.0) kwam alles
+  // portrait uit de printer; met portrait-dimensies+landscape (v0.19.1)
+  // kwam 't liggend maar met blanco labels (page-height 209 ≠ 99mm
+  // feed-per-label). Combinatie hieronder dekt allebei.
   return new Promise((resolve) => {
     wc.print({
       silent: true,
       printBackground: true,
       deviceName,
       landscape: true,
-      pageSize: { width: 99000, height: 209000 },
+      pageSize: { width: 209000, height: 99000 },
       margins: { marginType: "none" },
       copies: 1,
     }, (success, errorType) => {
@@ -446,6 +446,30 @@ ipcMain.handle("fonteyn:print-labels", async (event, opts = {}) => {
       resolve({ ok: !!success, deviceName: deviceName || null, error: success ? null : errorType });
     });
   });
+});
+
+// Debug-modus: schrijf de print-output naar PDF op het bureaublad i.p.v.
+// naar de printer. Handig om vóór een grote print-batch te kunnen
+// verifiëren dat oriëntatie + page-size kloppen, zonder labels te
+// verspillen. Bestand verschijnt op het bureaublad als
+// fonteyn-labels-debug-<timestamp>.pdf.
+ipcMain.handle("fonteyn:print-labels-to-pdf", async (event) => {
+  const wc = event.sender;
+  try {
+    const pdfBuffer = await wc.printToPDF({
+      landscape: true,
+      pageSize: { width: 209000, height: 99000 },
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      printBackground: true,
+    });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const dest = path.join(app.getPath("desktop"), `fonteyn-labels-debug-${stamp}.pdf`);
+    await fs.writeFile(dest, pdfBuffer);
+    return { ok: true, path: dest, bytes: pdfBuffer.length };
+  } catch (e) {
+    console.warn("[print-to-pdf] mislukt:", e.message);
+    return { ok: false, error: e.message };
+  }
 });
 
 app.whenReady().then(async () => {
