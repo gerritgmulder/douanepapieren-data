@@ -426,16 +426,19 @@ ipcMain.handle("fonteyn:print-labels", async (event, opts = {}) => {
     console.warn("[print] kon printers niet inventariseren:", e.message);
   }
   // Print silently met custom label-grootte 209mm × 99mm (matcht de
-  // fysieke Fonteyn-label-rol). Eerder stond hier pageSize: "A6"
-  // (148×105mm), wat een mismatch van 60mm/label opleverde — de printer
-  // schoot blanco labels tussendoor om weer in lijn te komen met de
-  // perforatie. Electron-pageSize verwacht dimensies in micrometers.
+  // fysieke Fonteyn-label-rol). Electron interpreteert pageSize-object
+  // ALTIJD als portrait, dus we geven de portrait-dimensies (smal-eerst)
+  // mee én vragen via landscape:true om 90° rotatie — net zoals het
+  // vroeger met pageSize:"A6" + landscape:true werkte. Eerder stond hier
+  // zonder landscape-flag, waardoor de labels in portrait uit de printer
+  // kwamen.
   return new Promise((resolve) => {
     wc.print({
       silent: true,
       printBackground: true,
       deviceName,
-      pageSize: { width: 209000, height: 99000 },
+      landscape: true,
+      pageSize: { width: 99000, height: 209000 },
       margins: { marginType: "none" },
       copies: 1,
     }, (success, errorType) => {
