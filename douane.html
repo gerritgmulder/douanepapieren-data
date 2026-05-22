@@ -149,6 +149,7 @@
   table.items tr.drag-over-bottom td { box-shadow: inset 0 -2px 0 var(--accent); }
   .badge { display: inline-block; background: #eef2ff; color: #3730a3; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 6px; font-weight: 600; letter-spacing: 0.02em; }
   .badge.bundle-parent { background: #fecaca; color: #991b1b; }
+  .badge.bundle-parent-active { background: #fef3c7; color: #92400e; cursor: help; }
   .badge.bundle-child { background: #fef08a; color: #854d0e; }
   .badge.service { background: #e0e7ff; color: #3730a3; }
 
@@ -800,8 +801,10 @@ async function handleFile(file) {
     state.lineItems = parsed.lineItems;
     state.colliOverride = null; // nieuwe order → reset user-override
     state.bundles = detectBundles(state.lineItems);
-    // Auto-distribute
-    for (const b of state.bundles) distributeBundle(b);
+    // distributeBundle wordt NIET meer automatisch aangeroepen. De hoofdregel
+    // blijft zichtbaar met de oorspronkelijke prijs; sub-pakketten staan op
+    // €0 totdat Manon de hoofdregel verwijdert. Zie distributeBundle voor
+    // uitleg + de delete-flow in renderItems.
     // EUR-basis vastleggen + koers toepassen — zelfde flow als Logic4-load
     for (const it of state.lineItems) {
       if (it.eurUnitPrice == null) it.eurUnitPrice = it.unitPrice;
@@ -1008,25 +1011,38 @@ function detectBundles(items) {
   return bundles;
 }
 
-// Distribute parent price over children in round ,00 amounts
+// Verdeel de prijs van een hoofdregel over z'n subpakketten en markeer
+// de parent als 'dropped'. Wordt NIET meer automatisch aangeroepen bij
+// het inladen — pas wanneer de gebruiker expliciet op × klikt op de
+// hoofdregel (via splitBundleByDeletingParent in renderItems). Manon
+// kan zo zelf kiezen: hoofdregel houden + losse pakketten verwijderen,
+// óf hoofdregel weg + prijs over de pakketten verdelen.
 function distributeBundle(bundle) {
   const total = Math.round(bundle.parent.total * 100) / 100; // expect round $
   const n = bundle.children.length;
-  // In whole dollars: floor each, give remainder to last
   const totalDollars = Math.round(total); // expected whole $
   const base = Math.floor(totalDollars / n);
   const remainder = totalDollars - base * n;
-  bundle.children.forEach((c, idx) => {
+  bundle.children.forEach((c) => {
     c.unitPrice = base;
     c.total = base;
+    c.eurUnitPrice = base;
   });
-  // Add remainder onto the last child so amounts stay round
   if (remainder !== 0) {
-    bundle.children[n - 1].unitPrice += remainder;
-    bundle.children[n - 1].total += remainder;
+    bundle.children[n - 1].unitPrice  += remainder;
+    bundle.children[n - 1].total      += remainder;
+    bundle.children[n - 1].eurUnitPrice = (bundle.children[n - 1].eurUnitPrice || 0) + remainder;
   }
-  // Drop parent from output
   bundle.parent.dropped = true;
+}
+
+// Helper: vind de bundle waarvan een item de parent is (of null als 't
+// item geen parent van een bundle is).
+function findBundleForParent(item) {
+  for (const b of (state.bundles || [])) {
+    if (b.parent === item) return b;
+  }
+  return null;
 }
 
 // ============================================================
@@ -1054,6 +1070,7 @@ function renderMeta() {
     ["eoriNr", "EORI nr"],
     ["hsCode", "HS code (order-level)"],
     ["shippingMethod", "Shipping method"],
+    ["incoterm", "Incoterm"],
     ["paymentMethod", "Payment method"],
     ["customerName", "Ordered by — Name"],
     ["deliverName", "Deliver to — Name"],
@@ -1140,9 +1157,13 @@ function renderItems() {
     }
     const isService = it.service;
     const spec = getSpec(it.code, it.description) || {};
-    const badge = it.bundleChild ? `<span class="badge bundle-child">SUB</span>` :
-                  isService ? `<span class="badge service">SERVICE</span>` :
-                  "";
+    // Is dit item een bundle-parent (= hoofdregel met sub-pakketten)?
+    const parentBundle = (state.bundles || []).find(b => b.parent === it);
+    const isBundleParent = !!parentBundle;
+    let badge = "";
+    if (it.bundleChild) badge = `<span class="badge bundle-child">SUB</span>`;
+    else if (isBundleParent) badge = `<span class="badge bundle-parent-active" title="Klik × om de hoofdregel te verwijderen en de prijs over de ${parentBundle.children.length} subpakketten te verdelen. Of verwijder de subpakketten als je deze hoofdregel wilt behouden.">HOOFDREGEL · ${parentBundle.children.length} pakketten</span>`;
+    else if (isService) badge = `<span class="badge service">SERVICE</span>`;
     const specCells = isService
       ? `<td colspan="6" style="color:var(--muted);font-style:italic">geen fysiek product</td>`
       : ["sku","dims","gw","nw","hs","origin"].map(k => {
@@ -1195,10 +1216,31 @@ function renderItems() {
     });
   });
 
-  // Verwijderen
+  // Verwijderen — met speciale flow voor hoofdregels van een bundle:
+  // als Manon op × klikt bij een hoofdregel, splitsen we de prijs eerst
+  // automatisch over de sub-pakketten (zodat de totaalprijs blijft kloppen),
+  // dan verwijderen we de hoofdregel-rij. Bij verwijderen van een sub-pakket
+  // (kind) gebeurt geen redistribute — Manon wil dan gewoon dat pakket weg.
   body.querySelectorAll("[data-del]").forEach(btn => {
     btn.addEventListener("click", () => {
       const idx = +btn.dataset.del;
+      const item = state.lineItems[idx];
+      if (!item) return;
+      const bundle = findBundleForParent(item);
+      if (bundle && !item.dropped) {
+        // Hoofdregel met nog levende subpakketten — verdeel prijs eerst
+        const liveChildren = bundle.children.filter(c => !c.dropped && state.lineItems.includes(c));
+        if (liveChildren.length > 0) {
+          distributeBundle({ ...bundle, children: liveChildren });
+          // distributeBundle zet item.dropped=true — verwijder daarna écht
+          state.lineItems.splice(idx, 1);
+          state.bundles = state.bundles.filter(b => b !== bundle);
+          renderItems();
+          renderTotals();
+          renderBundles();
+          return;
+        }
+      }
       state.lineItems.splice(idx, 1);
       renderItems();
       renderTotals();
@@ -1380,7 +1422,37 @@ function pickFirst(obj, keys) {
   }
   return "";
 }
-function mapLogic4Order(orderHeader, orderRows, debtorResp) {
+/* Cache van Logic4-users — adviseurs zitten op orders als UserId en
+   we hebben naam + email pas na een lookup. Eenmaal per sessie ophalen
+   en hergebruiken zodat opeenvolgende order-fetches snel zijn. */
+let _usersCache = null;
+async function getLogic4UserById(userId) {
+  if (userId == null || userId === "") return null;
+  if (!_usersCache) {
+    try {
+      const r = await fetch(HELPER_BASE + "/api/logic4-call", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: "/v3/Users/GetUsers", method: "POST", body: { TakeRecords: 1000 } }),
+      });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+      const arr = Array.isArray(j.data) ? j.data : (j.data?.Users || j.data?.Items || []);
+      _usersCache = new Map();
+      for (const u of arr) {
+        const id = u.Id ?? u.UserId ?? u.id;
+        if (id != null) _usersCache.set(String(id), u);
+      }
+      console.log(`[adviseur] ${_usersCache.size} Logic4-users gecached`);
+    } catch (e) {
+      console.warn("[adviseur] kon Logic4-users niet ophalen:", e.message);
+      _usersCache = new Map(); // markeer als geprobeerd zodat we niet steeds retry'en
+    }
+  }
+  return _usersCache.get(String(userId)) || null;
+}
+
+async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
   // orderHeader = j.order (array, neem eerste); rows kunnen ook in header.OrderRows zitten.
   const o = Array.isArray(orderHeader) ? orderHeader[0] : orderHeader;
   if (!o) throw new Error("Geen order in response.");
@@ -1403,15 +1475,36 @@ function mapLogic4Order(orderHeader, orderRows, debtorResp) {
     "RequestedDeliveryDate", "ExpectedDeliveryDate", "ETA"
   ]);
 
-  // Advisor: salesperson / account manager — Logic4 noemt dit op verschillende manieren
-  const advisor = pickFirst(o, [
-    "UserName", "Username", "SalesEmployeeName", "SalesPersonName",
-    "AccountManagerName", "AccountManager.Name", "Owner.Name", "User.Name"
+  // Advisor (= verkoper die de order opmaakte): Logic4 zet z'n UserId op
+  // de order. Naam + email pakken we via een lookup in /v3/Users/GetUsers
+  // (eenmalig gecached). Fallback: probeer wat ingebakken velden mochten
+  // Logic4-veranderingen die alsnog vullen.
+  const advisorUserId = pickFirst(o, [
+    "UserId", "SalesEmployeeId", "AccountManagerId", "OwnerId", "User.Id"
   ]);
-  const advisorEmail = pickFirst(o, [
-    "UserEmail", "User.Email", "SalesEmployeeEmail", "AccountManagerEmail",
-    "AccountManager.Email", "Owner.Email", "SalespersonEmail"
-  ]);
+  let advisor = "";
+  let advisorEmail = "";
+  if (advisorUserId) {
+    const u = await getLogic4UserById(advisorUserId);
+    if (u) {
+      advisor = u.FullName
+             || (`${u.FirstName || ""} ${u.LastName || ""}`).trim()
+             || u.Name || u.DisplayName || u.Login || "";
+      advisorEmail = u.Email || u.EmailAddress || "";
+    }
+  }
+  if (!advisor) {
+    advisor = pickFirst(o, [
+      "UserName", "Username", "SalesEmployeeName", "SalesPersonName",
+      "AccountManagerName", "AccountManager.Name", "Owner.Name", "User.Name"
+    ]);
+  }
+  if (!advisorEmail) {
+    advisorEmail = pickFirst(o, [
+      "UserEmail", "User.Email", "SalesEmployeeEmail", "AccountManagerEmail",
+      "AccountManager.Email", "Owner.Email", "SalespersonEmail"
+    ]);
+  }
 
   const metadata = {
     invoiceNumber: String(o.Id || ""),
@@ -1420,6 +1513,7 @@ function mapLogic4Order(orderHeader, orderRows, debtorResp) {
     eoriNr:        String(eori || "").trim(),
     hsCode:        "", // (nog) niet uit Logic4 — Manon vult zelf in
     shippingMethod:(o.ShippingMethod && o.ShippingMethod.Name) || "",
+    incoterm:      "", // Handmatig invullen — Logic4 heeft typisch geen incoterm-veld
     paymentMethod: (o.PaymentMethod && o.PaymentMethod.Description) || "",
     eta:           etaRaw ? formatLogic4Date(etaRaw) : "",
     advisor:       String(advisor || "").trim(),
@@ -1520,14 +1614,15 @@ async function fetchOrderFromLogic4() {
       "\n\n--- LOGIC4 DEBTOR — order " + nr + " ---\n" +
       JSON.stringify(debtor, null, 2);
 
-    // Mapping → state, zelfde flow als bij PDF-drop.
-    const parsed = mapLogic4Order(j.order, j.rows, debtor);
+    // Mapping → state, zelfde flow als bij PDF-drop. Async geworden wegens
+    // adviseur-lookup via /v3/Users (eenmalig gecached).
+    const parsed = await mapLogic4Order(j.order, j.rows, debtor);
     state.metadata  = parsed.metadata;
     state.lineItems = parsed.lineItems;
     state.colliOverride = null;  // nieuwe order → reset eventuele user-override
     state.bundles   = detectBundles(state.lineItems);
-    for (const b of state.bundles) distributeBundle(b);
-    // Na distributie: EUR → USD via state.fxRate. applyFxRate verwacht dat
+    // Geen automatische distribute meer — hoofdregel blijft zichtbaar.
+    // EUR → USD via state.fxRate. applyFxRate verwacht dat
     // alle items een eurUnitPrice hebben; bundle-children krijgen die hier
     // alsnog (van hun post-distribute EUR-waarde) zodat ze ook meeschalen
     // bij koers-wijzigingen.
@@ -1811,14 +1906,16 @@ async function buildPdf(brand = "passion") {
     ["EORI nr:",          m.eoriNr],
     ["HS code:",          m.hsCode],
     ["Shipping method:",  m.shippingMethod],
+    ["Incoterm:",         m.incoterm],
     ["Payment method:",   m.paymentMethod]
   ];
-  // EORI-regel helemaal weglaten als hij leeg is — anders staat er op de PDF
-  // "EORI nr:" zonder waarde, en dat wil Manon expliciet niet.
+  // EORI- en Incoterm-regel helemaal weglaten als ze leeg zijn — anders
+  // staat op de PDF de label zonder waarde, en die wil Manon niet zien.
   // Andere velden (HS code, ETA, …) tonen we wél leeg, zodat duidelijk is
   // dat ze nog ingevuld moeten worden indien nodig.
+  const SKIP_IF_EMPTY = new Set(["EORI nr:", "Incoterm:"]);
   const metaRows = allMetaRows.filter(([k, v]) =>
-    !(k === "EORI nr:" && (!v || !String(v).trim()))
+    !(SKIP_IF_EMPTY.has(k) && (!v || !String(v).trim()))
   );
   for (const [k, v] of metaRows) {
     textRight(k, rxMetaLbl, ry);
