@@ -1452,11 +1452,14 @@ function pickFirst(obj, keys) {
    die data oplevert wint en wordt voor de hele sessie gecached. */
 let _usersCache = null;
 const _USER_ENDPOINTS = [
+  "/v3/Globalizations/GetSalesPersons",   // verkoper-lijst (Logic4 globalisatie)
   "/v3/SalesEmployees/GetSalesEmployees",
   "/v3/Users/GetUsers",
   "/v3/Employees/GetEmployees",
   "/v3/Personnel/GetPersonnel",
   "/v3/Globalizations/GetUsers",
+  "/v3/Globalizations/GetSalesEmployees",
+  "/v3/Sales/GetSalesPersons",
 ];
 async function getLogic4UserById(userId) {
   if (userId == null || userId === "") return null;
@@ -1587,7 +1590,34 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
   }
   if (!advisor && !advisorEmail) {
     diag.level = "error";
-    diag.steps.push(`<b>Vul handmatig in</b> in de velden Advisor + Advisor email hieronder.`);
+    // Toon ALLE order-velden die op user/sales/advisor/employee/owner/clerk
+    // lijken, plus hun waarden. Daarmee kunnen we direct zien welk veld
+    // de echte adviseur-ID bevat (zonder dat Gerrit/Manon raw JSON moet
+    // doorscrollen).
+    const SUSPECT_RE = /user|sales|employee|advisor|adviseur|owner|manager|clerk|branch|operator|verkoper/i;
+    const suspects = [];
+    function walk(obj, prefix, depth) {
+      if (obj == null || depth > 2) return;
+      for (const k of Object.keys(obj)) {
+        const path = prefix ? `${prefix}.${k}` : k;
+        const v = obj[k];
+        if (SUSPECT_RE.test(k)) {
+          if (v != null && typeof v !== "object") suspects.push([path, String(v)]);
+          else if (v && typeof v === "object" && !Array.isArray(v)) walk(v, path, depth + 1);
+        } else if (v && typeof v === "object" && !Array.isArray(v) && depth < 1) {
+          walk(v, path, depth + 1);
+        }
+      }
+    }
+    walk(o, "", 0);
+    if (suspects.length) {
+      const list = suspects.slice(0, 25).map(([k, v]) =>
+        `<code>${k}</code> = <code>${String(v).slice(0, 60)}</code>`).join("<br>");
+      diag.steps.push(`<b>Mogelijk relevante velden op de order</b> (geef deze door, dan voeg ik die toe als kandidaat):<br>${list}`);
+    } else {
+      diag.steps.push(`Geen velden op de order die op een adviseur lijken — toch handmatig invullen.`);
+    }
+    diag.steps.push(`<b>Vul anders handmatig in</b> in de velden Advisor + Advisor email hieronder.`);
   }
   console.log(`[adviseur] resolved → naam="${advisor}", email="${advisorEmail}"`);
 
