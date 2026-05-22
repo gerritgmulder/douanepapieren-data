@@ -1424,32 +1424,62 @@ function pickFirst(obj, keys) {
 }
 /* Cache van Logic4-users — adviseurs zitten op orders als UserId en
    we hebben naam + email pas na een lookup. Eenmaal per sessie ophalen
-   en hergebruiken zodat opeenvolgende order-fetches snel zijn. */
+   en hergebruiken zodat opeenvolgende order-fetches snel zijn.
+   Logic4 hanteert /v3/<Entity>/Get<Entity>-conventie maar verschilt per
+   instantie: probeer in volgorde van meest-specifiek naar minst. Eerste
+   die data oplevert wint en wordt voor de hele sessie gecached. */
 let _usersCache = null;
+const _USER_ENDPOINTS = [
+  "/v3/SalesEmployees/GetSalesEmployees",
+  "/v3/Users/GetUsers",
+  "/v3/Employees/GetEmployees",
+  "/v3/Personnel/GetPersonnel",
+  "/v3/Globalizations/GetUsers",
+];
 async function getLogic4UserById(userId) {
   if (userId == null || userId === "") return null;
   if (!_usersCache) {
-    try {
-      const r = await fetch(HELPER_BASE + "/api/logic4-call", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: "/v3/Users/GetUsers", method: "POST", body: { TakeRecords: 1000 } }),
-      });
-      const j = await r.json();
-      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
-      const arr = Array.isArray(j.data) ? j.data : (j.data?.Users || j.data?.Items || []);
-      _usersCache = new Map();
-      for (const u of arr) {
-        const id = u.Id ?? u.UserId ?? u.id;
-        if (id != null) _usersCache.set(String(id), u);
+    _usersCache = new Map(); // gemarkeerd-geprobeerd; bij fout retry'en we niet steeds
+    for (const ep of _USER_ENDPOINTS) {
+      try {
+        const r = await fetch(HELPER_BASE + "/api/logic4-call", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: ep, method: "POST", body: { TakeRecords: 1000 } }),
+        });
+        const j = await r.json();
+        if (!r.ok || !j.ok) {
+          console.warn(`[adviseur] ${ep} faalde: ${j.error || ("HTTP " + r.status)}`);
+          continue;
+        }
+        const arr = Array.isArray(j.data) ? j.data
+          : (j.data?.Users || j.data?.Employees || j.data?.SalesEmployees
+          || j.data?.Personnel || j.data?.Items || []);
+        if (!arr.length) {
+          console.warn(`[adviseur] ${ep} gaf 0 records terug`);
+          continue;
+        }
+        for (const u of arr) {
+          const id = u.Id ?? u.UserId ?? u.EmployeeId ?? u.id;
+          if (id != null) _usersCache.set(String(id), u);
+        }
+        console.log(`[adviseur] ${_usersCache.size} users gecached via ${ep}`);
+        break;
+      } catch (e) {
+        console.warn(`[adviseur] ${ep} exception:`, e.message);
       }
-      console.log(`[adviseur] ${_usersCache.size} Logic4-users gecached`);
-    } catch (e) {
-      console.warn("[adviseur] kon Logic4-users niet ophalen:", e.message);
-      _usersCache = new Map(); // markeer als geprobeerd zodat we niet steeds retry'en
+    }
+    if (_usersCache.size === 0) {
+      console.warn("[adviseur] geen werkend users-endpoint gevonden — adviseur blijft handmatig invullen");
     }
   }
-  return _usersCache.get(String(userId)) || null;
+  const found = _usersCache.get(String(userId)) || null;
+  if (!found) {
+    console.warn(`[adviseur] userId ${userId} niet gevonden in cache van ${_usersCache.size} users`);
+  } else {
+    console.log(`[adviseur] userId ${userId} → match`, found);
+  }
+  return found;
 }
 
 async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
@@ -1476,12 +1506,24 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
   ]);
 
   // Advisor (= verkoper die de order opmaakte): Logic4 zet z'n UserId op
-  // de order. Naam + email pakken we via een lookup in /v3/Users/GetUsers
-  // (eenmalig gecached). Fallback: probeer wat ingebakken velden mochten
-  // Logic4-veranderingen die alsnog vullen.
-  const advisorUserId = pickFirst(o, [
-    "UserId", "SalesEmployeeId", "AccountManagerId", "OwnerId", "User.Id"
-  ]);
+  // de order. Naam + email pakken we via een lookup in een Logic4 users-
+  // endpoint (kandidatenlijst, eenmalig gecached). Backup: probeer wat
+  // ingebakken velden mochten Logic4-versies die alsnog vullen.
+  const advisorIdCandidates = [
+    "UserId", "SalesEmployeeId", "SalesPersonId", "AccountManagerId",
+    "OwnerId", "EmployeeId", "CreatedByUserId", "User.Id",
+  ];
+  let advisorUserId = "";
+  let advisorIdField = "";
+  for (const f of advisorIdCandidates) {
+    const v = f.split(".").reduce((obj, p) => (obj == null ? obj : obj[p]), o);
+    if (v !== undefined && v !== null && String(v).trim() !== "") {
+      advisorUserId = v;
+      advisorIdField = f;
+      break;
+    }
+  }
+  console.log(`[adviseur] order ${o.Id}: userId-veld="${advisorIdField}" → "${advisorUserId}"`);
   let advisor = "";
   let advisorEmail = "";
   if (advisorUserId) {
@@ -1505,6 +1547,7 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
       "AccountManager.Email", "Owner.Email", "SalespersonEmail"
     ]);
   }
+  console.log(`[adviseur] resolved → naam="${advisor}", email="${advisorEmail}"`);
 
   const metadata = {
     invoiceNumber: String(o.Id || ""),
