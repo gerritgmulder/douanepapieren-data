@@ -106,6 +106,14 @@
   #fileinput { display: none; }
 
   .meta-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 28px; }
+  .advisor-diagnostic {
+    background: #f8f5e8; border: 1px solid #e8dba8; border-radius: 6px;
+    padding: 8px 12px; margin-bottom: 14px; font-size: 12px; color: #6b5e1f;
+  }
+  .advisor-diagnostic.ok    { background: #dcfce7; border-color: #86efac; color: #166534; }
+  .advisor-diagnostic.warn  { background: #fef3c7; border-color: #fde68a; color: #92400e; }
+  .advisor-diagnostic.error { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+  .advisor-diagnostic code { font-family: ui-monospace, Menlo, monospace; background: rgba(0,0,0,0.05); padding: 1px 4px; border-radius: 3px; }
   .meta-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
   .meta-grid input, .meta-grid textarea { border: 1px solid var(--border); border-radius: 6px; padding: 7px 9px; font: inherit; color: var(--ink); background: #fff; }
   .meta-grid textarea { min-height: 54px; resize: vertical; }
@@ -284,6 +292,7 @@
 
   <section class="panel hidden" id="meta-panel">
     <h2>Orderinformatie</h2>
+    <div id="advisor-diagnostic" class="advisor-diagnostic hidden"></div>
     <div class="meta-grid" id="meta-grid"></div>
   </section>
 
@@ -1061,6 +1070,19 @@ function renderAll() {
 
 function renderMeta() {
   const m = state.metadata;
+  // Adviseur-diagnostiek bovenaan tonen — alleen als er actief is gezocht
+  // (= bij Logic4-fetch). Bij PDF-drop heeft m._advisorDiag geen entries.
+  const diagEl = document.getElementById("advisor-diagnostic");
+  if (diagEl) {
+    const d = m._advisorDiag;
+    if (d && d.steps && d.steps.length) {
+      diagEl.className = "advisor-diagnostic " + (d.level || "ok");
+      diagEl.innerHTML = "<b>Adviseur-lookup:</b><br>" + d.steps.map(s => "&middot; " + s).join("<br>");
+      diagEl.classList.remove("hidden");
+    } else {
+      diagEl.classList.add("hidden");
+    }
+  }
   const grid = document.getElementById("meta-grid");
   const fields = [
     ["invoiceNumber", "Invoice number"],
@@ -1526,26 +1548,46 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
   console.log(`[adviseur] order ${o.Id}: userId-veld="${advisorIdField}" → "${advisorUserId}"`);
   let advisor = "";
   let advisorEmail = "";
+  // Diagnose-string die we straks zichtbaar in de UI tonen — zodat we
+  // niet meer afhankelijk zijn van de DevTools-console om te zien waar
+  // het misgaat met de adviseur-lookup.
+  const diag = { steps: [], level: "ok", userObj: null };
   if (advisorUserId) {
+    diag.steps.push(`Order heeft <code>${advisorIdField}</code> = <code>${advisorUserId}</code>`);
     const u = await getLogic4UserById(advisorUserId);
     if (u) {
+      diag.userObj = u;
       advisor = u.FullName
              || (`${u.FirstName || ""} ${u.LastName || ""}`).trim()
              || u.Name || u.DisplayName || u.Login || "";
       advisorEmail = u.Email || u.EmailAddress || "";
+      if (advisor) diag.steps.push(`Adviseur gevonden: <b>${advisor}</b>${advisorEmail ? ` &lt;${advisorEmail}&gt;` : ""}`);
+      else { diag.level = "warn"; diag.steps.push(`User-record gevonden maar zonder bruikbare naam-velden — beschikbare keys: <code>${Object.keys(u).join(", ").slice(0, 200)}</code>`); }
+    } else {
+      diag.level = "warn";
+      diag.steps.push(`User <code>${advisorUserId}</code> niet gevonden via een van: ${_USER_ENDPOINTS.map(e => `<code>${e}</code>`).join(", ")}`);
     }
+  } else {
+    diag.level = "warn";
+    diag.steps.push(`Geen userId-veld op de order. Geprobeerd: ${advisorIdCandidates.map(f => `<code>${f}</code>`).join(", ")}`);
   }
   if (!advisor) {
     advisor = pickFirst(o, [
       "UserName", "Username", "SalesEmployeeName", "SalesPersonName",
       "AccountManagerName", "AccountManager.Name", "Owner.Name", "User.Name"
     ]);
+    if (advisor) diag.steps.push(`Naam alsnog uit order-veld (fallback): <b>${advisor}</b>`);
   }
   if (!advisorEmail) {
     advisorEmail = pickFirst(o, [
       "UserEmail", "User.Email", "SalesEmployeeEmail", "AccountManagerEmail",
       "AccountManager.Email", "Owner.Email", "SalespersonEmail"
     ]);
+    if (advisorEmail) diag.steps.push(`E-mail alsnog uit order-veld (fallback): <b>${advisorEmail}</b>`);
+  }
+  if (!advisor && !advisorEmail) {
+    diag.level = "error";
+    diag.steps.push(`<b>Vul handmatig in</b> in de velden Advisor + Advisor email hieronder.`);
   }
   console.log(`[adviseur] resolved → naam="${advisor}", email="${advisorEmail}"`);
 
@@ -1561,6 +1603,7 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
     eta:           etaRaw ? formatLogic4Date(etaRaw) : "",
     advisor:       String(advisor || "").trim(),
     advisorEmail:  String(advisorEmail || "").trim(),
+    _advisorDiag:  diag, // alleen voor zichtbare diagnostiek; niet voor PDF
     customerEmail: deliver.Email || invoice.Email || "",
     customerName:  invoice.CompanyName || invoice.ContactName || "",
     customerAddress: formatLogic4Address(invoice),
