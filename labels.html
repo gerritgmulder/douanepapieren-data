@@ -314,23 +314,27 @@
     }
 
     /* Elke .label = één label-pagina.
-       Hoogte 1mm onder de page-hoogte (99mm) zodat sub-pixel rendering-
-       overflow geen lege tussenpagina veroorzaakt. ZDesigner heeft zelf
-       advance-margin tussen labels, dus 1mm is visueel onmerkbaar. */
+       Hoogte 4mm onder de page-hoogte (99mm) zodat zelfs varierende
+       content (lange description, brede barcode, async-geladen logo)
+       nooit over de page-grens overlapt en een blanco tussenlabel
+       veroorzaakt. ZDesigner-printer heeft zelf advance-margin tussen
+       labels, dus 4mm is op de fysieke print onmerkbaar.
+
+       Alleen `break-after: page` gebruiken (modern). De oude legacy
+       `page-break-after: always` werd vroeger ÉN naast gezet, maar
+       de twee samen kunnen in Chromium een double-break triggeren
+       waardoor er een random blank-page tussendoor verschijnt. */
     #printArea .label {
-      page-break-after: always;
       break-after: page;
-      page-break-inside: avoid;
       break-inside: avoid;
       box-shadow: none !important;
       border: 0 !important;
-      width: 209mm; height: 98mm;
+      width: 209mm; height: 95mm;
       box-sizing: border-box;
       margin: 0 !important;
       padding: 0 !important;
     }
     #printArea .label:last-child {
-      page-break-after: auto;
       break-after: auto;
     }
     #printArea .label-frame { display: none; }
@@ -1302,7 +1306,27 @@ function fonteynLogoSvg() {
 /* ═══════════════════════════════════════════════════════════════
    Print: bouw #printArea met echte A6-labels en trigger window.print()
    ═══════════════════════════════════════════════════════════════ */
-function doPrint() {
+// Logo-preloader: zorg dat fonteyn-logo.png is gedecodeerd vóór we
+// print() triggeren. Eerder kon het gebeuren dat de eerste paar labels
+// nog "image loading" hadden (logo width=0) terwijl latere labels het
+// gecachete logo (32mm) toonden. Verschil in render-grootte per label
+// → sub-pixel-overflow op willekeurige labels → blanco tussenlabel.
+let _logoPreloadPromise = null;
+function ensureLogoPreloaded() {
+  if (!_logoPreloadPromise) {
+    _logoPreloadPromise = new Promise((resolve) => {
+      const img = new Image();
+      img.onload  = () => resolve();
+      img.onerror = () => resolve(); // bij fout: niet blokkeren
+      img.src = "fonteyn-logo.png";
+      // Vangnet voor het geval onload/onerror nooit komt
+      setTimeout(resolve, 2000);
+    });
+  }
+  return _logoPreloadPromise;
+}
+
+async function doPrint() {
   const toPrint = state.rows.filter(r => r.print && r.fonteynCode);
   if (!toPrint.length) {
     alert("Geen labels geselecteerd om te printen.");
@@ -1362,7 +1386,11 @@ function doPrint() {
   // decodes langer. Schatting: 5ms per label, minimaal 200ms, maximaal
   // 2500ms — bij 200 labels is dat 1 seconde extra wachten dan vroeger.
   const waitMs = Math.min(2500, Math.max(200, totalLabels * 5));
-  console.log(`[labels] wacht ${waitMs}ms op render voor print()`);
+  console.log(`[labels] wacht ${waitMs}ms op render voor print() + logo-preload`);
+  // Garandeer dat het logo gedecodeerd is — anders kan de eerste label
+  // een 0-px-image hebben en een latere een 32mm-image (= verschillende
+  // layout = sub-pixel rendering verschilt per label).
+  await ensureLogoPreloaded();
   setTimeout(async () => {
     // Probeer Electron silent-print via de preload-bridge: skipt de
     // systeem-dialoog en stuurt direct naar de ZDesigner-printer in

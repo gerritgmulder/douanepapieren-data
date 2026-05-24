@@ -1460,6 +1460,9 @@ const _USER_ENDPOINTS = [
   "/v3/Globalizations/GetUsers",
   "/v3/Globalizations/GetSalesEmployees",
   "/v3/Sales/GetSalesPersons",
+  "/v3/Users/GetSalesUsers",
+  "/v3/Users/GetEmployees",
+  "/v3/Settings/GetUsers",
 ];
 async function getLogic4UserById(userId) {
   if (userId == null || userId === "") return null;
@@ -1590,32 +1593,49 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
   }
   if (!advisor && !advisorEmail) {
     diag.level = "error";
-    // Toon ALLE order-velden die op user/sales/advisor/employee/owner/clerk
-    // lijken, plus hun waarden. Daarmee kunnen we direct zien welk veld
-    // de echte adviseur-ID bevat (zonder dat Gerrit/Manon raw JSON moet
-    // doorscrollen).
-    const SUSPECT_RE = /user|sales|employee|advisor|adviseur|owner|manager|clerk|branch|operator|verkoper/i;
-    const suspects = [];
-    function walk(obj, prefix, depth) {
-      if (obj == null || depth > 2) return;
-      for (const k of Object.keys(obj)) {
-        const path = prefix ? `${prefix}.${k}` : k;
-        const v = obj[k];
-        if (SUSPECT_RE.test(k)) {
-          if (v != null && typeof v !== "object") suspects.push([path, String(v)]);
-          else if (v && typeof v === "object" && !Array.isArray(v)) walk(v, path, depth + 1);
-        } else if (v && typeof v === "object" && !Array.isArray(v) && depth < 1) {
-          walk(v, path, depth + 1);
+    // Toon ALLE top-level velden van de order (gefilterd op niet-null scalar
+    // of korte object-stringificatie). Daarmee kunnen we direct zien welk
+    // veld de echte adviseur is, ook als 't onder een totaal andere naam
+    // staat (bv. "Logic4ProjectId", "Reference", "ExtraInfo1", etc.).
+    const allFields = [];
+    for (const k of Object.keys(o)) {
+      const v = o[k];
+      if (v == null) continue;
+      let display;
+      if (typeof v === "object") {
+        if (Array.isArray(v)) {
+          if (v.length === 0) continue;
+          display = `[${v.length} items]`;
+        } else {
+          // Eén niveau diep — toon sub-keys
+          const sub = Object.keys(v).slice(0, 5).map(sk => {
+            const sv = v[sk];
+            if (sv == null || sv === "") return null;
+            return `${sk}: ${typeof sv === "object" ? "{...}" : String(sv).slice(0, 30)}`;
+          }).filter(Boolean).join(", ");
+          if (!sub) continue;
+          display = `{ ${sub}${Object.keys(v).length > 5 ? ", …" : ""} }`;
         }
+      } else {
+        const s = String(v);
+        if (s === "" || s === "0" || s === "false") continue;
+        display = s.slice(0, 80);
       }
+      allFields.push([k, display]);
     }
-    walk(o, "", 0);
-    if (suspects.length) {
-      const list = suspects.slice(0, 25).map(([k, v]) =>
-        `<code>${k}</code> = <code>${String(v).slice(0, 60)}</code>`).join("<br>");
-      diag.steps.push(`<b>Mogelijk relevante velden op de order</b> (geef deze door, dan voeg ik die toe als kandidaat):<br>${list}`);
-    } else {
-      diag.steps.push(`Geen velden op de order die op een adviseur lijken — toch handmatig invullen.`);
+    // Sorteer: highlight velden waarvan de naam op een adviseur duidt
+    const PRIO_RE = /user|sales|employee|advisor|adviseur|owner|manager|clerk|operator|verkoper|seller|name|reference|operator/i;
+    allFields.sort((a, b) => {
+      const aP = PRIO_RE.test(a[0]) ? 0 : 1;
+      const bP = PRIO_RE.test(b[0]) ? 0 : 1;
+      return aP - bP || a[0].localeCompare(b[0]);
+    });
+    if (allFields.length) {
+      const list = allFields.map(([k, v]) => {
+        const hi = PRIO_RE.test(k) ? ' style="font-weight:600;color:#92400e"' : "";
+        return `<div${hi}><code>${k}</code> = <code>${v}</code></div>`;
+      }).join("");
+      diag.steps.push(`<b>Alle order-velden</b> (geel = mogelijk relevant). Kopieer dit terug naar Claude, dan voegt 'ie het juiste veld toe als kandidaat:<details open><summary style="cursor:pointer;font-size:11px;color:#6b5e1f;">— klik om in/uit te klappen —</summary><div style="max-height:260px;overflow:auto;background:#fffdf6;padding:6px 8px;border-radius:4px;margin-top:4px;font-size:11px;line-height:1.5">${list}</div></details>`);
     }
     diag.steps.push(`<b>Vul anders handmatig in</b> in de velden Advisor + Advisor email hieronder.`);
   }
