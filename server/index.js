@@ -1495,6 +1495,113 @@ function appendAuditRow(row) {
   fs.appendFileSync(file, csvRow(row) + "\n", "utf-8");
 }
 
+// ─── Dry-run-log — apart bestand, raakt audit.csv (Don/Arno) NIET aan ──────
+//
+// audit.csv = doorvoer-acties (1 rij per gewijzigde order).
+// dry-run.csv = leesacties (1 rij per dry-run-actie). Veel compacter:
+// alleen wie, wanneer, hoeveel gescand, hoeveel kandidaten, hoeveel "verstopt".
+//
+// Gerrit kan zo zien "wanneer was de laatste dry-run en door wie"; Don/Arno
+// kunnen dit ook zien — alleen leesbaar in dezelfde Audit-log-modal.
+
+function getDryRunCsvPath() {
+  return path.join(getAuditDir(), "dry-run.csv");
+}
+
+const DRY_RUN_HEADER = [
+  "timestamp", "user", "orders_checked", "candidates_found",
+  "to_status_25", "to_status_30", "hidden_amount", "duration_ms"
+].join(";");
+
+function dryRunCsvRow(obj) {
+  return [
+    obj.timestamp, obj.user,
+    obj.orders_checked, obj.candidates_found,
+    obj.to_status_25, obj.to_status_30,
+    obj.hidden_amount, obj.duration_ms
+  ].map(csvEscape).join(";");
+}
+
+function ensureDryRunFile() {
+  const dir = getAuditDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const file = getDryRunCsvPath();
+  if (!fs.existsSync(file)) {
+    fs.writeFileSync(file, DRY_RUN_HEADER + "\n", "utf-8");
+  }
+  return file;
+}
+
+function appendDryRunRow(row) {
+  const file = ensureDryRunFile();
+  fs.appendFileSync(file, dryRunCsvRow(row) + "\n", "utf-8");
+}
+
+app.post("/api/order-status/dry-run-log", requireAuth, requireOrderStatusAccess, (req, res) => {
+  const {
+    orders_checked, candidates_found,
+    to_status_25, to_status_30, hidden_amount, duration_ms
+  } = req.body || {};
+  try {
+    appendDryRunRow({
+      timestamp: new Date().toISOString(),
+      user: req.auth.username,
+      orders_checked: Number(orders_checked) || 0,
+      candidates_found: Number(candidates_found) || 0,
+      to_status_25: Number(to_status_25) || 0,
+      to_status_30: Number(to_status_30) || 0,
+      hidden_amount: Number(hidden_amount) || 0,
+      duration_ms: Number(duration_ms) || 0,
+    });
+    res.json({ ok: true, path: getDryRunCsvPath() });
+  } catch (e) {
+    res.status(500).json({
+      ok: false,
+      error: `Dry-run-log kan niet worden geschreven (${getAuditDir()}): ${e.message}`
+    });
+  }
+});
+
+app.get("/api/order-status/dry-run-log", requireAuth, requireOrderStatusAccess, (req, res) => {
+  const limit = Math.max(1, Math.min(2000, parseInt(req.query.limit, 10) || 200));
+  const file = getDryRunCsvPath();
+  if (!fs.existsSync(file)) return res.json({ ok: true, rows: [], total: 0, path: file });
+  let raw;
+  try { raw = fs.readFileSync(file, "utf-8"); }
+  catch (e) { return res.status(500).json({ ok: false, error: `Kon dry-run-log niet lezen: ${e.message}` }); }
+  const lines = raw.split(/\r?\n/).filter(l => l.length > 0);
+  if (lines.length === 0) return res.json({ ok: true, rows: [], total: 0, path: file });
+  const header = lines[0].split(";");
+  const dataLines = lines.slice(1);
+  const recent = dataLines.slice(-limit).reverse();
+
+  const parseCsvLine = (line) => {
+    const out = []; let cur = ""; let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inQuotes) {
+        if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (c === '"') inQuotes = false;
+        else cur += c;
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === ";") { out.push(cur); cur = ""; }
+        else cur += c;
+      }
+    }
+    out.push(cur);
+    return out;
+  };
+
+  const rows = recent.map(line => {
+    const vals = parseCsvLine(line);
+    const obj = {};
+    header.forEach((h, i) => { obj[h] = vals[i] ?? ""; });
+    return obj;
+  });
+  res.json({ ok: true, rows, total: dataLines.length, path: file });
+});
+
 app.post("/api/order-status/apply", requireAuth, requireOrderStatusAccess, async (req, res) => {
   const { changes } = req.body || {};
   if (!Array.isArray(changes) || changes.length === 0) {

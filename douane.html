@@ -1072,12 +1072,25 @@ function renderMeta() {
   const m = state.metadata;
   // Adviseur-diagnostiek bovenaan tonen — alleen als er actief is gezocht
   // (= bij Logic4-fetch). Bij PDF-drop heeft m._advisorDiag geen entries.
+  // Standaard ingeklapt — de meeste gebruikers (Manon) hoeven dit niet te
+  // zien. Alleen de admin (Gerrit) klapt 'm uit als 'ie diagnose wil doen.
+  // Summary-regel is compact en geeft de essentie weer.
   const diagEl = document.getElementById("advisor-diagnostic");
   if (diagEl) {
     const d = m._advisorDiag;
     if (d && d.steps && d.steps.length) {
       diagEl.className = "advisor-diagnostic " + (d.level || "ok");
-      diagEl.innerHTML = "<b>Adviseur-lookup:</b><br>" + d.steps.map(s => "&middot; " + s).join("<br>");
+      // Korte status-regel: gebaseerd op of we wél/niet een naam vonden
+      const ok = (m.advisor && m.advisor.trim()) ? true : false;
+      const icon = ok ? "✓" : (d.level === "error" ? "⚠" : "ⓘ");
+      const label = ok
+        ? `Adviseur auto-gevuld: ${escapeHtml(m.advisor)}${m.advisorEmail ? " <" + escapeHtml(m.advisorEmail) + ">" : ""}`
+        : "Adviseur niet auto-gevuld — handmatig invullen hieronder. Klik voor diagnose.";
+      diagEl.innerHTML =
+        `<details><summary style="cursor:pointer;font-weight:600;list-style:none;">${icon} ${label}</summary>` +
+        `<div style="margin-top:8px;">` +
+        d.steps.map(s => "&middot; " + s).join("<br>") +
+        `</div></details>`;
       diagEl.classList.remove("hidden");
     } else {
       diagEl.classList.add("hidden");

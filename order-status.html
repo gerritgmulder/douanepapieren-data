@@ -354,6 +354,26 @@
           </table>
         </div>
 
+        <!-- Dry-run-historie — wie heeft wanneer wat gescand -->
+        <div id="dryRunsSection" class="batches-section hidden">
+          <div class="batches-header">Dry-run-historie — wie heeft gescand</div>
+          <table class="audit-table batches-table">
+            <thead>
+              <tr>
+                <th>Wanneer</th>
+                <th>Door</th>
+                <th class="col-num">Orders gescand</th>
+                <th class="col-num">Kandidaten</th>
+                <th class="col-num">→ 30%</th>
+                <th class="col-num">→ Vol. betaald</th>
+                <th class="col-num">Verstopte omzet</th>
+                <th class="col-num">Duur</th>
+              </tr>
+            </thead>
+            <tbody id="dryRunsBody"></tbody>
+          </table>
+        </div>
+
         <!-- Detail per regel -->
         <div id="rowsHeader" class="batches-header rows-header hidden">Alle regels</div>
         <table class="audit-table">
@@ -520,6 +540,7 @@ async function runDryRun() {
   el("resultsPanel").classList.add("hidden");
   setStatus("", "Bezig met ophalen van orders…");
   setProgress(0);
+  const dryRunStart = Date.now();
 
   try {
     const allOrders = [];
@@ -585,6 +606,27 @@ async function runDryRun() {
     setProgress(100);
     setTimeout(() => setProgress(null), 600);
     setStatus("ok", `Klaar — ${candidates.length} kandidaten gevonden uit ${allOrders.length} orders.`);
+
+    // Dry-run loggen — alleen voor zichtbaarheid wie wanneer wat gedraaid heeft.
+    // Niet kritiek: als de log-call faalt (bv. fonfile niet bereikbaar) gaat
+    // de dry-run gewoon door, alleen geen audit-entry. We swallowen de fout
+    // bewust zodat user-flow nooit breekt.
+    try {
+      const duration_ms = Date.now() - dryRunStart;
+      await apiFetch("/api/order-status/dry-run-log", {
+        method: "POST",
+        body: {
+          orders_checked: allOrders.length,
+          candidates_found: candidates.length,
+          to_status_25: candidates.filter(c => c.targetStatusId === STATUS_30_AANBETAALD).length,
+          to_status_30: candidates.filter(c => c.targetStatusId === STATUS_VOLLEDIG_BETAALD).length,
+          hidden_amount: hiddenAmount,
+          duration_ms,
+        }
+      });
+    } catch (logErr) {
+      console.warn("[dry-run-log] kon niet vastleggen:", logErr.message);
+    }
   } catch (e) {
     console.error(e);
     setStatus("bad", "Fout bij dry-run: " + e.message);
@@ -842,13 +884,62 @@ async function openAuditLog() {
   el("auditMeta").textContent = "Laden…";
   el("auditBody").innerHTML = "";
   el("auditEmpty").classList.add("hidden");
+  el("dryRunsSection").classList.add("hidden");
   try {
-    const r = await apiFetch("/api/order-status/audit-log?limit=1000");
-    const j = await r.json();
-    if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
-    renderAuditLog(j);
+    // Twee bronnen parallel ophalen: doorvoer-audit (audit.csv) en
+    // dry-run-audit (dry-run.csv). Dry-run-fetch is optioneel — als 't
+    // endpoint nog niet bestaat (oudere helper) tonen we alleen apply.
+    const [auditRes, dryRes] = await Promise.allSettled([
+      apiFetch("/api/order-status/audit-log?limit=1000"),
+      apiFetch("/api/order-status/dry-run-log?limit=200"),
+    ]);
+    const auditJ = auditRes.status === "fulfilled" ? await auditRes.value.json() : null;
+    const dryJ   = dryRes.status   === "fulfilled" ? await dryRes.value.json()   : null;
+    if (!auditJ || !auditJ.ok) {
+      throw new Error((auditJ && auditJ.error) || "Audit-log niet bereikbaar");
+    }
+    renderAuditLog(auditJ);
+    if (dryJ && dryJ.ok) renderDryRunHistory(dryJ);
   } catch (e) {
     el("auditMeta").textContent = "Fout: " + e.message;
+  }
+}
+
+// Render-functie voor dry-run-historie. Lichtgewicht: één rij = één dry-run.
+function renderDryRunHistory(j) {
+  const rows = j.rows || [];
+  const body = el("dryRunsBody");
+  body.innerHTML = "";
+  if (!rows.length) {
+    // Geen dry-runs gelogd — sectie verbergen, audit-tabel blijft hoofdfocus
+    el("dryRunsSection").classList.add("hidden");
+    return;
+  }
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    const ts = row.timestamp ? new Date(row.timestamp).toLocaleString("nl-NL") : "—";
+    const duration = row.duration_ms
+      ? (Number(row.duration_ms) / 1000).toFixed(1) + "s"
+      : "—";
+    const hidden = row.hidden_amount && Number(row.hidden_amount) > 0
+      ? fmtEur(row.hidden_amount) : "—";
+    tr.innerHTML = `
+      <td>${escapeHtml(ts)}</td>
+      <td>${escapeHtml(row.user || "")}</td>
+      <td class="col-num">${escapeHtml(row.orders_checked || "0")}</td>
+      <td class="col-num">${escapeHtml(row.candidates_found || "0")}</td>
+      <td class="col-num">${escapeHtml(row.to_status_25 || "0")}</td>
+      <td class="col-num">${escapeHtml(row.to_status_30 || "0")}</td>
+      <td class="col-num">${escapeHtml(hidden)}</td>
+      <td class="col-num">${escapeHtml(duration)}</td>
+    `;
+    body.appendChild(tr);
+  }
+  el("dryRunsSection").classList.remove("hidden");
+  // Als de "Nog geen audit-log-entries"-melding zichtbaar is maar er zijn
+  // wel dry-runs, dan klopt die melding niet meer — verbergen.
+  if (!el("auditEmpty").classList.contains("hidden")) {
+    el("auditEmpty").classList.add("hidden");
   }
 }
 
