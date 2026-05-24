@@ -1571,12 +1571,23 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
   let advisor = "";
   let advisorEmail = "";
   const diag = { steps: [], level: "ok", userObj: null };
-  // Eerste stap is altijd debtor-state — zo zien we direct of /api/debtor/X
-  // wel iets terug gaf. Bij portal-orders zit de adviseur namelijk op de
-  // debtor, dus als die leeg is hebben we überhaupt geen schijn van kans.
+  // Eerste stap is altijd debtor-state — zo zien we direct of de klant-
+  // lookup wel iets opleverde. Toon óók de afzonderlijke endpoint-pogingen
+  // (window._lastDebtorAttempts wordt gevuld door fetchOrderFromLogic4)
+  // zodat we precies zien welke endpoints werken/falen — cruciaal voor
+  // het diagnosticeren van portal-orders (Customer ipv Debtor).
+  const debtorAttempts = window._lastDebtorAttempts || [];
   diag.steps.push(
-    `Debtor-fetch: ${debtorState.fetched ? `OK (${debtorState.type}, ${debtorState.keys} velden)` : `<b style="color:#b91c1c">FAALDE / geen response</b>`}`
+    `Klant-fetch: ${debtorState.fetched ? `OK (${debtorState.type}, ${debtorState.keys} velden)` : `<b style="color:#b91c1c">geen record gevonden</b>`}`
   );
+  if (debtorAttempts.length) {
+    const rows = debtorAttempts.map(a => {
+      const icon = a.ok ? "✓" : "✗";
+      const color = a.ok ? "#059669" : "#b91c1c";
+      return `<div style="font-family:monospace;font-size:11px;color:${color}">${icon} ${a.endpoint} → ${a.info}</div>`;
+    }).join("");
+    diag.steps.push(`<details${debtor && Object.keys(debtor).length ? "" : " open"} style="margin-top:4px"><summary style="cursor:pointer;font-size:11px;color:#6b5e1f;">Klant-endpoint-pogingen — klik om in/uit te klappen</summary><div style="background:#fffdf6;padding:6px 8px;border-radius:4px;margin-top:4px">${rows}</div></details>`);
+  }
 
   async function tryLookup(found) {
     if (!found) return false;
@@ -1795,19 +1806,68 @@ async function fetchOrderFromLogic4() {
     }
     console.log("Logic4 order response:", j);
 
-    // Debtor (klant) los ophalen — daar zit het EORI-nummer in. Niet kritiek:
-    // als de call faalt of de klant heeft geen EORI, gaat de rest gewoon door.
+    // Klant los ophalen — daar zit het EORI-nummer in én bij portal-orders
+    // de adviseur. Probeer eerst /api/debtor (gaat naar /v3/Debtors/GetDebtors),
+    // en als dat faalt of leeg blijft: probeer /v3/Customers/GetCustomers
+    // direct via logic4-call. Webshop-orders hebben een Customer-ID in
+    // DebtorId, geen wholesale-debtor.
     let debtor = null;
+    const debtorAttempts = [];   // {endpoint, ok, info} — surfacen in diag
     const orderHeader = Array.isArray(j.order) ? j.order[0] : j.order;
     const debtorId = orderHeader && orderHeader.DebtorId;
     if (debtorId) {
+      // 1) /api/debtor/X (server-side proxy naar GetDebtors)
       try {
         const dr = await fetch(HELPER_BASE + "/api/debtor/" + debtorId);
-        const dj = await dr.json();
-        if (dr.ok && dj.ok) debtor = dj.raw;
+        const dj = await dr.json().catch(() => ({}));
+        if (dr.ok && dj.ok) {
+          const arr = Array.isArray(dj.raw) ? dj.raw : (dj.raw ? [dj.raw] : []);
+          debtorAttempts.push({ endpoint: "/api/debtor/" + debtorId, ok: arr.length > 0, info: `${arr.length} record(s)` });
+          if (arr.length) debtor = arr[0];
+        } else {
+          debtorAttempts.push({ endpoint: "/api/debtor/" + debtorId, ok: false, info: `HTTP ${dr.status} — ${dj.error || "(geen body)"}` });
+        }
       } catch (de) {
+        debtorAttempts.push({ endpoint: "/api/debtor/" + debtorId, ok: false, info: "exception: " + de.message });
         console.warn("Debtor niet ophaalbaar:", de.message);
       }
+
+      // 2) Fallback: probeer een aantal Logic4-endpoints direct via /api/logic4-call.
+      //    Webshop-orders hebben hun klant in Customers ipv Debtors. Ook proberen
+      //    we andere veld-namen voor het ID (Ids ipv DebtorIds), want Logic4-versies
+      //    verschillen.
+      if (!debtor) {
+        const customerCandidates = [
+          { path: "/v3/Debtors/GetDebtors",       body: { DebtorIds: [debtorId], TakeRecords: 1 } },
+          { path: "/v3/Debtors/GetDebtors",       body: { Ids: [debtorId], TakeRecords: 1 } },
+          { path: "/v3/Customers/GetCustomers",   body: { CustomerIds: [debtorId], TakeRecords: 1 } },
+          { path: "/v3/Customers/GetCustomers",   body: { Ids: [debtorId], TakeRecords: 1 } },
+          { path: "/v3/Globalizations/GetDebtors",body: { DebtorIds: [debtorId], TakeRecords: 1 } },
+        ];
+        for (const cand of customerCandidates) {
+          try {
+            const r = await fetch(HELPER_BASE + "/api/logic4-call", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ path: cand.path, method: "POST", body: cand.body })
+            });
+            const jj = await r.json().catch(() => ({}));
+            if (!r.ok || !jj.ok) {
+              debtorAttempts.push({ endpoint: `${cand.path} (${Object.keys(cand.body)[0]})`, ok: false, info: `HTTP ${r.status} — ${jj.error || ""}`.trim() });
+              continue;
+            }
+            const arr = Array.isArray(jj.data) ? jj.data
+              : (jj.data?.Debtors || jj.data?.Customers || jj.data?.Items || []);
+            debtorAttempts.push({ endpoint: `${cand.path} (${Object.keys(cand.body)[0]})`, ok: arr.length > 0, info: `${arr.length} record(s)` });
+            if (arr.length) { debtor = arr[0]; break; }
+          } catch (de) {
+            debtorAttempts.push({ endpoint: cand.path, ok: false, info: "exception: " + de.message });
+          }
+        }
+      }
+      console.log("[adviseur] debtor-attempts:", debtorAttempts, "→ debtor:", debtor);
+      // Stash op window zodat mapLogic4Order er bij kan voor de diag-box.
+      window._lastDebtorAttempts = debtorAttempts;
     }
 
     // Ruwe response onderaan voor inspectie blijft handig tijdens de eerste weken.
