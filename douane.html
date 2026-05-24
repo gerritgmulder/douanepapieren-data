@@ -1516,6 +1516,15 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
   if (!o) throw new Error("Geen order in response.");
   const rows = (orderRows && orderRows.length ? orderRows : (o.OrderRows || []));
   const debtor = Array.isArray(debtorResp) ? debtorResp[0] : (debtorResp || {});
+  // Houd bij hoe de debtor-fetch verliep — surfacen we straks in de diag-box
+  // zodat we direct zien of de account-manager-lookup-keten überhaupt iets
+  // had om mee te werken.
+  const debtorState = {
+    fetched: debtorResp != null,
+    type: Array.isArray(debtorResp) ? `array[${debtorResp.length}]` : (debtorResp == null ? "null" : typeof debtorResp),
+    keys: debtor && typeof debtor === "object" ? Object.keys(debtor).length : 0,
+  };
+  console.log("[adviseur] debtor-state:", debtorState, "debtor:", debtor);
 
   const deliver = o.DeliveryAddress || o.AccountAddress || {};
   const invoice = o.InvoiceAddress || o.AccountAddress || {};
@@ -1562,6 +1571,12 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
   let advisor = "";
   let advisorEmail = "";
   const diag = { steps: [], level: "ok", userObj: null };
+  // Eerste stap is altijd debtor-state — zo zien we direct of /api/debtor/X
+  // wel iets terug gaf. Bij portal-orders zit de adviseur namelijk op de
+  // debtor, dus als die leeg is hebben we überhaupt geen schijn van kans.
+  diag.steps.push(
+    `Debtor-fetch: ${debtorState.fetched ? `OK (${debtorState.type}, ${debtorState.keys} velden)` : `<b style="color:#b91c1c">FAALDE / geen response</b>`}`
+  );
 
   async function tryLookup(found) {
     if (!found) return false;
@@ -1679,10 +1694,18 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
     }
 
     const orderDump = dumpFields(o, "Order-velden");
-    const debtorDump = debtor ? dumpFields(debtor, "Debtor-velden (klant)") : "";
-    if (orderDump || debtorDump) {
-      diag.steps.push(`<b>Geel = mogelijk de adviseur</b>. Kopieer terug naar Claude met welk veld de juiste is:${orderDump}${debtorDump}`);
+    // Debtor altijd tonen, ook bij leeg/null — dan zien we direct of de
+    // fetch wel iets opleverde. Geen panel = mensen denken "dat dit niet
+    // werkt aan jouw kant" — dat willen we voorkomen.
+    let debtorDump;
+    if (!debtorState.fetched) {
+      debtorDump = `<details open style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:#b91c1c;"><b>Debtor-velden (klant)</b> — fetch faalde, geen response</summary><div style="padding:6px 8px;font-size:11px;color:#7f1d1d">Server kon klant ${debtor && debtor.Id || "(geen DebtorId)"} niet ophalen via <code>/api/debtor</code>. Controleer of <code>/v3/Debtors/GetDebtors</code> Logic4-toegang heeft, of dat de helper-server een fout retourneert. Kijk in DevTools-console voor "Debtor niet ophaalbaar".</div></details>`;
+    } else if (debtorState.keys === 0) {
+      debtorDump = `<details open style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:#92400e;"><b>Debtor-velden (klant)</b> — leeg (${debtorState.type})</summary><div style="padding:6px 8px;font-size:11px;color:#6b5e1f">Logic4 gaf <code>${debtorState.type}</code> terug voor deze klant. Mogelijk bestaat de debtor wel maar zonder uitgebreide velden, of de API gaf een lege array. Open "Debug rauwe pdf-tekst" onderaan om de ruwe response te zien.</div></details>`;
+    } else {
+      debtorDump = dumpFields(debtor, "Debtor-velden (klant)");
     }
+    diag.steps.push(`<b>Geel = mogelijk de adviseur</b>. Kopieer terug naar Claude met welk veld de juiste is:${orderDump}${debtorDump}`);
     diag.steps.push(`<b>Vul anders handmatig in</b> in de velden Advisor + Advisor email hieronder.`);
   }
   console.log(`[adviseur] resolved → naam="${advisor}", email="${advisorEmail}"`);
