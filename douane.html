@@ -1533,109 +1533,155 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
     "RequestedDeliveryDate", "ExpectedDeliveryDate", "ETA"
   ]);
 
-  // Advisor (= verkoper die de order opmaakte): Logic4 zet z'n UserId op
-  // de order. Naam + email pakken we via een lookup in een Logic4 users-
-  // endpoint (kandidatenlijst, eenmalig gecached). Backup: probeer wat
-  // ingebakken velden mochten Logic4-versies die alsnog vullen.
+  // Advisor (= verkoper / account-manager): Logic4 zet de userId-link
+  // soms op de order (voor manueel ingevoerde orders), maar bij portal-
+  // orders (klant plaatst zelf) is UserId de customer-portal-account.
+  // Dan zit de adviseur typisch op de DEBTOR (account-manager van de klant).
+  // We checken dus eerst de order, dan de debtor, en lookuppen elke ID
+  // tegen de Logic4 users-cache.
   const advisorIdCandidates = [
     "UserId", "SalesEmployeeId", "SalesPersonId", "AccountManagerId",
     "OwnerId", "EmployeeId", "CreatedByUserId", "User.Id",
   ];
+  function findIdIn(obj, label) {
+    for (const f of advisorIdCandidates) {
+      const v = f.split(".").reduce((o2, p) => (o2 == null ? o2 : o2[p]), obj || {});
+      if (v !== undefined && v !== null && String(v).trim() !== "" && String(v) !== "0") {
+        return { id: String(v), field: `${label}.${f}` };
+      }
+    }
+    return null;
+  }
+  let foundFromOrder = findIdIn(o, "order");
+  let foundFromDebtor = findIdIn(debtor, "debtor");
+  // Debtor-ID heeft VOORKEUR bij portal-orders: order.UserId = customer-account
+  // (high numeric ID), terwijl debtor.AccountManagerId/UserId = de interne
+  // adviseur. We proberen dus debtor eerst als die er is.
   let advisorUserId = "";
   let advisorIdField = "";
-  for (const f of advisorIdCandidates) {
-    const v = f.split(".").reduce((obj, p) => (obj == null ? obj : obj[p]), o);
-    if (v !== undefined && v !== null && String(v).trim() !== "") {
-      advisorUserId = v;
-      advisorIdField = f;
-      break;
-    }
-  }
-  console.log(`[adviseur] order ${o.Id}: userId-veld="${advisorIdField}" → "${advisorUserId}"`);
   let advisor = "";
   let advisorEmail = "";
-  // Diagnose-string die we straks zichtbaar in de UI tonen — zodat we
-  // niet meer afhankelijk zijn van de DevTools-console om te zien waar
-  // het misgaat met de adviseur-lookup.
   const diag = { steps: [], level: "ok", userObj: null };
-  if (advisorUserId) {
-    diag.steps.push(`Order heeft <code>${advisorIdField}</code> = <code>${advisorUserId}</code>`);
-    const u = await getLogic4UserById(advisorUserId);
+
+  async function tryLookup(found) {
+    if (!found) return false;
+    advisorUserId = found.id;
+    advisorIdField = found.field;
+    diag.steps.push(`Probeer <code>${found.field}</code> = <code>${found.id}</code>`);
+    const u = await getLogic4UserById(found.id);
     if (u) {
       diag.userObj = u;
       advisor = u.FullName
              || (`${u.FirstName || ""} ${u.LastName || ""}`).trim()
              || u.Name || u.DisplayName || u.Login || "";
       advisorEmail = u.Email || u.EmailAddress || "";
-      if (advisor) diag.steps.push(`Adviseur gevonden: <b>${advisor}</b>${advisorEmail ? ` &lt;${advisorEmail}&gt;` : ""}`);
-      else { diag.level = "warn"; diag.steps.push(`User-record gevonden maar zonder bruikbare naam-velden — beschikbare keys: <code>${Object.keys(u).join(", ").slice(0, 200)}</code>`); }
+      if (advisor) {
+        diag.steps.push(`✓ Adviseur gevonden: <b>${advisor}</b>${advisorEmail ? ` &lt;${advisorEmail}&gt;` : ""}`);
+        return true;
+      } else {
+        diag.steps.push(`User-record gevonden maar geen bruikbare naam-velden — keys: <code>${Object.keys(u).join(", ").slice(0, 200)}</code>`);
+      }
     } else {
-      diag.level = "warn";
-      diag.steps.push(`User <code>${advisorUserId}</code> niet gevonden via een van: ${_USER_ENDPOINTS.map(e => `<code>${e}</code>`).join(", ")}`);
+      diag.steps.push(`User <code>${found.id}</code> niet gevonden in users-cache`);
     }
-  } else {
-    diag.level = "warn";
-    diag.steps.push(`Geen userId-veld op de order. Geprobeerd: ${advisorIdCandidates.map(f => `<code>${f}</code>`).join(", ")}`);
+    return false;
   }
+
+  // 1) Debtor eerst (waar de account-manager zit voor portal-orders)
+  let resolved = await tryLookup(foundFromDebtor);
+  // 2) Anders order-velden
+  if (!resolved) resolved = await tryLookup(foundFromOrder);
+
+  if (!resolved && !foundFromOrder && !foundFromDebtor) {
+    diag.level = "warn";
+    diag.steps.push(`Geen userId-veld in order óf debtor. Geprobeerd: ${advisorIdCandidates.map(f => `<code>${f}</code>`).join(", ")}`);
+  } else if (!resolved) {
+    diag.level = "warn";
+  }
+
+  console.log(`[adviseur] order ${o.Id}: foundFromOrder=`, foundFromOrder, " foundFromDebtor=", foundFromDebtor);
+
+  // 3) Naam-fallback uit order
   if (!advisor) {
     advisor = pickFirst(o, [
       "UserName", "Username", "SalesEmployeeName", "SalesPersonName",
       "AccountManagerName", "AccountManager.Name", "Owner.Name", "User.Name"
     ]);
-    if (advisor) diag.steps.push(`Naam alsnog uit order-veld (fallback): <b>${advisor}</b>`);
+    if (advisor) diag.steps.push(`Naam uit order-veld (fallback): <b>${advisor}</b>`);
+  }
+  // 4) Naam-fallback uit debtor
+  if (!advisor && debtor) {
+    advisor = pickFirst(debtor, [
+      "UserName", "Username", "SalesEmployeeName", "SalesPersonName",
+      "AccountManagerName", "AccountManager.Name", "Owner.Name", "User.Name"
+    ]);
+    if (advisor) diag.steps.push(`Naam uit debtor-veld (fallback): <b>${advisor}</b>`);
   }
   if (!advisorEmail) {
     advisorEmail = pickFirst(o, [
       "UserEmail", "User.Email", "SalesEmployeeEmail", "AccountManagerEmail",
       "AccountManager.Email", "Owner.Email", "SalespersonEmail"
     ]);
-    if (advisorEmail) diag.steps.push(`E-mail alsnog uit order-veld (fallback): <b>${advisorEmail}</b>`);
+    if (advisorEmail) diag.steps.push(`E-mail uit order-veld (fallback): <b>${advisorEmail}</b>`);
   }
+  if (!advisorEmail && debtor) {
+    advisorEmail = pickFirst(debtor, [
+      "UserEmail", "User.Email", "SalesEmployeeEmail", "AccountManagerEmail",
+      "AccountManager.Email", "Owner.Email", "SalespersonEmail"
+    ]);
+    if (advisorEmail) diag.steps.push(`E-mail uit debtor-veld (fallback): <b>${advisorEmail}</b>`);
+  }
+
   if (!advisor && !advisorEmail) {
     diag.level = "error";
-    // Toon ALLE top-level velden van de order (gefilterd op niet-null scalar
-    // of korte object-stringificatie). Daarmee kunnen we direct zien welk
-    // veld de echte adviseur is, ook als 't onder een totaal andere naam
-    // staat (bv. "Logic4ProjectId", "Reference", "ExtraInfo1", etc.).
-    const allFields = [];
-    for (const k of Object.keys(o)) {
-      const v = o[k];
-      if (v == null) continue;
-      let display;
-      if (typeof v === "object") {
-        if (Array.isArray(v)) {
-          if (v.length === 0) continue;
-          display = `[${v.length} items]`;
+
+    // Hulpfunctie: dump top-level velden van een object, met highlight op
+    // velden die op adviseur duiden. Compacter dan ruwe JSON.
+    function dumpFields(obj, label) {
+      if (!obj || typeof obj !== "object") return "";
+      const allFields = [];
+      for (const k of Object.keys(obj)) {
+        const v = obj[k];
+        if (v == null) continue;
+        let display;
+        if (typeof v === "object") {
+          if (Array.isArray(v)) {
+            if (v.length === 0) continue;
+            display = `[${v.length} items]`;
+          } else {
+            const sub = Object.keys(v).slice(0, 5).map(sk => {
+              const sv = v[sk];
+              if (sv == null || sv === "") return null;
+              return `${sk}: ${typeof sv === "object" ? "{...}" : String(sv).slice(0, 30)}`;
+            }).filter(Boolean).join(", ");
+            if (!sub) continue;
+            display = `{ ${sub}${Object.keys(v).length > 5 ? ", …" : ""} }`;
+          }
         } else {
-          // Eén niveau diep — toon sub-keys
-          const sub = Object.keys(v).slice(0, 5).map(sk => {
-            const sv = v[sk];
-            if (sv == null || sv === "") return null;
-            return `${sk}: ${typeof sv === "object" ? "{...}" : String(sv).slice(0, 30)}`;
-          }).filter(Boolean).join(", ");
-          if (!sub) continue;
-          display = `{ ${sub}${Object.keys(v).length > 5 ? ", …" : ""} }`;
+          const s = String(v);
+          if (s === "" || s === "0" || s === "false") continue;
+          display = s.slice(0, 80);
         }
-      } else {
-        const s = String(v);
-        if (s === "" || s === "0" || s === "false") continue;
-        display = s.slice(0, 80);
+        allFields.push([k, display]);
       }
-      allFields.push([k, display]);
-    }
-    // Sorteer: highlight velden waarvan de naam op een adviseur duidt
-    const PRIO_RE = /user|sales|employee|advisor|adviseur|owner|manager|clerk|operator|verkoper|seller|name|reference|operator/i;
-    allFields.sort((a, b) => {
-      const aP = PRIO_RE.test(a[0]) ? 0 : 1;
-      const bP = PRIO_RE.test(b[0]) ? 0 : 1;
-      return aP - bP || a[0].localeCompare(b[0]);
-    });
-    if (allFields.length) {
+      const PRIO_RE = /user|sales|employee|advisor|adviseur|owner|manager|clerk|operator|verkoper|seller|reference|contact/i;
+      allFields.sort((a, b) => {
+        const aP = PRIO_RE.test(a[0]) ? 0 : 1;
+        const bP = PRIO_RE.test(b[0]) ? 0 : 1;
+        return aP - bP || a[0].localeCompare(b[0]);
+      });
+      if (!allFields.length) return "";
       const list = allFields.map(([k, v]) => {
         const hi = PRIO_RE.test(k) ? ' style="font-weight:600;color:#92400e"' : "";
         return `<div${hi}><code>${k}</code> = <code>${v}</code></div>`;
       }).join("");
-      diag.steps.push(`<b>Alle order-velden</b> (geel = mogelijk relevant). Kopieer dit terug naar Claude, dan voegt 'ie het juiste veld toe als kandidaat:<details open><summary style="cursor:pointer;font-size:11px;color:#6b5e1f;">— klik om in/uit te klappen —</summary><div style="max-height:260px;overflow:auto;background:#fffdf6;padding:6px 8px;border-radius:4px;margin-top:4px;font-size:11px;line-height:1.5">${list}</div></details>`);
+      return `<details open style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:#6b5e1f;"><b>${label}</b> — klik om in/uit te klappen</summary><div style="max-height:240px;overflow:auto;background:#fffdf6;padding:6px 8px;border-radius:4px;margin-top:4px;font-size:11px;line-height:1.5">${list}</div></details>`;
+    }
+
+    const orderDump = dumpFields(o, "Order-velden");
+    const debtorDump = debtor ? dumpFields(debtor, "Debtor-velden (klant)") : "";
+    if (orderDump || debtorDump) {
+      diag.steps.push(`<b>Geel = mogelijk de adviseur</b>. Kopieer terug naar Claude met welk veld de juiste is:${orderDump}${debtorDump}`);
     }
     diag.steps.push(`<b>Vul anders handmatig in</b> in de velden Advisor + Advisor email hieronder.`);
   }

@@ -104,6 +104,39 @@ Endpoints: `/api/login`, `/api/me`, `/api/logout`, `/api/order/:nr`,
   elk uur. Installeert stilletjes bij quit. Builds via GitHub Actions
   workflow op tag push.
 
+## Screenshots — 2000px-limiet opgelost via auto-resize
+
+Bij gesprekken met **meerdere** afbeeldingen handhaaft Claude een harde
+**2000px-limiet** (lange zijde) op álle plaatjes in de conversatie. macOS
+screenshots staan op native Retina-resolutie (3024–3840 px breed), dus die
+overschrijden die grens vrijwel altijd.
+
+Symptoom: `An image in the conversation exceeds the dimension limit for
+many-image requests (2000px). Start a new session with fewer images.`
+Eén te grote screenshot blokkeert daarna élk vervolgbericht in dezelfde
+sessie. Workaround als het tóch nog eens optreedt: **fork het gesprek**
+op een punt vóór de problematische afbeelding.
+
+**Auto-resize setup (actief op deze Mac, 2026-05-11):**
+- Screenshot-locatie verplaatst naar `~/Pictures/Screenshots/`
+  (`defaults write com.apple.screencapture location ...`). Reden: macOS
+  TCC blokkeert LaunchAgents van het lezen van `~/Desktop`, dus die map
+  is niet bruikbaar voor automatische verwerking.
+- LaunchAgent `~/Library/LaunchAgents/com.gerrit.screenshot-resize.plist`
+  watcht `~/Pictures/Screenshots/` en triggert het script
+  `~/.local/bin/resize-screenshots.sh`, die elke nieuwe screenshot met
+  `sips -Z 1800` verkleint zodra de lange zijde > 1800 px is.
+- Log: `~/.local/share/resize-screenshots.log`.
+
+**Reverten:**
+```sh
+launchctl bootout "gui/$(id -u)/com.gerrit.screenshot-resize"
+rm ~/Library/LaunchAgents/com.gerrit.screenshot-resize.plist
+rm ~/.local/bin/resize-screenshots.sh
+defaults delete com.apple.screencapture location  # screenshots terug naar Bureaublad
+killall SystemUIServer
+```
+
 ## Wat NIET doen
 
 - Geen feature branches / PRs — alles direct naar main
