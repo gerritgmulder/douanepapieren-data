@@ -1832,19 +1832,33 @@ async function fetchOrderFromLogic4() {
         console.warn("Debtor niet ophaalbaar:", de.message);
       }
 
-      // 2) Fallback: probeer een aantal Logic4-endpoints direct via /api/logic4-call.
-      //    Webshop-orders hebben hun klant in Customers ipv Debtors. Ook proberen
-      //    we andere veld-namen voor het ID (Ids ipv DebtorIds), want Logic4-versies
-      //    verschillen.
+      // 2) Fallback: probeer een lange lijst Logic4-endpoint-varianten via /api/logic4-call.
+      //    /v3/Debtors/GetDebtors gaf 404 — deze Logic4-installatie heeft die
+      //    module op een ander pad. Logic4 versies verschillen per module (v1, v1.1, v3).
+      //    Webshop-orders kunnen ook in een aparte Customer-module zitten.
       if (!debtor) {
         const customerCandidates = [
-          { path: "/v3/Debtors/GetDebtors",       body: { DebtorIds: [debtorId], TakeRecords: 1 } },
-          { path: "/v3/Debtors/GetDebtors",       body: { Ids: [debtorId], TakeRecords: 1 } },
-          { path: "/v3/Customers/GetCustomers",   body: { CustomerIds: [debtorId], TakeRecords: 1 } },
-          { path: "/v3/Customers/GetCustomers",   body: { Ids: [debtorId], TakeRecords: 1 } },
-          { path: "/v3/Globalizations/GetDebtors",body: { DebtorIds: [debtorId], TakeRecords: 1 } },
+          // v3 varianten (werkten niet voor ons, maar laten staan)
+          { path: "/v3/Debtors/GetDebtors",            body: { DebtorIds: [debtorId], TakeRecords: 1 } },
+          { path: "/v3/Customers/GetCustomers",        body: { CustomerIds: [debtorId], TakeRecords: 1 } },
+          // v1.1 varianten — Logic4 heeft veel "Globalization" modules op v1.1
+          { path: "/v1.1/Debtors/GetDebtors",          body: { DebtorIds: [debtorId], TakeRecords: 1 } },
+          { path: "/v1.1/Debtors/GetDebtor",           body: { DebtorId: debtorId } },
+          { path: "/v1.1/Debtors/GetDebtor",           body: debtorId },
+          { path: "/v1.1/Customers/GetCustomers",      body: { CustomerIds: [debtorId], TakeRecords: 1 } },
+          { path: "/v1.1/Customers/GetCustomer",       body: { CustomerId: debtorId } },
+          // v1 varianten
+          { path: "/v1/Debtors/GetDebtors",            body: { DebtorIds: [debtorId], TakeRecords: 1 } },
+          { path: "/v1/Customers/GetCustomers",        body: { CustomerIds: [debtorId], TakeRecords: 1 } },
+          // Globalizations-bundel
+          { path: "/v3/Globalizations/GetDebtors",     body: { DebtorIds: [debtorId], TakeRecords: 1 } },
+          { path: "/v1.1/Globalizations/GetDebtors",   body: { DebtorIds: [debtorId], TakeRecords: 1 } },
+          { path: "/v1.1/Globalizations/GetDebtor",    body: { DebtorId: debtorId } },
         ];
         for (const cand of customerCandidates) {
+          const bodyKey = (cand.body && typeof cand.body === "object" && !Array.isArray(cand.body))
+            ? Object.keys(cand.body)[0] : "raw";
+          const label = `${cand.path} (${bodyKey})`;
           try {
             const r = await fetch(HELPER_BASE + "/api/logic4-call", {
               method: "POST",
@@ -1852,16 +1866,31 @@ async function fetchOrderFromLogic4() {
               body: JSON.stringify({ path: cand.path, method: "POST", body: cand.body })
             });
             const jj = await r.json().catch(() => ({}));
-            if (!r.ok || !jj.ok) {
-              debtorAttempts.push({ endpoint: `${cand.path} (${Object.keys(cand.body)[0]})`, ok: false, info: `HTTP ${r.status} — ${jj.error || ""}`.trim() });
+            // Belangrijke nuance: jj.ok = ging-Logic4-upstream-goed; jj.status
+            // is de upstream-HTTP-code van Logic4 (404 = endpoint bestaat niet).
+            // jj.data bevat de upstream-response body (vaak een error-JSON met
+            // type/title/status).
+            if (!r.ok) {
+              debtorAttempts.push({ endpoint: label, ok: false, info: `helper HTTP ${r.status} — ${jj.error || ""}`.trim() });
+              continue;
+            }
+            if (!jj.ok) {
+              const upstreamStatus = jj.status || "?";
+              const upstreamErr = (jj.data && typeof jj.data === "object" && (jj.data.title || jj.data.error || jj.data.Message))
+                || (typeof jj.data === "string" ? jj.data.slice(0, 80) : "")
+                || "(geen body)";
+              debtorAttempts.push({ endpoint: label, ok: false, info: `Logic4 ${upstreamStatus} — ${upstreamErr}` });
               continue;
             }
             const arr = Array.isArray(jj.data) ? jj.data
-              : (jj.data?.Debtors || jj.data?.Customers || jj.data?.Items || []);
-            debtorAttempts.push({ endpoint: `${cand.path} (${Object.keys(cand.body)[0]})`, ok: arr.length > 0, info: `${arr.length} record(s)` });
+              : (jj.data && typeof jj.data === "object"
+                ? (jj.data.Debtors || jj.data.Customers || jj.data.Items
+                  || (jj.data.Id || jj.data.DebtorId ? [jj.data] : []))
+                : []);
+            debtorAttempts.push({ endpoint: label, ok: arr.length > 0, info: `${arr.length} record(s)` });
             if (arr.length) { debtor = arr[0]; break; }
           } catch (de) {
-            debtorAttempts.push({ endpoint: cand.path, ok: false, info: "exception: " + de.message });
+            debtorAttempts.push({ endpoint: label, ok: false, info: "exception: " + de.message });
           }
         }
       }
