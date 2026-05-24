@@ -137,6 +137,106 @@ defaults delete com.apple.screencapture location  # screenshots terug naar Burea
 killall SystemUIServer
 ```
 
+## Codewoord `Manon-dag` — opgespaard werk voor dag-met-Manon
+
+Als de user de term **`Manon-dag`** noemt (in welke vorm dan ook — "we gaan
+een Manon-dag doen", "het is Manon-dag", etc.), haal dan dit plan op en
+presenteer het stap-voor-stap. Het is werk dat per se met Manon erbij moet,
+omdat het haar input vereist (klant→adviseur-mapping invullen). Niet zelf
+proberen uit te voeren zonder bevestiging van de user.
+
+### Achtergrond — waarom dit moet wachten
+
+Bij order-ophalen in Douanepapieren faalt de auto-fill van **Advisor +
+Advisor-email** voor portal-orders (klant plaatst zelf via webshop).
+Diagnose (sessie 2026-05-24):
+- Order 3510276 (Florida Pools — A-MAC, DebtorId 878848794) heeft alleen
+  `UserId = 2005726` (= customer-portal-account, geen interne adviseur)
+- ALLE 13 Logic4-endpoints voor Debtors/Customers/Users/Globalizations
+  retourneren 404 → API-key heeft geen scope op die modules
+- Wel werkend: `/v3/Orders/*`, `/v3/Products/*`, `/v3/BuyOrders/*`
+
+We hebben dus géén Logic4-route om adviseur op te halen. Oplossing:
+**klant→adviseur-mapping handmatig invullen** (eenmalig per actieve klant,
+~50-100 stuks) en opslaan in Cloudflare KV zodat 't shared is + auto-fillt
+bij elke volgende order van dezelfde klant.
+
+### Voor de Manon-dag — voorbereiding zonder Manon
+
+Eerst proberen Logic4-support te bellen of mailen of de API-key uitgebreid
+kan worden met scope `Debtors` en `Users`/`SalesEmployees`. Als dat lukt is
+er geen Manon-dag nodig — de bestaande code in `douane.html`
+(`mapLogic4Order` checkt al debtor.AccountManagerId etc.) werkt dan
+automatisch. Dit eerst proberen voordat we Manon's tijd vragen.
+
+### Op de Manon-dag — wat ik (Claude) moet bouwen
+
+1. **KV-bucket `advisors`** toevoegen aan `data-worker/src/worker.js`
+   (ALLOWED_BUCKETS) en pushen naar Cloudflare. Formaat per record:
+   ```js
+   {
+     "878848794": { name: "Manon", email: "manon@fonteyn.nl",
+                    customerName: "Florida pools and spas - A-MAC",
+                    addedBy: "manon@fonteyn.nl", addedAt: "2026-..." }
+   }
+   ```
+
+2. **Vaste adviseur-lijst hardcoden** in douane.html (bovenaan):
+   ```js
+   const FONTEYN_ADVISORS = [
+     { name: "Manon", email: "manon@fonteyn.nl" },
+     { name: "Don",   email: "don@fonteyn.nl" },
+     { name: "Arno",  email: "arno@fonteyn.nl" },
+     { name: "Dolf",  email: "dolf@fonteyn.nl" },
+     { name: "Gerrit",email: "gerrit@fonteyn.nl" },
+     // checken bij Manon of er nog meer/andere zijn — Gerriette? Sales-team?
+   ];
+   ```
+
+3. **UI in douane.html — twee plekken**:
+   - **Bij order-ophalen**: als `DebtorId` niet in mapping zit, toon banner
+     bovenaan met dropdown "Wie is de adviseur van [klant-naam]?" + opslaan-
+     knop. Na opslaan vult 't direct het Advisor-veld + slaat op in KV.
+   - **Knop "Adviseurs beheren"** opent een modal met alle bestaande
+     koppelingen, zoekveld, en mogelijkheid om te wijzigen of verwijderen.
+     Lijst sorteerbaar op klantnaam.
+
+4. **Auto-fill in mapLogic4Order**:
+   - Na `loadAdvisorMappingFromServer()` (te maken, analoog aan
+     `loadUserSpecsFromServer`)
+   - Check `state.advisors[String(o.DebtorId)]` — als bestaat: vul direct
+   - Anders: laat banner zien, advisor-velden blijven leeg
+
+5. **Bulk-invul-modus (optioneel maar handig op die dag)**:
+   - Modal "Bulk koppelen": haalt laatste 100 orders op via Logic4,
+     extraheert unieke DebtorIds, toont één-voor-één met dropdown
+   - Manon klikt door, ik schrijf elke keuze direct naar KV
+   - Zo zit binnen 30-60 min de meeste catalogus vast
+
+### Met Manon op de dag — agenda
+
+1. **00:00-00:15** — Plan doornemen, vragen beantwoorden
+2. **00:15-00:45** — Ik bouw de UI (modal + auto-fill + KV-sync) live
+3. **00:45-01:30** — Bulk-modus draaien: Manon klikt door 50-100 klanten,
+   ik los bugs op terwijl ze invult
+4. **01:30-02:00** — Eindcheck: paar willekeurige orders ophalen, advisor
+   moet auto-vullen. Edge-cases (klant zonder adviseur = "nog te koppelen"
+   banner)
+5. **Rest van de dag** — andere openstaande douane-wensen die Manon heeft
+   (vraag haar bij start van de dag wat er nog niet goed werkt)
+
+### Niet vergeten
+
+- **EORI-veld blijft handmatig** — die kwam ook uit de debtor, maar dat
+  endpoint is óók 404. Voeg EORI eveneens toe aan de advisor-mapping per
+  klant (handig om in één keer mee te nemen tijdens bulk-modus)
+- **Hsign-code (HS code) blijft handmatig** — Manon vult deze nu al per
+  order in, niet automatiseren
+- **Test op order 3510276** als referentie-case — die heeft alle pijn-
+  punten in één order
+- **Geen Logic4-API-calls toevoegen** voor klant-lookup — die zijn al
+  geprobeerd en falen allemaal met 404
+
 ## Wat NIET doen
 
 - Geen feature branches / PRs — alles direct naar main
