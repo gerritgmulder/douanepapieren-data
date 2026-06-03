@@ -1392,26 +1392,31 @@ async function doPrint() {
   // layout = sub-pixel rendering verschilt per label).
   await ensureLogoPreloaded();
   setTimeout(async () => {
-    // Probeer Electron silent-print via de preload-bridge: skipt de
-    // systeem-dialoog en stuurt direct naar de ZDesigner-printer in
-    // landscape. Bridge bestaat alleen in nieuwere bundled-shells; valt
-    // anders gewoon terug op window.print() (= oude gedrag met dialoog).
+    // v0.19.3+: gebruik de native print-dialoog met defaults pre-filled.
+    // Vroeger (v0.17–0.19.2) probeerden we silent-printen direct naar
+    // de ZDesigner — dat veroorzaakte maandenlange chaos (blanco labels,
+    // gedraaide content, output verschilde per machine). Te onbetrouw-
+    // baar zonder fysieke aanwezigheid bij de printer.
+    //
+    // Nu: dialog ÁLTIJD tonen mét printer + 209×99mm + landscape al
+    // ingevuld. Manon klikt 1× OK. Werkt gegarandeerd want de driver
+    // doet wat 'ie kent. Als de bridge niet beschikbaar is (oude
+    // shell): val terug op window.print() — ook een dialog, maar
+    // Chromium-style ipv native.
     if (window.fonteynPrint?.isAvailable) {
       try {
         const r = await window.fonteynPrint.silentPrintLabels({ printerSubstring: "zdesigner" });
         if (!r?.ok) {
-          console.warn("[labels] silent-print faalde, val terug op systeem-dialog:", r?.error);
-          window.print();
+          console.warn("[labels] print geannuleerd of mislukt:", r?.error);
         } else {
-          console.log(`[labels] silent-print verzonden naar ${r.deviceName || "default"} — ${totalLabels} labels`);
+          console.log(`[labels] verzonden naar ${r.deviceName || "default"} — ${totalLabels} labels`);
         }
       } catch (e) {
-        console.warn("[labels] silent-print exception, val terug op systeem-dialog:", e.message);
+        console.warn("[labels] print exception, val terug op browser-dialog:", e.message);
         window.print();
       }
     } else {
-      // Geen bridge (oude bundled shell of in browser-context) — gewoon
-      // de standaard print-dialoog tonen.
+      // Geen bridge — val terug op Chromium print-preview.
       window.print();
     }
   }, waitMs);

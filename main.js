@@ -425,16 +425,22 @@ ipcMain.handle("fonteyn:print-labels", async (event, opts = {}) => {
   } catch (e) {
     console.warn("[print] kon printers niet inventariseren:", e.message);
   }
-  // Print silently met custom label-grootte 209mm × 99mm (matcht de
-  // fysieke Fonteyn-label-rol). We geven BEIDE landscape-dimensies in
-  // pageSize ÉN landscape:true mee. De ZDesigner-driver bleek pageSize
-  // alleen niet voldoende: zonder landscape-flag (v0.19.0) kwam alles
-  // portrait uit de printer; met portrait-dimensies+landscape (v0.19.1)
-  // kwam 't liggend maar met blanco labels (page-height 209 ≠ 99mm
-  // feed-per-label). Combinatie hieronder dekt allebei.
+  // BELANGRIJK — silent:false (= toont systeem-print-dialoog).
+  //
+  // Eerder (v0.17–0.19.2) deden we silent:true om dialoog over te slaan.
+  // Resultaat: maandenlange chaos met blanco labels, gedraaide content,
+  // verschillende output per machine — omdat de ZDesigner-driver onze
+  // page-size + orientation hints anders interpreteert dan we dachten.
+  //
+  // Nieuwe strategie (v0.19.3): toon de native print-dialoog mét alle
+  // defaults pre-filled (printer = ZDesigner, page-size = 209×99mm,
+  // landscape). Manon ziet een dialoog ze KENT, klikt 1× OK, klaar.
+  // Eerste keer eventueel "Onthouden voor deze printer" aanvinken in
+  // Windows zodat 't daarna ook 1 klik blijft. Betrouwbaar, geen
+  // mysterie meer.
   return new Promise((resolve) => {
     wc.print({
-      silent: true,
+      silent: false,
       printBackground: true,
       deviceName,
       landscape: true,
@@ -442,7 +448,7 @@ ipcMain.handle("fonteyn:print-labels", async (event, opts = {}) => {
       margins: { marginType: "none" },
       copies: 1,
     }, (success, errorType) => {
-      if (!success) console.warn("[print] mislukt:", errorType);
+      if (!success) console.warn("[print] mislukt of geannuleerd:", errorType);
       resolve({ ok: !!success, deviceName: deviceName || null, error: success ? null : errorType });
     });
   });
