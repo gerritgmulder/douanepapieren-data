@@ -91,6 +91,15 @@
   <button id="runStatuses">Statussen ophalen</button>
   <div id="statusesStatus" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
   <div id="statusesResult"></div>
+
+  <hr style="margin:40px 0;border:none;border-top:1px solid var(--border);">
+
+  <h2>Bol-memoriaal API-scope (read-only probe)</h2>
+  <p class="lead">Test of de Logic4 API memoriaal/dagboek-boekingen ondersteunt voor jullie installatie. <b>Veilig:</b> alleen GET/list-endpoints — geen boekingen worden aangemaakt of gewijzigd. Als één endpoint werkt = de Bookings-module zit in jullie scope = waarschijnlijk kunnen we automatisch memoriaal aanmaken. Als alles 404 geeft (zoals Debtors) = geen Logic4-write mogelijk, dan bouwen we een import-Excel-route.</p>
+
+  <button id="runBolProbe">Memoriaal-endpoints testen</button>
+  <div id="bolProbeStatus" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
+  <div id="bolProbeResult"></div>
 </main>
 
 <script>
@@ -364,6 +373,154 @@ document.getElementById("runStatuses").addEventListener("click", async () => {
   }
 
   result.innerHTML = html;
+  btn.disabled = false;
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Bol-memoriaal API-scope probe — Fase 0 van de Bol.com-tegel.
+// Test puur READ-only endpoints: als één werkt = module zit in scope
+// = Create-endpoint van diezelfde module zal ook werken (Logic4-API
+// consistentie). Falen alle endpoints met 404 = module niet vrij,
+// dan vervalt automatische Logic4-write en bouwen we de import-route.
+//
+// VEILIG: alle calls zijn GET-equivalents (GetBookings/GetJournals/etc.)
+// of POST met een lege TakeRecords-body. Geen enkele call kan een
+// boeking aanmaken of wijzigen.
+// ═══════════════════════════════════════════════════════════════
+document.getElementById("runBolProbe").addEventListener("click", async () => {
+  const btn = document.getElementById("runBolProbe");
+  const status = document.getElementById("bolProbeStatus");
+  const result = document.getElementById("bolProbeResult");
+  btn.disabled = true;
+  result.innerHTML = "";
+  status.textContent = "Testen — kan ~30s duren…";
+
+  // Kandidaat-endpoints in volgorde van waarschijnlijkheid. Voor elke
+  // module testen we beide v3 en v1.1, plus enkele Get-varianten.
+  // Body is altijd { TakeRecords: 1 } om de respons klein te houden.
+  const candidates = [
+    // Logic4's primaire boekhoud-module heet "Bookings"
+    "/v3/Bookings/GetBookings",
+    "/v3/Bookings/GetJournalBookings",
+    "/v3/Bookings/GetMemorials",
+    "/v1.1/Bookings/GetBookings",
+    "/v1.1/Bookings/GetJournalBookings",
+    // Alternatieve modulenamen
+    "/v3/JournalBookings/GetJournalBookings",
+    "/v3/JournalEntries/GetJournalEntries",
+    "/v3/Memorials/GetMemorials",
+    "/v3/Administration/GetBookings",
+    "/v3/Administration/GetJournalBookings",
+    "/v3/GeneralLedger/GetBookings",
+    "/v3/GeneralLedger/GetEntries",
+    "/v1.1/Memorials/GetMemorials",
+    "/v1.1/JournalBookings/GetJournalBookings",
+    // Get-dagboeken (= journals lijst): andere routes
+    "/v3/Bookings/GetJournals",
+    "/v3/Journals/GetJournals",
+    "/v1.1/Journals/GetJournals",
+    // Bank/payment-imports — Bol-betalingen kunnen via bank-import gaan
+    "/v3/BankBookings/GetBankBookings",
+    "/v3/BankPayments/GetBankPayments",
+    "/v1.1/BankBookings/GetBankBookings",
+  ];
+
+  const results = [];
+  for (const ep of candidates) {
+    status.textContent = `Testen ${ep}…`;
+    try {
+      const session = localStorage.getItem(SESSION_KEY);
+      const r = await fetch("/api/logic4-call", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + (session || "")
+        },
+        body: JSON.stringify({ path: ep, method: "POST", body: { TakeRecords: 1 } })
+      });
+      const jj = await r.json().catch(() => ({}));
+
+      let verdict, detail;
+      if (!r.ok) {
+        verdict = "helper-fout";
+        detail = `helper HTTP ${r.status} — ${jj.error || ""}`.trim();
+      } else if (!jj.ok) {
+        // jj.status = upstream Logic4 status
+        const upstreamStatus = jj.status || "?";
+        const upstreamErr = (jj.data && typeof jj.data === "object"
+          && (jj.data.title || jj.data.error || jj.data.Message))
+          || (typeof jj.data === "string" ? jj.data.slice(0, 80) : "")
+          || "(geen body)";
+        if (upstreamStatus === 404) {
+          verdict = "✗ bestaat niet";
+          detail = `Logic4 404 — ${upstreamErr}`;
+        } else if (upstreamStatus === 400) {
+          verdict = "✓ BESTAAT (body verkeerd)";
+          detail = `Logic4 400 — ${upstreamErr} — endpoint zit in scope!`;
+        } else if (upstreamStatus === 401 || upstreamStatus === 403) {
+          verdict = "⚠ bestaat (geen autorisatie)";
+          detail = `Logic4 ${upstreamStatus} — ${upstreamErr}`;
+        } else {
+          verdict = `Logic4 ${upstreamStatus}`;
+          detail = upstreamErr;
+        }
+      } else {
+        // 200 OK — endpoint werkt en geeft data terug
+        const count = Array.isArray(jj.data) ? jj.data.length
+          : (jj.data && typeof jj.data === "object"
+            ? (Object.keys(jj.data).length > 0 ? "object" : "leeg")
+            : "?");
+        verdict = "✓ WERKT";
+        detail = `Logic4 200 — ${count} record(s) — endpoint zit in scope én geeft data!`;
+      }
+      results.push({ ep, verdict, detail });
+    } catch (e) {
+      results.push({ ep, verdict: "exception", detail: e.message });
+    }
+  }
+
+  status.textContent = "Klaar — resultaten hieronder.";
+
+  // Sorteer: succes eerst, dan exists-but-something, dan 404
+  const sortRank = v => {
+    if (v.includes("WERKT")) return 0;
+    if (v.includes("BESTAAT")) return 1;
+    if (v.includes("⚠")) return 2;
+    if (v.includes("✗")) return 4;
+    return 3;
+  };
+  results.sort((a, b) => sortRank(a.verdict) - sortRank(b.verdict));
+
+  const anyHit = results.some(r => r.verdict.includes("✓") || r.verdict.includes("BESTAAT"));
+  const conclusion = anyHit
+    ? `<b style="color:#059669">GO voor Logic4-write</b> — minimaal één endpoint bestaat. We kunnen waarschijnlijk automatisch memoriaal-boekingen aanmaken via API. Volgende stap: <code>Create</code>-variant van het werkende endpoint testen.`
+    : `<b style="color:#b91c1c">NO-GO voor Logic4-write</b> — alle Bookings/Memorials/Journals modules retourneren 404. Net als Debtors/Customers/Users zit deze module niet in jullie API-scope. We bouwen de tegel met <b>import-Excel-export</b> als output (Osman importeert in Logic4 i.p.v. dat wij rechtstreeks boeken).`;
+
+  result.innerHTML = `
+    <div class="card">
+      <h3>Conclusie</h3>
+      <div class="desc">${conclusion}</div>
+    </div>
+    <div class="card">
+      <h3>Per endpoint</h3>
+      <table class="field-table">
+        <thead>
+          <tr><th>Endpoint</th><th>Status</th><th>Detail</th></tr>
+        </thead>
+        <tbody>
+          ${results.map(r => `
+            <tr>
+              <td class="name">${escapeHtml(r.ep)}</td>
+              <td>${escapeHtml(r.verdict)}</td>
+              <td class="val" title="${escapeHtml(r.detail)}">${escapeHtml(r.detail)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+      <div class="desc" style="margin-top:14px;"><b>Plak dit terug naar Claude:</b></div>
+      <pre>${escapeHtml(results.map(r => `${r.verdict.padEnd(28)} ${r.ep.padEnd(48)} ${r.detail}`).join("\n"))}</pre>
+    </div>
+  `;
   btn.disabled = false;
 });
 </script>
