@@ -228,6 +228,16 @@
           <label>Boekstuk-referentie</label>
           <input type="text" id="boekRef" placeholder="BOL.COM 25-03-2026 t/m 07-04-2026">
         </div>
+        <div class="field">
+          <label>Verwerk regels vanaf (datum)</label>
+          <select id="datumFilter"></select>
+        </div>
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:var(--muted);">
+        💡 Tussentijdse Bol-specificaties bevatten ook regels die al eerder
+        verwerkt zijn. Filter op de eerste-nog-niet-verwerkte datum.
+        De 2 debet-regels (provisie + overschrijving) zijn voor de hele
+        periode — boek die <b>pas in als ALLE regels van de periode klaar zijn</b>.
       </div>
     </div>
 
@@ -458,11 +468,28 @@ function parseBolFactuur(rows) {
   //  12: Bedrag (incl)
   const dataRows = rows.slice(8).filter(r => r && r[0]);
 
-  const creditRegels = [];   // klant-betalingen
-  let commissieTot = 0;      // som "Commissie" rijen (incl)
+  // Per bestelnummer aggregeren — één klant betaalt 1x voor zijn order,
+  // ook al bestaat die uit meerdere artikelen (= meerdere Excel-regels).
+  // Map: bestelnr → { datum, bedrag (som), artikel (gecombineerd) }
+  const verkoopMap = new Map();
+  let commissieTot = 0;
   let correctieCommissieTot = 0;
   let correctieVerkoopTot = 0;
   let eindtotaalIncl = null;
+
+  function addToMap(bestelnr, datum, artikel, bedrag) {
+    if (verkoopMap.has(bestelnr)) {
+      const existing = verkoopMap.get(bestelnr);
+      existing.bedrag += bedrag;
+      // Artikel-omschrijving: voeg samen (bv. "Filter + Cleaner")
+      if (artikel && !existing.artikel.includes(artikel)) {
+        existing.artikel += " + " + artikel;
+      }
+      existing.regelCount++;
+    } else {
+      verkoopMap.set(bestelnr, { datum, bestelnr, artikel, bedrag, regelCount: 1 });
+    }
+  }
 
   for (const row of dataRows) {
     const type = String(row[0] || "").trim();
@@ -478,25 +505,25 @@ function parseBolFactuur(rows) {
     }
 
     if (/^verkoopprijs/i.test(type) && bestelnr) {
-      // Klant betaling: in Excel meestal negatief, memoriaal credit = abs
-      creditRegels.push({
-        type: "verkoop",
-        datum, bestelnr, artikel,
-        bedrag: Math.abs(bedragIncl),
-      });
+      addToMap(bestelnr, datum, artikel, Math.abs(bedragIncl));
     } else if (/^correctie verkoopprijs/i.test(type) && bestelnr) {
-      // Klant restitutie: negeert credit
-      creditRegels.push({
-        type: "correctie-verkoop",
-        datum, bestelnr, artikel,
-        bedrag: -Math.abs(bedragIncl),  // negatief op credit-zijde
-      });
+      // Klant-restitutie verlaagt het te boeken credit-bedrag
+      addToMap(bestelnr, datum, "[retour] " + artikel, -Math.abs(bedragIncl));
     } else if (/^commissie/i.test(type) && !/^correctie/i.test(type)) {
       commissieTot += bedragIncl;
     } else if (/^correctie commissie/i.test(type)) {
       correctieCommissieTot += bedragIncl;
     }
   }
+
+  // Sorteer credit-regels op datum (oudst eerst voor logische volgorde)
+  const creditRegels = [...verkoopMap.values()]
+    .filter(r => r.bedrag !== 0)  // Volledig terugbetaalde bestellingen (netto 0) skippen
+    .sort((a, b) => {
+      const da = new Date(a.datum), db = new Date(b.datum);
+      return da - db;
+    })
+    .map(r => ({ type: "verkoop", ...r }));
 
   // Verkoopprovisie debet = commissie + correctie commissie (incl. BTW)
   // (Commissie is positief in Excel = kosten voor ons = debet op 4570)
@@ -538,7 +565,7 @@ function parseBolFactuur(rows) {
 // ─────────────────────────────────────────────────────────────────
 function renderResult(data) {
   document.getElementById("resultSection").classList.remove("hidden");
-  document.getElementById("infoFactuurnr").textContent = data.factuurnr || "—";
+  document.getElementById("infoFactuurnr").textContent = data.factuurnr || "(geen — tussentijdse spec)";
   document.getElementById("infoPeriode").textContent = data.periode || "—";
   document.getElementById("infoVerkopernr").textContent = data.verkopernr || "—";
   document.getElementById("infoAantalRijen").textContent = data.creditRegels.length;
@@ -549,11 +576,37 @@ function renderResult(data) {
   document.getElementById("boekDatum").value = today;
   document.getElementById("boekRef").value = `BOL.COM ${data.periode || ""}`.trim();
 
+  // Datum-filter dropdown vullen — unieke datums + "Alles"
+  // Default = laatste datum (= meest recente, nog niet verwerkte regels)
+  const uniqueDatums = [...new Set(data.creditRegels.map(r => formatDate(r.datum)).filter(Boolean))].sort();
+  const datumSel = document.getElementById("datumFilter");
+  if (datumSel && !datumSel.dataset.populated) {
+    datumSel.innerHTML = `<option value="">Alles (${data.creditRegels.length} regels)</option>` +
+      uniqueDatums.map(d => {
+        const count = data.creditRegels.filter(r => formatDate(r.datum) === d).length;
+        return `<option value="${d}">Vanaf ${d} (${countFromDate(data.creditRegels, d)} regels)</option>`;
+      }).join("");
+    // Default = laatste datum (kleinste set, meestal wat Osman wil)
+    datumSel.value = uniqueDatums[uniqueDatums.length - 1] || "";
+    datumSel.dataset.populated = "1";
+    datumSel.addEventListener("change", () => renderResult(data));
+  }
+
+  // Filter credit-regels op datum als datum-filter ingesteld
+  const filterDate = document.getElementById("datumFilter") ? document.getElementById("datumFilter").value : "";
+  const visibleRegels = filterDate
+    ? data.creditRegels.filter(r => formatDate(r.datum) >= filterDate)
+    : data.creditRegels;
+
+  // Stash in state zodat apply-flow weet welke regels gefilterd zijn
+  data._visibleRegels = visibleRegels;
+  data._filterActive = !!filterDate;
+
   // Tabel
   const tbody = document.getElementById("memoriaalBody");
   tbody.innerHTML = "";
 
-  for (const r of data.creditRegels) {
+  for (const r of visibleRegels) {
     const tr = document.createElement("tr");
     const datumStr = formatDate(r.datum);
     const bedragStr = fmtEur(r.bedrag);
@@ -562,8 +615,8 @@ function renderResult(data) {
     if (r.match) {
       const m = r.match;
       debiteurCell = `<b>${escapeHtml(String(m.debtorId))}</b> <span style="color:var(--muted);font-size:11px">${escapeHtml(truncate(m.customerName, 22))}</span>`;
-      statusPill = `<span class="match-pill ok">✓ gematcht</span>`;
-      infoExtra = ` — Logic4 order ${m.orderId}`;
+      statusPill = `<span class="match-pill ok" title="Gevonden in: ${escapeHtml(m.sourceField || "?")}">✓ gematcht</span>`;
+      infoExtra = ` — Logic4 order ${m.orderId} (via <code style="font-size:10px;">${escapeHtml(m.sourceField || "?")}</code>)`;
     } else if (r.match === null) {
       // Match-poging gedaan maar niets gevonden
       debiteurCell = `<span class="match-pill fail">✗ niet gevonden</span>`;
@@ -587,46 +640,76 @@ function renderResult(data) {
     tbody.appendChild(tr);
   }
 
-  // Debet-regels
-  for (const d of data.debetRegels) {
-    const tr = document.createElement("tr");
-    tr.className = "debet-row";
-    tr.innerHTML = `
-      <td>${escapeHtml(document.getElementById("boekDatum").value)}</td>
-      <td class="num"></td>
-      <td class="num">${fmtEur(d.bedrag)}</td>
-      <td>—</td>
-      <td></td>
-      <td></td>
-      <td>${escapeHtml(d.info)}</td>
-      <td>${escapeHtml(d.gb)}</td>
-      <td><span class="match-pill ok">auto</span></td>
+  // Bereken filtered totals
+  const visibleCreditTot = visibleRegels.reduce((s, r) => s + r.bedrag, 0);
+
+  // Debet-regels alleen tonen ALS er geen datum-filter actief is, want
+  // de debet-regels gelden voor de HELE periode (provisie + overschrijving).
+  // Bij filter: toon waarschuwingsregel ipv debet-regels.
+  if (!data._filterActive) {
+    for (const d of data.debetRegels) {
+      const tr = document.createElement("tr");
+      tr.className = "debet-row";
+      tr.innerHTML = `
+        <td>${escapeHtml(document.getElementById("boekDatum").value)}</td>
+        <td class="num"></td>
+        <td class="num">${fmtEur(d.bedrag)}</td>
+        <td>—</td>
+        <td></td>
+        <td></td>
+        <td>${escapeHtml(d.info)}</td>
+        <td>${escapeHtml(d.gb)}</td>
+        <td><span class="match-pill ok">auto</span></td>
+      `;
+      tbody.appendChild(tr);
+    }
+  } else {
+    const trWarn = document.createElement("tr");
+    trWarn.innerHTML = `
+      <td colspan="9" style="background:#fef3c7;color:#92400e;font-size:11.5px;text-align:center;font-style:italic;padding:8px;">
+        ⚠ Datum-filter actief — debet-regels (verkoopprovisie + Bol-overschrijving)
+        gelden voor de HELE periode en worden hier niet getoond.
+        Boek die pas in Logic4 als ALLE regels van deze Bol-periode klaar zijn.
+      </td>
     `;
-    tbody.appendChild(tr);
+    tbody.appendChild(trWarn);
   }
 
   // Totaal-regel
   const trTot = document.createElement("tr");
   trTot.className = "total-row";
+  const debetForTotal = data._filterActive ? null : data.totals.debet;
   trTot.innerHTML = `
-    <td>Totaal</td>
-    <td class="num">${fmtEur(data.totals.credit)}</td>
-    <td class="num">${fmtEur(data.totals.debet)}</td>
+    <td>Totaal${data._filterActive ? " (gefilterd)" : ""}</td>
+    <td class="num">${fmtEur(visibleCreditTot)}</td>
+    <td class="num">${debetForTotal != null ? fmtEur(debetForTotal) : "—"}</td>
     <td colspan="6"></td>
   `;
   tbody.appendChild(trTot);
 
   document.getElementById("aantalRegels").textContent =
-    data.creditRegels.length + data.debetRegels.length;
+    visibleRegels.length + (data._filterActive ? 0 : data.debetRegels.length);
 
-  // Balans-check
-  const diff = data.totals.credit - data.totals.debet;
-  const balOk = Math.abs(diff) < 0.01;
-  document.getElementById("totCredit").textContent = fmtEur(data.totals.credit);
-  document.getElementById("totDebet").textContent  = fmtEur(data.totals.debet);
-  document.getElementById("balansDiff").textContent = fmtEur(diff);
-  document.getElementById("balansVerdict").textContent = balOk ? "✓ klopt" : "✗ verschil!";
-  document.getElementById("balans").className = "balans " + (balOk ? "ok" : "bad");
+  // Balans-check — alleen relevant bij volledig (geen filter)
+  if (data._filterActive) {
+    document.getElementById("totCredit").textContent = fmtEur(visibleCreditTot);
+    document.getElementById("totDebet").textContent  = "n.v.t. (filter)";
+    document.getElementById("balansDiff").textContent = "—";
+    document.getElementById("balansVerdict").textContent = `🔍 ${visibleRegels.length} regels gefilterd`;
+    document.getElementById("balans").className = "balans";
+    document.getElementById("balans").style.background = "#fef3c7";
+    document.getElementById("balans").style.color = "#92400e";
+  } else {
+    const diff = data.totals.credit - data.totals.debet;
+    const balOk = Math.abs(diff) < 0.01;
+    document.getElementById("totCredit").textContent = fmtEur(data.totals.credit);
+    document.getElementById("totDebet").textContent  = fmtEur(data.totals.debet);
+    document.getElementById("balansDiff").textContent = fmtEur(diff);
+    document.getElementById("balansVerdict").textContent = balOk ? "✓ klopt" : "✗ verschil!";
+    document.getElementById("balans").className = "balans " + (balOk ? "ok" : "bad");
+    document.getElementById("balans").style.background = "";
+    document.getElementById("balans").style.color = "";
+  }
 
   // Scroll naar resultaat
   document.getElementById("resultSection").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -795,23 +878,44 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
 
     progressEl.textContent = `${allOrders.length} orders gescand — Bol-bestelnummers extraheren…`;
 
-    // 3. Bouw mapping: bestelnr → {orderId, debtorId, customerName}
-    // Scan Description + Reference + WebsiteReference + WebsiteOrderNumber
-    // Velden in een order (uit eerdere Douane-sessie): Description-achtige velden
-    // staan vaak onder verschillende namen, dus we proberen er meerdere.
+    // 3. Bouw mapping: bestelnr → {orderId, debtorId, customerName, sourceField}
+    // Recursieve scan: zoekt door ALLE velden van een order incl. sub-objecten
+    // en arrays. Don's regel = "altijd in omschrijving" maar Logic4 kan dat
+    // veld onder verschillende namen hebben (Description, OrderRow.Description,
+    // Comments, etc.). Door recursief te scannen werken we ongeacht waar
+    // Don 't precies neerzet.
     const SCAN_FIELDS = [
       "Description", "Reference", "ExternalReference", "WebsiteReference",
       "WebsiteOrderNumber", "WebsiteOrder", "CustomerReference",
-      "Note", "Notes", "OrderReference"
+      "Note", "Notes", "OrderReference", "Comments", "Comment",
+      "InternalReference", "OrderDescription"
     ];
+    function findBolInObject(obj, path = "") {
+      const hits = [];
+      if (obj == null) return hits;
+      if (typeof obj === "string") {
+        const matches = obj.match(BOL_NR_PATTERN);
+        if (matches) for (const nr of matches) hits.push({ nr, path });
+        return hits;
+      }
+      if (typeof obj !== "object") return hits;
+      for (const [k, v] of Object.entries(obj)) {
+        if (Array.isArray(v)) {
+          for (let i = 0; i < v.length; i++) {
+            hits.push(...findBolInObject(v[i], path ? `${path}.${k}[${i}]` : `${k}[${i}]`));
+          }
+        } else {
+          hits.push(...findBolInObject(v, path ? `${path}.${k}` : k));
+        }
+      }
+      return hits;
+    }
+
     const matchMap = new Map();  // bestelnr → match
     for (const o of allOrders) {
-      // Verzamel alle scanbare strings uit deze order
-      const haystack = SCAN_FIELDS.map(f => o[f]).filter(v => v != null).join(" | ");
-      if (!haystack) continue;
-      const found = haystack.match(BOL_NR_PATTERN);
-      if (!found) continue;
-      for (const nr of found) {
+      const hits = findBolInObject(o);
+      if (!hits.length) continue;
+      for (const { nr, path } of hits) {
         if (!matchMap.has(nr)) {
           matchMap.set(nr, {
             orderId: o.Id,
@@ -820,19 +924,23 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
               || (o.InvoiceAddress && o.InvoiceAddress.ContactName)
               || (o.AccountAddress && o.AccountAddress.CompanyName)
               || "—",
-            sourceField: SCAN_FIELDS.find(f => String(o[f] || "").includes(nr)) || "?",
+            sourceField: path,
           });
         }
       }
     }
 
     // 4. Update parsedData.creditRegels met match-info
+    // BELANGRIJK: alleen de gefilterde regels matchen (niet alle 419 als
+    // datum-filter "vanaf 9 juni" actief is — anders zoeken we 60s lang
+    // voor regels die we toch niet gaan boeken)
+    const regelsToMatch = parsedData._visibleRegels || parsedData.creditRegels;
     let matched = 0;
     for (const r of parsedData.creditRegels) {
       const m = matchMap.get(r.bestelnr);
       if (m) {
         r.match = m;
-        matched++;
+        if (regelsToMatch.includes(r)) matched++;
       } else {
         r.match = null;
       }
@@ -950,7 +1058,7 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     // 6. Toon doorvoer-sectie
     document.getElementById("applySection").classList.remove("hidden");
     document.getElementById("matchCount").textContent = matched;
-    document.getElementById("totalCount").textContent = parsedData.creditRegels.length;
+    document.getElementById("totalCount").textContent = regelsToMatch.length;
 
   } catch (e) {
     console.error(e);
@@ -988,7 +1096,10 @@ function buildPaymentBody(creditRegel, boekDatum) {
 document.getElementById("dryRunBtn").addEventListener("click", () => {
   if (!parsedData) return;
   const statusEl = document.getElementById("applyStatus");
-  const matched = parsedData.creditRegels.filter(r => r.match);
+  // Alleen gefilterde (zichtbare) regels meenemen — Osman wil niet
+  // per ongeluk alle 417 regels doorvoeren als 'ie maar 2 zoekt
+  const visibleRegels = parsedData._visibleRegels || parsedData.creditRegels;
+  const matched = visibleRegels.filter(r => r.match);
   const boekDatum = document.getElementById("boekDatum").value;
   const payments = matched.map(r => buildPaymentBody(r, boekDatum));
   statusEl.className = "status-msg ok";
@@ -1002,7 +1113,10 @@ document.getElementById("dryRunBtn").addEventListener("click", () => {
 
 document.getElementById("applyBtn").addEventListener("click", async () => {
   if (!parsedData) return;
-  const matched = parsedData.creditRegels.filter(r => r.match);
+  // Alleen gefilterde (zichtbare) regels meenemen — Osman wil niet
+  // per ongeluk alle 417 regels doorvoeren als 'ie maar 2 zoekt
+  const visibleRegels = parsedData._visibleRegels || parsedData.creditRegels;
+  const matched = visibleRegels.filter(r => r.match);
   if (!matched.length) {
     alert("Geen gematchte regels om door te voeren.");
     return;
@@ -1118,6 +1232,9 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
 // ─────────────────────────────────────────────────────────────────
 function fmtEur(n) {
   return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
+}
+function countFromDate(regels, fromDate) {
+  return regels.filter(r => formatDate(r.datum) >= fromDate).length;
 }
 function formatDate(d) {
   if (!d) return "";
