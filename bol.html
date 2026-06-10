@@ -1031,9 +1031,6 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     console.timeEnd("[bol-match] totaal");
 
     // 4. Update parsedData.creditRegels met match-info
-    // BELANGRIJK: alleen de gefilterde regels matchen (niet alle 419 als
-    // datum-filter "vanaf 9 juni" actief is — anders zoeken we 60s lang
-    // voor regels die we toch niet gaan boeken)
     const regelsToMatch = parsedData._visibleRegels || parsedData.creditRegels;
     let matched = 0;
     for (const r of parsedData.creditRegels) {
@@ -1044,6 +1041,58 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
       } else {
         r.match = null;
       }
+    }
+
+    // ─── 5. Tweede ronde voor niet-gematchte regels ───
+    // Onze Reference="Bol.com" filter pakt alleen orders waar Reference
+    // EXACT "Bol.com" is. Als Don voor sommige orders het bestelnummer
+    // in Reference zet (en bv. "Bol.com" in Description), missen we
+    // die. Tweede ronde: voor elke niet-gematchte bestelnr probeer
+    // een directe lookup ZONDER Reference-filter — Logic4 mag dat
+    // verzoek negeren of accepteren, beide is OK.
+    const ungematched = regelsToMatch.filter(r => !r.match);
+    if (ungematched.length > 0 && ungematched.length <= 30) {
+      progressEl.textContent = `2e ronde — ${ungematched.length} niet-gematchte regels direct opzoeken…`;
+      console.time("[bol-match] tweede ronde");
+      for (let i = 0; i < ungematched.length; i++) {
+        const r = ungematched[i];
+        progressEl.textContent = `2e ronde ${i + 1}/${ungematched.length} — ${r.bestelnr}…`;
+        // Probeer twee filter-velden: Description en Reference
+        for (const filterVeld of ["Description", "Reference"]) {
+          try {
+            const lookupData = await logic4Call("/v3/Orders/GetOrders", {
+              [filterVeld]: r.bestelnr,
+              DateFrom: dateIso(dateFrom),
+              DateTo: dateIso(dateTo),
+              TakeRecords: 5,
+            });
+            const arr = Array.isArray(lookupData) ? lookupData : (lookupData?.Orders || []);
+            // Logic4 negeert mogelijk de filter en geeft willekeurige orders.
+            // Dus we checken expliciet of de bestelnr in de teruggegeven
+            // order staat (= zekerheid dat de filter werkte).
+            for (const o of arr) {
+              const hay = JSON.stringify(o);
+              if (hay.includes(r.bestelnr)) {
+                r.match = {
+                  orderId: o.Id,
+                  debtorId: o.DebtorId,
+                  customerName: (o.InvoiceAddress && o.InvoiceAddress.CompanyName)
+                    || (o.InvoiceAddress && o.InvoiceAddress.ContactName)
+                    || (o.AccountAddress && o.AccountAddress.CompanyName)
+                    || "—",
+                  sourceField: `2e-ronde via ${filterVeld}`,
+                };
+                matched++;
+                break;
+              }
+            }
+            if (r.match) break;
+          } catch (e) {
+            console.warn(`[bol-match] tweede-ronde fout voor ${r.bestelnr} (${filterVeld}):`, e.message);
+          }
+        }
+      }
+      console.timeEnd("[bol-match] tweede ronde");
     }
 
     progressEl.className = matched === 0 ? "status-msg warn" : "status-msg ok";
