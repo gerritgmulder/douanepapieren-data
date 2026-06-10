@@ -274,7 +274,7 @@
         <p>Bovenaanzicht van de 10 bungalows op het vakantiepark — boekingen, schoonmaak en betaling in één oogopslag.</p>
       </a>
 
-      <div class="tile disabled" data-module="vijfs">
+      <div class="tile disabled" data-module="vijfs" id="tileVijfs">
         <div class="soon">Binnenkort</div>
         <div class="icon">🗂️</div>
         <h3>5S Methodiek</h3>
@@ -578,6 +578,17 @@ function showDashboard(email) {
   const isAdmin = (lc === "gerrit@fonteyn.nl" || lc === "gerrit" ||
                    lc === "fonteynbot@fonteyn.nl" || lc === "fonteyn.bot" || lc === "fonteynbot");
   el("tileProbe").classList.toggle("hidden", !isAdmin);
+  // 5S Methodiek (placeholder, niet-klikbaar) — verbergen voor finance-
+  // team (Osman/Rowan/Rico/Reinier), want 5S = magazijn-reorganisatie
+  // en niet relevant voor hun werk. Voor iedereen anders zichtbaar
+  // als 'Binnenkort'-placeholder.
+  const FIVE_S_HIDDEN_FOR = new Set([
+    "osman@fonteyn.nl",  "osman",  "fonteyn.osman",
+    "rowan@fonteyn.nl",  "rowan",  "fonteyn.rowan",
+    "rico@fonteyn.nl",   "rico",   "fonteyn.rico",
+    "reinier@fonteyn.nl","reinier","fonteyn.reinier",
+  ]);
+  el("tileVijfs").classList.toggle("hidden", FIVE_S_HIDDEN_FOR.has(lc));
 }
 
 // ─── Helper-server health (voor login-scherm) ────────────────
