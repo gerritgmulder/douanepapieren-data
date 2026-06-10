@@ -27,6 +27,14 @@ const ALLOWED_BUCKETS = new Set([
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
+// Patroon-buckets: modules die per periode een eigen bucket gebruiken
+// (omdat één bucket de 1 MB-limiet zou overschrijden bij groeiende data).
+// signin-YYYY-MM = UK showroom bezoekersregistratie, één bucket per maand
+// (handtekeningen als vector-strokes ≈ 2 KB per bezoeker).
+const ALLOWED_BUCKET_PATTERNS = [
+  /^signin-\d{4}-\d{2}$/,
+];
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
@@ -56,7 +64,7 @@ export default {
     const m = url.pathname.match(/^\/data\/([a-z0-9_-]{2,40})\/?$/i);
     if (!m) return reply(404, "Not found");
     const bucket = m[1].toLowerCase();
-    if (!ALLOWED_BUCKETS.has(bucket)) {
+    if (!ALLOWED_BUCKETS.has(bucket) && !ALLOWED_BUCKET_PATTERNS.some(re => re.test(bucket))) {
       return reply(403, `Bucket '${bucket}' not whitelisted`);
     }
 

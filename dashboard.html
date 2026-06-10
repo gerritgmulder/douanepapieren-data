@@ -322,6 +322,13 @@
         <p>Upload een MT940-bankafschrift en koppel binnenkomende betalingen automatisch aan de juiste Logic4-orders.</p>
       </a>
 
+      <!-- Sign In UK — bezoekersregistratie showroom Engeland (kiosk/touchscreen). -->
+      <a href="signin.html" class="tile hidden" id="tileSignin">
+        <div class="icon">✍️</div>
+        <h3>Sign In (UK)</h3>
+        <p>Visitor sign-in for the Fonteyn UK showroom — digital version of the paper sheet with touchscreen signature.</p>
+      </a>
+
       <!-- Logic4-probe — diagnose-pagina, alleen voor admin (Gerrit/Fonteynbot). -->
       <a href="probe-logic4.html" class="tile hidden" id="tileProbe">
         <div class="icon">🔬</div>
@@ -505,6 +512,14 @@ const RAPPORTAGE_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Welke logins mogen de Sign In (UK)-tegel zien.
+// UK showroom-kiosk + admins. UK-login toevoegen zodra bekend
+// (ook in signin.html → ALLOWED).
+const SIGNIN_EMAILS = new Set([
+  "gerrit@fonteyn.nl",     "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Welke logins mogen de Bol.com-koppeling-tegel zien.
 // Don plaatst de Bol-orders in Logic4; Osman doet de memoriaal-boekingen.
 // Gerrit en Fonteynbot zijn admin-overall.
@@ -574,6 +589,8 @@ function showDashboard(email) {
   el("tileEikensingel").classList.toggle("hidden", !EIKENSINGEL_EMAILS.has(lc));
   // Bol.com koppeling — Don + Osman + admins
   el("tileBol").classList.toggle("hidden", !BOL_EMAILS.has(lc));
+  // Sign In (UK) — showroom-kiosk + admins
+  el("tileSignin").classList.toggle("hidden", !SIGNIN_EMAILS.has(lc));
   // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot.
   const isAdmin = (lc === "gerrit@fonteyn.nl" || lc === "gerrit" ||
                    lc === "fonteynbot@fonteyn.nl" || lc === "fonteyn.bot" || lc === "fonteynbot");
