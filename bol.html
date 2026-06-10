@@ -277,8 +277,33 @@
 
     <!-- Acties -->
     <div class="actions">
-      <button class="primary" id="downloadBtn" type="button">📥 Download memoriaal-Excel</button>
+      <button class="primary" id="matchBtn" type="button">🔍 Match met Logic4-orders</button>
+      <button class="secondary" id="downloadBtn" type="button">📥 Download memoriaal-Excel</button>
       <button class="secondary" id="resetBtn" type="button">Nieuwe Bol-factuur</button>
+    </div>
+
+    <!-- Match-progress -->
+    <div id="matchProgress" class="status-msg hidden"></div>
+
+    <!-- Doorvoer-sectie (alleen zichtbaar na succesvolle match) -->
+    <div id="applySection" class="card hidden" style="margin-top:18px;">
+      <h3>Betalingen doorvoeren in Logic4</h3>
+      <p class="lead" style="font-size:13px;">
+        <b id="matchCount">0</b> van <b id="totalCount">0</b> credit-regels zijn
+        succesvol gematcht met een Logic4-order. Daarvan kunnen de betalingen
+        direct gekoppeld worden via <code>/v3/Orders/AddPayment</code> —
+        geen handmatige actie meer per regel.
+      </p>
+      <p class="lead" style="font-size:13px;color:var(--warn);">
+        ⚠ De 2 debet-regels (verkoopprovisie + Bol-overschrijving) blijven
+        Excel-export — die kunnen niet via API (boekhoud-module zit niet
+        in scope). Osman voert die twee handmatig in Logic4 in.
+      </p>
+      <div class="actions" style="margin-top:8px;">
+        <button class="secondary" id="dryRunBtn" type="button">🧪 Dry-run (toon wat er zou gebeuren)</button>
+        <button class="primary" id="applyBtn" type="button" disabled>⏵ Echt doorvoeren — nog inactief</button>
+      </div>
+      <div id="applyStatus" class="status-msg hidden" style="margin-top:12px;"></div>
     </div>
 
   </section>
@@ -535,16 +560,32 @@ function renderResult(data) {
     const tr = document.createElement("tr");
     const datumStr = formatDate(r.datum);
     const bedragStr = fmtEur(r.bedrag);
+    // Match-state bepaalt debiteur-cel + status-pill
+    let debiteurCell, statusPill, infoExtra = "";
+    if (r.match) {
+      const m = r.match;
+      debiteurCell = `<b>${escapeHtml(String(m.debtorId))}</b> <span style="color:var(--muted);font-size:11px">${escapeHtml(truncate(m.customerName, 22))}</span>`;
+      statusPill = `<span class="match-pill ok">✓ gematcht</span>`;
+      infoExtra = ` — Logic4 order ${m.orderId}`;
+    } else if (r.match === null) {
+      // Match-poging gedaan maar niets gevonden
+      debiteurCell = `<span class="match-pill fail">✗ niet gevonden</span>`;
+      statusPill = `<span class="match-pill fail">handmatig</span>`;
+    } else {
+      // Nog geen match-poging
+      debiteurCell = `<span class="match-pill todo">handmatig in Logic4</span>`;
+      statusPill = `<span class="match-pill todo">match nog niet</span>`;
+    }
     tr.innerHTML = `
       <td>${escapeHtml(datumStr)}</td>
       <td class="num">${bedragStr}</td>
       <td class="num"></td>
-      <td><span class="match-pill todo">handmatig in Logic4</span></td>
+      <td>${debiteurCell}</td>
       <td class="bestelnr">${escapeHtml(r.bestelnr)}</td>
       <td>${escapeHtml(truncate(r.artikel, 40))}</td>
-      <td>Betaling Bol-bestelling ${escapeHtml(r.bestelnr)}</td>
+      <td>Betaling Bol-bestelling ${escapeHtml(r.bestelnr)}${infoExtra}</td>
       <td>1300 Debiteuren</td>
-      <td><span class="match-pill todo">v2</span></td>
+      <td>${statusPill}</td>
     `;
     tbody.appendChild(tr);
   }
@@ -656,9 +697,201 @@ document.getElementById("downloadBtn").addEventListener("click", () => {
 document.getElementById("resetBtn").addEventListener("click", () => {
   parsedData = null;
   document.getElementById("resultSection").classList.add("hidden");
+  document.getElementById("applySection").classList.add("hidden");
   setStatus("", "");
   fileInput.value = "";
   window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// FASE 2: Match Bol-bestelnummers met Logic4-orders
+// ─────────────────────────────────────────────────────────────────
+// Don bevestigde: Bol-bestelnummer komt voortaan altijd in de
+// order-omschrijving (en historisch soms in de referentie). Strategy:
+// 1. Lees factuur-periode uit parsedData
+// 2. Haal Logic4-orders op van die periode + ~60 dagen marge ervoor
+//    (Don plaatst order op moment van Bol-bestelling, niet bij factuur)
+// 3. Per order: scan Description + Reference op een Bol-patroon
+//    (regex: C[0-9A-Z]{9} — Bol-bestelnummers zijn 10-char alfanumeriek
+//    beginnend met C, bv. C0002KR38X)
+// 4. Bouw map: bestelnr → {orderId, debtorId, customerName}
+// 5. Update parsedData.creditRegels met match-info
+// 6. Re-render tabel met groene/rode badges
+
+async function logic4Call(path, body) {
+  const r = await fetch(HELPER_BASE + "/api/logic4-call", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + getSession()
+    },
+    body: JSON.stringify({ path, method: "POST", body })
+  });
+  const j = await r.json();
+  if (!r.ok || !j.ok) {
+    throw new Error(j.error || (typeof j.data === "string" ? j.data : JSON.stringify(j.data)));
+  }
+  return j.data;
+}
+
+// Parse "25-03-2026 t/m 07-04-2026" → { from: Date, to: Date }
+function parsePeriode(s) {
+  if (!s) return null;
+  const m = String(s).match(/(\d{1,2}[-/]\d{1,2}[-/]\d{4}).+(\d{1,2}[-/]\d{1,2}[-/]\d{4})/);
+  if (!m) return null;
+  const toDate = str => {
+    const [d, mo, y] = str.split(/[-/]/).map(Number);
+    return new Date(y, mo - 1, d);
+  };
+  return { from: toDate(m[1]), to: toDate(m[2]) };
+}
+
+function dateIso(d) {
+  // Logic4 verwacht "2026-03-25T00:00:00"
+  if (!(d instanceof Date)) d = new Date(d);
+  return d.toISOString().slice(0, 19);
+}
+
+// Regex voor Bol-bestelnummers: typisch 10 chars beginnend met C,
+// gevolgd door 9 hoofdletters/cijfers (bv. C0002KR38X, C00034708C).
+const BOL_NR_PATTERN = /\bC[0-9A-Z]{9}\b/g;
+
+document.getElementById("matchBtn").addEventListener("click", async () => {
+  if (!parsedData) return;
+  const btn = document.getElementById("matchBtn");
+  const progressEl = document.getElementById("matchProgress");
+  btn.disabled = true;
+  progressEl.className = "status-msg";
+  progressEl.classList.remove("hidden");
+  progressEl.textContent = "Bezig met ophalen van Logic4-orders…";
+
+  try {
+    // 1. Bepaal datum-range
+    const periode = parsePeriode(parsedData.periode);
+    if (!periode) throw new Error("Kon factuur-periode niet parsen uit: " + parsedData.periode);
+    // Buffer: 60 dagen vóór factuur-start (Don plaatste order eerder),
+    // 14 dagen ná factuur-eind (laatste orders die in factuur belanden)
+    const dateFrom = new Date(periode.from);
+    dateFrom.setDate(dateFrom.getDate() - 60);
+    const dateTo = new Date(periode.to);
+    dateTo.setDate(dateTo.getDate() + 14);
+
+    progressEl.textContent = `Logic4-orders ophalen van ${dateFrom.toISOString().slice(0,10)} t/m ${dateTo.toISOString().slice(0,10)}…`;
+
+    // 2. Pagineren door orders
+    const PAGE_SIZE = 500;
+    const MAX_PAGES = 30; // veiligheid: max 15.000 orders
+    const allOrders = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      progressEl.textContent = `Logic4-orders ophalen — pagina ${page + 1} (totaal ${allOrders.length} orders gescand)…`;
+      const data = await logic4Call("/v3/Orders/GetOrders", {
+        DateFrom: dateIso(dateFrom),
+        DateTo: dateIso(dateTo),
+        TakeRecords: PAGE_SIZE,
+        SkipRecords: page * PAGE_SIZE,
+      });
+      const arr = Array.isArray(data) ? data : (data?.Orders || []);
+      if (!arr.length) break;
+      for (const o of arr) allOrders.push(o);
+      if (arr.length < PAGE_SIZE) break;
+    }
+
+    progressEl.textContent = `${allOrders.length} orders gescand — Bol-bestelnummers extraheren…`;
+
+    // 3. Bouw mapping: bestelnr → {orderId, debtorId, customerName}
+    // Scan Description + Reference + WebsiteReference + WebsiteOrderNumber
+    // Velden in een order (uit eerdere Douane-sessie): Description-achtige velden
+    // staan vaak onder verschillende namen, dus we proberen er meerdere.
+    const SCAN_FIELDS = [
+      "Description", "Reference", "ExternalReference", "WebsiteReference",
+      "WebsiteOrderNumber", "WebsiteOrder", "CustomerReference",
+      "Note", "Notes", "OrderReference"
+    ];
+    const matchMap = new Map();  // bestelnr → match
+    for (const o of allOrders) {
+      // Verzamel alle scanbare strings uit deze order
+      const haystack = SCAN_FIELDS.map(f => o[f]).filter(v => v != null).join(" | ");
+      if (!haystack) continue;
+      const found = haystack.match(BOL_NR_PATTERN);
+      if (!found) continue;
+      for (const nr of found) {
+        if (!matchMap.has(nr)) {
+          matchMap.set(nr, {
+            orderId: o.Id,
+            debtorId: o.DebtorId,
+            customerName: (o.InvoiceAddress && o.InvoiceAddress.CompanyName)
+              || (o.InvoiceAddress && o.InvoiceAddress.ContactName)
+              || (o.AccountAddress && o.AccountAddress.CompanyName)
+              || "—",
+            sourceField: SCAN_FIELDS.find(f => String(o[f] || "").includes(nr)) || "?",
+          });
+        }
+      }
+    }
+
+    // 4. Update parsedData.creditRegels met match-info
+    let matched = 0;
+    for (const r of parsedData.creditRegels) {
+      const m = matchMap.get(r.bestelnr);
+      if (m) {
+        r.match = m;
+        matched++;
+      } else {
+        r.match = null;
+      }
+    }
+
+    progressEl.className = "status-msg ok";
+    progressEl.textContent = `Klaar — ${matched} van ${parsedData.creditRegels.length} credit-regels gematcht. ${allOrders.length} Logic4-orders gescand.`;
+
+    // 5. Re-render met match-info
+    renderResult(parsedData);
+
+    // 6. Toon doorvoer-sectie
+    document.getElementById("applySection").classList.remove("hidden");
+    document.getElementById("matchCount").textContent = matched;
+    document.getElementById("totalCount").textContent = parsedData.creditRegels.length;
+
+  } catch (e) {
+    console.error(e);
+    progressEl.className = "status-msg bad";
+    progressEl.textContent = "Fout bij matchen: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────
+// FASE 3: Dry-run + apply naar /v3/Orders/AddPayment
+// ─────────────────────────────────────────────────────────────────
+// Dry-run: laat zien wat er gestuurd zou worden (zonder echte API-call)
+// Apply: voor elke gematchte regel een AddPayment-call. Exacte body
+// volgt uit de body-probe op probe-logic4.html — voorlopig staat
+// de apply-knop UIT.
+
+document.getElementById("dryRunBtn").addEventListener("click", () => {
+  if (!parsedData) return;
+  const statusEl = document.getElementById("applyStatus");
+  const matched = parsedData.creditRegels.filter(r => r.match);
+  const payments = matched.map(r => ({
+    OrderId: r.match.orderId,
+    Amount: r.bedrag,
+    PaymentDate: document.getElementById("boekDatum").value,
+    Reference: r.bestelnr,
+    Description: `Betaling Bol-bestelling ${r.bestelnr}`,
+  }));
+  statusEl.className = "status-msg ok";
+  statusEl.classList.remove("hidden");
+  statusEl.innerHTML = `<b>Dry-run — ${payments.length} betalingen zouden gestuurd worden:</b>
+    <pre style="background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;overflow:auto;max-height:300px;font-size:11px;margin-top:8px;">${escapeHtml(JSON.stringify(payments.slice(0, 5), null, 2))}${payments.length > 5 ? "\n\n... en " + (payments.length - 5) + " meer (eerste 5 getoond)" : ""}</pre>
+    <div style="margin-top:8px;font-size:12px;color:var(--muted);">
+      ⚠ De echte body-velden kunnen verschillen — voer de "AddPayment body-vereisten testen"-probe uit op de probe-pagina, deel de output met Claude, dan wordt deze body-template aangepast en de "Echt doorvoeren"-knop geactiveerd.
+    </div>`;
+});
+
+document.getElementById("applyBtn").addEventListener("click", () => {
+  // Placeholder — komt actief zodra body-vereisten bekend zijn
+  alert("Apply nog niet actief — eerst body-vereisten-probe afronden (zie probe-logic4.html → 'AddPayment body-vereisten testen').");
 });
 
 // ─────────────────────────────────────────────────────────────────
