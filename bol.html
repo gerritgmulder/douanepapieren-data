@@ -836,8 +836,111 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
       }
     }
 
-    progressEl.className = "status-msg ok";
+    progressEl.className = matched === 0 ? "status-msg warn" : "status-msg ok";
     progressEl.textContent = `Klaar — ${matched} van ${parsedData.creditRegels.length} credit-regels gematcht. ${allOrders.length} Logic4-orders gescand.`;
+
+    // ─── DIAGNOSE — zichtbaar als er weinig/geen matches zijn ───
+    // Doel: direct kunnen zien WAAROM matches mislukken zonder DevTools.
+    // Toont (1) aantal orders + velden gescand, (2) top-level veld-keys
+    // van de eerste order (zodat we zien welke velden ECHT bestaan),
+    // (3) sample-content van die velden zodat we zien hoe Bol-nrs
+    // eruitzien als ze in Logic4 staan.
+    const diagBlocks = [];
+    diagBlocks.push(`<b>${allOrders.length} orders gescand</b> in periode ${dateIso(dateFrom).slice(0,10)} t/m ${dateIso(dateTo).slice(0,10)}`);
+    if (allOrders.length === 0) {
+      diagBlocks.push(`<span style="color:#b91c1c">⚠ Geen orders teruggekomen — datum-filter werkt mogelijk niet of er zijn echt geen orders in die periode.</span>`);
+    } else {
+      // Eerste order: welke velden bestaan?
+      const sample = allOrders[0];
+      const allKeys = Object.keys(sample).sort();
+      diagBlocks.push(`<b>Eerste order — alle top-level velden:</b><br><code style="font-size:11px;">${allKeys.join(", ")}</code>`);
+
+      // Velden die we scannen vs velden die echt bestaan
+      const scannedThatExist = SCAN_FIELDS.filter(f => sample[f] != null);
+      const scannedMissing   = SCAN_FIELDS.filter(f => !(f in sample));
+      diagBlocks.push(`<b>Velden die ik scan:</b> ${SCAN_FIELDS.map(f => {
+        if (sample[f] != null) return `<span style="color:#059669">${f}✓</span>`;
+        if (f in sample) return `<span style="color:#92400e">${f}(leeg)</span>`;
+        return `<span style="color:#b91c1c">${f}✗</span>`;
+      }).join(", ")}`);
+
+      // Sample-content van de eerste order
+      const sampleSnippets = [];
+      for (const f of SCAN_FIELDS) {
+        if (sample[f] != null && String(sample[f]).trim()) {
+          sampleSnippets.push(`<code style="font-size:11px;background:#f3f4f6;padding:1px 5px;border-radius:3px;">${f}</code>: ${escapeHtml(String(sample[f]).slice(0, 100))}`);
+        }
+      }
+      if (sampleSnippets.length) {
+        diagBlocks.push(`<b>Sample-content eerste order:</b><br>${sampleSnippets.join("<br>")}`);
+      } else {
+        diagBlocks.push(`<span style="color:#b91c1c">⚠ Eerste order heeft GEEN inhoud in een van de gescande velden. Dat verklaart waarom matches falen.</span>`);
+      }
+
+      // Hoe ziet 't in een 'typische' order eruit — toon andere velden
+      // die mogelijk Bol-nummers bevatten
+      const POTENTIAL_FIELDS = [
+        "Description", "Reference", "Comments", "Comment", "Note", "Notes",
+        "OrderDescription", "WebsiteOrderReference", "ExternalReference",
+        "InternalReference", "InvoiceReference", "OrderReference",
+        "AccountReference", "DeliveryReference", "PackingReference",
+        "ContactName", "CompanyName"
+      ];
+      const sniffed = [];
+      for (const o of allOrders.slice(0, 50)) {
+        for (const f of POTENTIAL_FIELDS) {
+          const v = o[f];
+          if (v && /C[0-9A-Z]{9}/i.test(String(v))) {
+            sniffed.push(`<code>${f}</code> in order ${o.Id}: <code>${escapeHtml(String(v).slice(0, 120))}</code>`);
+          }
+        }
+      }
+      if (sniffed.length) {
+        diagBlocks.push(`<b style="color:#059669">✓ Bol-patroon GEVONDEN in deze velden (eerste 50 orders gescand):</b><br>${sniffed.slice(0, 10).join("<br>")}${sniffed.length > 10 ? `<br>...en ${sniffed.length - 10} meer` : ""}`);
+      } else {
+        diagBlocks.push(`<span style="color:#b91c1c"><b>⚠ Geen enkele Bol-patroon (C+9 chars) in 50 orders × 17 velden.</b> Dus óf Don zet de Bol-nrs nog niet in de order, óf ze staan ergens dat we niet kunnen lezen (bv. een sub-object zoals OrderRow.Description).</span>`);
+
+        // Laatste poging: scan ALLE velden recursief van 1 order voor
+        // een Bol-patroon — dan zien we waar het wel staat
+        function findBolInObject(obj, path = "") {
+          const hits = [];
+          if (obj == null) return hits;
+          if (typeof obj === "string") {
+            if (/C[0-9A-Z]{9}/i.test(obj)) hits.push({ path, val: obj.slice(0, 100) });
+            return hits;
+          }
+          if (typeof obj !== "object") return hits;
+          for (const [k, v] of Object.entries(obj)) {
+            if (Array.isArray(v)) {
+              for (let i = 0; i < Math.min(v.length, 3); i++) {
+                hits.push(...findBolInObject(v[i], `${path}.${k}[${i}]`));
+              }
+            } else {
+              hits.push(...findBolInObject(v, `${path}.${k}`));
+            }
+          }
+          return hits;
+        }
+        const deepHits = [];
+        for (const o of allOrders.slice(0, 20)) {
+          const h = findBolInObject(o, `order#${o.Id}`);
+          if (h.length) {
+            deepHits.push(...h.map(x => `<code>${escapeHtml(x.path)}</code>: <code>${escapeHtml(x.val)}</code>`));
+          }
+          if (deepHits.length > 15) break;
+        }
+        if (deepHits.length) {
+          diagBlocks.push(`<b style="color:#92400e">Diep gevonden (recursief, alle velden + sub-objecten):</b><br>${deepHits.slice(0, 15).join("<br>")}`);
+        }
+      }
+    }
+
+    const diagHtml = `<div style="margin-top:12px;padding:12px 14px;background:#fffdf6;border:1px solid #fde68a;border-radius:8px;font-size:12.5px;line-height:1.6">
+      <b style="color:#92400e">🔍 Match-diagnose:</b><br>
+      ${diagBlocks.join("<br><br>")}
+      <br><br><i style="color:var(--muted);font-size:11px;">Plak dit terug naar Claude als er 0 matches zijn — dan past ie de SCAN_FIELDS-lijst aan.</i>
+    </div>`;
+    progressEl.innerHTML = progressEl.textContent + diagHtml;
 
     // 5. Re-render met match-info
     renderResult(parsedData);
