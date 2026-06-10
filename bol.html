@@ -322,33 +322,28 @@ function clearSession() {
   localStorage.removeItem(EMAIL_KEY);
 }
 
-// Boot: check sessie, anders terug naar dashboard
-(async function boot() {
+// Boot: check sessie, anders terug naar dashboard. Email komt uit
+// localStorage (door dashboard daar gezet bij login) — geen extra
+// /api/me-call nodig. Zelfde patroon als koeien.html.
+const ALLOWED = new Set([
+  "don@fonteyn.nl",        "don",        "fonteyn.don",
+  "osman@fonteyn.nl",      "osman",      "fonteyn.osman",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+(function boot() {
   const session = getSession();
   if (!session) { location.href = "dashboard.html"; return; }
-  try {
-    const r = await fetch(HELPER_BASE + "/api/me", {
-      headers: { "Authorization": "Bearer " + session }
-    });
-    if (!r.ok) { clearSession(); location.href = "dashboard.html"; return; }
-    const j = await r.json();
-    const email = j.email || j.username || "";
-    document.getElementById("userEmail").textContent = email;
-    // Access-check client-side; server doet zelfde voor data-endpoints
-    const ALLOWED = new Set([
-      "don@fonteyn.nl",        "don",        "fonteyn.don",
-      "osman@fonteyn.nl",      "osman",      "fonteyn.osman",
-      "gerrit@fonteyn.nl",     "gerrit",
-      "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-    ]);
-    if (!ALLOWED.has((email || "").toLowerCase())) {
-      alert("Geen toegang tot Bol.com koppeling.");
-      location.href = "dashboard.html";
-      return;
-    }
-  } catch (e) {
-    console.error("Boot failed:", e);
-    location.href = "dashboard.html";
+  const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
+  document.getElementById("userEmail").textContent = email || "—";
+  if (!ALLOWED.has(email)) {
+    document.body.innerHTML =
+      "<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui;'>" +
+      "<h1 style='color:#144734;'>Geen toegang</h1>" +
+      "<p>Deze tegel is alleen voor Don, Osman, Gerrit en Fonteynbot.</p>" +
+      "<p>Je bent ingelogd als <code>" + (email || "(onbekend)") + "</code>.</p>" +
+      "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
+    throw new Error("Geen toegang");
   }
 })();
 
