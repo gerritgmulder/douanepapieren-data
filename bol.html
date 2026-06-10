@@ -462,15 +462,30 @@ async function handleFile(file) {
 //            (wat Bol netto naar Fonteyn overmaakt)
 //            → GB-rekening 4999 Verschillenrekening
 function parseBolFactuur(rows) {
-  // Header-info uit rij 4, 5, 6 (1-indexed) = rij 3, 4, 5 (0-indexed)
+  // Header-info: scan eerste 20 rijen voor robuustheid. Zoek óók in
+  // andere kolommen voor 't geval Bol de structuur verandert. Plus
+  // accepteer label-varianten ("periode" / "betreft periode" / etc).
   let periode = "", factuurnr = "", verkopernr = "";
-  for (const row of rows.slice(0, 8)) {
+  for (const row of rows.slice(0, 20)) {
     if (!row) continue;
-    const label = String(row[0] || "").toLowerCase();
-    const val   = row[1] != null ? String(row[1]).trim() : "";
-    if (label.startsWith("periode"))         periode = val;
-    else if (label.startsWith("factuurn"))   factuurnr = val;
-    else if (label.startsWith("verkopern"))  verkopernr = val;
+    // Probeer kolom 0 als label + kolom 1 als waarde, maar val terug op
+    // andere kolommen als 0/1 leeg zijn.
+    for (let labelCol = 0; labelCol < Math.min(row.length, 4); labelCol++) {
+      const label = String(row[labelCol] || "").toLowerCase().trim();
+      if (!label) continue;
+      // Pak de eerstvolgende niet-lege kolom als waarde
+      let val = "";
+      for (let valCol = labelCol + 1; valCol < row.length; valCol++) {
+        if (row[valCol] != null && String(row[valCol]).trim() !== "") {
+          val = String(row[valCol]).trim();
+          break;
+        }
+      }
+      if (!val) continue;
+      if (!periode && /periode/.test(label)) periode = val;
+      else if (!factuurnr && /factuurn/.test(label)) factuurnr = val;
+      else if (!verkopernr && /verkopern/.test(label)) verkopernr = val;
+    }
   }
 
   // Vanaf rij 9 (= index 8): kolomtitels in rij 8. Data vanaf rij 9.
@@ -867,12 +882,23 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
 
   try {
     console.time("[bol-match] totaal");
-    // 1. Bepaal datum-range — bij actief datum-filter: gebruik die als
-    // DateFrom (alleen orders van die dag+ ophalen, niet 60 dagen terug).
-    // Dit was de oorzaak van 15.000-orders-scannen — totaal overkill als
-    // user maar 2 regels van 9 juni wil koppelen.
-    const periode = parsePeriode(parsedData.periode);
-    if (!periode) throw new Error("Kon factuur-periode niet parsen uit: " + parsedData.periode);
+    // 1. Bepaal datum-range — eerst proberen uit de Bol-Excel periode-
+    // string (rij 4 normaal). Als dat faalt: fallback op min/max datum
+    // uit de credit-regels zelf — die zijn er sowieso.
+    let periode = parsePeriode(parsedData.periode);
+    if (!periode) {
+      // Fallback: gebruik datums uit creditRegels
+      const allDates = parsedData.creditRegels
+        .map(r => r.datum instanceof Date ? r.datum : new Date(r.datum))
+        .filter(d => d && !isNaN(d.getTime()));
+      if (allDates.length) {
+        const sorted = allDates.sort((a, b) => a - b);
+        periode = { from: sorted[0], to: sorted[sorted.length - 1] };
+        console.log("[bol-match] periode-fallback uit credit-regels:", periode);
+      } else {
+        throw new Error(`Kon factuur-periode niet parsen. Bol-Excel header gaf: "${parsedData.periode}". Ook geen datums in de regels — Excel mogelijk leeg of structuur veranderd.`);
+      }
+    }
     const filterDateStr = document.getElementById("datumFilter")?.value || "";
     const filterIsActive = !!filterDateStr;
     let dateFrom;
