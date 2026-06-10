@@ -1722,6 +1722,78 @@ app.get("/api/order-status/audit-log", requireAuth, requireOrderStatusAccess, (r
 });
 
 // ============================================================
+// Bol.com koppeling — audit-log voor doorvoer-acties.
+// CSV op fonfile (zelfde directory als orderstatus-audit), aparte file.
+// Don/Osman/Gerrit zien wie wanneer welke Bol-factuur heeft doorgevoerd.
+// ============================================================
+
+const BOL_ALLOWED = new Set([
+  "don@fonteyn.nl",        "fonteyn.don",
+  "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
+function requireBolAccess(req, res, next) {
+  const email = (req.auth?.username || "").toLowerCase();
+  if (!BOL_ALLOWED.has(email)) {
+    return res.status(403).json({ ok: false, error: "Geen toegang tot deze actie." });
+  }
+  next();
+}
+
+function getBolAuditCsvPath() {
+  return path.join(getAuditDir(), "bol-apply.csv");
+}
+
+const BOL_AUDIT_HEADER = [
+  "timestamp", "user", "factuurnr", "periode", "boek_datum",
+  "ok", "fail", "total", "details"
+].join(";");
+
+function bolAuditRow(obj) {
+  return [
+    obj.timestamp, obj.user, obj.factuurnr, obj.periode, obj.boek_datum,
+    obj.ok, obj.fail, obj.total, obj.details || ""
+  ].map(csvEscape).join(";");
+}
+
+function ensureBolAuditFile() {
+  const dir = getAuditDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const file = getBolAuditCsvPath();
+  if (!fs.existsSync(file)) {
+    fs.writeFileSync(file, BOL_AUDIT_HEADER + "\n", "utf-8");
+  }
+  return file;
+}
+
+app.post("/api/bol/apply-log", requireAuth, requireBolAccess, (req, res) => {
+  const { factuurnr, periode, boekDatum, ok, fail, total, results } = req.body || {};
+  try {
+    // Compacte detail-string voor in CSV (per regel: bestelnr,orderId,bedrag,ok)
+    const details = Array.isArray(results)
+      ? results.map(r => `${r.bestelnr}|${r.orderId}|${r.bedrag}|${r.ok ? "ok" : "fail:" + (r.detail || "").slice(0, 50)}`).join(" ; ")
+      : "";
+    const file = ensureBolAuditFile();
+    fs.appendFileSync(file, bolAuditRow({
+      timestamp: new Date().toISOString(),
+      user: req.auth.username,
+      factuurnr: factuurnr || "",
+      periode: periode || "",
+      boek_datum: boekDatum || "",
+      ok: Number(ok) || 0,
+      fail: Number(fail) || 0,
+      total: Number(total) || 0,
+      details,
+    }) + "\n", "utf-8");
+    res.json({ ok: true, path: file });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: `Audit-log Bol kan niet worden geschreven: ${e.message}` });
+  }
+});
+
+// ============================================================
 // Debug/dev-endpoints (werken alleen als LOGIC4_USERNAME/PASSWORD in env staan)
 // ============================================================
 

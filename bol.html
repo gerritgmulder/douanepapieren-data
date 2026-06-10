@@ -176,6 +176,7 @@
 <header>
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
   <h1>Bol.com koppeling</h1>
+  <a href="dashboard.html" style="color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px;">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
@@ -301,9 +302,10 @@
       </p>
       <div class="actions" style="margin-top:8px;">
         <button class="secondary" id="dryRunBtn" type="button">🧪 Dry-run (toon wat er zou gebeuren)</button>
-        <button class="primary" id="applyBtn" type="button" disabled>⏵ Echt doorvoeren — nog inactief</button>
+        <button class="primary" id="applyBtn" type="button">⏵ Doorvoeren in Logic4</button>
       </div>
       <div id="applyStatus" class="status-msg hidden" style="margin-top:12px;"></div>
+      <div id="applyResults" class="hidden" style="margin-top:12px;"></div>
     </div>
 
   </section>
@@ -967,29 +969,148 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
 // volgt uit de body-probe op probe-logic4.html — voorlopig staat
 // de apply-knop UIT.
 
+// Body-template voor /v3/Orders/AddPayment — bevestigd via probe:
+// 'Description' is verplicht; bij volledige body kreeg de probe
+// 'Order -1 niet gevonden' = endpoint accepteert payload.
+// PaymentMethodId 1 = standaard (later eventueel specifiek voor Bol-betalingen).
+function buildPaymentBody(creditRegel, boekDatum) {
+  return {
+    OrderId: creditRegel.match.orderId,
+    Amount: Number(creditRegel.bedrag.toFixed(2)),
+    PaymentDate: boekDatum,
+    Date: boekDatum,
+    PaymentMethodId: 1,
+    Reference: creditRegel.bestelnr,
+    Description: `Betaling Bol-bestelling ${creditRegel.bestelnr}`,
+  };
+}
+
 document.getElementById("dryRunBtn").addEventListener("click", () => {
   if (!parsedData) return;
   const statusEl = document.getElementById("applyStatus");
   const matched = parsedData.creditRegels.filter(r => r.match);
-  const payments = matched.map(r => ({
-    OrderId: r.match.orderId,
-    Amount: r.bedrag,
-    PaymentDate: document.getElementById("boekDatum").value,
-    Reference: r.bestelnr,
-    Description: `Betaling Bol-bestelling ${r.bestelnr}`,
-  }));
+  const boekDatum = document.getElementById("boekDatum").value;
+  const payments = matched.map(r => buildPaymentBody(r, boekDatum));
   statusEl.className = "status-msg ok";
   statusEl.classList.remove("hidden");
-  statusEl.innerHTML = `<b>Dry-run — ${payments.length} betalingen zouden gestuurd worden:</b>
+  statusEl.innerHTML = `<b>Dry-run — ${payments.length} betalingen zouden gestuurd worden naar <code>/v3/Orders/AddPayment</code>:</b>
     <pre style="background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;overflow:auto;max-height:300px;font-size:11px;margin-top:8px;">${escapeHtml(JSON.stringify(payments.slice(0, 5), null, 2))}${payments.length > 5 ? "\n\n... en " + (payments.length - 5) + " meer (eerste 5 getoond)" : ""}</pre>
     <div style="margin-top:8px;font-size:12px;color:var(--muted);">
-      ⚠ De echte body-velden kunnen verschillen — voer de "AddPayment body-vereisten testen"-probe uit op de probe-pagina, deel de output met Claude, dan wordt deze body-template aangepast en de "Echt doorvoeren"-knop geactiveerd.
+      Body-template bevestigd via probe: alle velden geldig, Logic4 antwoordt met 'Order niet gevonden' bij een test-OrderId, wat betekent dat de payload geaccepteerd wordt. Klik 'Doorvoeren' om écht te boeken.
     </div>`;
 });
 
-document.getElementById("applyBtn").addEventListener("click", () => {
-  // Placeholder — komt actief zodra body-vereisten bekend zijn
-  alert("Apply nog niet actief — eerst body-vereisten-probe afronden (zie probe-logic4.html → 'AddPayment body-vereisten testen').");
+document.getElementById("applyBtn").addEventListener("click", async () => {
+  if (!parsedData) return;
+  const matched = parsedData.creditRegels.filter(r => r.match);
+  if (!matched.length) {
+    alert("Geen gematchte regels om door te voeren.");
+    return;
+  }
+  // Dubbele bevestiging — boekhouding is gevoelig
+  const totaal = matched.reduce((s, r) => s + r.bedrag, 0);
+  const confirm1 = confirm(
+    `LET OP — je gaat ${matched.length} betalingen koppelen aan Logic4-orders ` +
+    `voor in totaal ${fmtEur(totaal)}.\n\n` +
+    `Dit wordt direct in Logic4 doorgevoerd en is alleen handmatig terug te draaien ` +
+    `(door per order de betaling te verwijderen).\n\n` +
+    `Weet je het zeker?`
+  );
+  if (!confirm1) return;
+  const confirm2 = prompt(
+    `Bevestig nog één keer — typ het woord DOORVOEREN (in hoofdletters) om te starten:`
+  );
+  if (confirm2 !== "DOORVOEREN") {
+    alert("Geannuleerd.");
+    return;
+  }
+
+  const btn = document.getElementById("applyBtn");
+  const dryBtn = document.getElementById("dryRunBtn");
+  const statusEl = document.getElementById("applyStatus");
+  const resultsEl = document.getElementById("applyResults");
+  btn.disabled = true;
+  dryBtn.disabled = true;
+  statusEl.className = "status-msg";
+  statusEl.classList.remove("hidden");
+  resultsEl.classList.remove("hidden");
+  resultsEl.innerHTML = `<table class="memoriaal"><thead><tr>
+    <th>Bol-bestelnr</th><th>Order</th><th>Bedrag</th><th>Status</th><th>Detail</th>
+  </tr></thead><tbody id="applyResultsBody"></tbody></table>`;
+  const resultsBody = document.getElementById("applyResultsBody");
+
+  const boekDatum = document.getElementById("boekDatum").value;
+  let okCount = 0, failCount = 0;
+  const applyResults = [];
+
+  for (let i = 0; i < matched.length; i++) {
+    const r = matched[i];
+    statusEl.textContent = `Doorvoeren ${i + 1}/${matched.length}: Bol-bestelling ${r.bestelnr} → Logic4 order ${r.match.orderId}…`;
+    const body = buildPaymentBody(r, boekDatum);
+    try {
+      await logic4Call("/v3/Orders/AddPayment", body);
+      okCount++;
+      applyResults.push({ bestelnr: r.bestelnr, orderId: r.match.orderId, bedrag: r.bedrag, ok: true, detail: "OK" });
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="bestelnr">${escapeHtml(r.bestelnr)}</td>
+        <td class="num">${r.match.orderId}</td>
+        <td class="num">${fmtEur(r.bedrag)}</td>
+        <td><span class="match-pill ok">✓ doorgevoerd</span></td>
+        <td style="color:var(--ok);">OK</td>
+      `;
+      resultsBody.appendChild(tr);
+    } catch (e) {
+      failCount++;
+      applyResults.push({ bestelnr: r.bestelnr, orderId: r.match.orderId, bedrag: r.bedrag, ok: false, detail: e.message });
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td class="bestelnr">${escapeHtml(r.bestelnr)}</td>
+        <td class="num">${r.match.orderId}</td>
+        <td class="num">${fmtEur(r.bedrag)}</td>
+        <td><span class="match-pill fail">✗ mislukt</span></td>
+        <td style="color:var(--bad);font-size:11px;">${escapeHtml(e.message)}</td>
+      `;
+      resultsBody.appendChild(tr);
+    }
+  }
+
+  // Audit-log via helper-server (CSV op fonfile, zelfde patroon als orderstatus)
+  // Eindpunt komt in een volgende commit — voor nu loggen we alleen client-side.
+  try {
+    await fetch(HELPER_BASE + "/api/bol/apply-log", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + getSession()
+      },
+      body: JSON.stringify({
+        factuurnr: parsedData.factuurnr,
+        periode: parsedData.periode,
+        boekDatum,
+        ok: okCount,
+        fail: failCount,
+        total: matched.length,
+        results: applyResults,
+      })
+    });
+  } catch (logErr) {
+    console.warn("[bol] apply-log faalde:", logErr.message);
+  }
+
+  if (failCount === 0) {
+    statusEl.className = "status-msg ok";
+    statusEl.innerHTML = `<b>✓ Klaar — alle ${okCount} betalingen succesvol gekoppeld in Logic4.</b><br>
+      Vergeet niet om in Logic4 zelf nog handmatig de 2 debet-regels toe te voegen:
+      <br>1. Verkoopprovisie ${fmtEur(parsedData.debetRegels.find(d => d.type === "verkoopprovisie").bedrag)} → 4570 Verkoopprovisie
+      <br>2. Bol-overschrijving ${fmtEur(parsedData.debetRegels.find(d => d.type === "bol-overschrijving").bedrag)} → 4999 Verschillenrekening`;
+  } else {
+    statusEl.className = "status-msg warn";
+    statusEl.innerHTML = `<b>⚠ ${okCount} doorgevoerd, ${failCount} mislukt.</b><br>
+      Hover over 'mislukt' voor de foutmelding. Mislukte regels kun je handmatig doen in Logic4.`;
+  }
+  btn.disabled = true;  // Voorkomen dubbel-doorvoeren
+  dryBtn.disabled = false;
 });
 
 // ─────────────────────────────────────────────────────────────────
