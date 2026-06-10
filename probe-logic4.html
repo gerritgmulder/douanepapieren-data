@@ -118,6 +118,15 @@
   <button id="runBodyProbe">AddPayment body-vereisten testen</button>
   <div id="bodyProbeStatus" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
   <div id="bodyProbeResult"></div>
+
+  <hr style="margin:40px 0;border:none;border-top:1px solid var(--border);">
+
+  <h2>GetOrders — filter-velden testen</h2>
+  <p class="lead">Probeert verschillende filter-velden op <code>/v3/Orders/GetOrders</code> om te zien welke Logic4 ondersteunt. Doel: kunnen we Logic4 vragen om <b>alleen orders met een specifieke tekst</b> (bv. Bol-bestelnummer in description)? Werkt dat → 1 API-call per bestelnummer i.p.v. 15.000 orders scannen.</p>
+
+  <button id="runFilterProbe">Filter-velden testen</button>
+  <div id="filterProbeStatus" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
+  <div id="filterProbeResult"></div>
 </main>
 
 <script>
@@ -707,6 +716,129 @@ document.getElementById("runPaymentProbe").addEventListener("click", async () =>
       </table>
       <div class="desc" style="margin-top:14px;"><b>Plak dit terug naar Claude:</b></div>
       <pre>${escapeHtml(results.map(r => `${r.verdict.padEnd(30)} ${r.ep.padEnd(50)} ${r.detail}`).join("\n"))}</pre>
+    </div>
+  `;
+  btn.disabled = false;
+});
+
+// ═══════════════════════════════════════════════════════════════
+// GetOrders filter-velden probe — test of Logic4 een tekstfilter
+// op GetOrders ondersteunt. Werkt 't → 1 call per bestelnummer in
+// plaats van 15.000 orders bulk-scannen.
+//
+// Test-bestelnr is een bestaande Bol-bestelnr uit user's Excel:
+// als Logic4 't ondersteunt en de order bestaat in Logic4, krijgen
+// we 1 record terug. Anders 0, of "veld onbekend" error.
+// ═══════════════════════════════════════════════════════════════
+document.getElementById("runFilterProbe").addEventListener("click", async () => {
+  const btn = document.getElementById("runFilterProbe");
+  const status = document.getElementById("filterProbeStatus");
+  const result = document.getElementById("filterProbeResult");
+  btn.disabled = true;
+  result.innerHTML = "";
+  status.textContent = "Testen — kan ~30s duren…";
+
+  const TEST_BESTELNR = "C00066FR7C"; // bekende Bol-bestelnr uit Test 2.xlsx (9 juni)
+
+  // 1 query met TakeRecords:0 als baseline (= alle order-count?), dan
+  // varianten met verschillende filter-naam.
+  const variants = [
+    { label: "Description",          body: { Description: TEST_BESTELNR, TakeRecords: 5 } },
+    { label: "DescriptionContains",  body: { DescriptionContains: TEST_BESTELNR, TakeRecords: 5 } },
+    { label: "OrderDescription",     body: { OrderDescription: TEST_BESTELNR, TakeRecords: 5 } },
+    { label: "Reference",            body: { Reference: TEST_BESTELNR, TakeRecords: 5 } },
+    { label: "ReferenceContains",    body: { ReferenceContains: TEST_BESTELNR, TakeRecords: 5 } },
+    { label: "FreeValue1",           body: { FreeValue1: TEST_BESTELNR, TakeRecords: 5 } },
+    { label: "Search",               body: { Search: TEST_BESTELNR, TakeRecords: 5 } },
+    { label: "SearchText",           body: { SearchText: TEST_BESTELNR, TakeRecords: 5 } },
+    { label: "Query",                body: { Query: TEST_BESTELNR, TakeRecords: 5 } },
+    { label: "Text",                 body: { Text: TEST_BESTELNR, TakeRecords: 5 } },
+    { label: "Notes",                body: { Notes: TEST_BESTELNR, TakeRecords: 5 } },
+    // Volgende zijn order-type filters om te zien welke types er zijn:
+    { label: "OrderType1Id = 2",     body: { OrderType1Id: 2, TakeRecords: 3 } },
+    { label: "OrderType1Id = 16",    body: { OrderType1Id: 16, TakeRecords: 3 } },
+    { label: "OrderType1Id = 99",    body: { OrderType1Id: 99, TakeRecords: 3 } },
+    { label: "BranchId = 2",         body: { BranchId: 2, TakeRecords: 3 } },
+    { label: "BranchId = 3",         body: { BranchId: 3, TakeRecords: 3 } },
+    // Baseline:
+    { label: "Geen filter",          body: { TakeRecords: 3 } },
+  ];
+
+  const results = [];
+  for (const v of variants) {
+    status.textContent = `Testen ${v.label}…`;
+    try {
+      const session = localStorage.getItem(SESSION_KEY);
+      const r = await fetch("/api/logic4-call", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + (session || "")
+        },
+        body: JSON.stringify({ path: "/v3/Orders/GetOrders", method: "POST", body: v.body })
+      });
+      const jj = await r.json().catch(() => ({}));
+      let verdict, detail, sampleIds = "";
+      if (!r.ok || !jj.ok) {
+        const upstreamStatus = jj.status || (r.ok ? "?" : r.status);
+        const upstreamErr = (jj.data && typeof jj.data === "object"
+          && (jj.data.title || jj.data.detail || jj.data.error))
+          || jj.error
+          || "(geen body)";
+        verdict = "✗ fout";
+        detail = `Logic4 ${upstreamStatus} — ${upstreamErr}`;
+      } else {
+        const arr = Array.isArray(jj.data) ? jj.data : (jj.data?.Orders || []);
+        const idRange = arr.length ? `IDs ${Math.min(...arr.map(o => o.Id))}–${Math.max(...arr.map(o => o.Id))}` : "";
+        // Heeft een van deze de TEST_BESTELNR daadwerkelijk in z'n velden?
+        let foundTestNr = false;
+        for (const o of arr) {
+          const hay = JSON.stringify(o);
+          if (hay.includes(TEST_BESTELNR)) { foundTestNr = true; break; }
+        }
+        verdict = `${arr.length} order(s) ${foundTestNr ? "✓ MATCH!" : ""}`;
+        detail = `${idRange} ${foundTestNr ? "— bevat test-bestelnr!" : ""}`;
+      }
+      results.push({ label: v.label, body: v.body, verdict, detail });
+    } catch (e) {
+      results.push({ label: v.label, body: v.body, verdict: "exception", detail: e.message });
+    }
+  }
+
+  status.textContent = "Klaar — resultaten hieronder.";
+
+  // Sortering: matches eerst, dan kleine resultaten, dan fouten
+  results.sort((a, b) => {
+    const rank = v => v.includes("MATCH") ? 0 : v.includes("✗") ? 3 : v.startsWith("0") ? 2 : 1;
+    return rank(a.verdict) - rank(b.verdict);
+  });
+
+  const winners = results.filter(r => r.verdict.includes("MATCH"));
+  let conclusion;
+  if (winners.length) {
+    conclusion = `<b style="color:#059669">GO — ${winners.length} filter-veld(en) werken!</b><br>Beste filter-namen voor bol-tegel:<ul style="margin:6px 0;padding-left:22px;">${winners.map(w => `<li><code>${escapeHtml(w.label)}</code></li>`).join("")}</ul>`;
+  } else {
+    conclusion = `<b style="color:#b91c1c">Geen tekst-filter werkt</b> voor <code>${TEST_BESTELNR}</code>. Conclusie: óf die bestelnr staat niet in Logic4 (Don nog niet ingevoerd), óf Logic4 ondersteunt deze filters niet. Check de OrderType1Id / BranchId-resultaten hieronder om te zien welke types/branches er zijn.`;
+  }
+
+  result.innerHTML = `
+    <div class="card"><h3>Conclusie</h3><div class="desc">${conclusion}</div></div>
+    <div class="card">
+      <h3>Per filter-variant</h3>
+      <table class="field-table">
+        <thead><tr><th>Filter</th><th>Resultaat</th><th>Detail</th></tr></thead>
+        <tbody>
+          ${results.map(r => `
+            <tr>
+              <td class="name">${escapeHtml(r.label)}</td>
+              <td>${escapeHtml(r.verdict)}</td>
+              <td class="val" title="${escapeHtml(r.detail)}">${escapeHtml(r.detail)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+      <div class="desc" style="margin-top:14px;"><b>Plak dit terug naar Claude:</b></div>
+      <pre>${escapeHtml(results.map(r => `${r.verdict.padEnd(30)} ${r.label.padEnd(28)} ${r.detail}`).join("\n"))}</pre>
     </div>
   `;
   btn.disabled = false;
