@@ -402,16 +402,36 @@ let parsedData = null;
 
 async function handleFile(file) {
   setStatus("", `Inlezen: ${file.name}…`);
+  console.time("[bol-upload] totaal");
   try {
+    console.time("[bol-upload] arrayBuffer");
     const buf = await file.arrayBuffer();
+    console.timeEnd("[bol-upload] arrayBuffer");
+
+    console.time("[bol-upload] XLSX.read");
     const wb = XLSX.read(buf, { type: "array", cellDates: true });
+    console.timeEnd("[bol-upload] XLSX.read");
+
     // Bol-factuur heeft typisch een sheet "Specificatie"
     const sheetName = wb.SheetNames.find(n => /spec/i.test(n)) || wb.SheetNames[0];
     const ws = wb.Sheets[sheetName];
+
+    console.time("[bol-upload] sheet_to_json");
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    console.timeEnd("[bol-upload] sheet_to_json");
+    console.log(`[bol-upload] ${rows.length} rijen ingelezen`);
+
+    console.time("[bol-upload] parseBolFactuur");
     parsedData = parseBolFactuur(rows);
+    console.timeEnd("[bol-upload] parseBolFactuur");
+    console.log(`[bol-upload] ${parsedData.creditRegels.length} credit-regels (geaggregeerd per bestelnr)`);
+
+    console.time("[bol-upload] renderResult");
     renderResult(parsedData);
-    setStatus("ok", `Bol-factuur ingelezen: ${parsedData.factuurnr} (${parsedData.creditRegels.length} klant-betalingen)`);
+    console.timeEnd("[bol-upload] renderResult");
+    console.timeEnd("[bol-upload] totaal");
+
+    setStatus("ok", `Bol-factuur ingelezen: ${parsedData.factuurnr || "(tussentijds)"} (${parsedData.creditRegels.length} klant-betalingen)`);
   } catch (e) {
     console.error(e);
     setStatus("bad", `Kon Excel niet inlezen: ${e.message}`);
@@ -846,33 +866,66 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
   progressEl.textContent = "Bezig met ophalen van Logic4-orders…";
 
   try {
-    // 1. Bepaal datum-range
+    console.time("[bol-match] totaal");
+    // 1. Bepaal datum-range — bij actief datum-filter: gebruik die als
+    // DateFrom (alleen orders van die dag+ ophalen, niet 60 dagen terug).
+    // Dit was de oorzaak van 15.000-orders-scannen — totaal overkill als
+    // user maar 2 regels van 9 juni wil koppelen.
     const periode = parsePeriode(parsedData.periode);
     if (!periode) throw new Error("Kon factuur-periode niet parsen uit: " + parsedData.periode);
-    // Buffer: 60 dagen vóór factuur-start (Don plaatste order eerder),
-    // 14 dagen ná factuur-eind (laatste orders die in factuur belanden)
-    const dateFrom = new Date(periode.from);
-    dateFrom.setDate(dateFrom.getDate() - 60);
+    const filterDateStr = document.getElementById("datumFilter")?.value || "";
+    const filterIsActive = !!filterDateStr;
+    let dateFrom;
+    if (filterIsActive) {
+      // 7 dagen vóór filter-datum als marge (Don kan order eerder hebben
+      // gemaakt dan Bol-bestelling). Beperkt opvolgend data-volume sterk.
+      dateFrom = new Date(filterDateStr);
+      dateFrom.setDate(dateFrom.getDate() - 7);
+    } else {
+      // Geen filter: hele factuur-periode + 14 dagen buffer ervoor
+      dateFrom = new Date(periode.from);
+      dateFrom.setDate(dateFrom.getDate() - 14);
+    }
     const dateTo = new Date(periode.to);
-    dateTo.setDate(dateTo.getDate() + 14);
+    dateTo.setDate(dateTo.getDate() + 7);
 
-    progressEl.textContent = `Logic4-orders ophalen van ${dateFrom.toISOString().slice(0,10)} t/m ${dateTo.toISOString().slice(0,10)}…`;
+    // Welke bestelnrs zoeken we eigenlijk? Bij filter actief alleen visible
+    // regels. Vroegtijdig stoppen zodra alle gevonden.
+    const regelsToMatchList = parsedData._visibleRegels || parsedData.creditRegels;
+    const wantedBestelnrs = new Set(regelsToMatchList.map(r => r.bestelnr));
+    progressEl.textContent = `Zoeken naar ${wantedBestelnrs.size} bestelnrs in Logic4-orders van ${dateIso(dateFrom).slice(0,10)} t/m ${dateIso(dateTo).slice(0,10)}…`;
 
-    // 2. Pagineren door orders
+    // 2. Pagineren door orders — early-stop wanneer alle bestelnrs gevonden
     const PAGE_SIZE = 500;
-    const MAX_PAGES = 30; // veiligheid: max 15.000 orders
+    const MAX_PAGES = filterIsActive ? 6 : 20; // bij filter actief max 3.000 orders
     const allOrders = [];
-    for (let page = 0; page < MAX_PAGES; page++) {
-      progressEl.textContent = `Logic4-orders ophalen — pagina ${page + 1} (totaal ${allOrders.length} orders gescand)…`;
+    const foundBestelnrs = new Set();
+    pageLoop: for (let page = 0; page < MAX_PAGES; page++) {
+      progressEl.textContent = `Pagina ${page + 1}/${MAX_PAGES} — ${allOrders.length} orders gescand, ${foundBestelnrs.size}/${wantedBestelnrs.size} bestelnrs gevonden…`;
+      console.time(`[bol-match] page ${page + 1}`);
       const data = await logic4Call("/v3/Orders/GetOrders", {
         DateFrom: dateIso(dateFrom),
         DateTo: dateIso(dateTo),
         TakeRecords: PAGE_SIZE,
         SkipRecords: page * PAGE_SIZE,
       });
+      console.timeEnd(`[bol-match] page ${page + 1}`);
       const arr = Array.isArray(data) ? data : (data?.Orders || []);
       if (!arr.length) break;
-      for (const o of arr) allOrders.push(o);
+      for (const o of arr) {
+        allOrders.push(o);
+        // Vroegdetect: scan alleen top-level Description/Reference/Comments
+        // op deze pagina (snel). Diepere recursie pas in stap 3.
+        const haystack = String(o.Description || "") + " " + String(o.Reference || "") + " " + String(o.Comments || "");
+        for (const nr of wantedBestelnrs) {
+          if (haystack.includes(nr)) foundBestelnrs.add(nr);
+        }
+      }
+      // Early-stop: alle gewenste bestelnrs al gevonden
+      if (foundBestelnrs.size >= wantedBestelnrs.size) {
+        progressEl.textContent = `✓ Alle ${wantedBestelnrs.size} bestelnrs gevonden — stoppen met pagineren…`;
+        break pageLoop;
+      }
       if (arr.length < PAGE_SIZE) break;
     }
 
@@ -890,9 +943,12 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
       "Note", "Notes", "OrderReference", "Comments", "Comment",
       "InternalReference", "OrderDescription"
     ];
-    function findBolInObject(obj, path = "") {
+    // Recursieve scan met depth-limit (max 4 niveaus). Diepere structuren
+    // kosten exponentieel meer tijd × velden; 4 niveaus dekt OrderRows.x,
+    // InvoiceAddress.x, etc. zonder eindeloze graven.
+    function findBolInObject(obj, path = "", depth = 0) {
       const hits = [];
-      if (obj == null) return hits;
+      if (obj == null || depth > 4) return hits;
       if (typeof obj === "string") {
         const matches = obj.match(BOL_NR_PATTERN);
         if (matches) for (const nr of matches) hits.push({ nr, path });
@@ -901,16 +957,19 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
       if (typeof obj !== "object") return hits;
       for (const [k, v] of Object.entries(obj)) {
         if (Array.isArray(v)) {
-          for (let i = 0; i < v.length; i++) {
-            hits.push(...findBolInObject(v[i], path ? `${path}.${k}[${i}]` : `${k}[${i}]`));
+          // Beperk array-scan tot eerste 20 elementen (OrderRows kan
+          // honderden items zijn — slechts eerste 20 relevant voor zoeken)
+          for (let i = 0; i < Math.min(v.length, 20); i++) {
+            hits.push(...findBolInObject(v[i], path ? `${path}.${k}[${i}]` : `${k}[${i}]`, depth + 1));
           }
         } else {
-          hits.push(...findBolInObject(v, path ? `${path}.${k}` : k));
+          hits.push(...findBolInObject(v, path ? `${path}.${k}` : k, depth + 1));
         }
       }
       return hits;
     }
 
+    console.time("[bol-match] recursieve scan");
     const matchMap = new Map();  // bestelnr → match
     for (const o of allOrders) {
       const hits = findBolInObject(o);
@@ -929,6 +988,8 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
         }
       }
     }
+    console.timeEnd("[bol-match] recursieve scan");
+    console.timeEnd("[bol-match] totaal");
 
     // 4. Update parsedData.creditRegels met match-info
     // BELANGRIJK: alleen de gefilterde regels matchen (niet alle 419 als
