@@ -1307,44 +1307,94 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
   statusEl.classList.remove("hidden");
   resultsEl.classList.remove("hidden");
   resultsEl.innerHTML = `<table class="memoriaal"><thead><tr>
-    <th>Bol-bestelnr</th><th>Order</th><th>Bedrag</th><th>Status</th><th>Detail</th>
+    <th>Bol-bestelnr</th><th>Order</th><th>Bedrag</th><th>Betaald vóór</th><th>Betaald ná</th><th>Status</th>
   </tr></thead><tbody id="applyResultsBody"></tbody></table>`;
   const resultsBody = document.getElementById("applyResultsBody");
 
+  // Helper: lees Totals.Calc_TotalPayed voor 1 order
+  async function getOrderPayed(orderId) {
+    try {
+      const r = await logic4Call("/v3/Orders/GetOrders", {
+        Id: Number(orderId), TakeRecords: 1
+      });
+      const arr = Array.isArray(r) ? r : (r?.Orders || []);
+      if (!arr.length) return null;
+      const totals = arr[0].Totals || {};
+      return {
+        payed: Number(totals.Calc_TotalPayed) || 0,
+        isPaid: !!totals.IsPaid,
+        amountIncl: Number(totals.AmountIncl) || 0,
+      };
+    } catch { return null; }
+  }
+
   const boekDatum = document.getElementById("boekDatum").value;
-  let okCount = 0, failCount = 0;
+  let okCount = 0, failCount = 0, verifiedCount = 0;
   const applyResults = [];
 
   for (let i = 0; i < matched.length; i++) {
     const r = matched[i];
-    statusEl.textContent = `Doorvoeren ${i + 1}/${matched.length}: Bol-bestelling ${r.bestelnr} → Logic4 order ${r.match.orderId}…`;
+    statusEl.textContent = `${i + 1}/${matched.length}: Bol-bestelling ${r.bestelnr} → Logic4 order ${r.match.orderId} — vóór-meting…`;
+
+    // 1) Vóór-meting van Betaald-status
+    const before = await getOrderPayed(r.match.orderId);
+
+    // 2) AddPayment-call
+    statusEl.textContent = `${i + 1}/${matched.length}: ${r.bestelnr} → AddPayment uitvoeren…`;
     const body = buildPaymentBody(r, boekDatum);
+    let apiResponse = null, apiError = null;
     try {
-      await logic4Call("/v3/Orders/AddPayment", body);
-      okCount++;
-      applyResults.push({ bestelnr: r.bestelnr, orderId: r.match.orderId, bedrag: r.bedrag, ok: true, detail: "OK" });
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td class="bestelnr">${escapeHtml(r.bestelnr)}</td>
-        <td class="num">${r.match.orderId}</td>
-        <td class="num">${fmtEur(r.bedrag)}</td>
-        <td><span class="match-pill ok">✓ doorgevoerd</span></td>
-        <td style="color:var(--ok);">OK</td>
-      `;
-      resultsBody.appendChild(tr);
+      apiResponse = await logic4Call("/v3/Orders/AddPayment", body);
     } catch (e) {
-      failCount++;
-      applyResults.push({ bestelnr: r.bestelnr, orderId: r.match.orderId, bedrag: r.bedrag, ok: false, detail: e.message });
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td class="bestelnr">${escapeHtml(r.bestelnr)}</td>
-        <td class="num">${r.match.orderId}</td>
-        <td class="num">${fmtEur(r.bedrag)}</td>
-        <td><span class="match-pill fail">✗ mislukt</span></td>
-        <td style="color:var(--bad);font-size:11px;">${escapeHtml(e.message)}</td>
-      `;
-      resultsBody.appendChild(tr);
+      apiError = e.message;
     }
+
+    // 3) Ná-meting van Betaald-status
+    statusEl.textContent = `${i + 1}/${matched.length}: ${r.bestelnr} → ná-meting…`;
+    const after = await getOrderPayed(r.match.orderId);
+
+    // 4) Bepaal status: API ok + Betaald-veld gestegen = echt verwerkt
+    const apiOk = !apiError;
+    const payedBefore = before?.payed ?? 0;
+    const payedAfter  = after?.payed  ?? 0;
+    const payedDelta  = payedAfter - payedBefore;
+    const expectedDelta = r.bedrag;
+    const actuallyApplied = apiOk && Math.abs(payedDelta - expectedDelta) < 0.05;
+
+    let statusHtml, detailExtra = "";
+    if (actuallyApplied) {
+      okCount++;
+      verifiedCount++;
+      statusHtml = `<span class="match-pill ok">✓ doorgevoerd + verifieerd</span>`;
+    } else if (apiOk && payedDelta === 0) {
+      failCount++;
+      statusHtml = `<span class="match-pill fail">⚠ API OK maar Betaald NIET gewijzigd</span>`;
+      detailExtra = "Logic4 accepteerde de call maar koppelde geen betaling. Vermoedelijke oorzaak: PaymentMethodId-waarde klopt niet.";
+    } else if (apiOk) {
+      failCount++;
+      statusHtml = `<span class="match-pill fail">⚠ verschil: verwacht +${fmtEur(expectedDelta)}, gemeten +${fmtEur(payedDelta)}</span>`;
+    } else {
+      failCount++;
+      statusHtml = `<span class="match-pill fail">✗ API-fout</span>`;
+      detailExtra = apiError;
+    }
+
+    applyResults.push({
+      bestelnr: r.bestelnr, orderId: r.match.orderId, bedrag: r.bedrag,
+      ok: actuallyApplied, apiOk, apiError, payedBefore, payedAfter, payedDelta,
+      detail: detailExtra,
+    });
+
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td class="bestelnr">${escapeHtml(r.bestelnr)}</td>
+      <td class="num">${r.match.orderId}</td>
+      <td class="num">${fmtEur(r.bedrag)}</td>
+      <td class="num">${before ? fmtEur(payedBefore) : "—"}</td>
+      <td class="num">${after  ? fmtEur(payedAfter)  : "—"}</td>
+      <td>${statusHtml}${detailExtra ? `<div style="font-size:11px;color:var(--muted);margin-top:3px;">${escapeHtml(detailExtra)}</div>` : ""}</td>
+    `;
+    resultsBody.appendChild(tr);
   }
 
   // Audit-log via helper-server (CSV op fonfile, zelfde patroon als orderstatus)
@@ -1370,20 +1420,118 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
     console.warn("[bol] apply-log faalde:", logErr.message);
   }
 
-  if (failCount === 0) {
+  if (failCount === 0 && verifiedCount === matched.length) {
     statusEl.className = "status-msg ok";
-    statusEl.innerHTML = `<b>✓ Klaar — alle ${okCount} betalingen succesvol gekoppeld in Logic4.</b><br>
+    statusEl.innerHTML = `<b>✓ Klaar — alle ${verifiedCount} betalingen succesvol gekoppeld én verifieerd in Logic4.</b><br>
       Vergeet niet om in Logic4 zelf nog handmatig de 2 debet-regels toe te voegen:
       <br>1. Verkoopprovisie ${fmtEur(parsedData.debetRegels.find(d => d.type === "verkoopprovisie").bedrag)} → 4570 Verkoopprovisie
       <br>2. Bol-overschrijving ${fmtEur(parsedData.debetRegels.find(d => d.type === "bol-overschrijving").bedrag)} → 4999 Verschillenrekening`;
-  } else {
+  } else if (verifiedCount > 0) {
     statusEl.className = "status-msg warn";
-    statusEl.innerHTML = `<b>⚠ ${okCount} doorgevoerd, ${failCount} mislukt.</b><br>
-      Hover over 'mislukt' voor de foutmelding. Mislukte regels kun je handmatig doen in Logic4.`;
+    statusEl.innerHTML = `<b>⚠ ${verifiedCount} echt verwerkt, ${matched.length - verifiedCount} mogelijk niet.</b><br>
+      Zie 'Betaald vóór/ná' kolommen voor verificatie. Check in Logic4 om zeker te zijn.`;
+  } else {
+    statusEl.className = "status-msg bad";
+    statusEl.innerHTML = `<b>✗ Geen enkele betaling werd verifieerbaar gekoppeld.</b><br>
+      Logic4 accepteerde de API-calls (status OK) maar het 'Betaald'-veld op de orders is niet veranderd.
+      Vermoedelijke oorzaak: de PaymentMethodId in onze body-template is verkeerd voor Bol-betalingen.
+      <b>STOP met doorvoeren</b> en deel deze info met Claude voor verdere diagnose.`;
   }
+
+  // ─── Uitleg-popup ───
+  // Toon altijd na doorvoeren een modal die uitlegt:
+  // - Wat er technisch is gebeurd
+  // - Hoe je 't kan verifiëren in Logic4
+  // - Wat de volgende stappen zijn
+  showAfterApplyExplanation(applyResults, verifiedCount, matched.length, parsedData);
+
   btn.disabled = true;  // Voorkomen dubbel-doorvoeren
   dryBtn.disabled = false;
 });
+
+function showAfterApplyExplanation(results, verifiedCount, totalCount, data) {
+  // Bouw uitleg met links/instructies om te verifiëren
+  const sample = results.find(r => r.ok) || results[0];
+  const sampleOrderId = sample ? sample.orderId : "<orderID>";
+
+  const verkoopprovisie = data.debetRegels.find(d => d.type === "verkoopprovisie");
+  const bolOverschrijving = data.debetRegels.find(d => d.type === "bol-overschrijving");
+
+  const modal = document.createElement("div");
+  modal.style.cssText = `
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(0,0,0,0.5);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  `;
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:12px;max-width:700px;max-height:85vh;overflow-y:auto;padding:28px;font-family:Montserrat,system-ui;">
+      <h2 style="margin:0 0 12px;color:#144734;">${verifiedCount === totalCount ? "✓" : "⚠"} Doorvoeren afgerond — waar zie je het terug?</h2>
+
+      <p style="color:#374151;line-height:1.6;">
+        Voor elk gematcht Bol-bestelnummer is een <b>AddPayment</b>-call gedaan naar Logic4
+        (<code>/v3/Orders/AddPayment</code>). Dat is technisch dezelfde actie die Osman
+        normaal handmatig doet als hij in Logic4 een Dagboek-boeking maakt — alleen dan
+        via de API.
+      </p>
+
+      <div style="background:#f9fafb;border-radius:8px;padding:14px;margin:14px 0;">
+        <div style="font-weight:600;margin-bottom:6px;color:#144734;">Resultaat</div>
+        <div>${verifiedCount} van ${totalCount} betalingen echt gekoppeld (geverifieerd via 'Betaald'-veld vóór/ná de call).</div>
+      </div>
+
+      <h3 style="color:#144734;margin:20px 0 8px;">Hoe verifieer je dit in Logic4?</h3>
+      <ol style="line-height:1.7;color:#374151;">
+        <li>Open Logic4 (desktop-app of webclient)</li>
+        <li>Ga naar Orders → zoek op order-ID (bv. <code>${sampleOrderId}</code>)</li>
+        <li>Open de order → blok <b>Totalen</b> rechts onderin de order</li>
+        <li>Veld <b>Betaald</b> zou nu het Bol-bedrag moeten tonen i.p.v. € 0,00</li>
+        <li>Bij dubbel-checken: tab <b>Overige informatie → Facturen</b> — daar zou een nieuwe betalings-regel staan</li>
+      </ol>
+
+      <h3 style="color:#144734;margin:20px 0 8px;">Waar staat het in onze audit-log?</h3>
+      <p style="color:#374151;line-height:1.6;">
+        Op de fileshare <code>\\fonfile\\data\\Fonteyn\\Orderstatus-Audit\\bol-apply.csv</code>
+        staat een nieuwe regel met: tijdstempel, jouw e-mail, factuurnr, periode, en per
+        regel het Bol-bestelnummer + Logic4 order-ID + bedrag + status.
+        Don/Osman/jij/Fonteynbot kunnen die file openen om te zien wie wanneer wat heeft doorgevoerd.
+      </p>
+
+      <h3 style="color:#144734;margin:20px 0 8px;">Wat moet je nog handmatig doen?</h3>
+      <p style="color:#374151;line-height:1.6;">
+        De 2 <b>debet-regels</b> kunnen NIET via API (de boekhoud-module zit niet in jullie
+        Logic4-scope). Voer die handmatig in via Logic4 → Administratie →
+        Dagboeken handmatig → Memoriaal:
+      </p>
+      <ul style="line-height:1.7;color:#374151;">
+        <li>${fmtEur(verkoopprovisie.bedrag)} → GB-rekening <b>4570 Verkoopprovisie</b> (debet)</li>
+        <li>${fmtEur(bolOverschrijving.bedrag)} → GB-rekening <b>4999 Verschillenrekening</b> (debet) — naam: "${escapeHtml(bolOverschrijving.info)}"</li>
+      </ul>
+      <p style="color:#374151;line-height:1.6;font-size:13px;">
+        Pas na inbreng van die twee regels klopt het memoriaal volledig en is de Bol-periode
+        boekhoudkundig dichtgezet.
+      </p>
+
+      ${verifiedCount < totalCount ? `
+        <div style="background:#fef3c7;border-radius:8px;padding:14px;margin-top:18px;">
+          <b style="color:#92400e;">⚠ Niet alle betalingen geverifieerd</b><br>
+          <span style="color:#6b5e1f;">
+            Voor ${totalCount - verifiedCount} regel(s) bleef het Betaald-veld op €0,00 staan na de API-call.
+            Mogelijke oorzaken: PaymentMethodId is verkeerd voor Bol-betalingen, of er ontbreekt een verplicht veld.
+            Voer die regels handmatig in via Logic4 of laat Claude de PaymentMethodId verifiëren.
+          </span>
+        </div>
+      ` : ""}
+
+      <div style="text-align:right;margin-top:24px;">
+        <button id="closeApplyModal" style="background:#8bc53f;color:#144734;border:0;border-radius:8px;padding:11px 22px;font-weight:700;cursor:pointer;font-family:inherit;font-size:14px;">Begrepen</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.querySelector("#closeApplyModal").addEventListener("click", () => modal.remove());
+  modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Util
