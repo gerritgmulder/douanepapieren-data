@@ -901,19 +901,22 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     }
     const filterDateStr = document.getElementById("datumFilter")?.value || "";
     const filterIsActive = !!filterDateStr;
-    let dateFrom;
+    let dateFrom, dateTo;
     if (filterIsActive) {
-      // 7 dagen vóór filter-datum als marge (Don kan order eerder hebben
-      // gemaakt dan Bol-bestelling). Beperkt opvolgend data-volume sterk.
+      // Strikt: alleen orders ván die dag (Don plaatst order op moment
+      // van Bol-bestelling, niet eerder). Geen marge — beperkt data-
+      // volume sterk en voorkomt dat we duizenden webshop-orders van
+      // andere kanalen meescannen.
       dateFrom = new Date(filterDateStr);
-      dateFrom.setDate(dateFrom.getDate() - 7);
+      dateTo = new Date(filterDateStr);
+      dateTo.setDate(dateTo.getDate() + 2); // 2 dag marge eind (Don kan order pas later toevoegen)
     } else {
-      // Geen filter: hele factuur-periode + 14 dagen buffer ervoor
+      // Geen filter: hele factuur-periode + kleine buffers
       dateFrom = new Date(periode.from);
-      dateFrom.setDate(dateFrom.getDate() - 14);
+      dateFrom.setDate(dateFrom.getDate() - 3);
+      dateTo = new Date(periode.to);
+      dateTo.setDate(dateTo.getDate() + 3);
     }
-    const dateTo = new Date(periode.to);
-    dateTo.setDate(dateTo.getDate() + 7);
 
     // Welke bestelnrs zoeken we eigenlijk? Bij filter actief alleen visible
     // regels. Vroegtijdig stoppen zodra alle gevonden.
@@ -921,13 +924,16 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     const wantedBestelnrs = new Set(regelsToMatchList.map(r => r.bestelnr));
     progressEl.textContent = `Zoeken naar ${wantedBestelnrs.size} bestelnrs in Logic4-orders van ${dateIso(dateFrom).slice(0,10)} t/m ${dateIso(dateTo).slice(0,10)}…`;
 
-    // 2. Pagineren door orders — early-stop wanneer alle bestelnrs gevonden
+    // 2. Pagineren door orders — early-stop wanneer alle bestelnrs gevonden.
+    // Logic4 sorteert op ID-asc (= oudst eerst). Bij meerdere order-types
+    // (sales/webshop/Bol gemengd) zit Bol vaak op latere pagina's.
     const PAGE_SIZE = 500;
-    const MAX_PAGES = filterIsActive ? 6 : 20; // bij filter actief max 3.000 orders
+    const MAX_PAGES = 30; // tot 15.000 orders — scant max 1 dag aan orders
     const allOrders = [];
     const foundBestelnrs = new Set();
+    let minId = Infinity, maxId = -Infinity;
     pageLoop: for (let page = 0; page < MAX_PAGES; page++) {
-      progressEl.textContent = `Pagina ${page + 1}/${MAX_PAGES} — ${allOrders.length} orders gescand, ${foundBestelnrs.size}/${wantedBestelnrs.size} bestelnrs gevonden…`;
+      progressEl.textContent = `Pagina ${page + 1}/${MAX_PAGES} — ${allOrders.length} orders, ID-range ${minId === Infinity ? "?" : minId + "–" + maxId}, ${foundBestelnrs.size}/${wantedBestelnrs.size} bestelnrs gevonden…`;
       console.time(`[bol-match] page ${page + 1}`);
       const data = await logic4Call("/v3/Orders/GetOrders", {
         DateFrom: dateIso(dateFrom),
@@ -940,16 +946,18 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
       if (!arr.length) break;
       for (const o of arr) {
         allOrders.push(o);
-        // Vroegdetect: scan alleen top-level Description/Reference/Comments
+        if (o.Id < minId) minId = o.Id;
+        if (o.Id > maxId) maxId = o.Id;
+        // Vroegdetect: scan alleen top-level Description/Reference/Notes
         // op deze pagina (snel). Diepere recursie pas in stap 3.
-        const haystack = String(o.Description || "") + " " + String(o.Reference || "") + " " + String(o.Comments || "");
+        const haystack = String(o.Description || "") + " " + String(o.Reference || "") + " " + String(o.Notes || "");
         for (const nr of wantedBestelnrs) {
           if (haystack.includes(nr)) foundBestelnrs.add(nr);
         }
       }
       // Early-stop: alle gewenste bestelnrs al gevonden
       if (foundBestelnrs.size >= wantedBestelnrs.size) {
-        progressEl.textContent = `✓ Alle ${wantedBestelnrs.size} bestelnrs gevonden — stoppen met pagineren…`;
+        progressEl.textContent = `✓ Alle ${wantedBestelnrs.size} bestelnrs gevonden in pagina ${page + 1} — stoppen…`;
         break pageLoop;
       }
       if (arr.length < PAGE_SIZE) break;
@@ -1043,7 +1051,16 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     // (3) sample-content van die velden zodat we zien hoe Bol-nrs
     // eruitzien als ze in Logic4 staan.
     const diagBlocks = [];
-    diagBlocks.push(`<b>${allOrders.length} orders gescand</b> in periode ${dateIso(dateFrom).slice(0,10)} t/m ${dateIso(dateTo).slice(0,10)}`);
+    diagBlocks.push(`<b>${allOrders.length} orders gescand</b> in periode ${dateIso(dateFrom).slice(0,10)} t/m ${dateIso(dateTo).slice(0,10)}, ID-range <code>${minId}–${maxId}</code>`);
+    if (allOrders.length === 0 && matched === 0) {
+      // Geen orders gevonden in datum-range
+      diagBlocks.push(`<b style="color:#b91c1c">Geen orders in deze datum-range.</b> Klopt de Bol-bestellingsdatum wel met wanneer Don ze in Logic4 zet?`);
+    }
+    if (matched === 0 && allOrders.length > 0) {
+      // Specifieke hint: misschien scant Logic4 in verkeerde range
+      const wantedNrs = [...wantedBestelnrs].slice(0, 3).join(", ");
+      diagBlocks.push(`<b style="color:#92400e">Gezocht naar:</b> <code>${wantedNrs}</code>${wantedBestelnrs.size > 3 ? ` en ${wantedBestelnrs.size - 3} meer` : ""} — niet gevonden in deze ${allOrders.length} orders.<br><b>Mogelijke oorzaken:</b><ul style="margin:4px 0 0 0;padding-left:22px;font-size:12px;"><li>Bol-orders zitten BUITEN deze ID-range (Logic4 sorteert op ID-asc — Bol kan jonger zijn met hogere IDs). Verhoog MAX_PAGES of versmal datum-filter verder.</li><li>Don zet bestelnr toch niet in Description (= regel nog niet actief voor deze orders)</li><li>Vraag Don/Osman: open Logic4 → zoek order met bestelnr <code>${[...wantedBestelnrs][0]}</code> → check welk veld 't bevat</li></ul>`);
+    }
     if (allOrders.length === 0) {
       diagBlocks.push(`<span style="color:#b91c1c">⚠ Geen orders teruggekomen — datum-filter werkt mogelijk niet of er zijn echt geen orders in die periode.</span>`);
     } else {
