@@ -315,6 +315,13 @@
         <p>Upload een MT940-bankafschrift en koppel binnenkomende betalingen automatisch aan de juiste Logic4-orders.</p>
       </a>
 
+      <!-- Logic4-probe — diagnose-pagina, alleen voor admin (Gerrit/Fonteynbot). -->
+      <a href="probe-logic4.html" class="tile hidden" id="tileProbe">
+        <div class="icon">🔬</div>
+        <h3>Logic4-probe</h3>
+        <p>Diagnose-pagina: test welke Logic4 API-endpoints toegankelijk zijn. Alleen voor admin-gebruik.</p>
+      </a>
+
       <!-- Stuurcijfers — alleen zichtbaar voor gerriette@ en dolf@. Klik vraagt extra wachtwoord. -->
       <a href="#" class="tile hidden" id="tileStuurcijfers">
         <div class="icon">📊</div>
@@ -545,6 +552,10 @@ function showDashboard(email) {
   el("tileRapportage").classList.toggle("hidden", !RAPPORTAGE_EMAILS.has(lc));
   // Eikensingel-tegel alleen tonen voor Fransje + team + Danique
   el("tileEikensingel").classList.toggle("hidden", !EIKENSINGEL_EMAILS.has(lc));
+  // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot.
+  const isAdmin = (lc === "gerrit@fonteyn.nl" || lc === "gerrit" ||
+                   lc === "fonteynbot@fonteyn.nl" || lc === "fonteyn.bot" || lc === "fonteynbot");
+  el("tileProbe").classList.toggle("hidden", !isAdmin);
 }
 
 // ─── Helper-server health (voor login-scherm) ────────────────
