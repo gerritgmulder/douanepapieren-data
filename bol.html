@@ -902,20 +902,19 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     const filterDateStr = document.getElementById("datumFilter")?.value || "";
     const filterIsActive = !!filterDateStr;
     let dateFrom, dateTo;
+    // Don's screenshot van order 3512488 toont: aanmaakdatum 04-06,
+    // maar Bol-checkout-datum was 09-06. Don plaatst de order dus VÓÓR
+    // Bol-checkout. 14 dagen marge moet ruim genoeg zijn.
     if (filterIsActive) {
-      // Strikt: alleen orders ván die dag (Don plaatst order op moment
-      // van Bol-bestelling, niet eerder). Geen marge — beperkt data-
-      // volume sterk en voorkomt dat we duizenden webshop-orders van
-      // andere kanalen meescannen.
       dateFrom = new Date(filterDateStr);
+      dateFrom.setDate(dateFrom.getDate() - 14);
       dateTo = new Date(filterDateStr);
-      dateTo.setDate(dateTo.getDate() + 2); // 2 dag marge eind (Don kan order pas later toevoegen)
+      dateTo.setDate(dateTo.getDate() + 7);
     } else {
-      // Geen filter: hele factuur-periode + kleine buffers
       dateFrom = new Date(periode.from);
-      dateFrom.setDate(dateFrom.getDate() - 3);
+      dateFrom.setDate(dateFrom.getDate() - 14);
       dateTo = new Date(periode.to);
-      dateTo.setDate(dateTo.getDate() + 3);
+      dateTo.setDate(dateTo.getDate() + 7);
     }
 
     // Welke bestelnrs zoeken we eigenlijk? Bij filter actief alleen visible
@@ -935,9 +934,15 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     pageLoop: for (let page = 0; page < MAX_PAGES; page++) {
       progressEl.textContent = `Pagina ${page + 1}/${MAX_PAGES} — ${allOrders.length} orders, ID-range ${minId === Infinity ? "?" : minId + "–" + maxId}, ${foundBestelnrs.size}/${wantedBestelnrs.size} bestelnrs gevonden…`;
       console.time(`[bol-match] page ${page + 1}`);
+      // Probeer Reference="Bol.com" als filter — confirmed in user's
+      // Logic4 screenshot dat ALLE Bol-orders dit veld op "Bol.com"
+      // hebben staan. Als Logic4 't accepteert: krijgen we DIRECT
+      // alleen Bol-orders i.p.v. 15.000 webshop-orders te scannen.
+      // Bij negeren: zelfde resultaat als voorheen.
       const data = await logic4Call("/v3/Orders/GetOrders", {
         DateFrom: dateIso(dateFrom),
         DateTo: dateIso(dateTo),
+        Reference: "Bol.com",
         TakeRecords: PAGE_SIZE,
         SkipRecords: page * PAGE_SIZE,
       });
