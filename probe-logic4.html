@@ -100,6 +100,15 @@
   <button id="runBolProbe">Memoriaal-endpoints testen</button>
   <div id="bolProbeStatus" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
   <div id="bolProbeResult"></div>
+
+  <hr style="margin:40px 0;border:none;border-top:1px solid var(--border);">
+
+  <h2>Bol-memoriaal Route A — Payment/Order-write probe</h2>
+  <p class="lead">Test of we via de <b>Orders-module</b> (die we wél hebben) betalingen kunnen koppelen aan orders. Werkbaar: 90% van Osman's werk zit in credit-regels = "klant X heeft order Y betaald", en dat is functioneel een betaling toevoegen aan een order. Probe gebruikt OrderId <code>-1</code> (= bestaat zeker niet) zodat <b>niets per ongeluk wordt aangemaakt</b>. We zien per endpoint of het bestaat (Logic4 400 = "order -1 not found" → endpoint reageert) of niet (404 → buiten scope).</p>
+
+  <button id="runPaymentProbe">Payment/Order-write endpoints testen</button>
+  <div id="paymentProbeStatus" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
+  <div id="paymentProbeResult"></div>
 </main>
 
 <script>
@@ -519,6 +528,176 @@ document.getElementById("runBolProbe").addEventListener("click", async () => {
       </table>
       <div class="desc" style="margin-top:14px;"><b>Plak dit terug naar Claude:</b></div>
       <pre>${escapeHtml(results.map(r => `${r.verdict.padEnd(28)} ${r.ep.padEnd(48)} ${r.detail}`).join("\n"))}</pre>
+    </div>
+  `;
+  btn.disabled = false;
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Route A probe — payment/order-write endpoints binnen modules die we
+// al weten dat ze open zijn (Orders, BuyOrders). Doel: vinden of we
+// betalingen kunnen koppelen aan orders zonder Bookings-module-scope.
+//
+// VEILIGHEID: alle bodies bevatten OrderId/Id = -1 (= bestaat nooit).
+// Een Logic4 200/201 zou betekenen dat 't endpoint klakkeloos accepteert
+// — geen risico van per ongeluk een echte order verstoren.
+// Verwachte responses:
+//   404 = endpoint bestaat niet (out of scope)
+//   400 = endpoint bestaat WEL maar OrderId -1 niet gevonden (= GO!)
+//   401/403 = endpoint bestaat maar geen autorisatie
+//   200 = endpoint accepteert nonsens (= GO maar vreemd)
+// ═══════════════════════════════════════════════════════════════
+document.getElementById("runPaymentProbe").addEventListener("click", async () => {
+  const btn = document.getElementById("runPaymentProbe");
+  const status = document.getElementById("paymentProbeStatus");
+  const result = document.getElementById("paymentProbeResult");
+  btn.disabled = true;
+  result.innerHTML = "";
+  status.textContent = "Testen — kan ~30s duren…";
+
+  // Veilige body-varianten: OrderId -1 zorgt dat geen ECHTE order
+  // geraakt kan worden, ongeacht of 't endpoint accepteert.
+  const SAFE_BODY = { OrderId: -1, Amount: 0, PaymentAmount: 0, Id: -1, StatusId: -1 };
+
+  const candidates = [
+    // Payment-koppelingen binnen Orders-module (die scope hebben we)
+    "/v3/Orders/AddPayment",
+    "/v3/Orders/AddOrderPayment",
+    "/v3/Orders/UpdatePayment",
+    "/v3/Orders/UpdateOrderPayment",
+    "/v3/Orders/AddBooking",
+    "/v3/Orders/AddOrderBooking",
+    "/v3/Orders/UpdateOrder",
+    "/v3/Orders/UpdateOrderRow",
+    "/v3/Orders/AddOrderRow",
+    "/v3/Orders/SetPaymentStatus",
+    "/v3/Orders/MarkAsPaid",
+    "/v3/Orders/AddJournalEntry",
+    "/v1.1/Orders/AddPayment",
+    "/v1.1/Orders/AddOrderPayment",
+    "/v1.1/Orders/UpdatePayment",
+    // Aparte Payments-module
+    "/v3/Payments/AddPayment",
+    "/v3/Payments/CreatePayment",
+    "/v3/Payments/GetPayments",
+    "/v3/OrderPayments/AddOrderPayment",
+    "/v3/OrderPayments/GetOrderPayments",
+    "/v1.1/Payments/AddPayment",
+    // Bank-import — als hier scope op is kunnen we MT940 importeren
+    "/v3/BankImports/Import",
+    "/v3/BankImports/CreateImport",
+    "/v3/BankStatements/Import",
+    "/v3/MT940/Import",
+    // Sanity check: bekend werkende endpoint moet GROEN zijn (controle dat
+    // de probe-logica zelf klopt)
+    "/v3/Orders/UpdateOrderStatus",
+  ];
+
+  const results = [];
+  for (const ep of candidates) {
+    status.textContent = `Testen ${ep}…`;
+    try {
+      const session = localStorage.getItem(SESSION_KEY);
+      const r = await fetch("/api/logic4-call", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + (session || "")
+        },
+        body: JSON.stringify({ path: ep, method: "POST", body: SAFE_BODY })
+      });
+      const jj = await r.json().catch(() => ({}));
+
+      let verdict, detail;
+      if (!r.ok) {
+        verdict = "helper-fout";
+        detail = `helper HTTP ${r.status} — ${jj.error || ""}`.trim();
+      } else if (!jj.ok) {
+        const upstreamStatus = jj.status || "?";
+        const upstreamErr = (jj.data && typeof jj.data === "object"
+          && (jj.data.title || jj.data.error || jj.data.Message))
+          || (typeof jj.data === "string" ? jj.data.slice(0, 100) : "")
+          || "(geen body)";
+        if (upstreamStatus === 404) {
+          verdict = "✗ bestaat niet";
+          detail = `Logic4 404 — buiten scope`;
+        } else if (upstreamStatus === 400) {
+          verdict = "✓ BESTAAT (body fout)";
+          detail = `Logic4 400 — ${upstreamErr} — endpoint zit in scope!`;
+        } else if (upstreamStatus === 401 || upstreamStatus === 403) {
+          verdict = "⚠ scope OK, auth nodig";
+          detail = `Logic4 ${upstreamStatus} — ${upstreamErr}`;
+        } else if (upstreamStatus === 500) {
+          verdict = "✓ BESTAAT (500)";
+          detail = `Logic4 500 — endpoint accepteert call, maar interne fout: ${upstreamErr}`;
+        } else {
+          verdict = `Logic4 ${upstreamStatus}`;
+          detail = upstreamErr;
+        }
+      } else {
+        const count = Array.isArray(jj.data) ? jj.data.length
+          : (jj.data && typeof jj.data === "object" ? "object" : "?");
+        verdict = "✓ ACCEPTEERT";
+        detail = `Logic4 200 — endpoint accepteerde nonsens-body! Onderzoek verder voor je 'm gebruikt.`;
+      }
+      results.push({ ep, verdict, detail });
+    } catch (e) {
+      results.push({ ep, verdict: "exception", detail: e.message });
+    }
+  }
+
+  status.textContent = "Klaar — resultaten hieronder.";
+
+  const sortRank = v => {
+    if (v.includes("ACCEPTEERT")) return 0;
+    if (v.includes("BESTAAT")) return 1;
+    if (v.includes("⚠")) return 2;
+    if (v.includes("✗")) return 4;
+    return 3;
+  };
+  results.sort((a, b) => sortRank(a.verdict) - sortRank(b.verdict));
+
+  // Belangrijkste hits naar boven, sanity-check apart vermelden
+  const sanity = results.find(r => r.ep === "/v3/Orders/UpdateOrderStatus");
+  const sanityOk = sanity && (sanity.verdict.includes("BESTAAT") || sanity.verdict.includes("ACCEPTEERT") || sanity.verdict.includes("⚠"));
+  const hits = results.filter(r =>
+    r.ep !== "/v3/Orders/UpdateOrderStatus" &&
+    (r.verdict.includes("BESTAAT") || r.verdict.includes("ACCEPTEERT") || r.verdict.includes("⚠"))
+  );
+
+  let conclusion;
+  if (!sanityOk) {
+    conclusion = `<b style="color:#92400e">⚠ Sanity-check faalt</b> — UpdateOrderStatus (bekend werkend) reageerde niet zoals verwacht. Mogelijk een token-probleem; log uit/in en probeer opnieuw.`;
+  } else if (hits.length > 0) {
+    const list = hits.map(h => `<li><code>${escapeHtml(h.ep)}</code> → ${escapeHtml(h.verdict)}</li>`).join("");
+    conclusion = `<b style="color:#059669">GO voor Route A</b> — minimaal één endpoint reageert. Bruikbaar voor payment-koppeling:<ul style="margin:6px 0;padding-left:22px;">${list}</ul>Volgende stap: ik test de exacte body-vereisten en bouw 'm in de Bol-tegel als Fase 3.`;
+  } else {
+    conclusion = `<b style="color:#b91c1c">NO-GO voor Route A</b> — geen enkel payment/booking endpoint binnen werkende modules. Sanity-check (UpdateOrderStatus) werkte wel, dus de probe klopt — Logic4 heeft hier echt niets vrij. Conclusie: Bol-tegel blijft Excel-export-only zoals Fase 1.`;
+  }
+
+  result.innerHTML = `
+    <div class="card">
+      <h3>Conclusie</h3>
+      <div class="desc">${conclusion}</div>
+    </div>
+    <div class="card">
+      <h3>Per endpoint</h3>
+      <table class="field-table">
+        <thead>
+          <tr><th>Endpoint</th><th>Status</th><th>Detail</th></tr>
+        </thead>
+        <tbody>
+          ${results.map(r => `
+            <tr ${r.ep === "/v3/Orders/UpdateOrderStatus" ? 'style="background:#f9fafb;font-style:italic;"' : ""}>
+              <td class="name">${escapeHtml(r.ep)}${r.ep === "/v3/Orders/UpdateOrderStatus" ? " (sanity)" : ""}</td>
+              <td>${escapeHtml(r.verdict)}</td>
+              <td class="val" title="${escapeHtml(r.detail)}">${escapeHtml(r.detail)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+      <div class="desc" style="margin-top:14px;"><b>Plak dit terug naar Claude:</b></div>
+      <pre>${escapeHtml(results.map(r => `${r.verdict.padEnd(30)} ${r.ep.padEnd(50)} ${r.detail}`).join("\n"))}</pre>
     </div>
   `;
   btn.disabled = false;
