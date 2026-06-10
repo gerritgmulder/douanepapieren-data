@@ -1324,6 +1324,7 @@ app.get("/api/products-by-supplier-code", requireAuth, async (req, res) => {
 // Accepteert zowel email-form als Logic4-username, zoals ORDERSTATUS_ALLOWED.
 const STUURCIJFERS_ALLOWED_EMAILS = new Set([
   "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
@@ -1434,6 +1435,7 @@ const ORDERSTATUS_ALLOWED = new Set([
   "don@fonteyn.nl",        "fonteyn.don",
   "arno@fonteyn.nl",       "fonteyn.arno",
   "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
