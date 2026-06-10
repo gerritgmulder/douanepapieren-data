@@ -14,6 +14,7 @@
     { "name": "eikensingel.html", "note": "Eikensingel-vakantiepark — bovenaanzicht 10 bungalows, boekingen + schoonmaak + betalingen" },
     { "name": "prijslijst.html", "note": "Prijslijst maken — leveranciers-PDF (invoice/catalogus) → Fonteyn/Passion-stijl prijslijst" },
     { "name": "bankkoppeling.html", "note": "Bankkoppeling — MT940-import + automatische match aan Logic4-orders (Osman/Rowan/Rico/Reinier + admins)" },
+    { "name": "bol.html", "note": "Bol.com koppeling — Bol-factuur Excel → memoriaal-voorstel (Don/Osman + admins). Fase 1: parsing + preview + download. Fase 2 volgt: Logic4-koppeling via order-omschrijving zoeken." },
     { "name": "personeel.html", "note": "Personeel — buitenlandse medewerkers, kamerverdeling Eikensingel + vluchten (Chantal/Manon + admins)" },
     { "name": "koeien.html", "note": "Koeien bij Dolf — interactief overzicht met stamboom, centraal opgeslagen in Cloudflare KV (alleen Dolf/Gerrit/Fonteynbot)" },
     { "name": "rapportage.html", "note": "Rapportage-dashboard — omzet/target/aantallen + reviews per adviseur (alleen Gerrit/Don/Arno/Dolf/Fonteynbot). Skeleton; data-integratie volgt." },

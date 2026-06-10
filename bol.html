@@ -1,0 +1,687 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Bol.com koppeling — Fonteyn Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<!-- SheetJS — Excel parser + writer, same CDN als stuurcijfers gebruikt -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --fonteyn-green: #144734;
+    --fonteyn-green-dark: #0d3325;
+    --fonteyn-lime: #8bc53f;
+    --fonteyn-lime-dark: #72a531;
+    --fonteyn-cream: #fff9ae;
+    --bg: #f5f4ef;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --ok: #059669;
+    --bad: #b91c1c;
+    --warn: #92400e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Montserrat", -apple-system, sans-serif;
+    background: var(--bg); color: var(--ink); font-size: 14px;
+  }
+  header {
+    background: var(--fonteyn-green); color: #fff;
+    padding: 14px 28px; display: flex; align-items: center; gap: 16px;
+  }
+  header img.logo { height: 40px; width: auto; display: block; }
+  header h1 { margin: 0; font-size: 16px; font-weight: 600; flex: 1; }
+  header .user-chip { font-size: 12px; color: rgba(255,255,255,0.85); }
+  header button.logout {
+    background: transparent; color: #fff;
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 6px; padding: 6px 14px;
+    font: inherit; font-size: 12px; cursor: pointer;
+  }
+  header button.logout:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); }
+
+  main { max-width: 1200px; margin: 28px auto; padding: 0 24px; }
+
+  h2 { color: var(--fonteyn-green); font-size: 22px; margin: 0 0 8px; }
+  .lead { color: var(--muted); margin: 0 0 24px; }
+
+  /* ── Upload-zone ── */
+  .drop-zone {
+    border: 2px dashed #cbd5e1; border-radius: 12px;
+    background: #fff; padding: 60px 24px;
+    text-align: center; cursor: pointer;
+    transition: all .15s ease;
+  }
+  .drop-zone:hover, .drop-zone.over {
+    border-color: var(--fonteyn-lime); background: #f0fdf4;
+  }
+  .drop-zone .icon { font-size: 48px; margin-bottom: 12px; opacity: 0.6; }
+  .drop-zone h3 { margin: 0 0 6px; font-size: 18px; color: var(--fonteyn-green); }
+  .drop-zone p { margin: 0; color: var(--muted); }
+  .drop-zone .or { color: #cbd5e1; margin: 12px 0; font-size: 12px; }
+  .drop-zone button {
+    background: var(--fonteyn-lime); color: var(--fonteyn-green);
+    border: 0; border-radius: 8px; padding: 10px 18px;
+    font: inherit; font-weight: 700; cursor: pointer;
+  }
+  .drop-zone button:hover { background: var(--fonteyn-lime-dark); color: #fff; }
+  input[type="file"] { display: none; }
+
+  /* ── Card / sectie ── */
+  .card {
+    background: #fff; border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 22px; margin: 16px 0;
+  }
+  .card h3 { margin: 0 0 10px; color: var(--fonteyn-green); font-size: 15px; }
+
+  /* ── Factuur-info ── */
+  .factuur-info {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px 24px;
+  }
+  .factuur-info .field label {
+    display: block; font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.04em;
+    margin-bottom: 3px;
+  }
+  .factuur-info .field .val { font-weight: 600; color: var(--ink); }
+  .factuur-info input {
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 10px; font: inherit; font-size: 14px;
+    width: 100%;
+  }
+  .factuur-info input:focus {
+    outline: 2px solid var(--fonteyn-lime);
+    outline-offset: -1px; border-color: transparent;
+  }
+
+  /* ── Tabel ── */
+  table.memoriaal {
+    width: 100%; border-collapse: collapse; font-size: 12.5px;
+    margin-top: 8px;
+  }
+  table.memoriaal th, table.memoriaal td {
+    padding: 6px 9px; border-bottom: 1px solid #f3f4f6;
+    text-align: left; vertical-align: top;
+  }
+  table.memoriaal th {
+    background: #f9fafb; font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.03em;
+    color: var(--muted); white-space: nowrap;
+  }
+  table.memoriaal td.num {
+    text-align: right; font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  table.memoriaal td.bestelnr {
+    font-family: ui-monospace, monospace; font-size: 11.5px;
+    color: var(--fonteyn-green-dark);
+  }
+  table.memoriaal tr.debet-row td {
+    background: #fef3c7; font-weight: 600;
+    border-top: 2px solid var(--fonteyn-cream);
+  }
+  table.memoriaal tr.total-row td {
+    background: var(--fonteyn-green); color: #fff;
+    font-weight: 700; border-top: 2px solid var(--fonteyn-green-dark);
+  }
+  .match-pill {
+    display: inline-block; padding: 1px 6px; border-radius: 10px;
+    font-size: 10px; font-weight: 600;
+  }
+  .match-pill.todo { background: #fef3c7; color: var(--warn); }
+  .match-pill.ok { background: #dcfce7; color: var(--ok); }
+  .match-pill.fail { background: #fee2e2; color: var(--bad); }
+
+  /* ── Balans-check ── */
+  .balans {
+    display: flex; gap: 24px; align-items: center;
+    padding: 10px 14px; border-radius: 8px;
+    margin: 12px 0; font-weight: 600;
+  }
+  .balans.ok { background: #dcfce7; color: var(--ok); }
+  .balans.bad { background: #fee2e2; color: var(--bad); }
+  .balans .label { font-size: 11px; text-transform: uppercase; opacity: 0.7; font-weight: 500; }
+
+  /* ── Actie-knoppen ── */
+  .actions { display: flex; gap: 12px; margin-top: 18px; }
+  button.primary {
+    background: var(--fonteyn-lime); color: var(--fonteyn-green);
+    border: 0; border-radius: 8px; padding: 11px 20px;
+    font: inherit; font-weight: 700; cursor: pointer;
+  }
+  button.primary:hover { background: var(--fonteyn-lime-dark); color: #fff; }
+  button.secondary {
+    background: #fff; color: var(--fonteyn-green);
+    border: 1px solid #cbd5e1; border-radius: 8px;
+    padding: 11px 20px; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button.secondary:hover { border-color: var(--fonteyn-green); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .status-msg {
+    padding: 10px 14px; border-radius: 6px; margin: 12px 0;
+    font-size: 13px;
+  }
+  .status-msg.ok { background: #dcfce7; color: var(--ok); }
+  .status-msg.bad { background: #fee2e2; color: var(--bad); }
+  .status-msg.warn { background: #fef3c7; color: var(--warn); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+  <h1>Bol.com koppeling</h1>
+  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <h2>Bol.com memoriaal automatiseren</h2>
+  <p class="lead">Upload de maandelijkse Bol.com-factuurspecificatie (Excel). De tool genereert een memoriaal-voorstel dat je in Logic4 kunt overnemen — credit-regels per klant + debet-regels voor verkoopprovisie en Bol-overschrijving.</p>
+
+  <!-- Upload-zone (fase 1) -->
+  <div id="dropZone" class="drop-zone">
+    <div class="icon">📊</div>
+    <h3>Sleep de Bol.com factuur-Excel hierheen</h3>
+    <p>Bestandsnaam begint typisch met <code>invoice_specification_</code></p>
+    <div class="or">— of —</div>
+    <button type="button" id="pickBtn">Kies bestand…</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls">
+  </div>
+
+  <div id="status" class="status-msg hidden"></div>
+
+  <!-- Resultaat-sectie (na upload) -->
+  <section id="resultSection" class="hidden">
+
+    <!-- Factuur-info -->
+    <div class="card">
+      <h3>Factuur-informatie</h3>
+      <div class="factuur-info">
+        <div class="field">
+          <label>Factuurnummer Bol</label>
+          <div class="val" id="infoFactuurnr">—</div>
+        </div>
+        <div class="field">
+          <label>Periode</label>
+          <div class="val" id="infoPeriode">—</div>
+        </div>
+        <div class="field">
+          <label>Verkopernummer</label>
+          <div class="val" id="infoVerkopernr">—</div>
+        </div>
+        <div class="field">
+          <label>Aantal klant-betalingen</label>
+          <div class="val" id="infoAantalRijen">—</div>
+        </div>
+        <div class="field">
+          <label>Boekdatum memoriaal</label>
+          <input type="date" id="boekDatum">
+        </div>
+        <div class="field">
+          <label>Boekstuk-referentie</label>
+          <input type="text" id="boekRef" placeholder="BOL.COM 25-03-2026 t/m 07-04-2026">
+        </div>
+      </div>
+    </div>
+
+    <!-- Balans-check -->
+    <div id="balans" class="balans">
+      <div>
+        <div class="label">Totaal Credit</div>
+        <div id="totCredit">—</div>
+      </div>
+      <div>
+        <div class="label">Totaal Debet</div>
+        <div id="totDebet">—</div>
+      </div>
+      <div>
+        <div class="label">Verschil</div>
+        <div id="balansDiff">—</div>
+      </div>
+      <div style="margin-left:auto;" id="balansVerdict">—</div>
+    </div>
+
+    <!-- Memoriaal-tabel -->
+    <div class="card">
+      <h3>Memoriaal-voorstel (<span id="aantalRegels">0</span> regels)</h3>
+      <p class="lead" style="margin-bottom:8px;font-size:12px;">
+        Credit-regels per klant + debet-regels onderaan. Logic4-koppeling
+        (debiteurnummer + factuurnummer) volgt in een latere versie. Voor nu
+        zoek je die per regel handmatig op in Logic4.
+      </p>
+      <div style="overflow-x:auto;">
+        <table class="memoriaal" id="memoriaalTable">
+          <thead>
+            <tr>
+              <th>Datum</th>
+              <th class="num">Credit</th>
+              <th class="num">Debet</th>
+              <th>Debiteur</th>
+              <th>Bol-bestelnr</th>
+              <th>Artikel</th>
+              <th>Info / Omschrijving</th>
+              <th>GB-rekening</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="memoriaalBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Acties -->
+    <div class="actions">
+      <button class="primary" id="downloadBtn" type="button">📥 Download memoriaal-Excel</button>
+      <button class="secondary" id="resetBtn" type="button">Nieuwe Bol-factuur</button>
+    </div>
+
+  </section>
+
+</main>
+
+<script>
+const SESSION_KEY = "fp.session";
+const EMAIL_KEY = "fp.email";
+const HELPER_BASE = "";
+
+// ── Session + logout (zelfde patroon als andere tegels) ─────────
+function getSession() { return localStorage.getItem(SESSION_KEY) || ""; }
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(EMAIL_KEY);
+}
+
+// Boot: check sessie, anders terug naar dashboard
+(async function boot() {
+  const session = getSession();
+  if (!session) { location.href = "dashboard.html"; return; }
+  try {
+    const r = await fetch(HELPER_BASE + "/api/me", {
+      headers: { "Authorization": "Bearer " + session }
+    });
+    if (!r.ok) { clearSession(); location.href = "dashboard.html"; return; }
+    const j = await r.json();
+    const email = j.email || j.username || "";
+    document.getElementById("userEmail").textContent = email;
+    // Access-check client-side; server doet zelfde voor data-endpoints
+    const ALLOWED = new Set([
+      "don@fonteyn.nl",        "don",        "fonteyn.don",
+      "osman@fonteyn.nl",      "osman",      "fonteyn.osman",
+      "gerrit@fonteyn.nl",     "gerrit",
+      "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+    ]);
+    if (!ALLOWED.has((email || "").toLowerCase())) {
+      alert("Geen toegang tot Bol.com koppeling.");
+      location.href = "dashboard.html";
+      return;
+    }
+  } catch (e) {
+    console.error("Boot failed:", e);
+    location.href = "dashboard.html";
+  }
+})();
+
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  const session = getSession();
+  try { await fetch(HELPER_BASE + "/api/logout", { method: "POST", headers: { "Authorization": "Bearer " + session } }); } catch {}
+  clearSession();
+  location.href = "dashboard.html";
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Upload-flow
+// ─────────────────────────────────────────────────────────────────
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+const pickBtn = document.getElementById("pickBtn");
+const statusEl = document.getElementById("status");
+
+pickBtn.addEventListener("click", (e) => { e.stopPropagation(); fileInput.click(); });
+dropZone.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", (e) => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+dropZone.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  dropZone.classList.add("over");
+});
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("over"));
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropZone.classList.remove("over");
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+
+function setStatus(level, msg) {
+  if (!msg) { statusEl.classList.add("hidden"); return; }
+  statusEl.className = "status-msg " + level;
+  statusEl.textContent = msg;
+  statusEl.classList.remove("hidden");
+}
+
+// State na parsing — bewaar voor download
+let parsedData = null;
+
+async function handleFile(file) {
+  setStatus("", `Inlezen: ${file.name}…`);
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array", cellDates: true });
+    // Bol-factuur heeft typisch een sheet "Specificatie"
+    const sheetName = wb.SheetNames.find(n => /spec/i.test(n)) || wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+    parsedData = parseBolFactuur(rows);
+    renderResult(parsedData);
+    setStatus("ok", `Bol-factuur ingelezen: ${parsedData.factuurnr} (${parsedData.creditRegels.length} klant-betalingen)`);
+  } catch (e) {
+    console.error(e);
+    setStatus("bad", `Kon Excel niet inlezen: ${e.message}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Parser — Bol factuur-specificatie → memoriaal-structuur
+// ─────────────────────────────────────────────────────────────────
+// De Bol-Excel "Specificatie" heeft:
+//   Rij 1-7:  header (Periode, Factuurnummer, Verkopernummer)
+//   Rij 8:    kolomtitels
+//   Rij 9+:   data-regels, met Type in kolom 0:
+//             - "Commissie"                            (provisie per item)
+//             - "Correctie commissie"                  (provisie-restitutie)
+//             - "Verkoopprijs artikel(en), ontvangen…" (klant-betaling)
+//             - "Correctie verkoopprijs artikel(en)"   (klant-restitutie)
+//             - "Eindtotaal"                           (= netto Bol-overschrijving)
+//             - "<Type> Totaal"                        (subtotaal-regels, negeren)
+//
+// Memoriaal-structuur die we eruit halen:
+//   Credit-regels: per "Verkoopprijs ontvangen" regel = 1 klant-betaling
+//                  (waarde is in Excel negatief = wat Bol heeft binnen-
+//                   gekregen; in het memoriaal credit-positief)
+//   Debet 1: VERKOOPPROVISIE = Commissie + Correctie commissie (netto)
+//            → GB-rekening 4570 Verkoopprovisie
+//   Debet 2: BOL-OVERSCHRIJVING = Eindtotaal absolute waarde
+//            (wat Bol netto naar Fonteyn overmaakt)
+//            → GB-rekening 4999 Verschillenrekening
+function parseBolFactuur(rows) {
+  // Header-info uit rij 4, 5, 6 (1-indexed) = rij 3, 4, 5 (0-indexed)
+  let periode = "", factuurnr = "", verkopernr = "";
+  for (const row of rows.slice(0, 8)) {
+    if (!row) continue;
+    const label = String(row[0] || "").toLowerCase();
+    const val   = row[1] != null ? String(row[1]).trim() : "";
+    if (label.startsWith("periode"))         periode = val;
+    else if (label.startsWith("factuurn"))   factuurnr = val;
+    else if (label.startsWith("verkopern"))  verkopernr = val;
+  }
+
+  // Vanaf rij 9 (= index 8): kolomtitels in rij 8. Data vanaf rij 9.
+  // Kolommen (0-indexed):
+  //   0: Type
+  //   1: Type productidentificatie
+  //   2: Productidentificatie (EAN)
+  //   3: Artikelomschrijving
+  //   4: Datum
+  //   5: Bestelnummer
+  //   6: Aantal
+  //   9: Bedrag (excl)
+  //  10: BTW%
+  //  11: BTW-bedrag
+  //  12: Bedrag (incl)
+  const dataRows = rows.slice(8).filter(r => r && r[0]);
+
+  const creditRegels = [];   // klant-betalingen
+  let commissieTot = 0;      // som "Commissie" rijen (incl)
+  let correctieCommissieTot = 0;
+  let correctieVerkoopTot = 0;
+  let eindtotaalIncl = null;
+
+  for (const row of dataRows) {
+    const type = String(row[0] || "").trim();
+    const bestelnr = row[5] != null ? String(row[5]).trim() : "";
+    const artikel = row[3] != null ? String(row[3]).trim() : "";
+    const datum = row[4];
+    const bedragIncl = Number(row[12]) || 0;
+
+    // Subtotaal-regels skippen ("<Type> Totaal" zonder bestelnummer)
+    if (/totaal$/i.test(type) && !bestelnr) {
+      if (/^eindtotaal/i.test(type)) eindtotaalIncl = bedragIncl;
+      continue;
+    }
+
+    if (/^verkoopprijs/i.test(type) && bestelnr) {
+      // Klant betaling: in Excel meestal negatief, memoriaal credit = abs
+      creditRegels.push({
+        type: "verkoop",
+        datum, bestelnr, artikel,
+        bedrag: Math.abs(bedragIncl),
+      });
+    } else if (/^correctie verkoopprijs/i.test(type) && bestelnr) {
+      // Klant restitutie: negeert credit
+      creditRegels.push({
+        type: "correctie-verkoop",
+        datum, bestelnr, artikel,
+        bedrag: -Math.abs(bedragIncl),  // negatief op credit-zijde
+      });
+    } else if (/^commissie/i.test(type) && !/^correctie/i.test(type)) {
+      commissieTot += bedragIncl;
+    } else if (/^correctie commissie/i.test(type)) {
+      correctieCommissieTot += bedragIncl;
+    }
+  }
+
+  // Verkoopprovisie debet = commissie + correctie commissie (incl. BTW)
+  // (Commissie is positief in Excel = kosten voor ons = debet op 4570)
+  const verkoopprovisie = commissieTot + correctieCommissieTot;
+
+  // Bol-overschrijving = wat Bol netto naar Fonteyn overmaakt = abs(Eindtotaal)
+  // Als Eindtotaal niet expliciet stond: bereken uit som
+  const totaalVerkoop = creditRegels.reduce((s, r) => s + r.bedrag, 0);
+  const bolOverschrijving = eindtotaalIncl != null
+    ? Math.abs(eindtotaalIncl)
+    : (totaalVerkoop - verkoopprovisie);
+
+  return {
+    factuurnr, periode, verkopernr,
+    creditRegels,
+    debetRegels: [
+      {
+        type: "bol-overschrijving",
+        bedrag: bolOverschrijving,
+        info: `BOL.COM ${periode}`,
+        gb: "4999 Verschillenrekening",
+      },
+      {
+        type: "verkoopprovisie",
+        bedrag: verkoopprovisie,
+        info: "BOL.COM",
+        gb: "4570 Verkoopprovisie",
+      },
+    ],
+    totals: {
+      credit: totaalVerkoop,
+      debet:  verkoopprovisie + bolOverschrijving,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Render
+// ─────────────────────────────────────────────────────────────────
+function renderResult(data) {
+  document.getElementById("resultSection").classList.remove("hidden");
+  document.getElementById("infoFactuurnr").textContent = data.factuurnr || "—";
+  document.getElementById("infoPeriode").textContent = data.periode || "—";
+  document.getElementById("infoVerkopernr").textContent = data.verkopernr || "—";
+  document.getElementById("infoAantalRijen").textContent = data.creditRegels.length;
+
+  // Boek-datum default = vandaag (Osman gebruikt typisch de factuurdatum,
+  // wat aansluit op wanneer 't memoriaal wordt gemaakt — niet de Bol-datum)
+  const today = new Date().toISOString().slice(0, 10);
+  document.getElementById("boekDatum").value = today;
+  document.getElementById("boekRef").value = `BOL.COM ${data.periode || ""}`.trim();
+
+  // Tabel
+  const tbody = document.getElementById("memoriaalBody");
+  tbody.innerHTML = "";
+
+  for (const r of data.creditRegels) {
+    const tr = document.createElement("tr");
+    const datumStr = formatDate(r.datum);
+    const bedragStr = fmtEur(r.bedrag);
+    tr.innerHTML = `
+      <td>${escapeHtml(datumStr)}</td>
+      <td class="num">${bedragStr}</td>
+      <td class="num"></td>
+      <td><span class="match-pill todo">handmatig in Logic4</span></td>
+      <td class="bestelnr">${escapeHtml(r.bestelnr)}</td>
+      <td>${escapeHtml(truncate(r.artikel, 40))}</td>
+      <td>Betaling Bol-bestelling ${escapeHtml(r.bestelnr)}</td>
+      <td>1300 Debiteuren</td>
+      <td><span class="match-pill todo">v2</span></td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  // Debet-regels
+  for (const d of data.debetRegels) {
+    const tr = document.createElement("tr");
+    tr.className = "debet-row";
+    tr.innerHTML = `
+      <td>${escapeHtml(document.getElementById("boekDatum").value)}</td>
+      <td class="num"></td>
+      <td class="num">${fmtEur(d.bedrag)}</td>
+      <td>—</td>
+      <td></td>
+      <td></td>
+      <td>${escapeHtml(d.info)}</td>
+      <td>${escapeHtml(d.gb)}</td>
+      <td><span class="match-pill ok">auto</span></td>
+    `;
+    tbody.appendChild(tr);
+  }
+
+  // Totaal-regel
+  const trTot = document.createElement("tr");
+  trTot.className = "total-row";
+  trTot.innerHTML = `
+    <td>Totaal</td>
+    <td class="num">${fmtEur(data.totals.credit)}</td>
+    <td class="num">${fmtEur(data.totals.debet)}</td>
+    <td colspan="6"></td>
+  `;
+  tbody.appendChild(trTot);
+
+  document.getElementById("aantalRegels").textContent =
+    data.creditRegels.length + data.debetRegels.length;
+
+  // Balans-check
+  const diff = data.totals.credit - data.totals.debet;
+  const balOk = Math.abs(diff) < 0.01;
+  document.getElementById("totCredit").textContent = fmtEur(data.totals.credit);
+  document.getElementById("totDebet").textContent  = fmtEur(data.totals.debet);
+  document.getElementById("balansDiff").textContent = fmtEur(diff);
+  document.getElementById("balansVerdict").textContent = balOk ? "✓ klopt" : "✗ verschil!";
+  document.getElementById("balans").className = "balans " + (balOk ? "ok" : "bad");
+
+  // Scroll naar resultaat
+  document.getElementById("resultSection").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Download — produceert Excel in EXACT het kolomformaat dat Osman
+// gewend is (cf. "Memoriaal in excel bol.xlsx"). Osman opent die,
+// vult de Debiteur-kolom in via zoekactie in Logic4, en typt het
+// memoriaal in Logic4's Dagboek-scherm over (Logic4 heeft geen
+// import-API in jullie scope).
+// ─────────────────────────────────────────────────────────────────
+document.getElementById("downloadBtn").addEventListener("click", () => {
+  if (!parsedData) return;
+  const boekDatum = document.getElementById("boekDatum").value || new Date().toISOString().slice(0, 10);
+  const boekRef   = document.getElementById("boekRef").value || `BOL.COM ${parsedData.periode}`;
+
+  // Kolomstructuur identiek aan Osman's "Memoriaal in excel bol.xlsx":
+  const rows = [
+    ["Datum","Credit","Debet","Crediteur","Debiteur","Zoeken","Relatie","OK","Toewijzen","Info","GB rekening info","Afschrift debiteur/crediteur"]
+  ];
+
+  for (const r of parsedData.creditRegels) {
+    rows.push([
+      boekDatum,
+      r.bedrag,
+      null,
+      null,
+      "",  // Debiteur — handmatig in Logic4 op te zoeken (v2 vult auto)
+      "Zoeken",
+      "",  // Relatie — wordt door Logic4 ingevuld bij debiteur-koppeling
+      "True",
+      "Toewijzen",
+      `Betaling voor Bol-bestelling ${r.bestelnr}`,
+      "1300 Debiteuren",
+      null,
+    ]);
+  }
+
+  for (const d of parsedData.debetRegels) {
+    rows.push([
+      boekDatum,
+      null,
+      d.bedrag,
+      null,
+      null,
+      "Zoeken",
+      "",
+      "True",
+      "Toewijzen",
+      d.type === "bol-overschrijving" ? boekRef : d.info,
+      d.gb,
+      null,
+    ]);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Memoriaal");
+  const fname = `memoriaal-bol-${parsedData.factuurnr || "onbekend"}.xlsx`;
+  XLSX.writeFile(wb, fname);
+  setStatus("ok", `Excel gedownload: ${fname}. Open in Logic4 → Dagboek-scherm → over typen.`);
+});
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+  parsedData = null;
+  document.getElementById("resultSection").classList.add("hidden");
+  setStatus("", "");
+  fileInput.value = "";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Util
+// ─────────────────────────────────────────────────────────────────
+function fmtEur(n) {
+  return new Intl.NumberFormat("nl-NL", { style: "currency", currency: "EUR" }).format(Number(n) || 0);
+}
+function formatDate(d) {
+  if (!d) return "";
+  if (d instanceof Date) return d.toISOString().slice(0, 10);
+  const s = String(d).trim();
+  // Bol gebruikt soms 2026-03-25 00:00:00 als string
+  return s.slice(0, 10);
+}
+function truncate(s, n) {
+  s = String(s || "");
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+</script>
+
+</body>
+</html>
