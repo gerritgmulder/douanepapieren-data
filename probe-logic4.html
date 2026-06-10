@@ -109,6 +109,15 @@
   <button id="runPaymentProbe">Payment/Order-write endpoints testen</button>
   <div id="paymentProbeStatus" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
   <div id="paymentProbeResult"></div>
+
+  <hr style="margin:40px 0;border:none;border-top:1px solid var(--border);">
+
+  <h2>AddPayment — body-vereisten testen</h2>
+  <p class="lead">Het Route-A-resultaat liet zien dat <code>/v3/Orders/AddPayment</code> bestaat. Nu testen we welke body Logic4 verwacht. We sturen 5 verschillende body-varianten (alle met OrderId -1 = veilig, raakt geen echte order) en tonen Logic4's volledige validatie-respons. Daaruit lezen we welke velden vereist zijn en in welk formaat.</p>
+
+  <button id="runBodyProbe">AddPayment body-vereisten testen</button>
+  <div id="bodyProbeStatus" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
+  <div id="bodyProbeResult"></div>
 </main>
 
 <script>
@@ -698,6 +707,119 @@ document.getElementById("runPaymentProbe").addEventListener("click", async () =>
       </table>
       <div class="desc" style="margin-top:14px;"><b>Plak dit terug naar Claude:</b></div>
       <pre>${escapeHtml(results.map(r => `${r.verdict.padEnd(30)} ${r.ep.padEnd(50)} ${r.detail}`).join("\n"))}</pre>
+    </div>
+  `;
+  btn.disabled = false;
+});
+
+// ═══════════════════════════════════════════════════════════════
+// AddPayment body-vereisten probe — vinden wat /v3/Orders/AddPayment
+// in z'n body verwacht. We sturen 5 verschillende body-varianten en
+// tonen Logic4's volledige validatie-respons. Logic4 returnt typisch
+// een ProblemDetails-formaat met een 'errors' object dat per missend
+// of foutief veld een melding bevat.
+//
+// VEILIG: alle bodies gebruiken OrderId -1 → geen echte order
+// kan geraakt worden.
+// ═══════════════════════════════════════════════════════════════
+document.getElementById("runBodyProbe").addEventListener("click", async () => {
+  const btn = document.getElementById("runBodyProbe");
+  const status = document.getElementById("bodyProbeStatus");
+  const result = document.getElementById("bodyProbeResult");
+  btn.disabled = true;
+  result.innerHTML = "";
+  status.textContent = "Testen — kan ~20s duren…";
+
+  // 5 body-varianten, oplopend in compleetheid. Logic4 vertelt per call
+  // welke velden vereist of fout zijn — uit het cumulatieve resultaat
+  // weten we straks exact wat de juiste body is.
+  const bodies = [
+    { label: "Leeg",            body: {} },
+    { label: "Alleen OrderId",  body: { OrderId: -1 } },
+    { label: "OrderId+Amount",  body: { OrderId: -1, Amount: 1.0 } },
+    { label: "+ Datum",         body: { OrderId: -1, Amount: 1.0, PaymentDate: "2026-04-18", Date: "2026-04-18" } },
+    { label: "+ Method+Ref",    body: { OrderId: -1, Amount: 1.0, PaymentDate: "2026-04-18", Date: "2026-04-18", PaymentMethodId: 1, Reference: "test-bol-bestelnr", Description: "test" } },
+  ];
+
+  const results = [];
+  for (const v of bodies) {
+    status.textContent = `Testen ${v.label}…`;
+    try {
+      const session = localStorage.getItem(SESSION_KEY);
+      const r = await fetch("/api/logic4-call", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + (session || "")
+        },
+        body: JSON.stringify({ path: "/v3/Orders/AddPayment", method: "POST", body: v.body })
+      });
+      const jj = await r.json().catch(() => ({}));
+      // Volledige upstream-respons opslaan (niet alleen de titel)
+      // — daar lezen we de errors object uit.
+      results.push({
+        label: v.label,
+        bodyIn: v.body,
+        upstreamStatus: jj.status || (r.ok ? "?" : r.status),
+        upstreamData: jj.data,
+        helperOk: r.ok,
+        jjOk: jj.ok,
+        error: jj.error,
+      });
+    } catch (e) {
+      results.push({ label: v.label, bodyIn: v.body, error: e.message });
+    }
+  }
+
+  status.textContent = "Klaar — resultaten hieronder. Plak terug naar Claude.";
+
+  // Verzamel alle unieke veld-meldingen uit de errors-objecten
+  const fieldErrors = new Map();
+  for (const r of results) {
+    const d = r.upstreamData;
+    if (d && typeof d === "object" && d.errors && typeof d.errors === "object") {
+      for (const [field, msgs] of Object.entries(d.errors)) {
+        if (!fieldErrors.has(field)) fieldErrors.set(field, new Set());
+        const m = Array.isArray(msgs) ? msgs : [msgs];
+        for (const msg of m) fieldErrors.get(field).add(String(msg));
+      }
+    }
+  }
+
+  let fieldSummary = "";
+  if (fieldErrors.size > 0) {
+    fieldSummary = `
+      <div class="card">
+        <h3>Gevonden veld-vereisten</h3>
+        <table class="field-table">
+          <thead><tr><th>Veld</th><th>Meldingen</th></tr></thead>
+          <tbody>
+            ${[...fieldErrors.entries()].map(([field, msgs]) => `
+              <tr>
+                <td class="name">${escapeHtml(field)}</td>
+                <td>${[...msgs].map(m => escapeHtml(m)).join("<br>")}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  result.innerHTML = `
+    ${fieldSummary}
+    <div class="card">
+      <h3>Per body-variant — ruwe Logic4-respons</h3>
+      ${results.map(r => `
+        <div style="margin:14px 0;padding-bottom:14px;border-bottom:1px dashed #e5e7eb;">
+          <div><b>${escapeHtml(r.label)}</b> — body: <code>${escapeHtml(JSON.stringify(r.bodyIn))}</code></div>
+          <div style="color:var(--muted);font-size:12px;margin:4px 0;">
+            Logic4 status: <b>${escapeHtml(String(r.upstreamStatus))}</b>
+          </div>
+          <pre>${escapeHtml(JSON.stringify(r.upstreamData, null, 2).slice(0, 1200))}</pre>
+        </div>
+      `).join("")}
+      <div class="desc" style="margin-top:14px;"><b>Plak deze hele blok terug naar Claude:</b></div>
+      <pre>${escapeHtml(results.map(r => `=== ${r.label} ===\nbody: ${JSON.stringify(r.bodyIn)}\nupstream-status: ${r.upstreamStatus}\nresponse: ${JSON.stringify(r.upstreamData, null, 2).slice(0, 800)}\n`).join("\n"))}</pre>
     </div>
   `;
   btn.disabled = false;
