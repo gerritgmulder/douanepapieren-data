@@ -142,12 +142,14 @@ async function handleKioskPage(request, env, url) {
     return new Response("<h1>403</h1><p>Missing or wrong kiosk key.</p>",
       { status: 403, headers: { "Content-Type": "text/html" } });
   }
-  // Cache-bust met de meegegeven ?v= zodat een verse push direct zichtbaar
-  // is op de kiosk (anders test je een oude gecachte versie). Korte TTL.
-  const ver = url.searchParams.get("v") || "";
+  // Tijd-gebaseerde cache-bust (verandert elke 10s) zodat de kiosk altijd
+  // automatisch de nieuwste signin.html krijgt — de bezoeker/gebruiker
+  // hoeft NIETS aan de URL toe te voegen. Zonder dit blijft GitHub's CDN
+  // een oude versie serveren.
+  const cb = Math.floor(Date.now() / 10000);
   const src = await fetch(
-    "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/signin.html?cb=" + encodeURIComponent(ver),
-    { cf: { cacheTtl: 15, cacheEverything: true } }
+    "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/signin.html?cb=" + cb,
+    { cf: { cacheTtl: 10, cacheEverything: true } }
   );
   if (!src.ok) {
     return new Response("<h1>502</h1><p>Could not load page from GitHub.</p>",
@@ -206,6 +208,133 @@ async function handleVisitTrack(request, env, url) {
   return Response.redirect(redirect.toString(), 302);
 }
 
+// ─── E-mailverificatie ─────────────────────────────────────────────
+// POST /email/send  body { id, m, email, name }  (auth via X-Fonteyn-Auth)
+//   → maakt een verify-token, slaat 't op bij de sign-in en mailt een
+//     verificatielink via Resend. Zonder RESEND_API_KEY → email-not-configured.
+// GET  /verify?id=..&m=..&t=..  (door de bezoeker geopend vanuit de mail)
+//   → token checken, sign-in markeren als geverifieerd, IP/device/locatie/
+//     tijd vastleggen, doorsturen naar de Fonteyn-site.
+function randToken() {
+  const a = new Uint8Array(16);
+  crypto.getRandomValues(a);
+  let s = "";
+  for (let i = 0; i < a.length; i++) s += (a[i] + 256).toString(16).slice(1);
+  return s;
+}
+
+async function sendEmail(env, to, subject, html) {
+  const key = env.RESEND_API_KEY;
+  if (!key) return { ok: false, error: "email-not-configured" };
+  const from = env.MAIL_FROM || "Fonteyn <onboarding@resend.dev>";
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + key, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: from, to: [to], subject: subject, html: html }),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    return { ok: false, error: "mail-error: " + t.slice(0, 200) };
+  }
+  return { ok: true };
+}
+
+async function handleEmailSend(request, env) {
+  const authHeader = request.headers.get("X-Fonteyn-Auth") || "";
+  if (!env.SHARED_SECRET || authHeader !== env.SHARED_SECRET) return reply(401, "Unauthorized");
+  if (request.method !== "POST") return reply(405, "Method not allowed");
+  let body;
+  try { body = await request.json(); } catch { return reply(400, { ok: false, error: "invalid-json" }); }
+  const id = String(body.id || "");
+  const m = String(body.m || "").toLowerCase();
+  const email = String(body.email || "").trim();
+  const name = String(body.name || "").slice(0, 60);
+  if (!email || email.indexOf("@") < 1) return reply(400, { ok: false, error: "invalid-email" });
+  if (!id || !/^signin-\d{4}-\d{2}$/.test(m)) return reply(400, { ok: false, error: "invalid-ref" });
+
+  const token = randToken();
+  try {
+    const data = await env.FONTEYN_DATA.get(m, { type: "json" });
+    if (data && Array.isArray(data.entries)) {
+      const entry = data.entries.filter(function (e) { return e.id === id; })[0];
+      if (entry) {
+        entry.verifyToken = token;
+        entry.emailSentAt = new Date().toISOString();
+        await env.FONTEYN_DATA.put(m, JSON.stringify(data));
+      }
+    }
+  } catch (e) { /* doorgaan; mail kan nog steeds */ }
+
+  const base = new URL(request.url).origin;
+  const link = base + "/verify?id=" + encodeURIComponent(id) + "&m=" + encodeURIComponent(m) + "&t=" + token;
+  const html =
+    '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;">' +
+    '<h2 style="color:#144734;">Welcome to Fonteyn' + (name ? ", " + name.replace(/[<>]/g, "") : "") + '!</h2>' +
+    '<p>Thanks for visiting our showroom. Please confirm your email address by clicking the button below.</p>' +
+    '<p style="text-align:center;margin:28px 0;"><a href="' + link + '" ' +
+    'style="background:#8bc53f;color:#144734;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:10px;display:inline-block;">Confirm my visit</a></p>' +
+    '<p style="font-size:12px;color:#888;">If the button doesn\'t work, copy this link:<br>' + link + '</p>' +
+    '</div>';
+  const sent = await sendEmail(env, email, "Please confirm your visit to Fonteyn", html);
+  return reply(200, sent);
+}
+
+async function handleVerify(request, env, url) {
+  const id = url.searchParams.get("id") || "";
+  const m = (url.searchParams.get("m") || "").toLowerCase();
+  const t = url.searchParams.get("t") || "";
+
+  const dest = env.KIOSK_REDIRECT_URL || "https://www.fonteyn.co.uk/";
+  let redirect;
+  try { redirect = new URL(dest); } catch (e) { redirect = new URL("https://www.fonteyn.co.uk/"); }
+  redirect.searchParams.set("utm_source", "showroom");
+  redirect.searchParams.set("utm_medium", "email");
+  redirect.searchParams.set("utm_campaign", "signin");
+  if (id) redirect.searchParams.set("fv", id);
+
+  let okVerified = false;
+  if (id && t && /^signin-\d{4}-\d{2}$/.test(m)) {
+    try {
+      const data = await env.FONTEYN_DATA.get(m, { type: "json" });
+      if (data && Array.isArray(data.entries)) {
+        const entry = data.entries.filter(function (e) { return e.id === id; })[0];
+        if (entry && entry.verifyToken && entry.verifyToken === t) {
+          const cf = request.cf || {};
+          entry.emailVerified = true;
+          entry.track = {
+            ip: request.headers.get("CF-Connecting-IP") || "",
+            ua: (request.headers.get("User-Agent") || "").slice(0, 300),
+            country: cf.country || "", region: cf.region || "", city: cf.city || "",
+            ts: new Date().toISOString(),
+            via: "email",
+          };
+          entry.verifyToken = "";   // eenmalig
+          await env.FONTEYN_DATA.put(m, JSON.stringify(data));
+          okVerified = true;
+        }
+      }
+    } catch (e) { /* val terug op een nette pagina */ }
+  }
+
+  // Eenvoudige bevestigingspagina (geen kale redirect — voelt betrouwbaarder
+  // voor de bezoeker), met automatische doorklik naar de Fonteyn-site.
+  const msg = okVerified
+    ? "Your email is confirmed — thank you!"
+    : "This link is invalid or has already been used.";
+  const page =
+    '<!doctype html><html lang="en"><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<meta http-equiv="refresh" content="2;url=' + redirect.toString() + '">' +
+    '<title>Fonteyn</title></head>' +
+    '<body style="font-family:Arial,sans-serif;text-align:center;padding:48px 20px;color:#144734;">' +
+    '<div style="font-size:48px;">' + (okVerified ? "&#9989;" : "&#9888;&#65039;") + '</div>' +
+    '<h2>' + msg + '</h2>' +
+    '<p style="color:#666;">Taking you to fonteyn.co.uk…</p>' +
+    '<p><a href="' + redirect.toString() + '" style="color:#72a531;">Continue</a></p>' +
+    '</body></html>';
+  return new Response(page, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
@@ -217,6 +346,14 @@ export default {
     // Kiosk-pagina (UK showroom, geen Logic4 nodig)
     if (url.pathname === "/signin") {
       return handleKioskPage(request, env, url);
+    }
+
+    // E-mailverificatie: mail versturen + verify-link (legt IP vast)
+    if (url.pathname === "/email/send") {
+      return handleEmailSend(request, env);
+    }
+    if (url.pathname === "/verify") {
+      return handleVerify(request, env, url);
     }
 
     // SMS-verificatie endpoints (legacy — vervangen door QR /v, blijft werken)

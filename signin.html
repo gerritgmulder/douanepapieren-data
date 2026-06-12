@@ -243,7 +243,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           <input type="text" id="fName" autocomplete="off" autocapitalize="words" placeholder="Your full name">
         </div>
         <div class="field">
-          <label>Email address <span class="opt">(optional)</span></label>
+          <label>Email address</label>
           <input type="email" id="fEmail" autocomplete="off" placeholder="name@example.com">
         </div>
         <div class="field">
@@ -639,11 +639,17 @@ async function saveEntry(entry) {
   refreshPresentCount();
 }
 
+function emailLooksValid(s) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || "").trim());
+}
+
 tap("btnSubmitIn", async () => {
   const name = el("fName").value.trim();
   const err = el("formErr");
+  const email = el("fEmail").value.trim();
   const phone = normPhone(el("fPhone").value); // optioneel — null als leeg/ongeldig
   if (!name) { err.textContent = "Please enter your name."; err.style.display = "block"; return; }
+  if (!emailLooksValid(email)) { err.textContent = "Please enter a valid email address — we'll send you a confirmation link."; err.style.display = "block"; return; }
   if (!strokes.length) { err.textContent = "Please sign in the signature box."; err.style.display = "block"; return; }
   err.style.display = "none";
   el("btnSubmitIn").disabled = true;
@@ -652,7 +658,7 @@ tap("btnSubmitIn", async () => {
     id: "v" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
     date: todayStr(),
     name,
-    email: el("fEmail").value.trim(),
+    email: email,
     phone: phone || el("fPhone").value.trim(),
     vehicle: el("fVehicle").value.trim().toUpperCase(),
     heard: heardSel,
@@ -663,7 +669,27 @@ tap("btnSubmitIn", async () => {
 
   try {
     await saveEntry(entry);
-    showQrOverlay(entry);   // toont QR-scherm; sluit terug naar home
+    // Verificatiemail versturen via de Worker. Lukt dat → 'check je mail'-
+    // scherm. Is e-mail (nog) niet geconfigureerd op de worker → val terug
+    // op het QR-scherm zodat de kiosk altijd blijft werken.
+    let mailRes = { ok: false, error: "unknown" };
+    try {
+      const base = DATA_STORE_BASE.replace("/data/", "");
+      const r = await fetch(base + "/email/send", {
+        method: "POST",
+        headers: { "X-Fonteyn-Auth": DATA_STORE_AUTH, "Content-Type": "application/json" },
+        body: JSON.stringify({ id: entry.id, m: monthKey(), email: entry.email, name: entry.name })
+      });
+      mailRes = await r.json();
+    } catch (e2) { mailRes = { ok: false, error: e2.message }; }
+
+    if (mailRes.ok) {
+      showVerifyEmailOverlay(entry);
+    } else {
+      // Geen mail mogelijk → QR als terugval (legt ook IP vast bij scan)
+      console.warn("[signin] mail niet verstuurd:", mailRes.error);
+      showQrOverlay(entry);
+    }
   } catch (e) {
     err.textContent = "Could not save — please check the internet connection and try again. (" + e.message + ")";
     err.style.display = "block";
@@ -671,6 +697,41 @@ tap("btnSubmitIn", async () => {
     el("btnSubmitIn").disabled = false;
   }
 });
+
+// ─── 'Check je mail'-scherm na inschrijven ───
+// Blijft staan tot de bezoeker op de verificatielink klikt (we pollen de
+// KV op entry.emailVerified) of tot staf 'Done' tikt.
+function showVerifyEmailOverlay(entry) {
+  const first = (entry.name || "").split(" ")[0];
+  const o = document.createElement("div");
+  o.className = "overlay";
+  o.innerHTML =
+    '<div class="icon">📧</div>' +
+    '<h2>Almost done, ' + escapeHtml(first) + '!</h2>' +
+    '<p style="max-width:560px;">We\'ve sent a confirmation link to <b>' + escapeHtml(entry.email) + '</b>.<br>Please open your email and tap the link to confirm your visit.</p>' +
+    '<p id="veWait" style="font-size:15px;opacity:0.9;margin-top:8px;">Waiting for confirmation…</p>' +
+    '<button id="veDone" style="margin-top:18px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.5);border-radius:12px;padding:12px 28px;font:inherit;font-size:15px;cursor:pointer;">Done</button>';
+  document.body.appendChild(o);
+
+  let poll = null;
+  const stop = function () { if (poll) { clearInterval(poll); poll = null; } };
+  const close = function () { stop(); o.remove(); show("home"); };
+  tap(o.querySelector("#veDone"), close);
+
+  poll = setInterval(function () {
+    kvLoad(monthKey()).then(function (data) {
+      const fresh = (data.entries || []).filter(function (e) { return e.id === entry.id; })[0];
+      if (fresh && fresh.emailVerified) {
+        stop();
+        o.querySelector(".icon").textContent = "✅";
+        o.querySelector("h2").textContent = "Thank you, " + first + "!";
+        o.querySelector("p").innerHTML = "Your email is confirmed — enjoy your visit.";
+        const w = o.querySelector("#veWait"); if (w) w.style.display = "none";
+        setTimeout(close, 3500);
+      }
+    }).catch(function () {});
+  }, 3000);
+}
 
 // ─── QR-scherm na inschrijven ───
 // De QR linkt naar het Worker-endpoint /v?id=..&m=.. Dat legt (bij scan
@@ -840,12 +901,18 @@ async function renderStaffLog(bucket) {
     // Web-visit cel: gevuld zodra de bezoeker de QR scant (Worker /v zet
     // e.track met ip/locatie/tijd). De fv-id (= e.id) is ook als URL-param
     // naar de site meegestuurd, dus daarop kun je in je web-analytics zoeken.
-    let webCell = '<span style="color:#cbd5e1;">not scanned</span>';
+    // 'not verified' tot de bezoeker op de e-mail-link klikt (of de QR scant).
+    // Worker /verify + /v zetten e.track (ip/locatie/tijd) en /verify zet
+    // e.emailVerified. fv-id (= e.id) staat ook in de URL → zoekbaar in analytics.
+    let webCell = '<span style="color:#cbd5e1;">not verified</span>';
     if (e.track && e.track.ts) {
       const loc = [e.track.city, e.track.country].filter(Boolean).join(", ");
-      const t = e.track.ip ? `IP ${e.track.ip}${loc ? " · " + loc : ""}` : (loc || "scanned");
-      webCell = `<span class="still-in" title="Search fv=${escapeHtml(e.id)} in your web analytics">✓ scanned</span>`
+      const t = e.track.ip ? `IP ${e.track.ip}${loc ? " · " + loc : ""}` : (loc || "verified");
+      const label = e.emailVerified ? "✓ email verified" : "✓ scanned";
+      webCell = `<span class="still-in" title="Search fv=${escapeHtml(e.id)} in your web analytics">${label}</span>`
         + `<div style="font-size:10px;color:var(--muted);">${escapeHtml(t)}</div>`;
+    } else if (e.emailSentAt) {
+      webCell = '<span style="color:#92400e;">email sent…</span>';
     }
     tr.innerHTML = `
       <td>${escapeHtml(fmtDateGB(e.date))}</td>
