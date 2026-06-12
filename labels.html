@@ -286,13 +286,15 @@
   }
 
   /* ─── Print-regels ───────────────────────────────────────── */
+  /* De @page-size wordt dynamisch gezet via <style id="pageStyle">
+     (zie onderaan <head>) op basis van de gekozen printstand:
+       liggend  → @page 209mm 99mm  (driver-stock = 209 breed)
+       gedraaid → @page 99mm 209mm  (rol voert 99mm breed uit;
+                   content wordt 90° gedraaid op een portrait-pagina)
+     Dit MOET matchen met de stock-instelling van de ZDesigner-driver —
+     anders schiet de printer blanco labels tussendoor om weer in lijn
+     te komen met de label-perforatie. */
   @media print {
-    /* Page-size MOET matchen met de fysieke label (209×99mm) — anders
-       schiet de printer blanco labels tussendoor om weer in lijn te
-       komen met de label-perforatie. Was eerder A6 (148×105mm), wat
-       een mismatch van 60mm/label opleverde. */
-    @page { size: 209mm 99mm; margin: 0; }
-
     html, body { background: #fff !important; margin: 0; padding: 0; }
 
     /* DWING de browser om achtergrondkleuren en logo-afbeelding mee te
@@ -313,20 +315,23 @@
       overflow: hidden;
     }
 
-    /* Elke .label = één label-pagina.
-       Hoogte 4mm onder de page-hoogte (99mm) zodat zelfs varierende
-       content (lange description, brede barcode, async-geladen logo)
-       nooit over de page-grens overlapt en een blanco tussenlabel
-       veroorzaakt. ZDesigner-printer heeft zelf advance-margin tussen
-       labels, dus 4mm is op de fysieke print onmerkbaar.
-
-       Alleen `break-after: page` gebruiken (modern). De oude legacy
-       `page-break-after: always` werd vroeger ÉN naast gezet, maar
-       de twee samen kunnen in Chromium een double-break triggeren
-       waardoor er een random blank-page tussendoor verschijnt. */
-    #printArea .label {
+    /* Elke .pg = één label-pagina (wrapper om .label, gebouwd in doPrint).
+       Hoogte 4mm onder de page-hoogte zodat zelfs varierende content
+       (lange description, brede barcode, async-geladen logo) nooit over
+       de page-grens overlapt en een blanco tussenlabel veroorzaakt.
+       Alleen `break-after: page` (modern) — legacy page-break-after
+       ernaast kan in Chromium een double-break triggeren. */
+    #printArea .pg {
       break-after: page;
       break-inside: avoid;
+      width: 209mm; height: 95mm;
+      overflow: hidden;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    #printArea .pg:last-child { break-after: auto; }
+    #printArea .pg .label {
+      break-after: auto;
       box-shadow: none !important;
       border: 0 !important;
       width: 209mm; height: 95mm;
@@ -334,14 +339,31 @@
       margin: 0 !important;
       padding: 0 !important;
     }
-    #printArea .label:last-child {
-      break-after: auto;
+
+    /* ── Gedraaide stand: portrait-pagina 99×209, content 90° gedraaid ──
+       De rol voert 99mm breed uit; de label-lengte (209mm) loopt in de
+       feed-richting. We leggen het 205×99-label gedraaid op de pagina:
+       rotate(90°) om top-left + translateY(-99mm) zet 'm exact in beeld
+       (x ∈ 0–99, y ∈ 0–205). */
+    body.rot-mode #printArea .pg {
+      width: 99mm; height: 205mm;
+      position: relative;
     }
+    body.rot-mode #printArea .pg .label {
+      width: 205mm; height: 99mm;
+      transform-origin: top left;
+      transform: rotate(90deg) translateY(-99mm);
+    }
+
     #printArea .label-frame { display: none; }
   }
 
   .hidden { display: none !important; }
 </style>
+<!-- Dynamische @page-size — gezet door applyPrintMode() o.b.v. de
+     printstand-keuze in de toolbar. Staat NA de hoofdstijl zodat 'ie
+     altijd wint in de cascade. -->
+<style id="pageStyle">@media print { @page { size: 209mm 99mm; margin: 0; } }</style>
 </head>
 <body>
 
@@ -430,6 +452,14 @@
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);">
           Aantal
           <input type="number" id="printCountInput" min="1" placeholder="alles" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);">
+          Printstand
+          <select id="printModeSel" style="padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;"
+                  title="Liggend = pagina 209×99 (driver-stock 209 breed). Gedraaid = pagina 99×209, content 90° gedraaid (rol voert 99mm breed uit). Kies de stand die matcht met de stock-instelling van de ZDesigner-driver.">
+            <option value="land">Liggend (209×99)</option>
+            <option value="rot">Gedraaid (99×209)</option>
+          </select>
         </label>
         <button type="button" class="secondary" id="debugPdfBtn" title="Sla de print-output op als PDF op het bureaublad — handig om vóór een grote print-batch te controleren of dimensies + oriëntatie kloppen, zonder labels te verspillen.">📄 Debug-PDF</button>
         <button type="button" id="printBtn">🖨️ Labels printen</button>
@@ -1123,6 +1153,41 @@ $("backToEditBtn").addEventListener("click", () => {
   $("step3").classList.add("hidden");
   $("step2").scrollIntoView({ behavior: "smooth" });
 });
+/* ─── Printstand (liggend vs gedraaid) ───────────────────────────
+   liggend : @page 209×99, print via Electron-bridge (dialog met
+             209×99 + landscape pre-filled vanuit main.js)
+   gedraaid: @page 99×209 portrait, label-content 90° gedraaid via
+             CSS. Print via window.print() — de bridge zou de
+             hardcoded 209×99-landscape uit main.js meesturen en
+             dat vecht met de CSS. window.print() volgt de @page.
+   Keuze wordt onthouden in localStorage zodat Manon 'm maar één
+   keer hoeft te zetten. */
+const PRINT_MODE_KEY = "fl.printMode";
+function getPrintMode() {
+  return localStorage.getItem(PRINT_MODE_KEY) === "rot" ? "rot" : "land";
+}
+function applyPrintMode(mode) {
+  localStorage.setItem(PRINT_MODE_KEY, mode);
+  document.body.classList.toggle("rot-mode", mode === "rot");
+  document.getElementById("pageStyle").textContent = mode === "rot"
+    ? "@media print { @page { size: 99mm 209mm; margin: 0; } }"
+    : "@media print { @page { size: 209mm 99mm; margin: 0; } }";
+  console.log(`[labels] printstand: ${mode === "rot" ? "gedraaid 99×209" : "liggend 209×99"}`);
+}
+$("printModeSel").value = getPrintMode();
+applyPrintMode(getPrintMode());
+$("printModeSel").addEventListener("change", () => applyPrintMode($("printModeSel").value));
+
+// Wrapper: elke label in een .pg (= één print-pagina). De .pg krijgt
+// de page-break; in gedraaide stand is de .pg portrait en draait de
+// CSS het label erin.
+function wrapInPage(labelEl) {
+  const pg = document.createElement("div");
+  pg.className = "pg";
+  pg.appendChild(labelEl);
+  return pg;
+}
+
 $("printBtn").addEventListener("click", doPrint);
 
 // Debug-PDF-knop: bouwt dezelfde labels op in #printArea als doPrint, maar
@@ -1157,7 +1222,14 @@ $("debugPdfBtn").addEventListener("click", async () => {
   // gebruiker hoeft alleen visueel te checken of het format klopt.
   const subset = allLabels.slice(0, 5);
   for (const { row, c, colliTotal, p, productTotal } of subset) {
-    area.appendChild(buildLabel(row, c, colliTotal, p, productTotal));
+    area.appendChild(wrapInPage(buildLabel(row, c, colliTotal, p, productTotal)));
+  }
+  // Let op: de Debug-PDF gebruikt main.js printToPDF met hardcoded
+  // 209×99-landscape. In gedraaide stand klopt de PDF-oriëntatie dus
+  // niet 1-op-1 — gebruik dan de print-dialoog met "Microsoft Print
+  // to PDF" als printer voor een exacte check.
+  if (getPrintMode() === "rot") {
+    console.warn("[labels] Debug-PDF in gedraaide stand: PDF-pagina is 209×99 (main.js), fysieke print volgt 99×209. Gebruik evt. 'Microsoft Print to PDF' in de print-dialoog.");
   }
   // Wacht op render
   await new Promise(r => setTimeout(r, 500));
@@ -1366,7 +1438,7 @@ async function doPrint() {
   const area = $("printArea");
   area.innerHTML = "";
   for (const { row, c, colliTotal, p, productTotal } of subset) {
-    area.appendChild(buildLabel(row, c, colliTotal, p, productTotal));
+    area.appendChild(wrapInPage(buildLabel(row, c, colliTotal, p, productTotal)));
   }
   const totalLabels = subset.length;
 
@@ -1392,17 +1464,19 @@ async function doPrint() {
   // layout = sub-pixel rendering verschilt per label).
   await ensureLogoPreloaded();
   setTimeout(async () => {
-    // v0.19.3+: gebruik de native print-dialoog met defaults pre-filled.
-    // Vroeger (v0.17–0.19.2) probeerden we silent-printen direct naar
-    // de ZDesigner — dat veroorzaakte maandenlange chaos (blanco labels,
-    // gedraaide content, output verschilde per machine). Te onbetrouw-
-    // baar zonder fysieke aanwezigheid bij de printer.
-    //
-    // Nu: dialog ÁLTIJD tonen mét printer + 209×99mm + landscape al
-    // ingevuld. Manon klikt 1× OK. Werkt gegarandeerd want de driver
-    // doet wat 'ie kent. Als de bridge niet beschikbaar is (oude
-    // shell): val terug op window.print() — ook een dialog, maar
-    // Chromium-style ipv native.
+    // GEDRAAIDE stand: print via window.print(). De Electron-bridge
+    // stuurt hardcoded pageSize 209×99 + landscape:true mee (main.js)
+    // en dat vecht met onze 99×209-portrait @page. window.print()
+    // volgt de CSS @page wél.
+    if (getPrintMode() === "rot") {
+      console.log("[labels] gedraaide stand → window.print() (CSS @page 99×209)");
+      window.print();
+      return;
+    }
+    // LIGGENDE stand (v0.19.3+): native print-dialoog met defaults
+    // pre-filled (printer = ZDesigner, 209×99mm, landscape) vanuit
+    // main.js. Manon klikt 1× OK. Als de bridge niet beschikbaar is
+    // (oude shell): val terug op window.print().
     if (window.fonteynPrint?.isAvailable) {
       try {
         const r = await window.fonteynPrint.silentPrintLabels({ printerSubstring: "zdesigner" });
