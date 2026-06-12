@@ -142,9 +142,12 @@ async function handleKioskPage(request, env, url) {
     return new Response("<h1>403</h1><p>Missing or wrong kiosk key.</p>",
       { status: 403, headers: { "Content-Type": "text/html" } });
   }
+  // Cache-bust met de meegegeven ?v= zodat een verse push direct zichtbaar
+  // is op de kiosk (anders test je een oude gecachte versie). Korte TTL.
+  const ver = url.searchParams.get("v") || "";
   const src = await fetch(
-    "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/signin.html",
-    { cf: { cacheTtl: 60, cacheEverything: true } }
+    "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/signin.html?cb=" + encodeURIComponent(ver),
+    { cf: { cacheTtl: 15, cacheEverything: true } }
   );
   if (!src.ok) {
     return new Response("<h1>502</h1><p>Could not load page from GitHub.</p>",

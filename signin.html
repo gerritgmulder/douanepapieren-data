@@ -5,8 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Visitor Sign In — Fonteyn UK</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
-<!-- QR-generator voor het bedankscherm (scannen → bezoek koppelen aan web-analytics) -->
-<script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@04f46c6a0708c9a09033c8c9fe9b65aa37c4f7dd/qrcode.min.js"></script>
+<!-- QR-generator voor het bedankscherm (scannen → bezoek koppelen aan web-
+     analytics). defer = nooit parser-blokkerend; QRCode is pas nodig bij
+     het QR-scherm, ruim ná het laden. Mocht 't CDN geblokkeerd zijn op het
+     kiosk-netwerk, dan blijft de rest van de pagina gewoon werken. -->
+<script defer src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@04f46c6a0708c9a09033c8c9fe9b65aa37c4f7dd/qrcode.min.js"></script>
 <style>
   :root {
     --fonteyn-green: #144734;
@@ -330,6 +333,30 @@
 </main>
 
 <script>
+// ── Zichtbare fout-diagnose op de kiosk zelf ──
+// Geen toegang tot de console op een Android-touchscreen, dus tonen we
+// JS-fouten in een rode balk onderaan. Zo zien we direct waaróm knoppen
+// niet werken (bv. een init-fout die de listeners niet laat koppelen).
+(function () {
+  function banner(msg) {
+    var b = document.getElementById("jsErrBanner");
+    if (!b) {
+      b = document.createElement("div");
+      b.id = "jsErrBanner";
+      b.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#b91c1c;color:#fff;font:12px/1.4 monospace;padding:8px 12px;white-space:pre-wrap;max-height:40vh;overflow:auto;";
+      b.addEventListener("click", function () { b.remove(); });
+      (document.body || document.documentElement).appendChild(b);
+    }
+    b.textContent = "JS-fout (tik om te sluiten):\n" + msg;
+  }
+  window.addEventListener("error", function (ev) {
+    banner((ev.message || ev.error || "onbekend") + "\n@ " + (ev.filename || "") + ":" + (ev.lineno || "") + ":" + (ev.colno || ""));
+  });
+  window.addEventListener("unhandledrejection", function (ev) {
+    banner("Promise: " + ((ev.reason && (ev.reason.message || ev.reason)) || "onbekend"));
+  });
+})();
+
 const SESSION_KEY = "fp.session";
 const EMAIL_KEY   = "fp.email";
 
