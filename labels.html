@@ -1190,8 +1190,9 @@ function applyPrintMode(mode) {
     // translateY(−w) ⇒ content beslaat x ∈ 0–w, y ∈ 0–(l−buf).
     document.getElementById("pageStyle").textContent = `@media print {
       @page { size: ${w}mm ${l}mm; margin: 0; }
-      body.rot-mode #printArea .pg { width: ${w}mm; height: ${l - buf}mm; position: relative; }
+      body.rot-mode #printArea .pg { width: ${w}mm; height: ${l - buf}mm; position: relative; overflow: hidden; }
       body.rot-mode #printArea .pg .label {
+        position: absolute; top: 0; left: 0;
         width: ${l - buf}mm; height: ${w}mm;
         transform-origin: top left;
         transform: rotate(90deg) translateY(-${w}mm);
