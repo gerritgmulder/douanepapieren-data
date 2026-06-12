@@ -372,7 +372,11 @@ const EMAIL_KEY   = "fp.email";
 //    dus geen sessie-check hier. Dashboard-knop wordt verborgen.
 // 2. ELECTRON-modus: geopend als tegel in het Fonteyn Dashboard.
 //    Normale sessie + access-check zoals andere tegels.
-const KIOSK_MODE = location.hostname.includes("workers.dev");
+// Kiosk-modus: geserveerd via de worker (workers.dev) OF via het nette
+// custom-domein signin.fonteyn.co.uk. In beide gevallen geen Logic4-sessie,
+// Staff-knop verborgen, geen Dashboard-knop.
+const KIOSK_MODE = location.hostname.indexOf("workers.dev") !== -1
+  || location.hostname === "signin.fonteyn.co.uk";
 
 const ALLOWED = new Set([
   "gerrit@fonteyn.nl",     "gerrit",
