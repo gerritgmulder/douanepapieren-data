@@ -404,8 +404,12 @@ const ALLOWED = new Set([
 const DATA_STORE_BASE = "https://fonteyn-data-store.g-mulder.workers.dev/data/";
 const DATA_STORE_AUTH = "SV--QQW_xwIgrIdbjAozfgnxtloYitCZxEQ_S04gv2YupY4LY4KD7_QvfVkb8DGs";
 
-function monthKey(d = new Date()) {
-  return "signin-" + d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+// Oud-browser-veilige 2-cijfer-pad (vervangt padStart, Chrome 57+).
+function pad2(n) { return (n < 10 ? "0" : "") + n; }
+
+function monthKey(d) {
+  if (!d) d = new Date();
+  return "signin-" + d.getFullYear() + "-" + pad2(d.getMonth() + 1);
 }
 
 async function kvLoad(bucket) {
@@ -474,7 +478,7 @@ function normPhone(raw) {
 
 function todayStr() {
   const d = new Date();
-  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
 }
 function timeStr() {
   return new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
@@ -829,7 +833,8 @@ async function renderStaffLog(bucket) {
     body.appendChild(tr);
   }
   el("staffMeta").textContent = entries.length + " entries";
-  el("printMonthLabel").textContent = el("monthSelect").selectedOptions[0]?.textContent || "";
+  var _selOpt = el("monthSelect").selectedOptions[0];
+  el("printMonthLabel").textContent = (_selOpt && _selOpt.textContent) || "";
   // "set out"-knoppen
   body.querySelectorAll("button.mini").forEach(b => {
     b.addEventListener("click", async () => {
@@ -873,7 +878,7 @@ function fmtDateGB(iso) {
   return `${d}/${m}/${y}`;
 }
 function escapeHtml(s) {
-  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  return String(s === null || s === undefined ? "" : s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; });
 }
 
 // ─── Diagnose-balk (tijdelijk) ───
@@ -886,7 +891,7 @@ function escapeHtml(s) {
   let taps = 0;
   const bar = document.createElement("div");
   bar.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:99998;background:#144734;color:#fff;font:bold 14px/1.4 monospace;padding:8px 12px;text-align:center;";
-  function paint() { bar.textContent = "Sign-in v4  ·  taps detected: " + taps; }
+  function paint() { bar.textContent = "Sign-in v5  ·  taps detected: " + taps; }
   paint();
   document.addEventListener("touchstart", function () { taps++; paint(); }, { passive: true });
   document.addEventListener("click", function () { taps++; paint(); }, true);
