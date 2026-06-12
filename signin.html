@@ -876,16 +876,24 @@ function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
-// ─── READY-markering ───
-// Bereikt het script dit punt, dan zijn ALLE listeners gekoppeld. Een
-// klein groen "READY v3"-label rechtsonder bevestigt op de kiosk zelf
-// dat de nieuwste versie geladen is én de JS volledig draaide. (Tijdelijk
-// — weghalen zodra de knoppen bevestigd werken.)
+// ─── Diagnose-balk (tijdelijk) ───
+// Onmisbare balk bovenaan die TWEE vragen tegelijk beantwoordt:
+//  1) Welke versie draait er? ("v4" → nieuwste; staat er niks/oud → cache)
+//  2) Bereiken aanrakingen de pagina? (de teller loopt op bij élke tik
+//     ergens op het scherm). Loopt 'ie niet op → de tik komt niet binnen
+//     (hardware/kiosk-browser), geen code-probleem.
 (function () {
-  const d = document.createElement("div");
-  d.textContent = "READY v3";
-  d.style.cssText = "position:fixed;right:8px;bottom:8px;z-index:99998;background:#8bc53f;color:#144734;font:11px/1 monospace;padding:5px 8px;border-radius:6px;opacity:0.85;";
-  document.body.appendChild(d);
+  let taps = 0;
+  const bar = document.createElement("div");
+  bar.style.cssText = "position:fixed;left:0;right:0;top:0;z-index:99998;background:#144734;color:#fff;font:bold 14px/1.4 monospace;padding:8px 12px;text-align:center;";
+  function paint() { bar.textContent = "Sign-in v4  ·  taps detected: " + taps; }
+  paint();
+  document.addEventListener("touchstart", function () { taps++; paint(); }, { passive: true });
+  document.addEventListener("click", function () { taps++; paint(); }, true);
+  document.addEventListener("DOMContentLoaded", function () {
+    (document.body || document.documentElement).appendChild(bar);
+  });
+  if (document.body) document.body.appendChild(bar);
 })();
 </script>
 
