@@ -156,6 +156,53 @@ async function handleKioskPage(request, env, url) {
   });
 }
 
+// ─── Visit-tracking endpoint (QR-scan) ─────────────────────────────
+// GET /v?id=<visitId>&m=<signin-YYYY-MM>
+// Geen auth (publiek; door de bezoeker z'n telefoon geopend). Legt
+// IP/UA/geo/tijd vast bij de sign-in en redirect naar de Fonteyn-site.
+// Open-redirect-veilig: de bestemming staat server-side vast (env of
+// default), niet in de URL.
+async function handleVisitTrack(request, env, url) {
+  const id = url.searchParams.get("id") || "";
+  const m = (url.searchParams.get("m") || "").toLowerCase();
+
+  // Bestemming: env.KIOSK_REDIRECT_URL of een veilige default.
+  const dest = env.KIOSK_REDIRECT_URL || "https://www.fonteyn.co.uk/";
+  let redirect;
+  try { redirect = new URL(dest); } catch { redirect = new URL("https://www.fonteyn.co.uk/"); }
+  redirect.searchParams.set("utm_source", "showroom");
+  redirect.searchParams.set("utm_medium", "qr");
+  redirect.searchParams.set("utm_campaign", "signin");
+  if (id) redirect.searchParams.set("fv", id);
+
+  // Bezoek vastleggen bij de sign-in (best-effort; faalt het, dan nog redirect).
+  if (id && /^signin-\d{4}-\d{2}$/.test(m)) {
+    try {
+      const data = await env.FONTEYN_DATA.get(m, { type: "json" });
+      if (data && Array.isArray(data.entries)) {
+        const entry = data.entries.find(e => e.id === id);
+        if (entry) {
+          const cf = request.cf || {};
+          const prev = entry.track || {};
+          entry.track = {
+            ip: request.headers.get("CF-Connecting-IP") || "",
+            ua: (request.headers.get("User-Agent") || "").slice(0, 300),
+            country: cf.country || "",
+            region: cf.region || "",
+            city: cf.city || "",
+            ts: new Date().toISOString(),
+            scans: (prev.scans || 0) + 1,
+          };
+          await env.FONTEYN_DATA.put(m, JSON.stringify(data));
+        }
+      }
+    } catch (e) {
+      // stil — bezoeker krijgt sowieso de redirect
+    }
+  }
+  return Response.redirect(redirect.toString(), 302);
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
@@ -169,9 +216,17 @@ export default {
       return handleKioskPage(request, env, url);
     }
 
-    // SMS-verificatie endpoints
+    // SMS-verificatie endpoints (legacy — vervangen door QR /v, blijft werken)
     if (url.pathname === "/sms/send" || url.pathname === "/sms/check") {
       return handleSms(request, env, url);
+    }
+
+    // Visit-tracking: bezoeker scant de QR op de kiosk → opent dit op z'n
+    // eigen telefoon. We leggen IP/device/locatie/tijd vast bij de sign-in
+    // en sturen door naar de Fonteyn-site (UTM + fv-id) zodat web-analytics
+    // het showroom-bezoek aan het surfgedrag koppelt.
+    if (url.pathname === "/v") {
+      return handleVisitTrack(request, env, url);
     }
 
     const m = url.pathname.match(/^\/data\/([a-z0-9_-]{2,40})\/?$/i);

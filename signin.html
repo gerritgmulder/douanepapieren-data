@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Visitor Sign In — Fonteyn UK</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<!-- QR-generator voor het bedankscherm (scannen → bezoek koppelen aan web-analytics) -->
+<script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs@04f46c6a0708c9a09033c8c9fe9b65aa37c4f7dd/qrcode.min.js"></script>
 <style>
   :root {
     --fonteyn-green: #144734;
@@ -238,8 +240,8 @@
         <input type="email" id="fEmail" autocomplete="off" placeholder="name@example.com">
       </div>
       <div class="field">
-        <label>Mobile number</label>
-        <input type="tel" id="fPhone" autocomplete="off" placeholder="07… (we'll text you a confirmation code)">
+        <label>Mobile number <span class="opt">(optional)</span></label>
+        <input type="tel" id="fPhone" autocomplete="off" placeholder="07…">
       </div>
       <div class="field">
         <label>Vehicle registration <span class="opt">(optional)</span></label>
@@ -317,7 +319,7 @@
         <thead>
           <tr>
             <th>Date</th><th>Name</th><th>Email</th><th>Phone</th><th>Vehicle</th>
-            <th>Heard about us</th><th>Time in</th><th>Time out</th><th>Signature</th>
+            <th>Heard about us</th><th>Web visit</th><th>Time in</th><th>Time out</th><th>Signature</th>
             <th class="no-print"></th>
           </tr>
         </thead>
@@ -583,101 +585,80 @@ async function saveEntry(entry) {
 el("btnSubmitIn").addEventListener("click", async () => {
   const name = el("fName").value.trim();
   const err = el("formErr");
-  const phone = normPhone(el("fPhone").value);
+  const phone = normPhone(el("fPhone").value); // optioneel — null als leeg/ongeldig
   if (!name) { err.textContent = "Please enter your name."; err.style.display = "block"; return; }
-  if (!phone) { err.textContent = "Please enter a valid mobile number (e.g. 07123 456789)."; err.style.display = "block"; return; }
   if (!strokes.length) { err.textContent = "Please sign in the signature box."; err.style.display = "block"; return; }
   err.style.display = "none";
   el("btnSubmitIn").disabled = true;
 
-  pendingEntry = {
+  const entry = {
     id: "v" + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
     date: todayStr(),
     name,
     email: el("fEmail").value.trim(),
-    phone,
+    phone: phone || el("fPhone").value.trim(),
     vehicle: el("fVehicle").value.trim().toUpperCase(),
     heard: heardSel,
     timeIn: timeStr(),
     timeOut: "",
     sig: strokes,
-    verified: false,
   };
 
   try {
-    const res = await smsCall("/sms/send", { phone, name });
-    if (res.ok) {
-      // Code verstuurd → verificatie-scherm
-      el("verifyPhoneLabel").textContent = phone;
-      el("fCode").value = "";
-      el("verifyErr").style.display = "none";
-      show("verify");
-      el("fCode").focus();
-    } else if (res.error === "sms-not-configured") {
-      // SMS nog niet ingericht → opslaan zonder verificatie
-      await saveEntry(pendingEntry);
-      pendingEntry = null;
-      showOverlay("👋", "Welcome, " + name.split(" ")[0] + "!", "Enjoy your visit. Please remember to sign out when you leave.");
-      show("home");
-    } else if (res.error === "too-many-requests") {
-      err.textContent = "Too many attempts for this number — please wait 10 minutes or ask a member of staff.";
-      err.style.display = "block";
-    } else {
-      err.textContent = "Could not send the text message (" + (res.error || "unknown") + "). Please check the number.";
-      err.style.display = "block";
-    }
+    await saveEntry(entry);
+    showQrOverlay(entry);   // toont QR-scherm; sluit terug naar home
   } catch (e) {
-    err.textContent = "Could not connect — please check the internet connection and try again. (" + e.message + ")";
+    err.textContent = "Could not save — please check the internet connection and try again. (" + e.message + ")";
     err.style.display = "block";
   } finally {
     el("btnSubmitIn").disabled = false;
   }
 });
 
-// ─── Verificatie-scherm ───
-el("btnVerifyBack").addEventListener("click", () => { pendingEntry = null; show("signin"); });
-el("btnResend").addEventListener("click", async () => {
-  if (!pendingEntry) return;
-  const res = await smsCall("/sms/send", { phone: pendingEntry.phone, name: pendingEntry.name });
-  const ve = el("verifyErr");
-  ve.style.display = "block";
-  if (res.ok) { ve.style.color = "var(--ok)"; ve.textContent = "New code sent!"; }
-  else { ve.style.color = ""; ve.textContent = res.error === "too-many-requests"
-    ? "Too many texts sent — wait 10 minutes." : "Could not send (" + (res.error || "?") + ")."; }
-});
-el("btnVerifyCheck").addEventListener("click", async () => {
-  if (!pendingEntry) { show("home"); return; }
-  const code = el("fCode").value.trim();
-  const ve = el("verifyErr");
-  ve.style.color = "";
-  if (!/^\d{6}$/.test(code)) { ve.textContent = "Enter the 6-digit code from the text message."; ve.style.display = "block"; return; }
-  el("btnVerifyCheck").disabled = true;
+// ─── QR-scherm na inschrijven ───
+// De QR linkt naar het Worker-endpoint /v?id=..&m=.. Dat legt (bij scan
+// op de eigen telefoon) IP + device + tijd + globale locatie vast bij
+// deze sign-in, en stuurt de bezoeker door naar de Fonteyn-site met een
+// UTM-tag + visit-id (fv=) — zo koppelt jullie web-analytics z'n
+// showroom-bezoek aan z'n surfgedrag.
+function trackingUrlFor(entry) {
+  const base = DATA_STORE_BASE.replace("/data/", "");
+  return base + "/v?id=" + encodeURIComponent(entry.id) + "&m=" + encodeURIComponent(monthKey());
+}
+function showQrOverlay(entry) {
+  const url = trackingUrlFor(entry);
+  const first = (entry.name || "").split(" ")[0];
+  const o = document.createElement("div");
+  o.className = "overlay";
+  o.innerHTML = `
+    <div class="icon">📲</div>
+    <h2>Almost done, ${escapeHtml(first)}!</h2>
+    <p style="max-width:520px;">Scan this code with your phone camera to see our latest offers — and help us tailor your visit.</p>
+    <div id="qrBox" style="background:#fff;padding:18px;border-radius:16px;margin:20px 0;width:240px;height:240px;display:flex;align-items:center;justify-content:center;"></div>
+    <p style="font-size:13px;opacity:0.8;max-width:520px;">By scanning you agree Fonteyn may link your showroom visit to your website activity to improve our service. No code? Just tap Done.</p>
+    <button id="qrDone" style="margin-top:14px;background:#8bc53f;color:#144734;border:0;border-radius:12px;padding:14px 32px;font:inherit;font-size:17px;font-weight:700;cursor:pointer;">Done</button>
+  `;
+  document.body.appendChild(o);
+  // QR renderen (qrcodejs via CDN). Fallback: toon de URL als tekst.
   try {
-    const res = await smsCall("/sms/check", { phone: pendingEntry.phone, code });
-    if (res.ok) {
-      pendingEntry.verified = true;
-      const name = pendingEntry.name;
-      await saveEntry(pendingEntry);
-      pendingEntry = null;
-      showOverlay("✅", "Welcome, " + name.split(" ")[0] + "!", "Your number is confirmed. Enjoy your visit — please remember to sign out when you leave.");
-      show("home");
-    } else if (res.error === "wrong-code") {
-      ve.textContent = "That code is not right — please try again (" + res.attemptsLeft + " attempts left).";
-      ve.style.display = "block";
-    } else if (res.error === "code-expired") {
-      ve.textContent = "The code has expired — tap 'Send again' for a new one.";
-      ve.style.display = "block";
+    if (window.QRCode) {
+      new QRCode(o.querySelector("#qrBox"), {
+        text: url, width: 220, height: 220,
+        correctLevel: QRCode.CorrectLevel.M,
+        colorDark: "#144734", colorLight: "#ffffff",
+      });
     } else {
-      ve.textContent = "Verification failed (" + (res.error || "?") + ").";
-      ve.style.display = "block";
+      o.querySelector("#qrBox").innerHTML =
+        `<a href="${url}" style="font-size:11px;color:#144734;word-break:break-all;">${url}</a>`;
     }
   } catch (e) {
-    ve.textContent = "Could not connect — try again. (" + e.message + ")";
-    ve.style.display = "block";
-  } finally {
-    el("btnVerifyCheck").disabled = false;
+    console.warn("[signin] QR render faalde:", e.message);
   }
-});
+  const close = () => { o.remove(); show("home"); };
+  o.querySelector("#qrDone").addEventListener("click", close);
+  // Ruim de tijd om te scannen; sluit daarna automatisch terug naar home.
+  setTimeout(close, 45000);
+}
 
 // ─── Sign out ───
 function renderSignOutList() {
@@ -778,13 +759,24 @@ async function renderStaffLog(bucket) {
       : `<span class="still-in">still in</span>`;
     const outBtn = (!e.timeOut && e.date === todayStr())
       ? `<button class="mini no-print" data-id="${escapeHtml(e.id)}">set out</button>` : "";
+    // Web-visit cel: gevuld zodra de bezoeker de QR scant (Worker /v zet
+    // e.track met ip/locatie/tijd). De fv-id (= e.id) is ook als URL-param
+    // naar de site meegestuurd, dus daarop kun je in je web-analytics zoeken.
+    let webCell = '<span style="color:#cbd5e1;">not scanned</span>';
+    if (e.track && e.track.ts) {
+      const loc = [e.track.city, e.track.country].filter(Boolean).join(", ");
+      const t = e.track.ip ? `IP ${e.track.ip}${loc ? " · " + loc : ""}` : (loc || "scanned");
+      webCell = `<span class="still-in" title="Search fv=${escapeHtml(e.id)} in your web analytics">✓ scanned</span>`
+        + `<div style="font-size:10px;color:var(--muted);">${escapeHtml(t)}</div>`;
+    }
     tr.innerHTML = `
       <td>${escapeHtml(fmtDateGB(e.date))}</td>
       <td><b>${escapeHtml(e.name)}</b></td>
       <td>${escapeHtml(e.email || "")}</td>
-      <td>${escapeHtml(e.phone || "")}${e.verified ? ' <span style="color:var(--ok);" title="Confirmed via SMS">✓</span>' : ""}</td>
+      <td>${escapeHtml(e.phone || "")}</td>
       <td>${escapeHtml(e.vehicle || "")}</td>
       <td>${escapeHtml(e.heard || "")}</td>
+      <td>${webCell}</td>
       <td>${escapeHtml(e.timeIn || "")}</td>
       <td>${outCell}</td>
       <td>${sigImg}</td>
@@ -811,9 +803,15 @@ async function renderStaffLog(bucket) {
 }
 
 el("btnExportCsv").addEventListener("click", () => {
-  const rows = [["Date","Name","Email","Phone","Vehicle","Heard about us","Time in","Time out","Signed"]];
+  const rows = [["Date","Name","Email","Phone","Vehicle","Heard about us","Web visit id (fv)","Web visit IP","Web visit location","Web visit time","Time in","Time out","Signed"]];
   for (const e of staffData.entries) {
-    rows.push([e.date, e.name, e.email || "", (e.phone || "") + (e.verified ? " (verified)" : ""), e.vehicle || "", e.heard || "", e.timeIn || "", e.timeOut || "", (e.sig && e.sig.length) ? "yes" : "no"]);
+    const t = e.track || {};
+    const loc = [t.city, t.region, t.country].filter(Boolean).join(" / ");
+    rows.push([
+      e.date, e.name, e.email || "", e.phone || "", e.vehicle || "", e.heard || "",
+      t.ts ? e.id : "", t.ip || "", loc, t.ts || "",
+      e.timeIn || "", e.timeOut || "", (e.sig && e.sig.length) ? "yes" : "no"
+    ]);
   }
   const csv = rows.map(r => r.map(v => /[",\n]/.test(v) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(",")).join("\n");
   const a = document.createElement("a");
