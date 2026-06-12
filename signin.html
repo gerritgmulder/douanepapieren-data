@@ -215,7 +215,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
 <header>
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn"
        onerror="this.onerror=null;this.src='https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-logo.png'">
-  <h1>Visitor Sign In — Fonteyn UK</h1>
+  <h1 id="hdrTitle">Visitor Sign In — Fonteyn UK</h1>
   <span class="clock" id="clock">—</span>
   <button class="ghost no-print" id="staffBtn" type="button">Staff</button>
   <button class="ghost no-print" id="backBtn" type="button">Dashboard</button>
@@ -872,12 +872,58 @@ function showOverlay(icon, title, sub) {
 }
 
 // ─── Staff view ───
-el("staffBtn").addEventListener("click", async () => {
+async function openStaff() {
   await buildMonthSelect();
   await renderStaffLog(monthKey());
   show("staff");
-});
-el("btnCloseStaff").addEventListener("click", () => show("home"));
+}
+tap("staffBtn", openStaff);
+tap("btnCloseStaff", function () { show("home"); });
+
+// ─── Verborgen Staff-toegang op de kiosk ───
+// Bezoekers mogen de lijst (namen/IP's) niet zien, dus de Staff-knop is
+// verborgen in kiosk-modus. Admin komt erbij via een verborgen gebaar:
+// 5× op de titel tikken → PIN → lijst. PIN is aanpasbaar.
+var STAFF_PIN = "1447"; // wijzigbaar — vraag Claude om 'm te veranderen
+(function () {
+  var taps = 0, timer = null;
+  var title = el("hdrTitle");
+  if (!title) return;
+  function hit() {
+    taps++;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function () { taps = 0; }, 2500);
+    if (taps >= 5) { taps = 0; askStaffPin(); }
+  }
+  title.addEventListener("click", hit);
+  title.addEventListener("touchend", function (e) { e.preventDefault(); hit(); }, { passive: false });
+})();
+
+function askStaffPin() {
+  var o = document.createElement("div");
+  o.className = "overlay";
+  o.innerHTML =
+    '<div class="icon">🔒</div>' +
+    '<h2>Staff access</h2>' +
+    '<input id="pinInput" inputmode="numeric" type="password" maxlength="8" ' +
+    'style="width:200px;text-align:center;font-size:30px;letter-spacing:8px;border:0;border-radius:12px;padding:14px;font-family:inherit;" placeholder="PIN">' +
+    '<div id="pinErr" style="color:#fecaca;margin-top:10px;height:18px;font-size:14px;"></div>' +
+    '<div style="display:flex;gap:12px;margin-top:14px;">' +
+    '<button id="pinCancel" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.5);border-radius:12px;padding:12px 24px;font:inherit;font-size:15px;cursor:pointer;">Cancel</button>' +
+    '<button id="pinOk" style="background:#8bc53f;color:#144734;border:0;border-radius:12px;padding:12px 28px;font:inherit;font-size:15px;font-weight:700;cursor:pointer;">Open</button>' +
+    '</div>';
+  document.body.appendChild(o);
+  var input = o.querySelector("#pinInput");
+  input.focus();
+  var close = function () { o.remove(); };
+  var submit = function () {
+    if (input.value === STAFF_PIN) { close(); openStaff(); }
+    else { o.querySelector("#pinErr").textContent = "Wrong PIN"; input.value = ""; }
+  };
+  tap(o.querySelector("#pinCancel"), close);
+  tap(o.querySelector("#pinOk"), submit);
+  input.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); });
+}
 
 async function buildMonthSelect() {
   // Toon huidige + 11 vorige maanden; data wordt per maand on-demand geladen.
