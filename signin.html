@@ -431,6 +431,18 @@ let currentView = "home";
 
 const el = id => document.getElementById(id);
 
+// ─── Touch-robuuste knop-binding ───
+// Op sommige Android-touchscreens vuurt 'click' onbetrouwbaar. We binden
+// daarom zowel 'click' als 'touchend'. preventDefault op touchend
+// onderdrukt de synthetische dubbel-klik. Gebruik dit voor ALLE
+// interactieve knoppen op de kiosk.
+function tap(idOrEl, fn) {
+  const node = typeof idOrEl === "string" ? el(idOrEl) : idOrEl;
+  if (!node) { console.warn("[signin] tap: element niet gevonden:", idOrEl); return; }
+  node.addEventListener("click", fn);
+  node.addEventListener("touchend", function (e) { e.preventDefault(); fn(e); }, { passive: false });
+}
+
 // ─── Klok ───
 function tickClock() {
   const now = new Date();
@@ -496,7 +508,7 @@ let heardSel = "";
   for (const opt of HEARD_OPTIONS) {
     const b = document.createElement("button");
     b.type = "button"; b.className = "chip"; b.textContent = opt;
-    b.addEventListener("click", () => {
+    tap(b, () => {
       heardSel = (heardSel === opt) ? "" : opt;
       wrap.querySelectorAll(".chip").forEach(c => c.classList.toggle("sel", c.textContent === heardSel));
     });
@@ -556,7 +568,7 @@ function clearSignature() {
   el("sigHint").style.display = "";
   canvas.classList.remove("signed");
 }
-el("sigClear").addEventListener("click", clearSignature);
+tap("sigClear", clearSignature);
 
 // Render vector-handtekening naar een dataURL (voor staff-log)
 function strokesToDataUrl(sig, w, h) {
@@ -573,8 +585,8 @@ function strokesToDataUrl(sig, w, h) {
   return c.toDataURL("image/png");
 }
 
-// ─── Navigatie ───
-el("btnGoSignIn").addEventListener("click", () => {
+// ─── Navigatie (touch + klik robuust via tap(), zie boven) ───
+tap("btnGoSignIn", () => {
   el("fName").value = ""; el("fEmail").value = ""; el("fPhone").value = ""; el("fVehicle").value = "";
   heardSel = "";
   el("heardChips").querySelectorAll(".chip").forEach(c => c.classList.remove("sel"));
@@ -582,10 +594,10 @@ el("btnGoSignIn").addEventListener("click", () => {
   el("formErr").style.display = "none";
   show("signin");
 });
-el("btnCancelIn").addEventListener("click", () => show("home"));
-el("btnGoSignOut").addEventListener("click", () => { renderSignOutList(); show("signout"); });
-el("btnCancelOut").addEventListener("click", () => show("home"));
-el("backBtn").addEventListener("click", () => location.href = "dashboard.html");
+tap("btnCancelIn", () => show("home"));
+tap("btnGoSignOut", () => { renderSignOutList(); show("signout"); });
+tap("btnCancelOut", () => show("home"));
+tap("backBtn", () => location.href = "dashboard.html");
 
 // ─── Sign in submit → SMS-verificatie → opslaan ───
 // Flow: formulier valideren → code SMS'en via de worker → bezoeker
@@ -614,7 +626,7 @@ async function saveEntry(entry) {
   refreshPresentCount();
 }
 
-el("btnSubmitIn").addEventListener("click", async () => {
+tap("btnSubmitIn", async () => {
   const name = el("fName").value.trim();
   const err = el("formErr");
   const phone = normPhone(el("fPhone").value); // optioneel — null als leeg/ongeldig
@@ -687,7 +699,7 @@ function showQrOverlay(entry) {
     console.warn("[signin] QR render faalde:", e.message);
   }
   const close = () => { o.remove(); show("home"); };
-  o.querySelector("#qrDone").addEventListener("click", close);
+  tap(o.querySelector("#qrDone"), close);
   // Ruim de tijd om te scannen; sluit daarna automatisch terug naar home.
   setTimeout(close, 45000);
 }
@@ -707,7 +719,7 @@ function renderSignOutList() {
     b.type = "button"; b.className = "visitor-btn";
     b.innerHTML = `<span class="name"></span><span class="time">in since ${escapeHtml(e.timeIn)}</span>`;
     b.querySelector(".name").textContent = e.name;
-    b.addEventListener("click", () => signOut(e.id, e.name));
+    tap(b, () => signOut(e.id, e.name));
     list.appendChild(b);
   }
 }
@@ -863,6 +875,18 @@ function fmtDateGB(iso) {
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+
+// ─── READY-markering ───
+// Bereikt het script dit punt, dan zijn ALLE listeners gekoppeld. Een
+// klein groen "READY v3"-label rechtsonder bevestigt op de kiosk zelf
+// dat de nieuwste versie geladen is én de JS volledig draaide. (Tijdelijk
+// — weghalen zodra de knoppen bevestigd werken.)
+(function () {
+  const d = document.createElement("div");
+  d.textContent = "READY v3";
+  d.style.cssText = "position:fixed;right:8px;bottom:8px;z-index:99998;background:#8bc53f;color:#144734;font:11px/1 monospace;padding:5px 8px;border-radius:6px;opacity:0.85;";
+  document.body.appendChild(d);
+})();
 </script>
 
 </body>
