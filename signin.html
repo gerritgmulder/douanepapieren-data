@@ -62,23 +62,25 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
     padding: 20px 32px; margin: 0; width: 100%;
   }
 
-  /* ─── Kiosk home — één grote Sign In-knop ─── */
-  .kiosk-home { text-align: center; padding-top: 2vh; height: 100%; display: flex; flex-direction: column; }
+  /* ─── Kiosk home — één Sign In-knop ─── */
+  /* Vaste px-maten (geen clamp(): die snapt de oude kiosk-browser niet,
+     waardoor tekst/icoon op de standaardmaat terugvielen = minuscuul). */
+  .kiosk-home { text-align: center; padding-top: 4vh; }
   .kiosk-home h2 {
-    color: var(--fonteyn-green); font-size: clamp(28px, 5vw, 48px);
+    color: var(--fonteyn-green); font-size: 40px;
     margin: 0 0 6px; letter-spacing: 0.02em;
   }
-  .kiosk-home .sub { color: var(--muted); font-size: clamp(15px, 2.5vw, 20px); margin: 0 0 24px; }
-  .big-buttons { display: flex; gap: 20px; justify-content: center; flex: 1; }
+  .kiosk-home .sub { color: var(--muted); font-size: 18px; margin: 0 0 36px; }
+  .big-buttons { display: flex; justify-content: center; }
   .big-btn {
-    width: 100%; max-width: 900px; min-height: 220px;
-    border: 0; border-radius: 24px; cursor: pointer;
-    font-family: inherit; font-size: clamp(34px, 6vw, 56px); font-weight: 700;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    width: 100%; max-width: 480px; height: 150px;
+    border: 0; border-radius: 22px; cursor: pointer;
+    font-family: inherit; font-size: 38px; font-weight: 700;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
     transition: transform .1s ease;
   }
   .big-btn:active { transform: scale(0.98); }
-  .big-btn .icon { font-size: clamp(60px, 10vw, 110px); }
+  .big-btn .icon { font-size: 60px; line-height: 1; }
   .big-btn.in { background: var(--fonteyn-lime); color: var(--fonteyn-green); }
 
   /* ─── Form ─── */
@@ -118,7 +120,7 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
   }
   canvas.sig.signed { border-style: solid; border-color: var(--fonteyn-lime); }
   .sig-hint {
-    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    position: absolute; top: 0; right: 0; bottom: 0; left: 0; display: flex; align-items: center; justify-content: center;
     color: #c4c8ce; font-size: 17px; pointer-events: none;
   }
   .sig-clear {
@@ -156,13 +158,13 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
 
   /* ─── Success overlay ─── */
   .overlay {
-    position: fixed; inset: 0; z-index: 999;
+    position: fixed; top: 0; right: 0; bottom: 0; left: 0; z-index: 999;
     background: rgba(20, 71, 52, 0.96); color: #fff;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     text-align: center; padding: 24px;
   }
   .overlay .icon { font-size: 70px; margin-bottom: 16px; }
-  .overlay h2 { font-size: clamp(26px, 5vw, 40px); margin: 0 0 10px; }
+  .overlay h2 { font-size: 34px; margin: 0 0 10px; }
   .overlay p { font-size: 18px; color: rgba(255,255,255,0.85); margin: 0; }
 
   /* ─── Staff view ─── */
