@@ -247,16 +247,16 @@ var QRCode;!function(){function a(a){this.mode=c.MODE_8BIT_BYTE,this.data=a,this
           <input type="email" id="fEmail" autocomplete="off" placeholder="name@example.com">
         </div>
         <div class="field">
-          <label>Mobile number <span class="opt">(optional)</span></label>
+          <label>Mobile number</label>
           <input type="tel" id="fPhone" autocomplete="off" placeholder="07…">
         </div>
         <div class="field">
-          <label>Vehicle registration <span class="opt">(optional)</span></label>
+          <label>Vehicle registration</label>
           <input type="text" id="fVehicle" autocomplete="off" style="text-transform:uppercase" placeholder="AB12 CDE">
         </div>
       </div>
       <div class="field">
-        <label>How did you hear about us? <span class="opt">(optional)</span></label>
+        <label>How did you hear about us?</label>
         <div class="chips" id="heardChips"></div>
       </div>
       <div class="field">
@@ -650,9 +650,14 @@ tap("btnSubmitIn", async () => {
   // ongevoelig, en Resend vergelijkt hoofdlettergevoelig met het account-
   // adres (anders 403 in test-modus).
   const email = el("fEmail").value.trim().toLowerCase();
-  const phone = normPhone(el("fPhone").value); // optioneel — null als leeg/ongeldig
+  const phone = normPhone(el("fPhone").value);   // null als leeg/ongeldig
+  const vehicle = el("fVehicle").value.trim();
+  // Alle velden verplicht.
   if (!name) { err.textContent = "Please enter your name."; err.style.display = "block"; return; }
   if (!emailLooksValid(email)) { err.textContent = "Please enter a valid email address — we'll send you a confirmation link."; err.style.display = "block"; return; }
+  if (!phone) { err.textContent = "Please enter a valid mobile number (e.g. 07123 456789)."; err.style.display = "block"; return; }
+  if (!vehicle) { err.textContent = "Please enter your vehicle registration."; err.style.display = "block"; return; }
+  if (!heardSel) { err.textContent = "Please tell us how you heard about us."; err.style.display = "block"; return; }
   if (!strokes.length) { err.textContent = "Please sign in the signature box."; err.style.display = "block"; return; }
   err.style.display = "none";
   el("btnSubmitIn").disabled = true;
