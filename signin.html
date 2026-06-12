@@ -646,7 +646,10 @@ function emailLooksValid(s) {
 tap("btnSubmitIn", async () => {
   const name = el("fName").value.trim();
   const err = el("formErr");
-  const email = el("fEmail").value.trim();
+  // E-mail altijd in kleine letters: providers behandelen 'm hoofdletter-
+  // ongevoelig, en Resend vergelijkt hoofdlettergevoelig met het account-
+  // adres (anders 403 in test-modus).
+  const email = el("fEmail").value.trim().toLowerCase();
   const phone = normPhone(el("fPhone").value); // optioneel — null als leeg/ongeldig
   if (!name) { err.textContent = "Please enter your name."; err.style.display = "block"; return; }
   if (!emailLooksValid(email)) { err.textContent = "Please enter a valid email address — we'll send you a confirmation link."; err.style.display = "block"; return; }
@@ -686,9 +689,11 @@ tap("btnSubmitIn", async () => {
     if (mailRes.ok) {
       showVerifyEmailOverlay(entry);
     } else {
-      // Geen mail mogelijk → QR als terugval (legt ook IP vast bij scan)
+      // Mail kon niet verstuurd worden (bv. domein nog niet geverifieerd
+      // bij Resend → alleen je eigen adres werkt). Geen QR meer; toon een
+      // simpel bedankscherm zodat de kiosk altijd netjes afrondt.
       console.warn("[signin] mail niet verstuurd:", mailRes.error);
-      showQrOverlay(entry);
+      showThanksOverlay(entry);
     }
   } catch (e) {
     err.textContent = "Could not save — please check the internet connection and try again. (" + e.message + ")";
@@ -733,7 +738,23 @@ function showVerifyEmailOverlay(entry) {
   }, 3000);
 }
 
-// ─── QR-scherm na inschrijven ───
+// ─── Simpel bedankscherm (als mail niet verstuurd kon worden) ───
+function showThanksOverlay(entry) {
+  const first = (entry.name || "").split(" ")[0];
+  const o = document.createElement("div");
+  o.className = "overlay";
+  o.innerHTML =
+    '<div class="icon">👋</div>' +
+    '<h2>Thank you, ' + escapeHtml(first) + '!</h2>' +
+    '<p style="max-width:560px;">You\'re signed in. Enjoy your visit.</p>' +
+    '<button id="thDone" style="margin-top:18px;background:#8bc53f;color:#144734;border:0;border-radius:12px;padding:14px 30px;font:inherit;font-size:16px;font-weight:700;cursor:pointer;">Done</button>';
+  document.body.appendChild(o);
+  const close = function () { o.remove(); show("home"); };
+  tap(o.querySelector("#thDone"), close);
+  setTimeout(close, 6000);
+}
+
+// ─── QR-scherm na inschrijven (legacy — niet meer gebruikt) ───
 // De QR linkt naar het Worker-endpoint /v?id=..&m=.. Dat legt (bij scan
 // op de eigen telefoon) IP + device + tijd + globale locatie vast bij
 // deze sign-in, en stuurt de bezoeker door naar de Fonteyn-site met een
