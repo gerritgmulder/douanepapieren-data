@@ -350,7 +350,12 @@ const ALLOWED = new Set([
 ]);
 (function boot() {
   if (KIOSK_MODE) {
+    // Openbaar scherm bij de ingang: geen Dashboard-knop en geen
+    // Staff-knop (anders kan een bezoeker bij alle namen/handtekeningen/
+    // IP's = privacy-lek). Staff bekijkt het log via de Dashboard-tegel
+    // op kantoor (ingelogd).
     document.getElementById("backBtn").classList.add("hidden");
+    document.getElementById("staffBtn").classList.add("hidden");
     return;
   }
   if (!localStorage.getItem(SESSION_KEY)) { location.href = "dashboard.html"; return; }
