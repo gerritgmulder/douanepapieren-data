@@ -82,7 +82,21 @@ afdichten.
   PDF-upload als bron. Bewerkbare regels (slepen, verwijderen), auto-fill via
   `article-codes.json` + `spec-database.json`. `getSpec(code, description)`
   gebruikt regel-omschrijving als primaire bron, articleCodes als fallback.
-- **Inkomende goederen** (`labels.html`) — A6 doos-labels printen.
+- **Inkomende goederen** (`labels.html`) — doos-labels printen op een
+  Zebra ZDesigner GK420d (thermisch). **Bewezen-correcte print-setup
+  (live-sessie Manon, juni 2026):** Printstand **Gedraaid**, Label
+  **104 × 214 mm**, ÉN de ZDesigner-driver op exact 104×214
+  (Voorkeursinstellingen → Grootte). De **214** is de volledige pitch
+  (perforatie-tot-perforatie incl. gap), NIET de zichtbare labelhoogte
+  van 210mm. Met de verkeerde lengte schoof de printer een blanco
+  tussenlabel uit bij elke print — maanden zoekwerk. Pitch verkeerd =
+  blanco's; maat veranderen zonder de échte pitch deed niks. Na elke
+  rol-/maatwijziging ook de GK420d **gap-sensor herkalibreren**: FEED-
+  knop ~6-7 knipperingen ingedrukt houden. Print-route: gedraaide stand
+  gebruikt `window.print()` (volgt CSS @page), liggend gebruikt de
+  Electron-bridge. Diagnose-truc: print naar "Microsoft Print to PDF"
+  en tel de pagina's — 2 voor 2 labels = onze kant goed, blanco's zijn
+  dan printer-kant (pitch/kalibratie).
 - **Orderstatus** (`order-status.html`) — beperkte doelgroep (don/arno/dolf),
   Logic4 betaalde-orders status updaten met audit-trail.
 - **Stuurcijfers** (`stuurcijfers.html`) — Logic4 Excel client-side parsen,

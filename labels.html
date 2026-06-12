@@ -465,6 +465,7 @@
         <button type="button" id="printBtn">🖨️ Labels printen</button>
       </div>
       <div style="font-size:11.5px;color:var(--muted);padding:6px 0 0;text-align:right;">
+        <b>✅ Juiste instelling (bewezen):</b> Printstand <b>Gedraaid</b>, Label <b>104 × 214 mm</b>. Zet de ZDesigner-driver op exact dezelfde maat (Voorkeursinstellingen → Grootte → 104 × 214). De 214 = volledige afstand van perforatie tot perforatie (incl. de gap), NIET de zichtbare labelhoogte van 210 — dat voorkomt de blanco tussenlabels.<br>
         <b>Bij rol-vervanging:</b> tel hoeveel labels al door de printer zijn gerold, vul dat + 1 in bij "Start vanaf" en klik opnieuw printen. Laat "Aantal" leeg om alle resterende te printen.<br>
         <b>📄 Debug-PDF:</b> sla de print-output op als PDF op je bureaublad — om dimensies + oriëntatie te checken zonder labels te verspillen.
       </div>
@@ -1172,11 +1173,16 @@ function getPrintMode() {
   return localStorage.getItem(PRINT_MODE_KEY) === "land" ? "land" : "rot";
 }
 function getLabelDims() {
-  // Defaults: 104mm breed (= GK420d max + driver-instelling Manon),
-  // 199mm lang (standaard DHL-labelmaat). EXACT op te meten met
-  // liniaal en bij te stellen via de toolbar-inputs.
+  // Defaults bewezen-correct in de live-sessie met Manon (juni 2026):
+  //   breedte 104mm = printkop-breedte GK420d
+  //   lengte  214mm = ECHTE pitch = gap-tot-gap afstand tussen labels.
+  // Cruciaal: de lengte is NIET de zichtbare labelhoogte (210mm) maar
+  // de volledige pitch incl. de gap (214mm). Met 214 lijnt de printer
+  // exact uit op de perforatie en komen er GEEN blanco tussenlabels.
+  // De ZDesigner-driver moet op DEZELFDE 104×214 staan
+  // (Voorkeursinstellingen → Grootte).
   const w = parseFloat(localStorage.getItem(LABEL_W_KEY)) || 104;
-  const l = parseFloat(localStorage.getItem(LABEL_L_KEY)) || 199;
+  const l = parseFloat(localStorage.getItem(LABEL_L_KEY)) || 214;
   return { w, l };
 }
 function applyPrintMode(mode) {
