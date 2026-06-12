@@ -340,20 +340,12 @@
       padding: 0 !important;
     }
 
-    /* ── Gedraaide stand: portrait-pagina 99×209, content 90° gedraaid ──
-       De rol voert 99mm breed uit; de label-lengte (209mm) loopt in de
-       feed-richting. We leggen het 205×99-label gedraaid op de pagina:
-       rotate(90°) om top-left + translateY(-99mm) zet 'm exact in beeld
-       (x ∈ 0–99, y ∈ 0–205). */
-    body.rot-mode #printArea .pg {
-      width: 99mm; height: 205mm;
-      position: relative;
-    }
-    body.rot-mode #printArea .pg .label {
-      width: 205mm; height: 99mm;
-      transform-origin: top left;
-      transform: rotate(90deg) translateY(-99mm);
-    }
+    /* ── Gedraaide stand ──
+       De regels voor de gedraaide stand (portrait-pagina met 90°-
+       gedraaide content) worden DYNAMISCH gegenereerd in
+       applyPrintMode() o.b.v. de ingevulde labelmaat (breedte ×
+       lengte) — zie <style id="pageStyle">. Zo kan Manon de exacte
+       maat van de fysieke rol invoeren zonder code-wijziging. */
 
     #printArea .label-frame { display: none; }
   }
@@ -456,10 +448,18 @@
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);">
           Printstand
           <select id="printModeSel" style="padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;"
-                  title="Liggend = pagina 209×99 (driver-stock 209 breed). Gedraaid = pagina 99×209, content 90° gedraaid (rol voert 99mm breed uit). Kies de stand die matcht met de stock-instelling van de ZDesigner-driver.">
-            <option value="land">Liggend (209×99)</option>
-            <option value="rot">Gedraaid (99×209)</option>
+                  title="Gedraaid = portrait-pagina (breedte × lengte zoals de rol uit de printer komt), content 90° gedraaid. Liggend = oude stand (209×99 via Electron-bridge). De maat hiernaast + de driver-stock moeten exact matchen met het fysieke label.">
+            <option value="rot">Gedraaid (aanbevolen)</option>
+            <option value="land">Liggend (oud, 209×99)</option>
           </select>
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);"
+               title="EXACTE maat van het fysieke label: breedte = dwars op de uitvoer-richting (max 104 op de GK420d), lengte = in de feed-richting (van perforatie tot perforatie). Meet met een liniaal! De ZDesigner-driver moet op DEZELFDE maat staan (Voorkeursinstellingen → Grootte).">
+          Label
+          <input type="number" id="labelWInput" min="50" max="120" step="0.5" style="width:56px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
+          ×
+          <input type="number" id="labelLInput" min="80" max="300" step="0.5" style="width:56px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
+          mm
         </label>
         <button type="button" class="secondary" id="debugPdfBtn" title="Sla de print-output op als PDF op het bureaublad — handig om vóór een grote print-batch te controleren of dimensies + oriëntatie kloppen, zonder labels te verspillen.">📄 Debug-PDF</button>
         <button type="button" id="printBtn">🖨️ Labels printen</button>
@@ -1163,20 +1163,63 @@ $("backToEditBtn").addEventListener("click", () => {
    Keuze wordt onthouden in localStorage zodat Manon 'm maar één
    keer hoeft te zetten. */
 const PRINT_MODE_KEY = "fl.printMode";
+const LABEL_W_KEY = "fl.labelW";   // breedte dwars op uitvoer (mm)
+const LABEL_L_KEY = "fl.labelL";   // lengte in feed-richting (mm)
+
 function getPrintMode() {
-  return localStorage.getItem(PRINT_MODE_KEY) === "rot" ? "rot" : "land";
+  // Default = gedraaid: de GK420d voert portrait (104mm breed), dus
+  // gedraaid is vrijwel zeker de juiste stand.
+  return localStorage.getItem(PRINT_MODE_KEY) === "land" ? "land" : "rot";
+}
+function getLabelDims() {
+  // Defaults: 104mm breed (= GK420d max + driver-instelling Manon),
+  // 199mm lang (standaard DHL-labelmaat). EXACT op te meten met
+  // liniaal en bij te stellen via de toolbar-inputs.
+  const w = parseFloat(localStorage.getItem(LABEL_W_KEY)) || 104;
+  const l = parseFloat(localStorage.getItem(LABEL_L_KEY)) || 199;
+  return { w, l };
 }
 function applyPrintMode(mode) {
   localStorage.setItem(PRINT_MODE_KEY, mode);
   document.body.classList.toggle("rot-mode", mode === "rot");
-  document.getElementById("pageStyle").textContent = mode === "rot"
-    ? "@media print { @page { size: 99mm 209mm; margin: 0; } }"
-    : "@media print { @page { size: 209mm 99mm; margin: 0; } }";
-  console.log(`[labels] printstand: ${mode === "rot" ? "gedraaid 99×209" : "liggend 209×99"}`);
+  const { w, l } = getLabelDims();
+  const buf = 4; // mm veiligheidsbuffer in feed-richting tegen overflow → blanco's
+  if (mode === "rot") {
+    // Portrait-pagina exact = labelmaat. Het label (l−buf × w) wordt
+    // 90° gedraaid op de pagina gelegd: rotate(90°) om top-left +
+    // translateY(−w) ⇒ content beslaat x ∈ 0–w, y ∈ 0–(l−buf).
+    document.getElementById("pageStyle").textContent = `@media print {
+      @page { size: ${w}mm ${l}mm; margin: 0; }
+      body.rot-mode #printArea .pg { width: ${w}mm; height: ${l - buf}mm; position: relative; }
+      body.rot-mode #printArea .pg .label {
+        width: ${l - buf}mm; height: ${w}mm;
+        transform-origin: top left;
+        transform: rotate(90deg) translateY(-${w}mm);
+      }
+    }`;
+  } else {
+    document.getElementById("pageStyle").textContent =
+      "@media print { @page { size: 209mm 99mm; margin: 0; } }";
+  }
+  console.log(`[labels] printstand: ${mode === "rot" ? `gedraaid ${w}×${l}` : "liggend 209×99"}`);
 }
 $("printModeSel").value = getPrintMode();
+{
+  const { w, l } = getLabelDims();
+  $("labelWInput").value = w;
+  $("labelLInput").value = l;
+}
 applyPrintMode(getPrintMode());
 $("printModeSel").addEventListener("change", () => applyPrintMode($("printModeSel").value));
+for (const id of ["labelWInput", "labelLInput"]) {
+  $(id).addEventListener("change", () => {
+    const w = parseFloat($("labelWInput").value);
+    const l = parseFloat($("labelLInput").value);
+    if (Number.isFinite(w) && w > 0) localStorage.setItem(LABEL_W_KEY, String(w));
+    if (Number.isFinite(l) && l > 0) localStorage.setItem(LABEL_L_KEY, String(l));
+    applyPrintMode(getPrintMode());
+  });
+}
 
 // Wrapper: elke label in een .pg (= één print-pagina). De .pg krijgt
 // de page-break; in gedraaide stand is de .pg portrait en draait de
