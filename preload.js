@@ -22,6 +22,11 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("fonteynPrint", {
   isAvailable: true,
   silentPrintLabels: (opts) => ipcRenderer.invoke("fonteyn:print-labels", opts),
+  // Echte silent print mét door de renderer opgegeven paginamaat
+  // (portrait 104×214). Kiest automatisch de ZDesigner en print zonder
+  // systeem-dialoog. Aparte naam zodat oude shells dit NIET hebben →
+  // labels.html valt dan veilig terug op window.print().
+  printLabelsSilent: (opts) => ipcRenderer.invoke("fonteyn:print-labels-silent", opts),
   listPrinters: () => ipcRenderer.invoke("fonteyn:list-printers"),
   // Debug: schrijf de print-output naar een PDF op het bureaublad
   // i.p.v. naar de printer. Voor het verifiëren van page-size/orientation

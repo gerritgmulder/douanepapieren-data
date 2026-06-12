@@ -92,9 +92,13 @@ afdichten.
   tussenlabel uit bij elke print — maanden zoekwerk. Pitch verkeerd =
   blanco's; maat veranderen zonder de échte pitch deed niks. Na elke
   rol-/maatwijziging ook de GK420d **gap-sensor herkalibreren**: FEED-
-  knop ~6-7 knipperingen ingedrukt houden. Print-route: gedraaide stand
-  gebruikt `window.print()` (volgt CSS @page), liggend gebruikt de
-  Electron-bridge. Diagnose-truc: print naar "Microsoft Print to PDF"
+  knop ~6-7 knipperingen ingedrukt houden. Maat + printstand-keuze zijn
+  uit de UI gehaald (v0.20.0) — 104×214 gedraaid staat hardcoded.
+  Print-route: "Labels printen" toont een bevestigingspopup en print
+  dan **silent** naar de ZDesigner via de Electron-bridge
+  `printLabelsSilent` (portrait 104×214, main.js handler
+  `fonteyn:print-labels-silent`). Oude shells zonder die bridge vallen
+  terug op `window.print()`. Diagnose-truc: print naar "Microsoft Print to PDF"
   en tel de pagina's — 2 voor 2 labels = onze kant goed, blanco's zijn
   dan printer-kant (pitch/kalibratie).
 - **Orderstatus** (`order-status.html`) — beperkte doelgroep (don/arno/dolf),

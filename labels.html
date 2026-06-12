@@ -341,21 +341,27 @@
     }
 
     /* ── Gedraaide stand ──
-       De regels voor de gedraaide stand (portrait-pagina met 90°-
-       gedraaide content) worden DYNAMISCH gegenereerd in
-       applyPrintMode() o.b.v. de ingevulde labelmaat (breedte ×
-       lengte) — zie <style id="pageStyle">. Zo kan Manon de exacte
-       maat van de fysieke rol invoeren zonder code-wijziging. */
+       De regels voor de gedraaide stand (portrait-pagina 104×214mm met
+       90°-gedraaide content) worden één keer gegenereerd in
+       applyFixedPrintCss() — zie <style id="pageStyle">. De maat staat
+       vast (bewezen-correct: 104×214). */
 
     #printArea .label-frame { display: none; }
   }
 
   .hidden { display: none !important; }
+
+  /* De print-container (#printArea) wordt vlak vóór printen gevuld met
+     labels op ware grootte (104×214mm). Op het SCHERM mag die nooit
+     zichtbaar zijn — anders verschijnen er lelijke labels op volledige
+     grootte onder de nette preview-grid. Off-screen plaatsen i.p.v.
+     display:none zodat de barcodes wél correct gelayout/gerenderd worden
+     voor de print. In @media print wint de print-regel (display:block). */
+  @media screen { #printArea { position: fixed; left: -10000px; top: 0; } }
 </style>
-<!-- Dynamische @page-size — gezet door applyPrintMode() o.b.v. de
-     printstand-keuze in de toolbar. Staat NA de hoofdstijl zodat 'ie
-     altijd wint in de cascade. -->
-<style id="pageStyle">@media print { @page { size: 209mm 99mm; margin: 0; } }</style>
+<!-- @page-size — gezet door applyFixedPrintCss() op de vaste 104×214mm
+     gedraaide stand. Staat NA de hoofdstijl zodat 'ie wint in de cascade. -->
+<style id="pageStyle">@media print { @page { size: 104mm 214mm; margin: 0; } }</style>
 </head>
 <body>
 
@@ -429,45 +435,26 @@
     <div class="preview-wrap">
       <div class="preview-header">
         <h3>Voorbeeld van de labels</h3>
-        <div class="tip">Bij print: A6 landscape, 1 label per pagina. Zet je printer ook op A6 (of "Alleen selectie / meerdere pagina's per A4" als je dat wil).</div>
+        <div class="tip">Bij "Labels printen" gaat alles automatisch naar de ZDesigner GK420d (104 × 214 mm, gedraaid). Je krijgt eerst een bevestiging te zien.</div>
       </div>
       <div class="preview-grid" id="previewGrid"></div>
 
-      <div class="bulk-actions" style="margin-top: 18px; border-bottom: 0; padding-bottom: 0;flex-wrap:wrap;">
+      <div class="bulk-actions" style="margin-top: 18px; border-bottom: 0; padding-bottom: 0;flex-wrap:nowrap;">
         <button type="button" class="secondary" id="backToEditBtn">← Terug naar bewerken</button>
         <div class="grow"></div>
-        <span class="count" id="printCount">0 labels klaar voor print</span>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);">
+        <span class="count" id="printCount" style="white-space:nowrap;">0 labels klaar voor print</span>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);white-space:nowrap;">
           Start vanaf
-          <input type="number" id="printStartAt" min="1" value="1" style="width:60px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
+          <input type="number" id="printStartAt" min="1" value="1" style="width:62px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
         </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);white-space:nowrap;">
           Aantal
-          <input type="number" id="printCountInput" min="1" placeholder="alles" style="width:70px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
+          <input type="number" id="printCountInput" min="1" placeholder="alles" style="width:72px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
         </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);">
-          Printstand
-          <select id="printModeSel" style="padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;"
-                  title="Gedraaid = portrait-pagina (breedte × lengte zoals de rol uit de printer komt), content 90° gedraaid. Liggend = oude stand (209×99 via Electron-bridge). De maat hiernaast + de driver-stock moeten exact matchen met het fysieke label.">
-            <option value="rot">Gedraaid (aanbevolen)</option>
-            <option value="land">Liggend (oud, 209×99)</option>
-          </select>
-        </label>
-        <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);"
-               title="EXACTE maat van het fysieke label: breedte = dwars op de uitvoer-richting (max 104 op de GK420d), lengte = in de feed-richting (van perforatie tot perforatie). Meet met een liniaal! De ZDesigner-driver moet op DEZELFDE maat staan (Voorkeursinstellingen → Grootte).">
-          Label
-          <input type="number" id="labelWInput" min="50" max="120" step="0.5" style="width:56px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
-          ×
-          <input type="number" id="labelLInput" min="80" max="300" step="0.5" style="width:56px;padding:4px 6px;border:1px solid var(--border);border-radius:4px;font:inherit;font-size:12px;text-align:right;">
-          mm
-        </label>
-        <button type="button" class="secondary" id="debugPdfBtn" title="Sla de print-output op als PDF op het bureaublad — handig om vóór een grote print-batch te controleren of dimensies + oriëntatie kloppen, zonder labels te verspillen.">📄 Debug-PDF</button>
         <button type="button" id="printBtn">🖨️ Labels printen</button>
       </div>
       <div style="font-size:11.5px;color:var(--muted);padding:6px 0 0;text-align:right;">
-        <b>✅ Juiste instelling (bewezen):</b> Printstand <b>Gedraaid</b>, Label <b>104 × 214 mm</b>. Zet de ZDesigner-driver op exact dezelfde maat (Voorkeursinstellingen → Grootte → 104 × 214). De 214 = volledige afstand van perforatie tot perforatie (incl. de gap), NIET de zichtbare labelhoogte van 210 — dat voorkomt de blanco tussenlabels.<br>
-        <b>Bij rol-vervanging:</b> tel hoeveel labels al door de printer zijn gerold, vul dat + 1 in bij "Start vanaf" en klik opnieuw printen. Laat "Aantal" leeg om alle resterende te printen.<br>
-        <b>📄 Debug-PDF:</b> sla de print-output op als PDF op je bureaublad — om dimensies + oriëntatie te checken zonder labels te verspillen.
+        <b>Bij rol-vervanging:</b> tel hoeveel labels al door de printer zijn gerold, vul dat + 1 in bij "Start vanaf" en klik opnieuw printen. Laat "Aantal" leeg om alle resterende te printen.
       </div>
     </div>
   </div>
@@ -1163,70 +1150,33 @@ $("backToEditBtn").addEventListener("click", () => {
              dat vecht met de CSS. window.print() volgt de @page.
    Keuze wordt onthouden in localStorage zodat Manon 'm maar één
    keer hoeft te zetten. */
-const PRINT_MODE_KEY = "fl.printMode";
-const LABEL_W_KEY = "fl.labelW";   // breedte dwars op uitvoer (mm)
-const LABEL_L_KEY = "fl.labelL";   // lengte in feed-richting (mm)
+// ─── Vaste labelmaat — bewezen-correct (live-sessie Manon, juni 2026) ───
+// breedte 104mm = printkop-breedte GK420d
+// lengte  214mm = ECHTE pitch = gap-tot-gap afstand tussen de labels.
+// Cruciaal: de lengte is NIET de zichtbare labelhoogte (210mm) maar de
+// volledige pitch incl. de gap (214mm). Met 214 lijnt de printer exact
+// uit op de perforatie en komen er GEEN blanco tussenlabels. De
+// ZDesigner-driver staat op dezelfde 104×214. Deze maat staat vast —
+// logistiek hoeft (en kan) hier niets meer aan in te stellen.
+const LABEL_W = 104;
+const LABEL_L = 214;
+const LABEL_BUF = 4; // mm buffer in feed-richting tegen overflow → blanco's
 
-function getPrintMode() {
-  // Default = gedraaid: de GK420d voert portrait (104mm breed), dus
-  // gedraaid is vrijwel zeker de juiste stand.
-  return localStorage.getItem(PRINT_MODE_KEY) === "land" ? "land" : "rot";
-}
-function getLabelDims() {
-  // Defaults bewezen-correct in de live-sessie met Manon (juni 2026):
-  //   breedte 104mm = printkop-breedte GK420d
-  //   lengte  214mm = ECHTE pitch = gap-tot-gap afstand tussen labels.
-  // Cruciaal: de lengte is NIET de zichtbare labelhoogte (210mm) maar
-  // de volledige pitch incl. de gap (214mm). Met 214 lijnt de printer
-  // exact uit op de perforatie en komen er GEEN blanco tussenlabels.
-  // De ZDesigner-driver moet op DEZELFDE 104×214 staan
-  // (Voorkeursinstellingen → Grootte).
-  const w = parseFloat(localStorage.getItem(LABEL_W_KEY)) || 104;
-  const l = parseFloat(localStorage.getItem(LABEL_L_KEY)) || 214;
-  return { w, l };
-}
-function applyPrintMode(mode) {
-  localStorage.setItem(PRINT_MODE_KEY, mode);
-  document.body.classList.toggle("rot-mode", mode === "rot");
-  const { w, l } = getLabelDims();
-  const buf = 4; // mm veiligheidsbuffer in feed-richting tegen overflow → blanco's
-  if (mode === "rot") {
-    // Portrait-pagina exact = labelmaat. Het label (l−buf × w) wordt
-    // 90° gedraaid op de pagina gelegd: rotate(90°) om top-left +
-    // translateY(−w) ⇒ content beslaat x ∈ 0–w, y ∈ 0–(l−buf).
-    document.getElementById("pageStyle").textContent = `@media print {
-      @page { size: ${w}mm ${l}mm; margin: 0; }
-      body.rot-mode #printArea .pg { width: ${w}mm; height: ${l - buf}mm; position: relative; overflow: hidden; }
-      body.rot-mode #printArea .pg .label {
-        position: absolute; top: 0; left: 0;
-        width: ${l - buf}mm; height: ${w}mm;
-        transform-origin: top left;
-        transform: rotate(90deg) translateY(-${w}mm);
-      }
-    }`;
-  } else {
-    document.getElementById("pageStyle").textContent =
-      "@media print { @page { size: 209mm 99mm; margin: 0; } }";
-  }
-  console.log(`[labels] printstand: ${mode === "rot" ? `gedraaid ${w}×${l}` : "liggend 209×99"}`);
-}
-$("printModeSel").value = getPrintMode();
-{
-  const { w, l } = getLabelDims();
-  $("labelWInput").value = w;
-  $("labelLInput").value = l;
-}
-applyPrintMode(getPrintMode());
-$("printModeSel").addEventListener("change", () => applyPrintMode($("printModeSel").value));
-for (const id of ["labelWInput", "labelLInput"]) {
-  $(id).addEventListener("change", () => {
-    const w = parseFloat($("labelWInput").value);
-    const l = parseFloat($("labelLInput").value);
-    if (Number.isFinite(w) && w > 0) localStorage.setItem(LABEL_W_KEY, String(w));
-    if (Number.isFinite(l) && l > 0) localStorage.setItem(LABEL_L_KEY, String(l));
-    applyPrintMode(getPrintMode());
-  });
-}
+// Genereer de print-CSS één keer: portrait-pagina 104×214, het label
+// (210×104) wordt 90° gedraaid op de pagina gelegd.
+(function applyFixedPrintCss() {
+  document.body.classList.add("rot-mode");
+  document.getElementById("pageStyle").textContent = `@media print {
+    @page { size: ${LABEL_W}mm ${LABEL_L}mm; margin: 0; }
+    body.rot-mode #printArea .pg { width: ${LABEL_W}mm; height: ${LABEL_L - LABEL_BUF}mm; position: relative; overflow: hidden; }
+    body.rot-mode #printArea .pg .label {
+      position: absolute; top: 0; left: 0;
+      width: ${LABEL_L - LABEL_BUF}mm; height: ${LABEL_W}mm;
+      transform-origin: top left;
+      transform: rotate(90deg) translateY(-${LABEL_W}mm);
+    }
+  }`;
+})();
 
 // Wrapper: elke label in een .pg (= één print-pagina). De .pg krijgt
 // de page-break; in gedraaide stand is de .pg portrait en draait de
@@ -1239,66 +1189,6 @@ function wrapInPage(labelEl) {
 }
 
 $("printBtn").addEventListener("click", doPrint);
-
-// Debug-PDF-knop: bouwt dezelfde labels op in #printArea als doPrint, maar
-// roept printToPDF aan i.p.v. wc.print. Output verschijnt als PDF op het
-// bureaublad. Handig om dimensies + oriëntatie te checken zonder labels
-// uit de printer te jagen.
-$("debugPdfBtn").addEventListener("click", async () => {
-  const toPrint = state.rows.filter(r => r.print && r.fonteynCode);
-  if (!toPrint.length) {
-    alert("Geen labels geselecteerd om naar PDF te schrijven.");
-    return;
-  }
-  if (!window.fonteynPrint?.printLabelsToPdf) {
-    alert("Debug-PDF werkt alleen vanuit de Electron-app (niet in een browser-tab).");
-    return;
-  }
-  // Hergebruik de label-build-logic uit doPrint, maar zonder daadwerkelijk
-  // print() aan te roepen.
-  const area = $("printArea");
-  area.innerHTML = "";
-  const allLabels = [];
-  for (const row of toPrint) {
-    const productTotal = Math.max(1, row.aantalProducten || row.aantal || 1);
-    const colliTotal   = Math.max(1, row.aantalColliPerProduct || 1);
-    for (let p = 1; p <= productTotal; p++) {
-      for (let c = 1; c <= colliTotal; c++) {
-        allLabels.push({ row, c, colliTotal, p, productTotal });
-      }
-    }
-  }
-  // Voor debug pakken we max 5 labels — anders wordt de PDF groot en de
-  // gebruiker hoeft alleen visueel te checken of het format klopt.
-  const subset = allLabels.slice(0, 5);
-  for (const { row, c, colliTotal, p, productTotal } of subset) {
-    area.appendChild(wrapInPage(buildLabel(row, c, colliTotal, p, productTotal)));
-  }
-  // Let op: de Debug-PDF gebruikt main.js printToPDF met hardcoded
-  // 209×99-landscape. In gedraaide stand klopt de PDF-oriëntatie dus
-  // niet 1-op-1 — gebruik dan de print-dialoog met "Microsoft Print
-  // to PDF" als printer voor een exacte check.
-  if (getPrintMode() === "rot") {
-    console.warn("[labels] Debug-PDF in gedraaide stand: PDF-pagina is 209×99 (main.js), fysieke print volgt 99×209. Gebruik evt. 'Microsoft Print to PDF' in de print-dialoog.");
-  }
-  // Wacht op render
-  await new Promise(r => setTimeout(r, 500));
-  $("debugPdfBtn").disabled = true;
-  $("debugPdfBtn").textContent = "📄 Bezig…";
-  try {
-    const result = await window.fonteynPrint.printLabelsToPdf();
-    if (result?.ok) {
-      alert(`PDF opgeslagen op je bureaublad:\n\n${result.path}\n\n(${Math.round(result.bytes/1024)} KB)`);
-    } else {
-      alert("Debug-PDF mislukt: " + (result?.error || "onbekende fout"));
-    }
-  } catch (e) {
-    alert("Debug-PDF mislukt: " + e.message);
-  } finally {
-    $("debugPdfBtn").disabled = false;
-    $("debugPdfBtn").textContent = "📄 Debug-PDF";
-  }
-});
 
 /* ═══════════════════════════════════════════════════════════════
    STAP 3: preview renderen
@@ -1479,71 +1369,91 @@ async function doPrint() {
     alert(`Geen labels te printen: er zijn er ${totalAvailable} in totaal, maar je start vanaf ${startAt}.`);
     return;
   }
+  const totalLabels = subset.length;
 
-  if (startAt > 1 || count !== Infinity) {
-    const endAt = startAt + subset.length - 1;
-    if (!confirm(`Print labels ${startAt} t/m ${endAt} (van ${totalAvailable} totaal). Doorgaan?`)) return;
+  // Bevestiging: toon precies wat er geprint gaat worden (aantal per artikel).
+  const perArticle = new Map();
+  for (const { row } of subset) {
+    const key = (row.fonteynCode || "—") + " · " + (row.description || "");
+    perArticle.set(key, (perArticle.get(key) || 0) + 1);
   }
+  const listHtml = [...perArticle.entries()].map(([k, n]) =>
+    `<div style="display:flex;justify-content:space-between;gap:14px;padding:4px 0;border-bottom:1px solid #f3f4f6;"><span>${escape(k)}</span><b style="white-space:nowrap;">${n}×</b></div>`
+  ).join("");
+  const rangeNote = (startAt > 1 || count !== Infinity)
+    ? `<div style="color:#92400e;margin-top:10px;font-size:13px;">Alleen bereik <b>${startAt}</b> t/m <b>${startAt + totalLabels - 1}</b> van ${totalAvailable} totaal.</div>`
+    : "";
+  const ok = await confirmPrint(`
+    <p style="margin:0 0 12px;">Je gaat <b>${totalLabels} label${totalLabels === 1 ? "" : "s"}</b> printen op de <b>ZDesigner GK420d</b>:</p>
+    <div style="max-height:260px;overflow:auto;font-size:13px;border:1px solid #eef0f2;border-radius:8px;padding:6px 12px;">${listHtml}</div>
+    ${rangeNote}
+  `);
+  if (!ok) return;
 
   const area = $("printArea");
   area.innerHTML = "";
   for (const { row, c, colliTotal, p, productTotal } of subset) {
     area.appendChild(wrapInPage(buildLabel(row, c, colliTotal, p, productTotal)));
   }
-  const totalLabels = subset.length;
-
-  // Sanity-check: tel de DOM-nodes terug zodat we kunnen verifiëren dat
-  // we precies zoveel labels in print-area hebben als bedoeld. Verschijnt
-  // in DevTools console; bij miscount-meldingen door Manon kunnen we
-  // direct zien of het issue in JS zit (DOM-count klopt niet) of in de
-  // print-pipeline (DOM-count klopt maar fysieke print is minder).
+  // Sanity-check: DOM-count moet kloppen met bedoeld aantal.
   const domCount = area.querySelectorAll(".label").length;
-  console.log(`[labels] print-job aangemaakt: ${totalLabels} verwacht (van ${totalAvailable} totaal, start ${startAt}), ${domCount} in DOM`);
-  if (domCount !== totalLabels) {
-    console.error(`[labels] MISMATCH: bedoeld ${totalLabels}, in DOM ${domCount}`);
-  }
+  console.log(`[labels] print-job: ${totalLabels} verwacht (van ${totalAvailable}, start ${startAt}), ${domCount} in DOM`);
+  if (domCount !== totalLabels) console.error(`[labels] MISMATCH: bedoeld ${totalLabels}, in DOM ${domCount}`);
 
-  // Wacht dynamisch op layout-reflow voor we print() triggeren. Bij
-  // grote batches duurt het renderen van honderden barcodes + image-
-  // decodes langer. Schatting: 5ms per label, minimaal 200ms, maximaal
-  // 2500ms — bij 200 labels is dat 1 seconde extra wachten dan vroeger.
+  // Wacht op layout-reflow + logo-decode vóór we printen (anders kan de
+  // eerste label een 0-px-logo hebben → afwijkende layout).
   const waitMs = Math.min(2500, Math.max(200, totalLabels * 5));
-  console.log(`[labels] wacht ${waitMs}ms op render voor print() + logo-preload`);
-  // Garandeer dat het logo gedecodeerd is — anders kan de eerste label
-  // een 0-px-image hebben en een latere een 32mm-image (= verschillende
-  // layout = sub-pixel rendering verschilt per label).
   await ensureLogoPreloaded();
   setTimeout(async () => {
-    // GEDRAAIDE stand: print via window.print(). De Electron-bridge
-    // stuurt hardcoded pageSize 209×99 + landscape:true mee (main.js)
-    // en dat vecht met onze 99×209-portrait @page. window.print()
-    // volgt de CSS @page wél.
-    if (getPrintMode() === "rot") {
-      console.log("[labels] gedraaide stand → window.print() (CSS @page 99×209)");
-      window.print();
-      return;
-    }
-    // LIGGENDE stand (v0.19.3+): native print-dialoog met defaults
-    // pre-filled (printer = ZDesigner, 209×99mm, landscape) vanuit
-    // main.js. Manon klikt 1× OK. Als de bridge niet beschikbaar is
-    // (oude shell): val terug op window.print().
-    if (window.fonteynPrint?.isAvailable) {
+    // Auto-print naar de ZDesigner — silent, 104×214 portrait. De bridge-
+    // methode printLabelsSilent kiest zelf de printer en gebruikt exact
+    // onze paginamaat (de CSS heeft de content al 90° gedraaid). Bestaat
+    // 'ie niet (oudere shell die nog niet geüpdatet is) → val terug op
+    // window.print() (volgt de CSS @page, toont wél een dialoog).
+    if (window.fonteynPrint?.printLabelsSilent) {
       try {
-        const r = await window.fonteynPrint.silentPrintLabels({ printerSubstring: "zdesigner" });
-        if (!r?.ok) {
-          console.warn("[labels] print geannuleerd of mislukt:", r?.error);
+        const r = await window.fonteynPrint.printLabelsSilent({
+          printerSubstring: "zdesigner",
+          pageWidthMm: LABEL_W,
+          pageHeightMm: LABEL_L,
+        });
+        if (r?.ok) {
+          console.log(`[labels] silent verzonden naar ${r.deviceName} — ${totalLabels} labels`);
         } else {
-          console.log(`[labels] verzonden naar ${r.deviceName || "default"} — ${totalLabels} labels`);
+          console.warn("[labels] silent-print kon niet:", r?.error, "→ val terug op dialoog");
+          window.print();
         }
       } catch (e) {
-        console.warn("[labels] print exception, val terug op browser-dialog:", e.message);
+        console.warn("[labels] silent-print exception:", e.message, "→ dialoog");
         window.print();
       }
     } else {
-      // Geen bridge — val terug op Chromium print-preview.
       window.print();
     }
   }, waitMs);
+}
+
+// Bevestigings-popup vóór printen. Resolve true = printen, false = annuleren.
+function confirmPrint(innerHtml) {
+  return new Promise((resolve) => {
+    const ov = document.createElement("div");
+    ov.style.cssText = "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;padding:20px;";
+    ov.innerHTML = `
+      <div style="background:#fff;border-radius:14px;max-width:520px;width:100%;padding:24px;font-family:Montserrat,system-ui;box-shadow:0 10px 40px rgba(0,0,0,0.25);">
+        <h2 style="margin:0 0 14px;color:#144734;font-size:20px;">Labels printen?</h2>
+        ${innerHtml}
+        <div style="display:flex;gap:12px;margin-top:22px;justify-content:flex-end;">
+          <button type="button" id="cpCancel" style="background:#fff;border:2px solid #e5e7eb;border-radius:10px;padding:12px 20px;font:inherit;font-weight:600;cursor:pointer;color:#144734;">Annuleren</button>
+          <button type="button" id="cpOk" style="background:#8bc53f;border:0;border-radius:10px;padding:12px 24px;font:inherit;font-weight:700;cursor:pointer;color:#144734;">🖨️ Printen</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const done = (val) => { ov.remove(); resolve(val); };
+    ov.querySelector("#cpOk").addEventListener("click", () => done(true));
+    ov.querySelector("#cpCancel").addEventListener("click", () => done(false));
+    ov.addEventListener("click", (e) => { if (e.target === ov) done(false); });
+    ov.querySelector("#cpOk").focus();
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════

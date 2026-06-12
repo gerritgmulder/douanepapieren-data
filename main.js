@@ -454,6 +454,50 @@ ipcMain.handle("fonteyn:print-labels", async (event, opts = {}) => {
   });
 });
 
+// Silent print mét door de renderer opgegeven paginamaat (portrait).
+// Voor de labels-tegel v0.20+: de juiste setup is bewezen 104×214mm
+// gedraaid, en die staat vast. De renderer (labels.html) heeft de
+// content via CSS al 90° gedraaid op een 104×214 portrait-pagina —
+// hier hoeven we dus ALLEEN silent te printen naar de ZDesigner met
+// exact die paginamaat (portrait, GEEN landscape-flag, geen marges).
+//
+// Aparte handler-naam zodat oude shells (die deze niet kennen) de
+// nieuwe labels.html veilig laten terugvallen op window.print().
+ipcMain.handle("fonteyn:print-labels-silent", async (event, opts = {}) => {
+  const wc = event.sender;
+  const wantedSubstring = (opts.printerSubstring || "zdesigner").toLowerCase();
+  let deviceName = undefined;
+  try {
+    const printers = (typeof wc.getPrintersAsync === "function")
+      ? await wc.getPrintersAsync()
+      : (wc.getPrinters ? wc.getPrinters() : []);
+    const match = printers.find(p => (p.name || "").toLowerCase().includes(wantedSubstring));
+    if (match) deviceName = match.name;
+  } catch (e) {
+    console.warn("[print-silent] kon printers niet inventariseren:", e.message);
+  }
+  if (!deviceName) {
+    // Geen ZDesigner gevonden — laat de renderer terugvallen op een dialoog.
+    return { ok: false, error: "printer-not-found", deviceName: null };
+  }
+  const wMm = Number(opts.pageWidthMm) || 104;
+  const hMm = Number(opts.pageHeightMm) || 214;
+  return new Promise((resolve) => {
+    wc.print({
+      silent: true,
+      printBackground: true,
+      deviceName,
+      landscape: false,
+      pageSize: { width: Math.round(wMm * 1000), height: Math.round(hMm * 1000) },
+      margins: { marginType: "none" },
+      copies: 1,
+    }, (success, errorType) => {
+      if (!success) console.warn("[print-silent] mislukt:", errorType);
+      resolve({ ok: !!success, deviceName: deviceName || null, error: success ? null : errorType });
+    });
+  });
+});
+
 // Debug-modus: schrijf de print-output naar PDF op het bureaublad i.p.v.
 // naar de printer. Handig om vóór een grote print-batch te kunnen
 // verifiëren dat oriëntatie + page-size kloppen, zonder labels te
