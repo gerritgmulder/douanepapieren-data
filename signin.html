@@ -42,7 +42,15 @@
   }
   header button.ghost:hover { color: #fff; border-color: rgba(255,255,255,0.6); }
 
-  main { flex: 1; overflow-y: auto; padding: 24px; max-width: 860px; margin: 0 auto; width: 100%; }
+  /* min-height:0 is cruciaal: zonder dat krijgt een flex-kind als
+     min-height de volledige content-hoogte → het kan niet krimpen en
+     z'n eigen overflow-y:auto doet niets (de pagina scrollt dan niet).
+     -webkit-overflow-scrolling:touch = soepel scrollen op touchscreens. */
+  main {
+    flex: 1; min-height: 0; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 24px; max-width: 860px; margin: 0 auto; width: 100%;
+  }
 
   /* ─── Kiosk home ─── */
   .kiosk-home { text-align: center; padding-top: 4vh; }
