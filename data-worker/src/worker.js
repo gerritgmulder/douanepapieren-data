@@ -24,6 +24,7 @@ const ALLOWED_BUCKETS = new Set([
   "koeien",
   "rapportage",       // Jaartargets per afdeling, review-toewijzingen
   "douane-specs",     // Handmatig aangevulde HS/origin/gewicht/dims per artikel
+  "retouren",         // Retour-registratie per order (reden/locatie/uitleg/adviseur)
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 

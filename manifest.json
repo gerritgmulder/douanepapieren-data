@@ -16,6 +16,7 @@
     { "name": "bankkoppeling.html", "note": "Bankkoppeling — MT940-import + automatische match aan Logic4-orders (Osman/Rowan/Rico/Reinier + admins)" },
     { "name": "bol.html", "note": "Bol.com koppeling — Bol-factuur Excel → memoriaal-voorstel (Don/Osman + admins). Fase 1: parsing + preview + download. Fase 2 volgt: Logic4-koppeling via order-omschrijving zoeken." },
     { "name": "signin.html", "note": "Sign In (UK) — bezoekersregistratie showroom Engeland, touch-kiosk met handtekening. Data per maand in Cloudflare KV (signin-YYYY-MM)." },
+    { "name": "retouren.html", "note": "Retouren — op te halen retouren uit Logic4 (bedrag <=0) + reden/locatie-registratie in Cloudflare KV (bucket retouren), cirkeldiagram + periode-filter (Don/Arno/Dolf/Manon + admins)." },
     { "name": "personeel.html", "note": "Personeel — buitenlandse medewerkers, kamerverdeling Eikensingel + vluchten (Chantal/Manon + admins)" },
     { "name": "koeien.html", "note": "Koeien bij Dolf — interactief overzicht met stamboom, centraal opgeslagen in Cloudflare KV (alleen Dolf/Gerrit/Fonteynbot)" },
     { "name": "rapportage.html", "note": "Rapportage-dashboard — omzet/target/aantallen + reviews per adviseur (alleen Gerrit/Don/Arno/Dolf/Fonteynbot). Skeleton; data-integratie volgt." },

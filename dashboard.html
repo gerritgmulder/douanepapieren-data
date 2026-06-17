@@ -308,6 +308,13 @@
         <p>Controleer en update de status van betaalde orders in Logic4.</p>
       </a>
 
+      <!-- Retouren — Don/Arno/Dolf/Manon + admins. -->
+      <a href="retouren.html" class="tile hidden" id="tileRetouren">
+        <div class="icon">↩️</div>
+        <h3>Retouren</h3>
+        <p>Welke retouren komen er binnen en waarom — op te halen retouren uit Logic4, reden + locatie registreren, en cijfers per dag/week/maand/jaar met cirkeldiagram.</p>
+      </a>
+
       <!-- Bol.com koppeling — finance + sales: Osman + Don + admins. -->
       <a href="bol.html" class="tile hidden" id="tileBol">
         <div class="icon">🛒</div>
@@ -523,6 +530,16 @@ const SIGNIN_EMAILS = new Set([
 // Welke logins mogen de Bol.com-koppeling-tegel zien.
 // Don plaatst de Bol-orders in Logic4; Osman doet de memoriaal-boekingen.
 // Gerrit en Fonteynbot zijn admin-overall.
+// Retouren-tegel — logistiek + sales + management.
+const RETOUREN_EMAILS = new Set([
+  "don@fonteyn.nl",        "fonteyn.don",
+  "arno@fonteyn.nl",       "fonteyn.arno",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "manon@fonteyn.nl",      "manon",  "fonteyn.manon",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 const BOL_EMAILS = new Set([
   "don@fonteyn.nl",        "fonteyn.don",
   "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
@@ -589,6 +606,7 @@ function showDashboard(email) {
   el("tileEikensingel").classList.toggle("hidden", !EIKENSINGEL_EMAILS.has(lc));
   // Bol.com koppeling — Don + Osman + admins
   el("tileBol").classList.toggle("hidden", !BOL_EMAILS.has(lc));
+  el("tileRetouren").classList.toggle("hidden", !RETOUREN_EMAILS.has(lc));
   // Sign In (UK) — showroom-kiosk + admins
   el("tileSignin").classList.toggle("hidden", !SIGNIN_EMAILS.has(lc));
   // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot.
