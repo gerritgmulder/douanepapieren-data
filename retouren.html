@@ -100,6 +100,13 @@
   <!-- ═══ 1. Op te halen retouren uit Logic4 ═══ -->
   <div class="card">
     <h3>Op te halen retouren ophalen uit Logic4</h3>
+    <div class="row" style="padding-bottom:12px;border-bottom:1px dashed var(--border);margin-bottom:12px;">
+      <label class="fld">Order ophalen op nummer
+        <input type="text" id="lookupOrder" placeholder="bv. 3513742" style="width:160px;">
+      </label>
+      <button class="primary" id="lookupBtn" type="button">Order ophalen</button>
+      <span style="font-size:12px;color:var(--muted);align-self:center;">← betrouwbaarste manier: haal precies de order op die je wilt registreren</span>
+    </div>
     <div class="row">
       <label class="fld">Datum van
         <input type="date" id="dateFrom">
@@ -107,8 +114,8 @@
       <label class="fld">Datum t/m
         <input type="date" id="dateTo">
       </label>
-      <button class="primary" id="fetchBtn" type="button">Ophalen</button>
-      <span id="fetchStatus" style="font-size:12.5px;color:var(--muted);"></span>
+      <button class="primary" id="fetchBtn" type="button">Op datum ophalen</button>
+      <span id="fetchStatus" style="font-size:12.5px;color:var(--muted);align-self:center;"></span>
     </div>
 
     <div id="methodsWrap" class="hidden">
@@ -146,7 +153,7 @@
         <button data-p="all" type="button">Alles</button>
       </div>
       <div class="row" style="gap:8px;align-items:center;">
-        <input type="search" id="search" placeholder="Zoek op order, klant, product, reden…" style="width:280px;">
+        <input type="search" id="search" placeholder="Zoek in geregistreerde retouren…" title="Doorzoekt alleen de al-geregistreerde retouren hieronder. Een nieuwe order uit Logic4 haal je op via 'Order ophalen op nummer' bovenaan." style="width:280px;">
         <button class="secondary" id="addManualBtn" type="button">+ Order handmatig toevoegen</button>
       </div>
     </div>
@@ -288,6 +295,43 @@ function methodOnByDefault(name) {
 }
 
 el("fetchBtn").addEventListener("click", fetchReturns);
+
+// Eén order op nummer ophalen — GetOrders met {Id} werkt wél betrouwbaar
+// (i.t.t. de datum-bulk). Toont 'm bovenaan de kandidaten, ongeacht
+// bedrag/verzendmethode, klaar om te registreren.
+el("lookupBtn").addEventListener("click", lookupOrder);
+el("lookupOrder").addEventListener("keydown", (e) => { if (e.key === "Enter") lookupOrder(); });
+
+async function lookupOrder() {
+  const nr = el("lookupOrder").value.trim();
+  if (!/^\d+$/.test(nr)) { setFetch("warn", "Vul een numeriek ordernummer in."); return; }
+  el("lookupBtn").disabled = true;
+  setFetch("info", "Order " + nr + " ophalen…");
+  try {
+    const data = await logic4("/v3/Orders/GetOrders", { Id: parseInt(nr, 10), TakeRecords: 1 });
+    const arr = Array.isArray(data) ? data : (data && (data.Orders || data.Items) || []);
+    if (!arr.length) { setFetch("bad", "Order " + nr + " niet gevonden in Logic4."); return; }
+    const o = arr[0];
+    // Toon ongeacht bedrag/methode (Manon weet of 't een retour is, ook bij
+    // een positief totaal met retourregels erin).
+    if (selectedMethods === null) selectedMethods = new Set();
+    const method = (o.ShippingMethod && o.ShippingMethod.Name) || "(onbekend)";
+    selectedMethods.add(method);
+    if (!returnOrders.some(x => String(x.Id) === String(o.Id))) returnOrders.unshift(o);
+    if (all_first(o)) { el("diagBox").classList.remove("hidden"); el("diagPre").textContent = JSON.stringify(o, null, 2).slice(0, 4000); }
+    renderCandidates();
+    const amount = Number((o.Totals && o.Totals.AmountIncl) ?? 0);
+    setFetch(amount <= 0 ? "ok" : "warn",
+      "Order " + nr + " opgehaald — bedrag " + fmtEur(amount) + (amount > 0 ? " (positief — controleer of 't echt een retour is)" : "") + ". Registreer 'm hieronder.");
+    el("lookupOrder").value = "";
+  } catch (e) {
+    console.error(e); setFetch("bad", "Fout: " + e.message);
+  } finally {
+    el("lookupBtn").disabled = false;
+  }
+}
+let _diagShown = false;
+function all_first(o) { if (_diagShown) return false; _diagShown = true; return true; }
 
 async function fetchReturns() {
   const from = el("dateFrom").value, to = el("dateTo").value;
