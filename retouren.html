@@ -108,14 +108,17 @@
       <span style="font-size:12px;color:var(--muted);align-self:center;">← betrouwbaarste manier: haal precies de order op die je wilt registreren</span>
     </div>
     <div class="row">
-      <label class="fld">Datum van
+      <label class="fld">Aangemaakt van
         <input type="date" id="dateFrom">
       </label>
-      <label class="fld">Datum t/m
+      <label class="fld">Aangemaakt t/m
         <input type="date" id="dateTo">
       </label>
-      <button class="primary" id="fetchBtn" type="button">Op datum ophalen</button>
+      <button class="primary" id="fetchBtn" type="button">Op aanmaakdatum ophalen</button>
       <span id="fetchStatus" style="font-size:12.5px;color:var(--muted);align-self:center;"></span>
+    </div>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:6px;">
+      ⚠ Logic4 kan alleen op <b>aanmaakdatum</b> filteren (datum dat de order is ingevoerd), niet op de geplande ophaaldatum. Voor een specifieke retour: gebruik <b>Order ophalen op nummer</b> hierboven.
     </div>
 
     <div id="methodsWrap" class="hidden">
@@ -343,8 +346,10 @@ async function fetchReturns() {
     const all = [];
     for (let p=0; p<MAXP; p++) {
       setFetch("info", "Ophalen — pagina " + (p+1) + " (" + all.length + " orders)…");
+      // CreationDateFrom/CreationDateTo is de ENIGE datumfilter die deze
+      // Logic4 honoreert (probe 2026-06: alle andere params genegeerd).
       const data = await logic4("/v3/Orders/GetOrders", {
-        DateFrom: from + "T00:00:00", DateTo: to + "T23:59:59",
+        CreationDateFrom: from + "T00:00:00", CreationDateTo: to + "T23:59:59",
         TakeRecords: PAGE, SkipRecords: p*PAGE,
       });
       const arr = Array.isArray(data) ? data : (data && (data.Orders||data.Items) || []);
@@ -354,8 +359,21 @@ async function fetchReturns() {
     }
     lastOrders = all;
 
-    // Retour = totaalbedrag <= 0 (0,00 of negatief).
-    returnOrders = all.filter(o => Number((o.Totals && o.Totals.AmountIncl) ?? 0) <= 0);
+    // Harde client-side garde: hou ALLEEN orders met aanmaakdatum in de
+    // gevraagde periode (mocht Logic4 het filter toch negeren, dan zien we
+    // nooit meer per ongeluk 2015-orders) ÉN bedrag <= 0 (retour).
+    const fromMs = new Date(from + "T00:00:00").getTime();
+    const toMs   = new Date(to   + "T23:59:59").getTime();
+    const ignored = all.filter(o => { const c = new Date(o.CreationDate).getTime(); return !(c >= fromMs && c <= toMs); }).length;
+    returnOrders = all.filter(o => {
+      const amt = Number((o.Totals && o.Totals.AmountIncl) ?? 0);
+      if (amt > 0) return false;
+      const c = new Date(o.CreationDate).getTime();
+      return c >= fromMs && c <= toMs;
+    });
+    if (ignored > all.length * 0.5 && all.length > 0) {
+      setFetch("warn", "Let op: Logic4 lijkt het datumfilter te negeren — alleen orders met aanmaakdatum in de periode worden getoond.");
+    }
 
     // Diagnose: velden van de eerste order tonen (om datum/methode te checken)
     if (all.length) {
