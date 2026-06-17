@@ -127,6 +127,17 @@
   <button id="runFilterProbe">Filter-velden testen</button>
   <div id="filterProbeStatus" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
   <div id="filterProbeResult"></div>
+
+  <hr style="margin:40px 0;border:none;border-top:1px solid var(--border);">
+
+  <h2>GetOrders — datumfilter testen (voor Retouren-tegel)</h2>
+  <p class="lead">GetOrders lijkt <code>DateFrom/DateTo</code> te negeren en geeft de oudste orders eerst. Deze test probeert ~7 datumfilter-varianten voor de gekozen dag en toont per variant: hoeveel orders + het bereik van CreationDate/DeliveryDate. De variant die orders ván de gekozen dag teruggeeft (i.p.v. uit 2015) is de juiste.</p>
+  <label style="font-size:13px;color:var(--muted);">Testdatum:
+    <input type="date" id="dateProbeInput" style="font:inherit;padding:6px 8px;border:1px solid var(--border);border-radius:6px;">
+  </label>
+  <button id="runDateProbe" style="margin-left:8px;">Datumfilter testen</button>
+  <div id="dateProbeStatus" style="margin-top:12px;color:var(--muted);font-size:13px;"></div>
+  <div id="dateProbeResult"></div>
 </main>
 
 <script>
@@ -954,6 +965,73 @@ document.getElementById("runBodyProbe").addEventListener("click", async () => {
       <pre>${escapeHtml(results.map(r => `=== ${r.label} ===\nbody: ${JSON.stringify(r.bodyIn)}\nupstream-status: ${r.upstreamStatus}\nresponse: ${JSON.stringify(r.upstreamData, null, 2).slice(0, 800)}\n`).join("\n"))}</pre>
     </div>
   `;
+  btn.disabled = false;
+});
+
+// ═══════════════════════════════════════════════════════════════
+// GetOrders datumfilter-probe — vind de param die deze Logic4 wél
+// gebruikt om op datum te filteren. Probeert per variant 1 pagina
+// (200 orders) en rapporteert het CreationDate/DeliveryDate-bereik.
+// ═══════════════════════════════════════════════════════════════
+document.getElementById("dateProbeInput").value = new Date().toISOString().slice(0,10);
+document.getElementById("runDateProbe").addEventListener("click", async () => {
+  const btn = document.getElementById("runDateProbe");
+  const status = document.getElementById("dateProbeStatus");
+  const result = document.getElementById("dateProbeResult");
+  btn.disabled = true; result.innerHTML = "";
+  const day = document.getElementById("dateProbeInput").value;
+  if (!day) { status.textContent = "Kies een datum."; btn.disabled = false; return; }
+  status.textContent = "Testen — kan ~30s duren…";
+
+  const F = day + "T00:00:00", T = day + "T23:59:59";
+  const variants = [
+    { label: "DateFrom/DateTo",                 body: { DateFrom:F, DateTo:T, TakeRecords:200 } },
+    { label: "DateChangedFrom/DateChangedTo",   body: { DateChangedFrom:F, DateChangedTo:T, TakeRecords:200 } },
+    { label: "DateTimeChangedFrom/...To",       body: { DateTimeChangedFrom:F, DateTimeChangedTo:T, TakeRecords:200 } },
+    { label: "CreatedAfter/CreatedBefore",      body: { CreatedAfter:F, CreatedBefore:T, TakeRecords:200 } },
+    { label: "OrderDateFrom/OrderDateTo",       body: { OrderDateFrom:F, OrderDateTo:T, TakeRecords:200 } },
+    { label: "DeliveryDateFrom/DeliveryDateTo", body: { DeliveryDateFrom:F, DeliveryDateTo:T, TakeRecords:200 } },
+    { label: "CreationDateFrom/CreationDateTo", body: { CreationDateFrom:F, CreationDateTo:T, TakeRecords:200 } },
+    { label: "(geen filter, baseline)",         body: { TakeRecords:200 } },
+  ];
+
+  function range(arr, field) {
+    const ds = arr.map(o => o[field]).filter(Boolean).map(s => String(s).slice(0,10)).sort();
+    return ds.length ? (ds[0] + " … " + ds[ds.length-1]) : "—";
+  }
+
+  const rows = [];
+  for (const v of variants) {
+    status.textContent = "Testen " + v.label + "…";
+    try {
+      const session = localStorage.getItem(SESSION_KEY);
+      const r = await fetch("/api/logic4-call", {
+        method:"POST", headers:{ "Content-Type":"application/json","Authorization":"Bearer "+(session||"") },
+        body: JSON.stringify({ path:"/v3/Orders/GetOrders", method:"POST", body: v.body })
+      });
+      const jj = await r.json().catch(()=>({}));
+      if (!r.ok || !jj.ok) {
+        const st = jj.status || r.status;
+        const err = (jj.data && (jj.data.title||jj.data.error)) || jj.error || "fout";
+        rows.push({ label:v.label, n:"—", created:"Logic4 "+st+" — "+err, delivery:"" });
+        continue;
+      }
+      const arr = Array.isArray(jj.data) ? jj.data : (jj.data && (jj.data.Orders||jj.data.Items) || []);
+      rows.push({ label:v.label, n:arr.length, created: range(arr,"CreationDate"), delivery: range(arr,"DeliveryDate") });
+    } catch (e) {
+      rows.push({ label:v.label, n:"—", created:"exception: "+e.message, delivery:"" });
+    }
+  }
+  status.textContent = "Klaar — de variant met CreationDate/DeliveryDate ≈ " + day + " is de juiste.";
+  result.innerHTML = `
+    <div class="card"><h3>Resultaat (testdag: ${escapeHtml(day)})</h3>
+      <table class="field-table">
+        <thead><tr><th>Variant</th><th># orders</th><th>CreationDate-bereik</th><th>DeliveryDate-bereik</th></tr></thead>
+        <tbody>${rows.map(r => `<tr><td class="name">${escapeHtml(r.label)}</td><td>${escapeHtml(String(r.n))}</td><td class="val">${escapeHtml(r.created)}</td><td class="val">${escapeHtml(r.delivery)}</td></tr>`).join("")}</tbody>
+      </table>
+      <div class="desc" style="margin-top:14px;"><b>Plak dit terug naar Claude:</b></div>
+      <pre>${escapeHtml(rows.map(r => `${r.label.padEnd(34)} n=${String(r.n).padEnd(5)} created:${r.created}  delivery:${r.delivery}`).join("\n"))}</pre>
+    </div>`;
   btn.disabled = false;
 });
 </script>
