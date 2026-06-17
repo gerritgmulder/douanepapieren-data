@@ -453,21 +453,47 @@ function renderCandidates() {
   }
 }
 
+// Haal productomschrijving + reden-hint uit de orderregels. Retouren
+// hebben vaak negatieve-Qty-regels (ingenomen product) en/of een
+// serviceregel met de reden ("omruiling wegens beschadiging" e.d.).
+function summarizeRows(rows) {
+  rows = rows || [];
+  const productNames = [];
+  for (const r of rows) {
+    const d = (r.Description || "").trim();
+    if (d && Number(r.Qty) > 0 && Number(r.GrossPrice) > 0) {
+      if (productNames.indexOf(d) === -1) productNames.push(d);
+    }
+  }
+  let product = productNames.join(" + ");
+  if (!product) { const any = rows.find(r => r.Description); product = any ? any.Description : ""; }
+  // Reden-hints: negatieve regels of regels met reden-woorden / serviceregels
+  const hints = [];
+  for (const r of rows) {
+    const d = (r.Description || "").trim();
+    if (!d) continue;
+    const looksReason = Number(r.Qty) < 0 || /omruil|beschadig|retour|defect|kapot|klacht|reparat|garantie|verkeerd|fout|nalever/i.test(d);
+    if (looksReason && hints.indexOf(d) === -1 && d !== product) hints.push(d);
+  }
+  return { product, hint: hints.join("; ") };
+}
+
 async function registerFromOrder(o) {
   const orderNr = String(o.Id || "");
   const inv = o.InvoiceAddress || o.DeliveryAddress || o.AccountAddress || {};
   const date = o.DeliveryDate || o.CreationDate || new Date().toISOString();
   const d = new Date(date);
   if (!store.records[orderNr]) {
+    const sum = summarizeRows(o.OrderRows);
     store.records[orderNr] = {
       orderNr,
       date: isoDate(isNaN(d)?new Date():d),
       week: isoWeek(isNaN(d)?new Date():d),
       advisor: "",
-      product: ((o.OrderRows && o.OrderRows[0] && (o.OrderRows[0].Description || o.OrderRows[0].ProductDescription)) || (inv.CompanyName ? "" : "")) || "",
+      product: sum.product,
       reason: "",
       location: "",
-      explanation: "",
+      explanation: sum.hint,    // reden-context uit de orderregels als startpunt
       amount: Number((o.Totals && o.Totals.AmountIncl) ?? 0),
       method: (o.ShippingMethod && o.ShippingMethod.Name) || "",
       customer: inv.CompanyName || inv.ContactName || "",
