@@ -478,6 +478,20 @@ function summarizeRows(rows) {
   return { product, hint: hints.join("; ") };
 }
 
+// Stel een reden voor op basis van de tekst in de orderregels. Manon
+// bevestigt/wijzigt 'm altijd zelf, maar dit scheelt typewerk.
+function guessReason(text) {
+  const t = (text || "").toLowerCase();
+  if (/transportschade|beschadig|schade/.test(t)) return "Transportschade";
+  if (/defect|kapot|productfout|gebrek|mankement|barst|scheur/.test(t)) return "Productfout";
+  if (/reparat/.test(t)) return "Reparatie";
+  if (/nalever/.test(t)) return "Nalevering";
+  if (/klacht/.test(t)) return "Klacht";
+  if (/fout adviseur|verkeerd geadviseerd/.test(t)) return "Fout adviseur";
+  if (/fout klant|verkeerd besteld|verkeerd gekozen|niet bevallen|retour/.test(t)) return "Fout klant";
+  return "";
+}
+
 async function registerFromOrder(o) {
   const orderNr = String(o.Id || "");
   const inv = o.InvoiceAddress || o.DeliveryAddress || o.AccountAddress || {};
@@ -491,7 +505,7 @@ async function registerFromOrder(o) {
       week: isoWeek(isNaN(d)?new Date():d),
       advisor: "",
       product: sum.product,
-      reason: "",
+      reason: guessReason(sum.hint + " " + sum.product),  // voorstel; Manon bevestigt/wijzigt
       location: "",
       explanation: sum.hint,    // reden-context uit de orderregels als startpunt
       amount: Number((o.Totals && o.Totals.AmountIncl) ?? 0),
