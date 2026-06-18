@@ -613,7 +613,6 @@ function renderResult(data) {
   document.getElementById("boekRef").value = `BOL.COM ${data.periode || ""}`.trim();
 
   // Datum-filter dropdown vullen — unieke datums + "Alles"
-  // Default = laatste datum (= meest recente, nog niet verwerkte regels)
   const uniqueDatums = [...new Set(data.creditRegels.map(r => formatDate(r.datum)).filter(Boolean))].sort();
   const datumSel = document.getElementById("datumFilter");
   if (datumSel && !datumSel.dataset.populated) {
@@ -622,8 +621,10 @@ function renderResult(data) {
         const count = data.creditRegels.filter(r => formatDate(r.datum) === d).length;
         return `<option value="${d}">Vanaf ${d} (${countFromDate(data.creditRegels, d)} regels)</option>`;
       }).join("");
-    // Default = laatste datum (kleinste set, meestal wat Osman wil)
-    datumSel.value = uniqueDatums[uniqueDatums.length - 1] || "";
+    // Default = ALLES tonen. Bij een nieuwe, volledige factuur wil je alle
+    // regels zien/matchen. Het datum-filter is optioneel — alleen handig bij
+    // tussentijdse specs waar de oudere datums al verwerkt zijn.
+    datumSel.value = "";
     datumSel.dataset.populated = "1";
     datumSel.addEventListener("change", () => renderResult(data));
   }
@@ -1357,7 +1358,14 @@ function countFromDate(regels, fromDate) {
 }
 function formatDate(d) {
   if (!d) return "";
-  if (d instanceof Date) return d.toISOString().slice(0, 10);
+  if (d instanceof Date) {
+    // Lokale datum, NIET toISOString — die schuift in NL (UTC+1/+2) een
+    // dag terug, waardoor 04-04 als 04-03 in de filter belandde.
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return y + "-" + m + "-" + day;
+  }
   const s = String(d).trim();
   // Bol gebruikt soms 2026-03-25 00:00:00 als string
   return s.slice(0, 10);
