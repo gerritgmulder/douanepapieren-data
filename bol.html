@@ -262,9 +262,10 @@
     <div class="card">
       <h3>Memoriaal-voorstel (<span id="aantalRegels">0</span> regels)</h3>
       <p class="lead" style="margin-bottom:8px;font-size:12px;">
-        Credit-regels per klant + debet-regels onderaan. Logic4-koppeling
-        (debiteurnummer + factuurnummer) volgt in een latere versie. Voor nu
-        zoek je die per regel handmatig op in Logic4.
+        Eén regel per Bol-bestelling. Klik <b>“Match met Logic4-orders”</b> om
+        per bestelnummer (= Referentie in Logic4) de order op te zoeken, het
+        debiteurnummer te lezen én te zien wat er al betaald is. Daarna kun je
+        de betalingen in één keer doorvoeren (Betaald = Bol-bedrag).
       </p>
       <div style="overflow-x:auto;">
         <table class="memoriaal" id="memoriaalTable">
@@ -650,8 +651,13 @@ function renderResult(data) {
     if (r.match) {
       const m = r.match;
       debiteurCell = `<b>${escapeHtml(String(m.debtorId))}</b> <span style="color:var(--muted);font-size:11px">${escapeHtml(truncate(m.customerName, 22))}</span>`;
-      statusPill = `<span class="match-pill ok" title="Gevonden in: ${escapeHtml(m.sourceField || "?")}">✓ gematcht</span>`;
-      infoExtra = ` — Logic4 order ${m.orderId} (via <code style="font-size:10px;">${escapeHtml(m.sourceField || "?")}</code>)`;
+      const alBetaald = amountToBook(r) < 0.01;
+      if (alBetaald) {
+        statusPill = `<span class="match-pill ok" title="Betaald €${(m.payed||0).toFixed(2)} ≥ Bol-bedrag">✓ al betaald</span>`;
+      } else {
+        statusPill = `<span class="match-pill ok" title="Order ${m.orderId} — Betaald nu ${fmtEur(m.payed||0)}">✓ gematcht</span>`;
+      }
+      infoExtra = ` — Logic4 order ${m.orderId}, Betaald nu ${fmtEur(m.payed||0)}`;
     } else if (r.match === null) {
       // Match-poging gedaan maar niets gevonden
       debiteurCell = `<span class="match-pill fail">✗ niet gevonden</span>`;
@@ -871,6 +877,36 @@ function dateIso(d) {
 // gevolgd door 9 hoofdletters/cijfers (bv. C0002KR38X, C00034708C).
 const BOL_NR_PATTERN = /\bC[0-9A-Z]{9}\b/g;
 
+// Normaliseer een referentie/bestelnummer voor vergelijking (trim + uppercase).
+function normRef(s) { return String(s == null ? "" : s).trim().toUpperCase(); }
+
+// Concurrency-limiter: draait `tasks` (array van () => Promise) met max
+// `limit` tegelijk. 417 losse lookups serieel = traag; 6 parallel = vlot,
+// zonder de helper-server te overspoelen.
+async function runWithLimit(tasks, limit, onProgress) {
+  let next = 0, done = 0;
+  async function worker() {
+    while (next < tasks.length) {
+      const i = next++;
+      try { await tasks[i](); } catch (e) { /* per-task afgehandeld */ }
+      done++;
+      if (onProgress) onProgress(done, tasks.length);
+    }
+  }
+  const workers = [];
+  for (let w = 0; w < Math.min(limit, tasks.length); w++) workers.push(worker());
+  await Promise.all(workers);
+}
+
+// Hoeveel moet er nog geboekt worden zodat Betaald == Bol-bedrag?
+// = Bol-bedrag minus wat al op de order betaald staat. Zo voorkomen we
+// dubbel boeken bij een 2e run en boeken we alleen het restant bij een
+// deels-betaalde order.
+function amountToBook(r) {
+  const already = (r.match && Number(r.match.payed)) || 0;
+  return Math.round((Number(r.bedrag) - already) * 100) / 100;
+}
+
 document.getElementById("matchBtn").addEventListener("click", async () => {
   if (!parsedData) return;
   const btn = document.getElementById("matchBtn");
@@ -878,345 +914,112 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
   btn.disabled = true;
   progressEl.className = "status-msg";
   progressEl.classList.remove("hidden");
-  progressEl.textContent = "Bezig met ophalen van Logic4-orders…";
+  progressEl.textContent = "Bezig met opzoeken in Logic4…";
 
   try {
-    console.time("[bol-match] totaal");
-    // 1. Bepaal datum-range — eerst proberen uit de Bol-Excel periode-
-    // string (rij 4 normaal). Als dat faalt: fallback op min/max datum
-    // uit de credit-regels zelf — die zijn er sowieso.
-    let periode = parsePeriode(parsedData.periode);
-    if (!periode) {
-      // Fallback: gebruik datums uit creditRegels
-      const allDates = parsedData.creditRegels
-        .map(r => r.datum instanceof Date ? r.datum : new Date(r.datum))
-        .filter(d => d && !isNaN(d.getTime()));
-      if (allDates.length) {
-        const sorted = allDates.sort((a, b) => a - b);
-        periode = { from: sorted[0], to: sorted[sorted.length - 1] };
-        console.log("[bol-match] periode-fallback uit credit-regels:", periode);
-      } else {
-        throw new Error(`Kon factuur-periode niet parsen. Bol-Excel header gaf: "${parsedData.periode}". Ook geen datums in de regels — Excel mogelijk leeg of structuur veranderd.`);
-      }
-    }
-    const filterDateStr = document.getElementById("datumFilter")?.value || "";
-    const filterIsActive = !!filterDateStr;
-    let dateFrom, dateTo;
-    // Don's screenshot van order 3512488 toont: aanmaakdatum 04-06,
-    // maar Bol-checkout-datum was 09-06. Don plaatst de order dus VÓÓR
-    // Bol-checkout. 14 dagen marge moet ruim genoeg zijn.
-    if (filterIsActive) {
-      dateFrom = new Date(filterDateStr);
-      dateFrom.setDate(dateFrom.getDate() - 14);
-      dateTo = new Date(filterDateStr);
-      dateTo.setDate(dateTo.getDate() + 7);
-    } else {
-      dateFrom = new Date(periode.from);
-      dateFrom.setDate(dateFrom.getDate() - 14);
-      dateTo = new Date(periode.to);
-      dateTo.setDate(dateTo.getDate() + 7);
-    }
-
-    // Welke bestelnrs zoeken we eigenlijk? Bij filter actief alleen visible
-    // regels. Vroegtijdig stoppen zodra alle gevonden.
-    const regelsToMatchList = parsedData._visibleRegels || parsedData.creditRegels;
-    const wantedBestelnrs = new Set(regelsToMatchList.map(r => r.bestelnr));
-    progressEl.textContent = `Zoeken naar ${wantedBestelnrs.size} bestelnrs in Logic4-orders van ${dateIso(dateFrom).slice(0,10)} t/m ${dateIso(dateTo).slice(0,10)}…`;
-
-    // 2. Pagineren door orders — early-stop wanneer alle bestelnrs gevonden.
-    // Logic4 sorteert op ID-asc (= oudst eerst). Bij meerdere order-types
-    // (sales/webshop/Bol gemengd) zit Bol vaak op latere pagina's.
-    const PAGE_SIZE = 500;
-    const MAX_PAGES = 30; // tot 15.000 orders — scant max 1 dag aan orders
-    const allOrders = [];
-    const foundBestelnrs = new Set();
-    let minId = Infinity, maxId = -Infinity;
-    pageLoop: for (let page = 0; page < MAX_PAGES; page++) {
-      progressEl.textContent = `Pagina ${page + 1}/${MAX_PAGES} — ${allOrders.length} orders, ID-range ${minId === Infinity ? "?" : minId + "–" + maxId}, ${foundBestelnrs.size}/${wantedBestelnrs.size} bestelnrs gevonden…`;
-      console.time(`[bol-match] page ${page + 1}`);
-      // Probeer Reference="Bol.com" als filter — confirmed in user's
-      // Logic4 screenshot dat ALLE Bol-orders dit veld op "Bol.com"
-      // hebben staan. Als Logic4 't accepteert: krijgen we DIRECT
-      // alleen Bol-orders i.p.v. 15.000 webshop-orders te scannen.
-      // Bij negeren: zelfde resultaat als voorheen.
-      const data = await logic4Call("/v3/Orders/GetOrders", {
-        DateFrom: dateIso(dateFrom),
-        DateTo: dateIso(dateTo),
-        Reference: "Bol.com",
-        TakeRecords: PAGE_SIZE,
-        SkipRecords: page * PAGE_SIZE,
-      });
-      console.timeEnd(`[bol-match] page ${page + 1}`);
-      const arr = Array.isArray(data) ? data : (data?.Orders || []);
-      if (!arr.length) break;
-      for (const o of arr) {
-        allOrders.push(o);
-        if (o.Id < minId) minId = o.Id;
-        if (o.Id > maxId) maxId = o.Id;
-        // Vroegdetect: scan alleen top-level Description/Reference/Notes
-        // op deze pagina (snel). Diepere recursie pas in stap 3.
-        const haystack = String(o.Description || "") + " " + String(o.Reference || "") + " " + String(o.Notes || "");
-        for (const nr of wantedBestelnrs) {
-          if (haystack.includes(nr)) foundBestelnrs.add(nr);
-        }
-      }
-      // Early-stop: alle gewenste bestelnrs al gevonden
-      if (foundBestelnrs.size >= wantedBestelnrs.size) {
-        progressEl.textContent = `✓ Alle ${wantedBestelnrs.size} bestelnrs gevonden in pagina ${page + 1} — stoppen…`;
-        break pageLoop;
-      }
-      if (arr.length < PAGE_SIZE) break;
-    }
-
-    progressEl.textContent = `${allOrders.length} orders gescand — Bol-bestelnummers extraheren…`;
-
-    // 3. Bouw mapping: bestelnr → {orderId, debtorId, customerName, sourceField}
-    // Recursieve scan: zoekt door ALLE velden van een order incl. sub-objecten
-    // en arrays. Don's regel = "altijd in omschrijving" maar Logic4 kan dat
-    // veld onder verschillende namen hebben (Description, OrderRow.Description,
-    // Comments, etc.). Door recursief te scannen werken we ongeacht waar
-    // Don 't precies neerzet.
-    const SCAN_FIELDS = [
-      "Description", "Reference", "ExternalReference", "WebsiteReference",
-      "WebsiteOrderNumber", "WebsiteOrder", "CustomerReference",
-      "Note", "Notes", "OrderReference", "Comments", "Comment",
-      "InternalReference", "OrderDescription"
-    ];
-    // Recursieve scan met depth-limit (max 4 niveaus). Diepere structuren
-    // kosten exponentieel meer tijd × velden; 4 niveaus dekt OrderRows.x,
-    // InvoiceAddress.x, etc. zonder eindeloze graven.
-    function findBolInObject(obj, path = "", depth = 0) {
-      const hits = [];
-      if (obj == null || depth > 4) return hits;
-      if (typeof obj === "string") {
-        const matches = obj.match(BOL_NR_PATTERN);
-        if (matches) for (const nr of matches) hits.push({ nr, path });
-        return hits;
-      }
-      if (typeof obj !== "object") return hits;
-      for (const [k, v] of Object.entries(obj)) {
-        if (Array.isArray(v)) {
-          // Beperk array-scan tot eerste 20 elementen (OrderRows kan
-          // honderden items zijn — slechts eerste 20 relevant voor zoeken)
-          for (let i = 0; i < Math.min(v.length, 20); i++) {
-            hits.push(...findBolInObject(v[i], path ? `${path}.${k}[${i}]` : `${k}[${i}]`, depth + 1));
-          }
-        } else {
-          hits.push(...findBolInObject(v, path ? `${path}.${k}` : k, depth + 1));
-        }
-      }
-      return hits;
-    }
-
-    console.time("[bol-match] recursieve scan");
-    const matchMap = new Map();  // bestelnr → match
-    for (const o of allOrders) {
-      const hits = findBolInObject(o);
-      if (!hits.length) continue;
-      for (const { nr, path } of hits) {
-        if (!matchMap.has(nr)) {
-          matchMap.set(nr, {
-            orderId: o.Id,
-            debtorId: o.DebtorId,
-            customerName: (o.InvoiceAddress && o.InvoiceAddress.CompanyName)
-              || (o.InvoiceAddress && o.InvoiceAddress.ContactName)
-              || (o.AccountAddress && o.AccountAddress.CompanyName)
-              || "—",
-            sourceField: path,
-          });
-        }
-      }
-    }
-    console.timeEnd("[bol-match] recursieve scan");
-    console.timeEnd("[bol-match] totaal");
-
-    // 4. Update parsedData.creditRegels met match-info
+    // Welke regels matchen we? Bij datum-filter alleen de zichtbare set,
+    // anders alle credit-regels uit de Bol-factuur.
     const regelsToMatch = parsedData._visibleRegels || parsedData.creditRegels;
+    const uniqueNrs = [];
+    const seen = new Set();
+    for (const r of regelsToMatch) {
+      if (r.bestelnr && !seen.has(r.bestelnr)) { seen.add(r.bestelnr); uniqueNrs.push(r.bestelnr); }
+    }
+
+    if (!uniqueNrs.length) {
+      progressEl.className = "status-msg warn";
+      progressEl.textContent = "Geen Bol-bestelnummers in de (gefilterde) regels om op te zoeken.";
+      return;
+    }
+
+    progressEl.textContent = uniqueNrs.length + " Bol-bestelnummers opzoeken in Logic4 (op Referentie)…";
+
+    // ── Strategie: directe Referentie-lookup per bestelnummer ──
+    // Exact wat Osman handmatig doet in Logic4: zoekveld "Referentie" =
+    // het Bol-bestelnummer (bv. C0006W5KL8). Logic4 GetOrders accepteert
+    // een Reference-filter en geeft de bijbehorende order(s) terug. Daaruit
+    // lezen we het Debiteurnummer + de huidige Betaald-stand. Veel
+    // betrouwbaarder dan duizenden orders scannen — vindt de order
+    // ongeacht de aanmaakdatum.
+    const matchMap = new Map();
+    const diag = { found: 0, noOrders: 0, refMismatch: 0, errors: 0, samples: [] };
+
+    const tasks = uniqueNrs.map(function (nr) {
+      return async function () {
+        let data;
+        try {
+          data = await logic4Call("/v3/Orders/GetOrders", { Reference: nr, TakeRecords: 10 });
+        } catch (e) {
+          diag.errors++;
+          if (diag.samples.length < 6) diag.samples.push("<code>" + escapeHtml(nr) + "</code> → API-fout: " + escapeHtml(e.message));
+          return;
+        }
+        const arr = Array.isArray(data) ? data : ((data && data.Orders) || []);
+        if (!arr.length) { diag.noOrders++; return; }
+        // Exacte Referentie-match eerst; anders een order waarin het
+        // bestelnummer ergens letterlijk voorkomt (afwijkende notatie).
+        let hit = null;
+        for (const o of arr) { if (normRef(o.Reference) === normRef(nr)) { hit = o; break; } }
+        if (!hit) { for (const o of arr) { if (JSON.stringify(o).toUpperCase().indexOf(normRef(nr)) !== -1) { hit = o; break; } } }
+        if (!hit) {
+          diag.refMismatch++;
+          if (diag.samples.length < 6) {
+            const eersteRef = arr[0].Reference == null ? "(leeg)" : String(arr[0].Reference);
+            diag.samples.push("gezocht <code>" + escapeHtml(nr) + "</code> → " + arr.length + " order(s) terug, Referentie eerste = <code>" + escapeHtml(eersteRef) + "</code> (order " + arr[0].Id + ") — filter genegeerd?");
+          }
+          return;
+        }
+        const totals = hit.Totals || {};
+        matchMap.set(nr, {
+          orderId: hit.Id,
+          debtorId: hit.DebtorId,
+          customerName: (hit.InvoiceAddress && (hit.InvoiceAddress.CompanyName || hit.InvoiceAddress.ContactName))
+            || (hit.AccountAddress && hit.AccountAddress.CompanyName) || "—",
+          sourceField: "Referentie",
+          reference: hit.Reference,
+          payed: Number(totals.Calc_TotalPayed) || 0,
+          amountIncl: Number(totals.AmountIncl) || 0,
+          isPaid: !!totals.IsPaid,
+        });
+        diag.found++;
+      };
+    });
+
+    await runWithLimit(tasks, 6, function (done, total) {
+      progressEl.textContent = "Opzoeken… " + done + "/" + total + " — " + diag.found + " gevonden, " + diag.noOrders + " zonder order, " + diag.refMismatch + " ref-mismatch";
+    });
+
+    // Koppel match-info terug aan de credit-regels
     let matched = 0;
     for (const r of parsedData.creditRegels) {
       const m = matchMap.get(r.bestelnr);
-      if (m) {
-        r.match = m;
-        if (regelsToMatch.includes(r)) matched++;
-      } else {
-        r.match = null;
-      }
+      if (m) { r.match = m; if (regelsToMatch.indexOf(r) !== -1) matched++; }
+      else r.match = null;
     }
 
-    // ─── 5. Tweede ronde voor niet-gematchte regels ───
-    // Onze Reference="Bol.com" filter pakt alleen orders waar Reference
-    // EXACT "Bol.com" is. Als Don voor sommige orders het bestelnummer
-    // in Reference zet (en bv. "Bol.com" in Description), missen we
-    // die. Tweede ronde: voor elke niet-gematchte bestelnr probeer
-    // een directe lookup ZONDER Reference-filter — Logic4 mag dat
-    // verzoek negeren of accepteren, beide is OK.
-    const ungematched = regelsToMatch.filter(r => !r.match);
-    if (ungematched.length > 0 && ungematched.length <= 30) {
-      progressEl.textContent = `2e ronde — ${ungematched.length} niet-gematchte regels direct opzoeken…`;
-      console.time("[bol-match] tweede ronde");
-      for (let i = 0; i < ungematched.length; i++) {
-        const r = ungematched[i];
-        progressEl.textContent = `2e ronde ${i + 1}/${ungematched.length} — ${r.bestelnr}…`;
-        // Probeer twee filter-velden: Description en Reference
-        for (const filterVeld of ["Description", "Reference"]) {
-          try {
-            const lookupData = await logic4Call("/v3/Orders/GetOrders", {
-              [filterVeld]: r.bestelnr,
-              DateFrom: dateIso(dateFrom),
-              DateTo: dateIso(dateTo),
-              TakeRecords: 5,
-            });
-            const arr = Array.isArray(lookupData) ? lookupData : (lookupData?.Orders || []);
-            // Logic4 negeert mogelijk de filter en geeft willekeurige orders.
-            // Dus we checken expliciet of de bestelnr in de teruggegeven
-            // order staat (= zekerheid dat de filter werkte).
-            for (const o of arr) {
-              const hay = JSON.stringify(o);
-              if (hay.includes(r.bestelnr)) {
-                r.match = {
-                  orderId: o.Id,
-                  debtorId: o.DebtorId,
-                  customerName: (o.InvoiceAddress && o.InvoiceAddress.CompanyName)
-                    || (o.InvoiceAddress && o.InvoiceAddress.ContactName)
-                    || (o.AccountAddress && o.AccountAddress.CompanyName)
-                    || "—",
-                  sourceField: `2e-ronde via ${filterVeld}`,
-                };
-                matched++;
-                break;
-              }
-            }
-            if (r.match) break;
-          } catch (e) {
-            console.warn(`[bol-match] tweede-ronde fout voor ${r.bestelnr} (${filterVeld}):`, e.message);
-          }
-        }
-      }
-      console.timeEnd("[bol-match] tweede ronde");
-    }
-
+    // ── Resultaat + diagnose ──
     progressEl.className = matched === 0 ? "status-msg warn" : "status-msg ok";
-    progressEl.textContent = `Klaar — ${matched} van ${parsedData.creditRegels.length} credit-regels gematcht. ${allOrders.length} Logic4-orders gescand.`;
+    const head = "Klaar — " + matched + " van " + uniqueNrs.length + " bestelnummers gekoppeld aan een Logic4-order.";
 
-    // ─── DIAGNOSE — zichtbaar als er weinig/geen matches zijn ───
-    // Doel: direct kunnen zien WAAROM matches mislukken zonder DevTools.
-    // Toont (1) aantal orders + velden gescand, (2) top-level veld-keys
-    // van de eerste order (zodat we zien welke velden ECHT bestaan),
-    // (3) sample-content van die velden zodat we zien hoe Bol-nrs
-    // eruitzien als ze in Logic4 staan.
     const diagBlocks = [];
-    diagBlocks.push(`<b>${allOrders.length} orders gescand</b> in periode ${dateIso(dateFrom).slice(0,10)} t/m ${dateIso(dateTo).slice(0,10)}, ID-range <code>${minId}–${maxId}</code>`);
-    if (allOrders.length === 0 && matched === 0) {
-      // Geen orders gevonden in datum-range
-      diagBlocks.push(`<b style="color:#b91c1c">Geen orders in deze datum-range.</b> Klopt de Bol-bestellingsdatum wel met wanneer Don ze in Logic4 zet?`);
-    }
-    if (matched === 0 && allOrders.length > 0) {
-      // Specifieke hint: misschien scant Logic4 in verkeerde range
-      const wantedNrs = [...wantedBestelnrs].slice(0, 3).join(", ");
-      diagBlocks.push(`<b style="color:#92400e">Gezocht naar:</b> <code>${wantedNrs}</code>${wantedBestelnrs.size > 3 ? ` en ${wantedBestelnrs.size - 3} meer` : ""} — niet gevonden in deze ${allOrders.length} orders.<br><b>Mogelijke oorzaken:</b><ul style="margin:4px 0 0 0;padding-left:22px;font-size:12px;"><li>Bol-orders zitten BUITEN deze ID-range (Logic4 sorteert op ID-asc — Bol kan jonger zijn met hogere IDs). Verhoog MAX_PAGES of versmal datum-filter verder.</li><li>Don zet bestelnr toch niet in Description (= regel nog niet actief voor deze orders)</li><li>Vraag Don/Osman: open Logic4 → zoek order met bestelnr <code>${[...wantedBestelnrs][0]}</code> → check welk veld 't bevat</li></ul>`);
-    }
-    if (allOrders.length === 0) {
-      diagBlocks.push(`<span style="color:#b91c1c">⚠ Geen orders teruggekomen — datum-filter werkt mogelijk niet of er zijn echt geen orders in die periode.</span>`);
+    if (diag.noOrders) diagBlocks.push("<b>" + diag.noOrders + "</b> bestelnummer(s) gaven géén order terug — die order bestaat (nog) niet in Logic4, of het bestelnummer staat niet in het Referentie-veld.");
+    if (diag.refMismatch) diagBlocks.push("<b>" + diag.refMismatch + "</b> keer kreeg ik wél orders terug maar zónder matchende Referentie — mogelijk negeert de API het Reference-filter. <i>(Zie voorbeelden — plak terug naar Claude.)</i>");
+    if (diag.errors) diagBlocks.push("<b style=\"color:#b91c1c\">" + diag.errors + "</b> API-fout(en) tijdens opzoeken.");
+    if (diag.samples.length) diagBlocks.push("<b>Voorbeelden:</b><br>" + diag.samples.join("<br>"));
+
+    if (diagBlocks.length) {
+      progressEl.innerHTML = head + "<div style=\"margin-top:10px;padding:11px 13px;background:#fffdf6;border:1px solid #fde68a;border-radius:8px;font-size:12.5px;line-height:1.6\">" + diagBlocks.join("<br><br>") + "</div>";
     } else {
-      // Eerste order: welke velden bestaan?
-      const sample = allOrders[0];
-      const allKeys = Object.keys(sample).sort();
-      diagBlocks.push(`<b>Eerste order — alle top-level velden:</b><br><code style="font-size:11px;">${allKeys.join(", ")}</code>`);
-
-      // Velden die we scannen vs velden die echt bestaan
-      const scannedThatExist = SCAN_FIELDS.filter(f => sample[f] != null);
-      const scannedMissing   = SCAN_FIELDS.filter(f => !(f in sample));
-      diagBlocks.push(`<b>Velden die ik scan:</b> ${SCAN_FIELDS.map(f => {
-        if (sample[f] != null) return `<span style="color:#059669">${f}✓</span>`;
-        if (f in sample) return `<span style="color:#92400e">${f}(leeg)</span>`;
-        return `<span style="color:#b91c1c">${f}✗</span>`;
-      }).join(", ")}`);
-
-      // Sample-content van de eerste order
-      const sampleSnippets = [];
-      for (const f of SCAN_FIELDS) {
-        if (sample[f] != null && String(sample[f]).trim()) {
-          sampleSnippets.push(`<code style="font-size:11px;background:#f3f4f6;padding:1px 5px;border-radius:3px;">${f}</code>: ${escapeHtml(String(sample[f]).slice(0, 100))}`);
-        }
-      }
-      if (sampleSnippets.length) {
-        diagBlocks.push(`<b>Sample-content eerste order:</b><br>${sampleSnippets.join("<br>")}`);
-      } else {
-        diagBlocks.push(`<span style="color:#b91c1c">⚠ Eerste order heeft GEEN inhoud in een van de gescande velden. Dat verklaart waarom matches falen.</span>`);
-      }
-
-      // Hoe ziet 't in een 'typische' order eruit — toon andere velden
-      // die mogelijk Bol-nummers bevatten
-      const POTENTIAL_FIELDS = [
-        "Description", "Reference", "Comments", "Comment", "Note", "Notes",
-        "OrderDescription", "WebsiteOrderReference", "ExternalReference",
-        "InternalReference", "InvoiceReference", "OrderReference",
-        "AccountReference", "DeliveryReference", "PackingReference",
-        "ContactName", "CompanyName"
-      ];
-      const sniffed = [];
-      for (const o of allOrders.slice(0, 50)) {
-        for (const f of POTENTIAL_FIELDS) {
-          const v = o[f];
-          if (v && /C[0-9A-Z]{9}/i.test(String(v))) {
-            sniffed.push(`<code>${f}</code> in order ${o.Id}: <code>${escapeHtml(String(v).slice(0, 120))}</code>`);
-          }
-        }
-      }
-      if (sniffed.length) {
-        diagBlocks.push(`<b style="color:#059669">✓ Bol-patroon GEVONDEN in deze velden (eerste 50 orders gescand):</b><br>${sniffed.slice(0, 10).join("<br>")}${sniffed.length > 10 ? `<br>...en ${sniffed.length - 10} meer` : ""}`);
-      } else {
-        diagBlocks.push(`<span style="color:#b91c1c"><b>⚠ Geen enkele Bol-patroon (C+9 chars) in 50 orders × 17 velden.</b> Dus óf Don zet de Bol-nrs nog niet in de order, óf ze staan ergens dat we niet kunnen lezen (bv. een sub-object zoals OrderRow.Description).</span>`);
-
-        // Laatste poging: scan ALLE velden recursief van 1 order voor
-        // een Bol-patroon — dan zien we waar het wel staat
-        function findBolInObject(obj, path = "") {
-          const hits = [];
-          if (obj == null) return hits;
-          if (typeof obj === "string") {
-            if (/C[0-9A-Z]{9}/i.test(obj)) hits.push({ path, val: obj.slice(0, 100) });
-            return hits;
-          }
-          if (typeof obj !== "object") return hits;
-          for (const [k, v] of Object.entries(obj)) {
-            if (Array.isArray(v)) {
-              for (let i = 0; i < Math.min(v.length, 3); i++) {
-                hits.push(...findBolInObject(v[i], `${path}.${k}[${i}]`));
-              }
-            } else {
-              hits.push(...findBolInObject(v, `${path}.${k}`));
-            }
-          }
-          return hits;
-        }
-        const deepHits = [];
-        for (const o of allOrders.slice(0, 20)) {
-          const h = findBolInObject(o, `order#${o.Id}`);
-          if (h.length) {
-            deepHits.push(...h.map(x => `<code>${escapeHtml(x.path)}</code>: <code>${escapeHtml(x.val)}</code>`));
-          }
-          if (deepHits.length > 15) break;
-        }
-        if (deepHits.length) {
-          diagBlocks.push(`<b style="color:#92400e">Diep gevonden (recursief, alle velden + sub-objecten):</b><br>${deepHits.slice(0, 15).join("<br>")}`);
-        }
-      }
+      progressEl.textContent = head;
     }
 
-    const diagHtml = `<div style="margin-top:12px;padding:12px 14px;background:#fffdf6;border:1px solid #fde68a;border-radius:8px;font-size:12.5px;line-height:1.6">
-      <b style="color:#92400e">🔍 Match-diagnose:</b><br>
-      ${diagBlocks.join("<br><br>")}
-      <br><br><i style="color:var(--muted);font-size:11px;">Plak dit terug naar Claude als er 0 matches zijn — dan past ie de SCAN_FIELDS-lijst aan.</i>
-    </div>`;
-    progressEl.innerHTML = progressEl.textContent + diagHtml;
-
-    // 5. Re-render met match-info
+    // Re-render tabel met debiteurnummers + match-badges
     renderResult(parsedData);
 
-    // 6. Toon doorvoer-sectie
+    // Doorvoer-sectie tonen
     document.getElementById("applySection").classList.remove("hidden");
     document.getElementById("matchCount").textContent = matched;
-    document.getElementById("totalCount").textContent = regelsToMatch.length;
+    document.getElementById("totalCount").textContent = uniqueNrs.length;
 
   } catch (e) {
     console.error(e);
@@ -1242,7 +1045,9 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
 function buildPaymentBody(creditRegel, boekDatum) {
   return {
     OrderId: creditRegel.match.orderId,
-    Amount: Number(creditRegel.bedrag.toFixed(2)),
+    // Boek het RESTANT zodat Betaald op het Bol-bedrag uitkomt (niet
+    // dubbel boeken als er al iets op de order staat).
+    Amount: amountToBook(creditRegel),
     PaymentDate: boekDatum,
     Date: boekDatum,
     PaymentMethodId: 1,
@@ -1257,15 +1062,18 @@ document.getElementById("dryRunBtn").addEventListener("click", () => {
   // Alleen gefilterde (zichtbare) regels meenemen — Osman wil niet
   // per ongeluk alle 417 regels doorvoeren als 'ie maar 2 zoekt
   const visibleRegels = parsedData._visibleRegels || parsedData.creditRegels;
-  const matched = visibleRegels.filter(r => r.match);
+  const matchedAll = visibleRegels.filter(r => r.match);
+  const reedsBetaald = matchedAll.filter(r => amountToBook(r) < 0.01).length;
+  const matched = matchedAll.filter(r => amountToBook(r) >= 0.01);
   const boekDatum = document.getElementById("boekDatum").value;
   const payments = matched.map(r => buildPaymentBody(r, boekDatum));
   statusEl.className = "status-msg ok";
   statusEl.classList.remove("hidden");
   statusEl.innerHTML = `<b>Dry-run — ${payments.length} betalingen zouden gestuurd worden naar <code>/v3/Orders/AddPayment</code>:</b>
+    ${reedsBetaald ? `<div style="font-size:12px;color:var(--warn);margin:4px 0;">${reedsBetaald} order(s) staan al volledig betaald → die worden overgeslagen.</div>` : ""}
     <pre style="background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;overflow:auto;max-height:300px;font-size:11px;margin-top:8px;">${escapeHtml(JSON.stringify(payments.slice(0, 5), null, 2))}${payments.length > 5 ? "\n\n... en " + (payments.length - 5) + " meer (eerste 5 getoond)" : ""}</pre>
     <div style="margin-top:8px;font-size:12px;color:var(--muted);">
-      Body-template bevestigd via probe: alle velden geldig, Logic4 antwoordt met 'Order niet gevonden' bij een test-OrderId, wat betekent dat de payload geaccepteerd wordt. Klik 'Doorvoeren' om écht te boeken.
+      <code>Amount</code> = Bol-bedrag minus wat al op de order betaald staat, zodat 'Betaald' precies op het Bol-bedrag uitkomt. Klik 'Doorvoeren' om écht te boeken.
     </div>`;
 });
 
@@ -1274,13 +1082,17 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
   // Alleen gefilterde (zichtbare) regels meenemen — Osman wil niet
   // per ongeluk alle 417 regels doorvoeren als 'ie maar 2 zoekt
   const visibleRegels = parsedData._visibleRegels || parsedData.creditRegels;
-  const matched = visibleRegels.filter(r => r.match);
+  const matchedAll = visibleRegels.filter(r => r.match);
+  const reedsBetaald = matchedAll.filter(r => amountToBook(r) < 0.01).length;
+  const matched = matchedAll.filter(r => amountToBook(r) >= 0.01);
   if (!matched.length) {
-    alert("Geen gematchte regels om door te voeren.");
+    alert(matchedAll.length
+      ? `Alle ${matchedAll.length} gematchte order(s) staan al volledig betaald — niets door te voeren.`
+      : "Geen gematchte regels om door te voeren.");
     return;
   }
   // Dubbele bevestiging — boekhouding is gevoelig
-  const totaal = matched.reduce((s, r) => s + r.bedrag, 0);
+  const totaal = matched.reduce((s, r) => s + amountToBook(r), 0);
   const confirm1 = confirm(
     `LET OP — je gaat ${matched.length} betalingen koppelen aan Logic4-orders ` +
     `voor in totaal ${fmtEur(totaal)}.\n\n` +
@@ -1358,7 +1170,8 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
     const payedBefore = before?.payed ?? 0;
     const payedAfter  = after?.payed  ?? 0;
     const payedDelta  = payedAfter - payedBefore;
-    const expectedDelta = r.bedrag;
+    // We boeken het restant (amountToBook), dus zóveel zou Betaald moeten stijgen.
+    const expectedDelta = amountToBook(r);
     const actuallyApplied = apiOk && Math.abs(payedDelta - expectedDelta) < 0.05;
 
     let statusHtml, detailExtra = "";
