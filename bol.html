@@ -314,6 +314,7 @@
       <div class="actions" style="margin-top:8px;">
         <button class="secondary" id="dryRunBtn" type="button">🧪 Dry-run (toon wat er zou gebeuren)</button>
         <button class="secondary" id="test1Btn" type="button">1️⃣ Test op 1 order</button>
+        <button class="secondary" id="diagPayBtn" type="button">🔧 Diagnose betaling-velden</button>
         <button class="primary" id="applyBtn" type="button">⏵ Doorvoeren in Logic4</button>
       </div>
       <p class="lead" style="font-size:12px;color:var(--muted);margin:8px 0 0;">
@@ -1059,10 +1060,90 @@ function buildPaymentBody(creditRegel, boekDatum) {
     // Boek het RESTANT zodat Betaald op het Bol-bedrag uitkomt (niet
     // dubbel boeken als er al iets op de order staat).
     AmountIncl: amountToBook(creditRegel),
-    DateTime: boekDatum,
+    DateTime: (boekDatum || new Date().toISOString().slice(0, 10)) + "T00:00:00",
     Description: "Betaling Bol-bestelling " + creditRegel.bestelnr,
   };
 }
+
+// Rauwe Logic4-call (geeft {ok,status,data} terug i.p.v. te throwen) —
+// voor diagnose, zodat we 404/500 netjes kunnen tonen.
+async function logic4Raw(path, method, body) {
+  const payload = body !== undefined ? { path, method, body } : { path, method };
+  const r = await fetch(HELPER_BASE + "/api/logic4-call", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + getSession() },
+    body: JSON.stringify(payload)
+  });
+  const j = await r.json().catch(() => ({}));
+  return { ok: !!j.ok, status: j.status, data: j.data, error: j.error };
+}
+
+// 🔧 Diagnose betaling-velden — leest (read-only) welke betaalmethoden,
+// dagboeken en grootboekrekeningen Logic4 kent + dumpt de invoice/payment-
+// velden van de eerste gematchte order. Uit dit resultaat bepalen we de
+// juiste AddPayment-body (waarom geeft AddPayment een 500?).
+document.getElementById("diagPayBtn").addEventListener("click", async () => {
+  if (!parsedData) return;
+  const out = document.getElementById("applyStatus");
+  out.classList.remove("hidden");
+  out.className = "status-msg";
+  const btn = document.getElementById("diagPayBtn");
+  btn.disabled = true;
+  const visibleRegels = parsedData._visibleRegels || parsedData.creditRegels;
+  const r = visibleRegels.find(x => x.match);
+  const orderId = r ? r.match.orderId : null;
+  const blocks = [];
+  try {
+    if (orderId) {
+      out.textContent = "Order " + orderId + " ophalen…";
+      const resp = await logic4Raw("/v3/Orders/GetOrders", "POST", { Id: Number(orderId), TakeRecords: 1 });
+      const arr = Array.isArray(resp.data) ? resp.data : ((resp.data && resp.data.Orders) || []);
+      const o = arr[0];
+      if (o) {
+        const keys = Object.keys(o).sort();
+        const interesting = keys.filter(k => /invoice|factu|paid|payment|ledger|debtor|journal|booking/i.test(k));
+        const kv = interesting.map(k => "<code>" + escapeHtml(k) + "</code> = " + escapeHtml(JSON.stringify(o[k])));
+        blocks.push("<b>Order " + orderId + " — invoice/payment-velden:</b><br>" + (kv.join("<br>") || "(geen op top-level)"));
+        blocks.push("<b>Totals:</b> <code>" + escapeHtml(JSON.stringify(o.Totals || {})) + "</code>");
+        blocks.push("<b>Alle top-level keys:</b> <code style='font-size:10px'>" + escapeHtml(keys.join(", ")) + "</code>");
+      } else {
+        blocks.push("<b>Order " + orderId + "</b>: geen data (status " + resp.status + ").");
+      }
+    }
+    const refs = [
+      ["/v3/Financial/GetPaymentMethods", "Betaalmethoden"],
+      ["/v3/Financial/GetFinancialBooks", "Dagboeken"],
+      ["/v3/Financial/GetLedgers", "Grootboekrekeningen"],
+    ];
+    for (let i = 0; i < refs.length; i++) {
+      const path = refs[i][0], label = refs[i][1];
+      out.textContent = label + " ophalen…";
+      const resp = await logic4Raw(path, "GET");
+      if (!resp.ok) {
+        blocks.push("<b>" + label + "</b> (<code>" + escapeHtml(path) + "</code>): <span style='color:#b91c1c'>status " + (resp.status || "?") + (resp.status === 404 ? " — geen scope op deze module" : "") + "</span>");
+        continue;
+      }
+      let list = resp.data;
+      if (!Array.isArray(list) && list && typeof list === "object") {
+        list = list.PaymentMethods || list.FinancialBooks || list.Ledgers || list.Items || [];
+      }
+      if (!Array.isArray(list)) list = [];
+      const sample = list.slice(0, 30).map(function (x) {
+        const id = x.Id != null ? x.Id : (x.LedgerId != null ? x.LedgerId : (x.Code != null ? x.Code : "?"));
+        const name = x.Description || x.Value || x.Name || x.Code || "";
+        return id + ": " + escapeHtml(String(name).slice(0, 45));
+      });
+      blocks.push("<b>" + label + "</b> (" + list.length + "):<br><code style='font-size:11px'>" + (sample.join("<br>") || escapeHtml(JSON.stringify(resp.data).slice(0, 300))) + "</code>");
+    }
+    out.className = "status-msg";
+    out.innerHTML = "<b>🔧 Betaling-diagnose</b> — plak dit terug naar Claude:<div style='margin-top:8px;padding:11px 13px;background:#fffdf6;border:1px solid #fde68a;border-radius:8px;font-size:12px;line-height:1.6;max-height:440px;overflow:auto'>" + blocks.join("<br><br>") + "</div>";
+  } catch (e) {
+    out.className = "status-msg bad";
+    out.textContent = "Diagnose-fout: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // Lees Betaald-stand (Calc_TotalPayed) van 1 order.
 async function readOrderPayed(orderId) {
