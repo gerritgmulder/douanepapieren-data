@@ -313,8 +313,14 @@
       </p>
       <div class="actions" style="margin-top:8px;">
         <button class="secondary" id="dryRunBtn" type="button">🧪 Dry-run (toon wat er zou gebeuren)</button>
+        <button class="secondary" id="test1Btn" type="button">1️⃣ Test op 1 order</button>
         <button class="primary" id="applyBtn" type="button">⏵ Doorvoeren in Logic4</button>
       </div>
+      <p class="lead" style="font-size:12px;color:var(--muted);margin:8px 0 0;">
+        💡 Doe éérst <b>Test op 1 order</b>: boekt precies één betaling en meet
+        of het Betaald-veld in Logic4 beweegt. Pas doorvoeren als die test
+        groen is én Osman bevestigt dat het bedrag goed in de boekhouding staat.
+      </p>
       <div id="applyStatus" class="status-msg hidden" style="margin-top:12px;"></div>
       <div id="applyResults" class="hidden" style="margin-top:12px;"></div>
     </div>
@@ -1039,23 +1045,97 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
 // volgt uit de body-probe op probe-logic4.html — voorlopig staat
 // de apply-knop UIT.
 
-// Body-template voor /v3/Orders/AddPayment — bevestigd via probe:
-// 'Description' is verplicht; bij volledige body kreeg de probe
-// 'Order -1 niet gevonden' = endpoint accepteert payload.
-// PaymentMethodId 1 = standaard (later eventueel specifiek voor Bol-betalingen).
+// Body voor /v3/Orders/AddPayment — veldnamen MOETEN exact matchen met
+// Logic4's Payment-model (v3), anders negeert Logic4 het veld stilletjes:
+//   AmountIncl  (NIET "Amount")   ← het te boeken bedrag incl. BTW
+//   DateTime    (NIET "PaymentDate"/"Date")
+//   Description (vrije tekst; "Reference"/"PaymentMethodId" bestaan niet)
+// Met het verkeerde "Amount"-veld boekte de tool €0,00 → Betaald bewoog niet.
+// Bron: Logic4 Swagger / Payment-model (orderId, invoiceId, amountIncl,
+// description, bookingId, matchingLedgerId, dateTime, ledgerCode).
 function buildPaymentBody(creditRegel, boekDatum) {
   return {
     OrderId: creditRegel.match.orderId,
     // Boek het RESTANT zodat Betaald op het Bol-bedrag uitkomt (niet
     // dubbel boeken als er al iets op de order staat).
-    Amount: amountToBook(creditRegel),
-    PaymentDate: boekDatum,
-    Date: boekDatum,
-    PaymentMethodId: 1,
-    Reference: creditRegel.bestelnr,
-    Description: `Betaling Bol-bestelling ${creditRegel.bestelnr}`,
+    AmountIncl: amountToBook(creditRegel),
+    DateTime: boekDatum,
+    Description: "Betaling Bol-bestelling " + creditRegel.bestelnr,
   };
 }
+
+// Lees Betaald-stand (Calc_TotalPayed) van 1 order.
+async function readOrderPayed(orderId) {
+  try {
+    const resp = await logic4Call("/v3/Orders/GetOrders", { Id: Number(orderId), TakeRecords: 1 });
+    const arr = Array.isArray(resp) ? resp : ((resp && resp.Orders) || []);
+    if (!arr.length) return null;
+    const t = arr[0].Totals || {};
+    return { payed: Number(t.Calc_TotalPayed) || 0, amountIncl: Number(t.AmountIncl) || 0, isPaid: !!t.IsPaid };
+  } catch (e) { return null; }
+}
+
+// TEST OP 1 ORDER — boekt precies één betaling en meet of Betaald beweegt.
+// Bedoeld om de body/veldnamen te verifiëren vóór een batch van honderden.
+document.getElementById("test1Btn").addEventListener("click", async () => {
+  if (!parsedData) return;
+  const statusEl = document.getElementById("applyStatus");
+  const visibleRegels = parsedData._visibleRegels || parsedData.creditRegels;
+  const r = visibleRegels.find(x => x.match && amountToBook(x) >= 0.01);
+  statusEl.classList.remove("hidden");
+  if (!r) {
+    statusEl.className = "status-msg warn";
+    statusEl.textContent = "Geen gematchte, nog-niet-betaalde order gevonden om te testen.";
+    return;
+  }
+  const boekDatum = document.getElementById("boekDatum").value;
+  const body = buildPaymentBody(r, boekDatum);
+  const ok = confirm(
+    "TEST op 1 order.\n\n" +
+    "Bol-bestelling " + r.bestelnr + " → Logic4 order " + r.match.orderId + "\n" +
+    "Te boeken: " + fmtEur(amountToBook(r)) + " (veld AmountIncl)\n\n" +
+    "Dit boekt ÉÉN echte betaling in Logic4. Doorgaan?"
+  );
+  if (!ok) return;
+
+  const btn = document.getElementById("test1Btn");
+  btn.disabled = true;
+  statusEl.className = "status-msg";
+  try {
+    statusEl.textContent = "Betaald-stand vóór meten…";
+    const before = await readOrderPayed(r.match.orderId);
+    statusEl.textContent = "AddPayment versturen…";
+    let apiErr = null;
+    try { await logic4Call("/v3/Orders/AddPayment", body); }
+    catch (e) { apiErr = e.message; }
+    statusEl.textContent = "Betaald-stand ná meten…";
+    const after = await readOrderPayed(r.match.orderId);
+
+    const pb = before ? before.payed : 0;
+    const pa = after ? after.payed : 0;
+    const delta = pa - pb;
+    const expected = amountToBook(r);
+    const moved = !apiErr && Math.abs(delta - expected) < 0.05;
+
+    let verdict;
+    if (moved) verdict = `<span class="match-pill ok">✓ Betaald bewoog +${fmtEur(delta)} — de fix werkt!</span>`;
+    else if (!apiErr && delta === 0) verdict = `<span class="match-pill fail">⚠ API zei OK maar Betaald bewoog niet. Veldnaam/dagboek nog niet goed — deel dit met Claude.</span>`;
+    else if (apiErr) verdict = `<span class="match-pill fail">✗ API-fout: ${escapeHtml(apiErr)}</span>`;
+    else verdict = `<span class="match-pill fail">⚠ Betaald +${fmtEur(delta)}, verwacht +${fmtEur(expected)}</span>`;
+
+    statusEl.className = "status-msg " + (moved ? "ok" : "warn");
+    statusEl.innerHTML = `<b>Test-resultaat — order ${r.match.orderId} (${escapeHtml(r.bestelnr)})</b><br>
+      Verstuurd: <code>AmountIncl ${amountToBook(r)}</code>, <code>DateTime ${escapeHtml(boekDatum)}</code><br>
+      Betaald vóór: ${before ? fmtEur(pb) : "?"} → ná: ${after ? fmtEur(pa) : "?"}<br>
+      ${verdict}
+      <div style="margin-top:8px;font-size:12px;color:var(--muted);">Open order ${r.match.orderId} in Logic4 → blok Totalen → controleer 'Betaald'. Klopt het bedrag én staat het goed in de boekhouding (Osman), dan kun je de rest doorvoeren.</div>`;
+  } catch (e) {
+    statusEl.className = "status-msg bad";
+    statusEl.textContent = "Testfout: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 document.getElementById("dryRunBtn").addEventListener("click", () => {
   if (!parsedData) return;
