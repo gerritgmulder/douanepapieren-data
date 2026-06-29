@@ -286,7 +286,40 @@ async function saveVoorraadState(){
       body: JSON.stringify({ advisorMap, dealers, lastUpdated:new Date().toISOString() }) });
   }catch(e){ console.warn("voorraad-state opslaan faalde:", e); }
 }
-function advisorName(uid){ const k=String(uid==null?"":uid); return advisorMap[k] ? advisorMap[k] : ("UserId "+uid); }
+// Medewerkers (= adviseurs) automatisch ophalen uit Logic4, indien in scope.
+// /v3/User/GetAllUsers (enkelvoud 'User') — de eerder 404'de endpoints waren
+// het meervoud 'Users'. Lukt dit → UserId→naam vult automatisch.
+let autoUsers = {};
+let autoUsersInfo = { tried:false, ok:false, count:0, sampleKeys:"", error:"" };
+async function tryLoadMedewerkers(){
+  autoUsersInfo.tried = true;
+  try{
+    const r = await fetch(HELPER_BASE+"/api/logic4-call",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+getSession()},
+      body:JSON.stringify({ path:"/v3/User/GetAllUsers", method:"GET" })
+    });
+    const j = await r.json().catch(()=>({}));
+    if (!j || !j.ok){ autoUsersInfo.error = "status "+(j&&j.status)+(j&&j.status===404?" (geen scope)":""); return; }
+    let arr = j.data;
+    if (!Array.isArray(arr) && arr && typeof arr==="object") arr = arr.Users||arr.Items||arr.value||[];
+    if (!Array.isArray(arr)){ autoUsersInfo.error="onverwacht antwoord"; return; }
+    let n=0;
+    for (let i=0;i<arr.length;i++){
+      const u = arr[i]||{};
+      if (i===0) autoUsersInfo.sampleKeys = Object.keys(u).join(", ");
+      const id = u.Id!=null?u.Id:(u.UserId!=null?u.UserId:null);
+      if (id==null) continue;
+      const name = (u.FullName||u.Name||u.DisplayName|| ((u.FirstName||"")+" "+(u.LastName||"")).trim() || u.UserName || u.Email || "").trim();
+      if (name){ autoUsers[String(id)] = name; n++; }
+    }
+    autoUsersInfo.ok = n>0; autoUsersInfo.count = n;
+  }catch(e){ autoUsersInfo.error = e.message; }
+}
+function advisorName(uid){
+  const k=String(uid==null?"":uid);
+  return advisorMap[k] || autoUsers[k] || ("UserId "+uid);
+}
 function reapplyAdvisors(){ for (let i=0;i<allLines.length;i++) allLines[i].adviseur = advisorName(allLines[i].userId); }
 
 /* ====== Util ====== */
@@ -321,6 +354,7 @@ document.getElementById("fetchBtn").addEventListener("click", async ()=>{
   setStatus("", "Orders ophalen…");
   try{
     await loadVoorraadState();
+    if (!autoUsersInfo.tried) await tryLoadMedewerkers();
     const fromIso = datum+"T00:00:00", toIso = datum+"T23:59:59";
     const fromMs = new Date(fromIso).getTime(), toMs = new Date(toIso).getTime();
     const PAGE=500, MAX_PAGES=20;
@@ -430,24 +464,31 @@ function renderAdvisorPanel(){
     if (ua!==ub) return ua-ub;
     return byUid[b].count-byUid[a].count;
   });
-  const nUnknown = uids.filter(k=>!advisorMap[k]).length;
+  const nUnknown = uids.filter(k=>!advisorMap[k] && !autoUsers[k]).length;
   const rows = uids.map(function(k){
     const info = byUid[k];
-    const cur = advisorMap[k] || "";
+    const manual = advisorMap[k] || "";
+    const auto = autoUsers[k] || "";
+    const cur = manual || auto;
     let opt = "<option value=''>— kies adviseur —</option>";
-    for (let i=0;i<ADVISORS.length;i++){ opt += "<option"+(ADVISORS[i]===cur?" selected":"")+">"+esc(ADVISORS[i])+"</option>"; }
+    for (let i=0;i<ADVISORS.length;i++){ opt += "<option"+(ADVISORS[i]===manual?" selected":"")+">"+esc(ADVISORS[i])+"</option>"; }
     const sel = "<select data-uid='"+esc(k)+"'>"+opt+"</select>";
+    const tag = cur ? ("<span class='pill s1'>"+esc(cur)+"</span>"+(!manual&&auto?" <span style='color:var(--muted);font-size:10px'>(auto)</span>":"")+" ") : "";
     return "<tr>"+
       "<td class='code'>UserId "+esc(k)+"</td>"+
       "<td class='num'>"+info.count+"</td>"+
       "<td>"+esc(info.ex.naam)+" <span style='color:var(--muted)'>(order "+esc(info.ex.ordernr)+")</span></td>"+
-      "<td>"+(cur?"<span class='pill s1'>"+esc(cur)+"</span> ":"")+sel+"</td>"+
+      "<td>"+tag+sel+"</td>"+
     "</tr>";
   }).join("");
   panel.innerHTML =
     "<div class='card'>"+
-    "<h3>Adviseurs koppelen"+(nUnknown?" <span style='color:var(--warn);font-weight:600'>("+nUnknown+" nog te koppelen)</span>":"")+"</h3>"+
-    "<p class='lead' style='font-size:12px;margin-bottom:8px'>De order bevat alleen een <b>UserId</b>, geen naam. Koppel elk UserId één keer aan een adviseur — dat onthoud ik voortaan (geldt ook voor alle volgende dagen). Herken je 'm niet? Open de voorbeeld-order even in Logic4.</p>"+
+    "<h3>Adviseurs (medewerkers) koppelen"+(nUnknown?" <span style='color:var(--warn);font-weight:600'>("+nUnknown+" nog te koppelen)</span>":"")+"</h3>"+
+    "<p class='lead' style='font-size:12px;margin-bottom:8px'>"+
+      (autoUsersInfo.ok
+        ? "<span style='color:var(--ok)'>✓ "+autoUsersInfo.count+" medewerkers automatisch uit Logic4 geladen — de namen vullen vanzelf in. Een keuze hieronder overschrijft de automatische naam.</span>"
+        : "<span style='color:var(--warn)'>Medewerkers konden niet automatisch worden opgehaald ("+esc(autoUsersInfo.error||"onbekend")+"). Koppel elk UserId één keer handmatig — dat onthoud ik voortaan.</span>")+
+      " Herken je 'm niet? Open de voorbeeld-order even in Logic4.</p>"+
     "<table class='grid'><thead><tr><th>UserId</th><th>Spa-regels</th><th>Voorbeeld-order</th><th>Adviseur</th></tr></thead><tbody>"+rows+"</tbody></table>"+
     "</div>";
   panel.querySelectorAll("select").forEach(function(se){
@@ -468,6 +509,7 @@ function diagWrap(inner){
 function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode){
   const b=[];
   b.push("<b>"+scanned+"</b> orders opgehaald · <b>"+onDay+"</b> op deze dag · <b>"+verkocht.length+"</b> met status Verkooporder/30% · <b>"+rowsTotal+"</b> orderregels (waarvan "+rowsWithCode+" met productcode) · <b>"+lines.length+"</b> spa-regels herkend.");
+  b.push("<b>Medewerkers automatisch ophalen (/v3/User/GetAllUsers):</b> "+(autoUsersInfo.ok ? ("✓ "+autoUsersInfo.count+" geladen — velden: <code>"+esc(autoUsersInfo.sampleKeys)+"</code>") : ("mislukt — "+esc(autoUsersInfo.error||"?"))));
   if (!verkocht.length){ document.getElementById("diag").innerHTML = diagWrap(b.join("<br>")); return; }
   if (rowsTotal===0){
     b.push("<b style='color:#b91c1c'>⚠ Geen orderregels in de respons</b> — GetOrders levert de regels mogelijk niet mee onder 'OrderRows'. Zie de top-level velden hieronder; anders haal ik ze per order op via GetOrderRows.");
