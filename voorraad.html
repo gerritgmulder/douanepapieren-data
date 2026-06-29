@@ -201,9 +201,26 @@ function spaModel(code){
   }
   return "(onbekend SKT-model)";
 }
+// Modelnamen op lengte (langste eerst) zodat "Activity 1 Deep" vóór "Activity 1" matcht.
+const MODELS_BY_LEN = SPA_CODES.map(p=>p[1]).sort((a,b)=>b.length-a.length);
+// Herken een spa-model in vrije tekst (order-regel omschrijving). Logic4 zet
+// het model in de omschrijving (bv. "Activity 1 SW with GREY/oak"), niet als
+// SKT-code. Woordgrens-check zodat losse letters niet vals matchen.
+function modelFromText(text){
+  const t = " " + String(text==null?"":text).toLowerCase() + " ";
+  for (let i=0;i<MODELS_BY_LEN.length;i++){
+    const ml = MODELS_BY_LEN[i].toLowerCase();
+    const idx = t.indexOf(ml);
+    if (idx !== -1){
+      const before = t.charAt(idx-1), after = t.charAt(idx+ml.length);
+      if (!/[a-z0-9]/.test(before) && !/[a-z0-9]/.test(after)) return MODELS_BY_LEN[i];
+    }
+  }
+  return null;
+}
 
 /* ====== De 9 spa-adviseurs (voor herkenning/filtering — kalibratie volgt) ====== */
-const ADVISORS = ["Arno","Christian","Dali","Ahmed","Yves","Louis","Chantal","Bert","Patrick"];
+const ADVISORS = ["Arno","Christian","Dali","Ahmed","Yves","Louis","Chantal","Bert","Patrick","Mario","Gert","Edwin"];
 
 /* ====== Order-statussen (uit order-status.html) ====== */
 const STATUS_VERKOOPORDER = 1;
@@ -299,17 +316,21 @@ document.getElementById("fetchBtn").addEventListener("click", async ()=>{
     // Alleen verkooporders / 30% aanbetaald
     const verkocht = onDay.filter(o=> SPA_STATUSSEN.indexOf(o.OrderStatus && o.OrderStatus.Id) !== -1);
 
-    // Spa-regels extraheren — één regel per spa-orderregel
+    // Spa-regels extraheren — één regel per spa-orderregel.
+    // Primair: model uit de omschrijving (Logic4 zet model in Description).
+    // Fallback: SKT-productcode (factory-code) als die wél voorkomt.
     const lines=[];
-    const unmatched={}; // onbekende SKT-codes
+    let rowsTotal=0, rowsWithCode=0;
     for (const o of verkocht){
       const rows = o.OrderRows || [];
       for (const r of rows){
-        const model = spaModel(r.ProductCode);
-        if (model===null) continue; // geen spa
+        rowsTotal++;
+        if (r.ProductCode) rowsWithCode++;
+        let model = modelFromText(r.Description);
+        if (!model){ const mc = spaModel(r.ProductCode); if (mc && mc!=="(onbekend SKT-model)") model = mc; }
+        if (!model) continue; // geen spa
         const aantal = Number(r.Qty)||0;
         if (aantal<=0) continue;
-        if (model==="(onbekend SKT-model)") unmatched[normCode(r.ProductCode)] = (unmatched[normCode(r.ProductCode)]||0)+1;
         lines.push({
           ordernr:o.Id, datum:fmtDate(o.CreationDate), naam:klantNaam(o),
           adviseur:advisorRaw(o), statusId:o.OrderStatus&&o.OrderStatus.Id,
@@ -323,7 +344,7 @@ document.getElementById("fetchBtn").addEventListener("click", async ()=>{
     document.getElementById("dateLabel").textContent = datum;
     document.getElementById("resultSection").classList.remove("hidden");
     renderLines();
-    renderDiag(orders.length, onDay.length, verkocht.length, lines, unmatched);
+    renderDiag(orders.length, onDay.length, verkocht, lines, rowsTotal, rowsWithCode);
     setStatus("ok", lines.length+" spa-regel(s) gevonden in "+verkocht.length+" verkochte order(s) op "+datum+".");
   }catch(e){
     console.error(e); setStatus("bad","Fout bij ophalen: "+e.message);
@@ -364,24 +385,45 @@ function renderLines(){
 }
 document.querySelectorAll(".filter-row input").forEach(inp=> inp.addEventListener("input", renderLines));
 
-function renderDiag(scanned, onDay, verkocht, lines, unmatched){
-  // distinct adviseurs + statussen → om te kalibreren
-  const adv={}, stat={};
-  for (const l of lines){ adv[l.adviseur]=(adv[l.adviseur]||0)+1; stat[(l.statusId)+" — "+l.status]=(stat[(l.statusId)+" — "+l.status]||0)+1; }
-  const advList = Object.keys(adv).sort((a,b)=>adv[b]-adv[a]).map(k=>esc(k)+" ("+adv[k]+")").join(", ") || "(geen)";
-  const statList = Object.keys(stat).map(k=>esc(k)+" ("+stat[k]+")").join(", ") || "(geen)";
-  const unm = Object.keys(unmatched);
-  const unmList = unm.length ? unm.map(c=>"<code>"+esc(c)+"</code> ("+unmatched[c]+")").join(", ") : "(geen — alle spa-codes herkend)";
-  document.getElementById("diag").innerHTML =
-    "<div class='card' style='background:#fffdf6;border-color:#fde68a'>"+
+function diagWrap(inner){
+  return "<div class='card' style='background:#fffdf6;border-color:#fde68a'>"+
     "<h3>🔧 Kalibratie-diagnose <span style='font-weight:400;color:var(--muted)'>— plak terug naar Claude</span></h3>"+
-    "<div style='font-size:12.5px;line-height:1.7'>"+
-    "<b>"+scanned+"</b> orders opgehaald · <b>"+onDay+"</b> op deze dag · <b>"+verkocht+"</b> met status Verkooporder/30% · <b>"+lines.length+"</b> spa-regels.<br>"+
-    "<b>Adviseur-waarden gevonden (zo staat het in de order):</b> "+advList+"<br>"+
-    "<i style='color:var(--muted)'>→ Hieruit leid ik af welk veld de adviseur is en koppel ik de 9 namen ("+ADVISORS.join(", ")+").</i><br>"+
-    "<b>Statussen gevonden:</b> "+statList+"<br>"+
-    "<b>Onbekende SKT-codes:</b> "+unmList+
-    "</div></div>";
+    "<div style='font-size:12px;line-height:1.6'>"+inner+"</div></div>";
+}
+function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode){
+  const b=[];
+  b.push("<b>"+scanned+"</b> orders opgehaald · <b>"+onDay+"</b> op deze dag · <b>"+verkocht.length+"</b> met status Verkooporder/30% · <b>"+rowsTotal+"</b> orderregels (waarvan "+rowsWithCode+" met productcode) · <b>"+lines.length+"</b> spa-regels herkend.");
+  if (!verkocht.length){ document.getElementById("diag").innerHTML = diagWrap(b.join("<br>")); return; }
+  if (rowsTotal===0){
+    b.push("<b style='color:#b91c1c'>⚠ Geen orderregels in de respons</b> — GetOrders levert de regels mogelijk niet mee onder 'OrderRows'. Zie de top-level velden hieronder; anders haal ik ze per order op via GetOrderRows.");
+  }
+  const o = verkocht[0];
+  const keys = Object.keys(o).sort();
+  b.push("<b>Voorbeeld-order "+o.Id+" — alle top-level velden:</b><br><code style='font-size:10px'>"+esc(keys.join(", "))+"</code>");
+  const advCand = keys.filter(k=>/user|sales|employ|medewerk|adviseur|verkoop|account|rep/i.test(k));
+  const advDump = advCand.map(k=>"<code>"+esc(k)+"</code> = "+esc(JSON.stringify(o[k]).slice(0,90))).join("<br>") || "(geen voor de hand liggend adviseur-veld)";
+  b.push("<b>Mogelijke adviseur-velden op order "+o.Id+":</b><br>"+advDump);
+  const firstRow = (o.OrderRows && o.OrderRows[0]) || null;
+  if (firstRow){
+    b.push("<b>Velden van een orderregel:</b><br><code style='font-size:10px'>"+esc(Object.keys(firstRow).sort().join(", "))+"</code>");
+  }
+  const sampleRows=[];
+  const vk = verkocht.slice(0,8);
+  for (let i=0;i<vk.length;i++){
+    const rs = vk[i].OrderRows || [];
+    for (let k=0;k<Math.min(rs.length,5);k++){
+      const r=rs[k];
+      sampleRows.push("ord "+vk[i].Id+" | code <code>"+esc(r.ProductCode==null?"(leeg)":r.ProductCode)+"</code> | qty "+esc(r.Qty)+" | "+esc(String(r.Description==null?"":r.Description).slice(0,60)));
+      if (sampleRows.length>=20) break;
+    }
+    if (sampleRows.length>=20) break;
+  }
+  b.push("<b>Voorbeeld orderregels (code | aantal | omschrijving):</b><br>"+(sampleRows.join("<br>")||"(geen orderregels gevonden)"));
+  if (lines.length){
+    const adv={}; for (const l of lines) adv[l.adviseur]=(adv[l.adviseur]||0)+1;
+    b.push("<b>Adviseur-waarden in herkende spa-regels:</b> "+Object.keys(adv).map(k=>esc(k)+" ("+adv[k]+")").join(", "));
+  }
+  document.getElementById("diag").innerHTML = diagWrap(b.join("<br><br>"));
 }
 </script>
 </body>
