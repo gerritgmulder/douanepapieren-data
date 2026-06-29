@@ -26,6 +26,7 @@ const ALLOWED_BUCKETS = new Set([
   "douane-specs",     // Handmatig aangevulde HS/origin/gewicht/dims per artikel
   "retouren",         // Retour-registratie per order (reden/locatie/uitleg/adviseur)
   "voorraad",         // Voorraadbeheer: adviseur-map (UserId→naam) + dealer-markering per debiteur
+  "voorraad-pipeline",// Voorraadbeheer pipeline: containers (nr/besteld/ETA/herkomst + spa-regels) — door Chantal beheerd
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 

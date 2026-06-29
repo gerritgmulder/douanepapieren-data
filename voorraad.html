@@ -183,44 +183,46 @@
 
   <div id="tab-pipe" class="hidden">
     <div class="card">
-      <h3>Voorraad &amp; pipeline — waar is elke spa? <span style="font-weight:400;color:var(--warn)">(concept — kalibreren met Chantal)</span></h3>
+      <h3>Voorraad &amp; pipeline — waar is elke spa?</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">
-        Upload het <b>Passion-bestellingen-document</b> (Excel). Ik lees de tabbladen
-        <b>Bestellingen / Devine / GrizTropStr 2025-2026</b>, bepaal per container of de spa's
-        <b>in productie</b>, <b>op het schip</b> of <b>in Nederland</b> zijn (op basis van besteld-datum + ETA,
-        schip ≈ 5,5 wk), en tel de voorraad per model (gereserveerd vs. vrij).
+        Beheer hier de <b>containers</b> met spa's. Per container: nummer, herkomst, besteld-datum en ETA.
+        Ik bepaal automatisch of de spa's <b>in productie</b>, <b>op het schip</b> of <b>in Nederland</b> zijn
+        (voorraad telt vanaf vertrek schip ≈ 5,5 wk vóór ETA). Alles wordt centraal opgeslagen — geen Excel meer nodig.
       </p>
-      <div class="drop-zone" id="pipeDrop">
-        <div style="font-size:34px;opacity:.6">🚢</div>
-        <b>Sleep het Passion-bestellingen-Excel hierheen</b> — of klik om te kiezen
+      <div class="actions" style="margin-top:0">
+        <button class="primary" id="addContBtn" type="button">➕ Nieuwe container</button>
+        <button class="secondary" id="importBtn" type="button">📥 Importeer uit Excel (eenmalig)</button>
         <input type="file" id="pipeFile" accept=".xlsx,.xls" style="display:none">
       </div>
       <div id="pipeStatus" class="status-msg hidden" style="margin-top:12px"></div>
     </div>
 
-    <div id="pipeResult" class="hidden">
-      <div class="card">
-        <h3>Pijplijn — <span id="pipeContCount">0</span> containers</h3>
-        <div class="pipe">
-          <div class="zone prod"><h4>🏭 In productie (<span id="zProdC">0</span> cont. · <span id="zProdU">0</span> spa's)</h4><div class="body" id="zProd"></div></div>
-          <div class="zone ship"><h4>🚢 Op het schip (<span id="zShipC">0</span> cont. · <span id="zShipU">0</span> spa's)</h4><div class="body" id="zShip"></div></div>
-          <div class="zone nl"><h4>📦 In Nederland / voorraad (<span id="zNlC">0</span> cont. · <span id="zNlU">0</span> spa's)</h4><div class="body" id="zNl"></div></div>
-        </div>
+    <div class="card">
+      <h3>Pijplijn — <span id="pipeContCount">0</span> containers</h3>
+      <div class="pipe">
+        <div class="zone prod"><h4>🏭 In productie (<span id="zProdC">0</span> cont. · <span id="zProdU">0</span> spa's)</h4><div class="body" id="zProd"></div></div>
+        <div class="zone ship"><h4>🚢 Op het schip (<span id="zShipC">0</span> cont. · <span id="zShipU">0</span> spa's)</h4><div class="body" id="zShip"></div></div>
+        <div class="zone nl"><h4>📦 In Nederland / voorraad (<span id="zNlC">0</span> cont. · <span id="zNlU">0</span> spa's)</h4><div class="body" id="zNl"></div></div>
       </div>
+    </div>
 
-      <div class="card">
-        <h3>Voorraad per model</h3>
-        <div class="tablewrap" style="max-height:46vh">
-          <table class="grid" id="stockTable">
-            <thead>
-              <tr><th>Model</th><th>In productie</th><th>Op schip</th><th>In NL</th><th>Totaal</th><th>Gereserveerd</th><th>Vrij</th></tr>
-              <tr class="filter-row" data-ov="stock"><th><input data-col="model" placeholder="filter model"></th><th></th><th></th><th></th><th></th><th></th><th></th></tr>
-            </thead>
-            <tbody id="stockBody"></tbody>
-          </table>
-        </div>
+    <div class="card">
+      <h3>Voorraad per model</h3>
+      <div class="tablewrap" style="max-height:46vh">
+        <table class="grid" id="stockTable">
+          <thead>
+            <tr><th>Model</th><th>In productie</th><th>Op schip</th><th>In NL</th><th>Totaal</th><th>Gereserveerd</th><th>Vrij</th></tr>
+            <tr class="filter-row" data-ov="stock"><th><input data-col="model" placeholder="filter model"></th><th></th><th></th><th></th><th></th><th></th><th></th></tr>
+          </thead>
+          <tbody id="stockBody"></tbody>
+        </table>
       </div>
-      <div id="pipeDiag"></div>
+    </div>
+
+    <div class="card">
+      <h3>Containers beheren</h3>
+      <datalist id="modelList"></datalist>
+      <div id="contManager"></div>
     </div>
   </div>
 </main>
@@ -788,177 +790,222 @@ function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode, un
   document.getElementById("diag").innerHTML = diagWrap(b.join("<br><br>"));
 }
 
-// ===================== Voorraad & pipeline (concept) =====================
-// Leest het Passion-bestellingen-document en bepaalt per container waar de
-// spa's zijn: in productie / op het schip / in Nederland. Nog te kalibreren.
-const PIPE_SHIP_WEEKS = 5.5;     // schip 5-6 weken
-const PIPE_PROD_EU_WEEKS = 8;    // productie ~2 maanden (EU); VS ~4 wk (later per container)
-const DAY_MS = 86400000;
-const M3 = {jan:0,feb:1,mrt:2,maa:2,apr:3,mei:4,jun:5,jul:6,aug:7,sep:8,okt:9,oct:9,nov:10,dec:11};
-let pipeContainers = [];
 
-function pcell(r,i){ if(!r||i>=r.length||r[i]==null) return ""; return String(r[i]).trim(); }
-function pdate(r,i){ if(!r||i>=r.length) return null; const v=r[i]; if(v instanceof Date && !isNaN(v)) return v; if(typeof v==="string"){ const d=new Date(v); if(!isNaN(d)) return d; } return null; }
+// ===================== Voorraad & pipeline =====================
+// Containers worden centraal in KV beheerd (bucket voorraad-pipeline). Chantal
+// voert ze in/bewerkt ze in het dashboard; Excel-import is alleen eenmalig.
+const PIPE_SHIP_WEEKS=5.5, PIPE_PROD_EU_WEEKS=8, DAY_MS=86400000;
+const PIPE_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-pipeline";
+const M3={jan:0,feb:1,mrt:2,maa:2,apr:3,mei:4,jun:5,jul:6,aug:7,sep:8,okt:9,oct:9,nov:10,dec:11};
+let pipeContainers=[];  // [{id,nr,herkomst,besteld,eta,lines:[{model,color,qty,reserved}]}]
 
-function parseEtaText(txt, anchor){
-  if(!txt) return null;
-  const m = String(txt).toLowerCase().match(/(\d{1,2})\s*([a-z]{3,})/);
-  if(!m) return null;
-  const mon = M3[m[2].slice(0,3)];
-  if(mon==null) return null;
-  const day = parseInt(m[1],10);
-  let year = (anchor instanceof Date && !isNaN(anchor)) ? anchor.getFullYear() : new Date().getFullYear();
-  let d = new Date(year, mon, day);
-  if(anchor instanceof Date && !isNaN(anchor) && d < anchor) d = new Date(year+1, mon, day);
-  return d;
+function isoLocal(d){ if(!(d instanceof Date)||isNaN(d)) return ""; return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function toDate(s){ if(!s) return null; const d=new Date(s); return isNaN(d)?null:d; }
+function newId(){ return "c"+Date.now()+Math.floor(Math.random()*10000); }
+
+async function loadPipe(){
+  try{ const r=await fetch(PIPE_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
+    if(r.ok){ const j=await r.json(); if(j&&Array.isArray(j.containers)) pipeContainers=j.containers; } }
+  catch(e){ console.warn("pipeline laden faalde:",e); }
 }
-function pipeStatus(besteld, eta){
-  const now = new Date();
-  if(eta instanceof Date && !isNaN(eta)){
-    const shipStart = new Date(eta.getTime() - PIPE_SHIP_WEEKS*7*DAY_MS);
-    if(now>=eta) return "nl";
-    if(now>=shipStart) return "ship";
-    return "prod";
-  }
-  if(besteld instanceof Date && !isNaN(besteld)){
-    const shipStart = new Date(besteld.getTime() + PIPE_PROD_EU_WEEKS*7*DAY_MS);
-    const arr = new Date(besteld.getTime() + (PIPE_PROD_EU_WEEKS+PIPE_SHIP_WEEKS)*7*DAY_MS);
-    if(now>=arr) return "nl";
-    if(now>=shipStart) return "ship";
-    return "prod";
-  }
+async function savePipe(){
+  try{ await fetch(PIPE_URL,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
+    body:JSON.stringify({containers:pipeContainers,lastUpdated:new Date().toISOString()})}); }
+  catch(e){ console.warn("pipeline opslaan faalde:",e); }
+}
+
+function pipeStatus(c){
+  const eta=toDate(c.eta), besteld=toDate(c.besteld), now=new Date();
+  if(eta){ const ship=new Date(eta.getTime()-PIPE_SHIP_WEEKS*7*DAY_MS); return now>=eta?"nl":(now>=ship?"ship":"prod"); }
+  if(besteld){ const ship=new Date(besteld.getTime()+PIPE_PROD_EU_WEEKS*7*DAY_MS), arr=new Date(besteld.getTime()+(PIPE_PROD_EU_WEEKS+PIPE_SHIP_WEEKS)*7*DAY_MS);
+    return now>=arr?"nl":(now>=ship?"ship":"prod"); }
   return "prod";
 }
+const STATUS_LABEL={prod:"🏭 In productie",ship:"🚢 Op het schip",nl:"📦 In Nederland"};
+function contUnits(c){ let n=0; for(const l of (c.lines||[])) n+=Number(l.qty)||0; return n; }
 
-// Blok-layout (Devine / GrizTropStr): containers in blokken van 5 kolommen.
-function parseBlockSheet(rows, sheetName){
-  const out=[];
-  const ncol = rows.reduce((m,r)=>Math.max(m, r?r.length:0), 0);
-  const row0=rows[0]||[], row1=rows[1]||[], row2=rows[2]||[], row3=rows[3]||[];
-  for(let b=1; b<ncol; b+=5){
-    const nr = pcell(row0,b+2);
-    const etaTxt = pcell(row1,b+3);
-    const besteld = pdate(row2,b+2) || pdate(row3,b+2);
-    if(!nr && !etaTxt && !besteld) continue;
-    const eta = parseEtaText(etaTxt, besteld);
-    const byKey={};
-    for(let ri=3; ri<rows.length; ri++){
-      const r=rows[ri]; if(!r) continue;
-      const model=pcell(r,b);
-      if(!model || /^(container|besteld)$/i.test(model)) continue;
-      const color=pcell(r,b+1);
-      const c2=r[b+2];
-      const key=model+" | "+color;
-      if(!byKey[key]) byKey[key]={model:model,color:color,qty:0,reserved:0,units:0};
-      let num=null;
-      if(typeof c2==="number") num=c2;
-      else if(c2!=null && /^\d+(\.0)?$/.test(String(c2).trim())) num=parseInt(c2,10);
-      if(num!=null && num>=1000000){ byKey[key].reserved++; byKey[key].units++; }
-      else if(num!=null && num<1000){ byKey[key].qty += num; }
-      else { byKey[key].units++; }
-    }
-    const models=Object.keys(byKey).map(k=>{
-      const e=byKey[k]; const total=Math.max(e.qty, e.units);
-      return {model:e.model, color:e.color, total:total, reserved:e.reserved, free:Math.max(0,total-e.reserved)};
-    }).filter(m=>m.total>0);
-    if(!models.length) continue;
-    out.push({sheet:sheetName, nr:nr||"?", etaTxt:etaTxt, eta:eta, besteld:besteld, models:models});
-  }
-  return out;
+let PIPE_MODELS=[];
+function buildModelList(){
+  const set={}; for(const k in SPA_BY_CODE) set[SPA_BY_CODE[k]]=1; for(const m of SPA_MODELS_EXTRA) set[m]=1;
+  PIPE_MODELS=Object.keys(set).sort();
+  const dl=document.getElementById("modelList"); if(dl) dl.innerHTML=PIPE_MODELS.map(m=>"<option value='"+esc(m)+"'>").join("");
 }
 
-// Matrix-layout (Bestellingen): rij=model+kleur, kolommen=containers.
-function parseMatrixSheet(rows, sheetName){
-  const row0=rows[0]||[], row1=rows[1]||[];
-  const conts=[];
-  for(let c=2;c<row0.length;c++){
-    const v=row0[c];
-    const isNum = typeof v==="number" || (v!=null && /^\d{3,5}(\.0)?$/.test(String(v).trim()));
-    if(!isNum) continue;
-    conts.push({col:c, nr:String(v).replace(/\.0$/,''), besteld:pdate(row1,c), models:{}});
-  }
-  for(let ri=2; ri<rows.length; ri++){
-    const r=rows[ri]; if(!r) continue;
-    const model=pcell(r,0); if(!model) continue;
-    const color=pcell(r,1);
-    for(const ct of conts){
-      const q=r[ct.col];
-      const n = typeof q==="number"?q:(q!=null && /^\d+(\.0)?$/.test(String(q).trim())?parseInt(q,10):0);
-      if(n>0){ const key=model+" | "+color; ct.models[key]=(ct.models[key]||0)+n; }
-    }
-  }
-  return conts.filter(c=>Object.keys(c.models).length).map(c=>({
-    sheet:sheetName, nr:c.nr, etaTxt:"", eta:null, besteld:c.besteld,
-    models:Object.keys(c.models).map(k=>{const p=k.split(" | ");return {model:p[0],color:p[1]||"",total:c.models[k],reserved:0,free:c.models[k]};})
-  }));
-}
+function renderPipeAll(){ renderZones(); renderStock(); renderManager(); }
 
-function pipeFmtDate(d){ if(!(d instanceof Date)||isNaN(d)) return "—"; return d.getDate()+"-"+(d.getMonth()+1)+"-"+d.getFullYear(); }
-function pipeUnits(c){ let n=0; for(const m of c.models) n+=m.total; return n; }
-
-function renderPipeline(){
+function renderZones(){
   const zones={prod:[],ship:[],nl:[]};
-  for(const c of pipeContainers){ c.status=pipeStatus(c.besteld,c.eta); zones[c.status].push(c); }
-  const zmap=[["prod","zProd","zProdC","zProdU"],["ship","zShip","zShipC","zShipU"],["nl","zNl","zNlC","zNlU"]];
-  for(const [st,bodyId,cId,uId] of zmap){
-    const list=zones[st];
-    document.getElementById(cId).textContent=list.length;
-    document.getElementById(uId).textContent=list.reduce((s,c)=>s+pipeUnits(c),0);
-    document.getElementById(bodyId).innerHTML = list.sort((a,b)=>(a.eta&&b.eta)?(a.eta-b.eta):0).map(c=>{
-      const items=c.models.map(m=>"<li>"+esc(m.model)+(m.color?" <span style='color:var(--muted)'>"+esc(m.color)+"</span>":"")+" — "+m.total+
-        (m.reserved?" <span class='resv'>("+m.reserved+" gereserveerd)</span>":"")+(m.free?" <span class='free'>("+m.free+" vrij)</span>":"")+"</li>").join("");
-      return "<div class='cont'><div class='hd'><span>"+esc(c.nr)+" <span style='color:var(--muted);font-weight:400'>"+esc(c.sheet.replace(/ ?20252026/,''))+"</span></span>"+
-        "<span class='eta'>"+(c.etaTxt?esc(c.etaTxt):"besteld "+pipeFmtDate(c.besteld))+"</span></div><ul>"+items+"</ul></div>";
+  for(const c of pipeContainers){ zones[pipeStatus(c)].push(c); }
+  const map=[["prod","zProd","zProdC","zProdU"],["ship","zShip","zShipC","zShipU"],["nl","zNl","zNlC","zNlU"]];
+  for(let i=0;i<map.length;i++){
+    const st=map[i][0], list=zones[st];
+    document.getElementById(map[i][2]).textContent=list.length;
+    document.getElementById(map[i][3]).textContent=list.reduce((s,c)=>s+contUnits(c),0);
+    document.getElementById(map[i][1]).innerHTML = list.sort((a,b)=>String(a.eta||a.besteld||"").localeCompare(String(b.eta||b.besteld||""))).map(c=>{
+      const items=(c.lines||[]).filter(l=>l.model).map(l=>"<li>"+esc(l.model)+(l.color?" <span style='color:var(--muted)'>"+esc(l.color)+"</span>":"")+" — "+(Number(l.qty)||0)+
+        ((Number(l.reserved)||0)?" <span class='resv'>("+(Number(l.reserved)||0)+" gereserveerd)</span>":"")+
+        (((Number(l.qty)||0)-(Number(l.reserved)||0))>0?" <span class='free'>("+((Number(l.qty)||0)-(Number(l.reserved)||0))+" vrij)</span>":"")+"</li>").join("");
+      return "<div class='cont'><div class='hd'><span>"+esc(c.nr||"(zonder nr)")+(c.herkomst?" <span style='color:var(--muted);font-weight:400'>"+esc(c.herkomst)+"</span>":"")+"</span>"+
+        "<span class='eta'>"+(c.eta?("ETA "+esc(c.eta)):(c.besteld?("besteld "+esc(c.besteld)):""))+"</span></div><ul>"+(items||"<li style='color:var(--muted)'>(nog geen regels)</li>")+"</ul></div>";
     }).join("") || "<p style='color:var(--muted);font-size:12px'>(geen)</p>";
   }
   document.getElementById("pipeContCount").textContent=pipeContainers.length;
-  renderStock();
 }
+
 function renderStock(){
   const f=readFilters(document.getElementById("stockTable"));
   const agg={};
-  for(const c of pipeContainers){ const st=c.status||pipeStatus(c.besteld,c.eta);
-    for(const m of c.models){ const k=m.model; if(!agg[k]) agg[k]={model:m.model,prod:0,ship:0,nl:0,total:0,reserved:0,free:0};
-      agg[k][st]+=m.total; agg[k].total+=m.total; agg[k].reserved+=m.reserved; agg[k].free+=m.free; } }
+  for(const c of pipeContainers){ const st=pipeStatus(c);
+    for(const l of (c.lines||[])){ if(!l.model) continue; const k=l.model.trim(); const q=Number(l.qty)||0, res=Number(l.reserved)||0;
+      if(!agg[k]) agg[k]={model:k,prod:0,ship:0,nl:0,total:0,reserved:0,free:0};
+      agg[k][st]+=q; agg[k].total+=q; agg[k].reserved+=res; agg[k].free+=Math.max(0,q-res); } }
   const rows=Object.keys(agg).map(k=>agg[k]).filter(r=>matchFilters(r,f)).sort((a,b)=>b.total-a.total);
   document.getElementById("stockBody").innerHTML = rows.map(r=>"<tr>"+
     "<td><b>"+esc(r.model)+"</b></td><td class='num'>"+r.prod+"</td><td class='num'>"+r.ship+"</td><td class='num'>"+r.nl+"</td>"+
-    "<td class='num'><b>"+r.total+"</b></td><td class='num resv'>"+r.reserved+"</td><td class='num free'>"+r.free+"</td></tr>").join("");
+    "<td class='num'><b>"+r.total+"</b></td><td class='num resv'>"+r.reserved+"</td><td class='num free'>"+r.free+"</td></tr>").join("")
+    || "<tr><td colspan='7' style='color:var(--muted)'>Nog geen containers. Voeg er een toe of importeer uit Excel.</td></tr>";
 }
 
-async function handlePipeFile(file){
+function renderManager(){
+  const wrap=document.getElementById("contManager");
+  if(!pipeContainers.length){ wrap.innerHTML="<p style='color:var(--muted);font-size:13px'>Nog geen containers. Klik <b>Nieuwe container</b> of <b>Importeer uit Excel</b>.</p>"; return; }
+  const sorted=pipeContainers.slice().sort((a,b)=>String(b.eta||b.besteld||"").localeCompare(String(a.eta||a.besteld||"")));
+  wrap.innerHTML = sorted.map(c=>{
+    const st=pipeStatus(c);
+    const lineRows=(c.lines||[]).map((l,idx)=>"<tr data-idx='"+idx+"'>"+
+      "<td><input list='modelList' class='lfld' data-f='model' value=\""+esc(l.model||"")+"\" style='min-width:150px'></td>"+
+      "<td><input class='lfld' data-f='color' value=\""+esc(l.color||"")+"\" style='min-width:120px'></td>"+
+      "<td><input type='number' min='0' class='lfld' data-f='qty' value='"+(Number(l.qty)||0)+"' style='width:64px'></td>"+
+      "<td><input type='number' min='0' class='lfld' data-f='reserved' value='"+(Number(l.reserved)||0)+"' style='width:64px'></td>"+
+      "<td><button class='rmv delline' data-idx='"+idx+"'>✕</button></td></tr>").join("");
+    return "<div class='card' style='margin:10px 0;padding:12px 14px' data-cid='"+esc(c.id)+"'>"+
+      "<div class='controls' style='gap:12px'>"+
+        "<div><label>Container</label><input class='cfld' data-f='nr' value=\""+esc(c.nr||"")+"\" style='border:1px solid var(--border);border-radius:6px;padding:6px 8px;font:inherit'></div>"+
+        "<div><label>Herkomst</label><select class='cfld' data-f='herkomst' style='border:1px solid var(--border);border-radius:6px;padding:6px 8px;font:inherit'>"+
+          "<option value='EU'"+(c.herkomst!=="US"?" selected":"")+">Europa</option><option value='US'"+(c.herkomst==="US"?" selected":"")+">Amerika</option></select></div>"+
+        "<div><label>Besteld</label><input type='date' class='cfld' data-f='besteld' value='"+esc(c.besteld||"")+"' style='border:1px solid var(--border);border-radius:6px;padding:6px 8px;font:inherit'></div>"+
+        "<div><label>ETA (aankomst NL)</label><input type='date' class='cfld' data-f='eta' value='"+esc(c.eta||"")+"' style='border:1px solid var(--border);border-radius:6px;padding:6px 8px;font:inherit'></div>"+
+        "<div style='padding-bottom:6px'><span class='pill "+(st==="nl"?"s1":"s25")+"'>"+STATUS_LABEL[st]+"</span></div>"+
+        "<div style='margin-left:auto;padding-bottom:4px'><button class='rmv delcont'>🗑 verwijder container</button></div>"+
+      "</div>"+
+      "<table class='grid' style='margin-top:8px'><thead><tr><th>Model</th><th>Kleur</th><th>Aantal</th><th>Gereserveerd</th><th></th></tr></thead>"+
+      "<tbody>"+lineRows+
+        "<tr class='newline'><td><input list='modelList' class='nl-model' placeholder='+ model' style='min-width:150px'></td>"+
+        "<td><input class='nl-color' placeholder='kleur' style='min-width:120px'></td>"+
+        "<td><input type='number' min='0' class='nl-qty' placeholder='0' style='width:64px'></td>"+
+        "<td><input type='number' min='0' class='nl-res' placeholder='0' style='width:64px'></td>"+
+        "<td><button class='addline'>+ regel</button></td></tr>"+
+      "</tbody></table></div>";
+  }).join("");
+
+  // wiring
+  wrap.querySelectorAll("[data-cid]").forEach(function(card){
+    const cid=card.dataset.cid;
+    const c=pipeContainers.find(x=>String(x.id)===String(cid));
+    if(!c) return;
+    card.querySelectorAll(".cfld").forEach(function(inp){
+      inp.addEventListener("change", async function(){ c[inp.dataset.f]=inp.value; await savePipe(); renderPipeAll(); });
+    });
+    card.querySelectorAll("tr[data-idx]").forEach(function(tr){
+      const idx=Number(tr.dataset.idx);
+      tr.querySelectorAll(".lfld").forEach(function(inp){
+        inp.addEventListener("change", async function(){
+          const f=inp.dataset.f; c.lines[idx][f]=(f==="qty"||f==="reserved")?(Number(inp.value)||0):inp.value;
+          await savePipe(); renderPipeAll();
+        });
+      });
+      tr.querySelector(".delline").addEventListener("click", async function(){ c.lines.splice(idx,1); await savePipe(); renderPipeAll(); });
+    });
+    const nl=card.querySelector(".newline");
+    nl.querySelector(".addline").addEventListener("click", async function(){
+      const model=nl.querySelector(".nl-model").value.trim();
+      if(!model){ nl.querySelector(".nl-model").focus(); return; }
+      c.lines=c.lines||[];
+      c.lines.push({model:model, color:nl.querySelector(".nl-color").value.trim(), qty:Number(nl.querySelector(".nl-qty").value)||0, reserved:Number(nl.querySelector(".nl-res").value)||0});
+      await savePipe(); renderPipeAll();
+    });
+    card.querySelector(".delcont").addEventListener("click", async function(){
+      if(!confirm("Container "+(c.nr||"")+" verwijderen?")) return;
+      pipeContainers=pipeContainers.filter(x=>String(x.id)!==String(cid)); await savePipe(); renderPipeAll();
+    });
+  });
+}
+
+// ---- Excel-import (eenmalig) ----
+function pcell(r,i){ if(!r||i>=r.length||r[i]==null) return ""; return String(r[i]).trim(); }
+function pdate(r,i){ if(!r||i>=r.length) return null; const v=r[i]; if(v instanceof Date && !isNaN(v)) return v; if(typeof v==="string"){ const d=new Date(v); if(!isNaN(d)) return d; } return null; }
+function parseEtaText(txt, anchor){
+  if(!txt) return null;
+  const m=String(txt).toLowerCase().match(/(\d{1,2})\s*([a-z]{3,})/); if(!m) return null;
+  const mon=M3[m[2].slice(0,3)]; if(mon==null) return null;
+  let year=(anchor instanceof Date && !isNaN(anchor))?anchor.getFullYear():2026;
+  let d=new Date(year,mon,parseInt(m[1],10));
+  if(anchor instanceof Date && !isNaN(anchor) && d<anchor) d=new Date(year+1,mon,parseInt(m[1],10));
+  return d;
+}
+function parseBlockSheet(rows){
+  const out=[]; const ncol=rows.reduce((m,r)=>Math.max(m,r?r.length:0),0);
+  const r0=rows[0]||[],r1=rows[1]||[],r2=rows[2]||[],r3=rows[3]||[];
+  for(let b=1;b<ncol;b+=5){
+    const nr=pcell(r0,b+2), etaTxt=pcell(r1,b+3); const besteld=pdate(r2,b+2)||pdate(r3,b+2);
+    if(!nr && !etaTxt && !besteld) continue;
+    const eta=parseEtaText(etaTxt,besteld); const byk={};
+    for(let ri=3;ri<rows.length;ri++){ const r=rows[ri]; if(!r) continue;
+      const model=pcell(r,b); if(!model||/^(container|besteld)$/i.test(model)) continue;
+      const color=pcell(r,b+1), c2=r[b+2]; const key=model+" | "+color;
+      if(!byk[key]) byk[key]={model:model,color:color,qty:0,reserved:0,units:0};
+      let num=null; if(typeof c2==="number") num=c2; else if(c2!=null&&/^\d+(\.0)?$/.test(String(c2).trim())) num=parseInt(c2,10);
+      if(num!=null&&num>=1000000){ byk[key].reserved++; byk[key].units++; }
+      else if(num!=null&&num<1000){ byk[key].qty+=num; } else { byk[key].units++; }
+    }
+    const lines=Object.keys(byk).map(k=>{const e=byk[k];const total=Math.max(e.qty,e.units);return {model:e.model,color:e.color,qty:total,reserved:e.reserved};}).filter(l=>l.qty>0);
+    if(!lines.length) continue;
+    out.push({id:newId(), nr:nr||"?", herkomst:"EU", besteld:isoLocal(besteld), eta:isoLocal(eta), lines:lines});
+  }
+  return out;
+}
+function parseMatrixSheet(rows){
+  const r0=rows[0]||[],r1=rows[1]||[]; const conts=[];
+  for(let c=2;c<r0.length;c++){ const v=r0[c]; const isNum=typeof v==="number"||(v!=null&&/^\d{3,5}(\.0)?$/.test(String(v).trim())); if(!isNum) continue;
+    conts.push({col:c,nr:String(v).replace(/\.0$/,''),besteld:pdate(r1,c),models:{}}); }
+  for(let ri=2;ri<rows.length;ri++){ const r=rows[ri]; if(!r) continue; const model=pcell(r,0); if(!model) continue; const color=pcell(r,1);
+    for(const ct of conts){ const q=r[ct.col]; const n=typeof q==="number"?q:(q!=null&&/^\d+(\.0)?$/.test(String(q).trim())?parseInt(q,10):0);
+      if(n>0){ const key=model+" | "+color; ct.models[key]=(ct.models[key]||0)+n; } } }
+  return conts.filter(c=>Object.keys(c.models).length).map(c=>({id:newId(),nr:c.nr,herkomst:"EU",besteld:isoLocal(c.besteld),eta:"",
+    lines:Object.keys(c.models).map(k=>{const p=k.split(" | ");return {model:p[0],color:p[1]||"",qty:c.models[k],reserved:0};})}));
+}
+async function handlePipeImport(file){
   const st=document.getElementById("pipeStatus"); st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Inlezen: "+file.name+"…";
   try{
-    const buf=await file.arrayBuffer();
-    const wb=XLSX.read(buf,{type:"array",cellDates:true});
-    let containers=[]; const used=[]; const diag=[];
-    for(const sn of wb.SheetNames){
-      const k=sn.toLowerCase().replace(/\s+/g,"");
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null});
-      let part=null;
-      if(k.indexOf("bestellingen2025")===0) part=parseMatrixSheet(rows,sn);
-      else if(k.indexOf("devine2025")===0) part=parseBlockSheet(rows,sn);
-      else if(k.indexOf("griztrop")===0) part=parseBlockSheet(rows,sn);
-      if(part){ containers=containers.concat(part); used.push(sn); diag.push(sn+": "+part.length+" containers, "+part.reduce((s,c)=>s+pipeUnits(c),0)+" spa's"); }
+    const buf=await file.arrayBuffer(); const wb=XLSX.read(buf,{type:"array",cellDates:true});
+    let imported=[]; const diag=[];
+    for(const sn of wb.SheetNames){ const k=sn.toLowerCase().replace(/\s+/g,"");
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:null}); let part=null;
+      if(k.indexOf("bestellingen2025")===0) part=parseMatrixSheet(rows);
+      else if(k.indexOf("devine2025")===0) part=parseBlockSheet(rows);
+      else if(k.indexOf("griztrop")===0) part=parseBlockSheet(rows);
+      if(part){ imported=imported.concat(part); diag.push(sn+": "+part.length+" containers"); }
     }
-    pipeContainers=containers;
-    if(!containers.length){ st.className="status-msg warn"; st.textContent="Geen containers gevonden. Sheets gezien: "+wb.SheetNames.join(", "); return; }
-    document.getElementById("pipeResult").classList.remove("hidden");
-    renderPipeline();
-    st.className="status-msg ok"; st.textContent="Ingelezen: "+containers.length+" containers uit "+used.length+" tabblad(en).";
-    document.getElementById("pipeDiag").innerHTML="<div class='card' style='background:#fffdf6;border-color:#fde68a'><b>Diagnose (concept — controleer met Chantal):</b><br><span style='font-size:12px'>"+
-      diag.map(esc).join("<br>")+"<br><br>Status-bepaling: schip ≈ "+PIPE_SHIP_WEEKS+" wk vóór ETA; zonder ETA geschat uit besteld-datum (productie "+PIPE_PROD_EU_WEEKS+" wk). Klopt de indeling in productie/schip/NL en de gereserveerd/vrij-telling?</span></div>";
+    if(!imported.length){ st.className="status-msg warn"; st.textContent="Geen containers gevonden in: "+wb.SheetNames.join(", "); return; }
+    const have={}; for(const c of pipeContainers) have[String(c.nr)]=1;
+    const fresh=imported.filter(c=>!have[String(c.nr)]);
+    if(!confirm("Importeren: "+fresh.length+" nieuwe containers toevoegen ("+(imported.length-fresh.length)+" bestaan al en worden overgeslagen).\n\nDaarna beheer je alles in het dashboard.")) { st.classList.add("hidden"); return; }
+    pipeContainers=pipeContainers.concat(fresh); await savePipe(); renderPipeAll();
+    st.className="status-msg ok"; st.textContent="Geïmporteerd: "+fresh.length+" containers toegevoegd. "+diag.join(" · ")+". Controleer/bewerk hieronder — ETA-jaar is afgeleid, pas zo nodig aan.";
   }catch(e){ console.error(e); st.className="status-msg bad"; st.textContent="Kon Excel niet inlezen: "+e.message; }
 }
+
+// wiring
 (function(){
-  const drop=document.getElementById("pipeDrop"), inp=document.getElementById("pipeFile");
-  if(!drop) return;
-  drop.addEventListener("click", ()=>inp.click());
-  inp.addEventListener("change", e=>{ if(e.target.files.length) handlePipeFile(e.target.files[0]); });
-  drop.addEventListener("dragover", e=>{ e.preventDefault(); drop.style.borderColor="var(--fonteyn-lime)"; });
-  drop.addEventListener("dragleave", ()=>{ drop.style.borderColor=""; });
-  drop.addEventListener("drop", e=>{ e.preventDefault(); drop.style.borderColor=""; if(e.dataTransfer.files.length) handlePipeFile(e.dataTransfer.files[0]); });
+  const addBtn=document.getElementById("addContBtn"), impBtn=document.getElementById("importBtn"), file=document.getElementById("pipeFile");
+  if(!addBtn) return;
+  buildModelList();
+  addBtn.addEventListener("click", async function(){ pipeContainers.push({id:newId(),nr:"",herkomst:"EU",besteld:"",eta:"",lines:[]}); await savePipe(); renderPipeAll();
+    document.getElementById("contManager").scrollIntoView({behavior:"smooth",block:"start"}); });
+  impBtn.addEventListener("click", function(){ file.click(); });
+  file.addEventListener("change", function(e){ if(e.target.files.length) handlePipeImport(e.target.files[0]); file.value=""; });
   document.querySelectorAll('.filter-row[data-ov="stock"] input').forEach(i=> i.addEventListener("input", renderStock));
+  loadPipe().then(renderPipeAll);
 })();
 
 </script>
