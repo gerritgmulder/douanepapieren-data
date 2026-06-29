@@ -75,6 +75,7 @@
   <div id="status" class="status-msg hidden"></div>
 
   <section id="resultSection" class="hidden">
+    <div id="advPanel"></div>
     <div class="card">
       <h3>Verkochte spa's op <span id="dateLabel">—</span> — <span id="lineCount">0</span> regel(s)</h3>
       <div class="tablewrap">
@@ -266,6 +267,28 @@ async function logic4Call(path, body){
   return j.data;
 }
 
+/* ====== Gedeelde state in Cloudflare KV (bucket 'voorraad') ======
+   { advisorMap: { "<UserId>": "Arno" }, dealers: { "<DebtorId>": true } }
+   De order bevat alleen een UserId (geen naam) → adviseur 1× koppelen. */
+const DATA_STORE_URL  = "https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad";
+const DATA_STORE_AUTH = "SV--QQW_xwIgrIdbjAozfgnxtloYitCZxEQ_S04gv2YupY4LY4KD7_QvfVkb8DGs";
+let advisorMap = {}, dealers = {};
+async function loadVoorraadState(){
+  try{
+    const r = await fetch(DATA_STORE_URL, { headers:{ "X-Fonteyn-Auth":DATA_STORE_AUTH } });
+    if (r.ok){ const j = await r.json(); if (j && typeof j==="object"){ advisorMap = j.advisorMap||{}; dealers = j.dealers||{}; } }
+  }catch(e){ console.warn("voorraad-state laden faalde:", e); }
+}
+async function saveVoorraadState(){
+  try{
+    await fetch(DATA_STORE_URL, { method:"PUT",
+      headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth":DATA_STORE_AUTH },
+      body: JSON.stringify({ advisorMap, dealers, lastUpdated:new Date().toISOString() }) });
+  }catch(e){ console.warn("voorraad-state opslaan faalde:", e); }
+}
+function advisorName(uid){ const k=String(uid==null?"":uid); return advisorMap[k] ? advisorMap[k] : ("UserId "+uid); }
+function reapplyAdvisors(){ for (let i=0;i<allLines.length;i++) allLines[i].adviseur = advisorName(allLines[i].userId); }
+
 /* ====== Util ====== */
 function todayLocal(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function fmtDate(d){ if(!d) return ""; const s=String(d); return s.slice(0,10); }
@@ -297,6 +320,7 @@ document.getElementById("fetchBtn").addEventListener("click", async ()=>{
   const btn=document.getElementById("fetchBtn"); btn.disabled=true;
   setStatus("", "Orders ophalen…");
   try{
+    await loadVoorraadState();
     const fromIso = datum+"T00:00:00", toIso = datum+"T23:59:59";
     const fromMs = new Date(fromIso).getTime(), toMs = new Date(toIso).getTime();
     const PAGE=500, MAX_PAGES=20;
@@ -341,8 +365,10 @@ document.getElementById("fetchBtn").addEventListener("click", async ()=>{
       }
     }
     allLines = lines;
+    reapplyAdvisors();
     document.getElementById("dateLabel").textContent = datum;
     document.getElementById("resultSection").classList.remove("hidden");
+    renderAdvisorPanel();
     renderLines();
     renderDiag(orders.length, onDay.length, verkocht, lines, rowsTotal, rowsWithCode);
     setStatus("ok", lines.length+" spa-regel(s) gevonden in "+verkocht.length+" verkochte order(s) op "+datum+".");
@@ -384,6 +410,55 @@ function renderLines(){
   document.getElementById("lineCount").textContent = rows.length;
 }
 document.querySelectorAll(".filter-row input").forEach(inp=> inp.addEventListener("input", renderLines));
+
+// Adviseurs koppelen: de order bevat alleen een UserId. Toon de UserIds die in
+// de spa-regels voorkomen + een keuze uit de bekende adviseurs. Eén keer
+// koppelen, daarna onthouden in KV (geldt voor alle toekomstige orders).
+function renderAdvisorPanel(){
+  const panel = document.getElementById("advPanel");
+  const byUid = {};
+  for (let i=0;i<allLines.length;i++){
+    const k = String(allLines[i].userId);
+    if (!byUid[k]) byUid[k] = { count:0, ex:allLines[i] };
+    byUid[k].count++;
+  }
+  const uids = Object.keys(byUid);
+  if (!uids.length){ panel.innerHTML=""; return; }
+  // Onbekende eerst sorteren
+  uids.sort((a,b)=>{
+    const ua = advisorMap[a]?1:0, ub = advisorMap[b]?1:0;
+    if (ua!==ub) return ua-ub;
+    return byUid[b].count-byUid[a].count;
+  });
+  const nUnknown = uids.filter(k=>!advisorMap[k]).length;
+  const rows = uids.map(function(k){
+    const info = byUid[k];
+    const cur = advisorMap[k] || "";
+    let opt = "<option value=''>— kies adviseur —</option>";
+    for (let i=0;i<ADVISORS.length;i++){ opt += "<option"+(ADVISORS[i]===cur?" selected":"")+">"+esc(ADVISORS[i])+"</option>"; }
+    const sel = "<select data-uid='"+esc(k)+"'>"+opt+"</select>";
+    return "<tr>"+
+      "<td class='code'>UserId "+esc(k)+"</td>"+
+      "<td class='num'>"+info.count+"</td>"+
+      "<td>"+esc(info.ex.naam)+" <span style='color:var(--muted)'>(order "+esc(info.ex.ordernr)+")</span></td>"+
+      "<td>"+(cur?"<span class='pill s1'>"+esc(cur)+"</span> ":"")+sel+"</td>"+
+    "</tr>";
+  }).join("");
+  panel.innerHTML =
+    "<div class='card'>"+
+    "<h3>Adviseurs koppelen"+(nUnknown?" <span style='color:var(--warn);font-weight:600'>("+nUnknown+" nog te koppelen)</span>":"")+"</h3>"+
+    "<p class='lead' style='font-size:12px;margin-bottom:8px'>De order bevat alleen een <b>UserId</b>, geen naam. Koppel elk UserId één keer aan een adviseur — dat onthoud ik voortaan (geldt ook voor alle volgende dagen). Herken je 'm niet? Open de voorbeeld-order even in Logic4.</p>"+
+    "<table class='grid'><thead><tr><th>UserId</th><th>Spa-regels</th><th>Voorbeeld-order</th><th>Adviseur</th></tr></thead><tbody>"+rows+"</tbody></table>"+
+    "</div>";
+  panel.querySelectorAll("select").forEach(function(se){
+    se.addEventListener("change", async function(){
+      const uid = se.dataset.uid, name = se.value;
+      if (name) advisorMap[uid] = name; else delete advisorMap[uid];
+      reapplyAdvisors(); renderLines(); renderAdvisorPanel();
+      await saveVoorraadState();
+    });
+  });
+}
 
 function diagWrap(inner){
   return "<div class='card' style='background:#fffdf6;border-color:#fde68a'>"+

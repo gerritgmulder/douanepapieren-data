@@ -25,6 +25,7 @@ const ALLOWED_BUCKETS = new Set([
   "rapportage",       // Jaartargets per afdeling, review-toewijzingen
   "douane-specs",     // Handmatig aangevulde HS/origin/gewicht/dims per artikel
   "retouren",         // Retour-registratie per order (reden/locatie/uitleg/adviseur)
+  "voorraad",         // Voorraadbeheer: adviseur-map (UserId→naam) + dealer-markering per debiteur
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
