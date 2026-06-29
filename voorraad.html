@@ -202,8 +202,24 @@ function spaModel(code){
   }
   return "(onbekend SKT-model)";
 }
+// Extra spa-modellen die NIET in 'Codes spas 2025' staan (andere merken),
+// geoogst uit Chantal's Reserveringen-historie. Detectie is op naam in de
+// omschrijving, dus een code is hier niet nodig. CD/Classic/Crystal Diamond-
+// varianten worden door de basisnaam al gevangen.
+const SPA_MODELS_EXTRA = [
+  // Passion Devine
+  "Praise","Believe","Miracle","Hope","Wonder","Vision","Reflect","Retreat",
+  // Grizzly
+  "Kenai","Kodiak","Blackpool","Blackburn","Vancouver","Yukon","Denali",
+  // Tropic Seas
+  "Aruba","Bahamas","Bermuda","Key Largo","Montego","Moondance","Moonlight","Jamaica",
+  // Storm
+  "Monsoon","Cyclone","Turbine","Hurricane","Tornado",
+  // basis-namen voor reeksen die we alleen met suffix kennen
+  "Mallorca","Tenerife","Corsica",
+];
 // Modelnamen op lengte (langste eerst) zodat "Activity 1 Deep" vóór "Activity 1" matcht.
-const MODELS_BY_LEN = SPA_CODES.map(p=>p[1]).sort((a,b)=>b.length-a.length);
+const MODELS_BY_LEN = SPA_CODES.map(p=>p[1]).concat(SPA_MODELS_EXTRA).sort((a,b)=>b.length-a.length);
 // Herken een spa-model in vrije tekst (order-regel omschrijving). Logic4 zet
 // het model in de omschrijving (bv. "Activity 1 SW with GREY/oak"), niet als
 // SKT-code. Woordgrens-check zodat losse letters niet vals matchen.
@@ -379,6 +395,7 @@ document.getElementById("fetchBtn").addEventListener("click", async ()=>{
     // Fallback: SKT-productcode (factory-code) als die wél voorkomt.
     const lines=[];
     let rowsTotal=0, rowsWithCode=0;
+    const undetected={}; // omschrijving → aantal keer (om gemiste spa's te spotten)
     for (const o of verkocht){
       const rows = o.OrderRows || [];
       for (const r of rows){
@@ -386,7 +403,11 @@ document.getElementById("fetchBtn").addEventListener("click", async ()=>{
         if (r.ProductCode) rowsWithCode++;
         let model = modelFromText(r.Description);
         if (!model){ const mc = spaModel(r.ProductCode); if (mc && mc!=="(onbekend SKT-model)") model = mc; }
-        if (!model) continue; // geen spa
+        if (!model){
+          const d = String(r.Description==null?"":r.Description).trim();
+          if (d && (Number(r.Qty)||0)>0) undetected[d.slice(0,70)] = (undetected[d.slice(0,70)]||0)+1;
+          continue; // geen spa
+        }
         const aantal = Number(r.Qty)||0;
         if (aantal<=0) continue;
         lines.push({
@@ -404,7 +425,7 @@ document.getElementById("fetchBtn").addEventListener("click", async ()=>{
     document.getElementById("resultSection").classList.remove("hidden");
     renderAdvisorPanel();
     renderLines();
-    renderDiag(orders.length, onDay.length, verkocht, lines, rowsTotal, rowsWithCode);
+    renderDiag(orders.length, onDay.length, verkocht, lines, rowsTotal, rowsWithCode, undetected);
     setStatus("ok", lines.length+" spa-regel(s) gevonden in "+verkocht.length+" verkochte order(s) op "+datum+".");
   }catch(e){
     console.error(e); setStatus("bad","Fout bij ophalen: "+e.message);
@@ -506,7 +527,7 @@ function diagWrap(inner){
     "<h3>🔧 Kalibratie-diagnose <span style='font-weight:400;color:var(--muted)'>— plak terug naar Claude</span></h3>"+
     "<div style='font-size:12px;line-height:1.6'>"+inner+"</div></div>";
 }
-function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode){
+function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode, undetected){
   const b=[];
   b.push("<b>"+scanned+"</b> orders opgehaald · <b>"+onDay+"</b> op deze dag · <b>"+verkocht.length+"</b> met status Verkooporder/30% · <b>"+rowsTotal+"</b> orderregels (waarvan "+rowsWithCode+" met productcode) · <b>"+lines.length+"</b> spa-regels herkend.");
   b.push("<b>Medewerkers automatisch ophalen (/v3/User/GetAllUsers):</b> "+(autoUsersInfo.ok ? ("✓ "+autoUsersInfo.count+" geladen — velden: <code>"+esc(autoUsersInfo.sampleKeys)+"</code>") : ("mislukt — "+esc(autoUsersInfo.error||"?"))));
@@ -539,6 +560,14 @@ function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode){
   if (lines.length){
     const adv={}; for (const l of lines) adv[l.adviseur]=(adv[l.adviseur]||0)+1;
     b.push("<b>Adviseur-waarden in herkende spa-regels:</b> "+Object.keys(adv).map(k=>esc(k)+" ("+adv[k]+")").join(", "));
+  }
+  // Niet-herkende orderregels — om gemiste spa-modellen te spotten.
+  if (undetected){
+    const us = Object.keys(undetected).sort((a,b2)=>undetected[b2]-undetected[a]);
+    if (us.length){
+      b.push("<b>Niet-herkende orderregels ("+us.length+" unieke, top 30 — staat hier een gemiste spa tussen?):</b><br>"+
+        us.slice(0,30).map(d=>esc(d)+" <span style='color:var(--muted)'>("+undetected[d]+")</span>").join("<br>"));
+    }
   }
   document.getElementById("diag").innerHTML = diagWrap(b.join("<br><br>"));
 }
