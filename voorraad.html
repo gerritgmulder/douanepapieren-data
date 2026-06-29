@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Voorraadbeheer — Fonteyn Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
+    --fonteyn-lime:#8bc53f; --fonteyn-lime-dark:#72a531;
+    --fonteyn-cream:#fff9ae; --bg:#f5f4ef; --ink:#1f2937;
+    --muted:#6b7280; --border:#e5e7eb; --ok:#059669; --bad:#b91c1c; --warn:#92400e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  header{background:var(--fonteyn-green);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px}
+  header img.logo{height:40px;width:auto;display:block}
+  header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+  header a.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px}
+  header .user-chip{font-size:12px;color:rgba(255,255,255,0.85)}
+  header button.logout{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer}
+  main{max-width:1400px;margin:24px auto;padding:0 22px}
+  h2{color:var(--fonteyn-green);font-size:22px;margin:0 0 6px}
+  .lead{color:var(--muted);margin:0 0 20px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin:14px 0}
+  .card h3{margin:0 0 10px;color:var(--fonteyn-green);font-size:15px}
+  .controls{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+  .controls label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
+  .controls input[type=date]{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit;font-size:14px}
+  button.primary{background:var(--fonteyn-lime);color:var(--fonteyn-green);border:0;border-radius:8px;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer}
+  button.primary:hover{background:var(--fonteyn-lime-dark);color:#fff}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .status-msg{padding:10px 14px;border-radius:6px;margin:12px 0;font-size:13px}
+  .status-msg.ok{background:#dcfce7;color:var(--ok)} .status-msg.bad{background:#fee2e2;color:var(--bad)} .status-msg.warn{background:#fef3c7;color:var(--warn)}
+  table.grid{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+  table.grid th,table.grid td{padding:6px 9px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:top}
+  table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);white-space:nowrap;position:sticky;top:0}
+  table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.grid td.code{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--fonteyn-green-dark)}
+  table.grid tr:hover td{background:#fbfdf7}
+  .filter-row input{width:100%;border:1px solid var(--border);border-radius:5px;padding:4px 6px;font:inherit;font-size:11.5px}
+  .pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600}
+  .pill.s1{background:#dbeafe;color:#1e40af} .pill.s25{background:#fef3c7;color:var(--warn)}
+  .hidden{display:none !important}
+  .tablewrap{max-height:62vh;overflow:auto;border:1px solid var(--border);border-radius:8px}
+  code{background:#f3f4f6;padding:1px 5px;border-radius:3px;font-size:11px}
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+  <h1>Voorraadbeheer</h1>
+  <a class="back" href="dashboard.html">← Dashboard</a>
+  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <h2>Verkochte spa's ophalen</h2>
+  <p class="lead">Kies een dag en haal alle <b>verkochte spa-orders</b> op uit Logic4
+  (status <b>Verkooporder</b> of <b>30% aanbetaald</b>). Elke verkochte spa wordt een aparte regel.
+  Je kunt op elke kolom filteren. <i>(Eerste versie — adviseur-herkenning en de splitsing
+  Dealer/Particulier volgen zodra we deze ophaal-stap hebben gekalibreerd.)</i></p>
+
+  <div class="card controls">
+    <div>
+      <label>Besteldatum</label>
+      <input type="date" id="datum">
+    </div>
+    <button class="primary" id="fetchBtn" type="button">Haal SPA-orders op</button>
+    <span id="fetchInfo" style="color:var(--muted);font-size:12px"></span>
+  </div>
+
+  <div id="status" class="status-msg hidden"></div>
+
+  <section id="resultSection" class="hidden">
+    <div class="card">
+      <h3>Verkochte spa's op <span id="dateLabel">—</span> — <span id="lineCount">0</span> regel(s)</h3>
+      <div class="tablewrap">
+        <table class="grid" id="spaTable">
+          <thead>
+            <tr>
+              <th>Ordernr</th><th>Besteldatum</th><th>Naam</th><th>Adviseur</th>
+              <th>Status</th><th>Model</th><th>Productcode</th><th>Omschrijving</th><th>Aantal</th>
+            </tr>
+            <tr class="filter-row">
+              <th><input data-col="ordernr" placeholder="filter"></th>
+              <th><input data-col="datum" placeholder="filter"></th>
+              <th><input data-col="naam" placeholder="filter"></th>
+              <th><input data-col="adviseur" placeholder="filter"></th>
+              <th><input data-col="status" placeholder="filter"></th>
+              <th><input data-col="model" placeholder="filter (bv. Renew)"></th>
+              <th><input data-col="code" placeholder="filter"></th>
+              <th><input data-col="omschrijving" placeholder="filter"></th>
+              <th><input data-col="aantal" placeholder="filter"></th>
+            </tr>
+          </thead>
+          <tbody id="spaBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="diag"></div>
+  </section>
+</main>
+
+<script>
+/* ====== Spa-catalogus (Codes spas 2025.xlsx) — gesorteerd op codelengte
+   zodat de langste prefix-match wint (bv. SKT339G13 vóór SKT339G). ====== */
+const SPA_CODES = [
+  ["SKT339C ECO","Aquatic 1 ECO"],
+  ["SKT339DA-1","Dynamic Deep"],
+  ["SKT888A-4S","Happy"],
+  ["SKT339G13","Activity 1"],
+  ["SKT888-G1","Mallorca Diamond"],
+  ["SKT339G12","Activity 1 Deep"],
+  ["SKT339G15","Activity 2"],
+  ["SKT888-G2","Mallorca Superior"],
+  ["SKT339G14","Activity 2 Deep"],
+  ["SKT339D-1","Aquatic 3 Deep"],
+  ["SKT339E-1","Aquatic 5"],
+  ["SKT339E-2","Aquatic 6"],
+  ["SKT339G16","Balance"],
+  ["SKT888I-1","Corsica Diamond"],
+  ["SKT888I-2","Corsica Superior"],
+  ["SKT339-G4","Energy"],
+  ["SKT339-G5","Energy Deep"],
+  ["SKT888M-1","Excite"],
+  ["SKT339G11","Vitality"],
+  ["SKT339-G6","Fitness 1"],
+  ["SKT339G10","Vitality Deep"],
+  ["SKT339-G7","Fitness 1 Deep"],
+  ["SKT339G17","Vital Ice"],
+  ["SKT339-G2","Fitness 2"],
+  ["SKT339-G3","Fitness 2 Deep"],
+  ["SKT888X-1","Flame"],
+  ["SKT338-E2","Florida"],
+  ["SKT306-C","Malta"],
+  ["SKT888CA","Pleasure"],
+  ["SKT329E1","Repose"],
+  ["SKT329FB","Refresh"],
+  ["SKT888BA","Admire"],
+  ["SKT329EA","Relax"],
+  ["SKT335HA","Renew"],
+  ["SKT888DA","Bliss"],
+  ["SKT329FA","Rewind"],
+  ["SKT888K1","Sensation"],
+  ["SKT338A3","Bright"],
+  ["SKT333H1","Serene 3"],
+  ["SKT333H3","Serene 5"],
+  ["SKT335FA","Soulmate"],
+  ["SKT888AA","Delight"],
+  ["SKT888AB","Solace"],
+  ["SKT888C1","Desire"],
+  ["SKT888BC","Devotion"],
+  ["SKT339DA","Dynamic"],
+  ["SKT339G1","Spirit Deep"],
+  ["SKT338A4","Sunny"],
+  ["SKT888FA","Ecstatic Wave"],
+  ["SKT888H1","Tenerife Diamond"],
+  ["SKT888H2","Tenerife Luxury"],
+  ["SKT888KA","Euphoria"],
+  ["SKT888JA","Felicity"],
+  ["SKT888EA","Heart"],
+  ["SKT888MA","Joy"],
+  ["SKT888G","Mallorca Luxury"],
+  ["SKT339C","Aquatic 1"],
+  ["SKT306B","Natural"],
+  ["SKT888T","Oasis"],
+  ["SKT339B","Aquatic 2"],
+  ["SKT335F","Oxford"],
+  ["SKT339D","Aquatic 3"],
+  ["SKT306D","Recharge"],
+  ["SKT329A","Arizona"],
+  ["SKT329F","Resort"],
+  ["SKT888V","Breeze"],
+  ["SKT333H","Serene 2"],
+  ["SKT888I","Corsica Luxury"],
+  ["SKT333A","Serene 6"],
+  ["SKT335A","Coventry"],
+  ["SKT888X","Spark"],
+  ["SKT339G","Spirit"],
+  ["SKT888Y","Summit"],
+  ["SKT888F","Ecstatic Classic"],
+  ["SKT666A","Sydney"],
+  ["SKT888H","Tenerife Superior"],
+  ["SKT888Q","Exhilarate"],
+  ["SKT339F","Theater"],
+  ["SKT888U","Aurora /Tradition"],
+  ["SKT888P","Harmony"],
+  ["SKT888S","Indulgence"],
+  ["SKT888R","Lagoon"],
+];
+function normCode(c){ return String(c==null?"":c).toUpperCase().replace(/\s+/g,""); }
+// Geeft modelnaam als de productcode een spa is (begint met SKT), anders null.
+function spaModel(code){
+  const n = normCode(code);
+  if (n.indexOf("SKT") !== 0) return null;
+  for (let i=0;i<SPA_CODES.length;i++){
+    if (n.indexOf(normCode(SPA_CODES[i][0])) === 0) return SPA_CODES[i][1];
+  }
+  return "(onbekend SKT-model)";
+}
+
+/* ====== De 9 spa-adviseurs (voor herkenning/filtering — kalibratie volgt) ====== */
+const ADVISORS = ["Arno","Christian","Dali","Ahmed","Yves","Louis","Chantal","Bert","Patrick"];
+
+/* ====== Order-statussen (uit order-status.html) ====== */
+const STATUS_VERKOOPORDER = 1;
+const STATUS_30_AANBETAALD = 25;
+const SPA_STATUSSEN = [STATUS_VERKOOPORDER, STATUS_30_AANBETAALD];
+
+/* ====== Sessie + toegang ====== */
+const SESSION_KEY="fp.session", EMAIL_KEY="fp.email", HELPER_BASE="";
+function getSession(){ return localStorage.getItem(SESSION_KEY)||""; }
+const ALLOWED = new Set([
+  "dolf@fonteyn.nl","fonteyn.dolf","dolf",
+  "arno@fonteyn.nl","fonteyn.arno","arno",
+  "chantal@fonteyn.nl","fonteyn.chantal","chantal",
+  "gerrit@fonteyn.nl","fonteyn.gerrit","gerrit",
+  "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot",
+]);
+(function boot(){
+  if (!getSession()){ location.href="dashboard.html"; return; }
+  const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  document.getElementById("userEmail").textContent = email || "—";
+  if (!ALLOWED.has(email)){
+    document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'>"+
+      "<h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor Dolf, Arno, Chantal, Gerrit en Fonteynbot.</p>"+
+      "<p>Je bent ingelogd als <code>"+(email||"(onbekend)")+"</code>.</p>"+
+      "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
+    throw new Error("geen toegang");
+  }
+})();
+document.getElementById("logoutBtn").addEventListener("click", async ()=>{
+  try{ await fetch(HELPER_BASE+"/api/logout",{method:"POST",headers:{"Authorization":"Bearer "+getSession()}}); }catch(e){}
+  localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY);
+  location.href="dashboard.html";
+});
+
+async function logic4Call(path, body){
+  const r = await fetch(HELPER_BASE+"/api/logic4-call",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer "+getSession()},
+    body:JSON.stringify({path,method:"POST",body})
+  });
+  const j = await r.json();
+  if (!r.ok || !j.ok) throw new Error(j.error || (typeof j.data==="string"?j.data:JSON.stringify(j.data)));
+  return j.data;
+}
+
+/* ====== Util ====== */
+function todayLocal(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function fmtDate(d){ if(!d) return ""; const s=String(d); return s.slice(0,10); }
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function setStatus(level,msg){ const e=document.getElementById("status"); if(!msg){e.classList.add("hidden");return;} e.className="status-msg "+level; e.textContent=msg; e.classList.remove("hidden"); }
+
+// Best-effort: haal een adviseur-aanduiding uit het order-object. Welk veld
+// dit echt is weten we pas na de eerste kalibratie-run (zie diagnose).
+function advisorRaw(o){
+  const cands = [o.SalesEmployeeName, o.SalesPersonName, o.UserName, o.EmployeeName,
+    o.User && (o.User.Name||o.User.FullName||o.User.DisplayName),
+    o.SalesEmployee && (o.SalesEmployee.Name||o.SalesEmployee.FullName)];
+  for (let i=0;i<cands.length;i++){ if (cands[i]) return String(cands[i]); }
+  return o.UserId!=null ? ("UserId "+o.UserId) : "—";
+}
+function klantNaam(o){
+  return (o.InvoiceAddress && (o.InvoiceAddress.CompanyName||o.InvoiceAddress.ContactName))
+    || (o.AccountAddress && (o.AccountAddress.CompanyName||o.AccountAddress.ContactName))
+    || (o.DebtorId!=null ? ("Debiteur "+o.DebtorId) : "—");
+}
+
+document.getElementById("datum").value = todayLocal();
+
+let allLines = [];
+
+document.getElementById("fetchBtn").addEventListener("click", async ()=>{
+  const datum = document.getElementById("datum").value;
+  if (!datum){ setStatus("warn","Kies eerst een datum."); return; }
+  const btn=document.getElementById("fetchBtn"); btn.disabled=true;
+  setStatus("", "Orders ophalen…");
+  try{
+    const fromIso = datum+"T00:00:00", toIso = datum+"T23:59:59";
+    const fromMs = new Date(fromIso).getTime(), toMs = new Date(toIso).getTime();
+    const PAGE=500, MAX_PAGES=20;
+    const orders=[];
+    for (let p=0;p<MAX_PAGES;p++){
+      setStatus("", "Orders ophalen — pagina "+(p+1)+" ("+orders.length+" tot nu)…");
+      const data = await logic4Call("/v3/Orders/GetOrders",{
+        CreationDateFrom:fromIso, CreationDateTo:toIso, TakeRecords:PAGE, SkipRecords:p*PAGE
+      });
+      const arr = Array.isArray(data)?data:((data&&data.Orders)||[]);
+      if (!arr.length) break;
+      for (const o of arr) orders.push(o);
+      if (arr.length<PAGE) break;
+    }
+    // Harde client-guard op datum (Logic4 datumfilter kan onbetrouwbaar zijn)
+    const onDay = orders.filter(o=>{ const c=new Date(o.CreationDate).getTime(); return c>=fromMs && c<=toMs; });
+    // Alleen verkooporders / 30% aanbetaald
+    const verkocht = onDay.filter(o=> SPA_STATUSSEN.indexOf(o.OrderStatus && o.OrderStatus.Id) !== -1);
+
+    // Spa-regels extraheren — één regel per spa-orderregel
+    const lines=[];
+    const unmatched={}; // onbekende SKT-codes
+    for (const o of verkocht){
+      const rows = o.OrderRows || [];
+      for (const r of rows){
+        const model = spaModel(r.ProductCode);
+        if (model===null) continue; // geen spa
+        const aantal = Number(r.Qty)||0;
+        if (aantal<=0) continue;
+        if (model==="(onbekend SKT-model)") unmatched[normCode(r.ProductCode)] = (unmatched[normCode(r.ProductCode)]||0)+1;
+        lines.push({
+          ordernr:o.Id, datum:fmtDate(o.CreationDate), naam:klantNaam(o),
+          adviseur:advisorRaw(o), statusId:o.OrderStatus&&o.OrderStatus.Id,
+          status:(o.OrderStatus&&o.OrderStatus.Value)||"", model:model,
+          code:String(r.ProductCode||""), omschrijving:String(r.Description||""), aantal:aantal,
+          debtorId:o.DebtorId, userId:o.UserId
+        });
+      }
+    }
+    allLines = lines;
+    document.getElementById("dateLabel").textContent = datum;
+    document.getElementById("resultSection").classList.remove("hidden");
+    renderLines();
+    renderDiag(orders.length, onDay.length, verkocht.length, lines, unmatched);
+    setStatus("ok", lines.length+" spa-regel(s) gevonden in "+verkocht.length+" verkochte order(s) op "+datum+".");
+  }catch(e){
+    console.error(e); setStatus("bad","Fout bij ophalen: "+e.message);
+  }finally{ btn.disabled=false; }
+});
+
+function currentFilters(){
+  const f={};
+  document.querySelectorAll(".filter-row input").forEach(inp=>{
+    const v=inp.value.trim().toLowerCase(); if(v) f[inp.dataset.col]=v;
+  });
+  return f;
+}
+function renderLines(){
+  const f=currentFilters();
+  const body=document.getElementById("spaBody");
+  const rows = allLines.filter(l=>{
+    for (const col in f){ if (String(l[col]==null?"":l[col]).toLowerCase().indexOf(f[col])===-1) return false; }
+    return true;
+  });
+  body.innerHTML = rows.map(l=>{
+    const sp = l.statusId===STATUS_VERKOOPORDER?'<span class="pill s1">Verkooporder</span>'
+            : l.statusId===STATUS_30_AANBETAALD?'<span class="pill s25">30% aanbetaald</span>'
+            : esc(l.status);
+    return "<tr>"+
+      "<td class='code'>"+esc(l.ordernr)+"</td>"+
+      "<td>"+esc(l.datum)+"</td>"+
+      "<td>"+esc(l.naam)+"</td>"+
+      "<td>"+esc(l.adviseur)+"</td>"+
+      "<td>"+sp+"</td>"+
+      "<td><b>"+esc(l.model)+"</b></td>"+
+      "<td class='code'>"+esc(l.code)+"</td>"+
+      "<td>"+esc(l.omschrijving)+"</td>"+
+      "<td class='num'>"+esc(l.aantal)+"</td>"+
+    "</tr>";
+  }).join("");
+  document.getElementById("lineCount").textContent = rows.length;
+}
+document.querySelectorAll(".filter-row input").forEach(inp=> inp.addEventListener("input", renderLines));
+
+function renderDiag(scanned, onDay, verkocht, lines, unmatched){
+  // distinct adviseurs + statussen → om te kalibreren
+  const adv={}, stat={};
+  for (const l of lines){ adv[l.adviseur]=(adv[l.adviseur]||0)+1; stat[(l.statusId)+" — "+l.status]=(stat[(l.statusId)+" — "+l.status]||0)+1; }
+  const advList = Object.keys(adv).sort((a,b)=>adv[b]-adv[a]).map(k=>esc(k)+" ("+adv[k]+")").join(", ") || "(geen)";
+  const statList = Object.keys(stat).map(k=>esc(k)+" ("+stat[k]+")").join(", ") || "(geen)";
+  const unm = Object.keys(unmatched);
+  const unmList = unm.length ? unm.map(c=>"<code>"+esc(c)+"</code> ("+unmatched[c]+")").join(", ") : "(geen — alle spa-codes herkend)";
+  document.getElementById("diag").innerHTML =
+    "<div class='card' style='background:#fffdf6;border-color:#fde68a'>"+
+    "<h3>🔧 Kalibratie-diagnose <span style='font-weight:400;color:var(--muted)'>— plak terug naar Claude</span></h3>"+
+    "<div style='font-size:12.5px;line-height:1.7'>"+
+    "<b>"+scanned+"</b> orders opgehaald · <b>"+onDay+"</b> op deze dag · <b>"+verkocht+"</b> met status Verkooporder/30% · <b>"+lines.length+"</b> spa-regels.<br>"+
+    "<b>Adviseur-waarden gevonden (zo staat het in de order):</b> "+advList+"<br>"+
+    "<i style='color:var(--muted)'>→ Hieruit leid ik af welk veld de adviseur is en koppel ik de 9 namen ("+ADVISORS.join(", ")+").</i><br>"+
+    "<b>Statussen gevonden:</b> "+statList+"<br>"+
+    "<b>Onbekende SKT-codes:</b> "+unmList+
+    "</div></div>";
+}
+</script>
+</body>
+</html>

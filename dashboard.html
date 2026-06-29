@@ -315,6 +315,13 @@
         <p>Welke retouren komen er binnen en waarom — op te halen retouren uit Logic4, reden + locatie registreren, en cijfers per dag/week/maand/jaar met cirkeldiagram.</p>
       </a>
 
+      <!-- Voorraadbeheer — Dolf/Arno/Chantal + admins. -->
+      <a href="voorraad.html" class="tile hidden" id="tileVoorraad">
+        <div class="icon">📦</div>
+        <h3>Voorraadbeheer</h3>
+        <p>Verkochte spa-orders van een dag ophalen uit Logic4, splitsen naar Dealer/Particulier en reserveringen bijhouden — met filteren op elke kolom.</p>
+      </a>
+
       <!-- Bol.com koppeling — finance + sales: Osman + Don + admins. -->
       <a href="bol.html" class="tile hidden" id="tileBol">
         <div class="icon">🛒</div>
@@ -547,6 +554,15 @@ const BOL_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Voorraadbeheer-tegel — sales/logistiek: Dolf, Arno, Chantal + admins.
+const VOORRAAD_EMAILS = new Set([
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "arno@fonteyn.nl",       "fonteyn.arno",
+  "chantal@fonteyn.nl",    "chantal",  "fonteyn.chantal",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Welke logins mogen de Orderstatus-tegel zien.
 // Server (server/index.js → ORDERSTATUS_ALLOWED) doet dezelfde check.
 const ORDERSTATUS_EMAILS = new Set([
@@ -607,6 +623,8 @@ function showDashboard(email) {
   // Bol.com koppeling — Don + Osman + admins
   el("tileBol").classList.toggle("hidden", !BOL_EMAILS.has(lc));
   el("tileRetouren").classList.toggle("hidden", !RETOUREN_EMAILS.has(lc));
+  // Voorraadbeheer — Dolf/Arno/Chantal + admins
+  el("tileVoorraad").classList.toggle("hidden", !VOORRAAD_EMAILS.has(lc));
   // Sign In (UK) — showroom-kiosk + admins
   el("tileSignin").classList.toggle("hidden", !SIGNIN_EMAILS.has(lc));
   // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot.
