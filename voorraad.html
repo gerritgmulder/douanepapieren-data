@@ -93,6 +93,7 @@
     <button class="tab" data-tab="dealer" type="button">Reserveringen Dealers (<span id="cntDealer">0</span>)</button>
     <button class="tab" data-tab="part" type="button">Reserveringen Particulieren (<span id="cntPart">0</span>)</button>
     <button class="tab" data-tab="pipe" type="button">Voorraad &amp; pipeline 🧪</button>
+    <button class="tab" data-tab="dealerview" type="button">Dealer-view 🧪</button>
   </div>
 
   <div id="tab-ophalen">
@@ -223,6 +224,23 @@
       <h3>Containers beheren</h3>
       <datalist id="modelList"></datalist>
       <div id="contManager"></div>
+    </div>
+  </div>
+
+  <div id="tab-dealerview" class="hidden">
+    <div class="card">
+      <h3>Dealer-view — beschikbaarheid &amp; reserveren <span style="font-weight:400;color:var(--warn)">(voorbeeld van wat dealers straks zien)</span></h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">
+        Per model: hoeveel spa's <b>direct beschikbaar</b> zijn (in NL), wat er <b>onderweg</b> is (op het schip, met ETA)
+        en wat er <b>in productie</b> zit — plus wanneer de eerstvolgende vrij is. Rekent live op de containers uit de pipeline-tab.
+      </p>
+      <input id="dvSearch" placeholder="Zoek model (bv. Renew)…" style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit;width:280px;max-width:100%">
+    </div>
+    <div id="dvCards"></div>
+    <div class="card">
+      <h3>Reserveringen (concept) — <span id="dvResvCount">0</span></h3>
+      <p class="lead" style="font-size:12px;margin-bottom:6px">Vastgelegde reserveringen. De volledige flow (30% aanbetaling, 70%-betaalverzoek bij aankomst, automatisch doorschuiven naar de eerstvolgende spa) volgt later.</p>
+      <div id="dvResvList"></div>
     </div>
   </div>
 </main>
@@ -678,7 +696,9 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   document.getElementById("tab-dealer").classList.toggle("hidden", tab!=="dealer");
   document.getElementById("tab-part").classList.toggle("hidden", tab!=="part");
   document.getElementById("tab-pipe").classList.toggle("hidden", tab!=="pipe");
+  document.getElementById("tab-dealerview").classList.toggle("hidden", tab!=="dealerview");
   if (tab==="dealer"||tab==="part") renderOverviews();
+  if (tab==="dealerview") renderDealerView();
 }));
 
 // Bij start: state laden en de overzichten alvast tonen.
@@ -798,6 +818,7 @@ const PIPE_SHIP_WEEKS=5.5, PIPE_PROD_EU_WEEKS=8, DAY_MS=86400000;
 const PIPE_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-pipeline";
 const M3={jan:0,feb:1,mrt:2,maa:2,apr:3,mei:4,jun:5,jul:6,aug:7,sep:8,okt:9,oct:9,nov:10,dec:11};
 let pipeContainers=[];  // [{id,nr,herkomst,besteld,eta,lines:[{model,color,qty,reserved}]}]
+let dealerReservations=[]; // [{id,model,dealer,date}] — concept
 
 function isoLocal(d){ if(!(d instanceof Date)||isNaN(d)) return ""; return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function toDate(s){ if(!s) return null; const d=new Date(s); return isNaN(d)?null:d; }
@@ -805,12 +826,12 @@ function newId(){ return "c"+Date.now()+Math.floor(Math.random()*10000); }
 
 async function loadPipe(){
   try{ const r=await fetch(PIPE_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
-    if(r.ok){ const j=await r.json(); if(j&&Array.isArray(j.containers)) pipeContainers=j.containers; } }
+    if(r.ok){ const j=await r.json(); if(j){ if(Array.isArray(j.containers)) pipeContainers=j.containers; if(Array.isArray(j.dealerReservations)) dealerReservations=j.dealerReservations; } } }
   catch(e){ console.warn("pipeline laden faalde:",e); }
 }
 async function savePipe(){
   try{ await fetch(PIPE_URL,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
-    body:JSON.stringify({containers:pipeContainers,lastUpdated:new Date().toISOString()})}); }
+    body:JSON.stringify({containers:pipeContainers,dealerReservations:dealerReservations,lastUpdated:new Date().toISOString()})}); }
   catch(e){ console.warn("pipeline opslaan faalde:",e); }
 }
 
@@ -995,6 +1016,65 @@ async function handlePipeImport(file){
   }catch(e){ console.error(e); st.className="status-msg bad"; st.textContent="Kon Excel niet inlezen: "+e.message; }
 }
 
+// ---- Dealer-view (concept): beschikbaarheid per model + reserveren ----
+function dealerNextLabel(m){
+  if(m.nl>0) return "<b style='color:var(--ok)'>nu beschikbaar</b>";
+  if(m.next) return "ETA "+isoLocal(m.next);
+  return "op aanvraag";
+}
+function renderDealerView(){
+  const sb=document.getElementById("dvSearch"); const q=(sb?sb.value:"").trim().toLowerCase();
+  const byModel={};
+  for(const c of pipeContainers){ const st=pipeStatus(c); const eta=toDate(c.eta);
+    for(const l of (c.lines||[])){ if(!l.model) continue; const k=l.model.trim();
+      const free=Math.max(0,(Number(l.qty)||0)-(Number(l.reserved)||0));
+      if(!byModel[k]) byModel[k]={model:k,nl:0,ship:0,prod:0,next:null};
+      byModel[k][st]+=free;
+      if(free>0 && st!=="nl" && eta){ if(byModel[k].next===null || eta<byModel[k].next) byModel[k].next=eta; }
+    }
+  }
+  let list=Object.keys(byModel).map(k=>byModel[k]);
+  if(q) list=list.filter(m=>m.model.toLowerCase().indexOf(q)!==-1);
+  list.sort((a,b)=>{
+    if((b.nl>0)-(a.nl>0)) return (b.nl>0)-(a.nl>0);
+    const da=a.next?a.next.getTime():8.64e15, db=b.next?b.next.getTime():8.64e15;
+    if(da!==db) return da-db;
+    return a.model.localeCompare(b.model);
+  });
+  document.getElementById("dvCards").innerHTML = list.length
+    ? "<div class='pipe' style='grid-template-columns:repeat(auto-fill,minmax(240px,1fr))'>"+list.map(m=>
+        "<div class='cont' style='background:#fff'><div class='hd'><span style='font-size:14px'>"+esc(m.model)+"</span>"+
+          (m.nl>0?"<span class='pill s1'>"+m.nl+" direct</span>":"")+"</div>"+
+          "<ul style='list-style:none;padding:0;margin:6px 0 0'>"+
+            "<li>📦 In NL (direct): <b>"+m.nl+"</b></li>"+
+            "<li>🚢 Op het schip: <b>"+m.ship+"</b></li>"+
+            "<li>🏭 In productie: <b>"+m.prod+"</b></li>"+
+            "<li style='margin-top:4px'>Eerstvolgende: "+dealerNextLabel(m)+"</li>"+
+          "</ul>"+
+          "<button class='primary dv-resv' data-model=\""+esc(m.model)+"\" style='margin-top:8px;padding:6px 12px;font-size:12px'>Reserveren</button>"+
+        "</div>").join("")+"</div>"
+    : "<div class='card'><p style='color:var(--muted)'>Nog geen voorraad/containers. Voeg containers toe of importeer in de pipeline-tab.</p></div>";
+  document.getElementById("dvCards").querySelectorAll(".dv-resv").forEach(b=> b.addEventListener("click", function(){ dealerReserve(b.dataset.model); }));
+  renderDealerResv();
+}
+async function dealerReserve(model){
+  const dealer=prompt("Reserveren (concept) — "+model+"\n\nNaam dealer/klant:");
+  if(!dealer || !dealer.trim()) return;
+  dealerReservations.push({id:newId(), model:model, dealer:dealer.trim(), date:isoLocal(new Date())});
+  await savePipe(); renderDealerResv();
+  alert("Reservering vastgelegd: "+dealer.trim()+" — "+model+".\n\n(Concept: in de volledige versie volgt hier de 30% aanbetaling, en bij aankomst in NL het 70%-betaalverzoek met automatisch doorschuiven naar de eerstvolgende spa van hetzelfde model.)");
+}
+function renderDealerResv(){
+  const cEl=document.getElementById("dvResvCount"); if(cEl) cEl.textContent=dealerReservations.length;
+  const wrap=document.getElementById("dvResvList"); if(!wrap) return;
+  wrap.innerHTML = dealerReservations.length
+    ? "<div class='tablewrap'><table class='grid'><thead><tr><th>Datum</th><th>Model</th><th>Dealer/klant</th><th></th></tr></thead><tbody>"+
+      dealerReservations.slice().reverse().map(r=>"<tr><td>"+esc(r.date)+"</td><td><b>"+esc(r.model)+"</b></td><td>"+esc(r.dealer)+"</td>"+
+        "<td><button class='rmv dv-del' data-id='"+esc(r.id)+"'>✕</button></td></tr>").join("")+"</tbody></table></div>"
+    : "<p style='color:var(--muted);font-size:13px'>Nog geen reserveringen.</p>";
+  wrap.querySelectorAll(".dv-del").forEach(b=> b.addEventListener("click", async function(){ dealerReservations=dealerReservations.filter(x=>String(x.id)!==String(b.dataset.id)); await savePipe(); renderDealerResv(); }));
+}
+
 // wiring
 (function(){
   const addBtn=document.getElementById("addContBtn"), impBtn=document.getElementById("importBtn"), file=document.getElementById("pipeFile");
@@ -1005,7 +1085,8 @@ async function handlePipeImport(file){
   impBtn.addEventListener("click", function(){ file.click(); });
   file.addEventListener("change", function(e){ if(e.target.files.length) handlePipeImport(e.target.files[0]); file.value=""; });
   document.querySelectorAll('.filter-row[data-ov="stock"] input').forEach(i=> i.addEventListener("input", renderStock));
-  loadPipe().then(renderPipeAll);
+  const dv=document.getElementById("dvSearch"); if(dv) dv.addEventListener("input", renderDealerView);
+  loadPipe().then(function(){ renderPipeAll(); renderDealerResv(); });
 })();
 
 </script>
