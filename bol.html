@@ -311,6 +311,16 @@
         Excel-export — die kunnen niet via API (boekhoud-module zit niet
         in scope). Osman voert die twee handmatig in Logic4 in.
       </p>
+      <div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:10px 0;">
+        <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Bol-dagboek (BookingId)</label>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:4px;">
+          <input type="number" id="bolBookingId" placeholder="bv. 12" style="border:1px solid var(--border);border-radius:6px;padding:7px 9px;font:inherit;width:120px;">
+          <span style="font-size:12px;color:var(--muted);">
+            Het dagboek waarop Bol-betalingen geboekt worden. <code>MatchingLedgerId=78</code> staat al vast (advies Max).
+            Weet je het nummer niet? Klik <b>Diagnose betaling-velden</b> → kijk bij <b>Dagboeken</b>.
+          </span>
+        </div>
+      </div>
       <div class="actions" style="margin-top:8px;">
         <button class="secondary" id="dryRunBtn" type="button">🧪 Dry-run (toon wat er zou gebeuren)</button>
         <button class="secondary" id="test1Btn" type="button">1️⃣ Test op 1 order</button>
@@ -1046,23 +1056,37 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
 // volgt uit de body-probe op probe-logic4.html — voorlopig staat
 // de apply-knop UIT.
 
-// Body voor /v3/Orders/AddPayment — veldnamen MOETEN exact matchen met
-// Logic4's Payment-model (v3), anders negeert Logic4 het veld stilletjes:
-//   AmountIncl  (NIET "Amount")   ← het te boeken bedrag incl. BTW
-//   DateTime    (NIET "PaymentDate"/"Date")
-//   Description (vrije tekst; "Reference"/"PaymentMethodId" bestaan niet)
-// Met het verkeerde "Amount"-veld boekte de tool €0,00 → Betaald bewoog niet.
-// Bron: Logic4 Swagger / Payment-model (orderId, invoiceId, amountIncl,
-// description, bookingId, matchingLedgerId, dateTime, ledgerCode).
+// Body voor /v3/Orders/AddPayment — bevestigd door Max (Logic4-advies):
+//   OrderId, AmountIncl, MatchingLedgerId=78, BookingId (dagboek v/d
+//   betaalmethode), DateTime, Description. InvoiceId/LedgerCode leeg.
+// Eerdere 500 kwam doordat MatchingLedgerId + BookingId ontbraken; het
+// €0-probleem daarvóór doordat we "Amount" i.p.v. "AmountIncl" stuurden.
+const BOL_MATCHING_LEDGER_ID = 78;
+function bolBookingId(){
+  const v = parseInt((localStorage.getItem("bol.bookingId") || "").trim(), 10);
+  return isNaN(v) ? null : v;
+}
+(function initBookingId(){
+  const el = document.getElementById("bolBookingId");
+  if (!el) return;
+  el.value = localStorage.getItem("bol.bookingId") || "";
+  el.addEventListener("change", function(){
+    const v = el.value.trim();
+    if (v) localStorage.setItem("bol.bookingId", v); else localStorage.removeItem("bol.bookingId");
+  });
+})();
 function buildPaymentBody(creditRegel, boekDatum) {
-  return {
+  const body = {
     OrderId: creditRegel.match.orderId,
-    // Boek het RESTANT zodat Betaald op het Bol-bedrag uitkomt (niet
-    // dubbel boeken als er al iets op de order staat).
+    // Boek het RESTANT zodat Betaald op het Bol-bedrag uitkomt.
     AmountIncl: amountToBook(creditRegel),
+    MatchingLedgerId: BOL_MATCHING_LEDGER_ID,
     DateTime: (boekDatum || new Date().toISOString().slice(0, 10)) + "T00:00:00",
     Description: "Betaling Bol-bestelling " + creditRegel.bestelnr,
   };
+  const bid = bolBookingId();
+  if (bid != null) body.BookingId = bid;   // dagboek van de Bol-betaalmethode
+  return body;
 }
 
 // Rauwe Logic4-call (geeft {ok,status,data} terug i.p.v. te throwen) —
