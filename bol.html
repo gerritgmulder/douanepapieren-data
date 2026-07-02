@@ -314,11 +314,9 @@
       <div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:10px 0;">
         <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Bol-dagboek (BookingId)</label>
         <div style="display:flex;gap:10px;align-items:center;margin-top:4px;">
-          <input type="number" id="bolBookingId" placeholder="bv. 12" style="border:1px solid var(--border);border-radius:6px;padding:7px 9px;font:inherit;width:120px;">
+          <input type="number" id="bolBookingId" placeholder="22 (standaard)" style="border:1px solid var(--border);border-radius:6px;padding:7px 9px;font:inherit;width:120px;">
           <span style="font-size:12px;color:var(--muted);">
-            Het dagboek waarop Bol-betalingen geboekt worden. <code>MatchingLedgerId=78</code> (vooruitontvangen) staat vast (advies Max).
-            Max' mapping (PSP's): Shopify=46, Mollie=42, PayPal=30, MultiSafepay=31, Amex=43, overig/tussenrekening=22 —
-            <b>Bol staat er niet bij</b>. Klik <b>🔧 Diagnose betaling-velden</b>: die markeert automatisch een mogelijk Bol-dagboek. Of vraag Osman/Max het Bol-dagboek. Onbekend? Dan is <b>22</b> (tussenrekening) een veilige tijdelijke keuze.
+            Standaard <b>22 = Tussenrekening Online Payments</b> — er is geen apart Bol-dagboek, dus dit is de juiste boeking voor Bol-uitbetalingen. <code>MatchingLedgerId=78</code> (vooruitontvangen) staat ook vast. Leeg laten = 22.
           </span>
         </div>
       </div>
@@ -1063,9 +1061,13 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
 // Eerdere 500 kwam doordat MatchingLedgerId + BookingId ontbraken; het
 // €0-probleem daarvóór doordat we "Amount" i.p.v. "AmountIncl" stuurden.
 const BOL_MATCHING_LEDGER_ID = 78;
+// Geen apart Bol-dagboek in de administratie → 22 = "Tussenrekening Online
+// Payments" is de juiste boeking voor Bol-uitbetalingen (bevestigd via
+// Dagboeken-lijst). Instelbaar, maar 22 is de standaard.
+const BOL_DEFAULT_BOOKING_ID = 22;
 function bolBookingId(){
   const v = parseInt((localStorage.getItem("bol.bookingId") || "").trim(), 10);
-  return isNaN(v) ? null : v;
+  return isNaN(v) ? BOL_DEFAULT_BOOKING_ID : v;
 }
 (function initBookingId(){
   const el = document.getElementById("bolBookingId");
