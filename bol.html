@@ -316,8 +316,9 @@
         <div style="display:flex;gap:10px;align-items:center;margin-top:4px;">
           <input type="number" id="bolBookingId" placeholder="bv. 12" style="border:1px solid var(--border);border-radius:6px;padding:7px 9px;font:inherit;width:120px;">
           <span style="font-size:12px;color:var(--muted);">
-            Het dagboek waarop Bol-betalingen geboekt worden. <code>MatchingLedgerId=78</code> staat al vast (advies Max).
-            Weet je het nummer niet? Klik <b>Diagnose betaling-velden</b> → kijk bij <b>Dagboeken</b>.
+            Het dagboek waarop Bol-betalingen geboekt worden. <code>MatchingLedgerId=78</code> (vooruitontvangen) staat vast (advies Max).
+            Max' mapping (PSP's): Shopify=46, Mollie=42, PayPal=30, MultiSafepay=31, Amex=43, overig/tussenrekening=22 —
+            <b>Bol staat er niet bij</b>. Klik <b>🔧 Diagnose betaling-velden</b>: die markeert automatisch een mogelijk Bol-dagboek. Of vraag Osman/Max het Bol-dagboek. Onbekend? Dan is <b>22</b> (tussenrekening) een veilige tijdelijke keuze.
           </span>
         </div>
       </div>
@@ -1081,7 +1082,7 @@ function buildPaymentBody(creditRegel, boekDatum) {
     // Boek het RESTANT zodat Betaald op het Bol-bedrag uitkomt.
     AmountIncl: amountToBook(creditRegel),
     MatchingLedgerId: BOL_MATCHING_LEDGER_ID,
-    DateTime: (boekDatum || new Date().toISOString().slice(0, 10)) + "T00:00:00",
+    DateTime: (boekDatum || new Date().toISOString().slice(0, 10)) + "T12:00:00",
     Description: "Betaling Bol-bestelling " + creditRegel.bestelnr,
   };
   const bid = bolBookingId();
@@ -1139,6 +1140,7 @@ document.getElementById("diagPayBtn").addEventListener("click", async () => {
       ["/v3/Financial/GetFinancialBooks", "Dagboeken"],
       ["/v3/Financial/GetLedgers", "Grootboekrekeningen"],
     ];
+    const bolHits = [];
     for (let i = 0; i < refs.length; i++) {
       const path = refs[i][0], label = refs[i][1];
       out.textContent = label + " ophalen…";
@@ -1152,13 +1154,17 @@ document.getElementById("diagPayBtn").addEventListener("click", async () => {
         list = list.PaymentMethods || list.FinancialBooks || list.Ledgers || list.Items || [];
       }
       if (!Array.isArray(list)) list = [];
-      const sample = list.slice(0, 30).map(function (x) {
+      const sample = list.slice(0, 80).map(function (x) {
         const id = x.Id != null ? x.Id : (x.LedgerId != null ? x.LedgerId : (x.Code != null ? x.Code : "?"));
         const name = x.Description || x.Value || x.Name || x.Code || "";
-        return id + ": " + escapeHtml(String(name).slice(0, 45));
+        const isBol = /bol/i.test(String(name));
+        if (isBol) bolHits.push(label + " → <b>" + id + "</b>: " + escapeHtml(String(name)));
+        const line = id + ": " + escapeHtml(String(name).slice(0, 45));
+        return isBol ? "<b style='color:var(--ok)'>" + line + "  ⬅ Bol?</b>" : line;
       });
       blocks.push("<b>" + label + "</b> (" + list.length + "):<br><code style='font-size:11px'>" + (sample.join("<br>") || escapeHtml(JSON.stringify(resp.data).slice(0, 300))) + "</code>");
     }
+    if (bolHits.length) blocks.unshift("<b style='color:var(--ok)'>🔎 Mogelijk Bol-dagboek/betaalmethode gevonden:</b><br>" + bolHits.join("<br>") + "<br><span style='color:var(--muted)'>→ Vul het dagboek-ID (BookingId) hierboven in.</span>");
     out.className = "status-msg";
     out.innerHTML = "<b>🔧 Betaling-diagnose</b> — plak dit terug naar Claude:<div style='margin-top:8px;padding:11px 13px;background:#fffdf6;border:1px solid #fde68a;border-radius:8px;font-size:12px;line-height:1.6;max-height:440px;overflow:auto'>" + blocks.join("<br><br>") + "</div>";
   } catch (e) {
