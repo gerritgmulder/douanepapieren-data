@@ -1345,17 +1345,17 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
   const matched = matchedAll.filter(r => amountToBook(r) >= 0.01);
   if (!matched.length) {
     alert(matchedAll.length
-      ? `Alle ${matchedAll.length} gematchte order(s) staan al volledig betaald — niets door te voeren.`
+      ? `Geen van de ${matchedAll.length} gematchte order(s) heeft een openstaande factuur (al betaald of nog niet afgeboekt) — niets door te voeren.`
       : "Geen gematchte regels om door te voeren.");
     return;
   }
   // Dubbele bevestiging — boekhouding is gevoelig
   const totaal = matched.reduce((s, r) => s + amountToBook(r), 0);
   const confirm1 = confirm(
-    `LET OP — je gaat ${matched.length} betalingen koppelen aan Logic4-orders ` +
+    `LET OP — je gaat ${matched.length} betalingen op de bijbehorende facturen boeken ` +
     `voor in totaal ${fmtEur(totaal)}.\n\n` +
     `Dit wordt direct in Logic4 doorgevoerd en is alleen handmatig terug te draaien ` +
-    `(door per order de betaling te verwijderen).\n\n` +
+    `(door per factuur de betaling te verwijderen).\n\n` +
     `Weet je het zeker?`
   );
   if (!confirm1) return;
@@ -1551,10 +1551,9 @@ function showAfterApplyExplanation(results, verifiedCount, totalCount, data) {
       <h3 style="color:#144734;margin:20px 0 8px;">Hoe verifieer je dit in Logic4?</h3>
       <ol style="line-height:1.7;color:#374151;">
         <li>Open Logic4 (desktop-app of webclient)</li>
-        <li>Ga naar Orders → zoek op order-ID (bv. <code>${sampleOrderId}</code>)</li>
-        <li>Open de order → blok <b>Totalen</b> rechts onderin de order</li>
-        <li>Veld <b>Betaald</b> zou nu het Bol-bedrag moeten tonen i.p.v. € 0,00</li>
-        <li>Bij dubbel-checken: tab <b>Overige informatie → Facturen</b> — daar zou een nieuwe betalings-regel staan</li>
+        <li>Ga naar de order (bv. <code>${sampleOrderId}</code>) → tab <b>Overige informatie → Facturen</b>, of open de bijbehorende <b>factuur</b> (nr begint met 6) direct</li>
+        <li>Op de factuur: veld <b>Betaald</b> / het openstaande saldo zou nu op het Bol-bedrag moeten staan i.p.v. openstaand</li>
+        <li>Op de factuur: knop <b>Betalingen</b> — daar staat de nieuwe betalings-regel (dagboek 22, Tussenrekening Online Payments)</li>
       </ol>
 
       <h3 style="color:#144734;margin:20px 0 8px;">Waar staat het in onze audit-log?</h3>
