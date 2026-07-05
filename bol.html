@@ -302,9 +302,10 @@
       <h3>Betalingen doorvoeren in Logic4</h3>
       <p class="lead" style="font-size:13px;">
         <b id="matchCount">0</b> van <b id="totalCount">0</b> credit-regels zijn
-        succesvol gematcht met een Logic4-order. Daarvan kunnen de betalingen
-        direct gekoppeld worden via <code>/v3/Orders/AddPayment</code> —
-        geen handmatige actie meer per regel.
+        gematcht met een Logic4-order. De Bol-order is meestal al afgeboekt naar een
+        <b>factuur</b>, dus de betaling wordt via <code>/v3/Orders/AddPayment</code>
+        op de <b>InvoiceId</b> geboekt (uitleg Osman) — geen handmatige actie meer per regel.
+        Alleen orders met een openstaande factuur worden geboekt.
       </p>
       <p class="lead" style="font-size:13px;color:var(--warn);">
         ⚠ De 2 debet-regels (verkoopprovisie + Bol-overschrijving) blijven
@@ -668,13 +669,16 @@ function renderResult(data) {
     if (r.match) {
       const m = r.match;
       debiteurCell = `<b>${escapeHtml(String(m.debtorId))}</b> <span style="color:var(--muted);font-size:11px">${escapeHtml(truncate(m.customerName, 22))}</span>`;
-      const alBetaald = amountToBook(r) < 0.01;
-      if (alBetaald) {
-        statusPill = `<span class="match-pill ok" title="Betaald €${(m.payed||0).toFixed(2)} ≥ Bol-bedrag">✓ al betaald</span>`;
+      if (m.invoiceId == null) {
+        statusPill = `<span class="match-pill todo" title="Geen openstaande factuur voor deze debiteur">geen open factuur</span>`;
+        infoExtra = ` — order ${m.orderId} (nog geen/gesloten factuur)`;
+      } else if (amountToBook(r) < 0.01) {
+        statusPill = `<span class="match-pill ok" title="Factuur ${m.invoiceId} — openstaand ${fmtEur(m.invoiceOutstanding||0)}">✓ al betaald</span>`;
+        infoExtra = ` — factuur ${m.invoiceId}, openstaand ${fmtEur(m.invoiceOutstanding||0)}`;
       } else {
-        statusPill = `<span class="match-pill ok" title="Order ${m.orderId} — Betaald nu ${fmtEur(m.payed||0)}">✓ gematcht</span>`;
+        statusPill = `<span class="match-pill ok" title="Factuur ${m.invoiceId} — openstaand ${fmtEur(m.invoiceOutstanding||0)}">✓ factuur ${escapeHtml(String(m.invoiceId))}</span>`;
+        infoExtra = ` — factuur ${m.invoiceId} (order ${m.orderId}), openstaand ${fmtEur(m.invoiceOutstanding||0)}`;
       }
-      infoExtra = ` — Logic4 order ${m.orderId}, Betaald nu ${fmtEur(m.payed||0)}`;
     } else if (r.match === null) {
       // Match-poging gedaan maar niets gevonden
       debiteurCell = `<span class="match-pill fail">✗ niet gevonden</span>`;
@@ -915,13 +919,33 @@ async function runWithLimit(tasks, limit, onProgress) {
   await Promise.all(workers);
 }
 
-// Hoeveel moet er nog geboekt worden zodat Betaald == Bol-bedrag?
-// = Bol-bedrag minus wat al op de order betaald staat. Zo voorkomen we
-// dubbel boeken bij een 2e run en boeken we alleen het restant bij een
-// deels-betaalde order.
+// Bol-orders worden afgeboekt naar een FACTUUR (nr begint met 6); de betaling
+// hoort dus op de factuur, niet op de order (uitleg Osman). Kies uit de
+// openstaande facturen van een debiteur de Bol-factuur: bij voorkeur die met
+// PaymentMethodId 46 (Bol.com); anders die waarvan het totaal het dichtst bij
+// het Bol-bedrag ligt; anders de enige.
+function pickBolInvoice(list, bolBedrag) {
+  if (!Array.isArray(list) || !list.length) return null;
+  const bol = list.filter(i => Number(i.PaymentMethodId) === 46);
+  const pool = bol.length ? bol : list;
+  if (pool.length === 1) return pool[0];
+  let best = pool[0], bestDiff = Infinity;
+  for (const i of pool) {
+    const diff = Math.abs((Number(i.TotalAmount) || 0) - bolBedrag);
+    if (diff < bestDiff) { bestDiff = diff; best = i; }
+  }
+  return best;
+}
+
+// Hoeveel boeken we? Het nog-openstaande bedrag op de factuur, gemaximeerd op
+// het Bol-bedrag. Géén open factuur gevonden → 0 (niet automatisch boeken;
+// order mogelijk al betaald of nog niet afgeboekt → handmatig).
 function amountToBook(r) {
-  const already = (r.match && Number(r.match.payed)) || 0;
-  return Math.round((Number(r.bedrag) - already) * 100) / 100;
+  const m = r.match || {};
+  if (m.invoiceId != null && m.invoiceOutstanding != null) {
+    return Math.round(Math.min(Number(r.bedrag), Math.max(0, m.invoiceOutstanding)) * 100) / 100;
+  }
+  return 0;
 }
 
 document.getElementById("matchBtn").addEventListener("click", async () => {
@@ -959,7 +983,7 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     // betrouwbaarder dan duizenden orders scannen — vindt de order
     // ongeacht de aanmaakdatum.
     const matchMap = new Map();
-    const diag = { found: 0, noOrders: 0, refMismatch: 0, errors: 0, samples: [] };
+    const diag = { found: 0, withInvoice: 0, noOrders: 0, refMismatch: 0, errors: 0, samples: [] };
 
     const tasks = uniqueNrs.map(function (nr) {
       return async function () {
@@ -987,6 +1011,21 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
           return;
         }
         const totals = hit.Totals || {};
+        // Zoek de openstaande FACTUUR van deze debiteur (order is meestal al
+        // afgeboekt → betaling hoort op de factuur, niet de order).
+        let invoiceId = null, invoiceOutstanding = null, invoiceTotal = null, invoicePayed = null;
+        try {
+          const invResp = await logic4Call("/v3/Orders/GetOpenPaymentInvoices", { DebtorId: hit.DebtorId });
+          const invArr = Array.isArray(invResp) ? invResp : ((invResp && (invResp.Invoices || invResp.Items)) || []);
+          const inv = pickBolInvoice(invArr, Number(totals.AmountIncl) || 0);
+          if (inv) {
+            invoiceId = inv.InvoiceId;
+            invoiceOutstanding = Number(inv.AmountOutstanding) || 0;
+            invoiceTotal = Number(inv.TotalAmount) || 0;
+            invoicePayed = Number(inv.TotalAmountPayed) || 0;
+            diag.withInvoice++;
+          }
+        } catch (e) { /* geen open factuur / geen scope → val terug (skip) */ }
         matchMap.set(nr, {
           orderId: hit.Id,
           debtorId: hit.DebtorId,
@@ -997,6 +1036,10 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
           payed: Number(totals.Calc_TotalPayed) || 0,
           amountIncl: Number(totals.AmountIncl) || 0,
           isPaid: !!totals.IsPaid,
+          invoiceId: invoiceId,
+          invoiceOutstanding: invoiceOutstanding,
+          invoiceTotal: invoiceTotal,
+          invoicePayed: invoicePayed,
         });
         diag.found++;
       };
@@ -1016,9 +1059,11 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
 
     // ── Resultaat + diagnose ──
     progressEl.className = matched === 0 ? "status-msg warn" : "status-msg ok";
-    const head = "Klaar — " + matched + " van " + uniqueNrs.length + " bestelnummers gekoppeld aan een Logic4-order.";
+    const head = "Klaar — " + matched + " van " + uniqueNrs.length + " bestelnummers gekoppeld aan een Logic4-order, waarvan <b>" + diag.withInvoice + "</b> met een openstaande factuur (daarop wordt geboekt).";
 
     const diagBlocks = [];
+    const zonderFactuur = matched - diag.withInvoice;
+    if (zonderFactuur > 0) diagBlocks.push("<b>" + zonderFactuur + "</b> order(s) hadden géén openstaande factuur — die zijn al betaald óf nog niet afgeboekt. Die worden overgeslagen (niet automatisch geboekt).");
     if (diag.noOrders) diagBlocks.push("<b>" + diag.noOrders + "</b> bestelnummer(s) gaven géén order terug — die order bestaat (nog) niet in Logic4, of het bestelnummer staat niet in het Referentie-veld.");
     if (diag.refMismatch) diagBlocks.push("<b>" + diag.refMismatch + "</b> keer kreeg ik wél orders terug maar zónder matchende Referentie — mogelijk negeert de API het Reference-filter. <i>(Zie voorbeelden — plak terug naar Claude.)</i>");
     if (diag.errors) diagBlocks.push("<b style=\"color:#b91c1c\">" + diag.errors + "</b> API-fout(en) tijdens opzoeken.");
@@ -1079,16 +1124,18 @@ function bolBookingId(){
   });
 })();
 function buildPaymentBody(creditRegel, boekDatum) {
+  const m = creditRegel.match || {};
   const body = {
-    OrderId: creditRegel.match.orderId,
-    // Boek het RESTANT zodat Betaald op het Bol-bedrag uitkomt.
+    // Boek op de FACTUUR (order is afgeboekt) — dit is de kern-fix (uitleg Osman).
     AmountIncl: amountToBook(creditRegel),
     MatchingLedgerId: BOL_MATCHING_LEDGER_ID,
     DateTime: (boekDatum || new Date().toISOString().slice(0, 10)) + "T12:00:00",
     Description: "Betaling Bol-bestelling " + creditRegel.bestelnr,
   };
   const bid = bolBookingId();
-  if (bid != null) body.BookingId = bid;   // dagboek van de Bol-betaalmethode
+  if (bid != null) body.BookingId = bid;   // dagboek Bol (22 = Tussenrekening Online Payments)
+  if (m.invoiceId != null) body.InvoiceId = m.invoiceId;   // op de factuur boeken
+  else body.OrderId = m.orderId;                            // fallback: op de order
   return body;
 }
 
@@ -1188,6 +1235,18 @@ async function readOrderPayed(orderId) {
   } catch (e) { return null; }
 }
 
+// Lees de openstaande stand van EEN factuur (via de debiteur). Verdwijnt de
+// factuur uit de open-lijst → volledig betaald (gone:true, outstanding 0).
+async function readInvoiceState(debtorId, invoiceId) {
+  try {
+    const resp = await logic4Call("/v3/Orders/GetOpenPaymentInvoices", { DebtorId: Number(debtorId) });
+    const arr = Array.isArray(resp) ? resp : ((resp && (resp.Invoices || resp.Items)) || []);
+    const inv = arr.find(i => Number(i.InvoiceId) === Number(invoiceId));
+    if (!inv) return { outstanding: 0, payed: null, gone: true };
+    return { outstanding: Number(inv.AmountOutstanding) || 0, payed: Number(inv.TotalAmountPayed) || 0, gone: false };
+  } catch (e) { return null; }
+}
+
 // TEST OP 1 ORDER — boekt precies één betaling en meet of Betaald beweegt.
 // Bedoeld om de body/veldnamen te verifiëren vóór een batch van honderden.
 document.getElementById("test1Btn").addEventListener("click", async () => {
@@ -1203,10 +1262,13 @@ document.getElementById("test1Btn").addEventListener("click", async () => {
   }
   const boekDatum = document.getElementById("boekDatum").value;
   const body = buildPaymentBody(r, boekDatum);
+  const factuur = r.match.invoiceId;
   const ok = confirm(
     "TEST op 1 order.\n\n" +
-    "Bol-bestelling " + r.bestelnr + " → Logic4 order " + r.match.orderId + "\n" +
-    "Te boeken: " + fmtEur(amountToBook(r)) + " (veld AmountIncl)\n\n" +
+    "Bol-bestelling " + r.bestelnr + "\n" +
+    (factuur != null ? ("→ Factuur " + factuur + " (bij order " + r.match.orderId + ")\n")
+                     : ("→ Order " + r.match.orderId + " (geen factuur gevonden)\n")) +
+    "Te boeken: " + fmtEur(amountToBook(r)) + "\n\n" +
     "Dit boekt ÉÉN echte betaling in Logic4. Doorgaan?"
   );
   if (!ok) return;
@@ -1215,33 +1277,35 @@ document.getElementById("test1Btn").addEventListener("click", async () => {
   btn.disabled = true;
   statusEl.className = "status-msg";
   try {
-    statusEl.textContent = "Betaald-stand vóór meten…";
-    const before = await readOrderPayed(r.match.orderId);
+    // Meet het openstaande factuurbedrag vóór/ná — dat is wat moet dalen.
+    statusEl.textContent = "Openstaand bedrag vóór meten…";
+    const before = factuur != null ? await readInvoiceState(r.match.debtorId, factuur) : null;
     statusEl.textContent = "AddPayment versturen…";
     let apiErr = null;
     try { await logic4Call("/v3/Orders/AddPayment", body); }
     catch (e) { apiErr = e.message; }
-    statusEl.textContent = "Betaald-stand ná meten…";
-    const after = await readOrderPayed(r.match.orderId);
+    statusEl.textContent = "Openstaand bedrag ná meten…";
+    const after = factuur != null ? await readInvoiceState(r.match.debtorId, factuur) : null;
 
-    const pb = before ? before.payed : 0;
-    const pa = after ? after.payed : 0;
-    const delta = pa - pb;
+    const ob = before ? before.outstanding : null;
+    const oa = after ? after.outstanding : null;
     const expected = amountToBook(r);
-    const moved = !apiErr && Math.abs(delta - expected) < 0.05;
+    const drop = (ob != null && oa != null) ? (ob - oa) : null;
+    const fullyPaid = after && after.gone;
+    const moved = !apiErr && (fullyPaid || (drop != null && Math.abs(drop - expected) < 0.05));
 
     let verdict;
-    if (moved) verdict = `<span class="match-pill ok">✓ Betaald bewoog +${fmtEur(delta)} — de fix werkt!</span>`;
-    else if (!apiErr && delta === 0) verdict = `<span class="match-pill fail">⚠ API zei OK maar Betaald bewoog niet. Veldnaam/dagboek nog niet goed — deel dit met Claude.</span>`;
+    if (moved) verdict = `<span class="match-pill ok">✓ Openstaand daalde met ${drop != null ? fmtEur(drop) : fmtEur(expected)}${fullyPaid ? " — factuur volledig betaald!" : ""} — het werkt!</span>`;
+    else if (!apiErr && drop === 0) verdict = `<span class="match-pill fail">⚠ API zei OK maar openstaand bedrag bewoog niet. Deel dit met Claude (mogelijk BookingId/dagboek).</span>`;
     else if (apiErr) verdict = `<span class="match-pill fail">✗ API-fout: ${escapeHtml(apiErr)}</span>`;
-    else verdict = `<span class="match-pill fail">⚠ Betaald +${fmtEur(delta)}, verwacht +${fmtEur(expected)}</span>`;
+    else verdict = `<span class="match-pill fail">⚠ Openstaand −${drop != null ? fmtEur(drop) : "?"}, verwacht −${fmtEur(expected)}</span>`;
 
     statusEl.className = "status-msg " + (moved ? "ok" : "warn");
-    statusEl.innerHTML = `<b>Test-resultaat — order ${r.match.orderId} (${escapeHtml(r.bestelnr)})</b><br>
-      Verstuurd: <code>AmountIncl ${amountToBook(r)}</code>, <code>DateTime ${escapeHtml(boekDatum)}</code><br>
-      Betaald vóór: ${before ? fmtEur(pb) : "?"} → ná: ${after ? fmtEur(pa) : "?"}<br>
+    statusEl.innerHTML = `<b>Test-resultaat — ${factuur != null ? "factuur " + factuur : "order " + r.match.orderId} (${escapeHtml(r.bestelnr)})</b><br>
+      Verstuurd: <code>${factuur != null ? "InvoiceId " + factuur : "OrderId " + r.match.orderId}</code>, <code>AmountIncl ${amountToBook(r)}</code>, <code>BookingId ${bolBookingId()}</code>, <code>MatchingLedgerId 78</code><br>
+      Openstaand vóór: ${ob != null ? fmtEur(ob) : "?"} → ná: ${fullyPaid ? "€ 0,00 (van open-lijst af)" : (oa != null ? fmtEur(oa) : "?")}<br>
       ${verdict}
-      <div style="margin-top:8px;font-size:12px;color:var(--muted);">Open order ${r.match.orderId} in Logic4 → blok Totalen → controleer 'Betaald'. Klopt het bedrag én staat het goed in de boekhouding (Osman), dan kun je de rest doorvoeren.</div>`;
+      <div style="margin-top:8px;font-size:12px;color:var(--muted);">Open ${factuur != null ? "factuur " + factuur : "order " + r.match.orderId} in Logic4 → blok Totalen → 'Betaald' zou nu het Bol-bedrag moeten tonen. Klopt het? Dan de rest doorvoeren.</div>`;
   } catch (e) {
     statusEl.className = "status-msg bad";
     statusEl.textContent = "Testfout: " + e.message;
@@ -1264,10 +1328,10 @@ document.getElementById("dryRunBtn").addEventListener("click", () => {
   statusEl.className = "status-msg ok";
   statusEl.classList.remove("hidden");
   statusEl.innerHTML = `<b>Dry-run — ${payments.length} betalingen zouden gestuurd worden naar <code>/v3/Orders/AddPayment</code>:</b>
-    ${reedsBetaald ? `<div style="font-size:12px;color:var(--warn);margin:4px 0;">${reedsBetaald} order(s) staan al volledig betaald → die worden overgeslagen.</div>` : ""}
+    ${reedsBetaald ? `<div style="font-size:12px;color:var(--warn);margin:4px 0;">${reedsBetaald} regel(s) worden overgeslagen (al betaald óf geen openstaande factuur).</div>` : ""}
     <pre style="background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;overflow:auto;max-height:300px;font-size:11px;margin-top:8px;">${escapeHtml(JSON.stringify(payments.slice(0, 5), null, 2))}${payments.length > 5 ? "\n\n... en " + (payments.length - 5) + " meer (eerste 5 getoond)" : ""}</pre>
     <div style="margin-top:8px;font-size:12px;color:var(--muted);">
-      <code>Amount</code> = Bol-bedrag minus wat al op de order betaald staat, zodat 'Betaald' precies op het Bol-bedrag uitkomt. Klik 'Doorvoeren' om écht te boeken.
+      De betaling wordt op de <b>InvoiceId</b> (factuur) geboekt met <code>MatchingLedgerId 78</code> + <code>BookingId ${bolBookingId()}</code>. <code>AmountIncl</code> = het openstaande factuurbedrag (max. het Bol-bedrag). Klik 'Doorvoeren' om écht te boeken.
     </div>`;
 });
 
@@ -1313,25 +1377,27 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
   statusEl.classList.remove("hidden");
   resultsEl.classList.remove("hidden");
   resultsEl.innerHTML = `<table class="memoriaal"><thead><tr>
-    <th>Bol-bestelnr</th><th>Order</th><th>Bedrag</th><th>Betaald vóór</th><th>Betaald ná</th><th>Status</th>
+    <th>Bol-bestelnr</th><th>Factuur/Order</th><th>Bedrag</th><th>Openstaand vóór</th><th>Openstaand ná</th><th>Status</th>
   </tr></thead><tbody id="applyResultsBody"></tbody></table>`;
   const resultsBody = document.getElementById("applyResultsBody");
 
-  // Helper: lees Totals.Calc_TotalPayed voor 1 order
+  // Order-Betaald (fallback als er geen factuur is).
   async function getOrderPayed(orderId) {
     try {
-      const r = await logic4Call("/v3/Orders/GetOrders", {
-        Id: Number(orderId), TakeRecords: 1
-      });
+      const r = await logic4Call("/v3/Orders/GetOrders", { Id: Number(orderId), TakeRecords: 1 });
       const arr = Array.isArray(r) ? r : (r?.Orders || []);
       if (!arr.length) return null;
-      const totals = arr[0].Totals || {};
-      return {
-        payed: Number(totals.Calc_TotalPayed) || 0,
-        isPaid: !!totals.IsPaid,
-        amountIncl: Number(totals.AmountIncl) || 0,
-      };
+      return { payed: Number((arr[0].Totals || {}).Calc_TotalPayed) || 0 };
     } catch { return null; }
+  }
+  // Meet de relevante stand: openstaand factuurbedrag (primair) of order-Betaald.
+  async function measureState(r) {
+    if (r.match.invoiceId != null) {
+      const s = await readInvoiceState(r.match.debtorId, r.match.invoiceId);
+      return s ? { val: s.outstanding, gone: s.gone, mode: "invoice" } : null;
+    }
+    const o = await getOrderPayed(r.match.orderId);
+    return o ? { val: o.payed, gone: false, mode: "order" } : null;
   }
 
   const boekDatum = document.getElementById("boekDatum").value;
@@ -1340,46 +1406,40 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
 
   for (let i = 0; i < matched.length; i++) {
     const r = matched[i];
-    statusEl.textContent = `${i + 1}/${matched.length}: Bol-bestelling ${r.bestelnr} → Logic4 order ${r.match.orderId} — vóór-meting…`;
+    const isInvoice = r.match.invoiceId != null;
+    const doel = isInvoice ? ("factuur " + r.match.invoiceId) : ("order " + r.match.orderId);
+    statusEl.textContent = `${i + 1}/${matched.length}: ${r.bestelnr} → ${doel} — vóór-meting…`;
 
-    // 1) Vóór-meting van Betaald-status
-    const before = await getOrderPayed(r.match.orderId);
+    const before = await measureState(r);
 
-    // 2) AddPayment-call
-    statusEl.textContent = `${i + 1}/${matched.length}: ${r.bestelnr} → AddPayment uitvoeren…`;
+    statusEl.textContent = `${i + 1}/${matched.length}: ${r.bestelnr} → AddPayment…`;
     const body = buildPaymentBody(r, boekDatum);
-    let apiResponse = null, apiError = null;
-    try {
-      apiResponse = await logic4Call("/v3/Orders/AddPayment", body);
-    } catch (e) {
-      apiError = e.message;
-    }
+    let apiError = null;
+    try { await logic4Call("/v3/Orders/AddPayment", body); }
+    catch (e) { apiError = e.message; }
 
-    // 3) Ná-meting van Betaald-status
     statusEl.textContent = `${i + 1}/${matched.length}: ${r.bestelnr} → ná-meting…`;
-    const after = await getOrderPayed(r.match.orderId);
+    const after = await measureState(r);
 
-    // 4) Bepaal status: API ok + Betaald-veld gestegen = echt verwerkt
     const apiOk = !apiError;
-    const payedBefore = before?.payed ?? 0;
-    const payedAfter  = after?.payed  ?? 0;
-    const payedDelta  = payedAfter - payedBefore;
-    // We boeken het restant (amountToBook), dus zóveel zou Betaald moeten stijgen.
-    const expectedDelta = amountToBook(r);
-    const actuallyApplied = apiOk && Math.abs(payedDelta - expectedDelta) < 0.05;
+    const expected = amountToBook(r);
+    // Bij factuur DAALT 'openstaand'; bij order STIJGT 'betaald'.
+    let delta = null;
+    if (before && after) delta = isInvoice ? (before.val - after.val) : (after.val - before.val);
+    const fullyPaid = isInvoice && after && after.gone;
+    const actuallyApplied = apiOk && (fullyPaid || (delta != null && Math.abs(delta - expected) < 0.05));
 
     let statusHtml, detailExtra = "";
     if (actuallyApplied) {
-      okCount++;
-      verifiedCount++;
-      statusHtml = `<span class="match-pill ok">✓ doorgevoerd + verifieerd</span>`;
-    } else if (apiOk && payedDelta === 0) {
+      okCount++; verifiedCount++;
+      statusHtml = `<span class="match-pill ok">✓ doorgevoerd + verifieerd${fullyPaid ? " (factuur betaald)" : ""}</span>`;
+    } else if (apiOk && delta === 0) {
       failCount++;
-      statusHtml = `<span class="match-pill fail">⚠ API OK maar Betaald NIET gewijzigd</span>`;
-      detailExtra = "Logic4 accepteerde de call maar koppelde geen betaling. Vermoedelijke oorzaak: PaymentMethodId-waarde klopt niet.";
+      statusHtml = `<span class="match-pill fail">⚠ API OK maar stand ongewijzigd</span>`;
+      detailExtra = "Logic4 accepteerde de call maar er veranderde niets — deel dit met Claude (mogelijk BookingId/dagboek).";
     } else if (apiOk) {
       failCount++;
-      statusHtml = `<span class="match-pill fail">⚠ verschil: verwacht +${fmtEur(expectedDelta)}, gemeten +${fmtEur(payedDelta)}</span>`;
+      statusHtml = `<span class="match-pill fail">⚠ verschil: verwacht ${fmtEur(expected)}, gemeten ${delta != null ? fmtEur(delta) : "?"}</span>`;
     } else {
       failCount++;
       statusHtml = `<span class="match-pill fail">✗ API-fout</span>`;
@@ -1387,18 +1447,19 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
     }
 
     applyResults.push({
-      bestelnr: r.bestelnr, orderId: r.match.orderId, bedrag: r.bedrag,
-      ok: actuallyApplied, apiOk, apiError, payedBefore, payedAfter, payedDelta,
+      bestelnr: r.bestelnr, orderId: r.match.orderId, invoiceId: r.match.invoiceId, bedrag: r.bedrag,
+      ok: actuallyApplied, apiOk, apiError,
+      before: before ? before.val : null, after: after ? (after.gone ? 0 : after.val) : null, delta,
       detail: detailExtra,
     });
 
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td class="bestelnr">${escapeHtml(r.bestelnr)}</td>
-      <td class="num">${r.match.orderId}</td>
+      <td class="num">${isInvoice ? r.match.invoiceId : r.match.orderId}</td>
       <td class="num">${fmtEur(r.bedrag)}</td>
-      <td class="num">${before ? fmtEur(payedBefore) : "—"}</td>
-      <td class="num">${after  ? fmtEur(payedAfter)  : "—"}</td>
+      <td class="num">${before ? fmtEur(before.val) : "—"}</td>
+      <td class="num">${after ? (after.gone ? "€ 0,00" : fmtEur(after.val)) : "—"}</td>
       <td>${statusHtml}${detailExtra ? `<div style="font-size:11px;color:var(--muted);margin-top:3px;">${escapeHtml(detailExtra)}</div>` : ""}</td>
     `;
     resultsBody.appendChild(tr);
@@ -1436,12 +1497,12 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
   } else if (verifiedCount > 0) {
     statusEl.className = "status-msg warn";
     statusEl.innerHTML = `<b>⚠ ${verifiedCount} echt verwerkt, ${matched.length - verifiedCount} mogelijk niet.</b><br>
-      Zie 'Betaald vóór/ná' kolommen voor verificatie. Check in Logic4 om zeker te zijn.`;
+      Zie de 'Openstaand vóór/ná' kolommen voor verificatie. Check in Logic4 om zeker te zijn.`;
   } else {
     statusEl.className = "status-msg bad";
     statusEl.innerHTML = `<b>✗ Geen enkele betaling werd verifieerbaar gekoppeld.</b><br>
-      Logic4 accepteerde de API-calls (status OK) maar het 'Betaald'-veld op de orders is niet veranderd.
-      Vermoedelijke oorzaak: de PaymentMethodId in onze body-template is verkeerd voor Bol-betalingen.
+      Logic4 accepteerde de API-calls (status OK) maar het openstaande factuurbedrag daalde niet.
+      Vermoedelijke oorzaak: het BookingId/dagboek voor Bol klopt niet.
       <b>STOP met doorvoeren</b> en deel deze info met Claude voor verdere diagnose.`;
   }
 
