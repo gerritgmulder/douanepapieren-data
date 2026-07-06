@@ -276,6 +276,7 @@
     <div class="fetch-row">
       <input type="text" id="order-input" placeholder="Ordernummer (bv. 3486568)" inputmode="numeric" autocomplete="off">
       <button id="fetch-btn">Haal op uit Logic4</button>
+      <button id="demo-btn" class="hidden" type="button" title="Laad een voorbeeld-order om te laten zien hoe de tool werkt (geen Logic4 nodig)">🎬 Demo</button>
       <span class="status" id="fetch-status"></span>
     </div>
     <p style="color:var(--muted);font-size:12px;margin:10px 0 0">
@@ -1956,6 +1957,69 @@ document.getElementById("fetch-btn").addEventListener("click", fetchOrderFromLog
 document.getElementById("order-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") fetchOrderFromLogic4();
 });
+
+// ============================================================
+// DEMO-modus — alleen zichtbaar voor fonteynbot (Gerrits admin-login).
+// Laadt een realistisch voorbeeld-order zodat je kunt laten zien hoe de tool
+// werkt zonder een actueel Logic4-ordernummer. Geen netwerk, geen KV-schrijf:
+// specs worden alleen in-memory geseed.
+// ============================================================
+function loadDemoOrder() {
+  const status = document.getElementById("fetch-status");
+  const DEMO_SPECS = {
+    "100430": { sku:"SKT335HA", dims:"221 x 231 x 97 cm", gw:420, nw:390, hs:"9019.10.90", origin:"CN" },
+    "100358": { sku:"COV-LEG20", dims:"170 x 170 x 40 cm", gw:95,  nw:82,  hs:"3926.90.97", origin:"CA" },
+    "164025": { sku:"SC-KENAI",  dims:"218 x 160 x 20 cm", gw:22,  nw:18,  hs:"3926.90.97", origin:"CN" },
+    "151950": { sku:"WBP-SPA",   dims:"30 x 20 x 15 cm",   gw:4,   nw:3.5, hs:"3808.94.20", origin:"NL" },
+  };
+  for (const code in DEMO_SPECS) state.userSpecs[code] = { ...DEMO_SPECS[code] };
+
+  state.metadata = {
+    invoiceNumber: "3510276",
+    dateOfOrder: "06-06-2026",
+    eta: "ETA 15/8",
+    debtorNr: "878848794",
+    eoriNr: "US 98-7654321",
+    hsCode: "9019.10.90",
+    shippingMethod: "Sea freight — 40ft container",
+    incoterm: "FOB Rotterdam",
+    paymentMethod: "30% aanbetaling bij order, 70% voor levering",
+    customerName: "Florida Pools and Spas – A-MAC",
+    deliverName: "Florida Pools and Spas – A-MAC",
+    addressBlock: "1420 Celebration Blvd\n34747 Kissimmee, FL\nUnited States",
+    advisor: "Manon",
+    advisorEmail: "manon@fonteyn.nl",
+    customerEmail: "orders@floridapoolsspas.com",
+    _advisorDiag: { level: "ok", steps: ["🎬 DEMO — voorbeeld-order (niet uit Logic4). Adviseur handmatig ingevuld."] },
+  };
+  state.lineItems = [
+    { qty:2, code:"100430", description:"Passion Spa | Renew MM + oak/grey trim", unitPrice:4250, total:8500, service:false },
+    { qty:2, code:"100358", description:"Covana | Legend Cover 20' Max 614 cm",   unitPrice:1890, total:3780, service:false },
+    { qty:2, code:"164025", description:"Spa Cover Kenai, 218x160",                unitPrice:210,  total:420,  service:false },
+    { qty:4, code:"151950", description:"Waterbehandelingspakket spa",             unitPrice:45,   total:180,  service:false },
+    { qty:1, code:"999998", description:"Transport, plaatsen en installeren spa",  unitPrice:0,    total:0,    service:true  },
+  ];
+  state.colliOverride = null;
+  state.bundles = detectBundles(state.lineItems);
+  for (const it of state.lineItems) { if (it.eurUnitPrice == null) it.eurUnitPrice = it.unitPrice; }
+  applyFxRate(state.fxRate);
+  state.rawText = "(🎬 DEMO-order — voorbeeld, niet uit Logic4)";
+  renderAll();
+  if (status) {
+    status.textContent = "🎬 Demo-order geladen — " + state.lineItems.filter(i => !i.dropped).length + " regels.";
+    status.className = "status ok";
+  }
+}
+
+(function initDemoButton() {
+  const email = (localStorage.getItem("fp.email") || "").toLowerCase();
+  const isBot = email === "fonteynbot@fonteyn.nl" || email === "fonteyn.bot" || email === "fonteynbot";
+  const btn = document.getElementById("demo-btn");
+  if (btn && isBot) {
+    btn.classList.remove("hidden");
+    btn.addEventListener("click", loadDemoOrder);
+  }
+})();
 
 // Bij startup: check helper en laad de artikelcodes- en spec-database. Alles
 // parallel zodat een trage helper de UI niet blokkeert.
