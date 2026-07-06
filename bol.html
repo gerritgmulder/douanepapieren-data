@@ -178,6 +178,7 @@
   <h1>Bol.com koppeling</h1>
   <a href="dashboard.html" style="color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px;">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-Bol-factuur met gesimuleerde match (boekt niets)">🎬 Demo</button>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
@@ -1630,6 +1631,80 @@ function truncate(s, n) {
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+
+// ─────────────────────────────────────────────────────────────────
+// 🎬 DEMO — alleen zichtbaar voor fonteynbot. Laadt een voorbeeld-
+// Bol-factuur met gesimuleerde Logic4-match (factuur + openstaand),
+// zodat de hele flow te demonstreren is. De knoppen die écht boeken
+// (match/test/doorvoeren/diagnose) worden in demo-modus uitgeschakeld.
+// Dry-run blijft werken — die laat alleen de payload zien.
+// ─────────────────────────────────────────────────────────────────
+let bolDemoActive = false;
+function loadBolDemo() {
+  bolDemoActive = true;
+  const now = new Date();
+  const daysAgo = (n) => { const d = new Date(now); d.setDate(d.getDate() - n); return d; };
+  const iso = (d) => d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  let ordSeq = 3515600, invSeq = 6629300, debSeq = 878916000;
+  const mk = (dAgo, bestelnr, artikel, bedrag, customer, opts) => {
+    opts = opts || {};
+    const orderId = ordSeq++, debtorId = debSeq++;
+    const r = { type: "verkoop", datum: iso(daysAgo(dAgo)), bestelnr, artikel, bedrag, regelCount: 1 };
+    if (opts.unmatched) { r.match = null; return r; }
+    const paid = !!opts.paid;
+    r.match = {
+      orderId, debtorId, customerName: customer, sourceField: "Referentie", reference: bestelnr,
+      payed: paid ? bedrag : 0, amountIncl: bedrag, isPaid: paid,
+      invoiceId: opts.noInvoice ? null : invSeq++,
+      invoiceOutstanding: opts.noInvoice ? null : (paid ? 0 : bedrag),
+      invoiceTotal: opts.noInvoice ? null : bedrag,
+      invoicePayed: opts.noInvoice ? null : (paid ? bedrag : 0),
+    };
+    return r;
+  };
+  const creditRegels = [
+    mk(2, "C0006DEMO1", "AquaFinesse Filter Cleaner",              24.50,  "Wesolowska"),
+    mk(2, "C0006DEMO2", "Spa Filter S4CH-949/PWW50L/0250",         29.95,  "R. Jansen"),
+    mk(3, "C0006DEMO3", "Platinum AeroCover - Accessoires",        49.90,  "Fam. van Dop"),
+    mk(4, "C0006DEMO4", "Fonteyn | Tuinset La Donna 2.0",          1399.00,"K. de Boer"),
+    mk(5, "C0006DEMO5", "El Fuego | Barbecue Ottawa S",            99.00,  "M. Peeters"),
+    mk(6, "C0006DEMO6", "Ergonomische hoofdsteun rond | Red",      62.00,  "S. Willems", { paid: true }),
+    mk(7, "C0006DEMO7", "Passion Spa Filter C-4950",               55.00,  "T. Visser",  { noInvoice: true }),
+    mk(8, "C0006DEMO8", "Bestway | Flowclear Chloordispenser",     14.95,  "(order nog niet in Logic4)", { unmatched: true }),
+  ];
+  const totCredit = creditRegels.reduce((s, r) => s + r.bedrag, 0);
+  const provisie = Math.round(totCredit * 0.145 * 100) / 100;
+  parsedData = {
+    factuurnr: "3915443099999 (DEMO)", periode: "demo — afgelopen week", verkopernr: "1384835",
+    creditRegels,
+    debetRegels: [
+      { type: "bol-overschrijving", bedrag: Math.round((totCredit - provisie) * 100) / 100, info: "BOL.COM demo-periode", gb: "4999 Verschillenrekening" },
+      { type: "verkoopprovisie",    bedrag: provisie, info: "BOL.COM", gb: "4570 Verkoopprovisie" },
+    ],
+    totals: { credit: totCredit, debet: totCredit },
+  };
+  // Datum-filter resetten zodat de demo-datums de dropdown vullen
+  const sel = document.getElementById("datumFilter");
+  if (sel) { sel.innerHTML = ""; delete sel.dataset.populated; }
+  renderResult(parsedData);
+  // Doorvoer-sectie tonen met match-telling, maar échte acties blokkeren
+  document.getElementById("applySection").classList.remove("hidden");
+  const matched = creditRegels.filter(r => r.match).length;
+  document.getElementById("matchCount").textContent = matched;
+  document.getElementById("totalCount").textContent = creditRegels.length;
+  [["matchBtn","Match"],["test1Btn","Test"],["applyBtn","Doorvoeren"],["diagPayBtn","Diagnose"]].forEach(([id]) => {
+    const b = document.getElementById(id);
+    if (b) { b.disabled = true; b.title = "🎬 Demo-modus — deze actie zou echt naar Logic4 gaan en is daarom uitgeschakeld. Dry-run werkt wél."; }
+  });
+  setStatus("ok", "🎬 Demo — voorbeeld-Bol-factuur geladen met gesimuleerde match (7 van 8 gekoppeld, 1 al betaald, 1 zonder open factuur). Er wordt NIETS geboekt; ververs voor de echte tool.");
+}
+(function initBolDemo(){
+  const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
+  const isBot = email === "fonteynbot@fonteyn.nl" || email === "fonteyn.bot" || email === "fonteynbot";
+  const btn = document.getElementById("demoBtn");
+  if (btn && isBot) { btn.classList.remove("hidden"); btn.addEventListener("click", loadBolDemo); }
+})();
+
 </script>
 
 </body>

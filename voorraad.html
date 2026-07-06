@@ -76,6 +76,7 @@
   <h1>Voorraadbeheer</h1>
   <a class="back" href="dashboard.html">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout hidden" id="demoBtn" type="button" title="Laad voorbeeld-spa-orders om de tegel te demonstreren (slaat niets op)">🎬 Demo</button>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
@@ -448,7 +449,9 @@ async function loadVoorraadState(){
   }catch(e){ console.warn("voorraad-state laden faalde:", e); }
   stateLoaded = true;
 }
+let voorraadDemoActive = false;   // 🎬 demo: nooit naar de gedeelde KV schrijven
 async function saveVoorraadState(){
+  if (voorraadDemoActive) return; // demo blijft in-memory; ververs = echte data
   try{
     await fetch(DATA_STORE_URL, { method:"PUT",
       headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth":DATA_STORE_AUTH },
@@ -1087,6 +1090,59 @@ function renderDealerResv(){
   document.querySelectorAll('.filter-row[data-ov="stock"] input').forEach(i=> i.addEventListener("input", renderStock));
   const dv=document.getElementById("dvSearch"); if(dv) dv.addEventListener("input", renderDealerView);
   loadPipe().then(function(){ renderPipeAll(); renderDealerResv(); });
+})();
+
+
+// ─────────────────────────────────────────────────────────────────
+// 🎬 DEMO — alleen zichtbaar voor fonteynbot. Vult de Ophalen-tab met
+// voorbeeld-spa-orders + de twee overzichten met voorbeeld-reserveringen.
+// Alles in-memory: saveVoorraadState is in demo-modus uitgeschakeld,
+// dus markeren/spelen kan veilig. Verversen = echte data terug.
+// ─────────────────────────────────────────────────────────────────
+function loadVoorraadDemo(){
+  voorraadDemoActive = true;
+  const now = new Date();
+  const iso = (d)=> d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+  const daysAgo = (n)=>{ const d=new Date(now); d.setDate(d.getDate()-n); return d; };
+  let ord = 3515700, deb = 878920000, uid = 2004500;
+  const U = { arno: uid+1, dali: uid+2, chantal: uid+3, bert: uid+4 };
+  advisorMap = { [String(U.arno)]:"Arno", [String(U.dali)]:"Dali", [String(U.chantal)]:"Chantal", [String(U.bert)]:"Bert" };
+  const mkLine = (dAgo, naam, adviseurUid, statusId, model, code, oms, aantal, debtorId) => {
+    const o = ord++;
+    return { lineId: o+"|"+code+"|1", ordernr:o, datum: iso(daysAgo(dAgo)), naam,
+      adviseur: advisorMap[String(adviseurUid)] || ("UserId "+adviseurUid),
+      statusId, status: statusId===1?"Verkooporder":"30% aanbetaald",
+      model, code, omschrijving: oms, aantal, debtorId, userId: adviseurUid };
+  };
+  const D = { spahuis: deb+1, aqua: deb+2, bakker: deb+3, jansen: deb+4 };
+  allLines = [
+    mkLine(0, "Spahuis Nederland",  U.arno,    25, "Renew",     "100430", "Passion Spa | Renew MM + oak/grey trim",          2, D.spahuis),
+    mkLine(0, "Spahuis Nederland",  U.arno,    25, "Soulmate",  "100441", "Passion Spa | Soulmate SW + grey/oak trim",       1, D.spahuis),
+    mkLine(0, "Aqua Pools & Spas",  U.dali,    1,  "Kenai",     "100634", "Grizzly Spas | Kenai Spa | Sterling White",       3, D.aqua),
+    mkLine(0, "Fam. Bakker",        U.chantal, 25, "Happy",     "100515", "Passion Spa | Happy MM + dark grey",              1, D.bakker),
+    mkLine(0, "R. Jansen",          U.bert,    1,  "Vision",    "100702", "Devine | Vision SW + grey",                       1, D.jansen),
+  ];
+  // Klant-soort: 2 al bekend (auto), 2 nog te kiezen — laat precies de flow zien
+  klantType = { [String(D.spahuis)]:"dealer", [String(D.bakker)]:"particulier" };
+  // Overzichten vullen: bestaande demo-reserveringen (in-memory)
+  reserveringen = {};
+  for (const l of allLines){
+    const t = klantType[String(l.debtorId)];
+    if (t) reserveringen[l.lineId] = resvFromLine(l, t);
+  }
+  document.getElementById("dateLabel").textContent = "🎬 demo";
+  document.getElementById("resultSection").classList.remove("hidden");
+  renderAdvisorPanel();
+  renderLines();
+  renderOverviews();
+  setStatus("ok", "🎬 Demo — 5 voorbeeld-spa-regels geladen (2 klanten al gemarkeerd, 2 nog te kiezen). Er wordt NIETS opgeslagen; ververs voor echte data.");
+  document.querySelector(".tabs").scrollIntoView({ behavior:"smooth", block:"start" });
+}
+(function initVoorraadDemo(){
+  const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
+  const isBot = email === "fonteynbot@fonteyn.nl" || email === "fonteyn.bot" || email === "fonteynbot";
+  const btn = document.getElementById("demoBtn");
+  if (btn && isBot) { btn.classList.remove("hidden"); btn.addEventListener("click", loadVoorraadDemo); }
 })();
 
 </script>
