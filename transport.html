@@ -437,6 +437,7 @@
         <div class="desc">Kleinere spullen, ad-hoc.</div>
       </button>
     </div>
+    <button class="cta hidden" id="transportDemoBtn" type="button" style="margin-top:16px;" title="Toon een volle bakwagen met voorbeeld-orders (geen Logic4 nodig)">🎬 Demo — toon een volle bakwagen</button>
   </section>
 
   <!-- ─── STAP 2: ordernummers invoeren ──────────────────── -->
@@ -1339,6 +1340,67 @@ function renderTotals() {
   el("tUnmatched").textContent = unmatched;
   el("planBtn").disabled = orders === 0;
 }
+
+// ──────────────────────────────────────────────────────────────
+// DEMO-modus — alleen zichtbaar voor fonteynbot (Gerrits admin-login).
+// Laadt voorbeeld-orders + toont direct een gevulde bakwagen, zonder Logic4.
+// ──────────────────────────────────────────────────────────────
+function loadTransportDemo() {
+  state.carrier = "own";
+  document.querySelectorAll(".carrier").forEach(c => c.classList.toggle("selected", c.dataset.carrier === "own"));
+  el("step2").classList.remove("hidden");
+  el("step3").classList.remove("hidden");
+  el("totalsPanel").classList.remove("hidden");
+
+  // Box-afmetingen passen in de bakwagen (500×200×250 cm), stapelbaar.
+  const box = (l, w, h, kg, label) => ({ dims: { l, w, h }, weight: kg, label: label || null });
+  const P = (name, boxes) => ({ product: { name, boxes } });
+  function mkOrder(nr, customer, postcode, city, total, lines) {
+    let tb = 0, tv = 0, tk = 0;
+    for (const ln of lines) {
+      if (ln.isService || !ln.match) continue;
+      for (const b of ln.match.product.boxes) {
+        tb += ln.qty;
+        if (b.dims) tv += (b.dims.l * b.dims.w * b.dims.h * ln.qty) / 1e6;
+        if (b.weight) tk += b.weight * ln.qty;
+      }
+    }
+    return { nr, status: 30, total, paid: total, allowed: true, autoSelect: true,
+      customer, postcode, city, address: postcode + " " + city,
+      lines, totalBoxes: tb, totalVolumeM3: tv, totalKg: tk, unmatchedLines: 0 };
+  }
+  state.orders = [
+    mkOrder("3512488", "Spahuis Nederland", "3881 GD", "Putten", 12450, [
+      { qty: 3, isService: false, match: P("Passion Spa | Renew MM", [box(210, 110, 105, 420)]) },
+      { qty: 3, isService: false, match: P("Covana | Legend Cover", [box(180, 90, 30, 45)]) },
+      { qty: 1, isService: false, match: P("Fonteyn | Spa trap", [box(60, 50, 70, 14)]) },
+    ]),
+    mkOrder("3512671", "Aqua Pools & Spas", "6041 TA", "Roermond", 18990, [
+      { qty: 4, isService: false, match: P("Passion Spa | Soulmate SW", [box(210, 110, 105, 430)]) },
+      { qty: 1, isService: false, match: P("Fonteyn | Loungeset Timbre", [box(120, 80, 80, 60), box(120, 80, 45, 30)]) },
+    ]),
+    mkOrder("3512798", "Dansk Spa", "2131 MB", "Hoofddorp", 9750, [
+      { qty: 3, isService: false, match: P("Grizzly | Kenai Spa", [box(205, 110, 100, 410)]) },
+      { qty: 3, isService: false, match: P("Grizzly | Spa Cover Kenai", [box(180, 90, 25, 22)]) },
+    ]),
+    mkOrder("3512883", "Wellness Wereld", "7511 JM", "Enschede", 6400, [
+      { qty: 2, isService: false, match: P("Passion Spa | Happy MM", [box(210, 110, 105, 415)]) },
+      { qty: 1, isService: true, match: null, description: "Transport, plaatsen en installeren" },
+    ]),
+  ];
+  state.selected = new Set(state.orders.map(o => o.nr));
+  renderOrders();
+  renderTotals();
+  setFetchStatus("🎬 Demo — 4 voorbeeld-orders geladen. Scroll naar onderen voor de bakwagen-indeling.", "ok");
+  // Trigger de 3D-indeling (het module-script luistert op planBtn).
+  setTimeout(() => el("planBtn").click(), 60);
+}
+(function initTransportDemo() {
+  const email = (localStorage.getItem("fp.email") || "").toLowerCase();
+  const isBot = email === "fonteynbot@fonteyn.nl" || email === "fonteyn.bot" || email === "fonteynbot";
+  const btn = el("transportDemoBtn");
+  if (btn && isBot) { btn.classList.remove("hidden"); btn.addEventListener("click", loadTransportDemo); }
+})();
 
 </script>
 
