@@ -242,6 +242,7 @@
   <h1>Orderstatus</h1>
   <div class="right">
     <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+    <button class="logout hidden" id="demoBtn" type="button" title="Toon een voorbeeld-dry-run (wijzigt niets in Logic4)">🎬 Demo</button>
     <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
   </div>
 </header>
@@ -812,6 +813,7 @@ document.addEventListener("change", (ev) => {
 
 // ── Doorvoer-actie ──
 async function runApply() {
+  if (window._osDemoActive) { alert("🎬 Demo-modus — doorvoeren is uitgeschakeld (dit zou echte orders wijzigen). Ververs de pagina voor de echte tool."); return; }
   const changes = getSelectedChanges();
   if (changes.length === 0) return;
 
@@ -1052,6 +1054,43 @@ el("logoutBtn").addEventListener("click", async () => {
 });
 
 boot();
+
+// ─────────────────────────────────────────────────────────────────
+// 🎬 DEMO — alleen zichtbaar voor fonteynbot. Toont een voorbeeld-
+// dry-run-resultaat zonder Logic4 aan te raken; Doorvoeren is in
+// demo-modus geblokkeerd (guard in runApply).
+// ─────────────────────────────────────────────────────────────────
+function loadOrderstatusDemo(){
+  window._osDemoActive = true;
+  const now = new Date();
+  const daysAgo = (n)=>{ const d=new Date(now); d.setDate(d.getDate()-n); return d.toISOString(); };
+  let id = 3515800;
+  const mk = (dAgo, customer, total, paid, curId, curLbl, tgtId, tgtLbl) =>
+    ({ id: id++, date: daysAgo(dAgo), customer, total, paid,
+       currentStatusId: curId, currentStatusLabel: curLbl, targetStatusId: tgtId, targetStatusLabel: tgtLbl });
+  const candidates = [
+    mk(1, "Spahuis Nederland",  8450,  8450,  1,  "Verkooporder",    30, "Volledig betaald, vrijgeven leveren"),
+    mk(2, "Fam. Bakker",        3999,  3999,  25, "30% aanbetaald",  30, "Volledig betaald, vrijgeven leveren"),
+    mk(2, "Aqua Pools & Spas",  12600, 12600, 1,  "Verkooporder",    30, "Volledig betaald, vrijgeven leveren"),
+    mk(3, "R. Jansen",          5499,  1650,  1,  "Verkooporder",    25, "30% aanbetaald"),
+    mk(4, "Wellness Wereld",    2299,  2299,  25, "30% aanbetaald",  30, "Volledig betaald, vrijgeven leveren"),
+    mk(5, "M. Peeters",         6799,  2040,  1,  "Verkooporder",    25, "30% aanbetaald"),
+  ];
+  renderResults(1247, candidates, 41646);
+  // Doorvoeren blokkeren (guard zit ook in runApply zelf)
+  const btn = el("btnApply");
+  if (btn) { btn.disabled = true; btn.title = "🎬 Demo-modus — doorvoeren is uitgeschakeld."; btn.textContent = "Doorvoeren (demo)"; }
+  const bar = el("statusBar");
+  if (bar) bar.textContent = "🎬 Demo — voorbeeld-dry-run: 1.247 orders gecheckt, 6 kandidaat-wijzigingen. Er wordt NIETS gewijzigd; ververs voor de echte tool.";
+  el("resultsPanel").scrollIntoView({ behavior:"smooth", block:"start" });
+}
+(function initOsDemo(){
+  const email = (localStorage.getItem("fp.email") || "").toLowerCase();
+  const isBot = email === "fonteynbot@fonteyn.nl" || email === "fonteyn.bot" || email === "fonteynbot";
+  const btn = el("demoBtn");
+  if (btn && isBot) { btn.classList.remove("hidden"); btn.addEventListener("click", loadOrderstatusDemo); }
+})();
+
 </script>
 </body>
 </html>
