@@ -403,6 +403,7 @@
   <h1>Transport laden</h1>
   <div class="right">
     <div class="user-chip">Ingelogd als <b id="hdr-user">—</b></div>
+    <button class="logout hidden" id="demoBtn" type="button" title="Toon een volle bakwagen met voorbeeld-orders (geen Logic4 nodig)">🎬 Demo</button>
     <button class="logout" id="hdr-logout" type="button">Uitloggen</button>
   </div>
 </header>
@@ -437,7 +438,6 @@
         <div class="desc">Kleinere spullen, ad-hoc.</div>
       </button>
     </div>
-    <button class="cta hidden" id="transportDemoBtn" type="button" style="margin-top:16px;" title="Toon een volle bakwagen met voorbeeld-orders (geen Logic4 nodig)">🎬 Demo — toon een volle bakwagen</button>
   </section>
 
   <!-- ─── STAP 2: ordernummers invoeren ──────────────────── -->
@@ -1398,7 +1398,7 @@ function loadTransportDemo() {
 (function initTransportDemo() {
   const email = (localStorage.getItem("fp.email") || "").toLowerCase();
   const isBot = email === "fonteynbot@fonteyn.nl" || email === "fonteyn.bot" || email === "fonteynbot";
-  const btn = el("transportDemoBtn");
+  const btn = el("demoBtn");
   if (btn && isBot) { btn.classList.remove("hidden"); btn.addEventListener("click", loadTransportDemo); }
 })();
 

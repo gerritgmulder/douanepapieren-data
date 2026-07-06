@@ -90,6 +90,7 @@
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
   <h1>Retouren</h1>
   <a href="dashboard.html">← Dashboard</a>
+  <button class="logout hidden" id="demoBtn" type="button" title="Toon voorbeeld-retouren met statistieken (niets wordt opgeslagen)">🎬 Demo</button>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
@@ -277,7 +278,9 @@ async function loadStore() {
     store = (j && j.records) ? j : { records: {} };
   } catch (e) { console.warn("KV load:", e.message); store = { records:{} }; }
 }
+let demoActive = false;   // 🎬 demo-modus: NOOIT naar de gedeelde KV schrijven
 async function saveStore() {
+  if (demoActive) return;  // demo-data blijft in-memory; refresh = echte data terug
   const r = await fetch(DATA_STORE_URL, {
     method:"PUT", headers:{ "Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH }, body: JSON.stringify(store)
   });
@@ -694,6 +697,47 @@ el("mSave").addEventListener("click", async () => {
 });
 
 // ── Init ──
+// ─────────────────────────────────────────────────────────────────
+// 🎬 DEMO — alleen zichtbaar voor fonteynbot. Vult de registratie met
+// voorbeeld-retouren (in-memory; saveStore is uitgeschakeld) zodat je de
+// tabel, het cirkeldiagram en de periode-statistieken kunt demonstreren.
+// ─────────────────────────────────────────────────────────────────
+function loadRetourenDemo() {
+  demoActive = true;
+  const now = new Date();
+  const daysAgo = (n) => { const d = new Date(now); d.setDate(d.getDate() - n); return d; };
+  const mk = (nr, dAgo, advisor, product, reason, location, expl, amount, method, customer) => {
+    const d = daysAgo(dAgo);
+    return { orderNr: nr, date: isoDate(d), week: isoWeek(d), advisor, product, reason, location,
+      explanation: expl, amount, method, customer, source: "demo", addedBy: "demo", addedAt: new Date().toISOString() };
+  };
+  store = { records: {} };
+  const demo = [
+    mk("3515102", 2,  "Arno",    "Passion Spa | Renew MM",            "Transportschade", "Derving",       "Zijpaneel beschadigd bij levering", -4250, "Transport distributie - Groot", "Fam. Bakker"),
+    mk("3515088", 3,  "Dali",    "Grizzly | Kenai Spa",               "Fout klant",      "Voorraad",      "Verkeerde kleur besteld, klant wil Sterling White", 0, "Transport distributie - Groot", "Spahuis Nederland"),
+    mk("3514961", 5,  "Chantal", "Fonteyn | Timbre Loungeset",        "Productfout",     "Outlet",        "Naad kussen los — fabricagefout", -1899, "Fonteyn Bezorgservice Meubelen", "J. van Dijk"),
+    mk("3514877", 8,  "Arno",    "Covana | Legend Cover",             "Nalevering",      "Voorraad",      "Cover ontbrak in eerste levering", 0, "DHL 0-35KG", "Aqua Pools & Spas"),
+    mk("3514790", 11, "Bert",    "Passion Spa | Soulmate SW",         "Reparatie",       "Showroommodel", "Jetpomp vervangen onder garantie", 0, "Transport distributie - Groot", "Wellness Wereld"),
+    mk("3514615", 14, "Yves",    "Fonteyn | Bijzettafel U Aluminium", "Fout adviseur",   "Voorraad",      "Verkeerd artikel op de order gezet", -79, "DHL 0-35KG", "M. Peeters"),
+    mk("3514402", 18, "Dali",    "Spa Filter S4CH-949",               "Klacht",          "Derving",       "Filter na 2 weken verstopt, klant ontevreden", -29.95, "DHL 0-35KG", "R. Jansen"),
+    mk("3514166", 22, "Chantal", "Passion Spa | Happy MM",            "Transportschade", "Outlet",        "Hoek cabinet ingedeukt in container", -3999, "Transport distributie - Groot", "Dansk Spa"),
+    mk("3513954", 26, "Arno",    "AquaFinesse Filter Cleaner",        "Fout klant",      "Voorraad",      "Dubbel besteld door klant", -24.5, "DHL 0-35KG", "K. de Boer"),
+    mk("3513701", 33, "Mario",   "Tenerife Superior White",           "Transportschade", "Derving",       "Glasvezel schade zichtbaar bij uitpakken", -5499, "Transport distributie - Groot", "Saunas de Portugal"),
+  ];
+  for (const r of demo) store.records[r.orderNr] = r;
+  period = "year";
+  el("periodSeg").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.p === "year"));
+  renderRegister();
+  setFetch("ok", "🎬 Demo — 10 voorbeeld-retouren geladen (wordt NIET opgeslagen; ververs voor echte data).");
+  el("regTable").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+(function initDemoButton(){
+  const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
+  const isBot = email === "fonteynbot@fonteyn.nl" || email === "fonteyn.bot" || email === "fonteynbot";
+  const btn = el("demoBtn");
+  if (btn && isBot) { btn.classList.remove("hidden"); btn.addEventListener("click", loadRetourenDemo); }
+})();
+
 (async function init(){
   const today = isoDate(new Date());
   el("dateFrom").value = today; el("dateTo").value = today;

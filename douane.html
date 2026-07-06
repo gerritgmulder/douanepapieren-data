@@ -265,6 +265,7 @@
   </span>
   <div class="user-chip">
     <span class="u">Ingelogd als <b id="hdr-user">—</b></span>
+    <button type="button" class="logout hidden" id="demoBtn" title="Laad een voorbeeld-order om de tool te demonstreren (geen Logic4 nodig)">🎬 Demo</button>
     <button type="button" class="logout" id="hdr-logout">Uitloggen</button>
   </div>
 </header>
@@ -276,7 +277,6 @@
     <div class="fetch-row">
       <input type="text" id="order-input" placeholder="Ordernummer (bv. 3486568)" inputmode="numeric" autocomplete="off">
       <button id="fetch-btn">Haal op uit Logic4</button>
-      <button id="demo-btn" class="hidden" type="button" title="Laad een voorbeeld-order om te laten zien hoe de tool werkt (geen Logic4 nodig)">🎬 Demo</button>
       <span class="status" id="fetch-status"></span>
     </div>
     <p style="color:var(--muted);font-size:12px;margin:10px 0 0">
@@ -2014,7 +2014,7 @@ function loadDemoOrder() {
 (function initDemoButton() {
   const email = (localStorage.getItem("fp.email") || "").toLowerCase();
   const isBot = email === "fonteynbot@fonteyn.nl" || email === "fonteyn.bot" || email === "fonteynbot";
-  const btn = document.getElementById("demo-btn");
+  const btn = document.getElementById("demoBtn");
   if (btn && isBot) {
     btn.classList.remove("hidden");
     btn.addEventListener("click", loadDemoOrder);
