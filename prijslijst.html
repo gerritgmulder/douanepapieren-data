@@ -182,6 +182,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
   </div>
   <div class="user">
     <span id="userEmail">—</span>
+    <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-prijslijst (geen leveranciers-PDF nodig)">🎬 Demo</button>
     <button class="logout" id="hdr-logout">Uitloggen</button>
   </div>
 </header>
@@ -1094,6 +1095,37 @@ function truncate(s, maxW, font, size) {
   }
   return s + "…";
 }
+
+// ─── 🎬 DEMO — alleen zichtbaar voor fonteynbot ─────────────────────
+// Laadt voorbeeld-producten (invoice-formaat) zodat de prijslijst-flow
+// (multiplier, EUR-afronding, preview, PDF-export) te demonstreren is
+// zonder leveranciers-PDF. Foto's ontbreken (photoCanvas: null) — de
+// preview toont dan een leeg vak, net als bij een PDF zonder plaatjes.
+function loadPrijslijstDemo() {
+  state.format = "invoice";
+  state.pages = [];
+  const mk = (model, desc, size, usd, specs) =>
+    ({ model, desc, size, specs: specs || [], usd, eur: 0, eurOverride: null, photoCanvas: null, sourcePageIndex: 0 });
+  state.products = [
+    mk("Renew MM",        "Passion Spa | oak/grey trim",          "200 x 200 x 90 cm",  4290, ["5 zitplaatsen + 1 ligplaats", "45 jets", "Balboa besturing"]),
+    mk("Soulmate SW",     "Passion Spa | grey/oak trim",          "215 x 215 x 95 cm",  4980, ["6 zitplaatsen", "54 jets", "WiFi-module"]),
+    mk("Pleasure SW",     "Passion Spa | Sterling White",         "200 x 200 x 92 cm",  3850, ["5 zitplaatsen", "40 jets"]),
+    mk("Kenai SW",        "Grizzly Spas | Sterling White w/ Grey","208 x 208 x 96 cm",  4460, ["6 zitplaatsen", "48 jets", "LED-verlichting"]),
+    mk("Activity 1",      "Swimspa | grey/oak",                   "400 x 230 x 150 cm", 10950, ["Zwemjets 3x", "Tegenstroom"]),
+    mk("Delight MM",      "Passion Spa | Mystic Mountain",        "185 x 185 x 90 cm",  3390, ["4 zitplaatsen", "32 jets"]),
+  ];
+  applyMultiplier();
+  renderPreview();
+  showStatus($("dropStatus"), "🎬 Demo — 6 voorbeeld-producten geladen. Pas de multiplier aan en genereer de prijslijst-PDF om de flow te tonen. Ververs voor de echte tool.", "ok");
+  $("previewCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+(function initPrijslijstDemo(){
+  const email = (localStorage.getItem("fp.email") || "").toLowerCase();
+  const isBot = email === "fonteynbot@fonteyn.nl" || email === "fonteyn.bot" || email === "fonteynbot";
+  const btn = $("demoBtn");
+  if (btn && isBot) { btn.classList.remove("hidden"); btn.addEventListener("click", loadPrijslijstDemo); }
+})();
+
 </script>
 </body>
 </html>

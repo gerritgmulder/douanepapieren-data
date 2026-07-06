@@ -188,6 +188,7 @@ input.klantcode:focus { outline: none; border-color: var(--fonteyn-green); }
   </div>
   <div class="user">
     <span id="userEmail">—</span>
+    <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-bankafschrift met matches (geen MT940/Logic4 nodig)">🎬 Demo</button>
     <button class="logout" id="hdr-logout">Uitloggen</button>
   </div>
 </header>
@@ -665,6 +666,44 @@ $("resetBtn").addEventListener("click", () => {
   $("actionStatus").innerHTML = "";
   fileInput.value = "";
 });
+
+// ─── 🎬 DEMO — alleen zichtbaar voor fonteynbot ─────────────────────
+// Laadt een voorbeeld-bankafschrift met gesimuleerde Logic4-matches,
+// zodat de hele flow (parse → match-voorstel → statistieken) te tonen
+// is zonder MT940-bestand of Logic4. Fase 1 is sowieso alleen preview,
+// dus er kan niets per ongeluk geboekt worden.
+function loadBankDemo() {
+  const now = new Date();
+  const d = (n) => { const x = new Date(now); x.setDate(x.getDate() - n); return x.toISOString().slice(0, 10); };
+  const M = (orderId, companyName, totalIncl, amountMatch) =>
+    ({ status: amountMatch ? "match" : "match-amount-mismatch", candidates: [String(orderId)],
+       best: { orderId: String(orderId), debtorId: "8789" + orderId % 10000, companyName, totalIncl, amountMatch },
+       all: [] });
+  state.fileName = "demo-afschrift.mt940";
+  state.iban = "NL12RABO0123456789";
+  state.statementNr = "184/1";
+  state.openingBalance = { amount: 48210.55 };
+  state.closingBalance = { amount: 71354.20 };
+  state.transactions = [
+    { date: d(0), amount: 8450.00, currency: "EUR", kind: "direct", description: "SPAHUIS NEDERLAND FACTUUR 3515801 SPA RENEW",          descRaw: "", match: M(3515801, "Spahuis Nederland", 8450.00, true) },
+    { date: d(0), amount: 1650.00, currency: "EUR", kind: "direct", description: "R JANSEN AANBETALING ORDER 3515804",                   descRaw: "", match: M(3515804, "R. Jansen", 5499.00, false) },
+    { date: d(1), amount: 12600.00, currency: "EUR", kind: "direct", description: "AQUA POOLS AND SPAS BETALING 3515803",                descRaw: "", match: M(3515803, "Aqua Pools & Spas", 12600.00, true) },
+    { date: d(1), amount: 6118.40, currency: "EUR", kind: "mollie", description: "MOLLIE BV BATCH 2026-07 WEBSHOP",                      descRaw: "", match: null },
+    { date: d(2), amount: 2299.00, currency: "EUR", kind: "direct", description: "WELLNESS WERELD FACT 3515805 LOUNGESET",               descRaw: "", match: M(3515805, "Wellness Wereld", 2299.00, true) },
+    { date: d(2), amount: 540.75,  currency: "EUR", kind: "direct", description: "OVERBOEKING ZONDER KENMERK",                           descRaw: "", match: { status: "no-candidates", candidates: [] } },
+    { date: d(3), amount: 3120.10, currency: "EUR", kind: "paynl",  description: "PAY.NL UITBETALING WEEK 27",                            descRaw: "", match: null },
+  ];
+  renderResults();
+  showStatus($("dropStatus"), "🎬 Demo — voorbeeld-afschrift met 7 betalingen (3 match, 1 bedrag-mismatch, 1 zonder kenmerk, 2 PSP). Niets wordt geboekt; ververs voor de echte tool.", "ok");
+  $("resultCard").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+(function initBankDemo(){
+  const email = (localStorage.getItem("fp.email") || "").toLowerCase();
+  const isBot = email === "fonteynbot@fonteyn.nl" || email === "fonteyn.bot" || email === "fonteynbot";
+  const btn = $("demoBtn");
+  if (btn && isBot) { btn.classList.remove("hidden"); btn.addEventListener("click", loadBankDemo); }
+})();
+
 </script>
 </body>
 </html>
