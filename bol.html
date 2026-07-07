@@ -183,7 +183,7 @@
 
 <header>
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
-  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07f</span></h1>
+  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07g</span></h1>
   <a href="dashboard.html" style="color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px;">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
   <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-Bol-factuur met gesimuleerde match (boekt niets)">🎬 Demo</button>
@@ -687,8 +687,17 @@ function renderResult(data) {
           : `<span class="match-pill ${r.bookResult.skipped ? "todo" : "fail"}" title="${escapeHtml(r.bookResult.detail || "")}">${r.bookResult.skipped ? "⏭ al betaald" : "✗ fout bij boeken"}</span>`;
         infoExtra = ` — ${escapeHtml(r.bookResult.detail || "")}`;
       } else if (m.invoiceId == null) {
-        statusPill = `<span class="match-pill todo" title="Geen openstaande factuur voor deze debiteur">geen open factuur</span>`;
-        infoExtra = ` — order ${m.orderId} (nog geen/gesloten factuur)`;
+        // Geen openstaande factuur — twee smaken. Als de ORDER al (genoeg)
+        // Betaald toont of er betalingen op staan, is de factuur gesloten
+        // omdat 'ie betaald is → groen. Anders is er (nog) geen factuur.
+        const orderPaid = (Number(r.bedrag) > 0.01 && m.payed >= Number(r.bedrag) - 0.01) || (m.paymentsCount > 0);
+        if (orderPaid) {
+          statusPill = `<span class="match-pill ok" title="Order ${m.orderId}: Betaald ${fmtEur(m.payed)}${m.paymentsCount ? " (" + m.paymentsCount + " betaling(en))" : ""} — factuur gesloten en uit de open-lijst">✓ al betaald</span>`;
+          infoExtra = ` — order ${m.orderId}, betaald ${fmtEur(m.payed)} (factuur gesloten)`;
+        } else {
+          statusPill = `<span class="match-pill todo" title="Geen openstaande factuur én geen betaling op de order — waarschijnlijk nog niet afgeboekt naar een factuur">nog niet gefactureerd</span>`;
+          infoExtra = ` — order ${m.orderId} (geen factuur, geen betaling geregistreerd)`;
+        }
       } else if (amountToBook(r) < 0.01) {
         statusPill = `<span class="match-pill ok" title="Factuur ${m.invoiceId} — openstaand ${fmtEur(m.invoiceOutstanding||0)}">✓ al betaald</span>`;
         infoExtra = ` — factuur ${m.invoiceId}, openstaand ${fmtEur(m.invoiceOutstanding||0)}`;
@@ -942,12 +951,16 @@ async function linkSingleRow(bestelnr, orderNrRaw) {
       orderId: o.Id, debtorId: o.DebtorId, customerName: name,
       sourceField: "handmatig gekoppeld", reference: o.Reference,
       payed: Number(totals.Calc_TotalPayed) || 0, amountIncl: amt, isPaid: !!totals.IsPaid,
+      paymentsCount: Array.isArray(o.Payments) ? o.Payments.length : 0,
       invoiceId: invoiceId, invoiceOutstanding: invoiceOutstanding,
       invoiceTotal: invoiceTotal, invoicePayed: invoicePayed,
     };
     renderResult(parsedData);
     if (invoiceId == null) {
-      alert("Gekoppeld aan order " + o.Id + " (" + name + "), maar deze klant heeft geen openstaande factuur — al betaald óf nog niet afgeboekt naar factuur. Boeken kan daarom (nog) niet.");
+      const paidSignal = (Number(totals.Calc_TotalPayed) || 0) >= Number(r.bedrag) - 0.01 || (Array.isArray(o.Payments) && o.Payments.length > 0);
+      alert(paidSignal
+        ? "Gekoppeld aan order " + o.Id + " (" + name + ") — deze is al betaald (factuur gesloten). Er hoeft niets geboekt te worden."
+        : "Gekoppeld aan order " + o.Id + " (" + name + "), maar er is nog geen factuur en geen betaling — waarschijnlijk nog niet afgeboekt. Boeken kan pas als de factuur bestaat.");
     }
   } catch (e) {
     alert("Koppelen faalde: " + e.message);
@@ -1218,6 +1231,7 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
           payed: Number(totals.Calc_TotalPayed) || 0,
           amountIncl: Number(totals.AmountIncl) || 0,
           isPaid: !!totals.IsPaid,
+          paymentsCount: Array.isArray(hit.Payments) ? hit.Payments.length : 0,
           invoiceId: invoiceId,
           invoiceOutstanding: invoiceOutstanding,
           invoiceTotal: invoiceTotal,
