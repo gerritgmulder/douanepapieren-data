@@ -206,7 +206,7 @@
 
 <header>
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
-  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07j</span></h1>
+  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07k</span></h1>
   <a href="dashboard.html" style="color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px;">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
   <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-Bol-factuur met gesimuleerde match (boekt niets)">🎬 Demo</button>
@@ -474,6 +474,18 @@ document.getElementById("scrollTopBtn").addEventListener("click", () =>
   window.scrollTo({ top: 0, behavior: "smooth" }));
 document.getElementById("scrollBottomBtn").addEventListener("click", () =>
   window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }));
+
+// Vangnet: een fout in een async-handler mag NOOIT meer stilletjes sterven
+// (zo bleef de Doorvoeren-knop 'doen niks' door de niet-ondersteunde prompt()).
+// Elke onverwachte fout wordt nu als rode toast getoond.
+window.addEventListener("unhandledrejection", (e) => {
+  const msg = (e && e.reason && (e.reason.message || String(e.reason))) || "onbekende fout";
+  console.error("[bol] onverwachte fout:", e.reason);
+  showToast("✗ Onverwachte fout: " + escapeHtml(msg), "bad", 8000);
+});
+window.addEventListener("error", (e) => {
+  if (e && e.message) showToast("✗ Fout: " + escapeHtml(e.message), "bad", 8000);
+});
 
 // State na parsing — bewaar voor download
 let parsedData = null;
@@ -1796,11 +1808,18 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
     `Weet je het zeker?`
   );
   if (!confirm1) return;
-  const confirm2 = prompt(
-    `Bevestig nog één keer — typ het woord DOORVOEREN (in hoofdletters) om te starten:`
+  // LET OP: window.prompt() bestaat NIET in Electron (gooit een fout →
+  // de handler stierf stilletjes na de eerste popup). Daarom een tweede
+  // confirm i.p.v. het intypen van 'DOORVOEREN'. Veilig genoeg: de verse
+  // al-betaald-check per regel voorkomt sowieso dubbele boekingen.
+  const confirm2 = confirm(
+    `Laatste check ✋\n\n` +
+    `${matched.length} betalingen (${fmtEur(totaal)}) worden NU in Logic4 geboekt, ` +
+    `elk met een eigen al-betaald-controle vooraf.\n\n` +
+    `Klik OK om echt te starten.`
   );
-  if (confirm2 !== "DOORVOEREN") {
-    alert("Geannuleerd.");
+  if (!confirm2) {
+    showToast("Geannuleerd — er is niets geboekt.", "warn");
     return;
   }
 

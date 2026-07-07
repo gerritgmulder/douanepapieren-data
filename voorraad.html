@@ -1060,8 +1060,29 @@ function renderDealerView(){
   document.getElementById("dvCards").querySelectorAll(".dv-resv").forEach(b=> b.addEventListener("click", function(){ dealerReserve(b.dataset.model); }));
   renderDealerResv();
 }
+// LET OP: window.prompt() bestaat niet in Electron (gooit een fout) —
+// daarom een eigen mini-dialoog met invoerveld.
+function askText(vraag){
+  return new Promise(function(resolve){
+    const ov=document.createElement("div");
+    ov.style.cssText="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px";
+    ov.innerHTML="<div style='background:#fff;border-radius:12px;padding:22px 24px;max-width:420px;width:100%;font-family:inherit'>"+
+      "<div style='font-weight:600;color:var(--fonteyn-green);margin-bottom:10px'>"+esc(vraag)+"</div>"+
+      "<input id='askTextInp' style='width:100%;border:1px solid var(--border);border-radius:6px;padding:9px 10px;font:inherit'>"+
+      "<div style='display:flex;gap:10px;justify-content:flex-end;margin-top:14px'>"+
+      "<button id='askTextCancel' class='rmv' style='padding:8px 14px'>Annuleren</button>"+
+      "<button id='askTextOk' class='primary' style='padding:8px 16px'>OK</button></div></div>";
+    document.body.appendChild(ov);
+    const inp=ov.querySelector("#askTextInp");
+    const done=(val)=>{ ov.remove(); resolve(val); };
+    ov.querySelector("#askTextOk").addEventListener("click", ()=>done(inp.value));
+    ov.querySelector("#askTextCancel").addEventListener("click", ()=>done(null));
+    inp.addEventListener("keydown", (e)=>{ if(e.key==="Enter") done(inp.value); if(e.key==="Escape") done(null); });
+    setTimeout(()=>inp.focus(), 50);
+  });
+}
 async function dealerReserve(model){
-  const dealer=prompt("Reserveren (concept) — "+model+"\n\nNaam dealer/klant:");
+  const dealer=await askText("Reserveren (concept) — "+model+" · Naam dealer/klant:");
   if(!dealer || !dealer.trim()) return;
   dealerReservations.push({id:newId(), model:model, dealer:dealer.trim(), date:isoLocal(new Date())});
   await savePipe(); renderDealerResv();
