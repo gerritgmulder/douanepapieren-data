@@ -1248,6 +1248,31 @@ async function readInvoiceState(debtorId, invoiceId) {
   } catch (e) { return null; }
 }
 
+// ─── Verse "al betaald?"-check, VLAK VÓÓR elke boeking ───────────────
+// De match-gegevens kunnen verouderd zijn (Osman boekte intussen, of er is
+// al eerder via de tegel geboekt). Zonder deze check ontstaat een DUBBELE
+// betaling. We checken twee dingen live:
+//   1. Staat de ORDER al op (voldoende) Betaald? → overslaan.
+//   2. Is de FACTUUR nog open? Zo ja: ververs het openstaande bedrag zodat
+//      we nooit meer boeken dan er werkelijk openstaat.
+async function freshPaidCheck(r) {
+  const m = r.match;
+  const o = await readOrderPayed(m.orderId);
+  if (o && (o.isPaid || o.payed >= Number(r.bedrag) - 0.01)) {
+    return { skip: true, reason: "order staat al op Betaald (" + fmtEur(o.payed) + ")" };
+  }
+  if (m.invoiceId != null) {
+    const s = await readInvoiceState(m.debtorId, m.invoiceId);
+    if (s) {
+      if (s.gone || s.outstanding < 0.01) {
+        return { skip: true, reason: "factuur " + m.invoiceId + " is al volledig betaald" };
+      }
+      m.invoiceOutstanding = s.outstanding;   // vers bedrag → amountToBook klopt weer
+    }
+  }
+  return { skip: false };
+}
+
 // TEST OP 1 ORDER — boekt precies één betaling en meet of Betaald beweegt.
 // Bedoeld om de body/veldnamen te verifiëren vóór een batch van honderden.
 document.getElementById("test1Btn").addEventListener("click", async () => {
@@ -1262,7 +1287,6 @@ document.getElementById("test1Btn").addEventListener("click", async () => {
     return;
   }
   const boekDatum = document.getElementById("boekDatum").value;
-  const body = buildPaymentBody(r, boekDatum);
   const factuur = r.match.invoiceId;
   const ok = confirm(
     "TEST op 1 order.\n\n" +
@@ -1278,9 +1302,22 @@ document.getElementById("test1Btn").addEventListener("click", async () => {
   btn.disabled = true;
   statusEl.className = "status-msg";
   try {
+    // Verse controle: is deze order/factuur intussen al betaald? Dan NIET
+    // nog een keer boeken (voorkomt dubbele betalingen).
+    statusEl.textContent = "Controleren of er al betaald is…";
+    const fresh = await freshPaidCheck(r);
+    if (fresh.skip) {
+      statusEl.className = "status-msg warn";
+      statusEl.innerHTML = "<b>⏭ Niet geboekt — al betaald.</b><br>" + escapeHtml(fresh.reason) +
+        ". Er is géén betaling toegevoegd (dat zou een dubbele boeking geven).";
+      return;
+    }
     // Meet het openstaande factuurbedrag vóór/ná — dat is wat moet dalen.
     statusEl.textContent = "Openstaand bedrag vóór meten…";
     const before = factuur != null ? await readInvoiceState(r.match.debtorId, factuur) : null;
+    // Body ná de verse check bouwen: amountToBook gebruikt het zojuist
+    // ververste openstaande bedrag (nooit meer boeken dan er open staat).
+    const body = buildPaymentBody(r, boekDatum);
     statusEl.textContent = "AddPayment versturen…";
     let apiErr = null;
     try { await logic4Call("/v3/Orders/AddPayment", body); }
@@ -1402,18 +1439,44 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
   }
 
   const boekDatum = document.getElementById("boekDatum").value;
-  let okCount = 0, failCount = 0, verifiedCount = 0;
+  let okCount = 0, failCount = 0, verifiedCount = 0, skipCount = 0;
   const applyResults = [];
 
   for (let i = 0; i < matched.length; i++) {
     const r = matched[i];
     const isInvoice = r.match.invoiceId != null;
     const doel = isInvoice ? ("factuur " + r.match.invoiceId) : ("order " + r.match.orderId);
-    statusEl.textContent = `${i + 1}/${matched.length}: ${r.bestelnr} → ${doel} — vóór-meting…`;
 
+    // Verse "al betaald?"-check vlak vóór het boeken — de match-gegevens
+    // kunnen verouderd zijn. Al betaald → overslaan (geen dubbele boeking).
+    statusEl.textContent = `${i + 1}/${matched.length}: ${r.bestelnr} → controleren of al betaald…`;
+    const fresh = await freshPaidCheck(r);
+    if (fresh.skip) {
+      skipCount++;
+      applyResults.push({
+        bestelnr: r.bestelnr, orderId: r.match.orderId, invoiceId: r.match.invoiceId, bedrag: r.bedrag,
+        ok: false, skipped: true, apiOk: true, apiError: null, before: null, after: null, delta: 0,
+        detail: fresh.reason,
+      });
+      const trSkip = document.createElement("tr");
+      trSkip.innerHTML = `
+        <td class="bestelnr">${escapeHtml(r.bestelnr)}</td>
+        <td class="num">${isInvoice ? r.match.invoiceId : r.match.orderId}</td>
+        <td class="num">${fmtEur(r.bedrag)}</td>
+        <td class="num">—</td>
+        <td class="num">—</td>
+        <td><span class="match-pill todo">⏭ overgeslagen — al betaald</span><div style="font-size:11px;color:var(--muted);margin-top:3px;">${escapeHtml(fresh.reason)}</div></td>
+      `;
+      resultsBody.appendChild(trSkip);
+      continue;
+    }
+
+    statusEl.textContent = `${i + 1}/${matched.length}: ${r.bestelnr} → ${doel} — vóór-meting…`;
     const before = await measureState(r);
 
     statusEl.textContent = `${i + 1}/${matched.length}: ${r.bestelnr} → AddPayment…`;
+    // Body ná de verse check: amountToBook rekent met het ververste
+    // openstaande bedrag, dus nooit meer boeken dan er open staat.
     const body = buildPaymentBody(r, boekDatum);
     let apiError = null;
     try { await logic4Call("/v3/Orders/AddPayment", body); }
@@ -1481,6 +1544,7 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
         boekDatum,
         ok: okCount,
         fail: failCount,
+        skipped: skipCount,
         total: matched.length,
         results: applyResults,
       })
@@ -1489,16 +1553,21 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
     console.warn("[bol] apply-log faalde:", logErr.message);
   }
 
-  if (failCount === 0 && verifiedCount === matched.length) {
+  const skipNote = skipCount > 0 ? `<br>⏭ ${skipCount} regel(s) overgeslagen omdat ze al betaald waren (geen dubbele boeking gemaakt).` : "";
+  if (failCount === 0 && verifiedCount === matched.length - skipCount) {
     statusEl.className = "status-msg ok";
-    statusEl.innerHTML = `<b>✓ Klaar — alle ${verifiedCount} betalingen succesvol gekoppeld én verifieerd in Logic4.</b><br>
+    statusEl.innerHTML = `<b>✓ Klaar — ${verifiedCount} betaling(en) succesvol gekoppeld én verifieerd in Logic4.</b>${skipNote}<br>
       Vergeet niet om in Logic4 zelf nog handmatig de 2 debet-regels toe te voegen:
       <br>1. Verkoopprovisie ${fmtEur(parsedData.debetRegels.find(d => d.type === "verkoopprovisie").bedrag)} → 4570 Verkoopprovisie
       <br>2. Bol-overschrijving ${fmtEur(parsedData.debetRegels.find(d => d.type === "bol-overschrijving").bedrag)} → 4999 Verschillenrekening`;
   } else if (verifiedCount > 0) {
     statusEl.className = "status-msg warn";
-    statusEl.innerHTML = `<b>⚠ ${verifiedCount} echt verwerkt, ${matched.length - verifiedCount} mogelijk niet.</b><br>
+    statusEl.innerHTML = `<b>⚠ ${verifiedCount} echt verwerkt, ${matched.length - skipCount - verifiedCount} mogelijk niet.</b>${skipNote}<br>
       Zie de 'Openstaand vóór/ná' kolommen voor verificatie. Check in Logic4 om zeker te zijn.`;
+  } else if (skipCount === matched.length) {
+    statusEl.className = "status-msg warn";
+    statusEl.innerHTML = `<b>⏭ Alle ${skipCount} regels overgeslagen — ze waren al betaald.</b><br>
+      Er is niets geboekt (dat zouden dubbele betalingen zijn geweest).`;
   } else {
     statusEl.className = "status-msg bad";
     statusEl.innerHTML = `<b>✗ Geen enkele betaling werd verifieerbaar gekoppeld.</b><br>
@@ -1512,7 +1581,7 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
   // - Wat er technisch is gebeurd
   // - Hoe je 't kan verifiëren in Logic4
   // - Wat de volgende stappen zijn
-  showAfterApplyExplanation(applyResults, verifiedCount, matched.length, parsedData);
+  showAfterApplyExplanation(applyResults, verifiedCount, matched.length - skipCount, parsedData);
 
   btn.disabled = true;  // Voorkomen dubbel-doorvoeren
   dryBtn.disabled = false;
