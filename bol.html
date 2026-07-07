@@ -183,7 +183,7 @@
 
 <header>
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
-  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07d</span></h1>
+  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07e</span></h1>
   <a href="dashboard.html" style="color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px;">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
   <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-Bol-factuur met gesimuleerde match (boekt niets)">🎬 Demo</button>
@@ -698,9 +698,13 @@ function renderResult(data) {
         infoExtra = ` — factuur ${m.invoiceId} (order ${m.orderId}), openstaand ${fmtEur(m.invoiceOutstanding||0)}`;
       }
     } else if (r.match === null) {
-      // Match-poging gedaan maar niets gevonden
+      // Match-poging gedaan maar niets gevonden — bied handmatig koppelen aan:
+      // ordernummer intikken → koppelen → daarna gewone ⏵ Boek-flow.
       debiteurCell = `<span class="match-pill fail">✗ niet gevonden</span>`;
-      statusPill = `<span class="match-pill fail">handmatig</span>`;
+      statusPill = `<span class="match-pill fail" title="Geen Logic4-order met dit bestelnummer in het Referentie-veld — koppel 'm handmatig via het ordernummer">niet gevonden</span>`
+        + `<div style="margin-top:3px;white-space:nowrap;">`
+        + `<input class="rowLinkInp" data-nr="${escapeHtml(r.bestelnr)}" placeholder="ordernr 3…" style="width:88px;border:1px solid var(--border);border-radius:5px;padding:2px 5px;font:inherit;font-size:11px;">`
+        + ` <button class="rowBookBtn rowLinkBtn" data-nr="${escapeHtml(r.bestelnr)}" title="Koppel dit Bol-bestelnummer aan een Logic4-order — daarna kun je 'm gewoon boeken">Koppel</button></div>`;
     } else {
       // Nog geen match-poging
       debiteurCell = `<span class="match-pill todo">handmatig in Logic4</span>`;
@@ -792,8 +796,18 @@ function renderResult(data) {
   }
 
   // Per-regel boek-knoppen koppelen (regel voor regel doorvoeren)
-  tbody.querySelectorAll(".rowBookBtn").forEach(b =>
+  tbody.querySelectorAll(".rowBookBtn:not(.rowLinkBtn)").forEach(b =>
     b.addEventListener("click", () => bookSingleRow(b.dataset.nr, b)));
+  // Handmatig koppelen: ordernummer-invoer bij niet-gevonden regels
+  tbody.querySelectorAll(".rowLinkBtn").forEach(b =>
+    b.addEventListener("click", () => {
+      const inp = tbody.querySelector('.rowLinkInp[data-nr="' + b.dataset.nr + '"]');
+      linkSingleRow(b.dataset.nr, inp ? inp.value.trim() : "");
+    }));
+  tbody.querySelectorAll(".rowLinkInp").forEach(inp =>
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") linkSingleRow(inp.dataset.nr, inp.value.trim());
+    }));
 
   // Scroll naar resultaat
   document.getElementById("resultSection").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -871,6 +885,72 @@ async function bookSingleRow(bestelnr, btn) {
   } catch (e) {
     r.bookResult = { ok: false, amount: 0, detail: "Fout: " + e.message };
     renderResult(parsedData);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// HANDMATIG KOPPELEN — voor regels waar het bestelnummer niet in een
+// Logic4-Referentie gevonden werd. Osman zoekt de order zelf op in
+// Logic4, tikt hier het ordernummer in, en de tegel doet de rest:
+// order ophalen → controle-dialoog (klant + bedrag) → openstaande
+// factuur zoeken → daarna de gewone ⏵ Boek-flow met alle checks.
+// ─────────────────────────────────────────────────────────────────
+async function linkSingleRow(bestelnr, orderNrRaw) {
+  if (typeof bolDemoActive !== "undefined" && bolDemoActive) {
+    alert("🎬 Demo-modus — koppelen is uitgeschakeld. Ververs de pagina voor de echte tool.");
+    return;
+  }
+  const r = parsedData && parsedData.creditRegels.find(x => x.bestelnr === bestelnr);
+  if (!r) return;
+  const clean = String(orderNrRaw || "").replace(/\D/g, "");
+  if (!clean) { alert("Vul eerst het Logic4-ordernummer in (begint met 3)."); return; }
+  if (/^6/.test(clean)) {
+    alert("Dat lijkt een FACTUURnummer (begint met 6). Vul het ORDERnummer in (begint met 3) — de bijbehorende factuur zoek ik er zelf bij.");
+    return;
+  }
+  try {
+    const data = await logic4Call("/v3/Orders/GetOrders", { Id: parseInt(clean, 10), TakeRecords: 1 });
+    const arr = Array.isArray(data) ? data : ((data && data.Orders) || []);
+    const o = arr[0];
+    if (!o) { alert("Order " + clean + " niet gevonden in Logic4 — controleer het nummer."); return; }
+    const totals = o.Totals || {};
+    const name = (o.InvoiceAddress && (o.InvoiceAddress.CompanyName || o.InvoiceAddress.ContactName))
+      || (o.AccountAddress && o.AccountAddress.CompanyName) || "—";
+    const amt = Number(totals.AmountIncl) || 0;
+    const afwijkend = Math.abs(amt - Number(r.bedrag)) >= 0.05;
+    const ok = confirm(
+      "Koppelen?\n\n" +
+      "Bol-bestelling " + r.bestelnr + " — " + fmtEur(r.bedrag) + "\n" +
+      "→ Logic4 order " + o.Id + " — " + name + " (" + fmtEur(amt) + ")" +
+      (afwijkend ? "\n\n⚠ LET OP: het orderbedrag wijkt af van het Bol-bedrag — weet je zeker dat dit de juiste order is?" : "")
+    );
+    if (!ok) return;
+    // Openstaande factuur van deze debiteur zoeken (zelfde route als matchen)
+    let invoiceId = null, invoiceOutstanding = null, invoiceTotal = null, invoicePayed = null;
+    try {
+      const invResp = await logic4Call("/v3/Orders/GetOpenPaymentInvoices", { DebtorId: o.DebtorId });
+      const invArr = Array.isArray(invResp) ? invResp : ((invResp && (invResp.Invoices || invResp.Items)) || []);
+      const inv = pickBolInvoice(invArr, amt);
+      if (inv) {
+        invoiceId = inv.InvoiceId;
+        invoiceOutstanding = Number(inv.AmountOutstanding) || 0;
+        invoiceTotal = Number(inv.TotalAmount) || 0;
+        invoicePayed = Number(inv.TotalAmountPayed) || 0;
+      }
+    } catch (e) { /* geen open factuur → melding hieronder */ }
+    r.match = {
+      orderId: o.Id, debtorId: o.DebtorId, customerName: name,
+      sourceField: "handmatig gekoppeld", reference: o.Reference,
+      payed: Number(totals.Calc_TotalPayed) || 0, amountIncl: amt, isPaid: !!totals.IsPaid,
+      invoiceId: invoiceId, invoiceOutstanding: invoiceOutstanding,
+      invoiceTotal: invoiceTotal, invoicePayed: invoicePayed,
+    };
+    renderResult(parsedData);
+    if (invoiceId == null) {
+      alert("Gekoppeld aan order " + o.Id + " (" + name + "), maar deze klant heeft geen openstaande factuur — al betaald óf nog niet afgeboekt naar factuur. Boeken kan daarom (nog) niet.");
+    }
+  } catch (e) {
+    alert("Koppelen faalde: " + e.message);
   }
 }
 
