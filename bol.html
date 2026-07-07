@@ -1347,15 +1347,18 @@ async function readInvoiceState(debtorId, invoiceId) {
 // ─── Verse "al betaald?"-check, VLAK VÓÓR elke boeking ───────────────
 // De match-gegevens kunnen verouderd zijn (Osman boekte intussen, of er is
 // al eerder via de tegel geboekt). Zonder deze check ontstaat een DUBBELE
-// betaling. We checken twee dingen live:
-//   1. Staat de ORDER al op (voldoende) Betaald? → overslaan.
+// betaling. We checken twee dingen live, ALLEEN op echte bedragen:
+//   1. Is er op de ORDER al genoeg geboekt (Calc_TotalPayed ≥ Bol-bedrag)?
+//      LET OP: Totals.IsPaid NIET gebruiken — dat vlaggetje staat ook op
+//      true bij afgehandelde-maar-onbetaalde orders (het openstaande saldo
+//      zit dan op de factuur). Gaf een vals "al betaald" op order 3511718.
 //   2. Is de FACTUUR nog open? Zo ja: ververs het openstaande bedrag zodat
 //      we nooit meer boeken dan er werkelijk openstaat.
 async function freshPaidCheck(r) {
   const m = r.match;
   const o = await readOrderPayed(m.orderId);
-  if (o && (o.isPaid || o.payed >= Number(r.bedrag) - 0.01)) {
-    return { skip: true, reason: "order staat al op Betaald (" + fmtEur(o.payed) + ")" };
+  if (o && Number(r.bedrag) > 0.01 && o.payed >= Number(r.bedrag) - 0.01) {
+    return { skip: true, reason: "op de order is al " + fmtEur(o.payed) + " geboekt (Bol-bedrag " + fmtEur(r.bedrag) + ")" };
   }
   if (m.invoiceId != null) {
     const s = await readInvoiceState(m.debtorId, m.invoiceId);
