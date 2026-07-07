@@ -183,7 +183,7 @@
 
 <header>
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
-  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07h</span></h1>
+  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07i</span></h1>
   <a href="dashboard.html" style="color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px;">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
   <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-Bol-factuur met gesimuleerde match (boekt niets)">🎬 Demo</button>
@@ -687,11 +687,15 @@ function renderResult(data) {
           : `<span class="match-pill ${r.bookResult.skipped ? "todo" : "fail"}" title="${escapeHtml(r.bookResult.detail || "")}">${r.bookResult.skipped ? "⏭ al betaald" : "✗ fout bij boeken"}</span>`;
         infoExtra = ` — ${escapeHtml(r.bookResult.detail || "")}`;
       } else if (m.invoiceId == null) {
-        // Geen openstaande factuur — twee smaken. Als de ORDER al (genoeg)
-        // Betaald toont of er betalingen op staan, is de factuur gesloten
-        // omdat 'ie betaald is → groen. Anders is er (nog) geen factuur.
+        // Geen openstaande factuur — DRIE smaken. Eerst: is de factuur-check
+        // überhaupt gelukt? Een mislukte lookup (rate-limit/token) mag nooit
+        // als "geen factuur" gepresenteerd worden — toon 'm met een 🔁-knop.
         const orderPaid = (Number(r.bedrag) > 0.01 && m.payed >= Number(r.bedrag) - 0.01) || (m.paymentsCount > 0);
-        if (orderPaid) {
+        if (m.invoiceLookupFailed) {
+          statusPill = `<span class="match-pill fail" title="De factuur-opzoek-call faalde (tijdelijke API-fout, bv. rate-limit). De factuur kan gewoon openstaan — probeer opnieuw.">⚠ factuur-check mislukt</span>`
+            + ` <button class="rowBookBtn rowRetryBtn" data-nr="${escapeHtml(r.bestelnr)}" title="Factuur-check opnieuw uitvoeren voor deze regel">🔁 opnieuw</button>`;
+          infoExtra = ` — order ${m.orderId}: factuur-check mislukt, klik 🔁`;
+        } else if (orderPaid) {
           statusPill = `<span class="match-pill ok" title="Order ${m.orderId}: Betaald ${fmtEur(m.payed)}${m.paymentsCount ? " (" + m.paymentsCount + " betaling(en))" : ""} — factuur gesloten en uit de open-lijst">✓ al betaald</span>`;
           infoExtra = ` — order ${m.orderId}, betaald ${fmtEur(m.payed)} (factuur gesloten)`;
         } else {
@@ -805,8 +809,11 @@ function renderResult(data) {
   }
 
   // Per-regel boek-knoppen koppelen (regel voor regel doorvoeren)
-  tbody.querySelectorAll(".rowBookBtn:not(.rowLinkBtn)").forEach(b =>
+  tbody.querySelectorAll(".rowBookBtn:not(.rowLinkBtn):not(.rowRetryBtn)").forEach(b =>
     b.addEventListener("click", () => bookSingleRow(b.dataset.nr, b)));
+  // Factuur-check opnieuw (na een mislukte lookup, bv. rate-limit)
+  tbody.querySelectorAll(".rowRetryBtn").forEach(b =>
+    b.addEventListener("click", () => retryInvoiceRow(b.dataset.nr, b)));
   // Handmatig koppelen: ordernummer-invoer bij niet-gevonden regels
   tbody.querySelectorAll(".rowLinkBtn").forEach(b =>
     b.addEventListener("click", () => {
@@ -898,6 +905,34 @@ async function bookSingleRow(bestelnr, btn) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// FACTUUR-CHECK OPNIEUW — voor regels waar de factuur-lookup tijdens het
+// matchen faalde (rate-limit e.d.). Herhaalt alléén die ene lookup en
+// werkt de regel bij: open factuur → ⏵ Boek-knop verschijnt alsnog.
+// ─────────────────────────────────────────────────────────────────
+async function retryInvoiceRow(bestelnr, btn) {
+  const r = parsedData && parsedData.creditRegels.find(x => x.bestelnr === bestelnr);
+  if (!r || !r.match) return;
+  if (btn) { btn.disabled = true; btn.textContent = "bezig…"; }
+  const res = await fetchOpenInvoice(r.match.debtorId, r.match.amountIncl || r.bedrag);
+  if (res.ok) {
+    r.match.invoiceLookupFailed = false;
+    if (res.inv) {
+      r.match.invoiceId = res.inv.InvoiceId;
+      r.match.invoiceOutstanding = Number(res.inv.AmountOutstanding) || 0;
+      r.match.invoiceTotal = Number(res.inv.TotalAmount) || 0;
+      r.match.invoicePayed = Number(res.inv.TotalAmountPayed) || 0;
+    } else {
+      r.match.invoiceId = null;
+      r.match.invoiceOutstanding = null;
+    }
+  } else {
+    r.match.invoiceLookupFailed = true;
+    alert("Factuur-check faalde opnieuw (" + (res.error || "?") + ") — Logic4 is mogelijk even overbelast. Wacht een minuut en probeer nog eens.");
+  }
+  renderResult(parsedData);
+}
+
+// ─────────────────────────────────────────────────────────────────
 // HANDMATIG KOPPELEN — voor regels waar het bestelnummer niet in een
 // Logic4-Referentie gevonden werd. Osman zoekt de order zelf op in
 // Logic4, tikt hier het ordernummer in, en de tegel doet de rest:
@@ -934,19 +969,17 @@ async function linkSingleRow(bestelnr, orderNrRaw) {
       (afwijkend ? "\n\n⚠ LET OP: het orderbedrag wijkt af van het Bol-bedrag — weet je zeker dat dit de juiste order is?" : "")
     );
     if (!ok) return;
-    // Openstaande factuur van deze debiteur zoeken (zelfde route als matchen)
-    let invoiceId = null, invoiceOutstanding = null, invoiceTotal = null, invoicePayed = null;
-    try {
-      const invResp = await logic4Call("/v3/Orders/GetOpenPaymentInvoices", { DebtorId: o.DebtorId });
-      const invArr = Array.isArray(invResp) ? invResp : ((invResp && (invResp.Invoices || invResp.Items)) || []);
-      const inv = pickBolInvoice(invArr, amt);
-      if (inv) {
-        invoiceId = inv.InvoiceId;
-        invoiceOutstanding = Number(inv.AmountOutstanding) || 0;
-        invoiceTotal = Number(inv.TotalAmount) || 0;
-        invoicePayed = Number(inv.TotalAmountPayed) || 0;
-      }
-    } catch (e) { /* geen open factuur → melding hieronder */ }
+    // Openstaande factuur van deze debiteur zoeken (met retries)
+    let invoiceId = null, invoiceOutstanding = null, invoiceTotal = null, invoicePayed = null, invoiceLookupFailed = false;
+    const invRes = await fetchOpenInvoice(o.DebtorId, amt);
+    if (!invRes.ok) {
+      invoiceLookupFailed = true;
+    } else if (invRes.inv) {
+      invoiceId = invRes.inv.InvoiceId;
+      invoiceOutstanding = Number(invRes.inv.AmountOutstanding) || 0;
+      invoiceTotal = Number(invRes.inv.TotalAmount) || 0;
+      invoicePayed = Number(invRes.inv.TotalAmountPayed) || 0;
+    }
     r.match = {
       orderId: o.Id, debtorId: o.DebtorId, customerName: name,
       sourceField: "handmatig gekoppeld", reference: o.Reference,
@@ -954,13 +987,18 @@ async function linkSingleRow(bestelnr, orderNrRaw) {
       paymentsCount: Array.isArray(o.Payments) ? o.Payments.length : 0,
       invoiceId: invoiceId, invoiceOutstanding: invoiceOutstanding,
       invoiceTotal: invoiceTotal, invoicePayed: invoicePayed,
+      invoiceLookupFailed: invoiceLookupFailed,
     };
     renderResult(parsedData);
     if (invoiceId == null) {
-      const paidSignal = (Number(totals.Calc_TotalPayed) || 0) >= Number(r.bedrag) - 0.01 || (Array.isArray(o.Payments) && o.Payments.length > 0);
-      alert(paidSignal
-        ? "Gekoppeld aan order " + o.Id + " (" + name + ") — deze is al betaald (factuur gesloten). Er hoeft niets geboekt te worden."
-        : "Gekoppeld aan order " + o.Id + " (" + name + "), maar er is nog geen factuur en geen betaling — waarschijnlijk nog niet afgeboekt. Boeken kan pas als de factuur bestaat.");
+      if (invoiceLookupFailed) {
+        alert("Gekoppeld aan order " + o.Id + " (" + name + "), maar de factuur-check faalde (tijdelijke API-fout). Klik op de 🔁-knop op de regel om het opnieuw te proberen.");
+      } else {
+        const paidSignal = (Number(totals.Calc_TotalPayed) || 0) >= Number(r.bedrag) - 0.01 || (Array.isArray(o.Payments) && o.Payments.length > 0);
+        alert(paidSignal
+          ? "Gekoppeld aan order " + o.Id + " (" + name + ") — deze is al betaald (factuur gesloten). Er hoeft niets geboekt te worden."
+          : "Gekoppeld aan order " + o.Id + " (" + name + "), maar er is nog geen factuur en geen betaling — waarschijnlijk nog niet afgeboekt. Boeken kan pas als de factuur bestaat.");
+      }
     }
   } catch (e) {
     alert("Koppelen faalde: " + e.message);
@@ -1127,6 +1165,24 @@ function pickBolInvoice(list, bolBedrag) {
   return best;
 }
 
+// Factuur-lookup MET retries. Kritisch: een tijdelijke API-fout (rate-limit,
+// verlopen token) mag NOOIT stilletjes als "geen open factuur" gelezen worden
+// — dat liet boekbare regels onterecht als 'nog niet gefactureerd' zien.
+// Bij aanhoudende fout geven we ok:false terug zodat de UI het kan tonen.
+async function fetchOpenInvoice(debtorId, richtBedrag) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const resp = await logic4Call("/v3/Orders/GetOpenPaymentInvoices", { DebtorId: Number(debtorId) });
+      const arr = Array.isArray(resp) ? resp : ((resp && (resp.Invoices || resp.Items)) || []);
+      return { ok: true, inv: pickBolInvoice(arr, richtBedrag) };
+    } catch (e) {
+      if (attempt === 3) return { ok: false, error: e.message };
+      await new Promise(res => setTimeout(res, attempt * 900));   // 0,9s / 1,8s pauze
+    }
+  }
+  return { ok: false, error: "onbekend" };
+}
+
 // Hoeveel boeken we? Het nog-openstaande bedrag op de factuur, gemaximeerd op
 // het Bol-bedrag. Géén open factuur gevonden → 0 (niet automatisch boeken;
 // order mogelijk al betaald of nog niet afgeboekt → handmatig).
@@ -1173,7 +1229,7 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     // betrouwbaarder dan duizenden orders scannen — vindt de order
     // ongeacht de aanmaakdatum.
     const matchMap = new Map();
-    const diag = { found: 0, withInvoice: 0, viaRef: 0, viaDesc: 0, noOrders: 0, errors: 0, samples: [] };
+    const diag = { found: 0, withInvoice: 0, viaRef: 0, viaDesc: 0, noOrders: 0, errors: 0, invErrors: 0, samples: [] };
 
     const tasks = uniqueNrs.map(function (nr) {
       return async function () {
@@ -1207,20 +1263,20 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
         if (bron === "Omschrijving") diag.viaDesc++; else diag.viaRef++;
         const totals = hit.Totals || {};
         // Zoek de openstaande FACTUUR van deze debiteur (order is meestal al
-        // afgeboekt → betaling hoort op de factuur, niet de order).
-        let invoiceId = null, invoiceOutstanding = null, invoiceTotal = null, invoicePayed = null;
-        try {
-          const invResp = await logic4Call("/v3/Orders/GetOpenPaymentInvoices", { DebtorId: hit.DebtorId });
-          const invArr = Array.isArray(invResp) ? invResp : ((invResp && (invResp.Invoices || invResp.Items)) || []);
-          const inv = pickBolInvoice(invArr, Number(totals.AmountIncl) || 0);
-          if (inv) {
-            invoiceId = inv.InvoiceId;
-            invoiceOutstanding = Number(inv.AmountOutstanding) || 0;
-            invoiceTotal = Number(inv.TotalAmount) || 0;
-            invoicePayed = Number(inv.TotalAmountPayed) || 0;
-            diag.withInvoice++;
-          }
-        } catch (e) { /* geen open factuur / geen scope → val terug (skip) */ }
+        // afgeboekt → betaling hoort op de factuur, niet de order). Mét
+        // retries — een mislukte lookup wordt gemarkeerd, niet genegeerd.
+        let invoiceId = null, invoiceOutstanding = null, invoiceTotal = null, invoicePayed = null, invoiceLookupFailed = false;
+        const invRes = await fetchOpenInvoice(hit.DebtorId, Number(totals.AmountIncl) || 0);
+        if (!invRes.ok) {
+          invoiceLookupFailed = true;
+          diag.invErrors++;
+        } else if (invRes.inv) {
+          invoiceId = invRes.inv.InvoiceId;
+          invoiceOutstanding = Number(invRes.inv.AmountOutstanding) || 0;
+          invoiceTotal = Number(invRes.inv.TotalAmount) || 0;
+          invoicePayed = Number(invRes.inv.TotalAmountPayed) || 0;
+          diag.withInvoice++;
+        }
         matchMap.set(nr, {
           orderId: hit.Id,
           debtorId: hit.DebtorId,
@@ -1236,12 +1292,13 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
           invoiceOutstanding: invoiceOutstanding,
           invoiceTotal: invoiceTotal,
           invoicePayed: invoicePayed,
+          invoiceLookupFailed: invoiceLookupFailed,
         });
         diag.found++;
       };
     });
 
-    await runWithLimit(tasks, 6, function (done, total) {
+    await runWithLimit(tasks, 4, function (done, total) {
       progressEl.textContent = "Opzoeken… " + done + "/" + total + " — " + diag.found + " gevonden (" + diag.viaRef + " via Referentie, " + diag.viaDesc + " via Omschrijving), " + diag.noOrders + " niet gevonden";
     });
 
@@ -1287,19 +1344,18 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
           const nr = pair[0], hit = pair[1];
           return async function () {
             const totals = hit.Totals || {};
-            let invoiceId = null, invoiceOutstanding = null, invoiceTotal = null, invoicePayed = null;
-            try {
-              const invResp = await logic4Call("/v3/Orders/GetOpenPaymentInvoices", { DebtorId: hit.DebtorId });
-              const invArr = Array.isArray(invResp) ? invResp : ((invResp && (invResp.Invoices || invResp.Items)) || []);
-              const inv = pickBolInvoice(invArr, Number(totals.AmountIncl) || 0);
-              if (inv) {
-                invoiceId = inv.InvoiceId;
-                invoiceOutstanding = Number(inv.AmountOutstanding) || 0;
-                invoiceTotal = Number(inv.TotalAmount) || 0;
-                invoicePayed = Number(inv.TotalAmountPayed) || 0;
-                diag.withInvoice++;
-              }
-            } catch (e) { /* geen open factuur */ }
+            let invoiceId = null, invoiceOutstanding = null, invoiceTotal = null, invoicePayed = null, invoiceLookupFailed = false;
+            const invRes = await fetchOpenInvoice(hit.DebtorId, Number(totals.AmountIncl) || 0);
+            if (!invRes.ok) {
+              invoiceLookupFailed = true;
+              diag.invErrors++;
+            } else if (invRes.inv) {
+              invoiceId = invRes.inv.InvoiceId;
+              invoiceOutstanding = Number(invRes.inv.AmountOutstanding) || 0;
+              invoiceTotal = Number(invRes.inv.TotalAmount) || 0;
+              invoicePayed = Number(invRes.inv.TotalAmountPayed) || 0;
+              diag.withInvoice++;
+            }
             matchMap.set(nr, {
               orderId: hit.Id, debtorId: hit.DebtorId,
               customerName: (hit.InvoiceAddress && (hit.InvoiceAddress.CompanyName || hit.InvoiceAddress.ContactName))
@@ -1311,11 +1367,12 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
               paymentsCount: Array.isArray(hit.Payments) ? hit.Payments.length : 0,
               invoiceId: invoiceId, invoiceOutstanding: invoiceOutstanding,
               invoiceTotal: invoiceTotal, invoicePayed: invoicePayed,
+              invoiceLookupFailed: invoiceLookupFailed,
             });
             diag.found++; diag.viaDesc++; diag.noOrders = Math.max(0, diag.noOrders - 1);
           };
         });
-        await runWithLimit(scanTasks, 6, function (done, total) {
+        await runWithLimit(scanTasks, 4, function (done, total) {
           progressEl.textContent = "2e ronde — facturen zoeken bij " + total + " scan-treffers… " + done + "/" + total;
         });
       }
@@ -1338,6 +1395,7 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     if (zonderFactuur > 0) diagBlocks.push("<b>" + zonderFactuur + "</b> order(s) hadden géén openstaande factuur — die zijn al betaald óf nog niet afgeboekt. Die worden overgeslagen (niet automatisch geboekt).");
     if (diag.noOrders) diagBlocks.push("<b>" + diag.noOrders + "</b> bestelnummer(s) niet gevonden in Referentie óf Omschrijving — die order bestaat (nog) niet in Logic4, of het nummer is anders genoteerd. Koppel ze handmatig via het ordernr-veld in de tabel.");
     if (diag.viaDesc) diagBlocks.push("<b>" + diag.viaDesc + "</b> bestelnummer(s) niet in de Referentie maar wél in de <b>Omschrijving</b> gevonden — automatisch gematcht.");
+    if (diag.invErrors) diagBlocks.push("<b style=\"color:#b91c1c\">⚠ " + diag.invErrors + "</b> regel(s): de factuur-check faalde ook na 3 pogingen (Logic4 waarschijnlijk tijdelijk overbelast). Die regels tonen een 🔁-knop — of wacht een minuut en klik Match opnieuw. Ze zijn dus NIET per se 'nog niet gefactureerd'.");
     if (diag.errors) diagBlocks.push("<b style=\"color:#b91c1c\">" + diag.errors + "</b> API-fout(en) tijdens opzoeken.");
     if (diag.samples.length) diagBlocks.push("<b>Voorbeelden:</b><br>" + diag.samples.join("<br>"));
 
