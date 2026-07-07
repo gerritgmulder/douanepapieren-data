@@ -183,7 +183,7 @@
 
 <header>
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
-  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07g</span></h1>
+  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07h</span></h1>
   <a href="dashboard.html" style="color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px;">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
   <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-Bol-factuur met gesimuleerde match (boekt niets)">🎬 Demo</button>
@@ -1245,6 +1245,82 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
       progressEl.textContent = "Opzoeken… " + done + "/" + total + " — " + diag.found + " gevonden (" + diag.viaRef + " via Referentie, " + diag.viaDesc + " via Omschrijving), " + diag.noOrders + " niet gevonden";
     });
 
+    // ── 2e ronde: omschrijvingen SCANNEN voor nummers zonder treffer ──
+    // Logic4's Description-filter matcht alleen exact. Staat het bestel-
+    // nummer midden in de tekst ("... C0006KK10H ..."), dan vindt het
+    // filter niets. Daarom: alle orders uit de factuurperiode ophalen
+    // (CreationDate-filter werkt wél) en de omschrijving/referentie
+    // client-side doorzoeken op de resterende nummers.
+    const missing = uniqueNrs.filter(nr => !matchMap.has(nr));
+    if (missing.length) {
+      const dates = regelsToMatch.map(r => new Date(r.datum)).filter(d => !isNaN(d.getTime()));
+      if (dates.length) {
+        const from = new Date(Math.min.apply(null, dates));
+        const to = new Date(Math.max.apply(null, dates));
+        from.setDate(from.getDate() - 45);   // order wordt vóór de Bol-uitbetaling aangemaakt
+        to.setDate(to.getDate() + 14);
+        const isoD = d => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+        const PAGE = 500, MAXP = 24;
+        const scanHits = new Map();   // bestelnr → order
+        for (let p = 0; p < MAXP && scanHits.size < missing.length; p++) {
+          progressEl.textContent = "2e ronde — omschrijvingen scannen (pagina " + (p + 1) + ")… " + scanHits.size + " van " + missing.length + " resterende gevonden";
+          let data;
+          try {
+            data = await logic4Call("/v3/Orders/GetOrders", {
+              CreationDateFrom: isoD(from) + "T00:00:00", CreationDateTo: isoD(to) + "T23:59:59",
+              TakeRecords: PAGE, SkipRecords: p * PAGE,
+            });
+          } catch (e) { diag.errors++; break; }
+          const arr = Array.isArray(data) ? data : ((data && data.Orders) || []);
+          if (!arr.length) break;
+          for (const o of arr) {
+            const hay = (String(o.Description || "") + " " + String(o.Reference || "")).toUpperCase();
+            if (!hay.trim()) continue;
+            for (const nr of missing) {
+              if (!scanHits.has(nr) && hay.indexOf(normRef(nr)) !== -1) scanHits.set(nr, o);
+            }
+          }
+          if (arr.length < PAGE) break;
+        }
+        // Voor elke scan-treffer: factuur zoeken + match vastleggen (parallel)
+        const scanTasks = Array.from(scanHits.entries()).map(function (pair) {
+          const nr = pair[0], hit = pair[1];
+          return async function () {
+            const totals = hit.Totals || {};
+            let invoiceId = null, invoiceOutstanding = null, invoiceTotal = null, invoicePayed = null;
+            try {
+              const invResp = await logic4Call("/v3/Orders/GetOpenPaymentInvoices", { DebtorId: hit.DebtorId });
+              const invArr = Array.isArray(invResp) ? invResp : ((invResp && (invResp.Invoices || invResp.Items)) || []);
+              const inv = pickBolInvoice(invArr, Number(totals.AmountIncl) || 0);
+              if (inv) {
+                invoiceId = inv.InvoiceId;
+                invoiceOutstanding = Number(inv.AmountOutstanding) || 0;
+                invoiceTotal = Number(inv.TotalAmount) || 0;
+                invoicePayed = Number(inv.TotalAmountPayed) || 0;
+                diag.withInvoice++;
+              }
+            } catch (e) { /* geen open factuur */ }
+            matchMap.set(nr, {
+              orderId: hit.Id, debtorId: hit.DebtorId,
+              customerName: (hit.InvoiceAddress && (hit.InvoiceAddress.CompanyName || hit.InvoiceAddress.ContactName))
+                || (hit.AccountAddress && hit.AccountAddress.CompanyName) || "—",
+              sourceField: "Omschrijving (scan)", reference: hit.Reference,
+              payed: Number(totals.Calc_TotalPayed) || 0,
+              amountIncl: Number(totals.AmountIncl) || 0,
+              isPaid: !!totals.IsPaid,
+              paymentsCount: Array.isArray(hit.Payments) ? hit.Payments.length : 0,
+              invoiceId: invoiceId, invoiceOutstanding: invoiceOutstanding,
+              invoiceTotal: invoiceTotal, invoicePayed: invoicePayed,
+            });
+            diag.found++; diag.viaDesc++; diag.noOrders = Math.max(0, diag.noOrders - 1);
+          };
+        });
+        await runWithLimit(scanTasks, 6, function (done, total) {
+          progressEl.textContent = "2e ronde — facturen zoeken bij " + total + " scan-treffers… " + done + "/" + total;
+        });
+      }
+    }
+
     // Koppel match-info terug aan de credit-regels
     let matched = 0;
     for (const r of parsedData.creditRegels) {
@@ -1278,6 +1354,10 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     document.getElementById("applySection").classList.remove("hidden");
     document.getElementById("matchCount").textContent = matched;
     document.getElementById("totalCount").textContent = uniqueNrs.length;
+    // Doorvoeren-knop altijd bruikbaar na een verse match (kan door een
+    // eerdere run in deze sessie nog uitgeschakeld staan)
+    document.getElementById("applyBtn").disabled = false;
+    document.getElementById("dryRunBtn").disabled = false;
 
   } catch (e) {
     console.error(e);
@@ -1781,7 +1861,9 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
   // - Wat de volgende stappen zijn
   showAfterApplyExplanation(applyResults, verifiedCount, matched.length - skipCount, parsedData);
 
-  btn.disabled = true;  // Voorkomen dubbel-doorvoeren
+  // Knop weer bruikbaar: dubbel doorvoeren kan niet meer — de verse
+  // al-betaald-check vlak vóór elke boeking slaat al-geboekte regels over.
+  btn.disabled = false;
   dryBtn.disabled = false;
 });
 
