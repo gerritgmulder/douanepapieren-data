@@ -183,7 +183,7 @@
 
 <header>
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
-  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07e</span></h1>
+  <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07f</span></h1>
   <a href="dashboard.html" style="color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px;">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
   <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-Bol-factuur met gesimuleerde match (boekt niets)">🎬 Demo</button>
@@ -272,7 +272,7 @@
       <h3>Memoriaal-voorstel (<span id="aantalRegels">0</span> regels)</h3>
       <p class="lead" style="margin-bottom:8px;font-size:12px;">
         Eén regel per Bol-bestelling. Klik <b>“Match met Logic4-orders”</b> om
-        per bestelnummer (= Referentie in Logic4) de order op te zoeken, het
+        per bestelnummer de order op te zoeken (in de Referentie én de Omschrijving), het
         debiteurnummer te lezen én te zien wat er al betaald is. Daarna kun je
         de betalingen in één keer doorvoeren (Betaald = Bol-bedrag).
       </p>
@@ -701,7 +701,7 @@ function renderResult(data) {
       // Match-poging gedaan maar niets gevonden — bied handmatig koppelen aan:
       // ordernummer intikken → koppelen → daarna gewone ⏵ Boek-flow.
       debiteurCell = `<span class="match-pill fail">✗ niet gevonden</span>`;
-      statusPill = `<span class="match-pill fail" title="Geen Logic4-order met dit bestelnummer in het Referentie-veld — koppel 'm handmatig via het ordernummer">niet gevonden</span>`
+      statusPill = `<span class="match-pill fail" title="Geen Logic4-order met dit bestelnummer in de Referentie of Omschrijving — koppel 'm handmatig via het ordernummer">niet gevonden</span>`
         + `<div style="margin-top:3px;white-space:nowrap;">`
         + `<input class="rowLinkInp" data-nr="${escapeHtml(r.bestelnr)}" placeholder="ordernr 3…" style="width:88px;border:1px solid var(--border);border-radius:5px;padding:2px 5px;font:inherit;font-size:11px;">`
         + ` <button class="rowBookBtn rowLinkBtn" data-nr="${escapeHtml(r.bestelnr)}" title="Koppel dit Bol-bestelnummer aan een Logic4-order — daarna kun je 'm gewoon boeken">Koppel</button></div>`;
@@ -1160,33 +1160,38 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     // betrouwbaarder dan duizenden orders scannen — vindt de order
     // ongeacht de aanmaakdatum.
     const matchMap = new Map();
-    const diag = { found: 0, withInvoice: 0, noOrders: 0, refMismatch: 0, errors: 0, samples: [] };
+    const diag = { found: 0, withInvoice: 0, viaRef: 0, viaDesc: 0, noOrders: 0, errors: 0, samples: [] };
 
     const tasks = uniqueNrs.map(function (nr) {
       return async function () {
-        let data;
-        try {
-          data = await logic4Call("/v3/Orders/GetOrders", { Reference: nr, TakeRecords: 10 });
-        } catch (e) {
-          diag.errors++;
-          if (diag.samples.length < 6) diag.samples.push("<code>" + escapeHtml(nr) + "</code> → API-fout: " + escapeHtml(e.message));
-          return;
-        }
-        const arr = Array.isArray(data) ? data : ((data && data.Orders) || []);
-        if (!arr.length) { diag.noOrders++; return; }
-        // Exacte Referentie-match eerst; anders een order waarin het
-        // bestelnummer ergens letterlijk voorkomt (afwijkende notatie).
-        let hit = null;
-        for (const o of arr) { if (normRef(o.Reference) === normRef(nr)) { hit = o; break; } }
-        if (!hit) { for (const o of arr) { if (JSON.stringify(o).toUpperCase().indexOf(normRef(nr)) !== -1) { hit = o; break; } } }
-        if (!hit) {
-          diag.refMismatch++;
-          if (diag.samples.length < 6) {
-            const eersteRef = arr[0].Reference == null ? "(leeg)" : String(arr[0].Reference);
-            diag.samples.push("gezocht <code>" + escapeHtml(nr) + "</code> → " + arr.length + " order(s) terug, Referentie eerste = <code>" + escapeHtml(eersteRef) + "</code> (order " + arr[0].Id + ") — filter genegeerd?");
+        // Zoek in TWEE velden: eerst Referentie (meest voorkomend), daarna
+        // Omschrijving — Don zet het Bol-bestelnummer soms dáár. Per veld
+        // valideren we client-side dat het nummer echt in de order staat,
+        // dus ook als Logic4 een filter zou negeren matchen we nooit vals.
+        let hit = null, bron = "";
+        for (const veld of ["Reference", "Description"]) {
+          let data;
+          try {
+            const body = { TakeRecords: 10 }; body[veld] = nr;
+            data = await logic4Call("/v3/Orders/GetOrders", body);
+          } catch (e) {
+            diag.errors++;
+            if (diag.samples.length < 6) diag.samples.push("<code>" + escapeHtml(nr) + "</code> → API-fout (" + veld + "): " + escapeHtml(e.message));
+            continue;
           }
-          return;
+          const arr = Array.isArray(data) ? data : ((data && data.Orders) || []);
+          if (!arr.length) continue;
+          // Nummer moet echt in het veld staan (exact of als deel van de tekst)
+          for (const o of arr) {
+            const v = veld === "Reference" ? o.Reference : o.Description;
+            if (v != null && (normRef(v) === normRef(nr) || String(v).toUpperCase().indexOf(normRef(nr)) !== -1)) { hit = o; break; }
+          }
+          // Vangnet: nummer ergens anders in de order (afwijkende notatie)
+          if (!hit) { for (const o of arr) { if (JSON.stringify(o).toUpperCase().indexOf(normRef(nr)) !== -1) { hit = o; break; } } }
+          if (hit) { bron = veld === "Reference" ? "Referentie" : "Omschrijving"; break; }
         }
+        if (!hit) { diag.noOrders++; return; }
+        if (bron === "Omschrijving") diag.viaDesc++; else diag.viaRef++;
         const totals = hit.Totals || {};
         // Zoek de openstaande FACTUUR van deze debiteur (order is meestal al
         // afgeboekt → betaling hoort op de factuur, niet de order).
@@ -1208,7 +1213,7 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
           debtorId: hit.DebtorId,
           customerName: (hit.InvoiceAddress && (hit.InvoiceAddress.CompanyName || hit.InvoiceAddress.ContactName))
             || (hit.AccountAddress && hit.AccountAddress.CompanyName) || "—",
-          sourceField: "Referentie",
+          sourceField: bron,
           reference: hit.Reference,
           payed: Number(totals.Calc_TotalPayed) || 0,
           amountIncl: Number(totals.AmountIncl) || 0,
@@ -1223,7 +1228,7 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     });
 
     await runWithLimit(tasks, 6, function (done, total) {
-      progressEl.textContent = "Opzoeken… " + done + "/" + total + " — " + diag.found + " gevonden, " + diag.noOrders + " zonder order, " + diag.refMismatch + " ref-mismatch";
+      progressEl.textContent = "Opzoeken… " + done + "/" + total + " — " + diag.found + " gevonden (" + diag.viaRef + " via Referentie, " + diag.viaDesc + " via Omschrijving), " + diag.noOrders + " niet gevonden";
     });
 
     // Koppel match-info terug aan de credit-regels
@@ -1241,8 +1246,8 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     const diagBlocks = [];
     const zonderFactuur = matched - diag.withInvoice;
     if (zonderFactuur > 0) diagBlocks.push("<b>" + zonderFactuur + "</b> order(s) hadden géén openstaande factuur — die zijn al betaald óf nog niet afgeboekt. Die worden overgeslagen (niet automatisch geboekt).");
-    if (diag.noOrders) diagBlocks.push("<b>" + diag.noOrders + "</b> bestelnummer(s) gaven géén order terug — die order bestaat (nog) niet in Logic4, of het bestelnummer staat niet in het Referentie-veld.");
-    if (diag.refMismatch) diagBlocks.push("<b>" + diag.refMismatch + "</b> keer kreeg ik wél orders terug maar zónder matchende Referentie — mogelijk negeert de API het Reference-filter. <i>(Zie voorbeelden — plak terug naar Claude.)</i>");
+    if (diag.noOrders) diagBlocks.push("<b>" + diag.noOrders + "</b> bestelnummer(s) niet gevonden in Referentie óf Omschrijving — die order bestaat (nog) niet in Logic4, of het nummer is anders genoteerd. Koppel ze handmatig via het ordernr-veld in de tabel.");
+    if (diag.viaDesc) diagBlocks.push("<b>" + diag.viaDesc + "</b> bestelnummer(s) niet in de Referentie maar wél in de <b>Omschrijving</b> gevonden — automatisch gematcht.");
     if (diag.errors) diagBlocks.push("<b style=\"color:#b91c1c\">" + diag.errors + "</b> API-fout(en) tijdens opzoeken.");
     if (diag.samples.length) diagBlocks.push("<b>Voorbeelden:</b><br>" + diag.samples.join("<br>"));
 
