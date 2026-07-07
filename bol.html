@@ -133,6 +133,14 @@
   .match-pill.todo { background: #fef3c7; color: var(--warn); }
   .match-pill.ok { background: #dcfce7; color: var(--ok); }
   .match-pill.fail { background: #fee2e2; color: var(--bad); }
+  button.rowBookBtn {
+    background: var(--fonteyn-lime); color: var(--fonteyn-green);
+    border: 0; border-radius: 6px; padding: 2px 8px;
+    font: inherit; font-size: 10.5px; font-weight: 700; cursor: pointer;
+    margin-left: 4px; white-space: nowrap;
+  }
+  button.rowBookBtn:hover { background: var(--fonteyn-lime-dark); color: #fff; }
+  button.rowBookBtn:disabled { opacity: .5; cursor: wait; }
 
   /* ── Balans-check ── */
   .balans {
@@ -329,9 +337,11 @@
         <button class="primary" id="applyBtn" type="button">⏵ Doorvoeren in Logic4</button>
       </div>
       <p class="lead" style="font-size:12px;color:var(--muted);margin:8px 0 0;">
-        💡 Doe éérst <b>Test op 1 order</b>: boekt precies één betaling en meet
-        of het Betaald-veld in Logic4 beweegt. Pas doorvoeren als die test
-        groen is én Osman bevestigt dat het bedrag goed in de boekhouding staat.
+        💡 Voorzichtig opbouwen: gebruik de <b>⏵ Boek deze</b>-knop in de tabel
+        hierboven om <b>regel voor regel</b> door te voeren en elke boeking in
+        Logic4 te controleren. Al-geboekte regels worden bij "Doorvoeren"
+        automatisch overgeslagen, dus je kunt daarna veilig de rest in één
+        keer doen — geen dubbele boekingen mogelijk.
       </p>
       <div id="applyStatus" class="status-msg hidden" style="margin-top:12px;"></div>
       <div id="applyResults" class="hidden" style="margin-top:12px;"></div>
@@ -670,14 +680,21 @@ function renderResult(data) {
     if (r.match) {
       const m = r.match;
       debiteurCell = `<b>${escapeHtml(String(m.debtorId))}</b> <span style="color:var(--muted);font-size:11px">${escapeHtml(truncate(m.customerName, 22))}</span>`;
-      if (m.invoiceId == null) {
+      if (r.bookResult) {
+        // Resultaat van een per-regel-boeking — blijft staan na re-render
+        statusPill = r.bookResult.ok
+          ? `<span class="match-pill ok" title="${escapeHtml(r.bookResult.detail || "")}">✓ geboekt (${fmtEur(r.bookResult.amount)})</span>`
+          : `<span class="match-pill ${r.bookResult.skipped ? "todo" : "fail"}" title="${escapeHtml(r.bookResult.detail || "")}">${r.bookResult.skipped ? "⏭ al betaald" : "✗ fout bij boeken"}</span>`;
+        infoExtra = ` — ${escapeHtml(r.bookResult.detail || "")}`;
+      } else if (m.invoiceId == null) {
         statusPill = `<span class="match-pill todo" title="Geen openstaande factuur voor deze debiteur">geen open factuur</span>`;
         infoExtra = ` — order ${m.orderId} (nog geen/gesloten factuur)`;
       } else if (amountToBook(r) < 0.01) {
         statusPill = `<span class="match-pill ok" title="Factuur ${m.invoiceId} — openstaand ${fmtEur(m.invoiceOutstanding||0)}">✓ al betaald</span>`;
         infoExtra = ` — factuur ${m.invoiceId}, openstaand ${fmtEur(m.invoiceOutstanding||0)}`;
       } else {
-        statusPill = `<span class="match-pill ok" title="Factuur ${m.invoiceId} — openstaand ${fmtEur(m.invoiceOutstanding||0)}">✓ factuur ${escapeHtml(String(m.invoiceId))}</span>`;
+        statusPill = `<span class="match-pill ok" title="Factuur ${m.invoiceId} — openstaand ${fmtEur(m.invoiceOutstanding||0)}">✓ factuur ${escapeHtml(String(m.invoiceId))}</span>`
+          + ` <button class="rowBookBtn" data-nr="${escapeHtml(r.bestelnr)}" title="Boek alléén deze betaling in Logic4 — om regel voor regel te controleren">⏵ Boek deze</button>`;
         infoExtra = ` — factuur ${m.invoiceId} (order ${m.orderId}), openstaand ${fmtEur(m.invoiceOutstanding||0)}`;
       }
     } else if (r.match === null) {
@@ -774,8 +791,87 @@ function renderResult(data) {
     document.getElementById("balans").style.color = "";
   }
 
+  // Per-regel boek-knoppen koppelen (regel voor regel doorvoeren)
+  tbody.querySelectorAll(".rowBookBtn").forEach(b =>
+    b.addEventListener("click", () => bookSingleRow(b.dataset.nr, b)));
+
   // Scroll naar resultaat
   document.getElementById("resultSection").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PER REGEL doorvoeren — boekt precies één betaling, met dezelfde
+// veiligheid als de batch: verse al-betaald-check vlak vóór het boeken
+// + vóór/ná-meting van het openstaande factuurbedrag. Zo kan Osman
+// regel voor regel controleren in Logic4 vóórdat hij de rest aandurft.
+// ─────────────────────────────────────────────────────────────────
+async function bookSingleRow(bestelnr, btn) {
+  if (typeof bolDemoActive !== "undefined" && bolDemoActive) {
+    alert("🎬 Demo-modus — er wordt niets echt geboekt. Ververs de pagina voor de echte tool.");
+    return;
+  }
+  const r = parsedData && parsedData.creditRegels.find(x => x.bestelnr === bestelnr);
+  if (!r || !r.match || r.match.invoiceId == null) return;
+  const ok = confirm(
+    "Deze ENE betaling boeken?\n\n" +
+    "Bol-bestelling " + r.bestelnr + " — " + fmtEur(r.bedrag) + "\n" +
+    "→ Factuur " + r.match.invoiceId + " (order " + r.match.orderId + ", " + (r.match.customerName || "") + ")\n\n" +
+    "Controleer daarna in Logic4 of het goed staat."
+  );
+  if (!ok) return;
+
+  btn.disabled = true;
+  btn.textContent = "bezig…";
+  const boekDatum = document.getElementById("boekDatum").value;
+  try {
+    // 1) Verse al-betaald-check (voorkomt dubbele boeking)
+    const fresh = await freshPaidCheck(r);
+    if (fresh.skip) {
+      r.bookResult = { ok: false, skipped: true, amount: 0, detail: fresh.reason };
+      renderResult(parsedData);
+      return;
+    }
+    // 2) Vóór-meting, boeken, ná-meting
+    const before = await readInvoiceState(r.match.debtorId, r.match.invoiceId);
+    const amount = amountToBook(r);
+    const body = buildPaymentBody(r, boekDatum);
+    let apiErr = null;
+    try { await logic4Call("/v3/Orders/AddPayment", body); }
+    catch (e) { apiErr = e.message; }
+    const after = await readInvoiceState(r.match.debtorId, r.match.invoiceId);
+
+    const ob = before ? before.outstanding : null;
+    const oa = after ? (after.gone ? 0 : after.outstanding) : null;
+    const drop = (ob != null && oa != null) ? (ob - oa) : null;
+    const fullyPaid = after && after.gone;
+    const geboekt = !apiErr && (fullyPaid || (drop != null && Math.abs(drop - amount) < 0.05));
+
+    if (geboekt) {
+      r.match.invoiceOutstanding = oa != null ? oa : 0;
+      r.bookResult = { ok: true, amount: amount,
+        detail: "geboekt op factuur " + r.match.invoiceId + " — openstaand " + (ob != null ? fmtEur(ob) : "?") + " → " + (fullyPaid ? "€ 0,00 (betaald)" : fmtEur(oa)) };
+    } else if (apiErr) {
+      r.bookResult = { ok: false, amount: amount, detail: "API-fout: " + apiErr };
+    } else {
+      r.bookResult = { ok: false, amount: amount,
+        detail: "API zei OK maar openstaand bewoog niet zoals verwacht (−" + (drop != null ? fmtEur(drop) : "?") + " i.p.v. −" + fmtEur(amount) + ") — check in Logic4" };
+    }
+    // Audit-log (zelfde endpoint als de batch, met 1 regel)
+    try {
+      await fetch(HELPER_BASE + "/api/bol/apply-log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + getSession() },
+        body: JSON.stringify({ factuurnr: parsedData.factuurnr, periode: parsedData.periode, boekDatum,
+          ok: geboekt ? 1 : 0, fail: geboekt ? 0 : 1, skipped: 0, total: 1, single: true,
+          results: [{ bestelnr: r.bestelnr, orderId: r.match.orderId, invoiceId: r.match.invoiceId,
+            bedrag: r.bedrag, ok: geboekt, apiError: apiErr, before: ob, after: oa, delta: drop }] })
+      });
+    } catch (e) { /* log-fout niet blokkerend */ }
+    renderResult(parsedData);
+  } catch (e) {
+    r.bookResult = { ok: false, amount: 0, detail: "Fout: " + e.message };
+    renderResult(parsedData);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
