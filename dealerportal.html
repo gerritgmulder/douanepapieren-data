@@ -69,6 +69,7 @@
   <section id="appView" class="hidden">
     <div class="tabs">
       <button class="tab active" data-tab="stock" type="button">Stock</button>
+      <button class="tab" data-tab="myspas" type="button">My spas</button>
       <button class="tab" data-tab="docs" type="button">Documents</button>
       <button class="tab" data-tab="contact" type="button">Contact</button>
     </div>
@@ -80,6 +81,16 @@
         <input id="stockSearch" placeholder="Search model… (e.g. Renew)" style="max-width:320px;">
         <div id="stockGrid" class="grid" style="margin-top:14px;"></div>
         <div id="stockEmpty" class="lead hidden" style="margin-top:12px;">No stock data available right now — please check back later.</div>
+      </div>
+    </div>
+
+    <div id="tab-myspas" class="hidden">
+      <div class="card">
+        <h2>My spas</h2>
+        <p class="lead">Your reserved spas with Fonteyn, with the current status of each model.</p>
+        <div id="mySpasList"></div>
+        <div id="mySpasEmpty" class="lead hidden">No reservations found for your account.</div>
+        <div id="mySpasUnlinked" class="lead hidden">Your account is not yet linked to your order history — send us a message via the <b>Contact</b> tab and we will connect it.</div>
       </div>
     </div>
 
@@ -160,7 +171,7 @@ async function sendLink(){
   $("who").textContent = (me.data.company ? me.data.company + " · " : "") + me.data.email;
   $("who").classList.remove("hidden");
   $("logoutBtn").classList.remove("hidden");
-  loadStock(); loadDocs();
+  loadStock(); loadDocs(); loadMySpas();
 })();
 
 $("logoutBtn").addEventListener("click", ()=>{ localStorage.removeItem(SESS_KEY); location.reload(); });
@@ -169,7 +180,7 @@ $("logoutBtn").addEventListener("click", ()=>{ localStorage.removeItem(SESS_KEY)
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", ()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
   t.classList.add("active");
-  ["stock","docs","contact"].forEach(k => $("tab-"+k).classList.toggle("hidden", t.dataset.tab!==k));
+  ["stock","myspas","docs","contact"].forEach(k => $("tab-"+k).classList.toggle("hidden", t.dataset.tab!==k));
 }));
 
 // ── Stock ──
@@ -192,7 +203,9 @@ function renderStock(){
         <li>🚢 On the water: <b>${m.onTheWater}</b>${m.nextEta?` <span style="color:var(--muted)">(ETA ${esc(m.nextEta)})</span>`:""}</li>
         <li>🏭 In production: <b>${m.inProduction}</b></li>
       </ul>
+      <button class="primary rsv" data-model="${esc(m.model)}" style="margin-top:10px;padding:8px 14px;font-size:13px;">Reserve</button>
     </div>`).join("");
+  document.querySelectorAll(".rsv").forEach(b => b.addEventListener("click", () => openReserve(b.dataset.model)));
   $("stockEmpty").classList.toggle("hidden", list.length > 0);
 }
 $("stockSearch").addEventListener("input", renderStock);
@@ -216,6 +229,64 @@ function renderDocs(){
   $("docsEmpty").classList.toggle("hidden", list.length > 0);
 }
 $("docSearch").addEventListener("input", renderDocs);
+
+// ── My spas (fase 2) ──
+async function loadMySpas(){
+  const r = await api("/dealers/api/myspas");
+  if (r.status !== 200 || !r.data || !r.data.ok) return;
+  if (!r.data.linked) { $("mySpasUnlinked").classList.remove("hidden"); return; }
+  const spas = r.data.spas || [];
+  $("mySpasEmpty").classList.toggle("hidden", spas.length > 0);
+  $("mySpasList").innerHTML = spas.length ? `
+    <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13.5px;">
+      <thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;">
+        <th style="padding:8px 6px;">Order</th><th>Date</th><th>Model</th><th>Description</th><th>Qty</th><th>Status</th></tr></thead>
+      <tbody>${spas.map(s => `
+        <tr style="border-top:1px solid #f3f4f6;">
+          <td style="padding:9px 6px;font-family:ui-monospace,monospace;">${esc(s.ordernr)}</td>
+          <td>${esc(s.date||"")}</td>
+          <td><b>${esc(s.model)}</b></td>
+          <td style="color:var(--muted);font-size:12.5px;">${esc(String(s.description||"").slice(0,50))}</td>
+          <td>${esc(s.qty)}</td>
+          <td>${s.modelAvailable>0 ? '<span class="pill">in stock NL</span>' : (s.modelNextEta ? 'expected ETA '+esc(s.modelNextEta) : 'in pipeline')}</td>
+        </tr>`).join("")}</tbody></table></div>` : "";
+}
+
+// ── Reserve (fase 3-fundament) ──
+function openReserve(model){
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:18px";
+  ov.innerHTML = `
+    <div class="card" style="max-width:440px;width:100%;margin:0;">
+      <h2 style="font-size:17px;">Reserve — ${esc(model)}</h2>
+      <p class="lead">Send a reservation request. Our sales team will confirm price and availability by e-mail.</p>
+      <label style="font-size:12px;color:var(--muted);">Quantity</label>
+      <input type="number" id="rsvQty" value="1" min="1" max="50" style="margin-bottom:10px;">
+      <label style="font-size:12px;color:var(--muted);">Notes (colour, options, …)</label>
+      <textarea id="rsvNote" rows="3"></textarea>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
+        <button id="rsvCancel" style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 16px;font:inherit;cursor:pointer;">Cancel</button>
+        <button class="primary" id="rsvSend" type="button">Send request</button>
+      </div>
+      <div id="rsvMsg" class="msg hidden"></div>
+    </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", (e)=>{ if(e.target===ov) ov.remove(); });
+  ov.querySelector("#rsvCancel").addEventListener("click", ()=>ov.remove());
+  ov.querySelector("#rsvSend").addEventListener("click", async ()=>{
+    const btn = ov.querySelector("#rsvSend"); btn.disabled = true;
+    const r = await api("/dealers/api/reserve", { method:"POST", body: JSON.stringify({
+      model, qty: ov.querySelector("#rsvQty").value, note: ov.querySelector("#rsvNote").value }) });
+    const m = ov.querySelector("#rsvMsg");
+    if (r.status===200 && r.data && r.data.ok) {
+      m.className="msg ok"; m.textContent="Request sent — we will confirm by e-mail."; m.classList.remove("hidden");
+      setTimeout(()=>ov.remove(), 1800);
+    } else {
+      m.className="msg bad"; m.textContent="Sending failed — please try again."; m.classList.remove("hidden");
+      btn.disabled = false;
+    }
+  });
+}
 
 // ── Contact ──
 $("qSend").addEventListener("click", async ()=>{

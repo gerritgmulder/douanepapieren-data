@@ -29,6 +29,7 @@ const ALLOWED_BUCKETS = new Set([
   "voorraad-pipeline",// Voorraadbeheer pipeline: containers (nr/besteld/ETA/herkomst + spa-regels) — door Chantal beheerd
   "dealer-accounts",  // Dealerportaal: toegestane dealers (email/bedrijf/debtorIds) + contactEmail — beheer via interne tegel
   "dealer-docs",      // Dealerportaal: documenten/specsheets (titel/model/url)
+  "dealer-requests",  // Dealerportaal: reserveringsaanvragen van dealers (beheer via interne tegel)
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
@@ -166,8 +167,8 @@ function dpContainerStatus(c, now) {
   return "prod";
 }
 
-// GET /dealers/api/stock — geaggregeerd per model, dealer-veilig
-async function dpHandleStock(env) {
+// Voorraad-aggregatie per model (dealer-veilig) — gedeeld door /stock en /myspas
+async function dpStockModels(env) {
   const pipe = await env.FONTEYN_DATA.get("voorraad-pipeline", { type: "json" });
   const containers = (pipe && pipe.containers) || [];
   const now = new Date();
@@ -190,7 +191,93 @@ async function dpHandleStock(env) {
   }
   const models = Object.values(byModel).sort((a, b) =>
     (b.available - a.available) || String(a.model).localeCompare(String(b.model)));
-  return reply(200, { ok: true, updated: (pipe && pipe.lastUpdated) || null, models });
+  return { updated: (pipe && pipe.lastUpdated) || null, models };
+}
+
+// GET /dealers/api/stock — geaggregeerd per model, dealer-veilig
+async function dpHandleStock(env) {
+  const agg = await dpStockModels(env);
+  return reply(200, { ok: true, updated: agg.updated, models: agg.models });
+}
+
+// GET /dealers/api/myspas — fase 2: de eigen reserveringen van deze dealer.
+// Koppeling: debtorIds op het dealer-account (beheertegel) ↔ debtorId in de
+// Voorraadbeheer-reserveringen (bucket 'voorraad'). Alleen eigen data.
+async function dpHandleMySpas(env, sess) {
+  const accounts = await dpGetAccounts(env);
+  const dealer = dpFindDealer(accounts, sess.email);
+  const debtorIds = new Set(((dealer && dealer.debtorIds) || []).map(String).filter(Boolean));
+  if (!debtorIds.size) return reply(200, { ok: true, linked: false, spas: [] });
+  const voorraad = await env.FONTEYN_DATA.get("voorraad", { type: "json" });
+  const resv = (voorraad && voorraad.reserveringen) || {};
+  const agg = await dpStockModels(env);
+  const modelInfo = {};
+  for (const m of agg.models) modelInfo[m.model] = m;
+  const spas = [];
+  for (const k in resv) {
+    const r = resv[k];
+    if (!r || !debtorIds.has(String(r.debtorId))) continue;
+    const mi = modelInfo[String(r.model || "").trim()] || null;
+    spas.push({
+      ordernr: r.ordernr, date: r.datum, model: r.model,
+      description: r.omschrijving, qty: r.aantal, advisor: r.adviseur || "",
+      modelAvailable: mi ? mi.available : null,
+      modelNextEta: mi ? mi.nextEta : null,
+    });
+  }
+  spas.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  return reply(200, { ok: true, linked: true, spas });
+}
+
+// POST /dealers/api/reserve  { model, qty, note } — fase 3-fundament:
+// reserveringsaanvraag vastleggen + mail naar sales. De Mollie-betaallink
+// wordt hier aangehaakt zodra MOLLIE_API_KEY als worker-secret bestaat.
+async function dpHandleReserve(request, env, sess) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const model = String(body.model || "").trim().slice(0, 80);
+  const qty = Math.max(1, Math.min(50, parseInt(body.qty, 10) || 1));
+  const note = String(body.note || "").slice(0, 1500);
+  if (!model) return reply(400, { ok: false, error: "model-required" });
+  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  if (!Array.isArray(data.requests)) data.requests = [];
+  data.requests.push({
+    id: crypto.randomUUID(), ts: new Date().toISOString(),
+    email: sess.email, company: sess.company || "",
+    model, qty, note, status: "new",
+  });
+  await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+  const accounts = await dpGetAccounts(env);
+  const esc = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  await dpSendEmail(env, accounts.contactEmail || "gerrit@fonteyn.nl",
+    "[Dealerportaal] Reservering: " + qty + "x " + model + " — " + (sess.company || sess.email),
+    '<div style="font-family:Arial,sans-serif;">' +
+    '<p><b>Nieuwe reserveringsaanvraag via het dealerportaal</b></p>' +
+    '<p><b>Dealer:</b> ' + esc(sess.company || "") + ' &lt;' + esc(sess.email) + '&gt;<br>' +
+    '<b>Model:</b> ' + esc(model) + '<br><b>Aantal:</b> ' + qty + '</p>' +
+    (note ? '<p style="white-space:pre-wrap;border-left:3px solid #8bc53f;padding-left:12px;">' + esc(note) + '</p>' : '') +
+    '<p style="color:#888;font-size:12px;">Ook zichtbaar in de beheertegel Dealerportaal. Reply gaat direct naar de dealer.</p></div>',
+    sess.email);
+  return reply(200, { ok: true });
+}
+
+// Fase 3 — Mollie-betaallink (wacht op MOLLIE_API_KEY als worker-secret).
+// Zodra de key er is: aanroepen vanuit de reserve-flow met het aanbetalings-
+// bedrag, checkoutUrl teruggeven aan het portaal, en een /dealers/webhook
+// route toevoegen voor de betaalstatus.
+async function dpCreateMolliePayment(env, amountEur, description, redirectUrl) {
+  if (!env.MOLLIE_API_KEY) return { ok: false, error: "mollie-not-configured" };
+  const r = await fetch("https://api.mollie.com/v2/payments", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + env.MOLLIE_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      amount: { currency: "EUR", value: Number(amountEur).toFixed(2) },
+      description, redirectUrl,
+    }),
+  });
+  const j = await r.json().catch(() => null);
+  if (!r.ok || !j) return { ok: false, error: "mollie-http-" + r.status };
+  return { ok: true, id: j.id, checkoutUrl: j._links && j._links.checkout && j._links.checkout.href };
 }
 
 // GET /dealers/api/docs — documentenlijst (specsheets e.d.)
@@ -247,6 +334,8 @@ async function handleDealerRoutes(request, env, url) {
     if (!sess) return reply(401, { ok: false, error: "not-logged-in" });
     if (p === "/dealers/api/me" && request.method === "GET") return reply(200, { ok: true, email: sess.email, company: sess.company || "" });
     if (p === "/dealers/api/stock" && request.method === "GET") return dpHandleStock(env);
+    if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);
+    if (p === "/dealers/api/reserve" && request.method === "POST") return dpHandleReserve(request, env, sess);
     if (p === "/dealers/api/docs" && request.method === "GET") return dpHandleDocs(env);
     if (p === "/dealers/api/vraag" && request.method === "POST") return dpHandleVraag(request, env, sess);
   }
