@@ -81,6 +81,23 @@ function reply(status, body, extraHeaders = {}) {
 const DP_LOGIN_TTL = 15 * 60;            // magic-link 15 min geldig
 const DP_SESS_TTL  = 30 * 24 * 3600;     // sessie 30 dagen
 
+// Best-effort rate-limiter op KV (eventual consistent — geen harde garantie,
+// wel een echte rem op mail-bombing en wachtwoord-raden). Per IP + scope:
+// max `limit` pogingen per `windowSec`. Cloudflare geeft het echte client-IP
+// door in CF-Connecting-IP.
+async function rateLimited(env, request, scope, limit, windowSec) {
+  const ip = request.headers.get("CF-Connecting-IP") || "unknown";
+  const key = "rl:" + scope + ":" + ip;
+  const cur = parseInt(await env.FONTEYN_DATA.get(key) || "0", 10);
+  if (cur >= limit) {
+    console.log("[ratelimit] " + scope + " geblokkeerd voor " + ip);
+    return true;
+  }
+  // TTL vernieuwt per schrijf — venster schuift op; prima voor best-effort.
+  await env.FONTEYN_DATA.put(key, String(cur + 1), { expirationTtl: windowSec });
+  return false;
+}
+
 async function dpSendEmail(env, to, subject, html, replyTo) {
   if (!env.RESEND_API_KEY || !env.MAIL_FROM) {
     console.log("[dp-mail] niet geconfigureerd (RESEND_API_KEY/MAIL_FROM ontbreekt)");
@@ -124,6 +141,9 @@ async function dpHandleLogin(request, env, url) {
   // Altijd hetzelfde antwoord — geen e-mail-enumeratie mogelijk
   const generic = reply(200, { ok: true, message: "if-known-mail-sent" });
   if (!email || !email.includes("@")) return generic;
+  // Rem op mail-bombing/adres-proberen: 5 loginpogingen per kwartier per IP.
+  // Zelfde generieke antwoord, zodat ook dit geen enumeratie-signaal geeft.
+  if (await rateLimited(env, request, "dplogin", 5, 900)) return generic;
   const accounts = await dpGetAccounts(env);
   const dealer = dpFindDealer(accounts, email);
   if (!dealer) return generic;
@@ -152,7 +172,9 @@ async function dpHandleAuth(request, env, url) {
   await env.FONTEYN_DATA.delete("dp-login:" + t);   // eenmalig bruikbaar
   const sess = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("dp-sess:" + sess, JSON.stringify({ email: login.email, company: login.company, since: new Date().toISOString() }), { expirationTtl: DP_SESS_TTL });
-  return new Response(null, { status: 302, headers: { "Location": url.origin + "/dealers?s=" + sess } });
+  // Token in het URL-FRAGMENT (#s=…), niet als queryparameter: fragmenten
+  // verlaten de browser nooit (geen server/proxy-logs, geen referrers).
+  return new Response(null, { status: 302, headers: { "Location": url.origin + "/dealers#s=" + sess } });
 }
 
 // Voorraad-status per container (zelfde regels als de interne pipeline-tab)
@@ -452,6 +474,13 @@ async function handleDealerRoutes(request, env, url) {
     const sess = await dpSession(env, request);
     if (!sess) return reply(401, { ok: false, error: "not-logged-in" });
     if (p === "/dealers/api/me" && request.method === "GET") return reply(200, { ok: true, email: sess.email, company: sess.company || "" });
+    if (p === "/dealers/api/logout" && request.method === "POST") {
+      // Sessie ook server-side weggooien — localStorage wissen alleen liet
+      // het token 30 dagen bruikbaar in KV staan.
+      const tok = request.headers.get("X-Dealer-Session") || "";
+      if (tok) await env.FONTEYN_DATA.delete("dp-sess:" + tok);
+      return reply(200, { ok: true });
+    }
     if (p === "/dealers/api/stock" && request.method === "GET") return dpHandleStock(env);
     if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);
     if (p === "/dealers/api/reserve" && request.method === "POST") return dpHandleReserve(request, env, sess, url);
@@ -476,6 +505,12 @@ async function handleTeamKey(request, env) {
   const username = String(body.username || "").trim();
   const password = String(body.password || "");
   if (!username || !password) return reply(400, { ok: false, error: "credentials-required" });
+  // Zonder rem is dit endpoint een open brute-force-proxy richting Logic4's
+  // IDP (met de teamsleutel als prijs). 10 pogingen per kwartier per IP is
+  // ruim voor legitiem gebruik (1 poging per login).
+  if (await rateLimited(env, request, "teamkey", 10, 900)) {
+    return reply(429, { ok: false, error: "too-many-attempts" });
+  }
   if (!env.LOGIC4_PUBLICKEY || !env.LOGIC4_SECRETKEY || !env.LOGIC4_COMPANYKEY) {
     return reply(503, { ok: false, error: "logic4-not-configured" });
   }

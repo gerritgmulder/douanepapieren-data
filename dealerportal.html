@@ -125,11 +125,14 @@ const SESS_KEY = "dp.session";
 const $ = (id) => document.getElementById(id);
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
-// Sessie uit magic-link (?s=…) oppakken en URL schoonmaken
+// Sessie uit magic-link oppakken en URL schoonmaken. Het token komt in het
+// URL-fragment (#s=…) — dat verlaat de browser nooit (geen logs/referrers).
+// ?s= blijft als terugval voor redirects van vóór deze wijziging.
 let showPaidBanner = false;
 (function(){
   const u = new URL(location.href);
-  const s = u.searchParams.get("s");
+  const hashMatch = (location.hash || "").match(/^#s=(.+)$/);
+  const s = (hashMatch && hashMatch[1]) || u.searchParams.get("s");
   if (s && s.length > 20) {
     localStorage.setItem(SESS_KEY, s);
     u.searchParams.delete("s");
@@ -187,7 +190,12 @@ async function sendLink(){
   loadStock(); loadDocs(); loadMySpas();
 })();
 
-$("logoutBtn").addEventListener("click", ()=>{ localStorage.removeItem(SESS_KEY); location.reload(); });
+$("logoutBtn").addEventListener("click", async ()=>{
+  // Sessie ook server-side weggooien — alleen localStorage wissen liet het
+  // token in KV nog 30 dagen geldig.
+  try { await api("/dealers/api/logout", { method:"POST" }); } catch(e){}
+  localStorage.removeItem(SESS_KEY); location.reload();
+});
 
 // ── Tabs ──
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", ()=>{
