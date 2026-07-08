@@ -27,6 +27,8 @@ const ALLOWED_BUCKETS = new Set([
   "retouren",         // Retour-registratie per order (reden/locatie/uitleg/adviseur)
   "voorraad",         // Voorraadbeheer: adviseur-map (UserId→naam) + dealer-markering per debiteur
   "voorraad-pipeline",// Voorraadbeheer pipeline: containers (nr/besteld/ETA/herkomst + spa-regels) — door Chantal beheerd
+  "dealer-accounts",  // Dealerportaal: toegestane dealers (email/bedrijf/debtorIds) + contactEmail — beheer via interne tegel
+  "dealer-docs",      // Dealerportaal: documenten/specsheets (titel/model/url)
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
@@ -41,7 +43,7 @@ const ALLOWED_BUCKET_PATTERNS = [
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Fonteyn-Auth",
+  "Access-Control-Allow-Headers": "Content-Type, X-Fonteyn-Auth, X-Dealer-Session",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -62,6 +64,195 @@ function reply(status, body, extraHeaders = {}) {
 // is vervangen door een extern systeem en hier opgeruimd. De historische
 // bezoekersdata blijft bereikbaar via /data/signin-YYYY-MM (pattern hierboven).
 
+// ─── Dealerportaal ──────────────────────────────────────────────────
+// Publiek web-portaal voor dealers (dealers.fonteyn.nl, voorlopig op de
+// workers.dev-URL): GET /dealers serveert de pagina (vers van GitHub main,
+// zelfde patroon als de oude kiosk). Login = magic-link per e-mail (Resend);
+// alleen adressen die intern in de beheertegel zijn toegevoegd (bucket
+// dealer-accounts) krijgen een link. Sessies en login-tokens staan als
+// losse KV-keys (dp-sess:/dp-login:) met TTL — bewust NIET via /data
+// bereikbaar. De dealer-API's geven uitsluitend dealer-veilige data terug:
+// geaggregeerde voorraad (geen klantnamen, geen inkoopprijzen), documenten
+// en een contactformulier. De interne SHARED_SECRET komt hier nergens aan
+// te pas.
+
+const DP_LOGIN_TTL = 15 * 60;            // magic-link 15 min geldig
+const DP_SESS_TTL  = 30 * 24 * 3600;     // sessie 30 dagen
+
+async function dpSendEmail(env, to, subject, html, replyTo) {
+  if (!env.RESEND_API_KEY || !env.MAIL_FROM) return { ok: false, error: "mail-not-configured" };
+  const body = { from: env.MAIL_FROM, to: [String(to).toLowerCase()], subject, html };
+  if (replyTo) body.reply_to = [replyTo];
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { ok: r.ok, status: r.status };
+}
+
+async function dpGetAccounts(env) {
+  const data = await env.FONTEYN_DATA.get("dealer-accounts", { type: "json" });
+  return data || { dealers: [], contactEmail: "gerrit@fonteyn.nl" };
+}
+
+function dpFindDealer(accounts, email) {
+  const e = String(email || "").trim().toLowerCase();
+  if (!e) return null;
+  return (accounts.dealers || []).find(d => String(d.email || "").toLowerCase() === e && d.active !== false) || null;
+}
+
+async function dpSession(env, request) {
+  const tok = request.headers.get("X-Dealer-Session") || "";
+  if (!tok || tok.length < 20) return null;
+  const sess = await env.FONTEYN_DATA.get("dp-sess:" + tok, { type: "json" });
+  return sess || null;
+}
+
+// POST /dealers/login  { email }
+async function dpHandleLogin(request, env, url) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const email = String(body.email || "").trim().toLowerCase();
+  // Altijd hetzelfde antwoord — geen e-mail-enumeratie mogelijk
+  const generic = reply(200, { ok: true, message: "if-known-mail-sent" });
+  if (!email || !email.includes("@")) return generic;
+  const accounts = await dpGetAccounts(env);
+  const dealer = dpFindDealer(accounts, email);
+  if (!dealer) return generic;
+  const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+  await env.FONTEYN_DATA.put("dp-login:" + token, JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_LOGIN_TTL });
+  const link = url.origin + "/dealers/auth?t=" + token;
+  await dpSendEmail(env, email, "Your Fonteyn Dealer Portal login link",
+    '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">' +
+    '<h2 style="color:#144734;">Fonteyn Dealer Portal</h2>' +
+    '<p>Hello ' + (dealer.company ? dealer.company : "") + ',</p>' +
+    '<p>Click the button below to log in. This link is valid for 15 minutes.</p>' +
+    '<p style="margin:26px 0;"><a href="' + link + '" ' +
+    'style="background:#8bc53f;color:#144734;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:10px;display:inline-block;">Log in to the portal</a></p>' +
+    '<p style="color:#888;font-size:12px;">If you did not request this, you can ignore this email.</p></div>');
+  return generic;
+}
+
+// GET /dealers/auth?t=… → login-token inwisselen voor sessie, terug naar portaal
+async function dpHandleAuth(request, env, url) {
+  const t = url.searchParams.get("t") || "";
+  const login = t ? await env.FONTEYN_DATA.get("dp-login:" + t, { type: "json" }) : null;
+  if (!login) {
+    return new Response("<html><body style='font-family:Arial;padding:40px;text-align:center'><h2>Link expired</h2><p>This login link is no longer valid. Please request a new one.</p><p><a href='" + url.origin + "/dealers'>Back to the portal</a></p></body></html>",
+      { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
+  }
+  await env.FONTEYN_DATA.delete("dp-login:" + t);   // eenmalig bruikbaar
+  const sess = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+  await env.FONTEYN_DATA.put("dp-sess:" + sess, JSON.stringify({ email: login.email, company: login.company, since: new Date().toISOString() }), { expirationTtl: DP_SESS_TTL });
+  return new Response(null, { status: 302, headers: { "Location": url.origin + "/dealers?s=" + sess } });
+}
+
+// Voorraad-status per container (zelfde regels als de interne pipeline-tab)
+function dpContainerStatus(c, now) {
+  const eta = c.eta ? new Date(c.eta) : null;
+  const besteld = c.besteld ? new Date(c.besteld) : null;
+  const W = 7 * 86400000;
+  if (eta && !isNaN(eta)) {
+    if (now >= eta) return "nl";
+    if (now >= new Date(eta.getTime() - 5.5 * W)) return "ship";
+    return "prod";
+  }
+  if (besteld && !isNaN(besteld)) {
+    if (now >= new Date(besteld.getTime() + 13.5 * W)) return "nl";
+    if (now >= new Date(besteld.getTime() + 8 * W)) return "ship";
+    return "prod";
+  }
+  return "prod";
+}
+
+// GET /dealers/api/stock — geaggregeerd per model, dealer-veilig
+async function dpHandleStock(env) {
+  const pipe = await env.FONTEYN_DATA.get("voorraad-pipeline", { type: "json" });
+  const containers = (pipe && pipe.containers) || [];
+  const now = new Date();
+  const byModel = {};
+  for (const c of containers) {
+    const st = dpContainerStatus(c, now);
+    const eta = c.eta || null;
+    for (const l of (c.lines || [])) {
+      if (!l.model) continue;
+      const model = String(l.model).trim();
+      const free = Math.max(0, (Number(l.qty) || 0) - (Number(l.reserved) || 0));
+      if (!byModel[model]) byModel[model] = { model, available: 0, onTheWater: 0, inProduction: 0, nextEta: null };
+      if (st === "nl") byModel[model].available += free;
+      else if (st === "ship") byModel[model].onTheWater += free;
+      else byModel[model].inProduction += free;
+      if (free > 0 && st !== "nl" && eta) {
+        if (!byModel[model].nextEta || eta < byModel[model].nextEta) byModel[model].nextEta = eta;
+      }
+    }
+  }
+  const models = Object.values(byModel).sort((a, b) =>
+    (b.available - a.available) || String(a.model).localeCompare(String(b.model)));
+  return reply(200, { ok: true, updated: (pipe && pipe.lastUpdated) || null, models });
+}
+
+// GET /dealers/api/docs — documentenlijst (specsheets e.d.)
+async function dpHandleDocs(env) {
+  const data = await env.FONTEYN_DATA.get("dealer-docs", { type: "json" });
+  const docs = (data && data.docs) || [];
+  return reply(200, { ok: true, docs });
+}
+
+// POST /dealers/api/vraag  { subject, message } — mail naar sales
+async function dpHandleVraag(request, env, sess) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const subject = String(body.subject || "").slice(0, 150);
+  const message = String(body.message || "").slice(0, 4000);
+  if (!subject.trim() || !message.trim()) return reply(400, { ok: false, error: "subject-and-message-required" });
+  const accounts = await dpGetAccounts(env);
+  const to = accounts.contactEmail || "gerrit@fonteyn.nl";
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const sent = await dpSendEmail(env, to,
+    "[Dealerportaal] " + subject + " — " + (sess.company || sess.email),
+    '<div style="font-family:Arial,sans-serif;">' +
+    '<p><b>Dealer:</b> ' + esc(sess.company || "") + ' &lt;' + esc(sess.email) + '&gt;</p>' +
+    '<p><b>Onderwerp:</b> ' + esc(subject) + '</p>' +
+    '<p style="white-space:pre-wrap;border-left:3px solid #8bc53f;padding-left:12px;">' + esc(message) + '</p>' +
+    '<p style="color:#888;font-size:12px;">Beantwoord deze mail — reply gaat direct naar de dealer.</p></div>',
+    sess.email);
+  return reply(sent.ok ? 200 : 502, { ok: sent.ok });
+}
+
+// GET /dealers → portaalpagina vers van GitHub main (cache ≤10s)
+async function dpHandlePage(env) {
+  const cb = Math.floor(Date.now() / 10000);
+  const r = await fetch(
+    "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/dealerportal.html?cb=" + cb,
+    { cf: { cacheTtl: 10, cacheEverything: true } }
+  );
+  if (!r.ok) {
+    return new Response("Portal temporarily unavailable — please try again in a minute.", { status: 503, headers: { "Content-Type": "text/plain" } });
+  }
+  const html = await r.text();
+  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+}
+
+async function handleDealerRoutes(request, env, url) {
+  const p = url.pathname.replace(/\/+$/, "");
+  if (p === "/dealers" && request.method === "GET") return dpHandlePage(env);
+  if (p === "/dealers/login" && request.method === "POST") return dpHandleLogin(request, env, url);
+  if (p === "/dealers/auth" && request.method === "GET") return dpHandleAuth(request, env, url);
+
+  // Alles hieronder vereist een geldige dealer-sessie
+  if (p.startsWith("/dealers/api/")) {
+    const sess = await dpSession(env, request);
+    if (!sess) return reply(401, { ok: false, error: "not-logged-in" });
+    if (p === "/dealers/api/me" && request.method === "GET") return reply(200, { ok: true, email: sess.email, company: sess.company || "" });
+    if (p === "/dealers/api/stock" && request.method === "GET") return dpHandleStock(env);
+    if (p === "/dealers/api/docs" && request.method === "GET") return dpHandleDocs(env);
+    if (p === "/dealers/api/vraag" && request.method === "POST") return dpHandleVraag(request, env, sess);
+  }
+  return reply(404, "Not found");
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
@@ -69,6 +260,11 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    // Dealerportaal (publiek, eigen sessie-auth — géén shared secret)
+    if (url.pathname === "/dealers" || url.pathname.startsWith("/dealers/")) {
+      return handleDealerRoutes(request, env, url);
+    }
 
     const m = url.pathname.match(/^\/data\/([a-z0-9_-]{2,40})\/?$/i);
     if (!m) return reply(404, "Not found");

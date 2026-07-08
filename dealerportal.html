@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Fonteyn Dealer Portal</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --green:#144734; --green-dark:#0d3325; --lime:#8bc53f; --lime-dark:#72a531;
+    --bg:#f5f4ef; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb;
+    --ok:#059669; --warn:#92400e; --bad:#b91c1c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:15px}
+  header{background:var(--green);color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px}
+  header img{height:38px}
+  header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+  header .who{font-size:12px;color:rgba(255,255,255,.85)}
+  header button{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:6px 13px;font:inherit;font-size:12px;cursor:pointer}
+  main{max-width:1080px;margin:26px auto;padding:0 18px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin:14px 0}
+  h2{color:var(--green);font-size:20px;margin:0 0 8px}
+  .lead{color:var(--muted);margin:0 0 16px;font-size:13.5px}
+  input,textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:11px 12px;font:inherit;font-size:15px}
+  input:focus,textarea:focus{outline:2px solid var(--lime);outline-offset:-1px}
+  button.primary{background:var(--lime);color:var(--green);border:0;border-radius:8px;padding:12px 22px;font:inherit;font-weight:700;cursor:pointer}
+  button.primary:hover{background:var(--lime-dark);color:#fff}
+  button.primary:disabled{opacity:.55;cursor:wait}
+  .msg{padding:11px 14px;border-radius:8px;margin-top:12px;font-size:13.5px}
+  .msg.ok{background:#dcfce7;color:var(--ok)} .msg.bad{background:#fee2e2;color:var(--bad)}
+  .hidden{display:none !important}
+  .tabs{display:flex;gap:6px;margin:18px 0 4px;border-bottom:2px solid var(--border);flex-wrap:wrap}
+  .tab{background:transparent;border:0;border-bottom:3px solid transparent;padding:10px 16px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:-2px}
+  .tab.active{color:var(--green);border-bottom-color:var(--lime)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+  .stock-card{border:1px solid var(--border);border-radius:10px;padding:13px 15px;background:#fff}
+  .stock-card .m{font-weight:700;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .stock-card ul{list-style:none;margin:9px 0 0;padding:0;font-size:13px;color:#374151;line-height:1.75}
+  .pill{display:inline-block;background:#dcfce7;color:var(--ok);border-radius:999px;font-size:11px;font-weight:700;padding:2px 9px;white-space:nowrap}
+  .doc{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid #f3f4f6}
+  .doc a{color:var(--green);font-weight:600}
+  footer{color:var(--muted);font-size:12px;text-align:center;padding:26px 10px}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-logo.png" alt="Fonteyn">
+  <h1>Dealer Portal</h1>
+  <span class="who hidden" id="who"></span>
+  <button class="hidden" id="logoutBtn" type="button">Log out</button>
+</header>
+
+<main>
+  <!-- LOGIN -->
+  <section id="loginView">
+    <div class="card" style="max-width:460px;margin:40px auto;">
+      <h2>Welcome</h2>
+      <p class="lead">Enter your e-mail address and we will send you a login link. Access is available to registered Fonteyn &amp; Passion Spas dealers.</p>
+      <input type="email" id="email" placeholder="you@yourcompany.com" autocomplete="email">
+      <div style="margin-top:12px;"><button class="primary" id="loginBtn" type="button" style="width:100%;">Send me a login link</button></div>
+      <div id="loginMsg" class="msg hidden"></div>
+    </div>
+  </section>
+
+  <!-- APP -->
+  <section id="appView" class="hidden">
+    <div class="tabs">
+      <button class="tab active" data-tab="stock" type="button">Stock</button>
+      <button class="tab" data-tab="docs" type="button">Documents</button>
+      <button class="tab" data-tab="contact" type="button">Contact</button>
+    </div>
+
+    <div id="tab-stock">
+      <div class="card">
+        <h2>Spa availability</h2>
+        <p class="lead">Live overview per model: available now from stock (NL), on the water, and in production. <span id="stockUpdated"></span></p>
+        <input id="stockSearch" placeholder="Search model… (e.g. Renew)" style="max-width:320px;">
+        <div id="stockGrid" class="grid" style="margin-top:14px;"></div>
+        <div id="stockEmpty" class="lead hidden" style="margin-top:12px;">No stock data available right now — please check back later.</div>
+      </div>
+    </div>
+
+    <div id="tab-docs" class="hidden">
+      <div class="card">
+        <h2>Documents &amp; spec sheets</h2>
+        <p class="lead">Specification sheets, manuals and sales material.</p>
+        <input id="docSearch" placeholder="Search documents…" style="max-width:320px;">
+        <div id="docList" style="margin-top:8px;"></div>
+        <div id="docsEmpty" class="lead hidden" style="margin-top:12px;">No documents published yet.</div>
+      </div>
+    </div>
+
+    <div id="tab-contact" class="hidden">
+      <div class="card" style="max-width:600px;">
+        <h2>Ask us anything</h2>
+        <p class="lead">Your message goes straight to the Fonteyn sales team — we will reply to your e-mail address.</p>
+        <input id="qSubject" placeholder="Subject" style="margin-bottom:10px;">
+        <textarea id="qMessage" rows="6" placeholder="Your question…"></textarea>
+        <div style="margin-top:12px;"><button class="primary" id="qSend" type="button">Send</button></div>
+        <div id="qMsg" class="msg hidden"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>Fonteyn Outdoor Living Mall · Meervelderweg 52, 3888 NK Uddel, The Netherlands</footer>
+
+<script>
+const SESS_KEY = "dp.session";
+const $ = (id) => document.getElementById(id);
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+// Sessie uit magic-link (?s=…) oppakken en URL schoonmaken
+(function(){
+  const u = new URL(location.href);
+  const s = u.searchParams.get("s");
+  if (s && s.length > 20) {
+    localStorage.setItem(SESS_KEY, s);
+    u.searchParams.delete("s");
+    history.replaceState(null, "", u.pathname);
+  }
+})();
+
+async function api(path, opts){
+  opts = opts || {};
+  opts.headers = Object.assign({ "Content-Type": "application/json", "X-Dealer-Session": localStorage.getItem(SESS_KEY) || "" }, opts.headers || {});
+  const r = await fetch(path, opts);
+  let j = null; try { j = await r.json(); } catch {}
+  return { status: r.status, data: j };
+}
+
+// ── Login ──
+$("loginBtn").addEventListener("click", sendLink);
+$("email").addEventListener("keydown", (e)=>{ if(e.key==="Enter") sendLink(); });
+async function sendLink(){
+  const email = $("email").value.trim();
+  const m = $("loginMsg");
+  if (!email || !email.includes("@")) { m.className="msg bad"; m.textContent="Please enter a valid e-mail address."; m.classList.remove("hidden"); return; }
+  $("loginBtn").disabled = true;
+  try {
+    await api("/dealers/login", { method:"POST", body: JSON.stringify({ email }) });
+    m.className = "msg ok";
+    m.textContent = "If this address is registered as a dealer, a login link is on its way — check your inbox (valid for 15 minutes).";
+    m.classList.remove("hidden");
+  } catch(e) {
+    m.className="msg bad"; m.textContent="Something went wrong — please try again."; m.classList.remove("hidden");
+  } finally { $("loginBtn").disabled = false; }
+}
+
+// ── Boot: sessie checken ──
+(async function boot(){
+  if (!localStorage.getItem(SESS_KEY)) return;   // login-view blijft staan
+  const me = await api("/dealers/api/me");
+  if (me.status !== 200 || !me.data || !me.data.ok) { localStorage.removeItem(SESS_KEY); return; }
+  $("loginView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  $("who").textContent = (me.data.company ? me.data.company + " · " : "") + me.data.email;
+  $("who").classList.remove("hidden");
+  $("logoutBtn").classList.remove("hidden");
+  loadStock(); loadDocs();
+})();
+
+$("logoutBtn").addEventListener("click", ()=>{ localStorage.removeItem(SESS_KEY); location.reload(); });
+
+// ── Tabs ──
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", ()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+  t.classList.add("active");
+  ["stock","docs","contact"].forEach(k => $("tab-"+k).classList.toggle("hidden", t.dataset.tab!==k));
+}));
+
+// ── Stock ──
+let stockModels = [];
+async function loadStock(){
+  const r = await api("/dealers/api/stock");
+  if (r.status !== 200 || !r.data || !r.data.ok) return;
+  stockModels = r.data.models || [];
+  if (r.data.updated) $("stockUpdated").textContent = "Last updated: " + new Date(r.data.updated).toLocaleDateString("en-GB") + ".";
+  renderStock();
+}
+function renderStock(){
+  const q = ($("stockSearch").value || "").trim().toLowerCase();
+  const list = q ? stockModels.filter(m => m.model.toLowerCase().includes(q)) : stockModels;
+  $("stockGrid").innerHTML = list.map(m => `
+    <div class="stock-card">
+      <div class="m">${esc(m.model)}${m.available>0?`<span class="pill">${m.available} in stock</span>`:""}</div>
+      <ul>
+        <li>📦 Available now: <b>${m.available}</b></li>
+        <li>🚢 On the water: <b>${m.onTheWater}</b>${m.nextEta?` <span style="color:var(--muted)">(ETA ${esc(m.nextEta)})</span>`:""}</li>
+        <li>🏭 In production: <b>${m.inProduction}</b></li>
+      </ul>
+    </div>`).join("");
+  $("stockEmpty").classList.toggle("hidden", list.length > 0);
+}
+$("stockSearch").addEventListener("input", renderStock);
+
+// ── Documents ──
+let docs = [];
+async function loadDocs(){
+  const r = await api("/dealers/api/docs");
+  if (r.status !== 200 || !r.data || !r.data.ok) return;
+  docs = r.data.docs || [];
+  renderDocs();
+}
+function renderDocs(){
+  const q = ($("docSearch").value || "").trim().toLowerCase();
+  const list = q ? docs.filter(d => (d.title+" "+(d.model||"")).toLowerCase().includes(q)) : docs;
+  $("docList").innerHTML = list.map(d => `
+    <div class="doc">
+      <div><b>${esc(d.title)}</b>${d.model?` <span style="color:var(--muted);font-size:12px">· ${esc(d.model)}</span>`:""}</div>
+      <a href="${esc(d.url)}" target="_blank" rel="noopener">Download →</a>
+    </div>`).join("");
+  $("docsEmpty").classList.toggle("hidden", list.length > 0);
+}
+$("docSearch").addEventListener("input", renderDocs);
+
+// ── Contact ──
+$("qSend").addEventListener("click", async ()=>{
+  const subject = $("qSubject").value.trim(), message = $("qMessage").value.trim();
+  const m = $("qMsg");
+  if (!subject || !message) { m.className="msg bad"; m.textContent="Please fill in both a subject and a message."; m.classList.remove("hidden"); return; }
+  $("qSend").disabled = true;
+  const r = await api("/dealers/api/vraag", { method:"POST", body: JSON.stringify({ subject, message }) });
+  $("qSend").disabled = false;
+  if (r.status === 200 && r.data && r.data.ok) {
+    m.className="msg ok"; m.textContent="Thank you — your question has been sent. We will get back to you by e-mail.";
+    $("qSubject").value = ""; $("qMessage").value = "";
+  } else {
+    m.className="msg bad"; m.textContent="Sending failed — please try again or e-mail us directly.";
+  }
+  m.classList.remove("hidden");
+});
+</script>
+</body>
+</html>

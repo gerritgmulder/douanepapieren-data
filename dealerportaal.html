@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Dealerportaal beheren — Fonteyn Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
+    --fonteyn-lime:#8bc53f; --fonteyn-lime-dark:#72a531;
+    --bg:#f5f4ef; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb;
+    --ok:#059669; --bad:#b91c1c; --warn:#92400e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  header{background:var(--fonteyn-green);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px}
+  header img.logo{height:40px}
+  header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+  header a.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:6px 14px;font-size:12px}
+  header .user-chip{font-size:12px;color:rgba(255,255,255,.85)}
+  header button.logout{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:6px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer}
+  main{max-width:1150px;margin:24px auto;padding:0 22px}
+  h2{color:var(--fonteyn-green);font-size:21px;margin:0 0 6px}
+  .lead{color:var(--muted);margin:0 0 18px;font-size:13.5px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:17px 20px;margin:14px 0}
+  .card h3{margin:0 0 10px;color:var(--fonteyn-green);font-size:15px}
+  table.grid{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.grid th,table.grid td{padding:7px 9px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:middle}
+  table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  input,select{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit;font-size:13.5px}
+  input:focus{outline:2px solid var(--fonteyn-lime);outline-offset:-1px}
+  button.primary{background:var(--fonteyn-lime);color:var(--fonteyn-green);border:0;border-radius:8px;padding:9px 16px;font:inherit;font-weight:700;cursor:pointer}
+  button.primary:hover{background:var(--fonteyn-lime-dark);color:#fff}
+  .rmv{background:transparent;border:1px solid var(--border);border-radius:5px;color:var(--muted);cursor:pointer;font-size:11px;padding:2px 7px}
+  .rmv:hover{border-color:var(--bad);color:var(--bad)}
+  .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:10.5px;font-weight:700}
+  .pill.on{background:#dcfce7;color:var(--ok)} .pill.off{background:#fee2e2;color:var(--bad)}
+  .status-msg{padding:10px 14px;border-radius:6px;margin:10px 0;font-size:13px}
+  .status-msg.ok{background:#dcfce7;color:var(--ok)} .status-msg.bad{background:#fee2e2;color:var(--bad)}
+  .hidden{display:none !important}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  code{background:#f3f4f6;padding:1px 6px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+  <h1>Dealerportaal beheren</h1>
+  <a class="back" href="dashboard.html">← Dashboard</a>
+  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <h2>Dealerportaal</h2>
+  <p class="lead">
+    Beheer hier wie er in het <b>dealerportaal</b> kan (magic-link login op e-mailadres),
+    welke <b>documenten</b> dealers zien, en waar contactvragen binnenkomen.
+    Portaal-adres: <a id="portalLink" href="https://fonteyn-data-store.g-mulder.workers.dev/dealers" target="_blank" rel="noopener"><code>fonteyn-data-store.g-mulder.workers.dev/dealers</code></a>
+    <em>(later: dealers.fonteyn.nl)</em>. Dealers zien alleen geaggregeerde voorraad — geen klantnamen of inkoopprijzen.
+  </p>
+
+  <div id="status" class="status-msg hidden"></div>
+
+  <div class="card">
+    <h3>Dealers (<span id="dealerCount">0</span>)</h3>
+    <table class="grid">
+      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(voor fase 2 — komma-gescheiden)</span></th><th>Status</th><th></th></tr></thead>
+      <tbody id="dealerBody"></tbody>
+    </table>
+    <div class="row" style="margin-top:12px">
+      <input id="nEmail" type="email" placeholder="dealer@bedrijf.com" style="min-width:220px">
+      <input id="nCompany" placeholder="Bedrijfsnaam" style="min-width:180px">
+      <input id="nDebtors" placeholder="debiteurnr(s), optioneel" style="min-width:170px">
+      <button class="primary" id="addDealer" type="button">+ Dealer toevoegen</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Documenten &amp; specsheets (<span id="docCount">0</span>)</h3>
+    <p class="lead" style="margin-bottom:10px">Plak een link naar de PDF (bijv. op fonteyn.nl, Google Drive met "iedereen met link", of een andere publieke plek). Dealers zien titel + model + downloadknop.</p>
+    <table class="grid">
+      <thead><tr><th>Titel</th><th>Model</th><th>Link</th><th></th></tr></thead>
+      <tbody id="docBody"></tbody>
+    </table>
+    <div class="row" style="margin-top:12px">
+      <input id="dTitle" placeholder="Titel (bv. Specsheet Renew MM)" style="min-width:230px">
+      <input id="dModel" placeholder="Model (optioneel)" style="min-width:140px">
+      <input id="dUrl" placeholder="https://…" style="min-width:260px">
+      <button class="primary" id="addDoc" type="button">+ Document toevoegen</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Instellingen</h3>
+    <div class="row">
+      <label style="font-size:12.5px;color:var(--muted)">Contactvragen van dealers gaan naar:</label>
+      <input id="contactEmail" type="email" style="min-width:240px">
+      <button class="primary" id="saveContact" type="button">Opslaan</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const SESSION_KEY="fp.session", EMAIL_KEY="fp.email", HELPER_BASE="";
+const DATA_BASE = "https://fonteyn-data-store.g-mulder.workers.dev/data/";
+const DATA_STORE_AUTH = "SV--QQW_xwIgrIdbjAozfgnxtloYitCZxEQ_S04gv2YupY4LY4KD7_QvfVkb8DGs";
+const $ = (id) => document.getElementById(id);
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function setStatus(k,m){ const e=$("status"); if(!m){e.classList.add("hidden");return;} e.className="status-msg "+k; e.textContent=m; e.classList.remove("hidden"); }
+
+// Toegang: Gerrit/Fonteynbot + Arno, Don, Chantal
+const ALLOWED = new Set([
+  "gerrit@fonteyn.nl","gerrit",
+  "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot",
+  "arno@fonteyn.nl","fonteyn.arno","arno",
+  "don@fonteyn.nl","fonteyn.don","don",
+  "chantal@fonteyn.nl","fonteyn.chantal","chantal",
+]);
+(function boot(){
+  if (!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
+  const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  $("userEmail").textContent = email || "—";
+  if (!ALLOWED.has(email)){
+    document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'><h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor Gerrit, Arno, Don, Chantal en Fonteynbot.</p><p><a href='dashboard.html'>← Terug</a></p></main>";
+    throw new Error("geen toegang");
+  }
+})();
+$("logoutBtn").addEventListener("click", async ()=>{
+  try{ await fetch(HELPER_BASE+"/api/logout",{method:"POST",headers:{"Authorization":"Bearer "+localStorage.getItem(SESSION_KEY)}}); }catch(e){}
+  localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY);
+  location.href="dashboard.html";
+});
+
+async function kvGet(bucket){
+  const r = await fetch(DATA_BASE+bucket, { headers:{ "X-Fonteyn-Auth":DATA_STORE_AUTH } });
+  if (!r.ok) throw new Error("Laden faalde: HTTP "+r.status);
+  return r.json();
+}
+async function kvPut(bucket, data){
+  const r = await fetch(DATA_BASE+bucket, { method:"PUT",
+    headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth":DATA_STORE_AUTH },
+    body: JSON.stringify(data) });
+  if (!r.ok) throw new Error("Opslaan faalde: HTTP "+r.status);
+}
+
+let accounts = { dealers: [], contactEmail: "gerrit@fonteyn.nl" };
+let docsData = { docs: [] };
+
+function renderDealers(){
+  const list = accounts.dealers || [];
+  $("dealerCount").textContent = list.length;
+  $("dealerBody").innerHTML = list.map((d,i)=>`
+    <tr>
+      <td><code>${esc(d.email)}</code></td>
+      <td>${esc(d.company||"")}</td>
+      <td><input class="debIn" data-i="${i}" value="${esc((d.debtorIds||[]).join(", "))}" style="width:160px;font-size:12px;padding:4px 7px"></td>
+      <td><span class="pill ${d.active!==false?"on":"off"}">${d.active!==false?"actief":"uit"}</span>
+          <button class="rmv togAct" data-i="${i}" style="margin-left:6px">${d.active!==false?"blokkeer":"activeer"}</button></td>
+      <td><button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
+    </tr>`).join("") || '<tr><td colspan="5" style="color:var(--muted)">Nog geen dealers — voeg de eerste toe.</td></tr>';
+  document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
+    const d = accounts.dealers[Number(b.dataset.i)];
+    d.active = d.active === false ? true : false;
+    await save("dealer-accounts", accounts); renderDealers();
+  }));
+  document.querySelectorAll(".delD").forEach(b=>b.addEventListener("click", async ()=>{
+    const d = accounts.dealers[Number(b.dataset.i)];
+    if (!confirm("Dealer "+d.email+" verwijderen? (bestaande sessies verlopen vanzelf)")) return;
+    accounts.dealers.splice(Number(b.dataset.i),1);
+    await save("dealer-accounts", accounts); renderDealers();
+  }));
+  document.querySelectorAll(".debIn").forEach(inp=>inp.addEventListener("change", async ()=>{
+    const d = accounts.dealers[Number(inp.dataset.i)];
+    d.debtorIds = inp.value.split(",").map(s=>s.trim()).filter(Boolean);
+    await save("dealer-accounts", accounts);
+  }));
+}
+$("addDealer").addEventListener("click", async ()=>{
+  const email = $("nEmail").value.trim().toLowerCase();
+  if (!email || !email.includes("@")){ setStatus("bad","Vul een geldig e-mailadres in."); return; }
+  if ((accounts.dealers||[]).some(d=>String(d.email).toLowerCase()===email)){ setStatus("bad","Dit e-mailadres staat er al in."); return; }
+  accounts.dealers.push({
+    email, company: $("nCompany").value.trim(),
+    debtorIds: $("nDebtors").value.split(",").map(s=>s.trim()).filter(Boolean),
+    active: true, addedBy: localStorage.getItem(EMAIL_KEY)||"", addedAt: new Date().toISOString(),
+  });
+  await save("dealer-accounts", accounts);
+  $("nEmail").value=""; $("nCompany").value=""; $("nDebtors").value="";
+  renderDealers();
+  setStatus("ok","Dealer toegevoegd — die kan nu inloggen op het portaal met een magic-link.");
+});
+
+function renderDocs(){
+  const list = docsData.docs || [];
+  $("docCount").textContent = list.length;
+  $("docBody").innerHTML = list.map((d,i)=>`
+    <tr>
+      <td>${esc(d.title)}</td>
+      <td>${esc(d.model||"")}</td>
+      <td><a href="${esc(d.url)}" target="_blank" rel="noopener" style="font-size:12px">${esc(String(d.url).slice(0,55))}…</a></td>
+      <td><button class="rmv delDoc" data-i="${i}">✕</button></td>
+    </tr>`).join("") || '<tr><td colspan="4" style="color:var(--muted)">Nog geen documenten.</td></tr>';
+  document.querySelectorAll(".delDoc").forEach(b=>b.addEventListener("click", async ()=>{
+    docsData.docs.splice(Number(b.dataset.i),1);
+    await save("dealer-docs", docsData); renderDocs();
+  }));
+}
+$("addDoc").addEventListener("click", async ()=>{
+  const title=$("dTitle").value.trim(), model=$("dModel").value.trim(), urlv=$("dUrl").value.trim();
+  if (!title || !/^https?:\/\//i.test(urlv)){ setStatus("bad","Vul een titel en een geldige https-link in."); return; }
+  docsData.docs.push({ id: Date.now().toString(36), title, model, url: urlv });
+  await save("dealer-docs", docsData);
+  $("dTitle").value=""; $("dModel").value=""; $("dUrl").value="";
+  renderDocs();
+  setStatus("ok","Document toegevoegd — direct zichtbaar in het portaal.");
+});
+
+$("saveContact").addEventListener("click", async ()=>{
+  const v = $("contactEmail").value.trim().toLowerCase();
+  if (!v || !v.includes("@")){ setStatus("bad","Vul een geldig e-mailadres in."); return; }
+  accounts.contactEmail = v;
+  await save("dealer-accounts", accounts);
+  setStatus("ok","Opgeslagen — dealervragen gaan nu naar "+v+".");
+});
+
+async function save(bucket, data){
+  try { await kvPut(bucket, data); }
+  catch(e){ setStatus("bad", e.message); throw e; }
+}
+
+(async function init(){
+  try {
+    accounts = await kvGet("dealer-accounts");
+    if (!accounts || typeof accounts !== "object") accounts = {};
+    if (!Array.isArray(accounts.dealers)) accounts.dealers = [];
+    if (!accounts.contactEmail) accounts.contactEmail = "gerrit@fonteyn.nl";
+    docsData = await kvGet("dealer-docs");
+    if (!docsData || typeof docsData !== "object") docsData = {};
+    if (!Array.isArray(docsData.docs)) docsData.docs = [];
+    $("contactEmail").value = accounts.contactEmail;
+    renderDealers(); renderDocs();
+  } catch(e){ setStatus("bad", "Laden faalde: "+e.message); }
+})();
+</script>
+</body>
+</html>

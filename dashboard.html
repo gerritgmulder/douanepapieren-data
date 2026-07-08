@@ -315,6 +315,13 @@
         <p>Welke retouren komen er binnen en waarom — op te halen retouren uit Logic4, reden + locatie registreren, en cijfers per dag/week/maand/jaar met cirkeldiagram.</p>
       </a>
 
+      <!-- Dealerportaal beheren — Arno/Don/Chantal + admins. -->
+      <a href="dealerportaal.html" class="tile hidden" id="tileDealerportaal">
+        <div class="icon">🤝</div>
+        <h3>Dealerportaal</h3>
+        <p>Beheer het dealer-webportaal: welke dealers kunnen inloggen, welke specsheets ze zien, en waar hun vragen binnenkomen.</p>
+      </a>
+
       <!-- Voorraadbeheer — Dolf/Arno/Chantal + admins. -->
       <a href="voorraad.html" class="tile hidden" id="tileVoorraad">
         <div class="icon">📦</div>
@@ -539,6 +546,15 @@ const BOL_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Dealerportaal-beheer — Arno, Don, Chantal + admins.
+const DEALERPORTAAL_EMAILS = new Set([
+  "arno@fonteyn.nl",       "fonteyn.arno",  "arno",
+  "don@fonteyn.nl",        "fonteyn.don",   "don",
+  "chantal@fonteyn.nl",    "chantal",  "fonteyn.chantal",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Voorraadbeheer-tegel — sales/logistiek: Dolf, Arno, Chantal + admins.
 const VOORRAAD_EMAILS = new Set([
   "dolf@fonteyn.nl",       "fonteyn.dolf",
@@ -608,6 +624,8 @@ function showDashboard(email) {
   // Bol.com koppeling — Don + Osman + admins
   el("tileBol").classList.toggle("hidden", !BOL_EMAILS.has(lc));
   el("tileRetouren").classList.toggle("hidden", !RETOUREN_EMAILS.has(lc));
+  // Dealerportaal-beheer — Arno/Don/Chantal + admins
+  el("tileDealerportaal").classList.toggle("hidden", !DEALERPORTAAL_EMAILS.has(lc));
   // Voorraadbeheer — Dolf/Arno/Chantal + admins
   el("tileVoorraad").classList.toggle("hidden", !VOORRAAD_EMAILS.has(lc));
   // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot.
