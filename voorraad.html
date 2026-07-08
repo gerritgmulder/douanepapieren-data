@@ -434,7 +434,7 @@ async function logic4Call(path, body){
    { advisorMap:{"<UserId>":"Arno"}, klantType:{"<DebtorId>":"dealer|particulier"}, reserveringen:{"<lineId>":{...}} }
    De order bevat alleen een UserId (geen naam) → adviseur 1× koppelen. */
 const DATA_STORE_URL  = "https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad";
-const DATA_STORE_AUTH = "SV--QQW_xwIgrIdbjAozfgnxtloYitCZxEQ_S04gv2YupY4LY4KD7_QvfVkb8DGs";
+const DATA_STORE_AUTH = (localStorage.getItem("fp.teamkey") || "")   /* team-sleutel: 1x per computer via dashboard-ontgrendeling — staat bewust NIET in de (publieke) code */;
 // advisorMap: handmatige UserId→naam overrides. klantType: DebtorId→'dealer'|'particulier'
 // (1× per klant). reserveringen: lineId→regel (de persistente twee overzichten).
 let advisorMap = {}, klantType = {}, reserveringen = {}, stateLoaded = false;

@@ -595,10 +595,69 @@ const EIKENSINGEL_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// ─── Team-sleutel (SAFETY) ──────────────────────────────────────────
+// De gedeelde opslag (Cloudflare KV) is niet meer benaderbaar met een sleutel
+// die in de (publieke) code staat. In plaats daarvan: één keer per computer de
+// team-sleutel invoeren; tegels lezen 'm uit localStorage ("fp.teamkey").
+const TEAMKEY_STORE = "fp.teamkey";
+const TEAMKEY_TEST_URL = "https://fonteyn-data-store.g-mulder.workers.dev/data/rapportage";
+async function teamKeyValid(key) {
+  if (!key) return false;
+  try {
+    const r = await fetch(TEAMKEY_TEST_URL, { headers: { "X-Fonteyn-Auth": key } });
+    return r.ok;
+  } catch { return false; }
+}
+async function ensureTeamKey() {
+  const cur = localStorage.getItem(TEAMKEY_STORE);
+  if (cur && await teamKeyValid(cur)) return;
+  if (cur) localStorage.removeItem(TEAMKEY_STORE);   // verouderd/geroteerd
+  if (document.getElementById("teamKeyOverlay")) return;
+  const ov = document.createElement("div");
+  ov.id = "teamKeyOverlay";
+  ov.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(13,51,37,.88);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;";
+  ov.innerHTML = `
+    <div style="background:#fff;border-radius:14px;max-width:440px;width:100%;padding:26px 28px;font-family:inherit;">
+      <h2 style="margin:0 0 8px;color:#144734;font-size:19px;">🔐 Team-sleutel</h2>
+      <p style="margin:0 0 14px;color:#6b7280;font-size:13.5px;line-height:1.55;">
+        De gedeelde data (retouren, voorraad, personeel, …) is extra beveiligd.
+        Voer één keer de team-sleutel in — deze computer onthoudt 'm daarna.
+        Sleutel kwijt? Vraag Gerrit.
+      </p>
+      <input type="password" id="teamKeyInput" placeholder="team-sleutel" style="width:100%;border:1px solid #e5e7eb;border-radius:8px;padding:11px 12px;font:inherit;">
+      <div id="teamKeyErr" style="display:none;color:#b91c1c;font-size:12.5px;margin-top:8px;"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+        <button id="teamKeyLater" style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:10px 16px;font:inherit;cursor:pointer;color:#6b7280;">Later</button>
+        <button id="teamKeyOk" style="background:#8bc53f;color:#144734;border:0;border-radius:8px;padding:10px 20px;font:inherit;font-weight:700;cursor:pointer;">Ontgrendel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const inp = ov.querySelector("#teamKeyInput");
+  const tryKey = async () => {
+    const v = inp.value.trim();
+    const err = ov.querySelector("#teamKeyErr");
+    if (!v) { err.textContent = "Vul de sleutel in."; err.style.display = "block"; return; }
+    ov.querySelector("#teamKeyOk").disabled = true;
+    if (await teamKeyValid(v)) {
+      localStorage.setItem(TEAMKEY_STORE, v);
+      ov.remove();
+    } else {
+      err.textContent = "Sleutel niet geldig — controleer en probeer opnieuw.";
+      err.style.display = "block";
+      ov.querySelector("#teamKeyOk").disabled = false;
+    }
+  };
+  ov.querySelector("#teamKeyOk").addEventListener("click", tryKey);
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") tryKey(); });
+  ov.querySelector("#teamKeyLater").addEventListener("click", () => ov.remove());
+  setTimeout(() => inp.focus(), 60);
+}
+
 function showDashboard(email) {
   el("loginView").classList.add("hidden");
   el("dashView").classList.remove("hidden");
   el("userEmail").textContent = email || "—";
+  ensureTeamKey();
   // Vriendelijke groet op basis van tijd
   const h = new Date().getHours();
   const greet = h < 6 ? "Goedenacht" : h < 12 ? "Goedemorgen" : h < 18 ? "Goedemiddag" : "Goedenavond";

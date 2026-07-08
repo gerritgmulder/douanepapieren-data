@@ -372,7 +372,7 @@ async function logic4(path, body) {
 
 /* ─── KV-storage voor targets (Cloudflare data-worker, bucket "rapportage") ─── */
 const DATA_STORE_URL  = "https://fonteyn-data-store.g-mulder.workers.dev/data/rapportage";
-const DATA_STORE_AUTH = "SV--QQW_xwIgrIdbjAozfgnxtloYitCZxEQ_S04gv2YupY4LY4KD7_QvfVkb8DGs";
+const DATA_STORE_AUTH = (localStorage.getItem("fp.teamkey") || "")   /* team-sleutel: 1x per computer via dashboard-ontgrendeling — staat bewust NIET in de (publieke) code */;
 
 async function loadRapportageKV() {
   try {

@@ -337,6 +337,37 @@ async function dpHandlePage(env) {
   } });
 }
 
+// POST /dealers/webhook — Mollie betaalstatus (fase 3). Mollie stuurt alleen
+// een payment-id (form-encoded); wij halen de status server-side op en werken
+// de bijbehorende reserveringsaanvraag bij (koppeling via metadata.requestId
+// die we bij het aanmaken van de betaling meegeven). Altijd 200 antwoorden —
+// anders blijft Mollie eindeloos retryen.
+async function dpHandleMollieWebhook(request, env) {
+  if (!env.MOLLIE_API_KEY) return reply(200, { ok: true });   // nog niet actief
+  let id = "";
+  try { id = new URLSearchParams(await request.text()).get("id") || ""; } catch {}
+  if (!id) return reply(200, { ok: true });
+  const r = await fetch("https://api.mollie.com/v2/payments/" + encodeURIComponent(id), {
+    headers: { "Authorization": "Bearer " + env.MOLLIE_API_KEY },
+  });
+  const p = await r.json().catch(() => null);
+  if (!r.ok || !p) return reply(200, { ok: true });
+  const reqId = p.metadata && p.metadata.requestId;
+  if (reqId) {
+    const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+    const list = Array.isArray(data.requests) ? data.requests : [];
+    const item = list.find(x => x.id === reqId);
+    if (item) {
+      item.paymentId = p.id;
+      item.paymentStatus = p.status;   // paid / open / failed / expired / canceled
+      if (p.status === "paid") item.status = "paid";
+      await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+    }
+  }
+  console.log("[dp-mollie] webhook " + id + " status=" + p.status);
+  return reply(200, { ok: true });
+}
+
 // ─── Admin-endpoints (alleen interne beheertegel, X-Fonteyn-Auth) ─────
 // mailstatus: Resend-bezorgstatus opvragen (delivered/bounced/…) voor
 // diagnose van niet-aangekomen mails. loginlink: magic-link genereren
@@ -378,6 +409,8 @@ async function handleDealerRoutes(request, env, url) {
   if (p === "/dealers" && request.method === "GET") return dpHandlePage(env);
   if (p === "/dealers/login" && request.method === "POST") return dpHandleLogin(request, env, url);
   if (p === "/dealers/auth" && request.method === "GET") return dpHandleAuth(request, env, url);
+
+  if (p === "/dealers/webhook" && request.method === "POST") return dpHandleMollieWebhook(request, env);
 
   // Admin (interne beheertegel, shared secret — géén dealer-sessie)
   if (p.startsWith("/dealers/admin/")) {

@@ -540,7 +540,7 @@ function saveUserSpecsToLocalCache() {
 // Nu: Cloudflare KV (bucket "douane-specs") — sync werkt overal, ook
 // thuis/onderweg, zelfde patroon als Personeel / Koeien / Rapportage.
 const USER_SPECS_KV_URL  = "https://fonteyn-data-store.g-mulder.workers.dev/data/douane-specs";
-const USER_SPECS_KV_AUTH = "SV--QQW_xwIgrIdbjAozfgnxtloYitCZxEQ_S04gv2YupY4LY4KD7_QvfVkb8DGs";
+const USER_SPECS_KV_AUTH = (localStorage.getItem("fp.teamkey") || "")   /* team-sleutel: 1x per computer via dashboard-ontgrendeling — staat bewust NIET in de (publieke) code */;
 
 // Pull alle specs uit KV. Bij eerste run (KV leeg) migreer eenmalig de oude
 // helper-server data naar KV zodat niemand z'n bestaande invoer kwijtraakt.
