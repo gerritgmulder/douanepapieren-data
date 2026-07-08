@@ -1,0 +1,17 @@
+# Secrets — NOOIT committen (zie CLAUDE.md)
+dev-credentials.json
+server/.env
+.env
+*.env.local
+
+# Dependencies & build-output
+node_modules/
+dist/
+build/output/
+
+# OS / editor
+.DS_Store
+
+# Claude Code sessie-bestanden
+.claude/
+test-claude.txt
