@@ -63,6 +63,16 @@
 
   <div id="status" class="status-msg hidden"></div>
 
+  <div class="card hidden" id="keyCard">
+    <h3>🔐 Beheersleutel</h3>
+    <p class="lead" style="margin-bottom:10px">Dealer-data is extra beveiligd. Voer de beheersleutel in (vraag Gerrit) — dit hoeft maar één keer per computer.</p>
+    <div class="row">
+      <input id="keyInput" type="password" placeholder="beheersleutel" style="min-width:340px">
+      <button class="primary" id="keySave" type="button">Ontgrendel</button>
+    </div>
+  </div>
+
+  <div id="mgmt" class="hidden">
   <div class="card">
     <h3>Dealers (<span id="dealerCount">0</span>)</h3>
     <table class="grid">
@@ -109,12 +119,17 @@
       <button class="primary" id="saveContact" type="button">Opslaan</button>
     </div>
   </div>
+  </div><!-- /mgmt -->
 </main>
 
 <script>
 const SESSION_KEY="fp.session", EMAIL_KEY="fp.email", HELPER_BASE="";
 const DATA_BASE = "https://fonteyn-data-store.g-mulder.workers.dev/data/";
-const DATA_STORE_AUTH = "SV--QQW_xwIgrIdbjAozfgnxtloYitCZxEQ_S04gv2YupY4LY4KD7_QvfVkb8DGs";
+// SAFETY FIRST: dealer-data is alleen benaderbaar met de aparte BEHEERSLEUTEL.
+// Die staat bewust NIET in deze code (de repo is publiek) — elke beheerder
+// voert 'm één keer in per computer; hij wordt lokaal bewaard.
+const ADMIN_KEY_STORE = "dp.adminkey";
+function adminKey(){ return localStorage.getItem(ADMIN_KEY_STORE) || ""; }
 const $ = (id) => document.getElementById(id);
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function setStatus(k,m){ const e=$("status"); if(!m){e.classList.add("hidden");return;} e.className="status-msg "+k; e.textContent=m; e.classList.remove("hidden"); }
@@ -143,14 +158,16 @@ $("logoutBtn").addEventListener("click", async ()=>{
 });
 
 async function kvGet(bucket){
-  const r = await fetch(DATA_BASE+bucket, { headers:{ "X-Fonteyn-Auth":DATA_STORE_AUTH } });
+  const r = await fetch(DATA_BASE+bucket, { headers:{ "X-DP-Admin": adminKey() } });
+  if (r.status===401 || r.status===403) throw new Error("Beheersleutel ongeldig — voer 'm opnieuw in.");
   if (!r.ok) throw new Error("Laden faalde: HTTP "+r.status);
   return r.json();
 }
 async function kvPut(bucket, data){
   const r = await fetch(DATA_BASE+bucket, { method:"PUT",
-    headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth":DATA_STORE_AUTH },
+    headers:{ "Content-Type":"application/json", "X-DP-Admin": adminKey() },
     body: JSON.stringify(data) });
+  if (r.status===401 || r.status===403) throw new Error("Beheersleutel ongeldig — voer 'm opnieuw in.");
   if (!r.ok) throw new Error("Opslaan faalde: HTTP "+r.status);
 }
 
@@ -186,7 +203,7 @@ function renderDealers(){
     b.disabled = true; b.textContent = "bezig…";
     try {
       const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/loginlink", {
-        method:"POST", headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth":DATA_STORE_AUTH },
+        method:"POST", headers:{ "Content-Type":"application/json", "X-DP-Admin": adminKey() },
         body: JSON.stringify({ email: d.email }) });
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP "+r.status));
@@ -287,7 +304,29 @@ async function save(bucket, data){
   catch(e){ setStatus("bad", e.message); throw e; }
 }
 
-(async function init(){
+async function unlock(){
+  try {
+    const test = await fetch(DATA_BASE+"dealer-accounts", { headers:{ "X-DP-Admin": adminKey() } });
+    if (test.status===401 || test.status===403) return false;
+    return test.ok;
+  } catch(e){ return false; }
+}
+document.getElementById("keySave").addEventListener("click", async ()=>{
+  const v = document.getElementById("keyInput").value.trim();
+  if (!v){ setStatus("bad","Vul de beheersleutel in."); return; }
+  localStorage.setItem(ADMIN_KEY_STORE, v);
+  if (await unlock()){
+    setStatus("ok","Ontgrendeld — deze computer onthoudt de sleutel.");
+    document.getElementById("keyCard").classList.add("hidden");
+    init();
+  } else {
+    localStorage.removeItem(ADMIN_KEY_STORE);
+    setStatus("bad","Sleutel niet geldig — controleer en probeer opnieuw.");
+  }
+});
+document.getElementById("keyInput") && document.getElementById("keyInput").addEventListener("keydown",(e)=>{ if(e.key==="Enter") document.getElementById("keySave").click(); });
+
+async function init(){
   try {
     accounts = await kvGet("dealer-accounts");
     if (!accounts || typeof accounts !== "object") accounts = {};
@@ -301,7 +340,17 @@ async function save(bucket, data){
     if (!Array.isArray(reqData.requests)) reqData.requests = [];
     $("contactEmail").value = accounts.contactEmail;
     renderDealers(); renderDocs(); renderReqs();
+    document.getElementById("mgmt").classList.remove("hidden");
   } catch(e){ setStatus("bad", "Laden faalde: "+e.message); }
+}
+
+(async function bootKey(){
+  if (adminKey() && await unlock()){
+    init();
+  } else {
+    localStorage.removeItem(ADMIN_KEY_STORE);
+    document.getElementById("keyCard").classList.remove("hidden");
+  }
 })();
 </script>
 </body>

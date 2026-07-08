@@ -44,7 +44,7 @@ const ALLOWED_BUCKET_PATTERNS = [
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Fonteyn-Auth, X-Dealer-Session",
+  "Access-Control-Allow-Headers": "Content-Type, X-Fonteyn-Auth, X-Dealer-Session, X-DP-Admin",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -324,7 +324,17 @@ async function dpHandlePage(env) {
     return new Response("Portal temporarily unavailable — please try again in a minute.", { status: 503, headers: { "Content-Type": "text/plain" } });
   }
   const html = await r.text();
-  return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
+  // SAFETY: strikte security-headers op de publieke portaalpagina.
+  return new Response(html, { headers: {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://raw.githubusercontent.com; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "X-Frame-Options": "DENY",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Strict-Transport-Security": "max-age=63072000; includeSubDomains",
+    "X-Robots-Tag": "noindex, nofollow",
+  } });
 }
 
 // ─── Admin-endpoints (alleen interne beheertegel, X-Fonteyn-Auth) ─────
@@ -332,9 +342,13 @@ async function dpHandlePage(env) {
 // diagnose van niet-aangekomen mails. loginlink: magic-link genereren
 // ZONDER e-mail — kopieerbaar, voor als de mail van een dealer (of Outlook)
 // niet meewerkt. Zelfde geldigheid als de mail-link (15 min, eenmalig).
+// SAFETY: de interne SHARED_SECRET staat in de tegel-HTML van een PUBLIEKE
+// repo en is dus als gelekt te beschouwen. Alles wat dealers raakt vereist
+// daarom een APARTE beheersleutel (DP_ADMIN_KEY, alleen als worker-secret +
+// eenmalig per beheerder-computer ingevoerd in de beheertegel).
 function dpIsAdmin(request, env) {
-  const h = request.headers.get("X-Fonteyn-Auth") || "";
-  return !!env.SHARED_SECRET && h === env.SHARED_SECRET;
+  const h = request.headers.get("X-DP-Admin") || "";
+  return !!env.DP_ADMIN_KEY && h === env.DP_ADMIN_KEY;
 }
 
 async function dpAdminMailStatus(env, url) {
@@ -407,11 +421,17 @@ export default {
       return reply(403, `Bucket '${bucket}' not whitelisted`);
     }
 
-    // Auth check via shared secret in header
-    const authHeader = request.headers.get("X-Fonteyn-Auth") || "";
-    const expected = env.SHARED_SECRET || "";
-    if (!expected || authHeader !== expected) {
-      return reply(401, "Unauthorized");
+    // Auth. LET OP: dealer-buckets bevatten data van échte dealers en zijn
+    // NIET benaderbaar met het (publiek zichtbare) shared secret — alleen
+    // met de aparte beheersleutel DP_ADMIN_KEY.
+    if (bucket.startsWith("dealer-")) {
+      if (!dpIsAdmin(request, env)) return reply(403, "Dealer-buckets vereisen de beheersleutel (X-DP-Admin)");
+    } else {
+      const authHeader = request.headers.get("X-Fonteyn-Auth") || "";
+      const expected = env.SHARED_SECRET || "";
+      if (!expected || authHeader !== expected) {
+        return reply(401, "Unauthorized");
+      }
     }
 
     if (request.method === "GET") {
