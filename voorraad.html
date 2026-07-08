@@ -561,6 +561,9 @@ document.getElementById("fetchBtn").addEventListener("click", async ()=>{
         let model = spaByCode(r.ProductCode);                 // PRIMAIR: exacte artikelcode
         if (!model) model = modelFromText(r.Description);      // fallback: model in omschrijving
         if (!model){ const mc = spaModel(r.ProductCode); if (mc && mc!=="(onbekend SKT-model)") model = mc; }
+        // Cover-regels (bv. "Spa Cover Kenai, 218x160") bevatten de modelnaam
+        // maar zijn géén spa — alleen tellen als de code zelf een spa-code is.
+        if (model && !spaByCode(r.ProductCode) && /cover|abdeckung/i.test(String(r.Description||""))) continue;
         if (!model){
           const d = String(r.Description==null?"":r.Description).trim();
           if (d && (Number(r.Qty)||0)>0) undetected[d.slice(0,70)] = (undetected[d.slice(0,70)]||0)+1;

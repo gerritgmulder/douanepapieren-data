@@ -167,6 +167,8 @@ for (const o of verkocht) {
   for (const r of (o.OrderRows || [])) {
     let model = det.spaByCode(r.ProductCode) || det.modelFromText(r.Description) || det.sktModel(r.ProductCode);
     if (!model) continue;
+    // Zelfde cover-uitsluiting als de tegel: modelnaam in een cover-omschrijving telt niet
+    if (!det.spaByCode(r.ProductCode) && /cover|abdeckung/i.test(String(r.Description || ""))) continue;
     const aantal = Number(r.Qty) || 0;
     if (aantal <= 0) continue;
     lines.push({
