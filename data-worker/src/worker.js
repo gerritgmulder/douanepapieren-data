@@ -30,6 +30,7 @@ const ALLOWED_BUCKETS = new Set([
   "dealer-accounts",  // Dealerportaal: toegestane dealers (email/bedrijf/debtorIds) + contactEmail — beheer via interne tegel
   "dealer-docs",      // Dealerportaal: documenten/specsheets (titel/model/url)
   "dealer-requests",  // Dealerportaal: reserveringsaanvragen van dealers (beheer via interne tegel)
+  "dealer-prices",    // Dealerportaal: dealerprijs per model (voor 30%-aanbetaling via Mollie)
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
@@ -237,7 +238,7 @@ async function dpHandleMySpas(env, sess) {
 // POST /dealers/api/reserve  { model, qty, note } — fase 3-fundament:
 // reserveringsaanvraag vastleggen + mail naar sales. De Mollie-betaallink
 // wordt hier aangehaakt zodra MOLLIE_API_KEY als worker-secret bestaat.
-async function dpHandleReserve(request, env, sess) {
+async function dpHandleReserve(request, env, sess, url) {
   let body = {};
   try { body = await request.json(); } catch {}
   const model = String(body.model || "").trim().slice(0, 80);
@@ -246,11 +247,33 @@ async function dpHandleReserve(request, env, sess) {
   if (!model) return reply(400, { ok: false, error: "model-required" });
   const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
   if (!Array.isArray(data.requests)) data.requests = [];
-  data.requests.push({
+  const entry = {
     id: crypto.randomUUID(), ts: new Date().toISOString(),
     email: sess.email, company: sess.company || "",
     model, qty, note, status: "new",
-  });
+  };
+  // Fase 3: is Mollie geconfigureerd én is er een dealerprijs voor dit model?
+  // → maak direct een 30%-aanbetalingslink (jouw flow: verkocht = 30% aanbetaald).
+  let checkoutUrl = null;
+  if (env.MOLLIE_API_KEY) {
+    const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
+    const price = Number((priceData.prices || {})[model]);
+    if (price > 0) {
+      const deposit = Math.round(price * qty * 0.30 * 100) / 100;
+      const pay = await dpCreateMolliePayment(env, deposit,
+        "30% deposit — " + qty + "x " + model + " (" + (sess.company || sess.email) + ")",
+        url.origin + "/dealers?paid=1",
+        url.origin + "/dealers/webhook",
+        { requestId: entry.id });
+      if (pay.ok) {
+        entry.deposit = deposit;
+        entry.paymentId = pay.id;
+        entry.paymentStatus = "open";
+        checkoutUrl = pay.checkoutUrl;
+      }
+    }
+  }
+  data.requests.push(entry);
   await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
   const accounts = await dpGetAccounts(env);
   const esc = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -259,26 +282,30 @@ async function dpHandleReserve(request, env, sess) {
     '<div style="font-family:Arial,sans-serif;">' +
     '<p><b>Nieuwe reserveringsaanvraag via het dealerportaal</b></p>' +
     '<p><b>Dealer:</b> ' + esc(sess.company || "") + ' &lt;' + esc(sess.email) + '&gt;<br>' +
-    '<b>Model:</b> ' + esc(model) + '<br><b>Aantal:</b> ' + qty + '</p>' +
+    '<b>Model:</b> ' + esc(model) + '<br><b>Aantal:</b> ' + qty +
+    (entry.deposit ? '<br><b>Aanbetaling (30%):</b> € ' + entry.deposit.toFixed(2) + ' — Mollie-link naar dealer gestuurd' : '') + '</p>' +
     (note ? '<p style="white-space:pre-wrap;border-left:3px solid #8bc53f;padding-left:12px;">' + esc(note) + '</p>' : '') +
     '<p style="color:#888;font-size:12px;">Ook zichtbaar in de beheertegel Dealerportaal. Reply gaat direct naar de dealer.</p></div>',
     sess.email);
-  return reply(200, { ok: true });
+  return reply(200, { ok: true, checkoutUrl: checkoutUrl, deposit: entry.deposit || null });
 }
 
 // Fase 3 — Mollie-betaallink (wacht op MOLLIE_API_KEY als worker-secret).
 // Zodra de key er is: aanroepen vanuit de reserve-flow met het aanbetalings-
 // bedrag, checkoutUrl teruggeven aan het portaal, en een /dealers/webhook
 // route toevoegen voor de betaalstatus.
-async function dpCreateMolliePayment(env, amountEur, description, redirectUrl) {
+async function dpCreateMolliePayment(env, amountEur, description, redirectUrl, webhookUrl, metadata) {
   if (!env.MOLLIE_API_KEY) return { ok: false, error: "mollie-not-configured" };
+  const payload = {
+    amount: { currency: "EUR", value: Number(amountEur).toFixed(2) },
+    description, redirectUrl,
+  };
+  if (webhookUrl) payload.webhookUrl = webhookUrl;
+  if (metadata) payload.metadata = metadata;
   const r = await fetch("https://api.mollie.com/v2/payments", {
     method: "POST",
     headers: { "Authorization": "Bearer " + env.MOLLIE_API_KEY, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      amount: { currency: "EUR", value: Number(amountEur).toFixed(2) },
-      description, redirectUrl,
-    }),
+    body: JSON.stringify(payload),
   });
   const j = await r.json().catch(() => null);
   if (!r.ok || !j) return { ok: false, error: "mollie-http-" + r.status };
@@ -427,7 +454,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/api/me" && request.method === "GET") return reply(200, { ok: true, email: sess.email, company: sess.company || "" });
     if (p === "/dealers/api/stock" && request.method === "GET") return dpHandleStock(env);
     if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);
-    if (p === "/dealers/api/reserve" && request.method === "POST") return dpHandleReserve(request, env, sess);
+    if (p === "/dealers/api/reserve" && request.method === "POST") return dpHandleReserve(request, env, sess, url);
     if (p === "/dealers/api/docs" && request.method === "GET") return dpHandleDocs(env);
     if (p === "/dealers/api/vraag" && request.method === "POST") return dpHandleVraag(request, env, sess);
   }

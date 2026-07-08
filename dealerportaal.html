@@ -97,6 +97,20 @@
   </div>
 
   <div class="card">
+    <h3>Dealerprijzen per model (<span id="priceCount">0</span>)</h3>
+    <p class="lead" style="margin-bottom:10px">Nodig voor de automatische <b>30%-aanbetaling</b> bij een reservering (via Mollie, zodra de betaalkoppeling actief is). Zonder prijs blijft een reservering een aanvraag-per-mail. Modelnaam moet exact overeenkomen met de voorraad (bv. "Renew").</p>
+    <table class="grid">
+      <thead><tr><th>Model</th><th>Dealerprijs (€, excl. opties)</th><th>30% aanbetaling</th><th></th></tr></thead>
+      <tbody id="priceBody"></tbody>
+    </table>
+    <div class="row" style="margin-top:12px">
+      <input id="pModel" placeholder="Model (bv. Renew)" style="min-width:180px">
+      <input id="pPrice" type="number" min="0" step="1" placeholder="prijs in €" style="min-width:140px">
+      <button class="primary" id="addPrice" type="button">+ Prijs opslaan</button>
+    </div>
+  </div>
+
+  <div class="card">
     <h3>Documenten &amp; specsheets (<span id="docCount">0</span>)</h3>
     <p class="lead" style="margin-bottom:10px">Plak een link naar de PDF (bijv. op fonteyn.nl, Google Drive met "iedereen met link", of een andere publieke plek). Dealers zien titel + model + downloadknop.</p>
     <table class="grid">
@@ -268,6 +282,34 @@ $("saveContact").addEventListener("click", async ()=>{
   setStatus("ok","Opgeslagen — dealervragen gaan nu naar "+v+".");
 });
 
+let priceData = { prices: {} };
+function renderPrices(){
+  const entries = Object.entries(priceData.prices || {}).sort((a,b)=>a[0].localeCompare(b[0]));
+  $("priceCount").textContent = entries.length;
+  $("priceBody").innerHTML = entries.map(([model,price])=>`
+    <tr>
+      <td><b>${esc(model)}</b></td>
+      <td>€ ${Number(price).toFixed(2)}</td>
+      <td style="color:var(--muted)">€ ${(Number(price)*0.30).toFixed(2)}</td>
+      <td><button class="rmv delPrice" data-m="${esc(model)}">✕</button></td>
+    </tr>`).join("") || '<tr><td colspan="4" style="color:var(--muted)">Nog geen prijzen — reserveringen blijven aanvraag-per-mail.</td></tr>';
+  document.querySelectorAll(".delPrice").forEach(b=>b.addEventListener("click", async ()=>{
+    delete priceData.prices[b.dataset.m];
+    await save("dealer-prices", priceData); renderPrices();
+  }));
+}
+document.getElementById("addPrice").addEventListener("click", async ()=>{
+  const model = $("pModel").value.trim();
+  const price = parseFloat($("pPrice").value);
+  if (!model || !(price > 0)){ setStatus("bad","Vul een modelnaam en een prijs > 0 in."); return; }
+  priceData.prices = priceData.prices || {};
+  priceData.prices[model] = price;
+  await save("dealer-prices", priceData);
+  $("pModel").value=""; $("pPrice").value="";
+  renderPrices();
+  setStatus("ok","Prijs opgeslagen — reserveringen voor "+model+" krijgen straks automatisch een 30%-aanbetalingslink.");
+});
+
 let reqData = { requests: [] };
 function renderReqs(){
   const list = (reqData.requests || []).slice().reverse();
@@ -280,7 +322,8 @@ function renderReqs(){
       <td><b>${esc(r.model)}</b></td>
       <td>${esc(r.qty)}</td>
       <td style="max-width:260px;font-size:12px;color:var(--muted)">${esc(String(r.note||"").slice(0,120))}</td>
-      <td><span class="pill ${r.status==="done"?"on":"off"}">${r.status==="done"?"afgehandeld":"nieuw"}</span></td>
+      <td><span class="pill ${(r.status==="done"||r.status==="paid")?"on":"off"}">${r.status==="done"?"afgehandeld":(r.status==="paid"?"aanbetaald ✓":"nieuw")}</span>
+          ${r.deposit ? `<div style="font-size:10.5px;color:var(--muted);margin-top:2px">30%: € ${Number(r.deposit).toFixed(2)}${r.paymentStatus ? " · "+esc(r.paymentStatus) : ""}</div>` : ""}</td>
       <td>
         <button class="rmv reqTog" data-i="${idx}">${r.status==="done"?"heropen":"afgehandeld"}</button>
         <button class="rmv reqDel" data-i="${idx}">✕</button>
@@ -338,8 +381,11 @@ async function init(){
     reqData = await kvGet("dealer-requests");
     if (!reqData || typeof reqData !== "object") reqData = {};
     if (!Array.isArray(reqData.requests)) reqData.requests = [];
+    priceData = await kvGet("dealer-prices");
+    if (!priceData || typeof priceData !== "object") priceData = {};
+    if (!priceData.prices || typeof priceData.prices !== "object") priceData.prices = {};
     $("contactEmail").value = accounts.contactEmail;
-    renderDealers(); renderDocs(); renderReqs();
+    renderDealers(); renderDocs(); renderReqs(); renderPrices();
     document.getElementById("mgmt").classList.remove("hidden");
   } catch(e){ setStatus("bad", "Laden faalde: "+e.message); }
 }

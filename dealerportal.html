@@ -126,14 +126,19 @@ const $ = (id) => document.getElementById(id);
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
 // Sessie uit magic-link (?s=…) oppakken en URL schoonmaken
+let showPaidBanner = false;
 (function(){
   const u = new URL(location.href);
   const s = u.searchParams.get("s");
   if (s && s.length > 20) {
     localStorage.setItem(SESS_KEY, s);
     u.searchParams.delete("s");
-    history.replaceState(null, "", u.pathname);
   }
+  if (u.searchParams.get("paid")) {
+    showPaidBanner = true;
+    u.searchParams.delete("paid");
+  }
+  history.replaceState(null, "", u.pathname);
 })();
 
 async function api(path, opts){
@@ -172,6 +177,13 @@ async function sendLink(){
   $("who").textContent = (me.data.company ? me.data.company + " · " : "") + me.data.email;
   $("who").classList.remove("hidden");
   $("logoutBtn").classList.remove("hidden");
+  if (showPaidBanner) {
+    const b = document.createElement("div");
+    b.className = "msg ok";
+    b.style.margin = "14px 0 0";
+    b.textContent = "Thank you — your deposit payment is being processed. We will confirm your reservation by e-mail.";
+    $("appView").insertBefore(b, $("appView").firstChild);
+  }
   loadStock(); loadDocs(); loadMySpas();
 })();
 
@@ -279,7 +291,12 @@ function openReserve(model){
     const r = await api("/dealers/api/reserve", { method:"POST", body: JSON.stringify({
       model, qty: ov.querySelector("#rsvQty").value, note: ov.querySelector("#rsvNote").value }) });
     const m = ov.querySelector("#rsvMsg");
-    if (r.status===200 && r.data && r.data.ok) {
+    if (r.status===200 && r.data && r.data.ok && r.data.checkoutUrl) {
+      m.className="msg ok";
+      m.textContent="Request received — redirecting you to the secure payment page for the 30% deposit (€ " + (r.data.deposit!=null ? Number(r.data.deposit).toFixed(2) : "") + ")…";
+      m.classList.remove("hidden");
+      setTimeout(()=>{ location.href = r.data.checkoutUrl; }, 1400);
+    } else if (r.status===200 && r.data && r.data.ok) {
       m.className="msg ok"; m.textContent="Request sent — we will confirm by e-mail."; m.classList.remove("hidden");
       setTimeout(()=>ov.remove(), 1800);
     } else {
