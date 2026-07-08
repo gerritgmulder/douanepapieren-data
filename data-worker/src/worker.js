@@ -81,7 +81,10 @@ const DP_LOGIN_TTL = 15 * 60;            // magic-link 15 min geldig
 const DP_SESS_TTL  = 30 * 24 * 3600;     // sessie 30 dagen
 
 async function dpSendEmail(env, to, subject, html, replyTo) {
-  if (!env.RESEND_API_KEY || !env.MAIL_FROM) return { ok: false, error: "mail-not-configured" };
+  if (!env.RESEND_API_KEY || !env.MAIL_FROM) {
+    console.log("[dp-mail] niet geconfigureerd (RESEND_API_KEY/MAIL_FROM ontbreekt)");
+    return { ok: false, error: "mail-not-configured" };
+  }
   const body = { from: env.MAIL_FROM, to: [String(to).toLowerCase()], subject, html };
   if (replyTo) body.reply_to = [replyTo];
   const r = await fetch("https://api.resend.com/emails", {
@@ -89,6 +92,8 @@ async function dpSendEmail(env, to, subject, html, replyTo) {
     headers: { "Authorization": `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  const respText = await r.text().catch(() => "");
+  console.log("[dp-mail] to=" + to + " status=" + r.status + " resp=" + respText.slice(0, 300));
   return { ok: r.ok, status: r.status };
 }
 
