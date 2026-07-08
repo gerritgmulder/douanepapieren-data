@@ -461,6 +461,44 @@ async function handleDealerRoutes(request, env, url) {
   return reply(404, "Not found");
 }
 
+// ─── Team-sleutel automatisch uitdelen aan ingelogde medewerkers ─────
+// POST /internal/teamkey { username, password } — verifieert de Logic4-login
+// (zelfde token-request als de Electron-helper) en geeft bij succes de
+// team-sleutel terug. Zo krijgt élke medewerker de sleutel ONZICHTBAAR bij
+// het normale inloggen: niemand hoeft iets in te vullen. De toegangsdrempel
+// is exact gelijk aan de app zelf (geldige Logic4-inlog vereist); het
+// wachtwoord wordt alleen doorgegeven aan Logic4's IDP en nergens opgeslagen.
+function l4enc(v) { return String(v).replace(/_/g, "__").replace(/ /g, "_"); }
+
+async function handleTeamKey(request, env) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const username = String(body.username || "").trim();
+  const password = String(body.password || "");
+  if (!username || !password) return reply(400, { ok: false, error: "credentials-required" });
+  if (!env.LOGIC4_PUBLICKEY || !env.LOGIC4_SECRETKEY || !env.LOGIC4_COMPANYKEY) {
+    return reply(503, { ok: false, error: "logic4-not-configured" });
+  }
+  const form = new URLSearchParams();
+  form.set("client_id", l4enc(env.LOGIC4_PUBLICKEY) + " " + l4enc(env.LOGIC4_COMPANYKEY) + " " + l4enc(username));
+  form.set("client_secret", l4enc(env.LOGIC4_SECRETKEY) + " " + l4enc(password));
+  form.set("scope", "api administration." + l4enc(env.LOGIC4_ADMINISTRATION || "1"));
+  form.set("grant_type", "client_credentials");
+  const r = await fetch("https://idp.logic4server.nl/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+  });
+  if (!r.ok) {
+    console.log("[teamkey] Logic4-verificatie faalde voor " + username + " (HTTP " + r.status + ")");
+    return reply(401, { ok: false, error: "logic4-login-failed" });
+  }
+  const j = await r.json().catch(() => null);
+  if (!j || !j.access_token) return reply(401, { ok: false, error: "logic4-login-failed" });
+  console.log("[teamkey] uitgegeven aan " + username);
+  return reply(200, { ok: true, teamkey: env.SHARED_SECRET });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
@@ -468,6 +506,11 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    // Team-sleutel voor medewerkers (Logic4-login als bewijs)
+    if (url.pathname === "/internal/teamkey" && request.method === "POST") {
+      return handleTeamKey(request, env);
+    }
 
     // Dealerportaal (publiek, eigen sessie-auth — géén shared secret)
     if (url.pathname === "/dealers" || url.pathname.startsWith("/dealers/")) {
