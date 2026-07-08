@@ -219,6 +219,10 @@
           Wachtwoord
           <input type="password" id="loginPass" required autocomplete="current-password">
         </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:400;cursor:pointer;">
+          <input type="checkbox" id="rememberMe" style="width:auto;margin:0;">
+          Blijf ingelogd op deze computer
+        </label>
         <button type="submit" id="loginBtn">Inloggen</button>
       </form>
       <div id="helperHint" class="helper-hint"><span class="dot"></span>Helper-server checken…</div>
@@ -664,9 +668,33 @@ async function pingHelper() {
 }
 
 // ─── Boot ────────────────────────────────────────────────────
+// "Blijf ingelogd": probeer stil in te loggen met de lokaal bewaarde inlog.
+// Lukt het niet door een fout wachtwoord (gewijzigd?) → opgeslagen inlog
+// wissen; helper onbereikbaar → inlog bewaren en gewoon login-scherm tonen.
+async function tryAutoLogin() {
+  const raw = localStorage.getItem("fp.remember");
+  if (!raw) return false;
+  let creds = null;
+  try { creds = JSON.parse(decodeURIComponent(escape(atob(raw)))); }
+  catch { localStorage.removeItem("fp.remember"); return false; }
+  if (!creds || !creds.u || !creds.p) { localStorage.removeItem("fp.remember"); return false; }
+  try {
+    const r = await apiFetch("/api/login", { method: "POST", body: { username: creds.u, password: creds.p } });
+    const j = await r.json();
+    if (r.ok && j.ok) {
+      setSession(j.sessionId, j.user?.email || creds.u);
+      showDashboard(j.user?.email || creds.u);
+      return true;
+    }
+    if (r.status === 401) localStorage.removeItem("fp.remember");
+    return false;
+  } catch { return false; }
+}
+
 async function boot() {
   const session = getSession();
   if (!session) {
+    if (await tryAutoLogin()) return;
     showLogin();
     pingHelper();
     return;
@@ -679,8 +707,9 @@ async function boot() {
       showDashboard(j.user?.email || localStorage.getItem(EMAIL_KEY));
       return;
     }
-    // 401 → sessie verlopen
+    // 401 → sessie verlopen; met 'blijf ingelogd' stil opnieuw inloggen
     clearSession();
+    if (await tryAutoLogin()) return;
     showLogin("Sessie verlopen — log opnieuw in.");
     pingHelper();
   } catch {
@@ -691,6 +720,10 @@ async function boot() {
 }
 
 // ─── Login form ─────────────────────────────────────────────
+// Vinkje staat alvast aan als er een bewaarde inlog is (bv. wanneer het
+// login-scherm toch verschijnt na een wachtwoordwijziging).
+if (localStorage.getItem("fp.remember") && el("rememberMe")) el("rememberMe").checked = true;
+
 el("loginForm").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const email = el("loginEmail").value.trim();
@@ -713,6 +746,15 @@ el("loginForm").addEventListener("submit", async (ev) => {
       return;
     }
     setSession(j.sessionId, j.user?.email || email);
+    // "Blijf ingelogd": bewaar de inlog lokaal zodat de app bij het opstarten
+    // automatisch inlogt. Base64 is verhulling, geen encryptie — de echte
+    // bescherming is de eigen computer-login (FileVault/Windows-account).
+    // Expliciet uitloggen wist dit weer. Touch ID-versie volgt in een release.
+    if (el("rememberMe") && el("rememberMe").checked) {
+      localStorage.setItem("fp.remember", btoa(unescape(encodeURIComponent(JSON.stringify({ u: email, p: pass })))));
+    } else {
+      localStorage.removeItem("fp.remember");
+    }
     el("loginPass").value = "";
     el("loginBtn").disabled = false;
     el("loginBtn").textContent = "Inloggen";
@@ -729,6 +771,9 @@ el("loginForm").addEventListener("submit", async (ev) => {
 el("logoutBtn").addEventListener("click", async () => {
   try { await apiFetch("/api/logout", { method: "POST" }); } catch {}
   clearSession();
+  // Expliciet uitloggen = ook 'blijf ingelogd' uitzetten, anders logt de
+  // app zichzelf bij de volgende start direct weer in.
+  localStorage.removeItem("fp.remember");
   showLogin();
   pingHelper();
 });
