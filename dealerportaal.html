@@ -167,7 +167,8 @@ function renderDealers(){
       <td><input class="debIn" data-i="${i}" value="${esc((d.debtorIds||[]).join(", "))}" style="width:160px;font-size:12px;padding:4px 7px"></td>
       <td><span class="pill ${d.active!==false?"on":"off"}">${d.active!==false?"actief":"uit"}</span>
           <button class="rmv togAct" data-i="${i}" style="margin-left:6px">${d.active!==false?"blokkeer":"activeer"}</button></td>
-      <td><button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
+      <td><button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink (15 min geldig) — handig als de e-mail niet aankomt of voor onboarding via WhatsApp">🔗 inloglink</button>
+          <button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
     </tr>`).join("") || '<tr><td colspan="5" style="color:var(--muted)">Nog geen dealers — voeg de eerste toe.</td></tr>';
   document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
@@ -179,6 +180,22 @@ function renderDealers(){
     if (!confirm("Dealer "+d.email+" verwijderen? (bestaande sessies verlopen vanzelf)")) return;
     accounts.dealers.splice(Number(b.dataset.i),1);
     await save("dealer-accounts", accounts); renderDealers();
+  }));
+  document.querySelectorAll(".lnkD").forEach(b=>b.addEventListener("click", async ()=>{
+    const d = accounts.dealers[Number(b.dataset.i)];
+    b.disabled = true; b.textContent = "bezig…";
+    try {
+      const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/loginlink", {
+        method:"POST", headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth":DATA_STORE_AUTH },
+        body: JSON.stringify({ email: d.email }) });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP "+r.status));
+      let copied = false;
+      try { await navigator.clipboard.writeText(j.link); copied = true; } catch(e){}
+      setStatus("ok", (copied ? "Inloglink gekopieerd naar je klembord" : "Inloglink aangemaakt") +
+        " voor "+d.email+" (15 min geldig, eenmalig): "+j.link);
+    } catch(e){ setStatus("bad","Inloglink maken faalde: "+e.message); }
+    b.disabled = false; b.textContent = "🔗 inloglink";
   }));
   document.querySelectorAll(".debIn").forEach(inp=>inp.addEventListener("change", async ()=>{
     const d = accounts.dealers[Number(inp.dataset.i)];

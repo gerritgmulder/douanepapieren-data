@@ -327,11 +327,51 @@ async function dpHandlePage(env) {
   return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
+// ─── Admin-endpoints (alleen interne beheertegel, X-Fonteyn-Auth) ─────
+// mailstatus: Resend-bezorgstatus opvragen (delivered/bounced/…) voor
+// diagnose van niet-aangekomen mails. loginlink: magic-link genereren
+// ZONDER e-mail — kopieerbaar, voor als de mail van een dealer (of Outlook)
+// niet meewerkt. Zelfde geldigheid als de mail-link (15 min, eenmalig).
+function dpIsAdmin(request, env) {
+  const h = request.headers.get("X-Fonteyn-Auth") || "";
+  return !!env.SHARED_SECRET && h === env.SHARED_SECRET;
+}
+
+async function dpAdminMailStatus(env, url) {
+  const id = url.searchParams.get("id") || "";
+  if (!id) return reply(400, { ok: false, error: "id-required" });
+  const r = await fetch("https://api.resend.com/emails/" + encodeURIComponent(id), {
+    headers: { "Authorization": "Bearer " + env.RESEND_API_KEY },
+  });
+  const j = await r.json().catch(() => null);
+  return reply(r.ok ? 200 : 502, { ok: r.ok, status: r.status, mail: j });
+}
+
+async function dpAdminLoginLink(request, env, url) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const email = String(body.email || "").trim().toLowerCase();
+  const accounts = await dpGetAccounts(env);
+  const dealer = dpFindDealer(accounts, email);
+  if (!dealer) return reply(404, { ok: false, error: "geen actieve dealer met dit e-mailadres" });
+  const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+  await env.FONTEYN_DATA.put("dp-login:" + token, JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_LOGIN_TTL });
+  return reply(200, { ok: true, link: url.origin + "/dealers/auth?t=" + token, validMinutes: 15 });
+}
+
 async function handleDealerRoutes(request, env, url) {
   const p = url.pathname.replace(/\/+$/, "");
   if (p === "/dealers" && request.method === "GET") return dpHandlePage(env);
   if (p === "/dealers/login" && request.method === "POST") return dpHandleLogin(request, env, url);
   if (p === "/dealers/auth" && request.method === "GET") return dpHandleAuth(request, env, url);
+
+  // Admin (interne beheertegel, shared secret — géén dealer-sessie)
+  if (p.startsWith("/dealers/admin/")) {
+    if (!dpIsAdmin(request, env)) return reply(401, { ok: false, error: "unauthorized" });
+    if (p === "/dealers/admin/mailstatus" && request.method === "GET") return dpAdminMailStatus(env, url);
+    if (p === "/dealers/admin/loginlink" && request.method === "POST") return dpAdminLoginLink(request, env, url);
+    return reply(404, "Not found");
+  }
 
   // Alles hieronder vereist een geldige dealer-sessie
   if (p.startsWith("/dealers/api/")) {
