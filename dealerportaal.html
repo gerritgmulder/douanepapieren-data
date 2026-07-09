@@ -98,14 +98,15 @@
 
   <div class="card">
     <h3>Dealerprijzen per model (<span id="priceCount">0</span>)</h3>
-    <p class="lead" style="margin-bottom:10px">Nodig voor de automatische <b>30%-aanbetaling</b> bij een reservering (via Mollie, zodra de betaalkoppeling actief is). Zonder prijs blijft een reservering een aanvraag-per-mail. Modelnaam moet exact overeenkomen met de voorraad (bv. "Renew").</p>
+    <p class="lead" style="margin-bottom:10px">Nodig voor de automatische <b>30%-aanbetaling</b> bij een reservering (Mollie is actief). Zonder prijs blijft een reservering een aanvraag-per-mail. Modelnaam moet exact overeenkomen met de voorraad (bv. "Renew"). De <b>artikelcode</b> (optioneel) zorgt dat de automatische Logic4-order een echte productregel krijgt in plaats van alleen een omschrijving.</p>
     <table class="grid">
-      <thead><tr><th>Model</th><th>Dealerprijs (€, excl. opties)</th><th>30% aanbetaling</th><th></th></tr></thead>
+      <thead><tr><th>Model</th><th>Dealerprijs (€, excl. opties)</th><th>30% aanbetaling</th><th>Artikelcode</th><th></th></tr></thead>
       <tbody id="priceBody"></tbody>
     </table>
     <div class="row" style="margin-top:12px">
       <input id="pModel" placeholder="Model (bv. Renew)" style="min-width:180px">
       <input id="pPrice" type="number" min="0" step="1" placeholder="prijs in €" style="min-width:140px">
+      <input id="pCode" placeholder="artikelcode (optioneel)" style="min-width:160px">
       <button class="primary" id="addPrice" type="button">+ Prijs opslaan</button>
     </div>
   </div>
@@ -286,13 +287,18 @@ let priceData = { prices: {} };
 function renderPrices(){
   const entries = Object.entries(priceData.prices || {}).sort((a,b)=>a[0].localeCompare(b[0]));
   $("priceCount").textContent = entries.length;
-  $("priceBody").innerHTML = entries.map(([model,price])=>`
+  // Waarde kan kaal getal zijn (oud) of {price, code} (met Logic4-artikelcode)
+  $("priceBody").innerHTML = entries.map(([model,val])=>{
+    const price = Number(val && typeof val === "object" ? val.price : val);
+    const code = (val && typeof val === "object" && val.code) ? val.code : "";
+    return `
     <tr>
       <td><b>${esc(model)}</b></td>
-      <td>€ ${Number(price).toFixed(2)}</td>
-      <td style="color:var(--muted)">€ ${(Number(price)*0.30).toFixed(2)}</td>
+      <td>€ ${price.toFixed(2)}</td>
+      <td style="color:var(--muted)">€ ${(price*0.30).toFixed(2)}</td>
+      <td>${code ? esc(code) : '<span style="color:var(--muted)">—</span>'}</td>
       <td><button class="rmv delPrice" data-m="${esc(model)}">✕</button></td>
-    </tr>`).join("") || '<tr><td colspan="4" style="color:var(--muted)">Nog geen prijzen — reserveringen blijven aanvraag-per-mail.</td></tr>';
+    </tr>`;}).join("") || '<tr><td colspan="5" style="color:var(--muted)">Nog geen prijzen — reserveringen blijven aanvraag-per-mail.</td></tr>';
   document.querySelectorAll(".delPrice").forEach(b=>b.addEventListener("click", async ()=>{
     delete priceData.prices[b.dataset.m];
     await save("dealer-prices", priceData); renderPrices();
@@ -301,11 +307,12 @@ function renderPrices(){
 document.getElementById("addPrice").addEventListener("click", async ()=>{
   const model = $("pModel").value.trim();
   const price = parseFloat($("pPrice").value);
+  const code = $("pCode").value.trim();
   if (!model || !(price > 0)){ setStatus("bad","Vul een modelnaam en een prijs > 0 in."); return; }
   priceData.prices = priceData.prices || {};
-  priceData.prices[model] = price;
+  priceData.prices[model] = code ? { price, code } : price;
   await save("dealer-prices", priceData);
-  $("pModel").value=""; $("pPrice").value="";
+  $("pModel").value=""; $("pPrice").value=""; $("pCode").value="";
   renderPrices();
   setStatus("ok","Prijs opgeslagen — reserveringen voor "+model+" krijgen straks automatisch een 30%-aanbetalingslink.");
 });

@@ -279,7 +279,10 @@ async function dpHandleReserve(request, env, sess, url) {
   let checkoutUrl = null;
   if (env.MOLLIE_API_KEY) {
     const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
-    const price = Number((priceData.prices || {})[model]);
+    // Prijs per model: kaal getal (alleen prijs) of {price, code} met Logic4-artikelcode
+    const pEntry = (priceData.prices || {})[model];
+    const price = Number(pEntry && typeof pEntry === "object" ? pEntry.price : pEntry);
+    if (pEntry && typeof pEntry === "object" && pEntry.code) entry.productCode = String(pEntry.code);
     if (price > 0) {
       const deposit = Math.round(price * qty * 0.30 * 100) / 100;
       const pay = await dpCreateMolliePayment(env, deposit,
@@ -444,6 +447,75 @@ async function dpHandlePage(env) {
   } });
 }
 
+// ─── Logic4-order aanmaken na betaalde aanbetaling ───────────────────
+// Endpoint GEVERIFIEERD (9 jul 2026, via validatie-probes): POST
+// /v3/Orders/AddUpdateOrder — vereist minimaal OrderStatus + debiteur.
+// Auth: fonteynbot (LOGIC4_USERNAME/PASSWORD als worker-secrets).
+let _l4tok = null;
+async function l4Token(env) {
+  if (_l4tok && Date.now() < _l4tok.exp - 60000) return _l4tok.t;
+  const f = new URLSearchParams();
+  f.set("client_id", l4enc(env.LOGIC4_PUBLICKEY) + " " + l4enc(env.LOGIC4_COMPANYKEY) + " " + l4enc(env.LOGIC4_USERNAME));
+  f.set("client_secret", l4enc(env.LOGIC4_SECRETKEY) + " " + l4enc(env.LOGIC4_PASSWORD));
+  f.set("scope", "api administration." + l4enc(env.LOGIC4_ADMINISTRATION || "1"));
+  f.set("grant_type", "client_credentials");
+  const r = await fetch("https://idp.logic4server.nl/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: f.toString() });
+  const j = await r.json().catch(() => null);
+  if (!j || !j.access_token) throw new Error("logic4-token-failed (" + r.status + ")");
+  _l4tok = { t: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
+  return j.access_token;
+}
+
+// Maakt de verkooporder (status 25 = 30% aanbetaald) onder het debiteur-
+// nummer van de dealer. Prijzen-bucket mag per model een object zijn
+// ({price, code}) of een kaal getal (alleen prijs, regel zonder artikelcode).
+async function dpCreateLogic4Order(env, opts) {
+  if (!env.LOGIC4_USERNAME || !env.LOGIC4_PASSWORD) return { ok: false, error: "logic4-user-not-configured" };
+  const token = await l4Token(env);
+  const payload = {
+    OrderStatus: { Id: 25 },                         // 30% aanbetaald
+    DebtorId: Number(opts.debtorId),
+    Reference: opts.reference || "",
+    Remarks: opts.remarks || "",
+    OrderRows: [{
+      ...(opts.productCode ? { ProductCode: String(opts.productCode) } : {}),
+      Description: opts.description,
+      Qty: Number(opts.qty) || 1,
+    }],
+  };
+  const r = await fetch("https://api.logic4server.nl/v3/Orders/AddUpdateOrder", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const txt = await r.text();
+  let j = null; try { j = JSON.parse(txt); } catch {}
+  if (!r.ok) {
+    console.log("[dp-logic4] order faalde HTTP " + r.status + ": " + txt.slice(0, 300));
+    return { ok: false, error: "HTTP " + r.status + " — " + ((j && (j.detail || j.title)) || txt.slice(0, 200)) };
+  }
+  const orderId = (j && (j.Id || (j.Value && j.Value.Id))) || null;
+  console.log("[dp-logic4] order aangemaakt: " + orderId + " (debiteur " + opts.debtorId + ")");
+  return { ok: true, orderId, raw: orderId ? undefined : txt.slice(0, 300) };
+}
+
+// POST /dealers/admin/testorder { debtorId, model, qty, productCode? } —
+// gecontroleerde proeforder (X-DP-Admin) voor de livegang-test. Maakt een
+// ECHTE order aan; alleen gebruiken met een debiteurnummer dat daarna in
+// Logic4 opgeruimd/geannuleerd wordt.
+async function dpAdminTestOrder(request, env) {
+  let b = {};
+  try { b = await request.json(); } catch {}
+  if (!b.debtorId) return reply(400, { ok: false, error: "debtorId-required" });
+  const res = await dpCreateLogic4Order(env, {
+    debtorId: b.debtorId, qty: b.qty || 1, productCode: b.productCode || null,
+    reference: "DP-TEST",
+    remarks: "PROEFORDER dealerportaal — mag geannuleerd worden",
+    description: (b.qty || 1) + "x " + (b.model || "Testmodel") + " — proeforder dealerportaal (niet uitleveren)",
+  }).catch(e => ({ ok: false, error: String(e.message || e) }));
+  return reply(res.ok ? 200 : 502, res);
+}
+
 // POST /dealers/webhook — Mollie betaalstatus (fase 3). Mollie stuurt alleen
 // een payment-id (form-encoded); wij halen de status server-side op en werken
 // de bijbehorende reserveringsaanvraag bij (koppeling via metadata.requestId
@@ -468,6 +540,27 @@ async function dpHandleMollieWebhook(request, env) {
       item.paymentId = p.id;
       item.paymentStatus = p.status;   // paid / open / failed / expired / canceled
       if (p.status === "paid") item.status = "paid";
+      // Aanbetaling binnen → automatisch verkooporder (status 25) in Logic4,
+      // onder het debiteurnummer van de dealer. Idempotent: nooit dubbel.
+      if (p.status === "paid" && !item.logic4OrderId) {
+        try {
+          const accounts = await dpGetAccounts(env);
+          const dealer = dpFindDealer(accounts, item.email);
+          const debtorId = dealer && (dealer.debtorIds || [])[0];
+          if (!debtorId) {
+            item.logic4Error = "geen debtorId gekoppeld aan dealer-account " + item.email;
+          } else {
+            const res = await dpCreateLogic4Order(env, {
+              debtorId, qty: item.qty, productCode: item.productCode || null,
+              reference: "DP-" + String(item.id).slice(0, 8),
+              remarks: "Dealerportaal-reservering — 30% aanbetaald: € " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie dealer: " + item.note : ""),
+              description: item.qty + "x " + item.model + " — dealerportaal (30% aanbetaald via Mollie)",
+            });
+            if (res.ok) { item.logic4OrderId = res.orderId; delete item.logic4Error; }
+            else item.logic4Error = res.error;
+          }
+        } catch (e) { item.logic4Error = String(e.message || e); }
+      }
       await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
     }
   }
@@ -525,6 +618,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/mailstatus" && request.method === "GET") return dpAdminMailStatus(env, url);
     if (p === "/dealers/admin/loginlink" && request.method === "POST") return dpAdminLoginLink(request, env, url);
     if (p === "/dealers/admin/file" && request.method === "PUT") return dpAdminPutFile(request, env, url);
+    if (p === "/dealers/admin/testorder" && request.method === "POST") return dpAdminTestOrder(request, env);
     return reply(404, "Not found");
   }
 
