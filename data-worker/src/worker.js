@@ -133,11 +133,44 @@ async function dpSession(env, request) {
   return sess || null;
 }
 
-// POST /dealers/login  { email }
+// ─── Wachtwoorden: PBKDF2-SHA256, alleen de hash wordt bewaard ────────
+// Niemand (ook beheerders met bucket-toegang niet) kan het wachtwoord
+// terugzien — er staat alleen salt+hash in dealer-accounts.
+async function dpHashPassword(password, saltB64, iterations) {
+  const salt = saltB64 ? Uint8Array.from(atob(saltB64), c => c.charCodeAt(0)) : crypto.getRandomValues(new Uint8Array(16));
+  const iter = iterations || 50000;
+  const km = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations: iter }, km, 256);
+  return { salt: btoa(String.fromCharCode(...salt)), iter, hash: btoa(String.fromCharCode(...new Uint8Array(bits))) };
+}
+async function dpVerifyPassword(password, pw) {
+  if (!pw || !pw.salt || !pw.hash) return false;
+  const h = await dpHashPassword(password, pw.salt, pw.iter);
+  return h.hash === pw.hash;
+}
+function dpNewSessionToken() { return crypto.randomUUID() + crypto.randomUUID().replace(/-/g, ""); }
+
+// POST /dealers/login  { email }             → magic-link per mail (vangnet)
+// POST /dealers/login  { email, password }   → direct inloggen met wachtwoord
 async function dpHandleLogin(request, env, url) {
   let body = {};
   try { body = await request.json(); } catch {}
   const email = String(body.email || "").trim().toLowerCase();
+  const password = String(body.password || "");
+
+  // Wachtwoord-route: sessie direct teruggeven, geen mail nodig
+  if (password) {
+    if (await rateLimited(env, request, "dppw", 10, 900)) return reply(429, { ok: false, error: "too-many-attempts" });
+    const accounts = await dpGetAccounts(env);
+    const dealer = dpFindDealer(accounts, email);
+    if (!dealer || !(await dpVerifyPassword(password, dealer.pw))) {
+      return reply(401, { ok: false, error: "invalid-login" });   // generiek — geen enumeratie
+    }
+    const sess = dpNewSessionToken();
+    await env.FONTEYN_DATA.put("dp-sess:" + sess, JSON.stringify({ email, company: dealer.company || "", since: new Date().toISOString() }), { expirationTtl: DP_SESS_TTL });
+    return reply(200, { ok: true, session: sess, company: dealer.company || "" });
+  }
+
   // Altijd hetzelfde antwoord — geen e-mail-enumeratie mogelijk
   const generic = reply(200, { ok: true, message: "if-known-mail-sent" });
   if (!email || !email.includes("@")) return generic;
@@ -170,7 +203,7 @@ async function dpHandleAuth(request, env, url) {
       { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
   await env.FONTEYN_DATA.delete("dp-login:" + t);   // eenmalig bruikbaar
-  const sess = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+  const sess = dpNewSessionToken();
   await env.FONTEYN_DATA.put("dp-sess:" + sess, JSON.stringify({ email: login.email, company: login.company, since: new Date().toISOString() }), { expirationTtl: DP_SESS_TTL });
   // Token in het URL-FRAGMENT (#s=…), niet als queryparameter: fragmenten
   // verlaten de browser nooit (geen server/proxy-logs, geen referrers).
@@ -335,6 +368,22 @@ async function dpCreateMolliePayment(env, amountEur, description, redirectUrl, w
   const j = await r.json().catch(() => null);
   if (!r.ok || !j) return { ok: false, error: "mollie-http-" + r.status };
   return { ok: true, id: j.id, checkoutUrl: j._links && j._links.checkout && j._links.checkout.href };
+}
+
+// POST /dealers/api/setpassword { password } — dealer stelt (of wijzigt) zijn
+// eigen wachtwoord; vereist een geldige sessie (eerste keer via magic-link).
+async function dpHandleSetPassword(request, env, sess) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const password = String(body.password || "");
+  if (password.length < 8) return reply(400, { ok: false, error: "min-8-chars" });
+  const accounts = await dpGetAccounts(env);
+  const dealer = dpFindDealer(accounts, sess.email);
+  if (!dealer) return reply(403, { ok: false, error: "unknown-dealer" });
+  dealer.pw = await dpHashPassword(password);
+  await env.FONTEYN_DATA.put("dealer-accounts", JSON.stringify(accounts));
+  console.log("[dp-pw] wachtwoord (opnieuw) ingesteld voor " + sess.email);
+  return reply(200, { ok: true });
 }
 
 // GET /dealers/api/requests — de eigen reserveringsaanvragen van deze dealer,
@@ -626,7 +675,12 @@ async function handleDealerRoutes(request, env, url) {
   if (p.startsWith("/dealers/api/")) {
     const sess = await dpSession(env, request);
     if (!sess) return reply(401, { ok: false, error: "not-logged-in" });
-    if (p === "/dealers/api/me" && request.method === "GET") return reply(200, { ok: true, email: sess.email, company: sess.company || "" });
+    if (p === "/dealers/api/me" && request.method === "GET") {
+      const accounts = await dpGetAccounts(env);
+      const dealer = dpFindDealer(accounts, sess.email);
+      return reply(200, { ok: true, email: sess.email, company: sess.company || "", hasPassword: !!(dealer && dealer.pw) });
+    }
+    if (p === "/dealers/api/setpassword" && request.method === "POST") return dpHandleSetPassword(request, env, sess);
     if (p === "/dealers/api/logout" && request.method === "POST") {
       // Sessie ook server-side weggooien — localStorage wissen alleen liet
       // het token 30 dagen bruikbaar in KV staan.

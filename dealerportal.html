@@ -51,6 +51,7 @@
   <img src="https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/fonteyn-logo.png" alt="Fonteyn">
   <h1>Dealer Portal</h1>
   <span class="who hidden" id="who"></span>
+  <button class="hidden" id="pwBtn" type="button">Password</button>
   <button class="hidden" id="logoutBtn" type="button">Log out</button>
 </header>
 
@@ -59,15 +60,27 @@
   <section id="loginView">
     <div class="card" style="max-width:460px;margin:40px auto;">
       <h2>Welcome</h2>
-      <p class="lead">Enter your e-mail address and we will send you a login link. Access is available to registered Fonteyn &amp; Passion Spas dealers.</p>
+      <p class="lead">Log in with your e-mail address and password. Access is available to registered Fonteyn &amp; Passion Spas dealers.</p>
       <input type="email" id="email" placeholder="you@yourcompany.com" autocomplete="email">
-      <div style="margin-top:12px;"><button class="primary" id="loginBtn" type="button" style="width:100%;">Send me a login link</button></div>
+      <input type="password" id="pwd" placeholder="Password" autocomplete="current-password" style="margin-top:10px;">
+      <div style="margin-top:12px;"><button class="primary" id="loginBtn" type="button" style="width:100%;">Log in</button></div>
+      <div style="margin-top:10px;text-align:center;font-size:13px;">
+        <a href="#" id="linkBtn" style="color:var(--green);">No password yet, or forgot it? E-mail me a login link</a>
+      </div>
       <div id="loginMsg" class="msg hidden"></div>
     </div>
   </section>
 
   <!-- APP -->
   <section id="appView" class="hidden">
+    <div id="pwCard" class="card hidden" style="max-width:460px;">
+      <h2 id="pwCardTitle">Set a password</h2>
+      <p class="lead" id="pwCardLead">Set a password so you can log in directly next time — no login link needed. Your password is stored encrypted; nobody at Fonteyn can see it.</p>
+      <input type="password" id="npw1" placeholder="New password (min. 8 characters)" autocomplete="new-password">
+      <input type="password" id="npw2" placeholder="Repeat password" autocomplete="new-password" style="margin-top:10px;">
+      <div style="margin-top:12px;"><button class="primary" id="savePw" type="button">Save password</button></div>
+      <div id="pwMsg" class="msg hidden"></div>
+    </div>
     <div class="tabs">
       <button class="tab active" data-tab="stock" type="button">Stock</button>
       <button class="tab" data-tab="myspas" type="button">My spas</button>
@@ -160,22 +173,39 @@ async function api(path, opts){
   return { status: r.status, data: j };
 }
 
-// ── Login ──
-$("loginBtn").addEventListener("click", sendLink);
-$("email").addEventListener("keydown", (e)=>{ if(e.key==="Enter") sendLink(); });
-async function sendLink(){
-  const email = $("email").value.trim();
-  const m = $("loginMsg");
-  if (!email || !email.includes("@")) { m.className="msg bad"; m.textContent="Please enter a valid e-mail address."; m.classList.remove("hidden"); return; }
+// ── Login: wachtwoord (primair) of magic-link (vangnet/reset) ──
+function loginMsg(cls, txt){ const m=$("loginMsg"); m.className="msg "+cls; m.textContent=txt; m.classList.remove("hidden"); }
+$("loginBtn").addEventListener("click", pwLogin);
+$("pwd").addEventListener("keydown", (e)=>{ if(e.key==="Enter") pwLogin(); });
+$("email").addEventListener("keydown", (e)=>{ if(e.key==="Enter") $("pwd").focus(); });
+$("linkBtn").addEventListener("click", (e)=>{ e.preventDefault(); sendLink(); });
+async function pwLogin(){
+  const email = $("email").value.trim(), password = $("pwd").value;
+  if (!email || !email.includes("@")) return loginMsg("bad","Please enter a valid e-mail address.");
+  if (!password) return loginMsg("bad","Enter your password, or use the login-link option below.");
   $("loginBtn").disabled = true;
   try {
-    await api("/dealers/login", { method:"POST", body: JSON.stringify({ email }) });
-    m.className = "msg ok";
-    m.textContent = "If this address is registered as a dealer, a login link is on its way — check your inbox (valid for 15 minutes).";
-    m.classList.remove("hidden");
+    const r = await api("/dealers/login", { method:"POST", body: JSON.stringify({ email, password }) });
+    if (r.status === 200 && r.data && r.data.ok && r.data.session) {
+      localStorage.setItem(SESS_KEY, r.data.session);
+      location.reload();
+      return;
+    }
+    if (r.status === 429) return loginMsg("bad","Too many attempts — please wait 15 minutes and try again.");
+    loginMsg("bad","E-mail address or password not recognised. No password yet? Use the login-link option below.");
   } catch(e) {
-    m.className="msg bad"; m.textContent="Something went wrong — please try again."; m.classList.remove("hidden");
+    loginMsg("bad","Something went wrong — please try again.");
   } finally { $("loginBtn").disabled = false; }
+}
+async function sendLink(){
+  const email = $("email").value.trim();
+  if (!email || !email.includes("@")) return loginMsg("bad","Please enter a valid e-mail address.");
+  try {
+    await api("/dealers/login", { method:"POST", body: JSON.stringify({ email }) });
+    loginMsg("ok","If this address is registered as a dealer, a login link is on its way — check your inbox (valid for 15 minutes). Once logged in you can set a password.");
+  } catch(e) {
+    loginMsg("bad","Something went wrong — please try again.");
+  }
 }
 
 // ── Boot: sessie checken ──
@@ -188,6 +218,11 @@ async function sendLink(){
   $("who").textContent = (me.data.company ? me.data.company + " · " : "") + me.data.email;
   $("who").classList.remove("hidden");
   $("logoutBtn").classList.remove("hidden");
+  $("pwBtn").classList.remove("hidden");
+  if (!me.data.hasPassword) {
+    // Eerste keer (via inloglink): meteen vragen een wachtwoord te zetten
+    $("pwCard").classList.remove("hidden");
+  }
   if (showPaidBanner) {
     const b = document.createElement("div");
     b.className = "msg ok";
@@ -197,6 +232,29 @@ async function sendLink(){
   }
   loadStock(); loadDocs(); loadMySpas(); loadMyRequests();
 })();
+
+// ── Wachtwoord instellen / wijzigen ──
+$("pwBtn").addEventListener("click", ()=>{
+  $("pwCardTitle").textContent = "Change password";
+  $("pwCardLead").textContent = "Choose a new password (min. 8 characters). It is stored encrypted; nobody at Fonteyn can see it.";
+  $("pwCard").classList.toggle("hidden");
+});
+$("savePw").addEventListener("click", async ()=>{
+  const p1 = $("npw1").value, p2 = $("npw2").value, m = $("pwMsg");
+  const show = (cls,txt)=>{ m.className="msg "+cls; m.textContent=txt; m.classList.remove("hidden"); };
+  if (p1.length < 8) return show("bad","Password must be at least 8 characters.");
+  if (p1 !== p2) return show("bad","Passwords do not match.");
+  $("savePw").disabled = true;
+  try {
+    const r = await api("/dealers/api/setpassword", { method:"POST", body: JSON.stringify({ password: p1 }) });
+    if (r.status === 200 && r.data && r.data.ok) {
+      show("ok","Password saved — from now on you can log in directly with your e-mail address and password.");
+      $("npw1").value = ""; $("npw2").value = "";
+      setTimeout(()=>$("pwCard").classList.add("hidden"), 3000);
+    } else show("bad","Saving failed — please try again.");
+  } catch(e) { show("bad","Saving failed — please try again."); }
+  finally { $("savePw").disabled = false; }
+});
 
 $("logoutBtn").addEventListener("click", async ()=>{
   // Sessie ook server-side weggooien — alleen localStorage wissen liet het
