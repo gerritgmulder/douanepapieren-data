@@ -87,11 +87,17 @@
 
     <div id="tab-myspas" class="hidden">
       <div class="card">
+        <h2>Reservation requests</h2>
+        <p class="lead">Requests you submitted via the Stock tab, with their current status.</p>
+        <div id="myReqList"></div>
+        <div id="myReqEmpty" class="lead hidden">No requests yet — use the Reserve button on the Stock tab.</div>
+      </div>
+      <div class="card">
         <h2>My spas</h2>
         <p class="lead">Your reserved spas with Fonteyn, with the current status of each model.</p>
         <div id="mySpasList"></div>
         <div id="mySpasEmpty" class="lead hidden">No reservations found for your account.</div>
-        <div id="mySpasUnlinked" class="lead hidden">Your account is not yet linked to your order history — send us a message via the <b>Contact</b> tab and we will connect it.</div>
+        <div id="mySpasUnlinked" class="lead hidden">This overview becomes available once our team links your portal account to your Fonteyn customer number — one quick message via the <b>Contact</b> tab is enough to arrange that.</div>
       </div>
     </div>
 
@@ -189,7 +195,7 @@ async function sendLink(){
     b.textContent = "Thank you — your deposit payment is being processed. We will confirm your reservation by e-mail.";
     $("appView").insertBefore(b, $("appView").firstChild);
   }
-  loadStock(); loadDocs(); loadMySpas();
+  loadStock(); loadDocs(); loadMySpas(); loadMyRequests();
 })();
 
 $("logoutBtn").addEventListener("click", async ()=>{
@@ -222,9 +228,9 @@ function renderStock(){
     <div class="stock-card">
       <div class="m">${esc(m.model)}${m.available>0?`<span class="pill">${m.available} in stock</span>`:""}</div>
       <ul>
-        <li>📦 Available now: <b>${m.available}</b></li>
-        <li>🚢 On the water: <b>${m.onTheWater}</b>${m.nextEta?` <span style="color:var(--muted)">(ETA ${esc(m.nextEta)})</span>`:""}</li>
-        <li>🏭 In production: <b>${m.inProduction}</b></li>
+        <li>Available now: <b>${m.available}</b></li>
+        <li>On the water: <b>${m.onTheWater}</b>${m.nextEta?` <span style="color:var(--muted)">(ETA ${esc(m.nextEta)})</span>`:""}</li>
+        <li>In production: <b>${m.inProduction}</b></li>
       </ul>
       <button class="primary rsv" data-model="${esc(m.model)}" style="margin-top:10px;padding:8px 14px;font-size:13px;">Reserve</button>
     </div>`).join("");
@@ -278,21 +284,21 @@ function renderDocs(){
   $("libCrumb").innerHTML = crumbs.join(' <span style="color:var(--muted)">›</span> ');
 
   if (!cat){
-    // Niveau 1: categorieën (Spas / Saunas)
-    $("libBrowser").innerHTML = `<div class="grid">` + cats.map(c => {
+    // Niveau 1: categorieën — lege categorieën verbergen; is er maar één
+    // gevulde, dan die meteen openen (geen zinloze tussenstap)
+    const filled = cats.filter(c => (c.groups||[]).some(g => (g.files||[]).length));
+    if (filled.length === 1){ libNav = { cat: filled[0].key, group: null }; return renderDocs(); }
+    $("libBrowser").innerHTML = `<div class="grid">` + filled.map(c => {
       const n = (c.groups||[]).reduce((s,g)=>s+(g.files||[]).length, 0);
-      return n
-        ? `<a href="#" class="card" style="margin:0;display:block;text-decoration:none;color:inherit;" data-cat="${esc(c.key)}">
-             <div style="font-size:26px;">${c.key==="saunas"?"🧖":"💦"}</div><b>${esc(c.name)}</b>
-             <div style="color:var(--muted);font-size:12.5px;margin-top:4px;">${n} documents</div></a>`
-        : `<div class="card" style="margin:0;opacity:.55;"><div style="font-size:26px;">🧖</div><b>${esc(c.name)}</b>
-             <div style="color:var(--muted);font-size:12.5px;margin-top:4px;">Documentation coming soon</div></div>`;
+      return `<a href="#" class="card" style="margin:0;display:block;text-decoration:none;color:inherit;" data-cat="${esc(c.key)}">
+             <b>${esc(c.name)}</b>
+             <div style="color:var(--muted);font-size:12.5px;margin-top:4px;">${n} documents</div></a>`;
     }).join("") + `</div>`;
   } else if (!libNav.group){
     // Niveau 2: mappen binnen de categorie
     $("libBrowser").innerHTML = `<div class="grid">` + (cat.groups||[]).map(g =>
       `<a href="#" class="card" style="margin:0;display:block;text-decoration:none;color:inherit;" data-group="${esc(g.name)}">
-         <div style="font-size:22px;">📁</div><b>${esc(g.name)}</b>
+         <b>${esc(g.name)}</b>
          <div style="color:var(--muted);font-size:12.5px;margin-top:4px;">${(g.files||[]).length} documents</div></a>`).join("") + `</div>`;
   } else {
     // Niveau 3: bestanden in de map
@@ -325,6 +331,27 @@ document.getElementById("tab-docs").addEventListener("click", async (e)=>{
   }
 });
 $("docSearch").addEventListener("input", renderDocs);
+
+// ── Reservation requests: eigen aanvragen met status ──
+function reqStatusLabel(r){
+  if (r.status === "paid" || r.paymentStatus === "paid") return ["Deposit paid — reservation confirmed", "ok"];
+  if (r.deposit && r.paymentStatus === "open") return ["Awaiting deposit payment", ""];
+  if (r.status === "done") return ["Handled by our sales team", "ok"];
+  return ["Received — our sales team will contact you", ""];
+}
+async function loadMyRequests(){
+  const r = await api("/dealers/api/requests");
+  if (r.status !== 200 || !r.data || !r.data.ok) return;
+  const reqs = r.data.requests || [];
+  $("myReqEmpty").classList.toggle("hidden", reqs.length > 0);
+  $("myReqList").innerHTML = reqs.map(x => {
+    const [label, cls] = reqStatusLabel(x);
+    return `<div class="doc">
+      <div><b>${x.qty}&times; ${esc(x.model)}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit?` · deposit € ${Number(x.deposit).toFixed(2)}`:""}</span></div>
+      <span style="font-size:13px;${cls==="ok"?"color:#15803d;font-weight:600;":"color:var(--muted);"}">${label}</span>
+    </div>`;
+  }).join("");
+}
 
 // ── My spas (fase 2) ──
 async function loadMySpas(){
@@ -380,8 +407,9 @@ function openReserve(model){
       m.classList.remove("hidden");
       setTimeout(()=>{ location.href = r.data.checkoutUrl; }, 1400);
     } else if (r.status===200 && r.data && r.data.ok) {
-      m.className="msg ok"; m.textContent="Request sent — we will confirm by e-mail."; m.classList.remove("hidden");
-      setTimeout(()=>ov.remove(), 1800);
+      m.className="msg ok"; m.textContent="Request sent — you can follow its status under My spas."; m.classList.remove("hidden");
+      loadMyRequests();
+      setTimeout(()=>ov.remove(), 2200);
     } else {
       m.className="msg bad"; m.textContent="Sending failed — please try again."; m.classList.remove("hidden");
       btn.disabled = false;

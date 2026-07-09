@@ -334,6 +334,18 @@ async function dpCreateMolliePayment(env, amountEur, description, redirectUrl, w
   return { ok: true, id: j.id, checkoutUrl: j._links && j._links.checkout && j._links.checkout.href };
 }
 
+// GET /dealers/api/requests — de eigen reserveringsaanvragen van deze dealer,
+// zodat een verzoek na indienen zichtbaar blijft (status: new/paid/…).
+async function dpHandleMyRequests(env, sess) {
+  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  const mine = (Array.isArray(data.requests) ? data.requests : [])
+    .filter(r => String(r.email || "").toLowerCase() === String(sess.email || "").toLowerCase())
+    .map(r => ({ ts: r.ts, model: r.model, qty: r.qty, status: r.status,
+                 deposit: r.deposit || null, paymentStatus: r.paymentStatus || null }))
+    .sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+  return reply(200, { ok: true, requests: mine });
+}
+
 // GET /dealers/api/docs — losse links (docs) + documentbibliotheek (library:
 // categorieën → mappen → bestanden; gevuld via tools/dp-upload-docs.mjs)
 async function dpHandleDocs(env) {
@@ -530,6 +542,7 @@ async function handleDealerRoutes(request, env, url) {
     }
     if (p === "/dealers/api/stock" && request.method === "GET") return dpHandleStock(env);
     if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);
+    if (p === "/dealers/api/requests" && request.method === "GET") return dpHandleMyRequests(env, sess);
     if (p === "/dealers/api/reserve" && request.method === "POST") return dpHandleReserve(request, env, sess, url);
     if (p === "/dealers/api/docs" && request.method === "GET") return dpHandleDocs(env);
     if (p === "/dealers/api/file" && request.method === "GET") return dpServeFile(env, url);
