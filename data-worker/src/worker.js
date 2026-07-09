@@ -334,11 +334,57 @@ async function dpCreateMolliePayment(env, amountEur, description, redirectUrl, w
   return { ok: true, id: j.id, checkoutUrl: j._links && j._links.checkout && j._links.checkout.href };
 }
 
-// GET /dealers/api/docs — documentenlijst (specsheets e.d.)
+// GET /dealers/api/docs — losse links (docs) + documentbibliotheek (library:
+// categorieën → mappen → bestanden; gevuld via tools/dp-upload-docs.mjs)
 async function dpHandleDocs(env) {
   const data = await env.FONTEYN_DATA.get("dealer-docs", { type: "json" });
   const docs = (data && data.docs) || [];
-  return reply(200, { ok: true, docs });
+  const library = (data && data.library) || null;
+  return reply(200, { ok: true, docs, library });
+}
+
+// ─── Documentbibliotheek: bestanden in KV ────────────────────────────
+// Elk bestand is een losse KV-key dpfile:<id> (binair). De mappenboom staat
+// in bucket dealer-docs onder 'library'. Upload alleen met de beheersleutel;
+// download alleen met een geldige dealer-sessie. Max 24 MB (KV-limiet 25).
+const DP_FILE_TYPES = {
+  pdf: "application/pdf",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
+};
+
+function dpFileId(url) {
+  const id = (url.searchParams.get("id") || "").toLowerCase();
+  return /^[a-z0-9/_.\- ()&]{3,200}$/.test(id) && !id.includes("..") ? id : null;
+}
+
+// PUT /dealers/admin/file?id=<pad/naam.pdf>  (X-DP-Admin, body = binair)
+async function dpAdminPutFile(request, env, url) {
+  const id = dpFileId(url);
+  if (!id) return reply(400, { ok: false, error: "bad-id" });
+  const buf = await request.arrayBuffer();
+  if (!buf.byteLength) return reply(400, { ok: false, error: "empty-body" });
+  if (buf.byteLength > 24 * 1024 * 1024) return reply(413, { ok: false, error: "max-24mb" });
+  await env.FONTEYN_DATA.put("dpfile:" + id, buf);
+  return reply(200, { ok: true, id, bytes: buf.byteLength });
+}
+
+// GET /dealers/api/file?id=… (dealer-sessie vereist — afgedwongen in de router)
+async function dpServeFile(env, url) {
+  const id = dpFileId(url);
+  if (!id) return reply(400, { ok: false, error: "bad-id" });
+  const buf = await env.FONTEYN_DATA.get("dpfile:" + id, { type: "arrayBuffer" });
+  if (!buf) return reply(404, { ok: false, error: "not-found" });
+  const ext = id.split(".").pop();
+  const name = id.split("/").pop().replace(/"/g, "");
+  return new Response(buf, { headers: {
+    "Content-Type": DP_FILE_TYPES[ext] || "application/octet-stream",
+    "Content-Disposition": 'inline; filename="' + name + '"',
+    "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff",
+    ...corsHeaders,
+  } });
 }
 
 // POST /dealers/api/vraag  { subject, message } — mail naar sales
@@ -466,6 +512,7 @@ async function handleDealerRoutes(request, env, url) {
     if (!dpIsAdmin(request, env)) return reply(401, { ok: false, error: "unauthorized" });
     if (p === "/dealers/admin/mailstatus" && request.method === "GET") return dpAdminMailStatus(env, url);
     if (p === "/dealers/admin/loginlink" && request.method === "POST") return dpAdminLoginLink(request, env, url);
+    if (p === "/dealers/admin/file" && request.method === "PUT") return dpAdminPutFile(request, env, url);
     return reply(404, "Not found");
   }
 
@@ -485,6 +532,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);
     if (p === "/dealers/api/reserve" && request.method === "POST") return dpHandleReserve(request, env, sess, url);
     if (p === "/dealers/api/docs" && request.method === "GET") return dpHandleDocs(env);
+    if (p === "/dealers/api/file" && request.method === "GET") return dpServeFile(env, url);
     if (p === "/dealers/api/vraag" && request.method === "POST") return dpHandleVraag(request, env, sess);
   }
   return reply(404, "Not found");

@@ -98,8 +98,10 @@
     <div id="tab-docs" class="hidden">
       <div class="card">
         <h2>Documents &amp; spec sheets</h2>
-        <p class="lead">Specification sheets, manuals and sales material.</p>
-        <input id="docSearch" placeholder="Search documents…" style="max-width:320px;">
+        <p class="lead">Specification sheets, manuals and sales material for the products you buy from Fonteyn &amp; Passion Spas.</p>
+        <input id="docSearch" placeholder="Search all documents…" style="max-width:320px;">
+        <div id="libCrumb" style="margin-top:12px;font-size:13.5px;"></div>
+        <div id="libBrowser" style="margin-top:10px;"></div>
         <div id="docList" style="margin-top:8px;"></div>
         <div id="docsEmpty" class="lead hidden" style="margin-top:12px;">No documents published yet.</div>
       </div>
@@ -231,24 +233,97 @@ function renderStock(){
 }
 $("stockSearch").addEventListener("input", renderStock);
 
-// ── Documents ──
-let docs = [];
+// ── Documents: bibliotheek (categorie → map → bestanden) + losse links ──
+let docs = [], lib = null, libNav = { cat: null, group: null };
 async function loadDocs(){
   const r = await api("/dealers/api/docs");
   if (r.status !== 200 || !r.data || !r.data.ok) return;
   docs = r.data.docs || [];
+  lib = r.data.library || null;
   renderDocs();
+}
+function fmtSize(b){ return b >= 1048576 ? (b/1048576).toFixed(1)+" MB" : Math.max(1, Math.round(b/1024))+" KB"; }
+function fileRow(f, hint){
+  return `<div class="doc">
+    <div><b>${esc(f.title)}</b> <span style="color:var(--muted);font-size:12px">· ${hint ? esc(hint)+" · " : ""}${fmtSize(f.size||0)}</span></div>
+    <a href="#" data-file="${esc(f.id)}" data-title="${esc(f.title)}">Open →</a>
+  </div>`;
 }
 function renderDocs(){
   const q = ($("docSearch").value || "").trim().toLowerCase();
-  const list = q ? docs.filter(d => (d.title+" "+(d.model||"")).toLowerCase().includes(q)) : docs;
-  $("docList").innerHTML = list.map(d => `
-    <div class="doc">
-      <div><b>${esc(d.title)}</b>${d.model?` <span style="color:var(--muted);font-size:12px">· ${esc(d.model)}</span>`:""}</div>
-      <a href="${esc(d.url)}" target="_blank" rel="noopener">Download →</a>
-    </div>`).join("");
-  $("docsEmpty").classList.toggle("hidden", list.length > 0);
+  const cats = (lib && lib.categories) || [];
+
+  // Zoeken: plat door de hele bibliotheek + losse links heen
+  if (q){
+    $("libCrumb").innerHTML = "";
+    const hits = [];
+    for (const c of cats) for (const g of (c.groups||[]))
+      for (const f of (g.files||[])) if ((f.title+" "+g.name).toLowerCase().includes(q))
+        hits.push(fileRow(f, g.name));
+    $("libBrowser").innerHTML = hits.join("");
+    const links = docs.filter(d => (d.title+" "+(d.model||"")).toLowerCase().includes(q));
+    $("docList").innerHTML = links.map(d => `
+      <div class="doc"><div><b>${esc(d.title)}</b>${d.model?` <span style="color:var(--muted);font-size:12px">· ${esc(d.model)}</span>`:""}</div>
+      <a href="${esc(d.url)}" target="_blank" rel="noopener">Download →</a></div>`).join("");
+    $("docsEmpty").classList.toggle("hidden", hits.length + links.length > 0);
+    return;
+  }
+  $("docsEmpty").classList.add("hidden");
+
+  // Kruimelpad
+  const crumbs = ['<a href="#" data-nav="root">All documents</a>'];
+  const cat = cats.find(c => c.key === libNav.cat);
+  if (cat) crumbs.push(libNav.group ? `<a href="#" data-nav="cat">${esc(cat.name)}</a>` : `<b>${esc(cat.name)}</b>`);
+  if (cat && libNav.group) crumbs.push(`<b>${esc(libNav.group)}</b>`);
+  $("libCrumb").innerHTML = crumbs.join(' <span style="color:var(--muted)">›</span> ');
+
+  if (!cat){
+    // Niveau 1: categorieën (Spas / Saunas)
+    $("libBrowser").innerHTML = `<div class="grid">` + cats.map(c => {
+      const n = (c.groups||[]).reduce((s,g)=>s+(g.files||[]).length, 0);
+      return n
+        ? `<a href="#" class="card" style="margin:0;display:block;text-decoration:none;color:inherit;" data-cat="${esc(c.key)}">
+             <div style="font-size:26px;">${c.key==="saunas"?"🧖":"💦"}</div><b>${esc(c.name)}</b>
+             <div style="color:var(--muted);font-size:12.5px;margin-top:4px;">${n} documents</div></a>`
+        : `<div class="card" style="margin:0;opacity:.55;"><div style="font-size:26px;">🧖</div><b>${esc(c.name)}</b>
+             <div style="color:var(--muted);font-size:12.5px;margin-top:4px;">Documentation coming soon</div></div>`;
+    }).join("") + `</div>`;
+  } else if (!libNav.group){
+    // Niveau 2: mappen binnen de categorie
+    $("libBrowser").innerHTML = `<div class="grid">` + (cat.groups||[]).map(g =>
+      `<a href="#" class="card" style="margin:0;display:block;text-decoration:none;color:inherit;" data-group="${esc(g.name)}">
+         <div style="font-size:22px;">📁</div><b>${esc(g.name)}</b>
+         <div style="color:var(--muted);font-size:12.5px;margin-top:4px;">${(g.files||[]).length} documents</div></a>`).join("") + `</div>`;
+  } else {
+    // Niveau 3: bestanden in de map
+    const g = (cat.groups||[]).find(x => x.name === libNav.group);
+    $("libBrowser").innerHTML = ((g&&g.files)||[]).map(f => fileRow(f)).join("");
+  }
+
+  // Losse links (beheertegel) alleen op het hoogste niveau tonen
+  $("docList").innerHTML = (!cat && docs.length) ? `<h3 style="margin:18px 0 4px;">More documents</h3>` + docs.map(d => `
+    <div class="doc"><div><b>${esc(d.title)}</b>${d.model?` <span style="color:var(--muted);font-size:12px">· ${esc(d.model)}</span>`:""}</div>
+    <a href="${esc(d.url)}" target="_blank" rel="noopener">Download →</a></div>`).join("") : "";
 }
+// Navigatie + bestanden openen (fetch met sessie-header → blob in nieuw tabblad)
+document.getElementById("tab-docs").addEventListener("click", async (e)=>{
+  const a = e.target.closest("[data-cat],[data-group],[data-nav],[data-file]");
+  if (!a) return;
+  e.preventDefault();
+  if (a.dataset.cat){ libNav = { cat: a.dataset.cat, group: null }; return renderDocs(); }
+  if (a.dataset.group){ libNav.group = a.dataset.group; return renderDocs(); }
+  if (a.dataset.nav){ libNav = a.dataset.nav === "root" ? { cat:null, group:null } : { cat: libNav.cat, group:null }; return renderDocs(); }
+  if (a.dataset.file){
+    const old = a.textContent; a.textContent = "Loading…";
+    try{
+      const r = await fetch("/dealers/api/file?id=" + encodeURIComponent(a.dataset.file),
+        { headers: { "X-Dealer-Session": localStorage.getItem(SESS_KEY) || "" } });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      window.open(URL.createObjectURL(await r.blob()), "_blank");
+    }catch(err){ alert("Could not open document — please try again. (" + err.message + ")"); }
+    a.textContent = old;
+  }
+});
 $("docSearch").addEventListener("input", renderDocs);
 
 // ── My spas (fase 2) ──
