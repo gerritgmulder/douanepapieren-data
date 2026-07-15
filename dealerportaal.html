@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
-<title>Dealerportaal beheren — Fonteyn Dashboard</title>
+<title>Partnerportaal beheren — Fonteyn Dashboard</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <style>
   :root{
@@ -46,26 +46,26 @@
 
 <header>
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
-  <h1>Dealerportaal beheren</h1>
+  <h1>Partnerportaal beheren</h1>
   <a class="back" href="dashboard.html">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
 <main>
-  <h2>Dealerportaal</h2>
+  <h2>Partnerportaal</h2>
   <p class="lead">
-    Beheer hier wie er in het <b>dealerportaal</b> kan (magic-link login op e-mailadres),
-    welke <b>documenten</b> dealers zien, en waar contactvragen binnenkomen.
-    Portaal-adres: <a id="portalLink" href="https://fonteyn-data-store.g-mulder.workers.dev/dealers" target="_blank" rel="noopener"><code>fonteyn-data-store.g-mulder.workers.dev/dealers</code></a>
-    <em>(later: dealers.fonteyn.nl)</em>. Dealers zien alleen geaggregeerde voorraad — geen klantnamen of inkoopprijzen.
+    Beheer hier wie er in het <b>partnerportaal</b> kan (magic-link login op e-mailadres),
+    welke <b>documenten</b> partners zien, en waar contactvragen binnenkomen.
+    Portaal-adres: <a id="portalLink" href="https://fonteyn-data-store.g-mulder.workers.dev/partners" target="_blank" rel="noopener"><code>fonteyn-data-store.g-mulder.workers.dev/partners</code></a>
+    <em>(later: partners.fonteyn.nl)</em>. Partners zien alleen geaggregeerde voorraad — geen klantnamen of inkoopprijzen.
   </p>
 
   <div id="status" class="status-msg hidden"></div>
 
   <div class="card hidden" id="keyCard">
     <h3>🔐 Beheersleutel</h3>
-    <p class="lead" style="margin-bottom:10px">Dealer-data is extra beveiligd. Voer de beheersleutel in (vraag Gerrit) — dit hoeft maar één keer per computer.</p>
+    <p class="lead" style="margin-bottom:10px">Partner-data is extra beveiligd. Voer de beheersleutel in (vraag Gerrit) — dit hoeft maar één keer per computer.</p>
     <div class="row">
       <input id="keyInput" type="password" placeholder="beheersleutel" style="min-width:340px">
       <button class="primary" id="keySave" type="button">Ontgrendel</button>
@@ -74,33 +74,33 @@
 
   <div id="mgmt" class="hidden">
   <div class="card">
-    <h3>Dealers (<span id="dealerCount">0</span>)</h3>
+    <h3>Partners (<span id="partnerCount">0</span>)</h3>
     <table class="grid">
       <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(voor fase 2 — komma-gescheiden)</span></th><th>Status</th><th></th></tr></thead>
-      <tbody id="dealerBody"></tbody>
+      <tbody id="partnerBody"></tbody>
     </table>
     <div class="row" style="margin-top:12px">
-      <input id="nEmail" type="email" placeholder="dealer@bedrijf.com" style="min-width:220px">
+      <input id="nEmail" type="email" placeholder="partner@bedrijf.com" style="min-width:220px">
       <input id="nCompany" placeholder="Bedrijfsnaam" style="min-width:180px">
       <input id="nDebtors" placeholder="debiteurnr(s), optioneel" style="min-width:170px">
-      <button class="primary" id="addDealer" type="button">+ Dealer toevoegen</button>
+      <button class="primary" id="addPartner" type="button">+ Partner toevoegen</button>
     </div>
   </div>
 
   <div class="card">
     <h3>Reserveringsaanvragen (<span id="reqCount">0</span>)</h3>
-    <p class="lead" style="margin-bottom:10px">Aanvragen die dealers via de Reserve-knop in het portaal doen. Ze komen ook per mail binnen. Afgehandeld = verwerkt in Logic4/Voorraadbeheer.</p>
+    <p class="lead" style="margin-bottom:10px">Aanvragen die partners via de Reserve-knop in het portaal doen. Ze komen ook per mail binnen. Afgehandeld = verwerkt in Logic4/Voorraadbeheer.</p>
     <table class="grid">
-      <thead><tr><th>Datum</th><th>Dealer</th><th>Model</th><th>Aantal</th><th>Notitie</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Notitie</th><th>Status</th><th></th></tr></thead>
       <tbody id="reqBody"></tbody>
     </table>
   </div>
 
   <div class="card">
-    <h3>Dealerprijzen per model (<span id="priceCount">0</span>)</h3>
+    <h3>Partnerprijzen per model (<span id="priceCount">0</span>)</h3>
     <p class="lead" style="margin-bottom:10px">Nodig voor de automatische <b>30%-aanbetaling</b> bij een reservering (Mollie is actief). Zonder prijs blijft een reservering een aanvraag-per-mail. Modelnaam moet exact overeenkomen met de voorraad (bv. "Renew"). De <b>artikelcode</b> (optioneel) zorgt dat de automatische Logic4-order een echte productregel krijgt in plaats van alleen een omschrijving.</p>
     <table class="grid">
-      <thead><tr><th>Model</th><th>Dealerprijs (€, excl. opties)</th><th>30% aanbetaling</th><th>Artikelcode</th><th></th></tr></thead>
+      <thead><tr><th>Model</th><th>Partnerprijs (€, excl. opties)</th><th>30% aanbetaling</th><th>Artikelcode</th><th></th></tr></thead>
       <tbody id="priceBody"></tbody>
     </table>
     <div class="row" style="margin-top:12px">
@@ -113,7 +113,7 @@
 
   <div class="card">
     <h3>Documenten &amp; specsheets (<span id="docCount">0</span>)</h3>
-    <p class="lead" style="margin-bottom:10px">Plak een link naar de PDF (bijv. op fonteyn.nl, Google Drive met "iedereen met link", of een andere publieke plek). Dealers zien titel + model + downloadknop.</p>
+    <p class="lead" style="margin-bottom:10px">Plak een link naar de PDF (bijv. op fonteyn.nl, Google Drive met "iedereen met link", of een andere publieke plek). Partners zien titel + model + downloadknop.</p>
     <table class="grid">
       <thead><tr><th>Titel</th><th>Model</th><th>Link</th><th></th></tr></thead>
       <tbody id="docBody"></tbody>
@@ -129,7 +129,7 @@
   <div class="card">
     <h3>Instellingen</h3>
     <div class="row">
-      <label style="font-size:12.5px;color:var(--muted)">Contactvragen van dealers gaan naar:</label>
+      <label style="font-size:12.5px;color:var(--muted)">Contactvragen van partners gaan naar:</label>
       <input id="contactEmail" type="email" style="min-width:240px">
       <button class="primary" id="saveContact" type="button">Opslaan</button>
     </div>
@@ -140,7 +140,7 @@
 <script>
 const SESSION_KEY="fp.session", EMAIL_KEY="fp.email", HELPER_BASE="";
 const DATA_BASE = "https://fonteyn-data-store.g-mulder.workers.dev/data/";
-// SAFETY FIRST: dealer-data is alleen benaderbaar met de aparte BEHEERSLEUTEL.
+// SAFETY FIRST: partner-data is alleen benaderbaar met de aparte BEHEERSLEUTEL.
 // Die staat bewust NIET in deze code (de repo is publiek) — elke beheerder
 // voert 'm één keer in per computer; hij wordt lokaal bewaard.
 const ADMIN_KEY_STORE = "dp.adminkey";
@@ -189,10 +189,10 @@ async function kvPut(bucket, data){
 let accounts = { dealers: [], contactEmail: "gerrit@fonteyn.nl" };
 let docsData = { docs: [] };
 
-function renderDealers(){
+function renderPartners(){
   const list = accounts.dealers || [];
-  $("dealerCount").textContent = list.length;
-  $("dealerBody").innerHTML = list.map((d,i)=>`
+  $("partnerCount").textContent = list.length;
+  $("partnerBody").innerHTML = list.map((d,i)=>`
     <tr>
       <td><code>${esc(d.email)}</code></td>
       <td>${esc(d.company||"")}</td>
@@ -201,17 +201,17 @@ function renderDealers(){
           <button class="rmv togAct" data-i="${i}" style="margin-left:6px">${d.active!==false?"blokkeer":"activeer"}</button></td>
       <td><button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink (15 min geldig) — handig als de e-mail niet aankomt of voor onboarding via WhatsApp">🔗 inloglink</button>
           <button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
-    </tr>`).join("") || '<tr><td colspan="5" style="color:var(--muted)">Nog geen dealers — voeg de eerste toe.</td></tr>';
+    </tr>`).join("") || '<tr><td colspan="5" style="color:var(--muted)">Nog geen partners — voeg de eerste toe.</td></tr>';
   document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     d.active = d.active === false ? true : false;
-    await save("dealer-accounts", accounts); renderDealers();
+    await save("dealer-accounts", accounts); renderPartners();
   }));
   document.querySelectorAll(".delD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
-    if (!confirm("Dealer "+d.email+" verwijderen? (bestaande sessies verlopen vanzelf)")) return;
+    if (!confirm("Partner "+d.email+" verwijderen? (bestaande sessies verlopen vanzelf)")) return;
     accounts.dealers.splice(Number(b.dataset.i),1);
-    await save("dealer-accounts", accounts); renderDealers();
+    await save("dealer-accounts", accounts); renderPartners();
   }));
   document.querySelectorAll(".lnkD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
@@ -235,7 +235,7 @@ function renderDealers(){
     await save("dealer-accounts", accounts);
   }));
 }
-$("addDealer").addEventListener("click", async ()=>{
+$("addPartner").addEventListener("click", async ()=>{
   const email = $("nEmail").value.trim().toLowerCase();
   if (!email || !email.includes("@")){ setStatus("bad","Vul een geldig e-mailadres in."); return; }
   if ((accounts.dealers||[]).some(d=>String(d.email).toLowerCase()===email)){ setStatus("bad","Dit e-mailadres staat er al in."); return; }
@@ -246,8 +246,8 @@ $("addDealer").addEventListener("click", async ()=>{
   });
   await save("dealer-accounts", accounts);
   $("nEmail").value=""; $("nCompany").value=""; $("nDebtors").value="";
-  renderDealers();
-  setStatus("ok","Dealer toegevoegd — die kan nu inloggen op het portaal met een magic-link.");
+  renderPartners();
+  setStatus("ok","Partner toegevoegd — die kan nu inloggen op het portaal met een magic-link.");
 });
 
 function renderDocs(){
@@ -280,7 +280,7 @@ $("saveContact").addEventListener("click", async ()=>{
   if (!v || !v.includes("@")){ setStatus("bad","Vul een geldig e-mailadres in."); return; }
   accounts.contactEmail = v;
   await save("dealer-accounts", accounts);
-  setStatus("ok","Opgeslagen — dealervragen gaan nu naar "+v+".");
+  setStatus("ok","Opgeslagen — partnervragen gaan nu naar "+v+".");
 });
 
 let priceData = { prices: {} };
@@ -392,7 +392,7 @@ async function init(){
     if (!priceData || typeof priceData !== "object") priceData = {};
     if (!priceData.prices || typeof priceData.prices !== "object") priceData.prices = {};
     $("contactEmail").value = accounts.contactEmail;
-    renderDealers(); renderDocs(); renderReqs(); renderPrices();
+    renderPartners(); renderDocs(); renderReqs(); renderPrices();
     document.getElementById("mgmt").classList.remove("hidden");
   } catch(e){ setStatus("bad", "Laden faalde: "+e.message); }
 }

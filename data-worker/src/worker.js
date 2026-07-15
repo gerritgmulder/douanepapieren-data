@@ -183,9 +183,9 @@ async function dpHandleLogin(request, env, url) {
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("dp-login:" + token, JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_LOGIN_TTL });
   const link = url.origin + "/dealers/auth?t=" + token;
-  await dpSendEmail(env, email, "Your Fonteyn Dealer Portal login link",
+  await dpSendEmail(env, email, "Your Fonteyn Partner Portal login link",
     '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">' +
-    '<h2 style="color:#144734;">Fonteyn Dealer Portal</h2>' +
+    '<h2 style="color:#144734;">Fonteyn Partner Portal</h2>' +
     '<p>Hello ' + (dealer.company ? dealer.company : "") + ',</p>' +
     '<p>Click the button below to log in. This link is valid for 15 minutes.</p>' +
     '<p style="margin:26px 0;"><a href="' + link + '" ' +
@@ -384,9 +384,9 @@ async function dpHandleReserve(request, env, sess, url) {
   const accounts = await dpGetAccounts(env);
   const esc = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   await dpSendEmail(env, accounts.contactEmail || "gerrit@fonteyn.nl",
-    "[Dealerportaal] Reservering: " + qty + "x " + model + " — " + (sess.company || sess.email),
+    "[Partnerportaal] Reservering: " + qty + "x " + model + " — " + (sess.company || sess.email),
     '<div style="font-family:Arial,sans-serif;">' +
-    '<p><b>Nieuwe reserveringsaanvraag via het dealerportaal</b></p>' +
+    '<p><b>Nieuwe reserveringsaanvraag via het partnerportaal</b></p>' +
     '<p><b>Dealer:</b> ' + esc(sess.company || "") + ' &lt;' + esc(sess.email) + '&gt;<br>' +
     '<b>Model:</b> ' + esc(model) + '<br><b>Aantal:</b> ' + qty +
     (entry.deposit ? '<br><b>Aanbetaling (30%):</b> € ' + entry.deposit.toFixed(2) + ' — Mollie-link naar dealer gestuurd' : '') + '</p>' +
@@ -510,7 +510,7 @@ async function dpHandleVraag(request, env, sess) {
   const to = accounts.contactEmail || "gerrit@fonteyn.nl";
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const sent = await dpSendEmail(env, to,
-    "[Dealerportaal] " + subject + " — " + (sess.company || sess.email),
+    "[Partnerportaal] " + subject + " — " + (sess.company || sess.email),
     '<div style="font-family:Arial,sans-serif;">' +
     '<p><b>Dealer:</b> ' + esc(sess.company || "") + ' &lt;' + esc(sess.email) + '&gt;</p>' +
     '<p><b>Onderwerp:</b> ' + esc(subject) + '</p>' +
@@ -613,7 +613,7 @@ async function dpAdminTestOrder(request, env) {
     debtorId: b.debtorId, qty: b.qty || 1, productCode: b.productCode || null,
     reference: "DP-TEST",
     remarks: "PROEFORDER dealerportaal — mag geannuleerd worden",
-    description: (b.qty || 1) + "x " + (b.model || "Testmodel") + " — proeforder dealerportaal (niet uitleveren)",
+    description: (b.qty || 1) + "x " + (b.model || "Testmodel") + " — proeforder partnerportaal (niet uitleveren)",
   }).catch(e => ({ ok: false, error: String(e.message || e) }));
   return reply(res.ok ? 200 : 502, res);
 }
@@ -660,8 +660,8 @@ async function dpHandleMollieWebhook(request, env) {
             const res = await dpCreateLogic4Order(env, {
               debtorId, qty: item.qty, productCode: item.productCode || null,
               reference: "DP-" + String(item.id).slice(0, 8),
-              remarks: "Dealerportaal-reservering — 30% aanbetaald: € " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie dealer: " + item.note : ""),
-              description: item.qty + "x " + item.model + " — dealerportaal (30% aanbetaald via Mollie)",
+              remarks: "Partnerportaal-reservering — 30% aanbetaald: € " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie dealer: " + item.note : ""),
+              description: item.qty + "x " + item.model + " — partnerportaal (30% aanbetaald via Mollie)",
             });
             if (res.ok) { item.logic4OrderId = res.orderId; delete item.logic4Error; }
             else item.logic4Error = res.error;
