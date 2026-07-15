@@ -219,6 +219,7 @@ async function sendLink(){
   $("who").classList.remove("hidden");
   $("logoutBtn").classList.remove("hidden");
   $("pwBtn").classList.remove("hidden");
+  window.myRegion = me.data.region || "EU";
   if (!me.data.hasPassword) {
     // Eerste keer (via inloglink): meteen vragen een wachtwoord te zetten
     $("pwCard").classList.remove("hidden");
@@ -289,7 +290,7 @@ function renderStock(){
         <li>Available now: <b>${m.available}</b></li>
         <li>On the water: <b>${m.onTheWater}</b>${m.nextEta?` <span style="color:var(--muted)">(ETA ${esc(m.nextEta)})</span>`:""}</li>
         <li>In production: <b>${m.inProduction}</b></li>
-        ${m.partnerUsd?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b>${m.surchargeUsd?` <span style="color:var(--muted)">+ $ ${m.surchargeUsd} freight (Uddel)</span>`:""}</li>`:""}
+        ${m.partnerUsd?(window.myRegion==="US"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b>${m.surchargeUsd?` <span style="color:var(--muted)">+ $ ${m.surchargeUsd} freight (Uddel)</span>`:""}</li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b>${m.surchargeEur?` <span style="color:var(--muted)">+ &euro; ${m.surchargeEur} freight (Uddel)</span>`:""}</li>`):""}
       </ul>
       <button class="primary rsv" data-model="${esc(m.model)}" style="margin-top:10px;padding:8px 14px;font-size:13px;">Reserve</button>
     </div>`).join("");

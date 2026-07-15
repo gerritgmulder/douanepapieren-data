@@ -266,6 +266,8 @@ async function dpHandleStock(env) {
     if (p && typeof p === "object" && Number(p.usd) > 0) {
       m.partnerUsd = Number(p.usd);
       m.surchargeUsd = Number(p.surcharge) || 0;
+      m.partnerEur = Number(p.eurRef) || null;
+      m.surchargeEur = (m.partnerEur && m.partnerUsd) ? Math.round(m.surchargeUsd * m.partnerEur / m.partnerUsd) : null;
       m.retailEur = Number(p.retailEur) || null;
     }
   }
@@ -369,13 +371,27 @@ async function dpHandleReserve(request, env, sess, url) {
   let checkoutUrl = null;
   if (env.MOLLIE_API_KEY) {
     const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
-    // Prijslijst 2026: {usd, surcharge (Freight Surcharge Warehouse Uddel), code?}
-    // — aanbetaling ALTIJD op basis van de dollarprijs (afspraak Gerrit 15 jul).
-    // Oude vormen ({price} in EUR of kaal getal) blijven werken als terugval.
+    // Valuta per regio (Gerrit, 15 jul): partners in Amerika zien/betalen
+    // dollars; alle anderen euro's. De €-surcharge is afgeleid via de
+    // wisselkoers die in de prijslijst zelf zit (eurRef/usd).
+    // De surcharge geldt alleen bij losse bestellingen — portaal-reserveringen
+    // zíjn losse bestellingen, dus hier altijd erbij (containers gaan later
+    // via een eigen flow zonder surcharge).
+    const accountsPre = await dpGetAccounts(env);
+    const dealerPre = dpFindDealer(accountsPre, sess.email);
+    const isUS = String((dealerPre && dealerPre.region) || "").toUpperCase() === "US";
     const pEntry = (priceData.prices || {})[model];
     let unit = 0, currency = "EUR";
     if (pEntry && typeof pEntry === "object") {
-      if (Number(pEntry.usd) > 0) { unit = Number(pEntry.usd) + (Number(pEntry.surcharge) || 0); currency = "USD"; }
+      if (Number(pEntry.usd) > 0) {
+        const usd = Number(pEntry.usd), sur = Number(pEntry.surcharge) || 0;
+        if (isUS) { unit = usd + sur; currency = "USD"; }
+        else {
+          const eur = Number(pEntry.eurRef) || 0;
+          const surEur = eur && usd ? Math.round(sur * eur / usd) : sur;
+          unit = eur + surEur; currency = "EUR";
+        }
+      }
       else if (Number(pEntry.price) > 0) unit = Number(pEntry.price);
       if (pEntry.code) entry.productCode = String(pEntry.code);
     } else if (Number(pEntry) > 0) unit = Number(pEntry);
@@ -754,7 +770,9 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/api/me" && request.method === "GET") {
       const accounts = await dpGetAccounts(env);
       const dealer = dpFindDealer(accounts, sess.email);
-      return reply(200, { ok: true, email: sess.email, company: sess.company || "", hasPassword: !!(dealer && dealer.pw) });
+      return reply(200, { ok: true, email: sess.email, company: sess.company || "",
+        hasPassword: !!(dealer && dealer.pw),
+        region: (dealer && dealer.region) || "EU" });
     }
     if (p === "/dealers/api/setpassword" && request.method === "POST") return dpHandleSetPassword(request, env, sess);
     if (p === "/dealers/api/logout" && request.method === "POST") {
