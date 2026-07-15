@@ -1080,7 +1080,11 @@ async function dpRefreshReservations(env) {
         for (const row of (o.OrderRows || [])) {
           const model = codeToModel[String(row.ProductCode || "")];
           if (!model) continue;
-          perModelQty[model] = (perModelQty[model] || 0) + (Number(row.Qty) || 0);
+          // Alleen het NOG NIET uitgeleverde deel telt als reservering. Een
+          // (deels) uitgeleverde spa is geen openstaande reservering meer.
+          const undelivered = (Number(row.Qty) || 0) - (Number(row.QtyDeliverd) || 0);
+          if (undelivered <= 0) continue;
+          perModelQty[model] = (perModelQty[model] || 0) + undelivered;
         }
         for (const [model, qty] of Object.entries(perModelQty)) {
           if (qty <= 0) continue;
