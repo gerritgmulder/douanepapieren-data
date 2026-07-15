@@ -637,6 +637,119 @@ async function dpCreateLogic4Order(env, opts) {
   return { ok: true, orderId, raw: orderId ? undefined : txt.slice(0, 300) };
 }
 
+// Registreer een (aan)betaling op een BESTAANDE Logic4-order (particulier/
+// showroom). Dagboek Mollie=42, MatchingLedgerId=78 (vooruitontvangen) — zie
+// de Logic4/Optivaize-afspraken. Zet de order daarna op 30% aanbetaald (25).
+async function dpRegisterPayment(env, orderId, amountEur, mollieId) {
+  const token = await l4Token(env);
+  const pay = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      OrderId: Number(orderId), AmountIncl: Number(amountEur),
+      Description: "30% aanbetaling via dashboard (Mollie " + mollieId + ")",
+      BookingId: 42, MatchingLedgerId: 78,
+    }),
+  });
+  if (!pay.ok) return { ok: false, error: "AddPayment HTTP " + pay.status + " — " + (await pay.text()).slice(0, 200) };
+  // Status → 30% aanbetaald
+  await fetch("https://api.logic4server.nl/v3/Orders/UpdateOrderStatus", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ OrderId: Number(orderId), StatusId: 25 }),
+  }).catch(() => {});
+  console.log("[dp-logic4] betaling geregistreerd op order " + orderId);
+  return { ok: true };
+}
+
+// POST /dealers/admin/reserve-for — Chantal reserveert intern voor een partner
+// of particulier. Maakt een Mollie-aanbetalingslink en MAILT die (i.p.v.
+// meteen betalen). Body:
+//   { model, qty, variant?, variantName?, note?, custType:'partner'|'particulier',
+//     email, debtorId?, existingOrderId? }
+// - partner: email = partner-adres; order wordt ná betaling aangemaakt.
+// - particulier: existingOrderId = de bestaande Logic4-order; email wordt uit
+//   Logic4 gelezen als niet meegegeven; ná betaling wordt AddPayment gedaan.
+async function dpAdminReserveFor(request, env, url) {
+  let b = {};
+  try { b = await request.json(); } catch {}
+  const model = String(b.model || "").trim().slice(0, 80);
+  const qty = Math.max(1, Math.min(50, parseInt(b.qty, 10) || 1));
+  const custType = b.custType === "particulier" ? "particulier" : "partner";
+  if (!model) return reply(400, { ok: false, error: "model-required" });
+  if (!env.MOLLIE_API_KEY) return reply(503, { ok: false, error: "mollie-not-configured" });
+
+  // E-mail bepalen. Particulier zonder e-mail → uit de Logic4-order lezen.
+  let email = String(b.email || "").trim().toLowerCase();
+  let debtorId = b.debtorId || null;
+  const existingOrderId = custType === "particulier" ? (parseInt(b.existingOrderId, 10) || null) : null;
+  if (custType === "particulier" && existingOrderId && (!email || !debtorId)) {
+    try {
+      const token = await l4Token(env);
+      const or = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ Id: existingOrderId, TakeRecords: 1 }),
+      });
+      const oj = await or.json().catch(() => null);
+      const o = Array.isArray(oj) ? oj[0] : (oj && (oj.Orders || [])[0]);
+      if (o) {
+        debtorId = debtorId || o.DebtorId;
+        const addr = o.InvoiceAddress || o.AccountAddress || {};
+        email = email || String(addr.Email || addr.EmailAddress || "").toLowerCase();
+      }
+    } catch (e) { /* val terug op meegegeven e-mail */ }
+  }
+  if (!email || !email.includes("@")) return reply(400, { ok: false, error: "email-required (kon niet uit Logic4 lezen)" });
+
+  // Prijs + valuta: particulier = altijd EUR (NL-showroom); partner = regio.
+  const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
+  const pEntry = (priceData.prices || {})[model];
+  if (!(pEntry && Number(pEntry.usd) > 0)) return reply(400, { ok: false, error: "geen prijs voor " + model });
+  const accounts = await dpGetAccounts(env);
+  const dealer = dpFindDealer(accounts, email);
+  const isUS = custType === "partner" && String((dealer && dealer.region) || "").toUpperCase() === "US";
+  const usd = Number(pEntry.usd), sur = Number(pEntry.surcharge) || 0, PACK = 50;
+  let unit, currency;
+  if (isUS) { unit = usd + sur + PACK; currency = "USD"; }
+  else { const eur = Number(pEntry.eurRef) || 0, rate = eur && usd ? eur / usd : 1; unit = eur + Math.round(sur * rate) + Math.round(PACK * rate); currency = "EUR"; }
+  const deposit = Math.round(unit * qty * 0.30 * 100) / 100;
+
+  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  if (!Array.isArray(data.requests)) data.requests = [];
+  const entry = {
+    id: crypto.randomUUID(), ts: new Date().toISOString(),
+    email, targetEmail: email, company: (dealer && dealer.company) || "", model, qty,
+    variant: b.variant || null, variantName: b.variantName || null,
+    productCode: b.variant || (pEntry.code || null),
+    note: String(b.note || "").slice(0, 1500), status: "new",
+    adminInitiated: true, custType, debtorId, existingOrderId,
+    currency, deposit, paymentStatus: "open",
+  };
+  const pay = await dpCreateMolliePayment(env, deposit,
+    "30% deposit — " + qty + "x " + model + (entry.company ? " (" + entry.company + ")" : ""),
+    url.origin + "/dealers?paid=1", url.origin + "/dealers/webhook",
+    { requestId: entry.id }, currency);
+  if (!pay.ok) return reply(502, { ok: false, error: pay.error || "mollie-failed" });
+  entry.paymentId = pay.id;
+  data.requests.push(entry);
+  await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+
+  // Mail met aanbetalingsverzoek + link naar de partner/particulier
+  const esc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const sym = currency === "USD" ? "$" : "€";
+  const sent = await dpSendEmail(env, email,
+    "Aanbetalingsverzoek Fonteyn — " + qty + "x " + model,
+    '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">' +
+    '<h2 style="color:#144734;">Fonteyn / Passion Spas</h2>' +
+    '<p>Beste ' + (entry.company || "klant") + ',</p>' +
+    '<p>Voor uw reservering van <b>' + qty + '&times; ' + esc(model) + '</b>' + (entry.variantName ? ' (' + esc(entry.variantName) + ')' : '') +
+    ' staat een aanbetaling van <b>' + sym + ' ' + deposit.toFixed(2) + '</b> (30%) klaar.</p>' +
+    '<p style="margin:26px 0;"><a href="' + pay.checkoutUrl + '" style="background:#8bc53f;color:#144734;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:10px;display:inline-block;">Aanbetaling voldoen</a></p>' +
+    '<p style="color:#888;font-size:12px;">Na ontvangst bevestigen wij uw reservering. Vragen? Beantwoord deze e-mail.</p></div>',
+    (accounts.contactEmail || undefined));
+  return reply(200, { ok: true, deposit, currency, emailedTo: email, mailSent: sent.ok, checkoutUrl: pay.checkoutUrl });
+}
+
 // POST /dealers/admin/testorder { debtorId, model, qty, productCode? } —
 // gecontroleerde proeforder (X-DP-Admin) voor de livegang-test. Maakt een
 // ECHTE order aan; alleen gebruiken met een debiteurnummer dat daarna in
@@ -681,24 +794,34 @@ async function dpHandleMollieWebhook(request, env) {
       // Betaling niet doorgegaan → geclaimde voorraad weer vrijgeven
       // Betaling niet doorgegaan → claim vervalt (available telt 'm niet meer mee)
       if (["expired", "canceled", "failed"].includes(p.status)) item.allocationReleased = true;
-      // Aanbetaling binnen → automatisch verkooporder (status 25) in Logic4,
-      // onder het debiteurnummer van de dealer. Idempotent: nooit dubbel.
-      if (p.status === "paid" && !item.logic4OrderId) {
+      // Aanbetaling binnen → Logic4 bijwerken. Twee gevallen:
+      //  A) particulier / bestaande order (existingOrderId): de order stáát al
+      //     in Logic4 (showroomverkoop) → alleen de 30%-betaling registreren
+      //     (AddPayment, dagboek Mollie=42, MatchingLedger 78) + status → 25.
+      //  B) partner: order bestaat nog niet → aanmaken (status 25) onder het
+      //     debiteurnummer van de partner. Idempotent: nooit dubbel.
+      if (p.status === "paid" && !item.logic4OrderId && !item.logic4PaidRegistered) {
         try {
-          const accounts = await dpGetAccounts(env);
-          const dealer = dpFindDealer(accounts, item.email);
-          const debtorId = dealer && (dealer.debtorIds || [])[0];
-          if (!debtorId) {
-            item.logic4Error = "geen debtorId gekoppeld aan dealer-account " + item.email;
-          } else {
-            const res = await dpCreateLogic4Order(env, {
-              debtorId, qty: item.qty, productCode: item.productCode || null,
-              reference: "DP-" + String(item.id).slice(0, 8),
-              remarks: "Partnerportaal-reservering — 30% aanbetaald: " + (item.currency === "USD" ? "$" : "€") + " " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie dealer: " + item.note : ""),
-              description: item.qty + "x " + item.model + " — partnerportaal (30% aanbetaald via Mollie)",
-            });
-            if (res.ok) { item.logic4OrderId = res.orderId; delete item.logic4Error; }
+          if (item.existingOrderId) {
+            const res = await dpRegisterPayment(env, item.existingOrderId, item.deposit || 0, p.id);
+            if (res.ok) { item.logic4PaidRegistered = true; item.logic4OrderId = item.existingOrderId; delete item.logic4Error; }
             else item.logic4Error = res.error;
+          } else {
+            const accounts = await dpGetAccounts(env);
+            const dealer = dpFindDealer(accounts, item.targetEmail || item.email);
+            const debtorId = item.debtorId || (dealer && (dealer.debtorIds || [])[0]);
+            if (!debtorId) {
+              item.logic4Error = "geen debtorId gekoppeld aan " + (item.targetEmail || item.email);
+            } else {
+              const res = await dpCreateLogic4Order(env, {
+                debtorId, qty: item.qty, productCode: item.productCode || null,
+                reference: "DP-" + String(item.id).slice(0, 8),
+                remarks: "Partnerportaal-reservering — 30% aanbetaald: " + (item.currency === "USD" ? "$" : "€") + " " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie: " + item.note : ""),
+                description: item.qty + "x " + item.model + " — partnerportaal (30% aanbetaald via Mollie)",
+              });
+              if (res.ok) { item.logic4OrderId = res.orderId; delete item.logic4Error; }
+              else item.logic4Error = res.error;
+            }
           }
         } catch (e) { item.logic4Error = String(e.message || e); }
       }
@@ -760,6 +883,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/loginlink" && request.method === "POST") return dpAdminLoginLink(request, env, url);
     if (p === "/dealers/admin/file" && request.method === "PUT") return dpAdminPutFile(request, env, url);
     if (p === "/dealers/admin/testorder" && request.method === "POST") return dpAdminTestOrder(request, env);
+    if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);
     return reply(404, "Not found");
   }
 

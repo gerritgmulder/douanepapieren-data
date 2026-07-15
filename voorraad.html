@@ -216,6 +216,25 @@
 
   <div id="tab-prio" class="hidden">
     <div class="card">
+      <h3>Reserveren namens partner of particulier</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">
+        Maak een reservering voor een <b>partner</b> (vul e-mailadres in) of een <b>particulier</b>
+        (vul het bestaande Logic4-ordernummer in — e-mail wordt daaruit gelezen). Er wordt een
+        <b>mail met aanbetalingsverzoek + betaallink</b> gestuurd. Na betaling: bij een partner
+        wordt de order aangemaakt, bij een particulier wordt de aanbetaling op de bestaande order geboekt.
+      </p>
+      <div class="actions" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:0">
+        <select id="rfType" style="padding:8px"><option value="partner">Partner (e-mail)</option><option value="particulier">Particulier (Logic4-order)</option></select>
+        <select id="rfModel" style="min-width:180px;padding:8px"><option value="">— model —</option></select>
+        <select id="rfVariant" style="min-width:150px;padding:8px"><option value="">— kleur (optioneel) —</option></select>
+        <input id="rfQty" type="number" min="1" max="50" value="1" style="width:70px;padding:8px" title="aantal">
+        <input id="rfEmail" placeholder="e-mailadres partner" style="min-width:200px;padding:8px">
+        <input id="rfOrder" placeholder="Logic4-ordernr" style="min-width:140px;padding:8px;display:none">
+        <button class="primary" id="rfSend" type="button">Aanbetalingsverzoek sturen</button>
+      </div>
+      <div id="rfStatus" class="status-msg hidden" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
       <h3>Prioriteit — wie krijgt de eerstvolgende spa?</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">
         Kies een model. Je ziet alle <b>openstaande orders</b> (verkooporder / 30% aanbetaald / wacht op aanbetaling)
@@ -1005,7 +1024,57 @@ async function initPrio(){
       Object.keys(prioCatalog).sort().map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join("");
     sel.addEventListener("change", ()=>loadPrioModel(sel.value));
     document.getElementById("prioReload").addEventListener("click", ()=>loadPrioModel(sel.value));
+    initReserveFor();
   }
+}
+
+// ── Reserveren namens partner/particulier ──
+const RESERVE_FOR_URL="https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/reserve-for";
+function dpAdminKey(){ return localStorage.getItem("dp.adminkey")||""; }
+function initReserveFor(){
+  const modelSel=document.getElementById("rfModel"), varSel=document.getElementById("rfVariant");
+  modelSel.innerHTML='<option value="">— model —</option>'+
+    Object.keys(prioCatalog).sort().map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join("");
+  modelSel.addEventListener("change",()=>{
+    const vs=prioCatalog[modelSel.value]||[];
+    varSel.innerHTML='<option value="">— kleur (optioneel) —</option>'+
+      vs.map(v=>`<option value="${esc(v.code)}">${esc((v.desc||v.code).replace(/^.*\|\s*/,""))}</option>`).join("");
+  });
+  const typeSel=document.getElementById("rfType");
+  typeSel.addEventListener("change",()=>{
+    const part=typeSel.value==="particulier";
+    document.getElementById("rfEmail").style.display=part?"none":"";
+    document.getElementById("rfOrder").style.display=part?"":"none";
+  });
+  document.getElementById("rfSend").addEventListener("click",sendReserveFor);
+}
+async function sendReserveFor(){
+  const st=document.getElementById("rfStatus");
+  const show=(c,m)=>{ st.className="status-msg "+c; st.textContent=m; st.classList.remove("hidden"); };
+  if(!dpAdminKey()){ show("bad","Beheersleutel niet gevonden op deze computer — ontgrendel eerst het Partnerportaal (tegel Partnerportaal, 🔐)."); return; }
+  const type=document.getElementById("rfType").value;
+  const model=document.getElementById("rfModel").value;
+  const variant=document.getElementById("rfVariant").value;
+  const variantName=variant?document.getElementById("rfVariant").options[document.getElementById("rfVariant").selectedIndex].text:"";
+  const qty=document.getElementById("rfQty").value;
+  const email=document.getElementById("rfEmail").value.trim();
+  const order=document.getElementById("rfOrder").value.trim();
+  if(!model){ show("bad","Kies een model."); return; }
+  if(type==="partner"&&!email.includes("@")){ show("bad","Vul een geldig e-mailadres in."); return; }
+  if(type==="particulier"&&!order){ show("bad","Vul het Logic4-ordernummer in."); return; }
+  const btn=document.getElementById("rfSend"); btn.disabled=true; show("","Aanbetalingsverzoek aanmaken…");
+  try{
+    const body={model,qty,variant,variantName,custType:type};
+    if(type==="partner") body.email=email; else body.existingOrderId=order;
+    const r=await fetch(RESERVE_FOR_URL,{method:"POST",headers:{"Content-Type":"application/json","X-DP-Admin":dpAdminKey()},body:JSON.stringify(body)});
+    const j=await r.json();
+    if(r.ok&&j.ok){
+      const sym=j.currency==="USD"?"$":"€";
+      show("ok","Aanbetalingsverzoek ("+sym+" "+Number(j.deposit).toFixed(2)+") gemaild naar "+j.emailedTo+(j.mailSent?"":" — LET OP: mail niet bevestigd").replace(/\.$/,"")+".");
+      document.getElementById("rfEmail").value=""; document.getElementById("rfOrder").value="";
+    } else show("bad","Mislukt: "+(j.error||("HTTP "+r.status)));
+  }catch(e){ show("bad","Fout: "+e.message); }
+  finally{ btn.disabled=false; }
 }
 
 async function loadPrioModel(model){
