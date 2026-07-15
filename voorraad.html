@@ -26,6 +26,10 @@
   .lead{color:var(--muted);margin:0 0 20px}
   .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin:14px 0}
   .card h3{margin:0 0 10px;color:var(--fonteyn-green);font-size:15px}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
+  .kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-top:3px solid var(--fonteyn-green)}
+  .kpi .n{font-size:26px;font-weight:700;line-height:1.1}
+  .kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
   .controls{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
   .controls label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
   .controls input[type=date]{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit;font-size:14px}
@@ -90,7 +94,8 @@
   juiste overzicht.</p>
 
   <div class="tabs">
-    <button class="tab active" data-tab="reserveringen" type="button">Reserveringen ⭐</button>
+    <button class="tab active" data-tab="overzicht" type="button">Overzicht 📊</button>
+    <button class="tab" data-tab="reserveringen" type="button">Reserveringen ⭐</button>
     <button class="tab" data-tab="prio" type="button">Prioriteit ⚖️</button>
     <button class="tab" data-tab="schepen" type="button">Schepen 🚢</button>
     <!-- OUDE tabs — verborgen bewaard (verwijder de style om terug te halen) -->
@@ -191,7 +196,27 @@
     </div>
   </div>
 
-  <div id="tab-reserveringen">
+  <div id="tab-overzicht">
+    <div id="ovKpis" class="kpi-row"></div>
+    <p class="lead" style="font-size:11px;margin:-6px 0 4px">* Orderwaarde = actieve reserveringen × partnerprijs (€, excl. BTW), indicatief. Aanbetaling ≈ 30% hiervan.</p>
+    <div class="card">
+      <h3>Knelpunten — meeste tekort eerst</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
+      <div class="tablewrap" style="max-height:52vh"><table class="grid">
+        <thead><tr><th>Model</th><th>Actief res.</th><th>Op voorraad (NL)</th><th>Op zee</th><th>Gedekt</th><th>Tekort</th></tr></thead>
+        <tbody id="ovBacklog"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>Binnenkomende schepen</h3>
+      <div class="tablewrap"><table class="grid">
+        <thead><tr><th>Schip / reis</th><th>ETA</th><th>Spa's aan boord</th></tr></thead>
+        <tbody id="ovShips"></tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div id="tab-reserveringen" class="hidden">
     <div class="card">
       <h3>Reserveringen — de actuele stand</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">
@@ -803,11 +828,13 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   document.getElementById("tab-ophalen").classList.toggle("hidden", tab!=="ophalen");
   document.getElementById("tab-dealer").classList.toggle("hidden", tab!=="dealer");
   document.getElementById("tab-part").classList.toggle("hidden", tab!=="part");
+  document.getElementById("tab-overzicht").classList.toggle("hidden", tab!=="overzicht");
   document.getElementById("tab-reserveringen").classList.toggle("hidden", tab!=="reserveringen");
   document.getElementById("tab-schepen").classList.toggle("hidden", tab!=="schepen");
   document.getElementById("tab-prio").classList.toggle("hidden", tab!=="prio");
   document.getElementById("tab-pipe").classList.toggle("hidden", tab!=="pipe");
   document.getElementById("tab-dealerview").classList.toggle("hidden", tab!=="dealerview");
+  if (tab==="overzicht") loadOverzicht();
   if (tab==="reserveringen") loadReserveringen();
   if (tab==="schepen") loadSchepen();
   if (tab==="prio") initPrio();
@@ -924,6 +951,72 @@ function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode, un
   document.getElementById("diag").innerHTML = diagWrap(b.join("<br><br>"));
 }
 
+
+// ===================== Managementoverzicht =====================
+// Alles client-side uit de buckets: reserveringen-live + voorraad-hallen +
+// voorraad-schepen + dealer-prices. Eén blik op de hele stand.
+const HALLEN_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-hallen";
+async function loadOverzicht(){
+  try{
+    const [resv,hal,ship,prices]=await Promise.all([
+      fetch(RESV_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({byModel:{}})),
+      fetch(HALLEN_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({models:{}})),
+      fetch(SHIPS_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({ships:[]})),
+      fetch(PRICES_URL_OV,{headers:{"X-DP-Admin":dpAdminKey()}}).then(r=>r.ok?r.json():{prices:{}}).catch(()=>({prices:{}}))
+    ]);
+    renderOverzicht(resv,hal,ship,prices);
+  }catch(e){ document.getElementById("ovKpis").innerHTML="<div class='status-msg bad'>Overzicht laden faalde: "+esc(e.message)+"</div>"; }
+}
+const PRICES_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/dealer-prices";
+function renderOverzicht(resv,hal,ship,priceData){
+  const byModel=resv.byModel||{}, halM=hal.models||{}, rate=Number((priceData.meta||{}).rate)||1.11, prices=priceData.prices||{};
+  // schepen per model
+  const shipByModel={}; let shipTotal=0;
+  for(const s of (ship.ships||[])) for(const [m,q] of Object.entries(s.models||{})){ shipByModel[m]=(shipByModel[m]||0)+q; shipTotal+=q; }
+  // aggregaten
+  let actief=0,betaald=0,wacht=0,vervallen=0,orderwaarde=0, halTotal=0;
+  const rows=[];
+  const models=new Set([...Object.keys(byModel),...Object.keys(prices)]);
+  for(const m of models){
+    const list=byModel[m]||[];
+    const act=list.filter(r=>!r.vervallen), verv=list.filter(r=>r.vervallen);
+    const actQty=act.reduce((a,r)=>a+r.qty,0);
+    const betQty=act.filter(r=>r.betaald).reduce((a,r)=>a+r.qty,0);
+    actief+=actQty; betaald+=betQty; wacht+=actQty-betQty; vervallen+=verv.reduce((a,r)=>a+r.qty,0);
+    const voorraad=(halM[m]||{}).available||0; halTotal+=voorraad;
+    const zee=shipByModel[m]||0;
+    const gedekt=Math.min(actQty,voorraad+zee);
+    const tekort=Math.max(0,actQty-voorraad-zee);
+    // orderwaarde actief (EUR partnerprijs excl. BTW, indicatief)
+    const p=prices[m]; if(p&&p.usd) orderwaarde+=actQty*Math.round(Number(p.usd)/rate);
+    if(actQty>0||voorraad>0||zee>0) rows.push({m,actQty,voorraad,zee,gedekt,tekort});
+  }
+  // KPI's
+  const eur=n=>"€ "+Number(n).toLocaleString("nl-NL");
+  document.getElementById("ovKpis").innerHTML=
+    kpi(actief,"Actieve reserveringen","var(--fonteyn-green)")+
+    kpi(betaald,"Betaald (bevestigd)","#15803d")+
+    kpi(wacht,"Wacht op aanbetaling","#92400e")+
+    kpi(vervallen,"Vervallen","#b91c1c")+
+    kpi(halTotal,"Vrij op voorraad (NL)","#2563eb")+
+    kpi(shipTotal,"Op zee (onderweg)","#2563eb")+
+    kpi(eur(orderwaarde),"Orderwaarde actief*","var(--fonteyn-green)");
+  // knelpunten: meeste tekort eerst, dan meeste reserveringen
+  rows.sort((a,b)=>(b.tekort-a.tekort)||(b.actQty-a.actQty));
+  document.getElementById("ovBacklogUpd").textContent = resv.updated ? ("Bijgewerkt: "+new Date(resv.updated).toLocaleString("nl-NL")) : "";
+  document.getElementById("ovBacklog").innerHTML = rows.map(r=>
+    "<tr><td><b>"+esc(r.m)+"</b></td><td>"+r.actQty+"</td>"+
+    "<td>"+(r.voorraad||"—")+"</td><td>"+(r.zee||"—")+"</td>"+
+    "<td style='color:#15803d'>"+r.gedekt+"</td>"+
+    "<td style='color:"+(r.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(r.tekort||"—")+"</td></tr>"
+  ).join("") || "<tr><td colspan='6' style='color:var(--muted)'>Geen data. Draait de uur-sync al?</td></tr>";
+  // schepen
+  document.getElementById("ovShips").innerHTML=(ship.ships||[]).map(s=>{
+    const n=Object.values(s.models||{}).reduce((a,b)=>a+b,0);
+    return "<tr><td><b>"+esc(s.vessel||"—")+"</b></td><td>"+(s.eta?esc(s.eta):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td><td>"+n+"</td></tr>";
+  }).join("") || "<tr><td colspan='3' style='color:var(--muted)'>Geen schepen. Upload commercial invoices bij Schepen 🚢.</td></tr>";
+}
+function kpi(n,l,color){ return "<div class='kpi' style='border-top-color:"+color+"'><div class='n' style='color:"+color+"'>"+n+"</div><div class='l'>"+l+"</div></div>"; }
 
 // ===================== Reserveringen (live ledger) =====================
 // Toont de reserveringen-live bucket (uur-sync uit Logic4). Read-only overzicht:
@@ -1564,7 +1657,7 @@ function renderDealerResv(){
   document.querySelectorAll('.filter-row[data-ov="stock"] input').forEach(i=> i.addEventListener("input", renderStock));
   const dv=document.getElementById("dvSearch"); if(dv) dv.addEventListener("input", renderDealerView);
   loadPipe().then(function(){ renderPipeAll(); renderDealerResv(); });
-  loadReserveringen();   // standaard-tab
+  loadOverzicht();   // standaard-tab
 })();
 
 
