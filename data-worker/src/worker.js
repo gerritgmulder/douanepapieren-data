@@ -572,14 +572,18 @@ async function dpCreateLogic4Order(env, opts) {
   const payload = {
     OrderStatus: { Id: 25 },                         // 30% aanbetaald
     DebtorId: Number(opts.debtorId),
+    // VERPLICHT veld — ontbreken hiervan geeft een 500 (geen validatiefout!)
+    CreationDate: new Date().toISOString().slice(0, 19),
     Reference: opts.reference || "",
-    Remarks: opts.remarks || "",
-    OrderRows: [{
-      ...(opts.productCode ? { ProductCode: String(opts.productCode) } : {}),
-      Description: opts.description,
-      Qty: Number(opts.qty) || 1,
-    }],
+    Notes: opts.remarks || "",
+    // Regel zonder ProductCode laat Logic4 óók met een 500 crashen — dus:
+    // mét artikelcode een echte productregel, zonder code een regel-loze
+    // order (model/aantal staan in Notes; sales vult de regel aan).
+    OrderRows: opts.productCode
+      ? [{ ProductCode: String(opts.productCode), Description: opts.description, Qty: Number(opts.qty) || 1 }]
+      : [],
   };
+  if (!opts.productCode) payload.Notes = "LET OP: regel handmatig toevoegen — " + opts.description + "\n" + (opts.remarks || "");
   const r = await fetch("https://api.logic4server.nl/v3/Orders/AddUpdateOrder", {
     method: "POST",
     headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
@@ -591,7 +595,8 @@ async function dpCreateLogic4Order(env, opts) {
     console.log("[dp-logic4] order faalde HTTP " + r.status + ": " + txt.slice(0, 300));
     return { ok: false, error: "HTTP " + r.status + " — " + ((j && (j.detail || j.title)) || txt.slice(0, 200)) };
   }
-  const orderId = (j && (j.Id || (j.Value && j.Value.Id))) || null;
+  // Logic4 geeft het nieuwe ordernummer terug als kaal getal ("3517369")
+  const orderId = (typeof j === "number" && j) || (j && (j.Id || (j.Value && j.Value.Id))) || null;
   console.log("[dp-logic4] order aangemaakt: " + orderId + " (debiteur " + opts.debtorId + ")");
   return { ok: true, orderId, raw: orderId ? undefined : txt.slice(0, 300) };
 }
