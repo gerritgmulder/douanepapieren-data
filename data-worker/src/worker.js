@@ -312,33 +312,28 @@ async function dpHandleStock(env) {
   return reply(200, { ok: true, updated: agg.updated, shipsUpdated: agg.shipsUpdated, rate, models });
 }
 
-// GET /dealers/api/myspas — fase 2: de eigen reserveringen van deze dealer.
-// Koppeling: debtorIds op het dealer-account (beheertegel) ↔ debtorId in de
-// Voorraadbeheer-reserveringen (bucket 'voorraad'). Alleen eigen data.
+// GET /dealers/api/myspas — de eigen reserveringen van deze partner, MET de
+// verwachte levering per spa (uit de reserveringen-ledger / leverforecast).
+// Koppeling: debtorIds op het dealer-account ↔ debtorId in de ledger.
 async function dpHandleMySpas(env, sess) {
   const accounts = await dpGetAccounts(env);
   const dealer = dpFindDealer(accounts, sess.email);
   const debtorIds = new Set(((dealer && dealer.debtorIds) || []).map(String).filter(Boolean));
   if (!debtorIds.size) return reply(200, { ok: true, linked: false, spas: [] });
-  const voorraad = await env.FONTEYN_DATA.get("voorraad", { type: "json" });
-  const resv = (voorraad && voorraad.reserveringen) || {};
-  const agg = await dpStockModels(env);
-  const modelInfo = {};
-  for (const m of agg.models) modelInfo[m.model] = m;
+  const ledger = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
   const spas = [];
-  for (const k in resv) {
-    const r = resv[k];
-    if (!r || !debtorIds.has(String(r.debtorId))) continue;
-    const mi = modelInfo[String(r.model || "").trim()] || null;
-    spas.push({
-      ordernr: r.ordernr, date: r.datum, model: r.model,
-      description: r.omschrijving, qty: r.aantal, advisor: r.adviseur || "",
-      modelAvailable: mi ? mi.available : null,
-      modelNextEta: mi ? mi.nextEta : null,
-    });
+  for (const [model, list] of Object.entries(ledger.byModel || {})) {
+    for (const r of list) {
+      if (!debtorIds.has(String(r.debtorId))) continue;
+      spas.push({
+        ordernr: r.ordernr, date: r.datum, model, qty: r.qty,
+        status: r.status, betaald: r.betaald, vervallen: r.vervallen,
+        verwacht: r.verwacht || null, verwachtSchip: r.verwachtSchip || null,
+      });
+    }
   }
   spas.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
-  return reply(200, { ok: true, linked: true, spas });
+  return reply(200, { ok: true, linked: true, spas, ledgerUpdated: ledger.updated || null });
 }
 
 // ─── Prijs & aanbetaling (wisselkoers + BTW uit Logic4) ──────────────
@@ -1113,6 +1108,42 @@ async function dpRefreshReservations(env) {
   for (const list of Object.values(byModel)) {
     list.sort((a, b) => (b.betaald - a.betaald) || (a.vervallen - b.vervallen) || String(a.datum).localeCompare(String(b.datum)));
   }
+
+  // ── Leverforecast: wijs elke actieve reservering toe aan de eerstvolgende
+  // voorraad. Voorraadstroom per model: eerst wat NU in de hal vrij is, dan de
+  // schepen op ETA-volgorde. Elke reservering krijgt een 'verwacht':
+  //   "voorraad" = nu leverbaar · <ISO-datum> = met dat schip (ETA) ·
+  //   "op-schip" = op een schip zonder ETA · "productie" = na de bekende schepen.
+  const hallen = (await env.FONTEYN_DATA.get("voorraad-hallen", { type: "json" })) || {};
+  const schepen = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+  const shipsByModel = {};
+  for (const s of (schepen.ships || [])) {
+    for (const [model, q] of Object.entries(s.models || {})) {
+      (shipsByModel[model] = shipsByModel[model] || []).push({ eta: s.eta || null, qty: Number(q) || 0, vessel: s.vessel || "" });
+    }
+  }
+  for (const [model, list] of Object.entries(byModel)) {
+    const buckets = [];
+    const hal = ((hallen.models || {})[model] || {}).available || 0;
+    if (hal > 0) buckets.push({ kind: "voorraad", eta: null, left: hal });
+    (shipsByModel[model] || [])
+      .sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")))
+      .forEach(sh => buckets.push({ kind: sh.eta ? "schip" : "op-schip", eta: sh.eta, left: sh.qty, vessel: sh.vessel }));
+    let bi = 0;
+    for (const r of list) {
+      if (r.vervallen) { r.verwacht = "vervallen"; continue; }   // telt niet mee
+      let need = r.qty, landing = null;
+      while (need > 0 && bi < buckets.length) {
+        const take = Math.min(need, buckets[bi].left);
+        buckets[bi].left -= take; need -= take; landing = buckets[bi];
+        if (buckets[bi].left <= 0) bi++;
+      }
+      // 'verwacht' = waar de LAATSTE unit van deze order landt (hele order pas dan compleet)
+      r.verwacht = need > 0 ? "productie" : (landing.kind === "voorraad" ? "voorraad" : (landing.eta || "op-schip"));
+      if (landing && landing.vessel) r.verwachtSchip = landing.vessel;
+    }
+  }
+
   await env.FONTEYN_DATA.put("reserveringen-live", JSON.stringify({ updated: new Date().toISOString(), byModel }));
   const total = Object.values(byModel).reduce((n, l) => n + l.length, 0);
   return { ok: true, models: Object.keys(byModel).length, reserveringen: total };

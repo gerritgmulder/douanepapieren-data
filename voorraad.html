@@ -963,9 +963,9 @@ function renderReserveringen(){
       // Actieve reserveringen eerst, vervallen onderaan apart
       const actlist=l.filter(r=>!r.vervallen), vervlist=l.filter(r=>r.vervallen);
       html+="<tr><td colspan='5' style='padding:0;background:#fafafa'><div class='tablewrap' style='padding:8px 10px'>"+
-        "<table class='grid' style='margin:0'><thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Aantal</th><th>Datum</th><th>Status</th></tr></thead><tbody>"+
+        "<table class='grid' style='margin:0'><thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Aantal</th><th>Datum</th><th>Status</th><th>Verwachte levering</th></tr></thead><tbody>"+
         actlistRows(actlist)+
-        (vervlist.length?"<tr><td colspan='7' style='background:#fee2e2;color:#b91c1c;font-size:11px;text-align:center;padding:3px'>— vervallen (3+ dagen onbetaald, tellen niet meer mee) —</td></tr>"+actlistRows(vervlist,actlist.length):"")+
+        (vervlist.length?"<tr><td colspan='8' style='background:#fee2e2;color:#b91c1c;font-size:11px;text-align:center;padding:3px'>— vervallen (3+ dagen onbetaald, tellen niet meer mee) —</td></tr>"+actlistRows(vervlist,actlist.length):"")+
         "</tbody></table></div></td></tr>";
     }
   }
@@ -975,12 +975,20 @@ function renderReserveringen(){
     const m=row.dataset.m; resvOpen[m]=!resvOpen[m]; renderReserveringen();
   }));
 }
+function verwachtLabel(v){
+  if(!v||v==="vervallen") return "<span style='color:var(--muted)'>—</span>";
+  if(v==="voorraad") return "<span style='color:#15803d;font-weight:600'>op voorraad</span>";
+  if(v==="op-schip") return "<span style='color:#2563eb'>op schip (datum volgt)</span>";
+  if(v==="productie") return "<span style='color:#92400e'>volgende productie</span>";
+  // ISO-datum van een schip
+  const d=new Date(v); return "<span style='color:#2563eb'>"+(isNaN(d)?esc(v):d.toLocaleDateString("nl-NL"))+"</span>";
+}
 function actlistRows(list,offset){
   offset=offset||0;
   return list.map((r,i)=>{
     const badge=r.betaald?"<span class='pill' style='background:#dcfce7;color:#15803d'>betaald</span>"
       :(r.vervallen?"<span class='pill' style='background:#fee2e2;color:#b91c1c'>vervallen</span>":"<span class='pill' style='background:#fef3c7;color:#92400e'>wacht</span>");
-    return "<tr style='"+(r.vervallen?"opacity:.55":"")+"'><td>"+(offset+i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td>"+resvTypeBadge(r.type)+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+badge+"</td></tr>";
+    return "<tr style='"+(r.vervallen?"opacity:.55":"")+"'><td>"+(offset+i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td>"+resvTypeBadge(r.type)+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+badge+"</td><td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td></tr>";
   }).join("");
 }
 document.getElementById("resvSearch")&&document.getElementById("resvSearch").addEventListener("input",renderReserveringen);

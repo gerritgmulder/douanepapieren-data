@@ -445,16 +445,25 @@ async function loadMySpas(){
   $("mySpasList").innerHTML = spas.length ? `
     <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13.5px;">
       <thead><tr style="text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;">
-        <th style="padding:8px 6px;">Order</th><th>Date</th><th>Model</th><th>Description</th><th>Qty</th><th>Status</th></tr></thead>
+        <th style="padding:8px 6px;">Order</th><th>Date</th><th>Model</th><th>Qty</th><th>Payment</th><th>Expected delivery</th></tr></thead>
       <tbody>${spas.map(s => `
-        <tr style="border-top:1px solid #f3f4f6;">
+        <tr style="border-top:1px solid #f3f4f6;${s.vervallen?'opacity:.5;':''}">
           <td style="padding:9px 6px;font-family:ui-monospace,monospace;">${esc(s.ordernr)}</td>
           <td>${esc(s.date||"")}</td>
           <td><b>${esc(s.model)}</b></td>
-          <td style="color:var(--muted);font-size:12.5px;">${esc(String(s.description||"").slice(0,50))}</td>
           <td>${esc(s.qty)}</td>
-          <td>${s.modelAvailable>0 ? '<span class="pill">in stock NL</span>' : (s.modelNextEta ? 'expected ETA '+esc(s.modelNextEta) : 'in pipeline')}</td>
+          <td>${s.betaald?'<span class="pill" style="background:#dcfce7;color:#15803d">deposit paid</span>':(s.vervallen?'<span class="pill" style="background:#fee2e2;color:#b91c1c">expired</span>':'<span class="pill" style="background:#fef3c7;color:#92400e">awaiting deposit</span>')}</td>
+          <td>${mySpaEta(s)}</td>
         </tr>`).join("")}</tbody></table></div>` : "";
+}
+function mySpaEta(s){
+  const v = s.verwacht;
+  if (s.vervallen || !v || v==="vervallen") return '<span style="color:var(--muted)">—</span>';
+  if (v==="voorraad") return '<span style="color:#15803d;font-weight:600">available now</span>';
+  if (v==="op-schip") return '<span style="color:#2563eb">on the water (date to follow)</span>';
+  if (v==="productie") return '<span style="color:#92400e">next production batch</span>';
+  const d = new Date(v);
+  return '<span style="color:#2563eb">'+(isNaN(d)?esc(v):('~ '+d.toLocaleDateString("en-GB",{month:"short",year:"numeric"})))+'</span>';
 }
 
 // ── Reserve (fase 3-fundament) ──
