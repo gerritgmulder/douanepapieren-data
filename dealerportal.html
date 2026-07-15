@@ -440,12 +440,13 @@ async function loadMySpas(){
 function openReserve(model){
   const m0 = (stockModels||[]).find(x=>x.model===model) || {};
   const variants = (m0.variants||[]);
-  // Kleurvariant-keuze: per variant de kleurnaam (uit de stock-API) + hal-voorraad
+  // Kleurkeuze: álle kleuren van het model, met de vrije voorraad per kleur
+  // (0 = backorder). Zo kan een partner ook bij een backorder-model kiezen.
   const variantOpts = variants.length
-    ? `<label style="font-size:12px;color:var(--muted);">Colour / version (in stock now)</label>
+    ? `<label style="font-size:12px;color:var(--muted);">Choose a colour / version</label>
        <select id="rsvVariant" style="margin-bottom:10px;">
          <option value="">— no preference —</option>
-         ${variants.map(v=>`<option value="${esc(v.code)}">${esc(v.name||v.code)} (${v.qty} in stock)</option>`).join("")}
+         ${variants.map(v=>`<option value="${esc(v.code)}">${esc(v.name||v.code)} — ${v.free>0?v.free+" in stock":"backorder"}</option>`).join("")}
        </select>` : "";
   const ov = document.createElement("div");
   ov.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:18px";

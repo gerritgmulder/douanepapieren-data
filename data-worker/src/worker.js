@@ -279,10 +279,11 @@ async function dpHandleStock(env) {
   const agg = await dpStockModels(env);
   const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
   const prices = priceData.prices || {};
-  // Variant-omschrijvingen uit de catalogus (code → nette kleurnaam)
+  // Catalogus: alle kleurvarianten per model (code → nette kleurnaam)
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const catModels = catalog.models || {};
   const codeName = {};
-  for (const vs of Object.values(catalog.models || {}))
+  for (const vs of Object.values(catModels))
     for (const v of vs) codeName[v.code] = String(v.desc || v.code).replace(/^.*\|\s*/, "");
   // Live wisselkoers voor de EUR-weergave (partnerprijzen ex. BTW; BTW hangt
   // van de individuele debiteur af en wordt pas bij het reserveren berekend).
@@ -291,7 +292,13 @@ async function dpHandleStock(env) {
   for (const m of agg.models) {
     const p = prices[m.model];
     if (!(p && typeof p === "object" && Number(p.usd) > 0)) continue;   // alleen prijslijst
-    for (const v of (m.variants || [])) v.name = codeName[v.code] || v.code;
+    // ALLE kleuren uit de catalogus, elk met de vrije voorraad (0 = backorder),
+    // zodat een partner ook bij een backorder-model een kleur kan kiezen.
+    const freeByCode = {};
+    for (const v of (m.variants || [])) freeByCode[v.code] = v.qty;
+    m.variants = (catModels[m.model] || []).map(v => ({
+      code: v.code, name: codeName[v.code] || v.code, free: Number(freeByCode[v.code]) || 0,
+    }));
     m.partnerUsd = Number(p.usd);
     m.surchargeUsd = Number(p.surcharge) || 0;
     m.partnerEur = Math.round(Number(p.usd) / rate);                        // USD → EUR via live koers
