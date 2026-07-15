@@ -1090,14 +1090,19 @@ async function dpRefreshReservations(env) {
         for (const [model, qty] of Object.entries(perModelQty)) {
           if (qty <= 0) continue;
           const dId = String(o.DebtorId);
-          const type = partnerDebtors.has(dId) ? "partner" : (klantType[dId] === "dealer" ? "partner" : "particulier");
+          // Type rechtstreeks uit de order: een bedrijfsnaam = zakelijk, anders
+          // particulier. Portaal-partners (dealer-accounts) → 'partner'.
+          const company = (o.InvoiceAddress && o.InvoiceAddress.CompanyName) || (o.AccountAddress && o.AccountAddress.CompanyName) || "";
+          const type = partnerDebtors.has(dId) ? "partner"
+            : (klantType[dId] === "dealer" ? "partner"
+              : (company.trim() ? "zakelijk" : "particulier"));
           const dagen = (nowMs - new Date(o.CreationDate).getTime()) / 86400000;
           const betaald = st === 25;
           (byModel[model] = byModel[model] || []).push({
             ordernr: o.Id, debtorId: o.DebtorId,
-            naam: (o.InvoiceAddress && (o.InvoiceAddress.CompanyName || o.InvoiceAddress.ContactName)) || ("Debiteur " + o.DebtorId),
+            naam: company.trim() || (o.InvoiceAddress && o.InvoiceAddress.ContactName) || ("Debiteur " + o.DebtorId),
             type, qty, datum: String(o.CreationDate).slice(0, 10), statusId: st, status: statusName[st] || String(st),
-            betaald, vervallen: st === 15 && dagen > 3,   // >3 dagen onbetaald
+            betaald, vervallen: st === 15 && dagen > 3,   // >3 dagen onbetaald = vervallen
           });
         }
       }

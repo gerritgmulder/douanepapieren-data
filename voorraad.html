@@ -93,16 +93,16 @@
     <button class="tab active" data-tab="reserveringen" type="button">Reserveringen ⭐</button>
     <button class="tab" data-tab="prio" type="button">Prioriteit ⚖️</button>
     <button class="tab" data-tab="schepen" type="button">Schepen 🚢</button>
-    <button class="tab" data-tab="ophalen" type="button" style="color:var(--muted)">Ophalen &amp; markeren (oud)</button>
-    <button class="tab" data-tab="dealer" type="button" style="color:var(--muted)">Res. Dealers (oud)</button>
-    <button class="tab" data-tab="part" type="button" style="color:var(--muted)">Res. Particulieren (oud)</button>
-    <button class="tab" data-tab="pipe" type="button" style="color:var(--muted)">Pipeline (oud)</button>
-    <button class="tab" data-tab="dealerview" type="button" style="color:var(--muted)">Dealer-view (oud)</button>
+    <!-- OUDE tabs — verborgen bewaard (verwijder de style om terug te halen) -->
+    <button class="tab" data-tab="ophalen" type="button" style="display:none">Ophalen &amp; markeren (oud)</button>
+    <button class="tab" data-tab="dealer" type="button" style="display:none">Res. Dealers (oud)</button>
+    <button class="tab" data-tab="part" type="button" style="display:none">Res. Particulieren (oud)</button>
+    <button class="tab" data-tab="pipe" type="button" style="display:none">Pipeline (oud)</button>
+    <button class="tab" data-tab="dealerview" type="button" style="display:none">Dealer-view (oud)</button>
   </div>
   <div class="status-msg" style="background:#eef6ff;color:#1e40af;margin:0 0 12px">
-    <b>Nieuwe werkwijze:</b> begin bij <b>Reserveringen ⭐</b> (de actuele stand, elk uur ververst uit Logic4).
-    Gebruik <b>Prioriteit ⚖️</b> om te bepalen wie voorrang krijgt, en <b>Schepen 🚢</b> om commercial invoices te uploaden.
-    De grijze tabs zijn de oude werkwijze en verdwijnen binnenkort.
+    <b>Werkwijze:</b> <b>Reserveringen ⭐</b> = de actuele stand (elk uur ververst uit Logic4).
+    <b>Prioriteit ⚖️</b> = bepaal wie voorrang krijgt. <b>Schepen 🚢</b> = commercial invoices uploaden.
   </div>
 
   <div id="tab-ophalen" class="hidden">
@@ -937,36 +937,50 @@ async function loadReserveringen(){
   }catch(e){ console.warn("reserveringen laden faalde:",e); }
   renderReserveringen();
 }
+function resvTypeBadge(t){
+  if(t==="partner") return "<span class='pill s1'>partner</span>";
+  if(t==="zakelijk") return "<span class='pill' style='background:#e0e7ff;color:#3730a3'>zakelijk</span>";
+  return "<span class='pill'>particulier</span>";
+}
 function renderReserveringen(){
-  document.getElementById("resvUpdated").textContent = resvData.updated ? ("Laatst ververst: "+new Date(resvData.updated).toLocaleString("nl-NL")) : "";
+  document.getElementById("resvUpdated").textContent = resvData.updated ? ("Laatst ververst: "+new Date(resvData.updated).toLocaleString("nl-NL")) : "(nog niet geladen)";
   const q=(document.getElementById("resvSearch").value||"").trim().toLowerCase();
   const models=Object.keys(resvData.byModel).filter(m=>!q||m.toLowerCase().includes(q))
     .sort((a,b)=>resvData.byModel[b].length-resvData.byModel[a].length);
   const ov=document.getElementById("resvOverview");
-  ov.innerHTML="<table class='grid'><thead><tr><th>Model</th><th>Totaal</th><th>Betaald</th><th>Wacht</th><th>Vervallen</th><th></th></tr></thead><tbody>"+
-    models.map(m=>{
-      const l=resvData.byModel[m];
-      const bet=l.filter(r=>r.betaald).length, verv=l.filter(r=>r.vervallen).length, wacht=l.length-bet-verv;
-      return "<tr><td><b>"+esc(m)+"</b></td><td>"+l.length+"</td>"+
-        "<td style='color:#15803d'>"+bet+"</td><td style='color:#92400e'>"+wacht+"</td>"+
-        "<td style='color:#b91c1c'>"+(verv||"")+"</td>"+
-        "<td><button class='rmv resvToggle' data-m='"+esc(m)+"'>"+(resvOpen[m]?"verberg":"toon orders")+"</button></td></tr>";
-    }).join("") + "</tbody></table>";
-  ov.querySelectorAll(".resvToggle").forEach(b=>b.addEventListener("click",()=>{ resvOpen[b.dataset.m]=!resvOpen[b.dataset.m]; renderReserveringen(); renderResvDetail(); }));
-  renderResvDetail();
+  if(!models.length){ ov.innerHTML="<p class='lead'>Geen reserveringen. (Nog geen uur-sync gedraaid, of geen open spa-orders in Logic4.)</p>"; return; }
+  let html="<table class='grid'><thead><tr><th>Model</th><th>Actief</th><th>Betaald</th><th>Wacht</th><th>Vervallen</th></tr></thead><tbody>";
+  for(const m of models){
+    const l=resvData.byModel[m];
+    const bet=l.filter(r=>r.betaald).length, verv=l.filter(r=>r.vervallen).length, wacht=l.length-bet-verv;
+    const actief=l.length-verv;   // vervallen tellen NIET meer mee (3-dagen-regel)
+    html+="<tr class='resvRow' data-m='"+esc(m)+"' style='cursor:pointer'>"+
+      "<td>"+(resvOpen[m]?"▾ ":"▸ ")+"<b>"+esc(m)+"</b></td>"+
+      "<td><b>"+actief+"</b></td>"+
+      "<td style='color:#15803d'>"+bet+"</td><td style='color:#92400e'>"+wacht+"</td>"+
+      "<td style='color:#b91c1c'>"+(verv||"—")+"</td></tr>";
+    if(resvOpen[m]){
+      // Actieve reserveringen eerst, vervallen onderaan apart
+      const actlist=l.filter(r=>!r.vervallen), vervlist=l.filter(r=>r.vervallen);
+      html+="<tr><td colspan='5' style='padding:0;background:#fafafa'><div class='tablewrap' style='padding:8px 10px'>"+
+        "<table class='grid' style='margin:0'><thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Aantal</th><th>Datum</th><th>Status</th></tr></thead><tbody>"+
+        actlistRows(actlist)+
+        (vervlist.length?"<tr><td colspan='7' style='background:#fee2e2;color:#b91c1c;font-size:11px;text-align:center;padding:3px'>— vervallen (3+ dagen onbetaald, tellen niet meer mee) —</td></tr>"+actlistRows(vervlist,actlist.length):"")+
+        "</tbody></table></div></td></tr>";
+    }
+  }
+  html+="</tbody></table>";
+  ov.innerHTML=html;
+  ov.querySelectorAll(".resvRow").forEach(row=>row.addEventListener("click",()=>{
+    const m=row.dataset.m; resvOpen[m]=!resvOpen[m]; renderReserveringen();
+  }));
 }
-function renderResvDetail(){
-  const wrap=document.getElementById("resvDetail");
-  const openModels=Object.keys(resvOpen).filter(m=>resvOpen[m]&&resvData.byModel[m]);
-  wrap.innerHTML=openModels.map(m=>{
-    const rows=resvData.byModel[m].map((r,i)=>{
-      const badge=r.betaald?"<span class='pill s25' style='background:#dcfce7;color:#15803d'>betaald</span>"
-        :(r.vervallen?"<span class='pill' style='background:#fee2e2;color:#b91c1c'>vervallen</span>":"<span class='pill' style='background:#fef3c7;color:#92400e'>wacht</span>");
-      const type=r.type==="partner"?"<span class='pill s1'>partner</span>":"<span class='pill'>particulier</span>";
-      return "<tr style='"+(r.vervallen?"opacity:.6":"")+"'><td>"+(i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td>"+type+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+badge+"</td></tr>";
-    }).join("");
-    return "<div class='card'><h3>"+esc(m)+" — "+resvData.byModel[m].length+" reservering(en)</h3>"+
-      "<div class='tablewrap'><table class='grid'><thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Aantal</th><th>Datum</th><th>Status</th></tr></thead><tbody>"+rows+"</tbody></table></div></div>";
+function actlistRows(list,offset){
+  offset=offset||0;
+  return list.map((r,i)=>{
+    const badge=r.betaald?"<span class='pill' style='background:#dcfce7;color:#15803d'>betaald</span>"
+      :(r.vervallen?"<span class='pill' style='background:#fee2e2;color:#b91c1c'>vervallen</span>":"<span class='pill' style='background:#fef3c7;color:#92400e'>wacht</span>");
+    return "<tr style='"+(r.vervallen?"opacity:.55":"")+"'><td>"+(offset+i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td>"+resvTypeBadge(r.type)+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+badge+"</td></tr>";
   }).join("");
 }
 document.getElementById("resvSearch")&&document.getElementById("resvSearch").addEventListener("input",renderReserveringen);
