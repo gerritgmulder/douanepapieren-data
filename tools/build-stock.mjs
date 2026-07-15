@@ -43,8 +43,12 @@ async function stockPage(skip) {
   return r.json();
 }
 
-const perModel = {};    // model → { hal, variants: {code: qty} }
-const perVariant = {};  // code → qty (alleen spa-codes, alleen >0 bewaren)
+// available = VRIJE voorraad (fysiek − al verkocht/gereserveerd), per code
+// afgekapt op 0 en dan per model opgeteld. Het fysieke aantal (physical)
+// bewaren we apart voor Chantal's interne beeld. Reden: de hallen zijn zwaar
+// oververkocht (Logic4 FreeStock is diep negatief) — een partner kan alleen
+// de écht vrije voorraad nog krijgen, niet het volledige fysieke aantal.
+const perModel = {};    // model → { available, physical, variants: {code: free} }
 let scanned = 0;
 for (let page = 0; page < 200; page++) {
   const rows = await stockPage(page * 500);
@@ -54,27 +58,28 @@ for (let page = 0; page < 200; page++) {
     const code = String(row.ProductCode || "");
     const model = codeToModel[code];
     if (!model) continue;
-    const qty = Number(row.Qty) || 0;   // fysiek in de hallen
-    if (!perModel[model]) perModel[model] = { hal: 0, variants: {} };
-    perModel[model].hal += qty;
-    if (qty !== 0) perModel[model].variants[code] = qty;
-    if (qty !== 0) perVariant[code] = qty;
+    const qty = Number(row.Qty) || 0;                    // fysiek in de hallen
+    const free = Math.max(0, Number(row.FreeStock) || 0); // écht beschikbaar
+    if (!perModel[model]) perModel[model] = { available: 0, physical: 0, variants: {} };
+    perModel[model].available += free;
+    perModel[model].physical += qty;
+    if (free > 0) perModel[model].variants[code] = free;
   }
   process.stderr.write(`\r  ${scanned} voorraadregels gescand`);
   if (rows.length < 500) break;
 }
 console.error();
 
-const models = Object.entries(perModel).map(([m, v]) => ({ model: m, hal: v.hal, variants: v.variants }))
-  .sort((a, b) => b.hal - a.hal);
-console.log(models.length + " modellen met hal-voorraad. Top 8:");
-for (const m of models.slice(0, 8)) console.log("  " + String(m.hal).padStart(4) + "  " + m.model);
+const models = Object.entries(perModel).map(([m, v]) => ({ model: m, available: v.available, physical: v.physical }))
+  .sort((a, b) => b.available - a.available);
+console.log(models.length + " modellen. Top 8 op VRIJE voorraad (fysiek):");
+for (const m of models.slice(0, 8)) console.log("  vrij " + String(m.available).padStart(3) + "  (fysiek " + String(m.physical).padStart(3) + ")  " + m.model);
 
 if (process.argv.includes("--dry")) process.exit(0);
 
 const put = await fetch(BASE + "/data/voorraad-hallen", {
   method: "PUT",
   headers: { "X-Fonteyn-Auth": teamKey, "Content-Type": "application/json" },
-  body: JSON.stringify({ updated: new Date().toISOString(), warehouse: "Fonteyn (hallen F/K)", models: perModel }),
+  body: JSON.stringify({ updated: new Date().toISOString(), warehouse: "Fonteyn (hallen F/K)", basis: "vrije voorraad (fysiek − verkocht/gereserveerd), per kleur afgekapt op 0", models: perModel }),
 });
 console.log(put.ok ? "✓ voorraad-hallen opgeslagen in KV" : "✗ opslaan faalde: HTTP " + put.status);

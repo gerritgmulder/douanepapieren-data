@@ -226,16 +226,18 @@ async function dpStockModels(env) {
   const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
 
   const byModel = {};
-  const ensure = m => (byModel[m] = byModel[m] || { model: m, available: 0, onTheWater: 0, nextEta: null, variants: {} });
+  const ensure = m => (byModel[m] = byModel[m] || { model: m, available: 0, physical: 0, onTheWater: 0, nextEta: null, variants: {} });
 
   // Seed vanuit de prijslijst: élk verkoopbaar model verschijnt (ook met 0
   // voorraad → backorder), zodat partners altijd kunnen bestellen.
   for (const m of Object.keys(priceData.prices || {})) ensure(m);
 
-  // Hal-voorraad + kleurvarianten
+  // Hal-voorraad: available = VRIJE voorraad (fysiek − verkocht); physical =
+  // fysiek aantal (intern voor Chantal). Kleurvarianten tonen de vrije voorraad.
   for (const [model, v] of Object.entries((hallen && hallen.models) || {})) {
     const e = ensure(model);
-    e.available += Number(v.hal) || 0;
+    e.available += Number(v.available != null ? v.available : v.hal) || 0;   // v.hal = oud formaat (terugval)
+    e.physical += Number(v.physical != null ? v.physical : v.hal) || 0;
     for (const [code, qty] of Object.entries(v.variants || {})) e.variants[code] = (e.variants[code] || 0) + (Number(qty) || 0);
   }
   // Schip-voorraad (+ vroegste ETA als bekend)
