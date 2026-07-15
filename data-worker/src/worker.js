@@ -384,12 +384,17 @@ async function dpHandleReserve(request, env, sess, url) {
     let unit = 0, currency = "EUR";
     if (pEntry && typeof pEntry === "object") {
       if (Number(pEntry.usd) > 0) {
+        // Losse bestelling via Fonteyn: surcharge + packing costs ($50/stuk)
+        // erbij. Containerbestellingen (aparte flow, later) krijgen geen van
+        // beide. Regel Gerrit 15 jul.
+        const PACKING_USD = 50;
         const usd = Number(pEntry.usd), sur = Number(pEntry.surcharge) || 0;
-        if (isUS) { unit = usd + sur; currency = "USD"; }
+        if (isUS) { unit = usd + sur + PACKING_USD; currency = "USD"; }
         else {
           const eur = Number(pEntry.eurRef) || 0;
-          const surEur = eur && usd ? Math.round(sur * eur / usd) : sur;
-          unit = eur + surEur; currency = "EUR";
+          const rate = eur && usd ? eur / usd : 1;
+          unit = eur + Math.round(sur * rate) + Math.round(PACKING_USD * rate);
+          currency = "EUR";
         }
       }
       else if (Number(pEntry.price) > 0) unit = Number(pEntry.price);
