@@ -93,7 +93,8 @@
     <button class="tab active" data-tab="ophalen" type="button">Ophalen &amp; markeren</button>
     <button class="tab" data-tab="dealer" type="button">Reserveringen Dealers (<span id="cntDealer">0</span>)</button>
     <button class="tab" data-tab="part" type="button">Reserveringen Particulieren (<span id="cntPart">0</span>)</button>
-    <button class="tab" data-tab="pipe" type="button">Voorraad &amp; pipeline 🧪</button>
+    <button class="tab" data-tab="schepen" type="button">Schepen 🚢</button>
+    <button class="tab" data-tab="pipe" type="button">Oude pipeline 🧪</button>
     <button class="tab" data-tab="dealerview" type="button">Dealer-view 🧪</button>
   </div>
 
@@ -183,8 +184,38 @@
     </div>
   </div>
 
+  <div id="tab-schepen" class="hidden">
+    <div class="card">
+      <h3>Schepen — voorraad onderweg (commercial invoices)</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">
+        Upload hier de <b>commercial invoices</b> (Excel, één per schip). Alles wat op een
+        geüpload schip staat telt direct mee als <b>voorraad onderweg</b> in het Partnerportaal.
+        Vul per schip de <b>ETA</b> in (aankomst Rotterdam) — die lees je in het portaal van de
+        vervoerder. Modellen worden herkend op de SKT-fabriekscode.
+      </p>
+      <div class="actions" style="margin-top:0">
+        <button class="primary" id="ciUploadBtn" type="button">Commercial invoice(s) uploaden</button>
+        <input type="file" id="ciFile" accept=".xlsx,.xls" multiple style="display:none">
+      </div>
+      <div id="ciStatus" class="status-msg hidden" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h3>Schepen op zee — <span id="shipCount">0</span></h3>
+      <p class="lead" style="font-size:12px;margin-bottom:8px" id="shipUpdated"></p>
+      <div class="tablewrap">
+        <table class="grid">
+          <thead><tr><th>Schip / reis</th><th>Referentie</th><th>Containers</th><th>Spa's</th><th>ETA (aankomst NL)</th><th></th></tr></thead>
+          <tbody id="shipBody"></tbody>
+        </table>
+      </div>
+      <div id="ciUnmapped" style="margin-top:10px"></div>
+    </div>
+  </div>
+
   <div id="tab-pipe" class="hidden">
     <div class="card">
+      <div class="status-msg warn" style="margin-bottom:12px">⚠ <b>Verouderd.</b> Deze pipeline telde alle bestellingen sinds 2024 op en wordt niet meer door het Partnerportaal gebruikt. De echte voorraad komt nu uit Logic4 (in NL) + de tab <b>Schepen</b> (onderweg). Laat staan voor de historie; niet meer bijwerken.</div>
       <h3>Voorraad &amp; pipeline — waar is elke spa?</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">
         Beheer hier de <b>containers</b> met spa's. Per container: nummer, herkomst, besteld-datum en ETA.
@@ -701,8 +732,10 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   document.getElementById("tab-ophalen").classList.toggle("hidden", tab!=="ophalen");
   document.getElementById("tab-dealer").classList.toggle("hidden", tab!=="dealer");
   document.getElementById("tab-part").classList.toggle("hidden", tab!=="part");
+  document.getElementById("tab-schepen").classList.toggle("hidden", tab!=="schepen");
   document.getElementById("tab-pipe").classList.toggle("hidden", tab!=="pipe");
   document.getElementById("tab-dealerview").classList.toggle("hidden", tab!=="dealerview");
+  if (tab==="schepen") loadSchepen();
   if (tab==="dealer"||tab==="part") renderOverviews();
   if (tab==="dealerview") renderDealerView();
 }));
@@ -817,7 +850,106 @@ function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode, un
 }
 
 
-// ===================== Voorraad & pipeline =====================
+// ===================== Schepen (commercial invoices) =====================
+// Chantal uploadt commercial invoices (Excel, één per schip). Client-side
+// geparsed (zelfde logica als tools/import-ci.mjs) → bucket voorraad-schepen.
+// Het Partnerportaal telt dit als "voorraad onderweg". Model via SKT-code.
+const SHIPS_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-schepen";
+let shipsData={ships:[],unmapped:{}};
+
+async function loadSchepen(){
+  try{
+    const r=await fetch(SHIPS_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
+    if(r.ok){ const j=await r.json(); shipsData={ships:(j&&j.ships)||[],unmapped:(j&&j.unmapped)||{},updated:j&&j.updated}; }
+  }catch(e){ console.warn("schepen laden faalde:",e); }
+  renderSchepen();
+}
+async function saveSchepen(){
+  shipsData.updated=new Date().toISOString();
+  const r=await fetch(SHIPS_URL,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
+    body:JSON.stringify(shipsData)});
+  if(!r.ok) throw new Error("opslaan faalde: HTTP "+r.status);
+}
+function renderSchepen(){
+  const ships=shipsData.ships||[];
+  document.getElementById("shipCount").textContent=ships.length;
+  document.getElementById("shipUpdated").textContent=shipsData.updated?("Laatst bijgewerkt: "+new Date(shipsData.updated).toLocaleString("nl-NL")):"";
+  document.getElementById("shipBody").innerHTML=ships.map((s,i)=>{
+    const spas=Object.values(s.models||{}).reduce((a,b)=>a+b,0);
+    return "<tr>"+
+      "<td><b>"+esc(s.vessel||"—")+"</b></td>"+
+      "<td style='font-size:12px'>"+esc(s.ref||"")+"</td>"+
+      "<td>"+(s.containers||"")+"</td>"+
+      "<td>"+spas+"</td>"+
+      "<td><input type='date' class='shipEta' data-i='"+i+"' value='"+esc(s.eta||"")+"' style='font-size:12px;padding:4px 7px'></td>"+
+      "<td><button class='rmv delShip' data-i='"+i+"'>✕ verwijder</button></td>"+
+    "</tr>";
+  }).join("") || "<tr><td colspan='6' style='color:var(--muted)'>Nog geen schepen. Upload een commercial invoice.</td></tr>";
+  document.querySelectorAll(".shipEta").forEach(inp=>inp.addEventListener("change",async()=>{
+    shipsData.ships[Number(inp.dataset.i)].eta=inp.value;
+    try{ await saveSchepen(); setStatus("ok","ETA opgeslagen — direct zichtbaar in het Partnerportaal."); }catch(e){ setStatus("bad",e.message); }
+  }));
+  document.querySelectorAll(".delShip").forEach(b=>b.addEventListener("click",async()=>{
+    const s=shipsData.ships[Number(b.dataset.i)];
+    if(!confirm("Schip \""+(s.vessel||s.ref)+"\" verwijderen? De lading telt dan niet meer als voorraad.")) return;
+    shipsData.ships.splice(Number(b.dataset.i),1);
+    try{ await saveSchepen(); renderSchepen(); }catch(e){ setStatus("bad",e.message); }
+  }));
+  // Niet-herkende SKT-codes tonen
+  const un=shipsData.unmapped||{};
+  const keys=Object.keys(un);
+  document.getElementById("ciUnmapped").innerHTML=keys.length
+    ? "<div class='status-msg warn'>⚠ Niet-herkende fabriekscodes (welk model?): "+keys.map(k=>esc(k)+" ("+un[k]+"×)").join(", ")+"</div>" : "";
+}
+
+// Parse één commercial-invoice-werkboek → {ref, vessel, containers, models{model:qty}, unmapped{code:qty}}
+function parseCI(wb){
+  const ws=wb.Sheets["COMMERCIAL INVOICE"]||wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false});
+  let ref=null,vessel=null;
+  for(const r of rows.slice(0,20)) for(const c of (r||[])){
+    const s=String(c==null?"":c);
+    if(!ref&&s.startsWith("RZ")) ref=s.trim();
+    if(!vessel&&/\s\/\s\S*\d/.test(s)&&!/FOB|ROTTERDAM,|YANTIAN/i.test(s)) vessel=s.trim();
+  }
+  const models={},unmapped={};
+  for(const r of rows){
+    const c0=String((r&&r[0])==null?"":r[0]).split("\n")[0].trim();
+    const m=c0.match(/^(SKT[\w.-]+)/);
+    const qty=Number(r&&r[5]);
+    if(!m||!isFinite(qty)||qty<=0) continue;
+    const model=spaModel(m[1]);
+    if(!model||model==="(onbekend SKT-model)"){ unmapped[m[1]]=(unmapped[m[1]]||0)+qty; continue; }
+    models[model]=(models[model]||0)+qty;
+  }
+  const containers=wb.SheetNames.filter(n=>n!=="COMMERCIAL INVOICE").length;
+  return {ref,vessel,containers,models,total:Object.values(models).reduce((a,b)=>a+b,0)};
+}
+
+async function handleCIUpload(files){
+  const st=document.getElementById("ciStatus"); st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Inlezen…";
+  let added=0; const allUnmapped={...(shipsData.unmapped||{})};
+  try{
+    for(const file of files){
+      const buf=await file.arrayBuffer(); const wb=XLSX.read(buf,{type:"array"});
+      const ship=parseCI(wb);
+      if(!ship.total){ continue; }
+      // Bestaand schip met dezelfde referentie? Dan vervangen (nieuwe upload wint).
+      const idx=(shipsData.ships||[]).findIndex(s=>s.ref&&ship.ref&&s.ref===ship.ref);
+      const eta=idx>=0?shipsData.ships[idx].eta:"";
+      const rec={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,models:ship.models,total:ship.total,eta};
+      if(idx>=0) shipsData.ships[idx]=rec; else shipsData.ships.push(rec);
+      for(const [k,v] of Object.entries(ship.unmapped)) allUnmapped[k]=(allUnmapped[k]||0)+v;
+      added++;
+    }
+    shipsData.unmapped=allUnmapped;
+    await saveSchepen(); renderSchepen();
+    st.className="status-msg ok";
+    st.textContent=added+" schip(en) verwerkt en opgeslagen. Vul per schip de ETA in — de lading telt nu als voorraad onderweg in het Partnerportaal.";
+  }catch(e){ console.error(e); st.className="status-msg bad"; st.textContent="Kon niet inlezen: "+e.message; }
+}
+
+// ===================== Voorraad & pipeline (VEROUDERD) =====================
 // Containers worden centraal in KV beheerd (bucket voorraad-pipeline). Chantal
 // voert ze in/bewerkt ze in het dashboard; Excel-import is alleen eenmalig.
 const PIPE_SHIP_WEEKS=5.5, PIPE_PROD_EU_WEEKS=8, DAY_MS=86400000;
@@ -1111,6 +1243,12 @@ function renderDealerResv(){
     document.getElementById("contManager").scrollIntoView({behavior:"smooth",block:"start"}); });
   impBtn.addEventListener("click", function(){ file.click(); });
   file.addEventListener("change", function(e){ if(e.target.files.length) handlePipeImport(e.target.files[0]); file.value=""; });
+  // Schepen — commercial-invoice-upload
+  const ciBtn=document.getElementById("ciUploadBtn"), ciFile=document.getElementById("ciFile");
+  if(ciBtn&&ciFile){
+    ciBtn.addEventListener("click", function(){ ciFile.click(); });
+    ciFile.addEventListener("change", function(e){ if(e.target.files.length) handleCIUpload([...e.target.files]); ciFile.value=""; });
+  }
   document.querySelectorAll('.filter-row[data-ov="stock"] input').forEach(i=> i.addEventListener("input", renderStock));
   const dv=document.getElementById("dvSearch"); if(dv) dv.addEventListener("input", renderDealerView);
   loadPipe().then(function(){ renderPipeAll(); renderDealerResv(); });
