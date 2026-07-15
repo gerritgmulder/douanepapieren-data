@@ -91,8 +91,14 @@
     <div id="tab-stock">
       <div class="card">
         <h2>Spa availability</h2>
-        <p class="lead">Live overview per model: available now from stock (NL), on the water, and in production. <span id="stockUpdated"></span></p>
-        <input id="stockSearch" placeholder="Search model… (e.g. Renew)" style="max-width:320px;">
+        <p class="lead">Live overview per model: available now from stock (NL) and on the water. <span id="stockUpdated"></span></p>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <input id="stockSearch" placeholder="Search model… (e.g. Renew)" style="max-width:320px;flex:1;min-width:180px;">
+          <div id="curToggle" style="display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+            <button type="button" class="curBtn" data-cur="EUR" style="border:0;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer;">&euro; EUR</button>
+            <button type="button" class="curBtn" data-cur="USD" style="border:0;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer;">$ USD</button>
+          </div>
+        </div>
         <div id="stockGrid" class="grid" style="margin-top:14px;"></div>
         <div id="stockEmpty" class="lead hidden" style="margin-top:12px;">No stock data available right now — please check back later.</div>
       </div>
@@ -220,6 +226,8 @@ async function sendLink(){
   $("logoutBtn").classList.remove("hidden");
   $("pwBtn").classList.remove("hidden");
   window.myRegion = me.data.region || "EU";
+  if (!window.displayCurrency) window.displayCurrency = window.myRegion === "US" ? "USD" : "EUR";
+  renderCurToggle();
   if (!me.data.hasPassword) {
     // Eerste keer (via inloglink): meteen vragen een wachtwoord te zetten
     $("pwCard").classList.remove("hidden");
@@ -291,7 +299,7 @@ function renderStock(){
       <ul>
         <li>Available now: <b>${m.available}</b></li>
         <li>On the water: <b>${m.onTheWater||0}</b>${m.nextEta?` <span style="color:var(--muted)">(ETA ${esc(m.nextEta)})</span>`:""}</li>
-        ${m.partnerUsd?(window.myRegion==="US"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):""}
+        ${m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):""}
       </ul>
       <button class="primary rsv" data-model="${esc(m.model)}" style="margin-top:10px;padding:8px 14px;font-size:13px;">Reserve</button>
     </div>`).join("");
@@ -299,6 +307,19 @@ function renderStock(){
   $("stockEmpty").classList.toggle("hidden", list.length > 0);
 }
 $("stockSearch").addEventListener("input", renderStock);
+// Valuta-schakelaar (€/$) — standaard de valuta van de regio, maar overal
+// omschakelbaar zodat Arno/Chantal/Gerrit beide prijzen kunnen controleren.
+function renderCurToggle(){
+  document.querySelectorAll(".curBtn").forEach(b=>{
+    const on = b.dataset.cur === window.displayCurrency;
+    b.style.background = on ? "var(--green)" : "#fff";
+    b.style.color = on ? "#fff" : "var(--muted)";
+  });
+}
+document.querySelectorAll(".curBtn").forEach(b=>b.addEventListener("click",()=>{
+  window.displayCurrency = b.dataset.cur;
+  renderCurToggle(); renderStock();
+}));
 
 // ── Documents: bibliotheek (categorie → map → bestanden) + losse links ──
 let docs = [], lib = null, libNav = { cat: null, group: null };
