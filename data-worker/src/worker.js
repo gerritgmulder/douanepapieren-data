@@ -290,6 +290,52 @@ async function dpHandleMySpas(env, sess) {
   return reply(200, { ok: true, linked: true, spas });
 }
 
+// ─── Voorraad claimen/vrijgeven bij reserveringen ────────────────────
+// Claim gebeurt zodra de betaallink is aangemaakt (niet pas na betaling),
+// zodat twee dealers nooit dezelfde spa kunnen reserveren. Verloopt of
+// mislukt de betaling, dan geeft de webhook de claim automatisch weer vrij.
+async function dpClaimStock(env, model, qty) {
+  const pipe = await env.FONTEYN_DATA.get("voorraad-pipeline", { type: "json" });
+  if (!pipe || !Array.isArray(pipe.containers)) return null;
+  const now = new Date();
+  const cand = [];
+  for (const c of pipe.containers) for (const l of (c.lines || [])) {
+    if (String(l.model || "").trim() !== model) continue;
+    const free = Math.max(0, (Number(l.qty) || 0) - (Number(l.reserved) || 0));
+    if (free > 0) cand.push({ c, l, free, st: dpContainerStatus(c, now) });
+  }
+  // Voorkeur: eerst voorraad in NL, dan onderweg, dan productie; binnen
+  // gelijke status de vroegste ETA.
+  const rank = { nl: 0, ship: 1, prod: 2 };
+  cand.sort((a, b) => (rank[a.st] - rank[b.st]) || String(a.c.eta || "9999").localeCompare(String(b.c.eta || "9999")));
+  let need = Number(qty) || 1;
+  const lines = [];
+  for (const x of cand) {
+    if (need <= 0) break;
+    const take = Math.min(need, x.free);
+    x.l.reserved = (Number(x.l.reserved) || 0) + take;
+    lines.push({ container: x.c.nr, take });
+    need -= take;
+  }
+  if (!lines.length) return null;   // geen vrije voorraad — aanvraag gaat door, sales lost op
+  pipe.lastUpdated = new Date().toISOString();
+  await env.FONTEYN_DATA.put("voorraad-pipeline", JSON.stringify(pipe));
+  return { model, requested: Number(qty) || 1, lines, partial: need > 0 };
+}
+
+async function dpReleaseStock(env, allocation) {
+  if (!allocation || !Array.isArray(allocation.lines)) return;
+  const pipe = await env.FONTEYN_DATA.get("voorraad-pipeline", { type: "json" });
+  if (!pipe || !Array.isArray(pipe.containers)) return;
+  for (const a of allocation.lines) {
+    const c = pipe.containers.find(x => x.nr === a.container);
+    const l = c && (c.lines || []).find(x => String(x.model || "").trim() === allocation.model);
+    if (l) l.reserved = Math.max(0, (Number(l.reserved) || 0) - a.take);
+  }
+  pipe.lastUpdated = new Date().toISOString();
+  await env.FONTEYN_DATA.put("voorraad-pipeline", JSON.stringify(pipe));
+}
+
 // POST /dealers/api/reserve  { model, qty, note } — fase 3-fundament:
 // reserveringsaanvraag vastleggen + mail naar sales. De Mollie-betaallink
 // wordt hier aangehaakt zodra MOLLIE_API_KEY als worker-secret bestaat.
@@ -328,6 +374,8 @@ async function dpHandleReserve(request, env, sess, url) {
         entry.paymentId = pay.id;
         entry.paymentStatus = "open";
         checkoutUrl = pay.checkoutUrl;
+        // Voorraad direct claimen zodat niemand anders dezelfde spa reserveert
+        entry.allocation = await dpClaimStock(env, model, qty);
       }
     }
   }
@@ -589,6 +637,11 @@ async function dpHandleMollieWebhook(request, env) {
       item.paymentId = p.id;
       item.paymentStatus = p.status;   // paid / open / failed / expired / canceled
       if (p.status === "paid") item.status = "paid";
+      // Betaling niet doorgegaan → geclaimde voorraad weer vrijgeven
+      if (["expired", "canceled", "failed"].includes(p.status) && item.allocation && !item.allocationReleased) {
+        await dpReleaseStock(env, item.allocation);
+        item.allocationReleased = true;
+      }
       // Aanbetaling binnen → automatisch verkooporder (status 25) in Logic4,
       // onder het debiteurnummer van de dealer. Idempotent: nooit dubbel.
       if (p.status === "paid" && !item.logic4OrderId) {
