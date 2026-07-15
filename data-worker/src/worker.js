@@ -918,6 +918,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/file" && request.method === "PUT") return dpAdminPutFile(request, env, url);
     if (p === "/dealers/admin/testorder" && request.method === "POST") return dpAdminTestOrder(request, env);
     if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);
+    if (p === "/dealers/admin/refresh-stock" && request.method === "POST") return reply(200, await dpRefreshHalStock(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     return reply(404, "Not found");
   }
 
@@ -995,7 +996,59 @@ async function handleTeamKey(request, env) {
   return reply(200, { ok: true, teamkey: env.SHARED_SECRET });
 }
 
+// ─── Uur-sync (Cloudflare Cron) ──────────────────────────────────────
+// Ververst elk uur de vrije hal-voorraad uit Logic4 (warehouse "Fonteyn")
+// zodat het Partnerportaal altijd actueel is zonder handmatig een script te
+// draaien. Nieuwe aanbetalingen/verkopen wijzigen de reserveringen in Logic4
+// → de vrije voorraad verschuift → hier automatisch opgepikt.
+async function dpRefreshHalStock(env) {
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const codeToModel = {};
+  for (const [model, variants] of Object.entries(catalog.models || {}))
+    for (const v of variants) codeToModel[v.code] = model;
+  if (!Object.keys(codeToModel).length) return { ok: false, error: "geen catalogus" };
+
+  const token = await l4Token(env);
+  const perModel = {};   // model → { available, physical, variants }
+  const PAGE = 5000;
+  for (let page = 0; page < 20; page++) {
+    const r = await fetch("https://api.logic4server.nl/v3/Stock/GetStockForWarehouses", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ WareHouseId: 21, TakeRecords: PAGE, SkipRecords: page * PAGE }),
+    });
+    if (!r.ok) break;
+    const rows = await r.json().catch(() => []);
+    if (!Array.isArray(rows) || !rows.length) break;
+    for (const row of rows) {
+      const model = codeToModel[String(row.ProductCode || "")];
+      if (!model) continue;
+      const free = Math.max(0, Number(row.FreeStock) || 0);
+      const qty = Number(row.Qty) || 0;
+      if (!perModel[model]) perModel[model] = { available: 0, physical: 0, variants: {} };
+      perModel[model].available += free;
+      perModel[model].physical += qty;
+      if (free > 0) perModel[model].variants[String(row.ProductCode)] = free;
+    }
+    if (rows.length < PAGE) break;
+  }
+  await env.FONTEYN_DATA.put("voorraad-hallen", JSON.stringify({
+    updated: new Date().toISOString(), warehouse: "Fonteyn (hallen F/K)",
+    basis: "vrije voorraad (fysiek − verkocht/gereserveerd), per kleur afgekapt op 0", models: perModel,
+  }));
+  return { ok: true, models: Object.keys(perModel).length };
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil((async () => {
+      try {
+        if (!env.LOGIC4_USERNAME) { console.log("[cron] geen Logic4-creds"); return; }
+        const res = await dpRefreshHalStock(env);
+        console.log("[cron] hal-voorraad ververst: " + JSON.stringify(res));
+      } catch (e) { console.log("[cron] fout: " + (e.message || e)); }
+    })());
+  },
+
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });

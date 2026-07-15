@@ -7,3 +7,8 @@ compatibility_date = "2024-09-01"
 kv_namespaces = [
   { binding = "FONTEYN_DATA", id = "3e8fa24719f04406a167d19d7600d6fa" }
 ]
+
+# Elk uur: voorraad (vrije hal-voorraad uit Logic4) + reserveringsstand
+# (order-statussen, nieuwe aanbetalingen) verversen. Zie scheduled() in worker.js.
+[triggers]
+crons = ["0 * * * *"]
