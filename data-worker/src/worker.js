@@ -223,9 +223,14 @@ async function dpStockModels(env) {
   const hallen = await env.FONTEYN_DATA.get("voorraad-hallen", { type: "json" });
   const schepen = await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" });
   const reqData = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
 
   const byModel = {};
   const ensure = m => (byModel[m] = byModel[m] || { model: m, available: 0, onTheWater: 0, nextEta: null, variants: {} });
+
+  // Seed vanuit de prijslijst: élk verkoopbaar model verschijnt (ook met 0
+  // voorraad → backorder), zodat partners altijd kunnen bestellen.
+  for (const m of Object.keys(priceData.prices || {})) ensure(m);
 
   // Hal-voorraad + kleurvarianten
   for (const [model, v] of Object.entries((hallen && hallen.models) || {})) {
@@ -255,8 +260,19 @@ async function dpStockModels(env) {
   return { updated: (hallen && hallen.updated) || null, shipsUpdated: (schepen && schepen.updated) || null, models };
 }
 
+// Collectie-kleuren (uit de prijslijst-banners): partners zien elk model in
+// de kleur van zijn Passion-collectie.
+const DP_COLLECTION_COLORS = {
+  "Pure": "#e4551f", "Dream": "#e4551f", "Signature": "#3e7d3f",
+  "Exclusive": "#a62c39", "Modern": "#454545", "Sport & Fitness": "#2e79b5",
+  "Turbine Grand": "#2e79b5", "Ice Baths": "#2ca6d6", "Eden Premium": "#3ba89b",
+  "Overflow": "#6b4e9e", "Heat Pumps": "#6b7280",
+};
+
 // GET /dealers/api/stock — geaggregeerd per model, dealer-veilig, mét
-// partnerprijs ($ + Freight Surcharge Warehouse Uddel) uit de prijslijst
+// partnerprijs ($ + Freight Surcharge Warehouse Uddel) + collectie/kleur.
+// ALLEEN modellen die op de prijslijst staan (verkoopbaar assortiment) —
+// oude/uitlopende modellen en andere merken worden niet aan partners getoond.
 async function dpHandleStock(env) {
   const agg = await dpStockModels(env);
   const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
@@ -266,18 +282,21 @@ async function dpHandleStock(env) {
   const codeName = {};
   for (const vs of Object.values(catalog.models || {}))
     for (const v of vs) codeName[v.code] = String(v.desc || v.code).replace(/^.*\|\s*/, "");
+  const models = [];
   for (const m of agg.models) {
-    for (const v of (m.variants || [])) v.name = codeName[v.code] || v.code;
     const p = prices[m.model];
-    if (p && typeof p === "object" && Number(p.usd) > 0) {
-      m.partnerUsd = Number(p.usd);
-      m.surchargeUsd = Number(p.surcharge) || 0;
-      m.partnerEur = Number(p.eurRef) || null;
-      m.surchargeEur = (m.partnerEur && m.partnerUsd) ? Math.round(m.surchargeUsd * m.partnerEur / m.partnerUsd) : null;
-      m.retailEur = Number(p.retailEur) || null;
-    }
+    if (!(p && typeof p === "object" && Number(p.usd) > 0)) continue;   // alleen prijslijst
+    for (const v of (m.variants || [])) v.name = codeName[v.code] || v.code;
+    m.partnerUsd = Number(p.usd);
+    m.surchargeUsd = Number(p.surcharge) || 0;
+    m.partnerEur = Number(p.eurRef) || null;
+    m.surchargeEur = (m.partnerEur && m.partnerUsd) ? Math.round(m.surchargeUsd * m.partnerEur / m.partnerUsd) : null;
+    m.retailEur = Number(p.retailEur) || null;
+    m.collection = p.collection || null;
+    m.collectionColor = DP_COLLECTION_COLORS[p.collection] || "#9ca3af";
+    models.push(m);
   }
-  return reply(200, { ok: true, updated: agg.updated, shipsUpdated: agg.shipsUpdated, models: agg.models });
+  return reply(200, { ok: true, updated: agg.updated, shipsUpdated: agg.shipsUpdated, models });
 }
 
 // GET /dealers/api/myspas — fase 2: de eigen reserveringen van deze dealer.

@@ -284,7 +284,8 @@ function renderStock(){
   const q = ($("stockSearch").value || "").trim().toLowerCase();
   const list = q ? stockModels.filter(m => m.model.toLowerCase().includes(q)) : stockModels;
   $("stockGrid").innerHTML = list.map(m => `
-    <div class="stock-card">
+    <div class="stock-card" style="border-top:3px solid ${esc(m.collectionColor||'#9ca3af')}">
+      ${m.collection?`<div style="font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${esc(m.collectionColor)};margin-bottom:3px;">${esc(m.collection)}</div>`:""}
       <div class="m">${esc(m.model)}${m.available>0?`<span class="pill">${m.available} in stock</span>`:`<span class="pill" style="background:#fef3c7;color:#92400e">backorder</span>`}</div>
       <ul>
         <li>Available now: <b>${m.available}</b></li>
