@@ -289,6 +289,7 @@ function renderStock(){
         <li>Available now: <b>${m.available}</b></li>
         <li>On the water: <b>${m.onTheWater}</b>${m.nextEta?` <span style="color:var(--muted)">(ETA ${esc(m.nextEta)})</span>`:""}</li>
         <li>In production: <b>${m.inProduction}</b></li>
+        ${m.partnerUsd?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b>${m.surchargeUsd?` <span style="color:var(--muted)">+ $ ${m.surchargeUsd} freight (Uddel)</span>`:""}</li>`:""}
       </ul>
       <button class="primary rsv" data-model="${esc(m.model)}" style="margin-top:10px;padding:8px 14px;font-size:13px;">Reserve</button>
     </div>`).join("");
@@ -405,7 +406,7 @@ async function loadMyRequests(){
   $("myReqList").innerHTML = reqs.map(x => {
     const [label, cls] = reqStatusLabel(x);
     return `<div class="doc">
-      <div><b>${x.qty}&times; ${esc(x.model)}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit?` · deposit € ${Number(x.deposit).toFixed(2)}`:""}</span></div>
+      <div><b>${x.qty}&times; ${esc(x.model)}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit?` · deposit ${x.currency==="USD"?"$":"€"} ${Number(x.deposit).toFixed(2)}`:""}</span></div>
       <span style="font-size:13px;${cls==="ok"?"color:#15803d;font-weight:600;":"color:var(--muted);"}">${label}</span>
     </div>`;
   }).join("");
@@ -461,7 +462,7 @@ function openReserve(model){
     const m = ov.querySelector("#rsvMsg");
     if (r.status===200 && r.data && r.data.ok && r.data.checkoutUrl) {
       m.className="msg ok";
-      m.textContent="Request received — redirecting you to the secure payment page for the 30% deposit (€ " + (r.data.deposit!=null ? Number(r.data.deposit).toFixed(2) : "") + ")…";
+      m.textContent="Request received — redirecting you to the secure payment page for the 30% deposit (" + (r.data.currency==="USD"?"$ ":"€ ") + (r.data.deposit!=null ? Number(r.data.deposit).toFixed(2) : "") + ")…";
       m.classList.remove("hidden");
       setTimeout(()=>{ location.href = r.data.checkoutUrl; }, 1400);
     } else if (r.status===200 && r.data && r.data.ok) {

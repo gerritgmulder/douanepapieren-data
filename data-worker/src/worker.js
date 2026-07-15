@@ -255,9 +255,20 @@ async function dpStockModels(env) {
   return { updated: (pipe && pipe.lastUpdated) || null, models };
 }
 
-// GET /dealers/api/stock — geaggregeerd per model, dealer-veilig
+// GET /dealers/api/stock — geaggregeerd per model, dealer-veilig, mét
+// partnerprijs ($ + Freight Surcharge Warehouse Uddel) uit de prijslijst
 async function dpHandleStock(env) {
   const agg = await dpStockModels(env);
+  const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
+  const prices = priceData.prices || {};
+  for (const m of agg.models) {
+    const p = prices[m.model];
+    if (p && typeof p === "object" && Number(p.usd) > 0) {
+      m.partnerUsd = Number(p.usd);
+      m.surchargeUsd = Number(p.surcharge) || 0;
+      m.retailEur = Number(p.retailEur) || null;
+    }
+  }
   return reply(200, { ok: true, updated: agg.updated, models: agg.models });
 }
 
@@ -358,17 +369,24 @@ async function dpHandleReserve(request, env, sess, url) {
   let checkoutUrl = null;
   if (env.MOLLIE_API_KEY) {
     const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
-    // Prijs per model: kaal getal (alleen prijs) of {price, code} met Logic4-artikelcode
+    // Prijslijst 2026: {usd, surcharge (Freight Surcharge Warehouse Uddel), code?}
+    // — aanbetaling ALTIJD op basis van de dollarprijs (afspraak Gerrit 15 jul).
+    // Oude vormen ({price} in EUR of kaal getal) blijven werken als terugval.
     const pEntry = (priceData.prices || {})[model];
-    const price = Number(pEntry && typeof pEntry === "object" ? pEntry.price : pEntry);
-    if (pEntry && typeof pEntry === "object" && pEntry.code) entry.productCode = String(pEntry.code);
-    if (price > 0) {
-      const deposit = Math.round(price * qty * 0.30 * 100) / 100;
+    let unit = 0, currency = "EUR";
+    if (pEntry && typeof pEntry === "object") {
+      if (Number(pEntry.usd) > 0) { unit = Number(pEntry.usd) + (Number(pEntry.surcharge) || 0); currency = "USD"; }
+      else if (Number(pEntry.price) > 0) unit = Number(pEntry.price);
+      if (pEntry.code) entry.productCode = String(pEntry.code);
+    } else if (Number(pEntry) > 0) unit = Number(pEntry);
+    if (unit > 0) {
+      const deposit = Math.round(unit * qty * 0.30 * 100) / 100;
+      entry.currency = currency;
       const pay = await dpCreateMolliePayment(env, deposit,
         "30% deposit — " + qty + "x " + model + " (" + (sess.company || sess.email) + ")",
         url.origin + "/dealers?paid=1",
         url.origin + "/dealers/webhook",
-        { requestId: entry.id });
+        { requestId: entry.id }, currency);
       if (pay.ok) {
         entry.deposit = deposit;
         entry.paymentId = pay.id;
@@ -389,21 +407,21 @@ async function dpHandleReserve(request, env, sess, url) {
     '<p><b>Nieuwe reserveringsaanvraag via het partnerportaal</b></p>' +
     '<p><b>Dealer:</b> ' + esc(sess.company || "") + ' &lt;' + esc(sess.email) + '&gt;<br>' +
     '<b>Model:</b> ' + esc(model) + '<br><b>Aantal:</b> ' + qty +
-    (entry.deposit ? '<br><b>Aanbetaling (30%):</b> € ' + entry.deposit.toFixed(2) + ' — Mollie-link naar dealer gestuurd' : '') + '</p>' +
+    (entry.deposit ? '<br><b>Aanbetaling (30%):</b> ' + (entry.currency === 'USD' ? '$' : '€') + ' ' + entry.deposit.toFixed(2) + ' — Mollie-link naar dealer gestuurd' : '') + '</p>' +
     (note ? '<p style="white-space:pre-wrap;border-left:3px solid #8bc53f;padding-left:12px;">' + esc(note) + '</p>' : '') +
     '<p style="color:#888;font-size:12px;">Ook zichtbaar in de beheertegel Dealerportaal. Reply gaat direct naar de dealer.</p></div>',
     sess.email);
-  return reply(200, { ok: true, checkoutUrl: checkoutUrl, deposit: entry.deposit || null });
+  return reply(200, { ok: true, checkoutUrl: checkoutUrl, deposit: entry.deposit || null, currency: entry.currency || null });
 }
 
 // Fase 3 — Mollie-betaallink (wacht op MOLLIE_API_KEY als worker-secret).
 // Zodra de key er is: aanroepen vanuit de reserve-flow met het aanbetalings-
 // bedrag, checkoutUrl teruggeven aan het portaal, en een /dealers/webhook
 // route toevoegen voor de betaalstatus.
-async function dpCreateMolliePayment(env, amountEur, description, redirectUrl, webhookUrl, metadata) {
+async function dpCreateMolliePayment(env, amount, description, redirectUrl, webhookUrl, metadata, currency) {
   if (!env.MOLLIE_API_KEY) return { ok: false, error: "mollie-not-configured" };
   const payload = {
-    amount: { currency: "EUR", value: Number(amountEur).toFixed(2) },
+    amount: { currency: currency || "EUR", value: Number(amount).toFixed(2) },
     description, redirectUrl,
   };
   if (webhookUrl) payload.webhookUrl = webhookUrl;
@@ -441,7 +459,7 @@ async function dpHandleMyRequests(env, sess) {
   const mine = (Array.isArray(data.requests) ? data.requests : [])
     .filter(r => String(r.email || "").toLowerCase() === String(sess.email || "").toLowerCase())
     .map(r => ({ ts: r.ts, model: r.model, qty: r.qty, status: r.status,
-                 deposit: r.deposit || null, paymentStatus: r.paymentStatus || null }))
+                 deposit: r.deposit || null, currency: r.currency || null, paymentStatus: r.paymentStatus || null }))
     .sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
   return reply(200, { ok: true, requests: mine });
 }
@@ -660,7 +678,7 @@ async function dpHandleMollieWebhook(request, env) {
             const res = await dpCreateLogic4Order(env, {
               debtorId, qty: item.qty, productCode: item.productCode || null,
               reference: "DP-" + String(item.id).slice(0, 8),
-              remarks: "Partnerportaal-reservering — 30% aanbetaald: € " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie dealer: " + item.note : ""),
+              remarks: "Partnerportaal-reservering — 30% aanbetaald: " + (item.currency === "USD" ? "$" : "€") + " " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie dealer: " + item.note : ""),
               description: item.qty + "x " + item.model + " — partnerportaal (30% aanbetaald via Mollie)",
             });
             if (res.ok) { item.logic4OrderId = res.orderId; delete item.logic4Error; }
