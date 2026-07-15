@@ -94,6 +94,7 @@
     <button class="tab" data-tab="dealer" type="button">Reserveringen Dealers (<span id="cntDealer">0</span>)</button>
     <button class="tab" data-tab="part" type="button">Reserveringen Particulieren (<span id="cntPart">0</span>)</button>
     <button class="tab" data-tab="schepen" type="button">Schepen 🚢</button>
+    <button class="tab" data-tab="prio" type="button">Prioriteit ⚖️</button>
     <button class="tab" data-tab="pipe" type="button">Oude pipeline 🧪</button>
     <button class="tab" data-tab="dealerview" type="button">Dealer-view 🧪</button>
   </div>
@@ -210,6 +211,32 @@
         </table>
       </div>
       <div id="ciUnmapped" style="margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div id="tab-prio" class="hidden">
+    <div class="card">
+      <h3>Prioriteit — wie krijgt de eerstvolgende spa?</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">
+        Kies een model. Je ziet alle <b>openstaande orders</b> (verkooporder / 30% aanbetaald / wacht op aanbetaling)
+        met dat model, en of het een <b>partner</b> of <b>particulier</b> is. Sleep of gebruik de pijltjes om de
+        volgorde te bepalen waarin ze bediend worden. Boven de streep = gedekt door de huidige voorraad (in NL + op schip);
+        onder de streep = wacht op de volgende productie.
+      </p>
+      <div class="actions" style="margin-top:0;align-items:center;gap:10px">
+        <select id="prioModel" style="min-width:220px;padding:8px"><option value="">— kies een model —</option></select>
+        <button class="secondary" id="prioReload" type="button">Vernieuwen</button>
+        <span id="prioSummary" style="font-size:13px;color:var(--muted)"></span>
+      </div>
+      <div id="prioStatus" class="status-msg hidden" style="margin-top:12px"></div>
+    </div>
+    <div class="card">
+      <div class="tablewrap">
+        <table class="grid">
+          <thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Aantal</th><th>Datum</th><th>Status</th><th>Volgorde</th></tr></thead>
+          <tbody id="prioBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -733,9 +760,11 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   document.getElementById("tab-dealer").classList.toggle("hidden", tab!=="dealer");
   document.getElementById("tab-part").classList.toggle("hidden", tab!=="part");
   document.getElementById("tab-schepen").classList.toggle("hidden", tab!=="schepen");
+  document.getElementById("tab-prio").classList.toggle("hidden", tab!=="prio");
   document.getElementById("tab-pipe").classList.toggle("hidden", tab!=="pipe");
   document.getElementById("tab-dealerview").classList.toggle("hidden", tab!=="dealerview");
   if (tab==="schepen") loadSchepen();
+  if (tab==="prio") initPrio();
   if (tab==="dealer"||tab==="part") renderOverviews();
   if (tab==="dealerview") renderDealerView();
 }));
@@ -947,6 +976,125 @@ async function handleCIUpload(files){
     st.className="status-msg ok";
     st.textContent=added+" schip(en) verwerkt en opgeslagen. Vul per schip de ETA in — de lading telt nu als voorraad onderweg in het Partnerportaal.";
   }catch(e){ console.error(e); st.className="status-msg bad"; st.textContent="Kon niet inlezen: "+e.message; }
+}
+
+// ===================== Prioriteit (allocatie) =====================
+// Chantal bepaalt per model in welke volgorde openstaande orders bediend
+// worden. Bron: Logic4 (open orders met het model) + spa-catalog (model→codes)
+// + voorraad-hallen/schepen (dekking). Volgorde in bucket voorraad-prioriteit.
+const PRIO_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-prioriteit";
+const CATALOG_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/spa-catalog";
+const HALLEN_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-hallen";
+const PRIO_STATUSES=[1,25,15]; // Verkooporder, 30% aanbetaald, wacht op 30%
+let prioCatalog=null, prioPriority={}, prioRows=[];
+
+function prioStatus(level,msg){ const e=document.getElementById("prioStatus"); if(!msg){e.classList.add("hidden");return;} e.className="status-msg "+level; e.textContent=msg; e.classList.remove("hidden"); }
+
+async function initPrio(){
+  if(!prioCatalog){
+    try{
+      const [c,p]=await Promise.all([
+        fetch(CATALOG_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()),
+        fetch(PRIO_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({}))
+      ]);
+      prioCatalog=c&&c.models?c.models:{};
+      prioPriority=(p&&p.byModel)||{};
+    }catch(e){ prioStatus("bad","Catalogus laden faalde: "+e.message); return; }
+    const sel=document.getElementById("prioModel");
+    sel.innerHTML='<option value="">— kies een model —</option>'+
+      Object.keys(prioCatalog).sort().map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join("");
+    sel.addEventListener("change", ()=>loadPrioModel(sel.value));
+    document.getElementById("prioReload").addEventListener("click", ()=>loadPrioModel(sel.value));
+  }
+}
+
+async function loadPrioModel(model){
+  if(!model){ document.getElementById("prioBody").innerHTML=""; document.getElementById("prioSummary").textContent=""; return; }
+  prioStatus("","Open orders ophalen voor "+model+"…");
+  await loadVoorraadState(); // klantType
+  try{
+    const codes=(prioCatalog[model]||[]).map(v=>v.code);
+    // Dekking (voorraad in NL + op schip) uit de KV-buckets
+    const [hallen,schepen]=await Promise.all([
+      fetch(HALLEN_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({})),
+      fetch(SHIPS_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({}))
+    ]);
+    const halQty=((hallen.models||{})[model]||{}).hal||0;
+    let shipQty=0; for(const s of (schepen.ships||[])) shipQty+=(s.models||{})[model]||0;
+    const dekking=halQty+shipQty;
+
+    // Open orders per variant-code × status parallel ophalen (sneller), dan
+    // dedupliceren op ordernummer.
+    const jobs=[];
+    for(const code of codes) for(const st of PRIO_STATUSES)
+      jobs.push(logic4Call("/v3/Orders/GetOrders",{ProductCode:code,StatusId:st,TakeRecords:200}).catch(()=>null));
+    const results=await Promise.all(jobs);
+    const seen={};
+    for(const data of results){
+      const arr=Array.isArray(data)?data:((data&&data.Orders)||[]);
+      for(const o of (arr||[])){
+        if(seen[o.Id]) continue;
+        let qty=0; for(const r of (o.OrderRows||[])) if(codes.includes(String(r.ProductCode||""))) qty+=Number(r.Qty)||0;
+        if(qty<=0) continue;
+        const type=klantType[String(o.DebtorId)]||"?";
+        seen[o.Id]={ ordernr:o.Id, naam:klantNaam(o), debtorId:o.DebtorId, type,
+          qty, datum:fmtDate(o.CreationDate), statusId:(o.OrderStatus||{}).Id, status:(o.OrderStatus||{}).Value||"" };
+      }
+    }
+    prioRows=Object.values(seen);
+    // Sorteer op opgeslagen prioriteit; onbekend achteraan op datum
+    const saved=prioPriority[model]||[];
+    prioRows.sort((a,b)=>{
+      const ia=saved.indexOf(a.ordernr), ib=saved.indexOf(b.ordernr);
+      if(ia!==-1&&ib!==-1) return ia-ib;
+      if(ia!==-1) return -1; if(ib!==-1) return 1;
+      return String(a.datum).localeCompare(String(b.datum));
+    });
+    renderPrio(model, dekking, halQty, shipQty);
+    prioStatus("ok", prioRows.length+" open order(s) gevonden.");
+  }catch(e){ console.error(e); prioStatus("bad","Ophalen faalde: "+e.message); }
+}
+
+function renderPrio(model, dekking, halQty, shipQty){
+  const tot=prioRows.reduce((a,r)=>a+r.qty,0);
+  document.getElementById("prioSummary").innerHTML=
+    "Dekking: <b>"+dekking+"</b> ("+halQty+" in NL + "+shipQty+" op schip) · gevraagd: <b>"+tot+"</b>"+
+    (tot>dekking?" · <span style='color:#b91c1c'>tekort "+(tot-dekking)+"</span>":" · <span style='color:#15803d'>volledig gedekt</span>");
+  let cum=0;
+  document.getElementById("prioBody").innerHTML=prioRows.map((r,i)=>{
+    const before=cum; cum+=r.qty; const covered=before<dekking;
+    const cutHere = before<dekking && cum>=dekking; // laatste (deels) gedekte regel
+    const badge=r.type==="dealer"?"<span class='pill s1'>partner</span>":(r.type==="particulier"?"<span class='pill s25'>particulier</span>":"<span class='pill'>?</span>");
+    return "<tr style='"+(covered?"":"opacity:.6")+(cutHere?";border-bottom:2px solid #b91c1c":"")+"'>"+
+      "<td>"+(i+1)+"</td>"+
+      "<td>"+r.ordernr+"</td>"+
+      "<td>"+esc(r.naam)+"</td>"+
+      "<td>"+badge+"</td>"+
+      "<td>"+r.qty+"</td>"+
+      "<td style='font-size:12px'>"+esc(r.datum)+"</td>"+
+      "<td style='font-size:12px'>"+esc(r.status)+"</td>"+
+      "<td style='white-space:nowrap'>"+
+        "<button class='rmv prioUp' data-i='"+i+"' "+(i===0?"disabled":"")+">▲</button> "+
+        "<button class='rmv prioDown' data-i='"+i+"' "+(i===prioRows.length-1?"disabled":"")+">▼</button>"+
+      "</td></tr>"+
+      (cutHere&&i<prioRows.length-1?"<tr><td colspan='8' style='text-align:center;color:#b91c1c;font-size:11px;padding:2px'>— grens huidige voorraad ("+dekking+") —</td></tr>":"");
+  }).join("") || "<tr><td colspan='8' style='color:var(--muted)'>Geen open orders voor dit model.</td></tr>";
+  document.querySelectorAll(".prioUp").forEach(b=>b.addEventListener("click",()=>movePrio(model,Number(b.dataset.i),-1)));
+  document.querySelectorAll(".prioDown").forEach(b=>b.addEventListener("click",()=>movePrio(model,Number(b.dataset.i),1)));
+}
+
+async function movePrio(model, i, dir){
+  const j=i+dir; if(j<0||j>=prioRows.length) return;
+  const tmp=prioRows[i]; prioRows[i]=prioRows[j]; prioRows[j]=tmp;
+  prioPriority[model]=prioRows.map(r=>r.ordernr);
+  // dekking opnieuw uit summary afleiden is niet nodig — herbereken via reload-vrije render:
+  const sum=document.getElementById("prioSummary").textContent.match(/Dekking:\s*(\d+)/);
+  const halM=document.getElementById("prioSummary").innerHTML.match(/\((\d+) in NL \+ (\d+) op schip\)/);
+  renderPrio(model, sum?Number(sum[1]):0, halM?Number(halM[1]):0, halM?Number(halM[2]):0);
+  try{
+    await fetch(PRIO_URL,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
+      body:JSON.stringify({byModel:prioPriority,updated:new Date().toISOString()})});
+  }catch(e){ prioStatus("bad","Opslaan volgorde faalde: "+e.message); }
 }
 
 // ===================== Voorraad & pipeline (VEROUDERD) =====================

@@ -34,6 +34,7 @@ const ALLOWED_BUCKETS = new Set([
   "spa-catalog",      // Model → varianten (artikelcode/kleur/productId) uit Logic4 — tools/build-spa-catalog.mjs
   "voorraad-hallen",  // Echte hal-voorraad per model uit Logic4 (warehouse Fonteyn) — tools/build-stock.mjs
   "voorraad-schepen", // Schip-voorraad uit commercial invoices (ref/schip/eta + regels per model)
+  "voorraad-prioriteit", // Chantal's allocatie-volgorde per model (byModel: {model: [ordernr,…]})
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
