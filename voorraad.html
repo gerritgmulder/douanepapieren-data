@@ -90,16 +90,22 @@
   juiste overzicht.</p>
 
   <div class="tabs">
-    <button class="tab active" data-tab="ophalen" type="button">Ophalen &amp; markeren</button>
-    <button class="tab" data-tab="dealer" type="button">Reserveringen Dealers (<span id="cntDealer">0</span>)</button>
-    <button class="tab" data-tab="part" type="button">Reserveringen Particulieren (<span id="cntPart">0</span>)</button>
-    <button class="tab" data-tab="schepen" type="button">Schepen 🚢</button>
+    <button class="tab active" data-tab="reserveringen" type="button">Reserveringen ⭐</button>
     <button class="tab" data-tab="prio" type="button">Prioriteit ⚖️</button>
-    <button class="tab" data-tab="pipe" type="button">Oude pipeline 🧪</button>
-    <button class="tab" data-tab="dealerview" type="button">Dealer-view 🧪</button>
+    <button class="tab" data-tab="schepen" type="button">Schepen 🚢</button>
+    <button class="tab" data-tab="ophalen" type="button" style="color:var(--muted)">Ophalen &amp; markeren (oud)</button>
+    <button class="tab" data-tab="dealer" type="button" style="color:var(--muted)">Res. Dealers (oud)</button>
+    <button class="tab" data-tab="part" type="button" style="color:var(--muted)">Res. Particulieren (oud)</button>
+    <button class="tab" data-tab="pipe" type="button" style="color:var(--muted)">Pipeline (oud)</button>
+    <button class="tab" data-tab="dealerview" type="button" style="color:var(--muted)">Dealer-view (oud)</button>
+  </div>
+  <div class="status-msg" style="background:#eef6ff;color:#1e40af;margin:0 0 12px">
+    <b>Nieuwe werkwijze:</b> begin bij <b>Reserveringen ⭐</b> (de actuele stand, elk uur ververst uit Logic4).
+    Gebruik <b>Prioriteit ⚖️</b> om te bepalen wie voorrang krijgt, en <b>Schepen 🚢</b> om commercial invoices te uploaden.
+    De grijze tabs zijn de oude werkwijze en verdwijnen binnenkort.
   </div>
 
-  <div id="tab-ophalen">
+  <div id="tab-ophalen" class="hidden">
   <div class="card controls">
     <div>
       <label>Besteldatum</label>
@@ -183,6 +189,23 @@
         </table>
       </div>
     </div>
+  </div>
+
+  <div id="tab-reserveringen">
+    <div class="card">
+      <h3>Reserveringen — de actuele stand</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">
+        Elke Logic4-order met een spa is automatisch een reservering. Deze lijst wordt <b>elk uur</b> ververst.
+        <span style="color:#15803d">Betaald</span> = 30% aanbetaald (bevestigd). <span style="color:var(--warn)">Wacht</span> = wacht op aanbetaling.
+        <span style="color:var(--bad)">Vervallen</span> = langer dan 3 dagen onbetaald → schuift achteraan.
+      </p>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:0">
+        <input id="resvSearch" placeholder="zoek model…" style="min-width:200px;padding:8px">
+        <span id="resvUpdated" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="resvOverview" style="margin-top:12px"></div>
+    </div>
+    <div id="resvDetail"></div>
   </div>
 
   <div id="tab-schepen" class="hidden">
@@ -778,10 +801,12 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   document.getElementById("tab-ophalen").classList.toggle("hidden", tab!=="ophalen");
   document.getElementById("tab-dealer").classList.toggle("hidden", tab!=="dealer");
   document.getElementById("tab-part").classList.toggle("hidden", tab!=="part");
+  document.getElementById("tab-reserveringen").classList.toggle("hidden", tab!=="reserveringen");
   document.getElementById("tab-schepen").classList.toggle("hidden", tab!=="schepen");
   document.getElementById("tab-prio").classList.toggle("hidden", tab!=="prio");
   document.getElementById("tab-pipe").classList.toggle("hidden", tab!=="pipe");
   document.getElementById("tab-dealerview").classList.toggle("hidden", tab!=="dealerview");
+  if (tab==="reserveringen") loadReserveringen();
   if (tab==="schepen") loadSchepen();
   if (tab==="prio") initPrio();
   if (tab==="dealer"||tab==="part") renderOverviews();
@@ -897,6 +922,52 @@ function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode, un
   document.getElementById("diag").innerHTML = diagWrap(b.join("<br><br>"));
 }
 
+
+// ===================== Reserveringen (live ledger) =====================
+// Toont de reserveringen-live bucket (uur-sync uit Logic4). Read-only overzicht:
+// per model hoeveel betaald/wachtend/vervallen, uitklapbaar naar de orders.
+const RESV_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/reserveringen-live";
+let resvData={byModel:{}}, resvOpen={};
+async function loadReserveringen(){
+  try{
+    const r=await fetch(RESV_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
+    if(r.ok){ const j=await r.json(); resvData={byModel:(j&&j.byModel)||{},updated:j&&j.updated}; }
+  }catch(e){ console.warn("reserveringen laden faalde:",e); }
+  renderReserveringen();
+}
+function renderReserveringen(){
+  document.getElementById("resvUpdated").textContent = resvData.updated ? ("Laatst ververst: "+new Date(resvData.updated).toLocaleString("nl-NL")) : "";
+  const q=(document.getElementById("resvSearch").value||"").trim().toLowerCase();
+  const models=Object.keys(resvData.byModel).filter(m=>!q||m.toLowerCase().includes(q))
+    .sort((a,b)=>resvData.byModel[b].length-resvData.byModel[a].length);
+  const ov=document.getElementById("resvOverview");
+  ov.innerHTML="<table class='grid'><thead><tr><th>Model</th><th>Totaal</th><th>Betaald</th><th>Wacht</th><th>Vervallen</th><th></th></tr></thead><tbody>"+
+    models.map(m=>{
+      const l=resvData.byModel[m];
+      const bet=l.filter(r=>r.betaald).length, verv=l.filter(r=>r.vervallen).length, wacht=l.length-bet-verv;
+      return "<tr><td><b>"+esc(m)+"</b></td><td>"+l.length+"</td>"+
+        "<td style='color:#15803d'>"+bet+"</td><td style='color:#92400e'>"+wacht+"</td>"+
+        "<td style='color:#b91c1c'>"+(verv||"")+"</td>"+
+        "<td><button class='rmv resvToggle' data-m='"+esc(m)+"'>"+(resvOpen[m]?"verberg":"toon orders")+"</button></td></tr>";
+    }).join("") + "</tbody></table>";
+  ov.querySelectorAll(".resvToggle").forEach(b=>b.addEventListener("click",()=>{ resvOpen[b.dataset.m]=!resvOpen[b.dataset.m]; renderReserveringen(); renderResvDetail(); }));
+  renderResvDetail();
+}
+function renderResvDetail(){
+  const wrap=document.getElementById("resvDetail");
+  const openModels=Object.keys(resvOpen).filter(m=>resvOpen[m]&&resvData.byModel[m]);
+  wrap.innerHTML=openModels.map(m=>{
+    const rows=resvData.byModel[m].map((r,i)=>{
+      const badge=r.betaald?"<span class='pill s25' style='background:#dcfce7;color:#15803d'>betaald</span>"
+        :(r.vervallen?"<span class='pill' style='background:#fee2e2;color:#b91c1c'>vervallen</span>":"<span class='pill' style='background:#fef3c7;color:#92400e'>wacht</span>");
+      const type=r.type==="partner"?"<span class='pill s1'>partner</span>":"<span class='pill'>particulier</span>";
+      return "<tr style='"+(r.vervallen?"opacity:.6":"")+"'><td>"+(i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td>"+type+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+badge+"</td></tr>";
+    }).join("");
+    return "<div class='card'><h3>"+esc(m)+" — "+resvData.byModel[m].length+" reservering(en)</h3>"+
+      "<div class='tablewrap'><table class='grid'><thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Aantal</th><th>Datum</th><th>Status</th></tr></thead><tbody>"+rows+"</tbody></table></div></div>";
+  }).join("");
+}
+document.getElementById("resvSearch")&&document.getElementById("resvSearch").addEventListener("input",renderReserveringen);
 
 // ===================== Schepen (commercial invoices) =====================
 // Chantal uploadt commercial invoices (Excel, één per schip). Client-side
@@ -1469,6 +1540,7 @@ function renderDealerResv(){
   document.querySelectorAll('.filter-row[data-ov="stock"] input').forEach(i=> i.addEventListener("input", renderStock));
   const dv=document.getElementById("dvSearch"); if(dv) dv.addEventListener("input", renderDealerView);
   loadPipe().then(function(){ renderPipeAll(); renderDealerResv(); });
+  loadReserveringen();   // standaard-tab
 })();
 
 

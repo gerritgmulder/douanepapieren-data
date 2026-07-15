@@ -35,6 +35,7 @@ const ALLOWED_BUCKETS = new Set([
   "voorraad-hallen",  // Echte hal-voorraad per model uit Logic4 (warehouse Fonteyn) — tools/build-stock.mjs
   "voorraad-schepen", // Schip-voorraad uit commercial invoices (ref/schip/eta + regels per model)
   "voorraad-prioriteit", // Chantal's allocatie-volgorde per model (byModel: {model: [ordernr,…]})
+  "reserveringen-live",  // Reserveringen-ledger uit Logic4 (uur-sync): per model open orders + betaald/vervallen
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
@@ -926,6 +927,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/testorder" && request.method === "POST") return dpAdminTestOrder(request, env);
     if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);
     if (p === "/dealers/admin/refresh-stock" && request.method === "POST") return reply(200, await dpRefreshHalStock(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    if (p === "/dealers/admin/refresh-reserveringen" && request.method === "POST") return reply(200, await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     return reply(404, "Not found");
   }
 
@@ -1045,13 +1047,81 @@ async function dpRefreshHalStock(env) {
   return { ok: true, models: Object.keys(perModel).length };
 }
 
+// Reserveringen-ledger: élke Logic4-order met een spa is een reservering.
+// Statussen: 15 = wachten op 30% aanbetaling, 25 = 30% aanbetaald,
+// 1 = verkooporder. Regel Gerrit: een order mag reserveren maar moet binnen
+// 3 dagen aanbetaald zijn (status 25), anders 'vervallen' (schuift op). Elk
+// uur ververst; particulieren maken zelf geld over → status springt 15→25.
+const DP_RESV_STATUSES = [15, 25, 1];
+async function dpRefreshReservations(env) {
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const codeToModel = {};
+  for (const [model, variants] of Object.entries(catalog.models || {}))
+    for (const v of variants) codeToModel[v.code] = model;
+  // partner/particulier: dealer-accounts (debtorIds) + klantType-hint uit 'voorraad'
+  const accounts = await dpGetAccounts(env);
+  const partnerDebtors = new Set();
+  for (const d of (accounts.dealers || [])) for (const id of (d.debtorIds || [])) partnerDebtors.add(String(id));
+  const voorraad = (await env.FONTEYN_DATA.get("voorraad", { type: "json" })) || {};
+  const klantType = voorraad.klantType || {};
+
+  const token = await l4Token(env);
+  const fromIso = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 19);
+  const nowMs = Date.now();
+  const byModel = {};
+  const statusName = { 15: "wachten op aanbetaling", 25: "30% aanbetaald", 1: "verkooporder" };
+  for (const st of DP_RESV_STATUSES) {
+    for (let page = 0; page < 8; page++) {
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ StatusId: st, CreationDateFrom: fromIso, TakeRecords: 500, SkipRecords: page * 500 }),
+      });
+      if (!r.ok) break;
+      const data = await r.json().catch(() => []);
+      const arr = Array.isArray(data) ? data : ((data && data.Orders) || []);
+      if (!arr.length) break;
+      for (const o of arr) {
+        const perModelQty = {};
+        for (const row of (o.OrderRows || [])) {
+          const model = codeToModel[String(row.ProductCode || "")];
+          if (!model) continue;
+          perModelQty[model] = (perModelQty[model] || 0) + (Number(row.Qty) || 0);
+        }
+        for (const [model, qty] of Object.entries(perModelQty)) {
+          if (qty <= 0) continue;
+          const dId = String(o.DebtorId);
+          const type = partnerDebtors.has(dId) ? "partner" : (klantType[dId] === "dealer" ? "partner" : "particulier");
+          const dagen = (nowMs - new Date(o.CreationDate).getTime()) / 86400000;
+          const betaald = st === 25;
+          (byModel[model] = byModel[model] || []).push({
+            ordernr: o.Id, debtorId: o.DebtorId,
+            naam: (o.InvoiceAddress && (o.InvoiceAddress.CompanyName || o.InvoiceAddress.ContactName)) || ("Debiteur " + o.DebtorId),
+            type, qty, datum: String(o.CreationDate).slice(0, 10), statusId: st, status: statusName[st] || String(st),
+            betaald, vervallen: st === 15 && dagen > 3,   // >3 dagen onbetaald
+          });
+        }
+      }
+      if (arr.length < 500) break;
+    }
+  }
+  // Per model sorteren: betaald eerst, dan niet-vervallen op datum, vervallen achteraan
+  for (const list of Object.values(byModel)) {
+    list.sort((a, b) => (b.betaald - a.betaald) || (a.vervallen - b.vervallen) || String(a.datum).localeCompare(String(b.datum)));
+  }
+  await env.FONTEYN_DATA.put("reserveringen-live", JSON.stringify({ updated: new Date().toISOString(), byModel }));
+  const total = Object.values(byModel).reduce((n, l) => n + l.length, 0);
+  return { ok: true, models: Object.keys(byModel).length, reserveringen: total };
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       try {
         if (!env.LOGIC4_USERNAME) { console.log("[cron] geen Logic4-creds"); return; }
-        const res = await dpRefreshHalStock(env);
-        console.log("[cron] hal-voorraad ververst: " + JSON.stringify(res));
+        const s = await dpRefreshHalStock(env);
+        console.log("[cron] hal-voorraad: " + JSON.stringify(s));
+        const rv = await dpRefreshReservations(env);
+        console.log("[cron] reserveringen: " + JSON.stringify(rv));
       } catch (e) { console.log("[cron] fout: " + (e.message || e)); }
     })());
   },
