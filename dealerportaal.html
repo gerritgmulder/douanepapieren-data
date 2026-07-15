@@ -97,6 +97,17 @@
   </div>
 
   <div class="card">
+    <h3>Wisselkoers EUR/USD</h3>
+    <p class="lead" style="margin-bottom:10px">De partnerprijzen zijn in dollars. Voor EU-partners rekent het portaal om naar euro's: <b>€ = $ ÷ koers</b>. Vul de koers in van <a href="https://www.wisselkoers.nl" target="_blank" rel="noopener">wisselkoers.nl</a> (EUR/USD) <b>min 0,03</b> (veilige marge). BTW komt daarna automatisch uit Logic4 per partner (NL 21%, EU met geldig BTW-nummer 0%, buiten EU 0%).</p>
+    <div class="row" style="align-items:center;gap:10px">
+      <label style="font-size:13px">Koers:</label>
+      <input id="rateInput" type="number" min="0.5" max="2" step="0.001" style="width:120px">
+      <button class="primary" id="saveRate" type="button">Koers opslaan</button>
+      <span id="rateEx" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+  </div>
+
+  <div class="card">
     <h3>Partnerprijzen per model (<span id="priceCount">0</span>)</h3>
     <p class="lead" style="margin-bottom:10px">Nodig voor de automatische <b>30%-aanbetaling</b> bij een reservering (Mollie is actief). Zonder prijs blijft een reservering een aanvraag-per-mail. Modelnaam moet exact overeenkomen met de voorraad (bv. "Renew"). De <b>artikelcode</b> (optioneel) zorgt dat de automatische Logic4-order een echte productregel krijgt in plaats van alleen een omschrijving.</p>
     <table class="grid">
@@ -289,6 +300,18 @@ $("saveContact").addEventListener("click", async ()=>{
 });
 
 let priceData = { prices: {} };
+function renderRate(){
+  const r = Number(priceData.meta && priceData.meta.rate) > 0 ? Number(priceData.meta.rate) : 1.11;
+  $("rateInput").value = r;
+  $("rateEx").textContent = "Voorbeeld: $ 3.349 ÷ " + r + " = € " + Math.round(3349/r) + " (excl. BTW)";
+}
+$("saveRate").addEventListener("click", async ()=>{
+  const r = parseFloat($("rateInput").value);
+  if(!(r>0.5 && r<2)){ setStatus("bad","Voer een geldige koers in (tussen 0,5 en 2)."); return; }
+  priceData.meta = priceData.meta || {}; priceData.meta.rate = r;
+  await save("dealer-prices", priceData); renderRate();
+  setStatus("ok","Koers opgeslagen ("+r+"). Alle EU-partnerprijzen en aanbetalingen rekenen hier nu mee.");
+});
 function renderPrices(){
   const entries = Object.entries(priceData.prices || {}).sort((a,b)=>a[0].localeCompare(b[0]));
   $("priceCount").textContent = entries.length;
@@ -397,7 +420,8 @@ async function init(){
     if (!priceData || typeof priceData !== "object") priceData = {};
     if (!priceData.prices || typeof priceData.prices !== "object") priceData.prices = {};
     $("contactEmail").value = accounts.contactEmail;
-    renderPartners(); renderDocs(); renderReqs(); renderPrices();
+    if (!priceData.meta || typeof priceData.meta !== "object") priceData.meta = {};
+    renderPartners(); renderDocs(); renderReqs(); renderPrices(); renderRate();
     document.getElementById("mgmt").classList.remove("hidden");
   } catch(e){ setStatus("bad", "Laden faalde: "+e.message); }
 }

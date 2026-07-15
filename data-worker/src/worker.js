@@ -282,6 +282,9 @@ async function dpHandleStock(env) {
   const codeName = {};
   for (const vs of Object.values(catalog.models || {}))
     for (const v of vs) codeName[v.code] = String(v.desc || v.code).replace(/^.*\|\s*/, "");
+  // Live wisselkoers voor de EUR-weergave (partnerprijzen ex. BTW; BTW hangt
+  // van de individuele debiteur af en wordt pas bij het reserveren berekend).
+  const rate = Number(priceData.meta && priceData.meta.rate) > 0 ? Number(priceData.meta.rate) : 1.11;
   const models = [];
   for (const m of agg.models) {
     const p = prices[m.model];
@@ -289,14 +292,14 @@ async function dpHandleStock(env) {
     for (const v of (m.variants || [])) v.name = codeName[v.code] || v.code;
     m.partnerUsd = Number(p.usd);
     m.surchargeUsd = Number(p.surcharge) || 0;
-    m.partnerEur = Number(p.eurRef) || null;
-    m.surchargeEur = (m.partnerEur && m.partnerUsd) ? Math.round(m.surchargeUsd * m.partnerEur / m.partnerUsd) : null;
+    m.partnerEur = Math.round(Number(p.usd) / rate);                        // USD → EUR via live koers
+    m.surchargeEur = Math.round((Number(p.surcharge) || 0) / rate);
     m.retailEur = Number(p.retailEur) || null;
     m.collection = p.collection || null;
     m.collectionColor = DP_COLLECTION_COLORS[p.collection] || "#9ca3af";
     models.push(m);
   }
-  return reply(200, { ok: true, updated: agg.updated, shipsUpdated: agg.shipsUpdated, models });
+  return reply(200, { ok: true, updated: agg.updated, shipsUpdated: agg.shipsUpdated, rate, models });
 }
 
 // GET /dealers/api/myspas — fase 2: de eigen reserveringen van deze dealer.
@@ -326,6 +329,56 @@ async function dpHandleMySpas(env, sess) {
   }
   spas.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
   return reply(200, { ok: true, linked: true, spas });
+}
+
+// ─── Prijs & aanbetaling (wisselkoers + BTW uit Logic4) ──────────────
+// Rekenregels (Gerrit/Arno 15 jul):
+//  • Basis = ALTIJD de dollarprijs uit de lijst (+ surcharge + $50 packing bij
+//    losse levering via Fonteyn).
+//  • US-partner: bedragen in USD, geen BTW (buiten EU).
+//  • EU/NL: EUR = USD / koers, koers = wisselkoers.nl EUR/USD − 0,03 (instelbaar,
+//    dealer-prices.meta.rate, default 1,11).
+//  • BTW: rechtstreeks uit Logic4 per debiteur (VatCode.Percent). NL 21%,
+//    EU-partner met geldig BTW-nr = 0% (ICL), buiten EU 0%. Geen eigen logica.
+//  • Aanbetaling = 30% van het totaal INCL. BTW.
+async function dpDebtorVatPercent(env, debtorId) {
+  if (!debtorId) return 0;
+  try {
+    const token = await l4Token(env);
+    const r = await fetch("https://api.logic4server.nl/v3/Relations/GetCustomers", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ Id: Number(debtorId), TakeRecords: 1 }),
+    });
+    const j = await r.json().catch(() => null);
+    const c = Array.isArray(j) ? j[0] : (j && (j.Customers || [])[0]);
+    return Number(c && c.VatCode && c.VatCode.Percent) || 0;
+  } catch (e) { return 0; }
+}
+
+async function dpRate(env) {
+  const pd = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
+  const r = Number(pd.meta && pd.meta.rate);
+  return r > 0 ? r : 1.11;
+}
+
+// Bereken aanbetaling. vatPercent optioneel meegeven (anders 0). Voor US wordt
+// vatPercent genegeerd (nooit BTW). Retourneert bedragen + opbouw.
+function dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, withSurcharge = true }) {
+  const usd = Number(pEntry.usd) || 0;
+  const sur = withSurcharge ? (Number(pEntry.surcharge) || 0) : 0;
+  const pack = withSurcharge ? 50 : 0;
+  const q = Number(qty) || 1;
+  if (isUS) {
+    const unit = usd + sur + pack;                       // USD, geen BTW
+    const total = unit * q;
+    return { currency: "USD", vatPercent: 0, exVatUnit: unit, totalExVat: total, totalInclVat: total, deposit: Math.round(total * 0.30 * 100) / 100 };
+  }
+  const r = rate > 0 ? rate : 1.11;
+  const exVatUnit = (usd + sur + pack) / r;              // USD → EUR
+  const totalExVat = exVatUnit * q;
+  const vat = Number(vatPercent) || 0;
+  const totalInclVat = totalExVat * (1 + vat / 100);
+  return { currency: "EUR", vatPercent: vat, exVatUnit, totalExVat, totalInclVat, deposit: Math.round(totalInclVat * 0.30 * 100) / 100 };
 }
 
 // ─── Voorraad claimen bij reserveringen ──────────────────────────────
@@ -368,49 +421,28 @@ async function dpHandleReserve(request, env, sess, url) {
   let checkoutUrl = null;
   if (env.MOLLIE_API_KEY) {
     const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
-    // Valuta per regio (Gerrit, 15 jul): partners in Amerika zien/betalen
-    // dollars; alle anderen euro's. De €-surcharge is afgeleid via de
-    // wisselkoers die in de prijslijst zelf zit (eurRef/usd).
-    // De surcharge geldt alleen bij losse bestellingen — portaal-reserveringen
-    // zíjn losse bestellingen, dus hier altijd erbij (containers gaan later
-    // via een eigen flow zonder surcharge).
     const accountsPre = await dpGetAccounts(env);
     const dealerPre = dpFindDealer(accountsPre, sess.email);
     const isUS = String((dealerPre && dealerPre.region) || "").toUpperCase() === "US";
+    const debtorId = dealerPre && (dealerPre.debtorIds || [])[0];
     const pEntry = (priceData.prices || {})[model];
-    let unit = 0, currency = "EUR";
-    if (pEntry && typeof pEntry === "object") {
-      if (Number(pEntry.usd) > 0) {
-        // Losse bestelling via Fonteyn: surcharge + packing costs ($50/stuk)
-        // erbij. Containerbestellingen (aparte flow, later) krijgen geen van
-        // beide. Regel Gerrit 15 jul.
-        const PACKING_USD = 50;
-        const usd = Number(pEntry.usd), sur = Number(pEntry.surcharge) || 0;
-        if (isUS) { unit = usd + sur + PACKING_USD; currency = "USD"; }
-        else {
-          const eur = Number(pEntry.eurRef) || 0;
-          const rate = eur && usd ? eur / usd : 1;
-          unit = eur + Math.round(sur * rate) + Math.round(PACKING_USD * rate);
-          currency = "EUR";
-        }
-      }
-      else if (Number(pEntry.price) > 0) unit = Number(pEntry.price);
-      if (pEntry.code && !entry.productCode) entry.productCode = String(pEntry.code);   // variant wint
-    } else if (Number(pEntry) > 0) unit = Number(pEntry);
-    if (unit > 0) {
-      const deposit = Math.round(unit * qty * 0.30 * 100) / 100;
-      entry.currency = currency;
-      const pay = await dpCreateMolliePayment(env, deposit,
+    if (pEntry && pEntry.code && !entry.productCode) entry.productCode = String(pEntry.code);
+    if (pEntry && Number(pEntry.usd) > 0) {
+      const rate = await dpRate(env);
+      const vatPercent = isUS ? 0 : await dpDebtorVatPercent(env, debtorId);   // BTW uit Logic4
+      const calc = dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent });
+      entry.currency = calc.currency;
+      entry.vatPercent = calc.vatPercent;
+      const pay = await dpCreateMolliePayment(env, calc.deposit,
         "30% deposit — " + qty + "x " + model + " (" + (sess.company || sess.email) + ")",
         url.origin + "/dealers?paid=1",
         url.origin + "/dealers/webhook",
-        { requestId: entry.id }, currency);
+        { requestId: entry.id }, calc.currency);
       if (pay.ok) {
-        entry.deposit = deposit;
+        entry.deposit = calc.deposit;
         entry.paymentId = pay.id;
         entry.paymentStatus = "open";
         checkoutUrl = pay.checkoutUrl;
-        // Voorraad direct claimen zodat niemand anders dezelfde spa reserveert
         entry.allocation = dpSnapshotClaim(model, qty);
       }
     }
@@ -702,17 +734,17 @@ async function dpAdminReserveFor(request, env, url) {
   if (!email || !email.includes("@")) return reply(400, { ok: false, error: "email-required (kon niet uit Logic4 lezen)" });
 
   // Prijs + valuta: particulier = altijd EUR (NL-showroom); partner = regio.
+  // BTW uit Logic4 per debiteur (particulier: uit de order; partner: account).
   const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
   const pEntry = (priceData.prices || {})[model];
   if (!(pEntry && Number(pEntry.usd) > 0)) return reply(400, { ok: false, error: "geen prijs voor " + model });
   const accounts = await dpGetAccounts(env);
   const dealer = dpFindDealer(accounts, email);
   const isUS = custType === "partner" && String((dealer && dealer.region) || "").toUpperCase() === "US";
-  const usd = Number(pEntry.usd), sur = Number(pEntry.surcharge) || 0, PACK = 50;
-  let unit, currency;
-  if (isUS) { unit = usd + sur + PACK; currency = "USD"; }
-  else { const eur = Number(pEntry.eurRef) || 0, rate = eur && usd ? eur / usd : 1; unit = eur + Math.round(sur * rate) + Math.round(PACK * rate); currency = "EUR"; }
-  const deposit = Math.round(unit * qty * 0.30 * 100) / 100;
+  const rate = await dpRate(env);
+  const vatPercent = isUS ? 0 : await dpDebtorVatPercent(env, debtorId || (dealer && (dealer.debtorIds || [])[0]));
+  const calc = dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent });
+  const { currency, deposit } = calc;
 
   const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
   if (!Array.isArray(data.requests)) data.requests = [];
@@ -723,7 +755,7 @@ async function dpAdminReserveFor(request, env, url) {
     productCode: b.variant || (pEntry.code || null),
     note: String(b.note || "").slice(0, 1500), status: "new",
     adminInitiated: true, custType, debtorId, existingOrderId,
-    currency, deposit, paymentStatus: "open",
+    currency, deposit, vatPercent: calc.vatPercent, paymentStatus: "open",
   };
   const pay = await dpCreateMolliePayment(env, deposit,
     "30% deposit — " + qty + "x " + model + (entry.company ? " (" + entry.company + ")" : ""),
