@@ -31,6 +31,9 @@ const ALLOWED_BUCKETS = new Set([
   "dealer-docs",      // Dealerportaal: documenten/specsheets (titel/model/url)
   "dealer-requests",  // Dealerportaal: reserveringsaanvragen van dealers (beheer via interne tegel)
   "dealer-prices",    // Dealerportaal: dealerprijs per model (voor 30%-aanbetaling via Mollie)
+  "spa-catalog",      // Model → varianten (artikelcode/kleur/productId) uit Logic4 — tools/build-spa-catalog.mjs
+  "voorraad-hallen",  // Echte hal-voorraad per model uit Logic4 (warehouse Fonteyn) — tools/build-stock.mjs
+  "voorraad-schepen", // Schip-voorraad uit commercial invoices (ref/schip/eta + regels per model)
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
@@ -210,49 +213,45 @@ async function dpHandleAuth(request, env, url) {
   return new Response(null, { status: 302, headers: { "Location": url.origin + "/dealers#s=" + sess } });
 }
 
-// Voorraad-status per container (zelfde regels als de interne pipeline-tab)
-function dpContainerStatus(c, now) {
-  const eta = c.eta ? new Date(c.eta) : null;
-  const besteld = c.besteld ? new Date(c.besteld) : null;
-  const W = 7 * 86400000;
-  if (eta && !isNaN(eta)) {
-    if (now >= eta) return "nl";
-    if (now >= new Date(eta.getTime() - 5.5 * W)) return "ship";
-    return "prod";
-  }
-  if (besteld && !isNaN(besteld)) {
-    if (now >= new Date(besteld.getTime() + 13.5 * W)) return "nl";
-    if (now >= new Date(besteld.getTime() + 8 * W)) return "ship";
-    return "prod";
-  }
-  return "prod";
-}
-
-// Voorraad-aggregatie per model (dealer-veilig) — gedeeld door /stock en /myspas
+// Voorraad-aggregatie per model — NIEUWE definitie (Arno/Chantal, 15 jul):
+//   available = fysiek in de Fonteyn-hallen (bucket voorraad-hallen, uit Logic4)
+//   onTheWater = op het schip (bucket voorraad-schepen, uit commercial invoices)
+//   Minus de eigen portaal-claims (bucket dealer-requests, betaalde/open).
+// Een partner mag ALTIJD reserveren; niet-op-voorraad = backorder.
 async function dpStockModels(env) {
-  const pipe = await env.FONTEYN_DATA.get("voorraad-pipeline", { type: "json" });
-  const containers = (pipe && pipe.containers) || [];
-  const now = new Date();
+  const hallen = await env.FONTEYN_DATA.get("voorraad-hallen", { type: "json" });
+  const schepen = await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" });
+  const reqData = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+
   const byModel = {};
-  for (const c of containers) {
-    const st = dpContainerStatus(c, now);
-    const eta = c.eta || null;
-    for (const l of (c.lines || [])) {
-      if (!l.model) continue;
-      const model = String(l.model).trim();
-      const free = Math.max(0, (Number(l.qty) || 0) - (Number(l.reserved) || 0));
-      if (!byModel[model]) byModel[model] = { model, available: 0, onTheWater: 0, inProduction: 0, nextEta: null };
-      if (st === "nl") byModel[model].available += free;
-      else if (st === "ship") byModel[model].onTheWater += free;
-      else byModel[model].inProduction += free;
-      if (free > 0 && st !== "nl" && eta) {
-        if (!byModel[model].nextEta || eta < byModel[model].nextEta) byModel[model].nextEta = eta;
-      }
+  const ensure = m => (byModel[m] = byModel[m] || { model: m, available: 0, onTheWater: 0, nextEta: null, variants: {} });
+
+  // Hal-voorraad + kleurvarianten
+  for (const [model, v] of Object.entries((hallen && hallen.models) || {})) {
+    const e = ensure(model);
+    e.available += Number(v.hal) || 0;
+    for (const [code, qty] of Object.entries(v.variants || {})) e.variants[code] = (e.variants[code] || 0) + (Number(qty) || 0);
+  }
+  // Schip-voorraad (+ vroegste ETA als bekend)
+  for (const ship of (schepen && schepen.ships) || []) {
+    for (const [model, qty] of Object.entries(ship.models || {})) {
+      const e = ensure(model);
+      e.onTheWater += Number(qty) || 0;
+      if (ship.eta && (!e.nextEta || ship.eta < e.nextEta)) e.nextEta = ship.eta;
     }
   }
-  const models = Object.values(byModel).sort((a, b) =>
-    (b.available - a.available) || String(a.model).localeCompare(String(b.model)));
-  return { updated: (pipe && pipe.lastUpdated) || null, models };
+  // Portaal-claims van dit moment aftrekken van 'available' (open of betaald)
+  for (const r of (Array.isArray(reqData.requests) ? reqData.requests : [])) {
+    if (r.allocationReleased) continue;
+    if (!["open", "paid"].includes(r.paymentStatus) && r.status !== "paid") continue;
+    const e = byModel[String(r.model || "").trim()];
+    if (e) e.available = Math.max(0, e.available - (Number(r.qty) || 0));
+  }
+
+  const models = Object.values(byModel)
+    .map(m => ({ ...m, variants: Object.entries(m.variants).map(([code, qty]) => ({ code, qty })).filter(x => x.qty > 0) }))
+    .sort((a, b) => (b.available - a.available) || (b.onTheWater - a.onTheWater) || String(a.model).localeCompare(String(b.model)));
+  return { updated: (hallen && hallen.updated) || null, shipsUpdated: (schepen && schepen.updated) || null, models };
 }
 
 // GET /dealers/api/stock — geaggregeerd per model, dealer-veilig, mét
@@ -261,7 +260,13 @@ async function dpHandleStock(env) {
   const agg = await dpStockModels(env);
   const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
   const prices = priceData.prices || {};
+  // Variant-omschrijvingen uit de catalogus (code → nette kleurnaam)
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const codeName = {};
+  for (const vs of Object.values(catalog.models || {}))
+    for (const v of vs) codeName[v.code] = String(v.desc || v.code).replace(/^.*\|\s*/, "");
   for (const m of agg.models) {
+    for (const v of (m.variants || [])) v.name = codeName[v.code] || v.code;
     const p = prices[m.model];
     if (p && typeof p === "object" && Number(p.usd) > 0) {
       m.partnerUsd = Number(p.usd);
@@ -271,7 +276,7 @@ async function dpHandleStock(env) {
       m.retailEur = Number(p.retailEur) || null;
     }
   }
-  return reply(200, { ok: true, updated: agg.updated, models: agg.models });
+  return reply(200, { ok: true, updated: agg.updated, shipsUpdated: agg.shipsUpdated, models: agg.models });
 }
 
 // GET /dealers/api/myspas — fase 2: de eigen reserveringen van deze dealer.
@@ -303,50 +308,16 @@ async function dpHandleMySpas(env, sess) {
   return reply(200, { ok: true, linked: true, spas });
 }
 
-// ─── Voorraad claimen/vrijgeven bij reserveringen ────────────────────
-// Claim gebeurt zodra de betaallink is aangemaakt (niet pas na betaling),
-// zodat twee dealers nooit dezelfde spa kunnen reserveren. Verloopt of
-// mislukt de betaling, dan geeft de webhook de claim automatisch weer vrij.
-async function dpClaimStock(env, model, qty) {
-  const pipe = await env.FONTEYN_DATA.get("voorraad-pipeline", { type: "json" });
-  if (!pipe || !Array.isArray(pipe.containers)) return null;
-  const now = new Date();
-  const cand = [];
-  for (const c of pipe.containers) for (const l of (c.lines || [])) {
-    if (String(l.model || "").trim() !== model) continue;
-    const free = Math.max(0, (Number(l.qty) || 0) - (Number(l.reserved) || 0));
-    if (free > 0) cand.push({ c, l, free, st: dpContainerStatus(c, now) });
-  }
-  // Voorkeur: eerst voorraad in NL, dan onderweg, dan productie; binnen
-  // gelijke status de vroegste ETA.
-  const rank = { nl: 0, ship: 1, prod: 2 };
-  cand.sort((a, b) => (rank[a.st] - rank[b.st]) || String(a.c.eta || "9999").localeCompare(String(b.c.eta || "9999")));
-  let need = Number(qty) || 1;
-  const lines = [];
-  for (const x of cand) {
-    if (need <= 0) break;
-    const take = Math.min(need, x.free);
-    x.l.reserved = (Number(x.l.reserved) || 0) + take;
-    lines.push({ container: x.c.nr, take });
-    need -= take;
-  }
-  if (!lines.length) return null;   // geen vrije voorraad — aanvraag gaat door, sales lost op
-  pipe.lastUpdated = new Date().toISOString();
-  await env.FONTEYN_DATA.put("voorraad-pipeline", JSON.stringify(pipe));
-  return { model, requested: Number(qty) || 1, lines, partial: need > 0 };
-}
-
-async function dpReleaseStock(env, allocation) {
-  if (!allocation || !Array.isArray(allocation.lines)) return;
-  const pipe = await env.FONTEYN_DATA.get("voorraad-pipeline", { type: "json" });
-  if (!pipe || !Array.isArray(pipe.containers)) return;
-  for (const a of allocation.lines) {
-    const c = pipe.containers.find(x => x.nr === a.container);
-    const l = c && (c.lines || []).find(x => String(x.model || "").trim() === allocation.model);
-    if (l) l.reserved = Math.max(0, (Number(l.reserved) || 0) - a.take);
-  }
-  pipe.lastUpdated = new Date().toISOString();
-  await env.FONTEYN_DATA.put("voorraad-pipeline", JSON.stringify(pipe));
+// ─── Voorraad claimen bij reserveringen ──────────────────────────────
+// De beschikbaar-teller wordt in dpStockModels LIVE berekend: hal-voorraad
+// minus alle open/betaalde portaal-claims (bucket dealer-requests). We hoeven
+// dus niets aan een aparte voorraadtabel te muteren — de claim is impliciet
+// zodra de aanvraag met status open/paid in dealer-requests staat, en de
+// vrijgave is impliciet zodra hij op expired/canceled/failed
+// (allocationReleased) gaat. Dit voorkomt dubbel-reserveren zonder losse
+// tellerstaat. Een partner mag ALTIJD reserveren (ook backorder).
+function dpSnapshotClaim(model, qty) {
+  return { model, requested: Number(qty) || 1, ts: new Date().toISOString() };
 }
 
 // POST /dealers/api/reserve  { model, qty, note } — fase 3-fundament:
@@ -358,6 +329,10 @@ async function dpHandleReserve(request, env, sess, url) {
   const model = String(body.model || "").trim().slice(0, 80);
   const qty = Math.max(1, Math.min(50, parseInt(body.qty, 10) || 1));
   const note = String(body.note || "").slice(0, 1500);
+  // Kleurvariant (optioneel): artikelcode uit de catalogus. Bepaalt de
+  // Logic4-productregel; valt anders terug op de prijslijst-code.
+  const variantCode = String(body.variant || "").trim().slice(0, 20) || null;
+  const variantName = String(body.variantName || "").trim().slice(0, 120) || null;
   if (!model) return reply(400, { ok: false, error: "model-required" });
   const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
   if (!Array.isArray(data.requests)) data.requests = [];
@@ -365,7 +340,9 @@ async function dpHandleReserve(request, env, sess, url) {
     id: crypto.randomUUID(), ts: new Date().toISOString(),
     email: sess.email, company: sess.company || "",
     model, qty, note, status: "new",
+    variant: variantCode, variantName,
   };
+  if (variantCode) entry.productCode = variantCode;
   // Fase 3: is Mollie geconfigureerd én is er een dealerprijs voor dit model?
   // → maak direct een 30%-aanbetalingslink (jouw flow: verkocht = 30% aanbetaald).
   let checkoutUrl = null;
@@ -398,7 +375,7 @@ async function dpHandleReserve(request, env, sess, url) {
         }
       }
       else if (Number(pEntry.price) > 0) unit = Number(pEntry.price);
-      if (pEntry.code) entry.productCode = String(pEntry.code);
+      if (pEntry.code && !entry.productCode) entry.productCode = String(pEntry.code);   // variant wint
     } else if (Number(pEntry) > 0) unit = Number(pEntry);
     if (unit > 0) {
       const deposit = Math.round(unit * qty * 0.30 * 100) / 100;
@@ -414,7 +391,7 @@ async function dpHandleReserve(request, env, sess, url) {
         entry.paymentStatus = "open";
         checkoutUrl = pay.checkoutUrl;
         // Voorraad direct claimen zodat niemand anders dezelfde spa reserveert
-        entry.allocation = await dpClaimStock(env, model, qty);
+        entry.allocation = dpSnapshotClaim(model, qty);
       }
     }
   }
@@ -682,10 +659,8 @@ async function dpHandleMollieWebhook(request, env) {
       item.paymentStatus = p.status;   // paid / open / failed / expired / canceled
       if (p.status === "paid") item.status = "paid";
       // Betaling niet doorgegaan → geclaimde voorraad weer vrijgeven
-      if (["expired", "canceled", "failed"].includes(p.status) && item.allocation && !item.allocationReleased) {
-        await dpReleaseStock(env, item.allocation);
-        item.allocationReleased = true;
-      }
+      // Betaling niet doorgegaan → claim vervalt (available telt 'm niet meer mee)
+      if (["expired", "canceled", "failed"].includes(p.status)) item.allocationReleased = true;
       // Aanbetaling binnen → automatisch verkooporder (status 25) in Logic4,
       // onder het debiteurnummer van de dealer. Idempotent: nooit dubbel.
       if (p.status === "paid" && !item.logic4OrderId) {

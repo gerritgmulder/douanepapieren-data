@@ -285,11 +285,10 @@ function renderStock(){
   const list = q ? stockModels.filter(m => m.model.toLowerCase().includes(q)) : stockModels;
   $("stockGrid").innerHTML = list.map(m => `
     <div class="stock-card">
-      <div class="m">${esc(m.model)}${m.available>0?`<span class="pill">${m.available} in stock</span>`:""}</div>
+      <div class="m">${esc(m.model)}${m.available>0?`<span class="pill">${m.available} in stock</span>`:`<span class="pill" style="background:#fef3c7;color:#92400e">backorder</span>`}</div>
       <ul>
         <li>Available now: <b>${m.available}</b></li>
-        <li>On the water: <b>${m.onTheWater}</b>${m.nextEta?` <span style="color:var(--muted)">(ETA ${esc(m.nextEta)})</span>`:""}</li>
-        <li>In production: <b>${m.inProduction}</b></li>
+        <li>On the water: <b>${m.onTheWater||0}</b>${m.nextEta?` <span style="color:var(--muted)">(ETA ${esc(m.nextEta)})</span>`:""}</li>
         ${m.partnerUsd?(window.myRegion==="US"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50*(m.partnerEur&&m.partnerUsd?m.partnerEur/m.partnerUsd:1))} freight &amp; packing</span></li>`):""}
       </ul>
       <button class="primary rsv" data-model="${esc(m.model)}" style="margin-top:10px;padding:8px 14px;font-size:13px;">Reserve</button>
@@ -437,15 +436,25 @@ async function loadMySpas(){
 
 // ── Reserve (fase 3-fundament) ──
 function openReserve(model){
+  const m0 = (stockModels||[]).find(x=>x.model===model) || {};
+  const variants = (m0.variants||[]);
+  // Kleurvariant-keuze: per variant de kleurnaam (uit de stock-API) + hal-voorraad
+  const variantOpts = variants.length
+    ? `<label style="font-size:12px;color:var(--muted);">Colour / version (in stock now)</label>
+       <select id="rsvVariant" style="margin-bottom:10px;">
+         <option value="">— no preference —</option>
+         ${variants.map(v=>`<option value="${esc(v.code)}">${esc(v.name||v.code)} (${v.qty} in stock)</option>`).join("")}
+       </select>` : "";
   const ov = document.createElement("div");
   ov.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:18px";
   ov.innerHTML = `
     <div class="card" style="max-width:440px;width:100%;margin:0;">
       <h2 style="font-size:17px;">Reserve — ${esc(model)}</h2>
-      <p class="lead">Send a reservation request. Our sales team will confirm price and availability by e-mail.</p>
+      <p class="lead">${(m0.available>0)?`${m0.available} in stock now.`:`Currently on backorder — your reservation is allocated to the next factory production.`} Our sales team confirms the details by e-mail.</p>
+      ${variantOpts}
       <label style="font-size:12px;color:var(--muted);">Quantity</label>
       <input type="number" id="rsvQty" value="1" min="1" max="50" style="margin-bottom:10px;">
-      <label style="font-size:12px;color:var(--muted);">Notes (colour, options, …)</label>
+      <label style="font-size:12px;color:var(--muted);">Notes (options, …)</label>
       <textarea id="rsvNote" rows="3"></textarea>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
         <button id="rsvCancel" style="background:#fff;border:1px solid var(--border);border-radius:8px;padding:10px 16px;font:inherit;cursor:pointer;">Cancel</button>
@@ -458,8 +467,12 @@ function openReserve(model){
   ov.querySelector("#rsvCancel").addEventListener("click", ()=>ov.remove());
   ov.querySelector("#rsvSend").addEventListener("click", async ()=>{
     const btn = ov.querySelector("#rsvSend"); btn.disabled = true;
+    const vsel = ov.querySelector("#rsvVariant");
+    const variant = vsel ? vsel.value : "";
+    const variantName = vsel && vsel.value ? vsel.options[vsel.selectedIndex].text : "";
     const r = await api("/dealers/api/reserve", { method:"POST", body: JSON.stringify({
-      model, qty: ov.querySelector("#rsvQty").value, note: ov.querySelector("#rsvNote").value }) });
+      model, qty: ov.querySelector("#rsvQty").value, note: ov.querySelector("#rsvNote").value,
+      variant, variantName }) });
     const m = ov.querySelector("#rsvMsg");
     if (r.status===200 && r.data && r.data.ok && r.data.checkoutUrl) {
       m.className="msg ok";
