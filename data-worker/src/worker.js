@@ -368,22 +368,23 @@ async function dpRate(env) {
 
 // Bereken aanbetaling. vatPercent optioneel meegeven (anders 0). Voor US wordt
 // vatPercent genegeerd (nooit BTW). Retourneert bedragen + opbouw.
-function dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, withSurcharge = true }) {
+function dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, withSurcharge = true, fraction = 0.30 }) {
   const usd = Number(pEntry.usd) || 0;
   const sur = withSurcharge ? (Number(pEntry.surcharge) || 0) : 0;
   const pack = withSurcharge ? 50 : 0;
   const q = Number(qty) || 1;
+  const f = fraction > 0 ? fraction : 0.30;              // 0.30 = aanbetaling, 1.0 = volledig
   if (isUS) {
     const unit = usd + sur + pack;                       // USD, geen BTW
     const total = unit * q;
-    return { currency: "USD", vatPercent: 0, exVatUnit: unit, totalExVat: total, totalInclVat: total, deposit: Math.round(total * 0.30 * 100) / 100 };
+    return { currency: "USD", vatPercent: 0, exVatUnit: unit, totalExVat: total, totalInclVat: total, deposit: Math.round(total * f * 100) / 100 };
   }
   const r = rate > 0 ? rate : 1.11;
   const exVatUnit = (usd + sur + pack) / r;              // USD → EUR
   const totalExVat = exVatUnit * q;
   const vat = Number(vatPercent) || 0;
   const totalInclVat = totalExVat * (1 + vat / 100);
-  return { currency: "EUR", vatPercent: vat, exVatUnit, totalExVat, totalInclVat, deposit: Math.round(totalInclVat * 0.30 * 100) / 100 };
+  return { currency: "EUR", vatPercent: vat, exVatUnit, totalExVat, totalInclVat, deposit: Math.round(totalInclVat * f * 100) / 100 };
 }
 
 // ─── Voorraad claimen bij reserveringen ──────────────────────────────
@@ -421,8 +422,9 @@ async function dpHandleReserve(request, env, sess, url) {
     variant: variantCode, variantName,
   };
   if (variantCode) entry.productCode = variantCode;
-  // Fase 3: is Mollie geconfigureerd én is er een dealerprijs voor dit model?
-  // → maak direct een 30%-aanbetalingslink (jouw flow: verkocht = 30% aanbetaald).
+  // Volledig betalen (100%) mag ALLEEN als de spa nu op voorraad is (dan wordt
+  // hij direct geleverd). Anders altijd 30% aanbetaling. Server-side gecheckt.
+  const wantsFull = body.payFull === true;
   let checkoutUrl = null;
   if (env.MOLLIE_API_KEY) {
     const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
@@ -433,13 +435,19 @@ async function dpHandleReserve(request, env, sess, url) {
     const pEntry = (priceData.prices || {})[model];
     if (pEntry && pEntry.code && !entry.productCode) entry.productCode = String(pEntry.code);
     if (pEntry && Number(pEntry.usd) > 0) {
+      // Voorraad-check voor 100%-optie: alleen als vrij ≥ gevraagd aantal.
+      const hallen = (await env.FONTEYN_DATA.get("voorraad-hallen", { type: "json" })) || {};
+      const beschikbaar = ((hallen.models || {})[model] || {}).available || 0;
+      const payFull = wantsFull && beschikbaar >= qty;
       const rate = await dpRate(env);
       const vatPercent = isUS ? 0 : await dpDebtorVatPercent(env, debtorId);   // BTW uit Logic4
-      const calc = dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent });
+      const calc = dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, fraction: payFull ? 1.0 : 0.30 });
       entry.currency = calc.currency;
       entry.vatPercent = calc.vatPercent;
+      entry.payFull = payFull;
+      const label = payFull ? "Full payment (in stock)" : "30% deposit";
       const pay = await dpCreateMolliePayment(env, calc.deposit,
-        "30% deposit — " + qty + "x " + model + " (" + (sess.company || sess.email) + ")",
+        label + " — " + qty + "x " + model + " (" + (sess.company || sess.email) + ")",
         url.origin + "/dealers?paid=1",
         url.origin + "/dealers/webhook",
         { requestId: entry.id }, calc.currency);
@@ -466,7 +474,7 @@ async function dpHandleReserve(request, env, sess, url) {
     (note ? '<p style="white-space:pre-wrap;border-left:3px solid #8bc53f;padding-left:12px;">' + esc(note) + '</p>' : '') +
     '<p style="color:#888;font-size:12px;">Ook zichtbaar in de beheertegel Dealerportaal. Reply gaat direct naar de dealer.</p></div>',
     sess.email);
-  return reply(200, { ok: true, checkoutUrl: checkoutUrl, deposit: entry.deposit || null, currency: entry.currency || null });
+  return reply(200, { ok: true, checkoutUrl: checkoutUrl, deposit: entry.deposit || null, currency: entry.currency || null, payFull: !!entry.payFull });
 }
 
 // Fase 3 — Mollie-betaallink (wacht op MOLLIE_API_KEY als worker-secret).
@@ -643,7 +651,7 @@ async function dpCreateLogic4Order(env, opts) {
   if (!env.LOGIC4_USERNAME || !env.LOGIC4_PASSWORD) return { ok: false, error: "logic4-user-not-configured" };
   const token = await l4Token(env);
   const payload = {
-    OrderStatus: { Id: 25 },                         // 30% aanbetaald
+    OrderStatus: { Id: opts.statusId || 25 },        // 25=30% aanbetaald · 30=volledig betaald
     DebtorId: Number(opts.debtorId),
     // VERPLICHT veld — ontbreken hiervan geeft een 500 (geen validatiefout!)
     CreationDate: new Date().toISOString().slice(0, 19),
@@ -850,11 +858,14 @@ async function dpHandleMollieWebhook(request, env) {
             if (!debtorId) {
               item.logic4Error = "geen debtorId gekoppeld aan " + (item.targetEmail || item.email);
             } else {
+              const sym = item.currency === "USD" ? "$" : "€";
+              const bedragTxt = item.payFull ? "volledig betaald" : "30% aanbetaald";
               const res = await dpCreateLogic4Order(env, {
                 debtorId, qty: item.qty, productCode: item.productCode || null,
+                statusId: item.payFull ? 30 : 25,        // 30 = volledig betaald, vrijgeven leveren
                 reference: "DP-" + String(item.id).slice(0, 8),
-                remarks: "Partnerportaal-reservering — 30% aanbetaald: " + (item.currency === "USD" ? "$" : "€") + " " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie: " + item.note : ""),
-                description: item.qty + "x " + item.model + " — partnerportaal (30% aanbetaald via Mollie)",
+                remarks: "Partnerportaal-reservering — " + bedragTxt + ": " + sym + " " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie: " + item.note : ""),
+                description: item.qty + "x " + item.model + " — partnerportaal (" + bedragTxt + " via Mollie)",
               });
               if (res.ok) { item.logic4OrderId = res.orderId; delete item.logic4Error; }
               else item.logic4Error = res.error;

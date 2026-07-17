@@ -489,6 +489,12 @@ function openReserve(model){
       ${variantOpts}
       <label style="font-size:12px;color:var(--muted);">Quantity</label>
       <input type="number" id="rsvQty" value="1" min="1" max="50" style="margin-bottom:10px;">
+      ${(m0.available>0)?`
+      <label style="font-size:12px;color:var(--muted);">Payment</label>
+      <select id="rsvPay" style="margin-bottom:10px;">
+        <option value="deposit">30% deposit — reserve your spot</option>
+        <option value="full">Pay in full — in stock, delivered right away</option>
+      </select>`:''}
       <label style="font-size:12px;color:var(--muted);">Notes (options, …)</label>
       <textarea id="rsvNote" rows="3"></textarea>
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
@@ -505,13 +511,15 @@ function openReserve(model){
     const vsel = ov.querySelector("#rsvVariant");
     const variant = vsel ? vsel.value : "";
     const variantName = vsel && vsel.value ? vsel.options[vsel.selectedIndex].text : "";
+    const paySel = ov.querySelector("#rsvPay");
+    const payFull = !!(paySel && paySel.value==="full");
     const r = await api("/dealers/api/reserve", { method:"POST", body: JSON.stringify({
       model, qty: ov.querySelector("#rsvQty").value, note: ov.querySelector("#rsvNote").value,
-      variant, variantName }) });
+      variant, variantName, payFull }) });
     const m = ov.querySelector("#rsvMsg");
     if (r.status===200 && r.data && r.data.ok && r.data.checkoutUrl) {
       m.className="msg ok";
-      m.textContent="Request received — redirecting you to the secure payment page for the 30% deposit (" + (r.data.currency==="USD"?"$ ":"€ ") + (r.data.deposit!=null ? Number(r.data.deposit).toFixed(2) : "") + ")…";
+      m.textContent="Request received — redirecting you to the secure payment page ("+(r.data.payFull?"full payment":"30% deposit")+": " + (r.data.currency==="USD"?"$ ":"€ ") + (r.data.deposit!=null ? Number(r.data.deposit).toFixed(2) : "") + ")…";
       m.classList.remove("hidden");
       setTimeout(()=>{ location.href = r.data.checkoutUrl; }, 1400);
     } else if (r.status===200 && r.data && r.data.ok) {
