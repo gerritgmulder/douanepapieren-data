@@ -188,13 +188,13 @@ async function dpHandleLogin(request, env, url) {
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("dp-login:" + token, JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_LOGIN_TTL });
   const link = url.origin + "/dealers/auth?t=" + token;
-  await dpSendEmail(env, email, "Your Fonteyn Partner Portal login link",
+  await dpSendEmail(env, email, "Your Passion Spas Partner Portal login link",
     '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">' +
-    '<h2 style="color:#144734;">Fonteyn Partner Portal</h2>' +
+    '<h2 style="color:#c8102e;">Passion Spas — Partner Portal</h2>' +
     '<p>Hello ' + (dealer.company ? dealer.company : "") + ',</p>' +
     '<p>Click the button below to log in. This link is valid for 15 minutes.</p>' +
     '<p style="margin:26px 0;"><a href="' + link + '" ' +
-    'style="background:#8bc53f;color:#144734;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:10px;display:inline-block;">Log in to the portal</a></p>' +
+    'style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:10px;display:inline-block;">Log in to the portal</a></p>' +
     '<p style="color:#888;font-size:12px;">If you did not request this, you can ignore this email.</p></div>');
   return generic;
 }
@@ -777,11 +777,11 @@ async function dpAdminReserveFor(request, env, url) {
   const sent = await dpSendEmail(env, email,
     "Aanbetalingsverzoek Fonteyn — " + qty + "x " + model,
     '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">' +
-    '<h2 style="color:#144734;">Fonteyn / Passion Spas</h2>' +
+    '<h2 style="color:#c8102e;">Passion Spas</h2>' +
     '<p>Beste ' + (entry.company || "klant") + ',</p>' +
     '<p>Voor uw reservering van <b>' + qty + '&times; ' + esc(model) + '</b>' + (entry.variantName ? ' (' + esc(entry.variantName) + ')' : '') +
     ' staat een aanbetaling van <b>' + sym + ' ' + deposit.toFixed(2) + '</b> (30%) klaar.</p>' +
-    '<p style="margin:26px 0;"><a href="' + pay.checkoutUrl + '" style="background:#8bc53f;color:#144734;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:10px;display:inline-block;">Aanbetaling voldoen</a></p>' +
+    '<p style="margin:26px 0;"><a href="' + pay.checkoutUrl + '" style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:10px;display:inline-block;">Aanbetaling voldoen</a></p>' +
     '<p style="color:#888;font-size:12px;">Na ontvangst bevestigen wij uw reservering. Vragen? Beantwoord deze e-mail.</p></div>',
     (accounts.contactEmail || undefined));
   return reply(200, { ok: true, deposit, currency, emailedTo: email, mailSent: sent.ok, checkoutUrl: pay.checkoutUrl });
