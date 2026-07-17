@@ -28,7 +28,8 @@
   .card h3{margin:0 0 10px;color:var(--fonteyn-green);font-size:15px}
   .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
   .kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-top:3px solid var(--fonteyn-green)}
-  .kpi .n{font-size:26px;font-weight:700;line-height:1.1}
+  .kpi .n{font-size:26px;font-weight:700;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .kpi .n.sm{font-size:19px}
   .kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
   .controls{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
   .controls label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px}
@@ -94,10 +95,10 @@
   juiste overzicht.</p>
 
   <div class="tabs">
-    <button class="tab active" data-tab="overzicht" type="button">Overzicht 📊</button>
-    <button class="tab" data-tab="reserveringen" type="button">Reserveringen ⭐</button>
-    <button class="tab" data-tab="prio" type="button">Prioriteit ⚖️</button>
-    <button class="tab" data-tab="schepen" type="button">Schepen 🚢</button>
+    <button class="tab active" data-tab="overzicht" type="button">Overzicht</button>
+    <button class="tab" data-tab="reserveringen" type="button">Reserveringen</button>
+    <button class="tab" data-tab="prio" type="button">Prioriteit</button>
+    <button class="tab" data-tab="schepen" type="button">Schepen</button>
     <!-- OUDE tabs — verborgen bewaard (verwijder de style om terug te halen) -->
     <button class="tab" data-tab="ophalen" type="button" style="display:none">Ophalen &amp; markeren (oud)</button>
     <button class="tab" data-tab="dealer" type="button" style="display:none">Res. Dealers (oud)</button>
@@ -106,8 +107,8 @@
     <button class="tab" data-tab="dealerview" type="button" style="display:none">Dealer-view (oud)</button>
   </div>
   <div class="status-msg" style="background:#eef6ff;color:#1e40af;margin:0 0 12px">
-    <b>Werkwijze:</b> <b>Reserveringen ⭐</b> = de actuele stand (elk uur ververst uit Logic4).
-    <b>Prioriteit ⚖️</b> = bepaal wie voorrang krijgt. <b>Schepen 🚢</b> = commercial invoices uploaden.
+    <b>Werkwijze:</b> <b>Reserveringen</b> = de actuele stand (elk uur ververst uit Logic4).
+    <b>Prioriteit</b> = bepaal wie voorrang krijgt. <b>Schepen</b> = commercial invoices uploaden.
   </div>
 
   <div id="tab-ophalen" class="hidden">
@@ -219,8 +220,7 @@
   <div id="tab-reserveringen" class="hidden">
     <div class="card">
       <h3>Reserveringen — de actuele stand</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">
-        Elke Logic4-order met een spa is automatisch een reservering. Deze lijst wordt <b>elk uur</b> ververst.
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Elke Logic4-order met een spa is automatisch een reservering. Deze lijst wordt <b>elk uur</b> ververst.
         <span style="color:#15803d">Betaald</span> = 30% aanbetaald (bevestigd). <span style="color:var(--warn)">Wacht</span> = wacht op aanbetaling.
         <span style="color:var(--bad)">Vervallen</span> = langer dan 3 dagen onbetaald → schuift achteraan.
       </p>
@@ -236,8 +236,7 @@
   <div id="tab-schepen" class="hidden">
     <div class="card">
       <h3>Schepen — voorraad onderweg (commercial invoices)</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">
-        Upload hier de <b>commercial invoices</b> (Excel, één per schip). Alles wat op een
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Upload hier de <b>commercial invoices</b> (Excel, één per schip). Alles wat op een
         geüpload schip staat telt direct mee als <b>voorraad onderweg</b> in het Partnerportaal.
         Vul per schip de <b>ETA</b> in (aankomst Rotterdam) — die lees je in het portaal van de
         vervoerder. Modellen worden herkend op de SKT-fabriekscode.
@@ -265,8 +264,7 @@
   <div id="tab-prio" class="hidden">
     <div class="card">
       <h3>Reserveren namens partner of particulier</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">
-        Maak een reservering voor een <b>partner</b> (vul e-mailadres in) of een <b>particulier</b>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Maak een reservering voor een <b>partner</b> (vul e-mailadres in) of een <b>particulier</b>
         (vul het bestaande Logic4-ordernummer in — e-mail wordt daaruit gelezen). Er wordt een
         <b>mail met aanbetalingsverzoek + betaallink</b> gestuurd. Na betaling: bij een partner
         wordt de order aangemaakt, bij een particulier wordt de aanbetaling op de bestaande order geboekt.
@@ -284,8 +282,7 @@
     </div>
     <div class="card">
       <h3>Prioriteit — wie krijgt de eerstvolgende spa?</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">
-        Kies een model. Je ziet alle <b>openstaande orders</b> (verkooporder / 30% aanbetaald / wacht op aanbetaling)
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Kies een model. Je ziet alle <b>openstaande orders</b> (verkooporder / 30% aanbetaald / wacht op aanbetaling)
         met dat model, en of het een <b>partner</b> of <b>particulier</b> is. Sleep of gebruik de pijltjes om de
         volgorde te bepalen waarin ze bediend worden. Boven de streep = gedekt door de huidige voorraad (in NL + op schip);
         onder de streep = wacht op de volgende productie.
@@ -309,16 +306,15 @@
 
   <div id="tab-pipe" class="hidden">
     <div class="card">
-      <div class="status-msg warn" style="margin-bottom:12px">⚠ <b>Verouderd.</b> Deze pipeline telde alle bestellingen sinds 2024 op en wordt niet meer door het Partnerportaal gebruikt. De echte voorraad komt nu uit Logic4 (in NL) + de tab <b>Schepen</b> (onderweg). Laat staan voor de historie; niet meer bijwerken.</div>
+      <div class="status-msg warn" style="margin-bottom:12px"><b>Verouderd.</b> Deze pipeline telde alle bestellingen sinds 2024 op en wordt niet meer door het Partnerportaal gebruikt. De echte voorraad komt nu uit Logic4 (in NL) + de tab <b>Schepen</b> (onderweg). Laat staan voor de historie; niet meer bijwerken.</div>
       <h3>Voorraad &amp; pipeline — waar is elke spa?</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">
-        Beheer hier de <b>containers</b> met spa's. Per container: nummer, herkomst, besteld-datum en ETA.
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Beheer hier de <b>containers</b> met spa's. Per container: nummer, herkomst, besteld-datum en ETA.
         Ik bepaal automatisch of de spa's <b>in productie</b>, <b>op het schip</b> of <b>in Nederland</b> zijn
         (voorraad telt vanaf vertrek schip ≈ 5,5 wk vóór ETA). Alles wordt centraal opgeslagen — geen Excel meer nodig.
       </p>
       <div class="actions" style="margin-top:0">
-        <button class="primary" id="addContBtn" type="button">➕ Nieuwe container</button>
-        <button class="secondary" id="importBtn" type="button">📥 Importeer uit Excel (eenmalig)</button>
+        <button class="primary" id="addContBtn" type="button">Nieuwe container</button>
+        <button class="secondary" id="importBtn" type="button">Importeer uit Excel (eenmalig)</button>
         <input type="file" id="pipeFile" accept=".xlsx,.xls" style="display:none">
       </div>
       <div id="pipeStatus" class="status-msg hidden" style="margin-top:12px"></div>
@@ -327,9 +323,9 @@
     <div class="card">
       <h3>Pijplijn — <span id="pipeContCount">0</span> containers</h3>
       <div class="pipe">
-        <div class="zone prod"><h4>🏭 In productie (<span id="zProdC">0</span> cont. · <span id="zProdU">0</span> spa's)</h4><div class="body" id="zProd"></div></div>
-        <div class="zone ship"><h4>🚢 Op het schip (<span id="zShipC">0</span> cont. · <span id="zShipU">0</span> spa's)</h4><div class="body" id="zShip"></div></div>
-        <div class="zone nl"><h4>📦 In Nederland / voorraad (<span id="zNlC">0</span> cont. · <span id="zNlU">0</span> spa's)</h4><div class="body" id="zNl"></div></div>
+        <div class="zone prod"><h4>In productie (<span id="zProdC">0</span> cont. · <span id="zProdU">0</span> spa's)</h4><div class="body" id="zProd"></div></div>
+        <div class="zone ship"><h4>Op het schip (<span id="zShipC">0</span> cont. · <span id="zShipU">0</span> spa's)</h4><div class="body" id="zShip"></div></div>
+        <div class="zone nl"><h4>In Nederland / voorraad (<span id="zNlC">0</span> cont. · <span id="zNlU">0</span> spa's)</h4><div class="body" id="zNl"></div></div>
       </div>
     </div>
 
@@ -356,8 +352,7 @@
   <div id="tab-dealerview" class="hidden">
     <div class="card">
       <h3>Dealer-view — beschikbaarheid &amp; reserveren <span style="font-weight:400;color:var(--warn)">(voorbeeld van wat dealers straks zien)</span></h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">
-        Per model: hoeveel spa's <b>direct beschikbaar</b> zijn (in NL), wat er <b>onderweg</b> is (op het schip, met ETA)
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Per model: hoeveel spa's <b>direct beschikbaar</b> zijn (in NL), wat er <b>onderweg</b> is (op het schip, met ETA)
         en wat er <b>in productie</b> zit — plus wanneer de eerstvolgende vrij is. Rekent live op de containers uit de pipeline-tab.
       </p>
       <input id="dvSearch" placeholder="Zoek model (bv. Renew)…" style="border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit;width:280px;max-width:100%">
@@ -912,7 +907,7 @@ function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode, un
   b.push("<b>Medewerkers automatisch ophalen (/v3/User/GetAllUsers):</b> "+(autoUsersInfo.ok ? ("✓ "+autoUsersInfo.count+" geladen — velden: <code>"+esc(autoUsersInfo.sampleKeys)+"</code>") : ("mislukt — "+esc(autoUsersInfo.error||"?"))));
   if (!verkocht.length){ document.getElementById("diag").innerHTML = diagWrap(b.join("<br>")); return; }
   if (rowsTotal===0){
-    b.push("<b style='color:#b91c1c'>⚠ Geen orderregels in de respons</b> — GetOrders levert de regels mogelijk niet mee onder 'OrderRows'. Zie de top-level velden hieronder; anders haal ik ze per order op via GetOrderRows.");
+    b.push("<b style='color:#b91c1c'>Geen orderregels in de respons</b> — GetOrders levert de regels mogelijk niet mee onder 'OrderRows'. Zie de top-level velden hieronder; anders haal ik ze per order op via GetOrderRows.");
   }
   const o = verkocht[0];
   const keys = Object.keys(o).sort();
@@ -1000,7 +995,7 @@ function renderOverzicht(resv,hal,ship,priceData){
     kpi(vervallen,"Vervallen","#b91c1c")+
     kpi(halTotal,"Vrij op voorraad (NL)","#2563eb")+
     kpi(shipTotal,"Op zee (onderweg)","#2563eb")+
-    kpi(eur(orderwaarde),"Orderwaarde actief*","var(--fonteyn-green)");
+    kpi(eur(orderwaarde),"Orderwaarde actief*","var(--fonteyn-green)",true);
   // knelpunten: meeste tekort eerst, dan meeste reserveringen
   rows.sort((a,b)=>(b.tekort-a.tekort)||(b.actQty-a.actQty));
   document.getElementById("ovBacklogUpd").textContent = resv.updated ? ("Bijgewerkt: "+new Date(resv.updated).toLocaleString("nl-NL")) : "";
@@ -1014,9 +1009,9 @@ function renderOverzicht(resv,hal,ship,priceData){
   document.getElementById("ovShips").innerHTML=(ship.ships||[]).map(s=>{
     const n=Object.values(s.models||{}).reduce((a,b)=>a+b,0);
     return "<tr><td><b>"+esc(s.vessel||"—")+"</b></td><td>"+(s.eta?esc(s.eta):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td><td>"+n+"</td></tr>";
-  }).join("") || "<tr><td colspan='3' style='color:var(--muted)'>Geen schepen. Upload commercial invoices bij Schepen 🚢.</td></tr>";
+  }).join("") || "<tr><td colspan='3' style='color:var(--muted)'>Geen schepen. Upload commercial invoices bij Schepen.</td></tr>";
 }
-function kpi(n,l,color){ return "<div class='kpi' style='border-top-color:"+color+"'><div class='n' style='color:"+color+"'>"+n+"</div><div class='l'>"+l+"</div></div>"; }
+function kpi(n,l,color,small){ return "<div class='kpi' style='border-top-color:"+color+"'><div class='n"+(small?" sm":"")+"' style='color:"+color+"'>"+n+"</div><div class='l'>"+l+"</div></div>"; }
 
 // ===================== Reserveringen (live ledger) =====================
 // Toont de reserveringen-live bucket (uur-sync uit Logic4). Read-only overzicht:
@@ -1135,7 +1130,7 @@ function renderSchepen(){
   const un=shipsData.unmapped||{};
   const keys=Object.keys(un);
   document.getElementById("ciUnmapped").innerHTML=keys.length
-    ? "<div class='status-msg warn'>⚠ Niet-herkende fabriekscodes (welk model?): "+keys.map(k=>esc(k)+" ("+un[k]+"×)").join(", ")+"</div>" : "";
+    ? "<div class='status-msg warn'>Niet-herkende fabriekscodes (welk model?): "+keys.map(k=>esc(k)+" ("+un[k]+"×)").join(", ")+"</div>" : "";
 }
 
 // Parse één commercial-invoice-werkboek → {ref, vessel, containers, models{model:qty}, unmapped{code:qty}}
@@ -1239,7 +1234,7 @@ function initReserveFor(){
 async function sendReserveFor(){
   const st=document.getElementById("rfStatus");
   const show=(c,m)=>{ st.className="status-msg "+c; st.textContent=m; st.classList.remove("hidden"); };
-  if(!dpAdminKey()){ show("bad","Beheersleutel niet gevonden op deze computer — ontgrendel eerst het Partnerportaal (tegel Partnerportaal, 🔐)."); return; }
+  if(!dpAdminKey()){ show("bad","Beheersleutel niet gevonden op deze computer — ontgrendel eerst het Partnerportaal (tegel Partnerportaal,)."); return; }
   const type=document.getElementById("rfType").value;
   const model=document.getElementById("rfModel").value;
   const variant=document.getElementById("rfVariant").value;
@@ -1385,7 +1380,7 @@ function pipeStatus(c){
     return now>=arr?"nl":(now>=ship?"ship":"prod"); }
   return "prod";
 }
-const STATUS_LABEL={prod:"🏭 In productie",ship:"🚢 Op het schip",nl:"📦 In Nederland"};
+const STATUS_LABEL={prod:"In productie",ship:"Op het schip",nl:"In Nederland"};
 function contUnits(c){ let n=0; for(const l of (c.lines||[])) n+=Number(l.qty)||0; return n; }
 
 let PIPE_MODELS=[];
@@ -1589,9 +1584,9 @@ function renderDealerView(){
         "<div class='cont' style='background:#fff'><div class='hd'><span style='font-size:14px'>"+esc(m.model)+"</span>"+
           (m.nl>0?"<span class='pill s1'>"+m.nl+" direct</span>":"")+"</div>"+
           "<ul style='list-style:none;padding:0;margin:6px 0 0'>"+
-            "<li>📦 In NL (direct): <b>"+m.nl+"</b></li>"+
-            "<li>🚢 Op het schip: <b>"+m.ship+"</b></li>"+
-            "<li>🏭 In productie: <b>"+m.prod+"</b></li>"+
+            "<li>In NL (direct): <b>"+m.nl+"</b></li>"+
+            "<li>Op het schip: <b>"+m.ship+"</b></li>"+
+            "<li>In productie: <b>"+m.prod+"</b></li>"+
             "<li style='margin-top:4px'>Eerstvolgende: "+dealerNextLabel(m)+"</li>"+
           "</ul>"+
           "<button class='primary dv-resv' data-model=\""+esc(m.model)+"\" style='margin-top:8px;padding:6px 12px;font-size:12px'>Reserveren</button>"+
