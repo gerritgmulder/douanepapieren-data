@@ -9,6 +9,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
+import { teamKey as readTeamKey } from "./keys.mjs";
 import { createRequire } from "node:module";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -70,7 +71,7 @@ if (Object.keys(unmapped).length) {
 }
 
 if (dry) process.exit(0);
-const teamKey = readFileSync(join(homedir(), "Documents/fonteyn-teamsleutel-dashboard.txt"), "utf8").match(/[A-Za-z0-9_-]{20,}/)[0];
+const teamKey = readTeamKey();
 const put = await fetch(BASE + "/data/voorraad-schepen", {
   method: "PUT",
   headers: { "X-Fonteyn-Auth": teamKey, "Content-Type": "application/json" },

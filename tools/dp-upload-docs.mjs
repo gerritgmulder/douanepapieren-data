@@ -4,7 +4,7 @@
 // Gebruik:
 //   node tools/dp-upload-docs.mjs --src "/pad/naar/Spa documentatie/2024" [--dry]
 //
-// Leest de beheersleutel uit ~/Documents/fonteyn-beheersleutel-dealerportaal.txt
+// Leest de beheersleutel via tools/keys.mjs (zoekt in de bekende sleutelmappen)
 // (NOOIT de sleutel in code of repo zetten). Verwachte bronstructuur:
 //   <src>/<MARKT>/<Merk>/<Model>.pdf   (bv. 2024/EU/Passion Spas/Admire.pdf)
 //
@@ -14,10 +14,9 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, basename, extname } from "node:path";
-import { homedir } from "node:os";
+import { adminKey as readAdminKey } from "./keys.mjs";
 
 const BASE = "https://fonteyn-data-store.g-mulder.workers.dev";
-const KEY_FILE = join(homedir(), "Documents/fonteyn-beheersleutel-dealerportaal.txt");
 const ALLOWED = new Set([".pdf", ".docx", ".xlsx", ".jpg", ".jpeg", ".png", ".webp"]);
 
 const args = {};
@@ -27,8 +26,7 @@ for (let i = 2; i < process.argv.length; i++) {
 }
 if (!args.src) { console.error("Gebruik: --src <map met MARKT/Merk/bestanden>"); process.exit(1); }
 
-const adminKey = readFileSync(KEY_FILE, "utf8").match(/[A-Za-z0-9_-]{20,}/)?.[0];
-if (!adminKey) { console.error("Geen beheersleutel gevonden in " + KEY_FILE); process.exit(1); }
+const adminKey = readAdminKey();
 
 const slug = s => String(s).toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-+|-+$/g, "");
 

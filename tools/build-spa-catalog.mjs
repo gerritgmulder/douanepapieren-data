@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
+import { teamKey as readTeamKey } from "./keys.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const env = Object.fromEntries(readFileSync(join(ROOT, "server/.env"), "utf8").trim().split("\n").map(l => l.split("=")));
@@ -69,7 +70,7 @@ if (process.argv.includes("--dry")) {
   process.exit(0);
 }
 
-const teamKey = readFileSync(join(homedir(), "Documents/fonteyn-teamsleutel-dashboard.txt"), "utf8").match(/[A-Za-z0-9_-]{20,}/)[0];
+const teamKey = readTeamKey();
 const put = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/data/spa-catalog", {
   method: "PUT",
   headers: { "X-Fonteyn-Auth": teamKey, "Content-Type": "application/json" },

@@ -9,6 +9,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
+import { teamKey as readTeamKey } from "./keys.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BASE = "https://fonteyn-data-store.g-mulder.workers.dev";
@@ -16,7 +17,7 @@ const env = Object.fromEntries(readFileSync(join(ROOT, "server/.env"), "utf8").t
 const src = readFileSync(join(ROOT, "main.js"), "utf8");
 const g = n => src.match(new RegExp('LOGIC4_' + n + '\\s*=\\s*"([^"]+)"'))[1];
 const enc = s => String(s).replace(/_/g, "__").replace(/ /g, "_");
-const teamKey = readFileSync(join(homedir(), "Documents/fonteyn-teamsleutel-dashboard.txt"), "utf8").match(/[A-Za-z0-9_-]{20,}/)[0];
+const teamKey = readTeamKey();
 
 // code → model uit de KV-catalogus (door build-spa-catalog.mjs gevuld)
 const catalog = await (await fetch(BASE + "/data/spa-catalog", { headers: { "X-Fonteyn-Auth": teamKey } })).json();
