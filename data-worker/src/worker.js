@@ -1164,6 +1164,132 @@ async function dpRefreshReservations(env) {
   return { ok: true, models: Object.keys(byModel).length, reserveringen: total };
 }
 
+// ─── Merzario-tracking (MyMerzario Tracking API) ─────────────────────
+// Read-only zending/container-tracking van vervoerder Merzario. LET OP:
+// dit endpoint heeft GEEN api-key/login — het referentienummer (container,
+// house bill, orderreferentie of shipment-ID) ís de sleutel. We roepen het
+// server-side aan (de browser zou op CORS + Cloudflare-bot-challenge stuiten)
+// en cachen elk resultaat ~4 uur in KV ('merzario-cache'), want het endpoint
+// zit zelf achter Cloudflare en mag niet te vaak bevraagd worden.
+const MERZARIO_URL = "https://www-mbvrid.wisegrid.net/Glow/api/tracker/trackerList";
+const MERZARIO_TTL_MS = 4 * 60 * 60 * 1000;   // 4 uur
+
+// Normaliseer één ruw tracking-record naar een compacte, veilige vorm voor de tegel.
+function normalizeTrackRecord(rec) {
+  const d = (rec && rec.data) || {};
+  const prog = (rec && rec.progress) || {};
+  const legs = Array.isArray(rec && rec.routingLegs) ? rec.routingLegs : [];
+  const events = Array.isArray(rec && rec.events) ? rec.events : [];
+  const ev0 = events[0] || null;
+  // Beste ETA = de overall-aankomst uit progress (lokale tijd, geen offset) →
+  // pak alleen de datum (YYYY-MM-DD) voor het date-veld in de tegel.
+  const arrival = prog.arrival || (legs.length ? legs[legs.length - 1].eta : null) || null;
+  const etaDate = arrival ? String(arrival).slice(0, 10) : null;
+  const departure = prog.departure || null;
+  return {
+    entityType: rec.entityType || null,
+    container: (d.CONTAINERNUMBER || "").trim() || null,
+    shipmentId: d.SHIPMENTID || null,
+    orderReference: d.ORDERREFERENCE || null,
+    houseBill: d.HOUSEBILLNUMBER || null,
+    vessel: (d.VESSELCODE || "").trim() || null,          // veldnaam misleidt: bevat de scheepsnaam
+    voyage: (d.VOYAGEFLIGHT || "").trim() || null,
+    originPort: d.ORIGINPORT || d.LOADPORTIATA || null,
+    originCountry: d.ORIGINPORTCOUNTRY || d.LOADPORTCOUNTRY || null,
+    destPort: d.DESTINATIONPORT || null,
+    destCountry: d.DESTINATIONPORTCOUNTRY || d.DISCHARGEPORTCOUNTRY || null,
+    transportMode: d.TRANSPORTMODE || null,
+    departure,
+    departureIsEstimate: !!prog.departureIsEstimate,
+    arrival,
+    eta: etaDate,
+    arrivalIsEstimate: prog.arrivalIsEstimate !== false,   // default: behandel als schatting
+    progress: typeof prog.progress === "number" ? Math.round(prog.progress * 100) : null,
+    lastEvent: ev0 ? (ev0.description || ev0.eventDescription || "") : null,
+    lastEventUtc: ev0 ? (ev0.eventTimeUtc || null) : null,
+  };
+}
+
+// Vraag tracking op voor een lijst referenties, met KV-cache. Geeft een map
+// { ref: normalizedRecord|null } terug (null = niet gevonden/te achterhalen).
+async function merzarioTrack(env, refs, opts = {}) {
+  const wanted = [...new Set((refs || []).map(r => String(r || "").trim()).filter(Boolean))].slice(0, 50);
+  const out = {};
+  if (!wanted.length) return out;
+
+  const cache = (await env.FONTEYN_DATA.get("merzario-cache", { type: "json" })) || { records: {} };
+  cache.records = cache.records || {};
+  const now = Date.now();
+  const force = !!opts.force;
+  const stale = [];
+  for (const ref of wanted) {
+    const hit = cache.records[ref];
+    if (!force && hit && hit.fetchedAt && (now - hit.fetchedAt) < MERZARIO_TTL_MS) {
+      out[ref] = hit.record;                // vers genoeg uit cache
+    } else {
+      stale.push(ref);
+    }
+  }
+
+  if (stale.length) {
+    let arr = [];
+    try {
+      const r = await fetch(MERZARIO_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ trackingNumbers: stale }),
+      });
+      if (r.ok) {
+        const j = await r.json().catch(() => null);
+        arr = Array.isArray(j) ? j : [];
+      } else {
+        // 429/5xx of Cloudflare-challenge: laat oude cache staan, markeer live-fout
+        out.__error = "Merzario gaf HTTP " + r.status + " (probeer later opnieuw).";
+      }
+    } catch (e) {
+      out.__error = "Merzario niet bereikbaar: " + (e.message || e);
+    }
+    // Records terugmatchen op elke referentie waarop we konden zoeken
+    for (const rec of arr) {
+      const norm = normalizeTrackRecord(rec);
+      const keys = [norm.container, norm.shipmentId, norm.orderReference, norm.houseBill].filter(Boolean);
+      for (const ref of stale) {
+        if (keys.includes(ref)) {
+          out[ref] = norm;
+          cache.records[ref] = { fetchedAt: now, record: norm };
+        }
+      }
+    }
+    // Referenties zonder match expliciet op null (en cachen, zodat we niet blijven hameren)
+    for (const ref of stale) {
+      if (!(ref in out)) { out[ref] = null; cache.records[ref] = { fetchedAt: now, record: null }; }
+    }
+    // Cache opschonen (max 500 refs) en wegschrijven
+    const keys = Object.keys(cache.records);
+    if (keys.length > 500) {
+      keys.sort((a, b) => (cache.records[b].fetchedAt || 0) - (cache.records[a].fetchedAt || 0));
+      const keep = {}; keys.slice(0, 500).forEach(k => keep[k] = cache.records[k]);
+      cache.records = keep;
+    }
+    await env.FONTEYN_DATA.put("merzario-cache", JSON.stringify(cache));
+  }
+  return out;
+}
+
+// POST /track  { trackingNumbers:[...], force?:bool }  → { ok, results:{ref:rec|null}, error? }
+// Intern (team-sleutel X-Fonteyn-Auth), gebruikt door de Voorraadbeheer-tegel.
+async function handleTrack(request, env) {
+  const auth = request.headers.get("X-Fonteyn-Auth") || "";
+  if (!env.SHARED_SECRET || auth !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {};
+  try { body = await request.json(); } catch { return reply(400, { ok: false, error: "Body moet JSON zijn" }); }
+  const refs = Array.isArray(body.trackingNumbers) ? body.trackingNumbers : [];
+  if (!refs.length) return reply(400, { ok: false, error: "trackingNumbers ontbreekt" });
+  const results = await merzarioTrack(env, refs, { force: body.force === true });
+  const error = results.__error || null; delete results.__error;
+  return reply(200, { ok: !error || Object.keys(results).length > 0, error, results });
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -1187,6 +1313,11 @@ export default {
     // Team-sleutel voor medewerkers (Logic4-login als bewijs)
     if (url.pathname === "/internal/teamkey" && request.method === "POST") {
       return handleTeamKey(request, env);
+    }
+
+    // Merzario-tracking (intern, team-sleutel) — zie handleTrack
+    if (url.pathname === "/track" && request.method === "POST") {
+      return handleTrack(request, env);
     }
 
     // Dealerportaal (publiek, eigen sessie-auth — géén shared secret)

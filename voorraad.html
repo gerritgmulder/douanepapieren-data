@@ -238,8 +238,9 @@
       <h3>Schepen — voorraad onderweg (commercial invoices)</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Upload hier de <b>commercial invoices</b> (Excel, één per schip). Alles wat op een
         geüpload schip staat telt direct mee als <b>voorraad onderweg</b> in het Partnerportaal.
-        Vul per schip de <b>ETA</b> in (aankomst Rotterdam) — die lees je in het portaal van de
-        vervoerder. Modellen worden herkend op de SKT-fabriekscode.
+        Zet per schip een <b>trackingreferentie</b> (containernummer of orderreferentie) en klik
+        <b>ETA ophalen</b> — dan haalt Merzario automatisch de aankomstdatum, het schip en de
+        voortgang op. Geen referentie? Vul de ETA dan handmatig in. Modellen worden herkend op de SKT-fabriekscode.
       </p>
       <div class="actions" style="margin-top:0">
         <button class="primary" id="ciUploadBtn" type="button">Commercial invoice(s) uploaden</button>
@@ -249,11 +250,26 @@
     </div>
 
     <div class="card">
-      <h3>Schepen op zee — <span id="shipCount">0</span></h3>
-      <p class="lead" style="font-size:12px;margin-bottom:8px" id="shipUpdated"></p>
+      <h3>Zoek een zending (Merzario)</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:8px">Plak een <b>containernummer</b>, <b>house bill</b>, <b>orderreferentie</b> of <b>shipment-ID</b> —
+        meerdere mag (komma of spatie ertussen). Je ziet direct de actuele status, het schip en de ETA. Alleen-lezen.</p>
+      <div class="actions" style="margin-top:0;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="trkInput" placeholder="bv. MSNU7467506, 3000020127" style="flex:1;min-width:220px;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit">
+        <button class="primary" id="trkBtn" type="button">Zoeken</button>
+      </div>
+      <div id="trkStatus" class="status-msg hidden" style="margin-top:10px"></div>
+      <div id="trkResults" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <h3 style="margin:0">Schepen op zee — <span id="shipCount">0</span></h3>
+        <button id="shipRefreshAll" type="button" style="border:1px solid var(--border);background:#fff;border-radius:7px;padding:7px 12px;font:inherit;cursor:pointer">ETA's verversen (alle schepen)</button>
+      </div>
+      <p class="lead" style="font-size:12px;margin:8px 0" id="shipUpdated"></p>
       <div class="tablewrap">
         <table class="grid">
-          <thead><tr><th>Schip / reis</th><th>Referentie</th><th>Containers</th><th>Spa's</th><th>ETA (aankomst NL)</th><th></th></tr></thead>
+          <thead><tr><th>Schip / reis</th><th>Trackingreferentie</th><th>Spa's</th><th>Status / voortgang</th><th>ETA (aankomst NL)</th><th></th></tr></thead>
           <tbody id="shipBody"></tbody>
         </table>
       </div>
@@ -1101,17 +1117,102 @@ async function saveSchepen(){
     body:JSON.stringify(shipsData)});
   if(!r.ok) throw new Error("opslaan faalde: HTTP "+r.status);
 }
+// ── Merzario-tracking via de Worker-proxy (/track). Referentie = de sleutel;
+//    geen aparte api-key. Antwoord: {ok,error,results:{ref:record|null}}. ──
+const TRACK_URL="https://fonteyn-data-store.g-mulder.workers.dev/track";
+async function trackRefs(refs, force){
+  const r=await fetch(TRACK_URL,{method:"POST",
+    headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
+    body:JSON.stringify({trackingNumbers:refs,force:!!force})});
+  if(!r.ok) throw new Error("Tracking-service gaf HTTP "+r.status);
+  return await r.json();
+}
+// Kleine voortgangsbalk (0–100)
+function trackBar(pct){
+  const p=Math.max(0,Math.min(100,Number(pct)||0));
+  return "<div style='height:6px;background:var(--border);border-radius:4px;overflow:hidden;min-width:90px'>"+
+    "<div style='height:100%;width:"+p+"%;background:"+(p>=100?"#15803d":"var(--fonteyn-lime-dark,#72a531)")+"'></div></div>";
+}
+// Statuscel voor de schepentabel
+function trackStatusCell(t){
+  if(!t) return "<span style='color:var(--muted)'>—</span>";
+  if(t.notFound) return "<span style='color:var(--warn)'>niet gevonden</span>";
+  const pct=(t.progress==null?"":t.progress+"% ");
+  const ev=t.lastEvent?("<div style='font-size:11px;color:var(--muted);margin-top:3px;max-width:260px'>"+esc(t.lastEvent)+"</div>"):"";
+  return "<div style='display:flex;align-items:center;gap:7px'>"+trackBar(t.progress)+"<span style='font-size:11px;color:var(--muted)'>"+pct+"</span></div>"+ev;
+}
+// Kaart voor de losse "zoek een zending"
+function renderTrackCard(ref, rec){
+  if(!rec) return "<div style='border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:8px'>"+
+    "<b>"+esc(ref)+"</b> — <span style='color:var(--warn)'>geen tracking gevonden</span></div>";
+  const route=[rec.originPort,rec.destPort].filter(Boolean).join(" → ");
+  const etaBadge=rec.eta?("<b>"+esc(rec.eta)+"</b>"+(rec.arrivalIsEstimate?" <span style='font-size:10px;color:var(--muted)'>(verwacht)</span>":" <span style='font-size:10px;color:#15803d'>(aangekomen)</span>")):"—";
+  return "<div style='border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:8px'>"+
+    "<div style='display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap'>"+
+      "<b>"+esc(ref)+"</b>"+
+      "<span style='font-size:11px;color:var(--muted)'>"+esc(rec.entityType==="IJobContainer"?"container":"zending")+(rec.container?(" · "+esc(rec.container)):"")+"</span></div>"+
+    "<div style='font-size:13px;margin-top:4px'>"+(rec.vessel?("🚢 "+esc(rec.vessel)):"")+(route?("  ·  "+esc(route)):"")+"</div>"+
+    "<div style='display:flex;align-items:center;gap:9px;margin-top:7px'>"+trackBar(rec.progress)+"<span style='font-size:12px'>ETA: "+etaBadge+"</span></div>"+
+    (rec.lastEvent?("<div style='font-size:11px;color:var(--muted);margin-top:6px'>"+esc(rec.lastEvent)+(rec.lastEventUtc?(" · "+new Date(rec.lastEventUtc).toLocaleDateString("nl-NL")):"")+"</div>"):"")+
+  "</div>";
+}
+// Per schip ETA ophalen
+async function trackShip(i, force){
+  const s=shipsData.ships[i]; const ref=String(s.trackRef||s.ref||"").trim();
+  if(!ref){ setStatus("bad","Geen trackingreferentie voor dit schip — vul een containernummer of orderreferentie in."); return; }
+  setStatus("","ETA ophalen…");
+  try{
+    const j=await trackRefs([ref],force);
+    const rec=j.results&&j.results[ref];
+    if(rec){ s.track=rec; if(rec.eta) s.eta=rec.eta; await saveSchepen(); renderSchepen();
+      setStatus("ok","ETA opgehaald: "+(rec.eta||"onbekend")+(rec.vessel?(" · "+rec.vessel):"")); }
+    else { s.track={notFound:true}; await saveSchepen(); renderSchepen();
+      setStatus("bad","Geen tracking gevonden voor '"+ref+"'."+(j.error?(" ("+j.error+")"):"")); }
+  }catch(e){ setStatus("bad",e.message); }
+}
+// Alle schepen in één keer verversen
+async function trackAllShips(){
+  const ships=shipsData.ships||[];
+  const refs=ships.map(s=>String(s.trackRef||s.ref||"").trim()).filter(Boolean);
+  if(!refs.length){ setStatus("bad","Geen enkel schip heeft een trackingreferentie."); return; }
+  setStatus("","Alle ETA's verversen…");
+  try{
+    const j=await trackRefs(refs,true); let n=0;
+    for(const s of ships){ const ref=String(s.trackRef||s.ref||"").trim(); const rec=ref&&j.results&&j.results[ref];
+      if(rec){ s.track=rec; if(rec.eta) s.eta=rec.eta; n++; } }
+    await saveSchepen(); renderSchepen();
+    setStatus(n?"ok":"bad",n+" schip(en) bijgewerkt"+(j.error?(" · "+j.error):""));
+  }catch(e){ setStatus("bad",e.message); }
+}
+// Losse zoekopdracht
+async function doTrackLookup(){
+  const raw=(document.getElementById("trkInput").value||"");
+  const refs=raw.split(/[\s,;]+/).map(x=>x.trim()).filter(Boolean);
+  const st=document.getElementById("trkStatus"), out=document.getElementById("trkResults");
+  if(!refs.length){ st.classList.add("hidden"); out.innerHTML=""; return; }
+  st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Zoeken…"; out.innerHTML="";
+  try{
+    const j=await trackRefs(refs,false);
+    out.innerHTML=refs.map(ref=>renderTrackCard(ref, j.results&&j.results[ref])).join("");
+    const found=refs.filter(r=>j.results&&j.results[r]).length;
+    st.className="status-msg "+(j.error?"warn":"ok");
+    st.textContent=j.error?("Let op: "+j.error):("Klaar — "+found+" van "+refs.length+" gevonden.");
+  }catch(e){ st.className="status-msg bad"; st.textContent=e.message; }
+}
+
 function renderSchepen(){
   const ships=shipsData.ships||[];
   document.getElementById("shipCount").textContent=ships.length;
   document.getElementById("shipUpdated").textContent=shipsData.updated?("Laatst bijgewerkt: "+new Date(shipsData.updated).toLocaleString("nl-NL")):"";
   document.getElementById("shipBody").innerHTML=ships.map((s,i)=>{
     const spas=Object.values(s.models||{}).reduce((a,b)=>a+b,0);
+    const trackRef=(s.trackRef!=null?s.trackRef:(s.ref||""));
     return "<tr>"+
-      "<td><b>"+esc(s.vessel||"—")+"</b></td>"+
-      "<td style='font-size:12px'>"+esc(s.ref||"")+"</td>"+
-      "<td>"+(s.containers||"")+"</td>"+
+      "<td><b>"+esc(s.vessel||"—")+"</b>"+(s.track&&s.track.vessel&&s.track.vessel!==s.vessel?("<div style='font-size:11px;color:var(--muted)'>Merzario: "+esc(s.track.vessel)+"</div>"):"")+"</td>"+
+      "<td><input type='text' class='shipRef' data-i='"+i+"' value='"+esc(trackRef)+"' placeholder='container / orderref' style='font-size:12px;padding:4px 7px;width:130px'>"+
+        "<button class='trkOne' data-i='"+i+"' style='margin-top:4px;font-size:11px;border:1px solid var(--border);background:#fff;border-radius:6px;padding:3px 8px;cursor:pointer'>ETA ophalen</button></td>"+
       "<td>"+spas+"</td>"+
+      "<td>"+trackStatusCell(s.track)+"</td>"+
       "<td><input type='date' class='shipEta' data-i='"+i+"' value='"+esc(s.eta||"")+"' style='font-size:12px;padding:4px 7px'></td>"+
       "<td><button class='rmv delShip' data-i='"+i+"'>✕ verwijder</button></td>"+
     "</tr>";
@@ -1120,6 +1221,11 @@ function renderSchepen(){
     shipsData.ships[Number(inp.dataset.i)].eta=inp.value;
     try{ await saveSchepen(); setStatus("ok","ETA opgeslagen — direct zichtbaar in het Partnerportaal."); }catch(e){ setStatus("bad",e.message); }
   }));
+  document.querySelectorAll(".shipRef").forEach(inp=>inp.addEventListener("change",async()=>{
+    shipsData.ships[Number(inp.dataset.i)].trackRef=inp.value.trim();
+    try{ await saveSchepen(); }catch(e){ setStatus("bad",e.message); }
+  }));
+  document.querySelectorAll(".trkOne").forEach(b=>b.addEventListener("click",()=>trackShip(Number(b.dataset.i),true)));
   document.querySelectorAll(".delShip").forEach(b=>b.addEventListener("click",async()=>{
     const s=shipsData.ships[Number(b.dataset.i)];
     if(!confirm("Schip \""+(s.vessel||s.ref)+"\" verwijderen? De lading telt dan niet meer als voorraad.")) return;
@@ -1649,6 +1755,12 @@ function renderDealerResv(){
     ciBtn.addEventListener("click", function(){ ciFile.click(); });
     ciFile.addEventListener("change", function(e){ if(e.target.files.length) handleCIUpload([...e.target.files]); ciFile.value=""; });
   }
+  // Merzario-tracking: losse zoekopdracht + alle schepen verversen
+  const trkBtn=document.getElementById("trkBtn"), trkInput=document.getElementById("trkInput");
+  if(trkBtn) trkBtn.addEventListener("click", doTrackLookup);
+  if(trkInput) trkInput.addEventListener("keydown", function(e){ if(e.key==="Enter") doTrackLookup(); });
+  const shipRefreshAll=document.getElementById("shipRefreshAll");
+  if(shipRefreshAll) shipRefreshAll.addEventListener("click", trackAllShips);
   document.querySelectorAll('.filter-row[data-ov="stock"] input').forEach(i=> i.addEventListener("input", renderStock));
   const dv=document.getElementById("dvSearch"); if(dv) dv.addEventListener("input", renderDealerView);
   loadPipe().then(function(){ renderPipeAll(); renderDealerResv(); });
