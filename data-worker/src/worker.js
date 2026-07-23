@@ -1317,6 +1317,86 @@ async function handleTrack(request, env) {
   return reply(200, { ok: !error || Object.keys(results).length > 0, error, results });
 }
 
+// ─── QuickBooks Online (Amerika / Passion Spas USA) ──────────────────
+// Read-only koppeling met QuickBooks Online via OAuth2 (authorization code).
+// client_id/secret als worker-secrets (QB_CLIENT_ID/QB_CLIENT_SECRET); tokens
+// + realmId in KV ('qb-tokens'). We doen ALLEEN leesacties (SELECT-query's) —
+// nooit schrijven, factureren of geld verplaatsen.
+const QB_AUTH   = "https://appcenter.intuit.com/connect/oauth2";
+const QB_TOKEN  = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
+const QB_API    = "https://quickbooks.api.intuit.com";
+const QB_SCOPE  = "com.intuit.quickbooks.accounting";
+const qbRedirectUri = (url) => url.origin + "/amerika/qb/callback";
+
+async function qbGetTokens(env) { return (await env.FONTEYN_DATA.get("qb-tokens", { type: "json" })) || null; }
+
+// Geldig access token (ververst met refresh_token als 't bijna verlopen is)
+async function qbAccessToken(env) {
+  const t = await qbGetTokens(env);
+  if (!t || !t.refresh_token) throw new Error("QuickBooks niet gekoppeld");
+  if (t.access_token && t.expiresAt && Date.now() < t.expiresAt - 60000) return t;
+  const basic = btoa(env.QB_CLIENT_ID + ":" + env.QB_CLIENT_SECRET);
+  const body = new URLSearchParams({ grant_type: "refresh_token", refresh_token: t.refresh_token });
+  const r = await fetch(QB_TOKEN, { method: "POST", headers: { "Authorization": "Basic " + basic, "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" }, body });
+  const j = await r.json().catch(() => null);
+  if (!r.ok || !j || !j.access_token) throw new Error("QB token-refresh faalde (" + r.status + ")");
+  const nt = { ...t, access_token: j.access_token, refresh_token: j.refresh_token || t.refresh_token, expiresAt: Date.now() + (Number(j.expires_in) || 3600) * 1000 };
+  await env.FONTEYN_DATA.put("qb-tokens", JSON.stringify(nt));
+  return nt;
+}
+async function qbQuery(env, sql) {
+  const t = await qbAccessToken(env);
+  const u = QB_API + "/v3/company/" + t.realmId + "/query?minorversion=73&query=" + encodeURIComponent(sql);
+  const r = await fetch(u, { headers: { "Authorization": "Bearer " + t.access_token, "Accept": "application/json" } });
+  if (!r.ok) throw new Error("QB query HTTP " + r.status + ": " + (await r.text()).slice(0, 200));
+  return await r.json();
+}
+// Start de OAuth-flow (team-sleutel als query-param, want dit is een browser-redirect)
+async function qbHandleConnect(request, env, url) {
+  if (!env.SHARED_SECRET || (url.searchParams.get("key") || "") !== env.SHARED_SECRET) return reply(401, "Unauthorized");
+  if (!env.QB_CLIENT_ID) return reply(500, "QuickBooks nog niet geconfigureerd (QB_CLIENT_ID ontbreekt).");
+  const state = crypto.randomUUID();
+  await env.FONTEYN_DATA.put("qb-state:" + state, "1", { expirationTtl: 600 });
+  const p = new URLSearchParams({ client_id: env.QB_CLIENT_ID, response_type: "code", scope: QB_SCOPE, redirect_uri: qbRedirectUri(url), state });
+  return Response.redirect(QB_AUTH + "?" + p.toString(), 302);
+}
+async function qbHandleCallback(request, env, url) {
+  const code = url.searchParams.get("code"), realmId = url.searchParams.get("realmId"), state = url.searchParams.get("state") || "";
+  const okState = await env.FONTEYN_DATA.get("qb-state:" + state);
+  if (!okState) return new Response("Ongeldige of verlopen sessie — probeer opnieuw te verbinden.", { status: 400 });
+  await env.FONTEYN_DATA.delete("qb-state:" + state);
+  if (!code || !realmId) return new Response("Geen code/realmId ontvangen van QuickBooks.", { status: 400 });
+  const basic = btoa(env.QB_CLIENT_ID + ":" + env.QB_CLIENT_SECRET);
+  const body = new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: qbRedirectUri(url) });
+  const r = await fetch(QB_TOKEN, { method: "POST", headers: { "Authorization": "Basic " + basic, "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json" }, body });
+  const j = await r.json().catch(() => null);
+  if (!r.ok || !j || !j.access_token) return new Response("Token-uitwisseling faalde (" + r.status + ").", { status: 502 });
+  await env.FONTEYN_DATA.put("qb-tokens", JSON.stringify({ realmId, access_token: j.access_token, refresh_token: j.refresh_token, expiresAt: Date.now() + (Number(j.expires_in) || 3600) * 1000, connectedAt: new Date().toISOString() }));
+  return new Response("<!doctype html><meta charset='utf-8'><body style='font-family:sans-serif;padding:48px;text-align:center'><h2>✅ QuickBooks gekoppeld</h2><p>Passion Spas USA is verbonden. Je kunt dit tabblad sluiten en terug naar het dashboard.</p></body>", { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
+}
+async function qbHandleStatus(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+  const t = await qbGetTokens(env);
+  return reply(200, { ok: true, configured: !!env.QB_CLIENT_ID, connected: !!(t && t.refresh_token), realmId: (t && t.realmId) || null, connectedAt: (t && t.connectedAt) || null });
+}
+async function qbHandleData(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  try {
+    const invJson = await qbQuery(env, "SELECT * FROM Invoice ORDERBY TxnDate DESC MAXRESULTS 100");
+    const custJson = await qbQuery(env, "SELECT * FROM Customer MAXRESULTS 500");
+    const invoices = ((invJson.QueryResponse && invJson.QueryResponse.Invoice) || []).map(i => ({
+      id: i.Id, nr: i.DocNumber || null, datum: i.TxnDate || null,
+      klant: (i.CustomerRef && i.CustomerRef.name) || null,
+      totaal: Number(i.TotalAmt) || 0, openstaand: Number(i.Balance) || 0, valuta: (i.CurrencyRef && i.CurrencyRef.value) || "USD",
+    }));
+    const customers = ((custJson.QueryResponse && custJson.QueryResponse.Customer) || []).map(c => ({
+      id: c.Id, naam: c.DisplayName || c.CompanyName || null, bedrijf: c.CompanyName || null,
+      email: (c.PrimaryEmailAddr && c.PrimaryEmailAddr.Address) || null, openstaand: Number(c.Balance) || 0, actief: c.Active !== false,
+    }));
+    return reply(200, { ok: true, invoices, customers });
+  } catch (e) { return reply(200, { ok: false, error: String(e.message || e) }); }
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -1346,6 +1426,12 @@ export default {
     if (url.pathname === "/track" && request.method === "POST") {
       return handleTrack(request, env);
     }
+
+    // QuickBooks Online (Amerika) — OAuth-flow + read-only data
+    if (url.pathname === "/amerika/qb/connect")  return qbHandleConnect(request, env, url);
+    if (url.pathname === "/amerika/qb/callback") return qbHandleCallback(request, env, url);
+    if (url.pathname === "/amerika/qb/status")   return qbHandleStatus(request, env);
+    if (url.pathname === "/amerika/qb/data")     return qbHandleData(request, env);
 
     // Dealerportaal (publiek, eigen sessie-auth — géén shared secret)
     if (url.pathname === "/dealers" || url.pathname.startsWith("/dealers/")) {

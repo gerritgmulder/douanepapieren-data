@@ -93,6 +93,7 @@
       <p class="lead" style="font-size:12.5px;margin-top:14px">Zodra dit er is, verschijnen hier automatisch de US-facturen, klanten/dealers en openstaande bedragen — read-only, net als de rest van het dashboard. Ik zet niets live wat geld kan verplaatsen.</p>
       <button class="logout" id="qbConnectBtn" type="button" disabled style="border-color:var(--usa);color:var(--usa);opacity:.5">Verbinden met QuickBooks (wacht op app-gegevens)</button>
     </div>
+    <div id="qbData"></div>
   </div>
 </main>
 
@@ -114,7 +115,50 @@ document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
   const tab=t.dataset.tab;
   document.getElementById("tab-containers").classList.toggle("hidden",tab!=="containers");
   document.getElementById("tab-quickbooks").classList.toggle("hidden",tab!=="quickbooks");
+  if(tab==="quickbooks") qbInit();
 }));
+
+const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
+async function qbInit(){
+  const st=document.getElementById("qbStatus"), btn=document.getElementById("qbConnectBtn");
+  try{
+    const j=await (await fetch(WORKER+"/amerika/qb/status",{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}})).json();
+    if(j.connected){
+      st.textContent="gekoppeld"+(j.connectedAt?(" sinds "+new Date(j.connectedAt).toLocaleDateString("nl-NL")):"" ); st.style.color="#15803d";
+      btn.textContent="Opnieuw verbinden"; btn.disabled=false; btn.style.opacity="1";
+      qbLoadData();
+    } else if(j.configured){
+      st.textContent="klaar om te verbinden"; st.style.color="#2563eb";
+      btn.textContent="Verbinden met QuickBooks"; btn.disabled=false; btn.style.opacity="1";
+    } else {
+      st.textContent="nog niet gekoppeld (wacht op app-gegevens)"; st.style.color="var(--warn)";
+      btn.textContent="Verbinden met QuickBooks (wacht op app-gegevens)"; btn.disabled=true; btn.style.opacity=".5";
+    }
+  }catch(e){ st.textContent="status onbekend"; }
+}
+document.getElementById("qbConnectBtn").addEventListener("click",()=>{
+  const key=localStorage.getItem("fp.teamkey")||"";
+  window.open(WORKER+"/amerika/qb/connect?key="+encodeURIComponent(key),"_blank","noopener");
+});
+async function qbLoadData(){
+  const box=document.getElementById("qbData"); if(!box) return;
+  box.innerHTML="<p class='lead'>US-facturen en dealers laden…</p>";
+  try{
+    const j=await (await fetch(WORKER+"/amerika/qb/data",{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}})).json();
+    if(!j.ok){ box.innerHTML="<div class='status-msg warn'>Kon QuickBooks-data niet laden: "+esc(j.error||"onbekend")+"</div>"; return; }
+    const inv=j.invoices||[], cust=j.customers||[];
+    const money=(n,c)=>(c==="USD"?"$ ":c+" ")+Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+    box.innerHTML=
+      "<div class='kpi-row'>"+kpi(inv.length,"US-facturen")+kpi(cust.filter(c=>c.actief).length,"Actieve dealers")+
+        kpi("$ "+inv.reduce((n,i)=>n+i.openstaand,0).toLocaleString("en-US"),"Openstaand totaal")+"</div>"+
+      "<div class='card'><h3>Laatste facturen</h3><div class='tablewrap'><table class='grid'><thead><tr><th>Nr</th><th>Datum</th><th>Dealer</th><th>Totaal</th><th>Openstaand</th></tr></thead><tbody>"+
+      inv.map(i=>"<tr><td>"+esc(i.nr||i.id)+"</td><td>"+esc(i.datum||"")+"</td><td>"+esc(i.klant||"—")+"</td><td>"+money(i.totaal,i.valuta)+"</td><td>"+(i.openstaand>0?"<b style='color:#b91c1c'>"+money(i.openstaand,i.valuta)+"</b>":"—")+"</td></tr>").join("")+
+      "</tbody></table></div></div>"+
+      "<div class='card'><h3>Dealers</h3><div class='tablewrap'><table class='grid'><thead><tr><th>Naam</th><th>E-mail</th><th>Openstaand</th></tr></thead><tbody>"+
+      cust.map(c=>"<tr><td><b>"+esc(c.naam||"—")+"</b></td><td>"+esc(c.email||"—")+"</td><td>"+(c.openstaand>0?money(c.openstaand,"USD"):"—")+"</td></tr>").join("")+
+      "</tbody></table></div></div>";
+  }catch(e){ box.innerHTML="<div class='status-msg bad'>"+esc(e.message)+"</div>"; }
+}
 
 const RESV_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/reserveringen-live";
 const TEAM=(localStorage.getItem("fp.teamkey")||"");
