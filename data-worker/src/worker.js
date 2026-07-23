@@ -36,6 +36,7 @@ const ALLOWED_BUCKETS = new Set([
   "voorraad-schepen", // Schip-voorraad uit commercial invoices (ref/schip/eta + regels per model)
   "voorraad-prioriteit", // Chantal's allocatie-volgorde per model (byModel: {model: [ordernr,…]})
   "reserveringen-live",  // Reserveringen-ledger uit Logic4 (uur-sync): per model open orders + betaald/vervallen
+  "voorraad-productie",  // Open inkooporders bij de 9 spa-fabrieken (uur-sync): per model in productie + ETA
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
@@ -934,6 +935,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);
     if (p === "/dealers/admin/refresh-stock" && request.method === "POST") return reply(200, await dpRefreshHalStock(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     if (p === "/dealers/admin/refresh-reserveringen" && request.method === "POST") return reply(200, await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    if (p === "/dealers/admin/refresh-productie" && request.method === "POST") return reply(200, await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     return reply(404, "Not found");
   }
 
@@ -1072,6 +1074,51 @@ function dpRowColor(desc) {
   if (i < 0) return null;
   return s.slice(i + 1).replace(/\b(spa|swimspa)\b/gi, "").replace(/\s+/g, " ").trim() || null;
 }
+// De 9 fabrieken waar Fonteyn spa's/swimspa's/sauna's inkoopt. Fuzzy gematcht
+// op CreditorCompanyName (de spelling wisselt in Logic4). Zie geheugen.
+const SPA_FACTORIES = [
+  "guangzhou romex", "venus sanitary", "changzhou bigeer", "new normal bath",
+  "ponfit spa", "sunrans sanitary", "huantong industry", "kasdaly pool spa", "gaoming yuehua",
+];
+const isSpaFactory = (name) => { const s = String(name || "").toLowerCase(); return SPA_FACTORIES.some(f => s.includes(f)); };
+
+// Open inkooporders (IKO's) bij de 9 fabrieken = wat er nu 'in productie' is.
+// Per model de aantallen (nog te leveren) + verwachte leverdatum. Bucket
+// 'voorraad-productie'. Komt in de leverforecast ná de schepen.
+async function dpRefreshProductie(env) {
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const codeToModel = {};
+  for (const [model, variants] of Object.entries(catalog.models || {})) for (const v of variants) codeToModel[v.code] = model;
+  const token = await l4Token(env);
+  const call = (path, body) => fetch("https://api.logic4server.nl" + path, {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(body),
+  }).then(r => r.ok ? r.json() : []).catch(() => []);
+  // Alle open inkooporders ophalen, dan filteren op de fabrieken
+  let orders = [];
+  for (let page = 0; page < 12; page++) {
+    const arr = await call("/v3/BuyOrders/GetBuyOrders", { BuyOrderIsClosed: false, TakeRecords: 500, SkipRecords: page * 500 });
+    const list = Array.isArray(arr) ? arr : ((arr && (arr.Records || arr.BuyOrders)) || []);
+    if (!list.length) break; orders = orders.concat(list); if (list.length < 500) break;
+  }
+  const fact = orders.filter(o => isSpaFactory(o.CreditorCompanyName));
+  const byModel = {};
+  for (const o of fact) {
+    const rowsResp = await call("/v3/BuyOrders/GetBuyOrderRowsByFilter", { BuyOrderId: o.Id, TakeRecords: 200 });
+    const rows = Array.isArray(rowsResp) ? rowsResp : ((rowsResp && rowsResp.Records) || []);
+    for (const r of rows) {
+      const model = codeToModel[String(r.ProductCode || "")]; if (!model) continue;
+      const qty = Number(r.QtyToDeliver) || Number(r.QtyToOrder) || 0; if (qty <= 0) continue;
+      (byModel[model] = byModel[model] || []).push({
+        iko: o.Id, fabriek: o.CreditorCompanyName || "", ref: String(o.Remarks || "").trim().slice(0, 80) || null,
+        qty, eta: (r.ExpectedDeliveryDate || "").slice(0, 10) || null,
+      });
+    }
+  }
+  await env.FONTEYN_DATA.put("voorraad-productie", JSON.stringify({ updated: new Date().toISOString(), models: byModel }));
+  const total = Object.values(byModel).reduce((n, l) => n + l.reduce((a, x) => a + x.qty, 0), 0);
+  return { ok: true, modellen: Object.keys(byModel).length, stuks: total, ikos: fact.length };
+}
+
 async function dpRefreshReservations(env) {
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const codeToModel = {};
@@ -1155,6 +1202,8 @@ async function dpRefreshReservations(env) {
   //   "op-schip" = op een schip zonder ETA · "productie" = na de bekende schepen.
   const hallen = (await env.FONTEYN_DATA.get("voorraad-hallen", { type: "json" })) || {};
   const schepen = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+  const productie = (await env.FONTEYN_DATA.get("voorraad-productie", { type: "json" })) || {};
+  const prodByModel = productie.models || {};
   const shipsByModel = {};
   for (const s of (schepen.ships || [])) {
     for (const [model, q] of Object.entries(s.models || {})) {
@@ -1168,6 +1217,10 @@ async function dpRefreshReservations(env) {
     (shipsByModel[model] || [])
       .sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")))
       .forEach(sh => buckets.push({ kind: sh.eta ? "schip" : "op-schip", eta: sh.eta, left: sh.qty, vessel: sh.vessel }));
+    // Productie (open fabrieks-IKO's) ná de schepen, op ETA-volgorde
+    (prodByModel[model] || [])
+      .slice().sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")))
+      .forEach(p => buckets.push({ kind: "productie", eta: p.eta, left: p.qty, iko: p.iko }));
     let bi = 0;
     for (const r of list) {
       // Containerorders (Dealer magazijn) gaan rechtstreeks naar de dealer en
@@ -1180,8 +1233,12 @@ async function dpRefreshReservations(env) {
         if (buckets[bi].left <= 0) bi++;
       }
       // 'verwacht' = waar de LAATSTE unit van deze order landt (hele order pas dan compleet)
-      r.verwacht = need > 0 ? "productie" : (landing.kind === "voorraad" ? "voorraad" : (landing.eta || "op-schip"));
+      if (need > 0) { r.verwacht = "productie"; r.verwachtBron = "productie"; }
+      else if (landing.kind === "voorraad") { r.verwacht = "voorraad"; r.verwachtBron = "voorraad"; }
+      else if (landing.eta) { r.verwacht = landing.eta; r.verwachtBron = landing.kind; }   // schip- of productie-ETA
+      else { r.verwacht = landing.kind === "productie" ? "productie" : "op-schip"; r.verwachtBron = landing.kind; }
       if (landing && landing.vessel) r.verwachtSchip = landing.vessel;
+      if (landing && landing.iko) r.verwachtIko = landing.iko;
     }
   }
 
@@ -1322,6 +1379,36 @@ async function handleTrack(request, env) {
 // client_id/secret als worker-secrets (QB_CLIENT_ID/QB_CLIENT_SECRET); tokens
 // + realmId in KV ('qb-tokens'). We doen ALLEEN leesacties (SELECT-query's) —
 // nooit schrijven, factureren of geld verplaatsen.
+// Publieke juridische pagina's voor de QuickBooks-app-review. Beschrijven
+// waarheidsgetrouw wat de interne Fonteyn/Passion-integratie met data doet.
+function legalPage(which) {
+  const upd = "2026";
+  const wrap = (title, body) => new Response(
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
+    "<title>" + title + " — Passion Partners / Fonteyn</title><style>body{font-family:-apple-system,Arial,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;color:#1a1a1a;line-height:1.6}h1{color:#144734}h2{color:#144734;font-size:18px;margin-top:28px}small{color:#666}</style></head><body>" +
+    body + "<hr><p><small>De Fonteyn Groep — Meervelderweg 52, 3888 NK Uddel, The Netherlands · Last updated " + upd + "</small></p></body></html>",
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
+
+  if (which === "privacy") {
+    return wrap("Privacy Policy",
+      "<h1>Privacy Policy</h1>" +
+      "<p>This policy describes how the internal <b>Passion App</b> dashboard integration (“the App”), operated by De Fonteyn Groep for Passion Spas, handles data. The App is used only by authorised Fonteyn/Passion employees.</p>" +
+      "<h2>What data we access</h2><p>With the customer’s explicit authorisation, the App reads <b>invoice and customer records</b> from the connected QuickBooks Online company via Intuit’s official API. Access is strictly <b>read-only</b>; the App never creates, changes, deletes, or moves any financial data in QuickBooks.</p>" +
+      "<h2>How we use it</h2><p>The data is shown to authorised staff to plan production and orders. It is not sold, rented, or shared with any third party, and is not used for advertising.</p>" +
+      "<h2>Storage &amp; security</h2><p>Access tokens are stored encrypted at rest in Cloudflare’s key-value store and transmitted only over TLS/HTTPS. Access requires internal authentication. Tokens can be revoked at any time by disconnecting the App.</p>" +
+      "<h2>Retention</h2><p>We retain only the authorisation tokens needed to keep the connection active. Disconnecting removes them.</p>" +
+      "<h2>Contact</h2><p>Questions: <a href=\"mailto:g.mulder@intenza.nl\">g.mulder@intenza.nl</a>.</p>");
+  }
+  return wrap("End-User License Agreement",
+    "<h1>End-User License Agreement</h1>" +
+    "<p>This EULA governs use of the internal <b>Passion App</b> dashboard integration (“the App”), operated by De Fonteyn Groep for Passion Spas.</p>" +
+    "<h2>License</h2><p>The App is provided for internal use by authorised Fonteyn/Passion employees only. It connects to QuickBooks Online with the user’s authorisation to <b>read</b> invoice and customer data for production and order planning.</p>" +
+    "<h2>Acceptable use</h2><p>Users must be authorised, keep their access confidential, and use the App only for legitimate business purposes. The App performs read-only operations and never modifies financial records or moves funds.</p>" +
+    "<h2>Warranty &amp; liability</h2><p>The App is provided “as is” without warranty. De Fonteyn Groep is not liable for indirect or consequential damages arising from its use.</p>" +
+    "<h2>Termination</h2><p>Access may be withdrawn at any time. The customer can revoke access by disconnecting the App in QuickBooks.</p>" +
+    "<h2>Contact</h2><p><a href=\"mailto:g.mulder@intenza.nl\">g.mulder@intenza.nl</a>.</p>");
+}
+
 const QB_AUTH   = "https://appcenter.intuit.com/connect/oauth2";
 const QB_TOKEN  = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
 const QB_SCOPE  = "com.intuit.quickbooks.accounting";
@@ -1417,7 +1504,9 @@ export default {
         if (!env.LOGIC4_USERNAME) { console.log("[cron] geen Logic4-creds"); return; }
         const s = await dpRefreshHalStock(env);
         console.log("[cron] hal-voorraad: " + JSON.stringify(s));
-        const rv = await dpRefreshReservations(env);
+        const pr = await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+        console.log("[cron] productie: " + JSON.stringify(pr));
+        const rv = await dpRefreshReservations(env);   // leest voorraad-productie voor de forecast
         console.log("[cron] reserveringen: " + JSON.stringify(rv));
       } catch (e) { console.log("[cron] fout: " + (e.message || e)); }
     })());
@@ -1439,6 +1528,10 @@ export default {
     if (url.pathname === "/track" && request.method === "POST") {
       return handleTrack(request, env);
     }
+
+    // Juridische pagina's (publiek) — nodig voor de QuickBooks-app-review
+    if (url.pathname === "/legal/privacy") return legalPage("privacy");
+    if (url.pathname === "/legal/eula")    return legalPage("eula");
 
     // QuickBooks Online (Amerika) — OAuth-flow + read-only data
     if (url.pathname === "/amerika/qb/connect")  return qbHandleConnect(request, env, url);
