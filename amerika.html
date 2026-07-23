@@ -140,24 +140,65 @@ document.getElementById("qbConnectBtn").addEventListener("click",()=>{
   const key=localStorage.getItem("fp.teamkey")||"";
   window.open(WORKER+"/amerika/qb/connect?key="+encodeURIComponent(key),"_blank","noopener");
 });
+let qbInvoices=[], qbOpen={};
 async function qbLoadData(){
   const box=document.getElementById("qbData"); if(!box) return;
-  box.innerHTML="<p class='lead'>US-facturen en dealers laden…</p>";
+  box.innerHTML="<p class='lead'>Nieuwe QuickBooks-facturen laden…</p>";
   try{
-    const j=await (await fetch(WORKER+"/amerika/qb/data",{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}})).json();
-    if(!j.ok){ box.innerHTML="<div class='status-msg warn'>Kon QuickBooks-data niet laden: "+esc(j.error||"onbekend")+"</div>"; return; }
-    const inv=j.invoices||[], cust=j.customers||[];
-    const money=(n,c)=>(c==="USD"?"$ ":c+" ")+Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
-    box.innerHTML=
-      "<div class='kpi-row'>"+kpi(inv.length,"US-facturen")+kpi(cust.filter(c=>c.actief).length,"Actieve dealers")+
-        kpi("$ "+inv.reduce((n,i)=>n+i.openstaand,0).toLocaleString("en-US"),"Openstaand totaal")+"</div>"+
-      "<div class='card'><h3>Laatste facturen</h3><div class='tablewrap'><table class='grid'><thead><tr><th>Nr</th><th>Datum</th><th>Dealer</th><th>Totaal</th><th>Openstaand</th></tr></thead><tbody>"+
-      inv.map(i=>"<tr><td>"+esc(i.nr||i.id)+"</td><td>"+esc(i.datum||"")+"</td><td>"+esc(i.klant||"—")+"</td><td>"+money(i.totaal,i.valuta)+"</td><td>"+(i.openstaand>0?"<b style='color:#b91c1c'>"+money(i.openstaand,i.valuta)+"</b>":"—")+"</td></tr>").join("")+
-      "</tbody></table></div></div>"+
-      "<div class='card'><h3>Dealers</h3><div class='tablewrap'><table class='grid'><thead><tr><th>Naam</th><th>E-mail</th><th>Openstaand</th></tr></thead><tbody>"+
-      cust.map(c=>"<tr><td><b>"+esc(c.naam||"—")+"</b></td><td>"+esc(c.email||"—")+"</td><td>"+(c.openstaand>0?money(c.openstaand,"USD"):"—")+"</td></tr>").join("")+
-      "</tbody></table></div></div>";
+    const j=await (await fetch(WORKER+"/amerika/qb/invoices",{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}})).json();
+    if(!j.ok){ box.innerHTML="<div class='status-msg warn'>Kon facturen niet laden: "+esc(j.error||"onbekend")+"</div>"; return; }
+    qbInvoices=j.invoices||[]; renderQbInvoices();
   }catch(e){ box.innerHTML="<div class='status-msg bad'>"+esc(e.message)+"</div>"; }
+}
+function qbKindBadge(k){
+  const map={spa:["#dcfce7","#15803d","spa"],onderdeel:["#e0e7ff","#3730a3","onderdeel"],kosten:["#f3f4f6","#374151","kosten"]};
+  const m=map[k]||["#f3f4f6","#374151",k]; return "<span class='pill' style='background:"+m[0]+";color:"+m[1]+"'>"+m[2]+"</span>";
+}
+function renderQbInvoices(){
+  const box=document.getElementById("qbData");
+  const nieuw=qbInvoices.filter(i=>!i.geaccordeerd);
+  let html="<div class='card'><div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px'>"+
+    "<h3 style='margin:0'>Nieuwe orders uit QuickBooks — "+nieuw.length+"</h3>"+
+    "<div style='display:flex;gap:8px'><button id='qbSelAll' class='logout' type='button'>Alles selecteren</button>"+
+    "<button id='qbApprove' class='logout' type='button' style='border-color:var(--usa);color:var(--usa)'>Accorderen → Logic4-orders</button></div></div>"+
+    "<p class='lead' style='font-size:12px'>Vink facturen aan die je in Logic4 wilt aanmaken (debiteur <b>Passion Spa South</b>, magazijn <b>Warehouse Texas</b>). Klik een rij open om de voorgestelde regels te controleren. <span style='color:var(--bad)'>Rode artikelcode</span> = geen spa-variant gevonden; controleer voor accorderen.</p>"+
+    "<div id='qbApproveStatus' class='status-msg hidden'></div>"+
+    "<div class='tablewrap'><table class='grid'><thead><tr><th></th><th>Factuur</th><th>Klant</th><th>Datum</th><th>Regels</th><th>Status</th></tr></thead><tbody>";
+  for(const inv of qbInvoices){
+    const spaN=inv.rows.filter(r=>r.kind==='spa').reduce((a,r)=>a+r.qty,0);
+    const open=!!qbOpen[inv.docNr];
+    html+="<tr class='qbRow' data-nr='"+esc(inv.docNr)+"' style='cursor:pointer'>"+
+      "<td>"+(inv.geaccordeerd?"":"<input type='checkbox' class='qbChk' data-nr='"+esc(inv.docNr)+"' onclick='event.stopPropagation()'>")+"</td>"+
+      "<td>"+(open?"▾ ":"▸ ")+"<b>#"+esc(inv.docNr)+"</b></td><td>"+esc(inv.klant)+"</td><td style='font-size:12px'>"+esc(inv.datum||"")+"</td>"+
+      "<td>"+inv.rows.length+" regels · "+spaN+" spa</td>"+
+      "<td>"+(inv.geaccordeerd?"<span class='pill' style='background:#dcfce7;color:#15803d'>Logic4 #"+esc(inv.logic4Order||"?")+"</span>":"<span class='pill' style='background:#fef3c7;color:#92400e'>nieuw</span>")+"</td></tr>";
+    if(open){
+      html+="<tr><td colspan='6' style='background:#fafafa;padding:6px 12px'><table class='grid' style='margin:0'><thead><tr><th>Artikelcode</th><th>Omschrijving</th><th>Aantal</th><th>Soort</th></tr></thead><tbody>"+
+        inv.rows.map(r=>"<tr><td>"+(r.productCode?esc(r.productCode):"<b style='color:var(--bad)'>ontbreekt</b>")+"</td><td>"+esc(r.description)+"</td><td>"+r.qty+"</td><td>"+qbKindBadge(r.kind)+"</td></tr>").join("")+
+        (inv.overgeslagen&&inv.overgeslagen.length?"<tr><td colspan='4' style='color:var(--muted);font-size:11px'>Overgeslagen (niet op de order): "+esc(inv.overgeslagen.join(", "))+"</td></tr>":"")+
+        "</tbody></table></td></tr>";
+    }
+  }
+  html+="</tbody></table></div></div>";
+  box.innerHTML=html;
+  box.querySelectorAll(".qbRow").forEach(row=>row.addEventListener("click",()=>{ const nr=row.dataset.nr; qbOpen[nr]=!qbOpen[nr]; renderQbInvoices(); }));
+  const selAll=document.getElementById("qbSelAll"); if(selAll) selAll.addEventListener("click",()=>document.querySelectorAll(".qbChk").forEach(c=>c.checked=true));
+  const appr=document.getElementById("qbApprove"); if(appr) appr.addEventListener("click",qbApprove);
+}
+async function qbApprove(){
+  const nrs=[...document.querySelectorAll(".qbChk:checked")].map(c=>c.dataset.nr);
+  const st=document.getElementById("qbApproveStatus");
+  if(!nrs.length){ st.classList.remove("hidden"); st.className="status-msg warn"; st.textContent="Selecteer eerst een of meer facturen."; return; }
+  if(!confirm(nrs.length+" factuur/facturen accorderen? Er worden Logic4-orders aangemaakt onder Passion Spa South (magazijn Warehouse Texas).")) return;
+  st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Logic4-orders aanmaken…";
+  try{
+    const j=await (await fetch(WORKER+"/amerika/qb/approve",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},body:JSON.stringify({docNrs:nrs})})).json();
+    if(!j.ok){ st.className="status-msg bad"; st.textContent=j.error||"mislukt"; return; }
+    const ok=(j.results||[]).filter(r=>r.ok), bad=(j.results||[]).filter(r=>!r.ok);
+    st.className="status-msg "+(bad.length?"warn":"ok");
+    st.textContent=ok.length+" Logic4-order(s) aangemaakt"+(ok.length?" (#"+ok.map(r=>r.orderId).join(", #")+")":"")+(bad.length?(" · "+bad.length+" mislukt: "+bad.map(r=>"#"+r.docNr+" ("+r.error+")").join("; ")):"");
+    qbLoadData();
+  }catch(e){ st.className="status-msg bad"; st.textContent=e.message; }
 }
 
 const RESV_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/reserveringen-live";
