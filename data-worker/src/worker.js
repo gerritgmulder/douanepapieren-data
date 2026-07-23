@@ -1547,7 +1547,11 @@ function qbSpaCode(catalog, model, kleur) {
 
 // Regel-mapping: QuickBooks-factuurregel → Logic4-orderregel (of null = overslaan)
 function qbMapLine(name, qty, amount, catalog, spaModels) {
-  const n = String(name || "").trim();
+  const full = String(name || "").trim();
+  if (!full) return null;
+  // QuickBooks zet er soms een categorie vóór ("Swim Spa:Dynamic…", "Jet:PASS-D1…").
+  // Neem het deel ná de laatste ':' als de eigenlijke productnaam.
+  const n = full.includes(":") ? full.slice(full.lastIndexOf(":") + 1).trim() : full;
   const low = n.toLowerCase();
   if (!n) return null;
   if (/^wire\b/.test(low)) return null;                                  // Wire: nooit op de order
@@ -1559,6 +1563,15 @@ function qbMapLine(name, qty, amount, catalog, spaModels) {
     return { productCode: qbSpaCode(catalog, model, kleur) || null, description: n, qty, price: amount, kind: "spa", model, kleur };
   }
   return { productCode: QB_ART_PART, description: n, qty, price: amount, kind: "onderdeel" };   // alles anders = onderdeel
+}
+
+// Volledige spa-modellenlijst = catalogus (SKT) ∪ prijslijst (bevat ook de
+// swimspa's als Dynamic/Activity/Fitness die niet in de catalogus staan).
+// Langste namen eerst, zodat "Activity 1 Deep" vóór "Activity 1" matcht.
+async function qbSpaModelList(env, catalog) {
+  const prices = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
+  return [...new Set([...Object.keys(catalog.models || {}), ...Object.keys(prices.prices || {})])]
+    .sort((a, b) => b.length - a.length);
 }
 
 // Parse één QBO-invoice → {docNr, id, klant, datum, totaal, rows[], overgeslagen[]}
@@ -1586,7 +1599,7 @@ async function qbHandleInvoices(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
   try {
     const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
-    const spaModels = Object.keys(catalog.models || {}).sort((a, b) => b.length - a.length);
+    const spaModels = await qbSpaModelList(env, catalog);
     const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
     const j = await qbQuery(env, "SELECT * FROM Invoice ORDERBY TxnDate DESC MAXRESULTS 200");
     const raw = (j.QueryResponse && j.QueryResponse.Invoice) || [];
@@ -1609,13 +1622,18 @@ async function qbHandleInvoices(request, env) {
 // Maak één Logic4-order voor een geparste Amerika-factuur (magazijn Texas).
 async function dpCreateAmerikaOrder(env, mapped) {
   const token = await l4Token(env);
+  const withCode = mapped.rows.filter(r => r.productCode);
+  const missing = mapped.rows.filter(r => !r.productCode);   // spa zonder gevonden artikelcode
+  let notes = "Automatisch uit QuickBooks-factuur " + (mapped.docNr || "") + " (Passion Spa South).";
+  if (missing.length) notes += "\nLET OP — handmatig toevoegen (geen artikelcode gevonden):\n" +
+    missing.map(r => "  • " + r.qty + "x " + r.description).join("\n");
   const payload = {
     OrderStatus: { Id: 1 },                         // Verkooporder
     DebtorId: AMERIKA_DEBTOR,
     CreationDate: new Date().toISOString().slice(0, 19),   // verplicht
     Reference: "QuickBooks " + (mapped.docNr || ""),
-    Notes: "Automatisch uit QuickBooks-factuur " + (mapped.docNr || "") + " (Passion Spa South).",
-    OrderRows: mapped.rows.filter(r => r.productCode).map(r => ({
+    Notes: notes,
+    OrderRows: withCode.map(r => ({
       ProductCode: String(r.productCode), Description: r.description,
       Qty: Number(r.qty) || 1, WarehouseId: AMERIKA_WAREHOUSE,
     })),
@@ -1637,7 +1655,7 @@ async function qbHandleApprove(request, env) {
   const docNrs = (Array.isArray(body.docNrs) ? body.docNrs : []).map(String);
   if (!docNrs.length) return reply(400, { ok: false, error: "geen facturen geselecteerd" });
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
-  const spaModels = Object.keys(catalog.models || {}).sort((a, b) => b.length - a.length);
+  const spaModels = await qbSpaModelList(env, catalog);
   const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
   approved.ids = approved.ids || {};
   const results = [];
