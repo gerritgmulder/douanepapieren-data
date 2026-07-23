@@ -1294,6 +1294,14 @@ function normalizeTrackRecord(rec) {
   };
 }
 
+// Een ingevoerde referentie kan gecombineerd zijn ("3317-4&3332-1", "3332-7 & 3342-3").
+// Merzario zoekt op één referentie tegelijk, dus splitsen we op & , ; / en spaties
+// en proberen we elk deel + de hele string. (min. 3 tekens tegen ruis)
+function merzarioCandidates(ref) {
+  const parts = String(ref || "").split(/[&,;/\s]+/).map(s => s.trim()).filter(s => s.length >= 3);
+  return [...new Set([String(ref || "").trim(), ...parts])].filter(Boolean);
+}
+
 // Vraag tracking op voor een lijst referenties, met KV-cache. Geeft een map
 // { ref: normalizedRecord|null } terug (null = niet gevonden/te achterhalen).
 async function merzarioTrack(env, refs, opts = {}) {
@@ -1316,12 +1324,20 @@ async function merzarioTrack(env, refs, opts = {}) {
   }
 
   if (stale.length) {
+    // Elke stale-referentie uitbreiden naar losse zoektermen (split op & , ; / spatie)
+    const candByRef = {};                        // ref → [zoektermen]
+    const allCandidates = new Set();
+    for (const ref of stale) {
+      const cands = merzarioCandidates(ref);
+      candByRef[ref] = cands;
+      cands.forEach(c => allCandidates.add(c));
+    }
     let arr = [];
     try {
       const r = await fetch(MERZARIO_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Accept": "application/json" },
-        body: JSON.stringify({ trackingNumbers: stale }),
+        body: JSON.stringify({ trackingNumbers: [...allCandidates].slice(0, 100) }),
       });
       if (r.ok) {
         const j = await r.json().catch(() => null);
@@ -1333,12 +1349,19 @@ async function merzarioTrack(env, refs, opts = {}) {
     } catch (e) {
       out.__error = "Merzario niet bereikbaar: " + (e.message || e);
     }
-    // Records terugmatchen op elke referentie waarop we konden zoeken
+    // Records terugmatchen. LET OP: Merzario's ORDERREFERENCE kan zelf gecombineerd
+    // zijn ("3317-6, 3332-3"), dus ook de record-sleutels in losse tokens splitsen.
     for (const rec of arr) {
       const norm = normalizeTrackRecord(rec);
-      const keys = [norm.container, norm.shipmentId, norm.orderReference, norm.houseBill].filter(Boolean);
+      const keyTokens = new Set();
+      for (const k of [norm.container, norm.shipmentId, norm.orderReference, norm.houseBill]) {
+        if (!k) continue;
+        keyTokens.add(String(k).trim());
+        for (const part of String(k).split(/[&,;/\s]+/)) { const p = part.trim(); if (p.length >= 3) keyTokens.add(p); }
+      }
       for (const ref of stale) {
-        if (keys.includes(ref)) {
+        if (out[ref]) continue;                   // al gevonden
+        if ((candByRef[ref] || []).some(c => keyTokens.has(c))) {
           out[ref] = norm;
           cache.records[ref] = { fetchedAt: now, record: norm };
         }
@@ -1497,6 +1520,143 @@ async function qbHandleData(request, env) {
   }
 }
 
+// ── Amerika → Logic4: nieuwe QuickBooks-facturen accorderen ──────────
+// Vaste gegevens (Gerrit): debiteur 878871433 (Passion Spa South LLC),
+// magazijn 50 (Warehouse Texas). Vanaf factuurnummer 3300 (t/m nieuwste).
+const AMERIKA_DEBTOR = 878871433;
+const AMERIKA_WAREHOUSE = 50;
+const AMERIKA_VANAF = 3300;
+const QB_ART_FEE = "789456";      // Houston Fee + Freight
+const QB_ART_CC = "100000";       // Credit Card Charge
+const QB_ART_PART = "13265448";   // spa-onderdeel (alles zonder spa-naam)
+
+// Vind de Logic4-artikelcode voor een spa-model + kleur via de catalogus
+// (beste kleur-match op woord-overlap; anders de eerste variant).
+function qbSpaCode(catalog, model, kleur) {
+  const variants = (catalog.models || {})[model] || [];
+  if (!variants.length) return null;
+  const words = String(kleur || "").toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2);
+  let best = variants[0], bestScore = -1;
+  for (const v of variants) {
+    const vc = String(v.desc || "").toLowerCase();
+    const score = words.reduce((n, w) => n + (vc.includes(w) ? 1 : 0), 0);
+    if (score > bestScore) { bestScore = score; best = v; }
+  }
+  return best.code || null;
+}
+
+// Regel-mapping: QuickBooks-factuurregel → Logic4-orderregel (of null = overslaan)
+function qbMapLine(name, qty, amount, catalog, spaModels) {
+  const n = String(name || "").trim();
+  const low = n.toLowerCase();
+  if (!n) return null;
+  if (/^wire\b/.test(low)) return null;                                  // Wire: nooit op de order
+  if (low.startsWith("houston") || low.startsWith("freight")) return { productCode: QB_ART_FEE, description: n, qty, price: amount, kind: "kosten" };
+  if (low.startsWith("credit card")) return { productCode: QB_ART_CC, description: n, qty, price: amount, kind: "kosten" };
+  const model = spaModels.find(m => low === m.toLowerCase() || low.startsWith(m.toLowerCase() + " "));
+  if (model) {
+    const kleur = n.slice(model.length).trim();
+    return { productCode: qbSpaCode(catalog, model, kleur) || null, description: n, qty, price: amount, kind: "spa", model, kleur };
+  }
+  return { productCode: QB_ART_PART, description: n, qty, price: amount, kind: "onderdeel" };   // alles anders = onderdeel
+}
+
+// Parse één QBO-invoice → {docNr, id, klant, datum, totaal, rows[], overgeslagen[]}
+function qbMapInvoice(inv, catalog, spaModels) {
+  const rows = [], skipped = [];
+  for (const line of (inv.Line || [])) {
+    if (line.DetailType !== "SalesItemLineDetail") continue;
+    const d = line.SalesItemLineDetail || {};
+    const name = (d.ItemRef && d.ItemRef.name) || line.Description || "";
+    const qty = Number(d.Qty) || 1;
+    const amount = Number(line.Amount) || 0;
+    const m = qbMapLine(name, qty, amount, catalog, spaModels);
+    if (m) rows.push(m); else if (name) skipped.push(name);
+  }
+  return {
+    docNr: inv.DocNumber || null, id: inv.Id,
+    klant: (inv.CustomerRef && inv.CustomerRef.name) || "", datum: inv.TxnDate || null,
+    totaal: Number(inv.TotalAmt) || 0, rows, overgeslagen: skipped,
+  };
+}
+
+// GET /amerika/qb/invoices — nieuwe facturen (docNr >= 3300) met voorgestelde
+// Logic4-mapping + of ze al geaccordeerd zijn. Read-only.
+async function qbHandleInvoices(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  try {
+    const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+    const spaModels = Object.keys(catalog.models || {}).sort((a, b) => b.length - a.length);
+    const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
+    const j = await qbQuery(env, "SELECT * FROM Invoice ORDERBY TxnDate DESC MAXRESULTS 200");
+    const raw = (j.QueryResponse && j.QueryResponse.Invoice) || [];
+    const invoices = raw
+      .filter(inv => { const nr = parseInt(inv.DocNumber, 10); return isFinite(nr) && nr >= AMERIKA_VANAF; })
+      .map(inv => {
+        const m = qbMapInvoice(inv, catalog, spaModels);
+        m.geaccordeerd = !!(approved.ids && approved.ids[m.docNr]);
+        m.logic4Order = m.geaccordeerd ? approved.ids[m.docNr].orderId : null;
+        return m;
+      })
+      .sort((a, b) => (parseInt(b.docNr, 10) || 0) - (parseInt(a.docNr, 10) || 0));
+    return reply(200, { ok: true, invoices });
+  } catch (e) {
+    console.error("[qb] invoices-fout: " + String(e.message || e));
+    return reply(200, { ok: false, error: String(e.message || e) });
+  }
+}
+
+// Maak één Logic4-order voor een geparste Amerika-factuur (magazijn Texas).
+async function dpCreateAmerikaOrder(env, mapped) {
+  const token = await l4Token(env);
+  const payload = {
+    OrderStatus: { Id: 1 },                         // Verkooporder
+    DebtorId: AMERIKA_DEBTOR,
+    CreationDate: new Date().toISOString().slice(0, 19),   // verplicht
+    Reference: "QuickBooks " + (mapped.docNr || ""),
+    Notes: "Automatisch uit QuickBooks-factuur " + (mapped.docNr || "") + " (Passion Spa South).",
+    OrderRows: mapped.rows.filter(r => r.productCode).map(r => ({
+      ProductCode: String(r.productCode), Description: r.description,
+      Qty: Number(r.qty) || 1, WarehouseId: AMERIKA_WAREHOUSE,
+    })),
+  };
+  const r = await fetch("https://api.logic4server.nl/v3/Orders/AddUpdateOrder", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(payload),
+  });
+  const txt = await r.text(); let j = null; try { j = JSON.parse(txt); } catch {}
+  if (!r.ok) { console.log("[qb-order] faalde HTTP " + r.status + ": " + txt.slice(0, 300)); return { ok: false, error: "HTTP " + r.status + " — " + txt.slice(0, 200) }; }
+  const orderId = (typeof j === "number" && j) || (j && (j.Id || (j.Value && j.Value.Id))) || null;
+  return { ok: true, orderId };
+}
+
+// POST /amerika/qb/approve { docNrs:[...] } — maak Logic4-orders voor de
+// geselecteerde facturen. Side-effect: alleen op expliciete actie van Chantal.
+async function qbHandleApprove(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const docNrs = (Array.isArray(body.docNrs) ? body.docNrs : []).map(String);
+  if (!docNrs.length) return reply(400, { ok: false, error: "geen facturen geselecteerd" });
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const spaModels = Object.keys(catalog.models || {}).sort((a, b) => b.length - a.length);
+  const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
+  approved.ids = approved.ids || {};
+  const results = [];
+  for (const docNr of docNrs) {
+    if (approved.ids[docNr]) { results.push({ docNr, ok: true, orderId: approved.ids[docNr].orderId, already: true }); continue; }
+    try {
+      const j = await qbQuery(env, "SELECT * FROM Invoice WHERE DocNumber = '" + docNr.replace(/'/g, "") + "'");
+      const inv = ((j.QueryResponse && j.QueryResponse.Invoice) || [])[0];
+      if (!inv) { results.push({ docNr, ok: false, error: "factuur niet gevonden" }); continue; }
+      const mapped = qbMapInvoice(inv, catalog, spaModels);
+      const res = await dpCreateAmerikaOrder(env, mapped);
+      if (res.ok) { approved.ids[docNr] = { orderId: res.orderId, ts: new Date().toISOString() }; results.push({ docNr, ok: true, orderId: res.orderId }); }
+      else results.push({ docNr, ok: false, error: res.error });
+    } catch (e) { results.push({ docNr, ok: false, error: String(e.message || e) }); }
+  }
+  await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
+  return reply(200, { ok: true, results });
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -1538,6 +1698,8 @@ export default {
     if (url.pathname === "/amerika/qb/callback") return qbHandleCallback(request, env, url);
     if (url.pathname === "/amerika/qb/status")   return qbHandleStatus(request, env);
     if (url.pathname === "/amerika/qb/data")     return qbHandleData(request, env);
+    if (url.pathname === "/amerika/qb/invoices") return qbHandleInvoices(request, env);
+    if (url.pathname === "/amerika/qb/approve" && request.method === "POST") return qbHandleApprove(request, env);
 
     // Dealerportaal (publiek, eigen sessie-auth — géén shared secret)
     if (url.pathname === "/dealers" || url.pathname.startsWith("/dealers/")) {
