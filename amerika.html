@@ -9,6 +9,7 @@
     --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
     --fonteyn-lime:#8bc53f; --fonteyn-lime-dark:#72a531;
     --bg:#f5f4ef; --ink:#1f2937; --usa:#3c3b6e; --usa-red:#b22234;
+    --passion:#c8102e; --passion-dark:#a50d26;
     --muted:#6b7280; --border:#e5e7eb; --ok:#059669; --bad:#b91c1c; --warn:#92400e;
   }
   *{box-sizing:border-box}
@@ -18,7 +19,15 @@
   header h1{margin:0;font-size:16px;font-weight:600;flex:1}
   header a.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px}
   header .user-chip{font-size:12px;color:rgba(255,255,255,0.85)}
-  header button.logout{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer}
+  header button.logout{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:7px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer;transition:all .14s ease}
+  header button.logout:hover{background:rgba(255,255,255,.15);border-color:#fff}
+  /* Strakke secundaire knop met Passion-accent */
+  .btn{display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--passion);border:1.5px solid var(--passion);border-radius:8px;padding:8px 15px;font:inherit;font-weight:600;font-size:12.5px;line-height:1;cursor:pointer;transition:all .14s ease;white-space:nowrap}
+  .btn:hover{background:var(--passion);color:#fff;box-shadow:0 4px 12px rgba(200,16,46,.28);transform:translateY(-1px)}
+  .btn:active{transform:translateY(0);box-shadow:0 2px 6px rgba(200,16,46,.2)}
+  .btn.solid{background:var(--passion);color:#fff}
+  .btn.solid:hover{background:var(--passion-dark);border-color:var(--passion-dark)}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important;box-shadow:none!important;background:#fff;color:var(--passion)}
   main{max-width:1400px;margin:24px auto;padding:0 22px}
   h2{color:var(--usa);font-size:22px;margin:0 0 6px}
   .lead{color:var(--muted);margin:0 0 20px}
@@ -91,7 +100,7 @@
       <div class="step"><b>2. Redirect-adres</b> — in die app registreren we <code>https://fonteyn-data-store.g-mulder.workers.dev/amerika/qb/callback</code> als Redirect URI.</div>
       <div class="step"><b>3. Eénmalige toestemming</b> — iemand met toegang tot de US-QuickBooks (Audrey/Chantal) klikt één keer op "Verbinden" en logt in bij QuickBooks. Daarna onthoudt het systeem de toegang (met automatische vernieuwing).</div>
       <p class="lead" style="font-size:12.5px;margin-top:14px">Zodra dit er is, verschijnen hier automatisch de US-facturen, klanten/dealers en openstaande bedragen — read-only, net als de rest van het dashboard. Ik zet niets live wat geld kan verplaatsen.</p>
-      <button class="logout" id="qbConnectBtn" type="button" disabled style="border-color:var(--usa);color:var(--usa);opacity:.5">Verbinden met QuickBooks (wacht op app-gegevens)</button>
+      <button class="btn solid" id="qbConnectBtn" type="button" disabled style="opacity:.5">Verbinden met QuickBooks (wacht op app-gegevens)</button>
     </div>
     <div id="qbData"></div>
   </div>
@@ -159,8 +168,8 @@ function renderQbInvoices(){
   const nieuw=qbInvoices.filter(i=>!i.geaccordeerd);
   let html="<div class='card'><div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px'>"+
     "<h3 style='margin:0'>Nieuwe orders uit QuickBooks — "+nieuw.length+"</h3>"+
-    "<div style='display:flex;gap:8px'><button id='qbSelAll' class='logout' type='button'>Alles selecteren</button>"+
-    "<button id='qbApprove' class='logout' type='button' style='border-color:var(--usa);color:var(--usa)'>Accorderen → Logic4-orders</button></div></div>"+
+    "<div style='display:flex;gap:8px'><button id='qbSelAll' class='btn' type='button'>Alles selecteren</button>"+
+    "<button id='qbApprove' class='btn solid' type='button'>Accorderen → Logic4-orders</button></div></div>"+
     "<p class='lead' style='font-size:12px'>Vink facturen aan die je in Logic4 wilt aanmaken (debiteur <b>Passion Spa South</b>, magazijn <b>Warehouse Texas</b>). Klik een rij open om de voorgestelde regels te controleren. <span style='color:var(--bad)'>Rode artikelcode</span> = geen spa-variant gevonden; controleer voor accorderen.</p>"+
     "<div id='qbApproveStatus' class='status-msg hidden'></div>"+
     "<div class='tablewrap'><table class='grid'><thead><tr><th></th><th>Factuur</th><th>Klant</th><th>Datum</th><th>Regels</th><th>Status</th></tr></thead><tbody>";
