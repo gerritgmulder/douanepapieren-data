@@ -82,6 +82,13 @@
   .cont ul{margin:5px 0 0;padding-left:16px;color:#374151}
   .cont .resv{color:var(--ok)} .cont .free{color:var(--warn)}
   .barwrap{height:8px;background:#eef0ee;border-radius:5px;overflow:hidden;margin-top:4px}
+  /* Formuliervelden — consistent Montserrat-font + nette look (chevron op selects) */
+  input,select,textarea{font-family:inherit;color:var(--ink)}
+  input[type=text],input[type=date],input[type=number],input[type=email],input:not([type]),select:not(.soort-sel):not(.cfld){border:1px solid var(--border);border-radius:8px;padding:8px 11px;font:inherit;font-size:13px;background:#fff;transition:border-color .14s ease,box-shadow .14s ease}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--fonteyn-lime-dark);box-shadow:0 0 0 3px rgba(139,197,63,.18)}
+  select:not(.soort-sel):not(.cfld){-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='none' stroke='%23144734' stroke-width='1.6' d='M2.5 4.5 6 8l3.5-3.5'/></svg>");background-repeat:no-repeat;background-position:right 11px center;padding-right:32px;cursor:pointer}
+  .rmv{background:#fff;border:1px solid var(--border);border-radius:7px;color:var(--muted);cursor:pointer;font:inherit;font-size:11.5px;font-weight:600;padding:5px 11px;transition:all .14s ease}
+  .rmv:hover{border-color:var(--bad);color:#fff;background:var(--bad)}
 </style>
 </head>
 <body>
@@ -298,9 +305,9 @@
         wordt de order aangemaakt, bij een particulier wordt de aanbetaling op de bestaande order geboekt.
       </p>
       <div class="actions" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:0">
-        <select id="rfType" style="padding:8px"><option value="partner">Partner (e-mail)</option><option value="particulier">Particulier (Logic4-order)</option></select>
-        <select id="rfModel" style="min-width:180px;padding:8px"><option value="">— model —</option></select>
-        <select id="rfVariant" style="min-width:150px;padding:8px"><option value="">— kleur (optioneel) —</option></select>
+        <select id="rfType"><option value="partner">Partner (e-mail)</option><option value="particulier">Particulier (Logic4-order)</option></select>
+        <select id="rfModel" style="min-width:180px"><option value="">— model —</option></select>
+        <select id="rfVariant" style="min-width:150px"><option value="">— kleur (optioneel) —</option></select>
         <input id="rfQty" type="number" min="1" max="50" value="1" style="width:70px;padding:8px" title="aantal">
         <input id="rfEmail" placeholder="e-mailadres partner" style="min-width:200px;padding:8px">
         <input id="rfOrder" placeholder="Logic4-ordernr" style="min-width:140px;padding:8px;display:none">
@@ -316,7 +323,7 @@
         onder de streep = wacht op de volgende productie.
       </p>
       <div class="actions" style="margin-top:0;align-items:center;gap:10px">
-        <select id="prioModel" style="min-width:220px;padding:8px"><option value="">— kies een model —</option></select>
+        <select id="prioModel" style="min-width:220px"><option value="">— kies een model —</option></select>
         <button class="secondary" id="prioReload" type="button">Vernieuwen</button>
         <span id="prioSummary" style="font-size:13px;color:var(--muted)"></span>
       </div>
@@ -1285,11 +1292,12 @@ function renderSchepen(){
     const trackRef=(s.trackRef!=null?s.trackRef:(s.ref||""));
     return "<tr>"+
       "<td><b>"+esc(s.vessel||"—")+"</b>"+(s.track&&s.track.vessel&&s.track.vessel!==s.vessel?("<div style='font-size:11px;color:var(--muted)'>Merzario: "+esc(s.track.vessel)+"</div>"):"")+"</td>"+
-      "<td><input type='text' class='shipRef' data-i='"+i+"' value='"+esc(trackRef)+"' placeholder='container / orderref' style='font-size:12px;padding:4px 7px;width:130px'>"+
-        "<button class='btn sm trkOne' data-i='"+i+"' style='margin-top:4px'>ETA ophalen</button></td>"+
+      "<td><div style='display:flex;flex-direction:column;gap:8px;align-items:flex-start'>"+
+        "<input type='text' class='shipRef' data-i='"+i+"' value='"+esc(trackRef)+"' placeholder='container / orderref' style='font-size:12px;width:160px'>"+
+        "<button class='btn sm trkOne' data-i='"+i+"'>ETA ophalen</button></div></td>"+
       "<td>"+spas+"</td>"+
       "<td>"+trackStatusCell(s.track)+"</td>"+
-      "<td><input type='date' class='shipEta' data-i='"+i+"' value='"+esc(s.eta||"")+"' style='font-size:12px;padding:4px 7px'></td>"+
+      "<td><input type='date' class='shipEta' data-i='"+i+"' value='"+esc(s.eta||"")+"' style='font-size:12.5px'></td>"+
       "<td><button class='rmv delShip' data-i='"+i+"'>✕ verwijder</button></td>"+
     "</tr>";
   }).join("") || "<tr><td colspan='6' style='color:var(--muted)'>Nog geen schepen. Upload een commercial invoice.</td></tr>";

@@ -50,7 +50,9 @@
   .tabs{display:flex;gap:6px;margin:6px 0 16px;border-bottom:2px solid var(--border);flex-wrap:wrap}
   .tab{background:transparent;border:0;border-bottom:3px solid transparent;padding:9px 16px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:-2px}
   .tab.active{color:var(--usa);border-bottom-color:var(--usa-red)}
-  input[type=text]{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit}
+  input,select,textarea,button{font-family:inherit}
+  input[type=text]{border:1px solid var(--border);border-radius:8px;padding:8px 11px;font:inherit;font-size:13px;transition:border-color .14s ease,box-shadow .14s ease}
+  input[type=text]:focus{outline:none;border-color:var(--usa);box-shadow:0 0 0 3px rgba(60,59,110,.15)}
   .step{border-left:3px solid var(--usa);padding:4px 0 4px 14px;margin:10px 0}
   .step b{color:var(--usa)}
 </style>
