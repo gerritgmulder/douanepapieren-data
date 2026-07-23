@@ -326,8 +326,8 @@ async function dpHandleMySpas(env, sess) {
     for (const r of list) {
       if (!debtorIds.has(String(r.debtorId))) continue;
       spas.push({
-        ordernr: r.ordernr, date: r.datum, model, qty: r.qty,
-        status: r.status, betaald: r.betaald, vervallen: r.vervallen,
+        ordernr: r.ordernr, date: r.datum, model, kleur: r.kleur || null, qty: r.qty,
+        status: r.status, betaald: r.betaald, betaaldPct: r.betaaldPct,
         verwacht: r.verwacht || null, verwachtSchip: r.verwachtSchip || null,
       });
     }
@@ -1053,12 +1053,25 @@ async function dpRefreshHalStock(env) {
   return { ok: true, models: Object.keys(perModel).length };
 }
 
-// Reserveringen-ledger: élke Logic4-order met een spa is een reservering.
-// Statussen: 15 = wachten op 30% aanbetaling, 25 = 30% aanbetaald,
-// 1 = verkooporder. Regel Gerrit: een order mag reserveren maar moet binnen
-// 3 dagen aanbetaald zijn (status 25), anders 'vervallen' (schuift op). Elk
-// uur ververst; particulieren maken zelf geld over → status springt 15→25.
+// Reserveringen-ledger: élke openstaande Logic4-order met een spa is een
+// reservering. Statussen: 15 = wachten op 30% aanbetaling, 25 = 30% aanbetaald,
+// 1 = verkooporder (uitgeleverde orders staan op 3 = Afgehandeld en vallen dus
+// vanzelf weg). MAGAZIJN is bepalend (staat per orderregel, WarehouseId):
+//   21 = Fonteyn         → echte NL-reservering (uit Fonteyn-voorraad)
+//   27 = Dealer magazijn → containerorder (gaat rechtstreeks naar de dealer)
+//   50 = Warehouse Texas → Amerika (apart, telt NIET mee voor NL)
+// 'betaald' komt uit de ECHTE betaling (Totals.Calc_TotalPayed), niet uit de
+// status — een order kan op 'wachten' staan terwijl er al geld binnen is.
 const DP_RESV_STATUSES = [15, 25, 1];
+const WH_NAMES = { 19: "Geen", 20: "OUD Kelder", 21: "Fonteyn", 25: "Showroommodel", 26: "Outlet", 27: "Dealer magazijn", 49: "Derving", 50: "Warehouse Texas USA", 51: "Transporteur", 52: "Retouren" };
+const WH_TEXAS = 50, WH_DEALER = 27;
+// Kleur = het stuk ná de '|' in de regelomschrijving ("Relax Spa | Sterling White with Grey").
+function dpRowColor(desc) {
+  const s = String(desc || "");
+  const i = s.indexOf("|");
+  if (i < 0) return null;
+  return s.slice(i + 1).replace(/\b(spa|swimspa)\b/gi, "").replace(/\s+/g, " ").trim() || null;
+}
 async function dpRefreshReservations(env) {
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const codeToModel = {};
@@ -1073,8 +1086,8 @@ async function dpRefreshReservations(env) {
 
   const token = await l4Token(env);
   const fromIso = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 19);
-  const nowMs = Date.now();
-  const byModel = {};
+  const byModel = {};      // NL (magazijn ≠ Texas): { model: [lijnen] }
+  const byModelUSA = {};   // Amerika (magazijn 50)
   const statusName = { 15: "wachten op aanbetaling", 25: "30% aanbetaald", 1: "verkooporder" };
   for (const st of DP_RESV_STATUSES) {
     for (let page = 0; page < 8; page++) {
@@ -1087,42 +1100,53 @@ async function dpRefreshReservations(env) {
       const arr = Array.isArray(data) ? data : ((data && data.Orders) || []);
       if (!arr.length) break;
       for (const o of arr) {
-        const perModelQty = {};
+        // Betaling uit de order-totalen (niet uit de status): het echte %.
+        const T = o.Totals || {};
+        const totaal = Number(T.AmountIncl) || 0;
+        const aanbetaling = Number(T.Calc_TotalPayed) || 0;
+        const betaaldPct = totaal > 0 ? Math.round((aanbetaling / totaal) * 100) : 0;
+        const betaald = !!T.IsPaid || aanbetaling > 0;   // er is écht geld binnen
+        const dId = String(o.DebtorId);
+        const company = (o.InvoiceAddress && o.InvoiceAddress.CompanyName) || (o.AccountAddress && o.AccountAddress.CompanyName) || "";
+        const type = partnerDebtors.has(dId) ? "partner"
+          : (klantType[dId] === "dealer" ? "partner"
+            : (company.trim() ? "zakelijk" : "particulier"));
+        const naam = company.trim() || (o.InvoiceAddress && o.InvoiceAddress.ContactName) || ("Debiteur " + o.DebtorId);
+        // Regels groeperen per model+kleur+magazijn binnen deze order.
+        const groups = {};
         for (const row of (o.OrderRows || [])) {
           const model = codeToModel[String(row.ProductCode || "")];
           if (!model) continue;
-          // Alleen het NOG NIET uitgeleverde deel telt als reservering. Een
-          // (deels) uitgeleverde spa is geen openstaande reservering meer.
           const undelivered = (Number(row.Qty) || 0) - (Number(row.QtyDeliverd) || 0);
           if (undelivered <= 0) continue;
-          perModelQty[model] = (perModelQty[model] || 0) + undelivered;
+          const wh = Number(row.WarehouseId) || 0;
+          const kleur = dpRowColor(row.Description);
+          const key = model + "||" + (kleur || "") + "||" + wh;
+          (groups[key] = groups[key] || { model, kleur, wh, qty: 0 }).qty += undelivered;
         }
-        for (const [model, qty] of Object.entries(perModelQty)) {
-          if (qty <= 0) continue;
-          const dId = String(o.DebtorId);
-          // Type rechtstreeks uit de order: een bedrijfsnaam = zakelijk, anders
-          // particulier. Portaal-partners (dealer-accounts) → 'partner'.
-          const company = (o.InvoiceAddress && o.InvoiceAddress.CompanyName) || (o.AccountAddress && o.AccountAddress.CompanyName) || "";
-          const type = partnerDebtors.has(dId) ? "partner"
-            : (klantType[dId] === "dealer" ? "partner"
-              : (company.trim() ? "zakelijk" : "particulier"));
-          const dagen = (nowMs - new Date(o.CreationDate).getTime()) / 86400000;
-          const betaald = st === 25;
-          (byModel[model] = byModel[model] || []).push({
-            ordernr: o.Id, debtorId: o.DebtorId,
-            naam: company.trim() || (o.InvoiceAddress && o.InvoiceAddress.ContactName) || ("Debiteur " + o.DebtorId),
-            type, qty, datum: String(o.CreationDate).slice(0, 10), statusId: st, status: statusName[st] || String(st),
-            betaald, vervallen: st === 15 && dagen > 3,   // >3 dagen onbetaald = vervallen
-          });
+        for (const gkey of Object.keys(groups)) {
+          const gr = groups[gkey];
+          const usa = gr.wh === WH_TEXAS;
+          const container = gr.wh === WH_DEALER || gr.qty > 2;   // >2 stuks of Dealer magazijn = containerverdenking
+          const line = {
+            ordernr: o.Id, debtorId: o.DebtorId, naam, type,
+            model: gr.model, kleur: gr.kleur || null, qty: gr.qty,
+            warehouseId: gr.wh, magazijn: WH_NAMES[gr.wh] || ("magazijn " + gr.wh),
+            container, regio: usa ? "USA" : "NL",
+            datum: String(o.CreationDate).slice(0, 10), statusId: st, status: statusName[st] || String(st),
+            betaald, betaaldPct, aanbetaling: Math.round(aanbetaling), totaal: Math.round(totaal),
+          };
+          const bucket = usa ? byModelUSA : byModel;
+          (bucket[gr.model] = bucket[gr.model] || []).push(line);
         }
       }
       if (arr.length < 500) break;
     }
   }
-  // Per model sorteren: betaald eerst, dan niet-vervallen op datum, vervallen achteraan
-  for (const list of Object.values(byModel)) {
-    list.sort((a, b) => (b.betaald - a.betaald) || (a.vervallen - b.vervallen) || String(a.datum).localeCompare(String(b.datum)));
-  }
+  // Sorteren: betaald eerst, dan op datum
+  const srt = (a, b) => (b.betaald - a.betaald) || String(a.datum).localeCompare(String(b.datum));
+  for (const list of Object.values(byModel)) list.sort(srt);
+  for (const list of Object.values(byModelUSA)) list.sort(srt);
 
   // ── Leverforecast: wijs elke actieve reservering toe aan de eerstvolgende
   // voorraad. Voorraadstroom per model: eerst wat NU in de hal vrij is, dan de
@@ -1146,7 +1170,9 @@ async function dpRefreshReservations(env) {
       .forEach(sh => buckets.push({ kind: sh.eta ? "schip" : "op-schip", eta: sh.eta, left: sh.qty, vessel: sh.vessel }));
     let bi = 0;
     for (const r of list) {
-      if (r.vervallen) { r.verwacht = "vervallen"; continue; }   // telt niet mee
+      // Containerorders (Dealer magazijn) gaan rechtstreeks naar de dealer en
+      // trekken NIET uit de Fonteyn-voorraad — die krijgen 'dealer-direct'.
+      if (r.container && r.warehouseId === WH_DEALER) { r.verwacht = "dealer-direct"; continue; }
       let need = r.qty, landing = null;
       while (need > 0 && bi < buckets.length) {
         const take = Math.min(need, buckets[bi].left);
@@ -1159,9 +1185,10 @@ async function dpRefreshReservations(env) {
     }
   }
 
-  await env.FONTEYN_DATA.put("reserveringen-live", JSON.stringify({ updated: new Date().toISOString(), byModel }));
+  await env.FONTEYN_DATA.put("reserveringen-live", JSON.stringify({ updated: new Date().toISOString(), byModel, byModelUSA }));
   const total = Object.values(byModel).reduce((n, l) => n + l.length, 0);
-  return { ok: true, models: Object.keys(byModel).length, reserveringen: total };
+  const totalUSA = Object.values(byModelUSA).reduce((n, l) => n + l.length, 0);
+  return { ok: true, models: Object.keys(byModel).length, reserveringen: total, amerika: totalUSA };
 }
 
 // ─── Merzario-tracking (MyMerzario Tracking API) ─────────────────────

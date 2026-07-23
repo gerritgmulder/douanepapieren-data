@@ -99,6 +99,7 @@
     <button class="tab" data-tab="reserveringen" type="button">Reserveringen</button>
     <button class="tab" data-tab="prio" type="button">Prioriteit</button>
     <button class="tab" data-tab="schepen" type="button">Schepen</button>
+    <button class="tab" data-tab="amerika" type="button">Amerika 🇺🇸</button>
     <!-- OUDE tabs — verborgen bewaard (verwijder de style om terug te halen) -->
     <button class="tab" data-tab="ophalen" type="button" style="display:none">Ophalen &amp; markeren (oud)</button>
     <button class="tab" data-tab="dealer" type="button" style="display:none">Res. Dealers (oud)</button>
@@ -210,8 +211,9 @@
     </div>
     <div class="card">
       <h3>Binnenkomende schepen</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:8px">Klik een schip open om te zien welke spa's aan boord zijn. De trackingreferentie + ETA komen uit de tab Schepen.</p>
       <div class="tablewrap"><table class="grid">
-        <thead><tr><th>Schip / reis</th><th>ETA</th><th>Spa's aan boord</th></tr></thead>
+        <thead><tr><th>Schip / reis</th><th>Trackingreferentie</th><th>ETA</th><th>Spa's aan boord</th></tr></thead>
         <tbody id="ovShips"></tbody>
       </table></div>
     </div>
@@ -219,18 +221,30 @@
 
   <div id="tab-reserveringen" class="hidden">
     <div class="card">
-      <h3>Reserveringen — de actuele stand</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Elke Logic4-order met een spa is automatisch een reservering. Deze lijst wordt <b>elk uur</b> ververst.
-        <span style="color:#15803d">Betaald</span> = 30% aanbetaald (bevestigd). <span style="color:var(--warn)">Wacht</span> = wacht op aanbetaling.
-        <span style="color:var(--bad)">Vervallen</span> = langer dan 3 dagen onbetaald → schuift achteraan.
+      <h3>Reserveringen — de actuele stand (Fonteyn NL)</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Elke openstaande Logic4-order met een spa (magazijn <b>Fonteyn</b>) is een reservering. Elk uur ververst.
+        <span style="color:#15803d">Betaald</span> = er is écht geld binnen (aanbetaling of meer). <span style="color:var(--warn)">Wacht</span> = nog niets betaald.
+        Een <b style="color:#c2410c">oranje</b> rij = <b>meer dan 2 stuks of Dealer magazijn</b> → waarschijnlijk een containerorder die niet uit de Fonteyn-voorraad komt. Amerika staat in een eigen tab.
       </p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
-        <input id="resvSearch" placeholder="zoek model…" style="min-width:200px;padding:8px">
+        <input id="resvSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:280px;padding:8px">
         <span id="resvUpdated" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <div id="resvOverview" style="margin-top:12px"></div>
     </div>
     <div id="resvDetail"></div>
+  </div>
+
+  <div id="tab-amerika" class="hidden">
+    <div class="card">
+      <h3>Amerika 🇺🇸 — Warehouse Texas USA</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Orders met magazijn <b>Warehouse Texas USA</b>. Deze staan volledig los van Nederland en tellen <b>niet</b> mee in de Fonteyn-voorraad of -reserveringen.</p>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:0">
+        <input id="usaSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:280px;padding:8px">
+        <span id="usaUpdated" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="usaOverview" style="margin-top:12px"></div>
+    </div>
   </div>
 
   <div id="tab-schepen" class="hidden">
@@ -843,10 +857,12 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   document.getElementById("tab-reserveringen").classList.toggle("hidden", tab!=="reserveringen");
   document.getElementById("tab-schepen").classList.toggle("hidden", tab!=="schepen");
   document.getElementById("tab-prio").classList.toggle("hidden", tab!=="prio");
+  document.getElementById("tab-amerika").classList.toggle("hidden", tab!=="amerika");
   document.getElementById("tab-pipe").classList.toggle("hidden", tab!=="pipe");
   document.getElementById("tab-dealerview").classList.toggle("hidden", tab!=="dealerview");
   if (tab==="overzicht") loadOverzicht();
   if (tab==="reserveringen") loadReserveringen();
+  if (tab==="amerika") loadAmerika();
   if (tab==="schepen") loadSchepen();
   if (tab==="prio") initPrio();
   if (tab==="dealer"||tab==="part") renderOverviews();
@@ -979,53 +995,76 @@ async function loadOverzicht(){
   }catch(e){ document.getElementById("ovKpis").innerHTML="<div class='status-msg bad'>Overzicht laden faalde: "+esc(e.message)+"</div>"; }
 }
 const PRICES_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/dealer-prices";
+let ovShipsCache=[], ovShipOpen={};
 function renderOverzicht(resv,hal,ship,priceData){
   const byModel=resv.byModel||{}, halM=hal.models||{}, rate=Number((priceData.meta||{}).rate)||1.11, prices=priceData.prices||{};
   // schepen per model
   const shipByModel={}; let shipTotal=0;
   for(const s of (ship.ships||[])) for(const [m,q] of Object.entries(s.models||{})){ shipByModel[m]=(shipByModel[m]||0)+q; shipTotal+=q; }
-  // aggregaten
-  let actief=0,betaald=0,wacht=0,vervallen=0,orderwaarde=0, halTotal=0;
+  // aggregaten — containers (dealer-direct) apart van de Fonteyn-vraag
+  let actief=0,betaald=0,wacht=0,containers=0,orderwaarde=0, halTotal=0;
   const rows=[];
   const models=new Set([...Object.keys(byModel),...Object.keys(prices)]);
   for(const m of models){
     const list=byModel[m]||[];
-    const act=list.filter(r=>!r.vervallen), verv=list.filter(r=>r.vervallen);
-    const actQty=act.reduce((a,r)=>a+r.qty,0);
-    const betQty=act.filter(r=>r.betaald).reduce((a,r)=>a+r.qty,0);
-    actief+=actQty; betaald+=betQty; wacht+=actQty-betQty; vervallen+=verv.reduce((a,r)=>a+r.qty,0);
+    const fon=list.filter(r=>!r.container), con=list.filter(r=>r.container);
+    const actQty=fon.reduce((a,r)=>a+r.qty,0);              // echte Fonteyn-vraag
+    const conQty=con.reduce((a,r)=>a+r.qty,0);              // containerorders
+    const betQty=fon.filter(r=>r.betaald).reduce((a,r)=>a+r.qty,0);
+    actief+=actQty; betaald+=betQty; wacht+=actQty-betQty; containers+=conQty;
     const voorraad=(halM[m]||{}).available||0; halTotal+=voorraad;
     const zee=shipByModel[m]||0;
     const gedekt=Math.min(actQty,voorraad+zee);
     const tekort=Math.max(0,actQty-voorraad-zee);
-    // orderwaarde actief (EUR partnerprijs excl. BTW, indicatief)
     const p=prices[m]; if(p&&p.usd) orderwaarde+=actQty*Math.round(Number(p.usd)/rate);
-    if(actQty>0||voorraad>0||zee>0) rows.push({m,actQty,voorraad,zee,gedekt,tekort});
+    if(actQty>0||voorraad>0||zee>0||conQty>0) rows.push({m,actQty,conQty,voorraad,zee,gedekt,tekort});
   }
-  // KPI's
   const eur=n=>"€ "+Number(n).toLocaleString("nl-NL");
   document.getElementById("ovKpis").innerHTML=
-    kpi(actief,"Actieve reserveringen","var(--fonteyn-green)")+
-    kpi(betaald,"Betaald (bevestigd)","#15803d")+
+    kpi(actief,"Actieve reserveringen (Fonteyn)","var(--fonteyn-green)")+
+    kpi(betaald,"Betaald (geld binnen)","#15803d")+
     kpi(wacht,"Wacht op aanbetaling","#92400e")+
-    kpi(vervallen,"Vervallen","#b91c1c")+
+    kpi(containers,"Containers (dealer-direct)","#c2410c")+
     kpi(halTotal,"Vrij op voorraad (NL)","#2563eb")+
     kpi(shipTotal,"Op zee (onderweg)","#2563eb")+
     kpi(eur(orderwaarde),"Orderwaarde actief*","var(--fonteyn-green)",true);
-  // knelpunten: meeste tekort eerst, dan meeste reserveringen
   rows.sort((a,b)=>(b.tekort-a.tekort)||(b.actQty-a.actQty));
   document.getElementById("ovBacklogUpd").textContent = resv.updated ? ("Bijgewerkt: "+new Date(resv.updated).toLocaleString("nl-NL")) : "";
   document.getElementById("ovBacklog").innerHTML = rows.map(r=>
-    "<tr><td><b>"+esc(r.m)+"</b></td><td>"+r.actQty+"</td>"+
+    "<tr><td><b>"+esc(r.m)+"</b></td><td>"+r.actQty+(r.conQty?(" <span style='color:#c2410c;font-size:11px'>+"+r.conQty+" cont.</span>"):"")+"</td>"+
     "<td>"+(r.voorraad||"—")+"</td><td>"+(r.zee||"—")+"</td>"+
     "<td style='color:#15803d'>"+r.gedekt+"</td>"+
     "<td style='color:"+(r.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(r.tekort||"—")+"</td></tr>"
   ).join("") || "<tr><td colspan='6' style='color:var(--muted)'>Geen data. Draait de uur-sync al?</td></tr>";
-  // schepen
-  document.getElementById("ovShips").innerHTML=(ship.ships||[]).map(s=>{
+  // schepen — uitklapbaar met de spa's aan boord + trackingreferentie
+  ovShipsCache=ship.ships||[];
+  renderOvShips();
+}
+function renderOvShips(){
+  const ships=ovShipsCache;
+  const body=document.getElementById("ovShips");
+  if(!ships.length){ body.innerHTML="<tr><td colspan='4' style='color:var(--muted)'>Geen schepen. Upload commercial invoices bij Schepen.</td></tr>"; return; }
+  let html="";
+  ships.forEach((s,i)=>{
     const n=Object.values(s.models||{}).reduce((a,b)=>a+b,0);
-    return "<tr><td><b>"+esc(s.vessel||"—")+"</b></td><td>"+(s.eta?esc(s.eta):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td><td>"+n+"</td></tr>";
-  }).join("") || "<tr><td colspan='3' style='color:var(--muted)'>Geen schepen. Upload commercial invoices bij Schepen.</td></tr>";
+    const ref=(s.trackRef!=null?s.trackRef:(s.ref||""));
+    const open=!!ovShipOpen[i];
+    html+="<tr class='ovShipRow' data-i='"+i+"' style='cursor:pointer'>"+
+      "<td>"+(open?"▾ ":"▸ ")+"<b>"+esc(s.vessel||"—")+"</b></td>"+
+      "<td style='font-size:12px'>"+esc(ref||"—")+"</td>"+
+      "<td>"+(s.eta?esc(s.eta):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td>"+
+      "<td>"+n+" spa's</td></tr>";
+    if(open){
+      const items=Object.entries(s.models||{}).sort((a,b)=>b[1]-a[1])
+        .map(([m,q])=>"<li>"+esc(m)+" — <b>"+q+"×</b></li>").join("")||"<li style='color:var(--muted)'>(geen spa's herkend)</li>";
+      html+="<tr><td colspan='4' style='background:#fafafa;padding:8px 14px'><ul style='margin:0;columns:2;font-size:13px'>"+items+"</ul>"+
+        "<div style='font-size:11px;color:var(--muted);margin-top:4px'>Kleur per spa staat op de commercial invoice; die wordt (nog) niet los ingelezen.</div></td></tr>";
+    }
+  });
+  body.innerHTML=html;
+  body.querySelectorAll(".ovShipRow").forEach(row=>row.addEventListener("click",()=>{
+    const i=row.dataset.i; ovShipOpen[i]=!ovShipOpen[i]; renderOvShips();
+  }));
 }
 function kpi(n,l,color,small){ return "<div class='kpi' style='border-top-color:"+color+"'><div class='n"+(small?" sm":"")+"' style='color:"+color+"'>"+n+"</div><div class='l'>"+l+"</div></div>"; }
 
@@ -1033,11 +1072,11 @@ function kpi(n,l,color,small){ return "<div class='kpi' style='border-top-color:
 // Toont de reserveringen-live bucket (uur-sync uit Logic4). Read-only overzicht:
 // per model hoeveel betaald/wachtend/vervallen, uitklapbaar naar de orders.
 const RESV_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/reserveringen-live";
-let resvData={byModel:{}}, resvOpen={};
+let resvData={byModel:{},byModelUSA:{}}, resvOpen={};
 async function loadReserveringen(){
   try{
     const r=await fetch(RESV_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
-    if(r.ok){ const j=await r.json(); resvData={byModel:(j&&j.byModel)||{},updated:j&&j.updated}; }
+    if(r.ok){ const j=await r.json(); resvData={byModel:(j&&j.byModel)||{},byModelUSA:(j&&j.byModelUSA)||{},updated:j&&j.updated}; }
   }catch(e){ console.warn("reserveringen laden faalde:",e); }
   renderReserveringen();
 }
@@ -1046,30 +1085,34 @@ function resvTypeBadge(t){
   if(t==="zakelijk") return "<span class='pill' style='background:#e0e7ff;color:#3730a3'>zakelijk</span>";
   return "<span class='pill'>particulier</span>";
 }
+// Zoekt in model, klantnaam én ordernummer
+function resvMatch(r,m,q){ return !q || m.toLowerCase().includes(q) || String(r.naam||"").toLowerCase().includes(q) || String(r.ordernr).includes(q); }
+function kleurCel(k){ return k? "<span style='font-size:12px'>"+esc(k)+"</span>" : "<span style='color:var(--muted);font-size:12px'>—</span>"; }
 function renderReserveringen(){
   document.getElementById("resvUpdated").textContent = resvData.updated ? ("Laatst ververst: "+new Date(resvData.updated).toLocaleString("nl-NL")) : "(nog niet geladen)";
   const q=(document.getElementById("resvSearch").value||"").trim().toLowerCase();
-  const models=Object.keys(resvData.byModel).filter(m=>!q||m.toLowerCase().includes(q))
-    .sort((a,b)=>resvData.byModel[b].length-resvData.byModel[a].length);
   const ov=document.getElementById("resvOverview");
-  if(!models.length){ ov.innerHTML="<p class='lead'>Geen reserveringen. (Nog geen uur-sync gedraaid, of geen open spa-orders in Logic4.)</p>"; return; }
-  let html="<table class='grid'><thead><tr><th>Model</th><th>Actief</th><th>Betaald</th><th>Wacht</th><th>Vervallen</th></tr></thead><tbody>";
+  const all=Object.keys(resvData.byModel);
+  // Zichtbare modellen: model-naam matcht, of er is een regel die matcht (naam/ordernr)
+  const models=all.filter(m=>resvData.byModel[m].some(r=>resvMatch(r,m,q)))
+    .sort((a,b)=>resvData.byModel[b].length-resvData.byModel[a].length);
+  if(!models.length){ ov.innerHTML="<p class='lead'>Geen reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
+  let html="<table class='grid'><thead><tr><th>Model</th><th>Actief</th><th>Betaald</th><th>Wacht</th><th>Containers</th></tr></thead><tbody>";
   for(const m of models){
-    const l=resvData.byModel[m];
-    const bet=l.filter(r=>r.betaald).length, verv=l.filter(r=>r.vervallen).length, wacht=l.length-bet-verv;
-    const actief=l.length-verv;   // vervallen tellen NIET meer mee (3-dagen-regel)
+    const lines=resvData.byModel[m].filter(r=>resvMatch(r,m,q));
+    const qty=a=>a.reduce((n,r)=>n+r.qty,0);
+    const fon=lines.filter(r=>!r.container), con=lines.filter(r=>r.container);
+    const bet=qty(fon.filter(r=>r.betaald)), wacht=qty(fon)-bet;
+    const open=!!resvOpen[m] || (q && models.length<=3);   // bij zoeken automatisch open
     html+="<tr class='resvRow' data-m='"+esc(m)+"' style='cursor:pointer'>"+
-      "<td>"+(resvOpen[m]?"▾ ":"▸ ")+"<b>"+esc(m)+"</b></td>"+
-      "<td><b>"+actief+"</b></td>"+
+      "<td>"+(open?"▾ ":"▸ ")+"<b>"+esc(m)+"</b></td>"+
+      "<td><b>"+qty(fon)+"</b></td>"+
       "<td style='color:#15803d'>"+bet+"</td><td style='color:#92400e'>"+wacht+"</td>"+
-      "<td style='color:#b91c1c'>"+(verv||"—")+"</td></tr>";
-    if(resvOpen[m]){
-      // Actieve reserveringen eerst, vervallen onderaan apart
-      const actlist=l.filter(r=>!r.vervallen), vervlist=l.filter(r=>r.vervallen);
+      "<td style='color:#c2410c'>"+(qty(con)||"—")+"</td></tr>";
+    if(open){
       html+="<tr><td colspan='5' style='padding:0;background:#fafafa'><div class='tablewrap' style='padding:8px 10px'>"+
-        "<table class='grid' style='margin:0'><thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Aantal</th><th>Datum</th><th>Status</th><th>Verwachte levering</th></tr></thead><tbody>"+
-        actlistRows(actlist)+
-        (vervlist.length?"<tr><td colspan='8' style='background:#fee2e2;color:#b91c1c;font-size:11px;text-align:center;padding:3px'>— vervallen (3+ dagen onbetaald, tellen niet meer mee) —</td></tr>"+actlistRows(vervlist,actlist.length):"")+
+        "<table class='grid' style='margin:0'><thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Kleur</th><th>Aantal</th><th>Datum</th><th>Betaling</th><th>Verwachte levering</th></tr></thead><tbody>"+
+        resvRows(lines)+
         "</tbody></table></div></td></tr>";
     }
   }
@@ -1080,22 +1123,50 @@ function renderReserveringen(){
   }));
 }
 function verwachtLabel(v){
-  if(!v||v==="vervallen") return "<span style='color:var(--muted)'>—</span>";
+  if(!v) return "<span style='color:var(--muted)'>—</span>";
   if(v==="voorraad") return "<span style='color:#15803d;font-weight:600'>op voorraad</span>";
   if(v==="op-schip") return "<span style='color:#2563eb'>op schip (datum volgt)</span>";
   if(v==="productie") return "<span style='color:#92400e'>volgende productie</span>";
-  // ISO-datum van een schip
+  if(v==="dealer-direct") return "<span style='color:#c2410c'>→ dealer (container)</span>";
   const d=new Date(v); return "<span style='color:#2563eb'>"+(isNaN(d)?esc(v):d.toLocaleDateString("nl-NL"))+"</span>";
 }
-function actlistRows(list,offset){
-  offset=offset||0;
+function betaalBadge(r){
+  if(r.betaald) return "<span class='pill' style='background:#dcfce7;color:#15803d'>betaald "+(r.betaaldPct!=null?r.betaaldPct+"%":"")+"</span>";
+  return "<span class='pill' style='background:#fef3c7;color:#92400e'>wacht</span>";
+}
+function resvRows(list){
   return list.map((r,i)=>{
-    const badge=r.betaald?"<span class='pill' style='background:#dcfce7;color:#15803d'>betaald</span>"
-      :(r.vervallen?"<span class='pill' style='background:#fee2e2;color:#b91c1c'>vervallen</span>":"<span class='pill' style='background:#fef3c7;color:#92400e'>wacht</span>");
-    return "<tr style='"+(r.vervallen?"opacity:.55":"")+"'><td>"+(offset+i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td>"+resvTypeBadge(r.type)+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+badge+"</td><td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td></tr>";
+    // Oranje rij = containerverdenking (>2 stuks of Dealer magazijn)
+    const rowStyle=r.container?"background:#fff7ed;border-left:3px solid #c2410c":"";
+    const cont=r.container?" <span class='pill' style='background:#ffedd5;color:#c2410c;font-size:10px'>"+(r.warehouseId===27?"dealer mag.":"container?")+"</span>":"";
+    return "<tr style='"+rowStyle+"'><td>"+(i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+cont+"</td><td>"+resvTypeBadge(r.type)+"</td><td>"+kleurCel(r.kleur)+"</td><td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+betaalBadge(r)+"</td><td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td></tr>";
   }).join("");
 }
 document.getElementById("resvSearch")&&document.getElementById("resvSearch").addEventListener("input",renderReserveringen);
+
+// ===================== Amerika (Warehouse Texas USA) =====================
+function loadAmerika(){
+  // Hergebruikt de al geladen reserveringen-data; laad opnieuw als leeg.
+  if(!Object.keys(resvData.byModelUSA||{}).length && !resvData.updated){ loadReserveringen().then(renderAmerika); return; }
+  if(!resvData.updated){ loadReserveringen().then(renderAmerika); return; }
+  renderAmerika();
+}
+function renderAmerika(){
+  document.getElementById("usaUpdated").textContent = resvData.updated ? ("Laatst ververst: "+new Date(resvData.updated).toLocaleString("nl-NL")) : "(nog niet geladen)";
+  const q=(document.getElementById("usaSearch").value||"").trim().toLowerCase();
+  const by=resvData.byModelUSA||{};
+  const rows=[];
+  for(const m of Object.keys(by)) for(const r of by[m]) if(resvMatch(r,m,q)) rows.push({...r,model:m});
+  rows.sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
+  const ov=document.getElementById("usaOverview");
+  if(!rows.length){ ov.innerHTML="<p class='lead'>Geen Amerikaanse orders"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
+  const total=rows.reduce((n,r)=>n+r.qty,0);
+  ov.innerHTML="<p class='lead' style='font-size:12px'>"+rows.length+" orderregels · "+total+" spa's</p>"+
+    "<div class='tablewrap'><table class='grid'><thead><tr><th>Order</th><th>Klant</th><th>Model</th><th>Kleur</th><th>Aantal</th><th>Datum</th><th>Betaling</th></tr></thead><tbody>"+
+    rows.map(r=>"<tr><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur)+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+betaalBadge(r)+"</td></tr>").join("")+
+    "</tbody></table></div>";
+}
+document.getElementById("usaSearch")&&document.getElementById("usaSearch").addEventListener("input",renderAmerika);
 
 // ===================== Schepen (commercial invoices) =====================
 // Chantal uploadt commercial invoices (Excel, één per schip). Client-side
@@ -1368,38 +1439,23 @@ async function sendReserveFor(){
 
 async function loadPrioModel(model){
   if(!model){ document.getElementById("prioBody").innerHTML=""; document.getElementById("prioSummary").textContent=""; return; }
-  prioStatus("","Open orders ophalen voor "+model+"…");
-  await loadVoorraadState(); // klantType
+  prioStatus("","Reserveringen ophalen voor "+model+"…");
   try{
-    const codes=(prioCatalog[model]||[]).map(v=>v.code);
-    // Dekking (voorraad in NL + op schip) uit de KV-buckets
-    const [hallen,schepen]=await Promise.all([
+    // ÉÉN bron van waarheid: dezelfde reserveringen-live bucket + voorraad als
+    // de tabs Overzicht en Reserveringen. Zo zijn 'gevraagd' en 'tekort' overal
+    // gelijk (geen aparte live-telling meer die containers/Texas meepakte).
+    const [resv,hallen,schepen]=await Promise.all([
+      fetch(RESV_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({byModel:{}})),
       fetch(HALLEN_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({})),
       fetch(SHIPS_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({}))
     ]);
-    const halQty=((hallen.models||{})[model]||{}).hal||0;
+    const halQty=((hallen.models||{})[model]||{}).available||0;   // VRIJE voorraad (zoals Overzicht)
     let shipQty=0; for(const s of (schepen.ships||[])) shipQty+=(s.models||{})[model]||0;
     const dekking=halQty+shipQty;
-
-    // Open orders per variant-code × status parallel ophalen (sneller), dan
-    // dedupliceren op ordernummer.
-    const jobs=[];
-    for(const code of codes) for(const st of PRIO_STATUSES)
-      jobs.push(logic4Call("/v3/Orders/GetOrders",{ProductCode:code,StatusId:st,TakeRecords:200}).catch(()=>null));
-    const results=await Promise.all(jobs);
-    const seen={};
-    for(const data of results){
-      const arr=Array.isArray(data)?data:((data&&data.Orders)||[]);
-      for(const o of (arr||[])){
-        if(seen[o.Id]) continue;
-        let qty=0; for(const r of (o.OrderRows||[])) if(codes.includes(String(r.ProductCode||""))) qty+=Number(r.Qty)||0;
-        if(qty<=0) continue;
-        const type=klantType[String(o.DebtorId)]||"?";
-        seen[o.Id]={ ordernr:o.Id, naam:klantNaam(o), debtorId:o.DebtorId, type,
-          qty, datum:fmtDate(o.CreationDate), statusId:(o.OrderStatus||{}).Id, status:(o.OrderStatus||{}).Value||"" };
-      }
-    }
-    prioRows=Object.values(seen);
+    // Alleen echte Fonteyn-reserveringen (geen containers/dealer-direct)
+    const lines=((resv.byModel||{})[model]||[]).filter(r=>!r.container);
+    prioRows=lines.map(r=>({ ordernr:r.ordernr, naam:r.naam, debtorId:r.debtorId, type:r.type,
+      qty:r.qty, kleur:r.kleur||null, datum:r.datum, statusId:r.statusId, status:r.status, betaald:r.betaald }));
     // Sorteer op opgeslagen prioriteit; onbekend achteraan op datum
     const saved=prioPriority[model]||[];
     prioRows.sort((a,b)=>{
@@ -1422,7 +1478,7 @@ function renderPrio(model, dekking, halQty, shipQty){
   document.getElementById("prioBody").innerHTML=prioRows.map((r,i)=>{
     const before=cum; cum+=r.qty; const covered=before<dekking;
     const cutHere = before<dekking && cum>=dekking; // laatste (deels) gedekte regel
-    const badge=r.type==="dealer"?"<span class='pill s1'>partner</span>":(r.type==="particulier"?"<span class='pill s25'>particulier</span>":"<span class='pill'>?</span>");
+    const badge=resvTypeBadge(r.type);
     return "<tr style='"+(covered?"":"opacity:.6")+(cutHere?";border-bottom:2px solid #b91c1c":"")+"'>"+
       "<td>"+(i+1)+"</td>"+
       "<td>"+r.ordernr+"</td>"+
