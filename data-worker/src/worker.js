@@ -1324,8 +1324,12 @@ async function handleTrack(request, env) {
 // nooit schrijven, factureren of geld verplaatsen.
 const QB_AUTH   = "https://appcenter.intuit.com/connect/oauth2";
 const QB_TOKEN  = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer";
-const QB_API    = "https://quickbooks.api.intuit.com";
 const QB_SCOPE  = "com.intuit.quickbooks.accounting";
+// API-basis verschilt per omgeving: sandbox (Development-keys) vs productie
+// (Production-keys). Instelbaar via worker-secret QB_API_BASE; default productie.
+const qbApiBase = (env) => (env.QB_API_BASE === "sandbox"
+  ? "https://sandbox-quickbooks.api.intuit.com"
+  : (env.QB_API_BASE && env.QB_API_BASE.startsWith("http") ? env.QB_API_BASE : "https://quickbooks.api.intuit.com"));
 const qbRedirectUri = (url) => url.origin + "/amerika/qb/callback";
 
 async function qbGetTokens(env) { return (await env.FONTEYN_DATA.get("qb-tokens", { type: "json" })) || null; }
@@ -1346,7 +1350,7 @@ async function qbAccessToken(env) {
 }
 async function qbQuery(env, sql) {
   const t = await qbAccessToken(env);
-  const u = QB_API + "/v3/company/" + t.realmId + "/query?minorversion=73&query=" + encodeURIComponent(sql);
+  const u = qbApiBase(env) + "/v3/company/" + t.realmId + "/query?minorversion=73&query=" + encodeURIComponent(sql);
   const r = await fetch(u, { headers: { "Authorization": "Bearer " + t.access_token, "Accept": "application/json" } });
   if (!r.ok) throw new Error("QB query HTTP " + r.status + ": " + (await r.text()).slice(0, 200));
   return await r.json();
@@ -1377,7 +1381,7 @@ async function qbHandleCallback(request, env, url) {
 async function qbHandleStatus(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
   const t = await qbGetTokens(env);
-  return reply(200, { ok: true, configured: !!env.QB_CLIENT_ID, connected: !!(t && t.refresh_token), realmId: (t && t.realmId) || null, connectedAt: (t && t.connectedAt) || null });
+  return reply(200, { ok: true, configured: !!env.QB_CLIENT_ID, connected: !!(t && t.refresh_token), realmId: (t && t.realmId) || null, connectedAt: (t && t.connectedAt) || null, omgeving: env.QB_API_BASE === "sandbox" ? "sandbox" : "productie" });
 }
 async function qbHandleData(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
