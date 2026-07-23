@@ -1068,10 +1068,15 @@ function renderOvShips(){
       "<td>"+(s.eta?esc(s.eta):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td>"+
       "<td>"+n+" spa's</td></tr>";
     if(open){
-      const items=Object.entries(s.models||{}).sort((a,b)=>b[1]-a[1])
-        .map(([m,q])=>"<li>"+esc(m)+" — <b>"+q+"×</b></li>").join("")||"<li style='color:var(--muted)'>(geen spa's herkend)</li>";
-      html+="<tr><td colspan='4' style='background:#fafafa;padding:8px 14px'><ul style='margin:0;columns:2;font-size:13px'>"+items+"</ul>"+
-        "<div style='font-size:11px;color:var(--muted);margin-top:4px'>Kleur per spa staat op de commercial invoice; die wordt (nog) niet los ingelezen.</div></td></tr>";
+      const mc=s.modelColors||{};
+      const items=Object.entries(s.models||{}).sort((a,b)=>b[1]-a[1]).map(([m,q])=>{
+        const cols=mc[m]?Object.entries(mc[m]).sort((a,b)=>b[1]-a[1])
+          .map(([k,n])=>"<span class='pill' style='background:#eef2ff;color:#3730a3;margin:1px 3px 0 0'>"+esc(k)+" <b>"+n+"</b></span>").join(""):"";
+        return "<li style='margin-bottom:4px'>"+esc(m)+" — <b>"+q+"×</b>"+(cols?"<br>"+cols:"")+"</li>";
+      }).join("")||"<li style='color:var(--muted)'>(geen spa's herkend)</li>";
+      const heeftKleur=Object.keys(mc).length>0;
+      html+="<tr><td colspan='4' style='background:#fafafa;padding:8px 14px'><ul style='margin:0;list-style:none;padding:0;font-size:13px'>"+items+"</ul>"+
+        (heeftKleur?"":"<div style='font-size:11px;color:var(--muted);margin-top:4px'>Kleuren verschijnen zodra deze commercial invoice opnieuw is geüpload (in de tab Schepen).</div>")+"</td></tr>";
     }
   });
   body.innerHTML=html;
@@ -1310,7 +1315,7 @@ function parseCI(wb){
     if(!ref&&s.startsWith("RZ")) ref=s.trim();
     if(!vessel&&/\s\/\s\S*\d/.test(s)&&!/FOB|ROTTERDAM,|YANTIAN/i.test(s)) vessel=s.trim();
   }
-  const models={},unmapped={};
+  const models={},modelColors={},unmapped={};
   for(const r of rows){
     const c0=String((r&&r[0])==null?"":r[0]).split("\n")[0].trim();
     const m=c0.match(/^(SKT[\w.-]+)/);
@@ -1319,9 +1324,12 @@ function parseCI(wb){
     const model=spaModel(m[1]);
     if(!model||model==="(onbekend SKT-model)"){ unmapped[m[1]]=(unmapped[m[1]]||0)+qty; continue; }
     models[model]=(models[model]||0)+qty;
+    // Kleur = kolom 1 (COLOUR) op de commercial invoice ("Sterling Silver", "Mystic Mountain"…)
+    const kleur=String((r&&r[1])==null?"":r[1]).replace(/\bjazzi\s*colou?r\b/ig,"").replace(/[,\s]+$/,"").replace(/\s+/g," ").trim()||"(geen kleur)";
+    (modelColors[model]=modelColors[model]||{})[kleur]=(modelColors[model][kleur]||0)+qty;
   }
   const containers=wb.SheetNames.filter(n=>n!=="COMMERCIAL INVOICE").length;
-  return {ref,vessel,containers,models,total:Object.values(models).reduce((a,b)=>a+b,0)};
+  return {ref,vessel,containers,models,modelColors,total:Object.values(models).reduce((a,b)=>a+b,0)};
 }
 
 async function handleCIUpload(files){
@@ -1335,7 +1343,7 @@ async function handleCIUpload(files){
       // Bestaand schip met dezelfde referentie? Dan vervangen (nieuwe upload wint).
       const idx=(shipsData.ships||[]).findIndex(s=>s.ref&&ship.ref&&s.ref===ship.ref);
       const eta=idx>=0?shipsData.ships[idx].eta:"";
-      const rec={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,models:ship.models,total:ship.total,eta};
+      const rec={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,models:ship.models,modelColors:ship.modelColors,total:ship.total,eta};
       if(idx>=0) shipsData.ships[idx]=rec; else shipsData.ships.push(rec);
       for(const [k,v] of Object.entries(ship.unmapped)) allUnmapped[k]=(allUnmapped[k]||0)+v;
       added++;

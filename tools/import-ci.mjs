@@ -47,8 +47,9 @@ for (const file of readdirSync(dir).filter(f => f.endsWith(".xlsx") && !f.starts
     // Schip/reis: "NAAM / voyage" — reis eindigt meestal op cijfers(+E/W)
     if (!vessel && /\s\/\s\S*\d/.test(s) && !/FOB|ROTTERDAM,|YANTIAN/i.test(s)) vessel = s.trim();
   }
-  // Regels: kolom0 = SKT-code (evt. met klantref op regel2), kolom5 = qty
+  // Regels: kolom0 = SKT-code (evt. met klantref op regel2), kolom1 = COLOUR, kolom5 = qty
   const perModel = {};
+  const modelColors = {};
   for (const r of rows) {
     const c0 = String(r[0] || "").split("\n")[0].trim();
     const m = c0.match(/^(SKT[\w.-]+)/);
@@ -57,9 +58,11 @@ for (const file of readdirSync(dir).filter(f => f.endsWith(".xlsx") && !f.starts
     const model = sktToModel(m[1]);
     if (!model) { unmapped[m[1]] = (unmapped[m[1]] || 0) + qty; continue; }
     perModel[model] = (perModel[model] || 0) + qty;
+    const kleur = String(r[1] || "").replace(/\bjazzi\s*colou?r\b/ig, "").replace(/[,\s]+$/, "").replace(/\s+/g, " ").trim() || "(geen kleur)";
+    (modelColors[model] = modelColors[model] || {})[kleur] = (modelColors[model][kleur] || 0) + qty;
   }
   const containers = wb.SheetNames.filter(n => n !== "COMMERCIAL INVOICE").length;
-  ships.push({ file: basename(file), ref, vessel, containers, models: perModel,
+  ships.push({ file: basename(file), ref, vessel, containers, models: perModel, modelColors,
     total: Object.values(perModel).reduce((a, b) => a + b, 0) });
 }
 
