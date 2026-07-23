@@ -166,11 +166,11 @@ function qbKindBadge(k){
 function renderQbInvoices(){
   const box=document.getElementById("qbData");
   const nieuw=qbInvoices.filter(i=>!i.geaccordeerd);
-  let html="<div class='card'><div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px'>"+
+  let html="<div class='card'><div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px'>"+
     "<h3 style='margin:0'>Nieuwe orders uit QuickBooks — "+nieuw.length+"</h3>"+
-    "<div style='display:flex;gap:8px'><button id='qbSelAll' class='btn' type='button'>Alles selecteren</button>"+
+    "<div style='display:flex;gap:10px;flex-wrap:wrap'><button id='qbSelAll' class='btn' type='button'>Alles selecteren</button>"+
     "<button id='qbApprove' class='btn solid' type='button'>Accorderen → Logic4-orders</button></div></div>"+
-    "<p class='lead' style='font-size:12px'>Vink facturen aan die je in Logic4 wilt aanmaken (debiteur <b>Passion Spa South</b>, magazijn <b>Warehouse Texas</b>). Klik een rij open om de voorgestelde regels te controleren. <span style='color:var(--bad)'>Rode artikelcode</span> = geen spa-variant gevonden; controleer voor accorderen.</p>"+
+    "<p class='lead' style='font-size:12px;margin:0 0 14px'>Vink facturen aan die je in Logic4 wilt aanmaken (debiteur <b>Passion Spa South</b>, magazijn <b>Warehouse Texas</b>). Klik een rij open om de voorgestelde regels te controleren. <span style='color:var(--bad)'>Rode artikelcode</span> = geen spa-variant gevonden; controleer voor accorderen.</p>"+
     "<div id='qbApproveStatus' class='status-msg hidden'></div>"+
     "<div class='tablewrap'><table class='grid'><thead><tr><th></th><th>Factuur</th><th>Klant</th><th>Datum</th><th>Regels</th><th>Status</th></tr></thead><tbody>";
   for(const inv of qbInvoices){
