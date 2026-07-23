@@ -1329,7 +1329,7 @@ function parseCI(wb){
     (modelColors[model]=modelColors[model]||{})[kleur]=(modelColors[model][kleur]||0)+qty;
   }
   const containers=wb.SheetNames.filter(n=>n!=="COMMERCIAL INVOICE").length;
-  return {ref,vessel,containers,models,modelColors,total:Object.values(models).reduce((a,b)=>a+b,0)};
+  return {ref,vessel,containers,models,modelColors,unmapped,total:Object.values(models).reduce((a,b)=>a+b,0)};
 }
 
 async function handleCIUpload(files){
