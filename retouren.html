@@ -83,6 +83,21 @@
   .hidden { display: none !important; }
   .kpi-num { font-size: 30px; font-weight: 700; color: var(--fonteyn-green); }
 </style>
+<style id="btn-upgrade">
+/* Knop-opwaardering (huisstijl-breed) — Passion-accent + subtiele hover-lift */
+button.primary,.primary,button[type=submit]{border-radius:9px!important;box-shadow:0 2px 6px rgba(0,0,0,.12);transition:transform .12s ease,box-shadow .12s ease,filter .12s ease!important}
+button.primary:hover,.primary:hover,button[type=submit]:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(0,0,0,.2);filter:brightness(1.06)}
+button.primary:active,.primary:active,button[type=submit]:active{transform:translateY(0);box-shadow:0 2px 6px rgba(0,0,0,.12)}
+button:disabled{transform:none!important;box-shadow:none!important;filter:none!important}
+.btn{display:inline-flex;align-items:center;gap:6px;background:#fff;color:#c8102e;border:1.5px solid #c8102e;border-radius:8px;padding:8px 15px;font:inherit;font-weight:600;font-size:12.5px;line-height:1;cursor:pointer;transition:all .14s ease;white-space:nowrap}
+.btn:hover{background:#c8102e;color:#fff;box-shadow:0 4px 12px rgba(200,16,46,.28);transform:translateY(-1px)}
+.btn:active{transform:translateY(0);box-shadow:0 2px 6px rgba(200,16,46,.2)}
+.btn.solid{background:#c8102e;color:#fff}
+.btn.solid:hover{background:#a50d26;border-color:#a50d26}
+.btn.sm{padding:4px 10px;font-size:11px;border-radius:7px}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important;box-shadow:none!important;background:#fff;color:#c8102e}
+</style>
+
 </head>
 <body>
 
