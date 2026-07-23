@@ -1352,7 +1352,13 @@ async function qbQuery(env, sql) {
   const t = await qbAccessToken(env);
   const u = qbApiBase(env) + "/v3/company/" + t.realmId + "/query?minorversion=73&query=" + encodeURIComponent(sql);
   const r = await fetch(u, { headers: { "Authorization": "Bearer " + t.access_token, "Accept": "application/json" } });
-  if (!r.ok) throw new Error("QB query HTTP " + r.status + ": " + (await r.text()).slice(0, 200));
+  // intuit_tid uit de response-header vastleggen (helpt Intuit-support bij troubleshooting)
+  const tid = r.headers.get("intuit_tid") || "";
+  if (!r.ok) {
+    const body = (await r.text()).slice(0, 300);
+    console.error("[qb] query-fout status=" + r.status + " intuit_tid=" + tid + " body=" + body);
+    throw new Error("QB query HTTP " + r.status + " (intuit_tid " + tid + "): " + body);
+  }
   return await r.json();
 }
 // Start de OAuth-flow (team-sleutel als query-param, want dit is een browser-redirect)
@@ -1398,7 +1404,10 @@ async function qbHandleData(request, env) {
       email: (c.PrimaryEmailAddr && c.PrimaryEmailAddr.Address) || null, openstaand: Number(c.Balance) || 0, actief: c.Active !== false,
     }));
     return reply(200, { ok: true, invoices, customers });
-  } catch (e) { return reply(200, { ok: false, error: String(e.message || e) }); }
+  } catch (e) {
+    console.error("[qb] data-fout: " + String(e.message || e));   // logbaar voor troubleshooting
+    return reply(200, { ok: false, error: String(e.message || e) });
+  }
 }
 
 export default {
