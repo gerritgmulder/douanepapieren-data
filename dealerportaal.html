@@ -57,7 +57,7 @@
   <p class="lead">
     Beheer hier wie er in het <b>partnerportaal</b> kan (magic-link login op e-mailadres),
     welke <b>documenten</b> partners zien, en waar contactvragen binnenkomen.
-    Portaal-adres: <a id="portalLink" href="https://fonteyn-data-store.g-mulder.workers.dev/partners" target="_blank" rel="noopener"><code>fonteyn-data-store.g-mulder.workers.dev/partners</code></a>
+    Adres van <b>Passion Partners</b> (het publieke portaal): <a id="portalLink" href="https://fonteyn-data-store.g-mulder.workers.dev/dealers" target="_blank" rel="noopener"><code>fonteyn-data-store.g-mulder.workers.dev/dealers</code></a>
     <em>(later: partners.fonteyn.nl)</em>. Partners zien alleen geaggregeerde voorraad — geen klantnamen of inkoopprijzen.
   </p>
 
@@ -312,18 +312,34 @@ $("saveRate").addEventListener("click", async ()=>{
   await save("dealer-prices", priceData); renderRate();
   setStatus("ok","Koers opgeslagen ("+r+"). Alle EU-partnerprijzen en aanbetalingen rekenen hier nu mee.");
 });
+// Partnerprijs in euro's = $-prijs ÷ koers. Waarde kan zijn:
+//  • {usd,…}       → prijslijst (USD-basis) → EUR = usd/koers
+//  • {price,code}  → handmatig ingevoerd (EUR)
+//  • kaal getal    → oud handmatig (EUR)
+function priceEur(val){
+  const rate = Number(priceData.meta && priceData.meta.rate) > 0 ? Number(priceData.meta.rate) : 1.11;
+  if (val && typeof val === "object"){
+    if (val.usd != null) return Math.round(Number(val.usd) / rate);
+    if (val.price != null) return Number(val.price);
+  }
+  return Number(val);
+}
 function renderPrices(){
   const entries = Object.entries(priceData.prices || {}).sort((a,b)=>a[0].localeCompare(b[0]));
   $("priceCount").textContent = entries.length;
-  // Waarde kan kaal getal zijn (oud) of {price, code} (met Logic4-artikelcode)
   $("priceBody").innerHTML = entries.map(([model,val])=>{
-    const price = Number(val && typeof val === "object" ? val.price : val);
+    const price = priceEur(val);
+    const usd = (val && typeof val === "object" && val.usd != null) ? Number(val.usd) : null;
     const code = (val && typeof val === "object" && val.code) ? val.code : "";
+    const priceCell = isFinite(price)
+      ? `€ ${price.toFixed(2)}${usd!=null?` <span style="color:var(--muted);font-size:11px">($ ${usd})</span>`:""}`
+      : '<span style="color:var(--muted)">—</span>';
+    const depCell = isFinite(price) ? `€ ${(price*0.30).toFixed(2)}` : "—";
     return `
     <tr>
       <td><b>${esc(model)}</b></td>
-      <td>€ ${price.toFixed(2)}</td>
-      <td style="color:var(--muted)">€ ${(price*0.30).toFixed(2)}</td>
+      <td>${priceCell}</td>
+      <td style="color:var(--muted)">${depCell}</td>
       <td>${code ? esc(code) : '<span style="color:var(--muted)">—</span>'}</td>
       <td><button class="rmv delPrice" data-m="${esc(model)}">✕</button></td>
     </tr>`;}).join("") || '<tr><td colspan="5" style="color:var(--muted)">Nog geen prijzen — reserveringen blijven aanvraag-per-mail.</td></tr>';

@@ -188,9 +188,9 @@ async function dpHandleLogin(request, env, url) {
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("dp-login:" + token, JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_LOGIN_TTL });
   const link = url.origin + "/dealers/auth?t=" + token;
-  await dpSendEmail(env, email, "Your Passion Spas Partner Portal login link",
+  await dpSendEmail(env, email, "Your Passion Partners login link",
     '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">' +
-    '<h2 style="color:#c8102e;">Passion Spas — Partner Portal</h2>' +
+    '<h2 style="color:#c8102e;">Passion Partners</h2>' +
     '<p>Hello ' + (dealer.company ? dealer.company : "") + ',</p>' +
     '<p>Click the button below to log in. This link is valid for 15 minutes.</p>' +
     '<p style="margin:26px 0;"><a href="' + link + '" ' +
