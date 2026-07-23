@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Amerika — Fonteyn Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
+    --fonteyn-lime:#8bc53f; --fonteyn-lime-dark:#72a531;
+    --bg:#f5f4ef; --ink:#1f2937; --usa:#3c3b6e; --usa-red:#b22234;
+    --muted:#6b7280; --border:#e5e7eb; --ok:#059669; --bad:#b91c1c; --warn:#92400e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  header{background:var(--usa);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px}
+  header img.logo{height:40px;width:auto;display:block}
+  header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+  header a.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px}
+  header .user-chip{font-size:12px;color:rgba(255,255,255,0.85)}
+  header button.logout{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer}
+  main{max-width:1400px;margin:24px auto;padding:0 22px}
+  h2{color:var(--usa);font-size:22px;margin:0 0 6px}
+  .lead{color:var(--muted);margin:0 0 20px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin:14px 0}
+  .card h3{margin:0 0 10px;color:var(--usa);font-size:15px}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
+  .kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-top:3px solid var(--usa)}
+  .kpi .n{font-size:26px;font-weight:700;line-height:1.1}
+  .kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
+  .status-msg{padding:10px 14px;border-radius:6px;margin:12px 0;font-size:13px}
+  .status-msg.ok{background:#dcfce7;color:var(--ok)} .status-msg.bad{background:#fee2e2;color:var(--bad)} .status-msg.warn{background:#fef3c7;color:var(--warn)}
+  table.grid{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+  table.grid th,table.grid td{padding:6px 9px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:top}
+  table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  table.grid tr:hover td{background:#fbfbfd}
+  .pill{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600}
+  .hidden{display:none !important}
+  .tablewrap{max-height:60vh;overflow:auto;border:1px solid var(--border);border-radius:8px}
+  code{background:#f3f4f6;padding:1px 5px;border-radius:3px;font-size:11px}
+  .tabs{display:flex;gap:6px;margin:6px 0 16px;border-bottom:2px solid var(--border);flex-wrap:wrap}
+  .tab{background:transparent;border:0;border-bottom:3px solid transparent;padding:9px 16px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:-2px}
+  .tab.active{color:var(--usa);border-bottom-color:var(--usa-red)}
+  input[type=text]{border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit}
+  .step{border-left:3px solid var(--usa);padding:4px 0 4px 14px;margin:10px 0}
+  .step b{color:var(--usa)}
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+  <h1>Amerika 🇺🇸 — Passion Spas USA (Houston, Texas)</h1>
+  <a class="back" href="dashboard.html">← Dashboard</a>
+  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <h2>Amerika</h2>
+  <p class="lead">De Amerikaanse vestiging (Audrey) verkoopt aan alle US-dealers en werkt in <b>QuickBooks</b> —
+    een apart bedrijf, los van Nederland/Logic4. Chantal bestelt de containers bij de fabrieken; die inkooporders
+    komen in Logic4 op magazijn <b>Warehouse Texas</b> te staan. Hieronder beide kanten bij elkaar.</p>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="containers" type="button">Containers (Logic4 · Warehouse Texas)</button>
+    <button class="tab" data-tab="quickbooks" type="button">Verkoop &amp; dealers (QuickBooks)</button>
+  </div>
+
+  <!-- ===== Containers uit Logic4 (Warehouse Texas) ===== -->
+  <div id="tab-containers">
+    <div id="usaKpis" class="kpi-row"></div>
+    <div class="card">
+      <h3>Bestellingen op Warehouse Texas</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Alles wat in Logic4 op magazijn <b>Warehouse Texas USA</b> staat (elk uur ververst). Dit zijn de containers/orders die vanuit NL richting Amerika lopen.</p>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+        <input id="usaSearch" type="text" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:280px">
+        <span id="usaUpdated" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="usaOverview"></div>
+    </div>
+  </div>
+
+  <!-- ===== QuickBooks (nog te koppelen) ===== -->
+  <div id="tab-quickbooks" class="hidden">
+    <div class="card">
+      <h3>QuickBooks-koppeling — status: <span id="qbStatus" style="color:var(--warn)">nog niet gekoppeld</span></h3>
+      <p class="lead" style="font-size:13px">De verkoop van Audrey aan de US-dealers zit in QuickBooks Online. Dat kan gekoppeld worden via de
+        officiële QuickBooks-API (gratis; hoort bij het QuickBooks-abonnement). Om te koppelen is dit nodig:</p>
+      <div class="step"><b>1. Intuit-developer-app</b> — iemand maakt (gratis) een app op developer.intuit.com en geeft mij de <code>Client ID</code> + <code>Client Secret</code>.</div>
+      <div class="step"><b>2. Redirect-adres</b> — in die app registreren we <code>https://fonteyn-data-store.g-mulder.workers.dev/amerika/qb/callback</code> als Redirect URI.</div>
+      <div class="step"><b>3. Eénmalige toestemming</b> — iemand met toegang tot de US-QuickBooks (Audrey/Chantal) klikt één keer op "Verbinden" en logt in bij QuickBooks. Daarna onthoudt het systeem de toegang (met automatische vernieuwing).</div>
+      <p class="lead" style="font-size:12.5px;margin-top:14px">Zodra dit er is, verschijnen hier automatisch de US-facturen, klanten/dealers en openstaande bedragen — read-only, net als de rest van het dashboard. Ik zet niets live wat geld kan verplaatsen.</p>
+      <button class="logout" id="qbConnectBtn" type="button" disabled style="border-color:var(--usa);color:var(--usa);opacity:.5">Verbinden met QuickBooks (wacht op app-gegevens)</button>
+    </div>
+  </div>
+</main>
+
+<script>
+const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
+const ALLOWED=new Set(["chantal@fonteyn.nl","chantal","fonteyn.chantal","dolf@fonteyn.nl","fonteyn.dolf","gerrit@fonteyn.nl","gerrit","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"]);
+(function boot(){
+  if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
+  const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  document.getElementById("userEmail").textContent=email||"—";
+  if(!ALLOWED.has(email)){ document.querySelector("main").innerHTML="<div class='status-msg bad'>Geen toegang tot de Amerika-tegel.</div>"; return; }
+  loadUSA();
+})();
+document.getElementById("logoutBtn").addEventListener("click",()=>{
+  localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href="dashboard.html";
+});
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
+  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active")); t.classList.add("active");
+  const tab=t.dataset.tab;
+  document.getElementById("tab-containers").classList.toggle("hidden",tab!=="containers");
+  document.getElementById("tab-quickbooks").classList.toggle("hidden",tab!=="quickbooks");
+}));
+
+const RESV_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/reserveringen-live";
+const TEAM=(localStorage.getItem("fp.teamkey")||"");
+let usaData={byModelUSA:{}};
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+async function loadUSA(){
+  try{
+    const r=await fetch(RESV_URL,{headers:{"X-Fonteyn-Auth":TEAM}});
+    if(r.ok){ const j=await r.json(); usaData={byModelUSA:(j&&j.byModelUSA)||{},updated:j&&j.updated}; }
+  }catch(e){ console.warn(e); }
+  renderUSA();
+}
+function betaalBadge(r){
+  if(r.betaald) return "<span class='pill' style='background:#dcfce7;color:#15803d'>betaald "+(r.betaaldPct!=null?r.betaaldPct+"%":"")+"</span>";
+  return "<span class='pill' style='background:#fef3c7;color:#92400e'>wacht</span>";
+}
+function usaMatch(r,m,q){ return !q||m.toLowerCase().includes(q)||String(r.naam||"").toLowerCase().includes(q)||String(r.ordernr).includes(q); }
+function renderUSA(){
+  document.getElementById("usaUpdated").textContent=usaData.updated?("Laatst ververst: "+new Date(usaData.updated).toLocaleString("nl-NL")):"(nog niet geladen)";
+  const q=(document.getElementById("usaSearch").value||"").trim().toLowerCase();
+  const by=usaData.byModelUSA||{};
+  const rows=[];
+  for(const m of Object.keys(by)) for(const r of by[m]) if(usaMatch(r,m,q)) rows.push({...r,model:m});
+  rows.sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
+  // KPI's
+  const spas=rows.reduce((n,r)=>n+r.qty,0);
+  const orders=new Set(rows.map(r=>r.ordernr)).size;
+  const betaald=rows.filter(r=>r.betaald).reduce((n,r)=>n+r.qty,0);
+  document.getElementById("usaKpis").innerHTML=
+    kpi(orders,"Orders")+kpi(spas,"Spa's totaal")+kpi(betaald,"Betaald")+kpi(spas-betaald,"Wacht op betaling");
+  const ov=document.getElementById("usaOverview");
+  if(!rows.length){ ov.innerHTML="<p class='lead'>Geen Amerikaanse orders"+(q?" voor '"+esc(q)+"'":"")+". (Draait de uur-sync al?)</p>"; return; }
+  ov.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr><th>Order</th><th>Klant</th><th>Model</th><th>Kleur</th><th>Aantal</th><th>Datum</th><th>Betaling</th></tr></thead><tbody>"+
+    rows.map(r=>"<tr><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td><b>"+esc(r.model)+"</b></td><td>"+(r.kleur?esc(r.kleur):"<span style='color:var(--muted)'>—</span>")+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+betaalBadge(r)+"</td></tr>").join("")+
+    "</tbody></table></div>";
+}
+function kpi(n,l){ return "<div class='kpi'><div class='n'>"+n+"</div><div class='l'>"+l+"</div></div>"; }
+document.getElementById("usaSearch").addEventListener("input",renderUSA);
+</script>
+</body>
+</html>

@@ -99,7 +99,6 @@
     <button class="tab" data-tab="reserveringen" type="button">Reserveringen</button>
     <button class="tab" data-tab="prio" type="button">Prioriteit</button>
     <button class="tab" data-tab="schepen" type="button">Schepen</button>
-    <button class="tab" data-tab="amerika" type="button">Amerika 🇺🇸</button>
     <!-- OUDE tabs — verborgen bewaard (verwijder de style om terug te halen) -->
     <button class="tab" data-tab="ophalen" type="button" style="display:none">Ophalen &amp; markeren (oud)</button>
     <button class="tab" data-tab="dealer" type="button" style="display:none">Res. Dealers (oud)</button>
@@ -235,17 +234,6 @@
     <div id="resvDetail"></div>
   </div>
 
-  <div id="tab-amerika" class="hidden">
-    <div class="card">
-      <h3>Amerika 🇺🇸 — Warehouse Texas USA</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Orders met magazijn <b>Warehouse Texas USA</b>. Deze staan volledig los van Nederland en tellen <b>niet</b> mee in de Fonteyn-voorraad of -reserveringen.</p>
-      <div class="actions" style="gap:10px;align-items:center;margin-top:0">
-        <input id="usaSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:280px;padding:8px">
-        <span id="usaUpdated" style="font-size:12px;color:var(--muted)"></span>
-      </div>
-      <div id="usaOverview" style="margin-top:12px"></div>
-    </div>
-  </div>
 
   <div id="tab-schepen" class="hidden">
     <div class="card">
@@ -857,12 +845,10 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   document.getElementById("tab-reserveringen").classList.toggle("hidden", tab!=="reserveringen");
   document.getElementById("tab-schepen").classList.toggle("hidden", tab!=="schepen");
   document.getElementById("tab-prio").classList.toggle("hidden", tab!=="prio");
-  document.getElementById("tab-amerika").classList.toggle("hidden", tab!=="amerika");
   document.getElementById("tab-pipe").classList.toggle("hidden", tab!=="pipe");
   document.getElementById("tab-dealerview").classList.toggle("hidden", tab!=="dealerview");
   if (tab==="overzicht") loadOverzicht();
   if (tab==="reserveringen") loadReserveringen();
-  if (tab==="amerika") loadAmerika();
   if (tab==="schepen") loadSchepen();
   if (tab==="prio") initPrio();
   if (tab==="dealer"||tab==="part") renderOverviews();
@@ -1143,30 +1129,7 @@ function resvRows(list){
   }).join("");
 }
 document.getElementById("resvSearch")&&document.getElementById("resvSearch").addEventListener("input",renderReserveringen);
-
-// ===================== Amerika (Warehouse Texas USA) =====================
-function loadAmerika(){
-  // Hergebruikt de al geladen reserveringen-data; laad opnieuw als leeg.
-  if(!Object.keys(resvData.byModelUSA||{}).length && !resvData.updated){ loadReserveringen().then(renderAmerika); return; }
-  if(!resvData.updated){ loadReserveringen().then(renderAmerika); return; }
-  renderAmerika();
-}
-function renderAmerika(){
-  document.getElementById("usaUpdated").textContent = resvData.updated ? ("Laatst ververst: "+new Date(resvData.updated).toLocaleString("nl-NL")) : "(nog niet geladen)";
-  const q=(document.getElementById("usaSearch").value||"").trim().toLowerCase();
-  const by=resvData.byModelUSA||{};
-  const rows=[];
-  for(const m of Object.keys(by)) for(const r of by[m]) if(resvMatch(r,m,q)) rows.push({...r,model:m});
-  rows.sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
-  const ov=document.getElementById("usaOverview");
-  if(!rows.length){ ov.innerHTML="<p class='lead'>Geen Amerikaanse orders"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
-  const total=rows.reduce((n,r)=>n+r.qty,0);
-  ov.innerHTML="<p class='lead' style='font-size:12px'>"+rows.length+" orderregels · "+total+" spa's</p>"+
-    "<div class='tablewrap'><table class='grid'><thead><tr><th>Order</th><th>Klant</th><th>Model</th><th>Kleur</th><th>Aantal</th><th>Datum</th><th>Betaling</th></tr></thead><tbody>"+
-    rows.map(r=>"<tr><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur)+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+betaalBadge(r)+"</td></tr>").join("")+
-    "</tbody></table></div>";
-}
-document.getElementById("usaSearch")&&document.getElementById("usaSearch").addEventListener("input",renderAmerika);
+// (Amerika/Warehouse Texas is verplaatst naar de aparte Amerika-tegel — amerika.html)
 
 // ===================== Schepen (commercial invoices) =====================
 // Chantal uploadt commercial invoices (Excel, één per schip). Client-side

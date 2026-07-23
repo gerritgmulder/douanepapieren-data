@@ -333,6 +333,13 @@
         <p>Verkochte spa-orders van een dag ophalen uit Logic4, splitsen naar Dealer/Particulier en reserveringen bijhouden — met filteren op elke kolom.</p>
       </a>
 
+      <!-- Amerika (Houston/Texas, Passion Spas USA) — alleen Chantal/Dolf/Gerrit/bot. -->
+      <a href="amerika.html" class="tile hidden" id="tileAmerika">
+        <div class="icon">🇺🇸</div>
+        <h3>Amerika</h3>
+        <p>Passion Spas USA (Houston, Texas) — bestellingen, reserveringen en containers van de Amerikaanse vestiging. Draait op QuickBooks; los van Nederland/Logic4.</p>
+      </a>
+
       <!-- Bol.com koppeling — finance + sales: Osman + Don + admins. -->
       <a href="bol.html" class="tile hidden" id="tileBol">
         <div class="icon">🛒</div>
@@ -568,6 +575,15 @@ const VOORRAAD_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Amerika-tegel (Houston/Texas, Passion Spas USA) — apart 'bedrijf', draait op
+// QuickBooks i.p.v. Logic4. ALLEEN Chantal, Dolf, Gerrit en Fonteynbot.
+const AMERIKA_EMAILS = new Set([
+  "chantal@fonteyn.nl",    "chantal",  "fonteyn.chantal",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Welke logins mogen de Orderstatus-tegel zien.
 // Server (server/index.js → ORDERSTATUS_ALLOWED) doet dezelfde check.
 const ORDERSTATUS_EMAILS = new Set([
@@ -666,6 +682,8 @@ function showDashboard(email) {
   el("tileDealerportaal").classList.toggle("hidden", !DEALERPORTAAL_EMAILS.has(lc));
   // Voorraadbeheer — Dolf/Arno/Chantal + admins
   el("tileVoorraad").classList.toggle("hidden", !VOORRAAD_EMAILS.has(lc));
+  // Amerika (Houston/Texas, QuickBooks) — alleen Chantal/Dolf/Gerrit/bot
+  el("tileAmerika").classList.toggle("hidden", !AMERIKA_EMAILS.has(lc));
   // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot.
   const isAdmin = (lc === "gerrit@fonteyn.nl" || lc === "gerrit" ||
                    lc === "fonteynbot@fonteyn.nl" || lc === "fonteyn.bot" || lc === "fonteynbot");
