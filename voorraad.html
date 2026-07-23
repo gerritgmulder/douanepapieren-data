@@ -981,7 +981,12 @@ async function loadOverzicht(){
   }catch(e){ document.getElementById("ovKpis").innerHTML="<div class='status-msg bad'>Overzicht laden faalde: "+esc(e.message)+"</div>"; }
 }
 const PRICES_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/dealer-prices";
-let ovShipsCache=[], ovShipOpen={};
+let ovShipsCache=[], ovShipOpen={}, ovBacklogRows=[], ovBacklogOpen={};
+// Kleur-uitsplitsing van een set reserveringsregels → [{kleur,qty}] gesorteerd.
+function kleurBreakdown(lines){
+  const by={}; for(const r of lines){ const k=r.kleur||"(geen kleur)"; by[k]=(by[k]||0)+r.qty; }
+  return Object.entries(by).map(([kleur,qty])=>({kleur,qty})).sort((a,b)=>b.qty-a.qty);
+}
 function renderOverzicht(resv,hal,ship,priceData){
   const byModel=resv.byModel||{}, halM=hal.models||{}, rate=Number((priceData.meta||{}).rate)||1.11, prices=priceData.prices||{};
   // schepen per model
@@ -1003,7 +1008,8 @@ function renderOverzicht(resv,hal,ship,priceData){
     const gedekt=Math.min(actQty,voorraad+zee);
     const tekort=Math.max(0,actQty-voorraad-zee);
     const p=prices[m]; if(p&&p.usd) orderwaarde+=actQty*Math.round(Number(p.usd)/rate);
-    if(actQty>0||voorraad>0||zee>0||conQty>0) rows.push({m,actQty,conQty,voorraad,zee,gedekt,tekort});
+    if(actQty>0||voorraad>0||zee>0||conQty>0) rows.push({m,actQty,conQty,voorraad,zee,gedekt,tekort,
+      kleuren:kleurBreakdown(fon), kleurenCont:kleurBreakdown(con)});
   }
   const eur=n=>"€ "+Number(n).toLocaleString("nl-NL");
   document.getElementById("ovKpis").innerHTML=
@@ -1016,15 +1022,36 @@ function renderOverzicht(resv,hal,ship,priceData){
     kpi(eur(orderwaarde),"Orderwaarde actief*","var(--fonteyn-green)",true);
   rows.sort((a,b)=>(b.tekort-a.tekort)||(b.actQty-a.actQty));
   document.getElementById("ovBacklogUpd").textContent = resv.updated ? ("Bijgewerkt: "+new Date(resv.updated).toLocaleString("nl-NL")) : "";
-  document.getElementById("ovBacklog").innerHTML = rows.map(r=>
-    "<tr><td><b>"+esc(r.m)+"</b></td><td>"+r.actQty+(r.conQty?(" <span style='color:#c2410c;font-size:11px'>+"+r.conQty+" cont.</span>"):"")+"</td>"+
-    "<td>"+(r.voorraad||"—")+"</td><td>"+(r.zee||"—")+"</td>"+
-    "<td style='color:#15803d'>"+r.gedekt+"</td>"+
-    "<td style='color:"+(r.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(r.tekort||"—")+"</td></tr>"
-  ).join("") || "<tr><td colspan='6' style='color:var(--muted)'>Geen data. Draait de uur-sync al?</td></tr>";
+  ovBacklogRows=rows; renderBacklog();
   // schepen — uitklapbaar met de spa's aan boord + trackingreferentie
   ovShipsCache=ship.ships||[];
   renderOvShips();
+}
+function kleurChips(list){
+  if(!list||!list.length) return "<span style='color:var(--muted)'>—</span>";
+  return list.map(c=>"<span class='pill' style='background:#eef2ff;color:#3730a3;margin:2px 3px 0 0'>"+esc(c.kleur)+" <b>"+c.qty+"</b></span>").join("");
+}
+function renderBacklog(){
+  const body=document.getElementById("ovBacklog");
+  if(!ovBacklogRows.length){ body.innerHTML="<tr><td colspan='6' style='color:var(--muted)'>Geen data. Draait de uur-sync al?</td></tr>"; return; }
+  body.innerHTML=ovBacklogRows.map(r=>{
+    const open=!!ovBacklogOpen[r.m];
+    let h="<tr class='ovBackRow' data-m='"+esc(r.m)+"' style='cursor:pointer'><td>"+(open?"▾ ":"▸ ")+"<b>"+esc(r.m)+"</b></td>"+
+      "<td>"+r.actQty+(r.conQty?(" <span style='color:#c2410c;font-size:11px'>+"+r.conQty+" cont.</span>"):"")+"</td>"+
+      "<td>"+(r.voorraad||"—")+"</td><td>"+(r.zee||"—")+"</td>"+
+      "<td style='color:#15803d'>"+r.gedekt+"</td>"+
+      "<td style='color:"+(r.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(r.tekort||"—")+"</td></tr>";
+    if(open){
+      h+="<tr><td colspan='6' style='background:#fafafa;padding:8px 14px'>"+
+        "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px'>Kleuren — Fonteyn-reserveringen</div>"+kleurChips(r.kleuren)+
+        (r.kleurenCont.length?("<div style='font-size:11px;color:#c2410c;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px'>Kleuren — containers</div>"+kleurChips(r.kleurenCont)):"")+
+        "</td></tr>";
+    }
+    return h;
+  }).join("");
+  body.querySelectorAll(".ovBackRow").forEach(row=>row.addEventListener("click",()=>{
+    const m=row.dataset.m; ovBacklogOpen[m]=!ovBacklogOpen[m]; renderBacklog();
+  }));
 }
 function renderOvShips(){
   const ships=ovShipsCache;
