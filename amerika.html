@@ -178,19 +178,23 @@ function renderQbInvoices(){
     const open=!!qbOpen[inv.docNr];
     html+="<tr class='qbRow' data-nr='"+esc(inv.docNr)+"' style='cursor:pointer'>"+
       "<td>"+(inv.geaccordeerd?"":"<input type='checkbox' class='qbChk' data-nr='"+esc(inv.docNr)+"' onclick='event.stopPropagation()'>")+"</td>"+
-      "<td>"+(open?"▾ ":"▸ ")+"<b>#"+esc(inv.docNr)+"</b></td><td>"+esc(inv.klant)+"</td><td style='font-size:12px'>"+esc(inv.datum||"")+"</td>"+
+      "<td><span class='qbArrow'>"+(open?"▾ ":"▸ ")+"</span><b>#"+esc(inv.docNr)+"</b></td><td>"+esc(inv.klant)+"</td><td style='font-size:12px'>"+esc(inv.datum||"")+"</td>"+
       "<td>"+inv.rows.length+" regels · "+spaN+" spa</td>"+
       "<td>"+(inv.geaccordeerd?"<span class='pill' style='background:#dcfce7;color:#15803d'>Logic4 #"+esc(inv.logic4Order||"?")+"</span>":"<span class='pill' style='background:#fef3c7;color:#92400e'>nieuw</span>")+"</td></tr>";
-    if(open){
-      html+="<tr><td colspan='6' style='background:#fafafa;padding:6px 12px'><table class='grid' style='margin:0'><thead><tr><th>Artikelcode</th><th>Omschrijving</th><th>Aantal</th><th>Soort</th></tr></thead><tbody>"+
+    // Detail ALTIJD renderen (verborgen als dicht) → uit/inklappen zonder herteken, geen wegschieten
+    html+="<tr class='qbDetail' data-nr='"+esc(inv.docNr)+"' style='display:"+(open?"":"none")+"'><td colspan='6' style='background:#fafafa;padding:6px 12px'><table class='grid' style='margin:0'><thead><tr><th>Artikelcode</th><th>Omschrijving</th><th>Aantal</th><th>Soort</th></tr></thead><tbody>"+
         inv.rows.map(r=>"<tr><td>"+(r.productCode?esc(r.productCode):"<b style='color:var(--bad)'>ontbreekt</b>")+"</td><td>"+esc(r.description)+"</td><td>"+r.qty+"</td><td>"+qbKindBadge(r.kind)+"</td></tr>").join("")+
         (inv.overgeslagen&&inv.overgeslagen.length?"<tr><td colspan='4' style='color:var(--muted);font-size:11px'>Overgeslagen (niet op de order): "+esc(inv.overgeslagen.join(", "))+"</td></tr>":"")+
         "</tbody></table></td></tr>";
-    }
   }
   html+="</tbody></table></div></div>";
   box.innerHTML=html;
-  box.querySelectorAll(".qbRow").forEach(row=>row.addEventListener("click",()=>{ const nr=row.dataset.nr; qbOpen[nr]=!qbOpen[nr]; renderQbInvoices(); }));
+  box.querySelectorAll(".qbRow").forEach(row=>row.addEventListener("click",()=>{
+    const nr=row.dataset.nr; const open=!qbOpen[nr]; qbOpen[nr]=open;
+    const detail=box.querySelector('.qbDetail[data-nr="'+nr+'"]');
+    if(detail) detail.style.display=open?"":"none";
+    const arrow=row.querySelector(".qbArrow"); if(arrow) arrow.textContent=open?"▾ ":"▸ ";
+  }));
   const selAll=document.getElementById("qbSelAll"); if(selAll) selAll.addEventListener("click",()=>document.querySelectorAll(".qbChk").forEach(c=>c.checked=true));
   const appr=document.getElementById("qbApprove"); if(appr) appr.addEventListener("click",qbApprove);
 }
