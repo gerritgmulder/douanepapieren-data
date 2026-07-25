@@ -825,6 +825,7 @@ async function handleFile(file) {
     const parsed = parseLogic4(pages);
     state.metadata = parsed.metadata;
     state.lineItems = parsed.lineItems;
+    state._douaneLoadStats = computeDouaneLoadStats();
     state.colliOverride = null; // nieuwe order → reset user-override
     state.bundles = detectBundles(state.lineItems);
     // distributeBundle wordt NIET meer automatisch aangeroepen. De hoofdregel
@@ -1074,6 +1075,27 @@ function findBundleForParent(item) {
 // ============================================================
 // Rendering the UI
 // ============================================================
+// Voor het activiteitenlogboek: tel bij het LADEN van een order per regel welke
+// douane-velden de database al invulde (vooraf) en welke leeg bleven (= Manon
+// moet ze zelf invullen). Wordt op state._douaneLoadStats bewaard en bij het
+// genereren gelogd. Draait vóór Manons eigen bewerkingen, dus het weerspiegelt
+// echt "wat stond er vooraf klaar".
+function computeDouaneLoadStats() {
+  const fields = ["dims", "gw", "nw", "hs", "origin"];
+  const labels = { dims: "afmetingen", gw: "brutogewicht", nw: "nettogewicht", hs: "HS-code", origin: "herkomst" };
+  let lines = 0, fullPre = 0, preF = 0, manF = 0; const manLines = [];
+  for (const it of (state.lineItems || [])) {
+    if (it.service || it.dropped) continue;
+    lines++;
+    let spec = {}; try { spec = getSpec(it.code, it.description) || {}; } catch (e) {}
+    const missing = fields.filter(f => spec[f] == null || spec[f] === "");
+    preF += fields.length - missing.length; manF += missing.length;
+    if (missing.length === 0) fullPre++;
+    else manLines.push(String(it.description || it.code).replace(/^\*\s*/, "").slice(0, 26) + " (" + missing.map(f => labels[f]).join("/") + ")");
+  }
+  return { lines, fullPre, manLines: lines - fullPre, preF, manF, detail: manLines };
+}
+
 function renderAll() {
   document.getElementById("meta-panel").classList.remove("hidden");
   document.getElementById("items-panel").classList.remove("hidden");
@@ -1943,6 +1965,7 @@ async function fetchOrderFromLogic4() {
     const parsed = await mapLogic4Order(j.order, j.rows, debtor);
     state.metadata  = parsed.metadata;
     state.lineItems = parsed.lineItems;
+    state._douaneLoadStats = computeDouaneLoadStats();
     state.colliOverride = null;  // nieuwe order → reset eventuele user-override
     state.bundles   = detectBundles(state.lineItems);
     // Geen automatische distribute meer — hoofdregel blijft zichtbaar.
@@ -2120,7 +2143,13 @@ async function generatePdfFor(brand) {
     document.body.appendChild(a); a.click(); a.remove();
     status.textContent = `Klaar — ${invNr} Invoice ${brandSuffix}.pdf gedownload.`;
     status.className = "status ok";
-    try { if (window.fpLog) window.fpLog("douanepapier-gemaakt", brandSuffix + " · " + invNr); } catch (e) {}
+    try {
+      const _s = state._douaneLoadStats || {};
+      let _d = brandSuffix + " · " + invNr;
+      if (_s.lines) _d += " — " + _s.fullPre + "/" + _s.lines + " regels vooraf compleet"
+        + (_s.manF ? (", " + _s.manF + " veld(en) door Manon: " + (_s.detail || []).slice(0, 3).join("; ") + ((_s.detail || []).length > 3 ? " …" : "")) : " (niets handmatig)");
+      if (window.fpLog) window.fpLog("douanepapier-gemaakt", _d);
+    } catch (e) {}
   } catch (e) {
     console.error(e);
     status.textContent = "Fout: " + e.message;
