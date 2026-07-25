@@ -292,7 +292,6 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <button id="btnDryRun" type="button">Dry-run starten</button>
         <button id="btnApply" type="button" disabled
                 title="Eerst een dry-run draaien om te zien wat er gewijzigd zou worden.">Doorvoeren (0)</button>
-        <button id="btnAuditLog" class="secondary" type="button">Audit-log bekijken</button>
       </div>
 
       <div id="statusBar" class="status-row hidden"></div>
@@ -302,7 +301,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <!-- Samenvatting + tabel -->
     <div id="resultsPanel" class="panel hidden">
       <h2>Kandidaat-wijzigingen</h2>
-      <p class="sub">Vink onderin de rijen die je wilt overslaan; klik daarna op <b>Doorvoeren</b> om de geselecteerde statuswijzigingen door te voeren in Logic4. Iedere wijziging wordt vastgelegd in de audit-CSV.</p>
+      <p class="sub">Vink onderin de rijen die je wilt overslaan; klik daarna op <b>Doorvoeren</b> om de geselecteerde statuswijzigingen door te voeren in Logic4. Iedere doorvoer wordt vastgelegd in het Activiteitenlogboek (wie, wanneer, hoeveel).</p>
 
       <div class="summary-grid">
         <div class="stat"><div class="lbl">Gecontroleerd</div><div class="val" id="statChecked">—</div></div>
@@ -345,75 +344,6 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
   </div>
 
-  <!-- Audit-log modal -->
-  <div id="auditModal" class="modal-overlay hidden">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2>Audit-log</h2>
-        <span class="meta" id="auditMeta">—</span>
-        <button class="close" id="auditClose" type="button" title="Sluiten">×</button>
-      </div>
-      <div class="modal-body">
-        <!-- Overzicht per doorvoer-actie (= cluster van audit-regels) -->
-        <div id="batchesSection" class="batches-section hidden">
-          <div class="batches-header">Doorvoer-overzicht</div>
-          <table class="audit-table batches-table">
-            <thead>
-              <tr>
-                <th>Wanneer</th>
-                <th>Door</th>
-                <th class="col-num">Regels</th>
-                <th class="col-num">Geslaagd</th>
-                <th class="col-num">Mislukt</th>
-              </tr>
-            </thead>
-            <tbody id="batchesBody"></tbody>
-          </table>
-        </div>
-
-        <!-- Dry-run-historie — wie heeft wanneer wat gescand -->
-        <div id="dryRunsSection" class="batches-section hidden">
-          <div class="batches-header">Dry-run-historie — wie heeft gescand</div>
-          <table class="audit-table batches-table">
-            <thead>
-              <tr>
-                <th>Wanneer</th>
-                <th>Door</th>
-                <th class="col-num">Orders gescand</th>
-                <th class="col-num">Kandidaten</th>
-                <th class="col-num">→ 30%</th>
-                <th class="col-num">→ Vol. betaald</th>
-                <th class="col-num">Verstopte omzet</th>
-                <th class="col-num">Duur</th>
-              </tr>
-            </thead>
-            <tbody id="dryRunsBody"></tbody>
-          </table>
-        </div>
-
-        <!-- Detail per regel -->
-        <div id="rowsHeader" class="batches-header rows-header hidden">Alle regels</div>
-        <table class="audit-table">
-          <thead>
-            <tr>
-              <th>Tijdstip</th>
-              <th>Door</th>
-              <th class="col-num">Order #</th>
-              <th>Klant</th>
-              <th class="col-num">Totaal</th>
-              <th class="col-num">Betaald</th>
-              <th>Van</th>
-              <th>Naar</th>
-              <th>Status</th>
-              <th>Foutmelding</th>
-            </tr>
-          </thead>
-          <tbody id="auditBody"></tbody>
-        </table>
-        <div id="auditEmpty" class="empty-state hidden">Nog geen audit-log-entries.</div>
-      </div>
-    </div>
-  </div>
 
 </main>
 
@@ -624,25 +554,13 @@ async function runDryRun() {
     setTimeout(() => setProgress(null), 600);
     setStatus("ok", `Klaar — ${candidates.length} kandidaten gevonden uit ${allOrders.length} orders.`);
 
-    // Dry-run loggen — alleen voor zichtbaarheid wie wanneer wat gedraaid heeft.
-    // Niet kritiek: als de log-call faalt (bv. fonfile niet bereikbaar) gaat
-    // de dry-run gewoon door, alleen geen audit-entry. We swallowen de fout
-    // bewust zodat user-flow nooit breekt.
+    // Controle (dry-run) loggen in het Activiteitenlogboek — zo zie je dat
+    // iemand die dag de statussen heeft nagekeken, óók als er 0 wijzigingen
+    // waren. De 'open' + 'orderstatussen-bijgewerkt'-events volgen apart.
     try {
-      const duration_ms = Date.now() - dryRunStart;
-      await apiFetch("/api/order-status/dry-run-log", {
-        method: "POST",
-        body: {
-          orders_checked: allOrders.length,
-          candidates_found: candidates.length,
-          to_status_25: candidates.filter(c => c.targetStatusId === STATUS_30_AANBETAALD).length,
-          to_status_30: candidates.filter(c => c.targetStatusId === STATUS_VOLLEDIG_BETAALD).length,
-          hidden_amount: hiddenAmount,
-          duration_ms,
-        }
-      });
+      if (window.fpLog) window.fpLog("orderstatussen-gecontroleerd", candidates.length + " kandidaten uit " + allOrders.length + " orders");
     } catch (logErr) {
-      console.warn("[dry-run-log] kon niet vastleggen:", logErr.message);
+      console.warn("[activiteit] kon controle niet vastleggen:", logErr.message);
     }
   } catch (e) {
     console.error(e);
@@ -786,26 +704,38 @@ function formatDateNL(d) {
   return `${dd} ${mm} ${hh}:${mi}`;
 }
 
+// Leest de laatste "orderstatussen-bijgewerkt" uit het Activiteitenlogboek
+// (worker-bucket activiteit-YYYY-MM). Zo zie je direct op de tegel wanneer en
+// door wie de statussen voor het laatst zijn doorgevoerd — dezelfde bron als
+// het Activiteitenlogboek zelf.
 async function refreshLastDoorvoer() {
   const box = el("lastDoorvoer");
   if (!box) return;
   try {
-    const r = await apiFetch("/api/order-status/audit-log?limit=1");
-    const j = await r.json();
-    if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
-    const last = (j.rows || [])[0];
-    if (!last || !last.timestamp) {
+    const key = localStorage.getItem("fp.teamkey") || "";
+    const now = new Date();
+    const maanden = [now, new Date(now.getFullYear(), now.getMonth() - 1, 1)];
+    let last = null;
+    for (const m of maanden) {
+      const ym = m.toISOString().slice(0, 7);
+      const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/data/activiteit-" + ym, { headers: { "X-Fonteyn-Auth": key } });
+      if (!r.ok) continue;
+      const j = await r.json().catch(() => null);
+      const evs = ((j && j.events) || []).filter(e => e.action === "orderstatussen-bijgewerkt");
+      if (evs.length) { last = evs[evs.length - 1]; break; }
+    }
+    if (!last || !last.ts) {
       box.classList.add("never");
-      box.innerHTML = `<span class="clock">⏱</span><span>Nog niet eerder doorgevoerd.</span>`;
+      box.innerHTML = `<span class="clock">⏱</span><span>Nog niet eerder doorgevoerd (deze/vorige maand).</span>`;
       return;
     }
-    const d = new Date(last.timestamp);
+    const d = new Date(last.ts);
     if (isNaN(d.getTime())) throw new Error("Ongeldige timestamp");
     const rel = formatRelative(Date.now() - d.getTime());
     const user = last.user ? ` door <b>${escapeHtml(last.user)}</b>` : "";
     box.classList.remove("never");
-    box.title = d.toISOString();
-    box.innerHTML = `<span class="clock">⏱</span><span>Laatste doorvoer: <b>${formatDateNL(d)}</b>${user} (${rel})</span>`;
+    box.title = last.ts;
+    box.innerHTML = `<span class="clock">⏱</span><span>Laatste doorvoer: <b>${formatDateNL(d)}</b>${user} (${rel})${last.detail ? ` · ${escapeHtml(last.detail)}` : ""}</span>`;
   } catch (e) {
     box.classList.remove("never");
     box.innerHTML = `<span class="clock">⏱</span><span>Laatste doorvoer onbekend (${escapeHtml(e.message)}).</span>`;
@@ -835,7 +765,7 @@ async function runApply() {
 
   const ok = window.confirm(
     `${changes.length} statuswijziging(en) doorvoeren in Logic4?\n\n` +
-    `Dit wordt vastgelegd in de audit-CSV en is niet automatisch terug te draaien.`
+    `Dit wordt vastgelegd in het Activiteitenlogboek en is niet automatisch terug te draaien.`
   );
   if (!ok) return;
 
@@ -880,7 +810,7 @@ async function runApply() {
     if (j.failed > 0) {
       setStatus("warn", `Klaar — ${j.applied} doorgevoerd, ${j.failed} mislukt. Hover over "Mislukt" voor de foutmelding.`);
     } else {
-      setStatus("ok", `Klaar — alle ${j.applied} wijziging(en) zijn doorgevoerd. Audit-CSV bijgewerkt op ${j.auditPath}.`);
+      setStatus("ok", `Klaar — alle ${j.applied} wijziging(en) zijn doorgevoerd en vastgelegd in het Activiteitenlogboek.`);
     }
     setProgress(100);
     setTimeout(() => setProgress(null), 800);
@@ -897,173 +827,6 @@ async function runApply() {
 }
 
 el("btnApply").addEventListener("click", runApply);
-
-// ── Audit-log-modal ──
-async function openAuditLog() {
-  el("auditModal").classList.remove("hidden");
-  el("auditMeta").textContent = "Laden…";
-  el("auditBody").innerHTML = "";
-  el("auditEmpty").classList.add("hidden");
-  el("dryRunsSection").classList.add("hidden");
-  try {
-    // Twee bronnen parallel ophalen: doorvoer-audit (audit.csv) en
-    // dry-run-audit (dry-run.csv). Dry-run-fetch is optioneel — als 't
-    // endpoint nog niet bestaat (oudere helper) tonen we alleen apply.
-    const [auditRes, dryRes] = await Promise.allSettled([
-      apiFetch("/api/order-status/audit-log?limit=1000"),
-      apiFetch("/api/order-status/dry-run-log?limit=200"),
-    ]);
-    const auditJ = auditRes.status === "fulfilled" ? await auditRes.value.json() : null;
-    const dryJ   = dryRes.status   === "fulfilled" ? await dryRes.value.json()   : null;
-    if (!auditJ || !auditJ.ok) {
-      throw new Error((auditJ && auditJ.error) || "Audit-log niet bereikbaar");
-    }
-    renderAuditLog(auditJ);
-    if (dryJ && dryJ.ok) renderDryRunHistory(dryJ);
-  } catch (e) {
-    el("auditMeta").textContent = "Fout: " + e.message;
-  }
-}
-
-// Render-functie voor dry-run-historie. Lichtgewicht: één rij = één dry-run.
-function renderDryRunHistory(j) {
-  const rows = j.rows || [];
-  const body = el("dryRunsBody");
-  body.innerHTML = "";
-  if (!rows.length) {
-    // Geen dry-runs gelogd — sectie verbergen, audit-tabel blijft hoofdfocus
-    el("dryRunsSection").classList.add("hidden");
-    return;
-  }
-  for (const row of rows) {
-    const tr = document.createElement("tr");
-    const ts = row.timestamp ? new Date(row.timestamp).toLocaleString("nl-NL") : "—";
-    const duration = row.duration_ms
-      ? (Number(row.duration_ms) / 1000).toFixed(1) + "s"
-      : "—";
-    const hidden = row.hidden_amount && Number(row.hidden_amount) > 0
-      ? fmtEur(row.hidden_amount) : "—";
-    tr.innerHTML = `
-      <td>${escapeHtml(ts)}</td>
-      <td>${escapeHtml(row.user || "")}</td>
-      <td class="col-num">${escapeHtml(row.orders_checked || "0")}</td>
-      <td class="col-num">${escapeHtml(row.candidates_found || "0")}</td>
-      <td class="col-num">${escapeHtml(row.to_status_25 || "0")}</td>
-      <td class="col-num">${escapeHtml(row.to_status_30 || "0")}</td>
-      <td class="col-num">${escapeHtml(hidden)}</td>
-      <td class="col-num">${escapeHtml(duration)}</td>
-    `;
-    body.appendChild(tr);
-  }
-  el("dryRunsSection").classList.remove("hidden");
-  // Als de "Nog geen audit-log-entries"-melding zichtbaar is maar er zijn
-  // wel dry-runs, dan klopt die melding niet meer — verbergen.
-  if (!el("auditEmpty").classList.contains("hidden")) {
-    el("auditEmpty").classList.add("hidden");
-  }
-}
-
-function renderAuditLog(j) {
-  const rows = j.rows || [];
-  el("auditMeta").textContent = `${rows.length} van ${j.total} entries getoond — ${j.path}`;
-  const body = el("auditBody");
-  body.innerHTML = "";
-  el("batchesSection").classList.add("hidden");
-  el("rowsHeader").classList.add("hidden");
-  if (!rows.length) {
-    el("auditEmpty").classList.remove("hidden");
-    return;
-  }
-  el("auditEmpty").classList.add("hidden");
-
-  // ─── Doorvoer-overzicht (batches) ───
-  // Groepeer aangrenzende audit-regels van dezelfde user binnen 5 min als
-  // één doorvoer-actie. Een apply-batch van 200+ rijen duurt typisch
-  // <2 min in totaal; 5 min is veilige gap-grens.
-  const batches = groupAuditBatches(rows);
-  renderBatches(batches);
-  el("batchesSection").classList.remove("hidden");
-  el("rowsHeader").classList.remove("hidden");
-
-  // ─── Detail-tabel per regel ───
-  for (const row of rows) {
-    const tr = document.createElement("tr");
-    if (row.success !== "true") tr.classList.add("fail-row");
-    const ts = row.timestamp ? new Date(row.timestamp).toLocaleString("nl-NL") : "—";
-    const total = row.total ? fmtEur(row.total) : "—";
-    const paid  = row.paid  ? fmtEur(row.paid)  : "—";
-    const pill = row.success === "true"
-      ? `<span class="ok-pill">OK</span>`
-      : `<span class="fail-pill">Mislukt</span>`;
-    tr.innerHTML = `
-      <td>${escapeHtml(ts)}</td>
-      <td>${escapeHtml(row.user || "")}</td>
-      <td class="col-num">${escapeHtml(row.order_id || "")}</td>
-      <td>${escapeHtml(row.customer || "")}</td>
-      <td class="col-num">${escapeHtml(total)}</td>
-      <td class="col-num">${escapeHtml(paid)}</td>
-      <td>${escapeHtml(row.old_status_label || "")}</td>
-      <td>${escapeHtml(row.new_status_label || "")}</td>
-      <td>${pill}</td>
-      <td>${escapeHtml(row.error || "")}</td>
-    `;
-    body.appendChild(tr);
-  }
-}
-
-function groupAuditBatches(rows) {
-  // Sorteer chronologisch oplopend, batch-detectie is dan stabiel.
-  const sorted = rows.slice().sort((a, b) =>
-    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-  const GAP_MS = 5 * 60 * 1000;
-  const batches = [];
-  let cur = null;
-  for (const r of sorted) {
-    const t = new Date(r.timestamp).getTime();
-    if (!cur || r.user !== cur.user || t - cur.lastT > GAP_MS) {
-      cur = { user: r.user || "—", firstT: t, lastT: t, success: 0, fail: 0, count: 0 };
-      batches.push(cur);
-    } else {
-      cur.lastT = t;
-    }
-    cur.count++;
-    if (r.success === "true") cur.success++;
-    else cur.fail++;
-  }
-  return batches.reverse(); // nieuwste eerst voor weergave
-}
-
-function renderBatches(batches) {
-  const body = el("batchesBody");
-  body.innerHTML = "";
-  for (const b of batches) {
-    const tr = document.createElement("tr");
-    const firstD = new Date(b.firstT);
-    const lastD  = new Date(b.lastT);
-    // Format: "13 mei 14:32" of "13 mei 14:32–14:35" als de batch langer dan 1 min duurde
-    const dateStr = firstD.toLocaleDateString("nl-NL", { day: "numeric", month: "long", year: "numeric" });
-    const t1 = firstD.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
-    const t2 = lastD.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
-    const when = (t1 === t2)
-      ? `${dateStr} · ${t1}`
-      : `${dateStr} · ${t1}–${t2}`;
-    const failClass = b.fail === 0 ? "fail-count zero" : "fail-count";
-    tr.innerHTML = `
-      <td class="when">${escapeHtml(when)}</td>
-      <td class="who">${escapeHtml(b.user)}</td>
-      <td class="col-num">${b.count}</td>
-      <td class="col-num ok-count">${b.success}</td>
-      <td class="col-num ${failClass}">${b.fail}</td>
-    `;
-    body.appendChild(tr);
-  }
-}
-
-el("btnAuditLog").addEventListener("click", openAuditLog);
-el("auditClose").addEventListener("click", () => el("auditModal").classList.add("hidden"));
-el("auditModal").addEventListener("click", (ev) => {
-  if (ev.target === el("auditModal")) el("auditModal").classList.add("hidden");
-});
 
 el("logoutBtn").addEventListener("click", async () => {
   try { await apiFetch("/api/logout", { method: "POST" }); } catch {}
