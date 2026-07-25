@@ -100,6 +100,11 @@ const TILES={dashboard:"Dashboard",voorraad:"Voorraadbeheer",amerika:"Amerika",d
 function tileName(t){return TILES[t]||t||"—";}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function kpi(n,l){return "<div class='kpi'><div class='n'>"+n+"</div><div class='l'>"+l+"</div></div>";}
+function actionPill(a){
+  if(a==="login") return "<span class='pill login'>ingelogd</span>";
+  if(a==="open") return "<span class='pill'>geopend</span>";
+  return "<span class='pill' style='background:#ffedd5;color:#c2410c'>"+esc(String(a).replace(/-/g," "))+"</span>";
+}
 
 let allEvents=[];
 (function boot(){
@@ -133,8 +138,9 @@ function render(){
   const logins=evs.filter(e=>e.action==="login").length;
   const opens=evs.filter(e=>e.action==="open").length;
   const days=new Set(evs.map(e=>String(e.ts).slice(0,10)));
+  const acties=evs.filter(e=>e.action!=="open"&&e.action!=="login").length;
   document.getElementById("kpis").innerHTML=
-    kpi(users.size,"Actieve medewerkers")+kpi(logins,"Keer ingelogd")+kpi(opens,"Tegels geopend")+kpi(days.size,"Actieve dagen");
+    kpi(users.size,"Actieve medewerkers")+kpi(logins,"Keer ingelogd")+kpi(opens,"Tegels geopend")+kpi(acties,"Concrete acties")+kpi(days.size,"Actieve dagen");
   // Per medewerker
   const byUser={};
   for(const e of evs){ const u=byUser[e.user]=byUser[e.user]||{login:0,open:0,tiles:{},days:new Set(),last:""};
@@ -149,19 +155,23 @@ function render(){
   const sorted=evs.slice().sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
   document.getElementById("evCount").textContent="("+sorted.length+")";
   document.getElementById("events").innerHTML=sorted.slice(0,1000).map(e=>
-    "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+esc(e.user)+"</td><td>"+(e.action==="login"?"<span class='pill login'>ingelogd</span>":"<span class='pill'>geopend</span>")+"</td><td>"+esc(tileName(e.tile))+(e.detail?" <span style='color:var(--muted)'>· "+esc(e.detail)+"</span>":"")+"</td></tr>"
+    "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+esc(e.user)+"</td><td>"+actionPill(e.action)+"</td><td>"+esc(tileName(e.tile))+(e.detail?" <span style='color:var(--muted)'>· "+esc(e.detail)+"</span>":"")+"</td></tr>"
   ).join("")||"<tr><td colspan='4' style='color:var(--muted)'>Geen gebeurtenissen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
 }
 </script>
 <script>
-/* Activiteitenlogboek — meld dat deze tegel is geopend */
-(function(){try{
-  var email=(localStorage.getItem("fp.email")||"").toLowerCase();
-  var key=localStorage.getItem("fp.teamkey")||"";
-  if(!email||!key) return;
-  var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-  fetch("https://fonteyn-data-store.g-mulder.workers.dev/log",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:"open"})}).catch(function(){});
-}catch(e){}})();
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200)})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog("open");
+})();
 </script>
 
 </body>

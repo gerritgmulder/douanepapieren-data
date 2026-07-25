@@ -468,14 +468,18 @@ async function init(){
 })();
 </script>
 <script>
-/* Activiteitenlogboek — meld dat deze tegel is geopend */
-(function(){try{
-  var email=(localStorage.getItem("fp.email")||"").toLowerCase();
-  var key=localStorage.getItem("fp.teamkey")||"";
-  if(!email||!key) return;
-  var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-  fetch("https://fonteyn-data-store.g-mulder.workers.dev/log",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:"open"})}).catch(function(){});
-}catch(e){}})();
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200)})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog("open");
+})();
 </script>
 
 </body>

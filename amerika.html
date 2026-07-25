@@ -212,6 +212,7 @@ async function qbApprove(){
     const ok=(j.results||[]).filter(r=>r.ok), bad=(j.results||[]).filter(r=>!r.ok);
     st.className="status-msg "+(bad.length?"warn":"ok");
     st.textContent=ok.length+" Logic4-order(s) aangemaakt"+(ok.length?" (#"+ok.map(r=>r.orderId).join(", #")+")":"")+(bad.length?(" · "+bad.length+" mislukt: "+bad.map(r=>"#"+r.docNr+" ("+r.error+")").join("; ")):"");
+    try{ if(ok.length&&window.fpLog) window.fpLog("qb-orders-geaccordeerd",ok.length+" facturen → Logic4 (#"+ok.map(r=>r.docNr).join(", #")+")"); }catch(e){}
     qbLoadData();
   }catch(e){ st.className="status-msg bad"; st.textContent=e.message; }
 }
@@ -255,14 +256,18 @@ function kpi(n,l){ return "<div class='kpi'><div class='n'>"+n+"</div><div class
 document.getElementById("usaSearch").addEventListener("input",renderUSA);
 </script>
 <script>
-/* Activiteitenlogboek — meld dat deze tegel is geopend */
-(function(){try{
-  var email=(localStorage.getItem("fp.email")||"").toLowerCase();
-  var key=localStorage.getItem("fp.teamkey")||"";
-  if(!email||!key) return;
-  var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-  fetch("https://fonteyn-data-store.g-mulder.workers.dev/log",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:"open"})}).catch(function(){});
-}catch(e){}})();
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200)})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog("open");
+})();
 </script>
 
 </body>

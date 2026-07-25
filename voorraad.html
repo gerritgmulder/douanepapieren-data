@@ -1370,6 +1370,7 @@ async function handleCIUpload(files){
     await saveSchepen(); renderSchepen();
     st.className="status-msg ok";
     st.textContent=added+" schip(en) verwerkt en opgeslagen. Vul per schip de ETA in — de lading telt nu als voorraad onderweg in het Partnerportaal.";
+    try{ if(added&&window.fpLog) window.fpLog("commercial-invoice-geupload",added+" schip(en)"); }catch(e){}
   }catch(e){ console.error(e); st.className="status-msg bad"; st.textContent="Kon niet inlezen: "+e.message; }
 }
 
@@ -1447,6 +1448,7 @@ async function sendReserveFor(){
     if(r.ok&&j.ok){
       const sym=j.currency==="USD"?"$":"€";
       show("ok","Aanbetalingsverzoek ("+sym+" "+Number(j.deposit).toFixed(2)+") gemaild naar "+j.emailedTo+(j.mailSent?"":" — LET OP: mail niet bevestigd").replace(/\.$/,"")+".");
+      try{ if(window.fpLog) window.fpLog("reservering-aangemaakt",qty+"x "+model+" ("+type+")"); }catch(e){}
       document.getElementById("rfEmail").value=""; document.getElementById("rfOrder").value="";
     } else show("bad","Mislukt: "+(j.error||("HTTP "+r.status)));
   }catch(e){ show("bad","Fout: "+e.message); }
@@ -1894,14 +1896,18 @@ function loadVoorraadDemo(){
 
 </script>
 <script>
-/* Activiteitenlogboek — meld dat deze tegel is geopend */
-(function(){try{
-  var email=(localStorage.getItem("fp.email")||"").toLowerCase();
-  var key=localStorage.getItem("fp.teamkey")||"";
-  if(!email||!key) return;
-  var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-  fetch("https://fonteyn-data-store.g-mulder.workers.dev/log",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:"open"})}).catch(function(){});
-}catch(e){}})();
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200)})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog("open");
+})();
 </script>
 
 </body>
