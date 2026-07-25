@@ -254,10 +254,18 @@ async function dpStockModels(env) {
       if (ship.eta && (!e.nextEta || ship.eta < e.nextEta)) e.nextEta = ship.eta;
     }
   }
-  // Portaal-claims van dit moment aftrekken van 'available' (open of betaald)
+  // Portaal-claims aftrekken van 'available'. NIEUW (25 jul, Gerrit): een
+  // aanvraag claimt pas voorraad als er ÉCHT is aanbetaald (paid). Een nog
+  // niet-betaalde aanvraag ('open') houdt de voorraad alleen kort vast zolang
+  // de dealer daadwerkelijk aan het afrekenen is (grace-window van 60 min);
+  // daarna telt hij niet meer mee — geen betaling = geen reservering.
+  const CLAIM_GRACE_MS = 60 * 60000;
+  const nowMs = Date.now();
   for (const r of (Array.isArray(reqData.requests) ? reqData.requests : [])) {
     if (r.allocationReleased) continue;
-    if (!["open", "paid"].includes(r.paymentStatus) && r.status !== "paid") continue;
+    const paid = r.paymentStatus === "paid" || r.status === "paid";
+    const payingNow = r.paymentStatus === "open" && r.ts && (nowMs - Date.parse(r.ts)) < CLAIM_GRACE_MS;
+    if (!paid && !payingNow) continue;
     const e = byModel[String(r.model || "").trim()];
     if (e) e.available = Math.max(0, e.available - (Number(r.qty) || 0));
   }

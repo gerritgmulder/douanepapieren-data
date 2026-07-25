@@ -104,11 +104,21 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   </div>
 
   <div class="card">
-    <h3>Reserveringsaanvragen (<span id="reqCount">0</span>)</h3>
-    <p class="lead" style="margin-bottom:10px">Aanvragen die partners via de Reserve-knop in het portaal doen. Ze komen ook per mail binnen. Afgehandeld = verwerkt in Logic4/Voorraadbeheer.</p>
+    <h3>Reserveringen — aanbetaald (<span id="reqCount">0</span>)</h3>
+    <p class="lead" style="margin-bottom:10px">Partners die <b>daadwerkelijk hebben aanbetaald</b>. Deze zijn <b>automatisch</b> als order in Logic4 gezet en claimen voorraad — je hoeft hier niets goed te keuren. Alleen ter info.</p>
+    <table class="grid">
+      <thead><tr><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Aanbetaling</th><th>Logic4-order</th><th></th></tr></thead>
+      <tbody id="reqBodyPaid"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h3>Aanvragen zonder aanbetaling — leads (<span id="leadCount">0</span>)</h3>
+    <p class="lead" style="margin-bottom:10px">Partners die een reservering startten maar (nog) <b>niet aanbetaalden</b>. Dit zijn <b>geen</b> reserveringen: ze claimen geen voorraad en staan niet in Logic4. Bel na of archiveer ze.
+      <label style="margin-left:8px;font-size:12px;color:var(--ink)"><input type="checkbox" id="showArch" style="vertical-align:-1px"> toon gearchiveerd</label></p>
     <table class="grid">
       <thead><tr><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Notitie</th><th>Status</th><th></th></tr></thead>
-      <tbody id="reqBody"></tbody>
+      <tbody id="reqBodyLeads"></tbody>
     </table>
   </div>
 
@@ -378,26 +388,59 @@ document.getElementById("addPrice").addEventListener("click", async ()=>{
 });
 
 let reqData = { requests: [] };
+let showArch = false;
+// Een aanvraag is pas een échte reservering als er is aanbetaald (Mollie 'paid').
+function reqPaid(r){ return r.paymentStatus === "paid" || r.status === "paid"; }
+function leadLabel(r){
+  if (r.paymentStatus === "open") return "betaallink open — nog niet betaald";
+  if (["expired","canceled","failed"].includes(r.paymentStatus)) return "niet betaald (" + r.paymentStatus + ")";
+  if (r.status === "done") return "gearchiveerd";
+  return "aanvraag — geen aanbetaling";
+}
 function renderReqs(){
-  const list = (reqData.requests || []).slice().reverse();
-  $("reqCount").textContent = list.length;
-  $("reqBody").innerHTML = list.map((r)=>{
+  const all = reqData.requests || [];
+  const paid = all.filter(reqPaid);
+  const leadsAll = all.filter(r => !reqPaid(r));
+  const leads = leadsAll.filter(r => showArch || r.status !== "done");
+
+  // ── Aanbetaalde reserveringen (automatisch in Logic4) ──
+  $("reqCount").textContent = paid.length;
+  $("reqBodyPaid").innerHTML = paid.slice().reverse().map((r)=>{
     const idx = reqData.requests.indexOf(r);
+    const dep = r.deposit ? (r.currency==="USD"?"$":"€") + " " + Number(r.deposit).toFixed(2) + (r.payFull?" (volledig)":" (30%)") : "—";
+    const l4 = r.logic4OrderId ? `<span class="pill on">#${esc(String(r.logic4OrderId))}</span>`
+      : (r.logic4Error ? `<span class="pill off" title="${esc(r.logic4Error)}">fout — check</span>` : '<span style="color:var(--muted)">wordt aangemaakt…</span>');
     return `<tr>
       <td style="white-space:nowrap">${esc(String(r.ts||"").slice(0,16).replace("T"," "))}</td>
       <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span></td>
-      <td><b>${esc(r.model)}</b></td>
+      <td><b>${esc(r.model)}</b>${r.variantName?` <span style="color:var(--muted);font-size:11px">${esc(r.variantName)}</span>`:""}</td>
       <td>${esc(r.qty)}</td>
-      <td style="max-width:260px;font-size:12px;color:var(--muted)">${esc(String(r.note||"").slice(0,120))}</td>
-      <td><span class="pill ${(r.status==="done"||r.status==="paid")?"on":"off"}">${r.status==="done"?"afgehandeld":(r.status==="paid"?"aanbetaald ✓":"nieuw")}</span>
-          ${r.deposit ? `<div style="font-size:10.5px;color:var(--muted);margin-top:2px">30%: € ${Number(r.deposit).toFixed(2)}${r.paymentStatus ? " · "+esc(r.paymentStatus) : ""}</div>` : ""}</td>
+      <td style="white-space:nowrap">${dep}</td>
+      <td>${l4}</td>
+      <td><button class="rmv reqDel" data-i="${idx}">✕</button></td>
+    </tr>`;
+  }).join("") || '<tr><td colspan="7" style="color:var(--muted)">Nog geen aanbetaalde reserveringen.</td></tr>';
+
+  // ── Leads (geen aanbetaling — geen reservering) ──
+  $("leadCount").textContent = leadsAll.filter(r => r.status !== "done").length;
+  $("reqBodyLeads").innerHTML = leads.slice().reverse().map((r)=>{
+    const idx = reqData.requests.indexOf(r);
+    const archived = r.status === "done";
+    return `<tr${archived?' style="opacity:.55"':''}>
+      <td style="white-space:nowrap">${esc(String(r.ts||"").slice(0,16).replace("T"," "))}</td>
+      <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span></td>
+      <td><b>${esc(r.model)}</b>${r.variantName?` <span style="color:var(--muted);font-size:11px">${esc(r.variantName)}</span>`:""}</td>
+      <td>${esc(r.qty)}</td>
+      <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(String(r.note||"").slice(0,120))}</td>
+      <td><span class="pill off">${esc(leadLabel(r))}</span></td>
       <td>
-        <button class="rmv reqTog" data-i="${idx}">${r.status==="done"?"heropen":"afgehandeld"}</button>
+        <button class="rmv reqArch" data-i="${idx}">${archived?"heropen":"archiveer"}</button>
         <button class="rmv reqDel" data-i="${idx}">✕</button>
       </td>
     </tr>`;
-  }).join("") || '<tr><td colspan="7" style="color:var(--muted)">Nog geen aanvragen.</td></tr>';
-  document.querySelectorAll(".reqTog").forEach(b=>b.addEventListener("click", async ()=>{
+  }).join("") || '<tr><td colspan="7" style="color:var(--muted)">Geen openstaande leads.</td></tr>';
+
+  document.querySelectorAll(".reqArch").forEach(b=>b.addEventListener("click", async ()=>{
     const r = reqData.requests[Number(b.dataset.i)];
     r.status = r.status === "done" ? "new" : "done";
     await save("dealer-requests", reqData); renderReqs();
@@ -408,6 +451,7 @@ function renderReqs(){
     await save("dealer-requests", reqData); renderReqs();
   }));
 }
+document.getElementById("showArch").addEventListener("change", (e)=>{ showArch = e.target.checked; renderReqs(); });
 
 async function save(bucket, data){
   try { await kvPut(bucket, data); }
