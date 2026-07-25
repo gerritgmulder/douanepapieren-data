@@ -356,6 +356,13 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Passion Spas USA (Houston, Texas) — bestellingen, reserveringen en containers van de Amerikaanse vestiging. Draait op QuickBooks; los van Nederland/Logic4.</p>
       </a>
 
+      <!-- Activiteitenlogboek — alleen Gerrit/Dolf/Fonteynbot. -->
+      <a href="activiteit.html" class="tile hidden" id="tileActiviteit">
+        <div class="icon">📋</div>
+        <h3>Activiteitenlogboek</h3>
+        <p>Wie logt wanneer in en welke tegels worden gebruikt. Controleer of iedereen zijn dagelijkse werk in het dashboard doet.</p>
+      </a>
+
       <!-- Bol.com koppeling — finance + sales: Osman + Don + admins. -->
       <a href="bol.html" class="tile hidden" id="tileBol">
         <div class="icon">🛒</div>
@@ -600,6 +607,13 @@ const AMERIKA_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Activiteitenlogboek — management-oversight. ALLEEN Gerrit, Dolf en Fonteynbot.
+const ACTIVITEIT_EMAILS = new Set([
+  "gerrit@fonteyn.nl",     "gerrit",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Welke logins mogen de Orderstatus-tegel zien.
 // Server (server/index.js → ORDERSTATUS_ALLOWED) doet dezelfde check.
 const ORDERSTATUS_EMAILS = new Set([
@@ -665,6 +679,14 @@ function showDashboard(email) {
   el("loginView").classList.add("hidden");
   el("dashView").classList.remove("hidden");
   el("userEmail").textContent = email || "—";
+  // Activiteitenlogboek: login vastleggen (worker dedupliceert binnen 5 min)
+  try {
+    var _k = localStorage.getItem("fp.teamkey") || "";
+    if (email && _k) fetch("https://fonteyn-data-store.g-mulder.workers.dev/log", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": _k },
+      body: JSON.stringify({ user: (email || "").toLowerCase(), tile: "dashboard", action: "login" }),
+    }).catch(function () {});
+  } catch (e) {}
   // Vriendelijke groet op basis van tijd
   const h = new Date().getHours();
   const greet = h < 6 ? "Goedenacht" : h < 12 ? "Goedemorgen" : h < 18 ? "Goedemiddag" : "Goedenavond";
@@ -700,6 +722,8 @@ function showDashboard(email) {
   el("tileVoorraad").classList.toggle("hidden", !VOORRAAD_EMAILS.has(lc));
   // Amerika (Houston/Texas, QuickBooks) — alleen Chantal/Dolf/Gerrit/bot
   el("tileAmerika").classList.toggle("hidden", !AMERIKA_EMAILS.has(lc));
+  // Activiteitenlogboek — alleen Gerrit/Dolf/bot
+  el("tileActiviteit").classList.toggle("hidden", !ACTIVITEIT_EMAILS.has(lc));
   // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot.
   const isAdmin = (lc === "gerrit@fonteyn.nl" || lc === "gerrit" ||
                    lc === "fonteynbot@fonteyn.nl" || lc === "fonteyn.bot" || lc === "fonteynbot");

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Activiteitenlogboek — Fonteyn Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
+    --fonteyn-lime:#8bc53f; --fonteyn-lime-dark:#72a531;
+    --bg:#f5f4ef; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb;
+    --ok:#059669; --bad:#b91c1c; --warn:#92400e; --passion:#c8102e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  input,select,textarea,button{font-family:inherit}
+  header{background:var(--fonteyn-green);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px}
+  header img.logo{height:40px}
+  header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+  header a.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font-size:12px;transition:all .14s}
+  header a.back:hover{background:rgba(255,255,255,.15)}
+  header .user-chip{font-size:12px;color:rgba(255,255,255,.85)}
+  header button.logout{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer;transition:all .14s}
+  header button.logout:hover{background:rgba(255,255,255,.15)}
+  main{max-width:1300px;margin:24px auto;padding:0 22px}
+  h2{color:var(--fonteyn-green);font-size:22px;margin:0 0 6px}
+  .lead{color:var(--muted);margin:0 0 18px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin:14px 0}
+  .card h3{margin:0 0 12px;color:var(--fonteyn-green);font-size:15px}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
+  .kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-top:3px solid var(--fonteyn-green)}
+  .kpi .n{font-size:26px;font-weight:700;line-height:1.1;color:var(--fonteyn-green)}
+  .kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
+  table.grid{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.grid th,table.grid td{padding:7px 9px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:middle}
+  table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);position:sticky;top:0}
+  table.grid tr:hover td{background:#fbfdf7}
+  .tablewrap{max-height:60vh;overflow:auto;border:1px solid var(--border);border-radius:8px}
+  .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+  input[type=text],input[type=month],select{border:1px solid var(--border);border-radius:8px;padding:8px 11px;font:inherit;font-size:13px;background:#fff;transition:border-color .14s,box-shadow .14s}
+  input:focus,select:focus{outline:none;border-color:var(--fonteyn-lime-dark);box-shadow:0 0 0 3px rgba(139,197,63,.18)}
+  select{-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='none' stroke='%23144734' stroke-width='1.6' d='M2.5 4.5 6 8l3.5-3.5'/></svg>");background-repeat:no-repeat;background-position:right 11px center;padding-right:32px;cursor:pointer}
+  .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:600;background:#eef2ff;color:#3730a3}
+  .pill.login{background:#dcfce7;color:#15803d}
+  .status-msg{padding:10px 14px;border-radius:6px;margin:12px 0;font-size:13px}
+  .status-msg.bad{background:#fee2e2;color:var(--bad)}
+  .hidden{display:none!important}
+  .bar{height:7px;border-radius:4px;background:var(--fonteyn-lime);min-width:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+  <h1>📋 Activiteitenlogboek</h1>
+  <a class="back" href="dashboard.html">← Dashboard</a>
+  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <h2>Activiteitenlogboek</h2>
+  <p class="lead">Wie logt in, wanneer, en welke tegels worden gebruikt. Zo zie je in één oogopslag of iedereen zijn dagelijkse werk in het dashboard doet.</p>
+
+  <div class="controls">
+    <label style="font-size:12px;color:var(--muted)">Maand:</label>
+    <input type="month" id="maand">
+    <input type="text" id="zoek" placeholder="filter op medewerker of tegel…" style="min-width:240px">
+    <span id="updated" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+
+  <div id="deny" class="status-msg bad hidden">Geen toegang tot het activiteitenlogboek.</div>
+
+  <div id="content">
+    <div id="kpis" class="kpi-row"></div>
+    <div class="card">
+      <h3>Per medewerker</h3>
+      <div class="tablewrap"><table class="grid">
+        <thead><tr><th>Medewerker</th><th>Keer ingelogd</th><th>Tegels geopend</th><th>Actieve dagen</th><th>Laatst actief</th><th>Meest gebruikt</th></tr></thead>
+        <tbody id="perUser"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>Alle gebeurtenissen <span id="evCount" style="color:var(--muted);font-weight:400;font-size:12px"></span></h3>
+      <div class="tablewrap"><table class="grid">
+        <thead><tr><th>Wanneer</th><th>Medewerker</th><th>Actie</th><th>Tegel</th></tr></thead>
+        <tbody id="events"></tbody>
+      </table></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
+const ALLOWED=new Set(["gerrit@fonteyn.nl","gerrit","dolf@fonteyn.nl","fonteyn.dolf","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"]);
+const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
+const TEAM=(localStorage.getItem("fp.teamkey")||"");
+// Tegel-bestandsnaam → nette naam
+const TILES={dashboard:"Dashboard",voorraad:"Voorraadbeheer",amerika:"Amerika",douane:"Douanepapieren",labels:"Labels",transport:"Transport",eikensingel:"Eikensingel","order-status":"Orderstatus",stuurcijfers:"Stuurcijfers",prijslijst:"Prijslijst",bankkoppeling:"Bankkoppeling",bol:"Bol.com",retouren:"Retouren",personeel:"Personeel",koeien:"Koeien",rapportage:"Rapportage",dealerportaal:"Partnerportaal",activiteit:"Activiteitenlogboek","probe-logic4":"Logic4-probe"};
+function tileName(t){return TILES[t]||t||"—";}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function kpi(n,l){return "<div class='kpi'><div class='n'>"+n+"</div><div class='l'>"+l+"</div></div>";}
+
+let allEvents=[];
+(function boot(){
+  if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
+  const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  document.getElementById("userEmail").textContent=email||"—";
+  if(!ALLOWED.has(email)){ document.getElementById("deny").classList.remove("hidden"); document.getElementById("content").classList.add("hidden"); document.querySelector(".controls").classList.add("hidden"); return; }
+  const now=new Date();
+  document.getElementById("maand").value=now.toISOString().slice(0,7);
+  load();
+})();
+document.getElementById("logoutBtn").addEventListener("click",()=>{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href="dashboard.html"; });
+document.getElementById("maand").addEventListener("change",load);
+document.getElementById("zoek").addEventListener("input",render);
+
+async function load(){
+  const maand=document.getElementById("maand").value||new Date().toISOString().slice(0,7);
+  try{
+    const r=await fetch(WORKER+"/data/activiteit-"+maand,{headers:{"X-Fonteyn-Auth":TEAM}});
+    const j=r.ok?await r.json():{events:[]};
+    allEvents=(j&&j.events)||[];
+  }catch(e){ allEvents=[]; }
+  document.getElementById("updated").textContent=allEvents.length+" gebeurtenissen deze maand";
+  render();
+}
+function render(){
+  const q=(document.getElementById("zoek").value||"").trim().toLowerCase();
+  const evs=allEvents.filter(e=>!q||String(e.user).toLowerCase().includes(q)||tileName(e.tile).toLowerCase().includes(q)||String(e.tile).toLowerCase().includes(q));
+  // KPI's
+  const users=new Set(evs.map(e=>e.user));
+  const logins=evs.filter(e=>e.action==="login").length;
+  const opens=evs.filter(e=>e.action==="open").length;
+  const days=new Set(evs.map(e=>String(e.ts).slice(0,10)));
+  document.getElementById("kpis").innerHTML=
+    kpi(users.size,"Actieve medewerkers")+kpi(logins,"Keer ingelogd")+kpi(opens,"Tegels geopend")+kpi(days.size,"Actieve dagen");
+  // Per medewerker
+  const byUser={};
+  for(const e of evs){ const u=byUser[e.user]=byUser[e.user]||{login:0,open:0,tiles:{},days:new Set(),last:""};
+    if(e.action==="login")u.login++; if(e.action==="open"){u.open++; u.tiles[e.tile]=(u.tiles[e.tile]||0)+1;}
+    u.days.add(String(e.ts).slice(0,10)); if(e.ts>u.last)u.last=e.ts; }
+  const rows=Object.entries(byUser).sort((a,b)=>String(b[1].last).localeCompare(String(a[1].last)));
+  document.getElementById("perUser").innerHTML=rows.map(([u,d])=>{
+    const top=Object.entries(d.tiles).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([t,n])=>esc(tileName(t))+" ("+n+")").join(", ")||"—";
+    return "<tr><td><b>"+esc(u)+"</b></td><td>"+d.login+"</td><td>"+d.open+"</td><td>"+d.days.size+"</td><td style='font-size:12px'>"+(d.last?new Date(d.last).toLocaleString("nl-NL"):"—")+"</td><td style='font-size:12px'>"+top+"</td></tr>";
+  }).join("")||"<tr><td colspan='6' style='color:var(--muted)'>Nog geen activiteit deze maand.</td></tr>";
+  // Alle gebeurtenissen (nieuwste eerst)
+  const sorted=evs.slice().sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+  document.getElementById("evCount").textContent="("+sorted.length+")";
+  document.getElementById("events").innerHTML=sorted.slice(0,1000).map(e=>
+    "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+esc(e.user)+"</td><td>"+(e.action==="login"?"<span class='pill login'>ingelogd</span>":"<span class='pill'>geopend</span>")+"</td><td>"+esc(tileName(e.tile))+(e.detail?" <span style='color:var(--muted)'>· "+esc(e.detail)+"</span>":"")+"</td></tr>"
+  ).join("")||"<tr><td colspan='4' style='color:var(--muted)'>Geen gebeurtenissen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
+}
+</script>
+<script>
+/* Activiteitenlogboek — meld dat deze tegel is geopend */
+(function(){try{
+  var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+  var key=localStorage.getItem("fp.teamkey")||"";
+  if(!email||!key) return;
+  var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
+  fetch("https://fonteyn-data-store.g-mulder.workers.dev/log",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:"open"})}).catch(function(){});
+}catch(e){}})();
+</script>
+
+</body>
+</html>

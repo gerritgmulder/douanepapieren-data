@@ -46,6 +46,7 @@ const ALLOWED_BUCKETS = new Set([
 // (handtekeningen als vector-strokes ≈ 2 KB per bezoeker).
 const ALLOWED_BUCKET_PATTERNS = [
   /^signin-\d{4}-\d{2}$/,
+  /^activiteit-\d{4}-\d{2}$/,   // activiteitenlogboek, één bucket per maand
 ];
 
 const corsHeaders = {
@@ -1397,6 +1398,38 @@ async function handleTrack(request, env) {
   return reply(200, { ok: !error || Object.keys(results).length > 0, error, results });
 }
 
+// ─── Activiteitenlogboek ─────────────────────────────────────────────
+// Legt vast wie wanneer inlogt en welke tegel opent. Per maand een bucket
+// (activiteit-YYYY-MM). Alleen leesbaar met de team-sleutel; de viewer-tegel
+// is in het dashboard bovendien beperkt tot Gerrit/Dolf/Fonteynbot.
+async function handleLog(request, env) {
+  const auth = request.headers.get("X-Fonteyn-Auth") || "";
+  if (!env.SHARED_SECRET || auth !== env.SHARED_SECRET) return reply(401, { ok: false });
+  let b = {}; try { b = await request.json(); } catch { return reply(400, { ok: false }); }
+  const user = String(b.user || "").toLowerCase().slice(0, 80);
+  if (!user) return reply(200, { ok: true, skipped: true });
+  const ev = {
+    ts: new Date().toISOString(),
+    user,
+    tile: String(b.tile || "").slice(0, 40),
+    action: String(b.action || "open").slice(0, 40),
+    detail: String(b.detail || "").slice(0, 200),
+  };
+  const bucket = "activiteit-" + ev.ts.slice(0, 7);   // YYYY-MM
+  const data = (await env.FONTEYN_DATA.get(bucket, { type: "json" })) || { events: [] };
+  data.events = data.events || [];
+  // Dubbele 'open' binnen 5 min voor dezelfde gebruiker+tegel niet nog eens loggen
+  const last = data.events[data.events.length - 1];
+  const dup = last && last.user === ev.user && last.tile === ev.tile && last.action === ev.action &&
+    (Date.parse(ev.ts) - Date.parse(last.ts)) < 5 * 60000;
+  if (!dup) {
+    data.events.push(ev);
+    if (data.events.length > 5000) data.events = data.events.slice(-5000);
+    await env.FONTEYN_DATA.put(bucket, JSON.stringify(data));
+  }
+  return reply(200, { ok: true });
+}
+
 // ─── QuickBooks Online (Amerika / Passion Spas USA) ──────────────────
 // Read-only koppeling met QuickBooks Online via OAuth2 (authorization code).
 // client_id/secret als worker-secrets (QB_CLIENT_ID/QB_CLIENT_SECRET); tokens
@@ -1705,6 +1738,11 @@ export default {
     // Merzario-tracking (intern, team-sleutel) — zie handleTrack
     if (url.pathname === "/track" && request.method === "POST") {
       return handleTrack(request, env);
+    }
+
+    // Activiteitenlogboek — tegels sturen hier een event bij openen/login
+    if (url.pathname === "/log" && request.method === "POST") {
+      return handleLog(request, env);
     }
 
     // Juridische pagina's (publiek) — nodig voor de QuickBooks-app-review
