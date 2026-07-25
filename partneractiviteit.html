@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
-<title>Activiteitenlogboek — Fonteyn Dashboard</title>
+<title>Partner-activiteit — Fonteyn Dashboard</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <style>
   :root{
@@ -28,7 +28,7 @@
   .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin:14px 0}
   .card h3{margin:0 0 12px;color:var(--fonteyn-green);font-size:15px}
   .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
-  .kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-top:3px solid var(--fonteyn-green)}
+  .kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-top:3px solid var(--passion)}
   .kpi .n{font-size:26px;font-weight:700;line-height:1.1;color:var(--fonteyn-green)}
   .kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
   table.grid{width:100%;border-collapse:collapse;font-size:12.5px}
@@ -42,48 +42,51 @@
   select{-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='none' stroke='%23144734' stroke-width='1.6' d='M2.5 4.5 6 8l3.5-3.5'/></svg>");background-repeat:no-repeat;background-position:right 11px center;padding-right:32px;cursor:pointer}
   .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:600;background:#eef2ff;color:#3730a3}
   .pill.login{background:#dcfce7;color:#15803d}
+  .pill.visit{background:#e0f2fe;color:#0369a1}
+  .pill.reserve{background:#ffedd5;color:#c2410c}
+  .pill.doc{background:#f3e8ff;color:#7e22ce}
+  .pill.vraag{background:#fef9c3;color:#854d0e}
   .status-msg{padding:10px 14px;border-radius:6px;margin:12px 0;font-size:13px}
   .status-msg.bad{background:#fee2e2;color:var(--bad)}
   .hidden{display:none!important}
-  .bar{height:7px;border-radius:4px;background:var(--fonteyn-lime);min-width:2px}
 </style>
 </head>
 <body>
 
 <header>
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
-  <h1>📋 Activiteitenlogboek</h1>
+  <h1>🤝 Partner-activiteit</h1>
   <a class="back" href="dashboard.html">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
 <main>
-  <h2>Activiteitenlogboek</h2>
-  <p class="lead">Wie logt in, wanneer, en welke tegels worden gebruikt. Zo zie je in één oogopslag of iedereen zijn dagelijkse werk in het dashboard doet.</p>
+  <h2>Partner-activiteit — Passion Partners</h2>
+  <p class="lead">Wat doen dealers op het publieke partnerportaal? Wie logt wanneer in, welke reserveringen worden aangevraagd, welke documenten geopend en welke vragen gesteld. Zo zie je in één oogopslag hoe het portaal leeft — en welke partners actief zijn.</p>
 
   <div class="controls">
     <label style="font-size:12px;color:var(--muted)">Maand:</label>
     <input type="month" id="maand">
-    <input type="text" id="zoek" placeholder="filter op medewerker of tegel…" style="min-width:240px">
+    <input type="text" id="zoek" placeholder="filter op bedrijf, e-mail of actie…" style="min-width:260px">
     <span id="updated" style="font-size:12px;color:var(--muted)"></span>
   </div>
 
-  <div id="deny" class="status-msg bad hidden">Geen toegang tot het activiteitenlogboek.</div>
+  <div id="deny" class="status-msg bad hidden">Geen toegang tot het partner-activiteitenlogboek.</div>
 
   <div id="content">
     <div id="kpis" class="kpi-row"></div>
     <div class="card">
-      <h3>Per medewerker</h3>
+      <h3>Per partner</h3>
       <div class="tablewrap"><table class="grid">
-        <thead><tr><th>Medewerker</th><th>Keer ingelogd</th><th>Tegels geopend</th><th>Actieve dagen</th><th>Laatst actief</th><th>Meest gebruikt</th></tr></thead>
+        <thead><tr><th>Partner</th><th>Ingelogd</th><th>Bezoeken</th><th>Reserveringen</th><th>Documenten</th><th>Vragen</th><th>Actieve dagen</th><th>Laatst actief</th></tr></thead>
         <tbody id="perUser"></tbody>
       </table></div>
     </div>
     <div class="card">
       <h3>Alle gebeurtenissen <span id="evCount" style="color:var(--muted);font-weight:400;font-size:12px"></span></h3>
       <div class="tablewrap"><table class="grid">
-        <thead><tr><th>Wanneer</th><th>Medewerker</th><th>Actie</th><th>Tegel</th></tr></thead>
+        <thead><tr><th>Wanneer</th><th>Partner</th><th>Actie</th><th>Detail</th></tr></thead>
         <tbody id="events"></tbody>
       </table></div>
     </div>
@@ -92,19 +95,39 @@
 
 <script>
 const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
-const ALLOWED=new Set(["gerrit@fonteyn.nl","gerrit","dolf@fonteyn.nl","fonteyn.dolf","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"]);
+const ALLOWED=new Set([
+  "gerrit@fonteyn.nl","gerrit",
+  "dolf@fonteyn.nl","fonteyn.dolf",
+  "arno@fonteyn.nl","fonteyn.arno","arno",
+  "don@fonteyn.nl","fonteyn.don","don",
+  "chantal@fonteyn.nl","chantal","fonteyn.chantal",
+  "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"
+]);
 const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
 const TEAM=(localStorage.getItem("fp.teamkey")||"");
-// Tegel-bestandsnaam → nette naam
-const TILES={dashboard:"Dashboard",voorraad:"Voorraadbeheer",amerika:"Amerika",douane:"Douanepapieren",labels:"Labels",transport:"Transport",eikensingel:"Eikensingel","order-status":"Orderstatus",stuurcijfers:"Stuurcijfers",prijslijst:"Prijslijst",bankkoppeling:"Bankkoppeling",bol:"Bol.com",retouren:"Retouren",personeel:"Personeel",koeien:"Koeien",rapportage:"Rapportage",dealerportaal:"Partnerportaal",activiteit:"Activiteitenlogboek",partneractiviteit:"Partner-activiteit","probe-logic4":"Logic4-probe"};
-function tileName(t){return TILES[t]||t||"—";}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function kpi(n,l){return "<div class='kpi'><div class='n'>"+n+"</div><div class='l'>"+l+"</div></div>";}
+// Nette naam + kleur per actie
+const ACTIONS={
+  "login":["ingelogd","login"],
+  "portaal-open":["portaal geopend","visit"],
+  "reservering-aangevraagd":["reservering aangevraagd","reserve"],
+  "document-geopend":["document geopend","doc"],
+  "vraag-gesteld":["vraag gesteld","vraag"],
+  "wachtwoord-ingesteld":["wachtwoord ingesteld",""]
+};
 function actionPill(a){
-  if(a==="login") return "<span class='pill login'>ingelogd</span>";
-  if(a==="open") return "<span class='pill'>geopend</span>";
-  return "<span class='pill' style='background:#ffedd5;color:#c2410c'>"+esc(String(a).replace(/-/g," "))+"</span>";
+  const m=ACTIONS[a];
+  if(m) return "<span class='pill "+m[1]+"'>"+esc(m[0])+"</span>";
+  return "<span class='pill'>"+esc(String(a).replace(/-/g," "))+"</span>";
 }
+// Partner-label: bedrijf (e-mail) of alleen e-mail
+function partnerLabel(e){
+  const co=(e.company||"").trim();
+  return co ? "<b>"+esc(co)+"</b> <span style='color:var(--muted);font-size:11px'>"+esc(e.email)+"</span>"
+            : "<b>"+esc(e.email)+"</b>";
+}
+function partnerKey(e){ return (e.email||"").toLowerCase(); }
 
 let allEvents=[];
 (function boot(){
@@ -123,7 +146,7 @@ document.getElementById("zoek").addEventListener("input",render);
 async function load(){
   const maand=document.getElementById("maand").value||new Date().toISOString().slice(0,7);
   try{
-    const r=await fetch(WORKER+"/data/activiteit-"+maand,{headers:{"X-Fonteyn-Auth":TEAM}});
+    const r=await fetch(WORKER+"/data/partner-activiteit-"+maand,{headers:{"X-Fonteyn-Auth":TEAM}});
     const j=r.ok?await r.json():{events:[]};
     allEvents=(j&&j.events)||[];
   }catch(e){ allEvents=[]; }
@@ -132,35 +155,46 @@ async function load(){
 }
 function render(){
   const q=(document.getElementById("zoek").value||"").trim().toLowerCase();
-  const evs=allEvents.filter(e=>!q||String(e.user).toLowerCase().includes(q)||tileName(e.tile).toLowerCase().includes(q)||String(e.tile).toLowerCase().includes(q));
+  const evs=allEvents.filter(e=>!q
+    ||String(e.company||"").toLowerCase().includes(q)
+    ||String(e.email||"").toLowerCase().includes(q)
+    ||String(e.action||"").toLowerCase().includes(q)
+    ||((ACTIONS[e.action]&&ACTIONS[e.action][0])||"").toLowerCase().includes(q)
+    ||String(e.detail||"").toLowerCase().includes(q));
   // KPI's
-  const users=new Set(evs.map(e=>e.user));
+  const partners=new Set(evs.map(partnerKey));
   const logins=evs.filter(e=>e.action==="login").length;
-  const opens=evs.filter(e=>e.action==="open").length;
+  const reserv=evs.filter(e=>e.action==="reservering-aangevraagd").length;
+  const docs=evs.filter(e=>e.action==="document-geopend").length;
+  const vragen=evs.filter(e=>e.action==="vraag-gesteld").length;
   const days=new Set(evs.map(e=>String(e.ts).slice(0,10)));
-  const acties=evs.filter(e=>e.action!=="open"&&e.action!=="login").length;
   document.getElementById("kpis").innerHTML=
-    kpi(users.size,"Actieve medewerkers")+kpi(logins,"Keer ingelogd")+kpi(opens,"Tegels geopend")+kpi(acties,"Concrete acties")+kpi(days.size,"Actieve dagen");
-  // Per medewerker
+    kpi(partners.size,"Actieve partners")+kpi(logins,"Keer ingelogd")+kpi(reserv,"Reserveringen")+kpi(docs,"Documenten geopend")+kpi(vragen,"Vragen gesteld")+kpi(days.size,"Actieve dagen");
+  // Per partner
   const byUser={};
-  for(const e of evs){ const u=byUser[e.user]=byUser[e.user]||{login:0,open:0,tiles:{},days:new Set(),last:""};
-    if(e.action==="login")u.login++; if(e.action==="open"){u.open++; u.tiles[e.tile]=(u.tiles[e.tile]||0)+1;}
+  for(const e of evs){ const k=partnerKey(e);
+    const u=byUser[k]=byUser[k]||{email:e.email,company:e.company||"",login:0,visit:0,reserve:0,doc:0,vraag:0,days:new Set(),last:""};
+    if(e.company&&!u.company)u.company=e.company;
+    if(e.action==="login")u.login++;
+    else if(e.action==="portaal-open")u.visit++;
+    else if(e.action==="reservering-aangevraagd")u.reserve++;
+    else if(e.action==="document-geopend")u.doc++;
+    else if(e.action==="vraag-gesteld")u.vraag++;
     u.days.add(String(e.ts).slice(0,10)); if(e.ts>u.last)u.last=e.ts; }
-  const rows=Object.entries(byUser).sort((a,b)=>String(b[1].last).localeCompare(String(a[1].last)));
-  document.getElementById("perUser").innerHTML=rows.map(([u,d])=>{
-    const top=Object.entries(d.tiles).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([t,n])=>esc(tileName(t))+" ("+n+")").join(", ")||"—";
-    return "<tr><td><b>"+esc(u)+"</b></td><td>"+d.login+"</td><td>"+d.open+"</td><td>"+d.days.size+"</td><td style='font-size:12px'>"+(d.last?new Date(d.last).toLocaleString("nl-NL"):"—")+"</td><td style='font-size:12px'>"+top+"</td></tr>";
-  }).join("")||"<tr><td colspan='6' style='color:var(--muted)'>Nog geen activiteit deze maand.</td></tr>";
+  const rows=Object.values(byUser).sort((a,b)=>String(b.last).localeCompare(String(a.last)));
+  document.getElementById("perUser").innerHTML=rows.map(d=>
+    "<tr><td>"+partnerLabel(d)+"</td><td>"+d.login+"</td><td>"+d.visit+"</td><td>"+(d.reserve?"<b style='color:var(--passion)'>"+d.reserve+"</b>":"0")+"</td><td>"+d.doc+"</td><td>"+d.vraag+"</td><td>"+d.days.size+"</td><td style='font-size:12px'>"+(d.last?new Date(d.last).toLocaleString("nl-NL"):"—")+"</td></tr>"
+  ).join("")||"<tr><td colspan='8' style='color:var(--muted)'>Nog geen partner-activiteit deze maand.</td></tr>";
   // Alle gebeurtenissen (nieuwste eerst)
   const sorted=evs.slice().sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
   document.getElementById("evCount").textContent="("+sorted.length+")";
   document.getElementById("events").innerHTML=sorted.slice(0,1000).map(e=>
-    "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+esc(e.user)+"</td><td>"+actionPill(e.action)+"</td><td>"+esc(tileName(e.tile))+(e.detail?" <span style='color:var(--muted)'>· "+esc(e.detail)+"</span>":"")+"</td></tr>"
+    "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+partnerLabel(e)+"</td><td>"+actionPill(e.action)+"</td><td style='color:#374151'>"+esc(e.detail||"")+"</td></tr>"
   ).join("")||"<tr><td colspan='4' style='color:var(--muted)'>Geen gebeurtenissen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
 }
 </script>
 <script>
-/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+/* Tegel-open melden aan het interne activiteitenlogboek (medewerkers) */
 (function(){
   var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
   window.fpLog=function(action,detail){try{

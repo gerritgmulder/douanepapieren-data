@@ -46,7 +46,8 @@ const ALLOWED_BUCKETS = new Set([
 // (handtekeningen als vector-strokes ≈ 2 KB per bezoeker).
 const ALLOWED_BUCKET_PATTERNS = [
   /^signin-\d{4}-\d{2}$/,
-  /^activiteit-\d{4}-\d{2}$/,   // activiteitenlogboek, één bucket per maand
+  /^activiteit-\d{4}-\d{2}$/,   // activiteitenlogboek (medewerkers), één bucket per maand
+  /^partner-activiteit-\d{4}-\d{2}$/,   // partner-activiteitenlogboek (dealers), één bucket per maand
 ];
 
 const corsHeaders = {
@@ -175,6 +176,7 @@ async function dpHandleLogin(request, env, url) {
     }
     const sess = dpNewSessionToken();
     await env.FONTEYN_DATA.put("dp-sess:" + sess, JSON.stringify({ email, company: dealer.company || "", since: new Date().toISOString() }), { expirationTtl: DP_SESS_TTL });
+    await dpLogPartner(env, { email, company: dealer.company || "" }, "login", "wachtwoord");
     return reply(200, { ok: true, session: sess, company: dealer.company || "" });
   }
 
@@ -212,6 +214,7 @@ async function dpHandleAuth(request, env, url) {
   await env.FONTEYN_DATA.delete("dp-login:" + t);   // eenmalig bruikbaar
   const sess = dpNewSessionToken();
   await env.FONTEYN_DATA.put("dp-sess:" + sess, JSON.stringify({ email: login.email, company: login.company, since: new Date().toISOString() }), { expirationTtl: DP_SESS_TTL });
+  await dpLogPartner(env, { email: login.email, company: login.company }, "login", "inloglink");
   // Token in het URL-FRAGMENT (#s=…), niet als queryparameter: fragmenten
   // verlaten de browser nooit (geen server/proxy-logs, geen referrers).
   return new Response(null, { status: 302, headers: { "Location": url.origin + "/dealers#s=" + sess } });
@@ -476,6 +479,9 @@ async function dpHandleReserve(request, env, sess, url) {
     (note ? '<p style="white-space:pre-wrap;border-left:3px solid #8bc53f;padding-left:12px;">' + esc(note) + '</p>' : '') +
     '<p style="color:#888;font-size:12px;">Ook zichtbaar in de beheertegel Dealerportaal. Reply gaat direct naar de dealer.</p></div>',
     sess.email);
+  await dpLogPartner(env, sess, "reservering-aangevraagd",
+    qty + "× " + model + (variantName ? " (" + variantName + ")" : "") +
+    (checkoutUrl ? " — betaallink " + (entry.currency === "USD" ? "$" : "€") + (entry.deposit != null ? entry.deposit.toFixed(2) : "") : ""));
   return reply(200, { ok: true, checkoutUrl: checkoutUrl, deposit: entry.deposit || null, currency: entry.currency || null, payFull: !!entry.payFull });
 }
 
@@ -514,6 +520,7 @@ async function dpHandleSetPassword(request, env, sess) {
   dealer.pw = await dpHashPassword(password);
   await env.FONTEYN_DATA.put("dealer-accounts", JSON.stringify(accounts));
   console.log("[dp-pw] wachtwoord (opnieuw) ingesteld voor " + sess.email);
+  await dpLogPartner(env, sess, "wachtwoord-ingesteld", "");
   return reply(200, { ok: true });
 }
 
@@ -566,13 +573,14 @@ async function dpAdminPutFile(request, env, url) {
 }
 
 // GET /dealers/api/file?id=… (dealer-sessie vereist — afgedwongen in de router)
-async function dpServeFile(env, url) {
+async function dpServeFile(env, url, sess) {
   const id = dpFileId(url);
   if (!id) return reply(400, { ok: false, error: "bad-id" });
   const buf = await env.FONTEYN_DATA.get("dpfile:" + id, { type: "arrayBuffer" });
   if (!buf) return reply(404, { ok: false, error: "not-found" });
   const ext = id.split(".").pop();
   const name = id.split("/").pop().replace(/"/g, "");
+  if (sess) await dpLogPartner(env, sess, "document-geopend", name);
   return new Response(buf, { headers: {
     "Content-Type": DP_FILE_TYPES[ext] || "application/octet-stream",
     "Content-Disposition": 'inline; filename="' + name + '"',
@@ -600,6 +608,7 @@ async function dpHandleVraag(request, env, sess) {
     '<p style="white-space:pre-wrap;border-left:3px solid #8bc53f;padding-left:12px;">' + esc(message) + '</p>' +
     '<p style="color:#888;font-size:12px;">Beantwoord deze mail — reply gaat direct naar de dealer.</p></div>',
     sess.email);
+  await dpLogPartner(env, sess, "vraag-gesteld", subject);
   return reply(sent.ok ? 200 : 502, { ok: sent.ok });
 }
 
@@ -947,6 +956,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/api/me" && request.method === "GET") {
       const accounts = await dpGetAccounts(env);
       const dealer = dpFindDealer(accounts, sess.email);
+      await dpLogPartner(env, sess, "portaal-open", "");   // actieve sessie (dedup 5 min)
       return reply(200, { ok: true, email: sess.email, company: sess.company || "",
         hasPassword: !!(dealer && dealer.pw),
         region: (dealer && dealer.region) || "EU" });
@@ -964,7 +974,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/api/requests" && request.method === "GET") return dpHandleMyRequests(env, sess);
     if (p === "/dealers/api/reserve" && request.method === "POST") return dpHandleReserve(request, env, sess, url);
     if (p === "/dealers/api/docs" && request.method === "GET") return dpHandleDocs(env);
-    if (p === "/dealers/api/file" && request.method === "GET") return dpServeFile(env, url);
+    if (p === "/dealers/api/file" && request.method === "GET") return dpServeFile(env, url, sess);
     if (p === "/dealers/api/vraag" && request.method === "POST") return dpHandleVraag(request, env, sess);
   }
   return reply(404, "Not found");
@@ -1428,6 +1438,38 @@ async function handleLog(request, env) {
     await env.FONTEYN_DATA.put(bucket, JSON.stringify(data));
   }
   return reply(200, { ok: true });
+}
+
+// ─── Partner-activiteitenlogboek ─────────────────────────────────────
+// Legt server-side vast wat dealers/partners op het publieke Passion
+// Partners-portaal doen: inloggen, portaal openen, reserveren, documenten
+// openen, vragen stellen, wachtwoord instellen. Aparte bucket per maand
+// (partner-activiteit-YYYY-MM). BEWUST server-side: de publieke site heeft
+// géén team-sleutel, dus loggen vanuit de browser zou de sleutel lekken
+// (én zou te vervalsen zijn). De viewer-tegel leest met de team-sleutel.
+async function dpLogPartner(env, sess, action, detail) {
+  try {
+    if (!sess || !sess.email) return;
+    const ev = {
+      ts: new Date().toISOString(),
+      email: String(sess.email).toLowerCase().slice(0, 120),
+      company: String(sess.company || "").slice(0, 120),
+      action: String(action || "open").slice(0, 40),
+      detail: String(detail || "").slice(0, 200),
+    };
+    const bucket = "partner-activiteit-" + ev.ts.slice(0, 7);   // YYYY-MM
+    const data = (await env.FONTEYN_DATA.get(bucket, { type: "json" })) || { events: [] };
+    data.events = data.events || [];
+    // Zelfde actie+detail binnen 5 min voor dezelfde dealer niet dubbel loggen
+    const last = data.events[data.events.length - 1];
+    const dup = last && last.email === ev.email && last.action === ev.action && last.detail === ev.detail &&
+      (Date.parse(ev.ts) - Date.parse(last.ts)) < 5 * 60000;
+    if (!dup) {
+      data.events.push(ev);
+      if (data.events.length > 5000) data.events = data.events.slice(-5000);
+      await env.FONTEYN_DATA.put(bucket, JSON.stringify(data));
+    }
+  } catch (e) { /* loggen mag nooit een dealer-actie breken */ }
 }
 
 // ─── QuickBooks Online (Amerika / Passion Spas USA) ──────────────────
