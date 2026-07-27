@@ -37,7 +37,8 @@ const ALLOWED_BUCKETS = new Set([
   "voorraad-prioriteit", // Chantal's allocatie-volgorde per model (byModel: {model: [ordernr,…]})
   "reserveringen-live",  // Reserveringen-ledger uit Logic4 (uur-sync): per model open orders + betaald/vervallen
   "voorraad-productie",  // Open inkooporders bij de 9 spa-fabrieken (uur-sync): per model in productie + ETA
-  "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail) + 'verwerkt in Logic4'-vinkjes
+  "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail)
+  "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
@@ -1718,6 +1719,7 @@ async function qbHandleInvoices(request, env) {
     const spaModels = await qbSpaModelList(env, catalog);
     const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
     const audrey = (await env.FONTEYN_DATA.get("qb-audrey", { type: "json" })) || { ids: {} };
+    const verwerkt = (await env.FONTEYN_DATA.get("qb-verwerkt", { type: "json" })) || { ids: {} };
     const raw = await qbAllInvoices(env);
     const invoices = raw
       // Alleen de doorlopende factuurnummering (3300+). QuickBooks bevat ook
@@ -1733,7 +1735,12 @@ async function qbHandleInvoices(request, env) {
         const m = qbMapInvoice(inv, catalog, spaModels);
         m.geaccordeerd = !!(approved.ids && approved.ids[m.docNr]);
         m.logic4Order = m.geaccordeerd ? approved.ids[m.docNr].orderId : null;
+        m.geaccordeerdTs = m.geaccordeerd ? (approved.ids[m.docNr].ts || null) : null;
         m.audrey = !!(audrey.ids && audrey.ids[m.docNr]);
+        const v = verwerkt.ids && verwerkt.ids[m.docNr];
+        m.verwerkt = !!v;
+        m.verwerktTs = v ? (v.ts || null) : null;
+        m.verwerktDoor = v ? (v.user || null) : null;
         return m;
       })
       .sort((a, b) => (parseInt(b.docNr, 10) || 0) - (parseInt(a.docNr, 10) || 0));
@@ -1816,6 +1823,25 @@ async function qbHandleAudrey(request, env) {
   return reply(200, { ok: true, ontvangen: !!body.ontvangen });
 }
 
+// POST /amerika/qb/verwerkt { docNr, verwerkt, user } — "verwerkt in Logic4"
+// per FACTUURNUMMER. Eén centrale waarheid: het vinkje in het Audrey-tabblad
+// en de lijst 'geaccordeerd — nog te verwerken' lezen allebei hieruit, zodat
+// ze niet uit elkaar kunnen lopen. Een geaccordeerde factuur blijft in het
+// Audrey-tabblad staan totdat dit vinkje aan gaat (een Logic4-order betekent
+// immers nog niet dat de betaling gekoppeld is).
+async function qbHandleVerwerkt(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const docNr = String(body.docNr || "").trim();
+  if (!docNr) return reply(400, { ok: false, error: "docNr ontbreekt" });
+  const data = (await env.FONTEYN_DATA.get("qb-verwerkt", { type: "json" })) || { ids: {} };
+  data.ids = data.ids || {};
+  if (body.verwerkt) data.ids[docNr] = { ts: new Date().toISOString(), user: String(body.user || "").slice(0, 80) };
+  else delete data.ids[docNr];
+  await env.FONTEYN_DATA.put("qb-verwerkt", JSON.stringify(data));
+  return reply(200, { ok: true, verwerkt: !!body.verwerkt, docNr });
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -1865,6 +1891,7 @@ export default {
     if (url.pathname === "/amerika/qb/invoices") return qbHandleInvoices(request, env);
     if (url.pathname === "/amerika/qb/approve" && request.method === "POST") return qbHandleApprove(request, env);
     if (url.pathname === "/amerika/qb/audrey"  && request.method === "POST") return qbHandleAudrey(request, env);
+    if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);
 
     // Dealerportaal (publiek, eigen sessie-auth — géén shared secret)
     if (url.pathname === "/dealers" || url.pathname.startsWith("/dealers/")) {
