@@ -639,6 +639,9 @@ let MAG_WIJZIGEN = false;   // door boot() gezet; adviseurs = false
     throw new Error("geen toegang");
   }
   MAG_WIJZIGEN = BEHEER.has(email);
+  // Rol meesturen naar het activiteitenlogboek: zo is bij élke actie te zien
+  // met welke rechten iemand handelde.
+  window.fpRol = MAG_WIJZIGEN ? "beheer" : "adviseur (alleen-lezen)";
   if (!MAG_WIJZIGEN) beperkTotKlantTabs();
 })();
 // Adviseur-modus: alleen de drie klantsoort-tabs, puur lezen.
@@ -1486,6 +1489,7 @@ function renderSchepen(){
     "</tr>";
   }).join("") || "<tr><td colspan='6' style='color:var(--muted)'>Nog geen schepen. Upload een commercial invoice.</td></tr>";
   document.querySelectorAll(".shipEta").forEach(inp=>inp.addEventListener("change",async()=>{
+    try{ const _s=shipsData.ships[Number(inp.dataset.i)]; if(window.fpLog) window.fpLog("schip-eta-gewijzigd",(_s&&(_s.vessel||_s.ref)||"schip")+" → "+(inp.value?datumNL(inp.value):"leeg")); }catch(e){}
     shipsData.ships[Number(inp.dataset.i)].eta=inp.value;
     try{ await saveSchepen(); setStatus("ok","ETA opgeslagen — direct zichtbaar in het Partnerportaal."); }catch(e){ setStatus("bad",e.message); }
   }));
@@ -1497,6 +1501,7 @@ function renderSchepen(){
   document.querySelectorAll(".delShip").forEach(b=>b.addEventListener("click",async()=>{
     const s=shipsData.ships[Number(b.dataset.i)];
     if(!confirm("Schip \""+(s.vessel||s.ref)+"\" verwijderen? De lading telt dan niet meer als voorraad.")) return;
+    try{ if(window.fpLog) window.fpLog("schip-verwijderd",(s.vessel||s.ref||"schip")+" ("+(s.total||0)+" spa's)"); }catch(e){}
     shipsData.ships.splice(Number(b.dataset.i),1);
     try{ await saveSchepen(); renderSchepen(); }catch(e){ setStatus("bad",e.message); }
   }));
@@ -1710,6 +1715,12 @@ async function movePrio(model, i, dir){
   try{
     await fetch(PRIO_URL,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
       body:JSON.stringify({byModel:prioPriority,updated:new Date().toISOString()})});
+    // Prioriteit raakt wie zijn spa eerder krijgt — altijd vastleggen wie dit deed
+    try{
+      const r=prioRows[j];
+      if(window.fpLog) window.fpLog("prioriteit-gewijzigd",
+        model+": order "+(r?r.ordernr:"?")+(r&&r.naam?" ("+r.naam+")":"")+" naar plek "+(j+1)+" van "+prioRows.length);
+    }catch(e){}
   }catch(e){ prioStatus("bad","Opslaan volgorde faalde: "+e.message); }
 }
 
@@ -1849,6 +1860,7 @@ function renderManager(){
     });
     card.querySelector(".delcont").addEventListener("click", async function(){
       if(!confirm("Container "+(c.nr||"")+" verwijderen?")) return;
+      try{ const _c=pipeContainers.find(x=>String(x.id)===String(cid)); if(window.fpLog) window.fpLog("container-verwijderd",(_c&&_c.nr)||String(cid)); }catch(e){}
       pipeContainers=pipeContainers.filter(x=>String(x.id)!==String(cid)); await savePipe(); renderPipeAll();
     });
   });
@@ -2102,7 +2114,7 @@ function loadVoorraadDemo(){
     var key=localStorage.getItem("fp.teamkey")||"";
     if(!email||!key) return;
     var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200)})}).catch(function(){});
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
   }catch(e){}};
   window.fpLog("open");
 })();

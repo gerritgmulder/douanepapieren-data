@@ -65,7 +65,12 @@
   <div class="controls">
     <label style="font-size:12px;color:var(--muted)">Maand:</label>
     <input type="month" id="maand">
-    <input type="text" id="zoek" placeholder="filter op medewerker of tegel…" style="min-width:240px">
+    <input type="text" id="zoek" placeholder="filter op medewerker, tegel of actie…" style="min-width:240px">
+    <select id="soort">
+      <option value="alles">Alles tonen</option>
+      <option value="wijzigingen">Alleen wijzigingen</option>
+      <option value="inzage">Alleen inloggen &amp; bekijken</option>
+    </select>
     <span id="updated" style="font-size:12px;color:var(--muted)"></span>
   </div>
 
@@ -76,14 +81,22 @@
     <div class="card">
       <h3>Per medewerker</h3>
       <div class="tablewrap"><table class="grid">
-        <thead><tr><th>Medewerker</th><th>Keer ingelogd</th><th>Tegels geopend</th><th>Actieve dagen</th><th>Laatst actief</th><th>Meest gebruikt</th></tr></thead>
+        <thead><tr><th>Medewerker</th><th>Rechten</th><th>Ingelogd</th><th>Tegels geopend</th><th>Wijzigingen</th><th>Actieve dagen</th><th>Laatst actief</th><th>Meest gebruikt</th></tr></thead>
         <tbody id="perUser"></tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>Wijzigingen — wie heeft wat aangepast <span id="wijzCount" style="color:var(--muted);font-weight:400;font-size:12px"></span></h3>
+      <p class="lead" style="font-size:12px;margin:-6px 0 10px">Alleen handelingen die iets veranderd hebben. Inloggen en rondkijken staan in de lijst daaronder.</p>
+      <div class="tablewrap"><table class="grid">
+        <thead><tr><th>Wanneer</th><th>Wie</th><th>Rechten</th><th>Wat is aangepast</th><th>Tegel</th></tr></thead>
+        <tbody id="wijzigingen"></tbody>
       </table></div>
     </div>
     <div class="card">
       <h3>Alle gebeurtenissen <span id="evCount" style="color:var(--muted);font-weight:400;font-size:12px"></span></h3>
       <div class="tablewrap"><table class="grid">
-        <thead><tr><th>Wanneer</th><th>Medewerker</th><th>Actie</th><th>Tegel</th></tr></thead>
+        <thead><tr><th>Wanneer</th><th>Medewerker</th><th>Rechten</th><th>Actie</th><th>Tegel</th></tr></thead>
         <tbody id="events"></tbody>
       </table></div>
     </div>
@@ -119,6 +132,7 @@ let allEvents=[];
 document.getElementById("logoutBtn").addEventListener("click",()=>{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href="dashboard.html"; });
 document.getElementById("maand").addEventListener("change",load);
 document.getElementById("zoek").addEventListener("input",render);
+document.getElementById("soort").addEventListener("change",render);
 
 async function load(){
   const maand=document.getElementById("maand").value||new Date().toISOString().slice(0,7);
@@ -130,33 +144,69 @@ async function load(){
   document.getElementById("updated").textContent=allEvents.length+" gebeurtenissen deze maand";
   render();
 }
+// Is dit een wijziging of alleen kijken? De worker zet 'wijziging' mee; voor
+// events van vóór die wijziging leiden we het af uit de actienaam.
+function isWijziging(e){
+  if(typeof e.wijziging==="boolean") return e.wijziging;
+  const a=String(e.action||"");
+  return !/^(open|login|logout)$/.test(a) && !/-(gecontroleerd|bekeken|geopend)$/.test(a);
+}
+function rolPill(r){
+  if(!r) return "<span style='color:var(--muted);font-size:11px'>—</span>";
+  const beheer=/beheer|admin/i.test(r);
+  return "<span class='pill' style='background:"+(beheer?"#dcfce7":"#e0f2fe")+";color:"+(beheer?"#15803d":"#0369a1")+"'>"+esc(r)+"</span>";
+}
 function render(){
   const q=(document.getElementById("zoek").value||"").trim().toLowerCase();
-  const evs=allEvents.filter(e=>!q||String(e.user).toLowerCase().includes(q)||tileName(e.tile).toLowerCase().includes(q)||String(e.tile).toLowerCase().includes(q));
+  const soort=document.getElementById("soort").value;
+  let evs=allEvents.filter(e=>!q
+    ||String(e.user).toLowerCase().includes(q)
+    ||tileName(e.tile).toLowerCase().includes(q)
+    ||String(e.tile).toLowerCase().includes(q)
+    ||String(e.action||"").toLowerCase().includes(q)
+    ||String(e.detail||"").toLowerCase().includes(q)
+    ||String(e.rol||"").toLowerCase().includes(q));
+  if(soort==="wijzigingen") evs=evs.filter(isWijziging);
+  else if(soort==="inzage")  evs=evs.filter(e=>!isWijziging(e));
   // KPI's
   const users=new Set(evs.map(e=>e.user));
   const logins=evs.filter(e=>e.action==="login").length;
   const opens=evs.filter(e=>e.action==="open").length;
   const days=new Set(evs.map(e=>String(e.ts).slice(0,10)));
-  const acties=evs.filter(e=>e.action!=="open"&&e.action!=="login").length;
+  const wijz=evs.filter(isWijziging).length;
   document.getElementById("kpis").innerHTML=
-    kpi(users.size,"Actieve medewerkers")+kpi(logins,"Keer ingelogd")+kpi(opens,"Tegels geopend")+kpi(acties,"Concrete acties")+kpi(days.size,"Actieve dagen");
-  // Per medewerker
+    kpi(users.size,"Actieve medewerkers")+kpi(logins,"Keer ingelogd")+kpi(opens,"Tegels geopend")+kpi(wijz,"Wijzigingen")+kpi(days.size,"Actieve dagen");
+  // Per medewerker — inclusief de rechten waarmee ze werkten
   const byUser={};
-  for(const e of evs){ const u=byUser[e.user]=byUser[e.user]||{login:0,open:0,tiles:{},days:new Set(),last:""};
-    if(e.action==="login")u.login++; if(e.action==="open"){u.open++; u.tiles[e.tile]=(u.tiles[e.tile]||0)+1;}
+  for(const e of evs){ const u=byUser[e.user]=byUser[e.user]||{login:0,open:0,wijz:0,tiles:{},rollen:new Set(),days:new Set(),last:""};
+    if(e.action==="login")u.login++;
+    if(e.action==="open"){u.open++; u.tiles[e.tile]=(u.tiles[e.tile]||0)+1;}
+    if(isWijziging(e))u.wijz++;
+    if(e.rol)u.rollen.add(e.rol);
     u.days.add(String(e.ts).slice(0,10)); if(e.ts>u.last)u.last=e.ts; }
   const rows=Object.entries(byUser).sort((a,b)=>String(b[1].last).localeCompare(String(a[1].last)));
   document.getElementById("perUser").innerHTML=rows.map(([u,d])=>{
     const top=Object.entries(d.tiles).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([t,n])=>esc(tileName(t))+" ("+n+")").join(", ")||"—";
-    return "<tr><td><b>"+esc(u)+"</b></td><td>"+d.login+"</td><td>"+d.open+"</td><td>"+d.days.size+"</td><td style='font-size:12px'>"+(d.last?new Date(d.last).toLocaleString("nl-NL"):"—")+"</td><td style='font-size:12px'>"+top+"</td></tr>";
-  }).join("")||"<tr><td colspan='6' style='color:var(--muted)'>Nog geen activiteit deze maand.</td></tr>";
-  // Alle gebeurtenissen (nieuwste eerst)
+    const rollen=[...d.rollen].map(rolPill).join(" ")||"<span style='color:var(--muted);font-size:11px'>—</span>";
+    return "<tr><td><b>"+esc(u)+"</b></td><td>"+rollen+"</td><td>"+d.login+"</td><td>"+d.open+"</td>"+
+      "<td>"+(d.wijz?"<b style='color:#c2410c'>"+d.wijz+"</b>":"0")+"</td><td>"+d.days.size+"</td>"+
+      "<td style='font-size:12px'>"+(d.last?new Date(d.last).toLocaleString("nl-NL"):"—")+"</td><td style='font-size:12px'>"+top+"</td></tr>";
+  }).join("")||"<tr><td colspan='8' style='color:var(--muted)'>Nog geen activiteit deze maand.</td></tr>";
   const sorted=evs.slice().sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+  // Wijzigingen apart — wie heeft wat aangepast
+  const wijzRijen=sorted.filter(isWijziging);
+  document.getElementById("wijzCount").textContent="("+wijzRijen.length+")";
+  document.getElementById("wijzigingen").innerHTML=wijzRijen.slice(0,500).map(e=>
+    "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td>"+
+    "<td><b>"+esc(e.user)+"</b></td><td>"+rolPill(e.rol)+"</td>"+
+    "<td>"+actionPill(e.action)+(e.detail?" <span style='color:#374151'>"+esc(e.detail)+"</span>":"")+"</td>"+
+    "<td style='font-size:12px'>"+esc(tileName(e.tile))+"</td></tr>"
+  ).join("")||"<tr><td colspan='5' style='color:var(--muted)'>Geen wijzigingen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
+  // Alle gebeurtenissen (nieuwste eerst)
   document.getElementById("evCount").textContent="("+sorted.length+")";
   document.getElementById("events").innerHTML=sorted.slice(0,1000).map(e=>
-    "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+esc(e.user)+"</td><td>"+actionPill(e.action)+"</td><td>"+esc(tileName(e.tile))+(e.detail?" <span style='color:var(--muted)'>· "+esc(e.detail)+"</span>":"")+"</td></tr>"
-  ).join("")||"<tr><td colspan='4' style='color:var(--muted)'>Geen gebeurtenissen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
+    "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+esc(e.user)+"</td><td>"+rolPill(e.rol)+"</td><td>"+actionPill(e.action)+"</td><td>"+esc(tileName(e.tile))+(e.detail?" <span style='color:var(--muted)'>· "+esc(e.detail)+"</span>":"")+"</td></tr>"
+  ).join("")||"<tr><td colspan='5' style='color:var(--muted)'>Geen gebeurtenissen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
 }
 </script>
 <script>
@@ -168,7 +218,7 @@ function render(){
     var key=localStorage.getItem("fp.teamkey")||"";
     if(!email||!key) return;
     var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200)})}).catch(function(){});
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
   }catch(e){}};
   window.fpLog("open");
 })();

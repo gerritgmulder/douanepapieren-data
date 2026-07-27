@@ -1428,19 +1428,27 @@ async function handleLog(request, env) {
   let b = {}; try { b = await request.json(); } catch { return reply(400, { ok: false }); }
   const user = String(b.user || "").toLowerCase().slice(0, 80);
   if (!user) return reply(200, { ok: true, skipped: true });
+  const action = String(b.action || "open").slice(0, 40);
+  // Kijken of aanpassen? Alles wat geen inzage-actie is, telt als wijziging —
+  // zo kan het logboek filteren op "wie heeft er iets veranderd".
+  const INZAGE = /^(open|login|logout)$/.test(action) || /-(gecontroleerd|bekeken|geopend)$/.test(action);
   const ev = {
     ts: new Date().toISOString(),
     user,
     tile: String(b.tile || "").slice(0, 40),
-    action: String(b.action || "open").slice(0, 40),
+    action,
     detail: String(b.detail || "").slice(0, 200),
+    rol: String(b.rol || "").slice(0, 30) || null,   // rechten op moment van handelen
+    wijziging: !INZAGE,
   };
   const bucket = "activiteit-" + ev.ts.slice(0, 7);   // YYYY-MM
   const data = (await env.FONTEYN_DATA.get(bucket, { type: "json" })) || { events: [] };
   data.events = data.events || [];
-  // Dubbele 'open' binnen 5 min voor dezelfde gebruiker+tegel niet nog eens loggen
+  // Dubbele 'open' binnen 5 min voor dezelfde gebruiker+tegel niet nog eens
+  // loggen. WIJZIGINGEN nooit dedupliceren — die moeten stuk voor stuk
+  // terug te vinden zijn (wie deed wat, wanneer).
   const last = data.events[data.events.length - 1];
-  const dup = last && last.user === ev.user && last.tile === ev.tile && last.action === ev.action &&
+  const dup = !ev.wijziging && last && last.user === ev.user && last.tile === ev.tile && last.action === ev.action &&
     (Date.parse(ev.ts) - Date.parse(last.ts)) < 5 * 60000;
   if (!dup) {
     data.events.push(ev);

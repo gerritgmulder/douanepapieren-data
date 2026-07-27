@@ -242,11 +242,13 @@ function renderPartners(){
   document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     d.active = d.active === false ? true : false;
+    try{ if(window.fpLog) window.fpLog("partner-"+(d.active?"geactiveerd":"gedeactiveerd"),d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
     await save("dealer-accounts", accounts); renderPartners();
   }));
   document.querySelectorAll(".delD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     if (!confirm("Partner "+d.email+" verwijderen? (bestaande sessies verlopen vanzelf)")) return;
+    try{ if(window.fpLog) window.fpLog("partner-verwijderd",d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
     accounts.dealers.splice(Number(b.dataset.i),1);
     await save("dealer-accounts", accounts); renderPartners();
   }));
@@ -289,6 +291,7 @@ $("addPartner").addEventListener("click", async ()=>{
   await save("dealer-accounts", accounts);
   $("nEmail").value=""; $("nCompany").value=""; $("nDebtors").value="";
   renderPartners();
+  try{ if(window.fpLog) window.fpLog("partner-toegevoegd",email+($("nCompany").value?"":"")); }catch(e){}
   setStatus("ok","Partner toegevoegd — die kan nu inloggen op het portaal met een magic-link.");
 });
 
@@ -303,6 +306,7 @@ function renderDocs(){
       <td><button class="rmv delDoc" data-i="${i}">✕</button></td>
     </tr>`).join("") || '<tr><td colspan="4" style="color:var(--muted)">Nog geen documenten.</td></tr>';
   document.querySelectorAll(".delDoc").forEach(b=>b.addEventListener("click", async ()=>{
+    try{ const _d=docsData.docs[Number(b.dataset.i)]; if(window.fpLog) window.fpLog("document-verwijderd",(_d&&_d.title)||""); }catch(e){}
     docsData.docs.splice(Number(b.dataset.i),1);
     await save("dealer-docs", docsData); renderDocs();
   }));
@@ -336,6 +340,7 @@ $("saveRate").addEventListener("click", async ()=>{
   if(!(r>0.5 && r<2)){ setStatus("bad","Voer een geldige koers in (tussen 0,5 en 2)."); return; }
   priceData.meta = priceData.meta || {}; priceData.meta.rate = r;
   await save("dealer-prices", priceData); renderRate();
+  try{ if(window.fpLog) window.fpLog("wisselkoers-gewijzigd","EUR/USD → "+r); }catch(e){}
   setStatus("ok","Koers opgeslagen ("+r+"). Alle EU-partnerprijzen en aanbetalingen rekenen hier nu mee.");
 });
 // Partnerprijs in euro's = $-prijs ÷ koers. Waarde kan zijn:
@@ -370,6 +375,7 @@ function renderPrices(){
       <td><button class="rmv delPrice" data-m="${esc(model)}">✕</button></td>
     </tr>`;}).join("") || '<tr><td colspan="5" style="color:var(--muted)">Nog geen prijzen — reserveringen blijven aanvraag-per-mail.</td></tr>';
   document.querySelectorAll(".delPrice").forEach(b=>b.addEventListener("click", async ()=>{
+    try{ if(window.fpLog) window.fpLog("partnerprijs-verwijderd",b.dataset.m); }catch(e){}
     delete priceData.prices[b.dataset.m];
     await save("dealer-prices", priceData); renderPrices();
   }));
@@ -384,6 +390,7 @@ document.getElementById("addPrice").addEventListener("click", async ()=>{
   await save("dealer-prices", priceData);
   $("pModel").value=""; $("pPrice").value=""; $("pCode").value="";
   renderPrices();
+  try{ if(window.fpLog) window.fpLog("partnerprijs-gewijzigd",model+" → € "+price); }catch(e){}
   setStatus("ok","Prijs opgeslagen — reserveringen voor "+model+" krijgen straks automatisch een 30%-aanbetalingslink.");
 });
 
@@ -443,10 +450,12 @@ function renderReqs(){
   document.querySelectorAll(".reqArch").forEach(b=>b.addEventListener("click", async ()=>{
     const r = reqData.requests[Number(b.dataset.i)];
     r.status = r.status === "done" ? "new" : "done";
+    try{ if(window.fpLog) window.fpLog("lead-"+(r.status==="done"?"gearchiveerd":"heropend"),(r.company||r.email)+" — "+r.qty+"x "+r.model); }catch(e){}
     await save("dealer-requests", reqData); renderReqs();
   }));
   document.querySelectorAll(".reqDel").forEach(b=>b.addEventListener("click", async ()=>{
     if (!confirm("Aanvraag verwijderen?")) return;
+    try{ const _r=reqData.requests[Number(b.dataset.i)]; if(window.fpLog) window.fpLog("aanvraag-verwijderd",(_r.company||_r.email)+" — "+_r.qty+"x "+_r.model); }catch(e){}
     reqData.requests.splice(Number(b.dataset.i),1);
     await save("dealer-requests", reqData); renderReqs();
   }));
@@ -520,7 +529,7 @@ async function init(){
     var key=localStorage.getItem("fp.teamkey")||"";
     if(!email||!key) return;
     var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200)})}).catch(function(){});
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
   }catch(e){}};
   window.fpLog("open");
 })();
