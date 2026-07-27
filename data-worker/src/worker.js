@@ -37,6 +37,7 @@ const ALLOWED_BUCKETS = new Set([
   "voorraad-prioriteit", // Chantal's allocatie-volgorde per model (byModel: {model: [ordernr,…]})
   "reserveringen-live",  // Reserveringen-ledger uit Logic4 (uur-sync): per model open orders + betaald/vervallen
   "voorraad-productie",  // Open inkooporders bij de 9 spa-fabrieken (uur-sync): per model in productie + ETA
+  "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail) + 'verwerkt in Logic4'-vinkjes
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 

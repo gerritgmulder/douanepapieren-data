@@ -76,6 +76,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="containers" type="button">Containers (Logic4 · Warehouse Texas)</button>
     <button class="tab" data-tab="quickbooks" type="button">Verkoop &amp; dealers (QuickBooks)</button>
+    <button class="tab" data-tab="audrey" type="button">Ontvangen Audrey</button>
   </div>
 
   <!-- ===== Containers uit Logic4 (Warehouse Texas) ===== -->
@@ -106,6 +107,21 @@
     </div>
     <div id="qbData"></div>
   </div>
+
+  <!-- Ontvangen Audrey — wire-overzichten uit haar mail + 'verwerkt in Logic4' -->
+  <div id="tab-audrey" class="hidden">
+    <div class="card">
+      <h3>Wire-overzicht van Audrey inlezen</h3>
+      <p class="lead" style="font-size:13px">Sla Audrey's mail op als <b>.eml</b>-bestand (in Outlook: mail slepen naar een map, of <i>Bestand → Opslaan als</i>) en upload hem hier.
+        Het systeem leest de tabel letterlijk uit: de <b>Balance</b>-regel, elke factuurregel (bijv. <code>3553 Paradise</code>) met kolom 1, kolom 2 en — indien aanwezig — kolom 3.</p>
+      <div class="actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px">
+        <input type="file" id="audFile" accept=".eml,.txt,.html" style="font-size:13px">
+        <button class="btn solid" id="audBtn" type="button">Inlezen &amp; opslaan</button>
+      </div>
+      <div id="audStatus" class="status-msg hidden" style="margin-top:12px"></div>
+    </div>
+    <div id="audList"></div>
+  </div>
 </main>
 
 <script>
@@ -126,7 +142,9 @@ document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
   const tab=t.dataset.tab;
   document.getElementById("tab-containers").classList.toggle("hidden",tab!=="containers");
   document.getElementById("tab-quickbooks").classList.toggle("hidden",tab!=="quickbooks");
+  document.getElementById("tab-audrey").classList.toggle("hidden",tab!=="audrey");
   if(tab==="quickbooks") qbInit();
+  if(tab==="audrey") audInit();
 }));
 
 const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
@@ -289,11 +307,193 @@ function renderUSA(){
   const ov=document.getElementById("usaOverview");
   if(!rows.length){ ov.innerHTML="<p class='lead'>Geen Amerikaanse orders"+(q?" voor '"+esc(q)+"'":"")+". (Draait de uur-sync al?)</p>"; return; }
   ov.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr><th>Order</th><th>Klant</th><th>Model</th><th>Kleur</th><th>Aantal</th><th>Datum</th><th>Betaling</th></tr></thead><tbody>"+
-    rows.map(r=>"<tr><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td><b>"+esc(r.model)+"</b></td><td>"+(r.kleur?esc(r.kleur):"<span style='color:var(--muted)'>—</span>")+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+betaalBadge(r)+"</td></tr>").join("")+
+    rows.map(r=>"<tr><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td><b>"+esc(r.model)+"</b></td><td>"+(r.kleur?esc(r.kleur):"<span style='color:var(--muted)'>—</span>")+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td><td>"+betaalBadge(r)+"</td></tr>").join("")+
     "</tbody></table></div>";
 }
 function kpi(n,l){ return "<div class='kpi'><div class='n'>"+n+"</div><div class='l'>"+l+"</div></div>"; }
 document.getElementById("usaSearch").addEventListener("input",renderUSA);
+
+/* ===================== Ontvangen Audrey ==============================
+   Audrey mailt na elke wire een overzicht: een Balance-regel en per factuur
+   het bedrag (kolom 1), de creditcard-inhouding (kolom 2) en op de totaalregel
+   het netto overgemaakte bedrag (kolom 3). Chantal uploadt die mail als .eml;
+   we lezen de tabel letterlijk uit en zetten er per regel een vinkje
+   "Verwerkt in Logic4" bij (zichtbaar voor Chantal én Osman).
+   Opslag: bucket qb-wires via de gewone /data-route (team-sleutel).        */
+const WIRES_URL=WORKER+"/data/qb-wires";
+let wiresData={wires:[]};
+
+// Quoted-printable decoderen. We doen dat op de HELE mail: Outlook hakt het
+// HTML-deel op over geneste MIME-boundaries, dus per-deel parsen is te broos.
+// Base64-bijlagen (de PDF's) bevatten geen <tr> en storen dus niet.
+function audDecodeQP(s){
+  return s.replace(/=\r?\n/g,"").replace(/=([0-9A-Fa-f]{2})/g,(m,h)=>String.fromCharCode(parseInt(h,16)));
+}
+function audBedrag(t){
+  if(!t) return null;
+  const s=String(t).replace(/ /g," ").trim();
+  if(!/\d/.test(s)) return null;
+  const neg=/\(/.test(s);                      // (126.69) = negatief
+  const n=parseFloat(s.replace(/[^0-9.,-]/g,"").replace(/,/g,""));
+  if(!isFinite(n)) return null;
+  return neg?-Math.abs(n):n;
+}
+function audCellen(trHtml){
+  const out=[]; const re=/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi; let c;
+  while((c=re.exec(trHtml))){
+    out.push(c[1].replace(/<[^>]+>/g," ")
+      .replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&lt;/gi,"<")
+      .replace(/&gt;/gi,">").replace(/&#39;/g,"'")
+      .replace(/ /g," ").replace(/\s+/g," ").trim());
+  }
+  return out;
+}
+function audParse(raw){
+  const html=audDecodeQP(raw);
+  const rijen=[]; const trRe=/<tr[^>]*>([\s\S]*?)<\/tr>/gi; let m;
+  while((m=trRe.exec(html))){
+    const cs=audCellen(m[1]); if(!cs.length) continue;
+    const naam=cs[0]||"";
+    const bedragen=cs.slice(1).map(audBedrag).filter(v=>v!==null);
+    if(!bedragen.length) continue;                       // rij zonder bedragen
+    const isBalance=/^balance\b/i.test(naam);
+    const factuur=(naam.match(/^(\d{4})\b/)||[])[1]||null;
+    const heeftNaam=/[a-z]/i.test(naam);
+    rijen.push({
+      naam: naam || "(totaal)",
+      factuur,
+      soort: isBalance?"balance":(factuur?"factuur":(heeftNaam?"overig":"totaal")),
+      kolom1:bedragen[0]!=null?bedragen[0]:null,
+      kolom2:bedragen[1]!=null?bedragen[1]:null,
+      kolom3:bedragen[2]!=null?bedragen[2]:null,
+      verwerkt:false, verwerktTs:null, verwerktDoor:null,
+    });
+  }
+  return rijen;
+}
+// Datum van de wire zélf. Voorkeur: "Wire date Jul 9, 2026" uit Audrey's
+// overzicht; anders de "Sent:"-regel van haar oorspronkelijke mail (niet de
+// doorstuurdatum van Chantal); anders vandaag. We bouwen de datum uit lokale
+// componenten — toISOString() zou 9 juli 00:00 naar 8 juli schuiven (UTC).
+function audLokaleDatum(d){
+  if(!d||isNaN(d)) return null;
+  const p=n=>String(n).padStart(2,"0");
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+}
+function audMailDatum(raw){
+  const plat=audDecodeQP(raw).replace(/<[^>]+>/g," ").replace(/&nbsp;/gi," ").replace(/\s+/g," ");
+  const wd=plat.match(/Wire\s*date\s*([A-Za-z]{3,9}\s*\d{1,2},\s*\d{4})/i);
+  if(wd){ const s=audLokaleDatum(new Date(wd[1])); if(s) return s; }
+  const sent=[...plat.matchAll(/Sent:\s*(?:[A-Za-z]+day,\s*)?(\d{1,2}\s+[A-Za-z]+\s+\d{4})/g)];
+  if(sent.length){ const s=audLokaleDatum(new Date(sent[sent.length-1][1])); if(s) return s; }
+  return audLokaleDatum(new Date());
+}
+async function audLoad(){
+  try{
+    const r=await fetch(WIRES_URL,{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}});
+    if(r.ok){ const j=await r.json(); wiresData={wires:(j&&j.wires)||[]}; }
+  }catch(e){ console.warn("wires laden faalde:",e); }
+}
+async function audSave(){
+  const r=await fetch(WIRES_URL,{method:"PUT",
+    headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+    body:JSON.stringify({wires:wiresData.wires,updated:new Date().toISOString()})});
+  if(!r.ok) throw new Error("opslaan mislukt (HTTP "+r.status+")");
+}
+async function audInit(){ await audLoad(); audRender(); }
+const usd=n=>(n==null?"—":(n<0?"-":"")+"$ "+Math.abs(Number(n)).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}));
+function audSoortPill(s){
+  if(s==="balance") return "<span class='pill' style='background:#e0f2fe;color:#0369a1'>balance</span>";
+  if(s==="totaal")  return "<span class='pill' style='background:#f3f4f6;color:#374151'>totaal</span>";
+  if(s==="factuur") return "<span class='pill' style='background:#dcfce7;color:#15803d'>factuur</span>";
+  return "<span class='pill'>overig</span>";
+}
+function audRender(){
+  const box=document.getElementById("audList");
+  if(!wiresData.wires.length){ box.innerHTML="<div class='card'><p class='lead'>Nog geen wire-overzichten ingelezen. Upload hierboven Audrey's mail (.eml).</p></div>"; return; }
+  const wires=wiresData.wires.slice().sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
+  box.innerHTML=wires.map(w=>{
+    const openN=w.regels.filter(r=>r.soort==="factuur"&&!r.verwerkt).length;
+    const totaalRegel=w.regels.find(r=>r.soort==="totaal"&&r.kolom3!=null);
+    return "<div class='card'>"+
+      "<div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px'>"+
+        "<h3 style='margin:0'>Wire van "+esc(datumNL(w.datum))+
+          (totaalRegel?" — <span style='color:#15803d'>"+esc(usd(totaalRegel.kolom3))+" ontvangen</span>":"")+"</h3>"+
+        "<div style='display:flex;gap:10px;align-items:center'>"+
+          (openN?"<span class='pill' style='background:#fef3c7;color:#92400e'>"+openN+" nog te verwerken</span>":"<span class='pill' style='background:#dcfce7;color:#15803d'>alles verwerkt</span>")+
+          "<button class='btn' type='button' data-del='"+esc(w.id)+"'>verwijderen</button>"+
+        "</div></div>"+
+      "<p class='lead' style='font-size:12px;margin:0 0 10px'>Bestand: "+esc(w.bestand||"")+" · ingelezen "+esc(datumNL(w.ts))+"</p>"+
+      "<div class='tablewrap'><table class='grid'><thead><tr>"+
+        "<th>Regel</th><th>Factuur</th><th>Soort</th><th style='text-align:right'>Kolom 1</th><th style='text-align:right'>Kolom 2</th><th style='text-align:right'>Kolom 3</th><th>Verwerkt in Logic4</th></tr></thead><tbody>"+
+      w.regels.map((r,i)=>{
+        const kan=r.soort==="factuur";
+        return "<tr"+(r.verwerkt?" style='background:#f0fdf4'":"")+">"+
+          "<td><b>"+esc(r.naam)+"</b></td>"+
+          "<td>"+(r.factuur?esc(r.factuur):"<span style='color:var(--muted)'>—</span>")+"</td>"+
+          "<td>"+audSoortPill(r.soort)+"</td>"+
+          "<td style='text-align:right;font-variant-numeric:tabular-nums'>"+esc(usd(r.kolom1))+"</td>"+
+          "<td style='text-align:right;font-variant-numeric:tabular-nums;color:"+(r.kolom2!=null&&r.kolom2<0?"#b91c1c":"inherit")+"'>"+esc(usd(r.kolom2))+"</td>"+
+          "<td style='text-align:right;font-variant-numeric:tabular-nums'><b>"+esc(usd(r.kolom3))+"</b></td>"+
+          "<td>"+(kan
+            ? "<label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'><input type='checkbox' class='audChk' data-w='"+esc(w.id)+"' data-i='"+i+"'"+(r.verwerkt?" checked":"")+">"+
+              "<span style='font-size:11px;color:"+(r.verwerkt?"#15803d":"var(--muted)")+"'>"+(r.verwerkt?("verwerkt"+(r.verwerktDoor?" · "+esc(r.verwerktDoor.split("@")[0]):"")):"nog niet")+"</span></label>"
+            : "<span style='color:var(--muted);font-size:11px'>n.v.t.</span>")+"</td></tr>";
+      }).join("")+
+      "</tbody></table></div></div>";
+  }).join("");
+  // Vinkje "verwerkt in Logic4"
+  box.querySelectorAll(".audChk").forEach(cb=>cb.addEventListener("change",async()=>{
+    const w=wiresData.wires.find(x=>String(x.id)===cb.dataset.w);
+    if(!w) return;
+    const r=w.regels[Number(cb.dataset.i)]; if(!r) return;
+    const vorige={verwerkt:r.verwerkt,verwerktTs:r.verwerktTs,verwerktDoor:r.verwerktDoor};
+    r.verwerkt=cb.checked;
+    r.verwerktTs=cb.checked?new Date().toISOString():null;
+    r.verwerktDoor=cb.checked?(localStorage.getItem("fp.email")||""):null;
+    cb.disabled=true;
+    try{
+      await audSave(); audRender();
+      if(window.fpLog) window.fpLog("wire-regel-verwerkt",(r.factuur||r.naam)+(cb.checked?" verwerkt in Logic4":" teruggedraaid"));
+    }catch(e){
+      Object.assign(r,vorige); cb.checked=vorige.verwerkt; cb.disabled=false;
+      alert("Kon niet opslaan: "+e.message);
+    }
+  }));
+  box.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{
+    if(!confirm("Dit wire-overzicht verwijderen? De vinkjes gaan ook weg.")) return;
+    wiresData.wires=wiresData.wires.filter(w=>String(w.id)!==b.dataset.del);
+    try{ await audSave(); audRender(); }catch(e){ alert("Kon niet opslaan: "+e.message); }
+  }));
+}
+// Upload + inlezen
+document.getElementById("audBtn").addEventListener("click",async()=>{
+  const inp=document.getElementById("audFile"), st=document.getElementById("audStatus");
+  const toon=(cls,txt)=>{ st.classList.remove("hidden"); st.className="status-msg "+cls; st.textContent=txt; };
+  if(!inp.files.length) return toon("warn","Kies eerst het .eml-bestand van Audrey's mail.");
+  const file=inp.files[0];
+  toon("","Inlezen…");
+  try{
+    // Quoted-printable is per definitie 7-bit ASCII, dus gewoon als tekst lezen
+    const raw=await file.text();
+    const regels=audParse(raw);
+    if(!regels.length) return toon("bad","Geen bedragen-tabel gevonden in dit bestand. Klopt het dat dit Audrey's wire-mail is (opgeslagen als .eml)?");
+    await audLoad();
+    const wire={
+      id:(Date.now().toString(36)+Math.random().toString(36).slice(2,7)),
+      ts:new Date().toISOString(),
+      datum:audMailDatum(raw),
+      bestand:file.name,
+      regels,
+    };
+    wiresData.wires.push(wire);
+    await audSave();
+    audRender(); inp.value="";
+    const nF=regels.filter(r=>r.soort==="factuur").length;
+    toon("ok","Ingelezen: "+regels.length+" regel(s), waarvan "+nF+" factuurregel(s). Vink hieronder aan wat in Logic4 verwerkt is.");
+    if(window.fpLog) window.fpLog("audrey-wire-ingelezen",nF+" factuurregels uit "+file.name);
+  }catch(e){ console.error(e); toon("bad","Kon niet inlezen: "+e.message); }
+});
 </script>
 <script>
 /* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */

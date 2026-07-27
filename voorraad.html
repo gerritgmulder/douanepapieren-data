@@ -652,7 +652,14 @@ function beperkTotKlantTabs(){
   });
   // Upload-kaart in Partner containers is een wijzig-actie → weg
   const up=document.getElementById("pcUploadCard"); if(up) up.style.display="none";
-  // Start op Particulier
+  // Kop + werkwijze-balk gaan over beheer-tabs die een adviseur niet heeft
+  const lead=document.querySelector("main > .lead"); if(lead) lead.style.display="none";
+  const h1=document.querySelector("main > h2, main > h1");
+  if(h1) h1.textContent="Reserveringen — verwachte levering";
+  document.querySelectorAll("main > .status-msg").forEach(el=>{
+    if(/Werkwijze/i.test(el.textContent)) el.style.display="none";
+  });
+  // Start op Particulier — inclusief data laden (anders blijft de lijst leeg)
   const eerste=document.querySelector('.tab[data-tab="particulier"]');
   if(eerste){
     document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
@@ -660,6 +667,9 @@ function beperkTotKlantTabs(){
     document.getElementById("tab-particulier").classList.remove("hidden");
   }
   const note=document.getElementById("adviseurNote"); if(note) note.classList.remove("hidden");
+  // Pas ná het evalueren van dit script laden: boot() draait bovenaan, waar
+  // resvData/RESV_URL nog in hun temporal dead zone zitten.
+  setTimeout(function(){ loadReserveringen(); },0);
 }
 document.getElementById("logoutBtn").addEventListener("click", async ()=>{
   try{ await fetch(HELPER_BASE+"/api/logout",{method:"POST",headers:{"Authorization":"Bearer "+getSession()}}); }catch(e){}
