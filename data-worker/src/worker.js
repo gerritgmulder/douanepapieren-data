@@ -1669,29 +1669,70 @@ function qbMapInvoice(inv, catalog, spaModels) {
     const m = qbMapLine(name, qty, amount, catalog, spaModels);
     if (m) rows.push(m); else if (name) skipped.push(name);
   }
+  // Betaalstatus uit QuickBooks: Balance = wat er nog openstaat. 0 = volledig
+  // betaald door de dealer ("payment received" op de invoice), gelijk aan het
+  // totaal = niets betaald, ertussenin = deels betaald.
+  const totaal = Number(inv.TotalAmt) || 0;
+  const open = inv.Balance != null ? Number(inv.Balance) : totaal;
+  const betaaldBedrag = Math.max(0, totaal - open);
   return {
     docNr: inv.DocNumber || null, id: inv.Id,
     klant: (inv.CustomerRef && inv.CustomerRef.name) || "", datum: inv.TxnDate || null,
-    totaal: Number(inv.TotalAmt) || 0, rows, overgeslagen: skipped,
+    totaal, rows, overgeslagen: skipped,
+    openstaand: open,
+    betaaldBedrag,
+    betaald: open <= 0.005 && totaal > 0,                        // volledig voldaan
+    deelsBetaald: open > 0.005 && betaaldBedrag > 0.005,         // gedeeltelijk
   };
 }
 
 // GET /amerika/qb/invoices — nieuwe facturen (docNr >= 3300) met voorgestelde
 // Logic4-mapping + of ze al geaccordeerd zijn. Read-only.
+// Alle QuickBooks-facturen ophalen mét paginering. QBO geeft max 1000 rijen
+// per query; met alleen "MAXRESULTS 200" bleef de lijst hangen op de nieuwste
+// ~200 facturen (Chantal zag daardoor niets ouder dan 3408). We pagineren nu
+// op DocNumber tot we voorbij AMERIKA_VANAF zijn, zodat álles vanaf 3300
+// binnenkomt. Harde cap van 10 pagina's als veiligheidsrem.
+async function qbAllInvoices(env) {
+  const PAGE = 1000;
+  const all = [];
+  for (let page = 0; page < 10; page++) {
+    const start = page * PAGE + 1;   // QBO STARTPOSITION is 1-based
+    const j = await qbQuery(env,
+      "SELECT * FROM Invoice ORDERBY DocNumber DESC STARTPOSITION " + start + " MAXRESULTS " + PAGE);
+    const rows = (j.QueryResponse && j.QueryResponse.Invoice) || [];
+    all.push(...rows);
+    if (rows.length < PAGE) break;   // laatste pagina
+    // Zodra de hele pagina onder de ondergrens ligt, hoeven we niet verder.
+    const hoogste = rows.reduce((mx, inv) => Math.max(mx, parseInt(inv.DocNumber, 10) || 0), 0);
+    if (hoogste < AMERIKA_VANAF) break;
+  }
+  return all;
+}
+
 async function qbHandleInvoices(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
   try {
     const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
     const spaModels = await qbSpaModelList(env, catalog);
     const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
-    const j = await qbQuery(env, "SELECT * FROM Invoice ORDERBY TxnDate DESC MAXRESULTS 200");
-    const raw = (j.QueryResponse && j.QueryResponse.Invoice) || [];
+    const audrey = (await env.FONTEYN_DATA.get("qb-audrey", { type: "json" })) || { ids: {} };
+    const raw = await qbAllInvoices(env);
     const invoices = raw
-      .filter(inv => { const nr = parseInt(inv.DocNumber, 10); return isFinite(nr) && nr >= AMERIKA_VANAF; })
+      // Alleen de doorlopende factuurnummering (3300+). QuickBooks bevat ook
+      // oude facturen met een datum-nummer ("09232024_02"); parseInt maakte daar
+      // 9232024 van, waardoor ze ten onrechte in de lijst kwamen. Daarom eisen
+      // we een puur numeriek nummer van 4-5 cijfers.
+      .filter(inv => {
+        const doc = String(inv.DocNumber || "").trim();
+        if (!/^\d{4,5}$/.test(doc)) return false;
+        return parseInt(doc, 10) >= AMERIKA_VANAF;
+      })
       .map(inv => {
         const m = qbMapInvoice(inv, catalog, spaModels);
         m.geaccordeerd = !!(approved.ids && approved.ids[m.docNr]);
         m.logic4Order = m.geaccordeerd ? approved.ids[m.docNr].orderId : null;
+        m.audrey = !!(audrey.ids && audrey.ids[m.docNr]);
         return m;
       })
       .sort((a, b) => (parseInt(b.docNr, 10) || 0) - (parseInt(a.docNr, 10) || 0));
@@ -1758,6 +1799,22 @@ async function qbHandleApprove(request, env) {
   return reply(200, { ok: true, results });
 }
 
+// POST /amerika/qb/audrey { docNr, ontvangen } — Chantal vinkt zelf aan dat het
+// geld van Audrey binnen is. Puur een eigen administratie-vlag (staat los van
+// de QuickBooks-betaalstatus van de dealer), opgeslagen in bucket 'qb-audrey'.
+async function qbHandleAudrey(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const docNr = String(body.docNr || "").trim();
+  if (!docNr) return reply(400, { ok: false, error: "docNr ontbreekt" });
+  const data = (await env.FONTEYN_DATA.get("qb-audrey", { type: "json" })) || { ids: {} };
+  data.ids = data.ids || {};
+  if (body.ontvangen) data.ids[docNr] = { ts: new Date().toISOString(), user: String(body.user || "").slice(0, 80) };
+  else delete data.ids[docNr];
+  await env.FONTEYN_DATA.put("qb-audrey", JSON.stringify(data));
+  return reply(200, { ok: true, ontvangen: !!body.ontvangen });
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -1806,6 +1863,7 @@ export default {
     if (url.pathname === "/amerika/qb/data")     return qbHandleData(request, env);
     if (url.pathname === "/amerika/qb/invoices") return qbHandleInvoices(request, env);
     if (url.pathname === "/amerika/qb/approve" && request.method === "POST") return qbHandleApprove(request, env);
+    if (url.pathname === "/amerika/qb/audrey"  && request.method === "POST") return qbHandleAudrey(request, env);
 
     // Dealerportaal (publiek, eigen sessie-auth — géén shared secret)
     if (url.pathname === "/dealers" || url.pathname.startsWith("/dealers/")) {

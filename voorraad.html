@@ -655,6 +655,18 @@ function reapplyAdvisors(){ for (let i=0;i<allLines.length;i++) allLines[i].advi
 function todayLocal(){ const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function fmtDate(d){ if(!d) return ""; const s=String(d); return s.slice(0,10); }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+// Datums ALTIJD Europees tonen: 2026-07-18 → 18.07.2026. Let op: alleen voor
+// weergave — <input type="date"> blijft ISO (anders accepteert de browser 'm niet).
+function datumNL(v){
+  if(!v) return "";
+  const s=String(v);
+  const m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return m[3]+"."+m[2]+"."+m[1];
+  const d=new Date(s);
+  if(isNaN(d)) return s;
+  const p=n=>String(n).padStart(2,"0");
+  return p(d.getDate())+"."+p(d.getMonth()+1)+"."+d.getFullYear();
+}
 function setStatus(level,msg){ const e=document.getElementById("status"); if(!msg){e.classList.add("hidden");return;} e.className="status-msg "+level; e.textContent=msg; e.classList.remove("hidden"); }
 
 // Best-effort: haal een adviseur-aanduiding uit het order-object. Welk veld
@@ -1082,7 +1094,7 @@ function renderOvShips(){
     html+="<tr class='ovShipRow' data-i='"+i+"' style='cursor:pointer'>"+
       "<td>"+(open?"▾ ":"▸ ")+"<b>"+esc(s.vessel||"—")+"</b></td>"+
       "<td style='font-size:12px'>"+esc(ref||"—")+"</td>"+
-      "<td>"+(s.eta?esc(s.eta):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td>"+
+      "<td>"+(s.eta?esc(datumNL(s.eta)):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td>"+
       "<td>"+n+" spa's</td></tr>";
     if(open){
       const mc=s.modelColors||{};
@@ -1163,7 +1175,7 @@ function verwachtLabel(v){
   if(v==="op-schip") return "<span style='color:#2563eb'>op schip (datum volgt)</span>";
   if(v==="productie") return "<span style='color:#92400e'>volgende productie</span>";
   if(v==="dealer-direct") return "<span style='color:#c2410c'>→ dealer (container)</span>";
-  const d=new Date(v); return "<span style='color:#2563eb'>"+(isNaN(d)?esc(v):d.toLocaleDateString("nl-NL"))+"</span>";
+  return "<span style='color:#2563eb'>"+esc(datumNL(v))+"</span>";
 }
 function betaalBadge(r){
   if(r.betaald) return "<span class='pill' style='background:#dcfce7;color:#15803d'>betaald "+(r.betaaldPct!=null?r.betaaldPct+"%":"")+"</span>";
@@ -1229,7 +1241,7 @@ function renderTrackCard(ref, rec){
   if(!rec) return "<div style='border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:8px'>"+
     "<b>"+esc(ref)+"</b> — <span style='color:var(--warn)'>geen tracking gevonden</span></div>";
   const route=[rec.originPort,rec.destPort].filter(Boolean).join(" → ");
-  const etaBadge=rec.eta?("<b>"+esc(rec.eta)+"</b>"+(rec.arrivalIsEstimate?" <span style='font-size:10px;color:var(--muted)'>(verwacht)</span>":" <span style='font-size:10px;color:#15803d'>(aangekomen)</span>")):"—";
+  const etaBadge=rec.eta?("<b>"+esc(datumNL(rec.eta))+"</b>"+(rec.arrivalIsEstimate?" <span style='font-size:10px;color:var(--muted)'>(verwacht)</span>":" <span style='font-size:10px;color:#15803d'>(aangekomen)</span>")):"—";
   return "<div style='border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:8px'>"+
     "<div style='display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap'>"+
       "<b>"+esc(ref)+"</b>"+
@@ -1248,7 +1260,7 @@ async function trackShip(i, force){
     const j=await trackRefs([ref],force);
     const rec=j.results&&j.results[ref];
     if(rec){ s.track=rec; if(rec.eta) s.eta=rec.eta; await saveSchepen(); renderSchepen();
-      setStatus("ok","ETA opgehaald: "+(rec.eta||"onbekend")+(rec.vessel?(" · "+rec.vessel):"")); }
+      setStatus("ok","ETA opgehaald: "+(rec.eta?datumNL(rec.eta):"onbekend")+(rec.vessel?(" · "+rec.vessel):"")); }
     else { s.track={notFound:true}; await saveSchepen(); renderSchepen();
       setStatus("bad","Geen tracking gevonden voor '"+ref+"'."+(j.error?(" ("+j.error+")"):"")); }
   }catch(e){ setStatus("bad",e.message); }
@@ -1585,7 +1597,7 @@ function renderZones(){
         ((Number(l.reserved)||0)?" <span class='resv'>("+(Number(l.reserved)||0)+" gereserveerd)</span>":"")+
         (((Number(l.qty)||0)-(Number(l.reserved)||0))>0?" <span class='free'>("+((Number(l.qty)||0)-(Number(l.reserved)||0))+" vrij)</span>":"")+"</li>").join("");
       return "<div class='cont'><div class='hd'><span>"+esc(c.nr||"(zonder nr)")+(c.herkomst?" <span style='color:var(--muted);font-weight:400'>"+esc(c.herkomst)+"</span>":"")+"</span>"+
-        "<span class='eta'>"+(c.eta?("ETA "+esc(c.eta)):(c.besteld?("besteld "+esc(c.besteld)):""))+"</span></div><ul>"+(items||"<li style='color:var(--muted)'>(nog geen regels)</li>")+"</ul></div>";
+        "<span class='eta'>"+(c.eta?("ETA "+esc(datumNL(c.eta))):(c.besteld?("besteld "+esc(datumNL(c.besteld))):""))+"</span></div><ul>"+(items||"<li style='color:var(--muted)'>(nog geen regels)</li>")+"</ul></div>";
     }).join("") || "<p style='color:var(--muted);font-size:12px'>(geen)</p>";
   }
   document.getElementById("pipeContCount").textContent=pipeContainers.length;

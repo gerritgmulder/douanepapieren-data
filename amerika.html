@@ -110,7 +110,7 @@
 
 <script>
 const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
-const ALLOWED=new Set(["chantal@fonteyn.nl","chantal","fonteyn.chantal","dolf@fonteyn.nl","fonteyn.dolf","gerrit@fonteyn.nl","gerrit","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"]);
+const ALLOWED=new Set(["chantal@fonteyn.nl","chantal","fonteyn.chantal","dolf@fonteyn.nl","fonteyn.dolf","osman@fonteyn.nl","osman","fonteyn.osman","gerrit@fonteyn.nl","gerrit","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"]);
 (function boot(){
   if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
   const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
@@ -161,6 +161,25 @@ async function qbLoadData(){
     qbInvoices=j.invoices||[]; renderQbInvoices();
   }catch(e){ box.innerHTML="<div class='status-msg bad'>"+esc(e.message)+"</div>"; }
 }
+// Datum altijd Europees tonen: 2026-07-18 → 18.07.2026 (nooit Amerikaans).
+function datumNL(v){
+  if(!v) return "";
+  const s=String(v);
+  const m=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m) return m[3]+"."+m[2]+"."+m[1];
+  const d=new Date(s);
+  if(isNaN(d)) return s;
+  const p=n=>String(n).padStart(2,"0");
+  return p(d.getDate())+"."+p(d.getMonth()+1)+"."+d.getFullYear();
+}
+// Betaalstatus uit QuickBooks: groen = volledig voldaan, oranje = deels,
+// rood = niets ontvangen. Bedrag als tooltip zodat Chantal het kan checken.
+function qbBetaaldPill(inv){
+  const usd=n=>"$ "+Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(inv.betaald) return "<span class='pill' style='background:#dcfce7;color:#15803d' title='Volledig voldaan — "+esc(usd(inv.totaal))+"'>betaald</span>";
+  if(inv.deelsBetaald) return "<span class='pill' style='background:#fef3c7;color:#92400e' title='Ontvangen "+esc(usd(inv.betaaldBedrag))+" van "+esc(usd(inv.totaal))+"'>deels ("+esc(usd(inv.betaaldBedrag))+")</span>";
+  return "<span class='pill' style='background:#fee2e2;color:#b91c1c' title='Nog niets ontvangen — openstaand "+esc(usd(inv.openstaand))+"'>niet betaald</span>";
+}
 function qbKindBadge(k){
   const map={spa:["#dcfce7","#15803d","spa"],onderdeel:["#e0e7ff","#3730a3","onderdeel"],kosten:["#f3f4f6","#374151","kosten"]};
   const m=map[k]||["#f3f4f6","#374151",k]; return "<span class='pill' style='background:"+m[0]+";color:"+m[1]+"'>"+m[2]+"</span>";
@@ -174,17 +193,19 @@ function renderQbInvoices(){
     "<button id='qbApprove' class='btn solid' type='button'>Accorderen → Logic4-orders</button></div></div>"+
     "<p class='lead' style='font-size:12px;margin:0 0 14px'>Vink facturen aan die je in Logic4 wilt aanmaken (debiteur <b>Passion Spa South</b>, magazijn <b>Warehouse Texas</b>). Klik een rij open om de voorgestelde regels te controleren. <span style='color:var(--bad)'>Rode artikelcode</span> = geen spa-variant gevonden; controleer voor accorderen.</p>"+
     "<div id='qbApproveStatus' class='status-msg hidden'></div>"+
-    "<div class='tablewrap'><table class='grid'><thead><tr><th></th><th>Factuur</th><th>Klant</th><th>Datum</th><th>Regels</th><th>Status</th></tr></thead><tbody>";
+    "<div class='tablewrap'><table class='grid'><thead><tr><th></th><th>Factuur</th><th>Klant</th><th>Datum</th><th>Regels</th><th>Betaald</th><th>Ontv. Audrey</th><th>Status</th></tr></thead><tbody>";
   for(const inv of qbInvoices){
     const spaN=inv.rows.filter(r=>r.kind==='spa').reduce((a,r)=>a+r.qty,0);
     const open=!!qbOpen[inv.docNr];
     html+="<tr class='qbRow' data-nr='"+esc(inv.docNr)+"' style='cursor:pointer'>"+
       "<td>"+(inv.geaccordeerd?"":"<input type='checkbox' class='qbChk' data-nr='"+esc(inv.docNr)+"' onclick='event.stopPropagation()'>")+"</td>"+
-      "<td><span class='qbArrow'>"+(open?"▾ ":"▸ ")+"</span><b>#"+esc(inv.docNr)+"</b></td><td>"+esc(inv.klant)+"</td><td style='font-size:12px'>"+esc(inv.datum||"")+"</td>"+
+      "<td><span class='qbArrow'>"+(open?"▾ ":"▸ ")+"</span><b>#"+esc(inv.docNr)+"</b></td><td>"+esc(inv.klant)+"</td><td style='font-size:12px'>"+esc(datumNL(inv.datum))+"</td>"+
       "<td>"+inv.rows.length+" regels · "+spaN+" spa</td>"+
+      "<td>"+qbBetaaldPill(inv)+"</td>"+
+      "<td onclick='event.stopPropagation()'><label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'><input type='checkbox' class='qbAudrey' data-nr='"+esc(inv.docNr)+"'"+(inv.audrey?" checked":"")+"><span style='font-size:11px;color:"+(inv.audrey?"#15803d":"var(--muted)")+"'>"+(inv.audrey?"ontvangen":"nee")+"</span></label></td>"+
       "<td>"+(inv.geaccordeerd?"<span class='pill' style='background:#dcfce7;color:#15803d'>Logic4 #"+esc(inv.logic4Order||"?")+"</span>":"<span class='pill' style='background:#fef3c7;color:#92400e'>nieuw</span>")+"</td></tr>";
     // Detail ALTIJD renderen (verborgen als dicht) → uit/inklappen zonder herteken, geen wegschieten
-    html+="<tr class='qbDetail' data-nr='"+esc(inv.docNr)+"' style='display:"+(open?"":"none")+"'><td colspan='6' style='background:#fafafa;padding:6px 12px'><table class='grid' style='margin:0'><thead><tr><th>Artikelcode</th><th>Omschrijving</th><th>Aantal</th><th>Soort</th></tr></thead><tbody>"+
+    html+="<tr class='qbDetail' data-nr='"+esc(inv.docNr)+"' style='display:"+(open?"":"none")+"'><td colspan='8' style='background:#fafafa;padding:6px 12px'><table class='grid' style='margin:0'><thead><tr><th>Artikelcode</th><th>Omschrijving</th><th>Aantal</th><th>Soort</th></tr></thead><tbody>"+
         inv.rows.map(r=>"<tr><td>"+(r.productCode?esc(r.productCode):"<b style='color:var(--bad)'>ontbreekt</b>")+"</td><td>"+esc(r.description)+"</td><td>"+r.qty+"</td><td>"+qbKindBadge(r.kind)+"</td></tr>").join("")+
         (inv.overgeslagen&&inv.overgeslagen.length?"<tr><td colspan='4' style='color:var(--muted);font-size:11px'>Overgeslagen (niet op de order): "+esc(inv.overgeslagen.join(", "))+"</td></tr>":"")+
         "</tbody></table></td></tr>";
@@ -196,6 +217,25 @@ function renderQbInvoices(){
     const detail=box.querySelector('.qbDetail[data-nr="'+nr+'"]');
     if(detail) detail.style.display=open?"":"none";
     const arrow=row.querySelector(".qbArrow"); if(arrow) arrow.textContent=open?"▾ ":"▸ ";
+  }));
+  // "Ontvangen Audrey" — eigen vinkje van Chantal, direct opgeslagen in de
+  // worker zodat het blijft staan (ook voor Osman zichtbaar).
+  box.querySelectorAll(".qbAudrey").forEach(cb=>cb.addEventListener("change",async()=>{
+    const nr=cb.dataset.nr, aan=cb.checked;
+    const lbl=cb.parentElement.querySelector("span");
+    if(lbl){ lbl.textContent=aan?"ontvangen":"nee"; lbl.style.color=aan?"#15803d":"var(--muted)"; }
+    cb.disabled=true;
+    try{
+      const r=await fetch(WORKER+"/amerika/qb/audrey",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},body:JSON.stringify({docNr:nr,ontvangen:aan,user:(localStorage.getItem("fp.email")||"")})});
+      const j=await r.json();
+      if(!j.ok) throw new Error(j.error||"opslaan mislukt");
+      const inv=qbInvoices.find(i=>String(i.docNr)===String(nr)); if(inv) inv.audrey=aan;
+      if(window.fpLog) window.fpLog("audrey-ontvangst-gemarkeerd","#"+nr+(aan?" ontvangen":" teruggedraaid"));
+    }catch(e){
+      cb.checked=!aan;
+      if(lbl){ lbl.textContent=!aan?"ontvangen":"nee"; lbl.style.color=!aan?"#15803d":"var(--muted)"; }
+      alert("Kon niet opslaan: "+e.message);
+    }finally{ cb.disabled=false; }
   }));
   const selAll=document.getElementById("qbSelAll"); if(selAll) selAll.addEventListener("click",()=>document.querySelectorAll(".qbChk").forEach(c=>c.checked=true));
   const appr=document.getElementById("qbApprove"); if(appr) appr.addEventListener("click",qbApprove);
