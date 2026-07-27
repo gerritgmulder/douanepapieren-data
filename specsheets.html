@@ -56,7 +56,17 @@
   details.blok[open] summary::before{transform:rotate(90deg)}
 
   /* ─────────── De sheet zelf (A4) ─────────── */
-  .sheet-scroll{overflow:auto;background:#e9e7e1;border-radius:10px;padding:18px;border:1px solid var(--border)}
+  /* De preview loopt mee tijdens het scrollen door het formulier: hij blijft
+     bovenin plakken en krijgt een eigen scrollbalk als hij niet in beeld past. */
+  #previewKolom{position:sticky;top:16px;align-self:start}
+  .sheet-scroll{overflow:auto;background:#e9e7e1;border-radius:10px;padding:18px;border:1px solid var(--border);max-height:calc(100vh - 34px)}
+  /* Alleen op een écht smal scherm onder elkaar zetten (dan heeft meelopen
+     geen zin). 1px is bewust de ondergrens: sommige omgevingen melden 0. */
+  @media (min-width:1px) and (max-width:980px){
+    .wrap{grid-template-columns:1fr}
+    #previewKolom{position:static}
+    .sheet-scroll{max-height:none}
+  }
   #sheet{
     width:210mm;min-height:297mm;background:#fff;margin:0 auto;padding:14mm 13mm 12mm;
     box-shadow:0 3px 16px rgba(0,0,0,.14);color:#000;position:relative;
@@ -102,7 +112,8 @@
     header,.panel,.toolbar,.sheet-scroll{background:none}
     header,#formPanel,.geenPrint{display:none!important}
     .wrap{display:block;padding:0;margin:0;max-width:none}
-    .sheet-scroll{padding:0;border:0;background:none;overflow:visible}
+    #previewKolom{position:static}
+    .sheet-scroll{padding:0;border:0;background:none;overflow:visible;max-height:none;height:auto!important}
     #sheet{width:210mm;min-height:297mm;box-shadow:none;margin:0;transform:none!important}
     @page{size:A4 portrait;margin:0}
   }
@@ -198,7 +209,7 @@
   </div>
 
   <!-- ══════════ PREVIEW ══════════ -->
-  <div>
+  <div id="previewKolom">
     <div class="sheet-scroll">
       <div id="sheet" class="b-roboto">
         <div class="kop">
