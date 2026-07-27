@@ -1,0 +1,616 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Specificatiesheets — Fonteyn Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Roboto+Condensed:wght@300;400;700&family=Josefin+Sans:wght@300;400&family=Julius+Sans+One&family=Marcellus&display=swap">
+<style>
+  :root{
+    --fonteyn-green:#144734; --fonteyn-lime:#8bc53f; --fonteyn-lime-dark:#72a531;
+    --passion:#c8102e; --passion-dark:#a50d26;
+    --bg:#f5f4ef; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb;
+    --ok:#059669; --bad:#b91c1c; --warn:#92400e;
+    --zebra:#ece7e0;            /* grijsbeige balk uit de originele sheet */
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  input,select,textarea,button{font-family:inherit}
+  header{background:var(--fonteyn-green);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px}
+  header img.logo{height:40px}
+  header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+  header a.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font-size:12px;transition:all .14s}
+  header a.back:hover{background:rgba(255,255,255,.15)}
+  header .user-chip{font-size:12px;color:rgba(255,255,255,.85)}
+  header button.logout{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer}
+  header button.logout:hover{background:rgba(255,255,255,.15)}
+  .btn{display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--passion);border:1.5px solid var(--passion);border-radius:8px;padding:8px 15px;font:inherit;font-weight:600;font-size:12.5px;line-height:1;cursor:pointer;transition:all .14s;white-space:nowrap}
+  .btn:hover{background:var(--passion);color:#fff;box-shadow:0 4px 12px rgba(200,16,46,.28);transform:translateY(-1px)}
+  .btn.solid{background:var(--passion);color:#fff}
+  .btn.solid:hover{background:var(--passion-dark);border-color:var(--passion-dark)}
+  .btn.sm{padding:4px 9px;font-size:11px;border-radius:7px}
+  .btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important;box-shadow:none!important}
+  .wrap{display:grid;grid-template-columns:minmax(360px,440px) 1fr;gap:20px;max-width:1600px;margin:18px auto;padding:0 20px;align-items:start}
+  .panel{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+  .panel h3{margin:0 0 10px;color:var(--fonteyn-green);font-size:14px}
+  .panel h4{margin:16px 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  label.f{display:block;font-size:11px;color:var(--muted);margin:9px 0 3px}
+  input[type=text],input[type=number],select,textarea{width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:#fff;transition:border-color .14s,box-shadow .14s}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--fonteyn-lime-dark);box-shadow:0 0 0 3px rgba(139,197,63,.18)}
+  select{-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path fill='none' stroke='%23144734' stroke-width='1.6' d='M2.5 4.5 6 8l3.5-3.5'/></svg>");background-repeat:no-repeat;background-position:right 11px center;padding-right:30px;cursor:pointer}
+  .toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+  .status-msg{padding:9px 13px;border-radius:7px;margin:10px 0;font-size:12.5px}
+  .status-msg.ok{background:#dcfce7;color:var(--ok)} .status-msg.bad{background:#fee2e2;color:var(--bad)} .status-msg.warn{background:#fef3c7;color:var(--warn)}
+  .hidden{display:none!important}
+  .rij{display:flex;gap:5px;align-items:center;margin-bottom:4px}
+  .rij input.lbl{flex:1.6} .rij input.val{flex:1}
+  .rij button{flex:0 0 auto;background:#fff;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;font-size:11px;padding:5px 7px;line-height:1}
+  .rij button:hover{border-color:var(--bad);color:var(--bad)}
+  .badge-rij{display:flex;gap:6px;align-items:center;margin-bottom:4px}
+  .badge-rij input[type=text]{flex:1}
+  .thumb{width:100%;height:78px;object-fit:contain;background:#f9fafb;border:1px dashed var(--border);border-radius:8px;margin-top:4px}
+  .sec-kop{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--border)}
+  .sec-kop input{font-weight:700;font-size:12px}
+  details.blok summary{cursor:pointer;font-weight:600;font-size:12.5px;color:var(--fonteyn-green);padding:7px 0;list-style:none;display:flex;align-items:center;gap:6px}
+  details.blok summary::-webkit-details-marker{display:none}
+  details.blok summary::before{content:"▸";font-size:10px;transition:transform .15s}
+  details.blok[open] summary::before{transform:rotate(90deg)}
+
+  /* ─────────── De sheet zelf (A4) ─────────── */
+  .sheet-scroll{overflow:auto;background:#e9e7e1;border-radius:10px;padding:18px;border:1px solid var(--border)}
+  #sheet{
+    width:210mm;min-height:297mm;background:#fff;margin:0 auto;padding:14mm 13mm 12mm;
+    box-shadow:0 3px 16px rgba(0,0,0,.14);color:#000;position:relative;
+    transform-origin:top center;
+  }
+  #sheet .kop{display:flex;align-items:flex-start;gap:6mm}
+  #sheet .kop .logo{width:34mm;flex:0 0 auto}
+  #sheet .kop .logo img{width:100%;display:block}
+  #sheet .kop .titel{flex:1;padding-top:3mm}
+  #sheet .model{font-family:Helvetica,Arial,sans-serif;font-weight:900;font-size:34pt;line-height:.95;letter-spacing:-.5pt;margin:0}
+  #sheet .collectie{font-size:17pt;line-height:1.15;margin:1mm 0 0;color:#111;font-weight:300}
+  #sheet .badges{flex:0 0 auto;width:20mm;display:flex;flex-direction:column;gap:1.4mm;align-items:center}
+  #sheet .badge{width:100%;border:.6pt solid #b9b3aa;border-radius:1mm;padding:1.2mm .6mm;text-align:center;background:#fff}
+  #sheet .badge .bi{font-size:11pt;line-height:1}
+  #sheet .badge .bt{font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:3.6pt;letter-spacing:.02em;line-height:1.15;margin-top:.6mm;text-transform:uppercase}
+  #sheet .badge img{width:100%;display:block}
+  #sheet .optioneel{font-size:5pt;color:#333;font-style:italic;margin-top:.8mm;align-self:flex-start}
+  #sheet .fotos{display:flex;gap:4mm;align-items:center;justify-content:center;margin:5mm 0 6mm;min-height:62mm}
+  #sheet .fotos .fbox{flex:1;display:flex;align-items:center;justify-content:center;max-height:72mm}
+  #sheet .fotos img{max-width:100%;max-height:72mm;object-fit:contain;display:block}
+  #sheet .fotos .leeg{width:100%;height:56mm;border:1px dashed #ccc;border-radius:2mm;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:9pt;font-family:Montserrat,sans-serif}
+  #sheet .kolommen{display:grid;grid-template-columns:1fr 1fr;gap:7mm}
+  #sheet .sectie{margin-bottom:5mm;break-inside:avoid}
+  #sheet .sectie h3{font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:8.2pt;letter-spacing:.02em;margin:0 0 1.4mm;text-transform:uppercase}
+  #sheet .spec{display:flex;align-items:baseline;font-size:7.4pt;line-height:1.62;padding:0 1mm}
+  #sheet .spec .l{white-space:nowrap}
+  #sheet .spec .d{flex:1;border-bottom:.7pt dotted #4a4a4a;margin:0 1pt 1.4pt;min-width:6pt}
+  #sheet .spec .v{white-space:nowrap;padding-left:1pt}
+  #sheet .spec.zebra{background:var(--zebra)}
+  #sheet .voet{position:absolute;left:13mm;right:13mm;bottom:7mm;font-size:6pt;color:#555;display:flex;justify-content:space-between;font-family:Montserrat,sans-serif}
+
+  /* Lettertype-varianten voor de collectie-regel */
+  .f-josefin{font-family:"Josefin Sans",Helvetica,sans-serif}
+  .f-julius{font-family:"Julius Sans One",Helvetica,sans-serif}
+  .f-marcellus{font-family:"Marcellus",Georgia,serif}
+  .f-helv{font-family:Helvetica,Arial,sans-serif;font-weight:300}
+  /* Body-lettertype van de specs */
+  .b-roboto,.b-roboto .spec,.b-roboto .sectie h3{font-family:"Roboto Condensed",Helvetica,Arial,sans-serif}
+  .b-helv,.b-helv .spec,.b-helv .sectie h3{font-family:Helvetica,Arial,sans-serif}
+
+  @media print{
+    body{background:#fff}
+    header,.panel,.toolbar,.sheet-scroll{background:none}
+    header,#formPanel,.geenPrint{display:none!important}
+    .wrap{display:block;padding:0;margin:0;max-width:none}
+    .sheet-scroll{padding:0;border:0;background:none;overflow:visible}
+    #sheet{width:210mm;min-height:297mm;box-shadow:none;margin:0;transform:none!important}
+    @page{size:A4 portrait;margin:0}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+  <h1>📄 Specificatiesheets</h1>
+  <a class="back" href="dashboard.html">← Dashboard</a>
+  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<div id="deny" class="status-msg bad hidden" style="max-width:700px;margin:40px auto">Geen toegang tot deze tegel.</div>
+
+<div class="wrap" id="wrap">
+  <!-- ══════════ FORMULIER ══════════ -->
+  <div class="panel" id="formPanel">
+    <div class="toolbar">
+      <select id="sheetKies" style="flex:1;min-width:150px"><option value="">— nieuwe sheet —</option></select>
+      <button class="btn sm" id="btnNieuw" type="button">+ Nieuw</button>
+      <button class="btn sm solid" id="btnBewaar" type="button">Bewaren</button>
+      <button class="btn sm" id="btnKopie" type="button">Dupliceren</button>
+      <button class="btn sm" id="btnVerwijder" type="button">Verwijderen</button>
+    </div>
+    <div class="toolbar">
+      <button class="btn solid" id="btnPdf" type="button" style="flex:1;justify-content:center">📄 Opslaan als PDF / printen</button>
+      <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px">zoom
+        <input type="range" id="zoom" min="35" max="110" value="70" style="width:80px">
+      </label>
+    </div>
+    <div id="status" class="status-msg hidden"></div>
+
+    <h4>Kop</h4>
+    <label class="f">Modelnaam</label>
+    <input type="text" id="fModel" placeholder="bv. Renew">
+    <label class="f">Regel eronder (collectie)</label>
+    <input type="text" id="fCollectie" placeholder="Passion Spas Pure Collection">
+    <label class="f">Lettertype collectie-regel</label>
+    <select id="fFontKop">
+      <option value="f-josefin">Josefin Sans — licht &amp; breed (lijkt het meest op het origineel)</option>
+      <option value="f-julius">Julius Sans One — elegant, hoofdletters</option>
+      <option value="f-marcellus">Marcellus — klassiek met schreef</option>
+      <option value="f-helv">Helvetica Light — strak</option>
+    </select>
+    <label class="f">Lettertype specificaties</label>
+    <select id="fFontBody">
+      <option value="b-roboto">Roboto Condensed — smal (zoals het origineel)</option>
+      <option value="b-helv">Helvetica / Arial — standaard</option>
+    </select>
+
+    <label class="f">Logo</label>
+    <div class="toolbar" style="margin:0">
+      <select id="fLogoKeuze" style="flex:1">
+        <option value="passion">Passion Spas (standaard)</option>
+        <option value="fonteyn">Fonteyn</option>
+        <option value="eigen">Eigen logo uploaden…</option>
+        <option value="geen">Geen logo</option>
+      </select>
+    </div>
+    <input type="file" id="fLogoFile" accept="image/*" class="hidden" style="margin-top:6px">
+    <img id="tLogo" class="thumb hidden" alt="">
+    <label class="f">Logo-breedte: <span id="logoBreedteVal">34</span> mm</label>
+    <input type="range" id="fLogoBreedte" min="14" max="60" value="34" style="width:100%">
+
+    <h4>Foto's</h4>
+    <label class="f">Foto 1 (bv. schuin aanzicht)</label>
+    <input type="file" id="fFoto1" accept="image/*">
+    <img id="tFoto1" class="thumb hidden" alt="">
+    <label class="f">Foto 2 (bv. bovenaanzicht)</label>
+    <input type="file" id="fFoto2" accept="image/*">
+    <img id="tFoto2" class="thumb hidden" alt="">
+
+    <div class="sec-kop"><h4 style="margin:0">Kenmerken rechtsboven</h4>
+      <button class="btn sm" id="btnBadgeAdd" type="button">+ regel</button></div>
+    <p style="font-size:11px;color:var(--muted);margin:0 0 8px">Typ een symbool + tekst, óf upload het originele icoontje (dan vervangt de afbeelding het symbool).</p>
+    <div id="badgeLijst"></div>
+    <input type="file" id="fBadgeFile" accept="image/*" class="hidden">
+    <label class="f">Voetnoot bij kenmerken</label>
+    <input type="text" id="fOptioneel" placeholder="* Optional">
+
+    <div class="sec-kop"><h4 style="margin:0">Specificatie-blokken</h4>
+      <button class="btn sm" id="btnBlokAdd" type="button">+ blok</button></div>
+    <div id="blokLijst"></div>
+
+    <h4>Voettekst</h4>
+    <label class="f">Links</label>
+    <input type="text" id="fVoetL" placeholder="bv. Passion Spas — Pure Collection">
+    <label class="f">Rechts</label>
+    <input type="text" id="fVoetR" placeholder="bv. Specificaties onder voorbehoud van wijzigingen">
+  </div>
+
+  <!-- ══════════ PREVIEW ══════════ -->
+  <div>
+    <div class="sheet-scroll">
+      <div id="sheet" class="b-roboto">
+        <div class="kop">
+          <div class="logo" id="sLogo"></div>
+          <div class="titel">
+            <p class="model" id="sModel">Renew</p>
+            <p class="collectie f-josefin" id="sCollectie">Passion Spas Pure Collection</p>
+          </div>
+          <div class="badges" id="sBadges"></div>
+        </div>
+        <div class="fotos" id="sFotos"></div>
+        <div class="kolommen">
+          <div id="sKolomL"></div>
+          <div id="sKolomR"></div>
+        </div>
+        <div class="voet"><span id="sVoetL"></span><span id="sVoetR"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
+// Specificatiesheets — marketing (Gretha). Gerrit + Fonteynbot als beheer.
+const ALLOWED=new Set([
+  "gretha@fonteyn.nl","gretha","fonteyn.gretha",
+  "gerrit@fonteyn.nl","gerrit",
+  "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot",
+]);
+const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
+const BUCKET=WORKER+"/data/specsheets";
+const TEAM=()=>localStorage.getItem("fp.teamkey")||"";
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function el(id){return document.getElementById(id);}
+function toon(cls,txt){const s=el("status");s.className="status-msg "+cls;s.textContent=txt;s.classList.remove("hidden");
+  if(cls==="ok") setTimeout(()=>s.classList.add("hidden"),4000);}
+
+(function boot(){
+  if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
+  const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  el("userEmail").textContent=email||"—";
+  if(!ALLOWED.has(email)){
+    el("deny").classList.remove("hidden"); el("wrap").classList.add("hidden");
+    el("deny").textContent="Deze tegel is voor de marketingafdeling (Gretha).";
+    return;
+  }
+  window.fpRol="marketing";
+  laadAlles();
+})();
+el("logoutBtn").addEventListener("click",()=>{localStorage.removeItem(SESSION_KEY);localStorage.removeItem(EMAIL_KEY);location.href="dashboard.html";});
+
+// ─── Model van één sheet ────────────────────────────────────────────
+function leegSheet(){
+  return {
+    id:"", naam:"", model:"", collectie:"Passion Spas Pure Collection",
+    fontKop:"f-josefin", fontBody:"b-roboto",
+    logoKeuze:"passion", logoEigen:"", logoBreedte:34,
+    foto1:"", foto2:"",
+    badges:[
+      {icoon:"♨", tekst:"Hybrid Heating", img:""},
+      {icoon:"🛡", tekst:"Easyclean Shield", img:""},
+      {icoon:"🪑", tekst:"Lumbar Support", img:""},
+      {icoon:"💆", tekst:"Soft Tissue Massage", img:""},
+      {icoon:"🌊", tekst:"Freestyle Massage", img:""},
+    ],
+    optioneel:"* Optional",
+    blokken:[
+      {kolom:"L", titel:"SPECIFICATIONS/GENERAL", regels:[
+        {l:"Dimensions L x W x H",v:"208 x 155 x 83 cm"},
+        {l:"Number of Seats",v:"2"},
+        {l:"Number of Loungers",v:"1"},
+        {l:"Capacity in Liter",v:"850"},
+        {l:"Dry Weight in kg",v:"200"},
+        {l:"Full Weight in kg",v:"1050"},
+        {l:"Shell Material",v:"Aristech® Acrylic with Vinylester and Polyester"},
+        {l:"Synthetic Maintenance Free Cabinet",v:"Standard"},
+        {l:"Removable Side Panels",v:"4"},
+        {l:"Cabinet Material",v:"Synthetic"},
+        {l:"Durable Support System",v:"Synthetic"},
+        {l:"Everlast™ Full Floor Support Material",v:"Synthetic"},
+      ]},
+      {kolom:"L", titel:"WATER SYSTEM", regels:[
+        {l:"Total jets",v:"40"},
+        {l:"Water Jets, Stainless Steel",v:"32"},
+        {l:"Air Injector Jets",v:"8"},
+        {l:"Air Control Valve",v:"3"},
+        {l:"Filters",v:"(1) S6CH-940"},
+        {l:"Side Access Skim Filter",v:"High-Volume Side Load Skimmer"},
+        {l:"Floor Drain",v:"2"},
+        {l:"External Drain",v:"1"},
+        {l:"Hi Flow Suctions",v:"3"},
+        {l:"5” Massage Jets, Directional, Rotational and Pulsational",v:"2"},
+        {l:"3” Directional Jets",v:"14"},
+        {l:"Ozone Jets",v:"1"},
+      ]},
+      {kolom:"R", titel:"SPECIAL FEATURES", regels:[
+        {l:"Soft Air Massage System",v:"Standard"},
+        {l:"Molded Headrest Soft Pillows with LED Light",v:"3"},
+        {l:"StarBrite Interior LED Light System",v:"Standard"},
+        {l:"Water Fall with LED",v:"1"},
+        {l:"Exterior Corner LED Lighting",v:"4"},
+        {l:"Aromatherapy System",v:"Standard"},
+        {l:"Ozone Sanitation System",v:"Standard"},
+        {l:"Ultra Efficient Dual-Wrap Cabinet Insulation",v:"Standard"},
+        {l:"Ultra Efficient Cover",v:"Optional"},
+      ]},
+      {kolom:"R", titel:"PUMP INFORMATION", regels:[
+        {l:"Massage Pump 1: LXLP300",v:"2,2 kW"},
+        {l:"Filtration Pump: LX WTC50M",v:"250 W"},
+        {l:"Air Pump: LX AP300",v:"300 W"},
+      ]},
+      {kolom:"R", titel:"ELECTRICAL SYSTEM", regels:[
+        {l:"Minimum Voltage",v:"230 V"},
+        {l:"Minimum Amperage",v:"16 A"},
+        {l:"Full Flow Electric Heater",v:"3 kW"},
+        {l:"Control System",v:"Balboa GS510DZ"},
+        {l:"Electronic Topside Control",v:"Balboa VL801"},
+      ]},
+    ],
+    voetL:"", voetR:"",
+  };
+}
+let alles={sheets:[]};      // alle opgeslagen sheets
+let S=leegSheet();          // de sheet waar nu aan gewerkt wordt
+
+// ─── Laden / bewaren ────────────────────────────────────────────────
+async function laadAlles(){
+  try{
+    const r=await fetch(BUCKET+"?t="+Date.now(),{headers:{"X-Fonteyn-Auth":TEAM()}});
+    if(r.ok){ const j=await r.json(); alles={sheets:(j&&j.sheets)||[]}; }
+  }catch(e){ console.warn("laden faalde",e); }
+  vulKiezer();
+  vulFormulier(); teken();
+}
+function vulKiezer(){
+  const sel=el("sheetKies");
+  sel.innerHTML="<option value=''>— nieuwe sheet —</option>"+
+    alles.sheets.slice().sort((a,b)=>String(a.naam||a.model).localeCompare(String(b.naam||b.model)))
+      .map(s=>"<option value='"+esc(s.id)+"'>"+esc(s.naam||s.model||"(zonder naam)")+"</option>").join("");
+  sel.value=S.id||"";
+}
+async function bewaar(){
+  if(!S.model.trim()){ toon("warn","Vul eerst een modelnaam in."); return; }
+  S.naam=S.model.trim();
+  if(!S.id) S.id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  const i=alles.sheets.findIndex(x=>x.id===S.id);
+  if(i>=0) alles.sheets[i]=JSON.parse(JSON.stringify(S)); else alles.sheets.push(JSON.parse(JSON.stringify(S)));
+  try{
+    const body=JSON.stringify({sheets:alles.sheets,updated:new Date().toISOString()});
+    const mb=(body.length/1048576);
+    if(mb>20){ toon("bad","Te groot om te bewaren ("+mb.toFixed(1)+" MB). Verwijder een oude sheet of gebruik kleinere foto's."); return; }
+    const r=await fetch(BUCKET,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},body});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    vulKiezer();
+    toon("ok","Bewaard — "+S.naam+" ("+mb.toFixed(1)+" MB totaal).");
+    if(window.fpLog) window.fpLog("specsheet-bewaard",S.naam);
+  }catch(e){ toon("bad","Bewaren mislukt: "+e.message); }
+}
+el("btnBewaar").addEventListener("click",bewaar);
+el("btnNieuw").addEventListener("click",()=>{ S=leegSheet(); vulKiezer(); vulFormulier(); teken(); toon("ok","Nieuwe sheet — vul de gegevens in."); });
+el("btnKopie").addEventListener("click",()=>{
+  S=JSON.parse(JSON.stringify(S)); S.id=""; S.model=(S.model||"")+" (kopie)";
+  vulFormulier(); teken(); toon("ok","Kopie gemaakt — pas aan en bewaar.");
+});
+el("btnVerwijder").addEventListener("click",async()=>{
+  if(!S.id){ toon("warn","Deze sheet is nog niet bewaard."); return; }
+  if(!confirm("Sheet \""+(S.naam||S.model)+"\" definitief verwijderen?")) return;
+  const naam=S.naam||S.model;
+  alles.sheets=alles.sheets.filter(x=>x.id!==S.id);
+  try{
+    await fetch(BUCKET,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},
+      body:JSON.stringify({sheets:alles.sheets,updated:new Date().toISOString()})});
+    if(window.fpLog) window.fpLog("specsheet-verwijderd",naam);
+  }catch(e){}
+  S=leegSheet(); vulKiezer(); vulFormulier(); teken(); toon("ok","Verwijderd.");
+});
+el("sheetKies").addEventListener("change",()=>{
+  const id=el("sheetKies").value;
+  S = id ? JSON.parse(JSON.stringify(alles.sheets.find(x=>x.id===id)||leegSheet())) : leegSheet();
+  vulFormulier(); teken();
+});
+
+// ─── Afbeeldingen: verkleinen zodat de opslag klein blijft ──────────
+function leesAfbeelding(file,maxPx,kwaliteit){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        let {width:w,height:h}=img;
+        const f=Math.min(1,maxPx/Math.max(w,h));
+        w=Math.round(w*f); h=Math.round(h*f);
+        const c=document.createElement("canvas"); c.width=w; c.height=h;
+        const ctx=c.getContext("2d");
+        // PNG met transparantie (logo's) niet op wit zetten
+        const png=/png|svg/i.test(file.type);
+        if(!png){ ctx.fillStyle="#fff"; ctx.fillRect(0,0,w,h); }
+        ctx.drawImage(img,0,0,w,h);
+        res(png ? c.toDataURL("image/png") : c.toDataURL("image/jpeg",kwaliteit||0.85));
+      };
+      img.onerror=()=>rej(new Error("kon afbeelding niet lezen"));
+      img.src=fr.result;
+    };
+    fr.onerror=()=>rej(new Error("kon bestand niet lezen"));
+    fr.readAsDataURL(file);
+  });
+}
+function koppelUpload(inputId,thumbId,veld,maxPx){
+  el(inputId).addEventListener("change",async e=>{
+    const f=e.target.files[0]; if(!f) return;
+    try{
+      toon("","Afbeelding verwerken…");
+      S[veld]=await leesAfbeelding(f,maxPx||1400,0.85);
+      const t=el(thumbId); t.src=S[veld]; t.classList.remove("hidden");
+      teken(); toon("ok","Afbeelding toegevoegd.");
+    }catch(err){ toon("bad",err.message); }
+  });
+}
+koppelUpload("fFoto1","tFoto1","foto1",1400);
+koppelUpload("fFoto2","tFoto2","foto2",1400);
+koppelUpload("fLogoFile","tLogo","logoEigen",600);
+
+// ─── Formulier ⇄ model ──────────────────────────────────────────────
+function bind(id,veld){
+  el(id).addEventListener("input",()=>{ S[veld]=el(id).value; teken(); });
+}
+bind("fModel","model"); bind("fCollectie","collectie");
+bind("fOptioneel","optioneel"); bind("fVoetL","voetL"); bind("fVoetR","voetR");
+el("fFontKop").addEventListener("change",()=>{S.fontKop=el("fFontKop").value;teken();});
+el("fFontBody").addEventListener("change",()=>{S.fontBody=el("fFontBody").value;teken();});
+el("fLogoKeuze").addEventListener("change",()=>{
+  S.logoKeuze=el("fLogoKeuze").value;
+  el("fLogoFile").classList.toggle("hidden",S.logoKeuze!=="eigen");
+  teken();
+});
+el("fLogoBreedte").addEventListener("input",()=>{
+  S.logoBreedte=Number(el("fLogoBreedte").value);
+  el("logoBreedteVal").textContent=S.logoBreedte;
+  teken();
+});
+
+function vulFormulier(){
+  el("fModel").value=S.model||""; el("fCollectie").value=S.collectie||"";
+  el("fFontKop").value=S.fontKop||"f-josefin"; el("fFontBody").value=S.fontBody||"b-roboto";
+  el("fLogoKeuze").value=S.logoKeuze||"passion";
+  el("fLogoFile").classList.toggle("hidden",S.logoKeuze!=="eigen");
+  el("fLogoBreedte").value=S.logoBreedte||34; el("logoBreedteVal").textContent=S.logoBreedte||34;
+  el("fOptioneel").value=S.optioneel||""; el("fVoetL").value=S.voetL||""; el("fVoetR").value=S.voetR||"";
+  const zetThumb=(id,val)=>{const t=el(id); if(val){t.src=val;t.classList.remove("hidden");}else t.classList.add("hidden");};
+  zetThumb("tFoto1",S.foto1); zetThumb("tFoto2",S.foto2); zetThumb("tLogo",S.logoEigen);
+  tekenBadgeForm(); tekenBlokForm();
+  el("sheetKies").value=S.id||"";
+}
+// Kenmerken (badges)
+let badgeDoel=-1;   // welke badge krijgt de geüploade afbeelding
+function tekenBadgeForm(){
+  el("badgeLijst").innerHTML=S.badges.map((b,i)=>
+    "<div class='badge-rij'>"+
+      (b.img
+        ? "<img src='"+b.img+"' style='width:34px;height:26px;object-fit:contain;border:1px solid var(--border);border-radius:5px;background:#fff' title='eigen icoon'>"
+        : "<input type='text' value='"+esc(b.icoon)+"' data-bi='"+i+"' style='width:34px;text-align:center' title='symbool'>")+
+      "<input type='text' value='"+esc(b.tekst)+"' data-bt='"+i+"' placeholder='tekst'>"+
+      "<button class='btn sm' data-bimg='"+i+"' title='"+(b.img?"ander icoon kiezen":"icoon uploaden")+"'>🖼</button>"+
+      (b.img?"<button class='btn sm' data-bimgdel='"+i+"' title='icoon weghalen'>↩</button>":"")+
+      "<button class='btn sm' data-bup='"+i+"' title='omhoog'>↑</button>"+
+      "<button class='btn sm' data-bdel='"+i+"' title='verwijderen'>✕</button>"+
+    "</div>").join("")||"<p style='font-size:12px;color:var(--muted)'>Geen kenmerken.</p>";
+  const L=el("badgeLijst");
+  L.querySelectorAll("[data-bi]").forEach(inp=>inp.addEventListener("input",()=>{S.badges[+inp.dataset.bi].icoon=inp.value;teken();}));
+  L.querySelectorAll("[data-bt]").forEach(inp=>inp.addEventListener("input",()=>{S.badges[+inp.dataset.bt].tekst=inp.value;teken();}));
+  L.querySelectorAll("[data-bimg]").forEach(b=>b.addEventListener("click",()=>{
+    badgeDoel=+b.dataset.bimg; el("fBadgeFile").value=""; el("fBadgeFile").click();
+  }));
+  L.querySelectorAll("[data-bimgdel]").forEach(b=>b.addEventListener("click",()=>{
+    S.badges[+b.dataset.bimgdel].img=""; tekenBadgeForm(); teken();
+  }));
+  L.querySelectorAll("[data-bup]").forEach(b=>b.addEventListener("click",()=>{
+    const i=+b.dataset.bup; if(i<1) return;
+    [S.badges[i-1],S.badges[i]]=[S.badges[i],S.badges[i-1]]; tekenBadgeForm(); teken();
+  }));
+  L.querySelectorAll("[data-bdel]").forEach(b=>b.addEventListener("click",()=>{
+    S.badges.splice(+b.dataset.bdel,1); tekenBadgeForm(); teken();
+  }));
+}
+el("fBadgeFile").addEventListener("change",async e=>{
+  const f=e.target.files[0]; if(!f||badgeDoel<0) return;
+  try{
+    S.badges[badgeDoel].img=await leesAfbeelding(f,300,0.9);
+    tekenBadgeForm(); teken(); toon("ok","Icoon toegevoegd.");
+  }catch(err){ toon("bad",err.message); }
+  badgeDoel=-1;
+});
+el("btnBadgeAdd").addEventListener("click",()=>{S.badges.push({icoon:"★",tekst:"Nieuw kenmerk",img:""});tekenBadgeForm();teken();});
+
+// Specificatie-blokken
+function tekenBlokForm(){
+  el("blokLijst").innerHTML=S.blokken.map((bl,bi)=>
+    "<details class='blok'"+(bi===0?" open":"")+">"+
+      "<summary>"+esc(bl.titel||"(zonder titel)")+" — "+bl.regels.length+" regels</summary>"+
+      "<div class='rij' style='margin:4px 0 8px'>"+
+        "<input type='text' class='lbl' value='"+esc(bl.titel)+"' data-bltitel='"+bi+"' placeholder='KOPTEKST'>"+
+        "<select data-blkolom='"+bi+"' style='width:96px'>"+
+          "<option value='L'"+(bl.kolom==="L"?" selected":"")+">links</option>"+
+          "<option value='R'"+(bl.kolom==="R"?" selected":"")+">rechts</option></select>"+
+        "<button class='btn sm' data-bldel='"+bi+"' title='blok verwijderen'>✕</button>"+
+      "</div>"+
+      bl.regels.map((r,ri)=>
+        "<div class='rij'>"+
+          "<input type='text' class='lbl' value='"+esc(r.l)+"' data-rl='"+bi+"_"+ri+"' placeholder='omschrijving'>"+
+          "<input type='text' class='val' value='"+esc(r.v)+"' data-rv='"+bi+"_"+ri+"' placeholder='waarde'>"+
+          "<button data-rup='"+bi+"_"+ri+"' title='omhoog'>↑</button>"+
+          "<button data-rdel='"+bi+"_"+ri+"' title='verwijderen'>✕</button>"+
+        "</div>").join("")+
+      "<button class='btn sm' data-radd='"+bi+"' style='margin-top:4px'>+ regel</button>"+
+    "</details>").join("");
+  const L=el("blokLijst");
+  L.querySelectorAll("[data-bltitel]").forEach(i=>i.addEventListener("input",()=>{S.blokken[+i.dataset.bltitel].titel=i.value;teken();}));
+  L.querySelectorAll("[data-blkolom]").forEach(s=>s.addEventListener("change",()=>{S.blokken[+s.dataset.blkolom].kolom=s.value;teken();}));
+  L.querySelectorAll("[data-bldel]").forEach(b=>b.addEventListener("click",()=>{
+    if(!confirm("Dit hele blok verwijderen?")) return;
+    S.blokken.splice(+b.dataset.bldel,1); tekenBlokForm(); teken();
+  }));
+  L.querySelectorAll("[data-rl]").forEach(i=>i.addEventListener("input",()=>{const[a,b]=i.dataset.rl.split("_");S.blokken[+a].regels[+b].l=i.value;teken();}));
+  L.querySelectorAll("[data-rv]").forEach(i=>i.addEventListener("input",()=>{const[a,b]=i.dataset.rv.split("_");S.blokken[+a].regels[+b].v=i.value;teken();}));
+  L.querySelectorAll("[data-rup]").forEach(b=>b.addEventListener("click",()=>{
+    const[a,r]=b.dataset.rup.split("_").map(Number); if(r<1) return;
+    const R=S.blokken[a].regels; [R[r-1],R[r]]=[R[r],R[r-1]]; tekenBlokForm(); teken();
+  }));
+  L.querySelectorAll("[data-rdel]").forEach(b=>b.addEventListener("click",()=>{
+    const[a,r]=b.dataset.rdel.split("_").map(Number);
+    S.blokken[a].regels.splice(r,1); tekenBlokForm(); teken();
+  }));
+  L.querySelectorAll("[data-radd]").forEach(b=>b.addEventListener("click",()=>{
+    S.blokken[+b.dataset.radd].regels.push({l:"Nieuwe regel",v:""}); tekenBlokForm(); teken();
+  }));
+}
+el("btnBlokAdd").addEventListener("click",()=>{
+  S.blokken.push({kolom:"L",titel:"NIEUW BLOK",regels:[{l:"Omschrijving",v:"waarde"}]});
+  tekenBlokForm(); teken();
+});
+
+// ─── De sheet tekenen ───────────────────────────────────────────────
+const LOGOS={passion:"passion-logo.png",fonteyn:"fonteyn-logo.png"};
+function teken(){
+  const sh=el("sheet");
+  sh.className=(S.fontBody||"b-roboto");
+  el("sModel").textContent=S.model||"Modelnaam";
+  const c=el("sCollectie");
+  c.textContent=S.collectie||"";
+  c.className="collectie "+(S.fontKop||"f-josefin");
+  // logo
+  const lg=el("sLogo");
+  lg.style.width=(S.logoBreedte||34)+"mm";
+  if(S.logoKeuze==="geen") lg.innerHTML="";
+  else if(S.logoKeuze==="eigen") lg.innerHTML=S.logoEigen?"<img src='"+S.logoEigen+"' alt=''>":"";
+  else lg.innerHTML="<img src='"+LOGOS[S.logoKeuze||"passion"]+"' alt=''>";
+  // kenmerken
+  el("sBadges").innerHTML=S.badges.map(b=>
+    "<div class='badge'>"+(b.img?"<img src='"+b.img+"' alt=''>":
+      "<div class='bi'>"+esc(b.icoon||"")+"</div><div class='bt'>"+esc(b.tekst||"")+"</div>")+"</div>").join("")+
+    (S.optioneel?"<div class='optioneel'>"+esc(S.optioneel)+"</div>":"");
+  // foto's
+  const f=[];
+  if(S.foto1) f.push("<div class='fbox'><img src='"+S.foto1+"' alt=''></div>");
+  if(S.foto2) f.push("<div class='fbox'><img src='"+S.foto2+"' alt=''></div>");
+  el("sFotos").innerHTML=f.length?f.join(""):"<div class='leeg geenPrint'>Nog geen foto's — upload ze links</div>";
+  // specificatie-blokken, per kolom, met zebra-strepen
+  const bouw=k=>S.blokken.filter(b=>(b.kolom||"L")===k).map(b=>
+    "<div class='sectie'><h3>"+esc(b.titel||"")+"</h3>"+
+    b.regels.map((r,i)=>
+      "<div class='spec"+(i%2?" zebra":"")+"'><span class='l'>"+esc(r.l)+"</span>"+
+      "<span class='d'></span><span class='v'>"+esc(r.v)+"</span></div>").join("")+
+    "</div>").join("");
+  el("sKolomL").innerHTML=bouw("L");
+  el("sKolomR").innerHTML=bouw("R");
+  el("sVoetL").textContent=S.voetL||"";
+  el("sVoetR").textContent=S.voetR||"";
+}
+
+// Zoom van de preview (raakt de print niet)
+function zetZoom(){
+  const z=Number(el("zoom").value)/100;
+  const sh=el("sheet");
+  sh.style.transform="scale("+z+")";
+  // hoogte meeschalen zodat er geen enorme witruimte onder blijft
+  sh.parentElement.style.height=(sh.offsetHeight*z+8)+"px";
+}
+el("zoom").addEventListener("input",zetZoom);
+window.addEventListener("resize",zetZoom);
+
+el("btnPdf").addEventListener("click",()=>{
+  if(window.fpLog) window.fpLog("specsheet-geexporteerd",S.model||"(zonder naam)");
+  window.print();
+});
+
+// eerste keer tekenen
+teken(); setTimeout(zetZoom,300);
+</script>
+<script>
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog("open");
+})();
+</script>
+
+</body>
+</html>

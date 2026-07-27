@@ -363,6 +363,13 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Wie logt wanneer in en welke tegels worden gebruikt. Controleer of iedereen zijn dagelijkse werk in het dashboard doet.</p>
       </a>
 
+      <!-- Specificatiesheets — marketing (Gretha) + admins. -->
+      <a href="specsheets.html" class="tile hidden" id="tileSpecsheets">
+        <div class="icon">📄</div>
+        <h3>Specificatiesheets</h3>
+        <p>Maak en bewerk de specificatiesheets van de spa's — vul de velden in, upload foto's en sla op als PDF. Geen InDesign meer nodig.</p>
+      </a>
+
       <!-- Partner-activiteitenlogboek — Gerrit/Dolf/Arno/Don/Chantal + bot. -->
       <a href="partneractiviteit.html" class="tile hidden" id="tilePartnerActiviteit">
         <div class="icon">🤝</div>
@@ -629,6 +636,13 @@ const ACTIVITEIT_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Specificatiesheets — marketing. Gretha maakt de sheets; admins kunnen mee.
+const SPECSHEETS_EMAILS = new Set([
+  "gretha@fonteyn.nl",     "gretha",   "fonteyn.gretha",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Partner-activiteitenlogboek — wat dealers op Passion Partners doen.
 // Gerrit, Dolf, Arno, Don en Chantal (sales/beheer) + Fonteynbot.
 const PARTNERACTIVITEIT_EMAILS = new Set([
@@ -751,6 +765,7 @@ function showDashboard(email) {
   // Activiteitenlogboek — alleen Gerrit/Dolf/bot
   el("tileActiviteit").classList.toggle("hidden", !ACTIVITEIT_EMAILS.has(lc));
   el("tilePartnerActiviteit").classList.toggle("hidden", !PARTNERACTIVITEIT_EMAILS.has(lc));
+  el("tileSpecsheets").classList.toggle("hidden", !SPECSHEETS_EMAILS.has(lc));
   // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot.
   const isAdmin = (lc === "gerrit@fonteyn.nl" || lc === "gerrit" ||
                    lc === "fonteynbot@fonteyn.nl" || lc === "fonteyn.bot" || lc === "fonteynbot");
