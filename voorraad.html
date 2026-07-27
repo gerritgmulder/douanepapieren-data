@@ -116,12 +116,18 @@
     <button class="tab" data-tab="reserveringen" type="button">Reserveringen</button>
     <button class="tab" data-tab="prio" type="button">Prioriteit</button>
     <button class="tab" data-tab="schepen" type="button">Schepen</button>
+    <button class="tab" data-tab="particulier" type="button">Particulier</button>
+    <button class="tab" data-tab="partner" type="button">Partner</button>
+    <button class="tab" data-tab="partnercont" type="button">Partner containers</button>
     <!-- OUDE tabs — verborgen bewaard (verwijder de style om terug te halen) -->
     <button class="tab" data-tab="ophalen" type="button" style="display:none">Ophalen &amp; markeren (oud)</button>
     <button class="tab" data-tab="dealer" type="button" style="display:none">Res. Dealers (oud)</button>
     <button class="tab" data-tab="part" type="button" style="display:none">Res. Particulieren (oud)</button>
     <button class="tab" data-tab="pipe" type="button" style="display:none">Pipeline (oud)</button>
     <button class="tab" data-tab="dealerview" type="button" style="display:none">Dealer-view (oud)</button>
+  </div>
+  <div id="adviseurNote" class="hidden" style="margin:10px 0 0;padding:9px 13px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:12.5px;color:#1e40af">
+    Je kijkt mee als <b>adviseur</b>: je ziet hier alle reserveringen met de verwachte levering, zodat je klanten direct kunt informeren. Wijzigen doen Chantal, Arno en Manon.
   </div>
   <div class="status-msg" style="background:#eef6ff;color:#1e40af;margin:0 0 12px">
     <b>Werkwijze:</b> <b>Reserveringen</b> = de actuele stand (elk uur ververst uit Logic4).
@@ -240,7 +246,7 @@
       <h3>Reserveringen — de actuele stand (Fonteyn NL)</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Elke openstaande Logic4-order met een spa (magazijn <b>Fonteyn</b>) is een reservering. Elk uur ververst.
         <span style="color:#15803d">Betaald</span> = er is écht geld binnen (aanbetaling of meer). <span style="color:var(--warn)">Wacht</span> = nog niets betaald.
-        Een <b style="color:#c2410c">oranje</b> rij = <b>meer dan 2 stuks of Dealer magazijn</b> → waarschijnlijk een containerorder die niet uit de Fonteyn-voorraad komt. Amerika staat in een eigen tab.
+        <b>Containerorders</b> (Dealer magazijn) staan hier bewust <b>niet</b> tussen — die vertroebelden het beeld en hebben een eigen tab: <b>Partner containers</b>. Amerika staat ook in een eigen tegel.
       </p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="resvSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:280px;padding:8px">
@@ -249,6 +255,53 @@
       <div id="resvOverview" style="margin-top:12px"></div>
     </div>
     <div id="resvDetail"></div>
+  </div>
+
+  <!-- Particulier / Partner / Partner containers — platte lijsten per soort klant.
+       Adviseurs zien alléén deze drie tabs (alleen-lezen). -->
+  <div id="tab-particulier" class="hidden">
+    <div class="card">
+      <h3>Particulier — reserveringen van particuliere klanten</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Alle openstaande spa-reserveringen van <b>particuliere</b> klanten, met de verwachte levering. Deze staan óók in het tabblad Reserveringen.</p>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:0">
+        <input id="partSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
+        <span id="partCount" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="partList" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <div id="tab-partner" class="hidden">
+    <div class="card">
+      <h3>Partner — reserveringen van dealers &amp; zakelijke klanten</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Alle openstaande spa-reserveringen van <b>zakelijke</b> klanten en partners, met de verwachte levering. Deze staan óók in het tabblad Reserveringen. Containerorders staan apart onder <b>Partner containers</b>.</p>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:0">
+        <input id="ptnSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
+        <span id="ptnCount" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="ptnList" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <div id="tab-partnercont" class="hidden">
+    <div class="card">
+      <h3>Partner containers — rechtstreeks naar de dealer</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Orders op <b>Dealer magazijn</b>: containers die rechtstreeks naar de partner gaan en dus niet uit de Fonteyn-voorraad komen. Daarom staan ze <b>niet</b> in Overzicht of Reserveringen.</p>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:0">
+        <input id="pcSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
+        <span id="pcCount" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="pcList" style="margin-top:12px"></div>
+    </div>
+    <div class="card" id="pcUploadCard">
+      <h3>Commercial invoice uploaden — ETA's ophalen</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Upload de commercial invoice van een <b>dealer-container</b> (zelfde Excel-formaat als bij Schepen). De container verschijnt daarna bij Schepen en de ETA wordt via de vervoerder opgehaald.</p>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:0">
+        <input type="file" id="pcCi" accept=".xlsx,.xls,.csv" style="font-size:13px">
+        <button class="btn solid" id="pcCiBtn" type="button">Uploaden &amp; verwerken</button>
+      </div>
+      <div id="pcCiStatus" class="status-msg hidden" style="margin-top:10px"></div>
+    </div>
   </div>
 
 
@@ -551,25 +604,63 @@ const SPA_STATUSSEN = [STATUS_VERKOOPORDER, STATUS_30_AANBETAALD];
 /* ====== Sessie + toegang ====== */
 const SESSION_KEY="fp.session", EMAIL_KEY="fp.email", HELPER_BASE="";
 function getSession(){ return localStorage.getItem(SESSION_KEY)||""; }
-const ALLOWED = new Set([
+// Twee niveaus (Chantal, 27 jul):
+//  BEHEER   = alles zien én wijzigen (prioriteiten, uploads, verwijderen).
+//  ADVISEUR = ALLEEN de tabs Particulier / Partner / Partner containers, en
+//             uitsluitend lezen/zoeken — geen enkele aanpassing.
+// LET OP: 'spa-service' (Gerwin, Kevin, Bart, …) moet hier nog bij; Gerrit
+// vult die namen later aan — voeg ze toe aan BEHEER.
+const BEHEER = new Set([
   "dolf@fonteyn.nl","fonteyn.dolf","dolf",
   "arno@fonteyn.nl","fonteyn.arno","arno",
   "chantal@fonteyn.nl","fonteyn.chantal","chantal",
+  "manon@fonteyn.nl","fonteyn.manon","manon",
   "gerrit@fonteyn.nl","fonteyn.gerrit","gerrit",
   "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot",
 ]);
+// Spa-adviseurs — alleen-lezen. Namen door Chantal genoemd; aanvullen zodra
+// de volledige lijst van de spa-afdeling bekend is.
+const ADVISEURS = new Set([
+  "edwin@fonteyn.nl","fonteyn.edwin","edwin",
+  "dali@fonteyn.nl","fonteyn.dali","dali",
+  "ahmed@fonteyn.nl","fonteyn.ahmed","ahmed",
+]);
+const ALLOWED = new Set([...BEHEER,...ADVISEURS]);
+let MAG_WIJZIGEN = false;   // door boot() gezet; adviseurs = false
 (function boot(){
   if (!getSession()){ location.href="dashboard.html"; return; }
   const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
   document.getElementById("userEmail").textContent = email || "—";
   if (!ALLOWED.has(email)){
     document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'>"+
-      "<h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor Dolf, Arno, Chantal, Gerrit en Fonteynbot.</p>"+
+      "<h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor de spa-afdeling (sales, logistiek en adviseurs).</p>"+
       "<p>Je bent ingelogd als <code>"+(email||"(onbekend)")+"</code>.</p>"+
       "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
     throw new Error("geen toegang");
   }
+  MAG_WIJZIGEN = BEHEER.has(email);
+  if (!MAG_WIJZIGEN) beperkTotKlantTabs();
 })();
+// Adviseur-modus: alleen de drie klantsoort-tabs, puur lezen.
+function beperkTotKlantTabs(){
+  const mag=new Set(["particulier","partner","partnercont"]);
+  document.querySelectorAll(".tab").forEach(t=>{
+    if(!mag.has(t.dataset.tab)) t.style.display="none";
+  });
+  ["ophalen","dealer","part","overzicht","reserveringen","schepen","prio","pipe","dealerview"].forEach(id=>{
+    const el=document.getElementById("tab-"+id); if(el) el.classList.add("hidden");
+  });
+  // Upload-kaart in Partner containers is een wijzig-actie → weg
+  const up=document.getElementById("pcUploadCard"); if(up) up.style.display="none";
+  // Start op Particulier
+  const eerste=document.querySelector('.tab[data-tab="particulier"]');
+  if(eerste){
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+    eerste.classList.add("active");
+    document.getElementById("tab-particulier").classList.remove("hidden");
+  }
+  const note=document.getElementById("adviseurNote"); if(note) note.classList.remove("hidden");
+}
 document.getElementById("logoutBtn").addEventListener("click", async ()=>{
   try{ await fetch(HELPER_BASE+"/api/logout",{method:"POST",headers:{"Authorization":"Bearer "+getSession()}}); }catch(e){}
   localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY);
@@ -876,12 +967,19 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   document.getElementById("tab-prio").classList.toggle("hidden", tab!=="prio");
   document.getElementById("tab-pipe").classList.toggle("hidden", tab!=="pipe");
   document.getElementById("tab-dealerview").classList.toggle("hidden", tab!=="dealerview");
+  document.getElementById("tab-particulier").classList.toggle("hidden", tab!=="particulier");
+  document.getElementById("tab-partner").classList.toggle("hidden", tab!=="partner");
+  document.getElementById("tab-partnercont").classList.toggle("hidden", tab!=="partnercont");
   if (tab==="overzicht") loadOverzicht();
   if (tab==="reserveringen") loadReserveringen();
   if (tab==="schepen") loadSchepen();
   if (tab==="prio") initPrio();
   if (tab==="dealer"||tab==="part") renderOverviews();
   if (tab==="dealerview") renderDealerView();
+  // De drie klantsoort-tabs delen de reserveringsdata; die één keer laden.
+  if (tab==="particulier"||tab==="partner"||tab==="partnercont"){
+    if(!Object.keys(resvData.byModel||{}).length) loadReserveringen(); else renderSoortTabs();
+  }
 }));
 
 // Bij start: state laden en de overzichten alvast tonen.
@@ -1126,6 +1224,7 @@ async function loadReserveringen(){
     if(r.ok){ const j=await r.json(); resvData={byModel:(j&&j.byModel)||{},byModelUSA:(j&&j.byModelUSA)||{},updated:j&&j.updated}; }
   }catch(e){ console.warn("reserveringen laden faalde:",e); }
   renderReserveringen();
+  renderSoortTabs();
 }
 function resvTypeBadge(t){
   if(t==="partner") return "<span class='pill s1'>partner</span>";
@@ -1140,24 +1239,25 @@ function renderReserveringen(){
   const q=(document.getElementById("resvSearch").value||"").trim().toLowerCase();
   const ov=document.getElementById("resvOverview");
   const all=Object.keys(resvData.byModel);
-  // Zichtbare modellen: model-naam matcht, of er is een regel die matcht (naam/ordernr)
-  const models=all.filter(m=>resvData.byModel[m].some(r=>resvMatch(r,m,q)))
-    .sort((a,b)=>resvData.byModel[b].length-resvData.byModel[a].length);
+  // Containerorders (Dealer magazijn) horen hier NIET meer: die staan in de
+  // eigen tab 'Partner containers' — ze vertroebelden het voorraadbeeld.
+  const zichtbaar=m=>(resvData.byModel[m]||[]).filter(r=>!r.container);
+  const models=all.filter(m=>zichtbaar(m).some(r=>resvMatch(r,m,q)))
+    .sort((a,b)=>zichtbaar(b).length-zichtbaar(a).length);
   if(!models.length){ ov.innerHTML="<p class='lead'>Geen reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
-  let html="<table class='grid'><thead><tr><th>Model</th><th>Actief</th><th>Betaald</th><th>Wacht</th><th>Containers</th></tr></thead><tbody>";
+  let html="<table class='grid'><thead><tr><th>Model</th><th>Actief</th><th>Betaald</th><th>Wacht</th></tr></thead><tbody>";
   for(const m of models){
-    const lines=resvData.byModel[m].filter(r=>resvMatch(r,m,q));
+    const lines=zichtbaar(m).filter(r=>resvMatch(r,m,q));
     const qty=a=>a.reduce((n,r)=>n+r.qty,0);
-    const fon=lines.filter(r=>!r.container), con=lines.filter(r=>r.container);
+    const fon=lines;
     const bet=qty(fon.filter(r=>r.betaald)), wacht=qty(fon)-bet;
     const open=!!resvOpen[m] || (q && models.length<=3);   // bij zoeken automatisch open
     html+="<tr class='resvRow' data-m='"+esc(m)+"' style='cursor:pointer'>"+
       "<td>"+(open?"▾ ":"▸ ")+"<b>"+esc(m)+"</b></td>"+
       "<td><b>"+qty(fon)+"</b></td>"+
-      "<td style='color:#15803d'>"+bet+"</td><td style='color:#92400e'>"+wacht+"</td>"+
-      "<td style='color:#c2410c'>"+(qty(con)||"—")+"</td></tr>";
+      "<td style='color:#15803d'>"+bet+"</td><td style='color:#92400e'>"+wacht+"</td></tr>";
     if(open){
-      html+="<tr><td colspan='5' style='padding:0;background:#fafafa'><div class='tablewrap' style='padding:8px 10px'>"+
+      html+="<tr><td colspan='4' style='padding:0;background:#fafafa'><div class='tablewrap' style='padding:8px 10px'>"+
         "<table class='grid' style='margin:0'><thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Kleur</th><th>Aantal</th><th>Datum</th><th>Betaling</th><th>Verwachte levering</th></tr></thead><tbody>"+
         resvRows(lines)+
         "</tbody></table></div></td></tr>";
@@ -1191,6 +1291,68 @@ function resvRows(list){
 }
 document.getElementById("resvSearch")&&document.getElementById("resvSearch").addEventListener("input",renderReserveringen);
 // (Amerika/Warehouse Texas is verplaatst naar de aparte Amerika-tegel — amerika.html)
+
+// ===== Particulier / Partner / Partner containers (Chantal, 27 jul) =========
+// Platte lijsten per klantsoort. Dezelfde reserveringen als in het tabblad
+// Reserveringen, maar uitgesplitst zodat adviseurs alléén hun eigen soort zien.
+// Containerorders (Dealer magazijn) staan UITSLUITEND onder Partner containers —
+// die vertroebelden het beeld in Overzicht/Reserveringen.
+function resvAlleRegels(){
+  const uit=[];
+  for(const [model,list] of Object.entries(resvData.byModel||{})){
+    for(const r of (list||[])) uit.push(Object.assign({model},r));
+  }
+  return uit;
+}
+function isZakelijk(r){ return r.type==="partner"||r.type==="zakelijk"; }
+// Welke regels horen bij welk tabblad
+function resvVoorSoort(soort){
+  const alle=resvAlleRegels();
+  if(soort==="partnercont") return alle.filter(r=>r.container);
+  if(soort==="partner")     return alle.filter(r=>!r.container &&  isZakelijk(r));
+  return                           alle.filter(r=>!r.container && !isZakelijk(r));   // particulier
+}
+// Eén platte tabel: ordernummer, spa, kleur, aantal, klant, betaling, levering
+function renderResvSoort(soort,zoekId,lijstId,telId){
+  const inp=document.getElementById(zoekId), box=document.getElementById(lijstId);
+  if(!box) return;
+  const q=((inp&&inp.value)||"").trim().toLowerCase();
+  let rijen=resvVoorSoort(soort).filter(r=>resvMatch(r,r.model,q));
+  // Eerst wat het snelst komt: op verwachte levering, daarna model
+  const sortKey=r=>{
+    const v=r.verwacht;
+    if(v==="voorraad") return "0";
+    if(!v||v==="productie") return "9";
+    if(v==="op-schip") return "8";
+    return "1"+String(v);
+  };
+  rijen.sort((a,b)=>sortKey(a).localeCompare(sortKey(b))||String(a.model).localeCompare(String(b.model)));
+  const totaal=rijen.reduce((n,r)=>n+(Number(r.qty)||0),0);
+  const tel=document.getElementById(telId);
+  if(tel) tel.textContent=rijen.length+" reservering(en) · "+totaal+" spa's"+(resvData.updated?(" · ververst "+new Date(resvData.updated).toLocaleString("nl-NL")):"");
+  if(!rijen.length){ box.innerHTML="<p class='lead'>Geen reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
+  box.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
+    "<th>Order</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Klant</th><th>Datum</th><th>Betaling</th><th>Verwachte levering</th></tr></thead><tbody>"+
+    rijen.map(r=>"<tr"+(r.prio?" style='background:#f0fdf4'":"")+">"+
+      "<td>"+esc(r.ordernr)+"</td>"+
+      "<td><b>"+esc(r.model)+"</b></td>"+
+      "<td>"+kleurCel(r.kleur)+"</td>"+
+      "<td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td>"+
+      "<td>"+esc(r.naam)+"</td>"+
+      "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
+      "<td>"+betaalBadge(r)+"</td>"+
+      "<td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td></tr>").join("")+
+    "</tbody></table></div>";
+}
+function renderSoortTabs(){
+  renderResvSoort("particulier","partSearch","partList","partCount");
+  renderResvSoort("partner","ptnSearch","ptnList","ptnCount");
+  renderResvSoort("partnercont","pcSearch","pcList","pcCount");
+}
+["partSearch","ptnSearch","pcSearch"].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el) el.addEventListener("input",renderSoortTabs);
+});
 
 // ===================== Schepen (commercial invoices) =====================
 // Chantal uploadt commercial invoices (Excel, één per schip). Client-side
@@ -1362,8 +1524,8 @@ function parseCI(wb){
   return {ref,vessel,containers,models,modelColors,unmapped,total:Object.values(models).reduce((a,b)=>a+b,0)};
 }
 
-async function handleCIUpload(files){
-  const st=document.getElementById("ciStatus"); st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Inlezen…";
+async function handleCIUpload(files,statusId){
+  const st=document.getElementById(statusId||"ciStatus"); st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Inlezen…";
   let added=0; const allUnmapped={...(shipsData.unmapped||{})};
   try{
     for(const file of files){
@@ -1840,6 +2002,20 @@ function renderDealerResv(){
   if(ciBtn&&ciFile){
     ciBtn.addEventListener("click", function(){ ciFile.click(); });
     ciFile.addEventListener("change", function(e){ if(e.target.files.length) handleCIUpload([...e.target.files]); ciFile.value=""; });
+  }
+  // Partner containers — eigen commercial-invoice-upload (zelfde verwerking als
+  // bij Schepen; de container komt daarna in Schepen te staan mét ETA-tracking)
+  const pcBtn=document.getElementById("pcCiBtn"), pcCi=document.getElementById("pcCi");
+  if(pcBtn&&pcCi){
+    pcBtn.addEventListener("click", function(){
+      if(!pcCi.files.length){
+        const st=document.getElementById("pcCiStatus");
+        st.classList.remove("hidden"); st.className="status-msg warn";
+        st.textContent="Kies eerst een commercial-invoice-bestand.";
+        return;
+      }
+      handleCIUpload([...pcCi.files],"pcCiStatus").then(function(){ pcCi.value=""; });
+    });
   }
   // Merzario-tracking: losse zoekopdracht + alle schepen verversen
   const trkBtn=document.getElementById("trkBtn"), trkInput=document.getElementById("trkInput");
