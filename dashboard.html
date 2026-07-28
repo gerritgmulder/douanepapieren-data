@@ -17,6 +17,11 @@
     --fonteyn-lime-dark: #72a531;
     --fonteyn-cream: #fff9ae;
 
+    /* Passion Spas huisstijl — voor alles wat over spa's gaat */
+    --passion-red: #c8102e;
+    --passion-red-dark: #960c22;
+    --passion-charcoal: #2b2b2b;
+
     --bg: #f5f4ef;
     --panel: #ffffff;
     --ink: #1f2937;
@@ -151,6 +156,29 @@
   .tile.disabled .icon { background: #e5e5e0; color: #9ca3af; }
   .tile.disabled h3 { color: var(--muted); }
 
+  /* ─── Groepen ──────────────────────────────────────────────
+     De tegels staan gebundeld per afdeling. Een groep zonder zichtbare
+     tegels verdwijnt helemaal (zie verbergLegeGroepen). */
+  .groep { margin-bottom: 30px; }
+  .groep > h3 {
+    margin: 0 0 3px; font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--fonteyn-green);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .groep > h3::after {
+    content: ""; flex: 1; height: 2px; border-radius: 2px;
+    background: linear-gradient(to right, var(--fonteyn-lime), transparent);
+  }
+  .groep > p.groep-lead { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; }
+
+  /* Spa's draaien onder het merk Passion Spas en krijgen daarom de Passion-
+     huisstijl (rood/antraciet). Alle andere groepen blijven Fonteyn groen/geel. */
+  .groep.passion > h3 { color: var(--passion-red); }
+  .groep.passion > h3::after { background: linear-gradient(to right, var(--passion-red), transparent); }
+  .groep.passion .tile .icon { background: var(--passion-red); color: #fff; }
+  .groep.passion .tile h3 { color: var(--passion-red); }
+  .groep.passion .tile:hover { border-color: var(--passion-red); box-shadow: 0 6px 16px rgba(200,16,46,0.13); }
+
   .hidden { display: none !important; }
 
   /* ─── Wachtwoord-modal voor stuurcijfers ───────────────── */
@@ -262,7 +290,11 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <p>Kies een tool om mee aan de slag te gaan.</p>
     </div>
 
-    <div class="tiles">
+    <!-- ══════════ LOGISTIEK ══════════ -->
+    <section class="groep" id="groepLogistiek">
+      <h3>Logistiek</h3>
+      <p class="groep-lead">Goederenstroom: papieren, binnenkomst, transport en retouren.</p>
+      <div class="tiles">
       <!-- Logistieke tegels — alleen zichtbaar voor het logistiek-team (zie LOGISTIEK_EMAILS). -->
       <a href="douane.html" class="tile hidden" id="tileDouane">
         <div class="icon">📄</div>
@@ -288,81 +320,64 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Upload een leveranciers-invoice of -catalogus en genereer in één klik een prijslijst in Fonteyn- of Passion-huisstijl.</p>
       </a>
 
-      <a href="eikensingel.html" class="tile hidden" id="tileEikensingel">
-        <div class="icon">🏡</div>
-        <h3>Eikensingel</h3>
-        <p>Bovenaanzicht van de 10 bungalows op het vakantiepark — boekingen, schoonmaak en betaling in één oogopslag.</p>
-      </a>
-
-      <div class="tile disabled" data-module="vijfs" id="tileVijfs">
-        <div class="soon">Binnenkort</div>
-        <div class="icon">🗂️</div>
-        <h3>5S Methodiek</h3>
-        <p>Reorganisatie-plan voor het magazijn volgens de 5S-methodiek.</p>
-      </div>
-
-      <a href="personeel.html" class="tile hidden" id="tilePersoneel">
-        <div class="icon">👥</div>
-        <h3>Personeel</h3>
-        <p>Buitenlandse medewerkers — gegevens, kamerverdeling Eikensingel en woensdag-vluchten in één overzicht.</p>
-      </a>
-
-      <!-- Koeien bij Dolf — alleen zichtbaar voor Dolf, Gerrit en Fonteynbot. -->
-      <a href="koeien.html" class="tile hidden" id="tileKoeien">
-        <div class="icon">🐄</div>
-        <h3>Koeien bij Dolf</h3>
-        <p>Interactief overzicht van Dolfs koeien — status, stamboom en aantekeningen, centraal opgeslagen voor Dolf en Gerrit.</p>
-      </a>
-
-      <!-- Rapportage — management-overzicht, alleen voor Gerrit/Don/Arno/Dolf/Fonteynbot. -->
-      <a href="rapportage.html" class="tile hidden" id="tileRapportage">
-        <div class="icon">📈</div>
-        <h3>Rapportage</h3>
-        <p>Omzet, jaartarget, aantallen en vergelijking met vorig jaar. Plus reviews per adviseur (Google, Trustpilot, Klantenvertellen) met toewijzing-workflow.</p>
-      </a>
-
-      <!-- Orderstatus — alleen zichtbaar voor gerrit@, don@, arno@, dolf@. -->
-      <a href="order-status.html" class="tile hidden" id="tileOrderStatus">
-        <div class="icon">📊</div>
-        <h3>Orderstatus</h3>
-        <p>Controleer en update de status van betaalde orders in Logic4.</p>
-      </a>
-
       <!-- Retouren — Don/Arno/Dolf/Manon + admins. -->
       <a href="retouren.html" class="tile hidden" id="tileRetouren">
         <div class="icon">↩️</div>
         <h3>Retouren</h3>
         <p>Welke retouren komen er binnen en waarom — op te halen retouren uit Logic4, reden + locatie registreren, en cijfers per dag/week/maand/jaar met cirkeldiagram.</p>
       </a>
+      </div>
+    </section>
 
-      <!-- Dealerportaal beheren — Arno/Don/Chantal + admins. -->
-      <a href="dealerportaal.html" class="tile hidden" id="tileDealerportaal">
-        <div class="icon">🤝</div>
-        <h3>Partnerportaal</h3>
-        <p>Beheer het partner-webportaal: welke partners kunnen inloggen, welke specsheets ze zien, en waar hun vragen binnenkomen.</p>
-      </a>
-
-      <!-- Voorraadbeheer — Dolf/Arno/Chantal + admins. -->
+    <!-- ══════════ SPA'S — Passion Spas huisstijl ══════════ -->
+    <section class="groep passion" id="groepSpas">
+      <h3>Spa's</h3>
+      <p class="groep-lead">Alles rond Passion Spas: voorraad, partners en de Amerikaanse vestiging.</p>
+      <div class="tiles">
+      <!-- Voorraadbeheer — Dolf/Arno/Chantal/Manon + spa planning + adviseurs. -->
       <a href="voorraad.html" class="tile hidden" id="tileVoorraad">
         <div class="icon">📦</div>
         <h3>Voorraadbeheer</h3>
         <p>Verkochte spa-orders van een dag ophalen uit Logic4, splitsen naar Dealer/Particulier en reserveringen bijhouden — met filteren op elke kolom.</p>
       </a>
 
-      <!-- Amerika (Houston/Texas, Passion Spas USA) — alleen Chantal/Dolf/Gerrit/bot. -->
+      <!-- Amerika (Houston/Texas, Passion Spas USA) — Chantal/Dolf/Gerrit/Osman/bot. -->
       <a href="amerika.html" class="tile hidden" id="tileAmerika">
         <div class="icon">🇺🇸</div>
         <h3>Amerika</h3>
         <p>Passion Spas USA (Houston, Texas) — bestellingen, reserveringen en containers van de Amerikaanse vestiging. Draait op QuickBooks; los van Nederland/Logic4.</p>
       </a>
 
-      <!-- Activiteitenlogboek — alleen Gerrit/Dolf/Fonteynbot. -->
-      <a href="activiteit.html" class="tile hidden" id="tileActiviteit">
-        <div class="icon">📋</div>
-        <h3>Activiteitenlogboek</h3>
-        <p>Wie logt wanneer in en welke tegels worden gebruikt. Controleer of iedereen zijn dagelijkse werk in het dashboard doet.</p>
+      <!-- Dealerportaal beheren — Arno/Don/Chantal + admins. -->
+      <a href="dealerportaal.html" class="tile hidden" id="tileDealerportaal">
+        <div class="icon">🤝</div>
+        <h3>Partnerportaal beheren</h3>
+        <p>Beheer het partner-webportaal: welke partners kunnen inloggen, welke specsheets ze zien, en waar hun vragen binnenkomen.</p>
       </a>
 
+      <!-- Passion Partners — het publieke portaal zelf, opent in de browser.
+           target=_blank → Electron vangt dat af en opent de standaardbrowser. -->
+      <a href="https://fonteyn-data-store.g-mulder.workers.dev/dealers" target="_blank" rel="noopener"
+         class="tile hidden" id="tilePassionPartners">
+        <div class="icon">🌐</div>
+        <h3>Passion Partners</h3>
+        <p>Open het portaal zoals de dealers het zien — voorraad, documenten en reserveringen. Opent in je browser.</p>
+      </a>
+
+      <!-- Partner-activiteitenlogboek — Gerrit/Dolf/Arno/Don/Chantal + bot. -->
+      <a href="partneractiviteit.html" class="tile hidden" id="tilePartnerActiviteit">
+        <div class="icon">📡</div>
+        <h3>Partner-activiteit</h3>
+        <p>Wat doen dealers op Passion Partners? Wie logt wanneer in, welke reserveringen, documenten en vragen. Zo zie je hoe het portaal leeft.</p>
+      </a>
+      </div>
+    </section>
+
+    <!-- ══════════ MARKETING ══════════ -->
+    <section class="groep" id="groepMarketing">
+      <h3>Marketing</h3>
+      <p class="groep-lead">Documenten en drukwerk in de huisstijl.</p>
+      <div class="tiles">
       <!-- Specificatiesheets — marketing (Gretha) + admins. -->
       <a href="specsheets.html" class="tile hidden" id="tileSpecsheets">
         <div class="icon">📄</div>
@@ -370,11 +385,19 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Maak en bewerk de specificatiesheets van de spa's — vul de velden in, upload foto's en sla op als PDF. Geen InDesign meer nodig.</p>
       </a>
 
-      <!-- Partner-activiteitenlogboek — Gerrit/Dolf/Arno/Don/Chantal + bot. -->
-      <a href="partneractiviteit.html" class="tile hidden" id="tilePartnerActiviteit">
-        <div class="icon">🤝</div>
-        <h3>Partner-activiteit</h3>
-        <p>Wat doen dealers op Passion Partners? Wie logt wanneer in, welke reserveringen, documenten en vragen. Zo zie je hoe het portaal leeft.</p>
+      </div>
+    </section>
+
+    <!-- ══════════ FINANCIËN ══════════ -->
+    <section class="groep" id="groepFinancien">
+      <h3>Financiën</h3>
+      <p class="groep-lead">Betalingen, facturen en cijfers.</p>
+      <div class="tiles">
+      <!-- Bankkoppeling — finance-team (Osman/Rowan/Rico/Reinier) + admins. -->
+      <a href="bankkoppeling.html" class="tile hidden" id="tileBankkoppeling">
+        <div class="icon">🏦</div>
+        <h3>Bankkoppeling maken</h3>
+        <p>Upload een MT940-bankafschrift en koppel binnenkomende betalingen automatisch aan de juiste Logic4-orders.</p>
       </a>
 
       <!-- Bol.com koppeling — finance + sales: Osman + Don + admins. -->
@@ -384,11 +407,58 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Upload de maandelijkse Bol-factuur en genereer in één klik een memoriaal-voorstel voor in Logic4 — credit-regels per klant + verkoopprovisie + overschrijving.</p>
       </a>
 
-      <!-- Bankkoppeling — finance-team (Osman/Rowan/Rico/Reinier) + admins. -->
-      <a href="bankkoppeling.html" class="tile hidden" id="tileBankkoppeling">
-        <div class="icon">🏦</div>
-        <h3>Bankkoppeling maken</h3>
-        <p>Upload een MT940-bankafschrift en koppel binnenkomende betalingen automatisch aan de juiste Logic4-orders.</p>
+      <!-- Stuurcijfers — alleen zichtbaar voor gerriette@ en dolf@. Klik vraagt extra wachtwoord. -->
+      <a href="#" class="tile hidden" id="tileStuurcijfers">
+        <div class="icon">📊</div>
+        <h3>Stuurcijfers</h3>
+        <p>Financiële stuurcijfers en analyses op basis van het Logic4-grootboek — direct inzicht in waar je op moet sturen.</p>
+      </a>
+      </div>
+    </section>
+
+    <!-- ══════════ OVERIG ══════════ -->
+    <section class="groep" id="groepOverig">
+      <h3>Overig</h3>
+      <p class="groep-lead">Verkoop, personeel, park en beheer.</p>
+      <div class="tiles">
+      <!-- Orderstatus — alleen zichtbaar voor gerrit@, don@, arno@, dolf@. -->
+      <a href="order-status.html" class="tile hidden" id="tileOrderStatus">
+        <div class="icon">📊</div>
+        <h3>Orderstatus</h3>
+        <p>Controleer en update de status van betaalde orders in Logic4.</p>
+      </a>
+
+      <!-- Rapportage — management-overzicht, alleen voor Gerrit/Don/Arno/Dolf/Fonteynbot. -->
+      <a href="rapportage.html" class="tile hidden" id="tileRapportage">
+        <div class="icon">📈</div>
+        <h3>Rapportage</h3>
+        <p>Omzet, jaartarget, aantallen en vergelijking met vorig jaar. Plus reviews per adviseur (Google, Trustpilot, Klantenvertellen) met toewijzing-workflow.</p>
+      </a>
+
+      <a href="personeel.html" class="tile hidden" id="tilePersoneel">
+        <div class="icon">👥</div>
+        <h3>Personeel</h3>
+        <p>Buitenlandse medewerkers — gegevens, kamerverdeling Eikensingel en woensdag-vluchten in één overzicht.</p>
+      </a>
+
+      <a href="eikensingel.html" class="tile hidden" id="tileEikensingel">
+        <div class="icon">🏡</div>
+        <h3>Eikensingel</h3>
+        <p>Bovenaanzicht van de 10 bungalows op het vakantiepark — boekingen, schoonmaak en betaling in één oogopslag.</p>
+      </a>
+
+      <!-- Activiteitenlogboek — alleen Gerrit/Dolf/Fonteynbot. -->
+      <a href="activiteit.html" class="tile hidden" id="tileActiviteit">
+        <div class="icon">📋</div>
+        <h3>Activiteitenlogboek</h3>
+        <p>Wie logt wanneer in en welke tegels worden gebruikt. Controleer of iedereen zijn dagelijkse werk in het dashboard doet.</p>
+      </a>
+
+      <!-- Koeien bij Dolf — alleen zichtbaar voor Dolf, Gerrit en Fonteynbot. -->
+      <a href="koeien.html" class="tile hidden" id="tileKoeien">
+        <div class="icon">🐄</div>
+        <h3>Koeien bij Dolf</h3>
+        <p>Interactief overzicht van Dolfs koeien — status, stamboom en aantekeningen, centraal opgeslagen voor Dolf en Gerrit.</p>
       </a>
 
       <!-- Logic4-probe — diagnose-pagina, alleen voor admin (Gerrit/Fonteynbot). -->
@@ -397,14 +467,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <h3>Logic4-probe</h3>
         <p>Diagnose-pagina: test welke Logic4 API-endpoints toegankelijk zijn. Alleen voor admin-gebruik.</p>
       </a>
-
-      <!-- Stuurcijfers — alleen zichtbaar voor gerriette@ en dolf@. Klik vraagt extra wachtwoord. -->
-      <a href="#" class="tile hidden" id="tileStuurcijfers">
-        <div class="icon">📊</div>
-        <h3>Stuurcijfers</h3>
-        <p>Financiële stuurcijfers en analyses op basis van het Logic4-grootboek — direct inzicht in waar je op moet sturen.</p>
-      </a>
-    </div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -603,6 +667,14 @@ const DEALERPORTAAL_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Passion Partners — het publieke portaal openen in de browser. Kijken mag
+// ruimer dan beheren: iedereen die met spa's/partners werkt, plus Dolf.
+const PARTNERPORTAAL_KIJK = new Set([
+  ...DEALERPORTAAL_EMAILS,
+  "dolf@fonteyn.nl",       "fonteyn.dolf",  "dolf",
+  "manon@fonteyn.nl",      "manon",    "fonteyn.manon",
+]);
+
 // Voorraadbeheer-tegel — sales/logistiek: Dolf, Arno, Chantal, Manon + admins,
 // plus de spa-adviseurs (die zien in de tegel zélf alléén de tabs Particulier/
 // Partner/Partner containers, alleen-lezen). Spa-service volgt nog.
@@ -728,10 +800,18 @@ async function logLogin(email) {
   for (let poging = 0; poging < 30; poging++) {
     const k = localStorage.getItem("fp.teamkey") || "";
     if (k) {
+      const app = window.fonteynApp || {};
       try {
         await fetch("https://fonteyn-data-store.g-mulder.workers.dev/log", {
           method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": k },
-          body: JSON.stringify({ user: wie, tile: "dashboard", action: "login" }),
+          body: JSON.stringify({
+            user: wie, tile: "dashboard", action: "login",
+            // Op welke computer werd ingelogd — anders is een onverwachte
+            // inlog achteraf niet te herleiden.
+            computer: app.computer || null,
+            platform: app.platform || null,
+            versie: app.versie || "browser",
+          }),
         });
       } catch (e) {}
       return;
@@ -794,17 +874,19 @@ function showDashboard(email) {
   const isAdmin = (lc === "gerrit@fonteyn.nl" || lc === "gerrit" ||
                    lc === "fonteynbot@fonteyn.nl" || lc === "fonteyn.bot" || lc === "fonteynbot");
   el("tileProbe").classList.toggle("hidden", !isAdmin);
-  // 5S Methodiek (placeholder, niet-klikbaar) — verbergen voor finance-
-  // team (Osman/Rowan/Rico/Reinier), want 5S = magazijn-reorganisatie
-  // en niet relevant voor hun werk. Voor iedereen anders zichtbaar
-  // als 'Binnenkort'-placeholder.
-  const FIVE_S_HIDDEN_FOR = new Set([
-    "osman@fonteyn.nl",  "osman",  "fonteyn.osman",
-    "rowan@fonteyn.nl",  "rowan",  "fonteyn.rowan",
-    "rico@fonteyn.nl",   "rico",   "fonteyn.rico",
-    "reinier@fonteyn.nl","reinier","fonteyn.reinier",
-  ]);
-  el("tileVijfs").classList.toggle("hidden", FIVE_S_HIDDEN_FOR.has(lc));
+  // Passion Partners — het publieke portaal zoals de dealers het zien. Zelfde
+  // groep mensen die het portaal beheert plus de spa-mensen die willen kijken.
+  el("tilePassionPartners").classList.toggle("hidden", !PARTNERPORTAAL_KIJK.has(lc));
+  verbergLegeGroepen();
+}
+
+// Een afdelingskop zonder zichtbare tegels heeft geen functie: die verdwijnt.
+// Zo ziet Gretha alleen 'Marketing' en niet vier lege kopjes.
+function verbergLegeGroepen() {
+  document.querySelectorAll(".groep").forEach(g => {
+    const zichtbaar = [...g.querySelectorAll(".tile")].some(t => !t.classList.contains("hidden"));
+    g.classList.toggle("hidden", !zichtbaar);
+  });
 }
 
 // ─── Helper-server health (voor login-scherm) ────────────────
@@ -988,5 +1070,53 @@ el("stuurModal").addEventListener("click", (ev) => {
 
 boot();
 </script>
+
+<script>
+/* Europese datums, dashboard-breed. Chantal leest 2026-07-28 als Amerikaans;
+   overal moet 28.07.2026 staan. De meeste tegels doen dat al bij het opbouwen
+   van hun tabellen, maar dit is het vangnet: na elke wijziging in de pagina
+   wordt losse tekst van de vorm JJJJ-MM-DD omgezet.
+   Niet aangeraakt: invoervelden (die moeten ISO blijven, anders begrijpt de
+   browser de datumkiezer niet), scripts, en <code>/<pre> waar een ISO-datum
+   juist de bedoeling is. Een element met class="iso-datum" blijft ook staan. */
+(function(){
+  var OVERSLAAN = {INPUT:1, TEXTAREA:1, SELECT:1, OPTION:1, SCRIPT:1, STYLE:1, CODE:1, PRE:1};
+  // Wel: "2026-07-28". Niet: "2026-07-28T09:12" (tijdstempel) en niet als er
+  // meteen een cijfer of streepje op volgt (versienummers, referenties).
+  var PATROON = /\b(\d{4})-(\d{2})-(\d{2})\b(?![T:\d-])/g;
+
+  function magNiet(node){
+    for (var el = node.parentNode; el && el.nodeType === 1; el = el.parentNode){
+      if (OVERSLAAN[el.tagName]) return true;
+      if (el.classList && el.classList.contains("iso-datum")) return true;
+    }
+    return false;
+  }
+  function loop(wortel){
+    if (!wortel || wortel.nodeType !== 1) return;
+    var w = document.createTreeWalker(wortel, NodeFilter.SHOW_TEXT, null);
+    var raak = [], n;
+    while ((n = w.nextNode())){
+      if (n.nodeValue.indexOf("-") < 0) continue;
+      PATROON.lastIndex = 0;
+      if (PATROON.test(n.nodeValue) && !magNiet(n)) raak.push(n);
+    }
+    for (var i = 0; i < raak.length; i++){
+      raak[i].nodeValue = raak[i].nodeValue.replace(PATROON, function(_, j, m, d){ return d + "." + m + "." + j; });
+    }
+  }
+
+  var gepland = false;
+  function plan(){
+    if (gepland) return;
+    gepland = true;
+    requestAnimationFrame(function(){ gepland = false; loop(document.body); });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", plan);
+  else plan();
+  new MutationObserver(plan).observe(document.documentElement, {childList:true, subtree:true, characterData:true});
+})();
+</script>
+
 </body>
 </html>

@@ -19,6 +19,15 @@
 
 const { contextBridge, ipcRenderer } = require("electron");
 
+// Apparaat-info voor het activiteitenlogboek. Zonder dit was bij een
+// onverwachte inlog niet te achterhalen op wélke computer dat gebeurde.
+// Alleen platform, computernaam en app-versie — geen persoonlijke gegevens.
+contextBridge.exposeInMainWorld("fonteynApp", {
+  versie: process.env.npm_package_version || require("./package.json").version,
+  platform: process.platform,          // "darwin" | "win32"
+  computer: require("os").hostname(),
+});
+
 contextBridge.exposeInMainWorld("fonteynPrint", {
   isAvailable: true,
   silentPrintLabels: (opts) => ipcRenderer.invoke("fonteyn:print-labels", opts),

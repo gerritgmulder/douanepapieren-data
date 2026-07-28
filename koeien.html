@@ -1515,14 +1515,119 @@ init();
 /* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
 (function(){
   var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  // Apparaat + app-versie meesturen. Zonder dit was bij een onverwachte inlog
+  // niet te achterhalen op wélke computer dat gebeurde. In een gewone browser
+  // bestaat window.fonteynApp niet; dan noteren we wat de browser prijsgeeft.
+  function apparaat(){
+    var a=window.fonteynApp;
+    if(a) return {computer:a.computer||null, platform:a.platform||null, versie:a.versie||null};
+    var m=(navigator.userAgent||"").match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
+    return {computer:null, platform:m?m[1].replace(/_/g,"."):null, versie:"browser"};
+  }
   window.fpLog=function(action,detail){try{
     var email=(localStorage.getItem("fp.email")||"").toLowerCase();
     var key=localStorage.getItem("fp.teamkey")||"";
     if(!email||!key) return;
     var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
+    var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker"),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){});
   }catch(e){}};
   window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
+})();
+</script>
+
+<script>
+/* Nette upload-velden. De standaardknop van de browser ("Bestand kiezen",
+   "Bestand uploaden") ziet er per systeem anders uit en past niet in de
+   huisstijl. We verbergen het echte veld en zetten er een eigen knop voor,
+   met de gekozen bestandsnaam ernaast. De kleuren komen uit de CSS-variabelen
+   van de tegel, dus in de spa-tegels wordt dit vanzelf Passion-rood. */
+(function(){
+  var css=document.createElement("style");
+  css.textContent=
+    ".fp-upload{display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap}"+
+    ".fp-upload input[type=file]{position:absolute!important;width:1px;height:1px;opacity:0;pointer-events:none}"+
+    ".fp-upload-btn{display:inline-flex;align-items:center;gap:7px;background:var(--fonteyn-green,#144734);color:#fff;"+
+      "border:0;border-radius:8px;padding:9px 16px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;"+
+      "transition:background .14s,transform .1s,box-shadow .14s}"+
+    ".fp-upload-btn:hover{background:var(--fonteyn-green-dark,#0d3325);transform:translateY(-1px);box-shadow:0 3px 9px rgba(0,0,0,.13)}"+
+    ".fp-upload-btn:active{transform:none}"+
+    ".fp-upload-btn::before{content:'\\2191';font-weight:700}"+
+    ".fp-upload-naam{font-size:12.5px;color:var(--muted,#6b7280);max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}"+
+    ".fp-upload-naam.gekozen{color:var(--ink,#1f2937);font-weight:600}";
+  (document.head||document.documentElement).appendChild(css);
+
+  function opmaak(inp){
+    if(inp.dataset.fpMooi) return;
+    inp.dataset.fpMooi="1";
+    var wrap=document.createElement("span"); wrap.className="fp-upload";
+    var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
+    knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
+    var naam=document.createElement("span"); naam.className="fp-upload-naam";
+    naam.textContent="Nog geen bestand gekozen";
+    inp.parentNode.insertBefore(wrap,inp);
+    wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
+    knop.addEventListener("click",function(){ inp.click(); });
+    inp.addEventListener("change",function(){
+      var n=inp.files?inp.files.length:0;
+      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+        : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
+      naam.classList.toggle("gekozen", n>0);
+    });
+  }
+  function scan(){ document.querySelectorAll("input[type=file]").forEach(opmaak); }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",scan); else scan();
+  // Tabellen en formulieren worden telkens opnieuw opgebouwd; nieuwe
+  // upload-velden meteen meepakken.
+  new MutationObserver(scan).observe(document.documentElement,{childList:true,subtree:true});
+})();
+</script>
+
+
+<script>
+/* Europese datums, dashboard-breed. Chantal leest 2026-07-28 als Amerikaans;
+   overal moet 28.07.2026 staan. De meeste tegels doen dat al bij het opbouwen
+   van hun tabellen, maar dit is het vangnet: na elke wijziging in de pagina
+   wordt losse tekst van de vorm JJJJ-MM-DD omgezet.
+   Niet aangeraakt: invoervelden (die moeten ISO blijven, anders begrijpt de
+   browser de datumkiezer niet), scripts, en <code>/<pre> waar een ISO-datum
+   juist de bedoeling is. Een element met class="iso-datum" blijft ook staan. */
+(function(){
+  var OVERSLAAN = {INPUT:1, TEXTAREA:1, SELECT:1, OPTION:1, SCRIPT:1, STYLE:1, CODE:1, PRE:1};
+  // Wel: "2026-07-28". Niet: "2026-07-28T09:12" (tijdstempel) en niet als er
+  // meteen een cijfer of streepje op volgt (versienummers, referenties).
+  var PATROON = /\b(\d{4})-(\d{2})-(\d{2})\b(?![T:\d-])/g;
+
+  function magNiet(node){
+    for (var el = node.parentNode; el && el.nodeType === 1; el = el.parentNode){
+      if (OVERSLAAN[el.tagName]) return true;
+      if (el.classList && el.classList.contains("iso-datum")) return true;
+    }
+    return false;
+  }
+  function loop(wortel){
+    if (!wortel || wortel.nodeType !== 1) return;
+    var w = document.createTreeWalker(wortel, NodeFilter.SHOW_TEXT, null);
+    var raak = [], n;
+    while ((n = w.nextNode())){
+      if (n.nodeValue.indexOf("-") < 0) continue;
+      PATROON.lastIndex = 0;
+      if (PATROON.test(n.nodeValue) && !magNiet(n)) raak.push(n);
+    }
+    for (var i = 0; i < raak.length; i++){
+      raak[i].nodeValue = raak[i].nodeValue.replace(PATROON, function(_, j, m, d){ return d + "." + m + "." + j; });
+    }
+  }
+
+  var gepland = false;
+  function plan(){
+    if (gepland) return;
+    gepland = true;
+    requestAnimationFrame(function(){ gepland = false; loop(document.body); });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", plan);
+  else plan();
+  new MutationObserver(plan).observe(document.documentElement, {childList:true, subtree:true, characterData:true});
 })();
 </script>
 

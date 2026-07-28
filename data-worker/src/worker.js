@@ -1460,6 +1460,11 @@ async function handleLog(request, env) {
     // afgekapt, waardoor niet meer te lezen was wát iemand had ingevuld.
     detail: String(b.detail || "").slice(0, 1200),
     rol: String(b.rol || "").slice(0, 30) || null,   // rechten op moment van handelen
+    // Apparaat: op wélke computer gebeurde dit. Zonder dit was niet na te gaan
+    // waar een onverwachte inlog vandaan kwam.
+    computer: String(b.computer || "").slice(0, 60) || null,
+    platform: String(b.platform || "").slice(0, 40) || null,
+    versie: String(b.versie || "").slice(0, 20) || null,
     wijziging: !INZAGE,
   };
   const bucket = "activiteit-" + ev.ts.slice(0, 7);   // YYYY-MM
