@@ -1103,6 +1103,19 @@ const SPA_FACTORIES = [
   "ponfit spa", "sunrans sanitary", "huantong industry", "kasdaly pool spa", "gaoming yuehua",
 ];
 const isSpaFactory = (name) => { const s = String(name || "").toLowerCase(); return SPA_FACTORIES.some(f => s.includes(f)); };
+// Containernummer uit het Logic4-veld 'Uw referentie' (o.Reference). Chantal zet
+// daar bij een dealer-container "container 3376" in; soms staat er alleen het
+// nummer. Alles wat daar niet op lijkt laten we staan als vrije referentie.
+function dpContainerNr(ref) {
+  const s = String(ref || "").trim();
+  if (!s) return null;
+  // Minimaal 3 cijfers: "Barcelona 25 - Container 2" is een volgnummer, geen
+  // containernummer. Die referentie tonen we ongewijzigd in de tegel.
+  let m = s.match(/container[^0-9]*([0-9]{3,6}(?:[-&/][0-9]+)*)/i);
+  if (m) return m[1];
+  m = s.match(/^([0-9]{3,6}(?:[-&/][0-9]+)*)$/);
+  return m ? m[1] : null;
+}
 
 // Open inkooporders (IKO's) bij de 9 fabrieken = wat er nu 'in productie' is.
 // Per model de aantallen (nog te leveren) + verwachte leverdatum. Bucket
@@ -1196,12 +1209,17 @@ async function dpRefreshReservations(env) {
         for (const gkey of Object.keys(groups)) {
           const gr = groups[gkey];
           const usa = gr.wh === WH_TEXAS;
-          const container = gr.wh === WH_DEALER || gr.qty > 2;   // >2 stuks of Dealer magazijn = containerverdenking
+          // Containerorder = UITSLUITEND magazijn 'Dealer magazijn'. NIET op aantal
+          // filteren: een gewone partnerorder van 4 spa's is geen container en hoort
+          // gewoon bij de partner-reserveringen (Chantal, 28-07-2026).
+          const container = gr.wh === WH_DEALER;
           const line = {
             ordernr: o.Id, debtorId: o.DebtorId, naam, type,
             model: gr.model, kleur: gr.kleur || null, qty: gr.qty,
             warehouseId: gr.wh, magazijn: WH_NAMES[gr.wh] || ("magazijn " + gr.wh),
             container, regio: usa ? "USA" : "NL",
+            referentie: String(o.Reference || "").trim() || null,
+            containerNr: dpContainerNr(o.Reference),
             datum: String(o.CreationDate).slice(0, 10), statusId: st, status: statusName[st] || String(st),
             betaald, betaaldPct, aanbetaling: Math.round(aanbetaling), totaal: Math.round(totaal),
           };

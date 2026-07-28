@@ -26,8 +26,10 @@ const dry = process.argv.includes("--dry");
 // SKT-prefix → model
 const html = readFileSync(join(ROOT, "voorraad.html"), "utf8");
 const pairs = [...html.match(/const SPA_CODES = \[(.*?)\];/s)[1].matchAll(/\["([^"]+)","([^"]+)"\]/g)]
-  .map(m => [m[1], m[2]]).sort((a, b) => b[0].length - a[0].length);
-const norm = c => String(c).toUpperCase().replace(/\s+/g, "");
+  .map(m => [m[1], m[2]]).sort((a, b) => b[0].replace(/[^A-Za-z0-9]/g, "").length - a[0].replace(/[^A-Za-z0-9]/g, "").length);
+// Zelfde normalisatie als voorraad.html: streepjes/spaties eruit, want de fabriek
+// schrijft "SKT888G-1" waar onze codelijst "SKT888-G1" heeft staan.
+const norm = c => String(c).toUpperCase().replace(/[^A-Z0-9]/g, "");
 const sktToModel = code => {
   const n = norm(code);
   for (const [c, m] of pairs) if (n.indexOf(norm(c)) === 0) return m;

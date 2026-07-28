@@ -234,6 +234,10 @@
     <div class="card">
       <h3>Binnenkomende schepen</h3>
       <p class="lead" style="font-size:12px;margin-bottom:8px">Klik een schip open om te zien welke spa's aan boord zijn. De trackingreferentie + ETA komen uit de tab Schepen.</p>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:0;margin-bottom:10px">
+        <input id="ovShipSearch" placeholder="zoek op spa-model, schip, referentie of ordernummer…" style="min-width:320px;padding:8px">
+        <span id="ovShipCount" style="font-size:12px;color:var(--muted)"></span>
+      </div>
       <div class="tablewrap"><table class="grid">
         <thead><tr><th>Schip / reis</th><th>Trackingreferentie</th><th>ETA</th><th>Spa's aan boord</th></tr></thead>
         <tbody id="ovShips"></tbody>
@@ -286,7 +290,7 @@
   <div id="tab-partnercont" class="hidden">
     <div class="card">
       <h3>Partner containers — rechtstreeks naar de dealer</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Orders op <b>Dealer magazijn</b>: containers die rechtstreeks naar de partner gaan en dus niet uit de Fonteyn-voorraad komen. Daarom staan ze <b>niet</b> in Overzicht of Reserveringen.</p>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Uitsluitend orders op magazijn <b>Dealer magazijn</b>: containers die rechtstreeks naar de partner gaan en dus niet uit de Fonteyn-voorraad komen. Daarom staan ze <b>niet</b> in Overzicht of Reserveringen. Een gewone partnerorder met meerdere spa's is géén container en staat onder <b>Partner</b>. Klik op het <b>ordernummer</b> voor de volledige inhoud van de container. Het containernummer komt uit <b>Uw referentie</b> in Logic4 (bijvoorbeeld "container 3376").</p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="pcSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
         <span id="pcCount" style="font-size:12px;color:var(--muted)"></span>
@@ -495,6 +499,7 @@ const SPA_CODES = [
   ["SKT329EA","Relax"],
   ["SKT335HA","Renew"],
   ["SKT888DA","Bliss"],
+  ["SKT888D","Bliss"],   // fabriek schrijft de Bliss soms zonder de A (bevestigd door Chantal, 28-07-2026)
   ["SKT329FA","Rewind"],
   ["SKT888K1","Sensation"],
   ["SKT338A3","Bright"],
@@ -543,13 +548,22 @@ const SPA_CODES = [
   ["SKT888S","Indulgence"],
   ["SKT888R","Lagoon"],
 ];
-function normCode(c){ return String(c==null?"":c).toUpperCase().replace(/\s+/g,""); }
+// Alles wat geen letter of cijfer is gaat eruit. De fabrieken schrijven dezelfde
+// code namelijk verschillend: wij hebben "SKT888-G1" in de codelijst staan, de
+// fabriek zet het streepje ergens anders ("SKT888G-1") of laat het weg
+// ("SKT888G1"). Zonder deze normalisatie viel "SKT888G-1" (Mallorca Diamond)
+// terug op de kortere prefix "SKT888G" en werd het Mallorca Luxury genoemd.
+function normCode(c){ return String(c==null?"":c).toUpperCase().replace(/[^A-Z0-9]/g,""); }
+// Langste code eerst, zodat een specifiekere code altijd wint van een kortere
+// die er toevallig het begin van is (SKT888G1 vóór SKT888G, SKT339G13 vóór
+// SKT339G1). De volgorde in SPA_CODES doet er daardoor niet meer toe.
+const SPA_CODES_LANG = SPA_CODES.slice().sort((a,b)=>normCode(b[0]).length-normCode(a[0]).length);
 // Geeft modelnaam als de productcode een spa is (begint met SKT), anders null.
 function spaModel(code){
   const n = normCode(code);
   if (n.indexOf("SKT") !== 0) return null;
-  for (let i=0;i<SPA_CODES.length;i++){
-    if (n.indexOf(normCode(SPA_CODES[i][0])) === 0) return SPA_CODES[i][1];
+  for (let i=0;i<SPA_CODES_LANG.length;i++){
+    if (n.indexOf(normCode(SPA_CODES_LANG[i][0])) === 0) return SPA_CODES_LANG[i][1];
   }
   return "(onbekend SKT-model)";
 }
@@ -604,12 +618,11 @@ const SPA_STATUSSEN = [STATUS_VERKOOPORDER, STATUS_30_AANBETAALD];
 /* ====== Sessie + toegang ====== */
 const SESSION_KEY="fp.session", EMAIL_KEY="fp.email", HELPER_BASE="";
 function getSession(){ return localStorage.getItem(SESSION_KEY)||""; }
-// Twee niveaus (Chantal, 27 jul):
+// Drie niveaus:
 //  BEHEER   = alles zien én wijzigen (prioriteiten, uploads, verwijderen).
+//  PLANNING = afdeling Spa planning: álle tabbladen zien, niets wijzigen.
 //  ADVISEUR = ALLEEN de tabs Particulier / Partner / Partner containers, en
 //             uitsluitend lezen/zoeken — geen enkele aanpassing.
-// LET OP: 'spa-service' (Gerwin, Kevin, Bart, …) moet hier nog bij; Gerrit
-// vult die namen later aan — voeg ze toe aan BEHEER.
 const BEHEER = new Set([
   "dolf@fonteyn.nl","fonteyn.dolf","dolf",
   "arno@fonteyn.nl","fonteyn.arno","arno",
@@ -618,6 +631,14 @@ const BEHEER = new Set([
   "gerrit@fonteyn.nl","fonteyn.gerrit","gerrit",
   "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot",
 ]);
+// Afdeling Spa planning (Gerrit, 28 jul) — alleen-lezen, wél het hele beeld:
+// zij plannen en moeten dus voorraad, schepen en prioriteiten kunnen zien.
+const PLANNING = new Set([
+  "gerwin@fonteyn.nl","fonteyn.gerwin","gerwin",
+  "kevin@fonteyn.nl","fonteyn.kevin","kevin",
+  "bertjan@fonteyn.nl","fonteyn.bertjan","bertjan",
+  "bart@fonteyn.nl","fonteyn.bart","bart",
+]);
 // Spa-adviseurs — alleen-lezen. Namen door Chantal genoemd; aanvullen zodra
 // de volledige lijst van de spa-afdeling bekend is.
 const ADVISEURS = new Set([
@@ -625,7 +646,7 @@ const ADVISEURS = new Set([
   "dali@fonteyn.nl","fonteyn.dali","dali",
   "ahmed@fonteyn.nl","fonteyn.ahmed","ahmed",
 ]);
-const ALLOWED = new Set([...BEHEER,...ADVISEURS]);
+const ALLOWED = new Set([...BEHEER,...PLANNING,...ADVISEURS]);
 let MAG_WIJZIGEN = false;   // door boot() gezet; adviseurs = false
 (function boot(){
   if (!getSession()){ location.href="dashboard.html"; return; }
@@ -639,11 +660,52 @@ let MAG_WIJZIGEN = false;   // door boot() gezet; adviseurs = false
     throw new Error("geen toegang");
   }
   MAG_WIJZIGEN = BEHEER.has(email);
+  const isPlanning = PLANNING.has(email);
   // Rol meesturen naar het activiteitenlogboek: zo is bij élke actie te zien
   // met welke rechten iemand handelde.
-  window.fpRol = MAG_WIJZIGEN ? "beheer" : "adviseur (alleen-lezen)";
-  if (!MAG_WIJZIGEN) beperkTotKlantTabs();
+  window.fpRol = MAG_WIJZIGEN ? "beheer" : (isPlanning ? "spa planning (alleen-lezen)" : "adviseur (alleen-lezen)");
+  if (isPlanning) alleenLezen();
+  else if (!MAG_WIJZIGEN) beperkTotKlantTabs();
 })();
+// Spa planning: alles zien, niets wijzigen. De harde grens ligt op het netwerk —
+// elke PUT naar de data-store en het reserveren voor een dealer wordt geweigerd,
+// ook als er ergens toch nog een knop blijkt te staan. Wat daaronder gebeurt is
+// alleen om te voorkomen dat iemand op een knop drukt die niets doet.
+function alleenLezen(){
+  const echteFetch=window.fetch.bind(window);
+  window.fetch=function(url,opts){
+    const methode=String((opts&&opts.method)||"GET").toUpperCase();
+    const adres=String((url&&url.url)||url||"");
+    if(methode==="PUT"||(methode==="POST"&&/\/dealers\/admin\//.test(adres))){
+      try{ setStatus("bad","Je hebt alleen-lezen toegang tot Voorraadbeheer — wijzigen doen Chantal, Arno en Manon."); }catch(e){}
+      return Promise.resolve(new Response('{"ok":false,"error":"alleen-lezen"}',
+        {status:403,headers:{"Content-Type":"application/json"}}));
+    }
+    return echteFetch(url,opts);
+  };
+  // Wijzig-onderdelen verbergen: uploads, verwijderknoppen, prioriteit-pijlen.
+  const verberg=function(){
+    ["ciUploadCard","pcUploadCard"].forEach(function(id){
+      const el=document.getElementById(id); if(el) el.style.display="none";
+    });
+    document.querySelectorAll("input[type=file]").forEach(function(el){
+      const kaart=el.closest(".card"); if(kaart) kaart.style.display="none";
+    });
+    document.querySelectorAll(".rmv, .prioUp, .prioDown, .delShip, .delcont, .btn.solid")
+      .forEach(function(b){ if(!/zoek|ophalen|ververs/i.test(b.textContent||"")) b.style.display="none"; });
+    document.querySelectorAll("input[type=date], .shipRef, .shipEta")
+      .forEach(function(el){ el.readOnly=true; el.disabled=true; });
+  };
+  verberg();
+  // De tabellen worden telkens opnieuw opgebouwd; na elke render weer opruimen.
+  const obs=new MutationObserver(function(){ verberg(); });
+  obs.observe(document.body,{childList:true,subtree:true});
+  const note=document.getElementById("adviseurNote");
+  if(note){
+    note.innerHTML="Je kijkt mee vanuit <b>Spa planning</b>: je ziet het volledige voorraadbeeld — reserveringen, schepen en prioriteiten — maar kunt niets wijzigen. Aanpassen doen Chantal, Arno en Manon.";
+    note.classList.remove("hidden");
+  }
+}
 // Adviseur-modus: alleen de drie klantsoort-tabs, puur lezen.
 function beperkTotKlantTabs(){
   const mag=new Set(["particulier","partner","partnercont"]);
@@ -951,7 +1013,7 @@ function renderOverview(table, body, countEl, list){
   const f=readFilters(table);
   const rows=list.filter(r=>matchFilters(r,f)).sort((a,b)=>String(b.datum||"").localeCompare(String(a.datum||"")));
   body.innerHTML = rows.map(r=>"<tr>"+
-    "<td class='code'>"+esc(r.ordernr)+"</td><td>"+esc(r.datum)+"</td><td>"+esc(r.naam)+"</td>"+
+    "<td class='code'>"+esc(r.ordernr)+"</td><td>"+esc(datumNL(r.datum))+"</td><td>"+esc(r.naam)+"</td>"+
     "<td>"+esc(r.adviseur)+"</td><td><b>"+esc(r.model)+"</b></td><td class='code'>"+esc(r.code)+"</td>"+
     "<td>"+esc(r.omschrijving)+"</td><td class='num'>"+esc(r.aantal)+"</td>"+
     "<td><button class='rmv' data-id='"+esc(r.lineId)+"' title='Verwijderen'>✕</button></td>"+
@@ -992,6 +1054,9 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   // De drie klantsoort-tabs delen de reserveringsdata; die één keer laden.
   if (tab==="particulier"||tab==="partner"||tab==="partnercont"){
     if(!Object.keys(resvData.byModel||{}).length) loadReserveringen(); else renderSoortTabs();
+    // Partner containers toont de ETA van het schip waar de container op zit;
+    // daarvoor moeten de commercial invoices geladen zijn.
+    if(tab==="partnercont"&&!(shipsData.ships||[]).length) loadSchepen().then(renderSoortTabs).catch(function(){});
   }
 }));
 
@@ -1193,37 +1258,67 @@ function renderBacklog(){
     const m=row.dataset.m; ovBacklogOpen[m]=!ovBacklogOpen[m]; renderBacklog();
   }));
 }
+// Zoekt in scheepsnaam, referentie, de modellen aan boord én in de klantnaam/
+// het ordernummer van de speciale orders op die commercial invoice.
+function ovShipMatch(s,q){
+  if(!q) return true;
+  const hooi=[s.vessel,s.ref,s.trackRef,s.file].concat(Object.keys(s.models||{}))
+    .concat((s.specials||[]).map(x=>[x.klant,x.ordernr,x.tekst].join(" ")));
+  return hooi.join(" ").toLowerCase().includes(q);
+}
 function renderOvShips(){
-  const ships=ovShipsCache;
+  const q=((document.getElementById("ovShipSearch")||{}).value||"").trim().toLowerCase();
+  const alle=ovShipsCache;
+  const ships=alle.filter(s=>ovShipMatch(s,q));
   const body=document.getElementById("ovShips");
-  if(!ships.length){ body.innerHTML="<tr><td colspan='4' style='color:var(--muted)'>Geen schepen. Upload commercial invoices bij Schepen.</td></tr>"; return; }
+  const tel=document.getElementById("ovShipCount");
+  if(tel) tel.textContent=q?(ships.length+" van "+alle.length+" schepen"):(alle.length+" schepen");
+  if(!alle.length){ body.innerHTML="<tr><td colspan='4' style='color:var(--muted)'>Geen schepen. Upload commercial invoices bij Schepen.</td></tr>"; return; }
+  if(!ships.length){ body.innerHTML="<tr><td colspan='4' style='color:var(--muted)'>Niets gevonden voor '"+esc(q)+"'.</td></tr>"; return; }
   let html="";
-  ships.forEach((s,i)=>{
+  ships.forEach(s=>{
     const n=Object.values(s.models||{}).reduce((a,b)=>a+b,0);
     const ref=(s.trackRef!=null?s.trackRef:(s.ref||""));
-    const open=!!ovShipOpen[i];
-    html+="<tr class='ovShipRow' data-i='"+i+"' style='cursor:pointer'>"+
+    // Sleutel op de referentie/het bestand, NIET op de rij-index: bij zoeken
+    // verschuiven de indexen en zou de verkeerde container openklappen.
+    const key=String(s.ref||s.trackRef||s.file||s.vessel||"");
+    const open=!!ovShipOpen[key] || (!!q && ships.length<=3);
+    html+="<tr class='ovShipRow' data-k='"+esc(key)+"' style='cursor:pointer'>"+
       "<td>"+(open?"▾ ":"▸ ")+"<b>"+esc(s.vessel||"—")+"</b></td>"+
       "<td style='font-size:12px'>"+esc(ref||"—")+"</td>"+
       "<td>"+(s.eta?esc(datumNL(s.eta)):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td>"+
       "<td>"+n+" spa's</td></tr>";
     if(open){
       const mc=s.modelColors||{};
-      const items=Object.entries(s.models||{}).sort((a,b)=>b[1]-a[1]).map(([m,q])=>{
+      const items=Object.entries(s.models||{}).sort((a,b)=>b[1]-a[1]).map(([m,aantal])=>{
         const cols=mc[m]?Object.entries(mc[m]).sort((a,b)=>b[1]-a[1])
-          .map(([k,n])=>"<span class='pill' style='background:#eef2ff;color:#3730a3;margin:1px 3px 0 0'>"+esc(k)+" <b>"+n+"</b></span>").join(""):"";
-        return "<li style='margin-bottom:4px'>"+esc(m)+" — <b>"+q+"×</b>"+(cols?"<br>"+cols:"")+"</li>";
+          .map(([k,n2])=>"<span class='pill' style='background:#eef2ff;color:#3730a3;margin:1px 3px 0 0'>"+esc(k)+" <b>"+n2+"</b></span>").join(""):"";
+        return "<li style='margin-bottom:4px'>"+esc(m)+" — <b>"+aantal+"×</b>"+(cols?"<br>"+cols:"")+"</li>";
       }).join("")||"<li style='color:var(--muted)'>(geen spa's herkend)</li>";
       const heeftKleur=Object.keys(mc).length>0;
       html+="<tr><td colspan='4' style='background:#fafafa;padding:8px 14px'><ul style='margin:0;list-style:none;padding:0;font-size:13px'>"+items+"</ul>"+
+        ovSpecialsHtml(s.specials)+
         (heeftKleur?"":"<div style='font-size:11px;color:var(--muted);margin-top:4px'>Kleuren verschijnen zodra deze commercial invoice opnieuw is geüpload (in de tab Schepen).</div>")+"</td></tr>";
     }
   });
   body.innerHTML=html;
   body.querySelectorAll(".ovShipRow").forEach(row=>row.addEventListener("click",()=>{
-    const i=row.dataset.i; ovShipOpen[i]=!ovShipOpen[i]; renderOvShips();
+    const k=row.dataset.k; ovShipOpen[k]=!ovShipOpen[k]; renderOvShips();
   }));
 }
+// Speciale orders op deze commercial invoice: de fabriek zet er de klantnaam +
+// ons Logic4-ordernummer bij, zodat duidelijk is voor wie die spa gebouwd is.
+function ovSpecialsHtml(specials){
+  const lijst=(specials||[]).filter(x=>x&&(x.ordernr||x.klant));
+  if(!lijst.length) return "";
+  return "<div style='margin-top:10px;border-top:1px solid #e5e7eb;padding-top:8px'>"+
+    "<div style='font-size:12px;font-weight:600;margin-bottom:4px'>Speciaal besteld voor een klant ("+lijst.length+")</div>"+
+    "<table class='grid' style='margin:0;font-size:12px'><thead><tr><th>Order</th><th>Klant</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Bijzonderheden</th></tr></thead><tbody>"+
+    lijst.map(x=>"<tr><td>"+esc(x.ordernr||"—")+"</td><td>"+esc(x.klant||"—")+"</td><td>"+esc(x.model||"")+"</td>"+
+      "<td>"+esc(x.kleur||"—")+"</td><td>"+(x.qty||"")+"</td><td style='color:var(--muted)'>"+esc(x.notities||"—")+"</td></tr>").join("")+
+    "</tbody></table></div>";
+}
+document.getElementById("ovShipSearch")&&document.getElementById("ovShipSearch").addEventListener("input",renderOvShips);
 function kpi(n,l,color,small){ return "<div class='kpi' style='border-top-color:"+color+"'><div class='n"+(small?" sm":"")+"' style='color:"+color+"'>"+n+"</div><div class='l'>"+l+"</div></div>"; }
 
 // ===================== Reserveringen (live ledger) =====================
@@ -1296,10 +1391,10 @@ function betaalBadge(r){
 }
 function resvRows(list){
   return list.map((r,i)=>{
-    // Oranje rij = containerverdenking (>2 stuks of Dealer magazijn)
+    // Oranje rij = containerorder (magazijn Dealer magazijn)
     const rowStyle=r.container?"background:#fff7ed;border-left:3px solid #c2410c":"";
-    const cont=r.container?" <span class='pill' style='background:#ffedd5;color:#c2410c;font-size:10px'>"+(r.warehouseId===27?"dealer mag.":"container?")+"</span>":"";
-    return "<tr style='"+rowStyle+"'><td>"+(i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+cont+"</td><td>"+resvTypeBadge(r.type)+"</td><td>"+kleurCel(r.kleur)+"</td><td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td><td style='font-size:12px'>"+esc(r.datum)+"</td><td>"+betaalBadge(r)+"</td><td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td></tr>";
+    const cont=r.container?" <span class='pill' style='background:#ffedd5;color:#c2410c;font-size:10px'>dealer mag.</span>":"";
+    return "<tr style='"+rowStyle+"'><td>"+(i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+cont+"</td><td>"+resvTypeBadge(r.type)+"</td><td>"+kleurCel(r.kleur)+"</td><td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td><td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td><td>"+betaalBadge(r)+"</td><td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td></tr>";
   }).join("");
 }
 document.getElementById("resvSearch")&&document.getElementById("resvSearch").addEventListener("input",renderReserveringen);
@@ -1360,7 +1455,80 @@ function renderResvSoort(soort,zoekId,lijstId,telId){
 function renderSoortTabs(){
   renderResvSoort("particulier","partSearch","partList","partCount");
   renderResvSoort("partner","ptnSearch","ptnList","ptnCount");
-  renderResvSoort("partnercont","pcSearch","pcList","pcCount");
+  renderPartnerContainers();
+}
+
+// ===== Partner containers (Chantal, 28 jul) ================================
+// Eén rij per container-order i.p.v. per spa-regel: ordernummer, container,
+// klant, datum, betaling, ETA. Klik op het ordernummer → de volledige inhoud
+// van de container. Het containernummer komt uit 'Uw referentie' in Logic4
+// ("container 3376"); daarmee wordt straks ook de commercial invoice gekoppeld.
+let pcOpen={};
+function pcOrders(){
+  const per={};
+  for(const r of resvAlleRegels().filter(x=>x.container)){
+    const k=String(r.ordernr);
+    const o=per[k]||(per[k]={ordernr:r.ordernr,naam:r.naam,datum:r.datum,betaald:r.betaald,
+      betaaldPct:r.betaaldPct,containerNr:r.containerNr||null,referentie:r.referentie||null,regels:[],qty:0});
+    o.regels.push(r); o.qty+=Number(r.qty)||0;
+    if(!o.containerNr&&r.containerNr) o.containerNr=r.containerNr;
+    if(!o.referentie&&r.referentie) o.referentie=r.referentie;
+  }
+  return Object.values(per).sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
+}
+// ETA = die van het schip waar dit containernummer op voorkomt (commercial
+// invoice). Nog geen match? Dan is de CI van die container nog niet geüpload.
+function pcEta(o){
+  const nr=String(o.containerNr||"").trim();
+  if(!nr) return null;
+  const hit=(shipsData.ships||[]).find(s=>[s.ref,s.trackRef,s.file,s.vessel].join(" ").includes(nr));
+  return hit&&hit.eta?hit.eta:null;
+}
+function pcMatch(o,q){
+  if(!q) return true;
+  return [o.ordernr,o.containerNr,o.referentie,o.naam].concat(o.regels.map(r=>r.model))
+    .join(" ").toLowerCase().includes(q);
+}
+function renderPartnerContainers(){
+  const box=document.getElementById("pcList"); if(!box) return;
+  const inp=document.getElementById("pcSearch");
+  const q=((inp&&inp.value)||"").trim().toLowerCase();
+  const orders=pcOrders().filter(o=>pcMatch(o,q));
+  const tel=document.getElementById("pcCount");
+  const stuks=orders.reduce((n,o)=>n+o.qty,0);
+  if(tel) tel.textContent=orders.length+" container-order(s) · "+stuks+" spa's"+(resvData.updated?(" · ververst "+new Date(resvData.updated).toLocaleString("nl-NL")):"");
+  if(!orders.length){ box.innerHTML="<p class='lead'>Geen container-orders gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
+  let html="<div class='tablewrap'><table class='grid'><thead><tr>"+
+    "<th>Ordernummer</th><th>Container</th><th>Klant</th><th>Datum</th><th>Betaling</th><th>ETA</th></tr></thead><tbody>";
+  for(const o of orders){
+    const k=String(o.ordernr);
+    const open=!!pcOpen[k]||(!!q&&orders.length<=3);
+    const eta=pcEta(o);
+    html+="<tr class='pcRow' data-k='"+esc(k)+"' style='cursor:pointer'>"+
+      "<td><b style='color:var(--brand,#0f766e);text-decoration:underline'>"+(open?"▾ ":"▸ ")+esc(o.ordernr)+"</b></td>"+
+      "<td>"+(o.containerNr?("<b>"+esc(o.containerNr)+"</b>")
+        :(o.referentie?"<span style='font-size:12px;color:var(--muted)'>"+esc(o.referentie)+"</span>"
+                      :"<span style='color:var(--warn);font-size:12px'>nog invullen in Logic4</span>"))+"</td>"+
+      "<td>"+esc(o.naam)+"</td>"+
+      "<td style='font-size:12px'>"+esc(datumNL(o.datum))+"</td>"+
+      "<td>"+betaalBadge(o)+"</td>"+
+      "<td style='font-size:12px'>"+(eta?esc(datumNL(eta)):"<span style='color:var(--muted)'>—</span>")+"</td></tr>";
+    if(open){
+      const regels=o.regels.slice().sort((a,b)=>String(a.model).localeCompare(String(b.model)));
+      html+="<tr><td colspan='6' style='background:#fafafa;padding:8px 14px'>"+
+        "<div style='font-size:12px;font-weight:600;margin-bottom:4px'>Inhoud van deze container — "+o.qty+" spa's</div>"+
+        "<table class='grid' style='margin:0;font-size:12px'><thead><tr><th>Aantal</th><th>Spa</th><th>Kleur</th></tr></thead><tbody>"+
+        regels.map(r=>"<tr><td><b>"+r.qty+"×</b></td><td>"+esc(r.model)+"</td><td>"+kleurCel(r.kleur)+"</td></tr>").join("")+
+        "</tbody></table>"+
+        (o.referentie?"<div style='font-size:11px;color:var(--muted);margin-top:5px'>Uw referentie in Logic4: "+esc(o.referentie)+"</div>":"")+
+        (o.containerNr&&!eta?"<div style='font-size:11px;color:var(--warn);margin-top:4px'>Nog geen ETA — upload de commercial invoice van container "+esc(o.containerNr)+".</div>":"")+
+        "</td></tr>";
+    }
+  }
+  box.innerHTML=html+"</tbody></table></div>";
+  box.querySelectorAll(".pcRow").forEach(row=>row.addEventListener("click",()=>{
+    const k=row.dataset.k; pcOpen[k]=!pcOpen[k]; renderPartnerContainers();
+  }));
 }
 ["partSearch","ptnSearch","pcSearch"].forEach(id=>{
   const el=document.getElementById(id);
@@ -1505,11 +1673,22 @@ function renderSchepen(){
     shipsData.ships.splice(Number(b.dataset.i),1);
     try{ await saveSchepen(); renderSchepen(); }catch(e){ setStatus("bad",e.message); }
   }));
-  // Niet-herkende SKT-codes tonen
+  // Niet-herkende SKT-codes tonen. Codes die inmiddels wél in de codelijst staan
+  // (bv. SKT888D → Bliss) worden apart getoond: die lading zit nog niet in de
+  // aantallen van het schip, dus de commercial invoice moet één keer opnieuw
+  // geüpload worden. Daarna verdwijnt de melding vanzelf.
   const un=shipsData.unmapped||{};
-  const keys=Object.keys(un);
-  document.getElementById("ciUnmapped").innerHTML=keys.length
-    ? "<div class='status-msg warn'>Niet-herkende fabriekscodes (welk model?): "+keys.map(k=>esc(k)+" ("+un[k]+"×)").join(", ")+"</div>" : "";
+  const nuBekend=[], echtOnbekend=[];
+  for(const k of Object.keys(un)){
+    const m=spaModel(k);
+    if(m&&m!=="(onbekend SKT-model)") nuBekend.push([k,m]); else echtOnbekend.push(k);
+  }
+  document.getElementById("ciUnmapped").innerHTML=
+    (nuBekend.length
+      ? "<div class='status-msg ok'>Inmiddels ingesteld: "+nuBekend.map(p=>esc(p[0])+" = <b>"+esc(p[1])+"</b> ("+un[p[0]]+"×)").join(", ")+
+        ". Upload die commercial invoice nog één keer opnieuw, dan tellen deze spa's mee in de lading.</div>" : "")+
+    (echtOnbekend.length
+      ? "<div class='status-msg warn'>Niet-herkende fabriekscodes (welk model?): "+echtOnbekend.map(k=>esc(k)+" ("+un[k]+"×)").join(", ")+"</div>" : "");
 }
 
 // Parse één commercial-invoice-werkboek → {ref, vessel, containers, models{model:qty}, unmapped{code:qty}}
@@ -1522,21 +1701,53 @@ function parseCI(wb){
     if(!ref&&s.startsWith("RZ")) ref=s.trim();
     if(!vessel&&/\s\/\s\S*\d/.test(s)&&!/FOB|ROTTERDAM,|YANTIAN/i.test(s)) vessel=s.trim();
   }
-  const models={},modelColors={},unmapped={};
+  const models={},modelColors={},unmapped={},specials=[];
   for(const r of rows){
-    const c0=String((r&&r[0])==null?"":r[0]).split("\n")[0].trim();
+    const c0raw=String((r&&r[0])==null?"":r[0]);
+    const c0=c0raw.split("\n")[0].trim();
     const m=c0.match(/^(SKT[\w.-]+)/);
     const qty=Number(r&&r[5]);
     if(!m||!isFinite(qty)||qty<=0) continue;
-    const model=spaModel(m[1]);
+    // Model bepalen op de HELE eerste regel, niet alleen op het eerste woord.
+    // De fabriek plakt de variant er los achteraan ("SKT339C ECO" = Aquatic 1
+    // ECO, een ander model dan de gewone Aquatic 1). Doordat normCode spaties
+    // en streepjes weghaalt en de langste code wint, blijft "SKT888AA  Bombas
+    // 3510471" gewoon op SKT888AA uitkomen.
+    const model=spaModel(c0)||spaModel(m[1]);
     if(!model||model==="(onbekend SKT-model)"){ unmapped[m[1]]=(unmapped[m[1]]||0)+qty; continue; }
     models[model]=(models[model]||0)+qty;
+    const bijz=ciBijzonderheid(c0raw,model);
+    if(bijz) specials.push(Object.assign({model,qty,kleur:String((r&&r[1])==null?"":r[1]).trim()||null},bijz));
     // Kleur = kolom 1 (COLOUR) op de commercial invoice ("Sterling Silver", "Mystic Mountain"…)
     const kleur=String((r&&r[1])==null?"":r[1]).replace(/\bjazzi\s*colou?r\b/ig,"").replace(/[,\s]+$/,"").replace(/\s+/g," ").trim()||"(geen kleur)";
     (modelColors[model]=modelColors[model]||{})[kleur]=(modelColors[model][kleur]||0)+qty;
   }
   const containers=wb.SheetNames.filter(n=>n!=="COMMERCIAL INVOICE").length;
-  return {ref,vessel,containers,models,modelColors,unmapped,total:Object.values(models).reduce((a,b)=>a+b,0)};
+  return {ref,vessel,containers,models,modelColors,unmapped,specials,total:Object.values(models).reduce((a,b)=>a+b,0)};
+}
+
+// Speciale orders (Chantal, 28 jul). Bestelt een klant een spa met een afwijking,
+// dan zet de fabriek achter de SKT-code de klantnaam + ons Logic4-ordernummer op
+// de commercial invoice — soms op een volgende regel, soms achter een rij spaties.
+// Uitvoeringsnotities ("Heat pump ready", "24jets", "without TV") staan er op
+// dezelfde manier. Alles ná de fabriekscode is dus bijzonderheid.
+function ciBijzonderheid(c0raw,model){
+  const delen=String(c0raw||"").replace(/\r/g,"").split("\n").map(s=>s.replace(/\s+/g," ").trim()).filter(Boolean);
+  if(!delen.length) return null;
+  delen[0]=delen[0].replace(/^SKT[\w.-]+\s*/i,"").trim();
+  // Een variant die al in de modelnaam zit (ECO, Deep) is geen bijzonderheid.
+  if(delen[0]) delen[0]=delen[0].replace(new RegExp("^(eco|deep)\\b","i"),m2=>
+    String(model||"").toLowerCase().includes(m2.toLowerCase())?"":m2).trim();
+  const stukken=delen.filter(Boolean);
+  const tekst=stukken.join(" · ");
+  if(!tekst) return null;
+  // Het ordernummer staat bij de klantnaam in hetzelfde stuk ("3504661 Pleijhuis");
+  // de overige stukken zijn uitvoeringsnotities.
+  const i=stukken.findIndex(s=>/\b\d{7}\b/.test(s));
+  const ordernr=i<0?null:(stukken[i].match(/\b(\d{7})\b/)||[])[1];
+  const klant=i<0?null:(stukken[i].replace(ordernr,"").replace(/\s+/g," ").trim()||null);
+  const notities=stukken.filter((s,k)=>k!==i).join(" · ")||null;
+  return {tekst,ordernr:ordernr||null,klant,notities};
 }
 
 async function handleCIUpload(files,statusId){
@@ -1550,10 +1761,15 @@ async function handleCIUpload(files,statusId){
       // Bestaand schip met dezelfde referentie? Dan vervangen (nieuwe upload wint).
       const idx=(shipsData.ships||[]).findIndex(s=>s.ref&&ship.ref&&s.ref===ship.ref);
       const eta=idx>=0?shipsData.ships[idx].eta:"";
-      const rec={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,models:ship.models,modelColors:ship.modelColors,total:ship.total,eta};
+      const rec={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,models:ship.models,modelColors:ship.modelColors,specials:ship.specials,total:ship.total,eta};
       if(idx>=0) shipsData.ships[idx]=rec; else shipsData.ships.push(rec);
       for(const [k,v] of Object.entries(ship.unmapped)) allUnmapped[k]=(allUnmapped[k]||0)+v;
       added++;
+    }
+    // Codes die inmiddels in de codelijst staan horen niet meer in de meldingen:
+    // die zijn bij deze upload gewoon aan een model toegekend.
+    for(const k of Object.keys(allUnmapped)){
+      const m=spaModel(k); if(m&&m!=="(onbekend SKT-model)") delete allUnmapped[k];
     }
     shipsData.unmapped=allUnmapped;
     await saveSchepen(); renderSchepen();
@@ -1692,7 +1908,7 @@ function renderPrio(model, dekking, halQty, shipQty){
       "<td>"+esc(r.naam)+"</td>"+
       "<td>"+badge+"</td>"+
       "<td>"+r.qty+"</td>"+
-      "<td style='font-size:12px'>"+esc(r.datum)+"</td>"+
+      "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
       "<td style='font-size:12px'>"+esc(r.status)+"</td>"+
       "<td style='white-space:nowrap'>"+
         "<button class='rmv prioUp' data-i='"+i+"' "+(i===0?"disabled":"")+">▲</button> "+
