@@ -502,6 +502,9 @@ function setSession(id, email) {
 function clearSession() {
   localStorage.removeItem(SESSION_KEY);
   localStorage.removeItem(EMAIL_KEY);
+  // Bewaarde scrollpositie hoort bij de vorige gebruiker: wie opnieuw inlogt
+  // begint bovenaan. (SCROLL_KEY staat verderop; letterlijk om die reden.)
+  try { sessionStorage.removeItem("fp.dashScroll"); } catch (e) {}
 }
 
 async function apiFetch(path, opts = {}) {
@@ -880,7 +883,45 @@ function showDashboard(email) {
   // groep mensen die het portaal beheert plus de spa-mensen die willen kijken.
   el("tilePassionPartners").classList.toggle("hidden", !PARTNERPORTAAL_KIJK.has(lc));
   verbergLegeGroepen();
+  herstelScrollpositie();
 }
+
+// ─── Terug op dezelfde plek ──────────────────────────────────
+// Klik je onderin het dashboard een tegel aan en kom je terug, dan stond je
+// weer bovenaan en moest je opnieuw naar je tegel zoeken. We onthouden daarom
+// hoe ver je gescrold was. sessionStorage: het geldt zolang de app openstaat,
+// bij een nieuwe start begin je gewoon bovenaan.
+const SCROLL_KEY = "fp.dashScroll";
+// Zelf regelen; de browser doet het hier niet betrouwbaar omdat het dashboard
+// met no-store geladen wordt en de tegels pas ná het inloggen zichtbaar worden.
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+
+function bewaarScrollpositie() {
+  // Alleen zinvol als het tegel-overzicht in beeld is (niet op het loginscherm).
+  if (el("dashView") && !el("dashView").classList.contains("hidden")) {
+    try { sessionStorage.setItem(SCROLL_KEY, String(window.scrollY || 0)); } catch (e) {}
+  }
+}
+function herstelScrollpositie() {
+  let y = 0;
+  try { y = parseInt(sessionStorage.getItem(SCROLL_KEY) || "0", 10) || 0; } catch (e) {}
+  if (y <= 0) return;
+  // Direct proberen, en daarna nog een paar keer kort achter elkaar. Vlak na
+  // het tonen van de tegels is de pagina soms nog te kort (lettertype nog niet
+  // geladen), waardoor één poging op een te lage positie blijft steken. Zodra
+  // hij op de goede plek staat, stopt het vanzelf.
+  let poging = 0;
+  const probeer = () => {
+    window.scrollTo(0, y);
+    if (++poging < 10 && Math.abs(window.scrollY - y) > 2) setTimeout(probeer, 60);
+  };
+  probeer();
+}
+// Vastleggen vlak vóór het wegnavigeren naar een tegel.
+window.addEventListener("pagehide", bewaarScrollpositie);
+document.addEventListener("click", (ev) => {
+  if (ev.target.closest && ev.target.closest("a.tile")) bewaarScrollpositie();
+}, true);
 
 // Een afdelingskop zonder zichtbare tegels heeft geen functie: die verdwijnt.
 // Zo ziet Gretha alleen 'Marketing' en niet vier lege kopjes.
