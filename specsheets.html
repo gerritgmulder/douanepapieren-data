@@ -256,7 +256,9 @@ function toon(cls,txt){const s=el("status");s.className="status-msg "+cls;s.text
     el("deny").textContent="Deze tegel is voor de marketingafdeling (Gretha).";
     return;
   }
-  window.fpRol="marketing";
+  // Geen afdeling meesturen: de afdeling hoort bij de persoon en staat in de
+  // AFDELING-lijst in activiteit.html. Anders stond iedereen die deze tegel
+  // opende (ook Fonteynbot) als "marketing" in het logboek.
   laadAlles();
 })();
 el("logoutBtn").addEventListener("click",()=>{localStorage.removeItem(SESSION_KEY);localStorage.removeItem(EMAIL_KEY);location.href="dashboard.html";});
@@ -617,9 +619,9 @@ teken(); setTimeout(zetZoom,300);
     var key=localStorage.getItem("fp.teamkey")||"";
     if(!email||!key) return;
     var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
   }catch(e){}};
-  window.fpLog("open");
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
 })();
 </script>
 

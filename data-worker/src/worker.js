@@ -1456,7 +1456,9 @@ async function handleLog(request, env) {
     user,
     tile: String(b.tile || "").slice(0, 40),
     action,
-    detail: String(b.detail || "").slice(0, 200),
+    // 1200 tekens: bij 200 werd een douanepapier-omschrijving middenin een woord
+    // afgekapt, waardoor niet meer te lezen was wát iemand had ingevuld.
+    detail: String(b.detail || "").slice(0, 1200),
     rol: String(b.rol || "").slice(0, 30) || null,   // rechten op moment van handelen
     wijziging: !INZAGE,
   };

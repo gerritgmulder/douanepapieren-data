@@ -653,6 +653,14 @@ let MAG_WIJZIGEN = false;   // door boot() gezet; adviseurs = false
   const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
   document.getElementById("userEmail").textContent = email || "—";
   if (!ALLOWED.has(email)){
+    // Logboek: dit is een geweigerde poging, geen bezoek. Zelf versturen, want
+    // hieronder wordt de body leeggegooid en draait de fpLog-helper niet meer.
+    try{
+      const k=localStorage.getItem("fp.teamkey")||"";
+      if(email&&k) fetch("https://fonteyn-data-store.g-mulder.workers.dev/log",{method:"POST",
+        headers:{"Content-Type":"application/json","X-Fonteyn-Auth":k},
+        body:JSON.stringify({user:email,tile:"voorraad",action:"open-geweigerd",detail:"geen toegang tot Voorraadbeheer"})}).catch(function(){});
+    }catch(e){}
     document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'>"+
       "<h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor de spa-afdeling (sales, logistiek en adviseurs).</p>"+
       "<p>Je bent ingelogd als <code>"+(email||"(onbekend)")+"</code>.</p>"+
@@ -2330,9 +2338,9 @@ function loadVoorraadDemo(){
     var key=localStorage.getItem("fp.teamkey")||"";
     if(!email||!key) return;
     var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
   }catch(e){}};
-  window.fpLog("open");
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
 })();
 </script>
 

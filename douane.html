@@ -2527,9 +2527,9 @@ function wrapText(s, maxWidth, size) {
     var key=localStorage.getItem("fp.teamkey")||"";
     if(!email||!key) return;
     var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
   }catch(e){}};
-  window.fpLog("open");
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
 })();
 </script>
 

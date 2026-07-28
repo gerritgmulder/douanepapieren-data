@@ -46,6 +46,10 @@
   .status-msg.bad{background:#fee2e2;color:var(--bad)}
   .hidden{display:none!important}
   .bar{height:7px;border-radius:4px;background:var(--fonteyn-lime);min-width:2px}
+  /* Lange omschrijvingen: standaard één regel met "…", hover toont de tooltip,
+     klikken vouwt de hele tekst uit. Zo blijft de tabel leesbaar én compleet. */
+  .det{display:inline-block;max-width:520px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom;cursor:zoom-in;border-bottom:1px dotted #9ca3af}
+  .det.open{max-width:none;white-space:normal;overflow:visible;cursor:zoom-out;background:#fffbeb;padding:2px 5px;border-radius:5px;border-bottom:0}
 </style>
 </head>
 <body>
@@ -71,6 +75,9 @@
       <option value="wijzigingen">Alleen wijzigingen</option>
       <option value="inzage">Alleen inloggen &amp; bekijken</option>
     </select>
+    <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="checkbox" id="toonBot"> mijn eigen acties (Fonteynbot) tonen
+    </label>
     <span id="updated" style="font-size:12px;color:var(--muted)"></span>
   </div>
 
@@ -81,7 +88,7 @@
     <div class="card">
       <h3>Per medewerker</h3>
       <div class="tablewrap"><table class="grid">
-        <thead><tr><th>Medewerker</th><th>Rechten</th><th>Ingelogd</th><th>Tegels geopend</th><th>Wijzigingen</th><th>Actieve dagen</th><th>Laatst actief</th><th>Meest gebruikt</th></tr></thead>
+        <thead><tr><th>Medewerker</th><th>Afdeling</th><th>Rechten</th><th>Ingelogd</th><th>Tegels geopend</th><th>Wijzigingen</th><th>Actieve dagen</th><th>Laatst actief</th><th>Meest gebruikt</th></tr></thead>
         <tbody id="perUser"></tbody>
       </table></div>
     </div>
@@ -89,14 +96,14 @@
       <h3>Wijzigingen — wie heeft wat aangepast <span id="wijzCount" style="color:var(--muted);font-weight:400;font-size:12px"></span></h3>
       <p class="lead" style="font-size:12px;margin:-6px 0 10px">Alleen handelingen die iets veranderd hebben. Inloggen en rondkijken staan in de lijst daaronder.</p>
       <div class="tablewrap"><table class="grid">
-        <thead><tr><th>Wanneer</th><th>Wie</th><th>Rechten</th><th>Wat is aangepast</th><th>Tegel</th></tr></thead>
+        <thead><tr><th>Wanneer</th><th>Wie</th><th>Afdeling</th><th>Rechten</th><th>Wat is aangepast</th><th>Tegel</th></tr></thead>
         <tbody id="wijzigingen"></tbody>
       </table></div>
     </div>
     <div class="card">
       <h3>Alle gebeurtenissen <span id="evCount" style="color:var(--muted);font-weight:400;font-size:12px"></span></h3>
       <div class="tablewrap"><table class="grid">
-        <thead><tr><th>Wanneer</th><th>Medewerker</th><th>Rechten</th><th>Actie</th><th>Tegel</th></tr></thead>
+        <thead><tr><th>Wanneer</th><th>Medewerker</th><th>Afdeling</th><th>Rechten</th><th>Actie</th><th>Tegel</th></tr></thead>
         <tbody id="events"></tbody>
       </table></div>
     </div>
@@ -111,11 +118,49 @@ const TEAM=(localStorage.getItem("fp.teamkey")||"");
 // Tegel-bestandsnaam → nette naam
 const TILES={dashboard:"Dashboard",voorraad:"Voorraadbeheer",amerika:"Amerika",douane:"Douanepapieren",labels:"Labels",transport:"Transport",eikensingel:"Eikensingel","order-status":"Orderstatus",stuurcijfers:"Stuurcijfers",prijslijst:"Prijslijst",bankkoppeling:"Bankkoppeling",bol:"Bol.com",retouren:"Retouren",personeel:"Personeel",koeien:"Koeien",rapportage:"Rapportage",dealerportaal:"Partnerportaal",activiteit:"Activiteitenlogboek",partneractiviteit:"Partner-activiteit","probe-logic4":"Logic4-probe"};
 function tileName(t){return TILES[t]||t||"—";}
+// Afdeling hoort bij de PERSOON, niet bij de tegel. Eerder toonde het logboek
+// de rol die de tegel meestuurde — dan stond Fonteynbot als "marketing" in de
+// lijst omdat hij de Specificatiesheets had geopend. Deze lijst is leidend.
+// Aanvullen zodra er iemand bijkomt; onbekend = "—".
+const AFDELING={
+  "fonteynbot":"admin","fonteyn.bot":"admin","fonteynbot@fonteyn.nl":"admin",
+  "gerrit":"admin","gerrit@fonteyn.nl":"admin","fonteyn.gerrit":"admin",
+  "chantal":"spa's · telefonie","chantal@fonteyn.nl":"spa's · telefonie","fonteyn.chantal":"spa's · telefonie",
+  "arno":"spa's","arno@fonteyn.nl":"spa's","fonteyn.arno":"spa's",
+  "dali":"spa's","dali@fonteyn.nl":"spa's","fonteyn.dali":"spa's",
+  "edwin":"spa's","edwin@fonteyn.nl":"spa's","fonteyn.edwin":"spa's",
+  "ahmed":"spa's","ahmed@fonteyn.nl":"spa's","fonteyn.ahmed":"spa's",
+  "gerwin":"spa planning","gerwin@fonteyn.nl":"spa planning","fonteyn.gerwin":"spa planning",
+  "kevin":"spa planning","kevin@fonteyn.nl":"spa planning","fonteyn.kevin":"spa planning",
+  "bertjan":"spa planning","bertjan@fonteyn.nl":"spa planning","fonteyn.bertjan":"spa planning",
+  "bart":"spa planning","bart@fonteyn.nl":"spa planning","fonteyn.bart":"spa planning",
+  "don":"tuinmeubelen · sauna's","don@fonteyn.nl":"tuinmeubelen · sauna's","fonteyn.don":"tuinmeubelen · sauna's",
+  "manon":"logistiek","manon@fonteyn.nl":"logistiek","fonteyn.manon":"logistiek",
+  "osman":"financiën","osman@fonteyn.nl":"financiën","fonteyn.osman":"financiën",
+  "rowan":"financiën","rowan@fonteyn.nl":"financiën","fonteyn.rowan":"financiën",
+  "rico":"financiën","rico@fonteyn.nl":"financiën","fonteyn.rico":"financiën",
+  "reinier":"financiën","reinier@fonteyn.nl":"financiën","fonteyn.reinier":"financiën",
+  "gretha":"marketing","gretha@fonteyn.nl":"marketing","fonteyn.gretha":"marketing",
+  "dolf":"directie","dolf@fonteyn.nl":"directie","fonteyn.dolf":"directie",
+};
+function afdeling(user){ return AFDELING[String(user||"").toLowerCase()]||null; }
+function afdelingPill(user){
+  const a=afdeling(user);
+  if(!a) return "<span style='color:var(--muted);font-size:11px'>onbekend</span>";
+  const admin=a==="admin";
+  return "<span class='pill' style='background:"+(admin?"#fef3c7":"#ede9fe")+";color:"+(admin?"#92400e":"#5b21b6")+"'>"+esc(a)+"</span>";
+}
+// Fonteynbot = Gerrit zelf. Zijn eigen handelingen zijn ruis in dit overzicht,
+// dus die blijven standaard verborgen (vinkje om ze terug te halen).
+function isEigenAccount(u){ return /^(fonteynbot|fonteyn\.bot|fonteynbot@fonteyn\.nl)$/.test(String(u||"").toLowerCase()); }
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function kpi(n,l){return "<div class='kpi'><div class='n'>"+n+"</div><div class='l'>"+l+"</div></div>";}
 function actionPill(a){
   if(a==="login") return "<span class='pill login'>ingelogd</span>";
   if(a==="open") return "<span class='pill'>geopend</span>";
+  // Iemand klikte/navigeerde naar een tegel waar hij geen rechten voor heeft en
+  // kreeg het toegangsscherm. Hij heeft dus niets gezien.
+  if(a==="open-geweigerd") return "<span class='pill' style='background:#fee2e2;color:#b91c1c'>geen toegang</span>";
   return "<span class='pill' style='background:#ffedd5;color:#c2410c'>"+esc(String(a).replace(/-/g," "))+"</span>";
 }
 
@@ -133,6 +178,7 @@ document.getElementById("logoutBtn").addEventListener("click",()=>{ localStorage
 document.getElementById("maand").addEventListener("change",load);
 document.getElementById("zoek").addEventListener("input",render);
 document.getElementById("soort").addEventListener("change",render);
+document.getElementById("toonBot").addEventListener("change",render);
 
 async function load(){
   const maand=document.getElementById("maand").value||new Date().toISOString().slice(0,7);
@@ -159,7 +205,9 @@ function rolPill(r){
 function render(){
   const q=(document.getElementById("zoek").value||"").trim().toLowerCase();
   const soort=document.getElementById("soort").value;
-  let evs=allEvents.filter(e=>!q
+  const toonEigen=document.getElementById("toonBot").checked;
+  let evs=allEvents.filter(e=>toonEigen||!isEigenAccount(e.user));
+  evs=evs.filter(e=>!q
     ||String(e.user).toLowerCase().includes(q)
     ||tileName(e.tile).toLowerCase().includes(q)
     ||String(e.tile).toLowerCase().includes(q)
@@ -188,25 +236,41 @@ function render(){
   document.getElementById("perUser").innerHTML=rows.map(([u,d])=>{
     const top=Object.entries(d.tiles).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([t,n])=>esc(tileName(t))+" ("+n+")").join(", ")||"—";
     const rollen=[...d.rollen].map(rolPill).join(" ")||"<span style='color:var(--muted);font-size:11px'>—</span>";
-    return "<tr><td><b>"+esc(u)+"</b></td><td>"+rollen+"</td><td>"+d.login+"</td><td>"+d.open+"</td>"+
+    return "<tr><td><b>"+esc(u)+"</b></td><td>"+afdelingPill(u)+"</td><td>"+rollen+"</td><td>"+d.login+"</td><td>"+d.open+"</td>"+
       "<td>"+(d.wijz?"<b style='color:#c2410c'>"+d.wijz+"</b>":"0")+"</td><td>"+d.days.size+"</td>"+
       "<td style='font-size:12px'>"+(d.last?new Date(d.last).toLocaleString("nl-NL"):"—")+"</td><td style='font-size:12px'>"+top+"</td></tr>";
-  }).join("")||"<tr><td colspan='8' style='color:var(--muted)'>Nog geen activiteit deze maand.</td></tr>";
+  }).join("")||"<tr><td colspan='9' style='color:var(--muted)'>Nog geen activiteit deze maand.</td></tr>";
   const sorted=evs.slice().sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
   // Wijzigingen apart — wie heeft wat aangepast
   const wijzRijen=sorted.filter(isWijziging);
   document.getElementById("wijzCount").textContent="("+wijzRijen.length+")";
   document.getElementById("wijzigingen").innerHTML=wijzRijen.slice(0,500).map(e=>
     "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td>"+
-    "<td><b>"+esc(e.user)+"</b></td><td>"+rolPill(e.rol)+"</td>"+
-    "<td>"+actionPill(e.action)+(e.detail?" <span style='color:#374151'>"+esc(e.detail)+"</span>":"")+"</td>"+
+    "<td><b>"+esc(e.user)+"</b></td><td>"+afdelingPill(e.user)+"</td><td>"+rolPill(e.rol)+"</td>"+
+    "<td>"+actionPill(e.action)+detailCel(e.detail,"#374151")+"</td>"+
     "<td style='font-size:12px'>"+esc(tileName(e.tile))+"</td></tr>"
-  ).join("")||"<tr><td colspan='5' style='color:var(--muted)'>Geen wijzigingen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
+  ).join("")||"<tr><td colspan='6' style='color:var(--muted)'>Geen wijzigingen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
   // Alle gebeurtenissen (nieuwste eerst)
   document.getElementById("evCount").textContent="("+sorted.length+")";
   document.getElementById("events").innerHTML=sorted.slice(0,1000).map(e=>
-    "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+esc(e.user)+"</td><td>"+rolPill(e.rol)+"</td><td>"+actionPill(e.action)+"</td><td>"+esc(tileName(e.tile))+(e.detail?" <span style='color:var(--muted)'>· "+esc(e.detail)+"</span>":"")+"</td></tr>"
-  ).join("")||"<tr><td colspan='5' style='color:var(--muted)'>Geen gebeurtenissen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
+    "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+esc(e.user)+"</td><td>"+afdelingPill(e.user)+"</td><td>"+rolPill(e.rol)+"</td><td>"+actionPill(e.action)+"</td><td>"+esc(tileName(e.tile))+detailCel(e.detail,"var(--muted)"," · ")+"</td></tr>"
+  ).join("")||"<tr><td colspan='6' style='color:var(--muted)'>Geen gebeurtenissen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
+  koppelDetails();
+}
+// Lange omschrijvingen (bv. welke velden Manon op een douanepapier heeft
+// ingevuld) niet afkappen: één regel tonen, de volledige tekst in de tooltip,
+// en klikken vouwt hem helemaal uit.
+function detailCel(detail,kleur,voorvoegsel){
+  const d=String(detail||""); if(!d) return "";
+  return (voorvoegsel||" ")+"<span class='det' data-vol='"+esc(d)+"' title='"+esc(d)+"' style='color:"+kleur+"'>"+esc(d)+"</span>";
+}
+function koppelDetails(){
+  document.querySelectorAll(".det").forEach(function(el){
+    el.addEventListener("click",function(ev){
+      ev.stopPropagation();
+      el.classList.toggle("open");
+    });
+  });
 }
 </script>
 <script>
@@ -218,9 +282,9 @@ function render(){
     var key=localStorage.getItem("fp.teamkey")||"";
     if(!email||!key) return;
     var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
   }catch(e){}};
-  window.fpLog("open");
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
 })();
 </script>
 

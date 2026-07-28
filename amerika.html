@@ -132,7 +132,7 @@ const ALLOWED=new Set(["chantal@fonteyn.nl","chantal","fonteyn.chantal","dolf@fo
   if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
   const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
   document.getElementById("userEmail").textContent=email||"—";
-  if(!ALLOWED.has(email)){ document.querySelector("main").innerHTML="<div class='status-msg bad'>Geen toegang tot de Amerika-tegel.</div>"; return; }
+  if(!ALLOWED.has(email)){ window.fpGeenToegang=true; document.querySelector("main").innerHTML="<div class='status-msg bad'>Geen toegang tot de Amerika-tegel.</div>"; return; }
   loadUSA();
 })();
 document.getElementById("logoutBtn").addEventListener("click",()=>{
@@ -594,9 +594,9 @@ document.getElementById("audBtn").addEventListener("click",async()=>{
     var key=localStorage.getItem("fp.teamkey")||"";
     if(!email||!key) return;
     var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
-    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker")})}).catch(function(){});
   }catch(e){}};
-  window.fpLog("open");
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
 })();
 </script>
 
