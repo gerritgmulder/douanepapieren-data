@@ -333,6 +333,18 @@
       </div>
       <div id="pcList" style="margin-top:12px"></div>
     </div>
+    <div class="card" id="ikoCard">
+      <h3>Proforma invoice → inkooporder in Logic4</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Upload de <b>proforma invoice</b> van de fabriek. Het dashboard leest hem uit en laat zien welke inkooporder hij zou aanmaken — spa's, kleuren, aantallen en artikelcodes. <b>Er wordt niets weggeschreven tot je zelf op akkoord klikt.</b></p>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:0;flex-wrap:wrap">
+        <input type="file" id="ikoFile" accept=".xlsx,.xls,.csv">
+        <input type="text" id="ikoRef" placeholder="proforma-referentie (bv. PI-3352)" style="min-width:200px;padding:8px">
+        <input type="date" id="ikoEta" title="verwachte leverdatum" style="padding:8px">
+      </div>
+      <div id="ikoStatus" class="status-msg hidden" style="margin-top:10px"></div>
+      <div id="ikoVoorstel" style="margin-top:12px"></div>
+    </div>
+
     <div class="card" id="pcUploadCard">
       <h3>Commercial invoice uploaden — ETA's ophalen</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Upload de commercial invoice van een <b>dealer-container</b> (zelfde Excel-formaat als bij Schepen). De container verschijnt daarna bij Schepen en de ETA wordt via de vervoerder opgehaald.</p>
@@ -742,7 +754,7 @@ function alleenLezen(){
   };
   // Wijzig-onderdelen verbergen: uploads, verwijderknoppen, prioriteit-pijlen.
   const verberg=function(){
-    ["ciUploadCard","pcUploadCard"].forEach(function(id){
+    ["ciUploadCard","pcUploadCard","ikoCard"].forEach(function(id){
       const el=document.getElementById(id); if(el) el.style.display="none";
     });
     document.querySelectorAll("input[type=file]").forEach(function(el){
@@ -773,7 +785,7 @@ function beperkTotKlantTabs(){
     const el=document.getElementById("tab-"+id); if(el) el.classList.add("hidden");
   });
   // Upload-kaart in Partner containers is een wijzig-actie → weg
-  const up=document.getElementById("pcUploadCard"); if(up) up.style.display="none";
+  ["pcUploadCard","ikoCard"].forEach(function(id){ const el=document.getElementById(id); if(el) el.style.display="none"; });
   // Kop + werkwijze-balk gaan over beheer-tabs die een adviseur niet heeft
   const lead=document.querySelector("main > .lead"); if(lead) lead.style.display="none";
   const h1=document.querySelector("main > h2, main > h1");
@@ -2019,6 +2031,121 @@ function ciBijzonderheid(c0raw,model){
   const notities=stukken.filter((s,k)=>k!==i).join(" · ")||null;
   return {tekst,ordernr:ordernr||null,klant,notities};
 }
+
+// ===== Proforma invoice → inkooporder (Chantal & Manon, 29 jul) ===========
+// Zelfde soort werkboek als de commercial invoice, maar dan vóóraf: wat er bij
+// de fabriek besteld wordt. We lezen de regels uit, laten ze controleren en
+// schrijven pas na akkoord een inkooporder in Logic4.
+const IKO_VOORSTEL_URL="https://fonteyn-data-store.g-mulder.workers.dev/voorraad/inkooporder/voorstel";
+const IKO_AANMAAK_URL="https://fonteyn-data-store.g-mulder.workers.dev/voorraad/inkooporder/aanmaken";
+let ikoLaatst=null;
+function ikoStatus(soort,tekst){
+  const e=document.getElementById("ikoStatus"); if(!e) return;
+  if(!tekst){ e.classList.add("hidden"); return; }
+  e.className="status-msg "+soort; e.textContent=tekst; e.classList.remove("hidden");
+}
+// Per regel uitlezen (niet opgeteld zoals bij de commercial invoice): de
+// inkooporder heeft juist elke afzonderlijke regel nodig.
+function parseProforma(wb){
+  const ws=wb.Sheets["COMMERCIAL INVOICE"]||wb.Sheets["PROFORMA INVOICE"]||wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false});
+  let leverancier=null;
+  for(const r of rows.slice(0,25)) for(const c of (r||[])){
+    const s=String(c==null?"":c);
+    if(!leverancier&&/(co\.,?\s*ltd|sanitary|industry|spa\s*co|bath)/i.test(s)&&s.length<70) leverancier=s.trim();
+  }
+  const regels=[];
+  for(const r of rows){
+    const c0raw=String((r&&r[0])==null?"":r[0]);
+    const c0=c0raw.split("\n")[0].trim();
+    const m=c0.match(/^((?:SKT|PP)[\w.-]+)/);
+    const aantal=Number(r&&r[5]);
+    if(!m||!isFinite(aantal)||aantal<=0) continue;
+    const prijsCel=[r[6],r[7],r[8]].map(Number).find(x=>isFinite(x)&&x>0);
+    regels.push({
+      code:m[1],
+      model:(function(){ const mo=spaModel(c0)||spaModel(m[1]); return (mo&&mo!=="(onbekend SKT-model)")?mo:null; })(),
+      kleur:String((r&&r[1])==null?"":r[1]).replace(/\bjazzi\s*colou?r\b/ig,"").replace(/[,\s]+$/,"").trim()||null,
+      aantal, prijs:prijsCel!=null?prijsCel:null,
+    });
+  }
+  return {leverancier,regels};
+}
+function renderIkoVoorstel(v){
+  const box=document.getElementById("ikoVoorstel"); if(!box) return;
+  const w=(v.waarschuwingen||[]);
+  box.innerHTML=
+    (w.length?"<div class='status-msg warn'><b>Controleer dit eerst:</b><ul style='margin:6px 0 0;padding-left:18px'>"+
+      w.map(x=>"<li>"+esc(x)+"</li>").join("")+"</ul></div>":"")+
+    "<div class='actions' style='gap:10px;align-items:center;margin:0 0 10px;flex-wrap:wrap'>"+
+      "<label style='font-size:12px;color:var(--muted)'>Leverancier</label>"+
+      "<select id='ikoCred' style='min-width:260px;padding:8px'>"+
+        "<option value=''>— kies leverancier —</option>"+
+        (v.leveranciers||[]).map(c=>"<option value='"+c.id+"'"+((v.crediteur&&v.crediteur.id===c.id)?" selected":"")+">"+esc(c.naam)+"</option>").join("")+
+      "</select>"+
+      "<span style='font-size:12px;color:var(--muted)'>"+(v.regels||[]).length+" regel(s) · "+v.totaalStuks+" spa's</span>"+
+    "</div>"+
+    "<div class='tablewrap'><table class='grid'><thead><tr><th>Fabriekscode</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Artikelcode Logic4</th><th>Omschrijving</th></tr></thead><tbody>"+
+    (v.regels||[]).map(r=>"<tr"+(r.artikelcode?(r.zeker?"":" style='background:#fef3c7'"):" style='background:#fee2e2'")+">"+
+      "<td>"+esc(r.code||"—")+"</td><td><b>"+esc(r.model||"onbekend")+"</b></td><td>"+esc(r.kleur||"—")+"</td>"+
+      "<td>"+r.aantal+"</td><td>"+esc(r.artikelcode||"— niet gevonden —")+"</td>"+
+      "<td style='font-size:11.5px;color:var(--muted)'>"+esc(r.omschrijving||"")+"</td></tr>").join("")+
+    "</tbody></table></div>"+
+    "<div class='actions' style='margin-top:12px'>"+
+      "<button class='btn solid' id='ikoAanmaken' type='button'"+(MAG_WIJZIGEN?"":" disabled")+">Inkooporder aanmaken in Logic4</button>"+
+      "<span style='font-size:11.5px;color:var(--muted)'>Geel = kleur niet zeker herkend · rood = geen artikelcode, die regel moet eerst kloppen.</span>"+
+    "</div>";
+  document.getElementById("ikoAanmaken").addEventListener("click",ikoAanmaken);
+}
+async function ikoAanmaken(){
+  const knop=document.getElementById("ikoAanmaken");
+  const cred=Number((document.getElementById("ikoCred")||{}).value||0);
+  if(!cred){ ikoStatus("bad","Kies eerst de leverancier."); return; }
+  const ontbreekt=(ikoLaatst.regels||[]).filter(r=>!r.artikelcode);
+  if(ontbreekt.length){ ikoStatus("bad",ontbreekt.length+" regel(s) hebben geen artikelcode — die moeten eerst kloppen."); return; }
+  const ref=(document.getElementById("ikoRef").value||"").trim();
+  const aantal=ikoLaatst.regels.reduce((n,r)=>n+r.aantal,0);
+  if(!confirm("Inkooporder aanmaken in Logic4?\n\n"+ikoLaatst.regels.length+" regels · "+aantal+" spa's"+(ref?("\nProforma: "+ref):"")+
+    "\n\nDit schrijft écht weg in Logic4.")) return;
+  knop.disabled=true; knop.textContent="Bezig…";
+  try{
+    const r=await fetch(IKO_AANMAAK_URL,{method:"POST",
+      headers:{"Content-Type":"application/json","X-DP-Admin":dpAdminKey()},
+      body:JSON.stringify({crediteurId:cred,regels:ikoLaatst.regels,referentie:ref,
+        eta:(document.getElementById("ikoEta").value||null),door:(localStorage.getItem(EMAIL_KEY)||"")})});
+    const j=await r.json().catch(()=>({}));
+    if(j.dubbel){ ikoStatus("warn",j.error); knop.disabled=false; knop.textContent="Inkooporder aanmaken in Logic4"; return; }
+    if(!j.ok&&!j.buyOrderId) throw new Error(j.error||("HTTP "+r.status));
+    if(j.mislukt&&j.mislukt.length){
+      ikoStatus("warn","Inkooporder "+j.buyOrderId+" aangemaakt met "+j.toegevoegd+" regel(s), maar "+j.mislukt.length+" regel(s) niet: "+
+        j.mislukt.map(m=>m.artikelcode+" ("+m.fout+")").join("; ")+" — vul die handmatig aan in Logic4.");
+    }else{
+      ikoStatus("ok","Inkooporder "+j.buyOrderId+" aangemaakt in Logic4 met "+j.toegevoegd+" regel(s).");
+      knop.textContent="Aangemaakt ✓";
+    }
+    try{ if(window.fpLog) window.fpLog("inkooporder-aangemaakt","Logic4 inkooporder "+j.buyOrderId+" · "+j.toegevoegd+" regels"+(ref?(" · proforma "+ref):"")); }catch(e){}
+  }catch(e){ ikoStatus("bad","Aanmaken faalde: "+e.message); knop.disabled=false; knop.textContent="Inkooporder aanmaken in Logic4"; }
+}
+document.getElementById("ikoFile")&&document.getElementById("ikoFile").addEventListener("change",async ev=>{
+  const f=(ev.target.files||[])[0]; if(!f) return;
+  ikoStatus("","");
+  document.getElementById("ikoVoorstel").innerHTML="";
+  ikoStatus("info","Inlezen…");
+  try{
+    const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+    const p=parseProforma(wb);
+    if(!p.regels.length) throw new Error("geen spa-regels gevonden in dit bestand");
+    if(!document.getElementById("ikoRef").value) document.getElementById("ikoRef").value=f.name.replace(/\.[a-z]+$/i,"").slice(0,40);
+    const r=await fetch(IKO_VOORSTEL_URL,{method:"POST",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
+      body:JSON.stringify({leverancier:p.leverancier,regels:p.regels})});
+    const v=await r.json();
+    if(!v.ok) throw new Error(v.error||"voorstel maken faalde");
+    ikoLaatst=v; renderIkoVoorstel(v);
+    ikoStatus("ok","Uitgelezen: "+v.regels.length+" regel(s), "+v.totaalStuks+" spa's. Controleer hieronder en klik pas daarna op aanmaken.");
+  }catch(e){ ikoStatus("bad","Kon niet inlezen: "+e.message); }
+  ev.target.value="";
+});
 
 async function handleCIUpload(files,statusId){
   const st=document.getElementById(statusId||"ciStatus"); st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Inlezen…";

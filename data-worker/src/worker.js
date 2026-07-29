@@ -39,6 +39,7 @@ const ALLOWED_BUCKETS = new Set([
   "voorraad-productie",  // Open inkooporders bij de 9 spa-fabrieken (uur-sync): per model in productie + ETA
   "specsheets",       // Marketing: specificatiesheets per spa-model (tekst + verkleinde foto's)
   "specsheet-iconen", // Marketing: icoontjes van de onderdelen op pagina 2, op artikelnummer
+  "voorraad-inkooporders", // Welke proforma al een inkooporder is geworden — voorkomt dubbel bestellen
   "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail)
   "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
@@ -962,6 +963,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);
     if (p === "/dealers/admin/refresh-stock" && request.method === "POST") return reply(200, await dpRefreshHalStock(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     if (p === "/dealers/admin/refresh-reserveringen" && request.method === "POST") return reply(200, await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+
     if (p === "/dealers/admin/refresh-productie" && request.method === "POST") return reply(200, await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     return reply(404, "Not found");
   }
@@ -1188,6 +1190,150 @@ async function l4Medewerkers(env) {
     }
     return map;
   } catch (e) { return {}; }
+}
+
+// ══════════ Proforma invoice → inkooporder ══════════════════════════════
+// De fabriek stuurt een proforma invoice met wat er besteld wordt. Manon typt
+// dat nu handmatig over in Logic4. Hieronder wordt die lijst omgezet naar een
+// inkooporder — maar altijd in twee stappen: eerst een voorstel dat een mens
+// controleert, pas daarna het echte wegschrijven.
+
+// Leverancier (fabrieksnaam) → CreditorId. Uit de bestaande inkooporders, want
+// dáár staat welke naam bij welk crediteurnummer hoort. Geen giswerk.
+async function ikoCrediteuren(env) {
+  const token = await l4Token(env);
+  const r = await fetch("https://api.logic4server.nl/v3/BuyOrders/GetBuyOrders", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ TakeRecords: 500 }),
+  });
+  if (!r.ok) return {};
+  const data = await r.json().catch(() => []);
+  const arr = Array.isArray(data) ? data : ((data && (data.Records || data.BuyOrders)) || []);
+  const map = {};
+  for (const o of arr) {
+    const naam = String(o.CreditorCompanyName || "").trim();
+    if (naam && o.CreditorId != null && !map[naam.toLowerCase()]) map[naam.toLowerCase()] = { id: o.CreditorId, naam };
+  }
+  return map;
+}
+
+// Model + kleur → artikelcode uit de spa-catalogus. De kleur op de proforma is
+// vrije tekst ("Sterling Silver, Jazzi color #30"), dus we matchen op de
+// kenmerkende woorden en niet op een exacte string.
+function ikoZoekArtikel(catalog, model, kleur) {
+  const varianten = (catalog.models || {})[model] || [];
+  if (!varianten.length) return null;
+  const schoon = String(kleur || "").toLowerCase().replace(/jazzi\s*colou?r\s*#?\d*/g, "").replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+  if (schoon) {
+    const woorden = schoon.split(" ").filter(w => w.length > 3);
+    let beste = null, besteScore = 0;
+    for (const v of varianten) {
+      const d = String(v.desc || "").toLowerCase();
+      const score = woorden.filter(w => d.includes(w)).length;
+      if (score > besteScore) { besteScore = score; beste = v; }
+    }
+    if (beste && besteScore > 0) return { ...beste, zeker: true };
+  }
+  // Geen kleurtreffer: eerste variant teruggeven, maar wél als onzeker markeren
+  // zodat degene die controleert er expliciet naar kijkt.
+  return { ...varianten[0], zeker: false };
+}
+
+async function ikoVoorstel(env, body) {
+  const regels = Array.isArray(body.regels) ? body.regels : [];
+  if (!regels.length) return { ok: false, error: "geen regels ontvangen" };
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const crediteuren = await ikoCrediteuren(env);
+  const gevraagd = String(body.leverancier || "").toLowerCase().trim();
+  let crediteur = crediteuren[gevraagd] || null;
+  if (!crediteur && gevraagd) {
+    const hit = Object.keys(crediteuren).find(n => n.includes(gevraagd) || gevraagd.includes(n));
+    if (hit) crediteur = crediteuren[hit];
+  }
+  const uit = [], waarschuwingen = [];
+  for (const r of regels) {
+    const model = r.model || null;
+    const art = model ? ikoZoekArtikel(catalog, model, r.kleur) : null;
+    if (!model) waarschuwingen.push("Onbekende fabriekscode: " + (r.code || "?"));
+    else if (!art) waarschuwingen.push("Geen artikelcode gevonden voor " + model);
+    else if (!art.zeker) waarschuwingen.push(model + ": kleur \"" + (r.kleur || "") + "\" niet herkend — controleer de artikelcode");
+    uit.push({
+      code: r.code || null, model, kleur: r.kleur || null,
+      aantal: Number(r.aantal) || 0,
+      prijs: r.prijs != null ? Number(r.prijs) : null,
+      artikelcode: art ? art.code : null,
+      productId: art ? art.productId : null,
+      omschrijving: art ? art.desc : null,
+      zeker: art ? !!art.zeker : false,
+    });
+  }
+  if (!crediteur) waarschuwingen.push("Leverancier \"" + (body.leverancier || "") + "\" niet gevonden in Logic4 — kies hem handmatig.");
+  return {
+    ok: true, crediteur, leveranciers: Object.values(crediteuren).map(c => ({ id: c.id, naam: c.naam })).sort((a, b) => a.naam.localeCompare(b.naam)),
+    regels: uit, waarschuwingen,
+    totaalStuks: uit.reduce((n, x) => n + x.aantal, 0),
+    kanAanmaken: !!crediteur && uit.every(x => x.artikelcode) && uit.length > 0,
+  };
+}
+
+async function ikoAanmaken(env, body) {
+  const crediteurId = Number(body.crediteurId);
+  const regels = Array.isArray(body.regels) ? body.regels : [];
+  if (!crediteurId) return { ok: false, error: "geen leverancier gekozen" };
+  if (!regels.length) return { ok: false, error: "geen regels" };
+  if (regels.some(r => !r.artikelcode || !(Number(r.aantal) > 0)))
+    return { ok: false, error: "elke regel heeft een artikelcode en een aantal groter dan nul nodig" };
+
+  // Dubbel aanmaken voorkomen: dezelfde proforma-referentie mag maar één keer.
+  // Zonder dit levert een dubbele klik twee inkooporders op bij de fabriek.
+  const ref = String(body.referentie || "").trim();
+  const reeds = (await env.FONTEYN_DATA.get("voorraad-inkooporders", { type: "json" })) || { orders: {} };
+  if (ref && reeds.orders[ref] && !body.tochOpnieuw) {
+    return { ok: false, dubbel: true, bestaandeOrder: reeds.orders[ref].buyOrderId,
+      error: "Voor proforma " + ref + " is al inkooporder " + reeds.orders[ref].buyOrderId + " aangemaakt op " + reeds.orders[ref].ts + "." };
+  }
+
+  const token = await l4Token(env);
+  const call = async (pad, payload) => {
+    const r = await fetch("https://api.logic4server.nl" + pad, {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const tekst = await r.text();
+    let j = null; try { j = JSON.parse(tekst); } catch (e) {}
+    if (!r.ok) throw new Error(pad + " → HTTP " + r.status + " " + tekst.slice(0, 200));
+    return j;
+  };
+
+  const kop = await call("/v3/BuyOrders/CreateBuyOrder", {
+    CreditorId: crediteurId,
+    Remarks: ("Proforma " + (ref || "") + " — via dashboard door " + (body.door || "onbekend")).trim(),
+    CreatedAt: new Date().toISOString(),
+  });
+  const buyOrderId = kop && (kop.Id != null ? kop.Id : (kop.BuyOrderId != null ? kop.BuyOrderId : (kop.Value != null ? kop.Value : null)));
+  if (buyOrderId == null) throw new Error("Logic4 gaf geen inkoopordernummer terug: " + JSON.stringify(kop).slice(0, 200));
+
+  const toegevoegd = [], mislukt = [];
+  for (const r of regels) {
+    try {
+      await call("/v3/BuyOrders/AddBuyOrderRow", {
+        BuyOrderId: buyOrderId,
+        ProductCode: String(r.artikelcode),
+        QtyToOrder: Number(r.aantal),
+        Price: r.prijs != null ? Number(r.prijs) : 0,
+        Description: String(r.omschrijving || r.model || "").slice(0, 200),
+        ExpectedDeliveryDate: body.eta || null,
+      });
+      toegevoegd.push(r.artikelcode);
+    } catch (e) { mislukt.push({ artikelcode: r.artikelcode, fout: String(e.message || e) }); }
+  }
+
+  if (ref) {
+    reeds.orders = reeds.orders || {};
+    reeds.orders[ref] = { buyOrderId, ts: new Date().toISOString(), door: body.door || null, regels: toegevoegd.length };
+    await env.FONTEYN_DATA.put("voorraad-inkooporders", JSON.stringify(reeds));
+  }
+  return { ok: mislukt.length === 0, buyOrderId, toegevoegd: toegevoegd.length, mislukt };
 }
 
 async function dpRefreshReservations(env) {
@@ -1955,6 +2101,21 @@ export default {
     // Activiteitenlogboek — tegels sturen hier een event bij openen/login
     if (url.pathname === "/log" && request.method === "POST") {
       return handleLog(request, env);
+    }
+
+    // ── Proforma invoice → inkooporder (Chantal & Manon) ──────────────────
+    // Twee stappen, bewust gescheiden: 'voorstel' leest alleen en mag met de
+    // team-sleutel; 'aanmaken' schrijft écht een inkooporder in Logic4 en
+    // vereist daarom de zwaardere beheersleutel.
+    if (url.pathname === "/voorraad/inkooporder/voorstel" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await ikoVoorstel(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/voorraad/inkooporder/aanmaken" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await ikoAanmaken(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
 
     // Juridische pagina's (publiek) — nodig voor de QuickBooks-app-review
