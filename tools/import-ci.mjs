@@ -54,7 +54,7 @@ for (const file of readdirSync(dir).filter(f => f.endsWith(".xlsx") && !f.starts
   const modelColors = {};
   for (const r of rows) {
     const c0 = String(r[0] || "").split("\n")[0].trim();
-    const m = c0.match(/^(SKT[\w.-]+)/);
+    const m = c0.match(/^((?:SKT|PP)[\w.-]+)/);
     const qty = Number(r[5]);
     if (!m || !Number.isFinite(qty) || qty <= 0) continue;
     const model = sktToModel(m[1]);

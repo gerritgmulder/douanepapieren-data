@@ -40,6 +40,7 @@ const ALLOWED_BUCKETS = new Set([
   "specsheets",       // Marketing: specificatiesheets per spa-model (tekst + verkleinde foto's)
   "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail)
   "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
+  "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
@@ -1154,6 +1155,36 @@ async function dpRefreshProductie(env) {
   return { ok: true, modellen: Object.keys(byModel).length, stuks: total, ikos: fact.length };
 }
 
+// UserId → naam van de medewerker. Elke Logic4-order hangt aan de adviseur die
+// hem heeft ingevoerd; Chantal wil die naam bij elke reservering zien. Eén keer
+// per verversing ophalen. Faalt het, dan blijft 'adviseur' gewoon leeg — dat
+// mag de hele reserveringen-sync nooit onderuit halen.
+async function l4Medewerkers(env) {
+  try {
+    const token = await l4Token(env);
+    const r = await fetch("https://api.logic4server.nl/v3/User/GetAllUsers", {
+      headers: { "Authorization": "Bearer " + token },
+    });
+    if (!r.ok) return {};
+    const data = await r.json().catch(() => null);
+    const arr = Array.isArray(data) ? data : ((data && (data.Users || data.Records || data.Items)) || []);
+    const map = {};
+    for (const u of arr) {
+      const id = u.Id != null ? u.Id : u.UserId;
+      if (id == null) continue;
+      let naam = String(u.FullName || u.Name || u.DisplayName || u.Username || "").trim();
+      if (!naam) continue;
+      // Logic4 zet 'ZZ OUD' of 'ZZ-OUD' vóór de naam van wie uit dienst is. Die
+      // orders bestaan nog, dus de naam blijft staan — maar wél met de melding
+      // erbij, anders lijkt het alsof die adviseur er nog werkt.
+      const uitDienst = /^zz[\s-]*oud\b/i.test(naam);
+      if (uitDienst) naam = naam.replace(/^zz[\s-]*oud\s*/i, "").trim() || naam;
+      map[String(id)] = { naam, uitDienst };
+    }
+    return map;
+  } catch (e) { return {}; }
+}
+
 async function dpRefreshReservations(env) {
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const codeToModel = {};
@@ -1171,6 +1202,7 @@ async function dpRefreshReservations(env) {
   const byModel = {};      // NL (magazijn ≠ Texas): { model: [lijnen] }
   const byModelUSA = {};   // Amerika (magazijn 50)
   const statusName = { 15: "wachten op aanbetaling", 25: "30% aanbetaald", 1: "verkooporder" };
+  const medewerkers = await l4Medewerkers(env);
   for (const st of DP_RESV_STATUSES) {
     for (let page = 0; page < 8; page++) {
       const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
@@ -1220,6 +1252,13 @@ async function dpRefreshReservations(env) {
             container, regio: usa ? "USA" : "NL",
             referentie: String(o.Reference || "").trim() || null,
             containerNr: dpContainerNr(o.Reference),
+            // Adviseur = de medewerker die de order in Logic4 heeft gezet.
+            userId: o.UserId != null ? o.UserId : null,
+            adviseur: (medewerkers[String(o.UserId)] || {}).naam || null,
+            adviseurUitDienst: !!(medewerkers[String(o.UserId)] || {}).uitDienst,
+            // Vaste sleutel voor deze regel, zodat Chantals opmerking en
+            // vinkjes eraan blijven hangen als de lijst opnieuw wordt opgehaald.
+            regelId: o.Id + "|" + gr.model + "|" + (gr.kleur || "") + "|" + gr.wh,
             datum: String(o.CreationDate).slice(0, 10), statusId: st, status: statusName[st] || String(st),
             betaald, betaaldPct, aanbetaling: Math.round(aanbetaling), totaal: Math.round(totaal),
           };

@@ -240,6 +240,7 @@
     <div class="card">
       <h3>Knelpunten — meeste tekort eerst</h3>
       <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
+      <div id="ovParserWaarschuwing" class="status-msg warn hidden" style="margin:0 0 10px"></div>
       <div class="tablewrap" style="max-height:52vh"><table class="grid">
         <thead><tr><th>Model</th><th>Actief res.</th><th>Op voorraad (NL)</th><th>Op zee</th><th>Gedekt</th><th>Tekort</th></tr></thead>
         <tbody id="ovBacklog"></tbody>
@@ -395,6 +396,7 @@
       </p>
       <div class="actions" style="margin-top:0;align-items:center;gap:10px">
         <select id="prioModel" style="min-width:220px"><option value="">— kies een model —</option></select>
+        <input id="prioZoek" type="text" placeholder="zoek op klantnaam of ordernummer…" style="min-width:260px;padding:8px">
         <button class="secondary" id="prioReload" type="button">Vernieuwen</button>
         <span id="prioSummary" style="font-size:13px;color:var(--muted)"></span>
       </div>
@@ -561,6 +563,11 @@ const SPA_CODES = [
   ["SKT888P","Harmony"],
   ["SKT888S","Indulgence"],
   ["SKT888R","Lagoon"],
+  // Passion Devine — de fabriek gebruikt hier een PP-code in plaats van SKT
+  // (Chantal, 29-07-2026).
+  ["PP01","Reflect"],
+  ["PP02","Retreat"],
+  ["PP03","Resettle"],
 ];
 // Alles wat geen letter of cijfer is gaat eruit. De fabrieken schrijven dezelfde
 // code namelijk verschillend: wij hebben "SKT888-G1" in de codelijst staan, de
@@ -572,10 +579,14 @@ function normCode(c){ return String(c==null?"":c).toUpperCase().replace(/[^A-Z0-
 // die er toevallig het begin van is (SKT888G1 vóór SKT888G, SKT339G13 vóór
 // SKT339G1). De volgorde in SPA_CODES doet er daardoor niet meer toe.
 const SPA_CODES_LANG = SPA_CODES.slice().sort((a,b)=>normCode(b[0]).length-normCode(a[0]).length);
-// Geeft modelnaam als de productcode een spa is (begint met SKT), anders null.
+// Geeft modelnaam als de productcode een spa is, anders null. Fabriekscodes
+// beginnen met SKT (Jazzi) of met PP (Passion Devine — PP01/PP02/PP03).
+// LET OP: "(onbekend SKT-model)" is een vaste herkenningswaarde die op meerdere
+// plekken vergeleken wordt; die tekst niet wijzigen.
+const SPA_PREFIXEN = ["SKT","PP"];
 function spaModel(code){
   const n = normCode(code);
-  if (n.indexOf("SKT") !== 0) return null;
+  if (!SPA_PREFIXEN.some(p => n.indexOf(p) === 0)) return null;
   for (let i=0;i<SPA_CODES_LANG.length;i++){
     if (n.indexOf(normCode(SPA_CODES_LANG[i][0])) === 0) return SPA_CODES_LANG[i][1];
   }
@@ -1256,6 +1267,7 @@ function renderOverzicht(resv,hal,ship,priceData){
   // schepen — uitklapbaar met de spa's aan boord + trackingreferentie
   ovShipsCache=ship.ships||[];
   renderOvShips();
+  toonParserWaarschuwing();
 }
 function kleurChips(list){
   if(!list||!list.length) return "<span style='color:var(--muted)'>—</span>";
@@ -1290,6 +1302,16 @@ function ovShipMatch(s,q){
   const hooi=[s.vessel,s.ref,s.trackRef,s.file].concat(Object.keys(s.models||{}))
     .concat((s.specials||[]).map(x=>[x.klant,x.ordernr,x.tekst].join(" ")));
   return hooi.join(" ").toLowerCase().includes(q);
+}
+// Dezelfde waarschuwing als bij Schepen, maar dán bij de knelpunten — want dáár
+// zie je het gevolg: 'Op zee' telt te laag en het tekort klopt dus niet.
+function toonParserWaarschuwing(){
+  const el=document.getElementById("ovParserWaarschuwing"); if(!el) return;
+  const oud=(ovShipsCache||[]).filter(s=>!s.parser||s.parser<2);
+  if(!oud.length){ el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  el.innerHTML="<b>'Op zee' klopt nog niet voor alle modellen.</b> "+oud.length+
+    " commercial invoice(s) zijn ingelezen toen de Passion Devine-codes (PP01 Reflect, PP02 Retreat, PP03 Resettle) nog niet herkend werden — die spa's ontbreken daardoor in de lading. Upload ze bij <b>Schepen</b> één keer opnieuw.";
 }
 function renderOvShips(){
   const q=((document.getElementById("ovShipSearch")||{}).value||"").trim().toLowerCase();
@@ -1708,7 +1730,13 @@ function renderSchepen(){
     const m=spaModel(k);
     if(m&&m!=="(onbekend SKT-model)") nuBekend.push([k,m]); else echtOnbekend.push(k);
   }
+  // Schepen die vóór 29-07-2026 zijn ingelezen missen de Passion Devine-spa's:
+  // regels met een PP-code werden toen overgeslagen zonder melding.
+  const oudIngelezen=ships.filter(s=>!s.parser||s.parser<2);
   document.getElementById("ciUnmapped").innerHTML=
+    (oudIngelezen.length
+      ? "<div class='status-msg warn'><b>Let op — "+oudIngelezen.length+" schip(en) opnieuw uploaden.</b> Deze zijn ingelezen toen de codes van Passion Devine (PP01 = Reflect, PP02 = Retreat, PP03 = Resettle) nog niet herkend werden; die spa's tellen daardoor niet mee als voorraad op zee. Upload die commercial invoices één keer opnieuw, dan klopt het overzicht weer. Het gaat om: "+
+        oudIngelezen.map(s=>esc(s.vessel||s.ref||s.file||"?")).join(", ")+"</div>" : "")+
     (nuBekend.length
       ? "<div class='status-msg ok'>Inmiddels ingesteld: "+nuBekend.map(p=>esc(p[0])+" = <b>"+esc(p[1])+"</b> ("+un[p[0]]+"×)").join(", ")+
         ". Upload die commercial invoice nog één keer opnieuw, dan tellen deze spa's mee in de lading.</div>" : "")+
@@ -1730,7 +1758,7 @@ function parseCI(wb){
   for(const r of rows){
     const c0raw=String((r&&r[0])==null?"":r[0]);
     const c0=c0raw.split("\n")[0].trim();
-    const m=c0.match(/^(SKT[\w.-]+)/);
+    const m=c0.match(/^((?:SKT|PP)[\w.-]+)/);
     const qty=Number(r&&r[5]);
     if(!m||!isFinite(qty)||qty<=0) continue;
     // Model bepalen op de HELE eerste regel, niet alleen op het eerste woord.
@@ -1759,7 +1787,7 @@ function parseCI(wb){
 function ciBijzonderheid(c0raw,model){
   const delen=String(c0raw||"").replace(/\r/g,"").split("\n").map(s=>s.replace(/\s+/g," ").trim()).filter(Boolean);
   if(!delen.length) return null;
-  delen[0]=delen[0].replace(/^SKT[\w.-]+\s*/i,"").trim();
+  delen[0]=delen[0].replace(/^(?:SKT|PP)[\w.-]+\s*/i,"").trim();
   // Een variant die al in de modelnaam zit (ECO, Deep) is geen bijzonderheid.
   if(delen[0]) delen[0]=delen[0].replace(new RegExp("^(eco|deep)\\b","i"),m2=>
     String(model||"").toLowerCase().includes(m2.toLowerCase())?"":m2).trim();
@@ -1786,7 +1814,9 @@ async function handleCIUpload(files,statusId){
       // Bestaand schip met dezelfde referentie? Dan vervangen (nieuwe upload wint).
       const idx=(shipsData.ships||[]).findIndex(s=>s.ref&&ship.ref&&s.ref===ship.ref);
       const eta=idx>=0?shipsData.ships[idx].eta:"";
-      const rec={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,models:ship.models,modelColors:ship.modelColors,specials:ship.specials,total:ship.total,eta};
+      // parser 2 = kent ook de PP-codes van Passion Devine. Schepen die met een
+      // oudere versie zijn ingelezen missen die spa's en moeten één keer opnieuw.
+      const rec={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,models:ship.models,modelColors:ship.modelColors,specials:ship.specials,total:ship.total,eta,parser:2};
       if(idx>=0) shipsData.ships[idx]=rec; else shipsData.ships.push(rec);
       for(const [k,v] of Object.entries(ship.unmapped)) allUnmapped[k]=(allUnmapped[k]||0)+v;
       added++;
@@ -1917,15 +1947,26 @@ async function loadPrioModel(model){
   }catch(e){ console.error(e); prioStatus("bad","Ophalen faalde: "+e.message); }
 }
 
+// Laatste weergave onthouden, zodat het zoekveld opnieuw kan tekenen zonder
+// alles opnieuw op te halen.
+let prioLaatst=null;
 function renderPrio(model, dekking, halQty, shipQty){
+  prioLaatst={model,dekking,halQty,shipQty};
   const tot=prioRows.reduce((a,r)=>a+r.qty,0);
   document.getElementById("prioSummary").innerHTML=
     "Dekking: <b>"+dekking+"</b> ("+halQty+" in NL + "+shipQty+" op schip) · gevraagd: <b>"+tot+"</b>"+
     (tot>dekking?" · <span style='color:#b91c1c'>tekort "+(tot-dekking)+"</span>":" · <span style='color:#15803d'>volledig gedekt</span>");
-  let cum=0;
+  // Zoeken op klantnaam of ordernummer (Chantal, 29 jul). De volgorde en de
+  // dekkingsgrens worden over de HELE lijst berekend en daarna pas gefilterd —
+  // anders zou zoeken het volgnummer en de streep verschuiven.
+  const q=((document.getElementById("prioZoek")||{}).value||"").trim().toLowerCase();
+  const raak=r=>!q||String(r.naam||"").toLowerCase().includes(q)||String(r.ordernr).includes(q);
+  let cum=0, getoond=0;
   document.getElementById("prioBody").innerHTML=prioRows.map((r,i)=>{
     const before=cum; cum+=r.qty; const covered=before<dekking;
     const cutHere = before<dekking && cum>=dekking; // laatste (deels) gedekte regel
+    if(!raak(r)) return "";
+    getoond++;
     const badge=resvTypeBadge(r.type);
     return "<tr style='"+(covered?"":"opacity:.6")+(cutHere?";border-bottom:2px solid #b91c1c":"")+"'>"+
       "<td>"+(i+1)+"</td>"+
@@ -1940,7 +1981,17 @@ function renderPrio(model, dekking, halQty, shipQty){
         "<button class='rmv prioDown' data-i='"+i+"' "+(i===prioRows.length-1?"disabled":"")+">▼</button>"+
       "</td></tr>"+
       (cutHere&&i<prioRows.length-1?"<tr><td colspan='8' style='text-align:center;color:#b91c1c;font-size:11px;padding:2px'>— grens huidige voorraad ("+dekking+") —</td></tr>":"");
-  }).join("") || "<tr><td colspan='8' style='color:var(--muted)'>Geen open orders voor dit model.</td></tr>";
+  }).join("") || "<tr><td colspan='8' style='color:var(--muted)'>"+
+    (q?"Niets gevonden voor '"+esc(q)+"'.":"Geen open orders voor dit model.")+"</td></tr>";
+  if(q&&getoond) document.getElementById("prioSummary").innerHTML+=
+    " · <span style='color:#2563eb'>"+getoond+" van "+prioRows.length+" regels getoond</span>";
+  const zoekVeld=document.getElementById("prioZoek");
+  if(zoekVeld&&!zoekVeld.dataset.gekoppeld){
+    zoekVeld.dataset.gekoppeld="1";
+    zoekVeld.addEventListener("input",function(){
+      if(prioLaatst) renderPrio(prioLaatst.model,prioLaatst.dekking,prioLaatst.halQty,prioLaatst.shipQty);
+    });
+  }
   document.querySelectorAll(".prioUp").forEach(b=>b.addEventListener("click",()=>movePrio(model,Number(b.dataset.i),-1)));
   document.querySelectorAll(".prioDown").forEach(b=>b.addEventListener("click",()=>movePrio(model,Number(b.dataset.i),1)));
 }
@@ -1949,10 +2000,15 @@ async function movePrio(model, i, dir){
   const j=i+dir; if(j<0||j>=prioRows.length) return;
   const tmp=prioRows[i]; prioRows[i]=prioRows[j]; prioRows[j]=tmp;
   prioPriority[model]=prioRows.map(r=>r.ordernr);
-  // dekking opnieuw uit summary afleiden is niet nodig — herbereken via reload-vrije render:
-  const sum=document.getElementById("prioSummary").textContent.match(/Dekking:\s*(\d+)/);
-  const halM=document.getElementById("prioSummary").innerHTML.match(/\((\d+) in NL \+ (\d+) op schip\)/);
-  renderPrio(model, sum?Number(sum[1]):0, halM?Number(halM[1]):0, halM?Number(halM[2]):0);
+  // Cijfers uit de laatste weergave hergebruiken; alleen als die er niet is
+  // (bv. na een herlaad) terugvallen op wat er in de samenvatting staat.
+  if(prioLaatst&&prioLaatst.model===model){
+    renderPrio(model,prioLaatst.dekking,prioLaatst.halQty,prioLaatst.shipQty);
+  }else{
+    const sum=document.getElementById("prioSummary").textContent.match(/Dekking:\s*(\d+)/);
+    const halM=document.getElementById("prioSummary").innerHTML.match(/\((\d+) in NL \+ (\d+) op schip\)/);
+    renderPrio(model, sum?Number(sum[1]):0, halM?Number(halM[1]):0, halM?Number(halM[2]):0);
+  }
   try{
     await fetch(PRIO_URL,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
       body:JSON.stringify({byModel:prioPriority,updated:new Date().toISOString()})});
