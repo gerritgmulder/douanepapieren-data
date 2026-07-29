@@ -284,8 +284,16 @@
       <p class="lead" style="font-size:12px;margin-bottom:10px">Alle openstaande spa-reserveringen van <b>particuliere</b> klanten, met de verwachte levering. Deze staan óók in het tabblad Reserveringen.</p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="partSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
+        <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" id="partToonGepland"> geplande spa's tonen
+        </label>
         <span id="partCount" style="font-size:12px;color:var(--muted)"></span>
       </div>
+      <p class="lead" style="font-size:11.5px;margin:8px 0 0">
+        Klik op een kolomkop om te sorteren. <span style="background:#f3e8ff;border-left:4px solid #7c3aed;padding:1px 7px">paars = afroep</span>
+        <span style="background:#fef9c3;padding:1px 7px;margin-left:6px">geel = inplannen</span> — ingeplande regels staan altijd bovenaan.
+        <b>Gepland</b> aanvinken haalt de spa uit dit overzicht: die is dan met de klant afgesproken en gaat fysiek weg.
+      </p>
       <div id="partList" style="margin-top:12px"></div>
     </div>
   </div>
@@ -298,7 +306,20 @@
         <input id="ptnSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
         <span id="ptnCount" style="font-size:12px;color:var(--muted)"></span>
       </div>
+      <p class="lead" style="font-size:11.5px;margin:8px 0 0">
+        Klik op een kolomkop om te sorteren. Vink <b>Inplannen</b> aan zodra de spa binnen is —
+        hij verschijnt dan hieronder onder het tabblad van de adviseur, zodat die contact kan opnemen met zijn dealer.
+      </p>
       <div id="ptnList" style="margin-top:12px"></div>
+    </div>
+
+    <!-- Binnengekomen spa's per adviseur (Chantal, 29 jul). Alles wat hierboven
+         is aangevinkt als 'inplannen' komt onder het tabblad van zijn adviseur. -->
+    <div class="card">
+      <h3>Binnen per adviseur — <span id="ptnAdvTotaal">0</span> spa's</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">De spa's die <b>binnen zijn</b> voor een dealer, per adviseur. Zo weet elke adviseur welke dealer hij moet bellen. Klik op een kolomkop om te sorteren; standaard staat het op dealernaam.</p>
+      <div id="ptnAdvTabs" class="tabs" style="margin-bottom:10px"></div>
+      <div id="ptnAdvLijst"></div>
     </div>
   </div>
 
@@ -1378,6 +1399,9 @@ async function loadReserveringen(){
     const r=await fetch(RESV_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
     if(r.ok){ const j=await r.json(); resvData={byModel:(j&&j.byModel)||{},byModelUSA:(j&&j.byModelUSA)||{},updated:j&&j.updated}; }
   }catch(e){ console.warn("reserveringen laden faalde:",e); }
+  // Chantals opmerkingen en vinkjes horen bij deze regels; samen ophalen zodat
+  // de tabellen in één keer compleet staan.
+  await loadNotities();
   renderReserveringen();
   renderSoortTabs();
 }
@@ -1460,6 +1484,45 @@ function resvAlleRegels(){
   return uit;
 }
 function isZakelijk(r){ return r.type==="partner"||r.type==="zakelijk"; }
+
+// ===== Aantekeningen per reserveringsregel (Chantal, 29 jul) ===============
+// Opmerkingen en de vinkjes afroep/inplannen/gepland horen bij de regel, niet
+// bij de order: één order kan meerdere spa's in verschillende kleuren hebben.
+// De sleutel is r.regelId (ordernr|model|kleur|magazijn), die de worker meestuurt.
+const NOTITIE_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-notities";
+let notities={};
+async function loadNotities(){
+  try{
+    const r=await fetch(NOTITIE_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
+    if(r.ok){ const j=await r.json(); notities=(j&&j.regels)||{}; }
+  }catch(e){ console.warn("aantekeningen laden faalde:",e); }
+}
+// Niet bij élke toetsaanslag opslaan; even wachten tot het typen stopt.
+let notitieTimer=null;
+function saveNotitiesStraks(){
+  clearTimeout(notitieTimer);
+  notitieTimer=setTimeout(function(){ saveNotities(); },700);
+}
+async function saveNotities(){
+  try{
+    const r=await fetch(NOTITIE_URL,{method:"PUT",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
+      body:JSON.stringify({regels:notities,updated:new Date().toISOString()})});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+  }catch(e){ setStatus("bad","Opslaan aantekening faalde: "+e.message); }
+}
+function notitie(r){
+  const k=r.regelId; if(!k) return {};
+  return notities[k]||(notities[k]={});
+}
+function zetNotitie(r,veld,waarde){
+  const k=r.regelId; if(!k) return;
+  const n=notities[k]||(notities[k]={});
+  n[veld]=waarde;
+  n.door=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  n.ts=new Date().toISOString();
+  saveNotitiesStraks();
+}
 // Welke regels horen bij welk tabblad
 function resvVoorSoort(soort){
   const alle=resvAlleRegels();
@@ -1467,42 +1530,192 @@ function resvVoorSoort(soort){
   if(soort==="partner")     return alle.filter(r=>!r.container &&  isZakelijk(r));
   return                           alle.filter(r=>!r.container && !isZakelijk(r));   // particulier
 }
-// Eén platte tabel: ordernummer, spa, kleur, aantal, klant, betaling, levering
+// Sorteervoorkeur per tabblad. Chantal wil de spa's alfabetisch bij elkaar
+// ("alle Blissen onder elkaar"), dus dat is de standaard.
+const resvSort={particulier:{kolom:"model",op:1},partner:{kolom:"model",op:1}};
+function sorteerWaarde(r,kolom){
+  if(kolom==="model")    return String(r.model||"");
+  if(kolom==="naam")     return String(r.naam||"");
+  if(kolom==="adviseur") return String(r.adviseur||"zzz");
+  if(kolom==="datum")    return String(r.datum||"");
+  if(kolom==="levering"){
+    const v=r.verwacht;
+    if(v==="voorraad") return "0";
+    if(v==="op-schip") return "8";
+    if(!v||v==="productie") return "9";
+    return "1"+String(v);
+  }
+  return "";
+}
+function kopSorteer(soort,kolom,tekst){
+  const s=resvSort[soort]||{};
+  const actief=s.kolom===kolom;
+  return "<th class='sortKop' data-soort='"+soort+"' data-kolom='"+kolom+"' style='cursor:pointer;white-space:nowrap' title='Klik om te sorteren'>"+
+    esc(tekst)+(actief?(s.op>0?" ▲":" ▼"):"<span style='color:#d1d5db'> ⇅</span>")+"</th>";
+}
+function adviseurCel(r){
+  if(!r.adviseur) return "<span style='color:var(--muted);font-size:11px'>—</span>";
+  return "<span style='font-size:12px'>"+esc(r.adviseur)+
+    (r.adviseurUitDienst?" <span class='pill' style='background:#f3f4f6;color:#6b7280;font-size:9.5px'>uit dienst</span>":"")+"</span>";
+}
+// Eén regel = ordernummer, spa, kleur, aantal, klant, adviseur, datum, betaling,
+// levering + Chantals eigen velden (opmerking en de vinkjes).
 function renderResvSoort(soort,zoekId,lijstId,telId){
   const inp=document.getElementById(zoekId), box=document.getElementById(lijstId);
   if(!box) return;
   const q=((inp&&inp.value)||"").trim().toLowerCase();
+  const toonGepland=!!(document.getElementById(soort==="particulier"?"partToonGepland":"ptnToonGepland")||{}).checked;
   let rijen=resvVoorSoort(soort).filter(r=>resvMatch(r,r.model,q));
-  // Eerst wat het snelst komt: op verwachte levering, daarna model
-  const sortKey=r=>{
-    const v=r.verwacht;
-    if(v==="voorraad") return "0";
-    if(!v||v==="productie") return "9";
-    if(v==="op-schip") return "8";
-    return "1"+String(v);
-  };
-  rijen.sort((a,b)=>sortKey(a).localeCompare(sortKey(b))||String(a.model).localeCompare(String(b.model)));
+  // 'Gepland' = de klant heeft een afspraak en de spa gaat fysiek de deur uit;
+  // die hoort niet meer in het overzicht. Met het vinkje bovenaan haal je ze
+  // terug, zodat een verkeerd aangevinkte regel niet onvindbaar wordt.
+  if(!toonGepland) rijen=rijen.filter(r=>!notitie(r).gepland);
+  const s=resvSort[soort]||{kolom:"model",op:1};
+  rijen.sort(function(a,b){
+    // Ingeplande regels altijd bovenaan — die moet de planning als eerste zien.
+    const ia=notitie(a).inplannen?0:1, ib=notitie(b).inplannen?0:1;
+    if(ia!==ib) return ia-ib;
+    const va=sorteerWaarde(a,s.kolom), vb=sorteerWaarde(b,s.kolom);
+    return (va.localeCompare(vb,"nl",{numeric:true})||String(a.ordernr).localeCompare(String(b.ordernr)))*(s.op||1);
+  });
   const totaal=rijen.reduce((n,r)=>n+(Number(r.qty)||0),0);
   const tel=document.getElementById(telId);
   if(tel) tel.textContent=rijen.length+" reservering(en) · "+totaal+" spa's"+(resvData.updated?(" · ververst "+new Date(resvData.updated).toLocaleString("nl-NL")):"");
   if(!rijen.length){ box.innerHTML="<p class='lead'>Geen reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
+  const uit=!MAG_WIJZIGEN?" disabled":"";
+  const particulier=soort==="particulier";
   box.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
-    "<th>Order</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Klant</th><th>Datum</th><th>Betaling</th><th>Verwachte levering</th></tr></thead><tbody>"+
-    rijen.map(r=>"<tr"+(r.prio?" style='background:#f0fdf4'":"")+">"+
-      "<td>"+esc(r.ordernr)+"</td>"+
-      "<td><b>"+esc(r.model)+"</b></td>"+
-      "<td>"+kleurCel(r.kleur)+"</td>"+
-      "<td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td>"+
-      "<td>"+esc(r.naam)+"</td>"+
-      "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
-      "<td>"+betaalBadge(r)+"</td>"+
-      "<td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td></tr>").join("")+
+    "<th>Order</th>"+kopSorteer(soort,"model","Spa")+"<th>Kleur</th><th>Aantal</th>"+
+    kopSorteer(soort,"naam","Klant")+kopSorteer(soort,"adviseur","Adviseur")+
+    kopSorteer(soort,"datum","Datum")+"<th>Betaling</th>"+kopSorteer(soort,"levering","Verwachte levering")+
+    "<th>Opmerkingen</th>"+(particulier?"<th>Afroep</th>":"")+"<th>Inplannen</th>"+(particulier?"<th>Gepland</th>":"")+
+    "</tr></thead><tbody>"+
+    rijen.map(function(r){
+      const n=notitie(r);
+      // Geel = moet ingepland worden, paars = afroep. Staat er allebei een
+      // vinkje, dan wint geel voor de achtergrond en blijft paars als rand.
+      let stijl="";
+      if(n.inplannen) stijl="background:#fef9c3"+(n.afroep?";border-left:4px solid #7c3aed":"");
+      else if(n.afroep) stijl="background:#f3e8ff;border-left:4px solid #7c3aed";
+      const id=esc(r.regelId||"");
+      return "<tr style='"+stijl+"'>"+
+        "<td>"+esc(r.ordernr)+"</td>"+
+        "<td><b>"+esc(r.model)+"</b></td>"+
+        "<td>"+kleurCel(r.kleur)+"</td>"+
+        "<td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td>"+
+        "<td>"+esc(r.naam)+"</td>"+
+        "<td>"+adviseurCel(r)+"</td>"+
+        "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
+        "<td>"+betaalBadge(r)+"</td>"+
+        "<td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td>"+
+        "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' style='width:190px;font-size:12px;padding:4px 7px'"+uit+"></td>"+
+        (particulier?"<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='afroep' data-id='"+id+"'"+(n.afroep?" checked":"")+uit+"></td>":"")+
+        "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='inplannen' data-id='"+id+"'"+(n.inplannen?" checked":"")+uit+"></td>"+
+        (particulier?"<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='gepland' data-id='"+id+"'"+(n.gepland?" checked":"")+uit+"></td>":"")+
+        "</tr>";
+    }).join("")+
     "</tbody></table></div>";
+  koppelNotitieVelden(box,rijen);
+  box.querySelectorAll(".sortKop").forEach(function(th){
+    th.addEventListener("click",function(){
+      const st=resvSort[th.dataset.soort];
+      if(st.kolom===th.dataset.kolom) st.op=-(st.op||1); else { st.kolom=th.dataset.kolom; st.op=1; }
+      renderSoortTabs();
+    });
+  });
+}
+// Opmerkingveld en vinkjes aan de opslag hangen. Bij elke wijziging ook een
+// regel in het activiteitenlogboek: dit stuurt wat de planning gaat doen.
+function koppelNotitieVelden(box,rijen){
+  const perId={}; (rijen||[]).forEach(function(r){ if(r.regelId) perId[r.regelId]=r; });
+  box.querySelectorAll(".notOpm").forEach(function(inp){
+    inp.addEventListener("input",function(){
+      const r=perId[inp.dataset.id]; if(!r) return;
+      zetNotitie(r,"opmerking",inp.value);
+    });
+    inp.addEventListener("change",function(){
+      const r=perId[inp.dataset.id]; if(!r) return;
+      try{ if(window.fpLog) window.fpLog("opmerking-gewijzigd",r.ordernr+" "+r.model+": "+(inp.value||"(leeg)")); }catch(e){}
+    });
+  });
+  box.querySelectorAll(".notVink").forEach(function(cb){
+    cb.addEventListener("change",function(){
+      const r=perId[cb.dataset.id]; if(!r) return;
+      const veld=cb.dataset.veld;
+      zetNotitie(r,veld,cb.checked);
+      try{ if(window.fpLog) window.fpLog(veld+(cb.checked?"-aangevinkt":"-uitgevinkt"),r.ordernr+" "+r.model+" ("+r.naam+")"); }catch(e){}
+      renderSoortTabs();   // kleur, volgorde en het verdwijnen van 'gepland'
+    });
+  });
 }
 function renderSoortTabs(){
   renderResvSoort("particulier","partSearch","partList","partCount");
   renderResvSoort("partner","ptnSearch","ptnList","ptnCount");
+  renderAdviseurTabs();
   renderPartnerContainers();
+}
+
+// ===== Binnen per adviseur (Chantal, 29 jul) ===============================
+// Alles wat bij de partner-reserveringen is aangevinkt als 'inplannen' staat
+// hier onder het tabblad van de adviseur die de order heeft ingevoerd. Dat is
+// zijn seintje dat de spa binnen is en dat hij de dealer kan bellen.
+let ptnAdvActief="__alle__", ptnAdvSort={kolom:"naam",op:1};
+function renderAdviseurTabs(){
+  const tabs=document.getElementById("ptnAdvTabs"), lijst=document.getElementById("ptnAdvLijst");
+  if(!tabs||!lijst) return;
+  const binnen=resvVoorSoort("partner").filter(r=>notitie(r).inplannen);
+  const totaal=binnen.reduce((n,r)=>n+(Number(r.qty)||0),0);
+  const telEl=document.getElementById("ptnAdvTotaal"); if(telEl) telEl.textContent=totaal;
+  if(!binnen.length){
+    tabs.innerHTML="";
+    lijst.innerHTML="<p class='lead'>Nog niets binnengemeld. Vink hierboven <b>Inplannen</b> aan bij een reservering waarvan de spa binnen is.</p>";
+    return;
+  }
+  const perAdviseur={};
+  for(const r of binnen){ const a=r.adviseur||"Zonder adviseur"; (perAdviseur[a]=perAdviseur[a]||[]).push(r); }
+  const namen=Object.keys(perAdviseur).sort((a,b)=>a.localeCompare(b,"nl"));
+  if(ptnAdvActief!=="__alle__"&&!perAdviseur[ptnAdvActief]) ptnAdvActief="__alle__";
+  tabs.innerHTML=["__alle__"].concat(namen).map(function(a){
+    const actief=a===ptnAdvActief;
+    const aantal=a==="__alle__"?binnen.length:perAdviseur[a].length;
+    const label=a==="__alle__"?"Alle adviseurs":a;
+    return "<button type='button' class='tab advTab"+(actief?" active":"")+"' data-adv='"+esc(a)+"'>"+esc(label)+" ("+aantal+")</button>";
+  }).join("");
+  const rijen=(ptnAdvActief==="__alle__"?binnen:perAdviseur[ptnAdvActief]).slice();
+  rijen.sort(function(a,b){
+    const va=sorteerWaarde(a,ptnAdvSort.kolom), vb=sorteerWaarde(b,ptnAdvSort.kolom);
+    return (va.localeCompare(vb,"nl",{numeric:true})||String(a.ordernr).localeCompare(String(b.ordernr)))*(ptnAdvSort.op||1);
+  });
+  const kop=function(kolom,tekst){
+    const actief=ptnAdvSort.kolom===kolom;
+    return "<th class='advSortKop' data-kolom='"+kolom+"' style='cursor:pointer;white-space:nowrap'>"+esc(tekst)+
+      (actief?(ptnAdvSort.op>0?" ▲":" ▼"):"<span style='color:#d1d5db'> ⇅</span>")+"</th>";
+  };
+  lijst.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
+    kop("naam","Dealer")+kop("adviseur","Adviseur")+"<th>Order</th>"+kop("model","Spa")+
+    "<th>Kleur</th><th>Aantal</th>"+kop("datum","Datum")+"<th>Opmerkingen</th></tr></thead><tbody>"+
+    rijen.map(function(r){
+      const n=notitie(r);
+      return "<tr style='background:#fef9c3'>"+
+        "<td><b>"+esc(r.naam)+"</b></td>"+
+        "<td>"+adviseurCel(r)+"</td>"+
+        "<td>"+esc(r.ordernr)+"</td>"+
+        "<td>"+esc(r.model)+"</td>"+
+        "<td>"+kleurCel(r.kleur)+"</td>"+
+        "<td>"+r.qty+"</td>"+
+        "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
+        "<td style='font-size:12px;color:#374151'>"+esc(n.opmerking||"—")+"</td></tr>";
+    }).join("")+"</tbody></table></div>";
+  tabs.querySelectorAll(".advTab").forEach(function(b){
+    b.addEventListener("click",function(){ ptnAdvActief=b.dataset.adv; renderAdviseurTabs(); });
+  });
+  lijst.querySelectorAll(".advSortKop").forEach(function(th){
+    th.addEventListener("click",function(){
+      if(ptnAdvSort.kolom===th.dataset.kolom) ptnAdvSort.op=-(ptnAdvSort.op||1);
+      else { ptnAdvSort.kolom=th.dataset.kolom; ptnAdvSort.op=1; }
+      renderAdviseurTabs();
+    });
+  });
 }
 
 // ===== Partner containers (Chantal, 28 jul) ================================
@@ -1580,6 +1793,10 @@ function renderPartnerContainers(){
 ["partSearch","ptnSearch","pcSearch"].forEach(id=>{
   const el=document.getElementById(id);
   if(el) el.addEventListener("input",renderSoortTabs);
+});
+["partToonGepland"].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el) el.addEventListener("change",renderSoortTabs);
 });
 
 // ===================== Schepen (commercial invoices) =====================
