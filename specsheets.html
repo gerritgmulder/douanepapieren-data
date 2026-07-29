@@ -76,15 +76,43 @@
   #sheet .kop .logo{width:34mm;flex:0 0 auto}
   #sheet .kop .logo img{width:100%;display:block}
   #sheet .kop .titel{flex:1;padding-top:3mm}
-  #sheet .model{font-family:"HelveticaBold",Helvetica,Arial,sans-serif;font-weight:900;font-size:34pt;line-height:.95;letter-spacing:-.5pt;margin:0}
+  #sheet .model,#sheet2 .model{font-family:"HelveticaBold",Helvetica,Arial,sans-serif;font-weight:900;font-size:34pt;line-height:.95;letter-spacing:-.5pt;margin:0}
   #sheet .sectie h3{font-family:"HelveticaBold",Helvetica,Arial,sans-serif}
-  #sheet .collectie{font-size:17pt;line-height:1.15;margin:1mm 0 0;color:#111;font-weight:300}
+  #sheet .collectie,#sheet2 .collectie{font-size:17pt;line-height:1.15;margin:1mm 0 0;color:#111;font-weight:300}
   #sheet .badges{flex:0 0 auto;width:20mm;display:flex;flex-direction:column;gap:1.4mm;align-items:center}
   #sheet .badge{width:100%;border:.6pt solid #b9b3aa;border-radius:1mm;padding:1.2mm .6mm;text-align:center;background:#fff}
   #sheet .badge .bi{font-size:11pt;line-height:1}
   #sheet .badge .bt{font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:3.6pt;letter-spacing:.02em;line-height:1.15;margin-top:.6mm;text-transform:uppercase}
   #sheet .badge img{width:100%;display:block}
   #sheet .optioneel{font-size:5pt;color:#333;font-style:italic;margin-top:.8mm;align-self:flex-start}
+  /* ── Kop volgens het origineel (Gretha, 29 jul) ──────────────────────────
+     Links het logo met daaronder twee foto's, in het midden de modelnaam met
+     de grote productfoto, rechts de kenmerken in twee kolommen. Alle vlakken
+     zijn invulbaar; zolang er geen foto in zit staat er een gestippeld kader
+     zodat zichtbaar is waar hij hoort te komen. */
+  #sheet .kopblok,#sheet2 .kopblok{display:flex;gap:5mm;align-items:flex-start}
+  #sheet .linkerkolom,#sheet2 .linkerkolom{width:34mm;flex:0 0 auto;display:flex;flex-direction:column;gap:3mm}
+  #sheet .linkerkolom .logo,#sheet2 .linkerkolom .logo{width:100%}
+  #sheet .linkerkolom .logo img,#sheet2 .linkerkolom .logo img{width:100%;display:block}
+  #sheet .midden,#sheet2 .midden{flex:1;min-width:0}
+  #sheet .vlak,#sheet2 .vlak{border:.8pt solid #d9d4cc;border-radius:1mm;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  #sheet .vlak.leegvlak,#sheet2 .vlak.leegvlak{border-style:dashed;border-color:#ccc;color:#c4c4c4;font-family:Montserrat,sans-serif;font-size:7pt}
+  #sheet .vlak img,#sheet2 .vlak img{max-width:100%;max-height:100%;object-fit:contain;display:block}
+  #sheet .klein{height:32mm}
+  #sheet .hoofdfoto{height:70mm;margin-top:2mm}
+  #sheet .badgegrid{flex:0 0 auto;width:42mm;display:grid;grid-template-columns:1fr 1fr;gap:1.6mm}
+  #sheet .badgegrid .badge{aspect-ratio:1/1;padding:1mm .6mm;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  #sheet .badgevoet{grid-column:1/-1;display:flex;justify-content:space-between;font-size:4.6pt;color:#333;font-style:italic}
+
+  /* ── Pagina 2: technische tekening + onderdelenlijst ───────────────────── */
+  #sheet2{width:210mm;min-height:297mm;background:#fff;margin:14px auto 0;padding:14mm 13mm 12mm;
+    box-shadow:0 3px 16px rgba(0,0,0,.14);color:#000;position:relative}
+  #sheet2 .tekeningvlak{height:150mm;margin-top:8mm}
+  #sheet2 .legenda{margin-top:8mm;background:var(--zebra);padding:5mm 4mm;display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5mm 5mm}
+  #sheet2 .legrij{display:flex;align-items:center;gap:2.5mm;font-size:7.6pt;line-height:1.3}
+  #sheet2 .legrij .icoon{width:9mm;height:5mm;flex:0 0 auto;border:.7pt solid #c8102e;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  #sheet2 .legrij .icoon img{max-width:100%;max-height:100%;object-fit:contain}
+
   #sheet .fotos{display:flex;gap:4mm;align-items:center;justify-content:center;margin:5mm 0 6mm;min-height:62mm}
   #sheet .fotos .fbox{flex:1;display:flex;align-items:center;justify-content:center;max-height:72mm}
   #sheet .fotos img{max-width:100%;max-height:72mm;object-fit:contain;display:block}
@@ -122,7 +150,9 @@
     .wrap{display:block;padding:0;margin:0;max-width:none}
     #previewKolom{position:static}
     .sheet-scroll{padding:0;border:0;background:none;overflow:visible;max-height:none;height:auto!important}
-    #sheet{width:210mm;min-height:297mm;box-shadow:none;margin:0;transform:none!important}
+    #sheet,#sheet2{width:210mm;min-height:297mm;box-shadow:none;margin:0;transform:none!important}
+    /* Pagina 2 begint op een nieuw vel */
+    #sheet2{page-break-before:always;break-before:page}
     @page{size:A4 portrait;margin:0}
   }
 </style>
@@ -193,12 +223,27 @@
     <input type="range" id="fLogoBreedte" min="14" max="60" value="34" style="width:100%">
 
     <h4>Foto's</h4>
-    <label class="f">Foto 1 (bv. schuin aanzicht)</label>
+    <label class="f">Grote productfoto (midden)</label>
+    <input type="file" id="fFotoHoofd" accept="image/*">
+    <img id="tFotoHoofd" class="thumb hidden" alt="">
+    <label class="f">Foto 1 — klein, onder het logo</label>
     <input type="file" id="fFoto1" accept="image/*">
     <img id="tFoto1" class="thumb hidden" alt="">
-    <label class="f">Foto 2 (bv. bovenaanzicht)</label>
+    <label class="f">Foto 2 — klein, onder het logo</label>
     <input type="file" id="fFoto2" accept="image/*">
     <img id="tFoto2" class="thumb hidden" alt="">
+
+    <div class="sec-kop"><h4 style="margin:0">Pagina 2 — tekening &amp; onderdelen</h4>
+      <button class="btn sm" id="btnLegAdd" type="button">+ onderdeel</button></div>
+    <label class="f">Technische tekening</label>
+    <input type="file" id="fTekening" accept="image/*">
+    <img id="tTekening" class="thumb hidden" alt="">
+    <label class="f">Onderdelen — nummer en omschrijving</label>
+    <div id="legLijst"></div>
+    <label class="f" style="margin-top:10px">Icoontjes toevoegen — bestandsnaam wordt overgenomen</label>
+    <input type="file" id="fIconen" accept="image/*" multiple>
+    <p class="lead" style="font-size:11px;margin:4px 0 0">Noem het bestand bijvoorbeeld <b>152238 - Skimmer.png</b>. Nummer en omschrijving worden er automatisch uit gehaald en onthouden, dus de volgende keer staan ze er meteen weer.</p>
+    <div id="iconenStatus" class="status-msg hidden" style="margin-top:8px"></div>
 
     <div class="sec-kop"><h4 style="margin:0">Kenmerken rechtsboven</h4>
       <button class="btn sm" id="btnBadgeAdd" type="button">+ regel</button></div>
@@ -223,20 +268,37 @@
   <div id="previewKolom">
     <div class="sheet-scroll">
       <div id="sheet" class="b-roboto">
-        <div class="kop">
-          <div class="logo" id="sLogo"></div>
-          <div class="titel">
+        <div class="kopblok">
+          <div class="linkerkolom">
+            <div class="logo" id="sLogo"></div>
+            <div class="vlak klein" id="sFotoA"></div>
+            <div class="vlak klein" id="sFotoB"></div>
+          </div>
+          <div class="midden">
             <p class="model" id="sModel">Renew</p>
             <p class="collectie f-josefin" id="sCollectie">Passion Spas Pure Collection</p>
+            <div class="vlak hoofdfoto" id="sFotoHoofd"></div>
           </div>
-          <div class="badges" id="sBadges"></div>
+          <div class="badgegrid" id="sBadges"></div>
         </div>
-        <div class="fotos" id="sFotos"></div>
-        <div class="kolommen">
+        <div class="kolommen" style="margin-top:7mm">
           <div id="sKolomL"></div>
           <div id="sKolomR"></div>
         </div>
         <div class="voet"><span id="sVoetL"></span><span id="sVoetR"></span></div>
+      </div>
+      <!-- Pagina 2 — technische tekening + onderdelenlijst. In InDesign was dit
+           volgens Gretha het meeste gedoe; hier is het invullen en uploaden. -->
+      <div id="sheet2" class="b-roboto">
+        <div class="kopblok">
+          <div class="linkerkolom"><div class="logo" id="sLogo2"></div></div>
+          <div class="midden">
+            <p class="model" id="sModel2">Renew</p>
+            <p class="collectie f-josefin" id="sCollectie2">Passion Spas Pure Collection</p>
+          </div>
+        </div>
+        <div class="vlak tekeningvlak" id="sTekening"></div>
+        <div class="legenda" id="sLegenda"></div>
       </div>
     </div>
   </div>
@@ -303,7 +365,23 @@ function leegSheet(){
     id:"", naam:"", model:"", collectie:"Passion Spas Pure Collection",
     fontKop:"f-josefin", fontBody:"b-roboto",
     logoKeuze:"passion", logoEigen:"", logoBreedte:34,
-    foto1:"", foto2:"",
+    foto1:"", foto2:"", fotoHoofd:"",
+    tekening:"",
+    // Onderdelenlijst van pagina 2 — standaard de lijst uit de voorbeeld-sheet.
+    legenda:[
+      {code:"152238",naam:"Skimmer",img:""},
+      {code:"152365",naam:"1.5\" Water Diverter",img:""},
+      {code:"152241",naam:"2\" Water Diverter",img:""},
+      {code:"152019",naam:"Air Control",img:""},
+      {code:"152232",naam:"Pillow",img:""},
+      {code:"152231",naam:"Wiring Inlet",img:""},
+      {code:"150511",naam:"Drainage",img:""},
+      {code:"150992",naam:"Waterfall",img:""},
+      {code:"150561",naam:"5\" Jet (3 pcs)",img:""},
+      {code:"152228",naam:"3\" Jet (16 pcs)",img:""},
+      {code:"152230",naam:"1\" Jet (20 pcs)",img:""},
+      {code:"152244",naam:"Water Outlet",img:""},
+    ],
     badges:[
       {icoon:"♨", tekst:"Hybrid Heating", img:""},
       {icoon:"🛡", tekst:"Easyclean Shield", img:""},
@@ -377,6 +455,8 @@ async function laadAlles(){
     const r=await fetch(BUCKET+"?t="+Date.now(),{headers:{"X-Fonteyn-Auth":TEAM()}});
     if(r.ok){ const j=await r.json(); alles={sheets:(j&&j.sheets)||[]}; }
   }catch(e){ console.warn("laden faalde",e); }
+  // De icoontjes-bibliotheek erbij: die vult de onderdelen van pagina 2.
+  await loadIconen();
   vulKiezer();
   vulFormulier(); teken();
 }
@@ -464,8 +544,91 @@ function koppelUpload(inputId,thumbId,veld,maxPx){
     }catch(err){ toon("bad",err.message); }
   });
 }
+koppelUpload("fFotoHoofd","tFotoHoofd","fotoHoofd",1600);
 koppelUpload("fFoto1","tFoto1","foto1",1400);
 koppelUpload("fFoto2","tFoto2","foto2",1400);
+koppelUpload("fTekening","tTekening","tekening",1800);
+
+// ===== Onderdelen van pagina 2 + icoontjes-bibliotheek =====================
+// Gretha uploadt de icoontjes één keer met een bestandsnaam als
+// "152238 - Skimmer.png". Nummer en omschrijving worden daaruit gehaald en
+// samen met het plaatje bewaard, zodat ze bij een volgende sheet meteen
+// beschikbaar zijn en niet opnieuw ingetypt hoeven te worden.
+const ICONEN_URL=WORKER+"/data/specsheet-iconen";
+let iconen={};
+async function loadIconen(){
+  try{
+    const r=await fetch(ICONEN_URL,{headers:{"X-Fonteyn-Auth":TEAM()}});
+    if(r.ok){ const j=await r.json(); iconen=(j&&j.iconen)||{}; }
+  }catch(e){ console.warn("icoontjes laden faalde:",e); }
+}
+async function saveIconen(){
+  const r=await fetch(ICONEN_URL,{method:"PUT",
+    headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},
+    body:JSON.stringify({iconen,updated:new Date().toISOString()})});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+}
+// "152238 - Skimmer.png" → {code:"152238", naam:"Skimmer"}. Ook met een
+// en-streepje of zonder spaties eromheen.
+function leesBestandsnaam(naam){
+  const zonder=String(naam||"").replace(/\.[a-z0-9]+$/i,"").trim();
+  const m=zonder.match(/^\s*(\d{4,8})\s*[-–—]\s*(.+)$/);
+  if(m) return {code:m[1],naam:m[2].trim()};
+  const m2=zonder.match(/^\s*(\d{4,8})\s+(.+)$/);
+  if(m2) return {code:m2[1],naam:m2[2].trim()};
+  return {code:"",naam:zonder};
+}
+function tekenLegForm(){
+  const L=el("legLijst"); if(!L) return;
+  L.innerHTML=(S.legenda||[]).map((l,i)=>
+    "<div class='rij'>"+
+      (l.img?"<img src='"+l.img+"' alt='' style='width:26px;height:16px;object-fit:contain;border:1px solid var(--border);border-radius:3px'>":
+             "<span style='width:26px;height:16px;border:1px dashed var(--border);border-radius:3px;display:inline-block'></span>")+
+      "<input class='lbl' data-lc='"+i+"' value='"+esc(l.code||"")+"' placeholder='nummer' style='max-width:82px'>"+
+      "<input class='val' data-ln='"+i+"' value='"+esc(l.naam||"")+"' placeholder='omschrijving'>"+
+      "<button data-ldel='"+i+"' title='verwijderen'>✕</button>"+
+    "</div>").join("")||"<p class='lead' style='font-size:11.5px'>Nog geen onderdelen.</p>";
+  L.querySelectorAll("[data-lc]").forEach(inp=>inp.addEventListener("input",()=>{
+    S.legenda[+inp.dataset.lc].code=inp.value;
+    const hit=iconen[inp.value.trim()];
+    if(hit){ S.legenda[+inp.dataset.lc].naam=hit.naam; S.legenda[+inp.dataset.lc].img=hit.img; tekenLegForm(); }
+    teken();
+  }));
+  L.querySelectorAll("[data-ln]").forEach(inp=>inp.addEventListener("input",()=>{
+    S.legenda[+inp.dataset.ln].naam=inp.value; teken();
+  }));
+  L.querySelectorAll("[data-ldel]").forEach(b=>b.addEventListener("click",()=>{
+    S.legenda.splice(+b.dataset.ldel,1); tekenLegForm(); teken();
+  }));
+}
+el("btnLegAdd")&&el("btnLegAdd").addEventListener("click",()=>{
+  (S.legenda=S.legenda||[]).push({code:"",naam:"",img:""}); tekenLegForm(); teken();
+});
+el("fIconen")&&el("fIconen").addEventListener("change",async ev=>{
+  const st=el("iconenStatus"); st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Bezig…";
+  let nieuw=0, gekoppeld=0;
+  try{
+    for(const f of Array.from(ev.target.files||[])){
+      const {code,naam}=leesBestandsnaam(f.name);
+      const img=await leesAfbeelding(f,240,0.92);
+      const sleutel=code||naam;
+      iconen[sleutel]={code,naam,img,bestand:f.name};
+      nieuw++;
+      // Meteen koppelen aan de onderdelen die al in deze sheet staan.
+      for(const l of (S.legenda||[])){
+        if((code&&String(l.code).trim()===code)||(!code&&l.naam===naam)){ l.img=img; if(naam) l.naam=naam; gekoppeld++; }
+      }
+      // Staat het onderdeel er nog niet in? Dan toevoegen.
+      if(code&&!(S.legenda||[]).some(l=>String(l.code).trim()===code)) (S.legenda=S.legenda||[]).push({code,naam,img});
+    }
+    await saveIconen();
+    tekenLegForm(); teken();
+    st.className="status-msg ok";
+    st.textContent=nieuw+" icoontje(s) bewaard"+(gekoppeld?(", "+gekoppeld+" direct gekoppeld"):"")+". Ze staan nu ook klaar voor volgende sheets.";
+    try{ if(window.fpLog) window.fpLog("specsheet-iconen-geupload",nieuw+" icoontje(s)"); }catch(e){}
+  }catch(e){ st.className="status-msg bad"; st.textContent="Opslaan faalde: "+e.message; }
+  ev.target.value="";
+});
 koppelUpload("fLogoFile","tLogo","logoEigen",600);
 
 // ─── Formulier ⇄ model ──────────────────────────────────────────────
@@ -496,6 +659,9 @@ function vulFormulier(){
   el("fOptioneel").value=S.optioneel||""; el("fVoetL").value=S.voetL||""; el("fVoetR").value=S.voetR||"";
   const zetThumb=(id,val)=>{const t=el(id); if(val){t.src=val;t.classList.remove("hidden");}else t.classList.add("hidden");};
   zetThumb("tFoto1",S.foto1); zetThumb("tFoto2",S.foto2); zetThumb("tLogo",S.logoEigen);
+  zetThumb("tFotoHoofd",S.fotoHoofd); zetThumb("tTekening",S.tekening);
+  tekenLegForm();
+  zetThumb("tFotoHoofd",S.fotoHoofd); zetThumb("tTekening",S.tekening); tekenLegForm();
   tekenBadgeForm(); tekenBlokForm();
   el("sheetKies").value=S.id||"";
 }
@@ -602,16 +768,31 @@ function teken(){
   if(S.logoKeuze==="geen") lg.innerHTML="";
   else if(S.logoKeuze==="eigen") lg.innerHTML=S.logoEigen?"<img src='"+S.logoEigen+"' alt=''>":"";
   else lg.innerHTML="<img src='"+LOGOS[S.logoKeuze||"passion"]+"' alt=''>";
-  // kenmerken
+  // kenmerken — twee kolommen, zoals in het origineel. De laatste twee vakjes
+  // dragen de aanduiding '* Optional' als die is ingevuld.
   el("sBadges").innerHTML=S.badges.map(b=>
-    "<div class='badge'>"+(b.img?"<img src='"+b.img+"' alt=''>":
+    "<div class='badge vlak'>"+(b.img?"<img src='"+b.img+"' alt=''>":
       "<div class='bi'>"+esc(b.icoon||"")+"</div><div class='bt'>"+esc(b.tekst||"")+"</div>")+"</div>").join("")+
-    (S.optioneel?"<div class='optioneel'>"+esc(S.optioneel)+"</div>":"");
-  // foto's
-  const f=[];
-  if(S.foto1) f.push("<div class='fbox'><img src='"+S.foto1+"' alt=''></div>");
-  if(S.foto2) f.push("<div class='fbox'><img src='"+S.foto2+"' alt=''></div>");
-  el("sFotos").innerHTML=f.length?f.join(""):"<div class='leeg geenPrint'>Nog geen foto's — upload ze links</div>";
+    (S.optioneel?"<div class='badgevoet'><span>"+esc(S.optioneel)+"</span><span>"+esc(S.optioneel)+"</span></div>":"");
+  // Beeldvlakken: grote productfoto in het midden, twee kleinere links.
+  const vlak=(id,bron,tekst)=>{
+    const e=el(id); if(!e) return;
+    if(bron){ e.classList.remove("leegvlak"); e.innerHTML="<img src='"+bron+"' alt=''>"; }
+    else { e.classList.add("leegvlak"); e.innerHTML="<span class='geenPrint'>"+esc(tekst)+"</span>"; }
+  };
+  vlak("sFotoHoofd",S.fotoHoofd,"grote productfoto");
+  vlak("sFotoA",S.foto1,"foto 1");
+  vlak("sFotoB",S.foto2,"foto 2");
+  // ── Pagina 2 ──
+  el("sModel2").textContent=S.model||"";
+  el("sCollectie2").textContent=S.collectie||"";
+  el("sCollectie2").className="collectie "+(S.fontKop||"f-josefin");
+  el("sLogo2").innerHTML=el("sLogo").innerHTML;
+  vlak("sTekening",S.tekening,"technische tekening — upload hem links");
+  el("sLegenda").innerHTML=(S.legenda||[]).map(l=>
+    "<div class='legrij'><span class='icoon'>"+(l.img?"<img src='"+l.img+"' alt=''>":"")+"</span>"+
+    "<span>"+esc(l.code||"")+(l.code&&l.naam?" - ":"")+esc(l.naam||"")+"</span></div>").join("")||
+    "<div class='legrij geenPrint' style='grid-column:1/-1;color:#999'>Nog geen onderdelen — voeg ze links toe of upload de icoontjes.</div>";
   // specificatie-blokken, per kolom, met zebra-strepen
   const bouw=k=>S.blokken.filter(b=>(b.kolom||"L")===k).map(b=>
     "<div class='sectie'><h3>"+esc(b.titel||"")+"</h3>"+
@@ -628,10 +809,17 @@ function teken(){
 // Zoom van de preview (raakt de print niet)
 function zetZoom(){
   const z=Number(el("zoom").value)/100;
-  const sh=el("sheet");
-  sh.style.transform="scale("+z+")";
-  // hoogte meeschalen zodat er geen enorme witruimte onder blijft
-  sh.parentElement.style.height=(sh.offsetHeight*z+8)+"px";
+  // Beide pagina's meeschalen; anders staat pagina 2 op ware grootte naast een
+  // verkleinde pagina 1 en klopt de hoogte van het voorbeeldvenster niet.
+  let hoogte=8;
+  ["sheet","sheet2"].forEach(function(id){
+    const sh=el(id); if(!sh) return;
+    sh.style.transform="scale("+z+")";
+    sh.style.transformOrigin="top center";
+    hoogte+=sh.offsetHeight*z+8;
+  });
+  const houder=el("sheet").parentElement;
+  if(houder) houder.style.height=hoogte+"px";
 }
 el("zoom").addEventListener("input",zetZoom);
 window.addEventListener("resize",zetZoom);

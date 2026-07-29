@@ -38,6 +38,7 @@ const ALLOWED_BUCKETS = new Set([
   "reserveringen-live",  // Reserveringen-ledger uit Logic4 (uur-sync): per model open orders + betaald/vervallen
   "voorraad-productie",  // Open inkooporders bij de 9 spa-fabrieken (uur-sync): per model in productie + ETA
   "specsheets",       // Marketing: specificatiesheets per spa-model (tekst + verkleinde foto's)
+  "specsheet-iconen", // Marketing: icoontjes van de onderdelen op pagina 2, op artikelnummer
   "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail)
   "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
