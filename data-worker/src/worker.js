@@ -914,10 +914,16 @@ async function dpHandleMollieWebhook(request, env) {
 // diagnose van niet-aangekomen mails. loginlink: magic-link genereren
 // ZONDER e-mail — kopieerbaar, voor als de mail van een dealer (of Outlook)
 // niet meewerkt. Zelfde geldigheid als de mail-link (15 min, eenmalig).
-// SAFETY: de interne SHARED_SECRET staat in de tegel-HTML van een PUBLIEKE
-// repo en is dus als gelekt te beschouwen. Alles wat dealers raakt vereist
-// daarom een APARTE beheersleutel (DP_ADMIN_KEY, alleen als worker-secret +
-// eenmalig per beheerder-computer ingevoerd in de beheertegel).
+// SAFETY: de team-sleutel (SHARED_SECRET) staat NIET in de code — de tegels
+// lezen hem uit localStorage, waar hij bij het inloggen automatisch terechtkomt.
+// Maar hij komt daarmee wél op de computer van élke medewerker die inlogt, en
+// is dus breed verspreid. Data van échte dealers verdient een smallere kring,
+// en vereist daarom een APARTE beheersleutel: DP_ADMIN_KEY, die alleen als
+// worker-secret bestaat en eenmalig per beheerder-computer wordt ingevoerd in
+// de beheertegel.
+// (Deze toelichting stond er eerder anders: dat het shared secret in de
+// tegel-HTML zou staan. Dat klopt niet meer — de reden voor de tweede sleutel
+// blijft, de onderbouwing is hierboven bijgesteld.)
 function dpIsAdmin(request, env) {
   const h = request.headers.get("X-DP-Admin") || "";
   return !!env.DP_ADMIN_KEY && h === env.DP_ADMIN_KEY;
@@ -2145,8 +2151,9 @@ export default {
     }
 
     // Auth. LET OP: dealer-buckets bevatten data van échte dealers en zijn
-    // NIET benaderbaar met het (publiek zichtbare) shared secret — alleen
-    // met de aparte beheersleutel DP_ADMIN_KEY.
+    // NIET benaderbaar met de team-sleutel — die staat na het inloggen op de
+    // computer van elke medewerker. Daarvoor geldt de smallere beheersleutel
+    // DP_ADMIN_KEY; zie de toelichting bij dpIsAdmin.
     if (bucket.startsWith("dealer-")) {
       if (!dpIsAdmin(request, env)) return reply(403, "Dealer-buckets vereisen de beheersleutel (X-DP-Admin)");
     } else {
