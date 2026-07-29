@@ -106,7 +106,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <div class="card">
     <h3>Partners (<span id="partnerCount">0</span>)</h3>
     <table class="grid">
-      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th>Merk</th><th>Status</th><th></th></tr></thead>
       <tbody id="partnerBody"></tbody>
     </table>
     <div class="row" style="margin-top:12px">
@@ -248,11 +248,17 @@ function renderPartners(){
       <td><code>${esc(d.email)}</code></td>
       <td>${esc(d.company||"")}</td>
       <td><input class="debIn" data-i="${i}" value="${esc((d.debtorIds||[]).join(", "))}" style="width:120px;font-size:12px;padding:4px 7px"></td><td><select class="regIn" data-i="${i}" style="font-size:12px;padding:4px"><option value="EU"${(d.region||"EU")!=="US"?" selected":""}>EU (&euro;)</option><option value="US"${d.region==="US"?" selected":""}>US ($)</option></select></td>
+      <td><select class="merkIn" data-i="${i}" style="font-size:12px;padding:4px">
+        <option value="">— nog kiezen —</option>
+        <option value="passion"${d.merk==="passion"?" selected":""}>Passion Spas</option>
+        <option value="fonteyn"${d.merk==="fonteyn"?" selected":""}>Fonteyn</option>
+        <option value="beide"${d.merk==="beide"?" selected":""}>Beide</option>
+      </select></td>
       <td><span class="pill ${d.active!==false?"on":"off"}">${d.active!==false?"actief":"uit"}</span>
           <button class="rmv togAct" data-i="${i}" style="margin-left:6px">${d.active!==false?"blokkeer":"activeer"}</button></td>
       <td><button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink (15 min geldig) — handig als de e-mail niet aankomt of voor onboarding via WhatsApp">inloglink</button>
           <button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
-    </tr>`).join("") || '<tr><td colspan="6" style="color:var(--muted)">Nog geen partners — voeg de eerste toe.</td></tr>';
+    </tr>`).join("") || '<tr><td colspan="7" style="color:var(--muted)">Nog geen partners — voeg de eerste toe.</td></tr>';
   document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     d.active = d.active === false ? true : false;
@@ -291,6 +297,14 @@ function renderPartners(){
     const d = accounts.dealers[Number(sel.dataset.i)];
     d.region = sel.value;   // US = dollarprijzen, EU = europrijzen
     await save("dealer-accounts", accounts);
+  }));
+  // Merk bepaalt straks welke mappen deze dealer in de beeldbank ziet: een
+  // Fonteyn-dealer hoort geen Passion Spas-materiaal te krijgen en andersom.
+  document.querySelectorAll(".merkIn").forEach(sel=>sel.addEventListener("change", async ()=>{
+    const d = accounts.dealers[Number(sel.dataset.i)];
+    d.merk = sel.value || null;
+    try{ if(window.fpLog) window.fpLog("partner-merk-gewijzigd",d.email+" → "+(d.merk||"nog niet ingesteld")); }catch(e){}
+    await save("dealer-accounts", accounts); renderPartners();
   }));
 }
 $("addPartner").addEventListener("click", async ()=>{
