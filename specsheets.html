@@ -76,7 +76,8 @@
   #sheet .kop .logo{width:34mm;flex:0 0 auto}
   #sheet .kop .logo img{width:100%;display:block}
   #sheet .kop .titel{flex:1;padding-top:3mm}
-  #sheet .model{font-family:Helvetica,Arial,sans-serif;font-weight:900;font-size:34pt;line-height:.95;letter-spacing:-.5pt;margin:0}
+  #sheet .model{font-family:"HelveticaBold",Helvetica,Arial,sans-serif;font-weight:900;font-size:34pt;line-height:.95;letter-spacing:-.5pt;margin:0}
+  #sheet .sectie h3{font-family:"HelveticaBold",Helvetica,Arial,sans-serif}
   #sheet .collectie{font-size:17pt;line-height:1.15;margin:1mm 0 0;color:#111;font-weight:300}
   #sheet .badges{flex:0 0 auto;width:20mm;display:flex;flex-direction:column;gap:1.4mm;align-items:center}
   #sheet .badge{width:100%;border:.6pt solid #b9b3aa;border-radius:1mm;padding:1.2mm .6mm;text-align:center;background:#fff}
@@ -99,6 +100,13 @@
   #sheet .voet{position:absolute;left:13mm;right:13mm;bottom:7mm;font-size:6pt;color:#555;display:flex;justify-content:space-between;font-family:Montserrat,sans-serif}
 
   /* Lettertype-varianten voor de collectie-regel */
+  /* De échte huisstijl-fonts (Gretha, 29 jul). Ze worden bij het openen geladen
+     uit de beveiligde opslag — niet uit de repo, want die is publiek en dit zijn
+     gelicentieerde fonts. Zolang ze nog niet binnen zijn valt de tekst terug op
+     de benaderingen hieronder, zodat de sheet altijd leesbaar blijft. */
+  .f-sephir{font-family:"Sephir","Josefin Sans",Helvetica,sans-serif}
+  .b-huisstijl,.b-huisstijl .spec,.b-huisstijl .sectie h3{font-family:"HelveticaNeueCond","Univers Condensed","Roboto Condensed",Helvetica,Arial,sans-serif}
+  .b-univers,.b-univers .spec,.b-univers .sectie h3{font-family:"Univers Condensed","Roboto Condensed",Helvetica,Arial,sans-serif}
   .f-josefin{font-family:"Josefin Sans",Helvetica,sans-serif}
   .f-julius{font-family:"Julius Sans One",Helvetica,sans-serif}
   .f-marcellus{font-family:"Marcellus",Georgia,serif}
@@ -156,6 +164,7 @@
     <input type="text" id="fCollectie" placeholder="Passion Spas Pure Collection">
     <label class="f">Lettertype collectie-regel</label>
     <select id="fFontKop">
+      <option value="f-sephir">Sephir — het échte font uit de originele sheet</option>
       <option value="f-josefin">Josefin Sans — licht &amp; breed (lijkt het meest op het origineel)</option>
       <option value="f-julius">Julius Sans One — elegant, hoofdletters</option>
       <option value="f-marcellus">Marcellus — klassiek met schreef</option>
@@ -163,6 +172,8 @@
     </select>
     <label class="f">Lettertype specificaties</label>
     <select id="fFontBody">
+      <option value="b-huisstijl">Helvetica Neue Condensed — huisstijl (let op: schuine snede)</option>
+      <option value="b-univers">Univers Condensed — huisstijl, rechtop</option>
       <option value="b-roboto">Roboto Condensed — smal (zoals het origineel)</option>
       <option value="b-helv">Helvetica / Arial — standaard</option>
     </select>
@@ -242,6 +253,29 @@ const ALLOWED=new Set([
 const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
 const BUCKET=WORKER+"/data/specsheets";
 const TEAM=()=>localStorage.getItem("fp.teamkey")||"";
+
+// ─── Huisstijl-fonts laden ────────────────────────────────────────────────
+// Sephir, Helvetica Bold, Helvetica Neue Condensed en Univers Condensed staan
+// in de beveiligde opslag (bucket specsheet-fonts) en niet in de repo — die is
+// publiek en dit zijn gelicentieerde fonts. Lukt het laden niet, dan valt de
+// sheet terug op de gratis benaderingen; er gaat dus nooit iets stuk.
+async function laadHuisstijlFonts(){
+  try{
+    const r=await fetch(WORKER+"/data/specsheet-fonts",{headers:{"X-Fonteyn-Auth":TEAM()}});
+    if(!r.ok) return;
+    const j=await r.json();
+    const naar={sephir:"Sephir",helvBold:"HelveticaBold",helvNeueCond:"HelveticaNeueCond",universCond:"Univers Condensed"};
+    let css="";
+    for(const [sleutel,f] of Object.entries(j.fonts||{})){
+      const familie=naar[sleutel]; if(!familie||!f.base64) continue;
+      css+="@font-face{font-family:'"+familie+"';src:url(data:font/"+(f.type==="opentype"?"otf":"ttf")+
+           ";base64,"+f.base64+") format('"+f.type+"');font-display:swap}\n";
+    }
+    if(!css) return;
+    const st=document.createElement("style"); st.textContent=css; document.head.appendChild(st);
+  }catch(e){ console.warn("huisstijl-fonts laden faalde:",e); }
+}
+laadHuisstijlFonts();
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function el(id){return document.getElementById(id);}
 function toon(cls,txt){const s=el("status");s.className="status-msg "+cls;s.textContent=txt;s.classList.remove("hidden");

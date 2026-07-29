@@ -41,6 +41,10 @@ const ALLOWED_BUCKETS = new Set([
   "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail)
   "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
+  // De huisstijl-fonts (Sephir, Helvetica, Univers) zijn commercieel
+  // gelicentieerd. Ze staan hier en NIET in de repo, want die is publiek —
+  // in de repo zetten zou neerkomen op ze doorgeven aan iedereen.
+  "specsheet-fonts",
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
