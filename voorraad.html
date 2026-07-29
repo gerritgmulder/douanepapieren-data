@@ -745,7 +745,14 @@ function alleenLezen(){
   window.fetch=function(url,opts){
     const methode=String((opts&&opts.method)||"GET").toUpperCase();
     const adres=String((url&&url.url)||url||"");
-    if(methode==="PUT"||(methode==="POST"&&/\/dealers\/admin\//.test(adres))){
+    // Omgekeerd geregeld: alles wat geen GET is wordt geweigerd, behálve een
+    // korte lijst die aantoonbaar niets verandert (Logic4 uitlezen, tracking
+    // opvragen, en de eigen regel in het activiteitenlogboek). Eerst stond hier
+    // een lijst met wat wél geblokkeerd moest worden, en dan glipt elke nieuwe
+    // schrijfactie er vanzelf langs — dat gebeurde met de inkooporder-route.
+    const LEEST_ALLEEN=[/\/api\/logic4-call$/,/\/api\/health$/,/\/api\/me$/,/\/track$/,/\/log$/,
+                        /\/voorraad\/inkooporder\/voorstel$/];
+    if(methode!=="GET"&&!LEEST_ALLEEN.some(re=>re.test(adres.split("?")[0]))){
       try{ setStatus("bad","Je hebt alleen-lezen toegang tot Voorraadbeheer — wijzigen doen Chantal, Arno en Manon."); }catch(e){}
       return Promise.resolve(new Response('{"ok":false,"error":"alleen-lezen"}',
         {status:403,headers:{"Content-Type":"application/json"}}));
