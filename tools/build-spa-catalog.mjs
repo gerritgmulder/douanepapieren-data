@@ -50,12 +50,26 @@ for (let page = 0; page < 200; page++) {
   scanned += prods.length;
   for (const p of prods) {
     const code = String(p.ProductCode || "");
-    if (!wanted.has(code)) continue;
+    const naam = p.ProductName1 || p.Description || "";
+    let model = wanted.has(code) ? byCode[code] : null;
+    // De handmatige SPA_BY_CODE-lijst liep achter op Logic4: 286 spa-artikelen
+    // ontbraken erin, waaronder hele modellen (Dynamic, Fitness, Activity) en
+    // de Sydney. Daardoor vond de proforma-koppeling geen artikelcode terwijl
+    // het artikel gewoon bestond. Staat een artikel niet in de lijst, dan
+    // leiden we het model af uit de productnaam van Logic4 zelf.
+    if (!model && /(swimspa|spa) \|/i.test(naam)
+        && !/cover|filter|kussen|hoes|trap|onderhoud|prijskaart|cabinet|jet\b/i.test(naam)) {
+      model = naam.split("|")[0].replace(/\bswimspa\b/ig, " ").replace(/\bspa\b/ig, " ")
+                  .replace(/\s+/g, " ").trim() || null;
+    }
+    if (!model) continue;
+    // ECO is een ánder model dan de gewone uitvoering (Chantal) — apart houden.
+    if (/\bECO\b/i.test(naam) && !/ECO/i.test(model)) model += " ECO";
     found++;
-    (catalog[byCode[code]] = catalog[byCode[code]] || []).push({
+    (catalog[model] = catalog[model] || []).push({
       code,
       productId: p.Id || p.ProductId || null,
-      desc: p.ProductName1 || p.Description || "",
+      desc: naam,
     });
   }
   process.stderr.write(`\r  ${scanned} producten gescand, ${found} spa-varianten gevonden`);
