@@ -80,7 +80,7 @@
   #sheet .sectie h3{font-family:"HelveticaBold",Helvetica,Arial,sans-serif}
   #sheet .collectie,#sheet2 .collectie{font-size:17pt;line-height:1.15;margin:1mm 0 0;color:#111;font-weight:300}
   #sheet .badges{flex:0 0 auto;width:20mm;display:flex;flex-direction:column;gap:1.4mm;align-items:center}
-  #sheet .badge{width:100%;border:.6pt solid #b9b3aa;border-radius:1mm;padding:1.2mm .6mm;text-align:center;background:#fff}
+  #sheet .badge{width:100%;border:0;padding:.6mm;text-align:center;background:transparent}
   #sheet .badge .bi{font-size:11pt;line-height:1}
   #sheet .badge .bt{font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:3.6pt;letter-spacing:.02em;line-height:1.15;margin-top:.6mm;text-transform:uppercase}
   #sheet .badge img{width:100%;display:block}
@@ -95,22 +95,22 @@
   #sheet .linkerkolom .logo,#sheet2 .linkerkolom .logo{width:100%}
   #sheet .linkerkolom .logo img,#sheet2 .linkerkolom .logo img{width:100%;display:block}
   #sheet .midden,#sheet2 .midden{flex:1;min-width:0}
-  #sheet .vlak,#sheet2 .vlak{border:.8pt solid #d9d4cc;border-radius:1mm;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
-  #sheet .vlak.leegvlak,#sheet2 .vlak.leegvlak{border-style:dashed;border-color:#ccc;color:#c4c4c4;font-family:Montserrat,sans-serif;font-size:7pt}
+  #sheet .vlak,#sheet2 .vlak{border:0;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  #sheet .vlak.leegvlak,#sheet2 .vlak.leegvlak{border:1px dashed #d8d8d8;color:#c4c4c4;font-family:Montserrat,sans-serif;font-size:7pt}
   #sheet .vlak img,#sheet2 .vlak img{max-width:100%;max-height:100%;object-fit:contain;display:block}
   #sheet .klein{height:32mm}
-  #sheet .hoofdfoto{height:70mm;margin-top:2mm}
-  #sheet .badgegrid{flex:0 0 auto;width:42mm;display:grid;grid-template-columns:1fr 1fr;gap:1.6mm}
-  #sheet .badgegrid .badge{aspect-ratio:1/1;padding:1mm .6mm;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  #sheet .hoofdfoto{aspect-ratio:1/1;height:auto;margin-top:2mm}
+  #sheet .badgegrid{flex:0 0 auto;width:42mm;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:min-content;gap:1.2mm;align-content:start}
+  #sheet .badgegrid .badge{aspect-ratio:1/1;max-height:14.5mm;padding:.4mm;display:flex;flex-direction:column;align-items:center;justify-content:center}
   #sheet .badgevoet{grid-column:1/-1;display:flex;justify-content:space-between;font-size:4.6pt;color:#333;font-style:italic}
 
   /* ── Pagina 2: technische tekening + onderdelenlijst ───────────────────── */
   #sheet2{width:210mm;min-height:297mm;background:#fff;margin:14px auto 0;padding:14mm 13mm 12mm;
     box-shadow:0 3px 16px rgba(0,0,0,.14);color:#000;position:relative}
-  #sheet2 .tekeningvlak{height:150mm;margin-top:8mm}
-  #sheet2 .legenda{margin-top:8mm;background:var(--zebra);padding:5mm 4mm;display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5mm 5mm}
-  #sheet2 .legrij{display:flex;align-items:center;gap:2.5mm;font-size:7.6pt;line-height:1.3}
-  #sheet2 .legrij .icoon{width:9mm;height:5mm;flex:0 0 auto;border:.7pt solid #c8102e;background:#fff;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  #sheet2 .tekeningvlak{height:118mm;margin-top:6mm}
+  #sheet2 .legenda{margin-top:6mm;background:var(--zebra);padding:4mm 4mm;display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.2mm 5mm}
+  #sheet2 .legrij{display:flex;align-items:center;gap:2.5mm;font-size:10pt;line-height:1.25}
+  #sheet2 .legrij .icoon{width:12mm;height:8mm;flex:0 0 auto;border:0;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden}
   #sheet2 .legrij .icoon img{max-width:100%;max-height:100%;object-fit:contain}
 
   #sheet .fotos{display:flex;gap:4mm;align-items:center;justify-content:center;margin:5mm 0 6mm;min-height:62mm}
@@ -120,7 +120,7 @@
   #sheet .kolommen{display:grid;grid-template-columns:1fr 1fr;gap:7mm}
   #sheet .sectie{margin-bottom:5mm;break-inside:avoid}
   #sheet .sectie h3{font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:8.2pt;letter-spacing:.02em;margin:0 0 1.4mm;text-transform:uppercase}
-  #sheet .spec{display:flex;align-items:baseline;font-size:7.4pt;line-height:1.62;padding:0 1mm}
+  #sheet .spec{display:flex;align-items:baseline;font-size:10pt;line-height:1.34;padding:0 1mm}
   #sheet .spec .l{white-space:nowrap}
   #sheet .spec .d{flex:1;border-bottom:.7pt dotted #4a4a4a;margin:0 1pt 1.4pt;min-width:6pt}
   #sheet .spec .v{white-space:nowrap;padding-left:1pt}
@@ -153,6 +153,16 @@
     #sheet,#sheet2{width:210mm;min-height:297mm;box-shadow:none;margin:0;transform:none!important}
     /* Pagina 2 begint op een nieuw vel */
     #sheet2{page-break-before:always;break-before:page}
+    /* De grijsbeige balken achter de specificaties verdwenen bij printen en in
+       de PDF. Browsers laten achtergrondkleuren standaard weg om inkt te sparen;
+       hiermee dwingen we af dat ze wél meegaan. */
+    #sheet,#sheet2,#sheet *,#sheet2 *{
+      -webkit-print-color-adjust:exact !important;
+      print-color-adjust:exact !important;
+      color-adjust:exact !important;
+    }
+    /* Het gestippelde kader is een hulpmiddel op het scherm, geen opmaak. */
+    #sheet .vlak.leegvlak,#sheet2 .vlak.leegvlak{border:0 !important}
     @page{size:A4 portrait;margin:0}
   }
 </style>
@@ -250,8 +260,10 @@
     <p style="font-size:11px;color:var(--muted);margin:0 0 8px">Typ een symbool + tekst, óf upload het originele icoontje (dan vervangt de afbeelding het symbool).</p>
     <div id="badgeLijst"></div>
     <input type="file" id="fBadgeFile" accept="image/*" class="hidden">
-    <label class="f">Voetnoot bij kenmerken</label>
+    <label class="f">Voetnoot onder de linker kolom kenmerken</label>
     <input type="text" id="fOptioneel" placeholder="* Optional">
+    <label class="f">Voetnoot onder de rechter kolom kenmerken</label>
+    <input type="text" id="fOptioneel2" placeholder="laat leeg als je er maar één wilt">
 
     <div class="sec-kop"><h4 style="margin:0">Specificatie-blokken</h4>
       <button class="btn sm" id="btnBlokAdd" type="button">+ blok</button></div>
@@ -389,7 +401,7 @@ function leegSheet(){
       {icoon:"💆", tekst:"Soft Tissue Massage", img:""},
       {icoon:"🌊", tekst:"Freestyle Massage", img:""},
     ],
-    optioneel:"* Optional",
+    optioneel:"* Optional", optioneel2:"",
     blokken:[
       {kolom:"L", titel:"SPECIFICATIONS/GENERAL", regels:[
         {l:"Dimensions L x W x H",v:"208 x 155 x 83 cm"},
@@ -636,7 +648,7 @@ function bind(id,veld){
   el(id).addEventListener("input",()=>{ S[veld]=el(id).value; teken(); });
 }
 bind("fModel","model"); bind("fCollectie","collectie");
-bind("fOptioneel","optioneel"); bind("fVoetL","voetL"); bind("fVoetR","voetR");
+bind("fOptioneel","optioneel"); bind("fOptioneel2","optioneel2"); bind("fVoetL","voetL"); bind("fVoetR","voetR");
 el("fFontKop").addEventListener("change",()=>{S.fontKop=el("fFontKop").value;teken();});
 el("fFontBody").addEventListener("change",()=>{S.fontBody=el("fFontBody").value;teken();});
 el("fLogoKeuze").addEventListener("change",()=>{
@@ -656,7 +668,7 @@ function vulFormulier(){
   el("fLogoKeuze").value=S.logoKeuze||"passion";
   el("fLogoFile").classList.toggle("hidden",S.logoKeuze!=="eigen");
   el("fLogoBreedte").value=S.logoBreedte||34; el("logoBreedteVal").textContent=S.logoBreedte||34;
-  el("fOptioneel").value=S.optioneel||""; el("fVoetL").value=S.voetL||""; el("fVoetR").value=S.voetR||"";
+  el("fOptioneel").value=S.optioneel||""; el("fOptioneel2").value=S.optioneel2||""; el("fVoetL").value=S.voetL||""; el("fVoetR").value=S.voetR||"";
   const zetThumb=(id,val)=>{const t=el(id); if(val){t.src=val;t.classList.remove("hidden");}else t.classList.add("hidden");};
   zetThumb("tFoto1",S.foto1); zetThumb("tFoto2",S.foto2); zetThumb("tLogo",S.logoEigen);
   zetThumb("tFotoHoofd",S.fotoHoofd); zetThumb("tTekening",S.tekening);
@@ -699,7 +711,8 @@ function tekenBadgeForm(){
 el("fBadgeFile").addEventListener("change",async e=>{
   const f=e.target.files[0]; if(!f||badgeDoel<0) return;
   try{
-    S.badges[badgeDoel].img=await leesAfbeelding(f,300,0.9);
+    // Gretha: symbolen maximaal 175 x 175 pixels.
+    S.badges[badgeDoel].img=await leesAfbeelding(f,175,0.92);
     tekenBadgeForm(); teken(); toon("ok","Icoon toegevoegd.");
   }catch(err){ toon("bad",err.message); }
   badgeDoel=-1;
@@ -773,7 +786,8 @@ function teken(){
   el("sBadges").innerHTML=S.badges.map(b=>
     "<div class='badge vlak'>"+(b.img?"<img src='"+b.img+"' alt=''>":
       "<div class='bi'>"+esc(b.icoon||"")+"</div><div class='bt'>"+esc(b.tekst||"")+"</div>")+"</div>").join("")+
-    (S.optioneel?"<div class='badgevoet'><span>"+esc(S.optioneel)+"</span><span>"+esc(S.optioneel)+"</span></div>":"");
+    ((S.optioneel||S.optioneel2)
+      ? "<div class='badgevoet'><span>"+esc(S.optioneel||"")+"</span><span>"+esc(S.optioneel2||"")+"</span></div>" : "");
   // Beeldvlakken: grote productfoto in het midden, twee kleinere links.
   const vlak=(id,bron,tekst)=>{
     const e=el(id); if(!e) return;
