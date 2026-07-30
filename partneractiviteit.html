@@ -212,13 +212,27 @@ function render(){
 (function(){
   var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
   // Apparaat + app-versie meesturen. Zonder dit was bij een onverwachte inlog
-  // niet te achterhalen op wélke computer dat gebeurde. In een gewone browser
-  // bestaat window.fonteynApp niet; dan noteren we wat de browser prijsgeeft.
+  // niet te achterhalen op wélke computer dat gebeurde. Alles komt uit de
+  // pagina zelf, zodat dit werkt zonder dat er iets geïnstalleerd hoeft te
+  // worden — updates gaan uitsluitend via de cloud.
   function apparaat(){
-    var a=window.fonteynApp;
-    if(a) return {computer:a.computer||null, platform:a.platform||null, versie:a.versie||null};
-    var m=(navigator.userAgent||"").match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
-    return {computer:null, platform:m?m[1].replace(/_/g,"."):null, versie:"browser"};
+    // Alles hieruit komt uit de pagina zelf, zodat het werkt zonder dat iemand
+    // iets hoeft te installeren. De user-agent verraadt of dit de app is
+    // (Electron) of een gewone browser, en welke versie van de app het is.
+    var ua=navigator.userAgent||"";
+    var app=ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+    var elc=ua.match(/Electron\/([\d.]+)/i);
+    var versie=app?("app "+app[1]):(elc?("app · Electron "+elc[1]):"browser");
+    var pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
+    // Vaste sleutel per computer: een willekeurig nummer dat hier blijft staan.
+    // Geen persoonsgegeven — het zegt alleen DAT het dezelfde computer is. De
+    // herkenbare naam koppel je in het activiteitenlogboek.
+    var id=null;
+    try{
+      id=localStorage.getItem("fp.apparaat");
+      if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("fp.apparaat",id); }
+    }catch(e){}
+    return {computer:id, platform:pm?pm[1].replace(/_/g,"."):null, versie:versie};
   }
   window.fpLog=function(action,detail){try{
     var email=(localStorage.getItem("fp.email")||"").toLowerCase();

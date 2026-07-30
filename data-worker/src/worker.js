@@ -40,6 +40,7 @@ const ALLOWED_BUCKETS = new Set([
   "specsheets",       // Marketing: specificatiesheets per spa-model (tekst + verkleinde foto's)
   "specsheet-iconen", // Marketing: icoontjes van de onderdelen op pagina 2, op artikelnummer
   "voorraad-inkooporders", // Welke proforma al een inkooporder is geworden — voorkomt dubbel bestellen
+  "apparaten",        // Computer-sleutel (PC-XXXXXX) → herkenbare naam, voor het activiteitenlogboek
   "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail)
   "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)

@@ -19,14 +19,11 @@
 
 const { contextBridge, ipcRenderer } = require("electron");
 
-// Apparaat-info voor het activiteitenlogboek. Zonder dit was bij een
-// onverwachte inlog niet te achterhalen op wélke computer dat gebeurde.
-// Alleen platform, computernaam en app-versie — geen persoonlijke gegevens.
-contextBridge.exposeInMainWorld("fonteynApp", {
-  versie: process.env.npm_package_version || require("./package.json").version,
-  platform: process.platform,          // "darwin" | "win32"
-  computer: require("os").hostname(),
-});
+// LET OP: hier stond apparaat-info voor het activiteitenlogboek. Dat werkte
+// bij niemand, want dit bestand zit in het installatiebestand en updates gaan
+// uitsluitend via de cloud — er wordt nooit opnieuw geïnstalleerd. De tegels
+// bepalen die info nu zelf uit de user-agent plus een vaste sleutel in
+// localStorage. Zet hier dus niets neer waar een tegel van afhankelijk is.
 
 contextBridge.exposeInMainWorld("fonteynPrint", {
   isAvailable: true,

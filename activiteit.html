@@ -101,6 +101,11 @@
       </table></div>
     </div>
     <div class="card">
+      <h3>Computers</h3>
+      <p class="lead" style="font-size:12px;margin:-6px 0 10px">Elke computer krijgt een eigen sleutel zodra iemand daar het dashboard opstart. Geef hem hieronder een naam, dan staat die overal in het logboek in plaats van het nummer.</p>
+      <div id="apparaten"></div>
+    </div>
+    <div class="card">
       <h3>Alle gebeurtenissen <span id="evCount" style="color:var(--muted);font-weight:400;font-size:12px"></span></h3>
       <div class="tablewrap"><table class="grid">
         <thead><tr><th>Wanneer</th><th>Medewerker</th><th>Afdeling</th><th>Rechten</th><th>Actie</th><th>Tegel</th><th>Computer</th></tr></thead>
@@ -155,13 +160,65 @@ function afdelingPill(user){
 function isEigenAccount(u){ return /^(fonteynbot|fonteyn\.bot|fonteynbot@fonteyn\.nl)$/.test(String(u||"").toLowerCase()); }
 // Op welke computer gebeurde dit. Alleen gevuld voor events vanaf 28 jul 2026;
 // daarvóór werd het niet vastgelegd.
+// De computer-sleutel (PC-XXXXXX) is een willekeurig nummer dat op die computer
+// blijft staan. Zodra je weet van wie hij is, geef je hem hieronder een naam;
+// die wordt centraal bewaard en geldt dan voor iedereen die het logboek leest.
+let apparaatNamen={};
+function apparaatNaam(id){ return apparaatNamen[id]||null; }
 function apparaatTekst(e){
-  const p={darwin:"Mac",win32:"Windows",linux:"Linux"}[e.platform]||e.platform||null;
-  const d=[e.computer,p].filter(Boolean).join(" · ");
-  if(!d) return "<span style='color:var(--muted);font-size:11px'>—</span>";
-  const v=e.versie&&e.versie!=="browser"?(" v"+e.versie):(e.versie==="browser"?" (browser)":"");
-  return "<span title='"+esc(d+v)+"' style='font-size:11.5px'>"+esc(d)+
-    "<span style='color:var(--muted)'>"+esc(v)+"</span></span>";
+  if(!e.computer&&!e.platform) return "<span style='color:var(--muted);font-size:11px'>—</span>";
+  const p={darwin:"Mac",win32:"Windows",linux:"Linux"}[e.platform]||e.platform||"";
+  const naam=apparaatNaam(e.computer);
+  const zichtbaar=naam||e.computer||p;
+  const volledig=[e.computer,p,e.versie].filter(Boolean).join(" · ");
+  return "<span title='"+esc(volledig)+"' style='font-size:11.5px'>"+esc(zichtbaar)+
+    (naam?"":"<span style='color:var(--muted)'> "+esc(p)+"</span>")+"</span>";
+}
+async function loadApparaten(){
+  try{
+    const r=await fetch(WORKER+"/data/apparaten",{headers:{"X-Fonteyn-Auth":TEAM}});
+    if(r.ok){ const j=await r.json(); apparaatNamen=(j&&j.namen)||{}; }
+  }catch(e){}
+}
+async function saveApparaten(){
+  try{
+    await fetch(WORKER+"/data/apparaten",{method:"PUT",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM},
+      body:JSON.stringify({namen:apparaatNamen,updated:new Date().toISOString()})});
+  }catch(e){}
+}
+// Overzichtje van alle computers die in dit logboek voorkomen, met een veld om
+// er een naam aan te hangen.
+function renderApparaten(evs){
+  const box=document.getElementById("apparaten"); if(!box) return;
+  const per={};
+  for(const e of evs){
+    if(!e.computer) continue;
+    const a=per[e.computer]=per[e.computer]||{n:0,users:new Set(),platform:e.platform,versie:e.versie,laatst:""};
+    a.n++; if(e.user) a.users.add(e.user);
+    if(e.ts>a.laatst) a.laatst=e.ts;
+  }
+  const ids=Object.keys(per).sort((a,b)=>per[b].n-per[a].n);
+  if(!ids.length){
+    box.innerHTML="<p class='lead' style='font-size:12.5px'>Nog geen computers herkend. Dat verschijnt zodra iemand het dashboard opnieuw opstart.</p>";
+    return;
+  }
+  box.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr><th>Computer</th><th>Naam geven</th><th>Gebruikt door</th><th>Platform</th><th>App-versie</th><th>Acties</th><th>Laatst gezien</th></tr></thead><tbody>"+
+    ids.map(id=>{
+      const a=per[id];
+      return "<tr><td><code>"+esc(id)+"</code></td>"+
+        "<td><input class='appNaam' data-id='"+esc(id)+"' value='"+esc(apparaatNamen[id]||"")+"' placeholder='bv. laptop Chantal' style='width:170px;font-size:12px;padding:4px 7px'></td>"+
+        "<td style='font-size:12px'>"+esc([...a.users].join(", "))+"</td>"+
+        "<td style='font-size:12px'>"+esc(a.platform||"—")+"</td>"+
+        "<td style='font-size:12px'>"+esc(a.versie||"—")+"</td>"+
+        "<td>"+a.n+"</td>"+
+        "<td style='font-size:12px'>"+(a.laatst?new Date(a.laatst).toLocaleString("nl-NL"):"—")+"</td></tr>";
+    }).join("")+"</tbody></table></div>";
+  box.querySelectorAll(".appNaam").forEach(inp=>inp.addEventListener("change",async()=>{
+    const v=inp.value.trim();
+    if(v) apparaatNamen[inp.dataset.id]=v; else delete apparaatNamen[inp.dataset.id];
+    await saveApparaten(); render();
+  }));
 }
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function kpi(n,l){return "<div class='kpi'><div class='n'>"+n+"</div><div class='l'>"+l+"</div></div>";}
@@ -197,6 +254,7 @@ async function load(){
     const j=r.ok?await r.json():{events:[]};
     allEvents=(j&&j.events)||[];
   }catch(e){ allEvents=[]; }
+  await loadApparaten();
   document.getElementById("updated").textContent=allEvents.length+" gebeurtenissen deze maand";
   render();
 }
@@ -266,6 +324,7 @@ function render(){
     "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+esc(e.user)+"</td><td>"+afdelingPill(e.user)+"</td><td>"+rolPill(e.rol)+"</td><td>"+actionPill(e.action)+"</td><td>"+esc(tileName(e.tile))+detailCel(e.detail,"var(--muted)"," · ")+"</td><td>"+apparaatTekst(e)+"</td></tr>"
   ).join("")||"<tr><td colspan='7' style='color:var(--muted)'>Geen gebeurtenissen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
   koppelDetails();
+  renderApparaten(evs);
 }
 // Lange omschrijvingen (bv. welke velden Manon op een douanepapier heeft
 // ingevuld) niet afkappen: één regel tonen, de volledige tekst in de tooltip,
@@ -288,13 +347,27 @@ function koppelDetails(){
 (function(){
   var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
   // Apparaat + app-versie meesturen. Zonder dit was bij een onverwachte inlog
-  // niet te achterhalen op wélke computer dat gebeurde. In een gewone browser
-  // bestaat window.fonteynApp niet; dan noteren we wat de browser prijsgeeft.
+  // niet te achterhalen op wélke computer dat gebeurde. Alles komt uit de
+  // pagina zelf, zodat dit werkt zonder dat er iets geïnstalleerd hoeft te
+  // worden — updates gaan uitsluitend via de cloud.
   function apparaat(){
-    var a=window.fonteynApp;
-    if(a) return {computer:a.computer||null, platform:a.platform||null, versie:a.versie||null};
-    var m=(navigator.userAgent||"").match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
-    return {computer:null, platform:m?m[1].replace(/_/g,"."):null, versie:"browser"};
+    // Alles hieruit komt uit de pagina zelf, zodat het werkt zonder dat iemand
+    // iets hoeft te installeren. De user-agent verraadt of dit de app is
+    // (Electron) of een gewone browser, en welke versie van de app het is.
+    var ua=navigator.userAgent||"";
+    var app=ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+    var elc=ua.match(/Electron\/([\d.]+)/i);
+    var versie=app?("app "+app[1]):(elc?("app · Electron "+elc[1]):"browser");
+    var pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
+    // Vaste sleutel per computer: een willekeurig nummer dat hier blijft staan.
+    // Geen persoonsgegeven — het zegt alleen DAT het dezelfde computer is. De
+    // herkenbare naam koppel je in het activiteitenlogboek.
+    var id=null;
+    try{
+      id=localStorage.getItem("fp.apparaat");
+      if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("fp.apparaat",id); }
+    }catch(e){}
+    return {computer:id, platform:pm?pm[1].replace(/_/g,"."):null, versie:versie};
   }
   window.fpLog=function(action,detail){try{
     var email=(localStorage.getItem("fp.email")||"").toLowerCase();

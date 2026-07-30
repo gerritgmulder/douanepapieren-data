@@ -799,13 +799,33 @@ async function provisionTeamKey(username, password) {
 
 // Login melden zodra de team-sleutel er is. Wacht maximaal 15 seconden (30 x
 // 500 ms) — dat is ruim genoeg voor provisionTeamKey, ook op een trage laptop.
+// Apparaat-info uit de pagina zelf. Bewust NIET via preload.js: dat bestand zit
+// in het installatiebestand en bereikt dus niemand — updates gaan alleen via de
+// cloud. De user-agent verraadt of dit de app is (Electron) of een browser.
+function apparaatInfo() {
+  const ua = navigator.userAgent || "";
+  const app = ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+  const elc = ua.match(/Electron\/([\d.]+)/i);
+  const pm = ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
+  let id = null;
+  try {
+    id = localStorage.getItem("fp.apparaat");
+    if (!id) { id = "PC-" + Math.random().toString(36).slice(2, 8).toUpperCase(); localStorage.setItem("fp.apparaat", id); }
+  } catch (e) {}
+  return {
+    computer: id,
+    platform: pm ? pm[1].replace(/_/g, ".") : null,
+    versie: app ? ("app " + app[1]) : (elc ? ("app · Electron " + elc[1]) : "browser"),
+  };
+}
+
 async function logLogin(email) {
   const wie = String(email || "").toLowerCase();
   if (!wie) return;
   for (let poging = 0; poging < 30; poging++) {
     const k = localStorage.getItem("fp.teamkey") || "";
     if (k) {
-      const app = window.fonteynApp || {};
+      const app = apparaatInfo();
       try {
         await fetch("https://fonteyn-data-store.g-mulder.workers.dev/log", {
           method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": k },
@@ -813,9 +833,7 @@ async function logLogin(email) {
             user: wie, tile: "dashboard", action: "login",
             // Op welke computer werd ingelogd — anders is een onverwachte
             // inlog achteraf niet te herleiden.
-            computer: app.computer || null,
-            platform: app.platform || null,
-            versie: app.versie || "browser",
+            computer: app.computer, platform: app.platform, versie: app.versie,
           }),
         });
       } catch (e) {}
