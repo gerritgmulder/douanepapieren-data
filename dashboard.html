@@ -120,6 +120,73 @@
   }
   .welcome p { margin: 0; color: var(--muted); font-size: 14px; }
 
+  /* ─── Mijn taken (taken.js) ───────────────────────────── */
+  .takenblok {
+    background: #fff; border: 1px solid var(--border); border-left: 4px solid var(--fonteyn-lime);
+    border-radius: 12px; padding: 18px 20px; margin-bottom: 30px;
+  }
+  .taken-kop { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+  .taken-kop h3 {
+    margin: 0; font-size: 15px; font-weight: 700; color: var(--fonteyn-green);
+    letter-spacing: -0.01em;
+  }
+  .taken-telling {
+    font-size: 12px; color: #fff; background: var(--fonteyn-green);
+    padding: 2px 9px; border-radius: 999px; font-weight: 600;
+  }
+  .taken-telling.leeg { background: #e5e7eb; color: var(--muted); }
+
+  .taken-invoer { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .taken-invoer input[type=text] {
+    flex: 1 1 260px; padding: 8px 11px; border: 1px solid var(--border);
+    border-radius: 8px; font-family: inherit; font-size: 13px; color: var(--ink);
+  }
+  .taken-invoer input[type=date] {
+    padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+    font-family: inherit; font-size: 13px; color: var(--muted);
+  }
+  .taken-invoer input:focus { outline: 2px solid var(--fonteyn-lime); outline-offset: -1px; }
+  .taken-plus {
+    background: var(--fonteyn-green); color: #fff; border: 0; border-radius: 8px;
+    padding: 8px 16px; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .taken-plus:hover { background: var(--fonteyn-green-dark); }
+
+  .taken-lijst { display: flex; flex-direction: column; }
+  .taak {
+    display: flex; align-items: flex-start; gap: 11px;
+    padding: 11px 2px; border-top: 1px solid #f1f0ec;
+  }
+  .taak:first-child { border-top: 0; }
+  .taak-vink { margin-top: 2px; width: 16px; height: 16px; accent-color: var(--fonteyn-green); cursor: pointer; flex: none; }
+  .taak-punt {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--fonteyn-lime);
+    margin-top: 6px; flex: none;
+  }
+  .taak-mid { flex: 1; min-width: 0; }
+  .taak-tekst { font-size: 13.5px; color: var(--ink); line-height: 1.4; }
+  .taak-sub { font-size: 12px; color: var(--muted); margin-top: 2px; line-height: 1.45; }
+  .taak-sub.telaat { color: var(--bad); font-weight: 600; }
+  .taak-sub.nu { color: #b45309; font-weight: 600; }
+  .taak-actie { font-size: 12px; color: var(--fonteyn-green); margin-top: 3px; line-height: 1.45; }
+  .taak-merk {
+    display: inline-block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
+    background: #f1f0ec; color: var(--muted); padding: 1px 6px; border-radius: 4px;
+    font-weight: 600; vertical-align: 1px;
+  }
+  .taak-merk.sig { background: #fef3c7; color: #92400e; }
+  .taak-ga {
+    font-size: 12px; color: var(--fonteyn-green); text-decoration: none; flex: none;
+    border: 1px solid var(--border); border-radius: 7px; padding: 4px 10px; align-self: center;
+  }
+  .taak-ga:hover { border-color: var(--fonteyn-lime); background: #fafaf7; }
+  .taak-weg {
+    background: none; border: 0; color: #cbd5e1; font-size: 18px; line-height: 1;
+    cursor: pointer; padding: 0 4px; flex: none; align-self: center;
+  }
+  .taak-weg:hover { color: var(--bad); }
+  .taken-leeg { font-size: 13px; color: var(--muted); padding: 6px 0 2px; }
+
   .tiles {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 18px;
@@ -289,6 +356,10 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <h2 id="greeting">Welkom</h2>
       <p>Kies een tool om mee aan de slag te gaan.</p>
     </div>
+
+    <!-- Persoonlijk takenblok. Wordt gevuld door taken.js: eigen taken,
+         terugkerende momenten en signalen uit Logic4 die op naam staan. -->
+    <div id="takenBlok"></div>
 
     <!-- ══════════ LOGISTIEK ══════════ -->
     <section class="groep" id="groepLogistiek">
@@ -493,6 +564,10 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     </div>
   </div>
 </div>
+
+<!-- Persoonlijk takenblok. Moet vóór het dashboard-script staan, want
+     showDashboard() roept window.fpTaken aan zodra iemand is ingelogd. -->
+<script src="taken.js"></script>
 
 <script>
 const HELPER_BASE = ""; // same-origin
@@ -925,6 +1000,54 @@ function showDashboard(email) {
   el("tilePassionPartners").classList.toggle("hidden", !PARTNERPORTAAL_KIJK.has(lc));
   verbergLegeGroepen();
   herstelScrollpositie();
+  startTakenblok(email);
+}
+
+// ─── Mijn taken ──────────────────────────────────────────────
+// Het persoonlijke werkblok bovenaan. taken.js doet het werk; hier geven we
+// alleen mee wie er is ingelogd en hoe je bij Logic4 en de opslag komt.
+//
+// De team-sleutel wordt bij de allereerste login op een computer nog opgehaald
+// (provisionTeamKey draait parallel). Zonder sleutel kan het blok niets lezen
+// of bewaren, dus wachten we er kort op — precies zoals logLogin dat doet.
+async function startTakenblok(email) {
+  if (!window.fpTaken) return;
+  let key = "";
+  for (let i = 0; i < 30; i++) {
+    key = localStorage.getItem(TEAMKEY_STORE) || "";
+    if (key) break;
+    await new Promise(r => setTimeout(r, 500));
+  }
+  if (!key) return;
+  try {
+    window.fpTaken.start({
+      email: email,
+      teamKey: key,
+      doelId: "takenBlok",
+      // Generieke Logic4-doorgeefluik van de lokale helper. Zo hoeft er voor
+      // een nieuwe Logic4-aanroep nooit iets aan de .exe te veranderen.
+      logic4Call: async function (pad, body, methode) {
+        const r = await apiFetch("/api/logic4-call", {
+          method: "POST",
+          body: { path: pad, method: methode || "POST", body: body }
+        });
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw new Error(j.error || "Logic4-aanroep mislukt");
+        return j.data;
+      },
+      log: function (tegel, actie, detail) {
+        const app = apparaatInfo();
+        fetch("https://fonteyn-data-store.g-mulder.workers.dev/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": key },
+          body: JSON.stringify({
+            user: email, tile: tegel, action: actie, detail: String(detail || "").slice(0, 1200),
+            computer: app.computer, platform: app.platform, versie: app.versie,
+          }),
+        }).catch(function () {});
+      }
+    });
+  } catch (e) { console.warn("[taken] starten faalde:", e); }
 }
 
 // ─── Terug op dezelfde plek ──────────────────────────────────

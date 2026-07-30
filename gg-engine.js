@@ -575,7 +575,7 @@
       // (IsPaid staat op waar — de terugbetaling loopt via de bank, niet via
       // een betaalregel op de order).
       if (incl > 0 && betaald - incl > 1) c52.push({
-        sleutel: "5.2|" + ord.Id, verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""),
+        sleutel: "5.2|" + ord.Id, verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""), door: num(ord.UserId),
         datum: ord.CreationDate, omschrijving: ord.Description || "", aantal: 1, bedrag: betaald - incl,
         detail: "order " + incl.toFixed(2) + ", ontvangen " + betaald.toFixed(2)
       });
@@ -592,8 +592,12 @@
         if (qd > 0) ietsGeleverd = true;
         if (qd < qty) allesGeleverd = false;
 
+        // 'door' = de Logic4-gebruiker die de order maakte. Daarmee kan het
+        // takenpaneel op het dashboard een bevinding bij de juiste persoon
+        // neerleggen in plaats van bij een afdeling in het algemeen.
         var regelBasis = {
-          verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""), datum: ord.CreationDate,
+          verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""), door: num(ord.UserId),
+          datum: ord.CreationDate,
           omschrijving: (row.Description || (art3 ? art3.n : "")) + (code ? "  [" + code + "]" : "")
         };
 
@@ -634,7 +638,7 @@
       // 3.1 — rechtstreeks geleverd, maar nergens een inkooporder die naar
       // deze verkooporder verwijst.
       if (rechtstreeksWaarde > 0 && !heeftInkoop[Number(ord.Id)]) c31.push({
-        sleutel: "3.1|" + ord.Id, verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""),
+        sleutel: "3.1|" + ord.Id, verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""), door: num(ord.UserId),
         datum: ord.CreationDate, omschrijving: rechtstreeksWat || ord.Description || "",
         aantal: 1, bedrag: rechtstreeksWaarde,
         detail: "geleverd via " + rechtstreeksMag + ", geen inkooporder gekoppeld"
@@ -642,14 +646,14 @@
 
       // 4.2 — afgehandeld terwijl er niets geleverd is
       if (/afgehandeld/i.test(status) && rows.length && !ietsGeleverd && incl > 0) c42.push({
-        sleutel: "4.2|" + ord.Id, verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""),
+        sleutel: "4.2|" + ord.Id, verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""), door: num(ord.UserId),
         datum: ord.CreationDate, omschrijving: ord.Description || "", aantal: rows.length, bedrag: incl,
         detail: "status Afgehandeld, geen enkele regel geleverd"
       });
 
       // 5.3 — aanbetaling binnen, order blijft liggen
       if (betaald > 1 && !allesGeleverd && !/afgehandeld|geannuleerd/i.test(status) && ouderdom !== null && ouderdom > 120) c53.push({
-        sleutel: "5.3|" + ord.Id, verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""),
+        sleutel: "5.3|" + ord.Id, verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""), door: num(ord.UserId),
         datum: ord.CreationDate, omschrijving: ord.Description || "", aantal: ouderdom, bedrag: betaald,
         detail: ouderdom + " dagen geleden aanbetaald, nog niet volledig geleverd (" + status + ")"
       });
