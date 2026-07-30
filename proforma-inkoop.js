@@ -46,12 +46,13 @@ function parseProforma(wb){
     if(!referentie&&/order\s*no\.?\s*:/i.test(s)) referentie=s.replace(/.*order\s*no\.?\s*:\s*/i,"").trim();
   }
 
-  let kop=-1,kMod=0,kKleur=1,kAantal=-1,kPrijs=-1;
+  let kop=-1,kMod=0,kKleur=1,kSkirt=-1,kAantal=-1,kPrijs=-1;
   for(let i=0;i<Math.min(rows.length,30);i++){
     const r=(rows[i]||[]).map(x=>String(x==null?"":x).trim().toUpperCase());
     if(r.indexOf("MODEL")>=0&&r.some(x=>/QUANT/.test(x))){
       kop=i; kMod=r.indexOf("MODEL");
       const kl=r.findIndex(x=>/COLOU?R/.test(x)); if(kl>=0) kKleur=kl;
+      kSkirt=r.findIndex(x=>/^SKIRT/.test(x));
       kAantal=r.findIndex(x=>/QUANT/.test(x));
       kPrijs=r.findIndex(x=>/^RATE|PRICE|UNIT/.test(x));
       break;
@@ -76,6 +77,10 @@ function parseProforma(wb){
       code,
       model:(mo&&mo!=="(onbekend SKT-model)")?mo:null,
       kleur:String((r&&r[kKleur])==null?"":r[kKleur]).replace(/\bjazzi\s*colou?r\b/ig,"").replace(/[,\s]+$/,"").trim()||null,
+      // De omkasting bepaalt of het "GREY/oak trim" of "OAK/grey trim" wordt.
+      // Zonder die kolom leveren twee regels met dezelfde kleur dezelfde
+      // artikelcode op, terwijl het verschillende artikelen zijn (Chantal).
+      skirt:kSkirt>=0?(String((r&&r[kSkirt])==null?"":r[kSkirt]).replace(/\s+/g," ").trim()||null):null,
       aantal, prijs:(isFinite(prijs)&&prijs>0)?prijs:null,
     });
   }
@@ -95,9 +100,10 @@ function renderIkoVoorstel(v){
       "</select>"+
       "<span style='font-size:12px;color:var(--muted)'>"+(v.regels||[]).length+" regel(s) · "+v.totaalStuks+" spa's</span>"+
     "</div>"+
-    "<div class='tablewrap'><table class='grid'><thead><tr><th>Fabriekscode</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Artikelcode Logic4</th><th>Omschrijving</th><th>Niet meebestellen</th></tr></thead><tbody>"+
+    "<div class='tablewrap'><table class='grid'><thead><tr><th>Fabriekscode</th><th>Spa</th><th>Kleur</th><th>Omkasting</th><th>Aantal</th><th>Artikelcode Logic4</th><th>Omschrijving</th><th>Niet meebestellen</th></tr></thead><tbody>"+
     (v.regels||[]).map((r,i)=>"<tr data-rij='"+i+"'"+(r.artikelcode?(r.zeker?"":" style='background:#fef3c7'"):" style='background:#fee2e2'")+">"+
       "<td>"+esc(r.code||"—")+"</td><td><b>"+esc(r.model||"onbekend")+"</b></td><td>"+esc(r.kleur||"—")+"</td>"+
+      "<td style='font-size:11.5px'>"+esc(r.skirt||"—")+"</td>"+
       "<td>"+r.aantal+"</td><td>"+esc(r.artikelcode||"— niet gevonden —")+"</td>"+
       "<td style='font-size:11.5px;color:var(--muted)'>"+esc(r.omschrijving||"")+"</td>"+
       "<td style='text-align:center'>"+(r.artikelcode?"":"<input type='checkbox' class='ikoSkip' data-rij='"+i+"' title='deze regel niet meebestellen'>")+"</td>"+
@@ -105,10 +111,20 @@ function renderIkoVoorstel(v){
     "</tbody></table></div>"+
     "<div class='actions' style='margin-top:12px'>"+
       "<button class='btn solid' id='ikoAanmaken' type='button'"+(C.magWijzigen?"":" disabled")+">Inkooporder aanmaken in Logic4</button>"+
+      "<button class='btn' id='ikoWissen' type='button'>Opnieuw beginnen</button>"+
       "<span id='ikoTelling' style='font-size:11.5px;color:var(--muted)'></span>"+
     "</div>"+
-    "<p class='lead' style='font-size:11.5px;margin-top:6px'>Geel = kleur niet zeker herkend, controleer de artikelcode. Rood = dit model staat niet in de Logic4-catalogus; los dat op óf vink <b>Niet meebestellen</b> aan — dan bestel je die spa's zelf, buiten het dashboard om.</p>";
+    "<p class='lead' style='font-size:11.5px;margin-top:6px'>Geel = de kleur is niet zeker herkend, controleer de artikelcode. Rood = er is in Logic4 geen artikel voor dit model in deze kleur; los dat daar op óf vink <b>Niet meebestellen</b> aan. Aanmaken zet een inkooporder in Logic4 — er gaat niets naar de fabriek.</p>";
   document.getElementById("ikoAanmaken").addEventListener("click",ikoAanmaken);
+  // Een geüploade proforma wordt nergens bewaard — hij staat alleen op het
+  // scherm. 'Opnieuw beginnen' maakt dat zichtbaar, zodat duidelijk is dat er
+  // niets terug te draaien valt zolang je niet op aanmaken hebt geklikt.
+  document.getElementById("ikoWissen").addEventListener("click",function(){
+    ikoLaatst=null;
+    el("ikoVoorstel").innerHTML="";
+    el("ikoRef").value=""; el("ikoEta").value="";
+    ikoStatus("ok","Leeggemaakt. Er is niets opgeslagen — je kunt de proforma opnieuw uploaden.");
+  });
   document.querySelectorAll(".ikoSkip").forEach(cb=>cb.addEventListener("change",ikoTel));
   ikoTel();
 }
@@ -140,7 +156,7 @@ async function ikoAanmaken(){
   if(!confirm("Inkooporder aanmaken in Logic4?\n\n"+s.mee.length+" regels · "+aantal+" spa's"+(ref?("\nProforma: "+ref):"")+
     (s.overgeslagen.length?("\n\nLET OP: "+s.overgeslagen.length+" regel(s) gaan NIET mee ("+
       s.overgeslagen.map(r=>r.aantal+"x "+(r.model||r.code)).join(", ")+"). Die moet je zelf bestellen."):"")+
-    "\n\nDit schrijft écht weg in Logic4.")) return;
+    "\n\nDit maakt een inkooporder aan in Logic4. Er gaat niets naar de fabriek.")) return;
   knop.disabled=true; knop.textContent="Bezig…";
   try{
     const r=await fetch(IKO_AANMAAK_URL,{method:"POST",

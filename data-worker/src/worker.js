@@ -1226,7 +1226,7 @@ async function ikoCrediteuren(env) {
 // Model + kleur → artikelcode uit de spa-catalogus. De kleur op de proforma is
 // vrije tekst ("Sterling Silver, Jazzi color #30"), dus we matchen op de
 // kenmerkende woorden en niet op een exacte string.
-function ikoZoekArtikel(catalog, model, kleur) {
+function ikoZoekArtikel(catalog, model, kleur, skirt) {
   const modellen = catalog.models || {};
   let varianten = modellen[model] || [];
   let viaAndereNaam = null;
@@ -1239,20 +1239,48 @@ function ikoZoekArtikel(catalog, model, kleur) {
     else if (kandidaten.length > 1) return { meerdere: kandidaten };
   }
   if (!varianten.length) return null;
-  const schoon = String(kleur || "").toLowerCase().replace(/jazzi\s*colou?r\s*#?\d*/g, "").replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
-  if (schoon) {
+  // De fabriek en Logic4 gebruiken andere woorden voor dezelfde kleur. Chantal:
+  // wat op de proforma "Sterling Silver jazzi color #30" heet, staat in Logic4
+  // als "Sterling White". Zonder deze vertaling matchte alleen "sterling" en
+  // kwam er een willekeurige variant uit.
+  const kleurVertaling = [[/sterling\s*silver/g, "sterling white"]];
+  let schoon = String(kleur || "").toLowerCase().replace(/jazzi\s*colou?r\s*#?\d*/g, "");
+  for (const [van, naar] of kleurVertaling) schoon = schoon.replace(van, naar);
+  schoon = schoon.replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+
+  // De omkasting bepaalt de trim: "1130 GREY+OAK slat" is in Logic4
+  // "GREY/oak trim", "OAK+1130 GREY slat" is "OAK/grey trim". Dat onderscheid
+  // levert twee verschillende artikelcodes op bij dezelfde kuipkleur.
+  const s = String(skirt || "").toLowerCase();
+  let trim = null;
+  if (/grey\s*\+\s*oak/.test(s) || /grey.*oak\s*slat/.test(s)) trim = "grey/oak";
+  else if (/oak\s*\+.*grey/.test(s) || /^oak\b/.test(s)) trim = "oak/grey";
+
+  if (schoon || trim) {
     const woorden = schoon.split(" ").filter(w => w.length > 3);
     let beste = null, besteScore = 0;
     for (const v of varianten) {
       const d = String(v.desc || "").toLowerCase();
-      const score = woorden.filter(w => d.includes(w)).length;
+      let score = woorden.filter(w => d.includes(w)).length;
+      // De trim weegt zwaar: hij is juist het onderscheid tussen twee
+      // artikelen die verder identiek heten.
+      if (trim && d.includes(trim)) score += 3;
+      else if (trim && /grey\/oak|oak\/grey/.test(d)) score -= 2;   // de ándere trim
       if (score > besteScore) { besteScore = score; beste = v; }
     }
     if (beste && besteScore > 0) return { ...beste, zeker: !viaAndereNaam, viaAndereNaam };
   }
-  // Geen kleurtreffer: eerste variant teruggeven, maar wél als onzeker markeren
-  // zodat degene die controleert er expliciet naar kijkt.
-  return { ...varianten[0], zeker: false, viaAndereNaam };
+  // Is er maar één uitvoering, dan kan het niet mis: die nemen we.
+  if (varianten.length === 1) return { ...varianten[0], zeker: false, viaAndereNaam };
+  // Anders: de gevraagde kleur bestaat niet bij dit model. Vroeger pakten we
+  // dan de eerste uitvoering en zetten er 'onzeker' bij — dat leverde een
+  // geloofwaardige maar verkeerde artikelcode op (Aquatic 3 in Mystic Mountain
+  // werd Sterling White). Nu geven we niets terug en zeggen we wat er wél is.
+  const beschikbaar = [...new Set(varianten.map(v => {
+    const d = String(v.desc || ""); const i = d.indexOf("|");
+    return (i < 0 ? d : d.slice(i + 1)).replace(/\bspa\b/ig, "").trim();
+  }))].slice(0, 6);
+  return { geenKleur: true, beschikbaar };
 }
 
 async function ikoVoorstel(env, body) {
@@ -1275,21 +1303,24 @@ async function ikoVoorstel(env, body) {
   const uit = [], waarschuwingen = [];
   for (const r of regels) {
     const model = r.model || null;
-    const art = model ? ikoZoekArtikel(catalog, model, r.kleur) : null;
+    const art = model ? ikoZoekArtikel(catalog, model, r.kleur, r.skirt) : null;
     if (!model) waarschuwingen.push("Onbekende fabriekscode: " + (r.code || "?"));
     else if (art && art.meerdere)
       waarschuwingen.push(model + " komt in Logic4 onder meerdere namen voor (" + art.meerdere.join(", ") + ") — kies de juiste handmatig.");
-    else if (!art) waarschuwingen.push("Geen artikelcode gevonden voor " + model + " — dit model staat niet in de Logic4-catalogus.");
+    else if (art && art.geenKleur)
+      waarschuwingen.push(model + " bestaat in Logic4 niet in de kleur \"" + (r.kleur || "?") + "\"" +
+        (art.beschikbaar && art.beschikbaar.length ? (" — wél in: " + art.beschikbaar.join(", ")) : "") + ".");
+    else if (!art) waarschuwingen.push("Er is in Logic4 geen artikel voor " + model + " — de fabriekscode is wél herkend, maar het model zelf ontbreekt in de catalogus.");
     else if (art.viaAndereNaam) waarschuwingen.push(model + " heet in Logic4 \"" + art.viaAndereNaam + "\" — controleer of dat klopt.");
     else if (!art.zeker) waarschuwingen.push(model + ": kleur \"" + (r.kleur || "") + "\" niet herkend — controleer de artikelcode");
     uit.push({
-      code: r.code || null, model, kleur: r.kleur || null,
+      code: r.code || null, model, kleur: r.kleur || null, skirt: r.skirt || null,
       aantal: Number(r.aantal) || 0,
       prijs: r.prijs != null ? Number(r.prijs) : null,
-      artikelcode: (art && !art.meerdere) ? art.code : null,
-      productId: (art && !art.meerdere) ? art.productId : null,
-      omschrijving: (art && !art.meerdere) ? art.desc : null,
-      zeker: (art && !art.meerdere) ? !!art.zeker : false,
+      artikelcode: (art && !art.meerdere && !art.geenKleur) ? art.code : null,
+      productId: (art && !art.meerdere && !art.geenKleur) ? art.productId : null,
+      omschrijving: (art && !art.meerdere && !art.geenKleur) ? art.desc : null,
+      zeker: (art && !art.meerdere && !art.geenKleur) ? !!art.zeker : false,
     });
   }
   if (!crediteur) waarschuwingen.push("Leverancier \"" + (body.leverancier || "") + "\" niet gevonden in Logic4 — kies hem handmatig.");
