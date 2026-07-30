@@ -195,6 +195,11 @@
         <input type="range" id="zoom" min="35" max="110" value="70" style="width:80px">
       </label>
     </div>
+    <!-- Versiestempel. Gretha meldde "hij is nog hetzelfde", en dan is het gissen
+         of een aanpassing haar computer wel bereikt heeft. Nu is dat te zien én
+         te noemen: verandert dit nummer niet na een herstart, dan haalt de app
+         de nieuwe bestanden niet op. -->
+    <p style="font-size:10.5px;color:var(--muted);margin:2px 0 0">Versie van deze tegel: <b id="tegelVersie">—</b></p>
     <div id="status" class="status-msg hidden"></div>
 
     <h4>Kop</h4>
@@ -324,6 +329,13 @@ const ALLOWED=new Set([
   "gerrit@fonteyn.nl","gerrit",
   "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot",
 ]);
+// Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
+// zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
+// wijziging is aangekomen.
+const TEGEL_VERSIE="30-07-2026 · 16:45";
+document.addEventListener("DOMContentLoaded",function(){
+  const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
+});
 const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
 const BUCKET=WORKER+"/data/specsheets";
 const TEAM=()=>localStorage.getItem("fp.teamkey")||"";
