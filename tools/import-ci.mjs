@@ -24,7 +24,8 @@ if (!dir) { console.error('Gebruik: node tools/import-ci.mjs "<map met CI-xlsx>"
 const dry = process.argv.includes("--dry");
 
 // SKT-prefix → model
-const html = readFileSync(join(ROOT, "voorraad.html"), "utf8");
+// De codelijst staat sinds 30 jul in spa-codes.js (gedeeld met amerika.html).
+const html = readFileSync(join(ROOT, "spa-codes.js"), "utf8");
 const pairs = [...html.match(/const SPA_CODES = \[(.*?)\];/s)[1].matchAll(/\["([^"]+)","([^"]+)"\]/g)]
   .map(m => [m[1], m[2]]).sort((a, b) => b[0].replace(/[^A-Za-z0-9]/g, "").length - a[0].replace(/[^A-Za-z0-9]/g, "").length);
 // Zelfde normalisatie als voorraad.html: streepjes/spaties eruit, want de fabriek

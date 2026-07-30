@@ -1227,7 +1227,17 @@ async function ikoCrediteuren(env) {
 // vrije tekst ("Sterling Silver, Jazzi color #30"), dus we matchen op de
 // kenmerkende woorden en niet op een exacte string.
 function ikoZoekArtikel(catalog, model, kleur) {
-  const varianten = (catalog.models || {})[model] || [];
+  const modellen = catalog.models || {};
+  let varianten = modellen[model] || [];
+  let viaAndereNaam = null;
+  // De fabriekscodelijst noemt hem "Exhilarate", Logic4 "Spa Exhilarate Mighty
+  // Wave". Is er precies één catalogusmodel dat deze naam bevat, dan is dat hem.
+  // Zijn er meerdere, dan gokken we niet — dan moet een mens kiezen.
+  if (!varianten.length && model) {
+    const kandidaten = Object.keys(modellen).filter(k => k.toLowerCase().includes(String(model).toLowerCase()));
+    if (kandidaten.length === 1) { varianten = modellen[kandidaten[0]]; viaAndereNaam = kandidaten[0]; }
+    else if (kandidaten.length > 1) return { meerdere: kandidaten };
+  }
   if (!varianten.length) return null;
   const schoon = String(kleur || "").toLowerCase().replace(/jazzi\s*colou?r\s*#?\d*/g, "").replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
   if (schoon) {
@@ -1238,11 +1248,11 @@ function ikoZoekArtikel(catalog, model, kleur) {
       const score = woorden.filter(w => d.includes(w)).length;
       if (score > besteScore) { besteScore = score; beste = v; }
     }
-    if (beste && besteScore > 0) return { ...beste, zeker: true };
+    if (beste && besteScore > 0) return { ...beste, zeker: !viaAndereNaam, viaAndereNaam };
   }
   // Geen kleurtreffer: eerste variant teruggeven, maar wél als onzeker markeren
   // zodat degene die controleert er expliciet naar kijkt.
-  return { ...varianten[0], zeker: false };
+  return { ...varianten[0], zeker: false, viaAndereNaam };
 }
 
 async function ikoVoorstel(env, body) {
@@ -1250,10 +1260,16 @@ async function ikoVoorstel(env, body) {
   if (!regels.length) return { ok: false, error: "geen regels ontvangen" };
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const crediteuren = await ikoCrediteuren(env);
-  const gevraagd = String(body.leverancier || "").toLowerCase().trim();
-  let crediteur = crediteuren[gevraagd] || null;
-  if (!crediteur && gevraagd) {
-    const hit = Object.keys(crediteuren).find(n => n.includes(gevraagd) || gevraagd.includes(n));
+  // De fabriek schrijft "JAZZI POOL AND SPA PRODUCTS CO.,LTD", Logic4 heeft
+  // "Jazzi pool and spa products Co., Ltd". Alleen hoofdletters en leestekens
+  // verschillen, dus die halen we er aan beide kanten uit vóór het vergelijken.
+  const plat = s => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const gevraagd = plat(body.leverancier);
+  let crediteur = null;
+  if (gevraagd) {
+    const sleutels = Object.keys(crediteuren);
+    let hit = sleutels.find(n => plat(n) === gevraagd);
+    if (!hit) hit = sleutels.find(n => plat(n).includes(gevraagd) || gevraagd.includes(plat(n)));
     if (hit) crediteur = crediteuren[hit];
   }
   const uit = [], waarschuwingen = [];
@@ -1261,16 +1277,19 @@ async function ikoVoorstel(env, body) {
     const model = r.model || null;
     const art = model ? ikoZoekArtikel(catalog, model, r.kleur) : null;
     if (!model) waarschuwingen.push("Onbekende fabriekscode: " + (r.code || "?"));
-    else if (!art) waarschuwingen.push("Geen artikelcode gevonden voor " + model);
+    else if (art && art.meerdere)
+      waarschuwingen.push(model + " komt in Logic4 onder meerdere namen voor (" + art.meerdere.join(", ") + ") — kies de juiste handmatig.");
+    else if (!art) waarschuwingen.push("Geen artikelcode gevonden voor " + model + " — dit model staat niet in de Logic4-catalogus.");
+    else if (art.viaAndereNaam) waarschuwingen.push(model + " heet in Logic4 \"" + art.viaAndereNaam + "\" — controleer of dat klopt.");
     else if (!art.zeker) waarschuwingen.push(model + ": kleur \"" + (r.kleur || "") + "\" niet herkend — controleer de artikelcode");
     uit.push({
       code: r.code || null, model, kleur: r.kleur || null,
       aantal: Number(r.aantal) || 0,
       prijs: r.prijs != null ? Number(r.prijs) : null,
-      artikelcode: art ? art.code : null,
-      productId: art ? art.productId : null,
-      omschrijving: art ? art.desc : null,
-      zeker: art ? !!art.zeker : false,
+      artikelcode: (art && !art.meerdere) ? art.code : null,
+      productId: (art && !art.meerdere) ? art.productId : null,
+      omschrijving: (art && !art.meerdere) ? art.desc : null,
+      zeker: (art && !art.meerdere) ? !!art.zeker : false,
     });
   }
   if (!crediteur) waarschuwingen.push("Leverancier \"" + (body.leverancier || "") + "\" niet gevonden in Logic4 — kies hem handmatig.");
@@ -1311,9 +1330,14 @@ async function ikoAanmaken(env, body) {
     return j;
   };
 
+  // Wat er bewust NIET is meebesteld hoort in de order zelf te staan, anders is
+  // later niet te zien waarom de inkooporder afwijkt van de proforma.
+  const overgeslagen = Array.isArray(body.overgeslagen) ? body.overgeslagen : [];
   const kop = await call("/v3/BuyOrders/CreateBuyOrder", {
     CreditorId: crediteurId,
-    Remarks: ("Proforma " + (ref || "") + " — via dashboard door " + (body.door || "onbekend")).trim(),
+    Remarks: ("Proforma " + (ref || "") + " — via dashboard door " + (body.door || "onbekend") +
+      (body.bestemming ? (" — bestemming: " + body.bestemming) : "") +
+      (overgeslagen.length ? (" — NIET meebesteld: " + overgeslagen.join(", ")) : "")).trim().slice(0, 500),
     CreatedAt: new Date().toISOString(),
   });
   const buyOrderId = kop && (kop.Id != null ? kop.Id : (kop.BuyOrderId != null ? kop.BuyOrderId : (kop.Value != null ? kop.Value : null)));

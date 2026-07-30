@@ -6,6 +6,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <!-- SheetJS — voor het inlezen van het Passion-bestellingen-document (pipeline) -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="spa-codes.js"></script>
+<script src="proforma-inkoop.js"></script>
 <style>
   :root{
     --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
@@ -508,123 +510,9 @@
 </main>
 
 <script>
-/* ====== Spa-catalogus (Codes spas 2025.xlsx) — gesorteerd op codelengte
-   zodat de langste prefix-match wint (bv. SKT339G13 vóór SKT339G). ====== */
-const SPA_CODES = [
-  ["SKT329E2","Repose"],       // toegevoegd 16 jul (Chantal)
-  ["SKT888K-1","Sensation"],   // toegevoegd 16 jul (Chantal)
-  ["SKT339C ECO","Aquatic 1 ECO"],
-  ["SKT339DA-1","Dynamic Deep"],
-  ["SKT888A-4S","Happy"],
-  ["SKT339G13","Activity 1"],
-  ["SKT888-G1","Mallorca Diamond"],
-  ["SKT339G12","Activity 1 Deep"],
-  ["SKT339G15","Activity 2"],
-  ["SKT888-G2","Mallorca Superior"],
-  ["SKT339G14","Activity 2 Deep"],
-  ["SKT339D-1","Aquatic 3 Deep"],
-  ["SKT339E-1","Aquatic 5"],
-  ["SKT339E-2","Aquatic 6"],
-  ["SKT339G16","Balance"],
-  ["SKT888I-1","Corsica Diamond"],
-  ["SKT888I-2","Corsica Superior"],
-  ["SKT339-G4","Energy"],
-  ["SKT339-G5","Energy Deep"],
-  ["SKT888M-1","Excite"],
-  ["SKT339G11","Vitality"],
-  ["SKT339-G6","Fitness 1"],
-  ["SKT339G10","Vitality Deep"],
-  ["SKT339-G7","Fitness 1 Deep"],
-  ["SKT339G17","Vital Ice"],
-  ["SKT339-G2","Fitness 2"],
-  ["SKT339-G3","Fitness 2 Deep"],
-  ["SKT888X-1","Flame"],
-  ["SKT338-E2","Florida"],
-  ["SKT306-C","Malta"],
-  ["SKT888CA","Pleasure"],
-  ["SKT329E1","Repose"],
-  ["SKT329FB","Refresh"],
-  ["SKT888BA","Admire"],
-  ["SKT329EA","Relax"],
-  ["SKT335HA","Renew"],
-  ["SKT888DA","Bliss"],
-  ["SKT888D","Bliss"],   // fabriek schrijft de Bliss soms zonder de A (bevestigd door Chantal, 28-07-2026)
-  ["SKT329FA","Rewind"],
-  ["SKT888K1","Sensation"],
-  ["SKT338A3","Bright"],
-  ["SKT333H1","Serene 3"],
-  ["SKT333H3","Serene 5"],
-  ["SKT335FA","Soulmate"],
-  ["SKT888AA","Delight"],
-  ["SKT888AB","Solace"],
-  ["SKT888C1","Desire"],
-  ["SKT888BC","Devotion"],
-  ["SKT339DA","Dynamic"],
-  ["SKT339G1","Spirit Deep"],
-  ["SKT338A4","Sunny"],
-  ["SKT888FA","Ecstatic Wave"],
-  ["SKT888H1","Tenerife Diamond"],
-  ["SKT888H2","Tenerife Luxury"],
-  ["SKT888KA","Euphoria"],
-  ["SKT888JA","Felicity"],
-  ["SKT888EA","Heart"],
-  ["SKT888MA","Joy"],
-  ["SKT888G","Mallorca Luxury"],
-  ["SKT339C","Aquatic 1"],
-  ["SKT306B","Natural"],
-  ["SKT888T","Oasis"],
-  ["SKT339B","Aquatic 2"],
-  ["SKT335F","Oxford"],
-  ["SKT339D","Aquatic 3"],
-  ["SKT306D","Recharge"],
-  ["SKT329A","Arizona"],
-  ["SKT329F","Resort"],
-  ["SKT888V","Breeze"],
-  ["SKT333H","Serene 2"],
-  ["SKT888I","Corsica Luxury"],
-  ["SKT333A","Serene 6"],
-  ["SKT335A","Coventry"],
-  ["SKT888X","Spark"],
-  ["SKT339G","Spirit"],
-  ["SKT888Y","Summit"],
-  ["SKT888F","Ecstatic Classic"],
-  ["SKT666A","Sydney"],
-  ["SKT888H","Tenerife Superior"],
-  ["SKT888Q","Exhilarate"],
-  ["SKT339F","Theater"],
-  ["SKT888U","Aurora /Tradition"],
-  ["SKT888P","Harmony"],
-  ["SKT888S","Indulgence"],
-  ["SKT888R","Lagoon"],
-  // Passion Devine — de fabriek gebruikt hier een PP-code in plaats van SKT
-  // (Chantal, 29-07-2026).
-  ["PP01","Reflect"],
-  ["PP02","Retreat"],
-  ["PP03","Resettle"],
-];
-// Alles wat geen letter of cijfer is gaat eruit. De fabrieken schrijven dezelfde
-// code namelijk verschillend: wij hebben "SKT888-G1" in de codelijst staan, de
-// fabriek zet het streepje ergens anders ("SKT888G-1") of laat het weg
-// ("SKT888G1"). Zonder deze normalisatie viel "SKT888G-1" (Mallorca Diamond)
-// terug op de kortere prefix "SKT888G" en werd het Mallorca Luxury genoemd.
-function normCode(c){ return String(c==null?"":c).toUpperCase().replace(/[^A-Z0-9]/g,""); }
-// Langste code eerst, zodat een specifiekere code altijd wint van een kortere
-// die er toevallig het begin van is (SKT888G1 vóór SKT888G, SKT339G13 vóór
-// SKT339G1). De volgorde in SPA_CODES doet er daardoor niet meer toe.
-const SPA_CODES_LANG = SPA_CODES.slice().sort((a,b)=>normCode(b[0]).length-normCode(a[0]).length);
-// Geeft modelnaam als de productcode een spa is, anders null. Fabriekscodes
-// beginnen met SKT (Jazzi) of met PP (Passion Devine — PP01/PP02/PP03).
-// LET OP: "(onbekend SKT-model)" is een vaste herkenningswaarde die op meerdere
-// plekken vergeleken wordt; die tekst niet wijzigen.
-const SPA_PREFIXEN = ["SKT","PP"];
-function spaModel(code){
-  const n = normCode(code);
-  if (!SPA_PREFIXEN.some(p => n.indexOf(p) === 0)) return null;
-  for (let i=0;i<SPA_CODES_LANG.length;i++){
-    if (n.indexOf(normCode(SPA_CODES_LANG[i][0])) === 0) return SPA_CODES_LANG[i][1];
-  }
-  return "(onbekend SKT-model)";
-}
+/* Spa-fabriekscodes (SPA_CODES, normCode, spaModel) staan in spa-codes.js,
+   omdat amerika.html ze ook gebruikt. Zie dat bestand. */
+
 // Extra spa-modellen die NIET in 'Codes spas 2025' staan (andere merken),
 // geoogst uit Chantal's Reserveringen-historie. Detectie is op naam in de
 // omschrijving, dus een code is hier niet nodig. CD/Classic/Crystal Diamond-
@@ -2039,119 +1927,15 @@ function ciBijzonderheid(c0raw,model){
   return {tekst,ordernr:ordernr||null,klant,notities};
 }
 
-// ===== Proforma invoice → inkooporder (Chantal & Manon, 29 jul) ===========
-// Zelfde soort werkboek als de commercial invoice, maar dan vóóraf: wat er bij
-// de fabriek besteld wordt. We lezen de regels uit, laten ze controleren en
-// schrijven pas na akkoord een inkooporder in Logic4.
-const IKO_VOORSTEL_URL="https://fonteyn-data-store.g-mulder.workers.dev/voorraad/inkooporder/voorstel";
-const IKO_AANMAAK_URL="https://fonteyn-data-store.g-mulder.workers.dev/voorraad/inkooporder/aanmaken";
-let ikoLaatst=null;
-function ikoStatus(soort,tekst){
-  const e=document.getElementById("ikoStatus"); if(!e) return;
-  if(!tekst){ e.classList.add("hidden"); return; }
-  e.className="status-msg "+soort; e.textContent=tekst; e.classList.remove("hidden");
-}
-// Per regel uitlezen (niet opgeteld zoals bij de commercial invoice): de
-// inkooporder heeft juist elke afzonderlijke regel nodig.
-function parseProforma(wb){
-  const ws=wb.Sheets["COMMERCIAL INVOICE"]||wb.Sheets["PROFORMA INVOICE"]||wb.Sheets[wb.SheetNames[0]];
-  const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false});
-  let leverancier=null;
-  for(const r of rows.slice(0,25)) for(const c of (r||[])){
-    const s=String(c==null?"":c);
-    if(!leverancier&&/(co\.,?\s*ltd|sanitary|industry|spa\s*co|bath)/i.test(s)&&s.length<70) leverancier=s.trim();
-  }
-  const regels=[];
-  for(const r of rows){
-    const c0raw=String((r&&r[0])==null?"":r[0]);
-    const c0=c0raw.split("\n")[0].trim();
-    const m=c0.match(/^((?:SKT|PP)[\w.-]+)/);
-    const aantal=Number(r&&r[5]);
-    if(!m||!isFinite(aantal)||aantal<=0) continue;
-    const prijsCel=[r[6],r[7],r[8]].map(Number).find(x=>isFinite(x)&&x>0);
-    regels.push({
-      code:m[1],
-      model:(function(){ const mo=spaModel(c0)||spaModel(m[1]); return (mo&&mo!=="(onbekend SKT-model)")?mo:null; })(),
-      kleur:String((r&&r[1])==null?"":r[1]).replace(/\bjazzi\s*colou?r\b/ig,"").replace(/[,\s]+$/,"").trim()||null,
-      aantal, prijs:prijsCel!=null?prijsCel:null,
-    });
-  }
-  return {leverancier,regels};
-}
-function renderIkoVoorstel(v){
-  const box=document.getElementById("ikoVoorstel"); if(!box) return;
-  const w=(v.waarschuwingen||[]);
-  box.innerHTML=
-    (w.length?"<div class='status-msg warn'><b>Controleer dit eerst:</b><ul style='margin:6px 0 0;padding-left:18px'>"+
-      w.map(x=>"<li>"+esc(x)+"</li>").join("")+"</ul></div>":"")+
-    "<div class='actions' style='gap:10px;align-items:center;margin:0 0 10px;flex-wrap:wrap'>"+
-      "<label style='font-size:12px;color:var(--muted)'>Leverancier</label>"+
-      "<select id='ikoCred' style='min-width:260px;padding:8px'>"+
-        "<option value=''>— kies leverancier —</option>"+
-        (v.leveranciers||[]).map(c=>"<option value='"+c.id+"'"+((v.crediteur&&v.crediteur.id===c.id)?" selected":"")+">"+esc(c.naam)+"</option>").join("")+
-      "</select>"+
-      "<span style='font-size:12px;color:var(--muted)'>"+(v.regels||[]).length+" regel(s) · "+v.totaalStuks+" spa's</span>"+
-    "</div>"+
-    "<div class='tablewrap'><table class='grid'><thead><tr><th>Fabriekscode</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Artikelcode Logic4</th><th>Omschrijving</th></tr></thead><tbody>"+
-    (v.regels||[]).map(r=>"<tr"+(r.artikelcode?(r.zeker?"":" style='background:#fef3c7'"):" style='background:#fee2e2'")+">"+
-      "<td>"+esc(r.code||"—")+"</td><td><b>"+esc(r.model||"onbekend")+"</b></td><td>"+esc(r.kleur||"—")+"</td>"+
-      "<td>"+r.aantal+"</td><td>"+esc(r.artikelcode||"— niet gevonden —")+"</td>"+
-      "<td style='font-size:11.5px;color:var(--muted)'>"+esc(r.omschrijving||"")+"</td></tr>").join("")+
-    "</tbody></table></div>"+
-    "<div class='actions' style='margin-top:12px'>"+
-      "<button class='btn solid' id='ikoAanmaken' type='button'"+(MAG_WIJZIGEN?"":" disabled")+">Inkooporder aanmaken in Logic4</button>"+
-      "<span style='font-size:11.5px;color:var(--muted)'>Geel = kleur niet zeker herkend · rood = geen artikelcode, die regel moet eerst kloppen.</span>"+
-    "</div>";
-  document.getElementById("ikoAanmaken").addEventListener("click",ikoAanmaken);
-}
-async function ikoAanmaken(){
-  const knop=document.getElementById("ikoAanmaken");
-  const cred=Number((document.getElementById("ikoCred")||{}).value||0);
-  if(!cred){ ikoStatus("bad","Kies eerst de leverancier."); return; }
-  const ontbreekt=(ikoLaatst.regels||[]).filter(r=>!r.artikelcode);
-  if(ontbreekt.length){ ikoStatus("bad",ontbreekt.length+" regel(s) hebben geen artikelcode — die moeten eerst kloppen."); return; }
-  const ref=(document.getElementById("ikoRef").value||"").trim();
-  const aantal=ikoLaatst.regels.reduce((n,r)=>n+r.aantal,0);
-  if(!confirm("Inkooporder aanmaken in Logic4?\n\n"+ikoLaatst.regels.length+" regels · "+aantal+" spa's"+(ref?("\nProforma: "+ref):"")+
-    "\n\nDit schrijft écht weg in Logic4.")) return;
-  knop.disabled=true; knop.textContent="Bezig…";
-  try{
-    const r=await fetch(IKO_AANMAAK_URL,{method:"POST",
-      headers:{"Content-Type":"application/json","X-DP-Admin":dpAdminKey()},
-      body:JSON.stringify({crediteurId:cred,regels:ikoLaatst.regels,referentie:ref,
-        eta:(document.getElementById("ikoEta").value||null),door:(localStorage.getItem(EMAIL_KEY)||"")})});
-    const j=await r.json().catch(()=>({}));
-    if(j.dubbel){ ikoStatus("warn",j.error); knop.disabled=false; knop.textContent="Inkooporder aanmaken in Logic4"; return; }
-    if(!j.ok&&!j.buyOrderId) throw new Error(j.error||("HTTP "+r.status));
-    if(j.mislukt&&j.mislukt.length){
-      ikoStatus("warn","Inkooporder "+j.buyOrderId+" aangemaakt met "+j.toegevoegd+" regel(s), maar "+j.mislukt.length+" regel(s) niet: "+
-        j.mislukt.map(m=>m.artikelcode+" ("+m.fout+")").join("; ")+" — vul die handmatig aan in Logic4.");
-    }else{
-      ikoStatus("ok","Inkooporder "+j.buyOrderId+" aangemaakt in Logic4 met "+j.toegevoegd+" regel(s).");
-      knop.textContent="Aangemaakt ✓";
-    }
-    try{ if(window.fpLog) window.fpLog("inkooporder-aangemaakt","Logic4 inkooporder "+j.buyOrderId+" · "+j.toegevoegd+" regels"+(ref?(" · proforma "+ref):"")); }catch(e){}
-  }catch(e){ ikoStatus("bad","Aanmaken faalde: "+e.message); knop.disabled=false; knop.textContent="Inkooporder aanmaken in Logic4"; }
-}
-document.getElementById("ikoFile")&&document.getElementById("ikoFile").addEventListener("change",async ev=>{
-  const f=(ev.target.files||[])[0]; if(!f) return;
-  ikoStatus("","");
-  document.getElementById("ikoVoorstel").innerHTML="";
-  ikoStatus("info","Inlezen…");
-  try{
-    const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
-    const p=parseProforma(wb);
-    if(!p.regels.length) throw new Error("geen spa-regels gevonden in dit bestand");
-    if(!document.getElementById("ikoRef").value) document.getElementById("ikoRef").value=f.name.replace(/\.[a-z]+$/i,"").slice(0,40);
-    const r=await fetch(IKO_VOORSTEL_URL,{method:"POST",
-      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
-      body:JSON.stringify({leverancier:p.leverancier,regels:p.regels})});
-    const v=await r.json();
-    if(!v.ok) throw new Error(v.error||"voorstel maken faalde");
-    ikoLaatst=v; renderIkoVoorstel(v);
-    ikoStatus("ok","Uitgelezen: "+v.regels.length+" regel(s), "+v.totaalStuks+" spa's. Controleer hieronder en klik pas daarna op aanmaken.");
-  }catch(e){ ikoStatus("bad","Kon niet inlezen: "+e.message); }
-  ev.target.value="";
+// Proforma → inkooporder zit in proforma-inkoop.js, gedeeld met amerika.html.
+// Hier alleen wat per tegel verschilt meegeven.
+if(window.fpProforma) window.fpProforma.start({
+  teamKey:function(){ return DATA_STORE_AUTH; },
+  adminKey:function(){ return dpAdminKey(); },
+  magWijzigen:MAG_WIJZIGEN,
+  email:(localStorage.getItem(EMAIL_KEY)||""),
+  bestemming:null,                       // Nederland: geen aparte bestemming
+  log:function(a,d){ try{ if(window.fpLog) window.fpLog(a,d); }catch(e){} },
 });
 
 async function handleCIUpload(files,statusId){
@@ -2160,6 +1944,17 @@ async function handleCIUpload(files,statusId){
   try{
     for(const file of files){
       const buf=await file.arrayBuffer(); const wb=XLSX.read(buf,{type:"array"});
+      // Een proforma is géén commercial invoice: die gaat over wat er besteld
+      // wordt, niet over wat er vaart. Belandt hij hier, dan verschijnt er een
+      // schip dat niet bestaat en klopt het voorraadoverzicht niet meer.
+      const isProforma=wb.SheetNames.some(n=>/^pi$/i.test(String(n).trim())||/proforma/i.test(n))
+                       && !wb.SheetNames.some(n=>/commercial\s*invoice/i.test(n));
+      if(isProforma){
+        st.className="status-msg bad";
+        st.textContent="Dit is een proforma invoice ("+file.name+"), geen commercial invoice. Gebruik daarvoor de kaart "+
+          "\"Proforma invoice → inkooporder in Logic4\" hierboven. Er is niets gewijzigd aan de schepen.";
+        return;
+      }
       const ship=parseCI(wb);
       if(!ship.total){ continue; }
       // Bestaand schip met dezelfde referentie? Dan vervangen (nieuwe upload wint).

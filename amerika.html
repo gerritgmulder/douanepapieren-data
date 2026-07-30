@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <title>Amerika — Fonteyn Dashboard</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="spa-codes.js"></script>
+<script src="proforma-inkoop.js"></script>
 <style>
   :root{
     --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
@@ -109,6 +112,20 @@
       </div>
       <div id="usaOverview"></div>
     </div>
+
+    <!-- Proforma → inkooporder, net als bij Voorraadbeheer maar dan met
+         Warehouse Texas als bestemming (Chantal, 30 jul). -->
+    <div class="card" id="ikoCard">
+      <h3>Proforma invoice → inkooporder in Logic4</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Upload de <b>proforma invoice</b> van de fabriek voor Amerika. Het dashboard leest hem uit en laat zien welke inkooporder hij zou aanmaken. <b>Er wordt niets weggeschreven tot je zelf op akkoord klikt.</b> De order krijgt <b>Warehouse Texas USA</b> als bestemming in de opmerking mee.</p>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input type="file" id="ikoFile" accept=".xlsx,.xls,.csv">
+        <input type="text" id="ikoRef" placeholder="proforma-referentie" style="min-width:200px">
+        <input type="date" id="ikoEta" title="verwachte leverdatum" style="padding:8px;border:1px solid var(--border);border-radius:8px">
+      </div>
+      <div id="ikoStatus" class="status-msg hidden" style="margin-top:10px"></div>
+      <div id="ikoVoorstel" style="margin-top:12px"></div>
+    </div>
   </div>
 
   <!-- ===== QuickBooks (nog te koppelen) ===== -->
@@ -152,6 +169,17 @@ const ALLOWED=new Set(["chantal@fonteyn.nl","chantal","fonteyn.chantal","dolf@fo
   document.getElementById("userEmail").textContent=email||"—";
   if(!ALLOWED.has(email)){ window.fpGeenToegang=true; document.querySelector("main").innerHTML="<div class='status-msg bad'>Geen toegang tot de Amerika-tegel.</div>"; return; }
   loadUSA();
+  // Proforma → inkooporder (dezelfde module als Voorraadbeheer). Hier gaat het
+  // om de containers voor Amerika, dus de bestemming Warehouse Texas gaat mee
+  // in de opmerking van de inkooporder.
+  if(window.fpProforma) window.fpProforma.start({
+    teamKey:function(){ return localStorage.getItem("fp.teamkey")||""; },
+    adminKey:function(){ return localStorage.getItem("dp.adminkey")||""; },
+    magWijzigen:true,          // wie deze tegel mag openen, mag hier ook bestellen
+    email:email,
+    bestemming:"Warehouse Texas USA",
+    log:function(a,d){ try{ if(window.fpLog) window.fpLog(a,d); }catch(e){} },
+  });
 })();
 document.getElementById("logoutBtn").addEventListener("click",()=>{
   localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href="dashboard.html";
