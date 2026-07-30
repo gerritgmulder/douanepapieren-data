@@ -11,6 +11,8 @@
     { "name": "stuurcijfers-engine.js", "note": "Formule-engine — vervangt de Excel-formules in OUT_-tabbladen" },
     { "name": "spa-codes.js", "note": "Spa-fabriekscodes (SKT/PP) → modelnaam. Gedeeld door voorraad.html, amerika.html en tools/import-ci.mjs — één lijst, zodat er geen twee ontstaan die uit elkaar lopen." },
     { "name": "proforma-inkoop.js", "note": "Proforma invoice uitlezen → voorstel tonen → na akkoord een inkooporder in Logic4. Gedeeld door voorraad.html (NL) en amerika.html (Warehouse Texas)." },
+    { "name": "geldgoederen.html", "note": "Geld-goederenbeweging — de verbandscontrole van accountant Kevin (De Jong & Laan) op live Logic4-data: inkoop → voorraad → verkoop → factuur → bank, plus kostprijs/marge. Per bevinding een eigenaar en een status. Alleen Osman/Gerriette/Dolf/Gerrit/Fonteynbot." },
+    { "name": "gg-engine.js", "note": "Controle-engine achter de Geld-goederenbeweging: de 16 verbandscontroles, de magazijn-indeling (fysiek/virtueel/doorstroom) en de artikelclassificatie. Los bestand zodat de controles herbruikbaar zijn en apart te testen." },
     { "name": "probe-logic4.html", "note": "Eenmalige probe-pagina om Logic4-velden in kaart te brengen — kan later weer verwijderd worden" },
     { "name": "transport.html", "note": "Transport laden — bin-packing in bakwagens + routeplanning per dag" },
     { "name": "eikensingel.html", "note": "Eikensingel-vakantiepark — bovenaanzicht 10 bungalows, boekingen + schoonmaak + betalingen" },

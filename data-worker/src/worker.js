@@ -44,6 +44,8 @@ const ALLOWED_BUCKETS = new Set([
   "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail)
   "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
+  "geldgoederen",     // Geld-goederenbeweging: laatste controle-momentopname + historie van de totalen
+  "gg-bevindingen",   // Geld-goederenbeweging: per bevinding de status (open/opgepakt/opgelost/akkoord) + notitie
   // De huisstijl-fonts (Sephir, Helvetica, Univers) zijn commercieel
   // gelicentieerd. Ze staan hier en NIET in de repo, want die is publiek —
   // in de repo zetten zou neerkomen op ze doorgeven aan iedereen.
@@ -2231,9 +2233,14 @@ export default {
       try { JSON.parse(body); }
       catch { return reply(400, "Body must be valid JSON"); }
       // Limiet: max 1 MB per bucket (KV-limiet is 25 MB, 1 MB is ruim
-      // genoeg voor onze schaal van enkele tientallen records)
-      if (body.length > 1024 * 1024) {
-        return reply(413, "Payload too large (max 1 MB)");
+      // genoeg voor onze schaal van enkele tientallen records).
+      // Uitzondering: de geld-goederenbeweging bewaart per controle honderden
+      // bevindingsregels plus een historie van de totalen. Dat is bewust één
+      // momentopname en past niet in 1 MB, maar blijft ruim onder de KV-grens.
+      const RUIM = new Set(["geldgoederen", "gg-bevindingen"]);
+      const limiet = (RUIM.has(bucket) ? 8 : 1) * 1024 * 1024;
+      if (body.length > limiet) {
+        return reply(413, `Payload too large (max ${limiet / 1024 / 1024} MB)`);
       }
       await env.FONTEYN_DATA.put(bucket, body);
       return reply(200, { ok: true, bytes: body.length });

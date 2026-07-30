@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<script>
+/* fpToegangscontrole — deze tegel toont de volledige financiële keten en is
+   niet voor iedereen. Op het dashboard staat hij al verborgen, maar de app
+   heeft een terug/vooruit-history: een pagina die een vórige gebruiker opende
+   is anders opnieuw te bereiken. Daarom controleert de tegel het ook zelf. */
+(function(){
+  var TOEGANG = ["gerrit@fonteyn.nl","gerrit","fonteyn.gerrit",
+                 "dolf@fonteyn.nl","fonteyn.dolf","dolf",
+                 "osman@fonteyn.nl","osman","fonteyn.osman",
+                 "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"];
+  var email = (localStorage.getItem("fp.email")||"").toLowerCase();
+  if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+  if (TOEGANG.indexOf(email) >= 0) return;
+  window.fpGeenToegang = true;
+  try {
+    var k = localStorage.getItem("fp.teamkey")||"";
+    if (email && k) fetch("https://fonteyn-data-store.g-mulder.workers.dev/log", {
+      method:"POST", headers:{"Content-Type":"application/json","X-Fonteyn-Auth":k},
+      body: JSON.stringify({user:email, tile:"geldgoederen", action:"open-geweigerd",
+        detail:"geen toegang tot Geld-goederenbeweging"})}).catch(function(){});
+  } catch(e) {}
+  document.write('<style>body{margin:0;font-family:Montserrat,-apple-system,sans-serif;background:#f5f4ef;color:#1f2937}'+
+    '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
+    '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
+    '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
+    '<div class="gt"><h1>Geen toegang</h1><p>De Geld-goederenbeweging is niet beschikbaar voor jouw account.</p>'+
+    '<p style="font-size:12.5px">Je bent ingelogd als <code>'+(email||"(onbekend)")+'</code>.</p>'+
+    '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
+  window.stop();
+})();
+</script>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fonteyn — Geld-goederenbeweging</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --groen:#144734; --groen-donker:#0d3325; --lime:#8bc53f; --lime-donker:#72a531;
+  --ink:#1d1d1d; --grijs:#6b7280; --rand:#e0e0d8; --bg:#f5f4ef; --kaart:#fff;
+  --hoog:#b91c1c; --midden:#b45309; --laag:#0369a1; --goed:#15803d;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;font-family:'Montserrat',system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+header.hdr{background:var(--groen);color:#fff;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 3px rgba(0,0,0,.12);flex-wrap:wrap;gap:10px}
+header .brand{display:flex;align-items:center;gap:16px}
+header .back{color:#fff;text-decoration:none;font-size:13px;padding:5px 10px;border:1px solid rgba(255,255,255,.3);border-radius:6px}
+header .back:hover{background:rgba(255,255,255,.1)}
+header h1{font-size:18px;font-weight:600;margin:0}
+header .user{font-size:12.5px;opacity:.85}
+main{max-width:1240px;margin:0 auto;padding:24px}
+
+/* ── Bovenbalk met de laatste controle ── */
+.balk{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:18px 20px;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:18px}
+.balk .wanneer{font-size:13px;color:var(--grijs);line-height:1.5}
+.balk .wanneer b{color:var(--ink);font-size:14px}
+.knop{background:var(--groen);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer}
+.knop:hover{background:var(--groen-donker)}
+.knop[disabled]{opacity:.5;cursor:default}
+.knop.licht{background:#fff;color:var(--groen);border:1px solid var(--rand)}
+.knop.licht:hover{background:#f3f4f0}
+.knoprij{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+label.keuze{font-size:12.5px;color:var(--grijs);display:flex;align-items:center;gap:6px;cursor:pointer}
+
+/* ── Voortgang ── */
+#voortgang{display:none;background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:18px 20px;margin-bottom:18px}
+#voortgang .tekst{font-size:13px;color:var(--grijs);margin-bottom:10px}
+.balkje{height:8px;background:#eceae2;border-radius:5px;overflow:hidden}
+.balkje i{display:block;height:100%;background:var(--lime);width:0;transition:width .3s}
+
+/* ── De keten ── */
+.keten{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:22px}
+.schakel{flex:1 1 180px;background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:14px 16px;text-decoration:none;color:inherit;position:relative;transition:border-color .15s,transform .15s}
+.schakel:hover{border-color:var(--lime);transform:translateY(-1px)}
+.schakel .naam{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--grijs);font-weight:600}
+.schakel .cijfer{font-size:24px;font-weight:700;margin:6px 0 2px}
+.schakel .onder{font-size:12px;color:var(--grijs)}
+.schakel.rood .cijfer{color:var(--hoog)}
+.schakel.oranje .cijfer{color:var(--midden)}
+.schakel.groen .cijfer{color:var(--goed)}
+.schakel .pijl{position:absolute;right:-13px;top:50%;transform:translateY(-50%);color:var(--rand);font-size:18px;z-index:1}
+@media(max-width:760px){.schakel .pijl{display:none}}
+
+/* ── Controlekaarten ── */
+h2.kop{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--grijs);font-weight:600;margin:26px 0 10px}
+.kaart{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;margin-bottom:10px;overflow:hidden}
+.kaart .hoofd{padding:15px 18px;display:flex;align-items:flex-start;gap:14px;cursor:pointer}
+.kaart .hoofd:hover{background:#fbfbf8}
+.stip{width:9px;height:9px;border-radius:50%;flex:0 0 9px;margin-top:6px}
+.stip.hoog{background:var(--hoog)}.stip.midden{background:var(--midden)}.stip.laag{background:var(--laag)}
+.stip.leeg{background:var(--goed)}
+.kaart .titel{flex:1;min-width:0}
+.kaart .titel h3{margin:0 0 3px;font-size:14.5px;font-weight:600}
+.kaart .titel p{margin:0;font-size:12.5px;color:var(--grijs);line-height:1.45}
+.kaart .cijfers{text-align:right;flex:0 0 auto;white-space:nowrap}
+.kaart .cijfers .groot{font-size:19px;font-weight:700}
+.kaart .cijfers .klein{font-size:11.5px;color:var(--grijs)}
+.kaart .body{display:none;border-top:1px solid var(--rand);padding:16px 18px;background:#fbfbf8}
+.kaart.open .body{display:block}
+.uitleg{font-size:13px;line-height:1.6;color:#374151;margin:0 0 10px}
+.uitleg b{color:var(--ink)}
+.merk{display:inline-block;font-size:11px;background:#eef2e6;color:var(--groen);border-radius:20px;padding:3px 10px;margin-right:6px;font-weight:600}
+.let{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12.5px;color:#78350f;line-height:1.5;margin:10px 0}
+
+/* ── Tabel met bevindingen ── */
+.tabelwrap{overflow-x:auto;margin-top:12px;border:1px solid var(--rand);border-radius:8px;background:#fff}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{background:#f3f4f0;text-align:left;padding:8px 10px;font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--grijs);border-bottom:1px solid var(--rand);white-space:nowrap;position:sticky;top:0}
+td{padding:7px 10px;border-bottom:1px solid #f0efe9;vertical-align:top}
+tr:last-child td{border-bottom:0}
+tr.afgehandeld td{opacity:.45}
+td.bedrag{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td.verwijzing{white-space:nowrap;font-weight:600}
+select.status{font-family:inherit;font-size:11.5px;border:1px solid var(--rand);border-radius:6px;padding:3px 5px;background:#fff}
+input.notitie{font-family:inherit;font-size:12px;border:1px solid var(--rand);border-radius:6px;padding:4px 7px;width:100%;min-width:120px}
+.meer{padding:9px 12px;font-size:12px;color:var(--grijs);background:#f9f9f5;border-top:1px solid var(--rand)}
+.leeg{padding:14px 4px;font-size:13px;color:var(--goed)}
+ol.afspraken{margin:0;padding-left:20px;font-size:13px;line-height:1.65;color:#374151}
+ol.afspraken li{margin-bottom:9px}
+ol.afspraken b{color:var(--ink)}
+ol.afspraken i{color:var(--grijs);font-style:normal;font-size:11.5px}
+footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;color:#9ca3af}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="brand">
+    <a class="back" href="dashboard.html">&larr; Dashboard</a>
+    <h1>Geld-goederenbeweging</h1>
+  </div>
+  <div class="user" id="gebruiker"></div>
+</header>
+
+<main>
+
+  <div class="balk">
+    <div class="wanneer" id="wanneer">Bezig met laden…</div>
+    <div class="knoprij">
+      <label class="keuze"><input type="checkbox" id="diep"> ook handmatige voorraadcorrecties (duurt langer)</label>
+      <button class="knop licht" id="btnExport">Exporteren voor de accountant</button>
+      <button class="knop" id="btnScan">Nieuwe controle draaien</button>
+    </div>
+  </div>
+
+  <div id="voortgang">
+    <div class="tekst" id="voortgangTekst">…</div>
+    <div class="balkje"><i id="voortgangBalk"></i></div>
+  </div>
+
+  <div class="keten" id="keten"></div>
+  <div id="inhoud"></div>
+
+  <!-- ══════════ De werkwijze zelf ══════════
+       De controles hierboven laten zien wat er nu misgaat. Deze afspraken
+       zorgen dat het niet terugkomt. Ze staan bewust in de tegel en niet in
+       een los document, zodat ze niet zoekraken. -->
+  <h2 class="kop">Zo houden we de keten kloppend</h2>
+  <div class="kaart" id="werkwijze">
+    <div class="hoofd">
+      <span class="stip laag"></span>
+      <div class="titel">
+        <h3>Negen afspraken</h3>
+        <p>Elke afspraak sluit één van de gaten hierboven. Houd je je eraan, dan blijft de controle vanzelf leeg.</p>
+      </div>
+      <div class="cijfers"><div class="groot">9</div><div class="klein">afspraken</div></div>
+    </div>
+    <div class="body">
+      <ol class="afspraken">
+        <li><b>Rechtstreekse levering krijgt altijd een inkooporder.</b> Gaat een goed van de leverancier direct naar de klant, dan is de inkooporder de enige plek waar staat dát het is ingekocht. Koppel hem aan de verkooporder. <i>(controle 3.1)</i></li>
+        <li><b>Bij maatwerk vul je de inkoopprijs op de orderregel in.</b> Zodra de leverancier de prijs bevestigt. Zonder inkoopprijs is de marge op die order niet te berekenen — en juist maatwerk gaat om grote bedragen. <i>(6.1)</i></li>
+        <li><b>Inkooporder dicht zodra alles binnen is.</b> Een open order zegt tegen de administratie dat er nog goederen komen. <i>(1.1)</i></li>
+        <li><b>Inkooporder ouder dan een half jaar wordt beoordeeld.</b> Alsnog ontvangen boeken, of annuleren en afsluiten. Niet laten staan. <i>(1.2)</i></li>
+        <li><b>Voorraad blijft nooit staan op Dealer magazijn, ‘Geen’ of Transporteur.</b> Dat zijn geen plekken waar iets ligt; wat er blijft staan, is administratief kwijt. <i>(2.2 en 2.3)</i></li>
+        <li><b>Negatieve voorraad los je binnen een week op.</b> Minder dan nul kan fysiek niet, dus er ontbreekt een ontvangst. <i>(2.1)</i></li>
+        <li><b>Geleverd is gefactureerd.</b> Binnen de maand, of vastleggen waarom niet (garantie, coulance, showroom). <i>(4.1)</i></li>
+        <li><b>Elke handmatige voorraadcorrectie krijgt een reden mee.</b> In het opmerkingenveld van de mutatie. Een correctie zonder reden is een gat in de keten. <i>(1.3 en 3.2)</i></li>
+        <li><b>Eén keer per maand draait iemand deze controle.</b> Nieuwe punten worden verdeeld over Inkoop, Magazijn, Verkoop en Administratie, en blijven staan tot ze opgelost of bewust geaccepteerd zijn.</li>
+      </ol>
+      <p class="uitleg" style="margin-top:12px">Een punt dat terecht is zoals het is, zet je op <b>Akkoord — hoort zo</b> met een korte reden erbij. Hij verdwijnt dan uit de tellingen, maar de reden blijft bewaard. Zo blijft de lijst kort en is voor de accountant naderhand terug te zien waarom iets is geaccepteerd.</p>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Elke controle volgt de keten Inkoop → Voorraad → Verkoop → Factuur → Bank van de accountant.
+  De gegevens komen rechtstreeks uit Logic4; er wordt niets in Logic4 gewijzigd.
+  <span id="versie"></span>
+</footer>
+
+<script src="gg-engine.js"></script>
+<script>
+"use strict";
+if (window.fpGeenToegang) throw new Error("geen toegang");
+
+var TEGEL_VERSIE = "30-07-2026 · 21:00";
+document.getElementById("versie").textContent = " · tegelversie " + TEGEL_VERSIE;
+
+/* ══════════════════════ Sessie, opslag en logboek ══════════════════════ */
+
+var EMAIL = (localStorage.getItem("fp.email") || "").toLowerCase();
+var TEAMKEY = localStorage.getItem("fp.teamkey") || "";
+var WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
+var URL_SNAPSHOT = WORKER + "/data/geldgoederen";
+var URL_BEVINDING = WORKER + "/data/gg-bevindingen";
+document.getElementById("gebruiker").textContent = EMAIL;
+
+function sessie(){ return localStorage.getItem("fp.session") || ""; }
+
+// Apparaat-herkenning zonder installatie: alles uit de user-agent plus een
+// vaste sleutel in localStorage. Zie de andere tegels — bewust identiek.
+function apparaat(){
+  var ua = navigator.userAgent || "";
+  var app = ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+  var elc = ua.match(/Electron\/([\d.]+)/i);
+  var versie = app ? ("app " + app[1]) : (elc ? ("app · Electron " + elc[1]) : "browser");
+  var pm = ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
+  var id = null;
+  try {
+    id = localStorage.getItem("fp.apparaat");
+    if (!id) { id = "PC-" + Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("fp.apparaat", id); }
+  } catch(e){}
+  return { computer:id, platform: pm ? pm[1].replace(/_/g,".") : null, versie:versie };
+}
+function log(actie, detail){
+  if (!TEAMKEY || !EMAIL) return;
+  var a = apparaat();
+  fetch(WORKER + "/log", { method:"POST",
+    headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAMKEY},
+    body: JSON.stringify({ user:EMAIL, tile:"geldgoederen", action:actie||"open",
+      detail:(detail||"").slice(0,1200), rol:"financieel",
+      computer:a.computer, platform:a.platform, versie:a.versie })
+  }).catch(function(){});
+}
+log("open");
+
+/* Logic4 loopt via de lokale helper op poort 3737. Die zit in het
+   installatiebestand en is generiek: elk endpoint mag, dus deze tegel werkt
+   zonder dat er ooit iets opnieuw geïnstalleerd hoeft te worden. */
+async function logic4(pad, body){
+  var r = await fetch("/api/logic4-call", {
+    method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":"Bearer " + sessie()},
+    body: JSON.stringify({ path:pad, method:"POST", body:body })
+  });
+  var j = await r.json();
+  if (!r.ok || !j.ok) throw new Error(j.error || (typeof j.data === "string" ? j.data : JSON.stringify(j.data)));
+  var d = j.data;
+  if (d && d.Records !== undefined) return d.Records;
+  if (d && d.Items !== undefined) return d.Items;
+  return d;
+}
+
+/* ══════════════════════ Datum en bedrag, Europees ══════════════════════ */
+
+function datum(d){
+  if (!d) return "";
+  var t = new Date(d);
+  if (isNaN(t.getTime())) return "";
+  var p = function(n){ return (n<10?"0":"") + n; };
+  return p(t.getDate()) + "-" + p(t.getMonth()+1) + "-" + t.getFullYear();
+}
+function datumTijd(d){
+  if (!d) return "";
+  var t = new Date(d);
+  if (isNaN(t.getTime())) return "";
+  var p = function(n){ return (n<10?"0":"") + n; };
+  return datum(d) + " om " + p(t.getHours()) + ":" + p(t.getMinutes());
+}
+function euro(n){ return "€ " + Math.round(Number(n)||0).toLocaleString("nl-NL"); }
+function getal(n){ return Math.round(Number(n)||0).toLocaleString("nl-NL"); }
+// Onder het aantal bevindingen staat de omvang: een bedrag, een aantal stuks,
+// of — als de controle geen zinnige omvang heeft — gewoon het woord.
+function omvang(c){
+  if (c.eenheid === "eur")   return euro(c.bedrag);
+  if (c.eenheid === "stuks") return getal(c.bedrag) + " stuks";
+  return "";
+}
+function omvangLabel(eenheid, bedrag, aantal){
+  var t = omvang({ eenheid:eenheid, bedrag:bedrag });
+  if (t) return t;
+  return aantal === 1 ? "bevinding" : "bevindingen";
+}
+
+/* ══════════════════════ Toestand ══════════════════════ */
+
+var momentopname = null;   // laatste scan
+var historie = [];         // [{gemaakt, totalen:{id:{aantal,bedrag}}}]
+var bevindingen = {};      // sleutel -> {status, notitie, door, wanneer}
+var bezig = false;
+
+var STATUSSEN = [
+  ["open",     "Open"],
+  ["opgepakt", "Wordt opgepakt"],
+  ["opgelost", "Opgelost"],
+  ["akkoord",  "Akkoord — hoort zo"]
+];
+function isAf(st){ return st === "opgelost" || st === "akkoord"; }
+
+/* ══════════════════════ Laden en bewaren ══════════════════════ */
+
+async function laden(){
+  try {
+    var r = await fetch(URL_SNAPSHOT, { headers:{ "X-Fonteyn-Auth":TEAMKEY } });
+    if (r.ok) {
+      var j = await r.json();
+      if (j && typeof j === "object") { momentopname = j.laatste || null; historie = j.historie || []; }
+    }
+  } catch(e){ console.warn("momentopname laden faalde:", e); }
+  try {
+    var r2 = await fetch(URL_BEVINDING, { headers:{ "X-Fonteyn-Auth":TEAMKEY } });
+    if (r2.ok) {
+      var j2 = await r2.json();
+      if (j2 && typeof j2 === "object") bevindingen = j2;
+    }
+  } catch(e){ console.warn("bevindingen laden faalde:", e); }
+  tekenen();
+}
+
+async function bewaarSnapshot(){
+  // Historie bijhouden zodat je ziet of het beter wordt. Alleen de totalen,
+  // niet de regels — anders groeit de opslag ongelimiteerd.
+  var totalen = {};
+  momentopname.controles.forEach(function(c){ totalen[c.id] = { aantal:c.aantal, bedrag:c.bedrag }; });
+  historie.push({ gemaakt: momentopname.gemaakt, door: EMAIL, totalen: totalen });
+  if (historie.length > 60) historie = historie.slice(-60);
+  await fetch(URL_SNAPSHOT, { method:"PUT",
+    headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth":TEAMKEY },
+    body: JSON.stringify({ laatste: momentopname, historie: historie }) });
+}
+
+var bewaarTimer = null;
+function bewaarBevindingen(){
+  clearTimeout(bewaarTimer);
+  bewaarTimer = setTimeout(function(){
+    fetch(URL_BEVINDING, { method:"PUT",
+      headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth":TEAMKEY },
+      body: JSON.stringify(bevindingen) }).catch(function(e){ console.warn("opslaan faalde", e); });
+  }, 700);
+}
+
+/* ══════════════════════ De scan ══════════════════════ */
+
+document.getElementById("btnScan").addEventListener("click", async function(){
+  if (bezig) return;
+  bezig = true;
+  var knop = this; knop.disabled = true; knop.textContent = "Bezig…";
+  var vak = document.getElementById("voortgang");
+  var tekst = document.getElementById("voortgangTekst");
+  var balk = document.getElementById("voortgangBalk");
+  vak.style.display = "block";
+  var diep = document.getElementById("diep").checked;
+  var jaar = new Date().getFullYear();
+  // Het lopende én het vorige jaar: openstaande posten uit vorig jaar zijn
+  // juist de posten die de accountant niet kan thuisbrengen.
+  var vanaf = (jaar - 1) + "-01-01", tot = (jaar + 1) + "-01-01";
+
+  try {
+    var t0 = Date.now();
+    var uit = await ggEngine.scan({
+      l4: logic4, vanaf: vanaf, tot: tot, zwaar: diep,
+      stap: function(t, p){ tekst.textContent = t; balk.style.width = Math.min(100, p||0) + "%"; }
+    });
+    momentopname = uit.momentopname;
+    momentopname.door = EMAIL;
+    momentopname.duur = Math.round((Date.now() - t0)/1000);
+    await bewaarSnapshot();
+    var samen = momentopname.controles.filter(function(c){ return c.gedraaid; })
+      .map(function(c){ return c.id + ":" + c.aantal; }).join(" ");
+    log("controle-gedraaid", (diep ? "diepe controle, " : "") + momentopname.duur + "s — " + samen);
+    tekenen();
+  } catch(e){
+    tekst.textContent = "De controle is niet afgemaakt: " + e.message;
+    balk.style.background = "#b91c1c";
+    log("controle-mislukt", String(e.message).slice(0,300));
+    bezig = false; knop.disabled = false; knop.textContent = "Nieuwe controle draaien";
+    return;
+  }
+  vak.style.display = "none";
+  balk.style.width = "0";
+  bezig = false; knop.disabled = false; knop.textContent = "Nieuwe controle draaien";
+});
+
+/* ══════════════════════ Tekenen ══════════════════════ */
+
+function tekenen(){
+  var wanneer = document.getElementById("wanneer");
+  if (!momentopname) {
+    wanneer.innerHTML = "<b>Er is nog geen controle gedraaid.</b><br>" +
+      "Druk op ‘Nieuwe controle draaien’. Dat duurt ongeveer drie minuten — de tegel haalt dan het hele artikelbestand, alle orders, de voorraad per magazijn en de inkooporders op.";
+    document.getElementById("keten").innerHTML = "";
+    document.getElementById("inhoud").innerHTML = "";
+    return;
+  }
+  wanneer.innerHTML = "<b>Laatste controle: " + datumTijd(momentopname.gemaakt) + "</b>" +
+    (momentopname.door ? " door " + momentopname.door : "") +
+    (momentopname.duur ? " (" + momentopname.duur + " seconden)" : "") + "<br>" +
+    "Periode " + datum(momentopname.vanaf) + " t/m " + datum(momentopname.tot) + " — " +
+    getal(momentopname.omvang.orders) + " orders, " +
+    getal(momentopname.omvang.artikelen) + " artikelen, " +
+    getal(momentopname.omvang.inkooporders) + " open inkooporders" +
+    (momentopname.zwaar ? ", " + getal(momentopname.omvang.mutaties) + " voorraadmutaties" : "");
+
+  tekenKeten();
+  tekenControles();
+}
+
+// Per bevinding: is hij al afgehandeld? Zo ja, telt hij niet meer mee.
+function openRegels(c){
+  return (c.regels || []).filter(function(r){
+    var b = bevindingen[r.sleutel];
+    return !(b && isAf(b.status));
+  });
+}
+function openTotalen(c){
+  var alle = c.regels || [];
+  var lijst = openRegels(c);
+  var afgehandeld = alle.length - lijst.length;
+  // Bij een lange controle bewaart de scan alleen de zwaarste 400 regels, maar
+  // c.aantal en c.bedrag zijn wél de totalen over álles. Daarom rekenen we
+  // vanaf die totalen terug: alles minus wat er is afgehandeld. Zou je in
+  // plaats daarvan de zichtbare regels optellen, dan valt het bedrag bij een
+  // afgekapte lijst veel te laag uit.
+  // De eenheid moet kloppen: bij een stuks-controle telt het aantal stuks,
+  // bij een euro-controle het bedrag.
+  var perRegel = function(r){
+    return c.eenheid === "stuks" ? Math.abs(Number(r.aantal)||0) : (Number(r.bedrag)||0);
+  };
+  var afBedrag = 0;
+  for (var i = 0; i < alle.length; i++){
+    var b = bevindingen[alle[i].sleutel];
+    if (b && isAf(b.status)) afBedrag += perRegel(alle[i]);
+  }
+  return {
+    aantal: Math.max(0, (c.aantal || 0) - afgehandeld),
+    bedrag: Math.max(0, (Number(c.bedrag)||0) - afBedrag),
+    afgehandeld: afgehandeld
+  };
+}
+
+function tekenKeten(){
+  var per = {};
+  momentopname.controles.forEach(function(c){
+    var t = openTotalen(c);
+    var p = per[c.schakel] || (per[c.schakel] = { aantal:0, hoog:0, controles:0 });
+    p.aantal += t.aantal; p.controles++;
+    if (c.ernst === "hoog" && t.aantal > 0) p.hoog++;
+  });
+  var html = "";
+  ggEngine.SCHAKELS.forEach(function(s, i){
+    var p = per[s.id] || { aantal:0, hoog:0 };
+    var kleur = p.aantal === 0 ? "groen" : (p.hoog > 0 ? "rood" : "oranje");
+    html += '<a class="schakel ' + kleur + '" href="#schakel-' + s.id + '">' +
+      '<div class="naam">' + s.naam + '</div>' +
+      '<div class="cijfer">' + getal(p.aantal) + '</div>' +
+      '<div class="onder">' + (p.aantal === 0 ? "niets te doen" : (p.aantal === 1 ? "punt open" : "punten open")) + '</div>' +
+      (i < 4 ? '<div class="pijl">›</div>' : '') +
+      '</a>';
+  });
+  document.getElementById("keten").innerHTML = html;
+}
+
+function ontsnap(s){
+  return String(s == null ? "" : s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function tekenControles(){
+  var html = "";
+  ggEngine.SCHAKELS.forEach(function(s){
+    var lijst = momentopname.controles.filter(function(c){ return c.schakel === s.id; });
+    if (!lijst.length) return;
+    html += '<h2 class="kop" id="schakel-' + s.id + '">' + s.naam + (s.pijl ? " " + s.pijl : "") + '</h2>';
+    lijst.forEach(function(c){ html += kaartHtml(c); });
+  });
+  var vak = document.getElementById("inhoud");
+  vak.innerHTML = html;
+
+  // Openklappen
+  vak.querySelectorAll(".kaart .hoofd").forEach(function(h){
+    h.addEventListener("click", function(){
+      var k = h.parentNode;
+      k.classList.toggle("open");
+      if (k.classList.contains("open") && !k.dataset.gevuld) {
+        var c = momentopname.controles.filter(function(x){ return x.id === k.dataset.id; })[0];
+        k.querySelector(".regels").innerHTML = regelsHtml(c);
+        k.dataset.gevuld = "1";
+        koppelRegels(k, c);
+      }
+    });
+  });
+}
+
+function kaartHtml(c){
+  var t = openTotalen(c);
+  var stip = !c.gedraaid ? "laag" : (t.aantal === 0 ? "leeg" : c.ernst);
+  var trend = c.gedraaid ? trendTekst(c.id, t.aantal) : "";
+  return '<div class="kaart" data-id="' + c.id + '">' +
+    '<div class="hoofd">' +
+      '<span class="stip ' + stip + '"></span>' +
+      '<div class="titel"><h3>' + ontsnap(c.naam) + '</h3><p>' + ontsnap(c.vraag) + '</p></div>' +
+      '<div class="cijfers">' +
+        '<div class="groot">' + (c.gedraaid ? getal(t.aantal) : "—") + '</div>' +
+        '<div class="klein">' + (c.gedraaid ? omvangLabel(c.eenheid, t.bedrag, t.aantal) : "niet gedraaid") + '</div>' +
+        (trend ? '<div class="klein">' + trend + '</div>' : '') +
+      '</div>' +
+    '</div>' +
+    '<div class="body">' +
+      '<p class="uitleg"><b>Waarom dit telt:</b> ' + ontsnap(c.waarom) + '</p>' +
+      '<p class="uitleg"><b>Wat er moet gebeuren:</b> ' + ontsnap(c.actie) + '</p>' +
+      '<p class="uitleg"><span class="merk">' + ontsnap(c.eigenaar) + '</span>' +
+        '<span class="merk">controle ' + c.id + '</span>' +
+        (t.afgehandeld ? '<span class="merk">' + t.afgehandeld + ' afgehandeld</span>' : '') + '</p>' +
+      (c.toelichting ? '<div class="let">' + ontsnap(c.toelichting) + '</div>' : '') +
+      (!c.gedraaid ? '<div class="let">Deze controle is niet meegedraaid: ' + ontsnap(c.reden) + '</div>' : '') +
+      '<div class="regels"></div>' +
+    '</div>' +
+  '</div>';
+}
+
+function trendTekst(id, nu){
+  if (historie.length < 2) return "";
+  var vorige = historie[historie.length - 2];
+  if (!vorige || !vorige.totalen || !vorige.totalen[id]) return "";
+  var was = vorige.totalen[id].aantal;
+  var d = nu - was;
+  if (d === 0) return "gelijk aan vorige keer";
+  return (d < 0 ? "▼ " : "▲ ") + Math.abs(d) + " t.o.v. vorige controle";
+}
+
+function regelsHtml(c){
+  if (!c.gedraaid) return "";
+  var regels = c.regels || [];
+  if (!regels.length) return '<div class="leeg">Geen bevindingen — deze schakel sluit aan.</div>';
+  var h = '<div class="tabelwrap"><table><thead><tr>' +
+    '<th>Verwijzing</th><th>Datum</th><th>Omschrijving</th><th>Wat er aan de hand is</th>' +
+    '<th style="text-align:right">' + (c.eenheid === "eur" ? "Bedrag" : "Aantal") + '</th>' +
+    '<th>Status</th><th>Notitie</th></tr></thead><tbody>';
+  regels.forEach(function(r){
+    var b = bevindingen[r.sleutel] || {};
+    var af = isAf(b.status);
+    h += '<tr class="' + (af ? "afgehandeld" : "") + '" data-sleutel="' + ontsnap(r.sleutel) + '">' +
+      '<td class="verwijzing">' + ontsnap(r.verwijzing) + '</td>' +
+      '<td>' + datum(r.datum) + '</td>' +
+      '<td>' + ontsnap(String(r.omschrijving || "").slice(0,70)) + '</td>' +
+      '<td>' + ontsnap(r.detail || "") + '</td>' +
+      '<td class="bedrag">' + (c.eenheid === "eur" ? euro(r.bedrag) : getal(r.aantal)) + '</td>' +
+      '<td><select class="status">' + STATUSSEN.map(function(s){
+          return '<option value="' + s[0] + '"' + ((b.status||"open") === s[0] ? " selected" : "") + '>' + s[1] + '</option>';
+        }).join("") + '</select></td>' +
+      '<td><input class="notitie" value="' + ontsnap(b.notitie || "") + '" placeholder="reden of afspraak"></td>' +
+      '</tr>';
+  });
+  h += '</tbody></table></div>';
+  if (c.afgekapt) h += '<div class="meer">Er zijn ' + getal(c.aantal) + ' bevindingen. Hierboven staan de ' +
+    getal(regels.length) + ' zwaarste — dat zijn ook de regels die in de export komen. ' +
+    'De tellingen bovenaan gaan wél over alle ' + getal(c.aantal) + '.</div>';
+  return h;
+}
+
+function koppelRegels(kaart, c){
+  kaart.querySelectorAll("tbody tr").forEach(function(tr){
+    var sleutel = tr.dataset.sleutel;
+    var sel = tr.querySelector("select.status");
+    var not = tr.querySelector("input.notitie");
+    function opslaan(){
+      var st = sel.value, nt = not.value;
+      if (st === "open" && !nt) delete bevindingen[sleutel];
+      else bevindingen[sleutel] = { status:st, notitie:nt, door:EMAIL, wanneer:new Date().toISOString() };
+      tr.className = isAf(st) ? "afgehandeld" : "";
+      bewaarBevindingen();
+      hertelKaart(kaart, c);
+    }
+    sel.addEventListener("change", function(){ opslaan(); log("bevinding", c.id + " → " + sel.value + " (" + sleutel + ")"); });
+    not.addEventListener("change", opslaan);
+    // Klikken op de rij mag de kaart niet dichtklappen.
+    tr.addEventListener("click", function(e){ e.stopPropagation(); });
+  });
+}
+
+function hertelKaart(kaart, c){
+  var t = openTotalen(c);
+  kaart.querySelector(".cijfers .groot").textContent = getal(t.aantal);
+  kaart.querySelector(".cijfers .klein").textContent = omvangLabel(c.eenheid, t.bedrag, t.aantal);
+  var stip = kaart.querySelector(".stip");
+  stip.className = "stip " + (t.aantal === 0 ? "leeg" : c.ernst);
+  tekenKeten();
+}
+
+/* ══════════════════════ Export voor de accountant ══════════════════════ */
+
+document.getElementById("btnExport").addEventListener("click", function(){
+  if (!momentopname) { alert("Draai eerst een controle."); return; }
+  var r = [];
+  var q = function(v){ return '"' + String(v == null ? "" : v).replace(/"/g, '""') + '"'; };
+  r.push(["Geld-goederenbeweging Fonteyn"].map(q).join(";"));
+  r.push(["Controle gedraaid op", datumTijd(momentopname.gemaakt), "door", momentopname.door || ""].map(q).join(";"));
+  r.push(["Periode", datum(momentopname.vanaf) + " t/m " + datum(momentopname.tot)].map(q).join(";"));
+  r.push("");
+  r.push(["Schakel","Controle","Nummer","Eigenaar","Ernst","Open bevindingen","Omvang","Afgehandeld"].map(q).join(";"));
+  momentopname.controles.forEach(function(c){
+    var t = openTotalen(c);
+    r.push([c.schakel, c.naam, c.id, c.eigenaar, c.ernst,
+            c.gedraaid ? t.aantal : "niet gedraaid",
+            c.gedraaid ? omvang({eenheid:c.eenheid, bedrag:t.bedrag}) : "",
+            t.afgehandeld].map(q).join(";"));
+  });
+  r.push(""); r.push(["BEVINDINGEN PER REGEL"].map(q).join(";"));
+  r.push(["Controle","Omschrijving controle","Verwijzing","Datum","Relatie","Artikel/omschrijving","Wat er aan de hand is","Aantal","Bedrag","Status","Notitie"].map(q).join(";"));
+  momentopname.controles.forEach(function(c){
+    (c.regels || []).forEach(function(x){
+      var b = bevindingen[x.sleutel] || {};
+      r.push([c.id, c.naam, x.verwijzing, datum(x.datum), x.wie, x.omschrijving, x.detail,
+              x.aantal, (Number(x.bedrag)||0).toFixed(2).replace(".", ","),
+              (b.status || "open"), (b.notitie || "")].map(q).join(";"));
+    });
+  });
+  // BOM zodat Excel de accenten goed leest.
+  var blob = new Blob(["﻿" + r.join("\r\n")], { type:"text/csv;charset=utf-8" });
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "geld-goederenbeweging-" + datum(momentopname.gemaakt).replace(/-/g,"") + ".csv";
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  log("export", "csv gedownload");
+});
+
+// De werkwijze-kaart staat buiten #inhoud (hij hangt niet aan een controle),
+// dus die krijgt hier zijn eigen open/dicht-gedrag.
+document.querySelector("#werkwijze .hoofd").addEventListener("click", function(){
+  document.getElementById("werkwijze").classList.toggle("open");
+});
+
+laden();
+</script>
+</body>
+</html>

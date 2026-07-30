@@ -407,6 +407,14 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Upload de maandelijkse Bol-factuur en genereer in één klik een memoriaal-voorstel voor in Logic4 — credit-regels per klant + verkoopprovisie + overschrijving.</p>
       </a>
 
+      <!-- Geld-goederenbeweging — de verbandscontrole van de accountant.
+           Financiën + directie: Osman, Gerriette, Dolf, Gerrit, bot. -->
+      <a href="geldgoederen.html" class="tile hidden" id="tileGeldGoederen">
+        <div class="icon">⛓️</div>
+        <h3>Geld-goederenbeweging</h3>
+        <p>Controleert of de keten inkoop → voorraad → verkoop → factuur → bank echt sluit, en laat precies zien welke orders, artikelen en facturen hem breken.</p>
+      </a>
+
       <!-- Stuurcijfers — alleen zichtbaar voor gerriette@ en dolf@. Klik vraagt extra wachtwoord. -->
       <a href="#" class="tile hidden" id="tileStuurcijfers">
         <div class="icon">📊</div>
@@ -617,6 +625,19 @@ const BANKKOPPELING_EMAILS = new Set([
 const STUURCIJFERS_EMAILS = new Set([
   "dolf@fonteyn.nl",       "fonteyn.dolf",
   "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
+// Welke logins mogen de Geld-goederenbeweging zien.
+// Dit is de volledige financiële keten van het bedrijf: inkoop, voorraad,
+// omzet, marge, debiteuren. Bewust smal gehouden: Dolf (eigenaar, hij heeft
+// dit met de accountant afgesproken), Osman (financiën) en Gerrit (admin).
+// Uitbreiden kan altijd — Gerriette ligt voor de hand zodra dat gewenst is.
+// geldgoederen.html doet client-side exact dezelfde controle.
+const GELDGOEDEREN_EMAILS = new Set([
+  "gerrit@fonteyn.nl",     "gerrit",   "fonteyn.gerrit",
+  "dolf@fonteyn.nl",       "fonteyn.dolf", "dolf",
+  "osman@fonteyn.nl",      "osman",    "fonteyn.osman",
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
@@ -872,6 +893,8 @@ function showDashboard(email) {
   el("tileOrderStatus").classList.toggle("hidden", !ORDERSTATUS_EMAILS.has(lc));
   // Bankkoppeling-tegel — finance-team + admins
   el("tileBankkoppeling").classList.toggle("hidden", !BANKKOPPELING_EMAILS.has(lc));
+  // Geld-goederenbeweging — financiën + directie
+  el("tileGeldGoederen").classList.toggle("hidden", !GELDGOEDEREN_EMAILS.has(lc));
   // Personeel-tegel — Chantal/Manon + admins
   el("tilePersoneel").classList.toggle("hidden", !PERSONEEL_EMAILS.has(lc));
   // Koeien-tegel — Dolf + Gerrit + bot
