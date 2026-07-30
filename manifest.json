@@ -9,6 +9,7 @@
     { "name": "order-status.html", "note": "Orderstatus-controle — wijzigt status van betaalde Verkooporders (Gerrit/Don/Arno/Dolf)" },
     { "name": "stuurcijfers.html", "note": "Stuurcijfers-tool (alleen voor Gerriette en Dolf, extra wachtwoord 'Meerveld')" },
     { "name": "stuurcijfers-engine.js", "note": "Formule-engine — vervangt de Excel-formules in OUT_-tabbladen" },
+    { "name": "spa-migratie.js", "note": "Spa-inkoop naar Logic4 — Chantals containerlijst (Jazzi-orders) omzetten naar echte inkooporders; tabblad in voorraad.html. Alleen wat nog vaart, niets gokken." },
     { "name": "taken.js", "note": "Persoonlijk takenblok bovenaan het dashboard — eigen taken, terugkerende momenten en signalen uit Logic4 die op naam staan (iedereen)." },
     { "name": "spa-codes.js", "note": "Spa-fabriekscodes (SKT/PP) → modelnaam. Gedeeld door voorraad.html, amerika.html en tools/import-ci.mjs — één lijst, zodat er geen twee ontstaan die uit elkaar lopen." },
     { "name": "proforma-inkoop.js", "note": "Proforma invoice uitlezen → voorstel tonen → na akkoord een inkooporder in Logic4. Gedeeld door voorraad.html (NL) en amerika.html (Warehouse Texas)." },

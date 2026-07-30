@@ -46,6 +46,7 @@ const ALLOWED_BUCKETS = new Set([
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
   "geldgoederen",     // Geld-goederenbeweging: laatste controle-momentopname + historie van de totalen
   "gg-bevindingen",   // Geld-goederenbeweging: per bevinding de status (open/opgepakt/opgelost/akkoord) + notitie
+  "spa-aliassen",     // Modelnaam zoals hij getypt wordt → modelnaam in de spa-catalogus (eenmalige keuze door een mens)
   "taken",            // Persoonlijk takenblok: e-mailadres → eigen taken (tekst/datum/klaar)
   "taken-ritme",      // Terugkerende momenten (voorraadcontrole, kwartaalcontrole) + per persoon wanneer afgevinkt
   // De huisstijl-fonts (Sephir, Helvetica, Univers) zijn commercieel
@@ -1231,17 +1232,55 @@ async function ikoCrediteuren(env) {
 // Model + kleur → artikelcode uit de spa-catalogus. De kleur op de proforma is
 // vrije tekst ("Sterling Silver, Jazzi color #30"), dus we matchen op de
 // kenmerkende woorden en niet op een exacte string.
-function ikoZoekArtikel(catalog, model, kleur, skirt) {
+// Modelnamen worden met de hand getypt en zijn navenant: "Tenerife Sup.",
+// "Rewind NEW", "serene 6", "Mallorca sup/ Blackpool". Dit haalt de ruis eraf
+// zodat de naam vergelijkbaar wordt zonder dat er iets wordt gegokt.
+function ikoNormaliseerModel(naam) {
+  return String(naam || "")
+    .toLowerCase()
+    .replace(/\bnew\b/g, " ")        // "Rewind NEW" is gewoon Rewind
+    .replace(/\bsup\b\.?/g, "superior")
+    .replace(/\bdia\b\.?/g, "diamond")
+    .replace(/\blux\b\.?/g, "luxury")
+    .replace(/[^a-z0-9]+/g, " ")     // punten, schuine strepen, dubbele spaties
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// aliassen: door een mens vastgelegde koppeling "zoals Chantal het typt" →
+// "zoals het model in de catalogus heet". Eén keer kiezen, daarna onthouden.
+function ikoZoekArtikel(catalog, model, kleur, skirt, aliassen) {
   const modellen = catalog.models || {};
   let varianten = modellen[model] || [];
   let viaAndereNaam = null;
-  // De fabriekscodelijst noemt hem "Exhilarate", Logic4 "Spa Exhilarate Mighty
-  // Wave". Is er precies één catalogusmodel dat deze naam bevat, dan is dat hem.
-  // Zijn er meerdere, dan gokken we niet — dan moet een mens kiezen.
+
+  // Hoe de modelnaam is gevonden bepaalt of het resultaat te vertrouwen is.
+  // Een letterlijke of door een mens vastgelegde treffer is zeker; alleen een
+  // gedeeltelijke naamsovereenkomst is dat niet.
+  let modelZeker = true;
+
+  // 1. Handmatige alias gaat vóór alles: die is bewust gekozen.
+  if (!varianten.length && model && aliassen) {
+    const doel = aliassen[ikoNormaliseerModel(model)];
+    if (doel && modellen[doel]) { varianten = modellen[doel]; viaAndereNaam = doel; }
+  }
+  // 2. De fabriekscodelijst noemt hem "Exhilarate", Logic4 "Spa Exhilarate
+  // Mighty Wave". Is er precies één catalogusmodel dat deze naam bevat, dan is
+  // dat hem. Zijn er meerdere, dan gokken we niet — dan moet een mens kiezen.
   if (!varianten.length && model) {
-    const kandidaten = Object.keys(modellen).filter(k => k.toLowerCase().includes(String(model).toLowerCase()));
-    if (kandidaten.length === 1) { varianten = modellen[kandidaten[0]]; viaAndereNaam = kandidaten[0]; }
-    else if (kandidaten.length > 1) return { meerdere: kandidaten };
+    const genorm = ikoNormaliseerModel(model);
+    const kaart = Object.keys(modellen).map(k => ({ k, n: ikoNormaliseerModel(k) }));
+    // Eerst exact op de genormaliseerde naam: "serene 6" → "Serene 6",
+    // "Tenerife Sup." → "Tenerife Superior". Dat is geen gok maar een treffer.
+    const exact = kaart.filter(x => x.n === genorm);
+    if (exact.length === 1) { varianten = modellen[exact[0].k]; viaAndereNaam = exact[0].k; }
+    else {
+      const kandidaten = kaart.filter(x => x.n.includes(genorm)).map(x => x.k);
+      // Slechts een deel van de naam komt overeen — dat kan kloppen, maar
+      // "Renew" binnen "Old Renew" laat zien dat het ook mis kan gaan.
+      if (kandidaten.length === 1) { varianten = modellen[kandidaten[0]]; viaAndereNaam = kandidaten[0]; modelZeker = false; }
+      else if (kandidaten.length > 1) return { meerdere: kandidaten };
+    }
   }
   if (!varianten.length) return null;
   // De fabriek en Logic4 gebruiken andere woorden voor dezelfde kleur. Chantal:
@@ -1273,7 +1312,7 @@ function ikoZoekArtikel(catalog, model, kleur, skirt) {
       else if (trim && /grey\/oak|oak\/grey/.test(d)) score -= 2;   // de ándere trim
       if (score > besteScore) { besteScore = score; beste = v; }
     }
-    if (beste && besteScore > 0) return { ...beste, zeker: !viaAndereNaam, viaAndereNaam };
+    if (beste && besteScore > 0) return { ...beste, zeker: modelZeker, viaAndereNaam };
   }
   // Is er maar één uitvoering, dan kan het niet mis: die nemen we.
   if (varianten.length === 1) return { ...varianten[0], zeker: false, viaAndereNaam };
@@ -1292,6 +1331,7 @@ async function ikoVoorstel(env, body) {
   const regels = Array.isArray(body.regels) ? body.regels : [];
   if (!regels.length) return { ok: false, error: "geen regels ontvangen" };
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const aliassen = ((await env.FONTEYN_DATA.get("spa-aliassen", { type: "json" })) || {}).modellen || {};
   const crediteuren = await ikoCrediteuren(env);
   // De fabriek schrijft "JAZZI POOL AND SPA PRODUCTS CO.,LTD", Logic4 heeft
   // "Jazzi pool and spa products Co., Ltd". Alleen hoofdletters en leestekens
@@ -1308,7 +1348,7 @@ async function ikoVoorstel(env, body) {
   const uit = [], waarschuwingen = [];
   for (const r of regels) {
     const model = r.model || null;
-    const art = model ? ikoZoekArtikel(catalog, model, r.kleur, r.skirt) : null;
+    const art = model ? ikoZoekArtikel(catalog, model, r.kleur, r.skirt, aliassen) : null;
     if (!model) waarschuwingen.push("Onbekende fabriekscode: " + (r.code || "?"));
     else if (art && art.meerdere)
       waarschuwingen.push(model + " komt in Logic4 onder meerdere namen voor (" + art.meerdere.join(", ") + ") — kies de juiste handmatig.");
@@ -1400,6 +1440,165 @@ async function ikoAanmaken(env, body) {
     await env.FONTEYN_DATA.put("voorraad-inkooporders", JSON.stringify(reeds));
   }
   return { ok: mislukt.length === 0, buyOrderId, toegevoegd: toegevoegd.length, mislukt };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SPA-INKOOP NAAR LOGIC4
+   ═══════════════════════════════════════════════════════════════════════════
+
+   De spa-inkoop liep buiten Logic4 om, omdat Jazzi niet in Logic4 kan. Chantal
+   hield de bestellingen daarom in het dashboard bij: bucket 'voorraad-pipeline'
+   (containers = Jazzi-ordernummers, met per regel model/kleur/aantal) en
+   'voorraad-schepen' (deelleveringen met vaartuig en ETA).
+
+   Dat is een tweede administratie geworden. Gevolg: de grootste productgroep
+   van het bedrijf ontbreekt in de geld-goederenbeweging — er staat omzet
+   tegenover een inkoop die in Logic4 niet bestaat.
+
+   Deze functies zetten die lijst om in ECHTE inkooporders bij Jazzi:
+     • één inkooporder per containernummer (= één Jazzi-order)
+     • regels op artikelcode, gevonden via de spa-catalogus
+     • ETA uit het schip dat bij die order hoort
+     • referentie "Jazzi-order <nr>", zodat er nooit twee van worden gemaakt
+
+   Wat NIET automatisch gaat, gaat ook niet automatisch: regels waarvan het
+   model of de kleur niet met zekerheid te herleiden is, blijven staan tot een
+   mens kiest. Die keuze wordt bewaard in 'spa-aliassen' en geldt daarna overal,
+   ook voor de proforma-koppeling.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const JAZZI_CREDITEUR = 160181;   // "Jazzi pool and spa products Co., Ltd"
+
+// Welke containers zijn nog actueel? De oude bestellingen zijn allang geleverd;
+// die alsnog als openstaande inkooporder aanmaken zou precies de fout maken die
+// de accountant aanwijst (goederen die volgens de administratie nog moeten
+// komen). Een container telt als actueel zolang er een schip naar verwijst, of
+// zolang hij korter dan een jaar geleden is besteld.
+function spaContainerActueel(container, schipRefs) {
+  const nr = String(container.nr || "").trim();
+  if (nr && schipRefs.has(nr)) return { actueel: true, reden: "er vaart nog een schip met deze order" };
+  const besteld = container.besteld ? new Date(container.besteld).getTime() : NaN;
+  if (!isFinite(besteld)) return { actueel: false, reden: "geen geldige besteldatum" };
+  const dagen = Math.round((Date.now() - besteld) / 86400000);
+  if (dagen <= 365) return { actueel: true, reden: besteld ? (dagen + " dagen geleden besteld") : "" };
+  return { actueel: false, reden: dagen + " dagen geleden besteld — vrijwel zeker allang geleverd" };
+}
+
+// Uit "RZ2009DF3317-5&3332-2 to Rotterdam" komen de ordernummers 3317 en 3332.
+// Eén schip bevat vaak deelleveringen van twee Jazzi-orders.
+function spaOrdersUitSchip(ref) {
+  const uit = new Set();
+  const m = String(ref || "").match(/\d{4}(?=-\d)/g) || [];
+  for (const x of m) uit.add(x);
+  return uit;
+}
+
+async function spaMigratieVoorstel(env) {
+  const pipeline = (await env.FONTEYN_DATA.get("voorraad-pipeline", { type: "json" })) || {};
+  const schepen = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const aliassen = ((await env.FONTEYN_DATA.get("spa-aliassen", { type: "json" })) || {}).modellen || {};
+  const gedaan = (await env.FONTEYN_DATA.get("voorraad-inkooporders", { type: "json" })) || { orders: {} };
+
+  // Welke ordernummers varen er nog, en met welke ETA?
+  const schipRefs = new Set(), etaPerOrder = {};
+  for (const s of (schepen.ships || [])) {
+    for (const nr of spaOrdersUitSchip(s.ref)) {
+      schipRefs.add(nr);
+      // De vroegste ETA is de eerstvolgende aankomst van deze order.
+      if (s.eta && (!etaPerOrder[nr] || s.eta < etaPerOrder[nr])) etaPerOrder[nr] = s.eta;
+    }
+  }
+
+  const containers = [];
+  for (const c of (pipeline.containers || [])) {
+    const nr = String(c.nr || "").trim();
+    const ref = "Jazzi-order " + nr;
+    const status = spaContainerActueel(c, schipRefs);
+    const regels = [];
+    let zeker = 0, nakijken = 0, onmogelijk = 0, spas = 0;
+
+    for (const l of (c.lines || [])) {
+      const aantal = Number(l.qty) || 0;
+      spas += aantal;
+      const art = ikoZoekArtikel(catalog, l.model, l.color, l.color, aliassen);
+      let staat = "onmogelijk", uitleg = "", code = null, omschrijving = "";
+      if (art && art.code) {
+        code = art.code; omschrijving = art.desc || "";
+        if (art.zeker) { staat = "zeker"; zeker++; }
+        else {
+          staat = "nakijken"; nakijken++;
+          uitleg = art.viaAndereNaam ? ("heet in Logic4 \"" + art.viaAndereNaam + "\"") : "kleur niet zeker herkend";
+        }
+      } else if (art && art.geenKleur) {
+        onmogelijk++;
+        uitleg = "deze kleur bestaat niet bij dit model" + (art.beschikbaar && art.beschikbaar.length ? (" — wél: " + art.beschikbaar.join(", ")) : "");
+      } else if (art && art.meerdere) {
+        onmogelijk++;
+        uitleg = "meerdere modellen mogelijk: " + art.meerdere.join(", ");
+      } else {
+        onmogelijk++;
+        uitleg = "model onbekend in de spa-catalogus";
+      }
+      regels.push({
+        model: l.model || "", kleur: l.color || "", aantal: aantal,
+        artikelcode: code, artikelnaam: omschrijving, staat: staat, uitleg: uitleg
+      });
+    }
+
+    containers.push({
+      nr: nr, besteld: c.besteld || null, eta: etaPerOrder[nr] || c.eta || null,
+      herkomst: c.herkomst || null,
+      actueel: status.actueel, reden: status.reden,
+      alGedaan: gedaan.orders && gedaan.orders[ref] ? gedaan.orders[ref].buyOrderId : null,
+      spas: spas, zeker: zeker, nakijken: nakijken, onmogelijk: onmogelijk,
+      referentie: ref, regels: regels
+    });
+  }
+
+  containers.sort((a, b) => String(b.besteld || "").localeCompare(String(a.besteld || "")));
+  return {
+    ok: true, crediteur: JAZZI_CREDITEUR, containers: containers,
+    schepen: (schepen.ships || []).map(s => ({
+      ref: s.ref, vessel: s.vessel, eta: s.eta, containers: s.containers,
+      orders: [...spaOrdersUitSchip(s.ref)]
+    })),
+    aliassen: aliassen
+  };
+}
+
+// Eén container omzetten naar een inkooporder. Hergebruikt ikoAanmaken, zodat
+// er maar één plek is die inkooporders maakt — inclusief de dubbelcontrole.
+async function spaMigratieUitvoeren(env, body) {
+  const nr = String(body.nr || "").trim();
+  if (!nr) return { ok: false, error: "geen containernummer" };
+  const voorstel = await spaMigratieVoorstel(env);
+  const c = voorstel.containers.find(x => x.nr === nr);
+  if (!c) return { ok: false, error: "container " + nr + " niet gevonden" };
+  if (c.alGedaan && !body.tochOpnieuw)
+    return { ok: false, dubbel: true, bestaandeOrder: c.alGedaan,
+      error: "Voor " + c.referentie + " bestaat al inkooporder " + c.alGedaan + "." };
+
+  // Alleen regels met een artikelcode gaan mee. Wat niet herleidbaar is, wordt
+  // niet gegokt maar vastgelegd in de opmerking van de inkooporder, zodat later
+  // zichtbaar is waarom de order afwijkt van Chantals lijst.
+  const mee = c.regels.filter(r => r.artikelcode && (body.ookNakijken || r.staat === "zeker"));
+  const over = c.regels.filter(r => !mee.includes(r));
+  if (!mee.length) return { ok: false, error: "geen enkele regel van container " + nr + " is met zekerheid te koppelen" };
+
+  return await ikoAanmaken(env, {
+    crediteurId: JAZZI_CREDITEUR,
+    referentie: c.referentie,
+    eta: c.eta || null,
+    door: body.door || null,
+    bestemming: c.herkomst || null,
+    overgeslagen: over.map(r => r.model + " " + r.kleur + " (" + r.aantal + "x): " + r.uitleg),
+    regels: mee.map(r => ({
+      artikelcode: r.artikelcode, aantal: r.aantal, prijs: 0,
+      omschrijving: r.artikelnaam || (r.model + " " + r.kleur)
+    })),
+    tochOpnieuw: !!body.tochOpnieuw
+  });
 }
 
 async function dpRefreshReservations(env) {
@@ -2182,6 +2381,34 @@ export default {
       if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
       const body = await request.json().catch(() => ({}));
       return reply(200, await ikoAanmaken(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+
+    // Spa-inkoop naar Logic4. Het voorstel is alleen-lezen (teamsleutel);
+    // daadwerkelijk een inkooporder aanmaken vereist de beheersleutel, net als
+    // bij de proforma-koppeling. Zo kan niemand met alleen leesrechten per
+    // ongeluk inkooporders in de administratie zetten.
+    if (url.pathname === "/voorraad/spa-migratie/voorstel" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      return reply(200, await spaMigratieVoorstel(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/voorraad/spa-migratie/uitvoeren" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await spaMigratieUitvoeren(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    // Een modelnaam die Chantal anders typt dan Logic4 hem kent, eenmalig
+    // koppelen. Geldt daarna overal — ook voor de proforma-koppeling.
+    if (url.pathname === "/voorraad/spa-migratie/alias" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const body = await request.json().catch(() => ({}));
+      const van = ikoNormaliseerModel(body.van), naar = String(body.naar || "").trim();
+      if (!van || !naar) return reply(400, { ok: false, error: "van en naar zijn allebei nodig" });
+      const opslag = (await env.FONTEYN_DATA.get("spa-aliassen", { type: "json" })) || { modellen: {} };
+      opslag.modellen = opslag.modellen || {};
+      opslag.modellen[van] = naar;
+      opslag.gewijzigd = new Date().toISOString();
+      await env.FONTEYN_DATA.put("spa-aliassen", JSON.stringify(opslag));
+      return reply(200, { ok: true, van, naar });
     }
 
     // Juridische pagina's (publiek) — nodig voor de QuickBooks-app-review
