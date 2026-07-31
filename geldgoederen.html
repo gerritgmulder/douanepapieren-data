@@ -123,6 +123,20 @@ ol.afspraken li{margin-bottom:9px}
 ol.afspraken b{color:var(--ink)}
 ol.afspraken i{color:var(--grijs);font-style:normal;font-size:11.5px}
 footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;color:#9ca3af}
+/* ── Debiteurenlijst (debiteuren.js) ── */
+.dbcijfers{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 16px}
+.dbblok{flex:1 1 170px;background:#fff;border:1px solid var(--rand);border-radius:10px;padding:12px 14px}
+.dbblok .t{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--grijs);font-weight:600}
+.dbblok .g{font-size:20px;font-weight:700;margin:5px 0 2px;font-variant-numeric:tabular-nums}
+.dbblok .k{font-size:11.5px;color:var(--grijs)}
+.dbtabel td.r,.dbtabel th.r{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dbtabel tr.dbmarkeer{background:#fffbeb}
+.dbtabel .zacht{color:var(--grijs);font-size:11.5px}
+.dbkop{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--grijs);font-weight:600;margin:20px 0 8px}
+.dbafd{display:flex;flex-wrap:wrap;gap:7px}
+.dbafd div{background:#fff;border:1px solid var(--rand);border-radius:8px;padding:7px 11px;font-size:12px;display:flex;gap:9px;align-items:baseline}
+.dbafd div span{color:var(--grijs)}
+.dbafd div b{font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -141,6 +155,7 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
     <div class="wanneer" id="wanneer">Bezig met laden…</div>
     <div class="knoprij">
       <label class="keuze"><input type="checkbox" id="diep"> ook handmatige voorraadcorrecties (duurt langer)</label>
+      <button class="knop licht" id="btnDebiteuren">Debiteurenlijst maken</button>
       <button class="knop licht" id="btnExport">Exporteren voor de accountant</button>
       <button class="knop" id="btnScan">Nieuwe controle draaien</button>
     </div>
@@ -150,6 +165,8 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
     <div class="tekst" id="voortgangTekst">…</div>
     <div class="balkje"><i id="voortgangBalk"></i></div>
   </div>
+
+  <div id="debiteuren"></div>
 
   <div class="keten" id="keten"></div>
   <div id="inhoud"></div>
@@ -193,6 +210,7 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
 </footer>
 
 <script src="gg-engine.js"></script>
+<script src="debiteuren.js"></script>
 <script>
 "use strict";
 if (window.fpGeenToegang) throw new Error("geen toegang");
@@ -341,6 +359,98 @@ function bewaarBevindingen(){
       headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth":TEAMKEY },
       body: JSON.stringify(bevindingen) }).catch(function(e){ console.warn("opslaan faalde", e); });
   }, 700);
+}
+
+/* ══════════════════════ Debiteurenlijst ══════════════════════
+   Staat los van de maandelijkse controle: hiervoor is per openstaande factuur
+   de klantnaam én de productgroep nodig, en dat is één aanroep per post. Ruim
+   tweeduizend stuks, dus een paar minuten. Daarom een eigen knop. */
+
+document.getElementById("btnDebiteuren").addEventListener("click", async function(){
+  if (bezig) return;
+  if (!window.fpDebiteuren) { alert("De debiteuren-module is nog niet geladen. Sluit de app af en start hem opnieuw."); return; }
+  if (!confirm("De debiteurenlijst opbouwen duurt ongeveer twee tot drie minuten, omdat elke openstaande factuur apart uit Logic4 wordt gehaald.\n\nDoorgaan?")) return;
+  bezig = true;
+  var knop = this; knop.disabled = true; knop.textContent = "Bezig…";
+  var vak = document.getElementById("voortgang");
+  var tekst = document.getElementById("voortgangTekst");
+  var balk = document.getElementById("voortgangBalk");
+  vak.style.display = "block";
+  try {
+    var t0 = Date.now();
+    var uit = await window.fpDebiteuren.bouw({
+      logic4: logic4, teamKey: TEAMKEY, email: EMAIL,
+      melden: function(t, p){ tekst.textContent = t; balk.style.width = Math.min(100, p||0) + "%"; }
+    });
+    toonDebiteuren(uit);
+    window.fpDebiteuren.download(uit);
+    log("debiteurenlijst", Math.round((Date.now()-t0)/1000) + "s — " + uit.klanten.length + " klanten over " + uit.aantalPosten + " posten");
+  } catch (e) {
+    tekst.textContent = "Niet gelukt: " + (e.message || e);
+    balk.style.width = "0%";
+    bezig = false; knop.disabled = false; knop.textContent = "Debiteurenlijst maken";
+    return;
+  }
+  vak.style.display = "none";
+  bezig = false; knop.disabled = false; knop.textContent = "Debiteurenlijst maken";
+});
+
+function toonDebiteuren(uit){
+  var totOpen = 0, totTeveel = 0, totGekoppeld = 0, totExact = 0, telaat90 = 0;
+  var perAfd = {};
+  uit.klanten.forEach(function(k){
+    totOpen += k.open; totTeveel += k.teveel; totGekoppeld += k.mogelijkGekoppeld; totExact += k.exact;
+    if (k.telaat > 90) telaat90 += k.open;
+    var a = k.afdeling || "(onbekend)";
+    perAfd[a] = (perAfd[a] || 0) + k.open;
+  });
+
+  var h = '<h2 class="kop">Openstaand per klant</h2>';
+  h += '<div class="kaart"><div class="body">';
+  h += '<p class="uitleg">Momentopname van ' + datum(uit.gemaakt) + ' over ' + uit.aantalPosten + ' openstaande posten. ' +
+       'De twee bestanden zijn zojuist gedownload: één per klant en één per factuur.</p>';
+  h += '<div class="dbcijfers">' +
+       blok("Openstaand", euro(totOpen), uit.klanten.length + " klanten") +
+       blok("Waarvan &gt;90 dagen", euro(telaat90), "te laat") +
+       blok("Te veel ontvangen", euro(totTeveel), "bij klanten die óók iets openstaan hebben") +
+       blok("Mogelijk fout gekoppeld", euro(totGekoppeld), totExact + " keer exact gelijk") +
+       '</div>';
+
+  h += '<div class="tabelwrap"><table class="dbtabel"><thead><tr>' +
+       '<th>Klant</th><th>Afdeling</th><th class="r">Openstaand</th><th class="r">Facturen</th>' +
+       '<th class="r">Dagen te laat</th><th class="r">Te veel ontvangen</th></tr></thead><tbody>';
+  uit.klanten.slice(0, 40).forEach(function(k){
+    h += '<tr' + (k.mogelijkGekoppeld > 0.5 ? ' class="dbmarkeer"' : '') + '>' +
+      '<td>' + veilig(k.naam || ("debiteur " + k.deb)) + (k.plaats ? ' <span class="zacht">' + veilig(k.plaats) + '</span>' : '') + '</td>' +
+      '<td>' + veilig(k.afdeling) + '</td>' +
+      '<td class="r">' + euro(k.open) + '</td>' +
+      '<td class="r">' + k.nOpen + '</td>' +
+      '<td class="r">' + (k.telaat > 0 ? k.telaat : "—") + '</td>' +
+      '<td class="r">' + (k.teveel > 0.5 ? euro(k.teveel) + (k.exact ? ' <b>·' + k.exact + '×</b>' : '') : "") + '</td></tr>';
+  });
+  h += '</tbody></table></div>';
+  if (uit.klanten.length > 40) h += '<p class="uitleg">De 40 grootste staan hierboven; alle ' + uit.klanten.length + ' staan in het gedownloade bestand.</p>';
+
+  h += '<p class="uitleg" style="margin-top:14px"><b>Gemarkeerde regels</b> zijn klanten die tegelijk iets openstaan hebben én ergens te veel hebben betaald. ' +
+       'Staat er "×" bij, dan is het bedrag exact gelijk aan een openstaande post van diezelfde klant — dan is het dezelfde betaling, alleen op de verkeerde factuur geboekt.</p>';
+
+  h += '<h4 class="dbkop">Per afdeling</h4><div class="dbafd">';
+  Object.keys(perAfd).map(function(a){ return [a, perAfd[a]]; })
+    .sort(function(a,b){ return b[1]-a[1]; }).slice(0, 14)
+    .forEach(function(x){ h += '<div><span>' + veilig(x[0]) + '</span><b>' + euro(x[1]) + '</b></div>'; });
+  h += '</div></div></div>';
+
+  document.getElementById("debiteuren").innerHTML = h;
+
+  function blok(titel, groot, klein){
+    return '<div class="dbblok"><div class="t">' + titel + '</div><div class="g">' + groot + '</div><div class="k">' + klein + '</div></div>';
+  }
+}
+
+function veilig(s){
+  return String(s == null ? "" : s).replace(/[&<>"]/g, function(c){
+    return ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" })[c];
+  });
 }
 
 /* ══════════════════════ De scan ══════════════════════ */

@@ -2,39 +2,144 @@
   "version": "0.16.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
-    { "name": "dashboard.html" },
-    { "name": "douane.html" },
-    { "name": "douanetool.html", "note": "Legacy redirect → dashboard.html" },
-    { "name": "labels.html", "note": "Inkomende goederen — label-generator op basis van inkooporder-PDF" },
-    { "name": "order-status.html", "note": "Orderstatus-controle — wijzigt status van betaalde Verkooporders (Gerrit/Don/Arno/Dolf)" },
-    { "name": "stuurcijfers.html", "note": "Stuurcijfers-tool (alleen voor Gerriette en Dolf, extra wachtwoord 'Meerveld')" },
-    { "name": "stuurcijfers-engine.js", "note": "Formule-engine — vervangt de Excel-formules in OUT_-tabbladen" },
-    { "name": "spa-migratie.js", "note": "Spa-inkoop naar Logic4 — Chantals containerlijst (Jazzi-orders) omzetten naar echte inkooporders; tabblad in voorraad.html. Alleen wat nog vaart, niets gokken." },
-    { "name": "taken.js", "note": "Persoonlijk takenblok bovenaan het dashboard — eigen taken, terugkerende momenten en signalen uit Logic4 die op naam staan (iedereen)." },
-    { "name": "spa-codes.js", "note": "Spa-fabriekscodes (SKT/PP) → modelnaam. Gedeeld door voorraad.html, amerika.html en tools/import-ci.mjs — één lijst, zodat er geen twee ontstaan die uit elkaar lopen." },
-    { "name": "proforma-inkoop.js", "note": "Proforma invoice uitlezen → voorstel tonen → na akkoord een inkooporder in Logic4. Gedeeld door voorraad.html (NL) en amerika.html (Warehouse Texas)." },
-    { "name": "geldgoederen.html", "note": "Geld-goederenbeweging — de verbandscontrole van accountant Kevin (De Jong & Laan) op live Logic4-data: inkoop → voorraad → verkoop → factuur → bank, plus kostprijs/marge. Per bevinding een eigenaar en een status. Alleen Osman/Gerriette/Dolf/Gerrit/Fonteynbot." },
-    { "name": "gg-engine.js", "note": "Controle-engine achter de Geld-goederenbeweging: de 16 verbandscontroles, de magazijn-indeling (fysiek/virtueel/doorstroom) en de artikelclassificatie. Los bestand zodat de controles herbruikbaar zijn en apart te testen." },
-    { "name": "probe-logic4.html", "note": "Eenmalige probe-pagina om Logic4-velden in kaart te brengen — kan later weer verwijderd worden" },
-    { "name": "transport.html", "note": "Transport laden — bin-packing in bakwagens + routeplanning per dag" },
-    { "name": "eikensingel.html", "note": "Eikensingel-vakantiepark — bovenaanzicht 10 bungalows, boekingen + schoonmaak + betalingen" },
-    { "name": "prijslijst.html", "note": "Prijslijst maken — leveranciers-PDF (invoice/catalogus) → Fonteyn/Passion-stijl prijslijst" },
-    { "name": "bankkoppeling.html", "note": "Bankkoppeling — MT940-import + automatische match aan Logic4-orders (Osman/Rowan/Rico/Reinier + admins)" },
-    { "name": "bol.html", "note": "Bol.com koppeling — Bol-factuur Excel → klant-betalingen koppelen aan Logic4-orders via Referentie=bestelnummer (lookup → debiteurnr + Betaald-stand), daarna AddPayment zodat Betaald=Bol-bedrag. + memoriaal-export voor de 2 debet-regels (Don/Osman + admins)." },
-    { "name": "retouren.html", "note": "Retouren — op te halen retouren uit Logic4 (bedrag <=0) + reden/locatie-registratie in Cloudflare KV (bucket retouren), cirkeldiagram + periode-filter (Don/Arno/Dolf/Manon + admins)." },
-    { "name": "voorraad.html", "note": "Voorraadbeheer — verkochte spa-orders per dag uit Logic4 (status Verkooporder/30% aanbetaald), spa-detectie via SKT-productcodes, 1 regel per spa, filteren op elke kolom. Vervolg: Dealer/Particulier-splitsing + reserveringen in KV (Dolf/Arno/Chantal + admins)." },
-    { "name": "amerika.html", "note": "Amerika — Passion Spas USA (Houston/Texas). Warehouse-Texas-orders uit Logic4 + (nog te koppelen) QuickBooks. Alleen Chantal/Dolf/Gerrit/Fonteynbot." },
-    { "name": "activiteit.html", "note": "Activiteitenlogboek — wie logt wanneer in en welke tegels worden gebruikt (uit bucket activiteit-YYYY-MM via /log). Alleen Gerrit/Dolf/Fonteynbot." },
-    { "name": "specsheets.html", "note": "Specificatiesheets — marketing (Gretha) maakt de A4-specsheets per spa-model met invulvelden, foto-upload en PDF-export (vervangt InDesign). Opslag in bucket specsheets." },
-    { "name": "partneractiviteit.html", "note": "Partner-activiteitenlogboek — wat dealers op het publieke Passion Partners-portaal doen (login/reservering/document/vraag). Server-side gelogd in de worker → bucket partner-activiteit-YYYY-MM. Alleen Gerrit/Dolf/Arno/Don/Chantal/Fonteynbot." },
-    { "name": "dealerportaal.html", "note": "Dealerportaal beheren — dealer-accounts (magic-link toegang), documenten/specsheets en contact-instellingen voor het publieke dealerportaal op de worker (/dealers). Arno/Don/Chantal + admins. LET OP: dealerportal.html (de publieke pagina) hoort NIET in dit manifest — die wordt door de worker vers van GitHub main geserveerd." },
-    { "name": "personeel.html", "note": "Personeel — buitenlandse medewerkers, kamerverdeling Eikensingel + vluchten (Chantal/Manon + admins)" },
-    { "name": "koeien.html", "note": "Koeien bij Dolf — interactief overzicht met stamboom, centraal opgeslagen in Cloudflare KV (alleen Dolf/Gerrit/Fonteynbot)" },
-    { "name": "rapportage.html", "note": "Rapportage-dashboard — omzet/target/aantallen + reviews per adviseur (alleen Gerrit/Don/Arno/Dolf/Fonteynbot). Skeleton; data-integratie volgt." },
-    { "name": "fonteyn-logo.png", "note": "Officieel Fonteyn-logo (wit op transparant), gebruikt op de A6-labels" },
-    { "name": "passion-logo.png", "note": "Officieel Passion Spas-logo (kleurrijk op transparant), gebruikt in Prijslijst-Passion-stijl" },
-    { "name": "article-codes.json", "validate": "json" },
-    { "name": "spec-database.json", "validate": "json" },
-    { "name": "packaging-database.json", "validate": "json", "note": "Verpakkings-afmetingen + gewicht per product (Maten + gewichten.xlsx)" }
+    {
+      "name": "dashboard.html"
+    },
+    {
+      "name": "douane.html"
+    },
+    {
+      "name": "douanetool.html",
+      "note": "Legacy redirect → dashboard.html"
+    },
+    {
+      "name": "labels.html",
+      "note": "Inkomende goederen — label-generator op basis van inkooporder-PDF"
+    },
+    {
+      "name": "order-status.html",
+      "note": "Orderstatus-controle — wijzigt status van betaalde Verkooporders (Gerrit/Don/Arno/Dolf)"
+    },
+    {
+      "name": "stuurcijfers.html",
+      "note": "Stuurcijfers-tool (alleen voor Gerriette en Dolf, extra wachtwoord 'Meerveld')"
+    },
+    {
+      "name": "stuurcijfers-engine.js",
+      "note": "Formule-engine — vervangt de Excel-formules in OUT_-tabbladen"
+    },
+    {
+      "name": "spa-migratie.js",
+      "note": "Spa-inkoop naar Logic4 — Chantals containerlijst (Jazzi-orders) omzetten naar echte inkooporders; tabblad in voorraad.html. Alleen wat nog vaart, niets gokken."
+    },
+    {
+      "name": "taken.js",
+      "note": "Persoonlijk takenblok bovenaan het dashboard — eigen taken, terugkerende momenten en signalen uit Logic4 die op naam staan (iedereen)."
+    },
+    {
+      "name": "spa-codes.js",
+      "note": "Spa-fabriekscodes (SKT/PP) → modelnaam. Gedeeld door voorraad.html, amerika.html en tools/import-ci.mjs — één lijst, zodat er geen twee ontstaan die uit elkaar lopen."
+    },
+    {
+      "name": "proforma-inkoop.js",
+      "note": "Proforma invoice uitlezen → voorstel tonen → na akkoord een inkooporder in Logic4. Gedeeld door voorraad.html (NL) en amerika.html (Warehouse Texas)."
+    },
+    {
+      "name": "geldgoederen.html",
+      "note": "Geld-goederenbeweging — de verbandscontrole van accountant Kevin (De Jong & Laan) op live Logic4-data: inkoop → voorraad → verkoop → factuur → bank, plus kostprijs/marge. Per bevinding een eigenaar en een status. Alleen Osman/Gerriette/Dolf/Gerrit/Fonteynbot."
+    },
+    {
+      "name": "gg-engine.js",
+      "note": "Controle-engine achter de Geld-goederenbeweging: de 16 verbandscontroles, de magazijn-indeling (fysiek/virtueel/doorstroom) en de artikelclassificatie. Los bestand zodat de controles herbruikbaar zijn en apart te testen."
+    },
+    {
+      "name": "debiteuren.js",
+      "note": "Debiteurenlijst — openstaande posten per klant met afdeling en of er ergens een betaling verkeerd gekoppeld is. Knop in geldgoederen.html; haalt per openstaande factuur de klantnaam en regels op."
+    },
+    {
+      "name": "probe-logic4.html",
+      "note": "Eenmalige probe-pagina om Logic4-velden in kaart te brengen — kan later weer verwijderd worden"
+    },
+    {
+      "name": "transport.html",
+      "note": "Transport laden — bin-packing in bakwagens + routeplanning per dag"
+    },
+    {
+      "name": "eikensingel.html",
+      "note": "Eikensingel-vakantiepark — bovenaanzicht 10 bungalows, boekingen + schoonmaak + betalingen"
+    },
+    {
+      "name": "prijslijst.html",
+      "note": "Prijslijst maken — leveranciers-PDF (invoice/catalogus) → Fonteyn/Passion-stijl prijslijst"
+    },
+    {
+      "name": "bankkoppeling.html",
+      "note": "Bankkoppeling — MT940-import + automatische match aan Logic4-orders (Osman/Rowan/Rico/Reinier + admins)"
+    },
+    {
+      "name": "bol.html",
+      "note": "Bol.com koppeling — Bol-factuur Excel → klant-betalingen koppelen aan Logic4-orders via Referentie=bestelnummer (lookup → debiteurnr + Betaald-stand), daarna AddPayment zodat Betaald=Bol-bedrag. + memoriaal-export voor de 2 debet-regels (Don/Osman + admins)."
+    },
+    {
+      "name": "retouren.html",
+      "note": "Retouren — op te halen retouren uit Logic4 (bedrag <=0) + reden/locatie-registratie in Cloudflare KV (bucket retouren), cirkeldiagram + periode-filter (Don/Arno/Dolf/Manon + admins)."
+    },
+    {
+      "name": "voorraad.html",
+      "note": "Voorraadbeheer — verkochte spa-orders per dag uit Logic4 (status Verkooporder/30% aanbetaald), spa-detectie via SKT-productcodes, 1 regel per spa, filteren op elke kolom. Vervolg: Dealer/Particulier-splitsing + reserveringen in KV (Dolf/Arno/Chantal + admins)."
+    },
+    {
+      "name": "amerika.html",
+      "note": "Amerika — Passion Spas USA (Houston/Texas). Warehouse-Texas-orders uit Logic4 + (nog te koppelen) QuickBooks. Alleen Chantal/Dolf/Gerrit/Fonteynbot."
+    },
+    {
+      "name": "activiteit.html",
+      "note": "Activiteitenlogboek — wie logt wanneer in en welke tegels worden gebruikt (uit bucket activiteit-YYYY-MM via /log). Alleen Gerrit/Dolf/Fonteynbot."
+    },
+    {
+      "name": "specsheets.html",
+      "note": "Specificatiesheets — marketing (Gretha) maakt de A4-specsheets per spa-model met invulvelden, foto-upload en PDF-export (vervangt InDesign). Opslag in bucket specsheets."
+    },
+    {
+      "name": "partneractiviteit.html",
+      "note": "Partner-activiteitenlogboek — wat dealers op het publieke Passion Partners-portaal doen (login/reservering/document/vraag). Server-side gelogd in de worker → bucket partner-activiteit-YYYY-MM. Alleen Gerrit/Dolf/Arno/Don/Chantal/Fonteynbot."
+    },
+    {
+      "name": "dealerportaal.html",
+      "note": "Dealerportaal beheren — dealer-accounts (magic-link toegang), documenten/specsheets en contact-instellingen voor het publieke dealerportaal op de worker (/dealers). Arno/Don/Chantal + admins. LET OP: dealerportal.html (de publieke pagina) hoort NIET in dit manifest — die wordt door de worker vers van GitHub main geserveerd."
+    },
+    {
+      "name": "personeel.html",
+      "note": "Personeel — buitenlandse medewerkers, kamerverdeling Eikensingel + vluchten (Chantal/Manon + admins)"
+    },
+    {
+      "name": "koeien.html",
+      "note": "Koeien bij Dolf — interactief overzicht met stamboom, centraal opgeslagen in Cloudflare KV (alleen Dolf/Gerrit/Fonteynbot)"
+    },
+    {
+      "name": "rapportage.html",
+      "note": "Rapportage-dashboard — omzet/target/aantallen + reviews per adviseur (alleen Gerrit/Don/Arno/Dolf/Fonteynbot). Skeleton; data-integratie volgt."
+    },
+    {
+      "name": "fonteyn-logo.png",
+      "note": "Officieel Fonteyn-logo (wit op transparant), gebruikt op de A6-labels"
+    },
+    {
+      "name": "passion-logo.png",
+      "note": "Officieel Passion Spas-logo (kleurrijk op transparant), gebruikt in Prijslijst-Passion-stijl"
+    },
+    {
+      "name": "article-codes.json",
+      "validate": "json"
+    },
+    {
+      "name": "spec-database.json",
+      "validate": "json"
+    },
+    {
+      "name": "packaging-database.json",
+      "validate": "json",
+      "note": "Verpakkings-afmetingen + gewicht per product (Maten + gewichten.xlsx)"
+    }
   ]
 }
