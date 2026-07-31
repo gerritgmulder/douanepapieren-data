@@ -84,7 +84,6 @@
   #sheet .badge .bi{font-size:11pt;line-height:1}
   #sheet .badge .bt{font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:3.6pt;letter-spacing:.02em;line-height:1.15;margin-top:.6mm;text-transform:uppercase}
   #sheet .badge img{width:100%;display:block}
-  #sheet .optioneel{font-size:5pt;color:#333;font-style:italic;margin-top:.8mm;align-self:flex-start}
   /* ── Kop volgens het origineel (Gretha, 29 jul) ──────────────────────────
      Links het logo met daaronder twee foto's, in het midden de modelnaam met
      de grote productfoto, rechts de kenmerken in twee kolommen. Alle vlakken
@@ -102,7 +101,20 @@
   #sheet .hoofdfoto{aspect-ratio:1/1;height:auto;margin-top:2mm}
   #sheet .badgegrid{flex:0 0 auto;width:42mm;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:min-content;gap:1.2mm;align-content:start}
   #sheet .badgegrid .badge{aspect-ratio:1/1;max-height:14.5mm;padding:.4mm;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  #sheet .badgevoet{grid-column:1/-1;display:flex;justify-content:space-between;font-size:4.6pt;color:#333;font-style:italic}
+  /* '* Optional' hoort recht onder het symbool waar het bij hoort. Met
+     space-between werden de twee teksten naar de buitenranden van het hele
+     blok geduwd, terwijl de symbolen in hun eigen kolom gecentreerd staan —
+     daardoor stonden ze net verschoven. Nu volgt de voetregel exact dezelfde
+     kolomindeling als de symbolen erboven, en staat elke tekst gecentreerd
+     onder zijn eigen vakje. De negatieve marge haalt de grid-tussenruimte weg
+     zodat het strak onder het symbool zit. */
+  #sheet .badgevoet{
+    grid-column:1/-1;
+    display:grid;grid-template-columns:1fr 1fr;gap:1.2mm;
+    margin-top:-0.7mm;
+    font-size:4.6pt;color:#333;font-style:italic;
+    text-align:center;line-height:1.2;
+  }
 
   /* ── Pagina 2: technische tekening + onderdelenlijst ───────────────────── */
   #sheet2{width:210mm;min-height:297mm;background:#fff;margin:14px auto 0;padding:14mm 13mm 12mm;
@@ -332,7 +344,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="30-07-2026 · 16:45";
+const TEGEL_VERSIE="31-07-2026 · 11:20";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
