@@ -1602,6 +1602,267 @@ async function spaMigratieUitvoeren(env, body) {
   });
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   DOCUMENTENKETEN JAZZI — van commercial invoice naar de inkooporder
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Wat er nu gebeurt
+   -----------------
+   Jazzi mailt een commercial invoice met packing list zodra een deellevering
+   het schip op gaat. Die wordt in het dashboard ingelezen en beland in bucket
+   'voorraad-schepen'. In Logic4 gebeurt er niets: de inkooporder blijft staan
+   met de datum die er bij het bestellen in is gezet, of met niets.
+
+   Wat er hoort te gebeuren
+   ------------------------
+   Een commercial invoice zegt: déze spa's van déze Jazzi-order zitten op dit
+   schip en komen op deze datum aan. Dat is precies de verwachte leverdatum op
+   de inkooporderregel. Zetten we die, dan staat in Logic4 zelf wanneer de
+   goederen komen — en klopt het overzicht 'in productie / onderweg' zonder
+   tweede administratie.
+
+   Twee stappen, bewust gescheiden
+   -------------------------------
+   1. VERSCHEEPT  — commercial invoice binnen. Alleen de verwachte leverdatum
+      bijwerken. Er verandert niets aan de voorraad, want de goederen varen nog.
+   2. ONTVANGEN   — de container staat fysiek in Uddel. Pas dán een
+      inkooplevering boeken, want dat verhoogt de voorraad.
+
+   Stap 2 automatisch doen op het moment dat de factuur binnenkomt zou goederen
+   in de voorraad zetten die nog vier weken op zee liggen. Precies het soort
+   afwijking dat de accountant nu al niet kan verklaren. Daarom is stap 2 een
+   handeling van het magazijn, met dit scherm als voorbereiding.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+// Uit de opmerking van een inkooporder het Jazzi-ordernummer halen. Zo is de
+// koppeling schip → inkooporder te leggen zonder een eigen tabel bij te houden.
+function jazziOrderUitRemarks(remarks) {
+  var m = String(remarks || "").match(/Jazzi-order\s*(\d{3,6})/i);
+  return m ? m[1] : null;
+}
+
+async function spaOntvangstVoorstel(env) {
+  const schepen = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const aliassen = ((await env.FONTEYN_DATA.get("spa-aliassen", { type: "json" })) || {}).modellen || {};
+  const token = await l4Token(env);
+
+  const call = async (pad, payload, methode) => {
+    const r = await fetch("https://api.logic4server.nl" + pad, {
+      method: methode || "POST",
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: methode === "GET" ? undefined : JSON.stringify(payload || {}),
+    });
+    const tekst = await r.text();
+    let j = null; try { j = JSON.parse(tekst); } catch (e) {}
+    if (!r.ok) throw new Error(pad + " → HTTP " + r.status + " " + tekst.slice(0, 200));
+    return j && j.Records !== undefined ? j.Records : j;
+  };
+
+  // Alle open inkooporders bij Jazzi, op Jazzi-ordernummer.
+  const orders = {};
+  let skip = 0;
+  for (let p = 0; p < 20; p++) {
+    const r = await call("/v3/BuyOrders/GetBuyOrders",
+      { SupplierId: JAZZI_CREDITEUR, BuyOrderIsClosed: false, TakeRecords: 500, SkipRecords: skip });
+    if (!r || !r.length) break;
+    for (const bo of r) {
+      const nr = jazziOrderUitRemarks(bo.Remarks);
+      if (nr) orders[nr] = { buyOrderId: bo.Id, remarks: bo.Remarks, regels: [] };
+    }
+    if (r.length < 500) break;
+    skip += 500;
+  }
+
+  // De regels van die inkooporders erbij.
+  for (const nr of Object.keys(orders)) {
+    const rijen = await call("/v3/BuyOrders/GetBuyOrderRowsByFilter",
+      { BuyOrderId: orders[nr].buyOrderId, TakeRecords: 1000, SkipRecords: 0 });
+    orders[nr].regels = rijen || [];
+  }
+
+  // Artikelcode → modelnaam, om op model terug te kunnen vallen.
+  const codeNaarModel = {};
+  for (const [model, varianten] of Object.entries(catalog.models || {}))
+    for (const v of varianten) codeNaarModel[String(v.code)] = model;
+
+  // Per schip: welke regels horen erbij?
+  const uit = [];
+  for (const s of (schepen.ships || [])) {
+    const hoortBij = [...spaOrdersUitSchip(s.ref)];
+    const regels = [];
+    let raak = 0, mis = 0;
+
+    const kleuren = s.modelColors || {};
+    for (const model of Object.keys(s.models || {})) {
+      // Staat er een kleurverdeling, gebruik die; anders het model als geheel.
+      const perKleur = kleuren[model] && Object.keys(kleuren[model]).length
+        ? kleuren[model] : { "": s.models[model] };
+      for (const kleur of Object.keys(perKleur)) {
+        const aantal = Number(perKleur[kleur]) || 0;
+        if (!aantal) continue;
+        const art = ikoZoekArtikel(catalog, model, kleur, kleur, aliassen);
+        const code = art && art.code ? String(art.code) : null;
+
+        // Zoek een inkooporderregel met dit artikel op een van de orders van
+        // dit schip. Zonder artikelcode kan dat niet — dan blijft het staan.
+        let treffer = null, viaModel = false, keuzes = null;
+        if (code) {
+          for (const nr of hoortBij) {
+            const o = orders[nr];
+            if (!o) continue;
+            const r = (o.regels || []).find(x => String(x.ProductCode) === code);
+            if (r) { treffer = { jazziOrder: nr, buyOrderId: o.buyOrderId, rij: r }; break; }
+          }
+        }
+        // Terugval op model. De commercial invoice noemt de omkasting vaak niet
+        // ("Sterling Silver, #30"), de bestelling wel ("Sterling White with
+        // Grey/Oak"). Dan verschilt de artikelcode terwijl het om dezelfde spa
+        // gaat. Staat er van dat model precies één regel op de inkooporder,
+        // dan is dat hem — een container bevat immers wat er besteld is.
+        // Zijn er meerdere uitvoeringen besteld, dan gokken we niet.
+        if (!treffer) {
+          const model0 = (code && codeNaarModel[code]) ||
+            (art && art.viaAndereNaam) || model;
+          const kandidaten = [];
+          for (const nr of hoortBij) {
+            const o = orders[nr];
+            if (!o) continue;
+            for (const r of (o.regels || [])) {
+              if (codeNaarModel[String(r.ProductCode)] === model0)
+                kandidaten.push({ jazziOrder: nr, buyOrderId: o.buyOrderId, rij: r });
+            }
+          }
+          if (kandidaten.length === 1) { treffer = kandidaten[0]; viaModel = true; }
+          else if (kandidaten.length > 1) keuzes = kandidaten.map(k => String(k.rij.ProductCode));
+        }
+        if (treffer) raak++; else mis++;
+        regels.push({
+          model: model, kleur: kleur, aantal: aantal,
+          artikelcode: code, artikelnaam: art && art.desc ? art.desc : "",
+          zeker: !!(art && art.zeker) && !viaModel,
+          viaModel: viaModel,
+          jazziOrder: treffer ? treffer.jazziOrder : null,
+          buyOrderId: treffer ? treffer.buyOrderId : null,
+          buyOrderRowId: treffer ? treffer.rij.BuyOrderRowId : null,
+          productId: treffer ? treffer.rij.ProductId : null,
+          besteld: treffer ? Number(treffer.rij.QtyToOrder) || 0 : null,
+          nogTeLeveren: treffer ? Number(treffer.rij.QtyToDeliver) || 0 : null,
+          huidigeEta: treffer ? treffer.rij.ExpectedDeliveryDate : null,
+          prijs: treffer ? Number(treffer.rij.Price) || 0 : 0,
+          reden: treffer
+            ? (viaModel ? "gekoppeld op model — de invoice noemt de omkasting niet, de bestelling wel" : "")
+            : (keuzes
+              ? "dit model is in meerdere uitvoeringen besteld (" + keuzes.join(", ") + ") — kies zelf welke"
+              : (code
+                ? "geen inkooporderregel met dit artikel op order " + hoortBij.join(" of ")
+                : "artikel niet te herleiden uit model en kleur"))
+        });
+      }
+    }
+
+    uit.push({
+      ref: s.ref, vessel: s.vessel || "", eta: s.eta || null,
+      containers: s.containers || null, bestand: s.file || "",
+      jazziOrders: hoortBij,
+      // Welke van die orders bestaan al als inkooporder in Logic4?
+      gekoppeld: hoortBij.filter(nr => !!orders[nr]),
+      ontbreekt: hoortBij.filter(nr => !orders[nr]),
+      spas: regels.reduce((t, r) => t + r.aantal, 0),
+      raak: raak, mis: mis, regels: regels
+    });
+  }
+
+  uit.sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")));
+  return { ok: true, schepen: uit, inkooporders: Object.keys(orders).length };
+}
+
+// Stap 1 — verscheept: de verwachte leverdatum op de inkooporderregels zetten.
+// Verandert niets aan de voorraad.
+async function spaOntvangstEta(env, body) {
+  const ref = String(body.ref || "").trim();
+  if (!ref) return { ok: false, error: "geen schip opgegeven" };
+  const voorstel = await spaOntvangstVoorstel(env);
+  const schip = voorstel.schepen.find(s => s.ref === ref);
+  if (!schip) return { ok: false, error: "schip " + ref + " niet gevonden" };
+  const eta = String(body.eta || schip.eta || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(eta)) return { ok: false, error: "geen bruikbare aankomstdatum" };
+
+  const token = await l4Token(env);
+  const bijgewerkt = [], mislukt = [];
+  for (const r of schip.regels) {
+    if (!r.buyOrderRowId) continue;
+    try {
+      const resp = await fetch("https://api.logic4server.nl/v3/BuyOrders/UpdateBuyOrderRow", {
+        method: "PATCH",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          BuyOrderRowId: r.buyOrderRowId,
+          ExpectedDeliveryDate: eta,
+          // Logic4 verwacht bij een PATCH ook prijs en aantal terug; laten we
+          // die weg, dan zet hij ze op nul.
+          Price: r.prijs, QtyToOrder: r.besteld
+        }),
+      });
+      if (!resp.ok) throw new Error("HTTP " + resp.status + " " + (await resp.text()).slice(0, 150));
+      bijgewerkt.push(r.buyOrderRowId);
+    } catch (e) { mislukt.push({ regel: r.buyOrderRowId, artikel: r.artikelcode, fout: String(e.message || e) }); }
+  }
+  return { ok: mislukt.length === 0, eta: eta, bijgewerkt: bijgewerkt.length, mislukt: mislukt };
+}
+
+// Stap 2 — ontvangen: de container staat in Uddel. Dit boekt wél voorraad.
+// Status 'CreatedByAPI' zodat het magazijn ziet dat het uit het dashboard komt
+// en het nog kan nalopen.
+async function spaOntvangstBoeken(env, body) {
+  const ref = String(body.ref || "").trim();
+  if (!ref) return { ok: false, error: "geen schip opgegeven" };
+  const voorstel = await spaOntvangstVoorstel(env);
+  const schip = voorstel.schepen.find(s => s.ref === ref);
+  if (!schip) return { ok: false, error: "schip " + ref + " niet gevonden" };
+
+  // Per inkooporder één levering: Logic4 hangt een levering aan één order.
+  const perOrder = {};
+  for (const r of schip.regels) {
+    if (!r.buyOrderId || !r.productId || !(r.aantal > 0)) continue;
+    (perOrder[r.buyOrderId] = perOrder[r.buyOrderId] || []).push({
+      BuyOrderRowId: r.buyOrderRowId,
+      ProductId: r.productId,
+      Qty_Delivered: r.aantal,
+      BuyPrice: r.prijs || undefined,
+      StockLocationId: body.locatie ? Number(body.locatie) : undefined,
+      Remarks: (r.model + " " + r.kleur).trim().slice(0, 100)
+    });
+  }
+  if (!Object.keys(perOrder).length) return { ok: false, error: "geen enkele regel van dit schip is aan een inkooporderregel gekoppeld" };
+
+  const token = await l4Token(env);
+  const gemaakt = [], mislukt = [];
+  for (const buyOrderId of Object.keys(perOrder)) {
+    try {
+      const resp = await fetch("https://api.logic4server.nl/v3/BuyOrderDeliveries/CreateBuyOrderDelivery", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          BuyOrderId: Number(buyOrderId),
+          SupplierId: JAZZI_CREDITEUR,
+          Status: "CreatedByAPI",
+          Description: ("Container " + ref).slice(0, 100),
+          Remarks: ("Aangemeld via het dashboard door " + (body.door || "onbekend") +
+            (schip.vessel ? (" — schip " + schip.vessel) : "")).slice(0, 400),
+          ProcessMutationButDoNotCreatePickbon: true,
+          Rows: perOrder[buyOrderId]
+        }),
+      });
+      const tekst = await resp.text();
+      if (!resp.ok) throw new Error("HTTP " + resp.status + " " + tekst.slice(0, 200));
+      let j = null; try { j = JSON.parse(tekst); } catch (e) {}
+      gemaakt.push({ buyOrderId: Number(buyOrderId), levering: j && (j.Id || j.BuyOrderDeliveryId || j.Value) || null, regels: perOrder[buyOrderId].length });
+    } catch (e) { mislukt.push({ buyOrderId: Number(buyOrderId), fout: String(e.message || e) }); }
+  }
+  return { ok: mislukt.length === 0, gemaakt: gemaakt, mislukt: mislukt };
+}
+
 async function dpRefreshReservations(env) {
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const codeToModel = {};
@@ -2410,6 +2671,25 @@ export default {
       opslag.gewijzigd = new Date().toISOString();
       await env.FONTEYN_DATA.put("spa-aliassen", JSON.stringify(opslag));
       return reply(200, { ok: true, van, naar });
+    }
+
+    // Documentenketen Jazzi: commercial invoice → inkooporder.
+    // Voorstel is alleen-lezen; de datum bijwerken en de ontvangst boeken
+    // vereisen de beheersleutel. De ontvangst verhoogt echt de voorraad, dus
+    // die zit achter dezelfde drempel als het aanmaken van een inkooporder.
+    if (url.pathname === "/voorraad/spa-ontvangst/voorstel" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      return reply(200, await spaOntvangstVoorstel(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/voorraad/spa-ontvangst/eta" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await spaOntvangstEta(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/voorraad/spa-ontvangst/boeken" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await spaOntvangstBoeken(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
 
     // Juridische pagina's (publiek) — nodig voor de QuickBooks-app-review
