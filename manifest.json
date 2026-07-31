@@ -33,6 +33,10 @@
       "note": "Spa-inkoop naar Logic4 — Chantals containerlijst (Jazzi-orders) omzetten naar echte inkooporders; tabblad in voorraad.html. Alleen wat nog vaart, niets gokken."
     },
     {
+      "name": "spa-ontvangst.js",
+      "note": "Documentenketen Jazzi — commercial invoice koppelen aan de inkooporder: verwachte aankomst bijwerken (voorraad ongemoeid) en de ontvangst boeken zodra de container in Uddel staat. Tabblad in voorraad.html."
+    },
+    {
       "name": "taken.js",
       "note": "Persoonlijk takenblok bovenaan het dashboard — eigen taken, terugkerende momenten en signalen uit Logic4 die op naam staan (iedereen)."
     },

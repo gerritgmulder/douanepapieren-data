@@ -9,6 +9,7 @@
 <script src="spa-codes.js"></script>
 <script src="proforma-inkoop.js"></script>
 <script src="spa-migratie.js"></script>
+<script src="spa-ontvangst.js"></script>
 <style>
   :root{
     --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
@@ -148,6 +149,42 @@
 .sm-tabel code{background:#f1f0ec;padding:1px 5px;border-radius:4px;font-size:11.5px}
 .sm-uitlegregel{font-size:11px;color:#6b7280;margin-top:3px;max-width:290px;line-height:1.45}
 .sm-leeg{color:#cbd5e1}
+
+/* ─── Documentenketen Jazzi (spa-ontvangst.js) ─── */
+.so-uitleg{background:#fff;border:1px solid var(--border,#e0e0d8);border-left:4px solid #8bc53f;border-radius:10px;padding:14px 18px;margin-bottom:18px}
+.so-uitleg h3{margin:0 0 6px;font-size:15px;color:#144734}
+.so-uitleg p{margin:0;font-size:13px;color:#6b7280;line-height:1.55}
+.so-waarschuwing{background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:12px 16px;margin-bottom:18px;font-size:13px;color:#92400e;line-height:1.55}
+.so-kaart{background:#fff;border:1px solid var(--border,#e0e0d8);border-radius:10px;padding:13px 16px;margin-bottom:9px}
+.so-kaart.binnen{border-left:4px solid #144734}
+.so-rij{display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap}
+.so-links{flex:1;min-width:250px}
+.so-titel{font-size:14px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.so-badge{font-size:11px;background:#eef2e6;color:#144734;border-radius:20px;padding:2px 9px;font-weight:600}
+.so-meta{font-size:12px;color:#6b7280;margin-top:3px}
+.so-meta.klein{font-size:11px;font-style:italic;color:#9ca3af}
+.so-rechts{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+.so-pillen{display:flex;gap:5px;flex-wrap:wrap}
+.so-pil{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600;white-space:nowrap}
+.so-pil.zeker{background:#dcfce7;color:#15803d}
+.so-pil.nakijk{background:#fef3c7;color:#92400e}
+.so-pil.fout{background:#fee2e2;color:#b91c1c}
+.so-knoppen{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.so-knop{background:#144734;color:#fff;border:0;border-radius:7px;padding:6px 13px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.so-knop:hover{background:#0d3325}
+.so-knop:disabled{opacity:.55;cursor:default}
+.so-knop.licht{background:#fff;color:#144734;border:1px solid var(--border,#e0e0d8)}
+.so-knop.licht:hover{background:#fafaf7;border-color:#8bc53f}
+.so-tabelwrap{overflow-x:auto;margin-top:12px}
+.so-tabel{width:100%;border-collapse:collapse;font-size:12.5px}
+.so-tabel th{text-align:left;padding:6px 9px;border-bottom:1px solid var(--border,#e0e0d8);color:#6b7280;font-weight:600;white-space:nowrap}
+.so-tabel td{padding:6px 9px;border-bottom:1px solid #f4f3ef;vertical-align:top}
+.so-tabel td.num{text-align:right}
+.so-tabel tr.los{background:#fffbfb}
+.so-tabel tr.opmodel{background:#fffdf5}
+.so-tabel code{background:#f1f0ec;padding:1px 5px;border-radius:4px;font-size:11.5px}
+.so-reden{font-size:11px;color:#6b7280;margin-top:3px;max-width:300px;line-height:1.45}
+.so-leeg{color:#cbd5e1}
 </style>
 </head>
 <body>
@@ -176,6 +213,7 @@
     <button class="tab" data-tab="prio" type="button">Prioriteit</button>
     <button class="tab" data-tab="schepen" type="button">Schepen</button>
     <button class="tab" data-tab="spainkoop" type="button">Inkoop naar Logic4</button>
+    <button class="tab" data-tab="ontvangst" type="button">Schepen &amp; ontvangst</button>
     <button class="tab" data-tab="particulier" type="button">Particulier</button>
     <button class="tab" data-tab="partner" type="button">Partner</button>
     <button class="tab" data-tab="partnercont" type="button">Partner containers</button>
@@ -371,6 +409,9 @@
 
   <!-- Spa-inkoop naar Logic4 — inhoud wordt getekend door spa-migratie.js -->
   <div id="tab-spainkoop" class="hidden"></div>
+
+  <!-- Documentenketen Jazzi — getekend door spa-ontvangst.js -->
+  <div id="tab-ontvangst" class="hidden"></div>
 
   <div id="tab-partnercont" class="hidden">
     <div class="card">
@@ -727,7 +768,7 @@ function beperkTotKlantTabs(){
   document.querySelectorAll(".tab").forEach(t=>{
     if(!mag.has(t.dataset.tab)) t.style.display="none";
   });
-  ["ophalen","dealer","part","overzicht","reserveringen","schepen","prio","pipe","dealerview","spainkoop"].forEach(id=>{
+  ["ophalen","dealer","part","overzicht","reserveringen","schepen","prio","pipe","dealerview","spainkoop","ontvangst"].forEach(id=>{
     const el=document.getElementById("tab-"+id); if(el) el.classList.add("hidden");
   });
   // Upload-kaart in Partner containers is een wijzig-actie → weg
@@ -1061,10 +1102,12 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   document.getElementById("tab-partner").classList.toggle("hidden", tab!=="partner");
   document.getElementById("tab-partnercont").classList.toggle("hidden", tab!=="partnercont");
   document.getElementById("tab-spainkoop").classList.toggle("hidden", tab!=="spainkoop");
+  document.getElementById("tab-ontvangst").classList.toggle("hidden", tab!=="ontvangst");
   if (tab==="overzicht") loadOverzicht();
   if (tab==="reserveringen") loadReserveringen();
   if (tab==="schepen") loadSchepen();
   if (tab==="spainkoop") startSpaMigratie();
+  if (tab==="ontvangst") startSpaOntvangst();
   if (tab==="prio") initPrio();
   if (tab==="dealer"||tab==="part") renderOverviews();
   if (tab==="dealerview") renderDealerView();
@@ -1998,6 +2041,20 @@ function startSpaMigratie(){
   if(!window.fpSpaMigratie) return;
   window.fpSpaMigratie.start({
     doelId:"tab-spainkoop",
+    teamKey:DATA_STORE_AUTH,
+    adminKey:dpAdminKey(),
+    magWijzigen:MAG_WIJZIGEN,
+    email:(localStorage.getItem(EMAIL_KEY)||""),
+    log:function(tegel,actie,detail){ try{ if(window.fpLog) window.fpLog(actie,detail); }catch(e){} },
+  });
+}
+
+// Documentenketen Jazzi (spa-ontvangst.js). Pas laden bij het openen van het
+// tabblad: het voorstel haalt de inkooporders en hun regels op.
+function startSpaOntvangst(){
+  if(!window.fpSpaOntvangst) return;
+  window.fpSpaOntvangst.start({
+    doelId:"tab-ontvangst",
     teamKey:DATA_STORE_AUTH,
     adminKey:dpAdminKey(),
     magWijzigen:MAG_WIJZIGEN,

@@ -1568,38 +1568,108 @@ async function spaMigratieVoorstel(env) {
   };
 }
 
-// Eén container omzetten naar een inkooporder. Hergebruikt ikoAanmaken, zodat
-// er maar één plek is die inkooporders maakt — inclusief de dubbelcontrole.
+// Eén container omzetten naar een inkooporder.
+//
+// LET OP — Cloudflare-limiet. De worker zit op het gratis plan en mag per
+// aanroep maximaal 50 externe verzoeken doen. Een inkooporder met 78 regels
+// is 1 + 78 verzoeken en loopt daar dus hard tegenaan: de eerste keer bleef
+// order 3317 met 47 van de 78 regels achter. Daarom werkt dit nu in porties.
+// De aanroeper herhaalt tot 'klaar' waar is.
+//
+// De functie is bewust herstelbaar: hij kijkt eerst welke artikelen al op de
+// order staan en voegt alleen toe wat ontbreekt. Opnieuw aanroepen kan dus
+// nooit dubbele regels opleveren, ook niet na een half mislukte poging.
+const SPA_REGELS_PER_KEER = 30;
+
 async function spaMigratieUitvoeren(env, body) {
   const nr = String(body.nr || "").trim();
   if (!nr) return { ok: false, error: "geen containernummer" };
   const voorstel = await spaMigratieVoorstel(env);
   const c = voorstel.containers.find(x => x.nr === nr);
   if (!c) return { ok: false, error: "container " + nr + " niet gevonden" };
-  if (c.alGedaan && !body.tochOpnieuw)
-    return { ok: false, dubbel: true, bestaandeOrder: c.alGedaan,
-      error: "Voor " + c.referentie + " bestaat al inkooporder " + c.alGedaan + "." };
 
-  // Alleen regels met een artikelcode gaan mee. Wat niet herleidbaar is, wordt
-  // niet gegokt maar vastgelegd in de opmerking van de inkooporder, zodat later
-  // zichtbaar is waarom de order afwijkt van Chantals lijst.
   const mee = c.regels.filter(r => r.artikelcode && (body.ookNakijken || r.staat === "zeker"));
-  const over = c.regels.filter(r => !mee.includes(r));
+  const over = c.regels.filter(r => mee.indexOf(r) < 0);
   if (!mee.length) return { ok: false, error: "geen enkele regel van container " + nr + " is met zekerheid te koppelen" };
 
-  return await ikoAanmaken(env, {
-    crediteurId: JAZZI_CREDITEUR,
-    referentie: c.referentie,
-    eta: c.eta || null,
-    door: body.door || null,
-    bestemming: c.herkomst || null,
-    overgeslagen: over.map(r => r.model + " " + r.kleur + " (" + r.aantal + "x): " + r.uitleg),
-    regels: mee.map(r => ({
-      artikelcode: r.artikelcode, aantal: r.aantal, prijs: 0,
-      omschrijving: r.artikelnaam || (r.model + " " + r.kleur)
-    })),
-    tochOpnieuw: !!body.tochOpnieuw
-  });
+  const token = await l4Token(env);
+  const call = async (pad, payload) => {
+    const r = await fetch("https://api.logic4server.nl" + pad, {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const tekst = await r.text();
+    let j = null; try { j = JSON.parse(tekst); } catch (e) {}
+    if (!r.ok) throw new Error("HTTP " + r.status + " " + tekst.slice(0, 200));
+    return j;
+  };
+
+  // Bestaat de order al? Dan vullen we hem aan in plaats van een tweede te maken.
+  let buyOrderId = Number(body.buyOrderId) || c.alGedaan || null;
+  let nieuw = false;
+  if (!buyOrderId) {
+    const kop = await call("/v3/BuyOrders/CreateBuyOrder", {
+      CreditorId: JAZZI_CREDITEUR,
+      Remarks: (c.referentie + " — via dashboard door " + (body.door || "onbekend") +
+        (c.herkomst ? (" — herkomst: " + c.herkomst) : "") +
+        (over.length ? (" — NIET meegenomen: " + over.map(r => r.model + " " + r.kleur + " (" + r.aantal + "x)").join(", ")) : "")
+      ).slice(0, 500),
+      CreatedAt: new Date().toISOString(),
+    });
+    buyOrderId = kop && (kop.Id != null ? kop.Id : (kop.BuyOrderId != null ? kop.BuyOrderId : kop.Value));
+    if (buyOrderId == null) return { ok: false, error: "Logic4 gaf geen inkoopordernummer terug" };
+    nieuw = true;
+    const reeds = (await env.FONTEYN_DATA.get("voorraad-inkooporders", { type: "json" })) || { orders: {} };
+    reeds.orders = reeds.orders || {};
+    reeds.orders[c.referentie] = { buyOrderId, ts: new Date().toISOString(), door: body.door || null, regels: 0 };
+    await env.FONTEYN_DATA.put("voorraad-inkooporders", JSON.stringify(reeds));
+  }
+
+  // Wat staat er al op? Alleen aanvullen wat ontbreekt.
+  const bestaand = {};
+  if (!nieuw) {
+    const rijen = await call("/v3/BuyOrders/GetBuyOrderRowsByFilter", { BuyOrderId: buyOrderId, TakeRecords: 1000, SkipRecords: 0 });
+    for (const r of (rijen && rijen.Records ? rijen.Records : rijen) || []) {
+      const code = String(r.ProductCode);
+      bestaand[code] = (bestaand[code] || 0) + (Number(r.QtyToOrder) || 0);
+    }
+  }
+
+  const teDoen = [];
+  const nogNodig = Object.assign({}, bestaand);
+  for (const r of mee) {
+    const code = String(r.artikelcode);
+    if (nogNodig[code] >= r.aantal) { nogNodig[code] -= r.aantal; continue; }
+    teDoen.push(r);
+  }
+
+  const portie = teDoen.slice(0, SPA_REGELS_PER_KEER);
+  const toegevoegd = [], mislukt = [];
+  for (const r of portie) {
+    try {
+      await call("/v3/BuyOrders/AddBuyOrderRow", {
+        BuyOrderId: buyOrderId,
+        ProductCode: String(r.artikelcode),
+        QtyToOrder: Number(r.aantal),
+        Price: 0,
+        Description: String(r.artikelnaam || (r.model + " " + r.kleur)).slice(0, 200),
+        ExpectedDeliveryDate: c.eta || null,
+      });
+      toegevoegd.push(r.artikelcode);
+    } catch (e) { mislukt.push({ artikelcode: r.artikelcode, model: r.model, kleur: r.kleur, fout: String(e.message || e) }); }
+  }
+
+  const restant = Math.max(0, teDoen.length - portie.length);
+  return {
+    ok: mislukt.length === 0 && restant === 0,
+    buyOrderId, nieuw,
+    toegevoegd: toegevoegd.length,
+    mislukt,
+    resterend: restant,
+    klaar: restant === 0,
+    totaalRegels: mee.length,
+    overgeslagen: over.length
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1789,9 +1859,18 @@ async function spaOntvangstEta(env, body) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(eta)) return { ok: false, error: "geen bruikbare aankomstdatum" };
 
   const token = await l4Token(env);
-  const bijgewerkt = [], mislukt = [];
+  const bijgewerkt = [], mislukt = [], overgeslagen = [];
   for (const r of schip.regels) {
     if (!r.buyOrderRowId) continue;
+    // Eén inkooporderregel kan over meerdere schepen verdeeld zijn: van tien
+    // bestelde Sensations varen er vier nu en zes later. De regel kan maar één
+    // datum dragen, en dan is de eerstvolgende aankomst de bruikbare. Daarom
+    // alleen vervroegen, nooit verlaten — anders hangt de uitkomst af van de
+    // volgorde waarin iemand de schepen aanklikt.
+    if (!body.forceer && r.huidigeEta) {
+      const nu = String(r.huidigeEta).slice(0, 10);
+      if (nu <= eta) { overgeslagen.push({ regel: r.buyOrderRowId, staatAl: nu }); continue; }
+    }
     try {
       const resp = await fetch("https://api.logic4server.nl/v3/BuyOrders/UpdateBuyOrderRow", {
         method: "PATCH",
@@ -1808,7 +1887,8 @@ async function spaOntvangstEta(env, body) {
       bijgewerkt.push(r.buyOrderRowId);
     } catch (e) { mislukt.push({ regel: r.buyOrderRowId, artikel: r.artikelcode, fout: String(e.message || e) }); }
   }
-  return { ok: mislukt.length === 0, eta: eta, bijgewerkt: bijgewerkt.length, mislukt: mislukt };
+  return { ok: mislukt.length === 0, eta: eta, bijgewerkt: bijgewerkt.length,
+           overgeslagen: overgeslagen.length, mislukt: mislukt };
 }
 
 // Stap 2 — ontvangen: de container staat in Uddel. Dit boekt wél voorraad.
