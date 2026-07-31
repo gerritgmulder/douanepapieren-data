@@ -218,6 +218,13 @@
       actie: "Innen, een regeling treffen, of afboeken met reden."
     },
     {
+      id: "5.4", schakel: "bank", ernst: "hoog", eenheid: "eur", eigenaar: "Administratie",
+      naam: "Betaling staat op de verkeerde factuur",
+      vraag: "Welke klanten hebben tegelijk een openstaande factuur én een factuur waarop te veel is ontvangen?",
+      waarom: "Dan is het geld allang binnen en staat het alleen op de verkeerde regel. De debiteurenstand ziet er slechter uit dan de werkelijkheid, en er wordt aangemaand bij klanten die gewoon betaald hebben.",
+      actie: "De betaling omboeken naar de juiste factuur. Bij een exact gelijk bedrag is het vrijwel zeker dezelfde betaling."
+    },
+    {
       id: "5.2", schakel: "bank", ernst: "midden", eenheid: "eur", eigenaar: "Administratie",
       naam: "Meer ontvangen dan de order groot is",
       vraag: "Zijn er orders waarop meer betaald is dan het factuurbedrag?",
@@ -426,6 +433,15 @@
     /* ── 4d. Verkooporders in de periode ────────────────────────────── */
     // Verzamelbakken voor de controles die op orders slaan. Ze staan hier
     // omdat verwerkOrder() ze al vult tijdens het ophalen.
+    // Klantnamen. Logic4 geeft bij de openstaande facturen alleen een
+    // debiteurnummer, en het volledige klantenbestand ophalen zijn 200.000
+    // records. De orders die we tóch al langs zien komen dragen het adres mee,
+    // dus die gebruiken we als naamregister — het wordt gevuld in
+    // verwerkOrder(), want de orders worden per pagina verwerkt en nergens
+    // als geheel bewaard. Een nummer zonder naam blijft staan als nummer:
+    // beter dan er een verkeerde naam bij verzinnen.
+    var klantNaam = {};
+
     var c31 = [], c41 = [], c42 = [], c52 = [], c53 = [], c61 = [], c62 = [];
     var verzamel61 = { aantal: 0, bedrag: 0 };   // kassa-artikelen apart houden
     var dienst61 = { aantal: 0, bedrag: 0 };     // transport/montage: normaal
@@ -561,6 +577,14 @@
     // Wordt tijdens het ophalen per order aangeroepen (zie 4d), zodat de order
     // daarna weer uit het geheugen mag verdwijnen.
     function verwerkOrder(ord) {
+      // Naam onthouden vóór de offerte-check: ook een klant die alleen een
+      // offerte had, kan verderop een openstaande factuur hebben.
+      var deb0 = String(ord.DebtorId || "");
+      if (deb0 && !klantNaam[deb0]) {
+        var adr = ord.AccountAddress || ord.InvoiceAddress || {};
+        var naam = String(adr.CompanyName || "").trim() || String(adr.ContactName || "").trim();
+        if (naam) klantNaam[deb0] = naam + (adr.City ? (" · " + adr.City) : "");
+      }
       if (isGeenVerkoop(ord)) return;
       var status = (ord.OrderStatus && ord.OrderStatus.Value) || "";
       var rows = ord.OrderRows || [];
@@ -679,13 +703,65 @@
         var fac = openFacturen[f];
         var telaat = num(fac.DaysPastDueDate);
         if (telaat <= 90) continue;
+        if (num(fac.AmountOutstanding) <= 0) continue;   // negatief = te veel ontvangen, hoort bij 5.4
         c51.push({
           sleutel: "5.1|" + fac.InvoiceId, verwijzing: "Factuur " + fac.InvoiceId,
           wie: String(fac.DebtorId || ""), datum: fac.InvoiceDate,
-          omschrijving: "", aantal: telaat, bedrag: num(fac.AmountOutstanding),
-          detail: telaat + " dagen over de vervaldatum, open " + num(fac.AmountOutstanding).toFixed(2)
+          omschrijving: klantNaam[String(fac.DebtorId)] || "",
+          aantal: telaat, bedrag: num(fac.AmountOutstanding),
+          detail: telaat + " dagen over de vervaldatum, open " + num(fac.AmountOutstanding).toFixed(2) +
+            (num(fac.TotalAmountPayed) > 0 ? (" — er is al " + num(fac.TotalAmountPayed).toFixed(2) + " op betaald") : "")
         });
       }
+
+      /* ── 5.4 — betaling op de verkeerde factuur ──
+         Een klant met tegelijk een openstaande factuur én een factuur waarop te
+         veel is ontvangen, heeft vrijwel zeker gewoon betaald: het geld staat
+         alleen op de verkeerde regel. Is het bedrag exact gelijk, dan is het
+         geen vermoeden meer. Dit is de meest waardevolle bevinding van allemaal,
+         want er wordt aangemaand bij klanten die niets schuldig zijn. */
+      var perKlant = {};
+      for (var g = 0; g < openFacturen.length; g++) {
+        var fa = openFacturen[g], bedrag = num(fa.AmountOutstanding), deb = String(fa.DebtorId || "");
+        if (!deb) continue;
+        if (!perKlant[deb]) perKlant[deb] = { open: [], teveel: [] };
+        var post = { id: fa.InvoiceId, bedrag: Math.abs(bedrag), datum: fa.InvoiceDate };
+        if (bedrag < 0) perKlant[deb].teveel.push(post);
+        else if (bedrag > 0) perKlant[deb].open.push(post);
+      }
+      var c54 = [];
+      for (var deb2 in perKlant) {
+        var k = perKlant[deb2];
+        if (!k.open.length || !k.teveel.length) continue;
+        var somOpen = k.open.reduce(function (t, x) { return t + x.bedrag; }, 0);
+        var somTeveel = k.teveel.reduce(function (t, x) { return t + x.bedrag; }, 0);
+        // Zoek per openstaande post een even grote tegenhanger. Elke tegenhanger
+        // mag maar één keer gebruikt worden, anders tel je hem dubbel.
+        var gebruikt = {}, exact = [];
+        for (var oi = 0; oi < k.open.length; oi++) {
+          for (var ti = 0; ti < k.teveel.length; ti++) {
+            if (gebruikt[ti]) continue;
+            if (Math.abs(k.teveel[ti].bedrag - k.open[oi].bedrag) < 1) {
+              gebruikt[ti] = true;
+              exact.push(k.open[oi].id + " ↔ " + k.teveel[ti].id);
+              break;
+            }
+          }
+        }
+        c54.push({
+          sleutel: "5.4|" + deb2, verwijzing: "Klant " + deb2, wie: deb2,
+          datum: k.open[0] ? k.open[0].datum : null,
+          omschrijving: klantNaam[deb2] || "",
+          aantal: k.open.length + k.teveel.length,
+          // Het bedrag dat écht vastzit is niet meer dan wat er aan beide kanten staat.
+          bedrag: Math.min(somOpen, somTeveel),
+          detail: "openstaand " + Math.round(somOpen).toLocaleString("nl-NL") +
+            ", te veel ontvangen " + Math.round(somTeveel).toLocaleString("nl-NL") +
+            (exact.length ? (" — " + exact.length + " keer exact hetzelfde bedrag: " + exact.slice(0, 4).join(", ")) : "")
+        });
+      }
+      zet("5.4", c54, c54.reduce(function (t, x) { return t + x.bedrag; }, 0),
+        "Alleen klanten die tegelijk iets openstaan hebben én ergens te veel hebben betaald. Staat er exact hetzelfde bedrag aan beide kanten, dan is het dezelfde betaling die op de verkeerde factuur is geland.");
       var totOpen = openFacturen.reduce(function (t, x) { return t + num(x.AmountOutstanding); }, 0);
       zet("5.1", c51, c51.reduce(function (t, x) { return t + x.bedrag; }, 0),
         "In totaal staat er " + Math.round(totOpen).toLocaleString("nl-NL") + " euro open over " + openFacturen.length + " facturen; hierboven staan alleen de posten van meer dan 90 dagen te laat.");
