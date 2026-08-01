@@ -94,6 +94,9 @@
     }
 
     voorstel.schepen.forEach(function (s) { doel.appendChild(kaart(s)); });
+
+    // Wat de expediteur zelf weet, naast onze eigen schepenlijst.
+    doel.appendChild(flexportBlok());
   }
 
   function kaart(s) {
@@ -221,6 +224,99 @@
       if (cfg.log) cfg.log("voorraad", "container ontvangen geboekt", s.ref + " — " + m.replace(/\n/g, " | "));
     }
     await herlaad();
+  }
+
+  /* ═══════════ Flexport — wat de expediteur weet ═══════════
+
+     Chantals schepenlijst komt uit de commercial invoices van Jazzi. Flexport
+     vervoert het en weet dus zelf waar de containers zijn. Dit blok zet die
+     twee naast elkaar: wat Flexport heeft, en of wij daar een inkooporder bij
+     hebben. Wat aan één kant ontbreekt, valt zo meteen op. */
+
+  var flexport = null, flexportBezig = false;
+
+  async function haalFlexport(vers) {
+    var r = await fetch(BASIS + "/voorraad/flexport/overzicht", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
+      body: JSON.stringify({ vers: !!vers })
+    });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.error || "Flexport-overzicht ophalen mislukt");
+    return j;
+  }
+
+  function flexportBlok() {
+    var d = el("div", "so-flexport");
+    var kop = el("div", "so-fkop");
+    var t = el("div");
+    t.appendChild(el("h3", null, "Volgens Flexport"));
+    t.appendChild(el("p", null, flexport
+      ? ("Bijgewerkt " + nlDatum(flexport.opgehaald) + (flexport.uitCache ? " (uit de opslag)" : " (net opgehaald)") +
+        " — " + flexport.zendingen.length + " zendingen, " + flexport.aantalContainers + " containers.")
+      : "De expediteur weet zelf waar de containers zijn en wanneer ze aankomen."));
+    kop.appendChild(t);
+    var knop = el("button", "so-knop licht", flexportBezig ? "bezig…" : (flexport ? "Verversen" : "Ophalen"));
+    knop.type = "button";
+    knop.disabled = flexportBezig;
+    knop.title = "Een verse ronde bij Flexport duurt ruim twee minuten.";
+    knop.addEventListener("click", async function () {
+      flexportBezig = true; teken();
+      try { flexport = await haalFlexport(!!flexport); }
+      catch (e) { alert("Niet gelukt: " + (e.message || e)); }
+      flexportBezig = false; teken();
+    });
+    kop.appendChild(knop);
+    d.appendChild(kop);
+    if (!flexport) return d;
+
+    // Welke Jazzi-orders hebben wij als inkooporder in Logic4?
+    var onze = {};
+    (voorstel && voorstel.schepen || []).forEach(function (s) {
+      (s.gekoppeld || []).forEach(function (nr) { onze[nr] = 1; });
+    });
+
+    var metOrder = flexport.zendingen.filter(function (z) { return z.jazziOrders.length; });
+    var zonderOrder = flexport.zendingen.filter(function (z) { return !z.jazziOrders.length; });
+    var onbekend = [];
+    metOrder.forEach(function (z) {
+      z.jazziOrders.forEach(function (nr) { if (!onze[nr] && onbekend.indexOf(nr) < 0) onbekend.push(nr); });
+    });
+
+    if (onbekend.length) {
+      var w = el("div", "so-waarschuwing");
+      w.appendChild(el("strong", null, "Verscheept, maar geen inkooporder: Jazzi-order " + onbekend.join(", ") + ". "));
+      w.appendChild(document.createTextNode(
+        "Flexport heeft deze containers vervoerd, maar er staat bij ons geen bestelling tegenover. " +
+        "Dat betekent goederen binnen zonder inkoop — precies wat de accountant zoekt."));
+      d.appendChild(w);
+    }
+
+    var wrap = el("div", "so-tabelwrap");
+    var tb = el("table", "so-tabel");
+    var th = el("thead"), hr = el("tr");
+    ["Zending", "Jazzi-order", "Containers", "Aankomst", "Werkelijk binnen", "Status"]
+      .forEach(function (h) { hr.appendChild(el("th", null, h)); });
+    th.appendChild(hr); tb.appendChild(th);
+    var body = el("tbody");
+    flexport.zendingen.slice(0, 40).forEach(function (z) {
+      var los = z.jazziOrders.length && z.jazziOrders.every(function (nr) { return !onze[nr]; });
+      var tr = el("tr", los ? "los" : "");
+      tr.appendChild(el("td", null, String(z.naam || "").slice(0, 42) || "—"));
+      tr.appendChild(el("td", null, z.jazziOrders.length ? z.jazziOrders.join(" + ") : "—"));
+      tr.appendChild(el("td", "num", String(z.containers.length)));
+      tr.appendChild(el("td", null, nlDatum(z.eta)));
+      tr.appendChild(el("td", null, z.aangekomen ? nlDatum(z.aangekomen) : "—"));
+      tr.appendChild(el("td", null, String(z.status || "").replace(/_/g, " ")));
+      body.appendChild(tr);
+    });
+    tb.appendChild(body); wrap.appendChild(tb);
+    d.appendChild(wrap);
+    d.appendChild(el("p", "so-meta klein",
+      metOrder.length + " zendingen met een herkend ordernummer, " + zonderOrder.length +
+      " zonder — dat laatste is meestal geen spa-lading maar tuinmeubelen of onderdelen." +
+      (flexport.zendingen.length > 40 ? "  De veertig recentste staan hierboven." : "")));
+    return d;
   }
 
   async function herlaad() {
