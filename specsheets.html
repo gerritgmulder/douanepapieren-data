@@ -90,17 +90,25 @@
      zijn invulbaar; zolang er geen foto in zit staat er een gestippeld kader
      zodat zichtbaar is waar hij hoort te komen. */
   #sheet .kopblok,#sheet2 .kopblok{display:flex;gap:5mm;align-items:flex-start}
-  #sheet .linkerkolom,#sheet2 .linkerkolom{width:34mm;flex:0 0 auto;display:flex;flex-direction:column;gap:3mm}
+  #sheet .linkerkolom,#sheet2 .linkerkolom{width:45mm;flex:0 0 auto;display:flex;flex-direction:column;gap:3mm}
   #sheet .linkerkolom .logo,#sheet2 .linkerkolom .logo{width:100%}
   #sheet .linkerkolom .logo img,#sheet2 .linkerkolom .logo img{width:100%;display:block}
   #sheet .midden,#sheet2 .midden{flex:1;min-width:0}
   #sheet .vlak,#sheet2 .vlak{border:0;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden}
   #sheet .vlak.leegvlak,#sheet2 .vlak.leegvlak{border:1px dashed #d8d8d8;color:#c4c4c4;font-family:Montserrat,sans-serif;font-size:7pt}
   #sheet .vlak img,#sheet2 .vlak img{max-width:100%;max-height:100%;object-fit:contain;display:block}
-  #sheet .klein{height:32mm}
+  /* Er is nog maar één kleine foto (Gretha, 31 jul: de tweede weg, deze
+     groter). Hij rekt mee tot onderaan het kopblok, dus tot de onderkant
+     van de hoofdfoto — daarmee is hij zo groot als het ontwerp toelaat. */
+  #sheet .klein{height:38mm}
   #sheet .hoofdfoto{aspect-ratio:1/1;height:auto;margin-top:2mm}
-  #sheet .badgegrid{flex:0 0 auto;width:42mm;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:min-content;gap:1.2mm;align-content:start}
-  #sheet .badgegrid .badge{aspect-ratio:1/1;max-height:14.5mm;padding:.4mm;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  /* De kolommen waren 20,4mm breed terwijl een symbool 14,5mm is: dat gaf
+     links en rechts ruim 3mm lucht, waardoor de horizontale afstand veel
+     groter oogde dan de verticale (Gretha, 31 jul). De kolommen zijn nu
+     precies zo breed als een symbool, zodat beide afstanden 1,2mm zijn.
+     Het blok houdt zijn plek door rechts uit te lijnen. */
+  #sheet .badgegrid{flex:0 0 auto;width:31mm;display:grid;grid-template-columns:repeat(2,14.5mm);justify-content:end;grid-auto-rows:min-content;gap:1.2mm;align-content:start}
+  #sheet .badgegrid .badge{width:14.5mm;aspect-ratio:1/1;max-height:14.5mm;padding:.4mm;display:flex;flex-direction:column;align-items:center;justify-content:center}
   /* '* Optional' hoort recht onder het symbool waar het bij hoort. Met
      space-between werden de twee teksten naar de buitenranden van het hele
      blok geduwd, terwijl de symbolen in hun eigen kolom gecentreerd staan —
@@ -110,7 +118,7 @@
      zodat het strak onder het symbool zit. */
   #sheet .badgevoet{
     grid-column:1/-1;
-    display:grid;grid-template-columns:1fr 1fr;gap:1.2mm;
+    display:grid;grid-template-columns:repeat(2,14.5mm);gap:1.2mm;
     margin-top:-0.7mm;
     font-size:4.6pt;color:#333;font-style:italic;
     text-align:center;line-height:1.2;
@@ -120,9 +128,11 @@
   #sheet2{width:210mm;min-height:297mm;background:#fff;margin:14px auto 0;padding:14mm 13mm 12mm;
     box-shadow:0 3px 16px rgba(0,0,0,.14);color:#000;position:relative}
   #sheet2 .tekeningvlak{height:118mm;margin-top:6mm}
-  #sheet2 .legenda{margin-top:6mm;background:var(--zebra);padding:4mm 4mm;display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.2mm 5mm}
-  #sheet2 .legrij{display:flex;align-items:center;gap:2.5mm;font-size:10pt;line-height:1.25}
-  #sheet2 .legrij .icoon{width:12mm;height:8mm;flex:0 0 auto;border:0;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  /* Regelafstand krapper zodat de hele onderdelenlijst op de pagina past
+     (Gretha, 31 jul). */
+  #sheet2 .legenda{margin-top:5mm;background:var(--zebra);padding:3mm 4mm;display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.4mm 5mm}
+  #sheet2 .legrij{display:flex;align-items:center;gap:2.5mm;font-size:10pt;line-height:1.1}
+  #sheet2 .legrij .icoon{width:12mm;height:6.6mm;flex:0 0 auto;border:0;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden}
   #sheet2 .legrij .icoon img{max-width:100%;max-height:100%;object-fit:contain}
 
   #sheet .fotos{display:flex;gap:4mm;align-items:center;justify-content:center;margin:5mm 0 6mm;min-height:62mm}
@@ -253,12 +263,9 @@
     <label class="f">Grote productfoto (midden)</label>
     <input type="file" id="fFotoHoofd" accept="image/*">
     <img id="tFotoHoofd" class="thumb hidden" alt="">
-    <label class="f">Foto 1 — klein, onder het logo</label>
+    <label class="f">Foto links — onder het logo</label>
     <input type="file" id="fFoto1" accept="image/*">
     <img id="tFoto1" class="thumb hidden" alt="">
-    <label class="f">Foto 2 — klein, onder het logo</label>
-    <input type="file" id="fFoto2" accept="image/*">
-    <img id="tFoto2" class="thumb hidden" alt="">
 
     <div class="sec-kop"><h4 style="margin:0">Pagina 2 — tekening &amp; onderdelen</h4>
       <button class="btn sm" id="btnLegAdd" type="button">+ onderdeel</button></div>
@@ -301,7 +308,6 @@
           <div class="linkerkolom">
             <div class="logo" id="sLogo"></div>
             <div class="vlak klein" id="sFotoA"></div>
-            <div class="vlak klein" id="sFotoB"></div>
           </div>
           <div class="midden">
             <p class="model" id="sModel">Renew</p>
@@ -344,7 +350,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="31-07-2026 · 11:20";
+const TEGEL_VERSIE="31-07-2026 · 13:05";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
@@ -582,7 +588,6 @@ function koppelUpload(inputId,thumbId,veld,maxPx){
 }
 koppelUpload("fFotoHoofd","tFotoHoofd","fotoHoofd",1600);
 koppelUpload("fFoto1","tFoto1","foto1",1400);
-koppelUpload("fFoto2","tFoto2","foto2",1400);
 koppelUpload("fTekening","tTekening","tekening",1800);
 
 // ===== Onderdelen van pagina 2 + icoontjes-bibliotheek =====================
@@ -694,7 +699,7 @@ function vulFormulier(){
   el("fLogoBreedte").value=S.logoBreedte||34; el("logoBreedteVal").textContent=S.logoBreedte||34;
   el("fOptioneel").value=S.optioneel||""; el("fOptioneel2").value=S.optioneel2||""; el("fVoetL").value=S.voetL||""; el("fVoetR").value=S.voetR||"";
   const zetThumb=(id,val)=>{const t=el(id); if(val){t.src=val;t.classList.remove("hidden");}else t.classList.add("hidden");};
-  zetThumb("tFoto1",S.foto1); zetThumb("tFoto2",S.foto2); zetThumb("tLogo",S.logoEigen);
+  zetThumb("tFoto1",S.foto1); zetThumb("tLogo",S.logoEigen);
   zetThumb("tFotoHoofd",S.fotoHoofd); zetThumb("tTekening",S.tekening);
   tekenLegForm();
   zetThumb("tFotoHoofd",S.fotoHoofd); zetThumb("tTekening",S.tekening); tekenLegForm();
@@ -820,7 +825,6 @@ function teken(){
   };
   vlak("sFotoHoofd",S.fotoHoofd,"grote productfoto");
   vlak("sFotoA",S.foto1,"foto 1");
-  vlak("sFotoB",S.foto2,"foto 2");
   // ── Pagina 2 ──
   el("sModel2").textContent=S.model||"";
   el("sCollectie2").textContent=S.collectie||"";
@@ -835,7 +839,9 @@ function teken(){
   const bouw=k=>S.blokken.filter(b=>(b.kolom||"L")===k).map(b=>
     "<div class='sectie'><h3>"+esc(b.titel||"")+"</h3>"+
     b.regels.map((r,i)=>
-      "<div class='spec"+(i%2?" zebra":"")+"'><span class='l'>"+esc(r.l)+"</span>"+
+      // Gretha, 31 jul: het gekleurde vlak hoort meteen ná de bloktitel te
+      // beginnen, dus de eerste regel is gekleurd en niet de tweede.
+      "<div class='spec"+(i%2?"":" zebra")+"'><span class='l'>"+esc(r.l)+"</span>"+
       "<span class='d'></span><span class='v'>"+esc(r.v)+"</span></div>").join("")+
     "</div>").join("");
   el("sKolomL").innerHTML=bouw("L");
