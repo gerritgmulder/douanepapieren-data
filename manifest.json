@@ -61,6 +61,10 @@
       "note": "Debiteurenlijst — openstaande posten per klant met afdeling en of er ergens een betaling verkeerd gekoppeld is. Knop in geldgoederen.html; haalt per openstaande factuur de klantnaam en regels op."
     },
     {
+      "name": "aansluiting-1630.js",
+      "note": "Aansluiting grootboek 1630 (te ontvangen facturen) — grootboekexport inlezen, koppelen aan de inkoopleveringen uit Logic4 en de aansluiting per balansdatum opstellen. Blok in geldgoederen.html."
+    },
+    {
       "name": "probe-logic4.html",
       "note": "Eenmalige probe-pagina om Logic4-velden in kaart te brengen — kan later weer verwijderd worden"
     },

@@ -137,6 +137,36 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
 .dbafd div{background:#fff;border:1px solid var(--rand);border-radius:8px;padding:7px 11px;font-size:12px;display:flex;gap:9px;align-items:baseline}
 .dbafd div span{color:var(--grijs)}
 .dbafd div b{font-variant-numeric:tabular-nums}
+
+/* ── Aansluiting 1630 (aansluiting-1630.js) ── */
+.zes-uitleg{margin:26px 0 12px}
+.zes-uitleg h3{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--grijs);font-weight:600;margin:0 0 6px}
+.zes-uitleg p{font-size:13px;color:#374151;line-height:1.6;margin:0}
+.zes-invoer{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:14px 18px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:14px}
+.zes-invoer label{font-size:11.5px;color:var(--grijs);font-weight:600;display:block;margin-bottom:4px}
+.zes-invoer input[type=file]{font-size:12.5px;font-family:inherit}
+.zes-invoer input[type=text]{padding:7px 10px;border:1px solid var(--rand);border-radius:8px;font-family:inherit;font-size:13px;width:150px}
+.zes-knop{background:var(--groen);color:#fff;border:0;border-radius:8px;padding:8px 16px;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer}
+.zes-knop:hover{background:var(--groen-donker)}
+.zes-knop:disabled{opacity:.55;cursor:default}
+.zes-knop.licht{background:#fff;color:var(--groen);border:1px solid var(--rand)}
+.zes-knoppen{display:flex;gap:8px;margin:12px 0}
+.zes-tabelwrap{overflow-x:auto;border:1px solid var(--rand);border-radius:10px;background:#fff;margin-bottom:6px}
+.zes-tabel{width:100%;border-collapse:collapse;font-size:13px}
+.zes-tabel td,.zes-tabel th{padding:7px 12px;border-bottom:1px solid #f0efe9;text-align:left}
+.zes-tabel th{background:#f3f4f0;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--grijs);font-weight:600;white-space:nowrap}
+.zes-tabel td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.zes-tabel tr.sub td{font-weight:600;background:#fafaf7}
+.zes-tabel tr.tot td{font-weight:700;border-top:2px solid var(--rand)}
+.zes-tabel tr.let td{background:#fef3c7;color:#92400e;font-weight:600}
+.zes-tabel tr.goed td{background:#dcfce7;color:#15803d;font-weight:600}
+.zes-tabel tr.weg td{background:#fffbfb;color:#b91c1c}
+.zes-tabel.klein{font-size:12px}
+.zes-tabel.klein td,.zes-tabel.klein th{padding:5px 10px}
+.zes-let{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin:12px 0;font-size:12.5px;color:#78350f;line-height:1.55}
+.zes-let ul{margin:6px 0 0;padding-left:18px}
+.zes-let li{margin-bottom:4px}
+.zes-kop{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--grijs);font-weight:600;margin:20px 0 8px}
 </style>
 </head>
 <body>
@@ -167,6 +197,9 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
   </div>
 
   <div id="debiteuren"></div>
+
+  <!-- Aansluiting grootboek 1630 — getekend door aansluiting-1630.js -->
+  <div id="aansluiting1630"></div>
 
   <div class="keten" id="keten"></div>
   <div id="inhoud"></div>
@@ -209,7 +242,10 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
   <span id="versie"></span>
 </footer>
 
+<!-- Excel-lezer, nodig om de grootboekexport van 1630 in te lezen -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="gg-engine.js"></script>
+<script src="aansluiting-1630.js"></script>
 <script src="debiteuren.js"></script>
 <script>
 "use strict";
@@ -360,6 +396,27 @@ function bewaarBevindingen(){
       body: JSON.stringify(bevindingen) }).catch(function(e){ console.warn("opslaan faalde", e); });
   }, 700);
 }
+
+/* ══════════════════════ Aansluiting 1630 ══════════════════════
+   Eigen module: de grootboekmutaties komen (nog) niet uit de API, dus iemand
+   laadt de export uit Logic4 hierin. De inkoopleveringen komen wél live. */
+if (window.fp1630) window.fp1630.init({
+  doelId: "aansluiting1630",
+  teamKey: TEAMKEY,
+  email: EMAIL,
+  magWijzigen: true,
+  logic4: logic4,
+  melden: function(t, p){
+    var vak = document.getElementById("voortgang");
+    var tekst = document.getElementById("voortgangTekst");
+    var balk = document.getElementById("voortgangBalk");
+    if (!vak) return;
+    vak.style.display = (p >= 100) ? "none" : "block";
+    if (tekst) tekst.textContent = t;
+    if (balk) balk.style.width = Math.min(100, p || 0) + "%";
+  },
+  log: log,
+});
 
 /* ══════════════════════ Debiteurenlijst ══════════════════════
    Staat los van de maandelijkse controle: hiervoor is per openstaande factuur
