@@ -47,6 +47,7 @@ const wanted = new Set(codes);
 // "Passion Spas | ElegantFit Spa Furniture" is tuinmeubilair (groep 48) en
 // "Bestway | Lay-Z Spa Vegas" een opblaasbadje (groep 47). Die hoorden niet in
 // de spa-catalogus, en met alleen een naamfilter kwamen ze er wel in.
+const VERVALLEN = 10;   // Logic4-status 'Vervallen'
 const SPA_GROEPEN = new Set([
   39,   // Spa's
   92,   // Zwemspa's
@@ -75,6 +76,11 @@ for (let page = 0; page < 200; page++) {
     // "Aquatic 1 Swimspa ECO | Sterling White…" staat ECO ertussen, waardoor
     // alle ECO-uitvoeringen buiten de catalogus vielen. Nu mag er tekst tussen
     // staan (Chantal wees op hetzelfde soort gat bij de ice baths, 31 jul).
+    // Vervallen artikelen horen niet in de catalogus. Ze zijn niet meer te
+    // bestellen — Logic4 weigert ze op een inkooporder — en ze kapen de
+    // zoekopdracht: het vervallen "Felicity" (100232fr) verdrong het actuele
+    // "Felicity Mighty Wave", waardoor een bestaande kleur onvindbaar leek.
+    if (Number(p.StatusId) === VERVALLEN) continue;
     const spaGroep = SPA_GROEPEN.has(Number(p.ProductGroupId1));
     if (!model && spaGroep && /\b(swimspa|spa)\b[^|]*\|/i.test(naam)
         && !/cover|filter|kussen|hoes|trap|onderhoud|prijskaart|cabinet|jet\b/i.test(naam)) {

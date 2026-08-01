@@ -1303,9 +1303,18 @@ function ikoZoekArtikel(catalog, model, kleur, skirt, aliassen) {
   let trim = null;
   if (/grey\s*\+\s*oak/.test(s) || /grey.*oak\s*slat/.test(s)) trim = "grey/oak";
   else if (/oak\s*\+.*grey/.test(s) || /^oak\b/.test(s)) trim = "oak/grey";
+  // De kleur zelf schrijft de omkasting soms met een schuine streep:
+  // "Sterling White with Grey/Oak". De volgorde is bepalend — grey/oak en
+  // oak/grey zijn twee verschillende artikelen — en daar keken we niet naar.
+  else if (/grey\s*\/\s*oak/.test(s)) trim = "grey/oak";
+  else if (/oak\s*\/\s*grey/.test(s)) trim = "oak/grey";
 
   if (schoon || trim) {
-    const woorden = schoon.split(" ").filter(w => w.length > 3);
+    // Woorden van drie letters telden niet mee, en juist "oak" is er zo een.
+    // Daardoor scoorden "Sterling White with DARK GREY" en "Sterling White with
+    // GREY/oak trim" even hoog op de kleur "Sterling White with Grey/Oak" en
+    // won de eerste. Drie letters doen nu wél mee.
+    const woorden = schoon.split(" ").filter(w => w.length >= 3);
     let beste = null, besteScore = 0;
     for (const v of varianten) {
       const d = String(v.desc || "").toLowerCase();
