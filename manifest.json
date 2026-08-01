@@ -69,6 +69,14 @@
       "note": "Vooruitontvangen bedragen (grootboek 1350) — rekent alle orders door op openstaande aanbetalingen. Volledig uit Logic4, geen export nodig. Blok in geldgoederen.html."
     },
     {
+      "name": "bankaansluiting.js",
+      "note": "Bankaansluiting — bankafschriften (MT940) naast de betaalregistratie in Logic4: sluit elk afschrift, sluit het per maand, en wat koppelt niet. Blok in geldgoederen.html."
+    },
+    {
+      "name": "mt940.js",
+      "note": "MT940-lezer voor bankafschriften. Gedeeld door bankkoppeling.html en de bankaansluiting in geldgoederen.html — één lezer, geen twee die uiteenlopen."
+    },
+    {
       "name": "probe-logic4.html",
       "note": "Eenmalige probe-pagina om Logic4-velden in kaart te brengen — kan later weer verwijderd worden"
     },
