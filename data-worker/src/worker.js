@@ -48,6 +48,7 @@ const ALLOWED_BUCKETS = new Set([
   "gg-bevindingen",   // Geld-goederenbeweging: per bevinding de status (open/opgepakt/opgelost/akkoord) + notitie
   "flexport-zendingen",// Flexport-overzicht (zendingen + containers). Ophalen duurt ~2,5 min, dus dit wordt hergebruikt.
   "flexport-token",   // Flexport-toegangstoken (24u geldig). Bewaren is verplicht: er mogen maar 10 tokens per dag worden opgehaald.
+  "gg-1350",           // Vooruitontvangen bedragen: laatste doorrekening + historie per meting
   "gg-1630",           // Aansluiting grootboek 1630: laatste opstelling + historie per meting (accountant)
   "gg-artikelgroepen",// Artikelcode → productgroep-id + de groepsnamen. Voor de debiteurenlijst, die per factuur de afdeling moet bepalen. Opbouwen kost een minuut, dus wordt hij 30 dagen hergebruikt.
   "spa-aliassen",     // Modelnaam zoals hij getypt wordt → modelnaam in de spa-catalogus (eenmalige keuze door een mens)
