@@ -42,6 +42,20 @@ async function getPage(skip) {
 }
 
 const wanted = new Set(codes);
+
+// Alleen deze productgroepen zijn écht spa's. Op de naam afgaan is niet genoeg:
+// "Passion Spas | ElegantFit Spa Furniture" is tuinmeubilair (groep 48) en
+// "Bestway | Lay-Z Spa Vegas" een opblaasbadje (groep 47). Die hoorden niet in
+// de spa-catalogus, en met alleen een naamfilter kwamen ze er wel in.
+const SPA_GROEPEN = new Set([
+  39,   // Spa's
+  92,   // Zwemspa's
+  72,   // Spa's Gebruikt
+  73,   // Spa's Gebruikt Garantie
+  87,   // Spa's Samengesteld
+  89,   // Ice Baths
+  90,   // Ice Baths Samengesteld
+]);
 const catalog = {};   // model → [{code, productId, desc}]
 let found = 0, scanned = 0;
 for (let page = 0; page < 200; page++) {
@@ -57,10 +71,25 @@ for (let page = 0; page < 200; page++) {
     // de Sydney. Daardoor vond de proforma-koppeling geen artikelcode terwijl
     // het artikel gewoon bestond. Staat een artikel niet in de lijst, dan
     // leiden we het model af uit de productnaam van Logic4 zelf.
-    if (!model && /(swimspa|spa) \|/i.test(naam)
+    // "swimspa |" eiste dat het woord pál voor het streepje stond. Bij
+    // "Aquatic 1 Swimspa ECO | Sterling White…" staat ECO ertussen, waardoor
+    // alle ECO-uitvoeringen buiten de catalogus vielen. Nu mag er tekst tussen
+    // staan (Chantal wees op hetzelfde soort gat bij de ice baths, 31 jul).
+    const spaGroep = SPA_GROEPEN.has(Number(p.ProductGroupId1));
+    if (!model && spaGroep && /\b(swimspa|spa)\b[^|]*\|/i.test(naam)
         && !/cover|filter|kussen|hoes|trap|onderhoud|prijskaart|cabinet|jet\b/i.test(naam)) {
       model = naam.split("|")[0].replace(/\bswimspa\b/ig, " ").replace(/\bspa\b/ig, " ")
                   .replace(/\s+/g, " ").trim() || null;
+    }
+    // Ice baths heten anders: "Passion Ice Baths | Breeze Ice Bath | Sterling
+    // White with Oak". Daar staat geen "spa |" in, dus ze vielen buiten de
+    // catalogus — en dan lijkt het alsof ze niet in Logic4 bestaan. Chantal wees
+    // er terecht op dat de Breeze er gewoon in staat (31 jul). Het model is hier
+    // het tweede deel van de naam.
+    if (!model && spaGroep && /ice baths? \|/i.test(naam)
+        && !/cover|filter|kussen|hoes|trap|onderhoud|prijskaart|cabinet|jet\b/i.test(naam)) {
+      const delen = naam.split("|").map(s => s.trim());
+      if (delen.length >= 3 && delen[1]) model = delen[1].replace(/\s+/g, " ").trim();
     }
     if (!model) continue;
     // ECO is een ánder model dan de gewone uitvoering (Chantal) — apart houden.
