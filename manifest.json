@@ -65,6 +65,10 @@
       "note": "Aansluiting grootboek 1630 (te ontvangen facturen) — grootboekexport inlezen, koppelen aan de inkoopleveringen uit Logic4 en de aansluiting per balansdatum opstellen. Blok in geldgoederen.html."
     },
     {
+      "name": "vooruitontvangen.js",
+      "note": "Vooruitontvangen bedragen (grootboek 1350) — rekent alle orders door op openstaande aanbetalingen. Volledig uit Logic4, geen export nodig. Blok in geldgoederen.html."
+    },
+    {
       "name": "probe-logic4.html",
       "note": "Eenmalige probe-pagina om Logic4-velden in kaart te brengen — kan later weer verwijderd worden"
     },

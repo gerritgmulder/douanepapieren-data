@@ -167,6 +167,34 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
 .zes-let ul{margin:6px 0 0;padding-left:18px}
 .zes-let li{margin-bottom:4px}
 .zes-kop{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--grijs);font-weight:600;margin:20px 0 8px}
+
+/* ── Vooruitontvangen 1350 (vooruitontvangen.js) ── */
+.vo-uitleg{margin:26px 0 12px}
+.vo-uitleg h3{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--grijs);font-weight:600;margin:0 0 6px}
+.vo-uitleg p{font-size:13px;color:#374151;line-height:1.6;margin:0}
+.vo-invoer{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:14px 18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.vo-invoer label{font-size:11.5px;color:var(--grijs);font-weight:600}
+.vo-invoer input{padding:7px 10px;border:1px solid var(--rand);border-radius:8px;font-family:inherit;font-size:13px}
+.vo-knop{background:var(--groen);color:#fff;border:0;border-radius:8px;padding:8px 16px;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer}
+.vo-knop:hover{background:var(--groen-donker)}
+.vo-knop:disabled{opacity:.55;cursor:default}
+.vo-knop.licht{background:#fff;color:var(--groen);border:1px solid var(--rand)}
+.vo-knoppen{display:flex;gap:8px;margin:12px 0}
+.vo-cijfers{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.vo-blok{flex:1 1 190px;background:var(--kaart);border:1px solid var(--rand);border-radius:10px;padding:12px 14px}
+.vo-blok.let{border-color:#fcd34d;background:#fffbeb}
+.vo-blok .t{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--grijs);font-weight:600}
+.vo-blok .g{font-size:20px;font-weight:700;margin:5px 0 2px;font-variant-numeric:tabular-nums}
+.vo-blok .k{font-size:11.5px;color:var(--grijs)}
+.vo-let{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin:12px 0;font-size:12.5px;color:#78350f;line-height:1.6}
+.vo-kop{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--grijs);font-weight:600;margin:20px 0 8px}
+.vo-tabelwrap{overflow-x:auto;border:1px solid var(--rand);border-radius:10px;background:#fff;margin-bottom:6px}
+.vo-tabel{width:100%;border-collapse:collapse;font-size:12.5px}
+.vo-tabel td,.vo-tabel th{padding:6px 11px;border-bottom:1px solid #f0efe9;text-align:left}
+.vo-tabel th{background:#f3f4f0;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--grijs);font-weight:600;white-space:nowrap}
+.vo-tabel td.r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.vo-tabel tr.let td{background:#fffbeb}
+.vo-tabel.klein{font-size:12px}
 </style>
 </head>
 <body>
@@ -200,6 +228,9 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
 
   <!-- Aansluiting grootboek 1630 — getekend door aansluiting-1630.js -->
   <div id="aansluiting1630"></div>
+
+  <!-- Vooruitontvangen bedragen (1350) — getekend door vooruitontvangen.js -->
+  <div id="vooruitontvangen"></div>
 
   <div class="keten" id="keten"></div>
   <div id="inhoud"></div>
@@ -246,6 +277,7 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="gg-engine.js"></script>
 <script src="aansluiting-1630.js"></script>
+<script src="vooruitontvangen.js"></script>
 <script src="debiteuren.js"></script>
 <script>
 "use strict";
@@ -396,6 +428,24 @@ function bewaarBevindingen(){
       body: JSON.stringify(bevindingen) }).catch(function(e){ console.warn("opslaan faalde", e); });
   }, 700);
 }
+
+/* ══════════════════════ Vooruitontvangen (1350) ══════════════════════
+   Kan volledig uit Logic4: de betaalregels op een order dragen de
+   grootboekcode mee. Geen export nodig, dus dit is een gewone knop. */
+if (window.fp1350) window.fp1350.init({
+  doelId: "vooruitontvangen",
+  teamKey: TEAMKEY, email: EMAIL, magWijzigen: true, logic4: logic4,
+  melden: function(t, p){
+    var vak = document.getElementById("voortgang");
+    var tekst = document.getElementById("voortgangTekst");
+    var balk = document.getElementById("voortgangBalk");
+    if (!vak) return;
+    vak.style.display = (p >= 100) ? "none" : "block";
+    if (tekst) tekst.textContent = t;
+    if (balk) balk.style.width = Math.min(100, p || 0) + "%";
+  },
+  log: log,
+});
 
 /* ══════════════════════ Aansluiting 1630 ══════════════════════
    Eigen module: de grootboekmutaties komen (nog) niet uit de API, dus iemand
