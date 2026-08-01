@@ -46,6 +46,8 @@ const ALLOWED_BUCKETS = new Set([
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
   "geldgoederen",     // Geld-goederenbeweging: laatste controle-momentopname + historie van de totalen
   "gg-bevindingen",   // Geld-goederenbeweging: per bevinding de status (open/opgepakt/opgelost/akkoord) + notitie
+  "flexport-zendingen",// Flexport-overzicht (zendingen + containers). Ophalen duurt ~2,5 min, dus dit wordt hergebruikt.
+  "flexport-token",   // Flexport-toegangstoken (24u geldig). Bewaren is verplicht: er mogen maar 10 tokens per dag worden opgehaald.
   "gg-1630",           // Aansluiting grootboek 1630: laatste opstelling + historie per meting (accountant)
   "gg-artikelgroepen",// Artikelcode → productgroep-id + de groepsnamen. Voor de debiteurenlijst, die per factuur de afdeling moet bepalen. Opbouwen kost een minuut, dus wordt hij 30 dagen hergebruikt.
   "spa-aliassen",     // Modelnaam zoals hij getypt wordt → modelnaam in de spa-catalogus (eenmalige keuze door een mens)
@@ -1674,6 +1676,141 @@ async function spaMigratieUitvoeren(env, body) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   FLEXPORT — de expediteur als bron voor waar de containers zijn
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Chantal hield met de hand bij welk schip welke spa's vervoert en wanneer het
+   aankomt. Flexport, de expediteur, weet dat zelf en houdt het actueel. Die
+   koppeling haalt dus niet alleen werk weg, hij is ook betrouwbaarder: bij
+   vertraging verandert de datum bij Flexport, niet in een Excel.
+
+   Hoe de koppeling met onze inkooporders loopt
+   --------------------------------------------
+   Flexport kent onze Jazzi-ordernummers niet als veld. Ze staan in de vrije
+   naam van de zending, in dezelfde notatie die Chantal ook gebruikt:
+   "3205-1&3224-1，荷兰8柜" bevat de orders 3205 en 3224. Daar halen we ze uit,
+   met hetzelfde patroon als bij de schepen.
+
+   Twee dingen om te weten
+   -----------------------
+   • De API valt zonder versie-header terug op v1, en v1 werkt niet met deze
+     credentials. Vandaar Flexport-Version op elke aanroep.
+   • Er mogen maar 10 tokens per dag worden opgehaald. Een token is 24 uur
+     geldig, dus we bewaren hem in KV en halen alleen een nieuwe als hij
+     bijna verloopt. Zonder dat zit je na tien aanroepen een dag op slot.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const FLEXPORT_API = "https://api.flexport.com";
+const FLEXPORT_VERSIE = "2023-07-01";
+
+async function flexportToken(env) {
+  const bewaard = await env.FONTEYN_DATA.get("flexport-token", { type: "json" });
+  // Ruim voor het verlopen verversen, maar niet elke keer: 10 per dag is de limiet.
+  if (bewaard && bewaard.token && bewaard.verlooptOp && (Date.parse(bewaard.verlooptOp) - Date.now()) > 3600000)
+    return bewaard.token;
+
+  const r = await fetch(FLEXPORT_API + "/oauth/token", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_id: env.FLEXPORT_CLIENT_ID, client_secret: env.FLEXPORT_CLIENT_SECRET,
+      audience: FLEXPORT_API, grant_type: "client_credentials",
+    }),
+  });
+  const tekst = await r.text();
+  if (!r.ok) throw new Error("Flexport-token: HTTP " + r.status + " " + tekst.slice(0, 200));
+  const j = JSON.parse(tekst);
+  if (!j.access_token) throw new Error("Flexport gaf geen token terug");
+  // De vervaldatum zit in het token zelf.
+  let verlooptOp = new Date(Date.now() + 23 * 3600000).toISOString();
+  try {
+    const p = JSON.parse(atob(j.access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    if (p.exp) verlooptOp = new Date(p.exp * 1000).toISOString();
+  } catch (e) { /* dan de veilige schatting */ }
+  await env.FONTEYN_DATA.put("flexport-token", JSON.stringify({ token: j.access_token, verlooptOp, opgehaald: new Date().toISOString() }));
+  return j.access_token;
+}
+
+async function flexport(env, pad) {
+  const token = await flexportToken(env);
+  const r = await fetch(FLEXPORT_API + pad, {
+    headers: { "Authorization": "Bearer " + token, "Flexport-Version": FLEXPORT_VERSIE, "Content-Type": "application/json" },
+  });
+  const tekst = await r.text();
+  if (!r.ok) throw new Error(pad + " → HTTP " + r.status + " " + tekst.slice(0, 200));
+  return JSON.parse(tekst);
+}
+
+// Alle pagina's van een Flexport-lijst. Per aanroep 100, en de worker mag op het
+// gratis plan 50 externe verzoeken doen — vandaar de harde grens.
+async function flexportAlles(env, pad, maxPaginas = 30) {
+  const uit = [];
+  for (let p = 1; p <= maxPaginas; p++) {
+    const j = await flexport(env, pad + (pad.includes("?") ? "&" : "?") + "per=100&page=" + p);
+    const d = (j.data && j.data.data) || [];
+    uit.push(...d);
+    if (!j.data || !j.data.next || d.length < 100) break;
+  }
+  return uit;
+}
+
+// "3205-1&3224-1，荷兰8柜" → ["3205","3224"]. Zelfde notatie als op de schepen.
+function jazziOrdersUitTekst(tekst) {
+  return [...new Set((String(tekst || "").match(/\b3\d{3}(?=-\d)/g) || []))];
+}
+
+// Het volledige overzicht ophalen duurt bij Flexport ruim twee minuten. Dat wil
+// je niet bij elke schermweergave, dus het resultaat gaat in KV en wordt daaruit
+// geserveerd tot het een paar uur oud is. Met 'vers' forceer je een verse ronde.
+const FLEXPORT_CACHE_UREN = 6;
+
+async function flexportOverzicht(env, vers) {
+  if (!vers) {
+    const bewaard = await env.FONTEYN_DATA.get("flexport-zendingen", { type: "json" });
+    if (bewaard && bewaard.opgehaald && (Date.now() - Date.parse(bewaard.opgehaald)) < FLEXPORT_CACHE_UREN * 3600000)
+      return Object.assign({}, bewaard, { uitCache: true });
+  }
+  const uitkomst = await flexportVers(env);
+  await env.FONTEYN_DATA.put("flexport-zendingen", JSON.stringify(uitkomst));
+  return uitkomst;
+}
+
+async function flexportVers(env) {
+  const zendingen = await flexportAlles(env, "/shipments", 12);
+  const containers = await flexportAlles(env, "/ocean/shipment_containers", 12);
+
+  const perZending = {};
+  for (const c of containers) {
+    const id = c.shipment && c.shipment.id;
+    if (!id) continue;
+    (perZending[id] = perZending[id] || []).push(c);
+  }
+
+  const uit = zendingen.map(z => {
+    const cs = perZending[z.id] || [];
+    const eta = cs.map(c => c.estimated_arrival_date).filter(Boolean).sort()[0] || z.estimated_arrival_date || null;
+    const aan = cs.map(c => c.actual_arrival_date).filter(Boolean).sort();
+    return {
+      id: z.id, naam: z.naam || z.name || "", status: z.status || "",
+      jazziOrders: jazziOrdersUitTekst(z.name),
+      eta: eta ? String(eta).slice(0, 10) : null,
+      aangekomen: aan.length === cs.length && aan.length ? String(aan[aan.length - 1]).slice(0, 10) : null,
+      vertrek: z.estimated_departure_date ? String(z.estimated_departure_date).slice(0, 10) : null,
+      containers: cs.map(c => ({
+        nr: c.container_number, maat: c.container_size,
+        eta: c.estimated_arrival_date ? String(c.estimated_arrival_date).slice(0, 10) : null,
+        aangekomen: c.actual_arrival_date ? String(c.actual_arrival_date).slice(0, 10) : null,
+        afgeleverd: c.actual_delivery_date ? String(c.actual_delivery_date).slice(0, 10) : null,
+        // De dag waarna de rederij demurrage rekent. Kost geld en zag niemand.
+        laatsteVrijeDag: c.last_free_day_date ? String(c.last_free_day_date).slice(0, 10) : null,
+      })),
+    };
+  });
+
+  uit.sort((a, b) => String(b.eta || "").localeCompare(String(a.eta || "")));
+  return { ok: true, opgehaald: new Date().toISOString(), zendingen: uit, aantalContainers: containers.length };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    DOCUMENTENKETEN JAZZI — van commercial invoice naar de inkooporder
    ═══════════════════════════════════════════════════════════════════════════
 
@@ -2752,6 +2889,13 @@ export default {
       opslag.gewijzigd = new Date().toISOString();
       await env.FONTEYN_DATA.put("spa-aliassen", JSON.stringify(opslag));
       return reply(200, { ok: true, van, naar });
+    }
+
+    // Flexport — waar zijn de containers volgens de expediteur.
+    if (url.pathname === "/voorraad/flexport/overzicht" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await flexportOverzicht(env, !!body.vers).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
 
     // Documentenketen Jazzi: commercial invoice → inkooporder.
