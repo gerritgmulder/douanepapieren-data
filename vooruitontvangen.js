@@ -213,9 +213,20 @@
     }
     c.appendChild(blok("Openstaande aanbetalingen", euro(-u.open.bedrag), u.open.aantal + " orders"));
     c.appendChild(blok("Te veel afgeboekt", euro(u.teveel.bedrag), u.teveel.aantal + " orders"));
-    c.appendChild(blok("Saldo 1350", euro(u.saldo), "credit = schuld aan klanten"));
+    c.appendChild(blok("Saldo op de orders", euro(u.saldo), "niet gelijk aan het grootboek"));
     c.appendChild(blok("Order loopt niet meer", euro(-u.dood.bedrag), u.dood.aantal + " orders", "let"));
     doel.appendChild(c);
+
+    // Eerlijk zijn over wat dit cijfer wél en niet is.
+    var b = el("div", "vo-bron");
+    b.appendChild(el("strong", null, "Let op bij het saldo. "));
+    b.appendChild(document.createTextNode(
+      "Dit is opgebouwd uit de betaalregels op de orders zelf. Boekingen op 1350 die niet aan een order " +
+      "hangen — handmatige correcties, overboekingen — zijn via de API niet zichtbaar en zitten hier dus niet in. " +
+      "In de grootboekexport van de accountant ging dat over 187 regels van samen ruim 774.000 euro. " +
+      "Het saldo hierboven sluit daarom niet één op één aan op de balans. Voor die aansluiting is toegang tot de " +
+      "financiële endpoints van Logic4 nodig; die staat nu op 403."));
+    doel.appendChild(b);
 
     var w = el("div", "vo-let");
     w.appendChild(el("strong", null, "Waar het om gaat: "));
@@ -325,7 +336,8 @@
       [], ["", "Orders", "Bedrag EUR"],
       ["Openstaande aanbetalingen (credit)", u.open.aantal, u.open.bedrag],
       ["Te veel afgeboekt (debet)", u.teveel.aantal, u.teveel.bedrag],
-      ["Saldo 1350", "", u.saldo],
+      ["Saldo op de orders", "", u.saldo],
+      ["LET OP: boekingen zonder order zitten hier niet in (via de API niet zichtbaar)", "", ""],
       ["Volledig afgelopen orders", u.afgewikkeld, 0],
       [],
       ["Aanbetaling op een order die niet meer loopt", u.dood.aantal, u.dood.bedrag],
