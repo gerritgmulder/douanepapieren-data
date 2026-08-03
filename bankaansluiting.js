@@ -149,11 +149,12 @@
     var iO = kolom(kop, ["mededeling begunstigde", "omschrijving", "mededelingen", "naam / omschrijving", "description"]);
     var iW = kolom(kop, ["wederpartij", "naam tegenpartij", "tegenrekening naam", "naam"]);
     var iR = kolom(kop, ["rekening", "iban/bban", "rekeningnummer", "iban"]);
+    var iV = kolom(kop, ["valuta", "munt", "currency"]);
     // Sommige banken zetten het teken in een aparte kolom in plaats van in het bedrag.
     var iAf = kolom(kop, ["af bij", "af/bij", "bij/af", "debet/credit"]);
     if (iD < 0 || iB < 0) throw new Error(naam + ": geen kolom met een datum en een bedrag gevonden.");
 
-    var tx = [], iban = "";
+    var tx = [], iban = "", munten = {};
     for (var i = 1; i < rijen.length; i++) {
       var r = rijen[i];
       if (!r || r.length < 2) continue;
@@ -166,6 +167,10 @@
         else if (t === "bij" || t === "c" || t === "credit") b = Math.abs(b);
       }
       if (!iban && iR >= 0) iban = String(r[iR] || "").split("/")[0].trim();
+      if (iV >= 0) {
+        var mu = String(r[iV] || "").trim().toUpperCase();
+        if (mu) munten[mu] = (munten[mu] || 0) + 1;
+      }
       var oms = [iW >= 0 ? r[iW] : "", iO >= 0 ? r[iO] : ""]
         .map(function (x) { return String(x == null ? "" : x).trim(); })
         .filter(Boolean).join(" — ").replace(/\s+/g, " ");
@@ -173,8 +178,14 @@
     }
     if (!tx.length) throw new Error(naam + ": wel regels, maar geen bruikbare datum/bedrag-combinatie.");
 
+    // De valuta staat in de export maar werd niet gelezen. De dollarrekening
+    // van Fonteyn kwam als gewone CSV binnen en zou zo bij de euro's zijn
+    // opgeteld — 6 miljoen dollar erbij alsof het euro's waren (3 aug 2026).
+    var munt = "", meest = 0;
+    for (var mk in munten) if (munten[mk] > meest) { meest = munten[mk]; munt = mk; }
+
     return {
-      bestand: naam, iban: iban, afschrift: "CSV", saldi: false,
+      bestand: naam, iban: iban, afschrift: "CSV", saldi: false, valuta: munt || "",
       begin: null, eind: null,
       mutaties: tx.reduce(function (a, x) { return a + x.bedrag; }, 0),
       sluit: null, verschil: null, transacties: tx,
@@ -186,8 +197,10 @@
     var som = (p.transactions || []).reduce(function (t, x) { return t + num(x.amount); }, 0);
     var begin = p.openingBalance ? num(p.openingBalance.amount) : null;
     var eind = p.closingBalance ? num(p.closingBalance.amount) : null;
+    var munt = (p.closingBalance && p.closingBalance.currency) || (p.openingBalance && p.openingBalance.currency) || "";
     return {
       bestand: naam, iban: p.iban || "", afschrift: p.statementNr || "", saldi: begin !== null && eind !== null,
+      valuta: String(munt || "").toUpperCase(),
       begin: begin, eind: eind, mutaties: som,
       // Controle 1: het afschrift moet op zichzelf kloppen.
       sluit: (begin === null || eind === null) ? null : Math.abs(begin + som - eind) < 0.02,
@@ -300,6 +313,17 @@
   async function bouw(lijst, melden) {
     melden("Bankafschriften inlezen…", 6);
     var afschriften = await leesAfschriften(lijst, melden);
+    // Alleen euro's mogen de vergelijking in. De grootboekbedragen in Logic4
+    // staan in euro; een dollarafschrift ernaast leggen zou betekenen dat je
+    // dollars van euro's aftrekt. Zulke bestanden worden apart gemeld, niet
+    // stilzwijgend meegeteld en ook niet stilzwijgend weggegooid.
+    var vreemd = afschriften.filter(function (a) { return a.valuta && a.valuta !== "EUR"; });
+    afschriften = afschriften.filter(function (a) { return !a.valuta || a.valuta === "EUR"; });
+    if (!afschriften.length) {
+      throw new Error("Alleen bestanden in een andere valuta dan euro gevonden (" +
+        vreemd.map(function (a) { return a.valuta; }).join(", ") + "). Die kan ik niet tegen het grootboek leggen.");
+    }
+
     var alleTx = [];
     afschriften.forEach(function (a) {
       a.transacties.forEach(function (t) { alleTx.push(Object.assign({ iban: a.iban }, t)); });
@@ -369,9 +393,13 @@
       gemaakt: new Date().toISOString(), door: cfg.email || null,
       vanaf: vanaf, tot: tot,
       afschriften: afschriften.map(function (a) {
-        return { bestand: a.bestand, iban: a.iban, afschrift: a.afschrift, saldi: a.saldi !== false, begin: a.begin, eind: a.eind, mutaties: Math.round(a.mutaties * 100) / 100, sluit: a.sluit, verschil: a.verschil, aantal: a.transacties.length };
+        return { bestand: a.bestand, iban: a.iban, afschrift: a.afschrift, valuta: a.valuta || "", saldi: a.saldi !== false, begin: a.begin, eind: a.eind, mutaties: Math.round(a.mutaties * 100) / 100, sluit: a.sluit, verschil: a.verschil, aantal: a.transacties.length };
       }),
       rekeningen: rekeningen,
+      vreemdeValuta: vreemd.map(function (a) {
+        return { bestand: a.bestand, iban: a.iban, valuta: a.valuta, aantal: a.transacties.length,
+                 bij: a.transacties.reduce(function (t, x) { return x.bedrag > 0 ? t + x.bedrag : t; }, 0) };
+      }),
       bank: { aantal: binnen.length, bedrag: bankIn },
       doorboeking: {
         aantal: doorTx.length,
@@ -457,6 +485,17 @@
     // Bestanden zonder saldi (CSV) kunnen die controle niet ondergaan. Dat is
     // geen fout, maar het mag niet onopgemerkt blijven: een ontbrekende periode
     // valt er niet mee op.
+    var vv = u.vreemdeValuta || [];
+    if (vv.length) {
+      var vw = el("div", "ba-let");
+      vw.appendChild(el("strong", null, vv.length + " bestand(en) in een andere valuta, niet meegeteld. "));
+      vw.appendChild(document.createTextNode(
+        vv.map(function (a) { return (a.iban || a.bestand) + " (" + a.valuta + ", " + a.aantal + " regels)"; }).join(", ") +
+        ". Het grootboek staat in euro, dus die bedragen kunnen er niet zomaar bij opgeteld worden. " +
+        "Voor die rekening is een aparte aansluiting met de gehanteerde koersen nodig."));
+      doel.appendChild(vw);
+    }
+
     var zonder = (u.afschriften || []).filter(function (a) { return a.saldi === false; });
     if (zonder.length) {
       var z = el("div", "ba-let zacht");
@@ -569,9 +608,9 @@
     ["Doorboekingen (buiten de vergelijking)", (u.doorboeking || {}).aantal || 0, (u.doorboeking || {}).bedrag || 0], [],
     ["Op de bank, niet in Logic4", u.bankLos.aantal, u.bankLos.bedrag],
     ["In Logic4, niet op de bank", u.logic4Los.aantal, u.logic4Los.bedrag], [],
-    ["AFSCHRIFTEN"], ["Bestand", "IBAN", "Nr", "Beginsaldo", "Mutaties", "Eindsaldo", "Sluit", "Verschil", "Transacties"]];
+    ["AFSCHRIFTEN"], ["Bestand", "IBAN", "Valuta", "Nr", "Beginsaldo", "Mutaties", "Eindsaldo", "Sluit", "Verschil", "Transacties"]];
     (u.afschriften || []).forEach(function (a) {
-      r.push([a.bestand, a.iban, a.afschrift, a.begin, a.mutaties, a.eind, a.sluit === null ? "geen saldi" : (a.sluit ? "ja" : "NEE"), a.verschil, a.aantal]);
+      r.push([a.bestand, a.iban, a.valuta || "EUR", a.afschrift, a.begin, a.mutaties, a.eind, a.sluit === null ? "geen saldi" : (a.sluit ? "ja" : "NEE"), a.verschil, a.aantal]);
     });
     r.push([], ["PER MAAND"], ["Maand", "Bank EUR", "Logic4 EUR", "Verschil EUR"]);
     Object.keys(u.perMaand).sort().forEach(function (m) {
