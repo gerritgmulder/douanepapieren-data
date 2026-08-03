@@ -68,7 +68,141 @@
     return uit;
   }
 
-  /* ═══════════ de bankkant ═══════════ */
+  /* ═══════════ de bankkant ═══════════
+
+     MT940 is het nette formaat, maar niet elke bank geeft het over een lange
+     periode. ING levert per dag een MT940 en pas over een reeks een CSV — voor
+     heel 2025 zou dat ruim 250 losse downloads betekenen. Osman liep daar op
+     vast (3 aug 2026). Een CSV bevat alles wat we nodig hebben (datum, bedrag,
+     tegenpartij, omschrijving), dus lezen we die gewoon ook.
+
+     Wat een CSV níet heeft is het begin- en eindsaldo. Controle 1 — sluit het
+     afschrift op zichzelf? — kan er dus niet op. Dat wordt niet stilgehouden:
+     zulke bestanden krijgen sluit = null en het scherm meldt het apart. */
+
+  function csvRijen(tekst, sep) {
+    // Zelf uitgeschreven, want omschrijvingen bevatten regeleinden binnen
+    // aanhalingstekens. Op \n splitsen levert dan halve regels op.
+    var rijen = [], rij = [], veld = "", inQ = false, i = 0;
+    tekst = String(tekst).replace(/^﻿/, "");
+    while (i < tekst.length) {
+      var c = tekst.charAt(i);
+      if (inQ) {
+        if (c === '"') {
+          if (tekst.charAt(i + 1) === '"') { veld += '"'; i += 2; continue; }
+          inQ = false; i++; continue;
+        }
+        veld += c; i++; continue;
+      }
+      if (c === '"') { inQ = true; i++; continue; }
+      if (c === sep) { rij.push(veld); veld = ""; i++; continue; }
+      if (c === "\r") { i++; continue; }
+      if (c === "\n") { rij.push(veld); rijen.push(rij); rij = []; veld = ""; i++; continue; }
+      veld += c; i++;
+    }
+    if (veld !== "" || rij.length) { rij.push(veld); rijen.push(rij); }
+    return rijen;
+  }
+
+  function bedragUit(v) {
+    var s = String(v == null ? "" : v).replace(/[\s €]/g, "").replace(/^\+/, "");
+    if (!s) return NaN;
+    var min = /^-/.test(s) || /-$/.test(s);
+    s = s.replace(/-/g, "");
+    var k = s.lastIndexOf(","), p = s.lastIndexOf(".");
+    if (k > -1 && p > -1) {
+      // Beide aanwezig: de laatste is de decimaalscheiding.
+      s = k > p ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+    } else if (k > -1) {
+      s = /^\d{1,3}(,\d{3})+$/.test(s) ? s.replace(/,/g, "") : s.replace(",", ".");
+    } else if (p > -1) {
+      if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+    }
+    var n = Number(s);
+    return isFinite(n) ? (min ? -n : n) : NaN;
+  }
+
+  function datumUit(v) {
+    var s = String(v == null ? "" : v).trim(), m;
+    if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})/))) return m[1] + "-" + m[2] + "-" + m[3];
+    if ((m = s.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/))) return m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2);
+    if ((m = s.match(/^(\d{4})(\d{2})(\d{2})$/))) return m[1] + "-" + m[2] + "-" + m[3];
+    return "";
+  }
+
+  function kolom(kop, namen) {
+    var i, j;
+    for (i = 0; i < namen.length; i++) for (j = 0; j < kop.length; j++) if (kop[j] === namen[i]) return j;
+    for (i = 0; i < namen.length; i++) for (j = 0; j < kop.length; j++) if (kop[j].indexOf(namen[i]) === 0) return j;
+    return -1;
+  }
+
+  function uitCsv(naam, tekst) {
+    var eerste = String(tekst).slice(0, 4000).split(/\r?\n/)[0] || "";
+    var sep = eerste.split(";").length > eerste.split(",").length ? ";" : ",";
+    var rijen = csvRijen(tekst, sep).filter(function (r) { return r.length > 1 || (r[0] && r[0].trim()); });
+    if (rijen.length < 2) throw new Error(naam + ": geen bruikbare regels gevonden.");
+    var kop = rijen[0].map(function (h) { return String(h).replace(/^﻿/, "").trim().toLowerCase(); });
+
+    var iD = kolom(kop, ["boekdatum", "datum", "transactiedatum", "date", "rentedatum"]);
+    var iB = kolom(kop, ["bedrag", "transactiebedrag", "amount", "bedrag (eur)"]);
+    var iO = kolom(kop, ["mededeling begunstigde", "omschrijving", "mededelingen", "naam / omschrijving", "description"]);
+    var iW = kolom(kop, ["wederpartij", "naam tegenpartij", "tegenrekening naam", "naam"]);
+    var iR = kolom(kop, ["rekening", "iban/bban", "rekeningnummer", "iban"]);
+    // Sommige banken zetten het teken in een aparte kolom in plaats van in het bedrag.
+    var iAf = kolom(kop, ["af bij", "af/bij", "bij/af", "debet/credit"]);
+    if (iD < 0 || iB < 0) throw new Error(naam + ": geen kolom met een datum en een bedrag gevonden.");
+
+    var tx = [], iban = "";
+    for (var i = 1; i < rijen.length; i++) {
+      var r = rijen[i];
+      if (!r || r.length < 2) continue;
+      var d = datumUit(r[iD]);
+      var b = bedragUit(r[iB]);
+      if (!d || !isFinite(b)) continue;
+      if (iAf >= 0) {
+        var t = String(r[iAf] || "").trim().toLowerCase();
+        if (t === "af" || t === "d" || t === "debet") b = -Math.abs(b);
+        else if (t === "bij" || t === "c" || t === "credit") b = Math.abs(b);
+      }
+      if (!iban && iR >= 0) iban = String(r[iR] || "").split("/")[0].trim();
+      var oms = [iW >= 0 ? r[iW] : "", iO >= 0 ? r[iO] : ""]
+        .map(function (x) { return String(x == null ? "" : x).trim(); })
+        .filter(Boolean).join(" — ").replace(/\s+/g, " ");
+      tx.push({ datum: d, bedrag: b, oms: oms.slice(0, 160) });
+    }
+    if (!tx.length) throw new Error(naam + ": wel regels, maar geen bruikbare datum/bedrag-combinatie.");
+
+    return {
+      bestand: naam, iban: iban, afschrift: "CSV", saldi: false,
+      begin: null, eind: null,
+      mutaties: tx.reduce(function (a, x) { return a + x.bedrag; }, 0),
+      sluit: null, verschil: null, transacties: tx,
+    };
+  }
+
+  function uitMt940(naam, tekst) {
+    var p = global.fpMT940.parse(tekst);
+    var som = (p.transactions || []).reduce(function (t, x) { return t + num(x.amount); }, 0);
+    var begin = p.openingBalance ? num(p.openingBalance.amount) : null;
+    var eind = p.closingBalance ? num(p.closingBalance.amount) : null;
+    return {
+      bestand: naam, iban: p.iban || "", afschrift: p.statementNr || "", saldi: begin !== null && eind !== null,
+      begin: begin, eind: eind, mutaties: som,
+      // Controle 1: het afschrift moet op zichzelf kloppen.
+      sluit: (begin === null || eind === null) ? null : Math.abs(begin + som - eind) < 0.02,
+      verschil: (begin === null || eind === null) ? null : Math.round((begin + som - eind) * 100) / 100,
+      transacties: (p.transactions || []).map(function (x) {
+        return { datum: x.date, bedrag: num(x.amount), oms: String(x.description || "").slice(0, 160) };
+      }),
+    };
+  }
+
+  function isCsv(naam, tekst) {
+    if (/\.csv$/i.test(naam)) return true;
+    var e = String(tekst).slice(0, 400);
+    return !/:20:/.test(e) && /[,;]/.test(e) && /datum|date|bedrag|amount/i.test(e);
+  }
 
   function leesAfschriften(lijst, melden) {
     return Promise.all(lijst.map(function (f) {
@@ -77,21 +211,9 @@
         r.onerror = function () { mis(new Error("kon " + f.name + " niet lezen")); };
         r.onload = function (e) {
           try {
-            var p = global.fpMT940.parse(String(e.target.result));
-            var som = (p.transactions || []).reduce(function (t, x) { return t + num(x.amount); }, 0);
-            var begin = p.openingBalance ? num(p.openingBalance.amount) : null;
-            var eind = p.closingBalance ? num(p.closingBalance.amount) : null;
-            klaar({
-              bestand: f.name, iban: p.iban || "", afschrift: p.statementNr || "",
-              begin: begin, eind: eind, mutaties: som,
-              // Controle 1: het afschrift moet op zichzelf kloppen.
-              sluit: (begin === null || eind === null) ? null : Math.abs(begin + som - eind) < 0.02,
-              verschil: (begin === null || eind === null) ? null : Math.round((begin + som - eind) * 100) / 100,
-              transacties: (p.transactions || []).map(function (x) {
-                return { datum: x.date, bedrag: num(x.amount), oms: String(x.description || "").slice(0, 160) };
-              }),
-            });
-          } catch (fout) { mis(fout); }
+            var tekst = String(e.target.result);
+            klaar(isCsv(f.name, tekst) ? uitCsv(f.name, tekst) : uitMt940(f.name, tekst));
+          } catch (fout) { mis(new Error(f.name + ": " + (fout.message || fout))); }
         };
         r.readAsText(f);
       });
@@ -143,6 +265,36 @@
     return betalingen;
   }
 
+  /* ═══════════ doorboekingen ═══════════
+
+     Laad je zowel het afschrift van een betaaldienstverlener als dat van de
+     bank waar die naartoe uitbetaalt, dan staat hetzelfde geld er twee keer op:
+     één keer als losse klantbetaling bij de dienstverlener, en één keer als
+     dagelijkse verzameluitbetaling op de bankrekening. Hetzelfde geldt voor
+     overboekingen tussen eigen rekeningen en voor financiering.
+
+     Die posten horen niet in de vergelijking met Logic4, want daar staat maar
+     één kant van geregistreerd. Ze worden niet weggegooid maar apart geteld,
+     zodat zichtbaar blijft dat ze bestaan en hoe groot ze zijn. */
+
+  var DOORBOEKING = [
+    /pay\.nl/i, /multisafepay/i, /mollie/i, /adyen/i, /buckaroo/i, /sisow/i,
+    /shopify/i, /paypal/i, /klarna/i, /stripe/i, /worldline/i, /ccv\s*(pay|lab)/i,
+    /eigen rekening/i, /interne overboeking/i, /aflossing/i, /rentevastlening/i,
+  ];
+
+  function isDoorboeking(tekst, eigenIbans) {
+    var s = String(tekst || "");
+    for (var i = 0; i < DOORBOEKING.length; i++) if (DOORBOEKING[i].test(s)) return true;
+    // Geld dat van een van de ingelezen rekeningen zelf komt, is per definitie
+    // geen omzet die nog geregistreerd moest worden.
+    var plat = s.replace(/[\s.]/g, "").toUpperCase();
+    for (var j = 0; j < eigenIbans.length; j++) {
+      if (eigenIbans[j] && plat.indexOf(eigenIbans[j]) >= 0) return true;
+    }
+    return false;
+  }
+
   /* ═══════════ de aansluiting ═══════════ */
 
   async function bouw(lijst, melden) {
@@ -153,6 +305,14 @@
       a.transacties.forEach(function (t) { alleTx.push(Object.assign({ iban: a.iban }, t)); });
     });
     if (!alleTx.length) throw new Error("Geen transacties in deze bestanden gevonden.");
+
+    var eigenIbans = afschriften.map(function (a) {
+      return String(a.iban || "").replace(/[\s.]/g, "").toUpperCase();
+    }).filter(Boolean);
+    alleTx.forEach(function (t) { t.door = t.bedrag > 0 && isDoorboeking(t.oms, eigenIbans); });
+    var doorTx = alleTx.filter(function (t) { return t.door; });
+    // Vanaf hier tellen alleen de bijschrijvingen mee die écht van buiten komen.
+    var binnen = alleTx.filter(function (t) { return t.bedrag > 0 && !t.door; });
 
     var datums = alleTx.map(function (t) { return t.datum; }).filter(Boolean).sort();
     var vanaf = datums[0], tot = datums[datums.length - 1];
@@ -166,8 +326,7 @@
 
     // Controle 2 — per maand, alleen wat binnenkomt (credit).
     var perMaand = {};
-    alleTx.forEach(function (t) {
-      if (t.bedrag <= 0) return;
+    binnen.forEach(function (t) {
       var m = maand(t.datum);
       perMaand[m] = perMaand[m] || { bank: 0, bankN: 0, logic4: 0, logic4N: 0 };
       perMaand[m].bank += t.bedrag; perMaand[m].bankN++;
@@ -189,7 +348,7 @@
       (perBedrag[k] = perBedrag[k] || []).push(x);
     });
     var bankLos = [];
-    alleTx.filter(function (t) { return t.bedrag > 0; }).forEach(function (t) {
+    binnen.forEach(function (t) {
       var k = Math.round(t.bedrag * 100);
       var kand = perBedrag[k] || [];
       var hit = null;
@@ -202,7 +361,7 @@
     });
     var logic4Los = open.filter(function (x) { return !x.raak; }).map(function (x) { return x.p; });
 
-    var bankIn = alleTx.filter(function (t) { return t.bedrag > 0; }).reduce(function (a, t) { return a + t.bedrag; }, 0);
+    var bankIn = binnen.reduce(function (a, t) { return a + t.bedrag; }, 0);
     var l4In = betalingen.filter(function (p) { return p.bedrag > 0; }).reduce(function (a, p) { return a + p.bedrag; }, 0);
 
     melden("Klaar", 100);
@@ -210,10 +369,15 @@
       gemaakt: new Date().toISOString(), door: cfg.email || null,
       vanaf: vanaf, tot: tot,
       afschriften: afschriften.map(function (a) {
-        return { bestand: a.bestand, iban: a.iban, afschrift: a.afschrift, begin: a.begin, eind: a.eind, mutaties: Math.round(a.mutaties * 100) / 100, sluit: a.sluit, verschil: a.verschil, aantal: a.transacties.length };
+        return { bestand: a.bestand, iban: a.iban, afschrift: a.afschrift, saldi: a.saldi !== false, begin: a.begin, eind: a.eind, mutaties: Math.round(a.mutaties * 100) / 100, sluit: a.sluit, verschil: a.verschil, aantal: a.transacties.length };
       }),
       rekeningen: rekeningen,
-      bank: { aantal: alleTx.filter(function (t) { return t.bedrag > 0; }).length, bedrag: bankIn },
+      bank: { aantal: binnen.length, bedrag: bankIn },
+      doorboeking: {
+        aantal: doorTx.length,
+        bedrag: doorTx.reduce(function (a, t) { return a + t.bedrag; }, 0),
+        lijst: doorTx.slice().sort(function (a, b) { return b.bedrag - a.bedrag; }).slice(0, 50),
+      },
       logic4: { aantal: betalingen.filter(function (p) { return p.bedrag > 0; }).length, bedrag: l4In },
       verschil: bankIn - l4In,
       perMaand: perMaand,
@@ -259,9 +423,9 @@
     doel.appendChild(kop);
 
     var vak = el("div", "ba-invoer");
-    var lab = el("label", null, "Bankafschriften (MT940 — meerdere tegelijk mag)");
+    var lab = el("label", null, "Bankafschriften (MT940 of CSV — meerdere tegelijk mag)");
     var inp = el("input"); inp.type = "file"; inp.multiple = true;
-    inp.accept = ".sta,.940,.txt,.mt940";
+    inp.accept = ".sta,.940,.txt,.mt940,.csv";
     inp.addEventListener("change", function () { bestanden = Array.prototype.slice.call(inp.files || []); });
     var knop = el("button", "ba-knop", "Aansluiten");
     knop.type = "button";
@@ -272,8 +436,10 @@
 
     if (!u) {
       doel.appendChild(el("p", "uitleg",
-        "Nog geen aansluiting gemaakt. Laad de MT940-bestanden van de periode die je wilt controleren; " +
-        "de bijbehorende betalingen uit Logic4 haal ik er zelf bij."));
+        "Nog geen aansluiting gemaakt. Laad de afschriften van de periode die je wilt controleren; " +
+        "de bijbehorende betalingen uit Logic4 komen er vanzelf bij. MT940 heeft de voorkeur, want daar " +
+        "staan de saldi in en dan kan ik ook controleren of er geen afschrift ontbreekt. Geeft de bank " +
+        "alleen een CSV over een langere periode — zoals ING — laad die dan; alleen die ene controle valt weg."));
       return;
     }
 
@@ -286,6 +452,19 @@
         "Beginsaldo plus mutaties komt niet uit op het eindsaldo. Dan mist er een afschrift of is er een " +
         "regel weggevallen, en heeft vergelijken met Logic4 pas zin nadat dat is opgelost."));
       doel.appendChild(w);
+    }
+
+    // Bestanden zonder saldi (CSV) kunnen die controle niet ondergaan. Dat is
+    // geen fout, maar het mag niet onopgemerkt blijven: een ontbrekende periode
+    // valt er niet mee op.
+    var zonder = (u.afschriften || []).filter(function (a) { return a.saldi === false; });
+    if (zonder.length) {
+      var z = el("div", "ba-let zacht");
+      z.appendChild(el("strong", null, zonder.length + " bestand(en) zonder saldi. "));
+      z.appendChild(document.createTextNode(
+        "Een CSV bevat geen begin- en eindsaldo, dus voor die bestanden kan ik niet nagaan of de reeks " +
+        "compleet is. Kijk zelf of de eerste en laatste datum kloppen met wat je hebt opgevraagd."));
+      doel.appendChild(z);
     }
 
     var c = el("div", "ba-cijfers");
@@ -303,6 +482,14 @@
     doel.appendChild(el("p", "uitleg",
       "Periode " + nl(u.vanaf) + " tot en met " + nl(u.tot) + ", " + (u.afschriften || []).length +
       " afschrift(en). Gemaakt op " + nl(u.gemaakt) + (u.door ? " door " + u.door : "") + "."));
+
+    if (u.doorboeking && u.doorboeking.aantal) {
+      doel.appendChild(el("p", "uitleg",
+        "Buiten de vergelijking gehouden: " + euro(u.doorboeking.bedrag) + " over " + u.doorboeking.aantal +
+        " bijschrijvingen die geen omzet van buiten zijn — uitbetalingen van betaaldienstverleners, " +
+        "overboekingen tussen eigen rekeningen en financiering. Dat geld staat vaak al op een ander " +
+        "ingelezen afschrift als losse klantbetaling; zou je het hier meetellen, dan telde het dubbel."));
+    }
 
     var kn = el("div", "ba-knoppen");
     var ex = el("button", "ba-knop licht", "Exporteren voor de accountant"); ex.type = "button";
@@ -378,12 +565,13 @@
     ["", "Aantal", "Bedrag EUR"],
     ["Binnengekomen op de bank", u.bank.aantal, u.bank.bedrag],
     ["Geregistreerd in Logic4", u.logic4.aantal, u.logic4.bedrag],
-    ["Verschil", "", u.verschil], [],
+    ["Verschil", "", u.verschil],
+    ["Doorboekingen (buiten de vergelijking)", (u.doorboeking || {}).aantal || 0, (u.doorboeking || {}).bedrag || 0], [],
     ["Op de bank, niet in Logic4", u.bankLos.aantal, u.bankLos.bedrag],
     ["In Logic4, niet op de bank", u.logic4Los.aantal, u.logic4Los.bedrag], [],
     ["AFSCHRIFTEN"], ["Bestand", "IBAN", "Nr", "Beginsaldo", "Mutaties", "Eindsaldo", "Sluit", "Verschil", "Transacties"]];
     (u.afschriften || []).forEach(function (a) {
-      r.push([a.bestand, a.iban, a.afschrift, a.begin, a.mutaties, a.eind, a.sluit === null ? "?" : (a.sluit ? "ja" : "NEE"), a.verschil, a.aantal]);
+      r.push([a.bestand, a.iban, a.afschrift, a.begin, a.mutaties, a.eind, a.sluit === null ? "geen saldi" : (a.sluit ? "ja" : "NEE"), a.verschil, a.aantal]);
     });
     r.push([], ["PER MAAND"], ["Maand", "Bank EUR", "Logic4 EUR", "Verschil EUR"]);
     Object.keys(u.perMaand).sort().forEach(function (m) {

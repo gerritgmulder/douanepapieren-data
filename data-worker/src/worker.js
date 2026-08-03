@@ -2980,11 +2980,16 @@ export default {
       catch { return reply(400, "Body must be valid JSON"); }
       // Limiet: max 1 MB per bucket (KV-limiet is 25 MB, 1 MB is ruim
       // genoeg voor onze schaal van enkele tientallen records).
-      // Uitzondering: de geld-goederenbeweging bewaart per controle honderden
-      // bevindingsregels plus een historie van de totalen. Dat is bewust één
-      // momentopname en past niet in 1 MB, maar blijft ruim onder de KV-grens.
-      const RUIM = new Set(["geldgoederen", "gg-bevindingen"]);
-      const limiet = (RUIM.has(bucket) ? 8 : 1) * 1024 * 1024;
+      // Uitzonderingen, elk met een reden:
+      //   geldgoederen/gg-bevindingen — per controle honderden bevindingsregels
+      //     plus een historie van de totalen; bewust één momentopname.
+      //   specsheets — de foto's zitten als base64 in de sheet zelf. Eén sheet
+      //     met een productfoto en een technische tekening is al gauw een halve
+      //     MB, dus met een handvol modellen liep Gretha tegen de grens (3 aug
+      //     2026). Het scherm zei "bewaard tot 20 MB", de worker weigerde vanaf
+      //     1 MB. Die twee staan nu op hetzelfde getal.
+      const RUIM = { geldgoederen: 8, "gg-bevindingen": 8, specsheets: 20 };
+      const limiet = (RUIM[bucket] || 1) * 1024 * 1024;
       if (body.length > limiet) {
         return reply(413, `Payload too large (max ${limiet / 1024 / 1024} MB)`);
       }

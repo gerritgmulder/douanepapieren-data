@@ -89,7 +89,10 @@
      de grote productfoto, rechts de kenmerken in twee kolommen. Alle vlakken
      zijn invulbaar; zolang er geen foto in zit staat er een gestippeld kader
      zodat zichtbaar is waar hij hoort te komen. */
-  #sheet .kopblok,#sheet2 .kopblok{display:flex;gap:5mm;align-items:flex-start}
+  /* stretch, zodat de linkerkolom doorloopt tot onderaan het kopblok en de
+     kleine foto de vrije ruimte kan pakken (Gretha, 3 aug: "dat plaatje is
+     echt heel klein"). */
+  #sheet .kopblok,#sheet2 .kopblok{display:flex;gap:5mm;align-items:stretch}
   #sheet .linkerkolom,#sheet2 .linkerkolom{width:45mm;flex:0 0 auto;display:flex;flex-direction:column;gap:3mm}
   #sheet .linkerkolom .logo,#sheet2 .linkerkolom .logo{width:100%}
   #sheet .linkerkolom .logo img,#sheet2 .linkerkolom .logo img{width:100%;display:block}
@@ -99,8 +102,10 @@
   #sheet .vlak img,#sheet2 .vlak img{max-width:100%;max-height:100%;object-fit:contain;display:block}
   /* Er is nog maar één kleine foto (Gretha, 31 jul: de tweede weg, deze
      groter). Hij rekt mee tot onderaan het kopblok, dus tot de onderkant
-     van de hoofdfoto — daarmee is hij zo groot als het ontwerp toelaat. */
-  #sheet .klein{height:38mm}
+     van de hoofdfoto — daarmee is hij zo groot als het ontwerp toelaat.
+     Dat stond er al als bedoeling, maar met een vaste 38mm gebeurde het niet
+     (Gretha, 3 aug). Nu pakt hij écht de ruimte die het logo overlaat. */
+  #sheet .klein{flex:1 1 auto;height:auto;min-height:38mm}
   #sheet .hoofdfoto{aspect-ratio:1/1;height:auto;margin-top:2mm}
   /* De kolommen waren 20,4mm breed terwijl een symbool 14,5mm is: dat gaf
      links en rechts ruim 3mm lucht, waardoor de horizontale afstand veel
@@ -125,9 +130,22 @@
   }
 
   /* ── Pagina 2: technische tekening + onderdelenlijst ───────────────────── */
+  /* Kolom-flex: de tekening pakt wat er overblijft. Zo bepaalt de
+     onderdelenlijst hoeveel ruimte de tekening krijgt en niet andersom —
+     wordt de lijst langer, dan krimpt de tekening en blijft alles op één
+     vel. Voorheen had de tekening een vaste hoogte en werd de lijst er
+     vanaf geduwd (Gretha, 3 aug: "gaat nu standaard naar een 3e pagina"). */
   #sheet2{width:210mm;min-height:297mm;background:#fff;margin:14px auto 0;padding:14mm 13mm 12mm;
-    box-shadow:0 3px 16px rgba(0,0,0,.14);color:#000;position:relative}
-  #sheet2 .tekeningvlak{height:118mm;margin-top:6mm}
+    box-shadow:0 3px 16px rgba(0,0,0,.14);color:#000;position:relative;
+    display:flex;flex-direction:column}
+  #sheet2 .kopblok,#sheet2 .legenda{flex:0 0 auto}
+  /* Het vlak was 118mm hoog, ongeacht de tekening. Een technische tekening is
+     liggend, dus die vulde die hoogte nooit: er bleef een flinke witte strook
+     onder staan én de onderdelenlijst werd daardoor van de pagina geduwd naar
+     een derde vel (Gretha, 3 aug). Nu is het vlak zo hoog als de tekening zelf,
+     met 112mm als bovengrens. Het wit verdwijnt en de lijst past weer. */
+  #sheet2 .tekeningvlak{flex:1 1 auto;height:auto;min-height:45mm;max-height:118mm;margin-top:6mm}
+  #sheet2 .tekeningvlak img{max-height:118mm}
   /* Regelafstand krapper zodat de hele onderdelenlijst op de pagina past
      (Gretha, 31 jul). */
   #sheet2 .legenda{margin-top:5mm;background:var(--zebra);padding:3mm 4mm;display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.4mm 5mm}
@@ -518,8 +536,11 @@ async function bewaar(){
   try{
     const body=JSON.stringify({sheets:alles.sheets,updated:new Date().toISOString()});
     const mb=(body.length/1048576);
-    if(mb>20){ toon("bad","Te groot om te bewaren ("+mb.toFixed(1)+" MB). Verwijder een oude sheet of gebruik kleinere foto's."); return; }
+    if(mb>20){ toon("bad","Te groot om te bewaren ("+mb.toFixed(1)+" MB van de 20 MB). Verwijder een oude sheet of gebruik kleinere foto's."); return; }
     const r=await fetch(BUCKET,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},body});
+    // 413 betekent dat de opslag de sheet weigert. Dat is iets anders dan een
+    // storing, dus zeg het in gewone woorden — "HTTP 413" helpt niemand.
+    if(r.status===413){ toon("bad","De opslag weigert dit ("+mb.toFixed(1)+" MB). Gebruik kleinere foto's of verwijder een oude sheet."); return; }
     if(!r.ok) throw new Error("HTTP "+r.status);
     vulKiezer();
     toon("ok","Bewaard — "+S.naam+" ("+mb.toFixed(1)+" MB totaal).");
