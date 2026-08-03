@@ -91,7 +91,13 @@
      zodat zichtbaar is waar hij hoort te komen. */
   #sheet .kopblok,#sheet2 .kopblok{display:flex;gap:5mm;align-items:flex-start}
   #sheet .linkerkolom,#sheet2 .linkerkolom{width:45mm;flex:0 0 auto;display:flex;flex-direction:column;gap:3mm}
+  /* Op pagina 1 is de linkerkolom breder dan het logo. Het zijaanzicht is een
+     liggende foto en werd daardoor door de kolombreedte klein gehouden, niet
+     door zijn hoogte (Gretha, 3 aug: "afbeelding blijft klein"). De kolom is nu
+     56mm; het logo blijft op 45mm staan zodat daar niets aan verandert. */
+  #sheet .linkerkolom{width:56mm}
   #sheet .linkerkolom .logo,#sheet2 .linkerkolom .logo{width:100%}
+  #sheet .linkerkolom .logo{max-width:45mm}
   #sheet .linkerkolom .logo img,#sheet2 .linkerkolom .logo img{width:100%;display:block}
   #sheet .midden,#sheet2 .midden{flex:1;min-width:0}
   #sheet .vlak,#sheet2 .vlak{border:0;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden}
@@ -107,9 +113,15 @@
      als de foto zelf: een liggend zijaanzicht vult de volle 45mm breedte en
      wordt dus vanzelf laag, een staand of vierkant model loopt tot maximaal
      40mm. Zo staat er bij geen enkele vorm een strook wit onder de foto. */
-  #sheet .klein{height:auto;max-height:40mm}
-  #sheet .klein img{max-height:40mm}
-  #sheet .hoofdfoto{aspect-ratio:1/1;height:auto;margin-top:2mm}
+  #sheet .klein{height:auto;max-height:44mm}
+  #sheet .klein img{max-height:44mm}
+  /* Het bovenaanzicht zat in een vierkant vak van 98mm terwijl de foto staand
+     is: die vulde 76,5mm breed en liet ruim 21mm ongebruikt. Door het vak om de
+     foto heen te laten sluiten kon de linkerkolom breder worden zonder dat het
+     bovenaanzicht ook maar een millimeter kleiner wordt — precies wat Gretha
+     vroeg: bovenaanzicht blijft, zijaanzicht groter. */
+  #sheet .hoofdfoto{height:auto;max-height:98mm;margin-top:2mm}
+  #sheet .hoofdfoto img{max-height:98mm}
   /* De kolommen waren 20,4mm breed terwijl een symbool 14,5mm is: dat gaf
      links en rechts ruim 3mm lucht, waardoor de horizontale afstand veel
      groter oogde dan de verticale (Gretha, 31 jul). De kolommen zijn nu
@@ -138,7 +150,13 @@
      wordt de lijst langer, dan krimpt de tekening en blijft alles op één
      vel. Voorheen had de tekening een vaste hoogte en werd de lijst er
      vanaf geduwd (Gretha, 3 aug: "gaat nu standaard naar een 3e pagina"). */
-  #sheet2{width:210mm;min-height:297mm;background:#fff;margin:14px auto 0;padding:14mm 13mm 12mm;
+  /* height, niet min-height. Met min-height groeit de pagina gewoon mee met de
+     inhoud en heeft flexbox geen tekort om te verdelen — dan krimpt de tekening
+     dus nooit en wordt de onderdelenlijst er alsnog afgeduwd. Dat was precies
+     wat Gretha zag: bij 36 onderdelen sprong hij naar een derde pagina terwijl
+     de tekening onverstoorbaar op 118mm bleef staan (3 aug). Met een vaste
+     hoogte is er wél een tekort en geeft de tekening ruimte terug. */
+  #sheet2{width:210mm;height:297mm;background:#fff;margin:14px auto 0;padding:14mm 13mm 12mm;
     box-shadow:0 3px 16px rgba(0,0,0,.14);color:#000;position:relative;
     display:flex;flex-direction:column}
   #sheet2 .kopblok,#sheet2 .legenda{flex:0 0 auto}
@@ -147,7 +165,7 @@
      onder staan én de onderdelenlijst werd daardoor van de pagina geduwd naar
      een derde vel (Gretha, 3 aug). Nu is het vlak zo hoog als de tekening zelf,
      met 112mm als bovengrens. Het wit verdwijnt en de lijst past weer. */
-  #sheet2 .tekeningvlak{flex:1 1 auto;height:auto;min-height:45mm;max-height:118mm;margin-top:6mm}
+  #sheet2 .tekeningvlak{flex:1 1 auto;height:auto;min-height:40mm;max-height:118mm;margin-top:6mm}
   #sheet2 .tekeningvlak img{max-height:118mm}
   /* Regelafstand krapper zodat de hele onderdelenlijst op de pagina past
      (Gretha, 31 jul). */
@@ -193,7 +211,8 @@
     .wrap{display:block;padding:0;margin:0;max-width:none}
     #previewKolom{position:static}
     .sheet-scroll{padding:0;border:0;background:none;overflow:visible;max-height:none;height:auto!important}
-    #sheet,#sheet2{width:210mm;min-height:297mm;box-shadow:none;margin:0;transform:none!important}
+    #sheet{width:210mm;min-height:297mm;box-shadow:none;margin:0;transform:none!important}
+    #sheet2{width:210mm;height:297mm;box-shadow:none;margin:0;transform:none!important}
     /* Pagina 2 begint op een nieuw vel */
     #sheet2{page-break-before:always;break-before:page}
     /* De grijsbeige balken achter de specificaties verdwenen bij printen en in
@@ -371,7 +390,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="31-07-2026 · 13:05";
+const TEGEL_VERSIE="03-08-2026 · 15:20";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
