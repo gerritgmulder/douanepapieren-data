@@ -157,9 +157,13 @@
         open: u.open.bedrag, openN: u.open.aantal,
         dood: u.dood.bedrag, doodN: u.dood.aantal,
       });
+      // De handmatig vastgelegde brug naar het grootboek moet blijven staan;
+      // een nieuwe doorrekening mag die niet wissen.
+      var alles = { laatste: u, historie: historie.slice(0, 36) };
+      if (oud && oud.brug) alles.brug = oud.brug;
       await fetch(BUCKET, {
         method: "PUT", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
-        body: JSON.stringify({ laatste: u, historie: historie.slice(0, 36) })
+        body: JSON.stringify(alles)
       });
     } catch (e) { console.warn("[1350] bewaren mislukt:", e); }
   }
@@ -170,6 +174,138 @@
       var j = await r.json();
       return j && j.laatste ? j : null;
     } catch (e) { return null; }
+  }
+
+  /* ═══════════ de brug naar het grootboek ═══════════
+
+     Kevin (3 aug 2026): "In het overzicht van de aansluiting 1350 zie ik geen
+     juiste aansluiting met het grootboek. Het grootboeksaldo per 31-12-2025
+     bedraagt C 3.717.538,56 en niet € -1.839.090,41."
+
+     Hij heeft gelijk, en het verschil is verklaarbaar. Wat wij kunnen zien is
+     de bewéging: de boekingen op 1350 vanaf het moment waar de export begint.
+     Het grootboeksaldo is die beweging plus alles wat er daarvóór al stond. Bij
+     de export over 2020-2025 was dat verschil 1.878.448,15 — een stand uit de
+     tijd vóór 2020 die nooit is afgewikkeld, hetzelfde patroon als bij 1630.
+
+     Die beginstand kunnen wij niet uitrekenen; die moet uit het grootboek
+     komen. Dus vraagt dit blok om twee getallen en laat het zien wat er ná
+     invulling nog onverklaard blijft. Dat laatste bedrag is waar het over gaat. */
+
+  /* Een bedrag uit een invoerveld. De een typt 1.878.448,15 en de ander
+     -1878448.15; klakkeloos alle punten weghalen maakte van dat tweede
+     -187.844.815. Regel: staan er allebei, dan is de laatste de decimale
+     scheiding. Staat er alleen een punt, dan is het alleen een duizendtal-
+     scheiding als het ook echt in groepjes van drie staat. */
+  function bedragUit(v) {
+    var s = String(v == null ? "" : v).replace(/[\s €]/g, "").replace(/^\+/, "");
+    if (!s) return 0;
+    var min = /^-/.test(s);
+    s = s.replace(/-/g, "");
+    var k = s.lastIndexOf(","), p = s.lastIndexOf(".");
+    if (k > -1 && p > -1) s = k > p ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+    else if (k > -1) s = /^\d{1,3}(,\d{3})+$/.test(s) ? s.replace(/,/g, "") : s.replace(",", ".");
+    else if (p > -1 && /^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
+    var n = Number(s);
+    return isFinite(n) ? (min ? -n : n) : 0;
+  }
+
+  function brugUit(bewaard) {
+    var b = (bewaard && bewaard.brug) || {};
+    return {
+      beginstand: num(b.beginstand), perDatum: b.perDatum || "",
+      grootboek: num(b.grootboek), balansdatum: b.balansdatum || "",
+    };
+  }
+
+  async function bewaarBrug(brug) {
+    try {
+      var oud = await (await fetch(BUCKET, { headers: { "X-Fonteyn-Auth": cfg.teamKey } })).json().catch(function () { return null; });
+      var alles = oud || {};
+      alles.brug = brug;
+      await fetch(BUCKET, {
+        method: "PUT", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
+        body: JSON.stringify(alles)
+      });
+      if (cfg.log) cfg.log("geldgoederen", "1350-brug", "beginstand " + brug.beginstand + ", grootboek " + brug.grootboek);
+    } catch (e) { console.warn("[1350] brug bewaren mislukt:", e); }
+  }
+
+  function tekenBrug(bewaard, saldoOpOrders) {
+    var brug = brugUit(bewaard);
+    var vak = el("div", "vo-brug");
+    vak.appendChild(el("h4", "vo-kop", "Aansluiting op het grootboek"));
+    vak.appendChild(el("p", "uitleg",
+      "Wij zien de beweging op 1350, niet de stand die er bij het begin van die periode al stond. " +
+      "Vul die twee getallen hieronder in — ze komen uit het grootboek, niet uit Logic4 — en wat dan " +
+      "overblijft is het bedrag dat werkelijk niet verklaard is."));
+
+    var f = el("div", "vo-invoer");
+    function veld(naam, waarde, type) {
+      var w = el("div", "vo-veld");
+      w.appendChild(el("label", null, naam));
+      var i = el("input"); i.type = type || "text";
+      i.value = waarde == null ? "" : waarde;
+      if (!cfg.magWijzigen) i.disabled = true;
+      w.appendChild(i); f.appendChild(w);
+      return i;
+    }
+    var iBegin = veld("Stand op 1350 vóór deze periode (credit = negatief)", brug.beginstand || "");
+    var iBeginD = veld("per datum", brug.perDatum || "", "date");
+    var iGb = veld("Grootboeksaldo op balansdatum (credit = negatief)", brug.grootboek || "");
+    var iGbD = veld("balansdatum", brug.balansdatum || "", "date");
+    var knop = el("button", "vo-knop", "Vastleggen"); knop.type = "button";
+    if (!cfg.magWijzigen) knop.disabled = true;
+    f.appendChild(knop);
+    vak.appendChild(f);
+
+    var uitslag = el("div", "vo-brugsom");
+    function reken() {
+      uitslag.innerHTML = "";
+      var begin = bedragUit(iBegin.value);
+      var gb = bedragUit(iGb.value);
+      if (!begin && !gb) {
+        uitslag.appendChild(el("p", "uitleg", "Vul de twee bedragen in om de aansluiting te zien."));
+        return;
+      }
+      var verwacht = Math.round((begin + saldoOpOrders) * 100) / 100;
+      var rest = Math.round((gb - verwacht) * 100) / 100;
+      if (rest === 0) rest = 0;   // anders toont een afronding "-0,00"
+      var t = el("table", "vo-tabel");
+      var tb = el("tbody");
+      function rij(l, bedrag, klas) {
+        var tr = el("tr", klas || "");
+        tr.appendChild(el("td", null, l));
+        tr.appendChild(el("td", "r", euro2(bedrag)));
+        tb.appendChild(tr);
+      }
+      rij("Stand vóór deze periode" + (iBeginD.value ? " (per " + nl(iBeginD.value) + ")" : ""), begin);
+      rij("Beweging die wij kunnen volgen", saldoOpOrders);
+      rij("Zou het grootboeksaldo moeten zijn", verwacht, "vo-som");
+      rij("Grootboeksaldo volgens de accountant" + (iGbD.value ? " (per " + nl(iGbD.value) + ")" : ""), gb);
+      rij("Nog onverklaard", rest, Math.abs(rest) < 1 ? "vo-goed" : "let");
+      t.appendChild(tb);
+      uitslag.appendChild(t);
+      uitslag.appendChild(el("p", "uitleg", Math.abs(rest) < 1
+        ? "Het sluit aan. Het verschil met het grootboek was volledig de stand die er al stond."
+        : "Dit bedrag is niet te verklaren uit de beweging die wij kunnen zien. Dat zijn boekingen zonder " +
+          "order — handmatige correcties en overboekingen — die via de API niet zichtbaar zijn."));
+    }
+    [iBegin, iGb, iBeginD, iGbD].forEach(function (i) { i.addEventListener("input", reken); });
+    knop.addEventListener("click", function () {
+      var brugNieuw = {
+        beginstand: bedragUit(iBegin.value),
+        perDatum: iBeginD.value || "",
+        grootboek: bedragUit(iGb.value),
+        balansdatum: iGbD.value || "",
+      };
+      bewaarBrug(brugNieuw);
+      knop.textContent = "Vastgelegd";
+      setTimeout(function () { knop.textContent = "Vastleggen"; }, 2000);
+    });
+    reken();
+    vak.appendChild(uitslag);
+    return vak;
   }
 
   /* ═══════════ tekenen ═══════════ */
@@ -227,6 +363,8 @@
       "Het saldo hierboven sluit daarom niet één op één aan op de balans. Voor die aansluiting is toegang tot de " +
       "financiële endpoints van Logic4 nodig; die staat nu op 403."));
     doel.appendChild(b);
+
+    doel.appendChild(tekenBrug(bewaard, u.saldo));
 
     var w = el("div", "vo-let");
     w.appendChild(el("strong", null, "Waar het om gaat: "));
