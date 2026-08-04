@@ -18,7 +18,7 @@ const SPA_CODES = [
   ["SKT888-G1","Mallorca Diamond"],
   ["SKT339G12","Activity 1 Deep"],
   ["SKT339G15","Activity 2"],
-  ["SKT888-G2","Blackpool"],
+  ["SKT888-G2","Mallorca Superior"],   // let op: bij kleur "black" is dit een Blackpool — zie KLEUR_REGELS
   ["SKT339G14","Activity 2 Deep"],
   ["SKT339D-1","Aquatic 3 Deep"],
   ["SKT339E-1","Aquatic 5"],
@@ -151,6 +151,37 @@ const SPA_CODES_LANG = SPA_CODES.slice().sort((a,b)=>normCode(b[0]).length-normC
 // LET OP: "(onbekend SKT-model)" is een vaste herkenningswaarde die op meerdere
 // plekken vergeleken wordt; die tekst niet wijzigen.
 const SPA_PREFIXEN = ["SKT","PP"];
+
+/* ══ Waar de kleur het model bepaalt ══════════════════════════════════════
+   SKT888-G2 is officieel een Mallorca Superior. Staat er "black" bij de kleur,
+   dan noemt Logic4 hem Blackpool — dezelfde spa, andere naam (Chantal,
+   4 aug 2026). Tot nu toe stond SKT888-G2 hard op Blackpool, waardoor élke
+   Mallorca Superior in sterling white, pearl shadow of ABS white als Blackpool
+   werd ingelezen.
+
+   Dit is geen uitzondering die je in een parser wilt verstoppen: het is een
+   afspraak van de inkoop die nergens anders vastligt. Vandaar hier, met de
+   reden erbij. */
+const KLEUR_REGELS = [
+  { code: "SKT888-G2", standaard: "Mallorca Superior",
+    uitzonderingen: [{ kleur: /\bblack\b/i, model: "Blackpool" }] },
+];
+
+/* Zelfde als spaModel(), maar met de kleur erbij. Gebruik deze overal waar de
+   kleur bekend is — op een commercial invoice staat hij in een eigen kolom. */
+function spaModelMetKleur(code, kleur){
+  const basis = spaModel(code);
+  if (!basis) return basis;
+  const n = normCode(code);
+  for (const regel of KLEUR_REGELS){
+    if (n.indexOf(normCode(regel.code)) !== 0) continue;
+    for (const u of regel.uitzonderingen){
+      if (u.kleur.test(String(kleur == null ? "" : kleur))) return u.model;
+    }
+    return regel.standaard;
+  }
+  return basis;
+}
 function spaModel(code){
   const n = normCode(code);
   if (!n) return null;

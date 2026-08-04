@@ -2055,7 +2055,11 @@ function parseCI(wb,bestandsnaam){
     // ECO, een ander model dan de gewone Aquatic 1). Doordat normCode spaties
     // en streepjes weghaalt en de langste code wint, blijft "SKT888AA  Bombas
     // 3510471" gewoon op SKT888AA uitkomen.
-    const model=spaModel(c0)||spaModel(m[1]);
+    // De kleur staat in kolom 1 (COLOUR) en bepaalt bij sommige codes het model:
+    // SKT888-G2 is een Mallorca Superior, maar bij "black" een Blackpool
+    // (Chantal, 4 aug 2026).
+    const kleurRuw=String((r&&r[1])==null?"":r[1]);
+    const model=spaModelMetKleur(c0,kleurRuw)||spaModelMetKleur(m[1],kleurRuw);
     if(!model||model==="(onbekend SKT-model)"){ unmapped[m[1]]=(unmapped[m[1]]||0)+qty; continue; }
     models[model]=(models[model]||0)+qty;
     const bijz=ciBijzonderheid(c0raw,model);
