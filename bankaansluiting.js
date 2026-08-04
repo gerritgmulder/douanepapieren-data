@@ -222,9 +222,19 @@
       return new Promise(function (klaar, mis) {
         var r = new FileReader();
         r.onerror = function () { mis(new Error("kon " + f.name + " niet lezen")); };
+        var tweedePoging = false;
         r.onload = function (e) {
+          var tekst = String(e.target.result);
+          // Niet elke bank levert UTF-8. De Rabobank-export is ISO-8859-1, en
+          // dan wordt "initiërende" een rijtje vraagtekens. Zien we het
+          // vervangingsteken, dan één keer opnieuw lezen in die codering
+          // (Osman, 4 aug 2026).
+          if (!tweedePoging && tekst.indexOf("\uFFFD") >= 0) {
+            tweedePoging = true;
+            r.readAsText(f, "ISO-8859-1");
+            return;
+          }
           try {
-            var tekst = String(e.target.result);
             klaar(isCsv(f.name, tekst) ? uitCsv(f.name, tekst) : uitMt940(f.name, tekst));
           } catch (fout) { mis(new Error(f.name + ": " + (fout.message || fout))); }
         };
