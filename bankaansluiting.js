@@ -303,7 +303,16 @@
   var DOORBOEKING = [
     /pay\.nl/i, /multisafepay/i, /mollie/i, /adyen/i, /buckaroo/i, /sisow/i,
     /shopify/i, /paypal/i, /klarna/i, /stripe/i, /worldline/i, /ccv\s*(pay|lab)/i,
-    /eigen rekening/i, /interne overboeking/i, /aflossing/i, /rentevastlening/i,
+    /eigen\s*rek/i, /interne overboeking/i, /aflossing/i, /rentevastlening/i,
+    // Met de Rabobank erbij kwamen deze erbij (4 aug 2026):
+    /\bde fonteyn\b/i,      // overboeking tussen eigen rekeningen, ook als de
+                            // omschrijving iets anders zegt ("Salaris januari")
+    // GEEN geldmaat/storting: kasgeld dat naar de bank wordt gebracht is de
+    // tegenhanger van de kasontvangst op grootboek 1000-1002. Die twee horen
+    // juist tegen elkaar weg te vallen. Ze eruit filteren scheelde meteen een
+    // half miljoen aan schijnverschil (4 aug 2026).
+    /belastingdienst/i,     // teruggaven, geen omzet
+    /derdengelden|notaris/i, // geld dat via een notaris loopt
   ];
 
   function isDoorboeking(tekst, eigenIbans) {
