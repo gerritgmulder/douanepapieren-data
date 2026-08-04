@@ -7,6 +7,7 @@
 <!-- SheetJS — voor het inlezen van het Passion-bestellingen-document (pipeline) -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="spa-codes.js"></script>
+<script src="spa-fabrikanten.js"></script>
 <script src="proforma-inkoop.js"></script>
 <script src="spa-migratie.js"></script>
 <script src="spa-ontvangst.js"></script>
@@ -495,6 +496,10 @@
         </table>
       </div>
       <div id="ciUnmapped" style="margin-top:10px"></div>
+      <details id="fabrikantenBlok" style="margin-top:14px">
+        <summary style="cursor:pointer;font-size:13px;font-weight:600">Fabriekscodes en prijzen per fabriek</summary>
+        <div id="fabrikanten" style="margin-top:10px"></div>
+      </details>
     </div>
   </div>
 
@@ -1816,12 +1821,38 @@ function renderPartnerContainers(){
 const SHIPS_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-schepen";
 let shipsData={ships:[],unmapped:{}};
 
+// Chantal heeft de codelijsten en prijzen per fabriek opgevraagd (4 aug 2026).
+// Ze staan hier zodat zij ze kan nakijken zonder in de code te duiken — en
+// zodat duidelijk is wélke code bij welk model hoort als een invoice niet
+// ingelezen kan worden.
+function renderFabrikanten(){
+  const doel=document.getElementById("fabrikanten");
+  if(!doel||!window.fpFabrikanten) return;
+  const geld=(n,v)=>n==null?"<span style='color:var(--muted)'>—</span>":(v==="usd"?"$ ":"€ ")+Number(n).toLocaleString("nl-NL");
+  doel.innerHTML=window.fpFabrikanten.lijst.map(f=>
+    "<div style='margin-bottom:16px'>"+
+    "<div style='font-weight:600;font-size:13px'>"+esc(f.merk)+" <span style='font-weight:400;color:var(--muted)'>— "+esc(f.fabriek)+"</span></div>"+
+    "<div style='font-size:12px;color:var(--muted);margin:2px 0 6px'>"+
+      (f.contact?("Contact: "+esc(f.contact)+(f.email?" · "+esc(f.email):"")):"Geen contactpersoon bekend")+
+      (f.opmerking?" · "+esc(f.opmerking):"")+"</div>"+
+    "<table class='grid' style='font-size:12px'><thead><tr><th>Model</th><th>Fabriekscode</th><th>Inkoop</th><th>Verkoop</th></tr></thead><tbody>"+
+    f.modellen.map(m=>"<tr><td>"+esc(m.model)+(m.reeks?" <span style='color:var(--muted)'>("+esc(m.reeks)+")</span>":"")+"</td>"+
+      "<td><code>"+esc(m.code)+"</code></td><td>"+geld(m.inkoopUsd,"usd")+"</td><td>"+geld(m.verkoopEur,"eur")+"</td></tr>").join("")+
+    "</tbody></table></div>").join("")+
+    (window.fpFabrikanten.onduidelijk.length
+      ? "<div class='status-msg warn' style='font-size:12px'>Nog navragen bij de fabriek: "+
+        window.fpFabrikanten.onduidelijk.map(o=>esc(o.tekst)+" ("+esc(o.fabriek)+")").join(" · ")+"</div>"
+      : "")+
+    "<div style='font-size:11.5px;color:var(--muted);margin-top:6px'>Een streepje betekent dat het bedrag niet op het prijsblad stond of niet leesbaar was. Klopt er iets niet? Geef het door, dan pas ik het aan.</div>";
+}
+
 async function loadSchepen(){
   try{
     const r=await fetch(SHIPS_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
     if(r.ok){ const j=await r.json(); shipsData={ships:(j&&j.ships)||[],unmapped:(j&&j.unmapped)||{},updated:j&&j.updated}; }
   }catch(e){ console.warn("schepen laden faalde:",e); }
   renderSchepen();
+  renderFabrikanten();
 }
 async function saveSchepen(){
   shipsData.updated=new Date().toISOString();

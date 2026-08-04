@@ -45,6 +45,10 @@
       "note": "Spa-fabriekscodes (SKT/PP) → modelnaam. Gedeeld door voorraad.html, amerika.html en tools/import-ci.mjs — één lijst, zodat er geen twee ontstaan die uit elkaar lopen."
     },
     {
+      "name": "spa-fabrikanten.js",
+      "note": "Per spa-fabriek: merknaam, contactpersoon, fabriekscodes en de inkoop- en verkoopprijzen van de prijsbladen. Wordt in de voorraadtegel getoond zodat Chantal ze kan nakijken."
+    },
+    {
       "name": "proforma-inkoop.js",
       "note": "Proforma invoice uitlezen → voorstel tonen → na akkoord een inkooporder in Logic4. Gedeeld door voorraad.html (NL) en amerika.html (Warehouse Texas)."
     },

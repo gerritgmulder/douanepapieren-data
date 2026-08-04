@@ -103,6 +103,37 @@ const SPA_CODES = [
   ["PP01","Reflect"],
   ["PP02","Retreat"],
   ["PP03","Resettle"],
+  /* ── Andere fabrieken dan Jazzi (Chantal, 4 aug 2026) ──────────────────
+     Chantal heeft de codelijsten van vier fabrieken opgevraagd nadat een
+     commercial invoice van Kasdaly niet ingelezen kon worden. Prijzen en
+     contactpersonen staan in spa-fabrikanten.js, zodat zij ze kan nakijken. */
+  // Guangdong Kasdaly Pool Spa Equipment — Grizzly Spas
+  ["JY8805","Kenai"],
+  ["JY8810","Kodiak"],
+  ["JY8603","Calgary"],
+  ["JY8602","Vancouver"],
+  ["JY8601","Anchorage"],
+  // Guangzhou Huantong Industry — Tropic Spas / Lovia spas
+  ["ZR7011","Aruba"],
+  ["ZR6005","Bermuda"],
+  ["ZR6006","Jamaica"],
+  ["ZR801","Montego"],
+  ["ZR803","Key Largo"],
+  ["ZR804","Bahamas"],
+  // Guangzhou New Normal Bath Ware — Sea star spas
+  ["EX-180","Spa Hope"],
+  ["EX-155","Spa Believe"],
+  ["ET-160","Spa Wonder"],
+  ["S-1501","Spa Miracle"],
+  ["S-2202","Spa Vision"],
+  // Foshan Gaoming Yuehua Sanitary (MEXDA) — Storm Spas
+  ["WS-PC05ST","Turbine 5"],
+  ["WS-PC06ST","Turbine 6"],
+  ["WS-PC07ST","Turbine 7"],
+  ["WS-S06","Aquatic 9"],
+  ["WS-692","Monsoon"],
+  ["WS-696","Cyclone"],
+  ["WS-506M","Hurricane"],
 ];
 // Alles wat geen letter of cijfer is gaat eruit. De fabrieken schrijven dezelfde
 // code namelijk verschillend: wij hebben "SKT888-G1" in de codelijst staan, de
@@ -121,9 +152,16 @@ const SPA_CODES_LANG = SPA_CODES.slice().sort((a,b)=>normCode(b[0]).length-normC
 const SPA_PREFIXEN = ["SKT","PP"];
 function spaModel(code){
   const n = normCode(code);
-  if (!SPA_PREFIXEN.some(p => n.indexOf(p) === 0)) return null;
+  if (!n) return null;
+  // Eerst de codelijst zelf. Sinds er ook fabrieken bij zitten die JY, ZR, EX,
+  // ET, S- of WS-codes gebruiken, kan er niet meer op een prefix worden
+  // voorgeselecteerd: dan zou "S-1501" nooit gevonden worden.
   for (let i=0;i<SPA_CODES_LANG.length;i++){
     if (n.indexOf(normCode(SPA_CODES_LANG[i][0])) === 0) return SPA_CODES_LANG[i][1];
   }
-  return "(onbekend SKT-model)";
+  // Staat hij er niet in maar begint hij wél als een bekende fabriekscode, dan
+  // is het een spa waarvan wij het model nog niet weten. Dat is iets anders dan
+  // "geen spa" en moet dus gemeld worden.
+  if (SPA_PREFIXEN.some(p => n.indexOf(p) === 0)) return "(onbekend SKT-model)";
+  return null;
 }

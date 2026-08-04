@@ -20,10 +20,12 @@
 
    Waar de gegevens vandaan komen
    ------------------------------
-   De grootboekmutaties kunnen we (nog) niet via de API lezen: de API-gebruiker
-   krijgt een 403 op /v3/Financial/GetFinancialBookingsWithMutations. Zolang dat
-   zo is, sleept iemand de export uit Logic4 hierin. Zodra die rechten er zijn
-   hoeft alleen leesGrootboek() te veranderen — de rest blijft.
+   De grootboekmutaties komen rechtstreeks uit Logic4 via grootboek.js. Tot
+   4 aug 2026 kon dat niet — de API-gebruiker kreeg 403 — en moest iemand een
+   export uit Logic4 slepen. Die weg is er niet meer: hij leverde een
+   onverklaard verschil van 8.028,60 op dat bij de directe lezing 0,67 blijkt
+   te zijn, en hij schoof 1,26 miljoen ten onrechte naar de handmatige
+   correcties omdat de export sommige leveringen niet kon koppelen.
 
    De inkoopleveringen komen wél live uit Logic4, zodat elke openstaande post
    meteen een inkooporder, leverancier en ontvangstdatum krijgt.
@@ -58,46 +60,9 @@
 
   // Eén plek waar de bron zit. Komt de API-toegang er, dan haalt deze functie
   // de mutaties rechtstreeks op en verandert er verder niets.
-  function leesGrootboek(bestand, melden) {
-    return new Promise(function (klaar, mis) {
-      if (!global.XLSX) return mis(new Error("De Excel-lezer is niet geladen. Sluit de app af en start hem opnieuw."));
-      var lezer = new FileReader();
-      lezer.onerror = function () { mis(new Error("Bestand kon niet gelezen worden.")); };
-      lezer.onload = function (e) {
-        try {
-          melden("Bestand ontleden (dit duurt bij een groot grootboek even)…", 20);
-          var wb = global.XLSX.read(new Uint8Array(e.target.result), { type: "array", dense: true, cellDates: false, cellStyles: false });
-          var ws = wb.Sheets[wb.SheetNames[0]];
-          var rijen = global.XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-          klaar(rijen);
-        } catch (fout) { mis(fout); }
-      };
-      lezer.readAsArrayBuffer(bestand);
-    });
-  }
 
   // De export is gegroepeerd op "Inkooplevering nr. : <nummer>". Alles onder
   // zo'n kop hoort bij die levering; regels zonder nummer zijn de correcties.
-  function groepeer(rijen) {
-    var K = { gb: 1, datum: 3, cred: 5, bedrag: 6, omschr: 8, kpl: 11, dagboek: 12, boeking: 13 };
-    var groepen = {}, huidig = "", n = 0;
-    for (var i = 0; i < rijen.length; i++) {
-      var r = rijen[i];
-      var m = String(r[0] || "").match(/Inkooplevering nr\.\s*:\s*(\d*)/i);
-      if (m) { huidig = m[1] || ""; if (!groepen[huidig]) groepen[huidig] = { nr: huidig, som: 0, regels: [] }; continue; }
-      if (String(r[K.gb]) !== "1630") continue;
-      if (!groepen[huidig]) groepen[huidig] = { nr: huidig, som: 0, regels: [] };
-      var rec = {
-        datum: excelDatum(r[K.datum]), cred: String(r[K.cred] || ""), bedrag: num(r[K.bedrag]),
-        omschr: String(r[K.omschr] || "").slice(0, 150), dagboek: String(r[K.dagboek] || ""),
-        boeking: String(r[K.boeking] || ""), kpl: String(r[K.kpl] || "")
-      };
-      groepen[huidig].regels.push(rec);
-      groepen[huidig].som += rec.bedrag;
-      n++;
-    }
-    return { groepen: groepen, regels: n };
-  }
 
   /* ═══════════ inkoopleveringen uit Logic4 ═══════════ */
 
@@ -126,10 +91,8 @@
 
   /* ═══════════ de aansluiting ═══════════ */
 
-  /* Dezelfde groepering als groepeer(), maar rechtstreeks uit Logic4 in plaats
-     van uit een exportbestand. Levert bewust dezelfde vorm op — {groepen,
-     regels} met de correcties onder sleutel "" — zodat de rest van bouw()
-     ongewijzigd blijft.
+  /* De boekingen op 1630 groeperen per inkooplevering. De correcties — regels
+     zonder leveringnummer — komen onder sleutel "" te staan.
 
      Per levering bewaren we alleen wat we gebruiken (som, aantal, eerste en
      laatste datum, de omschrijving). Alle 313.636 regels vasthouden zou zonde
@@ -165,38 +128,10 @@
     return { groepen: groepen, regels: n };
   }
 
-  async function bouw(bestand, saldoBalans, melden) {
-    var uitGrootboek = !bestand && !!global.fpGrootboek;
-    var g;
-    if (uitGrootboek) {
-      melden("Grootboek 1630 uit Logic4 lezen…", 5);
-      g = await groepeerUitGrootboek("2025-12-31T23:59:59", melden);
-      if (!g.regels) throw new Error("Logic4 gaf geen enkele boekingsregel op 1630 terug.");
-    } else {
-      melden("Grootboek inlezen…", 5);
-      var rijen = await leesGrootboek(bestand, melden);
-      melden("Boekingen groeperen per inkooplevering…", 45);
-      g = groepeer(rijen);
-      if (!g.regels) throw new Error("Geen enkele regel op grootboekrekening 1630 gevonden. Klopt het bestand?");
-    }
-
-    // Het grootboek zelf erbij, sinds de API-rechten aanstaan (4 aug 2026).
-    // De koppeling per inkooplevering blijft uit het exportbestand komen — die
-    // werkt en is fijnmaziger — maar het gezaghebbende saldo en de boekingen
-    // zónder leveringnummer komen nu rechtstreeks uit Logic4.
-    var gb = null;
-    if (global.fpGrootboek && !uitGrootboek) {
-      try {
-        var v = global.fpGrootboek.verzamelaar(global.fpGrootboek.leveringUit, 300);
-        await global.fpGrootboek.lees(cfg, "1630", "2025-12-31T23:59:59",
-          function (l) { v.neem(l); }, melden);
-        v.afronden();
-        gb = { saldo: v.saldo, debet: v.debet, credit: v.credit, regels: v.regels,
-               leveringen: Object.keys(v.perSleutel).length,
-               metLevering: Math.round((v.saldo - v.zonder.bedrag) * 100) / 100,
-               zonder: v.zonder };
-      } catch (e) { console.warn("[1630] grootboek lezen mislukt:", e); gb = { fout: String(e.message || e) }; }
-    }
+  async function bouw(saldoBalans, melden) {
+    melden("Grootboek 1630 uit Logic4 lezen…", 5);
+    var g = await groepeerUitGrootboek("2025-12-31T23:59:59", melden);
+    if (!g.regels) throw new Error("Logic4 gaf geen enkele boekingsregel op 1630 terug.");
 
     var leveringen = await haalLeveringen(melden);
     melden("Aansluiting opstellen…", 80);
@@ -222,15 +157,11 @@
     var zonderLevering = [];
     var regels = open.map(function (grp) {
       var d = leveringen[grp.nr] || null;
-      // Uit het grootboek komen eerste/laatste/aantal al kant-en-klaar mee;
-      // uit het exportbestand moeten ze uit de regels worden afgeleid.
-      var dt = grp.eerste ? [grp.eerste, grp.laatste]
-        : grp.regels.map(function (x) { return x.datum; }).filter(Boolean).sort();
-      var nBoekingen = grp.aantal != null ? grp.aantal : grp.regels.length;
+      var dt = [grp.eerste, grp.laatste];
       if (!d) zonderLevering.push(grp.nr);
       return {
         nr: grp.nr, som: grp.som, soort: grp.som < 0 ? "A" : "B",
-        eerste: dt[0] || null, laatste: dt[dt.length - 1] || null, boekingen: nBoekingen,
+        eerste: dt[0] || null, laatste: dt[dt.length - 1] || null, boekingen: grp.aantal,
         bo: d ? d.bo : null, sup: d ? d.sup : null, ontvangen: d ? String(d.dt || "").slice(0, 10) : null,
         stuks: d ? d.stuks : null, waarde: d ? d.waarde : null, bestaat: !!d,
         omschr: grp.regels[0] ? grp.regels[0].omschr : ""
@@ -260,8 +191,8 @@
 
     return {
       gemaakt: new Date().toISOString(), door: cfg.email || null,
-      grootboek: gb, bron: uitGrootboek ? "logic4" : "export",
-      bestand: (bestand && bestand.name) || "", saldoBalans: num(saldoBalans),
+      bron: "logic4",
+      saldoBalans: num(saldoBalans),
       boekingsregels: g.regels, leveringenTotaal: Object.keys(leveringen).length,
       A: { aantal: A.length, bedrag: somA },
       B: { aantal: B.length, bedrag: somB },
@@ -316,19 +247,14 @@
 
     // invoer
     var vak = el("div", "zes-invoer");
-    var lab = el("label", null, "Grootboekexport 1630 uit Logic4 (.xlsx)");
-    var bestand = el("input"); bestand.type = "file"; bestand.accept = ".xlsx,.xls";
-    bestand.title = "Optioneel. Laat leeg om het grootboek rechtstreeks uit Logic4 te lezen; " +
-      "kies een bestand als je een eerdere export wilt narekenen.";
     var lab2 = el("label", null, "Saldo volgens de balans");
     var saldo = el("input"); saldo.type = "text"; saldo.placeholder = "bijv. 1484432"; saldo.value = u ? String(Math.round(u.saldoBalans || 0)) : "";
     var knop = el("button", "zes-knop", "Aansluiting opstellen");
     knop.type = "button";
-    knop.addEventListener("click", function () { start(bestand.files && bestand.files[0], saldo.value, knop); });
-    vak.appendChild(lab); vak.appendChild(bestand);
+    knop.addEventListener("click", function () { start(saldo.value, knop); });
     vak.appendChild(lab2); vak.appendChild(saldo);
     vak.appendChild(knop);
-    if (!cfg.magWijzigen) { bestand.disabled = saldo.disabled = knop.disabled = true; knop.title = "Alleen-lezen"; }
+    if (!cfg.magWijzigen) { saldo.disabled = knop.disabled = true; knop.title = "Alleen-lezen"; }
     doel.appendChild(vak);
 
     if (!u) {
@@ -359,8 +285,7 @@
     doel.appendChild(wrap);
 
     doel.appendChild(el("p", "uitleg",
-      "Opgesteld op " + nl(u.gemaakt) + (u.door ? " door " + u.door : "") + " uit " + (u.bestand || "een export") +
-      " — " + Number(u.boekingsregels).toLocaleString("nl-NL") + " boekingsregels, gekoppeld aan " +
+      "Opgesteld op " + nl(u.gemaakt) + (u.door ? " door " + u.door : "") + " — " + Number(u.boekingsregels).toLocaleString("nl-NL") + " boekingsregels, gekoppeld aan " +
       Number(u.leveringenTotaal).toLocaleString("nl-NL") + " inkoopleveringen uit Logic4."));
 
     // ── wat opvalt ──
@@ -479,18 +404,15 @@
 
   /* ═══════════ starten ═══════════ */
 
-  async function start(bestand, saldo, knop) {
+  async function start(saldo, knop) {
     if (bezig) return;
-    // Een exportbestand is niet meer nodig: sinds de API-rechten aanstaan lezen
-    // we het grootboek zelf. Het bestand mag nog wél — handig om een oudere
-    // export na te rekenen — maar het hoeft niet.
-    if (!bestand && !global.fpGrootboek) { alert("Kies eerst de grootboekexport van rekening 1630."); return; }
+    if (!global.fpGrootboek) { alert("De grootboeklezer is niet geladen. Sluit de app af en start hem opnieuw."); return; }
     var s = Number(String(saldo).replace(/[^\d,-]/g, "").replace(/\./g, "").replace(",", "."));
     if (!isFinite(s) || !s) { alert("Vul het saldo volgens de balans in, dan kan ik het verschil berekenen."); return; }
     bezig = true; knop.disabled = true; knop.textContent = "Bezig…";
     var melden = cfg.melden || function () {};
     try {
-      uitkomst = await bouw(bestand, s, melden);
+      uitkomst = await bouw(s, melden);
       await bewaar(uitkomst);
       if (cfg.log) cfg.log("geldgoederen", "1630-aansluiting",
         "saldo " + Math.round(uitkomst.totaal) + ", onverklaard " + Math.round(uitkomst.verschil) + ", " + uitkomst.regelsTotaal + " open posten");
@@ -514,6 +436,6 @@
   // bouw() staat los van het scherm, net als de scan in gg-engine.js. Zo is de
   // berekening apart te testen zonder browser — en dat is bij een aansluiting
   // die een accountant gebruikt geen luxe.
-  global.fp1630 = { init: init, bouw: bouw, groepeer: groepeer };
+  global.fp1630 = { init: init, bouw: bouw };
 
 })(typeof window !== "undefined" ? window : globalThis);
