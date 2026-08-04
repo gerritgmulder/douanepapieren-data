@@ -126,6 +126,7 @@ const SPA_CODES = [
   ["ET-160","Spa Wonder"],
   ["S-1501","Spa Miracle"],
   ["S-2202","Spa Vision"],
+  ["ET-165","Spa Praise"],   // code bevestigd door Chantal, 4 aug 2026
   // Foshan Gaoming Yuehua Sanitary (MEXDA) — Storm Spas
   ["WS-PC05ST","Turbine 5"],
   ["WS-PC06ST","Turbine 6"],

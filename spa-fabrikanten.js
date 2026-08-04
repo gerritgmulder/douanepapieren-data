@@ -66,6 +66,7 @@
         { model: "Spa Wonder",  code: "ET-160", reeks: "Superior", inkoopUsd: 1948, verkoopEur: null },
         { model: "Spa Miracle", code: "S-1501", reeks: "Superior", inkoopUsd: 1942, verkoopEur: null },
         { model: "Spa Vision",  code: "S-2202", reeks: "Superior", inkoopUsd: 2073, verkoopEur: null },
+        { model: "Spa Praise",  code: "ET-165", reeks: "Classic",  inkoopUsd: 1522, verkoopEur: null },
       ],
     },
     {
@@ -87,13 +88,10 @@
     },
   ];
 
-  // Nog niet verwerkt, bewust: op het blad van Sea star spas staat met de hand
-  // "spa praise classic tt165 $1522" bijgeschreven. De code is niet leesbaar en
-  // het bedrag is hetzelfde als dat van Spa Hope, dus dat kan een aantekening
-  // over dezelfde spa zijn. Liever navragen dan verkeerd vastleggen.
-  var ONDUIDELIJK = [
-    { fabriek: "Guangzhou New Normal Bath Ware Co.", tekst: "Spa Praise classic — code onleesbaar (“tt165”?), $1522" },
-  ];
+  // De met de hand bijgeschreven regel op het blad van Sea star spas las ik als
+  // "tt165"; Chantal bevestigde dat het ET-165 is (4 aug 2026). Dat het bedrag
+  // gelijk is aan dat van Spa Hope is dus toeval, geen dubbele aantekening.
+  var ONDUIDELIJK = [];
 
   global.fpFabrikanten = { lijst: FABRIKANTEN, onduidelijk: ONDUIDELIJK };
 
