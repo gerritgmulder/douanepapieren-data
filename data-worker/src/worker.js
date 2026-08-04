@@ -43,6 +43,8 @@ const ALLOWED_BUCKETS = new Set([
   "apparaten",        // Computer-sleutel (PC-XXXXXX) → herkenbare naam, voor het activiteitenlogboek
   "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail)
   "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
+  "qb-verborgen",     // Amerika: facturen die Chantal uit beeld heeft gehaald (dubbel ingeladen). Niet gewist: de bron levert ze opnieuw, dus we onthouden wát verborgen is en door wie.
+  "spa-verborgen",    // Voorraad: Jazzi-bestellingen die Chantal uit de historie heeft weggeklikt. Zelfde reden — het voorstel wordt telkens opnieuw opgebouwd.
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
   "geldgoederen",     // Geld-goederenbeweging: laatste controle-momentopname + historie van de totalen
   "gg-bevindingen",   // Geld-goederenbeweging: per bevinding de status (open/opgepakt/opgelost/akkoord) + notitie
@@ -2861,6 +2863,25 @@ async function qbHandleVerwerkt(request, env) {
   return reply(200, { ok: true, verwerkt: !!body.verwerkt, docNr });
 }
 
+/* Verbergen in plaats van verwijderen. Zowel de QuickBooks-facturen als de
+   Jazzi-bestellingen worden telkens opnieuw uit de bron opgebouwd; echt wissen
+   kan dus niet — de volgende keer staan ze er weer. Chantal wil ze wél uit
+   beeld hebben, want dubbel ingeladen orders leiden tot dubbel werk (4 aug
+   2026). We onthouden daarom wát verborgen is, door wie en wanneer, zodat het
+   terug te halen is als er een vraag over komt. */
+async function verbergHandler(request, env, bucket) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const id = String(body.id || "").trim();
+  if (!id) return reply(400, { ok: false, error: "id ontbreekt" });
+  const data = (await env.FONTEYN_DATA.get(bucket, { type: "json" })) || { ids: {} };
+  data.ids = data.ids || {};
+  if (body.verborgen === false) delete data.ids[id];
+  else data.ids[id] = { ts: new Date().toISOString(), user: String(body.user || "").slice(0, 80), reden: String(body.reden || "").slice(0, 200) };
+  await env.FONTEYN_DATA.put(bucket, JSON.stringify(data));
+  return reply(200, { ok: true, id, verborgen: body.verborgen !== false });
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -2980,6 +3001,8 @@ export default {
     if (url.pathname === "/amerika/qb/approve" && request.method === "POST") return qbHandleApprove(request, env);
     if (url.pathname === "/amerika/qb/audrey"  && request.method === "POST") return qbHandleAudrey(request, env);
     if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);
+    if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
+    if (url.pathname === "/voorraad/verberg" && request.method === "POST") return verbergHandler(request, env, "spa-verborgen");
 
     // Dealerportaal (publiek, eigen sessie-auth — géén shared secret)
     if (url.pathname === "/dealers" || url.pathname.startsWith("/dealers/")) {

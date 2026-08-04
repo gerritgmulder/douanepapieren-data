@@ -251,14 +251,18 @@ function qbKindBadge(k){
 }
 function renderQbInvoices(){
   const box=document.getElementById("qbData");
-  const nieuw=qbInvoices.filter(i=>!i.geaccordeerd);
+  // Een factuur verdwijnt hier pas als het geld van Audrey is ontvangen én de
+  // factuur volledig betaald is. Bij een deelbetaling blijft hij dus staan en
+  // heeft hij ook een kopie in Ontvangen Audrey — zo blijft zichtbaar dat er
+  // nog een restant openstaat (Chantal, 4 aug 2026).
+  const nieuw=qbInvoices.filter(i=>!qbVerborgen[i.docNr] && !(i.audrey && i.betaald));
   let html="<div class='card'><div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px'>"+
     "<h3 style='margin:0'>Nieuwe orders uit QuickBooks — "+nieuw.length+"</h3>"+
     "<div style='display:flex;gap:10px;flex-wrap:wrap'><button id='qbSelAll' class='btn' type='button'>Alles selecteren</button>"+
     "<button id='qbApprove' class='btn solid' type='button'>Accorderen → Logic4-orders</button></div></div>"+
-    "<p class='lead' style='font-size:12px;margin:0 0 14px'>Vink facturen aan die je in Logic4 wilt aanmaken (debiteur <b>Passion Spa South</b>, magazijn <b>Warehouse Texas</b>). Klik een rij open om de voorgestelde regels te controleren. <span style='color:var(--bad)'>Rode artikelcode</span> = geen spa-variant gevonden; controleer voor accorderen.<br>Zodra je accordeert verdwijnt de factuur hier en schuift hij door naar <b>Ontvangen Audrey</b> — daar blijft hij staan tot je hem als <b>verwerkt in Logic4</b> afvinkt.</p>"+
+    "<p class='lead' style='font-size:12px;margin:0 0 14px'>Vink facturen aan die je in Logic4 wilt aanmaken (debiteur <b>Passion Spa South</b>, magazijn <b>Warehouse Texas</b>). Klik een rij open om de voorgestelde regels te controleren. <span style='color:var(--bad)'>Rode artikelcode</span> = geen spa-variant gevonden; controleer voor accorderen.<br>Na accorderen blijft de factuur hier staan tot je <b>Ontv. Audrey</b> aanvinkt én hij volledig betaald is. Bij een deelbetaling staat hij op beide plekken, met het label <b>kopie</b>.</p>"+
     "<div id='qbApproveStatus' class='status-msg hidden'></div>"+
-    "<div class='tablewrap'><table class='grid'><thead><tr><th></th><th>Factuur</th><th>Klant</th><th>Datum</th><th>Regels</th><th>Betaald</th><th>Ontv. Audrey</th><th>Status</th></tr></thead><tbody>";
+    "<div class='tablewrap'><table class='grid'><thead><tr><th></th><th>Factuur</th><th>Klant</th><th>Datum</th><th>Regels</th><th>Betaald</th><th>Ontv. Audrey</th><th>Status</th><th></th></tr></thead><tbody>";
   // Geaccordeerde facturen staan niet meer in deze lijst — die volgen het
   // vervolgtraject in het tabblad 'Ontvangen Audrey' (wens Chantal).
   for(const inv of nieuw){
@@ -270,9 +274,12 @@ function renderQbInvoices(){
       "<td>"+inv.rows.length+" regels · "+spaN+" spa</td>"+
       "<td>"+qbBetaaldPill(inv)+"</td>"+
       "<td onclick='event.stopPropagation()'><label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'><input type='checkbox' class='qbAudrey' data-nr='"+esc(inv.docNr)+"'"+(inv.audrey?" checked":"")+"><span style='font-size:11px;color:"+(inv.audrey?"#15803d":"var(--muted)")+"'>"+(inv.audrey?"ontvangen":"nee")+"</span></label></td>"+
-      "<td>"+(inv.geaccordeerd?"<span class='pill' style='background:#dcfce7;color:#15803d'>Logic4 #"+esc(inv.logic4Order||"?")+"</span>":"<span class='pill' style='background:#fef3c7;color:#92400e'>nieuw</span>")+"</td></tr>";
+      "<td>"+(inv.geaccordeerd?"<span class='pill' style='background:#dcfce7;color:#15803d'>Logic4 #"+esc(inv.logic4Order||"?")+"</span>"+
+        (inv.audrey&&inv.deelsBetaald?" <span class='pill' style='background:#fef3c7;color:#92400e' title='Staat ook in Ontvangen Audrey. Blijft hier tot de factuur volledig betaald is.'>kopie</span>":"")
+        :"<span class='pill' style='background:#fef3c7;color:#92400e'>nieuw</span>")+"</td>"+
+      "<td onclick='event.stopPropagation()'><button class='qbVerberg' data-nr='"+esc(inv.docNr)+"' title='Uit beeld halen — bijvoorbeeld bij een dubbel ingeladen order' style='border:0;background:none;cursor:pointer;font-size:15px;opacity:.55'>&#128465;</button></td></tr>";
     // Detail ALTIJD renderen (verborgen als dicht) → uit/inklappen zonder herteken, geen wegschieten
-    html+="<tr class='qbDetail' data-nr='"+esc(inv.docNr)+"' style='display:"+(open?"":"none")+"'><td colspan='8' style='background:#fafafa;padding:6px 12px'><table class='grid' style='margin:0'><thead><tr><th>Artikelcode</th><th>Omschrijving</th><th>Aantal</th><th>Soort</th></tr></thead><tbody>"+
+    html+="<tr class='qbDetail' data-nr='"+esc(inv.docNr)+"' style='display:"+(open?"":"none")+"'><td colspan='9' style='background:#fafafa;padding:6px 12px'><table class='grid' style='margin:0'><thead><tr><th>Artikelcode</th><th>Omschrijving</th><th>Aantal</th><th>Soort</th></tr></thead><tbody>"+
         inv.rows.map(r=>"<tr><td>"+(r.productCode?esc(r.productCode):"<b style='color:var(--bad)'>ontbreekt</b>")+"</td><td>"+esc(r.description)+"</td><td>"+r.qty+"</td><td>"+qbKindBadge(r.kind)+"</td></tr>").join("")+
         (inv.overgeslagen&&inv.overgeslagen.length?"<tr><td colspan='4' style='color:var(--muted);font-size:11px'>Overgeslagen (niet op de order): "+esc(inv.overgeslagen.join(", "))+"</td></tr>":"")+
         "</tbody></table></td></tr>";
@@ -304,6 +311,7 @@ function renderQbInvoices(){
       alert("Kon niet opslaan: "+e.message);
     }finally{ cb.disabled=false; }
   }));
+  box.querySelectorAll(".qbVerberg").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); qbVerbergKlik(b.dataset.nr); }));
   const selAll=document.getElementById("qbSelAll"); if(selAll) selAll.addEventListener("click",()=>document.querySelectorAll(".qbChk").forEach(c=>c.checked=true));
   const appr=document.getElementById("qbApprove"); if(appr) appr.addEventListener("click",qbApprove);
 }
@@ -479,12 +487,33 @@ async function audZetVerwerkt(docNr,aan){
   else delete verwerktIds[docNr];
 }
 let audFacturenBezig=false;
+/* Facturen die Chantal uit beeld heeft gehaald. Verbergen, niet wissen: de
+   QuickBooks-lijst wordt telkens opnieuw opgehaald (4 aug 2026). */
+let qbVerborgen = {};
+async function qbLaadVerborgen(){
+  try{
+    const r=await fetch(WORKER+"/data/qb-verborgen",{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}});
+    if(r.ok){ const j=await r.json(); qbVerborgen=(j&&j.ids)||{}; }
+  }catch(e){ console.warn("verborgen facturen laden faalde:",e); }
+}
+async function qbVerbergKlik(nr){
+  if(!confirm("Factuur #"+nr+" uit beeld halen?\n\nHij verdwijnt uit beide tabbladen. De factuur zelf blijft in QuickBooks en Logic4 staan — dit haalt hem alleen van je scherm.")) return;
+  try{
+    const r=await fetch(WORKER+"/amerika/qb/verberg",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+      body:JSON.stringify({id:nr,user:(localStorage.getItem("fp.email")||"")})});
+    const j=await r.json(); if(!j.ok) throw new Error(j.error||"opslaan mislukt");
+    qbVerborgen[nr]={ts:new Date().toISOString()};
+    if(window.fpLog) window.fpLog("qb-factuur-verborgen","#"+nr);
+    renderQbInvoices(); audRenderWachtrij();
+  }catch(e){ alert("Kon niet verbergen: "+e.message); }
+}
+
 async function audInit(){
   // Snelle data eerst (wires + vinkjes), zodat er meteen iets staat. De
   // facturenlijst duurt ~10s (de worker pagineert door QuickBooks) en wordt
   // daarna bijgewerkt — met een laadmelding zodat het niet leeg lijkt.
   audFacturenBezig = !qbInvoices.length;
-  await Promise.all([audLoad(),audLoadVerwerkt()]);
+  await Promise.all([audLoad(),audLoadVerwerkt(),qbLaadVerborgen()]);
   audRenderWachtrij(); audRender();
   if(audFacturenBezig){
     await audLoadFacturen();
@@ -497,16 +526,21 @@ async function audInit(){
 // dat het écht in Logic4 verwerkt is.
 function audRenderWachtrij(){
   const box=document.getElementById("audWachtrij"); if(!box) return;
-  const wacht=qbInvoices.filter(i=>i.geaccordeerd && !verwerktIds[i.docNr]);
-  const klaar=qbInvoices.filter(i=>i.geaccordeerd && verwerktIds[i.docNr]);
+  // Een factuur hoort hier pas te staan nadat Chantal bij Verkoop & dealers
+  // heeft aangevinkt dat het geld van Audrey binnen is. Stond hier eerder
+  // alles wat geaccordeerd was, waardoor er orders verschenen waarvan het geld
+  // nog niet ontvangen was (Chantal, 4 aug 2026).
+  const zichtbaar=qbInvoices.filter(i=>i.geaccordeerd && i.audrey && !qbVerborgen[i.docNr]);
+  const wacht=zichtbaar.filter(i=>!verwerktIds[i.docNr]);
+  const klaar=zichtbaar.filter(i=>verwerktIds[i.docNr]);
   if(audFacturenBezig){
     box.innerHTML="<div class='card'><h3>Geaccordeerd — nog te verwerken</h3>"+
       "<p class='lead'>Geaccordeerde facturen ophalen uit QuickBooks… <span style='color:var(--muted)'>(dit duurt een paar tellen)</span></p></div>";
     return;
   }
-  if(!qbInvoices.filter(i=>i.geaccordeerd).length){
+  if(!zichtbaar.length){
     box.innerHTML="<div class='card'><h3>Geaccordeerd — nog te verwerken</h3>"+
-      "<p class='lead'>Nog geen geaccordeerde facturen. Zodra je in <b>Verkoop &amp; dealers</b> een factuur accordeert, verschijnt hij hier.</p></div>";
+      "<p class='lead'>Nog niets ontvangen van Audrey. Zodra je in <b>Verkoop &amp; dealers</b> bij een geaccordeerde factuur aanvinkt dat het geld binnen is, verschijnt hij hier.</p></div>";
     return;
   }
   box.innerHTML="<div class='card'>"+
@@ -516,7 +550,7 @@ function audRenderWachtrij(){
     "</div>"+
     "<p class='lead' style='font-size:12px;margin:0 0 12px'>Voor deze facturen is een Logic4-order aangemaakt. Ze blijven hier staan tot de betaling is gekoppeld — vink dan <b>Verwerkt in Logic4</b> aan. Het vinkje geldt ook voor dezelfde factuur in het wire-overzicht hieronder.</p>"+
     "<div class='tablewrap'><table class='grid'><thead><tr>"+
-      "<th>Factuur</th><th>Klant</th><th>Logic4-order</th><th>Geaccordeerd</th><th>Betaald (QB)</th><th>Ontv. Audrey</th><th>Verwerkt in Logic4</th></tr></thead><tbody>"+
+      "<th>Factuur</th><th>Klant</th><th>Logic4-order</th><th>Geaccordeerd</th><th>Betaald (QB)</th><th>Ontv. Audrey</th><th>Verwerkt in Logic4</th><th></th></tr></thead><tbody>"+
     wacht.concat(klaar).map(inv=>{
       const isKlaar=!!verwerktIds[inv.docNr];
       const v=verwerktIds[inv.docNr]||{};
@@ -530,10 +564,12 @@ function audRenderWachtrij(){
         "<td><label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'>"+
           "<input type='checkbox' class='audVerw' data-nr='"+esc(inv.docNr)+"'"+(isKlaar?" checked":"")+">"+
           "<span style='font-size:11px;color:"+(isKlaar?"#15803d":"var(--muted)")+"'>"+
-            (isKlaar?("verwerkt"+(v.user?" · "+esc(String(v.user).split("@")[0]):"")):"nog niet")+"</span></label></td></tr>";
+            (isKlaar?("verwerkt"+(v.user?" · "+esc(String(v.user).split("@")[0]):"")):"nog niet")+"</span></label></td>"+
+        "<td><button class='audVerberg' data-nr='"+esc(inv.docNr)+"' title='Uit beeld halen' style='border:0;background:none;cursor:pointer;font-size:15px;opacity:.55'>&#128465;</button></td></tr>";
     }).join("")+
     "</tbody></table></div></div>";
   box.querySelectorAll(".audVerw").forEach(cb=>cb.addEventListener("change",()=>audVerwerktKlik(cb)));
+  box.querySelectorAll(".audVerberg").forEach(b=>b.addEventListener("click",()=>qbVerbergKlik(b.dataset.nr)));
 }
 // Eén handler voor beide plekken (wachtrij én wire-regel) → één waarheid.
 async function audVerwerktKlik(cb){
@@ -596,6 +632,7 @@ function audRender(){
   }).join("");
   // Vinkje "verwerkt in Logic4" — zelfde handler als in de wachtrij
   box.querySelectorAll(".audVerw").forEach(cb=>cb.addEventListener("change",()=>audVerwerktKlik(cb)));
+  box.querySelectorAll(".audVerberg").forEach(b=>b.addEventListener("click",()=>qbVerbergKlik(b.dataset.nr)));
   box.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{
     if(!confirm("Dit wire-overzicht verwijderen? De vinkjes gaan ook weg.")) return;
     wiresData.wires=wiresData.wires.filter(w=>String(w.id)!==b.dataset.del);

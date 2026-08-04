@@ -93,7 +93,9 @@
     }
 
     var actueel = voorstel.containers.filter(function (c) { return c.actueel; });
-    var historie = voorstel.containers.filter(function (c) { return !c.actueel; });
+    var historieAlles = voorstel.containers.filter(function (c) { return !c.actueel; });
+    var historie = historieAlles.filter(function (c) { return !verborgen[String(c.nr)]; });
+    var weggeklikt = historieAlles.filter(function (c) { return verborgen[String(c.nr)]; });
 
     // ── uitleg ──
     var uitleg = el("div", "sm-uitleg");
@@ -131,6 +133,20 @@
       "vervuilen met goederen die volgens de boeken nog moeten komen maar er allang zijn.");
     doel.appendChild(h);
     historie.forEach(function (c) { doel.appendChild(kaart(c)); });
+
+    if (weggeklikt.length) {
+      var terug = el("p", "sm-sub");
+      terug.appendChild(document.createTextNode(weggeklikt.length + " bestelling(en) weggeklikt: " +
+        weggeklikt.map(function (c) { return c.nr; }).join(", ") + ". "));
+      var link = el("a", null, "Alles weer tonen");
+      link.href = "#"; link.style.textDecoration = "underline"; link.style.cursor = "pointer";
+      link.addEventListener("click", function (e) {
+        e.preventDefault();
+        weggeklikt.forEach(function (c) { verberg(c.nr, false); });
+      });
+      terug.appendChild(link);
+      doel.appendChild(terug);
+    }
   }
 
   function kop(titel, sub) {
@@ -138,6 +154,33 @@
     d.appendChild(el("h4", null, titel));
     d.appendChild(el("span", null, sub));
     return d;
+  }
+
+  /* Chantal wil oude bestellingen uit de historie kunnen wegklikken, zodat het
+     scherm niet vervuilt met dingen die allang geleverd zijn (4 aug 2026).
+     Echt verwijderen kan niet: dit voorstel wordt telkens opnieuw uit de
+     Jazzi-gegevens opgebouwd, dus dan staan ze er de volgende keer weer. We
+     onthouden daarom wát verborgen is, door wie en wanneer. */
+  var verborgen = {};
+  async function laadVerborgen() {
+    try {
+      var r = await fetch(BASIS + "/data/spa-verborgen", { headers: { "X-Fonteyn-Auth": cfg.teamKey } });
+      if (r.ok) { var j = await r.json(); verborgen = (j && j.ids) || {}; }
+    } catch (e) { console.warn("[spa] verborgen laden faalde:", e); }
+  }
+  async function verberg(nr, aan) {
+    try {
+      var r = await fetch(BASIS + "/voorraad/verberg", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
+        body: JSON.stringify({ id: String(nr), verborgen: aan !== false, user: cfg.email || "" })
+      });
+      var j = await r.json();
+      if (!j.ok) throw new Error(j.error || "opslaan mislukt");
+      if (aan === false) delete verborgen[String(nr)];
+      else verborgen[String(nr)] = { ts: new Date().toISOString(), user: cfg.email || "" };
+      if (cfg.log) cfg.log("voorraad", "jazzi-order-" + (aan === false ? "teruggehaald" : "verborgen"), String(nr));
+      teken();
+    } catch (e) { alert("Kon niet opslaan: " + e.message); }
   }
 
   function kaart(c) {
@@ -153,6 +196,16 @@
       "besteld " + nlDatum(c.besteld) + "  ·  ETA " + nlDatum(c.eta) + "  ·  " + c.spas + " spa's  ·  " + c.regels.length + " regels"));
     links.appendChild(el("div", "sm-meta klein", c.reden));
     rij.appendChild(links);
+    if (!c.actueel && cfg.magWijzigen) {
+      var weg = el("button", "sm-verberg", "🗑");
+      weg.type = "button";
+      weg.title = "Uit beeld halen. De bestelling zelf blijft bestaan; dit haalt hem alleen van je scherm.";
+      weg.addEventListener("click", function (e) {
+        e.stopPropagation();
+        if (confirm("Jazzi-order " + c.nr + " uit de historie halen?\n\nHij verdwijnt van je scherm. De bestelling blijft gewoon bestaan — dit is alleen om het overzicht schoon te houden.")) verberg(c.nr, true);
+      });
+      rij.appendChild(weg);
+    }
 
     var rechts = el("div", "sm-rechts");
     var telling = el("div", "sm-telling");
@@ -270,6 +323,7 @@
     cfg = opties || {};
     doel = document.getElementById(cfg.doelId || "tab-spainkoop");
     if (!doel || !cfg.teamKey) return;
+    await laadVerborgen();
     if (voorstel) { teken(); return; }     // al geladen: niet opnieuw ophalen
     await herlaad();
   }
