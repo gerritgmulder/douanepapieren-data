@@ -282,6 +282,26 @@
       t0.appendChild(tb0);
       var w0 = el("div", "vo-brugsom"); w0.appendChild(t0); vak.appendChild(w0);
 
+      // De impact per jaar — precies wat Kevin vroeg om te kunnen wegen of een
+      // correctie het resultaat of het eigen vermogen raakt.
+      var jr = Object.keys(gb.zonder.perJaar || {}).sort();
+      if (jr.length) {
+        vak.appendChild(el("p", "uitleg", "Deze boekingen per jaar, zodat te zien is welk boekjaar geraakt wordt:"));
+        var wj = el("div", "vo-tabelwrap");
+        var tj = el("table", "vo-tabel"), thj = el("thead"), hrj = el("tr");
+        ["Jaar", "Boekingen", "Bedrag"].forEach(function (h) { hrj.appendChild(el("th", null, h)); });
+        thj.appendChild(hrj); tj.appendChild(thj);
+        var tbj = el("tbody");
+        jr.forEach(function (j) {
+          var v = gb.zonder.perJaar[j], tr = el("tr");
+          tr.appendChild(el("td", null, j));
+          tr.appendChild(el("td", "r", String(v.n)));
+          tr.appendChild(el("td", "r", euro2(v.b)));
+          tbj.appendChild(tr);
+        });
+        tj.appendChild(tbj); wj.appendChild(tj); vak.appendChild(wj);
+      }
+
       if (gb.zonder.lijst && gb.zonder.lijst.length) {
         vak.appendChild(el("p", "uitleg",
           "De zwaarste boekingen zonder ordernummer. Dit zijn handmatige correcties en jaarafsluitingen; " +

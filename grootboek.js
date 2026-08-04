@@ -91,7 +91,10 @@
     return {
       regels: 0, debet: 0, credit: 0,
       perJaar: {}, perSleutel: {},
-      zonder: { aantal: 0, bedrag: 0, lijst: [] },
+      // Kevin vroeg om de impact per jaar (4 aug 2026): "graag een berekening
+      // van de impact per jaar, zodat wij een afweging kunnen maken". Het gaat
+      // hem om de boekingen zónder herkomst, niet om de hele rekening.
+      zonder: { aantal: 0, bedrag: 0, lijst: [], perJaar: {} },
       neem: function (lijst) {
         for (var i = 0; i < lijst.length; i++) {
           var r = lijst[i];
@@ -107,6 +110,8 @@
             this.perSleutel[sleutel].n++; this.perSleutel[sleutel].b += bedrag;
           } else {
             this.zonder.aantal++; this.zonder.bedrag += bedrag;
+            if (!this.zonder.perJaar[jaar]) this.zonder.perJaar[jaar] = { n: 0, b: 0 };
+            this.zonder.perJaar[jaar].n++; this.zonder.perJaar[jaar].b += bedrag;
             // Alleen de zwaarste bewaren; dit zijn de posten waar het over gaat.
             if (this.zonder.lijst.length < max * 4) {
               this.zonder.lijst.push({
@@ -124,6 +129,7 @@
         this.debet = Math.round(this.debet * 100) / 100;
         this.credit = Math.round(this.credit * 100) / 100;
         this.zonder.bedrag = Math.round(this.zonder.bedrag * 100) / 100;
+        for (var j in this.zonder.perJaar) this.zonder.perJaar[j].b = Math.round(this.zonder.perJaar[j].b * 100) / 100;
         this.zonder.lijst.sort(function (a, b) { return Math.abs(b.bedrag) - Math.abs(a.bedrag); });
         this.zonder.lijst = this.zonder.lijst.slice(0, max);
         return this;
