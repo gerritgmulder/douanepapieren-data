@@ -106,13 +106,18 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <div class="card">
     <h3>Partners (<span id="partnerCount">0</span>)</h3>
     <table class="grid">
-      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th>Merk</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een ander prijsniveau; die krijgt juist die prijslijsten niet te zien, want daarin staat wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Merk</th><th>Status</th><th></th></tr></thead>
       <tbody id="partnerBody"></tbody>
     </table>
     <div class="row" style="margin-top:12px">
       <input id="nEmail" type="email" placeholder="partner@bedrijf.com" style="min-width:220px">
       <input id="nCompany" placeholder="Bedrijfsnaam" style="min-width:180px">
       <input id="nDebtors" placeholder="debiteurnr(s), optioneel" style="min-width:170px">
+      <select id="nSoort" title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een ander prijsniveau; die krijgt juist die prijslijsten niet te zien, want daarin staat wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt." style="min-width:150px">
+        <option value="">&mdash; partner of dealer? &mdash;</option>
+        <option value="partner">Partner</option>
+        <option value="dealer">Dealer</option>
+      </select>
       <button class="primary" id="addPartner" type="button">+ Partner toevoegen</button>
     </div>
   </div>
@@ -248,6 +253,11 @@ function renderPartners(){
       <td><code>${esc(d.email)}</code></td>
       <td>${esc(d.company||"")}</td>
       <td><input class="debIn" data-i="${i}" value="${esc((d.debtorIds||[]).join(", "))}" style="width:120px;font-size:12px;padding:4px 7px"></td><td><select class="regIn" data-i="${i}" style="font-size:12px;padding:4px"><option value="EU"${(d.region||"EU")!=="US"?" selected":""}>EU (&euro;)</option><option value="US"${d.region==="US"?" selected":""}>US ($)</option></select></td>
+      <td><select class="soortIn" data-i="${i}" title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een ander prijsniveau; die krijgt juist die prijslijsten niet te zien, want daarin staat wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt." style="font-size:12px;padding:4px${d.soort?"":";border-color:#c8102e"}">
+        <option value=""${!d.soort?" selected":""}>&mdash; nog kiezen &mdash;</option>
+        <option value="partner"${d.soort==="partner"?" selected":""}>Partner</option>
+        <option value="dealer"${d.soort==="dealer"?" selected":""}>Dealer</option>
+      </select></td>
       <td><select class="merkIn" data-i="${i}" style="font-size:12px;padding:4px">
         <option value="">— nog kiezen —</option>
         <option value="passion"${d.merk==="passion"?" selected":""}>Passion Spas</option>
@@ -258,7 +268,7 @@ function renderPartners(){
           <button class="rmv togAct" data-i="${i}" style="margin-left:6px">${d.active!==false?"blokkeer":"activeer"}</button></td>
       <td><button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink (15 min geldig) — handig als de e-mail niet aankomt of voor onboarding via WhatsApp">inloglink</button>
           <button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
-    </tr>`).join("") || '<tr><td colspan="7" style="color:var(--muted)">Nog geen partners — voeg de eerste toe.</td></tr>';
+    </tr>`).join("") || '<tr><td colspan="8" style="color:var(--muted)">Nog geen partners — voeg de eerste toe.</td></tr>';
   document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     d.active = d.active === false ? true : false;
@@ -298,6 +308,18 @@ function renderPartners(){
     d.region = sel.value;   // US = dollarprijzen, EU = europrijzen
     await save("dealer-accounts", accounts);
   }));
+  // Partner of dealer bepaalt of de prijsgevoelige documenten zichtbaar zijn.
+  // De worker filtert ze weg voor wie op "dealer" staat, en blokkeert ook het
+  // rechtstreeks opvragen van zo'n bestand.
+  document.querySelectorAll(".soortIn").forEach(sel=>sel.addEventListener("change", async ()=>{
+    const d = accounts.dealers[Number(sel.dataset.i)];
+    d.soort = sel.value || null;
+    try{ if(window.fpLog) window.fpLog("partner-soort-gewijzigd",d.email+" \u2192 "+(d.soort||"nog niet ingesteld")); }catch(e){}
+    await save("dealer-accounts", accounts); renderPartners();
+    setStatus("ok", d.soort==="dealer"
+      ? d.email+" staat nu op Dealer \u2014 de prijslijsten met de margestructuur zijn voor dit account niet meer zichtbaar."
+      : d.email+" staat nu op Partner \u2014 dit account ziet alle documentatie.");
+  }));
   // Merk bepaalt straks welke mappen deze dealer in de beeldbank ziet: een
   // Fonteyn-dealer hoort geen Passion Spas-materiaal te krijgen en andersom.
   document.querySelectorAll(".merkIn").forEach(sel=>sel.addEventListener("change", async ()=>{
@@ -311,13 +333,15 @@ $("addPartner").addEventListener("click", async ()=>{
   const email = $("nEmail").value.trim().toLowerCase();
   if (!email || !email.includes("@")){ setStatus("bad","Vul een geldig e-mailadres in."); return; }
   if ((accounts.dealers||[]).some(d=>String(d.email).toLowerCase()===email)){ setStatus("bad","Dit e-mailadres staat er al in."); return; }
+  const soort = $("nSoort").value;
+  if (!soort){ setStatus("bad","Kies eerst of dit een partner of een dealer is \u2014 dat bepaalt welke prijslijsten dit account te zien krijgt."); return; }
   accounts.dealers.push({
-    email, company: $("nCompany").value.trim(),
+    email, company: $("nCompany").value.trim(), soort,
     debtorIds: $("nDebtors").value.split(",").map(s=>s.trim()).filter(Boolean),
     active: true, addedBy: localStorage.getItem(EMAIL_KEY)||"", addedAt: new Date().toISOString(),
   });
   await save("dealer-accounts", accounts);
-  $("nEmail").value=""; $("nCompany").value=""; $("nDebtors").value="";
+  $("nEmail").value=""; $("nCompany").value=""; $("nDebtors").value=""; $("nSoort").value="";
   renderPartners();
   try{ if(window.fpLog) window.fpLog("partner-toegevoegd",email+($("nCompany").value?"":"")); }catch(e){}
   setStatus("ok","Partner toegevoegd — die kan nu inloggen op het portaal met een magic-link.");

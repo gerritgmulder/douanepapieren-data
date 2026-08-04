@@ -566,12 +566,45 @@ async function dpHandleMyRequests(env, sess) {
   return reply(200, { ok: true, requests: mine });
 }
 
+// Sommige prijslijsten tonen partnerprijs, dealerprijs en consumentenprijs
+// naast elkaar. Voor een partner is dat geen probleem — die betaalt de
+// partnerprijs en de dealerprijs is een presentatiemiddel dat niemand betaalt
+// (Arno, 4 aug 2026). Voor een echte dealer wél: die zou dan zien wat een
+// ander betaalt. Welke bestanden dit zijn staat in dealer-docs onder
+// 'prijsgevoelig', zodat het bij de documenten zelf ligt en niet in code.
+function dpPrijsgevoeligeIds(data) {
+  const lijst = (data && data.prijsgevoelig && data.prijsgevoelig.bestanden) || [];
+  return new Set(lijst.map(f => String(f.id || "").toLowerCase()).filter(Boolean));
+}
+
+async function dpIsDealer(env, sess) {
+  if (!sess) return false;
+  const accounts = await dpGetAccounts(env);
+  const acc = dpFindDealer(accounts, sess.email);
+  return String((acc && acc.soort) || "").toLowerCase() === "dealer";
+}
+
 // GET /dealers/api/docs — losse links (docs) + documentbibliotheek (library:
 // categorieën → mappen → bestanden; gevuld via tools/dp-upload-docs.mjs)
-async function dpHandleDocs(env) {
+async function dpHandleDocs(env, sess) {
   const data = await env.FONTEYN_DATA.get("dealer-docs", { type: "json" });
   const docs = (data && data.docs) || [];
-  const library = (data && data.library) || null;
+  let library = (data && data.library) || null;
+
+  if (library && await dpIsDealer(env, sess)) {
+    const verboden = dpPrijsgevoeligeIds(data);
+    if (verboden.size) {
+      library = {
+        ...library,
+        categories: (library.categories || []).map(c => ({
+          ...c,
+          groups: (c.groups || []).map(g => ({
+            ...g, files: (g.files || []).filter(f => !verboden.has(String(f.id || "").toLowerCase())),
+          })).filter(g => g.files.length),
+        })),
+      };
+    }
+  }
   return reply(200, { ok: true, docs, library });
 }
 
@@ -606,6 +639,12 @@ async function dpAdminPutFile(request, env, url) {
 async function dpServeFile(env, url, sess) {
   const id = dpFileId(url);
   if (!id) return reply(400, { ok: false, error: "bad-id" });
+  // Uit de lijst halen is niet genoeg: wie het adres kent zou het bestand
+  // anders alsnog kunnen opvragen.
+  const docsData = await env.FONTEYN_DATA.get("dealer-docs", { type: "json" });
+  if (dpPrijsgevoeligeIds(docsData).has(id) && await dpIsDealer(env, sess)) {
+    return reply(403, { ok: false, error: "niet-beschikbaar-voor-dealers" });
+  }
   const buf = await env.FONTEYN_DATA.get("dpfile:" + id, { type: "arrayBuffer" });
   if (!buf) return reply(404, { ok: false, error: "not-found" });
   const ext = id.split(".").pop();
@@ -1010,7 +1049,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);
     if (p === "/dealers/api/requests" && request.method === "GET") return dpHandleMyRequests(env, sess);
     if (p === "/dealers/api/reserve" && request.method === "POST") return dpHandleReserve(request, env, sess, url);
-    if (p === "/dealers/api/docs" && request.method === "GET") return dpHandleDocs(env);
+    if (p === "/dealers/api/docs" && request.method === "GET") return dpHandleDocs(env, sess);
     if (p === "/dealers/api/file" && request.method === "GET") return dpServeFile(env, url, sess);
     if (p === "/dealers/api/vraag" && request.method === "POST") return dpHandleVraag(request, env, sess);
   }
