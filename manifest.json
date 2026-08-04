@@ -53,6 +53,10 @@
       "note": "Geld-goederenbeweging — de verbandscontrole van accountant Kevin (De Jong & Laan) op live Logic4-data: inkoop → voorraad → verkoop → factuur → bank, plus kostprijs/marge. Per bevinding een eigenaar en een status. Alleen Osman/Gerriette/Dolf/Gerrit/Fonteynbot."
     },
     {
+      "name": "grootboek.js",
+      "note": "De boekingsregels van een grootboekrekening rechtstreeks uit Logic4 (GetFinancialJournals), gestroomd zodat 676.000 regels niet in het geheugen hoeven. Gedeeld door de 1350- en 1630-aansluiting."
+    },
+    {
       "name": "gg-engine.js",
       "note": "Controle-engine achter de Geld-goederenbeweging: de 16 verbandscontroles, de magazijn-indeling (fysiek/virtueel/doorstroom) en de artikelclassificatie. Los bestand zodat de controles herbruikbaar zijn en apart te testen."
     },

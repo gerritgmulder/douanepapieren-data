@@ -50,7 +50,8 @@
 
   /* ═══════════ doorrekenen ═══════════ */
 
-  async function bouw(vanaf, melden) {
+  async function bouw(vanaf, melden, tot) {
+    var vanafTot = tot || new Date().toISOString().slice(0, 10);
     var orders = [], skip = 0, klaar = false, ronde = 0;
     while (!klaar && ronde < 200) {
       var verzoeken = [];
@@ -68,6 +69,28 @@
       }
       skip += GELIJK * PER; ronde++;
       melden("Orders doorrekenen… " + orders.length.toLocaleString("nl-NL"), Math.min(88, 5 + orders.length / 2000));
+    }
+
+    // Het grootboek zelf, sinds de API-rechten aanstaan (4 aug 2026). Dit is de
+    // enige bron die óók de boekingen zonder ordernummer laat zien; daar konden
+    // we tot nu toe alleen naar gissen.
+    var gb = null;
+    if (global.fpGrootboek) {
+      try {
+        var v = global.fpGrootboek.verzamelaar(global.fpGrootboek.orderUit, 300);
+        await global.fpGrootboek.lees(cfg, LEDGER, (vanafTot || "2025-12-31") + "T23:59:59",
+          function (lijst) { v.neem(lijst); }, melden);
+        v.afronden();
+        gb = {
+          saldo: v.saldo, debet: v.debet, credit: v.credit, regels: v.regels,
+          perJaar: v.perJaar, orders: Object.keys(v.perSleutel).length,
+          metOrder: Math.round((v.saldo - v.zonder.bedrag) * 100) / 100,
+          zonder: v.zonder,
+        };
+      } catch (e) {
+        console.warn("[1350] grootboek lezen mislukt:", e);
+        gb = { fout: String(e.message || e) };
+      }
     }
 
     melden("Vooruitontvangen posten bepalen…", 90);
@@ -131,6 +154,7 @@
     melden("Klaar", 100);
     return {
       gemaakt: new Date().toISOString(), door: cfg.email || null, vanaf: vanaf,
+      grootboek: gb, balansdatum: vanafTot,
       ordersBekeken: orders.length, zonderRegel: zonderRegel, afgewikkeld: afgewikkeld,
       open: { aantal: open.length, bedrag: somOpen },
       teveel: { aantal: teveel.length, bedrag: somTeveel },
@@ -231,14 +255,62 @@
     } catch (e) { console.warn("[1350] brug bewaren mislukt:", e); }
   }
 
-  function tekenBrug(bewaard, saldoOpOrders) {
+  function tekenBrug(bewaard, saldoOpOrders, gb) {
     var brug = brugUit(bewaard);
     var vak = el("div", "vo-brug");
     vak.appendChild(el("h4", "vo-kop", "Aansluiting op het grootboek"));
-    vak.appendChild(el("p", "uitleg",
-      "Wij zien de beweging op 1350, niet de stand die er bij het begin van die periode al stond. " +
-      "Vul die twee getallen hieronder in — ze komen uit het grootboek, niet uit Logic4 — en wat dan " +
-      "overblijft is het bedrag dat werkelijk niet verklaard is."));
+
+    // Sinds de API-rechten aanstaan lezen we het grootboek zelf. Dan hoeft er
+    // niets meer met de hand ingevuld te worden en klopt de aansluiting per
+    // definitie — het is dezelfde bron, alleen anders gegroepeerd.
+    if (gb && !gb.fout) {
+      vak.appendChild(el("p", "uitleg",
+        "Rechtstreeks uit het grootboek van Logic4 gelezen: " + gb.regels.toLocaleString("nl-NL") +
+        " boekingsregels tot en met " + nl((bewaard && bewaard.laatste && bewaard.laatste.balansdatum) || "") +
+        ". Er is geen exportbestand meer nodig, en de boekingen zonder ordernummer zijn nu wél zichtbaar."));
+
+      var t0 = el("table", "vo-tabel"), tb0 = el("tbody");
+      function rij0(l, b, klas) {
+        var tr = el("tr", klas || "");
+        tr.appendChild(el("td", null, l));
+        tr.appendChild(el("td", "r", euro2(b)));
+        tb0.appendChild(tr);
+      }
+      rij0("Te herleiden tot een order (" + gb.orders.toLocaleString("nl-NL") + " orders)", gb.metOrder);
+      rij0("Boekingen zonder ordernummer (" + gb.zonder.aantal.toLocaleString("nl-NL") + " regels)", gb.zonder.bedrag, "let");
+      rij0("Saldo 1350 volgens het grootboek", gb.saldo, "vo-som");
+      t0.appendChild(tb0);
+      var w0 = el("div", "vo-brugsom"); w0.appendChild(t0); vak.appendChild(w0);
+
+      if (gb.zonder.lijst && gb.zonder.lijst.length) {
+        vak.appendChild(el("p", "uitleg",
+          "De zwaarste boekingen zonder ordernummer. Dit zijn handmatige correcties en jaarafsluitingen; " +
+          "ze zijn niet aan een klant of order te koppelen en moeten dus los onderbouwd worden."));
+        var w1 = el("div", "vo-tabelwrap");
+        var t1 = el("table", "vo-tabel"), th1 = el("thead"), hr1 = el("tr");
+        ["Datum", "Bedrag", "Boeking", "Omschrijving"].forEach(function (h) { hr1.appendChild(el("th", null, h)); });
+        th1.appendChild(hr1); t1.appendChild(th1);
+        var tb1 = el("tbody");
+        gb.zonder.lijst.slice(0, 25).forEach(function (r) {
+          var tr = el("tr");
+          tr.appendChild(el("td", null, nl(r.datum)));
+          tr.appendChild(el("td", "r", euro2(r.bedrag)));
+          tr.appendChild(el("td", null, String(r.boeking == null ? "" : r.boeking)));
+          tr.appendChild(el("td", null, r.oms));
+          tb1.appendChild(tr);
+        });
+        t1.appendChild(tb1); w1.appendChild(t1); vak.appendChild(w1);
+      }
+      vak.appendChild(el("p", "uitleg",
+        "Wijkt dit af van het saldo in de jaarrekening, vul dat hieronder in — dan zie je meteen hoe groot " +
+        "het verschil is. Bij de meting van 4 aug 2026 was dat € 774,20 op € 3,7 miljoen."));
+    } else {
+      vak.appendChild(el("p", "uitleg",
+        (gb && gb.fout ? "Het grootboek kon niet gelezen worden (" + gb.fout + "). " : "") +
+        "Wij zien dan alleen de beweging op 1350, niet de stand die er bij het begin van die periode al stond. " +
+        "Vul die twee getallen hieronder in — ze komen uit het grootboek, niet uit Logic4 — en wat dan " +
+        "overblijft is het bedrag dat werkelijk niet verklaard is."));
+    }
 
     var f = el("div", "vo-invoer");
     function veld(naam, waarde, type) {
@@ -268,7 +340,8 @@
         uitslag.appendChild(el("p", "uitleg", "Vul de twee bedragen in om de aansluiting te zien."));
         return;
       }
-      var verwacht = Math.round((begin + saldoOpOrders) * 100) / 100;
+      var basis = (gb && !gb.fout) ? gb.saldo : saldoOpOrders;
+      var verwacht = Math.round(((gb && !gb.fout ? 0 : begin) + basis) * 100) / 100;
       var rest = Math.round((gb - verwacht) * 100) / 100;
       if (rest === 0) rest = 0;   // anders toont een afronding "-0,00"
       var t = el("table", "vo-tabel");
@@ -279,9 +352,13 @@
         tr.appendChild(el("td", "r", euro2(bedrag)));
         tb.appendChild(tr);
       }
-      rij("Stand vóór deze periode" + (iBeginD.value ? " (per " + nl(iBeginD.value) + ")" : ""), begin);
-      rij("Beweging die wij kunnen volgen", saldoOpOrders);
-      rij("Zou het grootboeksaldo moeten zijn", verwacht, "vo-som");
+      if (gb && !gb.fout) {
+        rij("Saldo 1350 volgens het grootboek van Logic4", basis, "vo-som");
+      } else {
+        rij("Stand vóór deze periode" + (iBeginD.value ? " (per " + nl(iBeginD.value) + ")" : ""), begin);
+        rij("Beweging die wij kunnen volgen", saldoOpOrders);
+        rij("Zou het grootboeksaldo moeten zijn", verwacht, "vo-som");
+      }
       rij("Grootboeksaldo volgens de accountant" + (iGbD.value ? " (per " + nl(iGbD.value) + ")" : ""), gb);
       rij("Nog onverklaard", rest, Math.abs(rest) < 1 ? "vo-goed" : "let");
       t.appendChild(tb);
@@ -364,7 +441,7 @@
       "financiële endpoints van Logic4 nodig; die staat nu op 403."));
     doel.appendChild(b);
 
-    doel.appendChild(tekenBrug(bewaard, u.saldo));
+    doel.appendChild(tekenBrug(bewaard, u.saldo, u.grootboek));
 
     var w = el("div", "vo-let");
     w.appendChild(el("strong", null, "Waar het om gaat: "));

@@ -133,6 +133,24 @@
     var g = groepeer(rijen);
     if (!g.regels) throw new Error("Geen enkele regel op grootboekrekening 1630 gevonden. Klopt het bestand?");
 
+    // Het grootboek zelf erbij, sinds de API-rechten aanstaan (4 aug 2026).
+    // De koppeling per inkooplevering blijft uit het exportbestand komen — die
+    // werkt en is fijnmaziger — maar het gezaghebbende saldo en de boekingen
+    // zónder leveringnummer komen nu rechtstreeks uit Logic4.
+    var gb = null;
+    if (global.fpGrootboek) {
+      try {
+        var v = global.fpGrootboek.verzamelaar(global.fpGrootboek.leveringUit, 300);
+        await global.fpGrootboek.lees(cfg, "1630", "2025-12-31T23:59:59",
+          function (l) { v.neem(l); }, melden);
+        v.afronden();
+        gb = { saldo: v.saldo, debet: v.debet, credit: v.credit, regels: v.regels,
+               leveringen: Object.keys(v.perSleutel).length,
+               metLevering: Math.round((v.saldo - v.zonder.bedrag) * 100) / 100,
+               zonder: v.zonder };
+      } catch (e) { console.warn("[1630] grootboek lezen mislukt:", e); gb = { fout: String(e.message || e) }; }
+    }
+
     var leveringen = await haalLeveringen(melden);
     melden("Aansluiting opstellen…", 80);
 
@@ -191,6 +209,7 @@
 
     return {
       gemaakt: new Date().toISOString(), door: cfg.email || null,
+      grootboek: gb,
       bestand: bestand.name || "", saldoBalans: num(saldoBalans),
       boekingsregels: g.regels, leveringenTotaal: Object.keys(leveringen).length,
       A: { aantal: A.length, bedrag: somA },

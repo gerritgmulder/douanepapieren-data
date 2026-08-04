@@ -314,6 +314,7 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
 
 <!-- Excel-lezer, nodig om de grootboekexport van 1630 in te lezen -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="grootboek.js"></script>
 <script src="gg-engine.js"></script>
 <script src="aansluiting-1630.js"></script>
 <script src="mt940.js"></script>
@@ -368,11 +369,15 @@ log("open");
 /* Logic4 loopt via de lokale helper op poort 3737. Die zit in het
    installatiebestand en is generiek: elk endpoint mag, dus deze tegel werkt
    zonder dat er ooit iets opnieuw geïnstalleerd hoeft te worden. */
-async function logic4(pad, body){
+async function logic4(pad, body, methode){
+  // De methode werd hier genegeerd en altijd op POST gezet. Endpoints die
+  // alleen GET kennen — GetLedgers bijvoorbeeld — gaven daardoor 405 zodra de
+  // aansluiting vanuit de tegel werd gedraaid, terwijl hij in de proefopstelling
+  // wél werkte (4 aug 2026).
   var r = await fetch("/api/logic4-call", {
     method:"POST",
     headers:{"Content-Type":"application/json","Authorization":"Bearer " + sessie()},
-    body: JSON.stringify({ path:pad, method:"POST", body:body })
+    body: JSON.stringify({ path:pad, method:(methode || "POST"), body:body })
   });
   var j = await r.json();
   if (!r.ok || !j.ok) throw new Error(j.error || (typeof j.data === "string" ? j.data : JSON.stringify(j.data)));
