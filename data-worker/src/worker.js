@@ -1605,6 +1605,9 @@ async function spaMigratieVoorstel(env) {
     containers.push({
       nr: nr, besteld: c.besteld || null, eta: etaPerOrder[nr] || c.eta || null,
       herkomst: c.herkomst || null,
+      // Uit welk bestand deze bestelling is ingelezen, door wie en wanneer.
+      // Anders is later niet meer na te gaan hoe hij in het dashboard kwam.
+      import: c.import || null,
       actueel: status.actueel, reden: status.reden,
       alGedaan: gedaan.orders && gedaan.orders[ref] ? gedaan.orders[ref].buyOrderId : null,
       spas: spas, zeker: zeker, nakijken: nakijken, onmogelijk: onmogelijk,

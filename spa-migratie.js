@@ -195,6 +195,13 @@
     links.appendChild(el("div", "sm-meta",
       "besteld " + nlDatum(c.besteld) + "  ·  ETA " + nlDatum(c.eta) + "  ·  " + c.spas + " spa's  ·  " + c.regels.length + " regels"));
     links.appendChild(el("div", "sm-meta klein", c.reden));
+    // Waar komt deze bestelling vandaan? Zonder dit moest Chantal het vragen.
+    if (c.import && c.import.bestand) {
+      links.appendChild(el("div", "sm-meta klein",
+        "ingelezen uit " + c.import.bestand +
+        (c.import.ingelezen ? " op " + nlDatum(String(c.import.ingelezen).slice(0, 10)) : "") +
+        (c.import.door ? " door " + String(c.import.door).split("@")[0] : "")));
+    }
     rij.appendChild(links);
     if (!c.actueel && cfg.magWijzigen) {
       var weg = el("button", "sm-verberg", "🗑");

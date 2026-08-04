@@ -2608,8 +2608,15 @@ async function handlePipeImport(file){
     const have={}; for(const c of pipeContainers) have[String(c.nr)]=1;
     const fresh=imported.filter(c=>!have[String(c.nr)]);
     if(!confirm("Importeren: "+fresh.length+" nieuwe containers toevoegen ("+(imported.length-fresh.length)+" bestaan al en worden overgeslagen).\n\nDaarna beheer je alles in het dashboard.")) { st.classList.add("hidden"); return; }
+    // Vastleggen waar een container vandaan komt. Chantal vroeg op 5 aug hoe
+    // 3205 en 3191 in het dashboard waren gekomen, en dat was niet te
+    // achterhalen: de import werd niet gelogd en de containers droegen geen
+    // spoor van hun herkomst. Nu wel.
+    const stempel={bestand:file.name, ingelezen:new Date().toISOString(), door:(localStorage.getItem(EMAIL_KEY)||"")};
+    fresh.forEach(c=>{ c.import=stempel; });
     pipeContainers=pipeContainers.concat(fresh); await savePipe(); renderPipeAll();
-    st.className="status-msg ok"; st.textContent="Geïmporteerd: "+fresh.length+" containers toegevoegd. "+diag.join(" · ")+". Controleer/bewerk hieronder — ETA-jaar is afgeleid, pas zo nodig aan.";
+    try{ if(window.fpLog) window.fpLog("pipeline-geimporteerd",fresh.length+" containers uit "+file.name+" ("+diag.join(" · ")+")"); }catch(e){}
+    st.className="status-msg ok"; st.textContent="Geïmporteerd: "+fresh.length+" containers toegevoegd uit "+file.name+". "+diag.join(" · ")+". Controleer/bewerk hieronder — ETA-jaar is afgeleid, pas zo nodig aan.";
   }catch(e){ console.error(e); st.className="status-msg bad"; st.textContent="Kon Excel niet inlezen: "+e.message; }
 }
 
