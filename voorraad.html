@@ -666,11 +666,16 @@ const SPA_STATUSSEN = [STATUS_VERKOOPORDER, STATUS_30_AANBETAALD];
 /* ====== Sessie + toegang ====== */
 const SESSION_KEY="fp.session", EMAIL_KEY="fp.email", HELPER_BASE="";
 function getSession(){ return localStorage.getItem(SESSION_KEY)||""; }
-// Drie niveaus:
-//  BEHEER   = alles zien én wijzigen (prioriteiten, uploads, verwijderen).
-//  PLANNING = afdeling Spa planning: álle tabbladen zien, niets wijzigen.
-//  ADVISEUR = ALLEEN de tabs Particulier / Partner / Partner containers, en
-//             uitsluitend lezen/zoeken — geen enkele aanpassing.
+// Drie niveaus, zoals Chantal ze op 5 aug 2026 heeft vastgesteld:
+//  BEHEER      = alles zien én wijzigen (prioriteiten, uploads, verwijderen).
+//  KLANT_WIJZIG = ALLEEN de tabs Particulier en Partner, en daar wél de
+//                vinkjes en notities aanpassen.
+//  KLANT_LEES  = dezelfde twee tabs, uitsluitend lezen en zoeken.
+//
+// Wat hier veranderde: tot 5 aug had de afdeling Spa planning (Gerwin, Kevin,
+// Bart, Bertjan) álle tabbladen alleen-lezen. Chantal draait dat om — zij zien
+// nu minder (twee tabs) maar mogen daar wél werken. De tab Partner containers
+// valt daarmee ook weg voor iedereen buiten beheer.
 const BEHEER = new Set([
   "dolf@fonteyn.nl","fonteyn.dolf","dolf",
   "arno@fonteyn.nl","fonteyn.arno","arno",
@@ -679,26 +684,39 @@ const BEHEER = new Set([
   "gerrit@fonteyn.nl","fonteyn.gerrit","gerrit",
   "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot",
 ]);
-// Afdeling Spa planning (Gerrit, 28 jul) — alleen-lezen, wél het hele beeld:
-// zij plannen en moeten dus voorraad, schepen en prioriteiten kunnen zien.
-const PLANNING = new Set([
+// Mogen in Particulier en Partner wél wijzigen (Chantal, 5 aug).
+const KLANT_WIJZIG = new Set([
   "gerwin@fonteyn.nl","fonteyn.gerwin","gerwin",
   "kevin@fonteyn.nl","fonteyn.kevin","kevin",
   "bertjan@fonteyn.nl","fonteyn.bertjan","bertjan",
-  // Bart logt in als 'Bart.vdB' — dat is zijn actieve Logic4-account.
-  // 'bart@fonteyn.nl' en 'fonteyn.Bart' staan in Logic4 als ZZ-OUD en horen
-  // bovendien bij een ándere Bart (Bart L.), dus die staan hier bewust niet.
+  // Bart van den Brink logt in als 'Bart.vdB' — dat is zijn actieve Logic4-
+  // account. 'bart@fonteyn.nl' en 'fonteyn.Bart' staan in Logic4 als ZZ-OUD en
+  // horen bovendien bij een ándere Bart (Bart L.), dus die staan hier bewust
+  // niet. Zie ook 'fonteyn.bert' hieronder: dat is Bert van de Berg, een ander
+  // mens dan Bart van den Brink.
   "bart.vdb","bart.vdb@fonteyn.nl",
 ]);
-// Spa-adviseurs — alleen-lezen. Namen door Chantal genoemd; aanvullen zodra
-// de volledige lijst van de spa-afdeling bekend is.
-const ADVISEURS = new Set([
+// Dezelfde twee tabs, maar alleen kijken. Inlognamen komen uit de Logic4-
+// gebruikerslijst (/v3/User/GetAllUsers), niet uit een gok op de voornaam:
+//   Yves           -> yves@fonteyn.nl        (2017880)
+//   Luis Fernando  -> luis@fonteyn.nl        (2016826)
+//   Bert           -> fonteyn.Bert           (2001495)  = Bert van de Berg
+//   Patrick        -> Fonteyn.MaartenS       (2001512)  hergebruikt account
+// Die laatste is geen typefout: in Logic4 heet de gebruiker Patrick, maar de
+// inlognaam is nog van zijn voorganger. Alle ZZ-OUD-varianten (Patrickt@,
+// Maarten@, bertb@) horen bij ándere mensen en staan hier dus niet.
+const KLANT_LEES = new Set([
   "edwin@fonteyn.nl","fonteyn.edwin","edwin",
   "dali@fonteyn.nl","fonteyn.dali","dali",
   "ahmed@fonteyn.nl","fonteyn.ahmed","ahmed",
+  "yves@fonteyn.nl","fonteyn.yves","yves",
+  "luis@fonteyn.nl","fonteyn.luis","luis",
+  "fonteyn.bert","bert@fonteyn.nl",
+  "fonteyn.maartens",
 ]);
-const ALLOWED = new Set([...BEHEER,...PLANNING,...ADVISEURS]);
-let MAG_WIJZIGEN = false;   // door boot() gezet; adviseurs = false
+const ALLOWED = new Set([...BEHEER,...KLANT_WIJZIG,...KLANT_LEES]);
+let MAG_WIJZIGEN = false;   // vinkjes en notities; door boot() gezet
+let MAG_BEHEREN  = false;   // uploads, schepen, prioriteiten, inkoop naar Logic4
 (function boot(){
   if (!getSession()){ location.href="dashboard.html"; return; }
   const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
@@ -718,18 +736,24 @@ let MAG_WIJZIGEN = false;   // door boot() gezet; adviseurs = false
       "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
     throw new Error("geen toegang");
   }
-  MAG_WIJZIGEN = BEHEER.has(email);
-  const isPlanning = PLANNING.has(email);
+  MAG_BEHEREN  = BEHEER.has(email);
+  const magKlantWijzigen = KLANT_WIJZIG.has(email);
+  MAG_WIJZIGEN = MAG_BEHEREN || magKlantWijzigen;
   // Rol meesturen naar het activiteitenlogboek: zo is bij élke actie te zien
   // met welke rechten iemand handelde.
-  window.fpRol = MAG_WIJZIGEN ? "beheer" : (isPlanning ? "spa planning (alleen-lezen)" : "adviseur (alleen-lezen)");
-  if (isPlanning) alleenLezen();
-  else if (!MAG_WIJZIGEN) beperkTotKlantTabs();
+  window.fpRol = MAG_BEHEREN ? "beheer"
+    : (magKlantWijzigen ? "klanttabs (wijzigen)" : "klanttabs (alleen-lezen)");
+  if (!MAG_BEHEREN){
+    beperkTotKlantTabs();
+    // Wie niet mag wijzigen krijgt bovendien het netwerkslot: dat is de harde
+    // grens. Wie wél mag wijzigen houdt precies één schrijfroute over.
+    if (magKlantWijzigen) alleenKlantnotities(); else alleenLezen();
+  }
 })();
-// Spa planning: alles zien, niets wijzigen. De harde grens ligt op het netwerk —
-// elke PUT naar de data-store en het reserveren voor een dealer wordt geweigerd,
-// ook als er ergens toch nog een knop blijkt te staan. Wat daaronder gebeurt is
-// alleen om te voorkomen dat iemand op een knop drukt die niets doet.
+// Alleen kijken. De harde grens ligt op het netwerk — elke PUT naar de
+// data-store en het reserveren voor een dealer wordt geweigerd, ook als er
+// ergens toch nog een knop blijkt te staan. Wat daaronder gebeurt is alleen om
+// te voorkomen dat iemand op een knop drukt die niets doet.
 function alleenLezen(){
   const echteFetch=window.fetch.bind(window);
   window.fetch=function(url,opts){
@@ -772,17 +796,44 @@ function alleenLezen(){
   obs.observe(document.body,{childList:true,subtree:true});
   const note=document.getElementById("adviseurNote");
   if(note){
-    note.innerHTML="Je kijkt mee vanuit <b>Spa planning</b>: je ziet het volledige voorraadbeeld — reserveringen, schepen en prioriteiten — maar kunt niets wijzigen. Aanpassen doen Chantal, Arno en Manon.";
+    note.innerHTML="Je ziet de reserveringen van <b>Particulier</b> en <b>Partner</b>. Aanpassen doen Chantal, Arno en Manon.";
     note.classList.remove("hidden");
   }
 }
-// Adviseur-modus: alleen de drie klantsoort-tabs, puur lezen.
+// Mag in de klanttabs de vinkjes en notities zetten, verder niets. Het verschil
+// met alleenLezen() is precies één route: de PUT naar /data/voorraad, waar de
+// reserveringen in staan. Alles wat schepen, prioriteiten, uploads of het
+// aanmaken van inkooporders raakt blijft dicht — die tabs zijn weliswaar
+// verborgen, maar de grens hoort op het netwerk te liggen en niet op de vraag
+// of er ergens nog een knop staat.
+function alleenKlantnotities(){
+  const echteFetch=window.fetch.bind(window);
+  window.fetch=function(url,opts){
+    const methode=String((opts&&opts.method)||"GET").toUpperCase();
+    const adres=String((url&&url.url)||url||"").split("?")[0];
+    const MAG=[/\/api\/logic4-call$/,/\/api\/health$/,/\/api\/me$/,/\/api\/logout$/,
+               /\/track$/,/\/log$/,/\/data\/voorraad$/];
+    if(methode!=="GET"&&!MAG.some(re=>re.test(adres))){
+      try{ setStatus("bad","Hier kun je alleen de vinkjes en notities aanpassen. De rest doen Chantal, Arno en Manon."); }catch(e){}
+      return Promise.resolve(new Response('{"ok":false,"error":"alleen klanttabs"}',
+        {status:403,headers:{"Content-Type":"application/json"}}));
+    }
+    return echteFetch(url,opts);
+  };
+  const note=document.getElementById("adviseurNote");
+  if(note){
+    note.innerHTML="Je werkt in <b>Particulier</b> en <b>Partner</b>: notities en de vinkjes Afroep, Inplannen en Gepland kun je zelf zetten. Schepen, prioriteiten en inkoop lopen via Chantal, Arno en Manon.";
+    note.classList.remove("hidden");
+  }
+}
+// Alleen de klanttabs: Particulier en Partner (Chantal, 5 aug 2026 — Partner
+// containers hoort daar niet meer bij).
 function beperkTotKlantTabs(){
-  const mag=new Set(["particulier","partner","partnercont"]);
+  const mag=new Set(["particulier","partner"]);
   document.querySelectorAll(".tab").forEach(t=>{
     if(!mag.has(t.dataset.tab)) t.style.display="none";
   });
-  ["ophalen","dealer","part","overzicht","reserveringen","schepen","prio","pipe","dealerview","spainkoop","ontvangst"].forEach(id=>{
+  ["ophalen","dealer","part","overzicht","reserveringen","schepen","prio","pipe","dealerview","spainkoop","ontvangst","partnercont"].forEach(id=>{
     const el=document.getElementById("tab-"+id); if(el) el.classList.add("hidden");
   });
   // Upload-kaart in Partner containers is een wijzig-actie → weg
@@ -2122,7 +2173,7 @@ function ciBijzonderheid(c0raw,model){
 if(window.fpProforma) window.fpProforma.start({
   teamKey:function(){ return DATA_STORE_AUTH; },
   adminKey:function(){ return dpAdminKey(); },
-  magWijzigen:MAG_WIJZIGEN,
+  magWijzigen:MAG_BEHEREN,
   email:(localStorage.getItem(EMAIL_KEY)||""),
   bestemming:null,                       // Nederland: geen aparte bestemming
   log:function(a,d){ try{ if(window.fpLog) window.fpLog(a,d); }catch(e){} },
@@ -2137,7 +2188,7 @@ function startSpaMigratie(){
     doelId:"tab-spainkoop",
     teamKey:DATA_STORE_AUTH,
     adminKey:dpAdminKey(),
-    magWijzigen:MAG_WIJZIGEN,
+    magWijzigen:MAG_BEHEREN,
     email:(localStorage.getItem(EMAIL_KEY)||""),
     log:function(tegel,actie,detail){ try{ if(window.fpLog) window.fpLog(actie,detail); }catch(e){} },
   });
@@ -2151,7 +2202,7 @@ function startSpaOntvangst(){
     doelId:"tab-ontvangst",
     teamKey:DATA_STORE_AUTH,
     adminKey:dpAdminKey(),
-    magWijzigen:MAG_WIJZIGEN,
+    magWijzigen:MAG_BEHEREN,
     email:(localStorage.getItem(EMAIL_KEY)||""),
     log:function(tegel,actie,detail){ try{ if(window.fpLog) window.fpLog(actie,detail); }catch(e){} },
   });

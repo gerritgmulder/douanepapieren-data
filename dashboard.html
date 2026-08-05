@@ -778,23 +778,33 @@ const PARTNERPORTAAL_KIJK = new Set([
 // plus de spa-adviseurs (die zien in de tegel zélf alléén de tabs Particulier/
 // Partner/Partner containers, alleen-lezen). Spa-service volgt nog.
 const VOORRAAD_EMAILS = new Set([
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "arno@fonteyn.nl",       "fonteyn.arno",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",  "dolf",
+  "arno@fonteyn.nl",       "fonteyn.arno",  "arno",
+  "fonteyn.gerrit",
   "chantal@fonteyn.nl",    "chantal",  "fonteyn.chantal",
   "manon@fonteyn.nl",      "manon",    "fonteyn.manon",
   "gerrit@fonteyn.nl",     "gerrit",
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-  // Afdeling Spa planning (alleen-lezen) — Voorraadbeheer is hun enige tegel
+  // Onderstaande groep ziet binnen de tegel alléén Particulier en Partner;
+  // dat onderscheid regelt voorraad.html zelf (KLANT_WIJZIG / KLANT_LEES).
+  // Mogen daar wijzigen (Chantal, 5 aug 2026):
   "gerwin@fonteyn.nl",     "gerwin",   "fonteyn.gerwin",
   "kevin@fonteyn.nl",      "kevin",    "fonteyn.kevin",
   "bertjan@fonteyn.nl",    "bertjan",  "fonteyn.bertjan",
-  // Bart = 'Bart.vdB' in Logic4. 'bart@fonteyn.nl' en 'fonteyn.Bart' zijn daar
-  // ZZ-OUD én van een ándere Bart (Bart L.) — die horen hier dus niet.
+  // Bart van den Brink = 'Bart.vdB' in Logic4. 'bart@fonteyn.nl' en
+  // 'fonteyn.Bart' zijn daar ZZ-OUD én van een ándere Bart (Bart L.) — die
+  // horen hier dus niet. Niet te verwarren met Bert van de Berg hieronder.
   "bart.vdb",              "bart.vdb@fonteyn.nl",
-  // Spa-adviseurs (alleen-lezen) — aanvullen zodra de volledige lijst er is
+  // Alleen kijken. Inlognamen uit de Logic4-gebruikerslijst, niet geraden:
+  // Yves 2017880, Luis Fernando 2016826, Bert van de Berg 2001495,
+  // Patrick 2001512 (die logt in onder de oude naam Fonteyn.MaartenS).
   "edwin@fonteyn.nl",      "edwin",    "fonteyn.edwin",
   "dali@fonteyn.nl",       "dali",     "fonteyn.dali",
   "ahmed@fonteyn.nl",      "ahmed",    "fonteyn.ahmed",
+  "yves@fonteyn.nl",       "yves",     "fonteyn.yves",
+  "luis@fonteyn.nl",       "luis",     "fonteyn.luis",
+  "fonteyn.bert",          "bert@fonteyn.nl",
+  "fonteyn.maartens",
 ]);
 
 // Amerika-tegel (Houston/Texas, Passion Spas USA) — apart 'bedrijf', draait op
