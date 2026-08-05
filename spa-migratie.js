@@ -195,6 +195,14 @@
     links.appendChild(el("div", "sm-meta",
       "besteld " + nlDatum(c.besteld) + "  ·  ETA " + nlDatum(c.eta) + "  ·  " + c.spas + " spa's  ·  " + c.regels.length + " regels"));
     links.appendChild(el("div", "sm-meta klein", c.reden));
+    // Wie heeft de inkooporder aangemaakt en wanneer. Zonder deze regel is aan
+    // een bestaande inkooporder niet te zien of een mens hem heeft gemaakt.
+    if (c.alGedaan) {
+      links.appendChild(el("div", "sm-meta klein",
+        "inkooporder " + c.alGedaan + " aangemaakt" +
+        (c.gedaanDoor ? " door " + c.gedaanDoor : "") +
+        (c.gedaanOp ? " op " + nlDatum(c.gedaanOp) : "")));
+    }
     // Waar komt deze bestelling vandaan? Zonder dit moest Chantal het vragen.
     if (c.import && c.import.bestand) {
       links.appendChild(el("div", "sm-meta klein",

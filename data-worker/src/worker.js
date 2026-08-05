@@ -1610,6 +1610,13 @@ async function spaMigratieVoorstel(env) {
       import: c.import || null,
       actueel: status.actueel, reden: status.reden,
       alGedaan: gedaan.orders && gedaan.orders[ref] ? gedaan.orders[ref].buyOrderId : null,
+      // Wie hem heeft aangemaakt en wanneer. Chantal zag op 5 aug 2026 drie
+      // inkooporders staan en kon nergens zien waar die vandaan kwamen; haar
+      // conclusie was dat het systeem ze zelf had gemaakt. Dat gebeurt niet -
+      // er komt geen inkooporder zonder dat een mens op de knop drukt - maar
+      // dat moet je dan wel kunnen zíen.
+      gedaanDoor: gedaan.orders && gedaan.orders[ref] ? (gedaan.orders[ref].door || null) : null,
+      gedaanOp: gedaan.orders && gedaan.orders[ref] ? (gedaan.orders[ref].ts || null) : null,
       spas: spas, zeker: zeker, nakijken: nakijken, onmogelijk: onmogelijk,
       referentie: ref, regels: regels
     });

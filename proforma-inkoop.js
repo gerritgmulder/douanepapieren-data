@@ -66,12 +66,26 @@ function parseProforma(wb){
     if(!eerste) continue;                       // o.a. de GRAND TOTAL-regel
     const aantal=Number(r&&r[kAantal]);
     if(!isFinite(aantal)||aantal<=0) continue;
-    // Op het PI-tabblad staat SKT888G-2, op 'customer request' kaal 888G2.
-    const m=eerste.match(/^((?:SKT|PP)[\w.-]*|[0-9][\w.-]*)/i);
+    // Elke fabriekscode bevat cijfers en begint met hooguit een paar letters:
+    // SKT888G-2 en PP01 (Jazzi/Devine), JY8805 (Kasdaly), ZR7011 (Huantong),
+    // EX-180, ET-165, S-1501 (New Normal), WS-PC05ST (Mexda).
+    //
+    // Hier stond eerder /^((?:SKT|PP)[\w.-]*|[0-9][\w.-]*)/, en dat sloeg élke
+    // regel van de drie nieuwe fabrieken over: JY, ZR, EX, ET, S- en WS-codes
+    // beginnen niet met SKT, PP of een cijfer. Een proforma van Kasdaly leverde
+    // daardoor een leeg voorstel op zonder dat er iets misging (4 aug 2026).
+    const m=eerste.match(/^([A-Z]{0,3}[-.]?\d[\w.\-]*|(?:SKT|PP|WS)[\w.\-]*)/i);
     if(!m) continue;
-    let code=m[1].toUpperCase();
-    if(!/^(SKT|PP)/.test(code)) code="SKT"+code;
-    const mo=spaModel(code);
+    let code=m[1].toUpperCase().replace(/\s+/g,"");
+    // Alleen Jazzi's eigen bestelmail zet de code kaal neer (888G2 in plaats van
+    // SKT888G-2). Een code die al met letters begint hoort ongemoeid te blijven,
+    // anders wordt JY8805 stilletjes SKTJY8805 en vindt niemand hem meer.
+    if(/^\d/.test(code)) code="SKT"+code;
+    const kleurTekst=String((r&&r[kKleur])==null?"":r[kKleur]);
+    // Kleur kan het model bepalen: SKT888-G2 is een Mallorca Superior, maar in
+    // het zwart heet hij Blackpool (Chantal, 4 aug 2026). Daarom niet spaModel
+    // maar spaModelMetKleur, precies zoals de commercial invoice het doet.
+    const mo=(typeof spaModelMetKleur==="function")?spaModelMetKleur(code,kleurTekst):spaModel(code);
     const prijs=kPrijs>=0?Number(r[kPrijs]):NaN;
     regels.push({
       code,

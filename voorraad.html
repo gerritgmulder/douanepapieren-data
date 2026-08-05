@@ -363,6 +363,7 @@
       </p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="resvSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:280px;padding:8px">
+        <select id="resvKleur" title="alleen deze kleur tonen" style="padding:8px"><option value="">alle kleuren</option></select>
         <span id="resvUpdated" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <div id="resvOverview" style="margin-top:12px"></div>
@@ -378,6 +379,7 @@
       <p class="lead" style="font-size:12px;margin-bottom:10px">Alle openstaande spa-reserveringen van <b>particuliere</b> klanten, met de verwachte levering. Deze staan óók in het tabblad Reserveringen.</p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="partSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
+        <select id="partKleur" title="alleen deze kleur tonen" style="padding:8px"><option value="">alle kleuren</option></select>
         <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
           <input type="checkbox" id="partToonGepland"> geplande spa's tonen
         </label>
@@ -390,6 +392,18 @@
       </p>
       <div id="partList" style="margin-top:12px"></div>
     </div>
+
+    <!-- Afroep en binnengekomen spa's (Chantal, 5 aug 2026). Zelfde gedachte als
+         'Binnen per adviseur' bij Partner, maar particulieren hebben geen
+         adviseur-indeling: hier splitst het op wát er met de spa moet gebeuren.
+         Wat je bovenin aanvinkt zakt naar dit blok; wat hier op Gepland gaat
+         verdwijnt, en is alleen terug te halen met 'geplande spa's tonen'. -->
+    <div class="card">
+      <h3>Afroep en binnengekomen — <span id="partBlokTotaal">0</span> spa's</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Alles wat je hierboven op <b>Afroep</b> of <b>Inplannen</b> hebt gezet staat hier. Vink <b>Gepland</b> aan zodra de afspraak met de klant staat; de regel verdwijnt dan uit beide lijsten.</p>
+      <div id="partBlokTabs" class="tabs" style="margin-bottom:10px"></div>
+      <div id="partBlokLijst"></div>
+    </div>
   </div>
 
   <div id="tab-partner" class="hidden">
@@ -398,6 +412,10 @@
       <p class="lead" style="font-size:12px;margin-bottom:10px">Alle openstaande spa-reserveringen van <b>zakelijke</b> klanten en partners, met de verwachte levering. Deze staan óók in het tabblad Reserveringen. Containerorders staan apart onder <b>Partner containers</b>.</p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="ptnSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
+        <select id="ptnKleur" title="alleen deze kleur tonen" style="padding:8px"><option value="">alle kleuren</option></select>
+        <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" id="ptnToonGepland"> geplande spa's tonen
+        </label>
         <span id="ptnCount" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <p class="lead" style="font-size:11.5px;margin:8px 0 0">
@@ -418,7 +436,24 @@
   </div>
 
   <!-- Spa-inkoop naar Logic4 — inhoud wordt getekend door spa-migratie.js -->
-  <div id="tab-spainkoop" class="hidden"></div>
+  <!-- Inkoop naar Logic4. De proforma-uploadkaart stond tot 5 aug 2026 onder
+       Partner containers; Chantal zocht hem hier en vond hem daar niet. Het
+       migratie-voorstel eronder wist zijn eigen doel-div leeg, dus die staat
+       apart — anders verdwijnt de uploadkaart bij elke hertekening. -->
+  <div id="tab-spainkoop" class="hidden">
+    <div class="card" id="ikoCard">
+      <h3>Proforma invoice → inkooporder in Logic4</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Upload de <b>proforma invoice</b> van de fabriek — Jazzi, Kasdaly, Huantong, New Normal of Mexda. Het dashboard leest hem uit en laat zien welke inkooporder hij zou aanmaken: spa's, kleuren, aantallen en artikelcodes. De leverancier kies je zelf in de lijst eronder. <b>Er wordt niets weggeschreven tot je zelf op akkoord klikt.</b></p>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:0;flex-wrap:wrap">
+        <input type="file" id="ikoFile" accept=".xlsx,.xls,.csv">
+        <input type="text" id="ikoRef" placeholder="proforma-referentie (bv. PI-3352)" style="min-width:200px;padding:8px">
+        <input type="date" id="ikoEta" title="verwachte leverdatum" style="padding:8px">
+      </div>
+      <div id="ikoStatus" class="status-msg hidden" style="margin-top:10px"></div>
+      <div id="ikoVoorstel" style="margin-top:12px"></div>
+    </div>
+    <div id="spaMigratieDoel"></div>
+  </div>
 
   <!-- Documentenketen Jazzi — getekend door spa-ontvangst.js -->
   <div id="tab-ontvangst" class="hidden"></div>
@@ -433,18 +468,6 @@
       </div>
       <div id="pcList" style="margin-top:12px"></div>
     </div>
-    <div class="card" id="ikoCard">
-      <h3>Proforma invoice → inkooporder in Logic4</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Upload de <b>proforma invoice</b> van de fabriek. Het dashboard leest hem uit en laat zien welke inkooporder hij zou aanmaken — spa's, kleuren, aantallen en artikelcodes. <b>Er wordt niets weggeschreven tot je zelf op akkoord klikt.</b></p>
-      <div class="actions" style="gap:10px;align-items:center;margin-top:0;flex-wrap:wrap">
-        <input type="file" id="ikoFile" accept=".xlsx,.xls,.csv">
-        <input type="text" id="ikoRef" placeholder="proforma-referentie (bv. PI-3352)" style="min-width:200px;padding:8px">
-        <input type="date" id="ikoEta" title="verwachte leverdatum" style="padding:8px">
-      </div>
-      <div id="ikoStatus" class="status-msg hidden" style="margin-top:10px"></div>
-      <div id="ikoVoorstel" style="margin-top:12px"></div>
-    </div>
-
     <div class="card" id="pcUploadCard">
       <h3>Commercial invoice uploaden — ETA's ophalen</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Upload de commercial invoice van een <b>dealer-container</b> (zelfde Excel-formaat als bij Schepen). De container verschijnt daarna bij Schepen en de ETA wordt via de vervoerder opgehaald.</p>
@@ -1301,17 +1324,37 @@ function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode, un
 const HALLEN_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-hallen";
 async function loadOverzicht(){
   try{
-    const [resv,hal,ship,prices]=await Promise.all([
+    const [resv,hal,ship,prices,cat]=await Promise.all([
       fetch(RESV_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({byModel:{}})),
       fetch(HALLEN_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({models:{}})),
       fetch(SHIPS_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({ships:[]})),
-      fetch(PRICES_URL_OV,{headers:{"X-DP-Admin":dpAdminKey()}}).then(r=>r.ok?r.json():{prices:{}}).catch(()=>({prices:{}}))
+      fetch(PRICES_URL_OV,{headers:{"X-DP-Admin":dpAdminKey()}}).then(r=>r.ok?r.json():{prices:{}}).catch(()=>({prices:{}})),
+      // De catalogus koppelt artikelcode → kleur. Nodig om de hal-voorraad,
+      // die per artikelcode wordt bijgehouden, per kleur te kunnen tonen.
+      fetch(CATALOG_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.ok?r.json():{models:{}}).catch(()=>({models:{}}))
     ]);
+    ovCodeKleur=bouwCodeKleur(cat);
     renderOverzicht(resv,hal,ship,prices);
   }catch(e){ document.getElementById("ovKpis").innerHTML="<div class='status-msg bad'>Overzicht laden faalde: "+esc(e.message)+"</div>"; }
 }
 const PRICES_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/dealer-prices";
-let ovShipsCache=[], ovShipOpen={}, ovBacklogRows=[], ovBacklogOpen={};
+const CATALOG_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/spa-catalog";
+let ovShipsCache=[], ovShipOpen={}, ovBacklogRows=[], ovBacklogOpen={}, ovCodeKleur={};
+// De kleur staat achter de streep in de artikelomschrijving ("Passion Spa |
+// Sensation SW with GREY/oak trim"). Exact dezelfde regel als de worker op de
+// orderregels toepast — anders zouden gevraagd en voorraad op net andere
+// kleurnamen uitkomen en klopt de vergelijking niet.
+function kleurUitOms(desc){
+  const s=String(desc||""), i=s.indexOf("|");
+  if(i<0) return null;
+  return s.slice(i+1).replace(/\b(spa|swimspa)\b/gi,"").replace(/\s+/g," ").trim()||null;
+}
+function bouwCodeKleur(cat){
+  const uit={};
+  for(const varianten of Object.values((cat&&cat.models)||{}))
+    for(const v of (varianten||[])) if(v&&v.code) uit[String(v.code)]=kleurUitOms(v.desc);
+  return uit;
+}
 // Kleur-uitsplitsing van een set reserveringsregels → [{kleur,qty}] gesorteerd.
 function kleurBreakdown(lines){
   const by={}; for(const r of lines){ const k=r.kleur||"(geen kleur)"; by[k]=(by[k]||0)+r.qty; }
@@ -1339,7 +1382,8 @@ function renderOverzicht(resv,hal,ship,priceData){
     const tekort=Math.max(0,actQty-voorraad-zee);
     const p=prices[m]; if(p&&p.usd) orderwaarde+=actQty*Math.round(Number(p.usd)/rate);
     if(actQty>0||voorraad>0||zee>0||conQty>0) rows.push({m,actQty,conQty,voorraad,zee,gedekt,tekort,
-      kleuren:kleurBreakdown(fon), kleurenCont:kleurBreakdown(con)});
+      kleuren:kleurBreakdown(fon), kleurenCont:kleurBreakdown(con),
+      perKleur:tekortPerKleur(fon,(halM[m]||{}).variants||{})});
   }
   const eur=n=>"€ "+Number(n).toLocaleString("nl-NL");
   document.getElementById("ovKpis").innerHTML=
@@ -1358,6 +1402,53 @@ function renderOverzicht(resv,hal,ship,priceData){
   renderOvShips();
   toonParserWaarschuwing();
 }
+/* ── Tekort per kleur (Chantal, 5 aug 2026) ────────────────────────────────
+   "Ik moet ook ergens kunnen zien waar mijn tekort in zit. In welke kleur?"
+   Het tekort per model zei tot nu toe alleen hoevéél, en daar kun je geen
+   bestelling op baseren.
+
+   De vraag staat per kleur in de reserveringen; de hal-voorraad staat per
+   artikelcode, en die codes vertalen we via de catalogus naar een kleur. Wat
+   op zee is weten we alleen per model — de commercial invoices geven geen
+   kleur — dus dat wordt hier bewust NIET over de kleuren verdeeld. Zo'n
+   verdeling zou een gok zijn en precies de vraag verpesten waarvoor Chantal
+   dit nodig heeft. Het staat als losse regel onder de tabel. */
+function tekortPerKleur(lines,variants){
+  const per={};
+  const zet=function(kleur,veld,n){
+    const k=kleur||"(geen kleur)";
+    if(!per[k]) per[k]={kleur:k,gevraagd:0,voorraad:0};
+    per[k][veld]+=n;
+  };
+  for(const r of lines) zet(r.kleur,"gevraagd",Number(r.qty)||0);
+  for(const [code,qty] of Object.entries(variants||{})) zet(ovCodeKleur[code],"voorraad",Number(qty)||0);
+  return Object.values(per).map(function(x){
+    x.tekort=Math.max(0,x.gevraagd-x.voorraad);
+    return x;
+  }).sort((a,b)=>(b.tekort-a.tekort)||(b.gevraagd-a.gevraagd)||a.kleur.localeCompare(b.kleur,"nl"));
+}
+function kleurTabel(r){
+  const rijen=(r.perKleur||[]).filter(x=>x.gevraagd>0||x.voorraad>0);
+  if(!rijen.length) return "<p class='lead' style='margin:0'>Geen kleurgegevens.</p>";
+  return "<div class='tablewrap'><table class='grid' style='margin:0'><thead><tr>"+
+    "<th>Kleur</th><th>Gevraagd</th><th>Op voorraad</th><th>Tekort</th></tr></thead><tbody>"+
+    rijen.map(function(x){
+      return "<tr><td>"+esc(x.kleur)+"</td><td>"+(x.gevraagd||"—")+"</td>"+
+        "<td style='color:#2563eb'>"+(x.voorraad||"—")+"</td>"+
+        "<td style='color:"+(x.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(x.tekort||"—")+"</td></tr>";
+    }).join("")+"</tbody></table></div>"+
+    // Voorraad die we niet aan een kleur kunnen hangen — bijvoorbeeld een
+    // artikelcode die nog niet in de catalogus staat. Die moet je zien, want
+    // anders lijkt er een tekort dat er in werkelijkheid niet is.
+    (function(){
+      const verdeeld=rijen.reduce((n,x)=>n+x.voorraad,0);
+      const rest=Math.max(0,(Number(r.voorraad)||0)-verdeeld);
+      return rest?("<p class='lead' style='font-size:11.5px;margin:6px 0 0;color:#92400e'><b>"+rest+"</b> stuks op voorraad "+
+        "waarvan de kleur niet te bepalen was; die staan hierboven nergens bij. Het tekort kan dus lager uitvallen.</p>"):"";
+    })()+
+    (r.zee?("<p class='lead' style='font-size:11.5px;margin:6px 0 0'><b>"+r.zee+"</b> stuks op zee. "+
+      "De commercial invoices vermelden geen kleur, dus die zijn hierboven niet van het tekort afgetrokken.</p>"):"");
+}
 function kleurChips(list){
   if(!list||!list.length) return "<span style='color:var(--muted)'>—</span>";
   return list.map(c=>"<span class='pill' style='background:#eef2ff;color:#3730a3;margin:2px 3px 0 0'>"+esc(c.kleur)+" <b>"+c.qty+"</b></span>").join("");
@@ -1368,14 +1459,18 @@ function renderBacklog(){
   body.innerHTML=ovBacklogRows.map(r=>{
     const open=!!ovBacklogOpen[r.m];
     let h="<tr class='ovBackRow' data-m='"+esc(r.m)+"' style='cursor:pointer'><td>"+(open?"▾ ":"▸ ")+"<b>"+esc(r.m)+"</b></td>"+
-      "<td>"+r.actQty+(r.conQty?(" <span style='color:#c2410c;font-size:11px'>+"+r.conQty+" cont.</span>"):"")+"</td>"+
+      // Chantal vroeg wat die "+29 cont." betekent. Dat is nu uit te lezen
+      // zonder het te hoeven vragen: het zijn de partnercontainers.
+      "<td>"+r.actQty+(r.conQty?(" <span style='color:#c2410c;font-size:11px' title='partnercontainers: orders op magazijn Dealer magazijn, rechtstreeks naar de dealer'>+"+r.conQty+" partnercont.</span>"):"")+"</td>"+
       "<td>"+(r.voorraad||"—")+"</td><td>"+(r.zee||"—")+"</td>"+
       "<td style='color:#15803d'>"+r.gedekt+"</td>"+
       "<td style='color:"+(r.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(r.tekort||"—")+"</td></tr>";
     if(open){
       h+="<tr><td colspan='6' style='background:#fafafa;padding:8px 14px'>"+
-        "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px'>Kleuren — Fonteyn-reserveringen</div>"+kleurChips(r.kleuren)+
-        (r.kleurenCont.length?("<div style='font-size:11px;color:#c2410c;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px'>Kleuren — containers</div>"+kleurChips(r.kleurenCont)):"")+
+        "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px'>Tekort per kleur — wat je zou moeten bestellen</div>"+
+        kleurTabel(r)+
+        "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px'>Kleuren — Fonteyn-reserveringen</div>"+kleurChips(r.kleuren)+
+        (r.kleurenCont.length?("<div style='font-size:11px;color:#c2410c;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px'>Kleuren — partnercontainers (rechtstreeks naar de dealer)</div>"+kleurChips(r.kleurenCont)):"")+
         "</td></tr>";
     }
     return h;
@@ -1488,7 +1583,11 @@ function renderReserveringen(){
   const all=Object.keys(resvData.byModel);
   // Containerorders (Dealer magazijn) horen hier NIET meer: die staan in de
   // eigen tab 'Partner containers' — ze vertroebelden het voorraadbeeld.
-  const zichtbaar=m=>(resvData.byModel[m]||[]).filter(r=>!r.container);
+  // Kleurkeuze vullen op álle zichtbare regels, niet op het zoekresultaat:
+  // anders verdwijnt de kleur waarop je net filterde zodra je gaat typen.
+  const gekozenKleur=vulKleurKeuze("resvKleur",
+    all.flatMap(m=>(resvData.byModel[m]||[]).filter(r=>!r.container)));
+  const zichtbaar=m=>(resvData.byModel[m]||[]).filter(r=>!r.container&&kleurMatch(r,gekozenKleur));
   const models=all.filter(m=>zichtbaar(m).some(r=>resvMatch(r,m,q)))
     .sort((a,b)=>zichtbaar(b).length-zichtbaar(a).length);
   if(!models.length){ ov.innerHTML="<p class='lead'>Geen reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
@@ -1537,6 +1636,7 @@ function resvRows(list){
   }).join("");
 }
 document.getElementById("resvSearch")&&document.getElementById("resvSearch").addEventListener("input",renderReserveringen);
+document.getElementById("resvKleur")&&document.getElementById("resvKleur").addEventListener("change",renderReserveringen);
 // (Amerika/Warehouse Texas is verplaatst naar de aparte Amerika-tegel — amerika.html)
 
 // ===== Particulier / Partner / Partner containers (Chantal, 27 jul) =========
@@ -1601,8 +1701,38 @@ function resvVoorSoort(soort){
 // Sorteervoorkeur per tabblad. Chantal wil de spa's alfabetisch bij elkaar
 // ("alle Blissen onder elkaar"), dus dat is de standaard.
 const resvSort={particulier:{kolom:"model",op:1},partner:{kolom:"model",op:1}};
+
+/* ── Kleur als filter en als sorteerkolom (Chantal, 5 aug 2026) ────────────
+   "Ik kan alleen niet selecteren op kleur, zou je die bij beide willen
+   toevoegen?" — dat geldt voor Reserveringen, Particulier en Partner.
+   De keuzelijst wordt gevuld met de kleuren die er op dat moment écht zijn,
+   zodat er nooit een kleur in staat waar geen enkele spa bij hoort. */
+function kleurSleutel(k){ return String(k==null?"":k).trim().toLowerCase(); }
+function vulKleurKeuze(id,regels){
+  const sel=document.getElementById(id); if(!sel) return "";
+  const gekozen=sel.value||"";
+  const perSleutel={};
+  for(const r of regels){
+    const s=kleurSleutel(r.kleur); if(!s) continue;
+    if(!perSleutel[s]) perSleutel[s]={label:String(r.kleur).trim(),n:0};
+    perSleutel[s].n+=Number(r.qty)||0;
+  }
+  const opts=Object.keys(perSleutel).sort((a,b)=>perSleutel[a].label.localeCompare(perSleutel[b].label,"nl"));
+  // Een gekozen kleur die na filteren even niet voorkomt tóch laten staan,
+  // anders springt de keuzelijst tijdens het typen in het zoekveld terug.
+  if(gekozen&&!perSleutel[gekozen]) opts.push(gekozen);
+  sel.innerHTML="<option value=''>alle kleuren</option>"+
+    opts.map(function(s){
+      const o=perSleutel[s]||{label:s,n:0};
+      return "<option value='"+esc(s)+"'"+(s===gekozen?" selected":"")+">"+esc(o.label)+(o.n?" ("+o.n+")":"")+"</option>";
+    }).join("");
+  return gekozen;
+}
+function kleurMatch(r,gekozen){ return !gekozen||kleurSleutel(r.kleur)===gekozen; }
+
 function sorteerWaarde(r,kolom){
   if(kolom==="model")    return String(r.model||"");
+  if(kolom==="kleur")    return String(r.kleur||"zzz");
   if(kolom==="naam")     return String(r.naam||"");
   if(kolom==="adviseur") return String(r.adviseur||"zzz");
   if(kolom==="datum")    return String(r.datum||"");
@@ -1632,12 +1762,24 @@ function renderResvSoort(soort,zoekId,lijstId,telId){
   const inp=document.getElementById(zoekId), box=document.getElementById(lijstId);
   if(!box) return;
   const q=((inp&&inp.value)||"").trim().toLowerCase();
-  const toonGepland=!!(document.getElementById(soort==="particulier"?"partToonGepland":"ptnToonGepland")||{}).checked;
+  const particulier=soort==="particulier";
+  const toonGepland=!!(document.getElementById(particulier?"partToonGepland":"ptnToonGepland")||{}).checked;
   let rijen=resvVoorSoort(soort).filter(r=>resvMatch(r,r.model,q));
-  // 'Gepland' = de klant heeft een afspraak en de spa gaat fysiek de deur uit;
-  // die hoort niet meer in het overzicht. Met het vinkje bovenaan haal je ze
-  // terug, zodat een verkeerd aangevinkte regel niet onvindbaar wordt.
-  if(!toonGepland) rijen=rijen.filter(r=>!notitie(r).gepland);
+  const gekozenKleur=vulKleurKeuze(particulier?"partKleur":"ptnKleur",rijen);
+  rijen=rijen.filter(r=>kleurMatch(r,gekozenKleur));
+  // Wat je hebt aangevinkt is naar het tweede blok verhuisd en hoort hier niet
+  // meer (Chantal, 5 aug 2026: "dan verdwijnt-ie bovenin"). Stond een regel er
+  // eerst dubbel in, dan zag je hem twee keer en wist je niet welke telde.
+  //   afroep of inplannen → tweede blok (Afroep / Binnengekomen, of per adviseur)
+  //   gepland             → helemaal weg, tenzij het vinkje bovenaan aan staat
+  // Let op de particulier-check bij afroep: Partner heeft dat vakje niet en
+  // ook geen tweede blok waar zo'n regel heen kan. Zonder die check zou een
+  // partnerregel met een oud afroep-vinkje nergens meer staan.
+  rijen=rijen.filter(function(r){
+    const n=notitie(r);
+    if(n.gepland) return toonGepland;
+    return !n.inplannen && !(particulier && n.afroep);
+  });
   const s=resvSort[soort]||{kolom:"model",op:1};
   rijen.sort(function(a,b){
     // Ingeplande regels altijd bovenaan — die moet de planning als eerste zien.
@@ -1651,9 +1793,8 @@ function renderResvSoort(soort,zoekId,lijstId,telId){
   if(tel) tel.textContent=rijen.length+" reservering(en) · "+totaal+" spa's"+(resvData.updated?(" · ververst "+new Date(resvData.updated).toLocaleString("nl-NL")):"");
   if(!rijen.length){ box.innerHTML="<p class='lead'>Geen reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
   const uit=!MAG_WIJZIGEN?" disabled":"";
-  const particulier=soort==="particulier";
   box.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
-    "<th>Order</th>"+kopSorteer(soort,"model","Spa")+"<th>Kleur</th><th>Aantal</th>"+
+    "<th>Order</th>"+kopSorteer(soort,"model","Spa")+kopSorteer(soort,"kleur","Kleur")+"<th>Aantal</th>"+
     kopSorteer(soort,"naam","Klant")+kopSorteer(soort,"adviseur","Adviseur")+
     kopSorteer(soort,"datum","Datum")+"<th>Betaling</th>"+kopSorteer(soort,"levering","Verwachte levering")+
     "<th>Opmerkingen</th>"+(particulier?"<th>Afroep</th>":"")+"<th>Inplannen</th>"+(particulier?"<th>Gepland</th>":"")+
@@ -1720,7 +1861,66 @@ function renderSoortTabs(){
   renderResvSoort("particulier","partSearch","partList","partCount");
   renderResvSoort("partner","ptnSearch","ptnList","ptnCount");
   renderAdviseurTabs();
+  renderParticulierBlok();
   renderPartnerContainers();
+}
+
+/* ── Afroep en binnengekomen spa's bij Particulier (Chantal, 5 aug 2026) ────
+   "Ik wil eigenlijk bij particulieren hetzelfde hebben als bij dealers. Hoeft
+   niet op adviseur." Bij Partner splitst het tweede blok op adviseur, want
+   die moet zijn eigen dealer bellen. Bij particulieren is er geen adviseur om
+   op te splitsen, dus splitst het op wát er moet gebeuren: afroep of inplannen.
+   Eén regel kan allebei aan hebben staan; die telt dan in beide tabbladen mee,
+   want het zijn twee verschillende acties. */
+let partBlokActief="inplannen";
+function renderParticulierBlok(){
+  const tabs=document.getElementById("partBlokTabs"), lijst=document.getElementById("partBlokLijst");
+  if(!tabs||!lijst) return;
+  const alle=resvVoorSoort("particulier").filter(function(r){
+    const n=notitie(r); return !n.gepland && (n.inplannen || n.afroep);
+  });
+  const groepen={
+    inplannen:alle.filter(r=>notitie(r).inplannen),
+    afroep:alle.filter(r=>notitie(r).afroep),
+  };
+  const telEl=document.getElementById("partBlokTotaal");
+  if(telEl) telEl.textContent=alle.reduce((n,r)=>n+(Number(r.qty)||0),0);
+  tabs.innerHTML=[["inplannen","Binnengekomen spa's"],["afroep","Op afroep"]].map(function(p){
+    return "<button type='button' class='tab partBlokTab"+(p[0]===partBlokActief?" active":"")+
+      "' data-groep='"+p[0]+"'>"+p[1]+" ("+groepen[p[0]].length+")</button>";
+  }).join("");
+  const rijen=groepen[partBlokActief]||[];
+  if(!rijen.length){
+    lijst.innerHTML="<p class='lead'>Niets in deze lijst. Vink hierboven <b>"+
+      (partBlokActief==="afroep"?"Afroep":"Inplannen")+"</b> aan bij een reservering.</p>";
+  }else{
+    rijen.sort(function(a,b){
+      return String(a.model||"").localeCompare(String(b.model||""),"nl",{numeric:true})
+        ||String(a.ordernr).localeCompare(String(b.ordernr));
+    });
+    const uit=!MAG_WIJZIGEN?" disabled":"";
+    lijst.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
+      "<th>Order</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Klant</th><th>Datum</th>"+
+      "<th>Opmerkingen</th><th>Afroep</th><th>Inplannen</th><th>Gepland</th></tr></thead><tbody>"+
+      rijen.map(function(r){
+        const n=notitie(r), id=esc(r.regelId||"");
+        const stijl=n.inplannen?"background:#fef9c3"+(n.afroep?";border-left:4px solid #7c3aed":"")
+                               :"background:#f3e8ff;border-left:4px solid #7c3aed";
+        return "<tr style='"+stijl+"'>"+
+          "<td>"+esc(r.ordernr)+"</td><td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur)+"</td>"+
+          "<td>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
+          "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
+          "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' style='width:190px;font-size:12px;padding:4px 7px'"+uit+"></td>"+
+          "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='afroep' data-id='"+id+"'"+(n.afroep?" checked":"")+uit+"></td>"+
+          "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='inplannen' data-id='"+id+"'"+(n.inplannen?" checked":"")+uit+"></td>"+
+          "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='gepland' data-id='"+id+"'"+(n.gepland?" checked":"")+uit+"></td>"+
+          "</tr>";
+      }).join("")+"</tbody></table></div>";
+    koppelNotitieVelden(lijst,rijen);
+  }
+  tabs.querySelectorAll(".partBlokTab").forEach(function(b){
+    b.addEventListener("click",function(){ partBlokActief=b.dataset.groep; renderParticulierBlok(); });
+  });
 }
 
 // ===== Binnen per adviseur (Chantal, 29 jul) ===============================
@@ -1731,7 +1931,12 @@ let ptnAdvActief="__alle__", ptnAdvSort={kolom:"naam",op:1};
 function renderAdviseurTabs(){
   const tabs=document.getElementById("ptnAdvTabs"), lijst=document.getElementById("ptnAdvLijst");
   if(!tabs||!lijst) return;
-  const binnen=resvVoorSoort("partner").filter(r=>notitie(r).inplannen);
+  // Wat op Ingepland staat is afgehandeld en hoort ook hier niet meer
+  // (Chantal, 5 aug 2026: "zodra we die aanklikken dat hij dan volledig
+  // verdwijnt"). Terughalen kan met 'geplande spa's tonen' bij Partner.
+  const binnen=resvVoorSoort("partner").filter(function(r){
+    const n=notitie(r); return n.inplannen && !n.gepland;
+  });
   const totaal=binnen.reduce((n,r)=>n+(Number(r.qty)||0),0);
   const telEl=document.getElementById("ptnAdvTotaal"); if(telEl) telEl.textContent=totaal;
   if(!binnen.length){
@@ -1759,11 +1964,13 @@ function renderAdviseurTabs(){
     return "<th class='advSortKop' data-kolom='"+kolom+"' style='cursor:pointer;white-space:nowrap'>"+esc(tekst)+
       (actief?(ptnAdvSort.op>0?" ▲":" ▼"):"<span style='color:#d1d5db'> ⇅</span>")+"</th>";
   };
+  const uit=!MAG_WIJZIGEN?" disabled":"";
   lijst.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
     kop("naam","Dealer")+kop("adviseur","Adviseur")+"<th>Order</th>"+kop("model","Spa")+
-    "<th>Kleur</th><th>Aantal</th>"+kop("datum","Datum")+"<th>Opmerkingen</th></tr></thead><tbody>"+
+    kop("kleur","Kleur")+"<th>Aantal</th>"+kop("datum","Datum")+
+    "<th>Opmerkingen</th><th>Inplannen</th><th>Ingepland</th></tr></thead><tbody>"+
     rijen.map(function(r){
-      const n=notitie(r);
+      const n=notitie(r), id=esc(r.regelId||"");
       return "<tr style='background:#fef9c3'>"+
         "<td><b>"+esc(r.naam)+"</b></td>"+
         "<td>"+adviseurCel(r)+"</td>"+
@@ -1772,8 +1979,17 @@ function renderAdviseurTabs(){
         "<td>"+kleurCel(r.kleur)+"</td>"+
         "<td>"+r.qty+"</td>"+
         "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
-        "<td style='font-size:12px;color:#374151'>"+esc(n.opmerking||"—")+"</td></tr>";
+        // Bewerkbaar veld, geen platte tekst meer: de adviseur moet hier zijn
+        // aantekening kwijt kunnen zonder terug te gaan naar de bovenste lijst,
+        // waar de regel inmiddels niet meer staat.
+        "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' style='width:180px;font-size:12px;padding:4px 7px'"+uit+"></td>"+
+        // Inplannen blijft zichtbaar zodat een per ongeluk aangevinkte regel
+        // hiervandaan terug kan; Ingepland haalt hem uit beide lijsten.
+        "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='inplannen' data-id='"+id+"'"+(n.inplannen?" checked":"")+uit+"></td>"+
+        "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='gepland' data-id='"+id+"'"+(n.gepland?" checked":"")+uit+"></td>"+
+        "</tr>";
     }).join("")+"</tbody></table></div>";
+  koppelNotitieVelden(lijst,rijen);
   tabs.querySelectorAll(".advTab").forEach(function(b){
     b.addEventListener("click",function(){ ptnAdvActief=b.dataset.adv; renderAdviseurTabs(); });
   });
@@ -1862,7 +2078,7 @@ function renderPartnerContainers(){
   const el=document.getElementById(id);
   if(el) el.addEventListener("input",renderSoortTabs);
 });
-["partToonGepland"].forEach(id=>{
+["partToonGepland","ptnToonGepland","partKleur","ptnKleur"].forEach(id=>{
   const el=document.getElementById(id);
   if(el) el.addEventListener("change",renderSoortTabs);
 });
@@ -2185,7 +2401,7 @@ if(window.fpProforma) window.fpProforma.start({
 function startSpaMigratie(){
   if(!window.fpSpaMigratie) return;
   window.fpSpaMigratie.start({
-    doelId:"tab-spainkoop",
+    doelId:"spaMigratieDoel",
     teamKey:DATA_STORE_AUTH,
     adminKey:dpAdminKey(),
     magWijzigen:MAG_BEHEREN,
