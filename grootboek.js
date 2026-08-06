@@ -82,7 +82,22 @@
      ("Betaling voor order 3488620", "Afboeking order 3500792 naar factuur …").
      Zonder nummer is het een handmatige boeking — juist die willen we zien. */
   function orderUit(oms) {
-    var m = String(oms || "").match(/order\s*[:#]?\s*(\d{6,8})/i);
+    var s = String(oms || "");
+    var m = s.match(/\border\s*[:#]?\s*(\d{6,8})/i);
+    if (m) return m[1];
+    // De betaalregels noemen het ordernummer zónder het woord "order":
+    // "Online betaling 3454477 (2522354478X36069)", "Shopify betaling 3485998".
+    // Die vielen allemaal buiten de herkenning, en dat waren er nogal wat: van
+    // de 2.409 regels zonder nummer bleven er na deze regel 121 over, en de
+    // verdeling tussen openstaande posten en correcties schoof 2,5 miljoen op.
+    //
+    // Let op de uitzondering voor facturen. "Betaling factuur 6437205" en
+    // "Betaling voor factuur 6444194" noemen een factuurnummer, geen order.
+    // Die twee door elkaar halen zou betalingen aan de verkeerde post hangen,
+    // en dan klopt er per saldo niets meer van de aansluiting.
+    // Het streepje in "Betaling voor  - 3447863" hoort er ook doorheen te
+    // kunnen; "factuur" mag er niet tussen staan, want dan is het geen order.
+    m = s.match(/\bbetaling\s+(?:voor\s+)?[-\s]*(\d{6,8})\b/i);
     return m ? m[1] : null;
   }
 
