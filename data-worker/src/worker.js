@@ -2776,6 +2776,80 @@ function qbMapInvoice(inv, catalog, spaModels) {
   };
 }
 
+/* GET /amerika/qb/omzet?van=2025-01-01&tot=2025-12-31 — omzet over een periode.
+   Read-only, teamsleutel vereist.
+
+   Waarom apart van /invoices: die route levert alleen facturen vanaf nummer
+   3300, en dat is bewust - Chantal hoeft de historie niet na te lopen. Maar
+   daardoor begint die lijst pas op 13 april 2026 en is er geen enkel cijfer
+   over 2025 uit te halen.
+
+   Waarom de winst-en-verliesrekening en niet een optelling van facturen: dat
+   is wat QuickBooks zelf omzet noemt. Creditnota's, losse kasontvangsten en
+   correcties tellen daarin mee en in een factuuroptelling niet. Ik geef de
+   factuuroptelling er wel bij, want als die twee ver uiteenlopen zegt dat
+   iets over de administratie en wil je dat zien in plaats van kiezen. */
+async function qbOmzetPeriode(env, van, tot, methode) {
+  const t = await qbAccessToken(env);
+  const u = qbApiBase(env) + "/v3/company/" + t.realmId +
+    "/reports/ProfitAndLoss?minorversion=73&accounting_method=" + (methode === "Cash" ? "Cash" : "Accrual") +
+    "&start_date=" + encodeURIComponent(van) + "&end_date=" + encodeURIComponent(tot);
+  const r = await fetch(u, { headers: { "Authorization": "Bearer " + t.access_token, "Accept": "application/json" } });
+  if (!r.ok) throw new Error("ProfitAndLoss HTTP " + r.status + " " + (await r.text()).slice(0, 200));
+  const rap = await r.json();
+
+  // Het rapport is een boom van Rows met Summary-regels. We zoeken de secties
+  // op naam in plaats van op positie, want die verschilt per inrichting.
+  const gevonden = {};
+  const loop = (rijen) => {
+    for (const rij of (rijen && rijen.Row) || []) {
+      const kop = rij.Header && rij.Header.ColData && rij.Header.ColData[0] && rij.Header.ColData[0].value;
+      const som = rij.Summary && rij.Summary.ColData;
+      if (kop && som && som.length > 1) gevonden[String(kop).toLowerCase()] = Number(som[som.length - 1].value) || 0;
+      if (rij.Rows) loop(rij.Rows);
+      if (rij.ColData && rij.ColData.length > 1) {
+        const naam = String(rij.ColData[0].value || "").toLowerCase();
+        if (naam) gevonden[naam] = Number(rij.ColData[rij.ColData.length - 1].value) || 0;
+      }
+    }
+  };
+  loop(rap.Rows);
+  const pak = (...namen) => {
+    for (const n of namen) for (const k of Object.keys(gevonden)) if (k.includes(n)) return gevonden[k];
+    return null;
+  };
+
+  // Factuuroptelling als tweede meting.
+  let facturen = 0, aantal = 0;
+  for (let page = 0; page < 20; page++) {
+    const j = await qbQuery(env, "SELECT * FROM Invoice WHERE TxnDate >= '" + van + "' AND TxnDate <= '" + tot +
+      "' ORDERBY TxnDate STARTPOSITION " + (page * 1000 + 1) + " MAXRESULTS 1000");
+    const rows = (j.QueryResponse && j.QueryResponse.Invoice) || [];
+    for (const inv of rows) { facturen += Number(inv.TotalAmt) || 0; aantal++; }
+    if (rows.length < 1000) break;
+  }
+
+  return {
+    ok: true, van, tot, methode: methode === "Cash" ? "Cash" : "Accrual",
+    valuta: rap.Header && rap.Header.Currency || "USD",
+    omzet: pak("total income", "totaal inkomsten", "income"),
+    kostprijs: pak("total cost of goods sold", "cost of goods sold"),
+    brutowinst: pak("gross profit", "brutowinst"),
+    nettoresultaat: pak("net income", "net operating income"),
+    facturen: { aantal, bedrag: Math.round(facturen * 100) / 100 },
+    secties: gevonden,
+  };
+}
+async function qbHandleOmzet(request, env, url) {
+  if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+  const van = url.searchParams.get("van") || "2025-01-01";
+  const tot = url.searchParams.get("tot") || "2025-12-31";
+  // Kasstelsel of factuurstelsel maakt hier veel uit; QuickBooks staat bij
+  // veel bedrijven standaard op Cash en dan is de omzet lager dan op Accrual.
+  try { return reply(200, await qbOmzetPeriode(env, van, tot, url.searchParams.get("methode"))); }
+  catch (e) { return reply(200, { ok: false, error: String(e.message || e) }); }
+}
+
 // GET /amerika/qb/invoices — nieuwe facturen (docNr >= 3300) met voorgestelde
 // Logic4-mapping + of ze al geaccordeerd zijn. Read-only.
 // Alle QuickBooks-facturen ophalen mét paginering. QBO geeft max 1000 rijen
@@ -3065,6 +3139,7 @@ export default {
     if (url.pathname === "/amerika/qb/status")   return qbHandleStatus(request, env);
     if (url.pathname === "/amerika/qb/data")     return qbHandleData(request, env);
     if (url.pathname === "/amerika/qb/invoices") return qbHandleInvoices(request, env);
+    if (url.pathname === "/amerika/qb/omzet")    return qbHandleOmzet(request, env, url);
     if (url.pathname === "/amerika/qb/approve" && request.method === "POST") return qbHandleApprove(request, env);
     if (url.pathname === "/amerika/qb/audrey"  && request.method === "POST") return qbHandleAudrey(request, env);
     if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);

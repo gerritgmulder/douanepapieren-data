@@ -12,12 +12,19 @@
 // een inkooplevering hangen (de "lijst" waar de accountant het over heeft) en
 // boekingen zonder leveringnummer, dus handmatige correcties en
 // jaarafsluitingen. Die tweede groep staat niet op die lijst maar zit wél in
-// het saldo. Bij 1630 gaat het om 6,19 miljoen debet aan oude correcties
-// tegenover 6,38 miljoen credit aan oude openstaande posten: die heffen elkaar
-// bijna op. Wordt alleen de lijst opgeschoond, dan blijft de andere helft
-// staan en ontstaat er een gat ter grootte van die correcties. Daarom toont
-// dit script per rekening beide kanten en het verschil tussen eenzijdig en
+// het saldo. Schoon je alleen de lijst op, dan blijft de andere helft staan en
+// komt de rekening op een stand uit die niets meer betekent. Daarom toont dit
+// script per rekening beide kanten en het verschil tussen eenzijdig en
 // tweezijdig opschonen.
+//
+// LET OP BIJ HET LEZEN VAN OUDERE UITDRAAIEN
+// De eerste versies van dit script gaven een verkeerde verdeling, omdat de
+// herkenning van leveringnummers de afkorting IKL miste en de orderherkenning
+// de betaalregels ("Online betaling 3454477"). Op 1630 ging dat om 3,88
+// miljoen, op 1350 om 2,5 miljoen. Het sáldo klopte in beide gevallen, wat het
+// verraderlijk maakte: alles telde netjes op naar het goede eindbedrag, alleen
+// stond het in de verkeerde kolom. Uitdraaien van vóór 6 aug 2026 zijn dus
+// onbruikbaar, ook al zien ze er sluitend uit.
 //
 // Gebruik: node tools/kevin-opschoning-impact.mjs [--peil 2025-06-30] [--csv map]
 
@@ -58,15 +65,48 @@ const token = (await (await fetch("https://idp.logic4server.nl/token", {
 
 // Zelfde herkenning als grootboek.js in de app, zodat de cijfers niet uiteen lopen.
 function leveringUit(oms) {
-  const s = String(oms || "");
-  let m = s.match(/\(levering:\s*(\d+)\s*\)/i);   if (m) return m[1];
-  m = s.match(/inkooplevering\s+(\d+)\s*$/i);     if (m) return m[1];
-  m = s.match(/levering[:#\s]+(\d{4,9})/i);       return m ? m[1] : null;
-}
+    let s = String(oms || "");
+    let m = s.match(/\(levering:\s*(\d+)\s*\)/i);
+    if (m) return m[1];
+    m = s.match(/inkooplevering\s+(\d+)\s*$/i);
+    if (m) return m[1];
+    // IKL is de afkorting die de administratie gebruikt voor inkooplevering.
+    // Die stond hier niet in, en dat kostte 3,88 miljoen aan verkeerde
+    // indeling: "Corr. IKL 14830" (517 regels, 2,52 mln) en "correctie
+    // boeking artikel 78775 ikl 20711" (1,32 mln) werden geteld als
+    // handmatige correctie zonder herkomst, terwijl ze gewoon naar een
+    // inkooplevering verwijzen. Het saldo van 1630 bleef daardoor kloppen,
+    // maar de verdeling tussen "openstaande posten" en "correcties" niet -
+    // en juist die verdeling bepaalt wat er opgeschoond mag worden.
+    m = s.match(/\bikl[.\s:#]*(\d{3,9})/i);
+    if (m) return m[1];
+    // Leveranciers schrijven het leveringnummer op alle mogelijke manieren:
+    // "Lev.nr: 49509", "LEV: 50471", "Levering nr: 48985", en zelfs zonder
+    // scheidingsteken als "levering47732".
+    m = s.match(/\blev(?:ering)?\.?\s*(?:nr)?[.\s:#]*(\d{4,9})/i);
+    if (m) return m[1];
+    m = s.match(/levering[:#\s]+(\d{4,9})/i);
+    return m ? m[1] : null;
+  }
 function orderUit(oms) {
-  const m = String(oms || "").match(/order\s*[:#]?\s*(\d{6,8})/i);
-  return m ? m[1] : null;
-}
+    let s = String(oms || "");
+    let m = s.match(/\border\s*[:#]?\s*(\d{6,8})/i);
+    if (m) return m[1];
+    // De betaalregels noemen het ordernummer zónder het woord "order":
+    // "Online betaling 3454477 (2522354478X36069)", "Shopify betaling 3485998".
+    // Die vielen allemaal buiten de herkenning, en dat waren er nogal wat: van
+    // de 2.409 regels zonder nummer bleven er na deze regel 121 over, en de
+    // verdeling tussen openstaande posten en correcties schoof 2,5 miljoen op.
+    //
+    // Let op de uitzondering voor facturen. "Betaling factuur 6437205" en
+    // "Betaling voor factuur 6444194" noemen een factuurnummer, geen order.
+    // Die twee door elkaar halen zou betalingen aan de verkeerde post hangen,
+    // en dan klopt er per saldo niets meer van de aansluiting.
+    // Het streepje in "Betaling voor  - 3447863" hoort er ook doorheen te
+    // kunnen; "factuur" mag er niet tussen staan, want dan is het geen order.
+    m = s.match(/\bbetaling\s+(?:voor\s+)?[-\s]*(\d{6,8})\b/i);
+    return m ? m[1] : null;
+  }
 
 const PER = 5000;
 async function analyseer(code, sleutelUit) {

@@ -1430,27 +1430,50 @@ function tekortPerKleur(lines,variants){
     return x;
   }).sort((a,b)=>(b.tekort-a.tekort)||(b.gevraagd-a.gevraagd)||a.kleur.localeCompare(b.kleur,"nl"));
 }
+/* De kleurtabel moet optellen tot de regel erboven, anders is hij erger dan
+   geen tabel. Hier stond eerst een kolom "Tekort" die alleen de NL-voorraad
+   van de vraag aftrok en de schepen negeerde. Bij nul voorraad in NL was dat
+   dus gewoon de vraag: 59 bij Mystic Mountain, terwijl het tekort van het hele
+   model 53 was. De kop zei er ook nog eens boven "wat je zou moeten bestellen",
+   en dat is precies wat je NIET moet doen als er 82 stuks op zee zitten.
+
+   De schepen zijn niet per kleur bekend - commercial invoices vermelden er
+   geen - dus die kunnen niet over de kleuren verdeeld worden zonder te gokken.
+   In plaats van dat weg te moffelen sluit de tabel nu af met wat er nog te
+   dekken is, wat er aan komt en wat er overblijft. Die drie regels tellen op
+   tot het tekort in de modelregel. */
 function kleurTabel(r){
   const rijen=(r.perKleur||[]).filter(x=>x.gevraagd>0||x.voorraad>0);
   if(!rijen.length) return "<p class='lead' style='margin:0'>Geen kleurgegevens.</p>";
+  const teDekken=rijen.reduce(function(n,x){ return n+Math.max(0,x.gevraagd-x.voorraad); },0);
+  const zee=Number(r.zee)||0;
+  const rest=Math.max(0,teDekken-zee);
+  const regel=function(tekst,waarde,kleur,dik){
+    return "<tr><td colspan='3' style='text-align:right;color:"+(kleur||"var(--muted)")+
+      (dik?";font-weight:700":"")+"'>"+tekst+"</td><td style='color:"+(kleur||"var(--muted)")+
+      (dik?";font-weight:700":"")+"'>"+waarde+"</td></tr>";
+  };
   return "<div class='tablewrap'><table class='grid' style='margin:0'><thead><tr>"+
-    "<th>Kleur</th><th>Gevraagd</th><th>Op voorraad</th><th>Tekort</th></tr></thead><tbody>"+
+    "<th>Kleur</th><th>Gevraagd</th><th>Op voorraad NL</th><th>Nog te dekken</th></tr></thead><tbody>"+
     rijen.map(function(x){
+      const open=Math.max(0,x.gevraagd-x.voorraad);
       return "<tr><td>"+esc(x.kleur)+"</td><td>"+(x.gevraagd||"—")+"</td>"+
         "<td style='color:#2563eb'>"+(x.voorraad||"—")+"</td>"+
-        "<td style='color:"+(x.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(x.tekort||"—")+"</td></tr>";
-    }).join("")+"</tbody></table></div>"+
-    // Voorraad die we niet aan een kleur kunnen hangen — bijvoorbeeld een
-    // artikelcode die nog niet in de catalogus staat. Die moet je zien, want
-    // anders lijkt er een tekort dat er in werkelijkheid niet is.
+        "<td>"+(open||"—")+"</td></tr>";
+    }).join("")+
+    regel("samen nog te dekken",teDekken,null,true)+
+    (zee?regel("af: op zee, kleur nog niet bekend","-"+zee,"#2563eb"):"")+
+    regel("blijft over — dit is het tekort",rest,rest>0?"#b91c1c":"#15803d",true)+
+    "</tbody></table></div>"+
+    (zee?("<p class='lead' style='font-size:11.5px;margin:6px 0 0'>De "+zee+" stuks op zee staan niet per kleur in de "+
+      "commercial invoices, dus welke kleuren daarmee gedekt zijn is nog niet te zeggen. Bestel pas bij als je weet "+
+      "welke kleuren er aan boord zitten.</p>"):"")+
     (function(){
       const verdeeld=rijen.reduce((n,x)=>n+x.voorraad,0);
-      const rest=Math.max(0,(Number(r.voorraad)||0)-verdeeld);
-      return rest?("<p class='lead' style='font-size:11.5px;margin:6px 0 0;color:#92400e'><b>"+rest+"</b> stuks op voorraad "+
-        "waarvan de kleur niet te bepalen was; die staan hierboven nergens bij. Het tekort kan dus lager uitvallen.</p>"):"";
-    })()+
-    (r.zee?("<p class='lead' style='font-size:11.5px;margin:6px 0 0'><b>"+r.zee+"</b> stuks op zee. "+
-      "De commercial invoices vermelden geen kleur, dus die zijn hierboven niet van het tekort afgetrokken.</p>"):"");
+      const over=Math.max(0,(Number(r.voorraad)||0)-verdeeld);
+      return over?("<p class='lead' style='font-size:11.5px;margin:6px 0 0;color:#92400e'><b>"+over+"</b> stuks op voorraad "+
+        "waarvan de kleur niet te bepalen was; die staan hierboven nergens bij.</p>"):"";
+    })();
 }
 function kleurChips(list){
   if(!list||!list.length) return "<span style='color:var(--muted)'>—</span>";
@@ -1470,7 +1493,7 @@ function renderBacklog(){
       "<td style='color:"+(r.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(r.tekort||"—")+"</td></tr>";
     if(open){
       h+="<tr><td colspan='6' style='background:#fafafa;padding:8px 14px'>"+
-        "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px'>Tekort per kleur — wat je zou moeten bestellen</div>"+
+        "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px'>Vraag per kleur — waar de dekking naartoe moet</div>"+
         kleurTabel(r)+
         "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px'>Kleuren — Fonteyn-reserveringen</div>"+kleurChips(r.kleuren)+
         (r.kleurenCont.length?("<div style='font-size:11px;color:#c2410c;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px'>Kleuren — partnercontainers (rechtstreeks naar de dealer)</div>"+kleurChips(r.kleurenCont)):"")+
