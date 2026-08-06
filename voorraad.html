@@ -331,6 +331,7 @@
   <div id="tab-overzicht">
     <div id="ovKpis" class="kpi-row"></div>
     <p class="lead" style="font-size:11px;margin:-6px 0 4px">* Orderwaarde = actieve reserveringen × partnerprijs (€, excl. BTW), indicatief. Aanbetaling ≈ 30% hiervan.</p>
+    <p class="lead" style="font-size:11px;margin:0 0 4px" id="ovBereik"></p>
     <div class="card">
       <h3>Knelpunten — meeste tekort eerst</h3>
       <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
@@ -1343,6 +1344,7 @@ async function loadOverzicht(){
 const PRICES_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/dealer-prices";
 const CATALOG_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/spa-catalog";
 let ovShipsCache=[], ovShipOpen={}, ovBacklogRows=[], ovBacklogOpen={}, ovCodeKleur={};
+let ovContainerOrders=0, ovContainerOudste=null;
 // De kleur staat achter de streep in de artikelomschrijving ("Passion Spa |
 // Sensation SW with GREY/oak trim"). Exact dezelfde regel als de worker op de
 // orderregels toepast — anders zouden gevraagd en voorraad op net andere
@@ -1370,6 +1372,17 @@ function renderOverzicht(resv,hal,ship,priceData){
   for(const s of (ship.ships||[])) for(const [m,q] of Object.entries(s.models||{})){ shipByModel[m]=(shipByModel[m]||0)+q; shipTotal+=q; }
   // aggregaten — containers (dealer-direct) apart van de Fonteyn-vraag
   let actief=0,betaald=0,wacht=0,containers=0,orderwaarde=0, halTotal=0;
+  // Aantal container-ORDERS erbij, want het getal eronder telt spa's. En het
+  // oudste orderjaar, zodat zichtbaar is hoe ver dit terugkijkt: de tegel toont
+  // wat er openstaat, en dat kan uit een order van vorig jaar komen.
+  const contOrders=new Set(); let oudsteCont=null;
+  for(const lijst of Object.values(byModel))
+    for(const r of (lijst||[])) if(r.container){
+      contOrders.add(r.ordernr);
+      const d=String(r.datum||"").slice(0,10);
+      if(d&&(!oudsteCont||d<oudsteCont)) oudsteCont=d;
+    }
+  ovContainerOrders=contOrders.size; ovContainerOudste=oudsteCont;
   const rows=[];
   const models=new Set([...Object.keys(byModel),...Object.keys(prices)]);
   for(const m of models){
@@ -1393,10 +1406,21 @@ function renderOverzicht(resv,hal,ship,priceData){
     kpi(actief,"Actieve reserveringen (Fonteyn)","var(--fonteyn-green)")+
     kpi(betaald,"Betaald (geld binnen)","#15803d")+
     kpi(wacht,"Wacht op aanbetaling","#92400e")+
-    kpi(containers,"Containers (dealer-direct)","#c2410c")+
+    // Dit telt spa's, geen containers. Het stond als "Containers
+    // (dealer-direct)" boven een getal van 583 terwijl het om 46 orders ging -
+    // een factor twaalf ernaast, en niemand die het kon narekenen.
+    kpi(containers,"Spa's op partnercontainers ("+ovContainerOrders+" orders)","#c2410c")+
     kpi(halTotal,"Vrij op voorraad (NL)","#2563eb")+
     kpi(shipTotal,"Op zee (onderweg)","#2563eb")+
     kpi(eur(orderwaarde),"Orderwaarde actief*","var(--fonteyn-green)",true);
+  // Wat deze cijfers wél en niet zijn. Zonder deze regel las "583" als een
+  // stand van nu, terwijl het openstaande regels zijn uit orders die tot een
+  // jaar terug kunnen lopen - en dan klopt "actueel" niet met wat je ziet.
+  const bereik=document.getElementById("ovBereik");
+  if(bereik) bereik.innerHTML="Alle getallen zijn <b>nog niet geleverde</b> orderregels: wat er openstaat, niet wat er is verkocht. "+
+    "Reserveringen komen uit orders van het afgelopen jaar"+
+    (ovContainerOudste?(", de oudste containerorder is van "+esc(datumNL(ovContainerOudste))):"")+
+    ". Zodra een regel is geleverd valt hij hier vanzelf uit.";
   rows.sort((a,b)=>(b.tekort-a.tekort)||(b.actQty-a.actQty));
   document.getElementById("ovBacklogUpd").textContent = resv.updated ? ("Bijgewerkt: "+new Date(resv.updated).toLocaleString("nl-NL")) : "";
   ovBacklogRows=rows; renderBacklog();
