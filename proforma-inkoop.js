@@ -191,10 +191,23 @@ async function ikoAanmaken(){
     try{ if(C.log) C.log("inkooporder-aangemaakt","Logic4 inkooporder "+j.buyOrderId+" · "+j.toegevoegd+" regels"+(ref?(" · proforma "+ref):"")); }catch(e){}
   }catch(e){ ikoStatus("bad","Aanmaken faalde: "+e.message); knop.disabled=false; knop.textContent="Inkooporder aanmaken in Logic4"; }
 }
+// Een PDF komt hier geregeld langs, want fabrieken sturen hun proforma net zo
+// vaak als PDF als in Excel. XLSX maakt daar iets onherkenbaars van en de
+// lezer klaagde vervolgens over een ontbrekende kopregel met MODEL en
+// QUANTITY. Dat stuurt iemand het verkeerde bos in: het probleem is niet de
+// kopregel maar het bestandsformaat. PDF wordt niet gelezen.
+function isPdf(f){
+  return /\.pdf$/i.test(f && f.name || "") || (f && f.type === "application/pdf");
+}
 function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEventListener("change",async function(ev){
   const f=(ev.target.files||[])[0]; if(!f) return;
   ikoStatus("","");
   document.getElementById("ikoVoorstel").innerHTML="";
+  if(isPdf(f)){
+    ikoStatus("bad","Dit is een PDF en die kan het dashboard niet uitlezen. Vraag de fabriek om dezelfde proforma als Excel-bestand; die maken ze er zelf ook mee. Lukt dat niet, geef het dan aan mij door.");
+    ev.target.value="";
+    return;
+  }
   ikoStatus("info","Inlezen…");
   try{
     const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});

@@ -100,6 +100,21 @@
     if (m) return m[1];
     m = s.match(/inkooplevering\s+(\d+)\s*$/i);
     if (m) return m[1];
+    // IKL is de afkorting die de administratie gebruikt voor inkooplevering.
+    // Die stond hier niet in, en dat kostte 3,88 miljoen aan verkeerde
+    // indeling: "Corr. IKL 14830" (517 regels, 2,52 mln) en "correctie
+    // boeking artikel 78775 ikl 20711" (1,32 mln) werden geteld als
+    // handmatige correctie zonder herkomst, terwijl ze gewoon naar een
+    // inkooplevering verwijzen. Het saldo van 1630 bleef daardoor kloppen,
+    // maar de verdeling tussen "openstaande posten" en "correcties" niet -
+    // en juist die verdeling bepaalt wat er opgeschoond mag worden.
+    m = s.match(/\bikl[.\s:#]*(\d{3,9})/i);
+    if (m) return m[1];
+    // Leveranciers schrijven het leveringnummer op alle mogelijke manieren:
+    // "Lev.nr: 49509", "LEV: 50471", "Levering nr: 48985", en zelfs zonder
+    // scheidingsteken als "levering47732".
+    m = s.match(/\blev(?:ering)?\.?\s*(?:nr)?[.\s:#]*(\d{4,9})/i);
+    if (m) return m[1];
     m = s.match(/levering[:#\s]+(\d{4,9})/i);
     return m ? m[1] : null;
   }
