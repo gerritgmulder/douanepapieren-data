@@ -221,12 +221,17 @@ const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
 /* ═══ Voorraad Houston ═══════════════════════════════════════════════════
    De telling die Chantal bijhoudt, met de partnerprijs in dollars ernaast.
 
-   Twee dingen zijn hier belangrijk genoeg om op het scherm te zetten en niet
-   in een voetnoot. Een negatief aantal is géén tekort maar een spa die in
-   productie of onderweg is en al aan een klant toebehoort. En niet elk model
-   heeft een dollarprijs: sauna's, ijsbaden en een aantal Amerikaanse modellen
-   staan niet in de EU-prijslijst, dus de voorraadwaarde hieronder is de
-   waarde van wat wél te prijzen is en niet van alles.
+   De prijs is de INKOOPPRIJS in dollars zoals de fabriek hem factureert, uit
+   de kolom RATE van de commercial invoices. Bewust niet de europrijs uit
+   Logic4 omgerekend: er wordt in dollars ingekocht, en die europrijs staat op
+   een oude koers (bij de Renew scheelt dat 2,5 procent). Verkoopprijzen horen
+   hier niet; dit gaat over wat de voorraad heeft gekost.
+
+   Twee dingen zijn belangrijk genoeg voor het scherm en niet voor een
+   voetnoot. Een negatief aantal is géén tekort maar een spa die in productie
+   of onderweg is en al aan een klant toebehoort. En lang niet elk model heeft
+   een fabrieksprijs: sauna's, ijsbaden en modellen die nooit via Rotterdam
+   zijn gegaan staan niet op een commercial invoice.
 
    Dit is een momentopname per mail. Zodra magazijn Houston in Logic4 bestaat
    hoort dit daaruit te komen en vervalt de handmatige stap. */
@@ -253,43 +258,50 @@ function vhTeken(){
   const onderweg=regels.filter(r=>r.aantal<0);
   const stuks=aanwezig.reduce((n,r)=>n+r.aantal,0);
   const stuksOnderweg=onderweg.reduce((n,r)=>n+Math.abs(r.aantal),0);
-  const waarde=aanwezig.filter(r=>r.usd).reduce((n,r)=>n+r.usd*r.aantal,0);
-  const zonderPrijs=aanwezig.filter(r=>!r.usd).reduce((n,r)=>n+r.aantal,0);
+  const waarde=aanwezig.filter(r=>r.inkoopUsd).reduce((n,r)=>n+r.inkoopUsd*r.aantal,0);
+  const zonderPrijs=aanwezig.filter(r=>!r.inkoopUsd).reduce((n,r)=>n+r.aantal,0);
   const modellen=new Set(regels.map(r=>r.model)).size;
 
   document.getElementById("vhKpis").innerHTML=
     kpi(stuks,"In het warehouse")+
     kpi(stuksOnderweg,"Onderweg / in productie")+
     kpi(modellen,"Modellen")+
-    kpi(usd(waarde),"Voorraadwaarde (partnerprijs)")+
-    kpi(zonderPrijs,"Stuks zonder dollarprijs");
+    kpi(usd(waarde),"Inkoopwaarde voorraad")+
+    kpi(zonderPrijs,"Stuks zonder inkoopprijs");
 
   document.getElementById("vhUitleg").innerHTML=
     "<b>Telling van "+esc(vhDatum(d.peildatum))+"</b>, bron: "+esc(d.bron||"onbekend")+". "+
     ((d.toelichting||[]).map(esc).join(" ")||"")+
-    " De voorraadwaarde is berekend met de partnerprijs in dollars uit "+esc(d.prijsbron||"de prijslijst")+
-    "; <b>"+zonderPrijs+" stuks hebben daar geen prijs</b> en tellen dus niet mee in dat bedrag.";
+    " Prijzen zijn de <b>inkoopprijs in dollars</b> zoals de fabriek hem factureert ("+esc(d.prijsbron||"")+
+    "), dus geen omgerekende europrijs. <b>"+zonderPrijs+" van de "+stuks+" stuks hebben geen fabrieksprijs</b> "+
+    "en tellen niet mee in de inkoopwaarde.";
 
   let rijen=regels.slice();
   if(verbergNul) rijen=rijen.filter(r=>r.aantal!==0);
   if(q) rijen=rijen.filter(r=>(r.model+" "+r.kleur).toLowerCase().includes(q));
-  rijen.sort((a,b)=>(b.usd?b.usd*Math.abs(b.aantal):0)-(a.usd?a.usd*Math.abs(a.aantal):0)
+  rijen.sort((a,b)=>(b.inkoopUsd?b.inkoopUsd*Math.abs(b.aantal):0)-(a.inkoopUsd?a.inkoopUsd*Math.abs(a.aantal):0)
     ||String(a.model).localeCompare(String(b.model)));
 
   document.getElementById("vhTel").textContent=rijen.length+" van "+regels.length+" regels";
   document.getElementById("vhLijst").innerHTML=!rijen.length
     ? "<p class='lead'>Niets gevonden.</p>"
     : "<div class='tablewrap'><table class='grid'><thead><tr><th>Model</th><th>Kleur</th><th>Aantal</th>"+
-      "<th>Partnerprijs USD</th><th>Waarde USD</th><th>Dealerprijs EUR</th></tr></thead><tbody>"+
+      "<th>Inkoop USD</th><th>Inkoopwaarde USD</th><th>Fabriekscode</th></tr></thead><tbody>"+
       rijen.map(function(r){
         const neg=r.aantal<0;
+        // Staat een code met twee verschillende tarieven op de invoices, dan
+        // rekenen we met de hoogste en zeggen we dat erbij. Stil de laagste
+        // pakken zou de voorraadwaarde te gunstig maken.
+        const let2=r.meerdereTarieven
+          ? " <span title='op de commercial invoices staan meerdere tarieven: "+
+            r.meerdereTarieven.map(x=>"$ "+x).join(", ")+"' style='color:var(--warn);font-size:11px'>±</span>" : "";
         return "<tr"+(neg?" style='background:#fff7ed'":"")+"><td><b>"+esc(r.model)+"</b></td>"+
           "<td style='font-size:12px'>"+esc(r.kleur)+"</td>"+
           "<td style='"+(neg?"color:#c2410c;font-weight:700":"")+"'>"+r.aantal+
             (neg?" <span style='font-size:11px'>onderweg</span>":"")+"</td>"+
-          "<td>"+(r.usd?usd(r.usd):"<span style='color:var(--muted)'>—</span>")+"</td>"+
-          "<td>"+(r.usd&&r.aantal>0?usd(r.usd*r.aantal):"<span style='color:var(--muted)'>—</span>")+"</td>"+
-          "<td style='color:var(--muted)'>"+(r.dealerEur?("€ "+r.dealerEur.toLocaleString("nl-NL")):"—")+"</td></tr>";
+          "<td>"+(r.inkoopUsd?(usd(r.inkoopUsd)+let2):"<span style='color:var(--muted)'>—</span>")+"</td>"+
+          "<td>"+(r.inkoopUsd&&r.aantal>0?usd(r.inkoopUsd*r.aantal):"<span style='color:var(--muted)'>—</span>")+"</td>"+
+          "<td style='color:var(--muted);font-size:11px'>"+esc(r.sktCode||"—")+"</td></tr>";
       }).join("")+"</tbody></table></div>";
 }
 function vhDatum(s){
