@@ -45,6 +45,11 @@
   .rij input.lbl{flex:1.6} .rij input.val{flex:1}
   .rij button{flex:0 0 auto;background:#fff;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;font-size:11px;padding:5px 7px;line-height:1}
   .rij button:hover{border-color:var(--bad);color:var(--bad)}
+  /* Verplaatsen is geen verwijderen: die pijlen niet rood laten oplichten, en
+     aan de uiteinden van de lijst uitgeschakeld tonen. */
+  .rij button[data-lup]:hover,.rij button[data-ldown]:hover{border-color:var(--fonteyn-green);color:var(--fonteyn-green)}
+  .rij button[disabled]{opacity:.3;cursor:default}
+  .rij button[disabled]:hover{border-color:var(--border);color:var(--muted)}
   .badge-rij{display:flex;gap:6px;align-items:center;margin-bottom:4px}
   .badge-rij input[type=text]{flex:1}
   .thumb{width:100%;height:78px;object-fit:contain;background:#f9fafb;border:1px dashed var(--border);border-radius:8px;margin-top:4px}
@@ -391,7 +396,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="03-08-2026 · 15:20";
+const TEGEL_VERSIE="05-08-2026 · 22:10";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
@@ -671,14 +676,34 @@ function tekenLegForm(){
              "<span style='width:26px;height:16px;border:1px dashed var(--border);border-radius:3px;display:inline-block'></span>")+
       "<input class='lbl' data-lc='"+i+"' value='"+esc(l.code||"")+"' placeholder='nummer' style='max-width:82px'>"+
       "<input class='val' data-ln='"+i+"' value='"+esc(l.naam||"")+"' placeholder='omschrijving'>"+
-      "<button data-ldel='"+i+"' title='verwijderen'>✕</button>"+
+      // Volgorde bepaalt de posities op de sheet, dus die moet je kunnen
+      // wijzigen zonder rijen te verwijderen en opnieuw te typen (Demi via
+      // Gretha, 5 aug 2026).
+      "<button data-lup='"+i+"' title='naar boven'"+(i===0?" disabled":"")+">▲</button>"+
+      "<button data-ldown='"+i+"' title='naar beneden'"+(i===(S.legenda||[]).length-1?" disabled":"")+">▼</button>"+
+      "<button data-ldel='"+i+"' title='rij verwijderen'>✕</button>"+
     "</div>").join("")||"<p class='lead' style='font-size:11.5px'>Nog geen onderdelen.</p>";
   L.querySelectorAll("[data-lc]").forEach(inp=>inp.addEventListener("input",()=>{
-    S.legenda[+inp.dataset.lc].code=inp.value;
+    const r=S.legenda[+inp.dataset.lc];
+    r.code=inp.value;
     const hit=iconen[inp.value.trim()];
-    if(hit){ S.legenda[+inp.dataset.lc].naam=hit.naam; S.legenda[+inp.dataset.lc].img=hit.img; tekenLegForm(); }
+    if(hit){ r.naam=hit.naam; r.img=hit.img; tekenLegForm(); }
+    // Geen treffer? Dan hoort er ook geen plaatje te staan. Het bleef eerder
+    // hangen als de code werd weggehaald, waardoor Demi de hele rij moest
+    // verwijderen om het vakje leeg te krijgen - en dan schoven alle posities
+    // eronder op. De rij zelf blijft dus staan, alleen het plaatje gaat weg.
+    else if(r.img){ r.img=""; tekenLegForm(); }
     teken();
   }));
+  const verplaats=(van,naar)=>{
+    const lijst=S.legenda||[];
+    if(naar<0||naar>=lijst.length) return;
+    const rij=lijst.splice(van,1)[0];
+    lijst.splice(naar,0,rij);
+    tekenLegForm(); teken();
+  };
+  L.querySelectorAll("[data-lup]").forEach(b=>b.addEventListener("click",()=>verplaats(+b.dataset.lup,+b.dataset.lup-1)));
+  L.querySelectorAll("[data-ldown]").forEach(b=>b.addEventListener("click",()=>verplaats(+b.dataset.ldown,+b.dataset.ldown+1)));
   L.querySelectorAll("[data-ln]").forEach(inp=>inp.addEventListener("input",()=>{
     S.legenda[+inp.dataset.ln].naam=inp.value; teken();
   }));
