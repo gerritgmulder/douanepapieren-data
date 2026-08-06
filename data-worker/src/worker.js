@@ -1153,7 +1153,19 @@ async function dpRefreshHalStock(env) {
 //   50 = Warehouse Texas → Amerika (apart, telt NIET mee voor NL)
 // 'betaald' komt uit de ECHTE betaling (Totals.Calc_TotalPayed), niet uit de
 // status — een order kan op 'wachten' staan terwijl er al geld binnen is.
-const DP_RESV_STATUSES = [15, 25, 1];
+// Welke orderstatussen tellen als openstaande reservering.
+//
+// Hier stonden alleen 15, 25 en 1, en daardoor was een order die verder in het
+// proces zat onzichtbaar in de tegel, hoeveel er ook betaald was. Chantal liep
+// daar tegenaan bij container 3517962 (status 28, 14.549,62 aanbetaald) en
+// eerder bij order 3511087. Gemeten op 6 aug 2026 ging het om 14 containers
+// met 213 spa's op Dealer magazijn die nergens te zien waren.
+//
+// 30 "Volledig betaald, vrijgeven leveren" en 28 "Gepland, wacht op betaling"
+// horen er dus bij. 23 "Geannuleerd" bewust NIET, ook al hangen daar 3 orders
+// met 44 spa's aan: die zijn afgeblazen en zouden het voorraadbeeld juist
+// vervuilen.
+const DP_RESV_STATUSES = [15, 25, 1, 28, 30];
 const WH_NAMES = { 19: "Geen", 20: "OUD Kelder", 21: "Fonteyn", 25: "Showroommodel", 26: "Outlet", 27: "Dealer magazijn", 49: "Derving", 50: "Warehouse Texas USA", 51: "Transporteur", 52: "Retouren" };
 const WH_TEXAS = 50, WH_DEALER = 27;
 // Kleur = het stuk ná de '|' in de regelomschrijving ("Relax Spa | Sterling White with Grey").
@@ -2159,18 +2171,27 @@ async function dpRefreshReservations(env) {
   const fromIso = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 19);
   const byModel = {};      // NL (magazijn ≠ Texas): { model: [lijnen] }
   const byModelUSA = {};   // Amerika (magazijn 50)
-  const statusName = { 15: "wachten op aanbetaling", 25: "30% aanbetaald", 1: "verkooporder" };
+  const statusName = { 15: "wachten op aanbetaling", 25: "30% aanbetaald", 1: "verkooporder",
+    28: "gepland, wacht op betaling", 30: "volledig betaald, vrijgeven leveren" };
   const medewerkers = await l4Medewerkers(env);
+  // 40 pagina's van 500 = 20.000 orders per status. Stond op 8 (4.000), en de
+  // lus stopte daarna zonder een spoor achter te laten - dezelfde stille
+  // afkapping die bij de grootboeklezer een verkeerd saldo opleverde. De
+  // grootste status telt nu 1.168 orders per jaar, dus 4.000 werd nog niet
+  // geraakt, maar dat is geen geruststelling: het zou pas opvallen als het
+  // voorraadbeeld al maanden gaten had.
+  const MAX_PAGINAS_ORDERS = 40;
   for (const st of DP_RESV_STATUSES) {
-    for (let page = 0; page < 8; page++) {
+    let afgekapt = true;
+    for (let page = 0; page < MAX_PAGINAS_ORDERS; page++) {
       const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
         method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
         body: JSON.stringify({ StatusId: st, CreationDateFrom: fromIso, TakeRecords: 500, SkipRecords: page * 500 }),
       });
-      if (!r.ok) break;
+      if (!r.ok) { afgekapt = false; break; }
       const data = await r.json().catch(() => []);
       const arr = Array.isArray(data) ? data : ((data && data.Orders) || []);
-      if (!arr.length) break;
+      if (!arr.length) { afgekapt = false; break; }
       for (const o of arr) {
         // Betaling uit de order-totalen (niet uit de status): het echte %.
         const T = o.Totals || {};
@@ -2224,8 +2245,12 @@ async function dpRefreshReservations(env) {
           (bucket[gr.model] = bucket[gr.model] || []).push(line);
         }
       }
-      if (arr.length < 500) break;
+      if (arr.length < 500) { afgekapt = false; break; }
     }
+    // Een half opgehaalde status levert een voorraadbeeld op dat te laag is
+    // zonder dat iemand het merkt. Liever luidruchtig in de logs.
+    if (afgekapt) console.log("[reserveringen] LET OP: status " + st + " raakte de paginalimiet van " +
+      (MAX_PAGINAS_ORDERS * 500) + " orders. Het beeld is niet compleet - verhoog MAX_PAGINAS_ORDERS.");
   }
   // Sorteren: betaald eerst, dan op datum
   const srt = (a, b) => (b.betaald - a.betaald) || String(a.datum).localeCompare(String(b.datum));

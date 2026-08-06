@@ -1202,9 +1202,10 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   // De drie klantsoort-tabs delen de reserveringsdata; die één keer laden.
   if (tab==="particulier"||tab==="partner"||tab==="partnercont"){
     if(!Object.keys(resvData.byModel||{}).length) loadReserveringen(); else renderSoortTabs();
-    // Partner containers toont de ETA van het schip waar de container op zit;
-    // daarvoor moeten de commercial invoices geladen zijn.
-    if(tab==="partnercont"&&!(shipsData.ships||[]).length) loadSchepen().then(renderSoortTabs).catch(function(){});
+    // De schepen zijn hier overal nodig: Partner containers toont de ETA van
+    // het schip waar de container op zit, en bij Particulier en Partner staat
+    // de keuzelijst waarmee Chantal zelf een schip aan een reservering hangt.
+    if(!(shipsData.ships||[]).length) loadSchepen().then(renderSoortTabs).catch(function(){});
   }
 }));
 
@@ -1737,7 +1738,10 @@ function sorteerWaarde(r,kolom){
   if(kolom==="adviseur") return String(r.adviseur||"zzz");
   if(kolom==="datum")    return String(r.datum||"");
   if(kolom==="levering"){
-    const v=r.verwacht;
+    // Een handmatig gekozen schip gaat vóór de berekende verwachting, ook bij
+    // het sorteren - anders staat een regel op een andere plek dan zijn datum.
+    const gekozen=schipVan((notities[r.regelId]||{}).schip);
+    const v=gekozen?(gekozen.eta||"op-schip"):r.verwacht;
     if(v==="voorraad") return "0";
     if(v==="op-schip") return "8";
     if(!v||v==="productie") return "9";
@@ -1750,6 +1754,48 @@ function kopSorteer(soort,kolom,tekst){
   const actief=s.kolom===kolom;
   return "<th class='sortKop' data-soort='"+soort+"' data-kolom='"+kolom+"' style='cursor:pointer;white-space:nowrap' title='Klik om te sorteren'>"+
     esc(tekst)+(actief?(s.op>0?" ▲":" ▼"):"<span style='color:#d1d5db'> ⇅</span>")+"</th>";
+}
+/* ── Verwachte levering: zelf een schip kiezen (Chantal, 6 aug 2026) ────────
+   De ETA die het dashboard berekent komt uit een automatische verdeling:
+   eerst de hal-voorraad, dan de schepen op ETA-volgorde, dan de productie.
+   Die volgorde is niet Chantals volgorde, en daardoor stond order 3518133
+   (Activity 1) op 06-08 terwijl die spa op een heel ander schip zit.
+
+   In plaats van die berekening slimmer te maken - waarbij je blijft gokken -
+   kan zij hier zelf het schip aanwijzen. De keuze wordt per reserveringsregel
+   bewaard, net als de vinkjes en de opmerking, en gaat vóór de berekening.
+   Kiest ze niets, dan blijft het gewoon de automatische ETA. */
+function schepenOnderweg(){
+  var vandaag = new Date().toISOString().slice(0,10);
+  return (shipsData.ships||[])
+    .filter(function(s){ return !s.eta || s.eta >= vandaag; })   // aangekomen schepen niet meer aanbieden
+    .map(function(s){ return { sleutel:String(s.ref||s.trackRef||s.file||s.vessel||""), naam:s.vessel||"(zonder naam)", eta:s.eta||null }; })
+    .filter(function(s){ return s.sleutel; })
+    .sort(function(a,b){ return String(a.eta||"9999").localeCompare(String(b.eta||"9999")); });
+}
+function schipVan(sleutel){
+  if(!sleutel) return null;
+  var lijst=schepenOnderweg();
+  for(var i=0;i<lijst.length;i++) if(lijst[i].sleutel===sleutel) return lijst[i];
+  return null;
+}
+function leveringCel(r,n,id,uit){
+  var gekozen = n.schip ? schipVan(n.schip) : null;
+  var kop = gekozen
+    ? "<span style='color:#2563eb;font-weight:600'>"+esc(gekozen.eta?datumNL(gekozen.eta):"ETA volgt")+"</span>"+
+      " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.naam)+", handmatig)</span>"
+    : verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"");
+  // Staat het gekozen schip er niet meer bij, bijvoorbeeld omdat het is
+  // aangekomen, dan de keuze niet stilzwijgend laten verdwijnen.
+  if(n.schip && !gekozen)
+    kop += " <span style='color:var(--warn);font-size:11px'>(gekozen schip niet meer onderweg)</span>";
+  var lijst = schepenOnderweg();
+  if(!lijst.length) return kop;
+  var opties = "<option value=''>automatisch</option>" + lijst.map(function(s){
+    return "<option value='"+esc(s.sleutel)+"'"+(n.schip===s.sleutel?" selected":"")+">"+
+      esc(s.naam)+(s.eta?" — "+esc(datumNL(s.eta)):" — ETA volgt")+"</option>";
+  }).join("");
+  return kop + "<br><select class='notSchip' data-id='"+id+"' style='margin-top:3px;font-size:11px;padding:2px 4px;max-width:210px'"+uit+">"+opties+"</select>";
 }
 function adviseurCel(r){
   if(!r.adviseur) return "<span style='color:var(--muted);font-size:11px'>—</span>";
@@ -1816,7 +1862,7 @@ function renderResvSoort(soort,zoekId,lijstId,telId){
         "<td>"+adviseurCel(r)+"</td>"+
         "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
         "<td>"+betaalBadge(r)+"</td>"+
-        "<td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td>"+
+        "<td style='font-size:12px'>"+leveringCel(r,n,id,uit)+"</td>"+
         "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' style='width:190px;font-size:12px;padding:4px 7px'"+uit+"></td>"+
         (particulier?"<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='afroep' data-id='"+id+"'"+(n.afroep?" checked":"")+uit+"></td>":"")+
         "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='inplannen' data-id='"+id+"'"+(n.inplannen?" checked":"")+uit+"></td>"+
@@ -1845,6 +1891,16 @@ function koppelNotitieVelden(box,rijen){
     inp.addEventListener("change",function(){
       const r=perId[inp.dataset.id]; if(!r) return;
       try{ if(window.fpLog) window.fpLog("opmerking-gewijzigd",r.ordernr+" "+r.model+": "+(inp.value||"(leeg)")); }catch(e){}
+    });
+  });
+  box.querySelectorAll(".notSchip").forEach(function(sel){
+    sel.addEventListener("change",function(){
+      const r=perId[sel.dataset.id]; if(!r) return;
+      zetNotitie(r,"schip",sel.value||null);
+      const s=schipVan(sel.value);
+      try{ if(window.fpLog) window.fpLog(sel.value?"schip-gekozen":"schip-losgelaten",
+        r.ordernr+" "+r.model+" ("+r.naam+")"+(s?" -> "+s.naam+(s.eta?" "+s.eta:""):"")); }catch(e){}
+      renderSoortTabs();
     });
   });
   box.querySelectorAll(".notVink").forEach(function(cb){
