@@ -550,9 +550,11 @@
     <div class="card">
       <h3>Prioriteit — wie krijgt de eerstvolgende spa?</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Kies een model. Je ziet alle <b>openstaande orders</b> (verkooporder / 30% aanbetaald / wacht op aanbetaling)
-        met dat model, en of het een <b>partner</b> of <b>particulier</b> is. Sleep of gebruik de pijltjes om de
-        volgorde te bepalen waarin ze bediend worden. Boven de streep = gedekt door de huidige voorraad (in NL + op schip);
-        onder de streep = wacht op de volgende productie.
+        met dat model, en of het een <b>partner</b> of <b>particulier</b> is. Typ een nieuw volgnummer om een regel te
+        verplaatsen: zet je bij regel 31 een <b>1</b>, dan gaat die naar boven en schuift de rest een plek op.
+        De kolom <b>Krijgt uit</b> laat zien welke spa deze klant krijgt: eerst wat in NL ligt, daarna de containers
+        op volgorde van aankomst. Boven de streep = gedekt door de huidige voorraad; onder de streep = wacht op de
+        volgende productie.
       </p>
       <div class="actions" style="margin-top:0;align-items:center;gap:10px">
         <select id="prioModel" style="min-width:220px"><option value="">— kies een model —</option></select>
@@ -565,7 +567,7 @@
     <div class="card">
       <div class="tablewrap">
         <table class="grid">
-          <thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Aantal</th><th>Datum</th><th>Status</th><th>Volgorde</th></tr></thead>
+          <thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Aantal</th><th>Datum</th><th>Status</th><th>Krijgt uit</th><th>Volgorde</th></tr></thead>
           <tbody id="prioBody"></tbody>
         </table>
       </div>
@@ -808,7 +810,7 @@ function alleenLezen(){
     document.querySelectorAll("input[type=file]").forEach(function(el){
       const kaart=el.closest(".card"); if(kaart) kaart.style.display="none";
     });
-    document.querySelectorAll(".rmv, .prioUp, .prioDown, .delShip, .delcont, .btn.solid")
+    document.querySelectorAll(".rmv, .prioNr, .delShip, .delcont, .btn.solid")
       .forEach(function(b){ if(!/zoek|ophalen|ververs/i.test(b.textContent||"")) b.style.display="none"; });
     document.querySelectorAll("input[type=date], .shipRef, .shipEta")
       .forEach(function(el){ el.readOnly=true; el.disabled=true; });
@@ -2659,6 +2661,53 @@ async function loadPrioModel(model){
 // Laatste weergave onthouden, zodat het zoekveld opnieuw kan tekenen zonder
 // alles opnieuw op te halen.
 let prioLaatst=null;
+/* ── Uit welke container krijgt deze klant zijn spa? (Chantal, 6 aug 2026) ──
+   "Het doel van Prioriteit is dat een klant de eerste de beste spa uit de
+   eerste de beste container krijgt toebedeeld."
+
+   Tot nu toe zei dit scherm alleen of iemand boven of onder de dekkingsgrens
+   viel. Dát is te grof: twee klanten boven de streep kunnen op containers
+   zitten die maanden uit elkaar liggen. Daarom hier dezelfde toewijzing als
+   het dashboard elders doet - eerst wat in NL ligt, dan de containers op
+   volgorde van aankomst - maar nu in de volgorde die Chantal zelf heeft
+   gezet, want dat is precies waar dit tabblad over gaat. */
+function prioBakken(model, halQty){
+  var bakken = [];
+  if (halQty > 0) bakken.push({ soort:"voorraad", eta:null, naam:null, over:halQty });
+  (shipsData.ships||[]).forEach(function(s){
+    var q = Number((s.models||{})[model]) || 0;
+    if (q > 0) bakken.push({ soort:"schip", eta:s.eta||null, naam:s.vessel||"(schip zonder naam)", over:q });
+  });
+  // Voorraad blijft vooraan; de containers erachter op aankomstdatum. Een
+  // container zonder ETA achteraan, want die kun je niet beloven.
+  return bakken.sort(function(a,b){
+    if(a.soort==="voorraad") return -1;
+    if(b.soort==="voorraad") return 1;
+    return String(a.eta||"9999").localeCompare(String(b.eta||"9999"));
+  });
+}
+function prioHerkomst(bakken, aantal){
+  var uit = [], nodig = aantal;
+  while (nodig > 0 && bakken.length) {
+    var b = bakken[0];
+    var neem = Math.min(nodig, b.over);
+    uit.push({ soort:b.soort, eta:b.eta, naam:b.naam, aantal:neem });
+    b.over -= neem; nodig -= neem;
+    if (b.over <= 0) bakken.shift();
+  }
+  if (nodig > 0) uit.push({ soort:"productie", eta:null, naam:null, aantal:nodig });
+  return uit;
+}
+function prioHerkomstTekst(delen, aantal){
+  return delen.map(function(d){
+    var stuks = delen.length>1||d.aantal!==aantal ? d.aantal+"x " : "";
+    if(d.soort==="voorraad")  return "<span style='color:#15803d'>"+stuks+"op voorraad</span>";
+    if(d.soort==="productie") return "<span style='color:#92400e'>"+stuks+"volgende productie</span>";
+    return "<span style='color:#2563eb'>"+stuks+esc(d.naam)+"</span>"+
+      (d.eta?" <span style='color:var(--muted);font-size:11px'>"+esc(datumNL(d.eta))+"</span>"
+            :" <span style='color:var(--warn);font-size:11px'>ETA volgt</span>");
+  }).join("<br>");
+}
 function renderPrio(model, dekking, halQty, shipQty){
   prioLaatst={model,dekking,halQty,shipQty};
   const tot=prioRows.reduce((a,r)=>a+r.qty,0);
@@ -2670,10 +2719,17 @@ function renderPrio(model, dekking, halQty, shipQty){
   // anders zou zoeken het volgnummer en de streep verschuiven.
   const q=((document.getElementById("prioZoek")||{}).value||"").trim().toLowerCase();
   const raak=r=>!q||String(r.naam||"").toLowerCase().includes(q)||String(r.ordernr).includes(q);
+  // De bakken worden over de HELE lijst leeggehaald, in de vastgelegde
+  // volgorde. Zou dat pas na het zoekfilter gebeuren, dan zou zoeken de
+  // toewijzing veranderen en zou Chantal een andere container zien dan de
+  // klant werkelijk krijgt.
+  const bakken=prioBakken(model,halQty);
+  const uit=!MAG_WIJZIGEN?" disabled":"";
   let cum=0, getoond=0;
   document.getElementById("prioBody").innerHTML=prioRows.map((r,i)=>{
     const before=cum; cum+=r.qty; const covered=before<dekking;
     const cutHere = before<dekking && cum>=dekking; // laatste (deels) gedekte regel
+    const herkomst=prioHerkomst(bakken,r.qty);      // altijd afrekenen, ook als de regel wegvalt door zoeken
     if(!raak(r)) return "";
     getoond++;
     const badge=resvTypeBadge(r.type);
@@ -2685,12 +2741,15 @@ function renderPrio(model, dekking, halQty, shipQty){
       "<td>"+r.qty+"</td>"+
       "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
       "<td style='font-size:12px'>"+esc(r.status)+"</td>"+
+      "<td style='font-size:12px'>"+prioHerkomstTekst(herkomst,r.qty)+"</td>"+
+      // Een invulbaar volgnummer in plaats van pijltjes: bij 40 regels is
+      // 30 keer klikken geen werkbare manier om iets naar boven te halen.
       "<td style='white-space:nowrap'>"+
-        "<button class='rmv prioUp' data-i='"+i+"' "+(i===0?"disabled":"")+">▲</button> "+
-        "<button class='rmv prioDown' data-i='"+i+"' "+(i===prioRows.length-1?"disabled":"")+">▼</button>"+
+        "<input type='number' class='prioNr' data-i='"+i+"' value='"+(i+1)+"' min='1' max='"+prioRows.length+"'"+
+        " title='typ het gewenste volgnummer en druk op enter' style='width:62px;padding:4px 6px;font-size:12px'"+uit+">"+
       "</td></tr>"+
-      (cutHere&&i<prioRows.length-1?"<tr><td colspan='8' style='text-align:center;color:#b91c1c;font-size:11px;padding:2px'>— grens huidige voorraad ("+dekking+") —</td></tr>":"");
-  }).join("") || "<tr><td colspan='8' style='color:var(--muted)'>"+
+      (cutHere&&i<prioRows.length-1?"<tr><td colspan='9' style='text-align:center;color:#b91c1c;font-size:11px;padding:2px'>— grens huidige voorraad ("+dekking+") —</td></tr>":"");
+  }).join("") || "<tr><td colspan='9' style='color:var(--muted)'>"+
     (q?"Niets gevonden voor '"+esc(q)+"'.":"Geen open orders voor dit model.")+"</td></tr>";
   if(q&&getoond) document.getElementById("prioSummary").innerHTML+=
     " · <span style='color:#2563eb'>"+getoond+" van "+prioRows.length+" regels getoond</span>";
@@ -2701,14 +2760,36 @@ function renderPrio(model, dekking, halQty, shipQty){
       if(prioLaatst) renderPrio(prioLaatst.model,prioLaatst.dekking,prioLaatst.halQty,prioLaatst.shipQty);
     });
   }
-  document.querySelectorAll(".prioUp").forEach(b=>b.addEventListener("click",()=>movePrio(model,Number(b.dataset.i),-1)));
-  document.querySelectorAll(".prioDown").forEach(b=>b.addEventListener("click",()=>movePrio(model,Number(b.dataset.i),1)));
+  document.querySelectorAll(".prioNr").forEach(function(inp){
+    const verplaats=function(){
+      const van=Number(inp.dataset.i), naar=Number(inp.value)-1;
+      if(!isFinite(naar)||naar===van){ inp.value=van+1; return; }
+      zetPrio(model,van,Math.max(0,Math.min(prioRows.length-1,naar)));
+    };
+    inp.addEventListener("change",verplaats);
+    inp.addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); verplaats(); } });
+  });
+}
+
+// Verplaatst één regel naar een nieuwe plek; de rest schuift op. Dat is iets
+// anders dan omwisselen: bij het typen van "1" op regel 31 moet 31 naar voren
+// en moeten 1 t/m 30 een plek opschuiven, niet regel 1 naar plek 31.
+async function zetPrio(model, van, naar){
+  if(van===naar||van<0||van>=prioRows.length) return;
+  const regel=prioRows.splice(van,1)[0];
+  prioRows.splice(naar,0,regel);
+  prioPriority[model]=prioRows.map(r=>r.ordernr);
+  await bewaarPrio(model,regel,naar);
 }
 
 async function movePrio(model, i, dir){
   const j=i+dir; if(j<0||j>=prioRows.length) return;
   const tmp=prioRows[i]; prioRows[i]=prioRows[j]; prioRows[j]=tmp;
   prioPriority[model]=prioRows.map(r=>r.ordernr);
+  await bewaarPrio(model,prioRows[j],j);
+}
+
+async function bewaarPrio(model, regel, plek){
   // Cijfers uit de laatste weergave hergebruiken; alleen als die er niet is
   // (bv. na een herlaad) terugvallen op wat er in de samenvatting staat.
   if(prioLaatst&&prioLaatst.model===model){
@@ -2723,9 +2804,9 @@ async function movePrio(model, i, dir){
       body:JSON.stringify({byModel:prioPriority,updated:new Date().toISOString()})});
     // Prioriteit raakt wie zijn spa eerder krijgt — altijd vastleggen wie dit deed
     try{
-      const r=prioRows[j];
       if(window.fpLog) window.fpLog("prioriteit-gewijzigd",
-        model+": order "+(r?r.ordernr:"?")+(r&&r.naam?" ("+r.naam+")":"")+" naar plek "+(j+1)+" van "+prioRows.length);
+        model+": order "+(regel?regel.ordernr:"?")+(regel&&regel.naam?" ("+regel.naam+")":"")+
+        " naar plek "+(plek+1)+" van "+prioRows.length);
     }catch(e){}
   }catch(e){ prioStatus("bad","Opslaan volgorde faalde: "+e.message); }
 }

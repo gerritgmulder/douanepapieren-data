@@ -1457,7 +1457,14 @@ async function ikoAanmaken(env, body) {
   // Zonder dit levert een dubbele klik twee inkooporders op bij de fabriek.
   const ref = String(body.referentie || "").trim();
   const reeds = (await env.FONTEYN_DATA.get("voorraad-inkooporders", { type: "json" })) || { orders: {} };
-  if (ref && reeds.orders[ref] && !body.tochOpnieuw) {
+  // aanvullenOp = regels bijzetten in een inkooporder die er al is, in plaats
+  // van een tweede aanmaken. Nodig omdat een proforma soms maar half wordt
+  // besteld: bij de Jazzi-orders 3317, 3332 en 3342 bleven modellen liggen
+  // waarvan de code toen nog niet in de catalogus stond, en die stonden daarna
+  // nergens meer. Zonder deze route was de enige uitweg een tweede
+  // inkooporder bij dezelfde fabriek, en dat is precies wat je niet wilt.
+  const aanvullenOp = body.aanvullenOp != null ? Number(body.aanvullenOp) : null;
+  if (ref && reeds.orders[ref] && !body.tochOpnieuw && !aanvullenOp) {
     return { ok: false, dubbel: true, bestaandeOrder: reeds.orders[ref].buyOrderId,
       error: "Voor proforma " + ref + " is al inkooporder " + reeds.orders[ref].buyOrderId + " aangemaakt op " + reeds.orders[ref].ts + "." };
   }
@@ -1477,15 +1484,29 @@ async function ikoAanmaken(env, body) {
   // Wat er bewust NIET is meebesteld hoort in de order zelf te staan, anders is
   // later niet te zien waarom de inkooporder afwijkt van de proforma.
   const overgeslagen = Array.isArray(body.overgeslagen) ? body.overgeslagen : [];
-  const kop = await call("/v3/BuyOrders/CreateBuyOrder", {
-    CreditorId: crediteurId,
-    Remarks: ("Proforma " + (ref || "") + " — via dashboard door " + (body.door || "onbekend") +
-      (body.bestemming ? (" — bestemming: " + body.bestemming) : "") +
-      (overgeslagen.length ? (" — NIET meebesteld: " + overgeslagen.join(", ")) : "")).trim().slice(0, 500),
-    CreatedAt: new Date().toISOString(),
-  });
-  const buyOrderId = kop && (kop.Id != null ? kop.Id : (kop.BuyOrderId != null ? kop.BuyOrderId : (kop.Value != null ? kop.Value : null)));
-  if (buyOrderId == null) throw new Error("Logic4 gaf geen inkoopordernummer terug: " + JSON.stringify(kop).slice(0, 200));
+  let buyOrderId = aanvullenOp;
+  if (!buyOrderId) {
+    const kop = await call("/v3/BuyOrders/CreateBuyOrder", {
+      CreditorId: crediteurId,
+      Remarks: ("Proforma " + (ref || "") + " — via dashboard door " + (body.door || "onbekend") +
+        (body.bestemming ? (" — bestemming: " + body.bestemming) : "") +
+        (overgeslagen.length ? (" — NIET meebesteld: " + overgeslagen.join(", ")) : "")).trim().slice(0, 500),
+      CreatedAt: new Date().toISOString(),
+    });
+    buyOrderId = kop && (kop.Id != null ? kop.Id : (kop.BuyOrderId != null ? kop.BuyOrderId : (kop.Value != null ? kop.Value : null)));
+    if (buyOrderId == null) throw new Error("Logic4 gaf geen inkoopordernummer terug: " + JSON.stringify(kop).slice(0, 200));
+  } else {
+    // Bestaat die inkooporder wel, en welke artikelen staan er al op? Dezelfde
+    // regel twee keer toevoegen zou stilletjes het dubbele bestellen.
+    const bestaand = await call("/v3/BuyOrders/GetBuyOrderRowsByFilter", { BuyOrderId: buyOrderId, TakeRecords: 500 });
+    const rijen = Array.isArray(bestaand) ? bestaand : ((bestaand && bestaand.Records) || []);
+    const alAanwezig = new Set(rijen.map(x => String(x.ProductCode || "")));
+    const dubbelOp = regels.filter(r => alAanwezig.has(String(r.artikelcode)));
+    if (dubbelOp.length && !body.tochDubbeleRegels)
+      return { ok: false, dubbeleRegels: dubbelOp.map(r => r.artikelcode),
+        error: "Deze artikelen staan al op inkooporder " + buyOrderId + ": " + dubbelOp.map(r => r.artikelcode).join(", ") +
+          ". Aanvullen zou het aantal verdubbelen." };
+  }
 
   const toegevoegd = [], mislukt = [];
   for (const r of regels) {
@@ -1504,10 +1525,21 @@ async function ikoAanmaken(env, body) {
 
   if (ref) {
     reeds.orders = reeds.orders || {};
-    reeds.orders[ref] = { buyOrderId, ts: new Date().toISOString(), door: body.door || null, regels: toegevoegd.length };
+    const eerder = reeds.orders[ref] || null;
+    reeds.orders[ref] = { buyOrderId, ts: new Date().toISOString(), door: body.door || null,
+      regels: (eerder && aanvullenOp ? (Number(eerder.regels) || 0) : 0) + toegevoegd.length };
+    // Aanvullingen apart bijhouden: anders is later niet te zien dat er in twee
+    // keer is besteld, en juist dát was hier het probleem.
+    if (aanvullenOp) {
+      reeds.orders[ref].aanvullingen = (eerder && eerder.aanvullingen ? eerder.aanvullingen : []).concat([{
+        ts: new Date().toISOString(), door: body.door || null, regels: toegevoegd.length,
+        artikelen: toegevoegd.slice(0, 40),
+      }]);
+    }
     await env.FONTEYN_DATA.put("voorraad-inkooporders", JSON.stringify(reeds));
   }
-  return { ok: mislukt.length === 0, buyOrderId, toegevoegd: toegevoegd.length, mislukt };
+  return { ok: mislukt.length === 0, buyOrderId, toegevoegd: toegevoegd.length, mislukt,
+    aangevuld: !!aanvullenOp };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

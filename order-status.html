@@ -311,10 +311,12 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <div class="stat"><div class="lbl">Totaal "verstopt"</div><div class="val" id="statHiddenAmount">—</div></div>
       </div>
 
-      <div class="actions" style="margin-top: 18px;">
+      <div class="actions" style="margin-top: 18px; gap:14px; align-items:center; flex-wrap:wrap;">
         <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
           <input type="checkbox" id="cbSelectAll" checked> Alles selecteren
         </label>
+        <input id="osZoek" type="text" placeholder="zoek op ordernummer of klantnaam…" style="min-width:280px;padding:8px">
+        <span id="osZoekTel" style="font-size:12px;color:var(--muted)"></span>
       </div>
 
       <div class="table-wrap">
@@ -604,6 +606,7 @@ function renderResults(checked, candidates, hiddenAmount) {
     `;
     body.appendChild(tr);
   }
+  osFilter();   // een lopende zoekopdracht ook op de nieuwe rijen toepassen
   updateApplyButtonState();
 }
 
@@ -744,15 +747,53 @@ async function refreshLastDoorvoer() {
 
 el("btnDryRun").addEventListener("click", runDryRun);
 
+/* ── Zoeken (Gerrit, 6 aug 2026) ────────────────────────────────────────────
+   Filtert op ordernummer en klantnaam. Verbergen alleen zou hier gevaarlijk
+   zijn: de doorvoer verzamelt élke aangevinkte rij, ook een die door het
+   zoeken uit beeld staat. Zoek je dan op één klant en klik je op doorvoeren,
+   dan wijzigen er stilletjes honderden orders in Logic4. Daarom werkt "alles
+   selecteren" alleen op wat je ziet, en zegt de teller het hardop als er
+   aangevinkte rijen buiten beeld staan. */
+function osZichtbareRijen() {
+  return [...document.querySelectorAll("#resultsBody tr")].filter(tr => tr.style.display !== "none");
+}
+function osFilter() {
+  const q = String((el("osZoek") || {}).value || "").trim().toLowerCase();
+  const rijen = [...document.querySelectorAll("#resultsBody tr")];
+  let zichtbaar = 0, verborgenAangevinkt = 0;
+  for (const tr of rijen) {
+    const klant = (tr.querySelector(".col-customer") || {}).textContent || "";
+    const raak = !q || (String(tr.dataset.orderId || "") + " " + klant).toLowerCase().includes(q);
+    tr.style.display = raak ? "" : "none";
+    if (raak) zichtbaar++;
+    else if ((tr.querySelector(".row-cb") || {}).checked) verborgenAangevinkt++;
+  }
+  const tel = el("osZoekTel");
+  if (tel) {
+    tel.innerHTML = !q ? "" :
+      zichtbaar + " van " + rijen.length + " getoond" +
+      (verborgenAangevinkt ? " · <b style='color:#b91c1c'>let op: " + verborgenAangevinkt +
+        " aangevinkte rij(en) staan buiten beeld en gaan wél mee bij doorvoeren</b>" : "");
+  }
+}
+el("osZoek") && el("osZoek").addEventListener("input", osFilter);
+
 el("cbSelectAll").addEventListener("change", (ev) => {
   const checked = ev.target.checked;
-  document.querySelectorAll(".row-cb").forEach(cb => { cb.checked = checked; });
+  // Alleen wat zichtbaar is; anders vinkt dit ook rijen aan die je door het
+  // zoeken niet eens ziet staan.
+  osZichtbareRijen().forEach(tr => {
+    const cb = tr.querySelector(".row-cb");
+    if (cb) cb.checked = checked;
+  });
+  osFilter();
   updateApplyButtonState();
 });
 
 // Per-rij selectie wijzigen → knop-tekst bijwerken
 document.addEventListener("change", (ev) => {
   if (ev.target && ev.target.classList && ev.target.classList.contains("row-cb")) {
+    osFilter();               // de waarschuwing over rijen buiten beeld bijwerken
     updateApplyButtonState();
   }
 });

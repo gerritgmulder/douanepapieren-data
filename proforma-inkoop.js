@@ -158,6 +158,40 @@ function ikoTel(){
     ? "<span style='color:#b91c1c'>"+s.blokkeert.length+" regel(s) zonder artikelcode — los op of vink 'niet meebestellen' aan.</span>"
     : s.mee.length+" regel(s) · "+stuks+" spa's"+(s.overgeslagen.length?(" · <b style='color:#c2410c'>"+s.overgeslagen.length+" regel(s) worden NIET meebesteld</b>"):"");
 }
+/* Aanvullen in een bestaande inkooporder (Chantal, 6 aug 2026).
+   Een proforma wordt soms maar half besteld, bijvoorbeeld omdat een model nog
+   niet in de catalogus stond. Bij de Jazzi-orders 3317, 3332 en 3342 bleven zo
+   modellen liggen. Tot nu toe was de enige uitweg een tweede inkooporder bij
+   dezelfde fabriek; nu kunnen de ontbrekende regels bij de bestaande. De
+   worker weigert artikelen die er al op staan, zodat aanvullen nooit stilletjes
+   het dubbele bestelt. */
+async function ikoAanvullen(bestaandeOrder){
+  const s=ikoMeeTeBestellen();
+  if(s.blokkeert.length){ ikoStatus("bad",s.blokkeert.length+" regel(s) hebben geen artikelcode — los dat op of vink 'niet meebestellen' aan."); return; }
+  if(!s.mee.length){ ikoStatus("bad","Er blijft geen enkele regel over om toe te voegen."); return; }
+  const aantal=s.mee.reduce((n,r)=>n+r.aantal,0);
+  if(!confirm("Aanvullen in inkooporder "+bestaandeOrder+"?\n\n"+s.mee.length+" regels · "+aantal+" spa's worden toegevoegd aan de bestaande inkooporder.\n\nArtikelen die er al op staan worden geweigerd, dus er wordt niets dubbel besteld.")) return;
+  const knop=document.getElementById("ikoAanvullen");
+  if(knop){ knop.disabled=true; knop.textContent="Bezig…"; }
+  try{
+    const r=await fetch(IKO_AANMAAK_URL,{method:"POST",
+      headers:{"Content-Type":"application/json","X-DP-Admin":C.adminKey()},
+      body:JSON.stringify({crediteurId:Number((document.getElementById("ikoCred")||{}).value||0),
+        regels:s.mee, referentie:(document.getElementById("ikoRef").value||"").trim(),
+        aanvullenOp:bestaandeOrder, bestemming:C.bestemming,
+        eta:(document.getElementById("ikoEta").value||null), door:(C.email)})});
+    const j=await r.json().catch(()=>({}));
+    if(j.dubbeleRegels){ ikoStatus("warn",j.error); if(knop){ knop.disabled=false; knop.textContent="Aanvullen in inkooporder "+bestaandeOrder; } return; }
+    if(!j.ok&&!j.buyOrderId) throw new Error(j.error||("HTTP "+r.status));
+    ikoStatus("ok","Inkooporder "+j.buyOrderId+" aangevuld met "+j.toegevoegd+" regel(s)."+
+      (j.mislukt&&j.mislukt.length?(" "+j.mislukt.length+" regel(s) niet: "+j.mislukt.map(m=>m.artikelcode+" ("+m.fout+")").join("; ")):""));
+    if(knop){ knop.textContent="Aangevuld ✓"; }
+    try{ if(C.log) C.log("inkooporder-aangevuld","order "+j.buyOrderId+", "+j.toegevoegd+" regel(s)"); }catch(e){}
+  }catch(e){
+    ikoStatus("bad","Aanvullen mislukt: "+e.message);
+    if(knop){ knop.disabled=false; knop.textContent="Aanvullen in inkooporder "+bestaandeOrder; }
+  }
+}
 async function ikoAanmaken(){
   const knop=document.getElementById("ikoAanmaken");
   const cred=Number((document.getElementById("ikoCred")||{}).value||0);
@@ -179,7 +213,20 @@ async function ikoAanmaken(){
         overgeslagen:s.overgeslagen.map(r=>r.aantal+"x "+(r.model||r.code)),
         eta:(document.getElementById("ikoEta").value||null),door:(C.email)})});
     const j=await r.json().catch(()=>({}));
-    if(j.dubbel){ ikoStatus("warn",j.error); knop.disabled=false; knop.textContent="Inkooporder aanmaken in Logic4"; return; }
+    if(j.dubbel){
+      // Niet alleen melden dát het al bestaat, maar ook de uitweg aanbieden.
+      ikoStatus("warn",j.error+" Wil je de regels van deze proforma aan die inkooporder toevoegen, gebruik dan de knop hieronder.");
+      const balk=document.getElementById("ikoTelling");
+      if(balk&&!document.getElementById("ikoAanvullen")){
+        const b=document.createElement("button");
+        b.className="btn solid"; b.id="ikoAanvullen"; b.type="button";
+        b.style.marginLeft="8px";
+        b.textContent="Aanvullen in inkooporder "+j.bestaandeOrder;
+        b.addEventListener("click",function(){ ikoAanvullen(j.bestaandeOrder); });
+        balk.parentNode.insertBefore(b,balk);
+      }
+      knop.disabled=false; knop.textContent="Inkooporder aanmaken in Logic4"; return;
+    }
     if(!j.ok&&!j.buyOrderId) throw new Error(j.error||("HTTP "+r.status));
     if(j.mislukt&&j.mislukt.length){
       ikoStatus("warn","Inkooporder "+j.buyOrderId+" aangemaakt met "+j.toegevoegd+" regel(s), maar "+j.mislukt.length+" regel(s) niet: "+
