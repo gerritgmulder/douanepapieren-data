@@ -396,7 +396,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="05-08-2026 · 22:10";
+const TEGEL_VERSIE="06-08-2026 · 09:30";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
@@ -688,10 +688,17 @@ function tekenLegForm(){
     r.code=inp.value;
     const hit=iconen[inp.value.trim()];
     if(hit){ r.naam=hit.naam; r.img=hit.img; tekenLegForm(); }
-    // Geen treffer? Dan hoort er ook geen plaatje te staan. Het bleef eerder
-    // hangen als de code werd weggehaald, waardoor Demi de hele rij moest
-    // verwijderen om het vakje leeg te krijgen - en dan schoven alle posities
-    // eronder op. De rij zelf blijft dus staan, alleen het plaatje gaat weg.
+    // Code helemaal leeg = de rij moet leeg zijn, inclusief de omschrijving
+    // (Demi via Gretha, 5 aug 2026). De rij zelf blijft wél staan, want die
+    // houdt de posities eronder op hun plek. Dat was het hele punt: eerder
+    // moest ze de rij verwijderen om het vakje leeg te krijgen en schoof
+    // alles op.
+    else if(!inp.value.trim()){
+      if(r.naam||r.img){ r.naam=""; r.img=""; tekenLegForm(); }
+    }
+    // Wél iets ingevuld, maar geen bekend icoontje: alleen het plaatje weg.
+    // De omschrijving laten staan, anders wist hij die tijdens het typen van
+    // een nieuwe code steeds weer.
     else if(r.img){ r.img=""; tekenLegForm(); }
     teken();
   }));
