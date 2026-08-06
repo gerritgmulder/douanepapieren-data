@@ -31,7 +31,18 @@
   "use strict";
 
   var PER = 5000;          // Logic4 levert dit in ~0,2s per pagina
-  var MAX_PAGINAS = 400;   // 2 miljoen regels; ver voorbij wat er is
+  // 2 miljoen regels. Hier stond "ver voorbij wat er is", en dat was op
+  // 6 aug 2026 aantoonbaar onwaar: grootboek 1300 (debiteuren) en 2050
+  // (automatische Logic4 boekingen) zitten er allebei boven. 1630 en 1350,
+  // de enige die de tegels nu lezen, blijven onder het miljoen.
+  //
+  // Het gevaar zit niet in de limiet maar in wat er gebeurde als hij werd
+  // geraakt: de lus stopte gewoon en gaf een uitkomst terug alsof die
+  // compleet was. Bij 1300 leverde dat een saldo op dat credit stond in
+  // plaats van debet, omdat juist de betalingen in de niet-gelezen staart
+  // zaten. Een half antwoord is gevaarlijker dan geen antwoord, dus nu
+  // stopt hij met een foutmelding.
+  var MAX_PAGINAS = 400;
 
   function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
 
@@ -48,14 +59,23 @@
         SkipRecords: p * PER,
       });
       var lijst = Array.isArray(r) ? r : (r && r.Records) || [];
-      if (!lijst.length) break;
+      // Let op: return en geen break. Bij een grootboek waarvan het aantal
+      // regels precies deelbaar is door PER is de volgende pagina leeg, en
+      // dat is een nette afsluiting - geen afkapping. Met een break zou hij
+      // hieronder alsnog de foutmelding geven.
+      if (!lijst.length) return gelezen;
       gelezen += lijst.length;
       if (perPagina) perPagina(lijst, gelezen);
       if (melden) melden("Grootboek " + code + " lezen… " + gelezen.toLocaleString("nl-NL") + " regels",
         Math.min(60, 5 + gelezen / 15000));
-      if (lijst.length < PER) break;
+      if (lijst.length < PER) return gelezen;   // laatste pagina: klaar
     }
-    return gelezen;
+    // Hier komen we alleen als de laatste pagina nog vol was, en dan is er
+    // méér. Doorgaan met wat we hebben zou een saldo opleveren dat nergens
+    // op slaat, dus liever hard stoppen dan stilletjes de helft tonen.
+    throw new Error("Grootboek " + code + " heeft meer dan " +
+      (MAX_PAGINAS * PER).toLocaleString("nl-NL") + " regels. De uitlezing is niet compleet " +
+      "en het saldo zou dus niet kloppen. Verhoog MAX_PAGINAS in grootboek.js.");
   }
 
   /* Het ordernummer staat niet in een eigen veld maar in de omschrijving
