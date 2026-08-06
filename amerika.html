@@ -98,6 +98,26 @@
     <button class="tab active" data-tab="containers" type="button">Containers (Logic4 · Warehouse Texas)</button>
     <button class="tab" data-tab="quickbooks" type="button">Verkoop &amp; dealers (QuickBooks)</button>
     <button class="tab" data-tab="audrey" type="button">Ontvangen Audrey</button>
+    <button class="tab" data-tab="voorraad" type="button">Voorraad Houston</button>
+  </div>
+
+  <!-- ===== Voorraad in Houston =====
+       Komt nu uit de telling die Chantal per mail stuurt. Zodra magazijn
+       Houston in Logic4 bestaat hoort dit daaruit te komen; tot die tijd is
+       dit een momentopname en dat moet er ook bij staan. -->
+  <div id="tab-voorraad" class="hidden">
+    <div id="vhKpis" class="kpi-row"></div>
+    <div class="card">
+      <div id="vhUitleg" class="status-msg" style="margin-bottom:12px"></div>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:0;flex-wrap:wrap">
+        <input id="vhZoek" type="text" placeholder="zoek op model of kleur…" style="min-width:280px;padding:8px">
+        <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" id="vhVerbergNul" checked> regels met 0 verbergen
+        </label>
+        <span id="vhTel" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="vhLijst" style="margin-top:12px"></div>
+    </div>
   </div>
 
   <!-- ===== Containers uit Logic4 (Warehouse Texas) ===== -->
@@ -190,11 +210,96 @@ document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
   document.getElementById("tab-containers").classList.toggle("hidden",tab!=="containers");
   document.getElementById("tab-quickbooks").classList.toggle("hidden",tab!=="quickbooks");
   document.getElementById("tab-audrey").classList.toggle("hidden",tab!=="audrey");
+  document.getElementById("tab-voorraad").classList.toggle("hidden",tab!=="voorraad");
   if(tab==="quickbooks") qbInit();
   if(tab==="audrey") audInit();
+  if(tab==="voorraad") vhInit();
 }));
 
 const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
+
+/* ═══ Voorraad Houston ═══════════════════════════════════════════════════
+   De telling die Chantal bijhoudt, met de partnerprijs in dollars ernaast.
+
+   Twee dingen zijn hier belangrijk genoeg om op het scherm te zetten en niet
+   in een voetnoot. Een negatief aantal is géén tekort maar een spa die in
+   productie of onderweg is en al aan een klant toebehoort. En niet elk model
+   heeft een dollarprijs: sauna's, ijsbaden en een aantal Amerikaanse modellen
+   staan niet in de EU-prijslijst, dus de voorraadwaarde hieronder is de
+   waarde van wat wél te prijzen is en niet van alles.
+
+   Dit is een momentopname per mail. Zodra magazijn Houston in Logic4 bestaat
+   hoort dit daaruit te komen en vervalt de handmatige stap. */
+const VH_URL=WORKER+"/data/amerika-voorraad";
+let vhData=null;
+async function vhInit(){
+  if(vhData) return vhTeken();
+  const box=document.getElementById("vhLijst");
+  box.innerHTML="<p class='lead'>Voorraad laden…</p>";
+  try{
+    const r=await fetch(VH_URL,{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    vhData=await r.json();
+    vhTeken();
+  }catch(e){ box.innerHTML="<div class='status-msg bad'>Voorraad laden faalde: "+esc(e.message)+"</div>"; }
+}
+function vhTeken(){
+  const d=vhData||{}, regels=d.regels||[];
+  const q=((document.getElementById("vhZoek")||{}).value||"").trim().toLowerCase();
+  const verbergNul=!!(document.getElementById("vhVerbergNul")||{}).checked;
+  const usd=n=>"$ "+Number(n||0).toLocaleString("nl-NL",{maximumFractionDigits:0});
+
+  const aanwezig=regels.filter(r=>r.aantal>0);
+  const onderweg=regels.filter(r=>r.aantal<0);
+  const stuks=aanwezig.reduce((n,r)=>n+r.aantal,0);
+  const stuksOnderweg=onderweg.reduce((n,r)=>n+Math.abs(r.aantal),0);
+  const waarde=aanwezig.filter(r=>r.usd).reduce((n,r)=>n+r.usd*r.aantal,0);
+  const zonderPrijs=aanwezig.filter(r=>!r.usd).reduce((n,r)=>n+r.aantal,0);
+  const modellen=new Set(regels.map(r=>r.model)).size;
+
+  document.getElementById("vhKpis").innerHTML=
+    kpi(stuks,"In het warehouse")+
+    kpi(stuksOnderweg,"Onderweg / in productie")+
+    kpi(modellen,"Modellen")+
+    kpi(usd(waarde),"Voorraadwaarde (partnerprijs)")+
+    kpi(zonderPrijs,"Stuks zonder dollarprijs");
+
+  document.getElementById("vhUitleg").innerHTML=
+    "<b>Telling van "+esc(vhDatum(d.peildatum))+"</b>, bron: "+esc(d.bron||"onbekend")+". "+
+    ((d.toelichting||[]).map(esc).join(" ")||"")+
+    " De voorraadwaarde is berekend met de partnerprijs in dollars uit "+esc(d.prijsbron||"de prijslijst")+
+    "; <b>"+zonderPrijs+" stuks hebben daar geen prijs</b> en tellen dus niet mee in dat bedrag.";
+
+  let rijen=regels.slice();
+  if(verbergNul) rijen=rijen.filter(r=>r.aantal!==0);
+  if(q) rijen=rijen.filter(r=>(r.model+" "+r.kleur).toLowerCase().includes(q));
+  rijen.sort((a,b)=>(b.usd?b.usd*Math.abs(b.aantal):0)-(a.usd?a.usd*Math.abs(a.aantal):0)
+    ||String(a.model).localeCompare(String(b.model)));
+
+  document.getElementById("vhTel").textContent=rijen.length+" van "+regels.length+" regels";
+  document.getElementById("vhLijst").innerHTML=!rijen.length
+    ? "<p class='lead'>Niets gevonden.</p>"
+    : "<div class='tablewrap'><table class='grid'><thead><tr><th>Model</th><th>Kleur</th><th>Aantal</th>"+
+      "<th>Partnerprijs USD</th><th>Waarde USD</th><th>Dealerprijs EUR</th></tr></thead><tbody>"+
+      rijen.map(function(r){
+        const neg=r.aantal<0;
+        return "<tr"+(neg?" style='background:#fff7ed'":"")+"><td><b>"+esc(r.model)+"</b></td>"+
+          "<td style='font-size:12px'>"+esc(r.kleur)+"</td>"+
+          "<td style='"+(neg?"color:#c2410c;font-weight:700":"")+"'>"+r.aantal+
+            (neg?" <span style='font-size:11px'>onderweg</span>":"")+"</td>"+
+          "<td>"+(r.usd?usd(r.usd):"<span style='color:var(--muted)'>—</span>")+"</td>"+
+          "<td>"+(r.usd&&r.aantal>0?usd(r.usd*r.aantal):"<span style='color:var(--muted)'>—</span>")+"</td>"+
+          "<td style='color:var(--muted)'>"+(r.dealerEur?("€ "+r.dealerEur.toLocaleString("nl-NL")):"—")+"</td></tr>";
+      }).join("")+"</tbody></table></div>";
+}
+function vhDatum(s){
+  const m=String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m?(m[3]+"-"+m[2]+"-"+m[1]):String(s||"");
+}
+["vhZoek","vhVerbergNul"].forEach(function(id){
+  const el=document.getElementById(id);
+  if(el) el.addEventListener(id==="vhZoek"?"input":"change",function(){ if(vhData) vhTeken(); });
+});
 async function qbInit(){
   const st=document.getElementById("qbStatus"), btn=document.getElementById("qbConnectBtn");
   try{

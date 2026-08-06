@@ -55,6 +55,11 @@ const ALLOWED_BUCKETS = new Set([
   "gg-1630",           // Aansluiting grootboek 1630: laatste opstelling + historie per meting (accountant)
   "gg-artikelgroepen",// Artikelcode → productgroep-id + de groepsnamen. Voor de debiteurenlijst, die per factuur de afdeling moet bepalen. Opbouwen kost een minuut, dus wordt hij 30 dagen hergebruikt.
   "spa-aliassen",     // Modelnaam zoals hij getypt wordt → modelnaam in de spa-catalogus (eenmalige keuze door een mens)
+  // Voorraad in Houston, zoals Chantal die bijhoudt. Nu nog een telling die per
+  // mail binnenkomt; zodra magazijn Houston in Logic4 bestaat komt dit daaruit
+  // en vervalt deze bucket. Bewust apart van 'voorraad-hallen': dat is de
+  // Nederlandse hal-voorraad en die twee moeten niet door elkaar lopen.
+  "amerika-voorraad",
   "taken",            // Persoonlijk takenblok: e-mailadres → eigen taken (tekst/datum/klaar)
   "taken-ritme",      // Terugkerende momenten (voorraadcontrole, kwartaalcontrole) + per persoon wanneer afgevinkt
   // De huisstijl-fonts (Sephir, Helvetica, Univers) zijn commercieel
