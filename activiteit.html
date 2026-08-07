@@ -69,7 +69,10 @@
   <div class="controls">
     <label style="font-size:12px;color:var(--muted)">Maand:</label>
     <input type="month" id="maand">
-    <input type="text" id="zoek" placeholder="filter op medewerker, tegel of actie…" style="min-width:240px">
+    <select id="fUser" title="Filter op medewerker"><option value="">Alle medewerkers</option></select>
+    <select id="fAfdeling" title="Filter op afdeling"><option value="">Alle afdelingen</option></select>
+    <select id="fTile" title="Filter op tegel"><option value="">Alle tegels</option></select>
+    <select id="fActie" title="Filter op wat er gebeurd is"><option value="">Alle acties</option></select>
     <select id="soort">
       <option value="alles">Alles tonen</option>
       <option value="wijzigingen">Alleen wijzigingen</option>
@@ -78,8 +81,11 @@
     <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
       <input type="checkbox" id="toonBot"> mijn eigen acties (Fonteynbot) tonen
     </label>
+    <button type="button" id="wisFilters" class="hidden"
+      style="border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer">✕ filters wissen</button>
     <span id="updated" style="font-size:12px;color:var(--muted)"></span>
   </div>
+  <div id="filterUitleg" class="hidden" style="font-size:12.5px;color:var(--fonteyn-green);background:#f2f8e8;border:1px solid #dbe9c6;border-radius:8px;padding:8px 12px;margin:-2px 0 12px"></div>
 
   <div id="deny" class="status-msg bad hidden">Geen toegang tot het activiteitenlogboek.</div>
 
@@ -121,7 +127,10 @@ const ALLOWED=new Set(["gerrit@fonteyn.nl","gerrit","dolf@fonteyn.nl","fonteyn.d
 const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
 const TEAM=(localStorage.getItem("fp.teamkey")||"");
 // Tegel-bestandsnaam → nette naam
-const TILES={dashboard:"Dashboard",voorraad:"Voorraadbeheer",amerika:"Amerika",douane:"Douanepapieren",labels:"Labels",transport:"Transport",eikensingel:"Eikensingel","order-status":"Orderstatus",stuurcijfers:"Stuurcijfers",prijslijst:"Prijslijst",bankkoppeling:"Bankkoppeling",bol:"Bol.com",retouren:"Retouren",personeel:"Personeel",koeien:"Koeien",rapportage:"Rapportage",dealerportaal:"Partnerportaal",activiteit:"Activiteitenlogboek",partneractiviteit:"Partner-activiteit","probe-logic4":"Logic4-probe"};
+// Elke tegel hoort hier te staan. Ontbreekt er een, dan komt de bestandsnaam
+// in beeld ("specsheets (178)") en dat is precies wat de keuzelijst moet
+// voorkomen. Nieuwe tegel erbij = regel erbij.
+const TILES={dashboard:"Dashboard",voorraad:"Voorraadbeheer",amerika:"Amerika",douane:"Douanepapieren",labels:"Labels",transport:"Transport",eikensingel:"Eikensingel","order-status":"Orderstatus",stuurcijfers:"Stuurcijfers",prijslijst:"Prijslijst maken","prijslijsten-fabrikanten":"Prijslijsten fabrikanten",bankkoppeling:"Bankkoppeling",bol:"Bol.com",retouren:"Retouren",personeel:"Personeel",koeien:"Koeien",rapportage:"Rapportage",dealerportaal:"Partnerportaal beheren",dealerportal:"Passion Partners (portaal)",geldgoederen:"Geld-goederenbeweging",specsheets:"Specificatiesheets",activiteit:"Activiteitenlogboek",partneractiviteit:"Partner-activiteit",douanetool:"Douanetool (oud)","probe-logic4":"Logic4-probe"};
 function tileName(t){return TILES[t]||t||"—";}
 // Afdeling hoort bij de PERSOON, niet bij de tegel. Eerder toonde het logboek
 // de rol die de tegel meestuurde — dan stond Fonteynbot als "marketing" in de
@@ -250,9 +259,15 @@ let allEvents=[];
 })();
 document.getElementById("logoutBtn").addEventListener("click",()=>{ localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href="dashboard.html"; });
 document.getElementById("maand").addEventListener("change",load);
-document.getElementById("zoek").addEventListener("input",render);
-document.getElementById("soort").addEventListener("change",render);
+["fUser","fAfdeling","fTile","fActie","soort"].forEach(function(id){
+  document.getElementById(id).addEventListener("change",render);
+});
 document.getElementById("toonBot").addEventListener("change",render);
+document.getElementById("wisFilters").addEventListener("click",function(){
+  ["fUser","fAfdeling","fTile","fActie"].forEach(function(id){ document.getElementById(id).value=""; });
+  document.getElementById("soort").value="alles";
+  render();
+});
 
 async function load(){
   const maand=document.getElementById("maand").value||new Date().toISOString().slice(0,7);
@@ -277,20 +292,90 @@ function rolPill(r){
   const beheer=/beheer|admin/i.test(r);
   return "<span class='pill' style='background:"+(beheer?"#dcfce7":"#e0f2fe")+";color:"+(beheer?"#15803d":"#0369a1")+"'>"+esc(r)+"</span>";
 }
+/* ─── Filters ────────────────────────────────────────────────────────
+   Waarom keuzelijsten en geen zoekbalk: bij een zoekbalk moet je weten wat je
+   zoekt en precies zo typen als het in het logboek staat. Met keuzelijsten
+   zie je wát er te kiezen valt, en kun je ze stapelen - Don én Orderstatus
+   (Gerrit, 7 aug 2026).
+
+   Achter elke keuze staat hoeveel gebeurtenissen die oplevert, gerekend mét
+   de andere filters die aanstaan. Zo zie je vooraf of een keuze iets oplevert
+   in plaats van op een lege tabel uit te komen. */
+function filterStand(){
+  return {
+    user: document.getElementById("fUser").value,
+    afdeling: document.getElementById("fAfdeling").value,
+    tile: document.getElementById("fTile").value,
+    actie: document.getElementById("fActie").value,
+    soort: document.getElementById("soort").value,
+    eigen: document.getElementById("toonBot").checked,
+  };
+}
+// `los` = welk filter we even negeren, om te tellen wat een andere keuze
+// binnen die keuzelijst zou opleveren.
+function pasToe(evs,f,los){
+  return evs.filter(function(e){
+    if(!f.eigen && isEigenAccount(e.user)) return false;
+    if(los!=="user"     && f.user     && String(e.user||"").toLowerCase()!==f.user) return false;
+    if(los!=="afdeling" && f.afdeling && (afdeling(e.user)||"—")!==f.afdeling) return false;
+    if(los!=="tile"     && f.tile     && String(e.tile||"")!==f.tile) return false;
+    if(los!=="actie"    && f.actie    && String(e.action||"")!==f.actie) return false;
+    if(f.soort==="wijzigingen" && !isWijziging(e)) return false;
+    if(f.soort==="inzage"      &&  isWijziging(e)) return false;
+    return true;
+  });
+}
+// Eén keuzelijst opnieuw vullen. De gekozen waarde blijft staan, ook als er
+// deze maand niets meer onder valt - dan zou hij anders stilletjes omslaan
+// naar 'alles' en zie je meer dan je hebt gevraagd.
+function vulLijst(id,evs,sleutel,label,alles){
+  const sel=document.getElementById(id), gekozen=sel.value;
+  const tel={};
+  for(const e of evs){ const k=sleutel(e); if(k==null||k==="") continue; tel[k]=(tel[k]||0)+1; }
+  const keys=Object.keys(tel).sort(function(a,b){ return tel[b]-tel[a]||String(label(a)).localeCompare(String(label(b)),"nl"); });
+  if(gekozen && !tel[gekozen]) keys.push(gekozen);
+  sel.innerHTML="<option value=''>"+esc(alles)+"</option>"+
+    keys.map(function(k){
+      return "<option value='"+esc(k)+"'"+(k===gekozen?" selected":"")+">"+esc(label(k))+" ("+(tel[k]||0)+")</option>";
+    }).join("");
+  sel.value=gekozen;
+}
+function vulFilters(){
+  const f=filterStand();
+  vulLijst("fUser",     pasToe(allEvents,f,"user"),     e=>String(e.user||"").toLowerCase(), u=>u, "Alle medewerkers");
+  vulLijst("fAfdeling", pasToe(allEvents,f,"afdeling"), e=>afdeling(e.user)||"—",            a=>a==="—"?"onbekend":a, "Alle afdelingen");
+  vulLijst("fTile",     pasToe(allEvents,f,"tile"),     e=>String(e.tile||""),               tileName, "Alle tegels");
+  vulLijst("fActie",    pasToe(allEvents,f,"actie"),    e=>String(e.action||""),             actieNaam, "Alle acties");
+}
+function actieNaam(a){
+  if(a==="login") return "ingelogd";
+  if(a==="open") return "tegel geopend";
+  if(a==="open-geweigerd") return "geen toegang";
+  return String(a).replace(/-/g," ");
+}
+// Wat staat er aan, in gewone taal. Zonder dit is een lege tabel niet te
+// onderscheiden van een maand zonder activiteit.
+function filterTekst(f){
+  const d=[];
+  if(f.user) d.push("<b>"+esc(f.user)+"</b>");
+  if(f.afdeling) d.push("afdeling <b>"+esc(f.afdeling==="—"?"onbekend":f.afdeling)+"</b>");
+  if(f.tile) d.push("tegel <b>"+esc(tileName(f.tile))+"</b>");
+  if(f.actie) d.push("actie <b>"+esc(actieNaam(f.actie))+"</b>");
+  if(f.soort==="wijzigingen") d.push("<b>alleen wijzigingen</b>");
+  if(f.soort==="inzage") d.push("<b>alleen inloggen en bekijken</b>");
+  return d;
+}
 function render(){
-  const q=(document.getElementById("zoek").value||"").trim().toLowerCase();
-  const soort=document.getElementById("soort").value;
-  const toonEigen=document.getElementById("toonBot").checked;
-  let evs=allEvents.filter(e=>toonEigen||!isEigenAccount(e.user));
-  evs=evs.filter(e=>!q
-    ||String(e.user).toLowerCase().includes(q)
-    ||tileName(e.tile).toLowerCase().includes(q)
-    ||String(e.tile).toLowerCase().includes(q)
-    ||String(e.action||"").toLowerCase().includes(q)
-    ||String(e.detail||"").toLowerCase().includes(q)
-    ||String(e.rol||"").toLowerCase().includes(q));
-  if(soort==="wijzigingen") evs=evs.filter(isWijziging);
-  else if(soort==="inzage")  evs=evs.filter(e=>!isWijziging(e));
+  const f=filterStand();
+  vulFilters();
+  const evs=pasToe(allEvents,f,null);
+
+  const actief=filterTekst(f);
+  const uitlegBox=document.getElementById("filterUitleg");
+  document.getElementById("wisFilters").classList.toggle("hidden",!actief.length);
+  uitlegBox.classList.toggle("hidden",!actief.length);
+  if(actief.length) uitlegBox.innerHTML="Gefilterd op "+actief.join(" &amp; ")+" — <b>"+evs.length+"</b> van "+allEvents.length+" gebeurtenissen.";
+  const geenTreffers=actief.length?" met deze filters":"";
   // KPI's
   const users=new Set(evs.map(e=>e.user));
   const logins=evs.filter(e=>e.action==="login").length;
@@ -324,12 +409,12 @@ function render(){
     "<td><b>"+esc(e.user)+"</b></td><td>"+afdelingPill(e.user)+"</td><td>"+rolPill(e.rol)+"</td>"+
     "<td>"+actionPill(e.action)+detailCel(e.detail,"#374151")+"</td>"+
     "<td style='font-size:12px'>"+esc(tileName(e.tile))+"</td></tr>"
-  ).join("")||"<tr><td colspan='6' style='color:var(--muted)'>Geen wijzigingen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
+  ).join("")||"<tr><td colspan='6' style='color:var(--muted)'>Geen wijzigingen"+geenTreffers+".</td></tr>";
   // Alle gebeurtenissen (nieuwste eerst)
   document.getElementById("evCount").textContent="("+sorted.length+")";
   document.getElementById("events").innerHTML=sorted.slice(0,1000).map(e=>
     "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+esc(e.user)+"</td><td>"+afdelingPill(e.user)+"</td><td>"+rolPill(e.rol)+"</td><td>"+actionPill(e.action)+"</td><td>"+esc(tileName(e.tile))+detailCel(e.detail,"var(--muted)"," · ")+"</td><td>"+apparaatTekst(e)+"</td></tr>"
-  ).join("")||"<tr><td colspan='7' style='color:var(--muted)'>Geen gebeurtenissen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
+  ).join("")||"<tr><td colspan='7' style='color:var(--muted)'>Geen gebeurtenissen"+geenTreffers+".</td></tr>";
   koppelDetails();
   renderApparaten(evs);
 }
