@@ -27,6 +27,122 @@
 
   var FABRIKANTEN = [
     {
+      fabriek: "Jazzi Pool & Spa (Guangzhou)",
+      merk: "Passion Spas",
+      contact: null, email: null,
+      bron: "prijslijst 'Updated Passion, Jazzi Confirmed Prices, European', 15-06-2026",
+      opmerking: "Verreweg de grootste leverancier. Bedragen in USD - Jazzi factureert in dollars.",
+      modellen: [
+        { model: "Activity 1", code: "SKT339G13", inkoopUsd: 5315.66, verkoopEur: null, afmeting: "3940x2260x1260" },
+        { model: "Activity 1 Deep", code: "SKT339G12", inkoopUsd: 6088.16, verkoopEur: null, afmeting: "3940x2260x1520" },
+        { model: "Activity 2", code: "SKT339G15", inkoopUsd: 6396.5, verkoopEur: null, afmeting: "5490x2260x1260" },
+        { model: "Activity 2 Deep", code: "SKT339G14", inkoopUsd: 7156.5, verkoopEur: null, afmeting: "5490x2260x1520" },
+        { model: "Arizona", code: "SKT329A", inkoopUsd: 1921.71, verkoopEur: null, afmeting: "2000x2000x880" },
+        { model: "Admire", code: "SKT888BA", inkoopUsd: 2990.51, verkoopEur: null, afmeting: "2300x2300x910" },
+        { model: "Aquatic 1", code: "SKT339C", inkoopUsd: 5049.86, verkoopEur: null, afmeting: "4000x2280x1260" },
+        { model: "Aquatic 1 ECO", code: "SKT339C SIMPLE PACK", inkoopUsd: 4982.91, verkoopEur: null },
+        { model: "Aquatic 2", code: "SKT339B", inkoopUsd: 6281.27, verkoopEur: null, afmeting: "6000x2230x1260" },
+        { model: "Aquatic 3", code: "SKT339D", inkoopUsd: 7220.32, verkoopEur: null, afmeting: "5820x2240x1240" },
+        { model: "Aquatic 3 Deep", code: "SKT339D1", inkoopUsd: 8169.98, verkoopEur: null, afmeting: "5820x2240x1560" },
+        { model: "Aquatic 5", code: "SKT339E1", inkoopUsd: 8615.25, verkoopEur: null, afmeting: "5800x2280x1550" },
+        { model: "Aquatic 6", code: "SKT339E2", inkoopUsd: 10742.14, verkoopEur: null, afmeting: "7800x2280x1550" },
+        { model: "Brisbane", code: "SKT338H", inkoopUsd: 3047.5, verkoopEur: null },
+        { model: "Bliss", code: "SKT888D", inkoopUsd: 1621.25, verkoopEur: null, afmeting: "2200x1000x790" },
+        { model: "New Bliss", code: "SKT888DA", inkoopUsd: 1621.25, verkoopEur: null },
+        { model: "Bright", code: "SKT338A3 with TV", inkoopUsd: 3803.4, verkoopEur: null },
+        { model: "Bright", code: "SKT338A3 without TV", inkoopUsd: 3230.84, verkoopEur: null },
+        { model: "Brighton", code: "SKT333F", inkoopUsd: 2798.24, verkoopEur: null },
+        { model: "Cardiff", code: "SKT306A", inkoopUsd: 3223.84, verkoopEur: null, afmeting: "2280x2280x940" },
+        { model: "Coventry", code: "SKT335A", inkoopUsd: 1715.71, verkoopEur: null, afmeting: "1840x1240x750" },
+        { model: "Delight", code: "SKT888AA", inkoopUsd: 2655.76, verkoopEur: null, afmeting: "2130x2130x910" },
+        { model: "Desire", code: "SKT888C1", inkoopUsd: 3121.32, verkoopEur: null, afmeting: "2740x2280x910" },
+        { model: "Devotion", code: "SKT888BC", inkoopUsd: 2990.51, verkoopEur: null, afmeting: "2300x2300x910" },
+        { model: "Dream 7", code: "PP01 ROTO MOULD SPA", inkoopUsd: 1317.1, verkoopEur: null },
+        { model: "Dynamic", code: "SKT339DA", inkoopUsd: 7333.62, verkoopEur: null, afmeting: "5900x2270x1260" },
+        { model: "Dynamic Deep", code: "SKT339DA-1", inkoopUsd: 8283.28, verkoopEur: null, afmeting: "5900x2270x1550" },
+        { model: "Ecstatic", code: "SKT888F", inkoopUsd: 3469.03, verkoopEur: null, afmeting: "3050x2280x910" },
+        { model: "Ecstatic Wave", code: "SKT888FA", inkoopUsd: 4099.18, verkoopEur: null, afmeting: "3050x2280x910" },
+        { model: "Edinborough", code: "SKT333D", inkoopUsd: 3003.21, verkoopEur: null },
+        { model: "Euphoria", code: "SKT888K", inkoopUsd: 3221.96, verkoopEur: null, afmeting: "2280x2280x860" },
+        { model: "New Euphoria wave", code: "SKT888KA", inkoopUsd: 3270.56, verkoopEur: null },
+        { model: "Energy", code: "SKT339G4，7.1m normal", inkoopUsd: 10243, verkoopEur: null },
+        { model: "Energy Deep", code: "SKT339G5，7.1m deep", inkoopUsd: 10965.26, verkoopEur: null },
+        { model: "Excite", code: "SKT888M-1", inkoopUsd: 3157.98, verkoopEur: null, afmeting: "2240x2240x910" },
+        { model: "Exercise", code: "SKT339G9", inkoopUsd: 3854.71, verkoopEur: null, afmeting: "2500x2260x1650" },
+        { model: "Felicity", code: "SKT888J", inkoopUsd: 3179.92, verkoopEur: null, afmeting: "2130x2130x910" },
+        { model: "New Felicity wave", code: "SKT888JA", inkoopUsd: 3155.92, verkoopEur: null },
+        { model: "Florida", code: "SKT338E2", inkoopUsd: 2179.21, verkoopEur: null, afmeting: "2290x2290x970" },
+        { model: "Fitness 1", code: "SKT339G6", inkoopUsd: 5814.74, verkoopEur: null, afmeting: "4000x2280x1260" },
+        { model: "Fitness 1 Deep", code: "SKT339G7", inkoopUsd: 6321.5, verkoopEur: null, afmeting: "4000x2280x1520" },
+        { model: "Fitness 2", code: "SKT339G2，5m normal", inkoopUsd: 7260.83, verkoopEur: null },
+        { model: "Fitness 2 Deep", code: "SKT339G3，5m deep", inkoopUsd: 7289.67, verkoopEur: null },
+        { model: "Heart", code: "SKT888E", inkoopUsd: 1943.34, verkoopEur: null, afmeting: "2020x1690x780" },
+        { model: "New Heart", code: "SKT888EA", inkoopUsd: 1947.12, verkoopEur: null },
+        { model: "Happy", code: "SKT888A-4S", inkoopUsd: 2167.54, verkoopEur: null, afmeting: "2130x1750x830" },
+        { model: "Joy", code: "SKT888M", inkoopUsd: 2749.83, verkoopEur: null, afmeting: "2250x2250x910" },
+        { model: "New Joy", code: "SKT888MA", inkoopUsd: 2749.83, verkoopEur: null },
+        { model: "Junior swimspa", code: "100383", inkoopUsd: 3106.21, verkoopEur: null },
+        { model: "Melbourne", code: "SKT888B2", inkoopUsd: 2757.04, verkoopEur: null, afmeting: "2320x2300x910" },
+        { model: "Natural", code: "SKT306B", inkoopUsd: 2520.35, verkoopEur: null, afmeting: "2000x2000x980" },
+        { model: "Oxford", code: "SKT335F", inkoopUsd: 1943.34, verkoopEur: null, afmeting: "2050x1550x810" },
+        { model: "Pleasure", code: "SKT888CA", inkoopUsd: 2573.7, verkoopEur: null, afmeting: "2150x2000x910" },
+        { model: "New Pleasure", code: "SKT888CA-1", inkoopUsd: 2573.7, verkoopEur: null },
+        { model: "Recharge", code: "SKT306D", inkoopUsd: 1838.49, verkoopEur: null, afmeting: "2000x2000x890" },
+        { model: "Renew", code: "SKT335HA", inkoopUsd: 1814.07, verkoopEur: null, afmeting: "2080x1560x840" },
+        { model: "Refresh", code: "SKT329FB", inkoopUsd: 1845.49, verkoopEur: null, afmeting: "2000x2000x850" },
+        { model: "Resort", code: "SKT329F", inkoopUsd: 2138.01, verkoopEur: null, afmeting: "2000x2000x850" },
+        { model: "Relax", code: "SKT329EA", inkoopUsd: 1845.49, verkoopEur: null, afmeting: "2000x2000x850" },
+        { model: "Repose", code: "SKT329E1", inkoopUsd: 2436.71, verkoopEur: null, afmeting: "2540x2040x850" },
+        { model: "New repose", code: "SKT329E2", inkoopUsd: 2436.71, verkoopEur: null },
+        { model: "Rewind", code: "SKT329FA", inkoopUsd: 1845.49, verkoopEur: null, afmeting: "2000x2000x850" },
+        { model: "Sensation", code: "SKT888K1 new mould", inkoopUsd: 2692.26, verkoopEur: null },
+        { model: "Serene 1", code: "SKT333H2", inkoopUsd: 1474.69, verkoopEur: null, afmeting: "1860x900x740" },
+        { model: "Serene 2", code: "SKT333H", inkoopUsd: 1811.5, verkoopEur: null, afmeting: "2100x1100x760" },
+        { model: "Serene 3", code: "SKT333H1", inkoopUsd: 1966, verkoopEur: null, afmeting: "2100x1300x840" },
+        { model: "Serene 5", code: "SKT333H3", inkoopUsd: 2481, verkoopEur: null, afmeting: "2100x1850x810" },
+        { model: "Serene 6", code: "SKT333A", inkoopUsd: 3106.21, verkoopEur: null, afmeting: "2420x2240x940" },
+        { model: "Solace", code: "SKT888AB", inkoopUsd: 2707.26, verkoopEur: null, afmeting: "2130x2130x910" },
+        { model: "Soulmate", code: "SKT335FA", inkoopUsd: 2167.54, verkoopEur: null, afmeting: "2130x1650x840" },
+        { model: "Reboot", code: "SKT335FA-1", inkoopUsd: 1894, verkoopEur: null, afmeting: "2130x1650x840" },
+        { model: "Spirit", code: "SKT339G", inkoopUsd: 8428.82, verkoopEur: null, afmeting: "5400x2280x1280" },
+        { model: "Spirit Deep", code: "SKT339G1", inkoopUsd: 9138.49, verkoopEur: null, afmeting: "5400x2280x1520" },
+        { model: "Sunny", code: "SKT338A4", inkoopUsd: 3230.84, verkoopEur: null, afmeting: "2280x2280x930" },
+        { model: "Sydney", code: "SKT666A", inkoopUsd: 5291.5, verkoopEur: null, afmeting: "3800x2280x1150" },
+        { model: "Theater", code: "SKT339F", inkoopUsd: 6698.48, verkoopEur: null, afmeting: "3800x2280x1160" },
+        { model: "Vitality", code: "SKT339G11，7.1m normal", inkoopUsd: 10202.98, verkoopEur: null },
+        { model: "Vitality Deep", code: "SKT339G10，7.1m deep", inkoopUsd: 10925.24, verkoopEur: null },
+        { model: "Malta", code: "SKT306C", inkoopUsd: 1331.45, verkoopEur: null, afmeting: "1820x1820x750" },
+        { model: "Mallorca Luxury", code: "SKT888G", inkoopUsd: 1413.5, verkoopEur: null, afmeting: "2000x2000x780", let: "Color Siver marble add $152" },
+        { model: "Mallorca Diamond", code: "SKT888G1", inkoopUsd: 1461.2, verkoopEur: null, afmeting: "2000x2000x780" },
+        { model: "Mallorca Superior", code: "SKT888G2", inkoopUsd: 1540.7, verkoopEur: null, afmeting: "2000x2000x780" },
+        { model: "Corsica Luxury", code: "SKT888I", inkoopUsd: 1461.2, verkoopEur: null, afmeting: "2280x2280x860" },
+        { model: "Corsica Diamond", code: "SKT888I-1", inkoopUsd: 1620.2, verkoopEur: null, afmeting: "2280x2280x860" },
+        { model: "Corsica Superior", code: "SKT888I-2", inkoopUsd: 1832.2, verkoopEur: null, afmeting: "2280x2280x860" },
+        { model: "Tenerife Luxury", code: "SKT888H2", inkoopUsd: 1518.97, verkoopEur: null, afmeting: "2140x1520x840" },
+        { model: "Tenerife Diamond", code: "SKT888H1", inkoopUsd: 1431.52, verkoopEur: null, afmeting: "2140x1520x840" },
+        { model: "Tenerife Superior", code: "SKT888H", inkoopUsd: 1618.08, verkoopEur: null, afmeting: "2140x1520x840" },
+        { model: "Aurora", code: "SKT888U", inkoopUsd: 3459.98, verkoopEur: null, afmeting: "2280x2280x1100", let: "upgrade to TOUCH 3 panel" },
+        { model: "Balance swim spa", code: "SKT339G16", inkoopUsd: 10010.5, verkoopEur: null, afmeting: "5900x2270x1250", let: "11587 Price for marble decorate 最新价格202410" },
+        { model: "Elevate", code: "SKT888W Hot cold spa", inkoopUsd: 4445, verkoopEur: null },
+        { model: "Indulgence", code: "SKT888S", inkoopUsd: 1712.78, verkoopEur: null, afmeting: "2130x1420x575" },
+        { model: "Harmony", code: "SKT888P", inkoopUsd: 3732.78, verkoopEur: null, afmeting: "2695x2280x910" },
+        { model: "Lagoon", code: "SKT888R", inkoopUsd: 3459.98, verkoopEur: null, afmeting: "2280x2280x910", let: "upgrade to TOUCH 3 panel" },
+        { model: "Summit", code: "SKT888Y", inkoopUsd: 3459.98, verkoopEur: null, afmeting: "2130x2130x910" },
+        { model: "Exhilarate wave", code: "SKT888Q", inkoopUsd: 3302.98, verkoopEur: null, afmeting: "2280x2280x910" },
+        { model: "Team Vitallce", code: "SKT339G17", inkoopUsd: 5238.5, verkoopEur: null, afmeting: "3900x2280x1450" },
+        { model: "Breeze Icebath", code: "SKT888V", inkoopUsd: 1152, verkoopEur: null, afmeting: "2000x900x750" },
+        { model: "Spark", code: "SKT888X", inkoopUsd: 1209, verkoopEur: null, afmeting: "1700x1500x730" },
+        { model: "Frame", code: "SKT888X-1", inkoopUsd: 1359, verkoopEur: null, afmeting: "1900x1900x760" },
+        { model: "Oasis", code: "SKT888T", inkoopUsd: 6990, verkoopEur: null, afmeting: "3200x2350x1000", let: "upgrade to BP+TOUCH 最新20241105" },
+        { model: "Cascade", code: "SKT888O", inkoopUsd: 3609, verkoopEur: null, afmeting: "2280x1880x1060", let: "upgrade to TOUCH 3 panel" },
+        { model: "Reflect", code: "PP01", inkoopUsd: 2084, verkoopEur: null },
+        { model: "Retreat", code: "PP02", inkoopUsd: 2084, verkoopEur: null },
+        { model: "Resettle", code: "PP03", inkoopUsd: 2084, verkoopEur: null },
+        { model: "", code: "SKT333J", inkoopUsd: 2309, verkoopEur: null },
+        { model: "", code: "TM168F", inkoopUsd: 3230.84, verkoopEur: null },
+      ],
+    },
+    {
       fabriek: "Guangdong Kasdaly Pool Spa Equipment",
       merk: "Grizzly Spas",
       contact: "Yuri Yu", email: "Vigor@joyspa.com",
@@ -93,6 +209,57 @@
   // gelijk is aan dat van Spa Hope is dus toeval, geen dubbele aantekening.
   var ONDUIDELIJK = [];
 
-  global.fpFabrikanten = { lijst: FABRIKANTEN, onduidelijk: ONDUIDELIJK };
+  /* ─── Inkoopprijs opzoeken ───────────────────────────────────────────
+     Eén plek waar een modelnaam of fabriekscode een dollarprijs wordt, zodat
+     de voorraadtegel en de Amerika-tegel niet elk hun eigen antwoord geven.
+
+     Zoeken gaat eerst op fabriekscode, want die is eenduidig; pas daarna op
+     naam. Codes op de prijslijst dragen soms een toevoeging ("SKT339G4，7.1m
+     normal", "SKT888K1 new mould") — daar wordt op de kale code na vergeleken.
+     Uitzondering: SKT338A3 bestaat mét en zónder tv voor een ander bedrag en
+     SKT339C heeft een SIMPLE PACK-variant. Die blijven op hun volledige code
+     staan; een kale SKT338A3 levert daarom bewust niets op in plaats van de
+     verkeerde helft van een keuze. */
+  function sleutel(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+  function kaleCode(c) { return sleutel(String(c || "").split(/[，,\s]/)[0]); }
+
+  // Namen die in de voorraadtelling anders staan dan op de prijslijst. Elke
+  // regel is een menselijke vaststelling, geen automatische gok.
+  var NAAMKOPPELING = {
+    "breeze": "Breeze Icebath",
+    "exhilarate": "Exhilarate wave",
+    "balance": "Balance swim spa",
+    "vitalice": "Team Vitallce",       // typefout van de fabriek voor Team Vital Ice
+    "euphoriawave": "New Euphoria wave",
+    "felicitywave": "New Felicity wave",
+  };
+
+  var DUBBELZINNIG = { "skt338a3": 1, "skt339c": 1 };
+
+  function prijsVan(model, code) {
+    var perCode = {}, perNaam = {};
+    for (var i = 0; i < FABRIKANTEN.length; i++) {
+      var f = FABRIKANTEN[i];
+      for (var j = 0; j < f.modellen.length; j++) {
+        var m = f.modellen[j];
+        if (m.inkoopUsd == null) continue;
+        var rec = { usd: m.inkoopUsd, model: m.model, code: m.code, fabriek: f.fabriek, merk: f.merk, bron: f.bron, let: m.let || null };
+        var vol = sleutel(m.code), kaal = kaleCode(m.code);
+        if (!perCode[vol]) perCode[vol] = rec;
+        // Alleen de kale code registreren als hij niet dubbelzinnig is.
+        if (kaal !== vol && !DUBBELZINNIG[kaal] && !perCode[kaal]) perCode[kaal] = rec;
+        if (m.model && !perNaam[sleutel(m.model)]) perNaam[sleutel(m.model)] = rec;
+      }
+    }
+    var c = sleutel(code);
+    if (c && perCode[c]) return perCode[c];
+    if (c && perCode[kaleCode(code)] && !DUBBELZINNIG[kaleCode(code)]) return perCode[kaleCode(code)];
+    var n = sleutel(model);
+    if (n && perNaam[n]) return perNaam[n];
+    if (n && NAAMKOPPELING[n]) return perNaam[sleutel(NAAMKOPPELING[n])] || null;
+    return null;
+  }
+
+  global.fpFabrikanten = { lijst: FABRIKANTEN, onduidelijk: ONDUIDELIJK, prijsVan: prijsVan };
 
 })(typeof window !== "undefined" ? window : globalThis);
