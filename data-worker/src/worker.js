@@ -122,8 +122,15 @@ function reply(status, body, extraHeaders = {}) {
 // en een contactformulier. De interne SHARED_SECRET komt hier nergens aan
 // te pas.
 
-const DP_LOGIN_TTL = 15 * 60;            // magic-link 15 min geldig
+const DP_LOGIN_TTL = 15 * 60;            // magic-link per mail: 15 min geldig
 const DP_SESS_TTL  = 30 * 24 * 3600;     // sessie 30 dagen
+// Een link die een beheerder zélf aanmaakt en met de hand doorgeeft (mail,
+// WhatsApp, telefonisch) heeft een ander leven dan een link die de bezoeker
+// net zelf heeft aangevraagd: hij ligt vaak een dag stil voordat hij wordt
+// gebruikt. Met 15 minuten was hij daardoor bijna altijd al verlopen op het
+// moment dat de ontvanger klikte (Gerrit over Gretha, 7 aug 2026). Zeven
+// dagen — en nog steeds eenmalig, dus na gebruik meteen dood.
+const DP_ADMIN_LINK_TTL = 7 * 24 * 3600;
 
 // Best-effort rate-limiter op KV (eventual consistent — geen harde garantie,
 // wel een echte rem op mail-bombing en wachtwoord-raden). Per IP + scope:
@@ -1012,8 +1019,36 @@ async function dpAdminLoginLink(request, env, url) {
   const dealer = dpFindDealer(accounts, email);
   if (!dealer) return reply(404, { ok: false, error: "geen actieve dealer met dit e-mailadres" });
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
-  await env.FONTEYN_DATA.put("dp-login:" + token, JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_LOGIN_TTL });
-  return reply(200, { ok: true, link: url.origin + "/dealers/auth?t=" + token, validMinutes: 15 });
+  await env.FONTEYN_DATA.put("dp-login:" + token, JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_ADMIN_LINK_TTL });
+  return reply(200, { ok: true, link: url.origin + "/dealers/auth?t=" + token, validDays: DP_ADMIN_LINK_TTL / 86400 });
+}
+
+// POST /dealers/admin/wachtwoord { email, password } — beheerder zet een
+// eerste wachtwoord voor een account.
+//
+// Waarom dit erbij moet: een inloglink is eenmalig, en dat botst met de
+// mailfilters. Microsoft Defender (Safe Links) opent elke link in een
+// binnenkomende mail zélf om hem te controleren. Die controle wisselt het
+// token in, en de ontvanger krijgt daarna "Link expired" te zien — de link
+// wás geldig, maar is al opgebruikt door de scanner. Dat verklaart waarom
+// het langer geldig maken alléén niet genoeg is.
+// Met een wachtwoord is er niets meer dat kan verlopen of onderweg wordt
+// opgesnoept. Het wachtwoord wordt hier niet bewaard: alleen salt+hash, net
+// als bij dpHandleSetPassword. De ontvanger kan het daarna zelf wijzigen.
+async function dpAdminSetPassword(request, env) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const email = String(body.email || "").trim().toLowerCase();
+  const password = String(body.password || "");
+  if (password.length < 8) return reply(400, { ok: false, error: "wachtwoord moet minstens 8 tekens zijn" });
+  const accounts = await dpGetAccounts(env);
+  const dealer = dpFindDealer(accounts, email);
+  if (!dealer) return reply(404, { ok: false, error: "geen actief account met dit e-mailadres" });
+  dealer.pw = await dpHashPassword(password);
+  await env.FONTEYN_DATA.put("dealer-accounts", JSON.stringify(accounts));
+  console.log("[dp-pw] wachtwoord door beheerder gezet voor " + email);
+  await dpLogPartner(env, { email, company: dealer.company || "" }, "wachtwoord-ingesteld", "door beheerder");
+  return reply(200, { ok: true, email });
 }
 
 async function handleDealerRoutes(request, env, url) {
@@ -1029,6 +1064,7 @@ async function handleDealerRoutes(request, env, url) {
     if (!dpIsAdmin(request, env)) return reply(401, { ok: false, error: "unauthorized" });
     if (p === "/dealers/admin/mailstatus" && request.method === "GET") return dpAdminMailStatus(env, url);
     if (p === "/dealers/admin/loginlink" && request.method === "POST") return dpAdminLoginLink(request, env, url);
+    if (p === "/dealers/admin/wachtwoord" && request.method === "POST") return dpAdminSetPassword(request, env);
     if (p === "/dealers/admin/file" && request.method === "PUT") return dpAdminPutFile(request, env, url);
     if (p === "/dealers/admin/testorder" && request.method === "POST") return dpAdminTestOrder(request, env);
     if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);

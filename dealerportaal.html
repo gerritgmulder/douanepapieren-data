@@ -266,7 +266,8 @@ function renderPartners(){
       </select></td>
       <td><span class="pill ${d.active!==false?"on":"off"}">${d.active!==false?"actief":"uit"}</span>
           <button class="rmv togAct" data-i="${i}" style="margin-left:6px">${d.active!==false?"blokkeer":"activeer"}</button></td>
-      <td><button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink (15 min geldig) — handig als de e-mail niet aankomt of voor onboarding via WhatsApp">inloglink</button>
+      <td><button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink (7 dagen geldig, eenmalig) — handig als de e-mail niet aankomt of voor onboarding via WhatsApp">inloglink</button>
+          <button class="rmv pwD" data-i="${i}" title="Zet een wachtwoord voor dit account. Gebruik dit als een inloglink 'verlopen' blijft zeggen: mailfilters zoals Microsoft Safe Links openen de link zelf om hem te controleren en gebruiken hem daarmee op. Met een wachtwoord kan er niets meer verlopen.">wachtwoord</button>
           <button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
     </tr>`).join("") || '<tr><td colspan="8" style="color:var(--muted)">Nog geen partners — voeg de eerste toe.</td></tr>';
   document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
@@ -294,9 +295,32 @@ function renderPartners(){
       let copied = false;
       try { await navigator.clipboard.writeText(j.link); copied = true; } catch(e){}
       setStatus("ok", (copied ? "Inloglink gekopieerd naar je klembord" : "Inloglink aangemaakt") +
-        " voor "+d.email+" (15 min geldig, eenmalig): "+j.link);
+        " voor "+d.email+" ("+(j.validDays||7)+" dagen geldig, eenmalig): "+j.link);
     } catch(e){ setStatus("bad","Inloglink maken faalde: "+e.message); }
     b.disabled = false; b.textContent = "inloglink";
+  }));
+  // Wachtwoord zetten. Bedoeld voor het geval dat een inloglink "verlopen"
+  // blijft zeggen: mailfilters (Microsoft Safe Links) openen zo'n link zelf
+  // om hem te controleren en gebruiken hem daarmee op, nog vóórdat de
+  // ontvanger klikt. Een wachtwoord kan niet verlopen en niet opgesnoept
+  // worden. Het wachtwoord wordt nergens bewaard — de worker slaat alleen
+  // een hash op, dus ook hier is het daarna niet meer terug te zien.
+  document.querySelectorAll(".pwD").forEach(b=>b.addEventListener("click", async ()=>{
+    const d = accounts.dealers[Number(b.dataset.i)];
+    const pw = prompt("Wachtwoord voor "+d.email+" (minstens 8 tekens).\n\nSchrijf het even over voordat je op OK klikt: het is hierna niet meer op te vragen.");
+    if (pw===null) return;
+    if (String(pw).length < 8){ setStatus("bad","Wachtwoord moet minstens 8 tekens zijn."); return; }
+    b.disabled = true; b.textContent = "bezig…";
+    try {
+      const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/wachtwoord", {
+        method:"POST", headers:{ "Content-Type":"application/json", "X-DP-Admin": adminKey() },
+        body: JSON.stringify({ email: d.email, password: pw }) });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP "+r.status));
+      try{ if(window.fpLog) window.fpLog("partner-wachtwoord-gezet",d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
+      setStatus("ok", d.email+" kan nu inloggen op het portaal met dit wachtwoord. Geef het los van de mail door — dan hoeft er geen link meer aan te pas te komen.");
+    } catch(e){ setStatus("bad","Wachtwoord zetten faalde: "+e.message); }
+    b.disabled = false; b.textContent = "wachtwoord";
   }));
   document.querySelectorAll(".debIn").forEach(inp=>inp.addEventListener("change", async ()=>{
     const d = accounts.dealers[Number(inp.dataset.i)];
