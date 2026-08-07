@@ -129,6 +129,10 @@
       "note": "Specificatiesheets — marketing (Gretha) maakt de A4-specsheets per spa-model met invulvelden, foto-upload en PDF-export (vervangt InDesign). Opslag in bucket specsheets."
     },
     {
+      "name": "prijslijsten-fabrikanten.html",
+      "note": "Prijslijsten fabrikanten — de prijsafspraken met alle leveranciers en fabrieken, in mappen per leverancier. Overzicht in bucket prijslijsten, de bestanden zelf als losse sleutels via /prijslijst/bestand. Gretha + beheer."
+    },
+    {
       "name": "partneractiviteit.html",
       "note": "Partner-activiteitenlogboek — wat dealers op het publieke Passion Partners-portaal doen (login/reservering/document/vraag). Server-side gelogd in de worker → bucket partner-activiteit-YYYY-MM. Alleen Gerrit/Dolf/Arno/Don/Chantal/Fonteynbot."
     },

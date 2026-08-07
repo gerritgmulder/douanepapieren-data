@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Prijslijsten fabrikanten — Fonteyn Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
+    --fonteyn-lime:#8bc53f; --fonteyn-lime-dark:#72a531;
+    --bg:#f5f4ef; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb;
+    --ok:#059669; --bad:#b91c1c; --warn:#92400e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  input,select,textarea,button{font-family:inherit}
+  header{background:var(--fonteyn-green);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px}
+  header img.logo{height:40px}
+  header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+  header a.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font-size:12px;transition:all .14s}
+  header a.back:hover{background:rgba(255,255,255,.15)}
+  header .user-chip{font-size:12px;color:rgba(255,255,255,.85)}
+  header button.logout{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer;transition:all .14s}
+  header button.logout:hover{background:rgba(255,255,255,.15)}
+  main{max-width:1300px;margin:24px auto;padding:0 22px}
+  h2{color:var(--fonteyn-green);font-size:22px;margin:0 0 6px}
+  .lead{color:var(--muted);margin:0 0 18px;max-width:900px;line-height:1.5}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin:14px 0}
+  .card h3{margin:0 0 12px;color:var(--fonteyn-green);font-size:15px}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:14px 0}
+  .kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;border-top:3px solid var(--fonteyn-lime)}
+  .kpi .n{font-size:26px;font-weight:700;line-height:1.1;color:var(--fonteyn-green)}
+  .kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
+  table.grid{width:100%;border-collapse:collapse;font-size:13px}
+  table.grid th,table.grid td{padding:8px 9px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:middle}
+  table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  table.grid tr:hover td{background:#fbfdf7}
+  .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+  input[type=text],select{border:1px solid var(--border);border-radius:8px;padding:8px 11px;font:inherit;font-size:13px;background:#fff;transition:border-color .14s,box-shadow .14s}
+  input:focus,select:focus{outline:none;border-color:var(--fonteyn-lime-dark);box-shadow:0 0 0 3px rgba(139,197,63,.22)}
+  button.primary{background:var(--fonteyn-green);color:#fff;border:0;border-radius:8px;padding:9px 16px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;transition:background .14s,transform .1s}
+  button.primary:hover{background:var(--fonteyn-green-dark);transform:translateY(-1px)}
+  button.primary:disabled{opacity:.55;cursor:default;transform:none}
+  button.mini{background:#fff;border:1px solid var(--border);border-radius:7px;padding:4px 9px;font:inherit;font-size:11.5px;cursor:pointer;color:var(--ink);transition:all .12s}
+  button.mini:hover{border-color:var(--fonteyn-lime-dark);background:#f7fbf1}
+  button.mini.gevaar:hover{border-color:var(--bad);color:var(--bad);background:#fef2f2}
+  /* Kruimelpad: waar zit ik, en hoe kom ik terug */
+  .kruimels{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;margin-bottom:12px}
+  .kruimels a{color:var(--fonteyn-green);text-decoration:none;font-weight:600;cursor:pointer}
+  .kruimels a:hover{text-decoration:underline}
+  .kruimels span.sep{color:var(--muted)}
+  .rij-map td{background:#fcfdfb}
+  .naam{display:flex;align-items:center;gap:9px}
+  .naam .ic{font-size:17px;line-height:1}
+  .naam b{font-weight:600}
+  .klik{cursor:pointer;color:var(--fonteyn-green)}
+  .klik:hover{text-decoration:underline}
+  .meta{font-size:11.5px;color:var(--muted)}
+  .notitie{font-size:12px;color:#374151}
+  .notitie.leeg{color:#c3c8cf;font-style:italic}
+  /* Sleepzone. Zichtbaar, want anders weet niemand dat slepen kan. */
+  .sleep{border:2px dashed #d5dbc9;border-radius:10px;padding:20px;text-align:center;color:var(--muted);background:#fcfdfa;transition:all .14s;margin-top:4px}
+  .sleep.over{border-color:var(--fonteyn-lime);background:#f2f8e8;color:var(--fonteyn-green)}
+  .status-msg{padding:10px 14px;border-radius:6px;margin:12px 0;font-size:13px}
+  .status-msg.ok{background:#dcfce7;color:#166534}
+  .status-msg.bad{background:#fee2e2;color:var(--bad)}
+  .status-msg.bezig{background:#fef3c7;color:var(--warn)}
+  .hidden{display:none!important}
+  .versies{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .versies a{color:var(--fonteyn-green);cursor:pointer}
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+  <h1>🗂️ Prijslijsten fabrikanten</h1>
+  <a class="back" href="dashboard.html">← Dashboard</a>
+  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <h2>Prijslijsten van leveranciers en fabrieken</h2>
+  <p class="lead">Alle prijsafspraken op één plek. Maak per leverancier of fabriek een map en zet de prijslijst erin — als PDF, Excel of Word. Vervang je een lijst door een nieuwere, dan blijft de oude als versie bewaard, zodat altijd terug te vinden is welke prijs wanneer gold.</p>
+
+  <div id="deny" class="status-msg bad hidden">Geen toegang tot de prijslijsten.</div>
+
+  <div id="content">
+    <div id="kpis" class="kpi-row"></div>
+
+    <div id="melding" class="status-msg hidden"></div>
+
+    <div class="card">
+      <div class="controls">
+        <input type="text" id="zoek" placeholder="zoek in alle mappen op naam of omschrijving…" style="min-width:320px;flex:1">
+        <button class="primary" id="nieuweMap" type="button">+ Nieuwe map</button>
+        <button class="primary" id="kiesBestand" type="button">↑ Bestanden toevoegen</button>
+        <input type="file" id="bestandIn" multiple style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+      </div>
+
+      <div class="kruimels" id="kruimels"></div>
+
+      <table class="grid">
+        <thead><tr>
+          <th style="width:38%">Naam</th>
+          <th style="width:26%">Omschrijving</th>
+          <th style="width:9%">Grootte</th>
+          <th style="width:15%">Toegevoegd</th>
+          <th style="width:12%"></th>
+        </tr></thead>
+        <tbody id="lijst"></tbody>
+      </table>
+
+      <div class="sleep" id="sleepzone">Sleep bestanden hierheen om ze in deze map te zetten</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
+// Wie mag hierbij. Gretha beheert de prijslijsten; de rest is beheer.
+// Let op: dit staat naast de lijst in dashboard.html. Die bepaalt of de tegel
+// te zien is, deze bepaalt of de pagina zelf iets laat zien — ook als iemand
+// het adres rechtstreeks intikt. Allebei bijwerken dus.
+const ALLOWED=new Set([
+  "gretha@fonteyn.nl","gretha","fonteyn.gretha",
+  "gerrit@fonteyn.nl","gerrit","fonteyn.gerrit",
+  "dolf@fonteyn.nl","fonteyn.dolf","dolf",
+  "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"
+]);
+const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
+const BUCKET=WORKER+"/data/prijslijsten";
+const TEAM=(localStorage.getItem("fp.teamkey")||"");
+const IK=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+
+// Bestandstypen die de opslag kan teruggeven met het juiste type erbij.
+// Iets anders uploaden mag ook, maar dan opent de browser 'm niet zelf.
+const TOEGESTAAN=["pdf","xlsx","xls","docx","doc","csv","txt","jpg","jpeg","png","webp"];
+
+let S={mappen:[],bestanden:[],gewijzigd:null};
+let hier="";          // huidige map, "" = hoofdmap. Genest via "Jazzi/2026".
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function kpi(n,l){return "<div class='kpi'><div class='n'>"+n+"</div><div class='l'>"+l+"</div></div>";}
+function mb(b){
+  b=Number(b)||0;
+  if(b<1024) return b+" B";
+  if(b<1024*1024) return (b/1024).toFixed(0)+" kB";
+  return (b/1024/1024).toFixed(1)+" MB";
+}
+function datum(iso){
+  if(!iso) return "—";
+  const d=new Date(iso);
+  if(isNaN(d)) return "—";
+  const p=n=>String(n).padStart(2,"0");
+  return p(d.getDate())+"."+p(d.getMonth()+1)+"."+d.getFullYear();
+}
+function korteNaam(e){ return String(e||"").split("@")[0].replace(/^fonteyn\./,""); }
+function melding(soort,tekst){
+  const m=document.getElementById("melding");
+  if(!tekst){ m.classList.add("hidden"); return; }
+  m.className="status-msg "+soort; m.textContent=tekst;
+}
+
+// ─── Opslag ────────────────────────────────────────────────────────
+async function laad(){
+  try{
+    const r=await fetch(BUCKET,{headers:{"X-Fonteyn-Auth":TEAM}});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j=await r.json();
+    S={mappen:Array.isArray(j.mappen)?j.mappen:[],
+       bestanden:Array.isArray(j.bestanden)?j.bestanden:[],
+       gewijzigd:j.gewijzigd||null};
+  }catch(e){
+    melding("bad","Het overzicht kon niet worden opgehaald: "+e.message+". Ververs de pagina; er is niets gewijzigd.");
+    S={mappen:[],bestanden:[],gewijzigd:null};
+  }
+}
+async function bewaar(){
+  S.gewijzigd=new Date().toISOString();
+  S.door=IK;
+  const r=await fetch(BUCKET,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM},body:JSON.stringify(S)});
+  if(!r.ok) throw new Error("opslaan faalde (HTTP "+r.status+")");
+}
+
+// ─── Mappen ────────────────────────────────────────────────────────
+function submappen(pad){
+  // Alleen één laag dieper, niet alles eronder.
+  const voor=pad?pad+"/":"";
+  return S.mappen
+    .filter(m=>m.startsWith(voor)&&m.slice(voor.length).length&&!m.slice(voor.length).includes("/"))
+    .sort((a,b)=>a.localeCompare(b,"nl"));
+}
+function bestandenIn(pad){
+  return S.bestanden.filter(b=>(b.map||"")===pad)
+    .sort((a,b)=>String(a.naam).localeCompare(String(b.naam),"nl"));
+}
+// Alles ónder een map — nodig bij hernoemen en verwijderen.
+function alsOnder(pad){
+  const voor=pad+"/";
+  return {
+    mappen:S.mappen.filter(m=>m===pad||m.startsWith(voor)),
+    bestanden:S.bestanden.filter(b=>(b.map||"")===pad||String(b.map||"").startsWith(voor)),
+  };
+}
+function schoneNaam(n){ return String(n||"").trim().replace(/[\/\\]/g,"-").slice(0,80); }
+
+// ─── Tekenen ───────────────────────────────────────────────────────
+function tekenKruimels(){
+  const k=document.getElementById("kruimels");
+  const delen=hier?hier.split("/"):[];
+  let html="<a data-pad=''>🏠 Alle leveranciers</a>";
+  let op="";
+  for(const d of delen){
+    op=op?op+"/"+d:d;
+    html+="<span class='sep'>›</span><a data-pad='"+esc(op)+"'>"+esc(d)+"</a>";
+  }
+  k.innerHTML=html;
+  k.querySelectorAll("a").forEach(a=>a.addEventListener("click",()=>{
+    hier=a.dataset.pad||""; document.getElementById("zoek").value=""; teken();
+  }));
+}
+
+function tekenKpis(){
+  const totaal=S.bestanden.reduce((s,b)=>s+(Number(b.bytes)||0),0);
+  const laatste=S.bestanden.reduce((m,b)=>(b.op&&b.op>m?b.op:m),"");
+  document.getElementById("kpis").innerHTML=
+    kpi(S.bestanden.length,"Prijslijsten")+
+    kpi(S.mappen.length,"Mappen")+
+    kpi(mb(totaal),"Opslag in gebruik")+
+    kpi(datum(laatste||S.gewijzigd),"Laatst toegevoegd");
+}
+
+function rijMap(pad){
+  const naam=pad.split("/").pop();
+  const onder=alsOnder(pad);
+  const aantal=onder.bestanden.length;
+  return "<tr class='rij-map' data-map='"+esc(pad)+"'>"+
+    "<td><div class='naam'><span class='ic'>📁</span><b class='klik openMap'>"+esc(naam)+"</b></div></td>"+
+    "<td class='meta'>"+aantal+" bestand"+(aantal===1?"":"en")+"</td>"+
+    "<td class='meta'>"+mb(onder.bestanden.reduce((s,b)=>s+(Number(b.bytes)||0),0))+"</td>"+
+    "<td class='meta'>—</td>"+
+    "<td style='white-space:nowrap'>"+
+      "<button class='mini mapHernoem'>hernoem</button> "+
+      "<button class='mini gevaar mapWis'>verwijder</button></td></tr>";
+}
+
+function rijBestand(b){
+  const versies=(b.versies||[]).length;
+  return "<tr data-id='"+esc(b.id)+"'>"+
+    "<td><div class='naam'><span class='ic'>"+icoon(b.naam)+"</span>"+
+        "<b class='klik openBestand'>"+esc(b.naam)+"</b></div>"+
+        (versies?"<div class='versies'>"+versies+" oudere versie"+(versies===1?"":"s")+": "+
+          (b.versies||[]).map((v,i)=>"<a class='openVersie' data-v='"+i+"'>"+esc(datum(v.op))+"</a>").join(" · ")+"</div>":"")+
+        (hier===""&&b.map?"<div class='meta'>in "+esc(b.map)+"</div>":"")+
+    "</td>"+
+    "<td><span class='notitie klik bewerkNotitie"+(b.notitie?"":" leeg")+"'>"+esc(b.notitie||"omschrijving toevoegen")+"</span></td>"+
+    "<td class='meta'>"+mb(b.bytes)+"</td>"+
+    "<td class='meta'>"+datum(b.op)+"<br>"+esc(korteNaam(b.door))+"</td>"+
+    "<td style='white-space:nowrap'>"+
+      "<button class='mini bDownload'>opslaan</button> "+
+      "<button class='mini bHernoem'>hernoem</button> "+
+      "<button class='mini bVerplaats'>verplaats</button> "+
+      "<button class='mini gevaar bWis'>✕</button></td></tr>";
+}
+
+function icoon(naam){
+  const e=String(naam).split(".").pop().toLowerCase();
+  if(e==="pdf") return "📕";
+  if(e==="xlsx"||e==="xls"||e==="csv") return "📗";
+  if(e==="docx"||e==="doc") return "📘";
+  if(["jpg","jpeg","png","webp"].includes(e)) return "🖼️";
+  return "📄";
+}
+
+function teken(){
+  tekenKpis();
+  tekenKruimels();
+  const q=(document.getElementById("zoek").value||"").trim().toLowerCase();
+  const tb=document.getElementById("lijst");
+
+  if(q){
+    // Zoeken gaat door álle mappen heen — anders moet je eerst weten waar iets
+    // staat om het te kunnen vinden.
+    const treffers=S.bestanden.filter(b=>
+      String(b.naam||"").toLowerCase().includes(q)||
+      String(b.notitie||"").toLowerCase().includes(q)||
+      String(b.map||"").toLowerCase().includes(q));
+    tb.innerHTML=treffers.map(b=>rijBestand(Object.assign({},b,{map:b.map}))).join("")||
+      "<tr><td colspan='5' style='color:var(--muted)'>Niets gevonden voor '"+esc(q)+"'.</td></tr>";
+    document.getElementById("kruimels").insertAdjacentHTML("beforeend",
+      "<span class='sep'>·</span><span class='meta'>"+treffers.length+" treffer"+(treffers.length===1?"":"s")+" in alle mappen</span>");
+  }else{
+    const mappen=submappen(hier), best=bestandenIn(hier);
+    tb.innerHTML=mappen.map(rijMap).join("")+best.map(rijBestand).join("")||
+      "<tr><td colspan='5' style='color:var(--muted)'>Deze map is nog leeg — maak een map aan of sleep er bestanden in.</td></tr>";
+  }
+  koppelRijen();
+}
+
+// ─── Handelingen per rij ───────────────────────────────────────────
+function koppelRijen(){
+  const tb=document.getElementById("lijst");
+  tb.querySelectorAll(".openMap").forEach(x=>x.addEventListener("click",()=>{
+    hier=x.closest("tr").dataset.map; teken();
+  }));
+  tb.querySelectorAll(".mapHernoem").forEach(x=>x.addEventListener("click",()=>hernoemMap(x.closest("tr").dataset.map)));
+  tb.querySelectorAll(".mapWis").forEach(x=>x.addEventListener("click",()=>wisMap(x.closest("tr").dataset.map)));
+  tb.querySelectorAll(".openBestand").forEach(x=>x.addEventListener("click",()=>open1(x.closest("tr").dataset.id,false)));
+  tb.querySelectorAll(".bDownload").forEach(x=>x.addEventListener("click",()=>open1(x.closest("tr").dataset.id,true)));
+  tb.querySelectorAll(".openVersie").forEach(x=>x.addEventListener("click",()=>{
+    const b=vind(x.closest("tr").dataset.id);
+    const v=(b.versies||[])[Number(x.dataset.v)];
+    if(v) haalOpen(v.id,v.naam,false);
+  }));
+  tb.querySelectorAll(".bHernoem").forEach(x=>x.addEventListener("click",()=>hernoemBestand(x.closest("tr").dataset.id)));
+  tb.querySelectorAll(".bVerplaats").forEach(x=>x.addEventListener("click",()=>verplaats(x.closest("tr").dataset.id)));
+  tb.querySelectorAll(".bWis").forEach(x=>x.addEventListener("click",()=>wisBestand(x.closest("tr").dataset.id)));
+  tb.querySelectorAll(".bewerkNotitie").forEach(x=>x.addEventListener("click",()=>notitie(x.closest("tr").dataset.id)));
+}
+function vind(id){ return S.bestanden.find(b=>b.id===id); }
+
+async function hernoemMap(pad){
+  const oud=pad.split("/").pop();
+  const nieuw=schoneNaam(prompt("Nieuwe naam voor de map:",oud));
+  if(!nieuw||nieuw===oud) return;
+  const ouder=pad.includes("/")?pad.slice(0,pad.lastIndexOf("/")):"";
+  const doel=ouder?ouder+"/"+nieuw:nieuw;
+  if(S.mappen.includes(doel)){ melding("bad","Er is hier al een map die zo heet."); return; }
+  const voor=pad+"/";
+  S.mappen=S.mappen.map(m=>m===pad?doel:(m.startsWith(voor)?doel+m.slice(pad.length):m));
+  S.bestanden.forEach(b=>{
+    const m=b.map||"";
+    if(m===pad) b.map=doel; else if(m.startsWith(voor)) b.map=doel+m.slice(pad.length);
+  });
+  if(hier===pad||hier.startsWith(voor)) hier=doel+hier.slice(pad.length);
+  try{ await bewaar(); melding("ok","Map heet nu '"+nieuw+"'."); }
+  catch(e){ melding("bad",e.message); await laad(); }
+  teken();
+}
+
+async function wisMap(pad){
+  const onder=alsOnder(pad);
+  if(onder.bestanden.length){
+    if(!confirm("De map '"+pad+"' bevat "+onder.bestanden.length+" bestand(en). Alles definitief verwijderen?")) return;
+  }else if(!confirm("Map '"+pad+"' verwijderen?")) return;
+  // Eerst de bestanden zelf uit de opslag, dán het overzicht. Andersom zou een
+  // bestand achterblijven dat niemand meer kan vinden maar wel ruimte inneemt.
+  const ids=[];
+  onder.bestanden.forEach(b=>{ ids.push(b.id); (b.versies||[]).forEach(v=>ids.push(v.id)); });
+  try{
+    if(ids.length) await wisUitOpslag(ids);
+    const wis=new Set(onder.mappen);
+    S.mappen=S.mappen.filter(m=>!wis.has(m));
+    const wisB=new Set(onder.bestanden.map(b=>b.id));
+    S.bestanden=S.bestanden.filter(b=>!wisB.has(b.id));
+    if(hier===pad||hier.startsWith(pad+"/")) hier=pad.includes("/")?pad.slice(0,pad.lastIndexOf("/")):"";
+    await bewaar();
+    melding("ok","Map verwijderd.");
+  }catch(e){ melding("bad","Verwijderen faalde: "+e.message); await laad(); }
+  teken();
+}
+
+async function hernoemBestand(id){
+  const b=vind(id); if(!b) return;
+  const nieuw=schoneNaam(prompt("Nieuwe naam voor dit bestand:",b.naam));
+  if(!nieuw||nieuw===b.naam) return;
+  b.naam=nieuw;
+  try{ await bewaar(); melding("ok","Naam gewijzigd."); }catch(e){ melding("bad",e.message); await laad(); }
+  teken();
+}
+
+async function notitie(id){
+  const b=vind(id); if(!b) return;
+  const n=prompt("Omschrijving (bijvoorbeeld: prijzen geldig vanaf 01.01.2026, incl. vracht):",b.notitie||"");
+  if(n===null) return;
+  b.notitie=String(n).trim().slice(0,200);
+  try{ await bewaar(); }catch(e){ melding("bad",e.message); await laad(); }
+  teken();
+}
+
+async function verplaats(id){
+  const b=vind(id); if(!b) return;
+  const keuzes=[""].concat(S.mappen.slice().sort((x,y)=>x.localeCompare(y,"nl")));
+  const lijst=keuzes.map((m,i)=>i+" = "+(m||"(hoofdmap)")).join("\n");
+  const k=prompt("Naar welke map?\n\n"+lijst+"\n\nTyp het nummer:","");
+  if(k===null) return;
+  const i=Number(k);
+  if(!(i>=0&&i<keuzes.length)){ melding("bad","Dat nummer staat niet in de lijst."); return; }
+  b.map=keuzes[i];
+  try{ await bewaar(); melding("ok","Verplaatst naar "+(b.map||"de hoofdmap")+"."); }catch(e){ melding("bad",e.message); await laad(); }
+  teken();
+}
+
+async function wisBestand(id){
+  const b=vind(id); if(!b) return;
+  const n=1+(b.versies||[]).length;
+  if(!confirm("'"+b.naam+"' verwijderen?"+(n>1?" (inclusief "+(n-1)+" oudere versie(s))":""))) return;
+  const ids=[b.id].concat((b.versies||[]).map(v=>v.id));
+  try{
+    await wisUitOpslag(ids);
+    S.bestanden=S.bestanden.filter(x=>x.id!==id);
+    await bewaar();
+    melding("ok","Verwijderd.");
+  }catch(e){ melding("bad","Verwijderen faalde: "+e.message); await laad(); }
+  teken();
+}
+
+async function wisUitOpslag(ids){
+  const r=await fetch(WORKER+"/prijslijst/verwijder",{method:"POST",
+    headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM},
+    body:JSON.stringify({ids})});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+}
+
+// ─── Openen en opslaan ─────────────────────────────────────────────
+function open1(id,downloaden){
+  const b=vind(id); if(!b) return;
+  haalOpen(b.id,b.naam,downloaden);
+}
+async function haalOpen(id,naam,downloaden){
+  melding("bezig","Bezig met ophalen…");
+  try{
+    // De sleutel gaat als header mee en niet in het adres, dus het bestand
+    // wordt eerst opgehaald en daarna pas geopend.
+    const r=await fetch(WORKER+"/prijslijst/bestand?id="+encodeURIComponent(id),{headers:{"X-Fonteyn-Auth":TEAM}});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob);
+    if(downloaden){
+      const a=document.createElement("a"); a.href=url; a.download=naam; document.body.appendChild(a); a.click(); a.remove();
+    }else{
+      const w=window.open(url,"_blank");
+      // Blokkeert de app het nieuwe venster, dan alsnog opslaan — beter dan
+      // een klik die niets lijkt te doen.
+      if(!w){ const a=document.createElement("a"); a.href=url; a.download=naam; document.body.appendChild(a); a.click(); a.remove(); }
+    }
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+    melding("",null);
+    try{ if(window.fpLog) window.fpLog("prijslijst-geopend",naam); }catch(e){}
+  }catch(e){ melding("bad","Openen faalde: "+e.message); }
+}
+
+// ─── Toevoegen ─────────────────────────────────────────────────────
+document.getElementById("nieuweMap").addEventListener("click",async ()=>{
+  const naam=schoneNaam(prompt("Naam van de nieuwe map (bijvoorbeeld de leverancier of de fabriek):",""));
+  if(!naam) return;
+  const pad=hier?hier+"/"+naam:naam;
+  if(S.mappen.includes(pad)){ melding("bad","Die map bestaat hier al."); return; }
+  S.mappen.push(pad);
+  try{ await bewaar(); melding("ok","Map '"+naam+"' aangemaakt."); }catch(e){ melding("bad",e.message); await laad(); }
+  teken();
+});
+
+document.getElementById("kiesBestand").addEventListener("click",()=>document.getElementById("bestandIn").click());
+document.getElementById("bestandIn").addEventListener("change",e=>{
+  const f=Array.from(e.target.files||[]);
+  e.target.value="";
+  if(f.length) upload(f);
+});
+
+const zone=document.getElementById("sleepzone");
+["dragenter","dragover"].forEach(t=>zone.addEventListener(t,e=>{ e.preventDefault(); zone.classList.add("over"); }));
+["dragleave","drop"].forEach(t=>zone.addEventListener(t,e=>{ e.preventDefault(); zone.classList.remove("over"); }));
+zone.addEventListener("drop",e=>{
+  const f=Array.from((e.dataTransfer&&e.dataTransfer.files)||[]);
+  if(f.length) upload(f);
+});
+
+function nieuwId(naam){
+  const ext=String(naam).split(".").pop().toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,5)||"bin";
+  return Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8)+"."+ext;
+}
+
+async function upload(bestanden){
+  const knop=document.getElementById("kiesBestand");
+  knop.disabled=true;
+  let gelukt=0;
+  for(let i=0;i<bestanden.length;i++){
+    const f=bestanden[i];
+    melding("bezig","Bezig met uploaden ("+(i+1)+" van "+bestanden.length+"): "+f.name);
+    const ext=String(f.name).split(".").pop().toLowerCase();
+    if(!TOEGESTAAN.includes(ext)){
+      melding("bad","'"+f.name+"' is een "+ext.toUpperCase()+"-bestand. Zet er een PDF, Excel of Word van, dan kan iedereen het openen.");
+      break;
+    }
+    if(f.size>24*1024*1024){
+      melding("bad","'"+f.name+"' is "+mb(f.size)+" en daarmee te groot (maximaal 24 MB). Bij een scan helpt het om 'm kleiner op te slaan.");
+      break;
+    }
+    const id=nieuwId(f.name);
+    try{
+      const r=await fetch(WORKER+"/prijslijst/bestand?id="+encodeURIComponent(id),{
+        method:"PUT",headers:{"X-Fonteyn-Auth":TEAM},body:f});
+      if(!r.ok){
+        const t=await r.text().catch(()=>"");
+        throw new Error("HTTP "+r.status+(t?" — "+t.slice(0,120):""));
+      }
+    }catch(e){ melding("bad","Uploaden van '"+f.name+"' faalde: "+e.message); break; }
+
+    // Bestaat er in deze map al een bestand met dezelfde naam? Dan is dit een
+    // nieuwe versie. De oude blijft staan, want bij prijslijsten moet je
+    // kunnen terugzien welke prijs wanneer gold.
+    const bestaand=S.bestanden.find(b=>(b.map||"")===hier&&String(b.naam).toLowerCase()===String(f.name).toLowerCase());
+    if(bestaand){
+      bestaand.versies=(bestaand.versies||[]);
+      bestaand.versies.unshift({id:bestaand.id,naam:bestaand.naam,bytes:bestaand.bytes,op:bestaand.op,door:bestaand.door});
+      bestaand.id=id; bestaand.bytes=f.size; bestaand.op=new Date().toISOString(); bestaand.door=IK;
+    }else{
+      S.bestanden.push({id,naam:f.name,map:hier,bytes:f.size,op:new Date().toISOString(),door:IK,notitie:""});
+    }
+    gelukt++;
+  }
+  if(gelukt){
+    try{
+      await bewaar();
+      melding("ok",gelukt+" bestand"+(gelukt===1?"":"en")+" toegevoegd aan "+(hier||"de hoofdmap")+".");
+      try{ if(window.fpLog) window.fpLog("prijslijst-toegevoegd",gelukt+" bestand(en) in "+(hier||"hoofdmap")); }catch(e){}
+    }catch(e){ melding("bad","De bestanden staan er wel, maar het overzicht kon niet worden bijgewerkt: "+e.message); await laad(); }
+  }
+  knop.disabled=false;
+  teken();
+}
+
+document.getElementById("zoek").addEventListener("input",teken);
+document.getElementById("logoutBtn").addEventListener("click",()=>{
+  localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href="dashboard.html";
+});
+
+(async function boot(){
+  if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
+  document.getElementById("userEmail").textContent=IK||"—";
+  if(!ALLOWED.has(IK)){
+    window.fpGeenToegang=true;
+    document.getElementById("deny").classList.remove("hidden");
+    document.getElementById("content").classList.add("hidden");
+    return;
+  }
+  await laad();
+  teken();
+})();
+</script>
+
+<script>
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){
+    var ua=navigator.userAgent||"";
+    var app=ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+    var elc=ua.match(/Electron\/([\d.]+)/i);
+    var versie=app?("app "+app[1]):(elc?("app · Electron "+elc[1]):"browser");
+    var pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
+    var id=null;
+    try{
+      id=localStorage.getItem("fp.apparaat");
+      if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("fp.apparaat",id); }
+    }catch(e){}
+    return {computer:id, platform:pm?pm[1].replace(/_/g,"."):null, versie:versie};
+  }
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
+    var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker"),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
+})();
+</script>
+
+<script>
+/* Europese datums, dashboard-breed (vangnet — zie de andere tegels). */
+(function(){
+  var OVERSLAAN = {INPUT:1, TEXTAREA:1, SELECT:1, OPTION:1, SCRIPT:1, STYLE:1, CODE:1, PRE:1};
+  var PATROON = /\b(\d{4})-(\d{2})-(\d{2})\b(?![T:\d-])/g;
+  function magNiet(node){
+    for (var el = node.parentNode; el && el.nodeType === 1; el = el.parentNode){
+      if (OVERSLAAN[el.tagName]) return true;
+      if (el.classList && el.classList.contains("iso-datum")) return true;
+    }
+    return false;
+  }
+  function loop(wortel){
+    if (!wortel || wortel.nodeType !== 1) return;
+    var w = document.createTreeWalker(wortel, NodeFilter.SHOW_TEXT, null);
+    var raak = [], n;
+    while ((n = w.nextNode())){
+      if (n.nodeValue.indexOf("-") < 0) continue;
+      PATROON.lastIndex = 0;
+      if (PATROON.test(n.nodeValue) && !magNiet(n)) raak.push(n);
+    }
+    for (var i = 0; i < raak.length; i++){
+      raak[i].nodeValue = raak[i].nodeValue.replace(PATROON, function(_, j, m, d){ return d + "." + m + "." + j; });
+    }
+  }
+  var gepland = false;
+  function plan(){
+    if (gepland) return;
+    gepland = true;
+    requestAnimationFrame(function(){ gepland = false; loop(document.body); });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", plan);
+  else plan();
+  new MutationObserver(plan).observe(document.documentElement, {childList:true, subtree:true, characterData:true});
+})();
+</script>
+
+</body>
+</html>

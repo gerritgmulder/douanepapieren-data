@@ -391,6 +391,14 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Upload een leveranciers-invoice of -catalogus en genereer in één klik een prijslijst in Fonteyn- of Passion-huisstijl.</p>
       </a>
 
+      <!-- Prijslijsten fabrikanten — Gretha + beheer. De prijsafspraken zelf,
+           het begin van de hele inkoopketen. -->
+      <a href="prijslijsten-fabrikanten.html" class="tile hidden" id="tilePrijslijstenFab">
+        <div class="icon">🗂️</div>
+        <h3>Prijslijsten fabrikanten</h3>
+        <p>Alle prijsafspraken met leveranciers en fabrieken op één plek. Per leverancier een map, met de prijslijst erin — en de oude versies blijven bewaard.</p>
+      </a>
+
       <!-- Retouren — Don/Arno/Dolf/Manon + admins. -->
       <a href="retouren.html" class="tile hidden" id="tileRetouren">
         <div class="icon">↩️</div>
@@ -827,6 +835,17 @@ const ACTIVITEIT_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Prijslijsten fabrikanten — de prijsafspraken met alle leveranciers en
+// fabrieken op één plek. Gretha beheert ze; zij heeft ze allemaal.
+// prijslijsten-fabrikanten.html heeft dezelfde lijst nog een keer, om ook het
+// rechtstreeks openen van het adres te bewaken. Allebei bijwerken dus.
+const PRIJSLIJSTEN_EMAILS = new Set([
+  "gretha@fonteyn.nl",     "gretha",   "fonteyn.gretha",
+  "gerrit@fonteyn.nl",     "gerrit",   "fonteyn.gerrit",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",  "dolf",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Specificatiesheets — marketing. Gretha en Demi maken de sheets; admins mee.
 const SPECSHEETS_EMAILS = new Set([
   "gretha@fonteyn.nl",     "gretha",   "fonteyn.gretha",
@@ -1006,6 +1025,8 @@ function showDashboard(email) {
   el("tileActiviteit").classList.toggle("hidden", !ACTIVITEIT_EMAILS.has(lc));
   el("tilePartnerActiviteit").classList.toggle("hidden", !PARTNERACTIVITEIT_EMAILS.has(lc));
   el("tileSpecsheets").classList.toggle("hidden", !SPECSHEETS_EMAILS.has(lc));
+  // Prijslijsten fabrikanten — Gretha + beheer
+  el("tilePrijslijstenFab").classList.toggle("hidden", !PRIJSLIJSTEN_EMAILS.has(lc));
   // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot.
   const isAdmin = (lc === "gerrit@fonteyn.nl" || lc === "gerrit" ||
                    lc === "fonteynbot@fonteyn.nl" || lc === "fonteyn.bot" || lc === "fonteynbot");

@@ -66,6 +66,11 @@ const ALLOWED_BUCKETS = new Set([
   // gelicentieerd. Ze staan hier en NIET in de repo, want die is publiek —
   // in de repo zetten zou neerkomen op ze doorgeven aan iedereen.
   "specsheet-fonts",
+  // Prijsafspraken met alle leveranciers en fabrieken (Gretha): de mappenboom
+  // en de gegevens per bestand. De bestanden zélf staan als losse sleutels
+  // (plfile:<id>) en gaan via /prijslijst/bestand — anders zou één map met
+  // vijftig PDF's de omvangsgrens van deze bucket meteen opblazen.
+  "prijslijsten",
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
@@ -3071,6 +3076,95 @@ async function verbergHandler(request, env, bucket) {
   return reply(200, { ok: true, id, verborgen: body.verborgen !== false });
 }
 
+// ─── Prijslijsten fabrikanten (Gretha) ───────────────────────────────
+// De prijsafspraken met alle leveranciers en fabrieken staan nu verspreid
+// over mailboxen en mappen. Alles begint bij de inkoop met de juiste
+// prijslijst, dus die horen op één plek te staan (Dolf/Gerrit, 7 aug 2026).
+//
+// Zelfde opzet als de documentbibliotheek van het partnerportaal: het
+// bestand zelf is een losse KV-sleutel (plfile:<id>, binair), de mappenboom
+// en alle gegevens eromheen staan in bucket 'prijslijsten'. Dat moet apart,
+// want een bucket is JSON met een maximum van een paar MB — een map met
+// vijftig PDF's past daar nooit in. Losse sleutels hebben elk hun eigen
+// ruimte, dus een lijst erbij maakt de bestaande niet zwaarder (dezelfde les
+// als bij de specificatiesheets).
+//
+// Toegang: de team-sleutel, net als de andere interne tegels. Bewust NIET de
+// dealer-beheersleutel — dit is geen dealerdata en Gretha hoort niet aan het
+// partnerbestand te kunnen komen. Wie de tegel te zien krijgt, regelt
+// dashboard.html.
+const PL_TYPES = {
+  pdf: "application/pdf",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  xls: "application/vnd.ms-excel",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  doc: "application/msword",
+  csv: "text/csv", txt: "text/plain",
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
+};
+
+// Het id wordt door de tegel gemaakt (tijdstempel + toeval + extensie) en
+// nooit door een mens getypt. Streng controleren kan dus zonder iemand voor
+// de voeten te lopen, en houdt gekke sleutels uit de opslag.
+function plBestandId(url) {
+  const id = String(url.searchParams.get("id") || "").toLowerCase();
+  return /^[a-z0-9][a-z0-9._-]{5,90}$/.test(id) && !id.includes("..") ? id : null;
+}
+
+function plAuthOk(request, env) {
+  return !!env.SHARED_SECRET && (request.headers.get("X-Fonteyn-Auth") || "") === env.SHARED_SECRET;
+}
+
+// PUT /prijslijst/bestand?id=… — body is het bestand zelf (binair).
+async function plZetBestand(request, env, url) {
+  if (!plAuthOk(request, env)) return reply(401, { ok: false, error: "Unauthorized" });
+  const id = plBestandId(url);
+  if (!id) return reply(400, { ok: false, error: "ongeldig id" });
+  const buf = await request.arrayBuffer();
+  if (!buf.byteLength) return reply(400, { ok: false, error: "leeg bestand" });
+  // 24 MB — de opslag zelf houdt bij 25 op. Een prijslijst is een PDF of een
+  // Excel en zit daar ver onder; een bestand dat hier tegenaan loopt is
+  // vrijwel zeker iets anders (een scan op volle resolutie bijvoorbeeld).
+  if (buf.byteLength > 24 * 1024 * 1024) return reply(413, { ok: false, error: "bestand is groter dan 24 MB" });
+  await env.FONTEYN_DATA.put("plfile:" + id, buf);
+  return reply(200, { ok: true, id, bytes: buf.byteLength });
+}
+
+// GET /prijslijst/bestand?id=… — de sleutel gaat als header mee, niet in het
+// adres: een adres belandt in logboeken, browsergeschiedenis en verwijzingen.
+async function plGeefBestand(request, env, url) {
+  if (!plAuthOk(request, env)) return reply(401, { ok: false, error: "Unauthorized" });
+  const id = plBestandId(url);
+  if (!id) return reply(400, { ok: false, error: "ongeldig id" });
+  const buf = await env.FONTEYN_DATA.get("plfile:" + id, { type: "arrayBuffer" });
+  if (!buf) return reply(404, { ok: false, error: "bestand niet gevonden" });
+  const ext = id.split(".").pop();
+  return new Response(buf, { headers: {
+    ...corsHeaders,
+    "Content-Type": PL_TYPES[ext] || "application/octet-stream",
+    "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff",
+  } });
+}
+
+// POST /prijslijst/verwijder { id } — alleen het bestand zelf. De tegel haalt
+// hem daarna uit het overzicht. Andersom (eerst uit het overzicht) zou een
+// bestand achterlaten dat niemand meer kan vinden maar wel ruimte inneemt.
+async function plWisBestand(request, env) {
+  if (!plAuthOk(request, env)) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const ids = Array.isArray(body.ids) ? body.ids : [body.id];
+  const gewist = [];
+  for (const raw of ids) {
+    const id = String(raw || "").toLowerCase();
+    if (!/^[a-z0-9][a-z0-9._-]{5,90}$/.test(id) || id.includes("..")) continue;
+    await env.FONTEYN_DATA.delete("plfile:" + id);
+    gewist.push(id);
+  }
+  if (!gewist.length) return reply(400, { ok: false, error: "geen geldig id" });
+  return reply(200, { ok: true, gewist });
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -3194,6 +3288,12 @@ export default {
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
     if (url.pathname === "/voorraad/verberg" && request.method === "POST") return verbergHandler(request, env, "spa-verborgen");
 
+    // Prijslijsten van fabrikanten en leveranciers (Gretha) — de bestanden
+    // zelf. Het overzicht eromheen loopt via bucket 'prijslijsten'.
+    if (url.pathname === "/prijslijst/bestand" && request.method === "PUT") return plZetBestand(request, env, url);
+    if (url.pathname === "/prijslijst/bestand" && request.method === "GET") return plGeefBestand(request, env, url);
+    if (url.pathname === "/prijslijst/verwijder" && request.method === "POST") return plWisBestand(request, env);
+
     // Dealerportaal (publiek, eigen sessie-auth — géén shared secret)
     if (url.pathname === "/dealers" || url.pathname.startsWith("/dealers/")) {
       return handleDealerRoutes(request, env, url);
@@ -3242,7 +3342,11 @@ export default {
       //     1 MB. Die twee staan nu op hetzelfde getal.
       //   specsheet-<id> — één losse sheet met zijn foto's. 8 MB is ruim voor
       //     een productfoto, een technische tekening en de icoontjes.
-      const RUIM = { geldgoederen: 8, "gg-bevindingen": 8, specsheets: 20 };
+      //   prijslijsten — alleen de mappenboom en de gegevens per bestand (de
+      //     bestanden zelf staan apart). Een paar honderd regels past ruim in
+      //     1 MB, maar met 4 loopt Gretha ook bij honderden lijsten met een
+      //     lange versiehistorie nergens tegenaan.
+      const RUIM = { geldgoederen: 8, "gg-bevindingen": 8, specsheets: 20, prijslijsten: 4 };
       const perSheet = /^specsheet-/.test(bucket) ? 8 : 0;
       const limiet = (perSheet || RUIM[bucket] || 1) * 1024 * 1024;
       if (body.length > limiet) {
