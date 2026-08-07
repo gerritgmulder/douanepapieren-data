@@ -286,30 +286,46 @@ function vhTeken(){
   const onderweg=regels.filter(r=>r.aantal<0);
   const stuks=aanwezig.reduce((n,r)=>n+r.aantal,0);
   const stuksOnderweg=onderweg.reduce((n,r)=>n+Math.abs(r.aantal),0);
+  // Chantals telling is niet één lijst maar drie blokken: de spa's, de
+  // barrelsauna's en het rijtje onder het kopje 'Ice Bath Stock'. Daar zitten
+  // ook toebehoren tussen - 580 waterkoelers en 80 douches. Die bij de spa's
+  // optellen levert een getal op dat niemand kan plaatsen, dus ze worden
+  // apart geteld (Gerrit, 8 aug 2026).
+  const groepVan=r=>r.groep||"Spa's";
+  const perGroep={};
+  for(const r of aanwezig) perGroep[groepVan(r)]=(perGroep[groepVan(r)]||0)+r.aantal;
+  const spas=perGroep["Spa's"]||0;
+  const anders=stuks-spas;
   const waarde=aanwezig.filter(r=>r.prijs).reduce((n,r)=>n+r.prijs*r.aantal,0);
   const zonderPrijs=aanwezig.filter(r=>!r.prijs).reduce((n,r)=>n+r.aantal,0);
   const uitLijst=aanwezig.filter(r=>r.prijsBron==="lijst").reduce((n,r)=>n+r.aantal,0);
   const modellen=new Set(regels.map(r=>r.model)).size;
 
   document.getElementById("vhKpis").innerHTML=
-    kpi(stuks,"In het warehouse")+
+    kpi(spas,"Spa's in het warehouse")+
+    kpi(anders,"IJsbaden, sauna's, toebehoren")+
     kpi(stuksOnderweg,"Onderweg / in productie")+
-    kpi(modellen,"Modellen")+
     // De dekking staat in het label zelf. Een totaal dat over een derde van de
     // voorraad gaat mag nooit als hele voorraadwaarde gelezen kunnen worden.
     kpi(usd(waarde),"Inkoopwaarde ("+(stuks-zonderPrijs)+" van "+stuks+" stuks)")+
     kpi(zonderPrijs,"Nog zonder inkoopprijs");
 
+  const groepTekst=Object.keys(perGroep).sort().map(g=>perGroep[g]+" "+g.toLowerCase()).join(", ");
   document.getElementById("vhUitleg").innerHTML=
     "<b>Telling van "+esc(vhDatum(d.peildatum))+"</b>, bron: "+esc(d.bron||"onbekend")+". "+
     ((d.toelichting||[]).map(esc).join(" ")||"")+
+    " De telling bestaat uit blokken: "+esc(groepTekst)+". Onder de ijsbaden staan ook toebehoren "+
+    "(waterkoelers, douches), dus dat aantal is geen aantal baden."+
     " Prijzen zijn de <b>inkoopprijs in dollars</b> zoals de fabriek hem factureert, dus geen omgerekende europrijs. "+
     "Staat een spa op een commercial invoice die het dashboard kent, dan is dat het bedrag: "+esc(d.prijsbron||"")+". "+
     "Voor de rest geldt de prijslijst van de fabriek; die regels zijn gemerkt met <b>lijst</b>."+
     (uitLijst?" Dat gaat om "+uitLijst+" van de "+stuks+" stuks.":"")+
     (zonderPrijs
       ? " <b>"+zonderPrijs+" van de "+stuks+" stuks hebben nog geen fabrieksprijs</b> en tellen niet mee in de inkoopwaarde."
-      : " Alle "+stuks+" stuks hebben een inkoopprijs.");
+      : " Alle "+stuks+" stuks hebben een inkoopprijs.")+
+    ((d.correcties||[]).length
+      ? "<div style='margin-top:8px;font-size:12px;color:var(--muted)'>Laatste correctie op de telling: "+esc(d.correcties[d.correcties.length-1].wat)+"</div>"
+      : "");
 
   let rijen=regels.slice();
   if(verbergNul) rijen=rijen.filter(r=>r.aantal!==0);
@@ -346,7 +362,11 @@ function vhTeken(){
         const bron=r.prijsBron==="lijst"
           ? " <span title='Prijslijst van de fabriek"+(r.prijsFabriek?" ("+esc(r.prijsFabriek)+")":"")+
             ", geen commercial invoice voor deze spa's' style='color:var(--muted);font-size:10.5px;border:1px solid var(--border);border-radius:5px;padding:0 4px'>lijst</span>" : "";
-        return "<tr"+(neg?" style='background:#fff7ed'":"")+"><td><b>"+esc(r.model)+"</b></td>"+
+        // Uit welk blok van de telling een regel komt. Alleen tonen als het
+        // géén spa is: anders staat er bij elke regel hetzelfde label.
+        const groep=(r.groep&&r.groep!=="Spa's")
+          ? " <span style='font-size:10.5px;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:0 5px;white-space:nowrap'>"+esc(r.groep)+"</span>" : "";
+        return "<tr"+(neg?" style='background:#fff7ed'":"")+"><td><b>"+esc(r.model)+"</b>"+groep+"</td>"+
           "<td style='font-size:12px'>"+esc(r.kleur)+"</td>"+
           "<td style='"+(neg?"color:#c2410c;font-weight:700":"")+"'>"+r.aantal+
             (neg?" <span style='font-size:11px'>onderweg</span>":"")+"</td>"+
