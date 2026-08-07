@@ -118,6 +118,11 @@
       </div>
       <div id="vhLijst" style="margin-top:12px"></div>
     </div>
+    <div class="card" id="vhOntbreektKaart" style="display:none">
+      <h3>Nog geen inkoopprijs — <span id="vhOntbreektTotaal">0</span> stuks</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Van deze modellen staat geen fabrieksprijs op een commercial invoice die het dashboard kent. Zolang die ontbreekt tellen ze niet mee in de inkoopwaarde hierboven. Stuur de commercial invoice of de proforma van de fabriek en ze staan er de volgende keer bij.</p>
+      <div id="vhOntbreekt"></div>
+    </div>
   </div>
 
   <!-- ===== Containers uit Logic4 (Warehouse Texas) ===== -->
@@ -266,8 +271,10 @@ function vhTeken(){
     kpi(stuks,"In het warehouse")+
     kpi(stuksOnderweg,"Onderweg / in productie")+
     kpi(modellen,"Modellen")+
-    kpi(usd(waarde),"Inkoopwaarde voorraad")+
-    kpi(zonderPrijs,"Stuks zonder inkoopprijs");
+    // De dekking staat in het label zelf. Een totaal dat over een derde van de
+    // voorraad gaat mag nooit als hele voorraadwaarde gelezen kunnen worden.
+    kpi(usd(waarde),"Inkoopwaarde ("+(stuks-zonderPrijs)+" van "+stuks+" stuks)")+
+    kpi(zonderPrijs,"Nog zonder inkoopprijs");
 
   document.getElementById("vhUitleg").innerHTML=
     "<b>Telling van "+esc(vhDatum(d.peildatum))+"</b>, bron: "+esc(d.bron||"onbekend")+". "+
@@ -281,6 +288,17 @@ function vhTeken(){
   if(q) rijen=rijen.filter(r=>(r.model+" "+r.kleur).toLowerCase().includes(q));
   rijen.sort((a,b)=>(b.inkoopUsd?b.inkoopUsd*Math.abs(b.aantal):0)-(a.inkoopUsd?a.inkoopUsd*Math.abs(a.aantal):0)
     ||String(a.model).localeCompare(String(b.model)));
+
+  // Wat er nog aan prijzen mist, als werklijst en niet als stille voetnoot.
+  const mist={};
+  for(const r of aanwezig) if(!r.inkoopUsd) mist[r.model]=(mist[r.model]||0)+r.aantal;
+  const mistLijst=Object.entries(mist).sort((a,b)=>b[1]-a[1]);
+  document.getElementById("vhOntbreektKaart").style.display=mistLijst.length?"":"none";
+  document.getElementById("vhOntbreektTotaal").textContent=zonderPrijs;
+  document.getElementById("vhOntbreekt").innerHTML=!mistLijst.length?"":
+    "<div class='tablewrap'><table class='grid'><thead><tr><th>Model</th><th>Stuks</th></tr></thead><tbody>"+
+    mistLijst.map(function(x){ return "<tr><td>"+esc(x[0])+"</td><td>"+x[1]+"</td></tr>"; }).join("")+
+    "</tbody></table></div>";
 
   document.getElementById("vhTel").textContent=rijen.length+" van "+regels.length+" regels";
   document.getElementById("vhLijst").innerHTML=!rijen.length
