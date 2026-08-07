@@ -85,6 +85,10 @@
       "note": "MT940-lezer voor bankafschriften. Gedeeld door bankkoppeling.html en de bankaansluiting in geldgoederen.html — één lezer, geen twee die uiteenlopen."
     },
     {
+      "name": "bank-matching.js",
+      "note": "Bankkoppeling — een afschriftregel aan een openstaande factuur koppelen: factuurnummer, ordernummer, bedrag en naam van de tegenpartij. Los van het scherm zodat het op echte afschriften te testen is. Gebruikt door bankkoppeling.html."
+    },
+    {
       "name": "probe-logic4.html",
       "note": "Eenmalige probe-pagina om Logic4-velden in kaart te brengen — kan later weer verwijderd worden"
     },

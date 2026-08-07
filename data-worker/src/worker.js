@@ -71,6 +71,10 @@ const ALLOWED_BUCKETS = new Set([
   // (plfile:<id>) en gaan via /prijslijst/bestand — anders zou één map met
   // vijftig PDF's de omvangsgrens van deze bucket meteen opblazen.
   "prijslijsten",
+  // Bankkoppeling: de openstaande posten uit Logic4 (een uur bewaard, ~2.500
+  // regels) en het logboek van wat er via het dashboard is geboekt.
+  "bank-openstaand",
+  "bank-geboekt",
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
@@ -3165,6 +3169,156 @@ async function plWisBestand(request, env) {
   return reply(200, { ok: true, gewist });
 }
 
+// ─── Bankkoppeling ───────────────────────────────────────────────────
+// De tegel leest een MT940 en koppelt de betalingen aan openstaande posten.
+// Het koppelen zelf gebeurt in de tegel (bank-matching.js); hier staan de
+// drie dingen die alleen Logic4 kan beantwoorden.
+//
+// Waarom de openstaande posten hier worden bewaard: het zijn er ~2.500 en ze
+// veranderen per dag nauwelijks. Bij elke upload opnieuw ophalen is zonde;
+// een uur bewaren is ruim genoeg en scheelt Osman het wachten.
+//
+// Let op de grens van 50 subverzoeken per aanroep (gratis laag van
+// Cloudflare). Daarom is elk endpoint hieronder begrensd op een aantal per
+// aanroep en doet de tegel de rest in porties.
+const BANK_CACHE_TTL = 3600 * 1000;
+
+async function bankOpenstaand(env, vers) {
+  const bewaard = await env.FONTEYN_DATA.get("bank-openstaand", { type: "json" });
+  if (!vers && bewaard && bewaard.updated && (Date.now() - Date.parse(bewaard.updated)) < BANK_CACHE_TTL) {
+    return { ok: true, uitCache: true, updated: bewaard.updated, posten: bewaard.posten || [] };
+  }
+  const token = await l4Token(env);
+  const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOpenPaymentInvoices", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ TakeRecords: 5000 }),
+  });
+  if (!r.ok) throw new Error("Logic4 gaf HTTP " + r.status + " op de openstaande posten");
+  const lijst = await r.json();
+  // Alleen wat de koppeling nodig heeft. Een factuur zonder nummer of zonder
+  // openstaand bedrag valt af: daar is niets aan te koppelen.
+  const posten = (Array.isArray(lijst) ? lijst : []).filter(p => p && p.InvoiceId && Number(p.AmountOutstanding) > 0)
+    .map(p => ({
+      InvoiceId: p.InvoiceId, DebtorId: p.DebtorId,
+      TotalAmount: Number(p.TotalAmount) || 0,
+      AmountOutstanding: Number(p.AmountOutstanding) || 0,
+      InvoiceDate: p.InvoiceDate || null, DueDate: p.DueDate || null,
+      DaysPastDueDate: p.DaysPastDueDate == null ? null : p.DaysPastDueDate,
+    }));
+  const opslag = { updated: new Date().toISOString(), posten };
+  await env.FONTEYN_DATA.put("bank-openstaand", JSON.stringify(opslag));
+  return { ok: true, uitCache: false, updated: opslag.updated, posten };
+}
+
+// Namen van debiteuren. Logic4 kent geen filter op meerdere ids en ook geen
+// zoeken op naam (nagelopen: Ids/DebtorIds/CustomerIds/Name/SearchString
+// worden allemaal genegeerd), en de klantenlijst is 200.000 regels lang. Eén
+// aanroep per debiteur is dus de enige weg - vandaar de portie van 40.
+async function bankDebiteuren(env, ids) {
+  const uniek = [...new Set((ids || []).map(x => Number(x)).filter(x => x > 0))].slice(0, 40);
+  const token = await l4Token(env);
+  const namen = {};
+  for (const id of uniek) {
+    try {
+      const r = await fetch("https://api.logic4server.nl/v3/Relations/GetCustomers", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ Id: id, TakeRecords: 1 }),
+      });
+      const j = await r.json().catch(() => null);
+      const c = Array.isArray(j) ? j[0] : null;
+      if (!c) continue;
+      const persoon = [c.FirstName, c.Preposition, c.LastName].filter(Boolean).join(" ").trim();
+      namen[String(id)] = { naam: c.CompanyName || persoon || "", plaats: c.City || "", persoon };
+    } catch (e) { /* één debiteur die niet lukt mag de rest niet ophouden */ }
+  }
+  return { ok: true, namen, gevraagd: uniek.length, meer: (ids || []).length > uniek.length };
+}
+
+// Van factuur naar order. AddPayment werkt op een ORDER, terwijl de
+// openstaande posten facturen zijn; het ordernummer staat op de factuur
+// (InvoiceBelongsToOrderNumber). Wordt pas opgehaald voor de regels die
+// iemand daadwerkelijk wil boeken.
+async function bankFactuurOrder(env, paren) {
+  const lijst = (Array.isArray(paren) ? paren : []).slice(0, 25);
+  const token = await l4Token(env);
+  // Per debiteur één aanroep: meerdere facturen van dezelfde klant kosten zo
+  // niet meerdere verzoeken.
+  const perDebiteur = {};
+  for (const p of lijst) {
+    const d = String(p.debtorId || "");
+    if (!d) continue;
+    (perDebiteur[d] = perDebiteur[d] || []).push(String(p.invoiceId));
+  }
+  const uit = {};
+  for (const [debtorId, facturen] of Object.entries(perDebiteur)) {
+    try {
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/GetInvoices", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ DebtorId: Number(debtorId), TakeRecords: 500 }),
+      });
+      const j = await r.json().catch(() => null);
+      const alle = Array.isArray(j) ? j : [];
+      for (const f of facturen) {
+        const gevonden = alle.find(x => String(x.Id) === f);
+        if (!gevonden) { uit[f] = { fout: "factuur niet gevonden bij deze debiteur" }; continue; }
+        const naam = (gevonden.AccountAddress && (gevonden.AccountAddress.CompanyName ||
+          [gevonden.AccountAddress.FirstName, gevonden.AccountAddress.LastName].filter(Boolean).join(" "))) || "";
+        uit[f] = {
+          orderNr: gevonden.InvoiceBelongsToOrderNumber || null,
+          naam,
+          totaal: (gevonden.Totals && Number(gevonden.Totals.AmountIncl)) || null,
+        };
+      }
+    } catch (e) {
+      for (const f of facturen) uit[f] = { fout: String(e.message || e) };
+    }
+  }
+  return { ok: true, facturen: uit };
+}
+
+// Betalingen wegschrijven. Dit verandert de administratie en is niet terug te
+// draaien, dus: de zware beheersleutel (net als het aanmaken van een
+// inkooporder en het boeken van een ontvangst), een harde grens per keer, en
+// per regel een eigen uitkomst zodat één mislukking de rest niet meesleept.
+async function bankBoeken(env, body) {
+  const regels = (Array.isArray(body.regels) ? body.regels : []).slice(0, 30);
+  if (!regels.length) return { ok: false, error: "geen regels meegegeven" };
+  const token = await l4Token(env);
+  const door = String(body.door || "").slice(0, 80);
+  const uit = [];
+  for (const r of regels) {
+    const orderNr = Number(r.orderNr);
+    const bedrag = Number(r.bedrag);
+    if (!orderNr || !(bedrag > 0)) { uit.push({ ...r, ok: false, error: "ordernummer of bedrag ontbreekt" }); continue; }
+    // De omschrijving is wat Osman later in Logic4 terugziet. Datum en
+    // afschrift erin, zodat een boeking naar de bankregel terug te leiden is.
+    const omschrijving = String(r.omschrijving || "").slice(0, 200) || "Bankbetaling";
+    try {
+      const resp = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ OrderId: orderNr, Amount: bedrag, Description: omschrijving }),
+      });
+      const tekst = await resp.text();
+      let j = null; try { j = JSON.parse(tekst); } catch {}
+      if (!resp.ok) {
+        uit.push({ ...r, ok: false, error: (j && (j.detail || j.title)) || ("HTTP " + resp.status) });
+      } else {
+        uit.push({ ...r, ok: true, geboekt: bedrag });
+      }
+    } catch (e) { uit.push({ ...r, ok: false, error: String(e.message || e) }); }
+  }
+  const gelukt = uit.filter(x => x.ok).length;
+  // Vastleggen wie wat heeft geboekt - een betaling in de administratie moet
+  // herleidbaar zijn tot een persoon.
+  const logboek = (await env.FONTEYN_DATA.get("bank-geboekt", { type: "json" })) || { boekingen: [] };
+  logboek.boekingen = (logboek.boekingen || []).slice(-4000);
+  logboek.boekingen.push({ ts: new Date().toISOString(), door, aantal: gelukt,
+    totaal: uit.filter(x => x.ok).reduce((n, x) => n + Number(x.geboekt || 0), 0),
+    regels: uit.map(x => ({ orderNr: x.orderNr, factuur: x.invoiceId || null, bedrag: x.bedrag, ok: x.ok, error: x.error || null })) });
+  await env.FONTEYN_DATA.put("bank-geboekt", JSON.stringify(logboek));
+  return { ok: true, gelukt, mislukt: uit.length - gelukt, resultaten: uit };
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -3288,6 +3442,30 @@ export default {
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
     if (url.pathname === "/voorraad/verberg" && request.method === "POST") return verbergHandler(request, env, "spa-verborgen");
 
+    // Bankkoppeling. Lezen mag met de team-sleutel; boeken verandert de
+    // administratie en vereist daarom de beheersleutel, net als het aanmaken
+    // van een inkooporder.
+    if (url.pathname === "/bank/openstaand" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await bankOpenstaand(env, !!body.vers).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/bank/debiteuren" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await bankDebiteuren(env, body.ids).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/bank/factuurorder" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await bankFactuurOrder(env, body.paren).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/bank/boeken" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await bankBoeken(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+
     // Prijslijsten van fabrikanten en leveranciers (Gretha) — de bestanden
     // zelf. Het overzicht eromheen loopt via bucket 'prijslijsten'.
     if (url.pathname === "/prijslijst/bestand" && request.method === "PUT") return plZetBestand(request, env, url);
@@ -3346,7 +3524,7 @@ export default {
       //     bestanden zelf staan apart). Een paar honderd regels past ruim in
       //     1 MB, maar met 4 loopt Gretha ook bij honderden lijsten met een
       //     lange versiehistorie nergens tegenaan.
-      const RUIM = { geldgoederen: 8, "gg-bevindingen": 8, specsheets: 20, prijslijsten: 4 };
+      const RUIM = { geldgoederen: 8, "gg-bevindingen": 8, specsheets: 20, prijslijsten: 4, "bank-openstaand": 4, "bank-geboekt": 4 };
       const perSheet = /^specsheet-/.test(bucket) ? 8 : 0;
       const limiet = (perSheet || RUIM[bucket] || 1) * 1024 * 1024;
       if (body.length > limiet) {

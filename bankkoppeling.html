@@ -224,6 +224,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 </style>
 
 <script src="mt940.js"></script>
+<script src="bank-matching.js"></script>
 </head>
 <body>
 <header class="hdr">
@@ -266,24 +267,33 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <table class="tx" id="txTable">
         <thead>
           <tr>
-            <th style="width:90px;">Datum</th>
+            <th style="width:34px;"><input type="checkbox" id="kiesAlles" title="Alles aan- of uitzetten"></th>
+            <th style="width:88px;">Datum</th>
             <th style="width:110px; text-align:right;">Bedrag</th>
             <th>Afschriftregel</th>
-            <th style="width:120px;">Status</th>
+            <th style="width:118px;">Status</th>
             <th>Voorgestelde koppeling</th>
-            <th style="width:130px;">Klantcode</th>
           </tr>
         </thead>
         <tbody id="txBody"></tbody>
       </table>
     </div>
 
-    <div class="row-flex" style="margin-top:18px;">
-      <button class="cta" id="exportBtn">📋 Kopieer als CSV</button>
-      <button class="cta secondary" id="exportJsonBtn">Kopieer als JSON</button>
-      <button class="cta secondary" id="resetBtn">Andere MT940 laden</button>
-      <span class="muted">Fase 1 — alleen voorstel/preview. Fase 2 (auto-boeken in Logic4) komt zodra de matches betrouwbaar zijn.</span>
+    <div class="row-flex" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button class="cta secondary" id="kiesZeker" type="button">Alleen de zekere aanvinken</button>
+      <button class="cta secondary" id="kiesGeen" type="button">Selectie wissen</button>
+      <span id="selInfo" class="muted"></span>
     </div>
+    <div class="row-flex" style="margin-top:12px;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button class="cta" id="boekBtn" type="button" disabled>Boek de geselecteerde betalingen</button>
+      <button class="cta secondary" id="exportBtn">📋 Kopieer als CSV</button>
+      <button class="cta secondary" id="exportJsonBtn">Kopieer als JSON</button>
+      <button class="cta secondary" id="resetBtn">Ander bestand laden</button>
+    </div>
+    <p class="muted" style="margin:10px 0 0;font-size:12px;">
+      Boeken schrijft de betaling weg op de order in Logic4 en is niet terug te draaien.
+      Vink daarom aan wat je wilt boeken — één regel, een deel, of alles.
+    </p>
     <div id="actionStatus"></div>
   </div>
 </main>
@@ -386,11 +396,13 @@ async function handleFile(file) {
       showStatus($("dropStatus"), "Geen inkomende creditbetalingen in dit MT940-bestand gevonden.", "error");
       return;
     }
-    showStatus($("dropStatus"), `✓ ${state.transactions.length} inkomende betalingen gevonden — bezig met Logic4-matching…`, "ok");
-    renderResults(); // initiële render met "pending"-status
+    showStatus($("dropStatus"), state.transactions.length + " inkomende betalingen gevonden — openstaande posten ophalen…", "info");
+    renderResults();
     await runMatchingForAll();
     renderResults();
-    showStatus($("dropStatus"), `✓ ${state.transactions.length} betalingen verwerkt. Controleer de voorstellen hieronder.`, "ok");
+    const zeker = state.transactions.filter(t => t.match && t.match.status === "zeker").length;
+    showStatus($("dropStatus"), state.transactions.length + " betalingen gelezen; " + zeker +
+      " daarvan zijn zonder twijfel te koppelen en staan alvast aangevinkt. Loop de rest na voordat je boekt.", "ok");
   } catch (e) {
     console.error(e);
     showStatus($("dropStatus"), "Kon MT940 niet inlezen: " + e.message, "error");
@@ -402,7 +414,7 @@ async function handleFile(file) {
 // in de tegel Geld-goederenbeweging. Eén lezer, geen twee die uiteenlopen.
 const parseMT940 = (t) => window.fpMT940.parse(t);
 
-// ─── Classificatie + match-extractie ────────────────────────────────
+// ─── Classificatie ──────────────────────────────────────────────────
 function classifyTx(tx) {
   const d = (tx.description || "").toLowerCase();
   if (/(?:^|[^a-z])mollie(?:[^a-z]|$)/.test(d) || /(?:^|[^a-z])mollie b\.?v\.?/.test(d)) return "mollie";
@@ -410,210 +422,351 @@ function classifyTx(tx) {
   return "direct";
 }
 
-function extractOrderCandidates(description) {
-  // Logic4 sales-orders zijn typisch 7-cijferig (bv. 3507187), inkooporders
-  // 5-cijferig (bv. 37386). We pakken alle aaneengesloten 5-7-cijfer-tokens
-  // uit de beschrijving en filteren op aannemelijke ranges.
-  const out = [];
-  const seen = new Set();
-  const re = /\b(\d{5,8})\b/g;
-  let m;
-  while ((m = re.exec(description)) !== null) {
-    const n = m[1];
-    if (seen.has(n)) continue;
-    // Skip pure-jaartal-achtige tokens (1900-2099)
-    if (/^(19|20)\d{2}$/.test(n)) continue;
-    // Skip te grote IBAN-achtige nummers (>99999999)
-    if (n.length > 7) continue;
-    seen.add(n);
-    out.push(n);
-  }
-  return out;
+// ─── Openstaande posten + koppelen ──────────────────────────────────
+// De koppellogica zelf staat in bank-matching.js, zodat hij op echte
+// afschriften te testen is los van dit scherm. Hier staat alleen het halen
+// van de gegevens en het tonen ervan.
+const WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
+const teamKey  = () => localStorage.getItem("fp.teamkey") || "";
+const adminKey = () => localStorage.getItem("dp.adminkey") || "";
+const BM = () => window.fpBankMatch;
+
+let openIndex = null, openMeta = null, debiteurNamen = {};
+
+async function haalOpenstaand(vers) {
+  const r = await fetch(WORKER + "/bank/openstaand", {
+    method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+    body: JSON.stringify({ vers: !!vers }) });
+  if (!r.ok) throw new Error("openstaande posten ophalen faalde (HTTP " + r.status + ")");
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || "openstaande posten ophalen faalde");
+  openMeta = { updated: j.updated, aantal: (j.posten || []).length, uitCache: j.uitCache };
+  openIndex = BM().bouwIndex(j.posten || []);
+  return openIndex;
 }
 
-// ─── Matching tegen Logic4 ──────────────────────────────────────────
-async function runMatchingForAll() {
-  // Sequentieel om Logic4-rate-limits te respecteren. Beperken tot 'direct'-
-  // betalingen — Mollie/Pay.nl slaan we over omdat die altijd handmatig
-  // moeten worden uitgesplitst (de sub-orders zitten niet in de bank-
-  // afschriftregel zelf).
-  for (const tx of state.transactions) {
-    if (tx.kind !== "direct") continue;
-    tx.match = await tryMatchTransaction(tx);
-  }
-}
-
-async function tryMatchTransaction(tx) {
-  const candidates = extractOrderCandidates(tx.description);
-  if (!candidates.length) {
-    return { status: "no-candidates", candidates: [] };
-  }
-  const checked = [];
-  for (const ordnr of candidates) {
+// Namen erbij zoeken. Logic4 kan er maar één tegelijk, dus de worker doet er
+// 40 per aanroep; hier doen we de porties en laten we de voortgang zien.
+async function haalNamen(ids) {
+  const nodig = [...new Set(ids.map(String))].filter(id => id && !(id in debiteurNamen));
+  for (let i = 0; i < nodig.length; i += 40) {
+    const portie = nodig.slice(i, i + 40);
+    showStatus($("dropStatus"), "Namen erbij zoeken… (" + Math.min(i + 40, nodig.length) + " van " + nodig.length + ")", "info");
     try {
-      const r = await fetch("/api/order/" + encodeURIComponent(ordnr));
-      if (r.status === 404) continue;
-      if (!r.ok) continue;
+      const r = await fetch(WORKER + "/bank/debiteuren", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+        body: JSON.stringify({ ids: portie }) });
       const j = await r.json();
-      if (!j || !j.order) continue;
-      const order = Array.isArray(j.order) ? j.order[0] : j.order;
-      if (!order) continue;
-      const totalIncl = Number(order?.Totals?.AmountIncl || 0);
-      const debtorId = order?.DebtorId || order?.AccountAddress?.DebtorId;
-      const company = order?.AccountAddress?.CompanyName
-                   || order?.InvoiceAddress?.CompanyName
-                   || "";
-      checked.push({
-        orderId: ordnr,
-        debtorId: debtorId ? String(debtorId) : "",
-        companyName: company,
-        totalIncl,
-        amountMatch: Math.abs(totalIncl - tx.amount) < 0.02,
-      });
-    } catch (e) {
-      console.warn(`[bank] order ${ordnr} lookup failed:`, e.message);
-    }
+      for (const [id, v] of Object.entries(j.namen || {})) debiteurNamen[id] = v;
+      // Wat niet gevonden is toch vastleggen, anders vragen we het elke keer opnieuw.
+      for (const id of portie) if (!(id in debiteurNamen)) debiteurNamen[id] = { naam: "", plaats: "" };
+    } catch (e) { console.warn("namen ophalen faalde:", e.message); break; }
   }
-  if (!checked.length) {
-    return { status: "no-match", candidates };
+}
+
+async function runMatchingForAll() {
+  if (!openIndex) await haalOpenstaand(false);
+  const teKoppelen = state.transactions.filter(t => t.kind === "direct");
+  for (const tx of teKoppelen) tx.match = BM().koppel(tx, openIndex);
+
+  // Alleen namen ophalen van debiteuren die als kandidaat naar voren komen -
+  // dat zijn er een handvol, niet de 200.000 uit het klantenbestand.
+  const ids = [];
+  for (const tx of teKoppelen) for (const p of (tx.match.kandidaten || [])) ids.push(p.DebtorId);
+  await haalNamen(ids);
+
+  const platteNamen = {};
+  for (const [id, v] of Object.entries(debiteurNamen)) platteNamen[id] = v.naam || "";
+  for (const tx of teKoppelen) {
+    tx.match = BM().bevestig(tx.match, platteNamen);
+    // Voorgeselecteerde factuur: wat de koppeling zelf het beste vond.
+    tx.gekozen = tx.match.beste ? String(tx.match.beste.InvoiceId) : "";
+    tx.kies = tx.match.status === "zeker";
   }
-  // Beste match: amount-match wint
-  checked.sort((a, b) => (b.amountMatch ? 1 : 0) - (a.amountMatch ? 1 : 0));
-  const best = checked[0];
-  const status = best.amountMatch ? "match" : "match-amount-mismatch";
-  return { status, candidates, best, all: checked };
 }
 
 // ─── Render ─────────────────────────────────────────────────────────
+const STATUS_UITERLIJK = {
+  zeker:       { klasse: "ok",      tekst: "Zeker" },
+  controleren: { klasse: "partial", tekst: "Controleren" },
+  kandidaten:  { klasse: "partial", tekst: "Kiezen" },
+  opzoeken:    { klasse: "partial", tekst: "Order genoemd" },
+  geen:        { klasse: "miss",    tekst: "Geen match" },
+};
+
+function postLabel(p) {
+  const n = debiteurNamen[String(p.DebtorId)] || {};
+  const naam = n.naam ? escapeHtml(n.naam) : ("debiteur " + p.DebtorId);
+  const dagen = p.DaysPastDueDate;
+  return "Factuur <b>" + p.InvoiceId + "</b> · " + naam +
+    " · openstaand " + fmtEur(p.AmountOutstanding) +
+    (Number(p.TotalAmount) !== Number(p.AmountOutstanding) ? " van " + fmtEur(p.TotalAmount) : "") +
+    (dagen != null && dagen > 0 ? " · " + dagen + " dagen over de vervaldatum" : "");
+}
+
 function renderResults() {
   $("resultCard").classList.remove("hidden");
-  $("bankInfo").innerHTML = `
-    <b>Bestand:</b> ${escapeHtml(state.fileName)} ·
-    <b>IBAN:</b> ${escapeHtml(state.iban || "—")} ·
-    <b>Afschrift:</b> ${escapeHtml(state.statementNr || "—")} ·
-    <b>Saldo:</b>
-    ${state.openingBalance ? fmtEur(state.openingBalance.amount) : "—"}
-    →
-    ${state.closingBalance ? fmtEur(state.closingBalance.amount) : "—"}
-  `;
+  $("bankInfo").innerHTML =
+    "<b>Bestand:</b> " + escapeHtml(state.fileName) + " · <b>IBAN:</b> " + escapeHtml(state.iban || "—") +
+    " · <b>Afschrift:</b> " + escapeHtml(state.statementNr || "—") +
+    " · <b>Saldo:</b> " + (state.openingBalance ? fmtEur(state.openingBalance.amount) : "—") +
+    " → " + (state.closingBalance ? fmtEur(state.closingBalance.amount) : "—") +
+    (openMeta ? " · <span class='muted'>" + openMeta.aantal + " openstaande posten uit Logic4</span>" : "");
 
-  // Statistieken
-  const total = state.transactions.length;
-  const matched = state.transactions.filter(t => t.match?.status === "match").length;
-  const partial = state.transactions.filter(t => t.match?.status === "match-amount-mismatch").length;
-  const unmatched = state.transactions.filter(t => t.kind === "direct" && (!t.match || t.match.status === "no-match" || t.match.status === "no-candidates")).length;
-  const tussen = state.transactions.filter(t => t.kind !== "direct").length;
-  $("summary").innerHTML = `
-    <div class="stat"><div class="lbl">Totaal</div><div class="val">${total}</div></div>
-    <div class="stat"><div class="lbl">Match</div><div class="val">${matched}</div></div>
-    <div class="stat warn"><div class="lbl">Bedrag-mismatch</div><div class="val">${partial}</div></div>
-    <div class="stat bad"><div class="lbl">Geen match</div><div class="val">${unmatched}</div></div>
-    <div class="stat tussen"><div class="lbl">Mollie / Pay.nl</div><div class="val">${tussen}</div></div>
-  `;
+  const t = state.transactions;
+  const tel = (st) => t.filter(x => x.kind === "direct" && x.match && x.match.status === st).length;
+  $("summary").innerHTML =
+    "<div class='stat'><div class='lbl'>Betalingen</div><div class='val'>" + t.length + "</div></div>" +
+    "<div class='stat'><div class='lbl'>Zeker</div><div class='val'>" + tel("zeker") + "</div></div>" +
+    "<div class='stat warn'><div class='lbl'>Controleren</div><div class='val'>" + (tel("controleren") + tel("kandidaten") + tel("opzoeken")) + "</div></div>" +
+    "<div class='stat bad'><div class='lbl'>Geen match</div><div class='val'>" + tel("geen") + "</div></div>" +
+    "<div class='stat tussen'><div class='lbl'>Mollie / Pay.nl</div><div class='val'>" + t.filter(x => x.kind !== "direct").length + "</div></div>";
 
   const tbody = $("txBody");
   tbody.innerHTML = "";
-  for (let i = 0; i < state.transactions.length; i++) {
-    const tx = state.transactions[i];
-    tbody.appendChild(renderRow(tx, i));
-  }
+  for (let i = 0; i < t.length; i++) tbody.appendChild(renderRow(t[i], i));
+  werkSelectieBij();
 }
 
 function renderRow(tx, idx) {
   const tr = document.createElement("tr");
-  // Status-badge + match-info
-  let badge, info;
-  if (tx.kind === "mollie") {
-    badge = `<span class="badge tussen">Mollie 1220</span>`;
-    info = `<div class="match-info">Tussenrekening — handmatig uitsplitsen.</div>`;
-  } else if (tx.kind === "paynl") {
-    badge = `<span class="badge tussen">Pay.nl 2030</span>`;
-    info = `<div class="match-info">Tussenrekening — handmatig uitsplitsen.</div>`;
+  let badge = "", info = "", vinkje = "";
+
+  if (tx.geboekt) {
+    badge = "<span class='badge ok'>Geboekt</span>";
+    info = "<div class='match-info'>" + escapeHtml(tx.geboekt) + "</div>";
+  } else if (tx.kind === "mollie" || tx.kind === "paynl") {
+    badge = "<span class='badge tussen'>" + (tx.kind === "mollie" ? "Mollie 1220" : "Pay.nl 2030") + "</span>";
+    info = "<div class='match-info'>Tussenrekening — de losse orders zitten niet in de afschriftregel, dus dit moet handmatig worden uitgesplitst.</div>";
   } else if (!tx.match) {
-    badge = `<span class="badge pending">Bezig…</span>`;
-    info = "";
-  } else if (tx.match.status === "match") {
-    badge = `<span class="badge ok">Match</span>`;
-    const b = tx.match.best;
-    info = `<div class="match-info">
-      <span class="order-id">Order ${escapeHtml(b.orderId)}</span> · ${escapeHtml(b.companyName || "—")} · totaal ${fmtEur(b.totalIncl)}
-    </div>`;
-  } else if (tx.match.status === "match-amount-mismatch") {
-    badge = `<span class="badge partial">Bedrag wijkt af</span>`;
-    const b = tx.match.best;
-    const diff = tx.amount - b.totalIncl;
-    info = `<div class="match-info">
-      <span class="order-id">Order ${escapeHtml(b.orderId)}</span> · ${escapeHtml(b.companyName || "—")} · order €${b.totalIncl.toFixed(2)} (${diff > 0 ? "+" : ""}${diff.toFixed(2)})
-    </div>`;
-  } else if (tx.match.status === "no-match") {
-    badge = `<span class="badge miss">Nrs. niet gevonden</span>`;
-    info = `<div class="match-info">Kandidaten: ${tx.match.candidates.map(escapeHtml).join(", ")}</div>`;
+    badge = "<span class='badge pending'>Bezig…</span>";
   } else {
-    badge = `<span class="badge miss">Geen ordernr.</span>`;
-    info = `<div class="match-info">Geen 5-7-cijferig nummer in afschriftregel.</div>`;
+    const u = STATUS_UITERLIJK[tx.match.status] || STATUS_UITERLIJK.geen;
+    badge = "<span class='badge " + u.klasse + "'>" + u.tekst + "</span>";
+    const k = tx.match.kandidaten || [];
+    if (k.length > 1) {
+      // Meerdere posten passen. Laat kiezen in plaats van er zelf één aanwijzen.
+      info = "<div class='match-info'><select class='kiesFactuur' data-idx='" + idx + "' style='max-width:100%;font-size:12px;padding:4px 6px;border:1px solid var(--border,#d5d9e0);border-radius:6px'>" +
+        "<option value=''>— kies een factuur —</option>" +
+        k.map(p => "<option value='" + p.InvoiceId + "'" + (String(p.InvoiceId) === tx.gekozen ? " selected" : "") + ">" +
+          "Factuur " + p.InvoiceId + " · " + escapeHtml((debiteurNamen[String(p.DebtorId)] || {}).naam || ("debiteur " + p.DebtorId)) +
+          " · " + fmtEur(p.AmountOutstanding) + "</option>").join("") +
+        "</select><div style='margin-top:4px'>" + escapeHtml(tx.match.reden) + "</div></div>";
+    } else if (tx.match.beste) {
+      info = "<div class='match-info'>" + postLabel(tx.match.beste) + "<div style='margin-top:3px'>" + escapeHtml(tx.match.reden) + "</div></div>";
+    } else {
+      info = "<div class='match-info'>" + escapeHtml(tx.match.reden) + "</div>";
+    }
+    if (tx.gekozen) vinkje = "<input type='checkbox' class='kiesRij' data-idx='" + idx + "'" + (tx.kies ? " checked" : "") + ">";
   }
-  // Pre-fill klantcode-input met de gematchte DebtorId
-  const klantcode = (tx.match?.best?.debtorId) || "";
-  tr.innerHTML = `
-    <td class="date">${escapeHtml(tx.date || "—")}</td>
-    <td class="amount">${fmtEur(tx.amount)}</td>
-    <td class="desc">${escapeHtml(tx.description || "—")}</td>
-    <td class="match">${badge}</td>
-    <td class="match">${info}</td>
-    <td>
-      <input type="text" class="klantcode" data-idx="${idx}" value="${escapeHtml(klantcode)}" placeholder="bv. 48614330">
-    </td>
-  `;
-  tr.querySelector(".klantcode").addEventListener("input", (e) => {
-    const i = parseInt(e.target.dataset.idx, 10);
-    if (!state.transactions[i].userOverride) state.transactions[i].userOverride = {};
-    state.transactions[i].userOverride.debtorId = e.target.value.trim();
+
+  const tp = (tx.match && tx.match.tegenpartij) || {};
+  tr.innerHTML =
+    "<td>" + vinkje + "</td>" +
+    "<td class='date'>" + escapeHtml(tx.date || "—") + "</td>" +
+    "<td class='amount'>" + fmtEur(tx.amount) + "</td>" +
+    "<td class='desc'>" + (tp.naam ? "<b>" + escapeHtml(tp.naam) + "</b><br>" : "") +
+      "<span style='color:var(--muted,#6b7280)'>" + escapeHtml((tx.description || "—").slice(0, 160)) + "</span></td>" +
+    "<td class='match'>" + badge + "</td>" +
+    "<td class='match'>" + info + "</td>";
+
+  const cb = tr.querySelector(".kiesRij");
+  if (cb) cb.addEventListener("change", (e) => {
+    state.transactions[Number(e.target.dataset.idx)].kies = e.target.checked;
+    werkSelectieBij();
+  });
+  const sel = tr.querySelector(".kiesFactuur");
+  if (sel) sel.addEventListener("change", (e) => {
+    const i = Number(e.target.dataset.idx);
+    state.transactions[i].gekozen = e.target.value;
+    if (!e.target.value) state.transactions[i].kies = false;
+    renderResults();
   });
   return tr;
+}
+
+// ─── Selectie ───────────────────────────────────────────────────────
+function selectie() {
+  return state.transactions.filter(t => t.kies && t.gekozen && !t.geboekt);
+}
+function werkSelectieBij() {
+  const s = selectie();
+  const totaal = s.reduce((n, t) => n + Number(t.amount), 0);
+  const kiesbaar = state.transactions.filter(t => t.gekozen && !t.geboekt).length;
+  $("selInfo").textContent = s.length
+    ? s.length + " van " + kiesbaar + " aangevinkt — samen " + fmtEur(totaal)
+    : (kiesbaar ? "niets aangevinkt van de " + kiesbaar + " koppelbare betalingen" : "nog niets te koppelen");
+  $("boekBtn").disabled = !s.length;
+  $("boekBtn").textContent = s.length ? "Boek " + s.length + " betaling" + (s.length === 1 ? "" : "en") + " (" + fmtEur(totaal) + ")"
+                                      : "Boek de geselecteerde betalingen";
+  const alles = $("kiesAlles");
+  if (alles) alles.checked = kiesbaar > 0 && s.length === kiesbaar;
+}
+$("kiesAlles").addEventListener("change", (e) => {
+  for (const t of state.transactions) if (t.gekozen && !t.geboekt) t.kies = e.target.checked;
+  renderResults();
+});
+$("kiesZeker").addEventListener("click", () => {
+  for (const t of state.transactions) t.kies = !t.geboekt && !!t.gekozen && t.match && t.match.status === "zeker";
+  renderResults();
+});
+$("kiesGeen").addEventListener("click", () => {
+  for (const t of state.transactions) t.kies = false;
+  renderResults();
+});
+
+// ─── Boeken ─────────────────────────────────────────────────────────
+// Twee stappen: eerst van factuur naar order (AddPayment werkt op een order),
+// dan pas boeken. Een factuur zonder ordernummer kan niet automatisch en
+// wordt met naam en toenaam teruggemeld in plaats van stil overgeslagen.
+$("boekBtn").addEventListener("click", async () => {
+  const rijen = selectie();
+  if (!rijen.length) return;
+  const sleutel = await vraagBeheersleutel();
+  if (!sleutel) return;
+
+  const totaal = rijen.reduce((n, t) => n + Number(t.amount), 0);
+  const zeker = await bevestigBoeken(rijen.length, totaal);
+  if (!zeker) return;
+
+  $("boekBtn").disabled = true;
+  showStatus($("actionStatus"), "Ordernummers opzoeken bij " + rijen.length + " facturen…", "info");
+
+  // Stap 1 — factuur → order
+  const paren = rijen.map(t => {
+    const post = (t.match.kandidaten || []).find(p => String(p.InvoiceId) === t.gekozen) || t.match.beste;
+    return { invoiceId: t.gekozen, debtorId: post ? post.DebtorId : null, tx: t };
+  });
+  const orders = {};
+  for (let i = 0; i < paren.length; i += 25) {
+    const portie = paren.slice(i, i + 25);
+    const r = await fetch(WORKER + "/bank/factuurorder", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ paren: portie.map(p => ({ invoiceId: p.invoiceId, debtorId: p.debtorId })) }) });
+    const j = await r.json();
+    Object.assign(orders, j.facturen || {});
+  }
+
+  const teBoeken = [], geenOrder = [];
+  for (const p of paren) {
+    const o = orders[String(p.invoiceId)];
+    if (o && o.orderNr) {
+      teBoeken.push({ orderNr: o.orderNr, invoiceId: p.invoiceId, bedrag: Number(p.tx.amount), tx: p.tx,
+        omschrijving: "Bankbetaling " + (p.tx.date || "") + " — afschrift " + (state.statementNr || state.fileName) + " — factuur " + p.invoiceId });
+    } else {
+      geenOrder.push({ invoiceId: p.invoiceId, reden: (o && o.fout) || "geen ordernummer op deze factuur" });
+    }
+  }
+
+  // Stap 2 — boeken
+  let gelukt = 0; const fouten = [];
+  for (let i = 0; i < teBoeken.length; i += 30) {
+    const portie = teBoeken.slice(i, i + 30);
+    showStatus($("actionStatus"), "Boeken… (" + Math.min(i + 30, teBoeken.length) + " van " + teBoeken.length + ")", "info");
+    const r = await fetch(WORKER + "/bank/boeken", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-DP-Admin": sleutel },
+      body: JSON.stringify({ door: (localStorage.getItem("fp.email") || ""),
+        regels: portie.map(x => ({ orderNr: x.orderNr, invoiceId: x.invoiceId, bedrag: x.bedrag, omschrijving: x.omschrijving })) }) });
+    if (r.status === 401) { showStatus($("actionStatus"), "De beheersleutel wordt niet geaccepteerd. Boeken is gestopt; er is niets geboekt in deze ronde.", "error"); localStorage.removeItem("dp.adminkey"); $("boekBtn").disabled = false; return; }
+    const j = await r.json();
+    for (const res of (j.resultaten || [])) {
+      const bij = portie.find(x => String(x.orderNr) === String(res.orderNr) && String(x.invoiceId) === String(res.invoiceId));
+      if (res.ok && bij) { bij.tx.geboekt = "Geboekt op order " + res.orderNr + " (factuur " + res.invoiceId + ")"; bij.tx.kies = false; gelukt++; }
+      else fouten.push("factuur " + res.invoiceId + ": " + (res.error || "onbekende fout"));
+    }
+  }
+
+  let bericht = gelukt + " betaling" + (gelukt === 1 ? "" : "en") + " geboekt in Logic4.";
+  if (geenOrder.length) bericht += " " + geenOrder.length + " niet geboekt omdat er geen ordernummer bij de factuur staat: " +
+    geenOrder.slice(0, 5).map(g => g.invoiceId).join(", ") + (geenOrder.length > 5 ? " en meer" : "") + ". Die moeten handmatig.";
+  if (fouten.length) bericht += " Mislukt: " + fouten.slice(0, 4).join("; ") + ".";
+  showStatus($("actionStatus"), bericht, fouten.length ? "error" : "ok");
+  try { if (window.fpLog) window.fpLog("bankbetalingen-geboekt", gelukt + " betalingen, afschrift " + (state.statementNr || state.fileName)); } catch (e) {}
+
+  // De openstaande posten kloppen nu niet meer: vers ophalen en opnieuw koppelen.
+  if (gelukt) { try { await haalOpenstaand(true); } catch (e) {} }
+  renderResults();
+  $("boekBtn").disabled = false;
+});
+
+// Eigen venstertjes: window.prompt en window.confirm bestaan niet in de app
+// (Electron kent prompt niet), dus een knop die daarop leunt doet niets.
+function vensterje(titel, uitleg, invoer, okTekst, gevaar) {
+  return new Promise(function (klaar) {
+    const ov = document.createElement("div");
+    ov.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px";
+    ov.innerHTML = "<div style='background:#fff;border-radius:12px;padding:22px 24px;max-width:470px;width:100%;font-family:inherit;box-shadow:0 12px 40px rgba(0,0,0,.25)'>" +
+      "<div style='font-weight:700;font-size:15px;margin-bottom:6px'>" + escapeHtml(titel) + "</div>" +
+      "<div style='color:#6b7280;font-size:12.5px;line-height:1.5;margin-bottom:14px'>" + uitleg + "</div>" +
+      (invoer ? "<input id='vjIn' type='password' style='width:100%;border:1px solid #d5d9e0;border-radius:8px;padding:10px 11px;font:inherit;font-size:14px'>" : "") +
+      "<div style='display:flex;gap:10px;justify-content:flex-end;margin-top:16px'>" +
+        "<button id='vjNee' style='border:1px solid #d5d9e0;background:#fff;border-radius:8px;padding:9px 15px;font:inherit;font-size:13px;cursor:pointer'>Annuleren</button>" +
+        "<button id='vjJa' style='border:0;border-radius:8px;padding:9px 17px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;color:#fff;background:" + (gevaar ? "#b91c1c" : "#144734") + "'>" + escapeHtml(okTekst || "OK") + "</button>" +
+      "</div></div>";
+    document.body.appendChild(ov);
+    const inp = ov.querySelector("#vjIn");
+    const af = (v) => { document.removeEventListener("keydown", toets, true); ov.remove(); klaar(v); };
+    function toets(e) {
+      if (e.key === "Escape") { e.preventDefault(); af(invoer ? null : false); }
+      if (e.key === "Enter") { e.preventDefault(); af(invoer ? inp.value : true); }
+    }
+    document.addEventListener("keydown", toets, true);
+    ov.querySelector("#vjJa").addEventListener("click", () => af(invoer ? inp.value : true));
+    ov.querySelector("#vjNee").addEventListener("click", () => af(invoer ? null : false));
+    if (inp) setTimeout(() => inp.focus(), 40);
+  });
+}
+async function vraagBeheersleutel() {
+  if (adminKey()) return adminKey();
+  const k = await vensterje("Beheersleutel nodig",
+    "Betalingen wegschrijven verandert de administratie. Die stap zit achter de beheersleutel, dezelfde als bij het aanmaken van een inkooporder. Je hoeft hem maar één keer per computer in te voeren.",
+    true, "Bewaren en doorgaan", false);
+  if (!k) return null;
+  localStorage.setItem("dp.adminkey", k.trim());
+  return k.trim();
+}
+function bevestigBoeken(aantal, totaal) {
+  return vensterje("Nu " + aantal + " betaling" + (aantal === 1 ? "" : "en") + " boeken?",
+    "Samen <b>" + fmtEur(totaal) + "</b>. De betalingen worden op de bijbehorende orders in Logic4 gezet. " +
+    "Dit is niet met een knop terug te draaien — een verkeerde koppeling moet handmatig worden rechtgezet.",
+    false, "Ja, boeken", true);
 }
 
 // ─── Export-knoppen ────────────────────────────────────────────────
 $("exportBtn").addEventListener("click", () => {
   const rows = state.transactions.map(t => {
-    const debtorId = t.userOverride?.debtorId || t.match?.best?.debtorId || "";
-    const orderId = t.match?.best?.orderId || "";
-    const company = t.match?.best?.companyName || "";
-    const tussen = t.kind === "mollie" ? "Mollie 1220" : t.kind === "paynl" ? "Pay.nl 2030" : "";
-    return [t.date, t.amount.toFixed(2), debtorId, orderId, company, tussen, (t.description || "").replace(/[\r\n;]/g, " ")];
+    const post = t.match && t.match.beste;
+    return [t.date, Number(t.amount).toFixed(2),
+      (t.match && t.match.tegenpartij && t.match.tegenpartij.naam) || "",
+      t.gekozen || "", post ? post.DebtorId : "",
+      post ? ((debiteurNamen[String(post.DebtorId)] || {}).naam || "") : "",
+      t.kind !== "direct" ? (t.kind === "mollie" ? "Mollie 1220" : "Pay.nl 2030") : ((t.match && t.match.status) || ""),
+      t.geboekt ? "geboekt" : "",
+      (t.description || "").replace(/[\r\n;]/g, " ")];
   });
-  const header = ["Datum", "Bedrag", "Klantcode", "Order", "Bedrijf", "Tussenrekening", "Afschriftregel"];
-  const csv = [header, ...rows].map(r => r.map(c => /[;"\n]/.test(String(c)) ? `"${String(c).replace(/"/g,'""')}"` : String(c)).join(";")).join("\n");
+  const header = ["Datum", "Bedrag", "Tegenpartij", "Factuur", "Klantcode", "Naam in Logic4", "Status", "Geboekt", "Afschriftregel"];
+  const csv = [header, ...rows].map(r => r.map(c => /[;"\n]/.test(String(c)) ? '"' + String(c).replace(/"/g, '""') + '"' : String(c)).join(";")).join("\n");
   navigator.clipboard.writeText(csv).then(() => {
-    showStatus($("actionStatus"), `✓ ${rows.length} regels naar klembord (CSV-formaat, separator ';' — plak in Excel).`, "ok");
-  }).catch(e => {
-    showStatus($("actionStatus"), "Klembord niet beschikbaar: " + e.message, "error");
-  });
+    showStatus($("actionStatus"), rows.length + " regels naar het klembord (CSV, scheidingsteken ';' — plak in Excel).", "ok");
+  }).catch(e => showStatus($("actionStatus"), "Klembord niet beschikbaar: " + e.message, "error"));
 });
 
 $("exportJsonBtn").addEventListener("click", () => {
   const data = state.transactions.map(t => ({
-    date: t.date,
-    amount: t.amount,
-    description: t.description,
-    kind: t.kind,
-    debtorId: t.userOverride?.debtorId || t.match?.best?.debtorId || null,
-    orderId: t.match?.best?.orderId || null,
-    company: t.match?.best?.companyName || null,
-    matchStatus: t.match?.status || (t.kind !== "direct" ? "tussenrekening" : "pending"),
+    datum: t.date, bedrag: t.amount, omschrijving: t.description,
+    tegenpartij: (t.match && t.match.tegenpartij) || null,
+    soort: t.kind, status: (t.match && t.match.status) || "tussenrekening",
+    factuur: t.gekozen || null, reden: (t.match && t.match.reden) || null, geboekt: t.geboekt || null,
   }));
   navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(() => {
-    showStatus($("actionStatus"), `✓ ${data.length} regels naar klembord (JSON).`, "ok");
+    showStatus($("actionStatus"), data.length + " regels naar het klembord (JSON).", "ok");
   });
 });
 
 $("resetBtn").addEventListener("click", () => {
-  state.transactions = [];
-  state.fileName = "";
-  state.iban = "";
-  state.statementNr = "";
+  state.transactions = []; state.fileName = ""; state.iban = ""; state.statementNr = "";
   $("resultCard").classList.add("hidden");
-  $("dropStatus").innerHTML = "";
-  $("actionStatus").innerHTML = "";
+  $("dropStatus").innerHTML = ""; $("actionStatus").innerHTML = "";
   fileInput.value = "";
 });
 
@@ -625,26 +778,53 @@ $("resetBtn").addEventListener("click", () => {
 function loadBankDemo() {
   const now = new Date();
   const d = (n) => { const x = new Date(now); x.setDate(x.getDate() - n); return x.toISOString().slice(0, 10); };
-  const M = (orderId, companyName, totalIncl, amountMatch) =>
-    ({ status: amountMatch ? "match" : "match-amount-mismatch", candidates: [String(orderId)],
-       best: { orderId: String(orderId), debtorId: "8789" + orderId % 10000, companyName, totalIncl, amountMatch },
-       all: [] });
+  // Verzonnen openstaande posten, zodat de echte koppellogica er overheen kan.
+  const posten = [
+    { InvoiceId: 6515801, DebtorId: 9001, TotalAmount: 8450.00, AmountOutstanding: 8450.00, DaysPastDueDate: 12 },
+    { InvoiceId: 6515804, DebtorId: 9002, TotalAmount: 5499.00, AmountOutstanding: 5499.00, DaysPastDueDate: 0 },
+    { InvoiceId: 6515803, DebtorId: 9003, TotalAmount: 12600.00, AmountOutstanding: 12600.00, DaysPastDueDate: 40 },
+    { InvoiceId: 6515805, DebtorId: 9004, TotalAmount: 2299.00, AmountOutstanding: 2299.00, DaysPastDueDate: 3 },
+    { InvoiceId: 6515806, DebtorId: 9005, TotalAmount: 2299.00, AmountOutstanding: 2299.00, DaysPastDueDate: 8 },
+  ];
+  debiteurNamen = {
+    "9001": { naam: "Spahuis Nederland", plaats: "Apeldoorn" },
+    "9002": { naam: "R. Jansen", plaats: "Nijkerk" },
+    "9003": { naam: "Aqua Pools & Spas", plaats: "Zwolle" },
+    "9004": { naam: "Wellness Wereld", plaats: "Ede" },
+    "9005": { naam: "Tuincentrum de Veluwe", plaats: "Barneveld" },
+  };
+  openIndex = window.fpBankMatch.bouwIndex(posten);
+  openMeta = { aantal: posten.length, updated: new Date().toISOString(), uitCache: false };
+
   state.fileName = "demo-afschrift.mt940";
   state.iban = "NL12RABO0123456789";
   state.statementNr = "184/1";
   state.openingBalance = { amount: 48210.55 };
   state.closingBalance = { amount: 71354.20 };
+  const tx = (dag, bedrag, naam, remi) => ({
+    date: d(dag), amount: bedrag, currency: "EUR",
+    description: remi, descRaw: "/NAME/" + naam + "/REMI/" + remi,
+    kind: classifyTx({ description: remi }), match: null,
+  });
   state.transactions = [
-    { date: d(0), amount: 8450.00, currency: "EUR", kind: "direct", description: "SPAHUIS NEDERLAND FACTUUR 3515801 SPA RENEW",          descRaw: "", match: M(3515801, "Spahuis Nederland", 8450.00, true) },
-    { date: d(0), amount: 1650.00, currency: "EUR", kind: "direct", description: "R JANSEN AANBETALING ORDER 3515804",                   descRaw: "", match: M(3515804, "R. Jansen", 5499.00, false) },
-    { date: d(1), amount: 12600.00, currency: "EUR", kind: "direct", description: "AQUA POOLS AND SPAS BETALING 3515803",                descRaw: "", match: M(3515803, "Aqua Pools & Spas", 12600.00, true) },
-    { date: d(1), amount: 6118.40, currency: "EUR", kind: "mollie", description: "MOLLIE BV BATCH 2026-07 WEBSHOP",                      descRaw: "", match: null },
-    { date: d(2), amount: 2299.00, currency: "EUR", kind: "direct", description: "WELLNESS WERELD FACT 3515805 LOUNGESET",               descRaw: "", match: M(3515805, "Wellness Wereld", 2299.00, true) },
-    { date: d(2), amount: 540.75,  currency: "EUR", kind: "direct", description: "OVERBOEKING ZONDER KENMERK",                           descRaw: "", match: { status: "no-candidates", candidates: [] } },
-    { date: d(3), amount: 3120.10, currency: "EUR", kind: "paynl",  description: "PAY.NL UITBETALING WEEK 27",                            descRaw: "", match: null },
+    tx(0, 8450.00, "SPAHUIS NEDERLAND BV", "factuur 6515801 spa Renew"),
+    tx(0, 1649.70, "R JANSEN", "aanbetaling factuur 6515804"),
+    tx(1, 12600.00, "AQUA POOLS EN SPAS", "6515803"),
+    tx(1, 6118.40, "MOLLIE B.V.", "MOLLIE BV BATCH 2026-07 WEBSHOP"),
+    tx(2, 2299.00, "TUINCENTRUM DE VELUWE", "betaling loungeset"),
+    tx(2, 540.75, "ONBEKENDE BETALER", "overboeking zonder kenmerk"),
+    tx(3, 3120.10, "PAY.NL", "PAY.NL UITBETALING WEEK 27"),
   ];
+  const platteNamen = {};
+  for (const [id, v] of Object.entries(debiteurNamen)) platteNamen[id] = v.naam;
+  for (const t of state.transactions) {
+    if (t.kind !== "direct") continue;
+    t.match = window.fpBankMatch.bevestig(window.fpBankMatch.koppel(t, openIndex), platteNamen);
+    t.gekozen = t.match.beste ? String(t.match.beste.InvoiceId) : "";
+    t.kies = t.match.status === "zeker";
+  }
   renderResults();
-  showStatus($("dropStatus"), "🎬 Demo — voorbeeld-afschrift met 7 betalingen (3 match, 1 bedrag-mismatch, 1 zonder kenmerk, 2 PSP). Niets wordt geboekt; ververs voor de echte tool.", "ok");
+  showStatus($("dropStatus"), "Demo met 7 betalingen op verzonnen openstaande posten. De koppeling is de echte; er staat geen verbinding met Logic4 open, dus boeken zal niets vinden.", "ok");
   $("resultCard").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 (function initBankDemo(){
