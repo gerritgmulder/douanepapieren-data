@@ -287,9 +287,11 @@
     var knop = el("button", "sm-knop mini", "Koppel \"" + model + "\"");
     knop.type = "button";
     knop.addEventListener("click", async function () {
-      var naar = prompt("Hoe heet \"" + model + "\" in Logic4?\n\n" +
-        "Typ de modelnaam precies zoals hij in de spa-catalogus staat.\n" +
-        "Deze koppeling wordt onthouden en geldt daarna overal.");
+      // window.prompt() bestaat niet in de app (Electron kent het niet): deze
+      // knop deed daardoor niets. voorraad.html levert het invoervenster.
+      var naar = typeof window.askText === "function"
+        ? await window.askText("Hoe heet \"" + model + "\" in Logic4? Typ de modelnaam precies zoals hij in de spa-catalogus staat — deze koppeling wordt onthouden en geldt daarna overal.")
+        : null;
       if (!naar) return;
       knop.disabled = true; knop.textContent = "bezig…";
       var j = await bewaarAlias(model, naar.trim());

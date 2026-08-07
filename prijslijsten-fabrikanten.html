@@ -96,7 +96,9 @@
         <input type="text" id="zoek" placeholder="zoek in alle mappen op naam of omschrijving…" style="min-width:320px;flex:1">
         <button class="primary" id="nieuweMap" type="button">+ Nieuwe map</button>
         <button class="primary" id="kiesBestand" type="button">↑ Bestanden toevoegen</button>
+        <button class="primary" id="kiesMap" type="button">↑ Hele map toevoegen</button>
         <input type="file" id="bestandIn" multiple style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
+        <input type="file" id="mapIn" webkitdirectory directory multiple style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none">
       </div>
 
       <div class="kruimels" id="kruimels"></div>
@@ -112,7 +114,7 @@
         <tbody id="lijst"></tbody>
       </table>
 
-      <div class="sleep" id="sleepzone">Sleep bestanden hierheen om ze in deze map te zetten</div>
+      <div class="sleep" id="sleepzone">Sleep hier bestanden of een hele map naartoe — mappen worden met submappen en al overgenomen</div>
     </div>
   </div>
 </main>
@@ -162,6 +164,48 @@ function melding(soort,tekst){
   if(!tekst){ m.classList.add("hidden"); return; }
   m.className="status-msg "+soort; m.textContent=tekst;
 }
+
+// ─── Vragen stellen ────────────────────────────────────────────────
+// LET OP: window.prompt() bestaat NIET in de app (Electron kent het niet).
+// Een knop die erom vraagt doet dan gewoon niets — precies wat Gretha zag
+// bij 'Nieuwe map', 'hernoem' en de omschrijving (7 aug 2026). Vandaar een
+// eigen venstertje. confirm() werkt wel, maar gaat om dezelfde reden ook
+// hierdoorheen: één manier van vragen door de hele tegel.
+function dialoog(o){
+  return new Promise(function(klaar){
+    const ov=document.createElement("div");
+    ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px";
+    let veld="";
+    if(o.soort==="tekst")
+      veld="<input id='dlgIn' style='width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 11px;font:inherit;font-size:14px' value=\""+esc(o.waarde||"")+"\">";
+    if(o.soort==="keuze")
+      veld="<select id='dlgIn' style='width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 11px;font:inherit;font-size:14px'>"+
+        (o.keuzes||[]).map(k=>"<option value=\""+esc(k.waarde)+"\""+(k.waarde===o.waarde?" selected":"")+">"+esc(k.label)+"</option>").join("")+"</select>";
+    ov.innerHTML="<div style='background:#fff;border-radius:12px;padding:22px 24px;max-width:460px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.25)'>"+
+      "<div style='font-weight:600;color:var(--fonteyn-green);font-size:15px;margin-bottom:"+(o.uitleg?"6px":"12px")+"'>"+esc(o.titel)+"</div>"+
+      (o.uitleg?"<div style='color:var(--muted);font-size:12.5px;line-height:1.45;margin-bottom:12px'>"+esc(o.uitleg)+"</div>":"")+
+      veld+
+      "<div style='display:flex;gap:10px;justify-content:flex-end;margin-top:16px'>"+
+        "<button id='dlgNee' class='mini' style='padding:8px 14px;font-size:13px'>Annuleren</button>"+
+        "<button id='dlgJa' class='primary'"+(o.gevaar?" style='background:var(--bad)'":"")+">"+esc(o.okTekst||"OK")+"</button>"+
+      "</div></div>";
+    document.body.appendChild(ov);
+    const inp=ov.querySelector("#dlgIn");
+    const af=v=>{ document.removeEventListener("keydown",toets,true); ov.remove(); klaar(v); };
+    function toets(e){
+      if(e.key==="Escape"){ e.preventDefault(); af(o.soort==="janee"?false:null); }
+      if(e.key==="Enter"&&o.soort!=="keuze"){ e.preventDefault(); af(o.soort==="janee"?true:(inp?inp.value:true)); }
+    }
+    document.addEventListener("keydown",toets,true);
+    ov.querySelector("#dlgJa").addEventListener("click",()=>af(o.soort==="janee"?true:(inp?inp.value:true)));
+    ov.querySelector("#dlgNee").addEventListener("click",()=>af(o.soort==="janee"?false:null));
+    ov.addEventListener("click",e=>{ if(e.target===ov) af(o.soort==="janee"?false:null); });
+    if(inp) setTimeout(()=>{ inp.focus(); if(inp.select) inp.select(); },40);
+  });
+}
+const vraagTekst =(titel,waarde,uitleg)=>dialoog({soort:"tekst",titel,waarde,uitleg});
+const vraagKeuze =(titel,keuzes,waarde,uitleg)=>dialoog({soort:"keuze",titel,keuzes,waarde,uitleg});
+const vraagJaNee =(titel,uitleg,okTekst,gevaar)=>dialoog({soort:"janee",titel,uitleg,okTekst,gevaar});
 
 // ─── Opslag ────────────────────────────────────────────────────────
 async function laad(){
@@ -323,7 +367,7 @@ function vind(id){ return S.bestanden.find(b=>b.id===id); }
 
 async function hernoemMap(pad){
   const oud=pad.split("/").pop();
-  const nieuw=schoneNaam(prompt("Nieuwe naam voor de map:",oud));
+  const nieuw=schoneNaam(await vraagTekst("Nieuwe naam voor de map",oud));
   if(!nieuw||nieuw===oud) return;
   const ouder=pad.includes("/")?pad.slice(0,pad.lastIndexOf("/")):"";
   const doel=ouder?ouder+"/"+nieuw:nieuw;
@@ -342,9 +386,11 @@ async function hernoemMap(pad){
 
 async function wisMap(pad){
   const onder=alsOnder(pad);
-  if(onder.bestanden.length){
-    if(!confirm("De map '"+pad+"' bevat "+onder.bestanden.length+" bestand(en). Alles definitief verwijderen?")) return;
-  }else if(!confirm("Map '"+pad+"' verwijderen?")) return;
+  const ja=onder.bestanden.length
+    ? await vraagJaNee("Map '"+pad.split("/").pop()+"' verwijderen?",
+        "Er staan "+onder.bestanden.length+" bestand(en) in. Die gaan er allemaal mee weg, ook de oudere versies.","Verwijderen",true)
+    : await vraagJaNee("Map '"+pad.split("/").pop()+"' verwijderen?","Deze map is leeg.","Verwijderen",true);
+  if(!ja) return;
   // Eerst de bestanden zelf uit de opslag, dán het overzicht. Andersom zou een
   // bestand achterblijven dat niemand meer kan vinden maar wel ruimte inneemt.
   const ids=[];
@@ -364,7 +410,8 @@ async function wisMap(pad){
 
 async function hernoemBestand(id){
   const b=vind(id); if(!b) return;
-  const nieuw=schoneNaam(prompt("Nieuwe naam voor dit bestand:",b.naam));
+  const nieuw=schoneNaam(await vraagTekst("Nieuwe naam voor dit bestand",b.naam,
+    "Houd de extensie erachter (.pdf, .xlsx), anders weet de computer niet meer waarmee hij het moet openen."));
   if(!nieuw||nieuw===b.naam) return;
   b.naam=nieuw;
   try{ await bewaar(); melding("ok","Naam gewijzigd."); }catch(e){ melding("bad",e.message); await laad(); }
@@ -373,7 +420,8 @@ async function hernoemBestand(id){
 
 async function notitie(id){
   const b=vind(id); if(!b) return;
-  const n=prompt("Omschrijving (bijvoorbeeld: prijzen geldig vanaf 01.01.2026, incl. vracht):",b.notitie||"");
+  const n=await vraagTekst("Omschrijving bij "+b.naam,b.notitie||"",
+    "Bijvoorbeeld: prijzen geldig vanaf 01.01.2026, incl. vracht.");
   if(n===null) return;
   b.notitie=String(n).trim().slice(0,200);
   try{ await bewaar(); }catch(e){ melding("bad",e.message); await laad(); }
@@ -382,21 +430,22 @@ async function notitie(id){
 
 async function verplaats(id){
   const b=vind(id); if(!b) return;
-  const keuzes=[""].concat(S.mappen.slice().sort((x,y)=>x.localeCompare(y,"nl")));
-  const lijst=keuzes.map((m,i)=>i+" = "+(m||"(hoofdmap)")).join("\n");
-  const k=prompt("Naar welke map?\n\n"+lijst+"\n\nTyp het nummer:","");
-  if(k===null) return;
-  const i=Number(k);
-  if(!(i>=0&&i<keuzes.length)){ melding("bad","Dat nummer staat niet in de lijst."); return; }
-  b.map=keuzes[i];
+  const keuzes=[{waarde:"",label:"— hoofdmap —"}].concat(
+    S.mappen.slice().sort((x,y)=>x.localeCompare(y,"nl")).map(m=>({waarde:m,label:m})));
+  if(keuzes.length===1){ melding("bad","Er zijn nog geen mappen om naartoe te verplaatsen. Maak er eerst een aan."); return; }
+  const naar=await vraagKeuze("'"+b.naam+"' verplaatsen naar",keuzes,b.map||"");
+  if(naar===null||naar===(b.map||"")) return;
+  b.map=naar;
   try{ await bewaar(); melding("ok","Verplaatst naar "+(b.map||"de hoofdmap")+"."); }catch(e){ melding("bad",e.message); await laad(); }
   teken();
 }
 
 async function wisBestand(id){
   const b=vind(id); if(!b) return;
-  const n=1+(b.versies||[]).length;
-  if(!confirm("'"+b.naam+"' verwijderen?"+(n>1?" (inclusief "+(n-1)+" oudere versie(s))":""))) return;
+  const n=(b.versies||[]).length;
+  const ja=await vraagJaNee("'"+b.naam+"' verwijderen?",
+    n?"Inclusief "+n+" oudere versie"+(n===1?"":"s")+".":"","Verwijderen",true);
+  if(!ja) return;
   const ids=[b.id].concat((b.versies||[]).map(v=>v.id));
   try{
     await wisUitOpslag(ids);
@@ -444,7 +493,8 @@ async function haalOpen(id,naam,downloaden){
 
 // ─── Toevoegen ─────────────────────────────────────────────────────
 document.getElementById("nieuweMap").addEventListener("click",async ()=>{
-  const naam=schoneNaam(prompt("Naam van de nieuwe map (bijvoorbeeld de leverancier of de fabriek):",""));
+  const naam=schoneNaam(await vraagTekst("Naam van de nieuwe map","",
+    "Bijvoorbeeld de leverancier of de fabriek."+(hier?" Komt te staan in "+hier+".":"")));
   if(!naam) return;
   const pad=hier?hier+"/"+naam:naam;
   if(S.mappen.includes(pad)){ melding("bad","Die map bestaat hier al."); return; }
@@ -457,38 +507,109 @@ document.getElementById("kiesBestand").addEventListener("click",()=>document.get
 document.getElementById("bestandIn").addEventListener("change",e=>{
   const f=Array.from(e.target.files||[]);
   e.target.value="";
-  if(f.length) upload(f);
+  if(f.length) upload(f.map(x=>({file:x,submap:""})));
 });
+// Een hele map van de computer erin zetten. De browser geeft dan per bestand
+// het pad binnen die map mee (webkitRelativePath), en daar bouwen we de
+// mappen mee na.
+document.getElementById("kiesMap").addEventListener("click",()=>document.getElementById("mapIn").click());
+document.getElementById("mapIn").addEventListener("change",e=>{
+  const f=Array.from(e.target.files||[]);
+  e.target.value="";
+  if(f.length) upload(f.map(x=>({file:x,submap:mapVanPad(x.webkitRelativePath||"")})));
+});
+function mapVanPad(rel){
+  const d=String(rel||"").split("/").slice(0,-1).map(schoneNaam).filter(Boolean);
+  return d.join("/");
+}
 
+// Slepen. Gretha sleepte een hele map naar binnen en kreeg te horen dat
+// "4 Seasons Outdoor B.V" een V-bestand was: de punt in de bedrijfsnaam werd
+// als extensie gelezen (7 aug 2026). Een map is dan ook geen bestand — die
+// moet worden uitgelopen. Dat gebeurt hieronder, met mappen en al.
 const zone=document.getElementById("sleepzone");
 ["dragenter","dragover"].forEach(t=>zone.addEventListener(t,e=>{ e.preventDefault(); zone.classList.add("over"); }));
 ["dragleave","drop"].forEach(t=>zone.addEventListener(t,e=>{ e.preventDefault(); zone.classList.remove("over"); }));
-zone.addEventListener("drop",e=>{
-  const f=Array.from((e.dataTransfer&&e.dataTransfer.files)||[]);
-  if(f.length) upload(f);
+zone.addEventListener("drop",async e=>{
+  e.preventDefault();
+  melding("bezig","Bezig met inlezen…");
+  const lijst=await sleepUitpakken(e.dataTransfer);
+  if(!lijst.length){ melding("bad","Hier zat niets in dat ik kan inlezen."); return; }
+  upload(lijst);
 });
+
+// Wat er gesleept is uitpakken tot een platte lijst {file, submap}. Mappen
+// worden uitgelopen, ook mappen in mappen.
+async function sleepUitpakken(dt){
+  const items=dt&&dt.items?Array.from(dt.items):[];
+  const wortels=items.map(i=>i.webkitGetAsEntry&&i.webkitGetAsEntry()).filter(Boolean);
+  if(!wortels.length) return Array.from((dt&&dt.files)||[]).map(f=>({file:f,submap:""}));
+  const uit=[];
+  for(const w of wortels) await loopDoor(w,"",uit);
+  return uit;
+}
+function loopDoor(entry,submap,uit){
+  return new Promise(klaar=>{
+    if(entry.isFile){
+      entry.file(f=>{ uit.push({file:f,submap}); klaar(); },()=>klaar());
+      return;
+    }
+    if(!entry.isDirectory){ klaar(); return; }
+    const diep=submap?submap+"/"+schoneNaam(entry.name):schoneNaam(entry.name);
+    const lezer=entry.createReader();
+    const alles=[];
+    // readEntries geeft per keer maar een deel terug; doorlezen tot leeg.
+    const lees=()=>lezer.readEntries(async batch=>{
+      if(!batch.length){
+        for(const kind of alles) await loopDoor(kind,diep,uit);
+        klaar(); return;
+      }
+      alles.push(...batch); lees();
+    },()=>klaar());
+    lees();
+  });
+}
 
 function nieuwId(naam){
   const ext=String(naam).split(".").pop().toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,5)||"bin";
   return Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8)+"."+ext;
 }
+function extensieVan(naam){
+  const n=String(naam);
+  const p=n.lastIndexOf(".");
+  // Geen punt, of een punt in de naam zonder echte extensie erachter
+  // ("4 Seasons Outdoor B.V") — dat is geen bestandstype.
+  if(p<1||p===n.length-1) return "";
+  return n.slice(p+1).toLowerCase();
+}
+function zorgVoorMap(pad){
+  if(!pad) return;
+  const delen=pad.split("/");
+  let op="";
+  for(const d of delen){
+    op=op?op+"/"+d:d;
+    if(!S.mappen.includes(op)) S.mappen.push(op);
+  }
+}
 
+// bestanden = [{file, submap}] — submap is het pad binnen de map die je
+// sleept, "" voor losse bestanden.
 async function upload(bestanden){
-  const knop=document.getElementById("kiesBestand");
-  knop.disabled=true;
+  const knoppen=[document.getElementById("kiesBestand"),document.getElementById("kiesMap")];
+  knoppen.forEach(k=>k.disabled=true);
   let gelukt=0;
+  const overgeslagen=[], mislukt=[];
   for(let i=0;i<bestanden.length;i++){
-    const f=bestanden[i];
+    const f=bestanden[i].file, submap=bestanden[i].submap||"";
     melding("bezig","Bezig met uploaden ("+(i+1)+" van "+bestanden.length+"): "+f.name);
-    const ext=String(f.name).split(".").pop().toLowerCase();
-    if(!TOEGESTAAN.includes(ext)){
-      melding("bad","'"+f.name+"' is een "+ext.toUpperCase()+"-bestand. Zet er een PDF, Excel of Word van, dan kan iedereen het openen.");
-      break;
-    }
-    if(f.size>24*1024*1024){
-      melding("bad","'"+f.name+"' is "+mb(f.size)+" en daarmee te groot (maximaal 24 MB). Bij een scan helpt het om 'm kleiner op te slaan.");
-      break;
-    }
+    const ext=extensieVan(f.name);
+    // Eén onbruikbaar bestand mag de rest niet tegenhouden: bij een map met
+    // vijftig lijsten stopte de hele stapel op de eerste die niet paste.
+    // Bewust niet zeggen wélk type het dan is: bij "4 Seasons Outdoor B.V"
+    // leest de computer "V" als bestandstype, en dan staat er onzin.
+    if(!TOEGESTAAN.includes(ext)){ overgeslagen.push(f.name); continue; }
+    if(f.size>24*1024*1024){ overgeslagen.push(f.name+" ("+mb(f.size)+", te groot)"); continue; }
+
     const id=nieuwId(f.name);
     try{
       const r=await fetch(WORKER+"/prijslijst/bestand?id="+encodeURIComponent(id),{
@@ -497,29 +618,42 @@ async function upload(bestanden){
         const t=await r.text().catch(()=>"");
         throw new Error("HTTP "+r.status+(t?" — "+t.slice(0,120):""));
       }
-    }catch(e){ melding("bad","Uploaden van '"+f.name+"' faalde: "+e.message); break; }
+    }catch(e){ mislukt.push(f.name+": "+e.message); continue; }
 
-    // Bestaat er in deze map al een bestand met dezelfde naam? Dan is dit een
+    const doelMap=[hier,submap].filter(Boolean).join("/");
+    zorgVoorMap(doelMap);
+
+    // Staat er in die map al een bestand met dezelfde naam? Dan is dit een
     // nieuwe versie. De oude blijft staan, want bij prijslijsten moet je
     // kunnen terugzien welke prijs wanneer gold.
-    const bestaand=S.bestanden.find(b=>(b.map||"")===hier&&String(b.naam).toLowerCase()===String(f.name).toLowerCase());
+    const bestaand=S.bestanden.find(b=>(b.map||"")===doelMap&&String(b.naam).toLowerCase()===String(f.name).toLowerCase());
     if(bestaand){
       bestaand.versies=(bestaand.versies||[]);
       bestaand.versies.unshift({id:bestaand.id,naam:bestaand.naam,bytes:bestaand.bytes,op:bestaand.op,door:bestaand.door});
       bestaand.id=id; bestaand.bytes=f.size; bestaand.op=new Date().toISOString(); bestaand.door=IK;
     }else{
-      S.bestanden.push({id,naam:f.name,map:hier,bytes:f.size,op:new Date().toISOString(),door:IK,notitie:""});
+      S.bestanden.push({id,naam:f.name,map:doelMap,bytes:f.size,op:new Date().toISOString(),door:IK,notitie:""});
     }
     gelukt++;
   }
+
   if(gelukt){
     try{
       await bewaar();
-      melding("ok",gelukt+" bestand"+(gelukt===1?"":"en")+" toegevoegd aan "+(hier||"de hoofdmap")+".");
       try{ if(window.fpLog) window.fpLog("prijslijst-toegevoegd",gelukt+" bestand(en) in "+(hier||"hoofdmap")); }catch(e){}
-    }catch(e){ melding("bad","De bestanden staan er wel, maar het overzicht kon niet worden bijgewerkt: "+e.message); await laad(); }
+    }catch(e){
+      melding("bad","De bestanden staan er wel, maar het overzicht kon niet worden bijgewerkt: "+e.message);
+      await laad(); knoppen.forEach(k=>k.disabled=false); teken(); return;
+    }
   }
-  knop.disabled=false;
+  // Eén nette afloop: wat erin staat, en wat niet — met de reden erbij.
+  let tekst=gelukt?(gelukt+" bestand"+(gelukt===1?"":"en")+" toegevoegd aan "+(hier||"de hoofdmap")+"."):"Er is niets toegevoegd.";
+  if(overgeslagen.length) tekst+=" Overgeslagen ("+overgeslagen.length+"): "+overgeslagen.slice(0,4).join(", ")+
+    (overgeslagen.length>4?" en nog "+(overgeslagen.length-4):"")+". Alleen PDF, Excel en Word passen hier, tot 24 MB per stuk.";
+  if(mislukt.length) tekst+=" Mislukt ("+mislukt.length+"): "+mislukt.slice(0,2).join("; ")+".";
+  melding(mislukt.length?"bad":(overgeslagen.length?"bezig":"ok"),tekst);
+
+  knoppen.forEach(k=>k.disabled=false);
   teken();
 }
 

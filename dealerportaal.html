@@ -245,6 +245,40 @@ async function kvPut(bucket, data){
 let accounts = { dealers: [], contactEmail: "gerrit@fonteyn.nl" };
 let docsData = { docs: [] };
 
+// LET OP: window.prompt() bestaat NIET in de app (Electron kent het niet) —
+// een knop die erom vraagt doet dan gewoon niets. Vandaar een eigen venster.
+// Er staat meteen een voorstel in, want een wachtwoord dat iemand ter plekke
+// verzint is doorgaans het zwakste onderdeel van de hele keten.
+function vraagWachtwoord(email){
+  return new Promise(function(klaar){
+    const woorden=["haven","spa","dennen","water","veluwe","anker","zomer","koers","brug","toren","wolk","steiger"];
+    const kies=()=>woorden[Math.floor(Math.random()*woorden.length)];
+    const voorstel=kies()+"-"+kies()+"-"+String(Math.floor(Math.random()*9000)+1000);
+    const ov=document.createElement("div");
+    ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px";
+    ov.innerHTML="<div style='background:#fff;border-radius:12px;padding:22px 24px;max-width:460px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.25)'>"+
+      "<div style='font-weight:600;color:var(--fonteyn-green);font-size:15px;margin-bottom:6px'>Wachtwoord voor "+esc(email)+"</div>"+
+      "<div style='color:var(--muted);font-size:12.5px;line-height:1.45;margin-bottom:12px'>Minstens 8 tekens. Schrijf het over voordat je opslaat: hierna is het niet meer op te vragen, ook niet door ons. Geef het los van de mail door.</div>"+
+      "<input id='pwInp' style='width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 11px;font:inherit;font-size:14px' value='"+voorstel+"'>"+
+      "<div style='display:flex;gap:10px;justify-content:flex-end;margin-top:16px'>"+
+        "<button id='pwNee' class='rmv' style='padding:8px 14px'>Annuleren</button>"+
+        "<button id='pwJa' class='primary'>Wachtwoord instellen</button>"+
+      "</div></div>";
+    document.body.appendChild(ov);
+    const inp=ov.querySelector("#pwInp");
+    const af=v=>{ document.removeEventListener("keydown",toets,true); ov.remove(); klaar(v); };
+    function toets(e){
+      if(e.key==="Escape"){ e.preventDefault(); af(null); }
+      if(e.key==="Enter"){ e.preventDefault(); af(inp.value); }
+    }
+    document.addEventListener("keydown",toets,true);
+    ov.querySelector("#pwJa").addEventListener("click",()=>af(inp.value));
+    ov.querySelector("#pwNee").addEventListener("click",()=>af(null));
+    ov.addEventListener("click",e=>{ if(e.target===ov) af(null); });
+    setTimeout(()=>{ inp.focus(); inp.select(); },40);
+  });
+}
+
 function renderPartners(){
   const list = accounts.dealers || [];
   $("partnerCount").textContent = list.length;
@@ -307,7 +341,7 @@ function renderPartners(){
   // een hash op, dus ook hier is het daarna niet meer terug te zien.
   document.querySelectorAll(".pwD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
-    const pw = prompt("Wachtwoord voor "+d.email+" (minstens 8 tekens).\n\nSchrijf het even over voordat je op OK klikt: het is hierna niet meer op te vragen.");
+    const pw = await vraagWachtwoord(d.email);
     if (pw===null) return;
     if (String(pw).length < 8){ setStatus("bad","Wachtwoord moet minstens 8 tekens zijn."); return; }
     b.disabled = true; b.textContent = "bezig…";
@@ -318,7 +352,9 @@ function renderPartners(){
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP "+r.status));
       try{ if(window.fpLog) window.fpLog("partner-wachtwoord-gezet",d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
-      setStatus("ok", d.email+" kan nu inloggen op het portaal met dit wachtwoord. Geef het los van de mail door — dan hoeft er geen link meer aan te pas te komen.");
+      // Het wachtwoord één keer teruggeven, want het moet nog doorgegeven
+      // worden en is hierna nergens meer op te vragen.
+      setStatus("ok", d.email+" kan nu inloggen met wachtwoord: "+pw+" — noteer het nu, hierna is het niet meer op te vragen. Geef het los van de mail door.");
     } catch(e){ setStatus("bad","Wachtwoord zetten faalde: "+e.message); }
     b.disabled = false; b.textContent = "wachtwoord";
   }));

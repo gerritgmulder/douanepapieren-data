@@ -189,9 +189,17 @@
 
   /* ═══════════ handelingen ═══════════ */
 
+  // window.prompt() bestaat niet in de app (Electron kent het niet): deze knop
+  // deed daardoor helemaal niets. voorraad.html heeft een eigen invoervenster
+  // (askText); dat gebruiken we hier.
+  function vraagTekst(vraag, waarde) {
+    if (typeof window.askText === "function") return window.askText(vraag, waarde);
+    return Promise.resolve(null);
+  }
+
   async function doeEta(s, knop) {
-    var datum = prompt("Verwachte aankomst zetten op de inkooporderregels van " + (s.vessel || s.ref) +
-      ".\n\nDatum (jjjj-mm-dd):", String(s.eta || "").slice(0, 10));
+    var datum = await vraagTekst("Verwachte aankomst zetten op de inkooporderregels van " + (s.vessel || s.ref) +
+      " — datum (jjjj-mm-dd):", String(s.eta || "").slice(0, 10));
     if (!datum) return;
     knop.disabled = true; knop.textContent = "bezig…";
     var j = await stuur("/voorraad/spa-ontvangst/eta", { ref: s.ref, eta: datum.trim(), door: cfg.email });
