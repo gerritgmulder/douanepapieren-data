@@ -77,6 +77,13 @@ const ALLOWED_BUCKET_PATTERNS = [
   /^signin-\d{4}-\d{2}$/,
   /^activiteit-\d{4}-\d{2}$/,   // activiteitenlogboek (medewerkers), één bucket per maand
   /^partner-activiteit-\d{4}-\d{2}$/,   // partner-activiteitenlogboek (dealers), één bucket per maand
+  // Eén sleutel per specificatiesheet. Alle sheets stonden in de bucket
+  // 'specsheets' bij elkaar, en de foto's zitten als base64 in de sheet zelf.
+  // Daardoor gold de omvangsgrens voor de sóm: vier sheets waren al 16 MB van
+  // de 20, en Demi kon de vijfde niet meer opslaan (Gretha, 6 aug 2026).
+  // Per sheet een eigen sleutel haalt die koppeling weg - een sheet erbij
+  // maakt de bestaande niet zwaarder.
+  /^specsheet-[a-z0-9]{4,24}$/,
 ];
 
 const corsHeaders = {
@@ -3197,8 +3204,11 @@ export default {
       //     MB, dus met een handvol modellen liep Gretha tegen de grens (3 aug
       //     2026). Het scherm zei "bewaard tot 20 MB", de worker weigerde vanaf
       //     1 MB. Die twee staan nu op hetzelfde getal.
+      //   specsheet-<id> — één losse sheet met zijn foto's. 8 MB is ruim voor
+      //     een productfoto, een technische tekening en de icoontjes.
       const RUIM = { geldgoederen: 8, "gg-bevindingen": 8, specsheets: 20 };
-      const limiet = (RUIM[bucket] || 1) * 1024 * 1024;
+      const perSheet = /^specsheet-/.test(bucket) ? 8 : 0;
+      const limiet = (perSheet || RUIM[bucket] || 1) * 1024 * 1024;
       if (body.length > limiet) {
         return reply(413, `Payload too large (max ${limiet / 1024 / 1024} MB)`);
       }

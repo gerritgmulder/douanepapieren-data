@@ -538,10 +538,47 @@ let alles={sheets:[]};      // alle opgeslagen sheets
 let S=leegSheet();          // de sheet waar nu aan gewerkt wordt
 
 // ─── Laden / bewaren ────────────────────────────────────────────────
+/* ── Opslag: één sleutel per sheet ──────────────────────────────────────────
+   Alle sheets stonden samen in de bucket 'specsheets'. De foto's zitten als
+   base64 in de sheet zelf, dus elke keer dat iemand bewaarde ging álles er
+   weer heen. Met vier sheets zat dat op 16 MB van de 20, en kon Demi de
+   vijfde niet meer opslaan.
+
+   Nu staat elke sheet onder zijn eigen sleutel specsheet-<id>, en bevat
+   'specsheets' alleen nog de index: id, naam en model. Een sheet erbij maakt
+   de andere dus niet zwaarder. Bewaren schrijft nog maar één sheet weg in
+   plaats van alles, wat het ook een stuk sneller maakt. */
+const SHEET_URL=id=>BUCKET.replace(/\/specsheets$/,"/specsheet-"+id);
+async function laadSheet(id){
+  const r=await fetch(SHEET_URL(id)+"?t="+Date.now(),{headers:{"X-Fonteyn-Auth":TEAM()}});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  return await r.json();
+}
 async function laadAlles(){
   try{
     const r=await fetch(BUCKET+"?t="+Date.now(),{headers:{"X-Fonteyn-Auth":TEAM()}});
-    if(r.ok){ const j=await r.json(); alles={sheets:(j&&j.sheets)||[]}; }
+    if(r.ok){
+      const j=await r.json();
+      const rijen=(j&&j.sheets)||[];
+      // Migratie: in de oude opzet stond de volledige sheet in deze bucket.
+      // Herkenbaar aan de inhoud (blokken/foto's). Die verhuizen we eenmalig
+      // naar hun eigen sleutel en laten alleen de index achter.
+      const oud=rijen.filter(s=>s&&(s.blokken||s.fotoHoofd||s.legenda));
+      if(oud.length){
+        toon("info","Opslag wordt eenmalig omgezet zodat elke sheet apart wordt bewaard…");
+        for(const s of oud){
+          try{
+            await fetch(SHEET_URL(s.id),{method:"PUT",
+              headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},body:JSON.stringify(s)});
+          }catch(e){ console.warn("verhuizen faalde voor "+s.id,e); }
+        }
+        alles={sheets:rijen.map(indexRegel)};
+        await bewaarIndex();
+        toon("ok",oud.length+" sheet(s) omgezet. Je kunt weer opslaan.");
+      }else{
+        alles={sheets:rijen};
+      }
+    }
   }catch(e){ console.warn("laden faalde",e); }
   // De icoontjes-bibliotheek erbij: die vult de onderdelen van pagina 2.
   await loadIconen();
@@ -555,23 +592,33 @@ function vulKiezer(){
       .map(s=>"<option value='"+esc(s.id)+"'>"+esc(s.naam||s.model||"(zonder naam)")+"</option>").join("");
   sel.value=S.id||"";
 }
+// De index bevat alleen wat de keuzelijst nodig heeft, geen foto's.
+function indexRegel(s){ return { id:s.id, naam:s.naam||s.model||"", model:s.model||"", updated:s.updated||null }; }
+async function bewaarIndex(){
+  const body=JSON.stringify({sheets:alles.sheets.map(indexRegel),updated:new Date().toISOString()});
+  const r=await fetch(BUCKET,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},body});
+  if(!r.ok) throw new Error("index opslaan faalde: HTTP "+r.status);
+}
 async function bewaar(){
   if(!S.model.trim()){ toon("warn","Vul eerst een modelnaam in."); return; }
   S.naam=S.model.trim();
   if(!S.id) S.id=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-  const i=alles.sheets.findIndex(x=>x.id===S.id);
-  if(i>=0) alles.sheets[i]=JSON.parse(JSON.stringify(S)); else alles.sheets.push(JSON.parse(JSON.stringify(S)));
+  S.updated=new Date().toISOString();
   try{
-    const body=JSON.stringify({sheets:alles.sheets,updated:new Date().toISOString()});
+    // Alleen déze sheet wegschrijven. De grens van 8 MB geldt dus per sheet en
+    // niet meer voor alles bij elkaar - dat was precies waar Demi op vastliep.
+    const body=JSON.stringify(S);
     const mb=(body.length/1048576);
-    if(mb>20){ toon("bad","Te groot om te bewaren ("+mb.toFixed(1)+" MB van de 20 MB). Verwijder een oude sheet of gebruik kleinere foto's."); return; }
-    const r=await fetch(BUCKET,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},body});
-    // 413 betekent dat de opslag de sheet weigert. Dat is iets anders dan een
-    // storing, dus zeg het in gewone woorden — "HTTP 413" helpt niemand.
-    if(r.status===413){ toon("bad","De opslag weigert dit ("+mb.toFixed(1)+" MB). Gebruik kleinere foto's of verwijder een oude sheet."); return; }
+    if(mb>8){ toon("bad","Deze sheet is te groot ("+mb.toFixed(1)+" MB van de 8 MB per sheet). Gebruik kleinere foto's."); return; }
+    const r=await fetch(SHEET_URL(S.id),{method:"PUT",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},body});
+    if(r.status===413){ toon("bad","De opslag weigert deze sheet ("+mb.toFixed(1)+" MB). Gebruik kleinere foto's."); return; }
     if(!r.ok) throw new Error("HTTP "+r.status);
+    const i=alles.sheets.findIndex(x=>x.id===S.id);
+    if(i>=0) alles.sheets[i]=indexRegel(S); else alles.sheets.push(indexRegel(S));
+    await bewaarIndex();
     vulKiezer();
-    toon("ok","Bewaard — "+S.naam+" ("+mb.toFixed(1)+" MB totaal).");
+    toon("ok","Bewaard — "+S.naam+" ("+mb.toFixed(1)+" MB). Er zijn nu "+alles.sheets.length+" sheets.");
     if(window.fpLog) window.fpLog("specsheet-bewaard",S.naam);
   }catch(e){ toon("bad","Bewaren mislukt: "+e.message); }
 }
@@ -584,18 +631,29 @@ el("btnKopie").addEventListener("click",()=>{
 el("btnVerwijder").addEventListener("click",async()=>{
   if(!S.id){ toon("warn","Deze sheet is nog niet bewaard."); return; }
   if(!confirm("Sheet \""+(S.naam||S.model)+"\" definitief verwijderen?")) return;
-  const naam=S.naam||S.model;
-  alles.sheets=alles.sheets.filter(x=>x.id!==S.id);
+  const naam=S.naam||S.model, weg=S.id;
+  alles.sheets=alles.sheets.filter(x=>x.id!==weg);
   try{
-    await fetch(BUCKET,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},
-      body:JSON.stringify({sheets:alles.sheets,updated:new Date().toISOString()})});
+    // De losse sheet leegmaken en uit de index halen. KV kent geen delete via
+    // deze route, dus een lege inhoud wegschrijven is het equivalent.
+    await fetch(SHEET_URL(weg),{method:"PUT",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},body:JSON.stringify({})});
+    await bewaarIndex();
     if(window.fpLog) window.fpLog("specsheet-verwijderd",naam);
   }catch(e){}
   S=leegSheet(); vulKiezer(); vulFormulier(); teken(); toon("ok","Verwijderd.");
 });
-el("sheetKies").addEventListener("change",()=>{
+el("sheetKies").addEventListener("change",async()=>{
   const id=el("sheetKies").value;
-  S = id ? JSON.parse(JSON.stringify(alles.sheets.find(x=>x.id===id)||leegSheet())) : leegSheet();
+  if(!id){ S=leegSheet(); vulFormulier(); teken(); return; }
+  // De index bevat geen inhoud meer, dus de gekozen sheet apart ophalen.
+  toon("info","Sheet laden…");
+  try{
+    const s=await laadSheet(id);
+    S = (s&&s.id) ? s : leegSheet();
+    if(!s||!s.id) toon("warn","Deze sheet kon niet geladen worden.");
+    else toon("ok","Geopend — "+(S.naam||S.model||""));
+  }catch(e){ S=leegSheet(); toon("bad","Sheet laden mislukt: "+e.message); }
   vulFormulier(); teken();
 });
 
