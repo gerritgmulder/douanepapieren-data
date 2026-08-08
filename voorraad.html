@@ -2411,6 +2411,44 @@ function parseCIOpKop(rows){
 }
 
 // Parse één commercial-invoice-werkboek → {ref, vessel, containers, models{model:qty}, unmapped{code:qty}}
+// Een commercial invoice die als PDF binnenkomt. Het containernummer is hier
+// de referentie: MEXDA gebruikt voor drie containers hetzelfde factuurnummer,
+// dus daarop zouden ze elkaar overschrijven.
+//
+// Regels zonder herkende fabriekscode gaan niet verloren maar komen bij
+// 'specials' te staan, met de omschrijving die op de factuur stond. Bij deze
+// fabriek is dat de meerderheid: het zijn sauna's en onderdelen, en die staan
+// niet in de spa-codelijst.
+async function parseCiPdf(file){
+  if(!window.fpCiPdf) throw new Error("de pdf-lezer is niet geladen. Herstart het dashboard.");
+  const doc=window.fpCiPdf.lees(await window.fpCiPdf.uitPdf(file));
+  if(!doc.regels.length) return null;
+  const models={},modelColors={},unmapped={},specials=[];
+  for(const r of doc.regels){
+    const aantal=Number(r.aantal)||0;
+    if(aantal<=0) continue;
+    const model=r.code?spaModel(r.code):null;
+    if(model&&model!=="(onbekend SKT-model)"){
+      models[model]=(models[model]||0)+aantal;
+    }else{
+      if(r.code) unmapped[r.code]=(unmapped[r.code]||0)+aantal;
+      specials.push({omschrijving:r.omschrijving,code:r.code||null,aantal:aantal,
+        sectie:r.sectie||null,prijsUsd:r.prijsUsd||null});
+    }
+  }
+  return {
+    ref:doc.container||doc.invoiceNo||file.name,
+    vessel:null,
+    containers:doc.container?[doc.container]:[],
+    models,modelColors,unmapped,specials,
+    total:Object.values(models).reduce((a,b)=>a+b,0),
+    doc:{invoiceNo:doc.invoiceNo,datum:doc.datum,container:doc.container,seal:doc.seal,
+         incoterm:doc.incoterm,leverancier:doc.leverancier,
+         totaalUsd:doc.totaalUsd,totaalStuks:doc.totaalStuks,
+         verschillen:doc.verschillen,packing:doc.packing},
+  };
+}
+
 function parseCI(wb,bestandsnaam){
   const ws=wb.Sheets["COMMERCIAL INVOICE"]||wb.Sheets["CI"]||wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false});
@@ -2537,6 +2575,22 @@ async function handleCIUpload(files,statusId){
   let added=0; const allUnmapped={...(shipsData.unmapped||{})}; const overgeslagen=[];
   try{
     for(const file of files){
+      // MEXDA stuurt de commercial invoice als PDF. ci-pdf.js leest die
+      // bladzijde; hieronder wordt hij in dezelfde vorm gegoten als een
+      // Excel-invoice, zodat de rest van de tegel er niets van merkt.
+      if(/\.pdf$/i.test(file.name)||file.type==="application/pdf"){
+        const ship=await parseCiPdf(file);
+        if(!ship){ overgeslagen.push({naam:file.name,codes:[],bladen:"PDF"}); continue; }
+        for(const [k,v] of Object.entries(ship.unmapped||{})) allUnmapped[k]=(allUnmapped[k]||0)+v;
+        const iP=(shipsData.ships||[]).findIndex(x=>x.ref&&ship.ref&&x.ref===ship.ref);
+        const etaP=iP>=0?shipsData.ships[iP].eta:"";
+        const recP={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,
+          models:ship.models,modelColors:ship.modelColors,specials:ship.specials,total:ship.total,
+          eta:etaP,parser:2,pdf:true,doc:ship.doc};
+        if(iP>=0) shipsData.ships[iP]=recP; else shipsData.ships.push(recP);
+        added++;
+        continue;
+      }
       const buf=await file.arrayBuffer(); const wb=XLSX.read(buf,{type:"array"});
       // Een proforma is géén commercial invoice: die gaat over wat er besteld
       // wordt, niet over wat er vaart. Belandt hij hier, dan verschijnt er een
