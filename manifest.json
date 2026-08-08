@@ -49,6 +49,10 @@
       "note": "Per spa-fabriek: merknaam, contactpersoon, fabriekscodes en de inkoop- en verkoopprijzen van de prijsbladen. Wordt in de voorraadtegel getoond zodat Chantal ze kan nakijken."
     },
     {
+      "name": "ci-pdf.js",
+      "note": "Commercial invoice + packing list uit een PDF lezen (MEXDA stuurt alleen PDF). Haalt container, seal, factuurnummer, datum en de artikelregels eruit, en legt factuur en pakbon naast elkaar zodat een verschil opvalt. Gedeeld door voorraad.html en amerika.html."
+    },
+    {
       "name": "proforma-inkoop.js",
       "note": "Proforma invoice uitlezen → voorstel tonen → na akkoord een inkooporder in Logic4. Gedeeld door voorraad.html (NL) en amerika.html (Warehouse Texas)."
     },

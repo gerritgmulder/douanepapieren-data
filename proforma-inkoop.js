@@ -250,17 +250,38 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
   const f=(ev.target.files||[])[0]; if(!f) return;
   ikoStatus("","");
   document.getElementById("ikoVoorstel").innerHTML="";
-  if(isPdf(f)){
-    ikoStatus("bad","Dit is een PDF en die kan het dashboard niet uitlezen. Vraag de fabriek om dezelfde proforma als Excel-bestand; die maken ze er zelf ook mee. Lukt dat niet, geef het dan aan mij door.");
-    ev.target.value="";
-    return;
-  }
   ikoStatus("info","Inlezen…");
   try{
-    const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
-    const p=parseProforma(wb);
-    if(p.fout) throw new Error(p.fout+". Tabbladen in dit bestand: "+wb.SheetNames.join(", "));
-    if(!p.regels.length) throw new Error("op tabblad '"+p.tabblad+"' staan geen spa-regels. Tabbladen in dit bestand: "+wb.SheetNames.join(", "));
+    // MEXDA stuurt uitsluitend PDF; er is bij die fabriek geen Excel om naar
+    // te vragen. ci-pdf.js leest de commercial invoice en de packing list uit
+    // zo'n bladzijde (Chantal, 8 aug 2026).
+    var p;
+    if(isPdf(f)){
+      if(!window.fpCiPdf) throw new Error("de pdf-lezer is niet geladen. Herstart het dashboard.");
+      const doc=await window.fpCiPdf.lees(await window.fpCiPdf.uitPdf(f));
+      if(!doc.regels.length) throw new Error("in deze PDF staan geen artikelregels. Staat er wel een tabel met aantal, stuksprijs en bedrag in?");
+      p={ tabblad:"PDF"+(doc.container?" · container "+doc.container:""),
+          leverancier:doc.leverancier,
+          referentie:doc.invoiceNo||null,
+          pdf:doc,
+          regels:doc.regels.map(function(r){
+            return { code:r.code, model:null, kleur:null, skirt:null,
+                     aantal:r.aantal, prijs:(r.prijsUsd>0?r.prijsUsd:null),
+                     omschrijving:r.omschrijving };
+          }) };
+      // Spreken factuur en pakbon elkaar tegen, dan mag daar niet overheen
+      // gelezen worden: hierop wordt straks voorraad geteld.
+      if(doc.verschillen.length){
+        ikoStatus("bad","Let op - de commercial invoice en de packing list in dit bestand komen niet overeen: "+
+          doc.verschillen.map(function(v){ return v.code+" ("+v.wat+")"; }).join("; ")+
+          ". Zoek dit eerst uit met de fabriek; het voorstel hieronder volgt de factuur.");
+      }
+    }else{
+      const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
+      p=parseProforma(wb);
+    }
+    if(p.fout) throw new Error(p.fout);
+    if(!p.regels.length) throw new Error("op tabblad '"+p.tabblad+"' staan geen spa-regels.");
     // Referentie uit het document zelf ("Order No.: RZ2009DF3352 to Rotterdam"),
     // want dat is waarop we later herkennen of een proforma al besteld is.
     if(!document.getElementById("ikoRef").value)
@@ -276,7 +297,7 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
       throw new Error((v.error||("de server antwoordde met HTTP "+r.status))+" — het bestand zelf is wel goed uitgelezen ("+p.regels.length+" regels).");
     }
     ikoLaatst=v; renderIkoVoorstel(v);
-    ikoStatus("ok","Uitgelezen van tabblad '"+p.tabblad+"': "+v.regels.length+" regel(s), "+v.totaalStuks+" spa's"+
+    if(!p.pdf||!p.pdf.verschillen.length) ikoStatus("ok","Uitgelezen van '"+p.tabblad+"': "+v.regels.length+" regel(s), "+v.totaalStuks+" spa's"+
       (p.leverancier?(" · "+p.leverancier):"")+". Controleer hieronder en klik pas daarna op aanmaken.");
   }catch(e){ ikoStatus("bad","Kon niet inlezen: "+e.message); }
   ev.target.value="";
