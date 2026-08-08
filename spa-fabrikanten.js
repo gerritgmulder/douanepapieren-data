@@ -202,6 +202,53 @@
           let: "Met de hand bijgeschreven op het blad." },
       ],
     },
+    {
+      fabriek: "Passion Ice Baths (Innerfire)",
+      merk: "Passion Ice Baths",
+      contact: null, email: null,
+      bron: "artikelbestand Logic4, opgevraagd 08-08-2026",
+      munt: "EUR",
+      opmerking: "Bedragen in EURO - deze baden komen uit Nederland, niet uit China. In Houston worden de onderdelen los geteld (barrels apart van de koelers), dus de losse artikelprijzen zijn hier de juiste. Een 'Compleet'-artikel staat in Logic4 op nul: dat is een samenstelling van losse regels.",
+      modellen: [
+        { model: "Wim Hof Barrel", code: "800052 / 800062", inkoopEur: 119.40, verkoopEur: null,
+          let: "Twee maten: 240 liter EUR 119,40 en 350 liter EUR 192,00. In de telling staat geen maat, dus de laagste - anders wordt de voorraad te hoog gewaardeerd." },
+        { model: "Wim Hof Barrel XL", code: "800031", inkoopEur: null, verkoopEur: null,
+          let: "Bestaat alleen als 'Compleet' en staat daar op nul. Geen inkoopprijs in Logic4." },
+        { model: "Revive", code: "800002", inkoopEur: 224.41, verkoopEur: null,
+          let: "Acht kleuren van EUR 224,41 (Solid Grey) tot EUR 251,41 (Moss Stone). De telling zegt 'Multiple Colors', dus de laagste." },
+        { model: "Water chiller", code: "800015", inkoopEur: 325.89, verkoopEur: null,
+          let: "De 110V/60Hz-uitvoering; in Logic4 staat er letterlijk bij dat die alleen voor de VS is. De 50Hz-versie (EUR 303,57) hoort in Europa." },
+        { model: "Faith", code: "800049", inkoopEur: 1482.14, verkoopEur: null },
+        { model: "Shower", code: "800030", inkoopEur: 455.36, verkoopEur: null,
+          let: "The Therapist Shower Chiller 50 liter - het enige douche-artikel in deze reeks." },
+        // Deze drie staan ook op de Jazzi-prijslijst in dollars. Die gaat voor:
+        // daar wordt in dollars ingekocht. Hier alleen ter vergelijking.
+        { model: "Breeze Ice Bath", code: "800033", inkoopEur: 1020.54, verkoopEur: null,
+          let: "Alle kleuren hetzelfde bedrag. Staat ook op de Jazzi-lijst voor USD 1.152; die wordt gebruikt." },
+        { model: "Elevate Ice Bath", code: "101008", inkoopEur: 4098.21, verkoopEur: null,
+          let: "Staat ook op de Jazzi-lijst voor USD 4.445; die wordt gebruikt." },
+        { model: "Vital-ICE Ice Bath", code: "800029", inkoopEur: 4642.86, verkoopEur: null,
+          let: "Staat ook op de Jazzi-lijst voor USD 5.238,50; die wordt gebruikt." },
+      ],
+    },
+    {
+      fabriek: "Fonteyn barrelsauna's",
+      merk: "Fonteyn",
+      contact: null, email: null,
+      bron: "artikelbestand Logic4, opgevraagd 08-08-2026",
+      munt: "EUR",
+      opmerking: "Bedragen in EURO. Elke maat bestaat in Clear en Rustic met een fors prijsverschil; in de telling van Houston staat geen uitvoering. Er wordt met de laagste gerekend, zodat de voorraad niet te hoog wordt gewaardeerd - staat per regel vermeld.",
+      modellen: [
+        { model: "Barrel Sauna 4 ft", code: "454117", inkoopEur: 803.57, verkoopEur: null,
+          let: "Rustic EUR 803,57, Clear EUR 1.207,14. Uitvoering onbekend, dus de laagste." },
+        { model: "Barrel Sauna 6 ft", code: "454119", inkoopEur: 1160.71, verkoopEur: null,
+          let: "Rustic EUR 1.160,71, Clear EUR 1.624,11. Uitvoering onbekend, dus de laagste." },
+        { model: "Barrel Sauna 8 ft", code: "454123", inkoopEur: 1383.93, verkoopEur: null,
+          let: "Rustic EUR 1.383,93, Clear EUR 2.450,00. Uitvoering onbekend, dus de laagste." },
+        { model: "Barrel Sauna 7+1 combi", code: "454115", inkoopEur: 1540.18, verkoopEur: null,
+          let: "Bestaat alleen als Rustic - geen keuze, geen onzekerheid." },
+      ],
+    },
   ];
 
   // De met de hand bijgeschreven regel op het blad van Sea star spas las ik als
@@ -242,8 +289,18 @@
       var f = FABRIKANTEN[i];
       for (var j = 0; j < f.modellen.length; j++) {
         var m = f.modellen[j];
-        if (m.inkoopUsd == null) continue;
-        var rec = { usd: m.inkoopUsd, model: m.model, code: m.code, fabriek: f.fabriek, merk: f.merk, bron: f.bron, let: m.let || null };
+        // Niet elke leverancier factureert in dollars: Jazzi wel, de ijsbaden
+        // en de barrelsauna's komen uit Nederland en staan in euro's. De munt
+        // reist mee, want omrekenen mag hier niet gebeuren.
+        if (m.inkoopUsd == null && m.inkoopEur == null) continue;
+        var inUsd = m.inkoopUsd != null;
+        var rec = {
+          usd: inUsd ? m.inkoopUsd : null,
+          eur: inUsd ? null : m.inkoopEur,
+          bedrag: inUsd ? m.inkoopUsd : m.inkoopEur,
+          munt: inUsd ? "USD" : "EUR",
+          model: m.model, code: m.code, fabriek: f.fabriek, merk: f.merk, bron: f.bron, let: m.let || null,
+        };
         var vol = sleutel(m.code), kaal = kaleCode(m.code);
         if (!perCode[vol]) perCode[vol] = rec;
         // Alleen de kale code registreren als hij niet dubbelzinnig is.

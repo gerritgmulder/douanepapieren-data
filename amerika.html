@@ -268,11 +268,15 @@ async function vhInit(){
 function vhVerrijk(regels){
   const zoek=(window.fpFabrikanten&&window.fpFabrikanten.prijsVan)||function(){ return null; };
   return regels.map(function(r){
-    if(r.inkoopUsd) return Object.assign({},r,{prijs:r.inkoopUsd,prijsBron:"factuur"});
-    const p=zoek(r.model,r.sktCode);
+    if(r.inkoopUsd) return Object.assign({},r,{prijs:r.inkoopUsd,munt:"USD",prijsBron:"factuur"});
+    // Eerst op modelnaam en fabriekscode. Lukt dat niet, dan met de kleur
+    // erachter: de sauna's heten allemaal "Barrel Sauna" en pas de kleur
+    // ("4 ft", "7+1 combi") maakt duidelijk welke het is.
+    const p=zoek(r.model,r.sktCode)||zoek((r.model+" "+(r.kleur||"")).trim(),null);
     return p
-      ? Object.assign({},r,{prijs:p.usd,prijsBron:"lijst",prijsCode:p.code,prijsFabriek:p.merk||p.fabriek})
-      : Object.assign({},r,{prijs:null,prijsBron:null});
+      ? Object.assign({},r,{prijs:p.bedrag,munt:p.munt,prijsBron:"lijst",prijsCode:p.code,
+                            prijsFabriek:p.merk||p.fabriek,prijsLet:p.let||null})
+      : Object.assign({},r,{prijs:null,munt:null,prijsBron:null});
   });
 }
 
@@ -296,18 +300,26 @@ function vhTeken(){
   for(const r of aanwezig) perGroep[groepVan(r)]=(perGroep[groepVan(r)]||0)+r.aantal;
   const spas=perGroep["Spa's"]||0;
   const anders=stuks-spas;
-  const waarde=aanwezig.filter(r=>r.prijs).reduce((n,r)=>n+r.prijs*r.aantal,0);
+  // Twee valuta's, twee totalen. De spa's komen uit China en worden in dollars
+  // gefactureerd; de ijsbaden en de sauna's komen uit Nederland en staan in
+  // euro's. Optellen zou een koers vergen, en juist die omrekening hoort hier
+  // niet thuis - dan lees je een bedrag dat nergens op een factuur staat.
+  const eur=n=>"€ "+Number(n||0).toLocaleString("nl-NL",{maximumFractionDigits:0});
+  const geld=(n,munt)=>munt==="EUR"?eur(n):usd(n);
+  const waardeUsd=aanwezig.filter(r=>r.prijs&&r.munt!=="EUR").reduce((n,r)=>n+r.prijs*r.aantal,0);
+  const waardeEur=aanwezig.filter(r=>r.prijs&&r.munt==="EUR").reduce((n,r)=>n+r.prijs*r.aantal,0);
+  const stuksUsd=aanwezig.filter(r=>r.prijs&&r.munt!=="EUR").reduce((n,r)=>n+r.aantal,0);
+  const stuksEur=aanwezig.filter(r=>r.prijs&&r.munt==="EUR").reduce((n,r)=>n+r.aantal,0);
   const zonderPrijs=aanwezig.filter(r=>!r.prijs).reduce((n,r)=>n+r.aantal,0);
   const uitLijst=aanwezig.filter(r=>r.prijsBron==="lijst").reduce((n,r)=>n+r.aantal,0);
-  const modellen=new Set(regels.map(r=>r.model)).size;
 
   document.getElementById("vhKpis").innerHTML=
     kpi(spas,"Spa's in het warehouse")+
     kpi(anders,"IJsbaden, sauna's, toebehoren")+
-    kpi(stuksOnderweg,"Onderweg / in productie")+
-    // De dekking staat in het label zelf. Een totaal dat over een derde van de
+    // De dekking staat in het label zelf. Een totaal dat over een deel van de
     // voorraad gaat mag nooit als hele voorraadwaarde gelezen kunnen worden.
-    kpi(usd(waarde),"Inkoopwaarde ("+(stuks-zonderPrijs)+" van "+stuks+" stuks)")+
+    kpi(usd(waardeUsd),"Inkoop in dollars ("+stuksUsd+" stuks)")+
+    kpi(eur(waardeEur),"Inkoop in euro's ("+stuksEur+" stuks)")+
     kpi(zonderPrijs,"Nog zonder inkoopprijs");
 
   const groepTekst=Object.keys(perGroep).sort().map(g=>perGroep[g]+" "+g.toLowerCase()).join(", ");
@@ -316,9 +328,12 @@ function vhTeken(){
     ((d.toelichting||[]).map(esc).join(" ")||"")+
     " De telling bestaat uit blokken: "+esc(groepTekst)+". Onder de ijsbaden staan ook toebehoren "+
     "(waterkoelers, douches), dus dat aantal is geen aantal baden."+
-    " Prijzen zijn de <b>inkoopprijs in dollars</b> zoals de fabriek hem factureert, dus geen omgerekende europrijs. "+
+    " Prijzen zijn de <b>inkoopprijs zoals de leverancier hem factureert</b>, nooit omgerekend. "+
+    "De spa's komen uit China en staan in <b>dollars</b>; de ijsbaden en de barrelsauna's komen uit Nederland "+
+    "en staan in <b>euro's</b>. Daarom staan er twee totalen en niet één: optellen zou een koers vergen, en dan "+
+    "lees je een bedrag dat op geen enkele factuur staat. "+
     "Staat een spa op een commercial invoice die het dashboard kent, dan is dat het bedrag: "+esc(d.prijsbron||"")+". "+
-    "Voor de rest geldt de prijslijst van de fabriek; die regels zijn gemerkt met <b>lijst</b>."+
+    "Voor de rest geldt de prijslijst van de leverancier; die regels zijn gemerkt met <b>lijst</b>."+
     (uitLijst?" Dat gaat om "+uitLijst+" van de "+stuks+" stuks.":"")+
     (zonderPrijs
       ? " <b>"+zonderPrijs+" van de "+stuks+" stuks hebben nog geen fabrieksprijs</b> en tellen niet mee in de inkoopwaarde."
@@ -348,7 +363,7 @@ function vhTeken(){
   document.getElementById("vhLijst").innerHTML=!rijen.length
     ? "<p class='lead'>Niets gevonden.</p>"
     : "<div class='tablewrap'><table class='grid'><thead><tr><th>Model</th><th>Kleur</th><th>Aantal</th>"+
-      "<th>Inkoop USD</th><th>Inkoopwaarde USD</th><th>Fabriekscode</th></tr></thead><tbody>"+
+      "<th>Inkoopprijs</th><th>Inkoopwaarde</th><th>Artikel-/fabriekscode</th></tr></thead><tbody>"+
       rijen.map(function(r){
         const neg=r.aantal<0;
         // Staat een code met twee verschillende tarieven op de invoices, dan
@@ -360,8 +375,12 @@ function vhTeken(){
         // Waar het bedrag vandaan komt hoort zichtbaar te zijn: een
         // afgesproken prijs is nog geen betaalde prijs.
         const bron=r.prijsBron==="lijst"
-          ? " <span title='Prijslijst van de fabriek"+(r.prijsFabriek?" ("+esc(r.prijsFabriek)+")":"")+
-            ", geen commercial invoice voor deze spa's' style='color:var(--muted);font-size:10.5px;border:1px solid var(--border);border-radius:5px;padding:0 4px'>lijst</span>" : "";
+          ? " <span title='Prijslijst van de leverancier"+(r.prijsFabriek?" ("+esc(r.prijsFabriek)+")":"")+
+            ", geen commercial invoice voor deze regel' style='color:var(--muted);font-size:10.5px;border:1px solid var(--border);border-radius:5px;padding:0 4px'>lijst</span>" : "";
+        // Staat er een kanttekening bij de prijs (twee maten, uitvoering
+        // onbekend), dan hoort die zichtbaar te zijn en niet in de code.
+        const twijfel=r.prijsLet
+          ? " <span title='"+esc(r.prijsLet)+"' style='color:var(--warn);font-size:11px;cursor:help'>±</span>" : "";
         // Uit welk blok van de telling een regel komt. Alleen tonen als het
         // géén spa is: anders staat er bij elke regel hetzelfde label.
         const groep=(r.groep&&r.groep!=="Spa's")
@@ -370,8 +389,8 @@ function vhTeken(){
           "<td style='font-size:12px'>"+esc(r.kleur)+"</td>"+
           "<td style='"+(neg?"color:#c2410c;font-weight:700":"")+"'>"+r.aantal+
             (neg?" <span style='font-size:11px'>onderweg</span>":"")+"</td>"+
-          "<td style='white-space:nowrap'>"+(r.prijs?(usd(r.prijs)+let2+bron):"<span style='color:var(--muted)'>—</span>")+"</td>"+
-          "<td>"+(r.prijs&&r.aantal>0?usd(r.prijs*r.aantal):"<span style='color:var(--muted)'>—</span>")+"</td>"+
+          "<td style='white-space:nowrap'>"+(r.prijs?(geld(r.prijs,r.munt)+let2+twijfel+bron):"<span style='color:var(--muted)'>—</span>")+"</td>"+
+          "<td>"+(r.prijs&&r.aantal>0?geld(r.prijs*r.aantal,r.munt):"<span style='color:var(--muted)'>—</span>")+"</td>"+
           "<td style='color:var(--muted);font-size:11px'>"+esc(r.sktCode||r.prijsCode||"—")+"</td></tr>";
       }).join("")+"</tbody></table></div>";
 }
