@@ -3234,6 +3234,40 @@ async function bankDebiteuren(env, ids) {
   return { ok: true, namen, gevraagd: uniek.length, meer: (ids || []).length > uniek.length };
 }
 
+// Orders opzoeken op nummer. In de praktijk noemt een klant een ordernummer
+// en geen factuurnummer, dus dit is de belangrijkste opzoekactie van de hele
+// koppeling. Totals.Calc_TotalPayed zegt wat er al op staat, AmountIncl wat
+// het kost; het verschil is wat er nog open staat.
+async function bankOrders(env, nrs) {
+  const uniek = [...new Set((nrs || []).map(x => Number(x)).filter(x => x > 0))].slice(0, 40);
+  const token = await l4Token(env);
+  const orders = {};
+  for (const nr of uniek) {
+    try {
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ Id: nr, TakeRecords: 1 }),
+      });
+      const j = await r.json().catch(() => null);
+      const o = Array.isArray(j) ? j[0] : null;
+      if (!o) continue;
+      const t = o.Totals || {};
+      const a = o.AccountAddress || {};
+      const totaal = Number(t.AmountIncl) || 0;
+      const betaald = Number(t.Calc_TotalPayed) || 0;
+      orders[String(nr)] = {
+        orderNr: nr, debiteurId: o.DebtorId || null,
+        naam: a.CompanyName || [a.FirstName, a.Preposition, a.LastName].filter(Boolean).join(" ").trim() || "",
+        totaal, betaald, open: Math.round((totaal - betaald) * 100) / 100,
+        status: (o.OrderStatus && o.OrderStatus.Value) || null,
+        isPaid: !!t.IsPaid,
+        factuurNr: o.InvoiceBelongsToOrderNumber || null,
+      };
+    } catch (e) { /* één order dat niet lukt mag de rest niet ophouden */ }
+  }
+  return { ok: true, orders, gevraagd: uniek.length, meer: (nrs || []).length > uniek.length };
+}
+
 // Van factuur naar order. AddPayment werkt op een ORDER, terwijl de
 // openstaande posten facturen zijn; het ordernummer staat op de factuur
 // (InvoiceBelongsToOrderNumber). Wordt pas opgehaald voor de regels die
@@ -3454,6 +3488,11 @@ export default {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const body = await request.json().catch(() => ({}));
       return reply(200, await bankDebiteuren(env, body.ids).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/bank/orders" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await bankOrders(env, body.nrs).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/bank/factuurorder" && request.method === "POST") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });

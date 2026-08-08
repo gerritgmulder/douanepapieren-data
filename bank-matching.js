@@ -53,22 +53,49 @@
   // Elke bank propt dit er anders in. ING en Rabo gebruiken /NAME/ en /IBAN/
   // (of /NAAM/ en /REMI/), ABN zet de naam gewoon vooraan. We proberen de
   // gestructureerde velden eerst en vallen daarna terug op de platte tekst.
+  // Een :86:-blok wordt door de bank hard afgekapt op 65 tekens en op de
+  // volgende regel voortgezet - middenin een woord of zelfs middenin een
+  // veldnaam ("/R" op de ene regel, "EMI/" op de volgende). Aaneenplakken moet
+  // dus ZONDER spatie, anders is /REMI/ onvindbaar en valt een ordernummer dat
+  // over twee regels loopt uit elkaar. Dit kostte Osman zijn hele afschrift
+  // (8 aug 2026): geen enkele naam en geen enkel nummer gevonden.
+  function plak(regel) { return String(regel || "").replace(/\r?\n/g, ""); }
+
   function tegenpartij(regel) {
-    var s = String(regel || "");
+    var s = plak(regel);
     var uit = { naam: "", iban: "", omschrijving: "" };
 
-    var iban = s.match(/\/(?:IBAN|CNTP)\/\s*([A-Z]{2}\d{2}[A-Z0-9]{4}\d{7,10})/i)
-            || s.match(/\b([A-Z]{2}\d{2}[A-Z0-9]{4}\d{7,10})\b/);
-    if (iban) uit.iban = iban[1].toUpperCase();
+    // ING-structured zet de tegenpartij in /CNTP/<iban>/<bic>/<naam>/.
+    // Dat is het formaat dat Fonteyn binnenkrijgt.
+    var cntp = s.match(/\/CNTP\/([A-Z0-9]*)\/([A-Z0-9]*)\/([^\/]{2,70})/i);
+    if (cntp) {
+      uit.iban = (cntp[1] || "").toUpperCase();
+      // De bank herhaalt de naam soms ("Carma world of welness Carma world
+      // of welness"). Eén keer is genoeg.
+      var n = cntp[3].trim();
+      var helft = n.slice(0, Math.floor(n.length / 2)).trim();
+      if (helft.length > 3 && n.slice(-helft.length).trim() === helft) n = helft;
+      uit.naam = n;
+    }
 
-    var naam = s.match(/\/(?:NAME|NAAM)\/([^\/]{2,70})/i);
-    if (naam) uit.naam = naam[1].trim();
+    if (!uit.iban) {
+      var iban = s.match(/\/IBAN\/\s*([A-Z]{2}\d{2}[A-Z0-9]{4}\d{7,10})/i)
+              || s.match(/\b([A-Z]{2}\d{2}[A-Z0-9]{4}\d{7,10})\b/);
+      if (iban) uit.iban = iban[1].toUpperCase();
+    }
+
+    if (!uit.naam) {
+      var naam = s.match(/\/(?:NAME|NAAM)\/([^\/]{2,70})/i);
+      if (naam) uit.naam = naam[1].trim();
+    }
     if (!uit.naam) {
       // ABN-stijl: "SEPA OVERBOEKING       IBAN: NL.. BIC: .. NAAM: Jansen"
       var n2 = s.match(/NAAM:\s*([^\n]{2,70}?)(?:\s{2,}|OMSCHRIJVING:|KENMERK:|$)/i);
       if (n2) uit.naam = n2[1].trim();
     }
-    var remi = s.match(/\/(?:REMI|EREF)\/([^\/]{2,140})/i)
+    // /REMI/ is de omschrijving die de betaler zelf heeft ingetypt. ING zet er
+    // "USTD//" voor (unstructured); die kop hoort er niet bij.
+    var remi = s.match(/\/REMI\/(?:USTD\/\/)?([^\/]{2,300})/i)
             || s.match(/OMSCHRIJVING:\s*([^\n]{2,140})/i);
     uit.omschrijving = remi ? remi[1].trim() : s;
     return uit;
@@ -79,7 +106,7 @@
   // cijfer scheidt ze. Alles wat daar niet aan voldoet laten we liggen -
   // klantnummers, postcodes en jaartallen leverden anders schijnkandidaten op.
   function nummers(tekst) {
-    var s = String(tekst || "");
+    var s = plak(tekst);
     var facturen = [], orders = [], gezien = {};
     var re = /\b(\d{7})\b/g, m;
     while ((m = re.exec(s)) !== null) {
@@ -200,8 +227,8 @@
     }
     if (nrs.orders.length) {
       return Object.assign(basis, {
-        status: "opzoeken", beste: null, orderNr: nrs.orders[0],
-        reden: "ordernummer " + nrs.orders[0] + " genoemd — factuur erbij zoeken",
+        status: "opzoeken", beste: null, orderNr: nrs.orders[0], bedrag: bedrag,
+        reden: "ordernummer " + nrs.orders[0] + " genoemd; order wordt opgehaald",
       });
     }
 
@@ -271,6 +298,65 @@
     return match;
   }
 
+  // ─── Order erbij zoeken ─────────────────────────────────────────────
+  // In de praktijk noemen klanten een ORDERnummer, geen factuurnummer: van de
+  // 21 betalingen op het afschrift van 7 aug 2026 noemden er 12 een order en
+  // maar 1 een factuur. De openstaande-postenlijst kent geen ordernummers, dus
+  // zo'n regel bleef op "opzoeken" staan en werd nooit zeker. Daarom wordt het
+  // order zelf opgehaald; daar staat wat het kost en wat er al op betaald is.
+  //
+  // Meegenomen voordeel: boeken gaat in Logic4 sowieso op een order, dus met
+  // het ordernummer in de hand is er geen factuur meer nodig.
+  //
+  // orders = { ordernummer: {naam, totaal, betaald, open, status, debiteurId} }
+  function bevestigOrder(match, orders) {
+    if (!match || match.status !== "opzoeken" || !match.orderNr) return match;
+    var o = orders[String(match.orderNr)];
+    if (!o) {
+      match.status = "geen";
+      match.reden = "ordernummer " + match.orderNr + " genoemd, maar dat order bestaat niet in Logic4";
+      return match;
+    }
+    var bedrag = Number(match.bedrag) || 0;
+    var totaal = Number(o.totaal) || 0;
+    var open = Math.round(((totaal - (Number(o.betaald) || 0))) * 100) / 100;
+    match.order = o;
+    match.beste = null;                     // dit loopt niet via een factuur
+    match.kandidaten = [];
+
+    var wie = o.naam ? " (" + o.naam + ")" : "";
+    if (open > 0 && gelijk(bedrag, open)) {
+      match.status = "zeker";
+      match.reden = "order " + match.orderNr + wie + " staat nog open voor " + open.toFixed(2) + " en dat is precies dit bedrag";
+    } else if (gelijk(bedrag, totaal)) {
+      match.status = "zeker";
+      match.reden = "order " + match.orderNr + wie + " kost " + totaal.toFixed(2) + " en dat is precies dit bedrag";
+    } else if (open <= 0) {
+      match.status = "controleren";
+      match.reden = "order " + match.orderNr + wie + " staat al volledig betaald (" + totaal.toFixed(2) + "); controleer of dit een dubbele betaling is";
+    } else {
+      var termijn = null;
+      for (var i = 0; i < AANBETALING.length; i++)
+        if (gelijk(bedrag, Math.round(totaal * AANBETALING[i] * 100) / 100)) termijn = Math.round(AANBETALING[i] * 100);
+      match.status = "controleren";
+      match.reden = termijn
+        ? "order " + match.orderNr + wie + " kost " + totaal.toFixed(2) + "; dit is " + termijn + "% daarvan"
+        : "order " + match.orderNr + wie + " staat open voor " + open.toFixed(2) + "; er komt " + bedrag.toFixed(2) + " binnen, dus een deelbetaling";
+    }
+    // De naam op het afschrift moet wel bij de klant van dat order horen.
+    var tegen = match.tegenpartij && match.tegenpartij.naam;
+    if (tegen && o.naam) {
+      var score = naamGelijkenis(tegen, o.naam);
+      if (score >= 0.5) match.naamBevestigd = true;
+      else if (match.status === "zeker" && score < 0.2) {
+        match.status = "controleren";
+        match.naamBotst = true;
+        match.reden += "; let op: het geld komt van '" + tegen + "' en het order staat op '" + o.naam + "'";
+      }
+    }
+    return match;
+  }
+
   global.fpBankMatch = {
     tegenpartij: tegenpartij,
     nummers: nummers,
@@ -280,6 +366,7 @@
     bouwIndex: bouwIndex,
     koppel: koppel,
     bevestig: bevestig,
+    bevestigOrder: bevestigOrder,
   };
 
 })(typeof window !== "undefined" ? window : globalThis);

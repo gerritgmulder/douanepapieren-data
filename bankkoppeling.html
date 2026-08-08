@@ -416,12 +416,26 @@ async function handleFile(file) {
 const parseMT940 = (t) => window.fpMT940.parse(t);
 
 // ─── Classificatie ──────────────────────────────────────────────────
+// Niet elke binnenkomende euro hoort bij een order. Een verzamelbetaling van
+// een betaaldienst of de dagafrekening van de pinautomaat gaat over honderden
+// klanten tegelijk; die staan niet in de afschriftregel en zijn hier dus niet
+// te koppelen. Ze als "geen match" tonen suggereert dat er iets mis is,
+// terwijl ze gewoon op een tussenrekening horen (Osmans afschrift, 8 aug 2026).
 function classifyTx(tx) {
-  const d = (tx.description || "").toLowerCase();
-  if (/(?:^|[^a-z])mollie(?:[^a-z]|$)/.test(d) || /(?:^|[^a-z])mollie b\.?v\.?/.test(d)) return "mollie";
-  if (/(?:^|[^a-z])pay\.?nl/.test(d) || /(?:^|[^a-z])paynl/.test(d)) return "paynl";
+  const d = ((tx.description || "") + " " + (tx.descRaw || "")).toLowerCase().replace(/\r?\n/g, "");
+  if (/(?:^|[^a-z])mollie(?:[^a-z]|$)/.test(d) || /mollie b\.?v\.?/.test(d)) return "mollie";
+  if (/pay\.?nl/.test(d) || /paynl/.test(d)) return "paynl";
+  if (/stripe|shopify/.test(d)) return "psp";
+  if (/afrek\.? betaalautomaat|betaalautomaat|pinautomaat/.test(d)) return "pin";
   return "direct";
 }
+const TUSSEN_LABEL = { mollie: "Mollie 1220", paynl: "Pay.nl 2030", psp: "Stripe / Shopify", pin: "Pinautomaat" };
+const TUSSEN_UITLEG = {
+  mollie: "Verzamelbetaling van de betaaldienst. De losse orders zitten niet in de afschriftregel, dus dit moet handmatig worden uitgesplitst.",
+  paynl: "Verzamelbetaling van de betaaldienst. De losse orders zitten niet in de afschriftregel, dus dit moet handmatig worden uitgesplitst.",
+  psp: "Uitbetaling van de webshop-betaaldienst over meerdere bestellingen tegelijk. Niet aan één order te koppelen.",
+  pin: "Dagafrekening van de pinautomaat in de showroom. Gaat over meerdere klanten en hoort op de tussenrekening, niet op een order.",
+};
 
 // ─── Openstaande posten + koppelen ──────────────────────────────────
 // De koppellogica zelf staat in bank-matching.js, zodat hij op echte
@@ -465,10 +479,39 @@ async function haalNamen(ids) {
   }
 }
 
+let orderCache = {};
+// De orders die in de omschrijvingen genoemd worden opzoeken. Logic4 kan er
+// een tegelijk, dus de worker doet er 40 per aanroep.
+async function haalOrders(nrs) {
+  const nodig = [...new Set(nrs.map(String))].filter(n => n && !(n in orderCache));
+  for (let i = 0; i < nodig.length; i += 40) {
+    const portie = nodig.slice(i, i + 40);
+    showStatus($("dropStatus"), "Orders opzoeken… (" + Math.min(i + 40, nodig.length) + " van " + nodig.length + ")", "info");
+    try {
+      const r = await fetch(WORKER + "/bank/orders", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+        body: JSON.stringify({ nrs: portie }) });
+      const j = await r.json();
+      Object.assign(orderCache, j.orders || {});
+      for (const n of portie) if (!(n in orderCache)) orderCache[n] = null;
+    } catch (e) { console.warn("orders ophalen faalde:", e.message); break; }
+  }
+}
+
 async function runMatchingForAll() {
   if (!openIndex) await haalOpenstaand(false);
   const teKoppelen = state.transactions.filter(t => t.kind === "direct");
   for (const tx of teKoppelen) tx.match = BM().koppel(tx, openIndex);
+
+  // Ordernummers oplossen. Dit is in de praktijk de belangrijkste route:
+  // klanten noemen hun ordernummer, niet hun factuurnummer.
+  const orderNrs = teKoppelen.filter(t => t.match.orderNr).map(t => t.match.orderNr);
+  if (orderNrs.length) {
+    await haalOrders(orderNrs);
+    const gevonden = {};
+    for (const [nr, o] of Object.entries(orderCache)) if (o) gevonden[nr] = o;
+    for (const tx of teKoppelen) tx.match = BM().bevestigOrder(tx.match, gevonden);
+  }
 
   // Alleen namen ophalen van debiteuren die als kandidaat naar voren komen -
   // dat zijn er een handvol, niet de 200.000 uit het klantenbestand.
@@ -482,6 +525,7 @@ async function runMatchingForAll() {
     tx.match = BM().bevestig(tx.match, platteNamen);
     // Voorgeselecteerde factuur: wat de koppeling zelf het beste vond.
     tx.gekozen = tx.match.beste ? String(tx.match.beste.InvoiceId) : "";
+    tx.orderNr = tx.match.order ? String(tx.match.order.orderNr) : "";
     tx.kies = tx.match.status === "zeker";
   }
 }
@@ -521,7 +565,7 @@ function renderResults() {
     "<div class='stat'><div class='lbl'>Zeker</div><div class='val'>" + tel("zeker") + "</div></div>" +
     "<div class='stat warn'><div class='lbl'>Controleren</div><div class='val'>" + (tel("controleren") + tel("kandidaten") + tel("opzoeken")) + "</div></div>" +
     "<div class='stat bad'><div class='lbl'>Geen match</div><div class='val'>" + tel("geen") + "</div></div>" +
-    "<div class='stat tussen'><div class='lbl'>Mollie / Pay.nl</div><div class='val'>" + t.filter(x => x.kind !== "direct").length + "</div></div>";
+    "<div class='stat tussen'><div class='lbl'>Tussenrekening</div><div class='val'>" + t.filter(x => x.kind !== "direct").length + "</div></div>";
 
   const tbody = $("txBody");
   tbody.innerHTML = "";
@@ -536,9 +580,9 @@ function renderRow(tx, idx) {
   if (tx.geboekt) {
     badge = "<span class='badge ok'>Geboekt</span>";
     info = "<div class='match-info'>" + escapeHtml(tx.geboekt) + "</div>";
-  } else if (tx.kind === "mollie" || tx.kind === "paynl") {
-    badge = "<span class='badge tussen'>" + (tx.kind === "mollie" ? "Mollie 1220" : "Pay.nl 2030") + "</span>";
-    info = "<div class='match-info'>Tussenrekening — de losse orders zitten niet in de afschriftregel, dus dit moet handmatig worden uitgesplitst.</div>";
+  } else if (tx.kind !== "direct") {
+    badge = "<span class='badge tussen'>" + escapeHtml(TUSSEN_LABEL[tx.kind] || "Tussenrekening") + "</span>";
+    info = "<div class='match-info'>" + escapeHtml(TUSSEN_UITLEG[tx.kind] || "Tussenrekening.") + "</div>";
   } else if (!tx.match) {
     badge = "<span class='badge pending'>Bezig…</span>";
   } else {
@@ -553,12 +597,18 @@ function renderRow(tx, idx) {
           "Factuur " + p.InvoiceId + " · " + escapeHtml((debiteurNamen[String(p.DebtorId)] || {}).naam || ("debiteur " + p.DebtorId)) +
           " · " + fmtEur(p.AmountOutstanding) + "</option>").join("") +
         "</select><div style='margin-top:4px'>" + escapeHtml(tx.match.reden) + "</div></div>";
+    } else if (tx.match.order) {
+      const o = tx.match.order;
+      info = "<div class='match-info'>Order <b>" + o.orderNr + "</b> · " + escapeHtml(o.naam || "") +
+        " · totaal " + fmtEur(o.totaal) + (o.betaald ? " waarvan " + fmtEur(o.betaald) + " betaald" : "") +
+        (o.status ? " · " + escapeHtml(o.status) : "") +
+        "<div style='margin-top:3px'>" + escapeHtml(tx.match.reden) + "</div></div>";
     } else if (tx.match.beste) {
       info = "<div class='match-info'>" + postLabel(tx.match.beste) + "<div style='margin-top:3px'>" + escapeHtml(tx.match.reden) + "</div></div>";
     } else {
       info = "<div class='match-info'>" + escapeHtml(tx.match.reden) + "</div>";
     }
-    if (tx.gekozen) vinkje = "<input type='checkbox' class='kiesRij' data-idx='" + idx + "'" + (tx.kies ? " checked" : "") + ">";
+    if (tx.gekozen || tx.orderNr) vinkje = "<input type='checkbox' class='kiesRij' data-idx='" + idx + "'" + (tx.kies ? " checked" : "") + ">";
   }
 
   const tp = (tx.match && tx.match.tegenpartij) || {};
@@ -588,12 +638,12 @@ function renderRow(tx, idx) {
 
 // ─── Selectie ───────────────────────────────────────────────────────
 function selectie() {
-  return state.transactions.filter(t => t.kies && t.gekozen && !t.geboekt);
+  return state.transactions.filter(t => t.kies && (t.gekozen || t.orderNr) && !t.geboekt);
 }
 function werkSelectieBij() {
   const s = selectie();
   const totaal = s.reduce((n, t) => n + Number(t.amount), 0);
-  const kiesbaar = state.transactions.filter(t => t.gekozen && !t.geboekt).length;
+  const kiesbaar = state.transactions.filter(t => (t.gekozen || t.orderNr) && !t.geboekt).length;
   $("selInfo").textContent = s.length
     ? s.length + " van " + kiesbaar + " aangevinkt — samen " + fmtEur(totaal)
     : (kiesbaar ? "niets aangevinkt van de " + kiesbaar + " koppelbare betalingen" : "nog niets te koppelen");
@@ -604,11 +654,11 @@ function werkSelectieBij() {
   if (alles) alles.checked = kiesbaar > 0 && s.length === kiesbaar;
 }
 $("kiesAlles").addEventListener("change", (e) => {
-  for (const t of state.transactions) if (t.gekozen && !t.geboekt) t.kies = e.target.checked;
+  for (const t of state.transactions) if ((t.gekozen || t.orderNr) && !t.geboekt) t.kies = e.target.checked;
   renderResults();
 });
 $("kiesZeker").addEventListener("click", () => {
-  for (const t of state.transactions) t.kies = !t.geboekt && !!t.gekozen && t.match && t.match.status === "zeker";
+  for (const t of state.transactions) t.kies = !t.geboekt && !!(t.gekozen || t.orderNr) && t.match && t.match.status === "zeker";
   renderResults();
 });
 $("kiesGeen").addEventListener("click", () => {
@@ -642,12 +692,16 @@ $("boekBtn").addEventListener("click", async () => {
   showStatus($("actionStatus"), "Ordernummers opzoeken bij " + rijen.length + " facturen…", "info");
 
   // Stap 1 — factuur → order
-  const paren = rijen.map(t => {
+  // Regels die al een ordernummer hebben zijn klaar: AddPayment werkt op een
+  // order. Alleen de regels die via een factuur lopen moeten nog omgezet.
+  const directe = rijen.filter(t => t.orderNr);
+  const viaFactuur = rijen.filter(t => !t.orderNr && t.gekozen);
+  const paren = viaFactuur.map(t => {
     const post = (t.match.kandidaten || []).find(p => String(p.InvoiceId) === t.gekozen) || t.match.beste;
     return { invoiceId: t.gekozen, debtorId: post ? post.DebtorId : null, tx: t };
   });
   const orders = {};
-  for (let i = 0; i < paren.length; i += 25) {
+  for (let i = 0; paren.length && i < paren.length; i += 25) {
     const portie = paren.slice(i, i + 25);
     const r = await fetch(WORKER + "/bank/factuurorder", {
       method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
@@ -657,6 +711,10 @@ $("boekBtn").addEventListener("click", async () => {
   }
 
   const teBoeken = [], geenOrder = [];
+  for (const t of directe) {
+    teBoeken.push({ orderNr: t.orderNr, invoiceId: null, bedrag: Number(t.amount), tx: t,
+      omschrijving: "Bankbetaling " + (t.date || "") + " — afschrift " + (state.statementNr || state.fileName) });
+  }
   for (const p of paren) {
     const o = orders[String(p.invoiceId)];
     if (o && o.orderNr) {
@@ -749,7 +807,7 @@ $("exportBtn").addEventListener("click", () => {
       (t.match && t.match.tegenpartij && t.match.tegenpartij.naam) || "",
       t.gekozen || "", post ? post.DebtorId : "",
       post ? ((debiteurNamen[String(post.DebtorId)] || {}).naam || "") : "",
-      t.kind !== "direct" ? (t.kind === "mollie" ? "Mollie 1220" : "Pay.nl 2030") : ((t.match && t.match.status) || ""),
+      t.kind !== "direct" ? (TUSSEN_LABEL[t.kind] || "tussenrekening") : ((t.match && t.match.status) || ""),
       t.geboekt ? "geboekt" : "",
       (t.description || "").replace(/[\r\n;]/g, " ")];
   });
