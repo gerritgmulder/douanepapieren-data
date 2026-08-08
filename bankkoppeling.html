@@ -751,7 +751,11 @@ $("boekBtn").addEventListener("click", async () => {
       method: "POST", headers: { "Content-Type": "application/json", "X-DP-Admin": sleutel },
       body: JSON.stringify({ door: (localStorage.getItem("fp.email") || ""),
         regels: portie.map(x => ({ orderNr: x.orderNr, invoiceId: x.invoiceId, bedrag: x.bedrag, omschrijving: x.omschrijving })) }) });
-    if (r.status === 401) { showStatus($("actionStatus"), "De beheersleutel wordt niet geaccepteerd. Boeken is gestopt; er is niets geboekt in deze ronde.", "error"); localStorage.removeItem("dp.adminkey"); $("boekBtn").disabled = false; return; }
+    if (r.status === 401) {
+      showStatus($("actionStatus"), "Die sleutel wordt niet geaccepteerd. Er is niets geboekt - je selectie staat er nog, dus je kunt het opnieuw proberen zodra je de juiste sleutel hebt. Vraag hem bij Gerrit.", "error");
+      localStorage.removeItem(BOEK_SLEUTEL);
+      $("boekBtn").disabled = false; return;
+    }
     const j = await r.json();
     for (const res of (j.resultaten || [])) {
       const bij = portie.find(x => String(x.orderNr) === String(res.orderNr) && String(x.invoiceId) === String(res.invoiceId));
@@ -800,13 +804,20 @@ function vensterje(titel, uitleg, invoer, okTekst, gevaar) {
     if (inp) setTimeout(() => inp.focus(), 40);
   });
 }
+// De sleutel om te mogen boeken. Bewust een eigen sleutel en niet die van het
+// partnerportaal: wie betalingen boekt hoeft niet bij het dealerbestand te
+// kunnen. Wordt apart bewaard, zodat het intypen ervan niets anders opent.
+const BOEK_SLEUTEL = "fp.boeksleutel";
+function boekSleutel() { return localStorage.getItem(BOEK_SLEUTEL) || adminKey() || ""; }
 async function vraagBeheersleutel() {
-  if (adminKey()) return adminKey();
-  const k = await vensterje("Beheersleutel nodig",
-    "Betalingen wegschrijven verandert de administratie. Die stap zit achter de beheersleutel, dezelfde als bij het aanmaken van een inkooporder. Je hoeft hem maar één keer per computer in te voeren.",
+  if (boekSleutel()) return boekSleutel();
+  const k = await vensterje("Sleutel om te boeken",
+    "Betalingen wegschrijven verandert de administratie, dus die stap zit achter een sleutel. " +
+    "Je hoeft hem maar \u00e9\u00e9n keer per computer in te voeren; daarna onthoudt deze computer hem. " +
+    "Heb je hem niet, vraag hem dan bij Gerrit.",
     true, "Bewaren en doorgaan", false);
   if (!k) return null;
-  localStorage.setItem("dp.adminkey", k.trim());
+  localStorage.setItem(BOEK_SLEUTEL, k.trim());
   return k.trim();
 }
 function bevestigBoeken(aantal, totaal) {

@@ -75,6 +75,10 @@ const ALLOWED_BUCKETS = new Set([
   // regels) en het logboek van wat er via het dashboard is geboekt.
   "bank-openstaand",
   "bank-geboekt",
+  // Debiteurenlijst: per openstaande factuur waarom hij openstaat. Het
+  // dashboard sorteert voor op betaalwijze; wat een mens daarvan omzet wordt
+  // hier bewaard en gaat daarna vóór dat vermoeden (Osman, 8 aug 2026).
+  "debiteuren-status",
   // Toekomstige modules toevoegen aan deze whitelist
 ]);
 
@@ -3510,7 +3514,15 @@ export default {
       return reply(200, await bankFactuurOrder(env, body.paren).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/bank/boeken" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      // Boeken zat achter de beheersleutel van het PARTNERPORTAAL. Dat koppelt
+      // twee dingen die niets met elkaar te maken hebben: Osman moet betalingen
+      // kunnen boeken zonder toegang tot het dealerbestand, en hij had die
+      // sleutel dus terecht niet (8 aug 2026). Er is nu een aparte sleutel voor
+      // de bank; de beheersleutel blijft ook werken zodat beheer niets merkt.
+      const sleutel = request.headers.get("X-DP-Admin") || "";
+      const magBoeken = (env.BANK_BOEK_KEY && sleutel === env.BANK_BOEK_KEY)
+                     || (env.DP_ADMIN_KEY && sleutel === env.DP_ADMIN_KEY);
+      if (!magBoeken) return reply(401, { ok: false, error: "sleutel-om-te-boeken-vereist" });
       const body = await request.json().catch(() => ({}));
       return reply(200, await bankBoeken(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }

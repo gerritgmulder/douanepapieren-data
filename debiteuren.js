@@ -43,6 +43,43 @@
 
   function num(v) { var n = Number(v); return isFinite(n) ? n : 0; }
 
+  /* ═══════════ Waarom staat deze post open? ═══════════
+     Osman heeft de lijst met de hand nagelopen en er drie soorten in
+     onderscheiden (8 aug 2026). Die indeling blijkt grotendeels uit de
+     betaalwijze te volgen, en dat kan het dashboard zelf: dan hoeft hij niet
+     1.900 regels te kleuren maar alleen de uitzonderingen te corrigeren.
+
+       terecht      een rekening op termijn; het geld moet nog komen. Lugarde,
+                    Tuinmaximaal en de dealers op 14/30/60/90 dagen.
+       garantie     een garantieorder. Die hoort op nul te staan; staat er toch
+                    een bedrag open, dan moet de adviseur kijken waarom.
+       opschonen    betaald bij de kassa, via Mollie, Bol, Shopify of contant.
+                    Bij zo'n betaalwijze is het geld direct binnen, dus een
+                    openstaand bedrag betekent dat de betaling niet gekoppeld
+                    is - niet dat de klant nog moet betalen.
+       teveel       een negatief bedrag: te veel betaald of een creditnota die
+                    nog nergens tegenover staat.
+
+     Het blijft een voorsortering. Wie het beter weet zet het om, en die keuze
+     wordt bewaard en gaat vóór dit vermoeden. */
+  var TERECHT = /^rekening\s|op\s*rekening|factuur\s*achteraf/i;
+  var GARANTIE = /garantie/i;
+  function categorie(post, betaalwijze) {
+    if (num(post.AmountOutstanding) < 0) return "teveel";
+    var b = String(betaalwijze || "");
+    if (GARANTIE.test(b)) return "garantie";
+    if (TERECHT.test(b)) return "terecht";
+    if (!b) return "onbekend";
+    return "opschonen";
+  }
+  var CATEGORIE_TEKST = {
+    terecht: "Terecht open - rekening op termijn",
+    garantie: "Garantieorder - hoort op nul te staan",
+    opschonen: "Direct betaald bij verkoop - waarschijnlijk niet gekoppeld",
+    teveel: "Te veel betaald of creditnota",
+    onbekend: "Betaalwijze onbekend",
+  };
+
   async function kvLees(bucket) {
     try {
       var r = await fetch(BASIS + "/data/" + bucket, { headers: { "X-Fonteyn-Auth": cfg.teamKey } });
@@ -116,6 +153,17 @@
 
     var kaart = await artikelKaart();
 
+    // Betaalwijzen erbij: die bepalen waaróm een post openstaat.
+    var betaalwijzen = {};
+    try {
+      var pm = await cfg.logic4("/v3/Financial/GetPaymentMethods", null, "GET") || [];
+      for (var b = 0; b < pm.length; b++) betaalwijzen[String(pm[b].Id)] = pm[b].Description;
+    } catch (e) { /* zonder betaalwijzen blijft alles 'onbekend'; de lijst werkt gewoon */ }
+
+    // Wat Osman eerder met de hand heeft vastgesteld gaat vóór het vermoeden.
+    var handmatig = (await kvLees("debiteuren-status")) || {};
+    handmatig = handmatig.posten || {};
+
     // Per openstaande factuur de naam en de regels ophalen. Acht tegelijk:
     // sneller kan de API niet aan zonder fouten te gaan geven.
     cfg.melden("Facturen ophalen (0 van " + open.length + ")…", 15);
@@ -158,10 +206,18 @@
         kl.telaat = Math.max(kl.telaat, num(post.DaysPastDueDate));
         if (afd) kl.afdelingen[afd] = (kl.afdelingen[afd] || 0) + bedrag;
       }
+      var wijze = betaalwijzen[String(post.PaymentMethodId || "")] || "";
+      var vermoeden = categorie(post, wijze);
+      var gezet = handmatig[String(post.InvoiceId)];
       kl.posten.push({
         factuur: post.InvoiceId, datum: post.InvoiceDate, bedrag: bedrag,
         telaat: num(post.DaysPastDueDate), afdeling: afd,
-        totaal: num(post.TotalAmount), betaald: num(post.TotalAmountPayed)
+        totaal: num(post.TotalAmount), betaald: num(post.TotalAmountPayed),
+        betaalwijze: wijze,
+        categorie: (gezet && gezet.categorie) || vermoeden,
+        vermoeden: vermoeden,
+        handmatig: !!(gezet && gezet.categorie),
+        notitie: (gezet && gezet.notitie) || ""
       });
     }
 
@@ -191,8 +247,24 @@
     }
     lijst.sort(function (a, b) { return b.open - a.open; });
 
+    // Wat staat er per soort open? Dit is het antwoord op de vraag die de
+    // accountant stelt: hoeveel hiervan is echt nog te ontvangen?
+    var perSoort = {};
+    for (var q = 0; q < open.length; q++) {
+      var pq = open[q];
+      var wq = betaalwijzen[String(pq.PaymentMethodId || "")] || "";
+      var gq = handmatig[String(pq.InvoiceId)];
+      var cq = (gq && gq.categorie) || categorie(pq, wq);
+      if (!perSoort[cq]) perSoort[cq] = { categorie: cq, tekst: CATEGORIE_TEKST[cq] || cq, aantal: 0, bedrag: 0 };
+      perSoort[cq].aantal++;
+      perSoort[cq].bedrag += num(pq.AmountOutstanding);
+    }
+    var soorten = Object.keys(perSoort).map(function (n) { return perSoort[n]; })
+      .sort(function (a, b) { return Math.abs(b.bedrag) - Math.abs(a.bedrag); });
+
     cfg.melden("Klaar", 100);
-    return { gemaakt: new Date().toISOString(), klanten: lijst, aantalPosten: open.length };
+    return { gemaakt: new Date().toISOString(), klanten: lijst, aantalPosten: open.length,
+             soorten: soorten, handmatigGezet: Object.keys(handmatig).length };
   }
 
   /* ═══════════ downloaden ═══════════ */
@@ -239,8 +311,25 @@
     download("debiteuren-per-factuur-" + stempel + ".csv", r2);
   }
 
+  // Een post handmatig indelen. Wordt bewaard en gaat daarna vóór het
+  // automatische vermoeden.
+  async function zetStatus(factuurId, cat, notitie, wie) {
+    var opslag = (await kvLees("debiteuren-status")) || {};
+    opslag.posten = opslag.posten || {};
+    if (!cat) delete opslag.posten[String(factuurId)];
+    else opslag.posten[String(factuurId)] = {
+      categorie: cat, notitie: String(notitie || "").slice(0, 300),
+      door: wie || "", op: new Date().toISOString()
+    };
+    opslag.gewijzigd = new Date().toISOString();
+    await kvSchrijf("debiteuren-status", opslag);
+    return true;
+  }
+
   global.fpDebiteuren = {
     bouw: function (opties) { cfg = opties; return bouw(); },
+    zetStatus: function (opties, id, cat, notitie) { cfg = opties; return zetStatus(id, cat, notitie, opties.email); },
+    categorieTekst: CATEGORIE_TEKST,
     download: downloadLijst
   };
 
