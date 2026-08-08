@@ -214,8 +214,13 @@
       modellen: [
         { model: "Wim Hof Barrel", code: "800062", inkoopEur: 119.40, verkoopEur: null,
           let: "De 240 liter; bevestigd door Chantal, 8 aug 2026." },
-        { model: "Wim Hof Barrel XL", code: "800031", inkoopEur: null, verkoopEur: null,
-          let: "De 360 liter (Chantal, 8 aug 2026). Staat in Logic4 alleen als 'Compleet' op nul euro; Chantal stuurt de inkoopfactuur na." },
+        // Chantal noemt hem 360 liter, Logic4 kent hem als 350 liter. Er zijn
+        // maar twee maten kuip (240 en 350) en de gewone barrel is de 240, dus
+        // de XL is deze. Eerder stond hij op 'geen prijs' omdat ik naar het
+        // artikel 'XL Compleet' keek - dat is een samenstelling en staat
+        // daarom op nul, net als alle andere 'Compleet'-artikelen.
+        { model: "Wim Hof Barrel XL", code: "800052", inkoopEur: 192.00, verkoopEur: null,
+          let: "De grote kuip: Logic4 noemt hem 350 liter, Chantal 360. Losse kuip, zonder koeler - die staat apart in de telling." },
         // Per kleur, want ze schelen in prijs. Chantal gaf de verdeling van de
         // 32 stuks op 8 aug 2026: 2 Moss, 7 Earth Grey, 9 Granite, 10 Black
         // Marble, 4 Blue.
@@ -223,8 +228,8 @@
         { model: "Revive Earth Grey", code: "800055", inkoopEur: 234.91, verkoopEur: null },
         { model: "Revive Granite Grey", code: "800058", inkoopEur: 230.41, verkoopEur: null },
         { model: "Revive Ice Blue", code: "800050", inkoopEur: 228.41, verkoopEur: null },
-        { model: "Revive Black Marble", code: null, inkoopEur: null, verkoopEur: null,
-          let: "Deze kleur staat niet in het artikelbestand van Logic4; de andere zeven wel. Prijs nog onbekend." },
+        { model: "Revive Black Marble", code: "800002", inkoopEur: 224.41, verkoopEur: null,
+          let: "Black Marble staat niet in Logic4; de zeven kleuren die er wel staan lopen van EUR 224,41 (Solid Grey) tot EUR 251,41 (Moss Stone). Gerekend met de laagste, net als bij de andere onzekere regels. Het gaat om hooguit 27 euro per stuk." },
         { model: "Water chiller", code: "800015", inkoopEur: 325.89, verkoopEur: null,
           let: "De 110V/60Hz-uitvoering; in Logic4 staat er letterlijk bij dat die alleen voor de VS is. De 50Hz-versie (EUR 303,57) hoort in Europa." },
         { model: "Faith", code: "800049", inkoopEur: 1482.14, verkoopEur: null },
