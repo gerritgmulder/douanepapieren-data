@@ -53,6 +53,10 @@
       "note": "Commercial invoice + packing list uit een PDF lezen (MEXDA stuurt alleen PDF). Haalt container, seal, factuurnummer, datum en de artikelregels eruit, en legt factuur en pakbon naast elkaar zodat een verschil opvalt. Gedeeld door voorraad.html en amerika.html."
     },
     {
+      "name": "transport-houston.js",
+      "note": "Transportkosten China naar warehouse Houston: de drie vrachtfacturen van Chantal, het gemiddelde per container (let op: twee facturen dekken twee containers) plus 400 dollar uitladen, en de optelsom voorraad + transport + inventaris in dollars. Blok in amerika.html."
+    },
+    {
       "name": "proforma-inkoop.js",
       "note": "Proforma invoice uitlezen → voorstel tonen → na akkoord een inkooporder in Logic4. Gedeeld door voorraad.html (NL) en amerika.html (Warehouse Texas)."
     },

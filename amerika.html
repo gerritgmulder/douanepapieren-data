@@ -9,6 +9,7 @@
 <script src="spa-fabrikanten.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="ci-pdf.js"></script>
+<script src="transport-houston.js"></script>
 <script>if(window.pdfjsLib)pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";</script>
 <script src="proforma-inkoop.js"></script>
 <style>
@@ -121,6 +122,21 @@
         <span id="vhTel" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <div id="vhLijst" style="margin-top:12px"></div>
+    </div>
+    <div class="card" id="vhWaardeKaart">
+      <h3>Wat is de voorraad in Houston waard?</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:12px">
+        Alles bij elkaar en in dollars, voor het gesprek met Daan: de inkoopwaarde van wat er ligt,
+        wat het heeft gekost om het daar te krijgen, en de inventaris.
+      </p>
+      <div id="vhWaarde"></div>
+      <div style="margin-top:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <label style="font-size:13px">Aantal containers voor deze voorraad:</label>
+        <input type="number" id="vhContainers" min="0" step="1" value="0"
+               style="width:90px;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font:inherit">
+        <span class="lead" style="font-size:12px;margin:0">Vul in hoeveel containers er voor deze voorraad zijn gevaren; de transportkosten rekenen daarmee door.</span>
+      </div>
+      <div id="vhTransportDetail" style="margin-top:14px"></div>
     </div>
     <div class="card" id="vhOntbreektKaart" style="display:none">
       <h3>Nog geen inkoopprijs — <span id="vhOntbreektTotaal">0</span> stuks</h3>
@@ -245,7 +261,19 @@ const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
    Dit is een momentopname per mail. Zodra magazijn Houston in Logic4 bestaat
    hoort dit daaruit te komen en vervalt de handmatige stap. */
 const VH_URL=WORKER+"/data/amerika-voorraad";
-let vhData=null;
+let vhData=null, vhKoers=null;
+// De wisselkoers komt uit het partnerportaal, zodat er niet ergens een tweede
+// koers gaat rondslingeren. Alleen nodig om het euro-deel van de voorraad in
+// dollars te kunnen uitdrukken - de bedragen zelf blijven staan zoals ze
+// gefactureerd zijn.
+async function vhHaalKoers(){
+  try{
+    const r=await fetch(WORKER+"/amerika/koers",{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}});
+    const j=await r.json();
+    if(j&&j.ok) vhKoers={koers:Number(j.koers),bron:j.bron};
+  }catch(e){}
+  if(!vhKoers) vhKoers={koers:1.11,bron:"terugval; het partnerportaal gaf geen koers"};
+}
 async function vhInit(){
   if(vhData) return vhTeken();
   const box=document.getElementById("vhLijst");
@@ -254,6 +282,7 @@ async function vhInit(){
     const r=await fetch(VH_URL,{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}});
     if(!r.ok) throw new Error("HTTP "+r.status);
     vhData=await r.json();
+    await vhHaalKoers();
     vhTeken();
   }catch(e){ box.innerHTML="<div class='status-msg bad'>Voorraad laden faalde: "+esc(e.message)+"</div>"; }
 }
@@ -362,6 +391,8 @@ function vhTeken(){
     mistLijst.map(function(x){ return "<tr><td>"+esc(x[0])+"</td><td>"+x[1]+"</td></tr>"; }).join("")+
     "</tbody></table></div>";
 
+  vhWaardeTeken(waardeUsd,waardeEur);
+
   document.getElementById("vhTel").textContent=rijen.length+" van "+regels.length+" regels";
   document.getElementById("vhLijst").innerHTML=!rijen.length
     ? "<p class='lead'>Niets gevonden.</p>"
@@ -397,10 +428,78 @@ function vhTeken(){
           "<td style='color:var(--muted);font-size:11px'>"+esc(r.sktCode||r.prijsCode||"—")+"</td></tr>";
       }).join("")+"</tbody></table></div>";
 }
+// ─── De som voor Daan ───────────────────────────────────────────────
+// Eén bedrag, in dollars. Het euro-deel wordt hier omgerekend - dat is de
+// enige plek waar dat gebeurt, en de koers staat er zichtbaar bij. In de
+// tabel zelf blijven de bedragen staan zoals de leverancier ze factureert.
+function vhWaardeTeken(waardeUsd,waardeEur){
+  const doel=document.getElementById("vhWaarde");
+  if(!doel||!window.fpTransportHouston) return;
+  const T=window.fpTransportHouston;
+  const koers=(vhKoers&&vhKoers.koers)||1.11;
+  const containers=Math.max(0,Number((document.getElementById("vhContainers")||{}).value)||0);
+  const som=T.totaal({voorraadUsd:waardeUsd,voorraadEur:waardeEur,koers:koers,containers:containers});
+  const u=n=>"$ "+Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const e=n=>"€ "+Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const rij=(wat,bedrag,uitleg,dik)=>
+    "<tr"+(dik?" style='border-top:2px solid var(--fonteyn-green)'":"")+">"+
+    "<td style='padding:7px 9px'>"+(dik?"<b>"+esc(wat)+"</b>":esc(wat))+
+      (uitleg?"<div style='font-size:11.5px;color:var(--muted)'>"+uitleg+"</div>":"")+"</td>"+
+    "<td style='padding:7px 9px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums'>"+
+      (dik?"<b style='font-size:16px'>"+u(bedrag)+"</b>":u(bedrag))+"</td></tr>";
+
+  doel.innerHTML="<table class='grid' style='width:100%;max-width:660px'>"+
+    rij("Inkoopwaarde, in dollars ingekocht",som.voorraadUsd,"De spa's van Jazzi en de andere Chinese fabrieken.")+
+    rij("Inkoopwaarde, in euro's ingekocht",som.voorraadEurInUsd,
+        "De ijsbaden en de barrelsauna's komen uit Nederland: "+e(som.voorraadEur)+
+        " omgerekend tegen koers "+koers.toFixed(2)+" ("+esc((vhKoers&&vhKoers.bron)||"")+").")+
+    rij("Voorraad samen",som.voorraadTotaalUsd,"",false)+
+    rij("Transport naar Houston",som.transportUsd,
+        containers
+          ? containers+" container"+(containers===1?"":"s")+" &times; "+u(som.transportPerContainer)+" gemiddeld per container."
+          : "<b>Vul hieronder het aantal containers in.</b> Gemiddeld "+u(som.transportPerContainer)+" per container.")+
+    rij("Inventaris warehouse",som.inventarisUsd,"Vast bedrag zolang er geen telling is.")+
+    rij("Totaal",som.totaalUsd,"",true)+
+    "</table>";
+
+  // De onderbouwing van dat gemiddelde hoort erbij: Daan mag vragen waar het
+  // vandaan komt, en dan moet het er staan.
+  const d=document.getElementById("vhTransportDetail");
+  if(!d) return;
+  const g=som.gemiddelde;
+  d.innerHTML="<details><summary style='cursor:pointer;font-size:13px;color:var(--fonteyn-green);font-weight:600'>"+
+    "Waar komt "+u(g.perContainer)+" per container vandaan?</summary>"+
+    "<p class='lead' style='font-size:12px;margin:10px 0'>Gemiddelde van drie facturen die Chantal heeft aangeleverd: een recente, "+
+    "een van een half jaar terug en een oudere. Let op dat twee ervan over <b>twee</b> containers gaan, dus het factuurtotaal "+
+    "is niet de prijs van één container. De spreiding loopt van "+u(g.laagste)+" tot "+u(g.hoogste)+".</p>"+
+    "<div class='tablewrap'><table class='grid'><thead><tr><th>Factuur</th><th>Datum</th><th>Expediteur</th><th>Route</th>"+
+    "<th style='text-align:right'>Containers</th><th style='text-align:right'>Factuurtotaal</th><th style='text-align:right'>Per container</th></tr></thead><tbody>"+
+    g.facturen.map(f=>"<tr><td>"+esc(f.nummer)+"</td><td>"+esc(vhDatum(f.datum))+"</td><td>"+esc(f.expediteur)+"</td>"+
+      "<td style='font-size:11.5px'>"+esc(f.route)+"</td><td style='text-align:right'>"+f.containers+"</td>"+
+      "<td style='text-align:right'>"+u(f.totaalFactuur)+"</td><td style='text-align:right'>"+u(f.perContainer)+"</td></tr>").join("")+
+    "<tr style='border-top:2px solid var(--border)'><td colspan='6'><b>Gemiddelde vracht per container</b></td>"+
+      "<td style='text-align:right'><b>"+u(g.vrachtPerContainer)+"</b></td></tr>"+
+    "<tr><td colspan='6'>Uitladen van de truck bij het warehouse — staat op geen enkele factuur</td>"+
+      "<td style='text-align:right'>"+u(g.uitladenPerContainer)+"</td></tr>"+
+    "<tr style='border-top:2px solid var(--fonteyn-green)'><td colspan='6'><b>Per container</b></td>"+
+      "<td style='text-align:right'><b>"+u(g.perContainer)+"</b></td></tr>"+
+    "</tbody></table></div>"+
+    "<p class='lead' style='font-size:12px;margin-top:10px'>De reis die op zo'n factuur staat: fabriek naar de haven in China "+
+    "(origin local charges), overzee naar Houston (ocean freight), papierwerk en havenkosten (ISF filing, US local charges, "+
+    "chassis rental, administratie), de douaneaangifte (customs entry fee) en de invoerrechten (customs duties), en tot slot "+
+    "van de haven naar het warehouse (container drayage).</p>"+
+    "<p class='lead' style='font-size:12px'><b>Let op bij de invoerrechten.</b> Die zijn gemiddeld "+u(g.dutiesPerContainer)+
+    " per container over deze drie facturen. Dat is wat er in het verleden is betaald. Wordt er nu 10% geheven waar eerder 3% gold, "+
+    "dan valt dit deel voor nieuwe containers fors hoger uit en is dit gemiddelde te laag.</p>"+
+    "</details>";
+}
+
 function vhDatum(s){
   const m=String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
   return m?(m[3]+"-"+m[2]+"-"+m[1]):String(s||"");
 }
+(function(){ const c=document.getElementById("vhContainers");
+  if(c) c.addEventListener("input",function(){ if(vhData) vhTeken(); }); })();
 ["vhZoek","vhVerbergNul"].forEach(function(id){
   const el=document.getElementById(id);
   if(el) el.addEventListener(id==="vhZoek"?"input":"change",function(){ if(vhData) vhTeken(); });
