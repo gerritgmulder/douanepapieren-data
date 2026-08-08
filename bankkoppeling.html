@@ -243,11 +243,28 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 <main>
   <div class="card">
     <div class="section-title">Stap 1 — Upload MT940-bankafschrift</div>
-    <p style="margin: 0 0 14px; font-size: 13px; color: var(--muted);">
-      Sleep een MT940-bestand hieronder (of klik). De binnenkomende creditbetalingen
-      worden geparseerd en automatisch geprobeerd te koppelen aan open Logic4-orders
-      op basis van het ordernummer in de afschriftregel. Mollie- en Pay.nl-tussenrekening-
-      betalingen worden apart gegroepeerd.
+    <p style="margin: 0 0 12px; font-size: 13px; color: var(--muted); line-height: 1.55;">
+      Sleep een MT940-bestand hierheen of klik erop. Alle binnenkomende betalingen worden
+      gelezen en zo goed mogelijk aan Logic4 gekoppeld. Daarvoor wordt op vier dingen
+      tegelijk gekeken:
+    </p>
+    <ul style="margin: 0 0 12px; padding-left: 20px; font-size: 13px; color: var(--muted); line-height: 1.6;">
+      <li><b>Factuurnummer</b> in de omschrijving (die beginnen met een 6).</li>
+      <li><b>Ordernummer</b> (die beginnen met een 3). Dit komt het vaakst voor: klanten
+          noemen meestal hun ordernummer. Het order wordt erbij gehaald, zodat het bedrag
+          vergeleken kan worden met wat er nog openstaat.</li>
+      <li><b>Het bedrag</b> tegen de openstaande posten. Levert dat precies één post op,
+          dan is dat een aanwijzing; komt het bedrag vaker voor, dan krijg je de kandidaten
+          te zien en kies je zelf.</li>
+      <li><b>De naam</b> van de tegenpartij. Die koppelt nooit op zichzelf, maar bevestigt
+          de rest — of haalt hem onderuit. Klopt het nummer wel maar hoort de naam bij een
+          andere klant, dan gaat de regel bewust terug naar <i>controleren</i>.</li>
+    </ul>
+    <p style="margin: 0 0 14px; font-size: 13px; color: var(--muted); line-height: 1.55;">
+      Verzamelbetalingen worden apart gezet en niet gekoppeld: Mollie, Pay.nl, Stripe en
+      Shopify, en de dagafrekening van de pinautomaat. Die gaan over veel klanten tegelijk,
+      dus er is geen order om ze aan te hangen — ze horen op een tussenrekening.
+      Er wordt niets geboekt zolang jij niets aanvinkt.
     </p>
     <label class="dropzone" id="dropzone">
       <input type="file" id="fileInput" accept=".sta,.940,.txt,.mt940,application/octet-stream,text/plain">
@@ -258,7 +275,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   </div>
 
   <div class="card hidden" id="resultCard">
-    <div class="section-title">Stap 2 — Controleer de matches</div>
+    <div class="section-title">Stap 2 — Controleer en kies wat er geboekt wordt</div>
     <div class="bank-info" id="bankInfo"></div>
 
     <div class="summary" id="summary"></div>
