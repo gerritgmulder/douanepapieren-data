@@ -309,7 +309,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     </div>
     <p class="muted" style="margin:10px 0 0;font-size:12px;">
       Boeken schrijft de betaling weg op de order in Logic4 en is niet terug te draaien.
-      Vink daarom aan wat je wilt boeken — één regel, een deel, of alles.
+      Vink daarom aan wat je wilt boeken — één regel, een deel, of alles. Er wordt vastgelegd wie wat heeft geboekt.
     </p>
     <div id="actionStatus"></div>
   </div>
@@ -460,7 +460,6 @@ const TUSSEN_UITLEG = {
 // van de gegevens en het tonen ervan.
 const WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
 const teamKey  = () => localStorage.getItem("fp.teamkey") || "";
-const adminKey = () => localStorage.getItem("dp.adminkey") || "";
 const BM = () => window.fpBankMatch;
 
 let openIndex = null, openMeta = null, debiteurNamen = {};
@@ -691,16 +690,13 @@ $("boekBtn").addEventListener("click", async () => {
   const rijen = selectie();
   if (!rijen.length) return;
   // De demo draait op verzonnen facturen. Zonder deze stop zou een klik hier
-  // wél de beheersleutel vragen en Logic4 aanspreken - met nummers die niet
+  // wél Logic4 aanspreken om te boeken - met factuurnummers die niet
   // bestaan. Dat hoort niet te kunnen.
   if (state.demo) {
     showStatus($("actionStatus"), "Dit is de demo met een voorbeeldafschrift; er wordt niets geboekt. " +
       "Laad een echt MT940-bestand om te boeken.", "info");
     return;
   }
-  const sleutel = await vraagBeheersleutel();
-  if (!sleutel) return;
-
   const totaal = rijen.reduce((n, t) => n + Number(t.amount), 0);
   const zeker = await bevestigBoeken(rijen.length, totaal);
   if (!zeker) return;
@@ -748,12 +744,15 @@ $("boekBtn").addEventListener("click", async () => {
     const portie = teBoeken.slice(i, i + 30);
     showStatus($("actionStatus"), "Boeken… (" + Math.min(i + 30, teBoeken.length) + " van " + teBoeken.length + ")", "info");
     const r = await fetch(WORKER + "/bank/boeken", {
-      method: "POST", headers: { "Content-Type": "application/json", "X-DP-Admin": sleutel },
+      method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
       body: JSON.stringify({ door: (localStorage.getItem("fp.email") || ""),
         regels: portie.map(x => ({ orderNr: x.orderNr, invoiceId: x.invoiceId, bedrag: x.bedrag, omschrijving: x.omschrijving })) }) });
+    if (r.status === 403) {
+      showStatus($("actionStatus"), "Jouw account mag betalingen niet wegschrijven. Er is niets geboekt en je selectie staat er nog. Vraag Gerrit om je toe te voegen.", "error");
+      $("boekBtn").disabled = false; return;
+    }
     if (r.status === 401) {
-      showStatus($("actionStatus"), "Die sleutel wordt niet geaccepteerd. Er is niets geboekt - je selectie staat er nog, dus je kunt het opnieuw proberen zodra je de juiste sleutel hebt. Vraag hem bij Gerrit.", "error");
-      localStorage.removeItem(BOEK_SLEUTEL);
+      showStatus($("actionStatus"), "Het dashboard is niet ontgrendeld op deze computer. Log opnieuw in via het dashboard, dan wordt de sleutel opgehaald. Er is niets geboekt.", "error");
       $("boekBtn").disabled = false; return;
     }
     const j = await r.json();
@@ -803,22 +802,6 @@ function vensterje(titel, uitleg, invoer, okTekst, gevaar) {
     ov.querySelector("#vjNee").addEventListener("click", () => af(invoer ? null : false));
     if (inp) setTimeout(() => inp.focus(), 40);
   });
-}
-// De sleutel om te mogen boeken. Bewust een eigen sleutel en niet die van het
-// partnerportaal: wie betalingen boekt hoeft niet bij het dealerbestand te
-// kunnen. Wordt apart bewaard, zodat het intypen ervan niets anders opent.
-const BOEK_SLEUTEL = "fp.boeksleutel";
-function boekSleutel() { return localStorage.getItem(BOEK_SLEUTEL) || adminKey() || ""; }
-async function vraagBeheersleutel() {
-  if (boekSleutel()) return boekSleutel();
-  const k = await vensterje("Sleutel om te boeken",
-    "Betalingen wegschrijven verandert de administratie, dus die stap zit achter een sleutel. " +
-    "Je hoeft hem maar \u00e9\u00e9n keer per computer in te voeren; daarna onthoudt deze computer hem. " +
-    "Heb je hem niet, vraag hem dan bij Gerrit.",
-    true, "Bewaren en doorgaan", false);
-  if (!k) return null;
-  localStorage.setItem(BOEK_SLEUTEL, k.trim());
-  return k.trim();
 }
 function bevestigBoeken(aantal, totaal) {
   return vensterje("Nu " + aantal + " betaling" + (aantal === 1 ? "" : "en") + " boeken?",

@@ -3187,6 +3187,19 @@ async function plWisBestand(request, env) {
 // aanroep en doet de tegel de rest in porties.
 const BANK_CACHE_TTL = 3600 * 1000;
 
+// Wie betalingen mag wegschrijven. Zelfde groep als in dashboard.html, die
+// bepaalt wie de tegel te zien krijgt; hier staat hij nog een keer omdat het
+// scherm zichzelf niet mag bewaken bij iets dat de administratie verandert.
+const BANK_BOEKERS = new Set([
+  "osman@fonteyn.nl", "osman", "fonteyn.osman",
+  "rowan@fonteyn.nl", "rowan", "fonteyn.rowan",
+  "rico@fonteyn.nl", "rico", "fonteyn.rico",
+  "reinier@fonteyn.nl", "reinier", "fonteyn.reinier",
+  "gerrit@fonteyn.nl", "gerrit", "fonteyn.gerrit",
+  "dolf@fonteyn.nl", "fonteyn.dolf", "dolf",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 async function bankOpenstaand(env, vers) {
   const bewaard = await env.FONTEYN_DATA.get("bank-openstaand", { type: "json" });
   if (!vers && bewaard && bewaard.updated && (Date.now() - Date.parse(bewaard.updated)) < BANK_CACHE_TTL) {
@@ -3514,15 +3527,19 @@ export default {
       return reply(200, await bankFactuurOrder(env, body.paren).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/bank/boeken" && request.method === "POST") {
-      // Boeken zat achter de beheersleutel van het PARTNERPORTAAL. Dat koppelt
-      // twee dingen die niets met elkaar te maken hebben: Osman moet betalingen
-      // kunnen boeken zonder toegang tot het dealerbestand, en hij had die
-      // sleutel dus terecht niet (8 aug 2026). Er is nu een aparte sleutel voor
-      // de bank; de beheersleutel blijft ook werken zodat beheer niets merkt.
-      const sleutel = request.headers.get("X-DP-Admin") || "";
-      const magBoeken = (env.BANK_BOEK_KEY && sleutel === env.BANK_BOEK_KEY)
-                     || (env.DP_ADMIN_KEY && sleutel === env.DP_ADMIN_KEY);
-      if (!magBoeken) return reply(401, { ok: false, error: "sleutel-om-te-boeken-vereist" });
+      // Boeken zat eerst achter een aparte sleutel. Dat leverde niets op en
+      // kostte wel gedoe: Osman kon niet werken en er moest een wachtwoord
+      // rondgaan (8 aug 2026). Wie deze tegel kan openen is al iemand van
+      // financiën met een geldige Logic4-inlog, en elke boeking wordt op naam
+      // vastgelegd. Daarom: team-sleutel plus een korte lijst van wie mag
+      // boeken. Diezelfde lijst staat in dashboard.html en bepaalt wie de
+      // tegel überhaupt ziet.
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const body0 = await request.clone().json().catch(() => ({}));
+      const wie = String(body0.door || "").toLowerCase();
+      if (!BANK_BOEKERS.has(wie)) {
+        return reply(403, { ok: false, error: "niet-gemachtigd-om-te-boeken", wie });
+      }
       const body = await request.json().catch(() => ({}));
       return reply(200, await bankBoeken(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
