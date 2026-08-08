@@ -134,7 +134,7 @@
         <label style="font-size:13px">Aantal containers voor deze voorraad:</label>
         <input type="number" id="vhContainers" min="0" step="1" value="0"
                style="width:90px;border:1px solid var(--border);border-radius:8px;padding:7px 10px;font:inherit">
-        <span class="lead" style="font-size:12px;margin:0">Vul in hoeveel containers er voor deze voorraad zijn gevaren; de transportkosten rekenen daarmee door.</span>
+        <span class="lead" style="font-size:12px;margin:0" id="vhContainersUitleg"></span>
       </div>
       <div id="vhTransportDetail" style="margin-top:14px"></div>
     </div>
@@ -391,7 +391,7 @@ function vhTeken(){
     mistLijst.map(function(x){ return "<tr><td>"+esc(x[0])+"</td><td>"+x[1]+"</td></tr>"; }).join("")+
     "</tbody></table></div>";
 
-  vhWaardeTeken(waardeUsd,waardeEur);
+  vhWaardeTeken(waardeUsd,waardeEur,vhSchatContainers(aanwezig));
 
   document.getElementById("vhTel").textContent=rijen.length+" van "+regels.length+" regels";
   document.getElementById("vhLijst").innerHTML=!rijen.length
@@ -432,12 +432,48 @@ function vhTeken(){
 // Eén bedrag, in dollars. Het euro-deel wordt hier omgerekend - dat is de
 // enige plek waar dat gebeurt, en de koers staat er zichtbaar bij. In de
 // tabel zelf blijven de bedragen staan zoals de leverancier ze factureert.
-function vhWaardeTeken(waardeUsd,waardeEur){
+// Hoeveel containers zijn er voor deze voorraad gevaren? Alleen wat uit China
+// komt telt mee: de ijsbaden en sauna's uit Nederland hebben een andere reis
+// gemaakt, en de vrachtprijs die we berekenen is die van China naar Houston.
+// Herkomst is af te lezen aan de munt: dollars = Chinese fabriek.
+function vhSchatContainers(aanwezig){
+  const T=window.fpTransportHouston;
+  if(!T) return null;
+  let spas=0, spasMetMaat=0, m3Spa=0, ijsbaden=0;
+  for(const r of aanwezig){
+    if(r.munt!=="USD") continue;                 // niet uit China
+    if(r.groep){ ijsbaden+=r.aantal; continue; } // Chinees ijsbad, geen spa
+    spas+=r.aantal;
+    const a=vhAfmeting(r.model);
+    if(a){ spasMetMaat+=r.aantal; m3Spa+=a*r.aantal; }
+  }
+  if(!spasMetMaat) return null;
+  // De spa's zonder afmeting krijgen het gemiddelde van de spa's die er wel
+  // een hebben; dat is eerlijker dan ze weglaten.
+  const gem=m3Spa/spasMetMaat;
+  const m3=gem*spas + ijsbaden*T.M3_IJSBAD;
+  const c=T.containersUitVolume(m3);
+  return {spas,spasMetMaat,ijsbaden,gemPerSpa:gem,m3,...c};
+}
+function vhAfmeting(model){
+  const L=(window.fpFabrikanten&&window.fpFabrikanten.lijst)||[];
+  for(const f of L) for(const m of f.modellen){
+    if(String(m.model).toLowerCase()!==String(model).toLowerCase()||!m.afmeting) continue;
+    const p=String(m.afmeting).split("x").map(Number);
+    if(p.length===3&&!p.some(isNaN)) return (p[0]/1000)*(p[1]/1000)*(p[2]/1000);
+  }
+  return null;
+}
+
+function vhWaardeTeken(waardeUsd,waardeEur,schatting){
   const doel=document.getElementById("vhWaarde");
   if(!doel||!window.fpTransportHouston) return;
   const T=window.fpTransportHouston;
   const koers=(vhKoers&&vhKoers.koers)||1.11;
-  const containers=Math.max(0,Number((document.getElementById("vhContainers")||{}).value)||0);
+  // Het veld begint op de berekende schatting; wie het beter weet typt het over.
+  const veld=document.getElementById("vhContainers");
+  if(veld&&!veld.dataset.aangeraakt&&schatting) veld.value=schatting.afgerond;
+  const containers=Math.max(0,Number((veld||{}).value)||0);
   const som=T.totaal({voorraadUsd:waardeUsd,voorraadEur:waardeEur,koers:koers,containers:containers});
   const u=n=>"$ "+Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2});
   const e=n=>"€ "+Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -464,6 +500,13 @@ function vhWaardeTeken(waardeUsd,waardeEur){
 
   // De onderbouwing van dat gemiddelde hoort erbij: Daan mag vragen waar het
   // vandaan komt, en dan moet het er staan.
+  const cu=document.getElementById("vhContainersUitleg");
+  if(cu) cu.innerHTML=schatting
+    ? "Berekend op <b>"+schatting.afgerond+"</b> ("+schatting.exact.toFixed(1)+"): "+
+      Math.round(schatting.m3)+" m&sup3; aan spa\'s en ijsbaden uit China, bij "+schatting.m3PerContainer+
+      " m&sup3; lading per container. Weet je het aantal zeker, typ het dan over."
+    : "Vul in hoeveel containers er voor deze voorraad zijn gevaren.";
+
   const d=document.getElementById("vhTransportDetail");
   if(!d) return;
   const g=som.gemiddelde;
@@ -499,7 +542,7 @@ function vhDatum(s){
   return m?(m[3]+"-"+m[2]+"-"+m[1]):String(s||"");
 }
 (function(){ const c=document.getElementById("vhContainers");
-  if(c) c.addEventListener("input",function(){ if(vhData) vhTeken(); }); })();
+  if(c) c.addEventListener("input",function(){ c.dataset.aangeraakt="1"; if(vhData) vhTeken(); }); })();
 ["vhZoek","vhVerbergNul"].forEach(function(id){
   const el=document.getElementById(id);
   if(el) el.addEventListener(id==="vhZoek"?"input":"change",function(){ if(vhData) vhTeken(); });

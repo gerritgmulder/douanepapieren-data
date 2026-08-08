@@ -95,6 +95,34 @@
     },
   ];
 
+  // ─── Hoeveel containers zijn er voor deze voorraad gevaren? ─────────
+  // Geijkt op echte zendingen, niet op een vuistregel. In het dashboard staan
+  // acht commercial invoices naar Rotterdam: samen 66 containers met 715
+  // spa's. Van 527 daarvan staat de afmeting op de Jazzi-prijslijst; die zijn
+  // samen 2.466,6 m3, dus gemiddeld 4,68 m3 per spa. Opgeschaald naar alle
+  // 715 komt dat neer op 50,7 m3 lading per container - ongeveer 75% van een
+  // 40ft high cube, en dat klopt met wat je mag verwachten: spa's zijn stijve
+  // dozen die niet in elkaar passen.
+  //
+  // Waarom niet simpelweg "10,8 spa's per container", wat diezelfde 66
+  // containers ook opleveren: de spa's in Houston zijn gemiddeld 6,25 m3 en
+  // dus een derde groter dan die in de Rotterdam-zendingen. Op stuks tellen
+  // geeft daardoor te weinig containers. Op volume rekenen houdt rekening met
+  // welke modellen er werkelijk staan.
+  var M3_PER_CONTAINER = 50.7;
+
+  // Een ijsbad is geen spa: kleiner, en de afmeting staat nergens vast. Voor
+  // de ijsbaden die uit China komen (Breeze, Elevate, Vital Ice, Balance)
+  // wordt met een voorzichtige 2,5 m3 gerekend. Het gaat om een handvol
+  // stuks, dus het verschuift het eindgetal nauwelijks.
+  var M3_IJSBAD = 2.5;
+
+  function containersUitVolume(m3) {
+    var n = Number(m3) / M3_PER_CONTAINER;
+    return { exact: Math.round(n * 10) / 10, afgerond: Math.ceil(n),
+             m3PerContainer: M3_PER_CONTAINER };
+  }
+
   function rond(n) { return Math.round(Number(n) * 100) / 100; }
 
   // Per factuur: totaal, en wat dat per container betekent.
@@ -163,6 +191,9 @@
 
   global.fpTransportHouston = {
     facturen: FACTUREN,
+    M3_PER_CONTAINER: M3_PER_CONTAINER,
+    M3_IJSBAD: M3_IJSBAD,
+    containersUitVolume: containersUitVolume,
     perFactuur: perFactuur,
     gemiddelde: gemiddelde,
     totaal: totaal,
