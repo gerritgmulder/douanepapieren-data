@@ -108,7 +108,9 @@
         { model: "Spirit Deep", code: "SKT339G1", inkoopUsd: 9138.49, verkoopEur: null, afmeting: "5400x2280x1520" },
         { model: "Sunny", code: "SKT338A4", inkoopUsd: 3230.84, verkoopEur: null, afmeting: "2280x2280x930" },
         { model: "Sydney", code: "SKT666A", inkoopUsd: 5291.5, verkoopEur: null, afmeting: "3800x2280x1150" },
-        { model: "Theater", code: "SKT339F", inkoopUsd: 6698.48, verkoopEur: null, afmeting: "3800x2280x1160" },
+        { model: "Theater", code: "SKT339F with TV", inkoopUsd: 6698.48, verkoopEur: null, afmeting: "3800x2280x1160" },
+        { model: "Theater", code: "SKT339F without TV", inkoopUsd: 5778.48, verkoopEur: null, afmeting: "3800x2280x1160",
+          let: "De prijslijst noemt alleen het bedrag met tv. Chantal bevestigde 8 aug 2026 dat de uitvoering zonder tv USD 5.778 is, en dat is ook wat er op de commercial invoice staat. Net als bij de Bright dus twee uitvoeringen onder een code." },
         { model: "Vitality", code: "SKT339G11，7.1m normal", inkoopUsd: 10202.98, verkoopEur: null },
         { model: "Vitality Deep", code: "SKT339G10，7.1m deep", inkoopUsd: 10925.24, verkoopEur: null },
         { model: "Malta", code: "SKT306C", inkoopUsd: 1331.45, verkoopEur: null, afmeting: "1820x1820x750" },
@@ -210,12 +212,19 @@
       munt: "EUR",
       opmerking: "Bedragen in EURO - deze baden komen uit Nederland, niet uit China. In Houston worden de onderdelen los geteld (barrels apart van de koelers), dus de losse artikelprijzen zijn hier de juiste. Een 'Compleet'-artikel staat in Logic4 op nul: dat is een samenstelling van losse regels.",
       modellen: [
-        { model: "Wim Hof Barrel", code: "800052 / 800062", inkoopEur: 119.40, verkoopEur: null,
-          let: "Twee maten: 240 liter EUR 119,40 en 350 liter EUR 192,00. In de telling staat geen maat, dus de laagste - anders wordt de voorraad te hoog gewaardeerd." },
+        { model: "Wim Hof Barrel", code: "800062", inkoopEur: 119.40, verkoopEur: null,
+          let: "De 240 liter; bevestigd door Chantal, 8 aug 2026." },
         { model: "Wim Hof Barrel XL", code: "800031", inkoopEur: null, verkoopEur: null,
-          let: "Bestaat alleen als 'Compleet' en staat daar op nul. Geen inkoopprijs in Logic4." },
-        { model: "Revive", code: "800002", inkoopEur: 224.41, verkoopEur: null,
-          let: "Acht kleuren van EUR 224,41 (Solid Grey) tot EUR 251,41 (Moss Stone). De telling zegt 'Multiple Colors', dus de laagste." },
+          let: "De 360 liter (Chantal, 8 aug 2026). Staat in Logic4 alleen als 'Compleet' op nul euro; Chantal stuurt de inkoopfactuur na." },
+        // Per kleur, want ze schelen in prijs. Chantal gaf de verdeling van de
+        // 32 stuks op 8 aug 2026: 2 Moss, 7 Earth Grey, 9 Granite, 10 Black
+        // Marble, 4 Blue.
+        { model: "Revive Moss Stone", code: "800053", inkoopEur: 251.41, verkoopEur: null },
+        { model: "Revive Earth Grey", code: "800055", inkoopEur: 234.91, verkoopEur: null },
+        { model: "Revive Granite Grey", code: "800058", inkoopEur: 230.41, verkoopEur: null },
+        { model: "Revive Ice Blue", code: "800050", inkoopEur: 228.41, verkoopEur: null },
+        { model: "Revive Black Marble", code: null, inkoopEur: null, verkoopEur: null,
+          let: "Deze kleur staat niet in het artikelbestand van Logic4; de andere zeven wel. Prijs nog onbekend." },
         { model: "Water chiller", code: "800015", inkoopEur: 325.89, verkoopEur: null,
           let: "De 110V/60Hz-uitvoering; in Logic4 staat er letterlijk bij dat die alleen voor de VS is. De 50Hz-versie (EUR 303,57) hoort in Europa." },
         { model: "Faith", code: "800049", inkoopEur: 1482.14, verkoopEur: null },
@@ -237,14 +246,14 @@
       contact: null, email: null,
       bron: "artikelbestand Logic4, opgevraagd 08-08-2026",
       munt: "EUR",
-      opmerking: "Bedragen in EURO. Elke maat bestaat in Clear en Rustic met een fors prijsverschil; in de telling van Houston staat geen uitvoering. Er wordt met de laagste gerekend, zodat de voorraad niet te hoog wordt gewaardeerd - staat per regel vermeld.",
+      opmerking: "Bedragen in EURO. Elke maat bestaat in Clear en Rustic met een fors prijsverschil; Houston heeft de Rustic-uitvoering (Chantal, 8 aug 2026). Zij stuurt haar eigen prijslijst nog na, die kan afwijken van het artikelbestand.",
       modellen: [
         { model: "Barrel Sauna 4 ft", code: "454117", inkoopEur: 803.57, verkoopEur: null,
-          let: "Rustic EUR 803,57, Clear EUR 1.207,14. Uitvoering onbekend, dus de laagste." },
+          let: "Rustic-uitvoering; bevestigd door Chantal, 8 aug 2026. Zij stuurt haar eigen prijslijst nog na." },
         { model: "Barrel Sauna 6 ft", code: "454119", inkoopEur: 1160.71, verkoopEur: null,
-          let: "Rustic EUR 1.160,71, Clear EUR 1.624,11. Uitvoering onbekend, dus de laagste." },
+          let: "Rustic-uitvoering; bevestigd door Chantal, 8 aug 2026. Zij stuurt haar eigen prijslijst nog na." },
         { model: "Barrel Sauna 8 ft", code: "454123", inkoopEur: 1383.93, verkoopEur: null,
-          let: "Rustic EUR 1.383,93, Clear EUR 2.450,00. Uitvoering onbekend, dus de laagste." },
+          let: "Rustic-uitvoering; bevestigd door Chantal, 8 aug 2026. Zij stuurt haar eigen prijslijst nog na." },
         { model: "Barrel Sauna 7+1 combi", code: "454115", inkoopEur: 1540.18, verkoopEur: null,
           let: "Bestaat alleen als Rustic - geen keuze, geen onzekerheid." },
       ],
@@ -279,9 +288,13 @@
     "vitalice": "Team Vitallce",       // typefout van de fabriek voor Team Vital Ice
     "euphoriawave": "New Euphoria wave",
     "felicitywave": "New Felicity wave",
+    // Modellen die van naam zijn veranderd. De voorraadtelling gebruikt nog de
+    // oude naam, de prijslijst de nieuwe (Chantal, 8 aug 2026).
+    "tradition": "Aurora",
+    "mirage": "Cascade",
   };
 
-  var DUBBELZINNIG = { "skt338a3": 1, "skt339c": 1 };
+  var DUBBELZINNIG = { "skt338a3": 1, "skt339c": 1, "skt339f": 1 };
 
   function prijsVan(model, code) {
     var perCode = {}, perNaam = {};
