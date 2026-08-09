@@ -258,20 +258,28 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
     var p;
     if(isPdf(f)){
       if(!window.fpCiPdf) throw new Error("de pdf-lezer is niet geladen. Herstart het dashboard.");
-      const doc=await window.fpCiPdf.lees(await window.fpCiPdf.uitPdf(f));
-      if(!doc.regels.length) throw new Error("in deze PDF staan geen artikelregels. Staat er wel een tabel met aantal, stuksprijs en bedrag in?");
-      p={ tabblad:"PDF"+(doc.container?" · container "+doc.container:""),
+      // Twee soorten bladzijden: de commercial invoice van MEXDA en de
+      // proforma van Huantong, met per spa een blok en de kleuren ernaast.
+      // De lezer kiest zelf op de inhoud; de bestandsnaam zegt niets.
+      const doc=window.fpCiPdf.leesAuto(await window.fpCiPdf.uitPdf(f));
+      if(!doc.regels.length) throw new Error("in deze PDF staan geen artikelregels. Staat er wel een tabel met een artikelnaam en een aantal in?");
+      p={ tabblad:(doc.soort==="proforma"?"proforma":"commercial invoice")+
+                  (doc.container?" · container "+doc.container:"")+
+                  (doc.containers?" · "+doc.containers+" containers":""),
           leverancier:doc.leverancier,
           referentie:doc.invoiceNo||null,
           pdf:doc,
           regels:doc.regels.map(function(r){
-            return { code:r.code, model:null, kleur:null, skirt:null,
+            return { code:r.code, model:null,
+                     // Bij de proforma staat de kleur in de Picture-kolom; die
+                     // bepaalt samen met de omkasting welk artikel het wordt.
+                     kleur:r.kleur||null, skirt:r.skirt||null,
                      aantal:r.aantal, prijs:(r.prijsUsd>0?r.prijsUsd:null),
                      omschrijving:r.omschrijving };
           }) };
       // Spreken factuur en pakbon elkaar tegen, dan mag daar niet overheen
       // gelezen worden: hierop wordt straks voorraad geteld.
-      if(doc.verschillen.length){
+      if((doc.verschillen||[]).length){
         ikoStatus("bad","Let op - de commercial invoice en de packing list in dit bestand komen niet overeen: "+
           doc.verschillen.map(function(v){ return v.code+" ("+v.wat+")"; }).join("; ")+
           ". Zoek dit eerst uit met de fabriek; het voorstel hieronder volgt de factuur.");

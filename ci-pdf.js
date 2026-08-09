@@ -205,6 +205,95 @@
     return regels;
   }
 
-  global.fpCiPdf = { lees: lees, uitPdf: uitPdf, kop: kop, tabel: tabel, getallen: getallen };
+  // ─── Tweede soort: de proforma van Huantong ─────────────────────────
+  // Heel andere bladzijde dan een commercial invoice. Per spa staat er een
+  // blok van soms twintig regels: de standaarduitvoering, daaronder de
+  // opties, en links ernaast de maat en de kleuren. Elk blok sluit af met
+  // "Total Price", en dat is het enige betrouwbare scheidingsteken.
+  //
+  // Chantal heeft gezegd wat ze eruit nodig heeft (8 aug 2026): de Item Name,
+  // de Shell Color uit de Picture-kolom, en de Quantity.
+  //
+  // Het aantal staat op élke optieregel opnieuw en is telkens hetzelfde - 21
+  // spa's, 21 covers, 21 blowers. We nemen daarom het aantal dat het vaakst
+  // voorkomt in het blok en niet het eerste of het hoogste; bij een blok waar
+  // één optie op een afwijkend aantal staat blijft dat dan goed gaan.
+  function leesProforma(regels) {
+    var alles = regels.join("\n");
+    var uit = { leverancier: null, invoiceNo: null, datum: null, regels: [], soort: "proforma" };
+    var m;
+    if ((m = alles.match(/PI\s*No\.?\s*:?\s*([A-Za-z0-9\- ]{3,40})/i))) uit.invoiceNo = schoon(m[1]);
+    if ((m = alles.match(/Date\s*:?\s*(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/i)))
+      uit.datum = m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
+    if ((m = alles.match(/^\s*([A-Z][A-Z .,&\']{6,60}CO\.,?\s*LTD)/im))) uit.leverancier = schoon(m[1]);
+    if ((m = alles.match(/Other\s*:\s*\((\d+)\s*Containers?\)/i))) uit.containers = Number(m[1]);
+
+    // In blokken hakken op "Total Price".
+    var blokken = [], huidig = [];
+    for (var i = 0; i < regels.length; i++) {
+      huidig.push(regels[i]);
+      if (/Total\s*Price\s*:/i.test(regels[i])) { blokken.push(huidig); huidig = []; }
+    }
+    if (huidig.length) blokken.push(huidig);
+
+    for (var b = 0; b < blokken.length; b++) {
+      var blok = blokken[b];
+      var naam = null, shell = null, skirt = null, maat = null;
+      var tellingen = {}, prijzen = {}, bedragen = [];
+      for (var j = 0; j < blok.length; j++) {
+        var r = String(blok[j]);
+        // De kolom "No. / Item Name": een klein nummer, dan witruimte, dan de naam.
+        if (!naam) {
+          var mn = r.match(/^\s{0,8}(\d{1,2})\s{2,}(\S[^\s].{0,40}?)(?:\s{2,}|$)/);
+          if (mn && !/^\d/.test(mn[2])) naam = schoon(mn[2]);
+        }
+        if (!shell && (m = r.match(/Shell\s*Colou?r\s*:?\s*([^\n]{1,40}?)(?:\s{2,}|$)/i))) shell = schoon(m[1]);
+        if (!skirt && (m = r.match(/Skirt\s*Colou?r\s*:?\s*([^\n]{1,40}?)(?:\s{2,}|$)/i))) skirt = schoon(m[1]);
+        if (!maat && (m = r.match(/Size\s*:?\s*([\d]{3,4}\s*[*x×]\s*[\d]{3,4}\s*[*x×]\s*[\d]{3,4})\s*mm?/i))) maat = schoon(m[1]).replace(/\s/g, "");
+        // Een regel met aantal, stuksprijs en bedrag aan het eind.
+        var mq = r.match(/(\d{1,4})\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*$/);
+        if (mq && !/Total\s*Price/i.test(r)) {
+          var q = Number(mq[1]);
+          if (q > 0 && q < 5000) {
+            tellingen[q] = (tellingen[q] || 0) + 1;
+            if (!prijzen[q] || Number(mq[3]) > prijzen[q].bedrag) prijzen[q] = { prijs: Number(mq[2]), bedrag: Number(mq[3]) };
+            bedragen.push(Number(mq[3]));
+          }
+        }
+      }
+      if (!naam || !Object.keys(tellingen).length) continue;
+      // Het aantal dat het vaakst terugkomt is het aantal spa\'s.
+      var beste = null;
+      for (var q2 in tellingen) if (beste === null || tellingen[q2] > tellingen[beste] ||
+          (tellingen[q2] === tellingen[beste] && Number(q2) > Number(beste))) beste = q2;
+      var aantal = Number(beste);
+      var hoofd = prijzen[aantal] || {};
+      uit.regels.push({
+        code: naam, omschrijving: naam, aantal: aantal,
+        kleur: shell || null, skirt: skirt || null, afmeting: maat || null,
+        prijsUsd: hoofd.prijs || null,
+        // Alles wat op dit blok is gefactureerd, dus inclusief de opties.
+        bedragUsd: Math.round(bedragen.reduce(function (n, x) { return n + x; }, 0) * 100) / 100,
+      });
+    }
+    uit.totaalStuks = uit.regels.reduce(function (n, r) { return n + (Number(r.aantal) || 0); }, 0);
+    uit.totaalUsd = Math.round(uit.regels.reduce(function (n, r) { return n + (Number(r.bedragUsd) || 0); }, 0) * 100) / 100;
+    uit.packing = []; uit.verschillen = [];
+    return uit;
+  }
+
+  // Welk soort bladzijde is dit? De keuze mag niet op de bestandsnaam
+  // berusten; die zegt bij deze fabrieken niets.
+  function soortVan(regels) {
+    var t = regels.join(" ");
+    if (/PROFORMA\s*INVOICE/i.test(t) && /Item\s*Name/i.test(t)) return "proforma";
+    return "commercial";
+  }
+  function leesAuto(regels) {
+    return soortVan(regels) === "proforma" ? leesProforma(regels) : lees(regels);
+  }
+
+  global.fpCiPdf = { lees: lees, leesProforma: leesProforma, leesAuto: leesAuto, soortVan: soortVan,
+                     uitPdf: uitPdf, kop: kop, tabel: tabel, getallen: getallen };
 
 })(typeof window !== "undefined" ? window : globalThis);

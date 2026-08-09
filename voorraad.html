@@ -2421,8 +2421,13 @@ function parseCIOpKop(rows){
 // niet in de spa-codelijst.
 async function parseCiPdf(file){
   if(!window.fpCiPdf) throw new Error("de pdf-lezer is niet geladen. Herstart het dashboard.");
-  const doc=window.fpCiPdf.lees(await window.fpCiPdf.uitPdf(file));
+  const doc=window.fpCiPdf.leesAuto(await window.fpCiPdf.uitPdf(file));
   if(!doc.regels.length) return null;
+  // Een proforma is géén commercial invoice: die gaat over wat besteld wordt,
+  // niet over wat er vaart. Belandt hij hier, dan zou er een schip verschijnen
+  // dat niet bestaat.
+  if(doc.soort==="proforma") throw new Error("dit is een proforma invoice ("+file.name+
+    "), geen commercial invoice. Gebruik daarvoor de kaart hierboven, Proforma invoice naar inkooporder. Er is niets gewijzigd aan de schepen.");
   const models={},modelColors={},unmapped={},specials=[];
   for(const r of doc.regels){
     const aantal=Number(r.aantal)||0;
