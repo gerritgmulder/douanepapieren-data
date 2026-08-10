@@ -185,13 +185,21 @@
     if (!hand) hand = {};
     var k = handSleutel(model, code);
     if (!k) return Promise.reject(new Error("Dit model heeft geen naam en geen code."));
+    // Een bestaande covermaat blijft staan: die gaat over de cover en niet
+    // over de spa, en anders raakt hij hem kwijt zodra iemand de spa aanpast.
+    var rec = hand[k] || {};
     if (maat) {
       hand[k] = {
         l: Number(maat.l), b: Number(maat.b), h: Number(maat.h),
         kg: maat.kg != null && maat.kg !== "" ? Number(maat.kg) : null,
+        cover: rec.cover,
         model: model || "", code: code || "",
         door: door || "", op: new Date().toISOString(),
       };
+      if (hand[k].cover === undefined) delete hand[k].cover;
+    } else if (rec.cover !== undefined) {
+      hand[k] = { cover: rec.cover, model: model || "", code: code || "",
+                  door: door || "", op: new Date().toISOString() };
     } else {
       delete hand[k];
     }
@@ -259,11 +267,89 @@
     return m ? (m.l / 100) * (m.b / 100) * (m.h / 100) : null;
   }
 
+  /* ─── Covers ──────────────────────────────────────────────────────────────
+     Elke spa gaat met zijn cover mee de container in. Die telt dus mee, en tot
+     10 aug 2026 deed hij dat niet.
+
+     De maat volgt uit de spa zelf (Gerrit, 10 aug 2026):
+     - De cover is een paar centimeter groter dan de spa: 200 x 200 wordt
+       203 x 203.
+     - Hij wordt dubbelgevouwen over de kórtste kant. Een cover van 203 x 303
+       wordt dus 101,5 x 303 - de lange kant blijft.
+     - Onopgevouwen is hij 10 cm dik aan de buitenranden en 12 cm bij de vouw
+       in het midden. Dubbelgevouwen wordt dat 20 cm en 24 cm.
+
+     Voor het stapelen rekenen we met die 24: dat is de dikste plek en daar
+     moet hij doorheen. In werkelijkheid kun je twee covers om en om leggen
+     zodat de vouwen elkaar niet raken en je gemiddeld op 22 uitkomt; dat
+     scheelt pas iets bij een container vol losse covers.
+
+     IJsbaden en sauna's hebben geen cover. */
+  var COVER_MARGE = 3;    // cm groter dan de spa, per kant van de maat
+  var COVER_RAND = 10;    // cm dik aan de buitenrand, onopgevouwen
+  var COVER_VOUW = 12;    // cm dik bij de vouw, onopgevouwen
+
+  var GEEN_COVER = /(ice ?bath|ijsbad|wim hof|barrel|plunge|revive|chiller|shower|douche|sauna|vital[- ]?ice)/i;
+  function heeftCover(model, fabriek) {
+    return !GEEN_COVER.test(String(model || "") + " " + String(fabriek || ""));
+  }
+
+  // De cover als doos zoals hij vervoerd wordt: dubbelgevouwen, dikste maat.
+  function vouw(l, b) {
+    var lang = Math.max(l, b), kort = Math.min(l, b);
+    return { l: lang, b: kort / 2, h: COVER_RAND * 2, hVouw: COVER_VOUW * 2 };
+  }
+
+  /* De cover van één model. Geeft null als hij er geen heeft.
+     maat = de spa-afmeting in centimeters (uit maatVan). */
+  function coverVan(model, code, maat, fabriek) {
+    var eigen = hand ? hand[handSleutel(model, code)] : null;
+    var c = eigen ? eigen.cover : undefined;
+    // Uitdrukkelijk op 'geen cover' gezet.
+    if (c === false) return null;
+    // Zelf een covermaat ingevuld (onopgevouwen).
+    if (c && c.l > 0 && c.b > 0) {
+      var v = vouw(c.l, c.b);
+      return { l: v.l, b: v.b, h: v.hVouw, open: { l: c.l, b: c.b }, bron: "handmatig" };
+    }
+    if (!maat || !heeftCover(model, fabriek)) return null;
+    var ol = maat.l + COVER_MARGE, ob = maat.b + COVER_MARGE;
+    var w = vouw(ol, ob);
+    return { l: w.l, b: w.b, h: w.hVouw, open: { l: ol, b: ob }, bron: "afgeleid" };
+  }
+
+  /* De covermaat vastleggen. cover = {l,b} onopgevouwen, false voor 'geen
+     cover', of null om weer op afgeleid te zetten. */
+  function bewaarCover(model, code, cover, door) {
+    if (!hand) hand = {};
+    var k = handSleutel(model, code);
+    if (!k) return Promise.reject(new Error("Dit model heeft geen naam en geen code."));
+    var rec = hand[k] || { model: model || "", code: code || "" };
+    if (cover === null) delete rec.cover;
+    else if (cover === false) rec.cover = false;
+    else rec.cover = { l: Number(cover.l), b: Number(cover.b) };
+    rec.door = door || rec.door || "";
+    rec.op = new Date().toISOString();
+    // Een record dat alleen nog een covermaat had en die kwijtraakt, mag weg.
+    if (rec.cover === undefined && !(rec.l > 0)) delete hand[k];
+    else hand[k] = rec;
+    return fetch(BUCKET, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamSleutel() },
+      body: JSON.stringify({ maten: hand, updated: new Date().toISOString() }),
+    }).then(function (r) {
+      if (!r.ok) throw new Error("opslaan faalde (HTTP " + r.status + ")");
+      return hand[k] || null;
+    });
+  }
+
   var API = {
     laad: laad, zet: zet, zetPakket: zetPakket, geladen: geladen, aantal: aantal,
     maatVan: maatVan, m3Van: m3Van, sleutel: sleutel,
     automatischVan: automatischVan, bewaarMaat: bewaarMaat,
     handmatigVan: handmatigVan, handmatigAantal: handmatigAantal,
+    coverVan: coverVan, bewaarCover: bewaarCover, heeftCover: heeftCover,
+    COVER_MARGE: COVER_MARGE, COVER_RAND: COVER_RAND, COVER_VOUW: COVER_VOUW,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = API;
   global.fpAfmetingen = API;

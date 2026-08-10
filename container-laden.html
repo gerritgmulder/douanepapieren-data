@@ -170,6 +170,10 @@
       <div class="keuze"><input type="checkbox" id="fKantelen" checked>
         <label for="fKantelen" style="margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)">Spa's mogen op hun kant</label>
       </div>
+      <div class="keuze"><input type="checkbox" id="fCovers" checked>
+        <label for="fCovers" style="margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)"
+               title="Elke spa gaat met zijn cover mee. Die is dubbelgevouwen en neemt ook plek in.">Covers meeladen</label>
+      </div>
       <button class="btn sm" id="btnLeeg" type="button">Alles weghalen</button>
       <button class="btn sm" id="btnPrint" type="button">🖨 Printen / PDF</button>
     </div>
@@ -221,6 +225,19 @@
     </div>
     <p class="lead" style="margin:6px 0 0;font-size:11.5px">De maat van de spa zoals hij in de container gaat, in hele
       centimeters. De ruimte om hem heen regelt het dashboard zelf.</p>
+
+    <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
+      <div class="keuze" style="padding:0 0 6px"><input type="checkbox" id="dlgGeenCover">
+        <label for="dlgGeenCover" style="margin:0;font-size:13px;color:var(--ink)">Dit model heeft geen cover</label>
+      </div>
+      <div id="dlgCoverVelden">
+        <div class="maten" style="margin-top:4px">
+          <div style="flex:1"><label for="dlgCL">Cover lengte (cm)</label><input type="number" id="dlgCL" min="1" max="1500" step="1"></div>
+          <div style="flex:1"><label for="dlgCB">Cover breedte (cm)</label><input type="number" id="dlgCB" min="1" max="400" step="1"></div>
+        </div>
+        <p class="lead" style="margin:6px 0 0;font-size:11.5px" id="dlgCoverUitleg"></p>
+      </div>
+    </div>
     <p class="fout" id="dlgFout"></p>
     <div class="knoppen">
       <button class="btn sm" id="dlgAuto" type="button">Terug naar automatisch</button>
@@ -272,6 +289,8 @@ const TEGEL_VERSIE="10-08-2026 · 16:10";
 function el(id){return document.getElementById(id);}
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 function nl(n,d){return Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:d||0,maximumFractionDigits:d||0});}
+// Halve centimeters komen voor bij een dubbelgevouwen cover (101,5).
+function nl2(n){return Number(n||0).toLocaleString("nl-NL",{maximumFractionDigits:1});}
 
 /* ─── Containers ──────────────────────────────────────────────────────────
    Binnenwerkse maten in centimeters. Dat is de ruimte die je echt kunt
@@ -317,7 +336,11 @@ function bouwModellen(){
     (f.modellen||[]).forEach(m=>{
       const maat=window.fpAfmetingen ? window.fpAfmetingen.maatVan(m.model,m.afmeting,m.code) : null;
       if(maat){
+        // Elke spa gaat met zijn cover mee. Die maat volgt uit de spa zelf,
+        // tenzij Chantal hem heeft ingevuld of op 'geen cover' gezet.
+        const cover=window.fpAfmetingen.coverVan(m.model,m.code,maat,f.fabriek);
         uit.push({
+          cover:cover,
           id:f.fabriek+"|"+(m.code||"")+"|"+(m.model||""),
           i:uit.length,
           model:m.model, code:m.code, fabriek:f.fabriek, merk:f.merk, bron:maat.bron,
@@ -343,11 +366,13 @@ function herbouwModellen(){
 // Vaste kleur per model, zodat dezelfde spa in de lijst en in de tekening
 // dezelfde kleur heeft. Uit de sleutel gerekend en niet uit de plek in de
 // lijst, want die plek verschuift als er modellen bij komen.
-function kleurVan(id){
+function kleurVan(id,licht){
   let h=0;
   const s=String(id);
   for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0;
-  return "hsl("+(Math.abs(h)%360)+",62%,55%)";
+  return licht
+    ? "hsl("+(Math.abs(h)%360)+",45%,80%)"   // de cover van dat model
+    : "hsl("+(Math.abs(h)%360)+",62%,55%)";
 }
 
 /* ─── Stapelen ────────────────────────────────────────────────────────────
@@ -393,65 +418,176 @@ function past(C,doos,st,p,geplaatst){
   if(p.x+st[0]>C.l+0.001) return false;
   if(p.y+st[1]>C.b+0.001) return false;
   if(p.z+st[2]>C.h+0.001) return false;
-  for(const q of geplaatst){
+  // Van achter naar voren: de laatst geplaatste dozen liggen het dichtst bij
+  // de plek die we nu proberen, dus daar botst hij het snelst op. Dat scheelt
+  // bij een volle container een veelvoud aan vergelijkingen.
+  for(let i=geplaatst.length-1;i>=0;i--){
+    const q=geplaatst[i];
     if(p.x<q.x+q.dl-0.001 && p.x+st[0]>q.x+0.001 &&
        p.y<q.y+q.db-0.001 && p.y+st[1]>q.y+0.001 &&
        p.z<q.z+q.dh-0.001 && p.z+st[2]>q.z+0.001) return false;
   }
   return true;
 }
+/* De vrije hoekpunten waar een volgende doos kan beginnen.
+
+   Dit draait in de binnenste lus - bij een volle container honderdduizenden
+   keren - dus de sleutel is een getal en geen tekst. Met "x|y|z" als tekst
+   ging bijna de helft van de rekentijd op aan het maken van die strings.
+   Alles staat in halve centimeters (een gevouwen cover is 101,5 breed), dus
+   maal tien en afronden is exact genoeg. */
 function hoekpunten(geplaatst){
-  const punten=[{x:0,y:0,z:0}], gezien={"0|0|0":1};
-  for(const q of geplaatst){
-    const kandidaten=[
-      {x:q.x+q.dl,y:q.y,z:q.z},
-      {x:q.x,y:q.y+q.db,z:q.z},
-      {x:q.x,y:q.y,z:q.z+q.dh},
-    ];
-    for(const c of kandidaten){
-      const k=c.x.toFixed(1)+"|"+c.y.toFixed(1)+"|"+c.z.toFixed(1);
-      if(!gezien[k]){ gezien[k]=1; punten.push(c); }
-    }
+  const punten=[{x:0,y:0,z:0}], gezien=new Set([0]);
+  const zet=(x,y,z)=>{
+    const k=(Math.round(x*10)*100000+Math.round(y*10))*100000+Math.round(z*10);
+    if(!gezien.has(k)){ gezien.add(k); punten.push({x:x,y:y,z:z}); }
+  };
+  for(let i=0;i<geplaatst.length;i++){
+    const q=geplaatst[i];
+    zet(q.x+q.dl,q.y,q.z);
+    zet(q.x,q.y+q.db,q.z);
+    zet(q.x,q.y,q.z+q.dh);
   }
   // Onderop eerst, dan vooraan, dan links: zo bouwt hij laag voor laag op.
   punten.sort((a,b)=>a.z-b.z||a.x-b.x||a.y-b.y);
   return punten;
 }
-function zoekPlek(C,doos,geplaatst,kantelen){
+/* De stand waarmee begonnen wordt, staat vooraan. De rest volgt daarna.
+
+   Dit is de kern van het maximaliseren. Zonder dit pakte hij bij elk hoekpunt
+   gewoon de eerste stand die paste, en dat is de spa rechtop - waarna hij ging
+   stapelen en nooit meer uitprobeerde of alles op de kant beter uitkwam.
+
+   Een Pleasure is 215 x 200 x 91. Rechtop: 5 rijen, 2 lagen = 10, met eentje
+   in de rest erbij 11. Op zijn kant, met de 91 als breedte: twaalf naast
+   elkaar in de lengte van de container = 12. Dat werd nooit gevonden, want
+   rechtop paste ook (Gerrit, 10 aug 2026). */
+function ordenStanden(st,voorkeur){
+  if(voorkeur==null||voorkeur<0||voorkeur>=st.length) return st;
+  const uit=[st[voorkeur]];
+  for(let i=0;i<st.length;i++) if(i!==voorkeur) uit.push(st[i]);
+  return uit;
+}
+function zoekPlek(C,doos,geplaatst,kantelen,voorkeur){
   const punten=hoekpunten(geplaatst);
+  const st=ordenStanden(standen(doos,kantelen),voorkeur);
   for(const p of punten){
-    for(const st of standen(doos,kantelen)){
-      if(past(C,doos,st,p,geplaatst)) return {x:p.x,y:p.y,z:p.z,dl:st[0],db:st[1],dh:st[2]};
+    for(const s of st){
+      if(past(C,doos,s,p,geplaatst)) return {x:p.x,y:p.y,z:p.z,dl:s[0],db:s[1],dh:s[2]};
     }
   }
   return null;
 }
-// Hoeveel van één model gaan er in een lege container. Greedy doorladen tot
-// er niets meer bij kan; bij gelijke dozen is dat ook echt het maximum.
-function maxVanEen(C,doos,kantelen){
-  const in_=[]; let n=0;
-  // 150 is ruim boven wat er ooit in past; het is een noodrem tegen een
-  // rekenfout die de pagina laat vastlopen, geen echte grens.
-  while(n<150){
-    const p=zoekPlek(C,doos,in_,kantelen);
-    if(!p) break;
-    in_.push(Object.assign({},doos,p)); n++;
+// Zoveel mogelijk dozen in één container, met een vaste voorkeursstand.
+function vulEen(C,dozen,kantelen,voorkeur){
+  const erin=[], rest=[];
+  for(const d of dozen){
+    const p=zoekPlek(C,d,erin,kantelen,voorkeur);
+    if(p) erin.push(Object.assign({},d,p)); else rest.push(d);
   }
+  return {erin,rest};
+}
+// Hoeveel standen heeft de grootste doos? Zoveel keer proberen we het.
+function aantalStanden(dozen,kantelen){
+  let n=1;
+  for(const d of dozen) n=Math.max(n,standen(d,kantelen).length);
   return n;
 }
-// De hele selectie verdelen over zo weinig mogelijk containers.
+
+/* Hoeveel van één model gaan er in een lege container.
+   Elke stand wordt als beginstand geprobeerd; de beste telt. */
+function maxVanEen(C,doos,kantelen){ return maxVanEenBeste(C,doos,kantelen).n; }
+function maxVanEenBeste(C,doos,kantelen){
+  let beste=0, besteV=0;
+  const standenAantal=standen(doos,kantelen).length;
+  for(let v=0;v<standenAantal;v++){
+    const erin=[]; let n=0;
+    // 150 is ruim boven wat er ooit in past; een noodrem tegen een rekenfout
+    // die de pagina laat vastlopen, geen echte grens.
+    while(n<150){
+      const p=zoekPlek(C,doos,erin,kantelen,v);
+      if(!p) break;
+      erin.push(Object.assign({},doos,p)); n++;
+    }
+    if(n>beste){ beste=n; besteV=v; }
+  }
+  return {n:beste,v:besteV};
+}
+
+/* Hoeveel complete sets spa + cover passen erin.
+   Een spa gaat nooit zonder zijn cover de container in, dus dít is het getal
+   waar Chantal wat aan heeft. Er wordt teruggeteld vanaf het aantal spa's dat
+   zónder cover zou passen; via een halvering, want dat scheelt bij een klein
+   model tientallen pogingen. */
+function maxSets(C,spa,cover,kantelen){
+  const alleen=maxVanEenBeste(C,spa,kantelen);
+  if(!cover||!alleen.n) return alleen.n;
+  // Bovengrens ook op volume: meer sets dan er kubieke meters zijn kan niet,
+  // en dat scheelt bij een klein model een paar dure pogingen.
+  const inhoud=C.l*C.b*C.h;
+  const perSet=(spa.l+speling)*(spa.b+speling)*spa.h+(cover.l+speling)*(cover.b+speling)*cover.h;
+  let hoog=Math.min(alleen.n,Math.max(1,Math.floor(inhoud/perSet)));
+  const past=n=>{
+    const dozen=[];
+    for(let i=0;i<n;i++) dozen.push(spa);
+    for(let i=0;i<n;i++) dozen.push(cover);
+    // De beste stand van de spa alleen is bijna altijd ook hier de beste, dus
+    // die eerst: dan is een geslaagde poging één stapeling in plaats van zes.
+    return besteVulling(C,dozen,kantelen,alleen.v).rest.length===0;
+  };
+  if(past(hoog)) return hoog;
+  let laag=0;
+  while(hoog-laag>1){
+    const mid=Math.floor((laag+hoog)/2);
+    if(past(mid)) laag=mid; else hoog=mid;
+  }
+  return laag;
+}
+// Eén container zo vol mogelijk, over alle beginstanden heen. 'eerst' is de
+// stand waarmee begonnen wordt; hij stopt zodra alles erin past.
+function besteVulling(C,dozen,kantelen,eerst){
+  const gesorteerd=dozen.slice().sort((a,b)=>(b.l*b.b*b.h)-(a.l*a.b*a.h));
+  const n=aantalStanden(gesorteerd,kantelen);
+  const volgorde=[];
+  if(eerst!=null&&eerst>=0&&eerst<n) volgorde.push(eerst);
+  for(let v=0;v<n;v++) if(v!==eerst) volgorde.push(v);
+  let beste=null;
+  for(const v of volgorde){
+    const r=vulEen(C,gesorteerd,kantelen,v);
+    if(!beste||r.erin.length>beste.erin.length) beste=r;
+    if(beste.rest.length===0) break;
+  }
+  return beste||{erin:[],rest:dozen.slice()};
+}
+
+/* De hele selectie verdelen over zo weinig mogelijk containers.
+   Ook hier wordt elke beginstand geprobeerd; het beste resultaat telt, en
+   'beste' is: eerst zo weinig mogelijk dat er niet in past, dan zo weinig
+   mogelijk containers. */
 function laad(C,dozen,kantelen){
   const gesorteerd=dozen.slice().sort((a,b)=>(b.l*b.b*b.h)-(a.l*a.b*a.h));
+  let beste=null;
+  const standenAantal=aantalStanden(gesorteerd,kantelen);
+  for(let v=0;v<standenAantal;v++){
+    const poging=laadEen(C,gesorteerd,kantelen,v);
+    if(!beste
+       || poging.nietGeplaatst.length<beste.nietGeplaatst.length
+       || (poging.nietGeplaatst.length===beste.nietGeplaatst.length
+           && poging.containers.length<beste.containers.length)) beste=poging;
+  }
+  return beste||{containers:[],nietGeplaatst:dozen.slice()};
+}
+function laadEen(C,gesorteerd,kantelen,voorkeur){
   const containers=[], nietGeplaatst=[];
   for(const d of gesorteerd){
     let klaar=false;
     for(const c of containers){
-      const p=zoekPlek(C,d,c.dozen,kantelen);
+      const p=zoekPlek(C,d,c.dozen,kantelen,voorkeur);
       if(p){ c.dozen.push(Object.assign({},d,p)); klaar=true; break; }
     }
     if(!klaar&&containers.length<MAX_CONTAINERS){
       const c={dozen:[]};
-      const p=zoekPlek(C,d,c.dozen,kantelen);
+      const p=zoekPlek(C,d,c.dozen,kantelen,voorkeur);
       if(p){ c.dozen.push(Object.assign({},d,p)); containers.push(c); klaar=true; }
     }
     if(!klaar) nietGeplaatst.push(d);
@@ -465,11 +601,11 @@ function laad(C,dozen,kantelen){
 const BEWAAR="fp.containerladen";
 let keuze={};                 // sleutel van het model -> aantal
 let C=CONTAINERS[0];
-let speling=5, kantelen=true;
+let speling=5, kantelen=true, coversMee=true;
 
 function bewaar(){
   try{ localStorage.setItem(BEWAAR,JSON.stringify({
-    keuze:keuze, container:C.id, speling:speling, kantelen:kantelen
+    keuze:keuze, container:C.id, speling:speling, kantelen:kantelen, covers:coversMee
   })); }catch(e){}
 }
 function herstel(){
@@ -480,6 +616,7 @@ function herstel(){
       const c=CONTAINERS.find(x=>x.id===j.container); if(c) C=c;
       if(j.speling!=null) speling=Math.max(0,Math.min(30,Number(j.speling)||0));
       if(j.kantelen!=null) kantelen=!!j.kantelen;
+      if(j.covers!=null) coversMee=!!j.covers;
     }
   }catch(e){}
 }
@@ -490,13 +627,24 @@ function herstel(){
 // De kale maat van het model. De ruimte eromheen komt er pas bij in standen(),
 // want die hangt af van hoe de spa komt te liggen.
 function doosVan(m){
-  return {id:m.id, model:m.model, code:m.code, l:m.l, b:m.b, h:m.h, m3:m.m3};
+  return {id:m.id, model:m.model, code:m.code, soort:"spa", l:m.l, b:m.b, h:m.h, m3:m.m3};
+}
+// De cover als losse doos, dubbelgevouwen zoals hij vervoerd wordt.
+function coverDoosVan(m){
+  if(!m.cover) return null;
+  const c=m.cover;
+  return {id:m.id, model:m.model, code:m.code, soort:"cover",
+    l:c.l, b:c.b, h:c.h, m3:(c.l/100)*(c.b/100)*(c.h/100)};
 }
 function gekozenDozen(){
   const uit=[];
   for(const m of MODELLEN){
     const n=Number(keuze[m.id]||0);
-    for(let i=0;i<n;i++) uit.push(doosVan(m));
+    const cd=coversMee?coverDoosVan(m):null;
+    for(let i=0;i<n;i++){
+      uit.push(doosVan(m));
+      if(cd) uit.push(Object.assign({},cd));
+    }
   }
   return uit;
 }
@@ -513,10 +661,18 @@ function gekozenDozen(){
    per seconde - en dan bleef er minutenlang "…" staan in plaats van een
    getal. */
 let maxCache={};
-function maxSleutel(m){ return C.id+"|"+speling+"|"+(kantelen?1:0)+"|"+m.id; }
+// Op de maten en niet op het model: veel modellen zijn even groot (Bermuda en
+// Jamaica allebei 200x200x82, Reflect/Retreat/Resettle allemaal 228x228x85).
+// Die hoeven maar één keer doorgerekend te worden.
+function maxSleutel(m){
+  const c=coversMee&&m.cover ? m.cover.l+"x"+m.cover.b+"x"+m.cover.h : "-";
+  return C.id+"|"+speling+"|"+(kantelen?1:0)+"|"+m.l+"x"+m.b+"x"+m.h+"|"+c;
+}
 function maxVoor(m){
   const s=maxSleutel(m);
-  if(maxCache[s]==null) maxCache[s]=maxVanEen(C,doosVan(m),kantelen);
+  // Mét covers is dit het aantal complete sets: een spa gaat nooit zonder
+  // zijn cover mee, dus dat is het getal waar je iets aan hebt.
+  if(maxCache[s]==null) maxCache[s]=maxSets(C,doosVan(m),coversMee?coverDoosVan(m):null,kantelen);
   return maxCache[s];
 }
 function tekenModellen(){
@@ -536,6 +692,12 @@ function tekenModellen(){
         "<span class='naam'><b>"+esc(m.model||"(zonder naam)")+"</b>"+
           "<span>"+esc(m.code||"")+" · "+nl(m.l)+" x "+nl(m.b)+" x "+nl(m.h)+" cm · "+
           m.m3.toFixed(2).replace(".",",")+" m&sup3;"+
+          // De cover hoort erbij: zonder die maat klopt het aantal niet.
+          (m.cover
+            ? " · <span title='Dubbelgevouwen cover, "+nl(m.cover.open.l)+" x "+nl(m.cover.open.b)+" cm open"+
+              (m.cover.bron==="handmatig"?", zelf ingevuld":"")+"'>cover "+
+              nl2(m.cover.l)+" x "+nl2(m.cover.b)+" x "+nl(m.cover.h)+"</span>"
+            : " · <span title='Dit model heeft geen cover'>geen cover</span>")+
           // Waar de maat vandaan komt. Bij een verschil tussen de bronnen moet
           // je kunnen zien welke je voor je hebt.
           (m.bron==="handmatig"
@@ -650,19 +812,51 @@ function openMaat(m){
     (eigen&&auto ? " Zonder jouw invulling zou hij "+maatTekst(auto)+" zijn ("+bronTekst(auto.bron)+")." : "");
   const start=eigen||auto||{l:"",b:"",h:""};
   el("dlgL").value=start.l||""; el("dlgB").value=start.b||""; el("dlgH").value=start.h||"";
+  // De cover. Wat er staat is de open maat; het dashboard vouwt hem zelf op.
+  // Van een model zonder spa-maat is de cover nog niet af te leiden; dan
+  // blijven de velden leeg en dat betekent gewoon 'automatisch'.
+  const cov=A?A.coverVan(m.model,m.code,eigen||auto,m.fabriek):null;
+  const heeftEr=A?A.heeftCover(m.model,m.fabriek):true;
+  el("dlgGeenCover").checked=cov?false:!heeftEr;
+  el("dlgCL").value=cov?cov.open.l:""; el("dlgCB").value=cov?cov.open.b:"";
+  coverVeldenTonen();
   el("dlgFout").textContent="";
   el("dlgAuto").classList.toggle("hidden",!eigen);
   el("dlgLaag").classList.remove("hidden");
   setTimeout(()=>el("dlgL").focus(),30);
 }
+// Laat zien wat de ingevulde covermaat opgevouwen wordt, zodat je ziet wat er
+// straks daadwerkelijk in de container ligt.
+function coverVeldenTonen(){
+  const geen=el("dlgGeenCover").checked;
+  el("dlgCoverVelden").classList.toggle("hidden",geen);
+  if(geen) return;
+  const l=Number(el("dlgCL").value), b=Number(el("dlgCB").value);
+  const A=window.fpAfmetingen;
+  el("dlgCoverUitleg").innerHTML = (l>0&&b>0&&A)
+    ? "De open maat van de cover, meestal "+A.COVER_MARGE+" cm groter dan de spa. Dubbelgevouwen over de korte kant "+
+      "wordt dat <b>"+nl2(Math.max(l,b))+" x "+nl2(Math.min(l,b)/2)+" x "+(A.COVER_VOUW*2)+" cm</b> - "+
+      (A.COVER_RAND*2)+" cm aan de randen, "+(A.COVER_VOUW*2)+" cm bij de vouw."
+    : "De open maat van de cover. Het dashboard vouwt hem zelf dubbel over de korte kant.";
+}
+el("dlgGeenCover").addEventListener("change",coverVeldenTonen);
+["dlgCL","dlgCB"].forEach(id=>el(id).addEventListener("input",coverVeldenTonen));
 function sluitMaat(){ el("dlgLaag").classList.add("hidden"); dlgHuidig=null; }
-async function bewaarMaatUitVenster(maat){
+/* Opslaan. cover mag zijn:
+     {l,b}  een eigen covermaat (open, niet gevouwen)
+     false  dit model heeft geen cover
+     null   volg de spa-maat weer, oftewel automatisch
+   Wat gelijk is aan wat het dashboard zelf zou uitrekenen, wordt als null
+   bewaard. Zo blijft de cover meebewegen als de spa-maat later wijzigt. */
+async function bewaarMaatUitVenster(maat,cover){
   const m=dlgHuidig; if(!m) return;
   const A=window.fpAfmetingen;
   if(!A){ el("dlgFout").textContent="De maatlijst is niet geladen."; return; }
   el("dlgBewaar").disabled=true; el("dlgAuto").disabled=true;
   try{
-    await A.bewaarMaat(m.model,m.code,maat,(localStorage.getItem(EMAIL_KEY)||"").toLowerCase());
+    const wie=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+    await A.bewaarMaat(m.model,m.code,maat,wie);
+    if(cover!==undefined) await A.bewaarCover(m.model,m.code,cover,wie);
     sluitMaat();
     herbouwModellen(); maxCache={};
     tekenZonderMaat(); tekenModellen(); tekenPlan();
@@ -677,12 +871,30 @@ async function bewaarMaatUitVenster(maat){
 el("dlgAnnuleer").addEventListener("click",sluitMaat);
 el("dlgLaag").addEventListener("click",ev=>{ if(ev.target===el("dlgLaag")) sluitMaat(); });
 document.addEventListener("keydown",ev=>{ if(ev.key==="Escape"&&!el("dlgLaag").classList.contains("hidden")) sluitMaat(); });
-el("dlgAuto").addEventListener("click",()=>bewaarMaatUitVenster(null));
+el("dlgAuto").addEventListener("click",()=>bewaarMaatUitVenster(null,null));
 el("dlgBewaar").addEventListener("click",()=>{
+  const m=dlgHuidig, A=window.fpAfmetingen;
   const l=Number(el("dlgL").value), b=Number(el("dlgB").value), h=Number(el("dlgH").value);
   if(!(l>0&&b>0&&h>0)){ el("dlgFout").textContent="Vul alle drie de maten in, in centimeters."; return; }
   if(l>1500||b>400||h>400){ el("dlgFout").textContent="Dat lijkt geen centimeters. Een spa is hooguit 15 meter lang."; return; }
-  bewaarMaatUitVenster({l:Math.round(l),b:Math.round(b),h:Math.round(h)});
+  const maat={l:Math.round(l),b:Math.round(b),h:Math.round(h)};
+
+  let cover;
+  if(el("dlgGeenCover").checked){
+    // Alleen vastleggen als het dashboard er uit zichzelf wél een zou geven.
+    cover = (A&&A.heeftCover(m.model,m.fabriek)) ? false : null;
+  }else{
+    const cl=Number(el("dlgCL").value), cb=Number(el("dlgCB").value);
+    // Leeg = automatisch: dan volgt de cover de spa-maat.
+    if(!cl&&!cb){ bewaarMaatUitVenster(maat,null); return; }
+    if(!(cl>0&&cb>0)){ el("dlgFout").textContent="Vul allebei de covermaten in, of laat ze leeg voor automatisch."; return; }
+    if(cl<l-20||cb<b-20){ el("dlgFout").textContent="De cover is kleiner dan de spa. Klopt dat?"; return; }
+    // Precies wat het dashboard zelf zou uitrekenen? Dan op automatisch laten
+    // staan, zodat de cover meebeweegt als de spa-maat later wijzigt.
+    const marge=A?A.COVER_MARGE:3;
+    cover = (cl===maat.l+marge && cb===maat.b+marge) ? null : {l:cl,b:cb};
+  }
+  bewaarMaatUitVenster(maat,cover);
 });
 ["dlgL","dlgB","dlgH"].forEach(id=>el(id).addEventListener("keydown",ev=>{
   if(ev.key==="Enter") el("dlgBewaar").click();
@@ -714,18 +926,19 @@ function tekenPlan(){
 
   const {containers,nietGeplaatst}=laad(C,dozen,kantelen);
   const m3=dozen.reduce((s,d)=>s+d.m3,0);
-  const geplaatst=dozen.length-nietGeplaatst.length;
+  const spas=dozen.filter(d=>d.soort!=="cover").length;
+  const covers=dozen.length-spas;
 
   el("kpis").innerHTML=
-    kpi(nl(dozen.length),"spa's gekozen")+
+    kpi(nl(spas),"spa's gekozen")+
     kpi(nl(containers.length),containers.length===1?"container":"containers")+
-    kpi(m3.toFixed(1).replace(".",",")+" m³","volume van de spa's")+
+    kpi(m3.toFixed(1).replace(".",",")+" m³",covers?"volume, spa's en covers":"volume van de spa's")+
     kpi(containers.length?Math.round(vulling(containers[0],inhoud))+"%":"—","gevuld, eerste container");
 
   el("plan").innerHTML=
     containers.map((c,i)=>kaart(c,i,inhoud)).join("")+
     (nietGeplaatst.length
-      ? "<div class='status-msg warn'><b>"+nietGeplaatst.length+" spa('s) passen er niet bij</b> - "+
+      ? "<div class='status-msg warn'><b>"+nietGeplaatst.length+" stuk(s) passen er niet bij</b> - "+
         "meer dan "+MAX_CONTAINERS+" containers wordt hier niet doorgerekend. Haal er wat af of splits de zending.</div>"
       : "");
 
@@ -734,7 +947,9 @@ function tekenPlan(){
   if(window.fpContainer3D){
     containers.forEach((c,i)=>{
       const cv=el("ctrCanvas"+i);
-      if(cv) window.fpContainer3D(cv,C,c.dozen,d=>kleurVan(d.id));
+      // De covers krijgen dezelfde kleur als hun spa, maar lichter: dan zie je
+      // in de tekening meteen welke blokken cover zijn en welke spa.
+      if(cv) window.fpContainer3D(cv,C,c.dozen,d=>kleurVan(d.id,d.soort==="cover"));
     });
   }else{
     containers.forEach((c,i)=>{
@@ -751,16 +966,23 @@ function vulling(c,inhoud){
 }
 function kaart(c,i,inhoud){
   const per={};
-  c.dozen.forEach(d=>{ (per[d.id]=per[d.id]||{n:0,model:d.model,code:d.code}).n++; });
+  c.dozen.forEach(d=>{
+    const r=per[d.id]=per[d.id]||{n:0,covers:0,model:d.model,code:d.code};
+    if(d.soort==="cover") r.covers++; else r.n++;
+  });
   const rijen=Object.keys(per).sort((a,b)=>per[b].n-per[a].n).map(k=>
     "<div class='lrij'><span class='kleur' style='background:"+kleurVan(k)+"'></span>"+
-    "<span class='nm' title='"+esc(per[k].code||"")+"'>"+esc(per[k].model||"")+"</span>"+
+    "<span class='nm' title='"+esc(per[k].code||"")+"'>"+esc(per[k].model||"")+
+      (per[k].covers?"<span style='color:var(--muted)'> + "+per[k].covers+" cover"+(per[k].covers===1?"":"s")+"</span>":"")+"</span>"+
     "<span class='ct'>"+per[k].n+"</span></div>").join("");
   const m3=c.dozen.reduce((s,d)=>s+d.m3,0);
+  const spas=c.dozen.filter(d=>d.soort!=="cover").length;
+  const covers=c.dozen.length-spas;
   return "<div class='ctr-kaart'>"+
     "<div class='ctr-kop'><h4>🚢 Container "+(i+1)+" · "+esc(C.naam)+"</h4>"+
       "<div class='stats'>"+
-        "<span><b>"+c.dozen.length+"</b> spa's</span>"+
+        "<span><b>"+spas+"</b> spa's</span>"+
+        (covers?"<span><b>"+covers+"</b> covers</span>":"")+
         "<span><b>"+m3.toFixed(1).replace(".",",")+"</b> m³</span>"+
         "<span><b>"+Math.round(vulling(c,inhoud))+"%</b> gevuld</span>"+
         "<span><b>"+Object.keys(per).length+"</b> model(len)</span>"+
@@ -936,6 +1158,7 @@ function alsInstellingWijzigt(){
   vulContainerKeuze();
   el("fSpeling").value=speling;
   el("fKantelen").checked=kantelen;
+  el("fCovers").checked=coversMee;
   // Eerst tekenen met wat er nu al is (de prijslijsten), zodat de pagina
   // meteen staat. De specificatiesheets komen er daarna bij; dan wordt de
   // lijst opnieuw opgebouwd en zijn er 38 modellen meer waar hij mee kan
@@ -964,6 +1187,9 @@ el("fSpeling").addEventListener("change",()=>{
 });
 el("fKantelen").addEventListener("change",()=>{
   kantelen=el("fKantelen").checked; alsInstellingWijzigt();
+});
+el("fCovers").addEventListener("change",()=>{
+  coversMee=el("fCovers").checked; alsInstellingWijzigt();
 });
 el("zoek").addEventListener("input",tekenModellen);
 el("btnLeeg").addEventListener("click",()=>{
