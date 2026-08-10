@@ -157,12 +157,11 @@ const SPA_CODES = [
   ["S-2202","Spa Vision"],
   ["ET-165","Spa Praise"],   // code bevestigd door Chantal, 4 aug 2026
   // Foshan Gaoming Yuehua Sanitary (MEXDA) — Storm Spas
-  // MEXDA. Chantal gaf op 9 aug 2026 haar lijst door, en die schrijft vier
-  // codes anders dan wat hier al stond: WS-PC06T naast WS-PC06ST, WS-PC05T
-  // naast WS-PC05ST, WS-S09 naast WS-S06 en WS-06M naast WS-506M. Welke van
-  // de twee op de facturen staat weet ik niet, dus staan ze er allebei in -
-  // dan wordt hij hoe dan ook herkend. Zodra duidelijk is welke de echte is,
-  // kan de andere weg.
+  // MEXDA. Chantal gaf op 9 aug 2026 de modelnamen door. Zij schrijft vier
+  // codes korter dan wat hier al stond (WS-PC06T, WS-PC05T, WS-S09, WS-06M).
+  // De facturen geven de doorslag: daar staat letterlijk WS-PC06ST, mét de S.
+  // De langere schrijfwijze is dus die van de fabriek. Haar korte varianten
+  // blijven staan als vangnet - ze kosten niets en botsen nergens mee.
   ["WS-PC05ST","Turbine 5"],
   ["WS-PC05T","Turbine 5"],
   ["WS-PC06ST","Turbine 6"],

@@ -134,7 +134,7 @@
         { model: "Team Vitallce", code: "SKT339G17", inkoopUsd: 5238.5, verkoopEur: null, afmeting: "3900x2280x1450" },
         { model: "Breeze Icebath", code: "SKT888V", inkoopUsd: 1152, verkoopEur: null, afmeting: "2000x900x750" },
         { model: "Spark", code: "SKT888X", inkoopUsd: 1209, verkoopEur: null, afmeting: "1700x1500x730" },
-        { model: "Frame", code: "SKT888X-1", inkoopUsd: 1359, verkoopEur: null, afmeting: "1900x1900x760" },
+        { model: "Flame", code: "SKT888X-1", inkoopUsd: 1359, verkoopEur: null, afmeting: "1900x1900x760" , let: "De prijslijst van Jazzi schrijft \"Frame\"; dat is een typefout. Chantal bevestigde Flame (9 aug 2026)." },
         { model: "Oasis", code: "SKT888T", inkoopUsd: 6990, verkoopEur: null, afmeting: "3200x2350x1000", let: "upgrade to BP+TOUCH 最新20241105" },
         { model: "Cascade", code: "SKT888O", inkoopUsd: 3609, verkoopEur: null, afmeting: "2280x1880x1060", let: "upgrade to TOUCH 3 panel" },
         { model: "Reflect", code: "PP01", inkoopUsd: 2084, verkoopEur: null },
