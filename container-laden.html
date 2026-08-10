@@ -110,6 +110,9 @@
   table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
   table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
   details.zonder summary{cursor:pointer;font-size:12px;color:var(--fonteyn-green);font-weight:600;padding:8px 0}
+  .tablewrap{max-height:58vh;overflow:auto;border:1px solid var(--border);border-radius:8px}
+  .tablewrap table.grid{margin:0}
+  .tablewrap table.grid th{position:sticky;top:0}
 
   @media print{
     header,.instel,#modelPaneel,.btn{display:none!important}
@@ -143,7 +146,7 @@
         <select id="fCtr"></select>
       </div>
       <div>
-        <label for="fSpeling">Ruimte om de spa (cm)</label>
+        <label for="fSpeling" title="Alleen naast en achter de spa. Bovenop niet: spa's staan op elkaar.">Ruimte ernaast (cm)</label>
         <input type="number" id="fSpeling" min="0" max="30" step="1" value="5" style="width:90px">
       </div>
       <div class="keuze"><input type="checkbox" id="fKantelen" checked>
@@ -171,6 +174,18 @@
       <div class="kpi-row" id="kpis"></div>
       <div id="plan"></div>
     </div>
+  </div>
+
+  <!-- ══════════ ONTBREKENDE MATEN IN LOGIC4 ══════════ -->
+  <div class="card" id="l4Kaart">
+    <h3>Ontbrekende maten opzoeken in Logic4</h3>
+    <p class="lead" style="margin:0 0 12px">De maten hierboven komen uit de prijslijsten, de verpakkingslijst en de
+      specificatiesheets. Wat daar niet in staat, staat misschien wel in Logic4 bij het artikel zelf. Deze knop
+      zoekt dat op onder jouw eigen Logic4-login en laat zien wát hij vindt - er wordt niets automatisch
+      overgenomen, want een maat die nergens op slaat is erger dan geen maat.</p>
+    <button class="btn solid" id="btnL4" type="button">🔎 Zoeken in Logic4</button>
+    <div id="l4Status" class="status-msg hidden"></div>
+    <div id="l4Uit"></div>
   </div>
 </main>
 
@@ -301,18 +316,33 @@ function kleurVan(id){
    spa rechtop en mag hij alleen een kwartslag draaien - dat is hoe een spa
    normaal in een container gaat. Staat het aan, dan mag hij ook op zijn kant,
    wat de fabriek bij de grote modellen ook echt doet. */
+/* De standen waarin een spa kan liggen, mét de ruimte eromheen erin verwerkt.
+
+   Die ruimte komt er alleen naast en achter bij, niet erboven. Dat was fout en
+   het scheelde een hele laag: een Relax is 85 cm hoog, dus drie op elkaar is
+   255 cm en dat past in een High Cube van 269. Maar met 5 cm speling erbij werd
+   het 3 x 90 = 270 en hield hij het op twee lagen (Gerrit, 10 aug 2026).
+
+   Fysiek klopt dat ook: spa's staan met hun rand op elkaar, daar hoeft geen
+   lucht tussen. Naast elkaar wél - je moet ze er met een heftruck in kunnen
+   schuiven. Daarom hangt de speling aan de stand: welke twee maten horizontaal
+   liggen krijgen hem, de maat die rechtop staat niet. */
 function standen(d,kantelen){
   // Eén keer uitrekenen per doos: dit wordt bij het zoeken naar een plek voor
   // élk hoekpunt opnieuw opgevraagd, en dat zijn er honderden.
-  if(d._st) return d._st;
-  const s=[[d.l,d.b,d.h],[d.b,d.l,d.h]];
+  const sleutel=speling+"|"+(kantelen?1:0);
+  if(d._st&&d._stSleutel===sleutel) return d._st;
+  const s=speling, rij=[];
+  const zet=(a,b,hoog)=>rij.push([a+s,b+s,hoog]);
+  zet(d.l,d.b,d.h); zet(d.b,d.l,d.h);
   if(kantelen){
-    s.push([d.l,d.h,d.b],[d.h,d.l,d.b],[d.b,d.h,d.l],[d.h,d.b,d.l]);
+    zet(d.l,d.h,d.b); zet(d.h,d.l,d.b);
+    zet(d.b,d.h,d.l); zet(d.h,d.b,d.l);
   }
   // Dubbele standen eruit (een kubus levert zes keer hetzelfde op).
   const gezien={}, uit=[];
-  for(const st of s){ const k=st.join("|"); if(!gezien[k]){gezien[k]=1;uit.push(st);} }
-  d._st=uit;
+  for(const st of rij){ const k=st.join("|"); if(!gezien[k]){gezien[k]=1;uit.push(st);} }
+  d._st=uit; d._stSleutel=sleutel;
   return uit;
 }
 function past(C,doos,st,p,geplaatst){
@@ -413,9 +443,10 @@ function herstel(){
 // De doos zoals hij de container in gaat: het model plus de speling eromheen.
 // Een spa zit in een krat met folie en hoekstukken, en de fabriek laat ruimte
 // om hem er weer uit te krijgen.
+// De kale maat van het model. De ruimte eromheen komt er pas bij in standen(),
+// want die hangt af van hoe de spa komt te liggen.
 function doosVan(m){
-  return {id:m.id, model:m.model, code:m.code,
-    l:m.l+speling, b:m.b+speling, h:m.h+speling, m3:m.m3};
+  return {id:m.id, model:m.model, code:m.code, l:m.l, b:m.b, h:m.h, m3:m.m3};
 }
 function gekozenDozen(){
   const uit=[];
@@ -461,9 +492,13 @@ function tekenModellen(){
         "<span class='naam'><b>"+esc(m.model||"(zonder naam)")+"</b>"+
           "<span>"+esc(m.code||"")+" · "+nl(m.l)+" x "+nl(m.b)+" x "+nl(m.h)+" cm · "+
           m.m3.toFixed(2).replace(".",",")+" m&sup3;"+
-          // Waar de maat vandaan komt. Bij een verschil tussen prijslijst en
-          // specsheet moet je kunnen zien welke je voor je hebt.
-          (m.bron==="specsheet"?" · <span title='Maat van de specificatiesheet, niet van de prijslijst'>specsheet</span>":"")+
+          // Waar de maat vandaan komt. Bij een verschil tussen de bronnen moet
+          // je kunnen zien welke je voor je hebt.
+          (m.bron==="specsheet"
+            ? " · <span title='Maat van de specificatiesheet, niet van de prijslijst'>specsheet</span>"
+            : m.bron==="verpakkingslijst"
+              ? " · <span title='Maat van de kist zoals hij vervoerd wordt, uit Maten + gewichten'>kistmaat</span>"
+              : "")+
           "</span></span>"+
         "<span class='past'><b data-max='"+m.i+"'>"+(mx==null?"…":mx)+"</b>per container</span>"+
         "<span class='teller' data-stop='1'>"+
@@ -517,7 +552,8 @@ function tekenPlan(){
   const inhoud=C.l*C.b*C.h/1000000;
   el("ctrUitleg").innerHTML=
     "Binnenwerks "+nl(C.l)+" x "+nl(C.b)+" x "+nl(C.h)+" cm, dat is "+inhoud.toFixed(1).replace(".",",")+" m&sup3; ruimte. "+
-    "Elke spa krijgt er "+speling+" cm omheen voor de verpakking. "+
+    "Elke spa krijgt er "+speling+" cm ruimte naast en achter zich, om hem erin te kunnen schuiven; "+
+    "bovenop niet, want spa's staan gewoon op elkaar. "+
     (kantelen?"Op de kant leggen mag.":"De spa's blijven rechtop staan.")+
     " Het vulpercentage telt die verpakkingsruimte mee."+
     (window.fpTransportHouston
@@ -592,6 +628,145 @@ function kaart(c,i,inhoud){
       "<div class='ctr-lijst'><h5>Wat er in staat</h5>"+rijen+"</div>"+
     "</div></div>";
 }
+
+/* ─── Ontbrekende maten opzoeken in Logic4 ────────────────────────────────
+   Van 27 modellen staat er nergens in het dashboard een maat. Logic4 is de
+   laatste plek waar er nog een kan staan, bij het artikel zelf.
+
+   Dit gaat via de helper op deze computer, met de sessie waarmee je al bent
+   ingelogd - er komen hier dus geen wachtwoorden aan te pas, en buiten de app
+   werkt de knop domweg niet.
+
+   Er wordt bewust niets automatisch overgenomen. We weten niet welke velden
+   Logic4 vult, en of ze de kale kuip of de kist beschrijven. Daarom laat hij
+   zien wát er staat, met de veldnaam erbij, zodat het een vaststelling wordt
+   in plaats van een gok. Wat klopt, gaat daarna met de hand in de lijst. */
+const MAAT_VELD=/(lengte|length|breedte|width|hoogte|height|diepte|depth|volume|gewicht|weight|afmeting|dimension|size|inhoud|verpakking|packag|colli)/i;
+
+function sessie(){ return localStorage.getItem(SESSION_KEY)||""; }
+function l4Melding(cls,txt){
+  const s=el("l4Status"); s.className="status-msg "+cls; s.innerHTML=txt; s.classList.remove("hidden");
+}
+async function helperCall(pad,opties){
+  const o=Object.assign({headers:{}},opties||{});
+  o.headers=Object.assign({"Authorization":"Bearer "+sessie()},o.headers||{});
+  let r;
+  try{ r=await fetch(pad,o); }
+  catch(e){ throw new Error("De helper op deze computer reageert niet. Draait het dashboard als app?"); }
+  if(r.status===401) throw new Error("Je Logic4-sessie is verlopen. Ga terug naar het dashboard en log opnieuw in.");
+  if(r.status===404) throw new Error("Deze pagina draait niet in de Fonteyn-app, dus Logic4 is hier niet bereikbaar.");
+  const j=await r.json().catch(()=>null);
+  if(!j) throw new Error("Onleesbaar antwoord van de helper (HTTP "+r.status+").");
+  if(j.ok===false) throw new Error(j.error||("HTTP "+r.status));
+  return j;
+}
+async function logic4(pad,body){
+  const j=await helperCall("/api/logic4-call",{method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({path:pad,method:"POST",body:body})});
+  if(!j.ok) throw new Error("Logic4 gaf HTTP "+j.status);
+  return j.data;
+}
+function alsLijst(d){
+  if(Array.isArray(d)) return d;
+  if(d&&Array.isArray(d.Products)) return d.Products;
+  return [];
+}
+// Alles uit een Logic4-artikel dat op een maat lijkt, met veldnaam en al.
+function maatVelden(p){
+  const uit=[];
+  for(const k of Object.keys(p||{})){
+    if(!MAAT_VELD.test(k)) continue;
+    const v=p[k];
+    if(v==null||v===""||v===0) continue;
+    if(typeof v==="object") continue;
+    uit.push(k+" = "+v);
+  }
+  return uit;
+}
+
+async function zoekInLogic4(){
+  const knop=el("btnL4"); knop.disabled=true;
+  el("l4Uit").innerHTML="";
+  try{
+    if(!ZONDER_MAAT.length){ l4Melding("ok","Er ontbreekt geen enkele maat meer."); return; }
+    // Een artikelnummer van Logic4 is puur cijfers (800052, 454117). Alles met
+    // letters erin is een fabriekscode en moet via de leverancierscode gezocht.
+    const nummers=ZONDER_MAAT.filter(m=>/^\d{4,}$/.test(String(m.code||"").trim()));
+    const codes=ZONDER_MAAT.filter(m=>!/^\d{4,}$/.test(String(m.code||"").trim())&&String(m.code||"").trim());
+    const gevonden=[];        // {model, code, artikel, velden}
+    let voorbeeld=null;       // één compleet artikel, om de veldnamen te leren
+
+    if(nummers.length){
+      l4Melding("","Artikelnummers opzoeken in Logic4 ("+nummers.length+")…");
+      const lijst=alsLijst(await logic4("/v3/Products/GetProducts",
+        {ProductCodes:nummers.map(m=>String(m.code).trim()),TakeRecords:500}));
+      if(lijst.length&&!voorbeeld) voorbeeld=lijst[0];
+      for(const m of nummers){
+        const p=lijst.find(x=>String(x.ProductCode||"").trim()===String(m.code).trim());
+        gevonden.push({model:m.model,code:m.code,
+          artikel:p?(p.ProductName1||p.Description||p.ProductCode):null,
+          velden:p?maatVelden(p):[]});
+      }
+    }
+
+    if(codes.length){
+      l4Melding("","Fabriekscodes zoeken in de artikelen van Logic4 ("+codes.length+"). "+
+        "Dit doorloopt de hele catalogus en duurt even…");
+      const q=codes.map(m=>String(m.code).trim().split(/[，,\s]/)[0]).join(",");
+      const j=await helperCall("/api/products-by-supplier-code?codes="+encodeURIComponent(q));
+      const mapping=j.mapping||{};
+      // Vond hij niets, dan stuurt de helper een voorbeeldartikel mee. Daar
+      // staan de veldnamen in, en dan weten we of Logic4 maten bijhoudt.
+      if(j.diagnostics&&j.diagnostics.sampleProduct&&!voorbeeld) voorbeeld=j.diagnostics.sampleProduct;
+      const raak=Object.keys(mapping).map(k=>mapping[k].fonteynCode).filter(Boolean);
+      let detail=[];
+      if(raak.length){
+        detail=alsLijst(await logic4("/v3/Products/GetProducts",{ProductCodes:raak,TakeRecords:500}));
+        if(detail.length&&!voorbeeld) voorbeeld=detail[0];
+      }
+      for(const m of codes){
+        const kale=String(m.code).trim().split(/[，,\s]/)[0];
+        const hit=Object.keys(mapping).find(k=>k.toLowerCase()===kale.toLowerCase());
+        const art=hit?mapping[hit].fonteynCode:null;
+        const p=art?detail.find(x=>String(x.ProductCode||"").trim()===String(art).trim()):null;
+        gevonden.push({model:m.model,code:m.code,
+          artikel:art?(hit?mapping[hit].description:art)+" ("+art+")":null,
+          velden:p?maatVelden(p):[]});
+      }
+    }
+
+    const metIets=gevonden.filter(g=>g.velden.length);
+    l4Melding(metIets.length?"ok":"warn",
+      metIets.length
+        ? "Bij <b>"+metIets.length+"</b> van de "+gevonden.length+" modellen staat er iets in Logic4 dat op een maat lijkt. "+
+          "Kijk hieronder of het klopt; overnemen doe ik pas als jij het zegt."
+        : "Logic4 heeft bij deze artikelen geen enkel veld dat op een maat lijkt. Dan moeten de maten bij de fabriek vandaan komen.");
+
+    el("l4Uit").innerHTML=
+      "<div class='tablewrap' style='margin-top:12px'><table class='grid'><thead><tr>"+
+      "<th>Model</th><th>Code</th><th>Gevonden in Logic4</th><th>Velden die op een maat lijken</th>"+
+      "</tr></thead><tbody>"+
+      gevonden.map(g=>"<tr><td>"+esc(g.model||"")+"</td><td>"+esc(g.code||"")+"</td>"+
+        "<td>"+(g.artikel?esc(g.artikel):"<span style='color:var(--muted)'>niet gevonden</span>")+"</td>"+
+        "<td>"+(g.velden.length?esc(g.velden.join("  ·  ")):"<span style='color:var(--muted)'>niets</span>")+"</td></tr>").join("")+
+      "</tbody></table></div>"+
+      (voorbeeld
+        ? "<details style='margin-top:10px'><summary style='cursor:pointer;font-size:12px;color:var(--fonteyn-green);font-weight:600'>"+
+          "Alle velden die Logic4 bij een artikel bijhoudt</summary>"+
+          "<p class='lead' style='font-size:11.5px;margin:6px 0'>Uit één willekeurig artikel. Staat er hier geen enkel "+
+          "veld voor lengte, breedte of hoogte tussen, dan houdt Logic4 die simpelweg niet bij.</p>"+
+          "<pre style='font-size:11px;background:#f9fafb;border:1px solid var(--border);border-radius:8px;"+
+          "padding:10px;overflow:auto;max-height:260px'>"+esc(Object.keys(voorbeeld).join("\n"))+"</pre></details>"
+        : "");
+    if(window.fpLog) window.fpLog("container-maten-logic4",metIets.length+" van "+gevonden.length+" met een maatveld");
+  }catch(e){
+    l4Melding("bad",esc(e.message));
+  }finally{
+    knop.disabled=false;
+  }
+}
+el("btnL4").addEventListener("click",zoekInLogic4);
 
 /* ─── Bedienen ────────────────────────────────────────────────────────── */
 function vulContainerKeuze(){
