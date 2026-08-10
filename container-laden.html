@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<title>Container laden — Fonteyn Dashboard</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<script src="spa-fabrikanten.js"></script>
+<script src="transport-houston.js"></script>
+<!-- Three.js als ES-module, net als bij Transport laden. Lukt het laden niet
+     (geen internet), dan blijven de aantallen en de tabellen gewoon werken:
+     die worden door het gewone script berekend en niet door de tekening. -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+  :root{
+    --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
+    --fonteyn-lime:#8bc53f; --fonteyn-lime-dark:#72a531;
+    --bg:#f5f4ef; --ink:#1f2937;
+    --muted:#6b7280; --border:#e5e7eb; --ok:#059669; --bad:#b91c1c; --warn:#92400e;
+    --passion:#c8102e; --passion-dark:#a50d26;
+  }
+  /* Passion Spas-huisstijl: deze tegel gaat over spa's, dus rood met
+     antraciet in plaats van Fonteyn-groen. Alleen de merkkleuren wijken af. */
+  :root{
+    --fonteyn-green:      #c8102e;
+    --fonteyn-green-dark: #960c22;
+    --fonteyn-lime:       #2b2b2b;
+    --fonteyn-lime-dark:  #111111;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  input,select,button,textarea{font-family:inherit}
+  header{background:var(--fonteyn-green);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px}
+  header img.logo{height:40px;width:auto;display:block}
+  header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+  header a.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px}
+  header a.back:hover{background:rgba(255,255,255,.15)}
+  header .user-chip{font-size:12px;color:rgba(255,255,255,0.85)}
+  header button.logout{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer}
+  header button.logout:hover{background:rgba(255,255,255,.15)}
+  main{max-width:1500px;margin:24px auto;padding:0 22px}
+  h2{color:var(--fonteyn-green);font-size:22px;margin:0 0 6px}
+  .lead{color:var(--muted);margin:0 0 18px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 20px;margin:14px 0}
+  .card h3{margin:0 0 10px;color:var(--fonteyn-green);font-size:15px}
+  .btn{display:inline-flex;align-items:center;gap:6px;background:#fff;color:var(--passion);border:1.5px solid var(--passion);border-radius:8px;padding:7px 14px;font:inherit;font-weight:600;font-size:12.5px;line-height:1;cursor:pointer;transition:all .14s ease;white-space:nowrap}
+  .btn:hover{background:var(--passion);color:#fff;box-shadow:0 4px 12px rgba(200,16,46,.28);transform:translateY(-1px)}
+  .btn.sm{padding:4px 10px;font-size:11px;border-radius:7px}
+  .btn.solid{background:var(--passion);color:#fff}
+  .btn.solid:hover{background:var(--passion-dark);border-color:var(--passion-dark)}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none!important;box-shadow:none!important;background:#fff;color:var(--passion)}
+  .status-msg{padding:10px 14px;border-radius:6px;margin:12px 0;font-size:13px}
+  .status-msg.ok{background:#dcfce7;color:var(--ok)} .status-msg.bad{background:#fee2e2;color:var(--bad)} .status-msg.warn{background:#fef3c7;color:var(--warn)}
+  .hidden{display:none!important}
+  .instel{display:flex;gap:20px;flex-wrap:wrap;align-items:flex-end}
+  .instel label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+  .instel select,.instel input[type=number]{border:1px solid var(--border);border-radius:7px;padding:8px 10px;font:inherit;font-size:13px;background:#fff}
+  .instel .keuze{display:flex;align-items:center;gap:7px;font-size:13px;padding-bottom:9px}
+
+  .wrap{display:grid;grid-template-columns:minmax(340px,430px) 1fr;gap:18px;align-items:start}
+  @media (max-width:1080px){ .wrap{grid-template-columns:1fr} }
+
+  /* ─── Modellenlijst ─────────────────────────────────────────────────── */
+  #zoek{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 11px;font:inherit;font-size:13px}
+  .fabgroep{margin-top:14px}
+  .fabgroep>h4{margin:0 0 5px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .mrij{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+  .mrij:hover{background:#fdf3f5;border-color:#f3d3d9}
+  .mrij.gekozen{background:#fdf3f5;border-color:var(--passion)}
+  .mrij .kleur{width:11px;height:11px;border-radius:3px;flex:0 0 auto;background:#e5e7eb}
+  .mrij .naam{flex:1;min-width:0}
+  .mrij .naam b{display:block;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mrij .naam span{font-size:11px;color:var(--muted)}
+  .mrij .past{flex:0 0 auto;font-size:11px;color:var(--muted);text-align:right;line-height:1.25}
+  .mrij .past b{font-size:14px;color:var(--fonteyn-green);display:block}
+  .teller{display:flex;align-items:center;gap:3px;flex:0 0 auto}
+  .teller button{width:24px;height:24px;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:pointer;font-size:14px;line-height:1;color:var(--muted)}
+  .teller button:hover{border-color:var(--passion);color:var(--passion)}
+  .teller input{width:42px;text-align:center;border:1px solid var(--border);border-radius:6px;padding:4px 2px;font:inherit;font-size:12.5px}
+
+  /* ─── Resultaat ─────────────────────────────────────────────────────── */
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:11px;margin:0 0 14px}
+  .kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;border-top:3px solid var(--fonteyn-green)}
+  .kpi .n{font-size:24px;font-weight:700;line-height:1.1}
+  .kpi .l{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
+  .ctr-kaart{border:1px solid var(--border);border-radius:10px;background:#fff;overflow:hidden;margin-bottom:14px}
+  .ctr-kop{background:var(--fonteyn-lime);color:#fff;padding:10px 15px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}
+  .ctr-kop h4{margin:0;font-size:14px}
+  .ctr-kop .stats{display:flex;gap:14px;font-size:11.5px;color:rgba(255,255,255,.85);flex-wrap:wrap}
+  .ctr-kop .stats b{color:#fff;font-size:13px}
+  .ctr-body{display:grid;grid-template-columns:1fr 240px;gap:0}
+  @media (max-width:820px){ .ctr-body{grid-template-columns:1fr} }
+  canvas.ctr-canvas{width:100%;height:340px;display:block;background:#f9fafb}
+  .ctr-lijst{border-left:1px solid var(--border);padding:12px 14px;font-size:12px;max-height:340px;overflow:auto}
+  .ctr-lijst h5{margin:0 0 8px;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .lrij{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid #f3f4f6}
+  .lrij .kleur{width:11px;height:11px;border-radius:3px;flex:0 0 auto}
+  .lrij .nm{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lrij .ct{font-weight:700;font-variant-numeric:tabular-nums}
+  .geen3d{padding:22px;color:var(--muted);font-size:12.5px;text-align:center}
+  table.grid{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+  table.grid th,table.grid td{padding:6px 9px;border-bottom:1px solid #f3f4f6;text-align:left}
+  table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
+  details.zonder summary{cursor:pointer;font-size:12px;color:var(--fonteyn-green);font-weight:600;padding:8px 0}
+
+  @media print{
+    header,.instel,#modelPaneel,.btn{display:none!important}
+    .wrap{grid-template-columns:1fr}
+    body{background:#fff}
+    .ctr-kaart{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="passion-logo.png" alt="Passion Spas" onerror="this.style.display='none'">
+  <h1>🚢 Container laden</h1>
+  <a class="back" href="dashboard.html">← Dashboard</a>
+  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<div id="deny" class="status-msg bad hidden" style="max-width:700px;margin:40px auto">Geen toegang tot deze tegel.</div>
+
+<main id="wrapAlles">
+  <h2>Container laden</h2>
+  <p class="lead">Klik de modellen aan die mee moeten en zie meteen hoeveel spa's er in een container passen.
+    De maten komen uit de prijslijsten van de fabrieken - dezelfde lijst die de voorraadtegel gebruikt.</p>
+
+  <div class="card">
+    <div class="instel">
+      <div>
+        <label for="fCtr">Container</label>
+        <select id="fCtr"></select>
+      </div>
+      <div>
+        <label for="fSpeling">Ruimte om de spa (cm)</label>
+        <input type="number" id="fSpeling" min="0" max="30" step="1" value="5" style="width:90px">
+      </div>
+      <div class="keuze"><input type="checkbox" id="fKantelen" checked>
+        <label for="fKantelen" style="margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)">Spa's mogen op hun kant</label>
+      </div>
+      <button class="btn sm" id="btnLeeg" type="button">Alles weghalen</button>
+      <button class="btn sm" id="btnPrint" type="button">🖨 Printen / PDF</button>
+    </div>
+    <p class="lead" style="margin:12px 0 0;font-size:12px" id="ctrUitleg"></p>
+  </div>
+
+  <div class="wrap">
+    <!-- ══════════ MODELLEN ══════════ -->
+    <div class="card" id="modelPaneel">
+      <h3>Modellen</h3>
+      <input type="text" id="zoek" placeholder="Zoek op modelnaam of fabriekscode…">
+      <p class="lead" style="font-size:11.5px;margin:8px 0 0">Achter elk model staat hoeveel er van dát model alleen
+        in de gekozen container gaan. Klik op de regel om er één toe te voegen.</p>
+      <div id="modelLijst"></div>
+      <details class="zonder" id="zonderMaat"></details>
+    </div>
+
+    <!-- ══════════ RESULTAAT ══════════ -->
+    <div>
+      <div class="kpi-row" id="kpis"></div>
+      <div id="plan"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ══════════════════════════════════════════════════════════════════════════
+   CONTAINER LADEN - wat past er in een zeecontainer
+   ══════════════════════════════════════════════════════════════════════════
+
+   Chantal boekt de containers bij de fabriek. De vraag die daarbij elke keer
+   terugkomt is: passen deze spa's in één container of moeten het er twee zijn?
+   Tot nu toe was dat rekenen op een blaadje met kubieke meters, en dat klopt
+   niet: een container vult zich nooit voor 100 procent, en twee spa's van
+   samen 4 m3 passen soms niet naast elkaar terwijl één van 4 m3 dat wel doet.
+
+   Daarom wordt hier echt gestapeld in plaats van gedeeld. Dezelfde aanpak als
+   bij Transport laden (bakwagens), maar dan met de maten van een zeecontainer
+   en de spa-afmetingen uit de prijslijsten van de fabrieken.
+
+   Wat je NIET mag verwachten: dit is een indeling die meetkundig past, niet de
+   indeling die de fabriek uiteindelijk maakt. In het echt gaat er minder in -
+   over de zendingen naar Houston gemeten kwam er gemiddeld 50,7 m3 lading in
+   een container, terwijl hier bij een strakke stapeling zomaar 65 m3 uit kan
+   komen. Reken dit dus als bovengrens, niet als toezegging, en zet er de
+   speling ruimer in als de fabriek klaagt dat het niet past.
+
+   OTA: staat in manifest.json. Nooit opnieuw installeren.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
+// Container laden - inkoop en logistiek. Chantal boekt de containers, Arno en
+// Manon plannen de aankomst. Gerrit en Fonteynbot beheer.
+const ALLOWED=new Set([
+  "chantal@fonteyn.nl","chantal","fonteyn.chantal",
+  "arno@fonteyn.nl","arno","fonteyn.arno",
+  "manon@fonteyn.nl","manon","fonteyn.manon",
+  "dolf@fonteyn.nl","dolf","fonteyn.dolf",
+  "gerrit@fonteyn.nl","gerrit","fonteyn.gerrit",
+  "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot",
+]);
+const TEGEL_VERSIE="10-08-2026 · 16:10";
+
+function el(id){return document.getElementById(id);}
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function nl(n,d){return Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:d||0,maximumFractionDigits:d||0});}
+
+/* ─── Containers ──────────────────────────────────────────────────────────
+   Binnenwerkse maten in centimeters. Dat is de ruimte die je echt kunt
+   vullen; de buitenmaat van een container is groter en zegt niets.
+   Een 40 ft High Cube is de standaard voor spa's: even lang als een gewone
+   40-voets maar 30 cm hoger, en die 30 cm schelen vaak een hele laag. */
+const CONTAINERS=[
+  {id:"40hc",naam:"40 ft High Cube",l:1203,b:235,h:269},
+  {id:"40",  naam:"40 ft standaard", l:1203,b:235,h:239},
+  {id:"20",  naam:"20 ft standaard", l:589, b:235,h:239},
+  {id:"45hc",naam:"45 ft High Cube", l:1356,b:235,h:269},
+];
+const MAX_CONTAINERS=12;
+
+/* ─── De modellen ─────────────────────────────────────────────────────────
+   Uit spa-fabrikanten.js, want daar staan de afmetingen al: één lijst voor de
+   voorraad, de prijzen en nu ook het laden. Modellen zonder afmeting kunnen
+   niet worden ingeladen; die worden apart getoond in plaats van weggelaten,
+   zodat zichtbaar blijft wát er nog bij de fabriek opgevraagd moet worden. */
+function bouwModellen(){
+  const uit=[], zonder=[];
+  const L=(window.fpFabrikanten&&window.fpFabrikanten.lijst)||[];
+  L.forEach(f=>{
+    (f.modellen||[]).forEach(m=>{
+      const p=String(m.afmeting||"").split("x").map(Number);
+      if(p.length===3&&!p.some(isNaN)&&p.every(x=>x>0)){
+        uit.push({
+          sleutel:uit.length,
+          model:m.model, code:m.code, fabriek:f.fabriek, merk:f.merk,
+          // De prijslijsten staan in millimeters; hier rekenen we in centimeters.
+          l:p[0]/10, b:p[1]/10, h:p[2]/10,
+          m3:(p[0]/1000)*(p[1]/1000)*(p[2]/1000),
+        });
+      }else{
+        zonder.push({model:m.model,code:m.code,fabriek:f.fabriek});
+      }
+    });
+  });
+  return {modellen:uit,zonder:zonder};
+}
+const {modellen:MODELLEN, zonder:ZONDER_MAAT}=bouwModellen();
+
+// Vaste kleur per model, zodat dezelfde spa in de lijst en in de tekening
+// dezelfde kleur heeft en je ze uit elkaar houdt.
+function kleurVan(i){ return "hsl("+((i*47)%360)+",62%,55%)"; }
+
+/* ─── Stapelen ────────────────────────────────────────────────────────────
+   Dozen van groot naar klein plaatsen, telkens op het laagste vrije hoekpunt
+   dat vooraan links ligt. Bij elke geplaatste doos komen er drie nieuwe
+   hoekpunten bij: ernaast, erachter en erbovenop. Simpel, en voor enkele
+   tientallen spa's per container snel genoeg.
+
+   'kantelen' bepaalt welke kant boven mag komen. Staat het uit, dan blijft de
+   spa rechtop en mag hij alleen een kwartslag draaien - dat is hoe een spa
+   normaal in een container gaat. Staat het aan, dan mag hij ook op zijn kant,
+   wat de fabriek bij de grote modellen ook echt doet. */
+function standen(d,kantelen){
+  // Eén keer uitrekenen per doos: dit wordt bij het zoeken naar een plek voor
+  // élk hoekpunt opnieuw opgevraagd, en dat zijn er honderden.
+  if(d._st) return d._st;
+  const s=[[d.l,d.b,d.h],[d.b,d.l,d.h]];
+  if(kantelen){
+    s.push([d.l,d.h,d.b],[d.h,d.l,d.b],[d.b,d.h,d.l],[d.h,d.b,d.l]);
+  }
+  // Dubbele standen eruit (een kubus levert zes keer hetzelfde op).
+  const gezien={}, uit=[];
+  for(const st of s){ const k=st.join("|"); if(!gezien[k]){gezien[k]=1;uit.push(st);} }
+  d._st=uit;
+  return uit;
+}
+function past(C,doos,st,p,geplaatst){
+  if(p.x+st[0]>C.l+0.001) return false;
+  if(p.y+st[1]>C.b+0.001) return false;
+  if(p.z+st[2]>C.h+0.001) return false;
+  for(const q of geplaatst){
+    if(p.x<q.x+q.dl-0.001 && p.x+st[0]>q.x+0.001 &&
+       p.y<q.y+q.db-0.001 && p.y+st[1]>q.y+0.001 &&
+       p.z<q.z+q.dh-0.001 && p.z+st[2]>q.z+0.001) return false;
+  }
+  return true;
+}
+function hoekpunten(geplaatst){
+  const punten=[{x:0,y:0,z:0}], gezien={"0|0|0":1};
+  for(const q of geplaatst){
+    const kandidaten=[
+      {x:q.x+q.dl,y:q.y,z:q.z},
+      {x:q.x,y:q.y+q.db,z:q.z},
+      {x:q.x,y:q.y,z:q.z+q.dh},
+    ];
+    for(const c of kandidaten){
+      const k=c.x.toFixed(1)+"|"+c.y.toFixed(1)+"|"+c.z.toFixed(1);
+      if(!gezien[k]){ gezien[k]=1; punten.push(c); }
+    }
+  }
+  // Onderop eerst, dan vooraan, dan links: zo bouwt hij laag voor laag op.
+  punten.sort((a,b)=>a.z-b.z||a.x-b.x||a.y-b.y);
+  return punten;
+}
+function zoekPlek(C,doos,geplaatst,kantelen){
+  const punten=hoekpunten(geplaatst);
+  for(const p of punten){
+    for(const st of standen(doos,kantelen)){
+      if(past(C,doos,st,p,geplaatst)) return {x:p.x,y:p.y,z:p.z,dl:st[0],db:st[1],dh:st[2]};
+    }
+  }
+  return null;
+}
+// Hoeveel van één model gaan er in een lege container. Greedy doorladen tot
+// er niets meer bij kan; bij gelijke dozen is dat ook echt het maximum.
+function maxVanEen(C,doos,kantelen){
+  const in_=[]; let n=0;
+  // 150 is ruim boven wat er ooit in past; het is een noodrem tegen een
+  // rekenfout die de pagina laat vastlopen, geen echte grens.
+  while(n<150){
+    const p=zoekPlek(C,doos,in_,kantelen);
+    if(!p) break;
+    in_.push(Object.assign({},doos,p)); n++;
+  }
+  return n;
+}
+// De hele selectie verdelen over zo weinig mogelijk containers.
+function laad(C,dozen,kantelen){
+  const gesorteerd=dozen.slice().sort((a,b)=>(b.l*b.b*b.h)-(a.l*a.b*a.h));
+  const containers=[], nietGeplaatst=[];
+  for(const d of gesorteerd){
+    let klaar=false;
+    for(const c of containers){
+      const p=zoekPlek(C,d,c.dozen,kantelen);
+      if(p){ c.dozen.push(Object.assign({},d,p)); klaar=true; break; }
+    }
+    if(!klaar&&containers.length<MAX_CONTAINERS){
+      const c={dozen:[]};
+      const p=zoekPlek(C,d,c.dozen,kantelen);
+      if(p){ c.dozen.push(Object.assign({},d,p)); containers.push(c); klaar=true; }
+    }
+    if(!klaar) nietGeplaatst.push(d);
+  }
+  return {containers,nietGeplaatst};
+}
+
+/* ─── Wat er gekozen is ───────────────────────────────────────────────────
+   In de browser bewaard, niet op de server: dit is een kladblok om mee te
+   rekenen en geen vastgelegde boeking. Zo staat je lijstje er morgen nog. */
+const BEWAAR="fp.containerladen";
+let keuze={};                 // sleutel van het model -> aantal
+let C=CONTAINERS[0];
+let speling=5, kantelen=true;
+
+function bewaar(){
+  try{ localStorage.setItem(BEWAAR,JSON.stringify({
+    keuze:keuze, container:C.id, speling:speling, kantelen:kantelen
+  })); }catch(e){}
+}
+function herstel(){
+  try{
+    const j=JSON.parse(localStorage.getItem(BEWAAR)||"{}");
+    if(j&&typeof j==="object"){
+      if(j.keuze) keuze=j.keuze;
+      const c=CONTAINERS.find(x=>x.id===j.container); if(c) C=c;
+      if(j.speling!=null) speling=Math.max(0,Math.min(30,Number(j.speling)||0));
+      if(j.kantelen!=null) kantelen=!!j.kantelen;
+    }
+  }catch(e){}
+}
+
+// De doos zoals hij de container in gaat: het model plus de speling eromheen.
+// Een spa zit in een krat met folie en hoekstukken, en de fabriek laat ruimte
+// om hem er weer uit te krijgen.
+function doosVan(m){
+  return {sleutel:m.sleutel, model:m.model, code:m.code,
+    l:m.l+speling, b:m.b+speling, h:m.h+speling, m3:m.m3};
+}
+function gekozenDozen(){
+  const uit=[];
+  for(const m of MODELLEN){
+    const n=Number(keuze[m.sleutel]||0);
+    for(let i=0;i<n;i++) uit.push(doosVan(m));
+  }
+  return uit;
+}
+
+/* ─── Modellenlijst tekenen ───────────────────────────────────────────── */
+/* Hoeveel er van één model in gaan. Dat is per model een complete stapeling,
+   en met tachtig modellen bij elkaar te veel om tijdens het tekenen te doen -
+   dan staat de lijst een paar seconden stil. Daarom komt het antwoord in de
+   achtergrond binnendruppelen: eerst een streepje, en zodra het uitgerekend
+   is wordt alleen dat ene getalletje bijgewerkt. */
+let maxCache={};
+// Verandert de container of de speling, dan klopt een lopende berekening niet
+// meer. De generatie loopt dan op en de oude ronde stopt zichzelf.
+let generatie=0, rekenLoopt=false;
+function maxSleutel(m){ return C.id+"|"+speling+"|"+(kantelen?1:0)+"|"+m.sleutel; }
+function maxVoor(m){
+  const s=maxSleutel(m);
+  return maxCache[s]==null ? null : maxCache[s];
+}
+function rekenAchtergrond(){
+  if(rekenLoopt) return;
+  const mijn=generatie;
+  const doosjes=MODELLEN.filter(m=>maxCache[maxSleutel(m)]==null)
+    .map(m=>({m:m, sleutel:maxSleutel(m), doos:doosVan(m), C:C, kantelen:kantelen}));
+  if(!doosjes.length) return;
+  rekenLoopt=true;
+  let i=0;
+  const stap=()=>{
+    if(mijn!==generatie){ rekenLoopt=false; rekenAchtergrond(); return; }
+    const tot=Math.min(i+3,doosjes.length);
+    for(;i<tot;i++){
+      const d=doosjes[i];
+      maxCache[d.sleutel]=maxVanEen(d.C,d.doos,d.kantelen);
+      const veld=document.querySelector("[data-max='"+d.m.sleutel+"']");
+      if(veld) veld.textContent=maxCache[d.sleutel]||"0";
+    }
+    if(i<doosjes.length) setTimeout(stap,0);
+    else rekenLoopt=false;
+  };
+  setTimeout(stap,0);
+}
+function tekenModellen(){
+  const zoek=(el("zoek").value||"").toLowerCase().trim();
+  const perFabriek={};
+  MODELLEN.forEach(m=>{
+    if(zoek && (m.model+" "+m.code).toLowerCase().indexOf(zoek)<0) return;
+    (perFabriek[m.fabriek]=perFabriek[m.fabriek]||[]).push(m);
+  });
+  const namen=Object.keys(perFabriek);
+  el("modelLijst").innerHTML = namen.length ? namen.map(f=>
+    "<div class='fabgroep'><h4>"+esc(f)+"</h4>"+
+    perFabriek[f].sort((a,b)=>String(a.model).localeCompare(String(b.model))).map(m=>{
+      const n=Number(keuze[m.sleutel]||0), mx=maxVoor(m);
+      return "<div class='mrij"+(n?" gekozen":"")+"' data-plus='"+m.sleutel+"'>"+
+        "<span class='kleur' style='background:"+kleurVan(m.sleutel)+"'></span>"+
+        "<span class='naam'><b>"+esc(m.model||"(zonder naam)")+"</b>"+
+          "<span>"+esc(m.code||"")+" · "+nl(m.l)+" x "+nl(m.b)+" x "+nl(m.h)+" cm · "+
+          m.m3.toFixed(2).replace(".",",")+" m&sup3;</span></span>"+
+        "<span class='past'><b data-max='"+m.sleutel+"'>"+(mx==null?"…":mx)+"</b>per container</span>"+
+        "<span class='teller' data-stop='1'>"+
+          "<button type='button' data-min='"+m.sleutel+"' title='eentje minder'>−</button>"+
+          "<input type='number' min='0' max='400' value='"+n+"' data-aantal='"+m.sleutel+"'>"+
+          "<button type='button' data-plus2='"+m.sleutel+"' title='eentje erbij'>+</button>"+
+        "</span></div>";
+    }).join("")+"</div>"
+  ).join("") : "<p class='lead' style='font-size:12.5px;margin-top:14px'>Geen model gevonden.</p>";
+
+  const L=el("modelLijst");
+  L.querySelectorAll("[data-plus]").forEach(r=>r.addEventListener("click",ev=>{
+    // Op de teller klikken mag niet óók een spa toevoegen.
+    if(ev.target.closest("[data-stop]")) return;
+    zetAantal(+r.dataset.plus,(Number(keuze[r.dataset.plus]||0))+1);
+  }));
+  L.querySelectorAll("[data-plus2]").forEach(b=>b.addEventListener("click",()=>{
+    zetAantal(+b.dataset.plus2,(Number(keuze[b.dataset.plus2]||0))+1);
+  }));
+  L.querySelectorAll("[data-min]").forEach(b=>b.addEventListener("click",()=>{
+    zetAantal(+b.dataset.min,(Number(keuze[b.dataset.min]||0))-1);
+  }));
+  L.querySelectorAll("[data-aantal]").forEach(i=>i.addEventListener("change",()=>{
+    zetAantal(+i.dataset.aantal,Number(i.value)||0);
+  }));
+  rekenAchtergrond();
+}
+function zetAantal(sleutel,n){
+  n=Math.max(0,Math.min(400,Math.round(n||0)));
+  if(n) keuze[sleutel]=n; else delete keuze[sleutel];
+  bewaar(); tekenModellen(); tekenPlan();
+}
+function tekenZonderMaat(){
+  const d=el("zonderMaat");
+  if(!ZONDER_MAAT.length){ d.classList.add("hidden"); return; }
+  d.classList.remove("hidden");
+  d.innerHTML="<summary>"+ZONDER_MAAT.length+" modellen zonder afmeting - die kunnen niet worden ingeladen</summary>"+
+    "<p class='lead' style='font-size:11.5px;margin:6px 0'>Van deze modellen staat er geen maat op de prijslijst. "+
+    "Zolang die er niet is kan het dashboard er niets mee rekenen; vraag ze op bij de fabriek.</p>"+
+    "<table class='grid'><thead><tr><th>Model</th><th>Code</th><th>Fabriek</th></tr></thead><tbody>"+
+    ZONDER_MAAT.map(m=>"<tr><td>"+esc(m.model||"")+"</td><td>"+esc(m.code||"")+"</td><td>"+esc(m.fabriek)+"</td></tr>").join("")+
+    "</tbody></table>";
+}
+
+/* ─── Het plan tekenen ────────────────────────────────────────────────── */
+function tekenPlan(){
+  const dozen=gekozenDozen();
+  const inhoud=C.l*C.b*C.h/1000000;
+  el("ctrUitleg").innerHTML=
+    "Binnenwerks "+nl(C.l)+" x "+nl(C.b)+" x "+nl(C.h)+" cm, dat is "+inhoud.toFixed(1).replace(".",",")+" m&sup3; ruimte. "+
+    "Elke spa krijgt er "+speling+" cm omheen voor de verpakking. "+
+    (kantelen?"Op de kant leggen mag.":"De spa's blijven rechtop staan.")+
+    " Het vulpercentage telt die verpakkingsruimte mee."+
+    (window.fpTransportHouston
+      ? "<br><b>Reken dit als bovengrens.</b> Dit is de strakst mogelijke stapeling; met de hand gaat er minder in. "+
+        "Over de zendingen naar Houston gemeten ging er gemiddeld "+
+        String(window.fpTransportHouston.M3_PER_CONTAINER).replace(".",",")+
+        " m&sup3; lading in een container. Komt dit er ver boven, zet de ruimte om de spa dan hoger."
+      : "");
+
+  if(!dozen.length){
+    el("kpis").innerHTML="";
+    el("plan").innerHTML="<div class='card'><p class='lead' style='margin:0'>Klik links op de modellen die mee moeten. "+
+      "Je ziet meteen hoeveel containers dat kost en hoe ze erin staan.</p></div>";
+    return;
+  }
+
+  const {containers,nietGeplaatst}=laad(C,dozen,kantelen);
+  const m3=dozen.reduce((s,d)=>s+d.m3,0);
+  const geplaatst=dozen.length-nietGeplaatst.length;
+
+  el("kpis").innerHTML=
+    kpi(nl(dozen.length),"spa's gekozen")+
+    kpi(nl(containers.length),containers.length===1?"container":"containers")+
+    kpi(m3.toFixed(1).replace(".",",")+" m³","volume van de spa's")+
+    kpi(containers.length?Math.round(vulling(containers[0],inhoud))+"%":"—","gevuld, eerste container");
+
+  el("plan").innerHTML=
+    containers.map((c,i)=>kaart(c,i,inhoud)).join("")+
+    (nietGeplaatst.length
+      ? "<div class='status-msg warn'><b>"+nietGeplaatst.length+" spa('s) passen er niet bij</b> - "+
+        "meer dan "+MAX_CONTAINERS+" containers wordt hier niet doorgerekend. Haal er wat af of splits de zending.</div>"
+      : "");
+
+  // De tekening pas ná het plaatsen van de kaarten, anders bestaan de
+  // canvassen nog niet. Ontbreekt Three.js, dan blijft de rest gewoon staan.
+  if(window.fpContainer3D){
+    containers.forEach((c,i)=>{
+      const cv=el("ctrCanvas"+i);
+      if(cv) window.fpContainer3D(cv,C,c.dozen,kleurVan);
+    });
+  }else{
+    containers.forEach((c,i)=>{
+      const cv=el("ctrCanvas"+i);
+      if(cv) cv.outerHTML="<div class='geen3d'>De 3D-tekening kon niet geladen worden (geen internet?). "+
+        "De aantallen hiernaast kloppen wel.</div>";
+    });
+  }
+}
+function kpi(n,l){ return "<div class='kpi'><div class='n'>"+n+"</div><div class='l'>"+l+"</div></div>"; }
+function vulling(c,inhoud){
+  const v=c.dozen.reduce((s,d)=>s+(d.dl*d.db*d.dh)/1000000,0);
+  return Math.min(100,(v/inhoud)*100);
+}
+function kaart(c,i,inhoud){
+  const per={};
+  c.dozen.forEach(d=>{ (per[d.sleutel]=per[d.sleutel]||{n:0,model:d.model,code:d.code}).n++; });
+  const rijen=Object.keys(per).sort((a,b)=>per[b].n-per[a].n).map(k=>
+    "<div class='lrij'><span class='kleur' style='background:"+kleurVan(+k)+"'></span>"+
+    "<span class='nm' title='"+esc(per[k].code||"")+"'>"+esc(per[k].model||"")+"</span>"+
+    "<span class='ct'>"+per[k].n+"</span></div>").join("");
+  const m3=c.dozen.reduce((s,d)=>s+d.m3,0);
+  return "<div class='ctr-kaart'>"+
+    "<div class='ctr-kop'><h4>🚢 Container "+(i+1)+" · "+esc(C.naam)+"</h4>"+
+      "<div class='stats'>"+
+        "<span><b>"+c.dozen.length+"</b> spa's</span>"+
+        "<span><b>"+m3.toFixed(1).replace(".",",")+"</b> m³</span>"+
+        "<span><b>"+Math.round(vulling(c,inhoud))+"%</b> gevuld</span>"+
+        "<span><b>"+Object.keys(per).length+"</b> model(len)</span>"+
+      "</div></div>"+
+    "<div class='ctr-body'>"+
+      "<canvas class='ctr-canvas' id='ctrCanvas"+i+"'></canvas>"+
+      "<div class='ctr-lijst'><h5>Wat er in staat</h5>"+rijen+"</div>"+
+    "</div></div>";
+}
+
+/* ─── Bedienen ────────────────────────────────────────────────────────── */
+function vulContainerKeuze(){
+  el("fCtr").innerHTML=CONTAINERS.map(c=>
+    "<option value='"+c.id+"'"+(c.id===C.id?" selected":"")+">"+esc(c.naam)+
+    " · "+nl(c.l)+" x "+nl(c.b)+" x "+nl(c.h)+" cm</option>").join("");
+}
+function alsInstellingWijzigt(){
+  maxCache={}; generatie++;   // de maten zijn veranderd, dus opnieuw rekenen
+  bewaar(); tekenModellen(); tekenPlan();
+}
+
+(function boot(){
+  if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
+  const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  el("userEmail").textContent=email||"—";
+  if(!ALLOWED.has(email)){
+    window.fpGeenToegang=true;
+    el("deny").classList.remove("hidden");
+    el("wrapAlles").classList.add("hidden");
+    el("deny").textContent="Deze tegel is voor inkoop en logistiek.";
+    return;
+  }
+  herstel();
+  vulContainerKeuze();
+  el("fSpeling").value=speling;
+  el("fKantelen").checked=kantelen;
+  tekenZonderMaat();
+  tekenModellen();
+  tekenPlan();
+})();
+
+el("logoutBtn").addEventListener("click",()=>{
+  localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href="dashboard.html";
+});
+el("fCtr").addEventListener("change",()=>{
+  C=CONTAINERS.find(x=>x.id===el("fCtr").value)||CONTAINERS[0];
+  alsInstellingWijzigt();
+});
+el("fSpeling").addEventListener("change",()=>{
+  speling=Math.max(0,Math.min(30,Number(el("fSpeling").value)||0));
+  el("fSpeling").value=speling;
+  alsInstellingWijzigt();
+});
+el("fKantelen").addEventListener("change",()=>{
+  kantelen=el("fKantelen").checked; alsInstellingWijzigt();
+});
+el("zoek").addEventListener("input",tekenModellen);
+el("btnLeeg").addEventListener("click",()=>{
+  keuze={}; bewaar(); tekenModellen(); tekenPlan();
+});
+el("btnPrint").addEventListener("click",()=>{
+  if(window.fpLog) window.fpLog("container-plan-geprint",Object.keys(keuze).length+" model(len)");
+  window.print();
+});
+</script>
+
+<!-- ──────────────────────────────────────────────────────────────────────
+     De tekening. Apart module-script omdat Three.js als ES-module binnenkomt.
+     Faalt dit script, dan valt de pagina terug op de tabellen; het gewone
+     script hierboven controleert daarop.
+     ────────────────────────────────────────────────────────────────────── -->
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const levend=[];
+function opruimen(canvas){
+  for(let i=levend.length-1;i>=0;i--){
+    if(levend[i].canvas!==canvas&&document.body.contains(levend[i].canvas)) continue;
+    if(levend[i].frame) cancelAnimationFrame(levend[i].frame);
+    if(levend[i].controls) levend[i].controls.dispose();
+    if(levend[i].renderer) levend[i].renderer.dispose();
+    levend.splice(i,1);
+  }
+}
+function hex(hsl){
+  const t=document.createElement("div"); t.style.color=hsl; document.body.appendChild(t);
+  const rgb=getComputedStyle(t).color; document.body.removeChild(t);
+  const m=rgb.match(/\d+/g);
+  return m?((+m[0])<<16)|((+m[1])<<8)|(+m[2]):0xc8102e;
+}
+
+window.fpContainer3D=function(canvas,C,dozen,kleurVan){
+  opruimen(canvas);
+  const w=canvas.clientWidth||620, h=canvas.clientHeight||340;
+  const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(w,h,false);
+  renderer.setClearColor(0xf9fafb);
+
+  const scene=new THREE.Scene();
+  // Camera zo ver naar achteren dat de hele container in beeld past. Een
+  // 40-voets is twaalf meter lang; op een vaste afstand valt hij er altijd
+  // half buiten, en bij een 20-voets sta je dan juist veel te ver weg.
+  const fov=38;
+  const camera=new THREE.PerspectiveCamera(fov,w/h,10,20000);
+  const straal=0.5*Math.sqrt(C.l*C.l+C.b*C.b+C.h*C.h);
+  const afstand=straal/Math.sin((fov/2)*Math.PI/180)*1.05;
+  const richting=new THREE.Vector3(0.72,0.42,0.55).normalize();
+  const midden=new THREE.Vector3(C.l/2,C.h/2,C.b/2);
+  camera.position.copy(midden).addScaledVector(richting,afstand);
+  camera.lookAt(midden);
+
+  scene.add(new THREE.AmbientLight(0xffffff,0.6));
+  const licht=new THREE.DirectionalLight(0xffffff,0.85);
+  licht.position.set(C.l,C.h*3,C.b*2);
+  scene.add(licht);
+
+  // De container als draadmodel, zodat je de spa's erin ziet staan.
+  const kader=new THREE.BoxGeometry(C.l,C.h,C.b);
+  const lijnen=new THREE.LineSegments(new THREE.EdgesGeometry(kader),
+    new THREE.LineBasicMaterial({color:0x2b2b2b}));
+  lijnen.position.set(C.l/2,C.h/2,C.b/2);
+  scene.add(lijnen);
+
+  const vloer=new THREE.Mesh(new THREE.PlaneGeometry(C.l,C.b),
+    new THREE.MeshBasicMaterial({color:0xe5e7eb,transparent:true,opacity:0.55}));
+  vloer.rotation.x=-Math.PI/2;
+  vloer.position.set(C.l/2,0.1,C.b/2);
+  scene.add(vloer);
+
+  for(const d of dozen){
+    const geo=new THREE.BoxGeometry(d.dl,d.dh,d.db);
+    const mesh=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:hex(kleurVan(d.sleutel))}));
+    // In de berekening is z de hoogte; in de tekening is dat de y-as.
+    mesh.position.set(d.x+d.dl/2, d.z+d.dh/2, d.y+d.db/2);
+    scene.add(mesh);
+    const rand=new THREE.LineSegments(new THREE.EdgesGeometry(geo),
+      new THREE.LineBasicMaterial({color:0x1f2937,transparent:true,opacity:0.35}));
+    rand.position.copy(mesh.position);
+    scene.add(rand);
+  }
+
+  const controls=new OrbitControls(camera,canvas);
+  controls.target.set(C.l/2,C.h/2,C.b/2);
+  controls.enableDamping=true;
+  controls.dampingFactor=0.08;
+  controls.update();
+
+  const ref={canvas,renderer,controls,frame:0};
+  levend.push(ref);
+  (function lus(){
+    controls.update();
+    renderer.render(scene,camera);
+    ref.frame=requestAnimationFrame(lus);
+  })();
+};
+
+// Three.js was er nog niet toen het plan voor het eerst werd getekend; nu wel.
+if(window.fpHertekenPlan) window.fpHertekenPlan();
+</script>
+<script>
+/* De module hierboven laadt asynchroon. Was hij nog niet klaar toen het plan
+   werd getekend, dan staan de canvassen er wel maar is er nog niets in
+   getekend; daarom tekent hij het plan daarna één keer opnieuw. */
+window.fpHertekenPlan=function(){ try{ tekenPlan(); }catch(e){} };
+</script>
+
+<script>
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){
+    var ua=navigator.userAgent||"";
+    var app=ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+    var elc=ua.match(/Electron\/([\d.]+)/i);
+    var versie=app?("app "+app[1]):(elc?("app · Electron "+elc[1]):"browser");
+    var pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
+    var id=null;
+    try{
+      id=localStorage.getItem("fp.apparaat");
+      if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("fp.apparaat",id); }
+    }catch(e){}
+    return {computer:id, platform:pm?pm[1].replace(/_/g,"."):null, versie:versie};
+  }
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var tile=((location.pathname.split("/").pop()||"").replace(/\.html$/,""))||"tegel";
+    var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:tile,action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker"),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
+})();
+</script>
+
+</body>
+</html>

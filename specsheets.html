@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Specificatiesheets — Fonteyn Dashboard</title>
+<script src="specsheet-eenheden.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Roboto+Condensed:wght@300;400;700&family=Josefin+Sans:wght@300;400&family=Julius+Sans+One&family=Marcellus&display=swap">
 <style>
   :root{
@@ -50,6 +51,15 @@
   .rij button[data-lup]:hover,.rij button[data-ldown]:hover{border-color:var(--fonteyn-green);color:var(--fonteyn-green)}
   .rij button[disabled]{opacity:.3;cursor:default}
   .rij button[disabled]:hover{border-color:var(--border);color:var(--muted)}
+  /* De extra invulregel voor de Amerikaanse waarde. Ingesprongen zodat je ziet
+     dat hij bij de regel erboven hoort, en niet bij de volgende. */
+  .rij.us-rij{margin:-2px 0 7px 0;padding-left:22px}
+  .rij.us-rij input{background:#fbfaf7}
+  .us-vlag{flex:0 0 auto;font-size:9.5px;font-weight:700;letter-spacing:.04em;color:var(--muted);
+    border:1px solid var(--border);border-radius:5px;padding:3px 5px;line-height:1;cursor:help}
+  /* Elektra: daar valt niets om te rekenen, dus daar moet iemand naar kijken. */
+  .rij.us-let .us-vlag{color:var(--warn);border-color:#fcd34d;background:#fffbeb}
+  .rij.us-let input{border-color:#fcd34d}
   .badge-rij{display:flex;gap:6px;align-items:center;margin-bottom:4px}
   .badge-rij input[type=text]{flex:1}
   .thumb{width:100%;height:78px;object-fit:contain;background:#f9fafb;border:1px dashed var(--border);border-radius:8px;margin-top:4px}
@@ -262,6 +272,21 @@
         <input type="range" id="zoom" min="35" max="110" value="70" style="width:80px">
       </label>
     </div>
+    <!-- Eenheden-schakelaar. Gretha vult altijd in cm, kilo's en liters in; de
+         Amerikaanse versie wordt hier alleen anders getekend. Eén sheet dus,
+         geen tweede die na een wijziging achterloopt (Gretha, 10 aug 2026). -->
+    <div class="toolbar" style="margin-bottom:6px">
+      <span style="font-size:11px;color:var(--muted)">Eenheden</span>
+      <button class="btn sm solid" id="btnEenhEU" type="button">🇪🇺 cm · kg · liter</button>
+      <button class="btn sm" id="btnEenhUS" type="button">🇺🇸 inch · lbs · gallons</button>
+    </div>
+    <div id="usUitleg" class="status-msg warn hidden" style="margin-top:0">
+      <b>Amerikaanse versie.</b> Je blijft gewoon in centimeters, kilo's en liters invullen -
+      rechts staat alles omgerekend, en de PDF ook. <br>
+      Volt, ampère, watt en hertz worden <b>niet</b> omgerekend: een Amerikaanse spa loopt
+      op andere elektra, dat is een ander getal en geen omrekening. Bij die regels staat een
+      veld <b>USA</b> waar je de Amerikaanse waarde zelf kunt invullen.
+    </div>
     <!-- Versiestempel. Gretha meldde "hij is nog hetzelfde", en dan is het gissen
          of een aanpassing haar computer wel bereikt heeft. Nu is dat te zien én
          te noemen: verandert dit nummer niet na een herstart, dan haalt de app
@@ -396,7 +421,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="06-08-2026 · 09:30";
+const TEGEL_VERSIE="10-08-2026 · 15:40";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
@@ -451,6 +476,9 @@ el("logoutBtn").addEventListener("click",()=>{localStorage.removeItem(SESSION_KE
 function leegSheet(){
   return {
     id:"", naam:"", model:"", collectie:"Passion Spas Pure Collection",
+    // "eu" = cm/kg/liter zoals ingevuld, "us" = inch/lbs/gallons. De invoer
+    // blijft altijd Europees; dit bepaalt alleen hoe hij getekend wordt.
+    eenheden:"eu",
     fontKop:"f-josefin", fontBody:"b-roboto",
     logoKeuze:"passion", logoEigen:"", logoBreedte:34,
     foto1:"", foto2:"", fotoHoofd:"",
@@ -812,6 +840,29 @@ function bind(id,veld){
 }
 bind("fModel","model"); bind("fCollectie","collectie");
 bind("fOptioneel","optioneel"); bind("fOptioneel2","optioneel2"); bind("fVoetL","voetL"); bind("fVoetR","voetR");
+// ─── Eenheden: Europees invullen, Amerikaans tonen ──────────────────
+// Het omrekenen zelf zit in specsheet-eenheden.js, zodat het buiten de
+// browser te testen is en de PDF exact hetzelfde laat zien als het scherm.
+function usAan(){ return S.eenheden==="us"; }
+function omgezet(r){
+  if(!usAan()||!window.fpEenheden) return {l:r.l,v:r.v};
+  return window.fpEenheden.regel(r);
+}
+function tekenEenhedenKnoppen(){
+  el("btnEenhEU").classList.toggle("solid",!usAan());
+  el("btnEenhUS").classList.toggle("solid",usAan());
+  el("usUitleg").classList.toggle("hidden",!usAan());
+}
+function zetEenheden(waarde){
+  S.eenheden = waarde==="us" ? "us" : "eu";
+  tekenEenhedenKnoppen();
+  tekenBlokForm(); teken();
+}
+el("btnEenhEU").addEventListener("click",()=>{ zetEenheden("eu"); });
+el("btnEenhUS").addEventListener("click",()=>{
+  zetEenheden("us");
+  if(window.fpLog) window.fpLog("specsheet-usa-eenheden",S.model||"(zonder naam)");
+});
 el("fFontKop").addEventListener("change",()=>{S.fontKop=el("fFontKop").value;teken();});
 el("fFontBody").addEventListener("change",()=>{S.fontBody=el("fFontBody").value;teken();});
 el("fLogoKeuze").addEventListener("change",()=>{
@@ -837,6 +888,7 @@ function vulFormulier(){
   zetThumb("tFotoHoofd",S.fotoHoofd); zetThumb("tTekening",S.tekening);
   tekenLegForm();
   zetThumb("tFotoHoofd",S.fotoHoofd); zetThumb("tTekening",S.tekening); tekenLegForm();
+  tekenEenhedenKnoppen();
   tekenBadgeForm(); tekenBlokForm();
   el("sheetKies").value=S.id||"";
 }
@@ -883,6 +935,26 @@ el("fBadgeFile").addEventListener("change",async e=>{
 el("btnBadgeAdd").addEventListener("click",()=>{S.badges.push({icoon:"★",tekst:"Nieuw kenmerk",img:""});tekenBadgeForm();teken();});
 
 // Specificatie-blokken
+/* De extra regel voor de Amerikaanse versie. Hij verschijnt alleen als de
+   sheet op USA staat, want anders staan er twee keer zo veel velden zonder dat
+   er iets mee gedaan wordt.
+
+   In het veld staat als grijze tekst wat de omrekening oplevert, zodat je
+   ziet wat er straks op de sheet komt. Typ je er zelf iets in, dan gaat dat
+   voor - dat is de weg voor volt en ampère, waar Amerika geen omrekening maar
+   een ander apparaat heeft. Die regels krijgen daarom een streepje kleur. */
+function usRij(r,bi,ri){
+  if(!usAan()||!window.fpEenheden) return "";
+  const auto=window.fpEenheden.regel({l:r.l,v:r.v}).v;
+  const anders=window.fpEenheden.elektrisch(r)&&!window.fpEenheden.omrekenbaar(r);
+  return "<div class='rij us-rij"+(anders?" us-let":"")+"'>"+
+    "<span class='us-vlag' title='"+(anders
+      ? "Elektra wordt niet omgerekend - vul hier de Amerikaanse waarde in"
+      : "Automatisch omgerekend; overschrijf alleen als het anders moet")+"'>USA</span>"+
+    "<input type='text' class='val' data-rus='"+bi+"_"+ri+"' value='"+esc(r.us||"")+
+      "' placeholder='"+esc(auto||"automatisch")+"'>"+
+  "</div>";
+}
 function tekenBlokForm(){
   el("blokLijst").innerHTML=S.blokken.map((bl,bi)=>
     "<details class='blok'"+(bi===0?" open":"")+">"+
@@ -900,7 +972,7 @@ function tekenBlokForm(){
           "<input type='text' class='val' value='"+esc(r.v)+"' data-rv='"+bi+"_"+ri+"' placeholder='waarde'>"+
           "<button data-rup='"+bi+"_"+ri+"' title='omhoog'>↑</button>"+
           "<button data-rdel='"+bi+"_"+ri+"' title='verwijderen'>✕</button>"+
-        "</div>").join("")+
+        "</div>"+usRij(r,bi,ri)).join("")+
       "<button class='btn sm' data-radd='"+bi+"' style='margin-top:4px'>+ regel</button>"+
     "</details>").join("");
   const L=el("blokLijst");
@@ -912,6 +984,11 @@ function tekenBlokForm(){
   }));
   L.querySelectorAll("[data-rl]").forEach(i=>i.addEventListener("input",()=>{const[a,b]=i.dataset.rl.split("_");S.blokken[+a].regels[+b].l=i.value;teken();}));
   L.querySelectorAll("[data-rv]").forEach(i=>i.addEventListener("input",()=>{const[a,b]=i.dataset.rv.split("_");S.blokken[+a].regels[+b].v=i.value;teken();}));
+  // De eigen Amerikaanse waarde. Leeg laten = weer automatisch omrekenen; de
+  // grijze tekst in het veld laat zien wat dat oplevert.
+  L.querySelectorAll("[data-rus]").forEach(i=>i.addEventListener("input",()=>{
+    const[a,b]=i.dataset.rus.split("_"); S.blokken[+a].regels[+b].us=i.value; teken();
+  }));
   L.querySelectorAll("[data-rup]").forEach(b=>b.addEventListener("click",()=>{
     const[a,r]=b.dataset.rup.split("_").map(Number); if(r<1) return;
     const R=S.blokken[a].regels; [R[r-1],R[r]]=[R[r],R[r-1]]; tekenBlokForm(); teken();
@@ -972,11 +1049,16 @@ function teken(){
   // specificatie-blokken, per kolom, met zebra-strepen
   const bouw=k=>S.blokken.filter(b=>(b.kolom||"L")===k).map(b=>
     "<div class='sectie'><h3>"+esc(b.titel||"")+"</h3>"+
-    b.regels.map((r,i)=>
+    b.regels.map((r,i)=>{
+      // Staat de sheet op USA, dan komen omschrijving én waarde omgerekend uit
+      // specsheet-eenheden.js. Wat in S staat blijft Europees; er wordt dus
+      // niets overschreven en terugschakelen kan altijd.
+      const o=omgezet(r);
       // Gretha, 31 jul: het gekleurde vlak hoort meteen ná de bloktitel te
       // beginnen, dus de eerste regel is gekleurd en niet de tweede.
-      "<div class='spec"+(i%2?"":" zebra")+"'><span class='l'>"+esc(r.l)+"</span>"+
-      "<span class='d'></span><span class='v'>"+esc(r.v)+"</span></div>").join("")+
+      return "<div class='spec"+(i%2?"":" zebra")+"'><span class='l'>"+esc(o.l)+"</span>"+
+      "<span class='d'></span><span class='v'>"+esc(o.v)+"</span></div>";
+    }).join("")+
     "</div>").join("");
   el("sKolomL").innerHTML=bouw("L");
   el("sKolomR").innerHTML=bouw("R");

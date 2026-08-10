@@ -420,6 +420,14 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Passion Spas USA (Houston, Texas) — bestellingen, reserveringen en containers van de Amerikaanse vestiging. Draait op QuickBooks; los van Nederland/Logic4.</p>
       </a>
 
+      <!-- Container laden — Chantal/Arno/Manon/Dolf + admins. Zelfde idee als
+           Transport laden, maar dan met zeecontainers en spa-afmetingen. -->
+      <a href="container-laden.html" class="tile hidden" id="tileContainerLaden">
+        <div class="icon">🚢</div>
+        <h3>Container laden</h3>
+        <p>Klik de modellen aan die mee moeten en zie meteen hoeveel spa's er in een container passen - inclusief de indeling in 3D.</p>
+      </a>
+
       <!-- Dealerportaal beheren — Arno/Don/Chantal + admins. -->
       <a href="dealerportaal.html" class="tile hidden" id="tileDealerportaal">
         <div class="icon">🤝</div>
@@ -847,6 +855,18 @@ const PRIJSLIJSTEN_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Container laden — inkoop en logistiek. Chantal boekt de containers bij de
+// fabriek, Arno en Manon plannen wat eruit komt. container-laden.html doet
+// client-side dezelfde controle; allebei bijwerken dus.
+const CONTAINERLADEN_EMAILS = new Set([
+  "chantal@fonteyn.nl",    "chantal",  "fonteyn.chantal",
+  "arno@fonteyn.nl",       "arno",     "fonteyn.arno",
+  "manon@fonteyn.nl",      "manon",    "fonteyn.manon",
+  "dolf@fonteyn.nl",       "dolf",     "fonteyn.dolf",
+  "gerrit@fonteyn.nl",     "gerrit",   "fonteyn.gerrit",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 // Specificatiesheets — marketing. Gretha en Demi maken de sheets; admins mee.
 const SPECSHEETS_EMAILS = new Set([
   "gretha@fonteyn.nl",     "gretha",   "fonteyn.gretha",
@@ -1020,6 +1040,8 @@ function showDashboard(email) {
   el("tileDealerportaal").classList.toggle("hidden", !DEALERPORTAAL_EMAILS.has(lc));
   // Voorraadbeheer — Dolf/Arno/Chantal + admins
   el("tileVoorraad").classList.toggle("hidden", !VOORRAAD_EMAILS.has(lc));
+  // Container laden — Chantal/Arno/Manon/Dolf + admins
+  el("tileContainerLaden").classList.toggle("hidden", !CONTAINERLADEN_EMAILS.has(lc));
   // Amerika (Houston/Texas, QuickBooks) — alleen Chantal/Dolf/Gerrit/bot
   el("tileAmerika").classList.toggle("hidden", !AMERIKA_EMAILS.has(lc));
   // Activiteitenlogboek — alleen Gerrit/Dolf/bot

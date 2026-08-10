@@ -105,6 +105,10 @@
       "note": "Transport laden — bin-packing in bakwagens + routeplanning per dag"
     },
     {
+      "name": "container-laden.html",
+      "note": "Container laden — wat past er in een zeecontainer: modellen aanklikken, stapelen in 3D en zien hoeveel spa's erin gaan. Maten uit spa-fabrikanten.js. Chantal/Arno/Manon/Dolf + beheer."
+    },
+    {
       "name": "eikensingel.html",
       "note": "Eikensingel-vakantiepark — bovenaanzicht 10 bungalows, boekingen + schoonmaak + betalingen"
     },
@@ -139,6 +143,10 @@
     {
       "name": "specsheets.html",
       "note": "Specificatiesheets — marketing (Gretha) maakt de A4-specsheets per spa-model met invulvelden, foto-upload en PDF-export (vervangt InDesign). Opslag in bucket specsheets."
+    },
+    {
+      "name": "specsheet-eenheden.js",
+      "note": "Specsheets omzetten naar Amerikaanse eenheden: cm naar inch, kg naar lbs, liter naar US gallons. Alleen rekenwerk, zodat scherm en PDF hetzelfde tonen. Elektra (V/A/W/kW/Hz) wordt bewust niet omgerekend."
     },
     {
       "name": "prijslijsten-fabrikanten.html",
