@@ -55,6 +55,12 @@ const ALLOWED_BUCKETS = new Set([
   "gg-1630",           // Aansluiting grootboek 1630: laatste opstelling + historie per meting (accountant)
   "gg-artikelgroepen",// Artikelcode → productgroep-id + de groepsnamen. Voor de debiteurenlijst, die per factuur de afdeling moet bepalen. Opbouwen kost een minuut, dus wordt hij 30 dagen hergebruikt.
   "spa-aliassen",     // Modelnaam zoals hij getypt wordt → modelnaam in de spa-catalogus (eenmalige keuze door een mens)
+  // De maten van de spa's zoals Chantal ze zelf invult, per model. Die gaan
+  // vóór alle bestanden: de prijslijsten, de kistmaten en de specsheets zijn
+  // wat leveranciers ooit hebben aangeleverd, dit is wat er echt klopt. Wordt
+  // gebruikt door de tegel Container laden en door de voorraadwaardering in
+  // Amerika, dus één plek voor allebei.
+  "spa-maten",
   // Voorraad in Houston, zoals Chantal die bijhoudt. Nu nog een telling die per
   // mail binnenkomt; zodra magazijn Houston in Logic4 bestaat komt dit daaruit
   // en vervalt deze bucket. Bewust apart van 'voorraad-hallen': dat is de

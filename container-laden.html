@@ -110,6 +110,23 @@
   table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
   table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
   details.zonder summary{cursor:pointer;font-size:12px;color:var(--fonteyn-green);font-weight:600;padding:8px 0}
+  /* ─── Maat invullen ─────────────────────────────────────────────────
+     Een eigen venster, want window.prompt() bestaat niet in Electron: een
+     knop die daarop leunt doet gewoon niets en dat is niet te zien. */
+  .dlg-laag{position:fixed;inset:0;background:rgba(17,17,17,.45);display:flex;align-items:center;
+    justify-content:center;z-index:60;padding:20px}
+  .dlg{background:#fff;border-radius:12px;padding:20px 22px;max-width:440px;width:100%;
+    box-shadow:0 18px 50px rgba(0,0,0,.28)}
+  .dlg h4{margin:0 0 6px;color:var(--fonteyn-green);font-size:16px}
+  .dlg .maten{display:flex;gap:10px;align-items:flex-end;margin:14px 0 4px}
+  .dlg .maten label{display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+  .dlg .maten input{width:100%;border:1px solid var(--border);border-radius:7px;padding:9px 10px;font:inherit;font-size:15px;text-align:center}
+  .dlg .maten input:focus{outline:none;border-color:var(--passion);box-shadow:0 0 0 3px rgba(200,16,46,.15)}
+  .dlg .knoppen{display:flex;gap:8px;align-items:center;margin-top:18px;flex-wrap:wrap}
+  .dlg .fout{color:var(--bad);font-size:12px;margin:8px 0 0;min-height:16px}
+  .mrij .pen{flex:0 0 auto;border:1px solid var(--border);background:#fff;border-radius:6px;cursor:pointer;
+    font-size:11px;line-height:1;padding:5px 6px;color:var(--muted)}
+  .mrij .pen:hover{border-color:var(--passion);color:var(--passion)}
   .tablewrap{max-height:58vh;overflow:auto;border:1px solid var(--border);border-radius:8px}
   .tablewrap table.grid{margin:0}
   .tablewrap table.grid th{position:sticky;top:0}
@@ -137,7 +154,8 @@
 <main id="wrapAlles">
   <h2>Container laden</h2>
   <p class="lead">Klik de modellen aan die mee moeten en zie meteen hoeveel spa's er in een container passen.
-    De maten komen uit de prijslijsten van de fabrieken - dezelfde lijst die de voorraadtegel gebruikt.</p>
+    De maten komen uit de prijslijsten, de kistmaten en de specificatiesheets - en wat je hier zelf invult gaat
+    daar overheen en geldt meteen in elke tegel die met maten rekent.</p>
 
   <div class="card">
     <div class="instel">
@@ -164,7 +182,9 @@
       <h3>Modellen</h3>
       <input type="text" id="zoek" placeholder="Zoek op modelnaam of fabriekscode…">
       <p class="lead" style="font-size:11.5px;margin:8px 0 0">Achter elk model staat hoeveel er van dát model alleen
-        in de gekozen container gaan. Klik op de regel om er één toe te voegen.</p>
+        in de gekozen container gaan. Klik op de regel om er één toe te voegen.
+        Klopt een maat niet? Met ✏ pas je hem aan; dat geldt dan overal, ook in de voorraadwaardering van Amerika.</p>
+      <p class="lead" style="font-size:11.5px;margin:4px 0 0" id="matenStand"></p>
       <div id="modelLijst"></div>
       <details class="zonder" id="zonderMaat"></details>
     </div>
@@ -188,6 +208,28 @@
     <div id="l4Uit"></div>
   </div>
 </main>
+
+<!-- Maat invullen. Eigen venster: window.prompt() bestaat niet in Electron. -->
+<div class="dlg-laag hidden" id="dlgLaag">
+  <div class="dlg">
+    <h4 id="dlgTitel">Maat invullen</h4>
+    <p class="lead" style="margin:0;font-size:12.5px" id="dlgUitleg"></p>
+    <div class="maten">
+      <div style="flex:1"><label for="dlgL">Lengte (cm)</label><input type="number" id="dlgL" min="1" max="1500" step="1"></div>
+      <div style="flex:1"><label for="dlgB">Breedte (cm)</label><input type="number" id="dlgB" min="1" max="400" step="1"></div>
+      <div style="flex:1"><label for="dlgH">Hoogte (cm)</label><input type="number" id="dlgH" min="1" max="400" step="1"></div>
+    </div>
+    <p class="lead" style="margin:6px 0 0;font-size:11.5px">De maat van de spa zoals hij in de container gaat, in hele
+      centimeters. De ruimte om hem heen regelt het dashboard zelf.</p>
+    <p class="fout" id="dlgFout"></p>
+    <div class="knoppen">
+      <button class="btn sm" id="dlgAuto" type="button">Terug naar automatisch</button>
+      <span style="flex:1"></span>
+      <button class="btn sm" id="dlgAnnuleer" type="button">Annuleren</button>
+      <button class="btn sm solid" id="dlgBewaar" type="button">Bewaren</button>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ══════════════════════════════════════════════════════════════════════════
@@ -273,18 +315,20 @@ function bouwModellen(){
   const L=(window.fpFabrikanten&&window.fpFabrikanten.lijst)||[];
   L.forEach(f=>{
     (f.modellen||[]).forEach(m=>{
-      const maat=window.fpAfmetingen ? window.fpAfmetingen.maatVan(m.model,m.afmeting) : null;
+      const maat=window.fpAfmetingen ? window.fpAfmetingen.maatVan(m.model,m.afmeting,m.code) : null;
       if(maat){
-        const bron=maat.bron;
         uit.push({
           id:f.fabriek+"|"+(m.code||"")+"|"+(m.model||""),
           i:uit.length,
-          model:m.model, code:m.code, fabriek:f.fabriek, merk:f.merk, bron:bron,
+          model:m.model, code:m.code, fabriek:f.fabriek, merk:f.merk, bron:maat.bron,
+          // De maat van de prijslijst blijft bewaard, zodat het venster kan
+          // laten zien waar hij op terugvalt als je je eigen maat weghaalt.
+          afmeting:m.afmeting||null,
           l:maat.l, b:maat.b, h:maat.h,
           m3:(maat.l/100)*(maat.b/100)*(maat.h/100),
         });
       }else{
-        zonder.push({model:m.model,code:m.code,fabriek:f.fabriek});
+        zonder.push({model:m.model,code:m.code,fabriek:f.fabriek,afmeting:m.afmeting||null});
       }
     });
   });
@@ -494,13 +538,16 @@ function tekenModellen(){
           m.m3.toFixed(2).replace(".",",")+" m&sup3;"+
           // Waar de maat vandaan komt. Bij een verschil tussen de bronnen moet
           // je kunnen zien welke je voor je hebt.
-          (m.bron==="specsheet"
-            ? " · <span title='Maat van de specificatiesheet, niet van de prijslijst'>specsheet</span>"
-            : m.bron==="verpakkingslijst"
-              ? " · <span title='Maat van de kist zoals hij vervoerd wordt, uit Maten + gewichten'>kistmaat</span>"
-              : "")+
+          (m.bron==="handmatig"
+            ? " · <b style='color:var(--passion)' title='Hier zelf ingevuld; gaat voor alle lijsten'>zelf ingevuld</b>"
+            : m.bron==="specsheet"
+              ? " · <span title='Maat van de specificatiesheet, niet van de prijslijst'>specsheet</span>"
+              : m.bron==="verpakkingslijst"
+                ? " · <span title='Maat van de kist zoals hij vervoerd wordt, uit Maten + gewichten'>kistmaat</span>"
+                : "")+
           "</span></span>"+
         "<span class='past'><b data-max='"+m.i+"'>"+(mx==null?"…":mx)+"</b>per container</span>"+
+        "<button type='button' class='pen' data-stop='1' data-pen='"+m.i+"' title='Maat aanpassen'>✏</button>"+
         "<span class='teller' data-stop='1'>"+
           "<button type='button' data-min='"+m.i+"' title='eentje minder'>−</button>"+
           "<input type='number' min='0' max='400' value='"+n+"' data-aantal='"+m.i+"'>"+
@@ -527,6 +574,24 @@ function tekenModellen(){
   L.querySelectorAll("[data-aantal]").forEach(i=>i.addEventListener("change",()=>{
     zetAantal(idVan(i.dataset.aantal),Number(i.value)||0);
   }));
+  L.querySelectorAll("[data-pen]").forEach(b=>b.addEventListener("click",ev=>{
+    ev.stopPropagation();
+    const m=MODELLEN[+b.dataset.pen]; if(m) openMaat(m);
+  }));
+  // Hoe de lijst ervoor staat, in één regel: waar de maten vandaan komen en
+  // wat er nog open staat.
+  const stand=el("matenStand");
+  if(stand){
+    const per={};
+    MODELLEN.forEach(m=>{ per[m.bron]=(per[m.bron]||0)+1; });
+    const deel=[];
+    if(per.handmatig) deel.push("<b>"+per.handmatig+"</b> zelf ingevuld");
+    if(per.prijslijst) deel.push(per.prijslijst+" van de prijslijst");
+    if(per.verpakkingslijst) deel.push(per.verpakkingslijst+" kistmaat");
+    if(per.specsheet) deel.push(per.specsheet+" van een specsheet");
+    stand.innerHTML=MODELLEN.length+" modellen met een maat: "+deel.join(", ")+
+      (ZONDER_MAAT.length?". Nog "+ZONDER_MAAT.length+" zonder - zie onderaan.":".");
+  }
 }
 function zetAantal(id,n){
   if(!id) return;
@@ -536,15 +601,92 @@ function zetAantal(id,n){
 }
 function tekenZonderMaat(){
   const d=el("zonderMaat");
-  if(!ZONDER_MAAT.length){ d.classList.add("hidden"); return; }
+  if(!ZONDER_MAAT.length){
+    d.classList.remove("hidden");
+    d.innerHTML="<summary>Van alle modellen is de maat bekend</summary>"+
+      "<p class='lead' style='font-size:11.5px;margin:6px 0'>Er staat niets meer open.</p>";
+    return;
+  }
   d.classList.remove("hidden");
-  d.innerHTML="<summary>"+ZONDER_MAAT.length+" modellen zonder afmeting - die kunnen niet worden ingeladen</summary>"+
-    "<p class='lead' style='font-size:11.5px;margin:6px 0'>Van deze modellen staat geen maat op de prijslijst en ook niet op een "+
-    "specificatiesheet. Zolang die er niet is kan het dashboard er niets mee rekenen; vraag ze op bij de fabriek.</p>"+
-    "<table class='grid'><thead><tr><th>Model</th><th>Code</th><th>Fabriek</th></tr></thead><tbody>"+
-    ZONDER_MAAT.map(m=>"<tr><td>"+esc(m.model||"")+"</td><td>"+esc(m.code||"")+"</td><td>"+esc(m.fabriek)+"</td></tr>").join("")+
+  d.innerHTML="<summary>"+ZONDER_MAAT.length+" modellen zonder afmeting - vul ze hier in</summary>"+
+    "<p class='lead' style='font-size:11.5px;margin:6px 0'>Van deze modellen staat geen maat op de prijslijst, de "+
+    "verpakkingslijst of een specificatiesheet. Weet je de maat, vul hem dan in: hij wordt centraal bewaard en geldt "+
+    "meteen voor iedereen, ook in de voorraadwaardering van Amerika.</p>"+
+    "<table class='grid'><thead><tr><th>Model</th><th>Code</th><th>Fabriek</th><th></th></tr></thead><tbody>"+
+    ZONDER_MAAT.map((m,i)=>"<tr><td>"+esc(m.model||"<i>zonder naam</i>")+"</td><td>"+esc(m.code||"")+"</td>"+
+      "<td>"+esc(m.fabriek)+"</td>"+
+      "<td style='text-align:right'><button type='button' class='btn sm' data-zpen='"+i+"'>Maat invullen</button></td></tr>").join("")+
     "</tbody></table>";
+  d.querySelectorAll("[data-zpen]").forEach(b=>b.addEventListener("click",()=>{
+    const m=ZONDER_MAAT[+b.dataset.zpen]; if(m) openMaat(m);
+  }));
 }
+
+/* ─── Een maat zelf invullen ──────────────────────────────────────────────
+   Wat hier wordt ingevuld gaat vóór alle bestanden en wordt centraal bewaard
+   bij de worker, dus het geldt meteen voor iedereen en in elke tegel die met
+   maten rekent. Terug naar automatisch kan altijd.
+
+   Eigen venster en geen prompt(): die bestaat niet in Electron en doet daar
+   dus niets, zonder foutmelding. */
+let dlgHuidig=null;
+function maatTekst(m){ return m ? nl(m.l)+" x "+nl(m.b)+" x "+nl(m.h)+" cm" : null; }
+function bronTekst(bron){
+  return {prijslijst:"de prijslijst van de fabriek", verpakkingslijst:"de kistmaat uit Maten + gewichten",
+          specsheet:"de specificatiesheet", handmatig:"zelf ingevuld"}[bron]||bron;
+}
+function openMaat(m){
+  dlgHuidig=m;
+  const A=window.fpAfmetingen;
+  const eigen=A?A.handmatigVan(m.model,m.code):null;
+  const auto=A?A.automatischVan(m.model,m.afmeting):null;
+  el("dlgTitel").textContent=(m.model||"Zonder naam")+(m.code?"  ·  "+m.code:"");
+  el("dlgUitleg").innerHTML=
+    (eigen
+      ? "Nu ingevuld op <b>"+maatTekst(eigen)+"</b>"+(eigen.door?" door "+esc(eigen.door):"")+"."
+      : auto
+        ? "Nu <b>"+maatTekst(auto)+"</b>, volgens "+bronTekst(auto.bron)+"."
+        : "Van dit model is nog nergens een maat bekend.")+
+    (eigen&&auto ? " Zonder jouw invulling zou hij "+maatTekst(auto)+" zijn ("+bronTekst(auto.bron)+")." : "");
+  const start=eigen||auto||{l:"",b:"",h:""};
+  el("dlgL").value=start.l||""; el("dlgB").value=start.b||""; el("dlgH").value=start.h||"";
+  el("dlgFout").textContent="";
+  el("dlgAuto").classList.toggle("hidden",!eigen);
+  el("dlgLaag").classList.remove("hidden");
+  setTimeout(()=>el("dlgL").focus(),30);
+}
+function sluitMaat(){ el("dlgLaag").classList.add("hidden"); dlgHuidig=null; }
+async function bewaarMaatUitVenster(maat){
+  const m=dlgHuidig; if(!m) return;
+  const A=window.fpAfmetingen;
+  if(!A){ el("dlgFout").textContent="De maatlijst is niet geladen."; return; }
+  el("dlgBewaar").disabled=true; el("dlgAuto").disabled=true;
+  try{
+    await A.bewaarMaat(m.model,m.code,maat,(localStorage.getItem(EMAIL_KEY)||"").toLowerCase());
+    sluitMaat();
+    herbouwModellen(); maxCache={};
+    tekenZonderMaat(); tekenModellen(); tekenPlan();
+    if(window.fpLog) window.fpLog(maat?"spa-maat-ingevuld":"spa-maat-teruggezet",
+      (m.model||m.code||"")+(maat?" = "+maat.l+"x"+maat.b+"x"+maat.h:""));
+  }catch(e){
+    el("dlgFout").textContent="Opslaan mislukt: "+e.message;
+  }finally{
+    el("dlgBewaar").disabled=false; el("dlgAuto").disabled=false;
+  }
+}
+el("dlgAnnuleer").addEventListener("click",sluitMaat);
+el("dlgLaag").addEventListener("click",ev=>{ if(ev.target===el("dlgLaag")) sluitMaat(); });
+document.addEventListener("keydown",ev=>{ if(ev.key==="Escape"&&!el("dlgLaag").classList.contains("hidden")) sluitMaat(); });
+el("dlgAuto").addEventListener("click",()=>bewaarMaatUitVenster(null));
+el("dlgBewaar").addEventListener("click",()=>{
+  const l=Number(el("dlgL").value), b=Number(el("dlgB").value), h=Number(el("dlgH").value);
+  if(!(l>0&&b>0&&h>0)){ el("dlgFout").textContent="Vul alle drie de maten in, in centimeters."; return; }
+  if(l>1500||b>400||h>400){ el("dlgFout").textContent="Dat lijkt geen centimeters. Een spa is hooguit 15 meter lang."; return; }
+  bewaarMaatUitVenster({l:Math.round(l),b:Math.round(b),h:Math.round(h)});
+});
+["dlgL","dlgB","dlgH"].forEach(id=>el(id).addEventListener("keydown",ev=>{
+  if(ev.key==="Enter") el("dlgBewaar").click();
+}));
 
 /* ─── Het plan tekenen ────────────────────────────────────────────────── */
 function tekenPlan(){
