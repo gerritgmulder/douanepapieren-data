@@ -105,6 +105,10 @@
       "note": "Transport laden — bin-packing in bakwagens + routeplanning per dag"
     },
     {
+      "name": "taal.js",
+      "note": "Talenknop NL/EN in de kop van elke tegel. De Nederlandse tekst blijft in de HTML staan; deze laag vervangt hem bij het openen door de Engelse uit de woordenlijst. Alleen wat er letterlijk in staat wordt vertaald, dus klant- en modelnamen blijven met zekerheid ongemoeid."
+    },
+    {
       "name": "spa-afmetingen.js",
       "note": "De maat van een spa-model, uit twee bronnen: de prijslijst van de fabriek (leidend) en anders de specificatiesheet. Gedeeld door container-laden.html en amerika.html, zodat er niet twee lijstjes ontstaan die uiteenlopen."
     },

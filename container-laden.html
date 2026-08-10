@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Container laden — Fonteyn Dashboard</title>
+<script src="taal.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <script src="spa-fabrikanten.js"></script>
 <script src="spa-afmetingen.js"></script>
@@ -775,7 +776,9 @@ function tekenZonderMaat(){
     "verpakkingslijst of een specificatiesheet. Weet je de maat, vul hem dan in: hij wordt centraal bewaard en geldt "+
     "meteen voor iedereen, ook in de voorraadwaardering van Amerika.</p>"+
     "<table class='grid'><thead><tr><th>Model</th><th>Code</th><th>Fabriek</th><th></th></tr></thead><tbody>"+
-    ZONDER_MAAT.map((m,i)=>"<tr><td>"+esc(m.model||"<i>zonder naam</i>")+"</td><td>"+esc(m.code||"")+"</td>"+
+    // esc() om de modelnaam heen, maar niet om de cursieve vervanging: die is
+    // opmaak en geen gegeven, en stond anders letterlijk met tags op het scherm.
+    ZONDER_MAAT.map((m,i)=>"<tr><td>"+(m.model?esc(m.model):"<i>zonder naam</i>")+"</td><td>"+esc(m.code||"")+"</td>"+
       "<td>"+esc(m.fabriek)+"</td>"+
       "<td style='text-align:right'><button type='button' class='btn sm' data-zpen='"+i+"'>Maat invullen</button></td></tr>").join("")+
     "</tbody></table>";
