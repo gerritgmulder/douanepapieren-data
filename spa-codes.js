@@ -68,7 +68,36 @@ const SPA_CODES = [
   ["SKT888H1","Tenerife Diamond"],
   ["SKT888H2","Tenerife Luxury"],
   ["SKT888KA","Euphoria"],
-  ["SKT888JA","Felicity Mighty Wave"],
+  // SKT888J en SKT888JA zijn hetzelfde model; Chantal wil ze allebei als
+  // Felicity lezen (9 aug 2026). Ze houden wel hun eigen fabriekscode, want
+  // op de prijslijst van Jazzi staan ze voor een ander bedrag.
+  // Tien modellen stonden wel op de bevestigde Jazzi-prijslijst van 15-06-2026
+  // maar niet in deze lijst, en werden dus als "(onbekend SKT-model)" gelezen.
+  // Overgenomen van die prijslijst, waar code en modelnaam naast elkaar staan
+  // - niet geraden (9 aug 2026).
+  // Drie variantcodes ontbraken, en dat is erger dan "onbekend": ze werden
+  // opgeslokt door hun kortere broer. SKT339G9 (Exercise) las als SKT339G
+  // (Spirit), SKT333H2 (Serene 1) als SKT333H (Serene 2), en SKT335FA-1
+  // (Reboot) als SKT335FA (Soulmate). Het dashboard boekte dus stilletjes het
+  // verkeerde model. Gevonden bij het naast elkaar leggen van de codelijst en
+  // de Jazzi-prijslijst (9 aug 2026).
+  ["SKT339G9","Exercise"],
+  ["SKT333H2","Serene 1"],
+  ["SKT335FA-1","Reboot"],
+  ["SKT338H","Brisbane"],
+  ["SKT333F","Brighton"],
+  ["SKT306A","Cardiff"],
+  ["SKT333D","Edinborough"],
+  ["SKT888K","Euphoria"],
+  ["SKT888M","Joy"],
+  ["SKT888B2","Melbourne"],
+  ["SKT888W","Elevate"],
+  ["SKT888O","Cascade"],
+  // "100383" (Junior swimspa) staat er bewust NIET bij: een kale reeks cijfers
+  // zou als beginstuk van een gewoon Logic4-artikelnummer kunnen worden
+  // gelezen, en dan heet een willekeurig artikel ineens Junior swimspa.
+  ["SKT888J","Felicity"],
+  ["SKT888JA","Felicity"],
   ["SKT888EA","Heart"],
   ["SKT888MA","Joy"],
   ["SKT888G","Mallorca Luxury"],
@@ -128,13 +157,25 @@ const SPA_CODES = [
   ["S-2202","Spa Vision"],
   ["ET-165","Spa Praise"],   // code bevestigd door Chantal, 4 aug 2026
   // Foshan Gaoming Yuehua Sanitary (MEXDA) — Storm Spas
+  // MEXDA. Chantal gaf op 9 aug 2026 haar lijst door, en die schrijft vier
+  // codes anders dan wat hier al stond: WS-PC06T naast WS-PC06ST, WS-PC05T
+  // naast WS-PC05ST, WS-S09 naast WS-S06 en WS-06M naast WS-506M. Welke van
+  // de twee op de facturen staat weet ik niet, dus staan ze er allebei in -
+  // dan wordt hij hoe dan ook herkend. Zodra duidelijk is welke de echte is,
+  // kan de andere weg.
   ["WS-PC05ST","Turbine 5"],
+  ["WS-PC05T","Turbine 5"],
   ["WS-PC06ST","Turbine 6"],
+  ["WS-PC06T","Turbine 6"],
   ["WS-PC07ST","Turbine 7"],
+  ["WS-PC07A-T","Turbine 7"],
+  ["WS-PC08T","Turbine 8"],
   ["WS-S06","Aquatic 9"],
+  ["WS-S09","Aquatic 9"],
   ["WS-692","Monsoon"],
   ["WS-696","Cyclone"],
   ["WS-506M","Hurricane"],
+  ["WS-06M","Hurricane"],
 ];
 // Alles wat geen letter of cijfer is gaat eruit. De fabrieken schrijven dezelfde
 // code namelijk verschillend: wij hebben "SKT888-G1" in de codelijst staan, de
