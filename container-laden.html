@@ -5,6 +5,7 @@
 <title>Container laden — Fonteyn Dashboard</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <script src="spa-fabrikanten.js"></script>
+<script src="spa-afmetingen.js"></script>
 <script src="transport-houston.js"></script>
 <!-- Three.js als ES-module, net als bij Transport laden. Lukt het laden niet
      (geen internet), dan blijven de aantallen en de tabellen gewoon werken:
@@ -228,24 +229,44 @@ const CONTAINERS=[
 ];
 const MAX_CONTAINERS=12;
 
-/* ─── De modellen ─────────────────────────────────────────────────────────
-   Uit spa-fabrikanten.js, want daar staan de afmetingen al: één lijst voor de
-   voorraad, de prijzen en nu ook het laden. Modellen zonder afmeting kunnen
-   niet worden ingeladen; die worden apart getoond in plaats van weggelaten,
-   zodat zichtbaar blijft wát er nog bij de fabriek opgevraagd moet worden. */
+/* ─── Waar de maten vandaan komen ─────────────────────────────────────────
+   Twee bronnen, in deze volgorde:
+
+   1. De prijslijsten van de fabrieken (spa-fabrikanten.js). Die maat is
+      leidend: de fabriek laadt de container en rekent met zijn eigen getal.
+   2. De specificatiesheets (spec-database.json). Daar staan de afmetingen van
+      modellen die niet op een prijslijst staan - de ijsbaden, de Grizzly's,
+      de Devine Spas en de Storm Spas.
+
+   Waarom niet alleen bron 2: bij zestien modellen die in allebei staan
+   schelen de maten een paar centimeter. Die verschillen laten we staan in
+   plaats van ze glad te strijken; de prijslijst wint, en in de lijst zie je
+   per model waar de maat vandaan komt.
+
+   Modellen die in geen van beide staan worden niet weggelaten maar apart
+   getoond, zodat zichtbaar blijft wát er nog opgevraagd moet worden. */
+
+/* De modellen zelf. De sleutel is een vaste tekst (fabriek, code, model) en
+   geen volgnummer: de lijst groeit zodra de specsheets binnen zijn, en met
+   volgnummers zou je keuze dan opeens bij een ander model staan.
+
+   De maat komt uit spa-afmetingen.js: die kent allebei de bronnen en wordt ook
+   door de Amerika-tegel gebruikt, zodat er niet twee lijstjes ontstaan die
+   uiteenlopen. */
 function bouwModellen(){
   const uit=[], zonder=[];
   const L=(window.fpFabrikanten&&window.fpFabrikanten.lijst)||[];
   L.forEach(f=>{
     (f.modellen||[]).forEach(m=>{
-      const p=String(m.afmeting||"").split("x").map(Number);
-      if(p.length===3&&!p.some(isNaN)&&p.every(x=>x>0)){
+      const maat=window.fpAfmetingen ? window.fpAfmetingen.maatVan(m.model,m.afmeting) : null;
+      if(maat){
+        const bron=maat.bron;
         uit.push({
-          sleutel:uit.length,
-          model:m.model, code:m.code, fabriek:f.fabriek, merk:f.merk,
-          // De prijslijsten staan in millimeters; hier rekenen we in centimeters.
-          l:p[0]/10, b:p[1]/10, h:p[2]/10,
-          m3:(p[0]/1000)*(p[1]/1000)*(p[2]/1000),
+          id:f.fabriek+"|"+(m.code||"")+"|"+(m.model||""),
+          i:uit.length,
+          model:m.model, code:m.code, fabriek:f.fabriek, merk:f.merk, bron:bron,
+          l:maat.l, b:maat.b, h:maat.h,
+          m3:(maat.l/100)*(maat.b/100)*(maat.h/100),
         });
       }else{
         zonder.push({model:m.model,code:m.code,fabriek:f.fabriek});
@@ -254,11 +275,21 @@ function bouwModellen(){
   });
   return {modellen:uit,zonder:zonder};
 }
-const {modellen:MODELLEN, zonder:ZONDER_MAAT}=bouwModellen();
+let MODELLEN=[], ZONDER_MAAT=[];
+function herbouwModellen(){
+  const r=bouwModellen();
+  MODELLEN=r.modellen; ZONDER_MAAT=r.zonder;
+}
 
 // Vaste kleur per model, zodat dezelfde spa in de lijst en in de tekening
-// dezelfde kleur heeft en je ze uit elkaar houdt.
-function kleurVan(i){ return "hsl("+((i*47)%360)+",62%,55%)"; }
+// dezelfde kleur heeft. Uit de sleutel gerekend en niet uit de plek in de
+// lijst, want die plek verschuift als er modellen bij komen.
+function kleurVan(id){
+  let h=0;
+  const s=String(id);
+  for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0;
+  return "hsl("+(Math.abs(h)%360)+",62%,55%)";
+}
 
 /* ─── Stapelen ────────────────────────────────────────────────────────────
    Dozen van groot naar klein plaatsen, telkens op het laagste vrije hoekpunt
@@ -383,13 +414,13 @@ function herstel(){
 // Een spa zit in een krat met folie en hoekstukken, en de fabriek laat ruimte
 // om hem er weer uit te krijgen.
 function doosVan(m){
-  return {sleutel:m.sleutel, model:m.model, code:m.code,
+  return {id:m.id, model:m.model, code:m.code,
     l:m.l+speling, b:m.b+speling, h:m.h+speling, m3:m.m3};
 }
 function gekozenDozen(){
   const uit=[];
   for(const m of MODELLEN){
-    const n=Number(keuze[m.sleutel]||0);
+    const n=Number(keuze[m.id]||0);
     for(let i=0;i<n;i++) uit.push(doosVan(m));
   }
   return uit;
@@ -397,40 +428,21 @@ function gekozenDozen(){
 
 /* ─── Modellenlijst tekenen ───────────────────────────────────────────── */
 /* Hoeveel er van één model in gaan. Dat is per model een complete stapeling,
-   en met tachtig modellen bij elkaar te veel om tijdens het tekenen te doen -
-   dan staat de lijst een paar seconden stil. Daarom komt het antwoord in de
-   achtergrond binnendruppelen: eerst een streepje, en zodra het uitgerekend
-   is wordt alleen dat ene getalletje bijgewerkt. */
+   maar alle 118 modellen samen kosten nog geen vijftigste seconde, dus het
+   gebeurt gewoon tijdens het tekenen. Het antwoord wordt onthouden per
+   combinatie van container, speling en kantelen, zodat het tijdens het typen
+   in het zoekveld niet telkens opnieuw gebeurt.
+
+   Eerder liep dit in de achtergrond in stukjes van drie. Dat werkte, maar in
+   een venster dat niet vooraan staat knijpt de browser die stapjes af tot één
+   per seconde - en dan bleef er minutenlang "…" staan in plaats van een
+   getal. */
 let maxCache={};
-// Verandert de container of de speling, dan klopt een lopende berekening niet
-// meer. De generatie loopt dan op en de oude ronde stopt zichzelf.
-let generatie=0, rekenLoopt=false;
-function maxSleutel(m){ return C.id+"|"+speling+"|"+(kantelen?1:0)+"|"+m.sleutel; }
+function maxSleutel(m){ return C.id+"|"+speling+"|"+(kantelen?1:0)+"|"+m.id; }
 function maxVoor(m){
   const s=maxSleutel(m);
-  return maxCache[s]==null ? null : maxCache[s];
-}
-function rekenAchtergrond(){
-  if(rekenLoopt) return;
-  const mijn=generatie;
-  const doosjes=MODELLEN.filter(m=>maxCache[maxSleutel(m)]==null)
-    .map(m=>({m:m, sleutel:maxSleutel(m), doos:doosVan(m), C:C, kantelen:kantelen}));
-  if(!doosjes.length) return;
-  rekenLoopt=true;
-  let i=0;
-  const stap=()=>{
-    if(mijn!==generatie){ rekenLoopt=false; rekenAchtergrond(); return; }
-    const tot=Math.min(i+3,doosjes.length);
-    for(;i<tot;i++){
-      const d=doosjes[i];
-      maxCache[d.sleutel]=maxVanEen(d.C,d.doos,d.kantelen);
-      const veld=document.querySelector("[data-max='"+d.m.sleutel+"']");
-      if(veld) veld.textContent=maxCache[d.sleutel]||"0";
-    }
-    if(i<doosjes.length) setTimeout(stap,0);
-    else rekenLoopt=false;
-  };
-  setTimeout(stap,0);
+  if(maxCache[s]==null) maxCache[s]=maxVanEen(C,doosVan(m),kantelen);
+  return maxCache[s];
 }
 function tekenModellen(){
   const zoek=(el("zoek").value||"").toLowerCase().trim();
@@ -443,41 +455,48 @@ function tekenModellen(){
   el("modelLijst").innerHTML = namen.length ? namen.map(f=>
     "<div class='fabgroep'><h4>"+esc(f)+"</h4>"+
     perFabriek[f].sort((a,b)=>String(a.model).localeCompare(String(b.model))).map(m=>{
-      const n=Number(keuze[m.sleutel]||0), mx=maxVoor(m);
-      return "<div class='mrij"+(n?" gekozen":"")+"' data-plus='"+m.sleutel+"'>"+
-        "<span class='kleur' style='background:"+kleurVan(m.sleutel)+"'></span>"+
+      const n=Number(keuze[m.id]||0), mx=maxVoor(m);
+      return "<div class='mrij"+(n?" gekozen":"")+"' data-plus='"+m.i+"'>"+
+        "<span class='kleur' style='background:"+kleurVan(m.id)+"'></span>"+
         "<span class='naam'><b>"+esc(m.model||"(zonder naam)")+"</b>"+
           "<span>"+esc(m.code||"")+" · "+nl(m.l)+" x "+nl(m.b)+" x "+nl(m.h)+" cm · "+
-          m.m3.toFixed(2).replace(".",",")+" m&sup3;</span></span>"+
-        "<span class='past'><b data-max='"+m.sleutel+"'>"+(mx==null?"…":mx)+"</b>per container</span>"+
+          m.m3.toFixed(2).replace(".",",")+" m&sup3;"+
+          // Waar de maat vandaan komt. Bij een verschil tussen prijslijst en
+          // specsheet moet je kunnen zien welke je voor je hebt.
+          (m.bron==="specsheet"?" · <span title='Maat van de specificatiesheet, niet van de prijslijst'>specsheet</span>":"")+
+          "</span></span>"+
+        "<span class='past'><b data-max='"+m.i+"'>"+(mx==null?"…":mx)+"</b>per container</span>"+
         "<span class='teller' data-stop='1'>"+
-          "<button type='button' data-min='"+m.sleutel+"' title='eentje minder'>−</button>"+
-          "<input type='number' min='0' max='400' value='"+n+"' data-aantal='"+m.sleutel+"'>"+
-          "<button type='button' data-plus2='"+m.sleutel+"' title='eentje erbij'>+</button>"+
+          "<button type='button' data-min='"+m.i+"' title='eentje minder'>−</button>"+
+          "<input type='number' min='0' max='400' value='"+n+"' data-aantal='"+m.i+"'>"+
+          "<button type='button' data-plus2='"+m.i+"' title='eentje erbij'>+</button>"+
         "</span></div>";
     }).join("")+"</div>"
   ).join("") : "<p class='lead' style='font-size:12.5px;margin-top:14px'>Geen model gevonden.</p>";
 
+  // In de HTML staat de plek in de lijst, want die is kort en veilig als
+  // attribuut. De keuze zelf gaat op de vaste sleutel van het model.
   const L=el("modelLijst");
+  const idVan=n=>(MODELLEN[+n]||{}).id;
   L.querySelectorAll("[data-plus]").forEach(r=>r.addEventListener("click",ev=>{
     // Op de teller klikken mag niet óók een spa toevoegen.
     if(ev.target.closest("[data-stop]")) return;
-    zetAantal(+r.dataset.plus,(Number(keuze[r.dataset.plus]||0))+1);
+    const id=idVan(r.dataset.plus); zetAantal(id,(Number(keuze[id]||0))+1);
   }));
   L.querySelectorAll("[data-plus2]").forEach(b=>b.addEventListener("click",()=>{
-    zetAantal(+b.dataset.plus2,(Number(keuze[b.dataset.plus2]||0))+1);
+    const id=idVan(b.dataset.plus2); zetAantal(id,(Number(keuze[id]||0))+1);
   }));
   L.querySelectorAll("[data-min]").forEach(b=>b.addEventListener("click",()=>{
-    zetAantal(+b.dataset.min,(Number(keuze[b.dataset.min]||0))-1);
+    const id=idVan(b.dataset.min); zetAantal(id,(Number(keuze[id]||0))-1);
   }));
   L.querySelectorAll("[data-aantal]").forEach(i=>i.addEventListener("change",()=>{
-    zetAantal(+i.dataset.aantal,Number(i.value)||0);
+    zetAantal(idVan(i.dataset.aantal),Number(i.value)||0);
   }));
-  rekenAchtergrond();
 }
-function zetAantal(sleutel,n){
+function zetAantal(id,n){
+  if(!id) return;
   n=Math.max(0,Math.min(400,Math.round(n||0)));
-  if(n) keuze[sleutel]=n; else delete keuze[sleutel];
+  if(n) keuze[id]=n; else delete keuze[id];
   bewaar(); tekenModellen(); tekenPlan();
 }
 function tekenZonderMaat(){
@@ -485,8 +504,8 @@ function tekenZonderMaat(){
   if(!ZONDER_MAAT.length){ d.classList.add("hidden"); return; }
   d.classList.remove("hidden");
   d.innerHTML="<summary>"+ZONDER_MAAT.length+" modellen zonder afmeting - die kunnen niet worden ingeladen</summary>"+
-    "<p class='lead' style='font-size:11.5px;margin:6px 0'>Van deze modellen staat er geen maat op de prijslijst. "+
-    "Zolang die er niet is kan het dashboard er niets mee rekenen; vraag ze op bij de fabriek.</p>"+
+    "<p class='lead' style='font-size:11.5px;margin:6px 0'>Van deze modellen staat geen maat op de prijslijst en ook niet op een "+
+    "specificatiesheet. Zolang die er niet is kan het dashboard er niets mee rekenen; vraag ze op bij de fabriek.</p>"+
     "<table class='grid'><thead><tr><th>Model</th><th>Code</th><th>Fabriek</th></tr></thead><tbody>"+
     ZONDER_MAAT.map(m=>"<tr><td>"+esc(m.model||"")+"</td><td>"+esc(m.code||"")+"</td><td>"+esc(m.fabriek)+"</td></tr>").join("")+
     "</tbody></table>";
@@ -537,7 +556,7 @@ function tekenPlan(){
   if(window.fpContainer3D){
     containers.forEach((c,i)=>{
       const cv=el("ctrCanvas"+i);
-      if(cv) window.fpContainer3D(cv,C,c.dozen,kleurVan);
+      if(cv) window.fpContainer3D(cv,C,c.dozen,d=>kleurVan(d.id));
     });
   }else{
     containers.forEach((c,i)=>{
@@ -554,9 +573,9 @@ function vulling(c,inhoud){
 }
 function kaart(c,i,inhoud){
   const per={};
-  c.dozen.forEach(d=>{ (per[d.sleutel]=per[d.sleutel]||{n:0,model:d.model,code:d.code}).n++; });
+  c.dozen.forEach(d=>{ (per[d.id]=per[d.id]||{n:0,model:d.model,code:d.code}).n++; });
   const rijen=Object.keys(per).sort((a,b)=>per[b].n-per[a].n).map(k=>
-    "<div class='lrij'><span class='kleur' style='background:"+kleurVan(+k)+"'></span>"+
+    "<div class='lrij'><span class='kleur' style='background:"+kleurVan(k)+"'></span>"+
     "<span class='nm' title='"+esc(per[k].code||"")+"'>"+esc(per[k].model||"")+"</span>"+
     "<span class='ct'>"+per[k].n+"</span></div>").join("");
   const m3=c.dozen.reduce((s,d)=>s+d.m3,0);
@@ -581,7 +600,7 @@ function vulContainerKeuze(){
     " · "+nl(c.l)+" x "+nl(c.b)+" x "+nl(c.h)+" cm</option>").join("");
 }
 function alsInstellingWijzigt(){
-  maxCache={}; generatie++;   // de maten zijn veranderd, dus opnieuw rekenen
+  maxCache={};              // de maten zijn veranderd, dus opnieuw rekenen
   bewaar(); tekenModellen(); tekenPlan();
 }
 
@@ -600,9 +619,18 @@ function alsInstellingWijzigt(){
   vulContainerKeuze();
   el("fSpeling").value=speling;
   el("fKantelen").checked=kantelen;
-  tekenZonderMaat();
-  tekenModellen();
-  tekenPlan();
+  // Eerst tekenen met wat er nu al is (de prijslijsten), zodat de pagina
+  // meteen staat. De specificatiesheets komen er daarna bij; dan wordt de
+  // lijst opnieuw opgebouwd en zijn er 38 modellen meer waar hij mee kan
+  // rekenen. De keuze blijft staan, want die hangt aan de naam van het model
+  // en niet aan zijn plek in de lijst.
+  herbouwModellen(); tekenZonderMaat(); tekenModellen(); tekenPlan();
+  if(window.fpAfmetingen){
+    window.fpAfmetingen.laad().then(()=>{
+      herbouwModellen(); maxCache={};
+      tekenZonderMaat(); tekenModellen(); tekenPlan();
+    });
+  }
 })();
 
 el("logoutBtn").addEventListener("click",()=>{
@@ -697,7 +725,7 @@ window.fpContainer3D=function(canvas,C,dozen,kleurVan){
 
   for(const d of dozen){
     const geo=new THREE.BoxGeometry(d.dl,d.dh,d.db);
-    const mesh=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:hex(kleurVan(d.sleutel))}));
+    const mesh=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:hex(kleurVan(d))}));
     // In de berekening is z de hoogte; in de tekening is dat de y-as.
     mesh.position.set(d.x+d.dl/2, d.z+d.dh/2, d.y+d.db/2);
     scene.add(mesh);

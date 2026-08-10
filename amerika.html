@@ -7,6 +7,7 @@
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="spa-codes.js"></script>
 <script src="spa-fabrikanten.js"></script>
+<script src="spa-afmetingen.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="ci-pdf.js"></script>
 <script src="transport-houston.js"></script>
@@ -312,7 +313,18 @@ function vhVerrijk(regels){
   });
 }
 
+/* De specificatiesheets ophalen zodra de tegel opent. Ze leveren de maten van
+   de modellen die niet op een prijslijst staan; zonder die maten telt zo'n spa
+   mee op het gemiddelde en wordt het aantal containers te laag geschat. Ze
+   komen los binnen, dus zodra ze er zijn wordt de telling opnieuw getekend. */
+let vhMatenGevraagd=false;
+function vhZorgVoorMaten(){
+  if(vhMatenGevraagd||!window.fpAfmetingen) return;
+  vhMatenGevraagd=true;
+  window.fpAfmetingen.laad().then(function(n){ if(n) vhTeken(); });
+}
 function vhTeken(){
+  vhZorgVoorMaten();
   const d=vhData||{}, regels=vhVerrijk(d.regels||[]);
   const q=((document.getElementById("vhZoek")||{}).value||"").trim().toLowerCase();
   const verbergNul=!!(document.getElementById("vhVerbergNul")||{}).checked;
@@ -440,27 +452,47 @@ function vhSchatContainers(aanwezig){
   const T=window.fpTransportHouston;
   if(!T) return null;
   let spas=0, spasMetMaat=0, m3Spa=0, ijsbaden=0;
+  const ontbrekend=[];
   for(const r of aanwezig){
     if(r.munt!=="USD") continue;                 // niet uit China
     if(r.groep){ ijsbaden+=r.aantal; continue; } // Chinees ijsbad, geen spa
     spas+=r.aantal;
     const a=vhAfmeting(r.model);
     if(a){ spasMetMaat+=r.aantal; m3Spa+=a*r.aantal; }
+    else if(r.model&&ontbrekend.indexOf(r.model)<0) ontbrekend.push(r.model);
   }
   if(!spasMetMaat) return null;
   // De spa's zonder afmeting krijgen het gemiddelde van de spa's die er wel
-  // een hebben; dat is eerlijker dan ze weglaten.
+  // een hebben; dat is eerlijker dan ze weglaten. Wélke dat zijn gaat mee
+  // naar het scherm, want anders is niet te zien hoe hard dit getal is.
   const gem=m3Spa/spasMetMaat;
   const m3=gem*spas + ijsbaden*T.M3_IJSBAD;
   const c=T.containersUitVolume(m3);
-  return {spas,spasMetMaat,ijsbaden,gemPerSpa:gem,m3,...c};
+  return {spas,spasMetMaat,spasZonderMaat:spas-spasMetMaat,ijsbaden,
+    gemPerSpa:gem,m3,ontbrekend:ontbrekend.sort(),...c};
 }
+/* De maat van een model, in kubieke meters.
+
+   Eerst de prijslijst van de fabriek (spa-fabrikanten.js), en staat hij daar
+   niet, dan de specificatiesheet. Dat tweede is er op 10 aug 2026 bijgekomen:
+   daarvoor kende alleen de prijslijst maten, en van 69 van de 149 modellen
+   stond daar niets - de ijsbaden, de Grizzly's, de Devine Spas en de Storm
+   Spas. Die telden dus mee op het gemiddelde in plaats van op hun eigen maat,
+   en dat trekt de schatting scheef.
+
+   Het opzoeken zelf staat in spa-afmetingen.js, want de tegel Container laden
+   gebruikt precies dezelfde lijst. */
 function vhAfmeting(model){
+  if(window.fpAfmetingen){
+    const m3=window.fpAfmetingen.m3Van(model,vhPrijslijstMaat(model));
+    if(m3) return m3;
+  }
+  return null;
+}
+function vhPrijslijstMaat(model){
   const L=(window.fpFabrikanten&&window.fpFabrikanten.lijst)||[];
   for(const f of L) for(const m of f.modellen){
-    if(String(m.model).toLowerCase()!==String(model).toLowerCase()||!m.afmeting) continue;
-    const p=String(m.afmeting).split("x").map(Number);
-    if(p.length===3&&!p.some(isNaN)) return (p[0]/1000)*(p[1]/1000)*(p[2]/1000);
+    if(String(m.model).toLowerCase()===String(model).toLowerCase()&&m.afmeting) return m.afmeting;
   }
   return null;
 }
@@ -504,7 +536,19 @@ function vhWaardeTeken(waardeUsd,waardeEur,schatting){
   if(cu) cu.innerHTML=schatting
     ? "Berekend op <b>"+schatting.afgerond+"</b> ("+schatting.exact.toFixed(1)+"): "+
       Math.round(schatting.m3)+" m&sup3; aan spa\'s en ijsbaden uit China, bij "+schatting.m3PerContainer+
-      " m&sup3; lading per container. Weet je het aantal zeker, typ het dan over."
+      " m&sup3; lading per container. Weet je het aantal zeker, typ het dan over."+
+      // Hoe hard dit getal is hoort erbij te staan. Van de spa's zonder maat
+      // wordt het gemiddelde van de rest genomen; hoe meer dat er zijn, hoe
+      // losser de schatting.
+      "<br>Van "+schatting.spasMetMaat+" van de "+schatting.spas+" spa\'s is de echte maat bekend"+
+      (schatting.spasZonderMaat
+        ? "; de overige "+schatting.spasZonderMaat+" tellen mee op het gemiddelde van "+
+          schatting.gemPerSpa.toFixed(2).replace(".",",")+" m&sup3;."
+        : ".")+
+      (schatting.ontbrekend&&schatting.ontbrekend.length
+        ? " Zonder maat: "+schatting.ontbrekend.slice(0,8).map(esc).join(", ")+
+          (schatting.ontbrekend.length>8?" en "+(schatting.ontbrekend.length-8)+" andere":"")+"."
+        : "")
     : "Vul in hoeveel containers er voor deze voorraad zijn gevaren.";
 
   const d=document.getElementById("vhTransportDetail");
