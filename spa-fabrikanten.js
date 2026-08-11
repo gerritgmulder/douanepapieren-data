@@ -208,8 +208,8 @@
         { model: "Aquatic 9",  code: "WS-S06",    inkoopUsd: null, verkoopEur: null },
         { model: "Monsoon",    code: "WS-692",    inkoopUsd: null, verkoopEur: null },
         { model: "Cyclone",    code: "WS-696",    inkoopUsd: null, verkoopEur: null },
-        { model: "Hurricane",  code: "WS-506M",   inkoopUsd: null, verkoopEur: null,
-          let: "Met de hand bijgeschreven op het blad." },
+        { model: "Hurricane",  code: "WS-506M",   inkoopUsd: 9866, verkoopEur: null, afmeting: "5900x2200x1610",
+          let: "Prijs en maat van de proforma Arnoswim20260810 (10 aug 2026), waar hij als WS-S06M op staat. De specsheet noemt hem Hurricane Deep en geeft 590x220x161 - tot op de millimeter gelijk. Met de hand bijgeschreven op het prijsblad." },
       ],
     },
     {
