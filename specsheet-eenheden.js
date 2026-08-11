@@ -5,9 +5,8 @@
    Waarom
    ------
    Gretha vult de specsheets in centimeters, kilo's en liters in. Voor de
-   Amerikaanse markt moet dezelfde sheet in inches, ponden en gallons staan
-   (Gretha, 10 aug 2026: "kunnen die heel snel omgezet worden naar inches etc
-   voor de USA?"). Twee keer invullen is vragen om twee sheets die uit elkaar
+   Amerikaanse markt moet dezelfde sheet in voet en inches, ponden en gallons staan
+   (Gretha, 10 en 11 aug 2026). Twee keer invullen is vragen om twee sheets die uit elkaar
    lopen, dus er is maar één sheet: de invoer blijft Europees en de omzetting
    gebeurt bij het tekenen.
 
@@ -30,17 +29,38 @@
 
   /* ─── Omrekenfactoren ────────────────────────────────────────────────────
      'rond' is het aantal decimalen. "slim" = boven de 10 hele getallen, daar
-     onder één decimaal; een spa van 208 cm is 82 inch en niet 81,9 inch, maar
-     een randje van 4 cm moet wel 1,6 inch blijven en niet 2. */
+     onder één decimaal.
+
+     Lengtes gaan naar voet en inches en niet naar kale inches: dat is wat ze
+     in de VS gewend zijn (Gretha, 11 aug 2026). Een spa van 208 cm wordt dus
+     6'10" en niet 82 inch. De factor rekent naar inches; het opmaken tot voet
+     en inches gebeurt daarna in voetInch(). Onder de voet blijft het inches,
+     want 4 cm als 0'2" schrijven leest niemand.
+
+     'Lbs' en 'US Gallons' met hoofdletters, zoals Gretha ze op de sheets
+     hanteert. */
   var EENHEDEN = [
-    { van: /^(centimeters?|cm)$/i,                 naar: "inch",    f: 0.3937007874,  rond: "slim" },
-    { van: /^(millimeters?|mm)$/i,                 naar: "inch",    f: 0.03937007874, rond: "slim" },
-    { van: /^(meters?|m)$/i,                       naar: "ft",      f: 3.280839895,   rond: 1 },
-    { van: /^(kilograms?|kilogram|kilo|kg)$/i,     naar: "lbs",     f: 2.2046226218,  rond: 0 },
-    { van: /^(liters?|litres?|ltr|l)$/i,           naar: "US gal",  f: 0.2641720524,  rond: 0 },
-    { van: /^(bar)$/i,                             naar: "psi",     f: 14.5037738,    rond: 0 },
-    { van: /^(°\s*c|graden)$/i,                    naar: "°F",      f: 1.8, plus: 32, rond: 0 },
+    { van: /^(centimeters?|cm)$/i,                 naar: "",            f: 0.3937007874,   vorm: "voetinch" },
+    { van: /^(millimeters?|mm)$/i,                 naar: "",            f: 0.03937007874,  vorm: "voetinch" },
+    { van: /^(meters?|m)$/i,                       naar: "",            f: 39.3700787,     vorm: "voetinch" },
+    { van: /^(kilograms?|kilogram|kilo|kg)$/i,     naar: "Lbs",         f: 2.2046226218,   rond: 0 },
+    { van: /^(liters?|litres?|ltr|l)$/i,           naar: "US Gallons",  f: 0.2641720524,   rond: 0 },
+    { van: /^(bar)$/i,                             naar: "psi",         f: 14.5037738,     rond: 0 },
+    { van: /^(°\s*c|graden)$/i,                    naar: "°F",          f: 1.8, plus: 32,  rond: 0 },
   ];
+
+  /* Inches opmaken als voet en inches: 82 wordt 6'10", 12 wordt 1'.
+     Onder de twaalf inch blijft het inches met hoogstens één decimaal. */
+  function voetInch(inch) {
+    if (Math.abs(inch) < 12) {
+      var klein = inch.toFixed(1);
+      if (klein.indexOf(".") >= 0) klein = klein.replace(/0+$/, "").replace(/\.$/, "");
+      return klein + '"';
+    }
+    var totaal = Math.round(inch);
+    var voet = Math.floor(totaal / 12), rest = totaal % 12;
+    return voet + "'" + (rest ? rest + '"' : "");
+  }
 
   // De eenheden zoals ze in een tekst kunnen staan. Lange vormen eerst, anders
   // pakt "l" de eerste letter van "liter". De losse letters m en l staan
@@ -82,6 +102,10 @@
     return isNaN(n) ? NaN : n;
   }
 
+  // Eén omgerekend getal opschrijven, in de vorm die bij de eenheid hoort.
+  function schrijfMet(n, e) {
+    return e.vorm === "voetinch" ? voetInch(n) : schrijf(n, e.rond);
+  }
   function schrijf(n, rond) {
     var d = rond === "slim" ? (Math.abs(n) >= 10 ? 0 : 1) : (rond || 0);
     var s = n.toFixed(d);
@@ -115,9 +139,9 @@
       if (e) {
         var om = m[1].replace(new RegExp(GETAL, "g"), function (g) {
           var n = lees(g);
-          return isNaN(n) ? g : schrijf(reken(n, e), e.rond);
+          return isNaN(n) ? g : schrijfMet(reken(n, e), e);
         });
-        return (om + " " + e.naar + (m[3] ? " " + m[3] : "")).trim();
+        return (om + (e.naar ? " " + e.naar : "") + (m[3] ? " " + m[3] : "")).trim();
       }
     }
 
@@ -128,7 +152,7 @@
       if (e2) {
         return v.replace(new RegExp(GETAL, "g"), function (g) {
           var n = lees(g);
-          return isNaN(n) ? g : schrijf(reken(n, e2), e2.rond);
+          return isNaN(n) ? g : schrijfMet(reken(n, e2), e2);
         });
       }
     }
@@ -141,7 +165,7 @@
       var n = lees(g);
       if (!e3 || isNaN(n)) return heel;
       geraakt = true;
-      return schrijf(reken(n, e3), e3.rond) + " " + e3.naar;
+      return schrijfMet(reken(n, e3), e3) + (e3.naar ? " " + e3.naar : "");
     });
     if (geraakt) return uit;
 
@@ -193,9 +217,9 @@
   // In een omschrijving staat het voluit: "Capacity in US Gallons" leest
   // prettiger dan "Capacity in US gal".
   function amerikaansLabel(e) {
-    if (e.naar === "US gal") return "US Gallons";
-    if (e.naar === "lbs") return "lbs";
-    if (e.naar === "inch") return "inch";
+    // Een lengte staat in de waarde al als voet en inches, dus de omschrijving
+    // noemt de eenheid als ft/in in plaats van cm.
+    if (e.vorm === "voetinch") return "ft/in";
     return e.naar;
   }
 
