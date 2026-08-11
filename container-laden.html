@@ -298,11 +298,24 @@ function nl2(n){return Number(n||0).toLocaleString("nl-NL",{maximumFractionDigit
    vullen; de buitenmaat van een container is groter en zegt niets.
    Een 40 ft High Cube is de standaard voor spa's: even lang als een gewone
    40-voets maar 30 cm hoger, en die 30 cm schelen vaak een hele laag. */
+/* De maten hieronder zijn de gangbare ISO-maten. Let op: ze verschillen een
+   paar millimeter per bouwer en per bouwjaar, dus voor het rekenen wordt naar
+   beneden afgerond op hele centimeters. Dat is de veilige kant: liever een
+   spa te weinig ingepland dan een container die aan de kade niet dichtgaat.
+
+   'deur' is de deuropening en die is smaller en lager dan de container zelf.
+   Bij een 40 ft High Cube is de binnenkant 269,8 hoog maar de deur 258,5 - een
+   spa die rechtop 265 hoog is past dus wél in de container maar komt er niet
+   doorheen. Daar wordt op gecontroleerd. */
 const CONTAINERS=[
-  {id:"40hc",naam:"40 ft High Cube",l:1203,b:235,h:269},
-  {id:"40",  naam:"40 ft standaard", l:1203,b:235,h:239},
-  {id:"20",  naam:"20 ft standaard", l:589, b:235,h:239},
-  {id:"45hc",naam:"45 ft High Cube", l:1356,b:235,h:269},
+  {id:"40hc",naam:"40 ft High Cube", l:1203,b:235,h:269,
+   mm:{l:12032,b:2352,h:2698}, deur:{b:2340,h:2585}, m3:76.3, laadvermogen:26580},
+  {id:"40",  naam:"40 ft standaard",  l:1203,b:235,h:239,
+   mm:{l:12032,b:2352,h:2393}, deur:{b:2340,h:2280}, m3:67.7, laadvermogen:26680},
+  {id:"20",  naam:"20 ft standaard",  l:589, b:235,h:239,
+   mm:{l:5898, b:2352,h:2393}, deur:{b:2340,h:2280}, m3:33.2, laadvermogen:28180},
+  {id:"45hc",naam:"45 ft High Cube",  l:1356,b:235,h:269,
+   mm:{l:13556,b:2352,h:2698}, deur:{b:2340,h:2585}, m3:86.0, laadvermogen:25600},
 ];
 const MAX_CONTAINERS=12;
 
@@ -397,13 +410,22 @@ function kleurVan(id,licht){
    lucht tussen. Naast elkaar wél - je moet ze er met een heftruck in kunnen
    schuiven. Daarom hangt de speling aan de stand: welke twee maten horizontaal
    liggen krijgen hem, de maat die rechtop staat niet. */
-function standen(d,kantelen){
+function standen(d,kantelen,ctr){
   // Eén keer uitrekenen per doos: dit wordt bij het zoeken naar een plek voor
   // élk hoekpunt opnieuw opgevraagd, en dat zijn er honderden.
-  const sleutel=speling+"|"+(kantelen?1:0);
+  const K=ctr||C;
+  const sleutel=K.id+"|"+speling+"|"+(kantelen?1:0);
   if(d._st&&d._stSleutel===sleutel) return d._st;
   const s=speling, rij=[];
-  const zet=(a,b,hoog)=>rij.push([a+s,b+s,hoog]);
+  /* De speling telt niet mee bij de deur: die ruimte heb je nodig om de spa in
+     de container te kunnen schuiven, niet om hem door de opening te krijgen.
+     Een spa gaat er in de lengterichting in, dus wat door de deur moet is zijn
+     breedte en zijn hoogte - de lengte niet. */
+  const deurB=K.deur?K.deur.b/10:9999, deurH=K.deur?K.deur.h/10:9999;
+  const zet=(a,b,hoog)=>{
+    if(b>deurB+0.001||hoog>deurH+0.001) return;   // komt de deur niet door
+    rij.push([a+s,b+s,hoog]);
+  };
   zet(d.l,d.b,d.h); zet(d.b,d.l,d.h);
   if(kantelen){
     zet(d.l,d.h,d.b); zet(d.h,d.l,d.b);
@@ -471,7 +493,7 @@ function ordenStanden(st,voorkeur){
 }
 function zoekPlek(C,doos,geplaatst,kantelen,voorkeur){
   const punten=hoekpunten(geplaatst);
-  const st=ordenStanden(standen(doos,kantelen),voorkeur);
+  const st=ordenStanden(standen(doos,kantelen,C),voorkeur);
   for(const p of punten){
     for(const s of st){
       if(past(C,doos,s,p,geplaatst)) return {x:p.x,y:p.y,z:p.z,dl:s[0],db:s[1],dh:s[2]};
@@ -489,9 +511,9 @@ function vulEen(C,dozen,kantelen,voorkeur){
   return {erin,rest};
 }
 // Hoeveel standen heeft de grootste doos? Zoveel keer proberen we het.
-function aantalStanden(dozen,kantelen){
+function aantalStanden(dozen,kantelen,ctr){
   let n=1;
-  for(const d of dozen) n=Math.max(n,standen(d,kantelen).length);
+  for(const d of dozen) n=Math.max(n,standen(d,kantelen,ctr).length);
   return n;
 }
 
@@ -500,7 +522,7 @@ function aantalStanden(dozen,kantelen){
 function maxVanEen(C,doos,kantelen){ return maxVanEenBeste(C,doos,kantelen).n; }
 function maxVanEenBeste(C,doos,kantelen){
   let beste=0, besteV=0;
-  const standenAantal=standen(doos,kantelen).length;
+  const standenAantal=standen(doos,kantelen,C).length;
   for(let v=0;v<standenAantal;v++){
     const erin=[]; let n=0;
     // 150 is ruim boven wat er ooit in past; een noodrem tegen een rekenfout
@@ -548,7 +570,7 @@ function maxSets(C,spa,cover,kantelen){
 // stand waarmee begonnen wordt; hij stopt zodra alles erin past.
 function besteVulling(C,dozen,kantelen,eerst){
   const gesorteerd=dozen.slice().sort((a,b)=>(b.l*b.b*b.h)-(a.l*a.b*a.h));
-  const n=aantalStanden(gesorteerd,kantelen);
+  const n=aantalStanden(gesorteerd,kantelen,C);
   const volgorde=[];
   if(eerst!=null&&eerst>=0&&eerst<n) volgorde.push(eerst);
   for(let v=0;v<n;v++) if(v!==eerst) volgorde.push(v);
@@ -568,7 +590,7 @@ function besteVulling(C,dozen,kantelen,eerst){
 function laad(C,dozen,kantelen){
   const gesorteerd=dozen.slice().sort((a,b)=>(b.l*b.b*b.h)-(a.l*a.b*a.h));
   let beste=null;
-  const standenAantal=aantalStanden(gesorteerd,kantelen);
+  const standenAantal=aantalStanden(gesorteerd,kantelen,C);
   for(let v=0;v<standenAantal;v++){
     const poging=laadEen(C,gesorteerd,kantelen,v);
     if(!beste
@@ -904,17 +926,39 @@ el("dlgBewaar").addEventListener("click",()=>{
 }));
 
 /* ─── Het plan tekenen ────────────────────────────────────────────────── */
+// De exacte maten van de gekozen container, zoals ze in de ISO-norm staan.
+function containerSpec(){
+  const mm=C.mm, d=C.deur;
+  const cm=x=>nl2(x/10);
+  return "<table class='grid' style='max-width:640px'><tbody>"+
+    "<tr><td>Binnenwerks lengte</td><td class='num'>"+nl(mm.l)+" mm</td><td class='num'>"+cm(mm.l)+" cm</td></tr>"+
+    "<tr><td>Binnenwerks breedte</td><td class='num'>"+nl(mm.b)+" mm</td><td class='num'>"+cm(mm.b)+" cm</td></tr>"+
+    "<tr><td>Binnenwerks hoogte</td><td class='num'>"+nl(mm.h)+" mm</td><td class='num'>"+cm(mm.h)+" cm</td></tr>"+
+    "<tr><td>Deuropening breedte</td><td class='num'>"+nl(d.b)+" mm</td><td class='num'>"+cm(d.b)+" cm</td></tr>"+
+    "<tr><td>Deuropening hoogte</td><td class='num'>"+nl(d.h)+" mm</td><td class='num'>"+cm(d.h)+" cm</td></tr>"+
+    "<tr><td>Inhoud</td><td class='num' colspan='2'>"+String(C.m3).replace(".",",")+" m&sup3;</td></tr>"+
+    "<tr><td>Laadvermogen</td><td class='num' colspan='2'>"+nl(C.laadvermogen)+" kg</td></tr>"+
+    "</tbody></table>"+
+    "<p class='lead' style='font-size:11.5px;margin:8px 0 0'>Gangbare ISO-maten. Ze lopen een paar millimeter "+
+    "uiteen per bouwer en bouwjaar, dus er wordt gerekend met "+nl(C.l)+" x "+nl(C.b)+" x "+nl(C.h)+
+    " cm - naar beneden afgerond op hele centimeters. Liever een spa te weinig ingepland dan een container "+
+    "die aan de kade niet dichtgaat.</p>";
+}
+
 function tekenPlan(){
   const dozen=gekozenDozen();
   const inhoud=C.l*C.b*C.h/1000000;
   el("ctrUitleg").innerHTML=
     "Binnenwerks "+nl(C.l)+" x "+nl(C.b)+" x "+nl(C.h)+" cm, dat is "+inhoud.toFixed(1).replace(".",",")+" m&sup3; ruimte. "+
+    "De deur is "+nl2(C.deur.b/10)+" cm breed en "+nl2(C.deur.h/10)+" cm hoog, en daar moet elke spa doorheen. "+
     "Elke spa krijgt er "+speling+" cm ruimte naast en achter zich, om hem erin te kunnen schuiven; "+
     "bovenop niet, want spa's staan gewoon op elkaar. "+
     (kantelen?"Op de kant leggen mag.":"De spa's blijven rechtop staan.")+
     " Het vulpercentage telt die verpakkingsruimte mee."+
+    "<details style='margin-top:6px'><summary style='cursor:pointer;color:var(--fonteyn-green);font-weight:600'>"+
+      "Exacte maten van deze container</summary>"+containerSpec()+"</details>"+
     (window.fpTransportHouston
-      ? "<br><b>Reken dit als bovengrens.</b> Dit is de strakst mogelijke stapeling; met de hand gaat er minder in. "+
+      ? "<b>Reken dit als bovengrens.</b> Dit is de strakst mogelijke stapeling; met de hand gaat er minder in. "+
         "Over de zendingen naar Houston gemeten ging er gemiddeld "+
         String(window.fpTransportHouston.M3_PER_CONTAINER).replace(".",",")+
         " m&sup3; lading in een container. Komt dit er ver boven, zet de ruimte om de spa dan hoger."
