@@ -282,18 +282,210 @@
     return uit;
   }
 
+  /* ─── Streepjes rechtzetten ───────────────────────────────────────────────
+     pdf.js knipt tekst op waar de letterafstand verspringt. Bij MEXDA en
+     Kasdaly valt het streepje in een code daardoor los: "WS - S06M" in plaats
+     van "WS-S06M", en "VIGOR20210805 - 0601". Zonder dit herkent geen enkele
+     codelijst er nog iets in. */
+  function koppel(s) {
+    return schoon(s).replace(/([A-Za-z0-9])\s+-\s+([A-Za-z0-9])/g, "$1-$2");
+  }
+  // Woorden waaraan een uitvoering te herkennen is. Alleen om te kiezen welke
+  // regel uit de omschrijving de kleur is; er wordt niets mee omgezet.
+  var KLEURWOORD = /\b(white|black|grey|gray|silver|marble|sterling|blue|brown|beige|ivory|aspen|cedar|hemlock|stone|acrylic)\b/i;
+
+  // "$11,169.4" en "22,044.6" -> 11169.4 en 22044.6
+  function bedrag(s) {
+    var n = parseFloat(String(s == null ? "" : s).replace(/[^\d.,-]/g, "").replace(/,/g, ""));
+    return isFinite(n) ? n : null;
+  }
+
+  /* ─── Derde soort: de proforma van MEXDA ──────────────────────────────────
+     Een echte tabel: MODEL | DESCRIPTIONS | QTY | UNIT PRICE | AMOUNT. De code
+     en de getallen staan op dezelfde regel, met de maat op de regel erboven en
+     de uitvoering eronder:
+
+         Size: 2000*1700*2100mm
+         DO-1102B          1      2038     2038
+         Aspen + white stone (short panel)
+
+     Dat er drie getallen achteraan staan is niet genoeg om zeker te zijn dat
+     het een artikelregel is - een telefoonnummer of een bankrekening kan er
+     ook zo uitzien. Daarom moet aantal x stuksprijs ook uitkomen op het
+     bedrag; dan blijft er niets anders over dan een echte regel.
+
+     De blokken PARTS en ACCESSORIES leveren geen artikelcode op. Daar staat
+     "Grey side panel for WS-S06M" en dat is een paneel voor die spa, niet die
+     spa - als code overnemen zou een spa bijbestellen die niemand besteld heeft. */
+  function leesMexdaProforma(regels) {
+    var L = regels.map(koppel);
+    var alles = L.join("\n");
+    var uit = { leverancier: null, invoiceNo: null, datum: null, regels: [], soort: "proforma" };
+    var m;
+    if ((m = alles.match(/INVOICE\s*NO\.?\s*:?\s*([A-Za-z0-9\-\/]{4,40})/i))) uit.invoiceNo = m[1];
+    if ((m = alles.match(/DATE\s*:\s*(\d{1,2})\s*(?:th|st|nd|rd)?\s*,?\s*([A-Za-z]{3,9})\s*,?\s*(\d{4})/i)))
+      uit.datum = schoon(m[1] + " " + m[2] + " " + m[3]);
+    if ((m = alles.match(/SELLER\s*:\s*([^\n]{5,80})/i))) uit.leverancier = schoon(m[1]);
+
+    var sectie = null, laatsteMaat = null;
+    for (var i = 0; i < L.length; i++) {
+      var r = L[i];
+      if (!r) continue;
+      if (/^(SWIMMING\s*POOL|SWIM\s*SPA|SPA|SAUNA|PARTS|ACCESSOR\w*)$/i.test(r)) { sectie = r.toUpperCase(); continue; }
+      if ((m = r.match(/Size\s*:?\s*(\d{3,4}\s*[*x×]\s*\d{3,4}\s*[*x×]\s*\d{3,4})/i))) {
+        laatsteMaat = m[1].replace(/\s/g, ""); continue;
+      }
+      if (/^TOTAL\b/i.test(r)) continue;
+      var mr = r.match(/^(.+?)\s+(\d{1,4})\s+([\d.,]+)\s+([\d.,]+)$/);
+      if (!mr) continue;
+      var aantal = Number(mr[2]), prijs = bedrag(mr[3]), bed = bedrag(mr[4]);
+      if (!(aantal > 0) || !(prijs > 0) || !(bed > 0)) continue;
+      // Klopt aantal x stuksprijs met het bedrag? Zo niet, dan is dit geen
+      // artikelregel maar een toevallige rij getallen.
+      if (Math.abs(aantal * prijs - bed) > Math.max(1, bed * 0.02)) continue;
+
+      var voorkant = schoon(mr[1]);
+      var deel = sectie && /PART|ACCESSOR/i.test(sectie);
+      var mc = deel ? null : voorkant.match(/^([A-Z]{1,3}-?[A-Z]?\d[\w-]*)/i);
+
+      /* De uitvoering staat bij een sauna op de regel eronder ("Aspen + white
+         stone"), maar bij een swimspa in de genummerde opsomming erboven
+         ("1.Chinese white acrylic", "2.Grey side panel").
+
+         Bij PARTS wordt de regel eronder alleen meegenomen als de voorkant
+         kort is. "SIDE PANEL Grey side panel for WS-S06M" beschrijft zichzelf
+         al; de regel eronder ("For WS-1102A") hoort bij de BACKREST daaronder
+         en die stond er in de PDF alleen bóven omdat die rij hoger is. */
+      var onder = "";
+      if (!deel || voorkant.length < 20) {
+        for (var w = i + 1; w < L.length && w < i + 3; w++) {
+          var s2 = L[w];
+          if (!s2 || /^Size\s*:/i.test(s2) || /^(TOTAL|PARTS|SAUNA|SWIMMING)/i.test(s2)) continue;
+          if (/^(.+?)\s+\d{1,4}\s+[\d.,]+\s+[\d.,]+$/.test(s2)) break;   // volgende artikelregel
+          onder = s2; break;
+        }
+      }
+      var boven = [];
+      for (var v2 = i - 1; v2 >= 0 && v2 > i - 9; v2--) {
+        var s3 = L[v2];
+        if (!s3) continue;
+        if (/^(.+?)\s+\d{1,4}\s+[\d.,]+\s+[\d.,]+$/.test(s3)) break;      // vorige artikelregel
+        if (/^(SWIMMING\s*POOL|SWIM\s*SPA|SPA|SAUNA|PARTS|ACCESSOR\w*)$/i.test(s3)) break;
+        if (/^Size\s*:/i.test(s3)) continue;
+        boven.unshift(schoon(s3.replace(/^\s*\d{1,2}\s*[.)]\s*/, "")));
+      }
+      /* De regel eronder gaat vóór de opsomming erboven. Twee sauna's van
+         hetzelfde model verschillen alleen in hun uitvoering, en die staat
+         eronder: bij de tweede stond anders de kleur van de eerste, want die
+         regel ligt er nog net boven ("Aspen + white stone" bij de zwarte). */
+      var kleur = null, skirtKleur = null;
+      if (onder && KLEURWOORD.test(onder) && !/\+\s*USD/i.test(onder)) kleur = onder;
+      for (var q = 0; q < boven.length; q++) {
+        var mp = boven[q].match(/^(.*?)\s*side\s*panel/i);
+        if (mp && !skirtKleur) { skirtKleur = schoon(mp[1]) || null; continue; }
+        if (!kleur && KLEURWOORD.test(boven[q]) && !/\+\s*USD/i.test(boven[q])) kleur = boven[q];
+      }
+      if (!kleur && onder) kleur = onder;
+
+      uit.regels.push({
+        code: mc ? mc[1].toUpperCase() : null,
+        omschrijving: schoon(voorkant + (kleur ? " · " + kleur : "")),
+        sectie: sectie, aantal: aantal,
+        kleur: kleur || null, skirt: skirtKleur,
+        afmeting: deel ? null : laatsteMaat,
+        prijsUsd: prijs, bedragUsd: bed,
+      });
+      if (!deel) laatsteMaat = null;   // een maat hoort bij één regel
+    }
+    uit.totaalStuks = uit.regels.reduce(function (n, r) { return n + (Number(r.aantal) || 0); }, 0);
+    uit.totaalUsd = Math.round(uit.regels.reduce(function (n, r) { return n + (Number(r.bedragUsd) || 0); }, 0) * 100) / 100;
+    uit.packing = []; uit.verschillen = [];
+    return uit;
+  }
+
+  /* ─── Vierde soort: de proforma van Kasdaly (JOYSPA) ──────────────────────
+     Geen tabel maar een specificatieblad per model. Elk blok begint met
+     "Model: JY8603" en verderop in datzelfde blok staan de maat, de prijs en
+     het aantal, elk aan het eind van een regel die verder over iets anders
+     gaat - de linkerkolom loopt gewoon door:
+
+         Model: JY8603                       Main components          Options
+         Size:4180*2200*1430mm   FOB Shenzhen : $5087.2   ...
+         Drainer                             Quantity needed(set)     2
+         Stainless steel stand               Amount(USD)              $11,169.4
+
+     Als stuksprijs wordt "Total price with options" genomen en niet de kale
+     FOB-prijs: die eerste is wat er daadwerkelijk gefactureerd wordt, en
+     aantal x die prijs komt precies uit op het bedrag.
+
+     De kleur staat één keer onderaan voor de hele zending ("All spa color is
+     Sterling White shell and grey cabinet"), niet per regel. */
+  function leesJoyspa(regels) {
+    var L = regels.map(koppel);
+    var alles = L.join("\n");
+    var uit = { leverancier: null, invoiceNo: null, datum: null, regels: [], soort: "proforma" };
+    var m;
+    if ((m = alles.match(/PI\s*NO\.?\s*:?\s*([A-Za-z0-9\-\/]{4,40})/i))) uit.invoiceNo = m[1];
+    if ((m = alles.match(/Date\s*:\s*([\d]{1,2}\s*,?\s*[A-Za-z]{3,9}\.?\s*,?\s*\d{4})/i))) uit.datum = schoon(m[1]);
+    for (var h = 0; h < Math.min(L.length, 6); h++)
+      if (/CO\.,?\s*LTD/i.test(L[h]) && !/FONTEYN|PASSION/i.test(L[h])) { uit.leverancier = schoon(L[h]); break; }
+
+    var shell = null, skirt = null;
+    if ((m = alles.match(/All\s+spa\s+colou?r\s+is\s+([^\n.]+)/i))) {
+      var kl = schoon(m[1]);
+      var ms = kl.match(/^(.*?)\s*shell/i); if (ms) shell = schoon(ms[1]);
+      var mk = kl.match(/and\s+(.*?)\s*cabinet/i); if (mk) skirt = schoon(mk[1]);
+    }
+
+    // Waar begint elk blok? Bij "Model: <code>".
+    var starts = [];
+    for (var i = 0; i < L.length; i++) if (/^Model\s*:\s*\S/i.test(L[i])) starts.push(i);
+    for (var b = 0; b < starts.length; b++) {
+      var van = starts[b], tot = (b + 1 < starts.length) ? starts[b + 1] : L.length;
+      var blok = L.slice(van, tot).join("\n");
+      var code = (blok.match(/^Model\s*:\s*([A-Za-z0-9\-]+)/i) || [])[1];
+      if (!code) continue;
+      var aantal = bedrag((blok.match(/Quantity\s+needed[^\n]*?\(set\)\s*([\d.,]+)/i) || [])[1]);
+      if (!(aantal > 0)) continue;
+      var metOpties = bedrag((blok.match(/Total\s+price\s+with\s+options\s*\$?\s*([\d.,]+)/i) || [])[1]);
+      var fob = bedrag((blok.match(/FOB[^:\n]*:\s*\$?\s*([\d.,]+)/i) || [])[1]);
+      var bed = bedrag((blok.match(/Amount\s*\(USD\)\s*\$?\s*([\d.,]+)/i) || [])[1]);
+      var maat = (blok.match(/Size\s*:?\s*(\d{3,4}\s*\*\s*\d{3,4}\s*\*\s*\d{3,4})/i) || [])[1];
+      uit.regels.push({
+        code: code.toUpperCase(),
+        omschrijving: code.toUpperCase() + (maat ? " · " + maat.replace(/\s/g, "") : ""),
+        sectie: null, aantal: aantal,
+        kleur: shell, skirt: skirt,
+        afmeting: maat ? maat.replace(/\s/g, "") : null,
+        prijsUsd: metOpties || fob || null,
+        bedragUsd: bed || (metOpties ? Math.round(metOpties * aantal * 100) / 100 : null),
+      });
+    }
+    uit.totaalStuks = uit.regels.reduce(function (n, r) { return n + (Number(r.aantal) || 0); }, 0);
+    uit.totaalUsd = Math.round(uit.regels.reduce(function (n, r) { return n + (Number(r.bedragUsd) || 0); }, 0) * 100) / 100;
+    uit.packing = []; uit.verschillen = [];
+    return uit;
+  }
+
   // Welk soort bladzijde is dit? De keuze mag niet op de bestandsnaam
   // berusten; die zegt bij deze fabrieken niets.
   function soortVan(regels) {
     var t = regels.join(" ");
+    if (/Main\s*components/i.test(t) && /Quantity\s+needed/i.test(t)) return "joyspa";
     if (/PROFORMA\s*INVOICE/i.test(t) && /Item\s*Name/i.test(t)) return "proforma";
+    if (/PROFORMA\s*INVOICE/i.test(t) && /DESCRIPTIONS?/i.test(t) && /QTY/i.test(t)) return "mexda-proforma";
     return "commercial";
   }
   function leesAuto(regels) {
-    return soortVan(regels) === "proforma" ? leesProforma(regels) : lees(regels);
+    var s = soortVan(regels);
+    if (s === "joyspa") return leesJoyspa(regels);
+    if (s === "mexda-proforma") return leesMexdaProforma(regels);
+    if (s === "proforma") return leesProforma(regels);
+    return lees(regels);
   }
 
-  global.fpCiPdf = { lees: lees, leesProforma: leesProforma, leesAuto: leesAuto, soortVan: soortVan,
-                     uitPdf: uitPdf, kop: kop, tabel: tabel, getallen: getallen };
+  global.fpCiPdf = { lees: lees, leesProforma: leesProforma, leesJoyspa: leesJoyspa,
+                     leesMexdaProforma: leesMexdaProforma, leesAuto: leesAuto, soortVan: soortVan,
+                     uitPdf: uitPdf, kop: kop, tabel: tabel, getallen: getallen, koppel: koppel };
 
 })(typeof window !== "undefined" ? window : globalThis);

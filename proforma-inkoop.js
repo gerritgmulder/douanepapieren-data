@@ -46,26 +46,45 @@ function parseProforma(wb){
     if(!referentie&&/order\s*no\.?\s*:/i.test(s)) referentie=s.replace(/.*order\s*no\.?\s*:\s*/i,"").trim();
   }
 
+  /* De kopregel opzoeken. Elke fabriek noemt zijn kolommen anders en dat is
+     geen detail: New Normal zet er "Item" en "Q'ty" boven in plaats van
+     "Model" en "Quantity", en daarop klapte de hele uitlezing eruit met de
+     melding dat de kopregel ontbrak (11 aug 2026).
+
+     De kleur heet bij hen "Body" (de kuip) met "Skirt" ernaast (de omkasting).
+     Die twee samen bepalen welk artikel het wordt, dus allebei meenemen. */
+  var IS_MODEL=/^(MODEL|ITEM|ARTICLE|ARTIKEL)S?$/;
+  var IS_AANTAL=/QUANT|^Q.?TY$|^QTY|^PCS$|^AANTAL$/;
+  var IS_KLEUR=/COLOU?R|^BODY$|^SHELL$/;
   let kop=-1,kMod=0,kKleur=1,kSkirt=-1,kAantal=-1,kPrijs=-1;
   for(let i=0;i<Math.min(rows.length,30);i++){
     const r=(rows[i]||[]).map(x=>String(x==null?"":x).trim().toUpperCase());
-    if(r.indexOf("MODEL")>=0&&r.some(x=>/QUANT/.test(x))){
-      kop=i; kMod=r.indexOf("MODEL");
-      const kl=r.findIndex(x=>/COLOU?R/.test(x)); if(kl>=0) kKleur=kl;
+    const km=r.findIndex(x=>IS_MODEL.test(x));
+    const ka=r.findIndex(x=>IS_AANTAL.test(x));
+    if(km>=0&&ka>=0){
+      kop=i; kMod=km; kAantal=ka;
+      const kl=r.findIndex(x=>IS_KLEUR.test(x)); if(kl>=0) kKleur=kl;
       kSkirt=r.findIndex(x=>/^SKIRT/.test(x));
-      kAantal=r.findIndex(x=>/QUANT/.test(x));
       kPrijs=r.findIndex(x=>/^RATE|PRICE|UNIT/.test(x));
       break;
     }
   }
-  if(kop<0) return {fout:"kopregel met MODEL en QUANTITY niet gevonden op tabblad '"+naam+"'",regels:[]};
+  if(kop<0) return {fout:"kopregel niet gevonden op tabblad '"+naam+"'. Er moet een kolom staan met Model of Item, en een met Quantity, Q'ty of Qty.",regels:[]};
 
   const regels=[];
+  // Een model met twee kleuren staat als twee regels onder elkaar, waarvan de
+  // tweede geen modelnaam meer heeft - die staat alleen bij de eerste. Zonder
+  // dit viel bij New Normal de helft van de ET-160's weg (11 aug 2026).
+  let vorigeCode=null, vorigeMaat=null;
   for(const r of rows.slice(kop+1)){
     const eerste=String((r&&r[kMod])==null?"":r[kMod]).split("\n")[0].trim();
-    if(!eerste) continue;                       // o.a. de GRAND TOTAL-regel
     const aantal=Number(r&&r[kAantal]);
-    if(!isFinite(aantal)||aantal<=0) continue;
+    if(!isFinite(aantal)||aantal<=0){ if(eerste) vorigeCode=null; continue; }
+    if(!eerste&&vorigeCode){
+      regels.push(vervolgRegel(vorigeCode,vorigeMaat,r,kKleur,kSkirt,kPrijs,aantal));
+      continue;
+    }
+    if(!eerste) continue;                       // o.a. de GRAND TOTAL-regel
     // Elke fabriekscode bevat cijfers en begint met hooguit een paar letters:
     // SKT888G-2 en PP01 (Jazzi/Devine), JY8805 (Kasdaly), ZR7011 (Huantong),
     // EX-180, ET-165, S-1501 (New Normal), WS-PC05ST (Mexda).
@@ -81,6 +100,18 @@ function parseProforma(wb){
     // SKT888G-2). Een code die al met letters begint hoort ongemoeid te blijven,
     // anders wordt JY8805 stilletjes SKTJY8805 en vindt niemand hem meer.
     if(/^\d/.test(code)) code="SKT"+code;
+    // New Normal zet de maat achter de code in dezelfde cel: "EX-155
+    // 1550mm×1550mm×800mm". Die pakken we mee - hij zegt niets over de
+    // bestelling maar wél wat de spa meet, en dat missen we van genoeg
+    // modellen om het niet weg te gooien.
+    //
+    // Op de hele cel zoeken en niet op de eerste regel: bij de ET-160 en de
+    // S-2202 staat de maat op een tweede regel ín dezelfde cel, en die viel
+    // met de code-splitsing weg.
+    const heleCel=String((r&&r[kMod])==null?"":r[kMod]);
+    const mm=heleCel.match(/(\d{3,4})\s*(?:mm)?\s*[x×*]\s*(\d{3,4})\s*(?:mm)?\s*[x×*]\s*(\d{3,4})/i);
+    const maat=mm?(mm[1]+"x"+mm[2]+"x"+mm[3]):null;
+    vorigeCode=code; vorigeMaat=maat;
     const kleurTekst=String((r&&r[kKleur])==null?"":r[kKleur]);
     // Kleur kan het model bepalen: SKT888-G2 is een Mallorca Superior, maar in
     // het zwart heet hij Blackpool (Chantal, 4 aug 2026). Daarom niet spaModel
@@ -95,10 +126,26 @@ function parseProforma(wb){
       // Zonder die kolom leveren twee regels met dezelfde kleur dezelfde
       // artikelcode op, terwijl het verschillende artikelen zijn (Chantal).
       skirt:kSkirt>=0?(String((r&&r[kSkirt])==null?"":r[kSkirt]).replace(/\s+/g," ").trim()||null):null,
+      afmeting:maat,
       aantal, prijs:(isFinite(prijs)&&prijs>0)?prijs:null,
     });
   }
   return {tabblad:naam,leverancier,referentie,regels};
+}
+/* Een vervolgregel: hetzelfde model, andere kleur. De code en de maat komen
+   van de regel erboven, de kleur en het aantal van deze regel zelf. */
+function vervolgRegel(code,maat,r,kKleur,kSkirt,kPrijs,aantal){
+  const kleurTekst=String((r&&r[kKleur])==null?"":r[kKleur]);
+  const mo=(typeof spaModelMetKleur==="function")?spaModelMetKleur(code,kleurTekst):spaModel(code);
+  const prijs=kPrijs>=0?Number(r[kPrijs]):NaN;
+  return {
+    code,
+    model:(mo&&mo!=="(onbekend SKT-model)")?mo:null,
+    kleur:kleurTekst.replace(/\bjazzi\s*colou?r\b/ig,"").replace(/[,\s]+$/,"").trim()||null,
+    skirt:kSkirt>=0?(String((r&&r[kSkirt])==null?"":r[kSkirt]).replace(/\s+/g," ").trim()||null):null,
+    afmeting:maat||null,
+    aantal, prijs:(isFinite(prijs)&&prijs>0)?prijs:null,
+  };
 }
 function renderIkoVoorstel(v){
   const box=document.getElementById("ikoVoorstel"); if(!box) return;

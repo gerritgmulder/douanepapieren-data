@@ -174,6 +174,12 @@ const SPA_CODES = [
   ["WS-692","Monsoon"],
   ["WS-696","Cyclone"],
   ["WS-506M","Hurricane"],
+  // Op de proforma Arnoswim20260810 staat WS-S06M met een S waar de 506M een
+  // 5 heeft. Dat is dezelfde spa en geen nieuw model: de maat op die proforma
+  // is 5900x2200x1610 mm en de specsheet van de Hurricane Deep is 590x220x161
+  // cm - tot op de millimeter gelijk. Deze fabriek wisselt vaker een letter en
+  // een cijfer om (WS-PC06T tegen WS-PC06ST).
+  ["WS-S06M","Hurricane"],
   ["WS-06M","Hurricane"],
 ];
 // Alles wat geen letter of cijfer is gaat eruit. De fabrieken schrijven dezelfde
