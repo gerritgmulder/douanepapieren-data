@@ -49,7 +49,9 @@
     { van: /^(°\s*c|graden)$/i,                    naar: "°F",          f: 1.8, plus: 32,  rond: 0 },
   ];
 
-  /* Inches opmaken als voet en inches: 82 wordt 6'10", 12 wordt 1'.
+  /* Inches opmaken als voet en inches: 82 wordt 6'10", 36 wordt 3'0".
+     Een ronde voet krijgt dus altijd 0" erachter (Gretha, 11 aug 2026) - in een
+     rij maten leest 7'7" x 7'7" x 3'0" rustiger dan 7'7" x 7'7" x 3'.
      Onder de twaalf inch blijft het inches met hoogstens één decimaal. */
   function voetInch(inch) {
     if (Math.abs(inch) < 12) {
@@ -58,8 +60,7 @@
       return klein + '"';
     }
     var totaal = Math.round(inch);
-    var voet = Math.floor(totaal / 12), rest = totaal % 12;
-    return voet + "'" + (rest ? rest + '"' : "");
+    return Math.floor(totaal / 12) + "'" + (totaal % 12) + '"';
   }
 
   // De eenheden zoals ze in een tekst kunnen staan. Lange vormen eerst, anders
