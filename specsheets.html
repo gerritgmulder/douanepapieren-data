@@ -422,7 +422,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="10-08-2026 · 15:40";
+const TEGEL_VERSIE="11-08-2026 · 11:20";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
@@ -1043,7 +1043,21 @@ function teken(){
   el("sCollectie2").className="collectie "+(S.fontKop||"f-josefin");
   el("sLogo2").innerHTML=el("sLogo").innerHTML;
   vlak("sTekening",S.tekening,"technische tekening — upload hem links");
-  el("sLegenda").innerHTML=(S.legenda||[]).map(l=>
+  /* De onderdelenlijst staat in drie kolommen. Die vulde zich van links naar
+     rechts: onderdeel 1, 2 en 3 kwamen naast elkaar op de bovenste regel te
+     staan. Gretha vult ze van boven naar beneden in, dus 1, 2 en 3 horen onder
+     elkaar in de eerste kolom (11 aug 2026).
+
+     Daarom wordt het aantal regels per kolom hier uitgerekend en loopt het
+     raster kolomsgewijs. Bij twaalf onderdelen is dat vier per kolom; blijft er
+     een restje over, dan wordt de laatste kolom korter en niet de eerste. */
+  const leg=(S.legenda||[]), KOLOMMEN=3;
+  const legRijen=Math.max(1,Math.ceil(leg.length/KOLOMMEN));
+  const L2=el("sLegenda");
+  L2.style.gridTemplateColumns="repeat("+KOLOMMEN+",1fr)";
+  L2.style.gridTemplateRows="repeat("+legRijen+",auto)";
+  L2.style.gridAutoFlow="column";
+  L2.innerHTML=leg.map(l=>
     "<div class='legrij'><span class='icoon'>"+(l.img?"<img src='"+l.img+"' alt=''>":"")+"</span>"+
     "<span>"+esc(l.code||"")+(l.code&&l.naam?" - ":"")+esc(l.naam||"")+"</span></div>").join("")||
     "<div class='legrij geenPrint' style='grid-column:1/-1;color:#999'>Nog geen onderdelen — voeg ze links toe of upload de icoontjes.</div>";
