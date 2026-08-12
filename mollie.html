@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<script>
+/* fpToegangscontrole — zie bankkoppeling.html. Het dashboard verbergt de tegel
+   al, maar de app heeft een history: een pagina die een vórige gebruiker
+   opende is anders opnieuw te bereiken. */
+(function(){
+  var TOEGANG = ["osman@fonteyn.nl","osman","fonteyn.osman","rowan@fonteyn.nl","rowan","fonteyn.rowan","rico@fonteyn.nl","rico","fonteyn.rico","reinier@fonteyn.nl","reinier","fonteyn.reinier","gerrit@fonteyn.nl","gerrit","dolf@fonteyn.nl","fonteyn.dolf","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"];
+  var email = (localStorage.getItem("fp.email")||"").toLowerCase();
+  if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+  if (TOEGANG.indexOf(email) >= 0) return;
+  window.fpGeenToegang = true;
+  document.write('<style>body{margin:0;font-family:Montserrat,-apple-system,sans-serif;background:#f5f4ef;color:#1f2937}'+
+    '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
+    '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
+    '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
+    '<div class="gt"><h1>Geen toegang</h1><p>De Mollie-tegel is niet beschikbaar voor jouw account.</p>'+
+    '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
+  window.stop();
+})();
+</script>
+<meta charset="UTF-8">
+<title>Fonteyn — Mollie</title>
+<script src="taal.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="mt940.js"></script>
+<script src="bank-matching.js"></script>
+<script src="mollie-matching.js"></script>
+<style>
+:root{
+  --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325; --fonteyn-lime:#8bc53f;
+  --bg:#f5f4ef; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb;
+  --ok:#059669; --bad:#b91c1c; --warn:#92400e;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+input,select,button{font-family:inherit}
+header{background:var(--fonteyn-green);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px}
+header img.logo{height:40px;width:auto;display:block}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+header a.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font-size:12px}
+header a.back:hover{background:rgba(255,255,255,.15)}
+header .user-chip{font-size:12px;color:rgba(255,255,255,.85)}
+header button.logout{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer}
+main{max-width:1400px;margin:24px auto;padding:0 22px}
+h2{color:var(--fonteyn-green);font-size:22px;margin:0 0 6px}
+.lead{color:var(--muted);margin:0 0 18px;line-height:1.55}
+.card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin:14px 0}
+.card h3{margin:0 0 10px;color:var(--fonteyn-green);font-size:15px}
+.muted{color:var(--muted)}
+.hidden{display:none!important}
+.cta{background:var(--fonteyn-green);color:#fff;border:0;border-radius:8px;padding:10px 18px;font:inherit;font-weight:600;font-size:13px;cursor:pointer}
+.cta:hover{background:var(--fonteyn-green-dark)}
+.cta.secondary{background:#fff;color:var(--fonteyn-green);border:1.5px solid var(--fonteyn-green)}
+.cta:disabled{opacity:.45;cursor:not-allowed}
+.dropzone{display:block;border:2px dashed #cbd5e1;border-radius:12px;padding:26px;text-align:center;cursor:pointer;background:#fbfcfa}
+.dropzone:hover{border-color:var(--fonteyn-lime);background:#f6faf0}
+.dropzone input{display:none}
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:14px 0}
+.stat{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 14px;border-top:3px solid var(--fonteyn-green)}
+.stat .lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.stat .val{font-size:24px;font-weight:700;line-height:1.15}
+.stat.warn{border-top-color:#d97706} .stat.warn .val{color:#92400e}
+.stat.bad{border-top-color:var(--bad)} .stat.bad .val{color:var(--bad)}
+.stat.gb{border-top-color:#2563eb} .stat.gb .val{color:#1e40af}
+table.grid{width:100%;border-collapse:collapse;font-size:12.5px}
+table.grid th,table.grid td{padding:7px 9px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:top}
+table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);position:sticky;top:0}
+td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.badge.ok{background:#dcfce7;color:#15803d}
+.badge.warn{background:#fef3c7;color:#92400e}
+.badge.bad{background:#fee2e2;color:#b91c1c}
+.badge.gb{background:#dbeafe;color:#1e3a8a}
+.match-info{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+.status-msg{padding:10px 14px;border-radius:8px;margin:12px 0;font-size:13px}
+.status-msg.ok{background:#dcfce7;color:var(--ok)}
+.status-msg.error{background:#fee2e2;color:var(--bad)}
+.status-msg.warn{background:#fef3c7;color:var(--warn)}
+.status-msg.info{background:#eff6ff;color:#1e40af}
+.rij-flex{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.rek{width:76px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn" onerror="this.style.display='none'">
+  <h1>🟣 Mollie</h1>
+  <a class="back" href="dashboard.html">← Dashboard</a>
+  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <h2>Mollie-uitbetalingen koppelen</h2>
+  <p class="lead">
+    Download het settlement-bestand (MT940) bij Mollie en zet het hieronder neer. Elke regel wordt naast
+    de openstaande posten in Logic4 gelegd. Staat het ordernummer in de omschrijving — dat is zo bij een
+    betaallink — dan is de koppeling hard. Bij een internetbestelling staat er alleen een sleutel van
+    Mollie; die gaat op naam en bedrag.
+  </p>
+
+  <div class="card">
+    <label class="dropzone" id="dropzone">
+      <input type="file" id="file" accept=".mt940,.940,.sta,.txt">
+      <div style="font-size:15px;font-weight:600;color:var(--fonteyn-green)">Sleep het MT940-bestand hierheen</div>
+      <div class="muted" style="font-size:12.5px;margin-top:4px">of klik om te kiezen</div>
+    </label>
+    <div id="dropStatus"></div>
+  </div>
+
+  <div id="resultaat" class="hidden">
+    <div class="summary" id="summary"></div>
+
+    <div class="card">
+      <h3>Regels uit dit settlement</h3>
+      <div style="max-height:60vh;overflow:auto;border:1px solid var(--border);border-radius:8px">
+        <table class="grid">
+          <thead><tr>
+            <th style="width:28px"></th><th>Datum</th><th class="num">Bedrag</th>
+            <th>Tegenpartij</th><th>Wat het is</th>
+          </tr></thead>
+          <tbody id="rijen"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- De sluitpost. Zonder dit blok is niet te zien of het settlement klopt. -->
+    <div class="card">
+      <h3>Klopt het settlement?</h3>
+      <div id="sluit"></div>
+    </div>
+
+    <div class="card">
+      <h3>Boeken</h3>
+      <p class="lead" style="margin:0 0 12px">
+        Betalingen gaan op hun order in Logic4. De fee en wat niet op een order past gaan als
+        memoriaalregel naar een grootboekrekening. Niets wordt geboekt zolang je niets aanvinkt.
+      </p>
+      <div class="rij-flex" style="margin-bottom:12px">
+        <label class="muted" for="dagboek" style="font-size:12px">Dagboek van Mollie</label>
+        <select id="dagboek" style="border:1px solid var(--border);border-radius:7px;padding:7px 10px;font:inherit;font-size:13px;min-width:240px">
+          <option value="">— kies eerst het dagboek —</option>
+        </select>
+        <span class="muted" id="dagboekInfo" style="font-size:12px"></span>
+      </div>
+      <div class="rij-flex" style="margin-bottom:12px;font-size:12.5px">
+        <span class="muted">Grootboekrekeningen:</span>
+        <label>fee <input class="rek" id="rekFee" value="4572"></label>
+        <label>terugbetaling zonder order <input class="rek" id="rekRetour" value="2100"></label>
+        <label>uitbetaling / kruispost <input class="rek" id="rekKruis" value="1220"></label>
+      </div>
+      <div class="rij-flex">
+        <button class="cta secondary" id="kiesAlles" type="button">Alles aanvinken</button>
+        <button class="cta secondary" id="kiesGeen" type="button">Selectie wissen</button>
+        <button class="cta" id="boekBtn" type="button" disabled>Boek de selectie</button>
+        <span class="muted" id="selInfo"></span>
+      </div>
+      <div id="boekStatus"></div>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOLLIE-TEGEL
+   ═══════════════════════════════════════════════════════════════════════════
+   Het scherm. Het beoordelen van de regels zit in mollie-matching.js, zodat
+   dat los te testen is op echte settlements - en dat is ook gebeurd, op het
+   settlement van 12 aug 2026.
+
+   Hoe het geld loopt (Gerrit, 12 aug 2026):
+     - De bank ziet één bedrag binnenkomen van Mollie. Dat gaat in de
+       bankkoppeling naar kruisposten 1220.
+     - Dit bestand splitst datzelfde bedrag uit: per klant een betaling op zijn
+       order, de fee naar 4572, terugbetalingen op de order en anders naar 2100.
+     - De tegenboeking van het geheel gaat weer naar 1220. Klopt het settlement,
+       dan valt 1220 daarmee tegen elkaar weg. Onderaan staat of dat uitkomt.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SESSION_KEY = "fp.session", EMAIL_KEY = "fp.email";
+const WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
+const teamKey = () => localStorage.getItem("fp.teamkey") || "";
+const $ = (id) => document.getElementById(id);
+const MM = () => window.fpMollieMatch;
+const BM = () => window.fpBankMatch;
+
+document.getElementById("userEmail").textContent = (localStorage.getItem(EMAIL_KEY) || "—").toLowerCase();
+$("logoutBtn").addEventListener("click", () => {
+  localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href = "dashboard.html";
+});
+
+const fmtEur = (n) => "€ " + Number(n || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[c]));
+function melding(el, tekst, soort) {
+  if (!el) return;
+  if (!tekst) { el.innerHTML = ""; return; }
+  el.innerHTML = "<div class='status-msg " + (soort || "info") + "'>" + tekst + "</div>";
+}
+
+let state = { transactions: [], iban: null, eind: null, bestand: "" };
+let openIndex = null, namen = {}, orders = {};
+
+// ─── Inlezen ────────────────────────────────────────────────────────
+$("file").addEventListener("change", e => { const f = e.target.files[0]; if (f) verwerkBestand(f); });
+["dragover", "drop"].forEach(n => $("dropzone").addEventListener(n, e => { e.preventDefault(); }));
+$("dropzone").addEventListener("drop", e => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (f) verwerkBestand(f);
+});
+
+async function verwerkBestand(f) {
+  melding($("dropStatus"), "Inlezen…", "info");
+  try {
+    const tekst = await f.text();
+    const r = window.fpMT940.parse(tekst);
+    if (!r.transactions.length) throw new Error("er staan geen transacties in dit bestand");
+    state = { transactions: r.transactions.map(t => ({ tx: t, match: null, kies: false, geboekt: null })),
+              iban: r.iban, eind: r.closingBalance ? r.closingBalance.amount : null, bestand: f.name };
+    melding($("dropStatus"), esc(f.name) + " gelezen: " + r.transactions.length + " regels. Bezig met koppelen…", "info");
+    $("resultaat").classList.remove("hidden");
+    await koppelAlles();
+    melding($("dropStatus"), esc(f.name) + " · " + r.transactions.length + " regels · rekening " + esc(r.iban || "?"), "ok");
+  } catch (e) {
+    melding($("dropStatus"), "Inlezen mislukt: " + esc(e.message), "error");
+  }
+}
+
+// ─── Koppelen ───────────────────────────────────────────────────────
+async function koppelAlles() {
+  // 1. De openstaande posten uit Logic4.
+  const r = await fetch(WORKER + "/bank/openstaand", {
+    method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+    body: JSON.stringify({ vers: false }) });
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || "openstaande posten ophalen faalde");
+  openIndex = BM().bouwIndex(j.posten || []);
+
+  // 2. De orders die met naam en nummer in de omschrijving staan.
+  const nrs = [];
+  state.transactions.forEach(x => {
+    BM().nummers(String(x.tx.descRaw || x.tx.description || "")).orders.forEach(n => nrs.push(n));
+  });
+  if (nrs.length) {
+    const ro = await fetch(WORKER + "/bank/orders", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ nrs }) });
+    const jo = await ro.json().catch(() => ({}));
+    if (jo && jo.orders) orders = jo.orders;
+  }
+
+  // 3. Eerste oordeel.
+  state.transactions.forEach(x => { x.match = MM().koppel(x.tx, openIndex, orders); });
+
+  // 4. Namen erbij en dan het oordeel aanscherpen. Zonder naam blijft een
+  //    treffer op alleen het bedrag staan op controleren.
+  const ids = [];
+  state.transactions.forEach(x => (x.match.kandidaten || []).forEach(p => ids.push(String(p.DebtorId))));
+  const nodig = [...new Set(ids)].filter(id => id && !(id in namen));
+  for (let i = 0; i < nodig.length; i += 40) {
+    try {
+      const rd = await fetch(WORKER + "/bank/debiteuren", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+        body: JSON.stringify({ ids: nodig.slice(i, i + 40) }) });
+      const jd = await rd.json().catch(() => ({}));
+      Object.assign(namen, (jd && jd.namen) || {});
+    } catch (e) { /* zonder naam blijft het gewoon controleren */ }
+  }
+  /* De worker geeft per debiteur een object terug ({naam: "..."}) omdat er meer
+     in kan zitten dan alleen de naam. De naamvergelijking in bank-matching.js
+     verwacht platte tekst; met het object erin was de gelijkenis altijd nul en
+     bleef élke internetbestelling op controleren staan, ook als de naam
+     woordelijk klopte. */
+  const naamTekst = {};
+  Object.keys(namen).forEach(id => {
+    const v = namen[id];
+    naamTekst[id] = (v && typeof v === "object") ? (v.naam || "") : String(v || "");
+  });
+  state.transactions.forEach(x => { x.match = MM().bevestig(x.match, naamTekst); });
+  teken();
+}
+
+// ─── Tonen ──────────────────────────────────────────────────────────
+const BADGE = {
+  zeker:       { k: "ok",   t: "Zeker" },
+  controleren: { k: "warn", t: "Controleren" },
+  kandidaten:  { k: "warn", t: "Controleren" },
+  opzoeken:    { k: "warn", t: "Controleren" },
+  geen:        { k: "bad",  t: "Geen match" },
+  grootboek:   { k: "gb",   t: "Grootboek" },
+};
+function teken() {
+  const t = state.transactions;
+  const tel = MM().tel(t);
+  $("summary").innerHTML =
+    "<div class='stat'><div class='lbl'>Regels</div><div class='val'>" + t.length + "</div></div>" +
+    "<div class='stat'><div class='lbl'>Zeker</div><div class='val'>" + tel.zeker + "</div></div>" +
+    "<div class='stat warn'><div class='lbl'>Controleren</div><div class='val'>" + tel.controleren + "</div></div>" +
+    "<div class='stat bad'><div class='lbl'>Geen match</div><div class='val'>" + tel.geen + "</div></div>" +
+    "<div class='stat gb'><div class='lbl'>Naar grootboek</div><div class='val'>" + tel.grootboek + "</div></div>";
+
+  $("rijen").innerHTML = t.map((x, i) => {
+    const m = x.match || {}, b = BADGE[m.status] || BADGE.geen;
+    const naam = (m.tegenpartij && m.tegenpartij.naam) || "";
+    const vink = x.geboekt ? "" :
+      "<input type='checkbox' class='kies' data-i='" + i + "'" + (x.kies ? " checked" : "") + ">";
+    let extra = "";
+    if (m.order) extra = "Order <b>" + m.order.orderNr + "</b> · " + esc(m.order.naam || "");
+    else if (m.beste) extra = "Factuur " + m.beste.InvoiceId + " · " + esc((namen[String(m.beste.DebtorId)] || {}).naam || "");
+    return "<tr>" +
+      "<td>" + vink + "</td>" +
+      "<td style='white-space:nowrap'>" + esc(x.tx.date || "") + "</td>" +
+      "<td class='num'>" + fmtEur(x.tx.amount) + "</td>" +
+      "<td>" + esc(naam || "—") + "</td>" +
+      "<td>" + (x.geboekt ? "<span class='badge ok'>Geboekt</span>" :
+                "<span class='badge " + b.k + "'>" + b.t + "</span>") +
+        (m.soort && m.soort !== "betaling" ? " <span class='badge gb'>" + esc(m.soort) + "</span>" : "") +
+        "<div class='match-info'>" + (extra ? extra + "<br>" : "") + esc(m.reden || "") + "</div></td>" +
+    "</tr>";
+  }).join("");
+
+  tekenSluit();
+  werkSelectieBij();
+}
+
+/* De optelsom. Een settlement hoort uit te komen op het bedrag dat Mollie
+   overmaakt; dat is het eindsaldo in het bestand zelf. Komt dat niet uit, dan
+   ontbreekt er een regel en klopt de tegenboeking op 1220 dus ook niet. */
+function tekenSluit() {
+  const t = state.transactions;
+  const som = (f) => t.filter(f).reduce((n, x) => n + Number(x.tx.amount), 0);
+  const betalingen = som(x => x.match && x.match.soort === "betaling");
+  const retouren   = som(x => x.match && x.match.soort === "terugbetaling");
+  const kosten     = som(x => x.match && x.match.soort === "kosten");
+  const rest       = som(x => x.match && ["betaling","terugbetaling","kosten"].indexOf(x.match.soort) < 0);
+  const totaal = betalingen + retouren + kosten + rest;
+  const eind = state.eind;
+  const klopt = eind == null ? null : Math.abs(totaal - eind) < 0.005;
+  const rij = (l, v, dik) => "<tr><td style='padding:5px 8px'>" + (dik ? "<b>" + l + "</b>" : l) +
+    "</td><td class='num' style='padding:5px 8px'>" + (dik ? "<b>" + fmtEur(v) + "</b>" : fmtEur(v)) + "</td></tr>";
+  $("sluit").innerHTML =
+    "<table style='max-width:520px;width:100%;border-collapse:collapse'>" +
+    rij("Betalingen van klanten", betalingen) +
+    rij("Terugbetalingen", retouren) +
+    rij("Fee van Mollie", kosten) +
+    (rest ? rij("Overig", rest) : "") +
+    rij("Samen", totaal, true) +
+    (eind != null ? rij("Uitbetaald volgens het bestand", eind) : "") +
+    "</table>" +
+    (klopt === null ? "" : klopt
+      ? "<div class='status-msg ok' style='margin-top:10px'>Het settlement sluit. De tegenboeking op kruisposten " +
+        esc($("rekKruis").value) + " is " + fmtEur(totaal) + " en valt weg tegen de boeking vanuit de bank.</div>"
+      : "<div class='status-msg error' style='margin-top:10px'>Dit settlement sluit niet: de regels tellen op tot " +
+        fmtEur(totaal) + " en er is " + fmtEur(eind) + " uitbetaald. Zoek dat eerst uit; de tegenboeking op " +
+        esc($("rekKruis").value) + " klopt dan namelijk ook niet.</div>");
+}
+
+// ─── Selectie ───────────────────────────────────────────────────────
+document.addEventListener("change", e => {
+  if (!e.target.classList || !e.target.classList.contains("kies")) return;
+  const x = state.transactions[Number(e.target.dataset.i)];
+  if (x) { x.kies = e.target.checked; werkSelectieBij(); }
+});
+$("kiesAlles").addEventListener("click", () => {
+  // Alleen wat te boeken is. "Geen match" aanvinken heeft geen zin: daar is
+  // geen bestemming voor en dan zou de knop iets beloven wat niet kan.
+  state.transactions.forEach(x => { x.kies = !x.geboekt && x.match && x.match.status !== "geen"; });
+  teken();
+});
+$("kiesGeen").addEventListener("click", () => { state.transactions.forEach(x => x.kies = false); teken(); });
+function selectie() { return state.transactions.filter(x => x.kies && !x.geboekt); }
+function werkSelectieBij() {
+  const s = selectie();
+  const som = s.reduce((n, x) => n + Number(x.tx.amount), 0);
+  $("selInfo").textContent = s.length ? s.length + " regel(s) geselecteerd, samen " + fmtEur(som) : "Niets geselecteerd.";
+  $("boekBtn").disabled = !s.length || !$("dagboek").value;
+}
+
+// ─── Dagboek ────────────────────────────────────────────────────────
+const DAGBOEK_KEY = "mollie.dagboek";
+async function laadDagboeken() {
+  try {
+    const r = await fetch(WORKER + "/bank/dagboeken", { headers: { "X-Fonteyn-Auth": teamKey() } });
+    const j = await r.json();
+    if (!j.ok) { $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + (j.error || ""); return; }
+    const onthouden = localStorage.getItem(DAGBOEK_KEY) || "";
+    $("dagboek").innerHTML = "<option value=''>— kies eerst het dagboek —</option>" +
+      (j.dagboeken || []).map(d => "<option value='" + d.id + "'" + (String(d.id) === onthouden ? " selected" : "") +
+        ">" + esc(d.naam) + " (" + d.id + ")</option>").join("");
+    werkSelectieBij();
+  } catch (e) { $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + e.message; }
+}
+$("dagboek").addEventListener("change", () => {
+  const v = $("dagboek").value;
+  if (v) localStorage.setItem(DAGBOEK_KEY, v); else localStorage.removeItem(DAGBOEK_KEY);
+  werkSelectieBij();
+});
+laadDagboeken();
+["rekFee","rekRetour","rekKruis"].forEach(id => $(id).addEventListener("change", () => { if (state.transactions.length) tekenSluit(); }));
+
+// ─── Boeken ─────────────────────────────────────────────────────────
+/* Twee soorten boekingen, en ze gaan langs twee wegen:
+
+     betaling op een order   → /bank/boeken   (AddPayment van Logic4)
+     alles zonder order      → /bank/memoriaal (grootboekregel)
+
+   Een terugbetaling gaat volgens Gerrit op de order. Dat kan alleen als we
+   wéten welke order dat is - staat het ordernummer er niet bij, dan gaat hij
+   naar de rekening die hierboven staat (2100) in plaats van naar een order die
+   we erbij zouden verzinnen. */
+$("boekBtn").addEventListener("click", async () => {
+  const s = selectie();
+  if (!s.length) return;
+  const dagboek = Number($("dagboek").value);
+  if (!dagboek) { melding($("boekStatus"), "Kies eerst het dagboek van Mollie.", "error"); return; }
+  if (!confirm(s.length + " regel(s) boeken, samen " + fmtEur(s.reduce((n, x) => n + Number(x.tx.amount), 0)) +
+      "?\n\nDit is niet met een knop terug te draaien.")) return;
+
+  const opOrder = [], naarGrootboek = [];
+  for (const x of s) {
+    const m = x.match, bedrag = Number(x.tx.amount);
+    const nr = m.order ? m.order.orderNr : (m.ordernummer || null);
+    if (m.soort === "betaling" && nr) {
+      opOrder.push({ x, orderNr: nr, bedrag,
+        omschrijving: "Mollie " + (x.tx.date || "") + " — " + state.bestand });
+    } else if (m.soort === "terugbetaling" && nr) {
+      // Een terugbetaling is een betaling de andere kant op.
+      opOrder.push({ x, orderNr: nr, bedrag,
+        omschrijving: "Mollie terugbetaling " + (x.tx.date || "") + " — " + state.bestand });
+    } else {
+      const rek = m.soort === "kosten" ? $("rekFee").value
+                : m.soort === "terugbetaling" ? $("rekRetour").value
+                : $("rekKruis").value;
+      naarGrootboek.push({ x, rekening: String(rek).trim(), bedrag: Math.abs(bedrag), datum: x.tx.date,
+        omschrijving: (x.tx.description || "").slice(0, 140), referentie: "Mollie " + state.bestand });
+    }
+  }
+
+  melding($("boekStatus"), "Bezig met boeken…", "info");
+  let gelukt = 0; const fouten = [];
+  if (opOrder.length) {
+    const r = await fetch(WORKER + "/bank/boeken", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ door: localStorage.getItem(EMAIL_KEY) || "", bookingId: dagboek,
+        regels: opOrder.map(o => ({ orderNr: o.orderNr, bedrag: o.bedrag, datum: o.x.tx.date, omschrijving: o.omschrijving })) }) });
+    const j = await r.json().catch(() => ({}));
+    (j.resultaten || []).forEach((res, i) => {
+      if (res.ok) { opOrder[i].x.geboekt = "op order " + opOrder[i].orderNr; gelukt++; }
+      else fouten.push("order " + opOrder[i].orderNr + ": " + (res.error || "onbekend"));
+    });
+    if (!j.resultaten) fouten.push("boeken op orders: " + (j.error || "geen antwoord"));
+  }
+  if (naarGrootboek.length) {
+    const r = await fetch(WORKER + "/bank/memoriaal", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ door: localStorage.getItem(EMAIL_KEY) || "", bookingId: dagboek,
+        regels: naarGrootboek.map(g => ({ rekening: g.rekening, bedrag: g.bedrag, datum: g.datum,
+                                          omschrijving: g.omschrijving, referentie: g.referentie })) }) });
+    const j = await r.json().catch(() => ({}));
+    (j.resultaten || []).forEach((res, i) => {
+      if (res.ok) { naarGrootboek[i].x.geboekt = "grootboek " + naarGrootboek[i].rekening; gelukt++; }
+      else fouten.push("grootboek " + naarGrootboek[i].rekening + ": " + (res.error || "onbekend"));
+    });
+    if (!j.resultaten) fouten.push("memoriaal: " + (j.error || "geen antwoord"));
+  }
+  state.transactions.forEach(x => { if (x.geboekt) x.kies = false; });
+  teken();
+  melding($("boekStatus"),
+    gelukt + " regel(s) geboekt." + (fouten.length ? " Niet gelukt: " + esc(fouten.join("; ")) : ""),
+    fouten.length ? "warn" : "ok");
+});
+</script>
+
+<script>
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){
+    var ua=navigator.userAgent||"";
+    var app=ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+    var elc=ua.match(/Electron\/([\d.]+)/i);
+    var versie=app?("app "+app[1]):(elc?("app · Electron "+elc[1]):"browser");
+    var pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
+    var id=null;
+    try{
+      id=localStorage.getItem("fp.apparaat");
+      if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("fp.apparaat",id); }
+    }catch(e){}
+    return {computer:id, platform:pm?pm[1].replace(/_/g,"."):null, versie:versie};
+  }
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"mollie",action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker"),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
+})();
+</script>
+
+</body>
+</html>

@@ -133,6 +133,10 @@
       "note": "Bankkoppeling — MT940-import + automatische match aan Logic4-orders (Osman/Rowan/Rico/Reinier + admins)"
     },
     {
+      "name": "mollie.html",
+      "note": "Mollie — settlement-MT940 van Mollie inlezen, per regel koppelen aan de order (betaallink op ordernummer, internetbestelling op naam en bedrag) en boeken. Fee naar 4572, terugbetaling op de order of anders 2100, tegenboeking op kruisposten 1220. Osman/Rowan/Rico/Reinier + beheer."
+    },
+    {
       "name": "bol.html",
       "note": "Bol.com koppeling — Bol-factuur Excel → klant-betalingen koppelen aan Logic4-orders via Referentie=bestelnummer (lookup → debiteurnr + Betaald-stand), daarna AddPayment zodat Betaald=Bol-bedrag. + memoriaal-export voor de 2 debet-regels (Don/Osman + admins)."
     },

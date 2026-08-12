@@ -489,6 +489,13 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Upload een MT940-bankafschrift en koppel binnenkomende betalingen automatisch aan de juiste Logic4-orders.</p>
       </a>
 
+      <!-- Mollie — Osman c.s. Hoort bij Financiën, naast de bankkoppeling. -->
+      <a href="mollie.html" class="tile hidden" id="tileMollie">
+        <div class="icon">🟣</div>
+        <h3>Mollie</h3>
+        <p>Het settlement-bestand van Mollie inlezen: per klant de betaling op zijn order, de fee apart, en zien of het settlement sluit.</p>
+      </a>
+
       <!-- Bol.com koppeling — finance + sales: Osman + Don + admins. -->
       <a href="bol.html" class="tile hidden" id="tileBol">
         <div class="icon">🛒</div>
@@ -768,6 +775,17 @@ const RETOUREN_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+// Mollie — dezelfde mensen als de bankkoppeling: zij boeken de betalingen.
+const MOLLIE_EMAILS = new Set([
+  "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
+  "rowan@fonteyn.nl",      "rowan",  "fonteyn.rowan",
+  "rico@fonteyn.nl",       "rico",   "fonteyn.rico",
+  "reinier@fonteyn.nl",    "reinier","fonteyn.reinier",
+  "gerrit@fonteyn.nl",     "gerrit",
+  "dolf@fonteyn.nl",       "fonteyn.dolf",
+  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
+]);
+
 const BOL_EMAILS = new Set([
   "don@fonteyn.nl",        "fonteyn.don",
   "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
@@ -1036,6 +1054,8 @@ function showDashboard(email) {
   el("tileEikensingel").classList.toggle("hidden", !EIKENSINGEL_EMAILS.has(lc));
   // Bol.com koppeling — Don + Osman + admins
   el("tileBol").classList.toggle("hidden", !BOL_EMAILS.has(lc));
+  // Mollie — dezelfde groep als de bankkoppeling
+  el("tileMollie").classList.toggle("hidden", !MOLLIE_EMAILS.has(lc));
   el("tileRetouren").classList.toggle("hidden", !RETOUREN_EMAILS.has(lc));
   // Dealerportaal-beheer — Arno/Don/Chantal + admins
   el("tileDealerportaal").classList.toggle("hidden", !DEALERPORTAAL_EMAILS.has(lc));
