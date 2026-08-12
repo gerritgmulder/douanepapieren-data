@@ -103,6 +103,10 @@ const ALLOWED_BUCKET_PATTERNS = [
   // Per sheet een eigen sleutel haalt die koppeling weg - een sheet erbij
   // maakt de bestaande niet zwaarder.
   /^specsheet-[a-z0-9]{4,24}$/,
+  // De vorige versie van een sheet. Zie de toelichting bij het wegschrijven:
+  // twee sheets van Demi zijn leeg geraakt en er was niets om op terug te
+  // vallen. Nu is er dat wel.
+  /^specsheet-[a-z0-9]{4,24}-vorige$/,
 ];
 
 const corsHeaders = {
@@ -3812,6 +3816,24 @@ export default {
       const limiet = (perSheet || RUIM[bucket] || 1) * 1024 * 1024;
       if (body.length > limiet) {
         return reply(413, `Payload too large (max ${limiet / 1024 / 1024} MB)`);
+      }
+      /* Van een specificatiesheet blijft de vorige versie bewaard.
+
+         Aanleiding: de sheets Pleasure en Desire van Demi bleken op 12 aug
+         2026 leeg in de opslag te staan - een record van twee tekens. Er was
+         geen enkele manier om terug te kijken wat erin stond, dus dat werk is
+         weg. Een sheet is een halve dag werk aan foto's en specificaties; dan
+         hoort er meer nodig te zijn dan één misser om hem kwijt te raken.
+
+         Alleen voor de sheets zelf, niet voor de -vorige-sleutel (anders krijg
+         je een keten), en alleen als er nu iets van betekenis staat: een lege
+         of piepkleine inhoud overschrijft de vorige versie niet. Juist dán wil
+         je er nog bij kunnen. */
+      if (/^specsheet-[a-z0-9]{4,24}$/.test(bucket)) {
+        try {
+          const vorige = await env.FONTEYN_DATA.get(bucket, { type: "text" });
+          if (vorige && vorige.length > 200) await env.FONTEYN_DATA.put(bucket + "-vorige", vorige);
+        } catch (e) { /* backup mag het opslaan nooit tegenhouden */ }
       }
       await env.FONTEYN_DATA.put(bucket, body);
       return reply(200, { ok: true, bytes: body.length });

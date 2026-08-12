@@ -452,7 +452,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="12-08-2026 · 14:05";
+const TEGEL_VERSIE="12-08-2026 · 15:20";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
@@ -800,12 +800,24 @@ async function probeerHerstel(id){
   try{
     const r=await fetch(BUCKET+"?t="+Date.now(),{headers:{"X-Fonteyn-Auth":TEAM()}});
     const j=r.ok?await r.json():null;
-    const rij=((j&&j.sheets)||[]).find(x=>x&&String(x.id)===String(id));
-    const heeftInhoud=rij&&(rij.blokken||rij.fotoHoofd||rij.legenda||rij.badges);
+    let rij=((j&&j.sheets)||[]).find(x=>x&&String(x.id)===String(id));
+    let heeftInhoud=rij&&(rij.blokken||rij.fotoHoofd||rij.legenda||rij.badges);
+    // Sinds 12 aug 2026 blijft de vorige versie van elke sheet bewaard. Die is
+    // de beste kans, dus daar eerst kijken.
+    if(!heeftInhoud){
+      try{
+        const rv=await fetch(SHEET_URL(id)+"-vorige?t="+Date.now(),{headers:{"X-Fonteyn-Auth":TEAM()}});
+        if(rv.ok){
+          const v=await rv.json();
+          if(v&&v.id){ rij=v; heeftInhoud=true; }
+        }
+      }catch(e){}
+    }
     if(!heeftInhoud){
       toon("bad","Deze sheet is leeg in de opslag en staat ook niet meer volledig in de oude opslag. "+
-        "De inhoud is er niet meer; hij zal opnieuw gemaakt moeten worden. Het lek waardoor dit kon "+
-        "gebeuren is dicht, dus dit kan niet nog een keer.");
+        "Ook de vorige versie is er niet. De inhoud is er niet meer; deze sheet zal opnieuw gemaakt "+
+        "moeten worden. Van nu af aan blijft van elke sheet de vorige versie bewaard, dus dit kan niet "+
+        "nog een keer gebeuren.");
       return false;
     }
     const p=await fetch(SHEET_URL(id),{method:"PUT",
