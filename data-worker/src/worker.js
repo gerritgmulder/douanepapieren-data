@@ -3577,13 +3577,18 @@ function memoriaalKandidaten(lijst, opts) {
   const uit = [];
   const voegToe = (d) => { if (d && geenBank(d) && !uit.some(x => x.id === d.id)) uit.push(d); };
 
-  // 1. Wat eerder werkte.
+  // 1. Wat eerder werkte: een dagboek dat een memoriaalboeking heeft
+  //    geaccepteerd ís een memoriaal. Harder bewijs is er niet.
   voegToe(lijst.find(d => String(d.id) === String(opts.onthouden || "")));
-  // 2. Wat iemand bewust heeft aangewezen in het scherm.
-  voegToe(lijst.find(d => String(d.id) === String(opts.gevraagd || "")));
-  // 3. Op naam - eerst de exacte, dan de rest.
+  /* 2. Op naam. Dit staat bewust vóór wat iemand in het scherm heeft
+        aangewezen: Osman had "Tussenrekening PIN 1" gekozen terwijl er
+        gewoon een dagboek "Memoriaal" in de lijst stond (12 aug 2026). Van
+        een lijst met twintig dagboeken is niet te verwachten dat iemand er
+        de goede uit haalt, en het dashboard kan het zelf zien. */
   lijst.filter(d => MEM_NAAM_EXACT.test(String(d.naam).trim())).forEach(voegToe);
   lijst.filter(d => MEM_NAAM.test(String(d.naam))).forEach(voegToe);
+  // 3. Pas daarna wat er in het scherm is aangewezen.
+  voegToe(lijst.find(d => String(d.id) === String(opts.gevraagd || "")));
   // 4. Alles van hetzelfde type als een dagboek dat op naam een memoriaal is:
   //    zo komt een tweede memoriaal ("Memoriaal 2026") ook mee, ook al staat
   //    het jaartal in de weg bij de naamtest.

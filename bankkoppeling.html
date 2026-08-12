@@ -907,12 +907,13 @@ async function laadDagboeken() {
     if (mem) {
       const bank = dagboeken.find(d => String(d.id) === onthouden);
       const geenBank = dagboeken.filter(d => !bank || bank.type == null || d.type !== bank.type);
-      const handmatig = localStorage.getItem(MEM_DAGBOEK_KEY) || "";
-      mem.innerHTML = opties(geenBank, String(j.memBookingId || handmatig || ""), "— automatisch —");
+      /* Een oude handmatige keuze op deze computer gaat eruit. Osman had hier
+         "Tussenrekening PIN 1" staan terwijl er gewoon een dagboek "Memoriaal"
+         bestaat (12 aug 2026); zo'n keuze blijft anders stilletjes sturen en
+         niemand die er nog naar kijkt. De worker weet het beter. */
+      try { localStorage.removeItem(MEM_DAGBOEK_KEY); } catch (e) {}
+      mem.innerHTML = opties(geenBank, String(j.memBookingId || ""), "— automatisch —");
       if (j.memNaam) $("memDagboekInfo").textContent = "Grootboekregels gaan naar " + j.memNaam + ".";
-      // Heeft iemand hier ooit met de hand iets aangewezen, laat het dan zien -
-      // anders staat er een keuze onzichtbaar iets te sturen.
-      if (handmatig && $("memRij")) $("memRij").style.display = "";
     }
     // Staat er een eigen tegenrekening ingesteld, laat hem dan zien.
     if (j.tegenrekeningCode && $("tegenRekening")) {
@@ -927,8 +928,9 @@ async function laadDagboeken() {
 }
 if ($("memDagboek")) $("memDagboek").addEventListener("change", () => {
   const v = $("memDagboek").value;
-  if (v) { localStorage.setItem(MEM_DAGBOEK_KEY, v); bewaarMemDagboek(v); }
-  else localStorage.removeItem(MEM_DAGBOEK_KEY);
+  // Alleen bij de worker bewaren, niet ook hier: twee plekken die hetzelfde
+  // onthouden lopen vroeg of laat uit elkaar.
+  if (v) bewaarMemDagboek(v); else bewaarInstelling({ memBookingId: null, memNaam: "" });
   $("memDagboekInfo").textContent = v ? "Onthouden - dit hoeft niemand nog een keer aan te wijzen." : "";
 });
 if ($("tegenRekening")) $("tegenRekening").addEventListener("change", async () => {
