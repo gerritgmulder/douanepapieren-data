@@ -1752,7 +1752,10 @@ async function spaMigratieVoorstel(env) {
     ok: true, crediteur: JAZZI_CREDITEUR, containers: containers,
     schepen: (schepen.ships || []).map(s => ({
       ref: s.ref, vessel: s.vessel, eta: s.eta, containers: s.containers,
-      orders: [...spaOrdersUitSchip(s.ref)]
+      orders: [...spaOrdersUitSchip(s.ref)],
+      // De papieren bij dit schip: de commercial invoice waarmee hij is
+      // ingelezen, en wat er later bij is gezet (packing list en de rest).
+      documenten: s.documenten || [],
     })),
     // Wat Chantal heeft verwijderd. Het scherm heeft dit nodig om niet meteen
     // te gaan roepen dat die order "wel op een schip staat maar niet in de
@@ -3521,6 +3524,53 @@ async function bankGrootboeken(env) {
   };
 }
 
+/* ─── Scheepsdocumenten ────────────────────────────────────────────────────
+   Chantal (video, 12 aug 2026): "bij Schepen en Ontvangst wil ik naast Lading
+   tonen een tegel hebben met documenten, dan is de commercial invoice en de
+   packing list die we eerder via Schepen hebben geüpload zichtbaar."
+
+   Tot nu toe werd zo'n bestand alleen uitgelezen en daarna weggegooid - de
+   regels bleven, het papier niet. Om het te kunnen laten zien moet het bewaard
+   worden, en dat gebeurt hier: het bestand als losse sleutel, de verwijzing
+   ernaar bij het schip in voorraad-schepen.
+
+   Zelfde grens als bij het partnerportaal: 24 MB, want een sleutel in KV mag
+   er 25 en je wilt niet op de rand zitten. */
+const SCHIP_TYPES = {
+  pdf: "application/pdf",
+  xls: "application/vnd.ms-excel",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
+  csv: "text/csv", txt: "text/plain",
+};
+function schipBestandId(url) {
+  const id = (url.searchParams.get("id") || "").toLowerCase();
+  return /^[a-z0-9/_.\- ()&]{3,200}$/.test(id) && !id.includes("..") ? id : null;
+}
+async function schipZetBestand(request, env, url) {
+  const id = schipBestandId(url);
+  if (!id) return reply(400, { ok: false, error: "ongeldige bestandsnaam" });
+  const buf = await request.arrayBuffer();
+  if (!buf.byteLength) return reply(400, { ok: false, error: "leeg bestand" });
+  if (buf.byteLength > 24 * 1024 * 1024) return reply(413, { ok: false, error: "groter dan 24 MB" });
+  await env.FONTEYN_DATA.put("schipfile:" + id, buf);
+  return reply(200, { ok: true, id, bytes: buf.byteLength });
+}
+async function schipGeefBestand(env, url) {
+  const id = schipBestandId(url);
+  if (!id) return reply(400, { ok: false, error: "ongeldige bestandsnaam" });
+  const buf = await env.FONTEYN_DATA.get("schipfile:" + id, { type: "arrayBuffer" });
+  if (!buf) return reply(404, { ok: false, error: "bestand niet gevonden" });
+  const ext = String(id.split(".").pop() || "").toLowerCase();
+  const naam = id.split("/").pop();
+  return new Response(buf, { status: 200, headers: {
+    "Content-Type": SCHIP_TYPES[ext] || "application/octet-stream",
+    "Content-Disposition": 'inline; filename="' + naam.replace(/"/g, "") + '"',
+    "Access-Control-Allow-Origin": "*",
+  } });
+}
+
 /* ─── De dagboeken uit Logic4 ──────────────────────────────────────────────
    Stond eerst alleen in de route. Nu heeft ook de memoriaalboeking hem nodig
    - die moet zelf kunnen zien welk dagboek een memoriaal is - dus staat hij
@@ -3850,6 +3900,18 @@ export default {
       opslag.gewijzigd = new Date().toISOString();
       await env.FONTEYN_DATA.put("spa-aliassen", JSON.stringify(opslag));
       return reply(200, { ok: true, van, naar });
+    }
+
+    /* De commercial invoice en packing list van een schip. Opslaan mag met de
+       teamsleutel: wie de tegel Voorraadbeheer mag openen, uploadt daar toch
+       al commercial invoices. Ophalen gaat langs dezelfde sleutel. */
+    if (url.pathname === "/voorraad/schip/bestand" && request.method === "PUT") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      return schipZetBestand(request, env, url);
+    }
+    if (url.pathname === "/voorraad/schip/bestand" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      return schipGeefBestand(env, url);
     }
 
     // Flexport — waar zijn de containers volgens de expediteur.

@@ -200,6 +200,12 @@
 
 /* ── Flexport-blok in Schepen & ontvangst ── */
 .so-flexport{margin-top:26px;padding-top:20px;border-top:1px solid var(--border,#e0e0d8)}
+/* De papieren onder een schip: commercial invoice, packing list. */
+.so-docs{margin-top:12px;padding:12px 14px;background:#fafaf7;border:1px solid var(--border,#e0e0d8);border-radius:8px}
+.so-doc{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;padding:5px 0;border-bottom:1px solid #f0f0ea}
+.so-doc:last-child{border-bottom:0}
+.so-doc a{color:var(--fonteyn-green,#144734);font-weight:600;font-size:13px;text-decoration:none;cursor:pointer}
+.so-doc a:hover{text-decoration:underline}
 .so-fkop{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px}
 .so-fkop h3{margin:0 0 4px;font-size:15px;color:#144734}
 .so-fkop p{margin:0;font-size:12.5px;color:#6b7280;line-height:1.5}
@@ -526,7 +532,7 @@
       <p class="lead" style="font-size:12px;margin:8px 0" id="shipUpdated"></p>
       <div class="tablewrap">
         <table class="grid">
-          <thead><tr><th>Schip / reis</th><th>Trackingreferentie</th><th>Spa's</th><th>Status / voortgang</th><th>ETA (aankomst NL)</th><th></th></tr></thead>
+          <thead><tr><th>Schip / reis</th><th>Trackingreferentie</th><th>Spa's</th><th>Status / voortgang</th><th>ETA (aankomst NL)</th><th>Documenten</th><th></th></tr></thead>
           <tbody id="shipBody"></tbody>
         </table>
       </div>
@@ -2237,6 +2243,48 @@ async function loadSchepen(){
   renderSchepen();
   renderFabrikanten();
 }
+/* ── De papieren bij een schip bewaren ──────────────────────────────────
+   Chantal wil de commercial invoice en de packing list terug kunnen zien bij
+   Schepen & ontvangst. Tot nu toe werd een upload uitgelezen en daarna
+   weggegooid: de regels bleven, het papier niet.
+
+   Het bestand gaat onder een eigen naam naar de worker; bij het schip komt
+   alleen een verwijzing te staan. De naam bevat de scheepsreferentie zodat
+   twee schepen met hetzelfde bestandsnaampje elkaar niet overschrijven. */
+const SCHIP_BESTAND_URL="https://fonteyn-data-store.g-mulder.workers.dev/voorraad/schip/bestand";
+function schipBestandsnaam(ref,naam){
+  const schoon=(s)=>String(s||"").toLowerCase().replace(/[^a-z0-9._-]+/g,"-").replace(/^-+|-+$/g,"").slice(0,60);
+  const ext=(naam.split(".").pop()||"dat").toLowerCase().replace(/[^a-z0-9]/g,"");
+  return "schepen/"+schoon(ref)+"/"+schoon(naam.replace(/\.[^.]*$/,""))+"."+ext;
+}
+async function bewaarSchipBestand(ref,file,soort){
+  const id=schipBestandsnaam(ref,file.name);
+  const r=await fetch(SCHIP_BESTAND_URL+"?id="+encodeURIComponent(id),{
+    method:"PUT",headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH},body:await file.arrayBuffer()});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok||!j.ok) throw new Error(j.error||("HTTP "+r.status));
+  return {id,naam:file.name,soort:soort||"commercial-invoice",grootte:file.size,
+          ts:new Date().toISOString(),door:(localStorage.getItem(EMAIL_KEY)||"")};
+}
+/* Een bewaard document openen. Rechtstreeks linken kan niet: de worker wil de
+   teamsleutel in een kop zien, en die past niet in een adresbalk. Dus ophalen
+   en als blob in een nieuw tabblad. */
+async function openSchipDocument(a){
+  const oud=a.textContent; a.textContent="bezig…";
+  try{
+    const r=await fetch(SCHIP_BESTAND_URL+"?id="+encodeURIComponent(a.dataset.id),
+      {headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    window.open(URL.createObjectURL(await r.blob()),"_blank");
+  }catch(e){ alert("Kon het document niet openen: "+e.message); }
+  a.textContent=oud;
+}
+// Eén verwijzing bij een schip zetten; dezelfde naam tweemaal wordt vervangen.
+function zetSchipDocument(rec,doc){
+  rec.documenten=(rec.documenten||[]).filter(d=>d.id!==doc.id);
+  rec.documenten.push(doc);
+  return rec;
+}
 async function saveSchepen(){
   shipsData.updated=new Date().toISOString();
   const r=await fetch(SHIPS_URL,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
@@ -2341,9 +2389,35 @@ function renderSchepen(){
       "<td>"+spas+"</td>"+
       "<td>"+trackStatusCell(s.track)+"</td>"+
       "<td><input type='date' class='shipEta' data-i='"+i+"' value='"+esc(s.eta||"")+"' style='font-size:12.5px'></td>"+
+      // De papieren bij dit schip. Ze staan hier zodat Chantal de packing list
+      // kan toevoegen op de plek waar ze het schip toch al bijwerkt; bij
+      // Schepen & ontvangst zijn ze daarna terug te zien.
+      "<td><div style='display:flex;flex-direction:column;gap:5px;align-items:flex-start'>"+
+        ((s.documenten||[]).map(d=>
+          "<a href='#' class='schipDoc' data-id='"+esc(d.id)+"' style='font-size:11.5px'>"+esc(d.naam)+"</a>").join("")||
+          "<span style='font-size:11.5px;color:var(--muted)'>geen</span>")+
+        "<label class='btn sm' style='cursor:pointer'>+ document"+
+          "<input type='file' class='schipDocIn' data-i='"+i+"' accept='.pdf,.xls,.xlsx,.docx,.csv,.txt,.jpg,.jpeg,.png' style='display:none'></label>"+
+      "</div></td>"+
       "<td><button class='rmv delShip' data-i='"+i+"'>✕ verwijder</button></td>"+
     "</tr>";
-  }).join("") || "<tr><td colspan='6' style='color:var(--muted)'>Nog geen schepen. Upload een commercial invoice.</td></tr>";
+  }).join("") || "<tr><td colspan='7' style='color:var(--muted)'>Nog geen schepen. Upload een commercial invoice.</td></tr>";
+  // Een document erbij zetten: packing list, of wat er verder bij dit schip hoort.
+  document.querySelectorAll(".schipDocIn").forEach(inp=>inp.addEventListener("change",async()=>{
+    const f=inp.files&&inp.files[0]; if(!f) return;
+    const s=shipsData.ships[Number(inp.dataset.i)];
+    const soort=/pack/i.test(f.name)?"packing-list":(/invoice|^ci/i.test(f.name)?"commercial-invoice":"document");
+    setStatus("","Bezig met opslaan van "+f.name+"…");
+    try{
+      zetSchipDocument(s,await bewaarSchipBestand(s.ref||s.vessel||"schip",f,soort));
+      await saveSchepen(); renderSchepen();
+      setStatus("ok",f.name+" bewaard bij "+(s.vessel||s.ref)+" — ook zichtbaar bij Schepen & ontvangst.");
+      try{ if(window.fpLog) window.fpLog("schip-document-toegevoegd",(s.vessel||s.ref||"schip")+": "+f.name); }catch(e){}
+    }catch(e){ setStatus("bad","Opslaan mislukt: "+e.message); }
+  }));
+  document.querySelectorAll(".schipDoc").forEach(a=>a.addEventListener("click",async(e)=>{
+    e.preventDefault(); await openSchipDocument(a);
+  }));
   document.querySelectorAll(".shipEta").forEach(inp=>inp.addEventListener("change",async()=>{
     try{ const _s=shipsData.ships[Number(inp.dataset.i)]; if(window.fpLog) window.fpLog("schip-eta-gewijzigd",(_s&&(_s.vessel||_s.ref)||"schip")+" → "+(inp.value?datumNL(inp.value):"leeg")); }catch(e){}
     shipsData.ships[Number(inp.dataset.i)].eta=inp.value;
@@ -2629,6 +2703,13 @@ async function handleCIUpload(files,statusId){
       // parser 2 = kent ook de PP-codes van Passion Devine. Schepen die met een
       // oudere versie zijn ingelezen missen die spa's en moeten één keer opnieuw.
       const rec={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,models:ship.models,modelColors:ship.modelColors,specials:ship.specials,total:ship.total,eta,parser:2};
+      // De papieren van het schip dat we vervangen blijven staan.
+      if(idx>=0) rec.documenten=(shipsData.ships[idx].documenten||[]).slice();
+      // Het bestand zelf bewaren, zodat het bij Schepen & ontvangst terug te
+      // zien is. Mislukt dat, dan gaat de rest gewoon door - de regels zijn
+      // belangrijker dan het plaatje erbij.
+      try{ zetSchipDocument(rec,await bewaarSchipBestand(ship.ref,file,"commercial-invoice")); }
+      catch(e){ console.warn("[schepen] bestand bewaren faalde:",e); }
       if(idx>=0) shipsData.ships[idx]=rec; else shipsData.ships.push(rec);
       for(const [k,v] of Object.entries(ship.unmapped)) allUnmapped[k]=(allUnmapped[k]||0)+v;
       added++;

@@ -23,6 +23,7 @@
   var BASIS = "https://fonteyn-data-store.g-mulder.workers.dev";
   var cfg = null, voorstel = null, doel = null, bezig = false;
   var open = {};
+  var docsOpen = {};   // per schip: staat het documentenblok open
 
   function el(tag, klas, tekst) {
     var e = document.createElement(tag);
@@ -130,6 +131,20 @@
     toon.addEventListener("click", function () { open[s.ref] = !open[s.ref]; teken(); });
     knoppen.appendChild(toon);
 
+    /* De papieren bij dit schip. Chantal, video 12 aug 2026: "naast Lading
+       tonen wil ik een tegel met documenten, dan is de commercial invoice en
+       de packing list die we eerder via Schepen hebben geüpload zichtbaar."
+       Toevoegen gebeurt bij Schepen; hier zijn ze alleen te lezen. */
+    var docs = s.documenten || [];
+    var docKnop = el("button", "so-knop licht",
+      "Documenten" + (docs.length ? " (" + docs.length + ")" : ""));
+    docKnop.type = "button";
+    docKnop.title = docs.length
+      ? "De commercial invoice en packing list van dit schip."
+      : "Nog geen papieren bij dit schip. Voeg ze toe bij Schepen.";
+    docKnop.addEventListener("click", function () { docsOpen[s.ref] = !docsOpen[s.ref]; teken(); });
+    knoppen.appendChild(docKnop);
+
     if (cfg.magWijzigen && s.raak > 0) {
       var eta = el("button", "so-knop licht", "Aankomst bijwerken");
       eta.type = "button";
@@ -148,7 +163,48 @@
     d.appendChild(rij);
 
     if (open[s.ref]) d.appendChild(tabel(s));
+    if (docsOpen[s.ref]) d.appendChild(documentenLijst(s));
     return d;
+  }
+
+  /* De papieren onder de kaart. Openen gaat via de worker met de teamsleutel
+     in een kop - een gewone link zou een 401 opleveren - dus ophalen en als
+     blob in een nieuw tabblad. */
+  var BESTAND_URL = BASIS + "/voorraad/schip/bestand";
+  var SOORT_NAAM = { "commercial-invoice": "Commercial invoice", "packing-list": "Packing list", "document": "Document" };
+  function documentenLijst(s) {
+    var wrap = el("div", "so-docs");
+    var docs = s.documenten || [];
+    if (!docs.length) {
+      wrap.appendChild(el("p", "so-meta klein",
+        "Nog geen papieren bij dit schip. Ze komen hier vanzelf te staan zodra de commercial invoice " +
+        "bij Schepen is geüpload; een packing list kun je daar met de knop “+ document” toevoegen."));
+      return wrap;
+    }
+    docs.forEach(function (doc) {
+      var r = el("div", "so-doc");
+      var a = el("a", null, doc.naam);
+      a.href = "#";
+      a.addEventListener("click", function (e) { e.preventDefault(); opendoc(a, doc); });
+      r.appendChild(a);
+      r.appendChild(el("span", "so-meta klein",
+        (SOORT_NAAM[doc.soort] || "Document") +
+        (doc.grootte ? "  ·  " + Math.max(1, Math.round(doc.grootte / 1024)) + " KB" : "") +
+        (doc.ts ? "  ·  " + nlDatum(doc.ts) : "") +
+        (doc.door ? "  ·  " + String(doc.door).split("@")[0] : "")));
+      wrap.appendChild(r);
+    });
+    return wrap;
+  }
+  async function opendoc(a, doc) {
+    var oud = a.textContent; a.textContent = "bezig…";
+    try {
+      var r = await fetch(BESTAND_URL + "?id=" + encodeURIComponent(doc.id),
+        { headers: { "X-Fonteyn-Auth": cfg.teamKey } });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      window.open(URL.createObjectURL(await r.blob()), "_blank");
+    } catch (e) { alert("Kon het document niet openen: " + (e.message || e)); }
+    a.textContent = oud;
   }
 
   function tabel(s) {
