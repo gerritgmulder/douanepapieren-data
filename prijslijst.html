@@ -1,16 +1,18 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
+<!-- Wie hier binnen mag staat in toegang.js, dezelfde lijst als het dashboard. -->
+<script src="toegang.js"></script>
 <script>
 /* fpToegangscontrole — deze tegel is niet voor iedereen. Op het dashboard staat
    hij al verborgen, maar de app heeft een terug/vooruit-history (swipe): een
    pagina die een vórige gebruiker opende is anders opnieuw te bereiken. Daarom
    controleert elke tegel het ook zelf, vóórdat er iets geladen wordt. */
 (function(){
-  var TOEGANG = ["gerrit@fonteyn.nl","gerrit","manon@fonteyn.nl","manon","fonteyn.manon","dolf@fonteyn.nl","fonteyn.dolf","don@fonteyn.nl","fonteyn.don","arno@fonteyn.nl","fonteyn.arno","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"];
+  var TOEGANG = window.fpToegang ? window.fpToegang.set("logistiek") : null;
   var email = (localStorage.getItem("fp.email")||"").toLowerCase();
   if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
-  if (TOEGANG.indexOf(email) >= 0) return;
+  if (TOEGANG && TOEGANG.has(email)) return;
   window.fpGeenToegang = true;
   try {
     var k = localStorage.getItem("fp.teamkey")||"";

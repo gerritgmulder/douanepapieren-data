@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <title>Fonteyn Dashboard</title>
+<!-- Wie welke tegel mag zien staat in toegang.js, één lijst voor het dashboard
+     én voor de tegels zelf. Moet vóór alles laden: de tegels hieronder worden
+     op basis daarvan getoond of verborgen. -->
+<script src="toegang.js"></script>
 <script src="taal.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -677,68 +681,45 @@ function prettyNameFromEmail(email) {
     .join(" ");
 }
 
-// Welke logins mogen de logistieke tegels (Douane / Labels / Transport) zien.
-// De tools zelf zijn niet server-gated (iedereen met Logic4-login zou ze kunnen
-// openen), dus dit is puur om het dashboard schoon te houden voor mensen die
-// niets met logistiek doen. Server-side gating zit op Logic4-niveau zelf.
-const LOGISTIEK_EMAILS = new Set([
-  "gerrit@fonteyn.nl",     "gerrit",
-  "manon@fonteyn.nl",      "manon",   "fonteyn.manon",
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "don@fonteyn.nl",        "fonteyn.don",
-  "arno@fonteyn.nl",       "fonteyn.arno",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+/* ─── De toegangslijsten ─────────────────────────────────────────────────
+   Ze staan in toegang.js, één keer voor het hele dashboard en voor de tegels
+   zelf. Iemand toegang geven is daar één naam bijschrijven.
 
-/* Douanepapieren en Inkomende goederen zijn er ook voor mensen die alleen de
-   papieren en de binnenkomst doen, en niet het laden of de prijslijsten. Die
-   staan hier apart, zodat toegang tot de papieren niet ongemerkt ook Transport
-   laden en Prijslijst maken opent (Gerrit, 12 aug 2026: Nomi). */
-const PAPIEREN_EXTRA = new Set([
-  "nomi@fonteyn.nl",       "nomi",    "fonteyn.nomi",
-]);
+   Ontbreekt dat bestand, dan valt hier alles stil. Dat is met opzet: het
+   alternatief is een dashboard dat gokt wie wat mag zien. Wel eerst even
+   zeggen wat er aan de hand is, want een leeg scherm helpt niemand. */
+if (!window.fpToegang) {
+  document.body.innerHTML =
+    "<main style='font-family:Montserrat,sans-serif;max-width:520px;margin:14vh auto;background:#fff;" +
+    "border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center'>" +
+    "<h1 style='color:#144734;font-size:20px;margin:0 0 10px'>Even herstarten</h1>" +
+    "<p style='color:#6b7280;font-size:14px;line-height:1.5'>Het dashboard mist een bestand dat bepaalt wie " +
+    "welke tegel mag zien. Sluit de app helemaal af en start hem opnieuw; dan wordt het opgehaald.</p>" +
+    "<p style='color:#6b7280;font-size:12.5px'>Blijft dit staan, geef het dan door aan Gerrit.</p></main>";
+  throw new Error("toegang.js ontbreekt");
+}
+
+// Welke logins mogen de logistieke tegels (Transport laden / Prijslijst maken)
+// zien. De tools zelf zijn niet server-gated (iedereen met Logic4-login zou ze
+// kunnen openen), dus dit is puur om het dashboard schoon te houden voor mensen
+// die niets met logistiek doen. Server-side gating zit op Logic4-niveau zelf.
+const LOGISTIEK_EMAILS = fpToegang.set("logistiek");
 
 // Welke logins mogen de Personeel-tegel zien.
 // Chantal + Manon zijn de dagelijkse beheerders; admins ook toegang.
 // Server (server/index.js → PERSONEEL_FULL) doet dezelfde check.
-const PERSONEEL_EMAILS = new Set([
-  "chantal@fonteyn.nl",    "chantal", "fonteyn.chantal",
-  "manon@fonteyn.nl",      "manon",   "fonteyn.manon",
-  "gerrit@fonteyn.nl",     "gerrit",
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "don@fonteyn.nl",        "fonteyn.don",
-  "arno@fonteyn.nl",       "fonteyn.arno",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const PERSONEEL_EMAILS = fpToegang.set("personeel");
 
 // Welke logins mogen de Bankkoppeling-tegel zien.
 // Finance-team (Osman/Rowan/Rico/Reinier) doet dit dagelijks; admins
 // Dolf/Don/Arno/Gerrit + bot ook toegang voor reviews.
-const BANKKOPPELING_EMAILS = new Set([
-  "osman@fonteyn.nl",      "osman",   "fonteyn.osman",
-  "rowan@fonteyn.nl",      "rowan",   "fonteyn.rowan",
-  "rico@fonteyn.nl",       "rico",    "fonteyn.rico",
-  "reinier@fonteyn.nl",    "reinier", "fonteyn.reinier",
-  // Reinier K. logt in als Reinier.K in Logic4 en heeft een eigen adres met
-  // punt erin. Dat is een ander account dan "reinier" hierboven, dus het staat
-  // er apart bij (Gerrit, 12 aug 2026).
-  "reinier.k@fonteyn.nl",  "reinier.k", "fonteyn.reinier.k",
-  "gerrit@fonteyn.nl",     "gerrit",
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "don@fonteyn.nl",        "fonteyn.don",
-  "arno@fonteyn.nl",       "fonteyn.arno",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const BANKKOPPELING_EMAILS = fpToegang.set("bankkoppeling");
 
 // Welke logins mogen de Stuurcijfers-tegel zien.
 // Server doet dezelfde check; dit hier is alleen voor de UI.
 // We accepteren zowel het e-mailadres ALS de Logic4-username (bv. "fonteyn.dolf"),
 // zodat het werkt ongeacht in welk format Logic4 die gebruiker laat inloggen.
-const STUURCIJFERS_EMAILS = new Set([
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const STUURCIJFERS_EMAILS = fpToegang.set("stuurcijfers");
 
 // Welke logins mogen de Geld-goederenbeweging zien.
 // Dit is de volledige financiële keten van het bedrijf: inkoop, voorraad,
@@ -746,207 +727,75 @@ const STUURCIJFERS_EMAILS = new Set([
 // dit met de accountant afgesproken), Osman (financiën) en Gerrit (admin).
 // Uitbreiden kan altijd — Gerriette ligt voor de hand zodra dat gewenst is.
 // geldgoederen.html doet client-side exact dezelfde controle.
-const GELDGOEDEREN_EMAILS = new Set([
-  "gerrit@fonteyn.nl",     "gerrit",   "fonteyn.gerrit",
-  "dolf@fonteyn.nl",       "fonteyn.dolf", "dolf",
-  "osman@fonteyn.nl",      "osman",    "fonteyn.osman",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const GELDGOEDEREN_EMAILS = fpToegang.set("geldgoederen");
 
 // Welke logins mogen de Koeien-tegel zien.
 // Alleen Dolf zelf, Gerrit (admin) en Fonteynbot.
 // koeien.html doet client-side dezelfde check; data zit centraal in
 // de Cloudflare Worker (data-worker), bucket "koeien".
-const KOEIEN_EMAILS = new Set([
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "gerrit@fonteyn.nl",     "gerrit",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const KOEIEN_EMAILS = fpToegang.set("koeien");
 
 // Welke logins mogen de Rapportage-tegel zien.
 // Management-niveau: Gerrit, Don, Arno, Dolf + Fonteynbot.
-const RAPPORTAGE_EMAILS = new Set([
-  "gerrit@fonteyn.nl",     "gerrit",
-  "don@fonteyn.nl",        "fonteyn.don",
-  "arno@fonteyn.nl",       "fonteyn.arno",
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const RAPPORTAGE_EMAILS = fpToegang.set("rapportage");
 
 // Welke logins mogen de Bol.com-koppeling-tegel zien.
 // Don plaatst de Bol-orders in Logic4; Osman doet de memoriaal-boekingen.
 // Gerrit en Fonteynbot zijn admin-overall.
 // Retouren-tegel — logistiek + sales + management.
-const RETOUREN_EMAILS = new Set([
-  "don@fonteyn.nl",        "fonteyn.don",
-  "arno@fonteyn.nl",       "fonteyn.arno",
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "manon@fonteyn.nl",      "manon",  "fonteyn.manon",
-  "nomi@fonteyn.nl",       "nomi",   "fonteyn.nomi",
-  "gerrit@fonteyn.nl",     "gerrit",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const RETOUREN_EMAILS = fpToegang.set("retouren");
 
 // Mollie — dezelfde mensen als de bankkoppeling: zij boeken de betalingen.
-const MOLLIE_EMAILS = new Set([
-  "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
-  "rowan@fonteyn.nl",      "rowan",  "fonteyn.rowan",
-  "rico@fonteyn.nl",       "rico",   "fonteyn.rico",
-  "reinier@fonteyn.nl",    "reinier","fonteyn.reinier",
-  "reinier.k@fonteyn.nl",  "reinier.k", "fonteyn.reinier.k",
-  "gerrit@fonteyn.nl",     "gerrit",
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const MOLLIE_EMAILS = fpToegang.set("mollie");
 
-const BOL_EMAILS = new Set([
-  "don@fonteyn.nl",        "fonteyn.don",
-  "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
-  "reinier.k@fonteyn.nl",  "reinier.k", "fonteyn.reinier.k",
-  "gerrit@fonteyn.nl",     "gerrit",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const BOL_EMAILS = fpToegang.set("bol");
 
 // Dealerportaal-beheer — Arno, Don, Chantal + admins.
-const DEALERPORTAAL_EMAILS = new Set([
-  "arno@fonteyn.nl",       "fonteyn.arno",  "arno",
-  "don@fonteyn.nl",        "fonteyn.don",   "don",
-  "chantal@fonteyn.nl",    "chantal",  "fonteyn.chantal",
-  "gerrit@fonteyn.nl",     "gerrit",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const DEALERPORTAAL_EMAILS = fpToegang.set("dealerportaal");
 
 // Passion Partners — het publieke portaal openen in de browser. Kijken mag
 // ruimer dan beheren: iedereen die met spa's/partners werkt, plus Dolf.
-const PARTNERPORTAAL_KIJK = new Set([
-  ...DEALERPORTAAL_EMAILS,
-  "dolf@fonteyn.nl",       "fonteyn.dolf",  "dolf",
-  "manon@fonteyn.nl",      "manon",    "fonteyn.manon",
-  // Marketing kijkt mee in het portaal: Gretha maakt de documenten en
-  // specsheets die daar terechtkomen (Gerrit, 6 aug 2026).
-  "gretha@fonteyn.nl",     "gretha",   "fonteyn.gretha",
-]);
+const PARTNERPORTAAL_KIJK = fpToegang.set("partnerportaal-kijk");
 
 // Voorraadbeheer-tegel — sales/logistiek: Dolf, Arno, Chantal, Manon + admins,
 // plus de spa-adviseurs (die zien in de tegel zélf alléén de tabs Particulier/
 // Partner/Partner containers, alleen-lezen). Spa-service volgt nog.
-const VOORRAAD_EMAILS = new Set([
-  "dolf@fonteyn.nl",       "fonteyn.dolf",  "dolf",
-  "arno@fonteyn.nl",       "fonteyn.arno",  "arno",
-  "fonteyn.gerrit",
-  "chantal@fonteyn.nl",    "chantal",  "fonteyn.chantal",
-  "manon@fonteyn.nl",      "manon",    "fonteyn.manon",
-  "gerrit@fonteyn.nl",     "gerrit",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-  // Onderstaande groep ziet binnen de tegel alléén Particulier en Partner;
-  // dat onderscheid regelt voorraad.html zelf (KLANT_WIJZIG / KLANT_LEES).
-  // Mogen daar wijzigen (Chantal, 5 aug 2026):
-  "gerwin@fonteyn.nl",     "gerwin",   "fonteyn.gerwin",
-  "kevin@fonteyn.nl",      "kevin",    "fonteyn.kevin",
-  "bertjan@fonteyn.nl",    "bertjan",  "fonteyn.bertjan",
-  // Bart van den Brink = 'Bart.vdB' in Logic4. 'bart@fonteyn.nl' en
-  // 'fonteyn.Bart' zijn daar ZZ-OUD én van een ándere Bart (Bart L.) — die
-  // horen hier dus niet. Niet te verwarren met Bert van de Berg hieronder.
-  "bart.vdb",              "bart.vdb@fonteyn.nl",
-  // Alleen kijken. Inlognamen uit de Logic4-gebruikerslijst, niet geraden:
-  // Yves 2017880, Luis Fernando 2016826, Bert van de Berg 2001495,
-  // Patrick 2001512 (die logt in onder de oude naam Fonteyn.MaartenS).
-  "edwin@fonteyn.nl",      "edwin",    "fonteyn.edwin",
-  "dali@fonteyn.nl",       "dali",     "fonteyn.dali",
-  "ahmed@fonteyn.nl",      "ahmed",    "fonteyn.ahmed",
-  "yves@fonteyn.nl",       "yves",     "fonteyn.yves",
-  "luis@fonteyn.nl",       "luis",     "fonteyn.luis",
-  "fonteyn.bert",          "bert@fonteyn.nl",
-  "fonteyn.maartens",
-]);
+const VOORRAAD_EMAILS = fpToegang.set("voorraad");
 
 // Amerika-tegel (Houston/Texas, Passion Spas USA) — apart 'bedrijf', draait op
 // QuickBooks i.p.v. Logic4. Chantal, Dolf, Gerrit, Osman (finance) + Fonteynbot.
-const AMERIKA_EMAILS = new Set([
-  "chantal@fonteyn.nl",    "chantal",  "fonteyn.chantal",
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "osman@fonteyn.nl",      "osman",    "fonteyn.osman",
-  "gerrit@fonteyn.nl",     "gerrit",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const AMERIKA_EMAILS = fpToegang.set("amerika");
 
 // Activiteitenlogboek — management-oversight. ALLEEN Gerrit, Dolf en Fonteynbot.
-const ACTIVITEIT_EMAILS = new Set([
-  "gerrit@fonteyn.nl",     "gerrit",
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const ACTIVITEIT_EMAILS = fpToegang.set("activiteit");
 
 // Prijslijsten fabrikanten — de prijsafspraken met alle leveranciers en
 // fabrieken op één plek. Gretha beheert ze; zij heeft ze allemaal.
 // prijslijsten-fabrikanten.html heeft dezelfde lijst nog een keer, om ook het
 // rechtstreeks openen van het adres te bewaken. Allebei bijwerken dus.
-const PRIJSLIJSTEN_EMAILS = new Set([
-  "gretha@fonteyn.nl",     "gretha",   "fonteyn.gretha",
-  "gerrit@fonteyn.nl",     "gerrit",   "fonteyn.gerrit",
-  "dolf@fonteyn.nl",       "fonteyn.dolf",  "dolf",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const PRIJSLIJSTEN_EMAILS = fpToegang.set("prijslijsten");
 
 // Container laden — inkoop en logistiek. Chantal boekt de containers bij de
 // fabriek, Arno en Manon plannen wat eruit komt. container-laden.html doet
 // client-side dezelfde controle; allebei bijwerken dus.
-const CONTAINERLADEN_EMAILS = new Set([
-  "chantal@fonteyn.nl",    "chantal",  "fonteyn.chantal",
-  "arno@fonteyn.nl",       "arno",     "fonteyn.arno",
-  "manon@fonteyn.nl",      "manon",    "fonteyn.manon",
-  "dolf@fonteyn.nl",       "dolf",     "fonteyn.dolf",
-  "gerrit@fonteyn.nl",     "gerrit",   "fonteyn.gerrit",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const CONTAINERLADEN_EMAILS = fpToegang.set("containerladen");
 
 // Specificatiesheets — marketing. Gretha en Demi maken de sheets; admins mee.
-const SPECSHEETS_EMAILS = new Set([
-  "gretha@fonteyn.nl",     "gretha",   "fonteyn.gretha",
-  "demi@fonteyn.nl",       "demi",     "fonteyn.demi",
-  "gerrit@fonteyn.nl",     "gerrit",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const SPECSHEETS_EMAILS = fpToegang.set("specsheets");
 
 // Partner-activiteitenlogboek — wat dealers op Passion Partners doen.
 // Gerrit, Dolf, Arno, Don en Chantal (sales/beheer) + Fonteynbot.
-const PARTNERACTIVITEIT_EMAILS = new Set([
-  "gerrit@fonteyn.nl",     "gerrit",
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "arno@fonteyn.nl",       "fonteyn.arno",  "arno",
-  "don@fonteyn.nl",        "fonteyn.don",   "don",
-  "chantal@fonteyn.nl",    "chantal",  "fonteyn.chantal",
-  "gretha@fonteyn.nl",     "gretha",   "fonteyn.gretha",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const PARTNERACTIVITEIT_EMAILS = fpToegang.set("partneractiviteit");
 
 // Welke logins mogen de Orderstatus-tegel zien.
 // Server (server/index.js → ORDERSTATUS_ALLOWED) doet dezelfde check.
-const ORDERSTATUS_EMAILS = new Set([
-  "gerrit@fonteyn.nl",     "gerrit",  "Gerrit".toLowerCase(),
-  "don@fonteyn.nl",        "fonteyn.don",
-  "arno@fonteyn.nl",       "fonteyn.arno",
-  "dolf@fonteyn.nl",       "fonteyn.dolf",
-  "osman@fonteyn.nl",      "osman",  "fonteyn.osman",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const ORDERSTATUS_EMAILS = fpToegang.set("orderstatus");
 
 // Welke logins mogen de Eikensingel-tegel zien.
 // Server splitst dit verder uit in 'full' (Fransje/Danique/Gerrit/Bot) die
 // alles mogen, en 'booker' die alleen mogen lezen + boekingen toevoegen.
 // De tegel zelf is voor beide rollen zichtbaar.
-const EIKENSINGEL_EMAILS = new Set([
-  "fransje@fonteyn.nl",    "fransje",  "fonteyn.fransje",
-  "danique@fonteyn.nl",    "danique",  "fonteyn.danique",
-  "rosalie@fonteyn.nl",    "rosalie",  "fonteyn.rosalie",
-  "evelinde@fonteyn.nl",   "evelinde", "fonteyn.evelinde",
-  "fabiola@fonteyn.nl",    "fabiola",  "fonteyn.fabiola",
-  "julia@fonteyn.nl",      "julia",    "fonteyn.julia",
-  "karina@fonteyn.nl",     "karina",   "fonteyn.karina",
-  "gerrit@fonteyn.nl",     "gerrit",
-  "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
-]);
+const EIKENSINGEL_EMAILS = fpToegang.set("eikensingel");
 
 // ─── Team-sleutel (SAFETY) ──────────────────────────────────────────
 // De gedeelde opslag (Cloudflare KV) gebruikt een team-sleutel die NIET in de
@@ -1047,7 +896,7 @@ function showDashboard(email) {
   const lc = (email || "").toLowerCase();
   // Logistieke tegels (Douane / Labels / Transport / Prijslijst) alleen voor het logistiek-team
   const isLogistiek = LOGISTIEK_EMAILS.has(lc);
-  const magPapieren = isLogistiek || PAPIEREN_EXTRA.has(lc);
+  const magPapieren = fpToegang.mag("papieren", lc);
   el("tileDouane").classList.toggle("hidden", !magPapieren);
   el("tileLabels").classList.toggle("hidden", !magPapieren);
   el("tileTransport").classList.toggle("hidden", !isLogistiek);

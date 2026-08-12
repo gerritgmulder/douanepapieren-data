@@ -2,6 +2,8 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
+<!-- Wie hier binnen mag staat in toegang.js, dezelfde lijst als het dashboard. -->
+<script src="toegang.js"></script>
 <title>Retouren — Fonteyn Dashboard</title>
 <script src="taal.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
@@ -243,16 +245,11 @@ const el = (id) => document.getElementById(id);
 
 // ── Sessie / toegang ──
 function getSession() { return localStorage.getItem(SESSION_KEY) || ""; }
-const ALLOWED = new Set([
-  "don@fonteyn.nl","fonteyn.don","arno@fonteyn.nl","fonteyn.arno",
-  "dolf@fonteyn.nl","fonteyn.dolf","manon@fonteyn.nl","manon","fonteyn.manon",
-  "nomi@fonteyn.nl","nomi","fonteyn.nomi",
-  "gerrit@fonteyn.nl","gerrit","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot",
-]);
+const ALLOWED = window.fpToegang ? window.fpToegang.set("retouren") : null;
 (function boot() {
   if (!getSession()) { location.href = "dashboard.html"; return; }
   const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
-  if (!ALLOWED.has(email)) {
+  if (!ALLOWED || !ALLOWED.has(email)) {
     document.body.innerHTML = "<main style='padding:40px;text-align:center;'><h1 style='color:#144734'>Geen toegang</h1>"
       + "<p>Retouren is voor Don, Arno, Dolf, Manon, Gerrit en Fonteynbot.</p>"
       + "<p>Ingelogd als <code>" + (email||"(onbekend)") + "</code>.</p><p><a href='dashboard.html'>← Dashboard</a></p></main>";
