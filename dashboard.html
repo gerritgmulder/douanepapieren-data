@@ -690,6 +690,14 @@ const LOGISTIEK_EMAILS = new Set([
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
 
+/* Douanepapieren en Inkomende goederen zijn er ook voor mensen die alleen de
+   papieren en de binnenkomst doen, en niet het laden of de prijslijsten. Die
+   staan hier apart, zodat toegang tot de papieren niet ongemerkt ook Transport
+   laden en Prijslijst maken opent (Gerrit, 12 aug 2026: Nomi). */
+const PAPIEREN_EXTRA = new Set([
+  "nomi@fonteyn.nl",       "nomi",    "fonteyn.nomi",
+]);
+
 // Welke logins mogen de Personeel-tegel zien.
 // Chantal + Manon zijn de dagelijkse beheerders; admins ook toegang.
 // Server (server/index.js → PERSONEEL_FULL) doet dezelfde check.
@@ -775,6 +783,7 @@ const RETOUREN_EMAILS = new Set([
   "arno@fonteyn.nl",       "fonteyn.arno",
   "dolf@fonteyn.nl",       "fonteyn.dolf",
   "manon@fonteyn.nl",      "manon",  "fonteyn.manon",
+  "nomi@fonteyn.nl",       "nomi",   "fonteyn.nomi",
   "gerrit@fonteyn.nl",     "gerrit",
   "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
 ]);
@@ -1038,8 +1047,9 @@ function showDashboard(email) {
   const lc = (email || "").toLowerCase();
   // Logistieke tegels (Douane / Labels / Transport / Prijslijst) alleen voor het logistiek-team
   const isLogistiek = LOGISTIEK_EMAILS.has(lc);
-  el("tileDouane").classList.toggle("hidden", !isLogistiek);
-  el("tileLabels").classList.toggle("hidden", !isLogistiek);
+  const magPapieren = isLogistiek || PAPIEREN_EXTRA.has(lc);
+  el("tileDouane").classList.toggle("hidden", !magPapieren);
+  el("tileLabels").classList.toggle("hidden", !magPapieren);
   el("tileTransport").classList.toggle("hidden", !isLogistiek);
   el("tilePrijslijst").classList.toggle("hidden", !isLogistiek);
   // Stuurcijfers-tegel alleen tonen voor de geautoriseerde e-mailadressen
