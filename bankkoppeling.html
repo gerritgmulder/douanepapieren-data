@@ -262,10 +262,12 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
           andere klant, dan gaat de regel bewust terug naar <i>controleren</i>.</li>
     </ul>
     <p style="margin: 0 0 14px; font-size: 13px; color: var(--muted); line-height: 1.55;">
-      Verzamelbetalingen worden apart gezet en niet gekoppeld: Mollie, Pay.nl, Stripe en
-      Shopify, en de dagafrekening van de pinautomaat. Die gaan over veel klanten tegelijk,
-      dus er is geen order om ze aan te hangen — ze horen op een tussenrekening.
-      Er wordt niets geboekt zolang jij niets aanvinkt.
+      Verzamelbetalingen gaan niet naar een order maar naar een grootboekrekening:
+      Mollie naar 1175, Pay.nl en de dagafrekening van de pinautomaat naar 2030, en
+      Stripe en Shopify naar 2100. Die gaan over veel klanten tegelijk, dus er ís geen
+      order om ze aan te hangen — dat is geen probleem maar een ander soort boeking, en
+      ze staan daarom ook op <i>zeker</i>. Ze komen onderaan in een memoriaal-voorstel
+      te staan. Er wordt niets geboekt zolang jij niets aanvinkt.
     </p>
     <label class="dropzone" id="dropzone">
       <input type="file" id="fileInput" accept=".sta,.940,.txt,.mt940,application/octet-stream,text/plain">
@@ -324,6 +326,34 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       Vink daarom aan wat je wilt boeken — één regel, een deel, of alles. Er wordt vastgelegd wie wat heeft geboekt.
     </p>
     <div id="actionStatus"></div>
+  </div>
+
+  <!-- De verzamelbetalingen. Die gaan niet via een order maar via een
+       memoriaal, en daar heeft Logic4 geen koppeling voor die wij mogen
+       gebruiken - dus hier staat het voorstel klaar om over te nemen. -->
+  <div class="card hidden" id="memoKaart">
+    <h3 style="margin:0 0 6px">Memoriaal-voorstel · verzamelbetalingen</h3>
+    <p class="muted" style="margin:0 0 12px;font-size:13px;line-height:1.55">
+      Deze regels horen niet bij één order maar op een grootboekrekening. Ze worden
+      <b>niet</b> door het dashboard geboekt: neem ze over in het memoriaal in Logic4,
+      of gebruik de knop hieronder om ze als regel te kopiëren.
+    </p>
+    <div style="overflow:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px" id="memoTabel">
+        <thead><tr>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border,#e5e7eb)">Datum</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border,#e5e7eb)">Soort</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border,#e5e7eb)">Grootboek</th>
+          <th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border,#e5e7eb)">Bedrag</th>
+          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border,#e5e7eb)">Omschrijving</th>
+        </tr></thead>
+        <tbody id="memoBody"></tbody>
+      </table>
+    </div>
+    <div class="row-flex" style="margin-top:12px;gap:8px;flex-wrap:wrap;align-items:center">
+      <button class="cta secondary" id="memoKopieer" type="button">📋 Kopieer als CSV</button>
+      <span class="muted" id="memoTotaal" style="font-size:12px"></span>
+    </div>
   </div>
 </main>
 
@@ -480,13 +510,33 @@ function classifyTx(tx) {
   if (/afrek\.? betaalautomaat|betaalautomaat|pinautomaat/.test(d)) return "pin";
   return "direct";
 }
-const TUSSEN_LABEL = { mollie: "Mollie 1220", paynl: "Pay.nl 2030", psp: "Stripe / Shopify", pin: "Pinautomaat" };
-const TUSSEN_UITLEG = {
-  mollie: "Verzamelbetaling van de betaaldienst. De losse orders zitten niet in de afschriftregel, dus dit moet handmatig worden uitgesplitst.",
-  paynl: "Verzamelbetaling van de betaaldienst. De losse orders zitten niet in de afschriftregel, dus dit moet handmatig worden uitgesplitst.",
-  psp: "Uitbetaling van de webshop-betaaldienst over meerdere bestellingen tegelijk. Niet aan één order te koppelen.",
-  pin: "Dagafrekening van de pinautomaat in de showroom. Gaat over meerdere klanten en hoort op de tussenrekening, niet op een order.",
+/* ─── Waar een verzamelbetaling heen gaat ─────────────────────────────────
+   Deze regels stonden als "niet te koppelen" in beeld en daar hield het op.
+   Dat was de verkeerde conclusie (Gerrit, 11 aug 2026): ze zijn wél te boeken,
+   alleen niet op een order maar op een grootboekrekening. Een dagafrekening
+   van de pinautomaat gaat over tien klanten tegelijk - daar ís geen order bij,
+   en dat is geen probleem maar een ander soort boeking.
+
+   De rekeningnummers komen van Osman en Gerrit uit het bevindingendocument;
+   ze staan hier hardop zodat niemand hoeft te raden waar het geld landt. */
+const TUSSEN = {
+  mollie: { label: "Mollie",           rekening: "1175",
+            uitleg: "Uitbetaling van Mollie over meerdere bestellingen tegelijk. Gaat naar grootboek 1175; de losse orders worden in de Mollie-tegel gekoppeld." },
+  paynl:  { label: "Pay.nl",           rekening: "2030",
+            uitleg: "Uitbetaling van Pay.nl over meerdere bestellingen tegelijk. Gaat naar de tussenrekening 2030." },
+  psp:    { label: "Stripe / Shopify", rekening: "2100",
+            uitleg: "Uitbetaling van de webshop-betaaldienst over meerdere bestellingen tegelijk. Gaat naar grootboek 2100." },
+  pin:    { label: "Pinautomaat",      rekening: "2030",
+            uitleg: "Dagafrekening van de pinautomaat in de showroom. Gaat over meerdere klanten en hoort op de tussenrekening 2030, net als Pay.nl." },
 };
+function tussenLabel(kind) {
+  const t = TUSSEN[kind];
+  return t ? t.label + " " + t.rekening : "Tussenrekening";
+}
+function tussenUitleg(kind) {
+  const t = TUSSEN[kind];
+  return t ? t.uitleg : "Hoort op een tussenrekening.";
+}
 
 // ─── Openstaande posten + koppelen ──────────────────────────────────
 // De koppellogica zelf staat in bank-matching.js, zodat hij op echte
@@ -612,15 +662,53 @@ function renderResults() {
   const tel = (st) => t.filter(x => x.kind === "direct" && x.match && x.match.status === st).length;
   $("summary").innerHTML =
     "<div class='stat'><div class='lbl'>Betalingen</div><div class='val'>" + t.length + "</div></div>" +
-    "<div class='stat'><div class='lbl'>Zeker</div><div class='val'>" + tel("zeker") + "</div></div>" +
+    // Een verzamelbetaling telt mee als zeker: er is geen twijfel over waar
+    // hij heen moet, alleen is dat een grootboekrekening en geen order.
+    "<div class='stat'><div class='lbl'>Zeker</div><div class='val'>" + (tel("zeker") + t.filter(x => x.kind !== "direct").length) + "</div></div>" +
     "<div class='stat warn'><div class='lbl'>Controleren</div><div class='val'>" + (tel("controleren") + tel("kandidaten") + tel("opzoeken")) + "</div></div>" +
     "<div class='stat bad'><div class='lbl'>Geen match</div><div class='val'>" + tel("geen") + "</div></div>" +
-    "<div class='stat tussen'><div class='lbl'>Tussenrekening</div><div class='val'>" + t.filter(x => x.kind !== "direct").length + "</div></div>";
+    "<div class='stat tussen'><div class='lbl'>Naar grootboek</div><div class='val'>" + t.filter(x => x.kind !== "direct").length + "</div></div>";
 
   const tbody = $("txBody");
   tbody.innerHTML = "";
   for (let i = 0; i < t.length; i++) tbody.appendChild(renderRow(t[i], i));
+  tekenMemoriaal();
   werkSelectieBij();
+}
+
+/* Het memoriaal-voorstel voor de verzamelbetalingen.
+
+   Waarom hier alleen een voorstel staat en geen knop die boekt: AddPayment van
+   Logic4 zet een betaling op een órder, en deze regels hebben er geen. Voor een
+   grootboekboeking is een memoriaal nodig, en of Logic4 dat via de koppeling
+   laat maken weet ik niet - dat is nooit uitgezocht. De Bol.com-tegel doet het
+   daarom al net zo: voorstel klaarzetten, mens neemt het over. Liever dat dan
+   een knop die iets anders doet dan hij belooft. */
+function memoRegels() {
+  return state.transactions.filter(x => x.kind !== "direct" && !x.geboekt).map(x => ({
+    datum: x.date || "",
+    soort: (TUSSEN[x.kind] || {}).label || "Tussenrekening",
+    rekening: (TUSSEN[x.kind] || {}).rekening || "",
+    bedrag: Number(x.amount) || 0,
+    omschrijving: (x.description || "").slice(0, 140),
+  }));
+}
+function tekenMemoriaal() {
+  const kaart = $("memoKaart"), body = $("memoBody");
+  if (!kaart || !body) return;
+  const r = memoRegels();
+  if (!r.length) { kaart.classList.add("hidden"); return; }
+  kaart.classList.remove("hidden");
+  body.innerHTML = r.map(x =>
+    "<tr>" +
+    "<td style='padding:6px 8px;border-bottom:1px solid #f3f4f6;white-space:nowrap'>" + escapeHtml(x.datum) + "</td>" +
+    "<td style='padding:6px 8px;border-bottom:1px solid #f3f4f6'>" + escapeHtml(x.soort) + "</td>" +
+    "<td style='padding:6px 8px;border-bottom:1px solid #f3f4f6'><b>" + escapeHtml(x.rekening) + "</b></td>" +
+    "<td style='padding:6px 8px;border-bottom:1px solid #f3f4f6;text-align:right;white-space:nowrap'>" + fmtEur(x.bedrag) + "</td>" +
+    "<td style='padding:6px 8px;border-bottom:1px solid #f3f4f6;color:var(--muted,#6b7280)'>" + escapeHtml(x.omschrijving) + "</td>" +
+    "</tr>").join("");
+  const som = r.reduce((n, x) => n + x.bedrag, 0);
+  $("memoTotaal").textContent = r.length + " regel" + (r.length === 1 ? "" : "s") + ", samen " + fmtEur(som) + ".";
 }
 
 function renderRow(tx, idx) {
@@ -631,8 +719,21 @@ function renderRow(tx, idx) {
     badge = "<span class='badge ok'>Geboekt</span>";
     info = "<div class='match-info'>" + escapeHtml(tx.geboekt) + "</div>";
   } else if (tx.kind !== "direct") {
-    badge = "<span class='badge tussen'>" + escapeHtml(TUSSEN_LABEL[tx.kind] || "Tussenrekening") + "</span>";
-    info = "<div class='match-info'>" + escapeHtml(TUSSEN_UITLEG[tx.kind] || "Tussenrekening.") + "</div>";
+    /* Wél zeker, alleen naar een grootboekrekening in plaats van naar een
+       order. Deze regels konden eerst niet aangevinkt worden en waren dus een
+       doodlopende weg: je zag wél "Mollie 1220" staan maar kon er niets mee
+       (Gerrit, 12 aug 2026). Ze zijn nu net zo goed te boeken, alleen als
+       memoriaalregel op de rekening die hier staat. Die rekening is aan te
+       passen; hij wordt onthouden per soort. */
+    badge = "<span class='badge tussen'>Zeker · grootboek</span>";
+    info = "<div class='match-info'>" + escapeHtml(tussenUitleg(tx.kind)) +
+      "<div style='margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap'>" +
+        "<span>Boeken op rekening</span>" +
+        "<input class='rekeningVeld' data-idx='" + idx + "' value='" + escapeHtml(rekeningVoor(tx.kind)) + "' " +
+          "inputmode='numeric' style='width:78px;padding:3px 6px;border:1px solid var(--border,#d5d9e0);border-radius:6px;font:inherit;font-size:12px'>" +
+        "<span style='color:var(--muted,#6b7280)'>" + escapeHtml(rekeningNaam(rekeningVoor(tx.kind))) + "</span>" +
+      "</div></div>";
+    vinkje = "<input type='checkbox' class='kiesRij' data-idx='" + idx + "'" + (tx.kies ? " checked" : "") + ">";
   } else if (!tx.match) {
     badge = "<span class='badge pending'>Bezig…</span>";
   } else {
@@ -687,8 +788,53 @@ function renderRow(tx, idx) {
 }
 
 // ─── Selectie ───────────────────────────────────────────────────────
+/* ─── De grootboekrekening per soort ─────────────────────────────────
+   De rekeningnummers komen van Osman en Gerrit (bevindingendocument, 11 aug
+   2026): de pinautomaat en Pay.nl op 2030, Stripe/Shopify op 2100, Mollie op
+   1220. Ze staan hier als startwaarde en niet als wet - je kunt ze per regel
+   overtypen en dan onthoudt hij dat voor dat soort. */
+const REKENING_STANDAARD = { mollie: "1220", paynl: "2030", psp: "2100", pin: "2030" };
+function rekeningVoor(soort) {
+  try { return localStorage.getItem("bank.rek." + soort) || REKENING_STANDAARD[soort] || ""; }
+  catch (e) { return REKENING_STANDAARD[soort] || ""; }
+}
+function zetRekening(soort, nr) {
+  try { localStorage.setItem("bank.rek." + soort, String(nr || "").trim()); } catch (e) {}
+}
+// Grootboekrekeningen uit Logic4, om de naam bij een nummer te tonen en om
+// het nummer om te zetten naar het interne id dat Logic4 wil hebben.
+let grootboek = { perCode: {}, btwNul: null, geladen: false };
+async function laadGrootboek() {
+  try {
+    const r = await fetch(WORKER + "/bank/grootboeken", { headers: { "X-Fonteyn-Auth": teamKey() } });
+    const j = await r.json();
+    if (!j.ok) return;
+    grootboek.perCode = {};
+    (j.grootboeken || []).forEach(g => { grootboek.perCode[String(g.code)] = g; });
+    grootboek.btwNul = j.btwNul || null;
+    grootboek.geladen = true;
+    renderResults();
+  } catch (e) {}
+}
+function rekeningNaam(nr) {
+  const g = grootboek.perCode[String(nr || "").trim()];
+  if (g) return g.naam || "";
+  return grootboek.geladen ? "— bestaat niet in Logic4" : "";
+}
+laadGrootboek();
+
+// Een aangepast rekeningnummer geldt meteen voor alle regels van dat soort.
+document.addEventListener("change", (e) => {
+  if (!e.target.classList || !e.target.classList.contains("rekeningVeld")) return;
+  const tx = state.transactions[Number(e.target.dataset.idx)];
+  if (!tx) return;
+  zetRekening(tx.kind, e.target.value);
+  renderResults();
+});
+
 function selectie() {
-  return state.transactions.filter(t => t.kies && (t.gekozen || t.orderNr) && !t.geboekt);
+  return state.transactions.filter(t => t.kies && !t.geboekt &&
+    (t.kind !== "direct" ? true : (t.gekozen || t.orderNr)));
 }
 function werkSelectieBij() {
   const s = selectie();
@@ -704,11 +850,12 @@ function werkSelectieBij() {
   if (alles) alles.checked = kiesbaar > 0 && s.length === kiesbaar;
 }
 $("kiesAlles").addEventListener("change", (e) => {
-  for (const t of state.transactions) if ((t.gekozen || t.orderNr) && !t.geboekt) t.kies = e.target.checked;
+  for (const t of state.transactions) if (!t.geboekt && (t.kind !== "direct" || t.gekozen || t.orderNr)) t.kies = e.target.checked;
   renderResults();
 });
 $("kiesZeker").addEventListener("click", () => {
-  for (const t of state.transactions) t.kies = !t.geboekt && !!(t.gekozen || t.orderNr) && t.match && t.match.status === "zeker";
+  for (const t of state.transactions) t.kies = !t.geboekt &&
+    (t.kind !== "direct" ? true : (!!(t.gekozen || t.orderNr) && t.match && t.match.status === "zeker"));
   renderResults();
 });
 $("kiesGeen").addEventListener("click", () => {
@@ -775,11 +922,35 @@ $("boekBtn").addEventListener("click", async () => {
   $("boekBtn").disabled = true;
   showStatus($("actionStatus"), "Ordernummers opzoeken bij " + rijen.length + " facturen…", "info");
 
+  /* Stap 0 — de regels die niet bij één order horen.
+     Pinautomaat, Stripe/Shopify, Mollie en Pay.nl gaan als memoriaalboeking
+     naar een tussenrekening in plaats van als betaling op een order. */
+  const naarGrootboek = rijen.filter(t => t.kind !== "direct");
+  let gbGelukt = 0; const gbFouten = [];
+  if (naarGrootboek.length) {
+    showStatus($("actionStatus"), naarGrootboek.length + " regel(s) op een grootboekrekening boeken…", "info");
+    const r = await fetch(WORKER + "/bank/memoriaal", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ door: (localStorage.getItem("fp.email") || ""), bookingId: gekozenDagboek(),
+        regels: naarGrootboek.map(t => ({
+          rekening: rekeningVoor(t.kind), bedrag: Number(t.amount), datum: t.date || null,
+          referentie: "Afschrift " + (state.statementNr || state.fileName),
+          omschrijving: (tussenLabel(t.kind) + " — " + (t.description || "")).slice(0, 200),
+        })) }) });
+    const j = await r.json().catch(() => ({}));
+    (j.resultaten || []).forEach((res, i) => {
+      const t = naarGrootboek[i];
+      if (res.ok && t) { t.geboekt = "Op grootboek " + res.rekening + (res.rekeningNaam ? " (" + res.rekeningNaam + ")" : ""); t.kies = false; gbGelukt++; }
+      else gbFouten.push("rekening " + (res.rekening || "?") + ": " + (res.error || "onbekende fout") + (res.antwoord ? " — " + res.antwoord : ""));
+    });
+    if (!j.ok && j.error) gbFouten.push(j.error);
+  }
+
   // Stap 1 — factuur → order
   // Regels die al een ordernummer hebben zijn klaar: AddPayment werkt op een
   // order. Alleen de regels die via een factuur lopen moeten nog omgezet.
-  const directe = rijen.filter(t => t.orderNr);
-  const viaFactuur = rijen.filter(t => !t.orderNr && t.gekozen);
+  const directe = rijen.filter(t => t.kind === "direct" && t.orderNr);
+  const viaFactuur = rijen.filter(t => t.kind === "direct" && !t.orderNr && t.gekozen);
   const paren = viaFactuur.map(t => {
     const post = (t.match.kandidaten || []).find(p => String(p.InvoiceId) === t.gekozen) || t.match.beste;
     return { invoiceId: t.gekozen, debtorId: post ? post.DebtorId : null, tx: t };
@@ -837,11 +1008,13 @@ $("boekBtn").addEventListener("click", async () => {
     }
   }
 
-  let bericht = gelukt + " betaling" + (gelukt === 1 ? "" : "en") + " geboekt in Logic4.";
+  let bericht = gelukt + " betaling" + (gelukt === 1 ? "" : "en") + " geboekt op een order in Logic4.";
+  if (gbGelukt) bericht += " " + gbGelukt + " regel(s) als memoriaal op een grootboekrekening.";
+  if (gbFouten.length) bericht += " Grootboek mislukt: " + gbFouten.slice(0, 3).join("; ") + ".";
   if (geenOrder.length) bericht += " " + geenOrder.length + " niet geboekt omdat er geen ordernummer bij de factuur staat: " +
     geenOrder.slice(0, 5).map(g => g.invoiceId).join(", ") + (geenOrder.length > 5 ? " en meer" : "") + ". Die moeten handmatig.";
   if (fouten.length) bericht += " Mislukt: " + fouten.slice(0, 4).join("; ") + ".";
-  showStatus($("actionStatus"), bericht, fouten.length ? "error" : "ok");
+  showStatus($("actionStatus"), bericht, (fouten.length || gbFouten.length) ? "error" : "ok");
   try { if (window.fpLog) window.fpLog("bankbetalingen-geboekt", gelukt + " betalingen, afschrift " + (state.statementNr || state.fileName)); } catch (e) {}
 
   // De openstaande posten kloppen nu niet meer: vers ophalen en opnieuw koppelen.
@@ -892,7 +1065,7 @@ $("exportBtn").addEventListener("click", () => {
       (t.match && t.match.tegenpartij && t.match.tegenpartij.naam) || "",
       t.gekozen || "", post ? post.DebtorId : "",
       post ? ((debiteurNamen[String(post.DebtorId)] || {}).naam || "") : "",
-      t.kind !== "direct" ? (TUSSEN_LABEL[t.kind] || "tussenrekening") : ((t.match && t.match.status) || ""),
+      t.kind !== "direct" ? tussenLabel(t.kind) : ((t.match && t.match.status) || ""),
       t.geboekt ? "geboekt" : "",
       (t.description || "").replace(/[\r\n;]/g, " ")];
   });
@@ -900,6 +1073,18 @@ $("exportBtn").addEventListener("click", () => {
   const csv = [header, ...rows].map(r => r.map(c => /[;"\n]/.test(String(c)) ? '"' + String(c).replace(/"/g, '""') + '"' : String(c)).join(";")).join("\n");
   navigator.clipboard.writeText(csv).then(() => {
     showStatus($("actionStatus"), rows.length + " regels naar het klembord (CSV, scheidingsteken ';' — plak in Excel).", "ok");
+  }).catch(e => showStatus($("actionStatus"), "Klembord niet beschikbaar: " + e.message, "error"));
+});
+
+// Het memoriaal-voorstel als CSV, klaar om in Excel of in Logic4 over te nemen.
+$("memoKopieer").addEventListener("click", () => {
+  const r = memoRegels();
+  if (!r.length) return;
+  const header = ["Datum", "Soort", "Grootboekrekening", "Bedrag", "Omschrijving"];
+  const rows = r.map(x => [x.datum, x.soort, x.rekening, x.bedrag.toFixed(2), x.omschrijving.replace(/[\r\n;]/g, " ")]);
+  const csv = [header, ...rows].map(rr => rr.map(c => /[;"\n]/.test(String(c)) ? '"' + String(c).replace(/"/g, '""') + '"' : String(c)).join(";")).join("\n");
+  navigator.clipboard.writeText(csv).then(() => {
+    showStatus($("actionStatus"), r.length + " memoriaalregels naar het klembord (CSV, scheidingsteken ';').", "ok");
   }).catch(e => showStatus($("actionStatus"), "Klembord niet beschikbaar: " + e.message, "error"));
 });
 

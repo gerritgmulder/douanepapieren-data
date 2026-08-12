@@ -3410,6 +3410,103 @@ async function bankBoeken(env, body) {
   return { ok: true, gelukt, mislukt: uit.length - gelukt, resultaten: uit };
 }
 
+/* ─── Grootboekrekeningen en btw-codes ─────────────────────────────────────
+   Logic4 wil in een memoriaalregel niet het rekeningnummer (1220) maar het
+   interne LedgerId. Deze lijst maakt dat verschil onzichtbaar: de tegel praat
+   in rekeningnummers, hier wordt het omgezet.
+
+   De btw-code is verplicht op elke mutatie. Voor een tussenrekening is dat
+   nul procent; die code wordt hier opgezocht en niet geraden. Is er geen
+   nul-procentcode, dan gaat er niets weg en zegt hij dat. */
+async function bankGrootboeken(env) {
+  const token = await l4Token(env);
+  const haal = async (pad) => {
+    const r = await fetch("https://api.logic4server.nl" + pad, {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: "{}",
+    });
+    const tekst = await r.text();
+    let j = null; try { j = JSON.parse(tekst); } catch {}
+    if (!r.ok) throw new Error(pad + " gaf HTTP " + r.status + " — " + tekst.slice(0, 200));
+    return Array.isArray(j) ? j : ((j && (j.Value || j.Records)) || []);
+  };
+  const [ledgers, btw] = await Promise.all([
+    haal("/v3/Financial/GetLedgers"),
+    haal("/v3/Financial/GetVatCodes"),
+  ]);
+  const nul = (btw || []).find(v => Number(v.Percent) === 0);
+  return {
+    ok: true,
+    grootboeken: (ledgers || []).map(l => ({ id: l.Id, code: l.Code, naam: l.Description || "" })),
+    btwNul: nul ? { id: nul.Id, naam: nul.Name || "", percent: nul.Percent } : null,
+  };
+}
+
+/* ─── Memoriaal: een bankregel op een grootboekrekening ────────────────────
+   Voor alles wat niet bij één order hoort: de dagafrekening van de
+   pinautomaat, de uitbetalingen van Stripe/Shopify, Mollie en Pay.nl. Die
+   gaan als memoriaalboeking naar een tussenrekening.
+
+   Eén boeking per bankregel, met één mutatie: de tegenrekening. De bankkant
+   zit in het dagboek zelf - een dagboek van het type bank heeft zijn eigen
+   grootboekrekening, precies zoals in het Dagboek-scherm van Logic4 waar je
+   ook alleen de tegenrekening invult.
+
+   LET OP: de eerste die hiermee geboekt wordt hoort in Logic4 nagekeken te
+   worden voordat de rest volgt. Dit is geld op een rekening zetten. */
+async function bankMemoriaal(env, body) {
+  const regels = (Array.isArray(body.regels) ? body.regels : []).slice(0, 30);
+  if (!regels.length) return { ok: false, error: "geen regels meegegeven" };
+  const bookingId = Number(body.bookingId);
+  if (!bookingId) return { ok: false, error: "geen dagboek gekozen" };
+
+  let lijsten;
+  try { lijsten = await bankGrootboeken(env); }
+  catch (e) { return { ok: false, error: "grootboekrekeningen ophalen faalde: " + (e.message || e) }; }
+  if (!lijsten.btwNul) return { ok: false, error: "geen btw-code van 0% gevonden in Logic4. Zonder btw-code weigert Logic4 de mutatie." };
+  const perCode = {};
+  lijsten.grootboeken.forEach(g => { perCode[String(g.code)] = g; });
+
+  const token = await l4Token(env);
+  const uit = [];
+  for (const r of regels) {
+    const bedrag = Number(r.bedrag);
+    const rek = String(r.rekening || "").trim();
+    const gb = perCode[rek];
+    if (!gb) { uit.push({ ...r, ok: false, error: "grootboekrekening " + (rek || "(leeg)") + " bestaat niet in Logic4" }); continue; }
+    if (!(bedrag > 0)) { uit.push({ ...r, ok: false, error: "bedrag ontbreekt" }); continue; }
+    const datum = /^\d{4}-\d{2}-\d{2}$/.test(String(r.datum || "")) ? r.datum : new Date().toISOString().slice(0, 10);
+    try {
+      const resp = await fetch("https://api.logic4server.nl/v3/Financial/AddFinancialGeneralBookingWithMutations", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          Reference: String(r.referentie || "Bankafschrift").slice(0, 60),
+          BookingDateTime: datum + "T12:00:00",
+          FinancialBookId: bookingId,
+          Mutations: [{
+            LedgerId: gb.id,
+            VatCode: lijsten.btwNul.id,
+            AmountIncl: bedrag,
+            Description: String(r.omschrijving || "").slice(0, 200) || "Bankafschrift",
+          }],
+        }),
+      });
+      const tekst = await resp.text();
+      let j = null; try { j = JSON.parse(tekst); } catch {}
+      if (!resp.ok) uit.push({ ...r, ok: false, error: (j && (j.detail || j.title)) || ("HTTP " + resp.status), antwoord: tekst.slice(0, 300) });
+      else uit.push({ ...r, ok: true, geboekt: bedrag, rekeningNaam: gb.naam });
+    } catch (e) { uit.push({ ...r, ok: false, error: String(e.message || e) }); }
+  }
+  const gelukt = uit.filter(x => x.ok).length;
+  const logboek = (await env.FONTEYN_DATA.get("bank-geboekt", { type: "json" })) || { boekingen: [] };
+  logboek.boekingen = (logboek.boekingen || []).slice(-4000);
+  logboek.boekingen.push({ ts: new Date().toISOString(), door: String(body.door || "").slice(0, 80),
+    soort: "memoriaal", aantal: gelukt,
+    totaal: uit.filter(x => x.ok).reduce((n, x) => n + Number(x.geboekt || 0), 0),
+    regels: uit.map(x => ({ rekening: x.rekening, bedrag: x.bedrag, ok: x.ok, error: x.error || null })) });
+  await env.FONTEYN_DATA.put("bank-geboekt", JSON.stringify(logboek));
+  return { ok: true, gelukt, mislukt: uit.length - gelukt, resultaten: uit };
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -3582,6 +3679,23 @@ export default {
       }
       const body = await request.json().catch(() => ({}));
       return reply(200, await bankBoeken(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+
+    // Grootboekrekeningen + de btw-code van 0%, voor de memoriaalregels.
+    if (url.pathname === "/bank/grootboeken" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      return reply(200, await bankGrootboeken(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+
+    // Een bankregel die niet bij één order hoort als memoriaal wegschrijven.
+    if (url.pathname === "/bank/memoriaal" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b0 = await request.clone().json().catch(() => ({}));
+      if (!BANK_BOEKERS.has(String(b0.door || "").toLowerCase())) {
+        return reply(403, { ok: false, error: "niet-gemachtigd-om-te-boeken" });
+      }
+      const b = await request.json().catch(() => ({}));
+      return reply(200, await bankMemoriaal(env, b).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
 
     // De dagboeken uit Logic4, zodat de tegel kan laten kiezen in welk dagboek

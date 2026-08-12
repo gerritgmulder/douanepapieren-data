@@ -292,6 +292,7 @@
       <button class="btn sm solid" id="btnBewaar" type="button">Bewaren</button>
       <button class="btn sm" id="btnKopie" type="button">Dupliceren</button>
       <button class="btn sm" id="btnVerwijder" type="button">Verwijderen</button>
+      <button class="btn sm" id="btnControle" type="button" title="Kijk van elke sheet in de lijst of de inhoud er nog is">Opslag nakijken</button>
     </div>
     <div class="toolbar">
       <button class="btn solid" id="btnPdf" type="button" style="flex:1;justify-content:center">📄 Opslaan als PDF / printen</button>
@@ -451,7 +452,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="12-08-2026 · 13:10";
+const TEGEL_VERSIE="12-08-2026 · 15:40";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
@@ -665,16 +666,36 @@ async function laadAlles(){
       // naar hun eigen sleutel en laten alleen de index achter.
       const oud=rijen.filter(s=>s&&(s.blokken||s.fotoHoofd||s.legenda));
       if(oud.length){
+        /* Eerst verplaatsen, dan pas de index vervangen - en alleen als élke
+           sheet echt is aangekomen.
+
+           Hier ging het mis. Deze lus keek niet naar het antwoord van de
+           server. fetch() gooit alleen bij een netwerkstoring, dus een sheet
+           die te groot was kreeg netjes een 413 terug en dat werd stilzwijgend
+           als gelukt beschouwd. Daarna werd de oude opslag - waar de volledige
+           sheets nog in stonden - overschreven met alleen de index. De inhoud
+           was daarmee weg. */
         toon("info","Opslag wordt eenmalig omgezet zodat elke sheet apart wordt bewaard…");
+        const mislukt=[];
         for(const s of oud){
           try{
-            await fetch(SHEET_URL(s.id),{method:"PUT",
+            const r2=await fetch(SHEET_URL(s.id),{method:"PUT",
               headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},body:JSON.stringify(s)});
-          }catch(e){ console.warn("verhuizen faalde voor "+s.id,e); }
+            if(!r2.ok) mislukt.push((s.naam||s.model||s.id)+" (HTTP "+r2.status+")");
+          }catch(e){ mislukt.push((s.naam||s.model||s.id)+" ("+e.message+")"); }
         }
-        alles={sheets:rijen.map(indexRegel)};
-        await bewaarIndex();
-        toon("ok",oud.length+" sheet(s) omgezet. Je kunt weer opslaan.");
+        if(mislukt.length){
+          // Niets aan de index veranderen: de oude opslag is nu het enige wat
+          // deze sheets nog heeft.
+          alles={sheets:rijen};
+          toon("bad","Omzetten gestopt: "+mislukt.length+" sheet(s) konden niet worden verplaatst ("+
+            mislukt.join(", ")+"). De oude opslag is met opzet níet aangepast, dus er is niets kwijt. "+
+            "Geef dit door - meestal is de sheet te groot en moeten de foto's kleiner.");
+        }else{
+          alles={sheets:rijen.map(indexRegel)};
+          await bewaarIndex();
+          toon("ok",oud.length+" sheet(s) omgezet. Je kunt weer opslaan.");
+        }
       }else{
         alles={sheets:rijen};
       }
@@ -722,6 +743,26 @@ async function bewaar(){
     if(window.fpLog) window.fpLog("specsheet-bewaard",S.naam);
   }catch(e){ toon("bad","Bewaren mislukt: "+e.message); }
 }
+/* Nakijken of van elke sheet in de lijst de inhoud er nog is. Zonder dit is
+   "hij opent niet" het enige signaal, en dan weet je pas dat er iets weg is op
+   het moment dat je hem nodig hebt. */
+el("btnControle").addEventListener("click",async()=>{
+  const lijst=alles.sheets.slice();
+  if(!lijst.length){ toon("warn","Er staan nog geen sheets in de lijst."); return; }
+  toon("info","Opslag nakijken… ("+lijst.length+" sheets)");
+  const leeg=[], stuk=[];
+  for(const rij of lijst){
+    try{
+      const s=await laadSheet(rij.id);
+      if(!s||!s.id) leeg.push(rij.naam||rij.model||rij.id);
+    }catch(e){ stuk.push((rij.naam||rij.model||rij.id)+" ("+e.message+")"); }
+  }
+  if(!leeg.length&&!stuk.length){ toon("ok","Alle "+lijst.length+" sheets zijn er nog."); return; }
+  toon("bad",
+    (leeg.length?leeg.length+" sheet(s) staan leeg in de opslag: "+leeg.join(", ")+". ":"")+
+    (stuk.length?stuk.length+" sheet(s) konden niet opgehaald worden: "+stuk.join(", ")+". ":"")+
+    "De rest is in orde.");
+});
 el("btnBewaar").addEventListener("click",bewaar);
 el("btnNieuw").addEventListener("click",()=>{ S=leegSheet(); vulKiezer(); toonSheet(); toon("ok","Nieuwe sheet — vul de gegevens in."); });
 el("btnKopie").addEventListener("click",()=>{
@@ -754,7 +795,17 @@ el("sheetKies").addEventListener("change",async()=>{
     // Eerst heel maken, dan pas tekenen: een sheet uit een oudere versie kan
     // een lijst missen en daar liep het tekenen stuk op.
     S = (s&&s.id) ? normaliseerSheet(s) : leegSheet();
-    if(!s||!s.id){ toon("warn","Deze sheet kon niet geladen worden."); gelukt=false; }
+    if(!s||!s.id){
+      // Onderscheid maken tussen "de opslag deed niets" en "er staat niets in".
+      // Dat tweede betekent dat de inhoud er niet meer is, en dat hoort geen
+      // vage melding te zijn.
+      const leeg=s&&typeof s==="object"&&!Object.keys(s).length;
+      toon("bad",leeg
+        ? "Deze sheet staat leeg in de opslag: de inhoud is er niet meer. Hij staat nog wel in de lijst. "+
+          "Geef dit door met de modelnaam erbij, dan zoek ik uit wat ermee gebeurd is."
+        : "Deze sheet kon niet opgehaald worden uit de opslag. Probeer het zo nog eens.");
+      gelukt=false;
+    }
   }catch(e){ S=leegSheet(); toon("bad","Sheet laden mislukt: "+e.message); gelukt=false; }
   if(toonSheet()&&gelukt) toon("ok","Geopend — "+(S.naam||S.model||""));
 });
