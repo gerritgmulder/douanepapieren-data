@@ -331,11 +331,26 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <!-- De tegenrekening van de memoriaalboeking. Normaal de grootboekrekening
          van de bank zelf; dit veld is er voor administraties waar die op slot
          staat, en dan moet je hem ergens anders tegenover kunnen zetten. -->
-    <div class="row-flex" id="tegenRij" style="margin-top:8px;gap:8px;flex-wrap:wrap;align-items:center;display:none">
-      <label class="muted" for="tegenRekening" style="font-size:12px">Tegenrekening van de memoriaalboeking</label>
-      <input id="tegenRekening" inputmode="numeric" placeholder="bv. 1175"
-             style="border:1px solid var(--border);border-radius:7px;padding:7px 10px;font:inherit;font-size:13px;width:110px">
-      <span id="tegenInfo" class="muted" style="font-size:12px"></span>
+    <div id="tegenRij" style="margin-top:8px;display:none">
+      <div class="row-flex" style="gap:8px;flex-wrap:wrap;align-items:center;">
+        <label class="muted" for="tegenRekening" style="font-size:12px">Tegenrekening van de memoriaalboeking</label>
+        <input id="tegenRekening" inputmode="numeric" placeholder="bv. 1999"
+               style="border:1px solid var(--border);border-radius:7px;padding:7px 10px;font:inherit;font-size:13px;width:110px">
+        <span id="tegenInfo" class="muted" style="font-size:12px"></span>
+      </div>
+      <!-- Staat de bankrekening op slot, dan zijn er precies twee wegen en die
+           moeten er allebei staan. Logic4 heeft geen eindpunt om een bankregel
+           weg te schrijven: alleen betalingen op een order, en inkoop-,
+           verkoop- en memoriaalboekingen. Er is dus geen derde. -->
+      <p class="muted" style="margin:8px 0 0;font-size:12px;line-height:1.55">
+        <strong>Staat de bankrekening in Logic4 op slot?</strong> Dan is er een keuze te maken, en die is niet aan
+        het dashboard.<br>
+        <strong>1.</strong> De bankrekening deblokkeren in Logic4. Dan boekt het dashboard de regel meteen goed:
+        bank tegen tussenrekening, klaar, geen nawerk.<br>
+        <strong>2.</strong> Op slot laten en hier een kruisposten-rekening invullen. Het dashboard boekt dan de
+        tussenrekening tegen die kruisposten, en de bankkant boek je zelf in het bankdagboek tegen diezelfde
+        kruisposten. Veiliger, maar je houdt er werk aan.
+      </p>
     </div>
     <div class="row-flex" style="margin-top:12px;gap:8px;flex-wrap:wrap;align-items:center;">
       <button class="cta" id="boekBtn" type="button" disabled>Boek de geselecteerde betalingen</button>
@@ -1011,8 +1026,7 @@ $("boekBtn").addEventListener("click", async () => {
     if (j.geblokkeerd && $("tegenRij")) {
       $("tegenRij").style.display = "";
       if (j.tegenrekening) $("tegenInfo").textContent =
-        "Nu staat " + j.tegenrekening.code + " (" + j.tegenrekening.naam + ") als tegenrekening. " +
-        "Is dát de geblokkeerde rekening, vul hier dan een andere in.";
+        "Nu staat " + j.tegenrekening.code + " (" + j.tegenrekening.naam + ") als tegenrekening.";
       $("tegenRij").scrollIntoView({ behavior: "smooth", block: "center" });
     }
     if (j.kiesDagboek) {

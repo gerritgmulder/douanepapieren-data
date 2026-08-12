@@ -3729,9 +3729,8 @@ async function bankMemoriaal(env, body) {
             geblokkeerd: opSlot || undefined,
             tegenrekening: opSlot ? (tegen.code + (tegen.naam ? " " + tegen.naam : "")) : undefined,
             error: metNamen(rauw) + (opSlot
-              ? ". Deze boeking gebruikt rekening " + r.rekening + " en als tegenrekening " + tegen.code +
-                " (" + tegen.naam + "). Laat Osman de geblokkeerde rekening in Logic4 deblokkeren, " +
-                "of kies een andere tegenrekening in de tegel."
+              ? ". Deze boeking zet rekening " + r.rekening + " tegenover " + tegen.code + " (" + tegen.naam +
+                "). Er is niets geboekt. Onderaan het scherm staat wat je hieraan kunt doen."
               : ""),
             antwoord: tekst.slice(0, 300) });
         } else {
