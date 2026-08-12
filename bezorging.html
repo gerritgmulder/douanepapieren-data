@@ -74,7 +74,7 @@
     <h1 id="titel">Bezorging volgen</h1>
     <p class="sub" id="regel">Een moment, we halen de gegevens op…</p>
     <div id="demoMelding"></div>
-    <div id="map" class="hidden" style="display:none"></div>
+    <div id="map" style="display:none"></div>
     <div class="cijfers" id="cijfers" style="display:none"></div>
     <div id="melding"></div>
   </div>
@@ -124,6 +124,10 @@ function tekenKaart(pos, best){
       maxZoom: 18, attribution: "&copy; OpenStreetMap",
     }).addTo(map);
   }
+  /* Het kaartvak stond verborgen tot er een positie was, en Leaflet heeft de
+     hoogte dan als nul gemeten. Zonder deze regel valt hij terug op een
+     wereldkaart in plaats van in te zoomen op de wagen. */
+  map.invalidateSize();
   const wagenIcoon = L.divIcon({ className: "", html: '<div class="wagen">🚚</div>', iconSize: [34,34], iconAnchor: [17,17] });
   if (wagenMarker) wagenMarker.setLatLng(hier);
   else wagenMarker = L.marker(hier, { icon: wagenIcoon }).addTo(map);
