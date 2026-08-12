@@ -49,6 +49,11 @@ const ALLOWED_BUCKETS = new Set([
   // haalt ze uit voorraad-pipeline en dus overal weg; hier staat wat er weg
   // ging, door wie en wanneer, zodat een vergissing terug te draaien is.
   "voorraad-verwijderd",
+  // Verizon Connect: welke bakwagens er zijn (voertuignummer + kenteken/naam),
+  // het laatst opgehaalde positiebeeld en het toegangstoken. Dat token is maar
+  // twintig minuten geldig en moet bewaard worden - elke keer een nieuwe halen
+  // is zonde en Verizon houdt dat bij.
+  "verizon-instellingen", "verizon-posities", "verizon-token",
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
   "geldgoederen",     // Geld-goederenbeweging: laatste controle-momentopname + historie van de totalen
   "gg-bevindingen",   // Geld-goederenbeweging: per bevinding de status (open/opgepakt/opgelost/akkoord) + notitie
@@ -3524,6 +3529,144 @@ async function bankGrootboeken(env) {
   };
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   VERIZON CONNECT — waar rijdt de bakwagen
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Gerrit wil klanten op de bezorgdag een pagina kunnen geven waarop staat waar
+   hun bakwagen is. De trackers zitten er al in; Verizon Connect Reveal heeft
+   er een API voor.
+
+   Hoe het werkt
+   -------------
+   Twee stappen. Eerst een token halen met de REST-inloggegevens; dat token is
+   ongeveer twintig minuten geldig. Daarna elke aanroep met dat token én een
+   App ID in dezelfde kop:
+
+       Authorization: Atmosphere atmosphere_app_id=<app id>, Bearer <token>
+
+   Het mooie van deze API: POST /vehicles/locations neemt een lijst
+   voertuignummers en geeft ze állemaal in één aanroep terug. Dat scheelt: op
+   de gratis laag van Cloudflare mag een aanroep maar 50 verzoeken doen, dus
+   per wagen pollen zou niet uit kunnen.
+
+   Verizon zegt zelf: niet vaker dan eens per drie tot vijf minuten. Daarom
+   wordt het antwoord vier minuten bewaard; wie sneller ververst krijgt wat er
+   al lag.
+
+   Zonder sleutels
+   ---------------
+   Zolang de inloggegevens er niet zijn, geeft dit verzonnen posities terug op
+   een route van Uddel naar het westen. Zo is de pagina eromheen te bouwen en
+   te bekijken zonder dat er iets echt hoeft te werken. In het antwoord staat
+   dan `demo: true`; dat hoort ook op het scherm te komen, want een verzonnen
+   positie mag nooit voor een echte doorgaan.
+
+   Europees, niet Amerikaans. De Amerikaanse omgeving kent onze wagens niet.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const VERIZON_API = "https://fim.api.eu.fleetmatics.com";
+const VERIZON_CACHE_MS = 4 * 60 * 1000;
+
+async function verizonToken(env) {
+  const bewaard = await env.FONTEYN_DATA.get("verizon-token", { type: "json" });
+  if (bewaard && bewaard.token && Date.now() < bewaard.verlooptOp - 60000) return bewaard.token;
+  const basis = btoa(env.VERIZON_USER + ":" + env.VERIZON_PASS);
+  const r = await fetch(VERIZON_API + "/token", { headers: { "Authorization": "Basic " + basis } });
+  const tekst = await r.text();
+  if (!r.ok) throw new Error("Verizon-token: HTTP " + r.status + " " + tekst.slice(0, 200));
+  let j = null; try { j = JSON.parse(tekst); } catch {}
+  const token = (j && (j.access_token || j.token)) || tekst.trim().replace(/^"|"$/g, "");
+  if (!token) throw new Error("Verizon gaf geen token terug");
+  // Twintig minuten, met een marge omdat een verlopen token midden in een
+  // ronde vervelender is dan één token te veel ophalen.
+  await env.FONTEYN_DATA.put("verizon-token",
+    JSON.stringify({ token, verlooptOp: Date.now() + 18 * 60 * 1000 }));
+  return token;
+}
+
+/* Verzonnen posities: een wagen die van Uddel richting Amersfoort rijdt en
+   een die stilstaat. Genoeg om de pagina op te bouwen. */
+function verizonDemo(voertuigen) {
+  const route = [
+    { lat: 52.2456, lon: 5.7712, plaats: "Uddel",      straat: "Meervelderweg 52",   snelheid: 0 },
+    { lat: 52.2131, lon: 5.6402, plaats: "Garderen",   straat: "Putterweg",          snelheid: 62 },
+    { lat: 52.1875, lon: 5.5219, plaats: "Voorthuizen", straat: "Hoofdstraat",       snelheid: 48 },
+    { lat: 52.1561, lon: 5.3878, plaats: "Amersfoort", straat: "Outputweg",          snelheid: 31 },
+  ];
+  const nu = new Date().toISOString();
+  return (voertuigen.length ? voertuigen : ["BAKWAGEN-1", "BAKWAGEN-2"]).map((nr, i) => {
+    const p = route[i % route.length];
+    return {
+      voertuig: nr, breedtegraad: p.lat, lengtegraad: p.lon,
+      adres: { straat: p.straat, postcode: null, plaats: p.plaats, land: "NL" },
+      snelheid: p.snelheid, richting: p.snelheid ? "W" : null,
+      staat: p.snelheid ? "rijdt" : "staat stil",
+      gemetenOp: nu, prive: false,
+    };
+  });
+}
+
+// Het antwoord van Verizon omzetten naar onze eigen velden, zodat de tegel
+// niet met Engelse veldnamen hoeft te werken en een wijziging aan hun kant
+// hier ophoudt en niet in vier schermen.
+function verizonRegel(nr, v) {
+  const a = (v && v.Address) || {};
+  return {
+    voertuig: nr,
+    breedtegraad: v && v.Latitude != null ? Number(v.Latitude) : null,
+    lengtegraad: v && v.Longitude != null ? Number(v.Longitude) : null,
+    adres: {
+      straat: [a.AddressLine1, a.AddressLine2].filter(Boolean).join(" ") || null,
+      postcode: a.PostalCode || null, plaats: a.Locality || null, land: a.Country || null,
+    },
+    snelheid: v && v.Speed != null ? Number(v.Speed) : null,
+    richting: (v && v.Heading) || null,
+    staat: (v && v.DisplayState) || null,
+    gemetenOp: (v && v.UpdateUTC) || null,
+    // Een rit die als privé staat gemarkeerd hoort niet op een klantpagina.
+    prive: !!(v && v.IsPrivate),
+  };
+}
+
+async function verizonPosities(env, opties) {
+  const inst = (await env.FONTEYN_DATA.get("verizon-instellingen", { type: "json" })) || {};
+  const voertuigen = (opties && opties.voertuigen) || inst.voertuigen || [];
+  const demo = !env.VERIZON_APP_ID || !env.VERIZON_USER || !env.VERIZON_PASS;
+
+  if (!(opties && opties.vers)) {
+    const bewaard = await env.FONTEYN_DATA.get("verizon-posities", { type: "json" });
+    if (bewaard && bewaard.opgehaald && (Date.now() - Date.parse(bewaard.opgehaald)) < VERIZON_CACHE_MS)
+      return { ...bewaard, uitCache: true };
+  }
+  if (demo) {
+    const uit = { ok: true, demo: true, opgehaald: new Date().toISOString(), posities: verizonDemo(voertuigen),
+                  uitleg: "Verzonnen posities: de inloggegevens van Verizon staan nog niet ingesteld." };
+    await env.FONTEYN_DATA.put("verizon-posities", JSON.stringify(uit));
+    return uit;
+  }
+  if (!voertuigen.length) return { ok: false, error: "er zijn nog geen voertuignummers ingesteld" };
+
+  const token = await verizonToken(env);
+  const r = await fetch(VERIZON_API + "/rad/v1/vehicles/locations", {
+    method: "POST",
+    headers: {
+      "Authorization": "Atmosphere atmosphere_app_id=" + env.VERIZON_APP_ID + ", Bearer " + token,
+      "Content-Type": "application/json", "Accept": "application/json",
+    },
+    body: JSON.stringify(voertuigen),
+  });
+  const tekst = await r.text();
+  if (!r.ok) return { ok: false, error: "Verizon gaf HTTP " + r.status, antwoord: tekst.slice(0, 300) };
+  let j = null; try { j = JSON.parse(tekst); } catch {}
+  const lijst = Array.isArray(j) ? j : [];
+  const uit = {
+    ok: true, demo: false, opgehaald: new Date().toISOString(),
+    posities: lijst.map(x => verizonRegel(x.VehicleNumber || x.vehicleNumber || "", x.Content || x.content || x)),
+  };
+  await env.FONTEYN_DATA.put("verizon-posities", JSON.stringify(uit));
+  return uit;
+}
+
 /* ─── Scheepsdocumenten ────────────────────────────────────────────────────
    Chantal (video, 12 aug 2026): "bij Schepen en Ontvangst wil ik naast Lading
    tonen een tegel hebben met documenten, dan is de commercial invoice en de
@@ -3900,6 +4043,14 @@ export default {
       opslag.gewijzigd = new Date().toISOString();
       await env.FONTEYN_DATA.put("spa-aliassen", JSON.stringify(opslag));
       return reply(200, { ok: true, van, naar });
+    }
+
+    /* Waar rijden de bakwagens. Zolang de sleutels van Verizon er niet zijn
+       komen hier verzonnen posities uit, met demo:true erbij. */
+    if (url.pathname === "/verizon/posities" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await verizonPosities(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
 
     /* De commercial invoice en packing list van een schip. Opslaan mag met de
