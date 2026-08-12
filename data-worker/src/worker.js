@@ -3337,9 +3337,30 @@ async function bankFactuurOrder(env, paren) {
 // draaien, dus: de zware beheersleutel (net als het aanmaken van een
 // inkooporder en het boeken van een ontvangst), een harde grens per keer, en
 // per regel een eigen uitkomst zodat één mislukking de rest niet meesleept.
+/* Betalingen van een bankafschrift wegschrijven naar Logic4.
+
+   LET OP - hier zat de fout die Osman op 11 aug 2026 meldde ("0 betalingen
+   geboekt, er is een fout opgetreden, geef deze referentiecode door"). De
+   aanroep miste twee velden en gebruikte een derde verkeerd:
+
+     Amount   →  moet AmountIncl zijn, anders boekt Logic4 nul euro
+     BookingId        ontbrak - het dagboek waarin de betaling landt
+     MatchingLedgerId ontbrak - zonder die twee geeft Logic4 een 500
+
+   Dat stond allemaal al in bol.html, bevestigd door Max van Logic4, en in de
+   betaalregistratie van het partnerportaal. Ik heb het bij het bouwen van deze
+   tegel niet overgenomen; daardoor heeft er nooit één betaling geboekt kunnen
+   worden.
+
+   Het dagboek komt niet uit een vaste waarde hier maar wordt door de tegel
+   meegegeven. Een betaling in het verkeerde dagboek is geld op de verkeerde
+   plek, en dat mag dit dashboard niet stilletjes voor iemand invullen. */
 async function bankBoeken(env, body) {
   const regels = (Array.isArray(body.regels) ? body.regels : []).slice(0, 30);
   if (!regels.length) return { ok: false, error: "geen regels meegegeven" };
+  const bookingId = Number(body.bookingId);
+  const matchingLedgerId = Number(body.matchingLedgerId) || 78;
+  if (!bookingId) return { ok: false, error: "geen dagboek gekozen. Kies eerst het dagboek van deze bankrekening; zonder dagboek weigert Logic4 de boeking." };
   const token = await l4Token(env);
   const door = String(body.door || "").slice(0, 80);
   const uit = [];
@@ -3350,15 +3371,28 @@ async function bankBoeken(env, body) {
     // De omschrijving is wat Osman later in Logic4 terugziet. Datum en
     // afschrift erin, zodat een boeking naar de bankregel terug te leiden is.
     const omschrijving = String(r.omschrijving || "").slice(0, 200) || "Bankbetaling";
+    const datum = /^\d{4}-\d{2}-\d{2}$/.test(String(r.datum || "")) ? r.datum : new Date().toISOString().slice(0, 10);
     try {
       const resp = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
         method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-        body: JSON.stringify({ OrderId: orderNr, Amount: bedrag, Description: omschrijving }),
+        body: JSON.stringify({
+          OrderId: orderNr,
+          AmountIncl: bedrag,
+          BookingId: bookingId,
+          MatchingLedgerId: matchingLedgerId,
+          DateTime: datum + "T12:00:00",
+          Description: omschrijving,
+        }),
       });
       const tekst = await resp.text();
       let j = null; try { j = JSON.parse(tekst); } catch {}
       if (!resp.ok) {
-        uit.push({ ...r, ok: false, error: (j && (j.detail || j.title)) || ("HTTP " + resp.status) });
+        // Het hele antwoord meesturen. "Er is een fout opgetreden" zonder meer
+        // liet niemand verder komen; met de tekst erbij is de volgende poging
+        // tenminste te duiden.
+        uit.push({ ...r, ok: false,
+          error: (j && (j.detail || j.title)) || ("HTTP " + resp.status),
+          antwoord: tekst.slice(0, 300) });
       } else {
         uit.push({ ...r, ok: true, geboekt: bedrag });
       }
@@ -3548,6 +3582,27 @@ export default {
       }
       const body = await request.json().catch(() => ({}));
       return reply(200, await bankBoeken(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+
+    // De dagboeken uit Logic4, zodat de tegel kan laten kiezen in welk dagboek
+    // een betaling landt in plaats van dat er een nummer geraden wordt.
+    if (url.pathname === "/bank/dagboeken" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      try {
+        const token = await l4Token(env);
+        const r = await fetch("https://api.logic4server.nl/v3/Financial/GetFinancialBooks", {
+          method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+          body: "{}",
+        });
+        const tekst = await r.text();
+        let j = null; try { j = JSON.parse(tekst); } catch {}
+        if (!r.ok) return reply(200, { ok: false, error: "HTTP " + r.status, antwoord: tekst.slice(0, 300) });
+        const lijst = Array.isArray(j) ? j : (j && (j.Value || j.Records || j.FinancialBooks)) || [];
+        return reply(200, { ok: true, dagboeken: (lijst || []).map(x => ({
+          id: x.Id != null ? x.Id : (x.BookingId != null ? x.BookingId : null),
+          naam: x.Name || x.Description || x.Code || "",
+        })).filter(x => x.id != null) });
+      } catch (e) { return reply(200, { ok: false, error: String(e.message || e) }); }
     }
 
     // Prijslijsten van fabrikanten en leveranciers (Gretha) — de bestanden

@@ -302,6 +302,17 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <button class="cta secondary" id="kiesGeen" type="button">Selectie wissen</button>
       <span id="selInfo" class="muted"></span>
     </div>
+    <!-- Het dagboek waarin de betalingen landen. Logic4 weigert een boeking
+         zonder dagboek, en een betaling in het verkeerde dagboek is geld op de
+         verkeerde plek - daarom kiest een mens dit en vult het dashboard het
+         niet zelf in. De keuze blijft op deze computer staan. -->
+    <div class="row-flex" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center;">
+      <label class="muted" for="dagboek" style="font-size:12px">Dagboek van deze bankrekening</label>
+      <select id="dagboek" style="border:1px solid var(--border);border-radius:7px;padding:7px 10px;font:inherit;font-size:13px;min-width:240px">
+        <option value="">— kies eerst het dagboek —</option>
+      </select>
+      <span id="dagboekInfo" class="muted" style="font-size:12px"></span>
+    </div>
     <div class="row-flex" style="margin-top:12px;gap:8px;flex-wrap:wrap;align-items:center;">
       <button class="cta" id="boekBtn" type="button" disabled>Boek de geselecteerde betalingen</button>
       <button class="cta secondary" id="exportBtn">📋 Kopieer als CSV</button>
@@ -687,9 +698,46 @@ $("kiesGeen").addEventListener("click", () => {
 // Twee stappen: eerst van factuur naar order (AddPayment werkt op een order),
 // dan pas boeken. Een factuur zonder ordernummer kan niet automatisch en
 // wordt met naam en toenaam teruggemeld in plaats van stil overgeslagen.
+/* ─── Het dagboek ───────────────────────────────────────────────────
+   Logic4 weigert een betaling zonder dagboek, en een betaling in het verkeerde
+   dagboek is geld op de verkeerde plek. Daarom wordt de lijst uit Logic4
+   opgehaald en kiest een mens er één; het dashboard vult hier niets zelf in.
+   De keuze blijft op deze computer staan, dus het is eenmalig. */
+const DAGBOEK_KEY = "bank.dagboek";
+function gekozenDagboek() {
+  const v = parseInt(($("dagboek") || {}).value || "", 10);
+  return isNaN(v) ? null : v;
+}
+async function laadDagboeken() {
+  const sel = $("dagboek"); if (!sel) return;
+  try {
+    const r = await fetch(WORKER + "/bank/dagboeken", { headers: { "X-Fonteyn-Auth": teamKey() } });
+    const j = await r.json();
+    if (!j.ok) { $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + (j.error || "") + ". Je kunt niet boeken zonder dagboek."; return; }
+    const onthouden = localStorage.getItem(DAGBOEK_KEY) || "";
+    sel.innerHTML = "<option value=''>— kies eerst het dagboek —</option>" +
+      j.dagboeken.map(d => "<option value='" + d.id + "'" + (String(d.id) === onthouden ? " selected" : "") + ">" +
+        String(d.naam).replace(/[<>&]/g, "") + " (" + d.id + ")</option>").join("");
+    $("dagboekInfo").textContent = onthouden ? "" : "Kies het dagboek van de bankrekening waar dit afschrift bij hoort.";
+  } catch (e) {
+    $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + e.message;
+  }
+}
+if ($("dagboek")) $("dagboek").addEventListener("change", () => {
+  const v = $("dagboek").value;
+  if (v) localStorage.setItem(DAGBOEK_KEY, v); else localStorage.removeItem(DAGBOEK_KEY);
+  $("dagboekInfo").textContent = "";
+});
+laadDagboeken();
+
 $("boekBtn").addEventListener("click", async () => {
   const rijen = selectie();
   if (!rijen.length) return;
+  if (!gekozenDagboek()) {
+    showStatus($("actionStatus"), "Kies eerst het dagboek van deze bankrekening. Zonder dagboek weigert Logic4 de boeking, " +
+      "en in het verkeerde dagboek staat het geld op de verkeerde plek. Er is niets geboekt.", "error");
+    return;
+  }
   // De demo draait op verzonnen facturen. Zonder deze stop zou een klik hier
   // wél Logic4 aanspreken om te boeken - met factuurnummers die niet
   // bestaan. Dat hoort niet te kunnen.
@@ -726,13 +774,13 @@ $("boekBtn").addEventListener("click", async () => {
 
   const teBoeken = [], geenOrder = [];
   for (const t of directe) {
-    teBoeken.push({ orderNr: t.orderNr, invoiceId: null, bedrag: Number(t.amount), tx: t,
+    teBoeken.push({ orderNr: t.orderNr, invoiceId: null, bedrag: Number(t.amount), tx: t, datum: t.date || null,
       omschrijving: "Bankbetaling " + (t.date || "") + " — afschrift " + (state.statementNr || state.fileName) });
   }
   for (const p of paren) {
     const o = orders[String(p.invoiceId)];
     if (o && o.orderNr) {
-      teBoeken.push({ orderNr: o.orderNr, invoiceId: p.invoiceId, bedrag: Number(p.tx.amount), tx: p.tx,
+      teBoeken.push({ orderNr: o.orderNr, invoiceId: p.invoiceId, bedrag: Number(p.tx.amount), tx: p.tx, datum: p.tx.date || null,
         omschrijving: "Bankbetaling " + (p.tx.date || "") + " — afschrift " + (state.statementNr || state.fileName) + " — factuur " + p.invoiceId });
     } else {
       geenOrder.push({ invoiceId: p.invoiceId, reden: (o && o.fout) || "geen ordernummer op deze factuur" });
@@ -747,7 +795,9 @@ $("boekBtn").addEventListener("click", async () => {
     const r = await fetch(WORKER + "/bank/boeken", {
       method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
       body: JSON.stringify({ door: (localStorage.getItem("fp.email") || ""),
-        regels: portie.map(x => ({ orderNr: x.orderNr, invoiceId: x.invoiceId, bedrag: x.bedrag, omschrijving: x.omschrijving })) }) });
+        bookingId: gekozenDagboek(),
+        regels: portie.map(x => ({ orderNr: x.orderNr, invoiceId: x.invoiceId, bedrag: x.bedrag,
+                                   datum: x.datum, omschrijving: x.omschrijving })) }) });
     if (r.status === 403) {
       showStatus($("actionStatus"), "Jouw account mag betalingen niet wegschrijven. Er is niets geboekt en je selectie staat er nog. Vraag Gerrit om je toe te voegen.", "error");
       $("boekBtn").disabled = false; return;
@@ -760,7 +810,8 @@ $("boekBtn").addEventListener("click", async () => {
     for (const res of (j.resultaten || [])) {
       const bij = portie.find(x => String(x.orderNr) === String(res.orderNr) && String(x.invoiceId) === String(res.invoiceId));
       if (res.ok && bij) { bij.tx.geboekt = "Geboekt op order " + res.orderNr + " (factuur " + res.invoiceId + ")"; bij.tx.kies = false; gelukt++; }
-      else fouten.push("factuur " + res.invoiceId + ": " + (res.error || "onbekende fout"));
+      else fouten.push("order " + res.orderNr + (res.invoiceId ? " (factuur " + res.invoiceId + ")" : "") +
+        ": " + (res.error || "onbekende fout") + (res.antwoord ? " — " + res.antwoord : ""));
     }
   }
 

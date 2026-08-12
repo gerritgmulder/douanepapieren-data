@@ -451,7 +451,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="11-08-2026 · 16:05";
+const TEGEL_VERSIE="12-08-2026 · 13:10";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
@@ -595,6 +595,48 @@ function leegSheet(){
 let alles={sheets:[]};      // alle opgeslagen sheets
 let S=leegSheet();          // de sheet waar nu aan gewerkt wordt
 
+/* ─── Een bewaarde sheet klaarmaken om te tekenen ──────────────────────────
+   Demi kon de sheets van de Pleasure en de Desire niet meer openen (12 aug
+   2026). Er gebeurde dan zichtbaar niets: het tekenen brak halverwege af.
+
+   De oorzaak zit in wat er bewaard staat. Een sheet die met een oudere versie
+   is opgeslagen kan een lijst missen, en er kan een lege plek in een lijst
+   staan doordat een regel ooit is verwijderd. Het tekenen ging daar zonder
+   omhaal onderuit, en omdat dat buiten de foutafhandeling gebeurde bleef het
+   scherm gewoon staan zoals het stond.
+
+   Hier wordt zo'n sheet eerst heel gemaakt: elke lijst is een echte lijst,
+   zonder gaten, en elk onderdeel heeft de velden die het scherm verwacht.
+   Wat er niet in stond blijft leeg - er wordt niets bijverzonnen. */
+function schoonLijst(x){ return Array.isArray(x) ? x.filter(function(v){ return v!=null; }) : []; }
+function normaliseerSheet(s){
+  if(!s||typeof s!=="object") return leegSheet();
+  const n=Object.assign(leegSheet(),s);
+  // Uitdrukkelijk op de bewaarde sheet kijken en niet op n: ontbreekt een
+  // lijst daar, dan hoort hij leeg te zijn en niet het voorbeeld uit
+  // leegSheet() te tonen.
+  n.blokken=schoonLijst(s.blokken).map(function(b){
+    const bl=Object.assign({kolom:"L",titel:"",regels:[]},b);
+    bl.regels=schoonLijst(bl.regels).map(function(r){ return Object.assign({l:"",v:""},r); });
+    return bl;
+  });
+  n.badges=schoonLijst(s.badges).map(function(b){ return Object.assign({icoon:"",tekst:"",img:""},b); });
+  n.legenda=schoonLijst(s.legenda).map(function(l){ return Object.assign({code:"",naam:"",img:""},l); });
+  return n;
+}
+// Het scherm bijwerken zonder dat één rare sheet de hele tegel laat hangen.
+// Gaat er toch iets mis, dan staat er wát er misging - anders is het voor
+// iedereen gissen, ook voor mij.
+function toonSheet(){
+  try{ vulFormulier(); teken(); return true; }
+  catch(e){
+    console.error("tekenen mislukt",e);
+    toon("bad","Deze sheet kon niet getekend worden: "+e.message+
+      ". Geef dit door, dan zoek ik het op. De sheet zelf is niet gewijzigd.");
+    return false;
+  }
+}
+
 // ─── Laden / bewaren ────────────────────────────────────────────────
 /* ── Opslag: één sleutel per sheet ──────────────────────────────────────────
    Alle sheets stonden samen in de bucket 'specsheets'. De foto's zitten als
@@ -641,7 +683,7 @@ async function laadAlles(){
   // De icoontjes-bibliotheek erbij: die vult de onderdelen van pagina 2.
   await loadIconen();
   vulKiezer();
-  vulFormulier(); teken();
+  toonSheet();
 }
 function vulKiezer(){
   const sel=el("sheetKies");
@@ -681,10 +723,10 @@ async function bewaar(){
   }catch(e){ toon("bad","Bewaren mislukt: "+e.message); }
 }
 el("btnBewaar").addEventListener("click",bewaar);
-el("btnNieuw").addEventListener("click",()=>{ S=leegSheet(); vulKiezer(); vulFormulier(); teken(); toon("ok","Nieuwe sheet — vul de gegevens in."); });
+el("btnNieuw").addEventListener("click",()=>{ S=leegSheet(); vulKiezer(); toonSheet(); toon("ok","Nieuwe sheet — vul de gegevens in."); });
 el("btnKopie").addEventListener("click",()=>{
   S=JSON.parse(JSON.stringify(S)); S.id=""; S.model=(S.model||"")+" (kopie)";
-  vulFormulier(); teken(); toon("ok","Kopie gemaakt — pas aan en bewaar.");
+  toonSheet(); toon("ok","Kopie gemaakt — pas aan en bewaar.");
 });
 el("btnVerwijder").addEventListener("click",async()=>{
   if(!S.id){ toon("warn","Deze sheet is nog niet bewaard."); return; }
@@ -699,20 +741,22 @@ el("btnVerwijder").addEventListener("click",async()=>{
     await bewaarIndex();
     if(window.fpLog) window.fpLog("specsheet-verwijderd",naam);
   }catch(e){}
-  S=leegSheet(); vulKiezer(); vulFormulier(); teken(); toon("ok","Verwijderd.");
+  S=leegSheet(); vulKiezer(); toonSheet(); toon("ok","Verwijderd.");
 });
 el("sheetKies").addEventListener("change",async()=>{
   const id=el("sheetKies").value;
-  if(!id){ S=leegSheet(); vulFormulier(); teken(); return; }
+  if(!id){ S=leegSheet(); toonSheet(); return; }
   // De index bevat geen inhoud meer, dus de gekozen sheet apart ophalen.
   toon("info","Sheet laden…");
+  let gelukt=true;
   try{
     const s=await laadSheet(id);
-    S = (s&&s.id) ? s : leegSheet();
-    if(!s||!s.id) toon("warn","Deze sheet kon niet geladen worden.");
-    else toon("ok","Geopend — "+(S.naam||S.model||""));
-  }catch(e){ S=leegSheet(); toon("bad","Sheet laden mislukt: "+e.message); }
-  vulFormulier(); teken();
+    // Eerst heel maken, dan pas tekenen: een sheet uit een oudere versie kan
+    // een lijst missen en daar liep het tekenen stuk op.
+    S = (s&&s.id) ? normaliseerSheet(s) : leegSheet();
+    if(!s||!s.id){ toon("warn","Deze sheet kon niet geladen worden."); gelukt=false; }
+  }catch(e){ S=leegSheet(); toon("bad","Sheet laden mislukt: "+e.message); gelukt=false; }
+  if(toonSheet()&&gelukt) toon("ok","Geopend — "+(S.naam||S.model||""));
 });
 
 // ─── Afbeeldingen: verkleinen zodat de opslag klein blijft ──────────
