@@ -328,33 +328,6 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <div id="actionStatus"></div>
   </div>
 
-  <!-- De verzamelbetalingen. Die gaan niet via een order maar via een
-       memoriaal, en daar heeft Logic4 geen koppeling voor die wij mogen
-       gebruiken - dus hier staat het voorstel klaar om over te nemen. -->
-  <div class="card hidden" id="memoKaart">
-    <h3 style="margin:0 0 6px">Memoriaal-voorstel · verzamelbetalingen</h3>
-    <p class="muted" style="margin:0 0 12px;font-size:13px;line-height:1.55">
-      Deze regels horen niet bij één order maar op een grootboekrekening. Ze worden
-      <b>niet</b> door het dashboard geboekt: neem ze over in het memoriaal in Logic4,
-      of gebruik de knop hieronder om ze als regel te kopiëren.
-    </p>
-    <div style="overflow:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:13px" id="memoTabel">
-        <thead><tr>
-          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border,#e5e7eb)">Datum</th>
-          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border,#e5e7eb)">Soort</th>
-          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border,#e5e7eb)">Grootboek</th>
-          <th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border,#e5e7eb)">Bedrag</th>
-          <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border,#e5e7eb)">Omschrijving</th>
-        </tr></thead>
-        <tbody id="memoBody"></tbody>
-      </table>
-    </div>
-    <div class="row-flex" style="margin-top:12px;gap:8px;flex-wrap:wrap;align-items:center">
-      <button class="cta secondary" id="memoKopieer" type="button">📋 Kopieer als CSV</button>
-      <span class="muted" id="memoTotaal" style="font-size:12px"></span>
-    </div>
-  </div>
 </main>
 
 <script>
@@ -517,21 +490,26 @@ function classifyTx(tx) {
    van de pinautomaat gaat over tien klanten tegelijk - daar ís geen order bij,
    en dat is geen probleem maar een ander soort boeking.
 
-   De rekeningnummers komen van Osman en Gerrit uit het bevindingendocument;
-   ze staan hier hardop zodat niemand hoeft te raden waar het geld landt. */
+   Het rekeningnummer staat hier met opzet níet bij. Dat komt uit
+   REKENING_STANDAARD verderop, want dat is ook het nummer waarop echt geboekt
+   wordt en dat iemand kan overtypen. Twee lijsten met rekeningnummers in één
+   bestand is precies hoe geld op de verkeerde rekening belandt: hier stond
+   even 1175 bij Mollie terwijl er 1220 geboekt werd. */
 const TUSSEN = {
-  mollie: { label: "Mollie",           rekening: "1175",
-            uitleg: "Uitbetaling van Mollie over meerdere bestellingen tegelijk. Gaat naar grootboek 1175; de losse orders worden in de Mollie-tegel gekoppeld." },
-  paynl:  { label: "Pay.nl",           rekening: "2030",
-            uitleg: "Uitbetaling van Pay.nl over meerdere bestellingen tegelijk. Gaat naar de tussenrekening 2030." },
-  psp:    { label: "Stripe / Shopify", rekening: "2100",
+  mollie: { label: "Mollie",
+            uitleg: "Uitbetaling van Mollie over meerdere bestellingen tegelijk. Gaat naar een tussenrekening; de losse orders worden in de Mollie-tegel gekoppeld." },
+  paynl:  { label: "Pay.nl",
+            uitleg: "Uitbetaling van Pay.nl over meerdere bestellingen tegelijk. Gaat naar de tussenrekening." },
+  psp:    { label: "Stripe / Shopify",
             uitleg: "Uitbetaling van de webshop-betaaldienst over meerdere bestellingen tegelijk. Gaat naar grootboek 2100." },
-  pin:    { label: "Pinautomaat",      rekening: "2030",
+  pin:    { label: "Pinautomaat",
             uitleg: "Dagafrekening van de pinautomaat in de showroom. Gaat over meerdere klanten en hoort op de tussenrekening 2030, net als Pay.nl." },
 };
 function tussenLabel(kind) {
   const t = TUSSEN[kind];
-  return t ? t.label + " " + t.rekening : "Tussenrekening";
+  if (!t) return "Tussenrekening";
+  const nr = (typeof rekeningVoor === "function") ? rekeningVoor(kind) : "";
+  return t.label + (nr ? " " + nr : "");
 }
 function tussenUitleg(kind) {
   const t = TUSSEN[kind];
@@ -672,44 +650,9 @@ function renderResults() {
   const tbody = $("txBody");
   tbody.innerHTML = "";
   for (let i = 0; i < t.length; i++) tbody.appendChild(renderRow(t[i], i));
-  tekenMemoriaal();
   werkSelectieBij();
 }
 
-/* Het memoriaal-voorstel voor de verzamelbetalingen.
-
-   Waarom hier alleen een voorstel staat en geen knop die boekt: AddPayment van
-   Logic4 zet een betaling op een órder, en deze regels hebben er geen. Voor een
-   grootboekboeking is een memoriaal nodig, en of Logic4 dat via de koppeling
-   laat maken weet ik niet - dat is nooit uitgezocht. De Bol.com-tegel doet het
-   daarom al net zo: voorstel klaarzetten, mens neemt het over. Liever dat dan
-   een knop die iets anders doet dan hij belooft. */
-function memoRegels() {
-  return state.transactions.filter(x => x.kind !== "direct" && !x.geboekt).map(x => ({
-    datum: x.date || "",
-    soort: (TUSSEN[x.kind] || {}).label || "Tussenrekening",
-    rekening: (TUSSEN[x.kind] || {}).rekening || "",
-    bedrag: Number(x.amount) || 0,
-    omschrijving: (x.description || "").slice(0, 140),
-  }));
-}
-function tekenMemoriaal() {
-  const kaart = $("memoKaart"), body = $("memoBody");
-  if (!kaart || !body) return;
-  const r = memoRegels();
-  if (!r.length) { kaart.classList.add("hidden"); return; }
-  kaart.classList.remove("hidden");
-  body.innerHTML = r.map(x =>
-    "<tr>" +
-    "<td style='padding:6px 8px;border-bottom:1px solid #f3f4f6;white-space:nowrap'>" + escapeHtml(x.datum) + "</td>" +
-    "<td style='padding:6px 8px;border-bottom:1px solid #f3f4f6'>" + escapeHtml(x.soort) + "</td>" +
-    "<td style='padding:6px 8px;border-bottom:1px solid #f3f4f6'><b>" + escapeHtml(x.rekening) + "</b></td>" +
-    "<td style='padding:6px 8px;border-bottom:1px solid #f3f4f6;text-align:right;white-space:nowrap'>" + fmtEur(x.bedrag) + "</td>" +
-    "<td style='padding:6px 8px;border-bottom:1px solid #f3f4f6;color:var(--muted,#6b7280)'>" + escapeHtml(x.omschrijving) + "</td>" +
-    "</tr>").join("");
-  const som = r.reduce((n, x) => n + x.bedrag, 0);
-  $("memoTotaal").textContent = r.length + " regel" + (r.length === 1 ? "" : "s") + ", samen " + fmtEur(som) + ".";
-}
 
 function renderRow(tx, idx) {
   const tr = document.createElement("tr");
@@ -1076,17 +1019,6 @@ $("exportBtn").addEventListener("click", () => {
   }).catch(e => showStatus($("actionStatus"), "Klembord niet beschikbaar: " + e.message, "error"));
 });
 
-// Het memoriaal-voorstel als CSV, klaar om in Excel of in Logic4 over te nemen.
-$("memoKopieer").addEventListener("click", () => {
-  const r = memoRegels();
-  if (!r.length) return;
-  const header = ["Datum", "Soort", "Grootboekrekening", "Bedrag", "Omschrijving"];
-  const rows = r.map(x => [x.datum, x.soort, x.rekening, x.bedrag.toFixed(2), x.omschrijving.replace(/[\r\n;]/g, " ")]);
-  const csv = [header, ...rows].map(rr => rr.map(c => /[;"\n]/.test(String(c)) ? '"' + String(c).replace(/"/g, '""') + '"' : String(c)).join(";")).join("\n");
-  navigator.clipboard.writeText(csv).then(() => {
-    showStatus($("actionStatus"), r.length + " memoriaalregels naar het klembord (CSV, scheidingsteken ';').", "ok");
-  }).catch(e => showStatus($("actionStatus"), "Klembord niet beschikbaar: " + e.message, "error"));
-});
 
 $("exportJsonBtn").addEventListener("click", () => {
   const data = state.transactions.map(t => ({
