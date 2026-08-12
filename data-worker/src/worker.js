@@ -54,6 +54,10 @@ const ALLOWED_BUCKETS = new Set([
   // twintig minuten geldig en moet bewaard worden - elke keer een nieuwe halen
   // is zonde en Verizon houdt dat bij.
   "verizon-instellingen", "verizon-posities", "verizon-token",
+  // De bezorgingen waarvoor een klant een volglink heeft gekregen: code →
+  // naam, adres, welke wagen en welke dag. Alleen de code opent de pagina, dus
+  // die moet lang genoeg zijn om niet te raden te zijn.
+  "bezorgingen",
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
   "geldgoederen",     // Geld-goederenbeweging: laatste controle-momentopname + historie van de totalen
   "gg-bevindingen",   // Geld-goederenbeweging: per bevinding de status (open/opgepakt/opgelost/akkoord) + notitie
@@ -3667,6 +3671,56 @@ async function verizonPosities(env, opties) {
   return uit;
 }
 
+/* ─── De volgpagina voor de klant ──────────────────────────────────────────
+   Eén bezorging, één code, één pagina. De klant krijgt een link met een code
+   erin; die code is het enige dat de pagina opent, dus hij moet lang genoeg
+   zijn om niet te raden te zijn.
+
+   Wat er bewust NIET op komt: de naam van de chauffeur, waar de wagen daarvoor
+   was, en waar hij daarna heen gaat. Een klant hoort te zien waar zijn eigen
+   spa is en verder niets. Staat de rit als privé gemarkeerd, dan komt er geen
+   positie op het scherm.
+
+   En hij werkt alleen op de bezorgdag zelf. Buiten die dag is er niets te
+   volgen en zou een live positie alleen maar meekijken zijn. */
+function bezorgingVandaag(datum) {
+  if (!datum) return false;
+  const vandaag = new Date().toISOString().slice(0, 10);
+  return String(datum).slice(0, 10) === vandaag;
+}
+async function bezorgingStatus(env, url) {
+  const code = String(url.searchParams.get("code") || "").trim();
+  if (!/^[A-Za-z0-9_-]{8,64}$/.test(code)) return reply(400, { ok: false, error: "ongeldige code" });
+  const alle = (await env.FONTEYN_DATA.get("bezorgingen", { type: "json" })) || {};
+  const b = (alle.codes || {})[code];
+  if (!b) return reply(404, { ok: false, error: "onbekend" });
+
+  const basis = {
+    ok: true, klant: b.klant || null, adres: b.adres || null,
+    plaats: b.plaats || null, datum: b.datum || null,
+    bestelling: b.omschrijving || null, venster: b.venster || null,
+  };
+  if (!bezorgingVandaag(b.datum))
+    return reply(200, { ...basis, volgbaar: false,
+      reden: "De wagen is te volgen op de dag van bezorging zelf." });
+
+  const pos = await verizonPosities(env, {}).catch(() => null);
+  const p = pos && (pos.posities || []).find(x => String(x.voertuig) === String(b.voertuig));
+  if (!p || p.prive || p.breedtegraad == null)
+    return reply(200, { ...basis, volgbaar: true, positie: null,
+      reden: "De wagen is nu niet te volgen. Probeer het straks nog eens." });
+
+  return reply(200, { ...basis, volgbaar: true, demo: !!(pos && pos.demo),
+    positie: {
+      breedtegraad: p.breedtegraad, lengtegraad: p.lengtegraad,
+      plaats: (p.adres && p.adres.plaats) || null,
+      staat: p.staat, snelheid: p.snelheid, gemetenOp: p.gemetenOp,
+    },
+    // Waar moet het heen. Zonder dit punt is de afstand niet te tekenen.
+    bestemming: (b.lat != null && b.lon != null) ? { breedtegraad: b.lat, lengtegraad: b.lon } : null,
+  });
+}
+
 /* ─── Scheepsdocumenten ────────────────────────────────────────────────────
    Chantal (video, 12 aug 2026): "bij Schepen en Ontvangst wil ik naast Lading
    tonen een tegel hebben met documenten, dan is de commercial invoice en de
@@ -4043,6 +4097,21 @@ export default {
       opslag.gewijzigd = new Date().toISOString();
       await env.FONTEYN_DATA.put("spa-aliassen", JSON.stringify(opslag));
       return reply(200, { ok: true, van, naar });
+    }
+
+    /* De volgpagina voor de klant. Publiek: de code in de link is de sleutel,
+       en zonder geldige code komt er niets uit. */
+    if (url.pathname === "/bezorging" && request.method === "GET") {
+      const cb = Math.floor(Date.now() / 10000);
+      const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/bezorging.html?cb=" + cb);
+      if (!r.ok) return reply(502, "Pagina niet beschikbaar");
+      return new Response(await r.text(), { status: 200, headers: {
+        "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store",
+        "X-Robots-Tag": "noindex, nofollow",
+      } });
+    }
+    if (url.pathname === "/bezorging/status" && request.method === "GET") {
+      return bezorgingStatus(env, url);
     }
 
     /* Waar rijden de bakwagens. Zolang de sleutels van Verizon er niet zijn

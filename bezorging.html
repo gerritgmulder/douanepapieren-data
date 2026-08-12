@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Uw bezorging - Fonteyn</title>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     DE VOLGPAGINA VOOR DE KLANT
+
+     Wat een klant hier ziet: waar zijn eigen bakwagen is, hoe ver die nog
+     moet en ongeveer hoe laat hij voor de deur staat. Verder niets. Geen
+     naam van de chauffeur, geen route van de dag, geen andere klanten.
+
+     De pagina wordt door de worker geserveerd op /bezorging?c=<code>. Die
+     code hoort bij één bezorging en is het enige dat de pagina opent.
+
+     Hij ververst zichzelf elke twee minuten. Verizon zegt zelf dat een
+     positie niet vaker dan eens per drie tot vijf minuten opgehaald hoort te
+     worden, en de worker bewaart het antwoord vier minuten - vaker vragen
+     levert dus toch hetzelfde op.
+
+     De kaart komt van OpenStreetMap. Gratis, geen sleutel nodig, en de
+     bronvermelding staat er zoals het hoort onderin.
+
+     Wordt de pagina met verzonnen posities gevoed - zolang de sleutels van
+     Verizon er niet zijn - dan staat dat er met zoveel woorden bij. Een
+     verzonnen positie mag nooit voor een echte doorgaan.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root{
+    --groen:#144734; --groen-donker:#0d3325; --lime:#8bc53f;
+    --bg:#f5f4ef; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Montserrat",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+       background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5}
+  header{background:var(--groen);color:#fff;padding:16px 20px;display:flex;align-items:center;gap:14px}
+  header .merk{font-weight:700;font-size:15px;letter-spacing:.02em}
+  main{max-width:640px;margin:0 auto;padding:18px 16px 40px}
+  .kaart{background:#fff;border:1px solid var(--rand);border-radius:14px;padding:20px 22px;margin-bottom:14px;
+         box-shadow:0 1px 3px rgba(0,0,0,.04)}
+  h1{font-size:21px;margin:0 0 4px;color:var(--groen)}
+  .sub{color:var(--grijs);font-size:14px;margin:0}
+  #map{height:340px;border-radius:12px;margin-top:14px;border:1px solid var(--rand);background:#e8eae4}
+  .cijfers{display:flex;gap:12px;flex-wrap:wrap;margin-top:16px}
+  .cijfer{flex:1 1 140px;background:#fafaf7;border:1px solid var(--rand);border-radius:10px;padding:12px 14px}
+  .cijfer .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--grijs)}
+  .cijfer .val{font-size:22px;font-weight:700;color:var(--groen);line-height:1.2;margin-top:2px}
+  .melding{padding:12px 15px;border-radius:10px;font-size:14px;margin-top:14px}
+  .melding.wacht{background:#fef3c7;color:#92400e}
+  .melding.uit{background:#eef2f7;color:#374151}
+  .melding.demo{background:#fee2e2;color:#b91c1c;font-weight:600}
+  .voet{color:var(--grijs);font-size:12px;text-align:center;margin-top:22px;line-height:1.6}
+  .stip{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--lime);margin-right:6px;
+        vertical-align:middle;animation:pols 2s ease-in-out infinite}
+  @keyframes pols{0%,100%{opacity:1}50%{opacity:.35}}
+  .wagen{background:var(--groen);color:#fff;border-radius:50%;width:34px;height:34px;display:flex;
+         align-items:center;justify-content:center;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,.3)}
+  .huis{background:#fff;border:2px solid var(--groen);border-radius:50%;width:30px;height:30px;display:flex;
+        align-items:center;justify-content:center;font-size:15px}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="merk">FONTEYN</span>
+  <span style="font-size:13px;opacity:.85">Uw bezorging</span>
+</header>
+
+<main>
+  <div class="kaart">
+    <h1 id="titel">Bezorging volgen</h1>
+    <p class="sub" id="regel">Een moment, we halen de gegevens op…</p>
+    <div id="demoMelding"></div>
+    <div id="map" class="hidden" style="display:none"></div>
+    <div class="cijfers" id="cijfers" style="display:none"></div>
+    <div id="melding"></div>
+  </div>
+  <p class="voet" id="voet">Vragen over uw bezorging? Bel ons op 0577 - 40 88 44.</p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
+const $ = (id) => document.getElementById(id);
+const code = new URLSearchParams(location.search).get("c") || "";
+
+let map = null, wagenMarker = null, huisMarker = null, lijn = null;
+
+function esc(s){ return String(s == null ? "" : s).replace(/[<>&"]/g, c =>
+  ({ "<":"&lt;", ">":"&gt;", "&":"&amp;", '"':"&quot;" }[c])); }
+
+/* Hemelsbrede afstand. Over de weg is het altijd meer, dus de tijd die we
+   erbij zetten gaat uit van een omweg van een kwart - liever iets aan de
+   ruime kant dan een klant die voor niets bij het raam staat. */
+function afstandKm(a, b){
+  const R = 6371, rad = (x) => x * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
+  const h = Math.sin(dLat/2)**2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function tijdTekst(km){
+  const minuten = Math.round((km * 1.25) / 55 * 60) + 5;   // 55 km/u plus wat marge
+  if (minuten < 5) return "vrijwel ter plaatse";
+  if (minuten < 60) return "ongeveer " + (Math.round(minuten / 5) * 5) + " minuten";
+  const u = Math.floor(minuten / 60), m = Math.round((minuten % 60) / 15) * 15;
+  return "ongeveer " + u + " uur" + (m ? " en " + m + " minuten" : "");
+}
+function klokje(iso){
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+}
+
+function tekenKaart(pos, best){
+  $("map").style.display = "";
+  const hier = [pos.breedtegraad, pos.lengtegraad];
+  if (!map){
+    map = L.map("map", { zoomControl: true, attributionControl: true }).setView(hier, 11);
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18, attribution: "&copy; OpenStreetMap",
+    }).addTo(map);
+  }
+  const wagenIcoon = L.divIcon({ className: "", html: '<div class="wagen">🚚</div>', iconSize: [34,34], iconAnchor: [17,17] });
+  if (wagenMarker) wagenMarker.setLatLng(hier);
+  else wagenMarker = L.marker(hier, { icon: wagenIcoon }).addTo(map);
+
+  if (best && best.breedtegraad != null){
+    const daar = [best.breedtegraad, best.lengtegraad];
+    const huisIcoon = L.divIcon({ className: "", html: '<div class="huis">🏠</div>', iconSize: [30,30], iconAnchor: [15,15] });
+    if (huisMarker) huisMarker.setLatLng(daar);
+    else huisMarker = L.marker(daar, { icon: huisIcoon }).addTo(map);
+    if (lijn) map.removeLayer(lijn);
+    lijn = L.polyline([hier, daar], { color: "#144734", weight: 3, opacity: .5, dashArray: "6 8" }).addTo(map);
+    map.fitBounds(L.latLngBounds([hier, daar]).pad(0.3));
+  } else {
+    map.setView(hier, 12);
+  }
+}
+
+function toonCijfers(pos, best){
+  const vakjes = [];
+  if (best && best.breedtegraad != null){
+    const km = afstandKm({ lat: pos.breedtegraad, lon: pos.lengtegraad },
+                         { lat: best.breedtegraad, lon: best.lengtegraad });
+    vakjes.push(["Nog te gaan", (km < 1 ? "minder dan 1" : Math.round(km)) + " km"]);
+    vakjes.push(["Verwachte aankomst", tijdTekst(km)]);
+  }
+  if (pos.plaats) vakjes.push(["Nu in de buurt van", pos.plaats]);
+  if (pos.staat) vakjes.push(["Wagen", pos.staat === "rijdt" || Number(pos.snelheid) > 3 ? "onderweg" : "staat stil"]);
+  $("cijfers").style.display = vakjes.length ? "" : "none";
+  $("cijfers").innerHTML = vakjes.map(v =>
+    '<div class="cijfer"><div class="lbl">' + esc(v[0]) + '</div><div class="val">' + esc(v[1]) + "</div></div>").join("");
+}
+
+async function haal(){
+  if (!code){
+    $("titel").textContent = "Link onvolledig";
+    $("regel").textContent = "Deze link mist een code. Gebruik de link uit de e-mail die u van ons heeft gekregen.";
+    return;
+  }
+  try{
+    const r = await fetch(WORKER + "/bezorging/status?code=" + encodeURIComponent(code));
+    const j = await r.json();
+    if (!j.ok){
+      $("titel").textContent = "Bezorging niet gevonden";
+      $("regel").textContent = "We kunnen deze bezorging niet vinden. Klopt de link uit onze e-mail nog?";
+      return;
+    }
+    $("titel").textContent = j.klant ? ("Hallo " + j.klant) : "Uw bezorging";
+    const waar = [j.adres, j.plaats].filter(Boolean).join(", ");
+    $("regel").innerHTML = (j.bestelling ? esc(j.bestelling) + " wordt bezorgd" : "Uw bestelling wordt bezorgd") +
+      (waar ? " op " + esc(waar) : "") + (j.venster ? " tussen " + esc(j.venster) : "") + ".";
+
+    $("demoMelding").innerHTML = j.demo
+      ? '<div class="melding demo">Let op: dit is een testweergave met een verzonnen positie. De koppeling met de wagens is nog niet ingeschakeld.</div>'
+      : "";
+
+    if (!j.volgbaar){
+      $("melding").innerHTML = '<div class="melding uit">' + esc(j.reden || "") + "</div>";
+      return;
+    }
+    if (!j.positie){
+      $("melding").innerHTML = '<div class="melding wacht">' + esc(j.reden || "De wagen is nu niet te volgen.") + "</div>";
+      return;
+    }
+    tekenKaart(j.positie, j.bestemming);
+    toonCijfers(j.positie, j.bestemming);
+    const tijd = klokje(j.positie.gemetenOp);
+    $("melding").innerHTML = '<div class="melding uit"><span class="stip"></span>Laatste positie' +
+      (tijd ? " van " + esc(tijd) + " uur" : "") + ". Deze pagina ververst zichzelf.</div>";
+  }catch(e){
+    $("melding").innerHTML = '<div class="melding wacht">We konden de gegevens even niet ophalen. Probeer het zo nog eens.</div>';
+  }
+}
+
+haal();
+// Elke twee minuten opnieuw. De worker bewaart zijn antwoord vier minuten, dus
+// vaker vragen levert toch hetzelfde op.
+setInterval(haal, 120000);
+</script>
+</body>
+</html>
