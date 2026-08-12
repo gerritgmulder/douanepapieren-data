@@ -83,11 +83,28 @@
     #previewKolom{position:static}
     .sheet-scroll{max-height:none}
   }
+  /* ── De pagina zelf ───────────────────────────────────────────────────────
+     Rondom 12,7 mm vrij, precies wat InDesign standaard aanhoudt (een halve
+     inch). Dat is de marge die elke printer nodig heeft om te kunnen pakken;
+     wat daarbuiten staat kan er bij het printen afvallen. De randen waren
+     hiervoor 14/13/12 mm en dus per kant net anders (Gerrit, 11 aug 2026).
+
+     height en niet min-height. Met min-height groeit de pagina gewoon door als
+     er te veel op staat, en dan schuift de rest ongemerkt naar een tweede vel
+     - precies wat Gretha zag. Met een vaste hoogte is er een tekort, en dat
+     tekort kunnen we meten en oplossen in plaats van laten gebeuren.
+     Pagina 2 werkte al zo. */
   #sheet{
-    width:210mm;min-height:297mm;background:#fff;margin:0 auto;padding:14mm 13mm 12mm;
+    width:210mm;height:297mm;background:#fff;margin:0 auto;padding:12.7mm;
     box-shadow:0 3px 16px rgba(0,0,0,.14);color:#000;position:relative;
     transform-origin:top center;
+    display:flex;flex-direction:column;
   }
+  #sheet .kopblok{flex:0 0 auto}
+  /* De specificaties krijgen wat er overblijft. min-height:0 is nodig, anders
+     weigert een flex-kind kleiner te worden dan zijn inhoud en loopt hij er
+     alsnog onderuit. */
+  #sheet .kolommen{flex:1 1 auto;min-height:0}
   #sheet .kop{display:flex;align-items:flex-start;gap:6mm}
   #sheet .kop .logo{width:34mm;flex:0 0 auto}
   #sheet .kop .logo img{width:100%;display:block}
@@ -172,7 +189,7 @@
      wat Gretha zag: bij 36 onderdelen sprong hij naar een derde pagina terwijl
      de tekening onverstoorbaar op 118mm bleef staan (3 aug). Met een vaste
      hoogte is er wél een tekort en geeft de tekening ruimte terug. */
-  #sheet2{width:210mm;height:297mm;background:#fff;margin:14px auto 0;padding:14mm 13mm 12mm;
+  #sheet2{width:210mm;height:297mm;background:#fff;margin:14px auto 0;padding:12.7mm;
     box-shadow:0 3px 16px rgba(0,0,0,.14);color:#000;position:relative;
     display:flex;flex-direction:column}
   #sheet2 .kopblok,#sheet2 .legenda{flex:0 0 auto}
@@ -195,14 +212,23 @@
   #sheet .fotos img{max-width:100%;max-height:72mm;object-fit:contain;display:block}
   #sheet .fotos .leeg{width:100%;height:56mm;border:1px dashed #ccc;border-radius:2mm;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:9pt;font-family:Montserrat,sans-serif}
   #sheet .kolommen{display:grid;grid-template-columns:1fr 1fr;gap:7mm}
-  #sheet .sectie{margin-bottom:5mm;break-inside:avoid}
-  #sheet .sectie h3{font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:8.2pt;letter-spacing:.02em;margin:0 0 1.4mm;text-transform:uppercase}
-  #sheet .spec{display:flex;align-items:baseline;font-size:10pt;line-height:1.34;padding:0 1mm}
+  /* --sp is de schaal van het specificatieblok. Hij staat op 1 en gaat alleen
+     omlaag als het anders niet op de pagina past; zie pasSpecsIn(). Zo blijft
+     alles op één vel in plaats van dat de laatste blokken naar pagina 2
+     schuiven. */
+  #sheet{--sp:1}
+  #sheet .sectie{margin-bottom:calc(5mm * var(--sp));break-inside:avoid}
+  #sheet .sectie h3{font-family:Helvetica,Arial,sans-serif;font-weight:700;font-size:calc(8.2pt * var(--sp));letter-spacing:.02em;margin:0 0 calc(1.4mm * var(--sp));text-transform:uppercase}
+  #sheet .spec{display:flex;align-items:baseline;font-size:calc(10pt * var(--sp));line-height:1.34;padding:0 1mm}
   #sheet .spec .l{white-space:nowrap}
   #sheet .spec .d{flex:1;border-bottom:.7pt dotted #4a4a4a;margin:0 1pt 1.4pt;min-width:6pt}
   #sheet .spec .v{white-space:nowrap;padding-left:1pt}
   #sheet .spec.zebra{background:var(--zebra)}
-  #sheet .voet{position:absolute;left:13mm;right:13mm;bottom:7mm;font-size:6pt;color:#555;display:flex;justify-content:space-between;font-family:Montserrat,sans-serif}
+  /* De voettekst stond op 7 mm van de onderrand en dus búiten de printmarge:
+     op een deel van de printers viel hij eraf. Hij hoort nu gewoon onderaan de
+     pagina binnen de 12,7 mm, als laatste blok en niet zwevend - zo kan hij
+     ook nooit meer over de specificaties heen vallen. */
+  #sheet .voet{flex:0 0 auto;margin-top:auto;padding-top:2mm;font-size:6pt;color:#555;display:flex;justify-content:space-between;font-family:Montserrat,sans-serif}
 
   /* Lettertype-varianten voor de collectie-regel */
   /* De échte huisstijl-fonts (Gretha, 29 jul). Ze worden bij het openen geladen
@@ -227,7 +253,7 @@
     .wrap{display:block;padding:0;margin:0;max-width:none}
     #previewKolom{position:static}
     .sheet-scroll{padding:0;border:0;background:none;overflow:visible;max-height:none;height:auto!important}
-    #sheet{width:210mm;min-height:297mm;box-shadow:none;margin:0;transform:none!important}
+    #sheet{width:210mm;height:297mm;box-shadow:none;margin:0;transform:none!important}
     #sheet2{width:210mm;height:297mm;box-shadow:none;margin:0;transform:none!important}
     /* Pagina 2 begint op een nieuw vel */
     #sheet2{page-break-before:always;break-before:page}
@@ -293,6 +319,9 @@
          te noemen: verandert dit nummer niet na een herstart, dan haalt de app
          de nieuwe bestanden niet op. -->
     <p style="font-size:10.5px;color:var(--muted);margin:2px 0 0">Versie van deze tegel: <b id="tegelVersie">—</b></p>
+    <!-- Past het niet op één vel, dan hoort dat op het scherm te staan en niet
+         pas op te vallen als de PDF er is. -->
+    <div id="pasMelding" class="status-msg warn hidden" style="margin-top:8px"></div>
     <div id="status" class="status-msg hidden"></div>
 
     <h4>Kop</h4>
@@ -422,7 +451,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="11-08-2026 · 11:20";
+const TEGEL_VERSIE="11-08-2026 · 16:05";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
@@ -1079,6 +1108,45 @@ function teken(){
   el("sKolomR").innerHTML=bouw("R");
   el("sVoetL").textContent=S.voetL||"";
   el("sVoetR").textContent=S.voetR||"";
+  pasSpecsIn();
+}
+
+/* ─── Alles op één vel houden ────────────────────────────────────────────
+   Gretha, 11 aug 2026: "Specs worden nu doorgeschoven naar pagina 2."
+
+   Dat gebeurde omdat de pagina meegroeide met wat erop stond. Stond er meer
+   op dan er paste, dan werd het vel gewoon langer en zette de browser bij het
+   printen de rest op een volgend blad - zonder dat er iets van te zien was in
+   het voorbeeld.
+
+   De pagina heeft nu een vaste hoogte, dus er ís ruimte en er is een tekort.
+   Past het niet, dan worden de specificaties in kleine stapjes verkleind tot
+   ze wél passen. Dat is wat een opmaker met de hand ook doet. Onder de 78%
+   wordt het onleesbaar; dan houdt hij op en zegt hij het gewoon, want een
+   sheet die stiekem niet klopt is erger dan een melding. */
+var SPEC_MIN=0.78;
+function pasSpecsIn(){
+  const sh=el("sheet"), kol=sh&&sh.querySelector(".kolommen");
+  if(!kol) return;
+  sh.style.setProperty("--sp","1");
+  let schaal=1;
+  // Meten met een grens: bij een lege sheet is scrollHeight gelijk aan
+  // clientHeight en gebeurt er niets.
+  while(kol.scrollHeight>kol.clientHeight+1&&schaal>SPEC_MIN){
+    schaal=Math.round((schaal-0.02)*100)/100;
+    sh.style.setProperty("--sp",String(schaal));
+  }
+  const past=kol.scrollHeight<=kol.clientHeight+1;
+  const m=el("pasMelding");
+  if(!m) return;
+  if(past&&schaal===1){ m.classList.add("hidden"); return; }
+  m.classList.remove("hidden");
+  m.className="status-msg "+(past?"":"bad");
+  m.innerHTML=past
+    ? "De specificaties zijn tot <b>"+Math.round(schaal*100)+"%</b> verkleind om op de pagina te passen. "+
+      "Wil je ze op ware grootte? Haal dan een paar regels weg of maak de foto kleiner."
+    : "<b>Er past niet alles op de pagina.</b> Ook op "+Math.round(SPEC_MIN*100)+"% is het te veel. "+
+      "Haal een paar specificatieregels weg, of maak de grote foto kleiner - anders valt het onderste weg bij het printen.";
 }
 
 // Zoom van de preview (raakt de print niet)
