@@ -3461,8 +3461,26 @@ async function bankGrootboeken(env) {
 async function bankMemoriaal(env, body) {
   const regels = (Array.isArray(body.regels) ? body.regels : []).slice(0, 30);
   if (!regels.length) return { ok: false, error: "geen regels meegegeven" };
+  /* Het dagboek moet er één van het type Memoriaal zijn.
+
+     Eerst ging hier het bankdagboek in, hetzelfde als bij de betalingen op
+     orders. Logic4 weigerde dat: "Dit eindpunt kan alleen boeken van type
+     Memoriaal toevoegen, maar het meegegeven financieel dagboek 17 is een
+     Bank boek" (Osman, 12 aug 2026).
+
+     Er is geen weg omheen. De hele API kent maar drie soorten boekingen die
+     je kunt toevoegen - inkoop, verkoop en memoriaal - en in een bankdagboek
+     kun je alleen via AddPayment iets kwijt, en dat wil een order. Een regel
+     die niet bij een order hoort kan dus alleen in een memoriaaldagboek.
+
+     Daarom twee mutaties in plaats van één: de tussenrekening én de
+     grootboekrekening van de bank. In een bankdagboek zit die bankkant in het
+     dagboek zelf, in een memoriaal moet je hem er zelf bij zetten, anders
+     staat de boeking niet in evenwicht. */
   const bookingId = Number(body.bookingId);
-  if (!bookingId) return { ok: false, error: "geen dagboek gekozen" };
+  const bankLedgerId = Number(body.bankLedgerId) || null;
+  if (!bookingId) return { ok: false, error: "geen memoriaal-dagboek gekozen" };
+  if (!bankLedgerId) return { ok: false, error: "de grootboekrekening van de bank is niet bekend; kies het bankdagboek opnieuw" };
 
   let lijsten;
   try { lijsten = await bankGrootboeken(env); }
@@ -3487,12 +3505,13 @@ async function bankMemoriaal(env, body) {
           Reference: String(r.referentie || "Bankafschrift").slice(0, 60),
           BookingDateTime: datum + "T12:00:00",
           FinancialBookId: bookingId,
-          Mutations: [{
-            LedgerId: gb.id,
-            VatCode: lijsten.btwNul.id,
-            AmountIncl: bedrag,
-            Description: String(r.omschrijving || "").slice(0, 200) || "Bankafschrift",
-          }],
+          Mutations: [
+            // De bank erbij, anders staat de boeking niet in evenwicht.
+            { LedgerId: bankLedgerId, VatCode: lijsten.btwNul.id, AmountIncl: bedrag,
+              Description: String(r.omschrijving || "").slice(0, 200) || "Bankafschrift" },
+            { LedgerId: gb.id, VatCode: lijsten.btwNul.id, AmountIncl: -bedrag,
+              Description: String(r.omschrijving || "").slice(0, 200) || "Bankafschrift" },
+          ],
         }),
       });
       const tekst = await resp.text();
@@ -3720,6 +3739,12 @@ export default {
         return reply(200, { ok: true, dagboeken: (lijst || []).map(x => ({
           id: x.Id != null ? x.Id : (x.BookingId != null ? x.BookingId : null),
           naam: x.Name || x.Description || x.Code || "",
+          // Het type bepaalt wat er in mag: een betaling op een order kan
+          // alleen in een bankdagboek, een losse regel alleen in een
+          // memoriaal. En de grootboekrekening van het dagboek hebben we
+          // nodig om een memoriaal in evenwicht te krijgen.
+          type: x.FinancialBookType != null ? x.FinancialBookType : null,
+          ledgerId: x.LedgerId != null ? x.LedgerId : null,
         })).filter(x => x.id != null) });
       } catch (e) { return reply(200, { ok: false, error: String(e.message || e) }); }
     }

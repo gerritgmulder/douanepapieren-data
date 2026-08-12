@@ -315,6 +315,17 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       </select>
       <span id="dagboekInfo" class="muted" style="font-size:12px"></span>
     </div>
+    <!-- Een regel die niet bij een order hoort kan niet in een bankdagboek:
+         Logic4 laat via de API alleen inkoop-, verkoop- en memoriaalboekingen
+         toe, en in een bankdagboek kom je alleen via een betaling op een order
+         binnen. Vandaar een tweede dagboek voor die regels. -->
+    <div class="row-flex" style="margin-top:8px;gap:8px;flex-wrap:wrap;align-items:center;">
+      <label class="muted" for="memDagboek" style="font-size:12px">Memoriaal-dagboek voor de grootboekregels</label>
+      <select id="memDagboek" style="border:1px solid var(--border);border-radius:7px;padding:7px 10px;font:inherit;font-size:13px;min-width:240px">
+        <option value="">— kies het memoriaal-dagboek —</option>
+      </select>
+      <span id="memDagboekInfo" class="muted" style="font-size:12px"></span>
+    </div>
     <div class="row-flex" style="margin-top:12px;gap:8px;flex-wrap:wrap;align-items:center;">
       <button class="cta" id="boekBtn" type="button" disabled>Boek de geselecteerde betalingen</button>
       <button class="cta secondary" id="exportBtn">📋 Kopieer als CSV</button>
@@ -830,7 +841,18 @@ $("kiesGeen").addEventListener("click", () => {
    dagboek is geld op de verkeerde plek. Daarom wordt de lijst uit Logic4
    opgehaald en kiest een mens er één; het dashboard vult hier niets zelf in.
    De keuze blijft op deze computer staan, dus het is eenmalig. */
-const DAGBOEK_KEY = "bank.dagboek";
+const DAGBOEK_KEY = "bank.dagboek", MEM_DAGBOEK_KEY = "bank.memdagboek";
+let dagboeken = [];
+function gekozenMemDagboek() {
+  const v = parseInt(($("memDagboek") || {}).value || "", 10);
+  return isNaN(v) ? null : v;
+}
+// De grootboekrekening die bij het bankdagboek hoort. Die is nodig om een
+// memoriaal in evenwicht te krijgen: bank aan tussenrekening.
+function bankLedgerId() {
+  const d = dagboeken.find(x => String(x.id) === String(gekozenDagboek()));
+  return d ? d.ledgerId : null;
+}
 function gekozenDagboek() {
   const v = parseInt(($("dagboek") || {}).value || "", 10);
   return isNaN(v) ? null : v;
@@ -841,15 +863,24 @@ async function laadDagboeken() {
     const r = await fetch(WORKER + "/bank/dagboeken", { headers: { "X-Fonteyn-Auth": teamKey() } });
     const j = await r.json();
     if (!j.ok) { $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + (j.error || "") + ". Je kunt niet boeken zonder dagboek."; return; }
+    dagboeken = j.dagboeken || [];
     const onthouden = localStorage.getItem(DAGBOEK_KEY) || "";
-    sel.innerHTML = "<option value=''>— kies eerst het dagboek —</option>" +
-      j.dagboeken.map(d => "<option value='" + d.id + "'" + (String(d.id) === onthouden ? " selected" : "") + ">" +
+    const opties = (gekozen) => "<option value=''>— kies —</option>" +
+      dagboeken.map(d => "<option value='" + d.id + "'" + (String(d.id) === gekozen ? " selected" : "") + ">" +
         String(d.naam).replace(/[<>&]/g, "") + " (" + d.id + ")</option>").join("");
+    sel.innerHTML = opties(onthouden);
+    const mem = $("memDagboek");
+    if (mem) mem.innerHTML = opties(localStorage.getItem(MEM_DAGBOEK_KEY) || "");
     $("dagboekInfo").textContent = onthouden ? "" : "Kies het dagboek van de bankrekening waar dit afschrift bij hoort.";
   } catch (e) {
     $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + e.message;
   }
 }
+if ($("memDagboek")) $("memDagboek").addEventListener("change", () => {
+  const v = $("memDagboek").value;
+  if (v) localStorage.setItem(MEM_DAGBOEK_KEY, v); else localStorage.removeItem(MEM_DAGBOEK_KEY);
+  $("memDagboekInfo").textContent = "";
+});
 if ($("dagboek")) $("dagboek").addEventListener("change", () => {
   const v = $("dagboek").value;
   if (v) localStorage.setItem(DAGBOEK_KEY, v); else localStorage.removeItem(DAGBOEK_KEY);
@@ -860,6 +891,11 @@ laadDagboeken();
 $("boekBtn").addEventListener("click", async () => {
   const rijen = selectie();
   if (!rijen.length) return;
+  if (rijen.some(t => t.kind !== "direct") && !gekozenMemDagboek()) {
+    showStatus($("actionStatus"), "Kies eerst het memoriaal-dagboek. De regels die niet bij één order horen " +
+      "kunnen niet in een bankdagboek: Logic4 laat daar alleen betalingen op orders toe. Er is niets geboekt.", "error");
+    return;
+  }
   if (!gekozenDagboek()) {
     showStatus($("actionStatus"), "Kies eerst het dagboek van deze bankrekening. Zonder dagboek weigert Logic4 de boeking, " +
       "en in het verkeerde dagboek staat het geld op de verkeerde plek. Er is niets geboekt.", "error");
@@ -889,7 +925,8 @@ $("boekBtn").addEventListener("click", async () => {
     showStatus($("actionStatus"), naarGrootboek.length + " regel(s) op een grootboekrekening boeken…", "info");
     const r = await fetch(WORKER + "/bank/memoriaal", {
       method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
-      body: JSON.stringify({ door: (localStorage.getItem("fp.email") || ""), bookingId: gekozenDagboek(),
+      body: JSON.stringify({ door: (localStorage.getItem("fp.email") || ""),
+        bookingId: gekozenMemDagboek(), bankLedgerId: bankLedgerId(),
         regels: naarGrootboek.map(t => ({
           rekening: rekeningVoor(t.kind), bedrag: Number(t.amount), datum: t.date || null,
           referentie: "Afschrift " + (state.statementNr || state.fileName),

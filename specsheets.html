@@ -452,7 +452,7 @@ const ALLOWED=new Set([
 // Ophogen bij elke aanpassing aan deze tegel. Zo kan iemand aan de telefoon
 // zeggen welke versie hij ziet, in plaats van dat we moeten raden of een
 // wijziging is aangekomen.
-const TEGEL_VERSIE="12-08-2026 · 15:40";
+const TEGEL_VERSIE="12-08-2026 · 14:05";
 document.addEventListener("DOMContentLoaded",function(){
   const e=document.getElementById("tegelVersie"); if(e) e.textContent=TEGEL_VERSIE;
 });
@@ -784,6 +784,43 @@ el("btnVerwijder").addEventListener("click",async()=>{
   }catch(e){}
   S=leegSheet(); vulKiezer(); toonSheet(); toon("ok","Verwijderd.");
 });
+/* ─── Terughalen wat er nog is ────────────────────────────────────────────
+   Een sheet die leeg uit de opslag komt staat wél nog in de lijst. Dat komt
+   uit de omzetting naar losse sleutels: die keek niet naar het antwoord van
+   de server, dus een sheet die te groot was kreeg een 413 terug die als
+   gelukt werd geteld, waarna de oude opslag met alleen de index werd
+   overschreven.
+
+   Die fout is hersteld, maar dat helpt niet voor wat er toen al misging.
+   Daarom eerst kijken of de volledige sheet nog in de oude opslag staat en
+   hem dan terugzetten. Staat hij er niet meer, dan is dat het antwoord - en
+   dan is een vage melding het laatste wat iemand kan gebruiken. */
+async function probeerHerstel(id){
+  toon("info","Deze sheet komt leeg terug. Kijken of hij nog in de oude opslag staat…");
+  try{
+    const r=await fetch(BUCKET+"?t="+Date.now(),{headers:{"X-Fonteyn-Auth":TEAM()}});
+    const j=r.ok?await r.json():null;
+    const rij=((j&&j.sheets)||[]).find(x=>x&&String(x.id)===String(id));
+    const heeftInhoud=rij&&(rij.blokken||rij.fotoHoofd||rij.legenda||rij.badges);
+    if(!heeftInhoud){
+      toon("bad","Deze sheet is leeg in de opslag en staat ook niet meer volledig in de oude opslag. "+
+        "De inhoud is er niet meer; hij zal opnieuw gemaakt moeten worden. Het lek waardoor dit kon "+
+        "gebeuren is dicht, dus dit kan niet nog een keer.");
+      return false;
+    }
+    const p=await fetch(SHEET_URL(id),{method:"PUT",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},body:JSON.stringify(rij)});
+    if(!p.ok){
+      toon("bad","De sheet staat nog wél in de oude opslag, maar terugzetten lukt niet (HTTP "+p.status+"). "+
+        (p.status===413?"Hij is te groot; de foto's moeten kleiner.":"Geef dit door."));
+      return false;
+    }
+    S=normaliseerSheet(rij); toonSheet();
+    toon("ok","Teruggezet uit de oude opslag — "+(S.naam||S.model||"")+". Controleer hem en druk op Bewaren.");
+    return true;
+  }catch(e){ toon("bad","Terughalen mislukte: "+e.message); return false; }
+}
+
 el("sheetKies").addEventListener("change",async()=>{
   const id=el("sheetKies").value;
   if(!id){ S=leegSheet(); toonSheet(); return; }
@@ -800,10 +837,8 @@ el("sheetKies").addEventListener("change",async()=>{
       // Dat tweede betekent dat de inhoud er niet meer is, en dat hoort geen
       // vage melding te zijn.
       const leeg=s&&typeof s==="object"&&!Object.keys(s).length;
-      toon("bad",leeg
-        ? "Deze sheet staat leeg in de opslag: de inhoud is er niet meer. Hij staat nog wel in de lijst. "+
-          "Geef dit door met de modelnaam erbij, dan zoek ik uit wat ermee gebeurd is."
-        : "Deze sheet kon niet opgehaald worden uit de opslag. Probeer het zo nog eens.");
+      if(leeg) await probeerHerstel(id);
+      else toon("bad","Deze sheet kon niet opgehaald worden uit de opslag. Probeer het zo nog eens.");
       gelukt=false;
     }
   }catch(e){ S=leegSheet(); toon("bad","Sheet laden mislukt: "+e.message); gelukt=false; }
