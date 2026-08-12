@@ -731,6 +731,21 @@ function renderRow(tx, idx) {
 }
 
 // ─── Selectie ───────────────────────────────────────────────────────
+/* Wat Osman straks in het dagboek ziet staan in de kolom Info.
+
+   Er stond "Bankbetaling 2026-08-11 — afschrift 223": voor elke regel
+   hetzelfde, dus in een dagboek met twintig regels zegt het niets. Osman
+   vroeg om het ordernummer, en Logic4's eigen MT940-import schrijft daar
+   "Betaling voor order 3509130" (12 aug 2026). Diezelfde bewoording dus, met
+   het afschriftnummer erachter zodat een boeking naar de bankregel terug te
+   leiden blijft. */
+function omschrijvingVoor(orderNr, invoiceId, st) {
+  const afschrift = (st && (st.statementNr || st.fileName)) || "";
+  return "Betaling voor order " + orderNr +
+    (invoiceId ? " (factuur " + invoiceId + ")" : "") +
+    (afschrift ? " · afschrift " + afschrift : "");
+}
+
 /* ─── De grootboekrekening per soort ─────────────────────────────────
    De rekeningnummers komen van Osman en Gerrit (bevindingendocument, 11 aug
    2026): de pinautomaat en Pay.nl op 2030, Stripe/Shopify op 2100, Mollie op
@@ -911,13 +926,13 @@ $("boekBtn").addEventListener("click", async () => {
   const teBoeken = [], geenOrder = [];
   for (const t of directe) {
     teBoeken.push({ orderNr: t.orderNr, invoiceId: null, bedrag: Number(t.amount), tx: t, datum: t.date || null,
-      omschrijving: "Bankbetaling " + (t.date || "") + " — afschrift " + (state.statementNr || state.fileName) });
+      omschrijving: omschrijvingVoor(t.orderNr, null, state) });
   }
   for (const p of paren) {
     const o = orders[String(p.invoiceId)];
     if (o && o.orderNr) {
       teBoeken.push({ orderNr: o.orderNr, invoiceId: p.invoiceId, bedrag: Number(p.tx.amount), tx: p.tx, datum: p.tx.date || null,
-        omschrijving: "Bankbetaling " + (p.tx.date || "") + " — afschrift " + (state.statementNr || state.fileName) + " — factuur " + p.invoiceId });
+        omschrijving: omschrijvingVoor(o.orderNr, p.invoiceId, state) });
     } else {
       geenOrder.push({ invoiceId: p.invoiceId, reden: (o && o.fout) || "geen ordernummer op deze factuur" });
     }
