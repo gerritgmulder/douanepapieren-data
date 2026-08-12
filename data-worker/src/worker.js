@@ -3420,18 +3420,23 @@ async function bankBoeken(env, body) {
    nul-procentcode, dan gaat er niets weg en zegt hij dat. */
 async function bankGrootboeken(env) {
   const token = await l4Token(env);
-  const haal = async (pad) => {
-    const r = await fetch("https://api.logic4server.nl" + pad, {
-      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: "{}",
-    });
+  /* GetLedgers en GetVatCodes zijn GET, niet POST. Logic4 doet dat niet
+     overal hetzelfde: GetFinancialBooks is wél POST. Met POST komt er een
+     405 terug ("Method Not Allowed"), en dat is precies waar Osman op stuitte
+     bij de eerste memoriaalpoging (12 aug 2026). Staat in de openapi-
+     beschrijving van Logic4; ik was ervan uitgegaan dat alles POST was. */
+  const haal = async (pad, methode) => {
+    const r = await fetch("https://api.logic4server.nl" + pad, methode === "GET"
+      ? { method: "GET", headers: { "Authorization": "Bearer " + token } }
+      : { method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: "{}" });
     const tekst = await r.text();
     let j = null; try { j = JSON.parse(tekst); } catch {}
     if (!r.ok) throw new Error(pad + " gaf HTTP " + r.status + " — " + tekst.slice(0, 200));
     return Array.isArray(j) ? j : ((j && (j.Value || j.Records)) || []);
   };
   const [ledgers, btw] = await Promise.all([
-    haal("/v3/Financial/GetLedgers"),
-    haal("/v3/Financial/GetVatCodes"),
+    haal("/v3/Financial/GetLedgers", "GET"),
+    haal("/v3/Financial/GetVatCodes", "GET"),
   ]);
   const nul = (btw || []).find(v => Number(v.Percent) === 0);
   return {
