@@ -318,11 +318,13 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <!-- Een regel die niet bij een order hoort kan niet in een bankdagboek:
          Logic4 laat via de API alleen inkoop-, verkoop- en memoriaalboekingen
          toe, en in een bankdagboek kom je alleen via een betaling op een order
-         binnen. Vandaar een tweede dagboek voor die regels. -->
-    <div class="row-flex" style="margin-top:8px;gap:8px;flex-wrap:wrap;align-items:center;">
+         binnen. Welk dagboek het memoriaal is zoekt het dashboard zelf uit -
+         dit vakje is de uitzondering, voor als dat niet lukt. Het blijft dan
+         staan voor iedereen, dus het is eenmalig. -->
+    <div class="row-flex" id="memRij" style="margin-top:8px;gap:8px;flex-wrap:wrap;align-items:center;display:none">
       <label class="muted" for="memDagboek" style="font-size:12px">Memoriaal-dagboek voor de grootboekregels</label>
       <select id="memDagboek" style="border:1px solid var(--border);border-radius:7px;padding:7px 10px;font:inherit;font-size:13px;min-width:240px">
-        <option value="">— kies het memoriaal-dagboek —</option>
+        <option value="">— automatisch —</option>
       </select>
       <span id="memDagboekInfo" class="muted" style="font-size:12px"></span>
     </div>
@@ -682,7 +684,7 @@ function renderRow(tx, idx) {
     badge = "<span class='badge tussen'>Zeker · grootboek</span>";
     info = "<div class='match-info'>" + escapeHtml(tussenUitleg(tx.kind)) +
       "<div style='margin-top:5px;display:flex;gap:6px;align-items:center;flex-wrap:wrap'>" +
-        "<span>Boeken op rekening</span>" +
+        "<span>Boekt op rekening</span>" +
         "<input class='rekeningVeld' data-idx='" + idx + "' value='" + escapeHtml(rekeningVoor(tx.kind)) + "' " +
           "inputmode='numeric' style='width:78px;padding:3px 6px;border:1px solid var(--border,#d5d9e0);border-radius:6px;font:inherit;font-size:12px'>" +
         "<span style='color:var(--muted,#6b7280)'>" + escapeHtml(rekeningNaam(rekeningVoor(tx.kind))) + "</span>" +
@@ -843,9 +845,25 @@ $("kiesGeen").addEventListener("click", () => {
    De keuze blijft op deze computer staan, dus het is eenmalig. */
 const DAGBOEK_KEY = "bank.dagboek", MEM_DAGBOEK_KEY = "bank.memdagboek";
 let dagboeken = [];
+/* Het memoriaal-dagboek zoekt de worker zelf op, en onthoudt het daarna voor
+   iedereen. Dit vakje is er alleen voor het geval dat niet lukt: dan blijft de
+   boeking staan, wijst iemand het één keer aan, en is het daarna klaar
+   (Gerrit, 12 aug 2026: "dat hoor je natuurlijk zelf al te doen"). */
 function gekozenMemDagboek() {
   const v = parseInt(($("memDagboek") || {}).value || "", 10);
   return isNaN(v) ? null : v;
+}
+// De keuze bij de worker leggen in plaats van in deze browser, zodat Osman en
+// Reinier hem niet allebei apart hoeven te maken.
+async function bewaarMemDagboek(id) {
+  try {
+    const r = await fetch(WORKER + "/data/bank-instellingen", { headers: { "X-Fonteyn-Auth": teamKey() } });
+    const huidig = r.ok ? (await r.json().catch(() => ({}))) : {};
+    const naam = (dagboeken.find(d => String(d.id) === String(id)) || {}).naam || "";
+    await fetch(WORKER + "/data/bank-instellingen", {
+      method: "PUT", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ ...(huidig || {}), memBookingId: Number(id), memNaam: naam }) });
+  } catch (e) {}
 }
 // De grootboekrekening die bij het bankdagboek hoort. Die is nodig om een
 // memoriaal in evenwicht te krijgen: bank aan tussenrekening.
@@ -865,12 +883,25 @@ async function laadDagboeken() {
     if (!j.ok) { $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + (j.error || "") + ". Je kunt niet boeken zonder dagboek."; return; }
     dagboeken = j.dagboeken || [];
     const onthouden = localStorage.getItem(DAGBOEK_KEY) || "";
-    const opties = (gekozen) => "<option value=''>— kies —</option>" +
-      dagboeken.map(d => "<option value='" + d.id + "'" + (String(d.id) === gekozen ? " selected" : "") + ">" +
+    const opties = (lijst, gekozen, leeg) => "<option value=''>" + leeg + "</option>" +
+      lijst.map(d => "<option value='" + d.id + "'" + (String(d.id) === gekozen ? " selected" : "") + ">" +
         String(d.naam).replace(/[<>&]/g, "") + " (" + d.id + ")</option>").join("");
-    sel.innerHTML = opties(onthouden);
+    sel.innerHTML = opties(dagboeken, onthouden, "— kies —");
+    /* Het memoriaal-vakje krijgt alleen dagboeken die géén bankboek zijn: op
+       een bankboek weigert Logic4 de memoriaalboeking, en dat was precies de
+       fout die Osman kreeg met dagboek 17. En het vakje blijft weg zolang de
+       worker het zelf weet. */
     const mem = $("memDagboek");
-    if (mem) mem.innerHTML = opties(localStorage.getItem(MEM_DAGBOEK_KEY) || "");
+    if (mem) {
+      const bank = dagboeken.find(d => String(d.id) === onthouden);
+      const geenBank = dagboeken.filter(d => !bank || bank.type == null || d.type !== bank.type);
+      const handmatig = localStorage.getItem(MEM_DAGBOEK_KEY) || "";
+      mem.innerHTML = opties(geenBank, String(j.memBookingId || handmatig || ""), "— automatisch —");
+      if (j.memNaam) $("memDagboekInfo").textContent = "Grootboekregels gaan naar " + j.memNaam + ".";
+      // Heeft iemand hier ooit met de hand iets aangewezen, laat het dan zien -
+      // anders staat er een keuze onzichtbaar iets te sturen.
+      if (handmatig && $("memRij")) $("memRij").style.display = "";
+    }
     $("dagboekInfo").textContent = onthouden ? "" : "Kies het dagboek van de bankrekening waar dit afschrift bij hoort.";
   } catch (e) {
     $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + e.message;
@@ -878,8 +909,9 @@ async function laadDagboeken() {
 }
 if ($("memDagboek")) $("memDagboek").addEventListener("change", () => {
   const v = $("memDagboek").value;
-  if (v) localStorage.setItem(MEM_DAGBOEK_KEY, v); else localStorage.removeItem(MEM_DAGBOEK_KEY);
-  $("memDagboekInfo").textContent = "";
+  if (v) { localStorage.setItem(MEM_DAGBOEK_KEY, v); bewaarMemDagboek(v); }
+  else localStorage.removeItem(MEM_DAGBOEK_KEY);
+  $("memDagboekInfo").textContent = v ? "Onthouden - dit hoeft niemand nog een keer aan te wijzen." : "";
 });
 if ($("dagboek")) $("dagboek").addEventListener("change", () => {
   const v = $("dagboek").value;
@@ -891,11 +923,6 @@ laadDagboeken();
 $("boekBtn").addEventListener("click", async () => {
   const rijen = selectie();
   if (!rijen.length) return;
-  if (rijen.some(t => t.kind !== "direct") && !gekozenMemDagboek()) {
-    showStatus($("actionStatus"), "Kies eerst het memoriaal-dagboek. De regels die niet bij één order horen " +
-      "kunnen niet in een bankdagboek: Logic4 laat daar alleen betalingen op orders toe. Er is niets geboekt.", "error");
-    return;
-  }
   if (!gekozenDagboek()) {
     showStatus($("actionStatus"), "Kies eerst het dagboek van deze bankrekening. Zonder dagboek weigert Logic4 de boeking, " +
       "en in het verkeerde dagboek staat het geld op de verkeerde plek. Er is niets geboekt.", "error");
@@ -920,24 +947,48 @@ $("boekBtn").addEventListener("click", async () => {
      Pinautomaat, Stripe/Shopify, Mollie en Pay.nl gaan als memoriaalboeking
      naar een tussenrekening in plaats van als betaling op een order. */
   const naarGrootboek = rijen.filter(t => t.kind !== "direct");
-  let gbGelukt = 0; const gbFouten = [];
+  let gbGelukt = 0, gbDagboek = ""; const gbFouten = [];
   if (naarGrootboek.length) {
     showStatus($("actionStatus"), naarGrootboek.length + " regel(s) op een grootboekrekening boeken…", "info");
     const r = await fetch(WORKER + "/bank/memoriaal", {
       method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
       body: JSON.stringify({ door: (localStorage.getItem("fp.email") || ""),
-        bookingId: gekozenMemDagboek(), bankLedgerId: bankLedgerId(),
+        // Het memoriaal-dagboek zoekt de worker zelf uit; dit is hooguit een
+        // handmatige aanwijzing als dat een keer niet lukte. Het bankdagboek
+        // gaat mee zodat hij weet welk dagboek in elk geval géén memoriaal is.
+        bookingId: gekozenMemDagboek(), bankBookingId: gekozenDagboek(), bankLedgerId: bankLedgerId(),
         regels: naarGrootboek.map(t => ({
+          // Elke regel gaat naar zijn eigen grootboekrekening: die volgt uit
+          // wat er in de afschriftregel staat (Mollie, Stripe, pinautomaat,
+          // Pay.nl). Vink je er tien aan van drie soorten, dan worden het
+          // drie verschillende rekeningen - niet één voor allemaal.
           rekening: rekeningVoor(t.kind), bedrag: Number(t.amount), datum: t.date || null,
           referentie: "Afschrift " + (state.statementNr || state.fileName),
           omschrijving: (tussenLabel(t.kind) + " — " + (t.description || "")).slice(0, 200),
         })) }) });
     const j = await r.json().catch(() => ({}));
+    gbDagboek = (j.dagboek && j.dagboek.naam) || "";
     (j.resultaten || []).forEach((res, i) => {
       const t = naarGrootboek[i];
-      if (res.ok && t) { t.geboekt = "Op grootboek " + res.rekening + (res.rekeningNaam ? " (" + res.rekeningNaam + ")" : ""); t.kies = false; gbGelukt++; }
+      if (res.ok && t) { t.geboekt = "Op grootboek " + res.rekening + (res.rekeningNaam ? " (" + res.rekeningNaam + ")" : "") +
+        (res.dagboek ? " · memoriaal " + res.dagboek : ""); t.kies = false; gbGelukt++; }
       else gbFouten.push("rekening " + (res.rekening || "?") + ": " + (res.error || "onbekende fout") + (res.antwoord ? " — " + res.antwoord : ""));
     });
+    /* Kon hij het memoriaal-dagboek niet zelf vinden, dan komt het vakje
+       alsnog tevoorschijn - één keer aanwijzen en het staat voorgoed vast,
+       ook voor de anderen. */
+    if (j.kiesDagboek) {
+      const rij = $("memRij");
+      if (rij) {
+        rij.style.display = "";
+        const mem = $("memDagboek");
+        if (mem && (j.dagboeken || []).length) {
+          mem.innerHTML = "<option value=''>— kies het memoriaal-dagboek —</option>" +
+            j.dagboeken.map(d => "<option value='" + d.id + "'>" + String(d.naam).replace(/[<>&]/g, "") + " (" + d.id + ")</option>").join("");
+        }
+        rij.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
     if (!j.ok && j.error) gbFouten.push(j.error);
   }
 
@@ -1004,7 +1055,8 @@ $("boekBtn").addEventListener("click", async () => {
   }
 
   let bericht = gelukt + " betaling" + (gelukt === 1 ? "" : "en") + " geboekt op een order in Logic4.";
-  if (gbGelukt) bericht += " " + gbGelukt + " regel(s) als memoriaal op een grootboekrekening.";
+  if (gbGelukt) bericht += " " + gbGelukt + " regel(s) als memoriaal op een grootboekrekening" +
+    (gbDagboek ? " in dagboek " + gbDagboek : "") + ".";
   if (gbFouten.length) bericht += " Grootboek mislukt: " + gbFouten.slice(0, 3).join("; ") + ".";
   if (geenOrder.length) bericht += " " + geenOrder.length + " niet geboekt omdat er geen ordernummer bij de factuur staat: " +
     geenOrder.slice(0, 5).map(g => g.invoiceId).join(", ") + (geenOrder.length > 5 ? " en meer" : "") + ". Die moeten handmatig.";
