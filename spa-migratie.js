@@ -72,6 +72,20 @@
     return await r.json();
   }
 
+  /* Echt verwijderen - niet hetzelfde als wegklikken. Wegklikken haalt een
+     bestelling van je scherm; dit haalt hem uit de containerlijst zelf, en
+     daarmee ook uit de forecast, de reserveringen en het containerladen.
+     Chantal vroeg erom voor bestellingen waarvan zij de inkooporder in Logic4
+     al had verwijderd (12 aug 2026). */
+  async function verwijderBestelling(nr) {
+    var r = await fetch(BASIS + "/voorraad/spa-migratie/verwijderen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-DP-Admin": cfg.adminKey },
+      body: JSON.stringify({ nr: String(nr), door: cfg.email || "" })
+    });
+    return await r.json();
+  }
+
   async function bewaarAlias(van, naar) {
     var r = await fetch(BASIS + "/voorraad/spa-migratie/alias", {
       method: "POST",
@@ -110,6 +124,9 @@
     // ── schip zonder container ──
     var bekend = {};
     voorstel.containers.forEach(function (c) { bekend[c.nr] = 1; });
+    // Een verwijderde bestelling is geen vergissing maar een keuze: die hoort
+    // hier niet als "ontbreekt in de containerlijst" te verschijnen.
+    (voorstel.verwijderd || []).forEach(function (nr) { bekend[nr] = 1; });
     var wees = [];
     (voorstel.schepen || []).forEach(function (s) {
       (s.orders || []).forEach(function (o) { if (!bekend[o] && wees.indexOf(o) < 0) wees.push(o); });
@@ -241,6 +258,16 @@
       maak.addEventListener("click", function () { aanmaken(c, maak); });
       knoppen.appendChild(maak);
     }
+    /* Verwijderen staat naast "Inkooporder aanmaken" en niet bij het
+       wegklik-prullenbakje: het lijkt erop maar doet iets heel anders. Dit
+       haalt de bestelling écht weg, ook uit de forecast en de reserveringen. */
+    if (cfg.magWijzigen) {
+      var del = el("button", "sm-knop licht gevaar", "Verwijderen");
+      del.type = "button";
+      del.title = "Haalt deze bestelling helemaal weg — ook uit de forecast, de reserveringen en het containerladen.";
+      del.addEventListener("click", function () { verwijderen(c, del); });
+      knoppen.appendChild(del);
+    }
     rechts.appendChild(knoppen);
     rij.appendChild(rechts);
     d.appendChild(rij);
@@ -325,6 +352,38 @@
       }
     } catch (e) {
       alert("Niet gelukt: " + (e.message || e));
+    }
+    await herlaad();
+  }
+
+  /* De vraag vóór het verwijderen noemt alles wat eraan hangt. Een van deze
+     bestellingen was 480 spa's op zeven schepen die nog moeten aankomen; dat
+     hoor je te zien vóór je klikt, niet erna. */
+  async function verwijderen(c, knop) {
+    var opSchip = [];
+    (voorstel.schepen || []).forEach(function (s) {
+      if ((s.orders || []).indexOf(String(c.nr)) >= 0) opSchip.push(s.ref + (s.eta ? " (ETA " + nlDatum(s.eta) + ")" : ""));
+    });
+    var tekst = "Jazzi-order " + c.nr + " helemaal verwijderen?\n\n" +
+      "Weg is: " + c.spas + " spa's in " + c.regels.length + " regels.\n" +
+      "Hij telt daarna nergens meer mee — niet in dit scherm, niet in de forecast, " +
+      "niet in de reserveringen en niet bij het containerladen.";
+    if (c.alGedaan) tekst += "\n\nOok het briefje 'inkooporder " + c.alGedaan + " aangemaakt' gaat weg. " +
+      "Die inkooporder zelf staat in Logic4 en verdwijnt hier niet mee — verwijder hem daar zelf.";
+    if (opSchip.length) tekst += "\n\nLet op: deze order staat nog op " + opSchip.length + " schip/schepen:\n· " +
+      opSchip.join("\n· ") + "\nDie regels blijven staan; pas ze zelf aan bij Schepen/Pipeline.";
+    tekst += "\n\nWat weggaat wordt bewaard, dus een vergissing is terug te draaien — vraag Gerrit.";
+    if (!confirm(tekst)) return;
+    knop.disabled = true; knop.textContent = "bezig…";
+    try {
+      var j = await verwijderBestelling(c.nr);
+      if (!j.ok) { alert("Niet gelukt: " + (j.error || "onbekende fout")); knop.disabled = false; knop.textContent = "Verwijderen"; return; }
+      if (cfg.log) cfg.log("voorraad", "jazzi-bestelling verwijderd",
+        "Jazzi-order " + j.nr + " — " + j.spas + " spa's, " + j.regels + " regels" +
+        (j.inkooporder ? ", briefje inkooporder " + j.inkooporder + " verwijderd" : ""));
+    } catch (e) {
+      alert("Niet gelukt: " + (e.message || e));
+      knop.disabled = false; knop.textContent = "Verwijderen"; return;
     }
     await herlaad();
   }

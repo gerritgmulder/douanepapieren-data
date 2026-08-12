@@ -45,6 +45,10 @@ const ALLOWED_BUCKETS = new Set([
   "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
   "qb-verborgen",     // Amerika: facturen die Chantal uit beeld heeft gehaald (dubbel ingeladen). Niet gewist: de bron levert ze opnieuw, dus we onthouden wát verborgen is en door wie.
   "spa-verborgen",    // Voorraad: Jazzi-bestellingen die Chantal uit de historie heeft weggeklikt. Zelfde reden — het voorstel wordt telkens opnieuw opgebouwd.
+  // Jazzi-bestellingen die écht zijn verwijderd, mét hun regels. Verwijderen
+  // haalt ze uit voorraad-pipeline en dus overal weg; hier staat wat er weg
+  // ging, door wie en wanneer, zodat een vergissing terug te draaien is.
+  "voorraad-verwijderd",
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
   "geldgoederen",     // Geld-goederenbeweging: laatste controle-momentopname + historie van de totalen
   "gg-bevindingen",   // Geld-goederenbeweging: per bevinding de status (open/opgepakt/opgelost/akkoord) + notitie
@@ -1743,14 +1747,74 @@ async function spaMigratieVoorstel(env) {
   }
 
   containers.sort((a, b) => String(b.besteld || "").localeCompare(String(a.besteld || "")));
+  const weg = (await env.FONTEYN_DATA.get("voorraad-verwijderd", { type: "json" })) || { orders: {} };
   return {
     ok: true, crediteur: JAZZI_CREDITEUR, containers: containers,
     schepen: (schepen.ships || []).map(s => ({
       ref: s.ref, vessel: s.vessel, eta: s.eta, containers: s.containers,
       orders: [...spaOrdersUitSchip(s.ref)]
     })),
+    // Wat Chantal heeft verwijderd. Het scherm heeft dit nodig om niet meteen
+    // te gaan roepen dat die order "wel op een schip staat maar niet in de
+    // containerlijst" - dat is dan geen vergissing maar de bedoeling.
+    verwijderd: Object.keys(weg.orders || {}),
     aliassen: aliassen
   };
+}
+
+/* ─── Een Jazzi-bestelling echt weghalen ───────────────────────────────────
+   Wegklikken bestond al, maar dat haalt hem alleen van het scherm en telt
+   overal gewoon door. Chantal vroeg om echt verwijderen: "Deze mag dan ook
+   nergens meer meetellen. De inkooporder in Logic4 heb ik zelf al verwijderd"
+   (12 aug 2026).
+
+   Daarom gaat de bestelling uit voorraad-pipeline - dat is de bron waar de
+   forecast, de reserveringen en het laden van containers ook uit lezen, dus
+   daarmee is hij overal weg. Het briefje "hier is inkooporder 37830 van
+   gemaakt" gaat mee: die inkooporder bestaat niet meer, en als dat blijft
+   staan zou het scherm blijven beweren dat het in Logic4 geregeld is.
+
+   Wat er weggaat wordt eerst apart weggeschreven, met wie en wanneer. Een
+   bestelling van 480 spa's is te veel werk om per ongeluk kwijt te raken. */
+async function spaMigratieVerwijderen(env, body) {
+  const nr = String(body.nr || "").trim();
+  if (!nr) return { ok: false, error: "geen ordernummer meegegeven" };
+
+  const pipeline = (await env.FONTEYN_DATA.get("voorraad-pipeline", { type: "json" })) || {};
+  const lijst = pipeline.containers || [];
+  const c = lijst.find(x => String(x.nr || "").trim() === nr);
+  if (!c) return { ok: false, error: "Jazzi-order " + nr + " staat niet (meer) in de containerlijst" };
+
+  const gedaan = (await env.FONTEYN_DATA.get("voorraad-inkooporders", { type: "json" })) || { orders: {} };
+  const ref = "Jazzi-order " + nr;
+  const inkooporder = (gedaan.orders || {})[ref] || null;
+
+  // Eerst bewaren, dan pas weghalen.
+  const weg = (await env.FONTEYN_DATA.get("voorraad-verwijderd", { type: "json" })) || { orders: {} };
+  weg.orders = weg.orders || {};
+  weg.orders[nr] = { container: c, inkooporder: inkooporder,
+                     ts: new Date().toISOString(), door: String(body.door || "").slice(0, 80) };
+  await env.FONTEYN_DATA.put("voorraad-verwijderd", JSON.stringify(weg));
+
+  pipeline.containers = lijst.filter(x => String(x.nr || "").trim() !== nr);
+  await env.FONTEYN_DATA.put("voorraad-pipeline", JSON.stringify(pipeline));
+  if (inkooporder) {
+    delete gedaan.orders[ref];
+    await env.FONTEYN_DATA.put("voorraad-inkooporders", JSON.stringify(gedaan));
+  }
+
+  /* De schepen blijven met rust. Daar staat de order in een tekstveld dat
+     Chantal zelf bijhoudt ("RZ2009DF3332-7&3342-3 to Rotterdam"), en daar het
+     mes in zetten zou een schipregel kunnen slopen die verder klopt. Ze krijgt
+     wel te horen wélke schepen deze order nog noemen. */
+  const schepen = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+  const opSchepen = (schepen.ships || [])
+    .filter(s => [...spaOrdersUitSchip(s.ref)].indexOf(nr) >= 0)
+    .map(s => ({ ref: s.ref, eta: s.eta || null }));
+
+  const spas = (c.lines || []).reduce((t, l) => t + (Number(l.qty) || 0), 0);
+  return { ok: true, nr: nr, spas: spas, regels: (c.lines || []).length,
+           inkooporder: inkooporder ? inkooporder.buyOrderId : null, schepen: opSchepen };
 }
 
 // Eén container omzetten naar een inkooporder.
@@ -3712,6 +3776,14 @@ export default {
     if (url.pathname === "/voorraad/spa-migratie/voorstel" && request.method === "POST") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       return reply(200, await spaMigratieVoorstel(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    /* Een Jazzi-bestelling echt verwijderen. Beheersleutel, net als het
+       aanmaken: dit haalt een bestelling uit de bron waar de forecast en de
+       reserveringen ook uit lezen. */
+    if (url.pathname === "/voorraad/spa-migratie/verwijderen" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await spaMigratieVerwijderen(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/voorraad/spa-migratie/uitvoeren" && request.method === "POST") {
       if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
