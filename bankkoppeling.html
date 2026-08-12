@@ -417,6 +417,28 @@ async function handleFile(file) {
     state.statementNr = parsed.statementNr;
     state.openingBalance = parsed.openingBalance;
     state.closingBalance = parsed.closingBalance;
+    /* De bank zet onderaan het afschrift zijn eigen telling: hoeveel af- en
+       bijboekingen en voor welk bedrag. Daar leggen we het onze naast.
+
+       Deze controle is er gekomen na 11 aug 2026. Toen las de lezer die
+       slotregel per ongeluk als de omschrijving van de laatste betaling, en
+       dat viel pas op toen Osman met een schermafdruk kwam. Een afschrift dat
+       niet met zichzelf klopt hoort het dashboard zélf te zien. */
+    state.telling = parsed.telling || null;
+    if (parsed.telling) {
+      const af = parsed.transactions.filter(t => t.amount < 0);
+      const bij = parsed.transactions.filter(t => t.amount > 0);
+      const rond = n => Math.round(n * 100) / 100;
+      const klopt = af.length === parsed.telling.afboekingen
+        && bij.length === parsed.telling.bijboekingen
+        && Math.abs(rond(af.reduce((n, t) => n - t.amount, 0)) - parsed.telling.afTotaal) < 0.02
+        && Math.abs(rond(bij.reduce((n, t) => n + t.amount, 0)) - parsed.telling.bijTotaal) < 0.02;
+      if (!klopt) {
+        showStatus($("dropStatus"), "Let op: dit afschrift klopt niet met zijn eigen telling. De bank meldt " +
+          parsed.telling.bijboekingen + " bijboekingen en " + parsed.telling.afboekingen + " afboekingen, " +
+          "het dashboard leest er " + bij.length + " en " + af.length + ". Boek hier niets op voordat dit is uitgezocht.", "error");
+      }
+    }
     state.transactions = parsed.transactions
       // We koppelen alleen INKOMENDE betalingen (Credit). Uitgaande zijn niet
       // relevant voor het bankkoppeling-doel.

@@ -53,22 +53,42 @@
     }
     if (cur) blocks.push(cur);
 
-    let iban = "", statementNr = "", openingBalance = null, closingBalance = null;
+    let iban = "", statementNr = "", openingBalance = null, closingBalance = null, telling = null;
     const transactions = [];
-    let pending = null;
+    let pending = null, geslotenNa = false;
 
     for (let i = 0; i < blocks.length; i++) {
       const b = blocks[i];
       if (b.tag === "25")  iban = b.body.trim();
       else if (b.tag === "28C") statementNr = b.body.trim();
       else if (b.tag === "60F" || b.tag === "60M") openingBalance = parseBalance(b.body);
-      else if (b.tag === "62F" || b.tag === "62M") closingBalance = parseBalance(b.body);
+      else if (b.tag === "62F" || b.tag === "62M") {
+        closingBalance = parseBalance(b.body);
+        /* Hier eindigt de lijst met transacties, en dat moet hier gezegd
+           worden. Ná het eindsaldo zet ING nog een :86: neer met de telling
+           van het afschrift:
+
+             :62F:C260811EUR175630,63
+             :64:C260811EUR175630,63
+             :86:D000003C000023D33800,03C67838,80
+
+           Dat is geen omschrijving maar een samenvatting: 3 afboekingen,
+           23 bijboekingen, samen 33.800,03 af en 67.838,80 bij. De lezer
+           plakte hem aan de laatste transactie en overschreef daarmee de
+           echte omschrijving. Osman zag daardoor bij de betaling van J.
+           Wenting van 986,40 "D000003C000023D33800,03C67838,80" staan in
+           plaats van "aanbetaling bestelling: 3519824", en dus geen match
+           (11 aug 2026). */
+        if (pending) { transactions.push(pending); pending = null; }
+        geslotenNa = true;
+      }
       else if (b.tag === "61") {
         // Push de vorige transactie (zonder description) als die er was zonder :86:
         if (pending) transactions.push(pending);
         pending = parseTxLine(b.body);
       } else if (b.tag === "86") {
-        if (pending) {
+        if (geslotenNa) { telling = telling || parseTelling(b.body); }
+        else if (pending) {
           pending.descRaw = b.body;
           pending.description = cleanDescription(b.body);
         }
@@ -76,7 +96,7 @@
     }
     if (pending) transactions.push(pending);
 
-    return { iban, statementNr, openingBalance, closingBalance, transactions };
+    return { iban, statementNr, openingBalance, closingBalance, transactions, telling };
   }
 
   function parseBalance(body) {
@@ -111,9 +131,37 @@
   }
 
   function cleanDescription(raw) {
-    // Veel banken proppen sub-codes als /NAME/.../REMI/... in :86:. We strippen
-    // ze niet; we plakken alleen multi-line samen tot één leesbare regel.
-    return raw.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
+    /* Veel banken proppen sub-codes als /NAME/.../REMI/... in :86:. We strippen
+       ze niet; we plakken alleen de vervolgregels aan elkaar.
+
+       Zonder spatie ertussen. Een :86: wordt hard afgekapt op 65 tekens, dwars
+       door een woord of een getal heen:
+
+           /REMI/USTD//aanbeta
+           ling bestelling: 3519824/
+
+       Met een spatie ertussen werd dat "aanbeta ling bestelling", en valt een
+       ordernummer dat net op de knip staat in tweeën. De koppellogica plakte
+       ze daarom al zonder spatie aan elkaar; het scherm deed het anders en
+       liet dus iets anders zien dan waar op gematcht werd. */
+    return raw.replace(/\r?\n/g, "").replace(/[ \t]+/g, " ").trim();
+  }
+
+  /* De telling die de bank onderaan het afschrift zet:
+
+       :86:D000003C000023D33800,03C67838,80
+
+     Drie afboekingen, drieëntwintig bijboekingen, samen 33.800,03 af en
+     67.838,80 bij. Dat is de eigen controlesom van de bank, en daarmee is na
+     te gaan of er niets is gemist bij het inlezen. */
+  function parseTelling(body) {
+    // Achter de telling staat nog "-XXX", het einde-berichtteken van MT940.
+    var m = String(body || "").replace(/\s+/g, "").replace(/-X*$/i, "")
+      .match(/^D(\d+)C(\d+)D([\d.,]+)C([\d.,]+)$/i);
+    if (!m) return null;
+    var getal = function (s) { return parseFloat(s.replace(/\./g, "").replace(",", ".")); };
+    return { afboekingen: parseInt(m[1], 10), bijboekingen: parseInt(m[2], 10),
+             afTotaal: getal(m[3]), bijTotaal: getal(m[4]) };
   }
 
   global.fpMT940 = {
@@ -121,6 +169,7 @@
     parseBalance: parseBalance,
     parseTxLine: parseTxLine,
     cleanDescription: cleanDescription,
+    parseTelling: parseTelling,
   };
 
 })(typeof window !== "undefined" ? window : globalThis);
