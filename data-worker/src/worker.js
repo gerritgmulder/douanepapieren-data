@@ -3649,8 +3649,34 @@ async function bankMemoriaal(env, body) {
   try { lijsten = await bankGrootboeken(env); }
   catch (e) { return { ok: false, error: "grootboekrekeningen ophalen faalde: " + (e.message || e) }; }
   if (!lijsten.btwNul) return { ok: false, error: "geen btw-code van 0% gevonden in Logic4. Zonder btw-code weigert Logic4 de mutatie." };
-  const perCode = {};
-  lijsten.grootboeken.forEach(g => { perCode[String(g.code)] = g; });
+  const perCode = {}, perId = {};
+  lijsten.grootboeken.forEach(g => { perCode[String(g.code)] = g; perId[String(g.id)] = g; });
+
+  /* Logic4 klaagt in interne id's: "Grootboek(en) met id 150 zijn geblokkeerd"
+     (Osman, 12 aug 2026). Niemand weet uit zijn hoofd welke rekening id 150 is,
+     en zonder dat kun je er niets mee. Daarom wordt elk id in de foutmelding
+     vertaald naar het rekeningnummer en de naam die er in Logic4 bij staan. */
+  function metNamen(tekst) {
+    return String(tekst || "").replace(/\bid\s+(\d+(?:\s*,\s*\d+)*)/gi, (heel, ids) =>
+      heel + " (" + ids.split(/\s*,\s*/).map(id => {
+        const g = perId[id];
+        return g ? ("rekening " + g.code + (g.naam ? " " + g.naam : "")) : ("id " + id + " onbekend");
+      }).join(", ") + ")");
+  }
+
+  /* De tegenrekening van de boeking. Standaard de grootboekrekening van het
+     bankdagboek, want dat is wat er echt gebeurt: geld komt binnen op de bank.
+     Maar veel administraties zetten juist die rekening op slot, zodat er niet
+     buiten het bankdagboek om op geboekt kan worden - en dan loopt dit vast.
+     Daarom is hij te overrulen met een eigen tegenrekening. */
+  let tegen = { id: bankLedgerId, code: (perId[String(bankLedgerId)] || {}).code || "?",
+                naam: (perId[String(bankLedgerId)] || {}).naam || "grootboek van het bankdagboek" };
+  const eigenTegen = String(instellingen.tegenrekeningCode || "").trim();
+  if (eigenTegen) {
+    const g = perCode[eigenTegen];
+    if (!g) return { ok: false, error: "de ingestelde tegenrekening " + eigenTegen + " bestaat niet in Logic4" };
+    tegen = { id: g.id, code: g.code, naam: g.naam };
+  }
 
   const token = await l4Token(env);
   const uit = [];
@@ -3675,8 +3701,8 @@ async function bankMemoriaal(env, body) {
             BookingDateTime: datum + "T12:00:00",
             FinancialBookId: bookingIdNu(),
             Mutations: [
-              // De bank erbij, anders staat de boeking niet in evenwicht.
-              { LedgerId: bankLedgerId, VatCode: lijsten.btwNul.id, AmountIncl: bedrag,
+              // De tegenrekening erbij, anders staat de boeking niet in evenwicht.
+              { LedgerId: tegen.id, VatCode: lijsten.btwNul.id, AmountIncl: bedrag,
                 Description: String(r.omschrijving || "").slice(0, 200) || "Bankafschrift" },
               { LedgerId: gb.id, VatCode: lijsten.btwNul.id, AmountIncl: -bedrag,
                 Description: String(r.omschrijving || "").slice(0, 200) || "Bankafschrift" },
@@ -3688,8 +3714,21 @@ async function bankMemoriaal(env, body) {
         const verkeerdSoort = !resp.ok && /type Memoriaal|is een (Bank|Kas|Inkoop|Verkoop)/i.test(tekst);
         if (verkeerdSoort && kandidaatNr + 1 < kandidaten.length) { kandidaatNr++; continue; }
         if (!resp.ok) {
+          const rauw = (j && (j.detail || j.title)) || ("HTTP " + resp.status);
+          /* Een geblokkeerde rekening is geen storing maar een instelling in
+             Logic4, en er is precies één ding dat helpt: die rekening
+             deblokkeren, of een andere tegenrekening kiezen. Dat hoort erbij
+             te staan, anders blijft het "probeer het nog eens". */
+          const opSlot = /geblokkeerd/i.test(rauw);
           uit.push({ ...r, ok: false, dagboek: kandidaten[kandidaatNr].naam,
-            error: (j && (j.detail || j.title)) || ("HTTP " + resp.status), antwoord: tekst.slice(0, 300) });
+            geblokkeerd: opSlot || undefined,
+            tegenrekening: opSlot ? (tegen.code + (tegen.naam ? " " + tegen.naam : "")) : undefined,
+            error: metNamen(rauw) + (opSlot
+              ? ". Deze boeking gebruikt rekening " + r.rekening + " en als tegenrekening " + tegen.code +
+                " (" + tegen.naam + "). Laat Osman de geblokkeerde rekening in Logic4 deblokkeren, " +
+                "of kies een andere tegenrekening in de tegel."
+              : ""),
+            antwoord: tekst.slice(0, 300) });
         } else {
           uit.push({ ...r, ok: true, geboekt: bedrag, rekeningNaam: gb.naam, dagboek: kandidaten[kandidaatNr].naam });
         }
@@ -3714,7 +3753,11 @@ async function bankMemoriaal(env, body) {
     regels: uit.map(x => ({ rekening: x.rekening, bedrag: x.bedrag, ok: x.ok, error: x.error || null })) });
   await env.FONTEYN_DATA.put("bank-geboekt", JSON.stringify(logboek));
   return { ok: true, gelukt, mislukt: uit.length - gelukt, resultaten: uit,
-           dagboek: { id: bookingIdNu(), naam: kandidaten[kandidaatNr].naam } };
+           dagboek: { id: bookingIdNu(), naam: kandidaten[kandidaatNr].naam },
+           tegenrekening: { code: tegen.code, naam: tegen.naam },
+           // Zat er een rekening op slot? Dan mag de tegel daar iets mee doen
+           // in plaats van alleen de tekst laten zien.
+           geblokkeerd: uit.some(x => x.geblokkeerd) || undefined };
 }
 
 export default {
@@ -3925,7 +3968,8 @@ export default {
         // Het scherm mag ook weten wat er al is uitgezocht: welk dagboek het
         // memoriaal is, zodat het dat niet nog een keer hoeft te vragen.
         const inst = (await env.FONTEYN_DATA.get("bank-instellingen", { type: "json" })) || {};
-        return reply(200, { ...dg, memBookingId: inst.memBookingId || null, memNaam: inst.memNaam || "" });
+        return reply(200, { ...dg, memBookingId: inst.memBookingId || null, memNaam: inst.memNaam || "",
+                            tegenrekeningCode: inst.tegenrekeningCode || "" });
       } catch (e) { return reply(200, { ok: false, error: String(e.message || e) }); }
     }
 

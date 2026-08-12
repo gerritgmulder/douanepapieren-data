@@ -328,6 +328,15 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       </select>
       <span id="memDagboekInfo" class="muted" style="font-size:12px"></span>
     </div>
+    <!-- De tegenrekening van de memoriaalboeking. Normaal de grootboekrekening
+         van de bank zelf; dit veld is er voor administraties waar die op slot
+         staat, en dan moet je hem ergens anders tegenover kunnen zetten. -->
+    <div class="row-flex" id="tegenRij" style="margin-top:8px;gap:8px;flex-wrap:wrap;align-items:center;display:none">
+      <label class="muted" for="tegenRekening" style="font-size:12px">Tegenrekening van de memoriaalboeking</label>
+      <input id="tegenRekening" inputmode="numeric" placeholder="bv. 1175"
+             style="border:1px solid var(--border);border-radius:7px;padding:7px 10px;font:inherit;font-size:13px;width:110px">
+      <span id="tegenInfo" class="muted" style="font-size:12px"></span>
+    </div>
     <div class="row-flex" style="margin-top:12px;gap:8px;flex-wrap:wrap;align-items:center;">
       <button class="cta" id="boekBtn" type="button" disabled>Boek de geselecteerde betalingen</button>
       <button class="cta secondary" id="exportBtn">📋 Kopieer als CSV</button>
@@ -855,15 +864,18 @@ function gekozenMemDagboek() {
 }
 // De keuze bij de worker leggen in plaats van in deze browser, zodat Osman en
 // Reinier hem niet allebei apart hoeven te maken.
-async function bewaarMemDagboek(id) {
+async function bewaarInstelling(velden) {
   try {
     const r = await fetch(WORKER + "/data/bank-instellingen", { headers: { "X-Fonteyn-Auth": teamKey() } });
     const huidig = r.ok ? (await r.json().catch(() => ({}))) : {};
-    const naam = (dagboeken.find(d => String(d.id) === String(id)) || {}).naam || "";
     await fetch(WORKER + "/data/bank-instellingen", {
       method: "PUT", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
-      body: JSON.stringify({ ...(huidig || {}), memBookingId: Number(id), memNaam: naam }) });
+      body: JSON.stringify({ ...(huidig || {}), ...velden }) });
   } catch (e) {}
+}
+function bewaarMemDagboek(id) {
+  const naam = (dagboeken.find(d => String(d.id) === String(id)) || {}).naam || "";
+  return bewaarInstelling({ memBookingId: Number(id), memNaam: naam });
 }
 // De grootboekrekening die bij het bankdagboek hoort. Die is nodig om een
 // memoriaal in evenwicht te krijgen: bank aan tussenrekening.
@@ -902,6 +914,12 @@ async function laadDagboeken() {
       // anders staat er een keuze onzichtbaar iets te sturen.
       if (handmatig && $("memRij")) $("memRij").style.display = "";
     }
+    // Staat er een eigen tegenrekening ingesteld, laat hem dan zien.
+    if (j.tegenrekeningCode && $("tegenRekening")) {
+      $("tegenRekening").value = j.tegenrekeningCode;
+      $("tegenRij").style.display = "";
+      $("tegenInfo").textContent = "In plaats van de grootboekrekening van de bank.";
+    }
     $("dagboekInfo").textContent = onthouden ? "" : "Kies het dagboek van de bankrekening waar dit afschrift bij hoort.";
   } catch (e) {
     $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + e.message;
@@ -912,6 +930,13 @@ if ($("memDagboek")) $("memDagboek").addEventListener("change", () => {
   if (v) { localStorage.setItem(MEM_DAGBOEK_KEY, v); bewaarMemDagboek(v); }
   else localStorage.removeItem(MEM_DAGBOEK_KEY);
   $("memDagboekInfo").textContent = v ? "Onthouden - dit hoeft niemand nog een keer aan te wijzen." : "";
+});
+if ($("tegenRekening")) $("tegenRekening").addEventListener("change", async () => {
+  const v = String($("tegenRekening").value || "").trim();
+  await bewaarInstelling({ tegenrekeningCode: v });
+  $("tegenInfo").textContent = v
+    ? "Onthouden - de memoriaalboekingen zetten " + v + " tegenover de grootboekrekening."
+    : "Leeg: dan gaat het weer tegen de grootboekrekening van de bank.";
 });
 if ($("dagboek")) $("dagboek").addEventListener("change", () => {
   const v = $("dagboek").value;
@@ -977,6 +1002,17 @@ $("boekBtn").addEventListener("click", async () => {
     /* Kon hij het memoriaal-dagboek niet zelf vinden, dan komt het vakje
        alsnog tevoorschijn - één keer aanwijzen en het staat voorgoed vast,
        ook voor de anderen. */
+    /* Zit er een rekening op slot in Logic4, dan is er niets aan het dashboard
+       te repareren: iemand moet hem deblokkeren, of er moet een andere
+       tegenrekening tegenover. Het veld daarvoor komt hier tevoorschijn zodat
+       dat niet nog een keer een ronde kost. */
+    if (j.geblokkeerd && $("tegenRij")) {
+      $("tegenRij").style.display = "";
+      if (j.tegenrekening) $("tegenInfo").textContent =
+        "Nu staat " + j.tegenrekening.code + " (" + j.tegenrekening.naam + ") als tegenrekening. " +
+        "Is dát de geblokkeerde rekening, vul hier dan een andere in.";
+      $("tegenRij").scrollIntoView({ behavior: "smooth", block: "center" });
+    }
     if (j.kiesDagboek) {
       const rij = $("memRij");
       if (rij) {
