@@ -6,7 +6,7 @@
    al, maar de app heeft een history: een pagina die een vórige gebruiker
    opende is anders opnieuw te bereiken. */
 (function(){
-  var TOEGANG = ["osman@fonteyn.nl","osman","fonteyn.osman","rowan@fonteyn.nl","rowan","fonteyn.rowan","rico@fonteyn.nl","rico","fonteyn.rico","reinier@fonteyn.nl","reinier","fonteyn.reinier","gerrit@fonteyn.nl","gerrit","dolf@fonteyn.nl","fonteyn.dolf","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"];
+  var TOEGANG = ["osman@fonteyn.nl","osman","fonteyn.osman","rowan@fonteyn.nl","rowan","fonteyn.rowan","rico@fonteyn.nl","rico","fonteyn.rico","reinier@fonteyn.nl","reinier","fonteyn.reinier","reinier.k@fonteyn.nl","reinier.k","fonteyn.reinier.k","gerrit@fonteyn.nl","gerrit","dolf@fonteyn.nl","fonteyn.dolf","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"];
   var email = (localStorage.getItem("fp.email")||"").toLowerCase();
   if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
   if (TOEGANG.indexOf(email) >= 0) return;

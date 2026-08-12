@@ -7,7 +7,7 @@
    pagina die een vórige gebruiker opende is anders opnieuw te bereiken. Daarom
    controleert elke tegel het ook zelf, vóórdat er iets geladen wordt. */
 (function(){
-  var TOEGANG = ["osman@fonteyn.nl","osman","fonteyn.osman","rowan@fonteyn.nl","rowan","fonteyn.rowan","rico@fonteyn.nl","rico","fonteyn.rico","reinier@fonteyn.nl","reinier","fonteyn.reinier","gerrit@fonteyn.nl","gerrit","dolf@fonteyn.nl","fonteyn.dolf","don@fonteyn.nl","fonteyn.don","arno@fonteyn.nl","fonteyn.arno","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"];
+  var TOEGANG = ["osman@fonteyn.nl","osman","fonteyn.osman","rowan@fonteyn.nl","rowan","fonteyn.rowan","rico@fonteyn.nl","rico","fonteyn.rico","reinier@fonteyn.nl","reinier","fonteyn.reinier","reinier.k@fonteyn.nl","reinier.k","fonteyn.reinier.k","gerrit@fonteyn.nl","gerrit","dolf@fonteyn.nl","fonteyn.dolf","don@fonteyn.nl","fonteyn.don","arno@fonteyn.nl","fonteyn.arno","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"];
   var email = (localStorage.getItem("fp.email")||"").toLowerCase();
   if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
   if (TOEGANG.indexOf(email) >= 0) return;
