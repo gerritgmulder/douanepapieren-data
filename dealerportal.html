@@ -31,6 +31,10 @@
   button.primary{background:var(--red);color:#fff;border:0;border-radius:8px;padding:12px 22px;font:inherit;font-weight:700;cursor:pointer}
   button.primary:hover{background:var(--red-dark)}
   button.primary:disabled{opacity:.55;cursor:wait}
+  /* Tweede knop naast Reserve: Downloads. Even groot, maar niet rood - hij
+     vraagt niets aan, hij laat alleen zien wat er al klaarligt. */
+  button.secondary{background:#fff;color:var(--ink);border:1.5px solid var(--border);border-radius:8px;padding:12px 22px;font:inherit;font-weight:600;cursor:pointer}
+  button.secondary:hover{border-color:var(--red);color:var(--red)}
   .msg{padding:11px 14px;border-radius:8px;margin-top:12px;font-size:13.5px}
   .msg.ok{background:#dcfce7;color:var(--ok)} .msg.bad{background:#fee2e2;color:var(--bad)}
   .hidden{display:none !important}
@@ -86,7 +90,6 @@
     <div class="tabs">
       <button class="tab active" data-tab="stock" type="button">Stock</button>
       <button class="tab" data-tab="myspas" type="button">My spas</button>
-      <button class="tab" data-tab="docs" type="button">Documents</button>
       <button class="tab" data-tab="contact" type="button">Contact</button>
     </div>
 
@@ -119,18 +122,6 @@
         <div id="mySpasList"></div>
         <div id="mySpasEmpty" class="lead hidden">No reservations found for your account.</div>
         <div id="mySpasUnlinked" class="lead hidden">This overview becomes available once our team links your portal account to your Fonteyn customer number — one quick message via the <b>Contact</b> tab is enough to arrange that.</div>
-      </div>
-    </div>
-
-    <div id="tab-docs" class="hidden">
-      <div class="card">
-        <h2>Documents &amp; spec sheets</h2>
-        <p class="lead">Specification sheets, manuals and sales material for the products you buy from Fonteyn &amp; Passion Spas.</p>
-        <input id="docSearch" placeholder="Search all documents…" style="max-width:320px;">
-        <div id="libCrumb" style="margin-top:12px;font-size:13.5px;"></div>
-        <div id="libBrowser" style="margin-top:10px;"></div>
-        <div id="docList" style="margin-top:8px;"></div>
-        <div id="docsEmpty" class="lead hidden" style="margin-top:12px;">No documents published yet.</div>
       </div>
     </div>
 
@@ -278,7 +269,7 @@ $("logoutBtn").addEventListener("click", async ()=>{
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", ()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
   t.classList.add("active");
-  ["stock","myspas","docs","contact"].forEach(k => $("tab-"+k).classList.toggle("hidden", t.dataset.tab!==k));
+  ["stock","myspas","contact"].forEach(k => $("tab-"+k).classList.toggle("hidden", t.dataset.tab!==k));
 }));
 
 // ── Stock ──
@@ -303,9 +294,13 @@ function renderStock(){
         <li>On the water: <b>${m.onTheWater||0}</b>${m.nextEta?` <span style="color:var(--muted)">(ETA ${esc(m.nextEta)})</span>`:""}</li>
         ${m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):""}
       </ul>
-      <button class="primary rsv" data-model="${esc(m.model)}" style="margin-top:10px;padding:8px 14px;font-size:13px;">Reserve</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <button class="primary rsv" data-model="${esc(m.model)}" style="padding:8px 14px;font-size:13px;">Reserve</button>
+        <button class="secondary dls" data-model="${esc(m.model)}" style="padding:8px 14px;font-size:13px;">Downloads${aantalDocs(m.model) ? ` <span style="color:var(--muted);font-weight:400;">${aantalDocs(m.model)}</span>` : ""}</button>
+      </div>
     </div>`).join("");
   document.querySelectorAll(".rsv").forEach(b => b.addEventListener("click", () => openReserve(b.dataset.model)));
+  document.querySelectorAll(".dls").forEach(b => b.addEventListener("click", () => openDownloads(b.dataset.model)));
   $("stockEmpty").classList.toggle("hidden", list.length > 0);
 }
 $("stockSearch").addEventListener("input", renderStock);
@@ -323,98 +318,158 @@ document.querySelectorAll(".curBtn").forEach(b=>b.addEventListener("click",()=>{
   renderCurToggle(); renderStock();
 }));
 
-// ── Documents: bibliotheek (categorie → map → bestanden) + losse links ──
-let docs = [], lib = null, libNav = { cat: null, group: null };
+// ── Downloads per model ────────────────────────────────────────────────
+// Gretha, 12 aug 2026: "haal het tabblad Documents maar weg en zorg dat je bij
+// iedere spa of sauna direct de beschikbare documenten kunt vinden."
+//
+// De bibliotheek zelf blijft zoals hij was — mappen per merk en per markt (EU
+// en UK) — maar een partner hoeft die indeling niet meer te kennen. Per model
+// wordt uitgezocht welke bestanden erbij horen, en die staan achter één knop
+// op de producttegel.
+let lib = null, docIndex = {}, algemeenPerMap = {};
 async function loadDocs(){
   const r = await api("/dealers/api/docs");
   if (r.status !== 200 || !r.data || !r.data.ok) return;
-  docs = r.data.docs || [];
   lib = r.data.library || null;
-  renderDocs();
+  bouwDocIndex();
+  renderStock();                 // de knoppen weten nu wat er te halen valt
 }
 function fmtSize(b){ return b >= 1048576 ? (b/1048576).toFixed(1)+" MB" : Math.max(1, Math.round(b/1024))+" KB"; }
-function fileRow(f, hint){
+
+/* Namen gelijk maken. De bladen heten niet overal hetzelfde als op de
+   prijslijst: "Ecstatic MW" tegenover "Ecstatic Mighty Wave", "EU The Aurora"
+   tegenover "Aurora", en apostroffen schrijft niet iedereen hetzelfde. */
+function normNaam(s){
+  return String(s||"").toLowerCase()
+    .replace(/['‘’`]/g, "")
+    .replace(/\bmw\b/g, "mighty wave")
+    .replace(/\bthe beast\b/g, "beast")
+    .replace(/[^a-z0-9]+/g, " ").trim();
+}
+/* Eén bestandsnaam kan bij meerdere modellen horen. De fabriek zet de gewone
+   en de diepe uitvoering op één blad: "Dynamic - Dynamic Deep" (EU) en
+   "Fitness 1 - Deep" (UK) horen allebei bij twee modellen. */
+function titelNamen(titel){
+  let t = String(titel||"").replace(/^EU\s+The\s+/i, "").replace(/^EU\s+/i, "");
+  const uit = new Set(), delen = t.split(/\s+-\s+/), basis = delen[0].trim();
+  uit.add(basis);
+  for (let i = 1; i < delen.length; i++){
+    const d = delen[i].trim(); if (!d) continue;
+    uit.add(d); uit.add((basis + " " + d).trim());
+    const kop = basis.replace(/\s*\d+\s*$/, "").trim();
+    const nr = (basis.match(/(\d+)\s*$/) || [])[1] || "";
+    if (nr && d.indexOf(nr) === 0) uit.add((kop + " " + d).trim());
+  }
+  return [...uit].filter(Boolean);
+}
+const IS_MANUAL = /manual|handleid|gebruiksaanw|instruct/i;
+const IS_PLAATJE = /\.(jpe?g|png|webp)$/i;
+const IS_PRIJS = /prijslijst|price list/i;
+function soortVan(f){
+  if (IS_PLAATJE.test(f.id||"")) return "beeld";
+  if (IS_MANUAL.test(f.title||"")) return "manual";
+  return "spec";
+}
+function bouwDocIndex(){
+  docIndex = {}; algemeenPerMap = {};
+  for (const c of ((lib&&lib.categories)||[]))
+    for (const g of (c.groups||[]))
+      for (const f of (g.files||[])){
+        const rij = { ...f, map: g.name, soort: soortVan(f) };
+        // Een prijslijst hoort niet bij één model en gaat niet mee.
+        if (IS_PRIJS.test(f.title||"")) continue;
+        const namen = titelNamen(f.title);
+        let gekoppeld = false;
+        for (const n of namen){
+          const k = normNaam(n); if (!k) continue;
+          (docIndex[k] = docIndex[k] || []).push(rij); gekoppeld = true;
+        }
+        // Wat bij geen enkel model hoort is algemeen voor die map — de
+        // chiller-handleiding geldt voor elk ijsbad, niet voor één.
+        if (!gekoppeld || IS_MANUAL.test(f.title||""))
+          (algemeenPerMap[g.name] = algemeenPerMap[g.name] || []).push(rij);
+      }
+}
+/* De bestanden bij één model. Staat het model er niet zelf tussen, dan valt
+   hij terug op het basismodel: een "Aquatic 1 ECO" heeft geen eigen blad maar
+   is dezelfde kuip als de "Aquatic 1". Dat wordt er wel bij gezet, zodat een
+   partner ziet waar het blad vandaan komt. */
+function docsVoorModel(model){
+  const pogingen = [String(model||"").replace(/^spa\s+/i, "").trim()];
+  const w = pogingen[0].split(/\s+/);
+  for (let i = w.length - 1; i >= 2; i--) pogingen.push(w.slice(0, i).join(" "));
+  for (let i = 0; i < pogingen.length; i++){
+    const treffers = docIndex[normNaam(pogingen[i])] || [];
+    if (!treffers.length) continue;
+    const uit = [], gezien = new Set();
+    for (const f of treffers) if (!gezien.has(f.id)){ gezien.add(f.id); uit.push(f); }
+    return { bestanden: uit, viaBasis: i > 0 ? pogingen[i] : null };
+  }
+  return { bestanden: [], viaBasis: null };
+}
+function aantalDocs(model){ return docsVoorModel(model).bestanden.length; }
+
+function docRegel(f){
   return `<div class="doc">
-    <div><b>${esc(f.title)}</b> <span style="color:var(--muted);font-size:12px">· ${hint ? esc(hint)+" · " : ""}${fmtSize(f.size||0)}</span></div>
+    <div><b>${esc(f.title)}</b> <span style="color:var(--muted);font-size:12px">· ${esc(f.map)} · ${fmtSize(f.size||0)}</span></div>
     <a href="#" data-file="${esc(f.id)}" data-title="${esc(f.title)}">Open →</a>
   </div>`;
 }
-function renderDocs(){
-  const q = ($("docSearch").value || "").trim().toLowerCase();
-  const cats = (lib && lib.categories) || [];
-
-  // Zoeken: plat door de hele bibliotheek + losse links heen
-  if (q){
-    $("libCrumb").innerHTML = "";
-    const hits = [];
-    for (const c of cats) for (const g of (c.groups||[]))
-      for (const f of (g.files||[])) if ((f.title+" "+g.name).toLowerCase().includes(q))
-        hits.push(fileRow(f, g.name));
-    $("libBrowser").innerHTML = hits.join("");
-    const links = docs.filter(d => (d.title+" "+(d.model||"")).toLowerCase().includes(q));
-    $("docList").innerHTML = links.map(d => `
-      <div class="doc"><div><b>${esc(d.title)}</b>${d.model?` <span style="color:var(--muted);font-size:12px">· ${esc(d.model)}</span>`:""}</div>
-      <a href="${esc(d.url)}" target="_blank" rel="noopener">Download →</a></div>`).join("");
-    $("docsEmpty").classList.toggle("hidden", hits.length + links.length > 0);
-    return;
-  }
-  $("docsEmpty").classList.add("hidden");
-
-  // Kruimelpad
-  const crumbs = ['<a href="#" data-nav="root">All documents</a>'];
-  const cat = cats.find(c => c.key === libNav.cat);
-  if (cat) crumbs.push(libNav.group ? `<a href="#" data-nav="cat">${esc(cat.name)}</a>` : `<b>${esc(cat.name)}</b>`);
-  if (cat && libNav.group) crumbs.push(`<b>${esc(libNav.group)}</b>`);
-  $("libCrumb").innerHTML = crumbs.join(' <span style="color:var(--muted)">›</span> ');
-
-  if (!cat){
-    // Niveau 1: categorieën — lege categorieën verbergen; is er maar één
-    // gevulde, dan die meteen openen (geen zinloze tussenstap)
-    const filled = cats.filter(c => (c.groups||[]).some(g => (g.files||[]).length));
-    if (filled.length === 1){ libNav = { cat: filled[0].key, group: null }; return renderDocs(); }
-    $("libBrowser").innerHTML = `<div class="grid">` + filled.map(c => {
-      const n = (c.groups||[]).reduce((s,g)=>s+(g.files||[]).length, 0);
-      return `<a href="#" class="card" style="margin:0;display:block;text-decoration:none;color:inherit;" data-cat="${esc(c.key)}">
-             <b>${esc(c.name)}</b>
-             <div style="color:var(--muted);font-size:12.5px;margin-top:4px;">${n} documents</div></a>`;
-    }).join("") + `</div>`;
-  } else if (!libNav.group){
-    // Niveau 2: mappen binnen de categorie
-    $("libBrowser").innerHTML = `<div class="grid">` + (cat.groups||[]).map(g =>
-      `<a href="#" class="card" style="margin:0;display:block;text-decoration:none;color:inherit;" data-group="${esc(g.name)}">
-         <b>${esc(g.name)}</b>
-         <div style="color:var(--muted);font-size:12.5px;margin-top:4px;">${(g.files||[]).length} documents</div></a>`).join("") + `</div>`;
-  } else {
-    // Niveau 3: bestanden in de map
-    const g = (cat.groups||[]).find(x => x.name === libNav.group);
-    $("libBrowser").innerHTML = ((g&&g.files)||[]).map(f => fileRow(f)).join("");
-  }
-
-  // Losse links (beheertegel) alleen op het hoogste niveau tonen
-  $("docList").innerHTML = (!cat && docs.length) ? `<h3 style="margin:18px 0 4px;">More documents</h3>` + docs.map(d => `
-    <div class="doc"><div><b>${esc(d.title)}</b>${d.model?` <span style="color:var(--muted);font-size:12px">· ${esc(d.model)}</span>`:""}</div>
-    <a href="${esc(d.url)}" target="_blank" rel="noopener">Download →</a></div>`).join("") : "";
+function docSectie(titel, rijen, leeg){
+  if (!rijen.length) return `<h3 style="margin:16px 0 4px;font-size:14px;">${esc(titel)}</h3>
+    <p class="lead" style="margin:0;font-size:12.5px;">${esc(leeg)}</p>`;
+  return `<h3 style="margin:16px 0 4px;font-size:14px;">${esc(titel)} <span style="color:var(--muted);font-weight:400;">(${rijen.length})</span></h3>`
+       + rijen.map(docRegel).join("");
 }
-// Navigatie + bestanden openen (fetch met sessie-header → blob in nieuw tabblad)
-document.getElementById("tab-docs").addEventListener("click", async (e)=>{
-  const a = e.target.closest("[data-cat],[data-group],[data-nav],[data-file]");
+function openDownloads(model){
+  const { bestanden, viaBasis } = docsVoorModel(model);
+  const specs   = bestanden.filter(f => f.soort === "spec");
+  const manuals = bestanden.filter(f => f.soort === "manual");
+  const beeld   = bestanden.filter(f => f.soort === "beeld");
+  // Algemene documenten uit dezelfde map(pen) — de chiller-handleiding bij een
+  // ijsbad, de gebruiksaanwijzing bij een sauna.
+  const mappen = [...new Set(bestanden.map(f => f.map))];
+  const gezien = new Set(bestanden.map(f => f.id));
+  const algemeen = mappen.flatMap(m => (algemeenPerMap[m]||[]).filter(f => !gezien.has(f.id)));
+
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:18px;overflow:auto";
+  ov.innerHTML = `<div class="card" style="max-width:640px;width:100%;margin:5vh 0;">
+    <div style="display:flex;align-items:flex-start;gap:12px;">
+      <div style="flex:1;">
+        <h2 style="margin:0 0 2px;">Downloads</h2>
+        <p class="lead" style="margin:0;">${esc(model)}</p>
+      </div>
+      <button class="secondary" id="dlClose" type="button" style="padding:6px 12px;">Close</button>
+    </div>
+    ${viaBasis ? `<p class="lead" style="margin:10px 0 0;font-size:12.5px;">These documents are published under <b>${esc(viaBasis)}</b> — the same shell as this version.</p>` : ""}
+    ${bestanden.length || algemeen.length ? "" : `<p class="lead" style="margin:14px 0 0;">No documents published for this model yet. Ask us via the Contact tab and we will send them to you.</p>`}
+    ${bestanden.length || algemeen.length ? docSectie("Spec sheets", specs, "None published yet.") : ""}
+    ${bestanden.length || algemeen.length ? docSectie("Manuals", manuals, "None published yet.") : ""}
+    ${bestanden.length || algemeen.length ? docSectie("Images", beeld, "No images published yet.") : ""}
+    ${algemeen.length ? docSectie("General for this range", algemeen, "") : ""}
+  </div>`;
+  document.body.appendChild(ov);
+  const sluit = () => ov.remove();
+  ov.querySelector("#dlClose").addEventListener("click", sluit);
+  ov.addEventListener("click", (e) => { if (e.target === ov) sluit(); });
+  ov.addEventListener("click", (e) => openBestand(e));
+}
+// Bestanden openen: ophalen mét sessie-kop en als blob in een nieuw tabblad.
+// Een directe link zou zonder sessie een 401 geven.
+async function openBestand(e){
+  const a = e.target.closest("[data-file]");
   if (!a) return;
   e.preventDefault();
-  if (a.dataset.cat){ libNav = { cat: a.dataset.cat, group: null }; return renderDocs(); }
-  if (a.dataset.group){ libNav.group = a.dataset.group; return renderDocs(); }
-  if (a.dataset.nav){ libNav = a.dataset.nav === "root" ? { cat:null, group:null } : { cat: libNav.cat, group:null }; return renderDocs(); }
-  if (a.dataset.file){
-    const old = a.textContent; a.textContent = "Loading…";
-    try{
-      const r = await fetch("/dealers/api/file?id=" + encodeURIComponent(a.dataset.file),
-        { headers: { "X-Dealer-Session": localStorage.getItem(SESS_KEY) || "" } });
-      if (!r.ok) throw new Error("HTTP " + r.status);
-      window.open(URL.createObjectURL(await r.blob()), "_blank");
-    }catch(err){ alert("Could not open document — please try again. (" + err.message + ")"); }
-    a.textContent = old;
-  }
-});
-$("docSearch").addEventListener("input", renderDocs);
+  const oud = a.textContent; a.textContent = "Loading…";
+  try{
+    const r = await fetch("/dealers/api/file?id=" + encodeURIComponent(a.dataset.file),
+      { headers: { "X-Dealer-Session": localStorage.getItem(SESS_KEY) || "" } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    window.open(URL.createObjectURL(await r.blob()), "_blank");
+  }catch(err){ alert("Could not open document — please try again. (" + err.message + ")"); }
+  a.textContent = oud;
+}
 
 // ── Reservation requests: eigen aanvragen met status ──
 function reqStatusLabel(r){
