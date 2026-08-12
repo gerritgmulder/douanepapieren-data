@@ -205,6 +205,52 @@
     return regels;
   }
 
+  /* Dezelfde bladzijde, maar mét de x-positie van elk stukje tekst. Nodig
+     zodra een leverancier een echte tabel gebruikt en twee kolommen naast
+     elkaar doorlopen - dan is een platte regel niet meer te ontleden. */
+  async function uitPdfKolommen(bestand) {
+    if (!global.pdfjsLib) throw new Error("de pdf-lezer is niet geladen");
+    var buf = await bestand.arrayBuffer();
+    var pdf = await global.pdfjsLib.getDocument({ data: buf }).promise;
+    var rijen = [];
+    for (var p = 1; p <= pdf.numPages; p++) {
+      var page = await pdf.getPage(p);
+      var content = await page.getTextContent();
+      var pts = [];
+      for (var i = 0; i < content.items.length; i++) {
+        var it = content.items[i];
+        if (!it.str || !it.str.trim()) continue;
+        // De breedte erbij: nodig om te zien of twee stukjes tekst aan
+        // elkaar vast zaten of dat er een spatie tussen hoort.
+        pts.push({ y: it.transform[5], x: it.transform[4], breedte: it.width || 0, str: it.str });
+      }
+      pts.sort(function (a, b) { return b.y - a.y; });
+      var groepen = [];
+      for (var j = 0; j < pts.length; j++) {
+        var g = groepen[groepen.length - 1];
+        if (g && Math.abs(g.y - pts[j].y) <= 3.0) g.items.push(pts[j]);
+        else groepen.push({ y: pts[j].y, items: [pts[j]] });
+      }
+      for (var k = 0; k < groepen.length; k++) {
+        groepen[k].items.sort(function (a, b) { return a.x - b.x; });
+        rijen.push({ bladzijde: p, y: groepen[k].y, items: groepen[k].items });
+      }
+    }
+    return rijen;
+  }
+
+  /* Eén ingang voor een PDF-bestand: hij kijkt zelf welk soort het is en
+     kiest de lezer. Zo hoeft geen enkele tegel te weten welke fabriek welk
+     formaat stuurt. */
+  async function leesBestand(bestand) {
+    var rijen = await uitPdfKolommen(bestand);
+    var regels = rijen.map(function (r) {
+      return r.items.map(function (i) { return i.str; }).join(" ");
+    });
+    if (soortVan(regels) === "topia") return leesTopia(rijen);
+    return leesAuto(regels);
+  }
+
   // ─── Tweede soort: de proforma van Huantong ─────────────────────────
   // Heel andere bladzijde dan een commercial invoice. Per spa staat er een
   // blok van soms twintig regels: de standaarduitvoering, daaronder de
@@ -467,11 +513,218 @@
     return uit;
   }
 
+  /* ─── Vijfde soort: het sales contract van TOPIA (tuinmeubelen) ──────────
+     Geen spa's maar tuinsets, en de eerste leverancier die met een echte
+     tabel werkt: Picture | Your Art. No. | Commodity | Description | Colour |
+     Packing | QTY | Unit | Unit Price | Amount | Shipping Window.
+
+     Dat maakt hem makkelijker én lastiger. Makkelijker omdat "Your Art. No."
+     ons eigen artikelnummer is (151106.01) - er hoeft niets geraden te worden
+     aan modelnamen. Lastiger omdat omschrijving en kleur naast elkaar staan
+     en allebei over een stuk of tien regels doorlopen. Op één platte regel
+     zijn die twee niet meer uit elkaar te houden:
+
+         "1x 3-seater: W.240 x D.88 x H.55cm   flash, code: S-C127"
+
+     Daarom leest deze niet de platte regels maar de x-posities: uit de
+     koprij komt waar elke kolom begint, en elk stukje tekst gaat naar de
+     kolom waar het onder valt.
+
+     Chantal (12 aug 2026): Contract no = factuurnummer, Your art. = artikel,
+     Colour = kleur, Qty = aantal. De kleur is bij deze fabriek geen woord
+     maar een specificatie van drie regels (poedercoating, stof, touw), en die
+     gaat op verzoek van Gerrit helemaal mee. */
+  var TOPIA_KOLOMMEN = [
+    { sleutel: "art",     test: /^Your\s*Art/i },
+    { sleutel: "artikel", test: /^\(Our\s*Art/i },
+    { sleutel: "naam",    test: /^Commodity$/i },
+    { sleutel: "oms",     test: /^Description$/i },
+    { sleutel: "kleur",   test: /^Colou?r$/i },
+    { sleutel: "packing", test: /^Packing$/i },
+    { sleutel: "aantal",  test: /^QTY$/i },
+    { sleutel: "eenheid", test: /^Unit$/i },
+    { sleutel: "prijs",   test: /^Unit\s*Price$/i },
+    { sleutel: "bedrag",  test: /^Amount$/i },
+    { sleutel: "venster", test: /^Shipping$/i },
+  ];
+  /* Waar begint welke kolom?
+
+     Niet af te leiden uit de koppen. Die staan gecentreerd bóven hun kolom
+     terwijl de inhoud links uitlijnt, en ze lopen over drie regels heen
+     ("Your Art. No." staat een regel hoger dan "Commodity"). "Description"
+     staat op x=298 terwijl de omschrijvingen zelf op x=230 beginnen - op de
+     koppen afgaan zet de halve tabel in de verkeerde kolom.
+
+     Wat wél klopt: de eerste artikelregel. Die heeft in elke kolom precies
+     één waarde staan, dus daar zijn de linkerranden af te lezen. De koppen
+     zeggen alleen nog wélke kolom wat is: op volgorde van links naar rechts.
+
+     Voorwaarde is dat losse stukjes tekst eerst aan elkaar geplakt worden.
+     pdf.js hakt "18" in "1" en "8" en "$1,452.00" in vijf stukjes; zonder
+     plakken zou "8" in de kolom ernaast belanden. */
+  function topiaTokens(items) {
+    var uit = [];
+    for (var i = 0; i < items.length; i++) {
+      var vorige = uit[uit.length - 1];
+      var breedte = items[i].breedte || items[i].str.length * 4.2;
+      if (vorige && items[i].x - vorige.eind <= 2) {
+        vorige.str += items[i].str; vorige.eind = items[i].x + breedte;
+      } else {
+        uit.push({ x: items[i].x, eind: items[i].x + breedte, str: items[i].str });
+      }
+    }
+    return uit;
+  }
+  function topiaKolommen(rijen) {
+    // 1. De koppen opzoeken, over een venster van drie regels.
+    var koprij = -1, koppen = null;
+    for (var i = 0; i < rijen.length && koprij < 0; i++) {
+      var gevonden = {};
+      for (var w = i; w < Math.min(i + 3, rijen.length); w++)
+        for (var j = 0; j < rijen[w].items.length; j++)
+          for (var k = 0; k < TOPIA_KOLOMMEN.length; k++)
+            if (gevonden[TOPIA_KOLOMMEN[k].sleutel] == null &&
+                TOPIA_KOLOMMEN[k].test.test(schoon(rijen[w].items[j].str)))
+              gevonden[TOPIA_KOLOMMEN[k].sleutel] = rijen[w].items[j].x;
+      if (gevonden.art != null && gevonden.kleur != null && gevonden.aantal != null) {
+        koprij = i + 2; koppen = gevonden;
+      }
+    }
+    if (koprij < 0) return null;
+    // De kolom met het artikelnummer tussen haakjes staat onder de eerste en
+    // is dezelfde kolom; die telt hier niet apart mee.
+    delete koppen.artikel;
+    var volgorde = Object.keys(koppen).sort(function (a, b) { return koppen[a] - koppen[b]; });
+
+    // 2. De eerste artikelregel geeft de linkerranden.
+    for (var r = koprij; r < rijen.length; r++) {
+      var tk = topiaTokens(rijen[r].items);
+      if (!tk.length || !TOPIA_ART.test(schoon(tk[0].str))) continue;
+      if (tk.length !== volgorde.length) continue;
+      return {
+        koprij: r - 1,
+        kolommen: tk.map(function (t, n) { return { x: t.x, sleutel: volgorde[n] }; }),
+      };
+    }
+    return null;
+  }
+  /* Elk stukje tekst in de kolom waar het in valt. De randen komen uit de
+     eerste artikelregel; een klein beetje speling omdat niet elke regel op
+     de punt begint. */
+  function topiaVerdeel(items, kolommen) {
+    var vak = {}, tk = topiaTokens(items);
+    for (var i = 0; i < tk.length; i++) {
+      var kol = null;
+      for (var k = 0; k < kolommen.length; k++) if (tk[i].x >= kolommen[k].x - 8) kol = kolommen[k];
+      if (!kol || !kol.sleutel) continue;
+      vak[kol.sleutel] = (vak[kol.sleutel] ? vak[kol.sleutel] + " " : "") + tk[i].str;
+    }
+    for (var s2 in vak) vak[s2] = schoon(vak[s2]);
+    return vak;
+  }
+  function topiaOmschrijving(naam, oms) {
+    var n = schoon(naam), o = schoon(oms);
+    if (n && o && o.toLowerCase().indexOf(n.toLowerCase()) === 0) return o;
+    return schoon(n + (o ? " · " + o : ""));
+  }
+  // Getallen uit de tabel: eerst alle spaties eruit die de PDF erin gooit.
+  function topiaGetal(s) { return bedrag(String(s == null ? "" : s).replace(/\s+/g, "")); }
+  var TOPIA_ART = /^\(?(\d{4,8}\.\d{2})\)?$/;
+  /* Een nieuwe artikelregel begint met het nummer zónder haakjes. Met haakjes
+     is het "(Our Art. No.)", het nummer van de fabriek zelf, en dat staat een
+     regel lager in dezelfde kolom - dat is dus dezelfde regel en geen nieuwe. */
+  var TOPIA_ART_NIEUW = /^(\d{4,8}\.\d{2})$/;
+  // De kop en de voet van elke bladzijde horen niet in de tabel, en de
+  // tabelkop staat op elke bladzijde opnieuw. Zonder dat laatste kreeg het
+  // laatste artikel van een bladzijde "Commodity Description Colour" in zijn
+  // omschrijving en "Shipping Window" in zijn leverweek.
+  var TOPIA_OVERSLAAN = /SALES\s*CONTRACT|CONTRACT\s*NO|CUSTOMER\s*ORDER\s*NO|^DATE\s*:|PAGE\s*\d+\s*OF|The\s*Seller\s*agrees|\bCommodity\b|Your\s*Art\.?\s*No|\(Our\s*Art|^Shipping$|^Window$|^Picture$/i;
+  var TOPIA_EINDE = /GENERAL\s*TERMS|Please\s*sign\s*and\s*return/i;
+  function leesTopia(rijen) {
+    var uit = { leverancier: null, invoiceNo: null, datum: null, regels: [], soort: "proforma" };
+    var alles = rijen.map(function (r) {
+      return r.items.map(function (i) { return i.str; }).join(" ");
+    }).join("\n");
+    var m;
+    if ((m = alles.match(/CONTRACT\s*NO\.?\s*:?\s*([A-Za-z0-9\-\/]{3,40})/i))) uit.invoiceNo = m[1];
+    if ((m = alles.match(/DATE\s*:?\s*(\d{4})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})/i)))
+      uit.datum = m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
+    // De naam van de verkoper staat niet op de regel van "THE SELLER" maar
+    // een of twee regels lager; op die eerste regel staat de betaalconditie.
+    if ((m = alles.match(/^([^\n]*(?:CO\.,?\s*LTD|LIMITED|CO\.LTD)[^\n]*)$/im)))
+      // Op die regel staat rechts ook nog het rekeningnummer-blok; dat hoort
+      // niet bij de naam van de leverancier.
+      uit.leverancier = schoon(String(m[1]).split(/BENEFICIARY|ADV\s*BANK|ROOM\s*\d/i)[0]);
+
+    var kop2 = topiaKolommen(rijen);
+    if (!kop2) return uit;
+
+    var huidig = null;
+    var duw = function () {
+      if (!huidig) return;
+      var aantal = Number(String(huidig.aantal || "").replace(/[^\d]/g, ""));
+      // Een regel met aantal 0 staat er wel (een artikel dat deze keer niet
+      // meegaat) maar hoort niet in een inkooporder.
+      if (huidig.art && aantal > 0) {
+        uit.regels.push({
+          code: huidig.art,
+          // De kolom Description begint met dezelfde naam als de kolom
+          // Commodity; die hoeft er niet twee keer in te staan.
+          omschrijving: topiaOmschrijving(huidig.naam, huidig.oms),
+          sectie: null, aantal: aantal,
+          kleur: huidig.kleur || null, skirt: null, afmeting: null,
+          eenheid: huidig.eenheid || null,
+          verpakking: huidig.packing || null,
+          // De verticale streep is een tabelrand die als tekst meekomt.
+          venster: schoon(String(huidig.venster || "").replace(/\|/g, " ")) || null,
+          prijsUsd: topiaGetal(huidig.prijs), bedragUsd: topiaGetal(huidig.bedrag),
+        });
+      }
+      huidig = null;
+    };
+    for (var r = kop2.koprij + 1; r < rijen.length; r++) {
+      var plat = schoon(rijen[r].items.map(function (i2) { return i2.str; }).join(" "));
+      if (TOPIA_EINDE.test(plat)) break;
+      if (TOPIA_OVERSLAAN.test(plat)) continue;
+      var vak = topiaVerdeel(rijen[r].items, kop2.kolommen);
+      var artA = TOPIA_ART_NIEUW.exec(schoon(vak.art || ""));
+      if (artA) {                       // nieuwe artikelregel
+        duw();
+        huidig = { art: artA[1], naam: vak.naam || "", oms: vak.oms || "", kleur: vak.kleur || "",
+                   packing: vak.packing || "", aantal: vak.aantal || "", eenheid: vak.eenheid || "",
+                   prijs: vak.prijs || "", bedrag: vak.bedrag || "", venster: vak.venster || "" };
+        continue;
+      }
+      if (!huidig) continue;
+      // Vervolgregels: de tekstkolommen lopen door.
+      ["naam", "oms", "kleur", "venster"].forEach(function (s) {
+        if (vak[s]) huidig[s] = (huidig[s] ? huidig[s] + " " : "") + vak[s];
+      });
+      /* De kolommen met één waarde per artikel worden alleen aangevuld als ze
+         nog leeg zijn. Dat is nodig omdat zo'n waarde soms een paar pixels
+         lager staat dan de rest van zijn regel en dan als losse rij binnenkomt:
+         bij artikel 151103.01 stond het aantal 10 drie pixels onder de regel
+         en viel het er anders helemaal uit. */
+      ["packing", "aantal", "eenheid", "prijs", "bedrag"].forEach(function (s) {
+        if (vak[s] && !huidig[s]) huidig[s] = vak[s];
+      });
+      // Het artikelnummer tussen haakjes staat een regel lager en is hetzelfde
+      // nummer; dat hoeft niet in de omschrijving terecht te komen.
+      if (vak.artikel && TOPIA_ART.test(schoon(vak.artikel))) continue;
+    }
+    duw();
+    uit.totaalStuks = uit.regels.reduce(function (n, x) { return n + (Number(x.aantal) || 0); }, 0);
+    uit.totaalUsd = Math.round(uit.regels.reduce(function (n, x) { return n + (Number(x.bedragUsd) || 0); }, 0) * 100) / 100;
+    uit.packing = []; uit.verschillen = [];
+    return uit;
+  }
+
   // Welk soort bladzijde is dit? De keuze mag niet op de bestandsnaam
   // berusten; die zegt bij deze fabrieken niets.
   function soortVan(regels) {
     var t = regels.join(" ");
     if (/Main\s*components/i.test(t) && /Quantity\s+needed/i.test(t)) return "joyspa";
+    if (/SALES\s*CONTRACT/i.test(t) && /Your\s*Art\.?\s*No/i.test(t)) return "topia";
     if (/PROFORMA\s*INVOICE/i.test(t) && /Item\s*Name/i.test(t)) return "proforma";
     if (/PROFORMA\s*INVOICE/i.test(t) && /DESCRIPTIONS?/i.test(t) && /QTY/i.test(t)) return "mexda-proforma";
     return "commercial";
@@ -485,7 +738,9 @@
   }
 
   global.fpCiPdf = { lees: lees, leesProforma: leesProforma, leesJoyspa: leesJoyspa,
-                     leesMexdaProforma: leesMexdaProforma, leesAuto: leesAuto, soortVan: soortVan,
-                     uitPdf: uitPdf, kop: kop, tabel: tabel, getallen: getallen, koppel: koppel };
+                     leesMexdaProforma: leesMexdaProforma, leesTopia: leesTopia,
+                     leesAuto: leesAuto, leesBestand: leesBestand, soortVan: soortVan,
+                     uitPdf: uitPdf, uitPdfKolommen: uitPdfKolommen,
+                     kop: kop, tabel: tabel, getallen: getallen, koppel: koppel };
 
 })(typeof window !== "undefined" ? window : globalThis);

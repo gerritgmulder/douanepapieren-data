@@ -308,7 +308,9 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
       // Twee soorten bladzijden: de commercial invoice van MEXDA en de
       // proforma van Huantong, met per spa een blok en de kleuren ernaast.
       // De lezer kiest zelf op de inhoud; de bestandsnaam zegt niets.
-      const doc=window.fpCiPdf.leesAuto(await window.fpCiPdf.uitPdf(f));
+      // leesBestand kiest zelf de juiste lezer, ook voor formaten die de
+      // x-posities nodig hebben (TOPIA-tuinmeubelen).
+      const doc=await window.fpCiPdf.leesBestand(f);
       if(!doc.regels.length) throw new Error("in deze PDF staan geen artikelregels. Staat er wel een tabel met een artikelnaam en een aantal in?");
       p={ tabblad:(doc.soort==="proforma"?"proforma":"commercial invoice")+
                   (doc.container?" · container "+doc.container:"")+

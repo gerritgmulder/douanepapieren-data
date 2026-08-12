@@ -2501,7 +2501,7 @@ function parseCIOpKop(rows){
 // niet in de spa-codelijst.
 async function parseCiPdf(file){
   if(!window.fpCiPdf) throw new Error("de pdf-lezer is niet geladen. Herstart het dashboard.");
-  const doc=window.fpCiPdf.leesAuto(await window.fpCiPdf.uitPdf(file));
+  const doc=await window.fpCiPdf.leesBestand(file);
   if(!doc.regels.length) return null;
   // Een proforma is géén commercial invoice: die gaat over wat besteld wordt,
   // niet over wat er vaart. Belandt hij hier, dan zou er een schip verschijnen
