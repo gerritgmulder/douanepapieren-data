@@ -238,12 +238,22 @@
       tr.appendChild(veld);
       links.appendChild(tr);
     }
+    /* Wat de vervoerder er het laatst over zei. Twee vormen: wat hierlangs is
+       opgehaald (vervoerder + status) en wat er al lag uit de oude
+       schepenlijst - het kale antwoord van Merzario, met een voortgang in
+       procenten en de laatste gebeurtenis. Allebei laten zien wat ze hebben. */
     if (s.track) {
+      var t = s.track;
+      var stukjes = [];
+      if (t.progress != null) stukjes.push(t.progress + "% van de reis");
+      var wat = t.status || t.lastEvent;
+      if (wat) stukjes.push(String(wat).length > 90 ? String(wat).slice(0, 88) + "…" : wat);
+      if (!stukjes.length && t.eta) stukjes.push("aankomst " + nlDatum(t.eta));
+      if (t.vessel && t.vessel !== (s.vessel || "")) stukjes.push(t.vessel);
+      if (t.opgehaald) stukjes.push("opgehaald " + nlDatum(t.opgehaald));
       links.appendChild(el("div", "so-meta klein",
-        "volgens " + (s.track.vervoerder || "de vervoerder") + ": " +
-        (s.track.status || (s.track.eta ? "aankomst " + nlDatum(s.track.eta) : "geen status")) +
-        (s.track.vessel ? "  ·  " + s.track.vessel : "") +
-        (s.track.opgehaald ? "  ·  opgehaald " + nlDatum(s.track.opgehaald) : "")));
+        "volgens " + (t.vervoerder || "de vervoerder") + ": " +
+        (stukjes.join("  ·  ") || "geen bijzonderheden")));
     }
     rij.appendChild(links);
 
