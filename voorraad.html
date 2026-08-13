@@ -213,6 +213,19 @@
 .so-onderweg-inhoud{display:flex;flex-wrap:wrap;gap:5px;flex:1 1 320px}
 .so-inhoud-pil{background:#f3f6f1;border:1px solid #e2e8dd;border-radius:14px;padding:2px 10px;font-size:12px;white-space:nowrap}
 .so-inhoud-pil b{color:var(--fonteyn-green,#144734)}
+/* ── De zendingen als tabbladen, op volgorde van aankomst ──
+   Het label is wat Chantal herkent: het ordernummer groot, daaronder de
+   referentie van de fabriek en de aankomstdatum. */
+.so-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:-1px;
+  border-bottom:2px solid var(--border,#e0e0d8)}
+.so-tab{flex:0 0 auto;display:flex;flex-direction:column;gap:1px;align-items:flex-start;
+  background:transparent;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;
+  padding:9px 14px;font:inherit;cursor:pointer;text-align:left;color:var(--muted,#6b7280)}
+.so-tab:hover{background:#fafaf7}
+.so-tab.aan{color:var(--ink,#1f2937);border-bottom-color:var(--fonteyn-green,#144734)}
+.so-tab-order{font-size:13px;font-weight:700;white-space:nowrap}
+.so-tab-ref{font-size:11px;opacity:.85;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis}
+.so-tab-eta{font-size:11px;opacity:.7;white-space:nowrap}
 /* ── Flexport-blok in Schepen & ontvangst ── */
 .so-flexport{margin-top:26px;padding-top:20px;border-top:1px solid var(--border,#e0e0d8)}
 /* De papieren onder een schip: commercial invoice, packing list. */
@@ -250,7 +263,10 @@
   <div class="tabs">
     <button class="tab active" data-tab="overzicht" type="button">Overzicht</button>
     <button class="tab" data-tab="reserveringen" type="button">Reserveringen</button>
-    <button class="tab" data-tab="schepen" type="button">Schepen</button>
+    <!-- Opgegaan in Schepen & ontvangst (Chantal, 13 aug 2026). Nog even
+         bereikbaar voor het zoeken bij Merzario en het beheren van de
+         trackingreferenties; die verhuizen als laatste mee. -->
+    <button class="tab" data-tab="schepen" type="button" style="display:none">Schepen (oud)</button>
     <button class="tab" data-tab="spainkoop" type="button">Inkoop naar Logic4</button>
     <button class="tab" data-tab="ontvangst" type="button">Schepen &amp; ontvangst</button>
     <button class="tab" data-tab="particulier" type="button">Particulier</button>
@@ -514,7 +530,27 @@
   </div>
 
   <!-- Documentenketen Jazzi — getekend door spa-ontvangst.js -->
-  <div id="tab-ontvangst" class="hidden"></div>
+  <div id="tab-ontvangst" class="hidden">
+    <!-- De commercial-invoice-upload stond op het tabblad Schepen. Chantal
+         (video, 13 aug 2026): "schepen voorraad onderweg, waar je de commercial
+         invoice uploadt, die wil ik hier bij Schepen en ontvangst hebben, gewoon
+         keurig netjes bovenin." Zodra de invoice is ingelezen verschijnt de
+         zending hieronder en staat het bestand bij Documenten. -->
+    <div class="card">
+      <h3>Commercial invoice uploaden</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Eén bestand per schip (Excel of PDF). Alles wat erop staat telt direct mee als
+        <b>voorraad onderweg</b> in het Partnerportaal, en de zending verschijnt hieronder met zijn eigen tabblad.
+        Het bestand blijft bewaard en is daar terug te vinden onder <b>Documenten</b>, samen met de packing list.
+        Modellen worden herkend op de fabriekscode.
+      </p>
+      <div class="actions" style="margin-top:0">
+        <button class="primary" id="ciUploadBtn" type="button">Commercial invoice(s) uploaden</button>
+        <input type="file" id="ciFile" accept=".xlsx,.xls" multiple style="display:none">
+      </div>
+      <div id="ciStatus" class="status-msg hidden" style="margin-top:12px"></div>
+    </div>
+    <div id="soDoel"></div>
+  </div>
 
   <div id="tab-partnercont" class="hidden">
     <div class="card">
@@ -539,21 +575,6 @@
 
 
   <div id="tab-schepen" class="hidden">
-    <div class="card">
-      <h3>Schepen — voorraad onderweg (commercial invoices)</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Upload hier de <b>commercial invoices</b> (Excel, één per schip). Alles wat op een
-        geüpload schip staat telt direct mee als <b>voorraad onderweg</b> in het Partnerportaal.
-        Zet per schip een <b>trackingreferentie</b> (containernummer of orderreferentie) en klik
-        <b>ETA ophalen</b> — dan haalt Merzario automatisch de aankomstdatum, het schip en de
-        voortgang op. Geen referentie? Vul de ETA dan handmatig in. Modellen worden herkend op de SKT-fabriekscode.
-      </p>
-      <div class="actions" style="margin-top:0">
-        <button class="primary" id="ciUploadBtn" type="button">Commercial invoice(s) uploaden</button>
-        <input type="file" id="ciFile" accept=".xlsx,.xls" multiple style="display:none">
-      </div>
-      <div id="ciStatus" class="status-msg hidden" style="margin-top:12px"></div>
-    </div>
-
     <div class="card">
       <h3>Zoek een zending (Merzario)</h3>
       <p class="lead" style="font-size:12px;margin-bottom:8px">Plak een <b>containernummer</b>, <b>house bill</b>, <b>orderreferentie</b> of <b>shipment-ID</b> —
@@ -2645,7 +2666,7 @@ function startSpaMigratie(){
 function startSpaOntvangst(){
   if(!window.fpSpaOntvangst) return;
   window.fpSpaOntvangst.start({
-    doelId:"tab-ontvangst",
+    doelId:"soDoel",
     teamKey:DATA_STORE_AUTH,
     adminKey:dpAdminKey(),
     magWijzigen:MAG_BEHEREN,
@@ -2720,6 +2741,9 @@ async function handleCIUpload(files,statusId){
     }
     shipsData.unmapped=allUnmapped;
     await saveSchepen(); renderSchepen();
+    // De upload staat nu boven Schepen & ontvangst, dus dat scherm moet de
+    // nieuwe zending meteen tonen.
+    try{ if(window.fpSpaOntvangst&&window.fpSpaOntvangst.ververs) window.fpSpaOntvangst.ververs(); }catch(e){}
     if(overgeslagen.length){
       st.className="status-msg "+(added?"warn":"bad");
       st.innerHTML=(added?added+" schip(en) verwerkt, maar ":"")+

@@ -24,6 +24,7 @@
   var cfg = null, voorstel = null, doel = null, bezig = false;
   var open = {};
   var docsOpen = {};   // per schip: staat het documentenblok open
+  var actief = null;   // welk schip staat open (ref); leeg = het eerstvolgende
 
   function el(tag, klas, tekst) {
     var e = document.createElement(tag);
@@ -106,7 +107,35 @@
     });
 
     doel.appendChild(onderwegBlok(opVolgorde));
-    opVolgorde.forEach(function (s) { doel.appendChild(kaart(s)); });
+
+    /* De zendingen als tabbladen in plaats van als lijst onder elkaar.
+       Chantal (video, 13 aug 2026): "deze tegels wil ik daaronder hebben staan
+       als zijnde de tabbladen, net zoals we dat hebben bij de
+       partnerreserveringen. En op die tabbladen wil ik het ordernummer en de
+       omschrijving van de fabriek hebben staan, dat is het referentienummer."
+
+       Op volgorde van aankomst, dus het eerstvolgende schip staat vooraan en
+       is meteen open. */
+    if (opVolgorde.length) {
+      if (!opVolgorde.some(function (s) { return s.ref === actief; })) actief = opVolgorde[0].ref;
+      var strip = el("div", "so-tabs");
+      opVolgorde.forEach(function (s) {
+        var t = el("button", "so-tab" + (s.ref === actief ? " aan" : ""));
+        t.type = "button";
+        var orders = (s.jazziOrders && s.jazziOrders.length) ? s.jazziOrders.join(" + ") : "geen order";
+        t.appendChild(el("span", "so-tab-order", orders));
+        t.appendChild(el("span", "so-tab-ref", s.ref || ""));
+        var dg = dagenTot(s.eta);
+        t.appendChild(el("span", "so-tab-eta",
+          s.eta ? (nlDatum(s.eta) + (dg !== null && dg > 0 ? "  ·  " + dg + "d" : "")) : "geen aankomst"));
+        t.addEventListener("click", function () { actief = s.ref; teken(); });
+        strip.appendChild(t);
+      });
+      doel.appendChild(strip);
+
+      var nu = opVolgorde.find(function (s) { return s.ref === actief; }) || opVolgorde[0];
+      doel.appendChild(kaart(nu));
+    }
 
     // Wat de expediteur zelf weet, naast onze eigen schepenlijst.
     doel.appendChild(flexportBlok());
@@ -478,6 +507,12 @@
     await herlaad();
   }
 
-  global.fpSpaOntvangst = { start: start };
+  /* Ook opnieuw te laden van buitenaf. De commercial-invoice-upload staat nu
+     boven dit scherm; na een upload moet de nieuwe zending er meteen bij
+     staan, anders lijkt het of er niets gebeurd is. */
+  global.fpSpaOntvangst = {
+    start: start,
+    ververs: function () { if (doel && cfg) return herlaad(); },
+  };
 
 })(typeof window !== "undefined" ? window : globalThis);
