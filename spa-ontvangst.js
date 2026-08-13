@@ -94,10 +94,86 @@
       doel.appendChild(w);
     }
 
-    voorstel.schepen.forEach(function (s) { doel.appendChild(kaart(s)); });
+    /* Op volgorde van aankomst. Chantal (video, 13 aug 2026): "de eerste, de
+       beste container die binnenkomt staat vooraan, die over twee weken
+       daarnaast, die over drie weken daarnaast." Schepen zonder ETA weten we
+       niet te plaatsen en gaan achteraan. */
+    var opVolgorde = voorstel.schepen.slice().sort(function (a, b) {
+      if (!a.eta && !b.eta) return 0;
+      if (!a.eta) return 1;
+      if (!b.eta) return -1;
+      return String(a.eta).localeCompare(String(b.eta));
+    });
+
+    doel.appendChild(onderwegBlok(opVolgorde));
+    opVolgorde.forEach(function (s) { doel.appendChild(kaart(s)); });
 
     // Wat de expediteur zelf weet, naast onze eigen schepenlijst.
     doel.appendChild(flexportBlok());
+  }
+
+  /* ═══════════ Wat is er onderweg ═══════════
+     Chantal (video, 13 aug 2026): "ik wil in één oogopslag weten welke
+     containers er onderweg zijn met spabaden en wat de inhoud ervan is. Ik
+     moet niks hoeven aanklikken, niks hoeven vegen, niks hoeven selecteren."
+
+     Dus geen tabel om doorheen te scrollen maar één blok, op volgorde van
+     aankomst, met per container wat erin zit. En niet alleen Jazzi: elke
+     fabriek waarvan er spa's varen staat erin. */
+  function onderwegBlok(schepen) {
+    var d = el("div", "so-onderweg");
+    var varend = schepen.filter(function (s) {
+      var dg = dagenTot(s.eta);
+      return dg === null || dg > 0;   // zonder ETA weten we het niet: laten staan
+    });
+    var totaal = varend.reduce(function (n, s) { return n + (Number(s.spas) || 0); }, 0);
+    var conts = varend.reduce(function (n, s) { return n + (Number(s.containers) || 0); }, 0);
+
+    var kop = el("div", "so-onderweg-kop");
+    kop.appendChild(el("h3", null, "Onderweg naar Uddel"));
+    kop.appendChild(el("span", null,
+      varend.length + " zending" + (varend.length === 1 ? "" : "en") +
+      (conts ? "  ·  " + conts + " containers" : "") +
+      "  ·  " + totaal + " spa's"));
+    d.appendChild(kop);
+
+    if (!varend.length) {
+      d.appendChild(el("p", "so-meta klein", "Er vaart op dit moment niets. Zodra een commercial invoice is ingelezen verschijnt de zending hier."));
+      return d;
+    }
+
+    varend.forEach(function (s) {
+      var r = el("div", "so-onderweg-rij");
+
+      var links = el("div", "so-onderweg-wie");
+      links.appendChild(el("strong", null, s.vessel || s.ref));
+      var dg = dagenTot(s.eta);
+      links.appendChild(el("span", "so-meta klein",
+        nlDatum(s.eta) + (dg === null ? "  ·  aankomst onbekend" : "  ·  over " + dg + " dagen")));
+      if (s.jazziOrders && s.jazziOrders.length)
+        links.appendChild(el("span", "so-meta klein", "order " + s.jazziOrders.join(" + ")));
+      r.appendChild(links);
+
+      /* De inhoud zelf: model en aantal, grootste eerst. Dat is waar ze naar
+         kijkt - niet naar artikelcodes maar naar wat er in de container zit. */
+      var inhoud = el("div", "so-onderweg-inhoud");
+      var perModel = {};
+      (s.regels || []).forEach(function (x) {
+        var m = x.model || "onbekend";
+        perModel[m] = (perModel[m] || 0) + (Number(x.aantal) || 0);
+      });
+      var modellen = Object.keys(perModel).sort(function (a, b) { return perModel[b] - perModel[a]; });
+      if (!modellen.length) inhoud.appendChild(el("span", "so-meta klein", "inhoud nog niet ingelezen"));
+      modellen.forEach(function (m) {
+        var p = el("span", "so-inhoud-pil");
+        p.appendChild(el("b", null, String(perModel[m])));
+        p.appendChild(document.createTextNode(" " + m));
+        inhoud.appendChild(p);
+      });
+      r.appendChild(inhoud);
+      d.appendChild(r);
+    });
+    return d;
   }
 
   function kaart(s) {
