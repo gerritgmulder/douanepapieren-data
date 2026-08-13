@@ -54,6 +54,9 @@ const ALLOWED_BUCKETS = new Set([
   // twintig minuten geldig en moet bewaard worden - elke keer een nieuwe halen
   // is zonde en Verizon houdt dat bij.
   "verizon-instellingen", "verizon-posities", "verizon-token",
+  // Artikelen die de spa-catalogus niet kent, opgezocht in Logic4 op naam.
+  // Ook een "niet gevonden" blijft staan: anders zoekt elk scherm opnieuw.
+  "artikel-opzoek",
   // De bezorgingen waarvoor een klant een volglink heeft gekregen: code →
   // naam, adres, welke wagen en welke dag. Alleen de code opent de pagina, dus
   // die moet lang genoeg zijn om niet te raden te zijn.
@@ -2107,6 +2110,68 @@ function jazziOrderUitRemarks(remarks) {
   return m ? m[1] : null;
 }
 
+/* ─── Wat de spa-catalogus niet kent, opzoeken in Logic4 zelf ──────────────
+   Chantal (video, 13 aug 2026): "bij die Calgary staat 'artikel niet te
+   herleiden uit model en kleur'. Dat vind ik raar, want de Calgary staat
+   perfect in Logic4."
+
+   Ze heeft gelijk, en de reden is niet dat het artikel ontbreekt maar dat de
+   spa-catalogus alleen de spa-groepen bevat: spa's, zwemspa's en ijsbaden.
+   De Calgary is een sauna. Die vaart in dezelfde container mee maar zit in
+   een andere artikelgroep en komt dus nooit in die catalogus terecht.
+
+   De groep erbij zetten zou de Calgary oplossen en de volgende weer niet - er
+   komen tuinmeubelen aan, en die zitten in wéér een andere groep. Daarom
+   andersom: wat de catalogus niet kent wordt in Logic4 opgezocht op naam.
+   FastSearchText doorzoekt artikelcode, beide productnamen en de tags.
+
+   Het antwoord blijft bewaard, ook een "niet gevonden". Anders zou elk
+   scherm dat dit voorstel opent dezelfde vergeefse zoektocht opnieuw doen, en
+   op de gratis laag mag een aanroep maar vijftig verzoeken doen. Om diezelfde
+   reden maximaal acht nieuwe namen per keer; de rest volgt de ronde erna. */
+const ARTIKEL_ZOEK_MAX = 8;
+function artikelSleutel(model, kleur) {
+  return String(model || "").trim().toLowerCase() +
+         (kleur && kleur !== "(geen kleur)" ? "|" + String(kleur).trim().toLowerCase() : "");
+}
+async function ikoZoekBuitenCatalogus(env, gezocht) {
+  const cache = (await env.FONTEYN_DATA.get("artikel-opzoek", { type: "json" })) || { namen: {} };
+  cache.namen = cache.namen || {};
+  const nieuw = gezocht.filter(g => !(artikelSleutel(g.model, g.kleur) in cache.namen))
+                       .slice(0, ARTIKEL_ZOEK_MAX);
+  if (!nieuw.length) return cache.namen;
+
+  const token = await l4Token(env);
+  for (const g of nieuw) {
+    const sleutel = artikelSleutel(g.model, g.kleur);
+    try {
+      const r = await fetch("https://api.logic4server.nl/v3/Products/GetProducts", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ FastSearchText: String(g.model || "").trim(), TakeRecords: 25 }),
+      });
+      const j = await r.json().catch(() => null);
+      const lijst = Array.isArray(j) ? j : ((j && (j.Records || j.Products)) || []);
+      /* Op naam zoeken levert ook de accessoires op die het model in hun naam
+         hebben ("Cover Calgary"). We nemen alleen een artikel waarvan de naam
+         mét het model begint, en bij meerdere de kortste - dat is het model
+         zelf en niet een variant erop. */
+      const naam = String(g.model || "").trim().toLowerCase();
+      const passend = lijst
+        .map(p => ({ code: String(p.ProductCode || ""), productId: p.ProductId,
+                     desc: String(p.ProductName1 || p.Description || "") }))
+        .filter(p => p.code && p.desc.toLowerCase().replace(/^.*\|\s*/, "").trim().indexOf(naam) === 0)
+        .sort((a, b) => a.desc.length - b.desc.length);
+      cache.namen[sleutel] = passend.length
+        ? { code: passend[0].code, productId: passend[0].productId, desc: passend[0].desc,
+            meerdere: passend.length > 1 ? passend.length : undefined }
+        : { geen: true };
+    } catch (e) { cache.namen[sleutel] = { geen: true, fout: String(e.message || e).slice(0, 120) }; }
+  }
+  await env.FONTEYN_DATA.put("artikel-opzoek", JSON.stringify(cache));
+  return cache.namen;
+}
+
 async function spaOntvangstVoorstel(env) {
   const schepen = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
@@ -2152,6 +2217,24 @@ async function spaOntvangstVoorstel(env) {
   for (const [model, varianten] of Object.entries(catalog.models || {}))
     for (const v of varianten) codeNaarModel[String(v.code)] = model;
 
+  /* Eerst inventariseren wat de catalogus niet kent, en dat in één ronde bij
+     Logic4 opzoeken. Per regel zoeken zou tientallen verzoeken kosten. */
+  const onbekend = [];
+  for (const s of (schepen.ships || [])) {
+    const kl = s.modelColors || {};
+    for (const model of Object.keys(s.models || {})) {
+      const perKleur = kl[model] && Object.keys(kl[model]).length ? kl[model] : { "": s.models[model] };
+      for (const kleur of Object.keys(perKleur)) {
+        if (!Number(perKleur[kleur])) continue;
+        const a = ikoZoekArtikel(catalog, model, kleur, kleur, aliassen);
+        if (!(a && a.code) && !onbekend.some(x => x.model === model)) onbekend.push({ model, kleur });
+      }
+    }
+  }
+  const buitenCatalogus = onbekend.length
+    ? await ikoZoekBuitenCatalogus(env, onbekend).catch(() => ({}))
+    : {};
+
   // Per schip: welke regels horen erbij?
   const uit = [];
   for (const s of (schepen.ships || [])) {
@@ -2167,7 +2250,18 @@ async function spaOntvangstVoorstel(env) {
       for (const kleur of Object.keys(perKleur)) {
         const aantal = Number(perKleur[kleur]) || 0;
         if (!aantal) continue;
-        const art = ikoZoekArtikel(catalog, model, kleur, kleur, aliassen);
+        let art = ikoZoekArtikel(catalog, model, kleur, kleur, aliassen);
+        // Niet in de spa-catalogus? Dan wat Logic4 zelf op die naam gaf. Een
+        // sauna of een tuinset staat in een andere artikelgroep en komt daar
+        // dus nooit in, terwijl het artikel gewoon bestaat.
+        let buiten = null;
+        if (!(art && art.code)) {
+          const gevonden = buitenCatalogus[artikelSleutel(model, kleur)];
+          if (gevonden && gevonden.code) {
+            buiten = gevonden;
+            art = { code: gevonden.code, desc: gevonden.desc, zeker: !gevonden.meerdere };
+          }
+        }
         const code = art && art.code ? String(art.code) : null;
 
         // Zoek een inkooporderregel met dit artikel op een van de orders van
@@ -2222,7 +2316,10 @@ async function spaOntvangstVoorstel(env) {
               ? "dit model is in meerdere uitvoeringen besteld (" + keuzes.join(", ") + ") — kies zelf welke"
               : (code
                 ? "geen inkooporderregel met dit artikel op order " + hoortBij.join(" of ")
-                : "artikel niet te herleiden uit model en kleur"))
+                : "dit model staat niet in de spa-catalogus en Logic4 kent geen artikel met deze naam")),
+          // Buiten de spa-catalogus om gevonden: dat mag je zien, want de
+          // koppeling berust dan op de naam en niet op de codelijst.
+          buitenCatalogus: buiten ? (buiten.meerdere ? buiten.meerdere + " artikelen passen op deze naam" : true) : undefined,
         });
       }
     }

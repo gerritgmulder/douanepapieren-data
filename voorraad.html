@@ -235,7 +235,6 @@
   <div class="tabs">
     <button class="tab active" data-tab="overzicht" type="button">Overzicht</button>
     <button class="tab" data-tab="reserveringen" type="button">Reserveringen</button>
-    <button class="tab" data-tab="prio" type="button">Prioriteit</button>
     <button class="tab" data-tab="schepen" type="button">Schepen</button>
     <button class="tab" data-tab="spainkoop" type="button">Inkoop naar Logic4</button>
     <button class="tab" data-tab="ontvangst" type="button">Schepen &amp; ontvangst</button>
@@ -348,7 +347,11 @@
     <p class="lead" style="font-size:11px;margin:-6px 0 4px">* Orderwaarde = actieve reserveringen × partnerprijs (€, excl. BTW), indicatief. Aanbetaling ≈ 30% hiervan.</p>
     <p class="lead" style="font-size:11px;margin:0 0 4px" id="ovBereik"></p>
     <div class="card">
-      <h3>Knelpunten — meeste tekort eerst</h3>
+      <!-- Heette "Knelpunten - meeste tekort eerst". Chantal (video, 13 aug
+           2026): "aangezien wij niet met negatieve woorden praten, vind ik het
+           mooier als dit verdwijnt en dat we dat aanpassen naar Bestellen."
+           Dezelfde lijst, dezelfde volgorde, andere kop. -->
+      <h3>Bestellen</h3>
       <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
       <div id="ovParserWaarschuwing" class="status-msg warn hidden" style="margin:0 0 10px"></div>
       <div class="tablewrap" style="max-height:52vh"><table class="grid">
@@ -371,6 +374,30 @@
   </div>
 
   <div id="tab-reserveringen" class="hidden">
+    <!-- Stond op het tabblad Prioriteit. Chantal (video, 13 aug 2026):
+         "reserveren namens particulier of partner mag verplaatst worden naar
+         het tabblad Reserveringen, bovenin." Het tabblad Prioriteit zelf is
+         vervallen: de verwachte levering vult ze nu bij Particulier en
+         Partner in, dus de vraag wie de eerstvolgende spa krijgt beantwoordt
+         ze daar al. -->
+    <div class="card">
+      <h3>Reserveren namens partner of particulier</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Maak een reservering voor een <b>partner</b> (vul e-mailadres in) of een <b>particulier</b>
+        (vul het bestaande Logic4-ordernummer in — e-mail wordt daaruit gelezen). Er wordt een
+        <b>mail met aanbetalingsverzoek + betaallink</b> gestuurd. Na betaling: bij een partner
+        wordt de order aangemaakt, bij een particulier wordt de aanbetaling op de bestaande order geboekt.
+      </p>
+      <div class="actions" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:0">
+        <select id="rfType"><option value="partner">Partner (e-mail)</option><option value="particulier">Particulier (Logic4-order)</option></select>
+        <select id="rfModel" style="min-width:180px"><option value="">— model —</option></select>
+        <select id="rfVariant" style="min-width:150px"><option value="">— kleur (optioneel) —</option></select>
+        <input id="rfQty" type="number" min="1" max="50" value="1" style="width:70px;padding:8px" title="aantal">
+        <input id="rfEmail" placeholder="e-mailadres partner" style="min-width:200px;padding:8px">
+        <input id="rfOrder" placeholder="Logic4-ordernr" style="min-width:140px;padding:8px;display:none">
+        <button class="primary" id="rfSend" type="button">Aanbetalingsverzoek sturen</button>
+      </div>
+      <div id="rfStatus" class="status-msg hidden" style="margin-top:12px"></div>
+    </div>
     <div class="card">
       <h3>Reserveringen — de actuele stand (Fonteyn NL)</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Elke openstaande Logic4-order met een spa (magazijn <b>Fonteyn</b>) is een reservering. Elk uur ververst.
@@ -544,51 +571,6 @@
     </div>
   </div>
 
-  <div id="tab-prio" class="hidden">
-    <div class="card">
-      <h3>Reserveren namens partner of particulier</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Maak een reservering voor een <b>partner</b> (vul e-mailadres in) of een <b>particulier</b>
-        (vul het bestaande Logic4-ordernummer in — e-mail wordt daaruit gelezen). Er wordt een
-        <b>mail met aanbetalingsverzoek + betaallink</b> gestuurd. Na betaling: bij een partner
-        wordt de order aangemaakt, bij een particulier wordt de aanbetaling op de bestaande order geboekt.
-      </p>
-      <div class="actions" style="gap:8px;flex-wrap:wrap;align-items:center;margin-top:0">
-        <select id="rfType"><option value="partner">Partner (e-mail)</option><option value="particulier">Particulier (Logic4-order)</option></select>
-        <select id="rfModel" style="min-width:180px"><option value="">— model —</option></select>
-        <select id="rfVariant" style="min-width:150px"><option value="">— kleur (optioneel) —</option></select>
-        <input id="rfQty" type="number" min="1" max="50" value="1" style="width:70px;padding:8px" title="aantal">
-        <input id="rfEmail" placeholder="e-mailadres partner" style="min-width:200px;padding:8px">
-        <input id="rfOrder" placeholder="Logic4-ordernr" style="min-width:140px;padding:8px;display:none">
-        <button class="primary" id="rfSend" type="button">Aanbetalingsverzoek sturen</button>
-      </div>
-      <div id="rfStatus" class="status-msg hidden" style="margin-top:12px"></div>
-    </div>
-    <div class="card">
-      <h3>Prioriteit — wie krijgt de eerstvolgende spa?</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Kies een model. Je ziet alle <b>openstaande orders</b> (verkooporder / 30% aanbetaald / wacht op aanbetaling)
-        met dat model, en of het een <b>partner</b> of <b>particulier</b> is. Typ een nieuw volgnummer om een regel te
-        verplaatsen: zet je bij regel 31 een <b>1</b>, dan gaat die naar boven en schuift de rest een plek op.
-        De kolom <b>Krijgt uit</b> laat zien welke spa deze klant krijgt: eerst wat in NL ligt, daarna de containers
-        op volgorde van aankomst. Boven de streep = gedekt door de huidige voorraad; onder de streep = wacht op de
-        volgende productie.
-      </p>
-      <div class="actions" style="margin-top:0;align-items:center;gap:10px">
-        <select id="prioModel" style="min-width:220px"><option value="">— kies een model —</option></select>
-        <input id="prioZoek" type="text" placeholder="zoek op klantnaam of ordernummer…" style="min-width:260px;padding:8px">
-        <button class="secondary" id="prioReload" type="button">Vernieuwen</button>
-        <span id="prioSummary" style="font-size:13px;color:var(--muted)"></span>
-      </div>
-      <div id="prioStatus" class="status-msg hidden" style="margin-top:12px"></div>
-    </div>
-    <div class="card">
-      <div class="tablewrap">
-        <table class="grid">
-          <thead><tr><th>#</th><th>Order</th><th>Klant</th><th>Type</th><th>Aantal</th><th>Datum</th><th>Status</th><th>Krijgt uit</th><th>Volgorde</th></tr></thead>
-          <tbody id="prioBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
 
   <div id="tab-pipe" class="hidden">
     <div class="card">
@@ -1214,7 +1196,9 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   if (tab==="schepen") loadSchepen();
   if (tab==="spainkoop") startSpaMigratie();
   if (tab==="ontvangst") startSpaOntvangst();
-  if (tab==="prio") initPrio();
+  // Het tabblad Prioriteit is vervallen (Chantal, 13 aug 2026). Het
+  // reserveerformulier dat daar stond hoort nu bij Reserveringen.
+  if (tab==="reserveringen") initReserveFor();
   if (tab==="dealer"||tab==="part") renderOverviews();
   if (tab==="dealerview") renderDealerView();
   // De drie klantsoort-tabs delen de reserveringsdata; die één keer laden.
@@ -2753,29 +2737,25 @@ let prioCatalog=null, prioPriority={}, prioRows=[];
 
 function prioStatus(level,msg){ const e=document.getElementById("prioStatus"); if(!msg){e.classList.add("hidden");return;} e.className="status-msg "+level; e.textContent=msg; e.classList.remove("hidden"); }
 
-async function initPrio(){
-  if(!prioCatalog){
-    try{
-      const [c,p]=await Promise.all([
-        fetch(CATALOG_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()),
-        fetch(PRIO_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({}))
-      ]);
-      prioCatalog=c&&c.models?c.models:{};
-      prioPriority=(p&&p.byModel)||{};
-    }catch(e){ prioStatus("bad","Catalogus laden faalde: "+e.message); return; }
-    const sel=document.getElementById("prioModel");
-    sel.innerHTML='<option value="">— kies een model —</option>'+
-      Object.keys(prioCatalog).sort().map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join("");
-    sel.addEventListener("change", ()=>loadPrioModel(sel.value));
-    document.getElementById("prioReload").addEventListener("click", ()=>loadPrioModel(sel.value));
-    initReserveFor();
-  }
+/* Het tabblad Prioriteit is vervallen. De catalogus die het reserveerformulier
+   nodig heeft werd daar geladen, dus die haalt het formulier nu zelf op. De
+   rest van de prio-code blijft staan maar wordt nergens meer aangeroepen; hij
+   gaat eruit zodra zeker is dat Chantal hem niet mist. */
+async function laadPrioCatalogus(){
+  if(prioCatalog) return true;
+  try{
+    const [c,p]=await Promise.all([
+      fetch(CATALOG_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()),
+      fetch(PRIO_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({}))
+    ]);
+    prioCatalog=c&&c.models?c.models:{};
+    prioPriority=(p&&p.byModel)||{};
+    return true;
+  }catch(e){ console.warn("[voorraad] catalogus laden faalde:", e); return false; }
 }
 
-// ── Reserveren namens partner/particulier ──
-const RESERVE_FOR_URL="https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/reserve-for";
-function dpAdminKey(){ return localStorage.getItem("dp.adminkey")||""; }
-function initReserveFor(){
+async function initReserveFor(){
+  if(!(await laadPrioCatalogus())) return;
   const modelSel=document.getElementById("rfModel"), varSel=document.getElementById("rfVariant");
   modelSel.innerHTML='<option value="">— model —</option>'+
     Object.keys(prioCatalog).sort().map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join("");
