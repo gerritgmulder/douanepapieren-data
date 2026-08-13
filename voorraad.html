@@ -2780,6 +2780,14 @@ function prioStatus(level,msg){ const e=document.getElementById("prioStatus"); i
    nodig heeft werd daar geladen, dus die haalt het formulier nu zelf op. De
    rest van de prio-code blijft staan maar wordt nergens meer aangeroepen; hij
    gaat eruit zodra zeker is dat Chantal hem niet mist. */
+/* Deze twee stonden middenin het blok dat bij het opruimen van het tabblad
+   Prioriteit is weggehaald, en gingen daarmee ongemerkt mee. Gevolg: elke
+   aanroep van dpAdminKey liep stuk en daarmee gaf het hele scherm niets meer
+   weer - "Overzicht laden faalde: dpAdminKey is not defined" (13 aug 2026).
+   Ze horen niet bij Prioriteit maar bij het reserveren namens een klant. */
+const RESERVE_FOR_URL="https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/reserve-for";
+function dpAdminKey(){ return localStorage.getItem("dp.adminkey")||""; }
+
 async function laadPrioCatalogus(){
   if(prioCatalog) return true;
   try{
