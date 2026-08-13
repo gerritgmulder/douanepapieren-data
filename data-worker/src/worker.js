@@ -4025,9 +4025,15 @@ function memoriaalKandidaten(lijst, opts) {
   const uit = [];
   const voegToe = (d) => { if (d && geenBank(d) && !uit.some(x => x.id === d.id)) uit.push(d); };
 
-  // 1. Wat eerder werkte: een dagboek dat een memoriaalboeking heeft
-  //    geaccepteerd ís een memoriaal. Harder bewijs is er niet.
-  voegToe(lijst.find(d => String(d.id) === String(opts.onthouden || "")));
+  /* 1. Wat eerder écht heeft gewerkt: een dagboek dat een memoriaalboeking
+        heeft geaccepteerd ís een memoriaal. Harder bewijs is er niet.
+
+        Let op het verschil met een keuze uit het scherm. Die stond hier eerst
+        ook, en dat ging mis: Osman had ooit "Tussenrekening PIN 1" aangewezen,
+        dat werd bewaard, en daarmee won een nooit-geslaagde keuze het van het
+        dagboek dat gewoon "Memoriaal" heet (13 aug 2026). Een handmatige
+        keuze telt nu pas ná de naam mee. */
+  voegToe(lijst.find(d => String(d.id) === String(opts.bewezen || "")));
   /* 2. Op naam. Dit staat bewust vóór wat iemand in het scherm heeft
         aangewezen: Osman had "Tussenrekening PIN 1" gekozen terwijl er
         gewoon een dagboek "Memoriaal" in de lijst stond (12 aug 2026). Van
@@ -4035,7 +4041,9 @@ function memoriaalKandidaten(lijst, opts) {
         de goede uit haalt, en het dashboard kan het zelf zien. */
   lijst.filter(d => MEM_NAAM_EXACT.test(String(d.naam).trim())).forEach(voegToe);
   lijst.filter(d => MEM_NAAM.test(String(d.naam))).forEach(voegToe);
-  // 3. Pas daarna wat er in het scherm is aangewezen.
+  // 3. Pas daarna wat er met de hand is aangewezen: eerst de keuze die in het
+  //    scherm bewaard is, dan wat er bij deze boeking is meegestuurd.
+  voegToe(lijst.find(d => String(d.id) === String(opts.keuze || "")));
   voegToe(lijst.find(d => String(d.id) === String(opts.gevraagd || "")));
   // 4. Alles van hetzelfde type als een dagboek dat op naam een memoriaal is:
   //    zo komt een tweede memoriaal ("Memoriaal 2026") ook mee, ook al staat
@@ -4086,7 +4094,8 @@ async function bankMemoriaal(env, body) {
   const kandidaten = memoriaalKandidaten(dg.dagboeken, {
     bankBookingId: body.bankBookingId || null,
     gevraagd: body.bookingId || null,
-    onthouden: instellingen.memBookingId || null,
+    bewezen: instellingen.memBookingId || null,   // heeft ooit echt gewerkt
+    keuze: instellingen.memKeuze || null,         // met de hand aangewezen
   });
   if (!kandidaten.length) {
     return { ok: false, kiesDagboek: true,
@@ -4502,6 +4511,7 @@ export default {
         // memoriaal is, zodat het dat niet nog een keer hoeft te vragen.
         const inst = (await env.FONTEYN_DATA.get("bank-instellingen", { type: "json" })) || {};
         return reply(200, { ...dg, memBookingId: inst.memBookingId || null, memNaam: inst.memNaam || "",
+                            memKeuze: inst.memKeuze || null,
                             tegenrekeningCode: inst.tegenrekeningCode || "" });
       } catch (e) { return reply(200, { ok: false, error: String(e.message || e) }); }
     }

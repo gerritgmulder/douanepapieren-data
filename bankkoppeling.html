@@ -892,7 +892,11 @@ async function bewaarInstelling(velden) {
 }
 function bewaarMemDagboek(id) {
   const naam = (dagboeken.find(d => String(d.id) === String(id)) || {}).naam || "";
-  return bewaarInstelling({ memBookingId: Number(id), memNaam: naam });
+  /* Onder memKeuze en niet onder memBookingId: dat laatste is voorbehouden
+     aan een dagboek dat een boeking écht heeft geaccepteerd. Een keuze uit dit
+     lijstje is een vermoeden, geen bewijs, en mag het dagboek dat gewoon
+     "Memoriaal" heet niet overrulen. */
+  return bewaarInstelling({ memKeuze: Number(id), memKeuzeNaam: naam });
 }
 // De grootboekrekening die bij het bankdagboek hoort. Die is nodig om een
 // memoriaal in evenwicht te krijgen: bank aan tussenrekening.
@@ -929,7 +933,7 @@ async function laadDagboeken() {
          bestaat (12 aug 2026); zo'n keuze blijft anders stilletjes sturen en
          niemand die er nog naar kijkt. De worker weet het beter. */
       try { localStorage.removeItem(MEM_DAGBOEK_KEY); } catch (e) {}
-      mem.innerHTML = opties(geenBank, String(j.memBookingId || ""), "— automatisch —");
+      mem.innerHTML = opties(geenBank, String(j.memBookingId || j.memKeuze || ""), "— automatisch —");
       if (j.memNaam) $("memDagboekInfo").textContent = "Grootboekregels gaan naar " + j.memNaam + ".";
     }
     // Staat er een eigen tegenrekening ingesteld, laat hem dan zien.
