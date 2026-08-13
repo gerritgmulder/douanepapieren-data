@@ -2153,19 +2153,30 @@ async function ikoZoekBuitenCatalogus(env, gezocht) {
       const j = await r.json().catch(() => null);
       const lijst = Array.isArray(j) ? j : ((j && (j.Records || j.Products)) || []);
       /* Op naam zoeken levert ook de accessoires op die het model in hun naam
-         hebben ("Cover Calgary"). We nemen alleen een artikel waarvan de naam
-         mét het model begint, en bij meerdere de kortste - dat is het model
-         zelf en niet een variant erop. */
+         hebben ("Cover Calgary", "Onderhoudsset Calgary"). Daarom: de naam
+         moet het model als heel woord bevatten, en van wat overblijft nemen we
+         de kortste. Het model zelf heet nu eenmaal korter dan zijn toebehoren.
+
+         Eerst eiste dit dat de naam mét het model begínt. Dat was te streng:
+         bij Fonteyn staat er meestal een merk of soort voor ("Fonteyn | Sauna
+         Calgary"), en dan viel het artikel af terwijl het er gewoon was. */
       const naam = String(g.model || "").trim().toLowerCase();
+      const heelWoord = new RegExp("(^|[^a-z0-9])" + naam.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "([^a-z0-9]|$)", "i");
       const passend = lijst
         .map(p => ({ code: String(p.ProductCode || ""), productId: p.ProductId,
                      desc: String(p.ProductName1 || p.Description || "") }))
-        .filter(p => p.code && p.desc.toLowerCase().replace(/^.*\|\s*/, "").trim().indexOf(naam) === 0)
+        .filter(p => p.code && heelWoord.test(p.desc))
         .sort((a, b) => a.desc.length - b.desc.length);
-      cache.namen[sleutel] = passend.length
-        ? { code: passend[0].code, productId: passend[0].productId, desc: passend[0].desc,
-            meerdere: passend.length > 1 ? passend.length : undefined }
-        : { geen: true };
+      /* Alleen koppelen als er precies één artikel op de naam past. Bij de
+         Calgary kwamen er vier terug, waaronder "Grizzly spa | Cover Calgary",
+         en de kortste naam pakken leverde dus de hoes op in plaats van de
+         sauna. Een verkeerd artikel op een inkooporder is erger dan geen
+         artikel, dus bij twijfel koppelt hij niet en laat hij de keuze zien. */
+      cache.namen[sleutel] = passend.length === 1
+        ? { code: passend[0].code, productId: passend[0].productId, desc: passend[0].desc }
+        : (passend.length
+          ? { keuzes: passend.slice(0, 6).map(p => p.code + " " + p.desc) }
+          : { geen: true });
     } catch (e) { cache.namen[sleutel] = { geen: true, fout: String(e.message || e).slice(0, 120) }; }
   }
   await env.FONTEYN_DATA.put("artikel-opzoek", JSON.stringify(cache));
@@ -2254,12 +2265,14 @@ async function spaOntvangstVoorstel(env) {
         // Niet in de spa-catalogus? Dan wat Logic4 zelf op die naam gaf. Een
         // sauna of een tuinset staat in een andere artikelgroep en komt daar
         // dus nooit in, terwijl het artikel gewoon bestaat.
-        let buiten = null;
+        let buiten = null, buitenKeuzes = null;
         if (!(art && art.code)) {
           const gevonden = buitenCatalogus[artikelSleutel(model, kleur)];
           if (gevonden && gevonden.code) {
             buiten = gevonden;
-            art = { code: gevonden.code, desc: gevonden.desc, zeker: !gevonden.meerdere };
+            art = { code: gevonden.code, desc: gevonden.desc, zeker: true };
+          } else if (gevonden && gevonden.keuzes) {
+            buitenKeuzes = gevonden.keuzes;
           }
         }
         const code = art && art.code ? String(art.code) : null;
@@ -2316,10 +2329,13 @@ async function spaOntvangstVoorstel(env) {
               ? "dit model is in meerdere uitvoeringen besteld (" + keuzes.join(", ") + ") — kies zelf welke"
               : (code
                 ? "geen inkooporderregel met dit artikel op order " + hoortBij.join(" of ")
-                : "dit model staat niet in de spa-catalogus en Logic4 kent geen artikel met deze naam")),
+                : (buitenKeuzes
+                  ? "staat niet in de spa-catalogus; Logic4 heeft meerdere artikelen op deze naam - kies zelf welke: " + buitenKeuzes.join(" · ")
+                  : "dit model staat niet in de spa-catalogus en Logic4 kent geen artikel met deze naam"))),
           // Buiten de spa-catalogus om gevonden: dat mag je zien, want de
           // koppeling berust dan op de naam en niet op de codelijst.
-          buitenCatalogus: buiten ? (buiten.meerdere ? buiten.meerdere + " artikelen passen op deze naam" : true) : undefined,
+          buitenCatalogus: buiten ? true : undefined,
+          buitenKeuzes: buitenKeuzes || undefined,
         });
       }
     }
