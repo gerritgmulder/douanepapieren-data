@@ -222,6 +222,29 @@
       (dagen === null ? "" : (binnen ? "  ·  zou binnen moeten zijn" : "  ·  over " + dagen + " dagen")) +
       "  ·  " + s.spas + " spa's" + (s.containers ? ("  ·  " + s.containers + " containers") : "")));
     links.appendChild(el("div", "so-meta klein", s.ref));
+
+    /* De trackingreferentie stond op het tabblad Schepen, in een tabel waar je
+       hem moest opzoeken. Nu staat hij bij de container zelf, met daarnaast
+       wat de vervoerder er het laatst over zei. */
+    if (cfg.magWijzigen) {
+      var tr = el("div", "so-trackrij");
+      tr.appendChild(el("label", "so-meta klein", "Trackingreferentie"));
+      var veld = el("input", "so-trackveld");
+      veld.type = "text";
+      veld.value = s.trackRef || "";
+      veld.placeholder = "containernummer of orderreferentie";
+      veld.title = "Waarmee de vervoerder deze zending kent. Leeg = de referentie hierboven wordt gebruikt.";
+      veld.addEventListener("change", function () { bewaarReferentie(s, veld); });
+      tr.appendChild(veld);
+      links.appendChild(tr);
+    }
+    if (s.track) {
+      links.appendChild(el("div", "so-meta klein",
+        "volgens " + (s.track.vervoerder || "de vervoerder") + ": " +
+        (s.track.status || (s.track.eta ? "aankomst " + nlDatum(s.track.eta) : "geen status")) +
+        (s.track.vessel ? "  ·  " + s.track.vessel : "") +
+        (s.track.opgehaald ? "  ·  opgehaald " + nlDatum(s.track.opgehaald) : "")));
+    }
     rij.appendChild(links);
 
     var rechts = el("div", "so-rechts");
@@ -505,6 +528,24 @@
      wordt erbij gemeld, zodat te zien is waar het vandaan komt. Kent niemand
      hem, dan zegt hij dat - en welke vervoerders er nog niet aangesloten zijn,
      want dan is dat de verklaring en geen fout. */
+  async function bewaarReferentie(s, veld) {
+    var was = s.trackRef || "";
+    try {
+      var r = await fetch(BASIS + "/voorraad/schip/referentie", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
+        body: JSON.stringify({ ref: s.ref, trackRef: veld.value }),
+      });
+      var j = await r.json();
+      if (!j.ok) throw new Error(j.error || "opslaan mislukt");
+      s.trackRef = j.trackRef;
+      if (cfg.log) cfg.log("voorraad", "trackingreferentie-gewijzigd", s.ref + ": " + (was || "leeg") + " -> " + (j.trackRef || "leeg"));
+    } catch (e) {
+      alert("Kon de referentie niet opslaan: " + (e.message || e));
+      veld.value = was;
+    }
+  }
+
   async function haalAankomst(s, knop) {
     var oud = knop.textContent;
     knop.disabled = true; knop.textContent = "bezig…";
@@ -512,7 +553,7 @@
       var r = await fetch(BASIS + "/voorraad/aankomst", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
-        body: JSON.stringify({ ref: s.ref }),
+        body: JSON.stringify({ ref: s.trackRef || s.ref, schip: s.ref }),
       });
       var j = await r.json();
       if (!j.ok) {
@@ -527,6 +568,7 @@
           (j.status ? "Status: " + j.status + "\n" : "") +
           "\nDeze datum wordt niet vanzelf overgenomen; gebruik “Aankomst bijwerken” om hem op de inkooporder te zetten.");
         if (cfg.log) cfg.log("voorraad", "aankomst-opgehaald", s.ref + " via " + j.vervoerder + ": " + (j.eta || "geen datum"));
+        if (j.bewaard) { await herlaad(); return; }
       }
     } catch (e) {
       alert("Opvragen mislukt: " + (e.message || e));

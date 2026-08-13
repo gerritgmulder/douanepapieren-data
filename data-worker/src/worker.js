@@ -2343,6 +2343,12 @@ async function spaOntvangstVoorstel(env) {
     uit.push({
       ref: s.ref, vessel: s.vessel || "", eta: s.eta || null,
       containers: s.containers || null, bestand: s.file || "",
+      /* De trackingreferentie en wat de vervoerder er het laatst over zei.
+         Stonden op het tabblad Schepen; dat is opgegaan in dit scherm, dus ze
+         horen nu per container hier te staan (Chantal, 13 aug 2026). */
+      trackRef: s.trackRef != null ? s.trackRef : (s.ref || ""),
+      track: s.track || null,
+      documenten: s.documenten || [],
       jazziOrders: hoortBij,
       // Welke van die orders bestaan al als inkooporder in Logic4?
       gekoppeld: hoortBij.filter(nr => !!orders[nr]),
@@ -4238,12 +4244,50 @@ export default {
       return handleTrack(request, env);
     }
 
+    /* De trackingreferentie van één zending zetten. Stond op het tabblad
+       Schepen, waar de hele lijst in één keer werd weggeschreven. Per zending
+       is veiliger: twee mensen die tegelijk iets bijwerken overschrijven
+       elkaars werk niet meer. */
+    if (url.pathname === "/voorraad/schip/referentie" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      const ref = String(b.ref || "").trim();
+      if (!ref) return reply(400, { ok: false, error: "geen schip meegegeven" });
+      const data = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+      const schip = (data.ships || []).find(x => String(x.ref) === ref);
+      if (!schip) return reply(404, { ok: false, error: "schip niet gevonden" });
+      schip.trackRef = String(b.trackRef || "").trim();
+      data.updated = new Date().toISOString();
+      await env.FONTEYN_DATA.put("voorraad-schepen", JSON.stringify(data));
+      return reply(200, { ok: true, trackRef: schip.trackRef });
+    }
+
     /* De aankomst van één zending, bij welke vervoerder hij ook vaart. Het
        scherm hoeft niet te weten wie dat is. */
     if (url.pathname === "/voorraad/aankomst" && request.method === "POST") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const b = await request.json().catch(() => ({}));
-      return reply(200, await aankomstZoek(env, b.ref).catch(e => ({ ok: false, error: String(e.message || e) })));
+      const uit = await aankomstZoek(env, b.ref).catch(e => ({ ok: false, error: String(e.message || e) }));
+      /* Wat de vervoerder zei bij het schip bewaren, zodat de voortgang er de
+         volgende keer nog staat zonder opnieuw te hoeven vragen. De ETA zelf
+         wordt alleen ingevuld als er nog geen stond - een datum die iemand met
+         de hand heeft gezet mag niet stilletjes overschreven worden. */
+      if (uit.ok && b.schip) {
+        try {
+          const data = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+          const schip = (data.ships || []).find(x => String(x.ref) === String(b.schip));
+          if (schip) {
+            schip.track = { vervoerder: uit.vervoerder, eta: uit.eta || null,
+                            vessel: uit.vessel || null, status: uit.status || null,
+                            opgehaald: new Date().toISOString() };
+            if (!schip.eta && uit.eta) schip.eta = String(uit.eta).slice(0, 10);
+            data.updated = new Date().toISOString();
+            await env.FONTEYN_DATA.put("voorraad-schepen", JSON.stringify(data));
+            uit.bewaard = true;
+          }
+        } catch (e) { /* bewaren mag het antwoord niet tegenhouden */ }
+      }
+      return reply(200, uit);
     }
 
     // Activiteitenlogboek — tegels sturen hier een event bij openen/login

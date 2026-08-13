@@ -263,10 +263,6 @@
   <div class="tabs">
     <button class="tab active" data-tab="overzicht" type="button">Overzicht</button>
     <button class="tab" data-tab="reserveringen" type="button">Reserveringen</button>
-    <!-- Opgegaan in Schepen & ontvangst (Chantal, 13 aug 2026). Nog even
-         bereikbaar voor het zoeken bij Merzario en het beheren van de
-         trackingreferenties; die verhuizen als laatste mee. -->
-    <button class="tab" data-tab="schepen" type="button" style="display:none">Schepen (oud)</button>
     <button class="tab" data-tab="spainkoop" type="button">Inkoop naar Logic4</button>
     <button class="tab" data-tab="ontvangst" type="button">Schepen &amp; ontvangst</button>
     <button class="tab" data-tab="particulier" type="button">Particulier</button>
@@ -550,6 +546,20 @@
       <div id="ciStatus" class="status-msg hidden" style="margin-top:12px"></div>
     </div>
     <div id="soDoel"></div>
+    <!-- Verhuisd van het tabblad Schepen, dat helemaal is opgegaan in dit
+         scherm. Los opzoeken blijft handig voor een container die nog
+         nergens in onze eigen lijst staat. -->
+    <div class="card">
+      <h3>Zoek een zending (Merzario)</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:8px">Plak een <b>containernummer</b>, <b>house bill</b>, <b>orderreferentie</b> of <b>shipment-ID</b> —
+        meerdere mag (komma of spatie ertussen). Je ziet direct de actuele status, het schip en de ETA. Alleen-lezen.</p>
+      <div class="actions" style="margin-top:0;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="trkInput" placeholder="bv. MSNU7467506, 3000020127" style="flex:1;min-width:220px;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit">
+        <button class="primary" id="trkBtn" type="button">Zoeken</button>
+      </div>
+      <div id="trkStatus" class="status-msg hidden" style="margin-top:10px"></div>
+      <div id="trkResults" style="margin-top:10px"></div>
+    </div>
   </div>
 
   <div id="tab-partnercont" class="hidden">
@@ -575,18 +585,6 @@
 
 
   <div id="tab-schepen" class="hidden">
-    <div class="card">
-      <h3>Zoek een zending (Merzario)</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:8px">Plak een <b>containernummer</b>, <b>house bill</b>, <b>orderreferentie</b> of <b>shipment-ID</b> —
-        meerdere mag (komma of spatie ertussen). Je ziet direct de actuele status, het schip en de ETA. Alleen-lezen.</p>
-      <div class="actions" style="margin-top:0;gap:8px;align-items:center;flex-wrap:wrap">
-        <input type="text" id="trkInput" placeholder="bv. MSNU7467506, 3000020127" style="flex:1;min-width:220px;border:1px solid var(--border);border-radius:6px;padding:8px 10px;font:inherit">
-        <button class="primary" id="trkBtn" type="button">Zoeken</button>
-      </div>
-      <div id="trkStatus" class="status-msg hidden" style="margin-top:10px"></div>
-      <div id="trkResults" style="margin-top:10px"></div>
-    </div>
-
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
         <h3 style="margin:0">Schepen op zee — <span id="shipCount">0</span></h3>
@@ -1229,9 +1227,11 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   document.getElementById("tab-ontvangst").classList.toggle("hidden", tab!=="ontvangst");
   if (tab==="overzicht") loadOverzicht();
   if (tab==="reserveringen") loadReserveringen();
-  if (tab==="schepen") loadSchepen();
   if (tab==="spainkoop") startSpaMigratie();
-  if (tab==="ontvangst") startSpaOntvangst();
+  /* Het tabblad Schepen is opgegaan in Schepen & ontvangst. De schepenlijst
+     zelf is er nog wel: de commercial-invoice-upload schrijft erin, dus hij
+     moet geladen zijn voordat hier iemand een bestand neerzet. */
+  if (tab==="ontvangst") { loadSchepen(); startSpaOntvangst(); }
   // Het tabblad Prioriteit is vervallen (Chantal, 13 aug 2026). Het
   // reserveerformulier dat daar stond hoort nu bij Reserveringen.
   if (tab==="reserveringen") initReserveFor();
