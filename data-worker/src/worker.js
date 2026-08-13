@@ -2744,6 +2744,88 @@ async function merzarioTrack(env, refs, opts = {}) {
 
 // POST /track  { trackingNumbers:[...], force?:bool }  → { ok, results:{ref:rec|null}, error? }
 // Intern (team-sleutel X-Fonteyn-Auth), gebruikt door de Voorraadbeheer-tegel.
+/* ═══════════════════════════════════════════════════════════════════════════
+   AANKOMST OPHALEN — één ingang, meerdere vervoerders
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Chantal (video, 13 aug 2026): "let erop dat hij die ETA en die voortgang bij
+   alle partijen waar we mee samenwerken ophaalt. Dus zowel van Merzario, DHL
+   als Flexport."
+
+   Elke vervoerder heeft zijn eigen manier van antwoorden. Om te voorkomen dat
+   het scherm dat allemaal moet weten, gaat het hier langs één lijst: hij
+   probeert ze op volgorde en geeft het eerste bruikbare antwoord terug, met
+   erbij wie het gaf. Komt er een vervoerder bij, dan is dat één regel hier en
+   verandert er niets aan het scherm.
+
+   Merzario en Flexport draaien. DHL staat er al in maar heeft nog geen
+   toegang: die aanvraag loopt. Zolang die er niet is meldt hij zichzelf netjes
+   als 'nog niet aangesloten' in plaats van te doen alsof er niets is. MTO
+   idem. */
+const VERVOERDERS = [
+  { naam: "Merzario", zoek: aankomstMerzario },
+  { naam: "Flexport", zoek: aankomstFlexport },
+  { naam: "DHL",      zoek: aankomstDHL },
+  { naam: "MTO",      zoek: aankomstMTO },
+];
+
+async function aankomstMerzario(env, ref) {
+  const res = await merzarioTrack(env, [ref], {});
+  delete res.__error;
+  const rec = res[ref] || Object.values(res)[0];
+  if (!rec) return null;
+  return {
+    eta: rec.eta || rec.ETA || null,
+    vessel: rec.vessel || rec.vesselName || null,
+    status: rec.status || rec.lastStatus || null,
+  };
+}
+
+async function aankomstFlexport(env, ref) {
+  // Flexport wordt niet per referentie bevraagd - het hele overzicht staat al
+  // in de opslag omdat een verse ronde ruim twee minuten duurt. Dus zoeken we
+  // erin in plaats van erom te vragen.
+  const bewaard = await env.FONTEYN_DATA.get("flexport-zendingen", { type: "json" });
+  if (!bewaard || !Array.isArray(bewaard.zendingen)) return null;
+  const zoek = String(ref).toUpperCase().replace(/\s+/g, "");
+  const raak = bewaard.zendingen.find(z =>
+    [z.ref, z.naam, z.containerNr, ...(z.containers || [])]
+      .filter(Boolean).some(x => String(x).toUpperCase().replace(/\s+/g, "").includes(zoek)));
+  if (!raak) return null;
+  return { eta: raak.eta || null, vessel: raak.vessel || null, status: raak.status || null };
+}
+
+/* DHL Global Forwarding. De aanvraag voor API-toegang loopt: er zijn een App
+   ID en REST-inloggegevens nodig, en die geeft DHL alleen uit na goedkeuring
+   per API. Zodra ze er zijn hoeft hier alleen de aanroep ingevuld te worden;
+   de rest van de keten staat al klaar. */
+async function aankomstDHL(env, ref) {
+  if (!env.DHL_API_KEY) return { nogNiet: true, reden: "DHL is nog niet aangesloten; de API-aanvraag loopt" };
+  return null;
+}
+// MTO: nog geen afspraak over een koppeling.
+async function aankomstMTO(env, ref) {
+  if (!env.MTO_API_KEY) return { nogNiet: true, reden: "MTO is nog niet aangesloten" };
+  return null;
+}
+
+async function aankomstZoek(env, ref) {
+  const schoon = String(ref || "").trim();
+  if (!schoon) return { ok: false, error: "geen referentie meegegeven" };
+  const nietAangesloten = [];
+  for (const v of VERVOERDERS) {
+    try {
+      const uit = await v.zoek(env, schoon);
+      if (!uit) continue;
+      if (uit.nogNiet) { nietAangesloten.push(v.naam); continue; }
+      if (uit.eta || uit.status || uit.vessel)
+        return { ok: true, vervoerder: v.naam, eta: uit.eta || null,
+                 vessel: uit.vessel || null, status: uit.status || null, nietAangesloten };
+    } catch (e) { /* een vervoerder die stukloopt mag de rest niet blokkeren */ }
+  }
+  return { ok: false, error: "geen van de vervoerders kent deze referentie", nietAangesloten };
+}
+
 async function handleTrack(request, env) {
   const auth = request.headers.get("X-Fonteyn-Auth") || "";
   if (!env.SHARED_SECRET || auth !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
@@ -4154,6 +4236,14 @@ export default {
     // Merzario-tracking (intern, team-sleutel) — zie handleTrack
     if (url.pathname === "/track" && request.method === "POST") {
       return handleTrack(request, env);
+    }
+
+    /* De aankomst van één zending, bij welke vervoerder hij ook vaart. Het
+       scherm hoeft niet te weten wie dat is. */
+    if (url.pathname === "/voorraad/aankomst" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      return reply(200, await aankomstZoek(env, b.ref).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
 
     // Activiteitenlogboek — tegels sturen hier een event bij openen/login

@@ -250,6 +250,18 @@
     docKnop.addEventListener("click", function () { docsOpen[s.ref] = !docsOpen[s.ref]; teken(); });
     knoppen.appendChild(docKnop);
 
+    /* De aankomst ophalen bij de vervoerder. Welke dat is hoeft niemand te
+       weten: de worker probeert Merzario, Flexport, DHL en MTO op volgorde en
+       meldt terug wie antwoord gaf. Chantal wilde dit per container hier
+       hebben in plaats van op een apart tabblad (video, 13 aug 2026). */
+    if (cfg.magWijzigen) {
+      var haalEta = el("button", "so-knop licht", "Aankomst ophalen");
+      haalEta.type = "button";
+      haalEta.title = "Vraagt de vervoerder naar de actuele aankomstdatum en status.";
+      haalEta.addEventListener("click", function () { haalAankomst(s, haalEta); });
+      knoppen.appendChild(haalEta);
+    }
+
     if (cfg.magWijzigen && s.raak > 0) {
       var eta = el("button", "so-knop licht", "Aankomst bijwerken");
       eta.type = "button";
@@ -486,6 +498,40 @@
       " zonder — dat laatste is meestal geen spa-lading maar tuinmeubelen of onderdelen." +
       (flexport.zendingen.length > 40 ? "  De veertig recentste staan hierboven." : "")));
     return d;
+  }
+
+  /* De actuele aankomst opvragen bij wie deze container ook vervoert. Het
+     antwoord komt van de eerste vervoerder die de referentie kent; die naam
+     wordt erbij gemeld, zodat te zien is waar het vandaan komt. Kent niemand
+     hem, dan zegt hij dat - en welke vervoerders er nog niet aangesloten zijn,
+     want dan is dat de verklaring en geen fout. */
+  async function haalAankomst(s, knop) {
+    var oud = knop.textContent;
+    knop.disabled = true; knop.textContent = "bezig…";
+    try {
+      var r = await fetch(BASIS + "/voorraad/aankomst", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
+        body: JSON.stringify({ ref: s.ref }),
+      });
+      var j = await r.json();
+      if (!j.ok) {
+        alert("Geen aankomst gevonden voor " + s.ref + ".\n\n" + (j.error || "") +
+          (j.nietAangesloten && j.nietAangesloten.length
+            ? "\n\nNog niet aangesloten: " + j.nietAangesloten.join(", ") + "."
+            : ""));
+      } else {
+        alert("Volgens " + j.vervoerder + ":\n\n" +
+          "Aankomst: " + (j.eta ? nlDatum(j.eta) : "onbekend") + "\n" +
+          (j.vessel ? "Schip: " + j.vessel + "\n" : "") +
+          (j.status ? "Status: " + j.status + "\n" : "") +
+          "\nDeze datum wordt niet vanzelf overgenomen; gebruik “Aankomst bijwerken” om hem op de inkooporder te zetten.");
+        if (cfg.log) cfg.log("voorraad", "aankomst-opgehaald", s.ref + " via " + j.vervoerder + ": " + (j.eta || "geen datum"));
+      }
+    } catch (e) {
+      alert("Opvragen mislukt: " + (e.message || e));
+    }
+    knop.disabled = false; knop.textContent = oud;
   }
 
   async function herlaad() {
