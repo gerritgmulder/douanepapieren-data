@@ -279,8 +279,12 @@
     Je kijkt mee als <b>adviseur</b>: je ziet hier alle reserveringen met de verwachte levering, zodat je klanten direct kunt informeren. Wijzigen doen Chantal, Arno en Manon.
   </div>
   <div class="status-msg" style="background:#eef6ff;color:#1e40af;margin:0 0 12px">
+    <!-- Verwees nog naar Prioriteit en Schepen; die twee bestaan niet meer.
+         Prioriteit is vervallen en Schepen is opgegaan in Schepen & ontvangst
+         (Chantal, 13 aug 2026). -->
     <b>Werkwijze:</b> <b>Reserveringen</b> = de actuele stand (elk uur ververst uit Logic4).
-    <b>Prioriteit</b> = bepaal wie voorrang krijgt. <b>Schepen</b> = commercial invoices uploaden.
+    <b>Schepen &amp; ontvangst</b> = commercial invoices uploaden, volgen waar de containers zijn
+    en de ontvangst boeken zodra ze in Uddel staan.
   </div>
 
   <div id="tab-ophalen" class="hidden">
@@ -1212,19 +1216,15 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
   t.classList.add("active");
   const tab=t.dataset.tab;
   document.getElementById("tab-ophalen").classList.toggle("hidden", tab!=="ophalen");
-  document.getElementById("tab-dealer").classList.toggle("hidden", tab!=="dealer");
-  document.getElementById("tab-part").classList.toggle("hidden", tab!=="part");
-  document.getElementById("tab-overzicht").classList.toggle("hidden", tab!=="overzicht");
-  document.getElementById("tab-reserveringen").classList.toggle("hidden", tab!=="reserveringen");
-  document.getElementById("tab-schepen").classList.toggle("hidden", tab!=="schepen");
-  document.getElementById("tab-prio").classList.toggle("hidden", tab!=="prio");
-  document.getElementById("tab-pipe").classList.toggle("hidden", tab!=="pipe");
-  document.getElementById("tab-dealerview").classList.toggle("hidden", tab!=="dealerview");
-  document.getElementById("tab-particulier").classList.toggle("hidden", tab!=="particulier");
-  document.getElementById("tab-partner").classList.toggle("hidden", tab!=="partner");
-  document.getElementById("tab-partnercont").classList.toggle("hidden", tab!=="partnercont");
-  document.getElementById("tab-spainkoop").classList.toggle("hidden", tab!=="spainkoop");
-  document.getElementById("tab-ontvangst").classList.toggle("hidden", tab!=="ontvangst");
+  /* Eén lus in plaats van een regel per tabblad, en hij slaat over wat er
+     niet is. Dat laatste is geen luxe: toen het tabblad Prioriteit weg was,
+     bleef de regel die hem verborg staan, liep getElementById op null stuk
+     en werd geen enkel tabblad daarná nog getoond. Alleen Overzicht deed het
+     nog, omdat die er toevallig boven stond (13 aug 2026). */
+  ["dealer", "part", "overzicht", "reserveringen", "schepen", "pipe", "dealerview", "particulier", "partner", "partnercont", "spainkoop", "ontvangst"].forEach(function(n){
+    var e = document.getElementById("tab-" + n);
+    if (e) e.classList.toggle("hidden", tab !== n);
+  });
   if (tab==="overzicht") loadOverzicht();
   if (tab==="reserveringen") loadReserveringen();
   if (tab==="spainkoop") startSpaMigratie();
