@@ -3748,7 +3748,10 @@ async function bankGrootboeken(env) {
      Dus: eerst een code die zich vrij of vrijgesteld noemt, en pas als die er
      niet is een andere nulcode. Verlegd wordt bewust nooit als eerste keus
      genomen. */
-  var nullen = (btw || []).filter(v => Number(v.Percent) === 0);
+  /* Twee codes heten letterlijk "NIET GEBRUIKEN!!! 0% leveringen Duitsland".
+     Die horen nergens in een automatische keuze thuis, dus ze doen niet mee. */
+  var nullen = (btw || []).filter(v => Number(v.Percent) === 0 &&
+                                       !/niet\s*gebruiken/i.test(String(v.Name || "")));
   var vrij = nullen.find(v => /vrij|vrijgesteld|geen\s*btw/i.test(String(v.Name || "")) &&
                               !/verlegd/i.test(String(v.Name || "")));
   var nul = vrij || nullen.find(v => !/verlegd/i.test(String(v.Name || ""))) || nullen[0];
