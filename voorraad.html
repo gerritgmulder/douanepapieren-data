@@ -2277,6 +2277,18 @@ async function loadSchepen(){
   renderSchepen();
   renderFabrikanten();
 }
+/* Is dit een Bill of Lading? Zo ja, welke containers staan erop.
+   Alleen als de vervoerder er echt containers in noemt; anders laten we het
+   bestand gewoon door de gewone lezer gaan. */
+async function leesBl(file){
+  try{
+    if(!window.fpCiPdf||!window.fpMeubelInvoice) return null;
+    const regels=await window.fpCiPdf.uitPdf(file);
+    const bl=window.fpMeubelInvoice.leesBillOfLading(regels);
+    return (bl&&bl.containers&&bl.containers.length)?bl:null;
+  }catch(e){ console.warn("[schepen] B/L lezen faalde:",e); return null; }
+}
+
 /* ── De papieren bij een schip bewaren ──────────────────────────────────
    Chantal wil de commercial invoice en de packing list terug kunnen zien bij
    Schepen & ontvangst. Tot nu toe werd een upload uitgelezen en daarna
@@ -2691,13 +2703,43 @@ function startSpaOntvangst(){
 
 async function handleCIUpload(files,statusId){
   const st=document.getElementById(statusId||"ciStatus"); st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Inlezen…";
-  let added=0; const allUnmapped={...(shipsData.unmapped||{})}; const overgeslagen=[];
+  let added=0; const allUnmapped={...(shipsData.unmapped||{})}; const overgeslagen=[]; const blMeldingen=[];
   try{
     for(const file of files){
       // MEXDA stuurt de commercial invoice als PDF. ci-pdf.js leest die
       // bladzijde; hieronder wordt hij in dezelfde vorm gegoten als een
       // Excel-invoice, zodat de rest van de tegel er niets van merkt.
       if(/\.pdf$/i.test(file.name)||file.type==="application/pdf"){
+        /* Een Bill of Lading is geen commercial invoice: hij noemt geen
+           artikelen maar wél alle containers met hun zegel. Dat is de enige
+           plek waar ze allemaal bij naam staan - de invoice van Lodestone
+           herhaalde één nummer voor twee containers. Daarom eerst kijken of
+           dit er een is, en zo ja de containers eruit halen en het document
+           aan de zendingen hangen waar het over gaat. */
+        const bl=await leesBl(file);
+        if(bl&&bl.containers.length){
+          const doc=await bewaarSchipBestand("bl-"+(bl.blNo||"onbekend"),file,"bill-of-lading")
+            .catch(function(e){ console.warn("[schepen] B/L bewaren faalde:",e); return null; });
+          let raak=0, nieuwe=0;
+          for(const c of bl.containers){
+            let sch=(shipsData.ships||[]).find(x=>String(x.ref||"").toUpperCase()===c.container);
+            if(!sch){
+              // Nog geen zending voor deze container: aanmaken als drager van
+              // zijn papieren. Geen inhoud, dus geen voorraad.
+              sch={file:file.name,ref:c.container,vessel:"",containers:1,models:{},modelColors:{},
+                   specials:[],total:0,eta:"",parser:2,alleenDocumenten:true};
+              shipsData.ships.push(sch); nieuwe++;
+            } else raak++;
+            if(c.seal) sch.zegel=c.seal;
+            if(!sch.trackRef) sch.trackRef=c.container;
+            if(bl.blNo) sch.blNo=bl.blNo;
+            if(doc) zetSchipDocument(sch,doc);
+          }
+          added+=raak+nieuwe;
+          blMeldingen.push("Bill of Lading "+(bl.blNo||"")+": "+bl.containers.length+" container(s) — "+
+            raak+" gekoppeld aan een bestaande zending"+(nieuwe?", "+nieuwe+" nieuw aangemaakt":"")+".");
+          continue;
+        }
         const ship=await parseCiPdf(file);
         if(!ship){ overgeslagen.push({naam:file.name,codes:[],bladen:"PDF"}); continue; }
         for(const [k,v] of Object.entries(ship.unmapped||{})) allUnmapped[k]=(allUnmapped[k]||0)+v;
@@ -2803,7 +2845,8 @@ async function handleCIUpload(files,statusId){
         }).join("<br>");
     } else {
       st.className="status-msg ok";
-      st.textContent=added+" schip(en) verwerkt en opgeslagen. Vul per schip de ETA in — de lading telt nu als voorraad onderweg in het Partnerportaal.";
+      st.textContent=(blMeldingen.length?blMeldingen.join(" ")+" ":"")+
+        added+" schip(en) verwerkt en opgeslagen. Vul per schip de ETA in — de lading telt nu als voorraad onderweg in het Partnerportaal.";
     }
     try{ if(added&&window.fpLog) window.fpLog("commercial-invoice-geupload",added+" schip(en)"); }catch(e){}
     try{ if(overgeslagen.length&&window.fpLog) window.fpLog("commercial-invoice-niet-gelukt",overgeslagen.map(function(o){return o.naam;}).join(", ")); }catch(e){}

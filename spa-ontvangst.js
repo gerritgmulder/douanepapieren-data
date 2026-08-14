@@ -264,6 +264,14 @@
       (dagen === null ? "" : (binnen ? "  ·  zou binnen moeten zijn" : "  ·  over " + dagen + " dagen")) +
       "  ·  " + s.spas + " spa's" + (s.containers ? ("  ·  " + s.containers + " containers") : "")));
     links.appendChild(el("div", "so-meta klein", s.ref));
+    // Wat de Bill of Lading erover zegt. Handig bij de douane en bij het
+    // uitzoeken welke container waar is.
+    if (s.zegel || s.blNo) {
+      links.appendChild(el("div", "so-meta klein",
+        (s.zegel ? "zegel " + s.zegel : "") +
+        (s.zegel && s.blNo ? "  ·  " : "") +
+        (s.blNo ? "vrachtbrief " + s.blNo : "")));
+    }
     /* Duidelijk maken dat hier bewust geen voorraad achter zit. Zonder dit
        lijkt het op een spa-container waarvan het inlezen is mislukt. */
     if (s.alleenDocumenten) {

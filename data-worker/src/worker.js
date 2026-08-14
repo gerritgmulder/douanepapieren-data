@@ -2349,6 +2349,8 @@ async function spaOntvangstVoorstel(env) {
       // Een container waarvan we alleen de papieren bewaren: tuinmeubelen,
       // sauna's. Zijn inhoud telt nergens mee (Chantal, 14 aug 2026).
       alleenDocumenten: !!s.alleenDocumenten,
+      // Van de Bill of Lading: het zegel en het vrachtbriefnummer.
+      zegel: s.zegel || null, blNo: s.blNo || null,
       trackRef: s.trackRef != null ? s.trackRef : (s.ref || ""),
       track: s.track || null,
       documenten: s.documenten || [],
