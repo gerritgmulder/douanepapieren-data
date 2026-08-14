@@ -213,6 +213,10 @@
 .so-onderweg-inhoud{display:flex;flex-wrap:wrap;gap:5px;flex:1 1 320px}
 .so-inhoud-pil{background:#f3f6f1;border:1px solid #e2e8dd;border-radius:14px;padding:2px 10px;font-size:12px;white-space:nowrap}
 .so-inhoud-pil b{color:var(--fonteyn-green,#144734)}
+/* De kleur achter het model: wel leesbaar, maar het model blijft het eerste
+   dat je ziet. */
+.so-inhoud-kleur{color:var(--muted,#6b7280);margin-left:5px}
+.so-inhoud-kleur::before{content:"· "}
 /* ── De zendingen als tabbladen, op volgorde van aankomst ──
    Het label is wat Chantal herkent: het ordernummer groot, daaronder de
    referentie van de fabriek en de aankomstdatum. */

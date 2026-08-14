@@ -164,6 +164,16 @@
      Dus geen tabel om doorheen te scrollen maar één blok, op volgorde van
      aankomst, met per container wat erin zit. En niet alleen Jazzi: elke
      fabriek waarvan er spa's varen staat erin. */
+  /* Dezelfde kleur komt uit verschillende invoices net anders binnen:
+     "Sterling Silver #30" en "Sterling Silver, #30". Dat zouden twee pillen
+     worden terwijl het één kleur is. Alleen voor de weergave gladstrijken; wat
+     er in de gegevens staat blijft ongemoeid. */
+  function kleurNet(k) {
+    var t = String(k == null ? "" : k).trim();
+    if (!t || t === "(geen kleur)") return "";
+    return t.replace(/\s*,\s*#/g, " #").replace(/\s+/g, " ").replace(/[,;]+$/, "").trim();
+  }
+
   function onderwegBlok(schepen) {
     var d = el("div", "so-onderweg");
     var varend = schepen.filter(function (s) {
@@ -200,18 +210,32 @@
 
       /* De inhoud zelf: model en aantal, grootste eerst. Dat is waar ze naar
          kijkt - niet naar artikelcodes maar naar wat er in de container zit. */
+      /* Model én kleur. Chantal (video, 14 aug 2026): "ik zie hier per
+         container de inhoud, maar nu alleen de namen van de spa's - graag daar
+         ook de kleuren bij." Dus één pil per combinatie, want twee Renews in
+         verschillende kleuren zijn twee verschillende dingen om te lossen. */
       var inhoud = el("div", "so-onderweg-inhoud");
-      var perModel = {};
+      var per = {};
       (s.regels || []).forEach(function (x) {
         var m = x.model || "onbekend";
-        perModel[m] = (perModel[m] || 0) + (Number(x.aantal) || 0);
+        var k = kleurNet(x.kleur);
+        var sleutel = m + "|" + k;
+        if (!per[sleutel]) per[sleutel] = { model: m, kleur: k, aantal: 0 };
+        per[sleutel].aantal += Number(x.aantal) || 0;
       });
-      var modellen = Object.keys(perModel).sort(function (a, b) { return perModel[b] - perModel[a]; });
-      if (!modellen.length) inhoud.appendChild(el("span", "so-meta klein", "inhoud nog niet ingelezen"));
-      modellen.forEach(function (m) {
+      var lijst = Object.keys(per).map(function (k) { return per[k]; })
+        .filter(function (x) { return x.aantal > 0; })
+        .sort(function (a, b) {
+          // Grootste aantal eerst; bij gelijk aantal op naam, zodat dezelfde
+          // container er twee keer achter elkaar hetzelfde uitziet.
+          return b.aantal - a.aantal || a.model.localeCompare(b.model) || a.kleur.localeCompare(b.kleur);
+        });
+      if (!lijst.length) inhoud.appendChild(el("span", "so-meta klein", "inhoud nog niet ingelezen"));
+      lijst.forEach(function (x) {
         var p = el("span", "so-inhoud-pil");
-        p.appendChild(el("b", null, String(perModel[m])));
-        p.appendChild(document.createTextNode(" " + m));
+        p.appendChild(el("b", null, String(x.aantal)));
+        p.appendChild(document.createTextNode(" " + x.model));
+        if (x.kleur) p.appendChild(el("span", "so-inhoud-kleur", x.kleur));
         inhoud.appendChild(p);
       });
       r.appendChild(inhoud);
