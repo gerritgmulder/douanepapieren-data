@@ -89,6 +89,11 @@
     "koeien": [
       "dolf", "fonteynbot", "gerrit",
     ],
+    // Tuinmeubelen: de containers zonder spa's. Chantal en Manon houden ze
+    // bij, Arno koopt ze in.
+    "tuinmeubelen": [
+      "arno", "chantal", "dolf", "fonteynbot", "gerrit", "manon",
+    ],
     // Transport laden en Prijslijst maken
     "logistiek": [
       "arno", "dolf", "don", "fonteynbot", "gerrit", "manon",

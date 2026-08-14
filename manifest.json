@@ -45,6 +45,10 @@
       "note": "Commercial invoice van een meubelfabriek lezen - fabriek, invoicenummer, artikelnummer, omschrijving en aantal. Die containers tellen bewust niet als voorraad mee; daar komt een aparte tegel voor."
     },
     {
+      "name": "tuinmeubelen.html",
+      "note": "Containers met tuinmeubelen en sauna's: artikelen, papieren en meldingen. Alleen-lezen; de inhoud telt bewust niet als spa-voorraad mee (Chantal, 14 aug 2026)."
+    },
+    {
       "name": "taken.js",
       "note": "Persoonlijk takenblok bovenaan het dashboard — eigen taken, terugkerende momenten en signalen uit Logic4 die op naam staan (iedereen)."
     },

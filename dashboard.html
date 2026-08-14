@@ -397,6 +397,12 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       </a>
 
 
+      <a href="tuinmeubelen.html" class="tile hidden" id="tileTuinmeubelen">
+        <div class="icon">🪑</div>
+        <h3>Tuinmeubelen</h3>
+        <p>Containers met tuinmeubelen en sauna's: wat erin zit, de papieren erbij en wat er aan die papieren rammelt. Telt bewust niet mee als spa-voorraad.</p>
+      </a>
+
       <!-- Retouren — Don/Arno/Dolf/Manon + admins. -->
       <a href="retouren.html" class="tile hidden" id="tileRetouren">
         <div class="icon">↩️</div>
@@ -922,6 +928,8 @@ function showDashboard(email) {
   // Mollie — dezelfde groep als de bankkoppeling
   el("tileMollie").classList.toggle("hidden", !MOLLIE_EMAILS.has(lc));
   el("tileRetouren").classList.toggle("hidden", !RETOUREN_EMAILS.has(lc));
+  // Tuinmeubelen — Chantal/Manon/Arno + admins
+  el("tileTuinmeubelen").classList.toggle("hidden", !fpToegang.mag("tuinmeubelen", lc));
   // Dealerportaal-beheer — Arno/Don/Chantal + admins
   el("tileDealerportaal").classList.toggle("hidden", !DEALERPORTAAL_EMAILS.has(lc));
   // Voorraadbeheer — Dolf/Arno/Chantal + admins

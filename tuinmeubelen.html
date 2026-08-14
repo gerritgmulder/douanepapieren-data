@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<!-- Wie hier binnen mag staat in toegang.js, dezelfde lijst als het dashboard. -->
+<script src="toegang.js"></script>
+<script>
+/* fpToegangscontrole — het dashboard verbergt de tegel al, maar de app heeft
+   een history: een pagina die een vórige gebruiker opende is anders opnieuw te
+   bereiken. */
+(function(){
+  var TOEGANG = window.fpToegang ? window.fpToegang.set("tuinmeubelen") : null;
+  var email = (localStorage.getItem("fp.email")||"").toLowerCase();
+  if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+  if (TOEGANG && TOEGANG.has(email)) return;
+  window.fpGeenToegang = true;
+  document.write('<style>body{margin:0;font-family:Montserrat,-apple-system,sans-serif;background:#f5f4ef;color:#1f2937}'+
+    '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
+    '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
+    '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
+    '<div class="gt"><h1>Geen toegang</h1><p>De tegel Tuinmeubelen is niet beschikbaar voor jouw account.</p>'+
+    '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
+  window.stop();
+})();
+</script>
+<meta charset="UTF-8">
+<title>Fonteyn — Tuinmeubelen</title>
+<script src="taal.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     TUINMEUBELEN
+
+     Chantal (14 aug 2026): "voor tuinmeubelen moet een aparte tegel komen.
+     Het enige wat ik upload zijn de commercial invoice documenten, aangezien
+     we in mijn dashboard alle containers bijhouden, dus ook tuinmeubelen en
+     sauna's. Geen voorraad bij mij zichtbaar maken hiervoor."
+
+     Dus: uploaden blijft waar het was, bij Voorraadbeheer. Wat er in zo'n
+     container zit hoort niet in háár overzicht thuis maar hier. Deze tegel
+     leest dezelfde gegevens en laat alleen de containers zien waar geen spa's
+     in zitten - met de artikelen, de papieren en wat er aan die papieren
+     rammelt.
+
+     Bewust alleen-lezen. Er wordt hier niets geboekt en niets aan de voorraad
+     gedaan; dat is precies wat ze niet wilde.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{
+  --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325; --fonteyn-lime:#8bc53f;
+  --bg:#f5f4ef; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb;
+  --ok:#059669; --bad:#b91c1c; --warn:#92400e;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--fonteyn-green);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px}
+header img.logo{height:40px;width:auto;display:block}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+header a.back{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font-size:12px}
+header a.back:hover{background:rgba(255,255,255,.15)}
+header button.logout{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer}
+main{max-width:1200px;margin:24px auto;padding:0 22px}
+h2{color:var(--fonteyn-green);font-size:22px;margin:0 0 6px}
+.lead{color:var(--muted);margin:0 0 18px;line-height:1.55}
+.card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:18px 20px;margin:14px 0}
+.card h3{margin:0 0 4px;color:var(--fonteyn-green);font-size:15px}
+.muted{color:var(--muted)}
+.klein{font-size:12px;color:var(--muted)}
+.kop{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:baseline;justify-content:space-between}
+.pillen{display:flex;flex-wrap:wrap;gap:6px}
+.pil{background:#f3f6f1;border:1px solid #e2e8dd;border-radius:14px;padding:2px 10px;font-size:12px;white-space:nowrap}
+table.grid{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:10px}
+table.grid th,table.grid td{padding:7px 9px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:top}
+table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.let-op{background:#fef3c7;color:var(--warn);border-radius:8px;padding:9px 13px;margin-top:10px;font-size:12.5px;line-height:1.5}
+.docs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.docs a{color:var(--fonteyn-green);font-weight:600;font-size:12.5px;text-decoration:none;cursor:pointer;
+  border:1px solid var(--border);border-radius:7px;padding:5px 11px;background:#fafaf7}
+.docs a:hover{border-color:var(--fonteyn-lime)}
+.status-msg{padding:10px 14px;border-radius:8px;margin:12px 0;font-size:13px}
+.status-msg.info{background:#eff6ff;color:#1e40af}
+.status-msg.error{background:#fee2e2;color:var(--bad)}
+.onderdeel{color:var(--muted);font-size:11.5px}
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn" onerror="this.style.display='none'">
+  <h1>🪑 Tuinmeubelen</h1>
+  <a class="back" href="dashboard.html">← Dashboard</a>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <h2>Containers met tuinmeubelen</h2>
+  <p class="lead">
+    Alles wat Chantal en Manon bij <b>Voorraadbeheer → Schepen &amp; ontvangst</b> uploaden en waar geen spa's
+    in zitten, komt hier terecht: tuinmeubelen, sauna's en wat er verder meevaart. De inhoud telt bewust
+    <b>niet</b> als voorraad mee; dit is een overzicht van wat er in de container zit en welke papieren erbij horen.
+  </p>
+  <div id="status"></div>
+  <div id="lijst"></div>
+</main>
+
+<script>
+const WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
+const SHIPS_URL = WORKER + "/data/voorraad-schepen";
+const BESTAND_URL = WORKER + "/voorraad/schip/bestand";
+const $ = (id) => document.getElementById(id);
+const teamKey = () => localStorage.getItem("fp.teamkey") || "";
+
+function esc(s){ return String(s == null ? "" : s).replace(/[<>&"]/g, c =>
+  ({ "<":"&lt;", ">":"&gt;", "&":"&amp;", '"':"&quot;" }[c])); }
+function nlDatum(s){
+  if (!s) return "—";
+  const d = new Date(s);
+  return isNaN(d) ? "—" : String(d.getDate()).padStart(2,"0") + "-" +
+    String(d.getMonth()+1).padStart(2,"0") + "-" + d.getFullYear();
+}
+function kb(n){ return n >= 1048576 ? (n/1048576).toFixed(1)+" MB" : Math.max(1, Math.round(n/1024))+" KB"; }
+
+$("logoutBtn").addEventListener("click", () => {
+  ["fp.session","fp.email","fp.teamkey"].forEach(k => localStorage.removeItem(k));
+  location.href = "dashboard.html";
+});
+
+/* Welke zendingen horen hier thuis?
+
+   Alleen die Voorraadbeheer bewust als 'alleen documenten' heeft
+   weggeschreven. Eerst stond hier ook "geen spa's erin", en dat was te ruim:
+   er staan drie oudere containers in de lijst met nul spa's omdat het inlezen
+   destijds is mislukt (de MEXDA-PDF's). Dat zijn wél spa-containers, en die
+   hier als tuinmeubelen tonen zou een verkeerd beeld geven.
+
+   Gevolg: containers van vóór deze tegel verschijnen hier niet. Dat is de
+   juiste kant om op te vergissen - upload de invoice opnieuw en hij staat er. */
+function isVoorOns(s){
+  return !!s.alleenDocumenten;
+}
+
+async function laad(){
+  $("status").innerHTML = '<div class="status-msg info">Bezig met ophalen…</div>';
+  let data;
+  try{
+    const r = await fetch(SHIPS_URL, { headers: { "X-Fonteyn-Auth": teamKey() } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    data = await r.json();
+  }catch(e){
+    $("status").innerHTML = '<div class="status-msg error">Ophalen mislukt: ' + esc(e.message) + '</div>';
+    return;
+  }
+  const alle = (data && data.ships) || [];
+  const onze = alle.filter(isVoorOns);
+  $("status").innerHTML = "";
+
+  if (!onze.length){
+    $("lijst").innerHTML = '<div class="card"><p class="lead" style="margin:0">' +
+      'Er staan nog geen containers met tuinmeubelen in het dashboard. Zodra Chantal of Manon een commercial ' +
+      'invoice of een Bill of Lading uploadt bij Voorraadbeheer waar geen spa\'s op staan, verschijnt hij hier.' +
+      '</p></div>';
+    return;
+  }
+
+  // Eerstvolgende aankomst vooraan; zonder datum achteraan.
+  onze.sort((a,b) => (a.eta ? 0 : 1) - (b.eta ? 0 : 1) || String(a.eta||"").localeCompare(String(b.eta||"")));
+  $("lijst").innerHTML = onze.map(kaart).join("");
+
+  document.querySelectorAll("[data-file]").forEach(a =>
+    a.addEventListener("click", (e) => { e.preventDefault(); openBestand(a); }));
+}
+
+function kaart(s){
+  const m = s.meubel || null;
+  const regels = [];
+  if (m && m.containers) m.containers.forEach(c => (c.regels || []).forEach(r => regels.push(r)));
+
+  const meldingen = (m && m.meldingen) || [];
+  const docs = s.documenten || [];
+
+  return '<div class="card">' +
+    '<div class="kop">' +
+      '<div><h3>' + esc(s.ref || "zonder containernummer") + '</h3>' +
+        '<div class="klein">' +
+          (m && m.fabriek ? esc(m.fabriek) : "fabriek onbekend") +
+          (m && m.invoiceNo ? "  ·  invoice " + esc(m.invoiceNo) : "") +
+          (s.blNo ? "  ·  vrachtbrief " + esc(s.blNo) : "") +
+          (s.zegel ? "  ·  zegel " + esc(s.zegel) : "") +
+        '</div></div>' +
+      '<div class="klein">aankomst ' + esc(nlDatum(s.eta)) + '</div>' +
+    '</div>' +
+    (regels.length
+      ? '<table class="grid"><thead><tr><th>Artikel</th><th>Omschrijving</th>' +
+        '<th class="num">Aantal</th><th>Wat het is volgens de fabriek</th></tr></thead><tbody>' +
+        regels.map(r =>
+          '<tr><td><b>' + esc(r.artNo) + '</b></td>' +
+          '<td>' + esc(r.omschrijving || "—") +
+            ((r.onderdelen || []).length
+              ? '<div class="onderdeel">' + r.onderdelen.map(o => esc(o.aantal + "× " + o.omschrijving)).join(", ") + '</div>'
+              : "") + '</td>' +
+          '<td class="num">' + esc(r.aantal != null ? r.aantal : "—") + '</td>' +
+          '<td class="klein">' + esc(r.fabrieksOmschrijving || "—") + '</td></tr>').join("") +
+        '</tbody></table>'
+      : '<p class="klein" style="margin:10px 0 0">Van deze container zijn alleen de papieren bekend; ' +
+        'de artikelen zijn niet uit het bestand te lezen.</p>') +
+    (meldingen.length
+      ? '<div class="let-op"><b>Let op bij deze invoice:</b><br>' +
+        meldingen.map(x => "• " + esc(x)).join("<br>") + '</div>'
+      : "") +
+    (docs.length
+      ? '<div class="docs">' + docs.map(d =>
+          '<a href="#" data-file="' + esc(d.id) + '">' + esc(d.naam) +
+          ' <span class="klein">· ' + esc(kb(d.grootte || 0)) + '</span></a>').join("") + '</div>'
+      : '<p class="klein" style="margin:10px 0 0">Nog geen papieren bij deze container.</p>') +
+  '</div>';
+}
+
+/* Openen gaat via de worker met de teamsleutel in een kop; een gewone link
+   zou een 401 opleveren. Dus ophalen en als blob in een nieuw tabblad. */
+async function openBestand(a){
+  const oud = a.innerHTML;
+  a.textContent = "bezig…";
+  try{
+    const r = await fetch(BESTAND_URL + "?id=" + encodeURIComponent(a.dataset.file),
+      { headers: { "X-Fonteyn-Auth": teamKey() } });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    window.open(URL.createObjectURL(await r.blob()), "_blank");
+  }catch(e){ alert("Kon het document niet openen: " + (e.message || e)); }
+  a.innerHTML = oud;
+}
+
+laad();
+</script>
+
+<script>
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){
+    var ua=navigator.userAgent||"";
+    var app=ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+    var elc=ua.match(/Electron\/([\d.]+)/i);
+    var versie=app?("app "+app[1]):(elc?("app · Electron "+elc[1]):"browser");
+    var pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
+    var id=null;
+    try{
+      id=localStorage.getItem("fp.apparaat");
+      if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("fp.apparaat",id); }
+    }catch(e){}
+    return {computer:id, platform:pm?pm[1].replace(/_/g,"."):null, versie:versie};
+  }
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"tuinmeubelen",action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker"),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
+})();
+</script>
+
+</body>
+</html>
