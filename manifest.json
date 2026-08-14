@@ -1,5 +1,5 @@
 {
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -220,6 +220,14 @@
       "name": "packaging-database.json",
       "validate": "json",
       "note": "Verpakkings-afmetingen + gewicht per product (Maten + gewichten.xlsx)"
+    },
+    {
+      "name": "mail.html",
+      "note": "Mijn mail - eigen Exchange van Fonteyn via de worker (EWS). Postvak lezen, concepten klaarzetten en verzenden. Werkt op de pc en op de telefoon."
+    },
+    {
+      "name": "mobiel.html",
+      "note": "Het dashboard op de telefoon. Eigen, korte tegellijst; de worker serveert hem op /m/. Bewust niet de pc-pagina op klein formaat."
     }
   ]
 }

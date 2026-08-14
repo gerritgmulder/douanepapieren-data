@@ -64,6 +64,13 @@
       "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
       "reinier", "reinier.k", "rico", "rowan",
     ],
+    /* Mijn mail. Bewust smal: wie hier bij komt moet ook door de
+       Exchange-beheerder in de groep Dashboard Mailboxen worden gezet,
+       anders ziet hij hier niets. Twee plaatsen dus, met opzet - het
+       dashboard kan geen mailbox openzetten die de mailserver dichthoudt. */
+    "mail": [
+      "dolf", "gerrit",
+    ],
     // Bol.com koppeling
     "bol": [
       "don", "fonteynbot", "gerrit", "osman", "reinier.k",

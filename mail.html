@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<!-- Wie hier binnen mag staat in toegang.js, dezelfde lijst als het dashboard. -->
+<script src="toegang.js"></script>
+<script>
+/* Toegangscontrole. Het dashboard verbergt de tegel al, maar met de terugknop
+   is een pagina die een vórige gebruiker opende opnieuw te bereiken. Bij mail
+   weegt dat zwaarder dan elders, dus hier ook nog: de worker geeft alleen de
+   mailbox die bij de mailsleutel hoort, wat de pagina ook vraagt. */
+(function(){
+  var TOEGANG = window.fpToegang ? window.fpToegang.set("mail") : null;
+  var email = (localStorage.getItem("fp.email")||"").toLowerCase();
+  if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+  if (TOEGANG && TOEGANG.has(email)) return;
+  window.fpGeenToegang = true;
+  document.write('<style>body{margin:0;font-family:Montserrat,-apple-system,sans-serif;background:#f5f4ef;color:#1f2937}'+
+    '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
+    '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
+    '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
+    '<div class="gt"><h1>Geen toegang</h1><p>De tegel Mijn mail is niet beschikbaar voor jouw account.</p>'+
+    '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
+  window.stop();
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fonteyn — Mijn mail</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     MIJN MAIL
+
+     Fonteyn draait een eigen Exchange 2016, geen Microsoft 365. Deze tegel
+     praat daar niet rechtstreeks mee: alles loopt langs de worker, die als
+     één serviceaccount inlogt en per verzoek zegt namens wie hij werkt.
+
+     Wélke mailbox dat is bepaalt de worker aan de hand van de mailsleutel,
+     niet deze pagina. Een naam meesturen helpt dus niet - dat is met opzet,
+     anders zou iedereen met de teamsleutel in andermans mail kunnen kijken.
+
+     Verzenden gebeurt nooit vanzelf. Een concept klaarzetten mag het
+     dashboard uit zichzelf; op verzenden hoort een mens te hebben geklikt.
+
+     Deze pagina is met dezelfde opmaak voor de telefoon als voor de pc
+     gebouwd, want dit is de tegel die Gerrit juist onderweg wil hebben.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{
+  --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325; --fonteyn-lime:#8bc53f;
+  --bg:#f5f4ef; --card:#fff; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb;
+  --ok:#059669; --bad:#b91c1c; --warn:#92400e;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font-family:"Montserrat",-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);
+     color:var(--ink);font-size:14px;-webkit-text-size-adjust:100%}
+
+header{background:var(--fonteyn-green);color:#fff;padding:12px 20px;display:flex;align-items:center;
+       gap:12px;position:sticky;top:0;z-index:20;padding-top:calc(12px + env(safe-area-inset-top))}
+header h1{margin:0;font-size:15px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+header .knop{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:7px;
+             padding:7px 13px;font:inherit;font-size:12px;cursor:pointer;text-decoration:none;display:inline-block}
+header .knop:hover{background:rgba(255,255,255,.15)}
+header .wie{font-size:11px;opacity:.75;white-space:nowrap}
+
+main{max-width:1100px;margin:0 auto;padding:14px}
+
+nav.mappen{display:flex;gap:6px;overflow-x:auto;padding:0 0 12px;-webkit-overflow-scrolling:touch}
+nav.mappen button{flex:0 0 auto;background:var(--card);border:1px solid var(--border);border-radius:999px;
+                  padding:8px 15px;font:inherit;font-size:13px;cursor:pointer;color:var(--muted)}
+nav.mappen button.aan{background:var(--fonteyn-green);border-color:var(--fonteyn-green);color:#fff;font-weight:600}
+
+.melding{background:#fff7ed;border:1px solid #fed7aa;color:var(--warn);border-radius:10px;
+         padding:14px 16px;margin-bottom:14px;line-height:1.55;font-size:13px}
+.melding b{display:block;margin-bottom:4px;color:#7c2d12}
+.melding code{background:rgba(0,0,0,.05);padding:1px 5px;border-radius:4px;font-size:12px;
+              word-break:break-all;font-family:ui-monospace,Menlo,monospace}
+
+ul.lijst{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--border);
+         border-radius:12px;overflow:hidden}
+ul.lijst li{border-top:1px solid var(--border);padding:13px 15px;cursor:pointer;display:block}
+ul.lijst li:first-child{border-top:none}
+ul.lijst li:hover{background:#fafaf8}
+ul.lijst li.ongelezen{background:#f7fbf3}
+ul.lijst li.ongelezen .onderwerp{font-weight:700}
+.regel1{display:flex;gap:10px;align-items:baseline}
+.van{font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wanneer{font-size:11.5px;color:var(--muted);flex:0 0 auto}
+.onderwerp{margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
+.merk{font-size:11px;color:var(--muted);margin-top:3px}
+.merk .clip{color:var(--fonteyn-green)}
+
+.leeg{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:34px 20px;
+      text-align:center;color:var(--muted);line-height:1.6}
+
+.meer{display:block;width:100%;margin-top:12px;background:var(--card);border:1px solid var(--border);
+      border-radius:10px;padding:12px;font:inherit;font-size:13px;color:var(--fonteyn-green);cursor:pointer}
+
+/* Het bericht zelf. Op de telefoon schuift het over het scherm heen, op de pc
+   staat het als kaart in beeld. Eén opmaak, twee groottes. */
+#leesvenster{position:fixed;inset:0;background:var(--bg);z-index:40;display:none;
+             flex-direction:column;overflow:hidden}
+#leesvenster.open{display:flex}
+#leesvenster .kop{background:var(--fonteyn-green);color:#fff;padding:12px 16px;display:flex;
+                  align-items:center;gap:10px;padding-top:calc(12px + env(safe-area-inset-top))}
+#leesvenster .kop button{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;
+                         border-radius:7px;padding:7px 13px;font:inherit;font-size:12px;cursor:pointer}
+#leesvenster .kop span{flex:1;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#leesvenster .body{flex:1;overflow-y:auto;padding:16px;-webkit-overflow-scrolling:touch}
+#leesvenster .binnen{max-width:820px;margin:0 auto}
+.beriKop{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
+.beriKop h2{margin:0 0 10px;font-size:17px;line-height:1.35}
+.beriKop .rij{display:flex;gap:8px;font-size:12.5px;color:var(--muted);margin-top:3px;flex-wrap:wrap}
+.beriKop .rij b{color:var(--ink);font-weight:600}
+.beriTekst{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;
+           white-space:pre-wrap;word-wrap:break-word;line-height:1.6;font-size:14px}
+.bijlage{display:inline-block;background:#f3f4f6;border:1px solid var(--border);border-radius:8px;
+         padding:6px 11px;font-size:12px;margin:6px 6px 0 0;color:var(--muted)}
+
+.acties{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+button.doe{background:var(--fonteyn-green);color:#fff;border:none;border-radius:9px;padding:12px 18px;
+           font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+button.doe:hover{background:var(--fonteyn-green-dark)}
+button.doe:disabled{background:#d1d5db;color:#6b7280;cursor:not-allowed}
+button.stil{background:var(--card);color:var(--ink);border:1px solid var(--border);border-radius:9px;
+            padding:12px 18px;font:inherit;font-size:13px;cursor:pointer}
+
+/* Opstellen en aanpassen. Hetzelfde venster voor een nieuw bericht als voor
+   een concept dat het dashboard heeft klaargezet. */
+#schrijfvenster{position:fixed;inset:0;background:var(--bg);z-index:50;display:none;flex-direction:column}
+#schrijfvenster.open{display:flex}
+#schrijfvenster .body{flex:1;overflow-y:auto;padding:16px}
+#schrijfvenster .binnen{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+#schrijfvenster label{font-size:12px;color:var(--muted);font-weight:500;display:flex;flex-direction:column;gap:4px}
+#schrijfvenster input,#schrijfvenster textarea{border:1px solid var(--border);border-radius:9px;
+        padding:12px;font:inherit;font-size:15px;background:var(--card);color:var(--ink);width:100%}
+#schrijfvenster textarea{min-height:280px;resize:vertical;line-height:1.6}
+#schrijfvenster input:focus,#schrijfvenster textarea:focus{outline:none;border-color:var(--fonteyn-lime)}
+
+.bezig{text-align:center;color:var(--muted);padding:30px;font-size:13px}
+.fout{background:#fef2f2;border:1px solid #fecaca;color:var(--bad);border-radius:10px;padding:13px 15px;
+      margin-bottom:12px;font-size:13px;line-height:1.5}
+
+@media (max-width:640px){
+  main{padding:10px}
+  header{padding-left:14px;padding-right:14px}
+  header .wie{display:none}
+  ul.lijst{border-radius:10px}
+  ul.lijst li{padding:12px 13px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="knop" href="dashboard.html">&larr;</a>
+  <h1>Mijn mail</h1>
+  <span class="wie" id="wie"></span>
+  <button class="knop" id="knopNieuw">Nieuw</button>
+  <button class="knop" id="knopVerversen">Ververs</button>
+</header>
+
+<main>
+  <nav class="mappen" id="mappen"></nav>
+  <div id="melding"></div>
+  <div id="inhoud"><div class="bezig">Postvak wordt opgehaald…</div></div>
+</main>
+
+<!-- Bericht lezen -->
+<div id="leesvenster">
+  <div class="kop">
+    <button id="leesTerug">&larr; Terug</button>
+    <span id="leesTitel">Bericht</span>
+  </div>
+  <div class="body"><div class="binnen" id="leesInhoud"></div></div>
+</div>
+
+<!-- Opstellen of een concept aanpassen -->
+<div id="schrijfvenster">
+  <div class="kop" style="background:var(--fonteyn-green);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;padding-top:calc(12px + env(safe-area-inset-top))">
+    <button id="schrijfTerug" style="background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:7px;padding:7px 13px;font:inherit;font-size:12px;cursor:pointer">Sluiten</button>
+    <span style="flex:1;font-size:14px;font-weight:600" id="schrijfTitel">Nieuw bericht</span>
+  </div>
+  <div class="body"><div class="binnen">
+    <div id="schrijfFout"></div>
+    <label>Aan<input type="text" id="vAan" placeholder="naam@bedrijf.nl; tweede@bedrijf.nl" autocapitalize="off" autocorrect="off"></label>
+    <label>Cc<input type="text" id="vCc" placeholder="leeg laten mag" autocapitalize="off" autocorrect="off"></label>
+    <label>Onderwerp<input type="text" id="vOnderwerp"></label>
+    <label>Bericht<textarea id="vTekst"></textarea></label>
+    <div class="acties">
+      <button class="doe" id="knopBewaar">Bewaren als concept</button>
+      <button class="stil" id="knopBewaarVerzend">Bewaren en verzenden</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);line-height:1.55;margin:2px 0 20px">
+      Bewaren zet het bericht in je map Concepten. Het staat dan ook gewoon in Outlook,
+      dus je kunt het daar afmaken als je liever achter je bureau zit.
+    </p>
+  </div></div>
+</div>
+
+<script>
+"use strict";
+if (window.fpGeenToegang) throw new Error("geen toegang");
+
+var WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
+var MAPPEN = [
+  { id:"inbox", naam:"Postvak in" },
+  { id:"concepten", naam:"Concepten" },
+  { id:"verzonden", naam:"Verzonden" },
+  { id:"prullenbak", naam:"Prullenbak" },
+];
+
+var mapNu = "inbox";
+var lijstNu = [];
+var vanaf = 0;
+var conceptNu = null;      // {id, sleutel} als we een bestaand concept bewerken
+
+function el(id){ return document.getElementById(id); }
+function mailsleutel(){ return localStorage.getItem("fp.mailkey") || ""; }
+
+/* Elke aanroep gaat langs de persoonlijke mailsleutel. Die is bij het inloggen
+   uitgegeven en verloopt na twaalf uur; is hij weg, dan is opnieuw inloggen
+   het enige dat helpt en zeggen we dat ook gewoon. */
+async function roep(pad, opties){
+  var o = opties || {};
+  var k = mailsleutel();
+  if (!k) return { ok:false, error:"opnieuw-inloggen",
+                   uitleg:"Log opnieuw in op het dashboard, dan is je mail weer bereikbaar." };
+  var h = { "X-Fonteyn-Mail": k };
+  if (o.body) h["Content-Type"] = "application/json";
+  try {
+    var r = await fetch(WORKER + pad, {
+      method: o.body ? "POST" : "GET",
+      headers: h,
+      body: o.body ? JSON.stringify(o.body) : undefined,
+    });
+    return await r.json();
+  } catch (e) {
+    return { ok:false, error:"geen-verbinding", uitleg:String(e.message||e) };
+  }
+}
+
+function tekst(s){ var d = document.createElement("div"); d.textContent = s == null ? "" : s; return d.innerHTML; }
+
+/* Datum zoals een mens hem leest: vandaag alleen de tijd, deze week de dag,
+   daarvoor de datum. Europees, dus dag voor maand. */
+function wanneer(iso){
+  if (!iso) return "";
+  var d = new Date(iso);
+  if (isNaN(d)) return "";
+  var nu = new Date();
+  var zelfdeDag = d.toDateString() === nu.toDateString();
+  if (zelfdeDag) return d.toLocaleTimeString("nl-NL", { hour:"2-digit", minute:"2-digit" });
+  var verschil = (nu - d) / 86400000;
+  if (verschil < 7) return d.toLocaleDateString("nl-NL", { weekday:"short" }) + " " +
+                           d.toLocaleTimeString("nl-NL", { hour:"2-digit", minute:"2-digit" });
+  return d.toLocaleDateString("nl-NL", { day:"2-digit", month:"2-digit", year:"numeric" }).replace(/-/g, ".");
+}
+
+function toonMelding(r){
+  var m = el("melding");
+  if (!r || r.ok) { m.innerHTML = ""; return false; }
+
+  if (r.error === "mail-niet-ingesteld") {
+    m.innerHTML = '<div class="melding"><b>De mailkoppeling is nog niet aangezet</b>' +
+      'Het serviceaccount bij de mailserver bestaat nog niet of het wachtwoord staat er nog niet in. ' +
+      'Zodra André het account heeft aangemaakt zet Gerrit het wachtwoord weg met ' +
+      '<code>npx wrangler secret put EWS_WACHTWOORD</code> en werkt deze tegel meteen.</div>';
+    return true;
+  }
+  if (r.error === "opnieuw-inloggen") {
+    m.innerHTML = '<div class="melding"><b>Even opnieuw inloggen</b>' +
+      'De sleutel voor je mail is verlopen. Log uit en weer in op het dashboard; ' +
+      'dan wordt hij vanzelf opnieuw opgehaald.</div>';
+    return true;
+  }
+  if (r.error === "geen-mailbox-bekend") {
+    m.innerHTML = '<div class="melding"><b>Geen mailadres gekoppeld</b>' +
+      'Voor jouw inlog staat nog geen mailadres in de lijst. Dat moet apart, want je ' +
+      'Logic4-account en je mailadres hoeven niet hetzelfde te zijn. Geef het door aan Gerrit.</div>';
+    return true;
+  }
+  if (r.error === "geen-toegang-tot-mailbox") {
+    m.innerHTML = '<div class="melding"><b>De mailserver houdt de deur dicht</b>' + tekst(r.uitleg || "") + '</div>';
+    return true;
+  }
+  m.innerHTML = '<div class="fout"><b>' + tekst(r.error || "Er ging iets mis") + '</b>' +
+                (r.uitleg ? "<br>" + tekst(r.uitleg) : "") + "</div>";
+  return true;
+}
+
+function tekenMappen(){
+  el("mappen").innerHTML = MAPPEN.map(function(m){
+    return '<button data-map="' + m.id + '"' + (m.id === mapNu ? ' class="aan"' : "") + ">" + m.naam + "</button>";
+  }).join("");
+  Array.prototype.forEach.call(el("mappen").querySelectorAll("button"), function(b){
+    b.onclick = function(){ mapNu = b.dataset.map; vanaf = 0; lijstNu = []; haalLijst(); };
+  });
+}
+
+async function haalLijst(meer){
+  if (!meer) el("inhoud").innerHTML = '<div class="bezig">Bezig…</div>';
+  var r = await roep("/mail/lijst?map=" + encodeURIComponent(mapNu) + "&aantal=25&vanaf=" + vanaf);
+  if (toonMelding(r)) { if (!meer) el("inhoud").innerHTML = ""; return; }
+  lijstNu = meer ? lijstNu.concat(r.berichten) : r.berichten;
+  tekenLijst(r.meer);
+}
+
+function tekenLijst(meer){
+  if (!lijstNu.length) {
+    el("inhoud").innerHTML = '<div class="leeg">Geen berichten in deze map.</div>';
+    return;
+  }
+  var isConcept = mapNu === "concepten";
+  var html = '<ul class="lijst">' + lijstNu.map(function(b, i){
+    return '<li data-i="' + i + '"' + (!b.gelezen && !isConcept ? ' class="ongelezen"' : "") + ">" +
+      '<div class="regel1"><span class="van">' + tekst(b.van || b.vanAdres || "(zonder afzender)") + "</span>" +
+      '<span class="wanneer">' + wanneer(b.ontvangen) + "</span></div>" +
+      '<div class="onderwerp">' + tekst(b.onderwerp || "(geen onderwerp)") + "</div>" +
+      (b.bijlagen ? '<div class="merk"><span class="clip">&#128206; bijlage</span></div>' : "") +
+      "</li>";
+  }).join("") + "</ul>";
+  if (meer) html += '<button class="meer" id="knopMeer">Meer laden</button>';
+  el("inhoud").innerHTML = html;
+
+  Array.prototype.forEach.call(el("inhoud").querySelectorAll("li"), function(li){
+    li.onclick = function(){ open(lijstNu[Number(li.dataset.i)]); };
+  });
+  if (el("knopMeer")) el("knopMeer").onclick = function(){ vanaf += 25; haalLijst(true); };
+}
+
+async function open(b){
+  if (!b) return;
+  /* Een concept openen betekent: bewerken. Lezen heeft daar geen zin, want
+     het is je eigen tekst die nog weg moet. */
+  if (mapNu === "concepten") return openConcept(b);
+
+  el("leesTitel").textContent = b.onderwerp || "Bericht";
+  el("leesInhoud").innerHTML = '<div class="bezig">Bezig…</div>';
+  el("leesvenster").classList.add("open");
+
+  var r = await roep("/mail/bericht?id=" + encodeURIComponent(b.id) + "&sleutel=" + encodeURIComponent(b.sleutel || ""));
+  if (!r.ok) {
+    el("leesInhoud").innerHTML = '<div class="fout">' + tekst(r.uitleg || r.error || "Kon het bericht niet ophalen") + "</div>";
+    return;
+  }
+  var m = r.bericht;
+  var aan = (m.aan || []).map(function(x){ return x.naam || x.adres; }).join(", ");
+  var cc  = (m.cc  || []).map(function(x){ return x.naam || x.adres; }).join(", ");
+
+  el("leesInhoud").innerHTML =
+    '<div class="beriKop"><h2>' + tekst(m.onderwerp || "(geen onderwerp)") + "</h2>" +
+    '<div class="rij"><b>' + tekst(m.van || m.vanAdres) + "</b>" +
+      (m.vanAdres && m.van !== m.vanAdres ? "<span>" + tekst(m.vanAdres) + "</span>" : "") + "</div>" +
+    (aan ? '<div class="rij">Aan: ' + tekst(aan) + "</div>" : "") +
+    (cc  ? '<div class="rij">Cc: '  + tekst(cc)  + "</div>" : "") +
+    '<div class="rij">' + wanneer(m.ontvangen) + "</div>" +
+    (m.bijlagen && m.bijlagen.length
+      ? "<div>" + m.bijlagen.map(function(a){
+          return '<span class="bijlage">&#128206; ' + tekst(a.naam) +
+                 (a.grootte ? " (" + Math.round(a.grootte/1024) + " kB)" : "") + "</span>"; }).join("") +
+        '<div class="rij" style="margin-top:8px">Bijlagen openen kan in Outlook; hier zie je alleen dat ze er zijn.</div></div>'
+      : "") +
+    "</div>" +
+    '<div class="beriTekst">' + tekst(m.tekst || "(leeg bericht)") + "</div>" +
+    '<div class="acties">' +
+      '<button class="doe" id="knopAntwoord">Antwoorden</button>' +
+      '<button class="stil" id="knopPrullenbak">Naar prullenbak</button>' +
+    "</div>";
+
+  el("knopAntwoord").onclick = function(){ antwoordOp(m); };
+  el("knopPrullenbak").onclick = function(){ naarPrullenbak(m); };
+
+  /* Gelezen melden mag stilletjes mislukken. Als dat niet lukt is het bericht
+     nog steeds gelezen; het vinkje is niet belangrijk genoeg voor een fout. */
+  if (!b.gelezen) {
+    roep("/mail/gelezen", { body: { id:m.id, sleutel:m.sleutel, gelezen:true } })
+      .then(function(){ b.gelezen = true; tekenLijst(false); });
+  }
+}
+
+function sluitLezen(){ el("leesvenster").classList.remove("open"); }
+
+/* Antwoorden is: een nieuw concept met het oude eronder. Bewust niet de
+   ReplyToItem van Exchange - dan zou de tekst pas bij het verzenden ontstaan
+   en kun je hem hier niet nalezen voordat hij weg is. */
+function antwoordOp(m){
+  conceptNu = null;
+  el("schrijfTitel").textContent = "Antwoord";
+  el("vAan").value = m.vanAdres || "";
+  el("vCc").value = "";
+  el("vOnderwerp").value = /^re:/i.test(m.onderwerp || "") ? m.onderwerp : "Re: " + (m.onderwerp || "");
+  el("vTekst").value = "\n\n----------\nVan: " + (m.van || m.vanAdres) + "\nVerzonden: " +
+                       wanneer(m.ontvangen) + "\nOnderwerp: " + (m.onderwerp || "") + "\n\n" + (m.tekst || "");
+  el("schrijfFout").innerHTML = "";
+  el("schrijfvenster").classList.add("open");
+  el("vTekst").focus();
+  el("vTekst").setSelectionRange(0, 0);
+}
+
+async function openConcept(b){
+  el("schrijfTitel").textContent = "Concept";
+  el("schrijfFout").innerHTML = "";
+  el("vAan").value = ""; el("vCc").value = "";
+  el("vOnderwerp").value = b.onderwerp || ""; el("vTekst").value = "Bezig…";
+  el("schrijfvenster").classList.add("open");
+
+  var r = await roep("/mail/bericht?id=" + encodeURIComponent(b.id) + "&sleutel=" + encodeURIComponent(b.sleutel || ""));
+  if (!r.ok) {
+    el("vTekst").value = "";
+    el("schrijfFout").innerHTML = '<div class="fout">' + tekst(r.uitleg || r.error) + "</div>";
+    return;
+  }
+  var m = r.bericht;
+  conceptNu = { id:m.id, sleutel:m.sleutel };
+  el("vAan").value = (m.aan || []).map(function(x){ return x.adres; }).join("; ");
+  el("vCc").value  = (m.cc  || []).map(function(x){ return x.adres; }).join("; ");
+  el("vOnderwerp").value = m.onderwerp || "";
+  el("vTekst").value = m.tekst || "";
+}
+
+function nieuw(){
+  conceptNu = null;
+  el("schrijfTitel").textContent = "Nieuw bericht";
+  el("vAan").value = ""; el("vCc").value = ""; el("vOnderwerp").value = ""; el("vTekst").value = "";
+  el("schrijfFout").innerHTML = "";
+  el("schrijfvenster").classList.add("open");
+  el("vAan").focus();
+}
+
+function sluitSchrijven(){ el("schrijfvenster").classList.remove("open"); conceptNu = null; }
+
+/* Bewaren maakt altijd een nieuw concept. Een bestaand concept dat we hebben
+   opgehaald gaat daarna naar de prullenbak, zodat er niet twee versies van
+   dezelfde brief blijven staan. Bijwerken via UpdateItem kan ook, maar dan
+   moet elk veld apart worden gezet en loopt het mis zodra Outlook het concept
+   ondertussen heeft aangeraakt. */
+async function bewaar(danVerzenden){
+  var aan = el("vAan").value.trim();
+  var onderwerp = el("vOnderwerp").value.trim();
+  var body = el("vTekst").value;
+  if (!aan && danVerzenden) {
+    el("schrijfFout").innerHTML = '<div class="fout">Vul eerst in naar wie het bericht moet.</div>';
+    return;
+  }
+  if (!onderwerp && !body.trim()) {
+    el("schrijfFout").innerHTML = '<div class="fout">Er staat nog niets in het bericht.</div>';
+    return;
+  }
+
+  el("knopBewaar").disabled = true; el("knopBewaarVerzend").disabled = true;
+  el("schrijfFout").innerHTML = '<div class="bezig" style="padding:8px">Bezig…</div>';
+
+  var r = await roep("/mail/concept", { body: {
+    aan: aan, cc: el("vCc").value.trim(), onderwerp: onderwerp, tekst: body } });
+
+  if (!r.ok) {
+    el("schrijfFout").innerHTML = '<div class="fout">' + tekst(r.uitleg || r.error) + "</div>";
+    el("knopBewaar").disabled = false; el("knopBewaarVerzend").disabled = false;
+    return;
+  }
+
+  var oud = conceptNu;
+  conceptNu = null;
+
+  if (danVerzenden) {
+    var v = await roep("/mail/verzend", { body: { id:r.id, sleutel:r.sleutel } });
+    if (!v.ok) {
+      el("schrijfFout").innerHTML = '<div class="fout">Het concept is bewaard, maar verzenden lukte niet: ' +
+                                    tekst(v.uitleg || v.error) + "</div>";
+      el("knopBewaar").disabled = false; el("knopBewaarVerzend").disabled = false;
+      return;
+    }
+  }
+
+  if (oud) await roep("/mail/prullenbak", { body: { id:oud.id, sleutel:oud.sleutel } });
+
+  el("knopBewaar").disabled = false; el("knopBewaarVerzend").disabled = false;
+  sluitSchrijven();
+  sluitLezen();
+  if (danVerzenden) { mapNu = "verzonden"; }
+  else { mapNu = "concepten"; }
+  vanaf = 0; lijstNu = [];
+  tekenMappen(); haalLijst();
+}
+
+async function naarPrullenbak(m){
+  var r = await roep("/mail/prullenbak", { body: { id:m.id, sleutel:m.sleutel } });
+  if (!r.ok) { alert(r.uitleg || r.error || "Verplaatsen lukte niet"); return; }
+  sluitLezen();
+  vanaf = 0; lijstNu = [];
+  haalLijst();
+}
+
+el("knopNieuw").onclick = nieuw;
+el("knopVerversen").onclick = function(){ vanaf = 0; lijstNu = []; haalLijst(); };
+el("leesTerug").onclick = sluitLezen;
+el("schrijfTerug").onclick = sluitSchrijven;
+el("knopBewaar").onclick = function(){ bewaar(false); };
+el("knopBewaarVerzend").onclick = function(){ bewaar(true); };
+
+/* De terugknop van de telefoon hoort het geopende venster te sluiten en niet
+   de hele tegel te verlaten. */
+window.addEventListener("popstate", function(){
+  if (el("schrijfvenster").classList.contains("open")) { sluitSchrijven(); history.pushState({}, ""); }
+  else if (el("leesvenster").classList.contains("open")) { sluitLezen(); history.pushState({}, ""); }
+});
+history.pushState({}, "");
+
+(async function start(){
+  tekenMappen();
+  var w = await roep("/mail/wie");
+  if (w.ok) el("wie").textContent = w.mailbox;
+  haalLijst();
+})();
+</script>
+</body>
+</html>

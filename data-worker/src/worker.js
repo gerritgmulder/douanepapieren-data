@@ -57,6 +57,11 @@ const ALLOWED_BUCKETS = new Set([
   // Artikelen die de spa-catalogus niet kent, opgezocht in Logic4 op naam.
   // Ook een "niet gevonden" blijft staan: anders zoekt elk scherm opnieuw.
   "artikel-opzoek",
+  // Welk mailadres hoort bij welke inlog. Staat los van Logic4 met opzet:
+  // Dolf logt daar in als fonteyn.dolf en zijn mail is dolf@fonteyn.nl.
+  // De persoonlijke mailsleutels staan hier NIET in - die krijgen een eigen
+  // sleutel met vervaldatum en zijn daarmee via /data niet op te vragen.
+  "mail-adressen",
   // De bezorgingen waarvoor een klant een volglink heeft gekregen: code →
   // naam, adres, welke wagen en welke dag. Alleen de code opent de pagina, dus
   // die moet lang genoeg zijn om niet te raden te zijn.
@@ -1191,7 +1196,16 @@ async function handleTeamKey(request, env) {
   const j = await r.json().catch(() => null);
   if (!j || !j.access_token) return reply(401, { ok: false, error: "logic4-login-failed" });
   console.log("[teamkey] uitgegeven aan " + username);
-  return reply(200, { ok: true, teamkey: env.SHARED_SECRET });
+  /* Naast de teamsleutel een persoonlijke sleutel voor de mailtegel. Die
+     hoort bij déze naam en bij niemand anders, want de teamsleutel is bij
+     iedereen bekend en zou de mailbox van collega's openzetten. Dit gebeurt
+     bij het gewone inloggen, dus niemand hoeft iets extra's te doen. Gaat
+     het opslaan mis, dan gaat het inloggen gewoon door: zonder mailsleutel
+     werkt alleen de mailtegel niet, de rest van het dashboard wel. */
+  let mailsleutel = null;
+  try { mailsleutel = await mailSleutelGeef(env, username); }
+  catch (e) { console.log("[teamkey] mailsleutel niet uitgegeven: " + (e.message || e)); }
+  return reply(200, { ok: true, teamkey: env.SHARED_SECRET, mailsleutel });
 }
 
 // ─── Uur-sync (Cloudflare Cron) ──────────────────────────────────────
@@ -4251,6 +4265,356 @@ async function bankMemoriaal(env, body) {
            geblokkeerd: uit.some(x => x.geblokkeerd) || undefined };
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   Mail — de koppeling met de Exchange van Fonteyn
+   ══════════════════════════════════════════════════════════════════════
+
+   Fonteyn draait een eigen Exchange 2016 op portal.fonteyn.nl, geen
+   Microsoft 365. Dat bepaalt alles wat hieronder staat: Graph bestaat hier
+   niet, IMAP en SMTP zijn van buiten dicht, en wat overblijft is EWS - een
+   SOAP-dienst op poort 443. Die kan lezen, een concept in de map Concepten
+   zetten en verzenden, alle drie langs dezelfde deur.
+
+   Het dashboard logt in als één serviceaccount (dashboard@fonteyn.nl) en
+   zegt er per verzoek bij namens wie het werkt. De Exchange-beheerder heeft
+   dat account rechten gegeven op precies de mailboxen die in de groep
+   "Dashboard Mailboxen" zitten, en op geen enkele andere.
+
+   Wie wie is, staat los van Logic4. Dolf logt in Logic4 in als fonteyn.dolf
+   maar zijn mail is dolf@fonteyn.nl; die twee mogen nooit door elkaar lopen.
+   Daarom een eigen lijst: mailAdresVan().                                */
+
+const EWS_HOST = "portal.fonteyn.nl";
+const EWS_URL  = "https://" + EWS_HOST + "/EWS/Exchange.asmx";
+
+/* Exchange 2016 spreekt het schema van 2013 SP1. Hoger vragen laat hem
+   klagen, lager vragen kost velden die we willen hebben. */
+const EWS_SCHEMA = "Exchange2013_SP1";
+
+function xmlUit(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+
+function xmlIn(s) {
+  return String(s == null ? "" : s)
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/g, "&");   // als laatste, anders ontstaat &lt; uit &amp;lt;
+}
+
+/* Er is geen XML-parser in een Worker (DOMParser bestaat hier niet). Voor
+   antwoorden van EWS is dat geen bezwaar: de vorm ligt vast, dus één veld
+   uit één blok halen kan met een uitdrukking. Wel altijd het prefix vrij
+   laten - Exchange stuurt t:Subject, maar dat is niet gegarandeerd. */
+function xVeld(blok, naam) {
+  const m = blok.match(new RegExp("<(?:\\w+:)?" + naam + "(?:\\s[^>]*)?>([\\s\\S]*?)</(?:\\w+:)?" + naam + ">"));
+  return m ? xmlIn(m[1]) : "";
+}
+
+function xBlokken(xml, naam) {
+  const re = new RegExp("<(?:\\w+:)?" + naam + "(?:\\s[^>]*)?>[\\s\\S]*?</(?:\\w+:)?" + naam + ">", "g");
+  return xml.match(re) || [];
+}
+
+/* Een ItemId staat als leeg element met twee attributen in het antwoord.
+   Beide zijn nodig: zonder ChangeKey weigert Exchange elke wijziging. */
+function xItemId(blok) {
+  const m = blok.match(/<(?:\w+:)?ItemId\s+Id="([^"]+)"(?:\s+ChangeKey="([^"]*)")?/);
+  return m ? { id: xmlIn(m[1]), sleutel: xmlIn(m[2] || "") } : null;
+}
+
+function xMailbox(blok, naam) {
+  const b = blok.match(new RegExp("<(?:\\w+:)?" + naam + ">([\\s\\S]*?)</(?:\\w+:)?" + naam + ">"));
+  if (!b) return null;
+  return { naam: xVeld(b[1], "Name"), adres: xVeld(b[1], "EmailAddress") };
+}
+
+function xMailboxen(blok, naam) {
+  const b = blok.match(new RegExp("<(?:\\w+:)?" + naam + ">([\\s\\S]*?)</(?:\\w+:)?" + naam + ">"));
+  if (!b) return [];
+  return xBlokken(b[1], "Mailbox").map(m => ({ naam: xVeld(m, "Name"), adres: xVeld(m, "EmailAddress") }));
+}
+
+/* Eén verzoek aan Exchange. De impersonatie-kop is het hele verschil tussen
+   "de mailbox van het serviceaccount" en "de mailbox van Dolf". Staat hij er
+   niet, dan kijkt Exchange in de lege mailbox van het serviceaccount zelf -
+   geen foutmelding, gewoon niets. Vandaar dat namens altijd verplicht is. */
+async function ewsRoep(env, actie, body, namens) {
+  if (!env.EWS_GEBRUIKER || !env.EWS_WACHTWOORD) {
+    return { ok: false, error: "mail-niet-ingesteld",
+             uitleg: "Het serviceaccount is nog niet ingesteld. Zet EWS_GEBRUIKER en EWS_WACHTWOORD als worker-secret." };
+  }
+  if (!namens) return { ok: false, error: "geen-mailbox" };
+
+  const env_xml =
+    '<?xml version="1.0" encoding="utf-8"?>' +
+    '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"' +
+    ' xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"' +
+    ' xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages">' +
+    "<soap:Header>" +
+    '<t:RequestServerVersion Version="' + EWS_SCHEMA + '"/>' +
+    "<t:ExchangeImpersonation><t:ConnectingSID><t:SmtpAddress>" + xmlUit(namens) +
+    "</t:SmtpAddress></t:ConnectingSID></t:ExchangeImpersonation>" +
+    "</soap:Header><soap:Body>" + body + "</soap:Body></soap:Envelope>";
+
+  const auth = "Basic " + btoa(env.EWS_GEBRUIKER + ":" + env.EWS_WACHTWOORD);
+  let r;
+  try {
+    r = await fetch(EWS_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": 'text/xml; charset=utf-8',
+        "Authorization": auth,
+        "SOAPAction": '"http://schemas.microsoft.com/exchange/services/2006/messages/' + actie + '"',
+      },
+      body: env_xml,
+    });
+  } catch (e) {
+    return { ok: false, error: "mailserver-onbereikbaar", uitleg: String(e.message || e) };
+  }
+
+  const tekst = await r.text();
+  if (r.status === 401) {
+    return { ok: false, error: "inloggen-mislukt",
+             uitleg: "Exchange wees het serviceaccount af. Wachtwoord verlopen of gewijzigd?" };
+  }
+  if (!r.ok) {
+    return { ok: false, error: "mailserver-fout-" + r.status, uitleg: tekst.slice(0, 400) };
+  }
+
+  /* EWS antwoordt met HTTP 200 óók als de opdracht mislukte. Het echte
+     oordeel staat in ResponseClass en MessageText. Dat komt regelmatig voor
+     (verlopen ChangeKey, item intussen verplaatst), dus het moet netjes
+     terugkomen en niet als geslaagd worden weggeschreven. */
+  const fout = tekst.match(/ResponseClass="(Error|Warning)"/);
+  if (fout) {
+    const code = xVeld(tekst, "ResponseCode");
+    const uitleg = xVeld(tekst, "MessageText");
+    if (code === "ErrorImpersonateUserDenied" || code === "ErrorImpersonationDenied") {
+      return { ok: false, error: "geen-toegang-tot-mailbox",
+               uitleg: "Het serviceaccount mag niet bij " + namens + ". Staat die mailbox in de groep Dashboard Mailboxen?" };
+    }
+    return { ok: false, error: code || "mailserver-weigert", uitleg };
+  }
+  return { ok: true, xml: tekst };
+}
+
+/* Welk mailadres hoort bij wie er is ingelogd. Bewust een eigen lijst en
+   niet afgeleid van de Logic4-naam: Dolf heet daar fonteyn.dolf en zijn mail
+   is dolf@fonteyn.nl. Wie er niet in staat krijgt geen mailbox te zien -
+   raden is hier gevaarlijker dan weigeren. */
+async function mailAdresVan(env, wie) {
+  const lijst = (await env.FONTEYN_DATA.get("mail-adressen", { type: "json" })) || {};
+  const sleutel = String(wie || "").trim().toLowerCase();
+  if (!sleutel) return "";
+  if (lijst[sleutel]) return String(lijst[sleutel]);
+  /* Staat iemand er niet in maar logt hij in met zijn eigen mailadres, dan is
+     dat adres het antwoord. Alleen voor @fonteyn.nl, en alleen als de rest
+     van de keten hem toch al binnenliet. */
+  if (/^[a-z0-9._-]+@fonteyn\.nl$/.test(sleutel)) return sleutel;
+  return "";
+}
+
+/* De persoonlijke sleutel. De teamsleutel is bij iedereen bekend die het
+   dashboard mag gebruiken, en die is hier dus niet genoeg: daarmee zou de
+   een de mailbox van de ander kunnen opvragen door een andere naam mee te
+   sturen. Deze sleutel wordt uitgegeven op vertoon van een geldige
+   Logic4-login en is aan díe naam gebonden. Twaalf uur geldig, daarna vraagt
+   het dashboard hem stil opnieuw op bij het inloggen. */
+async function mailSleutelGeef(env, wie) {
+  const sleutel = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+  await env.FONTEYN_DATA.put("mailsleutel:" + sleutel,
+    JSON.stringify({ wie: String(wie).toLowerCase(), sinds: new Date().toISOString() }),
+    { expirationTtl: 43200 });
+  return sleutel;
+}
+
+async function mailSleutelWie(env, request) {
+  const sleutel = String(request.headers.get("X-Fonteyn-Mail") || "").trim();
+  if (!sleutel || sleutel.length > 100) return "";
+  const j = await env.FONTEYN_DATA.get("mailsleutel:" + sleutel, { type: "json" });
+  return j && j.wie ? j.wie : "";
+}
+
+/* Postvak in, of een andere vaste map. Alleen de mappen die Exchange bij
+   naam kent - een vrije mapnaam meegeven zou betekenen dat de tegel overal
+   in de mailbox kan grasduinen, en daar is nu geen reden voor. */
+const MAIL_MAPPEN = {
+  inbox: "inbox", concepten: "drafts", verzonden: "sentitems",
+  prullenbak: "deleteditems", ongewenst: "junkemail",
+};
+
+async function mailLijst(env, adres, opt) {
+  const map = MAIL_MAPPEN[String(opt.map || "inbox")] || "inbox";
+  const aantal = Math.min(Math.max(Number(opt.aantal) || 25, 1), 100);
+  const vanaf = Math.max(Number(opt.vanaf) || 0, 0);
+
+  const body =
+    '<m:FindItem Traversal="Shallow"><m:ItemShape>' +
+    "<t:BaseShape>IdOnly</t:BaseShape><t:AdditionalProperties>" +
+    '<t:FieldURI FieldURI="item:Subject"/>' +
+    '<t:FieldURI FieldURI="item:DateTimeReceived"/>' +
+    '<t:FieldURI FieldURI="item:HasAttachments"/>' +
+    '<t:FieldURI FieldURI="item:Importance"/>' +
+    '<t:FieldURI FieldURI="message:From"/>' +
+    '<t:FieldURI FieldURI="message:IsRead"/>' +
+    "</t:AdditionalProperties></m:ItemShape>" +
+    '<m:IndexedPageItemView MaxEntriesReturned="' + aantal + '" Offset="' + vanaf + '" BasePoint="Beginning"/>' +
+    '<m:SortOrder><t:FieldOrder Order="Descending">' +
+    '<t:FieldURI FieldURI="item:DateTimeReceived"/></t:FieldOrder></m:SortOrder>' +
+    '<m:ParentFolderIds><t:DistinguishedFolderId Id="' + map + '"/></m:ParentFolderIds>' +
+    "</m:FindItem>";
+
+  const r = await ewsRoep(env, "FindItem", body, adres);
+  if (!r.ok) return r;
+
+  const berichten = xBlokken(r.xml, "Message").map(b => {
+    const id = xItemId(b);
+    const van = xMailbox(b, "From");
+    return {
+      id: id ? id.id : "", sleutel: id ? id.sleutel : "",
+      onderwerp: xVeld(b, "Subject"),
+      van: van ? (van.naam || van.adres) : "",
+      vanAdres: van ? van.adres : "",
+      ontvangen: xVeld(b, "DateTimeReceived"),
+      gelezen: xVeld(b, "IsRead") === "true",
+      bijlagen: xVeld(b, "HasAttachments") === "true",
+      belangrijk: xVeld(b, "Importance") === "High",
+    };
+  }).filter(x => x.id);
+
+  const meer = /IncludesLastItemInRange="false"/.test(r.xml);
+  return { ok: true, map: opt.map || "inbox", berichten, meer, totaal: berichten.length };
+}
+
+async function mailBericht(env, adres, id, sleutel) {
+  /* Platte tekst en niet de HTML-versie. Dat leest op een telefoon prettiger,
+     en het scheelt dat er opmaak uit een vreemde mail in onze eigen pagina
+     terechtkomt. */
+  const body =
+    "<m:GetItem><m:ItemShape><t:BaseShape>IdOnly</t:BaseShape>" +
+    "<t:BodyType>Text</t:BodyType><t:AdditionalProperties>" +
+    '<t:FieldURI FieldURI="item:Subject"/>' +
+    '<t:FieldURI FieldURI="item:DateTimeReceived"/>' +
+    '<t:FieldURI FieldURI="item:Body"/>' +
+    '<t:FieldURI FieldURI="item:HasAttachments"/>' +
+    '<t:FieldURI FieldURI="item:Attachments"/>' +
+    '<t:FieldURI FieldURI="message:From"/>' +
+    '<t:FieldURI FieldURI="message:ToRecipients"/>' +
+    '<t:FieldURI FieldURI="message:CcRecipients"/>' +
+    '<t:FieldURI FieldURI="message:InternetMessageId"/>' +
+    "</t:AdditionalProperties></m:ItemShape><m:ItemIds><t:ItemId Id=\"" + xmlUit(id) + '"' +
+    (sleutel ? ' ChangeKey="' + xmlUit(sleutel) + '"' : "") + "/></m:ItemIds></m:GetItem>";
+
+  const r = await ewsRoep(env, "GetItem", body, adres);
+  if (!r.ok) return r;
+  const blok = xBlokken(r.xml, "Message")[0];
+  if (!blok) return { ok: false, error: "bericht-niet-gevonden" };
+  const eigen = xItemId(blok);
+  const van = xMailbox(blok, "From");
+  return { ok: true, bericht: {
+    id: eigen ? eigen.id : id, sleutel: eigen ? eigen.sleutel : (sleutel || ""),
+    onderwerp: xVeld(blok, "Subject"),
+    van: van ? (van.naam || van.adres) : "", vanAdres: van ? van.adres : "",
+    aan: xMailboxen(blok, "ToRecipients"), cc: xMailboxen(blok, "CcRecipients"),
+    ontvangen: xVeld(blok, "DateTimeReceived"),
+    tekst: xVeld(blok, "Body"),
+    bijlagen: xBlokken(blok, "FileAttachment").map(a => ({
+      naam: xVeld(a, "Name"), grootte: Number(xVeld(a, "Size")) || 0,
+      soort: xVeld(a, "ContentType"),
+    })),
+  } };
+}
+
+function mailOntvangers(lijst, tag) {
+  const adressen = (Array.isArray(lijst) ? lijst : String(lijst || "").split(/[;,]/))
+    .map(x => String(typeof x === "string" ? x : (x && x.adres) || "").trim())
+    .filter(x => /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(x));
+  if (!adressen.length) return "";
+  return "<t:" + tag + ">" + adressen.map(a =>
+    "<t:Mailbox><t:EmailAddress>" + xmlUit(a) + "</t:EmailAddress></t:Mailbox>").join("") + "</t:" + tag + ">";
+}
+
+/* Een concept klaarzetten. Dit is de kern van waar de tegel voor bedoeld is:
+   wat het dashboard opstelt komt in de map Concepten terecht en staat dus
+   ook gewoon in Outlook. Verzenden gebeurt niet hier - dat is een aparte
+   handeling, met een aparte knop, door een mens. */
+async function mailConcept(env, adres, c) {
+  const onderwerp = String(c.onderwerp || "").slice(0, 255);
+  const tekst = String(c.tekst || "");
+  if (!onderwerp && !tekst) return { ok: false, error: "leeg-concept" };
+
+  const body =
+    '<m:CreateItem MessageDisposition="SaveOnly">' +
+    '<m:SavedItemFolderId><t:DistinguishedFolderId Id="drafts"/></m:SavedItemFolderId>' +
+    "<m:Items><t:Message>" +
+    "<t:Subject>" + xmlUit(onderwerp) + "</t:Subject>" +
+    '<t:Body BodyType="Text">' + xmlUit(tekst) + "</t:Body>" +
+    mailOntvangers(c.aan, "ToRecipients") +
+    mailOntvangers(c.cc, "CcRecipients") +
+    "</t:Message></m:Items></m:CreateItem>";
+
+  const r = await ewsRoep(env, "CreateItem", body, adres);
+  if (!r.ok) return r;
+  const id = xItemId(r.xml);
+  if (!id) return { ok: false, error: "concept-zonder-id" };
+  return { ok: true, id: id.id, sleutel: id.sleutel };
+}
+
+/* Verzenden. Alleen op een uitdrukkelijke handeling van de gebruiker; deze
+   route wordt nergens automatisch aangeroepen. Wat verstuurd wordt is het
+   concept zoals het op dat moment in de mailbox staat, dus wat de gebruiker
+   in Outlook of in de tegel voor zich zag. */
+async function mailVerzend(env, adres, id, sleutel) {
+  const body =
+    '<m:SendItem SaveItemToFolder="true"><m:ItemIds><t:ItemId Id="' + xmlUit(id) + '"' +
+    (sleutel ? ' ChangeKey="' + xmlUit(sleutel) + '"' : "") + "/></m:ItemIds>" +
+    '<m:SavedItemFolderId><t:DistinguishedFolderId Id="sentitems"/></m:SavedItemFolderId>' +
+    "</m:SendItem>";
+  const r = await ewsRoep(env, "SendItem", body, adres);
+  if (!r.ok) return r;
+  return { ok: true };
+}
+
+async function mailGelezen(env, adres, id, sleutel, ja) {
+  const body =
+    '<m:UpdateItem MessageDisposition="SaveOnly" ConflictResolution="AutoResolve">' +
+    '<m:ItemChanges><t:ItemChange><t:ItemId Id="' + xmlUit(id) + '"' +
+    (sleutel ? ' ChangeKey="' + xmlUit(sleutel) + '"' : "") + "/>" +
+    "<t:Updates><t:SetItemField>" +
+    '<t:FieldURI FieldURI="message:IsRead"/>' +
+    "<t:Message><t:IsRead>" + (ja ? "true" : "false") + "</t:IsRead></t:Message>" +
+    "</t:SetItemField></t:Updates></t:ItemChange></m:ItemChanges></m:UpdateItem>";
+  const r = await ewsRoep(env, "UpdateItem", body, adres);
+  if (!r.ok) return r;
+  const id2 = xItemId(r.xml);
+  return { ok: true, sleutel: id2 ? id2.sleutel : "" };
+}
+
+/* Naar de prullenbak, niet weg. Wat hier verdwijnt moet terug te halen zijn;
+   definitief wissen doet een mens zelf maar in Outlook. */
+async function mailNaarPrullenbak(env, adres, id, sleutel) {
+  const body =
+    '<m:DeleteItem DeleteType="MoveToDeletedItems"><m:ItemIds><t:ItemId Id="' + xmlUit(id) + '"' +
+    (sleutel ? ' ChangeKey="' + xmlUit(sleutel) + '"' : "") + "/></m:ItemIds></m:DeleteItem>";
+  return await ewsRoep(env, "DeleteItem", body, adres).then(r => r.ok ? { ok: true } : r);
+}
+
+/* Werkt de hele keten? Vraagt de mailbox één regel op en zegt wat er misgaat
+   als dat niet lukt. Bedoeld voor het moment waarop het serviceaccount net
+   is aangemaakt en we willen weten of de rechten goed staan. */
+async function mailProef(env, adres) {
+  const t0 = Date.now();
+  const r = await mailLijst(env, adres, { map: "inbox", aantal: 1 });
+  return r.ok
+    ? { ok: true, mailbox: adres, ms: Date.now() - t0,
+        gevonden: r.berichten.length, nieuwste: r.berichten[0] ? r.berichten[0].ontvangen : null }
+    : { ...r, mailbox: adres, ms: Date.now() - t0 };
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -4439,6 +4803,46 @@ export default {
       return reply(200, { ok: true, van, naar });
     }
 
+    /* ── Het dashboard op de telefoon ────────────────────────────────
+       Op een telefoon draait het hulpprogramma van de pc niet, en er valt
+       ook niets te installeren. Dus serveert de worker de pagina's zelf,
+       rechtstreeks uit de repo, net als de volgpagina voor klanten.
+
+       Alleen de bestanden die hieronder staan. Zonder die lijst zou dit een
+       open luik naar de hele repo zijn, en daar staat meer in dan hier hoort
+       te komen. Wat je binnen ziet, zie je pas na inloggen bij Logic4; deze
+       pagina's zelf bevatten geen gegevens.
+
+       In de HTML gaat "dashboard.html" om naar "./": die pagina bestaat op
+       de telefoon niet, en de terugknop van een tegel hoort hier terug te
+       komen op het mobiele dashboard. */
+    if (url.pathname === "/m" || url.pathname === "/m/" || url.pathname.startsWith("/m/")) {
+      const MOBIEL = {
+        "": "mobiel.html", "mobiel.html": "mobiel.html",
+        "mail.html": "mail.html", "tuinmeubelen.html": "tuinmeubelen.html",
+        "toegang.js": "toegang.js", "taal.js": "taal.js",
+        "fonteyn-logo.png": "fonteyn-logo.png",
+      };
+      if (url.pathname === "/m") return Response.redirect(url.origin + "/m/", 302);
+      const naam = url.pathname.slice(3);
+      const bestand = MOBIEL[naam];
+      if (!bestand) return reply(404, "Niet beschikbaar op de telefoon");
+
+      const cb = Math.floor(Date.now() / 10000);
+      const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/" +
+                            bestand + "?cb=" + cb);
+      if (!r.ok) return reply(502, "Pagina niet beschikbaar");
+
+      const soort = bestand.endsWith(".js") ? "application/javascript; charset=utf-8"
+                  : bestand.endsWith(".png") ? "image/png"
+                  : "text/html; charset=utf-8";
+      const kop = { "Content-Type": soort, "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
+      if (bestand.endsWith(".png")) return new Response(await r.arrayBuffer(), { status: 200, headers: kop });
+      let t = await r.text();
+      if (bestand.endsWith(".html")) t = t.replace(/"dashboard\.html"/g, '"./"');
+      return new Response(t, { status: 200, headers: kop });
+    }
+
     /* De volgpagina voor de klant. Publiek: de code in de link is de sleutel,
        en zonder geldige code komt er niets uit. */
     if (url.pathname === "/bezorging" && request.method === "GET") {
@@ -4484,6 +4888,58 @@ export default {
         }
       }
       return reply(200, { ok: true, host, uit });
+    }
+
+    /* ── De mailtegel ────────────────────────────────────────────────
+       Deze routes gaan niet langs de teamsleutel maar langs de
+       persoonlijke sleutel uit X-Fonteyn-Mail. De teamsleutel heeft
+       iedereen die het dashboard mag openen; daarmee zou de een de
+       mailbox van de ander kunnen opvragen door een andere naam mee te
+       sturen. De persoonlijke sleutel is bij het inloggen uitgegeven op
+       vertoon van een geldige Logic4-login en ligt vast aan die persoon.
+       Welke mailbox daarbij hoort bepaalt de worker, niet de client. */
+    if (url.pathname.startsWith("/mail/") && url.pathname !== "/mail/bereikbaar") {
+      const wie = await mailSleutelWie(env, request);
+      if (!wie) return reply(401, { ok: false, error: "opnieuw-inloggen",
+                                    uitleg: "De mailsleutel ontbreekt of is verlopen." });
+      const adres = await mailAdresVan(env, wie);
+      if (!adres) return reply(403, { ok: false, error: "geen-mailbox-bekend",
+                                      uitleg: "Voor " + wie + " staat geen mailadres in de lijst." });
+      const b = request.method === "POST" ? await request.json().catch(() => ({})) : {};
+
+      if (url.pathname === "/mail/wie" && request.method === "GET")
+        return reply(200, { ok: true, wie, mailbox: adres });
+
+      if (url.pathname === "/mail/proef" && request.method === "GET")
+        return reply(200, await mailProef(env, adres));
+
+      if (url.pathname === "/mail/lijst" && request.method === "GET")
+        return reply(200, await mailLijst(env, adres, {
+          map: url.searchParams.get("map") || "inbox",
+          aantal: url.searchParams.get("aantal"),
+          vanaf: url.searchParams.get("vanaf"),
+        }));
+
+      if (url.pathname === "/mail/bericht" && request.method === "GET")
+        return reply(200, await mailBericht(env, adres,
+          url.searchParams.get("id") || "", url.searchParams.get("sleutel") || ""));
+
+      if (url.pathname === "/mail/concept" && request.method === "POST")
+        return reply(200, await mailConcept(env, adres, b));
+
+      /* Verzenden staat bewust apart van concept maken. Een concept mag het
+         dashboard uit zichzelf klaarzetten; op verzenden hoort altijd een
+         mens te hebben geklikt. */
+      if (url.pathname === "/mail/verzend" && request.method === "POST")
+        return reply(200, await mailVerzend(env, adres, String(b.id || ""), String(b.sleutel || "")));
+
+      if (url.pathname === "/mail/gelezen" && request.method === "POST")
+        return reply(200, await mailGelezen(env, adres, String(b.id || ""), String(b.sleutel || ""), b.gelezen !== false));
+
+      if (url.pathname === "/mail/prullenbak" && request.method === "POST")
+        return reply(200, await mailNaarPrullenbak(env, adres, String(b.id || ""), String(b.sleutel || "")));
+
+      return reply(404, { ok: false, error: "onbekende-mailroute" });
     }
 
     /* De commercial invoice en packing list van een schip. Opslaan mag met de
