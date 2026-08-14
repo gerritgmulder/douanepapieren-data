@@ -4822,6 +4822,7 @@ export default {
         "mail.html": "mail.html", "tuinmeubelen.html": "tuinmeubelen.html",
         "toegang.js": "toegang.js", "taal.js": "taal.js",
         "fonteyn-logo.png": "fonteyn-logo.png",
+        "mobiel.webmanifest": "mobiel.webmanifest",
       };
       if (url.pathname === "/m") return Response.redirect(url.origin + "/m/", 302);
       const naam = url.pathname.slice(3);
@@ -4835,6 +4836,7 @@ export default {
 
       const soort = bestand.endsWith(".js") ? "application/javascript; charset=utf-8"
                   : bestand.endsWith(".png") ? "image/png"
+                  : bestand.endsWith(".webmanifest") ? "application/manifest+json; charset=utf-8"
                   : "text/html; charset=utf-8";
       const kop = { "Content-Type": soort, "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
       if (bestand.endsWith(".png")) return new Response(await r.arrayBuffer(), { status: 200, headers: kop });
