@@ -4829,9 +4829,13 @@ export default {
       const bestand = MOBIEL[naam];
       if (!bestand) return reply(404, "Niet beschikbaar op de telefoon");
 
+      /* GitHub zet er zelf vijf minuten cache op, en Cloudflare houdt zich
+         daaraan. Dat is te lang: een wijziging pushen en hem meteen op je
+         telefoon willen zien is precies de bedoeling. cacheTtl zet die vijf
+         minuten terug naar tien seconden. */
       const cb = Math.floor(Date.now() / 10000);
       const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/" +
-                            bestand + "?cb=" + cb);
+                            bestand + "?cb=" + cb, { cf: { cacheTtl: 10, cacheEverything: false } });
       if (!r.ok) return reply(502, "Pagina niet beschikbaar");
 
       const soort = bestand.endsWith(".js") ? "application/javascript; charset=utf-8"
