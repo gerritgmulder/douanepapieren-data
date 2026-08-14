@@ -266,6 +266,32 @@ async function startHelper() {
   await import(helperPath);
 }
 
+/* Draait er al een helper op 3737?
+
+   Dat gebeurt als een vorige afsluiting een proces heeft laten staan, of als
+   iemand het dashboard twee keer opstart. De helper probeerde dan opnieuw te
+   luisteren op een bezette poort, en dat werd een kaal JavaScript-foutscherm:
+   "listen EADDRINUSE: address already in use 127.0.0.1:3737" (Chantal,
+   13 aug 2026).
+
+   Is het onze eigen helper, dan is er niets aan de hand en gebruiken we die.
+   Antwoordt er iets anders op die poort, dan zeggen we dat in gewone taal in
+   plaats van met een stacktrace. */
+function helperAlActief(maxMs = 1500) {
+  return new Promise((resolve) => {
+    const req = http.get(`${URL}api/health`, (res) => {
+      let body = "";
+      res.on("data", (c) => { body += c; });
+      res.on("end", () => resolve({ bezet: true, vanOns: res.statusCode === 200 }));
+    });
+    req.on("error", (err) => {
+      // ECONNREFUSED = niemand luistert, dus de poort is vrij.
+      resolve(err && err.code === "ECONNREFUSED" ? { bezet: false } : { bezet: true, vanOns: false });
+    });
+    req.setTimeout(maxMs, () => { req.destroy(); resolve({ bezet: true, vanOns: false }); });
+  });
+}
+
 // Wacht tot de helper antwoord geeft op /api/health (max 10s)
 function waitForHelper(maxMs = 10000) {
   return new Promise((resolve, reject) => {
@@ -529,8 +555,20 @@ app.whenReady().then(async () => {
     if (app.isPackaged) {
       await fetchLiveUpdates(); // fail-safe — bij offline gewoon doorgaan met cache
     }
-    await startHelper();
-    await waitForHelper();
+    /* Alleen zelf een helper starten als er nog geen draait. Zo maakt een
+       tweede opstart of een blijven hangen proces de app niet meer stuk. */
+    const bestaand = await helperAlActief();
+    if (!bestaand.bezet) {
+      await startHelper();
+      await waitForHelper();
+    } else if (bestaand.vanOns) {
+      console.log("[helper] draait al op 3737 - die wordt gebruikt.");
+    } else {
+      dialog.showErrorBox("Poort 3737 is bezet",
+        "Er luistert al een ander programma op poort 3737, en daardoor kan het dashboard zijn " +
+        "hulpprogramma niet starten.\n\nSluit het dashboard helemaal af (ook via Taakbeheer) en " +
+        "start het opnieuw. Helpt dat niet, herstart dan de computer.");
+    }
   } catch (e) {
     console.error("Opstartfout:", e);
   }

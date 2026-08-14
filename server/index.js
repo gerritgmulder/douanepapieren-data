@@ -1808,7 +1808,13 @@ app.get("/api/test-auth", async (req, res) => {
   }
 });
 
-app.listen(PORT, "127.0.0.1", () => {
+/* De poort kan al bezet zijn: meestal doordat er nog een dashboard draait, of
+   doordat een vorige afsluiting een proces heeft laten staan. Zonder deze
+   afhandeling wordt dat een onbehandelde uitzondering en krijgt de gebruiker
+   een kaal JavaScript-foutscherm te zien - Chantal kreeg dat bij het opstarten
+   (13 aug 2026). Nu blijft de app leven; main.js kijkt of de helper die er al
+   draait de onze is en gebruikt die dan gewoon. */
+const server = app.listen(PORT, "127.0.0.1", () => {
   console.log("");
   console.log("┌──────────────────────────────────────────────┐");
   console.log("│  Fonteyn helper draait                       │");
@@ -1816,4 +1822,11 @@ app.listen(PORT, "127.0.0.1", () => {
   console.log("│  Stop met Ctrl+C                             │");
   console.log("└──────────────────────────────────────────────┘");
   console.log("");
+});
+server.on("error", (err) => {
+  if (err && err.code === "EADDRINUSE") {
+    console.warn(`[helper] poort ${PORT} is al bezet - er draait al een dashboard. Deze helper start niet.`);
+    return;
+  }
+  console.error("[helper] kon niet starten:", err && err.message ? err.message : err);
 });
