@@ -3736,11 +3736,28 @@ async function bankGrootboeken(env) {
     haal("/v3/Financial/GetLedgers", "GET"),
     haal("/v3/Financial/GetVatCodes", "GET"),
   ]);
-  const nul = (btw || []).find(v => Number(v.Percent) === 0);
+  /* Welke btw-code hoort bij een boeking op een tussenrekening?
+
+     Hier stond "de eerste met 0 procent", en dat was fout. Logic4 heeft er
+     meerdere, en de eerste bleek "0% BTW Verlegd NL". Verlegd is geen nul
+     maar een verlegging naar de afnemer, en dat hoort in de aangifte thuis;
+     een pinafrekening is gewoon vrijgesteld. Reinier boekte handmatig op BTW
+     Vrij, het dashboard zette er Verlegd onder, en dat verschil zag Osman
+     meteen (14 aug 2026).
+
+     Dus: eerst een code die zich vrij of vrijgesteld noemt, en pas als die er
+     niet is een andere nulcode. Verlegd wordt bewust nooit als eerste keus
+     genomen. */
+  var nullen = (btw || []).filter(v => Number(v.Percent) === 0);
+  var vrij = nullen.find(v => /vrij|vrijgesteld|geen\s*btw/i.test(String(v.Name || "")) &&
+                              !/verlegd/i.test(String(v.Name || "")));
+  var nul = vrij || nullen.find(v => !/verlegd/i.test(String(v.Name || ""))) || nullen[0];
   return {
     ok: true,
     grootboeken: (ledgers || []).map(l => ({ id: l.Id, code: l.Code, naam: l.Description || "" })),
     btwNul: nul ? { id: nul.Id, naam: nul.Name || "", percent: nul.Percent } : null,
+    // Alle nulcodes erbij, zodat te zien is waaruit gekozen is.
+    btwOpties: nullen.map(v => ({ id: v.Id, naam: v.Name || "", percent: v.Percent })),
   };
 }
 

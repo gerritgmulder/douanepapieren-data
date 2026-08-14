@@ -996,7 +996,26 @@ $("boekBtn").addEventListener("click", async () => {
      naar een tussenrekening in plaats van als betaling op een order. */
   const naarGrootboek = rijen.filter(t => t.kind !== "direct");
   let gbGelukt = 0, gbDagboek = ""; const gbFouten = [];
-  if (naarGrootboek.length) {
+  /* Deze regels worden hier niet meer geboekt.
+
+     Ze horen in het bankdagboek, want dat is waar een afschriftregel thuis
+     hoort. Logic4 kan dat via de API niet: de enige manier om in een bankboek
+     te komen is een betaling op een order, en deze regels hébben geen order.
+     Wat wél kon was een memoriaal, en dat is wat hier gebeurde - maar dan
+     staat de boeking in het verkeerde dagboek en sluit het bankdagboek niet
+     meer aan op het afschrift. Osman zag dat meteen en heeft de boeking
+     verwijderd (14 aug 2026).
+
+     Liever niets dan iets wat weer weggehaald moet worden. De regels blijven
+     wel gewoon in beeld met hun rekening en bedrag, zodat ze met de hand in
+     het bankdagboek te zetten zijn. */
+  const MEMORIAAL_AAN = false;
+  if (naarGrootboek.length && !MEMORIAAL_AAN) {
+    gbFouten.push(naarGrootboek.length + " regel(s) zijn niet geboekt. Ze horen in het bankdagboek en dat kan " +
+      "Logic4 niet via de koppeling: daar komt alleen een betaling op een order in. Zet ze met de hand in het " +
+      "bankdagboek - de rekening staat per regel in beeld.");
+  }
+  if (naarGrootboek.length && MEMORIAAL_AAN) {
     showStatus($("actionStatus"), naarGrootboek.length + " regel(s) op een grootboekrekening boeken…", "info");
     const r = await fetch(WORKER + "/bank/memoriaal", {
       method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },

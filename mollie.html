@@ -469,7 +469,15 @@ $("boekBtn").addEventListener("click", async () => {
     });
     if (!j.resultaten) fouten.push("boeken op orders: " + (j.error || "geen antwoord"));
   }
-  if (naarGrootboek.length) {
+  /* Zie bankkoppeling.html: deze regels horen in het bankdagboek en Logic4
+     laat dat via de API niet toe. Een memoriaal maken levert een boeking op
+     die weer verwijderd moet worden, dus dat gebeurt hier niet meer. */
+  const MEMORIAAL_AAN = false;
+  if (naarGrootboek.length && !MEMORIAAL_AAN) {
+    fouten.push(naarGrootboek.length + " regel(s) niet geboekt: die horen in het bankdagboek van Mollie en dat " +
+      "kan Logic4 niet via de koppeling. Zet ze met de hand; de rekening staat per regel in beeld.");
+  }
+  if (naarGrootboek.length && MEMORIAAL_AAN) {
     const r = await fetch(WORKER + "/bank/memoriaal", {
       method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
       /* De bankkant moet mee. Een memoriaal moet in evenwicht zijn, en de
