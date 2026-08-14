@@ -6,9 +6,10 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f5f4ef",
+  "background_color": "#144734",
   "theme_color": "#144734",
   "icons": [
-    { "src": "fonteyn-logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    { "src": "app-icoon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" },
+    { "src": "app-icoon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "maskable" }
   ]
 }

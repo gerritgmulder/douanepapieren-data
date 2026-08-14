@@ -1,5 +1,5 @@
 {
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -228,6 +228,18 @@
     {
       "name": "mobiel.html",
       "note": "Het dashboard op de telefoon. Eigen, korte tegellijst; de worker serveert hem op /m/. Bewust niet de pc-pagina op klein formaat."
+    },
+    {
+      "name": "tegels.js",
+      "note": "Welke tegels er zijn en bij welke groep uit toegang.js ze horen. De telefoon bouwt zijn tegels hieruit op; tools/tegels-gelijk.mjs bewaakt dat de pc dezelfde rechten hanteert."
+    },
+    {
+      "name": "mobiel.webmanifest",
+      "note": "Maakt van de mobiele pagina een app op het beginscherm (Android)."
+    },
+    {
+      "name": "app-icoon.png",
+      "note": "Het app-icoon op het beginscherm - hetzelfde als de app op de pc (build/icon.png)."
     }
   ]
 }

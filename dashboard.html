@@ -390,11 +390,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Slim inlaadplan voor eigen vervoer of pakketdienst — bin-packing in de bakwagen + routeplanning per dag.</p>
       </a>
 
-      <a href="prijslijst.html" class="tile hidden" id="tilePrijslijst">
-        <div class="icon">💶</div>
-        <h3>Prijslijst maken</h3>
-        <p>Upload een leveranciers-invoice of -catalogus en genereer in één klik een prijslijst in Fonteyn- of Passion-huisstijl.</p>
-      </a>
+      <!-- Prijslijst maken is eruit (Gerrit, 14 aug 2026): "die doet niks en
+           gaat ook niks meer doen". Prijslijsten fabrikanten blijft wel. -->
 
 
       <a href="tuinmeubelen.html" class="tile hidden" id="tileTuinmeubelen">
@@ -927,7 +924,6 @@ function showDashboard(email) {
   el("tileDouane").classList.toggle("hidden", !magPapieren);
   el("tileLabels").classList.toggle("hidden", !magPapieren);
   el("tileTransport").classList.toggle("hidden", !isLogistiek);
-  el("tilePrijslijst").classList.toggle("hidden", !isLogistiek);
   // Stuurcijfers-tegel alleen tonen voor de geautoriseerde e-mailadressen
   el("tileStuurcijfers").classList.toggle("hidden", !STUURCIJFERS_EMAILS.has(lc));
   // Orderstatus-tegel alleen tonen voor de geautoriseerde e-mailadressen
@@ -966,10 +962,10 @@ function showDashboard(email) {
   el("tileSpecsheets").classList.toggle("hidden", !SPECSHEETS_EMAILS.has(lc));
   // Prijslijsten fabrikanten — Gretha + beheer
   el("tilePrijslijstenFab").classList.toggle("hidden", !PRIJSLIJSTEN_EMAILS.has(lc));
-  // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot.
-  const isAdmin = (lc === "gerrit@fonteyn.nl" || lc === "gerrit" ||
-                   lc === "fonteynbot@fonteyn.nl" || lc === "fonteyn.bot" || lc === "fonteynbot");
-  el("tileProbe").classList.toggle("hidden", !isAdmin);
+  // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot. Stond hier als
+  // losse if; nu een groep in toegang.js, zodat de telefoon dezelfde regel
+  // gebruikt en er niet één van beide achterloopt.
+  el("tileProbe").classList.toggle("hidden", !fpToegang.mag("probe", lc));
   // Passion Partners — het publieke portaal zoals de dealers het zien. Zelfde
   // groep mensen die het portaal beheert plus de spa-mensen die willen kijken.
   el("tilePassionPartners").classList.toggle("hidden", !PARTNERPORTAAL_KIJK.has(lc));

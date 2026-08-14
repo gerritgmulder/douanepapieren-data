@@ -7,55 +7,68 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Fonteyn">
-<!-- Android heeft dit bestand nodig om er een app van te maken. Zonder
-     manifest maakt Chrome een snelkoppeling die gewoon in de browser opent,
-     met adresbalk en al. -->
-<link rel="manifest" href="mobiel.webmanifest">
 <meta name="robots" content="noindex, nofollow">
 <title>Fonteyn Dashboard</title>
-<!-- Dezelfde toegangslijst als de pc. Wie een tegel op de pc mag zien, ziet
-     hem hier ook, en niemand anders. -->
+<!-- Hetzelfde icoon als de app op de pc: build/icon.png, hier als app-icoon.png
+     naast de andere bestanden zodat de worker hem kan meesturen. iOS pakt de
+     apple-touch-icon, Android het manifest. -->
+<link rel="apple-touch-icon" href="app-icoon.png">
+<link rel="icon" type="image/png" href="app-icoon.png">
+<link rel="manifest" href="mobiel.webmanifest">
+<!-- Dezelfde twee lijsten als de pc: wie in welke groep zit, en welke tegel bij
+     welke groep hoort. tools/tegels-gelijk.mjs bewaakt dat ze niet uit elkaar
+     lopen. -->
 <script src="toegang.js"></script>
+<script src="tegels.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- ══════════════════════════════════════════════════════════════════════
      FONTEYN DASHBOARD - TELEFOON
 
-     Dit is bewust niet het pc-dashboard op een klein scherm. De tegels daar
-     zijn tabellen van tien kolommen breed; die worden op 390 pixels niet
-     bruikbaar, hoe je ze ook plooit. Wat hier staat is de korte lijst van
-     dingen die je onderweg echt doet, en de rest wacht tot je achter je
-     bureau zit.
+     Alle tegels staan erop, want de rechten op de telefoon horen precies
+     dezelfde te zijn als op de pc (Gerrit, 14 aug 2026: "dat mag sowieso
+     nooit verschillen"). Wat wel verschilt is hoe goed een tegel op een
+     klein scherm werkt; dat staat per tegel in tegels.js en je ziet het
+     hier als een waarschuwing, niet als een gesloten deur.
 
      Er draait op een telefoon geen hulpprogramma zoals op de pc. Alles gaat
      dus rechtstreeks langs de worker: inloggen bij Logic4, de sleutels, en
-     de gegevens zelf.
-
-     Op het beginscherm zetten maakt er een venster zonder adresbalk van.
-     Geen App Store, geen installatie, geen kosten.
+     de gegevens zelf. Tegels die het hulpprogramma nog nodig hebben zullen
+     op de telefoon dus niet alles kunnen; ook dat staat erbij.
      ══════════════════════════════════════════════════════════════════════ -->
 <style>
 :root{
   --groen:#144734; --groen-donker:#0d3325; --lime:#8bc53f;
-  --bg:#f5f4ef; --kaart:#fff; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --rood:#b91c1c;
+  --bg:#f5f4ef; --kaart:#fff; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb;
+  --rood:#b91c1c; --waarschuw:#92400e;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0;height:100%}
+html,body{margin:0;padding:0;min-height:100%}
 body{font-family:"Montserrat",-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);
      color:var(--ink);font-size:15px;-webkit-text-size-adjust:100%}
 
-/* ── Inloggen ─────────────────────────────────────────────────────── */
-#inlog{display:none;min-height:100%;flex-direction:column;justify-content:center;padding:24px;
-       padding-top:calc(24px + env(safe-area-inset-top))}
+/* ── Inloggen ─────────────────────────────────────────────────────────
+   Zelfde opzet als op de pc: het logo in een groen vlak, want op de lichte
+   achtergrond is het wit in het logo nauwelijks te zien. */
+#inlog{display:none;min-height:100vh;flex-direction:column;justify-content:center;padding:20px;
+       padding-top:calc(20px + env(safe-area-inset-top))}
 #inlog.aan{display:flex}
-#inlog .merk{text-align:center;margin-bottom:26px}
-#inlog .merk img{height:56px;width:auto}
-#inlog .merk div{color:var(--grijs);font-size:13px;margin-top:8px}
-#inlog form{background:var(--kaart);border:1px solid var(--rand);border-radius:14px;padding:22px;
-            display:flex;flex-direction:column;gap:13px;max-width:420px;width:100%;margin:0 auto}
+#inlog .kaart{max-width:420px;width:100%;margin:0 auto;background:var(--kaart);
+              border:1px solid var(--rand);border-radius:14px;overflow:hidden;
+              box-shadow:0 4px 20px rgba(20,71,52,.08)}
+#inlog .merk{background:var(--groen);padding:26px 24px 22px;text-align:center}
+#inlog .merk img{height:64px;width:auto;display:inline-block}
+#inlog .merk .sub{color:rgba(255,255,255,.8);font-size:12px;margin-top:8px;
+                  letter-spacing:.04em;text-transform:uppercase}
+#inlog .body{padding:22px}
+#inlog form{display:flex;flex-direction:column;gap:13px}
 #inlog label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--grijs);font-weight:500}
-#inlog input{border:1px solid var(--rand);border-radius:10px;padding:14px;font:inherit;font-size:16px;
-             background:#fff;color:var(--ink)}
+#inlog input[type=text],#inlog input[type=password]{
+  border:1px solid var(--rand);border-radius:10px;padding:14px;font:inherit;font-size:16px;
+  background:#fff;color:var(--ink)}
 #inlog input:focus{outline:none;border-color:var(--lime)}
+#inlog .blijf{flex-direction:row;align-items:center;gap:9px;font-size:13px;color:var(--ink);
+              font-weight:400;cursor:pointer}
+#inlog .blijf input{width:19px;height:19px;accent-color:var(--groen);margin:0}
 #inlog button{background:var(--lime);color:#12331f;border:none;border-radius:10px;padding:15px;
               font:inherit;font-size:15px;font-weight:700;cursor:pointer}
 #inlog button:disabled{background:#d1d5db;color:#6b7280}
@@ -63,54 +76,81 @@ body{font-family:"Montserrat",-apple-system,BlinkMacSystemFont,sans-serif;backgr
       padding:12px 14px;font-size:13px;line-height:1.5}
 
 /* ── Het dashboard ────────────────────────────────────────────────── */
-#dash{display:none;min-height:100%;flex-direction:column}
+#dash{display:none;min-height:100vh;flex-direction:column}
 #dash.aan{display:flex}
 header{background:var(--groen);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px;
        position:sticky;top:0;z-index:10;padding-top:calc(14px + env(safe-area-inset-top))}
-header .naam{flex:1;font-size:15px;font-weight:600}
-header .naam small{display:block;font-size:11px;opacity:.7;font-weight:400}
+header .naam{flex:1;font-size:15px;font-weight:600;min-width:0}
+header .naam small{display:block;font-size:11px;opacity:.7;font-weight:400;
+                   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 header button{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:8px;
-              padding:8px 13px;font:inherit;font-size:12px;cursor:pointer}
+              padding:8px 13px;font:inherit;font-size:12px;cursor:pointer;flex:0 0 auto}
 main{flex:1;padding:16px;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
 
-.tegels{display:grid;grid-template-columns:1fr 1fr;gap:11px;max-width:640px;margin:0 auto}
-.tegel{background:var(--kaart);border:1px solid var(--rand);border-radius:14px;padding:17px 15px;
-       text-decoration:none;color:var(--ink);display:flex;flex-direction:column;gap:7px;min-height:112px}
+.groep{max-width:680px;margin:0 auto 8px;font-size:12px;color:var(--grijs);font-weight:600;
+       text-transform:uppercase;letter-spacing:.04em}
+.groep:not(:first-child){margin-top:22px}
+.tegels{display:grid;grid-template-columns:1fr 1fr;gap:11px;max-width:680px;margin:0 auto}
+.tegel{background:var(--kaart);border:1px solid var(--rand);border-radius:14px;padding:16px 14px;
+       text-decoration:none;color:var(--ink);display:flex;flex-direction:column;gap:6px;min-height:116px;
+       position:relative}
 .tegel:active{background:#f0efe9}
 .tegel .ic{font-size:25px;line-height:1}
-.tegel h3{margin:0;font-size:14px;font-weight:600;color:var(--groen)}
+.tegel h3{margin:0;font-size:14px;font-weight:600;color:var(--groen);line-height:1.25}
 .tegel p{margin:0;font-size:11.5px;color:var(--grijs);line-height:1.4}
 .tegel.breed{grid-column:1/-1;min-height:0;flex-direction:row;align-items:center;gap:13px}
-/* Alleen het tekstblok mag uitzetten. Gold dit ook voor het icoon, dan kreeg
-   dat de halve tegel en begon de tekst halverwege het scherm. */
 .tegel.breed .ic{font-size:24px;flex:0 0 auto}
-.tegel.breed > div:last-child{flex:1}
+.tegel.breed > div:last-child{flex:1;min-width:0}
+.tegel .merk{position:absolute;top:9px;right:9px;font-size:9.5px;font-weight:600;padding:2px 6px;
+             border-radius:999px;letter-spacing:.02em}
+.tegel .merk.krap{background:#fef3c7;color:var(--waarschuw)}
+.tegel .merk.pc{background:#f3f4f6;color:var(--grijs)}
 
-.kop{max-width:640px;margin:0 auto 12px;font-size:12px;color:var(--grijs);font-weight:600;
-     text-transform:uppercase;letter-spacing:.04em}
-.uitleg{max-width:640px;margin:22px auto 0;background:var(--kaart);border:1px solid var(--rand);
+.uitleg{max-width:680px;margin:22px auto 0;background:var(--kaart);border:1px solid var(--rand);
         border-radius:12px;padding:15px;font-size:12.5px;color:var(--grijs);line-height:1.6}
 .uitleg b{color:var(--ink)}
+
+/* Waarschuwing vóór het openen van een tegel die eigenlijk een pc wil. Geen
+   blokkade: wie het op de pc mag, mag het hier ook. */
+#waarschuwing{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:60;display:none;
+              align-items:flex-end;justify-content:center}
+#waarschuwing.aan{display:flex}
+#waarschuwing .kaart{background:var(--kaart);border-radius:16px 16px 0 0;padding:22px 20px;
+                     padding-bottom:calc(22px + env(safe-area-inset-bottom));width:100%;max-width:520px}
+#waarschuwing h3{margin:0 0 8px;font-size:16px;color:var(--groen)}
+#waarschuwing p{margin:0 0 16px;font-size:13.5px;color:var(--grijs);line-height:1.6}
+#waarschuwing .knoppen{display:flex;gap:9px}
+#waarschuwing button{flex:1;border-radius:10px;padding:14px;font:inherit;font-size:14px;
+                     font-weight:600;cursor:pointer;border:1px solid var(--rand);background:var(--kaart)}
+#waarschuwing button.doe{background:var(--groen);color:#fff;border-color:var(--groen)}
 </style>
 </head>
 <body>
 
 <div id="inlog">
-  <div class="merk">
-    <img src="fonteyn-logo.png" alt="Fonteyn" onerror="this.style.display='none'">
-    <div>Dashboard</div>
+  <div class="kaart">
+    <div class="merk">
+      <img src="fonteyn-logo.png" alt="Fonteyn" onerror="this.style.display='none'">
+      <div class="sub">Dashboard</div>
+    </div>
+    <div class="body">
+      <form id="inlogForm" autocomplete="on">
+        <div id="inlogFout" class="fout" style="display:none"></div>
+        <label>Logic4-gebruikersnaam
+          <input type="text" id="vGebruiker" required autocomplete="username"
+                 autocapitalize="off" autocorrect="off" placeholder="bv. fonteyn.don of jij@fonteyn.nl">
+        </label>
+        <label>Wachtwoord
+          <input type="password" id="vWachtwoord" required autocomplete="current-password">
+        </label>
+        <label class="blijf">
+          <input type="checkbox" id="vBlijf" checked>
+          Ingelogd blijven op dit toestel
+        </label>
+        <button type="submit" id="knopInlog">Inloggen</button>
+      </form>
+    </div>
   </div>
-  <form id="inlogForm" autocomplete="on">
-    <div id="inlogFout" class="fout" style="display:none"></div>
-    <label>Logic4-gebruikersnaam
-      <input type="text" id="vGebruiker" required autocomplete="username"
-             autocapitalize="off" autocorrect="off" placeholder="bv. fonteyn.dolf">
-    </label>
-    <label>Wachtwoord
-      <input type="password" id="vWachtwoord" required autocomplete="current-password">
-    </label>
-    <button type="submit" id="knopInlog">Inloggen</button>
-  </form>
 </div>
 
 <div id="dash">
@@ -119,8 +159,7 @@ main{flex:1;padding:16px;padding-bottom:calc(30px + env(safe-area-inset-bottom))
     <button id="knopUit">Uitloggen</button>
   </header>
   <main>
-    <div class="kop">Onderweg</div>
-    <div class="tegels" id="tegels"></div>
+    <div id="tegelblok"></div>
     <div class="uitleg">
       <b>Op je beginscherm zetten.</b> Op de iPhone: het deelknopje onderin Safari, dan
       "Zet op beginscherm". Op Android: de drie puntjes rechtsboven in Chrome, dan
@@ -129,32 +168,69 @@ main{flex:1;padding:16px;padding-bottom:calc(30px + env(safe-area-inset-bottom))
   </main>
 </div>
 
+<div id="waarschuwing">
+  <div class="kaart">
+    <h3 id="wsTitel">Deze tegel is gemaakt voor een pc</h3>
+    <p id="wsTekst"></p>
+    <div class="knoppen">
+      <button id="wsTerug">Laat maar</button>
+      <button class="doe" id="wsDoor">Toch openen</button>
+    </div>
+  </div>
+</div>
+
 <script>
 "use strict";
 
 var WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
 
-/* Welke tegels op de telefoon. Bewust kort: alles wat hier staat moet met één
-   duim te bedienen zijn. De rest van het dashboard blijft op de pc, en dat is
-   geen tekortkoming maar een keuze - een tabel van elf kolommen wordt op een
-   telefoon niet beter door hem te laten schuiven.
-
-   groep = dezelfde naam als in toegang.js, dus wie het op de pc mag ziet het
-   hier ook, en niemand anders. */
-var TEGELS = [
-  { bestand:"mail.html", groep:"mail", ic:"✉️", naam:"Mijn mail",
-    uitleg:"Postvak, concepten en verzenden", breed:true },
-  { bestand:"tuinmeubelen.html", groep:"tuinmeubelen", ic:"🪑", naam:"Tuinmeubelen",
-    uitleg:"Containers en papieren" },
-];
+/* Waar de sleutels blijven staan. Met "ingelogd blijven" aan gaat alles naar
+   localStorage en blijft het staan tot je uitlogt; staat het uit, dan naar
+   sessionStorage en is het weg zodra je de app sluit. De tegels lezen zelf
+   alleen localStorage, dus bij "uit" kopiëren we de waarden bij het openen
+   daarheen en ruimen we ze op als de app dichtgaat. */
+var SLEUTELS = ["fp.session", "fp.email", "fp.teamkey", "fp.mailkey"];
 
 function el(id){ return document.getElementById(id); }
+
+function bewaar(blijvend, waarden){
+  var doel = blijvend ? localStorage : sessionStorage;
+  Object.keys(waarden).forEach(function(k){
+    if (waarden[k] == null) return;
+    doel.setItem(k, waarden[k]);
+    localStorage.setItem(k, waarden[k]);   // tegels lezen localStorage
+  });
+  localStorage.setItem("fp.blijf", blijvend ? "ja" : "nee");
+}
+
+function wisAlles(){
+  SLEUTELS.forEach(function(k){
+    try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch (e) {}
+  });
+  localStorage.removeItem("fp.blijf");
+}
+
+/* Wie "niet ingelogd blijven" koos, hoort na het sluiten van de app opnieuw
+   in te loggen. localStorage overleeft dat, sessionStorage niet - dus is de
+   sessionStorage de waarheid en ruimen we localStorage op als die leeg is. */
+function herstelSessie(){
+  if (localStorage.getItem("fp.blijf") === "nee") {
+    if (!sessionStorage.getItem("fp.session")) { wisAlles(); return false; }
+    SLEUTELS.forEach(function(k){
+      var v = sessionStorage.getItem(k);
+      if (v) localStorage.setItem(k, v);
+    });
+  }
+  return !!(localStorage.getItem("fp.session") && localStorage.getItem("fp.email"));
+}
 
 function toonInlog(fout){
   el("dash").classList.remove("aan");
   el("inlog").classList.add("aan");
   if (fout) { el("inlogFout").textContent = fout; el("inlogFout").style.display = ""; }
   else el("inlogFout").style.display = "none";
+  var eerder = localStorage.getItem("fp.email");
+  if (eerder && !el("vGebruiker").value) el("vGebruiker").value = eerder;
 }
 
 /* "fonteyn.dolf" wordt "Dolf", "gerrit@fonteyn.nl" wordt "Gerrit". Zelfde
@@ -167,6 +243,12 @@ function voornaam(wie){
     return d.charAt(0).toUpperCase() + d.slice(1).toLowerCase(); }).join(" ");
 }
 
+var KOPPEN = {
+  goed: "Werkt op je telefoon",
+  krap: "Werkt, maar is aan de brede kant",
+  pc:   "Gemaakt voor een pc",
+};
+
 function toonDash(){
   var wie = (localStorage.getItem("fp.email") || "").toLowerCase();
   el("inlog").classList.remove("aan");
@@ -174,20 +256,49 @@ function toonDash(){
   el("kopNaam").textContent = "Hoi " + voornaam(wie);
   el("kopSub").textContent = wie;
 
-  var mag = window.fpToegang;
-  var zichtbaar = TEGELS.filter(function(t){ return !mag || mag.mag(t.groep, wie); });
-
-  if (!zichtbaar.length) {
-    el("tegels").innerHTML = '<div class="uitleg" style="grid-column:1/-1;margin:0">' +
-      'Er staat voor jouw account nog niets op de telefoon klaar. Op de pc werkt het dashboard gewoon.</div>';
+  var mijn = window.fpTegels ? window.fpTegels.voor(wie, { alleenMobiel: true }) : [];
+  if (!mijn.length) {
+    el("tegelblok").innerHTML = '<div class="uitleg">Er staat voor jouw account geen enkele tegel klaar. ' +
+      'Klopt dat niet, geef het dan door aan Gerrit.</div>';
     return;
   }
-  el("tegels").innerHTML = zichtbaar.map(function(t){
-    return '<a class="tegel' + (t.breed ? " breed" : "") + '" href="' + t.bestand + '">' +
-      '<div class="ic">' + t.ic + "</div><div>" +
-      "<h3>" + t.naam + "</h3><p>" + t.uitleg + "</p></div></a>";
-  }).join("");
+
+  var html = "";
+  ["goed", "krap", "pc"].forEach(function(soort){
+    var deel = mijn.filter(function(t){ return (t.mobiel || "krap") === soort; });
+    if (!deel.length) return;
+    html += '<div class="groep">' + KOPPEN[soort] + "</div><div class=\"tegels\">" +
+      deel.map(function(t, i){
+        var breed = soort === "goed" && deel.length === 1 ? " breed" : "";
+        var merk = soort === "goed" ? "" :
+          '<span class="merk ' + soort + '">' + (soort === "krap" ? "breed" : "pc") + "</span>";
+        return '<a class="tegel' + breed + '" href="' + t.bestand + '" data-soort="' + soort +
+               '" data-naam="' + t.naam.replace(/"/g, "&quot;") + '">' + merk +
+               '<div class="ic">' + t.ic + "</div><div><h3>" + t.naam + "</h3><p>" + t.uit + "</p></div></a>";
+      }).join("") + "</div>";
+  });
+  el("tegelblok").innerHTML = html;
+
+  /* Een tegel die voor een pc is gemaakt gaat niet op slot - dat zou betekenen
+     dat de telefoon andere rechten heeft dan de pc, en dat mag niet. Wel eerst
+     even zeggen wat je te wachten staat. */
+  Array.prototype.forEach.call(el("tegelblok").querySelectorAll("a.tegel"), function(a){
+    if (a.dataset.soort !== "pc") return;
+    a.onclick = function(e){
+      e.preventDefault();
+      el("wsTekst").textContent = a.dataset.naam + " is gebouwd voor een breed scherm, en een deel " +
+        "ervan werkt alleen met het hulpprogramma dat op de pc draait. Openen kan, maar reken erop " +
+        "dat je moet schuiven en dat niet alles werkt.";
+      el("wsDoor").onclick = function(){ location.href = a.getAttribute("href"); };
+      el("waarschuwing").classList.add("aan");
+    };
+  });
 }
+
+el("wsTerug").onclick = function(){ el("waarschuwing").classList.remove("aan"); };
+el("waarschuwing").onclick = function(e){
+  if (e.target === el("waarschuwing")) el("waarschuwing").classList.remove("aan");
+};
 
 /* Inloggen gaat rechtstreeks naar de worker, die de Logic4-login nakijkt en
    de twee sleutels teruggeeft: de teamsleutel voor de gegevens en de
@@ -198,6 +309,7 @@ el("inlogForm").onsubmit = async function(e){
   e.preventDefault();
   var gebruiker = el("vGebruiker").value.trim();
   var wachtwoord = el("vWachtwoord").value;
+  var blijf = el("vBlijf").checked;
   if (!gebruiker || !wachtwoord) return;
 
   el("knopInlog").disabled = true;
@@ -216,12 +328,14 @@ el("inlogForm").onsubmit = async function(e){
         : "Inloggen mislukt. Klopt de gebruikersnaam en het wachtwoord?");
       return;
     }
-    localStorage.setItem("fp.teamkey", j.teamkey);
-    if (j.mailsleutel) localStorage.setItem("fp.mailkey", j.mailsleutel);
-    localStorage.setItem("fp.email", gebruiker.toLowerCase());
-    /* De tegels kijken hierop of iemand is ingelogd. Zonder deze sleutel
-       sturen ze door naar dashboard.html en zit je in een kringetje. */
-    localStorage.setItem("fp.session", "mobiel-" + Date.now());
+    bewaar(blijf, {
+      "fp.teamkey": j.teamkey,
+      "fp.mailkey": j.mailsleutel || null,
+      "fp.email": gebruiker.toLowerCase(),
+      /* De tegels kijken hierop of iemand is ingelogd. Zonder deze sleutel
+         sturen ze door naar het dashboard en zit je in een kringetje. */
+      "fp.session": "mobiel-" + Date.now(),
+    });
     el("vWachtwoord").value = "";
     toonDash();
   } catch (err) {
@@ -233,15 +347,13 @@ el("inlogForm").onsubmit = async function(e){
 };
 
 el("knopUit").onclick = function(){
-  ["fp.session","fp.email","fp.mailkey"].forEach(function(k){ localStorage.removeItem(k); });
+  wisAlles();
+  el("vGebruiker").value = ""; el("vWachtwoord").value = "";
   toonInlog();
 };
 
-/* Bij het openen: is er nog een sessie van de vorige keer? Dan meteen door.
-   De sleutels zelf verlopen aan de kant van de worker, dus een oude sessie
-   levert hooguit een nette melding op in de tegel zelf. */
 (function start(){
-  if (!window.fpToegang) {
+  if (!window.fpToegang || !window.fpTegels) {
     document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;' +
       'border-radius:12px;padding:30px;text-align:center;font-family:Montserrat,sans-serif">' +
       '<h1 style="color:#144734;font-size:19px;margin:0 0 10px">Even opnieuw laden</h1>' +
@@ -249,7 +361,7 @@ el("knopUit").onclick = function(){
       'welke tegel mag zien. Ververs de pagina; blijft dit staan, geef het dan door aan Gerrit.</p></div>';
     return;
   }
-  if (localStorage.getItem("fp.session") && localStorage.getItem("fp.email")) toonDash();
+  if (herstelSessie()) toonDash();
   else toonInlog();
 })();
 </script>

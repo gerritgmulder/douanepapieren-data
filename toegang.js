@@ -64,6 +64,12 @@
       "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
       "reinier", "reinier.k", "rico", "rowan",
     ],
+    /* Logic4-probe. Stond niet als groep maar als losse if in dashboard.html
+       ("gerrit of fonteynbot"). Nu hier, zodat de telefoon en de pc dezelfde
+       regel gebruiken en er niet één van beide achterloopt. */
+    "probe": [
+      "fonteynbot", "gerrit",
+    ],
     /* Mijn mail. Bewust smal: wie hier bij komt moet ook door de
        Exchange-beheerder in de groep Dashboard Mailboxen worden gezet,
        anders ziet hij hier niets. Twee plaatsen dus, met opzet - het

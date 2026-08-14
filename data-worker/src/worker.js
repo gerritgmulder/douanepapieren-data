@@ -4284,6 +4284,28 @@ async function bankMemoriaal(env, body) {
    maar zijn mail is dolf@fonteyn.nl; die twee mogen nooit door elkaar lopen.
    Daarom een eigen lijst: mailAdresVan().                                */
 
+/* Welke bestanden de telefoon mag ophalen: die uit manifest.json. Dat is
+   dezelfde lijst die de app op de pc bij elke start binnenhaalt, dus hier
+   komt niets langs dat niet toch al op elke werkplek staat.
+
+   Eén minuut in het geheugen van deze worker-instantie. Langer is onhandig
+   bij een nieuwe tegel, korter is zonde van de aanroep naar GitHub. */
+let _mobielLijst = null;
+let _mobielTot = 0;
+
+async function mobielToegestaan(env) {
+  const nu = Date.now();
+  if (_mobielLijst && nu < _mobielTot) return _mobielLijst;
+  const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/manifest.json?cb=" +
+                        Math.floor(nu / 60000), { cf: { cacheTtl: 60 } });
+  if (!r.ok) return _mobielLijst || new Set();     // liever de oude lijst dan niets
+  const j = await r.json().catch(() => null);
+  if (!j || !Array.isArray(j.files)) return _mobielLijst || new Set();
+  _mobielLijst = new Set(j.files.map(f => String(f.name || "")).filter(Boolean));
+  _mobielTot = nu + 60000;
+  return _mobielLijst;
+}
+
 const EWS_HOST = "portal.fonteyn.nl";
 const EWS_URL  = "https://" + EWS_HOST + "/EWS/Exchange.asmx";
 
@@ -4817,16 +4839,16 @@ export default {
        de telefoon niet, en de terugknop van een tegel hoort hier terug te
        komen op het mobiele dashboard. */
     if (url.pathname === "/m" || url.pathname === "/m/" || url.pathname.startsWith("/m/")) {
-      const MOBIEL = {
-        "": "mobiel.html", "mobiel.html": "mobiel.html",
-        "mail.html": "mail.html", "tuinmeubelen.html": "tuinmeubelen.html",
-        "toegang.js": "toegang.js", "taal.js": "taal.js",
-        "fonteyn-logo.png": "fonteyn-logo.png",
-        "mobiel.webmanifest": "mobiel.webmanifest",
-      };
       if (url.pathname === "/m") return Response.redirect(url.origin + "/m/", 302);
-      const naam = url.pathname.slice(3);
-      const bestand = MOBIEL[naam];
+      const naam = url.pathname.slice(3) || "mobiel.html";
+
+      /* Wat mag hier naar buiten: precies de bestanden uit manifest.json, en
+         niets anders. Dat is dezelfde lijst die de app op de pc ophaalt, dus
+         er komt hier nooit iets langs dat niet toch al bij iedere medewerker
+         op de schijf staat. Een vaste lijst in deze code zou bij elke nieuwe
+         tegel weer bijgewerkt moeten worden, en dan is het wachten tot iemand
+         dat vergeet. */
+      const bestand = (await mobielToegestaan(env)).has(naam) ? naam : null;
       if (!bestand) return reply(404, "Niet beschikbaar op de telefoon");
 
       /* GitHub zet er zelf vijf minuten cache op, en Cloudflare houdt zich
@@ -4841,9 +4863,11 @@ export default {
       const soort = bestand.endsWith(".js") ? "application/javascript; charset=utf-8"
                   : bestand.endsWith(".png") ? "image/png"
                   : bestand.endsWith(".webmanifest") ? "application/manifest+json; charset=utf-8"
+                  : bestand.endsWith(".json") ? "application/json; charset=utf-8"
                   : "text/html; charset=utf-8";
       const kop = { "Content-Type": soort, "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" };
-      if (bestand.endsWith(".png")) return new Response(await r.arrayBuffer(), { status: 200, headers: kop });
+      if (bestand.endsWith(".png") || bestand.endsWith(".jpg") || bestand.endsWith(".ico"))
+        return new Response(await r.arrayBuffer(), { status: 200, headers: kop });
       let t = await r.text();
       if (bestand.endsWith(".html")) t = t.replace(/"dashboard\.html"/g, '"./"');
       return new Response(t, { status: 200, headers: kop });
