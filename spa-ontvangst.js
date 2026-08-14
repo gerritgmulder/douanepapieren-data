@@ -327,10 +327,25 @@
     var docs = s.documenten || [];
     if (!docs.length) {
       wrap.appendChild(el("p", "so-meta klein",
-        "Nog geen papieren bij dit schip. Ze komen hier vanzelf te staan zodra de commercial invoice " +
-        "bij Schepen is geüpload; een packing list kun je daar met de knop “+ document” toevoegen."));
-      return wrap;
+        "Nog geen papieren bij deze container. Zet ze hier neer met “+ document”; de commercial " +
+        "invoice die je bovenaan uploadt komt er vanzelf bij te staan."));
     }
+    /* Een document erbij zetten. Chantal (video, 13 aug 2026): "documenten
+       uploaden, die mogelijkheid per container - ik kan hier gewoon die
+       commercial invoice dan uploaden." De packing list en de commercial
+       invoice horen bij de container, dus je zet ze hier neer en niet ergens
+       anders. De soort wordt uit de bestandsnaam afgeleid. */
+    if (cfg.magWijzigen) {
+      var knop = el("label", "so-knop licht so-doc-upload", "+ document");
+      var invoer = el("input");
+      invoer.type = "file";
+      invoer.accept = ".pdf,.xls,.xlsx,.docx,.csv,.txt,.jpg,.jpeg,.png";
+      invoer.style.display = "none";
+      invoer.addEventListener("change", function () { zetDocument(s, invoer, knop); });
+      knop.appendChild(invoer);
+      wrap.appendChild(knop);
+    }
+
     docs.forEach(function (doc) {
       var r = el("div", "so-doc");
       var a = el("a", null, doc.naam);
@@ -346,6 +361,45 @@
     });
     return wrap;
   }
+  /* Het bestand gaat eerst naar de opslag, daarna komt de verwijzing bij de
+     container te staan. In die volgorde: een verwijzing naar een bestand dat
+     er niet is levert een dode link op. */
+  async function zetDocument(s, invoer, knop) {
+    var f = invoer.files && invoer.files[0];
+    if (!f) return;
+    var oud = knop.firstChild.nodeValue;
+    knop.firstChild.nodeValue = "bezig…";
+    try {
+      var schoon = function (x) {
+        return String(x || "").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+      };
+      var ext = (f.name.split(".").pop() || "dat").toLowerCase().replace(/[^a-z0-9]/g, "");
+      var id = "schepen/" + schoon(s.ref) + "/" + schoon(f.name.replace(/\.[^.]*$/, "")) + "." + ext;
+
+      var r1 = await fetch(BESTAND_URL + "?id=" + encodeURIComponent(id), {
+        method: "PUT", headers: { "X-Fonteyn-Auth": cfg.teamKey }, body: await f.arrayBuffer() });
+      var j1 = await r1.json();
+      if (!j1.ok) throw new Error(j1.error || ("HTTP " + r1.status));
+
+      var soort = /pack/i.test(f.name) ? "packing-list"
+                : (/invoice|^ci/i.test(f.name) ? "commercial-invoice" : "document");
+      var r2 = await fetch(BASIS + "/voorraad/schip/document", {
+        method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
+        body: JSON.stringify({ ref: s.ref, doc: { id: id, naam: f.name, soort: soort,
+                                                  grootte: f.size, door: cfg.email || "" } }) });
+      var j2 = await r2.json();
+      if (!j2.ok) throw new Error(j2.error || "koppelen mislukt");
+      s.documenten = j2.documenten;
+      if (cfg.log) cfg.log("voorraad", "schip-document-toegevoegd", s.ref + ": " + f.name);
+      teken();
+      return;
+    } catch (e) {
+      alert("Uploaden mislukt: " + (e.message || e));
+    }
+    knop.firstChild.nodeValue = oud;
+    invoer.value = "";
+  }
+
   async function opendoc(a, doc) {
     var oud = a.textContent; a.textContent = "bezig…";
     try {

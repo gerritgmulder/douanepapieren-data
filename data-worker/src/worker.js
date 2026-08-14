@@ -4271,6 +4271,31 @@ export default {
       return reply(200, { ok: true, trackRef: schip.trackRef });
     }
 
+    /* Een document aan een zending hangen. Het bestand zelf gaat via
+       /voorraad/schip/bestand; hier komt alleen de verwijzing erbij. Per
+       zending in plaats van de hele lijst wegschrijven, om dezelfde reden als
+       bij de referentie: twee mensen tegelijk mag geen werk kosten. */
+    if (url.pathname === "/voorraad/schip/document" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      const ref = String(b.ref || "").trim();
+      const doc = b.doc || null;
+      if (!ref || !doc || !doc.id) return reply(400, { ok: false, error: "schip en document zijn allebei nodig" });
+      const data = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+      const schip = (data.ships || []).find(x => String(x.ref) === ref);
+      if (!schip) return reply(404, { ok: false, error: "schip niet gevonden" });
+      schip.documenten = (schip.documenten || []).filter(d => d.id !== doc.id);
+      schip.documenten.push({
+        id: String(doc.id), naam: String(doc.naam || doc.id).slice(0, 160),
+        soort: String(doc.soort || "document").slice(0, 40),
+        grootte: Number(doc.grootte) || 0,
+        ts: new Date().toISOString(), door: String(doc.door || "").slice(0, 80),
+      });
+      data.updated = new Date().toISOString();
+      await env.FONTEYN_DATA.put("voorraad-schepen", JSON.stringify(data));
+      return reply(200, { ok: true, documenten: schip.documenten });
+    }
+
     /* De aankomst van één zending, bij welke vervoerder hij ook vaart. Het
        scherm hoeft niet te weten wie dat is. */
     if (url.pathname === "/voorraad/aankomst" && request.method === "POST") {
