@@ -106,6 +106,21 @@
       return String(a.eta).localeCompare(String(b.eta));
     });
 
+    /* Fabriekscodes uit een commercial invoice die aan geen model te koppelen
+       waren. Die spa's zitten wél in de container maar tellen nergens mee, dus
+       dit hoort niet stil te blijven. Deze waarschuwing stond op het tabblad
+       Schepen en verdween mee toen dat opging in dit scherm. */
+    var onbekend = Object.keys(voorstel.unmapped || {});
+    if (onbekend.length) {
+      var u = el("div", "so-waarschuwing");
+      u.appendChild(el("strong", null, onbekend.length + " fabriekscode(s) zijn aan geen model gekoppeld. "));
+      u.appendChild(document.createTextNode(
+        "Die spa's staan wel op de invoice maar tellen nergens mee. Het gaat om: " +
+        onbekend.map(function (k) { return k + " (" + voorstel.unmapped[k] + "×)"; }).join(", ") +
+        ". Geef door welk model daarbij hoort, dan lees ik ze alsnog in."));
+      doel.appendChild(u);
+    }
+
     doel.appendChild(onderwegBlok(opVolgorde));
 
     /* De zendingen als tabbladen in plaats van als lijst onder elkaar.
@@ -234,8 +249,19 @@
       veld.value = s.trackRef || "";
       veld.placeholder = "containernummer of orderreferentie";
       veld.title = "Waarmee de vervoerder deze zending kent. Leeg = de referentie hierboven wordt gebruikt.";
-      veld.addEventListener("change", function () { bewaarReferentie(s, veld); });
+      veld.addEventListener("change", function () { bewaarSchip(s, { trackRef: veld.value }, veld); });
       tr.appendChild(veld);
+
+      /* De aankomst met de hand kunnen zetten. Niet elke vervoerder geeft een
+         datum, en zonder datum valt de zending uit de volgorde en uit het blok
+         met wat er onderweg is. Stond op het tabblad Schepen. */
+      tr.appendChild(el("label", "so-meta klein", "Aankomst"));
+      var dat = el("input", "so-trackveld so-datumveld");
+      dat.type = "date";
+      dat.value = (s.eta || "").slice(0, 10);
+      dat.title = "De verwachte aankomst in Nederland. Telt mee in de volgorde en in het Partnerportaal.";
+      dat.addEventListener("change", function () { bewaarSchip(s, { eta: dat.value }, dat); });
+      tr.appendChild(dat);
       links.appendChild(tr);
     }
     /* Wat de vervoerder er het laatst over zei. Twee vormen: wat hierlangs is
@@ -307,6 +333,13 @@
       ont.title = "Boekt de ontvangst in Logic4 — dit verhoogt de voorraad.";
       ont.addEventListener("click", function () { doeOntvangst(s, ont); });
       knoppen.appendChild(ont);
+    }
+    if (cfg.magWijzigen) {
+      var weg = el("button", "so-knop licht gevaar", "Verwijderen");
+      weg.type = "button";
+      weg.title = "Haalt deze zending weg. De lading telt daarna niet meer mee als voorraad onderweg.";
+      weg.addEventListener("click", function () { verwijderSchip(s, weg); });
+      knoppen.appendChild(weg);
     }
     rechts.appendChild(knoppen);
     rij.appendChild(rechts);
@@ -592,21 +625,48 @@
      wordt erbij gemeld, zodat te zien is waar het vandaan komt. Kent niemand
      hem, dan zegt hij dat - en welke vervoerders er nog niet aangesloten zijn,
      want dan is dat de verklaring en geen fout. */
-  async function bewaarReferentie(s, veld) {
-    var was = s.trackRef || "";
+  // Een veld van de zending bewaren: de trackingreferentie of de aankomst.
+  async function bewaarSchip(s, velden, invoer) {
+    var was = invoer.value;
     try {
       var r = await fetch(BASIS + "/voorraad/schip/referentie", {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
-        body: JSON.stringify({ ref: s.ref, trackRef: veld.value }),
+        body: JSON.stringify(Object.assign({ ref: s.ref }, velden)),
       });
       var j = await r.json();
       if (!j.ok) throw new Error(j.error || "opslaan mislukt");
-      s.trackRef = j.trackRef;
-      if (cfg.log) cfg.log("voorraad", "trackingreferentie-gewijzigd", s.ref + ": " + (was || "leeg") + " -> " + (j.trackRef || "leeg"));
+      if (velden.trackRef !== undefined) s.trackRef = j.trackRef;
+      if (velden.eta !== undefined) { s.eta = j.eta; teken(); }   // volgorde kan wijzigen
+      if (cfg.log) cfg.log("voorraad", "schip-gewijzigd", s.ref + ": " + JSON.stringify(velden));
     } catch (e) {
-      alert("Kon de referentie niet opslaan: " + (e.message || e));
-      veld.value = was;
+      alert("Kon het niet opslaan: " + (e.message || e));
+      invoer.value = was;
+    }
+  }
+
+  /* Een zending verwijderen. Dat haalt de lading ook uit wat er als voorraad
+     onderweg meetelt, dus de vraag vooraf noemt hoeveel spa's dat zijn. Wat
+     weggaat wordt bewaard, dus een vergissing is terug te draaien. */
+  async function verwijderSchip(s, knop) {
+    if (!confirm("Zending " + (s.vessel || s.ref) + " verwijderen?\n\n" +
+      s.spas + " spa's tellen daarna niet meer mee als voorraad onderweg.\n\n" +
+      "Wat weggaat wordt bewaard, dus een vergissing is terug te draaien.")) return;
+    knop.disabled = true; knop.textContent = "bezig…";
+    try {
+      var r = await fetch(BASIS + "/voorraad/schip/verwijder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
+        body: JSON.stringify({ ref: s.ref, door: cfg.email || "" }),
+      });
+      var j = await r.json();
+      if (!j.ok) throw new Error(j.error || "verwijderen mislukt");
+      if (cfg.log) cfg.log("voorraad", "schip-verwijderd", (s.vessel || s.ref) + " (" + s.spas + " spa's)");
+      actief = null;
+      await herlaad();
+    } catch (e) {
+      alert("Verwijderen mislukt: " + (e.message || e));
+      knop.disabled = false; knop.textContent = "Verwijderen";
     }
   }
 

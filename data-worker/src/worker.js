@@ -2359,7 +2359,12 @@ async function spaOntvangstVoorstel(env) {
   }
 
   uit.sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")));
-  return { ok: true, schepen: uit, inkooporders: Object.keys(orders).length };
+  return { ok: true, schepen: uit, inkooporders: Object.keys(orders).length,
+    /* Fabriekscodes uit een commercial invoice die aan geen model te koppelen
+       waren. Die waarschuwing stond op het tabblad Schepen; dat is opgegaan in
+       dit scherm, en zonder deze regel zou ze stil verdwijnen - terwijl het
+       betekent dat er spa's in een container zitten die nergens meetellen. */
+    unmapped: schepen.unmapped || {} };
 }
 
 // Stap 1 — verscheept: de verwachte leverdatum op de inkooporderregels zetten.
@@ -4265,10 +4270,18 @@ export default {
       const data = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
       const schip = (data.ships || []).find(x => String(x.ref) === ref);
       if (!schip) return reply(404, { ok: false, error: "schip niet gevonden" });
-      schip.trackRef = String(b.trackRef || "").trim();
+      if (b.trackRef !== undefined) schip.trackRef = String(b.trackRef || "").trim();
+      /* De aankomst met de hand kunnen zetten blijft nodig: niet elke
+         vervoerder geeft een datum, en zonder datum valt een zending uit de
+         volgorde en uit het blok met wat er onderweg is. */
+      if (b.eta !== undefined) {
+        const e = String(b.eta || "").trim();
+        if (e && !/^\d{4}-\d{2}-\d{2}$/.test(e)) return reply(400, { ok: false, error: "datum moet jjjj-mm-dd zijn" });
+        schip.eta = e;
+      }
       data.updated = new Date().toISOString();
       await env.FONTEYN_DATA.put("voorraad-schepen", JSON.stringify(data));
-      return reply(200, { ok: true, trackRef: schip.trackRef });
+      return reply(200, { ok: true, trackRef: schip.trackRef, eta: schip.eta || null });
     }
 
     /* Een document aan een zending hangen. Het bestand zelf gaat via
@@ -4294,6 +4307,27 @@ export default {
       data.updated = new Date().toISOString();
       await env.FONTEYN_DATA.put("voorraad-schepen", JSON.stringify(data));
       return reply(200, { ok: true, documenten: schip.documenten });
+    }
+
+    /* Een zending verwijderen. Dat haalt de lading ook uit wat er als
+       voorraad onderweg meetelt, dus het is niet niks; wat weggaat wordt
+       daarom eerst apart bewaard, net als bij de Jazzi-bestellingen. */
+    if (url.pathname === "/voorraad/schip/verwijder" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      const ref = String(b.ref || "").trim();
+      if (!ref) return reply(400, { ok: false, error: "geen schip meegegeven" });
+      const data = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+      const schip = (data.ships || []).find(x => String(x.ref) === ref);
+      if (!schip) return reply(404, { ok: false, error: "schip niet gevonden" });
+      const weg = (await env.FONTEYN_DATA.get("voorraad-verwijderd", { type: "json" })) || { orders: {} };
+      weg.schepen = weg.schepen || {};
+      weg.schepen[ref] = { schip, ts: new Date().toISOString(), door: String(b.door || "").slice(0, 80) };
+      await env.FONTEYN_DATA.put("voorraad-verwijderd", JSON.stringify(weg));
+      data.ships = (data.ships || []).filter(x => String(x.ref) !== ref);
+      data.updated = new Date().toISOString();
+      await env.FONTEYN_DATA.put("voorraad-schepen", JSON.stringify(data));
+      return reply(200, { ok: true, spas: Number(schip.total) || 0 });
     }
 
     /* De aankomst van één zending, bij welke vervoerder hij ook vaart. Het
