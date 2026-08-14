@@ -4445,12 +4445,17 @@ async function mailAdresVan(env, wie) {
    een de mailbox van de ander kunnen opvragen door een andere naam mee te
    sturen. Deze sleutel wordt uitgegeven op vertoon van een geldige
    Logic4-login en is aan díe naam gebonden. Twaalf uur geldig, daarna vraagt
-   het dashboard hem stil opnieuw op bij het inloggen. */
+   het dashboard hem stil opnieuw op bij het inloggen.
+
+   Dertig dagen, niet een halve dag. Wie op zijn telefoon "ingelogd blijven"
+   aanvinkt bedoelt dat ook, en een mailtegel die elke ochtend om een
+   wachtwoord vraagt gebruikt niemand. De sleutel staat op het toestel en is
+   zonder dat toestel niets waard. */
 async function mailSleutelGeef(env, wie) {
   const sleutel = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("mailsleutel:" + sleutel,
     JSON.stringify({ wie: String(wie).toLowerCase(), sinds: new Date().toISOString() }),
-    { expirationTtl: 43200 });
+    { expirationTtl: 2592000 });
   return sleutel;
 }
 

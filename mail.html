@@ -219,7 +219,7 @@ function el(id){ return document.getElementById(id); }
 function mailsleutel(){ return localStorage.getItem("fp.mailkey") || ""; }
 
 /* Elke aanroep gaat langs de persoonlijke mailsleutel. Die is bij het inloggen
-   uitgegeven en verloopt na twaalf uur; is hij weg, dan is opnieuw inloggen
+   uitgegeven en blijft dertig dagen geldig; is hij weg, dan is opnieuw inloggen
    het enige dat helpt en zeggen we dat ook gewoon. */
 async function roep(pad, opties){
   var o = opties || {};

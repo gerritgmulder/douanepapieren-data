@@ -821,7 +821,7 @@ const EIKENSINGEL_EMAILS = fpToegang.set("eikensingel");
 // krijgt deze computer de sleutel automatisch (localStorage "fp.teamkey").
 const TEAMKEY_STORE = "fp.teamkey";
 // De persoonlijke sleutel voor de mailtegel. Hoort bij één naam en verloopt
-// na twaalf uur; de teamsleutel heeft iedereen en is hier dus niet genoeg.
+// na dertig dagen; de teamsleutel heeft iedereen en is hier dus niet genoeg.
 const MAILKEY_STORE = "fp.mailkey";
 const TEAMKEY_TEST_URL = "https://fonteyn-data-store.g-mulder.workers.dev/data/rapportage";
 async function teamKeyValid(key) {
@@ -836,7 +836,7 @@ async function teamKeyValid(key) {
 async function provisionTeamKey(username, password) {
   try {
     const cur = localStorage.getItem(TEAMKEY_STORE);
-    // De mailsleutel vervalt na twaalf uur, de teamsleutel niet. Ontbreekt
+    // De mailsleutel vervalt na een tijd, de teamsleutel niet. Ontbreekt
     // alleen de mailsleutel, dan toch even langs de worker: anders zou de
     // mailtegel pas weer werken na een keer uitloggen.
     if (cur && localStorage.getItem(MAILKEY_STORE) && await teamKeyValid(cur)) return;
