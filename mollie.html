@@ -380,15 +380,31 @@ function werkSelectieBij() {
 }
 
 // ─── Dagboek ────────────────────────────────────────────────────────
+let dagboeken = [];
+// De grootboekrekening die bij het gekozen Mollie-dagboek hoort. Zonder die
+// kan een memoriaal niet in evenwicht komen.
+function mollieLedgerId() {
+  const d = dagboeken.find(x => String(x.id) === String($("dagboek").value));
+  return d ? d.ledgerId : null;
+}
 const DAGBOEK_KEY = "mollie.dagboek";
 async function laadDagboeken() {
   try {
     const r = await fetch(WORKER + "/bank/dagboeken", { headers: { "X-Fonteyn-Auth": teamKey() } });
     const j = await r.json();
     if (!j.ok) { $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + (j.error || ""); return; }
-    const onthouden = localStorage.getItem(DAGBOEK_KEY) || "";
+    dagboeken = j.dagboeken || [];
+    /* Nog niets gekozen? Dan het dagboek van Mollie voorstellen. Dat is het
+       enige dat hier logisch is, en het scheelt een zoektocht door twintig
+       dagboeken. Het blijft een voorstel: je kunt er gewoon een ander kiezen. */
+    let onthouden = localStorage.getItem(DAGBOEK_KEY) || "";
+    if (!onthouden) {
+      const mollie = dagboeken.filter(d => /mollie/i.test(d.naam || ""));
+      // Bij meerdere de nieuwste: "Mollie Payments Nieuw" heeft een hoger id.
+      if (mollie.length) onthouden = String(mollie.sort((a, b) => b.id - a.id)[0].id);
+    }
     $("dagboek").innerHTML = "<option value=''>— kies eerst het dagboek —</option>" +
-      (j.dagboeken || []).map(d => "<option value='" + d.id + "'" + (String(d.id) === onthouden ? " selected" : "") +
+      dagboeken.map(d => "<option value='" + d.id + "'" + (String(d.id) === onthouden ? " selected" : "") +
         ">" + esc(d.naam) + " (" + d.id + ")</option>").join("");
     werkSelectieBij();
   } catch (e) { $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + e.message; }
@@ -456,7 +472,13 @@ $("boekBtn").addEventListener("click", async () => {
   if (naarGrootboek.length) {
     const r = await fetch(WORKER + "/bank/memoriaal", {
       method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
-      body: JSON.stringify({ door: localStorage.getItem(EMAIL_KEY) || "", bookingId: dagboek,
+      /* De bankkant moet mee. Een memoriaal moet in evenwicht zijn, en de
+         worker weigert zonder de grootboekrekening van het dagboek - dat was
+         precies wat de bankkoppeling eerst ook fout deed. bankBookingId gaat
+         mee zodat hij weet welk dagboek in elk geval géén memoriaal is; welk
+         dagboek dat wél is zoekt hij zelf op. */
+      body: JSON.stringify({ door: localStorage.getItem(EMAIL_KEY) || "",
+        bankBookingId: dagboek, bankLedgerId: mollieLedgerId(),
         regels: naarGrootboek.map(g => ({ rekening: g.rekening, bedrag: g.bedrag, datum: g.datum,
                                           omschrijving: g.omschrijving, referentie: g.referentie })) }) });
     const j = await r.json().catch(() => ({}));
