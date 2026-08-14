@@ -41,6 +41,10 @@
       "note": "Documentenketen Jazzi — commercial invoice koppelen aan de inkooporder: verwachte aankomst bijwerken (voorraad ongemoeid) en de ontvangst boeken zodra de container in Uddel staat. Tabblad in voorraad.html."
     },
     {
+      "name": "meubel-invoice.js",
+      "note": "Commercial invoice van een meubelfabriek lezen - fabriek, invoicenummer, artikelnummer, omschrijving en aantal. Die containers tellen bewust niet als voorraad mee; daar komt een aparte tegel voor."
+    },
+    {
       "name": "taken.js",
       "note": "Persoonlijk takenblok bovenaan het dashboard — eigen taken, terugkerende momenten en signalen uit Logic4 die op naam staan (iedereen)."
     },

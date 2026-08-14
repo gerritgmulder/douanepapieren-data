@@ -15,6 +15,7 @@
 <script src="proforma-inkoop.js"></script>
 <script src="spa-migratie.js"></script>
 <script src="spa-ontvangst.js"></script>
+<script src="meubel-invoice.js"></script>
 <style>
   :root{
     --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
@@ -2739,10 +2740,22 @@ async function handleCIUpload(files,statusId){
           continue;
         }
         const iA=(shipsData.ships||[]).findIndex(s=>s.ref&&s.ref===ship.ref);
+        /* Geen spa's, maar wel leesbare regels? Bij een meubelfabriek staan
+           artikelnummer, omschrijving en aantal er netjes in. Die halen we
+           eruit zodat straks zichtbaar is wat er in de container zit - zonder
+           dat het als voorraad meetelt. */
+        let meubel=null;
+        try{
+          const rijenA=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});
+          if(window.fpMeubelInvoice&&window.fpMeubelInvoice.isMeubelInvoice(rijenA))
+            meubel=window.fpMeubelInvoice.lees(rijenA);
+        }catch(e){ console.warn("[schepen] meubelinvoice lezen faalde:",e); }
         const recA={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,
                     models:{},modelColors:{},specials:[],total:0,
                     eta:iA>=0?shipsData.ships[iA].eta:"",parser:2,
-                    alleenDocumenten:true};
+                    alleenDocumenten:true,
+                    meubel: meubel ? { fabriek:meubel.fabriek, invoiceNo:meubel.invoiceNo,
+                                       containers:meubel.containers, meldingen:meubel.meldingen } : null};
         if(iA>=0) recA.documenten=(shipsData.ships[iA].documenten||[]).slice();
         try{ zetSchipDocument(recA,await bewaarSchipBestand(ship.ref,file,"commercial-invoice")); }
         catch(e){ console.warn("[schepen] bestand bewaren faalde:",e); }
