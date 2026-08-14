@@ -2346,6 +2346,9 @@ async function spaOntvangstVoorstel(env) {
       /* De trackingreferentie en wat de vervoerder er het laatst over zei.
          Stonden op het tabblad Schepen; dat is opgegaan in dit scherm, dus ze
          horen nu per container hier te staan (Chantal, 13 aug 2026). */
+      // Een container waarvan we alleen de papieren bewaren: tuinmeubelen,
+      // sauna's. Zijn inhoud telt nergens mee (Chantal, 14 aug 2026).
+      alleenDocumenten: !!s.alleenDocumenten,
       trackRef: s.trackRef != null ? s.trackRef : (s.ref || ""),
       track: s.track || null,
       documenten: s.documenten || [],

@@ -177,6 +177,9 @@
   function onderwegBlok(schepen) {
     var d = el("div", "so-onderweg");
     var varend = schepen.filter(function (s) {
+      // Containers waarvan we alleen de papieren bewaren horen niet in een
+      // overzicht van wat er aan spa's onderweg is.
+      if (s.alleenDocumenten) return false;
       var dg = dagenTot(s.eta);
       return dg === null || dg > 0;   // zonder ETA weten we het niet: laten staan
     });
@@ -261,6 +264,13 @@
       (dagen === null ? "" : (binnen ? "  ·  zou binnen moeten zijn" : "  ·  over " + dagen + " dagen")) +
       "  ·  " + s.spas + " spa's" + (s.containers ? ("  ·  " + s.containers + " containers") : "")));
     links.appendChild(el("div", "so-meta klein", s.ref));
+    /* Duidelijk maken dat hier bewust geen voorraad achter zit. Zonder dit
+       lijkt het op een spa-container waarvan het inlezen is mislukt. */
+    if (s.alleenDocumenten) {
+      links.appendChild(el("div", "so-meta klein",
+        "Alleen de papieren. Geen spa's herkend op deze invoice - tuinmeubelen en sauna's " +
+        "tellen hier bewust niet mee als voorraad."));
+    }
 
     /* De trackingreferentie stond op het tabblad Schepen, in een tabel waar je
        hem moest opzoeken. Nu staat hij bij de container zelf, met daarnaast

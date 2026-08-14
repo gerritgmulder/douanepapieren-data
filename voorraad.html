@@ -2722,12 +2722,32 @@ async function handleCIUpload(files,statusId){
         return;
       }
       const ship=parseCI(wb,file.name);
+      /* Geen enkele spa herkend? Dan is dit geen spa-container.
+         Chantal (14 aug 2026): "we houden in mijn dashboard alle containers
+         bij, dus ook tuinmeubelen en sauna's, maar geen voorraad bij mij
+         zichtbaar maken hiervoor - voor tuinmeubelen moet een aparte tegel
+         komen." Zo'n container werd tot nu toe geweigerd, en dan kon ze het
+         document er dus niet in kwijt.
+
+         Hij komt er nu wél in, maar als container waar alleen de papieren van
+         bewaard worden. Zijn inhoud telt nergens mee: niet als voorraad
+         onderweg, niet in het Partnerportaal en niet in de aantallen. */
       if(!ship.total){
-        // Niet stil overslaan. Chantal uploadde een invoice van een andere
-        // fabriek, kreeg "0 schip(en) verwerkt" in het groen te zien en zocht
-        // zich daarna suf naar een schip dat er nooit was gekomen (4 aug 2026).
-        for(const [k,v] of Object.entries(ship.unmapped||{})) allUnmapped[k]=(allUnmapped[k]||0)+v;
-        overgeslagen.push({naam:file.name,codes:Object.keys(ship.unmapped||{}),bladen:wb.SheetNames.join(", ")});
+        if(!ship.ref){
+          for(const [k,v] of Object.entries(ship.unmapped||{})) allUnmapped[k]=(allUnmapped[k]||0)+v;
+          overgeslagen.push({naam:file.name,codes:Object.keys(ship.unmapped||{}),bladen:wb.SheetNames.join(", ")});
+          continue;
+        }
+        const iA=(shipsData.ships||[]).findIndex(s=>s.ref&&s.ref===ship.ref);
+        const recA={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,
+                    models:{},modelColors:{},specials:[],total:0,
+                    eta:iA>=0?shipsData.ships[iA].eta:"",parser:2,
+                    alleenDocumenten:true};
+        if(iA>=0) recA.documenten=(shipsData.ships[iA].documenten||[]).slice();
+        try{ zetSchipDocument(recA,await bewaarSchipBestand(ship.ref,file,"commercial-invoice")); }
+        catch(e){ console.warn("[schepen] bestand bewaren faalde:",e); }
+        if(iA>=0) shipsData.ships[iA]=recA; else shipsData.ships.push(recA);
+        added++;
         continue;
       }
       // Bestaand schip met dezelfde referentie? Dan vervangen (nieuwe upload wint).
