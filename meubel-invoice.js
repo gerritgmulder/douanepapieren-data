@@ -162,6 +162,71 @@
     return /COMMERCIAL\s+INVOICE/.test(t) && /ART\.?\s*NO/.test(t) && /DESCRIPTION\s+OF\s+GOODS/.test(t);
   }
 
-  global.fpMeubelInvoice = { lees: lees, isMeubelInvoice: isMeubelInvoice, kolommen: kolommen };
+  /* ─── De Bill of Lading ─────────────────────────────────────────────────
+     De vervoerder zet er de containers met hun zegel, gewicht en inhoud in.
+     Dat is de enige plek waar ze allemaal bij naam staan: bij Lodestone noemt
+     de invoice twee containers maar herhaalt hij één nummer.
+
+     Het blok ziet er zo uit:
+        Container   Seals        Type      Weight     Tare    Gross   Volume   Packages
+        BSIU8223754 HLK6030351   40HC   3683.55 KG  3770 KG  ...    67.75 M3   111 CTN */
+  function leesBillOfLading(regels) {
+    var uit = { blNo: null, containers: [] };
+    var alles = regels.join("\n");
+    var m = alles.match(/B\/L\s*No\.?\s*:?\s*([A-Z0-9\-]{4,30})/i);
+    if (m) uit.blNo = m[1];
+    var gezien = {};
+    for (var i = 0; i < regels.length; i++) {
+      var r = schoon(regels[i]);
+      var c = r.match(/^([A-Z]{4}\d{6,7})\s+([A-Z0-9]{4,20})?\s*(\d{2}[A-Z]{2})?/);
+      if (!c || gezien[c[1]]) continue;
+      gezien[c[1]] = 1;
+      var kg = r.match(/([\d.,]+)\s*KG/gi) || [];
+      var m3 = r.match(/([\d.,]+)\s*M3/i);
+      var ctn = r.match(/([\d.,]+)\s*CTN/i);
+      uit.containers.push({
+        container: c[1], seal: c[2] || null, type: c[3] || null,
+        nettoKg: kg[0] ? getal(kg[0]) : null,
+        brutoKg: kg[2] ? getal(kg[2]) : (kg[1] ? getal(kg[1]) : null),
+        cbm: m3 ? getal(m3[1]) : null,
+        dozen: ctn ? getal(ctn[1]) : null,
+      });
+    }
+    return uit;
+  }
+
+  /* De containers van de Bill of Lading aan de blokken van de invoice hangen.
+
+     Op naam gaat niet: de invoice herhaalt hetzelfde nummer. Wat wél sluit is
+     het aantal dozen en de kubieke meters uit de pakbon - die staan per blok
+     en komen exact terug op de Bill of Lading. Alleen koppelen als het echt
+     past; bij twijfel blijft het nummer leeg en zegt hij dat. */
+  function koppelContainers(blokken, bl) {
+    var uit = [], meldingen = [];
+    var vrij = (bl.containers || []).slice();
+    blokken.forEach(function (b) {
+      var raak = null;
+      for (var i = 0; i < vrij.length; i++) {
+        var k = vrij[i];
+        var dozenGelijk = b.dozen != null && k.dozen != null && Math.abs(b.dozen - k.dozen) < 0.5;
+        var cbmGelijk = b.cbm != null && k.cbm != null && Math.abs(b.cbm - k.cbm) < 0.5;
+        if (dozenGelijk && cbmGelijk) { raak = k; vrij.splice(i, 1); break; }
+      }
+      if (raak) {
+        if (b.container && b.container !== raak.container) {
+          meldingen.push("De invoice noemt " + b.container + " bij dit blok, maar volgens de Bill of Lading " +
+            "is het " + raak.container + " (" + raak.dozen + " dozen, " + raak.cbm + " m3). De Bill of Lading is aangehouden.");
+        }
+        uit.push({ blok: b, container: raak.container, seal: raak.seal, viaBl: true });
+      } else {
+        uit.push({ blok: b, container: b.container || null, seal: null, viaBl: false });
+        meldingen.push("Voor een blok met " + (b.dozen || "?") + " dozen is op de Bill of Lading geen passende container gevonden.");
+      }
+    });
+    return { koppelingen: uit, meldingen: meldingen };
+  }
+
+  global.fpMeubelInvoice = { lees: lees, isMeubelInvoice: isMeubelInvoice, kolommen: kolommen,
+                             leesBillOfLading: leesBillOfLading, koppelContainers: koppelContainers };
 
 })(typeof window !== "undefined" ? window : globalThis);
