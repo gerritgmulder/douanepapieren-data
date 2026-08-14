@@ -4462,6 +4462,30 @@ export default {
       return reply(200, await verizonPosities(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
 
+    /* Kan Cloudflare bij de mailserver van Fonteyn? Dit is de vraag waar de
+       hele mailtegel op staat of valt: de Exchange staat in Uddel en de worker
+       draait bij Cloudflare. Er gaan bewust geen inloggegevens mee - een 401
+       met "Basic" erin is precies het antwoord dat we willen zien, want dat
+       betekent: bereikbaar, en hij accepteert een gewone gebruikersnaam. */
+    if (url.pathname === "/mail/bereikbaar" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const host = url.searchParams.get("host") || "portal.fonteyn.nl";
+      const uit = [];
+      for (const pad of ["/EWS/Exchange.asmx", "/Autodiscover/Autodiscover.xml", "/Microsoft-Server-ActiveSync"]) {
+        const t0 = Date.now();
+        try {
+          const r = await fetch("https://" + host + pad, { method: "GET" });
+          const auth = [];
+          r.headers.forEach((v, k) => { if (k.toLowerCase() === "www-authenticate") auth.push(v); });
+          uit.push({ pad, status: r.status, ms: Date.now() - t0,
+                     auth: auth.join(" | "), server: r.headers.get("x-feserver") || "" });
+        } catch (e) {
+          uit.push({ pad, fout: String(e.message || e), ms: Date.now() - t0 });
+        }
+      }
+      return reply(200, { ok: true, host, uit });
+    }
+
     /* De commercial invoice en packing list van een schip. Opslaan mag met de
        teamsleutel: wie de tegel Voorraadbeheer mag openen, uploadt daar toch
        al commercial invoices. Ophalen gaat langs dezelfde sleutel. */
