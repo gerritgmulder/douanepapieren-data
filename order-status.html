@@ -2,6 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fonteyn — Orderstatus</title>
 <script src="taal.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -248,6 +249,35 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 .btn.solid:hover{background:#a50d26;border-color:#a50d26}
 .btn.sm{padding:4px 10px;font-size:11px;border-radius:7px}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important;box-shadow:none!important;background:#fff;color:#c8102e}
+
+  /* ── Smal scherm ───────────────────────────────────────────────────
+     Tien kolommen passen niet op een telefoon. Elke rij wordt hier een
+     kaartje met de kolomnaam voor de waarde; de tabelkop en het pijltje
+     tussen de twee statussen vallen weg, want die zeggen alleen iets in
+     een tabel. Boven de 760 pixels verandert er niets. */
+  @media (max-width: 760px) {
+    body { font-size: 15px; }
+    .results-table, .results-table tbody, .results-table tr, .results-table td { display: block; width: 100%; }
+    .results-table thead { display: none; }
+    .results-table tr {
+      border: 1px solid var(--border, #e5e7eb); border-radius: 12px;
+      margin-bottom: 10px; padding: 6px 12px 10px; background: #fff; position: relative;
+    }
+    .results-table tr:hover td { background: transparent; }
+    .results-table td { border: none; padding: 5px 0; text-align: left !important; }
+    .results-table td[data-kolom]::before {
+      content: attr(data-kolom); display: block;
+      font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+      color: #6b7280; font-weight: 600; margin-bottom: 1px;
+    }
+    /* Het vinkje hoort rechtsboven in het kaartje, niet als eigen regel. */
+    .results-table td.col-cb { position: absolute; top: 10px; right: 10px; padding: 0; width: auto; }
+    .results-table td.col-cb input { width: 20px; height: 20px; }
+    .results-table td.col-arrow { display: none; }
+    .results-table td.col-customer { max-width: none; white-space: normal; }
+    .results-table td:empty { display: none; }
+    .results-table td.result-cell:empty::before { content: none; }
+  }
 </style>
 
 </head>
@@ -595,15 +625,15 @@ function renderResults(checked, candidates, hiddenAmount) {
     tr.dataset.orderId = String(c.id);
     tr.innerHTML = `
       <td class="col-cb"><input type="checkbox" class="row-cb" data-order-id="${c.id}" checked></td>
-      <td class="col-num">${c.id}</td>
-      <td>${fmtDate(c.date)}</td>
-      <td class="col-customer" title="${escapeHtml(c.customer)}">${escapeHtml(c.customer)}</td>
-      <td class="col-num">${fmtEur(c.total)}</td>
-      <td class="col-num">${fmtEur(c.paid)}</td>
-      <td><span class="badge from">${escapeHtml(c.currentStatusLabel)}</span></td>
+      <td class="col-num" data-kolom="Order">${c.id}</td>
+      <td data-kolom="Datum">${fmtDate(c.date)}</td>
+      <td class="col-customer" data-kolom="Klant" title="${escapeHtml(c.customer)}">${escapeHtml(c.customer)}</td>
+      <td class="col-num" data-kolom="Totaal">${fmtEur(c.total)}</td>
+      <td class="col-num" data-kolom="Betaald">${fmtEur(c.paid)}</td>
+      <td data-kolom="Nu"><span class="badge from">${escapeHtml(c.currentStatusLabel)}</span></td>
       <td class="col-arrow">→</td>
-      <td><span class="badge ${targetBadgeClass(c.targetStatusId)}">${escapeHtml(c.targetStatusLabel)}</span></td>
-      <td class="result-cell"></td>
+      <td data-kolom="Wordt"><span class="badge ${targetBadgeClass(c.targetStatusId)}">${escapeHtml(c.targetStatusLabel)}</span></td>
+      <td class="result-cell" data-kolom="Resultaat"></td>
     `;
     body.appendChild(tr);
   }

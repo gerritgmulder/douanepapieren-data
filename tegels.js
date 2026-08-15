@@ -47,7 +47,7 @@
     { bestand:"tuinmeubelen.html",   groep:"tuinmeubelen",     ic:"🪑",  naam:"Tuinmeubelen",
       uit:"Containers, papieren en meldingen",                     mobiel:"goed" },
     { bestand:"order-status.html",   groep:"orderstatus",      ic:"📊",  naam:"Orderstatus",
-      uit:"Een order opzoeken en de status bijwerken",             mobiel:"krap" },
+      uit:"Een order opzoeken en de status bijwerken",             mobiel:"goed" },
     { bestand:"specsheets.html",     groep:"specsheets",       ic:"📄",  naam:"Specificatiesheets",
       uit:"Specsheets maken en opzoeken",                          mobiel:"krap" },
     { bestand:"retouren.html",       groep:"retouren",         ic:"↩️",  naam:"Retouren",
