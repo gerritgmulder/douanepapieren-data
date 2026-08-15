@@ -1,13 +1,12 @@
-/* Controleert dat de telefoon en de pc precies dezelfde rechten hanteren.
+/* Controleert dat de tegellijst en de twee dashboards bij elkaar passen.
  *
- * De telefoon bouwt zijn tegels op uit tegels.js. De pc doet het nog met
- * vijfentwintig losse regels in dashboard.html. Zolang dat zo is, kan er een
- * verschil insluipen - en dat is precies wat niet mag: iemand die op de pc
- * een tegel niet ziet, hoort hem op zijn telefoon ook niet te zien.
- *
- * Dit script leest beide kanten uit en vergelijkt per tegel wie hem mag zien,
- * naam voor naam. Niet de groepsnaam maar de uitkomst, want twee groepen met
- * verschillende namen kunnen dezelfde mensen bevatten en andersom.
+ * Sinds 14 aug 2026 bouwen de pc en de telefoon hun tegels allebei uit
+ * tegels.js, dus kunnen de rechten niet meer uit elkaar lopen - dat was de
+ * hele reden voor dat bestand. Wat nog wél mis kan gaan is de aansluiting:
+ * een tegel in de lijst waar geen blok in de HTML bij hoort (dan ziet niemand
+ * hem), of een blok in de HTML dat niet in de lijst staat (dan staat hij bij
+ * iedereen open, want er is niets dat hem verbergt). Dat laatste is het
+ * gevaarlijke geval en precies wat hier wordt afgevangen.
  *
  *   node tools/tegels-gelijk.mjs
  */
@@ -29,99 +28,36 @@ const toegang = nep.fpToegang ?? globalThis.fpToegang;
 const tegels = nep.fpTegels ?? globalThis.fpTegels;
 
 const dash = lees("dashboard.html");
-
-/* Kant van de pc: welke set hoort bij welke tegel.
-   Eerst de naam-naar-groep-koppeling (const X_EMAILS = fpToegang.set("y")),
-   dan per tegel welke set of welke directe mag()-aanroep gebruikt wordt. */
-const setNaarGroep = new Map();
-for (const m of dash.matchAll(/const\s+([A-Z_]+)\s*=\s*fpToegang\.set\("([a-z-]+)"\)/g)) {
-  setNaarGroep.set(m[1], m[2]);
-}
-// Afgeleide vlaggen die dashboard.html zelf maakt.
-for (const m of dash.matchAll(/const\s+(\w+)\s*=\s*([A-Z_]+)\.has\(lc\)/g)) {
-  if (setNaarGroep.has(m[2])) setNaarGroep.set(m[1], setNaarGroep.get(m[2]));
-}
-for (const m of dash.matchAll(/const\s+(\w+)\s*=\s*fpToegang\.mag\("([a-z-]+)",\s*lc\)/g)) {
-  setNaarGroep.set(m[1], m[2]);
-}
-
-// tile-id → bestand, uit de tegel-blokken zelf.
-const tileNaarBestand = new Map();
-for (const m of dash.matchAll(/<a\s+href="([^"]+)"[^>]*id="(tile[A-Za-z]+)"/g)) {
-  tileNaarBestand.set(m[2], m[1]);
-}
-
-// tile-id → groep, uit de zichtbaarheidsregels.
 let fouten = 0;
-const pcTegels = new Map();
-/* Tot de afsluitende ");" van de regel, niet tot het eerste haakje - anders
-   valt ".has(lc)" halverwege af en herkent de controle bijna geen enkele
-   tegel. Dat was hier eerst wel zo, en dan meldt dit script vrolijk dat alles
-   klopt terwijl het nauwelijks iets heeft nagekeken. */
-const onbekend = [];
-for (const m of dash.matchAll(/el\("(tile[A-Za-z]+)"\)\.classList\.toggle\("hidden",\s*!(.+?)\);/g)) {
-  const tile = m[1];
-  const expr = m[2].trim();
-  let groep = null;
-  const viaSet = expr.match(/^([A-Z_]+)\.has\(lc\)$/);
-  const viaMag = expr.match(/^fpToegang\.mag\("([a-z-]+)",\s*lc\)$/);
-  const viaVlag = expr.match(/^(\w+)$/);
-  if (viaSet) groep = setNaarGroep.get(viaSet[1]);
-  else if (viaMag) groep = viaMag[1];
-  else if (viaVlag) groep = setNaarGroep.get(viaVlag[1]);
-  if (groep) pcTegels.set(tile, groep);
-  else onbekend.push(`${tile}: ${expr}`);
-}
-if (onbekend.length) {
-  console.log("Niet te herleiden zichtbaarheidsregels in dashboard.html:");
-  for (const r of onbekend) console.log("           " + r);
-  fouten += onbekend.length;
-}
 
-/* Iedereen die ergens in een groep voorkomt. Wie nergens in staat kan ook
-   nergens verschil opleveren, dus die hoeft niet mee. */
-const iedereen = new Set();
-for (const groep of Object.keys(toegang.groepen)) {
-  for (const wie of toegang.set(groep)) iedereen.add(wie);
-}
+// Alle tegel-blokken in de HTML, met hun id.
+const inHtml = new Set();
+for (const m of dash.matchAll(/id="(tile[A-Za-z]+)"/g)) inHtml.add(m[1]);
 
-let gecontroleerd = 0;
-
-// Per tegel: dezelfde mensen op beide kanten?
-for (const [tile, groepPc] of pcTegels) {
-  const bestand = tileNaarBestand.get(tile);
-  // Eerst op tile-id (nodig voor tegels met href="#", zoals Stuurcijfers),
-  // anders op bestandsnaam.
-  const mobiel =
-    tegels.lijst.find((t) => t.tile === tile) ??
-    (bestand && bestand !== "#" ? tegels.lijst.find((t) => t.bestand === bestand) : null);
-  if (!mobiel) {
-    console.log(`ONTBREEKT  ${bestand || tile} staat wel op de pc maar niet in tegels.js`);
-    fouten++;
-    continue;
-  }
-  gecontroleerd++;
-  const verschil = [...iedereen].filter(
-    (wie) => toegang.mag(groepPc, wie) !== toegang.mag(mobiel.groep, wie)
-  );
-  if (verschil.length) {
-    console.log(`VERSCHIL   ${bestand}: pc gebruikt "${groepPc}", telefoon "${mobiel.groep}"`);
-    console.log(`           anders voor: ${verschil.join(", ")}`);
-    fouten++;
-  }
-}
-
-// En andersom: staat er iets in tegels.js dat de pc niet kent?
+// 1. Staat elke tegel uit de lijst ook echt in de HTML?
 for (const t of tegels.lijst) {
-  if (t.extern) continue;
-  if (t.tile && pcTegels.has(t.tile)) continue;
-  if (![...tileNaarBestand.values()].includes(t.bestand)) {
-    console.log(`ONBEKEND   ${t.bestand} staat in tegels.js maar nergens in dashboard.html`);
+  if (!t.tile) {
+    console.log(`GEEN ID    ${t.bestand} heeft geen tile in tegels.js`);
+    fouten++;
+  } else if (!inHtml.has(t.tile)) {
+    console.log(`ONTBREEKT  ${t.tile} (${t.bestand}) staat in tegels.js maar niet in dashboard.html`);
     fouten++;
   }
 }
 
-// Bestaat elke genoemde groep?
+// 2. En andersom - dit is het gevaarlijke geval. Een blok in de HTML dat niet
+//    in de lijst staat, wordt door niemand verborgen en is dus voor iedereen
+//    zichtbaar.
+const inLijst = new Set(tegels.lijst.map((t) => t.tile));
+for (const id of inHtml) {
+  if (!inLijst.has(id)) {
+    console.log(`ONBEWAAKT  ${id} staat in dashboard.html maar niet in tegels.js`);
+    console.log(`           Niemand verbergt hem, dus iedereen ziet hem.`);
+    fouten++;
+  }
+}
+
+// 3. Verwijst elke tegel naar een groep die bestaat?
 for (const t of tegels.lijst) {
   if (!toegang.groepen[t.groep]) {
     console.log(`GEEN GROEP ${t.bestand} verwijst naar "${t.groep}", die niet in toegang.js staat`);
@@ -129,9 +65,26 @@ for (const t of tegels.lijst) {
   }
 }
 
-console.log(
-  fouten === 0
-    ? `\nGoed: ${gecontroleerd} tegels, op de pc en op de telefoon precies dezelfde mensen (${iedereen.size} inlognamen nagelopen).`
-    : `\n${fouten} verschil${fouten === 1 ? "" : "len"} gevonden.`
-);
+// 4. Bouwen beide dashboards nog uit dezelfde lijst? Zodra een van de twee
+//    weer eigen regels krijgt, is de garantie weg.
+if (!/fpTegels\.voor\(/.test(dash)) {
+  console.log("LOSGERAAKT dashboard.html bouwt zijn tegels niet meer uit tegels.js");
+  fouten++;
+}
+if (!/fpTegels\.voor\(/.test(lees("mobiel.html"))) {
+  console.log("LOSGERAAKT mobiel.html bouwt zijn tegels niet meer uit tegels.js");
+  fouten++;
+}
+
+// Ter informatie: wie ziet wat. Handig om in één oogopslag te zien of een
+// wijziging in de toegangslijsten doet wat je dacht.
+if (!fouten) {
+  const namen = ["fonteyn.dolf", "chantal", "fonteyn.don", "osman", "nomi", "reinier.k", "gretha"];
+  console.log(`\nGoed: ${tegels.lijst.length} tegels, pc en telefoon bouwen uit dezelfde lijst.\n`);
+  for (const wie of namen) {
+    const l = tegels.voor(wie);
+    console.log(`  ${wie.padEnd(14)} ${String(l.length).padStart(2)} tegels`);
+  }
+}
+
 process.exit(fouten === 0 ? 0 : 1);

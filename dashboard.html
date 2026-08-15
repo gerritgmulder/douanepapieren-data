@@ -7,6 +7,10 @@
      én voor de tegels zelf. Moet vóór alles laden: de tegels hieronder worden
      op basis daarvan getoond of verborgen. -->
 <script src="toegang.js"></script>
+<!-- Welke tegel bij welke groep hoort. Eén lijst voor dit dashboard en voor
+     dat op de telefoon; zonder dit bestand weet de pagina niet wat ze mag
+     tonen en blijft alles verborgen. -->
+<script src="tegels.js"></script>
 <script src="taal.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -705,7 +709,7 @@ function prettyNameFromEmail(email) {
    Ontbreekt dat bestand, dan valt hier alles stil. Dat is met opzet: het
    alternatief is een dashboard dat gokt wie wat mag zien. Wel eerst even
    zeggen wat er aan de hand is, want een leeg scherm helpt niemand. */
-if (!window.fpToegang) {
+if (!window.fpToegang || !window.fpTegels) {
   document.body.innerHTML =
     "<main style='font-family:Montserrat,sans-serif;max-width:520px;margin:14vh auto;background:#fff;" +
     "border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center'>" +
@@ -722,97 +726,10 @@ if (!window.fpToegang) {
 // die niets met logistiek doen. Server-side gating zit op Logic4-niveau zelf.
 const LOGISTIEK_EMAILS = fpToegang.set("logistiek");
 
-// Welke logins mogen de Personeel-tegel zien.
-// Chantal + Manon zijn de dagelijkse beheerders; admins ook toegang.
-// Server (server/index.js → PERSONEEL_FULL) doet dezelfde check.
-const PERSONEEL_EMAILS = fpToegang.set("personeel");
-
-// Welke logins mogen de Bankkoppeling-tegel zien.
-// Finance-team (Osman/Rowan/Rico/Reinier) doet dit dagelijks; admins
-// Dolf/Don/Arno/Gerrit + bot ook toegang voor reviews.
-const BANKKOPPELING_EMAILS = fpToegang.set("bankkoppeling");
-
-// Welke logins mogen de Stuurcijfers-tegel zien.
-// Server doet dezelfde check; dit hier is alleen voor de UI.
-// We accepteren zowel het e-mailadres ALS de Logic4-username (bv. "fonteyn.dolf"),
-// zodat het werkt ongeacht in welk format Logic4 die gebruiker laat inloggen.
-const STUURCIJFERS_EMAILS = fpToegang.set("stuurcijfers");
-
-// Welke logins mogen de Geld-goederenbeweging zien.
-// Dit is de volledige financiële keten van het bedrijf: inkoop, voorraad,
-// omzet, marge, debiteuren. Bewust smal gehouden: Dolf (eigenaar, hij heeft
-// dit met de accountant afgesproken), Osman (financiën) en Gerrit (admin).
-// Uitbreiden kan altijd — Gerriette ligt voor de hand zodra dat gewenst is.
-// geldgoederen.html doet client-side exact dezelfde controle.
-const GELDGOEDEREN_EMAILS = fpToegang.set("geldgoederen");
-
-// Welke logins mogen de Koeien-tegel zien.
-// Alleen Dolf zelf, Gerrit (admin) en Fonteynbot.
-// koeien.html doet client-side dezelfde check; data zit centraal in
-// de Cloudflare Worker (data-worker), bucket "koeien".
-const KOEIEN_EMAILS = fpToegang.set("koeien");
-
-// Welke logins mogen de Rapportage-tegel zien.
-// Management-niveau: Gerrit, Don, Arno, Dolf + Fonteynbot.
-const RAPPORTAGE_EMAILS = fpToegang.set("rapportage");
-
-// Welke logins mogen de Bol.com-koppeling-tegel zien.
-// Don plaatst de Bol-orders in Logic4; Osman doet de memoriaal-boekingen.
-// Gerrit en Fonteynbot zijn admin-overall.
-// Retouren-tegel — logistiek + sales + management.
-const RETOUREN_EMAILS = fpToegang.set("retouren");
-
-// Mollie — dezelfde mensen als de bankkoppeling: zij boeken de betalingen.
-const MOLLIE_EMAILS = fpToegang.set("mollie");
-
-const BOL_EMAILS = fpToegang.set("bol");
-
-// Dealerportaal-beheer — Arno, Don, Chantal + admins.
-const DEALERPORTAAL_EMAILS = fpToegang.set("dealerportaal");
-
-// Passion Partners — het publieke portaal openen in de browser. Kijken mag
-// ruimer dan beheren: iedereen die met spa's/partners werkt, plus Dolf.
-const PARTNERPORTAAL_KIJK = fpToegang.set("partnerportaal-kijk");
-
-// Voorraadbeheer-tegel — sales/logistiek: Dolf, Arno, Chantal, Manon + admins,
-// plus de spa-adviseurs (die zien in de tegel zélf alléén de tabs Particulier/
-// Partner/Partner containers, alleen-lezen). Spa-service volgt nog.
-const VOORRAAD_EMAILS = fpToegang.set("voorraad");
-
-// Amerika-tegel (Houston/Texas, Passion Spas USA) — apart 'bedrijf', draait op
-// QuickBooks i.p.v. Logic4. Chantal, Dolf, Gerrit, Osman (finance) + Fonteynbot.
-const AMERIKA_EMAILS = fpToegang.set("amerika");
 
 // Activiteitenlogboek — management-oversight. ALLEEN Gerrit, Dolf en Fonteynbot.
 const ACTIVITEIT_EMAILS = fpToegang.set("activiteit");
 
-// Prijslijsten fabrikanten — de prijsafspraken met alle leveranciers en
-// fabrieken op één plek. Gretha beheert ze; zij heeft ze allemaal.
-// prijslijsten-fabrikanten.html heeft dezelfde lijst nog een keer, om ook het
-// rechtstreeks openen van het adres te bewaken. Allebei bijwerken dus.
-const PRIJSLIJSTEN_EMAILS = fpToegang.set("prijslijsten");
-
-// Container laden — inkoop en logistiek. Chantal boekt de containers bij de
-// fabriek, Arno en Manon plannen wat eruit komt. container-laden.html doet
-// client-side dezelfde controle; allebei bijwerken dus.
-const CONTAINERLADEN_EMAILS = fpToegang.set("containerladen");
-
-// Specificatiesheets — marketing. Gretha en Demi maken de sheets; admins mee.
-const SPECSHEETS_EMAILS = fpToegang.set("specsheets");
-
-// Partner-activiteitenlogboek — wat dealers op Passion Partners doen.
-// Gerrit, Dolf, Arno, Don en Chantal (sales/beheer) + Fonteynbot.
-const PARTNERACTIVITEIT_EMAILS = fpToegang.set("partneractiviteit");
-
-// Welke logins mogen de Orderstatus-tegel zien.
-// Server (server/index.js → ORDERSTATUS_ALLOWED) doet dezelfde check.
-const ORDERSTATUS_EMAILS = fpToegang.set("orderstatus");
-
-// Welke logins mogen de Eikensingel-tegel zien.
-// Server splitst dit verder uit in 'full' (Fransje/Danique/Gerrit/Bot) die
-// alles mogen, en 'booker' die alleen mogen lezen + boekingen toevoegen.
-// De tegel zelf is voor beide rollen zichtbaar.
-const EIKENSINGEL_EMAILS = fpToegang.set("eikensingel");
 
 // ─── Team-sleutel (SAFETY) ──────────────────────────────────────────
 // De gedeelde opslag (Cloudflare KV) gebruikt een team-sleutel die NIET in de
@@ -918,57 +835,22 @@ function showDashboard(email) {
   const name = prettyNameFromEmail(email);
   el("greeting").textContent = name ? `${greet}, ${name}` : greet;
   const lc = (email || "").toLowerCase();
-  // Logistieke tegels (Douane / Labels / Transport / Prijslijst) alleen voor het logistiek-team
+  /* Welke tegels iemand ziet staat in tegels.js - dezelfde lijst waar de
+     telefoon uit put. Hier stonden tot 14 aug 2026 vijfentwintig losse regels
+     van het type el("tileBol").classList.toggle(...). Dat werkte prima zolang
+     er één dashboard was, maar zodra hetzelfde op twee plekken beschreven
+     staat lopen ze uit elkaar. Precies dat ging eerder mis bij Nomi: ze kreeg
+     toegang, zag de tegels niet, en na de reparatie nog steeds niet.
+
+     Eén lus dus. Een tegel toevoegen is een regel in tegels.js en een blok in
+     de HTML hieronder; er valt hier niets meer te vergeten. */
+  const magZien = new Set(fpTegels.voor(lc).map(t => t.tile));
+  for (const t of fpTegels.lijst) {
+    const knop = el(t.tile);
+    if (knop) knop.classList.toggle("hidden", !magZien.has(t.tile));
+  }
+  // Logistiek wordt verderop ook nog gebruikt (buiten de tegels om).
   const isLogistiek = LOGISTIEK_EMAILS.has(lc);
-  const magPapieren = fpToegang.mag("papieren", lc);
-  el("tileDouane").classList.toggle("hidden", !magPapieren);
-  el("tileLabels").classList.toggle("hidden", !magPapieren);
-  el("tileTransport").classList.toggle("hidden", !isLogistiek);
-  // Stuurcijfers-tegel alleen tonen voor de geautoriseerde e-mailadressen
-  el("tileStuurcijfers").classList.toggle("hidden", !STUURCIJFERS_EMAILS.has(lc));
-  // Orderstatus-tegel alleen tonen voor de geautoriseerde e-mailadressen
-  el("tileOrderStatus").classList.toggle("hidden", !ORDERSTATUS_EMAILS.has(lc));
-  // Bankkoppeling-tegel — finance-team + admins
-  el("tileBankkoppeling").classList.toggle("hidden", !BANKKOPPELING_EMAILS.has(lc));
-  // Geld-goederenbeweging — financiën + directie
-  el("tileGeldGoederen").classList.toggle("hidden", !GELDGOEDEREN_EMAILS.has(lc));
-  // Personeel-tegel — Chantal/Manon + admins
-  el("tilePersoneel").classList.toggle("hidden", !PERSONEEL_EMAILS.has(lc));
-  // Koeien-tegel — Dolf + Gerrit + bot
-  el("tileKoeien").classList.toggle("hidden", !KOEIEN_EMAILS.has(lc));
-  // Rapportage-tegel — management + bot
-  el("tileRapportage").classList.toggle("hidden", !RAPPORTAGE_EMAILS.has(lc));
-  // Eikensingel-tegel alleen tonen voor Fransje + team + Danique
-  el("tileEikensingel").classList.toggle("hidden", !EIKENSINGEL_EMAILS.has(lc));
-  // Bol.com koppeling — Don + Osman + admins
-  el("tileBol").classList.toggle("hidden", !BOL_EMAILS.has(lc));
-  // Mollie — dezelfde groep als de bankkoppeling
-  el("tileMollie").classList.toggle("hidden", !MOLLIE_EMAILS.has(lc));
-  el("tileRetouren").classList.toggle("hidden", !RETOUREN_EMAILS.has(lc));
-  // Tuinmeubelen — Chantal/Manon/Arno + admins
-  el("tileTuinmeubelen").classList.toggle("hidden", !fpToegang.mag("tuinmeubelen", lc));
-  el("tileMail").classList.toggle("hidden", !fpToegang.mag("mail", lc));
-  // Dealerportaal-beheer — Arno/Don/Chantal + admins
-  el("tileDealerportaal").classList.toggle("hidden", !DEALERPORTAAL_EMAILS.has(lc));
-  // Voorraadbeheer — Dolf/Arno/Chantal + admins
-  el("tileVoorraad").classList.toggle("hidden", !VOORRAAD_EMAILS.has(lc));
-  // Container laden — Chantal/Arno/Manon/Dolf + admins
-  el("tileContainerLaden").classList.toggle("hidden", !CONTAINERLADEN_EMAILS.has(lc));
-  // Amerika (Houston/Texas, QuickBooks) — alleen Chantal/Dolf/Gerrit/bot
-  el("tileAmerika").classList.toggle("hidden", !AMERIKA_EMAILS.has(lc));
-  // Activiteitenlogboek — alleen Gerrit/Dolf/bot
-  el("tileActiviteit").classList.toggle("hidden", !ACTIVITEIT_EMAILS.has(lc));
-  el("tilePartnerActiviteit").classList.toggle("hidden", !PARTNERACTIVITEIT_EMAILS.has(lc));
-  el("tileSpecsheets").classList.toggle("hidden", !SPECSHEETS_EMAILS.has(lc));
-  // Prijslijsten fabrikanten — Gretha + beheer
-  el("tilePrijslijstenFab").classList.toggle("hidden", !PRIJSLIJSTEN_EMAILS.has(lc));
-  // Logic4-probe — admin-diagnose. Alleen Gerrit en Fonteynbot. Stond hier als
-  // losse if; nu een groep in toegang.js, zodat de telefoon dezelfde regel
-  // gebruikt en er niet één van beide achterloopt.
-  el("tileProbe").classList.toggle("hidden", !fpToegang.mag("probe", lc));
-  // Passion Partners — het publieke portaal zoals de dealers het zien. Zelfde
-  // groep mensen die het portaal beheert plus de spa-mensen die willen kijken.
-  el("tilePassionPartners").classList.toggle("hidden", !PARTNERPORTAAL_KIJK.has(lc));
   verbergLegeGroepen();
   herstelScrollpositie();
   startTakenblok(email);
