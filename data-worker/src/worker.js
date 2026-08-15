@@ -4924,13 +4924,15 @@ export default {
       const bestand = (await mobielToegestaan(env)).has(naam) ? naam : null;
       if (!bestand) return reply(404, "Niet beschikbaar op de telefoon");
 
-      /* GitHub zet er zelf vijf minuten cache op, en Cloudflare houdt zich
-         daaraan. Dat is te lang: een wijziging pushen en hem meteen op je
-         telefoon willen zien is precies de bedoeling. cacheTtl zet die vijf
-         minuten terug naar tien seconden. */
-      const cb = Math.floor(Date.now() / 10000);
+      /* Niet cachen. GitHub zet er zelf vijf minuten op en Cloudflare hield
+         zich daaraan, ook met een korte cacheTtl erbij - een pas gepushte
+         wijziging bleef minutenlang onzichtbaar. Dat is precies verkeerd om:
+         iets aanpassen en het meteen op je toestel willen zien is de manier
+         waarop hier gewerkt wordt. Het verkeer is een handvol verzoeken per
+         dag, dus elke keer vers ophalen kost niets. */
       const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/" +
-                            bestand + "?cb=" + cb, { cf: { cacheTtl: 10, cacheEverything: false } });
+                            bestand + "?t=" + Date.now(),
+                            { cf: { cacheTtl: 0, cacheEverything: false } });
       if (!r.ok) return reply(502, "Pagina niet beschikbaar");
 
       const soort = bestand.endsWith(".js") ? "application/javascript; charset=utf-8"
