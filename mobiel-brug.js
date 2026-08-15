@@ -35,6 +35,7 @@
   window.fpBrug = true;
 
   var echt = window.fetch.bind(window);
+  var WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
 
   function antwoord(data, status) {
     return new Response(JSON.stringify(data), {
@@ -68,6 +69,42 @@
 
     if (p === "/api/logout") {
       return Promise.resolve(antwoord({ ok: true }));
+    }
+
+    /* Het doorgeefluik naar Logic4. Dit is verreweg de meest gebruikte
+       aanroep - twintig plekken over alle tegels - en daarom de enige die
+       hier niet wordt afgewezen maar doorgestuurd. De worker doet hem met
+       het Logic4-token van deze gebruiker, dus met precies zijn eigen
+       rechten, en laat alleen opvragen toe. Boeken en wijzigen blijft op de
+       werkplek. */
+    if (p === "/api/logic4-call") {
+      var sleutel = "";
+      try { sleutel = localStorage.getItem("fp.mailkey") || ""; } catch (e) {}
+      if (!sleutel) {
+        return Promise.resolve(antwoord({
+          ok: false, error: "opnieuw-inloggen",
+          message: "Log opnieuw in, dan kan het dashboard de gegevens weer ophalen.",
+        }, 503));
+      }
+      return echt(WORKER + "/logic4/lees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Fonteyn-Mail": sleutel },
+        body: (opties && opties.body) || "{}",
+      }).then(function (r) {
+        /* Een 401 van de worker betekent hier "je Logic4-verbinding is
+           verlopen", niet "je bent uitgelogd". Als 401 doorgegeven zou
+           worden, gooit een tegel je sessie weg en sta je weer op het
+           inlogscherm - precies wat deze brug moet voorkomen. */
+        if (r.status === 401 || r.status === 403) {
+          return r.json().catch(function () { return {}; }).then(function (j) {
+            return antwoord({ ok: false, error: j.error || "niet-beschikbaar",
+                              message: j.uitleg || "" }, 503);
+          });
+        }
+        return r;
+      }).catch(function () {
+        return antwoord({ ok: false, error: "geen-verbinding" }, 503);
+      });
     }
 
     /* De rest bestaat hier echt niet. 503 en geen 401: bij een 401 besluit een

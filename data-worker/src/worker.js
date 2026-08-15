@@ -1203,7 +1203,19 @@ async function handleTeamKey(request, env) {
      het opslaan mis, dan gaat het inloggen gewoon door: zonder mailsleutel
      werkt alleen de mailtegel niet, de rest van het dashboard wel. */
   let mailsleutel = null;
-  try { mailsleutel = await mailSleutelGeef(env, username); }
+  try {
+    /* Het Logic4-token dat we net kregen gaat mee. Daarmee kan een tegel op
+       een telefoon gegevens ophalen ónder de naam van deze gebruiker, met
+       precies de rechten die hij in Logic4 heeft. De alternatieven waren
+       slechter: het wachtwoord bewaren (nooit doen) of alles als fonteynbot
+       doen (dan zou het dashboard de Logic4-rechten omzeilen). Het token
+       vervalt na een uur; daarna staat er niets meer en zegt het dashboard
+       dat er even opnieuw ingelogd moet worden. */
+    mailsleutel = await mailSleutelGeef(env, username, {
+      token: j.access_token,
+      tot: Date.now() + (Number(j.expires_in) || 3600) * 1000,
+    });
+  }
   catch (e) { console.log("[teamkey] mailsleutel niet uitgegeven: " + (e.message || e)); }
   return reply(200, { ok: true, teamkey: env.SHARED_SECRET, mailsleutel });
 }
@@ -4451,19 +4463,75 @@ async function mailAdresVan(env, wie) {
    aanvinkt bedoelt dat ook, en een mailtegel die elke ochtend om een
    wachtwoord vraagt gebruikt niemand. De sleutel staat op het toestel en is
    zonder dat toestel niets waard. */
-async function mailSleutelGeef(env, wie) {
+async function mailSleutelGeef(env, wie, logic4) {
   const sleutel = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("mailsleutel:" + sleutel,
-    JSON.stringify({ wie: String(wie).toLowerCase(), sinds: new Date().toISOString() }),
+    JSON.stringify({
+      wie: String(wie).toLowerCase(),
+      sinds: new Date().toISOString(),
+      /* Het Logic4-token van déze gebruiker, met zijn eigen rechten. Leeft een
+         uur; de sleutel zelf dertig dagen. Daarna werkt de mailtegel nog wel
+         (die gaat langs Exchange) maar het opvragen van Logic4-gegevens niet
+         meer, en dat is precies de bedoeling. */
+      l4token: logic4 && logic4.token ? logic4.token : null,
+      l4tot: logic4 && logic4.tot ? logic4.tot : 0,
+    }),
     { expirationTtl: 2592000 });
   return sleutel;
 }
 
-async function mailSleutelWie(env, request) {
+async function mailSleutelLees(env, request) {
   const sleutel = String(request.headers.get("X-Fonteyn-Mail") || "").trim();
-  if (!sleutel || sleutel.length > 100) return "";
-  const j = await env.FONTEYN_DATA.get("mailsleutel:" + sleutel, { type: "json" });
+  if (!sleutel || sleutel.length > 100) return null;
+  return await env.FONTEYN_DATA.get("mailsleutel:" + sleutel, { type: "json" });
+}
+
+async function mailSleutelWie(env, request) {
+  const j = await mailSleutelLees(env, request);
   return j && j.wie ? j.wie : "";
+}
+
+/* Gegevens ophalen uit Logic4 zonder het hulpprogramma van de pc.
+   Op een werkplek loopt dit langs poort 3737, met het Logic4-token van de
+   ingelogde gebruiker. Op een telefoon bestaat dat niet, dus doet de worker
+   het - met hetzelfde token, dat bij het inloggen is bewaard.
+
+   Alleen lezen. Het pad moet er precies uitzien als /v3/Iets/GetIets: een
+   vaste vorm in plaats van een lijst endpoints, want zo'n lijst raakt
+   achterop en dan staat er ineens iets open dat er niet hoort. Boeken,
+   wijzigen en verwijderen gaan hier dus niet langs; dat blijft op de pc, waar
+   iemand achter zijn bureau zit. */
+const LOGIC4_LEES = /^\/v(?:1|1\.1|2|3)\/[A-Za-z0-9]+\/Get[A-Za-z0-9]+$/;
+
+async function logic4Lees(env, request, body) {
+  const sessie = await mailSleutelLees(env, request);
+  if (!sessie || !sessie.wie) {
+    return reply(401, { ok: false, error: "opnieuw-inloggen",
+                        uitleg: "De sleutel ontbreekt of is verlopen." });
+  }
+  const pad = String(body.path || "");
+  if (!LOGIC4_LEES.test(pad)) {
+    return reply(403, { ok: false, error: "alleen-opvragen",
+                        uitleg: "Buiten de werkplek kan het dashboard gegevens opvragen maar niets wijzigen." });
+  }
+  if (!sessie.l4token || Date.now() > Number(sessie.l4tot || 0)) {
+    return reply(401, { ok: false, error: "logic4-verlopen",
+                        uitleg: "Je verbinding met Logic4 is verlopen. Log opnieuw in, dan werkt het weer." });
+  }
+
+  const r = await fetch("https://api.logic4server.nl" + pad, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + sessie.l4token, "Content-Type": "application/json" },
+    body: JSON.stringify(body.body === undefined ? {} : body.body),
+  }).catch(e => null);
+  if (!r) return reply(502, { ok: false, error: "logic4-onbereikbaar" });
+
+  const tekst = await r.text();
+  let data = null;
+  try { data = JSON.parse(tekst); } catch (e) { data = tekst; }
+  /* Dezelfde vorm als het hulpprogramma teruggeeft, zodat de tegels niets
+     hoeven te merken van welke kant het antwoord komt. */
+  return reply(200, { ok: r.ok, status: r.status, data });
 }
 
 /* Postvak in, of een andere vaste map. Alleen de mappen die Exchange bij
@@ -4930,6 +4998,14 @@ export default {
         }
       }
       return reply(200, { ok: true, host, uit });
+    }
+
+    /* Gegevens opvragen uit Logic4 zonder het hulpprogramma van de pc.
+       Zelfde vorm als /api/logic4-call daar, zodat de tegels niet hoeven te
+       weten waar het antwoord vandaan komt - alleen opvragen, nooit wijzigen. */
+    if (url.pathname === "/logic4/lees" && request.method === "POST") {
+      const b = await request.json().catch(() => ({}));
+      return logic4Lees(env, request, b);
     }
 
     /* ── De mailtegel ────────────────────────────────────────────────
