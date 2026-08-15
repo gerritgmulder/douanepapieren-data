@@ -139,6 +139,26 @@
     body{background:#fff}
     .ctr-kaart{break-inside:avoid}
   }
+
+  /* ── Smal scherm ───────────────────────────────────────────────────
+     De regel per model is kleur, naam, "past er zoveel in" en de teller
+     naast elkaar. Op een telefoon paste dat niet: de plusknop en het
+     aantalveld vielen rechts buiten beeld, en juist die heb je nodig als je
+     in de loods staat te tellen. Onder 560 pixels breekt de regel daarom af
+     en komt de teller op een eigen regel te staan, rechts uitgelijnd. */
+  @media (max-width:560px){
+    .mrij{flex-wrap:wrap;row-gap:4px}
+    .mrij .naam{flex:1 1 60%}
+    .mrij .naam b{white-space:normal}
+    .mrij .past{flex:0 1 auto;text-align:left}
+    .mrij .past b{display:inline;margin-right:4px}
+    .teller{margin-left:auto}
+    .teller button{width:34px;height:34px;font-size:17px}
+    .teller input{width:52px;padding:7px 2px;font-size:14px}
+    .lrij{flex-wrap:wrap;row-gap:2px}
+    .instel{gap:12px}
+    .knoppen{gap:6px}
+  }
 </style>
 </head>
 <body>
