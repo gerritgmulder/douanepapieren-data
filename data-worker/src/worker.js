@@ -4874,7 +4874,14 @@ export default {
       if (bestand.endsWith(".png") || bestand.endsWith(".jpg") || bestand.endsWith(".ico"))
         return new Response(await r.arrayBuffer(), { status: 200, headers: kop });
       let t = await r.text();
-      if (bestand.endsWith(".html")) t = t.replace(/"dashboard\.html"/g, '"./"');
+      if (bestand.endsWith(".html")) {
+        t = t.replace(/"dashboard\.html"/g, '"./"');
+        /* De brug moet vóór al het andere draaien: hij vangt de aanroepen op
+           naar het hulpprogramma dat hier niet bestaat. Deed hij dat niet, dan
+           wist een tegel de sessie zodra die aanroep mislukte en stond je weer
+           op het inlogscherm - en na opnieuw inloggen meteen weer. */
+        t = t.replace(/<head([^>]*)>/i, '<head$1><script src="mobiel-brug.js"></script>');
+      }
       return new Response(t, { status: 200, headers: kop });
     }
 

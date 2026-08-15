@@ -1,5 +1,5 @@
 {
-  "version": "0.18.0",
+  "version": "0.18.1",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -240,6 +240,14 @@
     {
       "name": "app-icoon.png",
       "note": "Het app-icoon op het beginscherm - hetzelfde als de app op de pc (build/icon.png)."
+    },
+    {
+      "name": "mobiel-brug.js",
+      "note": "Vangt aanroepen op naar het hulpprogramma dat alleen op de pc draait, zodat een tegel de sessie niet weggooit als dat programma er niet is."
+    },
+    {
+      "name": "app-icoon-180.png",
+      "note": "Het app-icoon, zonder doorzichtige hoeken - iOS zet daar anders zwart achter."
     }
   ]
 }

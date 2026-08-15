@@ -12,8 +12,8 @@
 <!-- Hetzelfde icoon als de app op de pc: build/icon.png, hier als app-icoon.png
      naast de andere bestanden zodat de worker hem kan meesturen. iOS pakt de
      apple-touch-icon, Android het manifest. -->
-<link rel="apple-touch-icon" href="app-icoon.png">
-<link rel="icon" type="image/png" href="app-icoon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="app-icoon-180.png">
+<link rel="icon" type="image/png" sizes="180x180" href="app-icoon-180.png">
 <link rel="manifest" href="mobiel.webmanifest">
 <!-- Dezelfde twee lijsten als de pc: wie in welke groep zit, en welke tegel bij
      welke groep hoort. tools/tegels-gelijk.mjs bewaakt dat ze niet uit elkaar
@@ -145,7 +145,7 @@ main{flex:1;padding:16px;padding-bottom:calc(30px + env(safe-area-inset-bottom))
         </label>
         <label class="blijf">
           <input type="checkbox" id="vBlijf" checked>
-          Ingelogd blijven op dit toestel
+          Ingelogd blijven
         </label>
         <button type="submit" id="knopInlog">Inloggen</button>
       </form>
@@ -160,17 +160,12 @@ main{flex:1;padding:16px;padding-bottom:calc(30px + env(safe-area-inset-bottom))
   </header>
   <main>
     <div id="tegelblok"></div>
-    <div class="uitleg">
-      <b>Op je beginscherm zetten.</b> Op de iPhone: het deelknopje onderin Safari, dan
-      "Zet op beginscherm". Op Android: de drie puntjes rechtsboven in Chrome, dan
-      "Toevoegen aan startscherm". Daarna opent het als een app, zonder adresbalk.
-    </div>
   </main>
 </div>
 
 <div id="waarschuwing">
   <div class="kaart">
-    <h3 id="wsTitel">Deze tegel is gemaakt voor een pc</h3>
+    <h3 id="wsTitel">Deze tegel wil een groot scherm</h3>
     <p id="wsTekst"></p>
     <div class="knoppen">
       <button id="wsTerug">Laat maar</button>
@@ -244,9 +239,9 @@ function voornaam(wie){
 }
 
 var KOPPEN = {
-  goed: "Werkt op je telefoon",
+  goed: "Direct bruikbaar",
   krap: "Werkt, maar is aan de brede kant",
-  pc:   "Gemaakt voor een pc",
+  pc:   "Beter op een groot scherm",
 };
 
 function toonDash(){
@@ -287,8 +282,8 @@ function toonDash(){
     a.onclick = function(e){
       e.preventDefault();
       el("wsTekst").textContent = a.dataset.naam + " is gebouwd voor een breed scherm, en een deel " +
-        "ervan werkt alleen met het hulpprogramma dat op de pc draait. Openen kan, maar reken erop " +
-        "dat je moet schuiven en dat niet alles werkt.";
+        "ervan haalt zijn gegevens op bij het programma dat op de werkplek draait. Openen kan, " +
+        "maar reken erop dat je moet schuiven en dat niet alles werkt.";
       el("wsDoor").onclick = function(){ location.href = a.getAttribute("href"); };
       el("waarschuwing").classList.add("aan");
     };
