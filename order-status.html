@@ -257,6 +257,18 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
      een tabel. Boven de 760 pixels verandert er niets. */
   @media (max-width: 760px) {
     body { font-size: 15px; }
+
+    /* De kopbalk paste niet: logo, titel, naam en twee knoppen naast elkaar
+       liepen zo over de rand heen dat "Ingelogd als" half wegviel. Op een
+       smal scherm mag hij afbreken, en het logo en de naam kunnen weg - wie
+       op zijn eigen telefoon kijkt weet wie hij is. */
+    header { flex-wrap: wrap; gap: 8px 10px; padding: 10px 14px; }
+    header img.logo { display: none; }
+    header h1 { font-size: 15px; }
+    header .right { gap: 8px; }
+    header .user-chip { display: none; }
+    header .back-link { padding: 6px 10px; font-size: 12px; }
+
     .results-table, .results-table tbody, .results-table tr, .results-table td { display: block; width: 100%; }
     .results-table thead { display: none; }
     .results-table tr {
