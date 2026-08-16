@@ -4788,6 +4788,54 @@ async function urenLijst(env, wie, maandParam) {
   return { ok: true, maand, regels: mijn, bezig: await urenLopend(env, wie) };
 }
 
+/* Wie de uren van iedereen mag inzien. Dezelfde twee als in toegang.js, die
+   bepaalt wie de knop ziet; hier staat het nog een keer, want een scherm mag
+   zichzelf niet bewaken als het om de gegevens van collega's gaat. Wie hier
+   niet in staat krijgt zijn eigen uren en verder niets - ook niet als hij de
+   route rechtstreeks aanroept. */
+const UREN_ALLEMAAL = new Set([
+  "dolf@fonteyn.nl", "dolf", "fonteyn.dolf",
+  "gerrit@fonteyn.nl", "gerrit", "fonteyn.gerrit",
+  "fonteynbot@fonteyn.nl", "fonteynbot", "fonteyn.bot",
+]);
+
+/* Het overzicht van iedereen: per persoon een totaal, en de regels erbij.
+   Bedoeld om te zien wie hoeveel heeft gewerkt, niet om te controleren waar
+   iemand op welk moment was - vandaar totalen voorop en de regels eronder. */
+async function urenIedereen(env, wie, maandParam) {
+  if (!UREN_ALLEMAAL.has(String(wie).toLowerCase())) {
+    return { ok: false, error: "niet-gemachtigd" };
+  }
+  const maand = /^uren-\d{4}-\d{2}$/.test(maandParam || "") ? maandParam : urenMaand();
+  const data = await urenLees(env, maand);
+  const regels = (data.regels || []).slice()
+    .sort((a, b) => String(b.start).localeCompare(String(a.start)));
+
+  const perPersoon = new Map();
+  for (const r of regels) {
+    const p = perPersoon.get(r.wie) || { wie: r.wie, minuten: 0, regels: [] };
+    p.minuten += r.minuten || 0;
+    p.regels.push(r);
+    perPersoon.set(r.wie, p);
+  }
+  const mensen = [...perPersoon.values()].sort((a, b) => b.minuten - a.minuten);
+
+  /* Wie er nu aan het werk is. Dat staat per persoon apart opgeslagen, dus
+     even langs de sleutels die met urenloopt: beginnen. */
+  const bezig = [];
+  try {
+    const lijst = await env.FONTEYN_DATA.list({ prefix: "urenloopt:" });
+    for (const k of lijst.keys) {
+      const j = await env.FONTEYN_DATA.get(k.name, { type: "json" });
+      if (j) bezig.push({ wie: k.name.slice("urenloopt:".length), start: j.start,
+                          omschrijving: j.omschrijving || "" });
+    }
+  } catch (e) { /* niet kunnen zien wie er loopt is geen reden om alles te weigeren */ }
+
+  return { ok: true, maand, mensen, bezig,
+           totaal: mensen.reduce((n, m) => n + m.minuten, 0) };
+}
+
 /* Een regel bijstellen of weghalen. Alleen je eigen regels, en de tijden
    moeten kloppen - een eind vóór het begin levert negatieve uren op en die
    sluipen anders zo een overzicht in. */
@@ -5141,6 +5189,10 @@ export default {
 
       if (url.pathname === "/uren/lijst" && request.method === "GET")
         return reply(200, await urenLijst(env, wie, url.searchParams.get("maand")));
+      if (url.pathname === "/uren/iedereen" && request.method === "GET") {
+        const r = await urenIedereen(env, wie, url.searchParams.get("maand"));
+        return reply(r.ok ? 200 : 403, r);
+      }
       if (url.pathname === "/uren/start" && request.method === "POST")
         return reply(200, await urenStart(env, wie, b.omschrijving));
       if (url.pathname === "/uren/stop" && request.method === "POST")

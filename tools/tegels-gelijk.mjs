@@ -82,7 +82,43 @@ for (const t of tegels.lijst) {
   }
 }
 
-// 5. Bouwen beide dashboards nog uit dezelfde lijst? Zodra een van de twee
+/* 5. Sommige lijsten staan met opzet twee keer: in toegang.js voor wat je te
+      zien krijgt, en in de worker voor wat je echt mag. Dat tweede is nodig -
+      een scherm mag zichzelf niet bewaken bij andermans gegevens - maar twee
+      lijsten lopen uit elkaar, en dan mag iemand iets zien dat hij niet mag
+      opvragen, of andersom. */
+const worker = lees("data-worker/src/worker.js");
+const paren = [
+  { groep: "uren-allemaal", inWorker: "UREN_ALLEMAAL" },
+  { groep: "bankkoppeling", inWorker: "BANK_BOEKERS", losser: true },
+];
+for (const { groep, inWorker, losser } of paren) {
+  const m = worker.match(new RegExp("const " + inWorker + " = new Set\\(\\[([\\s\\S]*?)\\]\\)"));
+  if (!m) {
+    console.log(`ZOEK       ${inWorker} staat niet (meer) in de worker`);
+    fouten++;
+    continue;
+  }
+  const inCode = new Set([...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1].toLowerCase()));
+  const inLijst = toegang.set(groep);
+  const alleenLijst = [...inLijst].filter((x) => !inCode.has(x));
+  const alleenCode = [...inCode].filter((x) => !inLijst.has(x));
+  /* Bij de bankboekers mág de worker strenger zijn dan de tegel: admins zien
+     de tegel om mee te kijken maar hoeven niet te mogen boeken. Andersom is
+     wel altijd fout. */
+  if (alleenCode.length) {
+    console.log(`SCHEEF     ${inWorker} kent namen die niet in de groep "${groep}" staan:`);
+    console.log(`           ${alleenCode.join(", ")}`);
+    fouten++;
+  }
+  if (alleenLijst.length && !losser) {
+    console.log(`SCHEEF     groep "${groep}" kent namen die ${inWorker} niet kent:`);
+    console.log(`           ${alleenLijst.join(", ")}`);
+    fouten++;
+  }
+}
+
+// 6. Bouwen beide dashboards nog uit dezelfde lijst? Zodra een van de twee
 //    weer eigen regels krijgt, is de garantie weg.
 if (!/fpTegels\.voor\(/.test(dash)) {
   console.log("LOSGERAAKT dashboard.html bouwt zijn tegels niet meer uit tegels.js");

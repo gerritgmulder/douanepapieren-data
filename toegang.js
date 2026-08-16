@@ -147,6 +147,13 @@
       "nomi", "osman", "patrick", "reinier", "reinier.k", "rico",
       "rosalie", "rowan", "yves",
     ],
+    /* De uren van iedereen inzien. Bewust los van de groep "uren": daar zit
+       iedereen in, hier alleen Dolf en Gerrit. Dezelfde twee namen staan in
+       de worker (UREN_ALLEMAAL), want een scherm mag zichzelf niet bewaken
+       als het om de gegevens van collega's gaat. */
+    "uren-allemaal": [
+      "dolf", "fonteynbot", "gerrit",
+    ],
     // Personeel
     "personeel": [
       "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit",

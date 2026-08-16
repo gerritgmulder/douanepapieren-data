@@ -99,6 +99,35 @@ ul.dagen>li{margin-bottom:14px}
 
 .leeg{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:30px 20px;
       text-align:center;color:var(--grijs);line-height:1.6}
+
+/* De twee weergaven: eigen uren of die van iedereen. De tweede knop bestaat
+   alleen voor wie hem mag hebben; voor de rest is er niets te zien en niets
+   te vermoeden. */
+nav.weergaven{display:flex;gap:6px;margin-bottom:14px}
+nav.weergaven button{flex:1;background:var(--kaart);border:1px solid var(--rand);border-radius:10px;
+                     padding:11px;font:inherit;font-size:13.5px;cursor:pointer;color:var(--grijs)}
+nav.weergaven button.aan{background:var(--groen);border-color:var(--groen);color:#fff;font-weight:600}
+
+.nubezig{background:#fbfdf7;border:1px solid var(--lime);border-radius:12px;padding:13px 15px;
+         margin-bottom:14px;font-size:13.5px;line-height:1.6}
+.nubezig b{color:var(--groen)}
+.nubezig .stip{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--lime);
+               margin-right:7px;vertical-align:middle}
+
+.persoon{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;margin-bottom:9px;
+         overflow:hidden}
+.persoonkop{display:flex;align-items:center;gap:11px;padding:14px 15px;cursor:pointer}
+.persoonkop:active{background:#fafaf8}
+.persoonkop .naam{flex:1;font-weight:600;font-size:14.5px}
+.persoonkop .som{font-size:15px;font-weight:700;color:var(--groen);font-variant-numeric:tabular-nums}
+.persoonkop .pijl{color:var(--grijs);font-size:12px;transition:transform .15s}
+.persoon.open .persoonkop .pijl{transform:rotate(90deg)}
+.persoon .details{display:none;border-top:1px solid var(--rand)}
+.persoon.open .details{display:block}
+.persoon .details .regel{cursor:default}
+.persoon .details .regel:active{background:transparent}
+.persoon .details .dag{font-size:11px;color:var(--grijs);text-transform:uppercase;
+                       letter-spacing:.04em;padding:9px 15px 3px;background:#fafaf8}
 .fout{background:#fef2f2;border:1px solid #fecaca;color:var(--rood);border-radius:10px;
       padding:12px 14px;font-size:13px;line-height:1.5;margin-bottom:12px}
 .melding{background:#fff7ed;border:1px solid #fed7aa;color:var(--waarschuw);border-radius:10px;
@@ -136,6 +165,10 @@ ul.dagen>li{margin-bottom:14px}
 
 <main>
   <div id="melding"></div>
+  <nav class="weergaven" id="weergaven" style="display:none">
+    <button data-w="eigen" class="aan">Mijn uren</button>
+    <button data-w="iedereen">Iedereen</button>
+  </nav>
 
   <div class="klok" id="klok">
     <div class="tijd" id="tijd">0:00</div>
@@ -147,7 +180,7 @@ ul.dagen>li{margin-bottom:14px}
   </div>
 
   <div class="balk">
-    <h2>Deze maand</h2>
+    <h2 id="balkTitel">Deze maand</h2>
     <span class="totaal" id="totaal"></span>
     <select id="maand"></select>
   </div>
@@ -179,6 +212,7 @@ var regels = [];
 var maandNu = "";
 var bewerkt = null;    // de regel die in het venster openstaat, of null bij nieuw
 var tikker = null;
+var weergave = "eigen";   // "eigen" of "iedereen"
 
 function el(id){ return document.getElementById(id); }
 function sleutel(){ return localStorage.getItem("fp.mailkey") || ""; }
@@ -322,16 +356,106 @@ function vulMaanden(){
   s.onchange = function(){ maandNu = s.value; haal(); };
 }
 
+/* ── Het overzicht van iedereen ────────────────────────────────────────
+   Alleen voor wie er in de groep staat. De knop verschijnt niet voor de
+   rest, en de worker geeft de gegevens ook niet als je het toch probeert. */
+
+function voornaam(wie){
+  if (!wie) return "";
+  var lokaal = String(wie).split("@")[0].replace(/^fonteyn\./i, "");
+  return lokaal.split(/[.\-_]/).filter(Boolean).map(function(d){
+    return d.charAt(0).toUpperCase() + d.slice(1).toLowerCase(); }).join(" ");
+}
+
+function tekenIedereen(data){
+  var uit = "";
+
+  if (data.bezig && data.bezig.length) {
+    uit += '<div class="nubezig"><span class="stip"></span><b>Nu aan het werk:</b> ' +
+      data.bezig.map(function(b){
+        var min = (Date.now() - new Date(b.start)) / 60000;
+        return tekst(voornaam(b.wie)) + " (" + duur(min) + ")" +
+               (b.omschrijving ? " - " + tekst(b.omschrijving) : "");
+      }).join(", ") + "</div>";
+  }
+
+  if (!data.mensen.length) {
+    el("lijst").innerHTML = uit + '<div class="leeg">Nog geen uren geregistreerd deze maand.</div>';
+    el("totaal").textContent = "";
+    return;
+  }
+  el("totaal").textContent = duur(data.totaal) + " totaal";
+
+  uit += data.mensen.map(function(p, i){
+    /* Per persoon de regels op dag groeperen, zodat een maand met zestig
+       regels nog te lezen is. Dichtgeklapt zie je alleen het totaal. */
+    var perDag = [], laatste = null;
+    p.regels.forEach(function(r){
+      var d = dagSleutel(r.start);
+      if (!laatste || laatste.dag !== d) { laatste = { dag:d, iso:r.start, regels:[] }; perDag.push(laatste); }
+      laatste.regels.push(r);
+    });
+    return "<div class='persoon' data-i='" + i + "'>" +
+      "<div class='persoonkop'><span class='pijl'>&#9654;</span>" +
+      "<span class='naam'>" + tekst(voornaam(p.wie)) + "</span>" +
+      "<span class='som'>" + duur(p.minuten) + "</span></div>" +
+      "<div class='details'>" + perDag.map(function(dag){
+        var som = dag.regels.reduce(function(n,r){ return n + (r.minuten||0); }, 0);
+        return "<div class='dag'>" + tekst(dagNaam(dag.iso)) + " &middot; " + duur(som) + "</div>" +
+          dag.regels.map(function(r){
+            return "<div class='regel'>" +
+              "<span class='tijden'>" + klokTijd(r.start) + " - " + klokTijd(r.eind) + "</span>" +
+              "<span class='wat" + (r.omschrijving ? "" : " leeg") + "'>" +
+                tekst(r.omschrijving || "geen omschrijving") + "</span>" +
+              (r.metDeHand ? "<span class='hand'>hand</span>" : "") +
+              "<span class='duur'>" + duur(r.minuten||0) + "</span></div>";
+          }).join("");
+      }).join("") + "</div></div>";
+  }).join("");
+
+  el("lijst").innerHTML = uit;
+  Array.prototype.forEach.call(el("lijst").querySelectorAll(".persoon"), function(p){
+    p.querySelector(".persoonkop").onclick = function(){ p.classList.toggle("open"); };
+  });
+}
+
 async function haal(){
-  var r = await roep("/uren/lijst" + (maandNu ? "?maand=" + encodeURIComponent(maandNu) : ""));
+  var vraag = (weergave === "iedereen" ? "/uren/iedereen" : "/uren/lijst") +
+              (maandNu ? "?maand=" + encodeURIComponent(maandNu) : "");
+  var r = await roep(vraag);
+
+  /* Niet gemachtigd hoort niet voor te komen - de knop bestaat dan niet -
+     maar als het toch gebeurt vallen we terug op de eigen uren in plaats van
+     een leeg scherm te tonen. */
+  if (!r.ok && r.error === "niet-gemachtigd") { zetWeergave("eigen"); return; }
   if (toonFout(r)) { el("lijst").innerHTML = ""; return; }
-  regels = r.regels || [];
-  bezig = r.bezig || null;
+
   maandNu = r.maand;
   vulMaanden();
   el("maand").value = maandNu;
-  tekenKlok();
-  tekenLijst();
+
+  if (weergave === "iedereen") {
+    tekenIedereen(r);
+  } else {
+    regels = r.regels || [];
+    bezig = r.bezig || null;
+    tekenKlok();
+    tekenLijst();
+  }
+}
+
+function zetWeergave(w){
+  weergave = w;
+  Array.prototype.forEach.call(el("weergaven").querySelectorAll("button"), function(b){
+    b.classList.toggle("aan", b.dataset.w === w);
+  });
+  /* De klok hoort bij je eigen uren; bij het overzicht van iedereen zou hij
+     alleen maar in de weg staan. */
+  el("klok").style.display = w === "eigen" ? "" : "none";
+  el("knopHand").style.display = w === "eigen" ? "" : "none";
+  el("balkTitel").textContent = w === "eigen" ? "Deze maand" : "Iedereen";
+  el("lijst").innerHTML = '<div class="bezig">Bezig…</div>';
+  haal();
 }
 
 el("knopKlok").onclick = async function(){
@@ -413,6 +537,18 @@ el("bewerkWeg").onclick = async function(){
 document.addEventListener("visibilitychange", function(){
   if (!document.hidden) haal();
 });
+
+/* De knop "Iedereen" alleen voor wie in die groep staat. Dat de knop er voor
+   anderen niet is, is geen beveiliging - dat doet de worker - maar het scheelt
+   wel dat niemand zich hoeft af te vragen wat daar zou staan. */
+(function(){
+  var ik = (localStorage.getItem("fp.email") || "").toLowerCase();
+  if (!window.fpToegang || !fpToegang.mag("uren-allemaal", ik)) return;
+  el("weergaven").style.display = "";
+  Array.prototype.forEach.call(el("weergaven").querySelectorAll("button"), function(b){
+    b.onclick = function(){ if (weergave !== b.dataset.w) zetWeergave(b.dataset.w); };
+  });
+})();
 
 startTikker();
 haal();
