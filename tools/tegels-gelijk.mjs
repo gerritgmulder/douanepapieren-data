@@ -57,7 +57,24 @@ for (const id of inHtml) {
   }
 }
 
-// 3. Verwijst elke tegel naar een groep die bestaat?
+/* 3. Staat een groep twee keer in toegang.js? Dat is een stille val: in een
+      object-literal wint de laatste sleutel, dus je kunt een naam bijschrijven
+      in de bovenste en er verandert niets. Precies dat gebeurde op 14 aug 2026
+      bij partnerportaal-kijk. */
+const bron = lees("toegang.js");
+const geteld = new Map();
+for (const m of bron.matchAll(/^\s{4}"([a-z0-9-]+)":\s*\[/gm)) {
+  geteld.set(m[1], (geteld.get(m[1]) ?? 0) + 1);
+}
+for (const [groep, aantal] of geteld) {
+  if (aantal > 1) {
+    console.log(`DUBBEL     "${groep}" staat ${aantal}x in toegang.js`);
+    console.log(`           Alleen de laatste telt; namen in de eerste doen niets.`);
+    fouten++;
+  }
+}
+
+// 4. Verwijst elke tegel naar een groep die bestaat?
 for (const t of tegels.lijst) {
   if (!toegang.groepen[t.groep]) {
     console.log(`GEEN GROEP ${t.bestand} verwijst naar "${t.groep}", die niet in toegang.js staat`);
@@ -65,7 +82,7 @@ for (const t of tegels.lijst) {
   }
 }
 
-// 4. Bouwen beide dashboards nog uit dezelfde lijst? Zodra een van de twee
+// 5. Bouwen beide dashboards nog uit dezelfde lijst? Zodra een van de twee
 //    weer eigen regels krijgt, is de garantie weg.
 if (!/fpTegels\.voor\(/.test(dash)) {
   console.log("LOSGERAAKT dashboard.html bouwt zijn tegels niet meer uit tegels.js");

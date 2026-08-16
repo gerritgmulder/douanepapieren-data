@@ -64,13 +64,6 @@
       "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
       "reinier", "reinier.k", "rico", "rowan",
     ],
-    /* Passion Partners - het dealerportaal zoals een dealer het ziet.
-       Gerrit en Fonteynbot ontbraken hier, terwijl zij overal bij horen. Dat
-       is niet door de omzetting naar tegels.js gekomen (de oude regel keek
-       naar precies dezelfde groep), maar het viel wel toen pas op. */
-    "partnerportaal-kijk": [
-      "dolf", "fonteynbot", "gerrit", "gretha", "manon",
-    ],
     /* Logic4-probe. Stond niet als groep maar als losse if in dashboard.html
        ("gerrit of fonteynbot"). Nu hier, zodat de telefoon en de pc dezelfde
        regel gebruiken en er niet één van beide achterloopt. */
@@ -139,7 +132,10 @@
     ],
     // Partnerportaal meekijken
     "partnerportaal-kijk": [
-      "dolf", "gretha", "manon",
+      /* Gerrit en Fonteynbot stonden hier niet in, terwijl zij overal bij
+         horen. Dat kwam niet door de omzetting naar tegels.js - de oude regel
+         keek naar precies dezelfde groep - maar het viel toen wel pas op. */
+      "dolf", "fonteynbot", "gerrit", "gretha", "manon",
     ],
     // Personeel
     "personeel": [
