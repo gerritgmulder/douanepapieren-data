@@ -62,6 +62,11 @@ const ALLOWED_BUCKETS = new Set([
   // De persoonlijke mailsleutels staan hier NIET in - die krijgen een eigen
   // sleutel met vervaldatum en zijn daarmee via /data niet op te vragen.
   "mail-adressen",
+  /* uren-codes en de maandbestanden staan hier NIET. In uren-codes zitten de
+     afgeleiden van de persoonlijke codes, en in de maanden staat wie wanneer
+     waar was; dat hoort niet met de teamsleutel op te vragen te zijn. Het gaat
+     via /uren/, langs de persoonlijke sleutel. */
+  "uren-instellingen",
   // De bezorgingen waarvoor een klant een volglink heeft gekregen: code →
   // naam, adres, welke wagen en welke dag. Alleen de code opent de pagina, dus
   // die moet lang genoeg zijn om niet te raden te zijn.
@@ -4730,6 +4735,121 @@ async function mailProef(env, adres) {
    persoonlijke sleutel en die ligt vast aan één naam. Een andere naam
    meesturen levert niets op.                                            */
 
+/* ── Persoonlijke code ────────────────────────────────────────────────
+   Om voor een collega te kunnen klokken. Nomi geeft haar code aan Manon,
+   Manon klokt haar in, en beide namen komen in de regel te staan.
+
+   De code wordt niet bewaard, alleen een afgeleide ervan met een eigen zout
+   en honderdduizend rondes. Wie bij de opslag kan - en dat is niemand behalve
+   de beheerder - kan er dus nog steeds niet mee klokken. Dat is geen luxe:
+   zonder die stap zou één blik in de opslag genoeg zijn om voor iedereen in
+   te klokken, en dan is het hele systeem een formaliteit. */
+
+async function codeAfgeleide(code, zoutHex) {
+  const enc = new TextEncoder();
+  const zout = Uint8Array.from(zoutHex.match(/../g).map(h => parseInt(h, 16)));
+  const sleutel = await crypto.subtle.importKey("raw", enc.encode(code), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: zout, iterations: 100000, hash: "SHA-256" }, sleutel, 256);
+  return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function nieuwZout() {
+  return [...crypto.getRandomValues(new Uint8Array(16))]
+    .map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function urenCodes(env) {
+  return (await env.FONTEYN_DATA.get("uren-codes", { type: "json" })) || {};
+}
+
+/* Een code instellen of wijzigen. Wie er al een heeft moet de oude kennen -
+   anders zou wie even bij een openstaand scherm komt de code van een ander
+   kunnen omzetten en daarna vrij spel hebben. Kwijt? Dan zet Dolf of Gerrit
+   hem terug op nul. */
+async function urenCodeZetten(env, wie, oud, nieuw) {
+  const code = String(nieuw || "").trim();
+  if (!/^\d{4,8}$/.test(code)) {
+    return { ok: false, error: "code-vorm",
+             uitleg: "Een code is vier tot acht cijfers." };
+  }
+  if (/^(\d)\1+$/.test(code) || "0123456789".includes(code) || "9876543210".includes(code)) {
+    return { ok: false, error: "code-te-simpel",
+             uitleg: "Kies iets anders dan alleen dezelfde cijfers of een rijtje." };
+  }
+  const alles = await urenCodes(env);
+  const bestaand = alles[wie];
+  if (bestaand) {
+    if (!oud) return { ok: false, error: "oude-code-nodig" };
+    const proef = await codeAfgeleide(String(oud), bestaand.zout);
+    if (proef !== bestaand.hash) return { ok: false, error: "oude-code-klopt-niet" };
+  }
+  const zout = nieuwZout();
+  alles[wie] = { zout, hash: await codeAfgeleide(code, zout), gezet: new Date().toISOString() };
+  await env.FONTEYN_DATA.put("uren-codes", JSON.stringify(alles));
+  return { ok: true };
+}
+
+async function urenCodeKlopt(env, wie, code) {
+  const alles = await urenCodes(env);
+  const r = alles[wie];
+  if (!r) return false;
+  return (await codeAfgeleide(String(code || ""), r.zout)) === r.hash;
+}
+
+/* Voor wie kun je klokken: iedereen die een code heeft ingesteld. Zonder
+   code kan het niet, dus die lijst is precies de goede. Er gaan geen codes
+   of afgeleiden mee terug, alleen namen. */
+async function urenCollegas(env, ik) {
+  const alles = await urenCodes(env);
+  return { ok: true, namen: Object.keys(alles).filter(n => n !== ik).sort() };
+}
+
+/* ── Waar iemand was ──────────────────────────────────────────────────
+   De browser vraagt zelf toestemming voordat hij een locatie afgeeft, dus
+   dit kan niet buiten iemand om. Geeft iemand geen toestemming, dan wordt de
+   regel gewoon opgeslagen met de vermelding dat er geen locatie was; dat is
+   eerlijker dan het klokken weigeren.
+
+   Naast de coördinaten gaat de afstand tot de vestiging mee. Dat is meestal
+   het enige waar iemand naar kijkt - was je op de zaak of niet - en het is te
+   lezen zonder een kaart erbij te halen. */
+
+function afstandMeter(lat1, lon1, lat2, lon2) {
+  const R = 6371000, r = Math.PI / 180;
+  const dLat = (lat2 - lat1) * r, dLon = (lon2 - lon1) * r;
+  const a = Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLon / 2) ** 2;
+  return Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+}
+
+async function urenVestiging(env) {
+  const i = (await env.FONTEYN_DATA.get("uren-instellingen", { type: "json" })) || {};
+  return i.vestiging || null;   // { lat, lon, naam, straal }
+}
+
+async function urenPlaats(env, loc) {
+  if (!loc || typeof loc.lat !== "number" || typeof loc.lon !== "number") {
+    return { gegeven: false, reden: (loc && String(loc.reden || "").slice(0, 40)) || "niet gedeeld" };
+  }
+  const plek = {
+    gegeven: true,
+    lat: Math.round(loc.lat * 1e5) / 1e5,
+    lon: Math.round(loc.lon * 1e5) / 1e5,
+    nauwkeurig: Math.round(Number(loc.nauwkeurig) || 0),
+  };
+  const v = await urenVestiging(env);
+  if (v) {
+    plek.afstand = afstandMeter(plek.lat, plek.lon, v.lat, v.lon);
+    /* De meetfout telt mee. Staat iemand op tweehonderd meter met een
+       nauwkeurigheid van driehonderd, dan is "niet op de zaak" een conclusie
+       die de meting niet draagt. */
+    plek.opZaak = plek.afstand - plek.nauwkeurig <= (v.straal || 300);
+    plek.vestiging = v.naam || "";
+  }
+  return plek;
+}
+
 function urenMaand(d) {
   const dt = d ? new Date(d) : new Date();
   return "uren-" + dt.getUTCFullYear() + "-" + String(dt.getUTCMonth() + 1).padStart(2, "0");
@@ -4743,38 +4863,82 @@ async function urenLopend(env, wie) {
   return await env.FONTEYN_DATA.get("urenloopt:" + wie, { type: "json" });
 }
 
+/* Voor wie wordt er geklokt, en mag dat? Zonder namens is het gewoon jezelf.
+   Klok je voor een collega, dan moet je diens code kennen én laat je je eigen
+   naam achter in de regel. Frauderen kan dus niet alleen: er staan altijd twee
+   namen onder. */
+async function urenWieVoor(env, request, ik, body) {
+  const namens = String(body.namens || "").trim().toLowerCase();
+  if (!namens || namens === ik) return { ok: true, voor: ik, door: null };
+
+  if (await rateLimited(env, request, "urencode", 10, 600)) {
+    return { ok: false, error: "te-veel-pogingen",
+             uitleg: "Te veel pogingen met een code. Probeer het over tien minuten opnieuw." };
+  }
+  const codes = await urenCodes(env);
+  if (!codes[namens]) {
+    return { ok: false, error: "geen-code-ingesteld",
+             uitleg: namens + " heeft nog geen eigen code ingesteld en kan dus niet door een ander geklokt worden." };
+  }
+  if (!(await urenCodeKlopt(env, namens, body.code))) {
+    console.log("[uren] verkeerde code: " + ik + " probeerde te klokken voor " + namens);
+    return { ok: false, error: "code-klopt-niet", uitleg: "Die code klopt niet." };
+  }
+  return { ok: true, voor: namens, door: ik };
+}
+
 /* Beginnen. Loopt er al iets, dan is dat geen fout maar een vergissing van
    gisteren: we geven terug wat er loopt en laten de gebruiker beslissen. */
-async function urenStart(env, wie, omschrijving) {
-  const bezig = await urenLopend(env, wie);
-  if (bezig) return { ok: false, error: "loopt-al", bezig };
-  const nu = new Date().toISOString();
-  const regel = { start: nu, omschrijving: String(omschrijving || "").slice(0, 200) };
-  await env.FONTEYN_DATA.put("urenloopt:" + wie, JSON.stringify(regel));
-  return { ok: true, bezig: regel };
+async function urenStart(env, request, ik, body) {
+  const w = await urenWieVoor(env, request, ik, body);
+  if (!w.ok) return w;
+
+  const bezig = await urenLopend(env, w.voor);
+  if (bezig) return { ok: false, error: "loopt-al", bezig, voor: w.voor };
+
+  const regel = {
+    start: new Date().toISOString(),
+    omschrijving: String(body.omschrijving || "").slice(0, 200),
+    plaats: await urenPlaats(env, body.locatie),
+  };
+  if (w.door) regel.startDoor = w.door;
+  await env.FONTEYN_DATA.put("urenloopt:" + w.voor, JSON.stringify(regel));
+  return { ok: true, bezig: regel, voor: w.voor };
 }
 
 /* Stoppen. De regel gaat naar de maand waarin hij begón - een dienst die
    over middernacht heen loopt hoort bij de dag dat je bent begonnen, anders
    valt hij in het overzicht van de verkeerde maand. */
-async function urenStop(env, wie, omschrijving) {
-  const bezig = await urenLopend(env, wie);
-  if (!bezig) return { ok: false, error: "niets-gestart" };
+async function urenStop(env, request, ik, body) {
+  const w = await urenWieVoor(env, request, ik, body);
+  if (!w.ok) return w;
+
+  const bezig = await urenLopend(env, w.voor);
+  if (!bezig) return { ok: false, error: "niets-gestart", voor: w.voor };
+
   const eind = new Date().toISOString();
   const maand = urenMaand(bezig.start);
   const data = await urenLees(env, maand);
   const regel = {
     id: crypto.randomUUID(),
-    wie,
+    wie: w.voor,
     start: bezig.start,
     eind,
     minuten: Math.max(0, Math.round((new Date(eind) - new Date(bezig.start)) / 60000)),
-    omschrijving: String(omschrijving !== undefined ? omschrijving : bezig.omschrijving || "").slice(0, 200),
+    omschrijving: String(body.omschrijving !== undefined ? body.omschrijving : bezig.omschrijving || "").slice(0, 200),
+    /* Waar er is aan- en afgeklokt, en door wie als dat niet de persoon zelf
+       was. Allebei apart: iemand kan door een collega worden ingeklokt en
+       zichzelf afklokken, en dan hoort dat er ook zo te staan. */
+    begonnen: bezig.plaats || { gegeven: false, reden: "onbekend" },
+    geeindigd: await urenPlaats(env, body.locatie),
   };
+  if (bezig.startDoor) regel.startDoor = bezig.startDoor;
+  if (w.door) regel.stopDoor = w.door;
+
   data.regels = (data.regels || []).concat([regel]);
   await env.FONTEYN_DATA.put(maand, JSON.stringify(data));
-  await env.FONTEYN_DATA.delete("urenloopt:" + wie);
-  return { ok: true, regel };
+  await env.FONTEYN_DATA.delete("urenloopt:" + w.voor);
+  return { ok: true, regel, voor: w.voor };
 }
 
 /* De eigen regels van een maand. Alleen die van deze persoon: het filter
@@ -5194,9 +5358,41 @@ export default {
         return reply(r.ok ? 200 : 403, r);
       }
       if (url.pathname === "/uren/start" && request.method === "POST")
-        return reply(200, await urenStart(env, wie, b.omschrijving));
+        return reply(200, await urenStart(env, request, wie, b));
       if (url.pathname === "/uren/stop" && request.method === "POST")
-        return reply(200, await urenStop(env, wie, b.omschrijving));
+        return reply(200, await urenStop(env, request, wie, b));
+      if (url.pathname === "/uren/collegas" && request.method === "GET")
+        return reply(200, await urenCollegas(env, wie));
+
+      /* De vestiging vastleggen: ga op de zaak staan en druk op de knop. Dat
+         is nauwkeuriger dan een adres opzoeken en het scheelt gedoe met
+         coördinaten. Alleen voor wie het overzicht mag zien. */
+      if (url.pathname === "/uren/vestiging" && request.method === "POST") {
+        if (!UREN_ALLEMAAL.has(String(wie).toLowerCase()))
+          return reply(403, { ok: false, error: "niet-gemachtigd" });
+        const lat = Number(b.lat), lon = Number(b.lon);
+        if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180)
+          return reply(200, { ok: false, error: "geen-locatie",
+                              uitleg: "Er kwam geen bruikbare locatie binnen." });
+        const i = (await env.FONTEYN_DATA.get("uren-instellingen", { type: "json" })) || {};
+        i.vestiging = { lat, lon, naam: String(b.naam || "de zaak").slice(0, 60),
+                        straal: Math.min(Math.max(Number(b.straal) || 300, 50), 5000),
+                        gezet: new Date().toISOString(), door: wie };
+        await env.FONTEYN_DATA.put("uren-instellingen", JSON.stringify(i));
+        return reply(200, { ok: true, vestiging: i.vestiging });
+      }
+      if (url.pathname === "/uren/vestiging" && request.method === "GET") {
+        if (!UREN_ALLEMAAL.has(String(wie).toLowerCase()))
+          return reply(403, { ok: false, error: "niet-gemachtigd" });
+        return reply(200, { ok: true, vestiging: await urenVestiging(env) });
+      }
+      if (url.pathname === "/uren/code" && request.method === "POST")
+        return reply(200, await urenCodeZetten(env, wie, b.oud, b.nieuw));
+      if (url.pathname === "/uren/code" && request.method === "GET") {
+        const codes = await urenCodes(env);
+        return reply(200, { ok: true, heeftCode: !!codes[wie],
+                            vestiging: !!(await urenVestiging(env)) });
+      }
       if (url.pathname === "/uren/toevoegen" && request.method === "POST")
         return reply(200, await urenToevoegen(env, wie, b));
       if (url.pathname === "/uren/wijzig" && request.method === "POST")

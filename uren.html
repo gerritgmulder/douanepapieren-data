@@ -75,6 +75,24 @@ main{max-width:820px;margin:0 auto;padding:16px;padding-bottom:calc(30px + env(s
        font:inherit;font-size:18px;font-weight:700;cursor:pointer;color:#12331f;background:var(--lime)}
 .grote.stop{background:var(--groen);color:#fff}
 .grote:disabled{background:#d1d5db;color:#6b7280}
+.tweede{display:block;width:100%;margin-top:9px;background:transparent;border:1px solid var(--rand);
+        border-radius:12px;padding:13px;font:inherit;font-size:13.5px;cursor:pointer;color:var(--grijs)}
+.plaatsje{margin-top:11px;font-size:12px;color:var(--grijs);line-height:1.5}
+.plaatsje .zaak{color:var(--groen);font-weight:600}
+.plaatsje .elders{color:var(--waarschuw);font-weight:600}
+
+/* Waar iemand was, in de regels van het overzicht. Klein en onder de tekst,
+   want het is achtergrond en niet het eerste wat je wilt lezen. */
+.waar{font-size:11.5px;color:var(--grijs);margin-top:3px;line-height:1.45}
+.waar .zaak{color:var(--groen)}
+.waar .elders{color:var(--waarschuw)}
+.waar .geen{color:var(--grijs);font-style:italic}
+.waar a{color:var(--groen)}
+.door{display:inline-block;background:#eef2ff;color:#3730a3;border-radius:999px;
+      padding:1px 7px;font-size:10.5px;font-weight:600;margin-left:6px}
+.regel{flex-wrap:wrap}
+.regel .wat{min-width:0}
+.regel .onder{flex:1 1 100%}
 
 .balk{display:flex;align-items:baseline;gap:10px;margin:22px 0 10px}
 .balk h2{margin:0;font-size:14px;font-weight:600;color:var(--groen);flex:1}
@@ -135,22 +153,28 @@ nav.weergaven button.aan{background:var(--groen);border-color:var(--groen);color
 .bezig{text-align:center;color:var(--grijs);padding:26px;font-size:13px}
 
 /* Een regel aanpassen of met de hand toevoegen. Zelfde venster voor allebei. */
-#bewerk{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:60;display:none;
-        align-items:flex-end;justify-content:center}
-#bewerk.aan{display:flex}
-#bewerk .kaart{background:var(--kaart);border-radius:16px 16px 0 0;width:100%;max-width:560px;
+#bewerk,#voorander,#codevenster{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:60;
+        display:none;align-items:flex-end;justify-content:center}
+#bewerk.aan,#voorander.aan,#codevenster.aan{display:flex}
+#bewerk .kaart,#voorander .kaart,#codevenster .kaart{
+               background:var(--kaart);border-radius:16px 16px 0 0;width:100%;max-width:560px;
                padding:20px;padding-bottom:calc(20px + env(safe-area-inset-bottom));
                max-height:92vh;overflow-y:auto}
-#bewerk h3{margin:0 0 14px;font-size:16px;color:var(--groen)}
-#bewerk label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--grijs);
+#bewerk h3,#voorander h3,#codevenster h3{margin:0 0 14px;font-size:16px;color:var(--groen)}
+#bewerk label,#voorander label,#codevenster label{
+              display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--grijs);
               font-weight:500;margin-bottom:11px}
-#bewerk input{border:1px solid var(--rand);border-radius:10px;padding:13px;font:inherit;
+#bewerk input,#voorander input,#voorander select,#codevenster input{
+              border:1px solid var(--rand);border-radius:10px;padding:13px;font:inherit;
               font-size:16px;background:#fff;color:var(--ink)}
-#bewerk input:focus{outline:none;border-color:var(--lime)}
-#bewerk .knoppen{display:flex;gap:8px;margin-top:6px}
-#bewerk .knoppen button{flex:1;border-radius:11px;padding:14px;font:inherit;font-size:14px;
+#bewerk input:focus,#voorander input:focus,#codevenster input:focus{outline:none;border-color:var(--lime)}
+#bewerk .knoppen,#voorander .knoppen,#codevenster .knoppen{display:flex;gap:8px;margin-top:6px}
+#bewerk .knoppen button,#voorander .knoppen button,#codevenster .knoppen button{
+                        flex:1;border-radius:11px;padding:14px;font:inherit;font-size:14px;
                         font-weight:600;cursor:pointer;border:1px solid var(--rand);background:var(--kaart)}
-#bewerk .knoppen button.doe{background:var(--groen);color:#fff;border-color:var(--groen)}
+#bewerk .knoppen button.doe,#voorander .knoppen button.doe,#codevenster .knoppen button.doe{
+                        background:var(--groen);color:#fff;border-color:var(--groen)}
+#voorander .uitleg,#codevenster .uitleg{margin:0 0 14px;font-size:12.5px;color:var(--grijs);line-height:1.6}
 #bewerk .weg{width:100%;margin-top:10px;background:transparent;border:none;color:var(--rood);
              font:inherit;font-size:13px;cursor:pointer;padding:10px}
 </style>
@@ -160,6 +184,7 @@ nav.weergaven button.aan{background:var(--groen);border-color:var(--groen);color
 <header>
   <a class="knop" href="dashboard.html">&larr;</a>
   <h1>Mijn uren</h1>
+  <button class="knop" id="knopCode">Mijn code</button>
   <button class="knop" id="knopHand">Met de hand</button>
 </header>
 
@@ -177,6 +202,8 @@ nav.weergaven button.aan{background:var(--groen);border-color:var(--groen);color
       <input type="text" id="waaraan" placeholder="Waar ben je mee bezig?" autocomplete="off">
     </div>
     <button class="grote" id="knopKlok">Start</button>
+    <button class="tweede" id="knopVoorAnder">Voor een collega klokken</button>
+    <div class="plaatsje" id="plaatsje"></div>
   </div>
 
   <div class="balk">
@@ -186,6 +213,46 @@ nav.weergaven button.aan{background:var(--groen);border-color:var(--groen);color
   </div>
   <div id="lijst"><div class="bezig">Bezig…</div></div>
 </main>
+
+<!-- Voor een collega klokken. Zij kiezen, hun code invullen, klaar. Beide
+     namen komen in de regel te staan. -->
+<div id="voorander">
+  <div class="kaart">
+    <h3>Voor een collega klokken</h3>
+    <p class="uitleg">Kies wie het is en laat diegene zelf de code intypen. Jouw naam komt
+      onder de regel te staan naast die van hem of haar.</p>
+    <div id="anderFout"></div>
+    <label>Wie<select id="vWie"></select></label>
+    <label>Diens code<input type="password" id="vCode" inputmode="numeric" autocomplete="off"
+                            placeholder="4 tot 8 cijfers"></label>
+    <label>Waaraan<input type="text" id="vAnderWat" autocomplete="off"
+                         placeholder="Waar gaat hij of zij mee bezig?"></label>
+    <div class="knoppen">
+      <button id="anderTerug">Laat maar</button>
+      <button class="doe" id="anderDoen">Inklokken</button>
+    </div>
+  </div>
+</div>
+
+<!-- Je eigen code instellen of wijzigen. -->
+<div id="codevenster">
+  <div class="kaart">
+    <h3 id="codeTitel">Je eigen code</h3>
+    <p class="uitleg">Met deze code kan een collega jou in- en uitklokken als jij je telefoon
+      niet bij je hebt. Geef hem alleen aan wie het echt voor je doet: wat er met jouw code
+      wordt geklokt staat op jouw naam, met die van de ander ernaast.</p>
+    <div id="codeFout"></div>
+    <label id="oudRegel" style="display:none">Je huidige code
+      <input type="password" id="vOudeCode" inputmode="numeric" autocomplete="off"></label>
+    <label>Nieuwe code<input type="password" id="vNieuweCode" inputmode="numeric"
+                             autocomplete="off" placeholder="4 tot 8 cijfers"></label>
+    <label>Nog een keer<input type="password" id="vNieuweCode2" inputmode="numeric" autocomplete="off"></label>
+    <div class="knoppen">
+      <button id="codeTerug">Laat maar</button>
+      <button class="doe" id="codeOpslaan">Opslaan</button>
+    </div>
+  </div>
+</div>
 
 <div id="bewerk">
   <div class="kaart">
@@ -213,6 +280,7 @@ var maandNu = "";
 var bewerkt = null;    // de regel die in het venster openstaat, of null bij nieuw
 var tikker = null;
 var weergave = "eigen";   // "eigen" of "iedereen"
+var vestigingGezet = false;
 
 function el(id){ return document.getElementById(id); }
 function sleutel(){ return localStorage.getItem("fp.mailkey") || ""; }
@@ -232,6 +300,43 @@ async function roep(pad, body){
 }
 
 function tekst(s){ var d=document.createElement("div"); d.textContent = s==null?"":s; return d.innerHTML; }
+
+/* Waar iemand was, als één regel onder de omschrijving. Een kaartlink alleen
+   als er echt coördinaten zijn; anders staat er waarom ze ontbreken. */
+function plaatsRegel(p, wat){
+  if (!p) return "";
+  if (!p.gegeven) return "<span class='geen'>" + tekst(wat) + ": " + tekst(p.reden || "geen locatie") + "</span>";
+  var kern;
+  if (p.opZaak) kern = "<span class='zaak'>op de zaak</span>";
+  else if (typeof p.afstand === "number")
+    kern = "<span class='elders'>" + (p.afstand > 1500
+      ? Math.round(p.afstand/100)/10 + " km van de zaak"
+      : p.afstand + " m van de zaak") + "</span>";
+  else kern = "vastgelegd";
+  var kaart = "https://www.openstreetmap.org/?mlat=" + p.lat + "&mlon=" + p.lon + "#map=17/" + p.lat + "/" + p.lon;
+  return tekst(wat) + ": " + kern +
+    " <a href='" + kaart + "' target='_blank' rel='noopener'>kaart</a>" +
+    (p.nauwkeurig ? " <span style='opacity:.7'>(&plusmn;" + p.nauwkeurig + " m)</span>" : "");
+}
+
+/* De onderregel van een uurregel: waar begonnen, waar geëindigd, en door wie
+   er geklokt is als dat iemand anders was. */
+function onderRegel(r){
+  var stukken = [];
+  var b = plaatsRegel(r.begonnen, "Start");
+  var e = plaatsRegel(r.geeindigd, "Eind");
+  if (b) stukken.push(b);
+  if (e) stukken.push(e);
+  if (!stukken.length) return "";
+  return "<div class='onder waar'>" + stukken.join(" &middot; ") + "</div>";
+}
+
+function doorWie(r){
+  var uit = "";
+  if (r.startDoor) uit += "<span class='door'>in door " + tekst(voornaam(r.startDoor)) + "</span>";
+  if (r.stopDoor)  uit += "<span class='door'>uit door " + tekst(voornaam(r.stopDoor)) + "</span>";
+  return uit;
+}
 
 /* Minuten als 7:30, niet als 7,5 - een dienst lees je in uren en minuten. */
 function duur(min){
@@ -330,9 +435,10 @@ function tekenLijst(){
         return "<div class='regel' data-id='" + tekst(r.id) + "'>" +
           "<span class='tijden'>" + klokTijd(r.start) + " - " + klokTijd(r.eind) + "</span>" +
           "<span class='wat" + (r.omschrijving ? "" : " leeg") + "'>" +
-            tekst(r.omschrijving || "geen omschrijving") + "</span>" +
+            tekst(r.omschrijving || "geen omschrijving") + doorWie(r) + "</span>" +
           (r.metDeHand ? "<span class='hand'>hand</span>" : "") +
-          "<span class='duur'>" + duur(r.minuten||0) + "</span></div>";
+          "<span class='duur'>" + duur(r.minuten||0) + "</span>" +
+          onderRegel(r) + "</div>";
       }).join("") + "</div></li>";
   }).join("") + "</ul>";
 
@@ -370,6 +476,15 @@ function voornaam(wie){
 function tekenIedereen(data){
   var uit = "";
 
+  /* Zonder vastgelegde vestiging blijft "op de zaak" leeg, en dan zegt een
+     locatie weinig. Ga op de zaak staan en druk op de knop; dat is
+     nauwkeuriger dan een adres opzoeken. */
+  if (!vestigingGezet) {
+    uit += '<div class="melding">De plek van de zaak is nog niet vastgelegd, dus er staat bij ' +
+      'geen enkele registratie of iemand er was. Sta je nu op de zaak? ' +
+      '<b><a href="#" id="zetZaak" style="color:inherit">Leg deze plek vast</a></b></div>';
+  }
+
   if (data.bezig && data.bezig.length) {
     uit += '<div class="nubezig"><span class="stip"></span><b>Nu aan het werk:</b> ' +
       data.bezig.map(function(b){
@@ -406,9 +521,10 @@ function tekenIedereen(data){
             return "<div class='regel'>" +
               "<span class='tijden'>" + klokTijd(r.start) + " - " + klokTijd(r.eind) + "</span>" +
               "<span class='wat" + (r.omschrijving ? "" : " leeg") + "'>" +
-                tekst(r.omschrijving || "geen omschrijving") + "</span>" +
+                tekst(r.omschrijving || "geen omschrijving") + doorWie(r) + "</span>" +
               (r.metDeHand ? "<span class='hand'>hand</span>" : "") +
-              "<span class='duur'>" + duur(r.minuten||0) + "</span></div>";
+              "<span class='duur'>" + duur(r.minuten||0) + "</span>" +
+              onderRegel(r) + "</div>";
           }).join("");
       }).join("") + "</div></div>";
   }).join("");
@@ -417,6 +533,22 @@ function tekenIedereen(data){
   Array.prototype.forEach.call(el("lijst").querySelectorAll(".persoon"), function(p){
     p.querySelector(".persoonkop").onclick = function(){ p.classList.toggle("open"); };
   });
+  var z = el("zetZaak");
+  if (z) z.onclick = async function(e){
+    e.preventDefault();
+    z.textContent = "Locatie bepalen…";
+    var loc = await haalLocatie();
+    if (!loc || typeof loc.lat !== "number") {
+      z.textContent = "Lukte niet: " + (loc && loc.reden || "geen locatie");
+      return;
+    }
+    var r = await roep("/uren/vestiging", { lat: loc.lat, lon: loc.lon, naam: "de zaak", straal: 300 });
+    if (!r.ok) { z.textContent = "Lukte niet: " + (r.uitleg || r.error); return; }
+    vestigingGezet = true;
+    el("melding").innerHTML = '<div class="melding">De plek van de zaak staat vast. Vanaf nu zie je ' +
+      'bij elke registratie of iemand er was.</div>';
+    await haal();
+  };
 }
 
 async function haal(){
@@ -458,22 +590,172 @@ function zetWeergave(w){
   haal();
 }
 
+/* Waar sta je. De browser vraagt zelf toestemming, dus dit gaat nooit buiten
+   iemand om. Weigert iemand, of duurt het te lang, dan gaat het klokken
+   gewoon door met de vermelding dat er geen locatie was - een dienst die niet
+   geregistreerd wordt omdat de gps het niet deed is erger dan een regel
+   zonder plaats. */
+function haalLocatie(){
+  return new Promise(function(klaar){
+    if (!navigator.geolocation) return klaar({ reden: "toestel deelt geen locatie" });
+    var af = false;
+    var wacht = setTimeout(function(){ if (!af) { af = true; klaar({ reden: "duurde te lang" }); } }, 8000);
+    navigator.geolocation.getCurrentPosition(
+      function(p){
+        if (af) return; af = true; clearTimeout(wacht);
+        klaar({ lat: p.coords.latitude, lon: p.coords.longitude, nauwkeurig: p.coords.accuracy });
+      },
+      function(e){
+        if (af) return; af = true; clearTimeout(wacht);
+        klaar({ reden: e && e.code === 1 ? "niet gedeeld" : "niet beschikbaar" });
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+    );
+  });
+}
+
+function toonPlaats(p){
+  var d = el("plaatsje");
+  if (!p) { d.innerHTML = ""; return; }
+  if (!p.gegeven) { d.innerHTML = "Locatie: <span class='geen'>" + tekst(p.reden || "niet gedeeld") + "</span>"; return; }
+  if (p.opZaak) { d.innerHTML = "<span class='zaak'>&#10003; Op de zaak</span>"; return; }
+  if (typeof p.afstand === "number") {
+    d.innerHTML = "<span class='elders'>" + (p.afstand > 1500
+      ? Math.round(p.afstand/100)/10 + " km van de zaak"
+      : p.afstand + " m van de zaak") + "</span>";
+    return;
+  }
+  d.innerHTML = "Locatie vastgelegd";
+}
+
 el("knopKlok").onclick = async function(){
   var knop = el("knopKlok");
   knop.disabled = true;
+  knop.textContent = "Bezig…";
+  el("plaatsje").textContent = "Locatie bepalen…";
+
   var wat = el("waaraan").value.trim();
-  var r = bezig ? await roep("/uren/stop", { omschrijving: wat })
-                : await roep("/uren/start", { omschrijving: wat });
+  var loc = await haalLocatie();
+  var r = bezig ? await roep("/uren/stop",  { omschrijving: wat, locatie: loc })
+                : await roep("/uren/start", { omschrijving: wat, locatie: loc });
   knop.disabled = false;
 
   if (!r.ok && r.error === "loopt-al") {
     /* Kan gebeuren als je op twee toestellen tegelijk zit. Gewoon overnemen
        wat er loopt in plaats van klagen. */
-    bezig = r.bezig; tekenKlok(); return;
+    bezig = r.bezig; tekenKlok(); toonPlaats(bezig.plaats); return;
   }
-  if (toonFout(r)) return;
-  if (!bezig) { bezig = r.bezig; el("waaraan").value = bezig.omschrijving || ""; tekenKlok(); }
-  else { bezig = null; el("waaraan").value = ""; await haal(); }
+  if (toonFout(r)) { tekenKlok(); return; }
+  if (!bezig) {
+    bezig = r.bezig;
+    el("waaraan").value = bezig.omschrijving || "";
+    tekenKlok();
+    toonPlaats(bezig.plaats);
+  } else {
+    var afgerond = r.regel;
+    bezig = null;
+    el("waaraan").value = "";
+    await haal();
+    toonPlaats(afgerond && afgerond.geeindigd);
+  }
+};
+
+/* ── Voor een collega klokken ──────────────────────────────────────────
+   Zij kiezen, zij typen hun code. Beide namen komen in de regel: wie er
+   gewerkt heeft en wie er geklokt heeft. */
+
+async function openVoorAnder(){
+  el("anderFout").innerHTML = "";
+  el("vCode").value = ""; el("vAnderWat").value = "";
+  var s = el("vWie");
+  s.innerHTML = "<option>Even ophalen…</option>";
+  el("voorander").classList.add("aan");
+
+  var r = await roep("/uren/collegas");
+  if (!r.ok || !r.namen || !r.namen.length) {
+    s.innerHTML = "";
+    el("anderFout").innerHTML = '<div class="melding">Er is nog niemand met een eigen code. ' +
+      'Zolang een collega die niet heeft ingesteld, kun je niet voor hem of haar klokken.</div>';
+    return;
+  }
+  s.innerHTML = r.namen.map(function(n){
+    return '<option value="' + tekst(n) + '">' + tekst(voornaam(n)) + "</option>";
+  }).join("");
+}
+
+el("knopVoorAnder").onclick = openVoorAnder;
+el("anderTerug").onclick = function(){ el("voorander").classList.remove("aan"); };
+el("voorander").onclick = function(e){ if (e.target === el("voorander")) el("voorander").classList.remove("aan"); };
+
+el("anderDoen").onclick = async function(){
+  var namens = el("vWie").value;
+  var code = el("vCode").value.trim();
+  if (!namens || !code) {
+    el("anderFout").innerHTML = '<div class="fout">Kies een collega en laat diegene de code intypen.</div>';
+    return;
+  }
+  el("anderDoen").disabled = true;
+  el("anderFout").innerHTML = '<div class="bezig" style="padding:8px">Locatie bepalen…</div>';
+  var loc = await haalLocatie();
+
+  /* Loopt er al iets voor die collega, dan is dit een uitklokken en geen
+     inklokken. Dat scheelt een tweede knop: het is dezelfde handeling. */
+  var r = await roep("/uren/start", { namens: namens, code: code,
+                                      omschrijving: el("vAnderWat").value.trim(), locatie: loc });
+  if (!r.ok && r.error === "loopt-al") {
+    r = await roep("/uren/stop", { namens: namens, code: code,
+                                   omschrijving: el("vAnderWat").value.trim(), locatie: loc });
+  }
+  el("anderDoen").disabled = false;
+
+  if (!r.ok) {
+    el("anderFout").innerHTML = '<div class="fout">' + tekst(r.uitleg || r.error) + "</div>";
+    return;
+  }
+  el("voorander").classList.remove("aan");
+  var wat = r.regel ? "uitgeklokt" : "ingeklokt";
+  el("melding").innerHTML = '<div class="melding">' + tekst(voornaam(namens)) + " is " + wat +
+    ". Jouw naam staat erbij als degene die het heeft gedaan.</div>";
+  await haal();
+};
+
+/* ── Je eigen code ──────────────────────────────────────────────────── */
+
+var heeftCode = false;
+
+async function openCode(){
+  el("codeFout").innerHTML = "";
+  el("vOudeCode").value = ""; el("vNieuweCode").value = ""; el("vNieuweCode2").value = "";
+  el("oudRegel").style.display = heeftCode ? "" : "none";
+  el("codeTitel").textContent = heeftCode ? "Je code wijzigen" : "Stel je eigen code in";
+  el("codevenster").classList.add("aan");
+}
+el("codeTerug").onclick = function(){ el("codevenster").classList.remove("aan"); };
+el("codevenster").onclick = function(e){ if (e.target === el("codevenster")) el("codevenster").classList.remove("aan"); };
+
+el("codeOpslaan").onclick = async function(){
+  var nieuw = el("vNieuweCode").value.trim();
+  if (nieuw !== el("vNieuweCode2").value.trim()) {
+    el("codeFout").innerHTML = '<div class="fout">De twee codes zijn niet gelijk.</div>';
+    return;
+  }
+  el("codeOpslaan").disabled = true;
+  var r = await roep("/uren/code", { oud: el("vOudeCode").value.trim(), nieuw: nieuw });
+  el("codeOpslaan").disabled = false;
+  if (!r.ok) {
+    var tekstjes = {
+      "code-vorm": "Een code is vier tot acht cijfers.",
+      "code-te-simpel": "Kies iets anders dan alleen dezelfde cijfers of een rijtje.",
+      "oude-code-nodig": "Vul ook je huidige code in.",
+      "oude-code-klopt-niet": "Je huidige code klopt niet.",
+    };
+    el("codeFout").innerHTML = '<div class="fout">' + tekst(tekstjes[r.error] || r.uitleg || r.error) + "</div>";
+    return;
+  }
+  heeftCode = true;
+  el("codevenster").classList.remove("aan");
+  el("melding").innerHTML = '<div class="melding">Je code staat klaar. Een collega kan je nu ' +
+    'in- en uitklokken als jij je telefoon niet bij je hebt.</div>';
 };
 
 /* De omschrijving bijwerken terwijl de klok loopt: bij het stoppen gaat mee
@@ -548,6 +830,27 @@ document.addEventListener("visibilitychange", function(){
   Array.prototype.forEach.call(el("weergaven").querySelectorAll("button"), function(b){
     b.onclick = function(){ if (weergave !== b.dataset.w) zetWeergave(b.dataset.w); };
   });
+})();
+
+el("knopCode").onclick = openCode;
+
+/* Heb ik al een code? Zo niet, dan één keer vragen - zonder code kan een
+   collega niet voor je klokken, en dat is precies waar dit voor bedoeld is. */
+(async function codeStatus(){
+  var r = await roep("/uren/code");
+  if (!r.ok) return;
+  heeftCode = !!r.heeftCode;
+  vestigingGezet = !!r.vestiging;
+  if (!heeftCode) {
+    el("melding").innerHTML = '<div class="melding">Je hebt nog geen eigen code. Zonder die code ' +
+      'kan een collega je niet in- of uitklokken als je je telefoon niet bij je hebt. ' +
+      '<b><a href="#" id="codeNu" style="color:inherit">Nu instellen</a></b></div>';
+    var a = el("codeNu");
+    if (a) a.onclick = function(e){ e.preventDefault(); openCode(); };
+  }
+  if (!r.vestiging) {
+    console.log("[uren] geen vestiging ingesteld - afstanden worden niet berekend");
+  }
 })();
 
 startTikker();
