@@ -137,6 +137,16 @@
          keek naar precies dezelfde groep - maar het viel toen wel pas op. */
       "dolf", "fonteynbot", "gerrit", "gretha", "manon",
     ],
+    /* Uren. Iedereen die het dashboard gebruikt, want iedereen werkt.
+       Je ziet alleen je eigen uren; dat regelt de worker, niet de pagina. */
+    "uren": [
+      "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
+      "dali", "danique", "demi", "dolf", "don", "edwin",
+      "evelinde", "fabiola", "fonteynbot", "fransje", "gerrit", "gerwin",
+      "gretha", "julia", "karina", "kevin", "luis", "manon",
+      "nomi", "osman", "patrick", "reinier", "reinier.k", "rico",
+      "rosalie", "rowan", "yves",
+    ],
     // Personeel
     "personeel": [
       "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit",

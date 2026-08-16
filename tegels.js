@@ -42,6 +42,8 @@
                  telefoon andere rechten heeft dan de pc en dat mag niet.
      extern: opent buiten het dashboard (nieuw tabblad), niet uit de repo. */
   var TEGELS = [
+    { bestand:"uren.html",           groep:"uren",             ic:"⏱️",  naam:"Mijn uren",
+      uit:"Starten, stoppen en bijstellen",                        mobiel:"goed", tile:"tileUren" },
     { bestand:"mail.html",           groep:"mail",             ic:"✉️",  naam:"Mijn mail",
       uit:"Postvak, concepten en verzenden",                       mobiel:"goed", tile:"tileMail" },
     { bestand:"tuinmeubelen.html",   groep:"tuinmeubelen",     ic:"🪑",  naam:"Tuinmeubelen",

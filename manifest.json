@@ -1,5 +1,5 @@
 {
-  "version": "0.18.1",
+  "version": "0.19.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -248,6 +248,10 @@
     {
       "name": "app-icoon-180.png",
       "note": "Het app-icoon, zonder doorzichtige hoeken - iOS zet daar anders zwart achter."
+    },
+    {
+      "name": "uren.html",
+      "note": "Mijn uren - starten en stoppen met een knop, achteraf bij te stellen. De lopende registratie staat in de opslag, niet op het toestel, zodat je op het ene apparaat kunt beginnen en op het andere stoppen."
     }
   ]
 }

@@ -4710,6 +4710,133 @@ async function mailProef(env, adres) {
     : { ...r, mailbox: adres, ms: Date.now() - t0 };
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   Uren — starten, stoppen en achteraf bijstellen
+   ══════════════════════════════════════════════════════════════════════
+
+   Logic4 heeft hier niets voor. Alle 289 endpoints nagelopen: er is geen
+   enkele urenregistratie in de API. Dus houden we het zelf bij.
+
+   Twee soorten opslag:
+
+     uren-JJJJ-MM   de afgeronde regels van die maand, met een wie erbij
+     urenloopt:wie  wie er op dit moment aan het werk is
+
+   Die tweede staat bewust in de opslag en niet op het toestel. Je klokt in
+   op je telefoon in de loods en klokt af achter je bureau; dat moet gewoon
+   werken. Bovendien overleeft het een lege batterij.
+
+   Wie welke uren ziet bepaalt de worker, niet de pagina: alles gaat langs de
+   persoonlijke sleutel en die ligt vast aan één naam. Een andere naam
+   meesturen levert niets op.                                            */
+
+function urenMaand(d) {
+  const dt = d ? new Date(d) : new Date();
+  return "uren-" + dt.getUTCFullYear() + "-" + String(dt.getUTCMonth() + 1).padStart(2, "0");
+}
+
+async function urenLees(env, maand) {
+  return (await env.FONTEYN_DATA.get(maand, { type: "json" })) || { regels: [] };
+}
+
+async function urenLopend(env, wie) {
+  return await env.FONTEYN_DATA.get("urenloopt:" + wie, { type: "json" });
+}
+
+/* Beginnen. Loopt er al iets, dan is dat geen fout maar een vergissing van
+   gisteren: we geven terug wat er loopt en laten de gebruiker beslissen. */
+async function urenStart(env, wie, omschrijving) {
+  const bezig = await urenLopend(env, wie);
+  if (bezig) return { ok: false, error: "loopt-al", bezig };
+  const nu = new Date().toISOString();
+  const regel = { start: nu, omschrijving: String(omschrijving || "").slice(0, 200) };
+  await env.FONTEYN_DATA.put("urenloopt:" + wie, JSON.stringify(regel));
+  return { ok: true, bezig: regel };
+}
+
+/* Stoppen. De regel gaat naar de maand waarin hij begón - een dienst die
+   over middernacht heen loopt hoort bij de dag dat je bent begonnen, anders
+   valt hij in het overzicht van de verkeerde maand. */
+async function urenStop(env, wie, omschrijving) {
+  const bezig = await urenLopend(env, wie);
+  if (!bezig) return { ok: false, error: "niets-gestart" };
+  const eind = new Date().toISOString();
+  const maand = urenMaand(bezig.start);
+  const data = await urenLees(env, maand);
+  const regel = {
+    id: crypto.randomUUID(),
+    wie,
+    start: bezig.start,
+    eind,
+    minuten: Math.max(0, Math.round((new Date(eind) - new Date(bezig.start)) / 60000)),
+    omschrijving: String(omschrijving !== undefined ? omschrijving : bezig.omschrijving || "").slice(0, 200),
+  };
+  data.regels = (data.regels || []).concat([regel]);
+  await env.FONTEYN_DATA.put(maand, JSON.stringify(data));
+  await env.FONTEYN_DATA.delete("urenloopt:" + wie);
+  return { ok: true, regel };
+}
+
+/* De eigen regels van een maand. Alleen die van deze persoon: het filter
+   staat hier en niet in de pagina, want anders zou wie de teamsleutel heeft
+   in andermans uren kunnen kijken. */
+async function urenLijst(env, wie, maandParam) {
+  const maand = /^uren-\d{4}-\d{2}$/.test(maandParam || "") ? maandParam : urenMaand();
+  const data = await urenLees(env, maand);
+  const mijn = (data.regels || []).filter(r => r.wie === wie)
+                                  .sort((a, b) => String(b.start).localeCompare(String(a.start)));
+  return { ok: true, maand, regels: mijn, bezig: await urenLopend(env, wie) };
+}
+
+/* Een regel bijstellen of weghalen. Alleen je eigen regels, en de tijden
+   moeten kloppen - een eind vóór het begin levert negatieve uren op en die
+   sluipen anders zo een overzicht in. */
+async function urenWijzig(env, wie, body) {
+  const maand = /^uren-\d{4}-\d{2}$/.test(body.maand || "") ? body.maand : urenMaand();
+  const data = await urenLees(env, maand);
+  const i = (data.regels || []).findIndex(r => r.id === body.id && r.wie === wie);
+  if (i < 0) return { ok: false, error: "regel-niet-gevonden" };
+
+  if (body.verwijderen) {
+    data.regels.splice(i, 1);
+    await env.FONTEYN_DATA.put(maand, JSON.stringify(data));
+    return { ok: true, verwijderd: true };
+  }
+
+  const r = data.regels[i];
+  if (body.start) r.start = String(body.start);
+  if (body.eind) r.eind = String(body.eind);
+  if (body.omschrijving !== undefined) r.omschrijving = String(body.omschrijving).slice(0, 200);
+  const van = new Date(r.start), tot = new Date(r.eind);
+  if (isNaN(van) || isNaN(tot)) return { ok: false, error: "ongeldige-tijd" };
+  if (tot < van) return { ok: false, error: "eind-voor-begin",
+                          uitleg: "De eindtijd ligt vóór de begintijd." };
+  r.minuten = Math.round((tot - van) / 60000);
+  await env.FONTEYN_DATA.put(maand, JSON.stringify(data));
+  return { ok: true, regel: r };
+}
+
+/* Met de hand een regel toevoegen, voor wie is vergeten te klokken. */
+async function urenToevoegen(env, wie, body) {
+  const van = new Date(String(body.start || ""));
+  const tot = new Date(String(body.eind || ""));
+  if (isNaN(van) || isNaN(tot)) return { ok: false, error: "ongeldige-tijd" };
+  if (tot < van) return { ok: false, error: "eind-voor-begin",
+                          uitleg: "De eindtijd ligt vóór de begintijd." };
+  const maand = urenMaand(van.toISOString());
+  const data = await urenLees(env, maand);
+  const regel = {
+    id: crypto.randomUUID(), wie,
+    start: van.toISOString(), eind: tot.toISOString(),
+    minuten: Math.round((tot - van) / 60000),
+    omschrijving: String(body.omschrijving || "").slice(0, 200),
+    metDeHand: true,
+  };
+  data.regels = (data.regels || []).concat([regel]);
+  await env.FONTEYN_DATA.put(maand, JSON.stringify(data));
+  return { ok: true, regel };
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -5000,6 +5127,29 @@ export default {
         }
       }
       return reply(200, { ok: true, host, uit });
+    }
+
+    /* ── Uren ────────────────────────────────────────────────────────
+       Langs de persoonlijke sleutel, net als de mail. Wélke uren je ziet
+       bepaalt de worker aan de hand van die sleutel; een naam meesturen
+       helpt niet, en dat is met opzet. */
+    if (url.pathname.startsWith("/uren/")) {
+      const wie = await mailSleutelWie(env, request);
+      if (!wie) return reply(401, { ok: false, error: "opnieuw-inloggen",
+                                    uitleg: "De sleutel ontbreekt of is verlopen." });
+      const b = request.method === "POST" ? await request.json().catch(() => ({})) : {};
+
+      if (url.pathname === "/uren/lijst" && request.method === "GET")
+        return reply(200, await urenLijst(env, wie, url.searchParams.get("maand")));
+      if (url.pathname === "/uren/start" && request.method === "POST")
+        return reply(200, await urenStart(env, wie, b.omschrijving));
+      if (url.pathname === "/uren/stop" && request.method === "POST")
+        return reply(200, await urenStop(env, wie, b.omschrijving));
+      if (url.pathname === "/uren/toevoegen" && request.method === "POST")
+        return reply(200, await urenToevoegen(env, wie, b));
+      if (url.pathname === "/uren/wijzig" && request.method === "POST")
+        return reply(200, await urenWijzig(env, wie, b));
+      return reply(404, { ok: false, error: "onbekende-urenroute" });
     }
 
     /* Gegevens opvragen uit Logic4 zonder het hulpprogramma van de pc.
