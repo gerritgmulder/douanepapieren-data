@@ -517,8 +517,13 @@ const parseMT940 = (t) => window.fpMT940.parse(t);
 function classifyTx(tx) {
   const d = ((tx.description || "") + " " + (tx.descRaw || "")).toLowerCase().replace(/\r?\n/g, "");
   if (/(?:^|[^a-z])mollie(?:[^a-z]|$)/.test(d) || /mollie b\.?v\.?/.test(d)) return "mollie";
-  if (/pay\.?nl/.test(d) || /paynl/.test(d)) return "paynl";
+  /* Op het afschrift staat niet "Pay.nl" maar "Stichting Pay" - zo heet de
+     stichting derdengelden die het geld doorstort. Reinier gaf dat door
+     (17 aug 2026); tot dan viel zo'n regel onder "geen match". */
+  if (/pay\.?nl/.test(d) || /paynl/.test(d) || /stichting\s+pay(?:\s|$)/.test(d)) return "paynl";
   if (/stripe|shopify/.test(d)) return "psp";
+  // Airbnb-uitbetalingen voor de huizen aan de Eikensingel (Reinier, 17 aug 2026).
+  if (/airbnb/.test(d)) return "airbnb";
   if (/afrek\.? betaalautomaat|betaalautomaat|pinautomaat/.test(d)) return "pin";
   return "direct";
 }
@@ -543,6 +548,8 @@ const TUSSEN = {
             uitleg: "Uitbetaling van de webshop-betaaldienst over meerdere bestellingen tegelijk. Gaat naar grootboek 2100." },
   pin:    { label: "Pinautomaat",
             uitleg: "Dagafrekening van de pinautomaat in de showroom. Gaat over meerdere klanten en hoort op de tussenrekening 2030, net als Pay.nl." },
+  airbnb: { label: "Airbnb",
+            uitleg: "Uitbetaling van Airbnb voor de huizen. Hoort op grootboek 1452 en niet bij een order." },
 };
 function tussenLabel(kind) {
   const t = TUSSEN[kind];
@@ -790,7 +797,7 @@ function omschrijvingVoor(orderNr, invoiceId, st) {
    2026): de pinautomaat en Pay.nl op 2030, Stripe/Shopify op 2100, Mollie op
    1220. Ze staan hier als startwaarde en niet als wet - je kunt ze per regel
    overtypen en dan onthoudt hij dat voor dat soort. */
-const REKENING_STANDAARD = { mollie: "1220", paynl: "2030", psp: "2100", pin: "2030" };
+const REKENING_STANDAARD = { mollie: "1220", paynl: "2030", psp: "2100", pin: "2030", airbnb: "1452" };
 function rekeningVoor(soort) {
   try { return localStorage.getItem("bank.rek." + soort) || REKENING_STANDAARD[soort] || ""; }
   catch (e) { return REKENING_STANDAARD[soort] || ""; }
