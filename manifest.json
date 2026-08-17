@@ -1,5 +1,5 @@
 {
-  "version": "0.22.0",
+  "version": "0.23.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -264,6 +264,14 @@
     {
       "name": "goederenbeweging.js",
       "note": "Beginvoorraad + inkopen - verkopen +/- correcties = eindvoorraad, uit het datamodel van de accountant. De handmatige aansluitboekingen staan apart geteld; een beweging waarin die meelopen sluit altijd en beantwoordt de vraag niet."
+    },
+    {
+      "name": "vooruitontvangen-peil.js",
+      "note": "Grootboek 1350 per peildatum: verkooporders met een aanbetaling waar nog een levering tegenover staat, teruggerekend naar 31-12-2024, 31-12-2025 en 31-07-2026. Rekent terug in plaats van de huidige stand over te nemen."
+    },
+    {
+      "name": "rollback.js",
+      "note": "Voorraad nu min de mutaties sinds de peildatum is de voorraad toen. Per artikel, met de tellijst ernaast en een verschillenlijst waar het niet sluit."
     }
   ]
 }

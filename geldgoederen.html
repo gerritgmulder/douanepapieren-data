@@ -309,6 +309,59 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
     </div>
   </div>
 
+  <!-- ══════════ Vooruitontvangen per peildatum (1350) ══════════ -->
+  <h2 class="kop">Vooruitontvangen per peildatum</h2>
+  <div class="kaart" id="vpKaart">
+    <div class="hoofd">
+      <span class="stip laag"></span>
+      <div class="titel">
+        <h3>Grootboek 1350 — aanbetalingen van klanten</h3>
+        <p>Verkooporders met een aanbetaling waar nog een levering tegenover staat, teruggerekend
+           naar elke peildatum. Plus de orders die al meer dan een jaar zonder afwikkeling openstaan.</p>
+      </div>
+      <div class="cijfers"><div class="groot" id="vpGroot">—</div><div class="klein">orders</div></div>
+    </div>
+    <div class="body">
+      <div class="knoprij" style="margin-bottom:12px">
+        <label class="keuze">Peildata
+          <input type="text" id="vpPeil" value="2024-12-31, 2025-12-31, 2026-07-31"
+                 style="width:250px;margin-left:6px">
+        </label>
+        <button class="knop" id="vpDraai">Opbouwen uit Logic4</button>
+        <button class="knop licht" id="vpExport" disabled>Exporteren naar Excel</button>
+      </div>
+      <div id="vpStatus"></div>
+      <div id="vpUit"></div>
+    </div>
+  </div>
+
+  <!-- ══════════ Roll-back naar een peildatum ══════════ -->
+  <h2 class="kop">Roll-back van de voorraad</h2>
+  <div class="kaart" id="rbKaart">
+    <div class="hoofd">
+      <span class="stip laag"></span>
+      <div class="titel">
+        <h3>Van de voorraad van vandaag terug naar de peildatum</h3>
+        <p>Voorraad nu min alle mutaties sinds de peildatum is de voorraad toen. Per artikel,
+           met de tellijst ernaast en een verschillenlijst waar het niet sluit.</p>
+      </div>
+      <div class="cijfers"><div class="groot" id="rbGroot">—</div><div class="klein">artikelen</div></div>
+    </div>
+    <div class="body">
+      <div class="knoprij" style="margin-bottom:12px">
+        <label class="keuze">Peildatum
+          <input type="date" id="rbPeil" value="2025-12-31" style="margin-left:6px">
+        </label>
+        <input type="file" id="rbTelling" accept=".xlsx,.xls,.csv" style="display:none">
+        <button class="knop licht" id="rbTellingKies">Tellijst inlezen</button>
+        <button class="knop" id="rbDraai">Terugrekenen</button>
+        <button class="knop licht" id="rbExport" disabled>Exporteren naar Excel</button>
+      </div>
+      <div id="rbStatus"></div>
+      <div id="rbUit"></div>
+    </div>
+  </div>
+
   <!-- ══════════ Goederenbeweging (fase 3) ══════════
        Beginvoorraad + inkopen − verkopen ± correcties = eindvoorraad, uit het
        datamodel van de accountant. De handmatige aansluitboekingen staan
@@ -388,6 +441,8 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
 <script src="aansluiting-1630.js"></script>
 <script src="inkoopketen.js"></script>
 <script src="goederenbeweging.js"></script>
+<script src="vooruitontvangen-peil.js"></script>
+<script src="rollback.js"></script>
 <script src="mt940.js"></script>
 <script src="vooruitontvangen.js"></script>
 <script src="bankaansluiting.js"></script>
@@ -1352,6 +1407,228 @@ laden();
     var naam = "Goederenbeweging " + (laatst.jaar||"") + ".xlsx";
     XLSX.writeFile(wb, naam);
     if (window.fpLog) window.fpLog("goederenbeweging geexporteerd", naam);
+  };
+})();
+</script>
+
+
+<script>
+/* ══════════ Vooruitontvangen per peildatum, en de roll-back ══════════ */
+(function(){
+  if (window.fpGeenToegang) return;
+  var $$ = function(id){ return document.getElementById(id); };
+  function esc(x){ var d=document.createElement("div"); d.textContent=x==null?"":x; return d.innerHTML; }
+  function eur(n){ return (n===""||n==null) ? "" :
+    Number(n).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  function nlDat(x){ var d=String(x||"").split("-"); return d.length===3 ? d[2]+"."+d[1]+"."+d[0] : x; }
+  function melding(id, soort, tekst){
+    $$(id).innerHTML = tekst ? '<div class="status-msg '+soort+'">'+esc(tekst)+"</div>" : "";
+  }
+
+  /* ── 1350 per peildatum ─────────────────────────────────────────── */
+  var vpLaatst = null;
+  var VP_KOL = ["debiteurnummer","debiteur","verkoopordernummer","orderdatum","orderbedrag",
+                "ontvangenAanbetaling","gefactureerdPerPeildatum","nogTeFactureren",
+                "leveringenTotPeildatum","status"];
+  var VP_KOP = { debiteurnummer:"Debiteurnr", debiteur:"Debiteur", verkoopordernummer:"Order",
+                 orderdatum:"Orderdatum", orderbedrag:"Orderbedrag",
+                 ontvangenAanbetaling:"Ontvangen aanbetaling",
+                 gefactureerdPerPeildatum:"Gefactureerd", nogTeFactureren:"Nog te factureren",
+                 leveringenTotPeildatum:"Leveringen", status:"Status",
+                 orderwaarde:"Orderwaarde", ouderdomDagen:"Ouderdom (dagen)",
+                 toelichting:"Toelichting", verwachteAfwikkeling:"Verwachte afwikkeling" };
+
+  $$("vpDraai").onclick = async function(){
+    var kn = $$("vpDraai"); kn.disabled = true; $$("vpExport").disabled = true; $$("vpUit").innerHTML = "";
+    try {
+      if (!window.fpVooruitPeil) throw new Error("de module is niet geladen. Herstart het dashboard.");
+      var peildata = String($$("vpPeil").value||"").split(/[,;]/)
+        .map(function(x){ return x.trim(); }).filter(function(x){ return /^\d{4}-\d{2}-\d{2}$/.test(x); });
+      if (!peildata.length) throw new Error("vul minstens één peildatum in als jjjj-mm-dd.");
+      vpLaatst = await window.fpVooruitPeil.bouw({
+        logic4: logic4, peildata: peildata,
+        vandaag: new Date().toISOString().slice(0,10),
+        meld: function(t){ melding("vpStatus","info",t); },
+      });
+      melding("vpStatus","","");
+      vpToon(vpLaatst);
+      $$("vpExport").disabled = false;
+      if (window.fpLog) window.fpLog("vooruitontvangen per peildatum opgebouwd", peildata.join(", "));
+    } catch(e){ melding("vpStatus","bad","Opbouwen mislukt: " + (e.message||e)); }
+    finally { kn.disabled = false; }
+  };
+
+  function vpToon(r){
+    var eerste = r.overzichten.peildata[r.peildata[0]];
+    $$("vpGroot").textContent = eerste ? eerste.regels.length : "—";
+    var h = '<p class="uitleg">Opgebouwd uit ' + r.aantallen.orders + ' verkooporders, ' +
+      r.aantallen.leveringen + ' leveringen en ' + r.aantallen.facturen + ' facturen in ' +
+      r.seconden + ' seconden.</p>';
+    (r.meldingen||[]).forEach(function(m){
+      h += '<div class="status-msg warn" style="margin:6px 0">'+esc(m)+"</div>"; });
+
+    r.peildata.forEach(function(peil){
+      var o = r.overzichten.peildata[peil]; if (!o) return;
+      h += '<h3 style="margin:18px 0 6px;font-size:14px">Stand per ' + esc(nlDat(peil)) +
+        ' <span style="font-weight:400;color:var(--muted)">' + o.regels.length + " orders, samen " +
+        eur(o.totaalAanbetaling) + " aanbetaling</span></h3>";
+      h += vpTabel(o.regels, VP_KOL);
+    });
+
+    var z = r.overzichten.zonderAfwikkeling;
+    h += '<h3 style="margin:18px 0 6px;font-size:14px">Zonder enige afwikkeling, ouder dan een jaar' +
+      ' <span style="font-weight:400;color:var(--muted)">' + z.length + " orders</span></h3>";
+    h += vpTabel(z, ["debiteurnummer","debiteur","verkoopordernummer","orderdatum","orderwaarde",
+                     "status","ouderdomDagen","toelichting","verwachteAfwikkeling"]);
+    $$("vpUit").innerHTML = h;
+  }
+
+  function vpTabel(lijst, kols){
+    if (!lijst.length) return '<p class="uitleg" style="margin:0">Geen orders.</p>';
+    return '<div style="overflow-x:auto"><table class="grid"><thead><tr>' +
+      kols.map(function(c){ return "<th>"+esc(VP_KOP[c]||c)+"</th>"; }).join("") +
+      "</tr></thead><tbody>" +
+      lijst.slice(0,100).map(function(r){
+        return "<tr>" + kols.map(function(c){
+          var v = r[c];
+          if (/bedrag|waarde|aanbetaling|gefactureerd|factureren/i.test(c)) return '<td class="num">'+eur(v)+"</td>";
+          if (/datum/i.test(c)) return "<td>"+esc(nlDat(v))+"</td>";
+          return "<td>"+esc(v)+"</td>";
+        }).join("") + "</tr>";
+      }).join("") + "</tbody></table></div>" +
+      (lijst.length>100 ? '<p class="uitleg" style="margin:4px 0 0">De eerste 100 van '+lijst.length+
+        " regels. In de Excel staan ze allemaal.</p>" : "");
+  }
+
+  $$("vpExport").onclick = function(){
+    if (!vpLaatst) return;
+    var wb = XLSX.utils.book_new();
+    vpLaatst.peildata.forEach(function(peil, i){
+      var o = vpLaatst.overzichten.peildata[peil]; if (!o) return;
+      var data = [VP_KOL.map(function(c){ return VP_KOP[c]||c; })].concat(
+        o.regels.map(function(r){ return VP_KOL.map(function(c){ return r[c]; }); }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), "Tabblad " + (i+1) + " " + peil);
+    });
+    var k4 = ["debiteurnummer","debiteur","verkoopordernummer","orderdatum","orderwaarde",
+              "status","ouderdomDagen","toelichting","verwachteAfwikkeling"];
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+      [k4.map(function(c){ return VP_KOP[c]||c; })].concat(
+       vpLaatst.overzichten.zonderAfwikkeling.map(function(r){ return k4.map(function(c){ return r[c]; }); }))),
+      "Zonder afwikkeling");
+    XLSX.writeFile(wb, "1350 vooruitontvangen per peildatum.xlsx");
+    if (window.fpLog) window.fpLog("vooruitontvangen geexporteerd", vpLaatst.peildata.join(", "));
+  };
+
+  /* ── Roll-back ──────────────────────────────────────────────────── */
+  var rbLaatst = null, rbTelling = null;
+
+  $$("rbTellingKies").onclick = function(){ $$("rbTelling").click(); };
+  $$("rbTelling").onchange = async function(e){
+    var f = e.target.files && e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    try {
+      var wb = XLSX.read(await f.arrayBuffer(), {type:"array"});
+      var rijen = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:""});
+      /* De tellijst mag heten wat hij heet; we zoeken de kolom met de
+         artikelcode en die met het aantal. */
+      rbTelling = rijen.map(function(r){
+        var code = r.artikel || r.Artikelcode || r["Artikel code"] || r.ProductCode || r.code || r.Artikel;
+        var aantal = r.aantal != null ? r.aantal : (r.Aantal != null ? r.Aantal :
+                     (r["Aantal voorraad"] != null ? r["Aantal voorraad"] : r.Qty));
+        return { artikel: code, aantal: aantal };
+      }).filter(function(x){ return x.artikel; });
+      melding("rbStatus","ok", rbTelling.length + " tellijstregels ingelezen uit " + f.name + ".");
+    } catch(err){ melding("rbStatus","bad","Kon de tellijst niet lezen: " + (err.message||err)); }
+  };
+
+  $$("rbDraai").onclick = async function(){
+    var kn = $$("rbDraai"); kn.disabled = true; $$("rbExport").disabled = true; $$("rbUit").innerHTML = "";
+    try {
+      if (!window.fpRollback) throw new Error("de module is niet geladen. Herstart het dashboard.");
+      rbLaatst = await window.fpRollback.bouw({
+        logic4: logic4,
+        peildatum: $$("rbPeil").value || "2025-12-31",
+        vandaag: new Date().toISOString().slice(0,10),
+        telling: rbTelling,
+        meld: function(t){ melding("rbStatus","info",t); },
+      });
+      melding("rbStatus","","");
+      rbToon(rbLaatst);
+      $$("rbExport").disabled = false;
+      if (window.fpLog) window.fpLog("roll-back opgebouwd", rbLaatst.peildatum);
+    } catch(e){ melding("rbStatus","bad","Terugrekenen mislukt: " + (e.message||e)); }
+    finally { kn.disabled = false; }
+  };
+
+  function rbToon(r){
+    $$("rbGroot").textContent = r.aantallen.artikelen;
+    var h = '<p class="uitleg">' + r.aantallen.mutaties + ' mutaties tussen ' + esc(nlDat(r.peildatum)) +
+      ' en ' + esc(nlDat(r.vandaag)) + ', over ' + r.aantallen.artikelen + ' artikelen, in ' +
+      r.seconden + ' seconden.</p>';
+    (r.meldingen||[]).forEach(function(m){
+      h += '<div class="status-msg warn" style="margin:6px 0">'+esc(m)+"</div>"; });
+
+    h += '<table class="grid"><tbody>' +
+      "<tr><td>Voorraad vandaag</td><td class=\"num\">" + eur(r.totaal.nu) + "</td></tr>";
+    (window.fpRollback._intern.GROEPEN).forEach(function(g){
+      var v = r.totaal.perGroep[g.sleutel];
+      if (v) h += "<tr><td>" + esc(g.naam) + ' sinds de peildatum</td><td class="num">' + eur(v) + "</td></tr>";
+    });
+    if (r.totaal.perGroep.overig)
+      h += '<tr><td>Overig</td><td class="num">' + eur(r.totaal.perGroep.overig) + "</td></tr>";
+    h += '<tr style="border-top:2px solid #e5e7eb"><td><b>Voorraad per ' + esc(nlDat(r.peildatum)) +
+      '</b></td><td class="num"><b>' + eur(r.totaal.toen) + "</b></td></tr></tbody></table>";
+
+    if (r.vergelijking) {
+      var v = r.vergelijking;
+      h += '<h3 style="margin:18px 0 6px;font-size:14px">Vergelijking met de tellijst</h3>' +
+        '<p class="uitleg">' + v.sluit + " artikelen sluiten, " + v.wijktAf + " wijken af, " +
+        v.alleenTerugrekening + " staan alleen in de terugrekening en " + v.alleenTelling +
+        " alleen op de tellijst.</p>";
+      if (v.regels.length) {
+        h += '<div style="overflow-x:auto"><table class="grid"><thead><tr><th>Artikel</th>' +
+          "<th>Omschrijving</th><th>Berekend</th><th>Geteld</th><th>Verschil</th><th>Reden</th>" +
+          "</tr></thead><tbody>" +
+          v.regels.slice(0,100).map(function(x){
+            return "<tr><td>" + esc(x.artikel) + "</td><td>" + esc(x.omschrijving) +
+              '</td><td class="num">' + (x.berekend==null?"":eur(x.berekend)) +
+              '</td><td class="num">' + (x.geteld==null?"":eur(x.geteld)) +
+              '</td><td class="num">' + eur(x.verschil) + "</td><td>" + esc(x.reden) + "</td></tr>";
+          }).join("") + "</tbody></table></div>";
+        if (v.regels.length > 100)
+          h += '<p class="uitleg" style="margin:4px 0 0">De eerste 100 van ' + v.regels.length +
+               " verschillen. In de Excel staan ze allemaal.</p>";
+      }
+    }
+    $$("rbUit").innerHTML = h;
+  }
+
+  $$("rbExport").onclick = function(){
+    if (!rbLaatst) return;
+    var wb = XLSX.utils.book_new();
+    var sam = [["Roll-back naar " + rbLaatst.peildatum],[],["Voorraad vandaag", rbLaatst.totaal.nu]];
+    (window.fpRollback._intern.GROEPEN).forEach(function(g){
+      if (rbLaatst.totaal.perGroep[g.sleutel]) sam.push([g.naam, rbLaatst.totaal.perGroep[g.sleutel]]);
+    });
+    if (rbLaatst.totaal.perGroep.overig) sam.push(["Overig", rbLaatst.totaal.perGroep.overig]);
+    sam.push(["Voorraad per " + rbLaatst.peildatum, rbLaatst.totaal.toen]);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sam), "Samenvatting");
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+      [["Artikel","Omschrijving","Nu","Mutaties sinds peildatum","Per peildatum","Inkoopprijs","Waarde per peildatum"]]
+      .concat(rbLaatst.perArtikel.map(function(a){
+        return [a.artikel,a.omschrijving,a.nu,a.mutaties,a.toen,a.prijs,a.waardeToen]; }))),
+      "Per artikel");
+
+    if (rbLaatst.vergelijking)
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+        [["Artikel","Omschrijving","Berekend","Geteld","Verschil","Waardeverschil","Reden"]]
+        .concat(rbLaatst.vergelijking.regels.map(function(x){
+          return [x.artikel,x.omschrijving,x.berekend,x.geteld,x.verschil,x.waardeVerschil||"",x.reden]; }))),
+        "Verschillen");
+
+    XLSX.writeFile(wb, "Roll-back voorraad per " + rbLaatst.peildatum + ".xlsx");
+    if (window.fpLog) window.fpLog("roll-back geexporteerd", rbLaatst.peildatum);
   };
 })();
 </script>
