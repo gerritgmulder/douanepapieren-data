@@ -20,13 +20,26 @@
 
    Samen 2.640.620,48 in 53 regels. Boekhoudkundig sluit het - de
    tussenrekening is daarna weer glad - maar het betekent dat de
-   administratieve voorraad met de hand op het artikelbestand is gezet. Zonder
-   die boekingen loopt de voorraad geen 173 duizend maar 2,8 miljoen uit de pas.
+   administratieve voorraad met de hand op het artikelbestand is gezet.
 
    Daarom staan ze hier op een eigen regel en niet tussen de gewone mutaties.
    Een goederenbeweging waarin zo'n post meeloopt als "correctie" sluit altijd,
    en dan is de vraag waar het verschil vandaan komt niet beantwoord maar
    weggemoffeld. Dat is precies wat deze audit onderzoekt.
+
+   Vier cijfers voor dezelfde voorraad
+   -----------------------------------
+   Per 31-12-2025 zijn er vier bedragen in omloop: de voorraadlijst van de
+   accountant (13.545.686,62), het voorraadbestand (13.354.844,09), grootboek
+   7000-7998 (13.181.653,52) en de jaarrekening (11.350.088,00).
+
+   Ze meten niet hetzelfde. De jaarrekening telt de dealervoorraad, Texas en
+   het rechtstreekse magazijn niet mee; de accountant heeft dat verschil van
+   2.195.598,62 volledig verklaard, op 57 cent na. Twee van die cijfers zomaar
+   van elkaar aftrekken levert een getal op dat nergens op slaat - dat overkwam
+   mij bij de eerste doorrekening, en het is precies de valkuil waar deze audit
+   vol mee zit. Vandaar bronnen() en verklaring(): naast elkaar zetten en per
+   post benoemen, niet één verschil uitrekenen en dat "het verschil" noemen.
 
    OTA: staat in manifest.json. Nooit opnieuw installeren.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -290,9 +303,52 @@
     };
   }
 
+  /* Meerdere bronnen naast elkaar, want per 31-12-2025 zijn er vier
+     verschillende voorraadcijfers in omloop: de voorraadlijst van de
+     accountant, het voorraadbestand, het grootboek en de jaarrekening. Ze
+     meten niet allemaal hetzelfde - de jaarrekening telt bijvoorbeeld de
+     dealervoorraad en Texas niet mee - en juist daarom horen ze naast elkaar
+     in beeld met de verschillen erbij benoemd.
+
+     Twee cijfers vergelijken die niet dezelfde grootheid meten levert een
+     getal op dat nergens op slaat. Dat overkwam mij bij de eerste doorrekening
+     en het is precies de fout waar deze audit vol mee zit. */
+  function bronnen(lijst) {
+    var schoon = (lijst || [])
+      .filter(function (b) { return b && b.naam; })
+      .map(function (b) { return { naam: b.naam, waarde: getal(b.waarde), toelichting: b.toelichting || "" }; });
+    if (!schoon.length) return { bronnen: [], verschillen: [] };
+    var basis = schoon[0];
+    return {
+      bronnen: schoon,
+      basis: basis.naam,
+      verschillen: schoon.slice(1).map(function (b) {
+        return { naam: b.naam, waarde: b.waarde, verschil: b.waarde - basis.waarde,
+                 toelichting: b.toelichting };
+      }),
+    };
+  }
+
+  /* Een verklaring van een verschil, met de posten die het opvullen. Zo staat
+     de aansluiting van de accountant - dealervoorraad, Texas, rechtstreeks
+     magazijn - in dezelfde vorm als de rest en is te zien wat er overblijft. */
+  function verklaring(van, tot, posten) {
+    var v = getal(van), t = getal(tot);
+    var p = (posten || []).map(function (x) {
+      return { naam: x.naam, bedrag: getal(x.bedrag) };
+    });
+    var verklaard = p.reduce(function (n, x) { return n + x.bedrag; }, 0);
+    return {
+      van: v, tot: t, verschil: v - t, posten: p, verklaard: verklaard,
+      onverklaard: (v - t) - verklaard,
+    };
+  }
+
   global.fpGoederenbeweging = {
     bouw: bouw,
     aansluiting: aansluiting,
+    bronnen: bronnen,
+    verklaring: verklaring,
     _intern: { soortVan: soortVan, kolommen: kolommen, getal: getal,
                rekening: rekening, jaarVan: jaarVan, datumVan: datumVan,
                SOORTEN: SOORTEN, OVERIG: OVERIG },
