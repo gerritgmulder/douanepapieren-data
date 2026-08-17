@@ -309,6 +309,40 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
     </div>
   </div>
 
+  <!-- ══════════ Goederenbeweging (fase 3) ══════════
+       Beginvoorraad + inkopen − verkopen ± correcties = eindvoorraad, uit het
+       datamodel van de accountant. De handmatige aansluitboekingen staan
+       apart: een beweging waarin die als gewone correctie meelopen sluit
+       altijd, en dan is de vraag waar het verschil vandaan komt niet
+       beantwoord maar weggeboekt. -->
+  <h2 class="kop">Goederenbeweging</h2>
+  <div class="kaart" id="gbKaart">
+    <div class="hoofd">
+      <span class="stip laag"></span>
+      <div class="titel">
+        <h3>Beginvoorraad + inkopen − verkopen ± correcties</h3>
+        <p>Opgebouwd uit het datamodel van de accountant, per grootboekrekening en per artikelgroep,
+           met de aansluiting op de voorraadtelling.</p>
+      </div>
+      <div class="cijfers"><div class="groot" id="gbGroot">—</div><div class="klein">eindvoorraad</div></div>
+    </div>
+    <div class="body">
+      <div class="knoprij" style="margin-bottom:12px">
+        <input type="file" id="gbBestand" accept=".xlsx,.xls" style="display:none">
+        <button class="knop" id="gbKies">Datamodel inlezen</button>
+        <label class="keuze">Jaar
+          <input type="number" id="gbJaar" value="2025" min="2015" max="2099" style="width:90px;margin-left:6px">
+        </label>
+        <label class="keuze">Telling
+          <input type="text" id="gbTelling" placeholder="13354844,09" style="width:150px;margin-left:6px">
+        </label>
+        <button class="knop licht" id="gbExport" disabled>Exporteren naar Excel</button>
+      </div>
+      <div id="gbStatus"></div>
+      <div id="gbUit"></div>
+    </div>
+  </div>
+
   <!-- ══════════ De werkwijze zelf ══════════
        De controles hierboven laten zien wat er nu misgaat. Deze afspraken
        zorgen dat het niet terugkomt. Ze staan bewust in de tegel en niet in
@@ -353,6 +387,7 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
 <script src="gg-engine.js"></script>
 <script src="aansluiting-1630.js"></script>
 <script src="inkoopketen.js"></script>
+<script src="goederenbeweging.js"></script>
 <script src="mt940.js"></script>
 <script src="vooruitontvangen.js"></script>
 <script src="bankaansluiting.js"></script>
@@ -1112,6 +1147,211 @@ laden();
     var naam = "1630 inkoopketen per " + laatst.peildatum + ".xlsx";
     XLSX.writeFile(wb, naam);
     if (window.fpLog) window.fpLog("inkoopketen geexporteerd", naam);
+  };
+})();
+</script>
+
+
+<script>
+/* ══════════ Goederenbeweging ══════════
+   Leest het datamodel van de accountant in en bouwt de beweging op. Alleen
+   het tabblad Grootboektransacties en de Beginbalans worden gelezen; het hele
+   werkboek is vijftig megabyte en dat hoeft niet in het geheugen. */
+(function(){
+  if (window.fpGeenToegang) return;
+  var $$ = function(id){ return document.getElementById(id); };
+  var laatst = null;
+  function esc(x){ var d=document.createElement("div"); d.textContent=x==null?"":x; return d.innerHTML; }
+  function st(soort, tekst){
+    $$("gbStatus").innerHTML = tekst ? '<div class="status-msg '+soort+'">'+esc(tekst)+"</div>" : "";
+  }
+  function eur(n){
+    if (n === "" || n == null) return "";
+    return Number(n).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+  function getal(t){
+    var s2 = String(t||"").replace(/\s/g,"").replace(/\./g,"").replace(",",".");
+    var n = Number(s2); return isFinite(n) ? n : 0;
+  }
+
+  $$("gbKies").onclick = function(){ $$("gbBestand").click(); };
+
+  $$("gbBestand").onchange = async function(e){
+    var f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    $$("gbUit").innerHTML = "";
+    st("info", "Bezig met lezen van " + f.name + " (" + Math.round(f.size/1e6) + " MB)…");
+    try {
+      if (!window.fpGoederenbeweging) throw new Error("de module is niet geladen. Herstart het dashboard.");
+      var buf = await f.arrayBuffer();
+      /* Alleen de twee tabbladen die we nodig hebben. Het werkboek heeft er
+         tweeëntwintig en de rest is voor dit doel ballast. */
+      var wb = XLSX.read(buf, {type:"array", sheets:["Grootboektransacties","Beginbalans"], cellDates:true});
+
+      var wsG = wb.Sheets["Grootboektransacties"];
+      var wsB = wb.Sheets["Beginbalans"];
+      if (!wsG) throw new Error("het tabblad Grootboektransacties zit er niet in.");
+
+      st("info", "Beginbalans lezen…");
+      var begin = {};
+      if (wsB) {
+        XLSX.utils.sheet_to_json(wsB, {header:1, defval:""}).slice(1).forEach(function(r){
+          var nr = parseInt(String(r[0]).trim(), 10);
+          if (isFinite(nr)) begin[nr] = Number(r[4]) || 0;
+        });
+      }
+
+      st("info", "Grootboektransacties lezen… dit duurt even bij een groot bestand.");
+      var rijen = XLSX.utils.sheet_to_json(wsG, {header:1, defval:"", raw:true});
+
+      st("info", "Beweging opbouwen…");
+      var jaar = parseInt($$("gbJaar").value, 10) || null;
+      laatst = window.fpGoederenbeweging.bouw(rijen, begin, {jaar: jaar});
+      if (!laatst.ok) throw new Error(laatst.uitleg || laatst.error);
+      laatst.telling = getal($$("gbTelling").value);
+      st("", "");
+      toon(laatst);
+      $$("gbExport").disabled = false;
+      if (window.fpLog) window.fpLog("goederenbeweging opgebouwd",
+        f.name + ", jaar " + jaar + ", " + laatst.regels + " regels");
+    } catch (err) {
+      st("bad", "Inlezen mislukt: " + (err.message || err));
+    }
+  };
+
+  $$("gbTelling").onchange = function(){
+    if (!laatst) return;
+    laatst.telling = getal($$("gbTelling").value);
+    toon(laatst);
+  };
+
+  function toon(b){
+    $$("gbGroot").textContent = eur(b.eind);
+    var h = "";
+    (b.meldingen||[]).forEach(function(m){
+      h += '<div class="status-msg warn" style="margin:6px 0">' + esc(m) + "</div>";
+    });
+
+    /* De beweging zelf. De aansluitboekingen krijgen een eigen regel met een
+       streep erboven, want ze horen niet bij de gewone goederenstroom. */
+    h += '<table class="grid" style="margin-top:10px"><tbody>';
+    h += '<tr><td><b>Beginvoorraad</b></td><td class="num"></td><td class="num"><b>' + eur(b.begin) + "</b></td></tr>";
+    b.soorten.forEach(function(s){
+      if (!s.regels) return;
+      h += "<tr" + (s.apart ? ' style="border-top:2px solid #e5e7eb"' : "") + "><td>" +
+        (s.apart ? "<b>" + esc(s.naam) + "</b>" : esc(s.naam)) +
+        '</td><td class="num" style="color:var(--muted)">' + s.regels +
+        '</td><td class="num">' + eur(s.bedrag) + "</td></tr>";
+    });
+    h += '<tr style="border-top:2px solid #e5e7eb"><td><b>Eindvoorraad</b></td><td class="num"></td>' +
+         '<td class="num"><b>' + eur(b.eind) + "</b></td></tr>";
+    h += '<tr><td style="color:var(--muted)">zonder de handmatige aansluitboekingen</td><td></td>' +
+         '<td class="num" style="color:var(--muted)">' + eur(b.eindZonderAansluiting) + "</td></tr>";
+    h += "</tbody></table>";
+
+    h += '<p class="uitleg" style="margin-top:8px">Voorziening incourant (7999): begin ' +
+      eur(b.voorziening.begin) + ", mutatie " + eur(b.voorziening.mutatie) +
+      ", eind " + eur(b.voorziening.eind) + ".</p>";
+
+    /* De aansluiting met de telling: waar het de accountant om gaat. */
+    if (b.telling) {
+      var a = window.fpGoederenbeweging.aansluiting(b, b.telling);
+      h += '<h3 style="margin:20px 0 6px;font-size:14px">Aansluiting met de telling</h3>' +
+        '<table class="grid"><tbody>' +
+        "<tr><td>Voorraadtelling</td><td class=\"num\">" + eur(a.telling) + "</td></tr>" +
+        "<tr><td>Administratie</td><td class=\"num\">" + eur(a.administratie) + "</td></tr>" +
+        '<tr style="border-top:2px solid #e5e7eb"><td><b>Verschil</b></td><td class="num"><b>' +
+          eur(a.verschil) + "</b></td></tr>" +
+        '<tr><td style="color:var(--muted)">Administratie zonder handmatige aansluiting</td>' +
+          '<td class="num" style="color:var(--muted)">' + eur(a.administratieZonderAansluiting) + "</td></tr>" +
+        '<tr><td><b>Verschil vóór de handmatige aansluiting</b></td><td class="num"><b>' +
+          eur(a.verschilZonderAansluiting) + "</b></td></tr>" +
+        "</tbody></table>";
+    }
+
+    if (b.aansluitregels.length) {
+      h += '<h3 style="margin:20px 0 6px;font-size:14px">De handmatige aansluitboekingen (' +
+        b.aansluitregels.length + ' regels)</h3><div style="overflow-x:auto"><table class="grid">' +
+        "<thead><tr><th>Datum</th><th>Rekening</th><th>Omschrijving</th><th>Bedrag</th></tr></thead><tbody>" +
+        b.aansluitregels.map(function(r){
+          return "<tr><td>" + esc(r.datum) + "</td><td>" + r.rekening + " " + esc(r.rekeningNaam) +
+            "</td><td>" + esc(r.omschrijving) + '</td><td class="num">' + eur(r.bedrag) + "</td></tr>";
+        }).join("") + "</tbody></table></div>";
+    }
+
+    h += blokTabel("Per grootboekrekening", b.perRekening, true);
+    h += blokTabel("Per artikelgroep", b.perGroep, false);
+
+    var vormen = Object.keys(b.overigVormen||{});
+    if (vormen.length) {
+      vormen.sort(function(x,y){ return Math.abs(b.overigVormen[y].bedrag)-Math.abs(b.overigVormen[x].bedrag); });
+      h += '<h3 style="margin:20px 0 6px;font-size:14px">Niet geclassificeerd, naar soort omschrijving</h3>' +
+        '<table class="grid"><thead><tr><th>Omschrijving</th><th>Regels</th><th>Bedrag</th></tr></thead><tbody>' +
+        vormen.slice(0,15).map(function(v){
+          return "<tr><td>" + esc(v) + '</td><td class="num">' + b.overigVormen[v].aantal +
+            '</td><td class="num">' + eur(b.overigVormen[v].bedrag) + "</td></tr>";
+        }).join("") + "</tbody></table>";
+    }
+    $$("gbUit").innerHTML = h;
+  }
+
+  function blokTabel(titel, per, metNaam){
+    var sleutels = Object.keys(per||{});
+    if (!sleutels.length) return "";
+    sleutels.sort(function(a,b2){ return Math.abs(per[b2].totaal)-Math.abs(per[a].totaal); });
+    return '<h3 style="margin:20px 0 6px;font-size:14px">' + esc(titel) + "</h3>" +
+      '<table class="grid"><thead><tr><th>' + (metNaam ? "Rekening" : "Artikelgroep") +
+      "</th><th>Regels</th><th>Mutatie</th></tr></thead><tbody>" +
+      sleutels.map(function(k){
+        return "<tr><td>" + esc(metNaam ? (k + " " + (per[k].naam||"")) : k) +
+          '</td><td class="num">' + per[k].regels + '</td><td class="num">' + eur(per[k].totaal) + "</td></tr>";
+      }).join("") + "</tbody></table>";
+  }
+
+  $$("gbExport").onclick = function(){
+    if (!laatst) return;
+    var wb = XLSX.utils.book_new();
+    var bew = [["Goederenbeweging " + (laatst.jaar||"")],[],["", "Regels", "Bedrag"],
+               ["Beginvoorraad", "", laatst.begin]];
+    laatst.soorten.forEach(function(s){ if (s.regels) bew.push([s.naam, s.regels, s.bedrag]); });
+    bew.push(["Eindvoorraad", "", laatst.eind]);
+    bew.push(["Eindvoorraad zonder handmatige aansluiting", "", laatst.eindZonderAansluiting]);
+    bew.push([]);
+    bew.push(["Voorziening incourant begin", "", laatst.voorziening.begin]);
+    bew.push(["Voorziening incourant mutatie", "", laatst.voorziening.mutatie]);
+    bew.push(["Voorziening incourant eind", "", laatst.voorziening.eind]);
+    if (laatst.telling) {
+      var a = window.fpGoederenbeweging.aansluiting(laatst, laatst.telling);
+      bew.push([]);
+      bew.push(["Voorraadtelling", "", a.telling]);
+      bew.push(["Verschil met de administratie", "", a.verschil]);
+      bew.push(["Verschil vóór de handmatige aansluiting", "", a.verschilZonderAansluiting]);
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(bew), "Goederenbeweging");
+
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(
+      [["Datum","Rekening","Rekeningnaam","Omschrijving","Artikelgroep","Bedrag"]].concat(
+      laatst.aansluitregels.map(function(r){
+        return [r.datum, r.rekening, r.rekeningNaam, r.omschrijving, r.artikelgroep, r.bedrag]; }))),
+      "Aansluitboekingen");
+
+    ["perRekening","perGroep"].forEach(function(veld, i){
+      var per = laatst[veld], k2 = Object.keys(per);
+      var soorten = laatst.soorten.map(function(s){ return s.sleutel; });
+      var kop = [i ? "Artikelgroep" : "Rekening"].concat(
+        laatst.soorten.map(function(s){ return s.naam; })).concat(["Totaal","Regels"]);
+      var data = [kop].concat(k2.map(function(k3){
+        return [i ? k3 : (k3 + " " + (per[k3].naam||""))].concat(
+          soorten.map(function(s){ return per[k3].perSoort[s] || 0; })
+        ).concat([per[k3].totaal, per[k3].regels]);
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), i ? "Per artikelgroep" : "Per rekening");
+    });
+
+    var naam = "Goederenbeweging " + (laatst.jaar||"") + ".xlsx";
+    XLSX.writeFile(wb, naam);
+    if (window.fpLog) window.fpLog("goederenbeweging geexporteerd", naam);
   };
 })();
 </script>
