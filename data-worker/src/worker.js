@@ -67,6 +67,9 @@ const ALLOWED_BUCKETS = new Set([
      waar was; dat hoort niet met de teamsleutel op te vragen te zijn. Het gaat
      via /uren/, langs de persoonlijke sleutel. */
   "uren-instellingen",
+  // Orderbevestigingen van de meubelfabrieken: wat er besteld is, per S/C
+  // nummer. Alleen wat er in het document staat - geen prijzen.
+  "bestellingen",
   // De bezorgingen waarvoor een klant een volglink heeft gekregen: code →
   // naam, adres, welke wagen en welke dag. Alleen de code opent de pagina, dus
   // die moet lang genoeg zijn om niet te raden te zijn.
@@ -4716,6 +4719,91 @@ async function mailProef(env, adres) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════
+   Bestellingen — de orderbevestiging van een meubelfabriek
+   ══════════════════════════════════════════════════════════════════════
+
+   Chantal stuurt de sales confirmation die de fabriek terugstuurt. Het lezen
+   ervan gebeurt in de pagina (sales-confirmation.js); hier wordt het bewaard
+   en worden de artikelnummers in Logic4 nagekeken.
+
+   Dat laatste is haar eigenlijke vraag: "als je deze niet in Logic kan
+   vinden, dan graag afstemmen met Gretha". Dus moet er per artikelnummer
+   uitkomen of het bestaat, en zo niet, dat het langs Gretha moet.
+
+   De antwoorden blijven bewaard, ook een "niet gevonden". Anders zoekt elk
+   scherm dat de bestelling opent dezelfde nummers opnieuw op, en op de gratis
+   laag mag één aanroep maar vijftig verzoeken naar buiten doen.            */
+
+async function artikelBestaat(env, codes) {
+  const cache = (await env.FONTEYN_DATA.get("artikel-codes-check", { type: "json" })) || {};
+  const nu = Date.now();
+  const uit = {};
+  const teZoeken = [];
+
+  for (const ruw of codes) {
+    const code = String(ruw || "").trim().toUpperCase();
+    if (!code) continue;
+    const c = cache[code];
+    /* Een maand houdbaar. Een artikel dat vandaag niet bestaat kan volgende
+       week door Gretha zijn aangemaakt, en dan moet het antwoord meebewegen. */
+    if (c && nu - (c.ts || 0) < 30 * 86400000) uit[code] = { gevonden: c.gevonden, naam: c.naam || "" };
+    else teZoeken.push(code);
+  }
+  if (!teZoeken.length) return { ok: true, codes: uit };
+
+  let token = null;
+  try { token = await l4Token(env); } catch (e) {
+    /* Zonder Logic4 geen oordeel. Dan liever niets zeggen dan alles als
+       onbekend markeren en Chantal voor niets naar Gretha sturen. */
+    return { ok: true, codes: uit, onbekend: teZoeken, waarschuwing: "logic4-niet-bereikbaar" };
+  }
+
+  for (const code of teZoeken.slice(0, 20)) {
+    try {
+      const r = await fetch("https://api.logic4server.nl/v3/Products/GetProducts", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ FastSearchText: code, TakeRecords: 10 }),
+      });
+      const j = await r.json().catch(() => null);
+      const lijst = (j && (j.Products || j)) || [];
+      /* Alleen een treffer op precies dit artikelnummer telt. FastSearchText
+         geeft ook halve treffers terug, en "lijkt erop" is hier niet goed
+         genoeg: dan zou een verkeerd nummer als bestaand doorgaan. */
+      const raak = (Array.isArray(lijst) ? lijst : []).find(p =>
+        String(p.ProductCode || "").trim().toUpperCase() === code);
+      const res = { gevonden: !!raak, naam: raak ? String(raak.ProductName1 || "").slice(0, 80) : "" };
+      uit[code] = res;
+      cache[code] = { ...res, ts: nu };
+    } catch (e) {
+      uit[code] = { gevonden: null, naam: "" };
+    }
+  }
+  await env.FONTEYN_DATA.put("artikel-codes-check", JSON.stringify(cache));
+  return { ok: true, codes: uit };
+}
+
+async function bestellingBewaren(env, wie, doc) {
+  if (!doc || !doc.referentie) return { ok: false, error: "geen-referentie" };
+  const alles = (await env.FONTEYN_DATA.get("bestellingen", { type: "json" })) || { lijst: [] };
+  const rec = {
+    referentie: String(doc.referentie).slice(0, 40),
+    fabriek: String(doc.fabriek || "").slice(0, 100),
+    datum: String(doc.datum || "").slice(0, 10),
+    regels: (doc.regels || []).slice(0, 200),
+    artikelen: (doc.artikelen || []).slice(0, 200),
+    totaal: Number(doc.totaal) || 0,
+    bestand: String(doc.bestand || "").slice(0, 120),
+    door: wie, ts: new Date().toISOString(),
+  };
+  const i = (alles.lijst || []).findIndex(x => x.referentie === rec.referentie);
+  if (i >= 0) alles.lijst[i] = rec; else alles.lijst.push(rec);
+  alles.lijst = alles.lijst.slice(-300);
+  await env.FONTEYN_DATA.put("bestellingen", JSON.stringify(alles));
+  return { ok: true, referentie: rec.referentie, vervangen: i >= 0 };
+}
+
+/* ══════════════════════════════════════════════════════════════════════
    Uren — starten, stoppen en achteraf bijstellen
    ══════════════════════════════════════════════════════════════════════
 
@@ -5406,6 +5494,23 @@ export default {
     if (url.pathname === "/logic4/lees" && request.method === "POST") {
       const b = await request.json().catch(() => ({}));
       return logic4Lees(env, request, b);
+    }
+
+    /* Artikelnummers nakijken in Logic4, en een orderbevestiging bewaren.
+       Langs de teamsleutel: wie de tegel mag openen uploadt daar toch al
+       documenten van de fabriek. */
+    if (url.pathname === "/artikel/bestaat" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      const codes = Array.isArray(b.codes) ? b.codes.slice(0, 60) : [];
+      return reply(200, await artikelBestaat(env, codes)
+        .catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/bestelling" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      return reply(200, await bestellingBewaren(env, String(b.door || "").slice(0, 60), b.doc)
+        .catch(e => ({ ok: false, error: String(e.message || e) })));
     }
 
     /* ── De mailtegel ────────────────────────────────────────────────

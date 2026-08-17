@@ -25,6 +25,9 @@
 <meta charset="UTF-8">
 <title>Fonteyn — Tuinmeubelen</title>
 <script src="taal.js"></script>
+<!-- Voor het lezen van de orderbevestiging die de fabriek terugstuurt. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="sales-confirmation.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- ══════════════════════════════════════════════════════════════════════
      TUINMEUBELEN
@@ -80,6 +83,24 @@ td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .status-msg.info{background:#eff6ff;color:#1e40af}
 .status-msg.error{background:#fee2e2;color:var(--bad)}
 .onderdeel{color:var(--muted);font-size:11.5px}
+
+/* ── Besteld bij de fabriek ─────────────────────────────────────────── */
+.scknop{background:var(--fonteyn-green);color:#fff;border:none;border-radius:8px;padding:11px 20px;
+        font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.scknop:hover{background:var(--fonteyn-green-dark)}
+.scknop:disabled{background:#d1d5db;color:#6b7280;cursor:not-allowed}
+.sc-kop{display:flex;flex-wrap:wrap;gap:8px 22px;margin:16px 0 12px;font-size:13px}
+.sc-kop div{min-width:0}
+.sc-kop label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;
+              color:var(--muted);font-weight:600}
+.sc-kop b{font-size:14px}
+.sc-mist{background:#fff7ed;border:1px solid #fed7aa;color:var(--warn);border-radius:8px;
+         padding:12px 14px;margin:12px 0;font-size:13px;line-height:1.6}
+.sc-mist b{display:block;margin-bottom:3px;color:#7c2d12}
+.sc-mist code{background:rgba(0,0,0,.06);padding:1px 6px;border-radius:4px;font-size:12px}
+.sc-goed{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:8px;
+         padding:11px 14px;margin:12px 0;font-size:13px}
+.sc-onderdeel{color:var(--muted);font-size:12px}
 </style>
 </head>
 <body>
@@ -100,6 +121,23 @@ td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   </p>
   <div id="status"></div>
   <div id="lijst"></div>
+
+  <!-- Wat er bij de fabriek besteld is. Chantal (17 aug 2026): "Het dashboard
+       ook dit bestand laten lezen. Fabriek / S/C NO / Item NO / Color /
+       Quanity", met erbij: staat een artikelnummer niet in Logic4, dan moet
+       het langs Gretha. -->
+  <h2 style="margin-top:34px">Besteld bij de fabriek</h2>
+  <p class="lead">
+    De orderbevestiging die de fabriek terugstuurt - de <b>sales confirmation</b> - kun je hier inlezen.
+    Het dashboard haalt de fabriek, het S/C-nummer, de artikelnummers, de kleuren en de aantallen eruit,
+    en kijkt meteen na of die artikelnummers in Logic4 bestaan. Wat er niet in staat moet langs Gretha.
+  </p>
+  <div class="card" id="bestelKaart">
+    <input type="file" id="scBestand" accept=".xls,.xlsx" style="display:none">
+    <button class="scknop" id="scKies" type="button">Orderbevestiging inlezen</button>
+    <div id="scStatus"></div>
+    <div id="scUit"></div>
+  </div>
 </main>
 
 <script>
@@ -256,6 +294,144 @@ laad();
     fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"tuinmeubelen",action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker"),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){});
   }catch(e){}};
   window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
+})();
+</script>
+
+
+<script>
+/* ── Orderbevestiging inlezen ───────────────────────────────────────────
+   Chantal uploadt de sales confirmation die de fabriek terugstuurt. Het lezen
+   gebeurt hier in de pagina; de worker kijkt daarna de artikelnummers na in
+   Logic4 en bewaart wat er besteld is.
+
+   Het nakijken is haar eigenlijke vraag. Wat Logic4 niet kent moet langs
+   Gretha, en dat staat er dan ook zo. */
+(function(){
+  if (window.fpGeenToegang) return;
+  var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+  var $$ = function(id){ return document.getElementById(id); };
+  function esc(s){ var d=document.createElement("div"); d.textContent=s==null?"":s; return d.innerHTML; }
+  function sleutel(){ return localStorage.getItem("fp.teamkey") || ""; }
+  function melding(soort, tekst){
+    $$("scStatus").innerHTML = tekst
+      ? '<div class="status-msg ' + soort + '">' + esc(tekst) + "</div>" : "";
+  }
+
+  $$("scKies").onclick = function(){ $$("scBestand").click(); };
+
+  $$("scBestand").onchange = async function(e){
+    var file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    $$("scUit").innerHTML = "";
+    $$("scKies").disabled = true;
+    melding("info", "Bezig met lezen…");
+
+    try {
+      if (!window.XLSX || !window.fpSalesConfirmation)
+        throw new Error("de lezer is niet geladen. Sluit het dashboard af en start het opnieuw.");
+
+      var buf = await file.arrayBuffer();
+      var wb = XLSX.read(buf, { type: "array" });
+
+      /* Zoek het blad met de bevestiging erop. Deze bestanden hebben vaak een
+         Macro1 en een paar lege bladen; alleen op het eerste blad afgaan gaat
+         dan mis. */
+      var doc = null;
+      for (var i = 0; i < wb.SheetNames.length && !doc; i++) {
+        var rijen = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[i]], { header:1, defval:"" });
+        if (window.fpSalesConfirmation.isSalesConfirmation(rijen))
+          doc = window.fpSalesConfirmation.lees(rijen);
+      }
+      if (!doc)
+        throw new Error("dit lijkt geen orderbevestiging. Verwacht een blad met \'Sales confirmation\' " +
+                        "of een S/C-nummer, en een tabel met Item no en Quanity.");
+      doc.bestand = file.name;
+
+      /* De artikelnummers nakijken in Logic4. Lukt dat niet, dan tonen we de
+         bestelling gewoon zonder dat oordeel - beter dan helemaal niets. */
+      var check = null;
+      try {
+        var r = await fetch(W + "/artikel/bestaat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": sleutel() },
+          body: JSON.stringify({ codes: (doc.artikelen||[]).map(function(a){ return a.code; }) }),
+        });
+        var j = await r.json();
+        if (j && j.ok) check = j;
+      } catch (err) { console.warn("[bestelling] nakijken faalde:", err); }
+
+      toon(doc, check);
+
+      /* Bewaren, zodat het overzicht blijft staan als je de tegel opnieuw
+         opent. Mislukt dat, dan is wat je nu ziet nog steeds goed. */
+      fetch(W + "/bestelling", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": sleutel() },
+        body: JSON.stringify({ door: (localStorage.getItem("fp.email")||""), doc: doc }),
+      }).catch(function(){});
+
+      melding("", "");
+      if (window.fpLog) window.fpLog("bestelling-gelezen", doc.referentie + " " + file.name);
+    } catch (err) {
+      melding("bad", "Lezen mislukt: " + (err.message || err));
+    } finally {
+      $$("scKies").disabled = false;
+    }
+  };
+
+  function toon(doc, check){
+    var h = '<div class="sc-kop">' +
+      '<div><label>Fabriek</label><b>' + esc(doc.fabriek || "onbekend") + "</b></div>" +
+      '<div><label>S/C nummer</label><b>' + esc(doc.referentie || "onbekend") + "</b></div>" +
+      (doc.datum ? '<div><label>Datum</label><b>' + esc(doc.datum) + "</b></div>" : "") +
+      '<div><label>Totaal</label><b>' + doc.totaal + " stuks</b></div></div>";
+
+    if (doc.meldingen && doc.meldingen.length)
+      h += '<div class="sc-mist"><b>Let op</b>' + doc.meldingen.map(esc).join("<br>") + "</div>";
+
+    /* Wat Logic4 niet kent. Dit is waar het Chantal om te doen is. */
+    if (check && check.codes) {
+      var mist = Object.keys(check.codes).filter(function(c){ return check.codes[c].gevonden === false; });
+      if (mist.length) {
+        h += '<div class="sc-mist"><b>Niet gevonden in Logic4 - even met Gretha afstemmen</b>' +
+             mist.map(function(c){ return "<code>" + esc(c) + "</code>"; }).join(" ") + "</div>";
+      } else if (Object.keys(check.codes).length) {
+        h += '<div class="sc-goed">Alle artikelnummers staan in Logic4.</div>';
+      }
+      if (check.waarschuwing)
+        h += '<div class="sc-mist">Logic4 was even niet bereikbaar, dus de artikelnummers zijn niet nagekeken.</div>';
+    }
+
+    h += '<table class="grid"><thead><tr><th>Artikelnummer</th><th>Kleur</th>' +
+         '<th class="num">Aantal</th><th>Omschrijving</th></tr></thead><tbody>';
+    (doc.regels||[]).forEach(function(r){
+      var onder = (r.onderdelen||[]).map(function(o){
+        return esc(o.code) + (o.perSet > 1 ? " &times;" + o.perSet : "") + (o.maat ? " <span class=\'muted\'>" + esc(o.maat) + "</span>" : "");
+      }).join(", ");
+      h += "<tr><td><b>" + esc(r.set) + "</b>" +
+           (onder ? '<div class="sc-onderdeel">' + onder + "</div>" : "") + "</td>" +
+           "<td>" + esc(r.kleur || "-") + "</td>" +
+           '<td class="num">' + r.aantal + "</td>" +
+           "<td>" + esc(String(r.omschrijving||"").slice(0,90)) + (String(r.omschrijving||"").length>90?"…":"") + "</td></tr>";
+    });
+    h += "</tbody></table>";
+
+    if (doc.artikelen && doc.artikelen.length) {
+      h += '<h3 style="margin:20px 0 6px;font-size:14px;color:var(--fonteyn-green)">Per artikelnummer</h3>' +
+           '<table class="grid"><thead><tr><th>Artikelnummer</th><th class="num">Stuks</th><th>In Logic4</th></tr></thead><tbody>';
+      doc.artikelen.forEach(function(a){
+        var st = check && check.codes && check.codes[a.code];
+        var oordeel = !st ? "<span class=\'muted\'>niet nagekeken</span>"
+          : st.gevonden === true ? "ja" + (st.naam ? " <span class=\'muted\'>" + esc(st.naam) + "</span>" : "")
+          : st.gevonden === false ? "<b style=\'color:var(--warn)\'>nee - via Gretha</b>"
+          : "<span class=\'muted\'>onbekend</span>";
+        h += "<tr><td>" + esc(a.code) + '</td><td class="num">' + a.aantal + "</td><td>" + oordeel + "</td></tr>";
+      });
+      h += "</tbody></table>";
+    }
+    $$("scUit").innerHTML = h;
+  }
 })();
 </script>
 
