@@ -2393,7 +2393,34 @@ async function spaOntvangstVoorstel(env) {
       gekoppeld: hoortBij.filter(nr => !!orders[nr]),
       ontbreekt: hoortBij.filter(nr => !orders[nr]),
       spas: regels.reduce((t, r) => t + r.aantal, 0),
-      raak: raak, mis: mis, regels: regels
+      raak: raak, mis: mis, regels: regels,
+      /* Wat er wel op de factuur stond maar aan geen enkel artikel te koppelen
+         was. Bij de zending van 28 aug 2026 zijn dat drie swimspa's, tien
+         sauna's en zes onderdelen: die staan in de factuur met omschrijving,
+         aantal en sectie, maar niet in de spa-catalogus, want daar zitten
+         alleen spa's, zwemspa's en ijsbaden in.
+
+         Die stonden daardoor in geen enkel scherm - het veld bestond, maar het
+         enige dat het toonde filtert op regels met een ordernummer of een
+         klantnaam en die hebben deze niet. Drieëntwintig stuks onzichtbaar.
+
+         Ze tellen nog steeds niet mee als voorraad; dat kan pas als er een
+         artikel aan hangt. Maar zichtbaar horen ze wel te zijn. */
+      /* Twee soorten regels heten allebei "specials". De ene komt uit de
+         xls-lezer en is een herkende spa met een bijzonderheid: die heeft een
+         model en een qty, en telt hierboven al mee. De andere komt uit de
+         pdf-lezer en is juist een regel die aan geen artikel te koppelen was:
+         die heeft een omschrijving en een sectie.
+
+         Alleen die tweede hoort hier. Op "omschrijving of model" filteren
+         leverde bij de echte gegevens honderdzeventien regels op in plaats van
+         drieëntwintig - elke spa er nog een keer bij. */
+      ongekoppeld: (s.specials || [])
+        .filter(x => x && !x.ordernr && !x.klant && x.omschrijving && !x.model)
+        .map(x => ({ omschrijving: String(x.omschrijving).slice(0, 120),
+                     aantal: Number(x.aantal) || 0,
+                     sectie: String(x.sectie || "").slice(0, 40) }))
+        .filter(x => x.aantal > 0),
     });
   }
 

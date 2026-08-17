@@ -214,6 +214,11 @@
 .so-onderweg-inhoud{display:flex;flex-wrap:wrap;gap:5px;flex:1 1 320px}
 .so-inhoud-pil{background:#f3f6f1;border:1px solid #e2e8dd;border-radius:14px;padding:2px 10px;font-size:12px;white-space:nowrap}
 .so-inhoud-pil b{color:var(--fonteyn-green,#144734)}
+/* Wat er op de factuur staat maar nog aan geen artikel hangt: sauna's,
+   swimspa's, onderdelen. Een andere kleur dan de herkende spa's, want het
+   telt niet mee in de voorraad - het is wel onderweg. */
+.so-inhoud-pil.los{background:#fffbeb;border-color:#fde68a}
+.so-inhoud-pil.los b{color:#92400e}
 /* De kleur achter het model: wel leesbaar, maar het model blijft het eerste
    dat je ziet. */
 .so-inhoud-kleur{color:var(--muted,#6b7280);margin-left:5px}

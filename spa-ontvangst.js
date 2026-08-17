@@ -184,6 +184,9 @@
       return dg === null || dg > 0;   // zonder ETA weten we het niet: laten staan
     });
     var totaal = varend.reduce(function (n, s) { return n + (Number(s.spas) || 0); }, 0);
+    var los = varend.reduce(function (n, s) {
+      return n + (s.ongekoppeld || []).reduce(function (m, x) { return m + (x.aantal || 0); }, 0);
+    }, 0);
     var conts = varend.reduce(function (n, s) { return n + (Number(s.containers) || 0); }, 0);
 
     var kop = el("div", "so-onderweg-kop");
@@ -191,7 +194,8 @@
     kop.appendChild(el("span", null,
       varend.length + " zending" + (varend.length === 1 ? "" : "en") +
       (conts ? "  ·  " + conts + " containers" : "") +
-      "  ·  " + totaal + " spa's"));
+      "  ·  " + totaal + " spa's" +
+      (los ? "  ·  " + los + " nog niet gekoppeld" : "")));
     d.appendChild(kop);
 
     if (!varend.length) {
@@ -233,7 +237,6 @@
           // container er twee keer achter elkaar hetzelfde uitziet.
           return b.aantal - a.aantal || a.model.localeCompare(b.model) || a.kleur.localeCompare(b.kleur);
         });
-      if (!lijst.length) inhoud.appendChild(el("span", "so-meta klein", "inhoud nog niet ingelezen"));
       lijst.forEach(function (x) {
         var p = el("span", "so-inhoud-pil");
         p.appendChild(el("b", null, String(x.aantal)));
@@ -241,6 +244,22 @@
         if (x.kleur) p.appendChild(el("span", "so-inhoud-kleur", x.kleur));
         inhoud.appendChild(p);
       });
+
+      /* Wat er op de factuur stond maar aan geen artikel te koppelen was:
+         sauna's, swimspa's, onderdelen. Die zaten in de gegevens maar kwamen
+         nergens in beeld, en dan lijkt een volle container leeg. Ze tellen
+         niet mee in het aantal spa's - dat kan pas als er een artikel aan
+         hangt - maar je ziet nu wel wat eraan komt. */
+      (s.ongekoppeld || []).forEach(function (x) {
+        var p = el("span", "so-inhoud-pil los");
+        p.appendChild(el("b", null, String(x.aantal)));
+        p.appendChild(document.createTextNode(" " + x.omschrijving));
+        if (x.sectie) p.appendChild(el("span", "so-inhoud-kleur", x.sectie.toLowerCase()));
+        inhoud.appendChild(p);
+      });
+
+      if (!lijst.length && !(s.ongekoppeld || []).length)
+        inhoud.appendChild(el("span", "so-meta klein", "inhoud nog niet ingelezen"));
       r.appendChild(inhoud);
       d.appendChild(r);
     });
