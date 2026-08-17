@@ -101,6 +101,22 @@ td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .sc-goed{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:8px;
          padding:11px 14px;margin:12px 0;font-size:13px}
 .sc-onderdeel{color:var(--muted);font-size:12px}
+
+.sc-best{background:#fff;border:1px solid var(--border);border-radius:10px;padding:15px 18px;margin:12px 0}
+.sc-best .rij1{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline}
+.sc-best .ref{font-weight:700;color:var(--fonteyn-green);font-size:15px}
+.sc-best .fab{color:var(--muted);font-size:13px;flex:1;min-width:0}
+.sc-best .aant{font-size:13px;font-weight:600}
+.sc-zend{margin-top:10px;font-size:13px}
+.sc-zend .een{display:inline-flex;align-items:center;gap:7px;background:#f0fdf4;border:1px solid #bbf7d0;
+              border-radius:999px;padding:3px 6px 3px 11px;margin:4px 6px 0 0}
+.sc-zend .een.vanzelf{background:#eff6ff;border-color:#bfdbfe}
+.sc-zend .een button{border:none;background:transparent;color:var(--muted);cursor:pointer;
+                     font:inherit;font-size:14px;line-height:1;padding:0 4px}
+.sc-zend .geen{color:var(--muted);font-style:italic}
+.sc-koppel{margin-top:10px;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+.sc-koppel select{border:1px solid var(--border);border-radius:7px;padding:7px 9px;font:inherit;font-size:13px;
+                  max-width:100%}
 </style>
 </head>
 <body>
@@ -138,6 +154,7 @@ td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
     <div id="scStatus"></div>
     <div id="scUit"></div>
   </div>
+  <div id="bestellijst"></div>
 </main>
 
 <script>
@@ -372,6 +389,7 @@ laad();
       }).catch(function(){});
 
       melding("", "");
+      laadBestellingen();
       if (window.fpLog) window.fpLog("bestelling-gelezen", doc.referentie + " " + file.name);
     } catch (err) {
       melding("bad", "Lezen mislukt: " + (err.message || err));
@@ -432,7 +450,86 @@ laad();
     }
     $$("scUit").innerHTML = h;
   }
+
+  /* ── Wat er eerder is ingelezen ──────────────────────────────────────
+     Elke bestelling met de zendingen die eraan hangen. Een koppeling die het
+     dashboard zelf heeft gevonden - omdat het S/C-nummer op de commercial
+     invoice staat - krijgt een andere kleur dan een die iemand met de hand
+     heeft gelegd. Zo blijft zichtbaar wat een aanname is en wat een besluit. */
+  var vrijeZendingen = [];
+
+  async function laadBestellingen(){
+    var doel = $$("bestellijst");
+    try {
+      var r = await fetch(W + "/bestellingen", { headers: { "X-Fonteyn-Auth": sleutel() } });
+      var j = await r.json();
+      if (!j || !j.ok) { doel.innerHTML = ""; return; }
+      vrijeZendingen = j.vrij || [];
+      if (!j.lijst.length) { doel.innerHTML = ""; return; }
+
+      doel.innerHTML = '<h3 style="margin:24px 0 4px;font-size:14px;color:var(--fonteyn-green)">' +
+        "Eerder ingelezen bestellingen</h3>" +
+        j.lijst.map(function(b){
+          var zend = (b.koppelingen||[]).length
+            ? b.koppelingen.map(function(k){
+                return '<span class="een' + (k.vanzelf ? " vanzelf" : "") + '">' +
+                  esc(k.ref) + (k.eta ? ' <span class="muted">' + esc(k.eta) + "</span>" : "") +
+                  (k.vanzelf ? "" : '<button data-los="' + esc(b.referentie) + '|' + esc(k.ref) +
+                                    '" title="losmaken">&times;</button>') + "</span>";
+              }).join("")
+            : '<span class="geen">nog geen zending gekoppeld</span>';
+
+          var keuze = vrijeZendingen.length
+            ? '<div class="sc-koppel"><select data-voor="' + esc(b.referentie) + '">' +
+              '<option value="">Koppel een zending…</option>' +
+              vrijeZendingen.map(function(v){
+                return '<option value="' + esc(v.ref) + '">' + esc(v.ref) +
+                       (v.eta ? " - " + esc(v.eta) : "") + "</option>";
+              }).join("") + "</select></div>"
+            : "";
+
+          return '<div class="sc-best"><div class="rij1">' +
+            '<span class="ref">' + esc(b.referentie) + "</span>" +
+            '<span class="fab">' + esc(b.fabriek || "") + (b.datum ? " &middot; " + esc(b.datum) : "") + "</span>" +
+            '<span class="aant">' + (b.totaal||0) + " stuks</span></div>" +
+            '<div class="sc-zend">' + zend + "</div>" + keuze + "</div>";
+        }).join("");
+
+      /* Koppelen en losmaken. Na elke wijziging opnieuw laden, want de lijst
+         met vrije zendingen verandert mee. */
+      Array.prototype.forEach.call(doel.querySelectorAll("select[data-voor]"), function(sel){
+        sel.onchange = function(){
+          if (!sel.value) return;
+          koppel(sel.dataset.voor, sel.value, false);
+        };
+      });
+      Array.prototype.forEach.call(doel.querySelectorAll("button[data-los]"), function(kn){
+        kn.onclick = function(){
+          var d = kn.dataset.los.split("|");
+          koppel(d[0], d[1], true);
+        };
+      });
+    } catch (e) { console.warn("[bestellingen] laden faalde:", e); doel.innerHTML = ""; }
+  }
+
+  async function koppel(referentie, zending, los){
+    try {
+      var r = await fetch(W + "/bestelling/koppel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": sleutel() },
+        body: JSON.stringify({ referentie: referentie, zending: zending, los: !!los }),
+      });
+      var j = await r.json();
+      if (!j.ok) { melding("bad", "Koppelen mislukt: " + (j.error || "")); return; }
+      if (window.fpLog) window.fpLog(los ? "bestelling-losgemaakt" : "bestelling-gekoppeld",
+                                     referentie + " - " + zending);
+      laadBestellingen();
+    } catch (e) { melding("bad", "Koppelen mislukt: " + (e.message || e)); }
+  }
+
+  laadBestellingen();
 })();
+
 </script>
 
 </body>

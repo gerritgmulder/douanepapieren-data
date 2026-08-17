@@ -4783,6 +4783,80 @@ async function artikelBestaat(env, codes) {
   return { ok: true, codes: uit };
 }
 
+/* Een bestelling aan een zending hangen. Eén bestelling kan over meerdere
+   containers komen - deze gaat over vierenveertig sets in twee containers -
+   dus het is een lijst en geen enkel veld.
+
+   Automatisch koppelen kan alleen als de fabriek het S/C-nummer op de
+   commercial invoice herhaalt, en dat doet niet elke fabriek. Daarom kan het
+   ook met de hand; zodra iemand dat één keer doet blijft het staan. */
+function noemtReferentie(schip, ref) {
+  const naald = String(ref || "").trim().toLowerCase();
+  if (naald.length < 4) return false;
+  const hooi = [schip.ref, schip.file, schip.vessel,
+                schip.meubel && schip.meubel.invoiceNo,
+                schip.meubel && schip.meubel.fabriek]
+    .filter(Boolean).join(" ").toLowerCase();
+  /* Op woordgrens, niet zomaar als deel van een langere reeks: "R26039" mag
+     niet aanslaan op "AR260391". */
+  return new RegExp("(^|[^a-z0-9])" + naald.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+                    "([^a-z0-9]|$)").test(hooi);
+}
+
+async function bestellingKoppel(env, body) {
+  const ref = String(body.referentie || "").trim();
+  const zending = String(body.zending || "").trim();
+  if (!ref || !zending) return { ok: false, error: "referentie-en-zending-nodig" };
+
+  const alles = (await env.FONTEYN_DATA.get("bestellingen", { type: "json" })) || { lijst: [] };
+  const b = (alles.lijst || []).find(x => x.referentie === ref);
+  if (!b) return { ok: false, error: "bestelling-niet-gevonden" };
+
+  b.zendingen = (b.zendingen || []).filter(z => z !== zending);
+  if (!body.los) b.zendingen.push(zending);
+  await env.FONTEYN_DATA.put("bestellingen", JSON.stringify(alles));
+  return { ok: true, referentie: ref, zendingen: b.zendingen };
+}
+
+/* De bestellingen met hun zendingen erbij. Wat er automatisch te vinden is
+   wordt hier gezocht en niet bewaard: de schepenlijst verandert, en een
+   koppeling die ooit klopte moet niet blijven hangen als het schip weg is.
+   Wat met de hand is gekoppeld blijft wél staan - dat is een besluit van een
+   mens en geen gok van een machine. */
+async function bestellingen(env) {
+  const alles = (await env.FONTEYN_DATA.get("bestellingen", { type: "json" })) || { lijst: [] };
+  const schepen = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+  const vloot = schepen.ships || [];
+
+  const lijst = (alles.lijst || []).map(b => {
+    const handmatig = (b.zendingen || []);
+    const gevonden = vloot.filter(s => s.ref && noemtReferentie(s, b.referentie))
+                          .map(s => s.ref)
+                          .filter(r => handmatig.indexOf(r) < 0);
+    const alle = handmatig.concat(gevonden);
+    return {
+      ...b,
+      zendingen: handmatig,
+      gevonden,
+      /* Wat er van deze bestelling in beeld is. Zolang er geen zending aan
+         hangt staat er niets onderweg, en dat is precies wat je wilt zien. */
+      koppelingen: alle.map(r => {
+        const s = vloot.find(x => x.ref === r);
+        return { ref: r, eta: s ? (s.eta || "") : "", bestand: s ? (s.file || "") : "",
+                 bekend: !!s, vanzelf: gevonden.indexOf(r) >= 0 };
+      }),
+    };
+  }).sort((a, b) => String(b.datum || "").localeCompare(String(a.datum || "")));
+
+  /* De zendingen waar nog geen bestelling aan hangt, zodat er iets te kiezen
+     valt zonder dat iemand containernummers uit zijn hoofd moet kennen. */
+  const gekoppeld = new Set(lijst.flatMap(b => b.koppelingen.map(k => k.ref)));
+  const vrij = vloot.filter(s => s.ref && !gekoppeld.has(s.ref))
+                    .map(s => ({ ref: s.ref, eta: s.eta || "", bestand: s.file || "",
+                                 alleenDocumenten: !!s.alleenDocumenten }));
+  return { ok: true, lijst, vrij };
+}
+
 async function bestellingBewaren(env, wie, doc) {
   if (!doc || !doc.referentie) return { ok: false, error: "geen-referentie" };
   const alles = (await env.FONTEYN_DATA.get("bestellingen", { type: "json" })) || { lijst: [] };
@@ -5504,6 +5578,17 @@ export default {
       const b = await request.json().catch(() => ({}));
       const codes = Array.isArray(b.codes) ? b.codes.slice(0, 60) : [];
       return reply(200, await artikelBestaat(env, codes)
+        .catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/bestellingen" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      return reply(200, await bestellingen(env)
+        .catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/bestelling/koppel" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      return reply(200, await bestellingKoppel(env, b)
         .catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/bestelling" && request.method === "POST") {
