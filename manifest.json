@@ -1,5 +1,5 @@
 {
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -256,6 +256,10 @@
     {
       "name": "sales-confirmation.js",
       "note": "De orderbevestiging van een meubelfabriek lezen: fabriek, S/C nummer, artikelnummers, kleur en aantal. Artikelnummers staan met meerdere tegelijk in een samengevoegde cel; die wordt uitgeplozen tot de set en zijn onderdelen."
+    },
+    {
+      "name": "inkoopketen.js",
+      "note": "Inkooporder, goederenontvangst en inkoopfactuur aan elkaar knopen voor de audit van grootboek 1630. Zes overzichten in het kolommenformat van de accountant."
     }
   ]
 }

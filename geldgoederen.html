@@ -275,6 +275,40 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
   <div class="keten" id="keten"></div>
   <div id="inhoud"></div>
 
+  <!-- ══════════ Inkoopketen voor de audit (1630) ══════════
+       Just Audit controleert het werk van De Jong & Laan. Kevin heeft zes
+       overzichten gevraagd om grootboek 1630 te onderbouwen, allemaal in
+       hetzelfde kolommenformat. Die worden hier opgebouwd uit Logic4 zelf,
+       zodat ze volgende maand opnieuw te draaien zijn in plaats van één keer
+       met de hand in Excel gezet. -->
+  <h2 class="kop">Inkoopketen voor de audit</h2>
+  <div class="kaart" id="ikKaart">
+    <div class="hoofd">
+      <span class="stip laag"></span>
+      <div class="titel">
+        <h3>Grootboek 1630 — te ontvangen facturen</h3>
+        <p>Inkooporder, goederenontvangst en inkoopfactuur naast elkaar, per peildatum en per vandaag.
+           Zes overzichten in het vaste kolommenformat van de accountant.</p>
+      </div>
+      <div class="cijfers"><div class="groot" id="ikGroot">—</div><div class="klein">regels</div></div>
+    </div>
+    <div class="body">
+      <div class="knoprij" style="margin-bottom:12px">
+        <label class="keuze">Peildatum
+          <input type="date" id="ikPeil" value="2025-12-31" style="margin-left:6px">
+        </label>
+        <button class="knop" id="ikDraai">Opbouwen uit Logic4</button>
+        <button class="knop licht" id="ikExport" disabled>Exporteren naar Excel</button>
+        <label class="keuze" style="margin-left:auto">
+          <input type="file" id="ikGb" accept=".xlsx,.xls,.csv" style="display:none">
+          <button class="knop licht" id="ikGbKies">Grootboekexport 1630 inlezen</button>
+        </label>
+      </div>
+      <div id="ikStatus"></div>
+      <div id="ikUit"></div>
+    </div>
+  </div>
+
   <!-- ══════════ De werkwijze zelf ══════════
        De controles hierboven laten zien wat er nu misgaat. Deze afspraken
        zorgen dat het niet terugkomt. Ze staan bewust in de tegel en niet in
@@ -318,6 +352,7 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
 <script src="grootboek.js"></script>
 <script src="gg-engine.js"></script>
 <script src="aansluiting-1630.js"></script>
+<script src="inkoopketen.js"></script>
 <script src="mt940.js"></script>
 <script src="vooruitontvangen.js"></script>
 <script src="bankaansluiting.js"></script>
@@ -918,5 +953,168 @@ document.querySelector("#werkwijze .hoofd").addEventListener("click", function()
 
 laden();
 </script>
+
+<script>
+/* ══════════ Inkoopketen voor de audit ══════════
+   Bouwt de zes overzichten van Kevin op uit Logic4 en zet ze in één
+   Excel-bestand met zes tabbladen. Draait via de lokale helper, want een
+   volledige opbouw is honderden aanroepen.
+
+   Overzicht 6 heeft een grootboekexport nodig: de Logic4-API geeft bij een
+   boeking geen rekeningnummer per regel, dus welke boekingen op 1630 staan is
+   er niet uit af te leiden. */
+(function(){
+  if (window.fpGeenToegang) return;
+  var $$ = function(id){ return document.getElementById(id); };
+  var laatst = null, gbRegels = null;
+
+  function esc(x){ var d=document.createElement("div"); d.textContent = x==null?"":x; return d.innerHTML; }
+  function status(soort, tekst){
+    $$("ikStatus").innerHTML = tekst ? '<div class="status-msg ' + soort + '">' + esc(tekst) + "</div>" : "";
+  }
+  function bedrag(n){
+    if (n === "" || n == null) return "";
+    return Number(n).toLocaleString("nl-NL", {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+  function nlDat(s){
+    if (!s) return "";
+    var d = String(s).split("-");
+    return d.length === 3 ? d[2] + "." + d[1] + "." + d[0] : s;
+  }
+
+  var TITELS = {
+    1: "1 · Inkooporders met factuur, per peildatum niet volledig geleverd",
+    2: "2 · Inkoopfacturen zonder inkooporder",
+    3: "3 · Daarvan per vandaag nog niet afgewikkeld",
+    4: "4 · Openstaande inkooporders per vandaag",
+    5: "5 · Goederenontvangsten zonder order en zonder factuur",
+    6: "6 · Overige boekingen op 1630",
+  };
+  var KOLOMMEN = ["datum","leverancier","crediteurnummer","inkoopordernummer",
+                  "inkoopleveringsnummer","inkoopfactuurnummer","factuurdatum","factuurbedrag"];
+  var KOPPEN = { datum:"Datum", leverancier:"Leverancier", crediteurnummer:"Crediteurnr",
+                 inkoopordernummer:"Inkooporder", inkoopleveringsnummer:"Levering",
+                 inkoopfactuurnummer:"Factuurnr", factuurdatum:"Factuurdatum",
+                 factuurbedrag:"Factuurbedrag", besteld:"Besteld", geleverd:"Geleverd",
+                 geleverdPerPeildatum:"Geleverd per peildatum", geleverdNu:"Geleverd nu",
+                 nogTeLeveren:"Nog te leveren", ouderdomDagen:"Ouderdom (dagen)",
+                 aantal:"Aantal", omschrijving:"Omschrijving", teBeoordelen:"Let op",
+                 dagboek:"Dagboek", boekingsnummer:"Boekingsnr", boekingsbedrag:"Bedrag" };
+
+  $$("ikDraai").onclick = async function(){
+    var knop = $$("ikDraai");
+    knop.disabled = true;
+    $$("ikExport").disabled = true;
+    $$("ikUit").innerHTML = "";
+    try {
+      if (!window.fpInkoopketen) throw new Error("de module is niet geladen. Sluit het dashboard af en start opnieuw.");
+      var peil = $$("ikPeil").value || "2025-12-31";
+      laatst = await window.fpInkoopketen.bouw({
+        logic4: logic4,
+        peildatum: peil,
+        vandaag: new Date().toISOString().slice(0,10),
+        grootboek1630: gbRegels,
+        meld: function(t){ status("info", t); },
+      });
+      status("", "");
+      toon(laatst);
+      $$("ikExport").disabled = false;
+      if (window.fpLog) window.fpLog("inkoopketen opgebouwd",
+        "peildatum " + peil + ", " + laatst.aantallen.orders + " orders in " + laatst.seconden + "s");
+    } catch (e) {
+      status("bad", "Opbouwen mislukt: " + (e.message || e));
+    } finally {
+      knop.disabled = false;
+    }
+  };
+
+  function toon(r){
+    var totaal = [1,2,3,4,5,6].reduce(function(n,k){ return n + r.overzichten[k].length; }, 0);
+    $$("ikGroot").textContent = totaal;
+
+    var h = '<p class="uitleg">Peildatum ' + esc(nlDat(r.peildatum)) + ', stand van vandaag ' +
+      esc(nlDat(r.vandaag)) + '. Opgebouwd uit ' + r.aantallen.orders + ' inkooporders, ' +
+      r.aantallen.leveringen + ' goederenontvangsten en ' + r.aantallen.facturen +
+      ' inkoopfacturen in ' + r.seconden + ' seconden.</p>';
+
+    (r.meldingen || []).forEach(function(m){
+      h += '<div class="status-msg warn" style="margin:8px 0">' + esc(m) + "</div>";
+    });
+
+    [1,2,3,4,5,6].forEach(function(k){
+      var lijst = r.overzichten[k];
+      h += '<h3 style="margin:18px 0 6px;font-size:14px">' + esc(TITELS[k]) +
+           ' <span style="font-weight:400;color:var(--muted)">' + lijst.length + " regels</span></h3>";
+      if (!lijst.length) { h += '<p class="uitleg" style="margin:0">Geen regels.</p>'; return; }
+      /* Alle kolommen die in dit overzicht voorkomen, in een vaste volgorde:
+         eerst het format van de accountant, daarna wat er per overzicht extra
+         bij hoort. */
+      var extra = [];
+      lijst.forEach(function(rij){
+        Object.keys(rij).forEach(function(k2){
+          if (KOLOMMEN.indexOf(k2) < 0 && extra.indexOf(k2) < 0) extra.push(k2);
+        });
+      });
+      var kols = (k === 6) ? extra : KOLOMMEN.concat(extra);
+      h += '<div style="overflow-x:auto"><table class="grid"><thead><tr>' +
+        kols.map(function(c){ return "<th>" + esc(KOPPEN[c] || c) + "</th>"; }).join("") +
+        "</tr></thead><tbody>" +
+        lijst.slice(0, 100).map(function(rij){
+          return "<tr>" + kols.map(function(c){
+            var v = rij[c];
+            if (c === "factuurbedrag" || c === "boekingsbedrag") return '<td class="num">' + bedrag(v) + "</td>";
+            if (c === "datum" || c === "factuurdatum") return "<td>" + esc(nlDat(v)) + "</td>";
+            return "<td>" + esc(v) + "</td>";
+          }).join("") + "</tr>";
+        }).join("") + "</tbody></table></div>";
+      if (lijst.length > 100)
+        h += '<p class="uitleg" style="margin:4px 0 0">De eerste 100 van ' + lijst.length +
+             " regels. In de Excel staan ze allemaal.</p>";
+    });
+    $$("ikUit").innerHTML = h;
+  }
+
+  /* De grootboekexport van 1630. Zonder deze blijft overzicht 6 leeg. */
+  $$("ikGbKies").onclick = function(){ $$("ikGb").click(); };
+  $$("ikGb").onchange = async function(e){
+    var f = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!f) return;
+    try {
+      var buf = await f.arrayBuffer();
+      var wb = XLSX.read(buf, {type:"array"});
+      var rijen = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {defval:""});
+      gbRegels = rijen;
+      status("ok", rijen.length + " grootboekregels ingelezen uit " + f.name +
+                   ". Draai de opbouw opnieuw; overzicht 6 wordt dan gevuld.");
+    } catch (err) {
+      status("bad", "Kon het bestand niet lezen: " + (err.message || err));
+    }
+  };
+
+  /* Eén werkboek met zes tabbladen, want dat is hoe de accountant het vraagt. */
+  $$("ikExport").onclick = function(){
+    if (!laatst) return;
+    var wb = XLSX.utils.book_new();
+    [1,2,3,4,5,6].forEach(function(k){
+      var lijst = laatst.overzichten[k];
+      var kols = KOLOMMEN.slice();
+      lijst.forEach(function(rij){
+        Object.keys(rij).forEach(function(c){ if (kols.indexOf(c) < 0) kols.push(c); });
+      });
+      var data = [kols.map(function(c){ return KOPPEN[c] || c; })].concat(
+        lijst.map(function(rij){ return kols.map(function(c){
+          var v = rij[c];
+          return (c === "datum" || c === "factuurdatum") ? nlDat(v) : (v === undefined ? "" : v);
+        }); }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), "Tabblad " + k);
+    });
+    var naam = "1630 inkoopketen per " + laatst.peildatum + ".xlsx";
+    XLSX.writeFile(wb, naam);
+    if (window.fpLog) window.fpLog("inkoopketen geexporteerd", naam);
+  };
+})();
+</script>
+
 </body>
 </html>
