@@ -70,6 +70,9 @@ const ALLOWED_BUCKETS = new Set([
   // Orderbevestigingen van de meubelfabrieken: wat er besteld is, per S/C
   // nummer. Alleen wat er in het document staat - geen prijzen.
   "bestellingen",
+  // Omschrijving van de fabriek naar Logic4-artikel. Eén keer invullen, en
+  // dan herkent het dashboard dezelfde sauna in elke volgende container.
+  "artikel-koppeling",
   // De bezorgingen waarvoor een klant een volglink heeft gekregen: code →
   // naam, adres, welke wagen en welke dag. Alleen de code opent de pagina, dus
   // die moet lang genoeg zijn om niet te raden te zijn.
@@ -2218,6 +2221,9 @@ async function ikoZoekBuitenCatalogus(env, gezocht) {
 }
 
 async function spaOntvangstVoorstel(env) {
+  /* De koppelingen omschrijving-naar-artikel. Eén keer ophalen; ze gelden
+     voor alle containers samen, want dezelfde sauna komt telkens terug. */
+  const koppelingen = await artikelKoppelingen(env);
   const schepen = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const aliassen = ((await env.FONTEYN_DATA.get("spa-aliassen", { type: "json" })) || {}).modellen || {};
@@ -2417,9 +2423,14 @@ async function spaOntvangstVoorstel(env) {
          drieëntwintig - elke spa er nog een keer bij. */
       ongekoppeld: (s.specials || [])
         .filter(x => x && !x.ordernr && !x.klant && x.omschrijving && !x.model)
-        .map(x => ({ omschrijving: String(x.omschrijving).slice(0, 120),
-                     aantal: Number(x.aantal) || 0,
-                     sectie: String(x.sectie || "").slice(0, 40) }))
+        .map(x => {
+          const oms = String(x.omschrijving).slice(0, 120);
+          const k = koppelingen[koppelSleutel(oms)];
+          return { omschrijving: oms,
+                   aantal: Number(x.aantal) || 0,
+                   sectie: String(x.sectie || "").slice(0, 40),
+                   artikel: k ? { code: k.code, naam: k.naam || "" } : null };
+        })
         .filter(x => x.aantal > 0),
     });
   }
@@ -4761,6 +4772,64 @@ async function mailProef(env, adres) {
    scherm dat de bestelling opent dezelfde nummers opnieuw op, en op de gratis
    laag mag één aanroep maar vijftig verzoeken naar buiten doen.            */
 
+/* ── Omschrijving aan een artikel koppelen ────────────────────────────
+   Op de factuur van een sauna- of swimspafabriek staat geen artikelnummer
+   maar een omschrijving: "WS - 1103A Red cedar+ salt stone". Iemand die weet
+   wat dat is - Chantal of Gretha - zoekt er één keer het Logic4-artikel bij,
+   en vanaf dan herkent het dashboard het zelf. Ook in de volgende container,
+   want dezelfde sauna komt telkens terug.
+
+   De sleutel is de omschrijving zonder hoofdletters en dubbele spaties. Niet
+   scherper: dan zou "Red cedar+ salt stone" en "Red cedar + salt stone" twee
+   verschillende dingen worden en moet iemand het twee keer doen. */
+
+function koppelSleutel(omschrijving) {
+  return String(omschrijving || "")
+    .toLowerCase()
+    .replace(/[\s ]+/g, " ")
+    .replace(/\s*\+\s*/g, "+")
+    .replace(/\s*-\s*/g, "-")
+    .trim();
+}
+
+async function artikelKoppelingen(env) {
+  return (await env.FONTEYN_DATA.get("artikel-koppeling", { type: "json" })) || {};
+}
+
+async function artikelKoppel(env, body) {
+  const omschrijving = String(body.omschrijving || "").trim();
+  if (!omschrijving) return { ok: false, error: "geen-omschrijving" };
+  const sleutel = koppelSleutel(omschrijving);
+  const alles = await artikelKoppelingen(env);
+
+  if (body.los) {
+    delete alles[sleutel];
+    await env.FONTEYN_DATA.put("artikel-koppeling", JSON.stringify(alles));
+    return { ok: true, losgemaakt: true };
+  }
+
+  const code = String(body.code || "").trim().toUpperCase();
+  if (!code) return { ok: false, error: "geen-code" };
+
+  /* Eerst nakijken of dat artikel bestaat. Een typefout in een artikelcode
+     levert anders een koppeling op die er goed uitziet en nergens heen wijst,
+     en dat merkt niemand tot de ontvangst misgaat. */
+  const check = await artikelBestaat(env, [code]);
+  const st = check && check.codes && check.codes[code];
+  if (!st || st.gevonden !== true) {
+    return { ok: false, error: "artikel-onbekend",
+             uitleg: "Artikel " + code + " staat niet in Logic4. Klopt de code?" };
+  }
+
+  alles[sleutel] = {
+    omschrijving, code, naam: st.naam || "",
+    door: String(body.door || "").slice(0, 60),
+    ts: new Date().toISOString(),
+  };
+  await env.FONTEYN_DATA.put("artikel-koppeling", JSON.stringify(alles));
+  return { ok: true, koppeling: alles[sleutel] };
+}
+
 async function artikelBestaat(env, codes) {
   const cache = (await env.FONTEYN_DATA.get("artikel-codes-check", { type: "json" })) || {};
   const nu = Date.now();
@@ -5607,6 +5676,18 @@ export default {
       return reply(200, await artikelBestaat(env, codes)
         .catch(e => ({ ok: false, error: String(e.message || e) })));
     }
+    /* Een omschrijving van de fabriek aan een Logic4-artikel koppelen. */
+    if (url.pathname === "/voorraad/koppeling" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      return reply(200, await artikelKoppel(env, b)
+        .catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/voorraad/koppeling" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      return reply(200, { ok: true, koppelingen: await artikelKoppelingen(env) });
+    }
+
     if (url.pathname === "/bestellingen" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       return reply(200, await bestellingen(env)

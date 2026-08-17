@@ -122,6 +122,8 @@
     }
 
     doel.appendChild(onderwegBlok(opVolgorde));
+    var kb = koppelBlok(opVolgorde);
+    if (kb) doel.appendChild(kb);
 
     /* De zendingen als tabbladen in plaats van als lijst onder elkaar.
        Chantal (video, 13 aug 2026): "deze tegels wil ik daaronder hebben staan
@@ -172,6 +174,113 @@
     var t = String(k == null ? "" : k).trim();
     if (!t || t === "(geen kleur)") return "";
     return t.replace(/\s*,\s*#/g, " #").replace(/\s+/g, " ").replace(/[,;]+$/, "").trim();
+  }
+
+
+  /* ── Nog aan een artikel te koppelen ──────────────────────────────────
+     Op de factuur van een sauna- of swimspafabriek staat geen artikelnummer
+     maar een omschrijving. Wie weet wat het is zoekt er één keer het
+     Logic4-artikel bij; daarna herkent het dashboard het vanzelf, ook in de
+     volgende container.
+
+     Eén lijst voor alle containers samen en niet per container, want dezelfde
+     sauna komt telkens terug - anders moet iemand hetzelfde drie keer doen. */
+  function koppelBlok(schepen) {
+    var per = {};
+    schepen.forEach(function (s) {
+      (s.ongekoppeld || []).forEach(function (x) {
+        var sleutel = String(x.omschrijving || "").toLowerCase().trim();
+        if (!sleutel) return;
+        if (!per[sleutel]) per[sleutel] = { omschrijving: x.omschrijving, sectie: x.sectie,
+                                            aantal: 0, waar: [], artikel: x.artikel || null };
+        per[sleutel].aantal += x.aantal || 0;
+        if (per[sleutel].waar.indexOf(s.ref) < 0) per[sleutel].waar.push(s.ref);
+        if (x.artikel) per[sleutel].artikel = x.artikel;
+      });
+    });
+    var lijst = Object.keys(per).map(function (k) { return per[k]; })
+      .sort(function (a, b) {
+        // Wat nog gekoppeld moet worden bovenaan; dat is het werk.
+        if (!a.artikel !== !b.artikel) return a.artikel ? 1 : -1;
+        return b.aantal - a.aantal;
+      });
+    if (!lijst.length) return null;
+
+    var open = lijst.filter(function (x) { return !x.artikel; }).length;
+    var d = el("div", "so-koppel");
+    var kop = el("div", "so-onderweg-kop");
+    kop.appendChild(el("h3", null, "Nog aan een artikel te koppelen"));
+    kop.appendChild(el("span", null, open
+      ? open + " van de " + lijst.length + " omschrijvingen"
+      : "alles gekoppeld"));
+    d.appendChild(kop);
+    d.appendChild(el("p", "so-meta klein",
+      "Deze regels staan wel op de factuur maar horen nog bij geen artikel in Logic4. " +
+      "Vul de artikelcode in en het dashboard herkent ze voortaan zelf, ook in de volgende container. " +
+      "Weet je het niet zeker, vraag het dan aan Gretha."));
+
+    lijst.forEach(function (x) {
+      var r = el("div", "so-koppel-rij" + (x.artikel ? " klaar" : ""));
+
+      var links = el("div", "so-koppel-wat");
+      links.appendChild(el("strong", null, x.omschrijving));
+      links.appendChild(el("span", "so-meta klein",
+        x.aantal + " stuks" + (x.sectie ? "  ·  " + x.sectie.toLowerCase() : "") +
+        "  ·  " + x.waar.join(", ")));
+      r.appendChild(links);
+
+      var rechts = el("div", "so-koppel-doen");
+      if (x.artikel) {
+        var pil = el("span", "so-koppel-code");
+        pil.appendChild(el("b", null, x.artikel.code));
+        if (x.artikel.naam) pil.appendChild(el("span", null, " " + x.artikel.naam));
+        rechts.appendChild(pil);
+        var los = el("button", "so-knop klein", "losmaken");
+        los.onclick = function () { koppelZet(x.omschrijving, null, true, r); };
+        rechts.appendChild(los);
+      } else {
+        var invoer = el("input");
+        invoer.type = "text";
+        invoer.placeholder = "artikelcode";
+        invoer.className = "so-koppel-invoer";
+        var kn = el("button", "so-knop klein", "koppelen");
+        kn.onclick = function () {
+          var code = String(invoer.value || "").trim();
+          if (!code) { invoer.focus(); return; }
+          koppelZet(x.omschrijving, code, false, r);
+        };
+        invoer.onkeydown = function (e) { if (e.key === "Enter") kn.click(); };
+        rechts.appendChild(invoer);
+        rechts.appendChild(kn);
+      }
+      r.appendChild(rechts);
+      d.appendChild(r);
+    });
+    return d;
+  }
+
+  async function koppelZet(omschrijving, code, los, rij) {
+    var melding = rij.querySelector(".so-koppel-fout");
+    if (melding) melding.remove();
+    try {
+      var r = await fetch(BASIS + "/voorraad/koppeling", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
+        body: JSON.stringify({ omschrijving: omschrijving, code: code, los: !!los,
+                               door: (localStorage.getItem("fp.email") || "") }),
+      });
+      var j = await r.json();
+      if (!j.ok) {
+        var f = el("div", "so-koppel-fout", j.uitleg || j.error || "koppelen mislukt");
+        rij.appendChild(f);
+        return;
+      }
+      if (cfg.log) cfg.log("voorraad", los ? "artikel losgemaakt" : "artikel gekoppeld",
+                           omschrijving + (code ? " → " + code : ""));
+      await herlaad();
+    } catch (e) {
+      rij.appendChild(el("div", "so-koppel-fout", "koppelen mislukt: " + (e.message || e)));
+    }
   }
 
   function onderwegBlok(schepen) {

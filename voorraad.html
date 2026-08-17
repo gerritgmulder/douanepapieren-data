@@ -219,6 +219,28 @@
    telt niet mee in de voorraad - het is wel onderweg. */
 .so-inhoud-pil.los{background:#fffbeb;border-color:#fde68a}
 .so-inhoud-pil.los b{color:#92400e}
+
+/* ── Nog aan een artikel te koppelen ──────────────────────────────────
+   Eén lijst voor alle containers samen: dezelfde sauna komt in elke
+   container terug en hoort dus maar één keer gekoppeld te worden. */
+.so-koppel{background:#fff;border:1px solid var(--border,#e5e7eb);border-radius:12px;
+           padding:16px 18px;margin:14px 0}
+.so-koppel-rij{display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+               padding:11px 0;border-top:1px solid #f1f0ec}
+.so-koppel-rij:first-of-type{border-top:none}
+.so-koppel-rij.klaar{opacity:.72}
+.so-koppel-wat{flex:1;min-width:210px;display:flex;flex-direction:column;gap:2px}
+.so-koppel-wat strong{font-size:13.5px}
+.so-koppel-doen{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.so-koppel-invoer{border:1px solid var(--border,#e5e7eb);border-radius:8px;padding:8px 11px;
+                  font:inherit;font-size:13px;width:150px}
+.so-koppel-invoer:focus{outline:none;border-color:var(--fonteyn-lime,#8bc53f)}
+.so-koppel-code{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:999px;
+                padding:4px 12px;font-size:12.5px}
+.so-koppel-code b{color:#166534}
+.so-koppel-code span{color:var(--muted,#6b7280)}
+.so-koppel-fout{flex:1 1 100%;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;
+                border-radius:8px;padding:8px 11px;font-size:12.5px;margin-top:4px}
 /* De kleur achter het model: wel leesbaar, maar het model blijft het eerste
    dat je ziet. */
 .so-inhoud-kleur{color:var(--muted,#6b7280);margin-left:5px}
