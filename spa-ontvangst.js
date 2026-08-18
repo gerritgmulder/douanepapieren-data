@@ -25,6 +25,7 @@
   var open = {};
   var docsOpen = {};   // per schip: staat het documentenblok open
   var actief = null;   // welk schip staat open (ref); leeg = het eerstvolgende
+  var zoek = "";       // zoekterm in "Onderweg naar Uddel"; blijft staan bij hertekenen
 
   function el(tag, klas, tekst) {
     var e = document.createElement(tag);
@@ -312,8 +313,32 @@
       return d;
     }
 
+    /* Zoeken binnen wat er vaart. Chantal (video, 17 aug 2026): "kan je een
+       zoekbalk bij Schepen en ontvangst dat ik hier op spa kan zoeken. En op
+       het moment dat ik dan bijvoorbeeld zeg, ik ben op zoek naar een Relax en
+       die zit bijvoorbeeld in meerdere containers, dat die dan groen oplicht."
+
+       Dus niet filteren maar oplichten: de containers blijven op volgorde van
+       aankomst staan, zodat ze meteen ziet welke van de treffers het eerst
+       binnenkomt. Wat niet meedoet vervaagt, maar blijft leesbaar. */
+    var balk = el("div", "so-zoekbalk");
+    var veld = document.createElement("input");
+    veld.type = "search";
+    veld.className = "so-zoekveld";
+    veld.placeholder = "zoek een spa, kleur, schip of container…";
+    veld.value = zoek;
+    var teller = el("span", "so-zoek-tel");
+    balk.appendChild(veld);
+    balk.appendChild(teller);
+    d.appendChild(balk);
+    /* Alleen de klassen bijwerken, niet opnieuw tekenen: anders springt de
+       cursor uit het veld bij elke aanslag. */
+    veld.addEventListener("input", function () { zoek = veld.value; zoekToepassen(d); });
+
     varend.forEach(function (s) {
       var r = el("div", "so-onderweg-rij");
+      r.dataset.zoek = [s.vessel, s.ref, (s.jazziOrders || []).join(" ")]
+        .filter(Boolean).join(" ").toLowerCase();
 
       var links = el("div", "so-onderweg-wie");
       links.appendChild(el("strong", null, s.vessel || s.ref));
@@ -348,6 +373,8 @@
         });
       lijst.forEach(function (x) {
         var p = el("span", "so-inhoud-pil");
+        p.dataset.zoek = (x.model + " " + x.kleur).toLowerCase();
+        p.dataset.aantal = String(x.aantal);
         p.appendChild(el("b", null, String(x.aantal)));
         p.appendChild(document.createTextNode(" " + x.model));
         if (x.kleur) p.appendChild(el("span", "so-inhoud-kleur", x.kleur));
@@ -361,6 +388,8 @@
          hangt - maar je ziet nu wel wat eraan komt. */
       (s.ongekoppeld || []).forEach(function (x) {
         var p = el("span", "so-inhoud-pil los");
+        p.dataset.zoek = (x.omschrijving + " " + (x.sectie || "")).toLowerCase();
+        p.dataset.aantal = String(x.aantal);
         p.appendChild(el("b", null, String(x.aantal)));
         p.appendChild(document.createTextNode(" " + x.omschrijving));
         if (x.sectie) p.appendChild(el("span", "so-inhoud-kleur", x.sectie.toLowerCase()));
@@ -372,7 +401,51 @@
       r.appendChild(inhoud);
       d.appendChild(r);
     });
+    zoekToepassen(d);
     return d;
+  }
+
+  /* Zoekterm op het al getekende blok leggen. Meerdere woorden moeten allemaal
+     voorkomen, zodat "relax zilver" scherper is dan "relax". */
+  function zoekToepassen(blok) {
+    var q = String(zoek || "").trim().toLowerCase();
+    var teller = blok.querySelector(".so-zoek-tel");
+    var rijen = blok.querySelectorAll(".so-onderweg-rij");
+    if (!q) {
+      Array.prototype.forEach.call(rijen, function (r) {
+        r.classList.remove("raak", "dim");
+        Array.prototype.forEach.call(r.querySelectorAll(".so-inhoud-pil"),
+          function (p) { p.classList.remove("raak"); });
+      });
+      if (teller) teller.textContent = "";
+      return;
+    }
+    var woorden = q.split(/\s+/).filter(Boolean);
+    function past(tekst) {
+      return woorden.every(function (w) { return String(tekst || "").indexOf(w) >= 0; });
+    }
+    var nContainers = 0, nStuks = 0;
+    Array.prototype.forEach.call(rijen, function (r) {
+      var stuks = 0, treffers = 0;
+      Array.prototype.forEach.call(r.querySelectorAll(".so-inhoud-pil"), function (p) {
+        var hit = past(p.dataset.zoek);
+        p.classList.toggle("raak", hit);
+        if (hit) { treffers++; stuks += Number(p.dataset.aantal) || 0; }
+      });
+      // Op de scheepsnaam of het ordernummer licht de hele regel op, ook al
+      // hoort er geen enkele pil bij de zoekterm.
+      var raak = treffers > 0 || past(r.dataset.zoek);
+      r.classList.toggle("raak", raak);
+      r.classList.toggle("dim", !raak);
+      if (raak) { nContainers++; nStuks += stuks; }
+    });
+    if (teller) {
+      teller.textContent = nContainers
+        ? (nContainers + " zending" + (nContainers === 1 ? "" : "en") +
+           (nStuks ? "  ·  " + nStuks + " stuks" : ""))
+        : "niets gevonden";
+      teller.classList.toggle("leeg", !nContainers);
+    }
   }
 
   function kaart(s) {

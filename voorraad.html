@@ -219,6 +219,21 @@
    telt niet mee in de voorraad - het is wel onderweg. */
 .so-inhoud-pil.los{background:#fffbeb;border-color:#fde68a}
 .so-inhoud-pil.los b{color:#92400e}
+/* ── Zoeken binnen wat er onderweg is ──
+   Chantal (video, 17 aug 2026): zoeken op een spa, en dan moeten de containers
+   waar hij in zit groen oplichten. Niets verdwijnt uit beeld: de volgorde van
+   aankomst blijft staan, de rest vervaagt alleen. */
+.so-zoekbalk{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:2px 0 4px}
+.so-zoekveld{flex:1 1 260px;max-width:340px;border:1px solid var(--border,#e0e0d8);border-radius:8px;
+  padding:8px 11px;font:inherit;font-size:13px}
+.so-zoekveld:focus{outline:none;border-color:var(--fonteyn-lime,#8bc53f)}
+.so-zoek-tel{font-size:12.5px;color:var(--fonteyn-green,#144734);font-weight:600}
+.so-zoek-tel.leeg{color:var(--warn,#92400e)}
+.so-onderweg-rij.raak{background:#f0fdf4;box-shadow:inset 3px 0 0 #22c55e;
+  border-radius:0 6px 6px 0;padding-left:9px;margin-left:-9px}
+.so-onderweg-rij.dim{opacity:.42}
+.so-inhoud-pil.raak{background:#dcfce7;border-color:#22c55e;font-weight:600}
+.so-inhoud-pil.raak b{color:#15803d}
 
 /* ── Nog aan een artikel te koppelen ──────────────────────────────────
    Eén lijst voor alle containers samen: dezelfde sauna komt in elke
