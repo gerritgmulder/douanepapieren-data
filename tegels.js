@@ -95,6 +95,11 @@
       uit:"Containers, reserveringen, ontvangst en inkoop",        mobiel:"goed", tile:"tileVoorraad",
       mobielBestand:"voorraad-mobiel.html",
       mobielUit:"Voorraad, containers onderweg en een order opzoeken" },
+    /* Vertalen is een tekstvak met een knop: dat werkt op een telefoon net
+       zo goed als op een pc, mits de twee vlakken onder elkaar vallen. Dat
+       doen ze onder 900 pixels, dus geen aparte mobiele pagina nodig. */
+    { bestand:"vertalen.html",       groep:"vertalen",         ic:"🌍",  naam:"Vertalen",
+      uit:"Mails aan dealers vertalen",                            mobiel:"goed", tile:"tileVertalen" },
     { bestand:"probe-logic4.html",   groep:"probe",            ic:"🔬",  naam:"Logic4-probe",
       uit:"Rechtstreeks een Logic4-endpoint bevragen",             mobiel:"pc", tile:"tileProbe" },
 

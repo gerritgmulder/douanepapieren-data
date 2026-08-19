@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<!-- Wie hier binnen mag staat in toegang.js, dezelfde lijst als het dashboard. -->
+<script src="toegang.js"></script>
+<title>Vertalen — Fonteyn Dashboard</title>
+<script src="taal.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<!-- ══════════════════════════════════════════════════════════════════════
+     VERTALEN — voor de mails aan de dealers
+
+     Gerrit (19 aug 2026): "Zij schrijft enorm veel mails aan dealers in
+     allerlei talen: Spaans, Italiaans, Duits, Frans, Engels. Maak een
+     invoermogelijkheid waar ze tekst in kan plakken of typen die automatisch
+     vertaald."
+
+     Wat deze pagina wél doet en wat niet
+     ------------------------------------
+     Plakken of typen links, vertaling rechts, terwijl je typt. Andersom werkt
+     net zo goed: plak de Spaanse mail van een dealer en zet de doeltaal op
+     Nederlands - de brontaal wordt herkend.
+
+     Drie dingen die het verschil maken bij zakelijke post:
+
+       u of je       In het Duits, Frans, Spaans, Italiaans en Portugees is dat
+                     een keuze die de vertaler moet maken. Staat standaard op
+                     "u", want dit gaat naar dealers.
+
+       namen         Fonteyn, Passion Spas en Uddel zijn geen woorden om te
+                     vertalen. Wat in dat veld staat blijft letterlijk staan.
+
+       terugvertaling  De vertaling nog eens terug naar het Nederlands. Zo zie
+                     je of er iets geks in staat zonder de taal te kennen.
+
+     Er wordt niets bewaard. De tekst gaat naar de vertaaldienst en het
+     antwoord komt terug; er blijft geen dealercorrespondentie achter.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+  :root{
+    --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
+    --fonteyn-lime:#8bc53f; --fonteyn-lime-dark:#72a531;
+    --bg:#f5f4ef; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb;
+    --ok:#059669; --bad:#b91c1c; --warn:#92400e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  input,select,textarea,button{font-family:inherit}
+  header{background:var(--fonteyn-green);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header img.logo{height:40px}
+  header h1{margin:0;font-size:16px;font-weight:600;flex:1;min-width:140px}
+  header a.back,header button.logout{color:#fff;text-decoration:none;background:transparent;
+    border:1px solid rgba(255,255,255,.4);border-radius:7px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer;transition:all .14s}
+  header a.back:hover,header button.logout:hover{background:rgba(255,255,255,.15)}
+  header .user-chip{font-size:12px;color:rgba(255,255,255,.85)}
+  main{max-width:1400px;margin:22px auto;padding:0 22px}
+  h2{color:var(--fonteyn-green);font-size:22px;margin:0 0 6px}
+  .lead{color:var(--muted);margin:0 0 16px;max-width:70ch}
+
+  /* ── de balk met de talen ── */
+  .balk{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  .balk .regel{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .balk .regel + .regel{margin-top:11px;padding-top:11px;border-top:1px solid #f3f4f6}
+  .kop{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;margin-right:2px}
+  .chip{border:1px solid var(--border);background:#fff;border-radius:20px;padding:7px 15px;font:inherit;
+        font-size:13px;font-weight:600;color:var(--ink);cursor:pointer;transition:all .12s}
+  .chip:hover{border-color:var(--fonteyn-lime-dark)}
+  .chip.aan{background:var(--fonteyn-green);border-color:var(--fonteyn-green);color:#fff}
+  select,input[type=text]{border:1px solid var(--border);border-radius:8px;padding:8px 11px;font:inherit;font-size:13px;background:#fff}
+  select:focus,input:focus,textarea:focus{outline:none;border-color:var(--fonteyn-lime-dark);box-shadow:0 0 0 3px rgba(139,197,63,.22)}
+  label.schakel{display:inline-flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;color:var(--ink)}
+  label.schakel input{accent-color:var(--fonteyn-green);width:16px;height:16px;cursor:pointer}
+  .namen{flex:1;min-width:220px}
+
+  /* ── de twee vlakken ── */
+  .vlakken{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .vlak{background:#fff;border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;overflow:hidden}
+  .vlak .titel{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);
+               font-size:12px;font-weight:600;color:var(--fonteyn-green);text-transform:uppercase;letter-spacing:.04em}
+  .vlak .titel .rechts{margin-left:auto;display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;
+               font-weight:400;font-size:12px;color:var(--muted)}
+  .vlak textarea{border:0;resize:vertical;padding:15px;font-size:15px;line-height:1.62;min-height:340px;
+                 background:transparent;color:var(--ink)}
+  .vlak textarea:focus{box-shadow:none}
+  .vlak textarea[readonly]{background:#fcfdfb}
+  .knopje{border:1px solid var(--border);background:#fff;border-radius:7px;padding:5px 11px;font:inherit;
+          font-size:12px;cursor:pointer;color:var(--ink);transition:all .12s}
+  .knopje:hover{border-color:var(--fonteyn-lime-dark);background:#f7fbf2}
+  .knopje.hoofd{background:var(--fonteyn-lime);border-color:var(--fonteyn-lime-dark);font-weight:700;color:#12331f}
+  .knopje:disabled{opacity:.45;cursor:default}
+
+  .terugvlak{margin-top:14px}
+  .terugvlak textarea{min-height:120px;font-size:13.5px;color:var(--muted)}
+
+  .melding{border-radius:8px;padding:11px 14px;font-size:13px;margin-bottom:12px;line-height:1.55}
+  .melding.fout{background:#fee2e2;color:var(--bad)}
+  .melding.let{background:#fef3c7;color:var(--warn)}
+  .melding.rustig{background:#eef6ff;color:#1e40af}
+  .melding code{background:rgba(0,0,0,.06);padding:1px 5px;border-radius:4px;font-size:12px}
+  .voet{font-size:12px;color:var(--muted);margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  .hidden{display:none!important}
+
+  /* ── op een smal scherm onder elkaar ──
+     Chantal kijkt hier ook op haar telefoon; twee kolommen van 190 pixels
+     leest niemand. */
+  @media (max-width:900px){
+    header{padding:12px 16px}
+    main{padding:0 14px;margin:16px auto}
+    .vlakken{grid-template-columns:1fr}
+    .vlak textarea{min-height:190px;font-size:16px}   /* 16px: anders zoomt iOS in bij het tikken */
+    .lead{display:none}
+    h2{font-size:19px}
+    /* De kop van een vlak past hier niet op één regel: de knoppen gingen over
+       twee regels breken en "herkend als Nederlands" over drie. Dus de titel
+       op de eerste regel en alles wat rechts stond eronder, rechts uitgelijnd. */
+    .vlak .titel{flex-wrap:wrap;gap:6px}
+    .vlak .titel .rechts{margin-left:0;width:100%;justify-content:flex-end}
+    .knopje{white-space:nowrap}
+    #stand{flex:1;text-align:left}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+  <h1>🌍 Vertalen</h1>
+  <a class="back" href="dashboard.html">← Dashboard</a>
+  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <h2>Vertalen</h2>
+  <p class="lead">Plak of typ links, de vertaling verschijnt rechts terwijl je typt. Andersom werkt net zo goed: plak de mail van een dealer en zet de doeltaal op Nederlands, dan wordt de brontaal vanzelf herkend.</p>
+
+  <div id="motorMelding" class="melding let hidden"></div>
+  <div id="foutMelding" class="melding fout hidden"></div>
+
+  <div class="balk">
+    <div class="regel">
+      <span class="kop">Naar</span>
+      <button class="chip" data-taal="NL"    type="button">Nederlands</button>
+      <button class="chip" data-taal="EN-GB" type="button">Engels</button>
+      <button class="chip" data-taal="DE"    type="button">Duits</button>
+      <button class="chip" data-taal="FR"    type="button">Frans</button>
+      <button class="chip" data-taal="ES"    type="button">Spaans</button>
+      <button class="chip" data-taal="IT"    type="button">Italiaans</button>
+      <select id="meerTalen" title="andere talen"><option value="">andere taal…</option></select>
+    </div>
+    <div class="regel">
+      <span class="kop">Vanuit</span>
+      <select id="bronTaal"><option value="auto">automatisch herkennen</option></select>
+      <span class="kop" style="margin-left:8px">Aanspreken</span>
+      <label class="schakel"><input type="radio" name="formeel" value="ja" checked> met u</label>
+      <label class="schakel"><input type="radio" name="formeel" value="nee"> met je</label>
+      <label class="schakel" style="margin-left:8px"><input type="checkbox" id="terugAan"> terugvertaling tonen</label>
+    </div>
+    <div class="regel">
+      <span class="kop">Niet vertalen</span>
+      <input type="text" id="namen" class="namen" placeholder="Fonteyn, Passion Spas, Uddel">
+      <span style="font-size:12px;color:var(--muted)">namen en merken, gescheiden door komma's</span>
+    </div>
+  </div>
+
+  <div class="vlakken">
+    <div class="vlak">
+      <div class="titel">
+        <span>Jouw tekst</span>
+        <span class="rechts">
+          <span id="tellerBron">0 tekens</span>
+          <button class="knopje" id="wisKnop" type="button">wissen</button>
+        </span>
+      </div>
+      <textarea id="bron" placeholder="Plak of typ hier de tekst…" spellcheck="false"></textarea>
+    </div>
+
+    <div class="vlak">
+      <div class="titel">
+        <span id="doelKop">Vertaling</span>
+        <span class="rechts">
+          <span id="stand"></span>
+          <button class="knopje" id="vertaalKnop" type="button">vertaal nu</button>
+          <button class="knopje hoofd" id="kopieerKnop" type="button">kopiëren</button>
+        </span>
+      </div>
+      <textarea id="doel" readonly placeholder="Hier komt de vertaling." spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <div class="vlak terugvlak hidden" id="terugVlak">
+    <div class="titel"><span>Terug naar het Nederlands</span>
+      <span class="rechts">zo lees je zelf of er iets geks in staat</span></div>
+    <textarea id="terug" readonly spellcheck="false"></textarea>
+  </div>
+
+  <div class="voet">
+    <span id="motorNaam"></span>
+    <span id="tegoed"></span>
+  </div>
+</main>
+
+<script>
+const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
+const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
+const TOEGANG = window.fpToegang ? window.fpToegang.set("vertalen") : null;
+const el = (id) => document.getElementById(id);
+
+(function boot(){
+  if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
+  const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  el("userEmail").textContent = email || "—";
+  if(!TOEGANG || !TOEGANG.has(email)){
+    window.fpGeenToegang = true;
+    document.body.innerHTML = "<main style='padding:48px;text-align:center'><h1 style='color:#144734'>Geen toegang</h1>"
+      + "<p>Vertalen is niet beschikbaar voor jouw account.</p>"
+      + "<p>Ingelogd als <code>" + (email||"(onbekend)") + "</code>.</p>"
+      + "<p><a href='dashboard.html'>← Dashboard</a></p></main>";
+    throw new Error("geen toegang");
+  }
+})();
+el("logoutBtn").addEventListener("click", async ()=>{
+  try{ await fetch("/api/logout",{method:"POST"}); }catch(e){}
+  localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY);
+  location.href="dashboard.html";
+});
+
+/* ── instellingen die blijven staan ──────────────────────────────────── */
+const BEWAAR = {
+  naar:   "fp.vertaal.naar",
+  bron:   "fp.vertaal.bron",
+  formeel:"fp.vertaal.formeel",
+  namen:  "fp.vertaal.namen",
+  terug:  "fp.vertaal.terug",
+};
+function onthoud(k,v){ try{ localStorage.setItem(BEWAAR[k], String(v)); }catch(e){} }
+function herinner(k,standaard){ try{ const v=localStorage.getItem(BEWAAR[k]); return v===null?standaard:v; }catch(e){ return standaard; } }
+
+let TALEN = {};
+let naarTaal = herinner("naar","EN-GB");
+let motor = null;
+let teller = 0;              // hoogste aanvraagnummer; oudere antwoorden negeren we
+let wachtend = null;
+
+function team(){ return localStorage.getItem("fp.teamkey")||""; }
+function toon(id, aan){ el(id).classList.toggle("hidden", !aan); }
+function fout(tekst){
+  const d=el("foutMelding");
+  d.textContent = tekst || "";
+  d.classList.toggle("hidden", !tekst);
+}
+
+/* ── talen ophalen en de keuzelijsten vullen ─────────────────────────── */
+const CHIPS = ["NL","EN-GB","DE","FR","ES","IT"];
+async function laadTalen(){
+  try{
+    const r = await fetch(WORKER+"/vertaal/talen",{headers:{"X-Fonteyn-Auth":team()}});
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    TALEN = j.talen||{}; motor = j.motor;
+  }catch(e){
+    fout("De talenlijst kon niet worden opgehaald: "+e.message+". Log opnieuw in op het dashboard, dan wordt de sleutel opgehaald.");
+    return;
+  }
+  const meer = el("meerTalen"), bron = el("bronTaal");
+  Object.keys(TALEN).forEach(function(code){
+    if(CHIPS.indexOf(code)<0){
+      const o=document.createElement("option"); o.value=code; o.textContent=TALEN[code].naam; meer.appendChild(o);
+    }
+    const b=document.createElement("option"); b.value=code; b.textContent=TALEN[code].naam; bron.appendChild(b);
+  });
+  bron.value = herinner("bron","auto");
+  if(!TALEN[naarTaal]) naarTaal = "EN-GB";
+  zetTaal(naarTaal);
+
+  if(motor === "eenvoudig"){
+    const m = el("motorMelding");
+    m.innerHTML = "<b>Let op: dit is nog de eenvoudige vertaler.</b> Die is gratis en heeft geen sleutel nodig, "
+      + "maar de zinnen zijn merkbaar minder goed - controleer ze voordat je ze verstuurt. "
+      + "Zodra de DeepL-sleutel is gezet (<code>npx wrangler secret put DEEPL_SLEUTEL</code>) gaat alles vanzelf via DeepL.";
+    m.classList.remove("hidden");
+  }
+  el("motorNaam").textContent = motor==="deepl" ? "Vertaald door DeepL." : "Vertaald door de eenvoudige vertaler.";
+  laadTegoed();
+}
+async function laadTegoed(){
+  if(motor!=="deepl") return;
+  try{
+    const r=await fetch(WORKER+"/vertaal/tegoed",{headers:{"X-Fonteyn-Auth":team()}});
+    const j=await r.json();
+    if(j.ok && j.grens){
+      const pct=Math.round(j.gebruikt/j.grens*100);
+      el("tegoed").textContent = "Deze maand " + j.gebruikt.toLocaleString("nl-NL") + " van de "
+        + j.grens.toLocaleString("nl-NL") + " tekens gebruikt (" + pct + "%).";
+    }
+  }catch(e){}
+}
+
+function zetTaal(code){
+  naarTaal = code;
+  onthoud("naar", code);
+  Array.prototype.forEach.call(document.querySelectorAll(".chip"), function(c){
+    c.classList.toggle("aan", c.dataset.taal === code);
+  });
+  el("meerTalen").value = CHIPS.indexOf(code)<0 ? code : "";
+  el("doelKop").textContent = "Vertaling — " + ((TALEN[code]&&TALEN[code].naam) || code);
+  vraagVertaling(true);
+}
+
+/* ── vertalen ────────────────────────────────────────────────────────── */
+function namenLijst(){
+  return (el("namen").value||"").split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+}
+function formeel(){
+  const g=document.querySelector("input[name=formeel]:checked");
+  return !g ? true : g.value==="ja";
+}
+async function roep(tekst, naar, van){
+  const r = await fetch(WORKER+"/vertaal",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","X-Fonteyn-Auth":team()},
+    body: JSON.stringify({ tekst:tekst, naar:naar, van:van, formeel:formeel(), namen:namenLijst() })
+  });
+  const j = await r.json();
+  if(!j.ok) throw new Error(j.error || ("HTTP "+r.status));
+  return j;
+}
+
+async function vertaalNu(){
+  const tekst = el("bron").value;
+  const mijn = ++teller;
+  el("tellerBron").textContent = tekst.length.toLocaleString("nl-NL") + " tekens";
+  if(!tekst.trim()){ el("doel").value=""; el("terug").value=""; el("stand").textContent=""; fout(""); return; }
+
+  el("stand").textContent = "bezig…";
+  try{
+    const van = el("bronTaal").value || "auto";
+    const j = await roep(tekst, naarTaal, van);
+    if(mijn !== teller) return;                      // er is alweer een nieuwere vraag uit
+    el("doel").value = j.tekst || "";
+    fout("");
+    let stand = "";
+    if(j.herkend && van==="auto"){
+      const naam = (TALEN[j.herkend] && TALEN[j.herkend].naam) || j.herkend;
+      stand = "herkend als " + naam;
+    }
+    el("stand").textContent = stand;
+    if(window.fpLog) window.fpLog("vertaald", naarTaal + " · " + tekst.length + " tekens");
+
+    if(el("terugAan").checked && naarTaal !== "NL" && j.tekst){
+      el("terug").value = "bezig…";
+      try{
+        const t = await roep(j.tekst, "NL", naarTaal);
+        if(mijn === teller) el("terug").value = t.tekst || "";
+      }catch(e){ if(mijn===teller) el("terug").value = "terugvertaling mislukt: " + e.message; }
+    }
+  }catch(e){
+    if(mijn !== teller) return;
+    el("stand").textContent = "";
+    fout("Vertalen mislukt: " + e.message);
+  }
+}
+
+/* Tijdens het typen niet bij elke aanslag een aanvraag doen: pas als het even
+   stil is. Bij plakken hoeft die pauze niet zo lang - dan is de tekst al af. */
+function vraagVertaling(meteen){
+  clearTimeout(wachtend);
+  wachtend = setTimeout(vertaalNu, meteen ? 60 : 700);
+}
+
+el("bron").addEventListener("input", function(){
+  el("tellerBron").textContent = el("bron").value.length.toLocaleString("nl-NL") + " tekens";
+  vraagVertaling(false);
+});
+el("bron").addEventListener("paste", function(){ setTimeout(function(){ vraagVertaling(true); }, 0); });
+Array.prototype.forEach.call(document.querySelectorAll(".chip"), function(c){
+  c.addEventListener("click", function(){ zetTaal(c.dataset.taal); });
+});
+el("meerTalen").addEventListener("change", function(){ if(this.value) zetTaal(this.value); });
+el("bronTaal").addEventListener("change", function(){ onthoud("bron", this.value); vraagVertaling(true); });
+Array.prototype.forEach.call(document.querySelectorAll("input[name=formeel]"), function(r){
+  r.addEventListener("change", function(){ onthoud("formeel", formeel()?"ja":"nee"); vraagVertaling(true); });
+});
+el("namen").addEventListener("input", function(){ onthoud("namen", this.value); vraagVertaling(false); });
+el("terugAan").addEventListener("change", function(){
+  onthoud("terug", this.checked ? "1" : "0");
+  toon("terugVlak", this.checked);
+  if(this.checked) vraagVertaling(true); else el("terug").value="";
+});
+el("vertaalKnop").addEventListener("click", function(){ vraagVertaling(true); });
+el("wisKnop").addEventListener("click", function(){
+  el("bron").value=""; el("doel").value=""; el("terug").value="";
+  el("tellerBron").textContent="0 tekens"; el("stand").textContent=""; fout("");
+  el("bron").focus();
+});
+el("kopieerKnop").addEventListener("click", async function(){
+  const t = el("doel").value;
+  if(!t) return;
+  const knop=this, oud=knop.textContent;
+  try{
+    await navigator.clipboard.writeText(t);
+  }catch(e){
+    /* In de app op de pc kan het klembord geblokkeerd zijn; dan maar op de
+       ouderwetse manier, via een selectie in het tekstvak zelf. */
+    el("doel").removeAttribute("readonly");
+    el("doel").select(); document.execCommand("copy");
+    el("doel").setAttribute("readonly","readonly");
+  }
+  knop.textContent="gekopieerd"; setTimeout(function(){ knop.textContent=oud; }, 1400);
+});
+
+/* ── beginstand ──────────────────────────────────────────────────────── */
+el("namen").value = herinner("namen", "Fonteyn, Passion Spas, Uddel");
+if(herinner("formeel","ja")==="nee") document.querySelector("input[name=formeel][value=nee]").checked = true;
+if(herinner("terug","0")==="1"){ el("terugAan").checked = true; toon("terugVlak", true); }
+laadTalen();
+el("bron").focus();
+</script>
+
+<script>
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){
+    var ua=navigator.userAgent||"";
+    var app=ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+    var elc=ua.match(/Electron\/([\d.]+)/i);
+    var versie=app?("app "+app[1]):(elc?("app · Electron "+elc[1]):"browser");
+    var pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone|iPad)/);
+    var id=null;
+    try{
+      id=localStorage.getItem("fp.apparaat");
+      if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("fp.apparaat",id); }
+    }catch(e){}
+    return {computer:id, platform:pm?pm[1].replace(/_/g,"."):null, versie:versie};
+  }
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"vertalen",action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker"),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
+})();
+</script>
+</body>
+</html>

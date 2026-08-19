@@ -180,6 +180,11 @@
     "stuurcijfers": [
       "dolf", "fonteynbot", "osman",
     ],
+    /* Vertalen. Chantal schrijft de dealermails; de rest van de groep is de
+       vaste beheerlaag. Iemand erbij is één naam bijschrijven. */
+    "vertalen": [
+      "chantal", "dolf", "fonteynbot", "gerrit",
+    ],
     // Voorraadbeheer
     "voorraad": [
       "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",

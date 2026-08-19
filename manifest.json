@@ -161,6 +161,10 @@
       "note": "Retouren — op te halen retouren uit Logic4 (bedrag <=0) + reden/locatie-registratie in Cloudflare KV (bucket retouren), cirkeldiagram + periode-filter (Don/Arno/Dolf/Manon + admins)."
     },
     {
+      "name": "vertalen.html",
+      "note": "Vertalen — tekst plakken of typen en meteen terugkrijgen in het Engels, Duits, Frans, Spaans, Italiaans en twintig andere talen. Loopt via de worker (/vertaal); DeepL als DEEPL_SLEUTEL is gezet, anders een eenvoudige gratis vertaler. Keuze u/je, namen die onvertaald blijven, terugvertaling. Responsief, dus ook op de telefoon (Chantal + admins)."
+    },
+    {
       "name": "voorraad-mobiel.html",
       "note": "Voorraadbeheer op de telefoon: beginscherm met Overzicht, Stock, Onderweg (containers + binnen melden) en een order opzoeken. Zelfde toegangsgroep als voorraad.html."
     },
