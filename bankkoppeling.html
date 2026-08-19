@@ -389,16 +389,24 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <div class="card hidden" id="uitCard">
     <div class="section-title">Sluit het afschrift aan?</div>
     <div id="uitAansluiting"></div>
+    <div class="row-flex" style="margin-top:12px;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button class="cta secondary" id="uitKopieer" type="button" disabled>Aangevinkte uitgaven kopiëren als boekregels</button>
+      <span id="uitSelectie" class="muted" style="font-size:12.5px"></span>
+    </div>
     <p class="muted" id="uitMeta" style="margin:10px 0 0;font-size:12.5px;"></p>
     <div class="status warn" style="margin-top:14px;">
-      <b>De uitgaven staan er wel bij, maar zijn niet te boeken.</b> Ze horen in het bankdagboek, en
-      Logic4 laat via de API alleen inkoop-, verkoop- en memoriaalboekingen toe. Op 19 augustus 2026
-      nagegaan met een proefaanroep op de bankdagboeken: zowel de memoriaal- als de inkoopboeking
-      antwoordt letterlijk "Dit eindpunt kan alleen boeken van type Memoriaal (respectievelijk Inkoop)
-      toevoegen, maar het meegegeven financieel dagboek is een Bank boek." Er is daarbij niets geboekt.
-      In een bankdagboek kom je alleen met een betaling op een order of een factuur, en een betaling
-      aan een leverancier is geen van beide. De koppeling die hierboven staat scheelt het zoekwerk;
-      het wegschrijven blijft handwerk zolang Logic4 hier geen eindpunt voor heeft.
+      <b>De uitgaven zijn gekoppeld, maar Logic4 laat ze niet wegschrijven.</b> Op 19 augustus 2026
+      alle drie de wegen geprobeerd, met verzoeken die zo waren opgezet dat er niets kon ontstaan:
+      <br>&bull; <b>Betaling op een factuur</b> (dezelfde weg als bij de inkomsten): een crediteurfactuur
+      geeft "Factuur 788113 niet gevonden", precies dezelfde melding als een verzonnen nummer.
+      Dat eindpunt kent alleen verkoopfacturen.
+      <br>&bull; <b>Memoriaalboeking</b> in het bankdagboek: "Dit eindpunt kan alleen boeken van type
+      Memoriaal toevoegen, maar het meegegeven financieel dagboek 42 is een Bank boek."
+      <br>&bull; <b>Inkoopboeking</b> in het bankdagboek: hetzelfde, nu met "type Inkoop". In het
+      inkoopdagboek werd het dagboek wél geaccepteerd, wat bewijst dat de proef zelf klopte.
+      <br>Elk schrijf-eindpunt zit vast aan zijn eigen soort dagboek en geen van de vier schrijft in
+      een bankboek. Aanvinken kan wel: wat je aanvinkt komt met de knop hierboven naar buiten als
+      kant-en-klare boekregels met crediteurnummer, factuurnummer, bedrag en datum erbij.
     </div>
   </div>
 
@@ -799,15 +807,60 @@ function renderUitRij(t) {
       "<div style='margin-top:3px'>" + escapeHtml(t.match.reden) + "</div></div>";
   }
   const tp = (t.match && t.match.tegenpartijNaam) || (t.tegenpartij && t.tegenpartij.naam) || "";
+  /* Aanvinken kan wél, ook al kan het wegschrijven niet. Gerrit (19 aug
+     2026): "voor de bankkoppeling moet ik dus echt wel kunnen aanvinken."
+     Wat je aanvinkt komt onderaan als kant-en-klare boekregels naar buiten,
+     met crediteurnummer, factuurnummer, bedrag, datum en dagboek erbij -
+     precies de gegevens die Osman anders zelf moet opzoeken. */
+  const kanKiezen = !!(t.match && (t.match.beste || t.match.combinatie));
+  const vinkje = kanKiezen
+    ? "<input type='checkbox' class='kiesUit'" + (t.kies ? " checked" : "") + ">"
+    : "<span class='muted'>&darr;</span>";
   tr.innerHTML =
-    "<td><span class='muted' title='Uitgaven kunnen niet via de koppeling geboekt worden'>&darr;</span></td>" +
+    "<td>" + vinkje + "</td>" +
     "<td class='date'>" + escapeHtml(t.date || "—") + "</td>" +
     "<td class='amount neg'>" + fmtEur(t.amount) + "</td>" +
     "<td class='desc'>" + (tp ? "<b>" + escapeHtml(tp) + "</b><br>" : "") +
       "<span style='color:var(--muted,#6b7280)'>" + escapeHtml((t.description || "—").slice(0, 160)) + "</span></td>" +
     "<td class='match'>" + badge + "</td>" +
     "<td class='match'>" + info + "</td>";
+  const cb = tr.querySelector(".kiesUit");
+  if (cb) cb.addEventListener("change", () => { t.kies = cb.checked; werkUitSelectie(); });
   return tr;
+}
+
+/* Wat er aangevinkt staat, en wat je ermee kunt. */
+function werkUitSelectie() {
+  const gekozen = (state.uitgaven || []).filter(x => x.kies);
+  const totaal = gekozen.reduce((n, x) => n + Number(x.amount), 0);
+  const el = $("uitSelectie");
+  if (!el) return;
+  el.textContent = gekozen.length
+    ? gekozen.length + " uitgave" + (gekozen.length === 1 ? "" : "n") + " aangevinkt — samen " + fmtEur(totaal)
+    : "";
+  const knop = $("uitKopieer");
+  if (knop) knop.disabled = !gekozen.length;
+}
+
+/* De aangevinkte uitgaven als boekregels. Eén regel per factuur, want een
+   betaling die drie facturen voldoet is in het dagboek ook drie regels. */
+function uitgavenAlsRegels() {
+  const dagboek = gekozenDagboek();
+  const dagboekNaam = $("dagboek") && $("dagboek").selectedOptions[0] ? $("dagboek").selectedOptions[0].textContent : "";
+  const uit = [["datum", "dagboek", "crediteurnr", "leverancier", "factuurnr", "bedrag", "afschriftregel"]];
+  for (const t of (state.uitgaven || []).filter(x => x.kies)) {
+    const posten = t.match.combinatie || (t.match.beste ? [t.match.beste] : []);
+    for (const p of posten) {
+      uit.push([
+        t.date || "", (dagboekNaam || dagboek || ""),
+        String(p.CreditorId || ""), String(p.CompanyName || ""),
+        String(p.Reference || ""),
+        (Math.round(Math.abs(p.AmountOpen) * 100) / 100).toFixed(2).replace(".", ","),
+        String(t.description || "").slice(0, 120),
+      ]);
+    }
+  }
+  return uit;
 }
 
 
@@ -946,8 +999,21 @@ async function koppelUitgaven() {
   renderUitgaven();
 }
 
+if ($("uitKopieer")) $("uitKopieer").addEventListener("click", async () => {
+  const rijen = uitgavenAlsRegels();
+  const csv = rijen.map(r => r.map(v => /[;"\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v).join(";")).join("\n");
+  try {
+    await navigator.clipboard.writeText(csv);
+    showStatus($("actionStatus"), (rijen.length - 1) + " boekregel(s) gekopieerd. Plak ze in Excel of rechtstreeks in " +
+      "het bankdagboek van Logic4; crediteurnummer, factuurnummer, bedrag en datum staan erin.", "ok");
+  } catch (e) {
+    showStatus($("actionStatus"), "Kopiëren lukte niet: " + e.message, "error");
+  }
+});
+
 function renderUitgaven() {
   renderResults();
+  werkUitSelectie();
   const bij = state.transactions.reduce((n, t) => n + Number(t.amount), 0);
   const af = (state.uitgaven || []).reduce((n, t) => n + Number(t.amount), 0);
   const begin = state.openingBalance ? Number(state.openingBalance.amount) : null;
