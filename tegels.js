@@ -88,8 +88,13 @@
       uit:"Houston: facturen, voorraad en QuickBooks",             mobiel:"pc", tile:"tileAmerika" },
     { bestand:"douane.html",         groep:"papieren",         ic:"📄",  naam:"Douanepapieren",
       uit:"Douanedocumenten maken",                                mobiel:"pc", tile:"tileDouane" },
+    /* Op de telefoon een eigen, smalle weergave met de drie dingen die je
+       aan de lijn nodig hebt. Zelfde groep, dus exact dezelfde rechten; alleen
+       de weergave verschilt (Gerrit, 19 aug 2026). */
     { bestand:"voorraad.html",       groep:"voorraad",         ic:"📦",  naam:"Voorraadbeheer",
-      uit:"Containers, reserveringen, ontvangst en inkoop",        mobiel:"pc", tile:"tileVoorraad" },
+      uit:"Containers, reserveringen, ontvangst en inkoop",        mobiel:"goed", tile:"tileVoorraad",
+      mobielBestand:"voorraad-mobiel.html",
+      mobielUit:"Voorraad, wat eraan komt en een order opzoeken" },
     { bestand:"probe-logic4.html",   groep:"probe",            ic:"🔬",  naam:"Logic4-probe",
       uit:"Rechtstreeks een Logic4-endpoint bevragen",             mobiel:"pc", tile:"tileProbe" },
 

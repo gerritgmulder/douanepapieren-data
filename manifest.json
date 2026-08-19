@@ -161,6 +161,10 @@
       "note": "Retouren — op te halen retouren uit Logic4 (bedrag <=0) + reden/locatie-registratie in Cloudflare KV (bucket retouren), cirkeldiagram + periode-filter (Don/Arno/Dolf/Manon + admins)."
     },
     {
+      "name": "voorraad-mobiel.html",
+      "note": "Voorraadbeheer op de telefoon: overzicht, stock en een order opzoeken"
+    },
+    {
       "name": "voorraad.html",
       "note": "Voorraadbeheer — verkochte spa-orders per dag uit Logic4 (status Verkooporder/30% aanbetaald), spa-detectie via SKT-productcodes, 1 regel per spa, filteren op elke kolom. Vervolg: Dealer/Particulier-splitsing + reserveringen in KV (Dolf/Arno/Chantal + admins)."
     },

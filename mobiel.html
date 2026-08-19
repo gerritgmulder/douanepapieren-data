@@ -267,9 +267,14 @@ function toonDash(){
         var breed = soort === "goed" && deel.length === 1 ? " breed" : "";
         var merk = soort === "goed" ? "" :
           '<span class="merk ' + soort + '">' + (soort === "krap" ? "breed" : "pc") + "</span>";
-        return '<a class="tegel' + breed + '" href="' + t.bestand + '" data-soort="' + soort +
+        /* Heeft een tegel een eigen telefoonweergave, dan gaan we daarheen.
+           De rechten zitten aan de groep vast en niet aan het bestand, dus dit
+           verandert niets aan wie er in mag. */
+        var doel = t.mobielBestand || t.bestand;
+        var uitleg = (t.mobielBestand && t.mobielUit) ? t.mobielUit : t.uit;
+        return '<a class="tegel' + breed + '" href="' + doel + '" data-soort="' + soort +
                '" data-naam="' + t.naam.replace(/"/g, "&quot;") + '">' + merk +
-               '<div class="ic">' + t.ic + "</div><div><h3>" + t.naam + "</h3><p>" + t.uit + "</p></div></a>";
+               '<div class="ic">' + t.ic + "</div><div><h3>" + t.naam + "</h3><p>" + uitleg + "</p></div></a>";
       }).join("") + "</div>";
   });
   el("tegelblok").innerHTML = html;

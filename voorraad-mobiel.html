@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<script src="toegang.js"></script>
+<script>
+/* Dezelfde deur als de pc-versie. Gerrit (14 aug 2026): "ik wil dat de
+   rechten hetzelfde zijn als op de desktop, dat mag sowieso nooit
+   verschillen." Daarom dezelfde groep uit toegang.js, niet een eigen lijst. */
+(function(){
+  var TOEGANG = window.fpToegang ? window.fpToegang.set("voorraad") : null;
+  var email = (localStorage.getItem("fp.email")||"").toLowerCase();
+  if (!localStorage.getItem("fp.session")) { location.replace("./"); return; }
+  if (TOEGANG && TOEGANG.has(email)) return;
+  window.fpGeenToegang = true;
+  document.write('<style>body{margin:0;font-family:-apple-system,system-ui,sans-serif;background:#f5f4ef;color:#1f2937}'+
+    '.gt{margin:14vh 18px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:26px;text-align:center}'+
+    '.gt h1{color:#144734;font-size:19px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
+    '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px}</style>'+
+    '<div class="gt"><h1>Geen toegang</h1><p>Voorraadbeheer is niet beschikbaar voor jouw account.</p>'+
+    '<a href="./">&larr; Terug</a></div>');
+  window.stop();
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#144734">
+<meta name="robots" content="noindex, nofollow">
+<title>Voorraad</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     VOORRAADBEHEER OP DE TELEFOON
+
+     Gerrit (19 aug 2026): "Chantal krijgt vaak telefoontjes waarbij ze niet
+     achter de pc zit en dus even op haar mobiel moet kunnen kijken."
+
+     Bewust niet de hele pc-tegel geperst in een klein scherm. Zeven
+     tabbladen met tabellen van dertien kolommen worden daar niet bruikbaar
+     van. Dit zijn de drie dingen die je aan de telefoon nodig hebt: wat
+     hebben we van dit model, wat komt eraan, en hoe staat deze order ervoor.
+     De rest doet ze op de pc.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --bg:#f5f4ef; --kaart:#fff;
+       --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --rood:#b91c1c; --warm:#92400e; }
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;min-height:100%}
+body{font-family:"Montserrat",-apple-system,system-ui,sans-serif;background:var(--bg);
+     color:var(--ink);font-size:15px;-webkit-text-size-adjust:100%}
+header{background:var(--groen);color:#fff;padding:13px 16px;display:flex;align-items:center;gap:11px;
+       position:sticky;top:0;z-index:20;padding-top:calc(13px + env(safe-area-inset-top))}
+header a{color:rgba(255,255,255,.85);text-decoration:none;font-size:13px;flex:0 0 auto}
+header h1{flex:1;margin:0;font-size:16px;font-weight:600}
+nav{display:flex;background:var(--kaart);border-bottom:1px solid var(--rand);position:sticky;
+    top:calc(48px + env(safe-area-inset-top));z-index:19}
+nav button{flex:1;border:0;background:transparent;padding:13px 4px;font:inherit;font-size:13.5px;
+           font-weight:600;color:var(--grijs);border-bottom:3px solid transparent;cursor:pointer}
+nav button.aan{color:var(--groen);border-bottom-color:var(--groen)}
+main{padding:14px;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
+.zoek{width:100%;border:1px solid var(--rand);border-radius:10px;padding:13px;font:inherit;
+      font-size:16px;background:#fff;margin-bottom:12px}
+.zoek:focus{outline:none;border-color:var(--lime)}
+.rij{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:13px 14px;margin-bottom:9px}
+.rij h3{margin:0 0 7px;font-size:15px;color:var(--groen);font-weight:600}
+/* Vier getallen naast elkaar passen op 375 breed met 317 van de 319 pixels,
+   en dat is te krap voor een smallere Android. Vandaar minder marge per
+   getal; wat dan nog niet past valt netjes naar de tweede regel. */
+.getallen{display:flex;gap:12px;flex-wrap:wrap}
+.getal{min-width:58px}
+.getal b{display:block;font-size:19px;line-height:1.15}
+.getal span{font-size:11px;color:var(--grijs)}
+.getal.op b{color:var(--groen)}
+.getal.zee b{color:#1d4ed8}
+.getal.res b{color:var(--warm)}
+.getal.kort b{color:var(--rood)}
+.kleuren{margin-top:9px;padding-top:9px;border-top:1px solid #f0f0ea;font-size:12.5px;color:var(--grijs);line-height:1.7}
+.kleuren b{color:var(--ink)}
+.tel{font-size:12.5px;color:var(--grijs);margin:0 0 10px}
+.leeg{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:22px;
+      text-align:center;color:var(--grijs);font-size:13.5px}
+.melding{border-radius:10px;padding:11px 13px;font-size:13px;margin-bottom:11px;line-height:1.5}
+.melding.bezig{background:#eff6ff;color:#1e40af}
+.melding.fout{background:#fef2f2;color:var(--rood)}
+.knop{width:100%;background:var(--lime);color:#12331f;border:0;border-radius:10px;padding:14px;
+      font:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:12px}
+.knop:disabled{background:#d1d5db;color:#6b7280}
+.veld{display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #f4f4ef;font-size:13.5px}
+.veld:last-child{border-bottom:0}
+.veld span{color:var(--grijs);flex:0 0 auto}
+.veld b{text-align:right;font-weight:600}
+.pil{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:600}
+.pil.groen{background:#dcfce7;color:#166534}
+.pil.geel{background:#fef3c7;color:var(--warm)}
+.pil.grijs{background:#f3f4f6;color:var(--grijs)}
+.bron{font-size:11.5px;color:var(--grijs);margin-top:14px;text-align:center}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="./">&larr;</a>
+  <h1>Voorraad</h1>
+  <a href="#" id="ververs">ververs</a>
+</header>
+
+<nav>
+  <button data-t="overzicht" class="aan" type="button">Overzicht</button>
+  <button data-t="stock" type="button">Stock</button>
+  <button data-t="order" type="button">Order</button>
+</nav>
+
+<main>
+  <div id="tab-overzicht">
+    <input class="zoek" id="ovZoek" type="search" placeholder="zoek een model…">
+    <p class="tel" id="ovTel"></p>
+    <div id="ovLijst"></div>
+  </div>
+
+  <div id="tab-stock" style="display:none">
+    <input class="zoek" id="stZoek" type="search" placeholder="zoek een model of kleur…">
+    <p class="tel" id="stTel"></p>
+    <div id="stLijst"></div>
+  </div>
+
+  <div id="tab-order" style="display:none">
+    <input class="zoek" id="orNr" type="text" inputmode="numeric" placeholder="ordernummer, bv. 3515102">
+    <button class="knop" id="orKnop" type="button">Order opzoeken</button>
+    <div id="orUit"></div>
+  </div>
+  <p class="bron" id="bron"></p>
+</main>
+
+<script>
+(function(){
+if (window.fpGeenToegang) return;
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ var d=document.createElement("div"); d.textContent=(s==null?"":s); return d.innerHTML; }
+function teamKey(){ return localStorage.getItem("fp.teamkey") || ""; }
+function mailKey(){ return localStorage.getItem("fp.mailkey") || ""; }
+function nlDatum(s){ if(!s) return "—"; var d=new Date(s); return isNaN(d)?"—":
+  String(d.getDate()).padStart(2,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+d.getFullYear(); }
+
+/* ── de gegevens ─────────────────────────────────────────────────────
+   Alles uit dezelfde buckets als de pc-versie, zodat de telefoon nooit
+   iets anders kan zeggen dan het scherm op kantoor. */
+var data = { hallen:null, resv:null, schepen:null, cat:null, codeKleur:{} };
+
+function haal(pad){
+  return fetch(W + pad, { headers:{ "X-Fonteyn-Auth": teamKey() } })
+    .then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); });
+}
+function kleurUitOms(desc){
+  var s=String(desc||""), i=s.indexOf("|");
+  if(i<0) return null;
+  return s.slice(i+1).replace(/\b(spa|swimspa)\b/gi,"").replace(/\s+/g," ").trim()||null;
+}
+async function laad(){
+  $("bron").textContent = "laden…";
+  try{
+    var r = await Promise.all([
+      haal("/data/voorraad-hallen"), haal("/data/reserveringen-live"),
+      haal("/data/voorraad-schepen"), haal("/data/spa-catalog").catch(function(){ return {models:{}}; })
+    ]);
+    data.hallen=r[0]||{}; data.resv=r[1]||{}; data.schepen=r[2]||{}; data.cat=r[3]||{};
+    data.codeKleur={};
+    var modellen=(data.cat&&data.cat.models)||{};
+    for(var m in modellen) (modellen[m]||[]).forEach(function(v){
+      if(v&&v.code) data.codeKleur[String(v.code)]=kleurUitOms(v.desc);
+    });
+    $("bron").textContent = "bijgewerkt " + (data.hallen.updated ? new Date(data.hallen.updated).toLocaleString("nl-NL") : "onbekend");
+    tekenOverzicht(); tekenStock();
+  }catch(e){
+    $("bron").textContent = "";
+    $("ovLijst").innerHTML = '<div class="melding fout">Laden mislukt: ' + esc(e.message) +
+      '. Log opnieuw in op het dashboard, dan wordt de sleutel opgehaald.</div>';
+  }
+}
+
+/* Wat er per model op zee zit: alle schepen die nog moeten aankomen. */
+function opZee(){
+  var uit={}, vandaag=new Date().toISOString().slice(0,10);
+  ((data.schepen&&data.schepen.ships)||[]).forEach(function(s){
+    if(s.alleenDocumenten) return;
+    if(s.eta && s.eta < vandaag) return;
+    var mods=s.models||{};
+    for(var m in mods) uit[m]=(uit[m]||0)+(Number(mods[m])||0);
+  });
+  return uit;
+}
+function eersteSchip(model){
+  var beste=null, vandaag=new Date().toISOString().slice(0,10);
+  ((data.schepen&&data.schepen.ships)||[]).forEach(function(s){
+    if(s.alleenDocumenten||!s.eta||s.eta<vandaag) return;
+    if(!(s.models&&s.models[model])) return;
+    if(!beste||s.eta<beste.eta) beste={eta:s.eta, ref:s.ref||s.trackRef||""};
+  });
+  return beste;
+}
+
+/* ── Overzicht: per model wat er vrij is, wat er vaart en wat er vast zit ── */
+function tekenOverzicht(){
+  var q=($("ovZoek").value||"").trim().toLowerCase();
+  var hal=(data.hallen&&data.hallen.models)||{};
+  var byModel=(data.resv&&data.resv.byModel)||{};
+  var zee=opZee();
+  var namen={};
+  Object.keys(hal).forEach(function(m){ namen[m]=1; });
+  Object.keys(byModel).forEach(function(m){ namen[m]=1; });
+  Object.keys(zee).forEach(function(m){ namen[m]=1; });
+
+  var rijen=Object.keys(namen).map(function(m){
+    var vrij=Number((hal[m]||{}).available)||0;
+    var res=(byModel[m]||[]).reduce(function(n,r){ return n+(Number(r.qty)||0); },0);
+    var vaart=Number(zee[m])||0;
+    return { model:m, vrij:vrij, res:res, zee:vaart, tekort:Math.max(0,res-vrij-vaart) };
+  }).filter(function(r){ return r.vrij||r.res||r.zee; });
+  if(q) rijen=rijen.filter(function(r){ return r.model.toLowerCase().indexOf(q)>=0; });
+  rijen.sort(function(a,b){ return b.tekort-a.tekort || a.model.localeCompare(b.model,"nl",{numeric:true}); });
+
+  $("ovTel").textContent = rijen.length + " model" + (rijen.length===1?"":"len") +
+    (q ? " voor '"+q+"'" : "");
+  if(!rijen.length){ $("ovLijst").innerHTML='<div class="leeg">Niets gevonden.</div>'; return; }
+  $("ovLijst").innerHTML = rijen.map(function(r){
+    var schip=r.zee?eersteSchip(r.model):null;
+    return '<div class="rij"><h3>'+esc(r.model)+'</h3><div class="getallen">'+
+      '<div class="getal op"><b>'+r.vrij+'</b><span>vrij in NL</span></div>'+
+      '<div class="getal zee"><b>'+r.zee+'</b><span>op zee</span></div>'+
+      '<div class="getal res"><b>'+r.res+'</b><span>gereserveerd</span></div>'+
+      (r.tekort?'<div class="getal kort"><b>'+r.tekort+'</b><span>tekort</span></div>':'')+
+      '</div>'+
+      (schip?'<div class="kleuren">Eerstvolgende aankomst <b>'+esc(nlDatum(schip.eta))+'</b>'+
+        (schip.ref?' &middot; '+esc(schip.ref):'')+'</div>':'')+
+      '</div>';
+  }).join("");
+}
+
+/* ── Stock: alleen wat er in Nederland staat, met de kleuren erbij ── */
+function tekenStock(){
+  var q=($("stZoek").value||"").trim().toLowerCase();
+  var hal=(data.hallen&&data.hallen.models)||{};
+  var rijen=Object.keys(hal).map(function(m){
+    var d=hal[m]||{};
+    var varianten=Object.keys(d.variants||{}).map(function(code){
+      return { code:code, kleur:data.codeKleur[code]||"(kleur onbekend)", aantal:Number(d.variants[code])||0 };
+    }).filter(function(v){ return v.aantal>0; })
+      .sort(function(a,b){ return b.aantal-a.aantal; });
+    return { model:m, vrij:Number(d.available)||0, fysiek:Number(d.physical)||0, varianten:varianten };
+  }).filter(function(r){ return r.vrij>0||r.fysiek>0; });
+  if(q) rijen=rijen.filter(function(r){
+    return r.model.toLowerCase().indexOf(q)>=0 ||
+           r.varianten.some(function(v){ return v.kleur.toLowerCase().indexOf(q)>=0; });
+  });
+  rijen.sort(function(a,b){ return a.model.localeCompare(b.model,"nl",{numeric:true}); });
+
+  var tv=rijen.reduce(function(n,r){ return n+r.vrij; },0);
+  $("stTel").textContent = rijen.length + " model" + (rijen.length===1?"":"len") + " · " + tv + " vrij in Nederland";
+  if(!rijen.length){ $("stLijst").innerHTML='<div class="leeg">Niets op voorraad gevonden.</div>'; return; }
+  $("stLijst").innerHTML = rijen.map(function(r){
+    return '<div class="rij"><h3>'+esc(r.model)+'</h3><div class="getallen">'+
+      '<div class="getal op"><b>'+r.vrij+'</b><span>vrij</span></div>'+
+      '<div class="getal"><b>'+r.fysiek+'</b><span>fysiek aanwezig</span></div></div>'+
+      (r.varianten.length?'<div class="kleuren">'+r.varianten.map(function(v){
+        return '<b>'+v.aantal+'</b> &times; '+esc(v.kleur);
+      }).join('<br>')+'</div>':'')+
+      '</div>';
+  }).join("");
+}
+
+/* ── Order opzoeken ──────────────────────────────────────────────────
+   Langs dezelfde leesroute als de andere tegels op de telefoon: de worker
+   mag uitsluitend opvragen, nooit wijzigen. */
+async function logic4(pad, body){
+  var r = await fetch(W + "/logic4/lees", {
+    method:"POST",
+    headers:{ "Content-Type":"application/json", "X-Fonteyn-Mail": mailKey() },
+    body: JSON.stringify({ path:pad, method:"POST", body:body })
+  });
+  var j = await r.json();
+  if(!j || !j.ok) throw new Error((j&&(j.uitleg||j.error)) || ("HTTP "+r.status));
+  return j.data;
+}
+async function zoekOrder(){
+  var nr=($("orNr").value||"").trim();
+  var uit=$("orUit");
+  if(!/^\d{4,9}$/.test(nr)){ uit.innerHTML='<div class="melding fout">Vul een ordernummer in.</div>'; return; }
+  $("orKnop").disabled=true;
+  uit.innerHTML='<div class="melding bezig">Order '+esc(nr)+' opzoeken…</div>';
+  try{
+    var d = await logic4("/v3/Orders/GetOrders", { Id: parseInt(nr,10), TakeRecords:1 });
+    var arr = Array.isArray(d) ? d : ((d&&(d.Orders||d.Items))||[]);
+    if(!arr.length){ uit.innerHTML='<div class="melding fout">Order '+esc(nr)+' bestaat niet in Logic4.</div>'; return; }
+    var o=arr[0];
+    var adr=o.InvoiceAddress||o.DeliveryAddress||o.AccountAddress||{};
+    var klant=adr.CompanyName||adr.ContactName||("debiteur "+o.DebtorId);
+    var T=o.Totals||{};
+    var totaal=Number(T.AmountIncl)||0, betaald=Number(T.Calc_TotalPayed)||0;
+    var pct=totaal>0?Math.round(betaald/totaal*100):0;
+    var status=(o.OrderStatus&&o.OrderStatus.Value)||"onbekend";
+    var pil = pct>=100?"groen":(pct>0?"geel":"grijs");
+    var regels=(o.OrderRows||[]).filter(function(r){ return Number(r.Qty); });
+    uit.innerHTML =
+      '<div class="rij"><h3>'+esc(klant)+'</h3>'+
+        '<div class="veld"><span>Order</span><b>'+esc(String(o.Id))+'</b></div>'+
+        '<div class="veld"><span>Status</span><b>'+esc(status)+'</b></div>'+
+        '<div class="veld"><span>Orderdatum</span><b>'+esc(nlDatum(o.CreationDate))+'</b></div>'+
+        '<div class="veld"><span>Leverdatum</span><b>'+esc(nlDatum(o.DeliveryDate))+'</b></div>'+
+        '<div class="veld"><span>Bedrag</span><b>&euro; '+totaal.toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2})+'</b></div>'+
+        '<div class="veld"><span>Betaald</span><b><span class="pil '+pil+'">'+pct+'%</span></b></div>'+
+        (o.Reference?'<div class="veld"><span>Referentie</span><b>'+esc(o.Reference)+'</b></div>':'')+
+      '</div>'+
+      (regels.length?'<div class="rij"><h3>'+regels.length+' regel'+(regels.length===1?"":"s")+'</h3>'+
+        regels.map(function(r){
+          var gel=Number(r.QtyDeliverd)||0, bes=Number(r.Qty)||0;
+          var merk = gel>=bes ? '<span class="pil groen">geleverd</span>'
+                   : (gel>0 ? '<span class="pil geel">deels</span>' : '<span class="pil grijs">open</span>');
+          return '<div class="veld"><span>'+bes+' &times; '+esc(String(r.Description||r.ProductCode||"").slice(0,44))+
+                 '</span><b>'+merk+'</b></div>';
+        }).join("")+'</div>':'');
+  }catch(e){
+    uit.innerHTML='<div class="melding fout">Opzoeken mislukt: '+esc(e.message)+'</div>';
+  }finally{
+    $("orKnop").disabled=false;
+  }
+}
+
+/* ── tabbladen ─────────────────────────────────────────────────────── */
+Array.prototype.forEach.call(document.querySelectorAll("nav button"), function(b){
+  b.addEventListener("click", function(){
+    Array.prototype.forEach.call(document.querySelectorAll("nav button"), function(x){ x.classList.remove("aan"); });
+    b.classList.add("aan");
+    ["overzicht","stock","order"].forEach(function(t){
+      document.getElementById("tab-"+t).style.display = (t===b.dataset.t) ? "" : "none";
+    });
+  });
+});
+$("ovZoek").addEventListener("input", tekenOverzicht);
+$("stZoek").addEventListener("input", tekenStock);
+$("orKnop").addEventListener("click", zoekOrder);
+$("orNr").addEventListener("keydown", function(e){ if(e.key==="Enter") zoekOrder(); });
+$("ververs").addEventListener("click", function(e){ e.preventDefault(); laad(); });
+laad();
+})();
+</script>
+</body>
+</html>
