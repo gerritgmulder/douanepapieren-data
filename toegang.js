@@ -47,10 +47,11 @@
     return [naam + "@fonteyn.nl", naam, "fonteyn." + naam];
   }
 
-  /* Iedereen die het dashboard gebruikt. Twee groepen hebben deze lijst nodig
-     en die horen niet allebei hun eigen kopie te krijgen - dan lopen ze uit
-     elkaar, en dat is precies waar dit bestand voor bestaat. Wie erbij komt
-     schrijf je hier op, en staat daarmee meteen in allebei. */
+  /* Iedereen die het dashboard gebruikt. Op dit moment hangt alleen Vertalen
+     hieraan; Mijn uren stond er ook aan tot Gerrit (19 aug 2026) die tegel
+     weer dichtzette. De lijst blijft staan omdat hij "iedereen" betekent en
+     niet "de vertaaltegel" - zodra Mijn uren opengaat is het weer één regel.
+     Wie erbij komt schrijf je hier op en staat daarmee overal in. */
   var IEDEREEN = [
     "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
     "dali", "danique", "demi", "dolf", "don", "edwin",
@@ -144,9 +145,17 @@
          keek naar precies dezelfde groep - maar het viel toen wel pas op. */
       "dolf", "fonteynbot", "gerrit", "gretha", "manon",
     ],
-    /* Uren. Iedereen die het dashboard gebruikt, want iedereen werkt.
-       Je ziet alleen je eigen uren; dat regelt de worker, niet de pagina. */
-    "uren": IEDEREEN,
+    /* Uren. Stond open voor iedereen, maar Gerrit (19 aug 2026): "Mijn uren
+       mag nog verborgen blijven voor iedereen, behalve voor mij zichtbaar."
+       Dus voorlopig dicht. Zet er weer IEDEREEN neer als de tegel opengaat.
+
+       Dit verbergt niet alleen de tegel maar sluit ook uren.html zelf af: die
+       pagina kijkt naar dezelfde groep. De worker heeft daarnaast nog een
+       eigen lijst (UREN_ALLEMAAL) voor wie de uren van collega's mag inzien;
+       die staat hier los van en is niet aangeraakt. */
+    "uren": [
+      "fonteynbot", "gerrit",
+    ],
     /* De uren van iedereen inzien. Bewust los van de groep "uren": daar zit
        iedereen in, hier alleen Dolf en Gerrit. Dezelfde twee namen staan in
        de worker (UREN_ALLEMAAL), want een scherm mag zichzelf niet bewaken
