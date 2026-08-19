@@ -3775,18 +3775,38 @@ async function bankBoeken(env, body) {
   const door = String(body.door || "").slice(0, 80);
   const uit = [];
   for (const r of regels) {
-    const orderNr = Number(r.orderNr);
+    const orderNr = Number(r.orderNr) || 0;
+    /* Een betaling mag ook rechtstreeks op een factuur. AddPayment kent naast
+       OrderId ook InvoiceId, en dat is precies wat er nodig is als de order
+       al is afgehandeld maar de factuur nog openstaat - het geval van
+       Fennema Elektro (Gerrit, 19 aug 2026). */
+    const factuurNr = Number(r.invoiceId || r.factuurNr) || 0;
     const bedrag = Number(r.bedrag);
-    if (!orderNr || !(bedrag > 0)) { uit.push({ ...r, ok: false, error: "ordernummer of bedrag ontbreekt" }); continue; }
+    if (!orderNr && !factuurNr) { uit.push({ ...r, ok: false, error: "geen ordernummer en geen factuurnummer" }); continue; }
+    if (!(bedrag > 0)) { uit.push({ ...r, ok: false, error: "bedrag ontbreekt of is niet positief" }); continue; }
     // De omschrijving is wat Osman later in Logic4 terugziet. Datum en
     // afschrift erin, zodat een boeking naar de bankregel terug te leiden is.
     const omschrijving = String(r.omschrijving || "").slice(0, 200) || "Bankbetaling";
-    const datum = /^\d{4}-\d{2}-\d{2}$/.test(String(r.datum || "")) ? r.datum : new Date().toISOString().slice(0, 10);
+    /* De datum van de bankregel, niet de dag waarop iemand zit te boeken.
+       Gerrit (19 aug 2026): "ook al doe ik de boeking op 10 augustus, ik wil
+       dat die betaling van 5 augustus komt in het bankdagboek van 5 augustus."
+
+       Hier stond een terugval op vandaag als de datum ontbrak. Dat is precies
+       hoe een boeking op de verkeerde dag ontstaat zonder dat iemand het ziet.
+       Nu wordt de regel geweigerd in plaats van op een verzonnen dag geboekt,
+       en gaat de gebruikte datum mee terug zodat hij te controleren is. */
+    const datum = String(r.datum || "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) {
+      uit.push({ ...r, ok: false,
+        error: "deze regel heeft geen leesbare datum, en er wordt geen datum verzonnen. " +
+               "Een betaling hoort in het dagboek van de dag waarop hij binnenkwam." });
+      continue;
+    }
     try {
       const resp = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
         method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
         body: JSON.stringify({
-          OrderId: orderNr,
+          ...(orderNr ? { OrderId: orderNr } : { InvoiceId: factuurNr }),
           AmountIncl: bedrag,
           BookingId: bookingId,
           MatchingLedgerId: matchingLedgerId,
@@ -3804,7 +3824,8 @@ async function bankBoeken(env, body) {
           error: (j && (j.detail || j.title)) || ("HTTP " + resp.status),
           antwoord: tekst.slice(0, 300) });
       } else {
-        uit.push({ ...r, ok: true, geboekt: bedrag });
+        uit.push({ ...r, ok: true, geboekt: bedrag, datumGebruikt: datum,
+                   op: orderNr ? ("order " + orderNr) : ("factuur " + factuurNr) });
       }
     } catch (e) { uit.push({ ...r, ok: false, error: String(e.message || e) }); }
   }

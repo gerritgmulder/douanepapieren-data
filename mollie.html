@@ -464,8 +464,15 @@ $("boekBtn").addEventListener("click", async () => {
         regels: opOrder.map(o => ({ orderNr: o.orderNr, bedrag: o.bedrag, datum: o.x.tx.date, omschrijving: o.omschrijving })) }) });
     const j = await r.json().catch(() => ({}));
     (j.resultaten || []).forEach((res, i) => {
-      if (res.ok) { opOrder[i].x.geboekt = "op order " + opOrder[i].orderNr; gelukt++; }
-      else fouten.push("order " + opOrder[i].orderNr + ": " + (res.error || "onbekend"));
+      /* De gebruikte datum erbij. Gerrit (19 aug 2026): "ik wil dat die
+         betaling van 5 augustus komt in het bankdagboek van 5 augustus."
+         Door hem te tonen is meteen te zien of dat gelukt is, in plaats van
+         het pas in Logic4 te ontdekken. */
+      if (res.ok) {
+        opOrder[i].x.geboekt = "op order " + opOrder[i].orderNr +
+          (res.datumGebruikt ? " · " + res.datumGebruikt : "");
+        gelukt++;
+      } else fouten.push("order " + opOrder[i].orderNr + ": " + (res.error || "onbekend"));
     });
     if (!j.resultaten) fouten.push("boeken op orders: " + (j.error || "geen antwoord"));
   }

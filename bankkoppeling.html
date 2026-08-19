@@ -381,38 +381,24 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <div id="actionStatus"></div>
   </div>
 
-  <!-- ═══ Uitgaven ═══
-       Gerrit (19 aug 2026): "Op een MT940 staan inkomsten en uitgaven. De
-       uitgaven moeten op dezelfde manier worden geboekt aan crediteurfacturen
-       zoals inkomsten worden geboekt op debiteurenfacturen." -->
+  <!-- ═══ Aansluiting van het hele afschrift ═══
+       Osman (via Gerrit, 19 aug 2026): "er moet een balans komen per dag,
+       anders kan er nooit echt een bankkoppeling worden gemaakt van het hele
+       mt940 bestand." De regels zelf staan hierboven door elkaar op datum;
+       dit is de optelsom van het geheel. -->
   <div class="card hidden" id="uitCard">
-    <div class="section-title">Uitgaven — betalingen aan leveranciers</div>
-    <p class="muted" style="margin:0 0 12px;font-size:13px;">
-      Wat er van de rekening af is gegaan, gezocht bij de openstaande crediteurfacturen in Logic4.
-      Op factuurnummer, op de naam van de leverancier, of op een combinatie van facturen die samen
-      op het bedrag uitkomt — zo gaat een betaalbatch immers de deur uit.
-      <span id="uitMeta"></span>
-    </p>
-    <div style="overflow-x:auto;">
-      <table class="tx" id="uitTable">
-        <thead>
-          <tr>
-            <th style="width:88px;">Datum</th>
-            <th style="width:110px; text-align:right;">Bedrag</th>
-            <th>Afschriftregel</th>
-            <th style="width:118px;">Status</th>
-            <th>Gevonden crediteurfactuur</th>
-          </tr>
-        </thead>
-        <tbody id="uitBody"></tbody>
-      </table>
-    </div>
+    <div class="section-title">Sluit het afschrift aan?</div>
+    <div id="uitAansluiting"></div>
+    <p class="muted" id="uitMeta" style="margin:10px 0 0;font-size:12.5px;"></p>
     <div class="status warn" style="margin-top:14px;">
-      <b>Boeken kan hier nog niet.</b> Aan de debiteurenkant boekt Logic4 een betaling op de order
-      (AddPayment). Voor crediteuren bestaat die weg niet: dat gaat via een inkoopboeking in een
-      dagboek, en die kent wel de crediteur maar geen veld om één specifieke factuur mee af te
-      letteren. Zolang dat niet zeker is, wordt hier niets weggeschreven — dat is bij een
-      lopende controle het laatste wat je wilt. Dit overzicht scheelt Osman wel het zoekwerk.
+      <b>De uitgaven staan er wel bij, maar zijn niet te boeken.</b> Ze horen in het bankdagboek, en
+      Logic4 laat via de API alleen inkoop-, verkoop- en memoriaalboekingen toe. Op 19 augustus 2026
+      nagegaan met een proefaanroep op de bankdagboeken: zowel de memoriaal- als de inkoopboeking
+      antwoordt letterlijk "Dit eindpunt kan alleen boeken van type Memoriaal (respectievelijk Inkoop)
+      toevoegen, maar het meegegeven financieel dagboek is een Bank boek." Er is daarbij niets geboekt.
+      In een bankdagboek kom je alleen met een betaling op een order of een factuur, en een betaling
+      aan een leverancier is geen van beide. De koppeling die hierboven staat scheelt het zoekwerk;
+      het wegschrijven blijft handwerk zolang Logic4 hier geen eindpunt voor heeft.
     </div>
   </div>
 
@@ -558,10 +544,10 @@ async function handleFile(file) {
       melding += " Er staan ook " + state.uitgaven.length + " uitgaven op dit afschrift; die worden hieronder " +
                  "bij de openstaande crediteurfacturen gezocht.";
       showStatus($("dropStatus"), melding, "ok");
-      await koppelUitgaven();
     } else {
       showStatus($("dropStatus"), melding, "ok");
     }
+    await koppelUitgaven();
   } catch (e) {
     console.error(e);
     showStatus($("dropStatus"), "Kon MT940 niet inlezen: " + e.message, "error");
@@ -760,8 +746,68 @@ function renderResults() {
 
   const tbody = $("txBody");
   tbody.innerHTML = "";
-  for (let i = 0; i < t.length; i++) tbody.appendChild(renderRow(t[i], i));
+  /* Inkomsten en uitgaven door elkaar, op datum. Osman (via Gerrit, 19 aug
+     2026): "ik wil dat die uitgaves meegenomen worden in de lijst met
+     inkomende bedragen, want er moet een balans komen per dag en anders kan
+     er nooit echt een bankkoppeling worden gemaakt van het hele mt940
+     bestand." Twee losse tabellen laten je dat zelf optellen; zo staat het
+     afschrift er zoals het is. */
+  const alles = t.map((x, i) => ({ tx: x, idx: i, uit: false }))
+    .concat((state.uitgaven || []).map((x, i) => ({ tx: x, idx: i, uit: true })))
+    .sort((a, b) => String(a.tx.date || "").localeCompare(String(b.tx.date || "")));
+  let vorigeDag = null;
+  for (const r of alles) {
+    const dag = r.tx.date || "";
+    if (dag !== vorigeDag) { tbody.appendChild(dagKop(dag, alles)); vorigeDag = dag; }
+    tbody.appendChild(r.uit ? renderUitRij(r.tx) : renderRow(r.tx, r.idx));
+  }
   werkSelectieBij();
+}
+
+/* Een kopregel per dag, met wat er die dag bij en af ging en het saldo.
+   Daarmee sluit het hele bestand aan op het beginsaldo en het eindsaldo van
+   de bank, en dát is wat een bankkoppeling bruikbaar maakt. */
+function dagKop(dag, alles) {
+  const opDag = alles.filter(r => (r.tx.date || "") === dag);
+  const bij = opDag.filter(r => Number(r.tx.amount) > 0).reduce((n, r) => n + Number(r.tx.amount), 0);
+  const af = opDag.filter(r => Number(r.tx.amount) < 0).reduce((n, r) => n + Number(r.tx.amount), 0);
+  const tr = document.createElement("tr");
+  tr.className = "dagkop";
+  tr.innerHTML = "<td colspan='6'><b>" + escapeHtml(dag || "zonder datum") + "</b>" +
+    "<span class='muted' style='margin-left:14px'>bij " + fmtEur(bij) +
+    " · af " + fmtEur(af) + " · saldo " + fmtEur(bij + af) +
+    " · " + opDag.length + " regel" + (opDag.length === 1 ? "" : "s") + "</span></td>";
+  return tr;
+}
+
+/* Een uitgaande regel. Geen vinkje: boeken in het bankdagboek kan Logic4 niet
+   via de API, en dat is op 19 aug 2026 met hun eigen foutmelding bevestigd
+   voor zowel een memoriaal- als een inkoopboeking. */
+function renderUitRij(t) {
+  const tr = document.createElement("tr");
+  tr.className = "uitgave";
+  let badge = "<span class='badge pending'>Bezig…</span>", info = "";
+  if (t.match) {
+    const u = STATUS_UITERLIJK[t.match.status] || STATUS_UITERLIJK.geen;
+    badge = "<span class='badge " + u.klasse + "'>" + u.tekst + "</span>";
+    const k = t.match.kandidaten || [];
+    const regels = t.match.combinatie || (k.length > 1 ? k.slice(0, 8) : (t.match.beste ? [t.match.beste] : []));
+    info = "<div class='match-info'>" +
+      regels.map(p => "Factuur <b>" + escapeHtml(p.Reference || "—") + "</b> · " +
+        escapeHtml(p.CompanyName || ("crediteur " + p.CreditorId)) + " · " +
+        fmtEur(Math.abs(p.AmountOpen)) + (p.AmountOpen < 0 ? " creditnota" : "")).join("<br>") +
+      "<div style='margin-top:3px'>" + escapeHtml(t.match.reden) + "</div></div>";
+  }
+  const tp = (t.match && t.match.tegenpartijNaam) || (t.tegenpartij && t.tegenpartij.naam) || "";
+  tr.innerHTML =
+    "<td><span class='muted' title='Uitgaven kunnen niet via de koppeling geboekt worden'>&darr;</span></td>" +
+    "<td class='date'>" + escapeHtml(t.date || "—") + "</td>" +
+    "<td class='amount neg'>" + fmtEur(t.amount) + "</td>" +
+    "<td class='desc'>" + (tp ? "<b>" + escapeHtml(tp) + "</b><br>" : "") +
+      "<span style='color:var(--muted,#6b7280)'>" + escapeHtml((t.description || "—").slice(0, 160)) + "</span></td>" +
+    "<td class='match'>" + badge + "</td>" +
+    "<td class='match'>" + info + "</td>";
+  return tr;
 }
 
 
@@ -876,8 +922,10 @@ async function haalOpenstaandCrediteuren(vers) {
 }
 
 async function koppelUitgaven() {
-  if (!state.uitgaven.length) return;
+  /* De aansluiting hoort er ook te staan als er niets uitgaat: dan is de som
+     beginsaldo plus de inkomsten, en die hoort net zo goed te kloppen. */
   $("uitCard").classList.remove("hidden");
+  if (!state.uitgaven.length) { renderUitgaven(); return; }
   renderUitgaven();
   try {
     if (!credIndex) await haalOpenstaandCrediteuren(false);
@@ -899,38 +947,28 @@ async function koppelUitgaven() {
 }
 
 function renderUitgaven() {
-  const body = $("uitBody");
-  body.innerHTML = "";
-  for (const t of state.uitgaven) {
-    const tr = document.createElement("tr");
-    let badge = "<span class='badge pending'>Bezig…</span>", info = "";
-    if (t.match) {
-      const u = STATUS_UITERLIJK[t.match.status] || STATUS_UITERLIJK.geen;
-      badge = "<span class='badge " + u.klasse + "'>" + u.tekst + "</span>";
-      const k = t.match.kandidaten || [];
-      /* Meer dan één mogelijkheid? Dan alles laten zien in plaats van er zelf
-         één aanwijzen, precies zoals aan de debiteurenkant. */
-      const regels = (t.match.combinatie || (k.length > 1 ? k.slice(0, 12) : (t.match.beste ? [t.match.beste] : [])));
-      info = "<div class='match-info'>" +
-        regels.map(p => "Factuur <b>" + escapeHtml(p.Reference || "—") + "</b> · " +
-          escapeHtml(p.CompanyName || ("crediteur " + p.CreditorId)) + " · " +
-          fmtEur(Math.abs(p.AmountOpen)) + (p.AmountOpen < 0 ? " creditnota" : "") +
-          (p.PayBefore ? " · voor " + escapeHtml(String(p.PayBefore).slice(0, 10)) : "")).join("<br>") +
-        (regels.length ? "<div style='margin-top:3px'>" : "<div>") + escapeHtml(t.match.reden) + "</div>" +
-        (k.length > regels.length ? "<div class='muted' style='font-size:11px'>en nog " +
-          (k.length - regels.length) + " openstaand bij deze leverancier</div>" : "") +
-        "</div>";
-    }
-    const tp = (t.match && t.match.tegenpartijNaam) || (t.tegenpartij && t.tegenpartij.naam) || "";
-    tr.innerHTML =
-      "<td class='date'>" + escapeHtml(t.date || "—") + "</td>" +
-      "<td class='amount'>" + fmtEur(t.amount) + "</td>" +
-      "<td class='desc'>" + (tp ? "<b>" + escapeHtml(tp) + "</b><br>" : "") +
-        "<span style='color:var(--muted,#6b7280)'>" + escapeHtml((t.description || "—").slice(0, 160)) + "</span></td>" +
-      "<td class='match'>" + badge + "</td>" +
-      "<td class='match'>" + info + "</td>";
-    body.appendChild(tr);
-  }
+  renderResults();
+  const bij = state.transactions.reduce((n, t) => n + Number(t.amount), 0);
+  const af = (state.uitgaven || []).reduce((n, t) => n + Number(t.amount), 0);
+  const begin = state.openingBalance ? Number(state.openingBalance.amount) : null;
+  const eind = state.closingBalance ? Number(state.closingBalance.amount) : null;
+  const berekend = begin == null ? null : begin + bij + af;
+  const klopt = berekend != null && eind != null && Math.abs(berekend - eind) < 0.02;
+  $("uitAansluiting").innerHTML =
+    "<div class='summary'>" +
+    "<div class='stat'><div class='lbl'>Beginsaldo</div><div class='val'>" + (begin == null ? "—" : fmtEur(begin)) + "</div></div>" +
+    "<div class='stat'><div class='lbl'>Bij (" + state.transactions.length + ")</div><div class='val'>" + fmtEur(bij) + "</div></div>" +
+    "<div class='stat'><div class='lbl'>Af (" + (state.uitgaven || []).length + ")</div><div class='val'>" + fmtEur(af) + "</div></div>" +
+    "<div class='stat" + (klopt ? "" : " bad") + "'><div class='lbl'>Eindsaldo</div><div class='val'>" +
+      (eind == null ? "—" : fmtEur(eind)) + "</div></div>" +
+    "</div>" +
+    (berekend == null || eind == null
+      ? "<p class='muted' style='margin:10px 0 0;font-size:12.5px'>De bank geeft geen begin- of eindsaldo mee in dit bestand, dus de optelsom is niet te controleren.</p>"
+      : klopt
+        ? "<p style='margin:10px 0 0;font-size:13px;color:var(--ok,#15803d)'><b>Sluit aan.</b> Beginsaldo plus alle bij- en afboekingen komt precies uit op het eindsaldo van de bank.</p>"
+        : "<p style='margin:10px 0 0;font-size:13px;color:var(--bad,#b91c1c)'><b>Sluit niet aan.</b> Beginsaldo plus alle regels geeft " +
+          fmtEur(berekend) + ", de bank meldt " + fmtEur(eind) + " — een verschil van " + fmtEur(berekend - eind) +
+          ". Boek hier niets voordat dit is uitgezocht.</p>");
 }
 
 // ─── Selectie ───────────────────────────────────────────────────────
@@ -944,9 +982,12 @@ function renderUitgaven() {
    leiden blijft. */
 function omschrijvingVoor(orderNr, invoiceId, st) {
   const afschrift = (st && (st.statementNr || st.fileName)) || "";
-  return "Betaling voor order " + orderNr +
-    (invoiceId ? " (factuur " + invoiceId + ")" : "") +
-    (afschrift ? " · afschrift " + afschrift : "");
+  /* Zonder order gaat de betaling rechtstreeks op de factuur; dan hoort er
+     ook geen "order null" in de omschrijving te staan. */
+  const waarvoor = orderNr
+    ? "order " + orderNr + (invoiceId ? " (factuur " + invoiceId + ")" : "")
+    : "factuur " + invoiceId;
+  return "Betaling voor " + waarvoor + (afschrift ? " · afschrift " + afschrift : "");
 }
 
 /* ─── De grootboekrekening per soort ─────────────────────────────────
@@ -1276,7 +1317,10 @@ $("boekBtn").addEventListener("click", async () => {
     Object.assign(orders, j.facturen || {});
   }
 
-  const teBoeken = [], geenOrder = [];
+  const teBoeken = [];
+  /* Bleef leeg sinds een factuur zonder order gewoon op de factuur wordt
+     geboekt; blijft staan zodat de melding eronder niets hoeft te weten. */
+  const geenOrder = [];
   for (const t of directe) {
     teBoeken.push({ orderNr: t.orderNr, invoiceId: null, bedrag: Number(t.amount), tx: t, datum: t.date || null,
       omschrijving: omschrijvingVoor(t.orderNr, null, state) });
@@ -1287,7 +1331,13 @@ $("boekBtn").addEventListener("click", async () => {
       teBoeken.push({ orderNr: o.orderNr, invoiceId: p.invoiceId, bedrag: Number(p.tx.amount), tx: p.tx, datum: p.tx.date || null,
         omschrijving: omschrijvingVoor(o.orderNr, p.invoiceId, state) });
     } else {
-      geenOrder.push({ invoiceId: p.invoiceId, reden: (o && o.fout) || "geen ordernummer op deze factuur" });
+      /* Geen order bij deze factuur? Dan gaat de betaling rechtstreeks op de
+         factuur. AddPayment kent naast OrderId ook InvoiceId; dat is precies
+         het geval waar de order al is afgehandeld terwijl de factuur nog
+         openstaat (Gerrit, 19 aug 2026, Fennema Elektro). Tot nu toe bleef
+         zo'n regel liggen voor handwerk. */
+      teBoeken.push({ orderNr: null, invoiceId: p.invoiceId, bedrag: Number(p.tx.amount), tx: p.tx, datum: p.tx.date || null,
+        omschrijving: omschrijvingVoor(null, p.invoiceId, state) });
     }
   }
 
@@ -1313,9 +1363,12 @@ $("boekBtn").addEventListener("click", async () => {
     const j = await r.json();
     for (const res of (j.resultaten || [])) {
       const bij = portie.find(x => String(x.orderNr) === String(res.orderNr) && String(x.invoiceId) === String(res.invoiceId));
-      if (res.ok && bij) { bij.tx.geboekt = "Geboekt op order " + res.orderNr + " (factuur " + res.invoiceId + ")"; bij.tx.kies = false; gelukt++; }
-      else fouten.push("order " + res.orderNr + (res.invoiceId ? " (factuur " + res.invoiceId + ")" : "") +
-        ": " + (res.error || "onbekende fout") + (res.antwoord ? " — " + res.antwoord : ""));
+      const waarop = res.orderNr ? ("order " + res.orderNr + (res.invoiceId ? " (factuur " + res.invoiceId + ")" : ""))
+                                 : ("factuur " + res.invoiceId);
+      if (res.ok && bij) {
+        bij.tx.geboekt = "Geboekt op " + waarop + (res.datumGebruikt ? " · " + res.datumGebruikt : "");
+        bij.tx.kies = false; gelukt++;
+      } else fouten.push(waarop + ": " + (res.error || "onbekende fout") + (res.antwoord ? " — " + res.antwoord : ""));
     }
   }
 
@@ -1405,7 +1458,7 @@ $("resetBtn").addEventListener("click", () => {
   state.transactions = []; state.uitgaven = []; state.fileName = ""; state.iban = ""; state.statementNr = ""; state.demo = false;
   $("resultCard").classList.add("hidden");
   $("uitCard").classList.add("hidden");
-  $("uitBody").innerHTML = ""; $("uitMeta").textContent = "";
+  $("uitAansluiting").innerHTML = ""; $("uitMeta").textContent = "";
   $("dropStatus").innerHTML = ""; $("actionStatus").innerHTML = "";
   fileInput.value = "";
 });
