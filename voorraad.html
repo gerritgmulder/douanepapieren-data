@@ -1910,7 +1910,15 @@ function schepenOnderweg(){
   var vandaag = new Date().toISOString().slice(0,10);
   return (shipsData.ships||[])
     .filter(function(s){ return !s.eta || s.eta >= vandaag; })   // aangekomen schepen niet meer aanbieden
-    .map(function(s){ return { sleutel:String(s.ref||s.trackRef||s.file||s.vessel||""), naam:s.vessel||"(zonder naam)", eta:s.eta||null }; })
+    /* Chantal (video, 19 aug 2026): "ik zie daar nu de namen staan van de
+       schepen met de eta daarachter. Ik wil hier het referentienummer
+       zichtbaar hebben en de eta, dus niet de naam van het schip." Zij zoekt
+       op de referentie van de fabriek; een scheepsnaam zegt haar niets omdat
+       dezelfde boot elke maand anders heet. */
+    .map(function(s){ return { sleutel:String(s.ref||s.trackRef||s.file||s.vessel||""),
+                               naam:s.vessel||"(zonder naam)",
+                               ref:String(s.ref||s.trackRef||"")||(s.vessel||"(zonder referentie)"),
+                               eta:s.eta||null }; })
     .filter(function(s){ return s.sleutel; })
     .sort(function(a,b){ return String(a.eta||"9999").localeCompare(String(b.eta||"9999")); });
 }
@@ -1924,7 +1932,7 @@ function leveringCel(r,n,id,uit){
   var gekozen = n.schip ? schipVan(n.schip) : null;
   var kop = gekozen
     ? "<span style='color:#2563eb;font-weight:600'>"+esc(gekozen.eta?datumNL(gekozen.eta):"ETA volgt")+"</span>"+
-      " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.naam)+", handmatig)</span>"
+      " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.ref)+", handmatig)</span>"
     : verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"");
   // Staat het gekozen schip er niet meer bij, bijvoorbeeld omdat het is
   // aangekomen, dan de keuze niet stilzwijgend laten verdwijnen.
@@ -1934,7 +1942,7 @@ function leveringCel(r,n,id,uit){
   if(!lijst.length) return kop;
   var opties = "<option value=''>automatisch</option>" + lijst.map(function(s){
     return "<option value='"+esc(s.sleutel)+"'"+(n.schip===s.sleutel?" selected":"")+">"+
-      esc(s.naam)+(s.eta?" — "+esc(datumNL(s.eta)):" — ETA volgt")+"</option>";
+      esc(s.ref)+(s.eta?" - "+esc(datumNL(s.eta)):" - ETA volgt")+"</option>";
   }).join("");
   return kop + "<br><select class='notSchip' data-id='"+id+"' style='margin-top:3px;font-size:11px;padding:2px 4px;max-width:210px'"+uit+">"+opties+"</select>";
 }
@@ -2358,13 +2366,38 @@ async function bewaarSchipBestand(ref,file,soort){
 /* Een bewaard document openen. Rechtstreeks linken kan niet: de worker wil de
    teamsleutel in een kop zien, en die past niet in een adresbalk. Dus ophalen
    en als blob in een nieuw tabblad. */
+/* Een opgeslagen bestand openen. Chantal (video, 19 aug 2026): "op het moment
+   dat ik die aanklik krijg ik dit in beeld. Kan je ervoor zorgen dat we dat
+   bestand kunnen openen?"
+
+   Hier stond window.open op een blob-adres. In de app blokkeert Electron dat:
+   je krijgt een leeg venster of helemaal niets. Daarom nu eerst proberen te
+   openen, en lukt dat niet, dan het bestand aanbieden zodat het in het eigen
+   programma van de computer opent - Acrobat voor een pdf, Excel voor een xls.
+   Het adres wordt daarna opgeruimd, anders blijft elk geopend document in het
+   geheugen staan. */
+function bestandTonen(blob, naam) {
+  var url = URL.createObjectURL(blob);
+  var venster = null;
+  try { venster = window.open(url, "_blank"); } catch (e) { venster = null; }
+  if (!venster) {
+    var link = document.createElement("a");
+    link.href = url;
+    link.download = naam || "document";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+  setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e) {} }, 60000);
+}
+
 async function openSchipDocument(a){
   const oud=a.textContent; a.textContent="bezig…";
   try{
     const r=await fetch(SCHIP_BESTAND_URL+"?id="+encodeURIComponent(a.dataset.id),
       {headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
     if(!r.ok) throw new Error("HTTP "+r.status);
-    window.open(URL.createObjectURL(await r.blob()),"_blank");
+    bestandTonen(await r.blob(), oud);   // oud is de bestandsnaam die in de link stond
   }catch(e){ alert("Kon het document niet openen: "+e.message); }
   a.textContent=oud;
 }

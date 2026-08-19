@@ -71,6 +71,23 @@ function parseProforma(wb){
   }
   if(kop<0) return {fout:"kopregel niet gevonden op tabblad '"+naam+"'. Er moet een kolom staan met Model of Item, en een met Quantity, Q'ty of Qty.",regels:[]};
 
+  /* Een totaalregel herkennen. Twee aanwijzingen, en één is genoeg:
+       1. ergens in de regel staat "total", "totaal" of "sum";
+       2. het aantal is precies de som van de regels die eraan voorafgingen.
+     De tweede vangt de gevallen waar de fabriek helemaal niets opschrijft en
+     alleen het getal neerzet, zoals bij container 3342. */
+  function isTotaalRegel(rij,aantal,tot){
+    for(let i=0;i<(rij||[]).length;i++){
+      const t=String(rij[i]==null?"":rij[i]);
+      if(/\b(grand\s*)?(total|totaal|sub\s*total|sum)\b/i.test(t)) return true;
+    }
+    if(tot.length>=2){
+      const som=tot.reduce((n,x)=>n+(Number(x.aantal)||0),0);
+      if(som>0&&Math.abs(som-aantal)<0.5) return true;
+    }
+    return false;
+  }
+
   const regels=[];
   // Een model met twee kleuren staat als twee regels onder elkaar, waarvan de
   // tweede geen modelnaam meer heeft - die staat alleen bij de eerste. Zonder
@@ -81,6 +98,18 @@ function parseProforma(wb){
     const aantal=Number(r&&r[kAantal]);
     if(!isFinite(aantal)||aantal<=0){ if(eerste) vorigeCode=null; continue; }
     if(!eerste&&vorigeCode){
+      /* Chantal (video, 19 aug 2026), over de proforma van container 3342:
+         "de onderste regel, daar staat geen SKT code bij, daar staat wel een
+         totaal van 279. Die regel moet niet meegeteld worden, en ook niet als
+         foutmelding meegenomen worden."
+
+         Zo'n totaalregel heeft een lege modelcel en een gevuld aantal, en dat
+         is precies waar een tweede kleurregel ook aan voldoet. Het verschil
+         zit in twee dingen: er staat ergens "total" in de regel, of het
+         aantal is de optelsom van wat eraan voorafging. Beide worden hier
+         herkend en stilzwijgend overgeslagen - stil, want het is geen fout
+         maar gewoon een regel die er niet bij hoort. */
+      if(isTotaalRegel(r,aantal,regels)) { vorigeCode=null; continue; }
       regels.push(vervolgRegel(vorigeCode,vorigeMaat,r,kKleur,kSkirt,kPrijs,aantal));
       continue;
     }

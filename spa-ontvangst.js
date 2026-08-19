@@ -676,13 +676,38 @@
     invoer.value = "";
   }
 
+  /* Een opgeslagen bestand openen. Chantal (video, 19 aug 2026): "op het moment
+     dat ik die aanklik krijg ik dit in beeld. Kan je ervoor zorgen dat we dat
+     bestand kunnen openen?"
+  
+     Hier stond window.open op een blob-adres. In de app blokkeert Electron dat:
+     je krijgt een leeg venster of helemaal niets. Daarom nu eerst proberen te
+     openen, en lukt dat niet, dan het bestand aanbieden zodat het in het eigen
+     programma van de computer opent - Acrobat voor een pdf, Excel voor een xls.
+     Het adres wordt daarna opgeruimd, anders blijft elk geopend document in het
+     geheugen staan. */
+  function bestandTonen(blob, naam) {
+    var url = URL.createObjectURL(blob);
+    var venster = null;
+    try { venster = window.open(url, "_blank"); } catch (e) { venster = null; }
+    if (!venster) {
+      var link = document.createElement("a");
+      link.href = url;
+      link.download = naam || "document";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+    setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e) {} }, 60000);
+  }
+
   async function opendoc(a, doc) {
     var oud = a.textContent; a.textContent = "bezig…";
     try {
       var r = await fetch(BESTAND_URL + "?id=" + encodeURIComponent(doc.id),
         { headers: { "X-Fonteyn-Auth": cfg.teamKey } });
       if (!r.ok) throw new Error("HTTP " + r.status);
-      window.open(URL.createObjectURL(await r.blob()), "_blank");
+      bestandTonen(await r.blob(), doc.naam);
     } catch (e) { alert("Kon het document niet openen: " + (e.message || e)); }
     a.textContent = oud;
   }
