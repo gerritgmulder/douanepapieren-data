@@ -325,6 +325,7 @@
     <button class="tab" data-tab="particulier" type="button">Particulier</button>
     <button class="tab" data-tab="partner" type="button">Partner</button>
     <button class="tab" data-tab="partnercont" type="button">Partner containers</button>
+    <button class="tab" data-tab="stock" type="button">Stock</button>
     <!-- OUDE tabs — verborgen bewaard (verwijder de style om terug te halen) -->
     <button class="tab" data-tab="ophalen" type="button" style="display:none">Ophalen &amp; markeren (oud)</button>
     <button class="tab" data-tab="dealer" type="button" style="display:none">Res. Dealers (oud)</button>
@@ -511,9 +512,6 @@
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="partSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
         <select id="partKleur" title="alleen deze kleur tonen" style="padding:8px"><option value="">alle kleuren</option></select>
-        <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="checkbox" id="partToonGepland"> geplande spa's tonen
-        </label>
         <span id="partCount" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <p class="lead" style="font-size:11.5px;margin:8px 0 0">
@@ -535,6 +533,19 @@
       <div id="partBlokTabs" class="tabs" style="margin-bottom:10px"></div>
       <div id="partBlokLijst"></div>
     </div>
+
+    <!-- Gepland. Chantal (video, 19 aug 2026): "ik wil hier een derde tabblad
+         bij hebben, dat heet Gepland. Op het moment dat ik dat vinkje aanklik
+         verdwijnt hij uit deze lijst en uit de lijst hierboven en gaat hij
+         naar tabblad Gepland. Als de order in Logic op afgehandeld staat moet
+         hij volledig uit het dashboard verdwijnen." Dat laatste gebeurt
+         vanzelf: de reserveringenlijst komt uit Logic4 en kent alleen de
+         openstaande statussen, dus een afgehandelde order valt er uit. -->
+    <div class="card">
+      <h3>Gepland — <span id="partGeplandTel">0</span></h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">De spa's waarvan de afspraak met de klant staat. Ze zijn uit beide lijsten hierboven verdwenen. Zodra de order in Logic4 op <b>Afgehandeld</b> staat, verdwijnt de regel hier ook vanzelf. Vink <b>Gepland</b> uit om hem terug te halen.</p>
+      <div id="partGeplandLijst"></div>
+    </div>
   </div>
 
   <div id="tab-partner" class="hidden">
@@ -544,9 +555,6 @@
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="ptnSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
         <select id="ptnKleur" title="alleen deze kleur tonen" style="padding:8px"><option value="">alle kleuren</option></select>
-        <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
-          <input type="checkbox" id="ptnToonGepland"> geplande spa's tonen
-        </label>
         <span id="ptnCount" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <p class="lead" style="font-size:11.5px;margin:8px 0 0">
@@ -563,6 +571,45 @@
       <p class="lead" style="font-size:12px;margin-bottom:10px">De spa's die <b>binnen zijn</b> voor een dealer, per adviseur. Zo weet elke adviseur welke dealer hij moet bellen. Klik op een kolomkop om te sorteren; standaard staat het op dealernaam.</p>
       <div id="ptnAdvTabs" class="tabs" style="margin-bottom:10px"></div>
       <div id="ptnAdvLijst"></div>
+    </div>
+
+    <!-- Gepland, hetzelfde als bij Particulier. Chantal (video, 19 aug 2026):
+         "voor de partnerlijst wil ik hetzelfde als wat we bij de particulieren
+         gaan doen." -->
+    <div class="card">
+      <h3>Gepland — <span id="ptnGeplandTel">0</span></h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">De spa's waarvan de afspraak met de dealer staat. Ze zijn uit beide lijsten hierboven verdwenen. Zodra de order in Logic4 op <b>Afgehandeld</b> staat, verdwijnt de regel hier ook vanzelf. Vink <b>Gepland</b> uit om hem terug te halen.</p>
+      <div id="ptnGeplandLijst"></div>
+    </div>
+  </div>
+
+  <!-- Stock. Chantal (video, 19 aug 2026): "we willen hier een tabblad bij
+       hebben en die noemen we Stock, alleen Stock, meer dan genoeg. En in
+       Stock komt er alleen de voorraad die wij in Nederland hebben van alle
+       spa's. Dat kan je vinden op het tabblad Overzicht en dan voorraad
+       Nederland. In dit geval hebben we als voorbeeld Indulgence, er staan er
+       zes van op voorraad in Nederland."
+
+       Dezelfde bron als Overzicht gebruikt (voorraad-hallen), zodat de twee
+       nooit uit elkaar kunnen lopen. Vrij en fysiek staan er allebei: vrij is
+       wat Overzicht toont en waar zij naar keek, fysiek is wat er echt staat
+       inclusief het verkochte dat nog niet weg is. -->
+  <div id="tab-stock" class="hidden">
+    <div class="card">
+      <h3>Stock — wat er in Nederland staat</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">
+        Alle spa's met voorraad in de hallen in Uddel. <b>Vrij</b> is wat er nog te verkopen is; dat is
+        het getal dat ook op Overzicht staat. <b>Fysiek</b> is alles wat er staat, dus inclusief wat al
+        verkocht is maar nog niet weg. Klap een model open voor de verdeling per kleur.
+      </p>
+      <div class="actions" style="gap:10px;align-items:center;margin-top:0">
+        <input id="stockSearch" placeholder="zoek een model of kleur…" style="min-width:280px;padding:8px">
+        <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" id="stockAlles"> ook modellen zonder voorraad
+        </label>
+        <span id="stockTel" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="stockLijst" style="margin-top:12px"></div>
     </div>
   </div>
 
@@ -1278,11 +1325,12 @@ document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", functi
      bleef de regel die hem verborg staan, liep getElementById op null stuk
      en werd geen enkel tabblad daarná nog getoond. Alleen Overzicht deed het
      nog, omdat die er toevallig boven stond (13 aug 2026). */
-  ["dealer", "part", "overzicht", "reserveringen", "schepen", "pipe", "dealerview", "particulier", "partner", "partnercont", "spainkoop", "ontvangst"].forEach(function(n){
+  ["dealer", "part", "overzicht", "reserveringen", "schepen", "pipe", "dealerview", "particulier", "partner", "partnercont", "spainkoop", "ontvangst", "stock"].forEach(function(n){
     var e = document.getElementById("tab-" + n);
     if (e) e.classList.toggle("hidden", tab !== n);
   });
   if (tab==="overzicht") loadOverzicht();
+  if (tab==="stock") laadStock();
   if (tab==="reserveringen") loadReserveringen();
   if (tab==="spainkoop") startSpaMigratie();
   /* Het tabblad Schepen is opgegaan in Schepen & ontvangst. De schepenlijst
@@ -1953,12 +2001,15 @@ function adviseurCel(r){
 }
 // Eén regel = ordernummer, spa, kleur, aantal, klant, adviseur, datum, betaling,
 // levering + Chantals eigen velden (opmerking en de vinkjes).
-function renderResvSoort(soort,zoekId,lijstId,telId){
+/* modus "open" is de gewone lijst, modus "gepland" is de kaart eronder.
+   Chantal (video, 19 aug 2026) wilde het geplande werk niet meer verstopt
+   achter een vinkje maar als eigen blok, bij Particulier én bij Partner. */
+function renderResvSoort(soort,zoekId,lijstId,telId,modus){
   const inp=document.getElementById(zoekId), box=document.getElementById(lijstId);
   if(!box) return;
   const q=((inp&&inp.value)||"").trim().toLowerCase();
   const particulier=soort==="particulier";
-  const toonGepland=!!(document.getElementById(particulier?"partToonGepland":"ptnToonGepland")||{}).checked;
+  const alleenGepland = modus==="gepland";
   let rijen=resvVoorSoort(soort).filter(r=>resvMatch(r,r.model,q));
   const gekozenKleur=vulKleurKeuze(particulier?"partKleur":"ptnKleur",rijen);
   rijen=rijen.filter(r=>kleurMatch(r,gekozenKleur));
@@ -1972,7 +2023,8 @@ function renderResvSoort(soort,zoekId,lijstId,telId){
   // partnerregel met een oud afroep-vinkje nergens meer staan.
   rijen=rijen.filter(function(r){
     const n=notitie(r);
-    if(n.gepland) return toonGepland;
+    if(alleenGepland) return !!n.gepland;
+    if(n.gepland) return false;
     return !n.inplannen && !(particulier && n.afroep);
   });
   const s=resvSort[soort]||{kolom:"model",op:1};
@@ -1985,14 +2037,21 @@ function renderResvSoort(soort,zoekId,lijstId,telId){
   });
   const totaal=rijen.reduce((n,r)=>n+(Number(r.qty)||0),0);
   const tel=document.getElementById(telId);
-  if(tel) tel.textContent=rijen.length+" reservering(en) · "+totaal+" spa's"+(resvData.updated?(" · ververst "+new Date(resvData.updated).toLocaleString("nl-NL")):"");
-  if(!rijen.length){ box.innerHTML="<p class='lead'>Geen reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
+  if(tel) tel.textContent=alleenGepland
+    ? (rijen.length+" regel(s) · "+totaal+" spa's")
+    : (rijen.length+" reservering(en) · "+totaal+" spa's"+(resvData.updated?(" · ververst "+new Date(resvData.updated).toLocaleString("nl-NL")):""));
+  if(!rijen.length){
+    box.innerHTML="<p class='lead'>"+(alleenGepland
+      ? "Nog niets op gepland gezet."
+      : ("Geen reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+"."))+"</p>";
+    return;
+  }
   const uit=!MAG_WIJZIGEN?" disabled":"";
   box.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
     "<th>Order</th>"+kopSorteer(soort,"model","Spa")+kopSorteer(soort,"kleur","Kleur")+"<th>Aantal</th>"+
     kopSorteer(soort,"naam","Klant")+kopSorteer(soort,"adviseur","Adviseur")+
     kopSorteer(soort,"datum","Datum")+"<th>Betaling</th>"+kopSorteer(soort,"levering","Verwachte levering")+
-    "<th>Opmerkingen</th>"+(particulier?"<th>Afroep</th>":"")+"<th>Inplannen</th>"+(particulier?"<th>Gepland</th>":"")+
+    "<th>Opmerkingen</th>"+(particulier?"<th>Afroep</th>":"")+"<th>Inplannen</th>"+"<th>Gepland</th>"+
     "</tr></thead><tbody>"+
     rijen.map(function(r){
       const n=notitie(r);
@@ -2015,7 +2074,7 @@ function renderResvSoort(soort,zoekId,lijstId,telId){
         "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' style='width:190px;font-size:12px;padding:4px 7px'"+uit+"></td>"+
         (particulier?"<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='afroep' data-id='"+id+"'"+(n.afroep?" checked":"")+uit+"></td>":"")+
         "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='inplannen' data-id='"+id+"'"+(n.inplannen?" checked":"")+uit+"></td>"+
-        (particulier?"<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='gepland' data-id='"+id+"'"+(n.gepland?" checked":"")+uit+"></td>":"")+
+        "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='gepland' data-id='"+id+"'"+(n.gepland?" checked":"")+uit+"></td>"+
         "</tr>";
     }).join("")+
     "</tbody></table></div>";
@@ -2065,6 +2124,8 @@ function koppelNotitieVelden(box,rijen){
 function renderSoortTabs(){
   renderResvSoort("particulier","partSearch","partList","partCount");
   renderResvSoort("partner","ptnSearch","ptnList","ptnCount");
+  renderResvSoort("particulier","partSearch","partGeplandLijst","partGeplandTel","gepland");
+  renderResvSoort("partner","ptnSearch","ptnGeplandLijst","ptnGeplandTel","gepland");
   renderAdviseurTabs();
   renderParticulierBlok();
   renderPartnerContainers();
@@ -2283,9 +2344,93 @@ function renderPartnerContainers(){
   const el=document.getElementById(id);
   if(el) el.addEventListener("input",renderSoortTabs);
 });
-["partToonGepland","ptnToonGepland","partKleur","ptnKleur"].forEach(id=>{
+/* De twee vinkjes "geplande spa's tonen" zijn vervallen; die lijst
+   heeft nu een eigen kaart. */
+["partKleur","ptnKleur"].forEach(id=>{
   const el=document.getElementById(id);
   if(el) el.addEventListener("change",renderSoortTabs);
+});
+
+/* ═══════════ Stock: wat er in Nederland staat ═══════════
+   Dezelfde bron als Overzicht (voorraad-hallen), zodat de twee niet uit
+   elkaar kunnen lopen. De kleur komt uit de catalogus, net als bij Overzicht:
+   de hallen houden per artikelcode bij, niet per kleur. */
+let stockData=null, stockOpen={};
+
+async function laadStock(){
+  const box=document.getElementById("stockLijst");
+  if(!box) return;
+  if(stockData){ renderStock(); return; }
+  box.innerHTML="<p class='lead'>Bezig met laden…</p>";
+  try{
+    const [hal,cat]=await Promise.all([
+      fetch(HALLEN_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()),
+      fetch(CATALOG_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.ok?r.json():{models:{}}).catch(()=>({models:{}}))
+    ]);
+    stockData={hal:hal||{},codeKleur:bouwCodeKleur(cat)};
+    renderStock();
+  }catch(e){
+    box.innerHTML="<div class='status-msg bad'>Voorraad laden faalde: "+esc(e.message)+"</div>";
+  }
+}
+
+function renderStock(){
+  const box=document.getElementById("stockLijst");
+  if(!box||!stockData) return;
+  const q=((document.getElementById("stockSearch")||{}).value||"").trim().toLowerCase();
+  const toonAlles=!!(document.getElementById("stockAlles")||{}).checked;
+  const models=(stockData.hal.models)||{};
+
+  let rijen=Object.keys(models).map(function(m){
+    const d=models[m]||{};
+    const varianten=Object.keys(d.variants||{}).map(function(code){
+      return { code:code, kleur:stockData.codeKleur[code]||"(kleur onbekend)", aantal:Number(d.variants[code])||0 };
+    }).filter(function(v){ return v.aantal>0; })
+      .sort(function(a,b){ return b.aantal-a.aantal || a.kleur.localeCompare(b.kleur); });
+    return { model:m, vrij:Number(d.available)||0, fysiek:Number(d.physical)||0, varianten:varianten };
+  });
+  if(!toonAlles) rijen=rijen.filter(function(r){ return r.vrij>0||r.fysiek>0; });
+  if(q) rijen=rijen.filter(function(r){
+    return r.model.toLowerCase().indexOf(q)>=0 ||
+           r.varianten.some(function(v){ return v.kleur.toLowerCase().indexOf(q)>=0 || v.code.indexOf(q)>=0; });
+  });
+  rijen.sort(function(a,b){ return a.model.localeCompare(b.model,"nl",{numeric:true}); });
+
+  const totVrij=rijen.reduce(function(n,r){ return n+r.vrij; },0);
+  const totFys=rijen.reduce(function(n,r){ return n+r.fysiek; },0);
+  const tel=document.getElementById("stockTel");
+  if(tel) tel.textContent=rijen.length+" model(len) · "+totVrij+" vrij · "+totFys+" fysiek"+
+    (stockData.hal.updated?(" · ververst "+new Date(stockData.hal.updated).toLocaleString("nl-NL")):"");
+
+  if(!rijen.length){ box.innerHTML="<p class='lead'>Niets gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
+  box.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
+    "<th>Spa</th><th style='text-align:right'>Vrij</th><th style='text-align:right'>Fysiek</th><th>Kleuren</th>"+
+    "</tr></thead><tbody>"+
+    rijen.map(function(r){
+      const open=!!stockOpen[r.model];
+      const kleuren=r.varianten.length
+        ? (open
+            ? r.varianten.map(function(v){ return "<div style='font-size:12px'>"+v.aantal+" &times; "+esc(v.kleur)+
+                " <span style='color:var(--muted);font-size:11px'>"+esc(v.code)+"</span></div>"; }).join("")
+            : "<span style='font-size:12px;color:var(--muted)'>"+r.varianten.length+" kleur(en)</span>")
+        : "<span style='font-size:12px;color:var(--muted)'>geen verdeling bekend</span>";
+      return "<tr class='stockRij' data-model='"+esc(r.model)+"' style='cursor:pointer'>"+
+        "<td><b>"+esc(r.model)+"</b></td>"+
+        "<td style='text-align:right'"+(r.vrij>0?" ":"")+">"+r.vrij+"</td>"+
+        "<td style='text-align:right;color:var(--muted)'>"+r.fysiek+"</td>"+
+        "<td>"+kleuren+"</td></tr>";
+    }).join("")+"</tbody></table></div>";
+  box.querySelectorAll(".stockRij").forEach(function(tr){
+    tr.addEventListener("click",function(){
+      const m=tr.dataset.model;
+      stockOpen[m]=!stockOpen[m];
+      renderStock();
+    });
+  });
+}
+["stockSearch","stockAlles"].forEach(function(id){
+  const el=document.getElementById(id);
+  if(el) el.addEventListener(id==="stockAlles"?"change":"input",renderStock);
 });
 
 // ===================== Schepen (commercial invoices) =====================

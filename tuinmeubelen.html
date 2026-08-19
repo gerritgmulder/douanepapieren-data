@@ -422,15 +422,26 @@ laad();
     }
 
     h += '<table class="grid"><thead><tr><th>Artikelnummer</th><th>Kleur</th>' +
-         '<th class="num">Aantal</th><th>Omschrijving</th></tr></thead><tbody>';
-    (doc.regels||[]).forEach(function(r){
+         '<th class="num">Aantal</th><th>Artikelnummer</th><th>Omschrijving</th></tr></thead><tbody>';
+    (doc.regels||[]).forEach(function(r, i){
       var onder = (r.onderdelen||[]).map(function(o){
         return esc(o.code) + (o.perSet > 1 ? " &times;" + o.perSet : "") + (o.maat ? " <span class=\'muted\'>" + esc(o.maat) + "</span>" : "");
       }).join(", ");
+      /* Chantal (video, 19 aug 2026): "graag een mogelijkheid dat we zelf de
+         artikelnummers erachter kunnen typen, dat zou je achter kleur kunnen
+         doen." Dus een veld per regel, meteen na de kleur. Wat zij invult
+         wordt onthouden op de omschrijving, zodat dezelfde set in de volgende
+         container vanzelf het goede nummer heeft. Dat is dezelfde lijst die
+         Schepen en ontvangst gebruikt, dus één keer invullen is genoeg. */
+      var sleutelTekst = r.set || r.omschrijving || "";
       h += "<tr><td><b>" + esc(r.set) + "</b>" +
            (onder ? '<div class="sc-onderdeel">' + onder + "</div>" : "") + "</td>" +
            "<td>" + esc(r.kleur || "-") + "</td>" +
            '<td class="num">' + r.aantal + "</td>" +
+           "<td><input class=\"scArt\" data-wat=\"" + esc(sleutelTekst) + "\" value=\"" +
+             esc(bekendeCode(sleutelTekst) || r.artikelcode || "") + "\" placeholder=\"nog niet bekend\" " +
+             "style=\"width:110px;padding:4px 6px;border:1px solid var(--border,#e0e0d8);border-radius:6px;font:inherit;font-size:12px\">" +
+             "<span class=\"scArtOk\" style=\"font-size:11px;margin-left:6px;color:var(--muted)\"></span></td>" +
            "<td>" + esc(String(r.omschrijving||"").slice(0,90)) + (String(r.omschrijving||"").length>90?"…":"") + "</td></tr>";
     });
     h += "</tbody></table>";
@@ -449,6 +460,64 @@ laad();
       h += "</tbody></table>";
     }
     $$("scUit").innerHTML = h;
+    koppelVelden();
+  }
+
+  /* De koppelingen die er al liggen, zodat een ingevuld nummer de volgende
+     keer vanzelf terugkomt. */
+  var koppelingen = {};
+  function koppelSleutel(t){ return String(t||"").toLowerCase().replace(/\s+/g," ").trim(); }
+  function bekendeCode(t){
+    var k = koppelingen[koppelSleutel(t)];
+    return (k && (k.code || k)) || "";
+  }
+
+  async function laadKoppelingen(){
+    try {
+      var r = await fetch(W + "/voorraad/koppeling", { headers: { "X-Fonteyn-Auth": sleutel() } });
+      var j = await r.json();
+      if (j && j.ok) koppelingen = j.koppelingen || {};
+    } catch (e) { console.warn("[tuinmeubelen] koppelingen laden faalde:", e); }
+  }
+
+  /* Invullen en meteen bewaren. Er wordt niets gecontroleerd op vorm: als
+     Gretha zegt dat het nummer zo heet, dan is dat zo. Wel wordt nagekeken of
+     Logic4 het kent, want dat is precies waar het Chantal om te doen is. */
+  function koppelVelden(){
+    $$("scUit").querySelectorAll(".scArt").forEach(function(inp){
+      inp.addEventListener("change", async function(){
+        var wat = inp.dataset.wat, code = inp.value.trim();
+        var melding = inp.nextElementSibling;
+        melding.textContent = "bezig…";
+        try {
+          var r = await fetch(W + "/voorraad/koppeling", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": sleutel() },
+            body: JSON.stringify({ omschrijving: wat, code: code, los: !code,
+                                   door: (localStorage.getItem("fp.email")||"") }),
+          });
+          var j = await r.json();
+          /* Het dashboard weigert een code die Logic4 niet kent. Dat is met
+             opzet: een typefout levert anders een koppeling op die er goed
+             uitziet en nergens heen wijst. Precies dan moet het langs Gretha,
+             en dat staat er dan ook. */
+          if (!j || !j.ok) {
+            melding.textContent = j && j.error === "artikel-onbekend"
+              ? "staat niet in Logic4 - even met Gretha afstemmen"
+              : ("mislukt: " + ((j && (j.uitleg || j.error)) || "onbekend"));
+            melding.style.color = "var(--warn)";
+            return;
+          }
+          koppelingen[koppelSleutel(wat)] = { code: code };
+          melding.textContent = !code ? "losgekoppeld" : "bewaard";
+          melding.style.color = "#15803d";
+          if (window.fpLog) window.fpLog("artikel-gekoppeld", wat + " → " + (code||"(los)"));
+        } catch (e) {
+          melding.textContent = "mislukt: " + (e.message || e);
+          melding.style.color = "var(--bad,#b91c1c)";
+        }
+      });
+    });
   }
 
   /* ── Wat er eerder is ingelezen ──────────────────────────────────────
@@ -527,6 +596,7 @@ laad();
     } catch (e) { melding("bad", "Koppelen mislukt: " + (e.message || e)); }
   }
 
+  laadKoppelingen();
   laadBestellingen();
 })();
 
