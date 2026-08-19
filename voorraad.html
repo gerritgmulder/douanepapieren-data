@@ -16,6 +16,7 @@
 <script src="spa-migratie.js"></script>
 <script src="spa-ontvangst.js"></script>
 <script src="meubel-invoice.js"></script>
+<script src="inv-pl.js"></script>
 <style>
   :root{
     --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
@@ -2743,9 +2744,40 @@ function startSpaOntvangst(){
   });
 }
 
+/* De containers en hun colli uit een werkmap met een commercial invoice en
+   een packing list. Het lezen zit in inv-pl.js; hier wordt het bewaard zodat
+   Inkomende goederen er de labels uit kan halen. */
+let binnenkomendGemeld = [];
+async function leesBinnenkomend(wb,bestandsnaam){
+  if(!window.fpInvPl) return null;
+  const bladen=wb.SheetNames.map(n=>({naam:n,
+    rijen:XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:""})}));
+  if(!window.fpInvPl.isInvPl(bladen)) return null;
+
+  const doc=window.fpInvPl.lees(bladen);
+  if(!doc.ok||!doc.containers.length) return null;
+  doc.bestand=bestandsnaam;
+
+  const r=await fetch("https://fonteyn-data-store.g-mulder.workers.dev/binnenkomend",{
+    method:"POST",
+    headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
+    body:JSON.stringify({door:(localStorage.getItem(EMAIL_KEY)||""),doc}),
+  });
+  const j=await r.json();
+  if(j&&j.ok){
+    const labels=doc.containers.reduce((n,c)=>n+(c.labels?c.labels.length:0),0);
+    binnenkomendGemeld.push(doc.containers.length+" container"+(doc.containers.length===1?"":"s")+
+      " uit "+bestandsnaam+" ("+labels+" labels) staan klaar bij Inkomende goederen");
+    if(doc.meldingen&&doc.meldingen.length) binnenkomendGemeld.push(...doc.meldingen);
+    try{ if(window.fpLog) window.fpLog("binnenkomend-gelezen",bestandsnaam+": "+doc.containers.length+" container(s)"); }catch(e){}
+  }
+  return doc;
+}
+
 async function handleCIUpload(files,statusId){
   const st=document.getElementById(statusId||"ciStatus"); st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Inlezen…";
   let added=0; const allUnmapped={...(shipsData.unmapped||{})}; const overgeslagen=[]; const blMeldingen=[];
+  binnenkomendGemeld=[];
   try{
     for(const file of files){
       // MEXDA stuurt de commercial invoice als PDF. ci-pdf.js leest die
@@ -2806,6 +2838,18 @@ async function handleCIUpload(files,statusId){
           "\"Proforma invoice → inkooporder in Logic4\" hierboven. Er is niets gewijzigd aan de schepen.";
         return;
       }
+      /* Staat er een packing list bij? Dan komen daar de containers en de
+         labels uit. Gerrit (19 aug 2026): "Zodra die commercial invoice wordt
+         uitgelezen, wil ik dat er bij Binnenkomende goederen die containers
+         zichtbaar komen, dat automatisch de packing list wordt uitgelezen en
+         de labels om te printen per container klaar komen te staan."
+
+         Dit staat los van de schepenlijst: het gaat maar door als het lukt,
+         want een spa-container zonder packing list moet gewoon zijn gang
+         kunnen gaan. */
+      try{ await leesBinnenkomend(wb,file.name); }
+      catch(e){ console.warn("[binnenkomend] lezen faalde:",e); }
+
       const ship=parseCI(wb,file.name);
       /* Geen enkele spa herkend? Dan is dit geen spa-container.
          Chantal (14 aug 2026): "we houden in mijn dashboard alle containers
@@ -2889,6 +2933,14 @@ async function handleCIUpload(files,statusId){
       st.className="status-msg ok";
       st.textContent=(blMeldingen.length?blMeldingen.join(" ")+" ":"")+
         added+" schip(en) verwerkt en opgeslagen. Vul per schip de ETA in — de lading telt nu als voorraad onderweg in het Partnerportaal.";
+    }
+    /* Zat er een packing list bij, dan staan de containers en de labels nu
+       klaar. Dat hoort erbij te staan, ook als er verder niets aan spa's uit
+       het bestand kwam - anders lijkt het of er niets is gebeurd. */
+    if(binnenkomendGemeld.length){
+      if(!overgeslagen.length&&!added){ st.className="status-msg ok"; st.textContent=""; }
+      st.innerHTML=(st.innerHTML?st.innerHTML+"<br>":"")+
+        binnenkomendGemeld.map(function(m){ return "&bull; "+esc(m); }).join("<br>");
     }
     try{ if(added&&window.fpLog) window.fpLog("commercial-invoice-geupload",added+" schip(en)"); }catch(e){}
     try{ if(overgeslagen.length&&window.fpLog) window.fpLog("commercial-invoice-niet-gelukt",overgeslagen.map(function(o){return o.naam;}).join(", ")); }catch(e){}

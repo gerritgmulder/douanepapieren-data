@@ -73,6 +73,9 @@ const ALLOWED_BUCKETS = new Set([
   // Omschrijving van de fabriek naar Logic4-artikel. Eén keer invullen, en
   // dan herkent het dashboard dezelfde sauna in elke volgende container.
   "artikel-koppeling",
+  // Containers die eraan komen, met per container de colli uit de packing
+  // list. Hier haalt Inkomende goederen de labels uit.
+  "binnenkomend",
   // De bezorgingen waarvoor een klant een volglink heeft gekregen: code →
   // naam, adres, welke wagen en welke dag. Alleen de code opent de pagina, dus
   // die moet lang genoeg zijn om niet te raden te zijn.
@@ -4994,6 +4997,98 @@ function noemtReferentie(schip, ref) {
                     "([^a-z0-9]|$)").test(hooi);
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   Binnenkomende containers
+   ══════════════════════════════════════════════════════════════════════
+
+   Gerrit (19 aug 2026): "Op een commercial invoice staat hoeveel containers
+   er binnen gaan komen. Zodra die wordt uitgelezen, wil ik dat er bij
+   Binnenkomende goederen die containers zichtbaar komen, dat automatisch de
+   packing list wordt uitgelezen en de labels om te printen per container
+   klaar komen te staan. Als Manon dan een container binnenkrijgt, kan ze
+   gemakkelijk op de container klikken die binnenkomt en direct labels
+   printen kiezen."
+
+   Het lezen gebeurt in de pagina (inv-pl.js); hier wordt bewaard wat eruit
+   kwam. De sleutel is het invoicenummer plus het volgnummer van de container,
+   want een containernummer is er vaak nog niet als de fabriek de papieren
+   maakt.
+
+   Wat hier NIET gebeurt is opnieuw uitrekenen. Wat de lezer ervan maakte is
+   wat Manon in het scherm zag toen ze het inlas; dat later stilletjes anders
+   berekenen zou betekenen dat er andere labels uitrollen dan ze verwachtte. */
+
+function binnenkomendSleutel(invoice, volgnummer) {
+  return String(invoice || "?").trim() + "#" + Number(volgnummer || 1);
+}
+
+async function binnenkomendBewaren(env, door, doc) {
+  if (!doc || !Array.isArray(doc.containers) || !doc.containers.length) {
+    return { ok: false, error: "geen-containers" };
+  }
+  const alles = (await env.FONTEYN_DATA.get("binnenkomend", { type: "json" })) || { lijst: [] };
+  const nu = new Date().toISOString();
+  let nieuw = 0, bijgewerkt = 0;
+
+  for (const c of doc.containers) {
+    const sleutel = binnenkomendSleutel(doc.nummer, c.volgnummer);
+    const regel = {
+      sleutel,
+      invoice: String(doc.nummer || ""),
+      leverancier: String(doc.leverancier || ""),
+      vaart: String(doc.vaart || ""),
+      nummer: String(c.nummer || ""),
+      volgnummer: Number(c.volgnummer || 1),
+      maat: String(c.maat || ""),
+      colli: Array.isArray(c.colli) ? c.colli : [],
+      totaalColli: Number(c.totaalColli || 0),
+      totaalStuks: Number(c.totaalStuks || 0),
+      bruto: Number(c.bruto || 0),
+      cbm: Number(c.cbm || 0),
+      bestand: String(doc.bestand || ""),
+      door: door,
+      bewaard: nu,
+    };
+    const i = (alles.lijst || []).findIndex(x => x.sleutel === sleutel);
+    if (i >= 0) {
+      /* Opnieuw inlezen mag, maar wat iemand zelf heeft bijgezet blijft:
+         het containernummer dat later van de Bill of Lading kwam, en of hij
+         al binnen is. */
+      const oud = alles.lijst[i];
+      regel.nummer = regel.nummer || oud.nummer || "";
+      regel.binnen = oud.binnen || null;
+      regel.gedrukt = oud.gedrukt || null;
+      alles.lijst[i] = regel;
+      bijgewerkt++;
+    } else {
+      alles.lijst.push(regel);
+      nieuw++;
+    }
+  }
+  /* Nieuwste bovenaan, en niet eindeloos laten groeien. */
+  alles.lijst.sort((a, b) => String(b.bewaard).localeCompare(String(a.bewaard)));
+  if (alles.lijst.length > 400) alles.lijst = alles.lijst.slice(0, 400);
+  await env.FONTEYN_DATA.put("binnenkomend", JSON.stringify(alles));
+  return { ok: true, nieuw, bijgewerkt, containers: doc.containers.length };
+}
+
+/* Een container bijwerken: het echte containernummer erbij, aanvinken dat
+   hij binnen is, of vastleggen dat de labels gedrukt zijn. */
+async function binnenkomendZet(env, door, body) {
+  const sleutel = String(body.sleutel || "").trim();
+  if (!sleutel) return { ok: false, error: "sleutel-nodig" };
+  const alles = (await env.FONTEYN_DATA.get("binnenkomend", { type: "json" })) || { lijst: [] };
+  const c = (alles.lijst || []).find(x => x.sleutel === sleutel);
+  if (!c) return { ok: false, error: "container-niet-gevonden" };
+
+  if (typeof body.nummer === "string") c.nummer = body.nummer.trim().toUpperCase().slice(0, 20);
+  if (body.binnen === true) c.binnen = { door, op: new Date().toISOString() };
+  if (body.binnen === false) c.binnen = null;
+  if (body.gedrukt) c.gedrukt = { door, op: new Date().toISOString(), aantal: Number(body.aantal || 0) };
+  await env.FONTEYN_DATA.put("binnenkomend", JSON.stringify(alles));
+  return { ok: true, container: c };
+}
+
 async function bestellingKoppel(env, body) {
   const ref = String(body.referentie || "").trim();
   const zending = String(body.zending || "").trim();
@@ -5834,6 +5929,19 @@ export default {
       return reply(200, await bestellingKoppel(env, b)
         .catch(e => ({ ok: false, error: String(e.message || e) })));
     }
+    if (url.pathname === "/binnenkomend" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      return reply(200, await binnenkomendBewaren(env, String(b.door || "").slice(0, 60), b.doc)
+        .catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/binnenkomend/zet" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      return reply(200, await binnenkomendZet(env, String(b.door || "").slice(0, 60), b)
+        .catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+
     if (url.pathname === "/bestelling" && request.method === "POST") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const b = await request.json().catch(() => ({}));

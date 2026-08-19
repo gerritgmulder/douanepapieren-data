@@ -147,6 +147,22 @@
   .order-meta .m-item .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
   .order-meta .m-item .val { font-size: 14px; font-weight: 500; margin-top: 2px; }
 
+  /* Containers onderweg: één regel per container, groot genoeg om op te
+     klikken want dit gebeurt in het magazijn. */
+  .cont { display:flex; gap:14px; align-items:center; flex-wrap:wrap;
+          border:1px solid var(--border); border-radius:9px; padding:13px 15px; margin-bottom:9px; }
+  .cont.binnen { background:#f0fdf4; border-color:#bbf7d0; }
+  .cont .wie { flex:1 1 260px; min-width:0; }
+  .cont .wie b { font-size:14.5px; }
+  .cont .wie .sub2 { font-size:12px; color:var(--muted); margin-top:2px; }
+  .cont .cijfers { display:flex; gap:16px; font-size:12.5px; color:var(--muted); flex:0 0 auto; }
+  .cont .cijfers b { display:block; font-size:15px; color:var(--ink); }
+  .cont input.nr { width:135px; padding:6px 8px; border:1px solid var(--border); border-radius:6px;
+                   font:inherit; font-size:12.5px; text-transform:uppercase; }
+  .cont .knoppen { display:flex; gap:8px; flex:0 0 auto; }
+  .cont .merkje { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px;
+                  background:#dcfce7; color:#166534; }
+
   .bulk-actions {
     display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
     margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
@@ -427,6 +443,17 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
 <main id="mainView">
 
+  <!-- ───── Containers die eraan komen ─────
+       Gerrit (19 aug 2026): "Als Manon dan een container binnenkrijgt, kan ze
+       gemakkelijk op de container klikken die binnenkomt en direct labels
+       printen kiezen." Ze komen hier vanzelf te staan zodra bij Voorraadbeheer
+       een commercial invoice met packing list is ingelezen. -->
+  <div class="panel hidden" id="stepC">
+    <h2>Containers onderweg</h2>
+    <div class="sub">Ingelezen uit de commercial invoice en de packing list. Klik op een container om de labels klaar te zetten.</div>
+    <div id="contLijst"></div>
+  </div>
+
   <!-- ───── STAP 1: upload of ordernummer ───── -->
   <div class="panel" id="step1">
     <h2>1. Kies een inkooporder</h2>
@@ -562,6 +589,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const email = localStorage.getItem(EMAIL_KEY) || "—";
   const hdrUser = document.getElementById("hdr-user");
   if (hdrUser) hdrUser.textContent = email;
+  /* De containers die eraan komen meteen ophalen: dat is waar Manon voor
+     binnenkomt. Lukt het niet, dan blijft het paneel gewoon weg en werkt de
+     rest van de tegel als altijd. */
+  laadContainers();
   const hdrLogout = document.getElementById("hdr-logout");
   if (hdrLogout) hdrLogout.addEventListener("click", async () => {
     try { await fetch("/api/logout", { method: "POST" }); } catch {}
@@ -593,6 +624,142 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+/* ═══════════════════════════════════════════════════════════════
+   CONTAINERS ONDERWEG
+   ═══════════════════════════════════════════════════════════════
+
+   Gerrit (19 aug 2026): "Als Manon dan een container binnenkrijgt, kan ze
+   gemakkelijk op de container klikken die binnenkomt en direct labels printen
+   kiezen."
+
+   Ze komen uit de bucket binnenkomend, gevuld zodra bij Voorraadbeheer een
+   commercial invoice met packing list is ingelezen. Elke regel van de packing
+   list wordt hier één labelregel: colli stuks, met het aantal per collo erbij.
+
+   De Fonteyn-artikelcode staat niet op een packing list - een fabriek kent
+   alleen zijn eigen aanduiding. Die wordt dus opgezocht zoals dat ook bij een
+   PDF-inkooporder gebeurt, en anders vult Manon hem één keer in.
+   ═══════════════════════════════════════════════════════════════ */
+const WORKER_BASE = "https://fonteyn-data-store.g-mulder.workers.dev";
+function escapeHtml(v) {
+  const d = document.createElement("div");
+  d.textContent = v == null ? "" : String(v);
+  return d.innerHTML;
+}
+const teamKey = () => localStorage.getItem("fp.teamkey") || "";
+let containers = [];
+
+async function laadContainers() {
+  if (!teamKey()) return;
+  try {
+    const r = await fetch(WORKER_BASE + "/data/binnenkomend", { headers: { "X-Fonteyn-Auth": teamKey() } });
+    if (!r.ok) return;
+    const j = await r.json();
+    containers = (j && j.lijst) || [];
+  } catch (e) { console.warn("[containers] laden faalde:", e); return; }
+  toonContainers();
+}
+
+function toonContainers() {
+  const box = $("contLijst");
+  if (!containers.length) { $("stepC").classList.add("hidden"); return; }
+  $("stepC").classList.remove("hidden");
+  box.innerHTML = "";
+
+  for (const c of containers) {
+    const d = document.createElement("div");
+    d.className = "cont" + (c.binnen ? " binnen" : "");
+    const naam = c.nummer || ("Container " + c.volgnummer);
+    const labels = (c.colli || []).reduce((n, x) => n + (x.colli || 0), 0);
+
+    const wie = document.createElement("div");
+    wie.className = "wie";
+    wie.innerHTML = "<b>" + escapeHtml(naam) + "</b>" +
+      (c.maat ? " <span style='color:var(--muted);font-size:12px'>" + escapeHtml(c.maat) + "</span>" : "") +
+      (c.binnen ? " <span class='merkje'>binnen</span>" : "") +
+      "<div class='sub2'>" + escapeHtml(c.leverancier || "onbekende leverancier") +
+      (c.invoice ? " &middot; " + escapeHtml(c.invoice) : "") +
+      (c.vaart ? " &middot; " + escapeHtml(c.vaart) : "") + "</div>";
+    d.appendChild(wie);
+
+    const cijfers = document.createElement("div");
+    cijfers.className = "cijfers";
+    cijfers.innerHTML =
+      "<div><b>" + labels + "</b>labels</div>" +
+      "<div><b>" + (c.totaalStuks || 0) + "</b>stuks</div>" +
+      "<div><b>" + (c.bruto || 0) + "</b>kg</div>";
+    d.appendChild(cijfers);
+
+    /* Het containernummer staat er vaak nog niet op als de fabriek de papieren
+       maakt. Manon kan het hier invullen zodra het van de rederij komt. */
+    const nr = document.createElement("input");
+    nr.className = "nr"; nr.value = c.nummer || ""; nr.placeholder = "containernr.";
+    nr.addEventListener("change", () => zetContainer(c, { nummer: nr.value }));
+    d.appendChild(nr);
+
+    const knoppen = document.createElement("div");
+    knoppen.className = "knoppen";
+    const kies = document.createElement("button");
+    kies.type = "button";
+    kies.textContent = "Labels klaarzetten →";
+    kies.addEventListener("click", () => containerNaarLabels(c));
+    knoppen.appendChild(kies);
+
+    const binnen = document.createElement("button");
+    binnen.type = "button"; binnen.className = "secondary";
+    binnen.textContent = c.binnen ? "Toch niet binnen" : "Binnengekomen";
+    binnen.addEventListener("click", () => zetContainer(c, { binnen: !c.binnen }));
+    knoppen.appendChild(binnen);
+    d.appendChild(knoppen);
+
+    box.appendChild(d);
+  }
+}
+
+async function zetContainer(c, wat) {
+  try {
+    const r = await fetch(WORKER_BASE + "/binnenkomend/zet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ sleutel: c.sleutel, door: (localStorage.getItem("fp.email") || ""), ...wat }),
+    });
+    const j = await r.json();
+    if (j && j.ok && j.container) Object.assign(c, j.container);
+  } catch (e) { console.warn("[containers] bijwerken faalde:", e); }
+  toonContainers();
+}
+
+/* Eén container omzetten naar labelregels. Per regel van de packing list
+   evenveel labels als er colli zijn. */
+function containerNaarLabels(c) {
+  state.rows = (c.colli || []).map(x => ({
+    supplierCode: x.artikel || "",
+    description: x.artikel || "",
+    aantal: x.colli || 1,
+    aantalProducten: 1,
+    aantalColliPerProduct: x.colli || 1,
+    fonteynCode: "",
+    po: c.invoice || "",
+    print: true,
+    lookupTried: false,
+  }));
+  state.meta = {
+    poNumber: c.invoice || "",
+    supplier: c.leverancier || "",
+    createdOn: c.vaart || "",
+    crediteurNr: "",
+  };
+  if (!state.rows.length) { setStatus("Deze container heeft geen colli op de packing list.", "bad"); return; }
+  renderStep2();
+  const n = state.rows.reduce((t, r) => t + r.aantalColliPerProduct, 0);
+  setStatus("✓ " + (c.nummer || "Container " + c.volgnummer) + " · " + state.rows.length +
+    " artikelen, " + n + " labels. Vul de ontbrekende Fonteyn-codes in en klik Voorbeeld tonen.", "ok");
+  $("step2").scrollIntoView({ behavior: "smooth" });
+  /* Dezelfde opzoekslag als bij een PDF-inkooporder: de fabriek noemt zijn
+     eigen code, wij hebben de onze nodig voor de barcode. */
+  if (typeof lookupFonteynCodes === "function") lookupFonteynCodes();
+}
 
 /* ═══════════════════════════════════════════════════════════════
    STAP 1: upload-handling + PDF-parse
