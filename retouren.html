@@ -69,14 +69,45 @@
   table.ret .neg { color: var(--bad); font-weight: 600; }
   table.ret input, table.ret select, table.ret textarea { width: 100%; font-size: 12px; padding: 5px 7px; }
   table.ret textarea { resize: vertical; min-height: 30px; }
+  /* Vaste verdeling voor het register: product en uitleg krijgen de ruimte,
+     de smalle kolommen nemen niet meer dan ze nodig hebben. */
+  table.ret.register { table-layout: fixed; }
+  table.ret.register th:nth-child(1), table.ret.register td:nth-child(1) { width: 38px; }
+  table.ret.register th:nth-child(2), table.ret.register td:nth-child(2) { width: 82px; }
+  table.ret.register th:nth-child(3), table.ret.register td:nth-child(3) { width: 128px; }
+  table.ret.register th:nth-child(4), table.ret.register td:nth-child(4) { width: 110px; }
+  table.ret.register th:nth-child(5), table.ret.register td:nth-child(5) { width: auto; }
+  table.ret.register th:nth-child(6), table.ret.register td:nth-child(6) { width: 150px; }
+  table.ret.register th:nth-child(7), table.ret.register td:nth-child(7) { width: 134px; }
+  table.ret.register th:nth-child(8), table.ret.register td:nth-child(8) { width: 22%; }
+  table.ret.register th:nth-child(9), table.ret.register td:nth-child(9) { width: 34px; }
+  table.ret.register td { word-break: break-word; }
+  /* Een tweede of derde regel van dezelfde order: geen scheidingslijn ertussen
+     en een streep in de linkermarge, zodat je ziet dat het bij elkaar hoort. */
+  table.ret tr.vervolg > td { border-top: none; }
+  table.ret tr.zelfde-order:not(.laatste-van-order) > td { border-bottom: none; }
+  table.ret tr.zelfde-order > td:nth-child(3) { position: relative; }
+  table.ret tr.vervolg > td:nth-child(3)::before {
+    content: ""; position: absolute; left: 8px; top: -4px; bottom: 50%;
+    border-left: 2px solid var(--fonteyn-lime); border-bottom: 2px solid var(--fonteyn-lime);
+    width: 9px; border-bottom-left-radius: 4px;
+  }
+  table.ret tr.vervolg .regelnr { margin-left: 22px; }
+  .regelnr { font-size: 11px; color: var(--muted); }
   .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
   .pill.done { background: #dcfce7; color: var(--ok); }
   .pill.todo { background: #fef3c7; color: var(--warn); }
 
-  .overview-grid { display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: start; }
-  @media (max-width: 820px) { .overview-grid { grid-template-columns: 1fr; } }
-  .legend { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 12.5px; }
-  .legend .li { display: flex; align-items: center; gap: 8px; }
+  /* De samenvatting stond links naast de tabel en at 320px op, precies wat
+     de productkolom tekort kwam. Gerrit (18 aug 2026): "ik wil meer van de
+     productregel kunnen lezen, dus toon die cirkeldiagram en de cijfers
+     boven en daaronder alle retouren." */
+  .samenvatting { display: flex; gap: 26px; align-items: center; flex-wrap: wrap;
+                  padding: 4px 0 16px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+  .samenvatting .cijfer { text-align: center; flex: 0 0 auto; min-width: 120px; }
+  .samenvatting svg { flex: 0 0 auto; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; flex: 1 1 260px; }
+  .legend .li { display: flex; align-items: center; gap: 8px; min-width: 170px; }
   .legend .sw { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
   .legend .li .n { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); }
   .seg { display: flex; gap: 4px; }
@@ -182,30 +213,48 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     </div>
     <div id="periodLabel" style="font-size:12px;color:var(--muted);margin:8px 0 4px;"></div>
 
-    <div class="overview-grid">
-      <div>
-        <div style="text-align:center;">
-          <div class="kpi-num" id="totalCount">0</div>
-          <div style="font-size:12px;color:var(--muted);">retouren in deze periode</div>
-        </div>
-        <svg id="pie" viewBox="0 0 200 200" width="100%" height="200" style="margin-top:8px;"></svg>
-        <div class="legend" id="legend"></div>
+    <div class="samenvatting">
+      <div class="cijfer">
+        <div class="kpi-num" id="totalCount">0</div>
+        <div style="font-size:12px;color:var(--muted);">retouren in deze periode</div>
       </div>
-      <div style="overflow-x:auto;">
-        <table class="ret" id="regTable">
-          <thead>
-            <tr>
-              <th>Wk</th><th>Datum</th><th>Order</th><th>Adviseur</th><th>Product</th>
-              <th>Reden</th><th>Retourlocatie</th><th>Uitleg</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="regBody"></tbody>
-        </table>
-        <div id="regEmpty" class="empty">Nog geen geregistreerde retouren in deze periode.</div>
-      </div>
+      <svg id="pie" viewBox="0 0 200 200" width="170" height="170"></svg>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="ret register" id="regTable">
+        <thead>
+          <tr>
+            <th>Wk</th><th>Datum</th><th>Order</th><th>Adviseur</th><th>Product</th>
+            <th>Reden</th><th>Retourlocatie</th><th>Uitleg</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="regBody"></tbody>
+      </table>
+      <div id="regEmpty" class="empty">Nog geen geregistreerde retouren in deze periode.</div>
     </div>
   </div>
 </main>
+
+<!-- Welke regels van deze order zijn retour -->
+<div id="rowsModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:50;padding:20px;">
+  <div style="background:#fff;border-radius:12px;max-width:720px;width:100%;padding:24px;max-height:88vh;display:flex;flex-direction:column;">
+    <h3 style="margin:0 0 6px;color:var(--fonteyn-green);">Welke regels zijn retour?</h3>
+    <p class="lead" style="font-size:12.5px;margin:0 0 12px;">
+      Order <b id="rmOrder"></b> <span id="rmMeta" style="color:var(--muted)"></span>.
+      Aangevinkt staat wat er als product op de order staat. Vink erbij wat er nog meer retour komt;
+      elke aangevinkte regel wordt een eigen regel in het register, onder hetzelfde ordernummer.
+    </p>
+    <div id="rmRows" style="overflow:auto;border:1px solid var(--border);border-radius:8px;"></div>
+    <div class="row" style="justify-content:space-between;margin-top:14px;align-items:center;">
+      <span id="rmTel" style="font-size:12px;color:var(--muted);"></span>
+      <span>
+        <button class="secondary" id="rmCancel" type="button">Annuleren</button>
+        <button class="primary" id="rmSave" type="button">Toevoegen</button>
+      </span>
+    </div>
+  </div>
+</div>
 
 <!-- Handmatig-toevoegen modal -->
 <div id="manualModal" style="position:fixed;inset:0;background:rgba(0,0,0,0.45);display:none;align-items:center;justify-content:center;z-index:50;padding:20px;">
@@ -506,7 +555,7 @@ function renderCandidates() {
     const customer = inv.CompanyName || inv.ContactName || "—";
     const method = (o.ShippingMethod && o.ShippingMethod.Name) || "—";
     const date = o.DeliveryDate || o.CreationDate;
-    const registered = !!store.records[orderNr];
+    const registered = orderGeregistreerd(orderNr);
     const tr = document.createElement("tr");
     tr.innerHTML =
       "<td>" + escapeHtml(fmtDateNL(date)) + "</td>" +
@@ -564,38 +613,158 @@ function guessReason(text) {
   return "";
 }
 
+/* ── Eén order, meerdere retourregels ──────────────────────────────────
+   Gerrit namens Manon (18 aug 2026): "regelmatig komen er producten terug
+   die uit meer dan 1 product bestaan. Ik wil dat je bij het invoeren van een
+   order alle beschikbare regels toont en dat ik handmatig nog een regel kan
+   selecteren die ook in het overzicht als retour komt."
+
+   Van de 68 retourorders uit juli en augustus hebben er 43 meer dan één
+   regel, meestal een product plus een tegenboeking (korting, servicegarantie).
+   Daarom staat het product aangevinkt en de rest niet, maar staat alles er
+   wel bij.
+
+   Elke aangevinkte regel wordt een eigen record. De sleutel is dan
+   "<ordernummer>#<regel-id>". Records van vóór deze wijziging staan onder het
+   kale ordernummer; die blijven werken en worden bij het opnieuw registreren
+   van dezelfde order overgezet in plaats van gedupliceerd. */
+
+function sleutelVan(rec) {
+  return rec && rec.regelId ? rec.orderNr + "#" + rec.regelId : (rec ? rec.orderNr : "");
+}
+/* Is deze order al ergens in het register geland? Zowel de oude sleutel als
+   de nieuwe tellen mee, anders zou een order twee keer als nieuw ogen. */
+function orderGeregistreerd(orderNr) {
+  if (store.records[orderNr]) return true;
+  const pre = orderNr + "#";
+  return Object.keys(store.records).some(k => k.indexOf(pre) === 0);
+}
+/* Een echte productregel: positief aantal, positieve prijs, en geen
+   korting- of verrekenregel. Die laatste horen bij de order maar zijn geen
+   product dat terugkomt. */
+function isProductRegel(r) {
+  const code = String(r.ProductCode || "");
+  if (/^(korting|verzendkosten|toeslag)$/i.test(code)) return false;
+  return Number(r.Qty) > 0 && Number(r.GrossPrice) > 0;
+}
+
+let rmOrder = null;
+
 async function registerFromOrder(o) {
-  const orderNr = String(o.Id || "");
   await adviseursLaden();
+  rmOrder = o;
+  const orderNr = String(o.Id || "");
+  const rows = (o.OrderRows || []).slice();
   const inv = o.InvoiceAddress || o.DeliveryAddress || o.AccountAddress || {};
-  const date = o.DeliveryDate || o.CreationDate || new Date().toISOString();
-  const d = new Date(date);
-  if (!store.records[orderNr]) {
-    const sum = summarizeRows(o.OrderRows);
-    store.records[orderNr] = {
-      orderNr,
-      date: isoDate(isNaN(d)?new Date():d),
-      week: isoWeek(isNaN(d)?new Date():d),
-      advisor: adviseurVan(o),
-      product: sum.product,
-      reason: guessReason(sum.hint + " " + sum.product),  // voorstel; Manon bevestigt/wijzigt
-      location: "",
-      explanation: sum.hint,    // reden-context uit de orderregels als startpunt
-      amount: Number((o.Totals && o.Totals.AmountIncl) ?? 0),
-      method: (o.ShippingMethod && o.ShippingMethod.Name) || "",
-      customer: inv.CompanyName || inv.ContactName || "",
-      source: "logic4",
-      addedBy: (localStorage.getItem(EMAIL_KEY)||""),
-      addedAt: new Date().toISOString(),
-    };
-    try { await saveStore(); } catch(e){ alert("Opslaan faalde: "+e.message); }
-    try{ if(window.fpLog) window.fpLog("retour-geregistreerd","order "+orderNr); }catch(e){}
+
+  el("rmOrder").textContent = orderNr;
+  el("rmMeta").textContent =
+    [(inv.CompanyName || inv.ContactName || ""), rows.length + " regel" + (rows.length === 1 ? "" : "s")]
+      .filter(Boolean).join(" · ");
+
+  const box = el("rmRows");
+  box.innerHTML = "";
+  if (!rows.length) {
+    box.innerHTML = "<div style='padding:14px;font-size:12.5px;color:var(--muted)'>" +
+      "Deze order heeft geen regels in Logic4. Voeg 'm handmatig toe.</div>";
   }
+  const tabel = document.createElement("table");
+  tabel.className = "ret";
+  tabel.innerHTML = "<thead><tr><th style='width:34px'></th><th style='width:90px'>Artikel</th>" +
+                    "<th>Omschrijving</th><th class='num' style='width:60px'>Aantal</th>" +
+                    "<th class='num' style='width:100px'>Bedrag</th></tr></thead><tbody></tbody>";
+  const tb = tabel.querySelector("tbody");
+  for (const r of rows) {
+    const al = !!store.records[orderNr + "#" + r.Id];
+    const tr = document.createElement("tr");
+    const bedrag = Number(r.GrossPrice) * (Number(r.Qty) || 0);
+    tr.innerHTML =
+      "<td></td>" +
+      "<td>" + escapeHtml(String(r.ProductCode || r.ProductId || "")) + "</td>" +
+      "<td>" + escapeHtml(String(r.Description || "")) + "</td>" +
+      "<td class='num'>" + escapeHtml(String(r.Qty ?? "")) + "</td>" +
+      "<td class='num " + (bedrag < 0 ? "neg" : "") + "'>" + fmtEur(bedrag) + "</td>";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.style.width = "16px"; cb.style.height = "16px";
+    cb.checked = al || isProductRegel(r);
+    if (al) { cb.disabled = true; cb.title = "Deze regel staat al in het register."; tr.style.opacity = ".55"; }
+    cb.dataset.id = String(r.Id);
+    tr.querySelector("td").appendChild(cb);
+    cb.addEventListener("change", rmTellen);
+    tb.appendChild(tr);
+  }
+  box.appendChild(tabel);
+  rmTellen();
+  el("rowsModal").style.display = "flex";
+}
+
+function rmTellen() {
+  const n = el("rmRows").querySelectorAll("input[type=checkbox]:checked:not(:disabled)").length;
+  el("rmTel").textContent = n === 0 ? "Niets aangevinkt" :
+    (n + " regel" + (n === 1 ? "" : "s") + " wordt toegevoegd");
+  el("rmSave").disabled = n === 0;
+}
+
+el("rmCancel").addEventListener("click", () => { el("rowsModal").style.display = "none"; rmOrder = null; });
+
+el("rmSave").addEventListener("click", async () => {
+  const o = rmOrder;
+  if (!o) return;
+  const orderNr = String(o.Id || "");
+  const inv = o.InvoiceAddress || o.DeliveryAddress || o.AccountAddress || {};
+  const d = new Date(o.DeliveryDate || o.CreationDate || new Date().toISOString());
+  const datum = isoDate(isNaN(d) ? new Date() : d);
+  const week = isoWeek(isNaN(d) ? new Date() : d);
+  const gekozen = [...el("rmRows").querySelectorAll("input[type=checkbox]:checked:not(:disabled)")]
+    .map(cb => (o.OrderRows || []).find(r => String(r.Id) === cb.dataset.id))
+    .filter(Boolean);
+  if (!gekozen.length) return;
+
+  const sum = summarizeRows(o.OrderRows);
+  let eerste = true;
+  for (const r of gekozen) {
+    const sleutel = orderNr + "#" + r.Id;
+    if (store.records[sleutel]) continue;
+    const product = String(r.Description || "").trim();
+    /* Stond deze order er al onder de oude sleutel? Dan die regel overzetten
+       in plaats van er een tweede naast te maken, met behoud van wat Manon
+       er zelf al bij had gezet. */
+    const oud = eerste && !store.records[sleutel] ? store.records[orderNr] : null;
+    if (oud && !oud.regelId) {
+      delete store.records[orderNr];
+      oud.regelId = String(r.Id);
+      if (!oud.product) oud.product = product;
+      store.records[sleutel] = oud;
+    } else {
+      store.records[sleutel] = {
+        orderNr,
+        regelId: String(r.Id),
+        date: datum,
+        week: week,
+        advisor: adviseurVan(o),
+        product: product,
+        reason: guessReason(sum.hint + " " + product),   // voorstel; Manon bevestigt of wijzigt
+        location: "",
+        explanation: eerste ? sum.hint : "",
+        amount: Number(r.GrossPrice) * (Number(r.Qty) || 0),
+        method: (o.ShippingMethod && o.ShippingMethod.Name) || "",
+        customer: inv.CompanyName || inv.ContactName || "",
+        source: "logic4",
+        addedBy: (localStorage.getItem(EMAIL_KEY) || ""),
+        addedAt: new Date().toISOString(),
+      };
+    }
+    eerste = false;
+  }
+  try { await saveStore(); } catch (e) { alert("Opslaan faalde: " + e.message); return; }
+  try { if (window.fpLog) window.fpLog("retour-geregistreerd", "order " + orderNr + " (" + gekozen.length + " regel(s))"); } catch (e) {}
+  el("rowsModal").style.display = "none";
+  rmOrder = null;
   renderCandidates();
   renderRegister();
-  // scroll naar de registratie-tabel
-  el("regTable").scrollIntoView({ behavior:"smooth", block:"center" });
-}
+  el("regTable").scrollIntoView({ behavior: "smooth", block: "center" });
+});
 
 // ─────────────────────────────────────────────────────────────────
 // 2. Geregistreerde retouren — tabel, zoeken, periode, cirkeldiagram
@@ -636,7 +805,12 @@ function currentRecords() {
     recs = recs.filter(r => [r.orderNr,r.customer,r.advisor,r.product,r.reason,r.location,r.explanation]
       .join(" ").toLowerCase().indexOf(searchTerm) !== -1);
   }
-  recs.sort((a,b) => (b.date||"").localeCompare(a.date||"") || (b.orderNr||"").localeCompare(a.orderNr||""));
+  /* Nieuwste eerst, en binnen één order de regels op volgorde van toevoegen,
+     zodat ze in de tabel onder elkaar blijven staan. */
+  recs.sort((a,b) =>
+    (b.date||"").localeCompare(a.date||"") ||
+    (b.orderNr||"").localeCompare(a.orderNr||"") ||
+    (a.addedAt||"").localeCompare(b.addedAt||""));
   return recs;
 }
 
@@ -647,12 +821,24 @@ function renderRegister() {
   el("regEmpty").classList.toggle("hidden", recs.length !== 0);
 
   const body = el("regBody"); body.innerHTML = "";
-  for (const rec of recs) {
+  for (let i = 0; i < recs.length; i++) {
+    const rec = recs[i];
+    /* Hoort deze regel bij dezelfde order als de vorige? Dan het ordernummer
+       niet herhalen maar er zichtbaar onder hangen. */
+    const zelfdeAlsVorige = i > 0 && recs[i-1].orderNr === rec.orderNr;
+    const zelfdeAlsVolgende = i < recs.length-1 && recs[i+1].orderNr === rec.orderNr;
     const tr = document.createElement("tr");
+    if (zelfdeAlsVorige) tr.className = "vervolg zelfde-order";
+    else if (zelfdeAlsVolgende) tr.className = "zelfde-order";
+    if (zelfdeAlsVorige && !zelfdeAlsVolgende) tr.className += " laatste-van-order";
+    const orderCel = zelfdeAlsVorige
+      ? "<span class='regelnr'>zelfde order</span>"
+      : "<b>" + escapeHtml(rec.orderNr) + "</b>" +
+        (rec.customer ? "<div style='font-size:10px;color:var(--muted)'>" + escapeHtml(rec.customer) + "</div>" : "");
     tr.innerHTML =
-      "<td>" + escapeHtml(rec.week||"") + "</td>" +
-      "<td>" + escapeHtml(fmtDateNL(rec.date)) + "</td>" +
-      "<td><b>" + escapeHtml(rec.orderNr) + "</b>" + (rec.customer?"<div style='font-size:10px;color:var(--muted)'>"+escapeHtml(rec.customer)+"</div>":"") + "</td>" +
+      "<td>" + (zelfdeAlsVorige ? "" : escapeHtml(rec.week||"")) + "</td>" +
+      "<td>" + (zelfdeAlsVorige ? "" : escapeHtml(fmtDateNL(rec.date))) + "</td>" +
+      "<td>" + orderCel + "</td>" +
       "<td></td><td></td><td></td><td></td><td></td><td></td>";
     const cells = tr.querySelectorAll("td");
     // Adviseur
@@ -669,8 +855,9 @@ function renderRegister() {
     const del = document.createElement("button");
     del.className = "mini"; del.textContent = "✕"; del.title = "Verwijderen";
     del.addEventListener("click", async () => {
-      if (!confirm("Retour " + rec.orderNr + " verwijderen uit de registratie?")) return;
-      delete store.records[rec.orderNr];
+      const wat = rec.product ? (rec.orderNr + " - " + rec.product) : rec.orderNr;
+      if (!confirm("Retour " + wat + " verwijderen uit de registratie?")) return;
+      delete store.records[sleutelVan(rec)];
       try { await saveStore(); } catch(e){ alert(e.message); }
       renderRegister(); renderCandidates();
     });
@@ -793,11 +980,16 @@ el("mCancel").addEventListener("click", () => el("manualModal").style.display="n
 el("mSave").addEventListener("click", async () => {
   const orderNr = el("mOrder").value.trim();
   if (!orderNr) { alert("Vul een ordernummer in."); return; }
-  if (store.records[orderNr] && !confirm("Order " + orderNr + " bestaat al — overschrijven?")) return;
+  if (orderGeregistreerd(orderNr) &&
+      !confirm("Order " + orderNr + " staat al in het register. Er komt een regel bij. Doorgaan?")) return;
   const dateStr = el("mDate").value || isoDate(new Date());
   const d = new Date(dateStr);
-  store.records[orderNr] = {
-    orderNr, date: dateStr, week: isoWeek(isNaN(d)?new Date():d),
+  /* Ook met de hand mag een order meerdere regels krijgen. Is het kale
+     ordernummer nog vrij, dan gebruiken we dat, anders een eigen sleutel. */
+  const regelId = store.records[orderNr] ? ("h" + Date.now()) : "";
+  const sleutel = regelId ? (orderNr + "#" + regelId) : orderNr;
+  store.records[sleutel] = {
+    orderNr, regelId, date: dateStr, week: isoWeek(isNaN(d)?new Date():d),
     advisor: el("mAdvisor").value.trim(), product: el("mProduct").value.trim(),
     reason: el("mReason").value, location: el("mLocation").value, explanation: el("mExplain").value.trim(),
     amount: 0, method: "", customer: "", source: "manual",
