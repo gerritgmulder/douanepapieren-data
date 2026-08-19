@@ -4422,12 +4422,80 @@ function xMailboxen(blok, naam) {
    "de mailbox van het serviceaccount" en "de mailbox van Dolf". Staat hij er
    niet, dan kijkt Exchange in de lege mailbox van het serviceaccount zelf -
    geen foutmelding, gewoon niets. Vandaar dat namens altijd verplicht is. */
-async function ewsRoep(env, actie, body, namens) {
+/* ── Twee manieren om bij andermans mailbox te komen ──────────────────
+   Exchange kent er twee, en welke werkt hangt af van wat de beheerder heeft
+   uitgedeeld:
+
+   impersonatie   Het serviceaccount doet zich voor als Dolf. Vraagt de
+                  RBAC-rol ApplicationImpersonation.
+   gedelegeerd    Het serviceaccount blijft zichzelf en noemt per map de
+                  mailbox van Dolf. Vraagt Full Access of mapmachtigingen.
+
+   André (18 aug 2026) schreef: "Dit account mag verzenden als en namens
+   Dolf." Send As en Send on Behalf zijn geen van beide impersonatie, dus het
+   kan zijn dat alleen de gedelegeerde weg openstaat. In plaats van dat vooraf
+   uit te zoeken probeert de worker het gewoon: lukt de ene niet, dan de
+   andere, en welke werkte wordt onthouden zodat het daarna één verzoek is. */
+const MAIL_MODI = ["impersonatie", "gedelegeerd"];
+let mailModusCache = null;
+
+async function mailModus(env) {
+  if (mailModusCache) return mailModusCache;
+  const bewaard = await env.FONTEYN_DATA.get("mail-modus");
+  mailModusCache = MAIL_MODI.indexOf(bewaard) >= 0 ? bewaard : "impersonatie";
+  return mailModusCache;
+}
+async function mailModusZet(env, modus) {
+  mailModusCache = modus;
+  await env.FONTEYN_DATA.put("mail-modus", modus);
+}
+
+/* Een verwijzing naar een standaardmap. Bij impersonatie is Exchange al in de
+   juiste mailbox; gedelegeerd moet erbij staan wiens map je bedoelt. */
+function mapVerwijzing(map, adres, modus) {
+  if (modus === "gedelegeerd") {
+    return '<t:DistinguishedFolderId Id="' + map + '"><t:Mailbox><t:EmailAddress>' +
+           xmlUit(adres) + "</t:EmailAddress></t:Mailbox></t:DistinguishedFolderId>";
+  }
+  return '<t:DistinguishedFolderId Id="' + map + '"/>';
+}
+
+/* Wie staat er als afzender op? Bij impersonatie is dat vanzelf de mailbox
+   waarin we zitten. Gedelegeerd zou de mail van dashboard@fonteyn.nl komen,
+   en dat is niet de bedoeling: André gaf dit account uitdrukkelijk het recht
+   om als en namens Dolf te verzenden, dus zetten we de afzender er zelf op.
+   Volgens het EWS-schema hoort From ná de ontvangers. */
+function afzender(adres, modus) {
+  if (modus !== "gedelegeerd") return "";
+  return "<t:From><t:Mailbox><t:EmailAddress>" + xmlUit(adres) +
+         "</t:EmailAddress></t:Mailbox></t:From>";
+}
+
+/* Een opdracht uitvoeren, desnoods langs de andere weg. maakBody krijgt de
+   modus mee, want alleen de mapverwijzingen verschillen. */
+async function ewsDoe(env, actie, maakBody, namens) {
+  const modus = await mailModus(env);
+  const eerste = await ewsRoep(env, actie, maakBody(modus), namens, modus);
+  if (eerste.ok || eerste.error !== "geen-toegang-tot-mailbox") return eerste;
+
+  const ander = modus === "impersonatie" ? "gedelegeerd" : "impersonatie";
+  const tweede = await ewsRoep(env, actie, maakBody(ander), namens, ander);
+  if (tweede.ok) { await mailModusZet(env, ander); return tweede; }
+  /* Allebei dicht. Dan is de eerste melding de nuttigste, met erbij dat het
+     ook langs de andere weg niet gaat - dat scheelt de beheerder zoekwerk. */
+  return { ...eerste, ookGeprobeerd: ander, tweedeUitleg: tweede.uitleg || tweede.error };
+}
+
+async function ewsRoep(env, actie, body, namens, modus) {
   if (!env.EWS_GEBRUIKER || !env.EWS_WACHTWOORD) {
     return { ok: false, error: "mail-niet-ingesteld",
              uitleg: "Het serviceaccount is nog niet ingesteld. Zet EWS_GEBRUIKER en EWS_WACHTWOORD als worker-secret." };
   }
   if (!namens) return { ok: false, error: "geen-mailbox" };
+
+  const kop = modus === "gedelegeerd" ? "" :
+    "<t:ExchangeImpersonation><t:ConnectingSID><t:SmtpAddress>" + xmlUit(namens) +
+    "</t:SmtpAddress></t:ConnectingSID></t:ExchangeImpersonation>";
 
   const env_xml =
     '<?xml version="1.0" encoding="utf-8"?>' +
@@ -4435,9 +4503,7 @@ async function ewsRoep(env, actie, body, namens) {
     ' xmlns:t="http://schemas.microsoft.com/exchange/services/2006/types"' +
     ' xmlns:m="http://schemas.microsoft.com/exchange/services/2006/messages">' +
     "<soap:Header>" +
-    '<t:RequestServerVersion Version="' + EWS_SCHEMA + '"/>' +
-    "<t:ExchangeImpersonation><t:ConnectingSID><t:SmtpAddress>" + xmlUit(namens) +
-    "</t:SmtpAddress></t:ConnectingSID></t:ExchangeImpersonation>" +
+    '<t:RequestServerVersion Version="' + EWS_SCHEMA + '"/>' + kop +
     "</soap:Header><soap:Body>" + body + "</soap:Body></soap:Envelope>";
 
   const auth = "Basic " + btoa(env.EWS_GEBRUIKER + ":" + env.EWS_WACHTWOORD);
@@ -4473,9 +4539,17 @@ async function ewsRoep(env, actie, body, namens) {
   if (fout) {
     const code = xVeld(tekst, "ResponseCode");
     const uitleg = xVeld(tekst, "MessageText");
-    if (code === "ErrorImpersonateUserDenied" || code === "ErrorImpersonationDenied") {
-      return { ok: false, error: "geen-toegang-tot-mailbox",
-               uitleg: "Het serviceaccount mag niet bij " + namens + ". Staat die mailbox in de groep Dashboard Mailboxen?" };
+    /* Impersonatie weigert met ErrorImpersonate*, de gedelegeerde weg met
+       ErrorAccessDenied of ErrorNonExistentMailbox. Alle vier betekenen
+       hetzelfde: langs deze weg komen we niet in die mailbox. */
+    const dicht = ["ErrorImpersonateUserDenied", "ErrorImpersonationDenied",
+                   "ErrorAccessDenied", "ErrorNonExistentMailbox",
+                   "ErrorFolderNotFound"];
+    if (dicht.indexOf(code) >= 0) {
+      return { ok: false, error: "geen-toegang-tot-mailbox", modus: modus, code: code,
+               uitleg: "Het serviceaccount mag " + (modus === "gedelegeerd"
+                 ? "de mailbox van " + namens + " niet openen (Full Access ontbreekt)."
+                 : "zich niet voordoen als " + namens + " (ApplicationImpersonation ontbreekt).") };
     }
     return { ok: false, error: code || "mailserver-weigert", uitleg };
   }
@@ -4612,10 +4686,13 @@ async function mailLijst(env, adres, opt) {
     '<m:IndexedPageItemView MaxEntriesReturned="' + aantal + '" Offset="' + vanaf + '" BasePoint="Beginning"/>' +
     '<m:SortOrder><t:FieldOrder Order="Descending">' +
     '<t:FieldURI FieldURI="item:DateTimeReceived"/></t:FieldOrder></m:SortOrder>' +
-    '<m:ParentFolderIds><t:DistinguishedFolderId Id="' + map + '"/></m:ParentFolderIds>' +
+    "<!--MAP-->" +
     "</m:FindItem>";
 
-  const r = await ewsRoep(env, "FindItem", body, adres);
+  const r = await ewsDoe(env, "FindItem",
+    modus => body.replace("<!--MAP-->",
+      "<m:ParentFolderIds>" + mapVerwijzing(map, adres, modus) + "</m:ParentFolderIds>"),
+    adres);
   if (!r.ok) return r;
 
   const berichten = xBlokken(r.xml, "Message").map(b => {
@@ -4656,7 +4733,9 @@ async function mailBericht(env, adres, id, sleutel) {
     "</t:AdditionalProperties></m:ItemShape><m:ItemIds><t:ItemId Id=\"" + xmlUit(id) + '"' +
     (sleutel ? ' ChangeKey="' + xmlUit(sleutel) + '"' : "") + "/></m:ItemIds></m:GetItem>";
 
-  const r = await ewsRoep(env, "GetItem", body, adres);
+  const r = await ewsDoe(env, "GetItem", modus => body
+    .replace("<!--DRAFTS-->", mapVerwijzing("drafts", adres, modus))
+    .replace("<!--SENT-->", mapVerwijzing("sentitems", adres, modus)), adres);
   if (!r.ok) return r;
   const blok = xBlokken(r.xml, "Message")[0];
   if (!blok) return { ok: false, error: "bericht-niet-gevonden" };
@@ -4696,15 +4775,19 @@ async function mailConcept(env, adres, c) {
 
   const body =
     '<m:CreateItem MessageDisposition="SaveOnly">' +
-    '<m:SavedItemFolderId><t:DistinguishedFolderId Id="drafts"/></m:SavedItemFolderId>' +
+    "<m:SavedItemFolderId><!--DRAFTS--></m:SavedItemFolderId>" +
     "<m:Items><t:Message>" +
     "<t:Subject>" + xmlUit(onderwerp) + "</t:Subject>" +
     '<t:Body BodyType="Text">' + xmlUit(tekst) + "</t:Body>" +
     mailOntvangers(c.aan, "ToRecipients") +
     mailOntvangers(c.cc, "CcRecipients") +
+    "<!--VAN-->" +
     "</t:Message></m:Items></m:CreateItem>";
 
-  const r = await ewsRoep(env, "CreateItem", body, adres);
+  const r = await ewsDoe(env, "CreateItem", modus => body
+    .replace("<!--DRAFTS-->", mapVerwijzing("drafts", adres, modus))
+    .replace("<!--SENT-->", mapVerwijzing("sentitems", adres, modus))
+    .replace("<!--VAN-->", afzender(adres, modus)), adres);
   if (!r.ok) return r;
   const id = xItemId(r.xml);
   if (!id) return { ok: false, error: "concept-zonder-id" };
@@ -4719,9 +4802,11 @@ async function mailVerzend(env, adres, id, sleutel) {
   const body =
     '<m:SendItem SaveItemToFolder="true"><m:ItemIds><t:ItemId Id="' + xmlUit(id) + '"' +
     (sleutel ? ' ChangeKey="' + xmlUit(sleutel) + '"' : "") + "/></m:ItemIds>" +
-    '<m:SavedItemFolderId><t:DistinguishedFolderId Id="sentitems"/></m:SavedItemFolderId>' +
+    "<m:SavedItemFolderId><!--SENT--></m:SavedItemFolderId>" +
     "</m:SendItem>";
-  const r = await ewsRoep(env, "SendItem", body, adres);
+  const r = await ewsDoe(env, "SendItem", modus => body
+    .replace("<!--DRAFTS-->", mapVerwijzing("drafts", adres, modus))
+    .replace("<!--SENT-->", mapVerwijzing("sentitems", adres, modus)), adres);
   if (!r.ok) return r;
   return { ok: true };
 }
@@ -4735,7 +4820,9 @@ async function mailGelezen(env, adres, id, sleutel, ja) {
     '<t:FieldURI FieldURI="message:IsRead"/>' +
     "<t:Message><t:IsRead>" + (ja ? "true" : "false") + "</t:IsRead></t:Message>" +
     "</t:SetItemField></t:Updates></t:ItemChange></m:ItemChanges></m:UpdateItem>";
-  const r = await ewsRoep(env, "UpdateItem", body, adres);
+  const r = await ewsDoe(env, "UpdateItem", modus => body
+    .replace("<!--DRAFTS-->", mapVerwijzing("drafts", adres, modus))
+    .replace("<!--SENT-->", mapVerwijzing("sentitems", adres, modus)), adres);
   if (!r.ok) return r;
   const id2 = xItemId(r.xml);
   return { ok: true, sleutel: id2 ? id2.sleutel : "" };
@@ -4747,7 +4834,9 @@ async function mailNaarPrullenbak(env, adres, id, sleutel) {
   const body =
     '<m:DeleteItem DeleteType="MoveToDeletedItems"><m:ItemIds><t:ItemId Id="' + xmlUit(id) + '"' +
     (sleutel ? ' ChangeKey="' + xmlUit(sleutel) + '"' : "") + "/></m:ItemIds></m:DeleteItem>";
-  return await ewsRoep(env, "DeleteItem", body, adres).then(r => r.ok ? { ok: true } : r);
+  return await ewsDoe(env, "DeleteItem", modus => body
+    .replace("<!--DRAFTS-->", mapVerwijzing("drafts", adres, modus))
+    .replace("<!--SENT-->", mapVerwijzing("sentitems", adres, modus)), adres).then(r => r.ok ? { ok: true } : r);
 }
 
 /* Werkt de hele keten? Vraagt de mailbox één regel op en zegt wat er misgaat
@@ -5603,6 +5692,46 @@ export default {
         }
       }
       return reply(200, { ok: true, host, uit });
+    }
+
+    /* Werkt het serviceaccount, en zo ja langs welke weg? Beide manieren los
+       geprobeerd, zodat we de beheerder precies kunnen vertellen wat er nog
+       ontbreekt in plaats van "het doet het niet". Achter het gedeelde
+       geheim, want dit hoort bij het inrichten en niet bij het dagelijks
+       gebruik. */
+    if (url.pathname === "/mail/proefrit" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const adres = url.searchParams.get("adres") || "";
+      if (!adres) return reply(400, { ok: false, uitleg: "Geef ?adres=dolf@fonteyn.nl mee." });
+      if (!env.EWS_GEBRUIKER || !env.EWS_WACHTWOORD) {
+        return reply(200, { ok: false, error: "mail-niet-ingesteld",
+          uitleg: "EWS_GEBRUIKER en EWS_WACHTWOORD staan nog niet als worker-secret." });
+      }
+      const proef = modus => '<m:FindItem Traversal="Shallow"><m:ItemShape>' +
+        "<t:BaseShape>IdOnly</t:BaseShape></m:ItemShape>" +
+        '<m:IndexedPageItemView MaxEntriesReturned="1" Offset="0" BasePoint="Beginning"/>' +
+        "<m:ParentFolderIds>" + mapVerwijzing("inbox", adres, modus) + "</m:ParentFolderIds>" +
+        "</m:FindItem>";
+      const uit = {};
+      for (const modus of MAIL_MODI) {
+        const t0 = Date.now();
+        const r = await ewsRoep(env, "FindItem", proef(modus), adres, modus);
+        uit[modus] = r.ok
+          ? { werkt: true, ms: Date.now() - t0 }
+          : { werkt: false, ms: Date.now() - t0, error: r.error, code: r.code || "", uitleg: r.uitleg || "" };
+      }
+      const werkend = MAIL_MODI.filter(m => uit[m].werkt);
+      if (werkend.length) await mailModusZet(env, werkend[0]);
+      return reply(200, {
+        ok: werkend.length > 0,
+        mailbox: adres,
+        werkt: werkend,
+        gekozen: werkend[0] || null,
+        detail: uit,
+        advies: werkend.length ? "Klaar voor gebruik."
+          : "Geen van beide wegen staat open. Vraag de beheerder om ApplicationImpersonation " +
+            "of om Full Access op deze mailbox voor het serviceaccount.",
+      });
     }
 
     /* ── Uren ────────────────────────────────────────────────────────
