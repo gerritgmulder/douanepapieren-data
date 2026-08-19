@@ -3606,6 +3606,43 @@ async function bankOpenstaand(env, vers) {
   return { ok: true, uitCache: false, updated: opslag.updated, posten };
 }
 
+/* De openstaande crediteurfacturen. Gerrit (19 aug 2026): "Op een MT940 staan
+   inkomsten en uitgaven. De uitgaven moeten op dezelfde manier worden geboekt
+   aan crediteurenfacturen zoals inkomsten op debiteurenfacturen."
+
+   Anders dan aan de debiteurenkant staat hier de naam van de leverancier al
+   in de post, dus die hoeft niet apart opgehaald te worden. */
+async function bankOpenstaandCrediteuren(env, vers) {
+  const bewaard = await env.FONTEYN_DATA.get("bank-openstaand-cred", { type: "json" });
+  if (!vers && bewaard && bewaard.updated && (Date.now() - Date.parse(bewaard.updated)) < BANK_CACHE_TTL) {
+    return { ok: true, uitCache: true, updated: bewaard.updated, posten: bewaard.posten || [] };
+  }
+  const token = await l4Token(env);
+  const r = await fetch("https://api.logic4server.nl/v3/Relations/GetCreditorOutstandingPosts", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!r.ok) throw new Error("Logic4 gaf HTTP " + r.status + " op de openstaande crediteuren");
+  const lijst = await r.json();
+  /* Alleen wat de koppeling nodig heeft. Een post zonder openstaand bedrag is
+     afgehandeld; een creditnota (negatief) blijft er wél in, want die telt mee
+     als een betaling meerdere facturen tegelijk voldoet. */
+  const posten = (Array.isArray(lijst) ? lijst : [])
+    .filter(p => p && p.CreditorId != null && Number(p.AmountOpen))
+    .map(p => ({
+      Id: p.Id, CreditorId: p.CreditorId,
+      CompanyName: p.CompanyName || "",
+      Reference: p.Reference || "",
+      AmountOpen: Number(p.AmountOpen) || 0,
+      AmountPaid: Number(p.AmountPaid) || 0,
+      Date: p.Date || null, PayBefore: p.PayBefore || null,
+      Description: p.Description || "",
+    }));
+  const opslag = { updated: new Date().toISOString(), posten };
+  await env.FONTEYN_DATA.put("bank-openstaand-cred", JSON.stringify(opslag));
+  return { ok: true, uitCache: false, updated: opslag.updated, posten };
+}
+
 // Namen van debiteuren. Logic4 kent geen filter op meerdere ids en ook geen
 // zoeken op naam (nagelopen: Ids/DebtorIds/CustomerIds/Name/SearchString
 // worden allemaal genegeerd), en de klantenlijst is 200.000 regels lang. Eén
@@ -6073,6 +6110,12 @@ export default {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const body = await request.json().catch(() => ({}));
       return reply(200, await bankOpenstaand(env, !!body.vers).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+
+    if (url.pathname === "/bank/openstaand-crediteuren" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await bankOpenstaandCrediteuren(env, !!body.vers).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/bank/debiteuren" && request.method === "POST") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });

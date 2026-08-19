@@ -228,6 +228,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
 <script src="mt940.js"></script>
 <script src="bank-matching.js"></script>
+<script src="bank-crediteuren.js"></script>
 </head>
 <body>
 <header class="hdr">
@@ -380,6 +381,41 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <div id="actionStatus"></div>
   </div>
 
+  <!-- ═══ Uitgaven ═══
+       Gerrit (19 aug 2026): "Op een MT940 staan inkomsten en uitgaven. De
+       uitgaven moeten op dezelfde manier worden geboekt aan crediteurfacturen
+       zoals inkomsten worden geboekt op debiteurenfacturen." -->
+  <div class="card hidden" id="uitCard">
+    <div class="section-title">Uitgaven — betalingen aan leveranciers</div>
+    <p class="muted" style="margin:0 0 12px;font-size:13px;">
+      Wat er van de rekening af is gegaan, gezocht bij de openstaande crediteurfacturen in Logic4.
+      Op factuurnummer, op de naam van de leverancier, of op een combinatie van facturen die samen
+      op het bedrag uitkomt — zo gaat een betaalbatch immers de deur uit.
+      <span id="uitMeta"></span>
+    </p>
+    <div style="overflow-x:auto;">
+      <table class="tx" id="uitTable">
+        <thead>
+          <tr>
+            <th style="width:88px;">Datum</th>
+            <th style="width:110px; text-align:right;">Bedrag</th>
+            <th>Afschriftregel</th>
+            <th style="width:118px;">Status</th>
+            <th>Gevonden crediteurfactuur</th>
+          </tr>
+        </thead>
+        <tbody id="uitBody"></tbody>
+      </table>
+    </div>
+    <div class="status warn" style="margin-top:14px;">
+      <b>Boeken kan hier nog niet.</b> Aan de debiteurenkant boekt Logic4 een betaling op de order
+      (AddPayment). Voor crediteuren bestaat die weg niet: dat gaat via een inkoopboeking in een
+      dagboek, en die kent wel de crediteur maar geen veld om één specifieke factuur mee af te
+      letteren. Zolang dat niet zeker is, wordt hier niets weggeschreven — dat is bij een
+      lopende controle het laatste wat je wilt. Dit overzicht scheelt Osman wel het zoekwerk.
+    </div>
+  </div>
+
 </main>
 
 <script>
@@ -439,6 +475,7 @@ const state = {
   openingBalance: null,
   closingBalance: null,
   transactions: [],   // [{date, amount, currency, description, descRaw, kind, match}]
+  uitgaven: [],       // hetzelfde, maar dan de afboekingen (betalingen aan leveranciers)
 };
 
 // ─── Drop-zone handling ─────────────────────────────────────────────
@@ -495,12 +532,19 @@ async function handleFile(file) {
       }
     }
     state.transactions = parsed.transactions
-      // We koppelen alleen INKOMENDE betalingen (Credit). Uitgaande zijn niet
-      // relevant voor het bankkoppeling-doel.
+      // Inkomende betalingen: die gaan naar debiteurenfacturen.
       .filter(t => t.amount > 0)
       .map(t => ({ ...t, kind: classifyTx(t), match: null }));
-    if (!state.transactions.length) {
-      showStatus($("dropStatus"), "Geen inkomende creditbetalingen in dit MT940-bestand gevonden.", "error");
+    /* Uitgaande betalingen. Gerrit (19 aug 2026): "Op een MT940 staan
+       inkomsten en uitgaven. De uitgaven worden niet eens gelezen. Die moeten
+       op dezelfde manier worden geboekt aan crediteurenfacturen zoals
+       inkomsten worden geboekt op debiteurenfacturen." Ze werden hier
+       weggegooid; nu krijgen ze hun eigen tabel eronder. */
+    state.uitgaven = parsed.transactions
+      .filter(t => t.amount < 0)
+      .map(t => ({ ...t, match: null }));
+    if (!state.transactions.length && !state.uitgaven.length) {
+      showStatus($("dropStatus"), "Geen betalingen in dit MT940-bestand gevonden.", "error");
       return;
     }
     showStatus($("dropStatus"), state.transactions.length + " inkomende betalingen gevonden — openstaande posten ophalen…", "info");
@@ -508,8 +552,16 @@ async function handleFile(file) {
     await runMatchingForAll();
     renderResults();
     const zeker = state.transactions.filter(t => t.match && t.match.status === "zeker").length;
-    showStatus($("dropStatus"), state.transactions.length + " betalingen gelezen; " + zeker +
-      " daarvan zijn zonder twijfel te koppelen en staan alvast aangevinkt. Loop de rest na voordat je boekt.", "ok");
+    let melding = state.transactions.length + " inkomende betalingen gelezen; " + zeker +
+      " daarvan zijn zonder twijfel te koppelen en staan alvast aangevinkt. Loop de rest na voordat je boekt.";
+    if (state.uitgaven.length) {
+      melding += " Er staan ook " + state.uitgaven.length + " uitgaven op dit afschrift; die worden hieronder " +
+                 "bij de openstaande crediteurfacturen gezocht.";
+      showStatus($("dropStatus"), melding, "ok");
+      await koppelUitgaven();
+    } else {
+      showStatus($("dropStatus"), melding, "ok");
+    }
   } catch (e) {
     console.error(e);
     showStatus($("dropStatus"), "Kon MT940 niet inlezen: " + e.message, "error");
@@ -803,6 +855,82 @@ function renderRow(tx, idx) {
     renderResults();
   });
   return tr;
+}
+
+/* ─── Uitgaven ───────────────────────────────────────────────────────
+   De openstaande crediteurfacturen ophalen en er de betalingen bij zoeken.
+   De koppellogica staat in bank-crediteuren.js, zodat hij los te draaien en
+   te controleren is - net als de debiteurenkant. */
+let credIndex = null, credMeta = null;
+
+async function haalOpenstaandCrediteuren(vers) {
+  const r = await fetch(WORKER + "/bank/openstaand-crediteuren", {
+    method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+    body: JSON.stringify({ vers: !!vers }) });
+  if (!r.ok) throw new Error("openstaande crediteuren ophalen faalde (HTTP " + r.status + ")");
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || "openstaande crediteuren ophalen faalde");
+  credMeta = { updated: j.updated, aantal: (j.posten || []).length, uitCache: j.uitCache };
+  credIndex = window.fpBankCred.bouwIndex(j.posten || []);
+  return credIndex;
+}
+
+async function koppelUitgaven() {
+  if (!state.uitgaven.length) return;
+  $("uitCard").classList.remove("hidden");
+  renderUitgaven();
+  try {
+    if (!credIndex) await haalOpenstaandCrediteuren(false);
+  } catch (e) {
+    $("uitMeta").textContent = " " + e.message;
+    return;
+  }
+  for (const t of state.uitgaven) {
+    /* Dezelfde tegenpartij-ontleding als bij de inkomsten, zodat de naam op
+       het afschrift ook hier bruikbaar is. */
+    t.tegenpartij = BM().tegenpartij ? BM().tegenpartij(t.descRaw || t.description || "") : null;
+    t.match = window.fpBankCred.koppel(t, credIndex);
+  }
+  const zeker = state.uitgaven.filter(t => t.match && t.match.status === "zeker").length;
+  $("uitMeta").innerHTML = "<span class='muted'>" + credMeta.aantal +
+    " openstaande crediteurfacturen uit Logic4" + (credMeta.uitCache ? " (uit de cache)" : "") +
+    " · " + zeker + " van de " + state.uitgaven.length + " uitgaven zijn zonder twijfel te plaatsen</span>";
+  renderUitgaven();
+}
+
+function renderUitgaven() {
+  const body = $("uitBody");
+  body.innerHTML = "";
+  for (const t of state.uitgaven) {
+    const tr = document.createElement("tr");
+    let badge = "<span class='badge pending'>Bezig…</span>", info = "";
+    if (t.match) {
+      const u = STATUS_UITERLIJK[t.match.status] || STATUS_UITERLIJK.geen;
+      badge = "<span class='badge " + u.klasse + "'>" + u.tekst + "</span>";
+      const k = t.match.kandidaten || [];
+      /* Meer dan één mogelijkheid? Dan alles laten zien in plaats van er zelf
+         één aanwijzen, precies zoals aan de debiteurenkant. */
+      const regels = (t.match.combinatie || (k.length > 1 ? k.slice(0, 12) : (t.match.beste ? [t.match.beste] : [])));
+      info = "<div class='match-info'>" +
+        regels.map(p => "Factuur <b>" + escapeHtml(p.Reference || "—") + "</b> · " +
+          escapeHtml(p.CompanyName || ("crediteur " + p.CreditorId)) + " · " +
+          fmtEur(Math.abs(p.AmountOpen)) + (p.AmountOpen < 0 ? " creditnota" : "") +
+          (p.PayBefore ? " · voor " + escapeHtml(String(p.PayBefore).slice(0, 10)) : "")).join("<br>") +
+        (regels.length ? "<div style='margin-top:3px'>" : "<div>") + escapeHtml(t.match.reden) + "</div>" +
+        (k.length > regels.length ? "<div class='muted' style='font-size:11px'>en nog " +
+          (k.length - regels.length) + " openstaand bij deze leverancier</div>" : "") +
+        "</div>";
+    }
+    const tp = (t.match && t.match.tegenpartijNaam) || (t.tegenpartij && t.tegenpartij.naam) || "";
+    tr.innerHTML =
+      "<td class='date'>" + escapeHtml(t.date || "—") + "</td>" +
+      "<td class='amount'>" + fmtEur(t.amount) + "</td>" +
+      "<td class='desc'>" + (tp ? "<b>" + escapeHtml(tp) + "</b><br>" : "") +
+        "<span style='color:var(--muted,#6b7280)'>" + escapeHtml((t.description || "—").slice(0, 160)) + "</span></td>" +
+      "<td class='match'>" + badge + "</td>" +
+      "<td class='match'>" + info + "</td>";
+    body.appendChild(tr);
+  }
 }
 
 // ─── Selectie ───────────────────────────────────────────────────────
@@ -1269,8 +1397,10 @@ $("exportJsonBtn").addEventListener("click", () => {
 });
 
 $("resetBtn").addEventListener("click", () => {
-  state.transactions = []; state.fileName = ""; state.iban = ""; state.statementNr = ""; state.demo = false;
+  state.transactions = []; state.uitgaven = []; state.fileName = ""; state.iban = ""; state.statementNr = ""; state.demo = false;
   $("resultCard").classList.add("hidden");
+  $("uitCard").classList.add("hidden");
+  $("uitBody").innerHTML = ""; $("uitMeta").textContent = "";
   $("dropStatus").innerHTML = ""; $("actionStatus").innerHTML = "";
   fileInput.value = "";
 });

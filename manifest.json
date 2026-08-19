@@ -105,6 +105,10 @@
       "note": "MT940-lezer voor bankafschriften. Gedeeld door bankkoppeling.html en de bankaansluiting in geldgoederen.html — één lezer, geen twee die uiteenlopen."
     },
     {
+      "name": "bank-crediteuren.js",
+      "note": "Uitgaven van een MT940 koppelen aan openstaande crediteurfacturen"
+    },
+    {
       "name": "bank-matching.js",
       "note": "Bankkoppeling — een afschriftregel aan een openstaande factuur koppelen: factuurnummer, ordernummer, bedrag en naam van de tegenpartij. Los van het scherm zodat het op echte afschriften te testen is. Gebruikt door bankkoppeling.html."
     },
