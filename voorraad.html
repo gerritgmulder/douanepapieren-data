@@ -833,8 +833,10 @@ const SESSION_KEY="fp.session", EMAIL_KEY="fp.email", HELPER_BASE="";
 function getSession(){ return localStorage.getItem(SESSION_KEY)||""; }
 // Drie niveaus, zoals Chantal ze op 5 aug 2026 heeft vastgesteld:
 //  BEHEER      = alles zien én wijzigen (prioriteiten, uploads, verwijderen).
-//  KLANT_WIJZIG = ALLEEN de tabs Particulier en Partner, en daar wél de
-//                vinkjes en notities aanpassen.
+//  KLANT_WIJZIG = ALLEEN het tabblad Particulier, en daar wél de vinkjes en
+//                notities aanpassen. Dit is de spa service (Chantal, 19 aug
+//                2026: "het enige tabblad waar zij in mogen kijken, dat is
+//                dus Particulier"). Tot die datum zagen zij ook Partner.
 //  KLANT_LEES  = dezelfde twee tabs, uitsluitend lezen en zoeken.
 //
 // Wat hier veranderde: tot 5 aug had de afdeling Spa planning (Gerwin, Kevin,
@@ -909,7 +911,7 @@ let MAG_BEHEREN  = false;   // uploads, schepen, prioriteiten, inkoop naar Logic
   window.fpRol = MAG_BEHEREN ? "beheer"
     : (magKlantWijzigen ? "klanttabs (wijzigen)" : "klanttabs (alleen-lezen)");
   if (!MAG_BEHEREN){
-    beperkTotKlantTabs();
+    beperkTotKlantTabs(magKlantWijzigen);
     // Wie niet mag wijzigen krijgt bovendien het netwerkslot: dat is de harde
     // grens. Wie wél mag wijzigen houdt precies één schrijfroute over.
     if (magKlantWijzigen) alleenKlantnotities(); else alleenLezen();
@@ -987,20 +989,29 @@ function alleenKlantnotities(){
   };
   const note=document.getElementById("adviseurNote");
   if(note){
-    note.innerHTML="Je werkt in <b>Particulier</b> en <b>Partner</b>: notities en de vinkjes Afroep, Inplannen en Gepland kun je zelf zetten. Schepen, prioriteiten en inkoop lopen via Chantal, Arno en Manon.";
+    note.innerHTML="Je werkt in <b>Particulier</b>: notities en de vinkjes Afroep, Inplannen en Gepland kun je zelf zetten. Schepen, prioriteiten en inkoop lopen via Chantal, Arno en Manon.";
     note.classList.remove("hidden");
   }
 }
 // Alleen de klanttabs: Particulier en Partner (Chantal, 5 aug 2026 — Partner
 // containers hoort daar niet meer bij).
-function beperkTotKlantTabs(){
-  const mag=new Set(["particulier","partner"]);
+function beperkTotKlantTabs(alleenParticulier){
+  /* Chantal (video, 19 aug 2026): "de jongens van de spa service moeten daar
+     ook toegang toe hebben, dus dat is Gerwin, Kevin, Bertjan, Bart. Het
+     enige tabblad waar zij in mogen kijken, dat is dus Particulier. En zij
+     mogen ook aanpassingen doen, zij mogen bijvoorbeeld Gepland aanvinken."
+
+     Zij zagen tot nu toe Particulier én Partner. Partner gaat over dealers en
+     daar hebben zij niets te zoeken; het blijft wel bij de adviseurs, want
+     die bellen hun eigen dealers. */
+  const mag = alleenParticulier ? new Set(["particulier"]) : new Set(["particulier","partner"]);
   document.querySelectorAll(".tab").forEach(t=>{
     if(!mag.has(t.dataset.tab)) t.style.display="none";
   });
-  ["ophalen","dealer","part","overzicht","reserveringen","schepen","prio","pipe","dealerview","spainkoop","ontvangst","partnercont"].forEach(id=>{
+  ["ophalen","dealer","part","overzicht","reserveringen","schepen","prio","pipe","dealerview","spainkoop","ontvangst","partnercont","stock"].forEach(id=>{
     const el=document.getElementById("tab-"+id); if(el) el.classList.add("hidden");
   });
+  if(alleenParticulier){ const e=document.getElementById("tab-partner"); if(e) e.classList.add("hidden"); }
   // Upload-kaart in Partner containers is een wijzig-actie → weg
   ["pcUploadCard","ikoCard"].forEach(function(id){ const el=document.getElementById(id); if(el) el.style.display="none"; });
   // Kop + werkwijze-balk gaan over beheer-tabs die een adviseur niet heeft
