@@ -47,6 +47,19 @@
     return [naam + "@fonteyn.nl", naam, "fonteyn." + naam];
   }
 
+  /* Iedereen die het dashboard gebruikt. Twee groepen hebben deze lijst nodig
+     en die horen niet allebei hun eigen kopie te krijgen - dan lopen ze uit
+     elkaar, en dat is precies waar dit bestand voor bestaat. Wie erbij komt
+     schrijf je hier op, en staat daarmee meteen in allebei. */
+  var IEDEREEN = [
+    "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
+    "dali", "danique", "demi", "dolf", "don", "edwin",
+    "evelinde", "fabiola", "fonteynbot", "fransje", "gerrit", "gerwin",
+    "gretha", "julia", "karina", "kevin", "luis", "manon",
+    "nomi", "osman", "patrick", "reinier", "reinier.k", "rico",
+    "rosalie", "rowan", "yves",
+  ];
+
   /* De groepen. Eén regel per tegel of groep tegels; de namen zijn de
      voornamen zoals ze in Logic4 staan. Alfabetisch, zodat je ziet of iemand
      er al in staat zonder de hele regel te lezen. */
@@ -139,14 +152,7 @@
     ],
     /* Uren. Iedereen die het dashboard gebruikt, want iedereen werkt.
        Je ziet alleen je eigen uren; dat regelt de worker, niet de pagina. */
-    "uren": [
-      "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
-      "dali", "danique", "demi", "dolf", "don", "edwin",
-      "evelinde", "fabiola", "fonteynbot", "fransje", "gerrit", "gerwin",
-      "gretha", "julia", "karina", "kevin", "luis", "manon",
-      "nomi", "osman", "patrick", "reinier", "reinier.k", "rico",
-      "rosalie", "rowan", "yves",
-    ],
+    "uren": IEDEREEN,
     /* De uren van iedereen inzien. Bewust los van de groep "uren": daar zit
        iedereen in, hier alleen Dolf en Gerrit. Dezelfde twee namen staan in
        de worker (UREN_ALLEMAAL), want een scherm mag zichzelf niet bewaken
@@ -180,11 +186,10 @@
     "stuurcijfers": [
       "dolf", "fonteynbot", "osman",
     ],
-    /* Vertalen. Chantal schrijft de dealermails; de rest van de groep is de
-       vaste beheerlaag. Iemand erbij is één naam bijschrijven. */
-    "vertalen": [
-      "chantal", "dolf", "fonteynbot", "gerrit",
-    ],
+    /* Vertalen. Begon bij Chantal voor de dealermails, maar Gerrit
+       (19 aug 2026): "Vertalen-tegel mag voor iedereen zichtbaar zijn!"
+       Dezelfde lijst als uren, dus letterlijk iedereen. */
+    "vertalen": IEDEREEN,
     // Voorraadbeheer
     "voorraad": [
       "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",

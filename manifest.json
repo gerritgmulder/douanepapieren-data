@@ -162,7 +162,7 @@
     },
     {
       "name": "vertalen.html",
-      "note": "Vertalen — tekst plakken of typen en meteen terugkrijgen in het Engels, Duits, Frans, Spaans, Italiaans en twintig andere talen. Loopt via de worker (/vertaal) op Workers AI (Llama 3.3), dus zonder sleutel of extra account; 10.000 neuronen per dag gratis, ongeveer honderd mails. Keuze u/je, namen die onvertaald blijven, terugvertaling. Responsief, dus ook op de telefoon (Chantal + admins)."
+      "note": "Vertalen — tekst plakken of typen en meteen terugkrijgen in het Engels, Duits, Frans, Spaans, Italiaans en twintig andere talen. Loopt via de worker (/vertaal) op Workers AI (Llama 3.3), dus zonder sleutel of extra account; 10.000 neuronen per dag gratis, ongeveer honderd mails. Keuze u/je, namen die onvertaald blijven, terugvertaling. Responsief, dus ook op de telefoon. Zichtbaar voor iedereen (groep vertalen = IEDEREEN in toegang.js)."
     },
     {
       "name": "voorraad-mobiel.html",

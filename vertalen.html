@@ -303,7 +303,18 @@ function formeel(){
   const g=document.querySelector("input[name=formeel]:checked");
   return !g ? true : g.value==="ja";
 }
-async function roep(tekst, naar, van){
+/* De laatste twintig vertalingen onthouden. Dat scheelt bij precies de dingen
+   die je in de praktijk doet: een woord terugdraaien, heen en weer springen
+   tussen twee talen, of de terugvertaling aan- en uitzetten. Blijft in het
+   geheugen van dit tabblad, gaat nergens heen, en is weg zodra je de tegel
+   sluit. */
+const onthouden = new Map();
+function bewaarSleutel(tekst, naar, van){
+  return [tekst, naar, van, formeel(), namenLijst().join("|")].join("\u0000");
+}
+async function roep(tekst, naar, van, vers){
+  const s = bewaarSleutel(tekst, naar, van);
+  if(!vers && onthouden.has(s)) return onthouden.get(s);
   const r = await fetch(WORKER+"/vertaal",{
     method:"POST",
     headers:{"Content-Type":"application/json","X-Fonteyn-Auth":team()},
@@ -311,21 +322,37 @@ async function roep(tekst, naar, van){
   });
   const j = await r.json();
   if(!j.ok) throw new Error(j.error || ("HTTP "+r.status));
+  onthouden.set(s, j);
+  if(onthouden.size > 20) onthouden.delete(onthouden.keys().next().value);
   return j;
+}
+
+/* Waar de vorige geslaagde vertaling over ging. Zonder dit wordt bij elke
+   tikpauze dezelfde tekst opnieuw vertaald - ook als er niets veranderd is,
+   bijvoorbeeld omdat iemand een spatie zette en weer weghaalde. Sinds de tegel
+   voor iedereen open staat is dat niet alleen traag maar ook zonde van de
+   dagportie: die is gedeeld. */
+let laatste = null;
+let versVragen = false;   // gezet door de knop 'vertaal nu': niet uit het geheugen
+function sleutelVan(tekst){
+  return [tekst, naarTaal, el("bronTaal").value, formeel(), namenLijst().join("|")].join("\u0000");
 }
 
 async function vertaalNu(){
   const tekst = el("bron").value;
   const mijn = ++teller;
   el("tellerBron").textContent = tekst.length.toLocaleString("nl-NL") + " tekens";
-  if(!tekst.trim()){ el("doel").value=""; el("terug").value=""; el("stand").textContent=""; fout(""); return; }
+  if(!tekst.trim()){ laatste=null; el("doel").value=""; el("terug").value=""; el("stand").textContent=""; fout(""); return; }
+  const vers = versVragen; versVragen = false;
+  if(!vers && sleutelVan(tekst) === laatste) return;
 
   el("stand").textContent = "bezig…";
   try{
     const van = el("bronTaal").value || "auto";
-    const j = await roep(tekst, naarTaal, van);
+    const j = await roep(tekst, naarTaal, van, vers);
     if(mijn !== teller) return;                      // er is alweer een nieuwere vraag uit
     el("doel").value = j.tekst || "";
+    laatste = sleutelVan(tekst);
     fout("");
     let stand = "";
     if(j.gelijk){
@@ -352,10 +379,15 @@ async function vertaalNu(){
 }
 
 /* Tijdens het typen niet bij elke aanslag een aanvraag doen: pas als het even
-   stil is. Bij plakken hoeft die pauze niet zo lang - dan is de tekst al af. */
+   stil is. Bij plakken of een knop hoeft die pauze niet - dan is de tekst al af.
+
+   Anderhalve seconde en niet driekwart: wie een mail zit te typen pauzeert
+   voortdurend, en elke pauze was anders een hele vertaling van alles wat er al
+   staat. Bij zo'n twintig pauzes in één mail gaat dat hard in de dagportie die
+   iedereen deelt. */
 function vraagVertaling(meteen){
   clearTimeout(wachtend);
-  wachtend = setTimeout(vertaalNu, meteen ? 60 : 700);
+  wachtend = setTimeout(vertaalNu, meteen ? 60 : 1500);
 }
 
 el("bron").addEventListener("input", function(){
@@ -377,8 +409,9 @@ el("terugAan").addEventListener("change", function(){
   toon("terugVlak", this.checked);
   if(this.checked) vraagVertaling(true); else el("terug").value="";
 });
-el("vertaalKnop").addEventListener("click", function(){ vraagVertaling(true); });
+el("vertaalKnop").addEventListener("click", function(){ versVragen=true; vraagVertaling(true); });
 el("wisKnop").addEventListener("click", function(){
+  laatste=null;
   el("bron").value=""; el("doel").value=""; el("terug").value="";
   el("tellerBron").textContent="0 tekens"; el("stand").textContent=""; fout("");
   el("bron").focus();
