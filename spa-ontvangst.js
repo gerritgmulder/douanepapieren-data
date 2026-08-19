@@ -171,6 +171,44 @@
      "Sterling Silver #30" en "Sterling Silver, #30". Dat zouden twee pillen
      worden terwijl het één kleur is. Alleen voor de weergave gladstrijken; wat
      er in de gegevens staat blijft ongemoeid. */
+  /* ── De naam van de spa in plaats van de fabriekscode ──────────────────
+     Chantal (video, 19 aug 2026): "bij de Jazzi containers zie ik echt de
+     inhoud als een Relax staan met de kleur erbij, helemaal perfect. Bij de
+     volgende spa-containers zie ik alleen maar de productcode staan. Dit is
+     een Turbine 8. Alle namen van de artikelcodes staan in Logic, dus graag
+     deze toevoegen."
+
+     Bij Jazzi is de fabriekscode aan een modelnaam gekoppeld en staat die
+     naam er dus al. Bij de andere fabrieken is dat niet zo, en dan viel de
+     kale code in beeld. De naam die Logic4 aan het artikel geeft staat
+     intussen wel in de regel (artikelnaam), alleen werd hij hier niet
+     gebruikt.
+
+     Van die naam blijft het merk weg: Logic4 noemt hem "Passion Spa |
+     Turbine 8 | Sterling White", en zij wil "Turbine 8" zien - net zo kort
+     als bij de Jazzi's, met de kleur apart ernaast. */
+  function lijktOpCode(t) {
+    var v = String(t == null ? "" : t).trim();
+    if (!v || v.length > 16 || /\s/.test(v)) return false;
+    return /\d/.test(v) && /^[A-Za-z0-9][A-Za-z0-9.\-\/]*$/.test(v);
+  }
+  function uitLogic4Naam(naam) {
+    var delen = String(naam == null ? "" : naam).split("|").map(function (d) { return d.trim(); })
+      .filter(Boolean);
+    if (!delen.length) return "";
+    /* "Passion Spa | Turbine 8 | Sterling White with Grey" geeft "Turbine 8".
+       Staat er maar één deel, dan is dat de hele naam. */
+    if (delen.length === 1) return delen[0];
+    return delen[1];
+  }
+  function toonNaam(x) {
+    var model = String(x.model == null ? "" : x.model).trim();
+    if (model && !lijktOpCode(model)) return model;
+    var uitL4 = uitLogic4Naam(x.artikelnaam);
+    if (uitL4 && !lijktOpCode(uitL4)) return uitL4;
+    return model || String(x.artikelcode || "") || "onbekend";
+  }
+
   function kleurNet(k) {
     var t = String(k == null ? "" : k).trim();
     if (!t || t === "(geen kleur)") return "";
@@ -290,6 +328,9 @@
       // Containers waarvan we alleen de papieren bewaren horen niet in een
       // overzicht van wat er aan spa's onderweg is.
       if (s.alleenDocumenten) return false;
+      /* Aangevinkt als binnen? Dan is hij niet meer onderweg. Chantal wil dat
+         wat binnen is meetelt als binnen en niet als varend. */
+      if (s.binnenGemeld) return false;
       var dg = dagenTot(s.eta);
       return dg === null || dg > 0;   // zonder ETA weten we het niet: laten staan
     });
@@ -358,7 +399,7 @@
       var inhoud = el("div", "so-onderweg-inhoud");
       var per = {};
       (s.regels || []).forEach(function (x) {
-        var m = x.model || "onbekend";
+        var m = toonNaam(x);
         var k = kleurNet(x.kleur);
         var sleutel = m + "|" + k;
         if (!per[sleutel]) per[sleutel] = { model: m, kleur: k, aantal: 0 };
@@ -450,7 +491,7 @@
 
   function kaart(s) {
     var dagen = dagenTot(s.eta);
-    var binnen = dagen !== null && dagen <= 0;
+    var binnen = !!s.binnenGemeld || (dagen !== null && dagen <= 0);
     var d = el("div", "so-kaart" + (binnen ? " binnen" : ""));
 
     var rij = el("div", "so-rij");
@@ -462,7 +503,10 @@
     links.appendChild(t);
     links.appendChild(el("div", "so-meta",
       "aankomst " + nlDatum(s.eta) +
-      (dagen === null ? "" : (binnen ? "  ·  zou binnen moeten zijn" : "  ·  over " + dagen + " dagen")) +
+      (s.binnenGemeld
+        ? "  ·  binnen gemeld op " + nlDatum(s.binnenGemeld.op) +
+          (s.binnenGemeld.door ? " door " + String(s.binnenGemeld.door).split("@")[0] : "")
+        : (dagen === null ? "" : (binnen ? "  ·  zou binnen moeten zijn" : "  ·  over " + dagen + " dagen"))) +
       "  ·  " + s.spas + " spa's" + (s.containers ? ("  ·  " + s.containers + " containers") : "")));
     links.appendChild(el("div", "so-meta klein", s.ref));
     // Wat de Bill of Lading erover zegt. Handig bij de douane en bij het
@@ -571,9 +615,30 @@
       eta.addEventListener("click", function () { doeEta(s, eta); });
       knoppen.appendChild(eta);
 
-      var ont = el("button", "so-knop", "Container is binnen");
+      /* Twee verschillende dingen, en dat was precies de verwarring.
+         Chantal (video, 19 aug 2026): "container binnen moeten we gewoon
+         kunnen aanklikken, alleen moet het geen consequentie hebben in Logic
+         maar alleen in het dashboard. Alles wat binnenkomt moet dan wel in
+         het dashboard meegeteld worden bij het overzicht als zijnde op
+         voorraad of binnen. Het mag alleen absoluut geen consequentie of
+         actie doen in Logic."
+
+         Daarom staat "Container is binnen" nu los van het boeken. Het eerste
+         is een vinkje van haar, het tweede raakt de voorraad in Logic4 en
+         blijft een aparte, bewuste handeling. */
+      var binnenAan = !!s.binnenGemeld;
+      var mld = el("button", "so-knop" + (binnenAan ? " licht" : ""),
+        binnenAan ? "Toch niet binnen" : "Container is binnen");
+      mld.type = "button";
+      mld.title = binnenAan
+        ? "Haalt het vinkje weg. Verandert niets in Logic4."
+        : "Zet in het dashboard dat deze container binnen is. Verandert niets in Logic4.";
+      mld.addEventListener("click", function () { meldBinnen(s, mld, !binnenAan); });
+      knoppen.appendChild(mld);
+
+      var ont = el("button", "so-knop licht", "Ontvangst boeken in Logic4");
       ont.type = "button";
-      ont.title = "Boekt de ontvangst in Logic4 — dit verhoogt de voorraad.";
+      ont.title = "Boekt de ontvangst in Logic4 - dit verhoogt de voorraad daar.";
       ont.addEventListener("click", function () { doeOntvangst(s, ont); });
       knoppen.appendChild(ont);
     }
@@ -699,6 +764,29 @@
       link.remove();
     }
     setTimeout(function () { try { URL.revokeObjectURL(url); } catch (e) {} }, 60000);
+  }
+
+  /* Alleen het vinkje in het dashboard. Er gaat geen enkel verzoek naar
+     Logic4 vanuit deze knop; dat is het hele punt. */
+  async function meldBinnen(s, knop, aan) {
+    var oud = knop.textContent;
+    knop.textContent = "bezig…"; knop.disabled = true;
+    try {
+      var r = await fetch(BASIS + "/voorraad/schip/binnen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
+        body: JSON.stringify({ ref: s.ref, binnen: !!aan, door: cfg.email || "" }),
+      });
+      var j = await r.json();
+      if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+      s.binnenGemeld = j.binnenGemeld;
+      if (cfg.log) cfg.log("voorraad", aan ? "container-binnen-gemeld" : "container-binnen-teruggedraaid", s.ref);
+      teken();
+      return;
+    } catch (e) {
+      alert("Kon het niet opslaan: " + (e.message || e));
+    }
+    knop.textContent = oud; knop.disabled = false;
   }
 
   async function opendoc(a, doc) {

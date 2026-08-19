@@ -5617,6 +5617,29 @@ export default {
        /voorraad/schip/bestand; hier komt alleen de verwijzing erbij. Per
        zending in plaats van de hele lijst wegschrijven, om dezelfde reden als
        bij de referentie: twee mensen tegelijk mag geen werk kosten. */
+    /* Aanvinken dat een container binnen is, zonder dat er iets in Logic4
+       gebeurt. Chantal (video, 19 aug 2026): "dat moeten we ook gewoon kunnen
+       aanklikken, alleen moet het geen consequentie hebben in Logic maar
+       alleen in het dashboard. Alles wat binnenkomt moet dan wel in het
+       dashboard meegeteld worden bij het overzicht als zijnde op voorraad of
+       binnen. Het mag alleen absoluut geen consequentie of actie doen in
+       Logic." Daarom staat dit hier los van het boeken van de ontvangst. */
+    if (url.pathname === "/voorraad/schip/binnen" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      const ref = String(b.ref || "").trim();
+      if (!ref) return reply(400, { ok: false, error: "schip ontbreekt" });
+      const data = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+      const schip = (data.ships || []).find(x => String(x.ref) === ref);
+      if (!schip) return reply(404, { ok: false, error: "schip niet gevonden" });
+      schip.binnenGemeld = b.binnen
+        ? { op: new Date().toISOString(), door: String(b.door || "").slice(0, 80) }
+        : null;
+      data.updated = new Date().toISOString();
+      await env.FONTEYN_DATA.put("voorraad-schepen", JSON.stringify(data));
+      return reply(200, { ok: true, binnenGemeld: schip.binnenGemeld });
+    }
+
     if (url.pathname === "/voorraad/schip/document" && request.method === "POST") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const b = await request.json().catch(() => ({}));
