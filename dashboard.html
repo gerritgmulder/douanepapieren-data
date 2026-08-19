@@ -370,6 +370,47 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
          terugkerende momenten en signalen uit Logic4 die op naam staan. -->
     <div id="takenBlok"></div>
 
+    <!-- ══════════ ELKE DAG ══════════
+         Gerrit (19 aug 2026) over Vertalen: "haal hem naar boven". Die stond
+         onder Overig, tussen personeel en de koeien, terwijl iedereen hem nu
+         mag gebruiken.
+
+         Mijn uren en Mijn mail zijn meeverhuisd. Die stonden onder Logistiek
+         en hoorden daar nooit: ze gaan niet over de goederenstroom maar over
+         je eigen dag. Een afdelingskop zonder zichtbare tegels verdwijnt
+         vanzelf (zie verbergLegeGroepen), dus wie alleen Mijn uren heeft ziet
+         hier één tegel en verder niets. -->
+    <section class="groep" id="groepElkeDag">
+      <h3>Elke dag</h3>
+      <p class="groep-lead">Wat je zonder erbij na te denken openklikt.</p>
+      <div class="tiles">
+      <!-- Mijn uren - voor iedereen. Je ziet alleen je eigen uren; dat
+           regelt de worker, niet deze pagina. -->
+      <a href="uren.html" class="tile hidden" id="tileUren">
+        <div class="icon">⏱️</div>
+        <h3>Mijn uren</h3>
+        <p>Klik op Start als je begint en op Stop als je klaar bent. Vergeten? Dan pas je de regel achteraf aan of zet je hem met de hand erbij.</p>
+      </a>
+
+      <!-- Mijn mail — eigen Exchange van Fonteyn, via de worker. Wie hier bij
+           komt moet óók door de beheerder in de groep Dashboard Mailboxen
+           worden gezet; het dashboard kan geen mailbox openzetten die de
+           mailserver dichthoudt. -->
+      <a href="mail.html" class="tile hidden" id="tileMail">
+        <div class="icon">✉️</div>
+        <h3>Mijn mail</h3>
+        <p>Je @fonteyn.nl-postvak lezen, concepten die het dashboard voor je klaarzet nalezen, aanpassen en verzenden.</p>
+      </a>
+
+      <!-- Vertalen — iedereen. Begon bij Chantal voor de dealermails. -->
+      <a href="vertalen.html" class="tile hidden" id="tileVertalen">
+        <div class="icon">🌍</div>
+        <h3>Vertalen</h3>
+        <p>Plak of typ een tekst en lees hem meteen terug in het Engels, Duits, Frans, Spaans of Italiaans — met de keuze tussen u en je, namen die onvertaald blijven, en een terugvertaling om te controleren.</p>
+      </a>
+      </div>
+    </section>
+
     <!-- ══════════ LOGISTIEK ══════════ -->
     <section class="groep" id="groepLogistiek">
       <h3>Logistiek</h3>
@@ -402,24 +443,6 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <div class="icon">🪑</div>
         <h3>Tuinmeubelen</h3>
         <p>Containers met tuinmeubelen en sauna's: wat erin zit, de papieren erbij en wat er aan die papieren rammelt. Telt bewust niet mee als spa-voorraad.</p>
-      </a>
-
-      <!-- Mijn uren - voor iedereen. Je ziet alleen je eigen uren; dat
-           regelt de worker, niet deze pagina. -->
-      <a href="uren.html" class="tile hidden" id="tileUren">
-        <div class="icon">⏱️</div>
-        <h3>Mijn uren</h3>
-        <p>Klik op Start als je begint en op Stop als je klaar bent. Vergeten? Dan pas je de regel achteraf aan of zet je hem met de hand erbij.</p>
-      </a>
-
-      <!-- Mijn mail — eigen Exchange van Fonteyn, via de worker. Wie hier bij
-           komt moet óók door de beheerder in de groep Dashboard Mailboxen
-           worden gezet; het dashboard kan geen mailbox openzetten die de
-           mailserver dichthoudt. -->
-      <a href="mail.html" class="tile hidden" id="tileMail">
-        <div class="icon">✉️</div>
-        <h3>Mijn mail</h3>
-        <p>Je @fonteyn.nl-postvak lezen, concepten die het dashboard voor je klaarzet nalezen, aanpassen en verzenden.</p>
       </a>
 
       <!-- Retouren — Don/Arno/Dolf/Manon + admins. -->
@@ -580,13 +603,6 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Bovenaanzicht van de 10 bungalows op het vakantiepark — boekingen, schoonmaak en betaling in één oogopslag.</p>
       </a>
 
-      <!-- Vertalen — iedereen. Begon bij Chantal voor de dealermails. -->
-      <a href="vertalen.html" class="tile hidden" id="tileVertalen">
-        <div class="icon">🌍</div>
-        <h3>Vertalen</h3>
-        <p>Plak of typ een tekst en lees hem meteen terug in het Engels, Duits, Frans, Spaans of Italiaans — met de keuze tussen u en je, namen die onvertaald blijven, en een terugvertaling om te controleren.</p>
-      </a>
-
       <!-- Activiteitenlogboek — alleen Gerrit/Dolf/Fonteynbot. -->
       <a href="activiteit.html" class="tile hidden" id="tileActiviteit">
         <div class="icon">📋</div>
@@ -599,13 +615,6 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <div class="icon">🐄</div>
         <h3>Koeien bij Dolf</h3>
         <p>Interactief overzicht van Dolfs koeien — status, stamboom en aantekeningen, centraal opgeslagen voor Dolf en Gerrit.</p>
-      </a>
-
-      <!-- Logic4-probe — diagnose-pagina, alleen voor admin (Gerrit/Fonteynbot). -->
-      <a href="probe-logic4.html" class="tile hidden" id="tileProbe">
-        <div class="icon">🔬</div>
-        <h3>Logic4-probe</h3>
-        <p>Diagnose-pagina: test welke Logic4 API-endpoints toegankelijk zijn. Alleen voor admin-gebruik.</p>
       </a>
       </div>
     </section>

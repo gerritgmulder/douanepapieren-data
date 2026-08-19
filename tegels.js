@@ -100,8 +100,6 @@
        doen ze onder 900 pixels, dus geen aparte mobiele pagina nodig. */
     { bestand:"vertalen.html",       groep:"vertalen",         ic:"🌍",  naam:"Vertalen",
       uit:"Mails aan dealers vertalen",                            mobiel:"goed", tile:"tileVertalen" },
-    { bestand:"probe-logic4.html",   groep:"probe",            ic:"🔬",  naam:"Logic4-probe",
-      uit:"Rechtstreeks een Logic4-endpoint bevragen",             mobiel:"pc", tile:"tileProbe" },
 
     /* Twee buitenbeentjes. Stuurcijfers vraagt na het klikken een extra
        wachtwoord en zit daarom in dashboard.html aan een eigen scherm vast;

@@ -117,10 +117,6 @@
       "note": "Mollie-settlement naast de orders leggen: betaling, terugbetaling of ingehouden fee, en per betaling zeker/controleren/geen match. Betaallink gaat op het ordernummer uit /REMI/, internetbestelling op naam en bedrag. Los bestand zodat het op echte settlements te testen is."
     },
     {
-      "name": "probe-logic4.html",
-      "note": "Eenmalige probe-pagina om Logic4-velden in kaart te brengen — kan later weer verwijderd worden"
-    },
-    {
       "name": "transport.html",
       "note": "Transport laden — bin-packing in bakwagens + routeplanning per dag"
     },
