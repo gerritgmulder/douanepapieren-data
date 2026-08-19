@@ -9,9 +9,16 @@
 <meta name="apple-mobile-web-app-title" content="Fonteyn">
 <meta name="robots" content="noindex, nofollow">
 <title>Fonteyn Dashboard</title>
-<!-- Hetzelfde icoon als de app op de pc: build/icon.png, hier als app-icoon.png
-     naast de andere bestanden zodat de worker hem kan meesturen. iOS pakt de
-     apple-touch-icon, Android het manifest. -->
+<!-- Het icoon op het beginscherm. Was het logootje uit de huisstijl, opgeschaald
+     naar 1024: op een telefoon zag je daardoor vage, uitgelopen randen. Het wordt
+     nu uitgerekend in plaats van uitgerekt - zie tools/maak-app-icoon.py.
+
+     Twee bestanden, want de twee telefoons willen wat anders. iOS pakt de
+     apple-touch-icon en knipt alleen de hoeken weg; Android pakt het manifest en
+     legt er een eigen vorm overheen die alles buiten 80% wegknipt, dus daar staat
+     de fontein iets kleiner. Let op: iOS bakt zijn icoon vast op het moment dat
+     je de app aan het beginscherm toevoegt. Na een wijziging moet hij er dus af
+     en opnieuw op, anders blijft het oude staan. -->
 <link rel="apple-touch-icon" sizes="180x180" href="app-icoon-180.png">
 <link rel="icon" type="image/png" sizes="180x180" href="app-icoon-180.png">
 <link rel="manifest" href="mobiel.webmanifest">

@@ -162,7 +162,7 @@
     },
     {
       "name": "voorraad-mobiel.html",
-      "note": "Voorraadbeheer op de telefoon: overzicht, stock en een order opzoeken"
+      "note": "Voorraadbeheer op de telefoon: beginscherm met Overzicht, Stock, Onderweg (containers + binnen melden) en een order opzoeken. Zelfde toegangsgroep als voorraad.html."
     },
     {
       "name": "voorraad.html",
@@ -247,7 +247,7 @@
     },
     {
       "name": "app-icoon.png",
-      "note": "Het app-icoon op het beginscherm - hetzelfde als de app op de pc (build/icon.png)."
+      "note": "Het app-icoon voor Android, via mobiel.webmanifest, ook als maskable. Opnieuw getekend met tools/maak-app-icoon.py; de fontein blijft binnen de veilige cirkel van 80% die Android over een icoon legt."
     },
     {
       "name": "mobiel-brug.js",
@@ -255,7 +255,7 @@
     },
     {
       "name": "app-icoon-180.png",
-      "note": "Het app-icoon, zonder doorzichtige hoeken - iOS zet daar anders zwart achter."
+      "note": "Het app-icoon voor de iPhone (apple-touch-icon), zonder doorzichtige hoeken - iOS zet daar anders zwart achter. iOS bakt dit plaatje vast bij het toevoegen aan het beginscherm: na een wijziging moet het icoon van het beginscherm af en opnieuw worden toegevoegd."
     },
     {
       "name": "uren.html",

@@ -35,9 +35,20 @@
 
      Bewust niet de hele pc-tegel geperst in een klein scherm. Zeven
      tabbladen met tabellen van dertien kolommen worden daar niet bruikbaar
-     van. Dit zijn de drie dingen die je aan de telefoon nodig hebt: wat
-     hebben we van dit model, wat komt eraan, en hoe staat deze order ervoor.
-     De rest doet ze op de pc.
+     van. Dit zijn de vier dingen die je aan de telefoon nodig hebt: wat
+     hebben we van dit model, wat staat er in Uddel, wat komt eraan, en hoe
+     staat deze order ervoor. De rest doet ze op de pc.
+
+     GEEN TABBLADEN. Gerrit (19 aug 2026): "3 tabbladen bovenin? Ik denk dat
+     dat nog steeds veel te veel is. Ik zou het eerder onder elkaar zetten."
+     Klopt: vier tabjes op 375 pixels worden vier woorden van vijf letters die
+     je met een duim niet uit elkaar houdt. Dus een beginscherm met de vier
+     onderdelen onder elkaar, elk met het cijfer dat er nú toe doet, en per
+     onderdeel een eigen scherm met de pijl terug.
+
+     Elk onderdeel heeft zijn eigen adres (#overzicht, #stock, #onderweg,
+     #order). Daardoor werkt de terugveeg van de telefoon zelf ook: die brengt
+     je naar het beginscherm en niet uit de app.
      ══════════════════════════════════════════════════════════════════════ -->
 <style>
 :root{ --groen:#144734; --lime:#8bc53f; --bg:#f5f4ef; --kaart:#fff;
@@ -48,14 +59,25 @@ body{font-family:"Montserrat",-apple-system,system-ui,sans-serif;background:var(
      color:var(--ink);font-size:15px;-webkit-text-size-adjust:100%}
 header{background:var(--groen);color:#fff;padding:13px 16px;display:flex;align-items:center;gap:11px;
        position:sticky;top:0;z-index:20;padding-top:calc(13px + env(safe-area-inset-top))}
-header a{color:rgba(255,255,255,.85);text-decoration:none;font-size:13px;flex:0 0 auto}
+header button.terug{background:transparent;border:0;color:rgba(255,255,255,.9);font:inherit;
+       font-size:19px;line-height:1;padding:0 2px;cursor:pointer;flex:0 0 auto}
 header h1{flex:1;margin:0;font-size:16px;font-weight:600}
-nav{display:flex;background:var(--kaart);border-bottom:1px solid var(--rand);position:sticky;
-    top:calc(48px + env(safe-area-inset-top));z-index:19}
-nav button{flex:1;border:0;background:transparent;padding:13px 4px;font:inherit;font-size:13.5px;
-           font-weight:600;color:var(--grijs);border-bottom:3px solid transparent;cursor:pointer}
-nav button.aan{color:var(--groen);border-bottom-color:var(--groen)}
+header a.ververs{color:rgba(255,255,255,.85);text-decoration:none;font-size:13px;flex:0 0 auto}
 main{padding:14px;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
+
+/* ── het beginscherm: de onderdelen onder elkaar ── */
+.menu{display:block}
+.mk{display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:var(--kaart);
+    border:1px solid var(--rand);border-radius:14px;padding:15px 14px;margin-bottom:11px;
+    font:inherit;color:inherit;cursor:pointer}
+.mk:active{background:#f2f5f2}
+.mk .ic{flex:0 0 auto;width:42px;height:42px;border-radius:12px;background:#eaf2ec;
+        display:flex;align-items:center;justify-content:center;font-size:20px}
+.mk .tk{flex:1;min-width:0}
+.mk .tk b{display:block;font-size:16px;font-weight:600;color:var(--groen)}
+.mk .tk span{display:block;font-size:12.5px;color:var(--grijs);line-height:1.45;margin-top:2px}
+.mk .pijl{flex:0 0 auto;color:#c3c9c4;font-size:20px}
+
 .zoek{width:100%;border:1px solid var(--rand);border-radius:10px;padding:13px;font:inherit;
       font-size:16px;background:#fff;margin-bottom:12px}
 .zoek:focus{outline:none;border-color:var(--lime)}
@@ -92,41 +114,88 @@ main{padding:14px;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
 .pil.geel{background:#fef3c7;color:var(--warm)}
 .pil.grijs{background:#f3f4f6;color:var(--grijs)}
 .bron{font-size:11.5px;color:var(--grijs);margin-top:14px;text-align:center}
+
+/* ── Onderweg ── */
+.schip{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:13px 14px;margin-bottom:9px}
+.schip.binnen{background:#f7fbf5;border-color:#d6e9c8}
+.schip.dim{opacity:.42}
+.schip.raak{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.22)}
+.schip h3{margin:0;font-size:15px;color:var(--groen);font-weight:600}
+.schip .meta{font-size:12px;color:var(--grijs);margin-top:3px;line-height:1.5}
+.lading{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.stuk{background:#f3f4f2;border-radius:999px;padding:4px 10px;font-size:12px;color:var(--ink)}
+.stuk b{font-weight:700}
+.stuk .kl{color:var(--grijs);margin-left:4px}
+.stuk.los{background:#fff6e8;color:var(--warm)}
+.stuk.raak{background:#dcfce7;color:#14532d;font-weight:600}
+.stuk.raak .kl{color:#3f6b46}
+.melder{margin-top:11px;width:100%;background:#fff;border:1px solid var(--rand);border-radius:9px;
+        padding:11px;font:inherit;font-size:13.5px;font-weight:600;color:var(--groen);cursor:pointer}
+.melder.terug{color:var(--grijs);font-weight:500}
+.melder:disabled{color:#9ca3af}
+.kopje{font-size:12px;color:var(--grijs);font-weight:600;text-transform:uppercase;
+       letter-spacing:.04em;margin:18px 0 8px}
 </style>
 </head>
 <body>
 
 <header>
-  <a href="./">&larr;</a>
-  <h1>Voorraad</h1>
-  <a href="#" id="ververs">ververs</a>
+  <button class="terug" id="terug" type="button" aria-label="terug">&larr;</button>
+  <h1 id="titel">Voorraad</h1>
+  <a href="#" class="ververs" id="ververs">ververs</a>
 </header>
 
-<nav>
-  <button data-t="overzicht" class="aan" type="button">Overzicht</button>
-  <button data-t="stock" type="button">Stock</button>
-  <button data-t="order" type="button">Order</button>
-</nav>
-
 <main>
-  <div id="tab-overzicht">
+  <!-- beginscherm -->
+  <div id="s-home">
+    <div class="menu">
+      <button class="mk" data-ga="overzicht" type="button">
+        <span class="ic">&#128202;</span>
+        <span class="tk"><b>Overzicht</b><span id="sumOverzicht">vrij, op zee, gereserveerd en tekort per model</span></span>
+        <span class="pijl">&rsaquo;</span>
+      </button>
+      <button class="mk" data-ga="stock" type="button">
+        <span class="ic">&#128230;</span>
+        <span class="tk"><b>Stock</b><span id="sumStock">wat er nu in Uddel staat, per kleur</span></span>
+        <span class="pijl">&rsaquo;</span>
+      </button>
+      <button class="mk" data-ga="onderweg" type="button">
+        <span class="ic">&#128674;</span>
+        <span class="tk"><b>Onderweg</b><span id="sumOnderweg">welke containers eraan komen, en binnen melden</span></span>
+        <span class="pijl">&rsaquo;</span>
+      </button>
+      <button class="mk" data-ga="order" type="button">
+        <span class="ic">&#128269;</span>
+        <span class="tk"><b>Order opzoeken</b><span>status, betaling en wat er geleverd is</span></span>
+        <span class="pijl">&rsaquo;</span>
+      </button>
+    </div>
+    <p class="bron" id="bron"></p>
+  </div>
+
+  <div id="s-overzicht" style="display:none">
     <input class="zoek" id="ovZoek" type="search" placeholder="zoek een model…">
     <p class="tel" id="ovTel"></p>
     <div id="ovLijst"></div>
   </div>
 
-  <div id="tab-stock" style="display:none">
+  <div id="s-stock" style="display:none">
     <input class="zoek" id="stZoek" type="search" placeholder="zoek een model of kleur…">
     <p class="tel" id="stTel"></p>
     <div id="stLijst"></div>
   </div>
 
-  <div id="tab-order" style="display:none">
+  <div id="s-onderweg" style="display:none">
+    <input class="zoek" id="owZoek" type="search" placeholder="zoek een spa, kleur of container…">
+    <p class="tel" id="owTel"></p>
+    <div id="owLijst"></div>
+  </div>
+
+  <div id="s-order" style="display:none">
     <input class="zoek" id="orNr" type="text" inputmode="numeric" placeholder="ordernummer, bv. 3515102">
     <button class="knop" id="orKnop" type="button">Order opzoeken</button>
     <div id="orUit"></div>
   </div>
-  <p class="bron" id="bron"></p>
 </main>
 
 <script>
@@ -137,8 +206,15 @@ var $ = function(id){ return document.getElementById(id); };
 function esc(s){ var d=document.createElement("div"); d.textContent=(s==null?"":s); return d.innerHTML; }
 function teamKey(){ return localStorage.getItem("fp.teamkey") || ""; }
 function mailKey(){ return localStorage.getItem("fp.mailkey") || ""; }
+function mij(){ return (localStorage.getItem("fp.email")||"").toLowerCase(); }
 function nlDatum(s){ if(!s) return "—"; var d=new Date(s); return isNaN(d)?"—":
   String(d.getDate()).padStart(2,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+d.getFullYear(); }
+function dagenTot(s){
+  if(!s) return null;
+  var d=new Date(String(s).slice(0,10)+"T00:00:00").getTime();
+  if(!isFinite(d)) return null;
+  return Math.round((d-Date.now())/86400000);
+}
 
 /* ── de gegevens ─────────────────────────────────────────────────────
    Alles uit dezelfde buckets als de pc-versie, zodat de telefoon nooit
@@ -168,11 +244,12 @@ async function laad(){
       if(v&&v.code) data.codeKleur[String(v.code)]=kleurUitOms(v.desc);
     });
     $("bron").textContent = "bijgewerkt " + (data.hallen.updated ? new Date(data.hallen.updated).toLocaleString("nl-NL") : "onbekend");
-    tekenOverzicht(); tekenStock();
+    tekenOverzicht(); tekenStock(); tekenOnderweg(); tekenMenu();
   }catch(e){
     $("bron").textContent = "";
-    $("ovLijst").innerHTML = '<div class="melding fout">Laden mislukt: ' + esc(e.message) +
+    var fout = '<div class="melding fout">Laden mislukt: ' + esc(e.message) +
       '. Log opnieuw in op het dashboard, dan wordt de sleutel opgehaald.</div>';
+    $("ovLijst").innerHTML = fout; $("stLijst").innerHTML = fout; $("owLijst").innerHTML = fout;
   }
 }
 
@@ -198,8 +275,7 @@ function eersteSchip(model){
 }
 
 /* ── Overzicht: per model wat er vrij is, wat er vaart en wat er vast zit ── */
-function tekenOverzicht(){
-  var q=($("ovZoek").value||"").trim().toLowerCase();
+function overzichtRijen(){
   var hal=(data.hallen&&data.hallen.models)||{};
   var byModel=(data.resv&&data.resv.byModel)||{};
   var zee=opZee();
@@ -207,13 +283,16 @@ function tekenOverzicht(){
   Object.keys(hal).forEach(function(m){ namen[m]=1; });
   Object.keys(byModel).forEach(function(m){ namen[m]=1; });
   Object.keys(zee).forEach(function(m){ namen[m]=1; });
-
-  var rijen=Object.keys(namen).map(function(m){
+  return Object.keys(namen).map(function(m){
     var vrij=Number((hal[m]||{}).available)||0;
     var res=(byModel[m]||[]).reduce(function(n,r){ return n+(Number(r.qty)||0); },0);
     var vaart=Number(zee[m])||0;
     return { model:m, vrij:vrij, res:res, zee:vaart, tekort:Math.max(0,res-vrij-vaart) };
   }).filter(function(r){ return r.vrij||r.res||r.zee; });
+}
+function tekenOverzicht(){
+  var q=($("ovZoek").value||"").trim().toLowerCase();
+  var rijen=overzichtRijen();
   if(q) rijen=rijen.filter(function(r){ return r.model.toLowerCase().indexOf(q)>=0; });
   rijen.sort(function(a,b){ return b.tekort-a.tekort || a.model.localeCompare(b.model,"nl",{numeric:true}); });
 
@@ -235,10 +314,9 @@ function tekenOverzicht(){
 }
 
 /* ── Stock: alleen wat er in Nederland staat, met de kleuren erbij ── */
-function tekenStock(){
-  var q=($("stZoek").value||"").trim().toLowerCase();
+function stockRijen(){
   var hal=(data.hallen&&data.hallen.models)||{};
-  var rijen=Object.keys(hal).map(function(m){
+  return Object.keys(hal).map(function(m){
     var d=hal[m]||{};
     var varianten=Object.keys(d.variants||{}).map(function(code){
       return { code:code, kleur:data.codeKleur[code]||"(kleur onbekend)", aantal:Number(d.variants[code])||0 };
@@ -246,6 +324,10 @@ function tekenStock(){
       .sort(function(a,b){ return b.aantal-a.aantal; });
     return { model:m, vrij:Number(d.available)||0, fysiek:Number(d.physical)||0, varianten:varianten };
   }).filter(function(r){ return r.vrij>0||r.fysiek>0; });
+}
+function tekenStock(){
+  var q=($("stZoek").value||"").trim().toLowerCase();
+  var rijen=stockRijen();
   if(q) rijen=rijen.filter(function(r){
     return r.model.toLowerCase().indexOf(q)>=0 ||
            r.varianten.some(function(v){ return v.kleur.toLowerCase().indexOf(q)>=0; });
@@ -264,6 +346,161 @@ function tekenStock(){
       }).join('<br>')+'</div>':'')+
       '</div>';
   }).join("");
+}
+
+/* ── Onderweg: welke containers eraan komen en wat erin zit ─────────────
+   Bewust uit dezelfde bucket voorraad-schepen als het Overzicht en niet uit
+   /voorraad/spa-ontvangst/voorstel. Dat voorstel haalt eerst alle open
+   inkooporders bij Jazzi op om ze aan de containers te koppelen; dat duurt op
+   kantoor al even en is aan de telefoon niet te doen. Wat zij onderweg nodig
+   heeft - welke container, wanneer, wat zit erin - staat allemaal in de
+   bucket. Het koppelen aan de inkooporder blijft op de pc. */
+function schepenVoorLijst(){
+  return ((data.schepen&&data.schepen.ships)||[])
+    .filter(function(s){ return !s.alleenDocumenten; })
+    .map(function(s){
+      var lading=[], mc=s.modelColors||{}, mods=s.models||{};
+      Object.keys(mods).forEach(function(m){
+        var kleuren=mc[m];
+        if(kleuren && Object.keys(kleuren).length){
+          Object.keys(kleuren).forEach(function(k){
+            var n=Number(kleuren[k])||0;
+            if(n>0) lading.push({ model:m, kleur:(k==="(geen kleur)"?"":k), aantal:n });
+          });
+        } else {
+          var n=Number(mods[m])||0;
+          if(n>0) lading.push({ model:m, kleur:"", aantal:n });
+        }
+      });
+      lading.sort(function(a,b){ return b.aantal-a.aantal ||
+        a.model.localeCompare(b.model,"nl",{numeric:true}) || a.kleur.localeCompare(b.kleur); });
+      /* Wat op de factuur stond maar aan geen artikel te koppelen was:
+         sauna's, swimspa's, onderdelen. Die tellen niet mee als spa's - dat
+         kan pas als er een artikel aan hangt - maar zonder deze regels lijkt
+         een volle container leeg. */
+      var los=(s.specials||[])
+        .filter(function(x){ return x && !x.ordernr && !x.klant && x.omschrijving && !x.model && Number(x.aantal)>0; })
+        .map(function(x){ return { omschrijving:String(x.omschrijving).slice(0,80),
+                                   aantal:Number(x.aantal)||0, sectie:String(x.sectie||"").slice(0,40) }; });
+      var dg=dagenTot(s.eta);
+      return { ref:s.ref||"", vessel:s.vessel||"", eta:s.eta||null, dagen:dg,
+               containers:Number(s.containers)||0,
+               spas:lading.reduce(function(n,x){ return n+x.aantal; },0),
+               lading:lading, los:los, binnenGemeld:s.binnenGemeld||null,
+               binnen:!!s.binnenGemeld || (dg!==null && dg<=0), bron:s };
+    })
+    .sort(function(a,b){ return String(a.eta||"9999").localeCompare(String(b.eta||"9999")); });
+}
+
+function schipKaart(s, i){
+  var kop = s.vessel || s.ref || "(zonder naam)";
+  var wanneer = s.binnenGemeld
+    ? "binnen gemeld op " + nlDatum(s.binnenGemeld.op) +
+      (s.binnenGemeld.door ? " door " + esc(String(s.binnenGemeld.door).split("@")[0]) : "")
+    : nlDatum(s.eta) + (s.dagen===null ? " · aankomst onbekend"
+        : (s.dagen<=0 ? " · zou binnen moeten zijn" : " · over " + s.dagen + " dagen"));
+  var zoekTekst = [s.vessel, s.ref].filter(Boolean).join(" ").toLowerCase();
+  var stukken = s.lading.map(function(x){
+    return '<span class="stuk" data-zoek="'+esc((x.model+" "+x.kleur).toLowerCase())+'" data-aantal="'+x.aantal+'">'+
+      '<b>'+x.aantal+'</b> '+esc(x.model)+(x.kleur?'<span class="kl">'+esc(x.kleur)+'</span>':'')+'</span>';
+  }).concat(s.los.map(function(x){
+    return '<span class="stuk los" data-zoek="'+esc((x.omschrijving+" "+x.sectie).toLowerCase())+'" data-aantal="'+x.aantal+'">'+
+      '<b>'+x.aantal+'</b> '+esc(x.omschrijving)+(x.sectie?'<span class="kl">'+esc(x.sectie.toLowerCase())+'</span>':'')+'</span>';
+  })).join("");
+
+  return '<div class="schip'+(s.binnenGemeld?" binnen":"")+'" data-i="'+i+'" data-zoek="'+esc(zoekTekst)+'">'+
+    '<h3>'+esc(kop)+'</h3>'+
+    '<div class="meta">'+wanneer+'</div>'+
+    '<div class="meta">'+esc(s.ref)+
+      (s.containers?' &middot; '+s.containers+' container'+(s.containers===1?"":"s"):'')+
+      (s.spas?' &middot; '+s.spas+" spa's":'')+'</div>'+
+    (stukken?'<div class="lading">'+stukken+'</div>':'<div class="meta">inhoud nog niet ingelezen</div>')+
+    '<button class="melder'+(s.binnenGemeld?" terug":"")+'" data-ref="'+esc(s.ref)+'" data-aan="'+(s.binnenGemeld?"0":"1")+'" type="button">'+
+      (s.binnenGemeld?"Toch nog niet binnen":"Deze container is binnen")+'</button>'+
+    '</div>';
+}
+
+var schepenLijst = [];
+function tekenOnderweg(){
+  schepenLijst = schepenVoorLijst();
+  var varend = schepenLijst.filter(function(s){ return !s.binnenGemeld; });
+  var binnen = schepenLijst.filter(function(s){ return !!s.binnenGemeld; });
+  if(!schepenLijst.length){
+    $("owTel").textContent = "";
+    $("owLijst").innerHTML='<div class="leeg">Er vaart op dit moment niets. Zodra een commercial invoice is ingelezen verschijnt de zending hier.</div>';
+    return;
+  }
+  var html = varend.map(function(s){ return schipKaart(s, schepenLijst.indexOf(s)); }).join("");
+  if(binnen.length){
+    html += '<div class="kopje">Binnen gemeld</div>' +
+            binnen.map(function(s){ return schipKaart(s, schepenLijst.indexOf(s)); }).join("");
+  }
+  $("owLijst").innerHTML = html;
+  zoekOnderweg();
+}
+
+/* Zoeken licht op, het filtert niet weg. Chantal (video, 17 aug 2026): "ik ben
+   op zoek naar een Relax en die zit bijvoorbeeld in meerdere containers, dat
+   die dan groen oplicht." Dus de containers blijven op volgorde van aankomst
+   staan en ze ziet meteen welke treffer het eerst binnenkomt. */
+function zoekOnderweg(){
+  var q=($("owZoek").value||"").trim().toLowerCase();
+  var kaarten=$("owLijst").querySelectorAll(".schip");
+  if(!q){
+    Array.prototype.forEach.call(kaarten, function(k){
+      k.classList.remove("raak","dim");
+      Array.prototype.forEach.call(k.querySelectorAll(".stuk"), function(p){ p.classList.remove("raak"); });
+    });
+    var varend=schepenLijst.filter(function(s){ return !s.binnenGemeld; });
+    $("owTel").textContent = varend.length + " zending" + (varend.length===1?"":"en") + " onderweg · " +
+      varend.reduce(function(n,s){ return n+s.containers; },0) + " containers · " +
+      varend.reduce(function(n,s){ return n+s.spas; },0) + " spa's";
+    return;
+  }
+  var woorden=q.split(/\s+/).filter(Boolean);
+  function past(t){ return woorden.every(function(w){ return String(t||"").indexOf(w)>=0; }); }
+  var nZend=0, nStuks=0;
+  Array.prototype.forEach.call(kaarten, function(k){
+    var treffers=0, stuks=0;
+    Array.prototype.forEach.call(k.querySelectorAll(".stuk"), function(p){
+      var hit=past(p.dataset.zoek);
+      p.classList.toggle("raak", hit);
+      if(hit){ treffers++; stuks += Number(p.dataset.aantal)||0; }
+    });
+    var raak = treffers>0 || past(k.dataset.zoek);
+    k.classList.toggle("raak", raak);
+    k.classList.toggle("dim", !raak);
+    if(raak){ nZend++; nStuks += stuks; }
+  });
+  $("owTel").textContent = nZend
+    ? (nZend + " zending" + (nZend===1?"":"en") + (nStuks ? " · " + nStuks + " stuks" : ""))
+    : "niets gevonden";
+}
+
+/* Binnen melden zet alleen een vinkje in het dashboard. Er gaat geen enkel
+   verzoek naar Logic4 vanuit deze knop; dat is het hele punt. Het boeken van
+   de inkooplevering blijft op de pc, bij Schepen & ontvangst. */
+async function meldBinnen(knop){
+  var ref=knop.dataset.ref, aan=knop.dataset.aan==="1";
+  var oud=knop.textContent;
+  knop.textContent="bezig…"; knop.disabled=true;
+  try{
+    var r = await fetch(W + "/voorraad/schip/binnen", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ ref:ref, binnen:aan, door:mij() })
+    });
+    var j = await r.json();
+    if(!j.ok) throw new Error(j.error || ("HTTP "+r.status));
+    ((data.schepen&&data.schepen.ships)||[]).forEach(function(s){
+      if(s.ref===ref) s.binnenGemeld = j.binnenGemeld;
+    });
+    if(window.fpLog) window.fpLog(aan?"container-binnen-gemeld":"container-binnen-teruggedraaid", ref);
+    tekenOnderweg(); tekenMenu();
+  }catch(e){
+    alert("Kon het niet opslaan: " + (e.message||e));
+    knop.textContent=oud; knop.disabled=false;
+  }
 }
 
 /* ── Order opzoeken ──────────────────────────────────────────────────
@@ -298,6 +535,7 @@ async function zoekOrder(){
     var status=(o.OrderStatus&&o.OrderStatus.Value)||"onbekend";
     var pil = pct>=100?"groen":(pct>0?"geel":"grijs");
     var regels=(o.OrderRows||[]).filter(function(r){ return Number(r.Qty); });
+    if(window.fpLog) window.fpLog("order-opgezocht", nr);
     uit.innerHTML =
       '<div class="rij"><h3>'+esc(klant)+'</h3>'+
         '<div class="veld"><span>Order</span><b>'+esc(String(o.Id))+'</b></div>'+
@@ -323,22 +561,100 @@ async function zoekOrder(){
   }
 }
 
-/* ── tabbladen ─────────────────────────────────────────────────────── */
-Array.prototype.forEach.call(document.querySelectorAll("nav button"), function(b){
-  b.addEventListener("click", function(){
-    Array.prototype.forEach.call(document.querySelectorAll("nav button"), function(x){ x.classList.remove("aan"); });
-    b.classList.add("aan");
-    ["overzicht","stock","order"].forEach(function(t){
-      document.getElementById("tab-"+t).style.display = (t===b.dataset.t) ? "" : "none";
-    });
+/* ── het beginscherm bijwerken ───────────────────────────────────────
+   Het cijfer dat er per onderdeel toe doet, zodat ze op het beginscherm al
+   ziet of ze ergens naar binnen moet. */
+function tekenMenu(){
+  var ov=overzichtRijen();
+  var tekort=ov.filter(function(r){ return r.tekort>0; }).length;
+  $("sumOverzicht").textContent = ov.length + " model" + (ov.length===1?"":"len") +
+    (tekort ? " · " + tekort + " met een tekort" : " · geen tekorten");
+  var st=stockRijen();
+  $("sumStock").textContent = st.reduce(function(n,r){ return n+r.vrij; },0) +
+    " vrij in Uddel · " + st.length + " model" + (st.length===1?"":"len");
+  var sch=schepenVoorLijst().filter(function(s){ return !s.binnenGemeld; });
+  $("sumOnderweg").textContent = sch.length
+    ? (sch.length + " zending" + (sch.length===1?"":"en") + " · " +
+       sch.reduce(function(n,s){ return n+s.spas; },0) + " spa's")
+    : "er vaart op dit moment niets";
+}
+
+/* ── schermen ────────────────────────────────────────────────────────
+   Eén scherm tegelijk, en elk scherm heeft zijn eigen adres. Daardoor doet de
+   terugveeg van de telefoon precies wat je verwacht: terug naar het
+   beginscherm, en pas van het beginscherm uit de tegel. */
+var SCHERMEN = { overzicht:"Overzicht", stock:"Stock in Uddel",
+                 onderweg:"Onderweg", order:"Order opzoeken" };
+function toon(){
+  var naam=(location.hash||"").replace(/^#/,"");
+  if(!SCHERMEN[naam]) naam="";
+  $("s-home").style.display = naam ? "none" : "";
+  Object.keys(SCHERMEN).forEach(function(k){
+    $("s-"+k).style.display = (k===naam) ? "" : "none";
   });
+  $("titel").textContent = naam ? SCHERMEN[naam] : "Voorraad";
+  $("ververs").style.display = naam ? "none" : "";
+  window.scrollTo(0,0);
+}
+/* Alleen terugstappen in de geschiedenis als we er zelf een stap in hebben
+   gezet. Wie rechtstreeks op #onderweg binnenkomt heeft die stap niet, en dan
+   zou de pijl terug hem de tegel uit gooien in plaats van naar het
+   beginscherm. */
+var eigenSprong = false;
+Array.prototype.forEach.call(document.querySelectorAll(".mk"), function(b){
+  b.addEventListener("click", function(){ eigenSprong = true; location.hash = b.dataset.ga; });
 });
+$("terug").addEventListener("click", function(){
+  if((location.hash||"").length<=1){ location.href = "./"; return; }
+  if(eigenSprong){ history.back(); return; }
+  location.replace(location.pathname);
+  toon();
+});
+window.addEventListener("hashchange", function(){
+  if((location.hash||"").length<=1) eigenSprong = false;
+  toon();
+});
+
 $("ovZoek").addEventListener("input", tekenOverzicht);
 $("stZoek").addEventListener("input", tekenStock);
+$("owZoek").addEventListener("input", zoekOnderweg);
+$("owLijst").addEventListener("click", function(e){
+  var k = e.target.closest ? e.target.closest(".melder") : null;
+  if(k) meldBinnen(k);
+});
 $("orKnop").addEventListener("click", zoekOrder);
 $("orNr").addEventListener("keydown", function(e){ if(e.key==="Enter") zoekOrder(); });
 $("ververs").addEventListener("click", function(e){ e.preventDefault(); laad(); });
+toon();
 laad();
+})();
+</script>
+
+<!-- Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden -->
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){
+    var ua=navigator.userAgent||"";
+    var app=ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+    var elc=ua.match(/Electron\/([\d.]+)/i);
+    var versie=app?("app "+app[1]):(elc?("app · Electron "+elc[1]):"browser");
+    var pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone|iPad)/);
+    var id=null;
+    try{
+      id=localStorage.getItem("fp.apparaat");
+      if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("fp.apparaat",id); }
+    }catch(e){}
+    return {computer:id, platform:pm?pm[1].replace(/_/g,"."):null, versie:versie};
+  }
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"voorraad-mobiel",action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker"),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
 })();
 </script>
 </body>

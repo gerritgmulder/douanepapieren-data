@@ -94,7 +94,7 @@
     { bestand:"voorraad.html",       groep:"voorraad",         ic:"📦",  naam:"Voorraadbeheer",
       uit:"Containers, reserveringen, ontvangst en inkoop",        mobiel:"goed", tile:"tileVoorraad",
       mobielBestand:"voorraad-mobiel.html",
-      mobielUit:"Voorraad, wat eraan komt en een order opzoeken" },
+      mobielUit:"Voorraad, containers onderweg en een order opzoeken" },
     { bestand:"probe-logic4.html",   groep:"probe",            ic:"🔬",  naam:"Logic4-probe",
       uit:"Rechtstreeks een Logic4-endpoint bevragen",             mobiel:"pc", tile:"tileProbe" },
 
