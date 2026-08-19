@@ -254,6 +254,10 @@
       "note": "Mijn uren - starten en stoppen met een knop, achteraf bij te stellen. De lopende registratie staat in de opslag, niet op het toestel, zodat je op het ene apparaat kunt beginnen en op het andere stoppen."
     },
     {
+      "name": "inv-pl.js",
+      "note": "Commercial invoice + packing list in \u00e9\u00e9n werkmap: containers en labels"
+    },
+    {
       "name": "sales-confirmation.js",
       "note": "De orderbevestiging van een meubelfabriek lezen: fabriek, S/C nummer, artikelnummers, kleur en aantal. Artikelnummers staan met meerdere tegelijk in een samengevoegde cel; die wordt uitgeplozen tot de set en zijn onderdelen."
     },
