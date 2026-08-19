@@ -4565,10 +4565,16 @@ async function logic4Lees(env, request, body) {
                         uitleg: "Je verbinding met Logic4 is verlopen. Log opnieuw in, dan werkt het weer." });
   }
 
+  /* Sommige leesendpoints van Logic4 zijn GET en niet POST, bijvoorbeeld
+     /v3/User/GetAllUsers dat de tegel Retouren gebruikt om de adviseur bij
+     een order te vinden. Op de pc laat het hulpprogramma de methode al door;
+     hier deed de worker altijd POST, en dan komt er niets terug. Alleen GET
+     en POST, want dit pad is en blijft alleen-lezen. */
+  const methode = String(body.method || "POST").toUpperCase() === "GET" ? "GET" : "POST";
   const r = await fetch("https://api.logic4server.nl" + pad, {
-    method: "POST",
+    method: methode,
     headers: { Authorization: "Bearer " + sessie.l4token, "Content-Type": "application/json" },
-    body: JSON.stringify(body.body === undefined ? {} : body.body),
+    ...(methode === "GET" ? {} : { body: JSON.stringify(body.body === undefined ? {} : body.body) }),
   }).catch(e => null);
   if (!r) return reply(502, { ok: false, error: "logic4-onbereikbaar" });
 

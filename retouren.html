@@ -220,6 +220,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <label class="fld">Retourlocatie<select id="mLocation"></select></label>
       <label class="fld" style="grid-column:1/3;">Uitleg<textarea id="mExplain" rows="2"></textarea></label>
     </div>
+    <div id="mStatus" style="margin-top:10px;font-size:12px;color:var(--muted);min-height:16px"></div>
     <div class="row" style="justify-content:flex-end;margin-top:16px;">
       <button class="secondary" id="mCancel" type="button">Annuleren</button>
       <button class="primary" id="mSave" type="button">Toevoegen</button>
@@ -278,6 +279,59 @@ async function logic4(apiPath, body, method = "POST") {
   }
   return j.data;
 }
+
+/* ── De adviseur bij een order ────────────────────────────────────────
+   Manon (via Gerrit, 18 aug 2026): "bij het invoeren van een order wil ik
+   dat de adviseur direct wordt ingevuld, die moest ik steeds zelf typen."
+
+   Een Logic4-order draagt de adviseur als UserId, een nummer. De namen
+   staan in /v3/User/GetAllUsers (501 gebruikers). Die lijst halen we
+   eenmalig op en houden we vast, want hij verandert bijna nooit en het
+   scheelt een aanroep per order. Lukt het ophalen niet, dan blijft het veld
+   gewoon leeg en kan het met de hand ingevuld worden - nooit een blokkade
+   voor het registreren van een retour. */
+let adviseurs = null;          // Map van UserId naar naam
+let adviseursBezig = null;     // lopende belofte, zodat we niet dubbel ophalen
+
+async function adviseursLaden() {
+  if (adviseurs) return adviseurs;
+  if (adviseursBezig) return adviseursBezig;
+  adviseursBezig = (async () => {
+    try {
+      const data = await logic4("/v3/User/GetAllUsers", undefined, "GET");
+      const arr = Array.isArray(data) ? data : (data && (data.Users || data.Items || data.Records) || []);
+      const m = new Map();
+      for (const u of arr) {
+        const id = u.UserId ?? u.Id;
+        const naam = naamNet(u.FullName || u.Username || "");
+        if (id != null && naam) m.set(String(id), naam);
+      }
+      adviseurs = m;
+      return m;
+    } catch (e) {
+      console.warn("adviseurs ophalen faalde:", e.message);
+      adviseurs = new Map();   // niet blijven proberen bij elke order
+      return adviseurs;
+    } finally { adviseursBezig = null; }
+  })();
+  return adviseursBezig;
+}
+
+/* 382 van de 501 gebruikers zijn oud-medewerkers, in Logic4 hernoemd naar
+   "ZZ OUD Christian" zodat ze onderaan de lijst staan. In het retourenregister
+   wil je gewoon de naam zien. */
+function naamNet(n) {
+  return String(n == null ? "" : n).trim().replace(/^ZZ\s*-?\s*OUD\s+/i, "").trim();
+}
+
+/* De naam bij een order. Zonder lijst of zonder UserId een lege string:
+   dan staat het veld er gewoon leeg bij, zoals vroeger. */
+function adviseurVan(o) {
+  const id = o && o.UserId;
+  if (id == null || !adviseurs) return "";
+  return adviseurs.get(String(id)) || "";
+}
+
 function fmtEur(n) { return new Intl.NumberFormat("nl-NL",{style:"currency",currency:"EUR"}).format(Number(n)||0); }
 function isoDate(d) { return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function fmtDateNL(s) { if(!s) return ""; const d=new Date(s); return isNaN(d)?String(s).slice(0,10):d.toLocaleDateString("nl-NL"); }
@@ -512,6 +566,7 @@ function guessReason(text) {
 
 async function registerFromOrder(o) {
   const orderNr = String(o.Id || "");
+  await adviseursLaden();
   const inv = o.InvoiceAddress || o.DeliveryAddress || o.AccountAddress || {};
   const date = o.DeliveryDate || o.CreationDate || new Date().toISOString();
   const d = new Date(date);
@@ -521,7 +576,7 @@ async function registerFromOrder(o) {
       orderNr,
       date: isoDate(isNaN(d)?new Date():d),
       week: isoWeek(isNaN(d)?new Date():d),
-      advisor: "",
+      advisor: adviseurVan(o),
       product: sum.product,
       reason: guessReason(sum.hint + " " + sum.product),  // voorstel; Manon bevestigt/wijzigt
       location: "",
@@ -691,8 +746,49 @@ function renderPie(recs) {
 el("addManualBtn").addEventListener("click", () => {
   el("mOrder").value=""; el("mDate").value=isoDate(new Date()); el("mAdvisor").value="";
   el("mProduct").value=""; el("mReason").value=""; el("mLocation").value=""; el("mExplain").value="";
+  el("mStatus").textContent=""; mVorigNr="";
   el("manualModal").style.display = "flex";
+  el("mOrder").focus();
 });
+/* Zodra het ordernummer er staat, halen we de order op en vullen we in wat
+   we weten - de adviseur voorop. Alleen lege velden worden gevuld; wat
+   iemand zelf heeft ingetypt blijft staan. Wordt de order niet gevonden,
+   dan is dat een mededeling en geen blokkade: handmatig toevoegen moet ook
+   kunnen voor een order die niet in Logic4 staat. */
+let mVorigNr = "";
+async function vulUitOrder() {
+  const nr = el("mOrder").value.trim();
+  const st = el("mStatus");
+  if (nr === mVorigNr) return;
+  mVorigNr = nr;
+  if (!/^\d+$/.test(nr)) { st.textContent = ""; return; }
+  st.textContent = "Order " + nr + " ophalen uit Logic4…";
+  try {
+    await adviseursLaden();
+    const data = await logic4("/v3/Orders/GetOrders", { Id: parseInt(nr, 10), TakeRecords: 1 });
+    const arr = Array.isArray(data) ? data : (data && (data.Orders || data.Items) || []);
+    if (!arr.length) { st.textContent = "Order " + nr + " staat niet in Logic4. Vul de gegevens zelf in."; return; }
+    const o = arr[0];
+    const naam = adviseurVan(o);
+    if (naam && !el("mAdvisor").value.trim()) el("mAdvisor").value = naam;
+    const sum = summarizeRows(o.OrderRows);
+    if (sum.product && !el("mProduct").value.trim()) el("mProduct").value = sum.product;
+    if (sum.hint && !el("mExplain").value.trim()) el("mExplain").value = sum.hint;
+    if (!el("mReason").value) el("mReason").value = guessReason(sum.hint + " " + sum.product);
+    // De datum staat op vandaag zolang niemand hem heeft aangeraakt; dan is
+    // de datum van de order beter.
+    const d = new Date(o.DeliveryDate || o.CreationDate || "");
+    if (!isNaN(d) && el("mDate").value === isoDate(new Date())) el("mDate").value = isoDate(d);
+    st.textContent = naam
+      ? ("Order gevonden. Adviseur: " + naam + ".")
+      : "Order gevonden, maar er staat geen adviseur op. Vul hem zelf in.";
+  } catch (e) {
+    st.textContent = "Ophalen mislukt: " + e.message + ". Vul de gegevens zelf in.";
+  }
+}
+el("mOrder").addEventListener("change", vulUitOrder);
+el("mOrder").addEventListener("blur", vulUitOrder);
+
 el("mCancel").addEventListener("click", () => el("manualModal").style.display="none");
 el("mSave").addEventListener("click", async () => {
   const orderNr = el("mOrder").value.trim();
