@@ -8,6 +8,13 @@ kv_namespaces = [
   { binding = "FONTEYN_DATA", id = "3e8fa24719f04406a167d19d7600d6fa" }
 ]
 
+# Het taalmodel voor de tegel Vertalen. Zit op dit platform zelf, dus geen
+# extra account en geen sleutel; 10.000 neuronen per dag gratis, elke nacht
+# om 02:00 weer op nul. Zie het blok VERTALEN in worker.js voor waarom het
+# geen DeepL of MyMemory is geworden.
+[ai]
+binding = "AI"
+
 # Elk uur: voorraad (vrije hal-voorraad uit Logic4) + reserveringsstand
 # (order-statussen, nieuwe aanbetalingen) verversen. Zie scheduled() in worker.js.
 [triggers]

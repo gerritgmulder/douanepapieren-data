@@ -34,8 +34,17 @@
        terugvertaling  De vertaling nog eens terug naar het Nederlands. Zo zie
                      je of er iets geks in staat zonder de taal te kennen.
 
-     Er wordt niets bewaard. De tekst gaat naar de vertaaldienst en het
-     antwoord komt terug; er blijft geen dealercorrespondentie achter.
+     Wie het vertaalt
+     ----------------
+     Een taalmodel op Cloudflare zelf (Llama 3.3), niet een vertaaldienst van
+     buiten. Geen account, geen sleutel, geen creditcard, en per dag genoeg
+     voor ruim honderd mails; de teller staat elke nacht om 02:00 weer op nul.
+     Waarom het geen DeepL of MyMemory is geworden staat in worker.js, bij het
+     blok VERTALEN - kort gezegd: de een is in juli 2026 gestopt met zijn
+     gratis laag, de ander werkt niet vanaf een gedeeld Cloudflare-adres.
+
+     Er wordt niets bewaard. De tekst gaat naar het model en het antwoord komt
+     terug; er blijft geen dealercorrespondentie achter.
 
      OTA: staat in manifest.json. Nooit opnieuw installeren.
      ══════════════════════════════════════════════════════════════════════ -->
@@ -137,7 +146,6 @@
   <h2>Vertalen</h2>
   <p class="lead">Plak of typ links, de vertaling verschijnt rechts terwijl je typt. Andersom werkt net zo goed: plak de mail van een dealer en zet de doeltaal op Nederlands, dan wordt de brontaal vanzelf herkend.</p>
 
-  <div id="motorMelding" class="melding let hidden"></div>
   <div id="foutMelding" class="melding fout hidden"></div>
 
   <div class="balk">
@@ -198,8 +206,7 @@
   </div>
 
   <div class="voet">
-    <span id="motorNaam"></span>
-    <span id="tegoed"></span>
+    <span>Vertaald door een taalmodel op Cloudflare - goed, maar geen mens. Zet bij een belangrijke mail de terugvertaling even aan.</span>
   </div>
 </main>
 
@@ -241,7 +248,6 @@ function herinner(k,standaard){ try{ const v=localStorage.getItem(BEWAAR[k]); re
 
 let TALEN = {};
 let naarTaal = herinner("naar","EN-GB");
-let motor = null;
 let teller = 0;              // hoogste aanvraagnummer; oudere antwoorden negeren we
 let wachtend = null;
 
@@ -260,7 +266,7 @@ async function laadTalen(){
     const r = await fetch(WORKER+"/vertaal/talen",{headers:{"X-Fonteyn-Auth":team()}});
     const j = await r.json();
     if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
-    TALEN = j.talen||{}; motor = j.motor;
+    TALEN = j.talen||{};
   }catch(e){
     fout("De talenlijst kon niet worden opgehaald: "+e.message+". Log opnieuw in op het dashboard, dan wordt de sleutel opgehaald.");
     return;
@@ -276,27 +282,6 @@ async function laadTalen(){
   if(!TALEN[naarTaal]) naarTaal = "EN-GB";
   zetTaal(naarTaal);
 
-  if(motor === "eenvoudig"){
-    const m = el("motorMelding");
-    m.innerHTML = "<b>Let op: dit is nog de eenvoudige vertaler.</b> Die is gratis en heeft geen sleutel nodig, "
-      + "maar de zinnen zijn merkbaar minder goed - controleer ze voordat je ze verstuurt. "
-      + "Zodra de DeepL-sleutel is gezet (<code>npx wrangler secret put DEEPL_SLEUTEL</code>) gaat alles vanzelf via DeepL.";
-    m.classList.remove("hidden");
-  }
-  el("motorNaam").textContent = motor==="deepl" ? "Vertaald door DeepL." : "Vertaald door de eenvoudige vertaler.";
-  laadTegoed();
-}
-async function laadTegoed(){
-  if(motor!=="deepl") return;
-  try{
-    const r=await fetch(WORKER+"/vertaal/tegoed",{headers:{"X-Fonteyn-Auth":team()}});
-    const j=await r.json();
-    if(j.ok && j.grens){
-      const pct=Math.round(j.gebruikt/j.grens*100);
-      el("tegoed").textContent = "Deze maand " + j.gebruikt.toLocaleString("nl-NL") + " van de "
-        + j.grens.toLocaleString("nl-NL") + " tekens gebruikt (" + pct + "%).";
-    }
-  }catch(e){}
 }
 
 function zetTaal(code){
@@ -343,7 +328,9 @@ async function vertaalNu(){
     el("doel").value = j.tekst || "";
     fout("");
     let stand = "";
-    if(j.herkend && van==="auto"){
+    if(j.gelijk){
+      stand = "stond al in het " + ((TALEN[naarTaal]&&TALEN[naarTaal].naam)||naarTaal);
+    } else if(j.herkend && van==="auto"){
       const naam = (TALEN[j.herkend] && TALEN[j.herkend].naam) || j.herkend;
       stand = "herkend als " + naam;
     }

@@ -2936,207 +2936,224 @@ async function handleTrack(request, env) {
    Chantal schrijft de hele dag mails aan dealers in Spanje, Italië,
    Duitsland, Frankrijk en Engeland. Dit eindpunt vertaalt een stuk tekst.
 
-   Twee motoren, in deze volgorde:
+   Waarom Workers AI en niet een vertaaldienst
+   -------------------------------------------
+   Eerst stond hier DeepL met MyMemory als terugval. Allebei afgevallen, en
+   het is de moeite waard om op te schrijven waarom, anders bouwt iemand het
+   over een half jaar zo terug:
 
-     DeepL     als env.DEEPL_SLEUTEL bestaat. De gratis laag doet 500.000
-               tekens per maand zonder creditcard, en dat is voor deze
-               hoeveelheid mail ruim voldoende. Kwaliteit is het hele punt:
-               een dealer leest dit.
+     MyMemory  gratis en zonder sleutel, maar de dagportie hangt aan het
+               IP-adres. Een worker vertrekt vanaf een IP van Cloudflare dat
+               met duizenden anderen wordt gedeeld, en dat is altijd al op.
+               Gemeten op 19-08-2026: HTTP 429 met "YOU USED ALL AVAILABLE
+               FREE TRANSLATIONS FOR TODAY", ook met een eigen mailadres erbij.
+               Vanaf een gewone kantoor-lijn werkt het wel; vanaf hier nooit.
 
-     MyMemory  als er geen sleutel is. Geen sleutel nodig, maar merkbaar
-               slechter, en per aanvraag maximaal 500 tekens - vandaar dat
-               de tekst in stukken gaat. Dit is een noodverband zodat de
-               tegel niet dood is; de pagina zegt er ook bij dat het niet de
-               goede motor is.
+     DeepL     had 500.000 tekens per maand gratis, maar DeepL heeft API Free
+               in juli 2026 gesloten. Wat ervoor in de plaats komt geeft
+               eenmalig een miljoen tekens en daarna kost het geld. Dat botst
+               met de afspraak dat dit dashboard nergens voor betaalt.
 
-   Wat er NIET gebeurt: hier wordt niets bewaard. De tekst gaat naar de
-   vertaaldienst en het antwoord komt terug, verder niets. Er staat dus ook
-   geen dealercorrespondentie in de KV.
+   Workers AI zit op het platform waar deze worker toch al draait: geen extra
+   account, geen creditcard, geen sleutel om te zetten, en 10.000 neuronen per
+   dag gratis. Een korte mail kost er ongeveer 25, een lange ongeveer 115. Dat
+   is ruim honderd mails per dag, en de teller staat elke nacht om 02:00 (00:00
+   UTC) weer op nul.
+
+   Een taalmodel in plaats van een vertaalmachine heeft bovendien een
+   voordeel dat hier precies van pas komt: u-of-je en "deze namen laat je
+   staan" zijn gewoon instructies, geen API-opties die per taal wel of niet
+   bestaan.
+
+   Wat er NIET gebeurt: hier wordt niets bewaard. De tekst gaat naar het model
+   en het antwoord komt terug, verder niets. Er staat dus ook geen
+   dealercorrespondentie in de KV.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* De talen die de tegel aanbiedt. De sleutel is wat DeepL als doeltaal wil
-   (EN-GB en PT-PT zijn varianten), 'kort' is de tweeletterige code die de
-   noodmotor en de brontaal gebruiken. */
+const VERTAAL_MODEL  = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+/* Het herkennen doet een klein model apart, want het antwoord is twee letters.
+   Bewust 3B en niet 1B: die laatste hield een Spaanse dealermail voor
+   Nederlands, en dan vertaalt hij hem "terug" naar Spaans. Het verschil kost
+   minder dan één neuron. */
+const VERTAAL_HERKEN = "@cf/meta/llama-3.2-3b-instruct";
+const VERTAAL_MAX    = 12000;   // tekens per keer
+const VERTAAL_BROK   = 2500;    // en zoveel per aanroep naar het model
+const VERTAAL_UIT    = 3000;    // hoogste aantal tokens dat eruit mag komen
+
+/* De talen die de tegel aanbiedt. 'naam' is wat Chantal ziet, 'en' is hoe de
+   taal in de instructie aan het model heet - die luistert het best naar
+   Engels. */
 const VERTAAL_TALEN = {
-  "NL":    { kort: "nl", naam: "Nederlands" },
-  "EN-GB": { kort: "en", naam: "Engels" },
-  "DE":    { kort: "de", naam: "Duits" },
-  "FR":    { kort: "fr", naam: "Frans" },
-  "ES":    { kort: "es", naam: "Spaans" },
-  "IT":    { kort: "it", naam: "Italiaans" },
-  "PT-PT": { kort: "pt", naam: "Portugees" },
-  "PL":    { kort: "pl", naam: "Pools" },
-  "CS":    { kort: "cs", naam: "Tsjechisch" },
-  "SK":    { kort: "sk", naam: "Slowaaks" },
-  "SL":    { kort: "sl", naam: "Sloveens" },
-  "HU":    { kort: "hu", naam: "Hongaars" },
-  "RO":    { kort: "ro", naam: "Roemeens" },
-  "BG":    { kort: "bg", naam: "Bulgaars" },
-  "EL":    { kort: "el", naam: "Grieks" },
-  "TR":    { kort: "tr", naam: "Turks" },
-  "DA":    { kort: "da", naam: "Deens" },
-  "SV":    { kort: "sv", naam: "Zweeds" },
-  "NB":    { kort: "no", naam: "Noors" },
-  "FI":    { kort: "fi", naam: "Fins" },
-  "ET":    { kort: "et", naam: "Ests" },
-  "LV":    { kort: "lv", naam: "Lets" },
-  "LT":    { kort: "lt", naam: "Litouws" },
-  "UK":    { kort: "uk", naam: "Oekraïens" },
-  "RU":    { kort: "ru", naam: "Russisch" },
+  "NL":    { naam: "Nederlands", en: "Dutch" },
+  "EN-GB": { naam: "Engels",     en: "British English" },
+  "DE":    { naam: "Duits",      en: "German" },
+  "FR":    { naam: "Frans",      en: "French" },
+  "ES":    { naam: "Spaans",     en: "Spanish" },
+  "IT":    { naam: "Italiaans",  en: "Italian" },
+  "PT-PT": { naam: "Portugees",  en: "European Portuguese" },
+  "PL":    { naam: "Pools",      en: "Polish" },
+  "CS":    { naam: "Tsjechisch", en: "Czech" },
+  "SK":    { naam: "Slowaaks",   en: "Slovak" },
+  "SL":    { naam: "Sloveens",   en: "Slovenian" },
+  "HU":    { naam: "Hongaars",   en: "Hungarian" },
+  "RO":    { naam: "Roemeens",   en: "Romanian" },
+  "BG":    { naam: "Bulgaars",   en: "Bulgarian" },
+  "EL":    { naam: "Grieks",     en: "Greek" },
+  "TR":    { naam: "Turks",      en: "Turkish" },
+  "DA":    { naam: "Deens",      en: "Danish" },
+  "SV":    { naam: "Zweeds",     en: "Swedish" },
+  "NB":    { naam: "Noors",      en: "Norwegian" },
+  "FI":    { naam: "Fins",       en: "Finnish" },
+  "ET":    { naam: "Ests",       en: "Estonian" },
+  "LV":    { naam: "Lets",       en: "Latvian" },
+  "LT":    { naam: "Litouws",    en: "Lithuanian" },
+  "UK":    { naam: "Oekraïens",  en: "Ukrainian" },
+  "RU":    { naam: "Russisch",   en: "Russian" },
 };
 
-const VERTAAL_MAX = 20000;   // tekens per keer; een mail haalt dit nooit
-
-function vertaalXmlUit(s) {
-  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-function vertaalXmlIn(s) {
-  return String(s).replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-                  .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
-}
-
-/* Namen die niet vertaald mogen worden. DeepL kan stukken tekst overslaan als
-   ze in een tag staan die je als "negeren" opgeeft. Zonder dit wordt "Fonteyn
-   Outdoor Living Mall" in het Spaans een winkelcentrum met een fontein. */
-function vertaalBescherm(tekst, namen) {
-  /* In één keer, met alle namen in dezelfde uitdrukking. Naam voor naam zou
-     "Passion" nog eens binnen het al gemarkeerde "Passion Spas" raken, en dan
-     staan er tags in tags. De lijst staat op lengte gesorteerd, dus de langste
-     naam wint op elke plek. */
-  const veilig = namen.map((n) => vertaalXmlUit(n).trim()).filter(Boolean)
-                      .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const uit = vertaalXmlUit(tekst);
-  if (!veilig.length) return uit;
-  // Hele woorden en hoofdletterongevoelig: "fonteyn" telt ook.
-  const patroon = new RegExp("(?<![\\p{L}\\p{N}])(?:" + veilig.join("|") + ")(?![\\p{L}\\p{N}])", "giu");
-  return uit.replace(patroon, (m) => "<x>" + m + "</x>");
-}
-
-async function vertaalDeepl(env, tekst, naar, van, opties) {
-  const namen = (opties.namen || []).filter(Boolean);
-  const beschermd = namen.length > 0;
-  const invoer = beschermd ? vertaalBescherm(tekst, namen) : tekst;
-
-  const lading = {
-    text: [invoer],
-    target_lang: naar,
-    preserve_formatting: true,
-  };
-  if (van && van !== "auto") lading.source_lang = VERTAAL_TALEN[van] ? VERTAAL_TALEN[van].kort.toUpperCase() : van;
-  /* prefer_more / prefer_less en niet more / less: de "prefer"-vorm wordt
-     stilletjes genegeerd bij een taal die geen u/jij-onderscheid kent, en de
-     harde vorm geeft daar een foutmelding. */
-  if (opties.formeel === true)  lading.formality = "prefer_more";
-  if (opties.formeel === false) lading.formality = "prefer_less";
-  if (beschermd) { lading.tag_handling = "xml"; lading.ignore_tags = ["x"]; }
-
-  const r = await fetch("https://api-free.deepl.com/v2/translate", {
-    method: "POST",
-    headers: { "Authorization": "DeepL-Auth-Key " + env.DEEPL_SLEUTEL,
-               "Content-Type": "application/json" },
-    body: JSON.stringify(lading),
-  });
-  const rauw = await r.text();
-  let j = null; try { j = JSON.parse(rauw); } catch (e) {}
-  if (!r.ok) {
-    if (r.status === 403) throw new Error("DeepL weigert de sleutel. Controleer DEEPL_SLEUTEL.");
-    if (r.status === 456) throw new Error("Het gratis DeepL-tegoed van deze maand is op (500.000 tekens). Volgende maand staat het weer open.");
-    if (r.status === 429) throw new Error("DeepL is even druk. Probeer het over een paar tellen opnieuw.");
-    throw new Error("DeepL gaf HTTP " + r.status + ": " + rauw.slice(0, 200));
-  }
-  const eerste = j && j.translations && j.translations[0];
-  if (!eerste) throw new Error("DeepL gaf een leeg antwoord terug");
-  let uit = eerste.text || "";
-  if (beschermd) uit = vertaalXmlIn(uit.replace(/<\/?x>/g, ""));
-  return { tekst: uit, herkend: eerste.detected_source_language || null, motor: "deepl" };
+/* De instructie. Elke regel hier staat er om een fout die in de proef
+   voorkwam: zonder de datumregel bleef "12 september" in een Duitse mail
+   staan, zonder de regel over consequent aanspreken liep één mail van "du"
+   naar "ihr", en zonder de eerste regel schreef het model er "Here is the
+   translation:" boven. */
+function vertaalInstructie(naar, formeel, namen) {
+  const t = (VERTAAL_TALEN[naar] || {}).en || naar;
+  const r = [
+    "You are a professional translator for a Dutch company that sells hot tubs, swim spas and saunas to dealers across Europe.",
+    "Translate the user's message into " + t + ".",
+    "",
+    "Rules:",
+    "- Output ONLY the translation. No preamble, no explanation, no notes, no quotation marks around it.",
+    "- Keep the exact line breaks and blank lines of the original. The translation must have the same number of lines and the same blank lines in the same places. If there is an empty line between the greeting and the first sentence, keep that empty line.",
+    "- Never answer, summarise or continue the text. Only translate it.",
+    "- Never change a number: amounts, measurements, weights, order numbers, article numbers, product codes and dates keep exactly the same values.",
+    "- Write dates, month names and punctuation the way " + t + " writes them. The day and the month stay the same, only the notation follows the target language.",
+    "- Translate a greeting as a greeting and a sign-off as a sign-off, in the natural business style of " + t + ", including the punctuation that language uses after a greeting.",
+    "- Be consistent: use the same form of address from the first line to the last.",
+  ];
+  r.push(formeel === false
+    ? "- Use the informal form of address throughout (tu / du / tú)."
+    : "- Use the formal, polite form of address throughout (vous / Sie / usted / Lei).");
+  if (namen && namen.length)
+    r.push("- Leave these names exactly as written, do not translate them: " + namen.join(", ") + ".");
+  r.push("If the message is already in " + t + ", return it unchanged.");
+  return r.join("\n");
 }
 
-/* De noodmotor. Knipt de tekst in stukken van hoogstens 480 tekens, want daar
-   ligt de grens van de gratis dienst, en plakt de vertalingen weer aan elkaar.
-   Knippen gebeurt op alineagrens, dan op zinsgrens, en pas als het niet anders
-   kan midden in een zin. */
-function vertaalStukken(tekst, max) {
+/* De tekst in brokken die het model in één keer aankan, en altijd op een
+   alineagrens. Een mail van anderhalve kantjes past in één brok; pas bij een
+   heel lang stuk wordt er geknipt. */
+function vertaalBrokken(tekst, max) {
   const uit = [];
-  for (const alinea of String(tekst).split(/(\n{2,})/)) {
-    if (alinea.length <= max) { uit.push(alinea); continue; }
-    let rest = alinea;
+  let huidig = "";
+  for (const deel of String(tekst).split(/(\n{2,})/)) {
+    if (huidig.length + deel.length <= max) { huidig += deel; continue; }
+    if (huidig) { uit.push(huidig); huidig = ""; }
+    if (deel.length <= max) { huidig = deel; continue; }
+    // Eén alinea die zelf al te lang is: op zinsgrens knippen.
+    let rest = deel;
     while (rest.length > max) {
       let knip = rest.lastIndexOf(". ", max);
-      if (knip < max * 0.4) knip = rest.lastIndexOf("\n", max);
       if (knip < max * 0.4) knip = rest.lastIndexOf(" ", max);
-      if (knip < max * 0.4) knip = max;
-      else knip += 1;
+      if (knip < max * 0.4) knip = max; else knip += 1;
       uit.push(rest.slice(0, knip));
       rest = rest.slice(knip);
     }
-    if (rest) uit.push(rest);
+    huidig = rest;
   }
+  if (huidig) uit.push(huidig);
   return uit.filter((s) => s !== "");
 }
 
-async function vertaalEenvoudig(tekst, naar, van) {
-  const doel = (VERTAAL_TALEN[naar] || {}).kort;
-  const bron = (VERTAAL_TALEN[van] || {}).kort || "nl";
-  if (!doel) throw new Error("onbekende doeltaal");
-  if (doel === bron) return { tekst: tekst, herkend: bron.toUpperCase(), motor: "eenvoudig" };
+function vertaalGeenNeuronen(e) {
+  const m = String((e && e.message) || e).toLowerCase();
+  return m.includes("neuron") || m.includes("quota") || m.includes("limit exceeded") ||
+         m.includes("3040") || m.includes("capacity");
+}
 
+async function vertaalAi(env, tekst, naar, formeel, namen) {
+  if (!env.AI) throw new Error("De AI-koppeling ontbreekt in deze worker. Zet [ai] binding = \"AI\" in wrangler.toml en rol opnieuw uit.");
+  const instructie = vertaalInstructie(naar, formeel, namen);
   const delen = [];
-  for (const stuk of vertaalStukken(tekst, 480)) {
-    if (!stuk.trim()) { delen.push(stuk); continue; }
-    const u = "https://api.mymemory.translated.net/get?q=" + encodeURIComponent(stuk) +
-              "&langpair=" + bron + "|" + doel;
-    const r = await fetch(u);
-    const j = await r.json().catch(() => null);
-    const vert = j && j.responseData && j.responseData.translatedText;
-    if (!r.ok || !vert) throw new Error("De eenvoudige vertaler antwoordde niet. Zet DEEPL_SLEUTEL, dan gaat het via DeepL.");
-    /* De dienst geeft zijn eigen foutmelding als vertaalde tekst terug; die
-       zou anders zo in een dealermail belanden. */
-    if (/^(MYMEMORY WARNING|QUERY LENGTH LIMIT|INVALID)/i.test(vert))
-      throw new Error("De eenvoudige vertaler is voor vandaag op. Zet DEEPL_SLEUTEL, dan gaat het via DeepL.");
-    delen.push(vert);
+  let neuronen = 0;
+  for (const brok of vertaalBrokken(tekst, VERTAAL_BROK)) {
+    if (!brok.trim()) { delen.push(brok); continue; }
+    let a;
+    try {
+      a = await env.AI.run(VERTAAL_MODEL, {
+        messages: [{ role: "system", content: instructie }, { role: "user", content: brok }],
+        temperature: 0.2, max_tokens: VERTAAL_UIT,
+      });
+    } catch (e) {
+      if (vertaalGeenNeuronen(e))
+        throw new Error("De gratis dagportie vertalingen is op. Vannacht om 02:00 staat hij weer open.");
+      throw new Error("De vertaler antwoordde niet: " + String(e.message || e));
+    }
+    const uit = a && typeof a.response === "string" ? a.response : null;
+    if (uit === null) throw new Error("De vertaler gaf een onverwacht antwoord terug");
+    /* Afgekapt halverwege is erger dan een foutmelding: dan zou een halve mail
+       naar een dealer gaan zonder dat iemand het ziet. */
+    const gebruikt = (a.usage && a.usage.completion_tokens) || 0;
+    if (gebruikt >= VERTAAL_UIT - 8)
+      throw new Error("Deze tekst is te lang om in één keer te vertalen. Knip hem in tweeën.");
+    neuronen += (a.usage && a.usage.neurons) || 0;
+    /* Het model zet er af en toe een spatie op wat een lege regel hoort te
+       zijn. Onzichtbaar, maar in een mailprogramma is dat wél een regel met
+       inhoud. Spaties aan het eind van een regel weghalen lost dat op en kan
+       nooit iets kapotmaken. */
+    delen.push(uit.replace(/[ \t]+$/gm, "").trim());
   }
-  return { tekst: delen.join(""), herkend: bron.toUpperCase(), motor: "eenvoudig" };
+  /* De brokken zijn op alineagrens geknipt, dus ze horen met een lege regel
+     ertussen weer aan elkaar. Bij één brok - het normale geval - gebeurt hier
+     niets. */
+  return { tekst: delen.join("\n\n").replace(/\n{3,}/g, "\n\n"), neuronen: Math.round(neuronen) };
+}
+
+/* Welke taal is dit? Een klein model, want het antwoord is twee letters. Kost
+   minder dan één neuron en duurt een tiende seconde. */
+async function vertaalHerken(env, tekst) {
+  try {
+    const a = await env.AI.run(VERTAAL_HERKEN, {
+      messages: [{ role: "system", content:
+        "Identify the language of the user's text. Answer with exactly one code from this list and nothing else: " +
+        Object.keys(VERTAAL_TALEN).map((c) => c.split("-")[0]).join(" ") + ". " +
+        "If you are not sure, answer with your best guess. Never explain." },
+        { role: "user", content: String(tekst).slice(0, 400) }],
+      temperature: 0, max_tokens: 6,
+    });
+    const code = String((a && a.response) || "").trim().toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2);
+    if (!code) return null;
+    // "EN" hoort bij "EN-GB", "PT" bij "PT-PT".
+    const treffer = Object.keys(VERTAAL_TALEN).find((c) => c.split("-")[0] === code);
+    return treffer || null;
+  } catch (e) { return null; }   // herkennen is een extraatje, geen voorwaarde
 }
 
 async function vertaalDoe(env, body) {
   const tekst = String(body.tekst == null ? "" : body.tekst);
   const naar = String(body.naar || "").toUpperCase();
-  const van = body.van ? String(body.van).toUpperCase() : "auto";
   if (!VERTAAL_TALEN[naar]) return { ok: false, error: "kies een doeltaal" };
-  if (van !== "AUTO" && !VERTAAL_TALEN[van]) return { ok: false, error: "onbekende brontaal" };
-  if (!tekst.trim()) return { ok: true, tekst: "", motor: null, tekens: 0 };
+  if (!tekst.trim()) return { ok: true, tekst: "", tekens: 0 };
   if (tekst.length > VERTAAL_MAX)
-    return { ok: false, error: "Dit is " + tekst.length + " tekens; er kan " + VERTAAL_MAX +
-                              " tegelijk doorheen. Knip de tekst in tweeën." };
+    return { ok: false, error: "Dit is " + tekst.length.toLocaleString("nl-NL") + " tekens; er kan " +
+                              VERTAAL_MAX.toLocaleString("nl-NL") + " tegelijk doorheen. Knip de tekst in tweeën." };
 
   const namen = (Array.isArray(body.namen) ? body.namen : [])
-    .map((n) => String(n || "").trim()).filter((n) => n.length > 1).slice(0, 40)
-    .sort((a, b) => b.length - a.length);   // langste eerst, anders knipt "Passion" in "Passion Spas"
-  const opties = { namen, formeel: typeof body.formeel === "boolean" ? body.formeel : undefined };
-  const bron = van === "AUTO" ? null : van;
+    .map((n) => String(n || "").trim()).filter((n) => n.length > 1).slice(0, 40);
+  const formeel = typeof body.formeel === "boolean" ? body.formeel : true;
+  const van = body.van ? String(body.van).toUpperCase() : "AUTO";
 
   try {
-    const uit = env.DEEPL_SLEUTEL
-      ? await vertaalDeepl(env, tekst, naar, bron, opties)
-      : await vertaalEenvoudig(tekst, naar, bron || "NL");
-    return { ok: true, tekst: uit.tekst, herkend: uit.herkend, motor: uit.motor, tekens: tekst.length };
+    const herkend = van === "AUTO" ? await vertaalHerken(env, tekst) : van;
+    /* Al in de goede taal: dan is vertalen weggegooide moeite én weggegooide
+       neuronen, en levert het model alleen maar kleine wijzigingen op. */
+    if (herkend === naar) return { ok: true, tekst: tekst, herkend: herkend, gelijk: true, tekens: tekst.length };
+    const uit = await vertaalAi(env, tekst, naar, formeel, namen);
+    return { ok: true, tekst: uit.tekst, herkend: herkend || null,
+             neuronen: uit.neuronen, tekens: tekst.length };
   } catch (e) {
-    return { ok: false, error: String(e.message || e),
-             motor: env.DEEPL_SLEUTEL ? "deepl" : "eenvoudig" };
+    return { ok: false, error: String(e.message || e) };
   }
-}
-
-/* Hoeveel van het gratis tegoed is deze maand op. Alleen zinvol met DeepL. */
-async function vertaalTegoed(env) {
-  if (!env.DEEPL_SLEUTEL) return { ok: true, motor: "eenvoudig", sleutel: false };
-  const r = await fetch("https://api-free.deepl.com/v2/usage", {
-    headers: { "Authorization": "DeepL-Auth-Key " + env.DEEPL_SLEUTEL },
-  });
-  if (!r.ok) return { ok: false, error: "DeepL gaf HTTP " + r.status, sleutel: true };
-  const j = await r.json().catch(() => ({}));
-  return { ok: true, motor: "deepl", sleutel: true,
-           gebruikt: Number(j.character_count) || 0,
-           grens: Number(j.character_limit) || 0 };
 }
 
 // ─── Activiteitenlogboek ─────────────────────────────────────────────
@@ -5934,11 +5951,7 @@ export default {
     }
     if (url.pathname === "/vertaal/talen" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
-      return reply(200, { ok: true, talen: VERTAAL_TALEN, max: VERTAAL_MAX, motor: env.DEEPL_SLEUTEL ? "deepl" : "eenvoudig" });
-    }
-    if (url.pathname === "/vertaal/tegoed" && request.method === "GET") {
-      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
-      return reply(200, await vertaalTegoed(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+      return reply(200, { ok: true, talen: VERTAAL_TALEN, max: VERTAAL_MAX, motor: "cloudflare" });
     }
 
     // ── Proforma invoice → inkooporder (Chantal & Manon) ──────────────────
