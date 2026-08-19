@@ -471,11 +471,20 @@ $("boekBtn").addEventListener("click", async () => {
   }
   /* Zie bankkoppeling.html: deze regels horen in het bankdagboek en Logic4
      laat dat via de API niet toe. Een memoriaal maken levert een boeking op
-     die weer verwijderd moet worden, dus dat gebeurt hier niet meer. */
+     die weer verwijderd moet worden, dus dat gebeurt hier niet meer.
+
+     Opnieuw nagegaan op 19 aug 2026, nadat de API-rechten waren uitgebreid.
+     Het ligt niet aan de rechten. Logic4 antwoordt letterlijk: "Dit eindpunt
+     kan alleen boeken van type Memoriaal toevoegen, maar het meegegeven
+     financieel dagboek 42 is een Bank boek." Er bestaat in de hele API geen
+     eindpunt dat een bankboeking toevoegt; er zijn er vier, voor inkoop,
+     verkoop, memoriaal en een betaling op een order. */
   const MEMORIAAL_AAN = false;
   if (naarGrootboek.length && !MEMORIAAL_AAN) {
-    fouten.push(naarGrootboek.length + " regel(s) niet geboekt: die horen in het bankdagboek van Mollie en dat " +
-      "kan Logic4 niet via de koppeling. Zet ze met de hand; de rekening staat per regel in beeld.");
+    fouten.push(naarGrootboek.length + " regel(s) niet geboekt: die horen in het bankdagboek van Mollie, en " +
+      "Logic4 laat via de API alleen inkoop-, verkoop- en memoriaalboekingen toe. In een bankdagboek kom je " +
+      "alleen met een betaling op een order of factuur, en deze regels horen bij geen van beide. Dit ligt niet " +
+      "aan de rechten - nagegaan op 19 aug 2026. Zet ze met de hand; de rekening staat per regel in beeld.");
   }
   if (naarGrootboek.length && MEMORIAAL_AAN) {
     const r = await fetch(WORKER + "/bank/memoriaal", {

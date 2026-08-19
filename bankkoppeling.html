@@ -1192,11 +1192,16 @@ $("boekBtn").addEventListener("click", async () => {
      Liever niets dan iets wat weer weggehaald moet worden. De regels blijven
      wel gewoon in beeld met hun rekening en bedrag, zodat ze met de hand in
      het bankdagboek te zetten zijn. */
+  /* Opnieuw nagegaan op 19 aug 2026, nadat de API-rechten waren uitgebreid.
+     Het ligt niet aan de rechten. Logic4 antwoordt letterlijk: "Dit eindpunt
+     kan alleen boeken van type Memoriaal toevoegen, maar het meegegeven
+     financieel dagboek 42 is een Bank boek." */
   const MEMORIAAL_AAN = false;
   if (naarGrootboek.length && !MEMORIAAL_AAN) {
-    gbFouten.push(naarGrootboek.length + " regel(s) zijn niet geboekt. Ze horen in het bankdagboek en dat kan " +
-      "Logic4 niet via de koppeling: daar komt alleen een betaling op een order in. Zet ze met de hand in het " +
-      "bankdagboek - de rekening staat per regel in beeld.");
+    gbFouten.push(naarGrootboek.length + " regel(s) zijn niet geboekt. Ze horen in het bankdagboek, en Logic4 " +
+      "laat via de API alleen inkoop-, verkoop- en memoriaalboekingen toe. In een bankdagboek kom je alleen met " +
+      "een betaling op een order of factuur, en deze regels horen bij geen van beide. Dit ligt niet aan de " +
+      "rechten - nagegaan op 19 aug 2026. Zet ze met de hand in het bankdagboek; de rekening staat per regel in beeld.");
   }
   if (naarGrootboek.length && MEMORIAAL_AAN) {
     showStatus($("actionStatus"), naarGrootboek.length + " regel(s) op een grootboekrekening boeken…", "info");
