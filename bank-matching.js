@@ -107,7 +107,7 @@
   // klantnummers, postcodes en jaartallen leverden anders schijnkandidaten op.
   function nummers(tekst) {
     var s = plak(tekst);
-    var facturen = [], orders = [], gezien = {};
+    var facturen = [], orders = [], debiteuren = [], gezien = {};
     var re = /\b(\d{7})\b/g, m;
     while ((m = re.exec(s)) !== null) {
       var n = m[1];
@@ -116,7 +116,24 @@
       if (n.charAt(0) === "6") facturen.push(n);
       else if (n.charAt(0) === "3") orders.push(n);
     }
-    return { facturen: facturen, orders: orders };
+    /* Het debiteurnummer erbij. Gerrit (19 aug 2026): "er is betaald op
+       ordernummer maar de betaling moet gekoppeld worden aan een factuur.
+       Wat je dan moet doen is dat je het debiteurennummer opzoekt en dan de
+       openstaande facturen vindt en dan de factuur kiest die past bij het
+       bedrag."
+
+       In "139512 - 3512680" is het eerste het debiteurnummer. Dat zijn er
+       vijf tot zeven cijfers, dus vlak bij een factuur- of ordernummer. Het
+       onderscheid is: wat al als factuur of order is herkend telt niet meer
+       mee, en een reeks binnen een IBAN evenmin - vandaar de woordgrenzen. */
+    var re2 = /\b(\d{5,7})\b/g, m2;
+    while ((m2 = re2.exec(s)) !== null) {
+      var d = m2[1];
+      if (gezien[d] && (facturen.indexOf(d) >= 0 || orders.indexOf(d) >= 0)) continue;
+      if (debiteuren.indexOf(d) >= 0) continue;
+      debiteuren.push(d);
+    }
+    return { facturen: facturen, orders: orders, debiteuren: debiteuren };
   }
 
   // ─── Namen vergelijken ──────────────────────────────────────────────
@@ -163,16 +180,50 @@
   // ─── Index op bedrag ────────────────────────────────────────────────
   // Eén keer opbouwen per afschrift; daarna is opzoeken op bedrag gratis.
   function bouwIndex(posten) {
-    var perFactuur = {}, perBedrag = {}, perOrder = {};
+    var perFactuur = {}, perBedrag = {}, perOrder = {}, perDebiteur = {};
     for (var i = 0; i < posten.length; i++) {
       var p = posten[i];
       if (!p || !p.InvoiceId) continue;
       perFactuur[String(p.InvoiceId)] = p;
       if (p.OrderNumber) (perOrder[String(p.OrderNumber)] = perOrder[String(p.OrderNumber)] || []).push(p);
+      if (p.DebtorId != null) (perDebiteur[String(p.DebtorId)] = perDebiteur[String(p.DebtorId)] || []).push(p);
       var c = Math.round((Number(p.AmountOutstanding) || 0) * 100);
       if (c > 0) (perBedrag[c] = perBedrag[c] || []).push(p);
     }
-    return { posten: posten, perFactuur: perFactuur, perBedrag: perBedrag, perOrder: perOrder };
+    return { posten: posten, perFactuur: perFactuur, perBedrag: perBedrag,
+             perOrder: perOrder, perDebiteur: perDebiteur };
+  }
+
+  /* ─── Openstaande facturen van de genoemde debiteur ──────────────────
+     Precies wat Osman met de hand deed: debiteurnummer opzoeken, zijn
+     openstaande facturen erbij pakken, en die kiezen die op het bedrag past.
+     Letterlijk hetzelfde bedrag, of met een klein koersverschil.
+
+     Wat hier NIET gebeurt is kiezen. Er komt een lijstje uit dat Osman
+     voorgelegd krijgt; het boeken blijft zijn beslissing. */
+  var KOERS_MARGE = 0.02;   // 2%, ruim genoeg voor een koersverschil
+
+  function viaDebiteur(nrs, index, bedrag) {
+    if (!index || !index.perDebiteur) return [];
+    var uit = [];
+    var lijst = (nrs && nrs.debiteuren) || [];
+    for (var i = 0; i < lijst.length; i++) {
+      var posten = index.perDebiteur[lijst[i]];
+      if (!posten || !posten.length) continue;
+      for (var j = 0; j < posten.length; j++) {
+        var p = posten[j];
+        var open = Number(p.AmountOutstanding) || 0;
+        var verschil = Math.abs(open - bedrag);
+        if (verschil < 0.01) {
+          uit.push({ post: p, debiteur: lijst[i], soort: "precies", verschil: 0 });
+        } else if (open > 0 && verschil / Math.max(open, bedrag) <= KOERS_MARGE) {
+          uit.push({ post: p, debiteur: lijst[i], soort: "koersverschil", verschil: verschil });
+        }
+      }
+    }
+    /* Het dichtstbijzijnde bedrag bovenaan. */
+    uit.sort(function (a, b) { return a.verschil - b.verschil; });
+    return uit;
   }
 
   // ─── De koppeling zelf ──────────────────────────────────────────────
@@ -182,6 +233,40 @@
   //   kandidaten  - alleen op bedrag gevonden; een mens moet kiezen
   //   geen        - niets gevonden
   function koppel(tx, index) {
+    return metDebiteur(koppelKern(tx, index), tx, index);
+  }
+
+  /* De uitkomst aanvullen met de openstaande facturen van de genoemde
+     debiteur. Dat gebeurt náást wat er al gevonden is en niet in plaats
+     daarvan: bij een betaling op ordernummer blijft die order gewoon staan,
+     er komt alleen een factuur als keuze bij. */
+  function metDebiteur(match, tx, index) {
+    if (!match || match.status === "zeker") return match;
+    var bedrag = Number(tx.amount) || 0;
+    var treffers = viaDebiteur(match.nummers, index, bedrag);
+    if (!treffers.length) return match;
+
+    var bestaand = {};
+    (match.kandidaten || []).forEach(function (p) { bestaand[String(p.InvoiceId)] = 1; });
+    var erbij = treffers.filter(function (t) { return !bestaand[String(t.post.InvoiceId)]; });
+    if (!erbij.length) return match;
+
+    match.kandidaten = (match.kandidaten || []).concat(erbij.map(function (t) { return t.post; }));
+    match.viaDebiteur = erbij;
+    if (match.status === "geen" || match.status === "opzoeken") match.status = "controleren";
+
+    var e = erbij[0];
+    match.reden = (match.reden ? match.reden + ". " : "") +
+      "Op debiteur " + e.debiteur + " staat factuur " + e.post.InvoiceId + " open voor " +
+      (Math.round(e.post.AmountOutstanding * 100) / 100) +
+      (e.soort === "precies" ? " - precies dit bedrag" :
+        " - dit bedrag op een koersverschil van " + (Math.round(e.verschil * 100) / 100) + " na") +
+      (erbij.length > 1 ? " (en nog " + (erbij.length - 1) + " die past)" : "") +
+      ". Kies zelf of die klopt.";
+    return match;
+  }
+
+  function koppelKern(tx, index) {
     var tp = tegenpartij(tx.descRaw || tx.description || "");
     var tekst = (tx.description || "") + " " + (tx.descRaw || "");
     var nrs = nummers(tekst);
@@ -358,6 +443,7 @@
   }
 
   global.fpBankMatch = {
+    viaDebiteur: viaDebiteur, metDebiteur: metDebiteur,
     tegenpartij: tegenpartij,
     nummers: nummers,
     naamSleutel: naamSleutel,

@@ -285,6 +285,18 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
     <div class="summary" id="summary"></div>
 
+    <!-- Dezelfde knoppen als onder de tabel. Gerrit (19 aug 2026): "bij het
+         uitlezen van een mt940 wil ik de mogelijkheid om alles te selecteren
+         ook bovenaan hebben. Nu moeten we naar beneden scrollen." Bij een
+         afschrift met tachtig regels is dat een heel scherm scrollen voor één
+         klik. -->
+    <div class="row-flex kiesbalk" style="margin:0 0 12px;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button class="cta secondary kiesAllesBtn" type="button">Alles aanvinken</button>
+      <button class="cta secondary kiesZekerBtn" type="button">Alleen de zekere aanvinken</button>
+      <button class="cta secondary kiesGeenBtn" type="button">Selectie wissen</button>
+      <span class="selInfo muted"></span>
+    </div>
+
     <div style="overflow-x:auto;">
       <table class="tx" id="txTable">
         <thead>
@@ -301,10 +313,11 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       </table>
     </div>
 
-    <div class="row-flex" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center;">
-      <button class="cta secondary" id="kiesZeker" type="button">Alleen de zekere aanvinken</button>
-      <button class="cta secondary" id="kiesGeen" type="button">Selectie wissen</button>
-      <span id="selInfo" class="muted"></span>
+    <div class="row-flex kiesbalk" style="margin-top:14px;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button class="cta secondary kiesAllesBtn" type="button">Alles aanvinken</button>
+      <button class="cta secondary kiesZekerBtn" type="button">Alleen de zekere aanvinken</button>
+      <button class="cta secondary kiesGeenBtn" type="button">Selectie wissen</button>
+      <span class="selInfo muted"></span>
     </div>
     <!-- Het dagboek waarin de betalingen landen. Logic4 weigert een boeking
          zonder dagboek, en een betaling in het verkeerde dagboek is geld op de
@@ -729,19 +742,35 @@ function renderRow(tx, idx) {
     const u = STATUS_UITERLIJK[tx.match.status] || STATUS_UITERLIJK.geen;
     badge = "<span class='badge " + u.klasse + "'>" + u.tekst + "</span>";
     const k = tx.match.kandidaten || [];
+    /* Waarom een factuur in de lijst staat, zodat Osman niet hoeft te raden
+       welke van de twee bedragen hij ziet. */
+    const waarom = {};
+    (tx.match.viaDebiteur || []).forEach(t => {
+      waarom[String(t.post.InvoiceId)] = t.soort === "precies"
+        ? "zelfde bedrag" : "koersverschil " + fmtEur(t.verschil);
+    });
+    /* De order én de facturen. Bij een betaling op ordernummer waar de
+       factuur bij hoort, wil Osman allebei zien: waar het geld volgens de
+       omschrijving heen wil, en welke factuur er op het bedrag past.
+       Voorheen verdween de orderregel zodra er meer dan één kandidaat was. */
+    const orderInfo = tx.match.order
+      ? "Order <b>" + tx.match.order.orderNr + "</b> · " + escapeHtml(tx.match.order.naam || "") +
+        " · totaal " + fmtEur(tx.match.order.totaal) +
+        (tx.match.order.betaald ? " waarvan " + fmtEur(tx.match.order.betaald) + " betaald" : "") +
+        (tx.match.order.status ? " · " + escapeHtml(tx.match.order.status) : "")
+      : "";
     if (k.length > 1) {
       // Meerdere posten passen. Laat kiezen in plaats van er zelf één aanwijzen.
-      info = "<div class='match-info'><select class='kiesFactuur' data-idx='" + idx + "' style='max-width:100%;font-size:12px;padding:4px 6px;border:1px solid var(--border,#d5d9e0);border-radius:6px'>" +
+      info = "<div class='match-info'>" + (orderInfo ? orderInfo + "<div style='margin:4px 0'></div>" : "") +
+        "<select class='kiesFactuur' data-idx='" + idx + "' style='max-width:100%;font-size:12px;padding:4px 6px;border:1px solid var(--border,#d5d9e0);border-radius:6px'>" +
         "<option value=''>— kies een factuur —</option>" +
         k.map(p => "<option value='" + p.InvoiceId + "'" + (String(p.InvoiceId) === tx.gekozen ? " selected" : "") + ">" +
           "Factuur " + p.InvoiceId + " · " + escapeHtml((debiteurNamen[String(p.DebtorId)] || {}).naam || ("debiteur " + p.DebtorId)) +
-          " · " + fmtEur(p.AmountOutstanding) + "</option>").join("") +
+          " · " + fmtEur(p.AmountOutstanding) +
+          (waarom[String(p.InvoiceId)] ? " · " + waarom[String(p.InvoiceId)] : "") + "</option>").join("") +
         "</select><div style='margin-top:4px'>" + escapeHtml(tx.match.reden) + "</div></div>";
     } else if (tx.match.order) {
-      const o = tx.match.order;
-      info = "<div class='match-info'>Order <b>" + o.orderNr + "</b> · " + escapeHtml(o.naam || "") +
-        " · totaal " + fmtEur(o.totaal) + (o.betaald ? " waarvan " + fmtEur(o.betaald) + " betaald" : "") +
-        (o.status ? " · " + escapeHtml(o.status) : "") +
+      info = "<div class='match-info'>" + orderInfo +
         "<div style='margin-top:3px'>" + escapeHtml(tx.match.reden) + "</div></div>";
     } else if (tx.match.beste) {
       info = "<div class='match-info'>" + postLabel(tx.match.beste) + "<div style='margin-top:3px'>" + escapeHtml(tx.match.reden) + "</div></div>";
@@ -844,9 +873,16 @@ function werkSelectieBij() {
   const s = selectie();
   const totaal = s.reduce((n, t) => n + Number(t.amount), 0);
   const kiesbaar = state.transactions.filter(t => (t.gekozen || t.orderNr) && !t.geboekt).length;
-  $("selInfo").textContent = s.length
+  const tekst = s.length
     ? s.length + " van " + kiesbaar + " aangevinkt — samen " + fmtEur(totaal)
     : (kiesbaar ? "niets aangevinkt van de " + kiesbaar + " koppelbare betalingen" : "nog niets te koppelen");
+  document.querySelectorAll(".selInfo").forEach(e => { e.textContent = tekst; });
+  /* De knop "Alles aanvinken" wordt "Alles uitvinken" zodra alles aanstaat,
+     zodat één knop beide kanten op werkt - net als het vinkje in de kop. */
+  const allesAan = kiesbaar > 0 && s.length === kiesbaar;
+  document.querySelectorAll(".kiesAllesBtn").forEach(b => {
+    b.textContent = allesAan ? "Alles uitvinken" : "Alles aanvinken";
+  });
   $("boekBtn").disabled = !s.length;
   $("boekBtn").textContent = s.length ? "Boek " + s.length + " betaling" + (s.length === 1 ? "" : "en") + " (" + fmtEur(totaal) + ")"
                                       : "Boek de geselecteerde betalingen";
@@ -857,12 +893,24 @@ $("kiesAlles").addEventListener("change", (e) => {
   for (const t of state.transactions) if (!t.geboekt && (t.kind !== "direct" || t.gekozen || t.orderNr)) t.kies = e.target.checked;
   renderResults();
 });
-$("kiesZeker").addEventListener("click", () => {
+/* Beide balken bedienen dezelfde selectie; welke van de twee je gebruikt
+   maakt niet uit. */
+function opElke(klasse, doen) {
+  document.querySelectorAll("." + klasse).forEach(b => b.addEventListener("click", doen));
+}
+opElke("kiesAllesBtn", () => {
+  const kiesbaar = state.transactions.filter(t => (t.gekozen || t.orderNr) && !t.geboekt);
+  const allesAan = kiesbaar.length > 0 && kiesbaar.every(t => t.kies);
+  for (const t of state.transactions)
+    if (!t.geboekt && (t.kind !== "direct" || t.gekozen || t.orderNr)) t.kies = !allesAan;
+  renderResults();
+});
+opElke("kiesZekerBtn", () => {
   for (const t of state.transactions) t.kies = !t.geboekt &&
     (t.kind !== "direct" ? true : (!!(t.gekozen || t.orderNr) && t.match && t.match.status === "zeker"));
   renderResults();
 });
-$("kiesGeen").addEventListener("click", () => {
+opElke("kiesGeenBtn", () => {
   for (const t of state.transactions) t.kies = false;
   renderResults();
 });
