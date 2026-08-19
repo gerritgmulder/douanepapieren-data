@@ -3036,10 +3036,27 @@ async function handleCIUpload(files,statusId){
          Dit staat los van de schepenlijst: het gaat maar door als het lukt,
          want een spa-container zonder packing list moet gewoon zijn gang
          kunnen gaan. */
-      try{ await leesBinnenkomend(wb,file.name); }
+      let invpl=null;
+      try{ invpl=await leesBinnenkomend(wb,file.name); }
       catch(e){ console.warn("[binnenkomend] lezen faalde:",e); }
 
       const ship=parseCI(wb,file.name);
+      /* Manon (19 aug 2026): "probeer net een commercial invoice toe te voegen
+         van een andere container dan spa's, pakt die nog niet."
+
+         Zo'n bestand heeft geen spa-artikelcodes en ook geen referentie in de
+         vorm die parseCI kent, dus viel hij eruit met de melding dat er geen
+         enkele spa op stond. Terwijl de invoice zelf alles noemt wat we nodig
+         hebben: de leverancier, het invoicenummer en hoeveel containers het
+         zijn. Die gebruiken we nu, zodat de zending gewoon in de lijst komt
+         met zijn papieren eraan. De inhoud telt nergens als spa-voorraad mee,
+         net als bij de meubelcontainers. */
+      if(!ship.total && !ship.ref && invpl){
+        ship.ref = String(invpl.nummer||"").trim() || file.name.replace(/\.[^.]*$/,"");
+        ship.vessel = invpl.leverancier || "";
+        ship.containers = invpl.containersOpInvoice ? invpl.containersOpInvoice.aantal
+                        : ((invpl.containers||[]).length||1);
+      }
       /* Geen enkele spa herkend? Dan is dit geen spa-container.
          Chantal (14 aug 2026): "we houden in mijn dashboard alle containers
          bij, dus ook tuinmeubelen en sauna's, maar geen voorraad bij mij
@@ -3107,6 +3124,9 @@ async function handleCIUpload(files,statusId){
     // De upload staat nu boven Schepen & ontvangst, dus dat scherm moet de
     // nieuwe zending meteen tonen.
     try{ if(window.fpSpaOntvangst&&window.fpSpaOntvangst.ververs) window.fpSpaOntvangst.ververs(); }catch(e){}
+    /* Wat er via de packing list wél is gelukt hoort bovenaan te staan, ook
+       als er daarnaast iets is overgeslagen. Anders leest het als een fout
+       terwijl de containers gewoon klaarstaan. */
     if(overgeslagen.length){
       st.className="status-msg "+(added?"warn":"bad");
       st.innerHTML=(added?added+" schip(en) verwerkt, maar ":"")+
