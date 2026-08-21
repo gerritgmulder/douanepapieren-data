@@ -2986,6 +2986,201 @@ async function handleTrack(request, env) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   RELATIES: ZOEKEN EN AANMAKEN IN LOGIC4
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Voor het Partnerportaal: een bestaande dealer of partner erbij zoeken, of een
+   nieuwe aanmaken die meteen ook in Logic4 komt te staan. Gerrit (21 aug 2026):
+   "als Dolf op een beurs zit wil hij een nieuwe partner kunnen toevoegen."
+
+   Wat de API wel en niet kan - gemeten op 21-08-2026
+   --------------------------------------------------
+   Deze velden landen goed en zijn stuk voor stuk uitgeprobeerd:
+     CompanyName, FirstName, Preposition, LastName, EmailAddress,
+     TelephoneNumber, MobileNumber, Website, Street, HouseNumber,
+     HouseNumberAddition, Zipcode, City, VatNumber, ChamberOfCommerceCode,
+     StatusId.
+
+   Deze drie kan Logic4 NIET via de API:
+     land            CountryId geeft een serverfout, IsoCode wordt genegeerd;
+                     alles blijft op Nederland staan.
+     soort relatie   TypeId wordt genegeerd; een nieuwe relatie blijft
+                     "Particulier", ook als je Zakelijk stuurt.
+     factuur-e-mail  het aparte factuurveld laat zich niet vullen.
+
+   En verwijderen bestaat helemaal niet in de API. Daarom komt elke nieuw
+   aangemaakte relatie in de bucket 'nieuwe-relaties' te staan, en zien Chantal
+   en Arno die bovenaan hun dashboard tot ze hem hebben nagekeken. Zit er een
+   fout in, dan halen zij hem in Logic4 zelf weg - dat kan hier niet.
+
+   Zoeken
+   ------
+   Logic4 filtert alleen op Id en op EmailAddress. Op bedrijfsnaam filtert hij
+   niet, en de klantenlijst is 468.516 records lang; die elke keer doorlopen
+   duurt twee minuten. Daarom houdt de worker een eigen zoeklijst bij van
+   alleen de zakelijke relaties (28.606 stuks, zo'n 2,7 MB) en ververst die één
+   keer per etmaal.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const REL_INDEX = "dealer-zoekindex";
+const REL_NIEUW = "nieuwe-relaties";
+
+async function relL4(env, pad, payload) {
+  const token = await l4Token(env);
+  const r = await fetch("https://api.logic4server.nl" + pad, {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  const tekst = await r.text();
+  let j = null; try { j = JSON.parse(tekst); } catch (e) {}
+  if (!r.ok) throw new Error(pad + " gaf HTTP " + r.status + ": " + tekst.slice(0, 160));
+  return j && j.Records !== undefined ? j.Records : j;
+}
+
+function relKort(c) {
+  return {
+    i: c.Id,
+    n: [c.FirstName, c.Preposition, c.LastName].map(x => String(x || "").trim()).filter(Boolean).join(" "),
+    b: c.CompanyName || "",
+    e: c.EmailAddress || "",
+    p: c.City || "",
+    l: c.IsoCode || "",
+    s: (c.Type && c.Type.Description) || "",
+    a: (c.Status && c.Status.Description) || "",
+  };
+}
+
+/* De zoeklijst opnieuw opbouwen. Alleen zakelijke relaties: een dealer of
+   partner is nooit een particulier, en dat scheelt 94% van de regels. */
+async function relIndexBouw(env) {
+  const uit = [];
+  let skip = 0;
+  for (let p = 0; p < 1200; p++) {
+    const r = await relL4(env, "/v3/Relations/GetCustomers", { TakeRecords: 500, SkipRecords: skip });
+    if (!Array.isArray(r) || !r.length) break;
+    for (const c of r) {
+      const soort = (c.Type && c.Type.Description) || "";
+      if (soort && soort !== "Particulier") uit.push(relKort(c));
+    }
+    if (r.length < 500) break;
+    skip += 500;
+  }
+  await env.FONTEYN_DATA.put(REL_INDEX, JSON.stringify({ gebouwd: new Date().toISOString(), rijen: uit }));
+  return { ok: true, aantal: uit.length };
+}
+
+/* Zoeken. Alleen cijfers = debiteurnummer, met een @ = e-mailadres; die twee
+   gaan rechtstreeks naar Logic4 en zijn dus altijd actueel. Al het andere gaat
+   door de zoeklijst, die hooguit een etmaal oud is. */
+async function relZoek(env, vraag) {
+  const q = String(vraag || "").trim();
+  if (q.length < 2) return { ok: false, error: "typ minstens twee tekens" };
+
+  if (/^\d{1,12}$/.test(q)) {
+    const r = await relL4(env, "/v3/Relations/GetCustomers", { Id: Number(q), TakeRecords: 1 });
+    const c = Array.isArray(r) && r[0] && r[0].Id === Number(q) ? r[0] : null;
+    return { ok: true, bron: "logic4", treffers: c ? [relKort(c)] : [] };
+  }
+  if (q.includes("@")) {
+    const r = await relL4(env, "/v3/Relations/GetCustomers", { EmailAddress: q, TakeRecords: 20 });
+    return { ok: true, bron: "logic4", treffers: (Array.isArray(r) ? r : []).map(relKort) };
+  }
+
+  const index = (await env.FONTEYN_DATA.get(REL_INDEX, { type: "json" })) || null;
+  if (!index) return { ok: false, error: "de zoeklijst is nog niet opgebouwd", bron: "lijst" };
+  const woorden = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const past = (r) => {
+    const tekst = (r.b + " " + r.n + " " + r.p + " " + r.e).toLowerCase();
+    return woorden.every(w => tekst.includes(w));
+  };
+  const treffers = [];
+  for (const r of index.rijen) {
+    if (past(r)) { treffers.push(r); if (treffers.length >= 40) break; }
+  }
+  /* Bedrijfsnaam die met de zoekterm begint eerst: wie "qwal" typt zoekt
+     Qwal-IT en niet een bedrijf met qwal ergens in het midden. */
+  const start = q.toLowerCase();
+  treffers.sort((a, b) => (b.b.toLowerCase().startsWith(start) ? 1 : 0) - (a.b.toLowerCase().startsWith(start) ? 1 : 0));
+  return { ok: true, bron: "lijst", gebouwd: index.gebouwd, treffers: treffers.slice(0, 25) };
+}
+
+/* Aanmaken. Twee stappen met opzet: AddCustomer maakt het nummer aan en de
+   PATCH erachteraan zet de velden. AddCustomer accepteert een lege body en
+   geeft dan een leeg record terug, dus op die ene aanroep vertrouwen zou
+   betekenen dat je niet weet of er iets in staat. Na de PATCH lezen we terug
+   wat er werkelijk is blijven staan, en dát gaat naar het scherm. */
+async function relAanmaken(env, body) {
+  if (body.bevestigd !== true) return { ok: false, error: "niet bevestigd" };
+  const bedrijf = String(body.bedrijf || "").trim();
+  if (!bedrijf) return { ok: false, error: "een bedrijfsnaam is verplicht" };
+
+  const velden = {
+    CompanyName: bedrijf,
+    FirstName: String(body.voornaam || "").trim(),
+    Preposition: String(body.tussenvoegsel || "").trim(),
+    LastName: String(body.achternaam || "").trim(),
+    EmailAddress: String(body.email || "").trim(),
+    TelephoneNumber: String(body.telefoon || "").trim(),
+    MobileNumber: String(body.mobiel || "").trim(),
+    Website: String(body.website || "").trim(),
+    Street: String(body.straat || "").trim(),
+    HouseNumber: String(body.huisnummer || "").trim(),
+    HouseNumberAddition: String(body.toevoeging || "").trim(),
+    Zipcode: String(body.postcode || "").trim(),
+    City: String(body.plaats || "").trim(),
+    VatNumber: String(body.btw || "").trim(),
+    ChamberOfCommerceCode: String(body.kvk || "").trim(),
+  };
+
+  const nieuw = await relL4(env, "/v3/Relations/AddCustomer", {});
+  const id = Number(typeof nieuw === "number" ? nieuw : (nieuw && (nieuw.Id || nieuw.CustomerId)));
+  if (!id) return { ok: false, error: "Logic4 gaf geen debiteurnummer terug" };
+
+  /* UpdateCustomer wil PATCH; met POST krijg je 405. */
+  const token = await l4Token(env);
+  const pr = await fetch("https://api.logic4server.nl/v3/Relations/UpdateCustomer", {
+    method: "PATCH",
+    headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ Id: id, ...velden }),
+  });
+  if (!pr.ok) {
+    /* Het nummer bestaat nu wel maar is leeg. Dat melden we eerlijk, mét het
+       nummer, want weggooien kan niet en iemand moet het afmaken. */
+    return { ok: false, debiteur: id,
+      error: "Debiteur " + id + " is aangemaakt, maar de gegevens konden er niet in worden gezet (HTTP " +
+             pr.status + "). Vul hem in Logic4 verder in of blokkeer hem." };
+  }
+
+  const terug = await relL4(env, "/v3/Relations/GetCustomers", { Id: id, TakeRecords: 1 });
+  const staat = Array.isArray(terug) && terug[0] ? terug[0] : {};
+
+  /* In de lijst voor Chantal en Arno zetten. Die zien hem bovenaan hun
+     dashboard tot iemand hem heeft nagekeken. */
+  const lijst = (await env.FONTEYN_DATA.get(REL_NIEUW, { type: "json" })) || { items: [] };
+  lijst.items = lijst.items || [];
+  lijst.items.unshift({
+    debiteur: id,
+    bedrijf: staat.CompanyName || bedrijf,
+    email: staat.EmailAddress || velden.EmailAddress,
+    plaats: staat.City || velden.City,
+    landGevraagd: String(body.land || "").trim(),
+    soort: String(body.soort || "").trim(),
+    door: String(body.door || "").slice(0, 80),
+    ts: new Date().toISOString(),
+    /* Wat Logic4 niet kon en dus met de hand moet: land, soort relatie en
+       factuur-e-mail. Staat hier zodat het scherm het kan tonen. */
+    handwerk: ["land", "soort relatie (staat nu op Particulier)"]
+      .concat(body.factuurEmail ? ["factuur-e-mail"] : []),
+    gezien: false,
+  });
+  if (lijst.items.length > 400) lijst.items = lijst.items.slice(0, 400);
+  await env.FONTEYN_DATA.put(REL_NIEUW, JSON.stringify(lijst));
+
+  return { ok: true, debiteur: id, staat: relKort(staat), handwerk: lijst.items[0].handwerk };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    VERTALEN — voor de mails aan de dealers
    ═══════════════════════════════════════════════════════════════════════════
 
@@ -5849,6 +6044,16 @@ export default {
         console.log("[cron] productie: " + JSON.stringify(pr));
         const rv = await dpRefreshReservations(env);   // leest voorraad-productie voor de forecast
         console.log("[cron] reserveringen: " + JSON.stringify(rv));
+
+        /* De zoeklijst van zakelijke relaties, één keer per etmaal. Hij kost
+           bijna duizend aanroepen aan Logic4 omdat de klantenlijst 468.000
+           records telt; dat hoort niet elk uur te gebeuren. 's Nachts tussen
+           drie en vier, als er toch niemand zoekt. */
+        const uur = new Date().getUTCHours();
+        if (uur === 2) {
+          const zi = await relIndexBouw(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+          console.log("[cron] zoeklijst relaties: " + JSON.stringify(zi));
+        }
       } catch (e) { console.log("[cron] fout: " + (e.message || e)); }
     })());
   },
@@ -5996,6 +6201,40 @@ export default {
     // Activiteitenlogboek — tegels sturen hier een event bij openen/login
     if (url.pathname === "/log" && request.method === "POST") {
       return handleLog(request, env);
+    }
+
+    /* Relaties zoeken en aanmaken voor het Partnerportaal. Beheersleutel, want
+       aanmaken schrijft echt in Logic4 en dat is niet terug te draaien. */
+    if (url.pathname === "/dealers/admin/relatie/zoek" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const b = await request.json().catch(() => ({}));
+      return reply(200, await relZoek(env, b.q).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/dealers/admin/relatie/aanmaken" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const b = await request.json().catch(() => ({}));
+      return reply(200, await relAanmaken(env, b).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (url.pathname === "/dealers/admin/relatie/zoeklijst" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      return reply(200, await relIndexBouw(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    /* De lijst nieuw aangemaakte relaties voor Chantal en Arno. Lezen mag met
+       de teamsleutel; afvinken ook, want het is geen gevoelige handeling. */
+    if (url.pathname === "/dealers/nieuwe-relaties" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      const lijst = (await env.FONTEYN_DATA.get(REL_NIEUW, { type: "json" })) || { items: [] };
+      if (b.gezien) {
+        for (const it of (lijst.items || [])) {
+          if (String(it.debiteur) === String(b.gezien)) {
+            it.gezien = true; it.gezienDoor = String(b.door || "").slice(0, 80);
+            it.gezienOp = new Date().toISOString();
+          }
+        }
+        await env.FONTEYN_DATA.put(REL_NIEUW, JSON.stringify(lijst));
+      }
+      return reply(200, { ok: true, items: (lijst.items || []).filter(x => !x.gezien) });
     }
 
     /* Vertalen voor de dealermails. Leest alleen en schrijft niets weg, dus de

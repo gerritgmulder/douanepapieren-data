@@ -70,6 +70,48 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 .btn.solid:hover{background:#a50d26;border-color:#a50d26}
 .btn.sm{padding:4px 10px;font-size:11px;border-radius:7px}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important;box-shadow:none!important;background:#fff;color:#c8102e}
+
+  /* ── De relatiekaart ─────────────────────────────────────────────────
+     Alles van één dealer of partner op één plek, in blokken die de vraag
+     beantwoorden: wie is het, wat is er afgesproken, waar gaat de factuur
+     heen, waar gaat de spa heen, en welk nummer hoort erbij in Logic4. */
+  .kaartlaag{position:fixed;inset:0;background:rgba(15,20,17,.5);z-index:900;display:flex;
+             align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto}
+  .relkaart{background:#fff;border-radius:12px;width:100%;max-width:880px;box-shadow:0 20px 60px rgba(0,0,0,.28)}
+  .relkop{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--border)}
+  .relkop h3{margin:0;font-size:17px;color:var(--fonteyn-green);flex:1}
+  .relbody{padding:18px 22px;max-height:calc(100vh - 210px);overflow:auto}
+  .relvoet{display:flex;gap:10px;justify-content:flex-end;align-items:center;padding:14px 22px;border-top:1px solid var(--border);flex-wrap:wrap}
+  .blok{border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  .blok > h4{margin:0 0 3px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--fonteyn-green)}
+  .blok > .uit{margin:0 0 11px;font-size:12px;color:var(--muted);line-height:1.5}
+  .velden{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 12px}
+  .veld{display:flex;flex-direction:column;gap:4px}
+  .veld.breed{grid-column:1/-1}
+  .veld label{font-size:11px;color:var(--muted);font-weight:600}
+  .veld input,.veld select,.veld textarea{border:1px solid var(--border);border-radius:7px;padding:8px 10px;font:inherit;font-size:13px;width:100%}
+  .veld input:focus,.veld select:focus,.veld textarea:focus{outline:none;border-color:var(--fonteyn-lime-dark);box-shadow:0 0 0 3px rgba(139,197,63,.2)}
+
+  /* Partner of dealer: geen keuzelijst maar twee vlakken, want dit is het
+     belangrijkste dat je op deze kaart instelt. */
+  .soortkies{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .soortkies button{text-align:left;border:2px solid var(--border);background:#fff;border-radius:9px;padding:11px 13px;font:inherit;cursor:pointer}
+  .soortkies button b{display:block;font-size:14px;color:var(--ink);margin-bottom:2px}
+  .soortkies button span{display:block;font-size:11.5px;color:var(--muted);line-height:1.45}
+  .soortkies button.aan{border-color:var(--fonteyn-green);background:#f3f7f4}
+  .soortkies button.aan b{color:var(--fonteyn-green)}
+
+  .l4rij{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .l4rij input{flex:1;min-width:190px;border:1px solid var(--border);border-radius:7px;padding:8px 10px;font:inherit;font-size:13px}
+  .l4uit{margin-top:9px;border:1px solid var(--border);border-radius:8px;max-height:210px;overflow:auto}
+  .l4uit button{display:block;width:100%;text-align:left;border:0;border-bottom:1px solid #f3f4f6;background:#fff;
+                padding:9px 11px;font:inherit;font-size:12.5px;cursor:pointer}
+  .l4uit button:hover{background:#f6faf3}
+  .l4uit button:last-child{border-bottom:0}
+  .l4uit .nr{font-weight:700;color:var(--fonteyn-green)}
+  .waarschuw{border-left:3px solid #92400e;background:#fef3c7;color:#7c4a02;border-radius:7px;padding:11px 13px;font-size:12.5px;line-height:1.55;margin-top:12px}
+  .naloop{border-left:3px solid var(--fonteyn-green);background:#f3f7f4;border-radius:7px;padding:11px 13px;font-size:12.5px;line-height:1.6;margin-top:12px}
+  .naloop b{color:var(--fonteyn-green)}
 </style>
 
 </head>
@@ -107,10 +149,14 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <div class="card">
     <h3>Partners (<span id="partnerCount">0</span>)</h3>
     <table class="grid">
-      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een ander prijsniveau; die krijgt juist die prijslijsten niet te zien, want daarin staat wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Merk</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een ander prijsniveau; die krijgt juist die prijslijsten niet te zien, want daarin staat wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Merk</th><th>Afspraken</th><th>Status</th><th></th></tr></thead>
       <tbody id="partnerBody"></tbody>
     </table>
     <div class="row" style="margin-top:12px">
+      <button class="primary" id="nieuweRelatie" type="button">+ Nieuwe dealer of partner</button>
+      <span style="font-size:12px;color:var(--muted)">Bestaat de relatie al in Logic4? Dan zoek je hem in de kaart op en koppel je het debiteurnummer.</span>
+    </div>
+    <div class="row hidden" style="margin-top:12px">
       <input id="nEmail" type="email" placeholder="partner@bedrijf.com" style="min-width:220px">
       <input id="nCompany" placeholder="Bedrijfsnaam" style="min-width:180px">
       <input id="nDebtors" placeholder="debiteurnr(s), optioneel" style="min-width:170px">
@@ -280,6 +326,313 @@ function vraagWachtwoord(email){
   });
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+   DE RELATIEKAART
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (21 aug 2026): "het verschil tussen dealer en partner moet duidelijk
+   zijn, bij een dealer zijn afspraken gemaakt en die moet je kunnen invoeren",
+   en: "als Dolf op een beurs zit wil hij een nieuwe partner kunnen toevoegen,
+   met alle gegevens die belangrijk zijn, ook voor facturatie en shipping."
+
+   Alles van één relatie op één kaart, in vijf blokken: wie is het, wat is er
+   afgesproken, waar gaat de factuur heen, waar gaat de spa heen, en welk
+   nummer hoort erbij in Logic4.
+
+   Over dat laatste blok: aanmaken in Logic4 is niet terug te draaien. De API
+   kent geen verwijderen. Daarom staat er een bevestigingsscherm voor, met
+   alles wat er verstuurd wordt op een rij, en daarin staat ook wat Logic4
+   niet kan aannemen (land, soort relatie en factuur-e-mail). Chantal en Arno
+   zien nieuw aangemaakte relaties bovenaan hun dashboard tot ze ze hebben
+   nagekeken. */
+
+const LANDEN = ["NL","BE","DE","FR","ES","IT","PT","AT","CH","DK","SE","NO","FI","PL","CZ","SK","HU","RO","GR","IE","GB","US","CA","AU","NZ","ZA","AE","overig"];
+const INCOTERMS = ["EXW Uddel","FCA Uddel","FOB Rotterdam","CIF","DAP","DDP","anders"];
+
+function leegRelatie(){
+  return { email:"", company:"", debtorIds:[], region:"EU", soort:"", merk:"", active:true,
+    contact:{ voornaam:"", tussenvoegsel:"", achternaam:"", telefoon:"", mobiel:"", website:"" },
+    afspraken:{ kortingPct:"", kortingTekst:"", betaaltermijn:"", notitie:"" },
+    facturatie:{ straat:"", huisnummer:"", toevoeging:"", postcode:"", plaats:"", land:"NL",
+                 btw:"", kvk:"", factuurEmail:"" },
+    verzending:{ zelfde:true, straat:"", huisnummer:"", toevoeging:"", postcode:"", plaats:"",
+                 land:"NL", incoterm:"", opmerking:"" } };
+}
+function vulAan(d){
+  const l=leegRelatie();
+  d.contact    = Object.assign({}, l.contact,    d.contact||{});
+  d.afspraken  = Object.assign({}, l.afspraken,  d.afspraken||{});
+  d.facturatie = Object.assign({}, l.facturatie, d.facturatie||{});
+  d.verzending = Object.assign({}, l.verzending, d.verzending||{});
+  if (!Array.isArray(d.debtorIds)) d.debtorIds = [];
+  return d;
+}
+function veld(pad, label, waarde, opties){
+  const o = opties || {};
+  const attr = 'data-pad="'+pad+'"' + (o.type?' type="'+o.type+'"':'') + (o.plh?' placeholder="'+esc(o.plh)+'"':'');
+  const inv = o.keuze
+    ? '<select '+attr+'>'+o.keuze.map(k=>'<option value="'+esc(k)+'"'+(String(waarde)===String(k)?' selected':'')+'>'+esc(k)+'</option>').join("")+'</select>'
+    : (o.regels ? '<textarea '+attr+' rows="'+o.regels+'">'+esc(waarde||"")+'</textarea>'
+                : '<input '+attr+' value="'+esc(waarde==null?"":waarde)+'">');
+  return '<div class="veld'+(o.breed?" breed":"")+'"><label>'+esc(label)+'</label>'+inv+'</div>';
+}
+
+function relatieKaart(index){
+  const nieuw = index === null || index === undefined;
+  const d = vulAan(nieuw ? leegRelatie() : JSON.parse(JSON.stringify(accounts.dealers[index])));
+
+  const laag = document.createElement("div");
+  laag.className = "kaartlaag";
+  laag.innerHTML =
+    '<div class="relkaart">'
+    + '<div class="relkop"><h3>' + (nieuw ? "Nieuwe dealer of partner" : esc(d.company || d.email)) + '</h3>'
+    +   '<button class="btn sm" id="rkSluit" type="button">Sluiten</button></div>'
+    + '<div class="relbody" id="rkBody"></div>'
+    + '<div class="relvoet">'
+    +   '<span id="rkMelding" style="flex:1;font-size:12.5px;color:var(--muted)"></span>'
+    +   '<button class="btn" id="rkAnnuleer" type="button">Annuleren</button>'
+    +   '<button class="btn solid" id="rkBewaar" type="button">Bewaren</button>'
+    + '</div></div>';
+  document.body.appendChild(laag);
+  const $$ = (id) => laag.querySelector("#" + id);
+  const zeg = (t, fout) => { const m=$$("rkMelding"); m.textContent=t||""; m.style.color = fout ? "var(--bad)" : "var(--muted)"; };
+
+  function teken(){
+    const soortUit = d.soort === "dealer"
+      ? "Een dealer koopt in tegen een eigen, afwijkend prijsniveau. Die krijgt de prijslijsten waarin partner-, dealer- en consumentenprijs naast elkaar staan juist niet te zien. Leg hieronder vast wat er is afgesproken."
+      : d.soort === "partner"
+      ? "Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten met alle prijsniveaus naast elkaar."
+      : "Kies eerst partner of dealer. Dat bepaalt welke prijzen en welke documenten deze relatie te zien krijgt.";
+
+    $$("rkBody").innerHTML =
+      '<div class="blok"><h4>Wat voor relatie is dit</h4>'
+      + '<p class="uit">' + esc(soortUit) + '</p>'
+      + '<div class="soortkies">'
+      +   '<button type="button" data-soort="partner" class="' + (d.soort==="partner"?"aan":"") + '">'
+      +     '<b>Partner</b><span>Koopt in tegen de partnerprijs. Ziet alle prijslijsten en documentatie.</span></button>'
+      +   '<button type="button" data-soort="dealer" class="' + (d.soort==="dealer"?"aan":"") + '">'
+      +     '<b>Dealer</b><span>Eigen prijsafspraken. Ziet de prijslijsten met andermans prijzen niet.</span></button>'
+      + '</div>'
+      + '<div class="velden" style="margin-top:12px">'
+      +   veld("merk","Merk", d.merk, {keuze:["","passion","fonteyn","beide"]})
+      +   veld("region","Regio en valuta", d.region, {keuze:["EU","US"]})
+      + '</div></div>'
+
+      + '<div class="blok"><h4>Wie is het</h4>'
+      + '<div class="velden">'
+      +   veld("company","Bedrijfsnaam", d.company, {breed:true, plh:"zoals het op de factuur moet staan"})
+      +   veld("contact.voornaam","Voornaam contactpersoon", d.contact.voornaam)
+      +   veld("contact.tussenvoegsel","Tussenvoegsel", d.contact.tussenvoegsel)
+      +   veld("contact.achternaam","Achternaam", d.contact.achternaam)
+      +   veld("email","E-mail (inloggen op het portaal)", d.email, {type:"email", plh:"naam@bedrijf.com"})
+      +   veld("contact.telefoon","Telefoon", d.contact.telefoon)
+      +   veld("contact.mobiel","Mobiel", d.contact.mobiel)
+      +   veld("contact.website","Website", d.contact.website, {plh:"https://"})
+      + '</div></div>'
+
+      + '<div class="blok"><h4>' + (d.soort==="dealer"?"Dealerafspraken":"Inkoopafspraken") + '</h4>'
+      + '<p class="uit">' + (d.soort==="dealer"
+          ? "Wat is er met deze dealer afgesproken? Bijvoorbeeld tien procent korting op een spa. Wat je hier invult is wat geldt; het portaal rekent er niet automatisch mee, het legt het vast zodat iedereen hetzelfde weet."
+          : "Afwijkende afspraken met deze partner, als die er zijn. Staat er niets, dan gelden de gewone partnerprijzen.") + '</p>'
+      + '<div class="velden">'
+      +   veld("afspraken.kortingPct","Korting in procenten", d.afspraken.kortingPct, {type:"number", plh:"bv. 10"})
+      +   veld("afspraken.kortingTekst","Waarop geldt die korting", d.afspraken.kortingTekst, {plh:"bv. alle spa's, niet op onderdelen"})
+      +   veld("afspraken.betaaltermijn","Betaaltermijn", d.afspraken.betaaltermijn, {plh:"bv. 30 dagen, of 30% vooruit"})
+      +   veld("afspraken.notitie","Overige afspraken", d.afspraken.notitie, {breed:true, regels:2, plh:"vrije aantekening"})
+      + '</div></div>'
+
+      + '<div class="blok"><h4>Facturatie</h4>'
+      + '<p class="uit">Het adres en de gegevens die op de factuur horen.</p>'
+      + '<div class="velden">'
+      +   veld("facturatie.straat","Straat", d.facturatie.straat)
+      +   veld("facturatie.huisnummer","Huisnummer", d.facturatie.huisnummer)
+      +   veld("facturatie.toevoeging","Toevoeging", d.facturatie.toevoeging)
+      +   veld("facturatie.postcode","Postcode", d.facturatie.postcode)
+      +   veld("facturatie.plaats","Plaats", d.facturatie.plaats)
+      +   veld("facturatie.land","Land", d.facturatie.land, {keuze:LANDEN})
+      +   veld("facturatie.btw","Btw-nummer", d.facturatie.btw)
+      +   veld("facturatie.kvk","KvK of handelsregister", d.facturatie.kvk)
+      +   veld("facturatie.factuurEmail","Factuur-e-mail", d.facturatie.factuurEmail, {type:"email", plh:"als die afwijkt"})
+      + '</div></div>'
+
+      + '<div class="blok"><h4>Verzending</h4>'
+      + '<p class="uit">Waar gaan de spa\'s heen? Partners zitten over de hele wereld, dus land en incoterm horen hier vast te liggen.</p>'
+      + '<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-bottom:10px;cursor:pointer">'
+      +   '<input type="checkbox" data-pad="verzending.zelfde"' + (d.verzending.zelfde?" checked":"") + '> hetzelfde adres als de facturatie</label>'
+      + '<div class="velden"' + (d.verzending.zelfde?' style="display:none"':'') + ' id="rkVerz">'
+      +   veld("verzending.straat","Straat", d.verzending.straat)
+      +   veld("verzending.huisnummer","Huisnummer", d.verzending.huisnummer)
+      +   veld("verzending.toevoeging","Toevoeging", d.verzending.toevoeging)
+      +   veld("verzending.postcode","Postcode", d.verzending.postcode)
+      +   veld("verzending.plaats","Plaats", d.verzending.plaats)
+      +   veld("verzending.land","Land", d.verzending.land, {keuze:LANDEN})
+      + '</div>'
+      + '<div class="velden" style="margin-top:10px">'
+      +   veld("verzending.incoterm","Levervoorwaarde", d.verzending.incoterm, {keuze:[""].concat(INCOTERMS)})
+      +   veld("verzending.opmerking","Opmerking bij verzending", d.verzending.opmerking, {breed:true, plh:"bv. alleen lossen met kraan"})
+      + '</div></div>'
+
+      + '<div class="blok"><h4>Logic4</h4>'
+      + '<p class="uit">Elke relatie hoort een debiteurnummer te hebben. Zoek de bestaande op, of maak een nieuwe aan.</p>'
+      + '<div class="velden"><div class="veld breed"><label>Debiteurnummer(s), komma-gescheiden</label>'
+      +   '<input data-pad="debtorIdsTekst" value="' + esc(d.debtorIds.join(", ")) + '" placeholder="bv. 191923"></div></div>'
+      + '<div class="l4rij" style="margin-top:11px">'
+      +   '<input id="rkZoek" placeholder="zoek op nummer, e-mailadres of bedrijfsnaam">'
+      +   '<button class="btn sm" id="rkZoekKnop" type="button">Zoeken</button>'
+      +   '<button class="btn sm" id="rkNieuwL4" type="button">Nieuw debiteurnummer aanmaken</button>'
+      + '</div>'
+      + '<div class="l4uit hidden" id="rkTreffers"></div>'
+      + '<div id="rkL4melding"></div>'
+      + '</div>';
+
+    laag.querySelectorAll("[data-soort]").forEach(b => b.addEventListener("click", () => {
+      d.soort = b.dataset.soort; lees(); teken();
+    }));
+    const vinkje = laag.querySelector('[data-pad="verzending.zelfde"]');
+    if (vinkje) vinkje.addEventListener("change", () => {
+      d.verzending.zelfde = vinkje.checked;
+      const v = $$("rkVerz"); if (v) v.style.display = vinkje.checked ? "none" : "";
+    });
+    $$("rkZoekKnop").addEventListener("click", zoekL4);
+    $$("rkZoek").addEventListener("keydown", e => { if (e.key === "Enter") zoekL4(); });
+    $$("rkNieuwL4").addEventListener("click", () => { lees(); bevestigAanmaken(); });
+  }
+
+  /* Wat er in de velden staat terugzetten in het object. Eén functie, zodat
+     er nooit een veld vergeten wordt bij het opslaan. */
+  function lees(){
+    laag.querySelectorAll("[data-pad]").forEach(el => {
+      const pad = el.dataset.pad;
+      const waarde = el.type === "checkbox" ? el.checked : el.value;
+      if (pad === "debtorIdsTekst") {
+        d.debtorIds = String(waarde).split(",").map(x => x.trim()).filter(Boolean);
+        return;
+      }
+      const delen = pad.split(".");
+      if (delen.length === 1) d[delen[0]] = waarde;
+      else { d[delen[0]] = d[delen[0]] || {}; d[delen[0]][delen[1]] = waarde; }
+    });
+  }
+
+  async function zoekL4(){
+    const q = $$("rkZoek").value.trim();
+    const uit = $$("rkTreffers");
+    if (q.length < 2) { zeg("Typ minstens twee tekens om te zoeken.", true); return; }
+    zeg("Zoeken in Logic4…");
+    try {
+      const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/relatie/zoek", {
+        method:"POST", headers:{ "Content-Type":"application/json", "X-DP-Admin": adminKey() },
+        body: JSON.stringify({ q }) });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+      if (!j.treffers.length) { uit.classList.add("hidden"); zeg("Niets gevonden voor “" + q + "”."); return; }
+      uit.innerHTML = j.treffers.map(t =>
+        '<button type="button" data-nr="' + t.i + '" data-b="' + esc(t.b) + '" data-e="' + esc(t.e) + '">'
+        + '<span class="nr">' + t.i + '</span> &nbsp; ' + esc(t.b || t.n || "(zonder naam)")
+        + (t.p ? ' <span style="color:var(--muted)">&middot; ' + esc(t.p) + '</span>' : "")
+        + (t.e ? ' <span style="color:var(--muted)">&middot; ' + esc(t.e) + '</span>' : "")
+        + (t.a && t.a !== "Actief" ? ' <span style="color:var(--bad)">&middot; ' + esc(t.a) + '</span>' : "")
+        + '</button>').join("");
+      uit.classList.remove("hidden");
+      uit.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+        const inv = laag.querySelector('[data-pad="debtorIdsTekst"]');
+        const huidig = inv.value.split(",").map(x=>x.trim()).filter(Boolean);
+        if (!huidig.includes(b.dataset.nr)) huidig.push(b.dataset.nr);
+        inv.value = huidig.join(", ");
+        if (!laag.querySelector('[data-pad="company"]').value) laag.querySelector('[data-pad="company"]').value = b.dataset.b;
+        if (!laag.querySelector('[data-pad="email"]').value && b.dataset.e) laag.querySelector('[data-pad="email"]').value = b.dataset.e;
+        uit.classList.add("hidden");
+        zeg("Debiteur " + b.dataset.nr + " gekoppeld.");
+      }));
+      zeg(j.treffers.length + " treffer(s)" + (j.bron === "lijst" ? " uit de zoeklijst van vannacht" : " rechtstreeks uit Logic4") + ".");
+    } catch (e) { zeg("Zoeken mislukte: " + e.message, true); }
+  }
+
+  /* Aanmaken gaat nooit zomaar. Eerst alles op een rij, inclusief de drie
+     dingen die Logic4 niet aanneemt, en pas daarna de knop. */
+  function bevestigAanmaken(){
+    if (!d.company.trim()) { zeg("Vul eerst een bedrijfsnaam in.", true); return; }
+    const rij = (k,v) => v ? '<tr><td style="color:var(--muted);padding:2px 10px 2px 0">'+esc(k)+'</td><td>'+esc(v)+'</td></tr>' : "";
+    const laag2 = document.createElement("div");
+    laag2.className = "kaartlaag"; laag2.style.zIndex = 950;
+    laag2.innerHTML =
+      '<div class="relkaart" style="max-width:620px">'
+      + '<div class="relkop"><h3>Nieuwe debiteur aanmaken in Logic4</h3></div>'
+      + '<div class="relbody">'
+      +   '<p style="margin:0 0 12px;font-size:13px">Dit wordt naar Logic4 gestuurd:</p>'
+      +   '<table style="font-size:13px;border-collapse:collapse">'
+      +     rij("Bedrijfsnaam", d.company) + rij("Contactpersoon", [d.contact.voornaam,d.contact.tussenvoegsel,d.contact.achternaam].filter(Boolean).join(" "))
+      +     rij("E-mail", d.email) + rij("Telefoon", d.contact.telefoon) + rij("Mobiel", d.contact.mobiel)
+      +     rij("Website", d.contact.website)
+      +     rij("Adres", [d.facturatie.straat, d.facturatie.huisnummer, d.facturatie.toevoeging].filter(Boolean).join(" "))
+      +     rij("Postcode en plaats", [d.facturatie.postcode, d.facturatie.plaats].filter(Boolean).join(" "))
+      +     rij("Btw-nummer", d.facturatie.btw) + rij("KvK", d.facturatie.kvk)
+      +   '</table>'
+      +   '<div class="waarschuw"><b>Dit kan Logic4 niet aannemen via de koppeling.</b> '
+      +     'Na het aanmaken moet iemand in Logic4 zelf zetten:<br>'
+      +     '&middot; het land (staat straks op Nederland' + (d.facturatie.land && d.facturatie.land !== "NL" ? ', jij koos ' + esc(d.facturatie.land) : "") + ')<br>'
+      +     '&middot; de soort relatie (staat straks op Particulier, moet Zakelijk)'
+      +     (d.facturatie.factuurEmail ? '<br>&middot; de factuur-e-mail' : "")
+      +   '</div>'
+      +   '<div class="waarschuw" style="border-left-color:var(--bad);background:#fee2e2;color:#7f1d1d">'
+      +     '<b>Aanmaken is niet terug te draaien.</b> De koppeling kan een relatie niet verwijderen. '
+      +     'Klopt er iets niet, dan moet die in Logic4 zelf worden weggehaald. '
+      +     'Chantal en Arno zien deze nieuwe relatie bovenaan hun dashboard.'
+      +   '</div>'
+      + '</div>'
+      + '<div class="relvoet"><span id="rkBevMeld" style="flex:1;font-size:12.5px;color:var(--muted)"></span>'
+      +   '<button class="btn" id="rkBevNee" type="button">Terug</button>'
+      +   '<button class="btn solid" id="rkBevJa" type="button">Ja, aanmaken in Logic4</button></div>'
+      + '</div>';
+    document.body.appendChild(laag2);
+    laag2.querySelector("#rkBevNee").addEventListener("click", () => laag2.remove());
+    laag2.querySelector("#rkBevJa").addEventListener("click", async () => {
+      const knop = laag2.querySelector("#rkBevJa"), meld = laag2.querySelector("#rkBevMeld");
+      knop.disabled = true; meld.textContent = "Bezig met aanmaken…";
+      try {
+        const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/relatie/aanmaken", {
+          method:"POST", headers:{ "Content-Type":"application/json", "X-DP-Admin": adminKey() },
+          body: JSON.stringify({ bevestigd:true, bedrijf:d.company,
+            voornaam:d.contact.voornaam, tussenvoegsel:d.contact.tussenvoegsel, achternaam:d.contact.achternaam,
+            email:d.email, telefoon:d.contact.telefoon, mobiel:d.contact.mobiel, website:d.contact.website,
+            straat:d.facturatie.straat, huisnummer:d.facturatie.huisnummer, toevoeging:d.facturatie.toevoeging,
+            postcode:d.facturatie.postcode, plaats:d.facturatie.plaats, btw:d.facturatie.btw, kvk:d.facturatie.kvk,
+            land:d.facturatie.land, soort:d.soort, factuurEmail:d.facturatie.factuurEmail,
+            door:(localStorage.getItem(EMAIL_KEY)||"") }) });
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
+        const inv = laag.querySelector('[data-pad="debtorIdsTekst"]');
+        const huidig = inv.value.split(",").map(x=>x.trim()).filter(Boolean);
+        huidig.push(String(j.debiteur)); inv.value = huidig.join(", ");
+        d.debtorIds = huidig;
+        try{ if(window.fpLog) window.fpLog("relatie-aangemaakt-in-logic4", j.debiteur+" "+d.company); }catch(e){}
+        laag2.remove();
+        zeg("Aangemaakt: debiteur " + j.debiteur + ". Vergeet niet nog te bewaren.");
+      } catch (e) {
+        meld.textContent = "Mislukt: " + e.message;
+        meld.style.color = "var(--bad)"; knop.disabled = false;
+      }
+    });
+  }
+
+  $$("rkSluit").addEventListener("click", () => laag.remove());
+  $$("rkAnnuleer").addEventListener("click", () => laag.remove());
+  laag.addEventListener("click", e => { if (e.target === laag) laag.remove(); });
+  $$("rkBewaar").addEventListener("click", async () => {
+    lees();
+    if (!d.email.trim()) { zeg("Een e-mailadres is nodig, daarmee logt de relatie in op het portaal.", true); return; }
+    if (!d.soort) { zeg("Kies eerst partner of dealer.", true); return; }
+    const anders = (accounts.dealers || []).findIndex((x,i) => i !== index && String(x.email||"").toLowerCase() === d.email.toLowerCase());
+    if (anders >= 0) { zeg("Dit e-mailadres hoort al bij een andere relatie.", true); return; }
+    accounts.dealers = accounts.dealers || [];
+    if (nieuw) accounts.dealers.push(d); else accounts.dealers[index] = d;
+    try{ if(window.fpLog) window.fpLog(nieuw?"relatie-toegevoegd":"relatie-gewijzigd", d.email+" ("+d.company+")"); }catch(e){}
+    await save("dealer-accounts", accounts);
+    laag.remove(); renderPartners();
+  });
+
+  teken();
+}
+
 function renderPartners(){
   const list = accounts.dealers || [];
   $("partnerCount").textContent = list.length;
@@ -299,12 +652,21 @@ function renderPartners(){
         <option value="fonteyn"${d.merk==="fonteyn"?" selected":""}>Fonteyn</option>
         <option value="beide"${d.merk==="beide"?" selected":""}>Beide</option>
       </select></td>
+      <td style="font-size:12px;color:var(--muted)">${(()=>{
+        const a=d.afspraken||{};
+        const s=[];
+        if(a.kortingPct) s.push("<b style='color:var(--ink)'>"+esc(a.kortingPct)+"%</b>"+(a.kortingTekst?" "+esc(a.kortingTekst):""));
+        if(a.betaaltermijn) s.push(esc(a.betaaltermijn));
+        return s.join(" &middot; ") || "—";
+      })()}</td>
       <td><span class="pill ${d.active!==false?"on":"off"}">${d.active!==false?"actief":"uit"}</span>
           <button class="rmv togAct" data-i="${i}" style="margin-left:6px">${d.active!==false?"blokkeer":"activeer"}</button></td>
-      <td><button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink (7 dagen geldig, eenmalig) — handig als de e-mail niet aankomt of voor onboarding via WhatsApp">inloglink</button>
+      <td><button class="rmv kaartD" data-i="${i}" title="Alle gegevens van deze relatie: afspraken, facturatie, verzending en het debiteurnummer" style="font-weight:700">bewerken</button>
+          <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink (7 dagen geldig, eenmalig) — handig als de e-mail niet aankomt of voor onboarding via WhatsApp">inloglink</button>
           <button class="rmv pwD" data-i="${i}" title="Zet een wachtwoord voor dit account. Gebruik dit als een inloglink 'verlopen' blijft zeggen: mailfilters zoals Microsoft Safe Links openen de link zelf om hem te controleren en gebruiken hem daarmee op. Met een wachtwoord kan er niets meer verlopen.">wachtwoord</button>
           <button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
-    </tr>`).join("") || '<tr><td colspan="8" style="color:var(--muted)">Nog geen partners — voeg de eerste toe.</td></tr>';
+    </tr>`).join("") || '<tr><td colspan="9" style="color:var(--muted)">Nog geen dealers of partners — voeg de eerste toe.</td></tr>';
+  document.querySelectorAll(".kaartD").forEach(b=>b.addEventListener("click",()=>relatieKaart(Number(b.dataset.i))));
   document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     d.active = d.active === false ? true : false;
@@ -390,6 +752,9 @@ function renderPartners(){
     await save("dealer-accounts", accounts); renderPartners();
   }));
 }
+/* De nieuwe weg loopt via de relatiekaart. De oude invoerrij staat er nog wel
+   (verborgen) zodat deze functie niet stukloopt op een ontbrekend element. */
+$("nieuweRelatie").addEventListener("click", ()=>relatieKaart(null));
 $("addPartner").addEventListener("click", async ()=>{
   const email = $("nEmail").value.trim().toLowerCase();
   if (!email || !email.includes("@")){ setStatus("bad","Vul een geldig e-mailadres in."); return; }

@@ -368,6 +368,11 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
     <!-- Persoonlijk takenblok. Wordt gevuld door taken.js: eigen taken,
          terugkerende momenten en signalen uit Logic4 die op naam staan. -->
+    <!-- Nieuw aangemaakte dealers en partners. Alleen voor wie ze nakijkt:
+         Chantal en Arno. Staat bovenaan omdat een verkeerd aangemaakte
+         relatie in Logic4 niet vanzelf weggaat - de koppeling kan niet
+         verwijderen, dus dat moet met de hand en het liefst snel. -->
+    <div id="nieuweRelatiesBlok"></div>
     <div id="takenBlok"></div>
 
     <!-- ══════════ ELKE DAG ══════════
@@ -886,6 +891,7 @@ function showDashboard(email) {
   verbergLegeGroepen();
   herstelScrollpositie();
   startTakenblok(email);
+  startNieuweRelaties(email);
 }
 
 // ─── Mijn taken ──────────────────────────────────────────────
@@ -971,6 +977,72 @@ window.addEventListener("pagehide", bewaarScrollpositie);
 document.addEventListener("click", (ev) => {
   if (ev.target.closest && ev.target.closest("a.tile")) bewaarScrollpositie();
 }, true);
+
+/* ── Nieuw aangemaakte dealers en partners ──────────────────────────────
+   Wie in het Partnerportaal een nieuwe relatie aanmaakt, maakt hem ook echt
+   in Logic4 aan. Dat is niet terug te draaien: de koppeling kent geen
+   verwijderen, en land en soort relatie kan hij niet eens invullen. Chantal
+   en Arno kijken ze na. Tot iemand op "nagekeken" klikt blijft de melding
+   staan, want een halve relatie in de administratie moet iemand afmaken. */
+/* dashboard.html had nog geen ontsnappingsfunctie; deze tekst komt uit
+   Logic4 en uit wat iemand heeft ingetypt, dus die hoort er wel te zijn. */
+function relEsc(x){ return String(x==null?"":x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+const NIEUWE_REL_VOOR = new Set([
+  "chantal@fonteyn.nl","chantal","fonteyn.chantal",
+  "arno@fonteyn.nl","arno","fonteyn.arno",
+  "dolf@fonteyn.nl","fonteyn.dolf",
+  "gerrit@fonteyn.nl","gerrit",
+  "fonteynbot@fonteyn.nl","fonteynbot","fonteyn.bot",
+]);
+async function startNieuweRelaties(email){
+  const lc = String(email||"").toLowerCase();
+  if (!NIEUWE_REL_VOOR.has(lc)) return;
+  const blok = el("nieuweRelatiesBlok");
+  async function haal(gezien){
+    const key = localStorage.getItem("fp.teamkey") || "";
+    if (!key) return null;
+    try {
+      const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/nieuwe-relaties", {
+        method:"POST", headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": key },
+        body: JSON.stringify(gezien ? { gezien, door: lc } : {}) });
+      const j = await r.json();
+      return j && j.ok ? (j.items||[]) : null;
+    } catch(e){ return null; }
+  }
+  function teken(items){
+    if (!items || !items.length) { blok.innerHTML = ""; return; }
+    const nl = (t)=>{ const d=new Date(t); return isNaN(d)?"":d.toLocaleDateString("nl-NL",{day:"numeric",month:"long"}); };
+    blok.innerHTML =
+      '<section style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #92400e;border-radius:10px;padding:16px 20px;margin-bottom:22px">'
+      + '<h3 style="margin:0 0 4px;font-size:15px;color:#92400e">'
+      +   items.length + ' nieuw' + (items.length===1?'e':'e') + ' relatie' + (items.length===1?'':'s') + ' in Logic4 om na te kijken</h3>'
+      + '<p style="margin:0 0 12px;font-size:12.5px;color:#6b7280;line-height:1.55">'
+      +   'Aangemaakt vanuit het Partnerportaal. Logic4 kan het land en de soort relatie niet via de koppeling '
+      +   'aannemen, dus die staan nu op Nederland en Particulier. Klopt er iets niet, dan moet de relatie in '
+      +   'Logic4 zelf worden weggehaald; dat kan hier niet.</p>'
+      + items.map(it =>
+          '<div style="display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid #f3f4f6;flex-wrap:wrap">'
+          + '<div style="flex:1;min-width:220px">'
+          +   '<b style="font-size:13.5px">' + relEsc(it.bedrijf||"(zonder naam)") + '</b>'
+          +   ' <span style="color:#92400e;font-weight:700">debiteur ' + relEsc(String(it.debiteur)) + '</span>'
+          +   '<div style="font-size:12px;color:#6b7280;margin-top:2px">'
+          +     [it.email, it.plaats, it.landGevraagd ? "land: "+it.landGevraagd : "", it.soort, 
+                 "door " + String(it.door||"").split("@")[0], nl(it.ts)].filter(Boolean).map(relEsc).join(" &middot; ")
+          +   '</div>'
+          +   (it.handwerk && it.handwerk.length
+                ? '<div style="font-size:12px;color:#92400e;margin-top:3px">Nog met de hand zetten: ' + relEsc(it.handwerk.join(", ")) + '</div>' : "")
+          + '</div>'
+          + '<button data-nr="' + relEsc(String(it.debiteur)) + '" class="relGezien" style="background:#fff;border:1px solid #e5e7eb;'
+          +   'border-radius:7px;padding:7px 14px;font:inherit;font-size:12px;cursor:pointer">nagekeken</button>'
+          + '</div>').join("")
+      + '</section>';
+    blok.querySelectorAll(".relGezien").forEach(b=>b.addEventListener("click", async ()=>{
+      b.disabled = true; b.textContent = "bezig…";
+      teken(await haal(b.dataset.nr));
+    }));
+  }
+  teken(await haal(null));
+}
 
 // Een afdelingskop zonder zichtbare tegels heeft geen functie: die verdwijnt.
 // Zo ziet Gretha alleen 'Marketing' en niet vier lege kopjes.
