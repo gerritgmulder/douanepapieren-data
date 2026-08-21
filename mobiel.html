@@ -27,6 +27,7 @@
      lopen. -->
 <script src="toegang.js"></script>
 <script src="tegels.js"></script>
+<script src="nieuws.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- ══════════════════════════════════════════════════════════════════════
      FONTEYN DASHBOARD - TELEFOON
@@ -130,6 +131,34 @@ main{flex:1;padding:16px;padding-bottom:calc(30px + env(safe-area-inset-bottom))
 #waarschuwing button{flex:1;border-radius:10px;padding:14px;font:inherit;font-size:14px;
                      font-weight:600;cursor:pointer;border:1px solid var(--rand);background:var(--kaart)}
 #waarschuwing button.doe{background:var(--groen);color:#fff;border-color:var(--groen)}
+
+/* ── Nieuw voor jou ───────────────────────────────────────────────────
+   Dezelfde berichten als op de pc, uit dezelfde lijst. Op de telefoon
+   staat het boven de tegels, want er is hier geen takenblok om het in te
+   hangen. Wegklikken telt voor allebei: klik je het hier weg, dan is het
+   op de pc ook weg. */
+#nieuwblok{display:none;background:#fdfcf0;border:1px solid #ece7c4;border-radius:12px;
+           padding:12px 14px;margin-bottom:16px}
+#nieuwblok.aan{display:block}
+.nkop{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.nkop strong{font-size:13px;color:var(--groen)}
+.nkop button{border:1px solid #ddd6a8;background:#fff;color:var(--grijs);border-radius:8px;
+             padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+.nkop button.uit{border-color:var(--groen);color:var(--groen);font-weight:600}
+#nieuwblok.dicht .nregel{display:none}
+.nregel{display:flex;gap:10px;padding:9px 0;border-top:1px solid #f0ecd4}
+.nregel:first-of-type{border-top:0;padding-top:2px}
+.nic{font-size:18px;line-height:1.2;flex:none;width:22px;text-align:center}
+.nmid{flex:1;min-width:0}
+.ntitel{font-size:14px;font-weight:600;line-height:1.4}
+.nwat{font-size:13px;color:#55524a;margin-top:3px;line-height:1.5}
+.ndat{font-size:12px;color:var(--grijs);margin-top:3px}
+.nmerk{display:inline-block;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;
+       padding:1px 6px;border-radius:4px;font-weight:600;vertical-align:1px;
+       background:#f1f0ec;color:var(--grijs)}
+.nmerk.nw{background:var(--groen);color:#fff}
+.nmerk.vb{background:#e8f2d9;color:#3f6b21}
+.nmerk.hs{background:#dbeafe;color:#1e40af}
 </style>
 </head>
 <body>
@@ -166,6 +195,7 @@ main{flex:1;padding:16px;padding-bottom:calc(30px + env(safe-area-inset-bottom))
     <button id="knopUit">Uitloggen</button>
   </header>
   <main>
+    <div id="nieuwblok"></div>
     <div id="tegelblok"></div>
   </main>
 </div>
@@ -286,6 +316,10 @@ function toonDash(){
   });
   el("tegelblok").innerHTML = html;
 
+  // Berichten daarna: de tegels moeten er meteen staan, ook als de worker
+  // even niet antwoordt.
+  toonNieuws(wie).catch(function(){});
+
   /* Een tegel die voor een pc is gemaakt gaat niet op slot - dat zou betekenen
      dat de telefoon andere rechten heeft dan de pc, en dat mag niet. Wel eerst
      even zeggen wat je te wachten staat. */
@@ -300,6 +334,118 @@ function toonDash(){
       el("waarschuwing").classList.add("aan");
     };
   });
+}
+
+/* ── Nieuw voor jou ──────────────────────────────────────────────────────
+   Dezelfde berichten als op de pc en uit dezelfde bak: bucket
+   'dashboard-gezien' bij de worker, per e-mailadres. Wie het hier wegklikt
+   heeft het op de pc ook weggeklikt, want het is één bestand.
+
+   Op de telefoon is er geen takenblok om dit in te hangen, dus staat het los
+   boven de tegels. De rekenregels komen wél uit nieuws.js, zodat er niet twee
+   manieren ontstaan om te bepalen wat iemand te zien krijgt. */
+
+var GEZIEN_BAK = "dashboard-gezien";
+
+function nieuwsKv(){ return localStorage.getItem("fp.teamkey") || ""; }
+
+async function nieuwsLees(){
+  var k = nieuwsKv();
+  if (!k) return {};
+  try {
+    var r = await fetch(WORKER + "/data/" + GEZIEN_BAK, { headers: { "X-Fonteyn-Auth": k } });
+    if (!r.ok) return {};
+    return await r.json() || {};
+  } catch (e) { return {}; }
+}
+async function nieuwsSchrijf(alles){
+  var k = nieuwsKv();
+  if (!k) return;
+  try {
+    await fetch(WORKER + "/data/" + GEZIEN_BAK, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": k },
+      body: JSON.stringify(alles)
+    });
+  } catch (e) {}
+}
+
+function nMerk(soort){
+  return soort === "nieuw" ? ["nw","nieuw"] : soort === "hersteld" ? ["hs","opgelost"] : ["vb","vernieuwd"];
+}
+function nIcoon(n){
+  if (n.iedereen || !window.fpTegels) return "🏠";
+  var t = window.fpTegels.lijst.filter(function(x){
+    return (n.bestand && x.bestand === n.bestand) || (n.groep && x.groep === n.groep); })[0];
+  return (t && t.ic) || "🏠";
+}
+function nDatum(iso){
+  var d = new Date(iso);
+  if (isNaN(d)) return "";
+  return String(d.getDate()).padStart(2,"0") + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + d.getFullYear();
+}
+function nVeilig(t){
+  return String(t == null ? "" : t).replace(/[&<>"]/g, function(c){
+    return { "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;" }[c]; });
+}
+
+async function toonNieuws(wie){
+  var n = window.fpNieuws;
+  var blok = el("nieuwblok");
+  if (!n || !blok) return;
+
+  var alles = await nieuwsLees();
+  var eigen = alles[wie] || null;
+  var bij = n.samenstellen(wie, eigen);
+  var regels = bij.nieuws, tegelsErbij = bij.tegels;
+
+  /* Nooit eerder geopend: alleen de nulmeting wegschrijven, zodat de vólgende
+     tegel die iemand erbij krijgt wél opvalt. Nu melden zou betekenen dat hij
+     zijn hele tegelrij als nieuws krijgt. */
+  if (!eigen) {
+    alles[wie] = { gezien: "", tegels: n.tegelStand(wie) };
+    nieuwsSchrijf(alles);
+  }
+
+  if (!regels.length && !tegelsErbij.length) { blok.classList.remove("aan"); return; }
+
+  var aantal = regels.length + tegelsErbij.length;
+  /* Standaard dicht. Op een telefoon zou vijf berichten betekenen dat je
+     drie schermen moet scrollen voor je bij je tegels bent, en dan opent
+     niemand de app nog om even iets op te zoeken. Je ziet dus één regel:
+     hoeveel er is, en of je het wilt lezen. */
+  var html = '<div class="nkop"><strong>' +
+    (aantal === 1 ? "Nieuw voor jou  ·  1 bericht" : "Nieuw voor jou  ·  " + aantal + " berichten") +
+    '</strong><span style="display:flex;gap:8px">' +
+    '<button type="button" class="uit" id="nOpen">Bekijken</button>' +
+    '<button type="button" id="nGelezen">Gelezen</button></span></div>';
+
+  tegelsErbij.forEach(function(t){
+    html += '<div class="nregel"><div class="nic">' + t.ic + '</div><div class="nmid">' +
+      '<div class="ntitel"><span class="nmerk nw">tegel erbij</span> ' + nVeilig(t.naam) + '</div>' +
+      '<div class="nwat">' + nVeilig(t.uit) + '. Deze tegel is nieuw voor jou - hij staat hieronder tussen de andere.</div>' +
+      '</div></div>';
+  });
+  regels.forEach(function(r){
+    var m = nMerk(r.soort);
+    html += '<div class="nregel"><div class="nic">' + nIcoon(r) + '</div><div class="nmid">' +
+      '<div class="ntitel"><span class="nmerk ' + m[0] + '">' + m[1] + '</span> ' + nVeilig(r.titel) + '</div>' +
+      '<div class="nwat">' + nVeilig(r.wat) + '</div>' +
+      '<div class="ndat">' + nDatum(r.datum) + '</div></div></div>';
+  });
+
+  blok.innerHTML = html;
+  blok.classList.add("aan", "dicht");
+  el("nOpen").onclick = function(){
+    var dicht = blok.classList.toggle("dicht");
+    this.textContent = dicht ? "Bekijken" : "Inklappen";
+  };
+  el("nGelezen").onclick = async function(){
+    blok.classList.remove("aan");
+    var vers = await nieuwsLees();
+    vers[wie] = { gezien: new Date().toISOString(), tegels: n.tegelStand(wie) };
+    await nieuwsSchrijf(vers);
+  };
 }
 
 el("wsTerug").onclick = function(){ el("waarschuwing").classList.remove("aan"); };

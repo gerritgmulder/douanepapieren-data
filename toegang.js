@@ -230,6 +230,11 @@
   global.fpToegang = {
     mag: mag, set: set, varianten: varianten,
     groepen: GROEPEN, groepenVan: groepenVan,
+    /* Iedereen die het dashboard gebruikt, als voornaam. Het meekijkscherm
+       loopt hier langs om te laten zien wat er bij wie openstaat; zonder deze
+       lijst zou zo'n scherm alleen mensen tonen die toevallig al eens hebben
+       ingelogd, en dat is precies de groep waar je je geen zorgen over maakt. */
+    iedereen: IEDEREEN.slice(),
   };
 
 })(typeof window !== "undefined" ? window : globalThis);

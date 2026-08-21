@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <title>Activiteitenlogboek — Fonteyn Dashboard</title>
 <script src="taal.js"></script>
+<!-- Voor het meekijkscherm hieronder: dezelfde tegellijst, dezelfde
+     rechten en dezelfde rekenregels als het dashboard zelf gebruikt. Een
+     tweede kopie zou binnen een maand uit de pas lopen. -->
+<script src="toegang.js"></script>
+<script src="tegels.js"></script>
+<script src="nieuws.js"></script>
+<script src="taken.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <style>
   :root{
@@ -92,6 +99,35 @@
 
   <div id="content">
     <div id="kpis" class="kpi-row"></div>
+
+    <!-- ══════════ MEEKIJKEN ══════════
+         Gerrit, 21 aug 2026: "Ik wil kunnen zien wat alle mensen bovenaan in
+         hun Dashboard zien bij 'wat staat er voor je klaar', want ik weet nu
+         niet wat iedereen daar voor zichzelf ziet."
+
+         Dit is letterlijk hetzelfde blok als op hun eigen dashboard, alleen
+         dan voor iedereen tegelijk. De rekenregels komen uit taken.js en
+         nieuws.js; hier staat alleen hoe het eruitziet. -->
+    <div class="card">
+      <h3>Wat staat er bij iedereen klaar <span id="mkTelling" style="color:var(--muted);font-weight:400;font-size:12px"></span></h3>
+      <p class="lead" style="font-size:12px;margin:-6px 0 10px">
+        Precies wat deze medewerker zelf bovenaan het dashboard ziet: de eigen taken, de
+        terugkerende momenten die aan de beurt zijn, en de berichten over de eigen tegels die nog
+        niet zijn weggeklikt. Klik op een naam om het open te vouwen.
+      </p>
+      <div class="controls" style="margin-bottom:12px">
+        <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
+          <input type="checkbox" id="mkAlleen"> alleen wie werk heeft openstaan
+        </label>
+        <button type="button" id="mkSignalen"
+          style="border:1px solid var(--border);background:#fff;border-radius:8px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer">
+          Ook de signalen uit Logic4 erbij halen
+        </button>
+        <span id="mkStand" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="meekijken"></div>
+    </div>
+
     <div class="card">
       <h3>Per medewerker</h3>
       <div class="tablewrap"><table class="grid">
@@ -439,6 +475,218 @@ function koppelDetails(){
   });
 }
 </script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   MEEKIJKEN — wat staat er bij iedereen klaar
+   ═══════════════════════════════════════════════════════════════════════
+
+   Waarom dit scherm er is
+   -----------------------
+   Iedereen ziet bovenaan het dashboard een blok met eigen werk. Dat
+   werkt goed voor die persoon, maar er was niemand die kon zien of het bij de
+   rest ook echt aankomt. Gerrit, 21 aug 2026: "ik weet nu niet wat iedereen
+   daar voor zichzelf ziet".
+
+   Wat je hier dus ziet is niet een samenvatting maar het blok zelf, per
+   persoon, met dezelfde rekenregels. Loopt er iets scheef in taken.js, dan
+   loopt het hier net zo scheef en valt het op - een aparte berekening zou
+   dat juist verbergen.
+
+   Wat er NIET automatisch bij zit
+   -------------------------------
+   De signalen uit Logic4. Die kosten per persoon een rondje langs zijn orders
+   en dat doe je niet dertig keer bij het openen van een scherm. Met de knop
+   worden ze in één keer voor iedereen opgehaald: één keer de orders van de
+   afgelopen weken, en die dan op Logic4-gebruiker uitsorteren.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+  "use strict";
+
+  var doel = document.getElementById("meekijken");
+  if (!doel || !window.fpToegang || !window.fpTaken) return;
+
+  var rijen = [];          // wat overzicht() teruggaf
+  var signalen = {};       // inlognaam → [signaal], pas na de knop gevuld
+  var signalenGehaald = false;
+
+  function esc2(t){ return String(t==null?"":t).replace(/[&<>"]/g,function(c){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]; }); }
+  function euro(n){ return "€ " + Math.round(Number(n)||0).toLocaleString("nl-NL"); }
+  function dm(iso){
+    var d = new Date(iso);
+    if (isNaN(d)) return "";
+    return String(d.getDate()).padStart(2,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+d.getFullYear();
+  }
+  function voornaam(n){ return String(n||"").split(/[.\-_]/).filter(Boolean)
+    .map(function(d){ return d.charAt(0).toUpperCase()+d.slice(1); }).join(" "); }
+
+  /* Iedere naam met al zijn schrijfwijzen: iemand kan als "dolf",
+     "dolf@fonteyn.nl" of "fonteyn.dolf" inloggen, en de taken staan onder de
+     naam waarmee die dag is ingelogd. */
+  function personen(){
+    return window.fpToegang.iedereen.map(function(naam){
+      return { naam: naam, adressen: window.fpToegang.varianten(naam) };
+    });
+  }
+
+  function signalenVan(rij){
+    var uit = [];
+    rij.adressen.forEach(function(a){ (signalen[a]||[]).forEach(function(s){ uit.push(s); }); });
+    return uit;
+  }
+
+  function regelTaak(t){
+    var extra = t.datum ? " <span style='color:var(--muted)'>· uiterlijk "+esc2(dm(t.datum))+"</span>" : "";
+    return "<li>"+esc2(t.tekst)+extra+"</li>";
+  }
+  function regelRitme(r){
+    return "<li><b>"+esc2(r.ritme.titel)+"</b> · "+esc2(r.ritme.wat)+
+      "<span style='color:var(--muted)'> · "+
+      (r.laatst ? "laatst gedaan op "+esc2(dm(r.laatst)) : "nog nooit gedaan")+"</span></li>";
+  }
+  function regelNieuws(n){
+    return "<li><b>"+esc2(n.titel)+"</b> · "+esc2(n.wat)+
+      "<span style='color:var(--muted)'> · "+esc2(dm(n.datum))+"</span></li>";
+  }
+  function regelTegel(t){
+    return "<li><b>"+esc2(t.naam)+"</b> · "+esc2(t.uit)+"</li>";
+  }
+  function regelSignaal(s){
+    var st = [s.verwijzing, s.detail].filter(Boolean).map(esc2).join(" · ");
+    if (s.bedrag && s.eenheid === "eur") st += " · " + euro(s.bedrag);
+    return "<li><b>"+esc2(s.titel)+"</b> · "+st+
+      "<span style='color:var(--muted)'> · "+esc2(s.actie)+"</span></li>";
+  }
+
+  function bolletje(n, kleur, woord){
+    if (!n) return "";
+    return "<span class='pill' style='background:"+kleur+"'>"+n+" "+woord+"</span> ";
+  }
+
+  function teken(){
+    var alleenIets = document.getElementById("mkAlleen").checked;
+
+    /* Bewust op werk en niet op ongelezen berichten: zolang niemand zijn
+       berichten heeft weggeklikt staat er bij iedereen iets ongelezen, en dan
+       filtert dit vinkje niets weg. */
+    var toon = rijen.filter(function(r){
+      if (!alleenIets) return true;
+      return r.taken.length || r.ritmes.length || signalenVan(r).length;
+    });
+
+    document.getElementById("mkTelling").textContent =
+      toon.length + " van " + rijen.length + " medewerkers";
+
+    if (!toon.length) {
+      doel.innerHTML = "<p class='lead' style='font-size:12.5px'>Bij niemand staat er iets open.</p>";
+      return;
+    }
+
+    doel.innerHTML = toon.map(function(r){
+      var sig = signalenVan(r);
+      var totaal = r.taken.length + r.ritmes.length + sig.length;
+      var merken =
+        bolletje(r.taken.length, "#e0f2fe", r.taken.length===1?"taak":"taken") +
+        bolletje(r.ritmes.length, "#ede9fe", "terugkerend") +
+        bolletje(sig.length, "#fef3c7", sig.length===1?"signaal":"signalen") +
+        bolletje(r.nieuws.length + r.nieuweTegels.length, "#dcfce7", "ongelezen");
+      if (!merken) merken = "<span style='color:var(--muted);font-size:12px'>niets open</span>";
+
+      /* Wanneer zijn de berichten voor het laatst weggeklikt? Staat hier
+         "nog niet geopend", dan is er sinds deze berichten bestaan niet meer
+         ingelogd - dat is op zichzelf al iets om te weten. */
+      var gelezen = r.nooitGeopend
+        ? "<span style='color:var(--muted)'>dashboard nog niet geopend sinds de berichten er zijn</span>"
+        : (r.gezien ? "berichten gelezen op " + esc2(dm(r.gezien))
+                    : "<span style='color:var(--muted)'>berichten nog niet weggeklikt</span>");
+
+      var body = "";
+      if (r.nieuweTegels.length) body += "<h5>Tegels die erbij zijn gekomen</h5><ul>"+r.nieuweTegels.map(regelTegel).join("")+"</ul>";
+      if (r.nieuws.length)       body += "<h5>Berichten die nog niet gelezen zijn</h5><ul>"+r.nieuws.map(regelNieuws).join("")+"</ul>";
+      if (r.taken.length)        body += "<h5>Eigen taken</h5><ul>"+r.taken.map(regelTaak).join("")+"</ul>";
+      if (r.ritmes.length)       body += "<h5>Terugkerend, nu aan de beurt</h5><ul>"+r.ritmes.map(regelRitme).join("")+"</ul>";
+      if (sig.length)            body += "<h5>Signalen uit Logic4</h5><ul>"+sig.map(regelSignaal).join("")+"</ul>";
+      if (!signalenGehaald)      body += "<p class='mk-noot'>De signalen uit Logic4 staan er nog niet bij. Die haal je met de knop bovenaan op.</p>";
+      if (!body) body = "<p class='mk-noot'>Bij deze medewerker staat er niets open.</p>";
+
+      return "<details class='mk'>"+
+        "<summary><span class='mk-naam'>"+esc2(voornaam(r.naam))+"</span>"+
+        "<span class='mk-merken'>"+merken+"</span>"+
+        "<span class='mk-gelezen'>"+gelezen+"</span></summary>"+
+        "<div class='mk-body'>"+body+"</div></details>";
+    }).join("");
+  }
+
+  async function laad(){
+    var team = localStorage.getItem("fp.teamkey") || "";
+    if (!team) { doel.innerHTML = "<p class='lead' style='font-size:12.5px'>Geen teamsleutel op deze computer; log opnieuw in.</p>"; return; }
+    doel.innerHTML = "<p class='lead' style='font-size:12.5px'>Bezig met ophalen…</p>";
+    try {
+      rijen = await window.fpTaken.overzicht({ teamKey: team, personen: personen() });
+    } catch (e) {
+      doel.innerHTML = "<p class='lead' style='font-size:12.5px'>Ophalen mislukt: "+esc2(e.message||e)+"</p>";
+      return;
+    }
+    teken();
+  }
+
+  /* De signalen. Dit loopt langs het hulpprogramma op de werkplek, dus het
+     werkt alleen in de app en niet in een losse browser - daar zeggen we dat
+     dan ook gewoon. */
+  async function logic4Call(pad, body, methode){
+    var r = await fetch("/api/logic4-call", {
+      method: "POST",
+      headers: { "Content-Type":"application/json", "Authorization":"Bearer "+(localStorage.getItem("fp.session")||"") },
+      body: JSON.stringify({ path: pad, method: methode || "POST", body: body })
+    });
+    var j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || "Logic4-aanroep mislukt");
+    return j.data;
+  }
+
+  document.getElementById("mkAlleen").addEventListener("change", teken);
+  document.getElementById("mkSignalen").addEventListener("click", async function(){
+    var knop = this, stand = document.getElementById("mkStand");
+    knop.disabled = true;
+    stand.textContent = "Bezig met de orders van de afgelopen weken…";
+    try {
+      signalen = await window.fpTaken.signalenPerPersoon(logic4Call);
+      signalenGehaald = true;
+      var n = Object.keys(signalen).reduce(function(a,k){ return a + signalen[k].length; }, 0);
+      stand.textContent = n + (n===1 ? " signaal gevonden" : " signalen gevonden");
+      knop.style.display = "none";
+      teken();
+    } catch (e) {
+      stand.textContent = "Lukt niet: " + (e.message || e) + ". Dit werkt alleen in de app op de werkplek.";
+      knop.disabled = false;
+    }
+  });
+
+  var css = document.createElement("style");
+  css.textContent =
+    "details.mk{border:1px solid var(--border);border-radius:9px;margin-bottom:7px;background:#fff}"+
+    "details.mk[open]{border-color:#d6e4c2;box-shadow:0 1px 4px rgba(0,0,0,.05)}"+
+    "details.mk summary{list-style:none;cursor:pointer;padding:9px 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}"+
+    "details.mk summary::-webkit-details-marker{display:none}"+
+    "details.mk summary:hover{background:#fbfdf7}"+
+    ".mk-naam{font-weight:600;font-size:13px;min-width:110px}"+
+    ".mk-merken{flex:1;min-width:180px}"+
+    ".mk-merken .pill{font-size:11px;padding:2px 8px;border-radius:999px;color:#1f2937}"+
+    ".mk-gelezen{font-size:11.5px;color:var(--ink)}"+
+    ".mk-body{padding:2px 14px 12px;border-top:1px solid #f3f4f6}"+
+    ".mk-body h5{margin:12px 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}"+
+    ".mk-body ul{margin:0;padding-left:18px}"+
+    ".mk-body li{font-size:12.5px;line-height:1.55;margin-bottom:3px}"+
+    ".mk-noot{font-size:12px;color:var(--muted);margin:10px 0 0}";
+  document.head.appendChild(css);
+
+  // Pas laden als het logboek zelf staat; anders vechten twee schermen om
+  // dezelfde verbinding en lijkt de pagina te hangen.
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", laad);
+  else laad();
+})();
+</script>
+
 <script>
 /* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
 (function(){

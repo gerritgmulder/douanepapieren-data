@@ -108,6 +108,11 @@ const ALLOWED_BUCKETS = new Set([
   "amerika-voorraad",
   "taken",            // Persoonlijk takenblok: e-mailadres → eigen taken (tekst/datum/klaar)
   "taken-ritme",      // Terugkerende momenten (voorraadcontrole, kwartaalcontrole) + per persoon wanneer afgevinkt
+  // Wie welke dashboardberichten al gelezen heeft, en welke tegels iemand de
+  // vorige keer had. Dat tweede is geen lijst die iemand bijhoudt: door hem te
+  // vergelijken met nu zien we vanzelf welke tegel er voor iemand bij is
+  // gekomen, zonder dat er iemand aan hoeft te denken dat op te schrijven.
+  "dashboard-gezien",
   // De huisstijl-fonts (Sephir, Helvetica, Univers) zijn commercieel
   // gelicentieerd. Ze staan hier en NIET in de repo, want die is publiek —
   // in de repo zetten zou neerkomen op ze doorgeven aan iedereen.

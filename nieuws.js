@@ -1,0 +1,242 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   NIEUWS — wat er de laatste tijd aan het dashboard is veranderd
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Waarom dit bestand er is
+   ------------------------
+   Er wordt bijna elke dag iets aan het dashboard veranderd, maar niemand
+   merkt dat. Een tegel krijgt er een tabblad bij, een knop doet iets nieuws,
+   iemand krijgt een tegel erbij - en dat blijft onopgemerkt tot iemand er per
+   ongeluk tegenaan loopt. Gerrit, 21 aug 2026: "ik wil dat bijvoorbeeld
+   iedereen kan zien wat bij hun tegels is vernieuwd, of welke tegel er voor
+   hen bij is gekomen".
+
+   Dus staat het hier, en verschijnt het bovenaan in het dashboard bij precies
+   die mensen die de betreffende tegel ook echt mogen zien. Iemand die
+   Bankkoppeling niet heeft, krijgt geen berichten over de bankkoppeling.
+
+   Hoe een regel eruitziet
+   -----------------------
+       { datum: "2026-08-21", bestand: "vertalen.html",
+         soort: "nieuw",
+         titel: "Vertalen",
+         wat:   "In gewone taal: wat kun je nu wat je gisteren niet kon." }
+
+   datum    - de dag waarop het live ging (jjjj-mm-dd)
+   bestand  - de tegel waar het over gaat, exact zoals in tegels.js. Wie die
+              tegel niet mag zien, ziet dit bericht niet.
+   groep    - mag in plaats van 'bestand' als het over een groep tegels gaat
+              (de namen staan in toegang.js)
+   iedereen - true als het over het dashboard zelf gaat en niet over één tegel
+   soort    - "nieuw" (er is iets bijgekomen), "beter" (bestond al, doet nu
+              meer) of "hersteld" (het ging fout en gaat nu goed)
+   titel    - kort, drie tot zes woorden
+   wat      - één of twee zinnen, in de taal waarin je het aan de balie zou
+              uitleggen. Geen bestandsnamen, geen jargon.
+
+   BIJ ELKE WIJZIGING AAN EEN TEGEL HOORT HIER EEN REGEL BIJ. Zonder die regel
+   ziet niemand dat er iets veranderd is en is het werk voor de helft gedaan.
+   Zet nieuwe regels bovenaan; de lijst loopt van nieuw naar oud.
+
+   OTA: staat in manifest.json. Nooit opnieuw installeren.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+(function (global) {
+  "use strict";
+
+  /* Hoever we terugkijken bij iemand die het dashboard voor het eerst opent,
+     of die zijn berichten nog nooit heeft weggeklikt. Zonder deze grens zou
+     zo iemand in één keer de hele lijst hieronder voor zijn kiezen krijgen. */
+  var EERSTE_KEER_DAGEN = 14;
+
+  var NIEUWS = [
+
+    /* ── 21 augustus 2026 ─────────────────────────────────────────────── */
+    /* Dit bericht legt zichzelf uit: het is het eerste dat iedereen in het
+       nieuwe blok te zien krijgt. Zonder deze regel staat er een vak op je
+       dashboard waarvan je niet weet wat het is. */
+    {
+      datum: "2026-08-21", iedereen: true, soort: "nieuw",
+      titel: "Je ziet voortaan wat er nieuw is",
+      wat: "Bovenaan je dashboard staat vanaf nu wat er aan jouw tegels veranderd is, en welke tegel je erbij hebt gekregen. Gelezen? Klik op Gelezen, dan is het weg en krijg je het niet nog een keer.",
+    },
+    {
+      datum: "2026-08-21", bestand: "dealerportaal.html", soort: "nieuw",
+      titel: "Dealers en partners aanmaken",
+      wat: "Een nieuwe dealer of partner invoeren kan nu vanuit het dashboard zelf, met de afspraken, het factuuradres en een afwijkend verzendadres erbij. Zoeken in Logic4 gaat op debiteurnummer, op e-mailadres en op bedrijfsnaam.",
+    },
+    {
+      datum: "2026-08-21", groep: "partnerportaal-kijk", soort: "beter",
+      titel: "Passion Partners: prijslijst en foto's",
+      wat: "Het portaal heeft een tabblad Prijslijst waar alle modellen met hun prijs onder elkaar staan. Ga je met de muis over een model, dan zie je een bovenaanzicht van de spa. De Reserveren-knop staat overal op dezelfde hoogte en is groen.",
+    },
+    {
+      datum: "2026-08-21", bestand: "afbeeldingen.html", soort: "nieuw",
+      titel: "Afbeeldingen op maat",
+      wat: "Sleep er zoveel foto's in als je wilt en ze komen er allemaal uit op 1200 bij 900 en 300 dpi, bijgesneden zonder witte randen en met dezelfde bestandsnaam. Past een foto niet zonder dat er tekst afvalt, dan zegt hij dat erbij.",
+    },
+
+    /* ── 19 augustus 2026 ─────────────────────────────────────────────── */
+    {
+      datum: "2026-08-19", bestand: "vertalen.html", soort: "nieuw",
+      titel: "Vertalen",
+      wat: "Plak of typ een mail en kies de taal: Spaans, Italiaans, Duits, Frans of Engels. Je kunt kiezen tussen u en je, namen die niet vertaald mogen worden opgeven, en de vertaling terug laten vertalen om te zien of hij klopt.",
+    },
+    {
+      datum: "2026-08-19", bestand: "voorraad.html", soort: "beter",
+      titel: "Voorraadbeheer op de telefoon",
+      wat: "Op de telefoon krijg je nu een eigen, smalle weergave: voorraad, wat er onderweg is, schepen en ontvangst, en een order opzoeken. Alles onder elkaar in plaats van tabbladen die je niet kunt aanwijzen.",
+    },
+    {
+      datum: "2026-08-19", bestand: "voorraad.html", soort: "beter",
+      titel: "Gepland, Stock en binnen melden",
+      wat: "Er zijn twee tabbladen bijgekomen, Gepland en Stock. Bij Schepen en ontvangst staat nu de naam van de spa erbij en kun je een container binnen melden zonder eerst Logic4 te openen.",
+    },
+    {
+      datum: "2026-08-19", bestand: "bankkoppeling.html", soort: "beter",
+      titel: "Ook de uitgaven op het afschrift",
+      wat: "Het bankafschrift laat nu naast de ontvangsten ook de uitgaven zien, in dezelfde lijst met de dagbalans erbij. Een uitgave kun je aanvinken en aan een crediteurfactuur koppelen, en die gaat dan mee als boekregel.",
+    },
+    {
+      datum: "2026-08-19", bestand: "retouren.html", soort: "beter",
+      titel: "Adviseur en meerdere regels",
+      wat: "De adviseur wordt automatisch uit de order in Logic4 gehaald, dus die hoef je niet meer op te zoeken. Een order met meerdere producten kun je nu per regel afhandelen.",
+    },
+    {
+      datum: "2026-08-19", bestand: "labels.html", soort: "beter",
+      titel: "Labels uit de commercial invoice",
+      wat: "Naast de inkooporder leest hij nu ook een commercial invoice met packing list, en maakt daar de containers en de labels uit.",
+    },
+    {
+      datum: "2026-08-19", bestand: "mail.html", soort: "hersteld",
+      titel: "Mijn mail: tweede weg naar de mailbox",
+      wat: "De verbinding met de mailserver liep vast. Er is nu een tweede route, en een proefrit waarmee je kunt zien welke van de twee het bij jou doet.",
+    },
+
+    /* ── 17 augustus 2026 ─────────────────────────────────────────────── */
+    {
+      datum: "2026-08-17", bestand: "geldgoederen.html", soort: "beter",
+      titel: "Vier voorraadcijfers naast elkaar",
+      wat: "In plaats van één verschil zie je nu de vier cijfers waar dat verschil uit ontstaat. De handmatige aansluitboekingen staan apart, en je kunt de voorraad terugrekenen naar een peildatum.",
+    },
+    {
+      datum: "2026-08-17", bestand: "tuinmeubelen.html", soort: "beter",
+      titel: "Orderbevestiging van de fabriek lezen",
+      wat: "Een orderbevestiging van een meubelfabriek wordt ingelezen en aan de zending gekoppeld waarmee de spullen komen. Een omschrijving die je bij een artikelnummer zet geldt meteen voor alle containers.",
+    },
+    {
+      datum: "2026-08-17", bestand: "bankkoppeling.html", soort: "beter",
+      titel: "Stichting Pay en Airbnb herkend",
+      wat: "Betalingen via Stichting Pay en via Airbnb worden nu vanzelf herkend op het afschrift.",
+    },
+
+    /* ── 16 augustus 2026 ─────────────────────────────────────────────── */
+    {
+      datum: "2026-08-16", bestand: "uren.html", soort: "nieuw",
+      titel: "Mijn uren",
+      wat: "Klokken met een knop: start als je begint, stop als je klaar bent. Vergeten? Dan pas je de regel achteraf aan. Je kunt er ook bij zetten waar je was, en voor een collega klokken die zijn eigen code opgeeft.",
+    },
+
+    /* ── 15 augustus 2026 ─────────────────────────────────────────────── */
+    {
+      datum: "2026-08-15", iedereen: true, soort: "nieuw",
+      titel: "Het dashboard op je telefoon",
+      wat: "Alle tegels die je op de pc hebt staan nu ook op je telefoon, met precies dezelfde rechten. Op Android kun je hem op je startscherm zetten en werkt hij als een gewone app.",
+    },
+  ];
+
+  /* ═══════════════ hulpjes ═══════════════ */
+
+  function dagenGeleden(n) {
+    return new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  }
+  function datumVan(iso) {
+    return String(iso || "").slice(0, 10);
+  }
+
+  /* Welke berichten gaan deze persoon aan? Alleen die over tegels die ook
+     werkelijk geopend mogen worden - de tegellijst is de enige waarheid, zodat een
+     bericht nooit een tegel verraadt die iemand niet heeft. */
+  function zichtbaar(wie) {
+    var t = global.fpTegels;
+    if (!t || !t.voor) return [];
+    var mijn = t.voor(wie) || [];
+    var bestanden = {}, groepen = {};
+    mijn.forEach(function (x) { bestanden[x.bestand] = true; groepen[x.groep] = true; });
+    return NIEUWS.filter(function (n) {
+      if (n.iedereen) return true;
+      if (n.bestand) return !!bestanden[n.bestand];
+      if (n.groep) return !!groepen[n.groep];
+      return false;
+    });
+  }
+
+  /* De berichten die deze persoon nog niet heeft gezien.
+     sinds = de dag waarop er voor het laatst op "gezien" is geklikt. Is die er
+     niet, dan kijken we EERSTE_KEER_DAGEN terug in plaats van tot het begin
+     der tijden; anders opent iemand het dashboard en krijgt vijftien
+     berichten tegelijk. */
+  function voor(wie, sinds) {
+    var grens = datumVan(sinds) || dagenGeleden(EERSTE_KEER_DAGEN);
+    return zichtbaar(wie)
+      .filter(function (n) { return datumVan(n.datum) > grens; })
+      .sort(function (a, b) { return a.datum < b.datum ? 1 : a.datum > b.datum ? -1 : 0; });
+  }
+
+  /* Welke tegels heeft iemand erbij gekregen sinds de vorige keer? Dit is
+     geen lijst die iemand bijhoudt: we vergelijken wat er nu te zien is met
+     wat er de vorige keer te zien was. Krijgt Chantal er Vertalen bij, dan
+     ziet zij dat de eerstvolgende keer dat ze inlogt, zonder dat er iemand
+     aan gedacht heeft dat op te schrijven.
+
+     eerder = de lijst bestandsnamen van de vorige keer. Is die leeg (eerste
+     keer op deze manier), dan melden we niets - anders zou iedereen de hele
+     tegelrij als "nieuw" gepresenteerd krijgen. */
+  function nieuweTegels(wie, eerder) {
+    var t = global.fpTegels;
+    if (!t || !t.voor) return [];
+    if (!eerder || !eerder.length) return [];
+    var had = {};
+    eerder.forEach(function (b) { had[b] = true; });
+    return (t.voor(wie) || []).filter(function (x) { return !had[x.bestand]; });
+  }
+
+  /* Alles in één keer, en meteen goed ontdubbeld.
+
+     Wie een tegel er nét bij heeft gekregen, hoeft niet ook nog te horen wat
+     er de afgelopen weken aan die tegel verbeterd is - die tegel is nog nooit
+     eerder in beeld geweest, dus er is niets veranderd. De tegel zelf is het
+     nieuws.
+
+     gezien = het bewaarde recordje uit de bucket 'dashboard-gezien', of null
+     als deze persoon er nog geen heeft.  →  { nieuws, tegels } */
+  function samenstellen(wie, gezien) {
+    var tegels = gezien ? nieuweTegels(wie, gezien.tegels) : [];
+    var nieuw = {};
+    tegels.forEach(function (t) { nieuw[t.bestand] = true; nieuw["groep:" + t.groep] = true; });
+    var berichten = voor(wie, gezien && gezien.gezien).filter(function (n) {
+      if (n.bestand && nieuw[n.bestand]) return false;
+      if (n.groep && nieuw["groep:" + n.groep]) return false;
+      return true;
+    });
+    return { nieuws: berichten, tegels: tegels };
+  }
+
+  /* De huidige stand, om te bewaren voor de volgende keer. */
+  function tegelStand(wie) {
+    var t = global.fpTegels;
+    if (!t || !t.voor) return [];
+    return (t.voor(wie) || []).map(function (x) { return x.bestand; });
+  }
+
+  global.fpNieuws = {
+    lijst: NIEUWS,
+    samenstellen: samenstellen,
+    voor: voor,
+    zichtbaar: zichtbaar,
+    nieuweTegels: nieuweTegels,
+    tegelStand: tegelStand,
+    eersteKeerDagen: EERSTE_KEER_DAGEN,
+  };
+
+})(typeof window !== "undefined" ? window : globalThis);

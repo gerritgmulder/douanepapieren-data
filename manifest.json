@@ -1,5 +1,5 @@
 {
-  "version": "0.23.0",
+  "version": "0.24.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -47,6 +47,10 @@
     {
       "name": "tuinmeubelen.html",
       "note": "Containers met tuinmeubelen en sauna's: artikelen, papieren en meldingen. Alleen-lezen; de inhoud telt bewust niet als spa-voorraad mee (Chantal, 14 aug 2026)."
+    },
+    {
+      "name": "nieuws.js",
+      "note": "Wat er aan het dashboard veranderd is, in gewone taal. Verschijnt bovenaan bij precies die mensen die de betreffende tegel mogen zien. BIJ ELKE WIJZIGING AAN EEN TEGEL HOORT HIER EEN REGEL BIJ."
     },
     {
       "name": "taken.js",

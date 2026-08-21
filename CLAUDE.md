@@ -107,6 +107,25 @@ afdichten.
   formules voor financiële OUT_-tabbladen. Extra wachtwoord ('Meerveld').
   Alleen voor gerriette + dolf.
 
+## Nieuws melden — verplicht bij elke wijziging aan een tegel
+
+`nieuws.js` is de lijst met wat er aan het dashboard veranderd is, in gewone
+taal. Die berichten komen bovenaan in het dashboard te staan bij precies die
+mensen die de betreffende tegel ook mogen zien, en verdwijnen zodra ze op
+"Gelezen" klikken. Welke tegel iemand erbij heeft gekregen wordt automatisch
+bepaald (vergelijking met de vorige tegelstand in bucket `dashboard-gezien`);
+wat er aan een bestáánde tegel veranderd is niet.
+
+**Verander je iets aan een tegel, dan hoort daar een regel in `nieuws.js` bij,
+in dezelfde commit.** Zonder die regel merkt niemand het en is het werk voor
+de helft gedaan. Bovenaan zetten, in de taal waarin je het aan de balie zou
+uitleggen - niet de commit-boodschap overtypen.
+
+Meekijken: Dolf, Gerrit en Fonteynbot zien in `activiteit.html` het blok
+"Wat staat er bij iedereen klaar" - hetzelfde blok als op ieders eigen
+dashboard, maar dan voor iedereen tegelijk, met dezelfde rekenregels uit
+`taken.js` en `nieuws.js`.
+
 ## Logic4 helper-server
 
 `server/index.js` draait op `127.0.0.1:3737`. Doet auth (sessies in geheugen),

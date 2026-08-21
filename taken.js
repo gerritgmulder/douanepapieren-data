@@ -8,7 +8,12 @@
    weg, dan valt zijn afdeling stil. Dit blok draait dat om: bij het inloggen
    ziet iedereen wat er vandaag van hém of háár wordt verwacht.
 
-   Drie bronnen, in deze volgorde:
+   Vier bronnen, in deze volgorde:
+
+     0. NIEUW VOOR JOU  — wat er aan JOUW tegels veranderd is sinds je hier
+                          voor het laatst keek, en welke tegel je erbij hebt
+                          gekregen. Zie nieuws.js. Staat bovenaan omdat het
+                          eenmalig is: je leest het, je klikt het weg.
 
      1. EIGEN TAKEN     — zelf toegevoegd, met een datum. Wat je anders op een
                           post-it zet.
@@ -28,6 +33,13 @@
    ontbreekt" kost twee minuten en is meteen op te lossen. Fouten repareren aan
    de voorkant is orden van grootte goedkoper dan een jaar later.
 
+   Meekijken
+   ---------
+   Dolf, Gerrit en Fonteynbot kunnen dit blok ook voor iedereen tegelijk
+   opvragen (fpTaken.overzicht), zodat er iemand is die weet wat er bij de
+   rest openstaat. Dat scherm zit in activiteit.html. De rekenregels staan
+   hier één keer; een tweede kopie zou binnen een maand uit de pas lopen.
+
    Snelheid
    --------
    Het paneel toont eigen taken en terugkerende momenten meteen (die komen uit
@@ -45,12 +57,17 @@
   var CACHE_UUR = 1;              // signalen zo lang hergebruiken
   var VERS_DAGEN = 21;            // hoever terug we in eigen orders kijken
 
+  var GEZIEN = "dashboard-gezien"; // bucket: wie welke berichten al gelezen heeft
+
   var cfg = null;                 // {email, teamKey, sessie, logic4Call, log}
+  var sleutel = "";               // teamsleutel; ook het overzichtsscherm zet deze
   var mijnTaken = [];             // eigen taken van deze gebruiker
   var ritmes = [];                // terugkerende momenten (gedeeld)
-  var afgevinkt = {};             // ritme-id → laatste afvinkdatum, per persoon
+  var afgevinkt = {};             // ritme-id → laatste afvinkdatum, van mij
   var signalen = [];              // afgeleid uit Logic4
   var signalenBezig = false;
+  var nieuwsRegels = [];          // berichten die ik nog niet heb weggeklikt
+  var nieuweTegels = [];          // tegels die ik erbij heb gekregen
 
   /* ═══════════════ hulpjes ═══════════════ */
 
@@ -79,7 +96,7 @@
 
   async function kvLees(bucket) {
     try {
-      var r = await fetch(BASIS + "/data/" + bucket, { headers: { "X-Fonteyn-Auth": cfg.teamKey } });
+      var r = await fetch(BASIS + "/data/" + bucket, { headers: { "X-Fonteyn-Auth": sleutel } });
       if (!r.ok) return {};
       return await r.json() || {};
     } catch (e) { return {}; }
@@ -88,7 +105,7 @@
     try {
       await fetch(BASIS + "/data/" + bucket, {
         method: "PUT",
-        headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": cfg.teamKey },
+        headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": sleutel },
         body: JSON.stringify(waarde)
       });
       return true;
@@ -154,10 +171,14 @@
     }
   ];
 
+  var afgevinktAlles = {};   // email → {ritme-id: datum}. Het overzichtsscherm
+                             // heeft ze allemaal nodig, ik alleen de mijne.
+
   async function laadRitmes() {
     var opgeslagen = await kvLees("taken-ritme");
     ritmes = (opgeslagen && opgeslagen.ritmes) || STANDAARD_RITMES;
-    afgevinkt = (opgeslagen && opgeslagen.afgevinkt && opgeslagen.afgevinkt[cfg.email]) || {};
+    afgevinktAlles = (opgeslagen && opgeslagen.afgevinkt) || {};
+    afgevinkt = afgevinktAlles[cfg.email] || {};
     return opgeslagen;
   }
   async function ritmeAfvinken(id) {
@@ -173,19 +194,95 @@
   // Welke ritmes staan er voor mij open? Een ritme is 'aan de beurt' zodra het
   // langer geleden is afgevinkt dan de frequentie. Nooit afgevinkt = meteen aan
   // de beurt, want dan is het nog nooit gedaan.
-  function openstaandeRitmes() {
+  function openstaandeRitmes(email, vinkjes) {
+    var wie = String(email == null ? cfg.email : email).toLowerCase();
+    var vink = vinkjes || afgevinkt;
     var uit = [];
     for (var i = 0; i < ritmes.length; i++) {
       var r = ritmes[i];
-      var voorMij = !r.wie || r.wie.length === 0 ||
+      var voorHem = !r.wie || r.wie.length === 0 ||
         r.wie.indexOf("iedereen") >= 0 ||
-        r.wie.some(function (w) { return String(w).toLowerCase() === cfg.email; });
-      if (!voorMij) continue;
-      var laatst = afgevinkt[r.id];
+        r.wie.some(function (w) { return String(w).toLowerCase() === wie; });
+      if (!voorHem) continue;
+      var laatst = vink[r.id];
       var over = laatst ? (num(r.elke) - Math.abs(num(dagenTot(laatst)))) : 0;
       if (!laatst || over <= 0) uit.push({ ritme: r, laatst: laatst });
     }
     return uit;
+  }
+
+  /* ═══════════════ 0. NIEUW VOOR JOU ═══════════════
+     Twee dingen die iemand anders nooit te horen krijgt:
+
+       a) Wat er aan de eigen tegels veranderd is. Die berichten staan met
+          de hand in nieuws.js, want "Passion Partners: uitlijning, groen,
+          dikkere collectielijn" is een zin voor mij en niet voor Gretha.
+
+       b) Welke tegel erbij is gekomen. Dat schrijft niemand op: we bewaren
+          welke tegels er de vorige keer waren en vergelijken dat met nu.
+          Krijgt Chantal er Vertalen bij, dan ziet zij dat vanzelf bij de
+          eerstvolgende login.
+
+     Beide staan in de bucket 'dashboard-gezien', per e-mailadres:
+         { "chantal@fonteyn.nl": { gezien: "2026-08-21T09:12:00Z",
+                                   tegels: ["voorraad.html", ...] } }
+
+     'gezien' is de datum waarop er op "gelezen" is geklikt; alles wat daarna
+     live ging komt in beeld. Is die leeg, dan kijkt nieuws.js veertien dagen
+     terug in plaats van tot het begin - anders krijgt iemand bij de eerste
+     login de hele lijst voor zijn kiezen.
+
+     De tegelstand schrijven we wél meteen weg, ook zonder klik. Zonder die
+     nulmeting zou iedereen de complete tegelrij als "nieuw" gepresenteerd
+     krijgen, en dat is precies het bericht dat niemand meer leest. */
+
+  var mijnGezien = { gezien: "", tegels: [] };
+
+  async function laadGezien() {
+    var alles = await kvLees(GEZIEN);
+    if (!alles || typeof alles !== "object") alles = {};
+    var eigen = alles[cfg.email];
+    mijnGezien = {
+      gezien: (eigen && eigen.gezien) || "",
+      tegels: (eigen && eigen.tegels) || [],
+    };
+    var eersteKeer = !eigen;
+
+    var n = global.fpNieuws;
+    var bij = n ? n.samenstellen(cfg.email, eigen ? mijnGezien : null) : { nieuws: [], tegels: [] };
+    nieuwsRegels = bij.nieuws;
+    nieuweTegels = bij.tegels;
+
+    // Nulmeting: nu vastleggen welke tegels er zijn, zodat de vólgende
+    // wijziging wél opvalt. Dit zet 'gezien' bewust niet.
+    if (eersteKeer && n) {
+      mijnGezien.tegels = n.tegelStand(cfg.email);
+      await bewaarGezien(false);
+    }
+  }
+
+  /* Opnieuw inlezen vlak voor het schrijven, want het is één bestand voor
+     alle collega's. Dat maakt het venster klein maar niet nul: klikken twee
+     mensen in dezelfde seconde op "gelezen", dan kan er één verloren gaan en
+     ziet die persoon de berichten de volgende keer opnieuw. Hinderlijk, meer
+     niet - en het is dezelfde afweging als bij de taken zelf. Een bestand per
+     persoon zou dit oplossen maar levert dertig losse leesacties op voor het
+     meekijkscherm, en dat is de ruil niet waard. */
+  async function bewaarGezien(ookDatum) {
+    var alles = await kvLees(GEZIEN);
+    if (!alles || typeof alles !== "object") alles = {};
+    if (ookDatum) mijnGezien.gezien = new Date().toISOString();
+    alles[cfg.email] = { gezien: mijnGezien.gezien, tegels: mijnGezien.tegels };
+    await kvSchrijf(GEZIEN, alles);
+  }
+
+  async function nieuwsWegklikken() {
+    var n = global.fpNieuws;
+    if (n) mijnGezien.tegels = n.tegelStand(cfg.email);
+    nieuwsRegels = [];
+    nieuweTegels = [];
+    teken();
+    await bewaarGezien(true);
   }
 
   /* ═══════════════ 3. SIGNALEN UIT LOGIC4 ═══════════════
@@ -329,6 +426,22 @@
 
   /* ═══════════════ TEKENEN ═══════════════ */
 
+  // Het icoon van de tegel waar een bericht over gaat. Gaat het over het
+  // dashboard zelf, dan een huisje.
+  function ikoonVan(n) {
+    if (n.iedereen || !global.fpTegels) return "🏠";
+    var t = global.fpTegels.lijst.filter(function (x) {
+      return (n.bestand && x.bestand === n.bestand) || (n.groep && x.groep === n.groep);
+    })[0];
+    return (t && t.ic) || "🏠";
+  }
+  function merkTekst(soort) {
+    return soort === "nieuw" ? "nieuw" : soort === "hersteld" ? "opgelost" : "vernieuwd";
+  }
+  function merkKlasse(soort) {
+    return soort === "nieuw" ? "nw" : soort === "hersteld" ? "hs" : "vb";
+  }
+
   var doel = null;
 
   function teken() {
@@ -350,6 +463,71 @@
     if (totaal === 0) telling.classList.add("leeg");
     kop.appendChild(telling);
     kaart.appendChild(kop);
+
+    // ── nieuw voor jou ──
+    // Boven het invoerveld, want het is het enige wat je vandaag nog niet
+    // gezien had. Eén keer lezen, wegklikken, weg.
+    if (nieuwsRegels.length || nieuweTegels.length) {
+      var nb = eltje("div", "nieuwblok");
+
+      var nkop = eltje("div", "nieuw-kop");
+      var aantal = nieuwsRegels.length + nieuweTegels.length;
+      nkop.appendChild(eltje("strong", null,
+        aantal === 1 ? "Nieuw voor jou" : "Nieuw voor jou  ·  " + aantal + " berichten"));
+      var weg = eltje("button", "nieuw-weg", "Gelezen");
+      weg.type = "button";
+      weg.title = "Wegklikken. Je krijgt ze niet nog een keer.";
+      weg.addEventListener("click", function () {
+        nieuwsWegklikken();
+        if (cfg.log) cfg.log("dashboard", "nieuwsberichten gelezen", aantal + " berichten");
+      });
+      nkop.appendChild(weg);
+      nb.appendChild(nkop);
+
+      // Eerst de tegels die erbij zijn gekomen: dat is het grootste nieuws
+      // dat iemand kan hebben, en het staat nergens opgeschreven.
+      nieuweTegels.forEach(function (t) {
+        var rij = eltje("div", "nieuw-regel");
+        var ic = eltje("div", "nieuw-ic", t.ic);
+        rij.appendChild(ic);
+        var mid = eltje("div", "nieuw-mid");
+        var kopje = eltje("div", "nieuw-titel");
+        kopje.appendChild(eltje("span", "taak-merk nw", "tegel erbij"));
+        kopje.appendChild(document.createTextNode(" " + t.naam));
+        mid.appendChild(kopje);
+        mid.appendChild(eltje("div", "nieuw-wat",
+          t.uit + ". Deze tegel is nieuw voor jou - hij staat hieronder tussen de andere."));
+        rij.appendChild(mid);
+        if (!t.extern) {
+          var ga = eltje("a", "taak-ga", "Openen");
+          ga.href = t.bestand;
+          rij.appendChild(ga);
+        }
+        nb.appendChild(rij);
+      });
+
+      // En dan wat er aan bestaande tegels veranderd is.
+      nieuwsRegels.forEach(function (n) {
+        var rij = eltje("div", "nieuw-regel");
+        rij.appendChild(eltje("div", "nieuw-ic", ikoonVan(n)));
+        var mid = eltje("div", "nieuw-mid");
+        var kopje = eltje("div", "nieuw-titel");
+        kopje.appendChild(eltje("span", "taak-merk " + merkKlasse(n.soort), merkTekst(n.soort)));
+        kopje.appendChild(document.createTextNode(" " + n.titel));
+        mid.appendChild(kopje);
+        mid.appendChild(eltje("div", "nieuw-wat", n.wat));
+        mid.appendChild(eltje("div", "nieuw-datum", nlDatum(n.datum)));
+        rij.appendChild(mid);
+        if (n.bestand && !/^https?:/i.test(n.bestand)) {
+          var ga2 = eltje("a", "taak-ga", "Bekijken");
+          ga2.href = n.bestand;
+          rij.appendChild(ga2);
+        }
+        nb.appendChild(rij);
+      });
+
+      kaart.appendChild(nb);
+    }
 
     // ── nieuwe taak ──
     var invoer = eltje("form", "taken-invoer");
@@ -481,14 +659,187 @@
     doel = document.getElementById(cfg.doelId || "takenBlok");
     if (!doel || !cfg.email) return;
     if (!cfg.teamKey) return;          // zonder sleutel geen opslag: dan liever niets tonen
+    sleutel = cfg.teamKey;
 
     await laadTaken();
     await laadRitmes();
+    // De berichten hangen aan de tegellijst en die staat er al; dit is één
+    // extra aanroep en geen wachttijd waard om over te slaan.
+    try { await laadGezien(); } catch (e) { /* dan gewoon geen berichten */ }
     teken();
     // Signalen daarna, zodat het dashboard nooit op Logic4 hoeft te wachten.
     laadSignalen();
   }
 
-  global.fpTaken = { start: start };
+  /* ═══════════════ MEEKIJKEN ═══════════════
+     Hetzelfde blok, maar dan voor iedereen tegelijk. Draait in
+     activiteit.html, dat al achter de beheerlaag zit.
+
+     Wat hier NIET gebeurt: de signalen uit Logic4 ophalen. Dat is per persoon
+     een rondje langs zijn orders en dat vraag je niet dertig keer achter
+     elkaar bij het openen van een scherm. Wie ze wil ziet ze met een knop;
+     signalenPerPersoon hieronder haalt ze dan in één keer voor iedereen op.
+
+     Eén persoon kan onder drie namen inloggen ("dolf@fonteyn.nl", "dolf",
+     "fonteyn.dolf") en de taken staan dus onder de naam waarmee die dag is
+     ingelogd. Daarom geef je hier een persoon mee met al zijn schrijfwijzen,
+     en niet één adres; we tellen ze op tot één rij.
+
+       await fpTaken.overzicht({ teamKey: "...", personen: [
+         { naam: "dolf", adressen: fpToegang.varianten("dolf") } ]})
+         → [{ naam, adressen, taken, ritmes, nieuws, nieuweTegels,
+              gezien, tegels, nooitGeopend }]  */
+
+  async function overzicht(opties) {
+    var o = opties || {};
+    sleutel = o.teamKey || sleutel;
+    if (!sleutel) return [];
+
+    var takenAlles = await kvLees("taken");
+    if (!takenAlles || typeof takenAlles !== "object") takenAlles = {};
+    var ritmeOpslag = await kvLees("taken-ritme");
+    ritmes = (ritmeOpslag && ritmeOpslag.ritmes) || STANDAARD_RITMES;
+    var vinkjes = (ritmeOpslag && ritmeOpslag.afgevinkt) || {};
+    var gezienAlles = await kvLees(GEZIEN);
+    if (!gezienAlles || typeof gezienAlles !== "object") gezienAlles = {};
+
+    var n = global.fpNieuws;
+
+    return (o.personen || []).map(function (persoon) {
+      var adressen = (persoon.adressen || []).map(function (a) { return String(a).toLowerCase(); });
+
+      var taken = [], ritmesOpen = [], vinkSamen = {}, g = null;
+      adressen.forEach(function (adres) {
+        (takenAlles[adres] || []).forEach(function (t) { if (!t.klaar) taken.push(t); });
+        var v = vinkjes[adres] || {};
+        // De laatste afvinkdatum wint: onder welke naam er is ingelogd doet
+        // er voor een terugkerend moment niet toe.
+        Object.keys(v).forEach(function (id) {
+          if (!vinkSamen[id] || vinkSamen[id] < v[id]) vinkSamen[id] = v[id];
+        });
+        var eigen = gezienAlles[adres];
+        if (eigen && (!g || String(eigen.gezien || "") > String(g.gezien || ""))) g = eigen;
+      });
+
+      // Voor "wat mag hij zien" maakt de schrijfwijze niet uit; toegang.js
+      // kent alle drie. We nemen de eerste die bestaat.
+      var wie = adressen[0] || "";
+      ritmesOpen = openstaandeRitmes(wie, vinkSamen);
+      var bij = n ? n.samenstellen(wie, g) : { nieuws: [], tegels: [] };
+
+      return {
+        naam: persoon.naam || wie,
+        adressen: adressen,
+        taken: taken,
+        ritmes: ritmesOpen,
+        nieuws: bij.nieuws,
+        nieuweTegels: bij.tegels,
+        gezien: (g && g.gezien) || "",
+        tegels: (g && g.tegels) || [],
+        nooitGeopend: !g,
+      };
+    });
+  }
+
+  /* De signalen voor iedereen tegelijk. Eén keer de orders van de afgelopen
+     weken ophalen en op Logic4-gebruiker uitsorteren, plus de bevindingen uit
+     de laatste controle. Dat is precies wat elke medewerker afzonderlijk bij
+     het inloggen doet, maar dan één keer in plaats van dertig keer.
+
+       await fpTaken.signalenPerPersoon(logic4Call)  →  { email: [signaal] }  */
+
+  async function signalenPerPersoon(logic4Call) {
+    var uit = {};
+    if (typeof logic4Call !== "function") return uit;
+
+    // Logic4-gebruikersnummer → inlognaam, zodat we een signaal bij een
+    // persoon kunnen leggen.
+    var naamVan = {};
+    try {
+      var users = await logic4Call("/v3/User/GetAllUsers", null, "GET");
+      var lijst = Array.isArray(users) ? users : (users && users.Records) || [];
+      lijst.forEach(function (u) {
+        var naam = String(u.Username || "").toLowerCase();
+        if (naam) naamVan[num(u.UserId)] = naam;
+      });
+    } catch (e) { return uit; }
+
+    function leg(uid, signaal) {
+      var naam = naamVan[uid];
+      if (!naam) return;
+      (uit[naam] = uit[naam] || []).push(signaal);
+    }
+
+    // (a) uit de laatste controle geld-goederenbeweging
+    var opslag = await kvLees("geldgoederen");
+    var m = opslag && opslag.laatste;
+    var status = await kvLees("gg-bevindingen");
+    if (m && m.controles) {
+      m.controles.forEach(function (c) {
+        (c.regels || []).forEach(function (r) {
+          var st = status[r.sleutel];
+          if (st && (st.status === "opgelost" || st.status === "akkoord")) return;
+          leg(num(r.door), {
+            bron: "controle", titel: c.naam, actie: c.actie, verwijzing: r.verwijzing,
+            detail: r.detail, bedrag: num(r.bedrag), eenheid: c.eenheid,
+            datum: r.datum, tegel: "geldgoederen.html",
+          });
+        });
+      });
+    }
+
+    // (b) verse eigen orders - dezelfde twee regels als in het blok zelf
+    var van = new Date(Date.now() - VERS_DAGEN * 86400000).toISOString().slice(0, 10);
+    var orders = [], skip = 0;
+    try {
+      for (var p = 0; p < 12; p++) {
+        var r2 = await logic4Call("/v3/Orders/GetOrders", {
+          TakeRecords: 500, SkipRecords: skip, CreationDateFrom: van, LoadPayments: true
+        });
+        var deel = Array.isArray(r2) ? r2 : (r2 && r2.Records) || [];
+        if (!deel.length) break;
+        orders = orders.concat(deel);
+        if (deel.length < 500) break;
+        skip += 500;
+      }
+    } catch (e) { /* Logic4 niet bereikbaar: dan alleen de controle */ }
+
+    orders.forEach(function (o) {
+      var uid = num(o.UserId);
+      var toestand = (o.OrderStatus && o.OrderStatus.Value) || "";
+      (o.OrderRows || []).forEach(function (row) {
+        var np = num(row.NettPrice), bp = num(row.BuyPrice), qty = num(row.Qty);
+        if (qty > 0 && np > 0 && bp <= 0 && /maatwerk|op maat/i.test(String(row.Description || ""))) {
+          leg(uid, {
+            bron: "vers", titel: "Maatwerk zonder inkoopprijs",
+            actie: "Vul de inkoopprijs in op de orderregel.",
+            verwijzing: "Order " + o.Id, detail: String(row.Description || "").slice(0, 60),
+            bedrag: qty * np, eenheid: "eur", datum: o.CreationDate, tegel: "",
+          });
+        }
+      });
+      if (/^offerte$/i.test(toestand)) {
+        var oud = Math.abs(num(dagenTot(String(o.CreationDate).slice(0, 10))));
+        if (oud >= 14) leg(uid, {
+          bron: "vers", titel: "Offerte ligt er " + oud + " dagen",
+          actie: "Bel de klant na of sluit de offerte.",
+          verwijzing: "Order " + o.Id, detail: String(o.Description || "").slice(0, 60),
+          bedrag: num((o.Totals || {}).AmountIncl), eenheid: "eur", datum: o.CreationDate, tegel: "",
+        });
+      }
+    });
+
+    Object.keys(uit).forEach(function (k) {
+      uit[k].sort(function (a, b) { return b.bedrag - a.bedrag; });
+      uit[k] = uit[k].slice(0, 22);
+    });
+    return uit;
+  }
+
+  global.fpTaken = {
+    start: start,
+    overzicht: overzicht,
+    signalenPerPersoon: signalenPerPersoon,
+  };
 
 })(typeof window !== "undefined" ? window : globalThis);

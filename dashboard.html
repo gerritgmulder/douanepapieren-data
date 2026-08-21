@@ -184,6 +184,9 @@
     font-weight: 600; vertical-align: 1px;
   }
   .taak-merk.sig { background: #fef3c7; color: #92400e; }
+  .taak-merk.nw { background: var(--fonteyn-green); color: #fff; }
+  .taak-merk.vb { background: #e8f2d9; color: #3f6b21; }
+  .taak-merk.hs { background: #dbeafe; color: #1e40af; }
   .taak-ga {
     font-size: 12px; color: var(--fonteyn-green); text-decoration: none; flex: none;
     border: 1px solid var(--border); border-radius: 7px; padding: 4px 10px; align-self: center;
@@ -195,6 +198,36 @@
   }
   .taak-weg:hover { color: var(--bad); }
   .taken-leeg { font-size: 13px; color: var(--muted); padding: 6px 0 2px; }
+
+  /* ─── Nieuw voor jou (taken.js + nieuws.js) ───────────────
+     Een eigen vlak binnen het takenblok, in de crèmekleur die op het
+     dashboard al "let hier even op" betekent. Bewust geen groen: groen is
+     hier de huisstijl en valt daardoor juist niet op. */
+  .nieuwblok {
+    background: #fdfcf0; border: 1px solid #ece7c4; border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 16px;
+  }
+  .nieuw-kop {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 8px;
+  }
+  .nieuw-kop strong { font-size: 12.5px; color: var(--fonteyn-green); letter-spacing: -0.01em; }
+  .nieuw-weg {
+    border: 1px solid #ddd6a8; background: #fff; color: var(--muted);
+    border-radius: 7px; padding: 4px 11px; font: inherit; font-size: 12px;
+    cursor: pointer; flex: none;
+  }
+  .nieuw-weg:hover { border-color: var(--fonteyn-lime); color: var(--fonteyn-green); }
+  .nieuw-regel {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 9px 0; border-top: 1px solid #f0ecd4;
+  }
+  .nieuw-regel:first-of-type { border-top: 0; padding-top: 2px; }
+  .nieuw-ic { font-size: 17px; line-height: 1.2; flex: none; width: 22px; text-align: center; }
+  .nieuw-mid { flex: 1; min-width: 0; }
+  .nieuw-titel { font-size: 13.5px; color: var(--ink); line-height: 1.4; font-weight: 600; }
+  .nieuw-wat { font-size: 12.5px; color: #55524a; margin-top: 3px; line-height: 1.5; }
+  .nieuw-datum { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
 
   .tiles {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -650,6 +683,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
 <!-- Persoonlijk takenblok. Moet vóór het dashboard-script staan, want
      showDashboard() roept window.fpTaken aan zodra iemand is ingelogd. -->
+<script src="nieuws.js"></script>
 <script src="taken.js"></script>
 
 <script>
