@@ -58,6 +58,8 @@
       uit:"Wat er in welke container gaat",                        mobiel:"goed", tile:"tileContainerLaden" },
     { bestand:"mollie.html",         groep:"mollie",           ic:"🟣",  naam:"Mollie",
       uit:"Mollie-betalingen boeken",                              mobiel:"krap", tile:"tileMollie" },
+    { bestand:"afbeeldingen.html",   groep:"afbeeldingen",     ic:"🖼️",  naam:"Afbeeldingen op maat",
+      uit:"Productfoto's naar de juiste maat",                     mobiel:"krap", tile:"tileAfbeeldingen" },
     { bestand:"prijslijsten-fabrikanten.html", groep:"prijslijsten", ic:"🗂️", naam:"Prijslijsten fabrikanten",
       uit:"Inkoopprijslijsten van de fabrieken",                   mobiel:"krap", tile:"tilePrijslijstenFab" },
     { bestand:"partneractiviteit.html", groep:"partneractiviteit", ic:"📡", naam:"Partner-activiteit",

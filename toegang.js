@@ -69,6 +69,11 @@
     "activiteit": [
       "dolf", "fonteynbot", "gerrit",
     ],
+    /* Afbeeldingen op maat. Gretha en Demi maken het drukwerk en de
+       productfoto's; de rest van de groep is de vaste beheerlaag. */
+    "afbeeldingen": [
+      "demi", "dolf", "fonteynbot", "gerrit", "gretha",
+    ],
     // Amerika (Houston)
     "amerika": [
       "chantal", "dolf", "fonteynbot", "gerrit", "osman",

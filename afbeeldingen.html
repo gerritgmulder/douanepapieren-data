@@ -1,0 +1,593 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<!-- Wie hier binnen mag staat in toegang.js, dezelfde lijst als het dashboard. -->
+<script src="toegang.js"></script>
+<title>Afbeeldingen op maat — Fonteyn Dashboard</title>
+<script src="taal.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
+<!-- ══════════════════════════════════════════════════════════════════════
+     AFBEELDINGEN OP MAAT
+
+     Gretha (21 aug 2026): productfoto's moeten naar 1200 x 900 pixels, 300 dpi,
+     bijgesneden zonder witte randen erbij, met de oorspronkelijke bestandsnaam,
+     en de teksten op de foto moeten heel blijven. In ChatGPT lukte dat wel maar
+     niet meer dan twintig per keer, en na vier rondes drie uur op slot.
+
+     Die twee eisen bijten elkaar en dat is het hele probleem van deze tegel.
+     Bijsnijden naar een andere verhouding betekent dat er iets af gaat. Zit daar
+     tekst, dan valt die weg. Daarom werkt hij zo:
+
+       1. eerst de bestaande achtergrondrand eraf. De hoekkleur is de
+          achtergrond; alles wat aan de rand die kleur heeft wordt weggeknipt.
+          Dat is bijsnijden zonder dat er iets van het product af gaat.
+       2. daarna het kader oprekken tot de gevraagde verhouding, maar alleen
+          in de achtergrond die er al was. Er komt dus niets bij dat er niet
+          al stond.
+       3. past het dan nog niet, dan moet er gekozen worden: of er gaat product
+          af, of er komt achtergrond bij. De standaard is achtergrond erbij,
+          want anders sneuvelt de tekst. De foto krijgt dan een merkje en je
+          kunt hem per stuk alsnog laten bijsnijden.
+
+     Alles gebeurt in de browser. Er gaat geen foto naar een server, dus er is
+     geen limiet en geen wachttijd.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+  :root{ --groen:#144734; --groen-d:#0d3325; --lime:#8bc53f; --lime-d:#72a531;
+         --bg:#f5f4ef; --ink:#1f2937; --muted:#6b7280; --rand:#e5e7eb;
+         --ok:#059669; --bad:#b91c1c; --warn:#92400e; }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Montserrat",-apple-system,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  input,select,button,textarea{font-family:inherit}
+  header{background:var(--groen);color:#fff;padding:14px 28px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header img.logo{height:40px}
+  header h1{margin:0;font-size:16px;font-weight:600;flex:1;min-width:150px}
+  header a.back,header button.logout{color:#fff;text-decoration:none;background:transparent;border:1px solid rgba(255,255,255,.4);
+    border-radius:7px;padding:6px 14px;font:inherit;font-size:12px;cursor:pointer}
+  header a.back:hover,header button.logout:hover{background:rgba(255,255,255,.15)}
+  header .user-chip{font-size:12px;color:rgba(255,255,255,.85)}
+  main{max-width:1400px;margin:22px auto;padding:0 22px}
+  h2{color:var(--groen);font-size:22px;margin:0 0 6px}
+  .lead{color:var(--muted);margin:0 0 16px;max-width:78ch;line-height:1.55}
+  .kaart{background:#fff;border:1px solid var(--rand);border-radius:10px;padding:16px 18px;margin-bottom:14px}
+  .kaart h3{margin:0 0 12px;color:var(--groen);font-size:14px}
+
+  /* ── de sleepzone ── */
+  #drop{border:2px dashed #cfd6d0;border-radius:12px;padding:34px 20px;text-align:center;background:#fff;
+        cursor:pointer;transition:all .15s}
+  #drop.over{border-color:var(--lime);background:#f6fbf1}
+  #drop .groot{font-size:17px;color:var(--groen);font-weight:600;margin-bottom:5px}
+  #drop .klein{font-size:12.5px;color:var(--muted)}
+
+  /* ── instellingen ── */
+  .regel{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:11px}
+  .regel + .regel{padding-top:11px;border-top:1px solid #f3f4f6}
+  .kop{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;min-width:96px}
+  .chip{border:1px solid var(--rand);background:#fff;border-radius:20px;padding:7px 15px;font:inherit;font-size:13px;
+        font-weight:600;color:var(--ink);cursor:pointer}
+  .chip:hover{border-color:var(--lime-d)}
+  .chip.aan{background:var(--groen);border-color:var(--groen);color:#fff}
+  input[type=number],select{border:1px solid var(--rand);border-radius:8px;padding:7px 10px;font-size:13px;background:#fff;width:96px}
+  input:focus,select:focus{outline:none;border-color:var(--lime-d);box-shadow:0 0 0 3px rgba(139,197,63,.22)}
+  label.sch{display:inline-flex;align-items:center;gap:7px;font-size:13px;cursor:pointer}
+  label.sch input{accent-color:var(--groen);width:16px;height:16px}
+  .knop{background:var(--lime);border:1px solid var(--lime-d);border-radius:8px;padding:10px 20px;font:inherit;
+        font-size:14px;font-weight:700;color:#12331f;cursor:pointer}
+  .knop:disabled{background:#d1d5db;border-color:#d1d5db;color:#6b7280;cursor:default}
+  .knop.stil{background:#fff;border-color:var(--rand);font-weight:600;color:var(--ink)}
+
+  /* ── het raster ── */
+  .raster{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+  .foto{background:#fff;border:1px solid var(--rand);border-radius:10px;overflow:hidden;display:flex;flex-direction:column}
+  .foto .beeld{background:#eef0ee url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath fill='%23e3e6e3' d='M0 0h8v8H0zM8 8h8v8H8z'/%3E%3C/svg%3E");
+        display:flex;align-items:center;justify-content:center;min-height:150px;padding:8px}
+  .foto .beeld img{max-width:100%;max-height:190px;display:block;box-shadow:0 1px 4px rgba(0,0,0,.13)}
+  .foto .tekst{padding:9px 11px;font-size:11.5px;color:var(--muted);border-top:1px solid var(--rand)}
+  .foto .tekst b{display:block;color:var(--ink);font-size:12px;font-weight:600;word-break:break-all;margin-bottom:3px}
+  .merk{display:inline-block;border-radius:20px;padding:1px 8px;font-size:10px;font-weight:700;margin-top:5px}
+  .merk.ok{background:#dcfce7;color:#166534}
+  .merk.let{background:#fef3c7;color:var(--warn)}
+  .merk.fout{background:#fee2e2;color:var(--bad)}
+  .foto .keuze{padding:0 11px 10px;font-size:11.5px}
+  .foto .keuze button{border:1px solid var(--rand);background:#fff;border-radius:6px;padding:4px 9px;font:inherit;
+        font-size:11px;cursor:pointer;margin-right:5px}
+  .foto .keuze button.aan{background:var(--groen);border-color:var(--groen);color:#fff}
+
+  .melding{border-radius:8px;padding:11px 14px;font-size:13px;margin-bottom:12px;line-height:1.55}
+  .melding.let{background:#fef3c7;color:var(--warn)}
+  .melding.fout{background:#fee2e2;color:var(--bad)}
+  .melding.rustig{background:#eef6ff;color:#1e40af}
+  .balk{height:6px;background:#eef0ee;border-radius:3px;overflow:hidden;margin-top:9px}
+  .balk i{display:block;height:100%;background:var(--lime);width:0;transition:width .2s}
+  .hidden{display:none!important}
+  .tel{font-size:12.5px;color:var(--muted)}
+  @media (max-width:760px){ main{padding:0 14px} .kop{min-width:0} }
+</style>
+</head>
+<body>
+
+<header>
+  <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
+  <h1>🖼️ Afbeeldingen op maat</h1>
+  <a class="back" href="dashboard.html">← Dashboard</a>
+  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <h2>Afbeeldingen op maat</h2>
+  <p class="lead">Sleep er zoveel foto's in als je wilt, kies de maat, en haal ze in één keer weer op.
+  Alles gebeurt op deze computer: er gaat geen foto naar internet, dus er is geen limiet en geen wachttijd.
+  De bestandsnamen blijven zoals ze waren.</p>
+
+  <div class="kaart">
+    <div id="drop">
+      <div class="groot">Sleep hier je foto's naartoe</div>
+      <div class="klein">of klik om ze te kiezen &nbsp;·&nbsp; jpg, png, webp &nbsp;·&nbsp; zoveel als je wilt</div>
+      <input type="file" id="kies" accept="image/*" multiple class="hidden">
+    </div>
+  </div>
+
+  <div class="kaart" id="instel">
+    <h3>Hoe wil je ze hebben</h3>
+    <div class="regel">
+      <span class="kop">Maat</span>
+      <button class="chip aan" data-w="1200" data-h="900" type="button">1200 × 900</button>
+      <button class="chip" data-w="1000" data-h="1000" type="button">1000 × 1000</button>
+      <button class="chip" data-w="900"  data-h="1200" type="button">900 × 1200</button>
+      <button class="chip" data-w="1920" data-h="1080" type="button">1920 × 1080</button>
+      <button class="chip" data-w="0"    data-h="0"    type="button">zelf invullen</button>
+      <span id="eigen" class="hidden">
+        <input type="number" id="bW" min="16" max="10000" value="1200"> ×
+        <input type="number" id="bH" min="16" max="10000" value="900">
+      </span>
+    </div>
+    <div class="regel">
+      <span class="kop">Resolutie</span>
+      <select id="dpi"><option value="300" selected>300 dpi</option><option value="150">150 dpi</option><option value="72">72 dpi</option></select>
+      <span class="tel" id="afdruk"></span>
+    </div>
+    <div class="regel">
+      <span class="kop">Randen</span>
+      <label class="sch"><input type="checkbox" id="trim" checked> bestaande achtergrondrand eerst weghalen</label>
+      <label class="sch"><input type="checkbox" id="nietsnijden" checked> nooit iets van het product afsnijden</label>
+    </div>
+    <div class="regel">
+      <span class="kop">Bestand</span>
+      <select id="soort">
+        <option value="zelfde" selected>zelfde soort als het origineel</option>
+        <option value="image/jpeg">alles als jpg</option>
+        <option value="image/png">alles als png</option>
+      </select>
+      <label class="sch" style="margin-left:6px">jpg-kwaliteit
+        <input type="range" id="kwal" min="60" max="100" value="92" style="width:120px">
+        <span class="tel" id="kwalT">92</span>
+      </label>
+    </div>
+    <div class="regel">
+      <button class="knop" id="doe" type="button" disabled>Omzetten</button>
+      <button class="knop stil" id="haal" type="button" disabled>Alles downloaden (zip)</button>
+      <button class="knop stil" id="leeg" type="button" disabled>Lijst leegmaken</button>
+      <span class="tel" id="stand"></span>
+    </div>
+    <div class="balk hidden" id="balk"><i id="balkI"></i></div>
+  </div>
+
+  <div id="meldingen"></div>
+  <div class="raster" id="raster"></div>
+</main>
+
+<script>
+const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
+const TOEGANG = window.fpToegang ? window.fpToegang.set("afbeeldingen") : null;
+const el = (id) => document.getElementById(id);
+
+(function boot(){
+  if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
+  const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  el("userEmail").textContent = email || "—";
+  if(!TOEGANG || !TOEGANG.has(email)){
+    window.fpGeenToegang = true;
+    document.body.innerHTML = "<main style='padding:48px;text-align:center'><h1 style='color:#144734'>Geen toegang</h1>"
+      + "<p>Afbeeldingen op maat is niet beschikbaar voor jouw account.</p>"
+      + "<p>Ingelogd als <code>"+(email||"(onbekend)")+"</code>.</p>"
+      + "<p><a href='dashboard.html'>← Dashboard</a></p></main>";
+    throw new Error("geen toegang");
+  }
+})();
+el("logoutBtn").addEventListener("click", ()=>{
+  localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href="dashboard.html";
+});
+
+/* ══════════════════════════════════════════════════════════════════════
+   1. De achtergrondrand vinden
+   ══════════════════════════════════════════════════════════════════════
+   De hoeken van een productfoto zijn de achtergrond. We nemen de mediaan van
+   de vier hoeken en knippen daarna vanaf elke kant alle rijen en kolommen weg
+   die vrijwel helemaal die kleur hebben. "Vrijwel" is 2%: een enkele
+   afwijkende pixel (ruis, een JPEG-artefact) mag een rij niet redden. */
+const TOL = 14;          // hoeveel een pixel van de achtergrond mag afwijken
+const VUIL = 0.02;       // welk deel van een rij niet-achtergrond mag zijn
+
+function achtergrondVan(d, w, h){
+  const punt = (x,y)=>{ const i=(y*w+x)*4; return [d[i],d[i+1],d[i+2],d[i+3]]; };
+  const hoeken=[punt(0,0),punt(w-1,0),punt(0,h-1),punt(w-1,h-1)];
+  const mid = k => hoeken.map(p=>p[k]).sort((a,b)=>a-b)[1];
+  return [mid(0),mid(1),mid(2),mid(3)];
+}
+function isAchtergrond(d,i,bg){
+  if(bg[3]<16 && d[i+3]<16) return true;                 // allebei doorzichtig
+  if(Math.abs(d[i+3]-bg[3])>TOL) return false;
+  if(d[i+3]<16) return true;
+  return Math.abs(d[i]-bg[0])<=TOL && Math.abs(d[i+1]-bg[1])<=TOL && Math.abs(d[i+2]-bg[2])<=TOL;
+}
+/* Waar zit het product? Geeft de kleinste rechthoek die alles bevat wat geen
+   achtergrond is. Null als de hele foto achtergrond is. */
+function inhoudVak(d,w,h,bg){
+  let l=w, r=-1, b=h, o=-1;
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      if(!isAchtergrond(d,(y*w+x)*4,bg)){
+        if(x<l)l=x; if(x>r)r=x; if(y<b)b=y; if(y>o)o=y;
+      }
+    }
+  }
+  if(r<0) return null;
+  return {x:l, y:b, w:r-l+1, h:o-b+1};
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   2. Het kader bepalen
+   ══════════════════════════════════════════════════════════════════════
+   We willen een kader met de gevraagde verhouding dat het product helemaal
+   bevat en dat binnen de foto blijft. Lukt dat niet, dan is er een keuze:
+   snijden (product weg) of achtergrond erbij. */
+function kaderBepalen(vak, w, h, doelW, doelH, magSnijden){
+  const verh = doelW/doelH;
+  let kw = vak.w, kh = vak.h;
+  if(kw/kh < verh) kw = Math.round(kh*verh); else kh = Math.round(kw/verh);
+
+  // midden van het product als vertrekpunt, daarna binnen de foto duwen
+  let cx = vak.x + vak.w/2, cy = vak.y + vak.h/2;
+  let x = Math.round(cx - kw/2), y = Math.round(cy - kh/2);
+  if(x<0) x=0; if(y<0) y=0;
+  if(x+kw>w) x = w-kw; if(y+kh>h) y = h-kh;
+
+  if(kw<=w && kh<=h && x>=0 && y>=0)
+    return {x,y,w:kw,h:kh, soort:"past"};        // helemaal binnen de foto
+
+  if(!magSnijden){
+    // Achtergrond erbij: het kader mag buiten de foto uitsteken. Wat daar
+    // ligt vullen we met de achtergrondkleur die er al was.
+    return {x:Math.round(cx-kw/2), y:Math.round(cy-kh/2), w:kw, h:kh, soort:"aangevuld"};
+  }
+  // Snijden: het grootste kader met de goede verhouding dat in de foto past.
+  let sw=w, sh=Math.round(w/verh);
+  if(sh>h){ sh=h; sw=Math.round(h*verh); }
+  return {x:Math.round(Math.min(Math.max(cx-sw/2,0),w-sw)),
+          y:Math.round(Math.min(Math.max(cy-sh/2,0),h-sh)), w:sw, h:sh, soort:"gesneden"};
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   3. De resolutie in het bestand zetten
+   ══════════════════════════════════════════════════════════════════════
+   Een canvas levert altijd 96 dpi op. Voor de drukker moet er 300 in staan.
+   Dat is puur een notitie in het bestand: de pixels veranderen er niet van,
+   maar een opmaakprogramma weet daardoor hoe groot het op papier hoort. */
+function crcTabel(){
+  const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320 ^ (c>>>1) : c>>>1; t[n]=c>>>0; }
+  return t;
+}
+const CRC=crcTabel();
+function crc32(buf, start, eind){
+  let c=0xFFFFFFFF;
+  for(let i=(start||0); i<(eind===undefined?buf.length:eind); i++) c = CRC[(c ^ buf[i]) & 0xFF] ^ (c>>>8);
+  return (c ^ 0xFFFFFFFF)>>>0;
+}
+function jpegDpi(bytes, dpi){
+  // De JFIF-kop staat direct achter FFD8 en heeft twee velden voor de
+  // resolutie. Zit hij er niet, dan zetten we hem er zelf tussen.
+  if(bytes[0]!==0xFF||bytes[1]!==0xD8) return bytes;
+  if(bytes[2]===0xFF && bytes[3]===0xE0 && bytes[6]===0x4A && bytes[7]===0x46){
+    const u=new Uint8Array(bytes);
+    u[13]=1; u[14]=(dpi>>8)&0xFF; u[15]=dpi&0xFF; u[16]=(dpi>>8)&0xFF; u[17]=dpi&0xFF;
+    return u;
+  }
+  const kop=new Uint8Array([0xFF,0xE0,0x00,0x10,0x4A,0x46,0x49,0x46,0x00,0x01,0x02,0x01,
+                            (dpi>>8)&0xFF,dpi&0xFF,(dpi>>8)&0xFF,dpi&0xFF,0x00,0x00]);
+  const u=new Uint8Array(bytes.length+kop.length);
+  u.set(bytes.subarray(0,2),0); u.set(kop,2); u.set(bytes.subarray(2),2+kop.length);
+  return u;
+}
+function pngDpi(bytes, dpi){
+  // pHYs: pixels per meter. 300 dpi = 300 / 0,0254 = 11811.
+  const ppm=Math.round(dpi/0.0254);
+  const data=new Uint8Array(9);
+  const dv=new DataView(data.buffer);
+  dv.setUint32(0,ppm); dv.setUint32(4,ppm); data[8]=1;
+  const chunk=new Uint8Array(21);
+  new DataView(chunk.buffer).setUint32(0,9);
+  chunk.set([0x70,0x48,0x59,0x73],4);           // "pHYs"
+  chunk.set(data,8);
+  new DataView(chunk.buffer).setUint32(17, crc32(chunk,4,17));
+  // achter IHDR (dat is altijd het eerste blok, 8 + 25 bytes) invoegen, en een
+  // bestaande pHYs eruit halen
+  let uit=[], i=8;
+  uit.push(bytes.subarray(0,8));
+  let gezet=false;
+  while(i<bytes.length){
+    const len=new DataView(bytes.buffer,bytes.byteOffset+i,4).getUint32(0);
+    const naam=String.fromCharCode(bytes[i+4],bytes[i+5],bytes[i+6],bytes[i+7]);
+    const heel=bytes.subarray(i,i+12+len);
+    if(naam!=="pHYs") uit.push(heel);
+    if(naam==="IHDR" && !gezet){ uit.push(chunk); gezet=true; }
+    i+=12+len;
+  }
+  let n=0; uit.forEach(u=>n+=u.length);
+  const u=new Uint8Array(n); let p=0; uit.forEach(x=>{u.set(x,p);p+=x.length;});
+  return u;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   4. Een zip zonder hulpbibliotheek
+   ══════════════════════════════════════════════════════════════════════
+   Alles wordt opgeslagen zonder compressie. Dat scheelt niets aan grootte -
+   jpg en png zijn al gecomprimeerd - en het scheelt een bibliotheek die we
+   dan zouden moeten meeleveren en onderhouden. */
+function maakZip(bestanden){
+  const enc=new TextEncoder();
+  const lokaal=[], centraal=[];
+  let offset=0;
+  for(const b of bestanden){
+    const naam=enc.encode(b.naam);
+    const data=b.data;
+    const crc=crc32(data);
+    const lh=new Uint8Array(30+naam.length);
+    const dv=new DataView(lh.buffer);
+    dv.setUint32(0,0x04034b50,true); dv.setUint16(4,20,true); dv.setUint16(6,0x0800,true);
+    dv.setUint16(8,0,true); dv.setUint16(10,0,true); dv.setUint16(12,0,true);
+    dv.setUint32(14,crc,true); dv.setUint32(18,data.length,true); dv.setUint32(22,data.length,true);
+    dv.setUint16(26,naam.length,true); dv.setUint16(28,0,true);
+    lh.set(naam,30);
+    lokaal.push(lh, data);
+    const ch=new Uint8Array(46+naam.length);
+    const cv=new DataView(ch.buffer);
+    cv.setUint32(0,0x02014b50,true); cv.setUint16(4,20,true); cv.setUint16(6,20,true);
+    cv.setUint16(8,0x0800,true); cv.setUint16(10,0,true); cv.setUint16(12,0,true); cv.setUint16(14,0,true);
+    cv.setUint32(16,crc,true); cv.setUint32(20,data.length,true); cv.setUint32(24,data.length,true);
+    cv.setUint16(28,naam.length,true); cv.setUint32(42,offset,true);
+    ch.set(naam,46);
+    centraal.push(ch);
+    offset += lh.length + data.length;
+  }
+  let cLen=0; centraal.forEach(c=>cLen+=c.length);
+  const eind=new Uint8Array(22); const ev=new DataView(eind.buffer);
+  ev.setUint32(0,0x06054b50,true);
+  ev.setUint16(8,bestanden.length,true); ev.setUint16(10,bestanden.length,true);
+  ev.setUint32(12,cLen,true); ev.setUint32(16,offset,true);
+  return new Blob([...lokaal,...centraal,eind],{type:"application/zip"});
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   5. Het werk zelf
+   ══════════════════════════════════════════════════════════════════════ */
+let lijst=[];            // {file, naam, bron:{w,h}, uit:{blob,url,w,h}, soort, magSnijden}
+let doelW=1200, doelH=900;
+
+function zetMaat(){
+  const eigen=el("eigen");
+  if(!eigen.classList.contains("hidden")){
+    doelW=Math.max(16,Math.min(10000,parseInt(el("bW").value,10)||1200));
+    doelH=Math.max(16,Math.min(10000,parseInt(el("bH").value,10)||900));
+  }
+  const dpi=parseInt(el("dpi").value,10);
+  const cm=(p)=>(p/dpi*2.54).toFixed(1).replace(".",",");
+  el("afdruk").textContent = "op papier " + cm(doelW) + " × " + cm(doelH) + " cm";
+}
+document.querySelectorAll(".chip").forEach(c=>c.addEventListener("click",()=>{
+  document.querySelectorAll(".chip").forEach(x=>x.classList.remove("aan"));
+  c.classList.add("aan");
+  const w=parseInt(c.dataset.w,10), h=parseInt(c.dataset.h,10);
+  if(w===0){ el("eigen").classList.remove("hidden"); }
+  else { el("eigen").classList.add("hidden"); doelW=w; doelH=h; }
+  zetMaat();
+}));
+["bW","bH","dpi"].forEach(id=>el(id).addEventListener("input",zetMaat));
+el("kwal").addEventListener("input",()=>el("kwalT").textContent=el("kwal").value);
+
+/* ── binnenhalen ── */
+const drop=el("drop");
+drop.addEventListener("click",()=>el("kies").click());
+drop.addEventListener("dragover",e=>{e.preventDefault();drop.classList.add("over");});
+drop.addEventListener("dragleave",()=>drop.classList.remove("over"));
+drop.addEventListener("drop",e=>{e.preventDefault();drop.classList.remove("over");neem(e.dataTransfer.files);});
+el("kies").addEventListener("change",e=>neem(e.target.files));
+
+function neem(files){
+  const nieuw=[...files].filter(f=>/^image\//.test(f.type));
+  const geweigerd=[...files].length-nieuw.length;
+  for(const f of nieuw) lijst.push({file:f, naam:f.name, uit:null, magSnijden:false});
+  meld(geweigerd ? {soort:"let", tekst:geweigerd+" bestand(en) overgeslagen: dat zijn geen afbeeldingen."} : null);
+  teken(); knoppen();
+}
+function meld(m){
+  el("meldingen").innerHTML = m ? '<div class="melding '+m.soort+'">'+m.tekst+'</div>' : "";
+}
+function knoppen(){
+  el("doe").disabled  = lijst.length===0;
+  el("leeg").disabled = lijst.length===0;
+  el("haal").disabled = !lijst.some(r=>r.uit);
+  el("stand").textContent = lijst.length ? (lijst.length+" foto"+(lijst.length===1?"":"'s")+
+    (lijst.filter(r=>r.uit).length ? " · "+lijst.filter(r=>r.uit).length+" omgezet" : "")) : "";
+}
+function teken(){
+  el("raster").innerHTML = lijst.map((r,i)=>{
+    const merk = !r.uit ? '<span class="merk let">nog niet omgezet</span>'
+      : r.uit.soort==="aangevuld" ? '<span class="merk let">achtergrond erbij</span>'
+      : r.uit.soort==="gesneden"  ? '<span class="merk fout">bijgesneden</span>'
+      : '<span class="merk ok">precies passend</span>';
+    const keuze = (r.uit && (r.uit.soort==="aangevuld"||r.uit.soort==="gesneden"))
+      ? '<div class="keuze">Deze foto past niet in de verhouding:'
+        + '<div style="margin-top:5px">'
+        + '<button data-i="'+i+'" data-s="0" class="'+(!r.magSnijden?"aan":"")+'">achtergrond erbij</button>'
+        + '<button data-i="'+i+'" data-s="1" class="'+(r.magSnijden?"aan":"")+'">liever bijsnijden</button>'
+        + '</div></div>' : "";
+    return '<div class="foto">'
+      + '<div class="beeld">'+(r.uit?'<img src="'+r.uit.url+'" alt="">':'<span class="tel">wacht op omzetten</span>')+'</div>'
+      + '<div class="tekst"><b>'+r.naam.replace(/[<>&]/g,"")+'</b>'
+      + (r.bron?('was '+r.bron.w+' × '+r.bron.h):'')
+      + (r.uit?(' → <b style="display:inline">'+r.uit.w+' × '+r.uit.h+'</b>'):'')
+      + '<br>'+merk+'</div>'+keuze+'</div>';
+  }).join("");
+  el("raster").querySelectorAll(".keuze button").forEach(b=>b.addEventListener("click",async()=>{
+    const i=+b.dataset.i; lijst[i].magSnijden = b.dataset.s==="1";
+    await eenDoen(lijst[i]); teken(); knoppen();
+  }));
+}
+
+function laadPlaatje(file){
+  return new Promise((klaar,mis)=>{
+    const img=new Image(); const url=URL.createObjectURL(file);
+    img.onload=()=>{ URL.revokeObjectURL(url); klaar(img); };
+    img.onerror=()=>{ URL.revokeObjectURL(url); mis(new Error("kan deze afbeelding niet openen")); };
+    img.src=url;
+  });
+}
+function uitvoerSoort(r){
+  const keuze=el("soort").value;
+  if(keuze!=="zelfde") return keuze;
+  return /png$/i.test(r.file.type) ? "image/png" : "image/jpeg";
+}
+function naamMet(naam, mime){
+  const ext = mime==="image/png" ? ".png" : ".jpg";
+  return naam.replace(/\.[^.]*$/,"") + ext;
+}
+
+async function eenDoen(r){
+  const img = await laadPlaatje(r.file);
+  const w=img.naturalWidth, h=img.naturalHeight;
+  r.bron={w,h};
+
+  // de foto uitlezen om de achtergrond en het product te vinden
+  const c1=document.createElement("canvas"); c1.width=w; c1.height=h;
+  const x1=c1.getContext("2d",{willReadFrequently:true});
+  x1.drawImage(img,0,0);
+  let bg=[255,255,255,255], vak={x:0,y:0,w,h};
+  if(el("trim").checked){
+    try{
+      const d=x1.getImageData(0,0,w,h).data;
+      bg=achtergrondVan(d,w,h);
+      const v=inhoudVak(d,w,h,bg);
+      if(v) vak=v;                       // niets gevonden = hele foto is achtergrond
+    }catch(e){ /* een foto van een ander domein laat zich niet uitlezen */ }
+  }
+  const magSnijden = r.magSnijden || !el("nietsnijden").checked;
+  const kader = kaderBepalen(vak,w,h,doelW,doelH,magSnijden);
+
+  const c2=document.createElement("canvas"); c2.width=doelW; c2.height=doelH;
+  const x2=c2.getContext("2d");
+  x2.imageSmoothingQuality="high";
+  if(kader.soort==="aangevuld"){
+    x2.fillStyle="rgba("+bg[0]+","+bg[1]+","+bg[2]+","+(bg[3]/255)+")";
+    x2.fillRect(0,0,doelW,doelH);
+  }
+  x2.drawImage(img, kader.x, kader.y, kader.w, kader.h, 0, 0, doelW, doelH);
+
+  const mime=uitvoerSoort(r);
+  const kwal=parseInt(el("kwal").value,10)/100;
+  const blob=await new Promise(k=>c2.toBlob(k, mime, mime==="image/jpeg"?kwal:undefined));
+  let bytes=new Uint8Array(await blob.arrayBuffer());
+  const dpi=parseInt(el("dpi").value,10);
+  bytes = mime==="image/png" ? pngDpi(bytes,dpi) : jpegDpi(bytes,dpi);
+  const eindblob=new Blob([bytes],{type:mime});
+  if(r.uit && r.uit.url) URL.revokeObjectURL(r.uit.url);
+  r.uit={ blob:eindblob, url:URL.createObjectURL(eindblob), w:doelW, h:doelH,
+          soort:kader.soort, naam:naamMet(r.naam,mime), bytes };
+}
+
+el("doe").addEventListener("click", async ()=>{
+  zetMaat(); meld(null);
+  el("doe").disabled=true; el("balk").classList.remove("hidden");
+  let mis=[];
+  for(let i=0;i<lijst.length;i++){
+    try{ await eenDoen(lijst[i]); }
+    catch(e){ mis.push(lijst[i].naam+" ("+e.message+")"); }
+    el("balkI").style.width = Math.round((i+1)/lijst.length*100)+"%";
+    if(i%4===3){ teken(); await new Promise(k=>setTimeout(k,0)); }
+  }
+  teken(); knoppen();
+  el("balk").classList.add("hidden"); el("balkI").style.width="0";
+  const aangevuld=lijst.filter(r=>r.uit&&r.uit.soort==="aangevuld").length;
+  const gesneden =lijst.filter(r=>r.uit&&r.uit.soort==="gesneden").length;
+  if(mis.length) meld({soort:"fout",tekst:"<b>"+mis.length+" foto('s) lukten niet:</b> "+mis.join(", ")});
+  else if(aangevuld||gesneden) meld({soort:"let",tekst:
+      "<b>Let op bij "+(aangevuld+gesneden)+" foto('s).</b> "
+      + (aangevuld?aangevuld+" pasten niet in deze verhouding; daar staat nu achtergrond omheen in dezelfde kleur als de foto zelf had. ":"")
+      + (gesneden ?gesneden +" zijn bijgesneden, dus daar is iets van het product af. ":"")
+      + "Per foto kun je hieronder wisselen."});
+  else meld({soort:"rustig",tekst:"Alle foto's passen precies in deze verhouding; er is niets afgesneden en niets bijgekomen."});
+  if(window.fpLog) window.fpLog("afbeeldingen-omgezet", lijst.length+" stuks naar "+doelW+"x"+doelH);
+});
+
+el("haal").addEventListener("click", ()=>{
+  const klaar=lijst.filter(r=>r.uit);
+  if(!klaar.length) return;
+  /* Namen die twee keer voorkomen krijgen er een nummer bij, anders overschrijft
+     de een de ander bij het uitpakken. */
+  const gezien={};
+  const bestanden=klaar.map(r=>{
+    let n=r.uit.naam;
+    if(gezien[n]){ const p=n.replace(/(\.[^.]*)$/, " ("+(++gezien[n])+")$1"); n=p; } else gezien[n]=1;
+    return {naam:n, data:r.uit.bytes};
+  });
+  const zip=maakZip(bestanden);
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(zip);
+  a.download="afbeeldingen "+doelW+"x"+doelH+".zip";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+  if(window.fpLog) window.fpLog("afbeeldingen-gedownload", bestanden.length+" stuks");
+});
+
+el("leeg").addEventListener("click", ()=>{
+  lijst.forEach(r=>{ if(r.uit&&r.uit.url) URL.revokeObjectURL(r.uit.url); });
+  lijst=[]; teken(); knoppen(); meld(null);
+});
+
+zetMaat(); knoppen();
+</script>
+
+<script>
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){
+    var ua=navigator.userAgent||"";
+    var app=ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+    var elc=ua.match(/Electron\/([\d.]+)/i);
+    var versie=app?("app "+app[1]):(elc?("app · Electron "+elc[1]):"browser");
+    var pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone|iPad)/);
+    var id=null;
+    try{
+      id=localStorage.getItem("fp.apparaat");
+      if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("fp.apparaat",id); }
+    }catch(e){}
+    return {computer:id, platform:pm?pm[1].replace(/_/g,"."):null, versie:versie};
+  }
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"afbeeldingen",action:action||"open",detail:(detail||"").slice(0,1200),rol:(window.fpRol||"medewerker"),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
+})();
+</script>
+</body>
+</html>

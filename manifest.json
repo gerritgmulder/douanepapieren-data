@@ -173,6 +173,10 @@
       "note": "Amerika — Passion Spas USA (Houston/Texas). Warehouse-Texas-orders uit Logic4 + (nog te koppelen) QuickBooks. Alleen Chantal/Dolf/Gerrit/Fonteynbot."
     },
     {
+      "name": "afbeeldingen.html",
+      "note": "Afbeeldingen op maat — productfoto's naar een gekozen formaat (standaard 1200x900), 300 dpi in het bestand, oorspronkelijke bestandsnamen, download als zip. Snijdt eerst de bestaande achtergrondrand weg en rekt daarna op tot de verhouding; past het niet, dan vult hij aan met de achtergrondkleur in plaats van tekst weg te snijden. Draait volledig in de browser, geen server (Gretha, Demi + admins)."
+    },
+    {
       "name": "activiteit.html",
       "note": "Activiteitenlogboek — wie logt wanneer in en welke tegels worden gebruikt (uit bucket activiteit-YYYY-MM via /log). Alleen Gerrit/Dolf/Fonteynbot."
     },
