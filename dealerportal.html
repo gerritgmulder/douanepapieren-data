@@ -96,6 +96,18 @@
   table.prijs tr:hover td{background:#fafbfa}
   table.prijs td.coll{border-left:5px solid transparent;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.03em}
   .prijswrap{overflow:auto;max-height:70vh;border:1px solid var(--border);border-radius:10px;margin-top:12px}
+
+  /* Het bovenaanzicht dat bij hover verschijnt. Zweeft naast de tegel, zodat
+     de kaart zelf niet verspringt en de knoppen op hun plek blijven. */
+  #fotoPop{position:fixed;z-index:900;pointer-events:none;background:#fff;border:1px solid var(--border);
+           border-radius:12px;box-shadow:0 12px 34px rgba(0,0,0,.18);padding:10px;opacity:0;
+           transform:translateY(4px);transition:opacity .13s,transform .13s;display:none}
+  #fotoPop.aan{opacity:1;transform:translateY(0)}
+  #fotoPop img{display:block;width:230px;height:230px;object-fit:contain}
+  #fotoPop .naam{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+           text-align:center;color:var(--muted);margin-top:6px}
+  #fotoPop .bezig{width:230px;height:230px;display:flex;align-items:center;justify-content:center;
+           color:var(--muted);font-size:12px}
   .pill{display:inline-block;background:#dcfce7;color:var(--ok);border-radius:999px;font-size:11px;font-weight:700;padding:2px 9px;white-space:nowrap}
   .doc{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid #f3f4f6}
   .doc a{color:var(--red);font-weight:600}
@@ -372,6 +384,7 @@ function renderStock(){
     </div>`).join("");
   document.querySelectorAll(".rsv").forEach(b => b.addEventListener("click", () => openReserve(b.dataset.model)));
   document.querySelectorAll(".dls").forEach(b => b.addEventListener("click", () => openDownloads(b.dataset.model)));
+  document.querySelectorAll(".stock-card").forEach(c => koppelFoto(c, c.dataset.model));
   $("stockEmpty").classList.toggle("hidden", list.length > 0);
 }
 $("stockSearch").addEventListener("input", renderStock);
@@ -412,7 +425,7 @@ function renderPrices(){
     const kleur = m.collectionColor||"#9ca3af";
     rijen += `<tr>
       <td class="coll" style="border-left-color:${esc(kleur)};color:${esc(kleur)}">${nieuweGroep?esc(m.collection||"Other"):""}</td>
-      <td><b>${esc(m.model)}</b></td>
+      <td><b class="fotoNaam" data-model="${esc(m.model)}" style="cursor:default">${esc(m.model)}</b></td>
       <td>${m.available>0
             ? `<span class="pill">${m.available} in stock</span>`
             : `<span class="pill" style="background:#fef3c7;color:#92400e">backorder</span>`}</td>
@@ -428,8 +441,60 @@ function renderPrices(){
       <th class="n">Partner price</th><th class="n">Freight &amp; packing</th><th class="n">Total</th><th></th></tr></thead>
      <tbody>${rijen}</tbody>`;
   $("priceTable").querySelectorAll(".rsv").forEach(b=>b.addEventListener("click",()=>openReserve(b.dataset.model)));
+  $("priceTable").querySelectorAll(".fotoNaam").forEach(b=>koppelFoto(b, b.dataset.model));
 }
 $("priceSearch").addEventListener("input", renderPrices);
+
+// ── Bovenaanzicht bij hover ──────────────────────────────────────────
+// De foto's staan in de specificatiesheets die Demi heeft gevuld; de worker
+// vist het bovenaanzicht eruit en bewaart het apart. Hier wordt hij één keer
+// per model opgehaald en daarna onthouden, zodat een tweede keer zweven niets
+// meer kost. Modellen zonder specsheet geven een 404; die krijgen dan gewoon
+// geen voorbeeld, zonder foutmelding in beeld.
+const fotoCache = new Map();        // model -> blob-adres, of null als er geen foto is
+let fotoBezig = null;
+function fotoPop(){
+  let el = $("fotoPop");
+  if (!el) { el = document.createElement("div"); el.id = "fotoPop"; document.body.appendChild(el); }
+  return el;
+}
+function plaats(pop, doel){
+  const r = doel.getBoundingClientRect();
+  const b = 252, h = pop.offsetHeight || 282;
+  let x = r.right + 12;
+  if (x + b > window.innerWidth - 8) x = r.left - b - 12;      // links ervan
+  if (x < 8) x = Math.max(8, Math.min(window.innerWidth - b - 8, r.left));
+  let y = r.top + r.height/2 - h/2;
+  y = Math.max(8, Math.min(window.innerHeight - h - 8, y));
+  pop.style.left = x + "px"; pop.style.top = y + "px";
+}
+async function toonFoto(model, doel){
+  const pop = fotoPop();
+  fotoBezig = model;
+  if (!fotoCache.has(model)) {
+    pop.innerHTML = '<div class="bezig">…</div><div class="naam">'+esc(model)+'</div>';
+    pop.style.display = "block"; plaats(pop, doel); pop.classList.add("aan");
+    try {
+      const r = await fetch("/dealers/api/photo?model=" + encodeURIComponent(model),
+                            { headers: { "X-Dealer-Session": localStorage.getItem(SESS_KEY) || "" } });
+      fotoCache.set(model, r.status === 200 ? URL.createObjectURL(await r.blob()) : null);
+    } catch (e) { fotoCache.set(model, null); }
+    if (fotoBezig !== model) return;                            // muis is alweer weg
+  }
+  const url = fotoCache.get(model);
+  if (!url) { verbergFoto(); return; }                          // geen specsheet: niets tonen
+  pop.innerHTML = '<img src="'+url+'" alt=""><div class="naam">'+esc(model)+'</div>';
+  pop.style.display = "block"; plaats(pop, doel); pop.classList.add("aan");
+}
+function verbergFoto(){
+  fotoBezig = null;
+  const el = $("fotoPop");
+  if (el) { el.classList.remove("aan"); setTimeout(()=>{ if(!el.classList.contains("aan")) el.style.display="none"; }, 150); }
+}
+function koppelFoto(el, model){
+  el.addEventListener("mouseenter", ()=>toonFoto(model, el));
+  el.addEventListener("mouseleave", verbergFoto);
+}
 // Valuta-schakelaar (€/$) — standaard de valuta van de regio, maar overal
 // omschakelbaar zodat Arno/Chantal/Gerrit beide prijzen kunnen controleren.
 function renderCurToggle(){

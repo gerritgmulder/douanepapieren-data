@@ -391,6 +391,61 @@ const DP_COLLECTION_COLORS = {
   "Overflow": "#6b4e9e", "Heat Pumps": "#6b7280",
 };
 
+/* GET /dealers/api/photo?model=X — het bovenaanzicht van een spa.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (21 aug 2026): "bij on-hover van een model wil ik de productfoto
+   zien." Die foto's staan er al: Demi heeft de specsheets gevuld, en het veld
+   fotoHoofd daarin ís het bovenaanzicht.
+
+   Alleen staan ze op een onhandige plek. Eén specsheet is al gauw vier of vijf
+   megabyte, want alle afbeeldingen zitten er als base64 in. Die bij elke
+   muisbeweging ophalen om er één foto uit te vissen is zonde.
+
+   Daarom haalt dit eindpunt de foto de eerste keer uit de specsheet en legt
+   hem apart neer onder spafoto:<model>. Elke volgende keer komt hij daar
+   vandaan: een paar honderd kilobyte in plaats van vijf megabyte. Verandert
+   Demi een sheet, dan wist het opslaan van die sheet ook de losse foto (zie
+   het opslag-eindpunt), zodat hij de volgende keer opnieuw wordt opgebouwd. */
+async function dpHandleSpaPhoto(env, url) {
+  const model = String(url.searchParams.get("model") || "").trim();
+  if (!model) return reply(400, { ok: false, error: "geen model" });
+
+  const sleutel = "spafoto:" + model.toLowerCase();
+  const klaar = await env.FONTEYN_DATA.get(sleutel, { type: "arrayBuffer" });
+  if (klaar && klaar.byteLength > 0) {
+    return new Response(klaar, { status: 200, headers: {
+      ...corsHeaders, "Content-Type": "image/png",
+      "Cache-Control": "public, max-age=86400", "X-Bron": "bewaard" } });
+  }
+
+  const index = (await env.FONTEYN_DATA.get("specsheets", { type: "json" })) || {};
+  const sheets = index.sheets || [];
+  /* Op modelnaam zoeken, hoofdletterongevoelig. Sommige modellen staan er twee
+     keer in (Desire, Pleasure); dan wint de laatst bijgewerkte. */
+  const treffers = sheets
+    .filter(s => s && s.model && String(s.model).toLowerCase() === model.toLowerCase())
+    .sort((a, b) => String(b.updated || "").localeCompare(String(a.updated || "")));
+  if (!treffers.length) return reply(404, { ok: false, error: "geen specsheet voor dit model" });
+
+  const sheet = await env.FONTEYN_DATA.get("specsheet-" + treffers[0].id, { type: "json" });
+  const data = sheet && typeof sheet.fotoHoofd === "string" ? sheet.fotoHoofd : "";
+  if (!data.startsWith("data:image/")) return reply(404, { ok: false, error: "deze specsheet heeft geen bovenaanzicht" });
+
+  const komma = data.indexOf(",");
+  const soort = data.slice(5, data.indexOf(";"));
+  const ruw = atob(data.slice(komma + 1));
+  const bytes = new Uint8Array(ruw.length);
+  for (let i = 0; i < ruw.length; i++) bytes[i] = ruw.charCodeAt(i);
+
+  /* Apart wegleggen voor de volgende keer. Mislukt dat (te groot), dan geven
+     we de foto alsnog terug - dan is hij alleen niet sneller geworden. */
+  try { await env.FONTEYN_DATA.put(sleutel, bytes); } catch (e) {}
+
+  return new Response(bytes, { status: 200, headers: {
+    ...corsHeaders, "Content-Type": soort || "image/png",
+    "Cache-Control": "public, max-age=86400", "X-Bron": "specsheet" } });
+}
+
 // GET /dealers/api/stock — geaggregeerd per model, dealer-veilig, mét
 // partnerprijs ($ + Freight Surcharge Warehouse Uddel) + collectie/kleur.
 // ALLEEN modellen die op de prijslijst staan (verkoopbaar assortiment) —
@@ -1159,6 +1214,7 @@ async function handleDealerRoutes(request, env, url) {
       return reply(200, { ok: true });
     }
     if (p === "/dealers/api/stock" && request.method === "GET") return dpHandleStock(env);
+    if (p === "/dealers/api/photo" && request.method === "GET") return dpHandleSpaPhoto(env, url);
     if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);
     if (p === "/dealers/api/requests" && request.method === "GET") return dpHandleMyRequests(env, sess);
     if (p === "/dealers/api/reserve" && request.method === "POST") return dpHandleReserve(request, env, sess, url);
@@ -6548,6 +6604,16 @@ export default {
         } catch (e) { /* backup mag het opslaan nooit tegenhouden */ }
       }
       await env.FONTEYN_DATA.put(bucket, body);
+      /* Het bovenaanzicht dat het partnerportaal apart bewaart hoort bij deze
+         sheet. Wordt de sheet gewijzigd, dan is die kopie verouderd; weggooien
+         is genoeg, want het portaal bouwt hem bij de eerstvolgende hover
+         gewoon opnieuw op. */
+      if (/^specsheet-[a-z0-9]{4,24}$/.test(bucket)) {
+        try {
+          const sheet = JSON.parse(body);
+          if (sheet && sheet.model) await env.FONTEYN_DATA.delete("spafoto:" + String(sheet.model).toLowerCase());
+        } catch (e) { /* opruimen mag het opslaan nooit tegenhouden */ }
+      }
       return reply(200, { ok: true, bytes: body.length });
     }
 
