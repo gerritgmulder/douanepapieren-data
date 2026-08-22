@@ -836,11 +836,20 @@ async function dpHandlePage(env) {
     return new Response("Portal temporarily unavailable — please try again in a minute.", { status: 503, headers: { "Content-Type": "text/plain" } });
   }
   const html = await r.text();
-  // SAFETY: strikte security-headers op de publieke portaalpagina.
+  /* SAFETY: strikte security-headers op de publieke portaalpagina.
+
+     img-src heeft er 'blob:' bij gekregen (22 aug 2026). De productfoto bij
+     hover wordt met fetch opgehaald - dat moet, want /dealers/api/photo wil
+     de sessie-header zien en die kan een gewone <img src> niet meesturen - en
+     het antwoord wordt daarna een blob:-adres. Dat stond niet in de lijst, dus
+     blokkeerde de browser precies dat ene plaatje: het vak kwam wel in beeld,
+     de foto niet. Geen nieuwe deur: een blob:-adres verwijst alleen naar
+     gegevens die deze pagina zelf al binnen had, en 'data:' - dat hetzelfde
+     kan - stond er al in. */
   return new Response(html, { headers: {
     "Content-Type": "text/html; charset=utf-8",
     "Cache-Control": "no-store",
-    "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://raw.githubusercontent.com; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://raw.githubusercontent.com; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
     "X-Frame-Options": "DENY",
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",

@@ -458,22 +458,33 @@ function fotoPop(){
   if (!el) { el = document.createElement("div"); el.id = "fotoPop"; document.body.appendChild(el); }
   return el;
 }
-function plaats(pop, doel){
-  const r = doel.getBoundingClientRect();
-  const b = 252, h = pop.offsetHeight || 282;
-  let x = r.right + 12;
-  if (x + b > window.innerWidth - 8) x = r.left - b - 12;      // links ervan
-  if (x < 8) x = Math.max(8, Math.min(window.innerWidth - b - 8, r.left));
-  let y = r.top + r.height/2 - h/2;
-  y = Math.max(8, Math.min(window.innerHeight - h - 8, y));
+/* Het voorbeeld hangt aan de muis en niet aan de tegel: zolang je met de
+   muis over het tegeltje beweegt, schuift de foto mee (Gerrit, 22 aug 2026).
+   Naast de tegel stond hij bij een lange lijst telkens ergens anders, en dan
+   moet je hem elke keer opnieuw zoeken.
+
+   Het vak zelf heeft pointer-events:none, dus de muis gaat er dwars doorheen:
+   hij komt nooit tussen jou en het tegeltje in staan en kan de hover dus ook
+   niet zelf verbreken. */
+let muisX = 0, muisY = 0;
+function plaats(pop){
+  const b = pop.offsetWidth || 252, h = pop.offsetHeight || 282, marge = 18;
+  // Rechtsonder de muis, tenzij het daar niet past; dan klapt hij om naar de
+  // andere kant in plaats van tegen de rand aan te blijven plakken.
+  let x = muisX + marge;
+  if (x + b > window.innerWidth - 8) x = muisX - b - marge;
+  if (x < 8) x = 8;
+  let y = muisY + marge;
+  if (y + h > window.innerHeight - 8) y = muisY - h - marge;
+  if (y < 8) y = 8;
   pop.style.left = x + "px"; pop.style.top = y + "px";
 }
-async function toonFoto(model, doel){
+async function toonFoto(model){
   const pop = fotoPop();
   fotoBezig = model;
   if (!fotoCache.has(model)) {
     pop.innerHTML = '<div class="bezig">…</div><div class="naam">'+esc(model)+'</div>';
-    pop.style.display = "block"; plaats(pop, doel); pop.classList.add("aan");
+    pop.style.display = "block"; plaats(pop); pop.classList.add("aan");
     try {
       const r = await fetch("/dealers/api/photo?model=" + encodeURIComponent(model),
                             { headers: { "X-Dealer-Session": localStorage.getItem(SESS_KEY) || "" } });
@@ -484,7 +495,7 @@ async function toonFoto(model, doel){
   const url = fotoCache.get(model);
   if (!url) { verbergFoto(); return; }                          // geen specsheet: niets tonen
   pop.innerHTML = '<img src="'+url+'" alt=""><div class="naam">'+esc(model)+'</div>';
-  pop.style.display = "block"; plaats(pop, doel); pop.classList.add("aan");
+  pop.style.display = "block"; plaats(pop); pop.classList.add("aan");
 }
 function verbergFoto(){
   fotoBezig = null;
@@ -492,7 +503,12 @@ function verbergFoto(){
   if (el) { el.classList.remove("aan"); setTimeout(()=>{ if(!el.classList.contains("aan")) el.style.display="none"; }, 150); }
 }
 function koppelFoto(el, model){
-  el.addEventListener("mouseenter", ()=>toonFoto(model, el));
+  el.addEventListener("mouseenter", e => { muisX = e.clientX; muisY = e.clientY; toonFoto(model); });
+  el.addEventListener("mousemove", e => {
+    muisX = e.clientX; muisY = e.clientY;
+    const pop = $("fotoPop");
+    if (pop && pop.classList.contains("aan")) plaats(pop);
+  });
   el.addEventListener("mouseleave", verbergFoto);
 }
 // Valuta-schakelaar (€/$) — standaard de valuta van de regio, maar overal
