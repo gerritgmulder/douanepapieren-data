@@ -51,6 +51,13 @@
 
   var NIEUWS = [
 
+    /* ── 22 augustus 2026 ─────────────────────────────────────────────── */
+    {
+      datum: "2026-08-22", groep: "partnerportaal-kijk", soort: "hersteld",
+      titel: "De foto bij een model kwam niet in beeld",
+      wat: "Ga je met de muis over een model, dan kwam het venstertje wel tevoorschijn maar de foto niet. Dat is opgelost. Het venstertje hangt nu ook aan je muis in plaats van naast de tegel, zodat je het niet elke keer hoeft te zoeken.",
+    },
+
     /* ── 21 augustus 2026 ─────────────────────────────────────────────── */
     /* Dit bericht legt zichzelf uit: het is het eerste dat iedereen in het
        nieuwe blok te zien krijgt. Zonder deze regel staat er een vak op je
