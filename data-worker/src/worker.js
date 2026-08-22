@@ -314,13 +314,51 @@ async function dpHandleLogin(request, env, url) {
   return generic;
 }
 
-// GET /dealers/auth?t=… → login-token inwisselen voor sessie, terug naar portaal
+// GET  /dealers/auth?t=… → tussenpagina met een knop. Het token wordt hier
+//                           met opzet NIET ingewisseld.
+// POST /dealers/auth        → wisselt het token in en logt in.
+//
+// Waarom twee stappen: mailfilters (Microsoft Safe Links, corporate
+// linkscanners) openen elke link in een binnenkomende mail zelf om hem te
+// controleren. Toen het GET-verzoek het eenmalige token al inwisselde, was
+// de link daardoor vrijwel altijd "expired" op het moment dat de mens
+// klikte — de scanner was hem voor. Scanners doen GET, geen POST; de knop
+// hieronder is dus onbereikbaar voor de scanner en de link overleeft de
+// controle. Het token blijft eenmalig: de POST wist hem.
+function dpAuthPagina(url, t, kop, tekst, knop) {
+  return new Response("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
+    "<meta name='robots' content='noindex'><title>Passion Partners</title></head>" +
+    "<body style='font-family:Arial,sans-serif;background:#f7f7f5;margin:0;padding:40px 16px;text-align:center'>" +
+    "<div style='max-width:430px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:34px 28px'>" +
+    "<h2 style='color:#c8102e;margin:0 0 6px'>Passion Partners</h2>" +
+    "<h3 style='margin:14px 0 8px'>" + kop + "</h3>" +
+    "<p style='color:#555;line-height:1.5'>" + tekst + "</p>" +
+    (knop ? ("<form method='POST' action='" + url.origin + "/dealers/auth'>" +
+      "<input type='hidden' name='t' value='" + t.replace(/[^A-Za-z0-9-]/g, "") + "'>" +
+      "<button type='submit' style='background:#c8102e;color:#fff;border:0;font-weight:bold;font-size:15px;padding:14px 30px;border-radius:10px;cursor:pointer;margin-top:12px'>" + knop + "</button></form>")
+      : ("<p style='margin-top:18px'><a href='" + url.origin + "/dealers' style='color:#c8102e;font-weight:bold'>Back to the portal</a></p>")) +
+    "</div></body></html>",
+    { status: knop ? 200 : 400, headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex" } });
+}
+
 async function dpHandleAuth(request, env, url) {
-  const t = url.searchParams.get("t") || "";
+  let t = "";
+  if (request.method === "POST") {
+    const form = await request.formData().catch(() => null);
+    t = String((form && form.get("t")) || "");
+  } else {
+    t = url.searchParams.get("t") || "";
+  }
   const login = t ? await env.FONTEYN_DATA.get("dp-login:" + t, { type: "json" }) : null;
   if (!login) {
-    return new Response("<html><body style='font-family:Arial;padding:40px;text-align:center'><h2>Link expired</h2><p>This login link is no longer valid. Please request a new one.</p><p><a href='" + url.origin + "/dealers'>Back to the portal</a></p></body></html>",
-      { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
+    return dpAuthPagina(url, "", "Link expired",
+      "This login link is no longer valid. Please request a new one, or log in with your password.", null);
+  }
+  if (request.method === "GET") {
+    // Alleen kijken, niets inwisselen — dit is wat de scanner ziet.
+    return dpAuthPagina(url, t, "Log in to the portal",
+      "Welcome" + (login.company ? " " + String(login.company).replace(/[<>&]/g, "") : "") +
+      ". Click the button to open your Passion Partners portal.", "Continue to the portal");
   }
   await env.FONTEYN_DATA.delete("dp-login:" + t);   // eenmalig bruikbaar
   const sess = dpNewSessionToken();
@@ -508,6 +546,7 @@ async function dpHandleMySpas(env, sess) {
         ordernr: r.ordernr, date: r.datum, model, kleur: r.kleur || null, qty: r.qty,
         status: r.status, betaald: r.betaald, betaaldPct: r.betaaldPct,
         verwacht: r.verwacht || null, verwachtSchip: r.verwachtSchip || null,
+        verwachtBron: r.verwachtBron || null, vervallen: r.vervallen || false,
       });
     }
   }
@@ -1179,6 +1218,117 @@ async function dpAdminLoginLink(request, env, url) {
   return reply(200, { ok: true, link: url.origin + "/dealers/auth?t=" + token, validDays: DP_ADMIN_LINK_TTL / 86400 });
 }
 
+// ─── Uitnodigen van een nieuwe dealer of partner ─────────────────────
+// POST /dealers/admin/uitnodigen { email } → nette welkomstmail met een link
+// naar /dealers/welkom, waar de ontvanger zelf een wachtwoord kiest en
+// meteen ingelogd het portaal in gaat.
+//
+// Waarom een wachtwoord kiezen en niet nóg een inloglink: een link is
+// eenmalig en de sessie verloopt na dertig dagen — dan sta je weer buiten.
+// Een zelfgekozen wachtwoord blijft werken, en het kiezen ervan is één veld
+// op de welkomstpagina. De uitnodigingslink zelf is zeven dagen geldig en
+// overleeft mailscanners: de GET van de welkomstpagina wisselt niets in,
+// pas het instellen van het wachtwoord (POST) verbruikt het token.
+const DP_INVITE_TTL = 7 * 24 * 3600;
+
+async function dpAdminUitnodigen(request, env, url) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const email = String(body.email || "").trim().toLowerCase();
+  const accounts = await dpGetAccounts(env);
+  const dealer = dpFindDealer(accounts, email);
+  if (!dealer) return reply(404, { ok: false, error: "geen actieve dealer met dit e-mailadres" });
+  const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
+  await env.FONTEYN_DATA.put("dp-invite:" + token,
+    JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_INVITE_TTL });
+  const link = url.origin + "/dealers/welkom?t=" + token;
+  const naam = dealer.company ? String(dealer.company) : "partner";
+  const sent = await dpSendEmail(env, email, "Welcome to Passion Partners",
+    '<div style="font-family:Arial,sans-serif;max-width:540px;margin:0 auto;color:#1f2937;">' +
+    '<div style="background:#c8102e;border-radius:12px 12px 0 0;padding:22px 28px;">' +
+    '<h1 style="color:#fff;margin:0;font-size:22px;">Passion Partners</h1></div>' +
+    '<div style="border:1px solid #e5e7eb;border-top:0;border-radius:0 0 12px 12px;padding:26px 28px;">' +
+    '<p style="font-size:15px;">Hello ' + naam.replace(/[<>&]/g, "") + ',</p>' +
+    '<p style="line-height:1.6;">Your Passion Partners account is ready. In your own portal you will find ' +
+    'live stock for the full Passion Spas range, your price list, your reservations with expected ' +
+    'delivery, and all product documentation.</p>' +
+    '<p style="margin:28px 0;text-align:center;"><a href="' + link + '" ' +
+    'style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;font-size:15px;padding:15px 34px;border-radius:10px;display:inline-block;">Activate your account</a></p>' +
+    '<p style="color:#6b7280;font-size:13px;line-height:1.6;">The link is valid for 7 days and lets you choose ' +
+    'your own password. After that, log in any time at <a href="' + url.origin + '/dealers" style="color:#c8102e;">' +
+    url.origin.replace(/^https?:\/\//, "") + '/dealers</a>.</p>' +
+    '<p style="color:#9ca3af;font-size:12px;">Questions? Just reply to this email.</p></div></div>',
+    (accounts.contactEmail || undefined));
+  await dpLogPartner(env, { email, company: dealer.company || "" }, "uitnodiging-verstuurd",
+    sent.ok ? "welkomstmail" : "MAIL FAALDE");
+  return reply(sent.ok ? 200 : 502, { ok: sent.ok, link, validDays: DP_INVITE_TTL / 86400,
+    error: sent.ok ? undefined : "mail-versturen-faalde (link is wel aangemaakt)" });
+}
+
+// GET  /dealers/welkom?t=… → welkomstpagina met wachtwoord-formulier.
+//                            Wisselt niets in (scanner-bestendig).
+// POST /dealers/welkom      → zet het wachtwoord, verbruikt het token,
+//                            geeft een sessie terug.
+async function dpHandleWelkom(request, env, url) {
+  if (request.method === "POST") {
+    let body = {};
+    try { body = await request.json(); } catch {}
+    const t = String(body.t || "");
+    const password = String(body.password || "");
+    const invite = t ? await env.FONTEYN_DATA.get("dp-invite:" + t, { type: "json" }) : null;
+    if (!invite) return reply(400, { ok: false, error: "link-verlopen" });
+    if (password.length < 8) return reply(400, { ok: false, error: "wachtwoord-te-kort" });
+    const accounts = await dpGetAccounts(env);
+    const dealer = dpFindDealer(accounts, invite.email);
+    if (!dealer) return reply(404, { ok: false, error: "account-bestaat-niet-meer" });
+    dealer.pw = await dpHashPassword(password);
+    await env.FONTEYN_DATA.put("dealer-accounts", JSON.stringify(accounts));
+    await env.FONTEYN_DATA.delete("dp-invite:" + t);
+    const sess = dpNewSessionToken();
+    await env.FONTEYN_DATA.put("dp-sess:" + sess,
+      JSON.stringify({ email: invite.email, company: dealer.company || "", since: new Date().toISOString() }),
+      { expirationTtl: DP_SESS_TTL });
+    await dpLogPartner(env, { email: invite.email, company: dealer.company || "" }, "login", "account geactiveerd via uitnodiging");
+    return reply(200, { ok: true, session: sess, company: dealer.company || "" });
+  }
+
+  const t = url.searchParams.get("t") || "";
+  const invite = t ? await env.FONTEYN_DATA.get("dp-invite:" + t, { type: "json" }) : null;
+  const naam = invite && invite.company ? String(invite.company).replace(/[<>&]/g, "") : "";
+  const binnen = invite
+    ? "<h3 style='margin:14px 0 6px'>Welcome" + (naam ? ", " + naam : "") + "!</h3>" +
+      "<p style='color:#555;line-height:1.5;margin:0 0 18px'>Choose a password to activate your account. " +
+      "You will use it together with your email address to log in.</p>" +
+      "<form id='f' style='text-align:left'>" +
+      "<label style='font-size:13px;color:#555'>Password <span style='color:#9ca3af'>(minimum 8 characters)</span>" +
+      "<input id='pw1' type='password' minlength='8' required autocomplete='new-password' style='display:block;width:100%;box-sizing:border-box;margin:5px 0 14px;padding:12px;border:1px solid #d1d5db;border-radius:9px;font-size:15px'></label>" +
+      "<label style='font-size:13px;color:#555'>Repeat password" +
+      "<input id='pw2' type='password' minlength='8' required autocomplete='new-password' style='display:block;width:100%;box-sizing:border-box;margin:5px 0 6px;padding:12px;border:1px solid #d1d5db;border-radius:9px;font-size:15px'></label>" +
+      "<p id='fout' style='color:#b91c1c;font-size:13px;min-height:18px;margin:4px 0 8px'></p>" +
+      "<button type='submit' style='width:100%;background:#c8102e;color:#fff;border:0;font-weight:bold;font-size:15px;padding:14px;border-radius:10px;cursor:pointer'>Activate and open the portal</button>" +
+      "</form>" +
+      "<script>document.getElementById('f').addEventListener('submit',async function(e){" +
+      "e.preventDefault();var a=document.getElementById('pw1').value,b=document.getElementById('pw2').value,f=document.getElementById('fout');" +
+      "if(a!==b){f.textContent='The passwords do not match.';return;}" +
+      "f.textContent='';" +
+      "var r=await fetch('/dealers/welkom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({t:" + JSON.stringify(t.replace(/[^A-Za-z0-9-]/g, "")) + ",password:a})});" +
+      "var j=await r.json().catch(function(){return{}});" +
+      "if(j.ok){location.href='/dealers#s='+j.session;}" +
+      "else{f.textContent=j.error==='wachtwoord-te-kort'?'Password must be at least 8 characters.':'This link is no longer valid. Please contact us for a new invitation.';}" +
+      "});</script>"
+    : "<h3 style='margin:14px 0 6px'>Link expired</h3>" +
+      "<p style='color:#555;line-height:1.5'>This invitation link is no longer valid. " +
+      "Please contact us for a new invitation, or log in with your password if you already chose one.</p>" +
+      "<p style='margin-top:18px'><a href='/dealers' style='color:#c8102e;font-weight:bold'>Go to the portal</a></p>";
+
+  return new Response("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
+    "<meta name='robots' content='noindex'><title>Welcome — Passion Partners</title></head>" +
+    "<body style='font-family:Arial,sans-serif;background:#f7f7f5;margin:0;padding:40px 16px;text-align:center'>" +
+    "<div style='max-width:430px;margin:0 auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:34px 28px'>" +
+    "<h2 style='color:#c8102e;margin:0'>Passion Partners</h2>" + binnen + "</div></body></html>",
+    { status: invite ? 200 : 400, headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex" } });
+}
+
 // POST /dealers/admin/wachtwoord { email, password } — beheerder zet een
 // eerste wachtwoord voor een account.
 //
@@ -1211,7 +1361,8 @@ async function handleDealerRoutes(request, env, url) {
   const p = url.pathname.replace(/\/+$/, "");
   if (p === "/dealers" && request.method === "GET") return dpHandlePage(env);
   if (p === "/dealers/login" && request.method === "POST") return dpHandleLogin(request, env, url);
-  if (p === "/dealers/auth" && request.method === "GET") return dpHandleAuth(request, env, url);
+  if (p === "/dealers/auth" && (request.method === "GET" || request.method === "POST")) return dpHandleAuth(request, env, url);
+  if (p === "/dealers/welkom" && (request.method === "GET" || request.method === "POST")) return dpHandleWelkom(request, env, url);
 
   if (p === "/dealers/webhook" && request.method === "POST") return dpHandleMollieWebhook(request, env);
 
@@ -1220,6 +1371,7 @@ async function handleDealerRoutes(request, env, url) {
     if (!dpIsAdmin(request, env)) return reply(401, { ok: false, error: "unauthorized" });
     if (p === "/dealers/admin/mailstatus" && request.method === "GET") return dpAdminMailStatus(env, url);
     if (p === "/dealers/admin/loginlink" && request.method === "POST") return dpAdminLoginLink(request, env, url);
+    if (p === "/dealers/admin/uitnodigen" && request.method === "POST") return dpAdminUitnodigen(request, env, url);
     if (p === "/dealers/admin/wachtwoord" && request.method === "POST") return dpAdminSetPassword(request, env);
     if (p === "/dealers/admin/file" && request.method === "PUT") return dpAdminPutFile(request, env, url);
     if (p === "/dealers/admin/testorder" && request.method === "POST") return dpAdminTestOrder(request, env);

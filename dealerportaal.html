@@ -628,6 +628,19 @@ function relatieKaart(index){
     try{ if(window.fpLog) window.fpLog(nieuw?"relatie-toegevoegd":"relatie-gewijzigd", d.email+" ("+d.company+")"); }catch(e){}
     await save("dealer-accounts", accounts);
     laag.remove(); renderPartners();
+    // Nieuwe relatie? Dan is de welkomstmail de logische volgende stap - hier
+    // aanbieden scheelt het zoeken naar de knop in de tabel.
+    if (nieuw && confirm("Opgeslagen. Meteen de welkomstmail sturen naar "+d.email+"?\n\nDe relatie kiest daarmee zelf een wachtwoord en komt direct in het portaal. Kan ook later, met de knop 'uitnodiging'.")) {
+      try {
+        const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/uitnodigen", {
+          method:"POST", headers:{ "Content-Type":"application/json", "X-DP-Admin": adminKey() },
+          body: JSON.stringify({ email: d.email }) });
+        const j = await r.json();
+        if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP "+r.status));
+        try{ if(window.fpLog) window.fpLog("uitnodiging-verstuurd", d.email+" ("+d.company+")"); }catch(e){}
+        setStatus("ok", "Welkomstmail verstuurd naar "+d.email+".");
+      } catch(e){ setStatus("bad","Uitnodiging versturen faalde: "+e.message+". Probeer de knop 'uitnodiging' in de tabel."); }
+    }
   });
 
   teken();
@@ -662,8 +675,9 @@ function renderPartners(){
       <td><span class="pill ${d.active!==false?"on":"off"}">${d.active!==false?"actief":"uit"}</span>
           <button class="rmv togAct" data-i="${i}" style="margin-left:6px">${d.active!==false?"blokkeer":"activeer"}</button></td>
       <td><button class="rmv kaartD" data-i="${i}" title="Alle gegevens van deze relatie: afspraken, facturatie, verzending en het debiteurnummer" style="font-weight:700">bewerken</button>
-          <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink (7 dagen geldig, eenmalig) — handig als de e-mail niet aankomt of voor onboarding via WhatsApp">inloglink</button>
-          <button class="rmv pwD" data-i="${i}" title="Zet een wachtwoord voor dit account. Gebruik dit als een inloglink 'verlopen' blijft zeggen: mailfilters zoals Microsoft Safe Links openen de link zelf om hem te controleren en gebruiken hem daarmee op. Met een wachtwoord kan er niets meer verlopen.">wachtwoord</button>
+          <button class="rmv invD" data-i="${i}" title="Stuur de welkomstmail: een nette uitnodiging waarmee deze relatie zelf een wachtwoord kiest en meteen ingelogd het portaal in gaat. De link is 7 dagen geldig en kan tegen mailscanners: pas het instellen van het wachtwoord verbruikt hem." style="color:var(--fonteyn-green,#144734);font-weight:700">uitnodiging</button>
+          <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink zonder mail — voor onboarding via WhatsApp of als de mail niet aankomt. 7 dagen geldig, eenmalig, en sinds 22 aug bestand tegen mailscanners: de link opent eerst een tussenpagina en pas de knop daarop logt in.">inloglink</button>
+          <button class="rmv pwD" data-i="${i}" title="Zet zelf een wachtwoord voor dit account, bijvoorbeeld telefonisch door te geven. Normaal niet nodig: via de uitnodiging kiest de relatie er zelf een.">wachtwoord</button>
           <button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
     </tr>`).join("") || '<tr><td colspan="9" style="color:var(--muted)">Nog geen dealers of partners — voeg de eerste toe.</td></tr>';
   document.querySelectorAll(".kaartD").forEach(b=>b.addEventListener("click",()=>relatieKaart(Number(b.dataset.i))));
@@ -679,6 +693,21 @@ function renderPartners(){
     try{ if(window.fpLog) window.fpLog("partner-verwijderd",d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
     accounts.dealers.splice(Number(b.dataset.i),1);
     await save("dealer-accounts", accounts); renderPartners();
+  }));
+  document.querySelectorAll(".invD").forEach(b=>b.addEventListener("click", async ()=>{
+    const d = accounts.dealers[Number(b.dataset.i)];
+    if (!confirm("Welkomstmail sturen naar "+d.email+(d.company?" ("+d.company+")":"")+"?")) return;
+    b.disabled = true; b.textContent = "bezig…";
+    try {
+      const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/uitnodigen", {
+        method:"POST", headers:{ "Content-Type":"application/json", "X-DP-Admin": adminKey() },
+        body: JSON.stringify({ email: d.email }) });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP "+r.status));
+      try{ if(window.fpLog) window.fpLog("uitnodiging-verstuurd", d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
+      setStatus("ok", "Welkomstmail verstuurd naar "+d.email+". De relatie kiest zelf een wachtwoord; de link is "+(j.validDays||7)+" dagen geldig.");
+    } catch(e){ setStatus("bad","Uitnodiging versturen faalde: "+e.message); }
+    b.disabled = false; b.textContent = "uitnodiging";
   }));
   document.querySelectorAll(".lnkD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];

@@ -112,6 +112,38 @@
   .doc{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid #f3f4f6}
   .doc a{color:var(--red);font-weight:600}
   footer{color:var(--muted);font-size:12px;text-align:center;padding:26px 10px}
+
+  /* ── Reis-tijdlijn (My spas) ─────────────────────────────────────────
+     Gerrit (22 aug 2026): reserveringen als tijdlijn bovenaan de eigen
+     omgeving - Passion fabriek → schip → haven → jouw magazijn, met een
+     geanimeerd schip. Alles hieronder is SVG + CSS; geen libraries, want de
+     pagina moet zichzelf blijven dragen. */
+  .reis-scene{width:100%;height:auto;display:block}
+  .reis-golf{animation:reisGolf 7s linear infinite}
+  @keyframes reisGolf{from{transform:translateX(0)}to{transform:translateX(-80px)}}
+  .reis-schip{animation:reisVaar 9s ease-in-out infinite alternate}
+  @keyframes reisVaar{from{transform:translateX(-16px)}to{transform:translateX(16px)}}
+  .reis-romp{transform-origin:375px 148px;animation:reisDein 4.2s ease-in-out infinite}
+  @keyframes reisDein{0%,100%{transform:rotate(-1.6deg) translateY(1.5px)}50%{transform:rotate(1.6deg) translateY(-1.5px)}}
+  .reis-rook{opacity:0;animation:reisRook 5s ease-out infinite}
+  .reis-rook.r2{animation-delay:1.6s}.reis-rook.r3{animation-delay:3.2s}
+  @keyframes reisRook{0%{opacity:0;transform:translate(0,0) scale(.6)}15%{opacity:.55}100%{opacity:0;transform:translate(14px,-30px) scale(1.5)}}
+  .reis-truck{animation:reisRijd 11s ease-in-out infinite}
+  @keyframes reisRijd{0%,55%{transform:translateX(0);opacity:0}58%{opacity:1;transform:translateX(0)}92%{opacity:1;transform:translateX(196px)}96%,100%{opacity:0;transform:translateX(196px)}}
+  .reis-stations{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:2px}
+  .reis-st{text-align:center;min-width:0}
+  .reis-st h4{margin:0 0 7px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .reis-st.actief h4{color:var(--red)}
+  .reis-chip{display:inline-block;background:#fff;border:1px solid var(--border);border-radius:999px;
+             padding:4px 11px;font-size:12.5px;margin:0 3px 6px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .reis-chip b{font-weight:700}
+  .reis-chip .eta{color:#2563eb;font-size:11.5px}
+  .reis-chip.wacht{border-style:dashed;color:var(--muted)}
+  .reis-leeg{color:#d1d5db;font-size:12px}
+  @media (prefers-reduced-motion: reduce){
+    .reis-golf,.reis-schip,.reis-romp,.reis-rook,.reis-truck{animation:none}
+    .reis-rook{opacity:.3}.reis-truck{opacity:1}
+  }
 </style>
 </head>
 <body>
@@ -192,6 +224,12 @@
     </div>
 
     <div id="tab-myspas" class="hidden">
+      <div class="card hidden" id="reisKaart">
+        <h2>Your spas on their way</h2>
+        <p class="lead">Where your reservations are right now - from the Passion factory to your warehouse.</p>
+        <div id="reisScene"></div>
+        <div class="reis-stations" id="reisStations"></div>
+      </div>
       <div class="card">
         <h2>Reservation requests</h2>
         <p class="lead">Requests you submitted via the Stock tab, with their current status.</p>
@@ -706,6 +744,7 @@ async function loadMySpas(){
   if (r.status !== 200 || !r.data || !r.data.ok) return;
   if (!r.data.linked) { $("mySpasUnlinked").classList.remove("hidden"); return; }
   const spas = r.data.spas || [];
+  renderReis(spas);
   $("mySpasEmpty").classList.toggle("hidden", spas.length > 0);
   $("mySpasList").innerHTML = spas.length ? `
     <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13.5px;">
@@ -721,6 +760,114 @@ async function loadMySpas(){
           <td>${mySpaEta(s)}</td>
         </tr>`).join("")}</tbody></table></div>` : "";
 }
+// ── Reis-tijdlijn: waar zijn je spa's ─────────────────────────────────
+// Vier stations, gevoed door de leverforecast van de worker:
+//   productie → fabriek · schip/ETA/dealer-direct → op zee ·
+//   voorraad → aangekomen (klaar voor levering) · station 4 is de bestemming.
+// Een afgeleverde order verdwijnt uit de lijst, dus bij "Your warehouse"
+// blijft het leeg - de vrachtwagen rijdt er symbolisch heen.
+function reisEtappe(s){
+  const v = s.verwacht;
+  if (s.vervallen || !v || v === "vervallen") return -1;
+  if (v === "productie") return 0;
+  if (v === "op-schip" || v === "dealer-direct") return 1;
+  if (v === "voorraad") return 2;
+  if (!isNaN(new Date(v).getTime())) return s.verwachtBron === "productie" ? 0 : 1;
+  return 0;
+}
+function reisEtaTekst(s){
+  const v = s.verwacht;
+  if (v === "dealer-direct") return "own container";
+  if (v === "op-schip") return "date to follow";
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? "" : "~ " + d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+}
+
+function renderReis(spas){
+  const actief = (spas || []).filter(x => reisEtappe(x) >= 0);
+  $("reisKaart").classList.toggle("hidden", !actief.length);
+  if (!actief.length) return;
+
+  // Het decor: fabriek, zee met schip, havenkraan, magazijn met vrachtwagen.
+  $("reisScene").innerHTML = `
+  <svg class="reis-scene" viewBox="0 0 1000 200" role="img" aria-label="Journey of your spas from the factory to your warehouse">
+    <defs><clipPath id="reisZeeClip"><rect x="225" y="130" width="300" height="46"/></clipPath></defs>
+    <!-- route over land -->
+    <line x1="118" y1="164" x2="228" y2="164" stroke="#d1d5db" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round"/>
+    <line x1="522" y1="164" x2="978" y2="164" stroke="#d1d5db" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round"/>
+    <!-- fabriek -->
+    <g>
+      <rect x="82" y="108" width="86" height="56" rx="4" fill="#144734" opacity=".9"/>
+      <path d="M 92 108 L 92 88 L 104 88 L 104 108 Z" fill="#0d3325"/>
+      <path d="M 168 164 L 168 124 L 146 138 L 146 124 L 124 138 L 124 164 Z" fill="#1d5c44"/>
+      <circle class="reis-rook"    cx="98" cy="82" r="6" fill="#9ca3af"/>
+      <circle class="reis-rook r2" cx="98" cy="82" r="5" fill="#b6bcc6"/>
+      <circle class="reis-rook r3" cx="98" cy="82" r="7" fill="#9ca3af"/>
+      <text x="125" y="142" font-size="20" text-anchor="middle">🛁</text>
+    </g>
+    <!-- zee met golven -->
+    <g clip-path="url(#reisZeeClip)">
+      <rect x="225" y="146" width="300" height="30" fill="#dbeafe"/>
+      <path class="reis-golf" fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linecap="round"
+        d="M 145 150 q 20 -8 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0"/>
+      <path class="reis-golf" fill="none" stroke="#93c5fd" stroke-width="2" stroke-linecap="round" style="animation-duration:11s"
+        d="M 125 162 q 20 -6 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0 t 40 0"/>
+    </g>
+    <!-- schip -->
+    <g class="reis-schip"><g class="reis-romp">
+      <path d="M 330 148 L 420 148 L 408 166 L 342 166 Z" fill="#c8102e"/>
+      <rect x="344" y="128" width="20" height="20" fill="#144734"/>
+      <rect x="366" y="128" width="20" height="20" fill="#8bc53f"/>
+      <rect x="388" y="128" width="20" height="20" fill="#2563eb"/>
+      <rect x="352" y="112" width="26" height="16" rx="2" fill="#f3f4f6" stroke="#9ca3af"/>
+      <rect x="356" y="104" width="5" height="8" fill="#6b7280"/>
+    </g></g>
+    <!-- havenkraan -->
+    <g>
+      <rect x="600" y="112" width="8" height="52" fill="#6b7280"/>
+      <rect x="588" y="106" width="76" height="7" rx="3" fill="#6b7280"/>
+      <line x1="648" y1="113" x2="648" y2="134" stroke="#6b7280" stroke-width="2.5"/>
+      <rect x="639" y="134" width="18" height="13" fill="#c8102e"/>
+      <rect x="612" y="150" width="22" height="14" fill="#144734"/><rect x="636" y="150" width="22" height="14" fill="#8bc53f"/>
+    </g>
+    <!-- magazijn + vrachtwagen -->
+    <g>
+      <path d="M 836 164 L 836 122 L 876 104 L 916 122 L 916 164 Z" fill="#144734" opacity=".92"/>
+      <rect x="862" y="136" width="28" height="28" rx="2" fill="#fff9ae" opacity=".85"/>
+      <text x="876" y="156" font-size="15" text-anchor="middle">🏠</text>
+    </g>
+    <g class="reis-truck">
+      <rect x="668" y="146" width="34" height="15" rx="2" fill="#c8102e"/>
+      <path d="M 702 150 L 712 150 L 716 156 L 716 161 L 702 161 Z" fill="#144734"/>
+      <circle cx="678" cy="162" r="4.5" fill="#1f2937"/><circle cx="708" cy="162" r="4.5" fill="#1f2937"/>
+    </g>
+  </svg>`;
+
+  // De vier kolommen met wat er per station ligt: chips per model, met ETA.
+  const STATIONS = ["Passion factory", "At sea", "Arrived - ready for delivery", "Your warehouse"];
+  const per = [[], [], [], []];
+  const cluster = new Map();
+  for (const x of actief) {
+    const st = reisEtappe(x);
+    const eta = st === 1 ? reisEtaTekst(x) : "";
+    const k = st + "|" + x.model + "|" + eta + "|" + (x.betaald ? 1 : 0);
+    if (!cluster.has(k)) { cluster.set(k, { st, model: x.model, eta, betaald: x.betaald, qty: 0 }); }
+    cluster.get(k).qty += Number(x.qty) || 1;
+  }
+  for (const c of cluster.values()) per[c.st].push(c);
+  for (const lijst of per) lijst.sort((a, b) => b.qty - a.qty || String(a.model).localeCompare(String(b.model)));
+
+  $("reisStations").innerHTML = per.map((lijst, i) => `
+    <div class="reis-st${lijst.length ? " actief" : ""}">
+      <h4>${STATIONS[i]}</h4>
+      ${i === 3 && !lijst.length ? '<span class="reis-leeg">delivered spas leave this list</span>' :
+        (lijst.length ? lijst.map(c =>
+          `<span class="reis-chip${c.betaald ? "" : " wacht"}" title="${c.betaald ? "deposit paid" : "awaiting deposit"}">` +
+          `<b>${c.qty}&times;</b> ${esc(c.model)}${c.eta ? ` <span class="eta">${esc(c.eta)}</span>` : ""}</span>`).join("")
+        : '<span class="reis-leeg">&mdash;</span>')}
+    </div>`).join("");
+}
+
 function mySpaEta(s){
   const v = s.verwacht;
   if (s.vervallen || !v || v==="vervallen") return '<span style="color:var(--muted)">—</span>';

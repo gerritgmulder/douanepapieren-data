@@ -53,6 +53,16 @@
 
     /* ── 22 augustus 2026 ─────────────────────────────────────────────── */
     {
+      datum: "2026-08-22", bestand: "dealerportaal.html", soort: "nieuw",
+      titel: "Welkomstmail voor nieuwe partners",
+      wat: "Bij elke relatie staat nu een knop 'uitnodiging': die stuurt een nette welkomstmail waarmee de partner zelf een wachtwoord kiest en meteen in het portaal komt. De oude inloglinks zeiden vaak 'expired' omdat mailscanners ze al opgebruikten - dat is opgelost, links overleven de scanner nu.",
+    },
+    {
+      datum: "2026-08-22", groep: "partnerportaal-kijk", soort: "nieuw",
+      titel: "Tijdlijn: waar zijn je spa's",
+      wat: "Partners zien bovenaan Mijn spa's nu een geanimeerde reis van hun reserveringen: van de Passion-fabriek, over zee met een varend schip, naar de haven en hun eigen magazijn - met per etappe welke modellen daar zijn en wanneer het schip aankomt.",
+    },
+    {
       datum: "2026-08-22", bestand: "voorraad.html", soort: "hersteld",
       titel: "Bestelde containers stonden op nul in Logic4",
       wat: "Maakte je vanuit een proforma een inkooporder aan, dan zette Logic4 die op 'niets te leveren' - de spa's telden nergens mee als besteld, ook al voeren ze nog. Nieuwe inkooporders krijgen nu de besteldatum mee en tellen weer gewoon mee. Orders die er al staan moeten met de hand worden bijgewerkt.",
