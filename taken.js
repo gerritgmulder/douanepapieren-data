@@ -236,7 +236,7 @@
      nulmeting zou iedereen de complete tegelrij als "nieuw" gepresenteerd
      krijgen, en dat is precies het bericht dat niemand meer leest. */
 
-  var mijnGezien = { gezien: "", tegels: [] };
+  var mijnGezien = { gezien: "", tegels: [], weggeklikt: [] };
 
   async function laadGezien() {
     var alles = await kvLees(GEZIEN);
@@ -245,6 +245,7 @@
     mijnGezien = {
       gezien: (eigen && eigen.gezien) || "",
       tegels: (eigen && eigen.tegels) || [],
+      weggeklikt: (eigen && eigen.weggeklikt) || [],
     };
     var eersteKeer = !eigen;
 
@@ -271,8 +272,13 @@
   async function bewaarGezien(ookDatum) {
     var alles = await kvLees(GEZIEN);
     if (!alles || typeof alles !== "object") alles = {};
-    if (ookDatum) mijnGezien.gezien = new Date().toISOString();
-    alles[cfg.email] = { gezien: mijnGezien.gezien, tegels: mijnGezien.tegels };
+    if (ookDatum) {
+      mijnGezien.gezien = new Date().toISOString();
+      // 'Gelezen' dekt alles wat er nu staat, dus de losse kruisjes van
+      // daarvoor hoeven niet bewaard te blijven.
+      mijnGezien.weggeklikt = [];
+    }
+    alles[cfg.email] = { gezien: mijnGezien.gezien, tegels: mijnGezien.tegels, weggeklikt: mijnGezien.weggeklikt };
     await kvSchrijf(GEZIEN, alles);
   }
 
@@ -283,6 +289,22 @@
     nieuweTegels = [];
     teken();
     await bewaarGezien(true);
+  }
+
+  // Eén bericht wegklikken met het kruisje. Een gewoon bericht gaat op zijn
+  // sleutel in de weggeklikt-lijst; een 'tegel erbij' verdwijnt door de tegel
+  // in de bewaarde tegelstand op te nemen - dan is hij niet nieuw meer.
+  async function eenWegklikken(soort, waarde) {
+    var n = global.fpNieuws;
+    if (soort === "tegel") {
+      if (mijnGezien.tegels.indexOf(waarde) < 0) mijnGezien.tegels.push(waarde);
+      nieuweTegels = nieuweTegels.filter(function (t) { return t.bestand !== waarde; });
+    } else {
+      if (mijnGezien.weggeklikt.indexOf(waarde) < 0) mijnGezien.weggeklikt.push(waarde);
+      nieuwsRegels = nieuwsRegels.filter(function (x) { return !n || n.sleutelVan(x) !== waarde; });
+    }
+    teken();
+    await bewaarGezien(false);
   }
 
   /* ═══════════════ 3. SIGNALEN UIT LOGIC4 ═══════════════
@@ -503,6 +525,10 @@
           ga.href = t.bestand;
           rij.appendChild(ga);
         }
+        var x1 = eltje("button", "taak-weg", "\u00d7");
+        x1.type = "button"; x1.title = "Dit bericht wegklikken";
+        x1.addEventListener("click", function () { eenWegklikken("tegel", t.bestand); });
+        rij.appendChild(x1);
         nb.appendChild(rij);
       });
 
@@ -523,6 +549,13 @@
           ga2.href = n.bestand;
           rij.appendChild(ga2);
         }
+        var x2 = eltje("button", "taak-weg", "\u00d7");
+        x2.type = "button"; x2.title = "Dit bericht wegklikken";
+        x2.addEventListener("click", function () {
+          var fn = global.fpNieuws;
+          if (fn) eenWegklikken("bericht", fn.sleutelVan(n));
+        });
+        rij.appendChild(x2);
         nb.appendChild(rij);
       });
 

@@ -157,6 +157,8 @@ main{flex:1;padding:16px;padding-bottom:calc(30px + env(safe-area-inset-bottom))
        padding:1px 6px;border-radius:4px;font-weight:600;vertical-align:1px;
        background:#f1f0ec;color:var(--grijs)}
 .nmerk.nw{background:var(--groen);color:#fff}
+.nx{background:none;border:0;color:#cbd5e1;font-size:20px;line-height:1;padding:0 2px;flex:none;align-self:flex-start;margin-top:2px}
+.nx:active{color:var(--rood)}
 .nmerk.vb{background:#e8f2d9;color:#3f6b21}
 .nmerk.hs{background:#dbeafe;color:#1e40af}
 </style>
@@ -424,14 +426,15 @@ async function toonNieuws(wie){
     html += '<div class="nregel"><div class="nic">' + t.ic + '</div><div class="nmid">' +
       '<div class="ntitel"><span class="nmerk nw">tegel erbij</span> ' + nVeilig(t.naam) + '</div>' +
       '<div class="nwat">' + nVeilig(t.uit) + '. Deze tegel is nieuw voor jou - hij staat hieronder tussen de andere.</div>' +
-      '</div></div>';
+      '</div><button type="button" class="nx" data-soort="tegel" data-w="' + nVeilig(t.bestand) + '" title="Dit bericht wegklikken">&times;</button></div>';
   });
   regels.forEach(function(r){
     var m = nMerk(r.soort);
     html += '<div class="nregel"><div class="nic">' + nIcoon(r) + '</div><div class="nmid">' +
       '<div class="ntitel"><span class="nmerk ' + m[0] + '">' + m[1] + '</span> ' + nVeilig(r.titel) + '</div>' +
       '<div class="nwat">' + nVeilig(r.wat) + '</div>' +
-      '<div class="ndat">' + nDatum(r.datum) + '</div></div></div>';
+      '<div class="ndat">' + nDatum(r.datum) + '</div></div>' +
+      '<button type="button" class="nx" data-soort="bericht" data-w="' + nVeilig(n.sleutelVan(r)) + '" title="Dit bericht wegklikken">&times;</button></div>';
   });
 
   blok.innerHTML = html;
@@ -443,9 +446,35 @@ async function toonNieuws(wie){
   el("nGelezen").onclick = async function(){
     blok.classList.remove("aan");
     var vers = await nieuwsLees();
-    vers[wie] = { gezien: new Date().toISOString(), tegels: n.tegelStand(wie) };
+    // 'Gelezen' dekt alles; losse kruisjes van daarvoor mogen weg.
+    vers[wie] = { gezien: new Date().toISOString(), tegels: n.tegelStand(wie), weggeklikt: [] };
     await nieuwsSchrijf(vers);
   };
+
+  /* Eén bericht wegklikken. Zelfde opslag als op de pc: een gewoon bericht
+     op zijn sleutel in de weggeklikt-lijst, een 'tegel erbij' door de tegel
+     in de bewaarde tegelstand op te nemen. */
+  Array.prototype.forEach.call(blok.querySelectorAll(".nx"), function(k){
+    k.onclick = async function(ev){
+      ev.stopPropagation();
+      k.closest(".nregel").remove();
+      var rest = blok.querySelectorAll(".nregel").length;
+      if (!rest) blok.classList.remove("aan");
+      else blok.querySelector(".nkop strong").textContent =
+        rest === 1 ? "Nieuw voor jou  \u00b7  1 bericht" : "Nieuw voor jou  \u00b7  " + rest + " berichten";
+      var vers = await nieuwsLees();
+      var eigen = vers[wie] || { gezien: "", tegels: n.tegelStand(wie), weggeklikt: [] };
+      eigen.weggeklikt = eigen.weggeklikt || [];
+      if (k.dataset.soort === "tegel") {
+        eigen.tegels = eigen.tegels || [];
+        if (eigen.tegels.indexOf(k.dataset.w) < 0) eigen.tegels.push(k.dataset.w);
+      } else if (eigen.weggeklikt.indexOf(k.dataset.w) < 0) {
+        eigen.weggeklikt.push(k.dataset.w);
+      }
+      vers[wie] = eigen;
+      await nieuwsSchrijf(vers);
+    };
+  });
 }
 
 el("wsTerug").onclick = function(){ el("waarschuwing").classList.remove("aan"); };

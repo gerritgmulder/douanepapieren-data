@@ -53,6 +53,11 @@
 
     /* ── 22 augustus 2026 ─────────────────────────────────────────────── */
     {
+      datum: "2026-08-22", iedereen: true, soort: "beter",
+      titel: "Berichten los weg te klikken",
+      wat: "Elk bericht in dit vak heeft nu een eigen kruisje. Gelezen haalt nog steeds alles in \u00e9\u00e9n keer weg; met het kruisje houd je alleen wat je nog wilt bewaren.",
+    },
+    {
       datum: "2026-08-22", bestand: "dealerportaal.html", soort: "nieuw",
       titel: "Welkomstmail voor nieuwe partners",
       wat: "Bij elke relatie staat nu een knop 'uitnodiging': die stuurt een nette welkomstmail waarmee de partner zelf een wachtwoord kiest en meteen in het portaal komt. De oude inloglinks zeiden vaak 'expired' omdat mailscanners ze al opgebruikten - dat is opgelost, links overleven de scanner nu.",
@@ -223,6 +228,14 @@
     return (t.voor(wie) || []).filter(function (x) { return !had[x.bestand]; });
   }
 
+  /* De vaste sleutel van een bericht: datum plus titel. Geen apart
+     id-veld dat iedereen moet onthouden bij te houden - en verandert een
+     titel, dan komt het bericht één keer terug, wat eerder juist dan fout
+     is. Wordt gebruikt voor het wegklikken van losse berichten. */
+  function sleutelVan(n) {
+    return datumVan(n.datum) + "|" + String(n.titel || "");
+  }
+
   /* Alles in één keer, en meteen goed ontdubbeld.
 
      Wie een tegel er nét bij heeft gekregen, hoeft niet ook nog te horen wat
@@ -236,7 +249,11 @@
     var tegels = gezien ? nieuweTegels(wie, gezien.tegels) : [];
     var nieuw = {};
     tegels.forEach(function (t) { nieuw[t.bestand] = true; nieuw["groep:" + t.groep] = true; });
+    // Losse berichten die deze persoon met het kruisje heeft weggeklikt.
+    var weg = {};
+    ((gezien && gezien.weggeklikt) || []).forEach(function (k) { weg[k] = true; });
     var berichten = voor(wie, gezien && gezien.gezien).filter(function (n) {
+      if (weg[sleutelVan(n)]) return false;
       if (n.bestand && nieuw[n.bestand]) return false;
       if (n.groep && nieuw["groep:" + n.groep]) return false;
       return true;
@@ -254,6 +271,7 @@
   global.fpNieuws = {
     lijst: NIEUWS,
     samenstellen: samenstellen,
+    sleutelVan: sleutelVan,
     voor: voor,
     zichtbaar: zichtbaar,
     nieuweTegels: nieuweTegels,
