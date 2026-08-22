@@ -53,6 +53,11 @@
 
     /* ── 22 augustus 2026 ─────────────────────────────────────────────── */
     {
+      datum: "2026-08-22", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Bestelde containers stonden op nul in Logic4",
+      wat: "Maakte je vanuit een proforma een inkooporder aan, dan zette Logic4 die op 'niets te leveren' - de spa's telden nergens mee als besteld, ook al voeren ze nog. Nieuwe inkooporders krijgen nu de besteldatum mee en tellen weer gewoon mee. Orders die er al staan moeten met de hand worden bijgewerkt.",
+    },
+    {
       datum: "2026-08-22", groep: "partnerportaal-kijk", soort: "hersteld",
       titel: "De foto bij een model kwam niet in beeld",
       wat: "Ga je met de muis over een model, dan kwam het venstertje wel tevoorschijn maar de foto niet. Dat is opgelost. Het venstertje hangt nu ook aan je muis in plaats van naast de tegel, zodat je het niet elke keer hoeft te zoeken.",

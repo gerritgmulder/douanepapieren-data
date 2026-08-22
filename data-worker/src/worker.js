@@ -858,6 +858,30 @@ async function dpHandlePage(env) {
   } });
 }
 
+/* ─── BESTELD BIJ LEVERANCIER ────────────────────────────────────────
+   Logic4 telt een inkoopregel pas mee als "moet nog binnenkomen" zodra de
+   regel een datum heeft in OrderedOnDateByDistributor. Staat die leeg, dan
+   blijft QtyToDeliver op nul en denkt Logic4 dat er niets te leveren valt.
+
+   Dat hebben we op de harde manier gevonden (22 aug 2026). De twee
+   proforma's voor de Jazzi-containers 3317 en 3332, hier via het dashboard
+   aangemaakt, hadden alle 115 regels op nul staan: 784 spa's ter waarde van
+   EUR 1,86 miljoen die nergens als openstaande inkoop meetelden, terwijl ze
+   nog op zee zaten.
+
+   Gemeten over alle 3365 regels van de 913 open inkooporders:
+     - 356 regels zonder besteldatum -> ALLE 356 op "niets te leveren"
+     - 3009 regels met besteldatum   -> 62% heeft nog iets openstaan
+   Geen enkele uitzondering. QtyToDeliver zelf kun je niet meesturen; het
+   staat niet in AddBuyOrderRow en ook niet in UpdateBuyOrderRow (nagekeken
+   in de officiële API-beschrijving, api.logic4server.nl/openapi/latest.json).
+   Deze datum is de enige knop die we hebben, en hij zit in allebei.
+
+   Waarom "nu" de goede datum is: deze twee routes maken pas een inkooporder
+   aan op het moment dat de proforma echt besteld wordt bij de fabriek. Het
+   moment van aanmaken IS dus het moment van bestellen. */
+const besteldOp = () => new Date().toISOString();
+
 // ─── Logic4-order aanmaken na betaalde aanbetaling ───────────────────
 // Endpoint GEVERIFIEERD (9 jul 2026, via validatie-probes): POST
 // /v3/Orders/AddUpdateOrder — vereist minimaal OrderStatus + debiteur.
@@ -1720,6 +1744,9 @@ async function ikoAanmaken(env, body) {
         Price: r.prijs != null ? Number(r.prijs) : 0,
         Description: String(r.omschrijving || r.model || "").slice(0, 200),
         ExpectedDeliveryDate: body.eta || null,
+        // Zonder dit veld telt Logic4 de regel niet mee als iets dat nog
+        // binnen moet komen. Zie het blok BESTELD BIJ LEVERANCIER hierboven.
+        OrderedOnDateByDistributor: besteldOp(),
       });
       toegevoegd.push(r.artikelcode);
     } catch (e) { mislukt.push({ artikelcode: r.artikelcode, fout: String(e.message || e) }); }
@@ -2028,6 +2055,7 @@ async function spaMigratieUitvoeren(env, body) {
         Price: 0,
         Description: String(r.artikelnaam || (r.model + " " + r.kleur)).slice(0, 200),
         ExpectedDeliveryDate: c.eta || null,
+        OrderedOnDateByDistributor: besteldOp(),
       });
       toegevoegd.push(r.artikelcode);
     } catch (e) { mislukt.push({ artikelcode: r.artikelcode, model: r.model, kleur: r.kleur, fout: String(e.message || e) }); }
