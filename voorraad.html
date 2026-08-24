@@ -2051,6 +2051,38 @@ document.addEventListener("focusout",function(e){
     liveStuur({soort:"blur",regelId:t.dataset.id});
 });
 liveStart();
+/* Het notitievenster: de hele tekst lezen en (met rechten) bewerken. */
+function openNotitieEditor(r){
+  const n=notitie(r);
+  const magIk=MAG_WIJZIGEN;
+  const laag=document.createElement("div");
+  laag.style.cssText="position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:80;display:flex;align-items:center;justify-content:center;padding:20px";
+  laag.innerHTML="<div style='background:#fff;border-radius:14px;max-width:520px;width:100%;padding:20px 22px;font-family:inherit'>"+
+    "<h3 style='margin:0 0 2px;font-size:15px;color:var(--fonteyn-green,#144734)'>Notitie bij order "+esc(r.ordernr)+"</h3>"+
+    "<p style='margin:0 0 12px;font-size:12px;color:var(--muted)'>"+esc(r.model)+(r.kleur?" · "+esc(r.kleur):"")+" · "+esc(r.naam||"")+"</p>"+
+    "<textarea id='noteTekst' rows='6' style='width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--border);border-radius:9px;font:inherit;font-size:13.5px;line-height:1.5'"+(magIk?"":" readonly")+">"+esc(n.opmerking||"")+"</textarea>"+
+    (n.door&&n.opmerking?"<p style='margin:6px 0 0;font-size:11.5px;color:var(--muted)'>Laatst gewijzigd door "+esc(String(n.door).split("@")[0])+(n.ts?" op "+new Date(n.ts).toLocaleString("nl-NL"):"")+"</p>":"")+
+    "<div style='display:flex;gap:9px;margin-top:14px'>"+
+      (magIk?"<button type='button' id='noteBewaar' style='flex:1;background:var(--fonteyn-green,#144734);color:#fff;border:0;border-radius:9px;padding:11px;font:inherit;font-weight:600;cursor:pointer'>Bewaren</button>":"")+
+      "<button type='button' id='noteSluit' style='background:#fff;border:1px solid var(--border);border-radius:9px;padding:11px 18px;font:inherit;color:var(--muted);cursor:pointer'>"+(magIk?"Annuleren":"Sluiten")+"</button>"+
+    "</div></div>";
+  document.body.appendChild(laag);
+  const ta=laag.querySelector("#noteTekst");
+  ta.focus(); try{ ta.setSelectionRange(ta.value.length,ta.value.length); }catch(e){}
+  liveStuur({soort:"focus",regelId:r.regelId,veld:"opmerking"});
+  function dicht(){ liveStuur({soort:"blur",regelId:r.regelId}); laag.remove(); }
+  laag.querySelector("#noteSluit").addEventListener("click",dicht);
+  laag.addEventListener("click",function(e){ if(e.target===laag) dicht(); });
+  const bewaar=laag.querySelector("#noteBewaar");
+  if(bewaar) bewaar.addEventListener("click",function(){
+    const tekst=ta.value.trim();
+    zetNotitie(r,"opmerking",tekst);
+    try{ if(window.fpLog) window.fpLog("opmerking-gewijzigd",r.ordernr+" "+r.model+": "+(tekst||"(leeg)")); }catch(e){}
+    dicht();
+    const y=window.scrollY; renderSoortTabs(); window.scrollTo(0,y);
+  });
+}
+
 // Welke regels horen bij welk tabblad
 function resvVoorSoort(soort){
   const alle=resvAlleRegels();
@@ -2162,7 +2194,9 @@ function leveringCel(r,n,id,uit){
     return "<option value='"+esc(s.sleutel)+"'"+(n.schip===s.sleutel?" selected":"")+">"+
       esc(s.ref)+(s.eta?" - "+esc(datumNL(s.eta)):" - ETA volgt")+"</option>";
   }).join("");
-  return kop + "<br><select class='notSchip' data-id='"+id+"' style='margin-top:3px;font-size:11px;padding:2px 4px;max-width:210px'"+uit+">"+opties+"</select>";
+  // max-width 140: op een 15-inch scherm vielen de kolommen Inplannen en
+  // Gepland buiten beeld (Gerrit, 24 aug 2026).
+  return kop + "<br><select class='notSchip' data-id='"+id+"' style='margin-top:3px;font-size:11px;padding:2px 4px;max-width:140px'"+uit+">"+opties+"</select>";
 }
 function adviseurCel(r){
   if(!r.adviseur) return "<span style='color:var(--muted);font-size:11px'>—</span>";
@@ -2241,7 +2275,7 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
         "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
         "<td>"+betaalBadge(r)+"</td>"+
         "<td style='font-size:12px'>"+leveringCel(r,n,id,uit)+"</td>"+
-        "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' style='width:190px;font-size:12px;padding:4px 7px'"+uit+"></td>"+
+        "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' readonly title='"+esc(n.opmerking||"Klik om een notitie te schrijven")+"' style='width:110px;font-size:12px;padding:4px 7px;cursor:pointer;text-overflow:ellipsis'"+uit+"></td>"+
         (particulier?"<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='afroep' data-id='"+id+"'"+(n.afroep?" checked":"")+uit+"></td>":"")+
         "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='inplannen' data-id='"+id+"'"+(n.inplannen?" checked":"")+uit+"></td>"+
         "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='gepland' data-id='"+id+"'"+(n.gepland?" checked":"")+uit+"></td>"+
@@ -2261,14 +2295,16 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
 // regel in het activiteitenlogboek: dit stuurt wat de planning gaat doen.
 function koppelNotitieVelden(box,rijen){
   const perId={}; (rijen||[]).forEach(function(r){ if(r.regelId) perId[r.regelId]=r; });
+  /* Het veld in de rij is te smal om een echte notitie te lezen (Gerrit,
+     24 aug 2026). Klikken opent daarom een venster met de hele tekst; daar
+     wordt ook geschreven. Het rijveld zelf is alleen nog het voorproefje. */
   box.querySelectorAll(".notOpm").forEach(function(inp){
-    inp.addEventListener("input",function(){
+    inp.addEventListener("click",function(){
       const r=perId[inp.dataset.id]; if(!r) return;
-      zetNotitie(r,"opmerking",inp.value);
+      openNotitieEditor(r);
     });
-    inp.addEventListener("change",function(){
-      const r=perId[inp.dataset.id]; if(!r) return;
-      try{ if(window.fpLog) window.fpLog("opmerking-gewijzigd",r.ordernr+" "+r.model+": "+(inp.value||"(leeg)")); }catch(e){}
+    inp.addEventListener("keydown",function(e){
+      if(e.key==="Enter"||e.key===" "){ e.preventDefault(); const r=perId[inp.dataset.id]; if(r) openNotitieEditor(r); }
     });
   });
   box.querySelectorAll(".notSchip").forEach(function(sel){
@@ -2287,7 +2323,19 @@ function koppelNotitieVelden(box,rijen){
       const veld=cb.dataset.veld;
       zetNotitie(r,veld,cb.checked);
       try{ if(window.fpLog) window.fpLog(veld+(cb.checked?"-aangevinkt":"-uitgevinkt"),r.ordernr+" "+r.model+" ("+r.naam+")"); }catch(e){}
+      /* De regel verhuist bij het aanvinken naar een ander blok. Dat is de
+         bedoeling (Chantal, 5 aug), maar zonder uitleg leest het als "reset
+         en er gebeurt niks" (Gerrit, 24 aug). Dus: zeggen waar hij heen is,
+         en de pagina niet laten springen. */
+      const y=window.scrollY;
       renderSoortTabs();   // kleur, volgorde en het verdwijnen van 'gepland'
+      window.scrollTo(0,y);
+      if(cb.checked){
+        const waarheen = veld==="gepland" ? "het blok 'Gepland' onderaan dit tabblad"
+          : veld==="afroep" ? "'Op afroep' in het blok hieronder"
+          : "'Binnengekomen spa's' in het blok hieronder";
+        setStatus("ok","Order "+r.ordernr+" ("+r.model+") staat nu in "+waarheen+".");
+      }
     });
   });
 }
@@ -2347,7 +2395,7 @@ function renderParticulierBlok(){
           "<td>"+esc(r.ordernr)+"</td><td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur)+"</td>"+
           "<td>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
           "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
-          "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' style='width:190px;font-size:12px;padding:4px 7px'"+uit+"></td>"+
+          "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' readonly title='"+esc(n.opmerking||"Klik om een notitie te schrijven")+"' style='width:110px;font-size:12px;padding:4px 7px;cursor:pointer;text-overflow:ellipsis'"+uit+"></td>"+
           "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='afroep' data-id='"+id+"'"+(n.afroep?" checked":"")+uit+"></td>"+
           "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='inplannen' data-id='"+id+"'"+(n.inplannen?" checked":"")+uit+"></td>"+
           "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='gepland' data-id='"+id+"'"+(n.gepland?" checked":"")+uit+"></td>"+
@@ -3645,7 +3693,7 @@ function buildModelList(){
   const dl=document.getElementById("modelList"); if(dl) dl.innerHTML=PIPE_MODELS.map(m=>"<option value='"+esc(m)+"'>").join("");
 }
 
-function renderPipeAll(){ renderZones(); renderStock(); renderManager(); }
+function renderPipeAll(){ renderZones(); renderPipeStock(); renderManager(); }
 
 function renderZones(){
   const zones={prod:[],ship:[],nl:[]};
@@ -3666,7 +3714,14 @@ function renderZones(){
   document.getElementById("pipeContCount").textContent=pipeContainers.length;
 }
 
-function renderStock(){
+/* Heette ook renderStock, net als de functie van het tabblad Stock hierboven.
+   Twee function-declaraties met dezelfde naam in één script: de laatste wint,
+   en daardoor deed het tabblad Stock het bij NIEMAND meer - de lader haalde
+   de gegevens keurig op en riep vervolgens deze pipeline-functie aan, die
+   stilletjes niets deed (video Chantal + Gerrit, 24 aug 2026). Vandaar de
+   eeuwige "Bezig met laden". Hernoemd, en dit mag nooit meer een duplicaat
+   worden. */
+function renderPipeStock(){
   const f=readFilters(document.getElementById("stockTable"));
   const agg={};
   for(const c of pipeContainers){ const st=pipeStatus(c);

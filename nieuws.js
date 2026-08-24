@@ -52,6 +52,11 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-24", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Stock doet het weer, en de lijst past op een laptop",
+      wat: "Het tabblad Stock bleef eeuwig op 'Bezig met laden' staan - twee stukken code bleken dezelfde naam te hebben en de verkeerde werd aangeroepen. Verder past de reserveringenlijst nu op een 15-inch scherm, opent een klik op een notitie een venster waarin je de hele tekst kunt lezen en schrijven, en vertelt het scherm bij het aanvinken van Inplannen of Gepland waar de regel heen is verhuisd.",
+    },
+    {
       datum: "2026-08-24", bestand: "voorraad.html", soort: "nieuw",
       titel: "Samenwerken zoals in Google Documenten",
       wat: "In de tabbladen Particulier en Partner zie je nu live wie er nog meer in de lijst zit, en de rij waar een collega in staat krijgt diens kleur en naam. Wat iemand aanvinkt of typt, verschijnt bij jou direct in beeld.",
