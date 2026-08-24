@@ -40,6 +40,10 @@
   var AFWIJKEND = {
     "fonteynbot": ["fonteynbot@fonteyn.nl", "fonteynbot", "fonteyn.bot"],
     "patrick":    ["fonteyn.maartens"],
+    // Mike van Spa planning logt in met het service-account (Gerrit, 24 aug
+    // 2026: "Mike is servicespa@fonteyn.nl"). Een eigen mike-account is er
+    // niet in Logic4.
+    "mike":       ["servicespa@fonteyn.nl", "servicespa", "fonteyn.servicespa"],
   };
 
   function varianten(naam) {
@@ -168,12 +172,10 @@
     "uren-allemaal": [
       "dolf", "fonteynbot", "gerrit",
     ],
-    /* Planning: het weekoverzicht van leveringen en service-afspraken.
+    /* Planning: de weekagenda van leveringen en service-afspraken.
        De hele afdeling Spa planning plus de spa-verkoop en de vaste
-       beheerlaag (Gerrit, 22 aug 2026). LET OP: "mike" is nog niet
-       bevestigd - Logic4 kent mike@fonteyn.nl, michael@fonteyn.nl en
-       fonteyn.Michael, en welke daarvan de planner is moet Gerrit nog
-       nazeggen. Tot die tijd staat de gewone mike-variant erin. */
+       beheerlaag (Gerrit, 22 aug 2026). Mike logt in als
+       servicespa@fonteyn.nl; dat staat in AFWIJKEND bovenaan. */
     "planning": [
       "arno", "bart.vdb", "bertjan", "chantal", "dolf", "don",
       "fonteynbot", "gerrit", "gerwin", "kevin", "mike",
