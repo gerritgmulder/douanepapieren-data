@@ -57,8 +57,8 @@
     "dali", "danique", "demi", "dolf", "don", "edwin",
     "evelinde", "fabiola", "fonteynbot", "fransje", "gerrit", "gerwin",
     "gretha", "julia", "karina", "kevin", "luis", "manon",
-    "nomi", "osman", "patrick", "reinier", "reinier.k", "rico",
-    "rosalie", "rowan", "yves",
+    "mike", "nomi", "osman", "patrick", "reinier", "reinier.k",
+    "rico", "rosalie", "rowan", "yves",
   ];
 
   /* De groepen. Eén regel per tegel of groep tegels; de namen zijn de
@@ -167,6 +167,16 @@
        als het om de gegevens van collega's gaat. */
     "uren-allemaal": [
       "dolf", "fonteynbot", "gerrit",
+    ],
+    /* Planning: het weekoverzicht van leveringen en service-afspraken.
+       De hele afdeling Spa planning plus de spa-verkoop en de vaste
+       beheerlaag (Gerrit, 22 aug 2026). LET OP: "mike" is nog niet
+       bevestigd - Logic4 kent mike@fonteyn.nl, michael@fonteyn.nl en
+       fonteyn.Michael, en welke daarvan de planner is moet Gerrit nog
+       nazeggen. Tot die tijd staat de gewone mike-variant erin. */
+    "planning": [
+      "arno", "bart.vdb", "bertjan", "chantal", "dolf", "don",
+      "fonteynbot", "gerrit", "gerwin", "kevin", "mike",
     ],
     // Personeel
     "personeel": [

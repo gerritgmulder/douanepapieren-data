@@ -107,6 +107,7 @@ const ALLOWED_BUCKETS = new Set([
   // Nederlandse hal-voorraad en die twee moeten niet door elkaar lopen.
   "amerika-voorraad",
   "taken",            // Persoonlijk takenblok: e-mailadres → eigen taken (tekst/datum/klaar)
+  "planning",         // Weekplanning Spa planning: afspraken voor levering en service (planning.html)
   "taken-ritme",      // Terugkerende momenten (voorraadcontrole, kwartaalcontrole) + per persoon wanneer afgevinkt
   // Wie welke dashboardberichten al gelezen heeft, en welke tegels iemand de
   // vorige keer had. Dat tweede is geen lijst die iemand bijhoudt: door hem te

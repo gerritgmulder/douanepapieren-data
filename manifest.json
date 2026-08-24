@@ -1,5 +1,5 @@
 {
-  "version": "0.24.0",
+  "version": "0.25.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -159,6 +159,10 @@
     {
       "name": "retouren.html",
       "note": "Retouren — op te halen retouren uit Logic4 (bedrag <=0) + reden/locatie-registratie in Cloudflare KV (bucket retouren), cirkeldiagram + periode-filter (Don/Arno/Dolf/Manon + admins)."
+    },
+    {
+      "name": "planning.html",
+      "note": "Weekoverzicht van de afdeling Spa planning - leveringen en service-afspraken per dag. Data in bucket 'planning'."
     },
     {
       "name": "vertalen.html",

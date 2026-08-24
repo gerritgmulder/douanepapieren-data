@@ -53,6 +53,11 @@
 
     /* ── 22 augustus 2026 ─────────────────────────────────────────────── */
     {
+      datum: "2026-08-22", bestand: "planning.html", soort: "nieuw",
+      titel: "Planning: het weekoverzicht",
+      wat: "Een week in beeld, maandag tot en met zaterdag, met alle afspraken voor levering en service. Afspraak erbij zetten, aanpassen, afvinken als hij gedaan is - en iedereen van de afdeling kijkt naar dezelfde week.",
+    },
+    {
       datum: "2026-08-22", iedereen: true, soort: "beter",
       titel: "Berichten los weg te klikken",
       wat: "Elk bericht in dit vak heeft nu een eigen kruisje. Gelezen haalt nog steeds alles in \u00e9\u00e9n keer weg; met het kruisje houd je alleen wat je nog wilt bewaren.",

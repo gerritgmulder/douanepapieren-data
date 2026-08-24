@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<!-- Wie hier binnen mag staat in toegang.js, dezelfde lijst als het dashboard. -->
+<script src="toegang.js"></script>
+<script>
+/* Toegangscontrole. Het dashboard verbergt de tegel al, maar met de terugknop
+   is een pagina die een vórige gebruiker opende opnieuw te bereiken. */
+(function(){
+  var TOEGANG = window.fpToegang ? window.fpToegang.set("planning") : null;
+  var email = (localStorage.getItem("fp.email")||"").toLowerCase();
+  if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+  if (TOEGANG && TOEGANG.has(email)) return;
+  window.fpGeenToegang = true;
+  document.write('<style>body{margin:0;font-family:Montserrat,-apple-system,sans-serif;background:#f5f4ef;color:#1f2937}'+
+    '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
+    '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
+    '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
+    '<div class="gt"><h1>Geen toegang</h1><p>De tegel Planning is niet beschikbaar voor jouw account.</p>'+
+    '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
+  window.stop();
+})();
+</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fonteyn — Planning</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     PLANNING - weekoverzicht van leveringen en service-afspraken
+
+     Voor de afdeling Spa planning (Gerrit, 22 aug 2026): "een weekoverzicht
+     waarin ze alle afspraken kunnen plannen voor levering of service. Zij
+     plannen namelijk alle particuliere spa en sauna klanten in."
+
+     Eén week in beeld, maandag tot en met zaterdag. Een afspraak is een
+     kaartje in de dag: tijd, levering of service, klant, plaats en wie er
+     heen gaat. Aanklikken om te wijzigen, afvinken als hij gedaan is.
+
+     De afspraken staan in de bucket 'planning' bij de worker; iedereen van
+     de afdeling kijkt dus naar dezelfde week. Bewaren leest eerst de verse
+     stand en schrijft dan alleen de eigen wijziging terug, zodat twee
+     planners elkaar niet overschrijven zolang ze niet in dezelfde seconde
+     dezelfde afspraak pakken.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{
+  --groen:#144734; --groen-donker:#0d3325; --lime:#8bc53f;
+  --bg:#f5f4ef; --kaart:#fff; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb;
+  --rood:#b91c1c; --amber:#b45309;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{font-family:"Montserrat",-apple-system,BlinkMacSystemFont,sans-serif;background:var(--bg);
+     color:var(--ink);font-size:14px;-webkit-text-size-adjust:100%}
+
+header{background:var(--groen);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;
+       position:sticky;top:0;z-index:20;padding-top:calc(12px + env(safe-area-inset-top))}
+header h1{margin:0;font-size:15px;font-weight:600;flex:1}
+header a.knop,header button.knop{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);
+       border-radius:8px;padding:7px 13px;font:inherit;font-size:12px;cursor:pointer;text-decoration:none}
+header .wie{font-size:11px;opacity:.75}
+
+main{max-width:1240px;margin:0 auto;padding:16px;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
+
+/* ── weekbalk ── */
+.weekbalk{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.weekbalk h2{margin:0;font-size:17px;color:var(--groen);flex:1;min-width:220px}
+.weekbalk button{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:9px 14px;
+       font:inherit;font-size:13px;cursor:pointer}
+.weekbalk button:hover{border-color:var(--lime)}
+.weekbalk button.nieuw{background:var(--groen);color:#fff;border:0;font-weight:600}
+.weekbalk button.nieuw:hover{background:var(--groen-donker)}
+
+/* ── het rooster ── */
+.rooster{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+@media (max-width:860px){ .rooster{grid-template-columns:1fr} }
+.dag{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:10px;min-height:120px}
+.dag.vandaag{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.25)}
+.dag h3{margin:0 0 2px;font-size:12.5px;color:var(--groen)}
+.dag .datum{font-size:11px;color:var(--grijs);margin-bottom:9px}
+.dag .leeg{font-size:12px;color:#d1d5db;padding:4px 0}
+.dag .plus{display:block;width:100%;margin-top:8px;background:none;border:1px dashed var(--rand);
+       border-radius:8px;color:var(--grijs);font:inherit;font-size:12px;padding:7px;cursor:pointer}
+.dag .plus:hover{border-color:var(--lime);color:var(--groen)}
+
+/* ── afspraakkaartje ── */
+.afs{border:1px solid var(--rand);border-left:4px solid var(--lime);border-radius:9px;
+     padding:8px 9px;margin-bottom:7px;cursor:pointer;background:#fff}
+.afs:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.afs.service{border-left-color:#f59e0b}
+.afs.klaar{opacity:.45}
+.afs.klaar .klant{text-decoration:line-through}
+.afs .kop{display:flex;align-items:center;gap:7px}
+.afs .tijd{font-weight:700;font-size:12.5px}
+.afs .badge{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;
+     padding:1px 6px;border-radius:4px;background:#e8f2d9;color:#3f6b21}
+.afs.service .badge{background:#fef3c7;color:#92400e}
+.afs .klant{font-size:13px;font-weight:600;margin-top:3px;line-height:1.35}
+.afs .sub{font-size:11.5px;color:var(--grijs);margin-top:2px;line-height:1.45}
+
+/* ── formulier (laag over de pagina) ── */
+.laag{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:50;display:flex;
+      align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto}
+.formkaart{background:#fff;border-radius:14px;max-width:480px;width:100%;padding:22px;margin:auto 0}
+.formkaart h3{margin:0 0 14px;font-size:16px;color:var(--groen)}
+.formkaart label{display:block;font-size:12px;color:var(--grijs);margin:11px 0 4px}
+.formkaart input,.formkaart select,.formkaart textarea{width:100%;padding:10px 11px;border:1px solid var(--rand);
+      border-radius:9px;font:inherit;font-size:14px;color:var(--ink);background:#fff}
+.formkaart input:focus,.formkaart select:focus,.formkaart textarea:focus{outline:2px solid var(--lime);outline-offset:-1px}
+.formkaart .rij{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.formkaart .knoppen{display:flex;gap:9px;margin-top:18px;flex-wrap:wrap}
+.formkaart .knoppen button{font:inherit;font-size:13.5px;border-radius:9px;padding:11px 18px;cursor:pointer}
+.formkaart .doe{background:var(--groen);color:#fff;border:0;font-weight:600;flex:1}
+.formkaart .doe:hover{background:var(--groen-donker)}
+.formkaart .weg{background:#fff;border:1px solid #fecaca;color:var(--rood)}
+.formkaart .terug{background:#fff;border:1px solid var(--rand);color:var(--grijs)}
+.soortkeus{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.soortkeus button{font:inherit;font-size:13px;padding:11px;border-radius:9px;border:2px solid var(--rand);
+      background:#fff;cursor:pointer;font-weight:600}
+.soortkeus button.aan.levering{border-color:var(--lime);background:#f4f9ec;color:#3f6b21}
+.soortkeus button.aan.service{border-color:#f59e0b;background:#fffbeb;color:#92400e}
+.melding{font-size:12.5px;color:var(--rood);min-height:16px;margin-top:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <a class="knop" href="dashboard.html">&larr;</a>
+  <h1>📅 Planning</h1>
+  <span class="wie" id="wie"></span>
+  <button class="knop" id="uitKnop" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <div class="weekbalk">
+    <h2 id="weekTitel">Week</h2>
+    <button type="button" id="vorige" title="Vorige week">&larr;</button>
+    <button type="button" id="vandaagKnop">Vandaag</button>
+    <button type="button" id="volgende" title="Volgende week">&rarr;</button>
+    <button type="button" class="nieuw" id="nieuwKnop">+ Afspraak</button>
+  </div>
+  <div class="rooster" id="rooster"></div>
+</main>
+
+<div id="laagHouder"></div>
+
+<script>
+"use strict";
+
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var BUCKET = "planning";
+var DAGEN = ["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag"];
+var MAANDEN = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+var afspraken = [];          // de hele bucket-inhoud
+var maandag = weekStart(new Date());   // de maandag van de week in beeld
+
+function $(id){ return document.getElementById(id); }
+function esc(t){ return String(t==null?"":t).replace(/[&<>"']/g,function(c){
+  return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function weekStart(d){
+  var k = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  var dow = (k.getDay()+6)%7;              // maandag = 0
+  k.setDate(k.getDate()-dow);
+  return k;
+}
+function weekNr(d){
+  // ISO-weeknummer: de week van 4 januari is week 1.
+  var t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  t.setDate(t.getDate()+3-((t.getDay()+6)%7));
+  var w1 = new Date(t.getFullYear(),0,4);
+  return 1+Math.round(((t-w1)/86400000-3+((w1.getDay()+6)%7))/7);
+}
+
+/* ── opslag ── */
+async function lees(){
+  try{
+    var r = await fetch(W+"/data/"+BUCKET, { headers:{ "X-Fonteyn-Auth": teamKey() } });
+    if(!r.ok) return null;
+    var j = await r.json();
+    return (j && Array.isArray(j.afspraken)) ? j.afspraken : [];
+  }catch(e){ return null; }
+}
+/* Bewaren = altijd eerst vers lezen en dan alleen de eigen wijziging
+   toepassen. Twee planners die tegelijk werken raken elkaars afspraken zo
+   niet kwijt; alleen wie exact dezelfde afspraak tegelijk pakt, wint als
+   laatste. */
+async function bewaar(wijzig){
+  var vers = await lees();
+  if (vers === null) throw new Error("De opslag is niet bereikbaar. Probeer het zo nog eens.");
+  afspraken = wijzig(vers);
+  var r = await fetch(W+"/data/"+BUCKET, { method:"PUT",
+    headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey() },
+    body: JSON.stringify({ afspraken: afspraken }) });
+  if(!r.ok) throw new Error("Bewaren mislukte (HTTP "+r.status+").");
+}
+
+/* ── weergave ── */
+function teken(){
+  var vandaag = iso(new Date());
+  var einde = new Date(maandag); einde.setDate(einde.getDate()+5);
+  $("weekTitel").textContent = "Week "+weekNr(maandag)+" · "+
+    maandag.getDate()+" "+MAANDEN[maandag.getMonth()]+
+    (maandag.getMonth()!==einde.getMonth() ? " - "+einde.getDate()+" "+MAANDEN[einde.getMonth()] : " - "+einde.getDate()+" "+MAANDEN[einde.getMonth()])+
+    " "+einde.getFullYear();
+
+  var html = "";
+  for (var i=0;i<6;i++){
+    var dag = new Date(maandag); dag.setDate(dag.getDate()+i);
+    var dISO = iso(dag);
+    var lijst = afspraken.filter(function(a){ return a.datum===dISO; })
+      .sort(function(a,b){ return String(a.tijd||"99").localeCompare(String(b.tijd||"99")); });
+    html += '<div class="dag'+(dISO===vandaag?" vandaag":"")+'">'+
+      '<h3>'+DAGEN[i]+'</h3><div class="datum">'+dag.getDate()+' '+MAANDEN[dag.getMonth()]+'</div>'+
+      (lijst.length ? lijst.map(kaartje).join("") : '<div class="leeg">Nog niets gepland</div>')+
+      '<button type="button" class="plus" data-datum="'+dISO+'">+ afspraak</button></div>';
+  }
+  $("rooster").innerHTML = html;
+
+  document.querySelectorAll(".afs").forEach(function(k){
+    k.addEventListener("click", function(){ openForm(k.dataset.id); });
+  });
+  document.querySelectorAll(".plus").forEach(function(k){
+    k.addEventListener("click", function(){ openForm(null, k.dataset.datum); });
+  });
+}
+function kaartje(a){
+  var sub = [a.plaats, a.wat].filter(Boolean).map(esc).join(" · ");
+  var wie = a.wie ? '<div class="sub">👤 '+esc(a.wie)+'</div>' : "";
+  return '<div class="afs '+(a.soort==="service"?"service":"levering")+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'">'+
+    '<div class="kop"><span class="tijd">'+esc(a.tijd||"")+'</span>'+
+    '<span class="badge">'+(a.soort==="service"?"service":"levering")+'</span></div>'+
+    '<div class="klant">'+esc(a.klant||"(geen naam)")+'</div>'+
+    (sub?'<div class="sub">'+sub+'</div>':"")+wie+'</div>';
+}
+
+/* ── formulier ── */
+function openForm(id, datumVoorstel){
+  var a = id ? afspraken.find(function(x){ return x.id===id; }) : null;
+  var nieuw = !a;
+  if (nieuw) a = { id:"p"+Date.now()+Math.random().toString(36).slice(2,6),
+    datum: datumVoorstel || iso(new Date()), tijd:"", soort:"levering",
+    klant:"", telefoon:"", plaats:"", ordernr:"", wat:"", wie:"", klaar:false };
+
+  // Namen die al eens gebruikt zijn bij "wie gaat erheen", als suggestie.
+  var namen = {};
+  afspraken.forEach(function(x){ if(x.wie) namen[x.wie]=1; });
+
+  var laag = document.createElement("div");
+  laag.className = "laag";
+  laag.innerHTML = '<div class="formkaart">'+
+    '<h3>'+(nieuw?"Nieuwe afspraak":"Afspraak wijzigen")+'</h3>'+
+    '<div class="soortkeus">'+
+      '<button type="button" id="fLev" class="levering'+(a.soort!=="service"?" aan":"")+'">🚚 Levering</button>'+
+      '<button type="button" id="fSer" class="service'+(a.soort==="service"?" aan":"")+'">🔧 Service</button></div>'+
+    '<div class="rij"><div><label>Datum</label><input type="date" id="fDatum" value="'+esc(a.datum)+'"></div>'+
+    '<div><label>Tijd</label><input type="time" id="fTijd" value="'+esc(a.tijd)+'"></div></div>'+
+    '<label>Klant</label><input id="fKlant" maxlength="120" value="'+esc(a.klant)+'" placeholder="Naam van de klant">'+
+    '<div class="rij"><div><label>Telefoon</label><input id="fTel" maxlength="30" value="'+esc(a.telefoon)+'"></div>'+
+    '<div><label>Ordernummer (mag leeg)</label><input id="fOrder" maxlength="20" value="'+esc(a.ordernr)+'"></div></div>'+
+    '<label>Plaats of adres</label><input id="fPlaats" maxlength="160" value="'+esc(a.plaats)+'">'+
+    '<label>Wat (model, klus, bijzonderheden)</label><textarea id="fWat" rows="2" maxlength="400">'+esc(a.wat)+'</textarea>'+
+    '<label>Wie gaat erheen</label><input id="fWie" maxlength="80" value="'+esc(a.wie)+'" list="fNamen" placeholder="Naam of team">'+
+    '<datalist id="fNamen">'+Object.keys(namen).sort().map(function(n){ return '<option value="'+esc(n)+'">'; }).join("")+'</datalist>'+
+    (nieuw?"":'<label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13.5px;color:var(--ink);cursor:pointer">'+
+      '<input type="checkbox" id="fKlaar" style="width:auto"'+(a.klaar?" checked":"")+'> Gedaan</label>')+
+    '<div class="melding" id="fMelding"></div>'+
+    '<div class="knoppen">'+
+      (nieuw?"":'<button type="button" class="weg" id="fWeg">Verwijderen</button>')+
+      '<button type="button" class="terug" id="fTerug">Annuleren</button>'+
+      '<button type="button" class="doe" id="fDoe">Bewaren</button></div></div>';
+  document.body.appendChild(laag);
+
+  var soort = a.soort==="service" ? "service" : "levering";
+  $("fLev").addEventListener("click", function(){ soort="levering"; $("fLev").classList.add("aan"); $("fSer").classList.remove("aan"); });
+  $("fSer").addEventListener("click", function(){ soort="service"; $("fSer").classList.add("aan"); $("fLev").classList.remove("aan"); });
+  function dicht(){ laag.remove(); }
+  $("fTerug").addEventListener("click", dicht);
+  laag.addEventListener("click", function(e){ if(e.target===laag) dicht(); });
+
+  $("fDoe").addEventListener("click", async function(){
+    var b = {
+      id: a.id, datum: $("fDatum").value, tijd: $("fTijd").value, soort: soort,
+      klant: $("fKlant").value.trim(), telefoon: $("fTel").value.trim(),
+      plaats: $("fPlaats").value.trim(), ordernr: $("fOrder").value.trim(),
+      wat: $("fWat").value.trim(), wie: $("fWie").value.trim(),
+      klaar: nieuw ? false : $("fKlaar").checked,
+      door: nieuw ? ik : (a.door||ik), gewijzigdDoor: ik,
+      gemaakt: a.gemaakt || new Date().toISOString(), gewijzigd: new Date().toISOString()
+    };
+    if (!b.datum){ $("fMelding").textContent = "Kies een datum."; return; }
+    if (!b.klant){ $("fMelding").textContent = "Vul de naam van de klant in."; return; }
+    this.disabled = true; this.textContent = "Bezig…";
+    try{
+      await bewaar(function(lijst){
+        var i = lijst.findIndex(function(x){ return x.id===b.id; });
+        if (i>=0) lijst[i]=b; else lijst.push(b);
+        return lijst;
+      });
+      try{ if(window.fpLog) window.fpLog(nieuw?"afspraak-gepland":"afspraak-gewijzigd",
+        b.soort+" "+b.datum+" "+b.tijd+" "+b.klant); }catch(e){}
+      dicht(); teken();
+    }catch(e){ $("fMelding").textContent = e.message; this.disabled=false; this.textContent="Bewaren"; }
+  });
+
+  if (!nieuw) $("fWeg").addEventListener("click", async function(){
+    if (!confirm("Afspraak van "+a.klant+" op "+a.datum+" verwijderen?")) return;
+    this.disabled = true;
+    try{
+      await bewaar(function(lijst){ return lijst.filter(function(x){ return x.id!==a.id; }); });
+      try{ if(window.fpLog) window.fpLog("afspraak-verwijderd", a.soort+" "+a.datum+" "+a.klant); }catch(e){}
+      dicht(); teken();
+    }catch(e){ $("fMelding").textContent = e.message; this.disabled=false; }
+  });
+}
+
+/* ── weeknavigatie ── */
+$("vorige").addEventListener("click", function(){ maandag.setDate(maandag.getDate()-7); teken(); });
+$("volgende").addEventListener("click", function(){ maandag.setDate(maandag.getDate()+7); teken(); });
+$("vandaagKnop").addEventListener("click", function(){ maandag = weekStart(new Date()); teken(); });
+$("nieuwKnop").addEventListener("click", function(){ openForm(null, iso(new Date())); });
+$("uitKnop").addEventListener("click", function(){
+  localStorage.removeItem("fp.session"); localStorage.removeItem("fp.email");
+  location.href="dashboard.html";
+});
+$("wie").textContent = ik;
+
+/* ── start ── */
+(async function(){
+  var eerste = await lees();
+  if (eerste === null){
+    $("rooster").innerHTML = '<div class="dag" style="grid-column:1/-1"><div class="leeg">De opslag is even niet bereikbaar. Herlaad de pagina om het opnieuw te proberen.</div></div>';
+    return;
+  }
+  afspraken = eerste;
+  teken();
+})();
+</script>
+
+<script>
+/* Activiteitenlogboek — helper fpLog(actie,detail) + tegel-open melden */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){
+    var ua=navigator.userAgent||"";
+    var app=ua.match(/fonteyn-dashboard\/([\d.]+)/i);
+    var elc=ua.match(/Electron\/([\d.]+)/i);
+    var versie=app?("app "+app[1]):(elc?("app · Electron "+elc[1]):"browser");
+    var pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+|Linux|Android|iPhone)/);
+    var id=null;
+    try{
+      id=localStorage.getItem("fp.apparaat");
+      if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); localStorage.setItem("fp.apparaat",id); }
+    }catch(e){}
+    return {computer:id, platform:pm?pm[1].replace(/_/g,"."):null, versie:versie};
+  }
+  window.fpLog=function(action,detail){try{
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase();
+    var key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"planning",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){});
+  }catch(e){}};
+  window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
+})();
+</script>
+
+</body>
+</html>

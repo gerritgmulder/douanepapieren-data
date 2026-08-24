@@ -100,6 +100,10 @@
     /* Vertalen is een tekstvak met een knop: dat werkt op een telefoon net
        zo goed als op een pc, mits de twee vlakken onder elkaar vallen. Dat
        doen ze onder 900 pixels, dus geen aparte mobiele pagina nodig. */
+    /* Weekoverzicht van de afdeling Spa planning. Werkt op een telefoon
+       net zo goed als op de pc: de dagen vallen daar onder elkaar. */
+    { bestand:"planning.html",       groep:"planning",         ic:"📅",  naam:"Planning",
+      uit:"Weekoverzicht van leveringen en service-afspraken",     mobiel:"goed", tile:"tilePlanning" },
     { bestand:"vertalen.html",       groep:"vertalen",         ic:"🌍",  naam:"Vertalen",
       uit:"Mails aan dealers vertalen",                            mobiel:"goed", tile:"tileVertalen" },
 
