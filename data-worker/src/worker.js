@@ -2949,6 +2949,103 @@ async function dpRefreshReservations(env) {
   return { ok: true, models: Object.keys(byModel).length, reserveringen: total, amerika: totalUSA };
 }
 
+// ─── Planning: servicemeldingen uit Logic4 (ITS) ─────────────────────
+// De servicemeldingen heten ITS in Logic4 (Gerrit, 24 aug 2026) en hangen
+// aan een debiteur. Status 1 = Inplannen en 4 = Opnieuw inplannen zijn de
+// werkvoorraad van de afdeling Spa planning; die twee halen we op.
+//
+// Er liggen ruim tienduizend meldingen op "Inplannen" terug tot 2014 - dat
+// is historie, geen werk. Daarom alleen de laatste zes maanden (dat zijn er
+// enkele honderden). De lijst staat tien minuten in de cache zodat de tegel
+// vlot opent en Logic4 met rust wordt gelaten.
+//
+// GET /planning/its                    → { meldingen: [...] }
+// GET /planning/its/klant?debiteur=ID  → naam, adres en telefoon om een
+//                                        melding in te plannen (live).
+const ITS_CACHE = "planning-its-cache";
+const ITS_CACHE_MIN = 10;
+const ITS_MAANDEN = 6;
+
+function itsKaal(html) {
+  return String(html || "")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
+    .replace(/\s+/g, " ").trim();
+}
+
+async function planningIts(env, url) {
+  const vers = url.searchParams.get("vers") === "1";
+  if (!vers) {
+    const c = await env.FONTEYN_DATA.get(ITS_CACHE, { type: "json" });
+    if (c && c.ts && Date.now() - new Date(c.ts).getTime() < ITS_CACHE_MIN * 60000) {
+      return reply(200, { ok: true, bron: "cache", ts: c.ts, meldingen: c.meldingen });
+    }
+  }
+  const token = await l4Token(env);
+  const call = async (pad, body) => {
+    const r = await fetch("https://api.logic4server.nl" + pad, {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(pad + " → HTTP " + r.status);
+    return r.json();
+  };
+  const vanaf = new Date(Date.now() - ITS_MAANDEN * 30.44 * 86400000).toISOString().slice(0, 10);
+  const uit = [];
+  for (const statusId of [1, 4]) {
+    let skip = 0;
+    for (let p = 0; p < 8; p++) {
+      const r = await call("/v3/ITS/GetIssues", { StatusId: statusId, StartDate: vanaf, TakeRecords: 500, SkipRecords: skip });
+      const lijst = Array.isArray(r) ? r : (r && r.Records) || [];
+      for (const x of lijst) {
+        if (x.ArchiveIssue) continue;
+        uit.push({
+          id: x.id, naam: x.Name || "", status: (x.Status && x.Status.Name) || "",
+          type: (x.Type && x.Type.Name) || "", groep: (x.Group && x.Group.Name) || "",
+          omschrijving: itsKaal(x.Description).slice(0, 300),
+          gemeld: String(x.DateTimeReported || x.DateTimeCreatedOn || "").slice(0, 10),
+          uiterlijk: String(x.DateTimeMustBeCompletedOn || "").slice(0, 10) || null,
+          debiteur: x.ReportedByDebtorId || null,
+          verantwoordelijke: x.ResponsibleByUserName || null,
+        });
+      }
+      if (lijst.length < 500) break;
+      skip += 500;
+    }
+  }
+  // De strakste uiterste datum eerst; daarna de nieuwste melding bovenaan.
+  uit.sort((a, b) => String(a.uiterlijk || "9999").localeCompare(String(b.uiterlijk || "9999")) ||
+                     String(b.gemeld).localeCompare(String(a.gemeld)));
+  const nu = new Date().toISOString();
+  await env.FONTEYN_DATA.put(ITS_CACHE, JSON.stringify({ ts: nu, meldingen: uit }));
+  return reply(200, { ok: true, bron: "logic4", ts: nu, meldingen: uit });
+}
+
+async function planningItsKlant(env, url) {
+  const id = Number(url.searchParams.get("debiteur"));
+  if (!id) return reply(400, { ok: false, error: "debiteur ontbreekt" });
+  const token = await l4Token(env);
+  const r = await fetch("https://api.logic4server.nl/v3/Relations/GetCustomers", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ Id: id, TakeRecords: 2 }),
+  });
+  if (!r.ok) return reply(502, { ok: false, error: "Logic4 antwoordde niet (HTTP " + r.status + ")" });
+  const j = await r.json();
+  const c = ((Array.isArray(j) ? j : j.Records) || []).find(x => Number(x.Id) === id);
+  if (!c) return reply(404, { ok: false, error: "debiteur niet gevonden" });
+  const naam = [c.FirstName, c.Preposition, c.LastName].map(x => String(x || "").trim()).filter(Boolean).join(" ");
+  const adres = [[c.Street, c.HouseNumber, c.HouseNumberAddition].map(x => String(x || "").trim()).filter(Boolean).join(" "),
+                 [c.Zipcode, c.City].map(x => String(x || "").trim()).filter(Boolean).join(" ")]
+                .filter(Boolean).join(", ");
+  return reply(200, { ok: true, klant: {
+    debiteur: id, naam: c.CompanyName || naam || ("debiteur " + id),
+    adres, plaats: c.City || "",
+    telefoon: String(c.TelephoneNumber || c.MobileNumber || "").trim(),
+    email: c.EmailAddress || "",
+  } });
+}
+
 // ─── Merzario-tracking (MyMerzario Tracking API) ─────────────────────
 // Read-only zending/container-tracking van vervoerder Merzario. LET OP:
 // dit endpoint heeft GEEN api-key/login — het referentienummer (container,
@@ -6413,6 +6510,16 @@ export default {
     if (url.pathname === "/dealers/admin/relatie/zoeklijst" && request.method === "POST") {
       if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
       return reply(200, await relIndexBouw(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    /* Servicemeldingen (ITS) en klantgegevens voor de planningstegel. Lezen
+       met de teamsleutel; er wordt niets in Logic4 geschreven. */
+    if (url.pathname === "/planning/its" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+      return planningIts(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
+    if (url.pathname === "/planning/its/klant" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+      return planningItsKlant(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     /* De lijst nieuw aangemaakte relaties voor Chantal en Arno. Lezen mag met
        de teamsleutel; afvinken ook, want het is geen gevoelige handeling. */

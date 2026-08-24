@@ -53,9 +53,9 @@
 
     /* ── 22 augustus 2026 ─────────────────────────────────────────────── */
     {
-      datum: "2026-08-22", bestand: "planning.html", soort: "nieuw",
-      titel: "Planning: het weekoverzicht",
-      wat: "Een week in beeld, maandag tot en met zaterdag, met alle afspraken voor levering en service. Afspraak erbij zetten, aanpassen, afvinken als hij gedaan is - en iedereen van de afdeling kijkt naar dezelfde week.",
+      datum: "2026-08-24", bestand: "planning.html", soort: "nieuw",
+      titel: "Planning: de weekagenda",
+      wat: "Een echte agenda voor de afdeling Spa planning: de hele week met de uren onder elkaar, kleuren per soort afspraak, en op elk blok wie hem heeft ingepland. De servicemeldingen uit Logic4 staan er als lijst naast en zijn met een klik in te plannen, met naam, adres en telefoon er automatisch bij. En per dag rekent de autoknop de route uit voor de bezorger of de monteur.",
     },
     {
       datum: "2026-08-22", iedereen: true, soort: "beter",

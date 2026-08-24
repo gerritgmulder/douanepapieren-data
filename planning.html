@@ -26,21 +26,22 @@
 <title>Fonteyn — Planning</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- ══════════════════════════════════════════════════════════════════════
-     PLANNING - weekoverzicht van leveringen en service-afspraken
+     PLANNING - weekagenda van de afdeling Spa planning
 
-     Voor de afdeling Spa planning (Gerrit, 22 aug 2026): "een weekoverzicht
-     waarin ze alle afspraken kunnen plannen voor levering of service. Zij
-     plannen namelijk alle particuliere spa en sauna klanten in."
+     Gerrit (24 aug 2026, met een schermafdruk van zijn Outlook erbij):
+     de planning moet eruitzien als een echte agenda. Dus: een tijdraster
+     met de uren onder elkaar, de hele week inclusief het weekend, door
+     alle weken van het jaar te bladeren, categorieën met een eigen kleur,
+     en op elke afspraak zichtbaar wie hem heeft ingepland.
 
-     Eén week in beeld, maandag tot en met zaterdag. Een afspraak is een
-     kaartje in de dag: tijd, levering of service, klant, plaats en wie er
-     heen gaat. Aanklikken om te wijzigen, afvinken als hij gedaan is.
+     Een afspraak zonder tijd valt in de "hele dag"-strook bovenin, net als
+     in Outlook. Afspraken die elkaar overlappen komen naast elkaar te
+     staan. De rode lijn is het nu-moment.
 
      De afspraken staan in de bucket 'planning' bij de worker; iedereen van
-     de afdeling kijkt dus naar dezelfde week. Bewaren leest eerst de verse
-     stand en schrijft dan alleen de eigen wijziging terug, zodat twee
-     planners elkaar niet overschrijven zolang ze niet in dezelfde seconde
-     dezelfde afspraak pakken.
+     de afdeling kijkt dus naar dezelfde agenda. Bewaren leest eerst de
+     verse stand en past dan alleen de eigen wijziging toe, zodat twee
+     planners elkaar niet overschrijven.
 
      OTA: staat in manifest.json. Nooit opnieuw installeren.
      ══════════════════════════════════════════════════════════════════════ -->
@@ -48,7 +49,7 @@
 :root{
   --groen:#144734; --groen-donker:#0d3325; --lime:#8bc53f;
   --bg:#f5f4ef; --kaart:#fff; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb;
-  --rood:#b91c1c; --amber:#b45309;
+  --rood:#b91c1c;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -62,66 +63,134 @@ header a.knop,header button.knop{background:transparent;color:#fff;border:1px so
        border-radius:8px;padding:7px 13px;font:inherit;font-size:12px;cursor:pointer;text-decoration:none}
 header .wie{font-size:11px;opacity:.75}
 
-main{max-width:1240px;margin:0 auto;padding:16px;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
+main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
 
 /* ── weekbalk ── */
-.weekbalk{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
-.weekbalk h2{margin:0;font-size:17px;color:var(--groen);flex:1;min-width:220px}
-.weekbalk button{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:9px 14px;
-       font:inherit;font-size:13px;cursor:pointer}
+.weekbalk{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.weekbalk h2{margin:0;font-size:16px;color:var(--groen);flex:1;min-width:200px}
+.weekbalk button,.weekbalk input[type=date]{background:#fff;border:1px solid var(--rand);border-radius:9px;
+       padding:8px 13px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink)}
 .weekbalk button:hover{border-color:var(--lime)}
 .weekbalk button.nieuw{background:var(--groen);color:#fff;border:0;font-weight:600}
 .weekbalk button.nieuw:hover{background:var(--groen-donker)}
+.weekbalk input[type=date]{cursor:text;color:var(--grijs);width:150px}
 
-/* ── het rooster ── */
-.rooster{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
-@media (max-width:860px){ .rooster{grid-template-columns:1fr} }
-.dag{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:10px;min-height:120px}
-.dag.vandaag{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.25)}
-.dag h3{margin:0 0 2px;font-size:12.5px;color:var(--groen)}
-.dag .datum{font-size:11px;color:var(--grijs);margin-bottom:9px}
-.dag .leeg{font-size:12px;color:#d1d5db;padding:4px 0}
-.dag .plus{display:block;width:100%;margin-top:8px;background:none;border:1px dashed var(--rand);
-       border-radius:8px;color:var(--grijs);font:inherit;font-size:12px;padding:7px;cursor:pointer}
-.dag .plus:hover{border-color:var(--lime);color:var(--groen)}
+/* ── legenda: de categorieën, tevens filter ── */
+.legenda{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.cat-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rand);background:#fff;
+       border-radius:999px;padding:5px 12px;font-size:12px;cursor:pointer;user-select:none}
+.cat-chip .bol{width:10px;height:10px;border-radius:50%}
+.cat-chip.uit{opacity:.35}
+.cat-chip.uit .bol{background:#d1d5db!important}
 
-/* ── afspraakkaartje ── */
-.afs{border:1px solid var(--rand);border-left:4px solid var(--lime);border-radius:9px;
-     padding:8px 9px;margin-bottom:7px;cursor:pointer;background:#fff}
-.afs:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
-.afs.service{border-left-color:#f59e0b}
+/* ── het agendaraster ── */
+.agenda{background:#fff;border:1px solid var(--rand);border-radius:12px;overflow:hidden}
+.agenda-scroll{overflow:auto;max-height:calc(100vh - 240px);min-height:420px;position:relative}
+.rooster{display:grid;grid-template-columns:52px repeat(7,minmax(120px,1fr));min-width:900px}
+.dag-kop{position:sticky;top:0;background:#fff;z-index:6;border-bottom:1px solid var(--rand);
+       padding:8px 8px 6px;text-align:left}
+.dag-kop .dnaam{font-size:11px;color:var(--grijs);text-transform:lowercase}
+.dag-kop .dnum{font-size:17px;font-weight:700;color:var(--ink);line-height:1.2}
+.dag-kop.vandaag .dnum{color:#fff;background:var(--groen);border-radius:50%;display:inline-block;
+       width:28px;height:28px;text-align:center;line-height:28px;font-size:14px}
+.hoek{position:sticky;top:0;left:0;background:#fff;z-index:8;border-bottom:1px solid var(--rand)}
+.heledag-cel{border-bottom:1px solid var(--rand);border-left:1px solid #f3f4f6;padding:3px 3px 5px;min-height:26px}
+.heledag-label{border-bottom:1px solid var(--rand);font-size:10px;color:var(--grijs);text-align:right;
+       padding:6px 6px 0;position:sticky;left:0;background:#fff;z-index:5}
+.uur-label{font-size:10px;color:var(--grijs);text-align:right;padding-right:6px;transform:translateY(-6px);
+       position:sticky;left:0;background:#fff;z-index:5}
+.dag-cel{position:relative;border-left:1px solid #f3f4f6}
+.dag-cel.weekend{background:#fafaf7}
+.uurlijn{position:absolute;left:0;right:0;border-top:1px solid #f3f4f6;pointer-events:none}
+.nu-lijn{position:absolute;left:0;right:0;border-top:2px solid #c8102e;z-index:4;pointer-events:none}
+.nu-lijn::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;border-radius:50%;background:#c8102e}
+
+/* ── afspraakblok in het raster ── */
+.blok{position:absolute;border-radius:7px;padding:4px 6px;font-size:11px;line-height:1.3;cursor:pointer;
+      overflow:hidden;border-left:4px solid;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.blok:hover{box-shadow:0 3px 10px rgba(0,0,0,.18);z-index:5!important}
+.blok .t{font-weight:700;font-size:10.5px}
+.blok .k{font-weight:600;font-size:11.5px}
+.blok .s{opacity:.8;font-size:10.5px}
+.blok .d{opacity:.7;font-size:10px;font-style:italic}
+.blok.klaar{opacity:.42}
+.blok.klaar .k{text-decoration:line-through}
+.hd-blok{border-radius:6px;border-left:4px solid;padding:2px 6px;font-size:11px;font-weight:600;
+      margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hd-blok.klaar{opacity:.42;text-decoration:line-through}
+
+/* ── telefoonweergave: dagen onder elkaar ── */
+.lijst{display:none}
+@media (max-width:820px){
+  .agenda{display:none}
+  .lijst{display:block}
+}
+.dagkaart{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:10px;margin-bottom:10px}
+.dagkaart.vandaag{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.25)}
+.dagkaart h3{margin:0 0 2px;font-size:12.5px;color:var(--groen)}
+.dagkaart .datum{font-size:11px;color:var(--grijs);margin-bottom:9px}
+.dagkaart .leeg{font-size:12px;color:#d1d5db;padding:2px 0}
+.afs{border:1px solid var(--rand);border-left:4px solid;border-radius:9px;padding:8px 9px;margin-bottom:7px;cursor:pointer;background:#fff}
 .afs.klaar{opacity:.45}
 .afs.klaar .klant{text-decoration:line-through}
-.afs .kop{display:flex;align-items:center;gap:7px}
+.afs .kop{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .afs .tijd{font-weight:700;font-size:12.5px}
-.afs .badge{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;
-     padding:1px 6px;border-radius:4px;background:#e8f2d9;color:#3f6b21}
-.afs.service .badge{background:#fef3c7;color:#92400e}
+.afs .badge{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding:1px 6px;border-radius:4px}
 .afs .klant{font-size:13px;font-weight:600;margin-top:3px;line-height:1.35}
 .afs .sub{font-size:11.5px;color:var(--grijs);margin-top:2px;line-height:1.45}
+.plus{display:block;width:100%;margin-top:6px;background:none;border:1px dashed var(--rand);
+       border-radius:8px;color:var(--grijs);font:inherit;font-size:12px;padding:7px;cursor:pointer}
+.plus:hover{border-color:var(--lime);color:var(--groen)}
+
+/* ── servicemeldingen uit Logic4 ── */
+.its{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:12px 14px;margin-bottom:12px;display:none}
+.its.aan{display:block}
+.its-kop{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.its-kop h3{margin:0;font-size:14px;color:var(--groen);flex:1}
+.its-kop input{border:1px solid var(--rand);border-radius:8px;padding:7px 11px;font:inherit;font-size:13px;width:220px}
+.its-rij{display:flex;gap:10px;align-items:flex-start;padding:8px 2px;border-top:1px solid #f3f4f6}
+.its-rij .mid{flex:1;min-width:0}
+.its-rij .naam{font-size:13px;font-weight:600}
+.its-rij .naam .nr{color:var(--grijs);font-weight:400;font-size:11.5px}
+.its-rij .sub{font-size:11.5px;color:var(--grijs);margin-top:2px;line-height:1.45}
+.its-rij .om{font-size:12px;color:#4b5563;margin-top:3px;line-height:1.45}
+.its-rij .telaat{color:var(--rood);font-weight:600}
+.its-rij button{background:var(--groen);color:#fff;border:0;border-radius:8px;padding:8px 13px;font:inherit;font-size:12px;font-weight:600;cursor:pointer;flex:none}
+.its-rij button:hover{background:var(--groen-donker)}
+.its-rij .alGepland{background:#e8f2d9;color:#3f6b21;border-radius:8px;padding:8px 13px;font-size:12px;font-weight:600;flex:none}
+.its-meer{display:block;width:100%;margin-top:8px;background:none;border:1px dashed var(--rand);border-radius:8px;color:var(--grijs);font:inherit;font-size:12px;padding:8px;cursor:pointer}
+.its-leeg{font-size:12.5px;color:var(--grijs);padding:6px 0}
+
+/* ── routeknop ── */
+.route-knop{background:none;border:0;cursor:pointer;font-size:14px;padding:2px 4px;border-radius:6px;float:right}
+.route-knop:hover{background:#eef4e8}
+.route-menu{position:absolute;background:#fff;border:1px solid var(--rand);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:30;padding:6px;min-width:170px}
+.route-menu button{display:block;width:100%;text-align:left;background:none;border:0;font:inherit;font-size:13px;padding:8px 10px;border-radius:7px;cursor:pointer}
+.route-menu button:hover{background:#f4f9ec}
 
 /* ── formulier (laag over de pagina) ── */
 .laag{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:50;display:flex;
       align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto}
-.formkaart{background:#fff;border-radius:14px;max-width:480px;width:100%;padding:22px;margin:auto 0}
-.formkaart h3{margin:0 0 14px;font-size:16px;color:var(--groen)}
+.formkaart{background:#fff;border-radius:14px;max-width:500px;width:100%;padding:22px;margin:auto 0}
+.formkaart h3{margin:0 0 12px;font-size:16px;color:var(--groen)}
 .formkaart label{display:block;font-size:12px;color:var(--grijs);margin:11px 0 4px}
 .formkaart input,.formkaart select,.formkaart textarea{width:100%;padding:10px 11px;border:1px solid var(--rand);
       border-radius:9px;font:inherit;font-size:14px;color:var(--ink);background:#fff}
 .formkaart input:focus,.formkaart select:focus,.formkaart textarea:focus{outline:2px solid var(--lime);outline-offset:-1px}
-.formkaart .rij{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.formkaart .rij{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.formkaart .rij2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .formkaart .knoppen{display:flex;gap:9px;margin-top:18px;flex-wrap:wrap}
 .formkaart .knoppen button{font:inherit;font-size:13.5px;border-radius:9px;padding:11px 18px;cursor:pointer}
 .formkaart .doe{background:var(--groen);color:#fff;border:0;font-weight:600;flex:1}
 .formkaart .doe:hover{background:var(--groen-donker)}
 .formkaart .weg{background:#fff;border:1px solid #fecaca;color:var(--rood)}
 .formkaart .terug{background:#fff;border:1px solid var(--rand);color:var(--grijs)}
-.soortkeus{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.soortkeus button{font:inherit;font-size:13px;padding:11px;border-radius:9px;border:2px solid var(--rand);
-      background:#fff;cursor:pointer;font-weight:600}
-.soortkeus button.aan.levering{border-color:var(--lime);background:#f4f9ec;color:#3f6b21}
-.soortkeus button.aan.service{border-color:#f59e0b;background:#fffbeb;color:#92400e}
+.catkeus{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px}
+.catkeus button{display:flex;align-items:center;gap:7px;font:inherit;font-size:12.5px;padding:9px 10px;
+      border-radius:9px;border:2px solid var(--rand);background:#fff;cursor:pointer;font-weight:600;color:var(--ink)}
+.catkeus .bol{width:11px;height:11px;border-radius:50%;flex:none}
 .melding{font-size:12.5px;color:var(--rood);min-height:16px;margin-top:8px}
+.gepland-door{font-size:11.5px;color:var(--grijs);margin-top:10px}
 </style>
 </head>
 <body>
@@ -139,9 +208,31 @@ main{max-width:1240px;margin:0 auto;padding:16px;padding-bottom:calc(30px + env(
     <button type="button" id="vorige" title="Vorige week">&larr;</button>
     <button type="button" id="vandaagKnop">Vandaag</button>
     <button type="button" id="volgende" title="Volgende week">&rarr;</button>
+    <input type="date" id="springNaar" title="Spring naar de week van deze datum">
+    <button type="button" id="itsKnop">🔧 Servicemeldingen</button>
     <button type="button" class="nieuw" id="nieuwKnop">+ Afspraak</button>
   </div>
-  <div class="rooster" id="rooster"></div>
+  <div class="legenda" id="legenda"></div>
+
+  <!-- Servicemeldingen uit Logic4 (ITS), status Inplannen. Aanklikken zet de
+       melding als afspraak in de week, met naam, adres en telefoon erbij. -->
+  <div class="its" id="itsPaneel">
+    <div class="its-kop">
+      <h3 id="itsTitel">Servicemeldingen uit Logic4</h3>
+      <input type="search" id="itsZoek" placeholder="Zoek op naam, plaats of klus…">
+    </div>
+    <div id="itsLijst"><div class="its-leeg">Bezig met ophalen…</div></div>
+  </div>
+
+  <!-- brede schermen: het tijdraster -->
+  <div class="agenda">
+    <div class="agenda-scroll" id="agendaScroll">
+      <div class="rooster" id="rooster"></div>
+    </div>
+  </div>
+
+  <!-- telefoon: de dagen onder elkaar -->
+  <div class="lijst" id="lijst"></div>
 </main>
 
 <div id="laagHouder"></div>
@@ -151,12 +242,29 @@ main{max-width:1240px;margin:0 auto;padding:16px;padding-bottom:calc(30px + env(
 
 var W = "https://fonteyn-data-store.g-mulder.workers.dev";
 var BUCKET = "planning";
-var DAGEN = ["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag"];
+var DAGEN = ["Maandag","Dinsdag","Woensdag","Donderdag","Vrijdag","Zaterdag","Zondag"];
+var DAGKORT = ["ma","di","wo","do","vr","za","zo"];
 var MAANDEN = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
 
+/* De categorieën. De sleutel wordt opgeslagen, dus die verandert nooit meer;
+   naam en kleur mogen wel. 'levering' en 'service' waren er vanaf dag één,
+   de rest kwam er op 24 aug 2026 bij ("en nog andere logische categorieën"). */
+var CATS = {
+  levering:     { naam:"Levering",              kleur:"#8bc53f", zacht:"#f1f8e5" },
+  service:      { naam:"Service",               kleur:"#f59e0b", zacht:"#fef3d8" },
+  ophalen:      { naam:"Ophalen / retour",      kleur:"#3b82f6", zacht:"#e3edfd" },
+  bezichtiging: { naam:"Showroom / bezichtiging", kleur:"#a855f7", zacht:"#f3e8fd" },
+  intern:       { naam:"Intern / overig",       kleur:"#6b7280", zacht:"#eef0f2" },
+};
+function cat(a){ return CATS[a.soort] || CATS.intern; }
+
+var UUR_VAN = 6, UUR_TOT = 22;      // het raster loopt van 06:00 tot 22:00
+var UUR_PX = 46;                    // hoogte van één uur
+
 var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
-var afspraken = [];          // de hele bucket-inhoud
-var maandag = weekStart(new Date());   // de maandag van de week in beeld
+var afspraken = [];
+var maandag = weekStart(new Date());
+var filterUit = {};                 // categorie-sleutel -> true als uitgevinkt
 
 function $(id){ return document.getElementById(id); }
 function esc(t){ return String(t==null?"":t).replace(/[&<>"']/g,function(c){
@@ -165,17 +273,25 @@ function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
 function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function weekStart(d){
   var k = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  var dow = (k.getDay()+6)%7;              // maandag = 0
-  k.setDate(k.getDate()-dow);
+  k.setDate(k.getDate() - (k.getDay()+6)%7);
   return k;
 }
 function weekNr(d){
-  // ISO-weeknummer: de week van 4 januari is week 1.
   var t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
   t.setDate(t.getDate()+3-((t.getDay()+6)%7));
   var w1 = new Date(t.getFullYear(),0,4);
   return 1+Math.round(((t-w1)/86400000-3+((w1.getDay()+6)%7))/7);
 }
+/* "gerwin@fonteyn.nl" of "fonteyn.gerwin" wordt "Gerwin" - dezelfde regel als
+   het dashboard, zodat een naam er overal hetzelfde uitziet. */
+function voornaam(wie){
+  if (!wie) return "";
+  var lokaal = String(wie).split("@")[0].replace(/^fonteyn\./i,"");
+  return lokaal.split(/[.\-_]/).filter(Boolean).map(function(d){
+    return d.charAt(0).toUpperCase()+d.slice(1).toLowerCase(); }).join(" ");
+}
+function minuten(t){ var m = String(t||"").match(/^(\d{1,2}):(\d{2})/); return m ? (+m[1])*60+(+m[2]) : null; }
+function tijdStr(min){ return String(Math.floor(min/60)).padStart(2,"0")+":"+String(min%60).padStart(2,"0"); }
 
 /* ── opslag ── */
 async function lees(){
@@ -186,10 +302,6 @@ async function lees(){
     return (j && Array.isArray(j.afspraken)) ? j.afspraken : [];
   }catch(e){ return null; }
 }
-/* Bewaren = altijd eerst vers lezen en dan alleen de eigen wijziging
-   toepassen. Twee planners die tegelijk werken raken elkaars afspraken zo
-   niet kwijt; alleen wie exact dezelfde afspraak tegelijk pakt, wint als
-   laatste. */
 async function bewaar(wijzig){
   var vers = await lees();
   if (vers === null) throw new Error("De opslag is niet bereikbaar. Probeer het zo nog eens.");
@@ -200,68 +312,196 @@ async function bewaar(wijzig){
   if(!r.ok) throw new Error("Bewaren mislukte (HTTP "+r.status+").");
 }
 
-/* ── weergave ── */
-function teken(){
-  var vandaag = iso(new Date());
-  var einde = new Date(maandag); einde.setDate(einde.getDate()+5);
-  $("weekTitel").textContent = "Week "+weekNr(maandag)+" · "+
-    maandag.getDate()+" "+MAANDEN[maandag.getMonth()]+
-    (maandag.getMonth()!==einde.getMonth() ? " - "+einde.getDate()+" "+MAANDEN[einde.getMonth()] : " - "+einde.getDate()+" "+MAANDEN[einde.getMonth()])+
-    " "+einde.getFullYear();
+/* ── legenda + filter ── */
+function tekenLegenda(){
+  $("legenda").innerHTML = Object.keys(CATS).map(function(k){
+    var c = CATS[k];
+    return '<span class="cat-chip'+(filterUit[k]?" uit":"")+'" data-cat="'+k+'" title="Klik om deze categorie te tonen of te verbergen">'+
+      '<span class="bol" style="background:'+c.kleur+'"></span>'+esc(c.naam)+'</span>';
+  }).join("");
+  document.querySelectorAll(".cat-chip").forEach(function(ch){
+    ch.addEventListener("click", function(){
+      filterUit[ch.dataset.cat] = !filterUit[ch.dataset.cat];
+      tekenLegenda(); teken();
+    });
+  });
+}
 
-  var html = "";
-  for (var i=0;i<6;i++){
+/* ── weekgegevens ── */
+function weekLijst(){
+  var uit = [];
+  for (var i=0;i<7;i++){
     var dag = new Date(maandag); dag.setDate(dag.getDate()+i);
     var dISO = iso(dag);
-    var lijst = afspraken.filter(function(a){ return a.datum===dISO; })
-      .sort(function(a,b){ return String(a.tijd||"99").localeCompare(String(b.tijd||"99")); });
-    html += '<div class="dag'+(dISO===vandaag?" vandaag":"")+'">'+
-      '<h3>'+DAGEN[i]+'</h3><div class="datum">'+dag.getDate()+' '+MAANDEN[dag.getMonth()]+'</div>'+
-      (lijst.length ? lijst.map(kaartje).join("") : '<div class="leeg">Nog niets gepland</div>')+
-      '<button type="button" class="plus" data-datum="'+dISO+'">+ afspraak</button></div>';
+    uit.push({ datum: dag, iso: dISO,
+      items: afspraken.filter(function(a){ return a.datum===dISO && !filterUit[a.soort]; })
+        .sort(function(a,b){ return String(a.tijd||"99").localeCompare(String(b.tijd||"99")); }) });
   }
+  return uit;
+}
+function titel(){
+  var einde = new Date(maandag); einde.setDate(einde.getDate()+6);
+  $("weekTitel").textContent = "Week "+weekNr(maandag)+" · "+
+    maandag.getDate()+" "+MAANDEN[maandag.getMonth()]+" - "+einde.getDate()+" "+MAANDEN[einde.getMonth()]+" "+einde.getFullYear();
+}
+
+/* ── het tijdraster (brede schermen) ──
+   Afspraken met een tijd komen als blok op de juiste hoogte; wie elkaar
+   overlappen worden over kolommetjes verdeeld, net als in Outlook.
+   Zonder tijd = de "hele dag"-strook bovenin. */
+function teken(){
+  titel();
+  var week = weekLijst();
+  var vandaagISO = iso(new Date());
+  var uren = UUR_TOT - UUR_VAN;
+
+  var html = '<div class="hoek"></div>';
+  week.forEach(function(w,i){
+    var route = w.items.some(function(a){ return a.plaats && !a.klaar; })
+      ? '<button type="button" class="route-knop" data-datum="'+w.iso+'" title="Route van deze dag in Google Maps">🚗</button>' : "";
+    html += '<div class="dag-kop'+(w.iso===vandaagISO?" vandaag":"")+'">'+route+
+      '<span class="dnaam">'+DAGKORT[i]+'</span><br><span class="dnum">'+w.datum.getDate()+'</span></div>';
+  });
+
+  html += '<div class="heledag-label">hele dag</div>';
+  week.forEach(function(w){
+    var hd = w.items.filter(function(a){ return minuten(a.tijd)===null; });
+    html += '<div class="heledag-cel">'+hd.map(function(a){
+      var c = cat(a);
+      return '<div class="hd-blok'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="background:'+c.zacht+';border-left-color:'+c.kleur+'">'+
+        esc(a.klant||c.naam)+(a.wie?' · '+esc(a.wie):'')+'</div>';
+    }).join("")+'</div>';
+  });
+
+  // urenkolom + 7 dagkolommen
+  html += '<div style="height:'+(uren*UUR_PX)+'px;position:relative">';
+  for (var u=UUR_VAN; u<=UUR_TOT; u++)
+    html += '<div class="uur-label" style="position:absolute;right:0;top:'+((u-UUR_VAN)*UUR_PX)+'px;width:100%">'+String(u).padStart(2,"0")+'</div>';
+  html += '</div>';
+
+  week.forEach(function(w,di){
+    var isWeekend = di>=5;
+    html += '<div class="dag-cel'+(isWeekend?" weekend":"")+'" data-datum="'+w.iso+'" style="height:'+(uren*UUR_PX)+'px">';
+    for (var u2=1; u2<uren; u2++) html += '<div class="uurlijn" style="top:'+(u2*UUR_PX)+'px"></div>';
+    if (w.iso===vandaagISO){
+      var nu = new Date(); var nm = nu.getHours()*60+nu.getMinutes();
+      var y = (nm - UUR_VAN*60)/60*UUR_PX;
+      if (y>0 && y<uren*UUR_PX) html += '<div class="nu-lijn" style="top:'+y+'px"></div>';
+    }
+    html += blokken(w.items) + '</div>';
+  });
+
   $("rooster").innerHTML = html;
 
-  document.querySelectorAll(".afs").forEach(function(k){
-    k.addEventListener("click", function(){ openForm(k.dataset.id); });
+  // telefoonweergave
+  $("lijst").innerHTML = week.map(function(w,i){
+    var route = w.items.some(function(a){ return a.plaats && !a.klaar; })
+      ? '<button type="button" class="route-knop" data-datum="'+w.iso+'" title="Route van deze dag in Google Maps">🚗</button>' : "";
+    return '<div class="dagkaart'+(w.iso===vandaagISO?" vandaag":"")+'">'+route+
+      '<h3>'+DAGEN[i]+'</h3><div class="datum">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+'</div>'+
+      (w.items.length ? w.items.map(kaartje).join("") : '<div class="leeg">Nog niets gepland</div>')+
+      '<button type="button" class="plus" data-datum="'+w.iso+'">+ afspraak</button></div>';
+  }).join("");
+
+  document.querySelectorAll(".blok,.hd-blok,.afs").forEach(function(k){
+    k.addEventListener("click", function(e){ e.stopPropagation(); openForm(k.dataset.id); });
   });
   document.querySelectorAll(".plus").forEach(function(k){
     k.addEventListener("click", function(){ openForm(null, k.dataset.datum); });
   });
+  document.querySelectorAll(".route-knop").forEach(function(k){
+    k.addEventListener("click", function(e){ e.stopPropagation(); routeKies(k.dataset.datum, k); });
+  });
+  // Ook het meldingenpaneel bijwerken: "in de planning" kan veranderd zijn.
+  if (itsMeldingen !== null) itsTeken();
+  // Klik op een leeg stuk dag = nieuwe afspraak op dat tijdstip, afgerond op het halve uur.
+  document.querySelectorAll(".dag-cel").forEach(function(cel){
+    cel.addEventListener("click", function(e){
+      if (e.target!==cel && !e.target.classList.contains("uurlijn")) return;
+      var y = e.offsetY, min = UUR_VAN*60 + Math.round(y/UUR_PX*60/30)*30;
+      openForm(null, cel.dataset.datum, tijdStr(Math.max(UUR_VAN*60, Math.min(UUR_TOT*60-30, min))));
+    });
+  });
 }
+
+function blokken(items){
+  var met = items.map(function(a){
+    var van = minuten(a.tijd);
+    if (van===null) return null;
+    var duur = Number(a.duurMin)||60;
+    return { a:a, van:van, tot:van+duur };
+  }).filter(Boolean).sort(function(x,y){ return x.van-y.van || y.tot-x.tot; });
+
+  // Overlappende afspraken over kolommetjes verdelen (greedy, zoals Outlook).
+  var lanes = [];
+  met.forEach(function(b){
+    var l = 0;
+    while (lanes[l] && lanes[l] > b.van) l++;
+    lanes[l] = b.tot; b.lane = l;
+  });
+  met.forEach(function(b){
+    var n = 1;
+    met.forEach(function(o){ if (o!==b && o.van<b.tot && o.tot>b.van) n = Math.max(n, o.lane+1, b.lane+1); });
+    b.breed = Math.max(n, b.lane+1);
+  });
+
+  return met.map(function(b){
+    var a = b.a, c = cat(a);
+    var top = (b.van-UUR_VAN*60)/60*UUR_PX;
+    var hoog = Math.max(24, (b.tot-b.van)/60*UUR_PX-2);
+    var w = 100/b.breed, links = b.lane*w;
+    var door = a.door ? '<div class="d">door '+esc(voornaam(a.door))+'</div>' : "";
+    var sub = [a.plaats, a.wat].filter(Boolean).join(" · ");
+    return '<div class="blok'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="top:'+top+'px;height:'+hoog+'px;'+
+      'left:calc('+links+'% + 2px);width:calc('+w+'% - 5px);background:'+c.zacht+';border-left-color:'+c.kleur+';z-index:'+(2+b.lane)+'">'+
+      '<div class="t">'+esc(a.tijd)+(a.duurMin?'-'+tijdStr(b.tot):'')+'</div>'+
+      '<div class="k">'+esc(a.klant||c.naam)+'</div>'+
+      (hoog>50&&sub?'<div class="s">'+esc(sub)+'</div>':"")+
+      (hoog>66&&a.wie?'<div class="s">👤 '+esc(a.wie)+'</div>':"")+
+      (hoog>82?door:"")+'</div>';
+  }).join("");
+}
+
 function kaartje(a){
+  var c = cat(a);
   var sub = [a.plaats, a.wat].filter(Boolean).map(esc).join(" · ");
-  var wie = a.wie ? '<div class="sub">👤 '+esc(a.wie)+'</div>' : "";
-  return '<div class="afs '+(a.soort==="service"?"service":"levering")+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'">'+
-    '<div class="kop"><span class="tijd">'+esc(a.tijd||"")+'</span>'+
-    '<span class="badge">'+(a.soort==="service"?"service":"levering")+'</span></div>'+
+  var voet = [];
+  if (a.wie) voet.push("👤 "+esc(a.wie));
+  if (a.door) voet.push("gepland door "+esc(voornaam(a.door)));
+  return '<div class="afs'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="border-left-color:'+c.kleur+'">'+
+    '<div class="kop"><span class="tijd">'+esc(a.tijd||"hele dag")+'</span>'+
+    '<span class="badge" style="background:'+c.zacht+';color:'+c.kleur+';filter:brightness(.75)">'+esc(c.naam)+'</span></div>'+
     '<div class="klant">'+esc(a.klant||"(geen naam)")+'</div>'+
-    (sub?'<div class="sub">'+sub+'</div>':"")+wie+'</div>';
+    (sub?'<div class="sub">'+sub+'</div>':"")+
+    (voet.length?'<div class="sub">'+voet.join(" · ")+'</div>':"")+'</div>';
 }
 
 /* ── formulier ── */
-function openForm(id, datumVoorstel){
+function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   var a = id ? afspraken.find(function(x){ return x.id===id; }) : null;
   var nieuw = !a;
-  if (nieuw) a = { id:"p"+Date.now()+Math.random().toString(36).slice(2,6),
-    datum: datumVoorstel || iso(new Date()), tijd:"", soort:"levering",
-    klant:"", telefoon:"", plaats:"", ordernr:"", wat:"", wie:"", klaar:false };
+  if (nieuw) a = Object.assign({ id:"p"+Date.now()+Math.random().toString(36).slice(2,6),
+    datum: datumVoorstel || iso(new Date()), tijd: tijdVoorstel||"", duurMin: 60, soort:"levering",
+    klant:"", telefoon:"", plaats:"", ordernr:"", wat:"", wie:"", klaar:false }, voorvul || {});
 
-  // Namen die al eens gebruikt zijn bij "wie gaat erheen", als suggestie.
   var namen = {};
   afspraken.forEach(function(x){ if(x.wie) namen[x.wie]=1; });
+  var DUUR = [[30,"30 min"],[60,"1 uur"],[90,"1,5 uur"],[120,"2 uur"],[180,"3 uur"],[240,"4 uur"],[480,"hele dag"]];
 
   var laag = document.createElement("div");
   laag.className = "laag";
   laag.innerHTML = '<div class="formkaart">'+
     '<h3>'+(nieuw?"Nieuwe afspraak":"Afspraak wijzigen")+'</h3>'+
-    '<div class="soortkeus">'+
-      '<button type="button" id="fLev" class="levering'+(a.soort!=="service"?" aan":"")+'">🚚 Levering</button>'+
-      '<button type="button" id="fSer" class="service'+(a.soort==="service"?" aan":"")+'">🔧 Service</button></div>'+
+    '<label>Categorie</label><div class="catkeus" id="fCats">'+
+      Object.keys(CATS).map(function(k){ var c=CATS[k];
+        return '<button type="button" data-cat="'+k+'" style="'+(a.soort===k?'border-color:'+c.kleur+';background:'+c.zacht:'')+'">'+
+          '<span class="bol" style="background:'+c.kleur+'"></span>'+esc(c.naam)+'</button>'; }).join("")+'</div>'+
     '<div class="rij"><div><label>Datum</label><input type="date" id="fDatum" value="'+esc(a.datum)+'"></div>'+
-    '<div><label>Tijd</label><input type="time" id="fTijd" value="'+esc(a.tijd)+'"></div></div>'+
-    '<label>Klant</label><input id="fKlant" maxlength="120" value="'+esc(a.klant)+'" placeholder="Naam van de klant">'+
-    '<div class="rij"><div><label>Telefoon</label><input id="fTel" maxlength="30" value="'+esc(a.telefoon)+'"></div>'+
+    '<div><label>Tijd (leeg = hele dag)</label><input type="time" id="fTijd" value="'+esc(a.tijd)+'"></div>'+
+    '<div><label>Duur</label><select id="fDuur">'+DUUR.map(function(d){
+      return '<option value="'+d[0]+'"'+(Number(a.duurMin||60)===d[0]?" selected":"")+'>'+d[1]+'</option>'; }).join("")+'</select></div></div>'+
+    '<label>Klant of onderwerp</label><input id="fKlant" maxlength="120" value="'+esc(a.klant)+'" placeholder="Naam van de klant">'+
+    '<div class="rij2"><div><label>Telefoon</label><input id="fTel" maxlength="30" value="'+esc(a.telefoon)+'"></div>'+
     '<div><label>Ordernummer (mag leeg)</label><input id="fOrder" maxlength="20" value="'+esc(a.ordernr)+'"></div></div>'+
     '<label>Plaats of adres</label><input id="fPlaats" maxlength="160" value="'+esc(a.plaats)+'">'+
     '<label>Wat (model, klus, bijzonderheden)</label><textarea id="fWat" rows="2" maxlength="400">'+esc(a.wat)+'</textarea>'+
@@ -269,6 +509,8 @@ function openForm(id, datumVoorstel){
     '<datalist id="fNamen">'+Object.keys(namen).sort().map(function(n){ return '<option value="'+esc(n)+'">'; }).join("")+'</datalist>'+
     (nieuw?"":'<label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13.5px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fKlaar" style="width:auto"'+(a.klaar?" checked":"")+'> Gedaan</label>')+
+    (nieuw?"":'<div class="gepland-door">Gepland door '+esc(voornaam(a.door||"?"))+
+      (a.gewijzigdDoor&&a.gewijzigdDoor!==a.door?', laatst gewijzigd door '+esc(voornaam(a.gewijzigdDoor)):'')+'</div>')+
     '<div class="melding" id="fMelding"></div>'+
     '<div class="knoppen">'+
       (nieuw?"":'<button type="button" class="weg" id="fWeg">Verwijderen</button>')+
@@ -276,25 +518,32 @@ function openForm(id, datumVoorstel){
       '<button type="button" class="doe" id="fDoe">Bewaren</button></div></div>';
   document.body.appendChild(laag);
 
-  var soort = a.soort==="service" ? "service" : "levering";
-  $("fLev").addEventListener("click", function(){ soort="levering"; $("fLev").classList.add("aan"); $("fSer").classList.remove("aan"); });
-  $("fSer").addEventListener("click", function(){ soort="service"; $("fSer").classList.add("aan"); $("fLev").classList.remove("aan"); });
+  var soort = CATS[a.soort] ? a.soort : "intern";
+  $("fCats").querySelectorAll("button").forEach(function(b){
+    b.addEventListener("click", function(){
+      soort = b.dataset.cat;
+      $("fCats").querySelectorAll("button").forEach(function(x){ x.style.borderColor=""; x.style.background=""; });
+      b.style.borderColor = CATS[soort].kleur; b.style.background = CATS[soort].zacht;
+    });
+  });
   function dicht(){ laag.remove(); }
   $("fTerug").addEventListener("click", dicht);
   laag.addEventListener("click", function(e){ if(e.target===laag) dicht(); });
 
   $("fDoe").addEventListener("click", async function(){
     var b = {
-      id: a.id, datum: $("fDatum").value, tijd: $("fTijd").value, soort: soort,
+      id: a.id, datum: $("fDatum").value, tijd: $("fTijd").value,
+      duurMin: Number($("fDuur").value)||60, soort: soort,
       klant: $("fKlant").value.trim(), telefoon: $("fTel").value.trim(),
       plaats: $("fPlaats").value.trim(), ordernr: $("fOrder").value.trim(),
       wat: $("fWat").value.trim(), wie: $("fWie").value.trim(),
       klaar: nieuw ? false : $("fKlaar").checked,
+      itsId: a.itsId || null,
       door: nieuw ? ik : (a.door||ik), gewijzigdDoor: ik,
       gemaakt: a.gemaakt || new Date().toISOString(), gewijzigd: new Date().toISOString()
     };
     if (!b.datum){ $("fMelding").textContent = "Kies een datum."; return; }
-    if (!b.klant){ $("fMelding").textContent = "Vul de naam van de klant in."; return; }
+    if (!b.klant){ $("fMelding").textContent = "Vul de naam van de klant of het onderwerp in."; return; }
     this.disabled = true; this.textContent = "Bezig…";
     try{
       await bewaar(function(lijst){
@@ -309,20 +558,153 @@ function openForm(id, datumVoorstel){
   });
 
   if (!nieuw) $("fWeg").addEventListener("click", async function(){
-    if (!confirm("Afspraak van "+a.klant+" op "+a.datum+" verwijderen?")) return;
+    if (!confirm("Afspraak van "+(a.klant||"?")+" op "+a.datum+" verwijderen?")) return;
     this.disabled = true;
     try{
       await bewaar(function(lijst){ return lijst.filter(function(x){ return x.id!==a.id; }); });
-      try{ if(window.fpLog) window.fpLog("afspraak-verwijderd", a.soort+" "+a.datum+" "+a.klant); }catch(e){}
+      try{ if(window.fpLog) window.fpLog("afspraak-verwijderd", a.soort+" "+a.datum+" "+(a.klant||"")); }catch(e){}
       dicht(); teken();
     }catch(e){ $("fMelding").textContent = e.message; this.disabled=false; }
   });
 }
 
-/* ── weeknavigatie ── */
+/* ── servicemeldingen uit Logic4 (ITS) ──
+   De werkvoorraad van de afdeling: alles op status Inplannen of Opnieuw
+   inplannen uit het laatste half jaar. "Inplannen" haalt naam, adres en
+   telefoon van de klant erbij en zet de melding als service-afspraak in de
+   week. De koppeling blijft bewaard (itsId), zodat een melding die al in de
+   planning staat dat ook laat zien. */
+var itsMeldingen = null, itsToon = 30;
+
+function itsGepland(id){
+  return afspraken.some(function(a){ return Number(a.itsId)===Number(id); });
+}
+async function itsLaad(){
+  try{
+    var r = await fetch(W+"/planning/its", { headers:{ "X-Fonteyn-Auth": teamKey() } });
+    var j = await r.json();
+    if (!j.ok) throw new Error(j.error||"ophalen mislukte");
+    itsMeldingen = j.meldingen || [];
+  }catch(e){ itsMeldingen = null;
+    $("itsLijst").innerHTML = '<div class="its-leeg">Meldingen ophalen lukte niet: '+esc(e.message)+'</div>';
+    return;
+  }
+  itsTeken();
+}
+function itsTeken(){
+  if (!Array.isArray(itsMeldingen)) return;
+  var zoek = ($("itsZoek").value||"").toLowerCase();
+  var raak = itsMeldingen.filter(function(m){
+    if (!zoek) return true;
+    return (m.naam+" "+m.plaats+" "+m.groep+" "+m.type+" "+m.omschrijving).toLowerCase().indexOf(zoek)>=0;
+  });
+  var vandaag = iso(new Date());
+  $("itsTitel").textContent = "Servicemeldingen uit Logic4 · "+raak.length+" in te plannen";
+  $("itsLijst").innerHTML = (raak.slice(0, itsToon).map(function(m){
+    var telaat = m.uiterlijk && m.uiterlijk < vandaag;
+    var sub = [m.type, m.groep, "gemeld "+m.gemeld].filter(Boolean).join(" · ")+
+      (m.uiterlijk ? ' · <span class="'+(telaat?"telaat":"")+'">uiterlijk '+esc(m.uiterlijk)+'</span>' : "");
+    var knop = itsGepland(m.id)
+      ? '<span class="alGepland">in de planning ✓</span>'
+      : '<button type="button" data-its="'+m.id+'">Inplannen</button>';
+    return '<div class="its-rij"><div class="mid">'+
+      '<div class="naam">'+esc(m.naam||"(zonder naam)")+' <span class="nr">· melding '+m.id+'</span></div>'+
+      '<div class="sub">'+sub+'</div>'+
+      (m.omschrijving?'<div class="om">'+esc(m.omschrijving.slice(0,160))+(m.omschrijving.length>160?"…":"")+'</div>':"")+
+      '</div>'+knop+'</div>';
+  }).join("") || '<div class="its-leeg">Geen meldingen gevonden.</div>')+
+  (raak.length>itsToon ? '<button type="button" class="its-meer" id="itsMeer">Toon er meer ('+(raak.length-itsToon)+' te gaan)</button>' : "");
+
+  $("itsLijst").querySelectorAll("button[data-its]").forEach(function(k){
+    k.addEventListener("click", function(){ itsInplannen(Number(k.dataset.its), k); });
+  });
+  var meer = $("itsMeer");
+  if (meer) meer.addEventListener("click", function(){ itsToon += 50; itsTeken(); });
+}
+async function itsInplannen(id, knop){
+  var m = itsMeldingen.find(function(x){ return x.id===id; });
+  if (!m) return;
+  knop.disabled = true; knop.textContent = "Bezig…";
+  var klant = null;
+  if (m.debiteur){
+    try{
+      var r = await fetch(W+"/planning/its/klant?debiteur="+m.debiteur, { headers:{ "X-Fonteyn-Auth": teamKey() } });
+      var j = await r.json();
+      if (j.ok) klant = j.klant;
+    }catch(e){}
+  }
+  knop.disabled = false; knop.textContent = "Inplannen";
+  openForm(null, iso(new Date()), "", {
+    soort: "service",
+    klant: (klant && klant.naam) || m.naam || "",
+    telefoon: (klant && klant.telefoon) || "",
+    plaats: (klant && klant.adres) || "",
+    wat: ("Melding "+m.id+" · "+[m.groep, m.omschrijving.slice(0,140)].filter(Boolean).join(" · ")).slice(0,400),
+    itsId: m.id,
+  });
+}
+$("itsKnop").addEventListener("click", function(){
+  var aan = $("itsPaneel").classList.toggle("aan");
+  if (aan && itsMeldingen === null) itsLaad();
+});
+$("itsZoek").addEventListener("input", function(){ itsToon = 30; itsTeken(); });
+
+/* ── route van de dag ──
+   De adressen van een dag in tijdsvolgorde, als route in Google Maps -
+   vertrek en terugkomst bij Fonteyn in Uddel. Heeft een dag zowel
+   bezorgwerk als service, dan kies je eerst wiens route je wilt. */
+var THUIS = "Fonteyn, Uddel";
+function routeStops(dISO, soorten){
+  return afspraken.filter(function(a){
+    return a.datum===dISO && a.plaats && !a.klaar &&
+      (!soorten || soorten.indexOf(a.soort)>=0) && !filterUit[a.soort];
+  }).sort(function(a,b){ return String(a.tijd||"99").localeCompare(String(b.tijd||"99")); })
+    .map(function(a){ return a.plaats; });
+}
+function routeOpen(stops){
+  if (!stops.length) return;
+  var url = "https://www.google.com/maps/dir/" +
+    [THUIS].concat(stops).concat([THUIS]).map(encodeURIComponent).join("/");
+  try{ if(window.fpLog) window.fpLog("route-berekend", stops.length+" adressen"); }catch(e){}
+  window.open(url, "_blank");
+}
+function routeKies(dISO, bijKnop){
+  var lever = routeStops(dISO, ["levering","ophalen"]);
+  var serv  = routeStops(dISO, ["service"]);
+  var alles = routeStops(dISO, null);
+  if (!alles.length) return;
+  if (!lever.length || !serv.length){ routeOpen(alles); return; }
+  var oud = document.querySelector(".route-menu"); if (oud) oud.remove();
+  var menu = document.createElement("div");
+  menu.className = "route-menu";
+  menu.innerHTML =
+    '<button type="button" data-r="lever">🚚 Bezorger ('+lever.length+' adressen)</button>'+
+    '<button type="button" data-r="serv">🔧 Monteur ('+serv.length+' adressen)</button>'+
+    '<button type="button" data-r="alles">Alles in één route ('+alles.length+')</button>';
+  document.body.appendChild(menu);
+  var r = bijKnop.getBoundingClientRect();
+  menu.style.left = Math.min(window.innerWidth-190, r.left) + "px";
+  menu.style.top = (r.bottom + window.scrollY + 4) + "px";
+  menu.querySelectorAll("button").forEach(function(k){
+    k.addEventListener("click", function(){
+      menu.remove();
+      routeOpen(k.dataset.r==="lever" ? lever : k.dataset.r==="serv" ? serv : alles);
+    });
+  });
+  setTimeout(function(){ document.addEventListener("click", function weg(e){
+    if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener("click", weg); }
+  }); }, 0);
+}
+
+/* ── navigatie ── */
 $("vorige").addEventListener("click", function(){ maandag.setDate(maandag.getDate()-7); teken(); });
 $("volgende").addEventListener("click", function(){ maandag.setDate(maandag.getDate()+7); teken(); });
-$("vandaagKnop").addEventListener("click", function(){ maandag = weekStart(new Date()); teken(); });
+$("vandaagKnop").addEventListener("click", function(){ maandag = weekStart(new Date()); teken(); scrollNaarWerkdag(); });
+$("springNaar").addEventListener("change", function(){
+  if (!this.value) return;
+  maandag = weekStart(new Date(this.value+"T12:00:00"));
+  teken();
+});
 $("nieuwKnop").addEventListener("click", function(){ openForm(null, iso(new Date())); });
 $("uitKnop").addEventListener("click", function(){
   localStorage.removeItem("fp.session"); localStorage.removeItem("fp.email");
@@ -330,15 +712,25 @@ $("uitKnop").addEventListener("click", function(){
 });
 $("wie").textContent = ik;
 
+function scrollNaarWerkdag(){
+  // Bij openen rond 08:00 in beeld beginnen, niet om 06:00.
+  var s = $("agendaScroll");
+  if (s) s.scrollTop = Math.max(0, (8-UUR_VAN)*UUR_PX - 10);
+}
+
 /* ── start ── */
 (async function(){
+  tekenLegenda();
   var eerste = await lees();
   if (eerste === null){
-    $("rooster").innerHTML = '<div class="dag" style="grid-column:1/-1"><div class="leeg">De opslag is even niet bereikbaar. Herlaad de pagina om het opnieuw te proberen.</div></div>';
+    $("rooster").innerHTML = '<div style="grid-column:1/-1;padding:30px;color:var(--grijs)">De opslag is even niet bereikbaar. Herlaad de pagina om het opnieuw te proberen.</div>';
     return;
   }
   afspraken = eerste;
   teken();
+  scrollNaarWerkdag();
+  // De nu-lijn elke minuut opnieuw; goedkoop, want teken() is puur lokaal.
+  setInterval(function(){ teken(); }, 60000);
 })();
 </script>
 
