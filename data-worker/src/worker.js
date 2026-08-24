@@ -6325,6 +6325,93 @@ async function urenToevoegen(env, wie, body) {
   return { ok: true, regel };
 }
 
+/* ─── LiveKamer: samen in dezelfde lijst werken ───────────────────────
+   Gerrit (24 aug 2026): "Kun je het niet maken zoals het bij Google
+   Documenten werkt? Dat je letterlijk kunt zien wat ze aan het doen zijn?"
+
+   Eén kamer per onderwerp (nu alleen 'voorraad-notities'). Iedereen die de
+   klanttabs open heeft, hangt er met een WebSocket aan. Berichten:
+
+     in : { soort:"hallo", sleutel, wie }        aanmelden (teamsleutel!)
+     in : { soort:"zet", regelId, veld, waarde } vinkje of notitie gezet
+     in : { soort:"focus"|"blur", regelId }      waar iemand in staat
+     uit: { soort:"welkom", aanwezig:[...] }     na aanmelden
+     uit: { soort:"erbij"|"weg", wie }           iemand komt of gaat
+     uit: dezelfde zet/focus/blur, met wie erbij
+
+   De kamer BEWAART niets: de KV-bucket voorraad-notities blijft de enige
+   waarheid (de tegel schrijft daar gewoon naartoe zoals altijd). De kamer
+   geeft alleen door, direct, aan wie er nu bij zit. Valt hij weg, dan werkt
+   alles nog steeds - alleen weer op de 10-seconden-verversing.
+
+   Aanmelden gaat met de teamsleutel als EERSTE bericht, niet in de URL:
+   URL's belanden in logs, berichten niet. Zonder geldige aanmelding wordt
+   er niets doorgegeven en gaat de verbinding dicht. */
+export class LiveKamer {
+  constructor(state, env) { this.state = state; this.env = env; }
+
+  async fetch(request) {
+    if (request.headers.get("Upgrade") !== "websocket")
+      return new Response("Alleen WebSocket", { status: 426 });
+    const paar = new WebSocketPair();
+    const [klant, server] = Object.values(paar);
+    // Hibernation-API: de kamer mag slapen tussen berichten door; dat houdt
+    // hem ruim binnen het gratis plan.
+    this.state.acceptWebSocket(server);
+    return new Response(null, { status: 101, webSocket: klant });
+  }
+
+  wieAllemaal() {
+    const uit = [];
+    for (const w of this.state.getWebSockets()) {
+      try { const a = w.deserializeAttachment(); if (a && a.wie) uit.push(a.wie); } catch (e) {}
+    }
+    return uit;
+  }
+
+  rondsturen(obj, behalve) {
+    const tekst = JSON.stringify(obj);
+    for (const w of this.state.getWebSockets()) {
+      if (w === behalve) continue;
+      try { const a = w.deserializeAttachment(); if (!a || !a.aangemeld) continue; } catch (e) { continue; }
+      try { w.send(tekst); } catch (e) {}
+    }
+  }
+
+  webSocketMessage(ws, bericht) {
+    let d = null;
+    try { d = JSON.parse(bericht); } catch (e) { return; }
+    let att = null;
+    try { att = ws.deserializeAttachment(); } catch (e) {}
+
+    if (!att || !att.aangemeld) {
+      if (d.soort === "hallo" && this.env.SHARED_SECRET && d.sleutel === this.env.SHARED_SECRET) {
+        const wie = String(d.wie || "onbekend").toLowerCase().slice(0, 80);
+        ws.serializeAttachment({ aangemeld: true, wie });
+        ws.send(JSON.stringify({ soort: "welkom", aanwezig: this.wieAllemaal() }));
+        this.rondsturen({ soort: "erbij", wie }, ws);
+      } else {
+        ws.close(1008, "eerst aanmelden");
+      }
+      return;
+    }
+
+    if (d.soort === "zet" || d.soort === "focus" || d.soort === "blur") {
+      this.rondsturen({
+        soort: d.soort, wie: att.wie,
+        regelId: String(d.regelId || "").slice(0, 120),
+        veld: String(d.veld || "").slice(0, 40),
+        waarde: d.soort === "zet" ? d.waarde : undefined,
+      }, ws);
+    }
+  }
+
+  webSocketClose(ws) {
+    try { const a = ws.deserializeAttachment(); if (a && a.aangemeld) this.rondsturen({ soort: "weg", wie: a.wie }, ws); } catch (e) {}
+  }
+  webSocketError(ws) { this.webSocketClose(ws); }
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -6513,6 +6600,11 @@ export default {
     }
     /* Servicemeldingen (ITS) en klantgegevens voor de planningstegel. Lezen
        met de teamsleutel; er wordt niets in Logic4 geschreven. */
+    // Live-kamer: WebSocket voor samen in dezelfde lijst werken.
+    if (url.pathname.startsWith("/live/")) {
+      const kamer = url.pathname.slice(6).replace(/[^a-z0-9-]/gi, "").slice(0, 40) || "algemeen";
+      return env.LIVE.get(env.LIVE.idFromName(kamer)).fetch(request);
+    }
     if (url.pathname === "/planning/its" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
       return planningIts(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));

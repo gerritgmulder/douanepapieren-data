@@ -19,3 +19,16 @@ binding = "AI"
 # (order-statussen, nieuwe aanbetalingen) verversen. Zie scheduled() in worker.js.
 [triggers]
 crons = ["0 * * * *"]
+
+# De "live kamer" voor samenwerken zoals in Google Documenten: iedereen die
+# een klanttab van Voorraadbeheer open heeft, hangt via een WebSocket aan
+# dezelfde kamer. Vinkjes, notities en wie-waar-zit gaan direct rond in
+# plaats van via de 10-seconden-verversing. Durable Objects zijn sinds 2025
+# ook op het gratis plan beschikbaar (met SQLite-opslag); wij bewaren er
+# niets in - de KV-bucket blijft de waarheid - dus de limieten raken ons niet.
+[durable_objects]
+bindings = [{ name = "LIVE", class_name = "LiveKamer" }]
+
+[[migrations]]
+tag = "live-v1"
+new_sqlite_classes = ["LiveKamer"]

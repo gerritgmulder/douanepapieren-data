@@ -52,8 +52,13 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-24", bestand: "voorraad.html", soort: "nieuw",
+      titel: "Samenwerken zoals in Google Documenten",
+      wat: "In de tabbladen Particulier en Partner zie je nu live wie er nog meer in de lijst zit, en de rij waar een collega in staat krijgt diens kleur en naam. Wat iemand aanvinkt of typt, verschijnt bij jou direct in beeld.",
+    },
+    {
       datum: "2026-08-24", bestand: "voorraad.html", soort: "hersteld",
-      titel: "Vinkjes bleven niet staan, en je ziet elkaar nu live",
+      titel: "Vinkjes bleven niet staan",
       wat: "Wie in Particulier iets op Ingepland zette, zag dat na een herstart weer teruggedraaid - de opslag werd stilletjes geweigerd. Dat is gerepareerd. Bovendien ververst de lijst nu elke tien seconden, dus wat je collega aanvinkt zie je vrijwel meteen, en jullie schrijven elkaars vinkjes niet meer over. Bij Onderweg naar Uddel staat voortaan het referentienummer voorop in plaats van de bootnaam.",
     },
 

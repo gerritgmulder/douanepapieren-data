@@ -1939,8 +1939,118 @@ function zetNotitie(r,veld,waarde){
   n.door=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
   n.ts=new Date().toISOString();
   notitiesVuil.add(k);
+  liveStuur({soort:"zet",regelId:k,veld:veld,waarde:waarde});
   saveNotitiesStraks();
 }
+
+/* ── LIVE: samen in dezelfde lijst, zoals in Google Documenten ─────────
+   Gerrit (24 aug 2026): "dat je letterlijk kunt zien wat ze aan het doen
+   zijn". Een WebSocket naar de live-kamer van de worker. Wat een collega
+   aanvinkt of typt verschijnt direct; de rij waar iemand in staat krijgt
+   diens kleur en naam. De KV-opslag blijft de waarheid: valt de verbinding
+   weg, dan werkt alles gewoon door op de 10-seconden-verversing. */
+let liveWs=null, liveKlaar=false, liveAanwezig=[], liveFocus={}; // wie -> {regelId, veld}
+const LIVE_KLEUREN=["#2563eb","#d97706","#059669","#c026d3","#dc2626","#0891b2"];
+function liveKleur(wie){
+  let h=0; for(let i=0;i<wie.length;i++) h=(h*31+wie.charCodeAt(i))>>>0;
+  return LIVE_KLEUREN[h%LIVE_KLEUREN.length];
+}
+function liveNaam(wie){
+  const l=String(wie||"").split("@")[0].replace(/^fonteyn\./i,"");
+  return l.charAt(0).toUpperCase()+l.slice(1);
+}
+function liveStuur(obj){
+  if(liveKlaar&&liveWs&&liveWs.readyState===1){ try{ liveWs.send(JSON.stringify(obj)); }catch(e){} }
+}
+function liveStart(){
+  if(!DATA_STORE_AUTH) return;
+  try{ liveWs=new WebSocket("wss://fonteyn-data-store.g-mulder.workers.dev/live/voorraad-notities"); }
+  catch(e){ return; }
+  liveWs.addEventListener("open",function(){
+    liveWs.send(JSON.stringify({soort:"hallo",sleutel:DATA_STORE_AUTH,
+      wie:(localStorage.getItem(EMAIL_KEY)||"onbekend").toLowerCase()}));
+  });
+  liveWs.addEventListener("message",function(ev){
+    let d=null; try{ d=JSON.parse(ev.data); }catch(e){ return; }
+    if(d.soort==="welkom"){ liveKlaar=true; liveAanwezig=d.aanwezig||[]; liveToonAanwezig(); return; }
+    if(d.soort==="erbij"){ if(liveAanwezig.indexOf(d.wie)<0) liveAanwezig.push(d.wie); liveToonAanwezig(); return; }
+    if(d.soort==="weg"){ liveAanwezig=liveAanwezig.filter(w=>w!==d.wie); delete liveFocus[d.wie]; liveToonAanwezig(); liveVerfFocus(); return; }
+    if(d.soort==="focus"){ liveFocus[d.wie]={regelId:d.regelId,veld:d.veld}; liveVerfFocus(); return; }
+    if(d.soort==="blur"){ delete liveFocus[d.wie]; liveVerfFocus(); return; }
+    if(d.soort==="zet"&&d.regelId){
+      const n=notities[d.regelId]||(notities[d.regelId]={});
+      n[d.veld]=d.waarde; n.door=d.wie; n.ts=new Date().toISOString();
+      // Niet als eigen wijziging markeren: dit is al bewaard door de ander.
+      liveRerenderStraks();
+    }
+  });
+  liveWs.addEventListener("close",function(){
+    liveKlaar=false; liveAanwezig=[]; liveFocus={}; liveToonAanwezig();
+    setTimeout(liveStart,5000+Math.random()*5000);   // rustig opnieuw proberen
+  });
+  liveWs.addEventListener("error",function(){ try{ liveWs.close(); }catch(e){} });
+}
+let liveRerenderTimer=null;
+function liveRerenderStraks(){
+  clearTimeout(liveRerenderTimer);
+  liveRerenderTimer=setTimeout(function(){
+    const act=document.activeElement;
+    const typt=act&&(act.tagName==="INPUT"||act.tagName==="TEXTAREA")&&act.type!=="checkbox";
+    if(typt){ liveRerenderStraks(); return; }   // wachten tot het typen stopt
+    renderSoortTabs();
+  },250);
+}
+function liveToonAanwezig(){
+  let el=document.getElementById("liveAanwezig");
+  if(!el){
+    const note=document.getElementById("adviseurNote");
+    el=document.createElement("div"); el.id="liveAanwezig";
+    el.style.cssText="display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin:8px 0 2px;font-size:12px";
+    if(note&&note.parentNode) note.parentNode.insertBefore(el,note.nextSibling);
+    else { const m=document.querySelector("main"); if(m) m.insertBefore(el,m.firstChild); }
+  }
+  const ik=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  const anderen=liveAanwezig.filter(w=>w!==ik);
+  el.innerHTML=anderen.length
+    ? "<span style='color:var(--muted)'>Nu ook in deze lijst:</span>"+anderen.map(w=>
+        "<span style='display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid var(--border);border-radius:999px;padding:3px 10px'>"+
+        "<span style='width:8px;height:8px;border-radius:50%;background:"+liveKleur(w)+"'></span>"+esc(liveNaam(w))+"</span>").join("")
+    : "";
+}
+/* De rij waar een collega in staat diens kleur en naam geven. */
+function liveVerfFocus(){
+  document.querySelectorAll("tr[data-live-focus]").forEach(function(tr){
+    tr.style.outline=""; tr.removeAttribute("data-live-focus");
+    const lbl=tr.querySelector(".liveLabel"); if(lbl) lbl.remove();
+  });
+  Object.keys(liveFocus).forEach(function(wie){
+    const f=liveFocus[wie]; if(!f||!f.regelId) return;
+    const inp=document.querySelector(".notVink[data-id='"+CSS.escape(f.regelId)+"'],.notOpm[data-id='"+CSS.escape(f.regelId)+"']");
+    const tr=inp&&inp.closest("tr"); if(!tr) return;
+    tr.style.outline="2px solid "+liveKleur(wie);
+    tr.setAttribute("data-live-focus","1");
+    const cel=tr.querySelector("td");
+    if(cel&&!tr.querySelector(".liveLabel")){
+      const lbl=document.createElement("span");
+      lbl.className="liveLabel";
+      lbl.style.cssText="display:inline-block;margin-left:6px;font-size:10px;font-weight:700;color:#fff;background:"+liveKleur(wie)+";border-radius:4px;padding:1px 6px;vertical-align:1px";
+      lbl.textContent="✏️ "+liveNaam(wie);
+      cel.appendChild(lbl);
+    }
+  });
+}
+// Waar sta ik? Doorgeven zodra ik een vinkje of notitieveld inga of verlaat.
+document.addEventListener("focusin",function(e){
+  const t=e.target;
+  if(t&&t.dataset&&t.dataset.id&&(t.classList.contains("notVink")||t.classList.contains("notOpm")||t.classList.contains("notSchip")))
+    liveStuur({soort:"focus",regelId:t.dataset.id,veld:t.dataset.veld||"opmerking"});
+});
+document.addEventListener("focusout",function(e){
+  const t=e.target;
+  if(t&&t.dataset&&t.dataset.id&&(t.classList.contains("notVink")||t.classList.contains("notOpm")||t.classList.contains("notSchip")))
+    liveStuur({soort:"blur",regelId:t.dataset.id});
+});
+liveStart();
 // Welke regels horen bij welk tabblad
 function resvVoorSoort(soort){
   const alle=resvAlleRegels();
@@ -2186,6 +2296,7 @@ function renderSoortTabs(){
   renderResvSoort("partner","ptnSearch","ptnList","ptnCount");
   renderResvSoort("particulier","partSearch","partGeplandLijst","partGeplandTel","gepland");
   renderResvSoort("partner","ptnSearch","ptnGeplandLijst","ptnGeplandTel","gepland");
+  try{ liveVerfFocus(); }catch(e){}
   renderAdviseurTabs();
   renderParticulierBlok();
   renderPartnerContainers();
