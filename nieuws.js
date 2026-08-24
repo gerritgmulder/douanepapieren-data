@@ -51,6 +51,12 @@
 
   var NIEUWS = [
 
+    {
+      datum: "2026-08-24", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Vinkjes bleven niet staan, en je ziet elkaar nu live",
+      wat: "Wie in Particulier iets op Ingepland zette, zag dat na een herstart weer teruggedraaid - de opslag werd stilletjes geweigerd. Dat is gerepareerd. Bovendien ververst de lijst nu elke tien seconden, dus wat je collega aanvinkt zie je vrijwel meteen, en jullie schrijven elkaars vinkjes niet meer over. Bij Onderweg naar Uddel staat voortaan het referentienummer voorop in plaats van de bootnaam.",
+    },
+
     /* ── 22 augustus 2026 ─────────────────────────────────────────────── */
     {
       datum: "2026-08-24", bestand: "planning.html", soort: "nieuw",

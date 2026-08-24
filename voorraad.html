@@ -456,7 +456,7 @@
         <span id="ovShipCount" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <div class="tablewrap"><table class="grid">
-        <thead><tr><th>Schip / reis</th><th>Trackingreferentie</th><th>ETA</th><th>Spa's aan boord</th></tr></thead>
+        <thead><tr><th>Referentie</th><th>Schip / reis</th><th>ETA</th><th>Spa's aan boord</th></tr></thead>
         <tbody id="ovShips"></tbody>
       </table></div>
     </div>
@@ -978,8 +978,14 @@ function alleenKlantnotities(){
   window.fetch=function(url,opts){
     const methode=String((opts&&opts.method)||"GET").toUpperCase();
     const adres=String((url&&url.url)||url||"").split("?")[0];
+    /* LET OP: /data/voorraad-notities stond hier NIET in, terwijl dat juist
+       de bak is waar de vinkjes (Afroep/Inplannen/Gepland) en notities heen
+       gaan. Gevolg (video Spa planning, 24 aug 2026): aanvinken leek te
+       werken, maar elke opslag kreeg stilletjes een 403 - na een herstart
+       was alles weer terug. De $ aan het eind van /data/voorraad$ deed
+       precies wat hij moest doen, alleen op de verkeerde lijst. */
     const MAG=[/\/api\/logic4-call$/,/\/api\/health$/,/\/api\/me$/,/\/api\/logout$/,
-               /\/track$/,/\/log$/,/\/data\/voorraad$/];
+               /\/track$/,/\/log$/,/\/data\/voorraad$/,/\/data\/voorraad-notities$/];
     if(methode!=="GET"&&!MAG.some(re=>re.test(adres))){
       try{ setStatus("bad","Hier kun je alleen de vinkjes en notities aanpassen. De rest doen Chantal, Arno en Manon."); }catch(e){}
       return Promise.resolve(new Response('{"ok":false,"error":"alleen klanttabs"}',
@@ -1715,9 +1721,12 @@ function renderOvShips(){
     // verschuiven de indexen en zou de verkeerde container openklappen.
     const key=String(s.ref||s.trackRef||s.file||s.vessel||"");
     const open=!!ovShipOpen[key] || (!!q && ships.length<=3);
+    /* De referentie voorop en vet - Chantal (video, 24 aug 2026): "geen
+       bootnaam, ik wil daar het referentienummer hebben staan". De bootnaam
+       blijft ernaast staan voor wie ermee belt. */
     html+="<tr class='ovShipRow' data-k='"+esc(key)+"' style='cursor:pointer'>"+
-      "<td>"+(open?"▾ ":"▸ ")+"<b>"+esc(s.vessel||"—")+"</b></td>"+
-      "<td style='font-size:12px'>"+esc(ref||"—")+"</td>"+
+      "<td>"+(open?"▾ ":"▸ ")+"<b>"+esc(ref||"—")+"</b></td>"+
+      "<td style='font-size:12px;color:var(--muted)'>"+esc(s.vessel||"—")+"</td>"+
       "<td>"+(s.eta?esc(datumNL(s.eta)):"<span style='color:var(--warn)'>ETA nog invullen</span>")+"</td>"+
       "<td>"+n+" spa's</td></tr>";
     if(open){
@@ -1868,18 +1877,57 @@ async function loadNotities(){
 }
 // Niet bij élke toetsaanslag opslaan; even wachten tot het typen stopt.
 let notitieTimer=null;
+// Welke regels IK heb aangepast sinds de laatste geslaagde opslag. Bewaren
+// leest eerst de verse stand en legt alleen déze regels eroverheen - tot
+// 24 aug 2026 ging de hele lijst uit het eigen geheugen over de opslag heen,
+// en dan gomt de één de vinkjes van de ander uit (video Spa planning).
+let notitiesVuil=new Set();
 function saveNotitiesStraks(){
   clearTimeout(notitieTimer);
   notitieTimer=setTimeout(function(){ saveNotities(); },700);
 }
 async function saveNotities(){
+  const mijnVuil=Array.from(notitiesVuil);
   try{
+    const rv=await fetch(NOTITIE_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
+    if(rv.ok){
+      const j=await rv.json();
+      const vers=(j&&j.regels)||{};
+      // Vers van de server, met alleen mijn eigen wijzigingen eroverheen.
+      mijnVuil.forEach(function(k){ if(notities[k]) vers[k]=notities[k]; else delete vers[k]; });
+      notities=vers;
+    }
     const r=await fetch(NOTITIE_URL,{method:"PUT",
       headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
       body:JSON.stringify({regels:notities,updated:new Date().toISOString()})});
     if(!r.ok) throw new Error("HTTP "+r.status);
-  }catch(e){ setStatus("bad","Opslaan aantekening faalde: "+e.message); }
+    mijnVuil.forEach(function(k){ notitiesVuil.delete(k); });
+  }catch(e){ setStatus("bad","Opslaan aantekening faalde: "+e.message+" — probeer het vinkje zo nog eens."); }
 }
+
+/* Live meekijken met elkaar. Spa planning (video, 24 aug 2026): "op het
+   moment dat Gerwin iets aanpast, moet ik het gelijk zichtbaar hebben."
+   Elke 10 seconden de verse stand ophalen; eigen onbewaarde regels blijven
+   staan. Hertekenen alleen als er echt iets veranderde en er nergens een
+   veld met de focus staat, anders trek je iemand het typen uit handen. */
+setInterval(async function(){
+  if(document.hidden) return;
+  try{
+    const r=await fetch(NOTITIE_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
+    if(!r.ok) return;
+    const j=await r.json();
+    const vers=(j&&j.regels)||{};
+    notitiesVuil.forEach(function(k){ if(notities[k]) vers[k]=notities[k]; else delete vers[k]; });
+    if(JSON.stringify(vers)===JSON.stringify(notities)) return;
+    notities=vers;
+    const act=document.activeElement;
+    const typt=act&&(act.tagName==="INPUT"||act.tagName==="TEXTAREA")&&act.type!=="checkbox";
+    if(!typt) renderSoortTabs();
+  }catch(e){}
+},10000);
+document.addEventListener("visibilitychange",function(){
+  if(!document.hidden){ loadNotities().then(function(){ renderSoortTabs(); }); }
+});
 function notitie(r){
   const k=r.regelId; if(!k) return {};
   return notities[k]||(notities[k]={});
@@ -1890,6 +1938,7 @@ function zetNotitie(r,veld,waarde){
   n[veld]=waarde;
   n.door=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
   n.ts=new Date().toISOString();
+  notitiesVuil.add(k);
   saveNotitiesStraks();
 }
 // Welke regels horen bij welk tabblad
@@ -2368,20 +2417,38 @@ function renderPartnerContainers(){
    de hallen houden per artikelcode bij, niet per kleur. */
 let stockData=null, stockOpen={};
 
+/* De lader zegt voortaan wat er misgaat in plaats van eeuwig "Bezig met
+   laden" (video Chantal, 24 aug 2026: het tabblad stond een kwartier op de
+   laadmelding). Elke aanroep krijgt 20 seconden; daarna komt er een melding
+   met een knop om het opnieuw te proberen, en gaat er een regel naar het
+   activiteitenlogboek zodat we kunnen zien op welke computer dit gebeurt. */
 async function laadStock(){
   const box=document.getElementById("stockLijst");
   if(!box) return;
   if(stockData){ renderStock(); return; }
   box.innerHTML="<p class='lead'>Bezig met laden…</p>";
+  const metTijd=(url)=>{
+    const stop=new AbortController();
+    const t=setTimeout(()=>stop.abort(),20000);
+    return fetch(url,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH},signal:stop.signal})
+      .then(r=>{ clearTimeout(t);
+        if(!r.ok) throw new Error("HTTP "+r.status+(r.status===401?" — de teamsleutel ontbreekt op deze computer; log opnieuw in via het dashboard":""));
+        return r.json(); });
+  };
   try{
     const [hal,cat]=await Promise.all([
-      fetch(HALLEN_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()),
-      fetch(CATALOG_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.ok?r.json():{models:{}}).catch(()=>({models:{}}))
+      metTijd(HALLEN_URL_OV),
+      metTijd(CATALOG_URL_OV).catch(()=>({models:{}}))
     ]);
     stockData={hal:hal||{},codeKleur:bouwCodeKleur(cat)};
     renderStock();
   }catch(e){
-    box.innerHTML="<div class='status-msg bad'>Voorraad laden faalde: "+esc(e.message)+"</div>";
+    const reden=e.name==="AbortError"?"geen antwoord binnen 20 seconden (netwerk?)":e.message;
+    try{ if(window.fpLog) window.fpLog("stock-laden-faalde",reden); }catch(x){}
+    box.innerHTML="<div class='status-msg bad'>Voorraad laden faalde: "+esc(reden)+
+      " <button type='button' id='stockRetry' style='margin-left:10px;padding:6px 14px;font:inherit;cursor:pointer;border:1px solid var(--border);border-radius:7px;background:#fff'>Opnieuw proberen</button></div>";
+    const k=document.getElementById("stockRetry");
+    if(k) k.addEventListener("click",function(){ stockData=null; laadStock(); });
   }
 }
 

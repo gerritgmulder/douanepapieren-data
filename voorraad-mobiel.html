@@ -393,7 +393,8 @@ function schepenVoorLijst(){
 }
 
 function schipKaart(s, i){
-  var kop = s.vessel || s.ref || "(zonder naam)";
+  // Referentie voorop; de bootnaam zegt niemand iets (Chantal, 24 aug 2026).
+  var kop = s.ref || s.vessel || "(zonder referentie)";
   var wanneer = s.binnenGemeld
     ? "binnen gemeld op " + nlDatum(s.binnenGemeld.op) +
       (s.binnenGemeld.door ? " door " + esc(String(s.binnenGemeld.door).split("@")[0]) : "")
