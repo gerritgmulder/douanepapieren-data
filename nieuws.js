@@ -64,7 +64,7 @@
     {
       datum: "2026-08-24", bestand: "voorraad.html", soort: "hersteld",
       titel: "Vinkjes bleven niet staan",
-      wat: "Wie in Particulier iets op Ingepland zette, zag dat na een herstart weer teruggedraaid - de opslag werd stilletjes geweigerd. Dat is gerepareerd. Bovendien ververst de lijst nu elke tien seconden, dus wat je collega aanvinkt zie je vrijwel meteen, en jullie schrijven elkaars vinkjes niet meer over. Bij Onderweg naar Uddel staat voortaan het referentienummer voorop in plaats van de bootnaam.",
+      wat: "Wie in Particulier iets op Ingepland zette, zag dat na een herstart weer teruggedraaid - de opslag werd stilletjes geweigerd. Dat is gerepareerd. Bovendien ververst de lijst nu elke tien seconden, dus wat je collega aanvinkt zie je vrijwel meteen, en jullie schrijven elkaars vinkjes niet meer over. Bij Schepen en ontvangst staat overal het referentienummer voorop in plaats van de bootnaam: in Onderweg naar Uddel, op de zendingkaarten en op de tabbladen. De bootnaam blijft er klein bij staan.",
     },
 
     /* ── 22 augustus 2026 ─────────────────────────────────────────────── */

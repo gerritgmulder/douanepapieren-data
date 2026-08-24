@@ -27,6 +27,16 @@
   var actief = null;   // welk schip staat open (ref); leeg = het eerstvolgende
   var zoek = "";       // zoekterm in "Onderweg naar Uddel"; blijft staan bij hertekenen
 
+  /* De naam waarmee een zending wordt aangeduid. Chantal (video, 24 aug
+     2026): "geen bootnaam, ik wil daar het referentienummer hebben staan -
+     wat in het overzicht staat, wil ik ook bij Schepen en ontvangst."
+     Dus dezelfde regel als het overzicht: eerst de korte referentie
+     (3332-7&3342-3), anders de volledige, en pas als die er allebei niet
+     zijn de bootnaam. De bootnaam blijft als klein regeltje zichtbaar. */
+  function zendingNaam(s) {
+    return s.trackRef || s.ref || s.vessel || "(zonder referentie)";
+  }
+
   function el(tag, klas, tekst) {
     var e = document.createElement(tag);
     if (klas) e.className = klas;
@@ -142,7 +152,7 @@
         t.type = "button";
         var orders = (s.jazziOrders && s.jazziOrders.length) ? s.jazziOrders.join(" + ") : "geen order";
         t.appendChild(el("span", "so-tab-order", orders));
-        t.appendChild(el("span", "so-tab-ref", s.ref || ""));
+        t.appendChild(el("span", "so-tab-ref", zendingNaam(s)));
         var dg = dagenTot(s.eta);
         t.appendChild(el("span", "so-tab-eta",
           s.eta ? (nlDatum(s.eta) + (dg !== null && dg > 0 ? "  ·  " + dg + "d" : "")) : "geen aankomst"));
@@ -378,14 +388,15 @@
 
     varend.forEach(function (s) {
       var r = el("div", "so-onderweg-rij");
-      r.dataset.zoek = [s.vessel, s.ref, (s.jazziOrders || []).join(" ")]
+      r.dataset.zoek = [s.vessel, s.ref, s.trackRef, (s.jazziOrders || []).join(" ")]
         .filter(Boolean).join(" ").toLowerCase();
 
       var links = el("div", "so-onderweg-wie");
-      links.appendChild(el("strong", null, s.vessel || s.ref));
+      links.appendChild(el("strong", null, zendingNaam(s)));
       var dg = dagenTot(s.eta);
       links.appendChild(el("span", "so-meta klein",
-        nlDatum(s.eta) + (dg === null ? "  ·  aankomst onbekend" : "  ·  over " + dg + " dagen")));
+        nlDatum(s.eta) + (dg === null ? "  ·  aankomst onbekend" : "  ·  over " + dg + " dagen") +
+        (s.vessel && s.vessel !== zendingNaam(s) ? "  ·  " + s.vessel : "")));
       if (s.jazziOrders && s.jazziOrders.length)
         links.appendChild(el("span", "so-meta klein", "order " + s.jazziOrders.join(" + ")));
       r.appendChild(links);
@@ -497,7 +508,7 @@
     var rij = el("div", "so-rij");
     var links = el("div", "so-links");
     var t = el("div", "so-titel");
-    t.appendChild(el("strong", null, s.vessel || s.ref));
+    t.appendChild(el("strong", null, zendingNaam(s)));
     if (s.jazziOrders && s.jazziOrders.length)
       t.appendChild(el("span", "so-badge", "Jazzi-order " + s.jazziOrders.join(" + ")));
     links.appendChild(t);
@@ -508,7 +519,8 @@
           (s.binnenGemeld.door ? " door " + String(s.binnenGemeld.door).split("@")[0] : "")
         : (dagen === null ? "" : (binnen ? "  ·  zou binnen moeten zijn" : "  ·  over " + dagen + " dagen"))) +
       "  ·  " + s.spas + " spa's" + (s.containers ? ("  ·  " + s.containers + " containers") : "")));
-    links.appendChild(el("div", "so-meta klein", s.ref));
+    links.appendChild(el("div", "so-meta klein",
+      [s.vessel, s.ref !== zendingNaam(s) ? s.ref : ""].filter(Boolean).join("  ·  ")));
     // Wat de Bill of Lading erover zegt. Handig bij de douane en bij het
     // uitzoeken welke container waar is.
     if (s.zegel || s.blNo) {
@@ -847,7 +859,7 @@
   }
 
   async function doeEta(s, knop) {
-    var datum = await vraagTekst("Verwachte aankomst zetten op de inkooporderregels van " + (s.vessel || s.ref) +
+    var datum = await vraagTekst("Verwachte aankomst zetten op de inkooporderregels van " + zendingNaam(s) +
       " — datum (jjjj-mm-dd):", String(s.eta || "").slice(0, 10));
     if (!datum) return;
     knop.disabled = true; knop.textContent = "bezig…";
@@ -865,7 +877,7 @@
     var los = s.regels.filter(function (r) { return !r.buyOrderRowId; });
     var mee = s.regels.filter(function (r) { return r.buyOrderRowId; })
       .reduce(function (t, r) { return t + r.aantal; }, 0);
-    if (!confirm("Ontvangst boeken voor " + (s.vessel || s.ref) + "?\n\n" +
+    if (!confirm("Ontvangst boeken voor " + zendingNaam(s) + "?\n\n" +
       mee + " spa's worden als ontvangen geboekt in Logic4. Dit verhoogt de voorraad." +
       (los.length ? ("\n\n" + los.length + " regel(s) zijn niet gekoppeld en gaan NIET mee.") : "") +
       "\n\nDoe dit alleen als de container fysiek in Uddel staat.")) return;
