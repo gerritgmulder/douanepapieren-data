@@ -72,6 +72,12 @@
       wat: "Wie in Particulier iets op Ingepland zette, zag dat na een herstart weer teruggedraaid - de opslag werd stilletjes geweigerd. Dat is gerepareerd. Bovendien ververst de lijst nu elke tien seconden, dus wat je collega aanvinkt zie je vrijwel meteen, en jullie schrijven elkaars vinkjes niet meer over. Bij Schepen en ontvangst staat overal het referentienummer voorop in plaats van de bootnaam: in Onderweg naar Uddel, op de zendingkaarten en op de tabbladen. De bootnaam blijft er klein bij staan.",
     },
 
+    {
+      datum: "2026-08-25", bestand: "voorraad.html", soort: "beter",
+      titel: "Klantnaam bij de spa, en de transporteur erbij",
+      wat: "Zet de fabriek onder de SKT-code op de invoice een klantnaam met ordernummer (zoals Veldkamp 3507548), dan staat die nu in paars bij de spa - in Onderweg naar Uddel en in de ladingtabel, en je kunt er ook op zoeken. En bij Binnengekomen spa's staat een nieuwe kolom Transport, automatisch gevuld met wat er in Logic4 op de order bij transporteur staat: FBS, Transport distributie, Afhalen.",
+    },
+
     /* ── 22 augustus 2026 ─────────────────────────────────────────────── */
     {
       datum: "2026-08-24", bestand: "planning.html", soort: "nieuw",

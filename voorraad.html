@@ -213,6 +213,8 @@
 .so-onderweg-wie{display:flex;flex-direction:column;gap:1px;min-width:190px;flex:0 0 auto}
 .so-onderweg-wie strong{font-size:13.5px}
 .so-onderweg-inhoud{display:flex;flex-wrap:wrap;gap:5px;flex:1 1 320px}
+.so-inhoud-klant{display:block;font-size:10.5px;color:#7c3aed;font-weight:600;margin-top:2px}
+.so-klantlabel{font-size:11px;color:#7c3aed;font-weight:600;margin-top:2px}
 .so-inhoud-pil{background:#f3f6f1;border:1px solid #e2e8dd;border-radius:14px;padding:2px 10px;font-size:12px;white-space:nowrap}
 .so-inhoud-pil b{color:var(--fonteyn-green,#144734)}
 /* Wat er op de factuur staat maar nog aan geen artikel hangt: sauna's,
@@ -2384,15 +2386,21 @@ function renderParticulierBlok(){
         ||String(a.ordernr).localeCompare(String(b.ordernr));
     });
     const uit=!MAG_WIJZIGEN?" disabled":"";
+    /* Kolom Transport tussen Order en Spa. Chantal (video, 25 aug 2026):
+       "datgene wat bij transporteur staat ingevuld in Logic, moet hier
+       automatisch komen - FBS, transportdistributie, afhaal." De waarde komt
+       met de uur-sync van de reserveringen mee uit Logic4. */
     lijst.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
-      "<th>Order</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Klant</th><th>Datum</th>"+
+      "<th>Order</th><th>Transport</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Klant</th><th>Datum</th>"+
       "<th>Opmerkingen</th><th>Afroep</th><th>Inplannen</th><th>Gepland</th></tr></thead><tbody>"+
       rijen.map(function(r){
         const n=notitie(r), id=esc(r.regelId||"");
         const stijl=n.inplannen?"background:#fef9c3"+(n.afroep?";border-left:4px solid #7c3aed":"")
                                :"background:#f3e8ff;border-left:4px solid #7c3aed";
         return "<tr style='"+stijl+"'>"+
-          "<td>"+esc(r.ordernr)+"</td><td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur)+"</td>"+
+          "<td>"+esc(r.ordernr)+"</td>"+
+          "<td style='font-size:12px'>"+(r.transport?esc(r.transport):"<span style='color:var(--muted)'>—</span>")+"</td>"+
+          "<td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur)+"</td>"+
           "<td>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
           "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
           "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' readonly title='"+esc(n.opmerking||"Klik om een notitie te schrijven")+"' style='width:110px;font-size:12px;padding:4px 7px;cursor:pointer;text-overflow:ellipsis'"+uit+"></td>"+

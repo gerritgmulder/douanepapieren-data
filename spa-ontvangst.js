@@ -219,6 +219,22 @@
     return model || String(x.artikelcode || "") || "onbekend";
   }
 
+  /* De klant-bijzonderheden van dit schip die bij een model+kleur horen:
+     "Veldkamp · 3507548". De fabriek zet ze onder de SKT-code op de invoice;
+     Chantal wil ze bij de spa-regel geschreven zien (video, 25 aug 2026). */
+  function klantLabels(s, model, kleur) {
+    var m = String(model || "").trim().toLowerCase();
+    var k = String(kleur || "").trim().toLowerCase();
+    return (s.klanten || []).filter(function (x) {
+      if (String(x.model || "").trim().toLowerCase() !== m) return false;
+      var xk = String(x.kleur || "").trim().toLowerCase();
+      return !xk || !k || xk === k;
+    }).map(function (x) {
+      return [x.klant, x.ordernr].filter(Boolean).join(" · ") +
+             (x.notities ? " (" + x.notities + ")" : "");
+    });
+  }
+
   function kleurNet(k) {
     var t = String(k == null ? "" : k).trim();
     if (!t || t === "(geen kleur)") return "";
@@ -425,11 +441,17 @@
         });
       lijst.forEach(function (x) {
         var p = el("span", "so-inhoud-pil");
-        p.dataset.zoek = (x.model + " " + x.kleur).toLowerCase();
+        var labels = klantLabels(s, x.model, x.kleur);
+        p.dataset.zoek = (x.model + " " + x.kleur + " " + labels.join(" ")).toLowerCase();
         p.dataset.aantal = String(x.aantal);
         p.appendChild(el("b", null, String(x.aantal)));
         p.appendChild(document.createTextNode(" " + x.model));
         if (x.kleur) p.appendChild(el("span", "so-inhoud-kleur", x.kleur));
+        // De klant en het ordernummer van de fabriek erbij, zodat meteen te
+        // zien is dat deze spa al een eigenaar heeft.
+        labels.forEach(function (t) {
+          p.appendChild(el("span", "so-inhoud-klant", "👤 " + t));
+        });
         inhoud.appendChild(p);
       });
 
@@ -822,7 +844,11 @@
     var tbody = el("tbody");
     s.regels.forEach(function (r) {
       var tr = el("tr", r.buyOrderRowId ? (r.viaModel ? "opmodel" : "") : "los");
-      tr.appendChild(el("td", null, r.model));
+      var tdModel = el("td", null, r.model);
+      klantLabels(s, r.model, r.kleur).forEach(function (t) {
+        tdModel.appendChild(el("div", "so-klantlabel", "👤 " + t));
+      });
+      tr.appendChild(tdModel);
       tr.appendChild(el("td", null, r.kleur || "—"));
       tr.appendChild(el("td", "num", String(r.aantal)));
       var td = el("td");

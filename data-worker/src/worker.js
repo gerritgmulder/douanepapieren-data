@@ -2706,6 +2706,17 @@ async function spaOntvangstVoorstel(env) {
          Alleen die tweede hoort hier. Op "omschrijving of model" filteren
          leverde bij de echte gegevens honderdzeventien regels op in plaats van
          drieëntwintig - elke spa er nog een keer bij. */
+      /* De klant-bijzonderheden van de fabriek: onder de SKT-code staat dan
+         "Veldkamp 3507548" - die spa is voor een specifieke klant. Chantal
+         (video, 25 aug 2026): "die moet hij lezen en zichtbaar maken - bij
+         de Renew Solid White wil ik het ordernummer en de naam erbij."
+         De xls-lezer vangt ze al (ciBijzonderheid); hier gaan ze mee naar
+         het scherm zodat ze bij de spa-regel geschreven kunnen worden. */
+      klanten: (s.specials || [])
+        .filter(x => x && x.model && (x.ordernr || x.klant))
+        .map(x => ({ model: String(x.model), kleur: String(x.kleur || "").trim() || null,
+                     aantal: Number(x.qty) || 1, klant: x.klant || null,
+                     ordernr: x.ordernr || null, notities: x.notities || null })),
       ongekoppeld: (s.specials || [])
         .filter(x => x && !x.ordernr && !x.klant && x.omschrijving && !x.model)
         .map(x => {
@@ -2909,6 +2920,10 @@ async function dpRefreshReservations(env) {
             // vinkjes eraan blijven hangen als de lijst opnieuw wordt opgehaald.
             regelId: o.Id + "|" + gr.model + "|" + (gr.kleur || "") + "|" + gr.wh,
             datum: String(o.CreationDate).slice(0, 10), statusId: st, status: statusName[st] || String(st),
+            // De transporteur van de order ("FBS", "Transport distributie",
+            // "Afhalen"). Chantal (video, 25 aug 2026) wil die zien bij de
+            // binnengekomen spa's, zodat ze weet hoe hij weggaat.
+            transport: (o.ShippingMethod && o.ShippingMethod.Name) || null,
             betaald, betaaldPct, aanbetaling: Math.round(aanbetaling), totaal: Math.round(totaal),
           };
           const bucket = usa ? byModelUSA : byModel;
