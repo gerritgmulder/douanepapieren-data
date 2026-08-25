@@ -73,6 +73,11 @@
     },
 
     {
+      datum: "2026-08-25", groep: "partnerportaal-kijk", soort: "nieuw",
+      titel: "Chantal werkt mee aan Passion Partners",
+      wat: "Chantal ziet nu ook de tegel Passion Partners, zodat ze het portaal kan bekijken zoals een dealer het ziet.",
+    },
+    {
       datum: "2026-08-25", bestand: "voorraad.html", soort: "beter",
       titel: "Klantnaam bij de spa, en de transporteur erbij",
       wat: "Zet de fabriek onder de SKT-code op de invoice een klantnaam met ordernummer (zoals Veldkamp 3507548), dan staat die nu in paars bij de spa - in Onderweg naar Uddel en in de ladingtabel, en je kunt er ook op zoeken. En bij Binnengekomen spa's staat een nieuwe kolom Transport, automatisch gevuld met wat er in Logic4 op de order bij transporteur staat: FBS, Transport distributie, Afhalen.",

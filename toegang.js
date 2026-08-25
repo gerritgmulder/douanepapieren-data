@@ -151,8 +151,10 @@
     "partnerportaal-kijk": [
       /* Gerrit en Fonteynbot stonden hier niet in, terwijl zij overal bij
          horen. Dat kwam niet door de omzetting naar tegels.js - de oude regel
-         keek naar precies dezelfde groep - maar het viel toen wel pas op. */
-      "dolf", "fonteynbot", "gerrit", "gretha", "manon",
+         keek naar precies dezelfde groep - maar het viel toen wel pas op.
+         Chantal erbij op 25 aug 2026 (Gerrit): zij werkt mee aan Passion
+         Partners en moet het portaal kunnen zien zoals een dealer het ziet. */
+      "chantal", "dolf", "fonteynbot", "gerrit", "gretha", "manon",
     ],
     /* Uren. Stond open voor iedereen, maar Gerrit (19 aug 2026): "Mijn uren
        mag nog verborgen blijven voor iedereen, behalve voor mij zichtbaar."
