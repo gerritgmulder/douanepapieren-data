@@ -1680,10 +1680,25 @@ function ikoNormaliseerModel(naam) {
     .replace(/\bsup\b\.?/g, "superior")
     .replace(/\bdia\b\.?/g, "diamond")
     .replace(/\blux\b\.?/g, "luxury")
+    /* De fabriekslijst zegt "Spa Believe", de catalogus "Believe" (daar is
+       het woord spa er bij het bouwen al uit gehaald). Zonder deze regel
+       vond de koppeling "geen artikel voor Spa Believe" terwijl 100544
+       gewoon bestaat (Chantal, 24 aug 2026). */
+    .replace(/\bswimspa\b/g, " ")
+    .replace(/\bspa\b/g, " ")
     .replace(/[^a-z0-9]+/g, " ")     // punten, schuine strepen, dubbele spaties
     .replace(/\s+/g, " ")
     .trim();
 }
+
+/* Bij Devine Spas wisselt de MODELNAAM met de kleur (Chantal, 24 aug 2026):
+   "wonder pearl shadow = blackburn in logic, vision pearl shadow = moondance
+   in logic". De sleutel is het genormaliseerde basismodel; de waarde zegt
+   welk catalogusmodel er bij welke kleur hoort. */
+const IKO_MODEL_PER_KLEUR = {
+  "wonder": { "pearl shadow": "Blackburn" },
+  "vision": { "pearl shadow": "Moondance" },
+};
 
 // aliassen: door een mens vastgelegde koppeling "zoals Chantal het typt" →
 // "zoals het model in de catalogus heet". Eén keer kiezen, daarna onthouden.
@@ -1725,10 +1740,26 @@ function ikoZoekArtikel(catalog, model, kleur, skirt, aliassen) {
   // wat op de proforma "Sterling Silver jazzi color #30" heet, staat in Logic4
   // als "Sterling White". Zonder deze vertaling matchte alleen "sterling" en
   // kwam er een willekeurige variant uit.
-  const kleurVertaling = [[/sterling\s*silver/g, "sterling white"]];
+  const kleurVertaling = [[/sterling\s*silver/g, "sterling white"],
+    /* Devine schrijft op de invoice "sliver white" en "sliver black" (met de
+       tikfout van de fabriek erin). In Logic4 heet dat "Sterling White" en
+       "Pearl Shadow" (Chantal, 24 aug 2026: Believe 100544, Wonder sterling
+       white 100549, Vision sterling white 100555). */
+    [/s[il]{2}ver\s*white/g, "sterling white"],
+    [/s[il]{2}ver\s*black/g, "pearl shadow"]];
   let schoon = String(kleur || "").toLowerCase().replace(/jazzi\s*colou?r\s*#?\d*/g, "");
   for (const [van, naar] of kleurVertaling) schoon = schoon.replace(van, naar);
   schoon = schoon.replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+
+  // Heet dit model in deze kleur anders in Logic4? Dan die variantenlijst.
+  const wissel = IKO_MODEL_PER_KLEUR[ikoNormaliseerModel(viaAndereNaam || model)];
+  if (wissel) {
+    for (const [kl, doel] of Object.entries(wissel)) {
+      if (schoon.includes(kl) && modellen[doel]) {
+        varianten = modellen[doel]; viaAndereNaam = doel; modelZeker = true; break;
+      }
+    }
+  }
 
   // De omkasting bepaalt de trim: "1130 GREY+OAK slat" is in Logic4
   // "GREY/oak trim", "OAK+1130 GREY slat" is "OAK/grey trim". Dat onderscheid

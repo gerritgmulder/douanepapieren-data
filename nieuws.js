@@ -53,6 +53,11 @@
 
     {
       datum: "2026-08-24", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Devine-invoice vindt de artikelen nu wel",
+      wat: "Bij het inlezen van een Devine-invoice zei het scherm dat Believe, Wonder en Vision niet in Logic4 bestonden, terwijl ze er gewoon staan. De koppeling begrijpt nu dat 'Spa Believe' en 'Believe' hetzelfde model zijn, dat 'sliver white' Sterling White is, en dat een Wonder of Vision in Pearl Shadow in Logic4 Blackburn of Moondance heet.",
+    },
+    {
+      datum: "2026-08-24", bestand: "voorraad.html", soort: "hersteld",
       titel: "Stock doet het weer, en de lijst past op een laptop",
       wat: "Het tabblad Stock bleef eeuwig op 'Bezig met laden' staan - twee stukken code bleken dezelfde naam te hebben en de verkeerde werd aangeroepen. Verder past de reserveringenlijst nu op een 15-inch scherm, opent een klik op een notitie een venster waarin je de hele tekst kunt lezen en schrijven, en vertelt het scherm bij het aanvinken van Inplannen of Gepland waar de regel heen is verhuisd.",
     },
