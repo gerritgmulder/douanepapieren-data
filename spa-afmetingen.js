@@ -75,6 +75,14 @@
     revivegranitegrey: "Wim Hof's Ice Revive",
     reviveiceblue:     "Wim Hof's Ice Revive",
     reviveblackmarble: "Wim Hof's Ice Revive",
+    /* De Turbines heten sinds 26 aug 2026 voluit Luxury (de ST-codes) of Grand
+       (de T-codes). De specsheets die wij hebben zijn ouder en voeren de kale
+       naam - en dat zijn de Luxury: de tekening van de Turbine 6 Luxury geeft
+       5880 x 2400 mm en de sheet "Storm Spas Turbine 6" 590 x 240 cm. De Grand
+       is een andere spa (3000 mm breed) en wordt hier dus niet aan gekoppeld. */
+    turbine5luxury:    "Turbine 5",
+    turbine6luxury:    "Turbine 6",
+    turbine7luxury:    "Turbine 7",
   };
 
   /* De verpakkingslijst noemt de barrelsauna's korter dan de prijslijst.

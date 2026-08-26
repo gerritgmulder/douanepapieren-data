@@ -202,9 +202,19 @@
       opmerking: "Alle spa's solid white with grey. Op dit blad stonden geen prijzen.",
       bron: "codelijst Chantal, 4 aug 2026",
       modellen: [
-        { model: "Turbine 5",  code: "WS-PC05ST", inkoopUsd: null, verkoopEur: null },
-        { model: "Turbine 6",  code: "WS-PC06ST", inkoopUsd: null, verkoopEur: null },
-        { model: "Turbine 7",  code: "WS-PC07ST", inkoopUsd: null, verkoopEur: null },
+        { model: "Turbine 5 Luxury",  code: "WS-PC05ST", inkoopUsd: null, verkoopEur: null },
+        { model: "Turbine 6 Luxury",  code: "WS-PC06ST", inkoopUsd: null, verkoopEur: null },
+        { model: "Turbine 7 Luxury",  code: "WS-PC07ST", inkoopUsd: null, verkoopEur: null },
+        // De Grand-uitvoering stond niet op het blad van Chantal, maar komt wel
+        // op de facturen voor (bevestigd door Gerrit, 26 aug 2026). Zonder een
+        // regel hier valt hij buiten de lijst "modellen zonder afmeting" en kan
+        // niemand zijn maat invullen - terwijl hij dan in de containerberekening
+        // voor niets meetelt. Geen maat ingevuld: de specsheets van de Grand
+        // geven 3000 mm breed en dat is breder dan een container binnenwerks is
+        // (2352 mm), dus die maat wordt eerst bij Chantal nagevraagd.
+        { model: "Turbine 6 Grand", code: "WS-PC06T",   inkoopUsd: null, verkoopEur: null },
+        { model: "Turbine 7 Grand", code: "WS-PC07A-T", inkoopUsd: null, verkoopEur: null },
+        { model: "Turbine 8 Grand", code: "WS-PC08T",   inkoopUsd: null, verkoopEur: null },
         { model: "Aquatic 9",  code: "WS-S06",    inkoopUsd: null, verkoopEur: null },
         { model: "Monsoon",    code: "WS-692",    inkoopUsd: null, verkoopEur: null },
         { model: "Cyclone",    code: "WS-696",    inkoopUsd: null, verkoopEur: null },

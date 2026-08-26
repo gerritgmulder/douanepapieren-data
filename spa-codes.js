@@ -165,14 +165,19 @@ const SPA_CODES = [
   //
   // Gerrit bevestigde de reeks op 26 aug 2026, met één correctie: WS-PC08T,
   // WS-PC07A-T en WS-PC06T zijn de GRAND-uitvoering (de prijslijst kent
-  // Turbine 6/7/8 Grand als eigen modellen naast de Luxury-reeks). Nog open:
-  // of de ST-codes dan de Luxury-uitvoering zijn - tot dat antwoord er is
-  // blijven die op de kale naam staan.
-  ["WS-PC05ST","Turbine 5"],
-  ["WS-PC05T","Turbine 5"],
-  ["WS-PC06ST","Turbine 6"],
+  // Turbine 6/7/8 Grand als eigen modellen naast de Luxury-reeks). Op dezelfde
+  // dag bevestigde hij het spiegelbeeld: de ST-codes zijn de LUXURY-uitvoering.
+  // De fabriek zegt het zelf ook - de specsheets heten "Turbine 6 Luxury Swim
+  // Spa" en er zijn er van Luxury 5, 6, 7, 8 en 12 en van Grand 6, 7, 8 en 12.
+  //
+  // Een Turbine 5 Grand bestaat dus niet. WS-PC05T is daarom geen eigen model
+  // maar de kortere schrijfwijze van Chantal voor WS-PC05ST, en gaat mee als
+  // Luxury. Bij de 6 ligt dat anders: daar bestaan beide uitvoeringen wél.
+  ["WS-PC05ST","Turbine 5 Luxury"],
+  ["WS-PC05T","Turbine 5 Luxury"],
+  ["WS-PC06ST","Turbine 6 Luxury"],
   ["WS-PC06T","Turbine 6 Grand"],
-  ["WS-PC07ST","Turbine 7"],
+  ["WS-PC07ST","Turbine 7 Luxury"],
   ["WS-PC07A-T","Turbine 7 Grand"],
   ["WS-PC08T","Turbine 8 Grand"],
   ["WS-S06","Aquatic 9"],
