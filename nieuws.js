@@ -52,6 +52,16 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-26", groep: "partnerportaal-kijk", soort: "beter",
+      titel: "Prijslijst sorteert nu met een klik",
+      wat: "In Passion Partners kun je in de prijslijst op elke kolomkop klikken om te sorteren: op categorie, op beschikbaarheid, op wat er op het water is of op prijs. Nog een keer klikken draait de volgorde om.",
+    },
+    {
+      datum: "2026-08-26", bestand: "container-laden.html", soort: "beter",
+      titel: "Turbines heten nu Luxury of Grand",
+      wat: "De swimspa's van Storm Spas komen in twee uitvoeringen en die zijn nu uit elkaar gehouden: de Turbine 5, 6 en 7 heten voortaan Luxury, en daarnaast staan de Turbine 6, 7 en 8 Grand. De drie Grand-modellen zijn ook aan de modellenlijst toegevoegd, zodat hun afmeting ingevuld kan worden - zonder maat tellen ze bij het laden van een container voor niets mee.",
+    },
+    {
       datum: "2026-08-26", bestand: "voorraad.html", soort: "beter",
       titel: "Stock: fysiek nu ook per kleur te zien",
       wat: "Klap in het tabblad Stock een model open en je ziet per kleur twee getallen: fysiek (wat er werkelijk staat) en vrij (wat er nog te verkopen is). Zo zie je meteen waar het fysieke totaal uit bestaat. De uitleg bovenaan het tabblad vertelt precies hoe beide getallen worden berekend.",
