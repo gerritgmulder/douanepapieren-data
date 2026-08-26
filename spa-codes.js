@@ -162,13 +162,19 @@ const SPA_CODES = [
   // De facturen geven de doorslag: daar staat letterlijk WS-PC06ST, mét de S.
   // De langere schrijfwijze is dus die van de fabriek. Haar korte varianten
   // blijven staan als vangnet - ze kosten niets en botsen nergens mee.
+  //
+  // Gerrit bevestigde de reeks op 26 aug 2026, met één correctie: WS-PC08T,
+  // WS-PC07A-T en WS-PC06T zijn de GRAND-uitvoering (de prijslijst kent
+  // Turbine 6/7/8 Grand als eigen modellen naast de Luxury-reeks). Nog open:
+  // of de ST-codes dan de Luxury-uitvoering zijn - tot dat antwoord er is
+  // blijven die op de kale naam staan.
   ["WS-PC05ST","Turbine 5"],
   ["WS-PC05T","Turbine 5"],
   ["WS-PC06ST","Turbine 6"],
-  ["WS-PC06T","Turbine 6"],
+  ["WS-PC06T","Turbine 6 Grand"],
   ["WS-PC07ST","Turbine 7"],
-  ["WS-PC07A-T","Turbine 7"],
-  ["WS-PC08T","Turbine 8"],
+  ["WS-PC07A-T","Turbine 7 Grand"],
+  ["WS-PC08T","Turbine 8 Grand"],
   ["WS-S06","Aquatic 9"],
   ["WS-S09","Aquatic 9"],
   ["WS-692","Monsoon"],

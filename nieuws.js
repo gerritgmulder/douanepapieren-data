@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-26", bestand: "container-laden.html", soort: "beter",
+      titel: "Swimspa-codes bevestigd, Turbine Grand herkend",
+      wat: "De fabriekscodes van de swimspa's zijn bevestigd. Drie codes bleken de Grand-uitvoering te zijn: die tellen nu als Turbine 6 Grand, Turbine 7 Grand en Turbine 8 Grand in plaats van de gewone Turbine.",
+    },
+
+    {
       datum: "2026-08-26", groep: "partnerportaal-kijk", soort: "beter",
       titel: "Passion Partners toont nu wat er echt beschikbaar is",
       wat: "Partners zien per model voortaan één getal Available: de voorraad plus wat er op het water is, min alles wat al gereserveerd is. Eerst stond er alleen de vrije halvoorraad, en die zei bij drukke modellen niets: er kon 2 staan terwijl er met de schepen erbij 40 echt te bestellen zijn, of andersom voorraad lijken terwijl alles al vergeven was.",
