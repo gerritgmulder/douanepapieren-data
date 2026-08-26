@@ -7239,9 +7239,7 @@ export default {
     // apart terug, zodat er niet ergens een tweede koers gaat rondslingeren.
     if (url.pathname === "/amerika/koers" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
-      const dp = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
-      const koers = Number(dp.meta && dp.meta.rate) > 0 ? Number(dp.meta.rate) : 1.11;
-      return reply(200, { ok: true, koers, bron: "partnerportaal (wisselkoers.nl EUR/USD min 0,03)" });
+      return reply(200, { ok: true, koers: await dpRate(env), bron: "ECB-dagkoers EUR/USD min 0,03 (automatisch)" });
     }
     if (url.pathname === "/amerika/qb/approve" && request.method === "POST") return qbHandleApprove(request, env);
     if (url.pathname === "/amerika/qb/audrey"  && request.method === "POST") return qbHandleAudrey(request, env);
