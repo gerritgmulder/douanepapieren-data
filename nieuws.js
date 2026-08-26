@@ -52,6 +52,11 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-26", bestand: "specsheets.html", soort: "beter",
+      titel: "Duidelijk welk veld de NL- en welk de USA-sheet aanpast",
+      wat: "In de Amerikaanse stand staat nu een groen NL-vlaggetje voor de gewone waarde en een geel USA-vlaggetje voor de Amerikaanse. Wat je in het NL-veld typt verandert de Nederlandse sheet, het USA-veld raakt alleen de Amerikaanse versie - handig bij elektra, waar Amerika echt andere getallen heeft.",
+    },
+    {
       datum: "2026-08-26", groep: "partnerportaal-kijk", soort: "beter",
       titel: "Prijslijst sorteert nu met een klik",
       wat: "In Passion Partners kun je in de prijslijst op elke kolomkop klikken om te sorteren: op categorie, op beschikbaarheid, op wat er op het water is of op prijs. Nog een keer klikken draait de volgorde om.",

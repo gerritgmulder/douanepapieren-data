@@ -58,6 +58,12 @@
   .rij.us-rij input{background:#fbfaf7}
   .us-vlag{flex:0 0 auto;font-size:9.5px;font-weight:700;letter-spacing:.04em;color:var(--muted);
     border:1px solid var(--border);border-radius:5px;padding:3px 5px;line-height:1;cursor:help}
+  /* Zelfde vlaggetje maar dan voor de Nederlandse waarde, alleen zichtbaar in
+     de USA-stand. Demi typte de Amerikaanse elektra in het gewone veld en zag
+     de NL-sheet meeveranderen (26 aug 2026) - nergens stond welk veld welke
+     versie raakt. */
+  .nl-vlag{flex:0 0 auto;font-size:9.5px;font-weight:700;letter-spacing:.04em;color:var(--fonteyn-green);
+    border:1px solid var(--fonteyn-green);border-radius:5px;padding:3px 5px;line-height:1;cursor:help;opacity:.75}
   /* Elektra: daar valt niets om te rekenen, dus daar moet iemand naar kijken. */
   .rij.us-let .us-vlag{color:var(--warn);border-color:#fcd34d;background:#fffbeb}
   .rij.us-let input{border-color:#fcd34d}
@@ -309,11 +315,13 @@
       <button class="btn sm" id="btnEenhUS" type="button">🇺🇸 inch · lbs · gallons</button>
     </div>
     <div id="usUitleg" class="status-msg warn hidden" style="margin-top:0">
-      <b>Amerikaanse versie.</b> Je blijft gewoon in centimeters, kilo's en liters invullen -
-      rechts staat alles omgerekend, en de PDF ook. <br>
-      Volt, ampère, watt en hertz worden <b>niet</b> omgerekend: een Amerikaanse spa loopt
-      op andere elektra, dat is een ander getal en geen omrekening. Bij die regels staat een
-      veld <b>USA</b> waar je de Amerikaanse waarde zelf kunt invullen.
+      <b>Amerikaanse versie.</b> Let op: NL en USA zijn één sheet met twee weergaven.
+      Het veld met <b>NL</b> ervoor is de Nederlandse waarde - wat je daar typt, verandert
+      óók de NL-sheet. De Amerikaanse waarde typ je in het gele veld met <b>USA</b> ervoor;
+      dat raakt alleen de Amerikaanse versie. <br>
+      Maten en gewichten rekent het scherm zelf om (de grijze tekst in het USA-veld laat
+      zien wat eruit komt). Volt, ampère, watt en hertz worden <b>niet</b> omgerekend: een
+      Amerikaanse spa loopt op andere elektra - vul die dus altijd zelf in het USA-veld in.
     </div>
     <!-- Versiestempel. Gretha meldde "hij is nog hetzelfde", en dan is het gissen
          of een aanpassing haar computer wel bereikt heeft. Nu is dat te zien én
@@ -1141,6 +1149,7 @@ function tekenBlokForm(){
       bl.regels.map((r,ri)=>
         "<div class='rij'>"+
           "<input type='text' class='lbl' value='"+esc(r.l)+"' data-rl='"+bi+"_"+ri+"' placeholder='omschrijving'>"+
+          (usAan()?"<span class='nl-vlag' title='Dit is de NEDERLANDSE waarde - wat je hier typt verandert de NL-sheet. De Amerikaanse waarde hoort in het USA-veld eronder.'>NL</span>":"")+
           "<input type='text' class='val' value='"+esc(r.v)+"' data-rv='"+bi+"_"+ri+"' placeholder='waarde'>"+
           "<button data-rup='"+bi+"_"+ri+"' title='omhoog'>↑</button>"+
           "<button data-rdel='"+bi+"_"+ri+"' title='verwijderen'>✕</button>"+
