@@ -445,28 +445,54 @@ function prijsVan(m){
           munt: usd?"$":"\u20ac",
           opmaak: (n)=> (usd?"$ ":"\u20ac ")+Number(n).toLocaleString(usd?"en-US":"de-DE")};
 }
+/* Sortable columns (Gerrit, 26 aug 2026): "ik wil ze soms op categorie en
+   soms gewoon op hoogste voorraad". Click a header to sort; click again to
+   flip the direction. Default stays collection + price high-to-low. */
+let priceSort = { kolom: "collection", op: 1 };
+function priceWaarde(m, kolom){
+  switch(kolom){
+    case "model": return String(m.model||"");
+    case "besch": return Number(m.beschikbaar!=null?m.beschikbaar:m.available)||0;
+    case "water": return Number(m.onTheWater)||0;
+    case "prijs": return prijsVan(m).prijs;
+    case "vracht": return prijsVan(m).vracht;
+    case "totaal": return prijsVan(m).totaal;
+    default: return String(m.collection||"zz");
+  }
+}
 function renderPrices(){
   const q=($("priceSearch").value||"").trim().toLowerCase();
   let lijst=(stockModels||[]).filter(m=>m.partnerEur||m.partnerUsd);
   if(q) lijst=lijst.filter(m=>(m.model+" "+(m.collection||"")).toLowerCase().includes(q));
-  lijst=lijst.slice().sort((a,b)=>
-    String(a.collection||"zz").localeCompare(String(b.collection||"zz")) ||
-    (prijsVan(b).prijs-prijsVan(a).prijs) ||
-    String(a.model).localeCompare(String(b.model)));
+  const s=priceSort;
+  lijst=lijst.slice().sort((a,b)=>{
+    if(s.kolom==="collection")
+      return (String(a.collection||"zz").localeCompare(String(b.collection||"zz")))*s.op ||
+        (prijsVan(b).prijs-prijsVan(a).prijs) ||
+        String(a.model).localeCompare(String(b.model));
+    const va=priceWaarde(a,s.kolom), vb=priceWaarde(b,s.kolom);
+    const c = (typeof va==="number") ? va-vb : va.localeCompare(vb);
+    return c*s.op || String(a.model).localeCompare(String(b.model));
+  });
   $("priceCount").textContent = lijst.length+" model"+(lijst.length===1?"":"s");
   $("priceUpdated").textContent = $("stockUpdated").textContent;
   if(!lijst.length){
     $("priceTable").innerHTML = '<tr><td style="padding:18px;color:var(--muted)">No models found.</td></tr>';
     return;
   }
+  // Grouped collection labels only make sense while sorted by collection;
+  // in every other sort order each row shows its own collection.
+  const gegroepeerd = s.kolom==="collection";
   let vorige=null, rijen="";
   for(const m of lijst){
     const p=prijsVan(m);
     const nieuweGroep = (m.collection||"") !== vorige;
     vorige = m.collection||"";
     const kleur = m.collectionColor||"#9ca3af";
+    const collTekst = gegroepeerd ? (nieuweGroep?esc(m.collection||"Other"):"")
+                                  : `<span style="font-size:11px">${esc(m.collection||"Other")}</span>`;
     rijen += `<tr>
-      <td class="coll" style="border-left-color:${esc(kleur)};color:${esc(kleur)}">${nieuweGroep?esc(m.collection||"Other"):""}</td>
+      <td class="coll" style="border-left-color:${esc(kleur)};color:${esc(kleur)}">${collTekst}</td>
       <td><b class="fotoNaam" data-model="${esc(m.model)}" style="cursor:default">${esc(m.model)}</b></td>
       <td>${(Number(m.beschikbaar!=null?m.beschikbaar:m.available)||0)>0
             ? `<span class="pill">${Number(m.beschikbaar!=null?m.beschikbaar:m.available)||0} available</span>`
@@ -478,10 +504,21 @@ function renderPrices(){
       <td class="n"><button class="go rsv" data-model="${esc(m.model)}" style="padding:6px 12px;font-size:12px;">Reserve</button></td>
     </tr>`;
   }
+  const kop=(kolom,tekst,recht)=>{
+    const actief=s.kolom===kolom;
+    const pijl=actief?(s.op>0?" ▲":" ▼"):' <span style="color:#d1d5db">⇅</span>';
+    return `<th class="prijsKop${recht?" n":""}" data-kolom="${kolom}" style="cursor:pointer;white-space:nowrap" title="Click to sort">${tekst}${pijl}</th>`;
+  };
   $("priceTable").innerHTML =
-    `<thead><tr><th>Collection</th><th>Model</th><th>Availability</th><th class="n">On the water</th>
-      <th class="n">Partner price</th><th class="n">Freight &amp; packing</th><th class="n">Total</th><th></th></tr></thead>
+    `<thead><tr>${kop("collection","Collection")}${kop("model","Model")}${kop("besch","Availability")}${kop("water","On the water",1)}
+      ${kop("prijs","Partner price",1)}${kop("vracht","Freight &amp; packing",1)}${kop("totaal","Total",1)}<th></th></tr></thead>
      <tbody>${rijen}</tbody>`;
+  $("priceTable").querySelectorAll(".prijsKop").forEach(h=>h.addEventListener("click",()=>{
+    const k=h.dataset.kolom;
+    if(priceSort.kolom===k) priceSort.op=-priceSort.op;
+    else priceSort={ kolom:k, op:(k==="collection"||k==="model")?1:-1 };  // numbers open high-to-low
+    renderPrices();
+  }));
   $("priceTable").querySelectorAll(".rsv").forEach(b=>b.addEventListener("click",()=>openReserve(b.dataset.model)));
   $("priceTable").querySelectorAll(".fotoNaam").forEach(b=>koppelFoto(b, b.dataset.model));
 }
