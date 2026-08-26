@@ -188,9 +188,11 @@
       "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit",
       "manon",
     ],
-    // Prijslijsten fabrikanten
+    // Prijslijsten fabrikanten. Chantal en Arno erbij (Gerrit, 25 aug 2026):
+    // zij zetten de partner- en dealerprijzen op en hebben de inkooplijsten
+    // van de fabrieken daarvoor nodig.
     "prijslijsten": [
-      "dolf", "fonteynbot", "gerrit", "gretha",
+      "arno", "chantal", "dolf", "fonteynbot", "gerrit", "gretha",
     ],
     // Rapportage
     "rapportage": [
