@@ -1573,10 +1573,15 @@ async function dpRefreshHalStock(env) {
       if (!model) continue;
       const free = Math.max(0, Number(row.FreeStock) || 0);
       const qty = Number(row.Qty) || 0;
-      if (!perModel[model]) perModel[model] = { available: 0, physical: 0, variants: {} };
+      if (!perModel[model]) perModel[model] = { available: 0, physical: 0, variants: {}, fysiekPerCode: {} };
       perModel[model].available += free;
       perModel[model].physical += qty;
       if (free > 0) perModel[model].variants[String(row.ProductCode)] = free;
+      // Ook het fysieke aantal per kleur bewaren. Chantal (video, 26 aug 2026)
+      // kon 'vrij' per kleur naspelen in Logic4 maar zag nergens waar het
+      // fysieke totaal vandaan kwam - dat is de som van deze aantallen.
+      if (qty) perModel[model].fysiekPerCode[String(row.ProductCode)] =
+        (perModel[model].fysiekPerCode[String(row.ProductCode)] || 0) + qty;
     }
     if (rows.length < PAGE) break;
   }

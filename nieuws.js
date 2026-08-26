@@ -52,6 +52,16 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-26", bestand: "voorraad.html", soort: "beter",
+      titel: "Stock: fysiek nu ook per kleur te zien",
+      wat: "Klap in het tabblad Stock een model open en je ziet per kleur twee getallen: fysiek (wat er werkelijk staat) en vrij (wat er nog te verkopen is). Zo zie je meteen waar het fysieke totaal uit bestaat. De uitleg bovenaan het tabblad vertelt precies hoe beide getallen worden berekend.",
+    },
+    {
+      datum: "2026-08-26", bestand: "voorraad.html", soort: "beter",
+      titel: "Afgehandelde orders verdwijnen ook op een openstaand scherm",
+      wat: "Een order die in Logic4 op Afgehandeld staat verdwijnt overal uit het voorraadbeheer, ook uit Gepland. Dat werd elk uur al bijgewerkt, maar een scherm dat open bleef staan liet de oude lijst zien. Het scherm ververst de reserveringen nu zelf elke tien minuten.",
+    },
+    {
       datum: "2026-08-26", bestand: "container-laden.html", soort: "beter",
       titel: "Swimspa-codes bevestigd, Turbine Grand herkend",
       wat: "De fabriekscodes van de swimspa's zijn bevestigd. Drie codes bleken de Grand-uitvoering te zijn: die tellen nu als Turbine 6 Grand, Turbine 7 Grand en Turbine 8 Grand in plaats van de gewone Turbine.",

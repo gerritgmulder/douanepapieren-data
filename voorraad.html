@@ -600,9 +600,11 @@
     <div class="card">
       <h3>Stock — wat er in Nederland staat</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">
-        Alle spa's met voorraad in de hallen in Uddel. <b>Vrij</b> is wat er nog te verkopen is; dat is
-        het getal dat ook op Overzicht staat. <b>Fysiek</b> is alles wat er staat, dus inclusief wat al
-        verkocht is maar nog niet weg. Klap een model open voor de verdeling per kleur.
+        Alle spa's met voorraad in de hallen in Uddel (locatie Fonteyn in Logic4). <b>Vrij</b> is wat er
+        nog te verkopen is: de voorraad min de orders die er al aan hangen, per kleur, en dan opgeteld -
+        precies wat je in Logic4 naspeelt bij artikel &rarr; voorraad. <b>Fysiek</b> is alles wat er
+        werkelijk staat, alle kleuren samen, inclusief wat al verkocht of gereserveerd is maar nog niet
+        weg. Klap een model open om per kleur fysiek én vrij te zien.
       </p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="stockSearch" placeholder="zoek een model of kleur…" style="min-width:280px;padding:8px">
@@ -1930,6 +1932,26 @@ setInterval(async function(){
 document.addEventListener("visibilitychange",function(){
   if(!document.hidden){ loadNotities().then(function(){ renderSoortTabs(); }); }
 });
+
+/* Reserveringen zelf ook blijven verversen. Chantal (video, 26 aug 2026):
+   een order die in Logic4 op Afgehandeld gaat moet overal uit het dashboard
+   verdwijnen. De server doet dat al elk uur (afgehandelde orders vallen uit
+   de reserveringenlijst), maar een scherm dat open blijft staan haalde die
+   lijst maar één keer op. Daarom: elke 10 minuten opnieuw laden, en meteen
+   bij terugkomst op het scherm als de vorige lading ouder dan 5 minuten is.
+   Niet verversen terwijl iemand in een veld typt. */
+let resvGeladenOp=Date.now();
+function resvVerversen(){
+  const act=document.activeElement;
+  const typt=act&&(act.tagName==="INPUT"||act.tagName==="TEXTAREA")&&act.type!=="checkbox";
+  if(typt) return;
+  resvGeladenOp=Date.now();
+  loadReserveringen();
+}
+setInterval(function(){ if(!document.hidden) resvVerversen(); },10*60000);
+document.addEventListener("visibilitychange",function(){
+  if(!document.hidden && Date.now()-resvGeladenOp>5*60000) resvVerversen();
+});
 function notitie(r){
   const k=r.regelId; if(!k) return {};
   return notities[k]||(notities[k]={});
@@ -2643,10 +2665,20 @@ function renderStock(){
 
   let rijen=Object.keys(models).map(function(m){
     const d=models[m]||{};
-    const varianten=Object.keys(d.variants||{}).map(function(code){
-      return { code:code, kleur:stockData.codeKleur[code]||"(kleur onbekend)", aantal:Number(d.variants[code])||0 };
-    }).filter(function(v){ return v.aantal>0; })
-      .sort(function(a,b){ return b.aantal-a.aantal || a.kleur.localeCompare(b.kleur); });
+    /* Per kleur ZOWEL fysiek als vrij. Chantal (video, 26 aug 2026) kon
+       'vrij' naspelen in Logic4 (voorraad locatie Fonteyn min de orders)
+       maar zag nergens waaruit het fysieke totaal bestond. Fysiek per kleur
+       komt sinds vandaag mee met de uur-sync (fysiekPerCode); oudere data
+       heeft alleen de vrij-verdeling en valt daar stil op terug. */
+    const fys=d.fysiekPerCode||{};
+    const codes={};
+    Object.keys(d.variants||{}).forEach(function(c){ codes[c]=true; });
+    Object.keys(fys).forEach(function(c){ codes[c]=true; });
+    const varianten=Object.keys(codes).map(function(code){
+      return { code:code, kleur:stockData.codeKleur[code]||"(kleur onbekend)",
+               vrij:Number((d.variants||{})[code])||0, fysiek:Number(fys[code])||0 };
+    }).filter(function(v){ return v.vrij>0 || v.fysiek!==0; })
+      .sort(function(a,b){ return b.fysiek-a.fysiek || b.vrij-a.vrij || a.kleur.localeCompare(b.kleur); });
     return { model:m, vrij:Number(d.available)||0, fysiek:Number(d.physical)||0, varianten:varianten };
   });
   if(!toonAlles) rijen=rijen.filter(function(r){ return r.vrij>0||r.fysiek>0; });
@@ -2668,10 +2700,15 @@ function renderStock(){
     "</tr></thead><tbody>"+
     rijen.map(function(r){
       const open=!!stockOpen[r.model];
+      const heeftFysiek=r.varianten.some(function(v){ return v.fysiek!==0; });
       const kleuren=r.varianten.length
         ? (open
-            ? r.varianten.map(function(v){ return "<div style='font-size:12px'>"+v.aantal+" &times; "+esc(v.kleur)+
-                " <span style='color:var(--muted);font-size:11px'>"+esc(v.code)+"</span></div>"; }).join("")
+            ? r.varianten.map(function(v){
+                const stuk=heeftFysiek
+                  ? "fysiek <b>"+v.fysiek+"</b> · vrij <b>"+v.vrij+"</b> &times; "
+                  : v.vrij+" vrij &times; ";
+                return "<div style='font-size:12px'>"+stuk+esc(v.kleur)+
+                  " <span style='color:var(--muted);font-size:11px'>"+esc(v.code)+"</span></div>"; }).join("")
             : "<span style='font-size:12px;color:var(--muted)'>"+r.varianten.length+" kleur(en)</span>")
         : "<span style='font-size:12px;color:var(--muted)'>geen verdeling bekend</span>";
       return "<tr class='stockRij' data-model='"+esc(r.model)+"' style='cursor:pointer'>"+

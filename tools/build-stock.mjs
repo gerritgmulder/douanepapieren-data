@@ -61,10 +61,12 @@ for (let page = 0; page < 200; page++) {
     if (!model) continue;
     const qty = Number(row.Qty) || 0;                    // fysiek in de hallen
     const free = Math.max(0, Number(row.FreeStock) || 0); // écht beschikbaar
-    if (!perModel[model]) perModel[model] = { available: 0, physical: 0, variants: {} };
+    if (!perModel[model]) perModel[model] = { available: 0, physical: 0, variants: {}, fysiekPerCode: {} };
     perModel[model].available += free;
     perModel[model].physical += qty;
     if (free > 0) perModel[model].variants[code] = free;
+    // Fysiek per kleur, net als de uur-sync in de worker (Chantal, 26 aug 2026)
+    if (qty) perModel[model].fysiekPerCode[code] = (perModel[model].fysiekPerCode[code] || 0) + qty;
   }
   process.stderr.write(`\r  ${scanned} voorraadregels gescand`);
   if (rows.length < 500) break;
