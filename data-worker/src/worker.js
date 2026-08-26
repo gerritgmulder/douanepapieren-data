@@ -3841,7 +3841,9 @@ async function handleLog(request, env) {
     // waar een onverwachte inlog vandaan kwam.
     computer: String(b.computer || "").slice(0, 60) || null,
     platform: String(b.platform || "").slice(0, 40) || null,
-    versie: String(b.versie || "").slice(0, 20) || null,
+    // 60 tekens: bij 20 werd "app 0.20.2 · inhoud 0.25.6" precies na het
+    // woord 'inhoud' afgekapt en was het meetlint onleesbaar (26 aug 2026).
+    versie: String(b.versie || "").slice(0, 60) || null,
     wijziging: !INZAGE,
   };
   const bucket = "activiteit-" + ev.ts.slice(0, 7);   // YYYY-MM
