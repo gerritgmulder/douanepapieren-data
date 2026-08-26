@@ -875,6 +875,18 @@ function apparaatInfo() {
 async function logLogin(email) {
   const wie = String(email || "").toLowerCase();
   if (!wie) return;
+  /* Welke INHOUD draait deze computer? De app-versie zegt alleen iets over
+     de schil; de tegels komen uit de live-cache en die kan stiekem oud zijn
+     (Arno, 26 aug 2026: app netjes op 0.20.1, maar de tegelrechten van die
+     ochtend ontbraken). Het manifest in de cache draagt het versienummer van
+     de inhoud - dat sturen we voortaan mee, zodat het activiteitenlogboek
+     laat zien wie er op oude bestanden draait. In de browser bestaat dit
+     bestand niet en blijft het veld gewoon leeg. */
+  let inhoud = "";
+  try {
+    const r = await fetch("manifest.json?" + Date.now(), { cache: "no-store" });
+    if (r.ok) { const j = await r.json(); inhoud = String(j.version || ""); }
+  } catch (e) {}
   for (let poging = 0; poging < 30; poging++) {
     const k = localStorage.getItem("fp.teamkey") || "";
     if (k) {
@@ -886,7 +898,8 @@ async function logLogin(email) {
             user: wie, tile: "dashboard", action: "login",
             // Op welke computer werd ingelogd — anders is een onverwachte
             // inlog achteraf niet te herleiden.
-            computer: app.computer, platform: app.platform, versie: app.versie,
+            computer: app.computer, platform: app.platform,
+            versie: app.versie + (inhoud ? " · inhoud " + inhoud : ""),
           }),
         });
       } catch (e) {}
