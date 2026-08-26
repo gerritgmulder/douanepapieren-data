@@ -2342,6 +2342,17 @@ function koppelNotitieVelden(box,rijen){
   });
 }
 function renderSoortTabs(){
+  /* Spa planning (26 aug 2026): "als je scrolt in dat venster en je gaat naar
+     een ander programma, dan schiet ineens dat venster weer naar boven." De
+     verversing bouwt de tabellen opnieuw op en dat zet elk scrolvenster terug
+     op nul. Daarom: eerst per blok onthouden waar de gebruiker stond, na het
+     hertekenen exact terugzetten. Sleutel is het dichtstbijzijnde element met
+     een id, want de tablewrap zelf wordt weggegooid en opnieuw gemaakt. */
+  const schuifStand={};
+  document.querySelectorAll(".tablewrap").forEach(function(w){
+    const el=w.closest("[id]");
+    if(el&&!(el.id in schuifStand)) schuifStand[el.id]=[w.scrollTop,w.scrollLeft];
+  });
   renderResvSoort("particulier","partSearch","partList","partCount");
   renderResvSoort("partner","ptnSearch","ptnList","ptnCount");
   renderResvSoort("particulier","partSearch","partGeplandLijst","partGeplandTel","gepland");
@@ -2350,6 +2361,10 @@ function renderSoortTabs(){
   renderAdviseurTabs();
   renderParticulierBlok();
   renderPartnerContainers();
+  document.querySelectorAll(".tablewrap").forEach(function(w){
+    const el=w.closest("[id]"), s=el&&schuifStand[el.id];
+    if(s&&(s[0]||s[1])){ w.scrollTop=s[0]; w.scrollLeft=s[1]; }
+  });
 }
 
 /* ── Afroep en binnengekomen spa's bij Particulier (Chantal, 5 aug 2026) ────

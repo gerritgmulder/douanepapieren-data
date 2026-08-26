@@ -52,6 +52,11 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-26", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Lijsten springen niet meer naar boven",
+      wat: "Als je in een lijst gescrold had (zoals Afroep en binnengekomen bij Particulier) en je ging even naar een ander programma of scherm, stond de lijst bij terugkomst weer bovenaan. De lijsten onthouden nu gewoon waar je was.",
+    },
+    {
       datum: "2026-08-24", bestand: "voorraad.html", soort: "hersteld",
       titel: "Devine-invoice vindt de artikelen nu wel",
       wat: "Bij het inlezen van een Devine-invoice zei het scherm dat Believe, Wonder en Vision niet in Logic4 bestonden, terwijl ze er gewoon staan. De koppeling begrijpt nu dat 'Spa Believe' en 'Believe' hetzelfde model zijn, dat 'sliver white' Sterling White is, en dat een Wonder of Vision in Pearl Shadow in Logic4 Blackburn of Moondance heet.",
