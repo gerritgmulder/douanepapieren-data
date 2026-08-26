@@ -526,6 +526,9 @@ function relatieKaart(index){
       uit.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
         const t = j.treffers[Number(b.dataset.i)];
         lees();
+        /* De zoekdienst kent niet elk huisnummer; dan pakken we het nummer
+           dat in de zoekopdracht zelf stond ("Garderenseweg 154, Uddel"). */
+        if (!t.huisnummer) { const hm = q.match(/\b\d{1,4}[a-zA-Z]?\b/); if (hm) t.huisnummer = hm[0]; }
         if (t.straat) d.facturatie.straat = t.straat;
         if (t.huisnummer) d.facturatie.huisnummer = t.huisnummer;
         if (t.postcode) d.facturatie.postcode = t.postcode;
