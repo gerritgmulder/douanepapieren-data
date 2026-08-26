@@ -52,6 +52,16 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-26", groep: "partnerportaal-kijk", soort: "beter",
+      titel: "Passion Partners toont nu wat er echt beschikbaar is",
+      wat: "Partners zien per model voortaan één getal Available: de voorraad plus wat er op het water is, min alles wat al gereserveerd is. Eerst stond er alleen de vrije halvoorraad, en die zei bij drukke modellen niets: er kon 2 staan terwijl er met de schepen erbij 40 echt te bestellen zijn, of andersom voorraad lijken terwijl alles al vergeven was.",
+    },
+    {
+      datum: "2026-08-26", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Wisselkoers gaat vanzelf, debiteurnummer verplicht, adres invullen gaat sneller",
+      wat: "Drie dingen bij het beheren van partners. De wisselkoers wordt nu elke dag automatisch opgehaald (officiële ECB-dagkoers min 0,03) - je hoeft hem niet meer zelf bij te houden. Een nieuwe dealer of partner kan niet meer bewaard worden zonder debiteurnummer, zodat er altijd een koppeling met Logic4 is. En bij Facturatie zit een zoekveld: typ het adres en straat, postcode, plaats en land vullen zichzelf in, ook bij buitenlandse adressen.",
+    },
+    {
       datum: "2026-08-26", iedereen: true, soort: "hersteld",
       titel: "Updates komen nu op elke computer aan",
       wat: "Op sommige kantoorcomputers kwamen vernieuwingen van het dashboard niet of pas veel later binnen. Het dashboard haalt zijn vernieuwingen nu langs een tweede weg op als de eerste dicht zit. Je hoeft er niets voor te doen.",

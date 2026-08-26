@@ -159,7 +159,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <div class="row hidden" style="margin-top:12px">
       <input id="nEmail" type="email" placeholder="partner@bedrijf.com" style="min-width:220px">
       <input id="nCompany" placeholder="Bedrijfsnaam" style="min-width:180px">
-      <input id="nDebtors" placeholder="debiteurnr(s), optioneel" style="min-width:170px">
+      <input id="nDebtors" placeholder="debiteurnr(s), verplicht" style="min-width:170px">
       <select id="nSoort" title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een ander prijsniveau; die krijgt juist die prijslijsten niet te zien, want daarin staat wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt." style="min-width:150px">
         <option value="">&mdash; partner of dealer? &mdash;</option>
         <option value="partner">Partner</option>
@@ -190,11 +190,12 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
   <div class="card">
     <h3>Wisselkoers EUR/USD</h3>
-    <p class="lead" style="margin-bottom:10px">De partnerprijzen zijn in dollars. Voor EU-partners rekent het portaal om naar euro's: <b>€ = $ ÷ koers</b>. Vul de koers in van <a href="https://www.wisselkoers.nl" target="_blank" rel="noopener">wisselkoers.nl</a> (EUR/USD) <b>min 0,03</b> (veilige marge). BTW komt daarna automatisch uit Logic4 per partner (NL 21%, EU met geldig BTW-nummer 0%, buiten EU 0%).</p>
+    <p class="lead" style="margin-bottom:10px">De partnerprijzen zijn in dollars. Voor EU-partners rekent het portaal om naar euro's: <b>€ = $ ÷ koers</b>. De koers gaat vanaf nu vanzelf: elke dag wordt de officiële ECB-dagkoers opgehaald en daar gaat <b>0,03 vanaf</b> (veilige marge). Je hoeft hier dus niets meer bij te houden. BTW komt daarna automatisch uit Logic4 per partner (NL 21%, EU met geldig BTW-nummer 0%, buiten EU 0%).</p>
+    <p id="rateAuto" style="font-size:14px;margin-bottom:10px">Koers van vandaag wordt opgehaald…</p>
     <div class="row" style="align-items:center;gap:10px">
-      <label style="font-size:13px">Koers:</label>
+      <label style="font-size:13px" title="Wordt alleen gebruikt als de automatische dagkoers een keer niet lukt">Noodkoers:</label>
       <input id="rateInput" type="number" min="0.5" max="2" step="0.001" style="width:120px">
-      <button class="primary" id="saveRate" type="button">Koers opslaan</button>
+      <button class="primary" id="saveRate" type="button">Noodkoers opslaan</button>
       <span id="rateEx" style="font-size:12px;color:var(--muted)"></span>
     </div>
   </div>
@@ -441,7 +442,12 @@ function relatieKaart(index){
       + '</div></div>'
 
       + '<div class="blok"><h4>Facturatie</h4>'
-      + '<p class="uit">Het adres en de gegevens die op de factuur horen.</p>'
+      + '<p class="uit">Het adres en de gegevens die op de factuur horen. Typ het adres in het zoekveld en de velden vullen zichzelf, met stad en land erbij.</p>'
+      + '<div class="l4rij" style="margin-bottom:10px">'
+      +   '<input id="rkAdresZoek" placeholder="bv. Hoofdweg 12, Apeldoorn - of een buitenlands adres">'
+      +   '<button class="btn sm" id="rkAdresKnop" type="button">Adres opzoeken</button>'
+      + '</div>'
+      + '<div class="l4uit hidden" id="rkAdresTreffers"></div>'
       + '<div class="velden">'
       +   veld("facturatie.straat","Straat", d.facturatie.straat)
       +   veld("facturatie.huisnummer","Huisnummer", d.facturatie.huisnummer)
@@ -495,6 +501,41 @@ function relatieKaart(index){
     $$("rkZoekKnop").addEventListener("click", zoekL4);
     $$("rkZoek").addEventListener("keydown", e => { if (e.key === "Enter") zoekL4(); });
     $$("rkNieuwL4").addEventListener("click", () => { lees(); bevestigAanmaken(); });
+    $$("rkAdresKnop").addEventListener("click", zoekAdres);
+    $$("rkAdresZoek").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); zoekAdres(); } });
+  }
+
+  /* Adres opzoeken (Gerrit, 26 aug 2026): typ een adres, kies de treffer, en
+     straat, huisnummer, postcode, plaats en land staan ingevuld. Zoekt via
+     de worker (OpenStreetMap), dus ook buitenlandse adressen. */
+  async function zoekAdres(){
+    const q = $$("rkAdresZoek").value.trim();
+    const uit = $$("rkAdresTreffers");
+    if (q.length < 3) { zeg("Typ eerst een adres om op te zoeken.", true); return; }
+    zeg("Adres opzoeken…");
+    try {
+      const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/adres/zoek", {
+        method:"POST", headers:{ "Content-Type":"application/json", "X-DP-Admin": adminKey() },
+        body: JSON.stringify({ q }) });
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+      if (!j.treffers.length) { uit.classList.add("hidden"); zeg("Geen adres gevonden voor “" + q + "” - probeer het met plaatsnaam erbij.", true); return; }
+      uit.innerHTML = j.treffers.map((t,i) =>
+        '<button type="button" data-i="' + i + '">' + esc(t.weergave || "(adres)") + '</button>').join("");
+      uit.classList.remove("hidden");
+      uit.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+        const t = j.treffers[Number(b.dataset.i)];
+        lees();
+        if (t.straat) d.facturatie.straat = t.straat;
+        if (t.huisnummer) d.facturatie.huisnummer = t.huisnummer;
+        if (t.postcode) d.facturatie.postcode = t.postcode;
+        if (t.plaats) d.facturatie.plaats = t.plaats;
+        if (t.land) d.facturatie.land = LANDEN.includes(t.land) ? t.land : "overig";
+        teken();
+        zeg("Adres ingevuld: " + [t.straat, t.huisnummer, t.plaats].filter(Boolean).join(" ") + (t.land ? " (" + t.land + ")" : "") + ". Kijk het even na.");
+      }));
+      zeg(j.treffers.length + " adres(sen) gevonden - klik de juiste aan.");
+    } catch(e){ zeg("Adres opzoeken faalde: " + e.message, true); }
   }
 
   /* Wat er in de velden staat terugzetten in het object. Eén functie, zodat
@@ -621,6 +662,9 @@ function relatieKaart(index){
     lees();
     if (!d.email.trim()) { zeg("Een e-mailadres is nodig, daarmee logt de relatie in op het portaal.", true); return; }
     if (!d.soort) { zeg("Kies eerst partner of dealer.", true); return; }
+    /* Gerrit (26 aug 2026): een relatie zonder debiteurnummer mag niet meer
+       bewaard worden - zonder nummer landt er nooit iets goed in Logic4. */
+    if (!(d.debtorIds||[]).length) { zeg("Er is nog geen debiteurnummer gekoppeld. Zoek de bestaande relatie op in het blok Logic4 onderaan, of maak daar een nieuw debiteurnummer aan.", true); return; }
     const anders = (accounts.dealers || []).findIndex((x,i) => i !== index && String(x.email||"").toLowerCase() === d.email.toLowerCase());
     if (anders >= 0) { zeg("Dit e-mailadres hoort al bij een andere relatie.", true); return; }
     accounts.dealers = accounts.dealers || [];
@@ -790,9 +834,11 @@ $("addPartner").addEventListener("click", async ()=>{
   if ((accounts.dealers||[]).some(d=>String(d.email).toLowerCase()===email)){ setStatus("bad","Dit e-mailadres staat er al in."); return; }
   const soort = $("nSoort").value;
   if (!soort){ setStatus("bad","Kies eerst of dit een partner of een dealer is \u2014 dat bepaalt welke prijslijsten dit account te zien krijgt."); return; }
+  const nDebs = $("nDebtors").value.split(",").map(s=>s.trim()).filter(Boolean);
+  if (!nDebs.length){ setStatus("bad","Een debiteurnummer is verplicht - zoek het bestaande nummer op of maak het eerst aan via de relatiekaart."); return; }
   accounts.dealers.push({
     email, company: $("nCompany").value.trim(), soort,
-    debtorIds: $("nDebtors").value.split(",").map(s=>s.trim()).filter(Boolean),
+    debtorIds: nDebs,
     active: true, addedBy: localStorage.getItem(EMAIL_KEY)||"", addedAt: new Date().toISOString(),
   });
   await save("dealer-accounts", accounts);
@@ -837,25 +883,52 @@ $("saveContact").addEventListener("click", async ()=>{
 });
 
 let priceData = { prices: {} };
+/* De koers die overal in dit scherm rekent. Automatisch (ECB-dagkoers min
+   0,03, opgehaald bij de worker); alleen als dat ophalen faalt geldt de
+   handmatige noodkoers, en als laatste redmiddel 1,11. */
+let koersLive = null;
+function huidigeKoers(){
+  if (koersLive && koersLive > 0) return koersLive;
+  const r = Number(priceData.meta && priceData.meta.rate);
+  return r > 0 ? r : 1.11;
+}
+async function laadKoers(){
+  try{
+    const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/koers",
+                          { headers:{ "X-DP-Admin": adminKey() } });
+    const j = await r.json();
+    if (r.ok && j.ok && j.automatisch && Number(j.koers) > 0){
+      koersLive = Number(j.koers);
+      $("rateAuto").innerHTML = "Vandaag ("+esc(j.datum||"")+"): ECB <b>"+j.ecb+"</b> − 0,03 = koers <b>"+j.koers+"</b>. "
+        + "Voorbeeld: $ 3.349 ÷ "+j.koers+" = € "+Math.round(3349/j.koers)+" (excl. BTW).";
+    } else {
+      $("rateAuto").innerHTML = "<span style='color:#c8102e'>Automatische dagkoers niet beschikbaar — de noodkoers hieronder geldt nu.</span>";
+    }
+  }catch(e){
+    $("rateAuto").innerHTML = "<span style='color:#c8102e'>Automatische dagkoers niet op te halen — de noodkoers hieronder geldt nu.</span>";
+  }
+  renderRate(); renderPrices();
+}
 function renderRate(){
   const r = Number(priceData.meta && priceData.meta.rate) > 0 ? Number(priceData.meta.rate) : 1.11;
   $("rateInput").value = r;
-  $("rateEx").textContent = "Voorbeeld: $ 3.349 ÷ " + r + " = € " + Math.round(3349/r) + " (excl. BTW)";
+  $("rateEx").textContent = koersLive ? "wordt nu niet gebruikt (automatische koers actief)"
+    : "Voorbeeld: $ 3.349 ÷ " + r + " = € " + Math.round(3349/r) + " (excl. BTW)";
 }
 $("saveRate").addEventListener("click", async ()=>{
   const r = parseFloat($("rateInput").value);
   if(!(r>0.5 && r<2)){ setStatus("bad","Voer een geldige koers in (tussen 0,5 en 2)."); return; }
   priceData.meta = priceData.meta || {}; priceData.meta.rate = r;
   await save("dealer-prices", priceData); renderRate();
-  try{ if(window.fpLog) window.fpLog("wisselkoers-gewijzigd","EUR/USD → "+r); }catch(e){}
-  setStatus("ok","Koers opgeslagen ("+r+"). Alle EU-partnerprijzen en aanbetalingen rekenen hier nu mee.");
+  try{ if(window.fpLog) window.fpLog("wisselkoers-gewijzigd","noodkoers EUR/USD → "+r); }catch(e){}
+  setStatus("ok","Noodkoers opgeslagen ("+r+"). Die geldt alleen als de automatische dagkoers niet lukt.");
 });
 // Partnerprijs in euro's = $-prijs ÷ koers. Waarde kan zijn:
 //  • {usd,…}       → prijslijst (USD-basis) → EUR = usd/koers
 //  • {price,code}  → handmatig ingevoerd (EUR)
 //  • kaal getal    → oud handmatig (EUR)
 function priceEur(val){
-  const rate = Number(priceData.meta && priceData.meta.rate) > 0 ? Number(priceData.meta.rate) : 1.11;
+  const rate = huidigeKoers();
   if (val && typeof val === "object"){
     if (val.usd != null) return Math.round(Number(val.usd) / rate);
     if (val.price != null) return Number(val.price);
@@ -1014,6 +1087,7 @@ async function init(){
     $("contactEmail").value = accounts.contactEmail;
     if (!priceData.meta || typeof priceData.meta !== "object") priceData.meta = {};
     renderPartners(); renderDocs(); renderReqs(); renderPrices(); renderRate();
+    laadKoers();
     document.getElementById("mgmt").classList.remove("hidden");
   } catch(e){ setStatus("bad", "Laden faalde: "+e.message); }
 }

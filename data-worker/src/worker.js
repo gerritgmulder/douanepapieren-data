@@ -380,6 +380,7 @@ async function dpStockModels(env) {
   const schepen = await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" });
   const reqData = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
   const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
+  const ledger = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
 
   const byModel = {};
   const ensure = m => (byModel[m] = byModel[m] || { model: m, available: 0, physical: 0, onTheWater: 0, nextEta: null, variants: {} });
@@ -411,18 +412,46 @@ async function dpStockModels(env) {
   // daarna telt hij niet meer mee — geen betaling = geen reservering.
   const CLAIM_GRACE_MS = 60 * 60000;
   const nowMs = Date.now();
+  // Ordernummers die al in het reserveringen-ledger staan: een betaalde
+  // portaal-claim die al als Logic4-order in het ledger zit, mag niet
+  // dubbel worden afgetrokken (het ledger telt hem hieronder al mee).
+  const ledgerOrders = new Set();
+  for (const list of Object.values(ledger.byModel || {}))
+    for (const r of list) ledgerOrders.add(String(r.ordernr));
   for (const r of (Array.isArray(reqData.requests) ? reqData.requests : [])) {
     if (r.allocationReleased) continue;
     const paid = r.paymentStatus === "paid" || r.status === "paid";
     const payingNow = r.paymentStatus === "open" && r.ts && (nowMs - Date.parse(r.ts)) < CLAIM_GRACE_MS;
     if (!paid && !payingNow) continue;
     const e = byModel[String(r.model || "").trim()];
-    if (e) e.available = Math.max(0, e.available - (Number(r.qty) || 0));
+    if (!e) continue;
+    e.available = Math.max(0, e.available - (Number(r.qty) || 0));
+    if (!(r.logic4OrderId && ledgerOrders.has(String(r.logic4OrderId))))
+      e.claims = (e.claims || 0) + (Number(r.qty) || 0);
+  }
+
+  /* BESCHIKBAAR. Gerrit (26 aug 2026): "ik wil weten wat de voorraad is +
+     wat er op zee is minus wat er al gereserveerd is." Dus niet de vrije
+     hal-voorraad (die is bij oververkochte modellen 0 en verzwijgt dan dat
+     ook de schepen al vergeven zijn), maar de hele stroom: fysiek in de hal
+     plus onderweg, min álle openstaande reserveringen uit Logic4. Container-
+     orders op Dealer magazijn tellen niet mee: die gaan rechtstreeks naar de
+     dealer en trekken niet uit de Fonteyn-voorraad (zelfde regel als de
+     leverforecast). */
+  for (const m of Object.values(byModel)) {
+    let gereserveerd = 0;
+    for (const r of ((ledger.byModel || {})[m.model] || [])) {
+      if (r.container && r.warehouseId === 27) continue;
+      gereserveerd += Number(r.qty) || 0;
+    }
+    m.reserved = gereserveerd;
+    m.beschikbaar = Math.max(0, m.physical + m.onTheWater - gereserveerd - (m.claims || 0));
+    delete m.claims;
   }
 
   const models = Object.values(byModel)
     .map(m => ({ ...m, variants: Object.entries(m.variants).map(([code, qty]) => ({ code, qty })).filter(x => x.qty > 0) }))
-    .sort((a, b) => (b.available - a.available) || (b.onTheWater - a.onTheWater) || String(a.model).localeCompare(String(b.model)));
+    .sort((a, b) => (b.beschikbaar - a.beschikbaar) || (b.available - a.available) || String(a.model).localeCompare(String(b.model)));
   return { updated: (hallen && hallen.updated) || null, shipsUpdated: (schepen && schepen.updated) || null, models };
 }
 
@@ -506,7 +535,8 @@ async function dpHandleStock(env) {
     for (const v of vs) codeName[v.code] = String(v.desc || v.code).replace(/^.*\|\s*/, "");
   // Live wisselkoers voor de EUR-weergave (partnerprijzen ex. BTW; BTW hangt
   // van de individuele debiteur af en wordt pas bij het reserveren berekend).
-  const rate = Number(priceData.meta && priceData.meta.rate) > 0 ? Number(priceData.meta.rate) : 1.11;
+  // Automatisch: ECB-dagkoers min 0,03 (zie koersVanDaag).
+  const rate = await dpRate(env);
   const models = [];
   for (const m of agg.models) {
     const p = prices[m.model];
@@ -579,7 +609,41 @@ async function dpDebtorVatPercent(env, debtorId) {
   } catch (e) { return 0; }
 }
 
+/* De koers van vandaag, automatisch. Gerrit (26 aug 2026): "wat we willen is
+   dat je iedere dag de koers ophaalt en daar dan 3 cent van af haalt" - niet
+   een vaste 1,11 die niemand bijhoudt. Bron: de dagelijkse referentiekoers
+   van de Europese Centrale Bank (gratis, geen sleutel, elke werkdag rond
+   16:00 ververst). Eén keer per dag opgehaald en in KV bewaard; lukt het
+   ophalen niet (weekend telt de vrijdagkoers, storing), dan geldt de laatst
+   bekende dag. */
+async function koersVanDaag(env) {
+  const vandaag = new Date().toISOString().slice(0, 10);
+  const cache = await env.FONTEYN_DATA.get("wisselkoers-vandaag", { type: "json" });
+  if (cache && cache.datum === vandaag && Number(cache.koers) > 0) return cache;
+  try {
+    const r = await fetch("https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml");
+    if (r.ok) {
+      const t = await r.text();
+      const m = t.match(/currency=['"]USD['"]\s+rate=['"]([\d.]+)['"]/);
+      const ecb = m ? Number(m[1]) : 0;
+      // Grenzen als vangnet tegen een kapotte of omgedraaide waarde: een
+      // EUR/USD buiten dit bereik is geen koers maar een fout.
+      if (ecb > 0.7 && ecb < 1.8) {
+        const rec = { datum: vandaag, ecb, koers: Math.round((ecb - 0.03) * 10000) / 10000, bron: "ECB" };
+        await env.FONTEYN_DATA.put("wisselkoers-vandaag", JSON.stringify(rec));
+        return rec;
+      }
+    }
+  } catch (e) {}
+  return (cache && Number(cache.koers) > 0) ? cache : null;
+}
+
 async function dpRate(env) {
+  // Eerst de automatische dagkoers (ECB min 0,03); alleen als die er om wat
+  // voor reden ook niet is, valt het terug op de handmatig ingevulde koers
+  // uit het beheerscherm, en als laatste redmiddel op 1,11.
+  const auto = await koersVanDaag(env);
+  if (auto && Number(auto.koers) > 0) return Number(auto.koers);
   const pd = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
   const r = Number(pd.meta && pd.meta.rate);
   return r > 0 ? r : 1.11;
@@ -6643,6 +6707,48 @@ export default {
     if (url.pathname === "/dealers/admin/relatie/zoeklijst" && request.method === "POST") {
       if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
       return reply(200, await relIndexBouw(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+
+    /* De wisselkoers van vandaag (ECB min 0,03), voor het beheerscherm. */
+    if (url.pathname === "/dealers/koers" && request.method === "GET") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY &&
+          (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });
+      const auto = await koersVanDaag(env);
+      const pd = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
+      return reply(200, { ok: true, koers: await dpRate(env),
+        ecb: auto ? auto.ecb : null, datum: auto ? auto.datum : null,
+        automatisch: !!auto, handmatig: Number(pd.meta && pd.meta.rate) || null });
+    }
+
+    /* Adres opzoeken voor de relatiekaart (Facturatie). Gerrit (26 aug 2026):
+       "moet hij direct vinden waar in welke stad, land etc. het is." Zoekt
+       via OpenStreetMap (Nominatim, gratis) en geeft straat, huisnummer,
+       postcode, plaats en land terug. Beheersleutel: alleen het beheerscherm
+       gebruikt dit, en zo blijft het geen open doorgeefluik naar buiten. */
+    if (url.pathname === "/dealers/admin/adres/zoek" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const b = await request.json().catch(() => ({}));
+      const q = String(b.q || "").trim().slice(0, 200);
+      if (q.length < 3) return reply(400, { ok: false, error: "zoekterm te kort" });
+      try {
+        const r = await fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=5&q=" +
+                              encodeURIComponent(q),
+                              { headers: { "User-Agent": "Fonteyn-Dashboard/1.0" } });
+        if (!r.ok) return reply(502, { ok: false, error: "zoekdienst antwoordt niet (HTTP " + r.status + ")" });
+        const lijst = await r.json().catch(() => []);
+        const treffers = (Array.isArray(lijst) ? lijst : []).map(t => {
+          const a = t.address || {};
+          return {
+            weergave: String(t.display_name || "").slice(0, 160),
+            straat: a.road || a.pedestrian || a.footway || "",
+            huisnummer: a.house_number || "",
+            postcode: a.postcode || "",
+            plaats: a.city || a.town || a.village || a.municipality || a.county || "",
+            land: String(a.country_code || "").toUpperCase(),
+          };
+        });
+        return reply(200, { ok: true, treffers });
+      } catch (e) { return reply(502, { ok: false, error: String(e.message || e) }); }
     }
     /* Servicemeldingen (ITS) en klantgegevens voor de planningstegel. Lezen
        met de teamsleutel; er wordt niets in Logic4 geschreven. */

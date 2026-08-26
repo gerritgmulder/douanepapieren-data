@@ -192,7 +192,7 @@
     <div id="tab-stock">
       <div class="card">
         <h2>Spa availability</h2>
-        <p class="lead">Live overview per model: available now from stock (NL) and on the water. <span id="stockUpdated"></span></p>
+        <p class="lead">Live overview per model. <b>Available</b> = stock + on the water, minus what is already reserved. <span id="stockUpdated"></span></p>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
           <input id="stockSearch" placeholder="Search model… (e.g. Renew)" style="max-width:320px;flex:1;min-width:180px;">
           <div id="curToggle" style="display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
@@ -406,20 +406,24 @@ async function loadStock(){
 function renderStock(){
   const q = ($("stockSearch").value || "").trim().toLowerCase();
   const list = q ? stockModels.filter(m => m.model.toLowerCase().includes(q)) : stockModels;
-  $("stockGrid").innerHTML = list.map(m => `
+  $("stockGrid").innerHTML = list.map(m => {
+    // Available = physical stock + on the water, minus everything already
+    // reserved (Gerrit, 26 aug 2026). Computed server-side (beschikbaar).
+    const besch = Number(m.beschikbaar != null ? m.beschikbaar : m.available) || 0;
+    return `
     <div class="stock-card" data-model="${esc(m.model)}" style="border-top:6px solid ${esc(m.collectionColor||'#9ca3af')}">
       ${m.collection?`<div style="font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${esc(m.collectionColor)};margin-bottom:3px;">${esc(m.collection)}</div>`:""}
-      <div class="m">${esc(m.model)}${m.available>0?`<span class="pill">${m.available} in stock</span>`:`<span class="pill" style="background:#fef3c7;color:#92400e">backorder</span>`}</div>
+      <div class="m">${esc(m.model)}${besch>0?`<span class="pill">${besch} available</span>`:`<span class="pill" style="background:#fef3c7;color:#92400e">backorder</span>`}</div>
       <ul>
-        <li>Available now: <b>${m.available}</b></li>
-        <li>On the water: <b>${m.onTheWater||0}</b>${m.nextEta?` <span style="color:var(--muted)">(ETA ${esc(m.nextEta)})</span>`:""}</li>
+        <li>Available to order: <b>${besch}</b> <span style="color:var(--muted)">(stock + on the water, minus reserved)</span></li>
+        <li style="color:var(--muted)">In stock now: ${m.available} &middot; On the water: ${m.onTheWater||0}${m.nextEta?` (ETA ${esc(m.nextEta)})`:""}</li>
         ${m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):""}
       </ul>
       <div class="knoppen">
         <button class="go rsv" data-model="${esc(m.model)}" style="padding:9px 14px;font-size:13px;">Reserve</button>
         <button class="secondary dls" data-model="${esc(m.model)}" style="padding:9px 14px;font-size:13px;">Downloads${aantalDocs(m.model) ? ` <span style="color:var(--muted);font-weight:400;">${aantalDocs(m.model)}</span>` : ""}</button>
       </div>
-    </div>`).join("");
+    </div>`;}).join("");
   document.querySelectorAll(".rsv").forEach(b => b.addEventListener("click", () => openReserve(b.dataset.model)));
   document.querySelectorAll(".dls").forEach(b => b.addEventListener("click", () => openDownloads(b.dataset.model)));
   document.querySelectorAll(".stock-card").forEach(c => koppelFoto(c, c.dataset.model));
@@ -464,8 +468,8 @@ function renderPrices(){
     rijen += `<tr>
       <td class="coll" style="border-left-color:${esc(kleur)};color:${esc(kleur)}">${nieuweGroep?esc(m.collection||"Other"):""}</td>
       <td><b class="fotoNaam" data-model="${esc(m.model)}" style="cursor:default">${esc(m.model)}</b></td>
-      <td>${m.available>0
-            ? `<span class="pill">${m.available} in stock</span>`
+      <td>${(Number(m.beschikbaar!=null?m.beschikbaar:m.available)||0)>0
+            ? `<span class="pill">${Number(m.beschikbaar!=null?m.beschikbaar:m.available)||0} available</span>`
             : `<span class="pill" style="background:#fef3c7;color:#92400e">backorder</span>`}</td>
       <td class="n" style="color:var(--muted)">${m.onTheWater||0}${m.nextEta?` <span style="font-size:11px">(${esc(m.nextEta)})</span>`:""}</td>
       <td class="n"><b>${p.opmaak(p.prijs)}</b></td>
