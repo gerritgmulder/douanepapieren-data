@@ -405,6 +405,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
          Chantal en Arno. Staat bovenaan omdat een verkeerd aangemaakte
          relatie in Logic4 niet vanzelf weggaat - de koppeling kan niet
          verwijderen, dus dat moet met de hand en het liefst snel. -->
+    <div id="oudeAppBlok"></div>
     <div id="nieuweRelatiesBlok"></div>
     <div id="takenBlok"></div>
 
@@ -932,6 +933,46 @@ function showDashboard(email) {
   herstelScrollpositie();
   startTakenblok(email);
   startNieuweRelaties(email);
+  controleerAppVersie();
+}
+
+// ─── Verouderde app-schil ────────────────────────────────────────────
+// De tegels werken zichzelf bij via de cloud, maar de app-schil (de .exe)
+// alleen via de automatische updater - en die installeert pas bij een NETTE
+// afsluiting. Crasht de app telkens (zoals 0.20.0 doet op een bezette poort
+// 3737), dan komt die nette afsluiting er nooit en blijft iemand eeuwig op
+// de oude versie hangen. Dat gebeurde bij Arno (26 aug 2026): twaalf dagen
+// vast op 0.20.0 terwijl 0.20.1 al die tijd klaarstond.
+//
+// Deze melding doorbreekt dat: één klik sluit het dashboard netjes af,
+// waarna de klaargezette update alsnog wordt geïnstalleerd. Geen handmatige
+// download, niets installeren - precies zoals afgesproken.
+const APP_MINIMAAL = [0, 20, 1];
+function controleerAppVersie() {
+  const m = navigator.userAgent.match(/fonteyn-dashboard\/(\d+)\.(\d+)\.(\d+)/i);
+  if (!m) return;                              // browser of telefoon: niets doen
+  const huidig = [Number(m[1]), Number(m[2]), Number(m[3])];
+  for (let i = 0; i < 3; i++) {
+    if (huidig[i] > APP_MINIMAAL[i]) return;   // nieuwer: klaar
+    if (huidig[i] < APP_MINIMAAL[i]) break;    // ouder: melden
+    if (i === 2) return;                       // precies gelijk: klaar
+  }
+  const blok = el("oudeAppBlok");
+  if (!blok) return;
+  blok.innerHTML =
+    '<div style="background:#fff;border:1px solid #fecaca;border-left:5px solid #dc2626;border-radius:12px;padding:16px 18px;margin-bottom:18px">' +
+    '<div style="font-weight:700;color:#b91c1c;font-size:14px;margin-bottom:6px">Deze computer draait nog een oude versie van het dashboard (' + huidig.join(".") + ')</div>' +
+    '<div style="font-size:13px;line-height:1.55;color:#374151">Daardoor kan de app soms ineens afsluiten met een foutmelding. ' +
+    'De verbeterde versie staat al voor je klaar - er hoeft niets gedownload of ge\u00efnstalleerd te worden. ' +
+    'Klik op de knop: het dashboard sluit dan netjes af en werkt zichzelf bij. Start hem daarna gewoon opnieuw.</div>' +
+    '<button type="button" id="oudeAppKnop" style="margin-top:12px;background:#dc2626;color:#fff;border:0;border-radius:9px;padding:11px 20px;font:inherit;font-weight:600;cursor:pointer">Nu bijwerken (dashboard sluit even af)</button>' +
+    '<div style="font-size:11.5px;color:#6b7280;margin-top:8px">Zie je deze melding na het opnieuw starten nog steeds? Werk dan vijf minuten gewoon door en klik nog een keer - de update wordt op de achtergrond opgehaald.</div></div>';
+  el("oudeAppKnop").addEventListener("click", () => {
+    try { if (window.fpLog) window.fpLog("oude-app-herstart-geklikt", "versie " + huidig.join(".")); } catch (e) {}
+    // Netjes afsluiten: dan installeert de updater de klaargezette versie.
+    setTimeout(() => window.close(), 300);
+  });
+  try { if (window.fpLog) window.fpLog("oude-app-gemeld", "versie " + huidig.join(".") + " < " + APP_MINIMAAL.join(".")); } catch (e) {}
 }
 
 // ─── Mijn taken ──────────────────────────────────────────────
