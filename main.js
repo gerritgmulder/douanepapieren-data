@@ -38,6 +38,9 @@ const GITHUB_USER   = "gerritgmulder";
 const GITHUB_REPO   = "douanepapieren-data";
 const GITHUB_BRANCH = "main";
 const RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_USER}/${GITHUB_REPO}/${GITHUB_BRANCH}`;
+// Vangnet als raw.githubusercontent.com geblokkeerd is (sommige bedrijfs-
+// firewalls doen dat): onze eigen worker serveert dezelfde bestanden.
+const OTA_BASE = "https://fonteyn-data-store.g-mulder.workers.dev/ota";
 
 // Bundled defaults: als de userData live-map leeg is, kopieer deze bestanden.
 // Dit zijn de bestanden die ook in de .exe terechtkomen via electron-packager.
@@ -125,18 +128,37 @@ async function fetchRaw(url) {
 
 async function fetchLiveUpdates() {
   // 1) Haal het manifest op. Valideer als JSON voordat we 'm opslaan.
-  const manifestBuf = await fetchRaw(`${RAW_BASE}/manifest.json`);
+  //    Eerst rechtstreeks bij GitHub; lukt dat niet, dan via onze eigen
+  //    Cloudflare-worker, die hetzelfde bestand serverside bij GitHub haalt.
+  //    Aanleiding (26 aug 2026): op de kantoor-pc van Arno is
+  //    raw.githubusercontent.com geblokkeerd terwijl github.com en de worker
+  //    het daar gewoon doen — de tegels bleven daardoor dagenlang oud staan
+  //    terwijl de schil zich netjes bijwerkte.
+  let bron = "github";
+  let manifestBuf = await fetchRaw(`${RAW_BASE}/manifest.json`);
+  if (!manifestBuf || manifestBuf.length === 0) {
+    bron = "worker";
+    manifestBuf = await fetchRaw(`${OTA_BASE}/manifest.json`);
+  }
   let remoteManifest = null;
   if (manifestBuf && manifestBuf.length > 0) {
     try {
       remoteManifest = JSON.parse(manifestBuf.toString("utf-8"));
       await fs.writeFile(path.join(liveDir, "manifest.json"), manifestBuf);
-      console.log(`[update] ✓ manifest.json (v${remoteManifest.version || "?"}) opgehaald`);
+      console.log(`[update] ✓ manifest.json (v${remoteManifest.version || "?"}) opgehaald via ${bron}`);
     } catch (e) {
       console.warn(`[update] manifest.json ongeldig JSON:`, e.message);
       remoteManifest = null;
     }
   }
+
+  // Welke weg het werd, komt in de live-map te staan zodat dashboard.html
+  // het kan meesturen — zo is op afstand te zien welke pc's op het vangnet
+  // draaien. Geen manifest via geen van beide wegen = "cache".
+  try {
+    await fs.writeFile(path.join(liveDir, "ota-bron.json"),
+      JSON.stringify({ bron: remoteManifest ? bron : "cache", ts: new Date().toISOString() }));
+  } catch {}
 
   // 2) Fallback: als remote niet werkte, gebruik de lokale manifest om te weten
   //    welke files we zouden willen (bv. om alsnog wat te refreshen als dat lukt).
@@ -151,13 +173,17 @@ async function fetchLiveUpdates() {
     return;
   }
 
-  // 3) Download elk bestand uit het manifest.
+  // 3) Download elk bestand uit het manifest, langs dezelfde weg als het
+  //    manifest. Faalt één bestand via GitHub, dan vangt de worker dat op.
+  const basis = bron === "worker" ? OTA_BASE : RAW_BASE;
   for (const entry of remoteManifest.files) {
     if (!entry || !entry.name) continue;
     // Skip manifest.json zelf — die hebben we hierboven al.
     if (entry.name === "manifest.json") continue;
 
-    const buf = await fetchRaw(`${RAW_BASE}/${entry.name}`);
+    let buf = await fetchRaw(`${basis}/${entry.name}`);
+    if ((!buf || buf.length === 0) && basis === RAW_BASE)
+      buf = await fetchRaw(`${OTA_BASE}/${entry.name}`);
     if (!buf || buf.length === 0) continue;
 
     // Optionele validatie: voor JSON-bestanden niet overschrijven met corrupt bestand

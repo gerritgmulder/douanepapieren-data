@@ -6740,6 +6740,28 @@ export default {
       return reply(200, { ok: true, van, naar });
     }
 
+    /* OTA-vangnet voor de app op de pc. Op 26 aug 2026 bleek dat de kantoor-
+       pc van Arno (PC-KJLPDR) raw.githubusercontent.com niet kan bereiken,
+       terwijl github.com (schil-updates) en deze worker het daar gewoon doen -
+       een firewall of virusscanner die precies die servernaam blokkeert. De
+       schil (vanaf 0.20.2) haalt de tegelbestanden daarom eerst bij GitHub en
+       anders hier. Er komt geen byte meer naar buiten dan via GitHub al kan:
+       precies de bestanden uit manifest.json, dezelfde lijst als bij /m/. */
+    if (url.pathname.startsWith("/ota/") && request.method === "GET") {
+      const naam = decodeURIComponent(url.pathname.slice(5));
+      const mag = naam === "manifest.json" ||
+                  (!naam.includes("..") && (await mobielToegestaan(env)).has(naam));
+      if (!mag) return reply(404, "Onbekend bestand");
+      const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/" +
+                            naam + "?t=" + Date.now(),
+                            { cf: { cacheTtl: 0, cacheEverything: false } });
+      if (!r.ok) return reply(502, "Bron niet beschikbaar");
+      return new Response(await r.arrayBuffer(), { status: 200, headers: {
+        "Content-Type": "application/octet-stream",
+        "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow",
+      }});
+    }
+
     /* ── Het dashboard op de telefoon ────────────────────────────────
        Op een telefoon draait het hulpprogramma van de pc niet, en er valt
        ook niets te installeren. Dus serveert de worker de pagina's zelf,

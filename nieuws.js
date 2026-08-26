@@ -52,6 +52,11 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-26", iedereen: true, soort: "hersteld",
+      titel: "Updates komen nu op elke computer aan",
+      wat: "Op sommige kantoorcomputers kwamen vernieuwingen van het dashboard niet of pas veel later binnen. Het dashboard haalt zijn vernieuwingen nu langs een tweede weg op als de eerste dicht zit. Je hoeft er niets voor te doen.",
+    },
+    {
       datum: "2026-08-26", bestand: "voorraad.html", soort: "hersteld",
       titel: "Lijsten springen niet meer naar boven",
       wat: "Als je in een lijst gescrold had (zoals Afroep en binnengekomen bij Particulier) en je ging even naar een ander programma of scherm, stond de lijst bij terugkomst weer bovenaan. De lijsten onthouden nu gewoon waar je was.",

@@ -887,6 +887,17 @@ async function logLogin(email) {
     const r = await fetch("manifest.json?" + Date.now(), { cache: "no-store" });
     if (r.ok) { const j = await r.json(); inhoud = String(j.version || ""); }
   } catch (e) {}
+  /* Langs welke weg kwam de inhoud binnen? De schil (vanaf 0.20.2) schrijft
+     dat in ota-bron.json: "github" is de normale weg, "worker" betekent dat
+     GitHub op die pc geblokkeerd is en het vangnet het werk doet, "cache"
+     dat geen van beide lukte. Alleen het afwijkende geval vermelden. */
+  try {
+    const rb = await fetch("ota-bron.json?" + Date.now(), { cache: "no-store" });
+    if (rb.ok) {
+      const b = await rb.json();
+      if (b && b.bron && b.bron !== "github") inhoud += " · via " + b.bron;
+    }
+  } catch (e) {}
   for (let poging = 0; poging < 30; poging++) {
     const k = localStorage.getItem("fp.teamkey") || "";
     if (k) {
