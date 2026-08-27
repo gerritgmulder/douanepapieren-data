@@ -52,6 +52,22 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-27", bestand: "voorraad.html", soort: "nieuw",
+      titel: "Regels verwijderen, zoeken in elk blok, en 'op voorraad' kiezen",
+      wat: "Drie dingen bij Particulier en Partner. Met het kruisje achteraan haal je een reservering uit het dashboard; hij verdwijnt dan uit alle lijsten en met 'verwijderde regels tonen' haal je hem terug (in Logic4 verandert er niets). De blokken Afroep en binnengekomen, Binnen per adviseur en Gepland hebben nu een eigen zoekveld, zodat je daar op ordernummer kunt zoeken. En bij Verwachte levering kun je voortaan naast een schip ook 'op voorraad (Uddel)' aanwijzen.",
+    },
+    {
+      datum: "2026-08-27", bestand: "voorraad.html", soort: "beter",
+      titel: "Verwachte levering staat nu ook in de onderste blokken",
+      wat: "In Afroep en binnengekomen en in Binnen per adviseur stond niet wanneer de spa binnenkomt, terwijl de planning daar juist op stuurt. Die kolom staat er nu bij, bij Particulier en bij Partner.",
+    },
+    {
+      datum: "2026-08-27", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Lijsten worden niet meer leeg na een verversing",
+      wat: "Het scherm ververst zichzelf elke tien minuten. Ging dat ophalen een keer mis, dan kon een lijst leeg raken terwijl er in werkelijkheid gewoon regels stonden - bij Gepland was dat goed schrikken. Een mislukte verversing laat nu alles staan zoals het was.",
+    },
+
+    {
       datum: "2026-08-26", bestand: "specsheets.html", soort: "beter",
       titel: "Duidelijk welk veld de NL- en welk de USA-sheet aanpast",
       wat: "In de Amerikaanse stand staat nu een groen NL-vlaggetje voor de gewone waarde en een geel USA-vlaggetje voor de Amerikaanse. Wat je in het NL-veld typt verandert de Nederlandse sheet, het USA-veld raakt alleen de Amerikaanse versie - handig bij elektra, waar Amerika echt andere getallen heeft.",
