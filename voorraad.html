@@ -1772,9 +1772,21 @@ function kpi(n,l,color,small){ return "<div class='kpi' style='border-top-color:
 const RESV_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/reserveringen-live";
 let resvData={byModel:{},byModelUSA:{}}, resvOpen={};
 async function loadReserveringen(){
+  /* Zelfde regel als bij de aantekeningen: een mislukte of lege verversing
+     mag nooit het scherm leegmaken. Liever een lijst van tien minuten oud
+     dan een leeg tabblad bij iemand die aan het werk is (27 aug 2026). */
   try{
     const r=await fetch(RESV_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
-    if(r.ok){ const j=await r.json(); resvData={byModel:(j&&j.byModel)||{},byModelUSA:(j&&j.byModelUSA)||{},updated:j&&j.updated}; }
+    if(r.ok){
+      const j=await r.json();
+      const vers=j&&j.byModel;
+      const had=Object.keys(resvData.byModel||{}).length;
+      if(vers&&typeof vers==="object"&&(Object.keys(vers).length>0||had===0)){
+        resvData={byModel:vers,byModelUSA:(j&&j.byModelUSA)||{},updated:j&&j.updated};
+      }else if(had>0){
+        try{ if(window.fpLog) window.fpLog("reserveringen-leeg-genegeerd","opslag gaf 0 modellen terug terwijl er "+had+" op het scherm stonden"); }catch(e){}
+      }
+    }
   }catch(e){ console.warn("reserveringen laden faalde:",e); }
   // Chantals opmerkingen en vinkjes horen bij deze regels; samen ophalen zodat
   // de tabellen in één keer compleet staan.
@@ -1874,10 +1886,32 @@ function isZakelijk(r){ return r.type==="partner"||r.type==="zakelijk"; }
 const NOTITIE_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-notities";
 let notities={};
 async function loadNotities(){
+  /* De vinkjes en notities opnieuw ophalen. Deze functie MAG de bestaande
+     stand nooit wissen. Tot 27 aug 2026 deed hij dat wel: bij een antwoord
+     zonder 'regels' viel hij terug op een lege lijst, en dan verdwenen alle
+     vinkjes van het scherm. Zolang hij één keer bij het openen draaide viel
+     dat niemand op; sinds het scherm zichzelf elke tien minuten ververst
+     stond Chantal ineens naar een leeg tabblad Gepland te kijken terwijl er
+     in de opslag gewoon 88 vinkjes stonden. Vandaar drie sloten: een slecht
+     antwoord verandert niets, een lege lijst terwijl we er net nog hadden
+     verandert niets (en wordt gemeld), en wat ik zelf net heb aangevinkt
+     maar nog niet is opgeslagen blijft staan. */
   try{
     const r=await fetch(NOTITIE_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
-    if(r.ok){ const j=await r.json(); notities=(j&&j.regels)||{}; }
-  }catch(e){ console.warn("aantekeningen laden faalde:",e); }
+    if(!r.ok){ console.warn("aantekeningen laden: HTTP "+r.status+" - oude stand blijft staan"); return false; }
+    const j=await r.json();
+    const vers=j&&j.regels;
+    if(!vers||typeof vers!=="object"){ console.warn("aantekeningen laden: onbruikbaar antwoord - oude stand blijft staan"); return false; }
+    const had=Object.keys(notities).length, komt=Object.keys(vers).length;
+    if(had>0&&komt===0){
+      try{ if(window.fpLog) window.fpLog("aantekeningen-leeg-genegeerd","opslag gaf 0 regels terug terwijl er "+had+" op het scherm stonden"); }catch(e){}
+      return false;
+    }
+    // Eigen, nog niet opgeslagen wijzigingen overeind houden.
+    notitiesVuil.forEach(function(k){ if(notities[k]) vers[k]=notities[k]; else delete vers[k]; });
+    notities=vers;
+    return true;
+  }catch(e){ console.warn("aantekeningen laden faalde:",e); return false; }
 }
 // Niet bij élke toetsaanslag opslaan; even wachten tot het typen stopt.
 let notitieTimer=null;
