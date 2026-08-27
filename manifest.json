@@ -1,5 +1,5 @@
 {
-  "version": "0.25.8",
+  "version": "0.25.9",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -275,7 +275,7 @@
     },
     {
       "name": "inv-pl.js",
-      "note": "Commercial invoice + packing list in \u00e9\u00e9n werkmap: containers en labels"
+      "note": "Commercial invoice + packing list in één werkmap: containers en labels"
     },
     {
       "name": "sales-confirmation.js",

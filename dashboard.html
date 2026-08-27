@@ -983,20 +983,13 @@ function controleerAppVersie() {
   }
   const blok = el("oudeAppBlok");
   if (!blok) return;
-  /* Op een Mac werkt de zelf-update niet: de updater weigert een app die
-     niet door Apple is ondertekend. Gemeten 26 aug 2026: alle Windows-pc's
-     stonden op de nieuwste schil, alle Macs bleven hangen (0.13.0, 0.20.0).
-     Daarom krijgt een Mac een eerlijke kaart: eenmalig het .dmg-bestand
-     opnieuw downloaden en in Programma's slepen. */
-  const isMac = /Macintosh|Mac OS X/i.test(navigator.userAgent);
-  if (isMac) {
-    blok.innerHTML =
-      '<div style="background:#fff;border:1px solid #fecaca;border-left:5px solid #dc2626;border-radius:12px;padding:16px 18px;margin-bottom:18px">' +
-      '<div style="font-weight:700;color:#b91c1c;font-size:14px;margin-bottom:6px">Deze Mac draait nog een oude versie van het dashboard (' + huidig.join(".") + ')</div>' +
-      '<div style="font-size:13px;line-height:1.55;color:#374151">Op een Mac kan het dashboard zichzelf niet bijwerken. Dat is zo op te lossen: ' +
-      '<a href="https://github.com/gerritgmulder/douanepapieren-data/releases/latest" target="_blank" rel="noopener" style="color:#b91c1c;font-weight:600">download hier het nieuwste .dmg-bestand</a>, ' +
-      'open het en sleep het dashboard in de map Programma\u2019s (vervang de oude). Je instellingen en inlog blijven gewoon staan.</div></div>';
-    try { if (window.fpLog) window.fpLog("oude-app-gemeld-mac", "versie " + huidig.join(".")); } catch (e) {}
+  /* Op een Mac blijft dit vak leeg. De zelf-update werkt daar niet (de
+     updater weigert een app die niet door Apple is ondertekend), dus een
+     waarschuwing zou alleen maar elke dag in de weg staan zonder dat er een
+     knop is die hem oplost. Gerrit wil hem daar niet zien (27 aug 2026).
+     Op Windows blijft de kaart wel staan: daar doet de knop echt iets. */
+  if (/Macintosh|Mac OS X/i.test(navigator.userAgent)) {
+    try { if (window.fpLog) window.fpLog("oude-app-mac-stil", "versie " + huidig.join(".")); } catch (e) {}
     return;
   }
   blok.innerHTML =
