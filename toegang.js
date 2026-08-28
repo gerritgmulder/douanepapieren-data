@@ -103,8 +103,11 @@
       "arno", "chantal", "dolf", "fonteynbot", "gerrit", "manon",
     ],
     // Dealerportaal-beheer
+    /* Gretha erbij op 28 aug 2026: zij maakt de documentatie en de
+       prijslijsten en vroeg zelf of ze haar handleidingen en afbeeldingen in
+       het partnerportaal kan zetten. Dat kan nu, in het blok Bibliotheek. */
     "dealerportaal": [
-      "arno", "chantal", "don", "fonteynbot", "gerrit",
+      "arno", "chantal", "don", "fonteynbot", "gerrit", "gretha",
     ],
     // Eikensingel
     "eikensingel": [

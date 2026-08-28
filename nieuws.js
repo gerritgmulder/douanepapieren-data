@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-28", bestand: "dealerportaal.html", soort: "nieuw",
+      titel: "Zelf bestanden in het partnerportaal zetten",
+      wat: "In het blok Bibliotheek kies je een map, geef je een titel en wijs je een bestand op je computer aan - pdf, word, excel of een afbeelding tot 24 MB. Het staat meteen bij de partners onder Documenten. Tot nu toe kon je alleen een link plakken naar iets dat elders al openbaar stond.",
+    },
+
+    {
       datum: "2026-08-27", groep: "partnerportaal-kijk", soort: "beter",
       titel: "Uitleg bij de prijzen: vracht en verpakking",
       wat: "Gretha bevestigde hoe de prijzen zijn opgebouwd. De 50 dollar verpakkingskosten kloppen en worden in Logic4 als losse regel doorberekend. Bij de Turbine-swimspa's staat geen vrachttoeslag omdat de containerkosten al in de verkoopprijs zitten - die worden dus niet dubbel gerekend.",

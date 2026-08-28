@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Partnerportaal beheren — Fonteyn Dashboard</title>
+<script src="toegang.js"></script>
 <script src="taal.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <style>
@@ -217,7 +218,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
   <div class="card">
     <h3>Documenten &amp; specsheets (<span id="docCount">0</span>)</h3>
-    <p class="lead" style="margin-bottom:10px">Plak een link naar de PDF (bijv. op fonteyn.nl, Google Drive met "iedereen met link", of een andere publieke plek). Partners zien titel + model + downloadknop.</p>
+    <p class="lead" style="margin-bottom:10px">Hier zet je een <b>link</b> naar een document dat ergens anders al openbaar staat. Wil je een bestand uit je eigen map naar het portaal brengen - een handleiding, een specsheet, een afbeelding - gebruik dan het blok <b>Bibliotheek</b> hieronder. Dat is waar de partners hun documenten vinden.</p>
     <table class="grid">
       <thead><tr><th>Titel</th><th>Model</th><th>Link</th><th></th></tr></thead>
       <tbody id="docBody"></tbody>
@@ -228,6 +229,32 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <input id="dUrl" placeholder="https://…" style="min-width:260px">
       <button class="primary" id="addDoc" type="button">+ Document toevoegen</button>
     </div>
+  </div>
+
+  <!-- De echte bibliotheek van het portaal. Gretha (28 aug 2026): "kan ik
+       trouwens gewoon zelf ook afbeeldingen, handleidingen etc uploaden in het
+       partnerportaal als ik iets klaar heb?" Dat kon niet: er was alleen een
+       veld voor een link naar een bestand dat elders al openbaar stond, en de
+       154 documenten die partners nu zien waren buiten dit scherm om geplaatst.
+       Hier gaat het bestand zelf naar binnen: kies de map, kies het bestand,
+       klaar. -->
+  <div class="card">
+    <h3>Bibliotheek — bestanden voor partners (<span id="bibTel">0</span>)</h3>
+    <p class="lead" style="margin-bottom:10px">Dit is wat partners in het portaal onder <b>Documenten</b> zien. Zet hier je pdf, handleiding of afbeelding neer; hij staat er meteen in. Toegestaan: pdf, word, excel, jpg, png en webp, tot 24 MB per bestand.</p>
+    <div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+      <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:3px">Map</label>
+        <select id="bibGroep" style="min-width:250px"></select></div>
+      <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:3px">Titel voor de partner</label>
+        <input id="bibTitel" placeholder="bv. Handleiding Passion Wonder" style="min-width:250px"></div>
+      <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:3px">Bestand</label>
+        <input type="file" id="bibBestand" accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png,.webp" style="min-width:230px"></div>
+      <button class="primary" id="bibUpload" type="button">Naar het portaal zetten</button>
+    </div>
+    <div id="bibMelding" style="font-size:12.5px;margin-top:9px;color:var(--muted)"></div>
+    <div style="margin-top:14px">
+      <input id="bibZoek" placeholder="zoek in de bibliotheek…" style="min-width:260px;padding:7px">
+    </div>
+    <div id="bibLijst" style="margin-top:10px"></div>
   </div>
 
   <div class="card">
@@ -253,20 +280,18 @@ const $ = (id) => document.getElementById(id);
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function setStatus(k,m){ const e=$("status"); if(!m){e.classList.add("hidden");return;} e.className="status-msg "+k; e.textContent=m; e.classList.remove("hidden"); }
 
-// Toegang: Gerrit/Fonteynbot + Arno, Don, Chantal
-const ALLOWED = new Set([
-  "gerrit@fonteyn.nl","gerrit",
-  "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot",
-  "arno@fonteyn.nl","fonteyn.arno","arno",
-  "don@fonteyn.nl","fonteyn.don","don",
-  "chantal@fonteyn.nl","fonteyn.chantal","chantal",
-]);
+/* Toegang komt uit toegang.js, niet uit een eigen lijst. Hier stond tot
+   28 aug 2026 een tweede namenlijst, en dat is precies waar toegang.js voor
+   gemaakt is: Gretha kreeg de tegel toegewezen, zag hem op het dashboard
+   staan en kreeg bij het openen "Geen toegang" - twee lijsten die uit elkaar
+   liepen. Eén lijst dus, en die staat in toegang.js. */
 (function boot(){
   if (!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
   const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
   $("userEmail").textContent = email || "—";
-  if (!ALLOWED.has(email)){
-    document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'><h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor Gerrit, Arno, Don, Chantal en Fonteynbot.</p><p><a href='dashboard.html'>← Terug</a></p></main>";
+  const mag = window.fpToegang && window.fpToegang.mag("dealerportaal", email);
+  if (!mag){
+    document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'><h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor het team dat het partnerportaal beheert.</p><p>Je bent ingelogd als <code>"+email+"</code>.</p><p><a href='dashboard.html'>← Terug</a></p></main>";
     throw new Error("geen toegang");
   }
 })();
@@ -877,6 +902,82 @@ $("addDoc").addEventListener("click", async ()=>{
   setStatus("ok","Document toegevoegd — direct zichtbaar in het portaal.");
 });
 
+/* ── De bibliotheek van het partnerportaal ─────────────────────────────
+   docsData.library.categories[].groups[].files[] = {id, title, size}; het
+   bestand zelf staat bij de worker onder dat id. Uploaden is dus twee dingen:
+   het bestand erheen sturen en de regel in deze lijst zetten. */
+function bibGroepen(){
+  const uit=[];
+  for(const c of ((docsData.library&&docsData.library.categories)||[]))
+    for(const g of (c.groups||[])) uit.push({cat:c, groep:g, label:(c.name||"")+" › "+(g.name||"")});
+  return uit;
+}
+function bibVulKeuze(){
+  const sel=$("bibGroep"); if(!sel) return;
+  const nu=sel.value;
+  sel.innerHTML=bibGroepen().map((g,i)=>"<option value='"+i+"'>"+esc(g.label)+" ("+((g.groep.files||[]).length)+")</option>").join("");
+  if(nu) sel.value=nu;
+}
+function bibNaam(titel, bestandsnaam){
+  const ext=(String(bestandsnaam).split(".").pop()||"pdf").toLowerCase();
+  const kaal=String(titel||bestandsnaam).toLowerCase()
+    .replace(/[àáâä]/g,"a").replace(/[èéêë]/g,"e").replace(/[ìíîï]/g,"i")
+    .replace(/[òóôö]/g,"o").replace(/[ùúûü]/g,"u").replace(/[^a-z0-9]+/g,"-")
+    .replace(/^-+|-+$/g,"").slice(0,60) || "bestand";
+  return kaal+"."+ext;
+}
+function renderBib(){
+  const lijst=$("bibLijst"); if(!lijst) return;
+  bibVulKeuze();
+  const q=(($("bibZoek")||{}).value||"").trim().toLowerCase();
+  let n=0, rijen="";
+  for(const {cat,groep} of bibGroepen()){
+    const treffers=(groep.files||[]).filter(f=>!q||String(f.title||"").toLowerCase().includes(q)||String(f.id||"").toLowerCase().includes(q));
+    n+=(groep.files||[]).length;
+    if(!treffers.length) continue;
+    rijen+="<tr><td colspan='3' style='background:#f9fafb;font-weight:600;font-size:12px'>"+esc(cat.name)+" › "+esc(groep.name)+"</td></tr>";
+    for(const f of treffers)
+      rijen+="<tr><td>"+esc(f.title||"")+"</td>"+
+        "<td style='font-size:11.5px;color:var(--muted)'>"+esc(f.id||"")+"</td>"+
+        "<td style='text-align:right;font-size:11.5px;color:var(--muted);white-space:nowrap'>"+
+          (f.size?Math.round(f.size/1024)+" kB":"")+"</td></tr>";
+  }
+  $("bibTel").textContent=n;
+  lijst.innerHTML=q&&!rijen
+    ? "<p class='lead' style='font-size:12.5px'>Niets gevonden voor \u201c"+esc(q)+"\u201d.</p>"
+    : "<div style='max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:8px'><table class='grid' style='margin:0'>"+rijen+"</table></div>";
+}
+$("bibZoek").addEventListener("input", renderBib);
+$("bibUpload").addEventListener("click", async ()=>{
+  const mel=$("bibMelding");
+  const groepen=bibGroepen(), keuze=groepen[Number($("bibGroep").value)];
+  const bestand=($("bibBestand").files||[])[0];
+  const titel=$("bibTitel").value.trim();
+  if(!keuze){ mel.textContent="Kies eerst een map."; return; }
+  if(!bestand){ mel.textContent="Kies een bestand van je computer."; return; }
+  if(!titel){ mel.textContent="Vul een titel in; die zien de partners staan."; return; }
+  if(bestand.size>24*1024*1024){ mel.textContent="Dit bestand is groter dan 24 MB en past niet."; return; }
+  const map=String(keuze.cat.key||"overig")+"/"+String(keuze.groep.name||"algemeen").toLowerCase()
+    .replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
+  const id=map+"/"+bibNaam(titel,bestand.name);
+  if((keuze.groep.files||[]).some(f=>f.id===id)){ mel.textContent="Er staat al een bestand met deze naam in deze map. Kies een andere titel."; return; }
+  mel.textContent="Bezig met versturen…";
+  try{
+    const r=await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/file?id="+encodeURIComponent(id),
+      { method:"PUT", headers:{ "X-DP-Admin": adminKey() }, body: bestand });
+    const j=await r.json();
+    if(!r.ok||!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    keuze.groep.files=keuze.groep.files||[];
+    keuze.groep.files.push({ id, title: titel, size: bestand.size });
+    docsData.library.updated=new Date().toISOString();
+    await save("dealer-docs", docsData);
+    try{ if(window.fpLog) window.fpLog("bibliotheek-bestand-toegevoegd", titel+" ("+id+")"); }catch(e){}
+    $("bibTitel").value=""; $("bibBestand").value="";
+    renderBib();
+    mel.innerHTML="<b style='color:var(--fonteyn-green)'>Klaar.</b> \u201c"+esc(titel)+"\u201d staat in "+esc(keuze.label)+" en is meteen zichtbaar voor partners.";
+  }catch(e){ mel.textContent="Versturen faalde: "+e.message; }
+});
+
 $("saveContact").addEventListener("click", async ()=>{
   const v = $("contactEmail").value.trim().toLowerCase();
   if (!v || !v.includes("@")){ setStatus("bad","Vul een geldig e-mailadres in."); return; }
@@ -1089,7 +1190,7 @@ async function init(){
     if (!priceData.prices || typeof priceData.prices !== "object") priceData.prices = {};
     $("contactEmail").value = accounts.contactEmail;
     if (!priceData.meta || typeof priceData.meta !== "object") priceData.meta = {};
-    renderPartners(); renderDocs(); renderReqs(); renderPrices(); renderRate();
+    renderPartners(); renderDocs(); renderReqs(); renderPrices(); renderRate(); renderBib();
     laadKoers();
     document.getElementById("mgmt").classList.remove("hidden");
   } catch(e){ setStatus("bad", "Laden faalde: "+e.message); }

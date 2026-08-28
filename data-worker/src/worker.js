@@ -1446,6 +1446,21 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/uitnodigen" && request.method === "POST") return dpAdminUitnodigen(request, env, url);
     if (p === "/dealers/admin/wachtwoord" && request.method === "POST") return dpAdminSetPassword(request, env);
     if (p === "/dealers/admin/file" && request.method === "PUT") return dpAdminPutFile(request, env, url);
+    /* Een portaaldocument ophalen met de beheersleutel. Er was alleen een weg
+       om te uploaden; wie iets wilde nakijken moest zelf als partner inloggen.
+       Aanleiding: Gretha vroeg (27 aug 2026) of de partnerprijs van de
+       warmtepomp op pagina 2 van haar eigen prijslijst staat - dat hoort
+       gewoon na te kijken te zijn. */
+    if (p === "/dealers/admin/file" && request.method === "GET") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const id = dpFileId(url);
+      if (!id) return reply(400, { ok: false, error: "bad-id" });
+      const buf = await env.FONTEYN_DATA.get("dpfile:" + id, { type: "arrayBuffer" });
+      if (!buf) return reply(404, { ok: false, error: "not-found" });
+      return new Response(buf, { status: 200, headers: { ...corsHeaders,
+        "Content-Type": id.endsWith(".pdf") ? "application/pdf" : "application/octet-stream",
+        "Cache-Control": "no-store" } });
+    }
     if (p === "/dealers/admin/testorder" && request.method === "POST") return dpAdminTestOrder(request, env);
     if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);
     if (p === "/dealers/admin/refresh-stock" && request.method === "POST") return reply(200, await dpRefreshHalStock(env).catch(e => ({ ok: false, error: String(e.message || e) })));
