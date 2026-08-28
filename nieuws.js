@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-27", groep: "partnerportaal-kijk", soort: "beter",
+      titel: "Uitleg bij de prijzen: vracht en verpakking",
+      wat: "Gretha bevestigde hoe de prijzen zijn opgebouwd. De 50 dollar verpakkingskosten kloppen en worden in Logic4 als losse regel doorberekend. Bij de Turbine-swimspa's staat geen vrachttoeslag omdat de containerkosten al in de verkoopprijs zitten - die worden dus niet dubbel gerekend.",
+    },
+
+    {
       datum: "2026-08-27", bestand: "container-laden.html", soort: "beter",
       titel: "Covers van swimspa's gaan in delen, en te brede spa's worden gemeld",
       wat: "Een lange cover werd tot nu toe als één stuk gerekend - bij een Aquatic 2 was dat ruim zes meter, en dan paste hij naast twee spa's net niet meer in de container. Chantal bevestigde dat zo'n cover in twee of drie delen komt; de berekening rekent nu met twee delen, dus er past meer in. Staat een model in geen enkele stand in de container, dan zegt het scherm dat nu ook, in plaats van stilletjes nul te tonen. De Turbine Grand is daar het voorbeeld van: die is drie meter breed en komt in een open container naar Nederland.",

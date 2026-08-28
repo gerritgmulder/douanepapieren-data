@@ -199,8 +199,23 @@
       fabriek: "Foshan Gaoming Yuehua Sanitary (MEXDA)",
       merk: "Storm Spas",
       contact: "Boey Deng", email: "angus4a@china-yuehua.com",
-      opmerking: "Alle spa's solid white with grey. Op dit blad stonden geen prijzen.",
+      opmerking: "Alle spa's solid white with grey. Op dit blad stonden geen prijzen. LET OP (Gretha, 27 aug 2026): de sauna's van MEXDA zijn uitlopende sauna's voor PARTICULIEREN, niet voor partners. Er is alleen een kleine hoeveelheid besteld om de containers met zwemspa's mee te vullen; de inkooporders daarvan staan al in Logic4. De sauna's die partners kopen komen van een andere fabriek, Guangdong Foshan Fukiafu - die twee niet door elkaar halen.",
       bron: "codelijst Chantal, 4 aug 2026",
+      /* De vrachttoeslag staat bij deze fabriek bewust op nul in de
+         partnerprijslijst. Gretha (27 aug 2026): "de kosten voor de containers
+         zijn al verwerkt in de verkoopprijs bij de Turbine spa's, vandaar dat
+         de marges soms relatief hoog lijken." Dus niet alsnog een toeslag
+         invullen - dan wordt de vracht twee keer gerekend. */
+      vrachtInVerkoopprijs: true,
+      /* De Logic4-artikelnummers bij de MEXDA-saunacodes (Gretha, 27 aug 2026).
+         De modelnamen zijn er niet; deze nummers zijn wat we nodig hebben om
+         een factuurregel aan het juiste artikel te koppelen. */
+      saunaArtikelen: {
+        "WS-1101A": ["454141", "454142"],
+        "WS-1103A": ["454143", "454144", "454145"],
+        "WS-1101B": ["454137", "454138", "454139"],
+        "1102A":    ["454141", "454142"],
+      },
       modellen: [
         { model: "Turbine 5 Luxury",  code: "WS-PC05ST", inkoopUsd: null, verkoopEur: null },
         { model: "Turbine 6 Luxury",  code: "WS-PC06ST", inkoopUsd: null, verkoopEur: null },

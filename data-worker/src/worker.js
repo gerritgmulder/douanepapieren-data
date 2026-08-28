@@ -654,6 +654,13 @@ async function dpRate(env) {
 function dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, withSurcharge = true, fraction = 0.30 }) {
   const usd = Number(pEntry.usd) || 0;
   const sur = withSurcharge ? (Number(pEntry.surcharge) || 0) : 0;
+  /* De 50 dollar verpakkingskosten. Bevestigd door Gretha (27 aug 2026): dat
+     bedrag klopt en wordt in Logic4 doorberekend als losse regel met artikel
+     7894565 (omgerekend ongeveer 42 tot 44 euro). Niet zomaar aanpassen: dan
+     loopt de aanbetaling uit de pas met wat er op de factuur komt.
+     Waarom sommige modellen géén vrachttoeslag hebben: bij de Turbine-
+     swimspa's zitten de containerkosten al in de verkoopprijs (Gretha,
+     zelfde dag), dus daar is de toeslag terecht nul. */
   const pack = withSurcharge ? 50 : 0;
   const q = Number(qty) || 1;
   const f = fraction > 0 ? fraction : 0.30;              // 0.30 = aanbetaling, 1.0 = volledig
