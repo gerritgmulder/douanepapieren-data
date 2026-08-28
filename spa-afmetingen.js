@@ -296,6 +296,14 @@
   var COVER_MARGE = 3;    // cm groter dan de spa, per kant van de maat
   var COVER_RAND = 10;    // cm dik aan de buitenrand, onopgevouwen
   var COVER_VOUW = 12;    // cm dik bij de vouw, onopgevouwen
+  /* Een lange cover komt niet als één stuk. Chantal (27 aug 2026): "komt in
+     2 en soms 3 delen." Dat scheelt veel: de cover van een Aquatic 2 was
+     dubbelgevouwen nog ruim 6 meter en paste dan naast twee spa's net niet
+     meer in de container. In delen is elk deel de halve lengte. We rekenen
+     met twee delen, niet met drie - dat is het ongunstigste geval van de
+     twee die zij noemt, en dan valt het in de praktijk mee in plaats van
+     tegen. Een gewone spa-cover blijft één deel; die haalt deze grens niet. */
+  var COVER_DELEN_VANAF = 350;   // cm: is de dubbelgevouwen cover langer, dan in 2 delen
 
   var GEEN_COVER = /(ice ?bath|ijsbad|wim hof|barrel|plunge|revive|chiller|shower|douche|sauna|vital[- ]?ice)/i;
   function heeftCover(model, fabriek) {
@@ -308,6 +316,15 @@
     return { l: lang, b: kort / 2, h: COVER_RAND * 2, hVouw: COVER_VOUW * 2 };
   }
 
+  /* De cover opdelen als hij te lang is om als één stuk mee te gaan. Geeft
+     de maat van ÉÉN deel terug plus het aantal delen; de container-tegel legt
+     er dan dat aantal dozen in. */
+  function inDelen(w, open, bron) {
+    var delen = w.l > COVER_DELEN_VANAF ? 2 : 1;
+    return { l: Math.round((w.l / delen) * 10) / 10, b: w.b, h: w.hVouw,
+             delen: delen, open: open, bron: bron };
+  }
+
   /* De cover van één model. Geeft null als hij er geen heeft.
      maat = de spa-afmeting in centimeters (uit maatVan). */
   function coverVan(model, code, maat, fabriek) {
@@ -318,12 +335,12 @@
     // Zelf een covermaat ingevuld (onopgevouwen).
     if (c && c.l > 0 && c.b > 0) {
       var v = vouw(c.l, c.b);
-      return { l: v.l, b: v.b, h: v.hVouw, open: { l: c.l, b: c.b }, bron: "handmatig" };
+      return inDelen(v, { l: c.l, b: c.b }, "handmatig");
     }
     if (!maat || !heeftCover(model, fabriek)) return null;
     var ol = maat.l + COVER_MARGE, ob = maat.b + COVER_MARGE;
     var w = vouw(ol, ob);
-    return { l: w.l, b: w.b, h: w.hVouw, open: { l: ol, b: ob }, bron: "afgeleid" };
+    return inDelen(w, { l: ol, b: ob }, "afgeleid");
   }
 
   /* De covermaat vastleggen. cover = {l,b} onopgevouwen, false voor 'geen

@@ -36,6 +36,8 @@ const SPA_CODES = [
   ["SKT339G17","Vital Ice"],
   ["SKT339-G2","Fitness 2"],
   ["SKT339-G3","Fitness 2 Deep"],
+  // Flame, niet Frame: de Jazzi-prijslijst schrijft Frame, maar Chantal
+  // bevestigde Flame (27 aug 2026). In Houston staan ze ook als Flame.
   ["SKT888X-1","Flame"],
   ["SKT338-E2","Florida"],
   ["SKT306-C","Malta"],
@@ -180,6 +182,8 @@ const SPA_CODES = [
   ["WS-PC07ST","Turbine 7 Luxury"],
   ["WS-PC07A-T","Turbine 7 Grand"],
   ["WS-PC08T","Turbine 8 Grand"],
+  // WS-S06 en WS-S09 zijn allebei de Aquatic 9 (Chantal bevestigde dit op
+  // 27 aug 2026). Storm Spas heeft ook maar één Aquatic-specsheet.
   ["WS-S06","Aquatic 9"],
   ["WS-S09","Aquatic 9"],
   ["WS-692","Monsoon"],

@@ -563,18 +563,21 @@ function maxVanEenBeste(C,doos,kantelen){
    waar Chantal wat aan heeft. Er wordt teruggeteld vanaf het aantal spa's dat
    zónder cover zou passen; via een halvering, want dat scheelt bij een klein
    model tientallen pogingen. */
-function maxSets(C,spa,cover,kantelen){
+function maxSets(C,spa,cover,kantelen,coverDelen){
   const alleen=maxVanEenBeste(C,spa,kantelen);
   if(!cover||!alleen.n) return alleen.n;
+  // Een lange cover komt in meer dan één deel mee (Chantal, 27 aug 2026);
+  // een set is dan de spa plus al zijn coverdelen.
+  const delen=Math.max(1,Number(coverDelen)||1);
   // Bovengrens ook op volume: meer sets dan er kubieke meters zijn kan niet,
   // en dat scheelt bij een klein model een paar dure pogingen.
   const inhoud=C.l*C.b*C.h;
-  const perSet=(spa.l+speling)*(spa.b+speling)*spa.h+(cover.l+speling)*(cover.b+speling)*cover.h;
+  const perSet=(spa.l+speling)*(spa.b+speling)*spa.h+delen*(cover.l+speling)*(cover.b+speling)*cover.h;
   let hoog=Math.min(alleen.n,Math.max(1,Math.floor(inhoud/perSet)));
   const past=n=>{
     const dozen=[];
     for(let i=0;i<n;i++) dozen.push(spa);
-    for(let i=0;i<n;i++) dozen.push(cover);
+    for(let i=0;i<n*delen;i++) dozen.push(cover);
     // De beste stand van de spa alleen is bijna altijd ook hier de beste, dus
     // die eerst: dan is een geslaagde poging één stapeling in plaats van zes.
     return besteVulling(C,dozen,kantelen,alleen.v).rest.length===0;
@@ -685,9 +688,12 @@ function gekozenDozen(){
   for(const m of MODELLEN){
     const n=Number(keuze[m.id]||0);
     const cd=coversMee?coverDoosVan(m):null;
+    // Een lange cover komt in delen mee (Chantal, 27 aug 2026), dus dan gaan
+    // er meer, kleinere dozen in plaats van één lange.
+    const delen=cd?(Number(m.cover&&m.cover.delen)||1):0;
     for(let i=0;i<n;i++){
       uit.push(doosVan(m));
-      if(cd) uit.push(Object.assign({},cd));
+      for(let d=0;d<delen;d++) uit.push(Object.assign({},cd));
     }
   }
   return uit;
@@ -709,14 +715,15 @@ let maxCache={};
 // Jamaica allebei 200x200x82, Reflect/Retreat/Resettle allemaal 228x228x85).
 // Die hoeven maar één keer doorgerekend te worden.
 function maxSleutel(m){
-  const c=coversMee&&m.cover ? m.cover.l+"x"+m.cover.b+"x"+m.cover.h : "-";
+  const c=coversMee&&m.cover ? m.cover.l+"x"+m.cover.b+"x"+m.cover.h+"x"+(m.cover.delen||1) : "-";
   return C.id+"|"+speling+"|"+(kantelen?1:0)+"|"+m.l+"x"+m.b+"x"+m.h+"|"+c;
 }
 function maxVoor(m){
   const s=maxSleutel(m);
   // Mét covers is dit het aantal complete sets: een spa gaat nooit zonder
   // zijn cover mee, dus dat is het getal waar je iets aan hebt.
-  if(maxCache[s]==null) maxCache[s]=maxSets(C,doosVan(m),coversMee?coverDoosVan(m):null,kantelen);
+  if(maxCache[s]==null) maxCache[s]=maxSets(C,doosVan(m),coversMee?coverDoosVan(m):null,kantelen,
+    coversMee&&m.cover?(Number(m.cover.delen)||1):1);
   return maxCache[s];
 }
 function tekenModellen(){
@@ -739,7 +746,9 @@ function tekenModellen(){
           // De cover hoort erbij: zonder die maat klopt het aantal niet.
           (m.cover
             ? " · <span title='Dubbelgevouwen cover, "+nl(m.cover.open.l)+" x "+nl(m.cover.open.b)+" cm open"+
+              ((m.cover.delen||1)>1?", komt in "+m.cover.delen+" delen (Chantal)":"")+
               (m.cover.bron==="handmatig"?", zelf ingevuld":"")+"'>cover "+
+              ((m.cover.delen||1)>1?(m.cover.delen+"&times; "):"")+
               nl2(m.cover.l)+" x "+nl2(m.cover.b)+" x "+nl(m.cover.h)+"</span>"
             : " · <span title='Dit model heeft geen cover'>geen cover</span>")+
           // Waar de maat vandaan komt. Bij een verschil tussen de bronnen moet
@@ -752,7 +761,14 @@ function tekenModellen(){
                 ? " · <span title='Maat van de kist zoals hij vervoerd wordt, uit Maten + gewichten'>kistmaat</span>"
                 : "")+
           "</span></span>"+
-        "<span class='past'><b data-max='"+m.i+"'>"+(mx==null?"…":mx)+"</b>per container</span>"+
+        (mx===0
+          ? "<span class='past' style='color:#b91c1c' title='"+
+            (Math.min(m.b,m.h)>C.b/100
+              ? "Dit model is breder dan een zeecontainer binnenwerks ("+nl2(C.b/100)+" cm). Chantal (27 aug 2026): de Turbine Grand komt daarom in een open container naar Nederland, en gaat niet naar Amerika."
+              : "Dit model past in geen enkele stand in de gekozen container.")+
+            "'><b data-max='"+m.i+"'>past niet</b>"+
+            (Math.min(m.b,m.h)>C.b/100?"open container":"in deze container")+"</span>"
+          : "<span class='past'><b data-max='"+m.i+"'>"+(mx==null?"…":mx)+"</b>per container</span>")+
         "<button type='button' class='pen' data-stop='1' data-pen='"+m.i+"' title='Maat aanpassen'>✏</button>"+
         "<span class='teller' data-stop='1'>"+
           "<button type='button' data-min='"+m.i+"' title='eentje minder'>−</button>"+

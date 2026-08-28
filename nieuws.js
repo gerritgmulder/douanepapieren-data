@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-27", bestand: "container-laden.html", soort: "beter",
+      titel: "Covers van swimspa's gaan in delen, en te brede spa's worden gemeld",
+      wat: "Een lange cover werd tot nu toe als één stuk gerekend - bij een Aquatic 2 was dat ruim zes meter, en dan paste hij naast twee spa's net niet meer in de container. Chantal bevestigde dat zo'n cover in twee of drie delen komt; de berekening rekent nu met twee delen, dus er past meer in. Staat een model in geen enkele stand in de container, dan zegt het scherm dat nu ook, in plaats van stilletjes nul te tonen. De Turbine Grand is daar het voorbeeld van: die is drie meter breed en komt in een open container naar Nederland.",
+    },
+
+    {
       datum: "2026-08-27", bestand: "voorraad.html", soort: "nieuw",
       titel: "Regels verwijderen, zoeken in elk blok, en 'op voorraad' kiezen",
       wat: "Drie dingen bij Particulier en Partner. Met het kruisje achteraan haal je een reservering uit het dashboard; hij verdwijnt dan uit alle lijsten en met 'verwijderde regels tonen' haal je hem terug (in Logic4 verandert er niets). De blokken Afroep en binnengekomen, Binnen per adviseur en Gepland hebben nu een eigen zoekveld, zodat je daar op ordernummer kunt zoeken. En bij Verwachte levering kun je voortaan naast een schip ook 'op voorraad (Uddel)' aanwijzen.",
