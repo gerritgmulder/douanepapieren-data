@@ -216,20 +216,15 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     </div>
   </div>
 
-  <div class="card">
-    <h3>Documenten &amp; specsheets (<span id="docCount">0</span>)</h3>
-    <p class="lead" style="margin-bottom:10px">Hier zet je een <b>link</b> naar een document dat ergens anders al openbaar staat. Wil je een bestand uit je eigen map naar het portaal brengen - een handleiding, een specsheet, een afbeelding - gebruik dan het blok <b>Bibliotheek</b> hieronder. Dat is waar de partners hun documenten vinden.</p>
-    <table class="grid">
-      <thead><tr><th>Titel</th><th>Model</th><th>Link</th><th></th></tr></thead>
-      <tbody id="docBody"></tbody>
-    </table>
-    <div class="row" style="margin-top:12px">
-      <input id="dTitle" placeholder="Titel (bv. Specsheet Renew MM)" style="min-width:230px">
-      <input id="dModel" placeholder="Model (optioneel)" style="min-width:140px">
-      <input id="dUrl" placeholder="https://…" style="min-width:260px">
-      <button class="primary" id="addDoc" type="button">+ Document toevoegen</button>
-    </div>
-  </div>
+  <!-- Het blok "Documenten & specsheets" stond hier tot 28 aug 2026. Het nam
+       een link naar een bestand dat elders al openbaar stond, maar het
+       partnerportaal las die lijst nergens: zowel het tabblad Documenten als
+       de knop Downloads per spa komen uit de bibliotheek. Wat je er ook in
+       zette, geen partner zag het ooit - vandaar dat hij op nul stond. Twee
+       invoervakken voor hetzelfde onderwerp naast elkaar is bovendien vragen
+       om verkeerd plakken. De gegevens zelf (dealer-docs.docs) blijven staan,
+       alleen het scherm is dicht. -->
+
 
   <!-- De echte bibliotheek van het portaal. Gretha (28 aug 2026): "kan ik
        trouwens gewoon zelf ook afbeeldingen, handleidingen etc uploaden in het
@@ -876,31 +871,7 @@ $("addPartner").addEventListener("click", async ()=>{
   setStatus("ok","Partner toegevoegd — die kan nu inloggen op het portaal met een magic-link.");
 });
 
-function renderDocs(){
-  const list = docsData.docs || [];
-  $("docCount").textContent = list.length;
-  $("docBody").innerHTML = list.map((d,i)=>`
-    <tr>
-      <td>${esc(d.title)}</td>
-      <td>${esc(d.model||"")}</td>
-      <td><a href="${esc(d.url)}" target="_blank" rel="noopener" style="font-size:12px">${esc(String(d.url).slice(0,55))}…</a></td>
-      <td><button class="rmv delDoc" data-i="${i}">✕</button></td>
-    </tr>`).join("") || '<tr><td colspan="4" style="color:var(--muted)">Nog geen documenten.</td></tr>';
-  document.querySelectorAll(".delDoc").forEach(b=>b.addEventListener("click", async ()=>{
-    try{ const _d=docsData.docs[Number(b.dataset.i)]; if(window.fpLog) window.fpLog("document-verwijderd",(_d&&_d.title)||""); }catch(e){}
-    docsData.docs.splice(Number(b.dataset.i),1);
-    await save("dealer-docs", docsData); renderDocs();
-  }));
-}
-$("addDoc").addEventListener("click", async ()=>{
-  const title=$("dTitle").value.trim(), model=$("dModel").value.trim(), urlv=$("dUrl").value.trim();
-  if (!title || !/^https?:\/\//i.test(urlv)){ setStatus("bad","Vul een titel en een geldige https-link in."); return; }
-  docsData.docs.push({ id: Date.now().toString(36), title, model, url: urlv });
-  await save("dealer-docs", docsData);
-  $("dTitle").value=""; $("dModel").value=""; $("dUrl").value="";
-  renderDocs();
-  setStatus("ok","Document toegevoegd — direct zichtbaar in het portaal.");
-});
+
 
 /* ── De bibliotheek van het partnerportaal ─────────────────────────────
    docsData.library.categories[].groups[].files[] = {id, title, size}; het
@@ -1190,7 +1161,7 @@ async function init(){
     if (!priceData.prices || typeof priceData.prices !== "object") priceData.prices = {};
     $("contactEmail").value = accounts.contactEmail;
     if (!priceData.meta || typeof priceData.meta !== "object") priceData.meta = {};
-    renderPartners(); renderDocs(); renderReqs(); renderPrices(); renderRate(); renderBib();
+    renderPartners(); renderReqs(); renderPrices(); renderRate(); renderBib();
     laadKoers();
     document.getElementById("mgmt").classList.remove("hidden");
   } catch(e){ setStatus("bad", "Laden faalde: "+e.message); }

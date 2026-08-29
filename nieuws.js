@@ -52,6 +52,11 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-28", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Eén plek voor documenten in plaats van twee",
+      wat: "Het oude blok 'Documenten & specsheets' is weg. Dat nam alleen een link naar een bestand dat ergens anders al openbaar stond, en het portaal liet die lijst nergens zien - vandaar dat hij altijd op nul stond. Alles loopt nu via de Bibliotheek.",
+    },
+    {
       datum: "2026-08-28", bestand: "dealerportaal.html", soort: "nieuw",
       titel: "Zelf bestanden in het partnerportaal zetten",
       wat: "In het blok Bibliotheek kies je een map, geef je een titel en wijs je een bestand op je computer aan - pdf, word, excel of een afbeelding tot 24 MB. Het staat meteen bij de partners onder Documenten. Tot nu toe kon je alleen een link plakken naar iets dat elders al openbaar stond.",
