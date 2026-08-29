@@ -52,6 +52,17 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-29", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Containers verdwenen uit 'Onderweg naar Uddel'",
+      wat: "Een zending viel uit dat overzicht zodra zijn aankomstdatum bereikt was, ook als niemand hem binnen had gemeld. Een container die je toevoegde met de datum van vandaag verscheen er dus nooit in. Nu blijft een zending staan tot het vinkje 'binnen' aan gaat, en de regel zegt zelf of hij vandaag komt, morgen, over zoveel dagen, of dat de datum al verstreken is. Er stonden er vijf op die manier onzichtbaar.",
+    },
+    {
+      datum: "2026-08-29", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Zoeken op kleur geeft nu alleen kleuren",
+      wat: "In de keuzelijst 'kleur' bij Particulier en Partner stonden ook spa-namen (Bermuda, Aruba, Regent) en stond dezelfde kleur meerdere keren met een andere schrijfwijze. De kleur wordt nu goed uit de orderregel gehaald en schrijfwijzen worden samengenomen: de lijst ging van 102 naar 56 regels, zonder modelnamen.",
+    },
+
+    {
       datum: "2026-08-28", bestand: "dealerportaal.html", soort: "beter",
       titel: "Eén plek voor documenten in plaats van twee",
       wat: "Het oude blok 'Documenten & specsheets' is weg. Dat nam alleen een link naar een bestand dat ergens anders al openbaar stond, en het portaal liet die lijst nergens zien - vandaar dat hij altijd op nul stond. Alles loopt nu via de Bibliotheek.",

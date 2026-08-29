@@ -357,8 +357,17 @@
       /* Aangevinkt als binnen? Dan is hij niet meer onderweg. Chantal wil dat
          wat binnen is meetelt als binnen en niet als varend. */
       if (s.binnenGemeld) return false;
-      var dg = dagenTot(s.eta);
-      return dg === null || dg > 0;   // zonder ETA weten we het niet: laten staan
+      /* Vroeger viel een zending hier ook weg zodra zijn ETA was bereikt.
+         Dat ging mis (Chantal, video 28 aug 2026): zij voegde een container
+         toe met de ETA van diezelfde dag, en die verscheen daardoor nooit bij
+         'Onderweg naar Uddel' - "hij blijft maar zeggen dat er drie zendingen
+         onderweg zijn". Ook drie MEXDA-containers waren zo stilletjes
+         verdwenen zonder dat iemand ze binnen had gemeld.
+
+         Binnen is binnen, en dat bepaalt zij met het vinkje - niet de
+         kalender. Een zending blijft dus staan tot hij binnen gemeld is; is
+         de ETA voorbij, dan zegt de regel dat erbij. */
+      return true;
     });
     var totaal = varend.reduce(function (n, s) { return n + (Number(s.spas) || 0); }, 0);
     var los = varend.reduce(function (n, s) {
@@ -410,9 +419,19 @@
       var links = el("div", "so-onderweg-wie");
       links.appendChild(el("strong", null, zendingNaam(s)));
       var dg = dagenTot(s.eta);
-      links.appendChild(el("span", "so-meta klein",
-        nlDatum(s.eta) + (dg === null ? "  ·  aankomst onbekend" : "  ·  over " + dg + " dagen") +
-        (s.vessel && s.vessel !== zendingNaam(s) ? "  ·  " + s.vessel : "")));
+      /* Vandaag, morgen, over zoveel dagen - of de ETA is al geweest. Dat
+         laatste hoort opgemerkt te worden en niet stilletjes te verdwijnen:
+         zolang niemand hem binnen meldt, staat de container hier. */
+      var wanneer = dg === null ? "aankomst onbekend"
+        : dg > 1 ? "over " + dg + " dagen"
+        : dg === 1 ? "morgen"
+        : dg === 0 ? "vandaag verwacht"
+        : "ETA verstreken - nog niet binnen gemeld";
+      var etaRegel = el("span", "so-meta klein",
+        nlDatum(s.eta) + "  ·  " + wanneer +
+        (s.vessel && s.vessel !== zendingNaam(s) ? "  ·  " + s.vessel : ""));
+      if (dg !== null && dg < 0) etaRegel.className = "so-meta klein so-eta-laat";
+      links.appendChild(etaRegel);
       if (s.jazziOrders && s.jazziOrders.length)
         links.appendChild(el("span", "so-meta klein", "order " + s.jazziOrders.join(" + ")));
       r.appendChild(links);

@@ -177,6 +177,9 @@
 .so-badge{font-size:11px;background:#eef2e6;color:#144734;border-radius:20px;padding:2px 9px;font-weight:600}
 .so-meta{font-size:12px;color:#6b7280;margin-top:3px}
 .so-meta.klein{font-size:11px;font-style:italic;color:#9ca3af}
+/* ETA voorbij en nog niet binnen gemeld: dat moet opvallen, want zo'n
+   container verdween vroeger stilletjes uit het overzicht. */
+.so-meta.so-eta-laat{color:#b45309;font-style:normal;font-weight:600}
 .so-rechts{display:flex;flex-direction:column;align-items:flex-end;gap:8px}
 .so-pillen{display:flex;gap:5px;flex-wrap:wrap}
 .so-pil{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600;white-space:nowrap}
@@ -2172,14 +2175,39 @@ const resvSort={particulier:{kolom:"model",op:1},partner:{kolom:"model",op:1}};
    toevoegen?" — dat geldt voor Reserveringen, Particulier en Partner.
    De keuzelijst wordt gevuld met de kleuren die er op dat moment écht zijn,
    zodat er nooit een kleur in staat waar geen enkele spa bij hoort. */
-function kleurSleutel(k){ return String(k==null?"":k).trim().toLowerCase(); }
+/* De sleutel waarop kleuren worden samengenomen. Chantal (video, 28 aug
+   2026): "ik zie dubbele dingen erin staan... ik moet hier echt puur alleen
+   de kleuren zien en alsjeblieft niet dubbel." Dezelfde kleur wordt door
+   verschillende mensen anders opgeschreven: GREY naast Grey, GREYtrim naast
+   GREY trim, en (Outlet) / ( OUTLET) / **OUTLET** naast elkaar. Voor de
+   keuzelijst maken we die gelijk; in de regel zelf blijft de omschrijving
+   staan zoals hij in Logic4 is ingevoerd, want daar staat soms iets in dat
+   ertoe doet ("met IntelliSaver"). */
+function kleurSleutel(k){
+  return String(k==null?"":k).toLowerCase()
+    .replace(/\|.*$/,"")                    // aantekening achter een streepje
+    .replace(/\([^)]*\)/g," ")               // (Outlet), (swap to ...)
+    .replace(/\*+/g," ")                     // **OUTLET**
+    .replace(/\bmet\b.*$/,"")               // "met IntelliSaver", "met systeem dat..."
+    .replace(/\boutlet\b/g," ")             // los woord Outlet
+    .replace(/trim\b/g," trim ")             // GREYtrim -> GREY trim
+    .replace(/[\/]+/g," / ")
+    .replace(/[^a-z0-9\u00c0-\u024f\/ ]+/g," ")   // accenten blijven staan (crème)
+    .replace(/\s+/g," ").trim();
+}
+// Zoals hij in de keuzelijst komt te staan: nette hoofdletters, één schrijfwijze.
+function kleurLabel(k){
+  return kleurSleutel(k).split(" ").map(function(w){
+    return w==="/"?w:(w.charAt(0).toUpperCase()+w.slice(1));
+  }).join(" ").replace(/ \/ /g,"/");
+}
 function vulKleurKeuze(id,regels){
   const sel=document.getElementById(id); if(!sel) return "";
   const gekozen=sel.value||"";
   const perSleutel={};
   for(const r of regels){
     const s=kleurSleutel(r.kleur); if(!s) continue;
-    if(!perSleutel[s]) perSleutel[s]={label:String(r.kleur).trim(),n:0};
+    if(!perSleutel[s]) perSleutel[s]={label:kleurLabel(r.kleur),n:0};
     perSleutel[s].n+=Number(r.qty)||0;
   }
   const opts=Object.keys(perSleutel).sort((a,b)=>perSleutel[a].label.localeCompare(perSleutel[b].label,"nl"));

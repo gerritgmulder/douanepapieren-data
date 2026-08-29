@@ -1638,12 +1638,28 @@ async function dpRefreshHalStock(env) {
 const DP_RESV_STATUSES = [15, 25, 1, 28, 30];
 const WH_NAMES = { 19: "Geen", 20: "OUD Kelder", 21: "Fonteyn", 25: "Showroommodel", 26: "Outlet", 27: "Dealer magazijn", 49: "Derving", 50: "Warehouse Texas USA", 51: "Transporteur", 52: "Retouren" };
 const WH_TEXAS = 50, WH_DEALER = 27;
-// Kleur = het stuk ná de '|' in de regelomschrijving ("Relax Spa | Sterling White with Grey").
+/* Kleur uit de regelomschrijving. Die is opgebouwd met streepjes:
+   "Relax Spa | Sterling White with Grey". Alleen: sommige regels hebben er
+   twee of drie, en dan ging het mis (Chantal, video 28 aug 2026: "ik krijg
+   opeens ook Bahamas te zien, Aruba, Calcutta - dat zijn spa's"). Er stond
+   namelijk 'alles na het eerste streepje', en dan komt bij
+   "Grizzly | Key Largo | Sterling White with Grey" de modelnaam mee, en bij
+   "Spa Bermuda | Bermuda" belandt een modelnaam in het kleurenvak.
+
+   Nu: van alle stukken pakken we het LAATSTE waar echt een kleur in staat.
+   Bij "... | Sterling White with GREY/oak | Integrated Heat Pump" blijft de
+   kleur dus staan en valt de aantekening weg, en bij een regel zonder kleur
+   komt er niets - beter leeg dan een spa-naam in de kleurenlijst. */
+const KLEURWOORDEN = /(white|grey|gray|oak|espresso|sand|mountain|pearl|shadow|black|blackburn|moondance|sterling|silver|sliver|rhombus|rombus|wood|brown|beige|graphite|antraciet|anthracite)/i;
 function dpRowColor(desc) {
   const s = String(desc || "");
-  const i = s.indexOf("|");
-  if (i < 0) return null;
-  return s.slice(i + 1).replace(/\b(spa|swimspa)\b/gi, "").replace(/\s+/g, " ").trim() || null;
+  if (s.indexOf("|") < 0) return null;
+  const stukken = s.split("|").slice(1)
+    .map(x => x.replace(/\b(spa|swimspa)\b/gi, "").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  for (let i = stukken.length - 1; i >= 0; i--)
+    if (KLEURWOORDEN.test(stukken[i])) return stukken[i];
+  return null;
 }
 // De 9 fabrieken waar Fonteyn spa's/swimspa's/sauna's inkoopt. Fuzzy gematcht
 // op CreditorCompanyName (de spelling wisselt in Logic4). Zie geheugen.
