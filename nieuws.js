@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-29", bestand: "voorraad.html", soort: "beter",
+      titel: "Stock legt Vrij en Fysiek uit in de tabel zelf",
+      wat: "Onder elke kolomkop staat nu wat het getal betekent, en er is een kolom Al verkocht bij gekomen: fysiek min vrij. Zo zie je per model in één regel dat er bijvoorbeeld 59 staan, 57 al verkocht zijn en er 2 vrij zijn. Bij het openklappen staat hetzelfde per kleur.",
+    },
+
+    {
       datum: "2026-08-29", bestand: "amerika.html", soort: "beter",
       titel: "Wire-overzicht van Audrey: gewoon plakken",
       wat: "Je hoefde de mail eerst op te slaan als .eml-bestand, en in de nieuwe Outlook kan dat helemaal niet. Nu plak je de mail rechtstreeks in het vak op het tabblad Ontvangen Audrey: selecteren, Ctrl+C, Ctrl+V, inlezen. Uploaden van een bestand kan nog steeds, dat staat nu onder 'Liever een bestand uploaden?'.",

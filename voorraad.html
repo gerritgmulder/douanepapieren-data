@@ -2818,25 +2818,44 @@ function renderStock(){
 
   if(!rijen.length){ box.innerHTML="<p class='lead'>Niets gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
   box.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
-    "<th>Spa</th><th style='text-align:right'>Vrij</th><th style='text-align:right'>Fysiek</th><th>Kleuren</th>"+
+    /* De betekenis van de kolommen hoort in de tabel te staan en niet alleen
+       in een alinea erboven (Chantal, 29 aug 2026). Vandaar de tweede regel
+       onder elke kop, en per rij de tussenstap: fysiek min verkocht is vrij. */
+    "<th>Spa</th>"+
+    "<th style='text-align:right' title='Wat er nog te verkopen is: de voorraad min de orders die er al aan hangen. Dit is hetzelfde getal als op het tabblad Overzicht.'>Vrij"+
+      "<div style='font-weight:400;font-size:10.5px;color:var(--muted);text-transform:none;letter-spacing:0'>nog te verkopen</div></th>"+
+    "<th style='text-align:right' title='Alles wat er werkelijk in de hallen in Uddel staat, alle kleuren samen, inclusief wat al verkocht of gereserveerd is maar nog niet is opgehaald.'>Fysiek"+
+      "<div style='font-weight:400;font-size:10.5px;color:var(--muted);text-transform:none;letter-spacing:0'>staat er, ook al verkocht</div></th>"+
+    "<th style='text-align:right' title='Fysiek min vrij: staat er wel, maar hangt al aan een order.'>Al verkocht"+
+      "<div style='font-weight:400;font-size:10.5px;color:var(--muted);text-transform:none;letter-spacing:0'>fysiek min vrij</div></th>"+
+    "<th>Kleuren</th>"+
     "</tr></thead><tbody>"+
     rijen.map(function(r){
       const open=!!stockOpen[r.model];
       const heeftFysiek=r.varianten.some(function(v){ return v.fysiek!==0; });
+      // Wat er staat maar al aan een order hangt. Bij een oververkocht model
+      // is fysiek kleiner dan wat er verkocht is; dan is dit gewoon het
+      // verschil en zegt de nul bij 'vrij' de rest van het verhaal.
+      const verkocht=Math.max(0,(Number(r.fysiek)||0)-(Number(r.vrij)||0));
       const kleuren=r.varianten.length
         ? (open
-            ? r.varianten.map(function(v){
+            ? "<div style='font-size:10.5px;color:var(--muted);margin-bottom:3px'>per kleur: wat er staat, en wat daarvan nog vrij is</div>"+
+              r.varianten.map(function(v){
+                const vk=Math.max(0,(Number(v.fysiek)||0)-(Number(v.vrij)||0));
                 const stuk=heeftFysiek
-                  ? "fysiek <b>"+v.fysiek+"</b> · vrij <b>"+v.vrij+"</b> &times; "
-                  : v.vrij+" vrij &times; ";
+                  ? "<b>"+v.fysiek+"</b> staat er, <b style='color:"+(v.vrij>0?"#15803d":"var(--muted)")+"'>"+v.vrij+"</b> vrij"+
+                    (vk>0?" <span style='color:#c2410c'>("+vk+" verkocht)</span>":"")+" &times; "
+                  : "<b>"+v.vrij+"</b> vrij &times; ";
                 return "<div style='font-size:12px'>"+stuk+esc(v.kleur)+
                   " <span style='color:var(--muted);font-size:11px'>"+esc(v.code)+"</span></div>"; }).join("")
             : "<span style='font-size:12px;color:var(--muted)'>"+r.varianten.length+" kleur(en)</span>")
         : "<span style='font-size:12px;color:var(--muted)'>geen verdeling bekend</span>";
       return "<tr class='stockRij' data-model='"+esc(r.model)+"' style='cursor:pointer'>"+
         "<td><b>"+esc(r.model)+"</b></td>"+
-        "<td style='text-align:right'"+(r.vrij>0?" ":"")+">"+r.vrij+"</td>"+
+        "<td style='text-align:right;font-weight:600"+(r.vrij>0?";color:#15803d":";color:var(--muted)")+"'>"+r.vrij+"</td>"+
         "<td style='text-align:right;color:var(--muted)'>"+r.fysiek+"</td>"+
+        "<td style='text-align:right;font-size:12px;color:"+(verkocht>0?"#c2410c":"var(--muted)")+"'>"+
+          (verkocht>0?verkocht:"—")+"</td>"+
         "<td>"+kleuren+"</td></tr>";
     }).join("")+"</tbody></table></div>";
   box.querySelectorAll(".stockRij").forEach(function(tr){
