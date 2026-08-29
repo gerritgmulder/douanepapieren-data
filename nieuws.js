@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-29", bestand: "amerika.html", soort: "beter",
+      titel: "Wire-overzicht van Audrey: gewoon plakken",
+      wat: "Je hoefde de mail eerst op te slaan als .eml-bestand, en in de nieuwe Outlook kan dat helemaal niet. Nu plak je de mail rechtstreeks in het vak op het tabblad Ontvangen Audrey: selecteren, Ctrl+C, Ctrl+V, inlezen. Uploaden van een bestand kan nog steeds, dat staat nu onder 'Liever een bestand uploaden?'.",
+    },
+
+    {
       datum: "2026-08-29", bestand: "voorraad.html", soort: "hersteld",
       titel: "Containers verdwenen uit 'Onderweg naar Uddel'",
       wat: "Een zending viel uit dat overzicht zodra zijn aankomstdatum bereikt was, ook als niemand hem binnen had gemeld. Een container die je toevoegde met de datum van vandaag verscheen er dus nooit in. Nu blijft een zending staan tot het vinkje 'binnen' aan gaat, en de regel zegt zelf of hij vandaag komt, morgen, over zoveel dagen, of dat de datum al verstreken is. Er stonden er vijf op die manier onzichtbaar.",

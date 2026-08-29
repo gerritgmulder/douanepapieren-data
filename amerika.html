@@ -83,6 +83,11 @@
   input[type=text]:focus{outline:none;border-color:var(--usa);box-shadow:0 0 0 3px rgba(60,59,110,.15)}
   .step{border-left:3px solid var(--usa);padding:4px 0 4px 14px;margin:10px 0}
   .step b{color:var(--usa)}
+/* Het plakvak: zolang er niets in staat, staat er wat je moet doen. */
+#audPlak[data-toon="leeg"]::before{content:attr(data-leeg);color:#9ca3af}
+#audPlak:focus{outline:none;border-color:var(--fonteyn-green,#144734)}
+#audPlak table{border-collapse:collapse;font-size:12px}
+#audPlak td,#audPlak th{border:1px solid #e5e7eb;padding:2px 6px}
 </style>
 </head>
 <body>
@@ -194,12 +199,28 @@
   <div id="tab-audrey" class="hidden">
     <div class="card">
       <h3>Wire-overzicht van Audrey inlezen</h3>
-      <p class="lead" style="font-size:13px">Sla Audrey's mail op als <b>.eml</b>-bestand (in Outlook: mail slepen naar een map, of <i>Bestand → Opslaan als</i>) en upload hem hier.
-        Het systeem leest de tabel letterlijk uit: de <b>Balance</b>-regel, elke factuurregel (bijv. <code>3553 Paradise</code>) met kolom 1, kolom 2 en — indien aanwezig — kolom 3.</p>
-      <div class="actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px">
-        <input type="file" id="audFile" accept=".eml,.txt,.html" style="font-size:13px">
-        <button class="btn solid" id="audBtn" type="button">Inlezen &amp; opslaan</button>
+      <p class="lead" style="font-size:13px"><b>De makkelijkste manier: plakken.</b> Open Audrey's mail, selecteer de tabel met bedragen (of de hele mail met Ctrl+A), kopieer met Ctrl+C en plak hem hieronder met Ctrl+V. Meer is het niet - je hoeft niets op te slaan.
+        Het systeem leest de tabel letterlijk uit: de <b>Balance</b>-regel, elke factuurregel (bijv. <code>3553 Paradise</code>) met kolom 1, kolom 2 en - indien aanwezig - kolom 3.</p>
+      <!-- Plakvak. Chantal (video, 29 aug 2026): "ik kan de mail helemaal niet
+           opslaan als EML... dan staat er helemaal geen e-mail tussen." In de
+           nieuwe Outlook bestaat 'Opslaan als' niet meer, dus die weg was voor
+           haar dicht. Plakken werkt altijd: Outlook zet de tabel als HTML op
+           het klembord, precies wat de lezer nodig heeft. -->
+      <div id="audPlak" contenteditable="true"
+           style="min-height:88px;border:2px dashed var(--border);border-radius:10px;padding:12px 14px;font-size:13px;background:#fff;overflow:auto;max-height:220px"
+           data-leeg="Klik hier en plak de mail (Ctrl+V)"></div>
+      <div class="actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px">
+        <button class="btn solid" id="audPlakBtn" type="button">Geplakte mail inlezen</button>
+        <button class="btn" id="audPlakLeeg" type="button">Leegmaken</button>
       </div>
+      <details style="margin-top:14px">
+        <summary style="font-size:12.5px;color:var(--muted);cursor:pointer">Liever een bestand uploaden?</summary>
+        <p class="lead" style="font-size:12.5px;margin:8px 0">Kan ook, als je de mail als bestand hebt: .eml, .txt of .html. Lukt 'Opslaan als' niet in jouw Outlook, gebruik dan gewoon plakken hierboven.</p>
+        <div class="actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <input type="file" id="audFile" accept=".eml,.txt,.html" style="font-size:13px">
+          <button class="btn solid" id="audBtn" type="button">Inlezen &amp; opslaan</button>
+        </div>
+      </details>
       <div id="audStatus" class="status-msg hidden" style="margin-top:12px"></div>
     </div>
     <div id="audWachtrij"></div>
@@ -1036,6 +1057,101 @@ function audRender(){
     try{ await audSave(); audRender(); }catch(e){ alert("Kon niet opslaan: "+e.message); }
   }));
 }
+/* Vangnet voor als de opmaak niet meekomt. Plakt iemand als platte tekst,
+   dan is er geen tabel meer maar staan de bedragen achter de naam op één
+   regel: "3553 Paradise   1,234.56   2,000.00". Dan lezen we het zo. */
+function audParseTekst(tekst){
+  const rijen=[];
+  for(const regel of String(tekst||"").split(/\r?\n/)){
+    const s=regel.replace(/\u00a0/g," ").trim();
+    if(!s) continue;
+    // Alles wat op een bedrag lijkt, achteraan de regel
+    const stukken=s.split(/\s{2,}|\t/).map(x=>x.trim()).filter(Boolean);
+    const velden=stukken.length>1?stukken:s.split(/\s+/);
+    /* Wat telt als bedrag: iets met centen (500.00) of met een duizendtal-
+       komma (12,345.00), eventueel tussen haakjes voor negatief. Een kaal
+       getal telt NIET mee - anders wordt het factuurnummer 3553 uit
+       "3553 Paradise" als bedrag gelezen en houdt de regel geen naam over,
+       en leest "Wire date Jul 9, 2026" als een bedragenregel. */
+    const isBedrag=x=>/^[($\s-]*\d{1,3}(,\d{3})+(\.\d{1,2})?[)\s]*$/.test(x)
+                    || /^[($\s-]*\d+\.\d{2}[)\s]*$/.test(x);
+    const bedragen=[];
+    let i=velden.length-1;
+    while(i>=0 && bedragen.length<3){
+      if(!isBedrag(velden[i])) break;
+      const b=audBedrag(velden[i]);
+      if(b===null) break;
+      bedragen.unshift(b); i--;
+    }
+    if(!bedragen.length) continue;
+    const naam=velden.slice(0,i+1).join(" ").trim();
+    if(!naam) continue;
+    const isBalance=/^balance\b/i.test(naam);
+    const factuur=(naam.match(/^(\d{4})\b/)||[])[1]||null;
+    const heeftNaam=/[a-z]/i.test(naam);
+    rijen.push({ naam, factuur,
+      soort: isBalance?"balance":(factuur?"factuur":(heeftNaam?"overig":"totaal")),
+      kolom1:bedragen[0]!=null?bedragen[0]:null,
+      kolom2:bedragen[1]!=null?bedragen[1]:null,
+      kolom3:bedragen[2]!=null?bedragen[2]:null,
+      verwerkt:false, verwerktTs:null, verwerktDoor:null });
+  }
+  return rijen;
+}
+
+/* De geplakte mail. Outlook zet de tabel als HTML op het klembord, dus de
+   gewone lezer kan er meteen mee overweg; komt er alleen platte tekst mee,
+   dan valt hij terug op de tekstlezer hierboven. */
+(function(){
+  const vak=document.getElementById("audPlak");
+  if(!vak) return;
+  let geplakteHtml="";
+  function toonLeeg(){
+    if(!vak.textContent.trim()){ vak.innerHTML=""; vak.dataset.toon="leeg"; }
+    else vak.dataset.toon="";
+  }
+  vak.addEventListener("paste",function(e){
+    const dt=e.clipboardData; if(!dt) return;
+    const html=dt.getData("text/html");
+    if(html){ geplakteHtml=html; }
+    else { geplakteHtml=""; }
+    // De browser plakt zelf; we onthouden alleen de oorspronkelijke HTML,
+    // want die bevat de tabel die de lezer nodig heeft.
+    setTimeout(toonLeeg,0);
+  });
+  vak.addEventListener("input",toonLeeg);
+  document.getElementById("audPlakLeeg").addEventListener("click",function(){
+    vak.innerHTML=""; geplakteHtml=""; toonLeeg();
+  });
+  document.getElementById("audPlakBtn").addEventListener("click",async function(){
+    const st=document.getElementById("audStatus");
+    const toon=(cls,txt)=>{ st.classList.remove("hidden"); st.className="status-msg "+cls; st.textContent=txt; };
+    const bron=geplakteHtml || vak.innerHTML || "";
+    if(!vak.textContent.trim()) return toon("warn","Plak eerst de mail van Audrey in het vak (Ctrl+V).");
+    toon("","Inlezen…");
+    try{
+      let regels=audParse(bron);
+      if(!regels.length) regels=audParseTekst(vak.innerText||vak.textContent||"");
+      if(!regels.length) return toon("bad","Geen bedragen gevonden in wat je hebt geplakt. Selecteer de tabel met de factuurregels en plak die - of de hele mail met Ctrl+A.");
+      await audLoad();
+      wiresData.wires.push({
+        id:(Date.now().toString(36)+Math.random().toString(36).slice(2,7)),
+        ts:new Date().toISOString(),
+        datum:audMailDatum(bron)||audMailDatum(vak.innerText||""),
+        bestand:"geplakt uit de mail",
+        regels,
+      });
+      await audSave();
+      audRender();
+      vak.innerHTML=""; geplakteHtml=""; toonLeeg();
+      const nF=regels.filter(r=>r.soort==="factuur").length;
+      toon("ok","Ingelezen: "+regels.length+" regel(s), waarvan "+nF+" factuurregel(s). Vink hieronder aan wat in Logic4 verwerkt is.");
+      if(window.fpLog) window.fpLog("audrey-wire-geplakt",nF+" factuurregels");
+    }catch(e){ console.error(e); toon("bad","Kon niet inlezen: "+e.message); }
+  });
+  toonLeeg();
+})();
+
 // Upload + inlezen
 document.getElementById("audBtn").addEventListener("click",async()=>{
   const inp=document.getElementById("audFile"), st=document.getElementById("audStatus");
