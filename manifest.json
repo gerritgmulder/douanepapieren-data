@@ -1,5 +1,5 @@
 {
-  "version": "0.25.18",
+  "version": "0.26.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -139,6 +139,10 @@
     {
       "name": "eikensingel.html",
       "note": "Eikensingel-vakantiepark — bovenaanzicht 10 bungalows, boekingen + schoonmaak + betalingen"
+    },
+    {
+      "name": "leverancier-nieuw.html",
+      "note": "Nieuwe leverancier: proforma invoice inlezen, bedrijfsgegevens en artikelen met inkoopprijs vastleggen, en het crediteurnummer uit Logic4 eraan koppelen. Aanmaken in Logic4 kan niet via de API - alleen klanten - dus dat blijft een handeling in Logic4 zelf."
     },
     {
       "name": "prijslijst.html",

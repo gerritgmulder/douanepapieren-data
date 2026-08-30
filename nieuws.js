@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-30", bestand: "leverancier-nieuw.html", soort: "nieuw",
+      titel: "Nieuwe leverancier inlezen uit een proforma",
+      wat: "Sleep de proforma invoice van een nieuwe leverancier in de tegel Nieuwe leverancier. Het scherm haalt de bedrijfsgegevens, het contact en alle artikelen met hun inkoopprijs eruit, en controleert of het totaal klopt met wat er op het document staat. Daarna staat de leverancier met zijn prijslijst vast en kun je hem als bestand downloaden. De crediteur zelf maak je één keer in Logic4 aan; het adres, de contactpersoon, het e-mailadres en het telefoonnummer zet de knop er daarna automatisch bij.",
+    },
+
+    {
       datum: "2026-08-29", bestand: "voorraad.html", soort: "beter",
       titel: "Stock legt Vrij en Fysiek uit in de tabel zelf",
       wat: "Onder elke kolomkop staat nu wat het getal betekent, en er is een kolom Al verkocht bij gekomen: fysiek min vrij. Zo zie je per model in één regel dat er bijvoorbeeld 59 staan, 57 al verkocht zijn en er 2 vrij zijn. Bij het openklappen staat hetzelfde per kleur.",

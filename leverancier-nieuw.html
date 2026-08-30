@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nieuwe leverancier — Fonteyn Dashboard</title>
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="ci-pdf.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325; --fonteyn-lime:#8bc53f;
+         --border:#e5e7eb; --muted:#6b7280; --bad:#b3261e; --warn:#b45309; --ok:#15803d; }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f5f4ef;color:#111827;font-family:Montserrat,system-ui,sans-serif;font-size:14px}
+  header{background:var(--fonteyn-green);color:#fff;display:flex;align-items:center;gap:14px;padding:12px 20px}
+  header img{height:26px}
+  header .rechts{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12px}
+  header a.back,header button.logout{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.4);
+    border-radius:7px;padding:6px 14px;font:inherit;font-size:12px;background:transparent;cursor:pointer}
+  main{max-width:1180px;margin:0 auto;padding:22px 20px 80px}
+  h1{font-size:22px;margin:0 0 4px}
+  h3{font-size:15px;margin:0 0 8px}
+  .lead{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 14px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:16px}
+  .btn{background:#fff;color:var(--fonteyn-green);border:1.5px solid var(--fonteyn-green);border-radius:8px;
+    padding:8px 15px;font:inherit;font-weight:600;font-size:12.5px;cursor:pointer}
+  .btn.solid{background:var(--fonteyn-green);color:#fff}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  input[type=text],input[type=email],select,textarea{width:100%;border:1px solid var(--border);border-radius:8px;
+    padding:7px 9px;font:inherit;font-size:13px;background:#fff}
+  label.f{display:block;font-size:11.5px;color:var(--muted);margin:0 0 3px}
+  .velden{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}
+  .velden .breed{grid-column:1/-1}
+  .rij{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);
+     font-weight:600;padding:8px 8px;border-bottom:1px solid var(--border);white-space:nowrap}
+  td{padding:6px 8px;border-bottom:1px solid #f1f2f4;vertical-align:middle}
+  td input{padding:5px 7px;font-size:12.5px}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .tabelwrap{overflow-x:auto;border:1px solid var(--border);border-radius:9px;background:#fff}
+  .melding{padding:9px 13px;border-radius:8px;font-size:12.5px;margin:10px 0}
+  .melding.ok{background:#e8f5ee;color:var(--ok)} .melding.bad{background:#fdecea;color:var(--bad)}
+  .melding.warn{background:#fdf3e4;color:var(--warn)} .melding.info{background:#eef2ff;color:#3730a3}
+  .verborgen{display:none}
+  #dropzone{border:2px dashed var(--border);border-radius:12px;padding:26px;text-align:center;background:#fff;cursor:pointer}
+  #dropzone.over{border-color:var(--fonteyn-lime);background:#f6fbef}
+  .pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#f3f4f6;color:#374151}
+  .l4uit button{display:block;width:100%;text-align:left;background:#fff;border:1px solid var(--border);
+    border-radius:7px;padding:7px 10px;margin-bottom:5px;font:inherit;font-size:12.5px;cursor:pointer}
+  .l4uit .nr{font-weight:700;color:var(--fonteyn-green)}
+</style>
+</head>
+<body>
+<header>
+  <img src="fonteyn-logo.png" alt="Fonteyn">
+  <b>Nieuwe leverancier</b>
+  <span class="rechts">
+    <a class="back" href="dashboard.html">← Dashboard</a>
+    <span>Ingelogd als <span id="userEmail">—</span></span>
+    <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+  </span>
+</header>
+
+<main>
+  <h1>Proforma inlezen</h1>
+  <p class="lead">Sleep de proforma invoice van een nieuwe leverancier hierin. Het scherm leest de bedrijfsgegevens en de artikelen met hun inkoopprijs eruit, jij kijkt het na, en daarna staat de leverancier met zijn prijslijst vast in het dashboard.</p>
+
+  <!-- Wat wél en niet kan. Dit hoort bovenaan te staan en niet als verrassing
+       achteraf: Logic4 kan via de API geen crediteur aanmaken (alleen klanten),
+       dus dat blijft één handeling in Logic4 zelf. -->
+  <div class="melding warn" style="margin-bottom:16px">
+    <b>Hoe het met Logic4 werkt.</b> De crediteur zelf moet je één keer in Logic4 aanmaken - alleen de naam volstaat. Dat is de enige handeling die de koppeling niet kan doen; in de hele Logic4-API bestaat geen manier om een crediteur aan te maken, alleen om een klant aan te maken. Zodra het nummer er is doet dit scherm de rest: adres, contactpersoon, e-mail en telefoon zet het er automatisch bij.
+  </div>
+
+  <div class="card">
+    <div id="dropzone">
+      <div style="font-size:15px;font-weight:600;margin-bottom:4px">Sleep de proforma hierheen</div>
+      <div style="color:var(--muted);font-size:12.5px">of klik om een pdf te kiezen</div>
+      <input type="file" id="bestand" accept=".pdf" style="display:none">
+    </div>
+    <div id="leesStatus"></div>
+  </div>
+
+  <div id="voorstel" class="verborgen">
+    <div class="card">
+      <h3>De leverancier</h3>
+      <p class="lead" style="margin-bottom:10px">Uit de proforma gehaald. Kijk het na en vul aan wat ontbreekt - dit is wat straks in Logic4 moet komen te staan.</p>
+      <div class="velden">
+        <div class="breed"><label class="f">Bedrijfsnaam</label><input type="text" id="vNaam"></div>
+        <div class="breed"><label class="f">Tweede naam op de proforma (indien anders)</label><input type="text" id="vNaam2"></div>
+        <div class="breed"><label class="f">Adres</label><input type="text" id="vAdres"></div>
+        <div><label class="f">Land</label><input type="text" id="vLand"></div>
+        <div><label class="f">Contactpersoon</label><input type="text" id="vContact"></div>
+        <div><label class="f">Telefoon</label><input type="text" id="vTel"></div>
+        <div><label class="f">E-mail</label><input type="email" id="vMail"></div>
+        <div><label class="f">Offertenummer</label><input type="text" id="vOfferte"></div>
+        <div><label class="f">Datum op de proforma</label><input type="text" id="vDatum"></div>
+        <div><label class="f">Valuta</label><input type="text" id="vValuta"></div>
+        <div><label class="f">Levervoorwaarde</label><input type="text" id="vIncoterm"></div>
+        <div class="breed"><label class="f">Betaalvoorwaarden</label><input type="text" id="vBetaling"></div>
+        <div class="breed"><label class="f">Bankgegevens zoals ze op de proforma staan</label><textarea id="vBank" rows="3"></textarea></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Staat hij al in Logic4?</h3>
+      <p class="lead" style="margin-bottom:10px">Eerst kijken of deze leverancier er al is - dan voorkom je een dubbele crediteur. Vind je hem, klik hem aan. Bestaat hij nog niet, maak hem dan in Logic4 aan en vul het nummer hier in.</p>
+      <div class="rij">
+        <input type="text" id="l4Zoek" placeholder="zoek op bedrijfsnaam" style="max-width:340px">
+        <button class="btn" id="l4Knop" type="button">Zoeken in Logic4</button>
+        <span style="color:var(--muted);font-size:12px">of</span>
+        <input type="text" id="vCrediteur" placeholder="crediteurnummer" style="max-width:170px">
+      </div>
+      <div id="l4Uit" class="l4uit" style="margin-top:10px"></div>
+      <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
+        <p class="lead" style="margin-bottom:8px">Staat het crediteurnummer hierboven ingevuld, dan zet dit de gegevens er in Logic4 bij: het adres, en de contactpersoon met e-mail en telefoonnummer. Zo hoeft niemand het over te typen.</p>
+        <button class="btn solid" id="naarL4" type="button">Adres en contactgegevens naar Logic4 schrijven</button>
+        <div id="l4Schrijf"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>De prijslijst — <span id="regelTel">0</span> artikelen</h3>
+      <p class="lead" style="margin-bottom:10px">Dit wordt de inkoopprijslijst van deze leverancier. Wat niet klopt kun je hier aanpassen; een regel die er niet in hoort haal je met het kruisje weg.</p>
+      <div class="tabelwrap"><table>
+        <thead><tr>
+          <th>Artikelcode</th><th>Omschrijving</th><th>Maat</th><th class="num">Aantal</th>
+          <th class="num">Stukprijs</th><th class="num">Totaal</th><th>Materiaal</th><th></th>
+        </tr></thead>
+        <tbody id="regelBody"></tbody>
+      </table></div>
+      <div class="rij" style="margin-top:10px;justify-content:space-between">
+        <button class="btn" id="regelErbij" type="button">+ Regel toevoegen</button>
+        <div style="font-size:13px">Totaal volgens de regels: <b id="somRegels">—</b>
+          <span id="somDoc" style="color:var(--muted);margin-left:10px"></span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="rij" style="justify-content:space-between">
+        <div>
+          <button class="btn solid" id="bewaar" type="button">Leverancier en prijslijst bewaren</button>
+          <button class="btn" id="csv" type="button">Prijslijst downloaden (csv)</button>
+        </div>
+        <button class="btn" id="opnieuw" type="button">Opnieuw beginnen</button>
+      </div>
+      <div id="bewaarStatus"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Vastgelegde leveranciers — <span id="lvTel">0</span></h3>
+    <div id="lvLijst"><p class="lead">Nog niets vastgelegd.</p></div>
+  </div>
+</main>
+
+<script>
+const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
+const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
+const BUCKET=WORKER+"/data/leveranciers";
+const TEAMKEY=localStorage.getItem("fp.teamkey")||"";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+
+(function boot(){
+  if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
+  const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  $("userEmail").textContent=email||"—";
+  const mag=window.fpToegang && window.fpToegang.mag("leveranciers", email);
+  if(!mag){
+    document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'>"+
+      "<h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor inkoop en administratie.</p>"+
+      "<p>Je bent ingelogd als <code>"+esc(email)+"</code>.</p>"+
+      "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
+    throw new Error("geen toegang");
+  }
+})();
+$("logoutBtn").addEventListener("click",()=>{ localStorage.removeItem(SESSION_KEY); location.href="dashboard.html"; });
+function melding(waar,soort,tekst){ $(waar).innerHTML=tekst?"<div class='melding "+soort+"'>"+tekst+"</div>":""; }
+
+/* ─── De proforma lezen ────────────────────────────────────────────────
+   Elke fabriek maakt zijn eigen blad, dus dit leest niet één vast formaat.
+   Wat overal hetzelfde is: er staat een bedrijfsnaam bovenaan, ergens een
+   contactblok, en een tabel waarin per regel twee bedragen staan - de
+   stukprijs en het totaal. Op die twee bedragen herkennen we een artikel.
+   Wat er uitkomt is een voorstel; jij kijkt het na voordat het wordt
+   vastgelegd. Beter een half ingevuld scherm dan een verzonnen prijs. */
+let gelezen=null, regels=[];
+
+function bedrag(t){
+  const s=String(t||"").replace(/ /g," ");
+  const m=s.match(/(?:US\$|USD|EUR|€|\$)\s?([0-9][0-9.,]*)/i);
+  if(!m) return null;
+  const n=parseFloat(m[1].replace(/,/g,""));
+  return isFinite(n)?n:null;
+}
+function alleBedragen(t){
+  const uit=[]; const re=/(?:US\$|USD|EUR|€|\$)\s?([0-9][0-9.,]*)/gi; let m;
+  while((m=re.exec(String(t||"")))){ const n=parseFloat(m[1].replace(/,/g,"")); if(isFinite(n)) uit.push(n); }
+  return uit;
+}
+function leesProforma(tekstRegels){
+  const alles=tekstRegels.join("\n");
+  const uit={ naam:"", naam2:"", adres:"", land:"", contact:"", tel:"", mail:"",
+              offerte:"", datum:"", valuta:"", incoterm:"", betaling:"", bank:"", totaal:null, regels:[] };
+
+  // Bedrijfsnaam: de eerste regel die op een bedrijf lijkt (Co., Ltd / B.V. / GmbH / Inc)
+  for(const r of tekstRegels){
+    const s=r.trim();
+    if(/\b(co\.?,?\s*ltd|b\.?v\.?|gmbh|inc\.?|s\.?r\.?l|limited|company)\b/i.test(s) && s.length<90){ uit.naam=s; break; }
+  }
+  // Tweede naam: de regel achter "Supplier" die niet gelijk is aan de eerste
+  const sup=alles.match(/Supplier\s+([^\n]+)\n?([^\n]*)/i);
+  if(sup){
+    const a=sup[1].trim(), b=(sup[2]||"").trim();
+    if(a && a!==uit.naam && a.length<90 && !uit.naam) uit.naam=a;
+    for(const kand of [a,b]) if(kand && kand!==uit.naam && /\b(ltd|b\.?v\.?|gmbh|inc|limited)\b/i.test(kand)) uit.naam2=kand;
+  }
+  const adr=alles.match(/^\s*(No\.[^\n]+|[0-9][^\n]{10,80}(?:Road|Street|Village|Town|City)[^\n]*)$/im);
+  if(adr) uit.adres=adr[1].trim();
+  const land=alles.match(/\b(CN|China|Vietnam|India|Turkey|Poland)\b/);
+  if(land) uit.land=land[1]==="CN"?"China":land[1];
+  const mail=alles.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g)||[];
+  uit.mail=mail.find(m=>!/fonteyn\.nl$/i.test(m))||"";
+  const tel=alles.match(/\b(00\d{2}[\s\d]{6,16})\b/);
+  if(tel) uit.tel=tel[1].trim();
+  /* Op één tekstregel staan vaak beide kolommen naast elkaar:
+     "Contact Cobbi Wu Contact Dolf". De eerste is die van de leverancier,
+     de tweede is onze eigen contactpersoon - die moeten we niet overnemen. */
+  const cont=alles.match(/Contact\s+([A-Za-z.\- ]{2,30}?)\s*(?:Contact|Tel|Email|$)/i);
+  if(cont){
+    const naam=cont[1].trim();
+    if(naam && !/^(dolf|gerrit|chantal|arno)$/i.test(naam)) uit.contact=naam;
+  }
+  /* Het offertenummer staat in de pdf soms met spaties uit elkaar
+     ("OV08023 - 03"), omdat het over twee cellen loopt. Plak dat weer aan
+     elkaar, maar stop bij een woord - anders loopt het door in de volgende
+     kolom ("Add 3888 NK Uddel"). */
+  const off=alles.match(/Offer\s*No\.?\s*([A-Z0-9]+(?:\s*-\s*[A-Z0-9]+)*)/i);
+  if(off) uit.offerte=off[1].replace(/\s*-\s*/g,"-").trim();
+  const dat=alles.match(/(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]{3,9},?\s*20\d\d)/);
+  if(dat) uit.datum=dat[1];
+  uit.valuta=/US\$|USD/.test(alles)?"USD":(/EUR|€/.test(alles)?"EUR":"");
+  const inc=alles.match(/\b(EXW|FOB|CIF|FCA|DAP|DDP|CFR)\b/);
+  if(inc) uit.incoterm=inc[1];
+  const bet=alles.match(/PAYMENT TERMS?:?\s*([^\n]+)/i);
+  if(bet) uit.betaling=bet[1].trim().slice(0,200);
+  const bank=[];
+  for(const r of tekstRegels)
+    if(/(Bank Name|Account (Number|Name)|SWIFT|SWITF|BIC|Bank Address|Branch Code)/i.test(r)) bank.push(r.trim());
+  uit.bank=bank.slice(0,10).join("\n");
+  const tot=alles.match(/IN\s*TOTAL:?\s*[^0-9]*([0-9][0-9.,]*)/i);
+  if(tot){ const n=parseFloat(tot[1].replace(/,/g,"")); if(isFinite(n)) uit.totaal=n; }
+
+  /* De artikelregels. Een regel telt mee als er twee bedragen op staan
+     (stukprijs en totaal) en er een artikelcode voor staat. De code is het
+     eerste stuk met letters én cijfers dat geen maat of gewicht is. */
+  /* De omschrijving staat zelden helemaal op de regel met de bedragen. In
+     deze proforma staat "Artificial pine" op de regel erboven, "tree" op de
+     regel met de prijs, en bij een ander artikel staat het staartje er juist
+     onder. We kijken daarom een regel terug en een regel vooruit, en plakken
+     alleen aan wat een vervolg is: een stukje dat met een kleine letter
+     begint hoort bij het stuk ervoor. Wat er dan nog scheef staat verbeter je
+     in de tabel - het blijft een voorstel. */
+  function stukje(r){
+    if(!r) return "";
+    const zonder=String(r).replace(/(?:US\$|USD|EUR|€|\$)\s?[0-9][0-9.,]*/gi," ");
+    // Alleen het deel vóór een materiaalopsomming ("fiberglass,resin,PE")
+    const eerst=zonder.split(/\s[A-Za-z]+,/)[0];
+    const m=eerst.match(/[A-Za-z][A-Za-z\- ]{2,45}/);
+    if(!m) return "";
+    const s=m[0].replace(/\s+/g," ").trim();
+    if(/^(Supplier|Buyer|Contact|Email|Add|Tel|Item|No|Qty|CTNS|DESCRIPTIO|Parameters|Length|Width|IN TOTAL|The Netherlands|Offer)/i.test(s)) return "";
+    return s;
+  }
+  for(let i=0;i<tekstRegels.length;i++){
+    const r=tekstRegels[i];
+    const b=alleBedragen(r);
+    if(b.length<2) continue;
+    const stuk=b[b.length-2], totaalR=b[b.length-1];
+    if(!(stuk>0&&totaalR>0)) continue;
+    const zonderBedrag=r.replace(/(?:US\$|USD|EUR|€|\$)\s?[0-9][0-9.,]*/gi," ");
+    const code=(zonderBedrag.match(/\b([A-Z]{2,}[A-Z0-9\-]*\d[A-Z0-9\-]*)\b/)||[])[1]||"";
+    if(!code) continue;
+    let na=zonderBedrag.split(code)[1]||"";
+    let oms=(na.match(/^[^0-9]{3,60}/)||[""])[0].replace(/\s+/g," ").trim();
+    // Begint het met een kleine letter, dan is het een vervolg op de regel erboven
+    if(oms && /^[a-z]/.test(oms)){
+      for(let k=i-1;k>=Math.max(0,i-3);k--){
+        if(alleBedragen(tekstRegels[k]).length>=2) break;
+        const v=stukje(tekstRegels[k]);
+        if(v){ oms=v+" "+oms; break; }
+      }
+    } else if(!oms){
+      for(let k=i-1;k>=Math.max(0,i-3);k--){
+        if(alleBedragen(tekstRegels[k]).length>=2) break;
+        const v=stukje(tekstRegels[k]); if(v){ oms=v; break; }
+      }
+    }
+    // En een staartje dat eronder staat hoort er ook bij
+    for(let k=i+1;k<Math.min(tekstRegels.length,i+3);k++){
+      if(alleBedragen(tekstRegels[k]).length>=2) break;
+      const v=stukje(tekstRegels[k]);
+      if(v && /^[a-z]/.test(v)){ oms=(oms+" "+v).trim(); break; }
+      if(v) break;
+    }
+    const maat=(na.match(/(\d+(?:[.,]\d+)?\s*m)\s+(\d+(?:[.,]\d+)?\s*m)/i)||[]).slice(1,3).join(" x ");
+    const getallen=(zonderBedrag.match(/\b\d+(?:[.,]\d+)?\b/g)||[]).map(x=>parseFloat(x.replace(",",".")));
+    let aantal=getallen.find(g=>Math.abs(g*stuk-totaalR)<0.51);
+    if(aantal==null) aantal=Math.round(totaalR/stuk);
+    const mat=(r.match(/([a-z]+(?:,[a-z ]+){2,})\s*$/i)||[])[1]||"";
+    /* De materiaalkolom staat er soms tegenaan geplakt ("...tree solid wood").
+       Die woorden horen bij het materiaal en niet bij de omschrijving. */
+    oms=oms.replace(/\s+(solid wood|metal|plastic|fabric|resin|fiberglass|PE)\b.*$/i,"");
+    uit.regels.push({ code, omschrijving:oms.replace(/\s+/g," ").trim(),
+                      maat, aantal, stukprijs:stuk, totaal:totaalR, materiaal:mat.trim() });
+  }
+  return uit;
+}
+
+async function leesBestand(file){
+  melding("leesStatus","info","Bezig met lezen van "+esc(file.name)+"…");
+  try{
+    const rijen=await window.fpCiPdf.uitPdfKolommen(file);
+    const tekst=rijen.map(r=>r.items.map(i=>i.str).join(" "));
+    gelezen=leesProforma(tekst);
+    gelezen.bestand=file.name;
+    regels=gelezen.regels.slice();
+    vulVoorstel();
+    $("voorstel").classList.remove("verborgen");
+    melding("leesStatus", regels.length?"ok":"warn",
+      regels.length
+        ? "Gelezen: "+esc(gelezen.naam||"(naam niet gevonden)")+" met "+regels.length+" artikelregel(s). Kijk het hieronder na."
+        : "De bedrijfsgegevens zijn gelezen, maar er zijn geen artikelregels herkend. Vul ze hieronder met de hand aan.");
+    if(window.fpLog) window.fpLog("proforma-gelezen",(gelezen.naam||file.name)+" - "+regels.length+" regels");
+  }catch(e){ console.error(e); melding("leesStatus","bad","Kon de pdf niet lezen: "+esc(e.message)); }
+}
+function vulVoorstel(){
+  const z=(id,v)=>{ $(id).value=v||""; };
+  z("vNaam",gelezen.naam); z("vNaam2",gelezen.naam2); z("vAdres",gelezen.adres); z("vLand",gelezen.land);
+  z("vContact",gelezen.contact); z("vTel",gelezen.tel); z("vMail",gelezen.mail);
+  z("vOfferte",gelezen.offerte); z("vDatum",gelezen.datum); z("vValuta",gelezen.valuta);
+  z("vIncoterm",gelezen.incoterm); z("vBetaling",gelezen.betaling); z("vBank",gelezen.bank);
+  $("l4Zoek").value=gelezen.naam||"";
+  tekenRegels();
+}
+function tekenRegels(){
+  $("regelTel").textContent=regels.length;
+  $("regelBody").innerHTML=regels.map((r,i)=>
+    "<tr>"+
+    "<td><input type='text' data-v='code' data-i='"+i+"' value='"+esc(r.code)+"' style='width:110px'></td>"+
+    "<td><input type='text' data-v='omschrijving' data-i='"+i+"' value='"+esc(r.omschrijving)+"' style='min-width:190px'></td>"+
+    "<td><input type='text' data-v='maat' data-i='"+i+"' value='"+esc(r.maat)+"' style='width:100px'></td>"+
+    "<td class='num'><input type='text' data-v='aantal' data-i='"+i+"' value='"+esc(r.aantal)+"' style='width:64px;text-align:right'></td>"+
+    "<td class='num'><input type='text' data-v='stukprijs' data-i='"+i+"' value='"+esc(r.stukprijs)+"' style='width:88px;text-align:right'></td>"+
+    "<td class='num'><input type='text' data-v='totaal' data-i='"+i+"' value='"+esc(r.totaal)+"' style='width:96px;text-align:right'></td>"+
+    "<td><input type='text' data-v='materiaal' data-i='"+i+"' value='"+esc(r.materiaal)+"' style='min-width:150px'></td>"+
+    "<td><button class='btn' data-weg='"+i+"' style='padding:3px 8px;border-color:#fecaca;color:#b3261e'>&#10005;</button></td>"+
+    "</tr>").join("");
+  $("regelBody").querySelectorAll("input").forEach(inp=>inp.addEventListener("input",()=>{
+    const i=Number(inp.dataset.i), v=inp.dataset.v;
+    regels[i][v]=(v==="aantal"||v==="stukprijs"||v==="totaal")?parseFloat(String(inp.value).replace(",","."))||0:inp.value;
+    somBij();
+  }));
+  $("regelBody").querySelectorAll("[data-weg]").forEach(b=>b.addEventListener("click",()=>{
+    regels.splice(Number(b.dataset.weg),1); tekenRegels();
+  }));
+  somBij();
+}
+function somBij(){
+  const som=regels.reduce((n,r)=>n+(Number(r.totaal)||0),0);
+  const val=$("vValuta").value||"";
+  $("somRegels").textContent=(val?val+" ":"")+som.toLocaleString("nl-NL",{minimumFractionDigits:2});
+  $("somDoc").textContent=(gelezen&&gelezen.totaal!=null)
+    ? ("op het document staat "+(val?val+" ":"")+gelezen.totaal.toLocaleString("nl-NL",{minimumFractionDigits:2})+
+       (Math.abs(gelezen.totaal-som)<0.51?" ✓":" — dat wijkt af"))
+    : "";
+}
+$("regelErbij").addEventListener("click",()=>{
+  regels.push({code:"",omschrijving:"",maat:"",aantal:1,stukprijs:0,totaal:0,materiaal:""}); tekenRegels();
+});
+
+/* ─── Bestand kiezen of slepen ─────────────────────────────────────── */
+const dz=$("dropzone");
+dz.addEventListener("click",()=>$("bestand").click());
+$("bestand").addEventListener("change",e=>{ if(e.target.files[0]) leesBestand(e.target.files[0]); });
+["dragenter","dragover"].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.add("over"); }));
+["dragleave","drop"].forEach(ev=>dz.addEventListener(ev,e=>{ e.preventDefault(); dz.classList.remove("over"); }));
+dz.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) leesBestand(f); });
+
+/* ─── Staat hij al in Logic4? ──────────────────────────────────────── */
+$("l4Knop").addEventListener("click",async()=>{
+  const q=$("l4Zoek").value.trim();
+  if(q.length<3) return melding("bewaarStatus","warn","Typ minstens drie letters om te zoeken.");
+  $("l4Uit").innerHTML="<p class='lead'>Zoeken in Logic4…</p>";
+  try{
+    const r=await fetch(WORKER+"/leveranciers/zoek",{ method:"POST",
+      headers:{ "Content-Type":"application/json","X-Fonteyn-Auth":TEAMKEY }, body:JSON.stringify({ q }) });
+    const j=await r.json();
+    if(!r.ok||!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    if(!j.treffers.length){
+      $("l4Uit").innerHTML="<div class='melding info'>Geen crediteur gevonden voor “"+esc(q)+"”. "+
+        "Deze leverancier bestaat dus nog niet in Logic4 - maak hem daar aan en vul het nummer hiernaast in.</div>";
+      return;
+    }
+    $("l4Uit").innerHTML=j.treffers.map(t=>
+      "<button type='button' data-nr='"+esc(t.id)+"'><span class='nr'>"+esc(t.id)+"</span> &nbsp; "+esc(t.naam)+"</button>").join("");
+    $("l4Uit").querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
+      $("vCrediteur").value=b.dataset.nr;
+      melding("bewaarStatus","ok","Crediteur "+esc(b.dataset.nr)+" gekoppeld.");
+    }));
+  }catch(e){ $("l4Uit").innerHTML="<div class='melding bad'>Zoeken faalde: "+esc(e.message)+"</div>"; }
+});
+
+/* ─── Gegevens naar Logic4 schrijven ───────────────────────────────────
+   Alleen adres en contactpersoon; de crediteur zelf moet in Logic4 bestaan.
+   Dit verandert echt iets in de administratie, dus eerst laten bevestigen en
+   precies laten zien wat er heen gaat. */
+$("naarL4").addEventListener("click",async()=>{
+  const nr=$("vCrediteur").value.trim();
+  if(!nr) return melding("l4Schrijf","warn","Vul eerst het crediteurnummer in, of zoek de crediteur hierboven op.");
+  const adres={ bedrijf:$("vNaam").value.trim(), straat:$("vAdres").value.trim(),
+                plaats:"", postcode:"", landcode:($("vLand").value.trim().toLowerCase().startsWith("chin")?"CN":""),
+                mail:$("vMail").value.trim(), tel:$("vTel").value.trim() };
+  const contact={ naam:$("vContact").value.trim(), mail:$("vMail").value.trim(), tel:$("vTel").value.trim() };
+  const wat=["adres: "+(adres.straat||"(leeg)"),
+             "contact: "+(contact.naam||"(leeg)"),
+             "e-mail: "+(contact.mail||"(leeg)"),
+             "telefoon: "+(contact.tel||"(leeg)")].join("\n");
+  if(!confirm("Dit wordt bij crediteur "+nr+" in Logic4 gezet:\n\n"+wat+"\n\nDoorgaan?")) return;
+  melding("l4Schrijf","info","Bezig met wegschrijven…");
+  try{
+    const r=await fetch(WORKER+"/leveranciers/naar-logic4",{ method:"POST",
+      headers:{ "Content-Type":"application/json","X-Fonteyn-Auth":TEAMKEY },
+      body:JSON.stringify({ crediteur:nr, adres, contact }) });
+    const j=await r.json();
+    if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    melding("l4Schrijf","ok","Klaar. Adres en contactgegevens staan nu bij crediteur "+esc(nr)+" in Logic4.");
+    if(window.fpLog) window.fpLog("leverancier-naar-logic4","crediteur "+nr+" - "+$("vNaam").value.trim());
+  }catch(e){ melding("l4Schrijf","bad","Wegschrijven faalde: "+esc(e.message)+" - de crediteur bestaat mogelijk nog niet."); }
+});
+
+/* ─── Bewaren ──────────────────────────────────────────────────────── */
+let opslag={ leveranciers:[] };
+async function laad(){
+  try{
+    const r=await fetch(BUCKET,{headers:{"X-Fonteyn-Auth":TEAMKEY}});
+    if(r.ok){ const j=await r.json(); if(j&&Array.isArray(j.leveranciers)) opslag=j; }
+  }catch(e){ console.warn("laden faalde",e); }
+  tekenLijst();
+}
+async function bewaarOpslag(){
+  const r=await fetch(BUCKET,{ method:"PUT",
+    headers:{ "Content-Type":"application/json","X-Fonteyn-Auth":TEAMKEY }, body:JSON.stringify(opslag) });
+  if(!r.ok) throw new Error("opslaan gaf HTTP "+r.status);
+}
+$("bewaar").addEventListener("click",async()=>{
+  const naam=$("vNaam").value.trim();
+  if(!naam) return melding("bewaarStatus","bad","Vul eerst de bedrijfsnaam in.");
+  if(!regels.length) return melding("bewaarStatus","bad","Er staat geen enkele artikelregel in de prijslijst.");
+  const kaart={
+    id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    naam, naam2:$("vNaam2").value.trim(), adres:$("vAdres").value.trim(), land:$("vLand").value.trim(),
+    contact:$("vContact").value.trim(), tel:$("vTel").value.trim(), mail:$("vMail").value.trim(),
+    offerte:$("vOfferte").value.trim(), datumProforma:$("vDatum").value.trim(),
+    valuta:$("vValuta").value.trim(), incoterm:$("vIncoterm").value.trim(),
+    betaling:$("vBetaling").value.trim(), bank:$("vBank").value.trim(),
+    crediteur:$("vCrediteur").value.trim()||null,
+    bron:(gelezen&&gelezen.bestand)||"", prijslijst:regels.slice(),
+    aangemaakt:new Date().toISOString(), door:(localStorage.getItem(EMAIL_KEY)||"").toLowerCase(),
+  };
+  try{
+    opslag.leveranciers=opslag.leveranciers||[];
+    opslag.leveranciers.unshift(kaart);
+    opslag.gewijzigd=new Date().toISOString();
+    await bewaarOpslag();
+    tekenLijst();
+    melding("bewaarStatus","ok","Bewaard: "+esc(naam)+" met "+regels.length+" artikelen."+
+      (kaart.crediteur?"":" Vergeet niet de crediteur in Logic4 aan te maken en het nummer hier in te vullen."));
+    if(window.fpLog) window.fpLog("leverancier-vastgelegd",naam+" - "+regels.length+" artikelen");
+  }catch(e){ melding("bewaarStatus","bad","Bewaren faalde: "+esc(e.message)); }
+});
+$("opnieuw").addEventListener("click",()=>{
+  gelezen=null; regels=[]; $("voorstel").classList.add("verborgen");
+  $("bestand").value=""; melding("leesStatus",""); melding("bewaarStatus","");
+});
+$("csv").addEventListener("click",()=>{
+  const kop=["Artikelcode","Omschrijving","Maat","Aantal","Stukprijs","Totaal","Materiaal"];
+  const rij=r=>[r.code,r.omschrijving,r.maat,r.aantal,r.stukprijs,r.totaal,r.materiaal]
+    .map(x=>'"'+String(x==null?"":x).replace(/"/g,'""')+'"').join(";");
+  const csv=[kop.join(";")].concat(regels.map(rij)).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));
+  a.download="prijslijst "+($("vNaam").value.trim()||"leverancier")+".csv";
+  a.click();
+});
+
+function tekenLijst(){
+  const l=(opslag.leveranciers||[]);
+  $("lvTel").textContent=l.length;
+  if(!l.length){ $("lvLijst").innerHTML="<p class='lead'>Nog niets vastgelegd.</p>"; return; }
+  $("lvLijst").innerHTML="<div class='tabelwrap'><table><thead><tr>"+
+    "<th>Leverancier</th><th>Land</th><th>Offerte</th><th class='num'>Artikelen</th>"+
+    "<th>Crediteur in Logic4</th><th>Vastgelegd</th></tr></thead><tbody>"+
+    l.map(x=>"<tr>"+
+      "<td><b>"+esc(x.naam)+"</b>"+(x.contact?"<div style='color:var(--muted);font-size:11.5px'>"+esc(x.contact)+(x.mail?" · "+esc(x.mail):"")+"</div>":"")+"</td>"+
+      "<td>"+esc(x.land||"")+"</td><td>"+esc(x.offerte||"")+"</td>"+
+      "<td class='num'>"+((x.prijslijst||[]).length)+"</td>"+
+      "<td>"+(x.crediteur?"<span class='pill' style='background:#e8f5ee;color:#15803d'>"+esc(x.crediteur)+"</span>"
+                        :"<span class='pill' style='background:#fdf3e4;color:#b45309'>nog aanmaken</span>")+"</td>"+
+      "<td style='font-size:11.5px;color:var(--muted)'>"+esc(String(x.aangemaakt||"").slice(0,10))+"</td>"+
+      "</tr>").join("")+"</tbody></table></div>";
+}
+laad();
+</script>
+<script>
+/* Activiteitenlogboek */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function info(){
+    var ua=navigator.userAgent;
+    var app=ua.match(/fonteyn-dashboard\/(\d+\.\d+\.\d+)/i), pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+)/);
+    var pc=(localStorage.getItem("fp.computer")||"");
+    return { computer:pc||null, platform:pm?pm[1].replace(/_/g,"."):null, versie:app?("app "+app[1]):"browser" };
+  }
+  window.fpLog=function(actie,detail){
+    try{
+      var k=localStorage.getItem("fp.teamkey")||""; if(!k) return;
+      var i=info();
+      fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":k},
+        body:JSON.stringify({user:(localStorage.getItem("fp.email")||"").toLowerCase(),tile:"leverancier",
+          action:actie,detail:String(detail||""),computer:i.computer,platform:i.platform,versie:i.versie})}).catch(function(){});
+    }catch(e){}
+  };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

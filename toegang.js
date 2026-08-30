@@ -201,6 +201,12 @@
     "rapportage": [
       "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
     ],
+    /* Nieuwe leverancier inlezen uit een proforma. Inkoop en administratie:
+       Chantal en Arno lezen de proforma's in, Gretha beheert de prijslijsten,
+       Osman heeft de crediteurkant. */
+    "leveranciers": [
+      "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit", "gretha", "osman",
+    ],
     // Retouren
     "retouren": [
       "arno", "dolf", "don", "fonteynbot", "gerrit", "manon",

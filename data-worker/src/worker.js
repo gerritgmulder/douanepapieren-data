@@ -123,6 +123,11 @@ const ALLOWED_BUCKETS = new Set([
   // (plfile:<id>) en gaan via /prijslijst/bestand — anders zou één map met
   // vijftig PDF's de omvangsgrens van deze bucket meteen opblazen.
   "prijslijsten",
+  // Leveranciers die uit een proforma zijn ingelezen: bedrijfsgegevens,
+  // betaalvoorwaarden en de artikelen met hun inkoopprijs. Aanmaken in Logic4
+  // kan niet via de API (alleen klanten), dus hier ligt de volledige kaart en
+  // wordt het crediteurnummer erbij gezet zodra iemand hem daar heeft gemaakt.
+  "leveranciers",
   // Bankkoppeling: de openstaande posten uit Logic4 (een uur bewaard, ~2.500
   // regels) en het logboek van wat er via het dashboard is geboekt.
   "bank-openstaand",
@@ -6752,6 +6757,90 @@ export default {
     if (url.pathname === "/dealers/admin/relatie/zoeklijst" && request.method === "POST") {
       if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
       return reply(200, await relIndexBouw(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+
+    /* Crediteuren zoeken op naam, voor de tegel Nieuwe leverancier. Alleen
+       lezen: aanmaken kan Logic4 niet via de API (alleen klanten), dus dit
+       dient om te controleren of een leverancier er al staat voordat iemand
+       hem met de hand aanmaakt - een dubbele crediteur is achteraf lastig op
+       te ruimen. */
+    if (url.pathname === "/leveranciers/zoek" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });
+      const b = await request.json().catch(() => ({}));
+      const q = String(b.q || "").trim().toLowerCase();
+      if (q.length < 3) return reply(400, { ok: false, error: "zoekterm te kort" });
+      try {
+        const token = await l4Token(env);
+        const treffers = [];
+        for (let p = 0; p < 20 && treffers.length < 25; p++) {
+          const r = await fetch("https://api.logic4server.nl/v3/Relations/GetCreditors", {
+            method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+            body: JSON.stringify({ TakeRecords: 500, SkipRecords: p * 500 }),
+          });
+          if (!r.ok) break;
+          const lijst = await r.json().catch(() => []);
+          const rijen = Array.isArray(lijst) ? lijst : (lijst.Records || []);
+          if (!rijen.length) break;
+          for (const c of rijen) {
+            const naam = String(c.CompanyName || c.Name || "");
+            if (naam.toLowerCase().includes(q)) treffers.push({ id: c.Id ?? c.CreditorId, naam });
+          }
+          if (rijen.length < 500) break;
+        }
+        return reply(200, { ok: true, treffers: treffers.slice(0, 25) });
+      } catch (e) { return reply(502, { ok: false, error: String(e.message || e) }); }
+    }
+
+    /* De gegevens van een leverancier naar Logic4 schrijven. Aanmaken van de
+       crediteur zelf kan de API niet - dat is nagezocht over alle ruim
+       tweehonderd eindpunten en er is er geen - maar zodra het nummer er is
+       kunnen adres én contactpersoon met e-mail en telefoon er wél
+       automatisch bij. Dat scheelt het overtypen waar fouten in sluipen.
+       Dit SCHRIJFT in Logic4, dus alleen met de team-sleutel, altijd na een
+       bevestiging in het scherm, en het gaat mee in het logboek. */
+    if (url.pathname === "/leveranciers/naar-logic4" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });
+      const b = await request.json().catch(() => ({}));
+      const crediteur = parseInt(b.crediteur, 10);
+      if (!crediteur) return reply(400, { ok: false, error: "crediteurnummer ontbreekt" });
+      try {
+        const token = await l4Token(env);
+        const roep = async (pad, lijf) => {
+          const r = await fetch("https://api.logic4server.nl" + pad, {
+            method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+            body: JSON.stringify(lijf) });
+          const tekst = await r.text();
+          let j = null; try { j = JSON.parse(tekst); } catch {}
+          return { ok: r.ok, status: r.status, antwoord: j || tekst.slice(0, 300) };
+        };
+        const gedaan = {};
+        if (b.adres && (b.adres.straat || b.adres.plaats || b.adres.bedrijf)) {
+          gedaan.adres = await roep("/v3/Relations/AddUpdateAddress", {
+            CreditorId: crediteur,
+            CompanyName: String(b.adres.bedrijf || "").slice(0, 120) || null,
+            Street: String(b.adres.straat || "").slice(0, 120) || null,
+            City: String(b.adres.plaats || "").slice(0, 80) || null,
+            Zipcode: String(b.adres.postcode || "").slice(0, 20) || null,
+            IsoCode: String(b.adres.landcode || "").slice(0, 3).toUpperCase() || null,
+            Email: String(b.adres.mail || "").slice(0, 120) || null,
+            TelephoneNumber: String(b.adres.tel || "").slice(0, 40) || null,
+          });
+        }
+        if (b.contact && (b.contact.naam || b.contact.mail || b.contact.tel)) {
+          const naam = String(b.contact.naam || "").trim().split(/\s+/);
+          gedaan.contact = await roep("/v3/Relations/AddUpdateContact", {
+            CreditorId: crediteur,
+            FirstName: naam[0] || null,
+            LastName: naam.slice(1).join(" ") || null,
+            EmailAddress: String(b.contact.mail || "").slice(0, 120) || null,
+            TelephoneNumber: String(b.contact.tel || "").slice(0, 40) || null,
+            IsMainContact: true,
+          });
+        }
+        const mis = Object.entries(gedaan).filter(([, v]) => !v.ok);
+        return reply(200, { ok: mis.length === 0, gedaan,
+          error: mis.length ? mis.map(([k, v]) => k + ": HTTP " + v.status).join(", ") : null });
+      } catch (e) { return reply(502, { ok: false, error: String(e.message || e) }); }
     }
 
     /* De wisselkoers van vandaag (ECB min 0,03), voor het beheerscherm. */
