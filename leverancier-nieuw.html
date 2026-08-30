@@ -311,10 +311,57 @@ function leesProforma(tekstRegels){
     const getallen=(zonderBedrag.match(/\b\d+(?:[.,]\d+)?\b/g)||[]).map(x=>parseFloat(x.replace(",",".")));
     let aantal=getallen.find(g=>Math.abs(g*stuk-totaalR)<0.51);
     if(aantal==null) aantal=Math.round(totaalR/stuk);
-    const mat=(r.match(/([a-z]+(?:,[a-z ]+){2,})\s*$/i)||[])[1]||"";
-    /* De materiaalkolom staat er soms tegenaan geplakt ("...tree solid wood").
-       Die woorden horen bij het materiaal en niet bij de omschrijving. */
-    oms=oms.replace(/\s+(solid wood|metal|plastic|fabric|resin|fiberglass|PE)\b.*$/i,"");
+    /* Het materiaal staat in de laatste kolom, en die is in de pdf op twee
+       manieren stuk: hij breekt midden in een woord af ("plastic,fabric,meta"
+       op de ene regel, "l,solid wood" op de volgende) en er lekken woorden uit
+       de omschrijving in. Alles wat er staat aan elkaar plakken werkt daarom
+       niet - dan krijg je "solid woodtree".
+
+       Dus andersom: we rapen alle stukken uit de regels rondom bij elkaar,
+       knippen op de komma's, en houden alleen over wat werkelijk een
+       materiaal is. Een stuk dat door de afbreking aan een ander woord vast
+       is komen te zitten wordt zo alsnog herkend, en wat geen materiaal is
+       valt vanzelf af. Mist er een keer eentje, dan vul je hem in de tabel
+       bij - beter een gat dan een onzinwoord. */
+    const MATERIALEN=["solid wood","fiberglass","aluminium","aluminum","polyester","rattan",
+                      "plastic","ceramic","cement","fabric","metal","resin","glass","iron",
+                      "steel","wood","pvc","pe"];
+    const matStukken=[];
+    // Krap venster: één regel terug en één vooruit. Ruimer kijken levert
+    // materialen van de buurregel op, en dat is erger dan een gat.
+    for(let k=Math.max(0,i-1);k<Math.min(tekstRegels.length,i+2);k++){
+      if(k!==i && alleBedragen(tekstRegels[k]).length>=2) continue;
+      let s=String(tekstRegels[k]||"");
+      if(k===i){
+        const p=s.lastIndexOf("$");
+        if(p<0) continue;
+        s=s.slice(p).replace(/^\$\s?[0-9][0-9.,]*/,"");
+      }
+      if(s.indexOf(",")<0) continue;
+      matStukken.push(s);
+    }
+    const gevonden=[];
+    const brokken=[];
+    for(const stuk of matStukken)
+      for(const deel of stuk.split(",")){
+        const kaal=deel.toLowerCase().replace(/[^a-z ]/g," ").replace(/\s+/g," ").trim();
+        if(kaal) brokken.push(kaal);
+      }
+    /* Ook elk paar naast elkaar proberen: het afgebroken woord staat als
+       "meta" en "l" in twee losse brokken en is alleen samen "metal". */
+    const teToetsen=brokken.concat(brokken.slice(0,-1).map((b,n)=>b+brokken[n+1]));
+    for(const brok of teToetsen){
+      let rest=" "+brok+" ";
+      for(const m of MATERIALEN){                       // langste eerst
+        const treffer = m.length<=2 ? rest.split(/\s+/).includes(m) : rest.includes(m);
+        if(!treffer) continue;
+        if(gevonden.indexOf(m)<0) gevonden.push(m);
+        rest=rest.split(m).join(" ");                   // eruit, zodat 'glass' niet ook in 'fiberglass' telt
+      }
+    }
+    const mat=gevonden.join(",");
+    // Materiaalwoorden die aan de omschrijving vastplakten horen daar niet
+    oms=oms.replace(/\s+(solid wood|metal|plastic|fabric|resin|fiberglass|wood|PE)\b.*$/i,"");
     uit.regels.push({ code, omschrijving:oms.replace(/\s+/g," ").trim(),
                       maat, aantal, stukprijs:stuk, totaal:totaalR, materiaal:mat.trim() });
   }
