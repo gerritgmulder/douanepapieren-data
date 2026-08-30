@@ -53,6 +53,12 @@
 
     {
       datum: "2026-08-30", bestand: "leverancier-nieuw.html", soort: "nieuw",
+      titel: "Prijslijst van een nieuwe leverancier loopt langs Gretha",
+      wat: "Lees je een proforma in, dan gaat de prijslijst niet meteen het archief in: hij komt bij Gretha en Fonteynbot bovenaan het dashboard te staan om na te kijken. Na akkoord maakt het dashboard in Prijslijsten een map aan op naam van de leverancier en zet de prijslijst daarin.",
+    },
+
+    {
+      datum: "2026-08-30", bestand: "leverancier-nieuw.html", soort: "nieuw",
       titel: "Nieuwe leverancier inlezen uit een proforma",
       wat: "Sleep de proforma invoice van een nieuwe leverancier in de tegel Nieuwe leverancier. Het scherm haalt de bedrijfsgegevens, het contact en alle artikelen met hun inkoopprijs eruit, en controleert of het totaal klopt met wat er op het document staat. Daarna staat de leverancier met zijn prijslijst vast en kun je hem als bestand downloaden. De crediteur zelf maak je één keer in Logic4 aan; het adres, de contactpersoon, het e-mailadres en het telefoonnummer zet de knop er daarna automatisch bij.",
     },

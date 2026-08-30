@@ -423,12 +423,22 @@
   }
 
   async function laadSignalen() {
-    // Uit de cache als die vers genoeg is — anders wacht je bij elke login.
+    /* Uit de cache als die vers genoeg is — anders wacht je bij elke login.
+       Eén uitzondering: een prijslijst die op goedkeuring wacht halen we
+       altijd vers op. Dat is één klein bestand, en een uur wachten voordat
+       iemand ziet dat er iets klaarligt is voor een goedkeuring te lang. */
     try {
       var rauw = localStorage.getItem("fp.signalen." + cfg.email);
       if (rauw) {
         var c = JSON.parse(rauw);
-        if (c && c.tot && new Date(c.tot).getTime() > Date.now()) { signalen = c.lijst || []; return; }
+        if (c && c.tot && new Date(c.tot).getTime() > Date.now()) {
+          var oud = (c.lijst || []).filter(function (s) { return s.bron !== "prijslijst"; });
+          var vers = [];
+          try { vers = await signalenPrijslijsten(); } catch (e) {}
+          signalen = vers.concat(oud);
+          teken();
+          return;
+        }
       }
     } catch (e) {}
     signalenBezig = true; teken();
@@ -436,7 +446,9 @@
     var uitControle = await signalenUitControle(uid);
     var uitVers = [];
     try { uitVers = await signalenUitVerseOrders(uid); } catch (e) { /* Logic4 niet bereikbaar */ }
-    signalen = uitVers.concat(uitControle);
+    var uitPrijslijst = [];
+    try { uitPrijslijst = await signalenPrijslijsten(); } catch (e) { /* geen bucket: dan niets */ }
+    signalen = uitPrijslijst.concat(uitVers, uitControle);
     signalenBezig = false;
     try {
       localStorage.setItem("fp.signalen." + cfg.email, JSON.stringify({
@@ -444,6 +456,37 @@
       }));
     } catch (e) {}
     teken();
+  }
+
+  /* (c) Prijslijsten die op goedkeuring wachten.
+     Als er in de tegel Nieuwe leverancier een proforma is ingelezen, komt de
+     prijslijst niet meteen in het archief: Gretha kijkt er eerst naar. Dat
+     wachten hoort niet in een schermpje te verdwijnen dat niemand opent, dus
+     staat het bij haar (en bij Fonteynbot) bovenaan het dashboard. Zij is de
+     enige die eraan hoeft te denken; bij de rest verschijnt er niets. */
+  async function signalenPrijslijsten() {
+    var kort = String(cfg.email || "").split("@")[0].replace(/^fonteyn\./, "");
+    var opslag = await kvLees("leveranciers");
+    var lijst = (opslag && opslag.leveranciers) || [];
+    var uit = [];
+    for (var i = 0; i < lijst.length; i++) {
+      var k = lijst[i];
+      if (k.status !== "wacht") continue;
+      var mag = (k.goedkeurders || ["gretha", "fonteynbot"]).some(function (g) {
+        return g === kort || g === cfg.email;
+      });
+      if (!mag) continue;
+      uit.push({
+        bron: "prijslijst", titel: "Prijslijst goedkeuren",
+        actie: "Nakijken en akkoord geven; daarna komt hij in Prijslijsten",
+        verwijzing: k.naam,
+        detail: ((k.prijslijst || []).length) + " artikelen uit de proforma" +
+                (k.valuta ? ", bedragen in " + k.valuta : ""),
+        bedrag: 0, eenheid: "", datum: k.aangemaakt || null,
+        tegel: "leverancier-nieuw.html"
+      });
+    }
+    return uit;
   }
 
   /* ═══════════════ TEKENEN ═══════════════ */

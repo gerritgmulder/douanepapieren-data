@@ -151,6 +151,12 @@
     </div>
   </div>
 
+  <div class="card" id="wachtKaart" style="display:none">
+    <h3>Wacht op goedkeuring — <span id="wachtTel">0</span></h3>
+    <p class="lead" style="margin-bottom:10px">Deze prijslijsten zijn ingelezen en wachten op akkoord. Na goedkeuring komen ze in Prijslijsten te staan, in een map op naam van de leverancier.</p>
+    <div id="wachtLijst"></div>
+  </div>
+
   <div class="card">
     <h3>Vastgelegde leveranciers — <span id="lvTel">0</span></h3>
     <div id="lvLijst"><p class="lead">Nog niets vastgelegd.</p></div>
@@ -518,6 +524,12 @@ $("bewaar").addEventListener("click",async()=>{
     crediteur:$("vCrediteur").value.trim()||null,
     bron:(gelezen&&gelezen.bestand)||"", prijslijst:regels.slice(),
     aangemaakt:new Date().toISOString(), door:(localStorage.getItem(EMAIL_KEY)||"").toLowerCase(),
+    /* De prijslijst gaat niet zomaar het archief in. Gretha kijkt er eerst
+       naar; pas na haar akkoord komt hij in Prijslijsten te staan, in een map
+       op naam van de leverancier. Tot die tijd staat hij hier te wachten en
+       verschijnt hij bij haar in het opstartscherm. */
+    status:"wacht", goedkeurders:["gretha","fonteynbot"],
+    goedgekeurdDoor:null, goedgekeurdOp:null,
   };
   try{
     opslag.leveranciers=opslag.leveranciers||[];
@@ -545,19 +557,100 @@ $("csv").addEventListener("click",()=>{
   a.click();
 });
 
+/* ─── Goedkeuren en in het archief zetten ──────────────────────────────
+   Wie mag goedkeuren staat op de kaart zelf (Gretha en Fonteynbot). Na een
+   akkoord gebeuren er drie dingen: er komt een map in Prijslijsten op naam
+   van de leverancier als die er nog niet is, de prijslijst gaat daar als
+   bestand in, en de kaart gaat op goedgekeurd. */
+const PL_BUCKET=WORKER+"/data/prijslijsten";
+function magGoedkeuren(kaart){
+  const ik=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  const kort=ik.split("@")[0].replace(/^fonteyn\./,"");
+  return (kaart.goedkeurders||["gretha","fonteynbot"]).some(g=>g===kort||g===ik);
+}
+function prijslijstCsv(kaart){
+  const kop=["Artikelcode","Omschrijving","Maat","Aantal","Stukprijs","Totaal","Materiaal"];
+  const rij=r=>[r.code,r.omschrijving,r.maat,r.aantal,r.stukprijs,r.totaal,r.materiaal]
+    .map(x=>'"'+String(x==null?"":x).replace(/"/g,'""')+'"').join(";");
+  return "\ufeff"+[kop.join(";")].concat((kaart.prijslijst||[]).map(rij)).join("\n");
+}
+async function keurGoed(id){
+  const kaart=(opslag.leveranciers||[]).find(x=>x.id===id);
+  if(!kaart) return;
+  if(!confirm("Prijslijst van "+kaart.naam+" goedkeuren?\n\nHij komt dan in Prijslijsten te staan, in een map met die naam.")) return;
+  melding("bewaarStatus","info","Bezig met goedkeuren…");
+  try{
+    // a) de mappenboom ophalen
+    const r=await fetch(PL_BUCKET,{headers:{"X-Fonteyn-Auth":TEAMKEY}});
+    const pl=r.ok?await r.json():{};
+    pl.mappen=Array.isArray(pl.mappen)?pl.mappen:[];
+    pl.bestanden=Array.isArray(pl.bestanden)?pl.bestanden:[];
+    if(pl.mappen.indexOf(kaart.naam)<0) pl.mappen.push(kaart.naam);
+    // b) het bestand wegschrijven
+    const bestandId=(Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8)+".csv");
+    const csv=prijslijstCsv(kaart);
+    const up=await fetch(WORKER+"/prijslijst/bestand?id="+encodeURIComponent(bestandId),{
+      method:"PUT", headers:{ "X-Fonteyn-Auth":TEAMKEY, "Content-Type":"text/csv" }, body:csv });
+    if(!up.ok) throw new Error("bestand opslaan gaf HTTP "+up.status);
+    // c) de regel in de mappenboom
+    pl.bestanden.push({ id:bestandId,
+      naam:"Prijslijst "+(kaart.offerte||kaart.datumProforma||"").toString().trim()+" ("+(kaart.prijslijst||[]).length+" artikelen).csv",
+      map:kaart.naam, bytes:csv.length, op:new Date().toISOString(),
+      door:(localStorage.getItem(EMAIL_KEY)||"").toLowerCase(),
+      notitie:"Uit de proforma"+(kaart.bron?" "+kaart.bron:"")+(kaart.valuta?" · "+kaart.valuta:"") });
+    pl.gewijzigd=new Date().toISOString();
+    const bew=await fetch(PL_BUCKET,{ method:"PUT",
+      headers:{ "Content-Type":"application/json","X-Fonteyn-Auth":TEAMKEY }, body:JSON.stringify(pl) });
+    if(!bew.ok) throw new Error("mappenlijst opslaan gaf HTTP "+bew.status);
+    // d) de kaart afvinken
+    kaart.status="goedgekeurd";
+    kaart.goedgekeurdDoor=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+    kaart.goedgekeurdOp=new Date().toISOString();
+    kaart.plBestand=bestandId;
+    await bewaarOpslag();
+    tekenLijst();
+    melding("bewaarStatus","ok","Goedgekeurd. De prijslijst staat nu in Prijslijsten, in de map “"+esc(kaart.naam)+"”.");
+    if(window.fpLog) window.fpLog("prijslijst-goedgekeurd",kaart.naam);
+  }catch(e){ melding("bewaarStatus","bad","Goedkeuren faalde: "+esc(e.message)); }
+}
+function tekenWacht(){
+  const w=(opslag.leveranciers||[]).filter(x=>x.status==="wacht");
+  $("wachtKaart").style.display=w.length?"":"none";
+  $("wachtTel").textContent=w.length;
+  $("wachtLijst").innerHTML=w.map(x=>{
+    const mag=magGoedkeuren(x);
+    return "<div style='border:1px solid var(--border);border-radius:9px;padding:12px 14px;margin-bottom:9px'>"+
+      "<div style='display:flex;gap:12px;align-items:center;flex-wrap:wrap'>"+
+      "<b>"+esc(x.naam)+"</b>"+
+      "<span class='pill'>"+((x.prijslijst||[]).length)+" artikelen</span>"+
+      (x.valuta?"<span class='pill'>"+esc(x.valuta)+"</span>":"")+
+      "<span style='color:var(--muted);font-size:11.5px'>ingelezen door "+esc(x.door||"")+" op "+esc(String(x.aangemaakt||"").slice(0,10))+"</span>"+
+      "<span style='margin-left:auto'>"+
+        (mag?"<button class='btn solid' data-keur='"+esc(x.id)+"'>Goedkeuren</button>"
+            :"<span style='color:var(--muted);font-size:12px'>wacht op Gretha</span>")+
+      "</span></div></div>";
+  }).join("");
+  $("wachtLijst").querySelectorAll("[data-keur]").forEach(b=>
+    b.addEventListener("click",()=>keurGoed(b.dataset.keur)));
+}
+
 function tekenLijst(){
+  tekenWacht();
   const l=(opslag.leveranciers||[]);
   $("lvTel").textContent=l.length;
   if(!l.length){ $("lvLijst").innerHTML="<p class='lead'>Nog niets vastgelegd.</p>"; return; }
   $("lvLijst").innerHTML="<div class='tabelwrap'><table><thead><tr>"+
     "<th>Leverancier</th><th>Land</th><th>Offerte</th><th class='num'>Artikelen</th>"+
-    "<th>Crediteur in Logic4</th><th>Vastgelegd</th></tr></thead><tbody>"+
+    "<th>Crediteur in Logic4</th><th>Prijslijst</th><th>Vastgelegd</th></tr></thead><tbody>"+
     l.map(x=>"<tr>"+
       "<td><b>"+esc(x.naam)+"</b>"+(x.contact?"<div style='color:var(--muted);font-size:11.5px'>"+esc(x.contact)+(x.mail?" · "+esc(x.mail):"")+"</div>":"")+"</td>"+
       "<td>"+esc(x.land||"")+"</td><td>"+esc(x.offerte||"")+"</td>"+
       "<td class='num'>"+((x.prijslijst||[]).length)+"</td>"+
       "<td>"+(x.crediteur?"<span class='pill' style='background:#e8f5ee;color:#15803d'>"+esc(x.crediteur)+"</span>"
                         :"<span class='pill' style='background:#fdf3e4;color:#b45309'>nog aanmaken</span>")+"</td>"+
+      "<td>"+(x.status==="goedgekeurd"
+        ? "<span class='pill' style='background:#e8f5ee;color:#15803d'>in Prijslijsten</span>"
+        : "<span class='pill' style='background:#fdf3e4;color:#b45309'>wacht op akkoord</span>")+"</td>"+
       "<td style='font-size:11.5px;color:var(--muted)'>"+esc(String(x.aangemaakt||"").slice(0,10))+"</td>"+
       "</tr>").join("")+"</tbody></table></div>";
 }
