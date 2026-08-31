@@ -28,6 +28,7 @@
 <script src="toegang.js"></script>
 <script src="tegels.js"></script>
 <script src="nieuws.js"></script>
+<script src="takenlade.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- ══════════════════════════════════════════════════════════════════════
      FONTEYN DASHBOARD - TELEFOON
@@ -317,6 +318,12 @@ function toonDash(){
       }).join("") + "</div>";
   });
   el("tegelblok").innerHTML = html;
+
+  /* De takenlijst is geen tegel maar een lade aan de rechterkant, en dezelfde
+     lade als op de pc - één bestand, dus de telefoon kan niet achterlopen.
+     Onder 520 pixels wordt hij vanzelf schermvullend; sluiten gaat met de knop
+     in zijn eigen kop, want een telefoon heeft geen Escape. */
+  try { if (window.fpTakenlade) window.fpTakenlade.start(wie); } catch (e) {}
 
   // Berichten daarna: de tegels moeten er meteen staan, ook als de worker
   // even niet antwoordt.

@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-31", groep: "taken", soort: "beter",
+      titel: "Takenlijst staat ook weer op je telefoon",
+      wat: "Op de telefoon zit hetzelfde uitstulpje rechts in beeld; tik erop en de lijst schuift over je tegels heen, met een knop Sluiten rechtsboven. Het is precies dezelfde lijst als op de pc, dus wat je onderweg afvinkt staat op kantoor ook af. Anders dan op de pc gaat hij op een telefoon niet vanzelf open: je begint bij je tegels.",
+    },
+
+    {
       datum: "2026-08-31", iedereen: true, soort: "beter",
       titel: "Elke tegel heeft nu dezelfde balk bovenin",
       wat: "Linksboven staat overal \u2018\u2190 Dashboard\u2019 en rechtsboven staat wie er is ingelogd, de NL/EN-knop en Uitloggen. Dat liep uit elkaar: op de ene tegel ontbrak de uitlogknop, op de andere de taalknop, en Mijn uren en Mijn mail lieten helemaal niet zien wie je was. Nu is het overal hetzelfde, dus je hoeft niet meer te zoeken waar de knop staat.",

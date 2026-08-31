@@ -529,10 +529,13 @@
     gestart = true;
     bouw();
     laad().then(function () {
-      // Stand van de vorige keer terug, behalve als er niets te doen is.
+      /* Stond hij vorige keer open, dan weer open - maar alleen op een breed
+         scherm. Op een telefoon is de lade schermvullend, en dan zou je bij
+         het openen van het dashboard eerst je takenlijst over je tegels heen
+         krijgen zonder erom te vragen. Daar begin je met de tegels. */
       var wil = false;
       try { wil = localStorage.getItem("fp.takenlade") === "1"; } catch (e) {}
-      if (wil) schuif(true);
+      if (wil && global.innerWidth >= 640) schuif(true);
     });
     setInterval(function () { if (!document.hidden && !bezig) laad(); }, 120000);
     document.addEventListener("visibilitychange", function () {
