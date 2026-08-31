@@ -235,7 +235,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
        klaar. -->
   <div class="card">
     <h3>Bibliotheek — bestanden voor partners (<span id="bibTel">0</span>)</h3>
-    <p class="lead" style="margin-bottom:10px">Dit is wat partners in het portaal onder <b>Documenten</b> zien. Zet hier je pdf, handleiding of afbeelding neer; hij staat er meteen in. Toegestaan: pdf, word, excel, jpg, png en webp, tot 24 MB per bestand.</p>
+    <p class="lead" style="margin-bottom:10px">Dit is wat partners in het portaal onder <b>Documenten</b> zien, in precies deze volgorde. Zet hier je pdf, handleiding of afbeelding neer; hij staat er meteen in. Toegestaan: pdf, word, excel, jpg, png en webp, tot 24 MB per bestand.<br><b>Staat er iets verkeerd?</b> Sleep een regel naar zijn plek (of gebruik de pijltjes), kies een andere map bij <b>verplaats naar</b>, of gooi hem weg met het prullenbakje. Elke wijziging is meteen zichtbaar voor partners.</p>
     <div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
       <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:3px">Map</label>
         <select id="bibGroep" style="min-width:250px"></select></div>
@@ -248,6 +248,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <div id="bibMelding" style="font-size:12.5px;margin-top:9px;color:var(--muted)"></div>
     <div style="margin-top:14px">
       <input id="bibZoek" placeholder="zoek in de bibliotheek…" style="min-width:260px;padding:7px">
+      <button id="bibAllesUit" type="button" style="margin-left:8px">Alle mappen openklappen</button>
     </div>
     <div id="bibLijst" style="margin-top:10px"></div>
   </div>
@@ -897,27 +898,186 @@ function bibNaam(titel, bestandsnaam){
     .replace(/^-+|-+$/g,"").slice(0,60) || "bestand";
   return kaal+"."+ext;
 }
+/* De bibliotheek beheren. Tot 31 aug 2026 was dit een leeslijst: je zag wat
+   erin stond en verder niets. Gretha (31 aug 2026): "is er een mogelijkheid om
+   te zorgen dat je de volgorde van toegevoegde afbeeldingen kunt aanpassen? En
+   dat als een afbeelding of pdf onder de verkeerde categorie staat, je die naar
+   de juiste kunt verplaatsen of verwijderen zo nodig? Ik heb bijv. bij de Renew
+   een fout gemaakt." Ze had de Mystic Mountain-foto's onder de swimspa's gezet
+   en kon dat niet zelf rechtzetten.
+
+   De volgorde in files[] is letterlijk de volgorde die de partner ziet (zie
+   dpHandleDocs in de worker), dus slepen is genoeg - er is geen apart
+   sorteerveld nodig.
+
+   Verplaatsen laat het id met opzet ongemoeid: alleen de regel verhuist naar
+   een andere map. Het id is namelijk óók de sleutel waarmee de worker bepaalt
+   of een bestand prijsgevoelig is en dus voor dealers verborgen moet blijven
+   (dpPrijsgevoeligeIds). Zou het id meeveranderen, dan zou een prijslijst na
+   een verplaatsing stilletjes zichtbaar worden voor dealers. Het pad in het id
+   klopt daarna niet meer met de map waarin hij staat; dat ziet niemand en het
+   is de veilige kant van de ruil. */
+let bibOpen = {};                 // welke mappen zijn opengeklapt
+let bibSleep = null;              // {groepSleutel, index} tijdens het slepen
+
+function bibSleutel(cat, groep){ return String(cat.key||"") + "||" + String(groep.name||""); }
+
+async function bibBewaar(){
+  docsData.library.updated = new Date().toISOString();
+  await save("dealer-docs", docsData);
+  renderBib();
+}
+
+/* Eén regel naar een andere plek in dezelfde map. */
+async function bibVerschuif(groep, van, naar){
+  const f = groep.files || [];
+  if (naar < 0 || naar >= f.length || van === naar) return;
+  const [x] = f.splice(van, 1);
+  f.splice(naar, 0, x);
+  try{ if(window.fpLog) window.fpLog("bibliotheek-volgorde-gewijzigd", (x.title||x.id)+" naar plek "+(naar+1)); }catch(e){}
+  await bibBewaar();
+}
+
+/* Naar een andere map. Alleen de regel verhuist; het bestand blijft staan waar
+   het staat - zie de toelichting hierboven. */
+async function bibVerplaats(vanGroep, index, doel){
+  const f = vanGroep.files || [];
+  const x = f[index]; if (!x || !doel) return;
+  f.splice(index, 1);
+  doel.groep.files = doel.groep.files || [];
+  doel.groep.files.push(x);
+  bibOpen[bibSleutel(doel.cat, doel.groep)] = true;
+  try{ if(window.fpLog) window.fpLog("bibliotheek-bestand-verplaatst", (x.title||x.id)+" → "+doel.label); }catch(e){}
+  await bibBewaar();
+  $("bibMelding").innerHTML = "<b style='color:var(--fonteyn-green)'>Verplaatst.</b> “"+esc(x.title||x.id)+"” staat nu onderaan in "+esc(doel.label)+" - sleep hem daar op zijn plek.";
+}
+
+/* Weggooien. Het bestand zelf gaat ook echt weg bij de worker: alleen de regel
+   verwijderen zou betekenen dat wie het adres kent het nog steeds kan openen. */
+async function bibVerwijder(groep, index){
+  const x = (groep.files||[])[index]; if (!x) return;
+  if (!confirm("“"+(x.title||x.id)+"” definitief weggooien?\n\nHij verdwijnt uit het partnerportaal en het bestand zelf wordt ook verwijderd. Dit is niet terug te draaien.")) return;
+  const mel = $("bibMelding"); mel.textContent = "Bezig met verwijderen…";
+  try{
+    const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/file?id="+encodeURIComponent(x.id),
+      { method:"DELETE", headers:{ "X-DP-Admin": adminKey() } });
+    const j = await r.json();
+    if(!r.ok || !j.ok) throw new Error(j.error || ("HTTP "+r.status));
+    groep.files.splice(index, 1);
+    // Ook uit de prijsgevoelige lijst, anders blijft daar een dood id staan.
+    if (docsData.prijsgevoelig && Array.isArray(docsData.prijsgevoelig.bestanden))
+      docsData.prijsgevoelig.bestanden = docsData.prijsgevoelig.bestanden.filter(b => String(b.id) !== String(x.id));
+    try{ if(window.fpLog) window.fpLog("bibliotheek-bestand-verwijderd", (x.title||"")+" ("+x.id+")"); }catch(e){}
+    await bibBewaar();
+    mel.innerHTML = "<b style='color:var(--fonteyn-green)'>Weg.</b> “"+esc(x.title||x.id)+"” staat niet meer in het portaal.";
+  }catch(e){ mel.textContent = "Verwijderen faalde: "+e.message; }
+}
+
+function bibRegel(cat, groep, f, i, aantal, sleutel){
+  const doelen = bibGroepen();
+  const opties = doelen.map((g,gi)=> (g.cat===cat && g.groep===groep) ? "" :
+      "<option value='"+gi+"'>"+esc(g.label)+"</option>").join("");
+  const plaatje = /\.(jpe?g|png|webp)$/i.test(f.id||"");
+  return "<tr draggable='true' data-groep='"+esc(sleutel)+"' data-index='"+i+"'>"+
+    "<td style='width:26px;color:var(--muted);cursor:grab;text-align:center' title='Sleep om te verplaatsen'>≡</td>"+
+    "<td style='width:34px;color:var(--muted);font-size:11px;text-align:right'>"+(i+1)+"</td>"+
+    "<td>"+(plaatje?"🖼️ ":"📄 ")+esc(f.title||"")+
+      "<div style='font-size:11px;color:var(--muted)'>"+esc(f.id||"")+
+      (f.size?" · "+Math.round(f.size/1024)+" kB":"")+"</div></td>"+
+    "<td style='white-space:nowrap;text-align:right'>"+
+      "<button type='button' data-op='"+esc(sleutel)+"' data-i='"+i+"' title='Eén omhoog'"+(i===0?" disabled":"")+">↑</button> "+
+      "<button type='button' data-neer='"+esc(sleutel)+"' data-i='"+i+"' title='Eén omlaag'"+(i===aantal-1?" disabled":"")+">↓</button> "+
+      "<select data-naar='"+esc(sleutel)+"' data-i='"+i+"' title='Naar een andere map' style='font-size:11.5px;max-width:150px'>"+
+        "<option value=''>verplaats naar…</option>"+opties+"</select> "+
+      "<button type='button' data-weg='"+esc(sleutel)+"' data-i='"+i+"' title='Weggooien'>🗑️</button>"+
+    "</td></tr>";
+}
+
 function renderBib(){
   const lijst=$("bibLijst"); if(!lijst) return;
   bibVulKeuze();
   const q=(($("bibZoek")||{}).value||"").trim().toLowerCase();
-  let n=0, rijen="";
+  let n=0, html="";
   for(const {cat,groep} of bibGroepen()){
-    const treffers=(groep.files||[]).filter(f=>!q||String(f.title||"").toLowerCase().includes(q)||String(f.id||"").toLowerCase().includes(q));
-    n+=(groep.files||[]).length;
-    if(!treffers.length) continue;
-    rijen+="<tr><td colspan='3' style='background:#f9fafb;font-weight:600;font-size:12px'>"+esc(cat.name)+" › "+esc(groep.name)+"</td></tr>";
-    for(const f of treffers)
-      rijen+="<tr><td>"+esc(f.title||"")+"</td>"+
-        "<td style='font-size:11.5px;color:var(--muted)'>"+esc(f.id||"")+"</td>"+
-        "<td style='text-align:right;font-size:11.5px;color:var(--muted);white-space:nowrap'>"+
-          (f.size?Math.round(f.size/1024)+" kB":"")+"</td></tr>";
+    const alle=groep.files||[];
+    n+=alle.length;
+    const sleutel=bibSleutel(cat,groep);
+    const treffers=alle.map((f,i)=>({f,i})).filter(x=>!q||String(x.f.title||"").toLowerCase().includes(q)||String(x.f.id||"").toLowerCase().includes(q));
+    if(q && !treffers.length) continue;
+    const uit = q ? true : !!bibOpen[sleutel];
+    html+="<div style='border:1px solid var(--border);border-radius:8px;margin-bottom:8px;overflow:hidden'>"+
+      "<button type='button' data-klap='"+esc(sleutel)+"' style='width:100%;text-align:left;background:#f9fafb;border:0;padding:8px 11px;font:inherit;font-weight:600;font-size:12.5px;cursor:pointer'>"+
+        (uit?"▾ ":"▸ ")+esc(cat.name)+" › "+esc(groep.name)+
+        " <span style='font-weight:400;color:var(--muted)'>("+alle.length+(q?" · "+treffers.length+" gevonden":"")+")</span></button>";
+    if(uit){
+      html+="<table class='grid' style='margin:0'><tbody data-lijst='"+esc(sleutel)+"'>"+
+        treffers.map(x=>bibRegel(cat,groep,x.f,x.i,alle.length,sleutel)).join("")+
+        "</tbody></table>";
+      if(q) html+="<div style='padding:6px 11px;font-size:11.5px;color:var(--muted)'>Je ziet alleen de gevonden regels; slepen kan pas als je het zoekvak leegmaakt.</div>";
+    }
+    html+="</div>";
   }
   $("bibTel").textContent=n;
-  lijst.innerHTML=q&&!rijen
-    ? "<p class='lead' style='font-size:12.5px'>Niets gevonden voor \u201c"+esc(q)+"\u201d.</p>"
-    : "<div style='max-height:320px;overflow:auto;border:1px solid var(--border);border-radius:8px'><table class='grid' style='margin:0'>"+rijen+"</table></div>";
+  lijst.innerHTML = html || "<p class='lead' style='font-size:12.5px'>Niets gevonden voor “"+esc(q)+"”.</p>";
+  bibKoppel(lijst, !!q);
 }
+
+function bibZoekGroep(sleutel){
+  return bibGroepen().find(g=>bibSleutel(g.cat,g.groep)===sleutel) || null;
+}
+
+function bibKoppel(box, zoekend){
+  box.querySelectorAll("[data-klap]").forEach(b=>b.addEventListener("click",()=>{
+    const k=b.dataset.klap; bibOpen[k]=!bibOpen[k]; renderBib();
+  }));
+  box.querySelectorAll("[data-op]").forEach(b=>b.addEventListener("click",()=>{
+    const g=bibZoekGroep(b.dataset.op); if(g) bibVerschuif(g.groep, Number(b.dataset.i), Number(b.dataset.i)-1);
+  }));
+  box.querySelectorAll("[data-neer]").forEach(b=>b.addEventListener("click",()=>{
+    const g=bibZoekGroep(b.dataset.neer); if(g) bibVerschuif(g.groep, Number(b.dataset.i), Number(b.dataset.i)+1);
+  }));
+  box.querySelectorAll("[data-weg]").forEach(b=>b.addEventListener("click",()=>{
+    const g=bibZoekGroep(b.dataset.weg); if(g) bibVerwijder(g.groep, Number(b.dataset.i));
+  }));
+  box.querySelectorAll("[data-naar]").forEach(sel=>sel.addEventListener("change",()=>{
+    const g=bibZoekGroep(sel.dataset.naar), doel=bibGroepen()[Number(sel.value)];
+    if(g && doel) bibVerplaats(g.groep, Number(sel.dataset.i), doel);
+    sel.value="";
+  }));
+
+  // Slepen binnen dezelfde map. Tijdens het zoeken uit, want dan staan niet
+  // alle regels op het scherm en zou een sleep op de verkeerde plek landen.
+  if(zoekend) return;
+  box.querySelectorAll("tr[draggable]").forEach(function(tr){
+    tr.addEventListener("dragstart",function(e){
+      bibSleep={ sleutel:tr.dataset.groep, index:Number(tr.dataset.index) };
+      tr.style.opacity=".45";
+      try{ e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain",""); }catch(err){}
+    });
+    tr.addEventListener("dragend",function(){ tr.style.opacity=""; tr.style.borderTop=""; bibSleep=null; });
+    tr.addEventListener("dragover",function(e){
+      if(!bibSleep || bibSleep.sleutel!==tr.dataset.groep) return;
+      e.preventDefault(); tr.style.borderTop="2px solid var(--fonteyn-green)";
+    });
+    tr.addEventListener("dragleave",function(){ tr.style.borderTop=""; });
+    tr.addEventListener("drop",function(e){
+      tr.style.borderTop="";
+      if(!bibSleep || bibSleep.sleutel!==tr.dataset.groep) return;
+      e.preventDefault();
+      const g=bibZoekGroep(tr.dataset.groep);
+      if(g) bibVerschuif(g.groep, bibSleep.index, Number(tr.dataset.index));
+      bibSleep=null;
+    });
+  });
+}
+
+$("bibAllesUit").addEventListener("click",()=>{
+  const alles=bibGroepen();
+  const openNu=alles.every(g=>bibOpen[bibSleutel(g.cat,g.groep)]);
+  alles.forEach(g=>{ bibOpen[bibSleutel(g.cat,g.groep)]=!openNu; });
+  $("bibAllesUit").textContent = openNu ? "Alle mappen openklappen" : "Alle mappen dichtklappen";
+  renderBib();
+});
 $("bibZoek").addEventListener("input", renderBib);
 $("bibUpload").addEventListener("click", async ()=>{
   const mel=$("bibMelding");
@@ -931,7 +1091,12 @@ $("bibUpload").addEventListener("click", async ()=>{
   const map=String(keuze.cat.key||"overig")+"/"+String(keuze.groep.name||"algemeen").toLowerCase()
     .replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
   const id=map+"/"+bibNaam(titel,bestand.name);
-  if((keuze.groep.files||[]).some(f=>f.id===id)){ mel.textContent="Er staat al een bestand met deze naam in deze map. Kies een andere titel."; return; }
+  /* Over álle mappen kijken, niet alleen de gekozen. Sinds je bestanden kunt
+     verplaatsen kan dezelfde naam in een andere map terechtkomen; een tweede
+     upload met dezelfde titel zou dan het bestand achter die verplaatste regel
+     overschrijven, want het id is de opslagsleutel. */
+  const bezet = bibGroepen().find(g=>(g.groep.files||[]).some(f=>f.id===id));
+  if(bezet){ mel.textContent="Er staat al een bestand met deze naam ("+bezet.label+"). Kies een andere titel."; return; }
   mel.textContent="Bezig met versturen…";
   try{
     const r=await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/file?id="+encodeURIComponent(id),

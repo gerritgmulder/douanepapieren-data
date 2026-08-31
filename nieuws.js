@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-31", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Bibliotheek: volgorde aanpassen, verplaatsen en weggooien",
+      wat: "De bestandenlijst van het partnerportaal was alleen te lezen; nu kun je hem beheren. Sleep een regel naar zijn plek of gebruik de pijltjes - die volgorde is letterlijk wat de partner ziet. Staat er iets in de verkeerde map, kies dan 'verplaats naar' en hij verhuist. Met het prullenbakje gooi je iets echt weg: ook het bestand zelf verdwijnt, zodat het daarna ook niet meer op te vragen is. De mappen staan dichtgeklapt, dus je ziet niet meteen 166 regels.",
+    },
+
+    {
       datum: "2026-08-31", bestand: "takenlijst.html", soort: "beter",
       titel: "Takenlijst is nu persoonlijk, en je kunt collega's uitnodigen",
       wat: "Je ziet alleen je eigen taken; wat een ander op zijn lijst zet blijft bij hem. Nieuw is uitnodigen: zet iemand bij een taak en die komt bij hem in de takenlijst te staan onder Uitnodigingen. Neemt hij aan, dan staat de taak bij hem onder Eigen taken en zie jij \"doet mee\". Weigert hij, dan staat hij niet op zijn lijst en zie jij \"geweigerd\" - je hoeft er dus niet achteraan. Uitnodigen kan alleen bij mensen die de tegel zelf ook hebben, anders zou de taak nergens landen. De tegel staat nu onder Elke dag in plaats van bij Marketing.",

@@ -163,7 +163,7 @@ const ALLOWED_BUCKET_PATTERNS = [
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, X-Fonteyn-Auth, X-Dealer-Session, X-DP-Admin",
   "Access-Control-Max-Age": "86400",
 };
@@ -1466,6 +1466,20 @@ async function handleDealerRoutes(request, env, url) {
       return new Response(buf, { status: 200, headers: { ...corsHeaders,
         "Content-Type": id.endsWith(".pdf") ? "application/pdf" : "application/octet-stream",
         "Cache-Control": "no-store" } });
+    }
+    /* Een portaalbestand echt weggooien. Alleen de regel uit de lijst halen is
+       niet genoeg: dpServeFile haalt het bestand op zijn id op, dus wie het
+       adres kent zou een "verwijderd" bestand daarna alsnog kunnen openen.
+       Aanleiding: Gretha (31 aug 2026) zette de Mystic Mountain-foto's onder
+       de verkeerde categorie en vroeg om ze te kunnen verplaatsen of zo nodig
+       te verwijderen. */
+    if (p === "/dealers/admin/file" && request.method === "DELETE") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const id = dpFileId(url);
+      if (!id) return reply(400, { ok: false, error: "bad-id" });
+      const bestond = await env.FONTEYN_DATA.get("dpfile:" + id, { type: "arrayBuffer" });
+      await env.FONTEYN_DATA.delete("dpfile:" + id);
+      return reply(200, { ok: true, id, bestond: !!bestond });
     }
     if (p === "/dealers/admin/testorder" && request.method === "POST") return dpAdminTestOrder(request, env);
     if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);
