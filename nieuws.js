@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-31", bestand: "takenlijst.html", soort: "beter",
+      titel: "Takenlijst is nu persoonlijk, en je kunt collega's uitnodigen",
+      wat: "Je ziet alleen je eigen taken; wat een ander op zijn lijst zet blijft bij hem. Nieuw is uitnodigen: zet iemand bij een taak en die komt bij hem in de takenlijst te staan onder Uitnodigingen. Neemt hij aan, dan staat de taak bij hem onder Eigen taken en zie jij \"doet mee\". Weigert hij, dan staat hij niet op zijn lijst en zie jij \"geweigerd\" - je hoeft er dus niet achteraan. Uitnodigen kan alleen bij mensen die de tegel zelf ook hebben, anders zou de taak nergens landen. De tegel staat nu onder Elke dag in plaats van bij Marketing.",
+    },
+
+    {
       datum: "2026-08-31", bestand: "takenlijst.html", soort: "nieuw",
       titel: "Takenlijst: eigen weektaken en wat je delegeert",
       wat: "Nieuwe tegel Takenlijst. Onder Eigen taken zet je neer wat jij deze week doet, onder Delegeren leg je een klus bij iemand anders neer met zijn naam erbij. Alles hangt aan een week, zodat je op maandag in \u00e9\u00e9n keer de week vult; wat blijft liggen schuift niet weg maar staat de week erna bovenaan in het oranje. Vink je iets af, dan verdwijnt de regel uit de lijst en staat hij onder Afgerond, met wie hem heeft afgevinkt en wanneer. Terughalen kan altijd.",
