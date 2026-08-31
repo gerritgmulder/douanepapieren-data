@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-31", iedereen: true, soort: "beter",
+      titel: "Elke tegel heeft nu dezelfde balk bovenin",
+      wat: "Linksboven staat overal \u2018\u2190 Dashboard\u2019 en rechtsboven staat wie er is ingelogd, de NL/EN-knop en Uitloggen. Dat liep uit elkaar: op de ene tegel ontbrak de uitlogknop, op de andere de taalknop, en Mijn uren en Mijn mail lieten helemaal niet zien wie je was. Nu is het overal hetzelfde, dus je hoeft niet meer te zoeken waar de knop staat.",
+    },
+
+    {
       datum: "2026-08-31", groep: "taken", soort: "beter",
       titel: "Takenlijst zit nu als lade aan de zijkant",
       wat: "De takenlijst is geen tegel meer. Rechts op het dashboard zit een uitstulpje 'Takenlijst'; klik erop en de lijst schuift uit, klik weer en hij schuift terug. Je hoeft het dashboard dus niet meer te verlaten om iets af te vinken. Op het uitstulpje staat hoeveel er openstaat, en bij een uitnodiging kleurt dat oranje. Wacht er een uitnodiging op je, dan staat die bovendien bovenaan het dashboard bij je taken, met een knop die de lade op het juiste tabblad opent.",
