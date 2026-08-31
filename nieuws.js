@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-31", bestand: "takenlijst.html", soort: "nieuw",
+      titel: "Takenlijst: eigen weektaken en wat je delegeert",
+      wat: "Nieuwe tegel Takenlijst. Onder Eigen taken zet je neer wat jij deze week doet, onder Delegeren leg je een klus bij iemand anders neer met zijn naam erbij. Alles hangt aan een week, zodat je op maandag in \u00e9\u00e9n keer de week vult; wat blijft liggen schuift niet weg maar staat de week erna bovenaan in het oranje. Vink je iets af, dan verdwijnt de regel uit de lijst en staat hij onder Afgerond, met wie hem heeft afgevinkt en wanneer. Terughalen kan altijd.",
+    },
+
+    {
       datum: "2026-08-30", bestand: "leverancier-nieuw.html", soort: "nieuw",
       titel: "Prijslijst van een nieuwe leverancier loopt langs Gretha",
       wat: "Lees je een proforma in, dan gaat de prijslijst niet meteen het archief in: hij komt bij Gretha en Fonteynbot bovenaan het dashboard te staan om na te kijken. Na akkoord maakt het dashboard in Prijslijsten een map aan op naam van de leverancier en zet de prijslijst daarin.",

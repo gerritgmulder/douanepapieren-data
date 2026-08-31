@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Takenlijst — Fonteyn Dashboard</title>
+<script src="toegang.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --fonteyn-green:#144734; --fonteyn-lime:#8bc53f; --border:#e5e7eb; --muted:#6b7280;
+         --bad:#b3261e; --warn:#b45309; --ok:#15803d; }
+  *{box-sizing:border-box}
+  body{margin:0;background:#f5f4ef;color:#111827;font-family:Montserrat,system-ui,sans-serif;font-size:14px}
+  header{background:var(--fonteyn-green);color:#fff;display:flex;align-items:center;gap:14px;padding:12px 20px}
+  header img{height:26px}
+  header .rechts{margin-left:auto;display:flex;align-items:center;gap:10px;font-size:12px}
+  header a.back,header button.logout{color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,.4);
+    border-radius:7px;padding:6px 14px;font:inherit;font-size:12px;background:transparent;cursor:pointer}
+  main{max-width:900px;margin:0 auto;padding:22px 20px 80px}
+  h1{font-size:22px;margin:0 0 4px}
+  h3{font-size:15px;margin:0 0 8px}
+  .lead{color:var(--muted);font-size:13px;line-height:1.55;margin:0 0 14px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:16px}
+  .btn{background:#fff;color:var(--fonteyn-green);border:1.5px solid var(--fonteyn-green);border-radius:8px;
+    padding:8px 15px;font:inherit;font-weight:600;font-size:12.5px;cursor:pointer}
+  .btn.solid{background:var(--fonteyn-green);color:#fff}
+  .btn.klein{padding:4px 10px;font-size:11.5px;border-width:1px}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  input[type=text],select{width:100%;border:1px solid var(--border);border-radius:8px;
+    padding:8px 10px;font:inherit;font-size:13px;background:#fff}
+  label.f{display:block;font-size:11.5px;color:var(--muted);margin:0 0 3px}
+  .tabs{display:flex;gap:8px;margin:0 0 16px;flex-wrap:wrap}
+  .tab{background:#fff;border:1px solid var(--border);border-radius:9px;padding:8px 16px;font:inherit;
+    font-size:13px;font-weight:600;color:var(--muted);cursor:pointer}
+  .tab.active{background:var(--fonteyn-green);border-color:var(--fonteyn-green);color:#fff}
+  .toevoeg{display:grid;grid-template-columns:1fr 150px 150px auto;gap:10px;align-items:end}
+  .toevoeg.eigen{grid-template-columns:1fr 150px auto}
+  @media(max-width:760px){ .toevoeg,.toevoeg.eigen{grid-template-columns:1fr} }
+  .weekkop{font-size:11.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);
+    font-weight:700;margin:18px 0 7px;padding-bottom:5px;border-bottom:1px solid var(--border)}
+  .weekkop:first-of-type{margin-top:2px}
+  .taak{display:flex;align-items:flex-start;gap:11px;padding:10px 2px;border-bottom:1px solid #f1f2f4}
+  .taak:last-child{border-bottom:none}
+  .taak input[type=checkbox]{width:18px;height:18px;margin-top:1px;flex:none;cursor:pointer;accent-color:var(--fonteyn-green)}
+  .taak .mid{flex:1;min-width:0}
+  .taak .tekst{font-size:13.5px;line-height:1.45;cursor:text;word-break:break-word}
+  .taak .tekst:hover{background:#f9fafb;border-radius:4px}
+  .taak .meta{font-size:11px;color:var(--muted);margin-top:3px}
+  .taak .acties{flex:none;display:flex;gap:6px;align-items:center}
+  .voor{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;
+    background:#eef7e3;color:#3f6212;margin-right:6px}
+  .laat{background:#fdf3e4;color:var(--warn)}
+  .af .tekst{text-decoration:line-through;color:var(--muted)}
+  .melding{padding:9px 13px;border-radius:8px;font-size:12.5px;margin:10px 0}
+  .melding.ok{background:#e8f5ee;color:var(--ok)} .melding.bad{background:#fdecea;color:var(--bad)}
+  .melding.warn{background:#fdf3e4;color:var(--warn)}
+  .verborgen{display:none}
+  .leeg{color:var(--muted);font-size:13px;padding:18px 2px}
+  #bewaarstand{font-size:11.5px;color:var(--muted);min-height:16px;margin-top:8px}
+</style>
+</head>
+<body>
+<header>
+  <img src="fonteyn-logo.png" alt="Fonteyn">
+  <b>Takenlijst</b>
+  <span class="rechts">
+    <a class="back" href="dashboard.html">← Dashboard</a>
+    <span>Ingelogd als <span id="userEmail">—</span></span>
+    <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
+  </span>
+</header>
+
+<main>
+  <h1>Takenlijst</h1>
+  <p class="lead">Wat er deze week moet gebeuren. <b>Eigen taken</b> zijn van jou, <b>Delegeren</b> is werk dat je bij iemand anders neerlegt. Vink af wat klaar is: de regel verdwijnt uit de lijst en staat daarna onder <b>Afgerond</b>, met datum en naam erbij. Weghalen doet het nooit iets.</p>
+
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-lijst="eigen" type="button">Eigen taken (<span id="telEigen">0</span>)</button>
+    <button class="tab" data-lijst="delegeren" type="button">Delegeren (<span id="telDelegeren">0</span>)</button>
+    <button class="tab" data-lijst="afgerond" type="button">Afgerond (<span id="telAfgerond">0</span>)</button>
+  </div>
+
+  <!-- Toevoegen. Staat boven de lijst, want dat is waarvoor je het scherm opent. -->
+  <div class="card" id="toevoegKaart">
+    <h3 id="toevoegKop">Taak toevoegen</h3>
+    <div class="toevoeg eigen" id="toevoegVelden">
+      <div><label class="f">Wat moet er gebeuren</label>
+        <input type="text" id="nTekst" placeholder="bijv. offerte Van Dijk nakijken" autocomplete="off"></div>
+      <div id="wieVak" class="verborgen"><label class="f">Voor wie</label>
+        <input type="text" id="nWie" list="mensen" placeholder="naam" autocomplete="off">
+        <datalist id="mensen"></datalist></div>
+      <div><label class="f">Week</label><select id="nWeek"></select></div>
+      <div><button class="btn solid" id="nToevoegen" type="button">Toevoegen</button></div>
+    </div>
+    <div id="toevoegStatus"></div>
+  </div>
+
+  <div class="card">
+    <div id="lijst"></div>
+    <div id="bewaarstand"></div>
+  </div>
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAKENLIJST — eigen weektaken en werk dat je delegeert
+   ═══════════════════════════════════════════════════════════════════════════
+   Gerrit, 31 aug 2026: "op maandag voor mezelf weektaken erin zetten, en dat
+   Manon klussen die dezelfde week door de jongens gedaan kunnen worden erop
+   kan neerzetten. Een tabje Eigen taken en een tabje Delegeren. Afvinken,
+   afgevinkt moet verdwijnen maar nog wel terug te vinden zijn."
+
+   Waarom read-modify-write bij elke wijziging
+   -------------------------------------------
+   De opslag kent alleen "vervang de hele bucket". Zodra twee mensen dit scherm
+   tegelijk open hebben - en dat is precies de bedoeling, Gerrit en Manon - zou
+   een blinde PUT de taak van de ander overschrijven met een oudere kopie. Dus:
+   vóór élke opslag eerst de verse stand ophalen, daarin alleen de ene taak die
+   ik verander aanpassen, en dat terugschrijven. Taken zijn losse records met
+   een eigen id, dus twee mensen die verschillende taken aanraken raken elkaar
+   niet. Alleen wie exact dezelfde taak op hetzelfde moment wijzigt, wint als
+   laatste - en dat is bij een takenlijst geen schade.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
+const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
+const BUCKET=WORKER+"/data/takenlijst";
+const TEAMKEY=localStorage.getItem("fp.teamkey")||"";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+let IK="";
+
+(function boot(){
+  if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
+  IK=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+  $("userEmail").textContent=IK||"—";
+  const mag=window.fpToegang && window.fpToegang.mag("taken", IK);
+  if(!mag){
+    document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'>"+
+      "<h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel staat nog niet voor jou open.</p>"+
+      "<p>Je bent ingelogd als <code>"+esc(IK)+"</code>.</p>"+
+      "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
+    throw new Error("geen toegang");
+  }
+})();
+$("logoutBtn").addEventListener("click",()=>{ localStorage.removeItem(SESSION_KEY); location.href="dashboard.html"; });
+
+/* ─── Weken ────────────────────────────────────────────────────────────────
+   Een taak hoort bij een week, niet bij een dag: "wat moet er deze week
+   gebeuren". ISO-weeknummer, want dat is het nummer dat hier op kantoor wordt
+   gebruikt. De week loopt van maandag tot en met zondag. */
+function isoWeek(d){
+  const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  t.setUTCDate(t.getUTCDate()+4-(t.getUTCDay()||7));           // donderdag van deze week
+  const jan1=new Date(Date.UTC(t.getUTCFullYear(),0,1));
+  const nr=Math.ceil((((t-jan1)/86400000)+1)/7);
+  return t.getUTCFullYear()+"-W"+String(nr).padStart(2,"0");
+}
+function maandagVan(d){
+  const t=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  t.setDate(t.getDate()-((t.getDay()||7)-1));
+  return t;
+}
+const NU=new Date(), DEZE=isoWeek(NU);
+function weekOpties(){
+  // Vorige week erbij, want op maandag schuift er nog wel eens iets door.
+  const uit=[];
+  for(let i=-1;i<=5;i++){
+    const m=maandagVan(NU); m.setDate(m.getDate()+i*7);
+    uit.push({ code:isoWeek(m), maandag:m });
+  }
+  return uit;
+}
+function weekLabel(code){
+  if(code===DEZE) return "Deze week";
+  const o=weekOpties().find(x=>x.code===code);
+  const nr=String(code).split("-W")[1]||"?";
+  if(o){
+    const i=weekOpties().indexOf(o);
+    if(i===0) return "Vorige week (week "+nr+")";
+    if(i===2) return "Volgende week (week "+nr+")";
+  }
+  if(code<DEZE) return "Blijven staan (week "+nr+")";
+  return "Week "+nr;
+}
+function datumNL(iso){
+  if(!iso) return "";
+  const d=new Date(iso); if(isNaN(d)) return "";
+  return d.toLocaleDateString("nl-NL",{day:"numeric",month:"short"})+
+    " "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
+}
+function naam(mail){ return String(mail||"").split("@")[0]||"—"; }
+
+(function vulWeken(){
+  const sel=$("nWeek");
+  sel.innerHTML=weekOpties().map(function(o){
+    const nr=o.code.split("-W")[1];
+    const tekst=o.code===DEZE?("Deze week ("+nr+")"):("Week "+nr+" — vanaf "+
+      o.maandag.toLocaleDateString("nl-NL",{day:"numeric",month:"short"}));
+    return "<option value='"+o.code+"'"+(o.code===DEZE?" selected":"")+">"+esc(tekst)+"</option>";
+  }).join("");
+})();
+(function vulNamen(){
+  const lijst=(window.fpToegang && window.fpToegang.iedereen) || [];
+  $("mensen").innerHTML=lijst.slice().sort().map(n=>"<option value='"+esc(n)+"'>").join("");
+})();
+
+/* ─── Opslag ───────────────────────────────────────────────────────────── */
+let taken={};                 // id → taak
+let bezig=false;
+
+async function haal(){
+  const r=await fetch(BUCKET,{headers:{"X-Fonteyn-Auth":TEAMKEY}});
+  if(!r.ok) throw new Error("HTTP "+r.status);
+  const j=await r.json();
+  return (j && typeof j.taken==="object" && j.taken) ? j.taken : {};
+}
+async function laad(){
+  try{
+    taken=await haal();
+    stand("");
+    teken();
+  }catch(e){
+    stand("De lijst kon niet worden opgehaald ("+e.message+"). Wat je op het scherm ziet is de laatst geladen stand.","bad");
+  }
+}
+/* Verander één taak en schrijf die weg. Altijd eerst de verse stand ophalen -
+   zie de toelichting bovenaan. wijzig() krijgt de verse lijst mee en past die
+   ter plekke aan. */
+async function schrijf(wijzig){
+  if(bezig) return false;
+  bezig=true; stand("Bezig met opslaan…");
+  try{
+    const vers=await haal();
+    wijzig(vers);
+    const r=await fetch(BUCKET,{ method:"PUT",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAMKEY},
+      body:JSON.stringify({taken:vers, bijgewerkt:new Date().toISOString(), door:IK}) });
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    taken=vers; teken(); stand("Opgeslagen om "+new Date().toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}));
+    return true;
+  }catch(e){
+    stand("Niet opgeslagen: "+e.message+". Probeer het nog een keer.","bad");
+    return false;
+  }finally{ bezig=false; }
+}
+function stand(tekst,soort){
+  $("bewaarstand").innerHTML=tekst?(soort==="bad"?"<span style='color:var(--bad)'>"+esc(tekst)+"</span>":esc(tekst)):"";
+}
+function melding(soort,tekst){
+  $("toevoegStatus").innerHTML=tekst?"<div class='melding "+soort+"'>"+esc(tekst)+"</div>":"";
+}
+
+/* ─── Toevoegen ────────────────────────────────────────────────────────── */
+let actief="eigen";
+function nieuwId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+
+async function voegToe(){
+  const tekst=$("nTekst").value.trim();
+  if(!tekst) return melding("bad","Vul eerst in wat er moet gebeuren.");
+  const wie=$("nWie").value.trim();
+  if(actief==="delegeren" && !wie) return melding("bad","Vul in voor wie deze taak is.");
+  const taak={
+    id:nieuwId(), lijst:actief, tekst:tekst, wie:actief==="delegeren"?wie:"",
+    week:$("nWeek").value, door:IK, op:new Date().toISOString(),
+    klaar:false, klaarDoor:"", klaarOp:"",
+  };
+  const ok=await schrijf(function(v){ v[taak.id]=taak; });
+  if(ok){
+    $("nTekst").value=""; $("nWie").value=""; melding("", "");
+    $("nTekst").focus();
+    if(window.fpLog) window.fpLog("taak-toegevoegd",actief+": "+tekst.slice(0,60));
+  }
+}
+$("nToevoegen").addEventListener("click",voegToe);
+$("nTekst").addEventListener("keydown",e=>{ if(e.key==="Enter") voegToe(); });
+$("nWie").addEventListener("keydown",e=>{ if(e.key==="Enter") voegToe(); });
+
+/* ─── Tabbladen ────────────────────────────────────────────────────────── */
+document.querySelectorAll("#tabs .tab").forEach(function(b){
+  b.addEventListener("click",function(){
+    actief=b.dataset.lijst;
+    document.querySelectorAll("#tabs .tab").forEach(x=>x.classList.toggle("active",x===b));
+    const afgerond=actief==="afgerond";
+    $("toevoegKaart").classList.toggle("verborgen",afgerond);
+    $("wieVak").classList.toggle("verborgen",actief!=="delegeren");
+    $("toevoegVelden").classList.toggle("eigen",actief!=="delegeren");
+    $("toevoegKop").textContent=actief==="delegeren"?"Taak bij iemand neerleggen":"Taak toevoegen";
+    melding("","");
+    teken();
+  });
+});
+
+/* ─── Tekenen ──────────────────────────────────────────────────────────── */
+function tel(){
+  const alle=Object.values(taken);
+  $("telEigen").textContent=alle.filter(t=>t.lijst==="eigen"&&!t.klaar).length;
+  $("telDelegeren").textContent=alle.filter(t=>t.lijst==="delegeren"&&!t.klaar).length;
+  $("telAfgerond").textContent=alle.filter(t=>t.klaar).length;
+}
+function teken(){
+  tel();
+  const box=$("lijst");
+  const alle=Object.values(taken);
+  if(actief==="afgerond"){
+    const af=alle.filter(t=>t.klaar).sort((a,b)=>String(b.klaarOp).localeCompare(String(a.klaarOp)));
+    if(!af.length){ box.innerHTML="<p class='leeg'>Nog niets afgevinkt. Wat je afvinkt verdwijnt uit de lijst en komt hier te staan.</p>"; return; }
+    box.innerHTML="<p class='lead' style='margin-bottom:6px'>Alles wat is afgevinkt, nieuwste eerst. Ten onrechte afgevinkt? Met <b>Terughalen</b> staat hij weer in zijn eigen lijst.</p>"+
+      af.map(function(t){
+        return "<div class='taak af'><input type='checkbox' checked data-terug='"+esc(t.id)+"' title='Terughalen'>"+
+          "<div class='mid'><div class='tekst'>"+
+            (t.lijst==="delegeren"&&t.wie?"<span class='voor'>"+esc(t.wie)+"</span>":"")+esc(t.tekst)+"</div>"+
+          "<div class='meta'>"+(t.lijst==="delegeren"?"Delegeren":"Eigen taak")+
+            " · week "+esc(String(t.week).split("-W")[1]||"?")+
+            " · afgevinkt door "+esc(naam(t.klaarDoor))+" op "+esc(datumNL(t.klaarOp))+"</div></div>"+
+          "<div class='acties'><button class='btn klein' data-terug2='"+esc(t.id)+"'>Terughalen</button></div></div>";
+      }).join("");
+    koppel(box);
+    return;
+  }
+  const mijn=alle.filter(t=>t.lijst===actief&&!t.klaar);
+  if(!mijn.length){
+    box.innerHTML="<p class='leeg'>"+(actief==="delegeren"
+      ? "Niets uitstaan bij iemand anders. Zet hierboven een klus neer en vul in voor wie."
+      : "Geen openstaande taken. Zet hierboven neer wat er deze week moet gebeuren.")+"</p>";
+    return;
+  }
+  // Per week groeperen, oudste week bovenaan: wat is blijven liggen zie je eerst.
+  const perWeek={};
+  mijn.forEach(function(t){ (perWeek[t.week]=perWeek[t.week]||[]).push(t); });
+  const weken=Object.keys(perWeek).sort();
+  box.innerHTML=weken.map(function(w){
+    const rijen=perWeek[w].sort((a,b)=>String(a.op).localeCompare(String(b.op)));
+    const laat=w<DEZE;
+    return "<div class='weekkop"+(laat?" laat":"")+"' style='"+(laat?"color:var(--warn)":"")+"'>"+
+        esc(weekLabel(w))+" · "+rijen.length+"</div>"+
+      rijen.map(function(t){
+        return "<div class='taak'><input type='checkbox' data-klaar='"+esc(t.id)+"' title='Afvinken'>"+
+          "<div class='mid'>"+
+            "<div class='tekst' data-bewerk='"+esc(t.id)+"' title='Klik om de tekst aan te passen'>"+
+              (t.lijst==="delegeren"&&t.wie?"<span class='voor'>"+esc(t.wie)+"</span>":"")+esc(t.tekst)+"</div>"+
+            "<div class='meta'>gezet door "+esc(naam(t.door))+" op "+esc(datumNL(t.op))+"</div>"+
+          "</div>"+
+          "<div class='acties'><select class='btn klein' data-week='"+esc(t.id)+"' title='Naar een andere week'>"+
+            weekOpties().map(o=>"<option value='"+o.code+"'"+(o.code===t.week?" selected":"")+">wk "+o.code.split("-W")[1]+"</option>").join("")+
+            (weekOpties().some(o=>o.code===t.week)?"":"<option value='"+esc(t.week)+"' selected>wk "+esc(String(t.week).split("-W")[1])+"</option>")+
+          "</select></div></div>";
+      }).join("");
+  }).join("");
+  koppel(box);
+}
+
+function koppel(box){
+  box.querySelectorAll("[data-klaar]").forEach(function(c){
+    c.addEventListener("change",function(){
+      const id=c.dataset.klaar;
+      c.disabled=true;
+      schrijf(function(v){ if(v[id]){ v[id].klaar=true; v[id].klaarDoor=IK; v[id].klaarOp=new Date().toISOString(); } })
+        .then(function(ok){ if(!ok){ c.checked=false; c.disabled=false; } });
+      if(window.fpLog) window.fpLog("taak-afgevinkt",id);
+    });
+  });
+  function terug(id,el){
+    if(el) el.disabled=true;
+    schrijf(function(v){ if(v[id]){ v[id].klaar=false; v[id].klaarDoor=""; v[id].klaarOp=""; } })
+      .then(function(ok){ if(!ok&&el) el.disabled=false; });
+  }
+  box.querySelectorAll("[data-terug]").forEach(function(c){
+    c.addEventListener("change",function(){ terug(c.dataset.terug,c); });
+  });
+  box.querySelectorAll("[data-terug2]").forEach(function(b){
+    b.addEventListener("click",function(){ terug(b.dataset.terug2,b); });
+  });
+  box.querySelectorAll("[data-week]").forEach(function(s){
+    s.addEventListener("change",function(){
+      const id=s.dataset.week, w=s.value;
+      schrijf(function(v){ if(v[id]) v[id].week=w; });
+    });
+  });
+  // Tekst aanpassen: klik erop, het wordt een invoerveld, weg-klikken bewaart.
+  box.querySelectorAll("[data-bewerk]").forEach(function(d){
+    d.addEventListener("click",function(){
+      if(d.dataset.open) return;
+      const id=d.dataset.bewerk, t=taken[id]; if(!t) return;
+      d.dataset.open="1";
+      const inp=document.createElement("input");
+      inp.type="text"; inp.value=t.tekst; inp.style.width="100%";
+      d.replaceWith(inp); inp.focus(); inp.setSelectionRange(inp.value.length,inp.value.length);
+      let af=false;
+      function klaar(){
+        if(af) return; af=true;
+        const nieuw=inp.value.trim();
+        if(nieuw && nieuw!==t.tekst) schrijf(function(v){ if(v[id]) v[id].tekst=nieuw; });
+        else teken();
+      }
+      inp.addEventListener("blur",klaar);
+      inp.addEventListener("keydown",function(e){
+        if(e.key==="Enter") klaar();
+        if(e.key==="Escape"){ af=true; teken(); }
+      });
+    });
+  });
+}
+
+laad();
+// Elke twee minuten bijwerken, zodat je ziet wat de ander erbij heeft gezet.
+setInterval(function(){ if(!document.hidden && !bezig) laad(); },120000);
+document.addEventListener("visibilitychange",function(){ if(!document.hidden && !bezig) laad(); });
+
+/* Activiteitenlogboek */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function info(){
+    var ua=navigator.userAgent;
+    var app=ua.match(/fonteyn-dashboard\/(\d+\.\d+\.\d+)/i), pm=ua.match(/(Windows NT [\d.]+|Mac OS X [\d_]+)/);
+    var pc=(localStorage.getItem("fp.computer")||"");
+    return { computer:pc||null, platform:pm?pm[1].replace(/_/g,"."):null, versie:app?("app "+app[1]):"browser" };
+  }
+  window.fpLog=function(actie,detail){
+    try{
+      var k=localStorage.getItem("fp.teamkey")||""; if(!k) return;
+      var i=info();
+      fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":k},
+        body:JSON.stringify({user:(localStorage.getItem("fp.email")||"").toLowerCase(),tile:"taken",
+          action:actie,detail:String(detail||""),computer:i.computer,platform:i.platform,versie:i.versie})}).catch(function(){});
+    }catch(e){}
+  };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

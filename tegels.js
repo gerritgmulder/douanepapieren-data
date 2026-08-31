@@ -111,6 +111,8 @@
        wachtwoord en zit daarom in dashboard.html aan een eigen scherm vast;
        Passion Partners is het dealerportaal zelf en opent buiten het
        dashboard. Allebei niet naar de telefoon. */
+    { bestand:"takenlijst.html",     groep:"taken",            ic:"\u2705",  naam:"Takenlijst",
+      uit:"Eigen weektaken en wat je delegeert",                   mobiel:"goed", tile:"tileTaken" },
     { bestand:"leverancier-nieuw.html", groep:"leveranciers", ic:"\uD83C\uDFED", naam:"Nieuwe leverancier",
       uit:"Proforma inlezen: bedrijfsgegevens en prijslijst", mobiel:"pc", tile:"tileLeverancier" },
     { bestand:"stuurcijfers.html",   groep:"stuurcijfers",     ic:"📊",  naam:"Stuurcijfers",

@@ -204,6 +204,12 @@
     /* Nieuwe leverancier inlezen uit een proforma. Inkoop en administratie:
        Chantal en Arno lezen de proforma's in, Gretha beheert de prijslijsten,
        Osman heeft de crediteurkant. */
+    /* Takenlijst. Bewust nog maar één naam: Gerrit wil hem eerst zelf
+       uitproberen voordat Manon en de rest erbij komen (31 aug 2026).
+       Iemand toevoegen is hier één naam bijschrijven. */
+    "taken": [
+      "fonteynbot",
+    ],
     "leveranciers": [
       "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit", "gretha", "osman",
     ],
