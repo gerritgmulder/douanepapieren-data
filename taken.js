@@ -432,23 +432,39 @@
       if (rauw) {
         var c = JSON.parse(rauw);
         if (c && c.tot && new Date(c.tot).getTime() > Date.now()) {
-          var oud = (c.lijst || []).filter(function (s) { return s.bron !== "prijslijst"; });
-          var vers = [];
+          var oud = (c.lijst || []).filter(function (s) {
+            return s.bron !== "prijslijst" && s.bron !== "taakuitnodiging";
+          });
+          var vers = [], verseTaken = [];
           try { vers = await signalenPrijslijsten(); } catch (e) {}
-          signalen = vers.concat(oud);
+          try { verseTaken = await signalenTaken(); } catch (e) {}
+          signalen = verseTaken.concat(vers, oud);
           teken();
           return;
         }
       }
     } catch (e) {}
     signalenBezig = true; teken();
-    var uid = await zoekMijnUserId();
-    var uitControle = await signalenUitControle(uid);
-    var uitVers = [];
-    try { uitVers = await signalenUitVerseOrders(uid); } catch (e) { /* Logic4 niet bereikbaar */ }
+    /* Eerst de dingen die niets met Logic4 te maken hebben, en die meteen
+       tonen. Reden: hieronder staat werk dat Logic4 nodig heeft, en dat is
+       niet altijd bereikbaar. Stond een uitnodiging daarachter, dan zou een
+       haperende Logic4 betekenen dat iemand niet ziet dat er een taak op zijn
+       antwoord wacht - terwijl die uitnodiging uit onze eigen opslag komt en
+       gewoon beschikbaar is. Eerst tonen, dan pas het trage werk. */
+    var uitTaken = [];
+    try { uitTaken = await signalenTaken(); } catch (e) { /* lade niet geladen: dan niets */ }
     var uitPrijslijst = [];
     try { uitPrijslijst = await signalenPrijslijsten(); } catch (e) { /* geen bucket: dan niets */ }
-    signalen = uitPrijslijst.concat(uitVers, uitControle);
+    signalen = uitTaken.concat(uitPrijslijst);
+    teken();
+
+    var uid = null, uitControle = [], uitVers = [];
+    try {
+      uid = await zoekMijnUserId();
+      uitControle = await signalenUitControle(uid);
+    } catch (e) { /* Logic4 niet bereikbaar: de rest blijft gewoon staan */ }
+    try { uitVers = await signalenUitVerseOrders(uid); } catch (e) { /* idem */ }
+    signalen = uitTaken.concat(uitPrijslijst, uitVers, uitControle);
     signalenBezig = false;
     try {
       localStorage.setItem("fp.signalen." + cfg.email, JSON.stringify({
@@ -456,6 +472,31 @@
       }));
     } catch (e) {}
     teken();
+  }
+
+  /* (b2) Taken die iemand bij jou wil neerleggen.
+     De takenlijst is een lade aan de zijkant van het dashboard; die kan dicht
+     staan. Een uitnodiging waar de ander op wacht mag niet in een dichte lade
+     blijven hangen, dus staat hij ook hier bovenaan. Eén klik opent de lade op
+     het juiste tabblad. Alleen voor wie de lade heeft; bij de rest verschijnt
+     er niets. Altijd vers ophalen, net als de prijslijsten: een uur wachten
+     voordat je ziet dat er iets voor je klaarligt is te lang. */
+  async function signalenTaken() {
+    if (!global.fpTakenlade || !global.fpTakenlade.uitnodigingen) return [];
+    var lijst = await global.fpTakenlade.uitnodigingen(cfg.email);
+    return (lijst || []).map(function (t) {
+      var nr = String(t.week || "").split("-W")[1] || "?";
+      return {
+        bron: "taakuitnodiging", titel: "Taak aannemen of weigeren",
+        actie: "Van " + String(t.door || "").split("@")[0].replace(/^fonteyn\./, "") +
+               "; zolang je niet antwoordt weet hij niet of je hem doet",
+        verwijzing: t.tekst || "",
+        detail: "week " + nr,
+        bedrag: 0, eenheid: "", datum: (t.deelnemers && t.deelnemers[
+          String(cfg.email || "").split("@")[0].replace(/^fonteyn\./, "")] || {}).op || t.op || null,
+        takenlade: true
+      };
+    });
   }
 
   /* (c) Prijslijsten die op goedkeuring wachten.
@@ -701,7 +742,11 @@
       rij.appendChild(eltje("div", "taak-punt"));
       var mid = eltje("div", "taak-mid");
       var kopje = eltje("div", "taak-tekst");
-      kopje.appendChild(eltje("span", "taak-merk sig", s.bron === "vers" ? "uit Logic4" : "uit de controle"));
+      kopje.appendChild(eltje("span", "taak-merk sig",
+        s.bron === "vers" ? "uit Logic4"
+        : s.bron === "taakuitnodiging" ? "takenlijst"
+        : s.bron === "prijslijst" ? "wacht op jou"
+        : "uit de controle"));
       kopje.appendChild(document.createTextNode(" " + s.titel));
       mid.appendChild(kopje);
       var regels = [s.verwijzing];
@@ -710,7 +755,16 @@
       mid.appendChild(eltje("div", "taak-sub", regels.join("  ·  ")));
       mid.appendChild(eltje("div", "taak-actie", s.actie));
       rij.appendChild(mid);
-      if (s.tegel) {
+      if (s.takenlade) {
+        /* De takenlijst is geen pagina maar een lade; hier hoort dus geen link
+           maar een knop die hem openschuift op het juiste tabblad. */
+        var ga3 = eltje("button", "taak-ga", "Openen");
+        ga3.type = "button";
+        ga3.addEventListener("click", function () {
+          if (global.fpTakenlade && global.fpTakenlade.openUitnodigingen) global.fpTakenlade.openUitnodigingen();
+        });
+        rij.appendChild(ga3);
+      } else if (s.tegel) {
         var ga2 = eltje("a", "taak-ga", "Bekijken");
         ga2.href = s.tegel;
         rij.appendChild(ga2);

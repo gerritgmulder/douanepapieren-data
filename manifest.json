@@ -1,5 +1,5 @@
 {
-  "version": "0.26.6",
+  "version": "0.27.0",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -141,10 +141,6 @@
       "note": "Eikensingel-vakantiepark — bovenaanzicht 10 bungalows, boekingen + schoonmaak + betalingen"
     },
     {
-      "name": "takenlijst.html",
-      "note": "Takenlijst - eigen weektaken en delegeren, met een afgerond-archief"
-    },
-    {
       "name": "leverancier-nieuw.html",
       "note": "Nieuwe leverancier: proforma invoice inlezen, bedrijfsgegevens en artikelen met inkoopprijs vastleggen, en het crediteurnummer uit Logic4 eraan koppelen. Aanmaken in Logic4 kan niet via de API - alleen klanten - dus dat blijft een handeling in Logic4 zelf."
     },
@@ -260,6 +256,10 @@
     {
       "name": "tegels.js",
       "note": "Welke tegels er zijn en bij welke groep uit toegang.js ze horen. De telefoon bouwt zijn tegels hieruit op; tools/tegels-gelijk.mjs bewaakt dat de pc dezelfde rechten hanteert."
+    },
+    {
+      "name": "takenlade.js",
+      "note": "Takenlijst als uitschuiflade aan de zijkant van het dashboard - eigen taken, delegeren, uitnodigingen"
     },
     {
       "name": "mobiel.webmanifest",

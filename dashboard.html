@@ -11,6 +11,7 @@
      dat op de telefoon; zonder dit bestand weet de pagina niet wat ze mag
      tonen en blijft alles verborgen. -->
 <script src="tegels.js"></script>
+<script src="takenlade.js"></script>
 <script src="taal.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -426,11 +427,6 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <!-- Mijn uren - voorlopig alleen voor Gerrit; de tegel stond even voor
            iedereen open en is weer dichtgezet (19 aug 2026). Je ziet alleen
            je eigen uren; dat regelt de worker, niet deze pagina. -->
-      <a href="takenlijst.html" class="tile hidden" id="tileTaken">
-        <div class="icon">✅</div>
-        <h3>Takenlijst</h3>
-        <p>Jouw eigen weektaken en wat je bij iemand anders neerlegt. Nodig collega's uit voor een taak; zij nemen hem aan of weigeren. Afvinken laat de regel verdwijnen, onder Afgerond blijft hij vindbaar.</p>
-      </a>
       <a href="uren.html" class="tile hidden" id="tileUren">
         <div class="icon">⏱️</div>
         <h3>Mijn uren</h3>
@@ -966,6 +962,10 @@ function showDashboard(email) {
   const isLogistiek = LOGISTIEK_EMAILS.has(lc);
   verbergLegeGroepen();
   herstelScrollpositie();
+  /* De takenlijst is geen tegel maar een lade aan de rechterkant (Gerrit,
+     31 aug 2026: "een soort uitstulpje"). Hij bouwt zichzelf en verschijnt
+     alleen bij wie in de groep 'taken' zit. */
+  try { if (window.fpTakenlade) window.fpTakenlade.start(email); } catch (e) {}
   startTakenblok(email);
   startNieuweRelaties(email);
   controleerAppVersie();

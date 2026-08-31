@@ -52,19 +52,25 @@
   var NIEUWS = [
 
     {
+      datum: "2026-08-31", groep: "taken", soort: "beter",
+      titel: "Takenlijst zit nu als lade aan de zijkant",
+      wat: "De takenlijst is geen tegel meer. Rechts op het dashboard zit een uitstulpje 'Takenlijst'; klik erop en de lijst schuift uit, klik weer en hij schuift terug. Je hoeft het dashboard dus niet meer te verlaten om iets af te vinken. Op het uitstulpje staat hoeveel er openstaat, en bij een uitnodiging kleurt dat oranje. Wacht er een uitnodiging op je, dan staat die bovendien bovenaan het dashboard bij je taken, met een knop die de lade op het juiste tabblad opent.",
+    },
+
+    {
       datum: "2026-08-31", bestand: "dealerportaal.html", soort: "beter",
       titel: "Bibliotheek: volgorde aanpassen, verplaatsen en weggooien",
       wat: "De bestandenlijst van het partnerportaal was alleen te lezen; nu kun je hem beheren. Sleep een regel naar zijn plek of gebruik de pijltjes - die volgorde is letterlijk wat de partner ziet. Staat er iets in de verkeerde map, kies dan 'verplaats naar' en hij verhuist. Met het prullenbakje gooi je iets echt weg: ook het bestand zelf verdwijnt, zodat het daarna ook niet meer op te vragen is. De mappen staan dichtgeklapt, dus je ziet niet meteen 166 regels.",
     },
 
     {
-      datum: "2026-08-31", bestand: "takenlijst.html", soort: "beter",
+      datum: "2026-08-31", groep: "taken", soort: "beter",
       titel: "Takenlijst is nu persoonlijk, en je kunt collega's uitnodigen",
       wat: "Je ziet alleen je eigen taken; wat een ander op zijn lijst zet blijft bij hem. Nieuw is uitnodigen: zet iemand bij een taak en die komt bij hem in de takenlijst te staan onder Uitnodigingen. Neemt hij aan, dan staat de taak bij hem onder Eigen taken en zie jij \"doet mee\". Weigert hij, dan staat hij niet op zijn lijst en zie jij \"geweigerd\" - je hoeft er dus niet achteraan. Uitnodigen kan alleen bij mensen die de tegel zelf ook hebben, anders zou de taak nergens landen. De tegel staat nu onder Elke dag in plaats van bij Marketing.",
     },
 
     {
-      datum: "2026-08-31", bestand: "takenlijst.html", soort: "nieuw",
+      datum: "2026-08-31", groep: "taken", soort: "nieuw",
       titel: "Takenlijst: eigen weektaken en wat je delegeert",
       wat: "Nieuwe tegel Takenlijst. Onder Eigen taken zet je neer wat jij deze week doet, onder Delegeren leg je een klus bij iemand anders neer met zijn naam erbij. Alles hangt aan een week, zodat je op maandag in \u00e9\u00e9n keer de week vult; wat blijft liggen schuift niet weg maar staat de week erna bovenaan in het oranje. Vink je iets af, dan verdwijnt de regel uit de lijst en staat hij onder Afgerond, met wie hem heeft afgevinkt en wanneer. Terughalen kan altijd.",
     },
@@ -370,10 +376,19 @@
     var mijn = t.voor(wie) || [];
     var bestanden = {}, groepen = {};
     mijn.forEach(function (x) { bestanden[x.bestand] = true; groepen[x.groep] = true; });
+    /* Een 'groep' werd tot 31 aug 2026 alleen afgeleid uit de tegels die
+       iemand heeft. Dat brak zodra er iets in het dashboard kwam dat géén
+       tegel is: de takenlijst werd een uitschuiflade aan de zijkant, en een
+       bericht daarover zou dan bij niemand meer verschijnen - ook niet bij de
+       vier mensen die die lade wél hebben. Daarom nu rechtstreeks aan
+       toegang.js vragen of iemand in de groep zit; dat is sowieso de eerlijker
+       vraag, want dat is waar de rechten écht staan. De tegel-afleiding blijft
+       ernaast staan voor het geval fpToegang niet geladen is. */
+    var tg = global.fpToegang;
     return NIEUWS.filter(function (n) {
       if (n.iedereen) return true;
       if (n.bestand) return !!bestanden[n.bestand];
-      if (n.groep) return !!groepen[n.groep];
+      if (n.groep) return (tg && tg.mag) ? tg.mag(n.groep, wie) : !!groepen[n.groep];
       return false;
     });
   }
