@@ -193,6 +193,14 @@
       <p class="lead" style="font-size:12.5px;margin-top:14px">Zodra dit er is, verschijnen hier automatisch de US-facturen, klanten/dealers en openstaande bedragen — read-only, net als de rest van het dashboard. Ik zet niets live wat geld kan verplaatsen.</p>
       <button class="btn solid" id="qbConnectBtn" type="button" disabled style="opacity:.5">Verbinden met QuickBooks (wacht op app-gegevens)</button>
     </div>
+    <!-- Zoeken in de QuickBooks-lijst (Chantal, video 30 aug 2026: "ik moet
+         hier een zoekbalk hebben, zodat ik op factuurnummer kan zoeken en op
+         klantnaam"). -->
+    <div id="qbZoekRij" class="actions hidden" style="gap:10px;align-items:center;flex-wrap:wrap;margin:14px 0 0">
+      <input id="qbZoek" type="text" placeholder="zoek op factuurnummer of klantnaam…" style="min-width:280px;padding:8px">
+      <button class="btn" id="qbVerversBtn" type="button" title="De lijst opnieuw ophalen uit QuickBooks">Opnieuw ophalen</button>
+      <span id="qbGeladenOm" style="font-size:12px;color:var(--muted)"></span>
+    </div>
     <div id="qbData"></div>
   </div>
 
@@ -201,7 +209,7 @@
     <div class="card">
       <h3>Wire-overzicht van Audrey inlezen</h3>
       <p class="lead" style="font-size:13px"><b>De makkelijkste manier: plakken.</b> Open Audrey's mail, selecteer de tabel met bedragen (of de hele mail met Ctrl+A), kopieer met Ctrl+C en plak hem hieronder met Ctrl+V. Meer is het niet - je hoeft niets op te slaan.
-        Het systeem leest de tabel letterlijk uit: de <b>Balance</b>-regel, elke factuurregel (bijv. <code>3553 Paradise</code>) met kolom 1, kolom 2 en - indien aanwezig - kolom 3.</p>
+        Het systeem leest de tabel letterlijk uit: de <b>Balance</b>-regel, elke factuurregel (bijv. <code>3553 Paradise</code>) met <b>amount invoice</b>, <b>bankkosten</b> en - indien aanwezig - <b>totaal</b>.</p>
       <!-- Plakvak. Chantal (video, 29 aug 2026): "ik kan de mail helemaal niet
            opslaan als EML... dan staat er helemaal geen e-mail tussen." In de
            nieuwe Outlook bestaat 'Opslaan als' niet meer, dus die weg was voor
@@ -224,7 +232,13 @@
       </details>
       <div id="audStatus" class="status-msg hidden" style="margin-top:12px"></div>
     </div>
+    <div class="actions" style="gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 4px">
+      <input id="audWachtZoek" type="text" placeholder="zoek in geaccordeerd op factuurnummer of naam…" style="min-width:300px;padding:8px">
+    </div>
     <div id="audWachtrij"></div>
+    <div class="actions" style="gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 4px">
+      <input id="audWireZoek" type="text" placeholder="zoek in de wires op factuurnummer of naam…" style="min-width:300px;padding:8px">
+    </div>
     <div id="audList"></div>
   </div>
 </main>
@@ -253,6 +267,17 @@ const ALLOWED=new Set(["chantal@fonteyn.nl","chantal","fonteyn.chantal","dolf@fo
 document.getElementById("logoutBtn").addEventListener("click",()=>{
   localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href="dashboard.html";
 });
+["qbZoek","audWachtZoek","audWireZoek"].forEach(function(id){
+  const el=document.getElementById(id); if(!el) return;
+  el.addEventListener("input",function(){
+    if(id==="qbZoek") renderQbInvoices();
+    if(id==="audWachtZoek") audRenderWachtrij();
+    if(id==="audWireZoek") audRender();
+  });
+});
+const qbVervers=document.getElementById("qbVerversBtn");
+if(qbVervers) qbVervers.addEventListener("click",()=>qbInit(true));
+
 document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active")); t.classList.add("active");
   const tab=t.dataset.tab;
@@ -614,14 +639,26 @@ function vhDatum(s){
   const el=document.getElementById(id);
   if(el) el.addEventListener(id==="vhZoek"?"input":"change",function(){ if(vhData) vhTeken(); });
 });
-async function qbInit(){
+/* Chantal (video, 30 aug 2026): "zodra ik ga switchen tussen tabbladen gaat
+   hij weer opnieuw laden, dat kost best wel veel tijd. Ik wil gewoon dat dit
+   zichtbaar blijft. Pas op het moment dat ik het dashboard afsluit mag hij
+   deze verbinding verliezen."
+
+   De lijst wordt daarom één keer per keer-dat-het-scherm-open-is opgehaald.
+   Kom je terug op dit tabblad, dan staat hij er meteen. Verse gegevens haal
+   je met de knop 'Opnieuw ophalen', en bij het opnieuw openen van het
+   dashboard gebeurt dat vanzelf. */
+let qbGeladen=false, qbGeladenTijd=null;
+async function qbInit(force){
   const st=document.getElementById("qbStatus"), btn=document.getElementById("qbConnectBtn");
+  if(qbGeladen && !force){ renderQbInvoices(); qbToonGeladenOm(); return; }
   try{
     const j=await (await fetch(WORKER+"/amerika/qb/status",{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}})).json();
     if(j.connected){
       st.textContent="gekoppeld"+(j.connectedAt?(" sinds "+new Date(j.connectedAt).toLocaleDateString("nl-NL")):"" ); st.style.color="#15803d";
       btn.textContent="Opnieuw verbinden"; btn.disabled=false; btn.style.opacity="1";
-      qbLoadData();
+      await qbLoadData();
+      qbGeladen=true; qbGeladenTijd=new Date(); qbToonGeladenOm();
     } else if(j.configured){
       st.textContent="klaar om te verbinden"; st.style.color="#2563eb";
       btn.textContent="Verbinden met QuickBooks"; btn.disabled=false; btn.style.opacity="1";
@@ -668,13 +705,23 @@ function qbKindBadge(k){
   const map={spa:["#dcfce7","#15803d","spa"],onderdeel:["#e0e7ff","#3730a3","onderdeel"],kosten:["#f3f4f6","#374151","kosten"]};
   const m=map[k]||["#f3f4f6","#374151",k]; return "<span class='pill' style='background:"+m[0]+";color:"+m[1]+"'>"+m[2]+"</span>";
 }
+function qbToonGeladenOm(){
+  const e=document.getElementById("qbGeladenOm"), rij=document.getElementById("qbZoekRij");
+  if(rij) rij.classList.toggle("hidden", !qbGeladen);
+  if(e&&qbGeladenTijd) e.textContent="opgehaald om "+qbGeladenTijd.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"});
+}
+function qbMatch(inv,q){
+  if(!q) return true;
+  return String(inv.docNr||"").toLowerCase().includes(q) || String(inv.klant||inv.customer||"").toLowerCase().includes(q);
+}
 function renderQbInvoices(){
   const box=document.getElementById("qbData");
   // Een factuur verdwijnt hier pas als het geld van Audrey is ontvangen én de
   // factuur volledig betaald is. Bij een deelbetaling blijft hij dus staan en
   // heeft hij ook een kopie in Ontvangen Audrey — zo blijft zichtbaar dat er
   // nog een restant openstaat (Chantal, 4 aug 2026).
-  const nieuw=qbInvoices.filter(i=>!qbVerborgen[i.docNr] && !(i.audrey && i.betaald));
+  const q=((document.getElementById("qbZoek")||{}).value||"").trim().toLowerCase();
+  const nieuw=qbInvoices.filter(i=>!qbVerborgen[i.docNr] && !(i.audrey && i.betaald)).filter(i=>qbMatch(i,q));
   let html="<div class='card'><div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px'>"+
     "<h3 style='margin:0'>Nieuwe orders uit QuickBooks — "+nieuw.length+"</h3>"+
     "<div style='display:flex;gap:10px;flex-wrap:wrap'><button id='qbSelAll' class='btn' type='button'>Alles selecteren</button>"+
@@ -949,7 +996,8 @@ function audRenderWachtrij(){
   // heeft aangevinkt dat het geld van Audrey binnen is. Stond hier eerder
   // alles wat geaccordeerd was, waardoor er orders verschenen waarvan het geld
   // nog niet ontvangen was (Chantal, 4 aug 2026).
-  const zichtbaar=qbInvoices.filter(i=>i.geaccordeerd && i.audrey && !qbVerborgen[i.docNr]);
+  const qw=((document.getElementById("audWachtZoek")||{}).value||"").trim().toLowerCase();
+  const zichtbaar=qbInvoices.filter(i=>i.geaccordeerd && i.audrey && !qbVerborgen[i.docNr]).filter(i=>qbMatch(i,qw));
   const wacht=zichtbaar.filter(i=>!verwerktIds[i.docNr]);
   const klaar=zichtbaar.filter(i=>verwerktIds[i.docNr]);
   if(audFacturenBezig){
@@ -1013,13 +1061,26 @@ function audSoortPill(s){
 function audRender(){
   const box=document.getElementById("audList");
   if(!wiresData.wires.length){ box.innerHTML="<div class='card'><p class='lead'>Nog geen wire-overzichten ingelezen. Upload hierboven Audrey's mail (.eml).</p></div>"; return; }
-  const wires=wiresData.wires.slice().sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
+  const qz=((document.getElementById("audWireZoek")||{}).value||"").trim().toLowerCase();
+  const past=r=>!qz||String(r.factuur||"").toLowerCase().includes(qz)||String(r.naam||"").toLowerCase().includes(qz);
+  const wires=wiresData.wires.slice()
+    .map(w=>qz?Object.assign({},w,{regels:w.regels.filter(past)}):w)
+    .filter(w=>w.regels.length)
+    .sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
+  if(qz&&!wires.length){ box.innerHTML="<div class='card'><p class='lead'>Geen wire-regel gevonden voor \u201c"+esc(qz)+"\u201d.</p></div>"; return; }
   box.innerHTML=wires.map(w=>{
     const openN=w.regels.filter(r=>r.soort==="factuur"&&!verwerktIds[r.factuur]).length;
     const totaalRegel=w.regels.find(r=>r.soort==="totaal"&&r.kolom3!=null);
     return "<div class='card'>"+
       "<div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px'>"+
-        "<h3 style='margin:0'>Wire van "+esc(datumNL(w.datum))+
+        /* De datum is aanpasbaar. Hij stond op de dag van inlezen, en dat is niet
+           de dag van de betaling: Chantal (video, 30 aug 2026) "dit is geen wire,
+           want ik heb 'm vandaag ingelezen; dat zegt niet dat de betaling ook van
+           vandaag is." */
+        "<h3 style='margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap'>Wire van "+
+          "<input type='date' class='audDatum' data-id='"+esc(w.id)+"' value='"+esc(String(w.datum||"").slice(0,10))+"' "+
+          "title='Datum van de betaling; pas hem aan als die afwijkt van de dag van inlezen' "+
+          "style='border:1px solid var(--border);border-radius:7px;padding:3px 7px;font:inherit;font-size:14px'>"+
           (totaalRegel?" — <span style='color:#15803d'>"+esc(usd(totaalRegel.kolom3))+" ontvangen</span>":"")+"</h3>"+
         "<div style='display:flex;gap:10px;align-items:center'>"+
           (openN?"<span class='pill' style='background:#fef3c7;color:#92400e'>"+openN+" nog te verwerken</span>":"<span class='pill' style='background:#dcfce7;color:#15803d'>alles verwerkt</span>")+
@@ -1027,7 +1088,7 @@ function audRender(){
         "</div></div>"+
       "<p class='lead' style='font-size:12px;margin:0 0 10px'>Bestand: "+esc(w.bestand||"")+" · ingelezen "+esc(datumNL(w.ts))+"</p>"+
       "<div class='tablewrap'><table class='grid'><thead><tr>"+
-        "<th>Regel</th><th>Factuur</th><th>Soort</th><th style='text-align:right'>Kolom 1</th><th style='text-align:right'>Kolom 2</th><th style='text-align:right'>Kolom 3</th><th>Verwerkt in Logic4</th></tr></thead><tbody>"+
+        "<th>Regel</th><th>Factuur</th><th>Soort</th><th style='text-align:right'>Amount invoice</th><th style='text-align:right'>Bankkosten</th><th style='text-align:right'>Totaal</th><th>Verwerkt in Logic4</th></tr></thead><tbody>"+
       w.regels.map((r,i)=>{
         const kan=r.soort==="factuur";
         // Status komt uit de CENTRALE lijst op factuurnummer, zodat dit vinkje
@@ -1050,6 +1111,14 @@ function audRender(){
       "</tbody></table></div></div>";
   }).join("");
   // Vinkje "verwerkt in Logic4" — zelfde handler als in de wachtrij
+  box.querySelectorAll(".audDatum").forEach(inp=>inp.addEventListener("change",async()=>{
+    const w=wiresData.wires.find(x=>String(x.id)===inp.dataset.id);
+    if(!w||!inp.value) return;
+    const oudeDatum=w.datum;
+    w.datum=inp.value;
+    try{ await audSave(); if(window.fpLog) window.fpLog("wire-datum-gewijzigd",oudeDatum+" -> "+inp.value); audRender(); }
+    catch(e){ w.datum=oudeDatum; alert("Kon de datum niet opslaan: "+e.message); }
+  }));
   box.querySelectorAll(".audVerw").forEach(cb=>cb.addEventListener("change",()=>audVerwerktKlik(cb)));
   box.querySelectorAll(".audVerberg").forEach(b=>b.addEventListener("click",()=>qbVerbergKlik(b.dataset.nr)));
   box.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{

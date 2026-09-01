@@ -52,6 +52,22 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-01", groep: "partnerportaal-kijk", soort: "nieuw",
+      titel: "Passion Partners: meekijken zonder account",
+      wat: "Klik je op de tegel Passion Partners, dan ga je nu meteen het portaal in met je eigen dashboard-account. Je hoeft niet meer als partner of dealer aangemaakt te worden, en er komt dus ook niets extra's in Logic4 te staan. Bovenin staat een balk dat je meekijkt: je ziet alles zoals een partner het ziet, maar reserveren en andere wijzigingen zijn uitgeschakeld.",
+    },
+    {
+      datum: "2026-09-01", bestand: "amerika.html", soort: "beter",
+      titel: "Amerika: zoeken, kolomnamen en geen herlaadtijd meer",
+      wat: "Verkoop & dealers laadt niet meer opnieuw zodra je tussen tabbladen wisselt; de lijst blijft staan tot je het dashboard opnieuw opent, en met de knop Opnieuw ophalen haal je hem bewust vers op. Er zijn drie zoekvelden bij gekomen: in de QuickBooks-lijst, bij Geaccordeerd en bij de wires, allemaal op factuurnummer of naam. Bij de wires heten de kolommen nu Amount invoice, Bankkosten en Totaal, en de datum van een wire is aan te passen - die stond op de dag van inlezen en dat is niet de dag van de betaling.",
+    },
+    {
+      datum: "2026-09-01", bestand: "voorraad.html", soort: "beter",
+      titel: "Reserveringen tonen nu de hele orderregel",
+      wat: "Stond er in Logic4 iets bijzonders bij een spa, zoals 'Integrated Heat Pump', dan zag je dat hier niet: er stond alleen het model en de kleur. Nu staat die aantekening als oranje label achter de kleur, en de hele regel zoals Logic4 hem heeft zie je als je erover zweeft. Je kunt er ook op zoeken. Twee orders die alleen hierin verschillen worden bovendien niet meer op één regel samengevoegd.",
+    },
+
+    {
       datum: "2026-08-31", groep: "taken", soort: "beter",
       titel: "Takenlijst staat ook weer op je telefoon",
       wat: "Op de telefoon zit hetzelfde uitstulpje rechts in beeld; tik erop en de lijst schuift over je tegels heen, met een knop Sluiten rechtsboven. Het is precies dezelfde lijst als op de pc, dus wat je onderweg afvinkt staat op kantoor ook af. Anders dan op de pc gaat hij op een telefoon niet vanzelf open: je begint bij je tegels.",

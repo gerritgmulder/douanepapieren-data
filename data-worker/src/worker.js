@@ -798,6 +798,45 @@ async function dpCreateMolliePayment(env, amount, description, redirectUrl, webh
   return { ok: true, id: j.id, checkoutUrl: j._links && j._links.checkout && j._links.checkout.href };
 }
 
+/* POST /dealers/medewerker-sessie  { email }  (header X-Fonteyn-Auth)
+   Een meekijk-sessie voor Fonteyn-medewerkers.
+
+   Chantal (video, 30 aug 2026): "ik wil graag het portaal kunnen inzien, maar
+   ik heb geen account, want ik ben geen partner en geen dealer. Ik ga de
+   adviseurs niet allemaal in Logic4 neerzetten, want dan ga ik Logic4
+   vervuilen. Wij moeten gewoon kunnen inloggen zonder dat ik mezelf een
+   partner maak."
+
+   Daarom deze weg: het dashboard vraagt namens de ingelogde medewerker een
+   sessie aan met de teamsleutel. Er wordt geen dealer aangemaakt - niet in
+   dealer-accounts en niet in Logic4.
+
+   De sessie is nadrukkelijk KIJKEN, niet doen: hij krijgt medewerker:true en
+   elke schrijfactie (reserveren, wachtwoord zetten, een vraag sturen) wordt
+   geweigerd. Zo kan meekijken nooit een echte reservering opleveren die
+   niemand herkent.
+
+   Vertrouwensgrens is de teamsleutel, net als bij elke andere tegel: die
+   staat op de werkplek van elke medewerker na het inloggen. Wie die sleutel
+   heeft kan dus meekijken in het portaal. Dat is bewust dezelfde grens als
+   voor de rest van het dashboard; een fijnere afscherming zou een eigen
+   inlog per gebruiker op de server vragen en die is er niet. */
+async function dpHandleMedewerkerSessie(request, env) {
+  if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) {
+    return reply(401, { ok: false, error: "geen-teamsleutel" });
+  }
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const email = String(body.email || "").trim().toLowerCase();
+  if (!email || !email.includes("@")) return reply(400, { ok: false, error: "geen-adres" });
+  const sess = dpNewSessionToken();
+  await env.FONTEYN_DATA.put("dp-sess:" + sess, JSON.stringify({
+    email, company: "Fonteyn (meekijken)", medewerker: true, since: new Date().toISOString(),
+  }), { expirationTtl: DP_SESS_TTL });
+  console.log("[dp-medewerker] meekijksessie voor " + email);
+  return reply(200, { ok: true, session: sess, medewerker: true });
+}
+
 // POST /dealers/api/setpassword { password } — dealer stelt (of wijzigt) zijn
 // eigen wachtwoord; vereist een geldige sessie (eerste keer via magic-link).
 async function dpHandleSetPassword(request, env, sess) {
@@ -840,6 +879,7 @@ function dpPrijsgevoeligeIds(data) {
 
 async function dpIsDealer(env, sess) {
   if (!sess) return false;
+  if (sess.medewerker) return false;   // meekijkende collega: partnerweergave
   const accounts = await dpGetAccounts(env);
   const acc = dpFindDealer(accounts, sess.email);
   return String((acc && acc.soort) || "").toLowerCase() === "dealer";
@@ -1490,16 +1530,30 @@ async function handleDealerRoutes(request, env, url) {
     return reply(404, "Not found");
   }
 
+  if (p === "/dealers/medewerker-sessie" && request.method === "POST") {
+    return dpHandleMedewerkerSessie(request, env);
+  }
+
   // Alles hieronder vereist een geldige dealer-sessie
   if (p.startsWith("/dealers/api/")) {
     const sess = await dpSession(env, request);
     if (!sess) return reply(401, { ok: false, error: "not-logged-in" });
+    /* Meekijken is kijken. Een medewerkerssessie mag niets veranderen: geen
+       reservering, geen wachtwoord, geen vraag naar sales. Anders zou een
+       collega die "even meekijkt" een aanvraag kunnen indienen die als die
+       van een partner binnenkomt. */
+    if (sess.medewerker && request.method !== "GET") {
+      return reply(403, { ok: false, error: "meekijken-is-alleen-lezen" });
+    }
     if (p === "/dealers/api/me" && request.method === "GET") {
       const accounts = await dpGetAccounts(env);
       const dealer = dpFindDealer(accounts, sess.email);
       await dpLogPartner(env, sess, "portaal-open", "");   // actieve sessie (dedup 5 min)
       return reply(200, { ok: true, email: sess.email, company: sess.company || "",
         hasPassword: !!(dealer && dealer.pw),
+        // Meekijkende collega: het portaal zet er een balk boven en verbergt
+        // wat een medewerker toch niet mag doen.
+        medewerker: !!sess.medewerker,
         region: (dealer && dealer.region) || "EU" });
     }
     if (p === "/dealers/api/setpassword" && request.method === "POST") return dpHandleSetPassword(request, env, sess);
@@ -1671,16 +1725,31 @@ const WH_TEXAS = 50, WH_DEALER = 27;
    kleur dus staan en valt de aantekening weg, en bij een regel zonder kleur
    komt er niets - beter leeg dan een spa-naam in de kleurenlijst. */
 const KLEURWOORDEN = /(white|grey|gray|oak|espresso|sand|mountain|pearl|shadow|black|blackburn|moondance|sterling|silver|sliver|rhombus|rombus|wood|brown|beige|graphite|antraciet|anthracite)/i;
-function dpRowColor(desc) {
+/* Kleur én de rest van de omschrijving in één keer, zodat die twee niet uit
+   elkaar kunnen lopen. De 'rest' is alles achter het eerste streepje dat niet
+   de kleur is: bij "Soulmate Spa | Sterling White with GREY/oak | Integrated
+   Heat Pump" dus "Integrated Heat Pump".
+
+   Waarom dat apart moet: Chantal (video, 30 aug 2026) zag bij order 3517173
+   alleen "Soulmate, Sterling White" staan terwijl er in Logic4 een spa mét
+   geïntegreerde warmtepomp besteld is. "Anders ga ik ervan uit dat ik gewoon
+   een Sterling White krijg en plan ik hem gewoon in, terwijl dit echt een
+   bijzondere, aparte bestelling is." Zonder deze regel verdwijnt zo'n
+   aantekening, én worden twee orders die alleen hierin verschillen bij het
+   groeperen op één hoop gegooid. */
+function dpRowInfo(desc) {
   const s = String(desc || "");
-  if (s.indexOf("|") < 0) return null;
+  if (s.indexOf("|") < 0) return { kleur: null, extra: null };
   const stukken = s.split("|").slice(1)
     .map(x => x.replace(/\b(spa|swimspa)\b/gi, "").replace(/\s+/g, " ").trim())
     .filter(Boolean);
+  let kleurIndex = -1;
   for (let i = stukken.length - 1; i >= 0; i--)
-    if (KLEURWOORDEN.test(stukken[i])) return stukken[i];
-  return null;
+    if (KLEURWOORDEN.test(stukken[i])) { kleurIndex = i; break; }
+  const extra = stukken.filter((_, i) => i !== kleurIndex).join(" · ");
+  return { kleur: kleurIndex >= 0 ? stukken[kleurIndex] : null, extra: extra || null };
 }
+function dpRowColor(desc) { return dpRowInfo(desc).kleur; }
 // De 9 fabrieken waar Fonteyn spa's/swimspa's/sauna's inkoopt. Fuzzy gematcht
 // op CreditorCompanyName (de spelling wisselt in Logic4). Zie geheugen.
 const SPA_FACTORIES = [
@@ -3021,9 +3090,14 @@ async function dpRefreshReservations(env) {
           const undelivered = (Number(row.Qty) || 0) - (Number(row.QtyDeliverd) || 0);
           if (undelivered <= 0) continue;
           const wh = Number(row.WarehouseId) || 0;
-          const kleur = dpRowColor(row.Description);
-          const key = model + "||" + (kleur || "") + "||" + wh;
-          (groups[key] = groups[key] || { model, kleur, wh, qty: 0 }).qty += undelivered;
+          const info = dpRowInfo(row.Description);
+          const kleur = info.kleur;
+          /* 'extra' hoort in de sleutel: een Soulmate mét warmtepomp en een
+             gewone Soulmate in dezelfde kleur zijn niet hetzelfde en mogen
+             niet op één regel belanden. */
+          const key = model + "||" + (kleur || "") + "||" + wh + "||" + (info.extra || "");
+          (groups[key] = groups[key] || { model, kleur, extra: info.extra,
+            omschrijving: String(row.Description || "").trim(), wh, qty: 0 }).qty += undelivered;
         }
         for (const gkey of Object.keys(groups)) {
           const gr = groups[gkey];
@@ -3035,6 +3109,9 @@ async function dpRefreshReservations(env) {
           const line = {
             ordernr: o.Id, debtorId: o.DebtorId, naam, type,
             model: gr.model, kleur: gr.kleur || null, qty: gr.qty,
+            // De aantekening uit de orderregel ("Integrated Heat Pump") en de
+            // hele regel zoals Logic4 hem heeft, voor het uitklappen.
+            extra: gr.extra || null, omschrijving: gr.omschrijving || null,
             warehouseId: gr.wh, magazijn: WH_NAMES[gr.wh] || ("magazijn " + gr.wh),
             container, regio: usa ? "USA" : "NL",
             referentie: String(o.Reference || "").trim() || null,
@@ -3045,7 +3122,10 @@ async function dpRefreshReservations(env) {
             adviseurUitDienst: !!(medewerkers[String(o.UserId)] || {}).uitDienst,
             // Vaste sleutel voor deze regel, zodat Chantals opmerking en
             // vinkjes eraan blijven hangen als de lijst opnieuw wordt opgehaald.
-            regelId: o.Id + "|" + gr.model + "|" + (gr.kleur || "") + "|" + gr.wh,
+            /* De variant hoort in de regelsleutel, anders delen een spa mét en
+               zonder warmtepomp dezelfde notities en vinkjes. */
+            regelId: o.Id + "|" + gr.model + "|" + (gr.kleur || "") + "|" + gr.wh +
+                     (gr.extra ? "|" + gr.extra : ""),
             datum: String(o.CreationDate).slice(0, 10), statusId: st, status: statusName[st] || String(st),
             // De transporteur van de order ("FBS", "Transport distributie",
             // "Afhalen"). Chantal (video, 25 aug 2026) wil die zien bij de

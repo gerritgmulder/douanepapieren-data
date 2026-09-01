@@ -338,6 +338,22 @@ async function sendLink(){
   $("who").classList.remove("hidden");
   $("logoutBtn").classList.remove("hidden");
   $("pwBtn").classList.remove("hidden");
+  /* Meekijkende Fonteyn-collega. Zonder balk zou je denken dat je als partner
+     kijkt, en zou je je afvragen waarom reserveren niet lukt. De knop om een
+     wachtwoord te zetten hoort hier ook niet: er is geen dealeraccount om een
+     wachtwoord aan te hangen. */
+  if (me.data.medewerker) {
+    $("pwBtn").classList.add("hidden");
+    if (!document.getElementById("meekijkBalk")) {
+      const balk = document.createElement("div");
+      balk.id = "meekijkBalk";
+      balk.style.cssText = "background:#fef3c7;color:#92400e;border-bottom:1px solid #fcd34d;" +
+        "padding:9px 16px;font-size:13px;font-weight:600;text-align:center";
+      balk.textContent = "Je kijkt mee als medewerker van Fonteyn. Je ziet het portaal zoals een partner het ziet; " +
+        "reserveren en andere wijzigingen zijn uitgeschakeld.";
+      document.body.insertBefore(balk, document.body.firstChild);
+    }
+  }
   window.myRegion = me.data.region || "EU";
   if (!window.displayCurrency) window.displayCurrency = window.myRegion === "US" ? "USD" : "EUR";
   renderCurToggle();

@@ -965,6 +965,31 @@ function showDashboard(email) {
   /* De takenlijst is geen tegel maar een lade aan de rechterkant (Gerrit,
      31 aug 2026: "een soort uitstulpje"). Hij bouwt zichzelf en verschijnt
      alleen bij wie in de groep 'taken' zit. */
+  /* Passion Partners openen als medewerker. Chantal (video, 30 aug 2026):
+     "ik wil het portaal kunnen inzien, maar ik ben geen partner en geen
+     dealer; ik ga de adviseurs niet in Logic4 zetten, want dan vervuil ik
+     Logic4." Het dashboard vraagt daarom namens haar een meekijksessie aan
+     bij de worker en opent het portaal daarmee. Er wordt geen dealer
+     aangemaakt, en die sessie mag alleen lezen. */
+  const ppTegel = el("tilePassionPartners");
+  if (ppTegel && !ppTegel.dataset.meekijk) {
+    ppTegel.dataset.meekijk = "1";
+    ppTegel.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const basis = ppTegel.getAttribute("href");
+      try {
+        const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/medewerker-sessie", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": localStorage.getItem("fp.teamkey") || "" },
+          body: JSON.stringify({ email }),
+        });
+        const j = await r.json();
+        if (j && j.ok && j.session) { window.open(basis + "#s=" + encodeURIComponent(j.session), "_blank", "noopener"); return; }
+      } catch (err) { /* portaal gewoon openen, dan zie je het inlogscherm */ }
+      window.open(basis, "_blank", "noopener");
+    });
+  }
+
   try { if (window.fpTakenlade) window.fpTakenlade.start(email); } catch (e) {}
   startTakenblok(email);
   startNieuweRelaties(email);

@@ -1810,8 +1810,31 @@ function resvTypeBadge(t){
   return "<span class='pill'>particulier</span>";
 }
 // Zoekt in model, klantnaam én ordernummer
-function resvMatch(r,m,q){ return !q || m.toLowerCase().includes(q) || String(r.naam||"").toLowerCase().includes(q) || String(r.ordernr).includes(q); }
-function kleurCel(k){ return k? "<span style='font-size:12px'>"+esc(k)+"</span>" : "<span style='color:var(--muted);font-size:12px'>—</span>"; }
+function resvMatch(r,m,q){
+  if(!q) return true;
+  return m.toLowerCase().includes(q) || String(r.naam||"").toLowerCase().includes(q) ||
+         String(r.ordernr).includes(q) || String(r.kleur||"").toLowerCase().includes(q) ||
+         // Ook op de aantekening kunnen zoeken: "warmtepomp" of "heat pump"
+         // moet alle bijzondere bestellingen opleveren.
+         String(r.extra||"").toLowerCase().includes(q) ||
+         String(r.omschrijving||"").toLowerCase().includes(q);
+}
+/* Kleur, en daarachter wat er verder in de orderregel staat. Chantal (video,
+   30 aug 2026) op order 3517173: er stond "Soulmate, Sterling White" terwijl
+   in Logic4 een spa mét geïntegreerde warmtepomp besteld is. "Anders ga ik
+   ervan uit dat ik gewoon een Sterling White krijg en plan ik hem gewoon in,
+   terwijl dit echt een bijzondere, aparte bestelling is." De aantekening komt
+   nu met de uur-sync mee en staat als oranje label achter de kleur; de hele
+   regel zoals Logic4 hem heeft staat in de tooltip. */
+function kleurCel(k,r){
+  const kleur = k ? "<span style='font-size:12px'>"+esc(k)+"</span>"
+                  : "<span style='color:var(--muted);font-size:12px'>—</span>";
+  const extra = r && r.extra
+    ? " <span title='"+esc(r.omschrijving||r.extra)+"' style='display:inline-block;font-size:10.5px;font-weight:700;"+
+      "padding:1px 7px;border-radius:999px;background:#fef3c7;color:#92400e;white-space:nowrap'>"+esc(r.extra)+"</span>"
+    : "";
+  return kleur+extra;
+}
 function renderReserveringen(){
   document.getElementById("resvUpdated").textContent = resvData.updated ? ("Laatst ververst: "+new Date(resvData.updated).toLocaleString("nl-NL")) : "(nog niet geladen)";
   const q=(document.getElementById("resvSearch").value||"").trim().toLowerCase();
@@ -1868,7 +1891,7 @@ function resvRows(list){
     // Oranje rij = containerorder (magazijn Dealer magazijn)
     const rowStyle=r.container?"background:#fff7ed;border-left:3px solid #c2410c":"";
     const cont=r.container?" <span class='pill' style='background:#ffedd5;color:#c2410c;font-size:10px'>dealer mag.</span>":"";
-    return "<tr style='"+rowStyle+"'><td>"+(i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+cont+"</td><td>"+resvTypeBadge(r.type)+"</td><td>"+kleurCel(r.kleur)+"</td><td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td><td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td><td>"+betaalBadge(r)+"</td><td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td></tr>";
+    return "<tr style='"+rowStyle+"'><td>"+(i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+cont+"</td><td>"+resvTypeBadge(r.type)+"</td><td>"+kleurCel(r.kleur,r)+"</td><td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td><td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td><td>"+betaalBadge(r)+"</td><td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td></tr>";
   }).join("");
 }
 document.getElementById("resvSearch")&&document.getElementById("resvSearch").addEventListener("input",renderReserveringen);
@@ -2385,7 +2408,7 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
       return "<tr style='"+stijl+"'>"+
         "<td>"+esc(r.ordernr)+"</td>"+
         "<td><b>"+esc(r.model)+"</b></td>"+
-        "<td>"+kleurCel(r.kleur)+"</td>"+
+        "<td>"+kleurCel(r.kleur,r)+"</td>"+
         "<td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td>"+
         "<td>"+esc(r.naam)+"</td>"+
         "<td>"+adviseurCel(r)+"</td>"+
@@ -2557,7 +2580,7 @@ function renderParticulierBlok(){
         return "<tr style='"+stijl+"'>"+
           "<td>"+esc(r.ordernr)+"</td>"+
           "<td style='font-size:12px'>"+(r.transport?esc(r.transport):"<span style='color:var(--muted)'>—</span>")+"</td>"+
-          "<td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur)+"</td>"+
+          "<td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur,r)+"</td>"+
           "<td>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
           "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
           "<td style='font-size:12px'>"+leveringCel(r,n,id,uit)+"</td>"+
@@ -2628,7 +2651,7 @@ function renderAdviseurTabs(){
         "<td>"+adviseurCel(r)+"</td>"+
         "<td>"+esc(r.ordernr)+"</td>"+
         "<td>"+esc(r.model)+"</td>"+
-        "<td>"+kleurCel(r.kleur)+"</td>"+
+        "<td>"+kleurCel(r.kleur,r)+"</td>"+
         "<td>"+r.qty+"</td>"+
         "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
         "<td style='font-size:12px'>"+leveringCel(r,n,id,uit)+"</td>"+
@@ -2715,7 +2738,7 @@ function renderPartnerContainers(){
       html+="<tr><td colspan='6' style='background:#fafafa;padding:8px 14px'>"+
         "<div style='font-size:12px;font-weight:600;margin-bottom:4px'>Inhoud van deze container — "+o.qty+" spa's</div>"+
         "<table class='grid' style='margin:0;font-size:12px'><thead><tr><th>Aantal</th><th>Spa</th><th>Kleur</th></tr></thead><tbody>"+
-        regels.map(r=>"<tr><td><b>"+r.qty+"×</b></td><td>"+esc(r.model)+"</td><td>"+kleurCel(r.kleur)+"</td></tr>").join("")+
+        regels.map(r=>"<tr><td><b>"+r.qty+"×</b></td><td>"+esc(r.model)+"</td><td>"+kleurCel(r.kleur,r)+"</td></tr>").join("")+
         "</tbody></table>"+
         (o.referentie?"<div style='font-size:11px;color:var(--muted);margin-top:5px'>Uw referentie in Logic4: "+esc(o.referentie)+"</div>":"")+
         (o.containerNr&&!eta?"<div style='font-size:11px;color:var(--warn);margin-top:4px'>Nog geen ETA — upload de commercial invoice van container "+esc(o.containerNr)+".</div>":"")+
