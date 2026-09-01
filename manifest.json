@@ -1,5 +1,5 @@
 {
-  "version": "0.31.1",
+  "version": "0.31.2",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -271,7 +271,7 @@
     },
     {
       "name": "app-icoon.png",
-      "note": "Het app-icoon voor Android, via mobiel.webmanifest, ook als maskable. Opnieuw getekend met tools/maak-app-icoon.py; de fontein blijft binnen de veilige cirkel van 80% die Android over een icoon legt."
+      "note": "Het app-icoon voor Android, via mobiel.webmanifest, ook als maskable. Donkergroen vlak met de fontein uit fonteyn-logo.png zelf (tools/maak-app-icoon.py); de fontein blijft binnen de veilige cirkel van 80% die Android over een icoon legt."
     },
     {
       "name": "mobiel-brug.js",
