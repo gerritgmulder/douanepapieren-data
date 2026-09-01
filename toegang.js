@@ -208,7 +208,7 @@
        uitproberen voordat Manon en de rest erbij komen (31 aug 2026).
        Iemand toevoegen is hier één naam bijschrijven. */
     "taken": [
-      "chantal", "fonteynbot", "gerrit", "manon",
+      "chantal", "fonteynbot", "gerrit", "manon", "nomi",
     ],
     "leveranciers": [
       "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit", "gretha", "osman",
