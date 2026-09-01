@@ -2309,6 +2309,29 @@ function schipVan(sleutel){
   return null;
 }
 var VOORRAAD_KEUZE = "__voorraad__";
+/* De fabrieksbestelling achter een verwachte levering. Manon (1 sep 2026):
+   "bij verwachte levering wil ik duidelijk het Jazzi ordernummer en de ETA;
+   volgens Chantal springt deze automatisch terug op volgende productie."
+
+   Dat terugspringen kwam doordat Jazzi niet in de fabriekenlijst van de
+   worker stond, waardoor er van 941 open inkooporders maar 11 werden
+   meegenomen en er dus niets te tonen viel. Dat is rechtgezet; hier komt het
+   in beeld: het inkoopordernummer bij de fabriek en de verwachte datum, ook
+   als er verder "volgende productie" staat. */
+function fabriekKort(naam){
+  var s = String(naam||"").split(",")[0].trim();
+  var m = s.match(/^(jazzi|fenlin|romex|venus|bigeer|ponfit|sunrans|huantong|kasdaly|yuehua|fukiafu)/i);
+  return m ? m[1].charAt(0).toUpperCase()+m[1].slice(1).toLowerCase() : s.split(" ")[0];
+}
+function fabrieksRegel(r){
+  if(!r || (!r.verwachtIko && !r.verwachtEta)) return "";
+  var stukken = [];
+  if(r.verwachtIko) stukken.push("<b>"+esc(fabriekKort(r.verwachtFabriek)||"inkooporder")+" "+esc(r.verwachtIko)+"</b>");
+  // De ETA alleen apart tonen als hij niet al als datum boven staat.
+  if(r.verwachtEta && r.verwacht!==r.verwachtEta) stukken.push("ETA "+esc(datumNL(r.verwachtEta)));
+  if(!stukken.length) return "";
+  return "<div style='font-size:11px;color:#92400e;margin-top:2px'>"+stukken.join(" · ")+"</div>";
+}
 function leveringCel(r,n,id,uit){
   /* Naast de schepen kan de spa ook gewoon in Uddel staan. Chantal kon dat
      niet aanwijzen en moest dan met de automatische berekening leven; nu is
@@ -2327,7 +2350,8 @@ function leveringCel(r,n,id,uit){
   var kop = gekozen
     ? "<span style='color:#2563eb;font-weight:600'>"+esc(gekozen.eta?datumNL(gekozen.eta):"ETA volgt")+"</span>"+
       " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.ref)+", handmatig)</span>"
-    : verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"");
+    : verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")
+      +fabrieksRegel(r);
   // Staat het gekozen schip er niet meer bij, bijvoorbeeld omdat het is
   // aangekomen, dan de keuze niet stilzwijgend laten verdwijnen.
   if(n.schip && !gekozen)

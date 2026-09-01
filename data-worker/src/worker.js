@@ -1819,9 +1819,20 @@ function dpRowInfo(desc) {
 function dpRowColor(desc) { return dpRowInfo(desc).kleur; }
 // De 9 fabrieken waar Fonteyn spa's/swimspa's/sauna's inkoopt. Fuzzy gematcht
 // op CreditorCompanyName (de spelling wisselt in Logic4). Zie geheugen.
+/* Jazzi ontbrak hier, en dat was de reden dat 'in productie' vrijwel leeg
+   bleef: van de 941 open inkooporders haalde deze filter er 11 binnen, en het
+   Jazzi-ordernummer stond bij 3 van de 1.068 reserveringen. Manon (1 sep
+   2026) vroeg juist om dat nummer en de ETA bij de verwachte levering; zonder
+   Jazzi valt alles terug op "volgende productie". Fenlin (swimspa's/sauna's)
+   en Fukiafu (de partnersauna's) misten om dezelfde reden.
+
+   Een leverancier toevoegen is veilig: een inkooporderregel telt alleen mee
+   als de artikelcode in de spa-catalogus staat. Een bestelling schroeven bij
+   dezelfde fabriek levert dus geen spookregel op. */
 const SPA_FACTORIES = [
   "guangzhou romex", "venus sanitary", "changzhou bigeer", "new normal bath",
   "ponfit spa", "sunrans sanitary", "huantong industry", "kasdaly pool spa", "gaoming yuehua",
+  "jazzi pool and spa", "fenlin", "foshan fukiafu",
 ];
 const isSpaFactory = (name) => { const s = String(name || "").toLowerCase(); return SPA_FACTORIES.some(f => s.includes(f)); };
 // Containernummer uit het Logic4-veld 'Uw referentie' (o.Reference). Chantal zet
@@ -3241,7 +3252,7 @@ async function dpRefreshReservations(env) {
     // Productie (open fabrieks-IKO's) ná de schepen, op ETA-volgorde
     (prodByModel[model] || [])
       .slice().sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")))
-      .forEach(p => buckets.push({ kind: "productie", eta: p.eta, left: p.qty, iko: p.iko }));
+      .forEach(p => buckets.push({ kind: "productie", eta: p.eta, left: p.qty, iko: p.iko, fabriek: p.fabriek }));
     let bi = 0;
     for (const r of list) {
       // Containerorders (Dealer magazijn) gaan rechtstreeks naar de dealer en
@@ -3254,12 +3265,19 @@ async function dpRefreshReservations(env) {
         if (buckets[bi].left <= 0) bi++;
       }
       // 'verwacht' = waar de LAATSTE unit van deze order landt (hele order pas dan compleet)
+      /* Ook als de order niet helemaal gedekt is, bewaren we wát we weten van
+         de laatste bak waar hij op landde: het inkoopordernummer bij de
+         fabriek en de verwachte datum. Anders staat er alleen "volgende
+         productie" en is de informatie die er wél is weggegooid. */
       if (need > 0) { r.verwacht = "productie"; r.verwachtBron = "productie"; }
       else if (landing.kind === "voorraad") { r.verwacht = "voorraad"; r.verwachtBron = "voorraad"; }
       else if (landing.eta) { r.verwacht = landing.eta; r.verwachtBron = landing.kind; }   // schip- of productie-ETA
       else { r.verwacht = landing.kind === "productie" ? "productie" : "op-schip"; r.verwachtBron = landing.kind; }
       if (landing && landing.vessel) r.verwachtSchip = landing.vessel;
       if (landing && landing.iko) r.verwachtIko = landing.iko;
+      // De ETA los meegeven, ook als 'verwacht' op "productie" blijft staan.
+      if (landing && landing.eta) r.verwachtEta = landing.eta;
+      if (landing && landing.fabriek) r.verwachtFabriek = landing.fabriek;
     }
   }
 

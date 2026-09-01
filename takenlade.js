@@ -99,6 +99,27 @@
            d.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
   }
 
+  /* ─── Terugkerende taken ────────────────────────────────────────────────
+     Manon (1 sep 2026): "kun je zorgen dat er dagelijks en wekelijks
+     terugkerende taken ingevuld kunnen worden? Bijv. dagelijks Bol.com
+     verwerken, wekelijks bepalen waar de geloste containers ingeruimd
+     worden."
+
+     Een ritme is een sjabloon, geen taak. Bij het openen van de lade wordt
+     gekeken of er voor vandaag (dagelijks) of voor deze week (wekelijks) al
+     een taak uit dat sjabloon bestaat; zo niet, dan komt hij er. Daardoor
+     staat "Bol.com verwerken" elke ochtend gewoon op je lijst, ook als die
+     van gisteren nooit is afgevinkt.
+
+     De id van zo'n taak is met opzet voorspelbaar (r:<ritme>:<periode>):
+     doen twee mensen dit tegelijk, dan schrijven ze dezelfde sleutel en
+     ontstaat er geen dubbele taak. */
+  function vandaagISO() {
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  function periodeVan(ritme) { return ritme === "dag" ? vandaagISO() : DEZE; }
+
   /* Wie kun je uitnodigen: alleen mensen die de lade zelf ook hebben. Nodig je
      iemand anders uit, dan krijgt hij nooit een scherm om te accepteren en zou
      de taak stilletjes nergens landen. */
@@ -117,18 +138,65 @@
       return (j && typeof j.taken === "object" && j.taken) ? j.taken : {};
     });
   }
-  function laad() {
-    return haal().then(function (v) { taken = v; stand(""); teken(); telBij(); })
-      .catch(function (e) { stand("Lijst niet opgehaald (" + e.message + "). Je ziet de laatst geladen stand.", true); });
+  var ritmes = {};
+  function haalAlles() {
+    return fetch(BUCKET, { headers: { "X-Fonteyn-Auth": teamkey() } }).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
   }
-  function schrijf(wijzig) {
+  function laad() {
+    return haalAlles().then(function (j) {
+      taken = (j && typeof j.taken === "object" && j.taken) ? j.taken : {};
+      ritmes = (j && typeof j.ritmes === "object" && j.ritmes) ? j.ritmes : {};
+      stand(""); teken(); telBij();
+      return zorgVoorRitmetaken();
+    }).catch(function (e) { stand("Lijst niet opgehaald (" + e.message + "). Je ziet de laatst geladen stand.", true); });
+  }
+
+  /* Voor elk eigen ritme: staat de taak van deze periode er al? Zo niet, maak
+     hem. Alles in één schrijfactie, zodat vijf ritmes geen vijf rondjes naar
+     de opslag kosten. */
+  function zorgVoorRitmetaken() {
+    var missend = [];
+    for (var id in ritmes) if (Object.prototype.hasOwnProperty.call(ritmes, id)) {
+      var rt = ritmes[id];
+      if (!rt || rt.eigenaar !== IKNAAM) continue;
+      var sleutel = "r:" + id + ":" + periodeVan(rt.ritme);
+      if (!taken[sleutel]) missend.push({ sleutel: sleutel, rt: rt });
+    }
+    if (!missend.length) return Promise.resolve(false);
+    return schrijf(function (v) {
+      missend.forEach(function (m) {
+        if (v[m.sleutel]) return;
+        v[m.sleutel] = {
+          id: m.sleutel, eigenaar: IKNAAM, lijst: m.rt.lijst || "eigen",
+          tekst: m.rt.tekst, wie: m.rt.wie || "", week: DEZE,
+          dag: m.rt.ritme === "dag" ? vandaagISO() : null,
+          uitRitme: m.rt.id, ritme: m.rt.ritme,
+          door: IK, op: new Date().toISOString(),
+          klaar: false, klaarDoor: "", klaarOp: "", deelnemers: {},
+        };
+      });
+    });
+  }
+  /* wijzig() past de verse takenlijst aan, wijzigRitmes() de verse ritmes.
+     Allebei op de VERSE stand, want tussendoor kan een ander iets hebben
+     toegevoegd. Deed ik dat niet en werkte ik met de kopie in het geheugen,
+     dan zou het toevoegen of stoppen van een herhaling meteen worden
+     teruggedraaid door de verse stand die er overheen komt. */
+  function schrijf(wijzig, wijzigRitmes) {
     if (bezig) return Promise.resolve(false);
     bezig = true; stand("Bezig met opslaan…");
-    return haal().then(function (vers) {
-      wijzig(vers);
+    return haalAlles().then(function (j) {
+      var vers = (j && typeof j.taken === "object" && j.taken) ? j.taken : {};
+      var versRitmes = (j && typeof j.ritmes === "object" && j.ritmes) ? j.ritmes : {};
+      if (wijzig) wijzig(vers);
+      if (wijzigRitmes) wijzigRitmes(versRitmes);
+      ritmes = versRitmes;
       return fetch(BUCKET, { method: "PUT",
         headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamkey() },
-        body: JSON.stringify({ taken: vers, bijgewerkt: new Date().toISOString(), door: IK })
+        body: JSON.stringify({ taken: vers, ritmes: versRitmes, bijgewerkt: new Date().toISOString(), door: IK })
       }).then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         taken = vers; teken(); telBij();
@@ -233,6 +301,13 @@
   function regel(t, o) {
     o = o || {};
     var mij = vanMij(t);
+    /* Alleen zolang de herhaling nog loopt. Is hij gestopt, dan blijft de taak
+       van vandaag staan maar hoort er geen 'elke dag' meer bij - en ook geen
+       stopknop die niets meer doet. */
+    var loopt = !!(t.uitRitme && ritmes[t.uitRitme]);
+    var herhaal = (t.ritme && loopt)
+      ? "<span class='tl-pil tl-ritme'>" + (t.ritme === "dag" ? "elke dag" : "elke week") + "</span>"
+      : "";
     var van = mij ? "" : "<span class='tl-pil tl-van'>van " + esc(t.eigenaar) + "</span>";
     var voor = (t.lijst === "delegeren" && t.wie) ? "<span class='tl-pil tl-voor'>" + esc(t.wie) + "</span>" : "";
     return "<div class='tl-taak" + (o.af ? " tl-af" : "") + "'>" +
@@ -240,11 +315,20 @@
         " data-" + (o.af ? "terug" : "klaar") + "='" + esc(t.id) + "'>") +
       "<div class='tl-mid'>" +
         "<div class='tl-tekst'" + (mij && !o.af ? " data-bewerk='" + esc(t.id) + "' title='Klik om aan te passen'" : "") + ">" +
-          van + voor + esc(t.tekst) + "</div>" +
-        "<div class='tl-meta'>" + esc(o.meta || ("gezet door " + kort(t.door) + " op " + datumNL(t.op))) + "</div>" +
+          van + voor + herhaal + esc(t.tekst) + "</div>" +
+        "<div class='tl-meta'>" + esc(o.meta || (t.dag
+            ? ("voor " + new Date(t.dag).toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long" }))
+            : ("gezet door " + kort(t.door) + " op " + datumNL(t.op)))) + "</div>" +
         (mij ? deelPillen(t) : "") +
         (o.knoppen || "") +
-        "<div class='tl-onder'>" + (mij && !o.af ? weekKeuze(t) + uitnodigVak(t) : "") + "</div>" +
+        "<div class='tl-onder'>" + (mij && !o.af
+            ? (t.dag ? "" : weekKeuze(t)) + uitnodigVak(t) +
+              /* Zonder deze knop komt een terugkerende taak eeuwig terug en is
+                 er geen weg terug. De taak van vandaag blijft staan; alleen de
+                 herhaling stopt. */
+              (loopt ? "<button class='tl-mini' data-stop='" + esc(t.uitRitme) + "' " +
+                 "title='Deze taak niet meer laten terugkomen'>herhaling stoppen</button>" : "")
+            : "") + "</div>" +
       "</div></div>";
   }
   function perWeek(rijen) {
@@ -320,6 +404,20 @@
     box.querySelectorAll("[data-terug2]").forEach(function (b) {
       b.addEventListener("click", function () { terug(b.dataset.terug2, b); });
     });
+    box.querySelectorAll("[data-stop]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        var rid = b.dataset.stop, rt = ritmes[rid];
+        if (!rt) return;
+        if (!confirm("\u201c" + rt.tekst + "\u201d niet meer laten terugkomen?\n\nDe taak van nu blijft gewoon staan; alleen de herhaling stopt.")) return;
+        b.disabled = true;
+        var bewaar = rt;
+        schrijf(null, function (rs) { delete rs[rid]; }).then(function (ok) {
+          if (!ok) { b.disabled = false; return; }
+          if (global.fpLog) global.fpLog("taak-ritme-gestopt", bewaar.tekst.slice(0, 60));
+          teken();
+        });
+      });
+    });
     box.querySelectorAll("[data-week]").forEach(function (s) {
       s.addEventListener("change", function () {
         var id = s.dataset.week, w = s.value;
@@ -381,6 +479,25 @@
     if (!tekst) return melding("Vul eerst in wat er moet gebeuren.");
     var wie = ($("tlWie").value || "").trim();
     if (actief === "delegeren" && !wie) return melding("Vul in voor wie deze taak is.");
+
+    /* Terugkerend? Dan leggen we een sjabloon vast en niet één taak. De taak
+       van vandaag/deze week maakt zorgVoorRitmetaken er meteen bij, en morgen
+       staat hij er vanzelf weer. */
+    var ritme = ($("tlRitme") || {}).value || "";
+    if (ritme) {
+      var rid = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      var nieuwRitme = { id: rid, eigenaar: IKNAAM, tekst: tekst, ritme: ritme,
+                         lijst: actief, wie: actief === "delegeren" ? wie : "",
+                         door: IK, op: new Date().toISOString() };
+      schrijf(null, function (rs) { rs[rid] = nieuwRitme; }).then(function (ok) {
+        if (!ok) return;
+        $("tlTekst").value = ""; $("tlWie").value = ""; melding("");
+        if ($("tlRitme")) $("tlRitme").value = "";
+        if (global.fpLog) global.fpLog("taak-ritme-toegevoegd", ritme + ": " + tekst.slice(0, 60));
+        return zorgVoorRitmetaken();
+      });
+      return;
+    }
     var taak = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       eigenaar: IKNAAM, lijst: actief, tekst: tekst, wie: actief === "delegeren" ? wie : "",
@@ -450,6 +567,8 @@
       ".tl-af .tl-tekst{text-decoration:line-through;color:#6b7280}",
       ".tl-pil{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;margin-right:5px}",
       ".tl-pil.tl-voor{background:#eef7e3;color:#3f6212}.tl-pil.tl-van{background:#e0e7ff;color:#3730a3}",
+      ".tl-pil.tl-ritme{background:#e0f2fe;color:#075985}",
+      ".tl-dag{font-size:10.5px;color:#6b7280}",
       ".tl-deelrij{margin-top:3px}",
       ".tl-deel{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:999px;margin:2px 4px 0 0}",
       ".tl-deel.tl-open{background:#f3f4f6;color:#6b7280}",
@@ -493,6 +612,11 @@
         "<input type='text' id='tlTekst' placeholder='Wat moet er gebeuren?' autocomplete='off'>" +
         "<input type='text' id='tlWie' placeholder='Voor wie? (bijv. de jongens)' autocomplete='off' style='display:none'>" +
         "<select id='tlWeek'></select>" +
+        "<select id='tlRitme'>" +
+          "<option value=''>eenmalig</option>" +
+          "<option value='dag'>elke dag</option>" +
+          "<option value='week'>elke week</option>" +
+        "</select>" +
         "<button id='tlToevoegen' type='button'>Toevoegen</button>" +
         "<div id='tlMelding'></div>" +
       "</div>" +

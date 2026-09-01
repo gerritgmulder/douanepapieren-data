@@ -52,6 +52,17 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-01", groep: "taken", soort: "nieuw",
+      titel: "Taken die elke dag of elke week terugkomen",
+      wat: "Naast de week staat nu een keuze: eenmalig, elke dag of elke week. Kies je elke dag, dan staat die taak elke ochtend vanzelf op je lijst - ook als die van gisteren nooit is afgevinkt. Wekelijks werkt hetzelfde per week. Achter zo'n taak staat een blauw label en een knop 'herhaling stoppen'; die stopt alleen het terugkomen, de taak van vandaag blijft gewoon staan.",
+    },
+    {
+      datum: "2026-09-01", bestand: "voorraad.html", soort: "beter",
+      titel: "Verwachte levering toont het fabrieksordernummer en de ETA",
+      wat: "Bij de spa's die binnen zijn stond meestal alleen 'volgende productie'. Dat kwam doordat Jazzi niet in de fabriekenlijst van de koppeling stond: van de 941 open inkooporders werden er maar 11 meegenomen. Jazzi, Fenlin en Fukiafu staan er nu bij. In productie ging daardoor van 3 naar 48 modellen, en het inkoopordernummer bij de fabriek is nu bij 126 reserveringen bekend in plaats van 3. Onder de verwachte levering staat dat nummer met de ETA erbij, ook als er verder 'volgende productie' staat.",
+    },
+
+    {
       datum: "2026-09-01", bestand: "voorraad.html", soort: "beter",
       titel: "Meerdere spa's in één reservering",
       wat: "Bij 'Reserveren namens partner of particulier' zit nu een knop <b>+ Spa toevoegen</b>. Kies een model, aantal en kleur, klik toevoegen, en doe dat zo vaak als nodig; onderaan zie je wat er in de aanvraag zit en kun je een regel er weer uit halen. Verstuur je hem, dan gaat er één mail met één betaallink voor het hele bedrag, en na betaling komt er één Logic4-order met alle regels erin. Handig op een beurs, waar een nieuwe partner zelden één spa afneemt.",
