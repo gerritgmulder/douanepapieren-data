@@ -1074,11 +1074,29 @@ async function dpCreateLogic4Order(env, opts) {
     // Regel zonder ProductCode laat Logic4 óók met een 500 crashen — dus:
     // mét artikelcode een echte productregel, zonder code een regel-loze
     // order (model/aantal staan in Notes; sales vult de regel aan).
-    OrderRows: opts.productCode
-      ? [{ ProductCode: String(opts.productCode), Description: opts.description, Qty: Number(opts.qty) || 1 }]
-      : [],
+    /* Eén order kan meerdere spa's bevatten. Chantal (video, 1 sep 2026) op
+       de beurs: "soms zegt zo'n partner: doe mij maar vijf spa's" - dan hoort
+       dat één order en één betaalverzoek te zijn, niet vijf losse.
+       opts.rows is de nieuwe weg; de oude losse velden blijven werken. */
+    OrderRows: (opts.rows && opts.rows.length
+      ? opts.rows.filter(r => r.productCode).map(r => ({
+          ProductCode: String(r.productCode), Description: r.description, Qty: Number(r.qty) || 1 }))
+      : (opts.productCode
+          ? [{ ProductCode: String(opts.productCode), Description: opts.description, Qty: Number(opts.qty) || 1 }]
+          : [])),
   };
-  if (!opts.productCode) payload.Notes = "LET OP: regel handmatig toevoegen — " + opts.description + "\n" + (opts.remarks || "");
+  /* Regels zonder artikelcode kan Logic4 niet aan (die geeft een 500), dus die
+     gaan als tekst in de opmerking - sales vult ze met de hand aan. Dat gold
+     al voor één regel; bij meerdere regels moet elke code-loze regel erin,
+     anders verdwijnt er stilzwijgend een spa uit de order. */
+  const zonderCode = (opts.rows && opts.rows.length)
+    ? opts.rows.filter(r => !r.productCode)
+    : (opts.productCode ? [] : [{ description: opts.description, qty: opts.qty }]);
+  if (zonderCode.length) {
+    payload.Notes = "LET OP: regel(s) handmatig toevoegen — " +
+      zonderCode.map(r => (r.qty || 1) + "x " + (r.description || "")).join("; ") +
+      "\n" + (opts.remarks || "");
+  }
   const r = await fetch("https://api.logic4server.nl/v3/Orders/AddUpdateOrder", {
     method: "POST",
     headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
@@ -1132,10 +1150,25 @@ async function dpRegisterPayment(env, orderId, amountEur, mollieId) {
 async function dpAdminReserveFor(request, env, url) {
   let b = {};
   try { b = await request.json(); } catch {}
-  const model = String(b.model || "").trim().slice(0, 80);
-  const qty = Math.max(1, Math.min(50, parseInt(b.qty, 10) || 1));
+  /* Eén aanvraag kan meerdere spa's bevatten (Chantal, 1 sep 2026: op de beurs
+     bestelt een nieuwe partner er zelden één). Dan is er één betaallink, één
+     mail en straks één Logic4-order met meerdere regels. Het oude formaat met
+     losse model/qty blijft werken. */
+  const regelsIn = Array.isArray(b.regels) && b.regels.length
+    ? b.regels
+    : [{ model: b.model, qty: b.qty, variant: b.variant, variantName: b.variantName }];
+  const regels = regelsIn
+    .map(r => ({
+      model: String(r.model || "").trim().slice(0, 80),
+      qty: Math.max(1, Math.min(50, parseInt(r.qty, 10) || 1)),
+      variant: r.variant || null, variantName: r.variantName || null,
+    }))
+    .filter(r => r.model);
+  if (!regels.length) return reply(400, { ok: false, error: "model-required" });
+  if (regels.length > 20) return reply(400, { ok: false, error: "max-20-regels" });
+  const model = regels[0].model;
+  const qty = regels.reduce((n, r) => n + r.qty, 0);
   const custType = b.custType === "particulier" ? "particulier" : "partner";
-  if (!model) return reply(400, { ok: false, error: "model-required" });
   if (!env.MOLLIE_API_KEY) return reply(503, { ok: false, error: "mollie-not-configured" });
 
   // E-mail bepalen. Particulier zonder e-mail → uit de Logic4-order lezen.
@@ -1163,29 +1196,51 @@ async function dpAdminReserveFor(request, env, url) {
   // Prijs + valuta: particulier = altijd EUR (NL-showroom); partner = regio.
   // BTW uit Logic4 per debiteur (particulier: uit de order; partner: account).
   const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
+  // Elke regel moet een prijs hebben; anders klopt de aanbetaling niet en dat
+  // merk je pas als de partner al betaald heeft.
+  for (const r of regels) {
+    const pe = (priceData.prices || {})[r.model];
+    if (!(pe && Number(pe.usd) > 0)) return reply(400, { ok: false, error: "geen prijs voor " + r.model });
+  }
   const pEntry = (priceData.prices || {})[model];
-  if (!(pEntry && Number(pEntry.usd) > 0)) return reply(400, { ok: false, error: "geen prijs voor " + model });
   const accounts = await dpGetAccounts(env);
   const dealer = dpFindDealer(accounts, email);
   const isUS = custType === "partner" && String((dealer && dealer.region) || "").toUpperCase() === "US";
   const rate = await dpRate(env);
   const vatPercent = isUS ? 0 : await dpDebtorVatPercent(env, debtorId || (dealer && (dealer.debtorIds || [])[0]));
-  const calc = dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent });
-  const { currency, deposit } = calc;
+  // Aanbetaling = de som over alle regels. Per regel rekenen en dan optellen,
+  // niet één keer met het totale aantal: de modellen verschillen in prijs.
+  let deposit = 0, currency = null;
+  const regelsUit = [];
+  for (const r of regels) {
+    const pe = (priceData.prices || {})[r.model];
+    const c = dpDepositCalc(pe, { isUS, qty: r.qty, rate, vatPercent });
+    deposit += c.deposit;
+    currency = currency || c.currency;
+    regelsUit.push({ model: r.model, qty: r.qty, variant: r.variant, variantName: r.variantName,
+      productCode: r.variant || (pe.code || null), deposit: c.deposit });
+  }
+  deposit = Math.round(deposit * 100) / 100;
+  const calc = dpDepositCalc(pEntry, { isUS, qty: regels[0].qty, rate, vatPercent });
 
   const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
   if (!Array.isArray(data.requests)) data.requests = [];
   const entry = {
     id: crypto.randomUUID(), ts: new Date().toISOString(),
     email, targetEmail: email, company: (dealer && dealer.company) || "", model, qty,
-    variant: b.variant || null, variantName: b.variantName || null,
-    productCode: b.variant || (pEntry.code || null),
+    variant: regels[0].variant || null, variantName: regels[0].variantName || null,
+    productCode: regelsUit[0].productCode,
+    // De volledige aanvraag. model/qty hierboven blijven staan voor alles wat
+    // nog van één regel uitgaat (schermen, lijstjes), maar 'regels' is de
+    // waarheid zodra er meer dan één spa in zit.
+    regels: regelsUit,
     note: String(b.note || "").slice(0, 1500), status: "new",
     adminInitiated: true, custType, debtorId, existingOrderId,
     currency, deposit, vatPercent: calc.vatPercent, paymentStatus: "open",
   };
+  const samenvatting = regelsUit.map(r => r.qty + "x " + r.model).join(", ");
   const pay = await dpCreateMolliePayment(env, deposit,
-    "30% deposit — " + qty + "x " + model + (entry.company ? " (" + entry.company + ")" : ""),
+    "30% deposit — " + samenvatting + (entry.company ? " (" + entry.company + ")" : ""),
     url.origin + "/dealers?paid=1", url.origin + "/dealers/webhook",
     { requestId: entry.id }, currency);
   if (!pay.ok) return reply(502, { ok: false, error: pay.error || "mollie-failed" });
@@ -1197,16 +1252,18 @@ async function dpAdminReserveFor(request, env, url) {
   const esc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const sym = currency === "USD" ? "$" : "€";
   const sent = await dpSendEmail(env, email,
-    "Aanbetalingsverzoek Fonteyn — " + qty + "x " + model,
+    "Aanbetalingsverzoek Fonteyn — " + samenvatting,
     '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">' +
     '<h2 style="color:#c8102e;">Passion Spas</h2>' +
     '<p>Beste ' + (entry.company || "klant") + ',</p>' +
-    '<p>Voor uw reservering van <b>' + qty + '&times; ' + esc(model) + '</b>' + (entry.variantName ? ' (' + esc(entry.variantName) + ')' : '') +
-    ' staat een aanbetaling van <b>' + sym + ' ' + deposit.toFixed(2) + '</b> (30%) klaar.</p>' +
+    '<p>Voor uw reservering staat een aanbetaling van <b>' + sym + ' ' + deposit.toFixed(2) + '</b> (30%) klaar:</p>' +
+    '<ul style="line-height:1.7">' + regelsUit.map(r =>
+      '<li><b>' + r.qty + '&times; ' + esc(r.model) + '</b>' + (r.variantName ? ' (' + esc(r.variantName) + ')' : '') + '</li>').join("") +
+    '</ul>' +
     '<p style="margin:26px 0;"><a href="' + pay.checkoutUrl + '" style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:10px;display:inline-block;">Aanbetaling voldoen</a></p>' +
     '<p style="color:#888;font-size:12px;">Na ontvangst bevestigen wij uw reservering. Vragen? Beantwoord deze e-mail.</p></div>',
     (accounts.contactEmail || undefined));
-  return reply(200, { ok: true, deposit, currency, emailedTo: email, mailSent: sent.ok, checkoutUrl: pay.checkoutUrl });
+  return reply(200, { ok: true, deposit, currency, emailedTo: email, mailSent: sent.ok, checkoutUrl: pay.checkoutUrl, regels: regelsUit.length });
 }
 
 // POST /dealers/admin/testorder { debtorId, model, qty, productCode? } —
@@ -1274,12 +1331,22 @@ async function dpHandleMollieWebhook(request, env) {
             } else {
               const sym = item.currency === "USD" ? "$" : "€";
               const bedragTxt = item.payFull ? "volledig betaald" : "30% aanbetaald";
+              // Meerdere spa's in één aanvraag worden ook één order met
+              // meerdere regels. Bij een aanvraag van vóór deze wijziging is
+              // item.regels er niet en blijft het bij die ene regel.
+              const regels = (Array.isArray(item.regels) && item.regels.length)
+                ? item.regels.map(r => ({
+                    productCode: r.productCode || null, qty: r.qty || 1,
+                    description: (r.qty || 1) + "x " + r.model + (r.variantName ? " (" + r.variantName + ")" : "") +
+                                 " — partnerportaal (" + bedragTxt + " via Mollie)" }))
+                : [{ productCode: item.productCode || null, qty: item.qty || 1,
+                     description: (item.qty || 1) + "x " + item.model + " — partnerportaal (" + bedragTxt + " via Mollie)" }];
               const res = await dpCreateLogic4Order(env, {
-                debtorId, qty: item.qty, productCode: item.productCode || null,
+                debtorId, rows: regels,
                 statusId: item.payFull ? 30 : 25,        // 30 = volledig betaald, vrijgeven leveren
                 reference: "DP-" + String(item.id).slice(0, 8),
                 remarks: "Partnerportaal-reservering — " + bedragTxt + ": " + sym + " " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie: " + item.note : ""),
-                description: item.qty + "x " + item.model + " — partnerportaal (" + bedragTxt + " via Mollie)",
+                description: regels.map(r => r.description).join("; "),
               });
               if (res.ok) { item.logic4OrderId = res.orderId; delete item.logic4Error; }
               else item.logic4Error = res.error;

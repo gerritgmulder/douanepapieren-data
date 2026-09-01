@@ -490,8 +490,13 @@
         <input id="rfQty" type="number" min="1" max="50" value="1" style="width:70px;padding:8px" title="aantal">
         <input id="rfEmail" placeholder="e-mailadres partner" style="min-width:200px;padding:8px">
         <input id="rfOrder" placeholder="Logic4-ordernr" style="min-width:140px;padding:8px;display:none">
+        <button class="btn" id="rfAdd" type="button" title="Nog een spa aan dezelfde aanvraag toevoegen">+ Spa toevoegen</button>
         <button class="primary" id="rfSend" type="button">Aanbetalingsverzoek sturen</button>
       </div>
+      <!-- Meerdere spa's in één aanvraag. Chantal (video, 1 sep 2026) op de
+           beurs: "soms zegt zo'n partner: doe mij maar vijf spa's" - dan hoort
+           dat één mail met één betaallink te zijn, niet vijf losse. -->
+      <div id="rfMandje" style="margin-top:10px"></div>
       <div id="rfStatus" class="status-msg hidden" style="margin-top:12px"></div>
     </div>
     <div class="card">
@@ -3676,7 +3681,46 @@ async function initReserveFor(){
     document.getElementById("rfOrder").style.display=part?"":"none";
   });
   document.getElementById("rfSend").addEventListener("click",sendReserveFor);
+  document.getElementById("rfAdd").addEventListener("click",rfVoegToe);
 }
+/* Het mandje: wat er in deze ene aanvraag zit. Leeg mandje = alleen de regel
+   die nu in de keuzevelden staat, precies zoals het altijd werkte. */
+let rfMandje=[];
+function rfTekenMandje(){
+  const box=document.getElementById("rfMandje"); if(!box) return;
+  if(!rfMandje.length){ box.innerHTML=""; return; }
+  const totaal=rfMandje.reduce((n,r)=>n+Number(r.qty||1),0);
+  box.innerHTML="<div style='background:#f6f7f5;border:1px solid var(--border);border-radius:9px;padding:9px 12px'>"+
+    "<div style='font-size:12px;color:var(--muted);margin-bottom:5px'>In deze aanvraag ("+totaal+" spa's) — één mail, één betaallink:</div>"+
+    rfMandje.map((r,i)=>"<div style='display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px'>"+
+      "<b>"+r.qty+"×</b> "+esc(r.model)+(r.variantName?" <span style='color:var(--muted)'>("+esc(r.variantName)+")</span>":"")+
+      "<button class='btn' data-rfdel='"+i+"' type='button' style='margin-left:auto;padding:2px 9px;font-size:11px'>weg</button></div>").join("")+
+    "</div>";
+  box.querySelectorAll("[data-rfdel]").forEach(b=>b.addEventListener("click",()=>{
+    rfMandje.splice(Number(b.dataset.rfdel),1); rfTekenMandje();
+  }));
+}
+function rfHuidigeRegel(){
+  const model=document.getElementById("rfModel").value;
+  if(!model) return null;
+  const sel=document.getElementById("rfVariant");
+  const variant=sel.value;
+  return { model, qty:Math.max(1,parseInt(document.getElementById("rfQty").value,10)||1),
+           variant: variant||null,
+           variantName: variant?sel.options[sel.selectedIndex].text:null };
+}
+function rfVoegToe(){
+  const st=document.getElementById("rfStatus");
+  const r=rfHuidigeRegel();
+  if(!r){ st.className="status-msg bad"; st.textContent="Kies eerst een model."; st.classList.remove("hidden"); return; }
+  rfMandje.push(r); rfTekenMandje();
+  st.classList.add("hidden");
+  document.getElementById("rfModel").value="";
+  document.getElementById("rfVariant").innerHTML="<option value=''>— kleur (optioneel) —</option>";
+  document.getElementById("rfQty").value="1";
+  document.getElementById("rfModel").focus();
+}
+
 async function sendReserveFor(){
   const st=document.getElementById("rfStatus");
   const show=(c,m)=>{ st.className="status-msg "+c; st.textContent=m; st.classList.remove("hidden"); };
@@ -3688,20 +3732,28 @@ async function sendReserveFor(){
   const qty=document.getElementById("rfQty").value;
   const email=document.getElementById("rfEmail").value.trim();
   const order=document.getElementById("rfOrder").value.trim();
-  if(!model){ show("bad","Kies een model."); return; }
+  // Wat er in het mandje zit, plus de regel die nu nog in de velden staat.
+  const regels=rfMandje.slice();
+  const nu=rfHuidigeRegel(); if(nu) regels.push(nu);
+  if(!regels.length){ show("bad","Kies een model."); return; }
   if(type==="partner"&&!email.includes("@")){ show("bad","Vul een geldig e-mailadres in."); return; }
   if(type==="particulier"&&!order){ show("bad","Vul het Logic4-ordernummer in."); return; }
   const btn=document.getElementById("rfSend"); btn.disabled=true; show("","Aanbetalingsverzoek aanmaken…");
   try{
-    const body={model,qty,variant,variantName,custType:type};
+    const body={regels,custType:type};
     if(type==="partner") body.email=email; else body.existingOrderId=order;
     const r=await fetch(RESERVE_FOR_URL,{method:"POST",headers:{"Content-Type":"application/json","X-DP-Admin":dpAdminKey()},body:JSON.stringify(body)});
     const j=await r.json();
     if(r.ok&&j.ok){
       const sym=j.currency==="USD"?"$":"€";
-      show("ok","Aanbetalingsverzoek ("+sym+" "+Number(j.deposit).toFixed(2)+") gemaild naar "+j.emailedTo+(j.mailSent?"":" — LET OP: mail niet bevestigd").replace(/\.$/,"")+".");
-      try{ if(window.fpLog) window.fpLog("reservering-aangemaakt",qty+"x "+model+" ("+type+")"); }catch(e){}
+      const samen=regels.map(r=>r.qty+"x "+r.model).join(", ");
+      show("ok","Aanbetalingsverzoek voor "+samen+" ("+sym+" "+Number(j.deposit).toFixed(2)+") gemaild naar "+j.emailedTo+(j.mailSent?"":" — LET OP: mail niet bevestigd")+".");
+      try{ if(window.fpLog) window.fpLog("reservering-aangemaakt",samen+" ("+type+")"); }catch(e){}
       document.getElementById("rfEmail").value=""; document.getElementById("rfOrder").value="";
+      rfMandje=[]; rfTekenMandje();
+      document.getElementById("rfModel").value="";
+      document.getElementById("rfVariant").innerHTML="<option value=''>— kleur (optioneel) —</option>";
+      document.getElementById("rfQty").value="1";
     } else show("bad","Mislukt: "+(j.error||("HTTP "+r.status)));
   }catch(e){ show("bad","Fout: "+e.message); }
   finally{ btn.disabled=false; }

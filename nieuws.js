@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-01", bestand: "voorraad.html", soort: "beter",
+      titel: "Meerdere spa's in één reservering",
+      wat: "Bij 'Reserveren namens partner of particulier' zit nu een knop <b>+ Spa toevoegen</b>. Kies een model, aantal en kleur, klik toevoegen, en doe dat zo vaak als nodig; onderaan zie je wat er in de aanvraag zit en kun je een regel er weer uit halen. Verstuur je hem, dan gaat er één mail met één betaallink voor het hele bedrag, en na betaling komt er één Logic4-order met alle regels erin. Handig op een beurs, waar een nieuwe partner zelden één spa afneemt.",
+    },
+
+    {
       datum: "2026-09-01", bestand: "amerika.html", soort: "beter",
       titel: "Accorderen naar Logic4 werkt nu ook bij honderd facturen",
       wat: "Selecteerde je er veel tegelijk, dan werden er maar een stuk of dertien aangemaakt en verscheen er geen Logic4-ordernummer meer achter de regel. Eén opdracht kon niet honderd keer QuickBooks én Logic4 bevragen en viel halverwege om. Het scherm knipt de selectie nu zelf in blokjes en toont de voortgang. Belangrijker: elke aangemaakte order wordt meteen vastgelegd. Daardoor kan een afgebroken poging geen orders meer opleveren die het dashboard niet kent - en die bij een tweede klik dubbel in Logic4 zouden belanden. De dertien orders van vanochtend zijn alsnog gekoppeld.",
