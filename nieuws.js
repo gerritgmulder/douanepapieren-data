@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-01", bestand: "amerika.html", soort: "nieuw",
+      titel: "Voorraad Houston komt nu live uit Logic4",
+      wat: "Bovenaan het tabblad staat wat er volgens Logic4 op magazijn Warehouse Texas USA ligt. Boekt Osman een order af, dan zie je dat hier terug - handmatig bijhouden hoeft dan niet meer. Er is ook een lijst met onderdelen, covers en trapjes, waar niemand een telling van had. Zolang de getelde beginvoorraad nog niet in Logic4 is geboekt, staat de telling van 20-07 eronder met een verschillijst erbij; die is de werklijst om het recht te zetten en verdwijnt vanzelf zodra alles klopt.",
+    },
+
+    {
       datum: "2026-09-01", groep: "taken", soort: "nieuw",
       titel: "Taken die elke dag of elke week terugkomen",
       wat: "Naast de week staat nu een keuze: eenmalig, elke dag of elke week. Kies je elke dag, dan staat die taak elke ochtend vanzelf op je lijst - ook als die van gisteren nooit is afgevinkt. Wekelijks werkt hetzelfde per week. Achter zo'n taak staat een blauw label en een knop 'herhaling stoppen'; die stopt alleen het terugkomen, de taak van vandaag blijft gewoon staan.",

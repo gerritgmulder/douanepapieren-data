@@ -107,6 +107,7 @@ const ALLOWED_BUCKETS = new Set([
   // en vervalt deze bucket. Bewust apart van 'voorraad-hallen': dat is de
   // Nederlandse hal-voorraad en die twee moeten niet door elkaar lopen.
   "amerika-voorraad",
+  "amerika-voorraad-live", // Houston rechtstreeks uit Logic4 (magazijn 50), elk uur ververst
   "taken",            // Persoonlijk takenblok: e-mailadres → eigen taken (tekst/datum/klaar)
   "planning",         // Weekplanning Spa planning: afspraken voor levering en service (planning.html)
   "taken-ritme",      // Terugkerende momenten (voorraadcontrole, kwartaalcontrole) + per persoon wanneer afgevinkt
@@ -4585,6 +4586,86 @@ async function qbHandleHerstel(request, env) {
     hersteld: bijgezet.length, regels: bijgezet });
 }
 
+/* GET /amerika/voorraad-live — de voorraad in Houston, rechtstreeks uit Logic4.
+
+   Tot 1 sep 2026 kwam dit uit een telling die Chantal per mail stuurde. Die
+   telling wordt nu als beginvoorraad in Logic4 gezet; daarna boekt Osman de
+   orders af en klopt de voorraad vanzelf. Chantal (1 sep 2026): "op het
+   moment dat Osman de order afboekt in Logic4 wordt de voorraad bijgewerkt.
+   Het is mooi als we real time voorraad beschikbaar hebben."
+
+   Magazijn 50 (Warehouse Texas USA) is het enige Amerikaanse magazijn.
+
+   Let op: dit levert ALLES wat er op dat magazijn staat, dus ook onderdelen,
+   covers en trapjes - waar Chantal nooit een lijst van had. Wat in de
+   spa-catalogus staat wordt per model gegroepeerd; de rest komt apart terug
+   zodat het niet stilzwijgend in een spa-totaal verdwijnt. */
+async function amerikaVoorraadLive(env) {
+  const WH_HOUSTON = 50;
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const codeToModel = {};
+  for (const [m, vs] of Object.entries(catalog.models || {})) for (const v of vs) codeToModel[v.code] = m;
+  const token = await l4Token(env);
+  let rows = [];
+  for (let p = 0; p < 30; p++) {
+    const r = await fetch("https://api.logic4server.nl/v3/Stock/GetStockForWarehouses", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ WareHouseId: WH_HOUSTON, TakeRecords: 500, SkipRecords: p * 500 }),
+    });
+    if (!r.ok) break;
+    const a = await r.json();
+    if (!Array.isArray(a) || !a.length) break;
+    rows = rows.concat(a); if (a.length < 500) break;
+  }
+  const spas = {}, overig = [];
+  let stuksSpa = 0, stuksOverig = 0;
+  for (const r of rows) {
+    const qty = Number(r.Qty) || 0;
+    if (qty === 0) continue;
+    const code = String(r.ProductCode || "");
+    const model = codeToModel[code];
+    if (model) {
+      const g = spas[model] = spas[model] || { model, aantal: 0, vrij: 0, codes: [] };
+      g.aantal += qty; g.vrij += Math.max(0, Number(r.FreeStock) || 0);
+      g.codes.push({ code, aantal: qty });
+      stuksSpa += qty;
+    } else {
+      overig.push({ code, id: r.ProductId, aantal: qty });
+      stuksOverig += qty;
+    }
+  }
+  /* Namen erbij voor alles wat niet in de spa-catalogus staat. Dat is precies
+     de hoek waar Chantal geen lijst van had - covers, trapjes, chillers - dus
+     een rijtje kale artikelnummers helpt niemand. Eén aanroep voor alles. */
+  if (overig.length) {
+    try {
+      const pr = await fetch("https://api.logic4server.nl/v3/Products/GetProducts", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        /* ProductIds, niet ProductCodes: dat laatste bestaat niet als filter en
+           Logic4 negeert een onbekend filter stilzwijgend - je krijgt dan
+           gewoon de eerste willekeurige artikelen terug en geen enkele naam
+           past. */
+        body: JSON.stringify({ ProductIds: overig.map(o => o.id).filter(Boolean), TakeRecords: 500 }),
+      });
+      if (pr.ok) {
+        const ps = await pr.json();
+        const naam = {}, kost = {};
+        for (const x of (Array.isArray(ps) ? ps : [])) { naam[String(x.ProductCode)] = x.ProductName1 || ""; kost[String(x.ProductCode)] = Number(x.CostPrice) || 0; }
+        for (const o of overig) { o.naam = naam[o.code] || null; o.kost = kost[o.code] || null; }
+      }
+    } catch (e) { /* zonder namen is de lijst nog steeds bruikbaar */ }
+  }
+  const uit = {
+    magazijn: WH_HOUSTON, magazijnNaam: "Warehouse Texas USA",
+    opgehaald: new Date().toISOString(),
+    modellen: Object.values(spas).sort((a, b) => a.model.localeCompare(b.model)),
+    overig: overig.sort((a, b) => b.aantal - a.aantal),
+    stuksSpa, stuksOverig, regels: rows.length,
+  };
+  await env.FONTEYN_DATA.put("amerika-voorraad-live", JSON.stringify(uit));
+  return uit;
+}
+
 // POST /amerika/qb/audrey { docNr, ontvangen } — Chantal vinkt zelf aan dat het
 // geld van Audrey binnen is. Puur een eigen administratie-vlag (staat los van
 // de QuickBooks-betaalstatus van de dealer), opgeslagen in bucket 'qb-audrey'.
@@ -7622,6 +7703,17 @@ export default {
     if (url.pathname === "/amerika/koers" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       return reply(200, { ok: true, koers: await dpRate(env), bron: "ECB-dagkoers EUR/USD min 0,03 (automatisch)" });
+    }
+    if (url.pathname === "/amerika/voorraad-live" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+      // Uit de cache als hij vers genoeg is; anders opnieuw bij Logic4 halen.
+      const vers = url.searchParams.get("vers") === "1";
+      const cache = await env.FONTEYN_DATA.get("amerika-voorraad-live", { type: "json" });
+      if (!vers && cache && cache.opgehaald && (Date.now() - new Date(cache.opgehaald).getTime()) < 3600000) {
+        return reply(200, { ok: true, ...cache, uitCache: true });
+      }
+      try { return reply(200, { ok: true, ...(await amerikaVoorraadLive(env)) }); }
+      catch (e) { return reply(200, { ok: false, error: String(e.message || e), ...(cache || {}) }); }
     }
     if (url.pathname === "/amerika/qb/approve" && request.method === "POST") return qbHandleApprove(request, env);
     if (url.pathname === "/amerika/qb/herstel-koppeling" && request.method === "POST") return qbHandleHerstel(request, env);

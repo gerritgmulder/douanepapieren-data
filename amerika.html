@@ -119,6 +119,40 @@
        Houston in Logic4 bestaat hoort dit daaruit te komen; tot die tijd is
        dit een momentopname en dat moet er ook bij staan. -->
   <div id="tab-voorraad" class="hidden">
+    <!-- Live uit Logic4. Tot 1 sep 2026 kwam deze tegel uit een telling die
+         Chantal per mail stuurde; die telling wordt nu als beginvoorraad in
+         Logic4 gezet. Zodra Osman een order afboekt klopt de stand vanzelf.
+         Zolang de beginvoorraad er nog niet in staat wijken de twee af, en
+         dat hoort zichtbaar te zijn in plaats van weggepoetst. -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <h3 style="margin:0">Voorraad Houston — live uit Logic4</h3>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span id="vlOpgehaald" style="font-size:12px;color:var(--muted)"></span>
+          <button class="btn" id="vlVervers" type="button">Opnieuw ophalen</button>
+        </div>
+      </div>
+      <p class="lead" style="font-size:12.5px;margin:8px 0 12px">Alles wat in Logic4 op magazijn <b>Warehouse Texas USA</b> staat. Boekt Osman een order af, dan zie je dat hier terug.</p>
+      <div id="vlKpis" class="kpi-row"></div>
+      <div id="vlStatus" class="status-msg hidden" style="margin-bottom:10px"></div>
+      <div class="actions" style="gap:10px;align-items:center;flex-wrap:wrap;margin-top:0">
+        <input id="vlZoek" type="text" placeholder="zoek op model of artikel…" style="min-width:280px;padding:8px">
+      </div>
+      <div id="vlLijst" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card" id="vlOverigKaart">
+      <h3>Onderdelen, covers en trapjes in Houston</h3>
+      <p class="lead" style="font-size:12.5px;margin-bottom:10px">Artikelen op dit magazijn die geen spa, sauna of ijsbad zijn. Hier had niemand een telling van; dit komt rechtstreeks uit Logic4.</p>
+      <div id="vlOverig"></div>
+    </div>
+
+    <div class="card" id="vlVerschilKaart">
+      <h3>Verschil met de telling van 20-07-2026</h3>
+      <p class="lead" style="font-size:12.5px;margin-bottom:10px">Zolang de getelde beginvoorraad nog niet in Logic4 staat, lopen deze twee uiteen. Dit is de werklijst om dat recht te zetten; is een regel 0, dan klopt het.</p>
+      <div id="vlVerschil"></div>
+    </div>
+
     <div id="vhKpis" class="kpi-row"></div>
     <div class="card">
       <div id="vhUitleg" class="status-msg" style="margin-bottom:12px"></div>
@@ -275,6 +309,11 @@ document.getElementById("logoutBtn").addEventListener("click",()=>{
     if(id==="audWireZoek") audRender();
   });
 });
+const vlV=document.getElementById("vlVervers");
+if(vlV) vlV.addEventListener("click",()=>vlLaad(true));
+const vlZ=document.getElementById("vlZoek");
+if(vlZ) vlZ.addEventListener("input",vlTeken);
+
 const qbVervers=document.getElementById("qbVerversBtn");
 if(qbVervers) qbVervers.addEventListener("click",()=>qbInit(true));
 
@@ -323,7 +362,91 @@ async function vhHaalKoers(){
   }catch(e){}
   if(!vhKoers) vhKoers={koers:1.11,bron:"terugval; het partnerportaal gaf geen koers"};
 }
+/* ─── Voorraad Houston, live uit Logic4 ──────────────────────────────────
+   Chantal (1 sep 2026): "als jij mijn lijst in Logic4 zet, kunnen we vanaf nu
+   gaan afboeken. Op het moment dat Osman de order afboekt wordt de voorraad
+   bijgewerkt. Het is mooi als we real time voorraad beschikbaar hebben."
+
+   De telling blijft eronder staan zolang de beginvoorraad nog niet in Logic4
+   is geboekt: anders zou deze tegel met stelligheid getallen tonen waarvan we
+   wéten dat ze nog niet kloppen. Het verschilblok is de werklijst om dat
+   recht te zetten en verdwijnt vanzelf als alles op 0 staat. */
+let vlData=null;
+async function vlLaad(vers){
+  const st=document.getElementById("vlStatus");
+  st.className="status-msg"; st.textContent="Voorraad ophalen uit Logic4…"; st.classList.remove("hidden");
+  try{
+    const r=await fetch(WORKER+"/amerika/voorraad-live"+(vers?"?vers=1":""),
+      {headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}});
+    const j=await r.json();
+    if(!j.ok&&!j.modellen) throw new Error(j.error||("HTTP "+r.status));
+    vlData=j; st.classList.add("hidden");
+    if(!j.ok) { st.className="status-msg warn"; st.textContent="Logic4 gaf een fout ("+esc(j.error||"")+"); je ziet de laatst opgehaalde stand."; st.classList.remove("hidden"); }
+    vlTeken();
+  }catch(e){ st.className="status-msg bad"; st.textContent="Ophalen faalde: "+esc(e.message); st.classList.remove("hidden"); }
+}
+function vlTeken(){
+  if(!vlData) return;
+  const q=((document.getElementById("vlZoek")||{}).value||"").trim().toLowerCase();
+  const op=document.getElementById("vlOpgehaald");
+  if(op&&vlData.opgehaald) op.textContent="bijgewerkt "+new Date(vlData.opgehaald).toLocaleString("nl-NL");
+  document.getElementById("vlKpis").innerHTML=
+    kpi(vlData.stuksSpa||0,"Spa's, sauna's en ijsbaden")+
+    kpi(vlData.stuksOverig||0,"Onderdelen en toebehoren")+
+    kpi((vlData.modellen||[]).length,"Modellen op voorraad");
+
+  const mod=(vlData.modellen||[]).filter(m=>!q||m.model.toLowerCase().includes(q));
+  document.getElementById("vlLijst").innerHTML = !mod.length
+    ? "<p class='lead'>Niets gevonden"+(q?" voor “"+esc(q)+"”":"")+".</p>"
+    : "<div class='tablewrap'><table class='grid'><thead><tr><th>Model</th>"+
+      "<th style='text-align:right'>Aantal</th><th style='text-align:right'>Vrij</th>"+
+      "<th style='text-align:right'>Al verkocht</th><th>Artikelcodes</th></tr></thead><tbody>"+
+      mod.sort((a,b)=>b.aantal-a.aantal).map(m=>{
+        const verkocht=Math.max(0,(m.aantal||0)-(m.vrij||0));
+        return "<tr><td><b>"+esc(m.model)+"</b></td>"+
+          "<td style='text-align:right'>"+m.aantal+"</td>"+
+          "<td style='text-align:right;color:#15803d'>"+m.vrij+"</td>"+
+          "<td style='text-align:right;color:"+(verkocht?"#92400e":"var(--muted)")+"'>"+verkocht+"</td>"+
+          "<td style='font-size:11px;color:var(--muted)'>"+
+            (m.codes||[]).map(c=>esc(c.code)+" ("+c.aantal+")").join(", ")+"</td></tr>";
+      }).join("")+"</tbody></table></div>";
+
+  const ov=(vlData.overig||[]).filter(o=>!q||String(o.naam||"").toLowerCase().includes(q)||String(o.code).includes(q));
+  document.getElementById("vlOverig").innerHTML = !ov.length
+    ? "<p class='lead'>Niets gevonden.</p>"
+    : "<div class='tablewrap'><table class='grid'><thead><tr><th>Artikel</th><th>Code</th>"+
+      "<th style='text-align:right'>Aantal</th></tr></thead><tbody>"+
+      ov.map(o=>"<tr><td>"+esc(o.naam||"(naam onbekend)")+"</td>"+
+        "<td style='font-size:11px;color:var(--muted)'>"+esc(o.code)+"</td>"+
+        "<td style='text-align:right'>"+o.aantal+"</td></tr>").join("")+"</tbody></table></div>";
+
+  // Verschil met de telling
+  const box=document.getElementById("vlVerschil");
+  const d=vhData;
+  if(!d||!d.regels){ box.innerHTML="<p class='lead'>De telling is nog niet geladen.</p>"; return; }
+  const tel={};
+  for(const r of d.regels) if(r.aantal>0) tel[r.model]=(tel[r.model]||0)+r.aantal;
+  const live={}; for(const m of (vlData.modellen||[])) live[m.model]=m.aantal;
+  const namen=[...new Set([...Object.keys(tel),...Object.keys(live)])].sort();
+  const rijen=namen.map(n=>({n,tel:tel[n]||0,live:live[n]||0})).filter(r=>r.tel!==r.live);
+  if(!rijen.length){ box.innerHTML="<div class='status-msg ok'>Logic4 en de telling komen overeen — de beginvoorraad staat erin.</div>"; return; }
+  const tekort=rijen.filter(r=>r.live<r.tel).reduce((n,r)=>n+(r.tel-r.live),0);
+  const teveel=rijen.filter(r=>r.live>r.tel).reduce((n,r)=>n+(r.live-r.tel),0);
+  box.innerHTML="<div class='status-msg warn' style='margin-bottom:10px'>"+rijen.length+" modellen wijken af. "+
+      "In Logic4 staan er <b>"+tekort+"</b> te weinig en <b>"+teveel+"</b> te veel ten opzichte van de telling. "+
+      "Let op: een deel hiervan is een naamsverschil (bijvoorbeeld ‘Excite’ tegenover ‘Excite Mighty Wave’) en geen echt voorraadverschil.</div>"+
+    "<div class='tablewrap' style='max-height:340px;overflow:auto'><table class='grid'><thead><tr><th>Model</th>"+
+      "<th style='text-align:right'>Telling 20-07</th><th style='text-align:right'>Logic4 nu</th>"+
+      "<th style='text-align:right'>Verschil</th></tr></thead><tbody>"+
+    rijen.sort((a,b)=>Math.abs(b.live-b.tel)-Math.abs(a.live-a.tel)).map(r=>
+      "<tr><td>"+esc(r.n)+"</td><td style='text-align:right'>"+r.tel+"</td>"+
+      "<td style='text-align:right'>"+r.live+"</td>"+
+      "<td style='text-align:right;font-weight:600;color:"+(r.live<r.tel?"#b91c1c":"#15803d")+"'>"+
+        (r.live-r.tel>0?"+":"")+(r.live-r.tel)+"</td></tr>").join("")+"</tbody></table></div>";
+}
+
 async function vhInit(){
+  if(!vlData) vlLaad(false);
   if(vhData) return vhTeken();
   const box=document.getElementById("vhLijst");
   box.innerHTML="<p class='lead'>Voorraad laden…</p>";
@@ -333,6 +456,7 @@ async function vhInit(){
     vhData=await r.json();
     await vhHaalKoers();
     vhTeken();
+    vlTeken();   // het verschilblok heeft beide bronnen nodig
   }catch(e){ box.innerHTML="<div class='status-msg bad'>Voorraad laden faalde: "+esc(e.message)+"</div>"; }
 }
 /* Twee bronnen voor de inkoopprijs, in deze volgorde:
