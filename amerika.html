@@ -781,25 +781,44 @@ function renderQbInvoices(){
   const selAll=document.getElementById("qbSelAll"); if(selAll) selAll.addEventListener("click",()=>document.querySelectorAll(".qbChk").forEach(c=>c.checked=true));
   const appr=document.getElementById("qbApprove"); if(appr) appr.addEventListener("click",qbApprove);
 }
+/* Accorderen in blokjes. Chantal (1 sep 2026) selecteerde er 97 en kreeg er
+   13; de rest sneuvelde omdat één verzoek niet honderd keer QuickBooks én
+   Logic4 kan bevragen. Het scherm knipt de selectie nu zelf in stukjes en
+   laat na elk stukje zien hoever hij is, zodat je ook bij honderd facturen
+   ziet dat er iets gebeurt - en dat je bij een storing weet waar hij bleef. */
+const QB_BLOK = 10;
 async function qbApprove(){
   const nrs=[...document.querySelectorAll(".qbChk:checked")].map(c=>c.dataset.nr);
   const st=document.getElementById("qbApproveStatus");
   if(!nrs.length){ st.classList.remove("hidden"); st.className="status-msg warn"; st.textContent="Selecteer eerst een of meer facturen."; return; }
-  if(!confirm(nrs.length+" factuur/facturen accorderen? Er worden Logic4-orders aangemaakt onder Passion Spa South (magazijn Warehouse Texas).")) return;
-  st.classList.remove("hidden"); st.className="status-msg"; st.textContent="Logic4-orders aanmaken…";
+  if(!confirm(nrs.length+" factuur/facturen accorderen? Er worden Logic4-orders aangemaakt onder Passion Spa South (magazijn Warehouse Texas)."+
+    (nrs.length>QB_BLOK?"\n\nDat gaat in blokjes van "+QB_BLOK+"; laat dit scherm openstaan tot hij klaar is.":""))) return;
+  const knop=document.getElementById("qbApprove"); if(knop) knop.disabled=true;
+  st.classList.remove("hidden"); st.className="status-msg";
+  const ok=[], bad=[];
   try{
-    const j=await (await fetch(WORKER+"/amerika/qb/approve",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},body:JSON.stringify({docNrs:nrs})})).json();
-    if(!j.ok){ st.className="status-msg bad"; st.textContent=j.error||"mislukt"; return; }
-    const ok=(j.results||[]).filter(r=>r.ok), bad=(j.results||[]).filter(r=>!r.ok);
+    for(let i=0;i<nrs.length;i+=QB_BLOK){
+      const blok=nrs.slice(i,i+QB_BLOK);
+      st.textContent="Logic4-orders aanmaken… "+Math.min(i+blok.length,nrs.length)+" van "+nrs.length+
+        (ok.length?"  ·  "+ok.length+" aangemaakt":"")+(bad.length?"  ·  "+bad.length+" mislukt":"");
+      let j;
+      try{
+        j=await (await fetch(WORKER+"/amerika/qb/approve",{method:"POST",
+          headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+          body:JSON.stringify({docNrs:blok})})).json();
+      }catch(e){ blok.forEach(nr=>bad.push({docNr:nr,error:e.message})); continue; }
+      if(!j||!j.ok){ blok.forEach(nr=>bad.push({docNr:nr,error:(j&&j.error)||"mislukt"})); continue; }
+      for(const r of (j.results||[])) (r.ok?ok:bad).push(r);
+    }
     st.className="status-msg "+(bad.length?"warn":"ok");
-    st.textContent=ok.length+" Logic4-order(s) aangemaakt"+(ok.length?" (#"+ok.map(r=>r.orderId).join(", #")+")":"")+
-      (bad.length?(" · "+bad.length+" mislukt: "+bad.map(r=>"#"+r.docNr+" ("+r.error+")").join("; ")):"")+
+    st.textContent=ok.length+" Logic4-order(s) aangemaakt van de "+nrs.length+" geselecteerd"+
+      (bad.length?(" · "+bad.length+" mislukt: "+bad.slice(0,6).map(r=>"#"+r.docNr+" ("+r.error+")").join("; ")+(bad.length>6?" …":"")):"")+
       (ok.length?" — ze staan nu onder ‘Ontvangen Audrey’ tot je ze als verwerkt afvinkt.":"");
-    try{ if(ok.length&&window.fpLog) window.fpLog("qb-orders-geaccordeerd",ok.length+" facturen → Logic4 (#"+ok.map(r=>r.docNr).join(", #")+")"); }catch(e){}
-    await qbLoadData();
-    // Wachtrij in het Audrey-tabblad meteen bijwerken
+    try{ if(ok.length&&window.fpLog) window.fpLog("qb-orders-geaccordeerd",ok.length+" van "+nrs.length+" facturen → Logic4"); }catch(e){}
+    await qbInit(true);
     try{ await audLoadVerwerkt(); audRenderWachtrij(); }catch(e){}
   }catch(e){ st.className="status-msg bad"; st.textContent=e.message; }
+  finally{ if(knop) knop.disabled=false; }
 }
 
 const RESV_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/reserveringen-live";

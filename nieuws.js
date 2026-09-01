@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-01", bestand: "amerika.html", soort: "beter",
+      titel: "Accorderen naar Logic4 werkt nu ook bij honderd facturen",
+      wat: "Selecteerde je er veel tegelijk, dan werden er maar een stuk of dertien aangemaakt en verscheen er geen Logic4-ordernummer meer achter de regel. Eén opdracht kon niet honderd keer QuickBooks én Logic4 bevragen en viel halverwege om. Het scherm knipt de selectie nu zelf in blokjes en toont de voortgang. Belangrijker: elke aangemaakte order wordt meteen vastgelegd. Daardoor kan een afgebroken poging geen orders meer opleveren die het dashboard niet kent - en die bij een tweede klik dubbel in Logic4 zouden belanden. De dertien orders van vanochtend zijn alsnog gekoppeld.",
+    },
+
+    {
       datum: "2026-09-01", groep: "partnerportaal-kijk", soort: "nieuw",
       titel: "Passion Partners: meekijken zonder account",
       wat: "Klik je op de tegel Passion Partners, dan ga je nu meteen het portaal in met je eigen dashboard-account. Je hoeft niet meer als partner of dealer aangemaakt te worden, en er komt dus ook niets extra's in Logic4 te staan. Bovenin staat een balk dat je meekijkt: je ziet alles zoals een partner het ziet, maar reserveren en andere wijzigingen zijn uitgeschakeld.",

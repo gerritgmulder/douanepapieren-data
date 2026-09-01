@@ -4415,6 +4415,29 @@ async function qbHandleApprove(request, env) {
   const spaModels = await qbSpaModelList(env, catalog);
   const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
   approved.ids = approved.ids || {};
+  /* Chantal, 1 sep 2026: "ik had er 97 geselecteerd, en er zijn er maar 13
+     aangemaakt, en ik zie er geen ordernummer meer achter staan."
+
+     Twee dingen gingen mis, en de tweede was de ergste.
+
+     (a) Alle 97 in één verzoek. Elke factuur kost een QuickBooks-query plus
+         een Logic4-aanroep, en een worker mag maar een beperkt aantal
+         uitgaande verzoeken per verzoek doen. Halverwege viel hij om - na
+         precies 13 orders. De partij is daarom begrensd; het scherm stuurt
+         ze in blokjes en laat de voortgang zien.
+
+     (b) qb-approved werd pas ná de lus weggeschreven. Viel het verzoek
+         daarvóór om, dan stonden de orders wél in Logic4 maar wist het
+         dashboard daar niets van. Dat is niet alleen "geen ordernummer in
+         beeld": bij een tweede poging zouden diezelfde orders NOG een keer
+         in Logic4 worden aangemaakt. Er stonden vanochtend 13 van zulke
+         weesorders. Nu wordt er na élke geslaagde order opgeslagen, dus een
+         afgebroken verzoek kan nooit meer dubbele orders opleveren. */
+  const MAX_PER_KEER = 10;
+  if (docNrs.length > MAX_PER_KEER) {
+    return reply(400, { ok: false, error: "te-veel-tegelijk", max: MAX_PER_KEER,
+      hint: "Stuur ze in blokjes van maximaal " + MAX_PER_KEER + "; het scherm doet dat vanzelf." });
+  }
   const results = [];
   for (const docNr of docNrs) {
     if (approved.ids[docNr]) { results.push({ docNr, ok: true, orderId: approved.ids[docNr].orderId, already: true }); continue; }
@@ -4424,12 +4447,57 @@ async function qbHandleApprove(request, env) {
       if (!inv) { results.push({ docNr, ok: false, error: "factuur niet gevonden" }); continue; }
       const mapped = qbMapInvoice(inv, catalog, spaModels);
       const res = await dpCreateAmerikaOrder(env, mapped);
-      if (res.ok) { approved.ids[docNr] = { orderId: res.orderId, ts: new Date().toISOString() }; results.push({ docNr, ok: true, orderId: res.orderId }); }
+      if (res.ok) {
+        approved.ids[docNr] = { orderId: res.orderId, ts: new Date().toISOString() };
+        // Meteen vastleggen. Nooit meer aan het eind van de lus.
+        await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
+        results.push({ docNr, ok: true, orderId: res.orderId });
+      }
       else results.push({ docNr, ok: false, error: res.error });
     } catch (e) { results.push({ docNr, ok: false, error: String(e.message || e) }); }
   }
-  await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
   return reply(200, { ok: true, results });
+}
+
+/* POST /amerika/qb/herstel-koppeling — weesorders terugvinden.
+
+   Een order die in Logic4 is aangemaakt maar niet in qb-approved staat, is
+   onzichtbaar voor het dashboard én zou bij een volgende poging opnieuw
+   worden aangemaakt. Deze route zoekt ze terug: elke order op de
+   Amerika-debiteur met referentie "QuickBooks <factuurnummer>" hoort in
+   qb-approved te staan. Wat ontbreekt wordt alsnog vastgelegd.
+
+   Draaien kan altijd; hij maakt niets aan en verandert niets in Logic4. */
+async function qbHandleHerstel(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  const token = await l4Token(env);
+  const gevonden = [];
+  for (let p = 0; p < 12; p++) {
+    const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ DebtorId: AMERIKA_DEBTOR, TakeRecords: 500, SkipRecords: p * 500 }),
+    });
+    if (!r.ok) break;
+    const j = await r.json();
+    const arr = Array.isArray(j) ? j : (j.Records || []);
+    if (!arr.length) break;
+    for (const o of arr) {
+      const m = String(o.Reference || "").match(/^QuickBooks\s+(\S+)/);
+      if (m) gevonden.push({ docNr: m[1], orderId: o.Id, datum: o.CreationDate });
+    }
+    if (arr.length < 500) break;
+  }
+  const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
+  approved.ids = approved.ids || {};
+  const bijgezet = [];
+  for (const g of gevonden) {
+    if (approved.ids[g.docNr]) continue;
+    approved.ids[g.docNr] = { orderId: g.orderId, ts: g.datum || new Date().toISOString(), hersteld: true };
+    bijgezet.push(g);
+  }
+  if (bijgezet.length) await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
+  return reply(200, { ok: true, inLogic4: gevonden.length, alGekoppeld: gevonden.length - bijgezet.length,
+    hersteld: bijgezet.length, regels: bijgezet });
 }
 
 // POST /amerika/qb/audrey { docNr, ontvangen } — Chantal vinkt zelf aan dat het
@@ -7471,6 +7539,7 @@ export default {
       return reply(200, { ok: true, koers: await dpRate(env), bron: "ECB-dagkoers EUR/USD min 0,03 (automatisch)" });
     }
     if (url.pathname === "/amerika/qb/approve" && request.method === "POST") return qbHandleApprove(request, env);
+    if (url.pathname === "/amerika/qb/herstel-koppeling" && request.method === "POST") return qbHandleHerstel(request, env);
     if (url.pathname === "/amerika/qb/audrey"  && request.method === "POST") return qbHandleAudrey(request, env);
     if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
