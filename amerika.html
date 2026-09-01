@@ -420,29 +420,71 @@ function vlTeken(){
         "<td style='font-size:11px;color:var(--muted)'>"+esc(o.code)+"</td>"+
         "<td style='text-align:right'>"+o.aantal+"</td></tr>").join("")+"</tbody></table></div>";
 
-  // Verschil met de telling
+  // Verschil met de telling. LET OP bij het lezen van dit blok: alleen
+  // modellen die de spa-catalogus kent zijn te vergelijken. De ijsbaden,
+  // sauna's en toebehoren uit Chantals telling staan daar niet in en zouden
+  // anders allemaal als "0 in Logic4" verschijnen - 1.071 van de 1.266
+  // getelde stuks. Dat is geen ontbrekende voorraad maar een meetfout, en die
+  // hoort niet als tekort in beeld te komen.
   const box=document.getElementById("vlVerschil");
   const d=vhData;
   if(!d||!d.regels){ box.innerHTML="<p class='lead'>De telling is nog niet geladen.</p>"; return; }
-  const tel={};
-  for(const r of d.regels) if(r.aantal>0) tel[r.model]=(tel[r.model]||0)+r.aantal;
+  const tel={}, groep={};
+  for(const r of d.regels) if(r.aantal>0){ tel[r.model]=(tel[r.model]||0)+r.aantal; groep[r.model]=r.groep||"Spa's"; }
   const live={}; for(const m of (vlData.modellen||[])) live[m.model]=m.aantal;
-  const namen=[...new Set([...Object.keys(tel),...Object.keys(live)])].sort();
-  const rijen=namen.map(n=>({n,tel:tel[n]||0,live:live[n]||0})).filter(r=>r.tel!==r.live);
-  if(!rijen.length){ box.innerHTML="<div class='status-msg ok'>Logic4 en de telling komen overeen — de beginvoorraad staat erin.</div>"; return; }
-  const tekort=rijen.filter(r=>r.live<r.tel).reduce((n,r)=>n+(r.tel-r.live),0);
-  const teveel=rijen.filter(r=>r.live>r.tel).reduce((n,r)=>n+(r.live-r.tel),0);
-  box.innerHTML="<div class='status-msg warn' style='margin-bottom:10px'>"+rijen.length+" modellen wijken af. "+
-      "In Logic4 staan er <b>"+tekort+"</b> te weinig en <b>"+teveel+"</b> te veel ten opzichte van de telling. "+
-      "Let op: een deel hiervan is een naamsverschil (bijvoorbeeld ‘Excite’ tegenover ‘Excite Mighty Wave’) en geen echt voorraadverschil.</div>"+
-    "<div class='tablewrap' style='max-height:340px;overflow:auto'><table class='grid'><thead><tr><th>Model</th>"+
+  const kent=new Set(Object.keys(live));
+  // Ook modellen die Logic4 nu op 0 heeft maar die de catalogus wél kent
+  // horen vergelijkbaar te zijn; die herkennen we aan een naam die in de
+  // live-lijst voorkomt. Wat daar niet in zit is niet te vergelijken.
+  const vergelijkbaar=[], onvergelijkbaar=[];
+  for(const m of Object.keys(tel)) (kent.has(m)?vergelijkbaar:onvergelijkbaar).push(m);
+
+  const rijen=vergelijkbaar.map(n=>({n,tel:tel[n],live:live[n]||0})).filter(r=>r.tel!==r.live);
+  const alleenLogic4=Object.keys(live).filter(m=>!tel[m]).map(m=>({m,a:live[m]}));
+  const telOnverg=onvergelijkbaar.reduce((n,m)=>n+tel[m],0);
+  const somTel=vergelijkbaar.reduce((n,m)=>n+tel[m],0);
+  const somLive=vergelijkbaar.reduce((n,m)=>n+(live[m]||0),0);
+
+  let h="";
+  if(!rijen.length){
+    h+="<div class='status-msg ok'>De vergelijkbare modellen komen overeen met Logic4.</div>";
+  }else{
+    h+="<div class='status-msg warn' style='margin-bottom:10px'>"+
+      "Van de "+vergelijkbaar.length+" modellen die in beide bronnen voorkomen wijken er "+rijen.length+" af. "+
+      "Samen: <b>"+somTel+"</b> geteld tegenover <b>"+somLive+"</b> in Logic4. "+
+      "Logic4 staat dus <b>"+(somLive>somTel?"hoger":"lager")+"</b> - dat past bij verkopen in Amerika die nooit in Logic4 zijn afgeboekt."+
+      "</div>"+
+      "<div class='tablewrap' style='max-height:300px;overflow:auto'><table class='grid'><thead><tr><th>Model</th>"+
       "<th style='text-align:right'>Telling 20-07</th><th style='text-align:right'>Logic4 nu</th>"+
       "<th style='text-align:right'>Verschil</th></tr></thead><tbody>"+
-    rijen.sort((a,b)=>Math.abs(b.live-b.tel)-Math.abs(a.live-a.tel)).map(r=>
-      "<tr><td>"+esc(r.n)+"</td><td style='text-align:right'>"+r.tel+"</td>"+
-      "<td style='text-align:right'>"+r.live+"</td>"+
-      "<td style='text-align:right;font-weight:600;color:"+(r.live<r.tel?"#b91c1c":"#15803d")+"'>"+
-        (r.live-r.tel>0?"+":"")+(r.live-r.tel)+"</td></tr>").join("")+"</tbody></table></div>";
+      rijen.sort((a,b)=>Math.abs(b.live-b.tel)-Math.abs(a.live-a.tel)).map(r=>
+        "<tr><td>"+esc(r.n)+"</td><td style='text-align:right'>"+r.tel+"</td>"+
+        "<td style='text-align:right'>"+r.live+"</td>"+
+        "<td style='text-align:right;font-weight:600;color:"+(r.live<r.tel?"#b91c1c":"#15803d")+"'>"+
+          (r.live-r.tel>0?"+":"")+(r.live-r.tel)+"</td></tr>").join("")+"</tbody></table></div>";
+  }
+
+  if(onvergelijkbaar.length){
+    h+="<div style='margin-top:16px'><h3 style='font-size:14px;margin:0 0 6px'>Niet te vergelijken — "+telOnverg+" getelde stuks</h3>"+
+      "<p class='lead' style='font-size:12px;margin-bottom:8px'>Deze staan wél in de telling maar niet in de spa-catalogus, waarmee Logic4 op model wordt gegroepeerd. "+
+      "Ze verschijnen daardoor hierboven niet; in Logic4 zitten ze in de lijst met onderdelen, of onder een andere naam "+
+      "(de Wim Hof Barrel heet daar bijvoorbeeld The Iceman's Barrel). Dit is dus <b>geen ontbrekende voorraad</b>.</p>"+
+      "<div class='tablewrap' style='max-height:220px;overflow:auto'><table class='grid'><thead><tr><th>Model uit de telling</th><th>Soort</th>"+
+      "<th style='text-align:right'>Geteld</th></tr></thead><tbody>"+
+      onvergelijkbaar.sort((a,b)=>tel[b]-tel[a]).map(m=>
+        "<tr><td>"+esc(m)+"</td><td style='font-size:11px;color:var(--muted)'>"+esc(groep[m]||"")+"</td>"+
+        "<td style='text-align:right'>"+tel[m]+"</td></tr>").join("")+"</tbody></table></div></div>";
+  }
+
+  if(alleenLogic4.length){
+    h+="<div style='margin-top:16px'><h3 style='font-size:14px;margin:0 0 6px'>Staat in Logic4, niet in de telling</h3>"+
+      "<p class='lead' style='font-size:12px;margin-bottom:8px'>Vaak dezelfde spa onder een andere naam (‘Rewind’ tegenover ‘Rewind NEW’, ‘Excite Mighty Wave’ tegenover ‘Excite’). Nakijken vóór het inboeken.</p>"+
+      "<div class='tablewrap' style='max-height:220px;overflow:auto'><table class='grid'><thead><tr><th>Model in Logic4</th>"+
+      "<th style='text-align:right'>Aantal</th></tr></thead><tbody>"+
+      alleenLogic4.sort((a,b)=>b.a-a.a).map(x=>
+        "<tr><td>"+esc(x.m)+"</td><td style='text-align:right'>"+x.a+"</td></tr>").join("")+"</tbody></table></div></div>";
+  }
+  box.innerHTML=h;
 }
 
 async function vhInit(){
