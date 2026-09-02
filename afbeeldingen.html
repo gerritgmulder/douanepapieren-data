@@ -108,6 +108,7 @@
   .tel{font-size:12.5px;color:var(--muted)}
   @media (max-width:760px){ main{padding:0 14px} .kop{min-width:0} }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js"></script>
 </head>
 <body>
 
@@ -176,6 +177,38 @@
       <span class="tel" id="stand"></span>
     </div>
     <div class="balk hidden" id="balk"><i id="balkI"></i></div>
+  </div>
+
+  <!-- ═══ Tekst in de afbeelding vertalen ═══════════════════════════════
+       Gretha (1 sep 2026): "kan binnen het fotobewerkingsprogramma een
+       functie komen dat teksten in afbeeldingen automatisch vertaald kunnen
+       worden."
+
+       Drie stappen: de tekst herkennen (Tesseract, draait hier op de
+       computer), de gevonden regels laten vertalen door dezelfde motor als
+       de tegel Vertalen, en de vertaling terugzetten op de plek waar het
+       origineel stond. -->
+  <div class="kaart" id="vertaalKaart">
+    <h3>Tekst in een afbeelding vertalen</h3>
+    <p class="lead" style="margin-bottom:12px">Kies één afbeelding met tekst erin. Het scherm leest de tekst,
+      vertaalt hem en zet hem terug op dezelfde plek. <b>Werkt het best op een rustige achtergrond</b> (een banner,
+      een specsheet, een productplaat). Staat de tekst over een drukke foto, dan blijft er een vlak zichtbaar waar
+      de oude tekst stond; kijk het altijd na voor je hem gebruikt.</p>
+    <div class="rij" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <input type="file" id="vtBestand" accept="image/*" style="font-size:13px">
+      <label class="sch">van
+        <select id="vtVan"><option value="nld+eng" selected>Nederlands of Engels</option>
+          <option value="nld">Nederlands</option><option value="eng">Engels</option>
+          <option value="deu">Duits</option><option value="fra">Frans</option></select>
+      </label>
+      <label class="sch">naar <select id="vtNaar"></select></label>
+      <button class="knop" id="vtDoe" type="button" disabled>Vertalen</button>
+      <button class="knop stil hidden" id="vtHaal" type="button">Afbeelding downloaden</button>
+      <span class="tel" id="vtStand"></span>
+    </div>
+    <div class="balk hidden" id="vtBalk"><i id="vtBalkI"></i></div>
+    <div id="vtUit" style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px"></div>
+    <div id="vtRegels" style="margin-top:12px"></div>
   </div>
 
   <div id="meldingen"></div>
@@ -589,6 +622,209 @@ zetMaat(); knoppen();
   }catch(e){}};
   window.fpLog(window.fpGeenToegang?"open-geweigerd":"open");
 })();
+
+/* ═══ Tekst in een afbeelding vertalen ═══════════════════════════════════
+   Gretha (1 sep 2026): "kan er een functie komen dat teksten in afbeeldingen
+   automatisch vertaald kunnen worden."
+
+   Drie stappen:
+     1. Tesseract leest de tekst mét de plek waar elke regel staat. Dat draait
+        hier op de computer, net als de rest van deze tegel - er gaat geen
+        afbeelding naar internet.
+     2. De gevonden regels gaan in ÉÉN aanroep naar dezelfde vertaalmotor als
+        de tegel Vertalen. Eén aanroep en niet één per regel: de dagportie van
+        die motor is gedeeld met iedereen.
+     3. De vertaling wordt teruggezet op de plek van het origineel. Het oude
+        tekstvak wordt gevuld met de kleur die eromheen zit, en de nieuwe tekst
+        wordt net zo lang verkleind tot hij past.
+
+   Wat dit niet is: een fotobewerker. Op een rustige achtergrond is het
+   resultaat direct bruikbaar; staat de tekst over een drukke foto, dan zie je
+   het gevulde vlak. Daarom staat het resultaat naast het origineel en moet er
+   altijd iemand naar kijken voordat het naar buiten gaat. */
+const VT_WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
+function vtTeam(){ return localStorage.getItem("fp.teamkey") || ""; }
+function vtStand(t){ const e=document.getElementById("vtStand"); if(e) e.textContent=t||""; }
+function vtBalk(p){
+  const b=document.getElementById("vtBalk"), i=document.getElementById("vtBalkI");
+  if(!b) return;
+  b.classList.toggle("hidden", p==null);
+  if(p!=null) i.style.width=Math.round(p*100)+"%";
+}
+let vtBeeld=null, vtResultaat=null;
+
+(async function vtTalen(){
+  const sel=document.getElementById("vtNaar"); if(!sel) return;
+  try{
+    const r=await fetch(VT_WORKER+"/vertaal/talen",{headers:{"X-Fonteyn-Auth":vtTeam()}});
+    const j=await r.json();
+    if(j&&j.ok){
+      sel.innerHTML=Object.entries(j.talen).map(([code,t])=>
+        "<option value='"+code+"'"+(code==="EN-GB"?" selected":"")+">"+t.naam+"</option>").join("");
+      return;
+    }
+  }catch(e){}
+  sel.innerHTML="<option value='EN-GB'>Engels</option><option value='DE'>Duits</option><option value='FR'>Frans</option>";
+})();
+
+document.getElementById("vtBestand").addEventListener("change", function(){
+  const f=(this.files||[])[0];
+  document.getElementById("vtDoe").disabled=!f;
+  document.getElementById("vtHaal").classList.add("hidden");
+  document.getElementById("vtUit").innerHTML="";
+  document.getElementById("vtRegels").innerHTML="";
+  vtResultaat=null;
+  if(!f) return;
+  const img=new Image();
+  img.onload=()=>{ vtBeeld=img; vtStand(img.naturalWidth+" × "+img.naturalHeight+" pixels"); };
+  img.src=URL.createObjectURL(f);
+});
+
+/* De kleur rondom een tekstvak, zodat het vlak waarop we de oude tekst
+   overschilderen niet uit de lucht komt vallen. We kijken naar de rand van het
+   vak en nemen de meest voorkomende kleur; dat is bij een banner de
+   achtergrond en niet de letter. */
+function vtAchtergrond(ctx, x, y, w, h){
+  /* De achtergrondkleur wordt bemonsterd in een RING op afstand van het
+     tekstvak, niet er vlak tegenaan. Vlak tegen de letters zitten namelijk
+     de half-doorzichtige randpixels van die letters, en die trekken de
+     gemeten kleur op. Het resultaat was een vlakje dat net iets lichter was
+     dan de achtergrond en dat zag je staan waar de vertaling korter was dan
+     het origineel. Vandaar een bufferzone die wordt overgeslagen. */
+  const buffer=Math.max(2, Math.round(h*0.20));   // dit stuk NIET meten
+  const marge =buffer+Math.max(3, Math.round(h*0.45));
+  const gx=Math.max(0,x-marge), gy=Math.max(0,y-marge);
+  const gw=Math.min(ctx.canvas.width-gx, w+marge*2), gh=Math.min(ctx.canvas.height-gy, h+marge*2);
+  const d=ctx.getImageData(gx,gy,gw,gh).data;
+  const tel={};
+  for(let py=0;py<gh;py++){
+    for(let px=0;px<gw;px++){
+      const bx=x-gx, by=y-gy;
+      const inBuffer = px>=(bx-buffer) && px<(bx+w+buffer) && py>=(by-buffer) && py<(by+h+buffer);
+      if(inBuffer) continue;                     // vak plus bufferzone overslaan
+      const o=(py*gw+px)*4;
+      /* Groeperen in stapjes van 8 om ruis samen te nemen, maar we onthouden
+         de ECHTE kleuren in die groep. Teruggeven wat het groepsnummer weer
+         uitrekent (<<3) rondt naar beneden af op een veelvoud van 8: 20,71,52
+         werd dan 16,64,48. Dat is net donkerder dan de achtergrond, en dat zag
+         je als een blokje staan waar de vertaling korter was dan het
+         origineel. Nu het gemiddelde van de groep zelf. */
+      const k=(d[o]>>3)+","+(d[o+1]>>3)+","+(d[o+2]>>3);
+      const t=tel[k]||(tel[k]={n:0,r:0,g:0,b:0});
+      t.n++; t.r+=d[o]; t.g+=d[o+1]; t.b+=d[o+2];
+    }
+  }
+  let beste=null,n=-1;
+  for(const k in tel) if(tel[k].n>n){ n=tel[k].n; beste=tel[k]; }
+  if(!beste) return {r:255,g:255,b:255};
+  return { r:Math.round(beste.r/beste.n), g:Math.round(beste.g/beste.n), b:Math.round(beste.b/beste.n) };
+}
+/* De kleur van de letters zelf: binnen het vak de kleur die het verst van de
+   achtergrond af ligt. Zo blijft witte tekst wit en zwarte tekst zwart. */
+function vtInktkleur(ctx, x, y, w, h, bg){
+  const d=ctx.getImageData(x,y,Math.max(1,w),Math.max(1,h)).data;
+  let br=0,bgc=0,bb=0,best=-1;
+  for(let o=0;o<d.length;o+=4){
+    const afst=Math.abs(d[o]-bg.r)+Math.abs(d[o+1]-bg.g)+Math.abs(d[o+2]-bg.b);
+    if(afst>best){ best=afst; br=d[o]; bgc=d[o+1]; bb=d[o+2]; }
+  }
+  return best<40 ? {r:17,g:17,b:17} : {r:br,g:bgc,b:bb};
+}
+
+document.getElementById("vtDoe").addEventListener("click", async function(){
+  if(!vtBeeld) return;
+  const knop=this; knop.disabled=true;
+  document.getElementById("vtHaal").classList.add("hidden");
+  try{
+    if(typeof Tesseract==="undefined") throw new Error("de tekstherkenning kon niet geladen worden - controleer de internetverbinding");
+    vtStand("tekst zoeken in de afbeelding…"); vtBalk(0.05);
+    const talen=document.getElementById("vtVan").value;
+    const res=await Tesseract.recognize(vtBeeld, talen, {
+      logger: m => { if(m.status==="recognizing text") vtBalk(0.05+m.progress*0.5); }
+    });
+    // Tesseract geeft woorden en regels; wij werken per regel, want een woord
+    // los vertalen levert onzin op.
+    let regels=[];
+    for(const blok of (res.data.blocks||[])) for(const par of (blok.paragraphs||[])) for(const r of (par.lines||[])) regels.push(r);
+    if(!regels.length && res.data.lines) regels=res.data.lines;
+    regels=regels.filter(r => String(r.text||"").trim().length>1 && (r.confidence==null || r.confidence>45));
+    if(!regels.length) throw new Error("geen tekst gevonden in deze afbeelding");
+
+    vtStand(regels.length+" regel(s) gevonden, vertalen…"); vtBalk(0.6);
+    const naar=document.getElementById("vtNaar").value;
+    // Alle regels in één aanroep, gescheiden door regeleindes.
+    const bron=regels.map(r=>String(r.text).trim()).join("\n");
+    const vr=await fetch(VT_WORKER+"/vertaal",{ method:"POST",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":vtTeam()},
+      body: JSON.stringify({ tekst: bron, naar: naar })});
+    const vj=await vr.json();
+    if(!vj.ok) throw new Error(vj.error||("vertalen mislukt (HTTP "+vr.status+")"));
+    let uit=String(vj.tekst||"").split("\n").map(x=>x.trim()).filter(x=>x.length);
+    // Komt er een ander aantal regels terug, dan plakken we niet blind: dan is
+    // de kans op verschoven tekst groot en melden we dat eerlijk.
+    const scheef = uit.length !== regels.length;
+    if(scheef) uit = regels.map((r,i)=> uit[i] || String(r.text).trim());
+
+    vtStand("terugzetten in de afbeelding…"); vtBalk(0.85);
+    const c=document.createElement("canvas");
+    c.width=vtBeeld.naturalWidth; c.height=vtBeeld.naturalHeight;
+    const ctx=c.getContext("2d", {willReadFrequently:true});
+    ctx.drawImage(vtBeeld,0,0);
+    regels.forEach((r,i)=>{
+      const b=r.bbox; if(!b) return;
+      const x=b.x0, y=b.y0, w=b.x1-b.x0, h=b.y1-b.y0;
+      if(w<4||h<4) return;
+      const bg=vtAchtergrond(ctx,x,y,w,h);
+      const inkt=vtInktkleur(ctx,x,y,w,h,bg);
+      ctx.fillStyle="rgb("+bg.r+","+bg.g+","+bg.b+")";
+      ctx.fillRect(x-1,y-1,w+2,h+2);
+      // Lettergrootte net zo lang verkleinen tot de vertaling in het vak past.
+      let px=h;
+      ctx.textBaseline="top";
+      for(let k=0;k<40;k++){
+        ctx.font="600 "+px+"px Montserrat, Arial, sans-serif";
+        if(ctx.measureText(uit[i]).width<=w || px<=6) break;
+        px-=Math.max(1, Math.round(px*0.06));
+      }
+      ctx.fillStyle="rgb("+inkt.r+","+inkt.g+","+inkt.b+")";
+      ctx.fillText(uit[i], x, y+Math.max(0,(h-px)/2));
+    });
+    vtResultaat=c;
+
+    document.getElementById("vtUit").innerHTML=
+      "<div><div class='tel' style='margin-bottom:4px'>origineel</div>"+
+        "<img src='"+vtBeeld.src+"' style='width:100%;border:1px solid var(--rand);border-radius:8px'></div>"+
+      "<div><div class='tel' style='margin-bottom:4px'>vertaald</div>"+
+        "<img src='"+c.toDataURL("image/png")+"' style='width:100%;border:1px solid var(--rand);border-radius:8px'></div>";
+    document.getElementById("vtRegels").innerHTML=
+      (scheef?"<div class='tel' style='color:#b45309;margin-bottom:6px'>Let op: de vertaling kwam met een ander aantal regels terug dan er gevonden zijn. Kijk hieronder na of elke regel op de goede plek staat.</div>":"")+
+      "<table style='width:100%;border-collapse:collapse;font-size:12.5px'><thead><tr>"+
+      "<th style='text-align:left;padding:4px 6px;border-bottom:1px solid var(--rand)'>Gevonden</th>"+
+      "<th style='text-align:left;padding:4px 6px;border-bottom:1px solid var(--rand)'>Vertaald</th></tr></thead><tbody>"+
+      regels.map((r,i)=>"<tr><td style='padding:3px 6px;color:var(--muted)'>"+
+        String(r.text).trim().replace(/[&<>]/g,"")+"</td><td style='padding:3px 6px'>"+
+        String(uit[i]||"").replace(/[&<>]/g,"")+"</td></tr>").join("")+"</tbody></table>";
+    document.getElementById("vtHaal").classList.remove("hidden");
+    vtBalk(1); vtStand("klaar - kijk het resultaat na voor je het gebruikt");
+    setTimeout(()=>vtBalk(null), 900);
+    try{ if(window.fpLog) window.fpLog("afbeelding-tekst-vertaald", regels.length+" regels naar "+naar); }catch(e){}
+  }catch(e){
+    vtBalk(null); vtStand("");
+    document.getElementById("vtRegels").innerHTML="<div class='tel' style='color:#b3261e'>"+String(e.message||e)+"</div>";
+  }finally{ knop.disabled=false; }
+});
+
+document.getElementById("vtHaal").addEventListener("click", function(){
+  if(!vtResultaat) return;
+  vtResultaat.toBlob(function(b){
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(b);
+    const naam=(document.getElementById("vtBestand").files[0]||{}).name||"afbeelding.png";
+    a.download=naam.replace(/\.[^.]+$/,"")+"-"+document.getElementById("vtNaar").value+".png";
+    a.click();
+  }, "image/png");
+});
+
 </script>
 </body>
 </html>

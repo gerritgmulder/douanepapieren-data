@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Schrijft LEESMIJ.md en HERSTEL.md in de backupmap, met de echte aantallen erin.
 Wordt aangeroepen door tools/backup-dashboard.sh."""
-import os, sys, datetime
+import os, sys, json, datetime
 
 D = sys.argv[1]
 
@@ -36,8 +36,13 @@ stand = lees("repo/stand.txt").splitlines()
 haal  = lambda k: next((r.split(":", 1)[1].strip() for r in stand if r.startswith(k)), "onbekend")
 commit, titel = haal("commit"), haal("titel")
 
-geheim = [r.split(': "')[1].rstrip('"') for r in lees("cloudflare/config/geheimen-namen.txt").splitlines()
-          if '"name"' in r]
+# wrangler levert nette JSON; die parsen we ook zo. Met de oude regelsplitsing
+# bleef de komma aan de naam plakken ("SHARED_SECRET",) en dat stond zo in
+# HERSTEL.md - onhandig als je het moet overtypen achter wrangler secret put.
+try:
+    geheim = sorted(g["name"] for g in json.loads(lees("cloudflare/config/geheimen-namen.txt", "[]")))
+except (ValueError, KeyError, TypeError):
+    geheim = []
 nu = datetime.datetime.now().strftime("%d-%m-%Y om %H:%M")
 
 open(os.path.join(D, "LEESMIJ.md"), "w").write(f"""# Backup Fonteyn Dashboard
@@ -117,6 +122,62 @@ wachtwoorden. Wil je dat niet, verplaats de map dan naar bijvoorbeeld
 `~/Backups`; alleen Bureaublad en Documenten synchroniseren.
 """)
 
+# Hoeveel bucketsleutels hebben een teken dat in de bestandsnaam een liggend
+# streepje wordt? Dat getal staat in HERSTEL.md en moet meebewegen; het is de
+# reden dat de herstellus een script is en geen for-lus over *.json.
+try:
+    _namen = [x["name"] for x in json.loads(lees("cloudflare/kv/alle-sleutels.json", "[]"))]
+except ValueError:
+    _namen = []
+_soort = lambda n: n.split(":")[0] if ":" in n else ""
+_bucketsleutels = [n for n in _namen if _soort(n) not in
+                   ("dpfile", "plfile", "schipfile", "dp-sess", "mailsleutel", "dp-login")]
+_verminkt = [n for n in _bucketsleutels
+             if any(not ((c.isalnum() and c.isascii()) or c in "._-") for c in n)]
+# Welke soorten dat zijn, wisselt: de spa-foto's staan er altijd, een uitnodiging
+# (dp-invite:) en een rate-limit-teller (rl:) komen en gaan. Daarom opsommen wat
+# er nu staat in plaats van een lijstje dat over een maand niet meer klopt.
+_telling = {}
+for n in _verminkt:
+    _telling[n.split(":")[0]] = _telling.get(n.split(":")[0], 0) + 1
+_soorten = ", ".join("%d x `%s:`" % (a, s2) for s2, a in
+                     sorted(_telling.items(), key=lambda x: (-x[1], x[0]))) or "geen op dit moment"
+
+# Welke van de achttien workergeheimen staan echt in deze backup? Vastgesteld
+# bij de herstelrepetitie van 01-09-2026 door sleutels/ regel voor regel naast
+# geheimen-namen.txt te leggen. "De rest haal je bij de leverancier op" klinkt
+# geruststellender dan het is, dus staat het hier per naam.
+uit_backup = {
+    "SHARED_SECRET":          "sleutels/fonteyn-teamsleutel-dashboard.txt",
+    "DP_ADMIN_KEY":           "sleutels/fonteyn-beheersleutel-dealerportaal.txt",
+    "MOLLIE_API_KEY":         "sleutels/fonteyn-mollie-key.txt",
+    "FLEXPORT_CLIENT_ID":     "sleutels/Flexport API.rtf",
+    "FLEXPORT_CLIENT_SECRET": "sleutels/Flexport API.rtf",
+    "QB_CLIENT_ID":           "sleutels/fonteyn-api-quickbooks-id-secret.rtf",
+    "QB_CLIENT_SECRET":       "sleutels/fonteyn-api-quickbooks-id-secret.rtf",
+    "LOGIC4_USERNAME":        "sleutels/server-env.txt",
+    "LOGIC4_PASSWORD":        "sleutels/server-env.txt",
+}
+waar_opnieuw = {
+    "LOGIC4_COMPANYKEY":    "Logic4 (beheerscherm, of de accountmanager)",
+    "LOGIC4_PUBLICKEY":     "Logic4 (beheerscherm, of de accountmanager)",
+    "LOGIC4_SECRETKEY":     "Logic4 (beheerscherm, of de accountmanager)",
+    "LOGIC4_ADMINISTRATION":"Logic4 (beheerscherm, of de accountmanager)",
+    "RESEND_API_KEY":       "Resend, onder API Keys",
+    "KIOSK_KEY":            "zelf verzinnen; daarna in de kiosk-app gelijkzetten",
+    "KIOSK_REDIRECT_URL":   "zelf invullen; het adres waar de kiosk op terugkomt",
+    "QB_API_BASE":          "QuickBooks; het adres van de API, geen wachtwoord",
+    "MAIL_FROM":            "zelf invullen; het afzenderadres van de mails",
+}
+# De namenlijst van Cloudflare is leidend. Staat er ooit een geheim bij dat
+# hierboven niet voorkomt, dan valt het vanzelf in de tweede tabel op als
+# onbekend - liever dat dan dat het stilletjes verdwijnt.
+alle_geheim = geheim or sorted(set(uit_backup) | set(waar_opnieuw))
+rij_wel = [f"| `{n}` | `{uit_backup[n]}` |" for n in alle_geheim if n in uit_backup]
+rij_niet = [f"| `{n}` | {waar_opnieuw.get(n, 'ONBEKEND - uitzoeken')} |" for n in alle_geheim if n not in uit_backup]
+tabel_wel = chr(10).join(rij_wel) or "| - | geen |"
+tabel_niet = chr(10).join(rij_niet) or "| - | geen |"
+
 open(os.path.join(D, "HERSTEL.md"), "w").write(f"""# Herstellen na een ramp
 
 Stap voor stap. Je hebt nodig: deze map, een Cloudflare-account, een
@@ -165,47 +226,102 @@ kun je het bestaande id gewoon laten staan.
 
     npx wrangler deploy --cwd data-worker
 
-Daarna de achttien geheimen zetten. Wat in `sleutels/` staat kun je overtypen;
-de rest haal je opnieuw op bij de leverancier (Logic4, Resend, Mollie,
-QuickBooks, Flexport).
+Daarna de geheimen zetten, stuk voor stuk:
 
     npx wrangler secret put <NAAM> --cwd data-worker
 
-De namen zijn:
+De volledige namenlijst zoals Cloudflare hem kent staat in
+`cloudflare/config/geheimen-namen.txt`. Van die {len(alle_geheim)} geheimen zitten
+er {len(rij_wel)} in deze backup en {len(rij_niet)} niet. Op die tweede helft
+loopt een herstel vast, dus hier staat per naam waar hij vandaan moet komen.
 
-{chr(10).join("    " + n for n in geheim) if geheim else "    zie cloudflare/config/geheimen-namen.txt"}
+**Wel in de backup** - overtypen uit deze map:
+
+| geheim | staat in |
+|---|---|
+{tabel_wel}
+
+**Niet in de backup** - opnieuw ophalen:
+
+| geheim | waar vandaan |
+|---|---|
+{tabel_niet}
+
+Let op de vier Logic4-sleutels: `LOGIC4_COMPANYKEY`, `LOGIC4_PUBLICKEY`,
+`LOGIC4_SECRETKEY` en `LOGIC4_ADMINISTRATION`. Zonder die vier komt de worker
+niet bij Logic4 binnen en liggen voorraad, orders en Houston stil - de rest van
+het dashboard komt wel gewoon terug. Ze staan nergens in deze backup en ook
+nergens anders buiten Cloudflare; opnieuw opvragen bij Logic4 is de enige weg,
+en Gerrit weet bij wie. Reken erop dat daar een werkdag overheen kan gaan, dus
+begin er meteen mee en niet aan het eind.
 
 `SHARED_SECRET` is de teamsleutel: dezelfde waarde die in `sleutels/` staat.
 Zet je daar iets anders neer, dan moet iedereen opnieuw inloggen.
 
 ## 4. De gegevens terug
 
-Per bucket:
+Hiervoor staan twee scripts in de repo. Doe dit niet met de hand: de
+bestandsnamen in `buckets/` zijn niet allemaal gelijk aan de sleutelnaam, en
+dat zie je pas als het dashboard dingen niet meer vindt (zie het kader onderaan
+deze stap).
+
+    cd ~/GitHub/douanepapieren-data
+    bash tools/herstel-buckets.sh    --dry-run
+    bash tools/herstel-documenten.sh --dry-run
+
+`--dry-run` schrijft niets; het laat alleen zien welke sleutel uit welk bestand
+zou komen en welke sleutels geen bestand hebben. Klopt dat beeld, dan echt:
+
+    bash tools/herstel-buckets.sh    --namespace-id <id>
+    bash tools/herstel-documenten.sh --namespace-id <id>
+
+Beide vragen eerst om een bevestiging (`--ja` slaat die over) en tellen aan het
+eind hoeveel sleutels ze hebben teruggezet en welke ze niet konden vinden.
+Staat deze backupmap ergens anders dan op de standaardplek, geef dan
+`--backup "<map>"` mee.
+
+Eén sleutel met de hand terugzetten kan ook, bijvoorbeeld als er per ongeluk
+maar één bucket is gewist:
 
     npx wrangler kv key put "voorraad-schepen" \\
       --path "cloudflare/kv/buckets/voorraad-schepen.json" \\
       --namespace-id <id> --remote
 
-En allemaal in één keer, vanuit deze map:
+> **Waarom niet met een lus over de bestanden**
+>
+> Dat lijkt makkelijker en gaat op twee manieren mis.
+>
+> `backup-een-sleutel.sh` maakt van de sleutel een veilige bestandsnaam: alles
+> buiten `A-Za-z0-9._-` wordt een liggend streepje. Van de {len(_bucketsleutels)}
+> buckets hebben er nu {len(_verminkt)} zo'n teken in de sleutel: {_soorten}.
+> Dat aantal wisselt - de spa-foto's blijven, een uitnodiging (`dp-invite:`) of
+> een rate-limit-teller (`rl:`) komt en gaat. `basename` levert voor zo'n sleutel
+> `spafoto_bliss` op in plaats van `spafoto:bliss`: de sleutel bestaat dan wel,
+> maar niemand vraagt hem ooit op.
+>
+> En niet elke bucket is JSON. In `buckets/` staan `.json`, `.txt` en `.bin`
+> door elkaar; de spa-foto's zijn allemaal `.bin`. Een lus over `*.json` slaat
+> die zonder één woord over.
+>
+> De scripts doen het daarom andersom: ze lopen `cloudflare/kv/alle-sleutels.json`
+> af, rekenen daaruit de bestandsnaam uit, zoeken het bestand ongeacht de
+> extensie, en zetten het terug onder de echte sleutelnaam.
 
-    for f in cloudflare/kv/buckets/*.json; do
-      naam=$(basename "$f" .json)
-      npx wrangler kv key put "$naam" --path "$f" --namespace-id <id> --remote
-    done
+De documenten (`dpfile:`, `plfile:`, `schipfile:`) hebben dit probleem juist
+niet: die houden hun echte pad, want er wordt niets aan gesaneerd. Het pad
+achter de dubbele punt is precies het pad binnen de map:
 
-De documenten gaan net zo, met de oorspronkelijke sleutelnaam ervoor:
-`dpfile:` voor alles onder `dealerportaal/`, `plfile:` voor `prijslijsten/`,
-`schipfile:` voor `schepen/`. Het pad achter de dubbele punt is precies het pad
-binnen die map.
+    dpfile:<pad>     ->  cloudflare/kv/documenten/dealerportaal/<pad>
+    plfile:<pad>     ->  cloudflare/kv/documenten/prijslijsten/<pad>
+    schipfile:<pad>  ->  cloudflare/kv/documenten/schepen/<pad>
+
+Bij `schipfile:` begint het pad zelf al met `schepen/`, dus die bestanden staan
+onder `documenten/schepen/schepen/...`. Dat ziet er dubbel uit maar hoort zo;
+haal je die tweede map weg, dan vindt het herstelscript de bestanden niet meer.
 
     npx wrangler kv key put "dpfile:spas/eu/passion-spas/relax.pdf" \\
       --path "cloudflare/kv/documenten/dealerportaal/spas/eu/passion-spas/relax.pdf" \\
       --namespace-id <id> --remote
-
-Let op: een bucketnaam met een dubbele punt of een schuine streep is in de
-bestandsnaam een liggend streepje geworden. Voor de gewone buckets speelt dat
-niet; voor `plfile:` en `schipfile:` staat de echte naam in
-`cloudflare/kv/alle-sleutels.json`.
 
 ## 5. Nakijken
 

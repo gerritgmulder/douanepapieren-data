@@ -24,16 +24,26 @@
 #
 #  Een sleutel die uit Cloudflare verdwijnt blijft in de backup staan. Dat is
 #  met opzet: een backup hoort niet mee te wissen wat iemand per ongeluk
-#  weggooide.
+#  weggooide. Zo'n bucket verhuist wel naar cloudflare/kv/buckets-verdwenen,
+#  want anders blijft er in de bucketmap oude inhoud liggen die de controle
+#  in stap 6 niet van verse inhoud kan onderscheiden.
 # ═══════════════════════════════════════════════════════════════════════════
 set -u
 
 export NS="3e8fa24719f04406a167d19d7600d6fa"
+# Hoe wrangler wordt aangeroepen. Standaard via npx zonder te installeren, maar
+# npx lost "wrangler" op naar de nieuwste versie en weigert dan als die niet in
+# de cache staat - dat gebeurt zodra Cloudflare een nieuwe versie uitbrengt.
+# Zet FP_WRANGLER om een eigen wrangler aan te wijzen (pad of commando).
+export WRANGLER="${FP_WRANGLER:-npx --no-install wrangler}"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DOEL="${FP_BACKUP_DOEL:-$HOME/Documents/Documenten - MacBook Air van G. - 1/Claude/Projects/Fonteyn Dashboard/Backup Dashboard}"
 SLEUTELMAP="${FP_SLEUTELMAP:-$HOME/Documents/Documenten - MacBook Air van G. - 1}"
 GEHEUGEN="$HOME/.claude/projects/-Users-gmulder-Documents-Documenten---MacBook-Air-van-G----1-Claude-Projects-Douanepapieren/memory"
 
+# Het moment waarop deze ronde begint. Stap 6 gebruikt het om te zien of een
+# bucketbestand van deze ronde is of van een vorige is blijven staan.
+export RONDE_START="$(date +%s)"
 export DOCS="$DOEL/cloudflare/kv/documenten"
 export RUW="$DOEL/_ruw"
 export LOG="$DOEL/_ronde.log"
@@ -41,7 +51,7 @@ HULP="$REPO/tools"
 
 mkdir -p "$DOEL/repo" "$DOEL/cloudflare/kv/buckets" "$DOCS" "$DOEL/cloudflare/config" \
          "$DOEL/sleutels" "$DOEL/projectgeheugen" "$RUW"
-: > "$LOG"
+: > "$LOG"; : > "$LOG.fouten"
 zeg(){ echo "[$(date +%H:%M:%S)] $*" | tee -a "$LOG"; }
 zeg "backup naar: $DOEL"
 
@@ -69,12 +79,26 @@ cp "$REPO/manifest.json" "$REPO/data-worker/wrangler.toml" "$REPO/CLAUDE.md" \
 
 # ── 2. de sleutellijst ─────────────────────────────────────────────────────
 zeg "2/7  sleutellijst uit Cloudflare"
-npx --no-install wrangler kv key list --namespace-id "$NS" --remote \
+# Eerst kijken of wrangler überhaupt draait. Zonder deze controle mislukt elke
+# losse ophaalpoging apart, verdwijnt dat in het foutenlogboek en eindigt de
+# ronde met een backup die er compleet uitziet maar week-oude inhoud heeft.
+if ! $WRANGLER --version >/dev/null 2>>"$LOG.fouten"; then
+  zeg "     LET OP: wrangler start niet - er wordt niets uit Cloudflare gehaald."
+  zeg "     Kijk in $LOG.fouten. Meestal: npx wil een nieuwere wrangler ophalen"
+  zeg "     dan er in de cache staat. Installeer wrangler in de repo, of draai"
+  zeg "     deze ronde met FP_WRANGLER=/pad/naar/wrangler."
+fi
+$WRANGLER kv key list --namespace-id "$NS" --remote \
   > "$DOEL/cloudflare/kv/alle-sleutels.json.nieuw" 2>>"$LOG.fouten"
-if [ -s "$DOEL/cloudflare/kv/alle-sleutels.json.nieuw" ]; then
+# "Niet leeg" is niet genoeg: wrangler schrijft bij het vernieuwen van zijn
+# token eerst een banner naar stdout. Die belandde zo als sleutellijst in de
+# backup en maakte de rest van de ronde stuk. Dus: het moet ook JSON zijn.
+if [ -s "$DOEL/cloudflare/kv/alle-sleutels.json.nieuw" ] \
+   && python3 -c 'import json,sys; json.load(open(sys.argv[1]))' \
+        "$DOEL/cloudflare/kv/alle-sleutels.json.nieuw" 2>>"$LOG.fouten"; then
   mv "$DOEL/cloudflare/kv/alle-sleutels.json.nieuw" "$DOEL/cloudflare/kv/alle-sleutels.json"
 else
-  zeg "     LET OP: de sleutellijst kwam niet binnen; met de vorige verder"
+  zeg "     LET OP: de sleutellijst kwam niet (goed) binnen; met de vorige verder"
   rm -f "$DOEL/cloudflare/kv/alle-sleutels.json.nieuw"
 fi
 python3 - "$DOEL" <<'PY'
@@ -86,8 +110,11 @@ soort=lambda n: n.split(":")[0]
 binair=[n for n in namen if soort(n) in ("dpfile","plfile","schipfile")]
 vluchtig=[n for n in namen if soort(n) in ("dp-sess","mailsleutel","dp-login")]
 tekst=[n for n in namen if n not in set(binair)|set(vluchtig)]
-open(os.path.join(doel,"_binair.txt"),"w").write("\n".join(binair))
-open(os.path.join(doel,"_tekst.txt"),"w").write("\n".join(tekst))
+# De afsluitende newline is geen opmaak maar noodzaak: bash's read geeft bij
+# een laatste regel zonder newline exitcode 1, waardoor de leeslus in stap 4
+# de laatste sleutel oversloeg.
+open(os.path.join(doel,"_binair.txt"),"w").write("\n".join(binair)+"\n")
+open(os.path.join(doel,"_tekst.txt"),"w").write("\n".join(tekst)+"\n")
 open(os.path.join(doel,"cloudflare/kv/niet-meegenomen.txt"),"w").write(
   "Deze sleutels zijn met opzet NIET in de backup opgenomen.\n\n"
   "Het zijn lopende sessies: een dealer die is ingelogd op het partnerportaal\n"
@@ -103,34 +130,73 @@ PY
 # ── 3. de gegevens-buckets: elke week opnieuw ──────────────────────────────
 zeg "3/7  gegevens-buckets (elke week vers)"
 rm -rf "$RUW"; mkdir -p "$RUW"
-grep -v '^$' "$DOEL/_tekst.txt" | xargs -P 5 -n 1 "$HULP/backup-een-sleutel.sh" bucket
+# xargs splitst standaard op elke spatie, dus "spafoto:serene 2" werd twee
+# argumenten en die sleutel kwam er nooit uit. macOS-xargs kent geen -d, dus
+# scheiden we op NUL. Hetzelfde in stap 4.
+grep -v '^$' "$DOEL/_tekst.txt" | tr '\n' '\0' \
+  | xargs -0 -P 5 -n 1 "$HULP/backup-een-sleutel.sh" bucket
 python3 - "$DOEL" <<'PY'
-import os,sys,json
+import os,sys,json,shutil
 D=sys.argv[1]; ruw=os.path.join(D,"_ruw"); uit=os.path.join(D,"cloudflare/kv/buckets")
+weg=os.path.join(D,"cloudflare/kv/buckets-verdwenen")
 sleutels=[r.strip() for r in open(os.path.join(D,"_tekst.txt")) if r.strip()]
-geteld={"json":0,"tekst":0,"binair":0}; ontbreekt=[]
+schoon=lambda k: "".join(c if (c.isalnum() or c in "._-") else "_" for c in k)
+geteld={"json":0,"tekst":0,"binair":0}; ontbreekt=[]; geschreven=set()
+def schrijf(naam,ext,inhoud,binmodus=False):
+    geschreven.add(naam+ext)
+    open(os.path.join(uit,naam+ext),"wb" if binmodus else "w").write(inhoud)
 for k in sleutels:
-    naam="".join(c if (c.isalnum() or c in "._-") else "_" for c in k)
+    naam=schoon(k)
     p=os.path.join(ruw,naam)
     if not os.path.exists(p) or os.path.getsize(p)==0: ontbreekt.append(k); continue
     b=open(p,"rb").read()
     try: t=b.decode("utf-8")
     except UnicodeDecodeError:
-        open(os.path.join(uit,naam+".bin"),"wb").write(b); geteld["binair"]+=1; continue
+        schrijf(naam,".bin",b,True); geteld["binair"]+=1; continue
     try:
-        json.dump(json.loads(t), open(os.path.join(uit,naam+".json"),"w"), ensure_ascii=False, indent=1)
+        schrijf(naam,".json",json.dumps(json.loads(t), ensure_ascii=False, indent=1))
         geteld["json"]+=1
     except Exception:
-        open(os.path.join(uit,naam+".txt"),"w").write(t); geteld["tekst"]+=1
+        schrijf(naam,".txt",t); geteld["tekst"]+=1
 print("  %(json)d json, %(tekst)d tekst, %(binair)d binair" % geteld)
 if ontbreekt: print("  NIET OPGEHAALD:", ", ".join(ontbreekt[:10]))
+
+# Opruimen. De buckets worden elke ronde compleet opnieuw opgehaald, dus alles
+# wat hier ligt en niet meer in de sleutellijst voorkomt is een wees van een
+# vorige ronde. Die gooien we niet weg - dat zou een backup zijn die meewist
+# wat iemand per ongeluk verwijderde - maar zetten we apart in
+# buckets-verdwenen/, zodat de controle in stap 6 een schone map ziet.
+verwacht=set(schoon(k) for k in sleutels)
+basis=set(os.path.splitext(f)[0] for f in geschreven)
+wezen=[]; oude_vorm=[]
+for f in sorted(os.listdir(uit)):
+    if f.startswith("."): continue
+    b=os.path.splitext(f)[0]
+    if b not in verwacht:
+        os.makedirs(weg,exist_ok=True)
+        shutil.move(os.path.join(uit,f), os.path.join(weg,f)); wezen.append(f)
+    elif f not in geschreven and b in basis:
+        # zelfde sleutel, ander soort geworden (json -> bin): oude vorm weg
+        os.remove(os.path.join(uit,f)); oude_vorm.append(f)
+# Komt een sleutel terug in de KV, dan is de opzijgezette kopie niet langer
+# de laatste die er is; die mag weg zodra het verse bestand er weer staat.
+terug=[]
+if os.path.isdir(weg):
+    for f in sorted(os.listdir(weg)):
+        if f in geschreven and os.path.exists(os.path.join(uit,f)):
+            os.remove(os.path.join(weg,f)); terug.append(f)
+    if not os.listdir(weg): os.rmdir(weg)
+if terug: print("  %d sleutel(s) weer terug in de KV: %s" % (len(terug), ", ".join(terug[:5])))
+if wezen: print("  %d verdwenen sleutel(s) naar buckets-verdwenen/: %s" % (len(wezen), ", ".join(wezen[:5])))
+if oude_vorm: print("  %d bestand(en) in een oude vorm opgeruimd: %s" % (len(oude_vorm), ", ".join(oude_vorm[:5])))
 PY
 rm -rf "$RUW"
 
 # ── 4. de documenten: alleen wat nog ontbreekt ─────────────────────────────
 zeg "4/7  documenten (alleen de nieuwe)"
 nodig="$DOEL/_nodig.txt"; : > "$nodig"
-while IFS= read -r k; do
+# || [ -n "$k" ]: ook een laatste regel zonder newline nog verwerken.
+while IFS= read -r k || [ -n "$k" ]; do
   [ -n "$k" ] || continue
   case "$k" in
     dpfile:*)    p="$DOCS/dealerportaal/${k#dpfile:}" ;;
@@ -145,11 +211,12 @@ done < "$DOEL/_binair.txt"
 aantal=$(grep -c . "$nodig" 2>/dev/null || true); aantal=${aantal:-0}
 al=$(grep -c . "$DOEL/_binair.txt" 2>/dev/null || true); al=${al:-0}
 zeg "     $aantal nieuw, $(( al - aantal )) stonden er al"
-[ "$aantal" -gt 0 ] && grep -v '^$' "$nodig" | xargs -P 5 -n 1 "$HULP/backup-een-sleutel.sh" doc
+[ "$aantal" -gt 0 ] && grep -v '^$' "$nodig" | tr '\n' '\0' \
+  | xargs -0 -P 5 -n 1 "$HULP/backup-een-sleutel.sh" doc
 
 # ── 5. sleutels, geheugen en de namenlijst ─────────────────────────────────
 zeg "5/7  sleutels, projectgeheugen en de namen van de geheimen"
-npx --no-install wrangler secret list --cwd "$REPO/data-worker" \
+$WRANGLER secret list --cwd "$REPO/data-worker" \
   > "$DOEL/cloudflare/config/geheimen-namen.txt" 2>>"$LOG.fouten"
 cp "$SLEUTELMAP"/fonteyn-*.txt "$SLEUTELMAP"/fonteyn-*.rtf "$SLEUTELMAP"/*API*.rtf "$DOEL/sleutels/" 2>/dev/null
 cp "$REPO/server/.env" "$DOEL/sleutels/server-env.txt" 2>/dev/null
@@ -184,12 +251,19 @@ mist_d=[n for n in namen if n.split(":")[0] in mapje
         and not os.path.exists(os.path.join(D,"cloudflare/kv/documenten",mapje[n.split(":")[0]],n.split(":",1)[1]))]
 tekst=[n for n in namen if n.split(":")[0] not in list(mapje)+["dp-sess","mailsleutel","dp-login"]]
 bm=os.path.join(D,"cloudflare/kv/buckets")
-er=set(os.path.splitext(f)[0] for f in os.listdir(bm))
+bestanden=[f for f in os.listdir(bm) if not f.startswith(".")]
+er=set(os.path.splitext(f)[0] for f in bestanden)
 mist_b=[k for k in tekst if "".join(c if (c.isalnum() or c in "._-") else "_" for c in k) not in er]
+# Een bucketbestand hoort van deze ronde te zijn: ze worden elke keer opnieuw
+# opgehaald. Is het ouder, dan is het ophalen stilletjes mislukt en staat er
+# oude inhoud in de backup - "aanwezig" is dan niet hetzelfde als "goed".
+start=float(os.environ.get("RONDE_START") or 0)
+oud=sorted(f for f in bestanden if os.path.getmtime(os.path.join(bm,f))<start)
 print("     documenten: %d verwacht, %d ontbreekt" % (sum(1 for n in namen if n.split(':')[0] in mapje), len(mist_d)))
-print("     buckets   : %d verwacht, %d ontbreekt" % (len(tekst), len(mist_b)))
+print("     buckets   : %d verwacht, %d ontbreekt, %d verouderd" % (len(tekst), len(mist_b), len(oud)))
 if mist_d: print("     MIST:", ", ".join(mist_d[:8]))
 if mist_b: print("     MIST:", ", ".join(mist_b[:8]))
+if oud: print("     VEROUDERD (niet ververst deze ronde):", ", ".join(oud[:8]))
 PY
 
 # ── 7. controlelijst en leesmij ────────────────────────────────────────────

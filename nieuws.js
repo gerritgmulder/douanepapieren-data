@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-01", bestand: "afbeeldingen.html", soort: "nieuw",
+      titel: "Tekst in een afbeelding automatisch vertalen",
+      wat: "Onderaan de tegel Afbeeldingen op maat zit een nieuw blok. Kies een afbeelding met tekst, kies de taal, en het scherm leest de tekst, vertaalt hem en zet hem terug op dezelfde plek. Je ziet het origineel en de vertaling naast elkaar, met daaronder per regel wat er gevonden en wat er van gemaakt is. Werkt het best op een rustige achtergrond zoals een banner of een specsheet; staat de tekst over een drukke foto, dan blijft er een vlak zichtbaar waar de oude tekst stond. Kijk het dus altijd na voordat je het gebruikt.",
+    },
+
+    {
       datum: "2026-09-01", bestand: "amerika.html", soort: "nieuw",
       titel: "Voorraad Houston komt nu live uit Logic4",
       wat: "Bovenaan het tabblad staat wat er volgens Logic4 op magazijn Warehouse Texas USA ligt. Boekt Osman een order af, dan zie je dat hier terug - handmatig bijhouden hoeft dan niet meer. Er is ook een lijst met onderdelen, covers en trapjes, waar niemand een telling van had. Zolang de getelde beginvoorraad nog niet in Logic4 is geboekt, staat de telling van 20-07 eronder met een verschillijst erbij; die is de werklijst om het recht te zetten en verdwijnt vanzelf zodra alles klopt.",
