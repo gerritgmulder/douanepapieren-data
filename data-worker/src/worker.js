@@ -464,6 +464,22 @@ async function dpStockModels(env) {
 
 // Collectie-kleuren (uit de prijslijst-banners): partners zien elk model in
 // de kleur van zijn Passion-collectie.
+/* De volgorde waarin de collecties op de prijslijst horen te staan (Gerrit,
+   3 sep 2026). Dit is de volgorde van de gedrukte Pricelist, en die is niet
+   alfabetisch en niet op prijs: hij loopt van instap naar top en de losse
+   categorieën staan achteraan. Wat hier niet in staat, komt onderaan.
+   "Turbine" heet in de prijslijst-gegevens "Turbine Grand", vandaar dat er op
+   het begin van de naam wordt vergeleken. */
+const DP_COLLECTION_ORDER = [
+  "Dream", "Pure", "Modern", "Signature", "Exclusive", "Eden Premium",
+  "Sport & Fitness", "Turbine", "Overflow", "Heat Pumps", "Ice Baths",
+];
+function dpCollectionRank(naam) {
+  const n = String(naam || "").toLowerCase();
+  const i = DP_COLLECTION_ORDER.findIndex(c => n.startsWith(c.toLowerCase()));
+  return i < 0 ? DP_COLLECTION_ORDER.length : i;
+}
+
 const DP_COLLECTION_COLORS = {
   "Pure": "#e4551f", "Dream": "#e4551f", "Signature": "#3e7d3f",
   "Exclusive": "#a62c39", "Modern": "#454545", "Sport & Fitness": "#2e79b5",
@@ -590,8 +606,11 @@ async function dpHandleStock(env) {
     m.retailEur = Number(p.retailEur) || null;
     m.collection = p.collection || null;
     m.collectionColor = DP_COLLECTION_COLORS[p.collection] || "#9ca3af";
+    m.collectionRank = dpCollectionRank(p.collection);
     models.push(m);
   }
+  // In de volgorde van de gedrukte prijslijst, binnen een collectie op naam.
+  models.sort((a, b) => (a.collectionRank - b.collectionRank) || String(a.model).localeCompare(String(b.model)));
   return reply(200, { ok: true, updated: agg.updated, shipsUpdated: agg.shipsUpdated, rate, models });
 }
 
@@ -686,6 +705,10 @@ async function dpRate(env) {
 
 // Bereken aanbetaling. vatPercent optioneel meegeven (anders 0). Voor US wordt
 // vatPercent genegeerd (nooit BTW). Retourneert bedragen + opbouw.
+/* Artikel waarop de verpakkingskosten in Logic4 geboekt worden (Gretha,
+   27 aug 2026). $50 per spa, omgerekend naar euro's. */
+const DP_PACKING_CODE = "7894565";
+
 function dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, withSurcharge = true, fraction = 0.30 }) {
   const usd = Number(pEntry.usd) || 0;
   const sur = withSurcharge ? (Number(pEntry.surcharge) || 0) : 0;
@@ -699,17 +722,22 @@ function dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, withSurcharge = tr
   const pack = withSurcharge ? 50 : 0;
   const q = Number(qty) || 1;
   const f = fraction > 0 ? fraction : 0.30;              // 0.30 = aanbetaling, 1.0 = volledig
+  /* spaUnit en packUnit apart: de verpakkingskosten gaan in Logic4 als eigen
+     regel op artikel 7894565 (zie hierboven), dus de order moet ze los kennen.
+     Samen zijn ze exVatUnit — de aanbetaling verandert hier niet door. */
   if (isUS) {
     const unit = usd + sur + pack;                       // USD, geen BTW
     const total = unit * q;
-    return { currency: "USD", vatPercent: 0, exVatUnit: unit, totalExVat: total, totalInclVat: total, deposit: Math.round(total * f * 100) / 100 };
+    return { currency: "USD", vatPercent: 0, exVatUnit: unit, spaUnit: usd + sur, packUnit: pack,
+             totalExVat: total, totalInclVat: total, deposit: Math.round(total * f * 100) / 100 };
   }
   const r = rate > 0 ? rate : 1.11;
   const exVatUnit = (usd + sur + pack) / r;              // USD → EUR
   const totalExVat = exVatUnit * q;
   const vat = Number(vatPercent) || 0;
   const totalInclVat = totalExVat * (1 + vat / 100);
-  return { currency: "EUR", vatPercent: vat, exVatUnit, totalExVat, totalInclVat, deposit: Math.round(totalInclVat * f * 100) / 100 };
+  return { currency: "EUR", vatPercent: vat, exVatUnit, spaUnit: (usd + sur) / r, packUnit: pack / r,
+           totalExVat, totalInclVat, deposit: Math.round(totalInclVat * f * 100) / 100 };
 }
 
 // ─── Voorraad claimen bij reserveringen ──────────────────────────────
@@ -777,6 +805,12 @@ async function dpHandleReserve(request, env, sess, url) {
       entry.currency = calc.currency;
       entry.vatPercent = calc.vatPercent;
       entry.payFull = payFull;
+      /* De prijs per stuk vasthouden. De Logic4-order wordt pas ná de betaling
+         aangemaakt (in de webhook), en dan is de wisselkoers van vandaag al
+         weer een andere. De partner heeft betaald op de prijs van nú, dus die
+         hoort op de order te staan — niet een herberekening van morgen. */
+      entry.spaUnit = Math.round(calc.spaUnit * 100) / 100;
+      entry.packUnit = Math.round(calc.packUnit * 100) / 100;
       /* Bij een testbetaling blijft de hele berekening staan - bedragen, BTW,
          de order die er straks van komt - en gaat alleen het te betalen bedrag
          naar één cent. Zo test je de hele keten en niet een halve. */
@@ -1101,6 +1135,43 @@ async function l4Token(env) {
 // Maakt de verkooporder (status 25 = 30% aanbetaald) onder het debiteur-
 // nummer van de dealer. Prijzen-bucket mag per model een object zijn
 // ({price, code}) of een kaal getal (alleen prijs, regel zonder artikelcode).
+/* Eén orderregel voor Logic4, met de prijs erbij.
+
+   Zonder prijs pakt Logic4 de prijslijst van de debiteur, en een partner heeft
+   in Logic4 meestal "Geen prijslijst" staan. De regel kwam dan op € 0,00 in de
+   order terecht, terwijl de partner in het portaal wél een bedrag had gezien
+   en betaald. Gerrit zag dat op 3 sep 2026 bij de eerste testreservering van
+   Arno: "in Logic4 staat de order op 0, het staat er helemaal niet goed."
+   Daarom zetten we de portaalprijs expliciet op de regel — die is leidend,
+   niet wat Logic4 er zelf van maakt.
+
+   Bruto = netto: er wordt in het portaal geen regelkorting gegeven, dus als
+   we alleen netto zouden sturen, zou Logic4 een korting van 100% tonen.
+
+   AddProductCompositionByParentProductToOrder zorgt dat Logic4 een
+   samengesteld artikel zelf uitklapt: bestelt een partner een Revive Pro
+   Compleet, dan komen de step, de chiller, de cover en de installatieset
+   vanzelf als regels in de order. UseSystemPrices... op false houdt de
+   portaalprijs op het moederartikel leidend en zet de kinderen op nul — anders
+   wordt de order dubbel geteld. */
+function dpOrderRow(r) {
+  const rij = {
+    ProductCode: String(r.productCode),
+    Description: r.description,
+    Qty: Number(r.qty) || 1,
+    OrderRowWithProductComposition: {
+      AddProductCompositionByParentProductToOrder: true,
+      UseSystemPricesForProductCompositionProducts: false,
+    },
+  };
+  const netto = Number(r.nettPrice);
+  if (netto > 0) {
+    rij.NettPrice = Math.round(netto * 100) / 100;
+    rij.GrossPrice = Math.round((Number(r.grossPrice) > 0 ? Number(r.grossPrice) : netto) * 100) / 100;
+  }
+  return rij;
+}
+
 async function dpCreateLogic4Order(env, opts) {
   if (!env.LOGIC4_USERNAME || !env.LOGIC4_PASSWORD) return { ok: false, error: "logic4-user-not-configured" };
   const token = await l4Token(env);
@@ -1119,10 +1190,10 @@ async function dpCreateLogic4Order(env, opts) {
        dat één order en één betaalverzoek te zijn, niet vijf losse.
        opts.rows is de nieuwe weg; de oude losse velden blijven werken. */
     OrderRows: (opts.rows && opts.rows.length
-      ? opts.rows.filter(r => r.productCode).map(r => ({
-          ProductCode: String(r.productCode), Description: r.description, Qty: Number(r.qty) || 1 }))
+      ? opts.rows.filter(r => r.productCode).map(dpOrderRow)
       : (opts.productCode
-          ? [{ ProductCode: String(opts.productCode), Description: opts.description, Qty: Number(opts.qty) || 1 }]
+          ? [dpOrderRow({ productCode: opts.productCode, description: opts.description,
+                          qty: opts.qty, nettPrice: opts.nettPrice, grossPrice: opts.grossPrice })]
           : [])),
   };
   /* Regels zonder artikelcode kan Logic4 niet aan (die geeft een 500), dus die
@@ -1157,23 +1228,23 @@ async function dpCreateLogic4Order(env, opts) {
 // Registreer een (aan)betaling op een BESTAANDE Logic4-order (particulier/
 // showroom). Dagboek Mollie=42, MatchingLedgerId=78 (vooruitontvangen) — zie
 // de Logic4/Optivaize-afspraken. Zet de order daarna op 30% aanbetaald (25).
-async function dpRegisterPayment(env, orderId, amountEur, mollieId) {
+async function dpRegisterPayment(env, orderId, amountEur, mollieId, opts = {}) {
   const token = await l4Token(env);
   const pay = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
     method: "POST",
     headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
     body: JSON.stringify({
       OrderId: Number(orderId), AmountIncl: Number(amountEur),
-      Description: "30% aanbetaling via dashboard (Mollie " + mollieId + ")",
+      Description: (opts.omschrijving || "30% aanbetaling") + " via dashboard (Mollie " + mollieId + ")",
       BookingId: 42, MatchingLedgerId: 78,
     }),
   });
   if (!pay.ok) return { ok: false, error: "AddPayment HTTP " + pay.status + " — " + (await pay.text()).slice(0, 200) };
-  // Status → 30% aanbetaald
+  // Status → 25 (30% aanbetaald) of 30 (volledig betaald)
   await fetch("https://api.logic4server.nl/v3/Orders/UpdateOrderStatus", {
     method: "POST",
     headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-    body: JSON.stringify({ OrderId: Number(orderId), StatusId: 25 }),
+    body: JSON.stringify({ OrderId: Number(orderId), StatusId: Number(opts.statusId) || 25 }),
   }).catch(() => {});
   console.log("[dp-logic4] betaling geregistreerd op order " + orderId);
   return { ok: true };
@@ -1257,8 +1328,11 @@ async function dpAdminReserveFor(request, env, url) {
     const c = dpDepositCalc(pe, { isUS, qty: r.qty, rate, vatPercent });
     deposit += c.deposit;
     currency = currency || c.currency;
+    // spaUnit gaat mee zodat de Logic4-order straks de prijs krijgt die hier
+    // is uitgerekend, en niet € 0,00 uit een prijslijst die de partner niet heeft.
     regelsUit.push({ model: r.model, qty: r.qty, variant: r.variant, variantName: r.variantName,
-      productCode: r.variant || (pe.code || null), deposit: c.deposit });
+      productCode: r.variant || (pe.code || null), deposit: c.deposit,
+      spaUnit: Math.round(c.spaUnit * 100) / 100 });
   }
   deposit = Math.round(deposit * 100) / 100;
   const calc = dpDepositCalc(pEntry, { isUS, qty: regels[0].qty, rate, vatPercent });
@@ -1277,6 +1351,7 @@ async function dpAdminReserveFor(request, env, url) {
     note: String(b.note || "").slice(0, 1500), status: "new",
     adminInitiated: true, custType, debtorId, existingOrderId,
     currency, deposit, vatPercent: calc.vatPercent, paymentStatus: "open",
+    packUnit: Math.round(calc.packUnit * 100) / 100,
   };
   const samenvatting = regelsUit.map(r => r.qty + "x " + r.model).join(", ");
   const pay = await dpCreateMolliePayment(env, deposit,
@@ -1374,13 +1449,26 @@ async function dpHandleMollieWebhook(request, env) {
               // Meerdere spa's in één aanvraag worden ook één order met
               // meerdere regels. Bij een aanvraag van vóór deze wijziging is
               // item.regels er niet en blijft het bij die ene regel.
+              /* De omschrijving is het model plus de kleur - niet "1x Delight".
+                 Het aantal staat al in zijn eigen kolom, dus dat er twee keer
+                 in zetten leest alleen maar verkeerd op de orderbevestiging. */
               const regels = (Array.isArray(item.regels) && item.regels.length)
                 ? item.regels.map(r => ({
                     productCode: r.productCode || null, qty: r.qty || 1,
-                    description: (r.qty || 1) + "x " + r.model + (r.variantName ? " (" + r.variantName + ")" : "") +
-                                 " — partnerportaal (" + bedragTxt + " via Mollie)" }))
+                    nettPrice: r.spaUnit != null ? r.spaUnit : item.spaUnit,
+                    description: r.model + (r.variantName ? " — " + r.variantName : "") }))
                 : [{ productCode: item.productCode || null, qty: item.qty || 1,
-                     description: (item.qty || 1) + "x " + item.model + " — partnerportaal (" + bedragTxt + " via Mollie)" }];
+                     nettPrice: item.spaUnit,
+                     description: item.model + (item.variantName ? " — " + item.variantName : "") }];
+              /* Verpakkingskosten als eigen regel, precies zoals sales ze met
+                 de hand boekt: artikel 7894565, $50 per spa omgerekend. Zaten
+                 die in de spa-regel verstopt, dan klopte de spa-prijs niet
+                 meer met de prijslijst waar de partner naar kijkt. */
+              const aantalTotaal = regels.reduce((n, r) => n + (Number(r.qty) || 1), 0);
+              if (Number(item.packUnit) > 0 && aantalTotaal > 0) {
+                regels.push({ productCode: DP_PACKING_CODE, qty: aantalTotaal,
+                              nettPrice: item.packUnit, description: "Freight & packing" });
+              }
               const res = await dpCreateLogic4Order(env, {
                 debtorId, rows: regels,
                 statusId: item.payFull ? 30 : 25,        // 30 = volledig betaald, vrijgeven leveren
@@ -1388,7 +1476,24 @@ async function dpHandleMollieWebhook(request, env) {
                 remarks: "Partnerportaal-reservering — " + bedragTxt + ": " + sym + " " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie: " + item.note : ""),
                 description: regels.map(r => r.description).join("; "),
               });
-              if (res.ok) { item.logic4OrderId = res.orderId; delete item.logic4Error; }
+              if (res.ok) {
+                item.logic4OrderId = res.orderId; delete item.logic4Error;
+                /* De betaling zélf boeken. Dit ontbrak: bij een partner werd de
+                   order alleen op status "30% aanbetaald" gezet, maar het geld
+                   stond nergens in Logic4. Bij een particulier gebeurde dat wél
+                   (die tak hierboven). Gerrit zag het bij de eerste testbetaling
+                   van een cent: "mijn aanbetaling van een cent is niet
+                   geregistreerd." Nu gaat hij hetzelfde dagboek in (Mollie 42,
+                   vooruitontvangen 78) als bij een showroomverkoop. */
+                if (Number(item.deposit) > 0) {
+                  const bet = await dpRegisterPayment(env, res.orderId, item.deposit, p.id, {
+                    omschrijving: item.testbetaling ? "TESTBETALING partnerportaal" : bedragTxt,
+                    statusId: item.payFull ? 30 : 25,
+                  }).catch(e => ({ ok: false, error: String(e.message || e) }));
+                  if (bet.ok) item.logic4PaidRegistered = true;
+                  else item.logic4BetalingError = bet.error;
+                }
+              }
               else item.logic4Error = res.error;
             }
           }

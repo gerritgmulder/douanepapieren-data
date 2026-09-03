@@ -1346,7 +1346,12 @@ function renderReqs(){
   $("reqBodyPaid").innerHTML = paid.slice().reverse().map((r)=>{
     const idx = reqData.requests.indexOf(r);
     const dep = r.deposit ? (r.currency==="USD"?"$":"€") + " " + Number(r.deposit).toFixed(2) + (r.payFull?" (volledig)":" (30%)") : "—";
-    const l4 = r.logic4OrderId ? `<span class="pill on">#${esc(String(r.logic4OrderId))}</span>`
+    /* Order aangemaakt is niet hetzelfde als betaling geboekt. Ging de order
+       goed maar de betaling niet, dan staat er een order zonder geld in Logic4
+       en dat moet zichtbaar zijn — anders zoekt iemand zich later suf. */
+    const l4 = r.logic4OrderId
+      ? `<span class="pill on">#${esc(String(r.logic4OrderId))}</span>` +
+        (r.logic4BetalingError ? ` <span class="pill off" title="${esc(r.logic4BetalingError)}">betaling niet geboekt</span>` : "")
       : (r.logic4Error ? `<span class="pill off" title="${esc(r.logic4Error)}">fout — check</span>` : '<span style="color:var(--muted)">wordt aangemaakt…</span>');
     return `<tr>
       <td style="white-space:nowrap">${esc(String(r.ts||"").slice(0,16).replace("T"," "))}</td>

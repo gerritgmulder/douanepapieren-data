@@ -192,7 +192,7 @@
     <div id="tab-stock">
       <div class="card">
         <h2>Spa availability</h2>
-        <p class="lead">Live overview per model. <b>Available</b> = stock + on the water, minus what is already reserved. <span id="stockUpdated"></span></p>
+        <p class="lead">Live overview per model — the colours we have in stock right now, ready to ship. <span id="stockUpdated"></span></p>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
           <input id="stockSearch" placeholder="Search model… (e.g. Renew)" style="max-width:320px;flex:1;min-width:180px;">
           <div id="curToggle" style="display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
@@ -433,22 +433,37 @@ async function loadStock(){
   if (r.data.updated) $("stockUpdated").textContent = "Last updated: " + new Date(r.data.updated).toLocaleDateString("en-GB") + ".";
   renderStock();
 }
+/* Wat er ECHT staat, per kleur.
+
+   Hier stond eerst een rekensom: beschikbaar = voorraad + op het water − wat
+   al gereserveerd is, met daaronder de opbouw. Dat is intern-denken. Een
+   partner die wil verkopen heeft aan één ding genoeg: welke kleuren kan ik nu
+   krijgen en hoeveel. Gerrit (3 sep 2026): "Ik wil gewoon 1x Espresso en
+   eronder 1x Mystic Mountain. Gewoon van de kleuren die er zijn de aantallen
+   die er op voorraad zijn, en niet gereserveerd, want reserveringen zijn
+   orders en die wil ik dus niet zien."
+
+   Dus: alleen de vrije hal-voorraad per kleur, elk op zijn eigen regel. Wat
+   gereserveerd is, is verkocht en telt niet mee. Wat op het water ligt ook
+   niet: dat is nog geen voorraad. Staat er niets, dan is het een backorder. */
+function voorraadRegels(m){
+  const kleuren = (m.variants || []).filter(v => Number(v.free) > 0)
+                                    .sort((a, b) => (b.free - a.free) || String(a.name).localeCompare(String(b.name)));
+  if (!kleuren.length) return `<li style="color:var(--muted)">Not in stock — built to order.</li>`;
+  return kleuren.map(v =>
+    `<li><b>${v.free}&times;</b> ${esc(v.name)}</li>`).join("");
+}
 function renderStock(){
   const q = ($("stockSearch").value || "").trim().toLowerCase();
   const list = q ? stockModels.filter(m => m.model.toLowerCase().includes(q)) : stockModels;
   $("stockGrid").innerHTML = list.map(m => {
-    // Available = physical stock + on the water, minus everything already
-    // reserved (Gerrit, 26 aug 2026). Computed server-side (beschikbaar).
-    const besch = Number(m.beschikbaar != null ? m.beschikbaar : m.available) || 0;
+    const vrij = Number(m.vrijNu) || 0;
     return `
     <div class="stock-card" data-model="${esc(m.model)}" style="border-top:6px solid ${esc(m.collectionColor||'#9ca3af')}">
       ${m.collection?`<div style="font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${esc(m.collectionColor)};margin-bottom:3px;">${esc(m.collection)}</div>`:""}
-      <div class="m">${esc(m.model)}${besch>0?`<span class="pill">${besch} available</span>`:`<span class="pill" style="background:#fef3c7;color:#92400e">backorder</span>`}</div>
+      <div class="m">${esc(m.model)}${vrij>0?`<span class="pill">${vrij} in stock</span>`:`<span class="pill" style="background:#fef3c7;color:#92400e">backorder</span>`}</div>
       <ul>
-        <li>Available to order: <b>${besch}</b> <span style="color:var(--muted)">(stock + on the water, minus reserved)</span></li>
-        <li style="color:var(--muted)">In the warehouse: ${m.physical||0} &middot; on the water: ${m.onTheWater||0}${m.nextEta?` (ETA ${esc(m.nextEta)})`:""} &middot; already reserved: &minus;${m.vergeven||0}</li>
-        ${(m.vrijNu||0)>0?`<li style="color:var(--muted)">Ready to ship now, per colour: ${
-          m.variants.filter(v=>v.free>0).map(v=>`<b>${v.free}&times;</b> ${esc(v.name)}`).join(" &middot; ")}</li>`:""}
+        ${voorraadRegels(m)}
         ${m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):""}
       </ul>
       <div class="knoppen">
@@ -484,12 +499,15 @@ let priceSort = { kolom: "collection", op: 1 };
 function priceWaarde(m, kolom){
   switch(kolom){
     case "model": return String(m.model||"");
-    case "besch": return Number(m.beschikbaar!=null?m.beschikbaar:m.available)||0;
-    case "water": return Number(m.onTheWater)||0;
+    case "besch": return Number(m.vrijNu)||0;
     case "prijs": return prijsVan(m).prijs;
     case "vracht": return prijsVan(m).vracht;
     case "totaal": return prijsVan(m).totaal;
-    default: return String(m.collection||"zz");
+    /* Op collectie sorteren betekent: de volgorde van de gedrukte prijslijst,
+       niet alfabetisch. De server geeft die rangorde mee als collectionRank.
+       Het nummer krijgt vaste breedte zodat 10 ná 9 komt en niet ervoor. */
+    default: return String(m.collectionRank != null ? m.collectionRank : 99).padStart(3, "0")
+                  + " " + String(m.model || "");
   }
 }
 function renderPrices(){
@@ -498,8 +516,10 @@ function renderPrices(){
   if(q) lijst=lijst.filter(m=>(m.model+" "+(m.collection||"")).toLowerCase().includes(q));
   const s=priceSort;
   lijst=lijst.slice().sort((a,b)=>{
+    // Op collectie = de volgorde van de gedrukte prijslijst (collectionRank),
+    // niet alfabetisch — anders begint de lijst bij Dream noch bij Pure.
     if(s.kolom==="collection")
-      return (String(a.collection||"zz").localeCompare(String(b.collection||"zz")))*s.op ||
+      return ((a.collectionRank!=null?a.collectionRank:99)-(b.collectionRank!=null?b.collectionRank:99))*s.op ||
         (prijsVan(b).prijs-prijsVan(a).prijs) ||
         String(a.model).localeCompare(String(b.model));
     const va=priceWaarde(a,s.kolom), vb=priceWaarde(b,s.kolom);
@@ -526,10 +546,9 @@ function renderPrices(){
     rijen += `<tr>
       <td class="coll" style="border-left-color:${esc(kleur)};color:${esc(kleur)}">${collTekst}</td>
       <td><b class="fotoNaam" data-model="${esc(m.model)}" style="cursor:default">${esc(m.model)}</b></td>
-      <td>${(Number(m.beschikbaar!=null?m.beschikbaar:m.available)||0)>0
-            ? `<span class="pill">${Number(m.beschikbaar!=null?m.beschikbaar:m.available)||0} available</span>`
+      <td>${(Number(m.vrijNu)||0)>0
+            ? `<span class="pill" title="${esc((m.variants||[]).filter(v=>v.free>0).map(v=>v.free+"x "+v.name).join(", "))}">${Number(m.vrijNu)||0} in stock</span>`
             : `<span class="pill" style="background:#fef3c7;color:#92400e">backorder</span>`}</td>
-      <td class="n" style="color:var(--muted)">${m.onTheWater||0}${m.nextEta?` <span style="font-size:11px">(${esc(m.nextEta)})</span>`:""}</td>
       <td class="n"><b>${p.opmaak(p.prijs)}</b></td>
       <td class="n" style="color:var(--muted)">${p.opmaak(p.vracht)}</td>
       <td class="n"><b>${p.opmaak(p.totaal)}</b></td>
@@ -542,7 +561,7 @@ function renderPrices(){
     return `<th class="prijsKop${recht?" n":""}" data-kolom="${kolom}" style="cursor:pointer;white-space:nowrap" title="Click to sort">${tekst}${pijl}</th>`;
   };
   $("priceTable").innerHTML =
-    `<thead><tr>${kop("collection","Collection")}${kop("model","Model")}${kop("besch","Availability")}${kop("water","On the water",1)}
+    `<thead><tr>${kop("collection","Collection")}${kop("model","Model")}${kop("besch","In stock")}
       ${kop("prijs","Partner price",1)}${kop("vracht","Freight &amp; packing",1)}${kop("totaal","Total",1)}<th></th></tr></thead>
      <tbody>${rijen}</tbody>`;
   $("priceTable").querySelectorAll(".prijsKop").forEach(h=>h.addEventListener("click",()=>{
@@ -999,8 +1018,8 @@ function openReserve(model){
           ${m0.collection?`<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:${esc(kleur)}">${esc(m0.collection)}</span>`:""}
         </div>
         <p class="lead" style="margin:7px 0 18px;">
-          ${(m0.available>0)
-            ? `<span style="color:var(--green);font-weight:700;">${m0.available} in stock now.</span> Our sales team confirms the details by e-mail.`
+          ${(Number(m0.vrijNu)>0)
+            ? `<span style="color:var(--green);font-weight:700;">${Number(m0.vrijNu)} in stock now.</span> Our sales team confirms the details by e-mail.`
             : `<span style="color:#8a6400;font-weight:700;">Currently on backorder.</span> Your reservation is allocated to the next factory production.`}
         </p>
         ${kiezer}
