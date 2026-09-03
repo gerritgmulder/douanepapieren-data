@@ -219,7 +219,8 @@
           <span class="lead" id="priceCount" style="margin:0"></span>
         </div>
         <div class="prijswrap"><table class="prijs" id="priceTable"></table></div>
-        <p class="lead" style="margin-top:10px;font-size:12px;">Prices are excluding VAT. Freight &amp; packing to warehouse Uddel is shown separately.</p>
+        <p class="lead" style="margin-top:10px;font-size:12px;">Prices are excluding VAT. Freight &amp; packing to warehouse Uddel is shown separately.
+          <span id="koersNoot"></span></p>
       </div>
     </div>
 
@@ -416,6 +417,19 @@ async function loadStock(){
   if (r.status !== 200 || !r.data || !r.data.ok) return;
   stockModels = r.data.models || [];
   window.stockRate = r.data.rate || 1.11;
+  /* Zeggen dát er is omgerekend, en tegen welke koers. Zonder deze regel ziet
+     een partner "€ 443 freight & packing" staan en kan hij niet zien dat dat
+     $ 500 is tegen de koers van vandaag - Gerrit stelde die vraag zelf ook
+     (3 sep 2026). Alle eurobedragen op deze pagina zijn dollarprijzen gedeeld
+     door deze koers, ook de vracht en de verpakking. */
+  (function(){
+    const n = document.getElementById("koersNoot");
+    if (!n) return;
+    n.innerHTML = window.displayCurrency === "USD"
+      ? ""
+      : "All euro amounts are converted from US dollars at today's rate: <b>1 EUR = "
+        + Number(window.stockRate).toFixed(4) + " USD</b>. That includes freight &amp; packing.";
+  })();
   if (r.data.updated) $("stockUpdated").textContent = "Last updated: " + new Date(r.data.updated).toLocaleDateString("en-GB") + ".";
   renderStock();
 }
