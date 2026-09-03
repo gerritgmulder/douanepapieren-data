@@ -189,6 +189,18 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <thead><tr><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Aanbetaling</th><th>Logic4-order</th><th></th></tr></thead>
       <tbody id="reqBodyPaid"></tbody>
     </table>
+    <!-- Voor een order waarvan de aanvraag hierboven niet (meer) staat. Dat
+         gebeurt als iemand de regel met het kruisje heeft weggehaald: de order
+         blijft dan gewoon in Logic4 staan, maar de knop erbij is weg. -->
+    <details style="margin-top:12px">
+      <summary style="cursor:pointer;font-size:13px;color:var(--muted)">Een order terugdraaien die hierboven niet staat</summary>
+      <p class="lead" style="margin:8px 0 8px">Vul het Logic4-ordernummer in. Staat er een aanbetaling op die tegengeboekt moet worden, vul dan ook het bedrag in; laat je dat leeg, dan wordt de order alleen geannuleerd.</p>
+      <div class="row">
+        <input id="terugOrder" placeholder="Ordernummer, bv. 3517369" style="max-width:200px">
+        <input id="terugBedrag" type="number" step="0.01" min="0" placeholder="Aanbetaling (optioneel)" style="max-width:200px">
+        <button class="primary" id="terugLos" type="button">Terugdraaien</button>
+      </div>
+    </details>
   </div>
 
   <div class="card">
@@ -1452,6 +1464,39 @@ function renderReqs(){
   }));
 }
 document.getElementById("showArch").addEventListener("change", (e)=>{ showArch = e.target.checked; renderReqs(); });
+
+/* Terugdraaien op een kaal ordernummer. Zelfde eindpunt, alleen zonder
+   aanvraag erachter — dus ook zonder voorraadclaim om vrij te geven. */
+document.getElementById("terugLos").addEventListener("click", async ()=>{
+  const nr = ($("terugOrder").value || "").trim();
+  const bedrag = parseFloat($("terugBedrag").value);
+  if (!nr) { setStatus("bad", "Vul een ordernummer in."); return; }
+  const ja = await pDialoog({
+    titel: "Order terugdraaien", gevaarlijk: true, bevestig: "Terugdraaien",
+    html: `<p>Logic4-order <b>#${esc(nr)}</b>.</p><ul style="margin:8px 0 0;padding-left:18px;line-height:1.7;">`
+      + (bedrag > 0 ? `<li>Er wordt <b>&euro; ${bedrag.toFixed(2)}</b> tegengeboekt in dagboek Mollie.</li>` : `<li>Er wordt <b>niets</b> tegengeboekt — je hebt geen bedrag ingevuld.</li>`)
+      + `<li>De order gaat op <b>Geannuleerd</b>.</li></ul>`
+      + `<p style="margin-top:10px;color:var(--muted);font-size:12.5px;">Controleer het nummer goed: hier hangt geen aanvraag aan die het kan tegenspreken.</p>`,
+  });
+  if (!ja) return;
+  const knop = $("terugLos"); knop.disabled = true;
+  const res = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/terugdraaien", {
+    method: "POST", headers: { "Content-Type": "application/json", "X-DP-Admin": adminKey() },
+    body: JSON.stringify({ orderId: nr, bedrag: bedrag > 0 ? bedrag : 0,
+                           door: (document.getElementById("userEmail")||{}).textContent || "" }),
+  });
+  const j = await res.json().catch(()=>({}));
+  knop.disabled = false;
+  if (res.ok && j.ok) {
+    try{ if(window.fpLog) window.fpLog("bestelling-teruggedraaid", "#"+nr+" (los ordernummer)"); }catch(e){}
+    $("terugOrder").value = ""; $("terugBedrag").value = "";
+    await pDialoog({ titel: "Teruggedraaid", geenAnnuleren: true, bevestig: "Sluiten",
+      html: "<ul style=\"margin:0;padding-left:18px;line-height:1.7;\">" + (j.stappen||[]).map(t=>"<li>"+esc(t)+"</li>").join("") + "</ul>" });
+  } else {
+    await pDialoog({ titel: "Terugdraaien mislukt", geenAnnuleren: true, bevestig: "Sluiten",
+      html: "<p>" + esc(j.error || ("HTTP " + res.status)) + "</p>" });
+  }
+});
 
 async function save(bucket, data){
   try { await kvPut(bucket, data); }

@@ -1570,11 +1570,26 @@ async function dpAdminTerugdraaien(request, env) {
   let b = {};
   try { b = await request.json(); } catch {}
   const id = String(b.requestId || "").trim();
-  if (!id) return reply(400, { ok: false, error: "requestId-required" });
+  const losOrderNr = String(b.orderId || "").trim();
+  if (!id && !losOrderNr) return reply(400, { ok: false, error: "requestId-of-orderId-required" });
 
   const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
   const lijst = Array.isArray(data.requests) ? data.requests : [];
-  const item = lijst.find(x => x.id === id);
+  /* Terugdraaien kan op twee manieren:
+     - op de aanvraag uit het portaal (de gewone weg, knop in de tabel);
+     - op een kaal ordernummer, voor een order waarvan de aanvraag er niet meer
+       is. Dat komt voor: wie de regel in deze tegel met het kruisje weghaalt,
+       gooit de koppeling naar de Logic4-order weg terwijl die order blijft
+       staan. Precies dat gebeurde met de eerste testbestelling van 3 sep 2026.
+     Bij een kaal ordernummer weten we het aanbetaalde bedrag niet, dus dat moet
+     erbij; staat er niets, dan wordt alleen de order geannuleerd. */
+  const item = id
+    ? lijst.find(x => x.id === id)
+    : (lijst.find(x => String(x.logic4OrderId || "") === losOrderNr) || {
+        losseOrder: true, logic4OrderId: losOrderNr,
+        deposit: Number(b.bedrag) || 0,
+        logic4PaidRegistered: Number(b.bedrag) > 0,
+      });
   if (!item) return reply(404, { ok: false, error: "aanvraag niet gevonden" });
   if (item.teruggedraaid) return reply(200, { ok: true, alGedaan: true, stappen: ["was al teruggedraaid"] });
 
@@ -1618,6 +1633,11 @@ async function dpAdminTerugdraaien(request, env) {
 
   if (mislukt) return reply(502, { ok: false, error: mislukt, stappen });
 
+  if (item.losseOrder) {
+    // Alleen een ordernummer, geen aanvraag om bij te werken.
+    console.log("[dp-terugdraaien] losse order " + item.logic4OrderId + " teruggedraaid: " + stappen.join("; "));
+    return reply(200, { ok: true, stappen });
+  }
   /* De geclaimde voorraad weer vrijgeven, anders blijft de spa in het portaal
      als verkocht staan terwijl de bestelling er niet meer is. */
   item.allocationReleased = true;
