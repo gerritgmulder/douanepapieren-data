@@ -428,8 +428,7 @@ async function loadStock(){
     if (!n) return;
     n.innerHTML = window.displayCurrency === "USD"
       ? ""
-      : "All euro amounts are converted from US dollars at today's rate: <b>1 EUR = "
-        + Number(window.stockRate).toFixed(4) + " USD</b>. That includes freight &amp; packing.";
+      : "All euro amounts are converted from US dollars. That includes freight &amp; packing.";
   })();
   if (r.data.updated) $("stockUpdated").textContent = "Last updated: " + new Date(r.data.updated).toLocaleDateString("en-GB") + ".";
   renderStock();
@@ -447,7 +446,9 @@ function renderStock(){
       <div class="m">${esc(m.model)}${besch>0?`<span class="pill">${besch} available</span>`:`<span class="pill" style="background:#fef3c7;color:#92400e">backorder</span>`}</div>
       <ul>
         <li>Available to order: <b>${besch}</b> <span style="color:var(--muted)">(stock + on the water, minus reserved)</span></li>
-        <li style="color:var(--muted)">In stock now: ${m.available} &middot; On the water: ${m.onTheWater||0}${m.nextEta?` (ETA ${esc(m.nextEta)})`:""}</li>
+        <li style="color:var(--muted)">In the warehouse: ${m.physical||0} &middot; on the water: ${m.onTheWater||0}${m.nextEta?` (ETA ${esc(m.nextEta)})`:""} &middot; already reserved: &minus;${m.vergeven||0}</li>
+        ${(m.vrijNu||0)>0?`<li style="color:var(--muted)">Ready to ship now, per colour: ${
+          m.variants.filter(v=>v.free>0).map(v=>`<b>${v.free}&times;</b> ${esc(v.name)}`).join(" &middot; ")}</li>`:""}
         ${m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):""}
       </ul>
       <div class="knoppen">

@@ -573,6 +573,16 @@ async function dpHandleStock(env) {
     m.variants = (catModels[m.model] || []).map(v => ({
       code: v.code, name: codeName[v.code] || v.code, free: Number(freeByCode[v.code]) || 0,
     }));
+    /* Wat er NU vrij in de hal ligt, opgeteld uit de kleuren zelf. Het model
+       had ook een eigen 'available' uit een andere telling, en die twee liepen
+       uiteen (bij Delight 8 tegenover 10 over de kleuren). Op het scherm stond
+       daardoor een getal dat niet strookte met de kleuren eronder. Door dit uit
+       dezelfde kleuren op te tellen kán het niet meer uit elkaar lopen.
+       Gerrit (3 sep 2026): "9+29 is niet 30, en ik weet dan nog niet hoeveel er
+       per kleur beschikbaar zijn." */
+    m.vrijNu = m.variants.reduce((n, v) => n + (Number(v.free) || 0), 0);
+    // Alles wat al vergeven is: reserveringen uit Logic4 plus portaal-aanvragen.
+    m.vergeven = Math.max(0, (Number(m.physical) || 0) + (Number(m.onTheWater) || 0) - (Number(m.beschikbaar) || 0));
     m.partnerUsd = Number(p.usd);
     m.surchargeUsd = Number(p.surcharge) || 0;
     m.partnerEur = Math.round(Number(p.usd) / rate);                        // USD → EUR via live koers

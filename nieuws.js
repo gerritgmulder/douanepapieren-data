@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-03", groep: "partnerportaal-kijk", soort: "beter",
+      titel: "Voorraad in het portaal telt nu op, en per kleur",
+      wat: "Boven een model stond bijvoorbeeld 29 beschikbaar terwijl eronder 8 op voorraad en 29 op het water stond. Die getallen kwamen uit twee verschillende tellingen en klopten niet met elkaar. Er staat nu: in het magazijn, op het water, min wat al gereserveerd is, en dat komt precies uit op het getal bovenaan. Daaronder staat per kleur hoeveel er nu klaar staat, zodat een partner ziet welke kleur hij kan bestellen zonder de keuzelijst te openen.",
+    },
+
+    {
+      datum: "2026-09-03", groep: "partnerportaal-kijk", soort: "beter",
       titel: "Passion Partners: kleur staat nu bij elke uitvoering",
       wat: "Bij een model met een warmtepomp of waterstofmachine stond alleen 'Integrated Heat Pump' of 'With Hydrogen Machine' in de keuzelijst, drie keer onder elkaar en zonder kleur. Je kon dus niet zien welke kleur je bestelde. Nu staat de kleur er altijd bij, bijvoorbeeld 'Espresso with OAK/grey trim · IntelliSaver'. En 'Integrated Heat Pump' heet naar de partner toe voortaan IntelliSaver.",
     },
