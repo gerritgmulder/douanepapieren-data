@@ -1341,6 +1341,16 @@ function renderReqs(){
   const leadsAll = all.filter(r => !reqPaid(r));
   const leads = leadsAll.filter(r => showArch || r.status !== "done");
 
+  /* Wat er besteld is. Sinds de winkelwagen kan één aanvraag meerdere spa's
+     en onderdelen bevatten; dan is alleen het eerste model tonen misleidend. */
+  function regelsCel(r){
+    if (Array.isArray(r.items) && r.items.length) {
+      return r.items.map(i => `<div><b>${esc(i.qty)}&times; ${esc(i.soort==="spa" ? i.model : (i.naam||i.code))}</b>` +
+        (i.variantName?` <span style="color:var(--muted);font-size:11px">${esc(i.variantName)}</span>`:"") + `</div>`).join("");
+    }
+    return `<b>${esc(r.model)}</b>` + (r.variantName?` <span style="color:var(--muted);font-size:11px">${esc(r.variantName)}</span>`:"");
+  }
+
   // ── Aanbetaalde reserveringen (automatisch in Logic4) ──
   $("reqCount").textContent = paid.length;
   $("reqBodyPaid").innerHTML = paid.slice().reverse().map((r)=>{
@@ -1356,7 +1366,7 @@ function renderReqs(){
     return `<tr>
       <td style="white-space:nowrap">${esc(String(r.ts||"").slice(0,16).replace("T"," "))}</td>
       <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span></td>
-      <td><b>${esc(r.model)}</b>${r.variantName?` <span style="color:var(--muted);font-size:11px">${esc(r.variantName)}</span>`:""}</td>
+      <td>${regelsCel(r)}</td>
       <td>${esc(r.qty)}</td>
       <td style="white-space:nowrap">${dep}</td>
       <td>${l4}</td>
@@ -1372,7 +1382,7 @@ function renderReqs(){
     return `<tr${archived?' style="opacity:.55"':''}>
       <td style="white-space:nowrap">${esc(String(r.ts||"").slice(0,16).replace("T"," "))}</td>
       <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span></td>
-      <td><b>${esc(r.model)}</b>${r.variantName?` <span style="color:var(--muted);font-size:11px">${esc(r.variantName)}</span>`:""}</td>
+      <td>${regelsCel(r)}</td>
       <td>${esc(r.qty)}</td>
       <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(String(r.note||"").slice(0,120))}</td>
       <td><span class="pill off">${esc(leadLabel(r))}</span></td>

@@ -151,6 +151,7 @@
 <header>
   <img src="https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/passion-logo.png" alt="Passion Spas">
   <h1>Passion Partners</h1>
+  <button class="hidden" id="cartBtn" type="button" title="Your basket">Basket <span id="cartTel">0</span></button>
   <span class="who hidden" id="who"></span>
   <button class="hidden" id="pwBtn" type="button">Password</button>
   <button class="hidden" id="logoutBtn" type="button">Log out</button>
@@ -183,7 +184,8 @@
       <div id="pwMsg" class="msg hidden"></div>
     </div>
     <div class="tabs">
-      <button class="tab active" data-tab="stock" type="button">Stock</button>
+      <button class="tab active" data-tab="stock" type="button">Spas</button>
+      <button class="tab" data-tab="parts" type="button">Parts &amp; covers</button>
       <button class="tab" data-tab="prices" type="button">Price list</button>
       <button class="tab" data-tab="myspas" type="button">My spas</button>
       <button class="tab" data-tab="contact" type="button">Contact</button>
@@ -202,6 +204,24 @@
         </div>
         <div id="stockGrid" class="grid" style="margin-top:14px;"></div>
         <div id="stockEmpty" class="lead hidden" style="margin-top:12px;">No stock data available right now — please check back later.</div>
+      </div>
+    </div>
+
+    <!-- Onderdelen en covers. Tabblad 1 is en blijft de spa's; hier staat
+         alles wat een partner er los bij bestelt. -->
+    <div id="tab-parts" class="hidden">
+      <div class="card">
+        <h2>Parts &amp; covers</h2>
+        <p class="lead">Everything you order alongside a spa: covers, jets, pumps, filters, heaters and more.
+          Prices are per piece, excl. VAT, and drop at the quantity breaks shown. <span id="partsUpdated"></span></p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <input id="partsSearch" placeholder="Search part, code or brand… (e.g. cover clip, 151238)" style="max-width:340px;flex:1;min-width:200px;">
+          <select id="partsCat" style="padding:9px 10px;border:1px solid var(--border);border-radius:8px;font:inherit;background:#fff;">
+            <option value="">All categories</option>
+          </select>
+          <span class="lead" id="partsCount" style="margin:0"></span>
+        </div>
+        <div class="prijswrap" style="margin-top:12px;"><table class="prijs" id="partsTable"></table></div>
       </div>
     </div>
 
@@ -265,6 +285,13 @@
 const SESS_KEY = "dp.session";
 const $ = (id) => document.getElementById(id);
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+/* De winkelwagen staat hier bovenaan en niet bij de rest van de wagen-code:
+   het inloggen roept cartBewaar() aan zodra de sessie klopt, en dat gebeurt
+   eerder in het bestand dan waar de wagen verder wordt opgebouwd. */
+const CART_KEY = "pp_cart_v1";
+let cart = [];
+try { cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]") || []; } catch(e){ cart = []; }
 
 // Sessie uit magic-link oppakken en URL schoonmaken. Het token komt in het
 // URL-fragment (#s=…) — dat verlaat de browser nooit (geen logs/referrers).
@@ -339,6 +366,8 @@ async function sendLink(){
   $("who").classList.remove("hidden");
   $("logoutBtn").classList.remove("hidden");
   $("pwBtn").classList.remove("hidden");
+  window.ingelogd = true;
+  cartBewaar();                                   // toont de winkelwagen met het juiste aantal
   /* Meekijkende Fonteyn-collega. Zonder balk zou je denken dat je als partner
      kijkt, en zou je je afvragen waarom reserveren niet lukt. De knop om een
      wachtwoord te zetten hoort hier ook niet: er is geen dealeraccount om een
@@ -407,8 +436,9 @@ $("logoutBtn").addEventListener("click", async ()=>{
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", ()=>{
   document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
   t.classList.add("active");
-  ["stock","prices","myspas","contact"].forEach(k => $("tab-"+k).classList.toggle("hidden", t.dataset.tab!==k));
+  ["stock","parts","prices","myspas","contact"].forEach(k => $("tab-"+k).classList.toggle("hidden", t.dataset.tab!==k));
   if(t.dataset.tab==="prices") renderPrices();
+  if(t.dataset.tab==="parts") loadParts();
 }));
 
 // ── Stock ──
@@ -446,6 +476,12 @@ async function loadStock(){
    Dus: alleen de vrije hal-voorraad per kleur, elk op zijn eigen regel. Wat
    gereserveerd is, is verkocht en telt niet mee. Wat op het water ligt ook
    niet: dat is nog geen voorraad. Staat er niets, dan is het een backorder. */
+function pakketRegel(m){
+  const v = (m.variants||[]).find(x => (x.bevat||[]).length);
+  if (!v) return "";
+  const inh = v.bevat.map(d => d.qty + "\u00d7 " + d.naam.replace(/^.*\|\s*/, "")).join(", ");
+  return `<li style="color:var(--muted);font-size:12px;line-height:1.5;margin-top:4px;">Complete set: ${esc(inh)}</li>`;
+}
 function voorraadRegels(m){
   const kleuren = (m.variants || []).filter(v => Number(v.free) > 0)
                                     .sort((a, b) => (b.free - a.free) || String(a.name).localeCompare(String(b.name)));
@@ -464,6 +500,7 @@ function renderStock(){
       <div class="m">${esc(m.model)}${vrij>0?`<span class="pill">${vrij} in stock</span>`:`<span class="pill" style="background:#fef3c7;color:#92400e">backorder</span>`}</div>
       <ul>
         ${voorraadRegels(m)}
+        ${pakketRegel(m)}
         ${m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):""}
       </ul>
       <div class="knoppen">
@@ -708,14 +745,26 @@ function soortVan(f){
   if (IS_MANUAL.test(f.title||"")) return "manual";
   return "spec";
 }
+/* De algemene handleiding hoort bij ELKE spa en swimspa, niet bij één model.
+   Hij staat in de bibliotheek onder een eigen map met een vast voorvoegsel;
+   alles met dat voorvoegsel wordt hieronder aan iedere spa gehangen. Zo hoeft
+   niemand hem per model te koppelen. Gerrit (3 sep 2026): "bij elke spa +
+   swimspa moet bij Manuals 1 algemene handleiding worden toegevoegd."
+
+   IJsbaden en warmtepompen krijgen hem niet: dat zijn geen spa's, en die
+   hebben hun eigen chiller- en pompdocumentatie. */
+const ALG_SPA_PREFIX = "spas/algemeen/";
+const GEEN_ALG_SPA = new Set(["Ice Baths", "Heat Pumps"]);
+let algemeneSpaDocs = [];
 function bouwDocIndex(){
-  docIndex = {}; algemeenPerMap = {};
+  docIndex = {}; algemeenPerMap = {}; algemeneSpaDocs = [];
   for (const c of ((lib&&lib.categories)||[]))
     for (const g of (c.groups||[]))
       for (const f of (g.files||[])){
         const rij = { ...f, map: g.name, soort: soortVan(f) };
         // Een prijslijst hoort niet bij één model en gaat niet mee.
         if (IS_PRIJS.test(f.title||"")) continue;
+        if (String(f.id||"").startsWith(ALG_SPA_PREFIX)) { algemeneSpaDocs.push({ ...rij, soort: "manual" }); continue; }
         const namen = titelNamen(f.title);
         let gekoppeld = false;
         for (const n of namen){
@@ -732,6 +781,13 @@ function bouwDocIndex(){
    hij terug op het basismodel: een "Aquatic 1 ECO" heeft geen eigen blad maar
    is dezelfde kuip als de "Aquatic 1". Dat wordt er wel bij gezet, zodat een
    partner ziet waar het blad vandaan komt. */
+/* De algemene handleiding(en) voor dit model: bij elke spa en swimspa, niet
+   bij een ijsbad of een warmtepomp. */
+function algemeenVoorModel(model){
+  const m = (stockModels||[]).find(x => x.model === model);
+  if (m && GEEN_ALG_SPA.has(m.collection)) return [];
+  return algemeneSpaDocs;
+}
 function docsVoorModel(model){
   const pogingen = [String(model||"").replace(/^spa\s+/i, "").trim()];
   const w = pogingen[0].split(/\s+/);
@@ -745,7 +801,7 @@ function docsVoorModel(model){
   }
   return { bestanden: [], viaBasis: null };
 }
-function aantalDocs(model){ return docsVoorModel(model).bestanden.length; }
+function aantalDocs(model){ return docsVoorModel(model).bestanden.length + algemeenVoorModel(model).length; }
 
 function docRegel(f){
   return `<div class="doc">
@@ -762,7 +818,8 @@ function docSectie(titel, rijen, leeg){
 function openDownloads(model){
   const { bestanden, viaBasis } = docsVoorModel(model);
   const specs   = bestanden.filter(f => f.soort === "spec");
-  const manuals = bestanden.filter(f => f.soort === "manual");
+  // De algemene handleiding staat bovenaan bij Manuals, vóór de modelbladen.
+  const manuals = algemeenVoorModel(model).concat(bestanden.filter(f => f.soort === "manual"));
   const beeld   = bestanden.filter(f => f.soort === "beeld");
   // Algemene documenten uit dezelfde map(pen) — de chiller-handleiding bij een
   // ijsbad, de gebruiksaanwijzing bij een sauna.
@@ -781,9 +838,9 @@ function openDownloads(model){
       <button class="secondary" id="dlClose" type="button" style="padding:6px 12px;">Close</button>
     </div>
     ${viaBasis ? `<p class="lead" style="margin:10px 0 0;font-size:12.5px;">These documents are published under <b>${esc(viaBasis)}</b> — the same shell as this version.</p>` : ""}
-    ${bestanden.length || algemeen.length ? "" : `<p class="lead" style="margin:14px 0 0;">No documents published for this model yet. Ask us via the Contact tab and we will send them to you.</p>`}
-    ${bestanden.length || algemeen.length ? docSectie("Spec sheets", specs, "None published yet.") : ""}
-    ${bestanden.length || algemeen.length ? docSectie("Manuals", manuals, "None published yet.") : ""}
+    ${bestanden.length || algemeen.length || manuals.length ? "" : `<p class="lead" style="margin:14px 0 0;">No documents published for this model yet. Ask us via the Contact tab and we will send them to you.</p>`}
+    ${bestanden.length || algemeen.length || manuals.length ? docSectie("Spec sheets", specs, "None published yet.") : ""}
+    ${bestanden.length || algemeen.length || manuals.length ? docSectie("Manuals", manuals, "None published yet.") : ""}
     ${bestanden.length || algemeen.length ? docSectie("Images", beeld, "No images published yet.") : ""}
     ${algemeen.length ? docSectie("General for this range", algemeen, "") : ""}
   </div>`;
@@ -824,7 +881,9 @@ async function loadMyRequests(){
   $("myReqList").innerHTML = reqs.map(x => {
     const [label, cls] = reqStatusLabel(x);
     return `<div class="doc">
-      <div><b>${x.qty}&times; ${esc(x.model)}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit?` · deposit ${x.currency==="USD"?"$":"€"} ${Number(x.deposit).toFixed(2)}`:""}</span></div>
+      <div><b>${x.items && x.items.length
+            ? x.items.map(i => i.qty + "\u00d7 " + i.naam).join(", ")
+            : (x.qty + "\u00d7 " + esc(x.model))}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit?` · paid ${x.currency==="USD"?"$":"€"} ${Number(x.deposit).toFixed(2)}`:""}</span></div>
       <span style="font-size:13px;${cls==="ok"?"color:#15803d;font-weight:600;":"color:var(--muted);"}">${label}</span>
     </div>`;
   }).join("");
@@ -984,11 +1043,17 @@ function openReserve(model){
   const variants = (m0.variants||[]);
   const kleur = m0.collectionColor || "#9ca3af";
 
+  /* Bij een samengesteld artikel staat eronder wat erin zit. De Iceman's
+     Barrel XL is in Logic4 één artikel met het vat, twee steps, twee pluggen
+     en de chiller; die gaan bij het bestellen automatisch mee de order in, dus
+     hoort een partner ze ook te zien voordat hij kiest. */
+  const bevatTekst = v => (v.bevat||[]).map(d => d.qty + "\u00d7 " + d.naam.replace(/^.*\|\s*/, "")).join(", ");
   const regel = v => {
     const op = Number(v.free)>0;
+    const inh = bevatTekst(v);
     return `<button type="button" role="option" data-code="${esc(v.code)}" data-naam="${esc(v.name||v.code)}">
         <span class="stip ${op?"op":"back"}"></span>
-        <span>${esc(v.name||v.code)}</span>
+        <span>${esc(v.name||v.code)}${inh?`<span style="display:block;font-size:11px;color:var(--muted);font-weight:400;line-height:1.4;">Includes ${esc(inh)}</span>`:""}</span>
         <span class="vrij ${op?"op":"back"}">${op?(v.free+" in stock"):"backorder"}</span>
       </button>`;
   };
@@ -1031,10 +1096,8 @@ function openReserve(model){
           ${(m0.available>0)?`
           <div style="flex:1 1 200px;">
             <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:5px;">Payment</label>
-            <select id="rsvPay">
-              <option value="deposit">30% deposit — reserve your spot</option>
-              <option value="full">Pay in full — delivered right away</option>
-              ${window.isFonteyn?'<option value="cent">TEST — pay 1 cent (Fonteyn only)</option>':''}
+            <select id="rsvPay" disabled title="You choose how to pay at checkout">
+              <option>Chosen at checkout</option>
             </select>
           </div>`:''}
         </div>
@@ -1042,7 +1105,7 @@ function openReserve(model){
         <textarea id="rsvNote" rows="3" placeholder="Anything we should know?"></textarea>
         <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
           <button id="rsvCancel" class="secondary" style="padding:11px 18px;">Cancel</button>
-          <button class="go" id="rsvSend" type="button" style="padding:11px 22px;">Send request</button>
+          <button class="go" id="rsvSend" type="button" style="padding:11px 22px;">Add to basket</button>
         </div>
         <div id="rsvMsg" class="msg hidden"></div>
       </div>
@@ -1087,34 +1150,235 @@ function openReserve(model){
     }));
   }
 
-  ov.querySelector("#rsvSend").addEventListener("click", async ()=>{
-    const btn = ov.querySelector("#rsvSend"); btn.disabled = true;
+  /* Reserveren legt de spa in de winkelwagen; afrekenen gebeurt daar.
+     Daarvóór ging elke spa meteen als losse bestelling de deur uit, en dan kun
+     je geen twee modellen en tien covers in één order krijgen. */
+  ov.querySelector("#rsvSend").addEventListener("click", ()=>{
     const vsel = ov.querySelector("#rsvVariant");
     const variant = vsel ? vsel.value : "";
     const variantName = (vsel && vsel.value) ? (vsel.dataset.naam || "") : "";
-    const paySel = ov.querySelector("#rsvPay");
-    const payFull = !!(paySel && paySel.value==="full");
-    // Testbetaling van één cent; de worker laat dit alleen toe voor Fonteyn.
-    const payCent = !!(paySel && paySel.value==="cent");
-    const r = await api("/dealers/api/reserve", { method:"POST", body: JSON.stringify({
-      model, qty: ov.querySelector("#rsvQty").value, note: ov.querySelector("#rsvNote").value,
-      variant, variantName, payFull, payCent }) });
+    const notitie = (ov.querySelector("#rsvNote").value || "").trim();
+    cartVoegToe({ soort:"spa", model, code: variant || null, variantName: variantName || null,
+                  qty: Math.max(1, parseInt(ov.querySelector("#rsvQty").value, 10) || 1),
+                  notitie: notitie || undefined });
     const m = ov.querySelector("#rsvMsg");
-    if (r.status===200 && r.data && r.data.ok && r.data.checkoutUrl) {
-      m.className="msg ok";
-      m.textContent="Request received — redirecting you to the secure payment page ("+(r.data.testbetaling?"TEST - 1 cent":(r.data.payFull?"full payment":"30% deposit"))+": " + (r.data.currency==="USD"?"$ ":"€ ") + (r.data.deposit!=null ? Number(r.data.deposit).toFixed(2) : "") + ")…";
+    m.className = "msg ok"; m.textContent = "Added to your basket."; m.classList.remove("hidden");
+    setTimeout(()=>{ ov.remove(); openCart(); }, 700);
+  });
+}
+
+/* ── Onderdelen en covers ────────────────────────────────────────────
+   Tabblad 2. De lijst komt uit Gretha's partnerprijslijst; de worker vult hem
+   aan met wat Logic4 erover weet (bestaat de code, ligt er iets vrij).
+   Staffelprijzen staan erbij: tien covers zijn per stuk goedkoper dan één. */
+let partsAlle = [], partsGeladen = false;
+async function loadParts(){
+  if (partsGeladen) return;
+  const r = await api("/dealers/api/parts");
+  if (r.status !== 200 || !r.data || !r.data.ok) return;
+  partsGeladen = true;
+  partsAlle = r.data.parts || [];
+  const sel = $("partsCat");
+  for (const c of (r.data.categories || [])) {
+    const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o);
+  }
+  if (r.data.updated) $("partsUpdated").textContent = "Last updated: " + new Date(r.data.updated).toLocaleDateString("en-GB") + ".";
+  renderParts();
+}
+function partPrijs(a, qty){
+  const q = Number(qty) || 1;
+  let eur = 0;
+  for (const t of (a.staffel || [])) if (q >= (Number(t.vanaf) || 1)) eur = Number(t.eur) || eur;
+  if (!eur && (a.staffel || []).length) eur = Number(a.staffel[0].eur) || 0;
+  return eur;
+}
+/* Onderdelen staan in euro's, spa's in dollars. Voor een Amerikaanse partner
+   gaat dezelfde koers eroverheen die de spa-prijzen ook gebruiken - maar dan
+   de andere kant op, want hier begint het bedrag in euro's. */
+function partWeergave(eur){
+  if (window.displayCurrency === "USD") return "$ " + (eur * (window.stockRate || 1.11)).toLocaleString("en-US", {maximumFractionDigits:2});
+  return "€ " + Number(eur).toLocaleString("de-DE", {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function staffelTekst(a){
+  const t = (a.staffel || []).slice(1);
+  if (!t.length) return "";
+  return t.map(x => "from " + x.vanaf + ": " + partWeergave(x.eur)).join(" &middot; ");
+}
+function renderParts(){
+  const q = ($("partsSearch").value || "").trim().toLowerCase();
+  const cat = $("partsCat").value;
+  let lijst = partsAlle;
+  if (cat) lijst = lijst.filter(a => a.cat === cat);
+  if (q) lijst = lijst.filter(a => (a.code + " " + a.desc + " " + a.brand + " " + a.sect).toLowerCase().includes(q));
+  $("partsCount").textContent = lijst.length + " part" + (lijst.length === 1 ? "" : "s");
+  if (!lijst.length) {
+    $("partsTable").innerHTML = '<tr><td style="padding:18px;color:var(--muted)">No parts found.</td></tr>';
+    return;
+  }
+  // Op categorie en dan op tussenkopje, zodat de volgorde van de prijslijst
+  // herkenbaar blijft. Het kopje staat maar één keer boven zijn groepje.
+  let vorige = null, rijen = "";
+  for (const a of lijst) {
+    const kop = a.cat + (a.sect ? " › " + a.sect : "");
+    if (kop !== vorige) {
+      vorige = kop;
+      rijen += `<tr><td colspan="6" style="padding:14px 10px 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);border-bottom:0;">${esc(kop)}</td></tr>`;
+    }
+    const eur = partPrijs(a, 1);
+    const st = staffelTekst(a);
+    rijen += `<tr>
+      <td style="color:var(--muted);font-size:12px;white-space:nowrap">${esc(a.code)}</td>
+      <td><b>${esc(a.desc)}</b>${a.brand?` <span style="color:var(--muted);font-size:11px">${esc(a.brand)}</span>`:""}${
+        a.vervallen?' <span class="pill" style="background:#fef3c7;color:#92400e">discontinued</span>':""}
+        ${st?`<div style="color:var(--muted);font-size:11px;margin-top:2px;">${st}</div>`:""}</td>
+      <td class="n">${a.vrij>0?`<span class="pill">${a.vrij}</span>`:'<span style="color:var(--muted);font-size:12px">on order</span>'}</td>
+      <td class="n"><b>${partWeergave(eur)}</b></td>
+      <td class="n"><input type="number" class="pq" data-code="${esc(a.code)}" value="1" min="1" max="999"
+           style="width:64px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;text-align:right;"></td>
+      <td class="n">${a.bestelbaar
+        ? `<button class="go padd" data-code="${esc(a.code)}" style="padding:6px 12px;font-size:12px;">Add</button>`
+        : '<span style="color:var(--muted);font-size:11px">ask us</span>'}</td>
+    </tr>`;
+  }
+  $("partsTable").innerHTML =
+    `<thead><tr><th>Code</th><th>Part</th><th class="n">In stock</th><th class="n">Price</th><th class="n">Qty</th><th></th></tr></thead>
+     <tbody>${rijen}</tbody>`;
+  $("partsTable").querySelectorAll(".padd").forEach(b => b.addEventListener("click", () => {
+    const code = b.dataset.code;
+    const inp = $("partsTable").querySelector('.pq[data-code="' + CSS.escape(code) + '"]');
+    const a = partsAlle.find(x => x.code === code);
+    const aantal = Math.max(1, parseInt(inp && inp.value, 10) || 1);
+    if (a) { cartVoegToe({ soort:"part", code: a.code, naam: a.desc, qty: aantal, eur: partPrijs(a, aantal) });
+             b.textContent = "Added"; setTimeout(()=>{ b.textContent = "Add"; }, 1200); }
+  }));
+}
+$("partsSearch").addEventListener("input", renderParts);
+$("partsCat").addEventListener("change", renderParts);
+
+/* ── Winkelwagen ─────────────────────────────────────────────────────
+   Gerrit (3 sep 2026): "er moet een winkelwagen komen, omdat ik ook veel meer
+   dan 1 spa wil kunnen bestellen. Misschien wil ik wel 10 covers en 2 spa's
+   van verschillende modellen."
+
+   De wagen staat in localStorage, per browser. Sluit iemand het tabblad
+   halverwege een bestelling, dan is de lijst er de volgende keer nog. Hij
+   wordt pas leeggemaakt als de betaling is gestart. */
+function cartBewaar(){
+  try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch(e){}
+  const n = cart.reduce((t, r) => t + (Number(r.qty) || 0), 0);
+  const tel = $("cartTel"); if (tel) tel.textContent = n;
+  const btn = $("cartBtn"); if (btn) btn.classList.toggle("hidden", !window.ingelogd);
+}
+function cartVoegToe(regel){
+  // Dezelfde regel nog eens toevoegen telt op, in plaats van er twee te maken.
+  const zelfde = cart.find(r => r.soort === regel.soort && r.code === regel.code &&
+                                (r.soort !== "spa" || r.model === regel.model));
+  if (zelfde) zelfde.qty = Math.min(99, (Number(zelfde.qty)||0) + (Number(regel.qty)||1));
+  else cart.push(regel);
+  cartBewaar();
+}
+function cartRegelPrijs(r){
+  if (r.soort === "part") {
+    const a = partsAlle.find(x => x.code === r.code);
+    const eur = a ? partPrijs(a, r.qty) : Number(r.eur) || 0;
+    return window.displayCurrency === "USD" ? eur * (window.stockRate || 1.11) : eur;
+  }
+  const m = (stockModels || []).find(x => x.model === r.model);
+  if (!m) return 0;
+  const p = prijsVan(m);
+  return p.totaal;                       // spa + vracht en verpakking
+}
+function cartTotaal(){ return cart.reduce((t, r) => t + cartRegelPrijs(r) * (Number(r.qty)||1), 0); }
+function geld(n){
+  const usd = window.displayCurrency === "USD";
+  return (usd ? "$ " : "€ ") + Number(n).toLocaleString(usd ? "en-US" : "de-DE", {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+function openCart(){
+  const bestaand = $("cartOv"); if (bestaand) bestaand.remove();
+  const ov = document.createElement("div");
+  ov.id = "cartOv";
+  ov.style.cssText = "position:fixed;inset:0;background:rgba(20,24,22,.45);display:flex;align-items:center;justify-content:center;padding:18px;z-index:70;";
+  // Volledig betalen mag alleen als élke spa in de wagen nu op voorraad is.
+  const spaRegels = cart.filter(r => r.soort === "spa");
+  const alleOpVoorraad = spaRegels.length > 0 && spaRegels.every(r => {
+    const m = (stockModels || []).find(x => x.model === r.model);
+    return m && Number(m.vrijNu) >= (Number(r.qty) || 1);
+  });
+  const rijen = cart.map((r, i) => `
+    <tr>
+      <td><b>${esc(r.soort === "spa" ? r.model : r.naam)}</b>
+        ${r.variantName?`<div style="color:var(--muted);font-size:11.5px">${esc(r.variantName)}</div>`:""}
+        ${r.code?`<div style="color:var(--muted);font-size:11px">${esc(r.code)}</div>`:""}</td>
+      <td class="n"><input type="number" class="cq" data-i="${i}" value="${Number(r.qty)||1}" min="1" max="99"
+          style="width:60px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;text-align:right;"></td>
+      <td class="n">${geld(cartRegelPrijs(r) * (Number(r.qty)||1))}</td>
+      <td class="n"><button class="secondary cdel" data-i="${i}" style="padding:4px 9px;font-size:12px;">Remove</button></td>
+    </tr>`).join("");
+  ov.innerHTML = `
+    <div class="card" style="max-width:620px;width:100%;margin:0;max-height:88vh;overflow:auto;">
+      <h2 style="margin-top:0;">Your basket</h2>
+      ${cart.length ? `
+        <div class="prijswrap"><table class="prijs">
+          <thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Total</th><th></th></tr></thead>
+          <tbody>${rijen}</tbody>
+        </table></div>
+        <p class="lead" style="margin:12px 0 0;text-align:right;">Order value: <b style="font-size:16px;color:var(--ink)">${geld(cartTotaal())}</b> <span style="font-size:12px">excl. VAT</span></p>
+        <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Payment</label>
+        <select id="cartPay" style="width:100%;">
+          <option value="deposit">${spaRegels.length ? "30% deposit on the spas, parts in full" : "Pay in full"}</option>
+          ${alleOpVoorraad?'<option value="full">Pay everything in full — delivered right away</option>':''}
+          ${window.isFonteyn?'<option value="cent">TEST — pay 1 cent (Fonteyn only)</option>':''}
+        </select>
+        <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Notes (options, delivery, …)</label>
+        <textarea id="cartNote" rows="2" placeholder="Anything we should know?"></textarea>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap;">
+          <button class="secondary" id="cartLeeg" type="button" style="padding:11px 16px;">Empty basket</button>
+          <button class="secondary" id="cartDicht" type="button" style="padding:11px 18px;">Keep shopping</button>
+          <button class="go" id="cartAf" type="button" style="padding:11px 22px;">Checkout</button>
+        </div>
+        <div id="cartMsg" class="msg hidden"></div>`
+      : `<p class="lead">Your basket is empty. Add spas from the <b>Spas</b> tab and parts from <b>Parts &amp; covers</b>.</p>
+         <div style="text-align:right;margin-top:14px;"><button class="secondary" id="cartDicht" type="button" style="padding:11px 18px;">Close</button></div>`}
+    </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener("click", e => { if (e.target === ov) ov.remove(); });
+  ov.querySelector("#cartDicht").addEventListener("click", () => ov.remove());
+  ov.querySelectorAll(".cdel").forEach(b => b.addEventListener("click", () => {
+    cart.splice(Number(b.dataset.i), 1); cartBewaar(); ov.remove(); openCart();
+  }));
+  ov.querySelectorAll(".cq").forEach(inp => inp.addEventListener("change", () => {
+    cart[Number(inp.dataset.i)].qty = Math.max(1, Math.min(99, parseInt(inp.value, 10) || 1));
+    cartBewaar(); ov.remove(); openCart();
+  }));
+  const leeg = ov.querySelector("#cartLeeg");
+  if (leeg) leeg.addEventListener("click", () => { cart = []; cartBewaar(); ov.remove(); openCart(); });
+  const af = ov.querySelector("#cartAf");
+  if (af) af.addEventListener("click", async () => {
+    af.disabled = true;
+    const keuze = (ov.querySelector("#cartPay") || {}).value || "deposit";
+    const r = await api("/dealers/api/reserve", { method:"POST", body: JSON.stringify({
+      items: cart.map(x => ({ soort: x.soort, model: x.model, code: x.code, qty: x.qty,
+                              variant: x.soort === "spa" ? x.code : undefined, variantName: x.variantName })),
+      note: (ov.querySelector("#cartNote") || {}).value || "",
+      payFull: keuze === "full", payCent: keuze === "cent" }) });
+    const m = ov.querySelector("#cartMsg");
+    if (r.status === 200 && r.data && r.data.ok && r.data.checkoutUrl) {
+      m.className = "msg ok";
+      m.textContent = "Order received — redirecting you to the secure payment page (" +
+        (r.data.testbetaling ? "TEST - 1 cent" : geld(r.data.deposit || 0)) + ")…";
       m.classList.remove("hidden");
-      setTimeout(()=>{ location.href = r.data.checkoutUrl; }, 1400);
-    } else if (r.status===200 && r.data && r.data.ok) {
-      m.className="msg ok"; m.textContent="Request sent — you can follow its status under My spas."; m.classList.remove("hidden");
-      loadMyRequests();
-      setTimeout(()=>ov.remove(), 2200);
+      cart = []; cartBewaar();
+      setTimeout(() => { location.href = r.data.checkoutUrl; }, 1400);
+    } else if (r.status === 200 && r.data && r.data.ok) {
+      m.className = "msg ok"; m.textContent = "Order sent — you can follow it under My spas."; m.classList.remove("hidden");
+      cart = []; cartBewaar(); loadMyRequests(); setTimeout(() => ov.remove(), 2200);
     } else {
-      m.className="msg bad"; m.textContent="Sending failed — please try again."; m.classList.remove("hidden");
-      btn.disabled = false;
+      m.className = "msg bad"; m.textContent = "Sending failed — please try again."; m.classList.remove("hidden");
+      af.disabled = false;
     }
   });
 }
+$("cartBtn").addEventListener("click", openCart);
 
 // ── Contact ──
 $("qSend").addEventListener("click", async ()=>{

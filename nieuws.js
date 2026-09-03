@@ -52,6 +52,30 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-03", groep: "partnerportaal-kijk", soort: "nieuw",
+      titel: "Onderdelen, covers en een winkelwagen",
+      wat: "Passion Partners heeft er een tweede tabblad bij: alle spa-onderdelen en covers uit de partnerprijslijst, ruim zevenhonderd artikelen, met de staffelprijzen en of ze op voorraad liggen. En er is een winkelwagen, zodat een partner twee spa's en tien covers in één bestelling kan doen in plaats van elke spa apart.",
+    },
+
+    {
+      datum: "2026-09-03", groep: "partnerportaal-kijk", soort: "hersteld",
+      titel: "Bestellingen komen goed in Logic4",
+      wat: "Een bestelling uit het portaal kwam in Logic4 binnen met een bedrag van nul en zonder de aanbetaling erop. De prijs uit het portaal staat er nu op, de verpakkingskosten staan als eigen regel, en het betaalde bedrag wordt geboekt zoals bij een showroomverkoop. Ook worden samengestelde artikelen nu vanzelf uitgeklapt: bestel je een Iceman's Barrel XL, dan staan de steps, de pluggen en de chiller meteen in de order.",
+    },
+
+    {
+      datum: "2026-09-03", groep: "partnerportaal-kijk", soort: "beter",
+      titel: "Voorraad per kleur, en de handleiding erbij",
+      wat: "Op een modeltegel staat geen rekensom meer met voorraad, schip en reserveringen, maar gewoon welke kleuren er nu liggen en hoeveel: 1x Espresso, 1x Mystic Mountain. Wat gereserveerd is telt niet mee, want dat is verkocht. De collecties staan in de volgorde van de gedrukte prijslijst, en bij elke spa en swimspa staat nu de algemene handleiding onder Manuals.",
+    },
+
+    {
+      datum: "2026-09-03", bestand: "container-laden.html", soort: "hersteld",
+      titel: "Covers werden verkeerd om gevouwen",
+      wat: "Het dashboard vouwde een cover over de korte kant, waardoor een cover van 590 bij 277 als bijna zes meter lang de container in ging. Hij wordt over de lange kant gevouwen: 295 bij 277. Daardoor past er in de praktijk meer in een container dan de tegel tot nu toe liet zien.",
+    },
+
+    {
       datum: "2026-09-03", groep: "partnerportaal-kijk", soort: "beter",
       titel: "Voorraad in het portaal telt nu op, en per kleur",
       wat: "Boven een model stond bijvoorbeeld 29 beschikbaar terwijl eronder 8 op voorraad en 29 op het water stond. Die getallen kwamen uit twee verschillende tellingen en klopten niet met elkaar. Er staat nu: in het magazijn, op het water, min wat al gereserveerd is, en dat komt precies uit op het getal bovenaan. Daaronder staat per kleur hoeveel er nu klaar staat, zodat een partner ziet welke kleur hij kan bestellen zonder de keuzelijst te openen.",

@@ -31,6 +31,8 @@ const ALLOWED_BUCKETS = new Set([
   "dealer-docs",      // Dealerportaal: documenten/specsheets (titel/model/url)
   "dealer-requests",  // Dealerportaal: reserveringsaanvragen van dealers (beheer via interne tegel)
   "dealer-prices",    // Dealerportaal: dealerprijs per model (voor 30%-aanbetaling via Mollie)
+  "dealer-parts",     // Passion Partners: onderdelen en covers uit Gretha's prijslijst — tools/build-partner-parts.mjs.
+                      // Heet met opzet "dealer-": dan geldt de beheersleutel, net als bij dealer-prices.
   "spa-catalog",      // Model → varianten (artikelcode/kleur/productId) uit Logic4 — tools/build-spa-catalog.mjs
   "voorraad-hallen",  // Echte hal-voorraad per model uit Logic4 (warehouse Fonteyn) — tools/build-stock.mjs
   "voorraad-schepen", // Schip-voorraad uit commercial invoices (ref/schip/eta + regels per model)
@@ -586,8 +588,14 @@ async function dpHandleStock(env) {
     // zodat een partner ook bij een backorder-model een kleur kan kiezen.
     const freeByCode = {};
     for (const v of (m.variants || [])) freeByCode[v.code] = v.qty;
+    /* bevat = wat er in een samengesteld artikel zit. De Iceman's Barrel XL
+       is in Logic4 één artikel met het vat, twee steps, twee pluggen en de
+       chiller erin. Een partner hoort te zien wat hij koopt, en Logic4 zet die
+       onderdelen bij het bestellen zelf op de order. */
     m.variants = (catModels[m.model] || []).map(v => ({
       code: v.code, name: codeName[v.code] || v.code, free: Number(freeByCode[v.code]) || 0,
+      bevat: Array.isArray(v.bevat) && v.bevat.length
+        ? v.bevat.map(d => ({ qty: Number(d.qty) || 1, naam: d.naam || d.code })) : null,
     }));
     /* Wat er NU vrij in de hal ligt, opgeteld uit de kleuren zelf. Het model
        had ook een eigen 'available' uit een andere telling, en die twee liepen
@@ -612,6 +620,49 @@ async function dpHandleStock(env) {
   // In de volgorde van de gedrukte prijslijst, binnen een collectie op naam.
   models.sort((a, b) => (a.collectionRank - b.collectionRank) || String(a.model).localeCompare(String(b.model)));
   return reply(200, { ok: true, updated: agg.updated, shipsUpdated: agg.shipsUpdated, rate, models });
+}
+
+/* GET /dealers/api/parts — alle spa-onderdelen en covers.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (3 sep 2026): "alle spa onderdelen en covers. Die worden regelmatig
+   besteld door dealers/partners en dat moet een aparte tab worden."
+
+   De lijst komt uit Gretha's Partner Price List en wordt door
+   tools/build-partner-parts.mjs in KV gezet, aangevuld met wat Logic4 erover
+   weet: bestaat de code, ligt er iets vrij, en welk BTW-tarief hoort erbij.
+
+   Anders dan de spa's staan deze prijzen in EURO en niet in dollars. Ze worden
+   dus NIET door de wisselkoers gedeeld; dat zou ze zonder reden een tiende
+   duurder of goedkoper maken.
+
+   Artikelen zonder Logic4-code gaan wel mee (ze staan op de prijslijst en een
+   partner mag ernaar vragen), maar het portaal laat er geen bestelknop bij
+   zien: een orderregel zonder artikelcode laat Logic4 crashen. */
+async function dpHandleParts(env) {
+  const data = (await env.FONTEYN_DATA.get("dealer-parts", { type: "json" })) || {};
+  const parts = Array.isArray(data.parts) ? data.parts : [];
+  return reply(200, {
+    ok: true, updated: data.updated || null,
+    categories: Array.isArray(data.categories) ? data.categories : [],
+    parts: parts.map(a => ({
+      code: a.code, desc: a.descL4 || a.desc, brand: a.brand || "",
+      cat: a.cat, sect: a.sect || "",
+      staffel: Array.isArray(a.staffel) ? a.staffel : [],
+      vrij: Number(a.vrij) || 0,
+      bestelbaar: a.logic4 !== false,
+      vervallen: !!a.vervallen,
+    })),
+  });
+}
+
+/* Prijs van een onderdeel bij een bepaald aantal: de hoogste staffel waar het
+   aantal nog boven zit. Tien covers zijn per stuk goedkoper dan één. */
+function dpPartPrijs(staffel, qty) {
+  const q = Number(qty) || 1;
+  let prijs = 0;
+  for (const t of (staffel || [])) if (q >= (Number(t.vanaf) || 1)) prijs = Number(t.eur) || prijs;
+  if (!prijs && (staffel || []).length) prijs = Number(staffel[0].eur) || 0;
+  return prijs;
 }
 
 // GET /dealers/api/myspas — de eigen reserveringen van deze partner, MET de
@@ -758,96 +809,165 @@ function dpSnapshotClaim(model, qty) {
 async function dpHandleReserve(request, env, sess, url) {
   let body = {};
   try { body = await request.json(); } catch {}
-  const model = String(body.model || "").trim().slice(0, 80);
-  const qty = Math.max(1, Math.min(50, parseInt(body.qty, 10) || 1));
+
+  /* Winkelwagen. Gerrit (3 sep 2026): "er moet een winkelwagen komen, omdat ik
+     ook veel meer dan 1 spa wil kunnen bestellen. Misschien wil ik wel 10
+     covers en 2 spa's van verschillende modellen."
+
+     Eén aanvraag is dus een lijst regels van twee soorten: 'spa' (een model uit
+     de prijslijst, met een kleurvariant) en 'part' (een onderdeel of cover uit
+     de partnerprijslijst). Ze rekenen anders af: een spa gaat op 30%
+     aanbetaling tenzij hij op voorraad is, een onderdeel wordt altijd in één
+     keer betaald - dat ligt in de hal en gaat gewoon mee.
+
+     Het oude formaat met losse model/qty blijft werken; dat is één spa-regel. */
+  const items = (Array.isArray(body.items) && body.items.length ? body.items : [{
+    soort: "spa", model: body.model, qty: body.qty,
+    variant: body.variant, variantName: body.variantName,
+  }]).slice(0, 40);
   const note = String(body.note || "").slice(0, 1500);
-  // Kleurvariant (optioneel): artikelcode uit de catalogus. Bepaalt de
-  // Logic4-productregel; valt anders terug op de prijslijst-code.
-  const variantCode = String(body.variant || "").trim().slice(0, 20) || null;
-  const variantName = String(body.variantName || "").trim().slice(0, 120) || null;
-  if (!model) return reply(400, { ok: false, error: "model-required" });
+
+  const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
+  const partsData = (await env.FONTEYN_DATA.get("dealer-parts", { type: "json" })) || {};
+  const partByCode = new Map((partsData.parts || []).map(a => [String(a.code), a]));
+
+  const accountsPre = await dpGetAccounts(env);
+  const dealerPre = dpFindDealer(accountsPre, sess.email);
+  const isUS = String((dealerPre && dealerPre.region) || "").toUpperCase() === "US";
+  const debtorId = dealerPre && (dealerPre.debtorIds || [])[0];
+  const rate = await dpRate(env);
+  const vatPercent = isUS ? 0 : await dpDebtorVatPercent(env, debtorId);   // BTW uit Logic4
+  const hallen = (await env.FONTEYN_DATA.get("voorraad-hallen", { type: "json" })) || {};
+
+  const wantsFull = body.payFull === true;
+  /* Testbetaling van één cent. Alleen voor mensen van Fonteyn zelf; een echte
+     partner kan hem niet kiezen en ook niet meesturen, want dat zou een
+     reservering opleveren waar niets voor betaald is. */
+  const isFonteyn = /@fonteyn\.nl$/i.test(String(sess.email || ""));
+  const wantsCent = body.payCent === true && isFonteyn;
+
+  const regels = [];                      // wat er straks als orderregels in Logic4 komt
+  let teBetalen = 0;                      // som van aanbetalingen/volledige bedragen, incl. BTW
+  let totaalExVat = 0;
+  let spaAantal = 0, partAantal = 0;
+  let packUnit = 0;
+  const btwF = 1 + (Number(vatPercent) || 0) / 100;
+
+  for (const it of items) {
+    const qty = Math.max(1, Math.min(50, parseInt(it.qty, 10) || 1));
+    if (String(it.soort || "spa") === "part") {
+      const a = partByCode.get(String(it.code || "").trim());
+      if (!a) continue;                              // onbekende code slaan we over
+      if (a.logic4 === false) continue;              // zonder artikelcode kan er geen orderregel komen
+      const eur = dpPartPrijs(a.staffel, qty);
+      if (!(eur > 0)) continue;
+      // Onderdelen staan in euro's. Een Amerikaanse partner rekent in dollars,
+      // dus daar gaat dezelfde koers overheen die de spa's ook gebruiken.
+      const stuk = isUS ? eur * rate : eur;
+      const regelEx = stuk * qty;
+      totaalExVat += regelEx;
+      teBetalen += regelEx * btwF;                   // onderdelen: altijd in één keer
+      partAantal += qty;
+      regels.push({ soort: "part", code: a.code, qty, unit: Math.round(stuk * 100) / 100,
+                    naam: a.descL4 || a.desc });
+      continue;
+    }
+    const model = String(it.model || "").trim().slice(0, 80);
+    const pEntry = (priceData.prices || {})[model];
+    if (!model || !(pEntry && Number(pEntry.usd) > 0)) continue;
+    const c = dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, fraction: 1.0 });
+    totaalExVat += c.totalExVat;
+    spaAantal += qty;
+    packUnit = Math.round(c.packUnit * 100) / 100;
+    regels.push({ soort: "spa", model, qty,
+                  code: String(it.variant || "").trim().slice(0, 20) || (pEntry.code ? String(pEntry.code) : null),
+                  variantName: String(it.variantName || "").trim().slice(0, 120) || null,
+                  unit: Math.round(c.spaUnit * 100) / 100,
+                  volInclVat: c.totalInclVat });
+  }
+  if (!regels.length) return reply(400, { ok: false, error: "lege winkelwagen" });
+
+  /* Volledig betalen mag alleen als élke spa in de wagen nu op voorraad is;
+     anders is het 30% aanbetaling over de spa's. Onderdelen worden altijd
+     volledig betaald, ongeacht wat de spa's doen. */
+  const alleOpVoorraad = regels.filter(r => r.soort === "spa").every(r =>
+    (((hallen.models || {})[r.model] || {}).available || 0) >= r.qty);
+  const payFull = wantsFull && alleOpVoorraad;
+  for (const r of regels) {
+    if (r.soort !== "spa") continue;
+    teBetalen += payFull ? r.volInclVat : r.volInclVat * 0.30;
+    delete r.volInclVat;
+  }
+  let deposit = Math.round(teBetalen * 100) / 100;
+  const currency = isUS ? "USD" : "EUR";
+
+  const eersteSpa = regels.find(r => r.soort === "spa");
+  const samenvatting = regels.map(r => r.qty + "x " + (r.soort === "spa" ? r.model : r.naam)).join(", ").slice(0, 180);
+
   const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
   if (!Array.isArray(data.requests)) data.requests = [];
   const entry = {
     id: crypto.randomUUID(), ts: new Date().toISOString(),
     email: sess.email, company: sess.company || "",
-    model, qty, note, status: "new",
-    variant: variantCode, variantName,
+    // model/qty blijven bestaan: de beheertegel, de voorraadclaim en de
+    // reserveringsledger kijken daarnaar. Ze wijzen naar de eerste spa.
+    model: eersteSpa ? eersteSpa.model : (regels[0].naam || regels[0].code),
+    qty: eersteSpa ? eersteSpa.qty : regels[0].qty,
+    variant: eersteSpa ? eersteSpa.code : null,
+    variantName: eersteSpa ? eersteSpa.variantName : null,
+    productCode: regels[0].code || null,
+    items: regels, note, status: "new",
+    currency, vatPercent, payFull,
+    spaUnit: eersteSpa ? eersteSpa.unit : null,
+    packUnit: spaAantal ? packUnit : 0,
+    totaalExVat: Math.round(totaalExVat * 100) / 100,
   };
-  if (variantCode) entry.productCode = variantCode;
-  // Volledig betalen (100%) mag ALLEEN als de spa nu op voorraad is (dan wordt
-  // hij direct geleverd). Anders altijd 30% aanbetaling. Server-side gecheckt.
-  const wantsFull = body.payFull === true;
-  /* Testbetaling van één cent. Gerrit (3 sep 2026): "maak het mogelijk dat ik
-     naast 30% of Full ook kan kiezen om 0,01 aan te betalen, dan kan ik het nu
-     testen met Arno." Alleen zichtbaar en toegestaan voor mensen van Fonteyn
-     zelf; een echte partner kan hem niet kiezen en ook niet meesturen, want
-     dat zou een reservering opleveren waar niets voor betaald is. */
-  const isFonteyn = /@fonteyn\.nl$/i.test(String(sess.email || ""));
-  const wantsCent = body.payCent === true && isFonteyn;
+
   let checkoutUrl = null;
-  if (env.MOLLIE_API_KEY) {
-    const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
-    const accountsPre = await dpGetAccounts(env);
-    const dealerPre = dpFindDealer(accountsPre, sess.email);
-    const isUS = String((dealerPre && dealerPre.region) || "").toUpperCase() === "US";
-    const debtorId = dealerPre && (dealerPre.debtorIds || [])[0];
-    const pEntry = (priceData.prices || {})[model];
-    if (pEntry && pEntry.code && !entry.productCode) entry.productCode = String(pEntry.code);
-    if (pEntry && Number(pEntry.usd) > 0) {
-      // Voorraad-check voor 100%-optie: alleen als vrij ≥ gevraagd aantal.
-      const hallen = (await env.FONTEYN_DATA.get("voorraad-hallen", { type: "json" })) || {};
-      const beschikbaar = ((hallen.models || {})[model] || {}).available || 0;
-      const payFull = wantsFull && beschikbaar >= qty;
-      const rate = await dpRate(env);
-      const vatPercent = isUS ? 0 : await dpDebtorVatPercent(env, debtorId);   // BTW uit Logic4
-      const calc = dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, fraction: payFull ? 1.0 : 0.30 });
-      entry.currency = calc.currency;
-      entry.vatPercent = calc.vatPercent;
-      entry.payFull = payFull;
-      /* De prijs per stuk vasthouden. De Logic4-order wordt pas ná de betaling
-         aangemaakt (in de webhook), en dan is de wisselkoers van vandaag al
-         weer een andere. De partner heeft betaald op de prijs van nú, dus die
-         hoort op de order te staan — niet een herberekening van morgen. */
-      entry.spaUnit = Math.round(calc.spaUnit * 100) / 100;
-      entry.packUnit = Math.round(calc.packUnit * 100) / 100;
-      /* Bij een testbetaling blijft de hele berekening staan - bedragen, BTW,
-         de order die er straks van komt - en gaat alleen het te betalen bedrag
-         naar één cent. Zo test je de hele keten en niet een halve. */
-      if (wantsCent) { calc.deposit = 0.01; entry.testbetaling = true; entry.payFull = false; }
-      const label = wantsCent ? "TEST - 1 cent" : (payFull ? "Full payment (in stock)" : "30% deposit");
-      const pay = await dpCreateMolliePayment(env, calc.deposit,
-        label + " — " + qty + "x " + model + " (" + (sess.company || sess.email) + ")",
-        url.origin + "/dealers?paid=1",
-        url.origin + "/dealers/webhook",
-        { requestId: entry.id }, calc.currency);
-      if (pay.ok) {
-        entry.deposit = calc.deposit;
-        entry.paymentId = pay.id;
-        entry.paymentStatus = "open";
-        checkoutUrl = pay.checkoutUrl;
-        entry.allocation = dpSnapshotClaim(model, qty);
-      }
+  if (env.MOLLIE_API_KEY && deposit > 0) {
+    /* Bij een testbetaling blijft de hele berekening staan - bedragen, BTW,
+       de order die er straks van komt - en gaat alleen het te betalen bedrag
+       naar één cent. Zo test je de hele keten en niet een halve. */
+    if (wantsCent) { deposit = 0.01; entry.testbetaling = true; entry.payFull = false; }
+    const label = wantsCent ? "TEST - 1 cent"
+                : (payFull ? "Full payment (in stock)"
+                : (spaAantal ? "30% deposit" : "Payment"));
+    const pay = await dpCreateMolliePayment(env, deposit,
+      label + " — " + samenvatting + " (" + (sess.company || sess.email) + ")",
+      url.origin + "/dealers?paid=1",
+      url.origin + "/dealers/webhook",
+      { requestId: entry.id }, currency);
+    if (pay.ok) {
+      entry.deposit = deposit;
+      entry.paymentId = pay.id;
+      entry.paymentStatus = "open";
+      checkoutUrl = pay.checkoutUrl;
+      if (eersteSpa) entry.allocation = dpSnapshotClaim(eersteSpa.model, eersteSpa.qty);
     }
   }
   data.requests.push(entry);
   await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+
   const accounts = await dpGetAccounts(env);
   const esc = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const sym = currency === "USD" ? "$" : "€";
   await dpSendEmail(env, accounts.contactEmail || "gerrit@fonteyn.nl",
-    "[Partnerportaal] Reservering: " + qty + "x " + model + " — " + (sess.company || sess.email),
+    "[Partnerportaal] Bestelling: " + samenvatting + " — " + (sess.company || sess.email),
     '<div style="font-family:Arial,sans-serif;">' +
-    '<p><b>Nieuwe reserveringsaanvraag via het partnerportaal</b></p>' +
-    '<p><b>Dealer:</b> ' + esc(sess.company || "") + ' &lt;' + esc(sess.email) + '&gt;<br>' +
-    '<b>Model:</b> ' + esc(model) + '<br><b>Aantal:</b> ' + qty +
-    (entry.deposit ? '<br><b>Aanbetaling (30%):</b> ' + (entry.currency === 'USD' ? '$' : '€') + ' ' + entry.deposit.toFixed(2) + ' — Mollie-link naar dealer gestuurd' : '') + '</p>' +
+    '<p><b>Nieuwe bestelling via het partnerportaal</b></p>' +
+    '<p><b>Dealer:</b> ' + esc(sess.company || "") + ' &lt;' + esc(sess.email) + '&gt;</p>' +
+    '<ul style="line-height:1.7">' + regels.map(r =>
+      '<li><b>' + r.qty + '&times; ' + esc(r.soort === "spa" ? r.model : r.naam) + '</b>' +
+      (r.variantName ? ' (' + esc(r.variantName) + ')' : '') +
+      (r.code ? ' <span style="color:#888">' + esc(r.code) + '</span>' : '') + '</li>').join("") + '</ul>' +
+    (entry.deposit ? '<p><b>' + (payFull ? 'Volledig bedrag' : 'Aanbetaling') + ':</b> ' + sym + ' ' + entry.deposit.toFixed(2) + ' — Mollie-link naar dealer gestuurd</p>' : '') +
     (note ? '<p style="white-space:pre-wrap;border-left:3px solid #8bc53f;padding-left:12px;">' + esc(note) + '</p>' : '') +
     '<p style="color:#888;font-size:12px;">Ook zichtbaar in de beheertegel Dealerportaal. Reply gaat direct naar de dealer.</p></div>',
     sess.email);
   await dpLogPartner(env, sess, "reservering-aangevraagd",
-    qty + "× " + model + (variantName ? " (" + variantName + ")" : "") +
-    (checkoutUrl ? " — betaallink " + (entry.currency === "USD" ? "$" : "€") + (entry.deposit != null ? entry.deposit.toFixed(2) : "") : ""));
-  return reply(200, { ok: true, checkoutUrl: checkoutUrl, deposit: entry.deposit || null, currency: entry.currency || null, payFull: !!entry.payFull, testbetaling: !!entry.testbetaling });
+    samenvatting + (checkoutUrl ? " — betaallink " + sym + (entry.deposit != null ? entry.deposit.toFixed(2) : "") : ""));
+  return reply(200, { ok: true, checkoutUrl, deposit: entry.deposit || null, currency,
+                      payFull: !!entry.payFull, testbetaling: !!entry.testbetaling, regels: regels.length });
 }
 
 // Fase 3 — Mollie-betaallink (wacht op MOLLIE_API_KEY als worker-secret).
@@ -934,7 +1054,13 @@ async function dpHandleMyRequests(env, sess) {
   const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
   const mine = (Array.isArray(data.requests) ? data.requests : [])
     .filter(r => String(r.email || "").toLowerCase() === String(sess.email || "").toLowerCase())
+    /* items erbij: sinds de winkelwagen kan één aanvraag meerdere spa's én
+       onderdelen bevatten. Zonder deze regel zag een partner alleen de eerste
+       regel terug en leek de rest van zijn bestelling verdwenen. */
     .map(r => ({ ts: r.ts, model: r.model, qty: r.qty, status: r.status,
+                 items: Array.isArray(r.items) && r.items.length > 1
+                   ? r.items.map(x => ({ qty: x.qty, naam: x.soort === "spa" ? x.model : (x.naam || x.code),
+                                         variantName: x.variantName || null })) : null,
                  deposit: r.deposit || null, currency: r.currency || null, paymentStatus: r.paymentStatus || null }))
     .sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
   return reply(200, { ok: true, requests: mine });
@@ -1452,7 +1578,19 @@ async function dpHandleMollieWebhook(request, env) {
               /* De omschrijving is het model plus de kleur - niet "1x Delight".
                  Het aantal staat al in zijn eigen kolom, dus dat er twee keer
                  in zetten leest alleen maar verkeerd op de orderbevestiging. */
-              const regels = (Array.isArray(item.regels) && item.regels.length)
+              /* Drie formaten, van nieuw naar oud:
+                 - items: de winkelwagen (spa's én onderdelen door elkaar)
+                 - regels: meerdere spa's uit een interne reservering
+                 - losse velden: één spa, het oorspronkelijke formaat
+                 Oude aanvragen die nog openstaan moeten blijven werken, dus
+                 alle drie blijven ze hier staan. */
+              const regels = (Array.isArray(item.items) && item.items.length)
+                ? item.items.map(r => ({
+                    productCode: r.code || null, qty: r.qty || 1, nettPrice: r.unit,
+                    description: r.soort === "spa"
+                      ? r.model + (r.variantName ? " — " + r.variantName : "")
+                      : (r.naam || r.code) }))
+                : (Array.isArray(item.regels) && item.regels.length)
                 ? item.regels.map(r => ({
                     productCode: r.productCode || null, qty: r.qty || 1,
                     nettPrice: r.spaUnit != null ? r.spaUnit : item.spaUnit,
@@ -1464,9 +1602,14 @@ async function dpHandleMollieWebhook(request, env) {
                  de hand boekt: artikel 7894565, $50 per spa omgerekend. Zaten
                  die in de spa-regel verstopt, dan klopte de spa-prijs niet
                  meer met de prijslijst waar de partner naar kijkt. */
-              const aantalTotaal = regels.reduce((n, r) => n + (Number(r.qty) || 1), 0);
-              if (Number(item.packUnit) > 0 && aantalTotaal > 0) {
-                regels.push({ productCode: DP_PACKING_CODE, qty: aantalTotaal,
+              /* Alleen over de spa's: $50 verpakkingskosten per spa. Een cover
+                 of een jet krijgt die kosten niet - die gaan gewoon mee in een
+                 doos. Bij een winkelwagen tellen we dus de spa-regels. */
+              const spaStuks = (Array.isArray(item.items) && item.items.length)
+                ? item.items.filter(r => r.soort === "spa").reduce((n, r) => n + (Number(r.qty) || 1), 0)
+                : regels.reduce((n, r) => n + (Number(r.qty) || 1), 0);
+              if (Number(item.packUnit) > 0 && spaStuks > 0) {
+                regels.push({ productCode: DP_PACKING_CODE, qty: spaStuks,
                               nettPrice: item.packUnit, description: "Freight & packing" });
               }
               const res = await dpCreateLogic4Order(env, {
@@ -1779,6 +1922,7 @@ async function handleDealerRoutes(request, env, url) {
       return reply(200, { ok: true });
     }
     if (p === "/dealers/api/stock" && request.method === "GET") return dpHandleStock(env);
+    if (p === "/dealers/api/parts" && request.method === "GET") return dpHandleParts(env);
     if (p === "/dealers/api/photo" && request.method === "GET") return dpHandleSpaPhoto(env, url);
     if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);
     if (p === "/dealers/api/requests" && request.method === "GET") return dpHandleMyRequests(env, sess);

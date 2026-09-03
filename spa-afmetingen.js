@@ -282,8 +282,19 @@
      De maat volgt uit de spa zelf (Gerrit, 10 aug 2026):
      - De cover is een paar centimeter groter dan de spa: 200 x 200 wordt
        203 x 203.
-     - Hij wordt dubbelgevouwen over de kórtste kant. Een cover van 203 x 303
-       wordt dus 101,5 x 303 - de lange kant blijft.
+     - Hij wordt dubbelgevouwen over de LÁNGSTE kant: de eerste maat gaat door
+       de helft, de tweede blijft heel. Gerrit (3 sep 2026): "de regel is: het
+       eerste getal is het getal wat gevouwen wordt. Een cover die 590 x 277
+       heet wordt gevouwen over de 590-kant, dus door de helft is dat
+       295 x 277."
+
+       Hier stond het omgekeerde: de korte kant werd gehalveerd en de lange
+       bleef staan. Een cover van 590 x 277 werd zo 590 x 138,5. Dat is bijna
+       zes meter, en daarom paste een swimspa-cover naast twee spa's net niet
+       meer in de container. Dat is nooit een ladingsprobleem geweest maar een
+       rekenfout: in werkelijkheid is hij 295 lang. De opdeling in twee delen
+       hieronder rekent nu dus met de goede lengte en komt veel minder vaak in
+       actie.
      - Onopgevouwen is hij 10 cm dik aan de buitenranden en 12 cm bij de vouw
        in het midden. Dubbelgevouwen wordt dat 20 cm en 24 cm.
 
@@ -303,17 +314,19 @@
      met twee delen, niet met drie - dat is het ongunstigste geval van de
      twee die zij noemt, en dan valt het in de praktijk mee in plaats van
      tegen. Een gewone spa-cover blijft één deel; die haalt deze grens niet. */
-  var COVER_DELEN_VANAF = 350;   // cm: is de dubbelgevouwen cover langer, dan in 2 delen
+  var COVER_DELEN_VANAF = 350;   // cm: is de dubbelgevouwen cover nóg langer, dan in 2 delen
 
   var GEEN_COVER = /(ice ?bath|ijsbad|wim hof|barrel|plunge|revive|chiller|shower|douche|sauna|vital[- ]?ice)/i;
   function heeftCover(model, fabriek) {
     return !GEEN_COVER.test(String(model || "") + " " + String(fabriek || ""));
   }
 
-  // De cover als doos zoals hij vervoerd wordt: dubbelgevouwen, dikste maat.
+  /* De cover als doos zoals hij vervoerd wordt: dubbelgevouwen, dikste maat.
+     De vouw gaat over de lángste kant - die gaat door de helft, de korte kant
+     blijft heel. 590 x 277 wordt dus 295 x 277. */
   function vouw(l, b) {
     var lang = Math.max(l, b), kort = Math.min(l, b);
-    return { l: lang, b: kort / 2, h: COVER_RAND * 2, hVouw: COVER_VOUW * 2 };
+    return { l: lang / 2, b: kort, h: COVER_RAND * 2, hVouw: COVER_VOUW * 2 };
   }
 
   /* De cover opdelen als hij te lang is om als één stuk mee te gaan. Geeft

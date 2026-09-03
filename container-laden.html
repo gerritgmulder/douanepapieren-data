@@ -897,10 +897,10 @@ function coverVeldenTonen(){
   const l=Number(el("dlgCL").value), b=Number(el("dlgCB").value);
   const A=window.fpAfmetingen;
   el("dlgCoverUitleg").innerHTML = (l>0&&b>0&&A)
-    ? "De open maat van de cover, meestal "+A.COVER_MARGE+" cm groter dan de spa. Dubbelgevouwen over de korte kant "+
-      "wordt dat <b>"+nl2(Math.max(l,b))+" x "+nl2(Math.min(l,b)/2)+" x "+(A.COVER_VOUW*2)+" cm</b> - "+
+    ? "De open maat van de cover, meestal "+A.COVER_MARGE+" cm groter dan de spa. Dubbelgevouwen over de lange kant "+
+      "wordt dat <b>"+nl2(Math.max(l,b)/2)+" x "+nl2(Math.min(l,b))+" x "+(A.COVER_VOUW*2)+" cm</b> - "+
       (A.COVER_RAND*2)+" cm aan de randen, "+(A.COVER_VOUW*2)+" cm bij de vouw."
-    : "De open maat van de cover. Het dashboard vouwt hem zelf dubbel over de korte kant.";
+    : "De open maat van de cover. Het dashboard vouwt hem zelf dubbel over de lange kant: het eerste getal gaat door de helft.";
 }
 el("dlgGeenCover").addEventListener("change",coverVeldenTonen);
 ["dlgCL","dlgCB"].forEach(id=>el(id).addEventListener("input",coverVeldenTonen));
