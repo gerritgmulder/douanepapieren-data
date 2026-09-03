@@ -479,7 +479,7 @@ async function loadStock(){
 function pakketRegel(m){
   const v = (m.variants||[]).find(x => (x.bevat||[]).length);
   if (!v) return "";
-  const inh = v.bevat.map(d => d.qty + "\u00d7 " + d.naam.replace(/^.*\|\s*/, "")).join(", ");
+  const inh = v.bevat.map(d => d.qty + "\u00d7 " + kortArtikel(d.naam)).join(", ");
   return `<li style="color:var(--muted);font-size:12px;line-height:1.5;margin-top:4px;">Complete set: ${esc(inh)}</li>`;
 }
 function voorraadRegels(m){
@@ -753,6 +753,13 @@ function soortVan(f){
 
    IJsbaden en warmtepompen krijgen hem niet: dat zijn geen spa's, en die
    hebben hun eigen chiller- en pompdocumentatie. */
+/* De artikelnaam korter maken door alleen het MERK ervoor weg te halen.
+   Alles tot het laatste streepje weghalen is te gulzig: "The Iceman's Barrel |
+   350 liter" bleef dan over als "350 liter", en dan staat er in de
+   pakketinhoud een regel die niet zegt waar het over gaat. */
+const MERK_VOOR = /^(passion ice baths|passion spas|passion|fonteyn|storm spas|devine spas|rising dragon|balboa|waterway eu|sunbelt|vidsonix|confer)\s*\|\s*/i;
+function kortArtikel(naam){ return String(naam || "").replace(MERK_VOOR, "").trim(); }
+
 const ALG_SPA_PREFIX = "spas/algemeen/";
 const GEEN_ALG_SPA = new Set(["Ice Baths", "Heat Pumps"]);
 let algemeneSpaDocs = [];
@@ -1047,7 +1054,7 @@ function openReserve(model){
      Barrel XL is in Logic4 één artikel met het vat, twee steps, twee pluggen
      en de chiller; die gaan bij het bestellen automatisch mee de order in, dus
      hoort een partner ze ook te zien voordat hij kiest. */
-  const bevatTekst = v => (v.bevat||[]).map(d => d.qty + "\u00d7 " + d.naam.replace(/^.*\|\s*/, "")).join(", ");
+  const bevatTekst = v => (v.bevat||[]).map(d => d.qty + "\u00d7 " + kortArtikel(d.naam)).join(", ");
   const regel = v => {
     const op = Number(v.free)>0;
     const inh = bevatTekst(v);

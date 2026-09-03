@@ -432,11 +432,21 @@ async function dpStockModels(env) {
     const paid = r.paymentStatus === "paid" || r.status === "paid";
     const payingNow = r.paymentStatus === "open" && r.ts && (nowMs - Date.parse(r.ts)) < CLAIM_GRACE_MS;
     if (!paid && !payingNow) continue;
-    const e = byModel[String(r.model || "").trim()];
-    if (!e) continue;
-    e.available = Math.max(0, e.available - (Number(r.qty) || 0));
-    if (!(r.logic4OrderId && ledgerOrders.has(String(r.logic4OrderId))))
-      e.claims = (e.claims || 0) + (Number(r.qty) || 0);
+    /* Elke spa in de aanvraag claimt voorraad, niet alleen de eerste. Sinds de
+       winkelwagen kan één aanvraag twee verschillende modellen bevatten; werd
+       alleen r.model geteld, dan bleef de tweede spa vrij in beeld staan
+       terwijl hij al verkocht was. Onderdelen claimen niets: die liggen los in
+       de hal en gaan niet over de spa-voorraad. */
+    const claims = (Array.isArray(r.items) && r.items.length)
+      ? r.items.filter(x => x.soort === "spa").map(x => ({ model: x.model, qty: x.qty }))
+      : [{ model: r.model, qty: r.qty }];
+    for (const c of claims) {
+      const e = byModel[String(c.model || "").trim()];
+      if (!e) continue;
+      e.available = Math.max(0, e.available - (Number(c.qty) || 0));
+      if (!(r.logic4OrderId && ledgerOrders.has(String(r.logic4OrderId))))
+        e.claims = (e.claims || 0) + (Number(c.qty) || 0);
+    }
   }
 
   /* BESCHIKBAAR. Gerrit (26 aug 2026): "ik wil weten wat de voorraad is +
@@ -838,6 +848,22 @@ async function dpHandleReserve(request, env, sess, url) {
   const rate = await dpRate(env);
   const vatPercent = isUS ? 0 : await dpDebtorVatPercent(env, debtorId);   // BTW uit Logic4
   const hallen = (await env.FONTEYN_DATA.get("voorraad-hallen", { type: "json" })) || {};
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+
+  /* Kiest een partner "no preference", dan hoort daar alsnog een artikelcode
+     bij. Zonder code maakt Logic4 een regel-loze order met het model in de
+     opmerking, die sales met de hand moet aanvullen - en dat is precies wat
+     dit portaal moest wegnemen. We nemen de kleur die op voorraad ligt (de
+     grootste stapel eerst), en anders de eerste uit de catalogus. Welke kleur
+     het werd staat in de opmerking, zodat sales het kan omzetten. */
+  function kiesVariant(model) {
+    const vs = ((catalog.models || {})[model] || []);
+    if (!vs.length) return null;
+    const vrij = ((hallen.models || {})[model] || {}).variants || {};
+    const opVoorraad = vs.filter(v => (Number(vrij[v.code]) || 0) > 0)
+                         .sort((a, b) => (Number(vrij[b.code]) || 0) - (Number(vrij[a.code]) || 0));
+    return (opVoorraad[0] || vs[0]) || null;
+  }
 
   const wantsFull = body.payFull === true;
   /* Testbetaling van één cent. Alleen voor mensen van Fonteyn zelf; een echte
@@ -879,9 +905,15 @@ async function dpHandleReserve(request, env, sess, url) {
     totaalExVat += c.totalExVat;
     spaAantal += qty;
     packUnit = Math.round(c.packUnit * 100) / 100;
-    regels.push({ soort: "spa", model, qty,
-                  code: String(it.variant || "").trim().slice(0, 20) || (pEntry.code ? String(pEntry.code) : null),
-                  variantName: String(it.variantName || "").trim().slice(0, 120) || null,
+    let code = String(it.variant || "").trim().slice(0, 20) || (pEntry.code ? String(pEntry.code) : null);
+    let naam = String(it.variantName || "").trim().slice(0, 120) || null;
+    let gekozen = false;
+    if (!code) {
+      const v = kiesVariant(model);
+      if (v) { code = String(v.code); naam = null; gekozen = true; }
+    }
+    regels.push({ soort: "spa", model, qty, code, variantName: naam,
+                  zonderVoorkeur: gekozen || undefined,
                   unit: Math.round(c.spaUnit * 100) / 100,
                   volInclVat: c.totalInclVat });
   }
@@ -916,7 +948,10 @@ async function dpHandleReserve(request, env, sess, url) {
     variant: eersteSpa ? eersteSpa.code : null,
     variantName: eersteSpa ? eersteSpa.variantName : null,
     productCode: regels[0].code || null,
-    items: regels, note, status: "new",
+    items: regels, status: "new",
+    note: [note, regels.filter(r => r.zonderVoorkeur).map(r =>
+      "Geen kleurvoorkeur opgegeven - artikel " + r.code + " gekozen voor " + r.model).join("\n")]
+      .filter(Boolean).join("\n"),
     currency, vatPercent, payFull,
     spaUnit: eersteSpa ? eersteSpa.unit : null,
     packUnit: spaAantal ? packUnit : 0,
