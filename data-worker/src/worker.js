@@ -537,9 +537,27 @@ async function dpHandleStock(env) {
   // Catalogus: alle kleurvarianten per model (code → nette kleurnaam)
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const catModels = catalog.models || {};
+  /* De naam van een variant zoals de partner hem ziet.
+
+     Hier stond een vervanging die alles tot en met het laatste streepje weghaalde,
+     en dat is gulzig: alleen het stuk ná het LAATSTE streepje bleef over. Bij
+     "Delight Spa | Sterling White with
+     GREY/oak trim | With Hydrogen Machine" bleef dus alleen "With Hydrogen
+     Machine" staan en viel de kleur weg. Gevolg: onder één model stonden drie
+     keuzes die allemaal "Integrated Heat Pump" heetten, en Gerrit (3 sep 2026):
+     "anders weet ik natuurlijk niet welke kleur ik bestel."
+
+     Nu: de kleur, en daarachter de uitvoering als die er is. "Integrated Heat
+     Pump" heet naar buiten toe IntelliSaver. */
+  const UITVOERING_NAAM = { "integrated heat pump": "IntelliSaver" };
   const codeName = {};
   for (const vs of Object.values(catModels))
-    for (const v of vs) codeName[v.code] = String(v.desc || v.code).replace(/^.*\|\s*/, "");
+    for (const v of vs) {
+      const info = dpRowInfo(v.desc || "");
+      const extra = info.extra ? (UITVOERING_NAAM[info.extra.toLowerCase()] || info.extra) : null;
+      codeName[v.code] = [info.kleur, extra].filter(Boolean).join(" · ")
+        || String(v.desc || v.code).replace(/^.*\|\s*/, "");
+    }
   // Live wisselkoers voor de EUR-weergave (partnerprijzen ex. BTW; BTW hangt
   // van de individuele debiteur af en wordt pas bij het reserveren berekend).
   // Automatisch: ECB-dagkoers min 0,03 (zie koersVanDaag).
@@ -722,6 +740,13 @@ async function dpHandleReserve(request, env, sess, url) {
   // Volledig betalen (100%) mag ALLEEN als de spa nu op voorraad is (dan wordt
   // hij direct geleverd). Anders altijd 30% aanbetaling. Server-side gecheckt.
   const wantsFull = body.payFull === true;
+  /* Testbetaling van één cent. Gerrit (3 sep 2026): "maak het mogelijk dat ik
+     naast 30% of Full ook kan kiezen om 0,01 aan te betalen, dan kan ik het nu
+     testen met Arno." Alleen zichtbaar en toegestaan voor mensen van Fonteyn
+     zelf; een echte partner kan hem niet kiezen en ook niet meesturen, want
+     dat zou een reservering opleveren waar niets voor betaald is. */
+  const isFonteyn = /@fonteyn\.nl$/i.test(String(sess.email || ""));
+  const wantsCent = body.payCent === true && isFonteyn;
   let checkoutUrl = null;
   if (env.MOLLIE_API_KEY) {
     const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
@@ -742,7 +767,11 @@ async function dpHandleReserve(request, env, sess, url) {
       entry.currency = calc.currency;
       entry.vatPercent = calc.vatPercent;
       entry.payFull = payFull;
-      const label = payFull ? "Full payment (in stock)" : "30% deposit";
+      /* Bij een testbetaling blijft de hele berekening staan - bedragen, BTW,
+         de order die er straks van komt - en gaat alleen het te betalen bedrag
+         naar één cent. Zo test je de hele keten en niet een halve. */
+      if (wantsCent) { calc.deposit = 0.01; entry.testbetaling = true; entry.payFull = false; }
+      const label = wantsCent ? "TEST - 1 cent" : (payFull ? "Full payment (in stock)" : "30% deposit");
       const pay = await dpCreateMolliePayment(env, calc.deposit,
         label + " — " + qty + "x " + model + " (" + (sess.company || sess.email) + ")",
         url.origin + "/dealers?paid=1",
@@ -774,7 +803,7 @@ async function dpHandleReserve(request, env, sess, url) {
   await dpLogPartner(env, sess, "reservering-aangevraagd",
     qty + "× " + model + (variantName ? " (" + variantName + ")" : "") +
     (checkoutUrl ? " — betaallink " + (entry.currency === "USD" ? "$" : "€") + (entry.deposit != null ? entry.deposit.toFixed(2) : "") : ""));
-  return reply(200, { ok: true, checkoutUrl: checkoutUrl, deposit: entry.deposit || null, currency: entry.currency || null, payFull: !!entry.payFull });
+  return reply(200, { ok: true, checkoutUrl: checkoutUrl, deposit: entry.deposit || null, currency: entry.currency || null, payFull: !!entry.payFull, testbetaling: !!entry.testbetaling });
 }
 
 // Fase 3 — Mollie-betaallink (wacht op MOLLIE_API_KEY als worker-secret).
@@ -1622,6 +1651,8 @@ async function handleDealerRoutes(request, env, url) {
         // Meekijkende collega: het portaal zet er een balk boven en verbergt
         // wat een medewerker toch niet mag doen.
         medewerker: !!sess.medewerker,
+        // Alleen mensen van Fonteyn zien de testbetaling van één cent.
+        fonteyn: /@fonteyn\.nl$/i.test(String(sess.email || "")),
         region: (dealer && dealer.region) || "EU" });
     }
     if (p === "/dealers/api/setpassword" && request.method === "POST") return dpHandleSetPassword(request, env, sess);

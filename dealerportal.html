@@ -343,6 +343,7 @@ async function sendLink(){
      kijkt, en zou je je afvragen waarom reserveren niet lukt. De knop om een
      wachtwoord te zetten hoort hier ook niet: er is geen dealeraccount om een
      wachtwoord aan te hangen. */
+  window.isFonteyn = !!me.data.fonteyn;
   if (me.data.medewerker) {
     $("pwBtn").classList.add("hidden");
     if (!document.getElementById("meekijkBalk")) {
@@ -1013,6 +1014,7 @@ function openReserve(model){
             <select id="rsvPay">
               <option value="deposit">30% deposit — reserve your spot</option>
               <option value="full">Pay in full — delivered right away</option>
+              ${window.isFonteyn?'<option value="cent">TEST — pay 1 cent (Fonteyn only)</option>':''}
             </select>
           </div>`:''}
         </div>
@@ -1072,13 +1074,15 @@ function openReserve(model){
     const variantName = (vsel && vsel.value) ? (vsel.dataset.naam || "") : "";
     const paySel = ov.querySelector("#rsvPay");
     const payFull = !!(paySel && paySel.value==="full");
+    // Testbetaling van één cent; de worker laat dit alleen toe voor Fonteyn.
+    const payCent = !!(paySel && paySel.value==="cent");
     const r = await api("/dealers/api/reserve", { method:"POST", body: JSON.stringify({
       model, qty: ov.querySelector("#rsvQty").value, note: ov.querySelector("#rsvNote").value,
-      variant, variantName, payFull }) });
+      variant, variantName, payFull, payCent }) });
     const m = ov.querySelector("#rsvMsg");
     if (r.status===200 && r.data && r.data.ok && r.data.checkoutUrl) {
       m.className="msg ok";
-      m.textContent="Request received — redirecting you to the secure payment page ("+(r.data.payFull?"full payment":"30% deposit")+": " + (r.data.currency==="USD"?"$ ":"€ ") + (r.data.deposit!=null ? Number(r.data.deposit).toFixed(2) : "") + ")…";
+      m.textContent="Request received — redirecting you to the secure payment page ("+(r.data.testbetaling?"TEST - 1 cent":(r.data.payFull?"full payment":"30% deposit"))+": " + (r.data.currency==="USD"?"$ ":"€ ") + (r.data.deposit!=null ? Number(r.data.deposit).toFixed(2) : "") + ")…";
       m.classList.remove("hidden");
       setTimeout(()=>{ location.href = r.data.checkoutUrl; }, 1400);
     } else if (r.status===200 && r.data && r.data.ok) {

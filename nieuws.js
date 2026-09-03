@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-03", groep: "partnerportaal-kijk", soort: "beter",
+      titel: "Passion Partners: kleur staat nu bij elke uitvoering",
+      wat: "Bij een model met een warmtepomp of waterstofmachine stond alleen 'Integrated Heat Pump' of 'With Hydrogen Machine' in de keuzelijst, drie keer onder elkaar en zonder kleur. Je kon dus niet zien welke kleur je bestelde. Nu staat de kleur er altijd bij, bijvoorbeeld 'Espresso with OAK/grey trim · IntelliSaver'. En 'Integrated Heat Pump' heet naar de partner toe voortaan IntelliSaver.",
+    },
+
+    {
       datum: "2026-09-03", bestand: "dealerportaal.html", soort: "beter",
       titel: "Nieuwe partner: venster valt niet meer weg, mail gaat vanzelf",
       wat: "Bij het invoeren van een nieuwe dealer of partner kon het venster tijdens het typen ineens verdwijnen, met alles wat je had ingevuld. Dat gebeurde als je muis buiten het venster losliet, bijvoorbeeld bij kopiëren en plakken tussen Telefoon en Mobiel. Een klik sluit het venster nu alleen nog als hij ook naast het venster begon, en heb je iets ingevuld dan wordt er eerst gevraagd of het weg mag. Verder gaat de welkomstmail nu automatisch de deur uit zodra je een nieuwe relatie bewaart; daar hoef je niets meer voor te bevestigen. Zonder die mail heeft een partner geen wachtwoord en kan hij niet inloggen. Alle bevestigingsvensters in dit scherm zijn vervangen door een venster in Passion-opmaak.",
