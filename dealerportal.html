@@ -66,9 +66,17 @@
          -webkit-appearance:none;appearance:none;cursor:pointer;color:var(--ink)}
   select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px rgba(62,125,63,.18)}
 
-  /* De kleurkeuze is geen gewone keuzelijst meer: een opengeklapt <select>
-     laat zich niet opmaken, en juist daar moest zichtbaar worden wat op
-     voorraad is en wat op backorder staat. */
+  /* GEEN gewone keuzelijst meer, nergens.
+     ═══════════════════════════════════════════════════════════════════
+     Een <select> laat zich alleen dicht opmaken. Zodra je hem openklapt
+     tekent het besturingssysteem de lijst, en dan staat er midden in een
+     verzorgde pagina ineens een kale grijze systeemlijst. Gerrit (3 sep
+     2026): "sowieso alle dropdownmenu's en popupvensters moeten er altijd
+     professioneel uitzien."
+
+     Daarom is .kies een eigen keuzelijst: knop plus lijst, allebei van ons.
+     Hij begon als kleurkiezer bij het reserveren en is nu het component voor
+     élke keuze op deze pagina - categorie, sortering, betaalwijze. */
   .kies{position:relative}
   .kies-knop{width:100%;text-align:left;border:1.5px solid var(--border);border-radius:8px;padding:11px 38px 11px 12px;
              font:inherit;font-size:15px;background:#fff;cursor:pointer;display:flex;align-items:center;gap:9px}
@@ -82,6 +90,41 @@
              padding:9px 10px;font:inherit;font-size:14px;border-radius:7px;cursor:pointer}
   .kies-lijst button:hover{background:#f3f6f4}
   .kies-lijst button[aria-selected="true"]{background:#eef5ee;font-weight:600}
+  /* Vinkje bij de gekozen regel, zodat je bij het openklappen meteen ziet
+     waar je staat zonder de tekst te moeten lezen. */
+  .kies-lijst button[aria-selected="true"]:after{content:"";margin-left:auto;width:5px;height:9px;
+             border-right:2px solid var(--green);border-bottom:2px solid var(--green);
+             transform:rotate(45deg);flex:0 0 auto}
+  .kies-lijst .kop{padding:9px 10px 4px;font-size:10.5px;font-weight:700;text-transform:uppercase;
+             letter-spacing:.05em;color:var(--muted)}
+  /* Compacte variant: naast een zoekveld in een balk. */
+  .kies.klein .kies-knop{padding:9px 34px 9px 11px;font-size:14px}
+  .kies-lijst button .bij{margin-left:auto;font-size:11.5px;color:var(--muted);white-space:nowrap;font-weight:700}
+  .kies-lijst button .bij.op{color:var(--green)} .kies-lijst button .bij.back{color:#8a6400}
+  .kies-lijst button .onder{display:block;font-size:11px;color:var(--muted);font-weight:400;line-height:1.4;margin-top:1px}
+  .kies-lijst button{align-items:flex-start}
+  .kies-lijst button .stip{margin-top:5px}
+
+  /* ── Vensters ────────────────────────────────────────────────────────
+     Elk popupvenster op deze pagina gebruikt dezelfde laag: dezelfde
+     donkere waas met vervaging erachter, dezelfde kaart die er rustig
+     invouwt, dezelfde gekleurde balk bovenaan. Voorheen had elk venster
+     zijn eigen inline-stijl en zag alles er net iets anders uit. */
+  .laag{position:fixed;inset:0;background:rgba(16,20,18,.46);-webkit-backdrop-filter:blur(3px);
+        backdrop-filter:blur(3px);z-index:1000;display:flex;align-items:center;justify-content:center;
+        padding:18px;overflow:auto;animation:laagIn .16s ease-out}
+  .laag.boven{align-items:flex-start}
+  @keyframes laagIn{from{opacity:0}to{opacity:1}}
+  .laag > .card{animation:kaartIn .2s cubic-bezier(.2,.8,.3,1);box-shadow:0 24px 60px rgba(0,0,0,.28);
+        max-height:88vh;overflow:auto;margin:0}
+  .laag.boven > .card{margin:5vh 0}
+  @keyframes kaartIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
+  .laag .vensterkop{display:flex;align-items:flex-start;gap:12px;margin-bottom:4px}
+  .laag .vensterkop h2{flex:1;margin:0}
+  /* Sluitkruisje rechtsboven; elk venster heeft er een op dezelfde plek. */
+  .sluit{background:transparent;border:0;font-size:22px;line-height:1;color:var(--muted);
+        cursor:pointer;padding:2px 6px;border-radius:7px;flex:0 0 auto}
+  .sluit:hover{background:#f3f4f6;color:var(--ink)}
   .stip{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
   .stip.op{background:var(--green)} .stip.back{background:#e0a300} .stip.geen{background:#c9cfcb}
   .vrij{margin-left:auto;font-size:12px;font-weight:700;white-space:nowrap}
@@ -109,8 +152,19 @@
   #fotoPop .bezig{width:230px;height:230px;display:flex;align-items:center;justify-content:center;
            color:var(--muted);font-size:12px}
   .pill{display:inline-block;background:#dcfce7;color:var(--ok);border-radius:999px;font-size:11px;font-weight:700;padding:2px 9px;white-space:nowrap}
-  .doc{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid #f3f4f6}
-  .doc a{color:var(--red);font-weight:600}
+  /* Een regel in Downloads. De titel mag afbreken, de Open-knop nooit: die
+     stond met de pijl onder de tekst, allebei onderstreept, en dat is precies
+     het rommelige beeld dat er niet in hoort (Gerrit, 3 sep 2026). Daarom is
+     het geen kale link meer maar een knopje met een vaste breedte. */
+  .doc{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:11px 4px;border-bottom:1px solid #f3f4f6}
+  .doc:last-child{border-bottom:0}
+  .doc > div{min-width:0}
+  .doc a{color:var(--red);font-weight:600;text-decoration:none;white-space:nowrap;flex:0 0 auto;
+         border:1.5px solid #f0d3d8;border-radius:7px;padding:6px 12px;font-size:13px;
+         transition:background .13s,border-color .13s,color .13s}
+  .doc a:hover{background:var(--red);border-color:var(--red);color:#fff}
+  .doc .titel{font-weight:700;display:block;overflow-wrap:anywhere}
+  .doc .bijschrift{color:var(--muted);font-size:12px;display:block;margin-top:2px}
   footer{color:var(--muted);font-size:12px;text-align:center;padding:26px 10px}
 
   /* ── Reis-tijdlijn (My spas) ─────────────────────────────────────────
@@ -196,7 +250,8 @@
         <h2>Spa availability</h2>
         <p class="lead">Live overview per model — the colours we have in stock right now, ready to ship. <span id="stockUpdated"></span></p>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-          <input id="stockSearch" placeholder="Search model… (e.g. Renew)" style="max-width:320px;flex:1;min-width:180px;">
+          <input id="stockSearch" placeholder="Search model… (e.g. Renew)" style="max-width:300px;flex:1;min-width:180px;">
+          <div id="stockSort" class="kies klein" style="width:250px;flex:0 0 auto;"></div>
           <div id="curToggle" style="display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
             <button type="button" class="curBtn" data-cur="EUR" style="border:0;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer;">&euro; EUR</button>
             <button type="button" class="curBtn" data-cur="USD" style="border:0;padding:9px 16px;font:inherit;font-weight:600;cursor:pointer;">$ USD</button>
@@ -216,9 +271,7 @@
           Prices are per piece, excl. VAT, and drop at the quantity breaks shown. <span id="partsUpdated"></span></p>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
           <input id="partsSearch" placeholder="Search part, code or brand… (e.g. cover clip, 151238)" style="max-width:340px;flex:1;min-width:200px;">
-          <select id="partsCat" style="padding:9px 10px;border:1px solid var(--border);border-radius:8px;font:inherit;background:#fff;">
-            <option value="">All categories</option>
-          </select>
+          <div id="partsCat" class="kies klein" style="width:230px;flex:0 0 auto;"></div>
           <span class="lead" id="partsCount" style="margin:0"></span>
         </div>
         <div class="prijswrap" style="margin-top:12px;"><table class="prijs" id="partsTable"></table></div>
@@ -289,6 +342,100 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;"
 /* De winkelwagen staat hier bovenaan en niet bij de rest van de wagen-code:
    het inloggen roept cartBewaar() aan zodra de sessie klopt, en dat gebeurt
    eerder in het bestand dan waar de wagen verder wordt opgebouwd. */
+/* ── Keuzelijst ──────────────────────────────────────────────────────
+   Eén component voor élke keuze op deze pagina. Een <select> kan dit niet:
+   zodra hij openklapt tekent het besturingssysteem de lijst en is er geen
+   opmaak meer mogelijk. Hier is de lijst van ons, dus kan er van alles bij -
+   een stip die zegt of iets op voorraad ligt, een aantal rechts, kopjes
+   tussen groepen door - en ziet hij er overal hetzelfde uit.
+
+   maakKiezer(houderId, opties, gekozenWaarde, opKies)
+     opties: [{ waarde, tekst, bij?, kop?, stip? }]
+             kop = een tussenkopje in plaats van een keuze
+             bij = klein grijs bijschrift rechts (aantal, prijs)
+             stip = "op" | "back" | "geen" - het gekleurde bolletje links */
+function maakKiezer(houderId, opties, gekozen, opKies){
+  const houder = typeof houderId === "string" ? $(houderId) : houderId;
+  if (!houder) return;
+  const kiesbaar = opties.filter(o => !o.kop);
+  const nu = kiesbaar.find(o => String(o.waarde) === String(gekozen)) || kiesbaar[0] || { tekst: "" };
+  const regel = (o) => o.kop
+    ? `<div class="kop">${esc(o.kop)}</div>`
+    : `<button type="button" role="option" data-w="${esc(o.waarde)}"${String(o.waarde)===String(nu.waarde)?' aria-selected="true"':''}>`
+      + (o.stip ? `<span class="stip ${esc(o.stip)}"></span>` : "")
+      + `<span>${esc(o.tekst)}`
+      + (o.onder ? `<span class="onder">${esc(o.onder)}</span>` : "")
+      + `</span>`
+      + (o.bij ? `<span class="bij ${esc(o.bijKleur || "")}">${esc(o.bij)}</span>` : "")
+      + `</button>`;
+  houder.classList.add("kies");
+  houder.innerHTML =
+    `<button type="button" class="kies-knop">`
+    + (nu.stip ? `<span class="stip ${esc(nu.stip)}"></span>` : "")
+    + `<span class="kies-tekst">${esc(nu.tekst)}</span></button>`
+    + `<div class="kies-lijst hidden" role="listbox">${opties.map(regel).join("")}</div>`;
+
+  const knop = houder.querySelector(".kies-knop");
+  const lijst = houder.querySelector(".kies-lijst");
+  knop.addEventListener("click", (e)=>{
+    e.stopPropagation();
+    // Eerst alle andere lijsten dicht: twee open lijsten over elkaar heen is
+    // precies het rommelige beeld dat we juist kwijt wilden.
+    document.querySelectorAll(".kies.open").forEach(k=>{ if(k!==houder){ k.classList.remove("open"); k.querySelector(".kies-lijst").classList.add("hidden"); } });
+    const gaatOpen = lijst.classList.contains("hidden");
+    lijst.classList.toggle("hidden"); houder.classList.toggle("open");
+    if (!gaatOpen) return;
+    /* Naar boven openklappen als er onder de knop te weinig ruimte is. Anders
+       valt de lijst op een laptopscherm van de onderkant af, en dan zie je
+       juist niet wat je moest kiezen. */
+    const r = knop.getBoundingClientRect();
+    const onder = window.innerHeight - r.bottom;
+    const nodig = Math.min(300, lijst.scrollHeight + 12);
+    if (onder < nodig && r.top > onder) {
+      lijst.style.top = "auto"; lijst.style.bottom = "calc(100% + 5px)";
+      lijst.style.maxHeight = Math.max(140, Math.min(300, r.top - 16)) + "px";
+    } else {
+      lijst.style.top = ""; lijst.style.bottom = ""; lijst.style.maxHeight = "";
+    }
+  });
+  lijst.addEventListener("click", (e)=>e.stopPropagation());
+  lijst.querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{
+    lijst.querySelectorAll("button").forEach(x=>x.setAttribute("aria-selected","false"));
+    b.setAttribute("aria-selected","true");
+    const o = kiesbaar.find(o => String(o.waarde) === b.dataset.w) || {};
+    houder.dataset.waarde = b.dataset.w;
+    knop.innerHTML = (o.stip ? `<span class="stip ${esc(o.stip)}"></span>` : "")
+                   + `<span class="kies-tekst">${esc(o.tekst || "")}</span>`;
+    lijst.classList.add("hidden"); houder.classList.remove("open");
+    if (opKies) opKies(b.dataset.w, o);
+  }));
+  houder.dataset.waarde = String(nu.waarde == null ? "" : nu.waarde);
+}
+// Eén keer: buiten een lijst klikken sluit hem.
+document.addEventListener("click", ()=>{
+  document.querySelectorAll(".kies.open").forEach(k=>{
+    k.classList.remove("open");
+    const l = k.querySelector(".kies-lijst"); if (l) l.classList.add("hidden");
+  });
+});
+
+/* ── Venster ─────────────────────────────────────────────────────────
+   Elk popupvenster gaat hierlangs, zodat ze allemaal dezelfde waas, dezelfde
+   invouwbeweging, hetzelfde sluitkruisje en dezelfde Escape-toets hebben. */
+function maakVenster(html, opties){
+  const o = opties || {};
+  const laag = document.createElement("div");
+  laag.className = "laag" + (o.boven ? " boven" : "");
+  laag.innerHTML = html;
+  document.body.appendChild(laag);
+  const sluit = () => { document.removeEventListener("keydown", toets, true); laag.remove(); if (o.opSluiten) o.opSluiten(); };
+  function toets(e){ if (e.key === "Escape") { e.preventDefault(); sluit(); } }
+  document.addEventListener("keydown", toets, true);
+  laag.addEventListener("click", (e)=>{ if (e.target === laag) sluit(); });
+  laag.querySelectorAll("[data-sluit]").forEach(b=>b.addEventListener("click", sluit));
+  return { laag, sluit };
+}
+
 const CART_KEY = "pp_cart_v1";
 let cart = [];
 try { cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]") || []; } catch(e){ cart = []; }
@@ -489,9 +636,33 @@ function voorraadRegels(m){
   return kleuren.map(v =>
     `<li><b>${v.free}&times;</b> ${esc(v.name)}</li>`).join("");
 }
+/* Waar de tegels op gesorteerd staan. Gerrit (3 sep 2026): "ik wil altijd
+   kunnen kiezen wat je in welke volgorde ziet, en standaard hoogste voorraad
+   bovenaan." Dus niet de volgorde van de prijslijst als opening, maar wat er
+   ligt - daar begint een partner die wil verkopen. De keuze blijft staan
+   tussen bezoeken door. */
+const SORTEER_KEY = "pp_sort_v1";
+const SORTEERWIJZEN = [
+  { waarde: "voorraad", tekst: "Most in stock first",
+    fn: (a, b) => (Number(b.vrijNu)||0) - (Number(a.vrijNu)||0) },
+  { waarde: "collectie", tekst: "Collection (price list order)",
+    fn: (a, b) => (a.collectionRank!=null?a.collectionRank:99) - (b.collectionRank!=null?b.collectionRank:99) },
+  { waarde: "naam", tekst: "Model name A-Z",
+    fn: (a, b) => String(a.model).localeCompare(String(b.model)) },
+  { waarde: "prijs-hoog", tekst: "Price, high to low",
+    fn: (a, b) => prijsVan(b).totaal - prijsVan(a).totaal },
+  { waarde: "prijs-laag", tekst: "Price, low to high",
+    fn: (a, b) => prijsVan(a).totaal - prijsVan(b).totaal },
+];
+let stockSort = "voorraad";
+try { const w = localStorage.getItem(SORTEER_KEY); if (SORTEERWIJZEN.some(x=>x.waarde===w)) stockSort = w; } catch(e){}
+
 function renderStock(){
   const q = ($("stockSearch").value || "").trim().toLowerCase();
-  const list = q ? stockModels.filter(m => m.model.toLowerCase().includes(q)) : stockModels;
+  let list = q ? stockModels.filter(m => m.model.toLowerCase().includes(q)) : stockModels.slice();
+  const wijze = SORTEERWIJZEN.find(x => x.waarde === stockSort) || SORTEERWIJZEN[0];
+  // Gelijke waarden op modelnaam, zodat de volgorde niet per keer verspringt.
+  list = list.slice().sort((a, b) => wijze.fn(a, b) || String(a.model).localeCompare(String(b.model)));
   $("stockGrid").innerHTML = list.map(m => {
     const vrij = Number(m.vrijNu) || 0;
     return `
@@ -514,6 +685,11 @@ function renderStock(){
   $("stockEmpty").classList.toggle("hidden", list.length > 0);
 }
 $("stockSearch").addEventListener("input", renderStock);
+maakKiezer("stockSort", SORTEERWIJZEN.map(w => ({ waarde: w.waarde, tekst: w.tekst })), stockSort, (w)=>{
+  stockSort = w;
+  try { localStorage.setItem(SORTEER_KEY, w); } catch(e){}
+  renderStock();
+});
 
 // ── Prijslijst: dezelfde gegevens als de tegels, maar onder elkaar ──
 // Gerrit (21 aug 2026): "een tabblad waar ik direct alle modellen met hun
@@ -812,15 +988,18 @@ function aantalDocs(model){ return docsVoorModel(model).bestanden.length + algem
 
 function docRegel(f){
   return `<div class="doc">
-    <div><b>${esc(f.title)}</b> <span style="color:var(--muted);font-size:12px">· ${esc(f.map)} · ${fmtSize(f.size||0)}</span></div>
-    <a href="#" data-file="${esc(f.id)}" data-title="${esc(f.title)}">Open →</a>
+    <div>
+      <span class="titel">${esc(f.title)}</span>
+      <span class="bijschrift">${esc(f.map)} &middot; ${fmtSize(f.size||0)}</span>
+    </div>
+    <a href="#" data-file="${esc(f.id)}" data-title="${esc(f.title)}">Open</a>
   </div>`;
 }
 function docSectie(titel, rijen, leeg){
-  if (!rijen.length) return `<h3 style="margin:16px 0 4px;font-size:14px;">${esc(titel)}</h3>
-    <p class="lead" style="margin:0;font-size:12.5px;">${esc(leeg)}</p>`;
-  return `<h3 style="margin:16px 0 4px;font-size:14px;">${esc(titel)} <span style="color:var(--muted);font-weight:400;">(${rijen.length})</span></h3>`
-       + rijen.map(docRegel).join("");
+  const kop = `<h3 style="margin:18px 0 2px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);">`
+    + esc(titel) + (rijen.length ? ` <span style="font-weight:400;">(${rijen.length})</span>` : "") + `</h3>`;
+  if (!rijen.length) return kop + `<p class="lead" style="margin:6px 0 0;font-size:12.5px;">${esc(leeg)}</p>`;
+  return kop + rijen.map(docRegel).join("");
 }
 function openDownloads(model){
   const { bestanden, viaBasis } = docsVoorModel(model);
@@ -834,15 +1013,16 @@ function openDownloads(model){
   const gezien = new Set(bestanden.map(f => f.id));
   const algemeen = mappen.flatMap(m => (algemeenPerMap[m]||[]).filter(f => !gezien.has(f.id)));
 
-  const ov = document.createElement("div");
-  ov.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:18px;overflow:auto";
-  ov.innerHTML = `<div class="card" style="max-width:640px;width:100%;margin:5vh 0;">
-    <div style="display:flex;align-items:flex-start;gap:12px;">
+  const kleur = ((stockModels||[]).find(x=>x.model===model)||{}).collectionColor || "#9ca3af";
+  const html = `<div class="card" style="max-width:640px;width:100%;padding:0;overflow:hidden;">
+    <div style="height:6px;background:${esc(kleur)}"></div>
+    <div style="padding:20px 22px 22px;">
+    <div class="vensterkop">
       <div style="flex:1;">
         <h2 style="margin:0 0 2px;">Downloads</h2>
         <p class="lead" style="margin:0;">${esc(model)}</p>
       </div>
-      <button class="secondary" id="dlClose" type="button" style="padding:6px 12px;">Close</button>
+      <button class="sluit" type="button" data-sluit title="Close">&times;</button>
     </div>
     ${viaBasis ? `<p class="lead" style="margin:10px 0 0;font-size:12.5px;">These documents are published under <b>${esc(viaBasis)}</b> — the same shell as this version.</p>` : ""}
     ${bestanden.length || algemeen.length || manuals.length ? "" : `<p class="lead" style="margin:14px 0 0;">No documents published for this model yet. Ask us via the Contact tab and we will send them to you.</p>`}
@@ -850,11 +1030,9 @@ function openDownloads(model){
     ${bestanden.length || algemeen.length || manuals.length ? docSectie("Manuals", manuals, "None published yet.") : ""}
     ${bestanden.length || algemeen.length ? docSectie("Images", beeld, "No images published yet.") : ""}
     ${algemeen.length ? docSectie("General for this range", algemeen, "") : ""}
+    </div>
   </div>`;
-  document.body.appendChild(ov);
-  const sluit = () => ov.remove();
-  ov.querySelector("#dlClose").addEventListener("click", sluit);
-  ov.addEventListener("click", (e) => { if (e.target === ov) sluit(); });
+  const { laag: ov } = maakVenster(html, { boven: true });
   ov.addEventListener("click", (e) => openBestand(e));
 }
 // Bestanden openen: ophalen mét sessie-kop en als blob in een nieuw tabblad.
@@ -1055,39 +1233,31 @@ function openReserve(model){
      en de chiller; die gaan bij het bestellen automatisch mee de order in, dus
      hoort een partner ze ook te zien voordat hij kiest. */
   const bevatTekst = v => (v.bevat||[]).map(d => d.qty + "\u00d7 " + kortArtikel(d.naam)).join(", ");
-  const regel = v => {
-    const op = Number(v.free)>0;
-    const inh = bevatTekst(v);
-    return `<button type="button" role="option" data-code="${esc(v.code)}" data-naam="${esc(v.name||v.code)}">
-        <span class="stip ${op?"op":"back"}"></span>
-        <span>${esc(v.name||v.code)}${inh?`<span style="display:block;font-size:11px;color:var(--muted);font-weight:400;line-height:1.4;">Includes ${esc(inh)}</span>`:""}</span>
-        <span class="vrij ${op?"op":"back"}">${op?(v.free+" in stock"):"backorder"}</span>
-      </button>`;
-  };
+  /* De kleuren als opties voor het gedeelde keuzelijst-component: een stip
+     voor op voorraad of backorder, het aantal rechts, en bij een samengesteld
+     artikel eronder wat er in het pakket zit. */
+  const kleurOpties = [{ waarde: "", tekst: "No preference", stip: "geen" }].concat(
+    variants.map(v => {
+      const op = Number(v.free) > 0;
+      const inh = bevatTekst(v);
+      return { waarde: v.code, tekst: v.name || v.code, stip: op ? "op" : "back",
+               bij: op ? (v.free + " in stock") : "backorder", bijKleur: op ? "op" : "back",
+               onder: inh ? ("Includes " + inh) : "" };
+    }));
   const kiezer = variants.length ? `
     <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:5px;">Colour / version</label>
-    <div class="kies" id="rsvKies" style="margin-bottom:14px;">
-      <input type="hidden" id="rsvVariant" value="">
-      <button type="button" class="kies-knop" id="rsvKiesKnop">
-        <span class="stip geen"></span><span id="rsvKiesTekst">No preference</span>
-      </button>
-      <div class="kies-lijst hidden" id="rsvKiesLijst" role="listbox">
-        <button type="button" role="option" data-code="" data-naam="" aria-selected="true">
-          <span class="stip geen"></span><span>No preference</span>
-        </button>
-        ${variants.map(regel).join("")}
-      </div>
-    </div>` : "";
+    <div id="rsvKies" class="kies" style="margin-bottom:14px;"></div>` : "";
 
-  const ov = document.createElement("div");
-  ov.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,20,17,.5);z-index:1000;display:flex;align-items:center;justify-content:center;padding:18px";
-  ov.innerHTML = `
-    <div class="card" style="max-width:470px;width:100%;margin:0;padding:0;">
+  const html = `
+    <div class="card" style="max-width:470px;width:100%;padding:0;overflow:visible;">
       <div style="height:6px;background:${esc(kleur)};border-radius:11px 11px 0 0"></div>
       <div style="padding:20px 22px 22px;">
-        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
-          <h2 style="font-size:19px;margin:0;">${esc(model)}</h2>
-          ${m0.collection?`<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:${esc(kleur)}">${esc(m0.collection)}</span>`:""}
+        <div class="vensterkop">
+          <div style="flex:1;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+            <h2 style="font-size:19px;margin:0;">${esc(model)}</h2>
+            ${m0.collection?`<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:${esc(kleur)}">${esc(m0.collection)}</span>`:""}
+          </div>
+          <button class="sluit" type="button" data-sluit title="Close">&times;</button>
         </div>
         <p class="lead" style="margin:7px 0 18px;">
           ${(Number(m0.vrijNu)>0)
@@ -1100,77 +1270,40 @@ function openReserve(model){
             <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:5px;">Quantity</label>
             <input type="number" id="rsvQty" value="1" min="1" max="50">
           </div>
-          ${(m0.available>0)?`
           <div style="flex:1 1 200px;">
             <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:5px;">Payment</label>
-            <select id="rsvPay" disabled title="You choose how to pay at checkout">
-              <option>Chosen at checkout</option>
-            </select>
-          </div>`:''}
+            <div style="border:1.5px dashed var(--border);border-radius:8px;padding:11px 12px;color:var(--muted);font-size:13.5px;">
+              You choose this at checkout
+            </div>
+          </div>
         </div>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Notes (options, delivery, …)</label>
         <textarea id="rsvNote" rows="3" placeholder="Anything we should know?"></textarea>
         <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
-          <button id="rsvCancel" class="secondary" style="padding:11px 18px;">Cancel</button>
+          <button class="secondary" type="button" data-sluit style="padding:11px 18px;">Cancel</button>
           <button class="go" id="rsvSend" type="button" style="padding:11px 22px;">Add to basket</button>
         </div>
         <div id="rsvMsg" class="msg hidden"></div>
       </div>
     </div>`;
-  document.body.appendChild(ov);
-  ov.addEventListener("click", (e)=>{ if(e.target===ov) ov.remove(); });
-  ov.addEventListener("keydown", (e)=>{ if(e.key==="Escape") ov.remove(); });
-  ov.querySelector("#rsvCancel").addEventListener("click", ()=>ov.remove());
+  const { laag: ov, sluit } = maakVenster(html);
 
-  const kies = ov.querySelector("#rsvKies");
-  if (kies) {
-    const knop = ov.querySelector("#rsvKiesKnop"), lijst = ov.querySelector("#rsvKiesLijst");
-    knop.addEventListener("click", (e)=>{
-      e.stopPropagation();
-      const gaatOpen = lijst.classList.contains("hidden");
-      lijst.classList.toggle("hidden"); kies.classList.toggle("open");
-      if (gaatOpen) {
-        /* Naar boven openklappen als er onder de knop te weinig ruimte is.
-           Anders valt de lijst op een laptopscherm van de onderkant af, en
-           dan zie je juist de kleuren niet die je moest kunnen zien. */
-        const r = knop.getBoundingClientRect();
-        const onder = window.innerHeight - r.bottom;
-        const nodig = Math.min(264, lijst.scrollHeight + 12);
-        if (onder < nodig && r.top > onder) {
-          lijst.style.top = "auto";
-          lijst.style.bottom = "calc(100% + 5px)";
-          lijst.style.maxHeight = Math.max(140, Math.min(264, r.top - 16)) + "px";
-        } else {
-          lijst.style.top = ""; lijst.style.bottom = ""; lijst.style.maxHeight = "";
-        }
-      }
-    });
-    document.addEventListener("click", ()=>{ lijst.classList.add("hidden"); kies.classList.remove("open"); });
-    lijst.addEventListener("click", (e)=>e.stopPropagation());
-    lijst.querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{
-      lijst.querySelectorAll("button").forEach(x=>x.setAttribute("aria-selected","false"));
-      b.setAttribute("aria-selected","true");
-      ov.querySelector("#rsvVariant").value = b.dataset.code;
-      ov.querySelector("#rsvVariant").dataset.naam = b.dataset.naam || "";
-      knop.innerHTML = b.innerHTML;
-      lijst.classList.add("hidden"); kies.classList.remove("open");
-    }));
-  }
+  if (ov.querySelector("#rsvKies")) maakKiezer(ov.querySelector("#rsvKies"), kleurOpties, "");
 
   /* Reserveren legt de spa in de winkelwagen; afrekenen gebeurt daar.
      Daarvóór ging elke spa meteen als losse bestelling de deur uit, en dan kun
      je geen twee modellen en tien covers in één order krijgen. */
   ov.querySelector("#rsvSend").addEventListener("click", ()=>{
-    const vsel = ov.querySelector("#rsvVariant");
-    const variant = vsel ? vsel.value : "";
-    const variantName = (vsel && vsel.value) ? (vsel.dataset.naam || "") : "";
+    const kies = ov.querySelector("#rsvKies");
+    const variant = (kies && kies.dataset.waarde) || "";
+    const variantName = variant ? ((kleurOpties.find(o => String(o.waarde) === variant) || {}).tekst || "") : "";
     const notitie = (ov.querySelector("#rsvNote").value || "").trim();
     cartVoegToe({ soort:"spa", model, code: variant || null, variantName: variantName || null,
                   qty: Math.max(1, parseInt(ov.querySelector("#rsvQty").value, 10) || 1),
                   notitie: notitie || undefined });
     const m = ov.querySelector("#rsvMsg");
     m.className = "msg ok"; m.textContent = "Added to your basket."; m.classList.remove("hidden");
-    setTimeout(()=>{ ov.remove(); openCart(); }, 700);
+    setTimeout(()=>{ sluit(); openCart(); }, 700);
   });
 }
 
@@ -1185,10 +1318,14 @@ async function loadParts(){
   if (r.status !== 200 || !r.data || !r.data.ok) return;
   partsGeladen = true;
   partsAlle = r.data.parts || [];
-  const sel = $("partsCat");
-  for (const c of (r.data.categories || [])) {
-    const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o);
-  }
+  /* De categorielijst met het aantal artikelen erachter. Bij een gewone
+     keuzelijst kan dat niet: die kan alleen kale tekst tonen. */
+  const perCat = {};
+  for (const a of partsAlle) perCat[a.cat] = (perCat[a.cat] || 0) + 1;
+  maakKiezer("partsCat",
+    [{ waarde: "", tekst: "All categories", bij: String(partsAlle.length) }].concat(
+      (r.data.categories || []).map(c => ({ waarde: c, tekst: c, bij: String(perCat[c] || 0) }))),
+    "", renderParts);
   if (r.data.updated) $("partsUpdated").textContent = "Last updated: " + new Date(r.data.updated).toLocaleDateString("en-GB") + ".";
   renderParts();
 }
@@ -1213,7 +1350,7 @@ function staffelTekst(a){
 }
 function renderParts(){
   const q = ($("partsSearch").value || "").trim().toLowerCase();
-  const cat = $("partsCat").value;
+  const cat = $("partsCat").dataset.waarde || "";
   let lijst = partsAlle;
   if (cat) lijst = lijst.filter(a => a.cat === cat);
   if (q) lijst = lijst.filter(a => (a.code + " " + a.desc + " " + a.brand + " " + a.sect).toLowerCase().includes(q));
@@ -1260,7 +1397,6 @@ function renderParts(){
   }));
 }
 $("partsSearch").addEventListener("input", renderParts);
-$("partsCat").addEventListener("change", renderParts);
 
 /* ── Winkelwagen ─────────────────────────────────────────────────────
    Gerrit (3 sep 2026): "er moet een winkelwagen komen, omdat ik ook veel meer
@@ -1301,10 +1437,7 @@ function geld(n){
   return (usd ? "$ " : "€ ") + Number(n).toLocaleString(usd ? "en-US" : "de-DE", {minimumFractionDigits:2, maximumFractionDigits:2});
 }
 function openCart(){
-  const bestaand = $("cartOv"); if (bestaand) bestaand.remove();
-  const ov = document.createElement("div");
-  ov.id = "cartOv";
-  ov.style.cssText = "position:fixed;inset:0;background:rgba(20,24,22,.45);display:flex;align-items:center;justify-content:center;padding:18px;z-index:70;";
+  const bestaand = document.getElementById("cartOv"); if (bestaand) bestaand.remove();
   // Volledig betalen mag alleen als élke spa in de wagen nu op voorraad is.
   const spaRegels = cart.filter(r => r.soort === "spa");
   const alleOpVoorraad = spaRegels.length > 0 && spaRegels.every(r => {
@@ -1321,48 +1454,57 @@ function openCart(){
       <td class="n">${geld(cartRegelPrijs(r) * (Number(r.qty)||1))}</td>
       <td class="n"><button class="secondary cdel" data-i="${i}" style="padding:4px 9px;font-size:12px;">Remove</button></td>
     </tr>`).join("");
-  ov.innerHTML = `
-    <div class="card" style="max-width:620px;width:100%;margin:0;max-height:88vh;overflow:auto;">
-      <h2 style="margin-top:0;">Your basket</h2>
+  /* De kaart zelf schuift niet, de regellijst erin wel. Anders klapt de
+     betaalkeuze onderin open binnen een schuivend vlak en wordt hij afgeknipt
+     door de rand van de kaart. */
+  const html = `
+    <div class="card" style="max-width:620px;width:100%;overflow:visible;">
+      <div class="vensterkop">
+        <h2>Your basket</h2>
+        <button class="sluit" type="button" data-sluit title="Close">&times;</button>
+      </div>
       ${cart.length ? `
-        <div class="prijswrap"><table class="prijs">
+        <div class="prijswrap" style="max-height:40vh;margin-top:6px;"><table class="prijs">
           <thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Total</th><th></th></tr></thead>
           <tbody>${rijen}</tbody>
         </table></div>
         <p class="lead" style="margin:12px 0 0;text-align:right;">Order value: <b style="font-size:16px;color:var(--ink)">${geld(cartTotaal())}</b> <span style="font-size:12px">excl. VAT</span></p>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Payment</label>
-        <select id="cartPay" style="width:100%;">
-          <option value="deposit">${spaRegels.length ? "30% deposit on the spas, parts in full" : "Pay in full"}</option>
-          ${alleOpVoorraad?'<option value="full">Pay everything in full — delivered right away</option>':''}
-          ${window.isFonteyn?'<option value="cent">TEST — pay 1 cent (Fonteyn only)</option>':''}
-        </select>
+        <div id="cartPay" class="kies"></div>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Notes (options, delivery, …)</label>
         <textarea id="cartNote" rows="2" placeholder="Anything we should know?"></textarea>
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap;">
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
           <button class="secondary" id="cartLeeg" type="button" style="padding:11px 16px;">Empty basket</button>
-          <button class="secondary" id="cartDicht" type="button" style="padding:11px 18px;">Keep shopping</button>
+          <button class="secondary" type="button" data-sluit style="padding:11px 18px;">Keep shopping</button>
           <button class="go" id="cartAf" type="button" style="padding:11px 22px;">Checkout</button>
         </div>
         <div id="cartMsg" class="msg hidden"></div>`
       : `<p class="lead">Your basket is empty. Add spas from the <b>Spas</b> tab and parts from <b>Parts &amp; covers</b>.</p>
-         <div style="text-align:right;margin-top:14px;"><button class="secondary" id="cartDicht" type="button" style="padding:11px 18px;">Close</button></div>`}
+         <div style="text-align:right;margin-top:14px;"><button class="secondary" type="button" data-sluit style="padding:11px 18px;">Close</button></div>`}
     </div>`;
-  document.body.appendChild(ov);
-  ov.addEventListener("click", e => { if (e.target === ov) ov.remove(); });
-  ov.querySelector("#cartDicht").addEventListener("click", () => ov.remove());
+  const { laag: ov, sluit } = maakVenster(html);
+  ov.id = "cartOv";
+  /* Betaalkeuze als eigen lijst: bij "volledig betalen" hoort uitleg waaróm
+     dat mag, en dat past niet in een gewone keuzelijst. */
+  const betaalopties = [{ waarde: "deposit",
+      tekst: spaRegels.length ? "30% deposit on the spas" : "Pay in full",
+      bij: spaRegels.length ? "parts in full" : "" }];
+  if (alleOpVoorraad) betaalopties.push({ waarde: "full", tekst: "Pay everything in full", bij: "shipped right away" });
+  if (window.isFonteyn) betaalopties.push({ waarde: "cent", tekst: "TEST \u2014 pay 1 cent", bij: "Fonteyn only" });
+  if (cart.length) maakKiezer(ov.querySelector("#cartPay"), betaalopties, "deposit");
   ov.querySelectorAll(".cdel").forEach(b => b.addEventListener("click", () => {
-    cart.splice(Number(b.dataset.i), 1); cartBewaar(); ov.remove(); openCart();
+    cart.splice(Number(b.dataset.i), 1); cartBewaar(); sluit(); openCart();
   }));
   ov.querySelectorAll(".cq").forEach(inp => inp.addEventListener("change", () => {
     cart[Number(inp.dataset.i)].qty = Math.max(1, Math.min(99, parseInt(inp.value, 10) || 1));
-    cartBewaar(); ov.remove(); openCart();
+    cartBewaar(); sluit(); openCart();
   }));
   const leeg = ov.querySelector("#cartLeeg");
-  if (leeg) leeg.addEventListener("click", () => { cart = []; cartBewaar(); ov.remove(); openCart(); });
+  if (leeg) leeg.addEventListener("click", () => { cart = []; cartBewaar(); sluit(); openCart(); });
   const af = ov.querySelector("#cartAf");
   if (af) af.addEventListener("click", async () => {
     af.disabled = true;
-    const keuze = (ov.querySelector("#cartPay") || {}).value || "deposit";
+    const keuze = (ov.querySelector("#cartPay") || {}).dataset?.waarde || "deposit";
     const r = await api("/dealers/api/reserve", { method:"POST", body: JSON.stringify({
       items: cart.map(x => ({ soort: x.soort, model: x.model, code: x.code, qty: x.qty,
                               variant: x.soort === "spa" ? x.code : undefined, variantName: x.variantName })),
@@ -1378,7 +1520,7 @@ function openCart(){
       setTimeout(() => { location.href = r.data.checkoutUrl; }, 1400);
     } else if (r.status === 200 && r.data && r.data.ok) {
       m.className = "msg ok"; m.textContent = "Order sent — you can follow it under My spas."; m.classList.remove("hidden");
-      cart = []; cartBewaar(); loadMyRequests(); setTimeout(() => ov.remove(), 2200);
+      cart = []; cartBewaar(); loadMyRequests(); setTimeout(sluit, 2200);
     } else {
       m.className = "msg bad"; m.textContent = "Sending failed — please try again."; m.classList.remove("hidden");
       af.disabled = false;
