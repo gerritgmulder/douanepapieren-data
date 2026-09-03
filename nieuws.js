@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-03", bestand: "dealerportaal.html", soort: "nieuw",
+      titel: "Een bestelling terugdraaien",
+      wat: "De tegel heet nu Passion Partners Beheer. Bij een aanbetaalde bestelling staat een knop Terugdraaien: die boekt de aanbetaling tegen in het dagboek Mollie, zet de order in Logic4 op Geannuleerd en geeft de vastgehouden voorraad weer vrij. Bedoeld voor testbestellingen. Het geld wordt niet teruggestort bij Mollie; dat doe je zelf als het om een echte bestelling gaat.",
+    },
+
+    {
+      datum: "2026-09-03", groep: "partnerportaal-kijk", soort: "hersteld",
+      titel: "Zes artikelcodes wezen naar het verkeerde artikel",
+      wat: "In de partnerprijslijst stonden zes verschreven artikelcodes. Twee daarvan bestonden wél in Logic4, maar bij een heel ander artikel: wie een Click Trim in eiken bestelde kreeg een 45-gradenbocht, en wie een Skimmer Ring bestelde kreeg een skimmermandje. Alle zes zijn rechtgezet, en de import controleert voortaan bij elk artikel of de code en de omschrijving nog bij elkaar horen.",
+    },
+
+    {
       datum: "2026-09-03", groep: "partnerportaal-kijk", soort: "nieuw",
       titel: "Onderdelen, covers en een winkelwagen",
       wat: "Passion Partners heeft er een tweede tabblad bij: alle spa-onderdelen en covers uit de partnerprijslijst, ruim zevenhonderd artikelen, met de staffelprijzen en of ze op voorraad liggen. En er is een winkelwagen, zodat een partner twee spa's en tien covers in één bestelling kan doen in plaats van elke spa apart.",

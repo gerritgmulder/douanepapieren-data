@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
-<title>Partnerportaal beheren — Fonteyn Dashboard</title>
+<title>Passion Partners Beheer — Fonteyn Dashboard</title>
 <script src="toegang.js"></script>
 <script src="taal.js"></script>
 <script src="kop.js"></script>
@@ -132,14 +132,14 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
 <header>
   <img class="logo" src="passion-logo.png" alt="Passion Spas">
-  <h1>Partnerportaal beheren</h1>
+  <h1>Passion Partners Beheer</h1>
   <a class="back" href="dashboard.html">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
 <main>
-  <h2>Partnerportaal</h2>
+  <h2>Passion Partners</h2>
   <p class="lead">
     Beheer hier wie er in het <b>partnerportaal</b> kan (magic-link login op e-mailadres),
     welke <b>documenten</b> partners zien, en waar contactvragen binnenkomen.
@@ -1363,16 +1363,59 @@ function renderReqs(){
       ? `<span class="pill on">#${esc(String(r.logic4OrderId))}</span>` +
         (r.logic4BetalingError ? ` <span class="pill off" title="${esc(r.logic4BetalingError)}">betaling niet geboekt</span>` : "")
       : (r.logic4Error ? `<span class="pill off" title="${esc(r.logic4Error)}">fout — check</span>` : '<span style="color:var(--muted)">wordt aangemaakt…</span>');
-    return `<tr>
+    /* Terugdraaien: de aanbetaling tegenboeken en de order annuleren. Bedoeld
+       voor een testbestelling. Een aanvraag die al is teruggedraaid krijgt de
+       knop niet meer en staat vergrijsd. */
+    const terug = r.teruggedraaid
+      ? `<span class="pill off" title="${esc(String(r.teruggedraaidOp||"").slice(0,16).replace("T"," "))}">teruggedraaid</span>`
+      : (r.logic4OrderId ? `<button class="rmv reqTerug" data-id="${esc(r.id)}">terugdraaien</button>` : "");
+    return `<tr${r.teruggedraaid?' style="opacity:.55"':''}>
       <td style="white-space:nowrap">${esc(String(r.ts||"").slice(0,16).replace("T"," "))}</td>
       <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span></td>
       <td>${regelsCel(r)}</td>
       <td>${esc(r.qty)}</td>
       <td style="white-space:nowrap">${dep}</td>
       <td>${l4}</td>
-      <td><button class="rmv reqDel" data-i="${idx}">✕</button></td>
+      <td style="white-space:nowrap">${terug} <button class="rmv reqDel" data-i="${idx}">✕</button></td>
     </tr>`;
   }).join("") || '<tr><td colspan="7" style="color:var(--muted)">Nog geen aanbetaalde reserveringen.</td></tr>';
+
+  document.querySelectorAll(".reqTerug").forEach(b=>b.addEventListener("click", async ()=>{
+    const r = (reqData.requests||[]).find(x => x.id === b.dataset.id);
+    if (!r) return;
+    const sym = r.currency === "USD" ? "$" : "€";
+    const ja = await pDialoog({
+      titel: "Bestelling terugdraaien",
+      gevaarlijk: true, bevestig: "Terugdraaien",
+      html: `<p>Order <b>#${esc(String(r.logic4OrderId))}</b> van <b>${esc(r.company||r.email)}</b>.</p>
+        <ul style="margin:8px 0 0;padding-left:18px;line-height:1.7;">
+          <li>De aanbetaling van <b>${sym} ${Number(r.deposit||0).toFixed(2)}</b> wordt tegengeboekt in dagboek Mollie.</li>
+          <li>De order gaat in Logic4 op <b>Geannuleerd</b>. Verwijderen kan Logic4 niet, en een geboekte order hoort ook niet spoorloos te verdwijnen.</li>
+          <li>De voorraad die hiervoor vastzat komt weer vrij.</li>
+        </ul>
+        <p style="margin-top:10px;color:var(--muted);font-size:12.5px;">Het geld wordt <b>niet</b> teruggestort bij Mollie. Bij een test van een cent hoeft dat niet; bij een echte bestelling doe je dat zelf in Mollie.</p>`,
+    });
+    if (!ja) return;
+    b.disabled = true; b.textContent = "bezig…";
+    const res = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/terugdraaien", {
+      method: "POST", headers: { "Content-Type": "application/json", "X-DP-Admin": adminKey() },
+      body: JSON.stringify({ requestId: r.id, door: (document.getElementById("userEmail")||{}).textContent || "" }),
+    });
+    const j = await res.json().catch(()=>({}));
+    if (res.ok && j.ok) {
+      try{ if(window.fpLog) window.fpLog("bestelling-teruggedraaid", "#"+r.logic4OrderId+" — "+(r.company||r.email)); }catch(e){}
+      await pDialoog({ titel: "Teruggedraaid", geenAnnuleren: true, bevestig: "Sluiten",
+        html: "<ul style=\"margin:0;padding-left:18px;line-height:1.7;\">" +
+              (j.stappen||[]).map(t=>"<li>"+esc(t)+"</li>").join("") + "</ul>" });
+      reqData = await kvGet("dealer-requests");
+      renderReqs();
+    } else {
+      b.disabled = false; b.textContent = "terugdraaien";
+      await pDialoog({ titel: "Terugdraaien mislukt", geenAnnuleren: true, bevestig: "Sluiten",
+        html: "<p>" + esc(j.error || ("HTTP " + res.status)) + "</p>" +
+              ((j.stappen||[]).length ? "<p style=\"color:var(--muted);font-size:12.5px\">Wel al gedaan: " + esc(j.stappen.join("; ")) + "</p>" : "") });
+    }
+  }));
 
   // ── Leads (geen aanbetaling — geen reservering) ──
   $("leadCount").textContent = leadsAll.filter(r => r.status !== "done").length;

@@ -91,8 +91,17 @@ const HANDMATIG = {
   "Passion HeatMaster 16kW":      ["101240"],
   "Passion HeatMaster 21kW":      ["101241"],
   "Passion Xtreme Green Heat Pump": ["152526"],
-  // Ice baths: telkens het Compleet-pakket waar dat bestaat.
-  "Wim Hof's Ice Barrel":  ["800063", "800031"],
+  /* Ice baths: telkens het Compleet-pakket waar dat bestaat.
+
+     De barrel is bewust in twee modellen gesplitst. Logic4 heeft twee complete
+     pakketten - 800063 (240 liter) en 800031 (XL, 350 liter) - en die stonden
+     eerst als twee kleurkeuzes onder één prijs. Gerrit (3 sep 2026): "klopt
+     sowieso niet, de XL is duurder dan de normale." Twee producten met een
+     verschillende prijs horen twee regels op de prijslijst te zijn. Zolang de
+     XL geen prijs heeft staat hij niet in het portaal; zodra Gretha de prijs
+     geeft en die in de beheertegel staat, verschijnt hij vanzelf. */
+  "Wim Hof's Ice Barrel":     ["800063"],
+  "Wim Hof's Ice Barrel XL":  ["800031"],
   "Wim Hof's Ice Revive":  ["800004", "800017", "800019", "800021", "800024", "800026"],
   "Wim Hof's Ice Breeze":  ["800028", "800036", "800037", "800047"],
   "Wim Hof's Ice Faith":   ["800003"],

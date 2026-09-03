@@ -1542,6 +1542,95 @@ async function dpAdminReserveFor(request, env, url) {
   return reply(200, { ok: true, deposit, currency, emailedTo: email, mailSent: sent.ok, checkoutUrl: pay.checkoutUrl, regels: regelsUit.length });
 }
 
+/* POST /dealers/admin/terugdraaien { requestId } — een bestelling terugdraaien.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (3 sep 2026): "ik moet in Passion Partners Beheer een gemaakte order
+   kunnen terugdraaien (aanbetaling uit het Mollie dagboek halen, order
+   verwijderen uit Logic4) als het een test is geweest."
+
+   Twee dingen die je moet weten over hoe dit werkt:
+
+   1. Logic4 kán een order niet verwijderen. Over alle v3-eindpunten heen
+      bestaat er geen DeleteOrder; wel status 23 "Geannuleerd". Dat is ook de
+      juiste weg: een order die al geboekt is hoort niet spoorloos te
+      verdwijnen, hij hoort geannuleerd te zijn. Voor de voorraad en de
+      leverforecast telt een geannuleerde order niet meer mee.
+
+   2. De aanbetaling wordt niet weggehaald maar TEGENGEBOEKT: dezelfde
+      AddPayment, hetzelfde dagboek (Mollie 42, vooruitontvangen 78), met een
+      negatief bedrag. Het saldo op de order komt daarmee op nul en in het
+      dagboek staan de heenboeking en de terugboeking naast elkaar. Een
+      boeking wissen kan de API niet, en zou de boekhouding ook niet mogen.
+
+   Wat hier NIET gebeurt: het geld terugstorten bij Mollie. Bij een test van
+   een cent hoeft dat niet, en bij een echte bestelling is terugstorten een
+   beslissing van een mens, geen bijeffect van een knop. Het scherm zegt dat
+   er ook bij. */
+async function dpAdminTerugdraaien(request, env) {
+  let b = {};
+  try { b = await request.json(); } catch {}
+  const id = String(b.requestId || "").trim();
+  if (!id) return reply(400, { ok: false, error: "requestId-required" });
+
+  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  const lijst = Array.isArray(data.requests) ? data.requests : [];
+  const item = lijst.find(x => x.id === id);
+  if (!item) return reply(404, { ok: false, error: "aanvraag niet gevonden" });
+  if (item.teruggedraaid) return reply(200, { ok: true, alGedaan: true, stappen: ["was al teruggedraaid"] });
+
+  const stappen = [];
+  let mislukt = null;
+
+  if (item.logic4OrderId) {
+    const token = await l4Token(env);
+    // Tegenboeking van de aanbetaling
+    if (Number(item.deposit) > 0 && item.logic4PaidRegistered) {
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          OrderId: Number(item.logic4OrderId),
+          AmountIncl: -Math.abs(Number(item.deposit)),
+          Description: "Terugboeking " + (item.testbetaling ? "testbestelling" : "bestelling") +
+                       " partnerportaal (Mollie " + (item.paymentId || "") + ")",
+          BookingId: 42, MatchingLedgerId: 78,
+        }),
+      });
+      if (r.ok) { stappen.push("aanbetaling tegengeboekt in dagboek Mollie"); item.betalingTeruggeboekt = true; }
+      else { mislukt = "tegenboeking mislukt: HTTP " + r.status + " — " + (await r.text()).slice(0, 200); }
+    } else if (Number(item.deposit) > 0) {
+      stappen.push("geen tegenboeking nodig — de betaling stond nog niet in Logic4");
+    }
+
+    // Order annuleren (23 = Geannuleerd)
+    if (!mislukt) {
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/UpdateOrderStatus", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ OrderId: Number(item.logic4OrderId), StatusId: 23 }),
+      });
+      if (r.ok) { stappen.push("order " + item.logic4OrderId + " op Geannuleerd gezet"); item.orderGeannuleerd = true; }
+      else { mislukt = "annuleren mislukt: HTTP " + r.status + " — " + (await r.text()).slice(0, 200); }
+    }
+  } else {
+    stappen.push("er stond nog geen order in Logic4");
+  }
+
+  if (mislukt) return reply(502, { ok: false, error: mislukt, stappen });
+
+  /* De geclaimde voorraad weer vrijgeven, anders blijft de spa in het portaal
+     als verkocht staan terwijl de bestelling er niet meer is. */
+  item.allocationReleased = true;
+  item.teruggedraaid = true;
+  item.teruggedraaidOp = new Date().toISOString();
+  item.teruggedraaidDoor = String(b.door || "").slice(0, 60) || null;
+  item.status = "teruggedraaid";
+  stappen.push("voorraadclaim vrijgegeven");
+  await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+  console.log("[dp-terugdraaien] aanvraag " + id + " teruggedraaid: " + stappen.join("; "));
+  return reply(200, { ok: true, stappen });
+}
+
 // POST /dealers/admin/testorder { debtorId, model, qty, productCode? } —
 // gecontroleerde proeforder (X-DP-Admin) voor de livegang-test. Maakt een
 // ECHTE order aan; alleen gebruiken met een debiteurnummer dat daarna in
@@ -1913,6 +2002,7 @@ async function handleDealerRoutes(request, env, url) {
     }
     if (p === "/dealers/admin/testorder" && request.method === "POST") return dpAdminTestOrder(request, env);
     if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);
+    if (p === "/dealers/admin/terugdraaien" && request.method === "POST") return dpAdminTerugdraaien(request, env);
     if (p === "/dealers/admin/refresh-stock" && request.method === "POST") return reply(200, await dpRefreshHalStock(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     if (p === "/dealers/admin/refresh-reserveringen" && request.method === "POST") return reply(200, await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) })));
 

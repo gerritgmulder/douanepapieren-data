@@ -153,7 +153,7 @@
     "Container laden": "Container loading",
     "Klik de modellen aan die mee moeten en zie meteen hoeveel spa's er in een container passen - inclusief de indeling in 3D.":
       "Select the models to ship and see straight away how many spas fit in a container - including the 3D layout.",
-    "Partnerportaal beheren": "Manage partner portal",
+    "Passion Partners Beheer": "Passion Partners admin",
     "Beheer het partner-webportaal: welke partners kunnen inloggen, welke specsheets ze zien, en waar hun vragen binnenkomen.":
       "Manage the partner web portal: which partners can sign in, which spec sheets they see, and where their questions arrive.",
     "Passion Partners": "Passion Partners",

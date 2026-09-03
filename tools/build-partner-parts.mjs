@@ -41,6 +41,44 @@ tokenBody.set("client_secret", enc(g("SECRETKEY")) + " " + enc(env.LOGIC4_PASSWO
 tokenBody.set("scope", "api administration.1");
 tokenBody.set("grant_type", "client_credentials");
 
+/* Verschrijvingen in de Excel, met de code die Logic4 wél kent.
+   ═══════════════════════════════════════════════════════════════════════
+   Elke code uit de prijslijst is naast de artikelnaam van Logic4 gelegd. Zes
+   klopten niet, en twee daarvan waren gevaarlijk: de code bestond wél, maar
+   hoorde bij een heel ander artikel. Wie "Click Trim, Oak" bestelde kreeg een
+   45-gradenbocht, en wie een "Skimmer Ring Mystic Mountain" bestelde kreeg een
+   skimmermandje. Dat valt niet op in een orderregel - de omschrijving die de
+   partner ziet is die van de prijslijst, en de code eronder is een andere.
+
+   De vier Cabinet-codes staan er allemaal 200 naast (152559 hoort 152359 te
+   zijn); dat is één keer verkeerd overgetypt en daarna doorgekopieerd.
+
+   Deze tabel wordt gecontroleerd toegepast: klopt de naam bij de nieuwe code
+   niet meer met de Excel, dan slaat de tool alarm in plaats van hem stil te
+   vervangen. */
+const CODE_CORRECTIE = {
+  "152559": "152359",   // Exchangeable Slat, Light grey
+  "152560": "152360",   // Exchangeable Slat, Oak
+  "152561": "152361",   // Click Trim, Light Grey
+  "152562": "152362",   // Click Trim, Oak — 152562 is in Logic4 een 45° Ell
+  "152044": "152342",   // Skimmer Ring S 4CH-949, Mystic Mountain — 152044 is een Skimmer Basket
+  "163061": "152370",   // Heat Pump Control Board
+};
+
+/* Woorden vergelijken om te zien of een code bij de omschrijving hoort. Merk
+   en leestekens tellen niet mee; het gaat om de artikelwoorden zelf. */
+function kernwoorden(s) {
+  return String(s || "").toLowerCase()
+    .replace(/passion|fonteyn|spas?\b/g, " ").replace(/[^a-z0-9]+/g, " ")
+    .trim().split(/\s+/).filter(w => w.length > 2);
+}
+function naamOverlap(excel, logic4) {
+  const B = new Set(kernwoorden(logic4));
+  const A = kernwoorden(excel);
+  if (!A.length) return 1;
+  return A.filter(w => B.has(w)).length / A.length;
+}
+
 /* Artikelcodes staan in de Excel soms als getal ("152009.0") en soms als tekst
    ("151920"). Logic4 kent alleen de tekstvorm zonder decimalen. Codes met een
    achtervoegsel ("151537-one-piece") blijven zoals ze zijn. */
@@ -110,10 +148,41 @@ for (let skip = 0; ; skip += 500) {
 process.stderr.write("\n");
 
 const VERVALLEN = 10;
+
+/* Eerst de bekende verschrijvingen rechtzetten, maar alleen als de nieuwe code
+   in Logic4 ook echt bij deze omschrijving hoort. Zo kan deze tabel niet stil
+   verouderen: verandert er iets in Logic4, dan zegt de tool het. */
+let hersteld = 0;
+for (const a of parts) {
+  const nieuw = CODE_CORRECTIE[a.code];
+  if (!nieuw) continue;
+  const p = byCode.get(nieuw);
+  if (!p) { console.warn("LET OP: correctie " + a.code + " -> " + nieuw + " bestaat niet in Logic4; ongewijzigd gelaten"); continue; }
+  const score = naamOverlap(a.desc, p.ProductName1 || "");
+  if (score < 0.8) {
+    /* Deze regel gebruikt dezelfde code voor een ánder artikel, en dan hoort de
+       correctie er niet bij. Dat is precies waarom de tabel gecontroleerd wordt
+       toegepast: 152562 staat in de Excel twee keer - bij Cabinet als Click
+       Trim (fout) en bij Plumbing als 45° Ell (goed). Alleen de eerste hoort
+       omgezet te worden. */
+    console.log("  overgeslagen: " + a.code + " blijft staan voor \"" + a.desc + "\" (die code klopt daar wél)");
+    continue;
+  }
+  a.codeExcel = a.code;
+  a.code = nieuw;
+  hersteld++;
+}
+if (hersteld) console.log(hersteld + " verschreven artikelcodes rechtgezet");
+
 let onbekend = 0, vervallen = 0;
+const verkeerd = [];
 for (const a of parts) {
   const p = byCode.get(a.code);
   if (!p) { a.logic4 = false; onbekend++; continue; }
+  /* Hoort de code bij de omschrijving? Een vervallen artikel heeft in Logic4
+     geen naam meer ("-"), dus dat controleren we niet. */
+  if ((p.ProductName1 || "").trim() !== "-" && naamOverlap(a.desc, p.ProductName1 || "") < 0.34)
+    verkeerd.push({ code: a.code, excel: a.desc, l4: p.ProductName1 });
   a.logic4 = true;
   a.vrij = Math.max(0, Number(p.FreeStock) || 0);
   a.btw = Number(p.VatPercent) || 21;
@@ -122,7 +191,14 @@ for (const a of parts) {
   if (p.ProductName1 && p.ProductName1.length > a.desc.length) a.descL4 = p.ProductName1;
 }
 console.log(`Logic4: ${parts.length - onbekend} gevonden, ${onbekend} onbekende codes, ${vervallen} vervallen`);
-if (onbekend) console.log("  onbekend: " + parts.filter(a => !a.logic4).map(a => a.code).slice(0, 25).join(", "));
+if (onbekend) {
+  console.log("  onbekend (geen bestelknop in het portaal):");
+  for (const a of parts.filter(a => !a.logic4)) console.log("    " + a.code + "  " + a.cat + "  " + a.desc);
+}
+if (verkeerd.length) {
+  console.log("\n  LET OP - deze codes bestaan wél maar horen bij een ander artikel:");
+  for (const v of verkeerd) console.log("    " + v.code + "  prijslijst: " + v.excel + "\n              Logic4:     " + v.l4);
+}
 
 // ── Wegschrijven ────────────────────────────────────────────────────
 const uit = { updated: new Date().toISOString(), bron: bestand.split("/").pop(),

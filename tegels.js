@@ -84,7 +84,7 @@
       uit:"De financiële keten van inkoop tot omzet",              mobiel:"pc", tile:"tileGeldGoederen" },
     { bestand:"bol.html",            groep:"bol",              ic:"🛒",  naam:"Bol.com koppeling",
       uit:"Bol-orders en boekingen",                               mobiel:"pc", tile:"tileBol" },
-    { bestand:"dealerportaal.html",  groep:"dealerportaal",    ic:"🤝",  naam:"Partnerportaal beheren",
+    { bestand:"dealerportaal.html",  groep:"dealerportaal",    ic:"🤝",  naam:"Passion Partners Beheer",
       uit:"Dealers, documenten en aanvragen",                      mobiel:"pc", tile:"tileDealerportaal" },
     { bestand:"amerika.html",        groep:"amerika",          ic:"🇺🇸",  naam:"Amerika",
       uit:"Houston: facturen, voorraad en QuickBooks",             mobiel:"pc", tile:"tileAmerika" },
