@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-03", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Nieuwe partner: venster valt niet meer weg, mail gaat vanzelf",
+      wat: "Bij het invoeren van een nieuwe dealer of partner kon het venster tijdens het typen ineens verdwijnen, met alles wat je had ingevuld. Dat gebeurde als je muis buiten het venster losliet, bijvoorbeeld bij kopiëren en plakken tussen Telefoon en Mobiel. Een klik sluit het venster nu alleen nog als hij ook naast het venster begon, en heb je iets ingevuld dan wordt er eerst gevraagd of het weg mag. Verder gaat de welkomstmail nu automatisch de deur uit zodra je een nieuwe relatie bewaart; daar hoef je niets meer voor te bevestigen. Zonder die mail heeft een partner geen wachtwoord en kan hij niet inloggen. Alle bevestigingsvensters in dit scherm zijn vervangen door een venster in Passion-opmaak.",
+    },
+
+    {
       datum: "2026-09-01", bestand: "afbeeldingen.html", soort: "nieuw",
       titel: "Tekst in een afbeelding automatisch vertalen",
       wat: "Onderaan de tegel Afbeeldingen op maat zit een nieuw blok. Kies een afbeelding met tekst, kies de taal, en het scherm leest de tekst, vertaalt hem en zet hem terug op dezelfde plek. Je ziet het origineel en de vertaling naast elkaar, met daaronder per regel wat er gevonden en wat er van gemaakt is. Werkt het best op een rustige achtergrond zoals een banner of een specsheet; staat de tekst over een drukke foto, dan blijft er een vlak zichtbaar waar de oude tekst stond. Kijk het dus altijd na voordat je het gebruikt.",

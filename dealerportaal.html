@@ -80,6 +80,17 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   .kaartlaag{position:fixed;inset:0;background:rgba(15,20,17,.5);z-index:900;display:flex;
              align-items:flex-start;justify-content:center;padding:24px 16px;overflow:auto}
   .relkaart{background:#fff;border-radius:12px;width:100%;max-width:880px;box-shadow:0 20px 60px rgba(0,0,0,.28)}
+  /* De laag van de relatiekaart lijnt bovenaan uit (die kaart is hoog). Een
+     dialoogvenster hoort in het midden te staan, dus die laag zet zichzelf. */
+  .kaartlaag:has(> .pdlg){align-items:center}
+  .pdlg{background:#fff;border-radius:14px;max-width:520px;width:100%;overflow:hidden;
+    box-shadow:0 18px 50px rgba(0,0,0,.28)}
+  .pdlg-kop{background:var(--fonteyn-green);color:#fff;padding:16px 22px;font-size:16px;font-weight:700}
+  .pdlg-body{padding:20px 22px;font-size:13.5px;line-height:1.6;color:var(--ink)}
+  .pdlg-body p{margin:0 0 10px} .pdlg-body p:last-child{margin:0}
+  .pdlg-body b{color:var(--fonteyn-green)}
+  .pdlg-voet{display:flex;gap:10px;justify-content:flex-end;padding:0 22px 20px}
+  .btn.solid.gevaar{background:var(--bad);border-color:var(--bad)}
   .relkop{display:flex;align-items:center;gap:12px;padding:16px 22px;border-bottom:1px solid var(--border)}
   .relkop h3{margin:0;font-size:17px;color:var(--fonteyn-green);flex:1}
   .relbody{padding:18px 22px;max-height:calc(100vh - 210px);overflow:auto}
@@ -349,6 +360,48 @@ function vraagWachtwoord(email){
   });
 }
 
+/* ═══ Dialoogvenster in Passion-opmaak ═══════════════════════════════════
+   Gerrit (3 sep 2026): "na het opslaan komt er een heel lelijk popupvenster
+   (ouderwetse css)". Dat was het venster van de browser zelf (confirm), en
+   dat is niet op te maken. Vandaar dit venster: zelfde rood en dezelfde
+   vormgeving als de rest van het portaal.
+
+   Het geeft een belofte terug, net als confirm(), zodat de aanroepende code
+   er nauwelijks voor hoeft te veranderen. Escape en een klik naast het venster
+   gelden als annuleren; Enter als bevestigen. */
+function pDialoog(opties){
+  return new Promise(klaar=>{
+    const o = opties || {};
+    const laag = document.createElement("div");
+    laag.className = "kaartlaag";
+    laag.style.zIndex = 12000;
+    laag.innerHTML =
+      '<div class="pdlg">'
+      + '<div class="pdlg-kop">' + esc(o.titel || "Even bevestigen") + '</div>'
+      + '<div class="pdlg-body">' + (o.html || ("<p>" + esc(o.tekst || "") + "</p>")) + '</div>'
+      + '<div class="pdlg-voet">'
+      +   (o.geenAnnuleren ? "" : '<button class="btn" id="pdlgNee" type="button">' + esc(o.annuleer || "Annuleren") + '</button>')
+      +   '<button class="btn solid' + (o.gevaarlijk ? " gevaar" : "") + '" id="pdlgJa" type="button">' + esc(o.bevestig || "Ja") + '</button>'
+      + '</div></div>';
+    document.body.appendChild(laag);
+    const af = v => { document.removeEventListener("keydown", toets, true); laag.remove(); klaar(v); };
+    function toets(e){
+      if (e.key === "Escape") { e.preventDefault(); af(false); }
+      if (e.key === "Enter")  { e.preventDefault(); af(true); }
+    }
+    document.addEventListener("keydown", toets, true);
+    laag.querySelector("#pdlgJa").addEventListener("click", () => af(true));
+    const nee = laag.querySelector("#pdlgNee");
+    if (nee) nee.addEventListener("click", () => af(false));
+    /* Alleen sluiten als de klik ÓÓK naast het venster begon. Anders sluit een
+       tekstselectie die buiten het venster eindigt hem alsnog. */
+    let startBuiten = false;
+    laag.addEventListener("mousedown", e => { startBuiten = (e.target === laag); });
+    laag.addEventListener("click", e => { if (e.target === laag && startBuiten) af(false); });
+    setTimeout(() => { const k = laag.querySelector("#pdlgJa"); if (k) k.focus(); }, 40);
+  });
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    DE RELATIEKAART
    ═══════════════════════════════════════════════════════════════════════
@@ -417,6 +470,8 @@ function relatieKaart(index){
     + '</div></div>';
   document.body.appendChild(laag);
   const $$ = (id) => laag.querySelector("#" + id);
+  // Waar we mee begonnen, om te kunnen zien of er iets is ingevuld.
+  const beginStand = JSON.parse(JSON.stringify(d));
   const zeg = (t, fout) => { const m=$$("rkMelding"); m.textContent=t||""; m.style.color = fout ? "var(--bad)" : "var(--muted)"; };
 
   function teken(){
@@ -680,9 +735,33 @@ function relatieKaart(index){
     });
   }
 
-  $$("rkSluit").addEventListener("click", () => laag.remove());
-  $$("rkAnnuleer").addEventListener("click", () => laag.remove());
-  laag.addEventListener("click", e => { if (e.target === laag) laag.remove(); });
+  /* Arno (via Gerrit, 3 sep 2026): "hij doet ctrl-C ctrl-V van telefoon naar
+     mobiel en dan valt het venster soms weg, en is alles wat hij al heeft
+     ingevoerd verloren."
+
+     Dat kwam hierdoor: elke klik met de donkere laag als doel sloot de kaart,
+     zonder waarschuwing. Selecteer je tekst in een veld en laat je de muis los
+     buiten de kaart, dan is het doel van die klik de laag - en weg was alles.
+
+     Twee sloten. Een klik telt alleen als "naast de kaart" wanneer hij daar
+     ook BEGON, en is er iets ingevuld dan wordt er eerst gevraagd. */
+  let startNaast = false;
+  laag.addEventListener("mousedown", e => { startNaast = (e.target === laag); });
+  async function sluiten(){
+    lees();
+    const ingevuld = JSON.stringify(d) !== JSON.stringify(beginStand);
+    if (ingevuld) {
+      const weg = await pDialoog({
+        titel: "Weggooien wat je hebt ingevuld?",
+        html: "<p>Je hebt gegevens ingevuld die nog niet zijn bewaard. Sluit je dit venster, dan zijn ze weg.</p>",
+        bevestig: "Ja, weggooien", annuleer: "Terug naar het formulier", gevaarlijk: true });
+      if (!weg) return;
+    }
+    laag.remove();
+  }
+  $$("rkSluit").addEventListener("click", sluiten);
+  $$("rkAnnuleer").addEventListener("click", sluiten);
+  laag.addEventListener("click", e => { if (e.target === laag && startNaast) sluiten(); });
   $$("rkBewaar").addEventListener("click", async () => {
     lees();
     if (!d.email.trim()) { zeg("Een e-mailadres is nodig, daarmee logt de relatie in op het portaal.", true); return; }
@@ -697,9 +776,14 @@ function relatieKaart(index){
     try{ if(window.fpLog) window.fpLog(nieuw?"relatie-toegevoegd":"relatie-gewijzigd", d.email+" ("+d.company+")"); }catch(e){}
     await save("dealer-accounts", accounts);
     laag.remove(); renderPartners();
-    // Nieuwe relatie? Dan is de welkomstmail de logische volgende stap - hier
-    // aanbieden scheelt het zoeken naar de knop in de tabel.
-    if (nieuw && confirm("Opgeslagen. Meteen de welkomstmail sturen naar "+d.email+"?\n\nDe relatie kiest daarmee zelf een wachtwoord en komt direct in het portaal. Kan ook later, met de knop 'uitnodiging'.")) {
+    /* Nieuwe relatie? Dan gaat de welkomstmail METEEN de deur uit, zonder er
+       eerst iets over te vragen. Hier stond een venster van de browser met
+       "meteen de welkomstmail sturen?" - klikte je dat weg, dan gebeurde er
+       niets en stond de partner er wel in maar zonder wachtwoord. Precies dat
+       overkwam Arno: hij stond als partner in de lijst, wachtte op een mail,
+       en die was nooit verstuurd (Gerrit, 3 sep 2026: "ik wil er geen actie
+       vanuit mij tussen hebben"). */
+    if (nieuw) {
       try {
         const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/uitnodigen", {
           method:"POST", headers:{ "Content-Type":"application/json", "X-DP-Admin": adminKey() },
@@ -708,7 +792,24 @@ function relatieKaart(index){
         if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP "+r.status));
         try{ if(window.fpLog) window.fpLog("uitnodiging-verstuurd", d.email+" ("+d.company+")"); }catch(e){}
         setStatus("ok", "Welkomstmail verstuurd naar "+d.email+".");
-      } catch(e){ setStatus("bad","Uitnodiging versturen faalde: "+e.message+". Probeer de knop 'uitnodiging' in de tabel."); }
+        await pDialoog({
+          titel: "Klaar - de uitnodiging is onderweg",
+          html: "<p><b>" + esc(d.company || d.email) + "</b> staat erin als "
+              + (d.soort === "dealer" ? "dealer" : "partner") + ".</p>"
+              + "<p>Er is zojuist een mail gestuurd naar <b>" + esc(d.email) + "</b>. Daarmee kiest hij zelf een "
+              + "wachtwoord en kan hij direct inloggen op Passion Partners. De link is zeven dagen geldig.</p>"
+              + "<p>Jij hoeft verder niets te doen. Komt de mail niet aan, gebruik dan de knop <b>uitnodiging</b> in de lijst.</p>",
+          bevestig: "Klaar", geenAnnuleren: true });
+      } catch(e){
+        setStatus("bad","Uitnodiging versturen faalde: "+e.message);
+        await pDialoog({
+          titel: "Opgeslagen, maar de mail is niet verstuurd",
+          html: "<p><b>" + esc(d.company || d.email) + "</b> staat erin, maar de welkomstmail kwam niet weg:</p>"
+              + "<p style='color:var(--bad)'>" + esc(e.message) + "</p>"
+              + "<p>Probeer het opnieuw met de knop <b>uitnodiging</b> in de lijst. Zolang die mail niet is verstuurd "
+              + "heeft deze relatie geen wachtwoord en kan hij niet inloggen.</p>",
+          bevestig: "Begrepen", geenAnnuleren: true });
+      }
     }
   });
 
@@ -758,14 +859,20 @@ function renderPartners(){
   }));
   document.querySelectorAll(".delD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
-    if (!confirm("Partner "+d.email+" verwijderen? (bestaande sessies verlopen vanzelf)")) return;
+    if (!await pDialoog({ titel:"Relatie verwijderen?",
+      html:"<p><b>"+esc(d.company||d.email)+"</b> wordt uit het portaal gehaald. Hij kan daarna niet meer inloggen; "
+         + "een sessie die nu open staat verloopt vanzelf.</p><p>In Logic4 verandert er niets.</p>",
+      bevestig:"Verwijderen", gevaarlijk:true })) return;
     try{ if(window.fpLog) window.fpLog("partner-verwijderd",d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
     accounts.dealers.splice(Number(b.dataset.i),1);
     await save("dealer-accounts", accounts); renderPartners();
   }));
   document.querySelectorAll(".invD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
-    if (!confirm("Welkomstmail sturen naar "+d.email+(d.company?" ("+d.company+")":"")+"?")) return;
+    if (!await pDialoog({ titel:"Welkomstmail sturen?",
+      html:"<p>Er gaat een mail naar <b>"+esc(d.email)+"</b>"+(d.company?" ("+esc(d.company)+")":"")+".</p>"
+         + "<p>Daarmee kiest hij zelf een wachtwoord en kan hij inloggen op Passion Partners. De link is zeven dagen geldig.</p>",
+      bevestig:"Versturen" })) return;
     b.disabled = true; b.textContent = "bezig…";
     try {
       const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/uitnodigen", {
@@ -957,7 +1064,10 @@ async function bibVerplaats(vanGroep, index, doel){
    verwijderen zou betekenen dat wie het adres kent het nog steeds kan openen. */
 async function bibVerwijder(groep, index){
   const x = (groep.files||[])[index]; if (!x) return;
-  if (!confirm("“"+(x.title||x.id)+"” definitief weggooien?\n\nHij verdwijnt uit het partnerportaal en het bestand zelf wordt ook verwijderd. Dit is niet terug te draaien.")) return;
+  if (!await pDialoog({ titel:"Bestand definitief weggooien?",
+      html:"<p><b>"+esc(x.title||x.id)+"</b> verdwijnt uit het partnerportaal, en het bestand zelf wordt ook verwijderd.</p>"
+         + "<p>Dit is niet terug te draaien.</p>",
+      bevestig:"Weggooien", gevaarlijk:true })) return;
   const mel = $("bibMelding"); mel.textContent = "Bezig met verwijderen…";
   try{
     const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/file?id="+encodeURIComponent(x.id),
@@ -1275,7 +1385,9 @@ function renderReqs(){
     await save("dealer-requests", reqData); renderReqs();
   }));
   document.querySelectorAll(".reqDel").forEach(b=>b.addEventListener("click", async ()=>{
-    if (!confirm("Aanvraag verwijderen?")) return;
+    if (!await pDialoog({ titel:"Aanvraag verwijderen?",
+      html:"<p>De aanvraag verdwijnt uit de lijst. Dit is niet terug te draaien.</p>",
+      bevestig:"Verwijderen", gevaarlijk:true })) return;
     try{ const _r=reqData.requests[Number(b.dataset.i)]; if(window.fpLog) window.fpLog("aanvraag-verwijderd",(_r.company||_r.email)+" — "+_r.qty+"x "+_r.model); }catch(e){}
     reqData.requests.splice(Number(b.dataset.i),1);
     await save("dealer-requests", reqData); renderReqs();
