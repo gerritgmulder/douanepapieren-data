@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "container-laden.html", soort: "beter",
+      titel: "Geen invulveld meer voor de ruimte ernaast",
+      wat: "Het vakje 'Ruimte ernaast' is weg. Er wordt nog steeds met vijf centimeter naast en achter elke spa gerekend, want die ruimte heb je nodig om hem erin te schuiven, maar je hoeft er niets meer aan te draaien.",
+    },
+
+    {
       datum: "2026-09-07", groep: "planning", soort: "beter",
       titel: "Wijzigen in de planning doen Kevin en Gerwin",
       wat: "De planning is voor iedereen op de afdeling te zien, maar er iets in zetten of verzetten doen Kevin en Gerwin. Zie je de knoppen niet meer: dat is de bedoeling, je kunt alles nog wel bekijken. Een afspraak aanklikken laat gewoon alle gegevens zien.",

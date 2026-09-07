@@ -31,6 +31,11 @@ const ALLOWED_BUCKETS = new Set([
   "dealer-docs",      // Dealerportaal: documenten/specsheets (titel/model/url)
   "dealer-requests",  // Dealerportaal: reserveringsaanvragen van dealers (beheer via interne tegel)
   "dealer-prices",    // Dealerportaal: dealerprijs per model (voor 30%-aanbetaling via Mollie)
+  /* Zoeklijst waarmee het dealerbeheer op bedrijfsnaam zoekt. Logic4 kan daar
+     zelf niet op filteren, dus die lijst moet hier staan. Hij wordt eenmalig
+     opgebouwd met tools/build-relatie-index.mjs en daarna door de uursync
+     bijgehouden. Heet met opzet "dealer-": dan geldt de beheersleutel. */
+  "dealer-zoekindex",
   "dealer-parts",     // Passion Partners: onderdelen en covers uit Gretha's prijslijst — tools/build-partner-parts.mjs.
                       // Heet met opzet "dealer-": dan geldt de beheersleutel, net als bij dealer-prices.
   "spa-catalog",      // Model → varianten (artikelcode/kleur/productId) uit Logic4 — tools/build-spa-catalog.mjs
@@ -99,6 +104,16 @@ const ALLOWED_BUCKETS = new Set([
   // gebruikt door de tegel Container laden en door de voorraadwaardering in
   // Amerika, dus één plek voor allebei.
   "spa-maten",
+  /* Per spa-model de doos zoals hij de container in gaat, plus de doos van
+     zijn dubbelgevouwen cover. Afgeleid uit dezelfde bronnen als 'spa-maten'
+     en de prijslijsten van de fabrieken, één keer voorgerekend door
+     tools/build-spa-dozen.mjs.
+
+     Waarom een eigen bucket: Passion Partners moet in de winkelwagen kunnen
+     laten zien hoe de gekozen spa's in een container passen, en dat portaal
+     mag de bronbestanden niet zien - daar staan fabrieksnamen en
+     inkoopgegevens in. Hier staan alleen zes getallen per model. */
+  "spa-dozen",
   // Bankkoppeling: welk dagboek waarvoor. Bewust bij de worker en niet in de
   // browser: het memoriaal-dagboek en de tussenrekeningen zijn voor iedereen
   // hetzelfde, dus als Osman het één keer aanwijst hoeft niemand het daarna
@@ -429,6 +444,16 @@ async function dpStockModels(env) {
     for (const r of list) ledgerOrders.add(String(r.ordernr));
   for (const r of (Array.isArray(reqData.requests) ? reqData.requests : [])) {
     if (r.allocationReleased) continue;
+    /* Een containerbestelling pakt niets uit Uddel. Gerrit (7 sep 2026): "Het
+       moet mogelijk zijn om te kiezen voor het samenstellen van een container.
+       Dan wordt de voorraad namelijk niet uit Uddel gepakt." De spa's komen
+       rechtstreeks uit de fabriek en gaan als hele container naar de partner;
+       de hal in Uddel ziet ze nooit. Zou zo'n bestelling hier wél tellen, dan
+       zag iedereen de vrije voorraad zakken door spa's die er nooit lagen.
+
+       Dezelfde regel die het reserveringen-ledger hieronder al hanteert voor
+       containerorders op magazijn 27 (Dealer magazijn). */
+    if (r.levering === "container") continue;
     const paid = r.paymentStatus === "paid" || r.status === "paid";
     const payingNow = r.paymentStatus === "open" && r.ts && (nowMs - Date.parse(r.ts)) < CLAIM_GRACE_MS;
     if (!paid && !payingNow) continue;
@@ -590,10 +615,23 @@ async function dpHandleStock(env) {
   // van de individuele debiteur af en wordt pas bij het reserveren berekend).
   // Automatisch: ECB-dagkoers min 0,03 (zie koersVanDaag).
   const rate = await dpRate(env);
+  /* De doos waarin een model de container in gaat, plus de doos van zijn
+     dubbelgevouwen cover. Voorgerekend door tools/build-spa-dozen.mjs; zie de
+     toelichting bij de bucket 'spa-dozen' bovenaan. Ontbreekt de bucket, dan
+     blijft alles gewoon werken - het portaal laat de containerpassing dan
+     alleen niet zien. */
+  const dozen = ((await env.FONTEYN_DATA.get("spa-dozen", { type: "json" })) || {}).dozen || {};
   const models = [];
   for (const m of agg.models) {
     const p = prices[m.model];
-    if (!(p && typeof p === "object" && Number(p.usd) > 0)) continue;   // alleen prijslijst
+    if (!(p && typeof p === "object")) continue;                        // alleen prijslijst
+    /* Een model dat op de prijslijst staat maar nog geen bedrag heeft, laten
+       we wél zien - met "prijs op aanvraag" erbij. Verbergen leest als "dit
+       bestaat niet": Gerrit miste de Wim Hof's Ice Barrel XL in het portaal
+       (7 sep 2026) terwijl hij bewust wachtte op een prijs van Gretha.
+       Bestellen kan pas als het bedrag er staat; tot die tijd wijst het
+       scherm naar Contact. */
+    const opAanvraag = !(Number(p.usd) > 0);
     // ALLE kleuren uit de catalogus, elk met de vrije voorraad (0 = backorder),
     // zodat een partner ook bij een backorder-model een kleur kan kiezen.
     const freeByCode = {};
@@ -617,14 +655,19 @@ async function dpHandleStock(env) {
     m.vrijNu = m.variants.reduce((n, v) => n + (Number(v.free) || 0), 0);
     // Alles wat al vergeven is: reserveringen uit Logic4 plus portaal-aanvragen.
     m.vergeven = Math.max(0, (Number(m.physical) || 0) + (Number(m.onTheWater) || 0) - (Number(m.beschikbaar) || 0));
-    m.partnerUsd = Number(p.usd);
+    m.opAanvraag = opAanvraag;
+    m.partnerUsd = opAanvraag ? null : Number(p.usd);
     m.surchargeUsd = Number(p.surcharge) || 0;
-    m.partnerEur = Math.round(Number(p.usd) / rate);                        // USD → EUR via live koers
+    m.partnerEur = opAanvraag ? null : Math.round(Number(p.usd) / rate);    // USD → EUR via live koers
     m.surchargeEur = Math.round((Number(p.surcharge) || 0) / rate);
     m.retailEur = Number(p.retailEur) || null;
     m.collection = p.collection || null;
     m.collectionColor = DP_COLLECTION_COLORS[p.collection] || "#9ca3af";
     m.collectionRank = dpCollectionRank(p.collection);
+    // Maten in centimeters, zodat de winkelwagen zelf kan stapelen.
+    const doos = dozen[m.model];
+    m.doos = doos ? doos.spa : null;
+    m.coverDoos = doos ? doos.cover : null;
     models.push(m);
   }
   // In de volgorde van de gedrukte prijslijst, binnen een collectie op naam.
@@ -837,6 +880,19 @@ async function dpHandleReserve(request, env, sess, url) {
   }]).slice(0, 40);
   const note = String(body.note || "").slice(0, 1500);
 
+  /* Uit voorraad of als hele container? Gerrit (7 sep 2026): "Het moet
+     mogelijk zijn om te kiezen voor het samenstellen van een container. Dan
+     wordt de voorraad namelijk niet uit Uddel gepakt."
+
+     Uit voorraad: de spa's staan in Uddel, worden daar geclaimd en gaan per
+     stuk op transport. Container: de spa's komen als één zending uit de
+     fabriek naar de partner. Daar hoort geen voorraadclaim bij - er ligt
+     niets om te claimen - en de levertijd is die van de fabriek.
+
+     Alleen deze twee waarden; alles wat er anders binnenkomt telt als
+     voorraad, want dat is de gewone gang van zaken. */
+  const levering = body.levering === "container" ? "container" : "voorraad";
+
   const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
   const partsData = (await env.FONTEYN_DATA.get("dealer-parts", { type: "json" })) || {};
   const partByCode = new Map((partsData.parts || []).map(a => [String(a.code), a]));
@@ -924,7 +980,10 @@ async function dpHandleReserve(request, env, sess, url) {
      volledig betaald, ongeacht wat de spa's doen. */
   const alleOpVoorraad = regels.filter(r => r.soort === "spa").every(r =>
     (((hallen.models || {})[r.model] || {}).available || 0) >= r.qty);
-  const payFull = wantsFull && alleOpVoorraad;
+  /* Bij een container kan "nu volledig betalen omdat het op voorraad ligt"
+     niet: er wordt niets uit de hal gepakt, de fabriek moet hem nog laden.
+     Het blijft dus bij de aanbetaling van 30%. */
+  const payFull = wantsFull && alleOpVoorraad && levering !== "container";
   for (const r of regels) {
     if (r.soort !== "spa") continue;
     teBetalen += payFull ? r.volInclVat : r.volInclVat * 0.30;
@@ -952,7 +1011,7 @@ async function dpHandleReserve(request, env, sess, url) {
     note: [note, regels.filter(r => r.zonderVoorkeur).map(r =>
       "Geen kleurvoorkeur opgegeven - artikel " + r.code + " gekozen voor " + r.model).join("\n")]
       .filter(Boolean).join("\n"),
-    currency, vatPercent, payFull,
+    currency, vatPercent, payFull, levering,
     spaUnit: eersteSpa ? eersteSpa.unit : null,
     packUnit: spaAantal ? packUnit : 0,
     totaalExVat: Math.round(totaalExVat * 100) / 100,
@@ -977,7 +1036,10 @@ async function dpHandleReserve(request, env, sess, url) {
       entry.paymentId = pay.id;
       entry.paymentStatus = "open";
       checkoutUrl = pay.checkoutUrl;
-      if (eersteSpa) entry.allocation = dpSnapshotClaim(eersteSpa.model, eersteSpa.qty);
+      // Een container claimt geen hal-voorraad; zie de toelichting in
+      // dpStockModels. Zonder deze regel zou de beheertegel een claim tonen
+      // op spa's die nooit in Uddel komen te staan.
+      if (eersteSpa && levering !== "container") entry.allocation = dpSnapshotClaim(eersteSpa.model, eersteSpa.qty);
     }
   }
   data.requests.push(entry);
@@ -991,6 +1053,11 @@ async function dpHandleReserve(request, env, sess, url) {
     '<div style="font-family:Arial,sans-serif;">' +
     '<p><b>Nieuwe bestelling via het partnerportaal</b></p>' +
     '<p><b>Dealer:</b> ' + esc(sess.company || "") + ' &lt;' + esc(sess.email) + '&gt;</p>' +
+    (levering === "container"
+      ? '<p style="background:#fff4e5;border-left:4px solid #e0a300;padding:8px 12px;margin:0 0 12px;">' +
+        '<b>HELE CONTAINER</b> — rechtstreeks uit de fabriek. Niet uit Uddel: er is geen voorraad geclaimd ' +
+        'en er hoort een containerboeking bij.</p>'
+      : '') +
     '<ul style="line-height:1.7">' + regels.map(r =>
       '<li><b>' + r.qty + '&times; ' + esc(r.soort === "spa" ? r.model : r.naam) + '</b>' +
       (r.variantName ? ' (' + esc(r.variantName) + ')' : '') +
@@ -1002,7 +1069,8 @@ async function dpHandleReserve(request, env, sess, url) {
   await dpLogPartner(env, sess, "reservering-aangevraagd",
     samenvatting + (checkoutUrl ? " — betaallink " + sym + (entry.deposit != null ? entry.deposit.toFixed(2) : "") : ""));
   return reply(200, { ok: true, checkoutUrl, deposit: entry.deposit || null, currency,
-                      payFull: !!entry.payFull, testbetaling: !!entry.testbetaling, regels: regels.length });
+                      payFull: !!entry.payFull, testbetaling: !!entry.testbetaling,
+                      levering, regels: regels.length });
 }
 
 // Fase 3 — Mollie-betaallink (wacht op MOLLIE_API_KEY als worker-secret).
@@ -1760,7 +1828,9 @@ async function dpHandleMollieWebhook(request, env) {
                 debtorId, rows: regels,
                 statusId: item.payFull ? 30 : 25,        // 30 = volledig betaald, vrijgeven leveren
                 reference: "DP-" + String(item.id).slice(0, 8),
-                remarks: "Partnerportaal-reservering — " + bedragTxt + ": " + sym + " " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")" + (item.note ? "\nNotitie: " + item.note : ""),
+                remarks: "Partnerportaal-reservering — " + bedragTxt + ": " + sym + " " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")"
+                  + (item.levering === "container" ? "\nHELE CONTAINER — rechtstreeks uit de fabriek, niet uit Uddel." : "")
+                  + (item.note ? "\nNotitie: " + item.note : ""),
                 description: regels.map(r => r.description).join("; "),
               });
               if (res.ok) {
@@ -8399,7 +8469,10 @@ export default {
       //     bestanden zelf staan apart). Een paar honderd regels past ruim in
       //     1 MB, maar met 4 loopt Gretha ook bij honderden lijsten met een
       //     lange versiehistorie nergens tegenaan.
-      const RUIM = { geldgoederen: 8, "gg-bevindingen": 8, specsheets: 20, prijslijsten: 4, "bank-openstaand": 4, "bank-geboekt": 4 };
+      /*   dealer-zoekindex — 25.000 zakelijke relaties met naam, plaats en
+             e-mail. Rond de 3 MB; de KV-grens van 25 MB blijft ver weg. */
+      const RUIM = { geldgoederen: 8, "gg-bevindingen": 8, specsheets: 20, prijslijsten: 4,
+                     "bank-openstaand": 4, "bank-geboekt": 4, "dealer-zoekindex": 8 };
       const perSheet = /^specsheet-/.test(bucket) ? 8 : 0;
       const limiet = (perSheet || RUIM[bucket] || 1) * 1024 * 1024;
       if (body.length > limiet) {

@@ -186,10 +186,6 @@
         <label for="fCtr">Container</label>
         <select id="fCtr"></select>
       </div>
-      <div>
-        <label for="fSpeling" title="Alleen naast en achter de spa. Bovenop niet: spa's staan op elkaar.">Ruimte ernaast (cm)</label>
-        <input type="number" id="fSpeling" min="0" max="30" step="1" value="5" style="width:90px">
-      </div>
       <div class="keuze"><input type="checkbox" id="fKantelen" checked>
         <label for="fKantelen" style="margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)">Spa's mogen op hun kant</label>
       </div>
@@ -290,8 +286,7 @@
    indeling die de fabriek uiteindelijk maakt. In het echt gaat er minder in -
    over de zendingen naar Houston gemeten kwam er gemiddeld 50,7 m3 lading in
    een container, terwijl hier bij een strakke stapeling zomaar 65 m3 uit kan
-   komen. Reken dit dus als bovengrens, niet als toezegging, en zet er de
-   speling ruimer in als de fabriek klaagt dat het niet past.
+   komen. Reken dit dus als bovengrens en niet als toezegging.
 
    OTA: staat in manifest.json. Nooit opnieuw installeren.
    ══════════════════════════════════════════════════════════════════════════ */
@@ -430,15 +425,15 @@ function kleurVan(id,licht){
 
    Fysiek klopt dat ook: spa's staan met hun rand op elkaar, daar hoeft geen
    lucht tussen. Naast elkaar wél - je moet ze er met een heftruck in kunnen
-   schuiven. Daarom hangt de speling aan de stand: welke twee maten horizontaal
+   schuiven. Daarom hangt die ruimte aan de stand: welke twee maten horizontaal
    liggen krijgen hem, de maat die rechtop staat niet. */
 function standen(d,kantelen,ctr){
   // Eén keer uitrekenen per doos: dit wordt bij het zoeken naar een plek voor
   // élk hoekpunt opnieuw opgevraagd, en dat zijn er honderden.
   const K=ctr||C;
-  const sleutel=K.id+"|"+speling+"|"+(kantelen?1:0);
+  const sleutel=K.id+"|"+SPELING+"|"+(kantelen?1:0);
   if(d._st&&d._stSleutel===sleutel) return d._st;
-  const s=speling, rij=[];
+  const s=SPELING, rij=[];
   /* De speling telt niet mee bij de deur: die ruimte heb je nodig om de spa in
      de container te kunnen schuiven, niet om hem door de opening te krijgen.
      Een spa gaat er in de lengterichting in, dus wat door de deur moet is zijn
@@ -573,7 +568,7 @@ function maxSets(C,spa,cover,kantelen,coverDelen){
   // Bovengrens ook op volume: meer sets dan er kubieke meters zijn kan niet,
   // en dat scheelt bij een klein model een paar dure pogingen.
   const inhoud=C.l*C.b*C.h;
-  const perSet=(spa.l+speling)*(spa.b+speling)*spa.h+delen*(cover.l+speling)*(cover.b+speling)*cover.h;
+  const perSet=(spa.l+SPELING)*(spa.b+SPELING)*spa.h+delen*(cover.l+SPELING)*(cover.b+SPELING)*cover.h;
   let hoog=Math.min(alleen.n,Math.max(1,Math.floor(inhoud/perSet)));
   const past=n=>{
     const dozen=[];
@@ -649,11 +644,24 @@ function laadEen(C,gesorteerd,kantelen,voorkeur){
 const BEWAAR="fp.containerladen";
 let keuze={};                 // sleutel van het model -> aantal
 let C=CONTAINERS[0];
-let speling=5, kantelen=true, coversMee=true;
+/* De ruimte naast en achter een spa om hem er met de heftruck in te kunnen
+   schuiven. Stond tot 7 sep 2026 als invulveld "Ruimte ernaast (cm)" op het
+   scherm, met 5 als beginwaarde. Waarom het er stond: bij het bouwen was niet
+   zeker hoeveel lucht de fabriek nodig heeft, dus kon je eraan draaien als er
+   geklaagd werd dat het niet paste. In de praktijk heeft niemand er ooit iets
+   anders dan 5 ingezet, en een knop waar niemand aan draait leest als een
+   keuze die je zou moeten maken. Gerrit (7 sep 2026): "Bij Container Laden
+   snap ik niet waarom de mogelijkheid er is voor 'Ruimte ernaast (x cm)'.
+   Haal dat weg." Het getal zelf blijft: zonder die 5 cm zou de berekening
+   meer spa's beloven dan er in het echt in gaan.
+
+   Bovenop komt er niets bij - spa's staan met hun rand op elkaar. */
+const SPELING=5;
+let kantelen=true, coversMee=true;
 
 function bewaar(){
   try{ localStorage.setItem(BEWAAR,JSON.stringify({
-    keuze:keuze, container:C.id, speling:speling, kantelen:kantelen, covers:coversMee
+    keuze:keuze, container:C.id, kantelen:kantelen, covers:coversMee
   })); }catch(e){}
 }
 function herstel(){
@@ -662,7 +670,6 @@ function herstel(){
     if(j&&typeof j==="object"){
       if(j.keuze) keuze=j.keuze;
       const c=CONTAINERS.find(x=>x.id===j.container); if(c) C=c;
-      if(j.speling!=null) speling=Math.max(0,Math.min(30,Number(j.speling)||0));
       if(j.kantelen!=null) kantelen=!!j.kantelen;
       if(j.covers!=null) coversMee=!!j.covers;
     }
@@ -717,7 +724,7 @@ let maxCache={};
 // Die hoeven maar één keer doorgerekend te worden.
 function maxSleutel(m){
   const c=coversMee&&m.cover ? m.cover.l+"x"+m.cover.b+"x"+m.cover.h+"x"+(m.cover.delen||1) : "-";
-  return C.id+"|"+speling+"|"+(kantelen?1:0)+"|"+m.l+"x"+m.b+"x"+m.h+"|"+c;
+  return C.id+"|"+SPELING+"|"+(kantelen?1:0)+"|"+m.l+"x"+m.b+"x"+m.h+"|"+c;
 }
 function maxVoor(m){
   const s=maxSleutel(m);
@@ -989,7 +996,7 @@ function tekenPlan(){
   el("ctrUitleg").innerHTML=
     "Binnenwerks "+nl(C.l)+" x "+nl(C.b)+" x "+nl(C.h)+" cm, dat is "+inhoud.toFixed(1).replace(".",",")+" m&sup3; ruimte. "+
     "De deur is "+nl2(C.deur.b/10)+" cm breed en "+nl2(C.deur.h/10)+" cm hoog, en daar moet elke spa doorheen. "+
-    "Elke spa krijgt er "+speling+" cm ruimte naast en achter zich, om hem erin te kunnen schuiven; "+
+    "Elke spa krijgt er "+SPELING+" cm ruimte naast en achter zich, om hem erin te kunnen schuiven; "+
     "bovenop niet, want spa's staan gewoon op elkaar. "+
     (kantelen?"Op de kant leggen mag.":"De spa's blijven rechtop staan.")+
     " Het vulpercentage telt die verpakkingsruimte mee."+
@@ -1241,7 +1248,6 @@ function alsInstellingWijzigt(){
   }
   herstel();
   vulContainerKeuze();
-  el("fSpeling").value=speling;
   el("fKantelen").checked=kantelen;
   el("fCovers").checked=coversMee;
   // Eerst tekenen met wat er nu al is (de prijslijsten), zodat de pagina
@@ -1263,11 +1269,6 @@ el("logoutBtn").addEventListener("click",()=>{
 });
 el("fCtr").addEventListener("change",()=>{
   C=CONTAINERS.find(x=>x.id===el("fCtr").value)||CONTAINERS[0];
-  alsInstellingWijzigt();
-});
-el("fSpeling").addEventListener("change",()=>{
-  speling=Math.max(0,Math.min(30,Number(el("fSpeling").value)||0));
-  el("fSpeling").value=speling;
   alsInstellingWijzigt();
 });
 el("fKantelen").addEventListener("change",()=>{

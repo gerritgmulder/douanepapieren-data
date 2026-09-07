@@ -84,7 +84,12 @@
              border-bottom:1.7px solid #6b7280;transform:translateY(-70%) rotate(45deg)}
   .kies-knop:hover{border-color:#c9cfcb}
   .kies.open .kies-knop{border-color:var(--green);box-shadow:0 0 0 3px rgba(62,125,63,.18)}
-  .kies-lijst{position:absolute;top:calc(100% + 5px);left:0;right:0;z-index:20;background:#fff;border:1px solid var(--border);
+  /* position:fixed en niet absolute. Een keuzelijst die binnen zijn kaart
+     blijft wordt afgeknipt zodra die kaart zelf moet schuiven, en dan zie je
+     juist niet waar je uit kunt kiezen. Zwevend hoort hij bij niets en kan hij
+     nergens tegenaan lopen; maakKiezer rekent bij het openklappen uit waar hij
+     terechtkomt. Breedte en plek worden daar gezet. */
+  .kies-lijst{position:fixed;z-index:400;background:#fff;border:1px solid var(--border);
              border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.16);max-height:264px;overflow:auto;padding:5px}
   .kies-lijst button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:0;background:transparent;
              padding:9px 10px;font:inherit;font-size:14px;border-radius:7px;cursor:pointer}
@@ -354,6 +359,44 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;"
              kop = een tussenkopje in plaats van een keuze
              bij = klein grijs bijschrift rechts (aantal, prijs)
              stip = "op" | "back" | "geen" - het gekleurde bolletje links */
+/* Waar komt een opengeklapte keuzelijst te staan.
+
+   Hij zweeft (position:fixed), dus de plek moet hier worden uitgerekend: even
+   breed als de knop, eronder als het kan en erboven als het onder de knop niet
+   past. Zonder dit valt de lijst op een laptopscherm van de onderkant af, en
+   dan zie je juist niet wat je moest kiezen. */
+function plaatsLijst(knop, lijst){
+  const r = knop.getBoundingClientRect();
+  lijst.style.left = r.left + "px";
+  lijst.style.width = r.width + "px";
+  const onder = window.innerHeight - r.bottom - 12;
+  const boven = r.top - 12;
+  const nodig = Math.min(300, lijst.scrollHeight + 12);
+  if (onder < nodig && boven > onder) {
+    lijst.style.top = "auto";
+    lijst.style.bottom = (window.innerHeight - r.top + 5) + "px";
+    lijst.style.maxHeight = Math.max(140, Math.min(300, boven)) + "px";
+  } else {
+    lijst.style.bottom = "auto";
+    lijst.style.top = (r.bottom + 5) + "px";
+    lijst.style.maxHeight = Math.max(140, Math.min(300, onder)) + "px";
+  }
+}
+/* Schuift het scherm onder een open lijst weg, dan moet hij mee. Anders blijft
+   hij hangen op de plek waar de knop stond. */
+addEventListener("scroll", () => {
+  document.querySelectorAll(".kies.open").forEach(k => {
+    const knop = k.querySelector(".kies-knop"), lijst = k.querySelector(".kies-lijst");
+    if (knop && lijst && !lijst.classList.contains("hidden")) plaatsLijst(knop, lijst);
+  });
+}, true);
+addEventListener("resize", () => {
+  document.querySelectorAll(".kies.open").forEach(k => {
+    const knop = k.querySelector(".kies-knop"), lijst = k.querySelector(".kies-lijst");
+    if (knop && lijst && !lijst.classList.contains("hidden")) plaatsLijst(knop, lijst);
+  });
+});
+
 function maakKiezer(houderId, opties, gekozen, opKies){
   const houder = typeof houderId === "string" ? $(houderId) : houderId;
   if (!houder) return;
@@ -388,15 +431,7 @@ function maakKiezer(houderId, opties, gekozen, opKies){
     /* Naar boven openklappen als er onder de knop te weinig ruimte is. Anders
        valt de lijst op een laptopscherm van de onderkant af, en dan zie je
        juist niet wat je moest kiezen. */
-    const r = knop.getBoundingClientRect();
-    const onder = window.innerHeight - r.bottom;
-    const nodig = Math.min(300, lijst.scrollHeight + 12);
-    if (onder < nodig && r.top > onder) {
-      lijst.style.top = "auto"; lijst.style.bottom = "calc(100% + 5px)";
-      lijst.style.maxHeight = Math.max(140, Math.min(300, r.top - 16)) + "px";
-    } else {
-      lijst.style.top = ""; lijst.style.bottom = ""; lijst.style.maxHeight = "";
-    }
+    plaatsLijst(knop, lijst);
   });
   lijst.addEventListener("click", (e)=>e.stopPropagation());
   lijst.querySelectorAll("button").forEach(b=>b.addEventListener("click", ()=>{
@@ -437,6 +472,11 @@ function maakVenster(html, opties){
 }
 
 const CART_KEY = "pp_cart_v1";
+/* Uit voorraad of als hele container. Staat naast de wagen en niet erin: het
+   is een eigenschap van de zending en niet van een regel. */
+const LEVER_KEY = "pp_lever_v1";
+let levering = "voorraad";
+try { const v = localStorage.getItem(LEVER_KEY); if (v === "container") levering = v; } catch(e){}
 let cart = [];
 try { cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]") || []; } catch(e){ cart = []; }
 
@@ -520,6 +560,7 @@ async function sendLink(){
      wachtwoord te zetten hoort hier ook niet: er is geen dealeraccount om een
      wachtwoord aan te hangen. */
   window.isFonteyn = !!me.data.fonteyn;
+  window.meekijken = !!me.data.medewerker;
   if (me.data.medewerker) {
     $("pwBtn").classList.add("hidden");
     if (!document.getElementById("meekijkBalk")) {
@@ -672,14 +713,25 @@ function renderStock(){
       <ul>
         ${voorraadRegels(m)}
         ${pakketRegel(m)}
-        ${m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):""}
+        ${m.opAanvraag?`<li style="margin-top:6px;color:var(--muted)">Price on request &mdash; ask us via the Contact tab.</li>`
+          :(m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):"")}
       </ul>
       <div class="knoppen">
-        <button class="go rsv" data-model="${esc(m.model)}" style="padding:9px 14px;font-size:13px;">Reserve</button>
+        ${m.opAanvraag
+          ? `<button class="secondary vraag" data-model="${esc(m.model)}" style="padding:9px 14px;font-size:13px;">Ask us</button>`
+          : `<button class="go rsv" data-model="${esc(m.model)}" style="padding:9px 14px;font-size:13px;">Reserve</button>`}
         <button class="secondary dls" data-model="${esc(m.model)}" style="padding:9px 14px;font-size:13px;">Downloads${aantalDocs(m.model) ? ` <span style="color:var(--muted);font-weight:400;">${aantalDocs(m.model)}</span>` : ""}</button>
       </div>
     </div>`;}).join("");
   document.querySelectorAll(".rsv").forEach(b => b.addEventListener("click", () => openReserve(b.dataset.model)));
+  /* Nog geen prijs: dan naar Contact, met het model al ingevuld. Beter dan een
+     reserveerknop die halverwege stukloopt. */
+  document.querySelectorAll(".vraag").forEach(b => b.addEventListener("click", () => {
+    document.querySelector('.tab[data-tab="contact"]').click();
+    const o = $("qSubject"), t = $("qMessage");
+    if (o) o.value = "Price request: " + b.dataset.model;
+    if (t) { t.value = "Could you send me the partner price for the " + b.dataset.model + "?"; t.focus(); }
+  }));
   document.querySelectorAll(".dls").forEach(b => b.addEventListener("click", () => openDownloads(b.dataset.model)));
   document.querySelectorAll(".stock-card").forEach(c => koppelFoto(c, c.dataset.model));
   $("stockEmpty").classList.toggle("hidden", list.length > 0);
@@ -725,6 +777,8 @@ function priceWaarde(m, kolom){
 }
 function renderPrices(){
   const q=($("priceSearch").value||"").trim().toLowerCase();
+  // Op de prijslijst alleen modellen mét een prijs; wat op aanvraag is staat
+  // op het tabblad Spas met een verwijzing naar Contact.
   let lijst=(stockModels||[]).filter(m=>m.partnerEur||m.partnerUsd);
   if(q) lijst=lijst.filter(m=>(m.model+" "+(m.collection||"")).toLowerCase().includes(q));
   const s=priceSort;
@@ -1398,6 +1452,285 @@ function renderParts(){
 }
 $("partsSearch").addEventListener("input", renderParts);
 
+
+/* ── Containerpassing ────────────────────────────────────────────────
+   Gerrit (7 sep 2026): "Dat kiezen voor een container moet in Passion Partners
+   staan. Dus in mijn basket wil ik de mogelijkheid om te kiezen voor CONTAINER.
+   Dan wil ik Container Laden eraan koppelen, zodat je direct kunt zien hoe de
+   door jou gekozen producten in een container gaan passen."
+
+   Dit is dezelfde stapeling als in de tegel Container laden: dozen van groot
+   naar klein op het laagste vrije hoekpunt dat vooraan links ligt, en bij elke
+   geplaatste doos komen er drie hoekpunten bij (ernaast, erachter, erbovenop).
+   Elke beginstand wordt geprobeerd; de beste telt.
+
+   Waarom hij hier opnieuw staat en niet als gedeeld bestand: dit portaal draait
+   onder een strak Content-Security-Policy dat alleen inline script toestaat.
+   Een <script src> erbij zou de browser weigeren.
+
+   De maten komen van de server (bucket spa-dozen), niet uit de prijslijsten:
+   die staan vol met fabrieks- en inkoopgegevens die een partner niet hoort te
+   zien. Per model komen er zes getallen mee, meer niet.
+
+   De ruimte naast en achter een spa is vast 5 cm - je moet hem er met een
+   heftruck in kunnen schuiven. Bovenop niet: spa's staan met hun rand op
+   elkaar. Onderdelen en covers uit de Parts-tab tellen niet mee; die gaan los
+   in dozen en zijn geen blok waar je mee stapelt. */
+const CONTAINERS = [
+  { id:"40hc", naam:"40 ft High Cube", l:1203, b:235, h:269, deur:{b:2340, h:2585} },
+  { id:"40",   naam:"40 ft standard",  l:1203, b:235, h:239, deur:{b:2340, h:2280} },
+  { id:"45hc", naam:"45 ft High Cube", l:1356, b:235, h:269, deur:{b:2340, h:2585} },
+];
+const SPELING = 5;          // cm naast en achter, niet erboven
+const MAX_CONTAINERS = 6;   // meer dan dit rekenen we niet door in de browser
+
+function pakStanden(d, C){
+  const sleutel = C.id;
+  if (d._st && d._stK === sleutel) return d._st;
+  const rij = [], s = SPELING;
+  const deurB = C.deur.b/10, deurH = C.deur.h/10;
+  // De speling telt niet bij de deur: die ruimte heb je nodig om hem naar
+  // binnen te schuiven, niet om hem door de opening te krijgen.
+  const zet = (a,b,hoog) => { if (b > deurB+0.001 || hoog > deurH+0.001) return; rij.push([a+s, b+s, hoog]); };
+  zet(d.l,d.b,d.h); zet(d.b,d.l,d.h);
+  zet(d.l,d.h,d.b); zet(d.h,d.l,d.b);
+  zet(d.b,d.h,d.l); zet(d.h,d.b,d.l);
+  const gezien = {}, uit = [];
+  for (const st of rij) { const k = st.join("|"); if (!gezien[k]) { gezien[k]=1; uit.push(st); } }
+  d._st = uit; d._stK = sleutel;
+  return uit;
+}
+function pakPast(C, st, p, erin){
+  if (p.x+st[0] > C.l+0.001) return false;
+  if (p.y+st[1] > C.b+0.001) return false;
+  if (p.z+st[2] > C.h+0.001) return false;
+  for (let i = erin.length-1; i >= 0; i--) {
+    const q = erin[i];
+    if (p.x < q.x+q.dl-0.001 && p.x+st[0] > q.x+0.001 &&
+        p.y < q.y+q.db-0.001 && p.y+st[1] > q.y+0.001 &&
+        p.z < q.z+q.dh-0.001 && p.z+st[2] > q.z+0.001) return false;
+  }
+  return true;
+}
+function pakHoeken(erin){
+  const punten = [{x:0,y:0,z:0}], gezien = new Set([0]);
+  const zet = (x,y,z) => {
+    const k = (Math.round(x*10)*100000 + Math.round(y*10))*100000 + Math.round(z*10);
+    if (!gezien.has(k)) { gezien.add(k); punten.push({x,y,z}); }
+  };
+  for (const q of erin) { zet(q.x+q.dl,q.y,q.z); zet(q.x,q.y+q.db,q.z); zet(q.x,q.y,q.z+q.dh); }
+  punten.sort((a,b)=>a.z-b.z||a.x-b.x||a.y-b.y);
+  return punten;
+}
+function pakPlek(C, doos, erin, voorkeur){
+  const punten = pakHoeken(erin);
+  let st = pakStanden(doos, C);
+  if (voorkeur > 0 && voorkeur < st.length) st = [st[voorkeur]].concat(st.filter((_,i)=>i!==voorkeur));
+  for (const p of punten) for (const s of st)
+    if (pakPast(C, s, p, erin)) return { x:p.x, y:p.y, z:p.z, dl:s[0], db:s[1], dh:s[2] };
+  return null;
+}
+/* De hele lijst over zo weinig mogelijk containers. Elke beginstand wordt
+   geprobeerd; het beste resultaat telt, en 'beste' is eerst zo weinig mogelijk
+   dat er niet in past en daarna zo weinig mogelijk containers. */
+function pakLaad(C, dozen){
+  const gesorteerd = dozen.slice().sort((a,b)=>(b.l*b.b*b.h)-(a.l*a.b*a.h));
+  let standen = 1;
+  for (const d of gesorteerd) standen = Math.max(standen, pakStanden(d, C).length);
+  let beste = null;
+  for (let v = 0; v < standen; v++) {
+    const containers = [], buiten = [];
+    for (const d of gesorteerd) {
+      let klaar = false;
+      for (const c of containers) {
+        const p = pakPlek(C, d, c.dozen, v);
+        if (p) { c.dozen.push(Object.assign({}, d, p)); klaar = true; break; }
+      }
+      if (!klaar && containers.length < MAX_CONTAINERS) {
+        const c = { dozen: [] };
+        const p = pakPlek(C, d, c.dozen, v);
+        if (p) { c.dozen.push(Object.assign({}, d, p)); containers.push(c); klaar = true; }
+      }
+      if (!klaar) buiten.push(d);
+    }
+    if (!beste || buiten.length < beste.buiten.length ||
+        (buiten.length === beste.buiten.length && containers.length < beste.containers.length))
+      beste = { containers, buiten };
+    if (beste.buiten.length === 0 && beste.containers.length === 1) break;
+  }
+  return beste || { containers: [], buiten: dozen.slice() };
+}
+
+/* De dozen die bij de winkelwagen horen. Eén spa is één doos plus de dozen van
+   zijn cover: die gaat altijd mee en neemt ook plek in. Modellen waarvan wij de
+   maat niet hebben komen apart terug - dan kan het portaal zeggen wát het niet
+   kon meerekenen in plaats van stilletjes een te mooi getal te laten zien. */
+function cartDozen(){
+  const dozen = [], zonderMaat = [];
+  for (const r of cart) {
+    if (r.soort !== "spa") continue;
+    const m = (stockModels || []).find(x => x.model === r.model);
+    const d = m && m.doos;
+    if (!d || !(d.l > 0 && d.b > 0 && d.h > 0)) { zonderMaat.push(r.model); continue; }
+    const n = Math.max(1, Number(r.qty) || 1);
+    for (let i = 0; i < n; i++) {
+      dozen.push({ model: r.model, wat: "spa", l:d.l, b:d.b, h:d.h });
+      const c = m.coverDoos;
+      if (c && c.l > 0) for (let k = 0; k < (Number(c.delen)||1); k++)
+        dozen.push({ model: r.model, wat: "cover", l:c.l, b:c.b, h:c.h });
+    }
+  }
+  return { dozen, zonderMaat };
+}
+
+/* Vaste kleur per model, uit de naam gerekend en niet uit de plek in de lijst:
+   dezelfde spa houdt zo dezelfde kleur, ook als er een model bij komt. */
+function ctrKleur(naam, licht){
+  let h = 0; const t = String(naam);
+  for (let i = 0; i < t.length; i++) h = (h*31 + t.charCodeAt(i))|0;
+  return "hsl(" + (Math.abs(h)%360) + "," + (licht?"45%,82%":"62%,55%") + ")";
+}
+
+/* Twee doorsneden van één container: van boven (lengte x breedte) en van
+   opzij (lengte x hoogte). Genoeg om te zien hoe de lading ligt en waar er
+   nog ruimte over is, zonder dat er een 3D-tekening bij hoeft.
+
+   Van boven tekenen we alleen de onderste laag - anders kijk je door alles
+   heen en zie je een kleurenbrij. Van opzij alles, met de dozen achteraan
+   lichter, zodat diepte zichtbaar blijft. */
+function ctrTekening(c, C){
+  const breed = 560, marge = 1;
+  const schaal = breed / C.l;
+  const teken = (dozen, hoogteCm, xVan, yVan, dVan, hVan, lichtVan) => {
+    const hoog = Math.max(28, hoogteCm * schaal);
+    const vakken = dozen.map(d => {
+      const x = xVan(d)*schaal, y = yVan(d)*schaal, w = dVan(d)*schaal, h = hVan(d)*schaal;
+      const cover = d.wat === "cover";
+      return `<rect x="${(x+marge).toFixed(1)}" y="${(hoog-y-h+marge).toFixed(1)}" `
+        + `width="${Math.max(1,w-marge*2).toFixed(1)}" height="${Math.max(1,h-marge*2).toFixed(1)}" `
+        + `rx="1.5" fill="${ctrKleur(d.model, cover || lichtVan(d))}" `
+        + `fill-opacity="${cover?0.72:0.95}" stroke="#fff" stroke-width="0.7"></rect>`;
+    }).join("");
+    /* Op schaal, niet uitgerekt: een container van 12 meter bij 2,35 hoort er
+       ook lang en laag uit te zien. Daarom geen vaste hoogte en geen
+       preserveAspectRatio="none" - de viewBox doet het werk en de tekening
+       schaalt mee met de breedte van de kaart. */
+    return `<svg viewBox="0 0 ${breed} ${hoog.toFixed(1)}" style="display:block;width:100%;height:auto;`
+      + `border:1px solid var(--border);border-radius:5px;background:#fff;">${vakken}</svg>`;
+  };
+  // Onderste laag voor het bovenaanzicht: alles wat op de vloer staat.
+  const vloer = c.dozen.filter(d => d.z < 0.5);
+  const boven = teken(vloer, C.b, d=>d.x, d=>d.y, d=>d.dl, d=>d.db, ()=>false);
+  const zij   = teken(c.dozen.slice().sort((a,b)=>b.y-a.y), C.h, d=>d.x, d=>d.z, d=>d.dl, d=>d.dh,
+                      d=>d.y > C.b/2);
+  return `<div style="margin-top:9px;">
+      <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 3px;">Top view — bottom layer</div>${boven}
+      <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:8px 0 3px;">Side view</div>${zij}
+    </div>`;
+}
+
+let ctrKeuze = "40hc";
+let ctrCache = {};      // sleutel -> uitkomst, want stapelen kost rekentijd
+function ctrUitkomst(){
+  const { dozen, zonderMaat } = cartDozen();
+  const C = CONTAINERS.find(c => c.id === ctrKeuze) || CONTAINERS[0];
+  if (!dozen.length) return { C, leeg: true, zonderMaat };
+  const sleutel = C.id + "|" + dozen.map(d => d.model + d.wat).sort().join(",");
+  if (ctrCache[sleutel]) return Object.assign({ C, zonderMaat }, ctrCache[sleutel]);
+  const r = pakLaad(C, dozen);
+  const inhoud = C.l * C.b * C.h / 1000000;
+  const geladen = r.containers.map(c => {
+    const m3 = c.dozen.reduce((t,d)=>t + (d.dl*d.db*d.dh)/1000000, 0);
+    // De dozen zelf gaan mee: het paneel tekent er een boven- en zijaanzicht
+    // van, want "78% vol" laat je niet zien hóe je lading erin ligt.
+    return { aantal: c.dozen.length, vol: Math.round(m3 / inhoud * 100), dozen: c.dozen };
+  });
+  const uit = { containers: geladen, buiten: r.buiten, totaal: dozen.length, inhoud };
+  ctrCache[sleutel] = uit;
+  return Object.assign({ C, zonderMaat }, uit);
+}
+
+
+/* Het containerpaneel in de winkelwagen: welke container, wat er in past en
+   wat er dan nog vrij is. Alleen zichtbaar als er voor een hele container is
+   gekozen - bij levering uit Uddel gaat elke spa los op transport en is er
+   niets te stapelen. */
+function tekenContainer(ov){
+  const doel = ov.querySelector("#ctrPaneel");
+  if (!doel) return;
+  if (levering !== "container") { doel.innerHTML = ""; return; }
+
+  const r = ctrUitkomst();
+  const kop =
+    `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+       <b style="font-size:13px;">Your container</b>
+       <div id="ctrKies" class="kies" style="min-width:210px;flex:0 1 240px;"></div>
+     </div>`;
+
+  let body;
+  if (r.leeg) {
+    body = `<p class="lead" style="margin:0;">Add spas to your basket and we will show you here how they fit.</p>`;
+  } else {
+    const passen = r.totaal - r.buiten.length;
+    /* Hoeveel er nog bij kan, uitgedrukt in de spa die je al hebt gekozen: dat
+       zegt een partner meer dan een percentage. We nemen de kleinste spa in de
+       wagen, want dat is er het meeste van kwijt te krijgen. */
+    const laatste = r.containers[r.containers.length - 1];
+    const vrij = laatste ? Math.max(0, 100 - laatste.vol) : 0;
+    const balken = r.containers.map((c, i) => `
+      <div style="margin-top:${i?14:0}px;">
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:3px;">
+          <span>Container ${i+1}</span><span>${c.vol}% full &middot; ${c.aantal} items</span>
+        </div>
+        <div style="height:10px;border-radius:5px;background:var(--border);overflow:hidden;">
+          <div style="height:100%;width:${Math.min(100,c.vol)}%;background:linear-gradient(90deg,var(--red),#e03a52);"></div>
+        </div>
+        ${ctrTekening(c, r.C)}
+      </div>`).join("");
+    /* Welke kleur bij welk model hoort. Zonder dit lijstje is de tekening een
+       vlakverdeling zonder betekenis. */
+    const modellen = [...new Set(r.containers.flatMap(c => c.dozen.map(d => d.model)))];
+    const legenda = `<div style="display:flex;flex-wrap:wrap;gap:5px 14px;margin-top:10px;">` +
+      modellen.map(n => `<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);">
+          <span style="width:11px;height:11px;border-radius:3px;background:${ctrKleur(n,false)};"></span>${esc(n)}</span>`).join("") +
+      `<span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);">
+          <span style="width:11px;height:11px;border-radius:3px;background:#d8d8d8;"></span>lighter shade = its cover</span></div>`;
+    body =
+      `<p class="lead" style="margin:0 0 10px;">
+         ${passen} of ${r.totaal} packages (spas and their folded covers) fit in
+         ${r.containers.length === 1 ? "one" : r.containers.length} &times; ${esc(r.C.naam)}.
+         ${r.containers.length === 1 && vrij >= 8
+            ? `About <b>${vrij}%</b> of the space is still free — there is room for more.`
+            : ""}
+       </p>${balken}${legenda}` +
+      (r.buiten.length
+        ? `<p class="lead" style="margin:10px 0 0;color:var(--red);">
+             ${r.buiten.length} package${r.buiten.length>1?"s":""} did not fit in ${MAX_CONTAINERS} containers.
+             Please split the order or contact us.</p>`
+        : "") +
+      (r.zonderMaat.length
+        ? `<p class="lead" style="margin:10px 0 0;">We do not have the crate size for
+             ${esc([...new Set(r.zonderMaat)].join(", "))} yet, so ${r.zonderMaat.length>1?"they are":"it is"} not counted here.</p>`
+        : "");
+  }
+
+  doel.innerHTML =
+    `<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:10px;background:#fbfbfc;">
+       ${kop}${body}
+       <p style="margin:12px 0 0;font-size:11.5px;color:var(--muted);line-height:1.55;">
+         Every spa travels with its cover, folded in half, and each spa gets 5 cm of clearance
+         beside and behind it so it can be pushed in. Stacking on top needs no gap.
+         This is the tightest possible load, so treat it as an upper limit rather than a promise.
+         Nothing is taken from our Uddel warehouse for a container order.
+       </p>
+     </div>`;
+
+  maakKiezer(doel.querySelector("#ctrKies"),
+    CONTAINERS.map(c => ({ waarde: c.id, tekst: c.naam,
+                           bij: (c.l*c.b*c.h/1000000).toFixed(0) + " m³" })),
+    ctrKeuze, (w) => { ctrKeuze = w; tekenContainer(ov); });
+}
+
 /* ── Winkelwagen ─────────────────────────────────────────────────────
    Gerrit (3 sep 2026): "er moet een winkelwagen komen, omdat ik ook veel meer
    dan 1 spa wil kunnen bestellen. Misschien wil ik wel 10 covers en 2 spa's
@@ -1454,26 +1787,37 @@ function openCart(){
       <td class="n">${geld(cartRegelPrijs(r) * (Number(r.qty)||1))}</td>
       <td class="n"><button class="secondary cdel" data-i="${i}" style="padding:4px 9px;font-size:12px;">Remove</button></td>
     </tr>`).join("");
-  /* De kaart zelf schuift niet, de regellijst erin wel. Anders klapt de
-     betaalkeuze onderin open binnen een schuivend vlak en wordt hij afgeknipt
-     door de rand van de kaart. */
+  /* De kaart past altijd op het scherm: kop en knoppen staan vast, alleen het
+     middenstuk schuift. Gerrit (3 sep 2026) over de plandialoog: "dat venster
+     moet zo gemaakt zijn dat je niet hoeft te scrollen op welk desktop scherm
+     dan ook. Hetzelfde geldt voor andere schermen." Met de containertekening
+     erbij werd deze kaart te hoog voor een laptop van 720 pixels, en dan viel
+     de Checkout-knop onder de rand.
+
+     Dat het middenstuk schuift kan sinds de keuzelijsten zweven: die worden
+     niet meer afgeknipt door de rand van een schuivend vlak. */
   const html = `
-    <div class="card" style="max-width:620px;width:100%;overflow:visible;">
-      <div class="vensterkop">
+    <div class="card" style="max-width:620px;width:100%;max-height:92vh;display:flex;flex-direction:column;">
+      <div class="vensterkop" style="flex:0 0 auto;">
         <h2>Your basket</h2>
         <button class="sluit" type="button" data-sluit title="Close">&times;</button>
       </div>
       ${cart.length ? `
-        <div class="prijswrap" style="max-height:40vh;margin-top:6px;"><table class="prijs">
+       <div style="flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 -22px;padding:0 22px;">
+        <div class="prijswrap" style="margin-top:6px;"><table class="prijs">
           <thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Total</th><th></th></tr></thead>
           <tbody>${rijen}</tbody>
         </table></div>
         <p class="lead" style="margin:12px 0 0;text-align:right;">Order value: <b style="font-size:16px;color:var(--ink)">${geld(cartTotaal())}</b> <span style="font-size:12px">excl. VAT</span></p>
+        <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Delivery</label>
+        <div id="cartLever" class="kies"></div>
+        <div id="ctrPaneel"></div>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Payment</label>
         <div id="cartPay" class="kies"></div>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Notes (options, delivery, …)</label>
         <textarea id="cartNote" rows="2" placeholder="Anything we should know?"></textarea>
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
+       </div>
+        <div style="flex:0 0 auto;display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
           <button class="secondary" id="cartLeeg" type="button" style="padding:11px 16px;">Empty basket</button>
           <button class="secondary" type="button" data-sluit style="padding:11px 18px;">Keep shopping</button>
           <button class="go" id="cartAf" type="button" style="padding:11px 22px;">Checkout</button>
@@ -1490,8 +1834,27 @@ function openCart(){
       tekst: spaRegels.length ? "30% deposit on the spas" : "Pay in full",
       bij: spaRegels.length ? "parts in full" : "" }];
   if (alleOpVoorraad) betaalopties.push({ waarde: "full", tekst: "Pay everything in full", bij: "shipped right away" });
-  if (window.isFonteyn) betaalopties.push({ waarde: "cent", tekst: "TEST \u2014 pay 1 cent", bij: "Fonteyn only" });
+  /* De testbetaling alleen aan wie ook écht kan bestellen. Een meekijkende
+     collega mag niets wijzigen (de worker weigert elke POST), dus die optie
+     aanbieden levert alleen een foutmelding op. */
+  if (window.isFonteyn && !window.meekijken)
+    betaalopties.push({ waarde: "cent", tekst: "TEST \u2014 pay 1 cent", bij: "Fonteyn only" });
   if (cart.length) maakKiezer(ov.querySelector("#cartPay"), betaalopties, "deposit");
+  /* Uit voorraad of een hele container. Gerrit (7 sep 2026): "Het moet
+     mogelijk zijn om te kiezen voor het samenstellen van een container. Dan
+     wordt de voorraad namelijk niet uit Uddel gepakt en moet het echt [uit de
+     fabriek komen]." */
+  if (cart.length) {
+    maakKiezer(ov.querySelector("#cartLever"), [
+      { waarde:"voorraad",  tekst:"From our warehouse in Uddel", bij:"per spa" },
+      { waarde:"container", tekst:"Full container \u2014 straight from the factory", bij:"we build the load" },
+    ], levering, (w) => {
+      levering = w === "container" ? "container" : "voorraad";
+      try { localStorage.setItem(LEVER_KEY, levering); } catch(e){}
+      tekenContainer(ov);
+    });
+    tekenContainer(ov);
+  }
   ov.querySelectorAll(".cdel").forEach(b => b.addEventListener("click", () => {
     cart.splice(Number(b.dataset.i), 1); cartBewaar(); sluit(); openCart();
   }));
@@ -1502,13 +1865,24 @@ function openCart(){
   const leeg = ov.querySelector("#cartLeeg");
   if (leeg) leeg.addEventListener("click", () => { cart = []; cartBewaar(); sluit(); openCart(); });
   const af = ov.querySelector("#cartAf");
-  if (af) af.addEventListener("click", async () => {
+  /* Meekijken is kijken. Zonder deze regel loopt een collega tot de laatste
+     knop door en krijgt dan "Sending failed" - Gerrit liep daar op vast
+     (7 sep 2026). Nu staat het er vooraf, met de reden erbij. */
+  if (af && window.meekijken) {
+    af.disabled = true;
+    af.title = "Ordering is only possible from a partner account";
+    const mm = ov.querySelector("#cartMsg");
+    if (mm) { mm.className = "msg bad"; mm.classList.remove("hidden"); mm.textContent =
+      "You are viewing as a Fonteyn colleague. You can fill the basket and see everything, but ordering is only possible from a partner account."; }
+  }
+  if (af && !window.meekijken) af.addEventListener("click", async () => {
     af.disabled = true;
     const keuze = (ov.querySelector("#cartPay") || {}).dataset?.waarde || "deposit";
     const r = await api("/dealers/api/reserve", { method:"POST", body: JSON.stringify({
       items: cart.map(x => ({ soort: x.soort, model: x.model, code: x.code, qty: x.qty,
                               variant: x.soort === "spa" ? x.code : undefined, variantName: x.variantName })),
       note: (ov.querySelector("#cartNote") || {}).value || "",
+      levering,
       payFull: keuze === "full", payCent: keuze === "cent" }) });
     const m = ov.querySelector("#cartMsg");
     if (r.status === 200 && r.data && r.data.ok && r.data.checkoutUrl) {
@@ -1522,7 +1896,17 @@ function openCart(){
       m.className = "msg ok"; m.textContent = "Order sent — you can follow it under My spas."; m.classList.remove("hidden");
       cart = []; cartBewaar(); loadMyRequests(); setTimeout(sluit, 2200);
     } else {
-      m.className = "msg bad"; m.textContent = "Sending failed — please try again."; m.classList.remove("hidden");
+      /* Zeggen wát er misging. "Sending failed" alleen is niet op te lossen:
+         daar kan niemand uit afleiden of het aan de verbinding ligt, aan het
+         account of aan de winkelwagen. */
+      const reden = (r.data && (r.data.error || r.data.uitleg)) || ("HTTP " + r.status);
+      m.className = "msg bad";
+      m.textContent = reden === "meekijken-is-alleen-lezen"
+        ? "You are viewing as a Fonteyn colleague; ordering is only possible from a partner account."
+        : (reden === "lege winkelwagen"
+          ? "Nothing in your basket can be ordered right now."
+          : "Sending failed — " + reden);
+      m.classList.remove("hidden");
       af.disabled = false;
     }
   });
