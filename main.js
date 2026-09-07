@@ -509,12 +509,32 @@ function setupAutoUpdater() {
   });
   autoUpdater.on("update-downloaded", (info) => {
     console.log(`[updater] ${info.version} gedownload — installatie bij afsluiten.`);
-    // Toon subtiele notificatie — geen blokkerende dialog want de update
-    // gaat automatisch bij afsluiten, dat mag ze 's avonds stilletjes doen.
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.executeJavaScript(`
-        console.log("Nieuwe versie ${info.version} gedownload — wordt geïnstalleerd bij afsluiten.");
-      `).catch(() => {});
+    /* Dit stond alleen in de console, en daar kijkt niemand. Gevolg: een
+       update lag klaar en niemand wist het, dus bleef iedereen op de oude
+       versie werken en werkte een nieuwe functie "niet". Precies dat gebeurde
+       op 7 sep 2026 met de tegels in een eigen venster.
+
+       Nu een balkje in beeld. Geen dialoog die het werk blokkeert - alleen
+       zeggen dat afsluiten genoeg is, en dat je hem kunt wegklikken. */
+    const balk = `(function(){
+      if (document.getElementById("fpUpdateBalk")) return;
+      var d = document.createElement("div");
+      d.id = "fpUpdateBalk";
+      d.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:99999;background:#144734;color:#fff;"+
+        "padding:10px 16px;font:14px/1.45 Montserrat,system-ui,sans-serif;display:flex;gap:12px;"+
+        "align-items:center;box-shadow:0 -2px 12px rgba(0,0,0,.25)";
+      d.innerHTML = "<span>Er staat een nieuwe versie van het Dashboard klaar (${info.version}). "+
+        "<b>Sluit het Dashboard af en start het opnieuw</b> om hem te installeren.</span>";
+      var b = document.createElement("button");
+      b.textContent = "Later";
+      b.style.cssText = "margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.5);"+
+        "color:#fff;border-radius:7px;padding:6px 14px;font:inherit;font-size:13px;cursor:pointer";
+      b.onclick = function(){ d.remove(); };
+      d.appendChild(b);
+      document.body.appendChild(d);
+    })();`;
+    for (const v of [mainWindow, ...tegelVensters.values()]) {
+      if (v && !v.isDestroyed()) v.webContents.executeJavaScript(balk).catch(() => {});
     }
   });
   // Check direct bij starten én daarna elk uur
