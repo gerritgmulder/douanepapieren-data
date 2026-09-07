@@ -61,12 +61,17 @@
      weer dichtzette. De lijst blijft staan omdat hij "iedereen" betekent en
      niet "de vertaaltegel" - zodra Mijn uren opengaat is het weer één regel.
      Wie erbij komt schrijf je hier op en staat daarmee overal in. */
+  /* LET OP: wie hier staat krijgt de tegel Vertalen (zie de groep 'vertalen'
+     hieronder). De buitendienst staat er daarom bewust NIET in: Service en
+     Plaatsing kijken alleen hun route in en horen precies één tegel te zien.
+     Patrick Kroes stond er nog wel in en zag daardoor Vertalen én
+     Voorraadbeheer; die zijn er op verzoek van Gerrit uit (7 sep 2026). */
   var IEDEREEN = [
     "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
     "dali", "danique", "demi", "dolf", "don", "edwin",
     "evelinde", "fabiola", "fonteynbot", "fransje", "gerrit", "gerwin",
     "gretha", "julia", "karina", "kevin", "luis", "manon",
-    "mike", "nomi", "osman", "patrick", "reinier", "reinier.k",
+    "mike", "nomi", "osman", "reinier", "reinier.k",
     "rico", "rosalie", "rowan", "tim", "yves",
   ];
 
@@ -262,7 +267,7 @@
     "voorraad": [
       "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
       "dali", "dolf", "edwin", "fonteynbot", "gerrit", "gerwin",
-      "kevin", "luis", "manon", "patrick", "yves",
+      "kevin", "luis", "manon", "yves",
     ],
   };
 
