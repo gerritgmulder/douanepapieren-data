@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "amerika.html", soort: "nieuw",
+      titel: "Een wire in één keer boeken op 1160",
+      wat: "Bij elke wire staat nu een knop 'boeken op 1160'. Die boekt de facturen van die betaling af op hun Logic4-order, in het dagboek Bank Passion Spas South TX. Je krijgt eerst te zien wat er geboekt zou worden en wat er niet kan, en pas na akkoord gaat het echt. Wat al geboekt is kan niet nog een keer.",
+    },
+
+    {
       datum: "2026-09-07", iedereen: true, soort: "hersteld",
       titel: "De Mac werkt zichzelf nu ook bij",
       wat: "Op de Mac kwamen updates nooit binnen. Dat lag niet aan Apple maar aan onze eigen bouwinstellingen: er werd geen zip meegeleverd (en die heeft macOS nodig) en de app had een handtekening die aan één bouwsel vastzat. Allebei rechtgezet, zonder dat er iets betaald hoeft te worden. Deze versie moet nog één keer met de hand geïnstalleerd worden; daarna gaat het vanzelf.",

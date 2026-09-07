@@ -49,6 +49,7 @@ const ALLOWED_BUCKETS = new Set([
   "voorraad-inkooporders", // Welke proforma al een inkooporder is geworden — voorkomt dubbel bestellen
   "apparaten",        // Computer-sleutel (PC-XXXXXX) → herkenbare naam, voor het activiteitenlogboek
   "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail)
+  "qb-geboekt",       // Amerika: welke QuickBooks-factuur al op 1160 is geboekt (per factuurnummer). Voorkomt dubbel boeken.
   "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
   "qb-verborgen",     // Amerika: facturen die Chantal uit beeld heeft gehaald (dubbel ingeladen). Niet gewist: de bron levert ze opnieuw, dus we onthouden wát verborgen is en door wie.
   "spa-verborgen",    // Voorraad: Jazzi-bestellingen die Chantal uit de historie heeft weggeklikt. Zelfde reden — het voorstel wordt telkens opnieuw opgebouwd.
@@ -5510,10 +5511,37 @@ async function dpCreateAmerikaOrder(env, mapped) {
     CreationDate: new Date().toISOString().slice(0, 19),   // verplicht
     Reference: "QuickBooks " + (mapped.docNr || ""),
     Notes: notes,
-    OrderRows: withCode.map(r => ({
-      ProductCode: String(r.productCode), Description: r.description,
-      Qty: Number(r.qty) || 1, WarehouseId: AMERIKA_WAREHOUSE,
-    })),
+    /* Mét het bedrag van de QuickBooks-factuur.
+       ═══════════════════════════════════════════════════════════════════
+       Hier stonden alleen artikelcode, omschrijving en aantal, en dus kwam
+       élke order uit Amerika op 0 dollar in Logic4 te staan - 119 stuks
+       inmiddels. Logic4 zet er dan geen prijs bij (deze debiteur heeft geen
+       prijslijst) en meldt de order als "IsPaid" omdat het totaal nul is.
+
+       Dat viel pas op toen Osman erop wilde boeken: er valt niets te
+       vereffenen op een order van nul. Zelfde fout als eerder bij de
+       partnerorders; qbMapLine gaf het bedrag allang mee, het werd hier
+       alleen niet doorgegeven.
+
+       QuickBooks levert per regel het regeltotaal (Amount), niet de stukprijs.
+       Logic4 wil de prijs per stuk, dus delen door het aantal. De cent die
+       daarbij kan wegvallen komt in het ordertotaal terug als hooguit een
+       paar cent verschil met de factuur; dat is zichtbaar in het scherm en
+       niet stilzwijgend. */
+    OrderRows: withCode.map(r => {
+      const rij = {
+        ProductCode: String(r.productCode), Description: r.description,
+        Qty: Number(r.qty) || 1, WarehouseId: AMERIKA_WAREHOUSE,
+      };
+      const totaal = Number(r.price) || 0;
+      const stuks = Number(r.qty) || 1;
+      if (totaal > 0) {
+        const stuk = Math.round((totaal / stuks) * 100) / 100;
+        rij.NettPrice = stuk;
+        rij.GrossPrice = stuk;
+      }
+      return rij;
+    }),
   };
   const r = await fetch("https://api.logic4server.nl/v3/Orders/AddUpdateOrder", {
     method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(payload),
@@ -5522,6 +5550,115 @@ async function dpCreateAmerikaOrder(env, mapped) {
   if (!r.ok) { console.log("[qb-order] faalde HTTP " + r.status + ": " + txt.slice(0, 300)); return { ok: false, error: "HTTP " + r.status + " — " + txt.slice(0, 200) }; }
   const orderId = (typeof j === "number" && j) || (j && (j.Id || (j.Value && j.Value.Id))) || null;
   return { ok: true, orderId };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DE WIRE UIT AMERIKA BOEKEN — OP 1160
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Gerrit (7 sep 2026): "Chantal kan alle QuickBooks-orders omzetten in
+   Logic4-orders. Nu moet het ook mogelijk zijn (zoals bij Bol.com voor Osman)
+   dat die Logic4-orders direct worden geboekt."
+
+   Osman: "Graag het totaalbedrag op 1160 boeken, zodat wij in het bankdagboek
+   ook op 1160 boeken en elkaar gaan kruisen."
+
+   Grootboek 1160 heet in Logic4 "Bank Passion Spas South TX" (ledger 556) en
+   het bijbehorende dagboek is nummer 45. Dat is dus waar deze boekingen in
+   gaan: elke factuur van de wire wordt op zijn Logic4-order afgeboekt in
+   dagboek 45, en de som daarvan is het bedrag dat Osman vanuit het
+   bankafschrift op 1160 tegenboekt. Die twee kruisen dan.
+
+   Dezelfde vorm als bij Bol (Orders/AddPayment met AmountIncl, BookingId en
+   DateTime), want die weg is daar al bevestigd door Logic4 zelf.
+
+   Twee dingen zijn met opzet zo:
+
+   - Er is een proefstand. Zonder 'bevestigd:true' wordt er niets geboekt en
+     komt alleen terug wát er geboekt zou worden. Geld hoort niet in de
+     boekhouding te belanden omdat iemand op de verkeerde knop drukte.
+
+   - Wat geboekt is wordt meteen vastgelegd in qb-geboekt, per factuur. Valt
+     het verzoek halverwege om, dan kan er bij een tweede poging nooit dubbel
+     geboekt worden. Dat ging bij het aanmaken van de orders al een keer mis
+     (Chantal, 1 sep 2026) en dat willen we bij geld helemaal niet.
+
+   Wat hier NIET gebeurt: de bankkosten. Op de wire van 25-08 staat 60.225,53
+   aan facturen, 543,40 aan bankkosten en 59.682,13 ontvangen. De facturen
+   worden voor hun eigen bedrag afgeboekt; wat er aan bankkosten tussen zit
+   hoort op een kostenrekening en niet op 1160, en welke rekening dat is
+   bepaalt Osman. Zolang dat niet vaststaat blijft dat verschil zichtbaar in
+   het scherm in plaats van dat het ergens ingerekend wordt. */
+const AMERIKA_DAGBOEK = 45;        // "Bank Passion Spas South TX" = grootboek 1160
+const AMERIKA_LEDGER_1160 = 556;   // het grootboek zelf, voor in de uitleg
+
+async function qbHandleBoeken(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
+    return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const wireId = String(body.wireId || "");
+  if (!wireId) return reply(400, { ok: false, error: "geen wire opgegeven" });
+  const echt = body.bevestigd === true;
+
+  const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+  const wire = (wires.wires || []).find(w => String(w.id) === wireId);
+  if (!wire) return reply(404, { ok: false, error: "wire niet gevonden" });
+
+  const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
+  const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
+  geboekt.ids = geboekt.ids || {};
+
+  const token = echt ? await l4Token(env) : null;
+  const datum = (wire.datum || new Date().toISOString().slice(0, 10)) + "T12:00:00";
+  const regels = [];
+  let som = 0, kosten = 0;
+
+  for (const r of (wire.regels || [])) {
+    if (String(r.soort || "") !== "factuur") continue;
+    const factuur = String(r.factuur || "").trim();
+    const bedrag = Math.round((Number(r.kolom1) || 0) * 100) / 100;
+    kosten += Math.abs(Number(r.kolom2) || 0);
+    const order = approved.ids[factuur] && approved.ids[factuur].orderId;
+    const al = geboekt.ids[factuur];
+
+    if (al) { regels.push({ factuur, bedrag, order: al.orderId, status: "al geboekt", ts: al.ts }); continue; }
+    if (!order) { regels.push({ factuur, bedrag, status: "geen Logic4-order",
+      uitleg: "Deze factuur is nog niet omgezet naar een order. Doe dat eerst bij Facturen." }); continue; }
+    if (!(bedrag > 0)) { regels.push({ factuur, bedrag, order, status: "bedrag is nul" }); continue; }
+
+    som += bedrag;
+    if (!echt) { regels.push({ factuur, bedrag, order, status: "klaar om te boeken" }); continue; }
+
+    try {
+      const rr = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          OrderId: Number(order),
+          AmountIncl: bedrag,
+          BookingId: AMERIKA_DAGBOEK,
+          DateTime: datum,
+          Description: "Wire " + (wire.datum || "") + " - QuickBooks-factuur " + factuur,
+        }),
+      });
+      const tekst = await rr.text();
+      if (!rr.ok) { regels.push({ factuur, bedrag, order, status: "fout",
+        uitleg: "HTTP " + rr.status + " - " + tekst.slice(0, 160) }); continue; }
+      geboekt.ids[factuur] = { orderId: order, bedrag, wireId, ts: new Date().toISOString(),
+                               door: String(body.user || "").slice(0, 80) };
+      // Meteen vastleggen, nooit pas aan het eind van de lus.
+      await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));
+      regels.push({ factuur, bedrag, order, status: "geboekt" });
+    } catch (e) {
+      regels.push({ factuur, bedrag, order, status: "fout", uitleg: String(e.message || e) });
+    }
+  }
+
+  return reply(200, { ok: true, proef: !echt, wire: wire.datum, dagboek: AMERIKA_DAGBOEK,
+    grootboek: "1160", ledgerId: AMERIKA_LEDGER_1160,
+    tebeoken: Math.round(som * 100) / 100,
+    bankkosten: Math.round(kosten * 100) / 100,
+    regels });
 }
 
 // POST /amerika/qb/approve { docNrs:[...] } — maak Logic4-orders voor de
@@ -8808,6 +8945,11 @@ export default {
     if (url.pathname === "/amerika/qb/approve" && request.method === "POST") return qbHandleApprove(request, env);
     if (url.pathname === "/amerika/qb/herstel-koppeling" && request.method === "POST") return qbHandleHerstel(request, env);
     if (url.pathname === "/amerika/qb/audrey"  && request.method === "POST") return qbHandleAudrey(request, env);
+    /* De wire boeken op 1160. Zonder bevestigd:true is het een proef en
+       gebeurt er niets - zie de toelichting bij qbHandleBoeken. */
+    if (url.pathname === "/amerika/qb/boeken" && request.method === "POST") {
+      return qbHandleBoeken(request, env);
+    }
     if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
     if (url.pathname === "/voorraad/verberg" && request.method === "POST") return verbergHandler(request, env, "spa-verborgen");

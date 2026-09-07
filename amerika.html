@@ -1269,6 +1269,11 @@ function audRender(){
           (totaalRegel?" — <span style='color:#15803d'>"+esc(usd(totaalRegel.kolom3))+" ontvangen</span>":"")+"</h3>"+
         "<div style='display:flex;gap:10px;align-items:center'>"+
           (openN?"<span class='pill' style='background:#fef3c7;color:#92400e'>"+openN+" nog te verwerken</span>":"<span class='pill' style='background:#dcfce7;color:#15803d'>alles verwerkt</span>")+
+          /* Boeken op 1160. Osman (7 sep 2026): "Graag het totaalbedrag op
+             1160 boeken, zodat wij in het bankdagboek ook op 1160 boeken en
+             elkaar gaan kruisen." Eerst altijd een proef; pas na akkoord gaat
+             er iets de boekhouding in. */
+          "<button class='btn' type='button' data-boek='"+esc(w.id)+"' title='De facturen van deze wire afboeken in dagboek Bank Passion Spas South TX (grootboek 1160)'>boeken op 1160</button>"+
           "<button class='btn' type='button' data-del='"+esc(w.id)+"'>verwijderen</button>"+
         "</div></div>"+
       "<p class='lead' style='font-size:12px;margin:0 0 10px'>Bestand: "+esc(w.bestand||"")+" · ingelezen "+esc(datumNL(w.ts))+"</p>"+
@@ -1306,6 +1311,57 @@ function audRender(){
   }));
   box.querySelectorAll(".audVerw").forEach(cb=>cb.addEventListener("change",()=>audVerwerktKlik(cb)));
   box.querySelectorAll(".audVerberg").forEach(b=>b.addEventListener("click",()=>qbVerbergKlik(b.dataset.nr)));
+  /* De wire boeken op 1160.
+     ═══════════════════════════════════════════════════════════════════════
+     Eerst de proef: de worker rekent uit wat er geboekt zou worden en boekt
+     niets. Dat komt hier op het scherm, met per factuur wat er gebeurt en wat
+     er niet kan. Pas als iemand dan op akkoord klikt gaat het echt.
+
+     De bankkosten staan er apart bij en worden NIET meegeboekt. Op de wire van
+     25 augustus is dat 543,40 op 60.225,53 aan facturen; waar die kosten heen
+     moeten bepaalt Osman, en tot die tijd is zichtbaar maken beter dan ergens
+     onderbrengen. */
+  box.querySelectorAll("[data-boek]").forEach(b=>b.addEventListener("click",async()=>{
+    const id=b.dataset.boek;
+    b.disabled=true; const oudeTekst=b.textContent; b.textContent="proef draaien…";
+    async function vraag(bevestigd){
+      const r=await fetch(WORKER+"/amerika/qb/boeken",{method:"POST",
+        headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+        body:JSON.stringify({wireId:id,bevestigd:bevestigd,user:(localStorage.getItem("fp.email")||"")})});
+      const j=await r.json().catch(()=>null);
+      if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+      return j;
+    }
+    try{
+      const proef=await vraag(false);
+      const klaar=(proef.regels||[]).filter(x=>x.status==="klaar om te boeken");
+      const rest=(proef.regels||[]).filter(x=>x.status!=="klaar om te boeken");
+      const lijst=(arr)=>arr.map(x=>"  • factuur "+x.factuur+" — "+usd(x.bedrag)+
+        (x.order?(" op order "+x.order):"")+(x.status!=="klaar om te boeken"?("  ("+x.status+")"):"")).join("\n");
+      if(!klaar.length){
+        alert("Er valt nu niets te boeken voor deze wire.\n\n"+lijst(rest)+
+          "\n\nEen factuur zonder Logic4-order moet eerst bij Facturen worden omgezet.");
+        return;
+      }
+      const akkoord=confirm(
+        "Boeken in dagboek Bank Passion Spas South TX (grootboek 1160)\n"+
+        "Wire van "+(proef.wire||"")+"\n\n"+
+        klaar.length+" factu(u)r(en), samen "+usd(proef.tebeoken)+":\n"+lijst(klaar)+"\n\n"+
+        (rest.length?("Niet meegenomen:\n"+lijst(rest)+"\n\n"):"")+
+        "Bankkosten op deze wire: "+usd(proef.bankkosten)+" — die worden NIET geboekt.\n\n"+
+        "Doorgaan?");
+      if(!akkoord) return;
+      b.textContent="boeken…";
+      const echt=await vraag(true);
+      const gelukt=(echt.regels||[]).filter(x=>x.status==="geboekt");
+      const mis=(echt.regels||[]).filter(x=>x.status==="fout");
+      if(window.fpLog) window.fpLog("wire-geboekt-op-1160",(echt.wire||"")+": "+gelukt.length+" facturen, "+usd(echt.tebeoken));
+      alert(gelukt.length+" factu(u)r(en) geboekt op 1160."+
+        (mis.length?("\n\nNiet gelukt:\n"+mis.map(x=>"  • "+x.factuur+" — "+(x.uitleg||"")).join("\n")):""));
+      await audLoadFacturen(); audRender();
+    }catch(e){ alert("Boeken mislukte: "+e.message); }
+    finally{ b.disabled=false; b.textContent=oudeTekst; }
+  }));
   box.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{
     if(!confirm("Dit wire-overzicht verwijderen? De vinkjes gaan ook weg.")) return;
     wiresData.wires=wiresData.wires.filter(w=>String(w.id)!==b.dataset.del);
