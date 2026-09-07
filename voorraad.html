@@ -685,7 +685,7 @@
     <div class="card">
       <h3>Commercial invoice uploaden</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Eén bestand per schip (Excel of PDF). Alles wat erop staat telt direct mee als
-        <b>voorraad onderweg</b> in het Partnerportaal, en de zending verschijnt hieronder met zijn eigen tabblad.
+        <b>voorraad onderweg</b> in Passion Partners, en de zending verschijnt hieronder met zijn eigen tabblad.
         Het bestand blijft bewaard en is daar terug te vinden onder <b>Documenten</b>, samen met de packing list.
         Modellen worden herkend op de fabriekscode.
       </p>
@@ -743,7 +743,7 @@
       <p class="lead" style="font-size:12px;margin:8px 0" id="shipUpdated"></p>
       <div class="tablewrap">
         <table class="grid">
-          <thead><tr><th>Schip / reis</th><th>Trackingreferentie</th><th>Spa's</th><th>Status / voortgang</th><th>ETA (aankomst NL)</th><th>Documenten</th><th></th></tr></thead>
+          <thead><tr><th>Schip / reis</th><th>Trackingreferentie</th><th>Bestemming</th><th>Spa's</th><th>Status / voortgang</th><th>ETA (aankomst NL)</th><th>Documenten</th><th></th></tr></thead>
           <tbody id="shipBody"></tbody>
         </table>
       </div>
@@ -758,7 +758,7 @@
 
   <div id="tab-pipe" class="hidden">
     <div class="card">
-      <div class="status-msg warn" style="margin-bottom:12px"><b>Verouderd.</b> Deze pipeline telde alle bestellingen sinds 2024 op en wordt niet meer door het Partnerportaal gebruikt. De echte voorraad komt nu uit Logic4 (in NL) + de tab <b>Schepen</b> (onderweg). Laat staan voor de historie; niet meer bijwerken.</div>
+      <div class="status-msg warn" style="margin-bottom:12px"><b>Verouderd.</b> Deze pipeline telde alle bestellingen sinds 2024 op en wordt niet meer door Passion Partners gebruikt. De echte voorraad komt nu uit Logic4 (in NL) + de tab <b>Schepen</b> (onderweg). Laat staan voor de historie; niet meer bijwerken.</div>
       <h3>Voorraad &amp; pipeline — waar is elke spa?</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Beheer hier de <b>containers</b> met spa's. Per container: nummer, herkomst, besteld-datum en ETA.
         Ik bepaal automatisch of de spa's <b>in productie</b>, <b>op het schip</b> of <b>in Nederland</b> zijn
@@ -2935,12 +2935,54 @@ function pcOrders(){
 }
 // ETA = die van het schip waar dit containernummer op voorkomt (commercial
 // invoice). Nog geen match? Dan is de CI van die container nog niet geüpload.
-function pcEta(o){
-  const nr=String(o.containerNr||"").trim();
-  if(!nr) return null;
-  const hit=(shipsData.ships||[]).find(s=>[s.ref,s.trackRef,s.file,s.vessel].join(" ").includes(nr));
-  return hit&&hit.eta?hit.eta:null;
+/* De ETA bij een containerorder.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (7 sep 2026): "Bij Partner Containers komt ook helemaal geen ETA
+   zichtbaar in het venster waar je alle containers in 1 overzicht kunt zien."
+
+   Er stond overal een streepje, en dat kwam door drie dingen tegelijk:
+
+   1. Er werd gezocht op de kale tekst van het containernummer in de
+      referentie van het schip. "Container 3340/3341" viel daardoor nooit
+      ergens op, en een order met "Container 2950" zou zomaar op een schip
+      met 12950 in de naam kunnen vallen. Nu worden aan beide kanten de
+      nummergroepen van vier cijfers uit elkaar gehaald en met elkaar
+      vergeleken - "RZ2009DF3332-7&3342-3" is proforma 3332 én 3342.
+   2. Stond de ETA nog niet met de hand ingevuld, dan bleef het bij een
+      streepje, ook als Merzario de aankomst allang doorgaf. Die wordt nu
+      gebruikt als terugval.
+   3. En als er niets was, stond er alleen een streepje. Daar kun je niets
+      mee: je weet niet of de invoice ontbreekt of de datum. Dat staat er nu
+      bij.
+
+   Geeft terug: {eta, bron, schip} of {reden} als er geen datum is. */
+function pcNummers(tekst){
+  /* De vaste aanloop van een Jazzi-referentie eerst eruit: "RZ2009DF3376"
+     bevat 2009, en dat is geen containernummer maar onderdeel van hun
+     ordercode. Zonder dit zou een container die toevallig 2009 heet op élk
+     Jazzi-schip vallen. */
+  return (String(tekst||"").replace(/\bRZ\d+DF/gi,"").match(/\d{4}/g)||[]);
 }
+function pcSchipVan(o){
+  const nrs=pcNummers(o.containerNr||o.referentie||"");
+  if(!nrs.length) return null;
+  return (shipsData.ships||[]).find(function(s){
+    const opSchip=pcNummers([s.ref,s.trackRef,s.file].filter(Boolean).join(" "));
+    return nrs.some(function(n){ return opSchip.indexOf(n)>=0; });
+  })||null;
+}
+function pcEtaInfo(o){
+  const nr=String(o.containerNr||"").trim();
+  const schip=pcSchipVan(o);
+  if(!schip) return {eta:null, reden: nr
+    ? "nog geen commercial invoice voor "+nr
+    : "geen containernummer in Logic4"};
+  if(schip.eta) return {eta:schip.eta, bron:"invoice", schip:schip};
+  // Merzario weet het soms wél, ook als de datum hier nog niet is ingevuld.
+  if(schip.track&&schip.track.eta) return {eta:schip.track.eta, bron:"tracking", schip:schip};
+  return {eta:null, schip:schip, reden:"invoice is er, ETA nog niet ingevuld"};
+}
+function pcEta(o){ return pcEtaInfo(o).eta; }
 function pcMatch(o,q){
   if(!q) return true;
   return [o.ordernr,o.containerNr,o.referentie,o.naam].concat(o.regels.map(r=>r.model))
@@ -2960,7 +3002,8 @@ function renderPartnerContainers(){
   for(const o of orders){
     const k=String(o.ordernr);
     const open=!!pcOpen[k]||(!!q&&orders.length<=3);
-    const eta=pcEta(o);
+    const etaInfo=pcEtaInfo(o);
+    const eta=etaInfo.eta;
     html+="<tr class='pcRow' data-k='"+esc(k)+"' style='cursor:pointer'>"+
       "<td><b style='color:var(--brand,#0f766e);text-decoration:underline'>"+(open?"▾ ":"▸ ")+esc(o.ordernr)+"</b></td>"+
       "<td>"+(o.containerNr?("<b>"+esc(o.containerNr)+"</b>")
@@ -2969,7 +3012,11 @@ function renderPartnerContainers(){
       "<td>"+esc(o.naam)+"</td>"+
       "<td style='font-size:12px'>"+esc(datumNL(o.datum))+"</td>"+
       "<td>"+betaalBadge(o)+"</td>"+
-      "<td style='font-size:12px'>"+(eta?esc(datumNL(eta)):"<span style='color:var(--muted)'>—</span>")+"</td></tr>";
+      "<td style='font-size:12px'>"+(etaInfo.eta
+        ? esc(datumNL(etaInfo.eta))+
+          (etaInfo.bron==="tracking"?"<div style='font-size:10.5px;color:var(--muted)'>via tracking</div>":"")+
+          (etaInfo.schip&&etaInfo.schip.vessel?"<div style='font-size:10.5px;color:var(--muted)'>"+esc(etaInfo.schip.vessel)+"</div>":"")
+        : "<span style='color:var(--muted);font-size:11.5px'>"+esc(etaInfo.reden||"—")+"</span>")+"</td></tr>";
     if(open){
       const regels=o.regels.slice().sort((a,b)=>String(a.model).localeCompare(String(b.model)));
       html+="<tr><td colspan='6' style='background:#fafafa;padding:8px 14px'>"+
@@ -2978,7 +3025,14 @@ function renderPartnerContainers(){
         regels.map(r=>"<tr><td><b>"+r.qty+"×</b></td><td>"+esc(r.model)+"</td><td>"+kleurCel(r.kleur,r)+"</td></tr>").join("")+
         "</tbody></table>"+
         (o.referentie?"<div style='font-size:11px;color:var(--muted);margin-top:5px'>Uw referentie in Logic4: "+esc(o.referentie)+"</div>":"")+
-        (o.containerNr&&!eta?"<div style='font-size:11px;color:var(--warn);margin-top:4px'>Nog geen ETA — upload de commercial invoice van container "+esc(o.containerNr)+".</div>":"")+
+        (o.containerNr&&!eta
+          ? "<div style='font-size:11px;color:var(--warn);margin-top:4px'>"+
+            (etaInfo.schip
+              ? "De commercial invoice van container "+esc(o.containerNr)+" is ingelezen ("+esc(etaInfo.schip.vessel||etaInfo.schip.ref)+
+                "), maar er staat nog geen ETA bij. Vul die in bij <b>Schepen &amp; ontvangst</b>."
+              : "Nog geen ETA — upload de commercial invoice van container "+esc(o.containerNr)+".")+
+            "</div>"
+          : "")+
         "</td></tr>";
     }
   }
@@ -3150,7 +3204,7 @@ document.querySelectorAll(".verwijderdTonen").forEach(function(v){
 // ===================== Schepen (commercial invoices) =====================
 // Chantal uploadt commercial invoices (Excel, één per schip). Client-side
 // geparsed (zelfde logica als tools/import-ci.mjs) → bucket voorraad-schepen.
-// Het Partnerportaal telt dit als "voorraad onderweg". Model via SKT-code.
+// Passion Partners telt dit als "voorraad onderweg". Model via SKT-code.
 const SHIPS_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-schepen";
 let shipsData={ships:[],unmapped:{}};
 
@@ -3367,7 +3421,19 @@ function renderSchepen(){
       "<td><div style='display:flex;flex-direction:column;gap:8px;align-items:flex-start'>"+
         "<input type='text' class='shipRef' data-i='"+i+"' value='"+esc(trackRef)+"' placeholder='container / orderref' style='font-size:12px;width:160px'>"+
         "<button class='btn sm trkOne' data-i='"+i+"'>ETA ophalen</button></div></td>"+
-      "<td>"+spas+"</td>"+
+      /* Bestemming: naar Uddel of rechtstreeks naar een dealer. Het staat op
+         de invoice ("to Rotterdam" / "to Luxury spas") maar moet te
+         corrigeren zijn - de fabriek schrijft niet altijd hetzelfde, en een
+         PDF-invoice noemt het soms helemaal niet. */
+      "<td><select class='shipBest' data-i='"+i+"' style='font-size:12px;max-width:150px'>"+
+          "<option value='uddel'"+(s.dealerContainer?"":" selected")+">Uddel (voorraad)</option>"+
+          "<option value='dealer'"+(s.dealerContainer?" selected":"")+">Rechtstreeks naar dealer</option>"+
+        "</select>"+
+        (s.bestemming?("<div style='font-size:11px;color:var(--muted);margin-top:2px'>op de invoice: "+esc(s.bestemming)+"</div>"):"")+
+        (s.bestemmingOnbekend&&!s.bestemmingHand&&spas
+          ? "<div style='font-size:11px;color:#92400e;margin-top:2px'>geen bestemming op het papier</div>" : "")+
+      "</td>"+
+      "<td>"+spas+(s.dealerContainer&&spas?" <span style='font-size:11px;color:#c2410c' title='rechtstreeks naar de dealer, telt niet als voorraad'>niet als voorraad</span>":"")+"</td>"+
       "<td>"+trackStatusCell(s.track)+"</td>"+
       "<td><input type='date' class='shipEta' data-i='"+i+"' value='"+esc(s.eta||"")+"' style='font-size:12.5px'></td>"+
       // De papieren bij dit schip. Ze staan hier zodat Chantal de packing list
@@ -3382,7 +3448,20 @@ function renderSchepen(){
       "</div></td>"+
       "<td><button class='rmv delShip' data-i='"+i+"'>✕ verwijder</button></td>"+
     "</tr>";
-  }).join("") || "<tr><td colspan='7' style='color:var(--muted)'>Nog geen schepen. Upload een commercial invoice.</td></tr>";
+  }).join("") || "<tr><td colspan='8' style='color:var(--muted)'>Nog geen schepen. Upload een commercial invoice.</td></tr>";
+  document.querySelectorAll(".shipBest").forEach(sel=>sel.addEventListener("change",async()=>{
+    const sch=shipsData.ships[Number(sel.dataset.i)];
+    sch.dealerContainer = sel.value==="dealer";
+    sch.bestemmingHand = true;          // met de hand gezet: een nieuwe upload overschrijft dit niet
+    sch.bestemmingOnbekend = false;
+    try{
+      await saveSchepen(); renderSchepen();
+      setStatus("ok",(sch.vessel||sch.ref||"schip")+" gaat nu "+(sch.dealerContainer
+        ? "rechtstreeks naar de dealer en telt niet meer mee als voorraad."
+        : "naar Uddel en telt mee als voorraad onderweg."));
+      try{ if(window.fpLog) window.fpLog("schip-bestemming-gewijzigd",(sch.vessel||sch.ref||"schip")+" → "+(sch.dealerContainer?"dealer":"Uddel")); }catch(e){}
+    }catch(e){ setStatus("bad",e.message); }
+  }));
   // Een document erbij zetten: packing list, of wat er verder bij dit schip hoort.
   document.querySelectorAll(".schipDocIn").forEach(inp=>inp.addEventListener("change",async()=>{
     const f=inp.files&&inp.files[0]; if(!f) return;
@@ -3402,7 +3481,7 @@ function renderSchepen(){
   document.querySelectorAll(".shipEta").forEach(inp=>inp.addEventListener("change",async()=>{
     try{ const _s=shipsData.ships[Number(inp.dataset.i)]; if(window.fpLog) window.fpLog("schip-eta-gewijzigd",(_s&&(_s.vessel||_s.ref)||"schip")+" → "+(inp.value?datumNL(inp.value):"leeg")); }catch(e){}
     shipsData.ships[Number(inp.dataset.i)].eta=inp.value;
-    try{ await saveSchepen(); setStatus("ok","ETA opgeslagen — direct zichtbaar in het Partnerportaal."); }catch(e){ setStatus("bad",e.message); }
+    try{ await saveSchepen(); setStatus("ok","ETA opgeslagen — direct zichtbaar in Passion Partners."); }catch(e){ setStatus("bad",e.message); }
   }));
   document.querySelectorAll(".shipRef").forEach(inp=>inp.addEventListener("change",async()=>{
     shipsData.ships[Number(inp.dataset.i)].trackRef=inp.value.trim();
@@ -3515,6 +3594,37 @@ async function parseCiPdf(file){
   };
 }
 
+/* Waar gaat deze container heen?
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (7 sep 2026): "To Rotterdam = altijd naar Uddel (voorraad in ons
+   magazijn). To 'naam dealer' = naar het dealermagazijn van de dealer (dus
+   bijvoorbeeld To Luxury Spas gaat direct naar het magazijn van die dealer
+   Luxury Spas)."
+
+   Dat staat gewoon in de referentie op de commercial invoice:
+   "RZ2009DF3332-7&3342-3 to Rotterdam" tegenover "RZ2009DF3376 to Luxury
+   spas". Tot nu toe werd daar niet naar gekeken en telde élke ingelezen
+   invoice mee als voorraad onderweg. Chantal laadde een dealercontainer op en
+   kreeg te horen dat de lading nu voorraad was - terwijl die 13 spa's
+   rechtstreeks naar de dealer varen en nooit in Uddel komen. Ze zouden dus
+   twee keer vergeven kunnen worden: één keer aan de dealer die ze koopt, en
+   één keer aan iedereen die ze in het portaal ziet staan.
+
+   Rotterdam is de haven waar ónze lading binnenkomt; Uddel is de hal erachter.
+   Alles wat een andere bestemming noemt is een dealercontainer.
+
+   Staat er geen bestemming op (de PDF-invoices van MEXDA noemen hem niet),
+   dan houden we het op Uddel - zo was het altijd - maar het schip krijgt wel
+   'bestemmingOnbekend', zodat het scherm erom kan vragen in plaats van er
+   stilletjes van uit te gaan. */
+const NAAR_ONS = /^(rotterdam|uddel|nederland|the netherlands|holland|nl)\b/i;
+function leesBestemming(tekst){
+  const m = String(tekst||"").match(/\bto\s+(.{2,60})$/i);
+  if(!m) return {bestemming:null, dealerContainer:false, onbekend:true};
+  const naam = m[1].replace(/[\s.,;]+$/,"").trim();
+  return {bestemming:naam, dealerContainer:!NAAR_ONS.test(naam), onbekend:false};
+}
+
 function parseCI(wb,bestandsnaam){
   const ws=wb.Sheets["COMMERCIAL INVOICE"]||wb.Sheets["CI"]||wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false});
@@ -3569,7 +3679,13 @@ function parseCI(wb,bestandsnaam){
   // de bestandsnaam staat — dat is er één.
   let containers=wb.SheetNames.filter(n=>!CI_DOCBLADEN.test(String(n).trim())).length;
   if(!containers&&ref&&/^[A-Z]{4}\d{7}$/.test(ref)) containers=1;
-  return {ref,vessel,containers,models,modelColors,unmapped,specials,total:Object.values(models).reduce((a,b)=>a+b,0)};
+  // De bestemming staat achter "to" in de referentie, en anders soms in de
+  // bestandsnaam ("3332-7&3342-3 to Rotterdam Commercial invoice…xlsx").
+  const best=leesBestemming(ref)&&!leesBestemming(ref).onbekend?leesBestemming(ref)
+            :leesBestemming(String(bestandsnaam||"").replace(/\.[a-z]+$/i,"").replace(/\s*(commercial invoice|packing list).*$/i,""));
+  return {ref,vessel,containers,models,modelColors,unmapped,specials,
+    bestemming:best.bestemming, dealerContainer:best.dealerContainer, bestemmingOnbekend:best.onbekend,
+    total:Object.values(models).reduce((a,b)=>a+b,0)};
 }
 
 // Speciale orders (Chantal, 28 jul). Bestelt een klant een spa met een afwijking,
@@ -3769,7 +3885,7 @@ async function handleCIUpload(files,statusId){
 
          Hij komt er nu wél in, maar als container waar alleen de papieren van
          bewaard worden. Zijn inhoud telt nergens mee: niet als voorraad
-         onderweg, niet in het Partnerportaal en niet in de aantallen. */
+         onderweg, niet in Passion Partners en niet in de aantallen. */
       if(!ship.total){
         if(!ship.ref){
           for(const [k,v] of Object.entries(ship.unmapped||{})) allUnmapped[k]=(allUnmapped[k]||0)+v;
@@ -3805,7 +3921,20 @@ async function handleCIUpload(files,statusId){
       const eta=idx>=0?shipsData.ships[idx].eta:"";
       // parser 2 = kent ook de PP-codes van Passion Devine. Schepen die met een
       // oudere versie zijn ingelezen missen die spa's en moeten één keer opnieuw.
-      const rec={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,models:ship.models,modelColors:ship.modelColors,specials:ship.specials,total:ship.total,eta,parser:2};
+      const rec={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,models:ship.models,modelColors:ship.modelColors,specials:ship.specials,total:ship.total,eta,parser:2,
+        // Waar hij heen gaat, en of dat een dealer is. Zie leesBestemming().
+        bestemming:ship.bestemming||null,
+        dealerContainer:!!ship.dealerContainer,
+        bestemmingOnbekend:!!ship.bestemmingOnbekend};
+      /* Heeft iemand de bestemming eerder met de hand gezet, dan wint dat van
+         wat er nu uit het papier komt: een correctie hoort niet ongedaan
+         gemaakt te worden door dezelfde invoice nog eens te uploaden. */
+      if(idx>=0&&shipsData.ships[idx].bestemmingHand){
+        rec.bestemmingHand=true;
+        rec.dealerContainer=!!shipsData.ships[idx].dealerContainer;
+        rec.bestemming=shipsData.ships[idx].bestemming||rec.bestemming;
+        rec.bestemmingOnbekend=false;
+      }
       // De papieren van het schip dat we vervangen blijven staan.
       if(idx>=0) rec.documenten=(shipsData.ships[idx].documenten||[]).slice();
       // Het bestand zelf bewaren, zodat het bij Schepen & ontvangst terug te
@@ -3842,9 +3971,29 @@ async function handleCIUpload(files,statusId){
               ". Waarschijnlijk gebruikt deze fabriek een indeling die ik nog niet ken &mdash; stuur het bestand door.");
         }).join("<br>");
     } else {
-      st.className="status-msg ok";
-      st.textContent=(blMeldingen.length?blMeldingen.join(" ")+" ":"")+
-        added+" schip(en) verwerkt en opgeslagen. Vul per schip de ETA in — de lading telt nu als voorraad onderweg in het Partnerportaal.";
+      /* De melding zegt nu wát er met de lading gebeurt, en dat hangt van de
+         bestemming af. Er stond onvoorwaardelijk dat de lading als voorraad
+         onderweg meetelt; bij een dealercontainer is dat juist niet zo, en
+         Chantal las dat als een bevestiging terwijl er iets fout ging. */
+      const verwerkt=(shipsData.ships||[]).filter(x=>x.file&&[...files].some(f=>f.name===x.file));
+      const naarDealer=verwerkt.filter(x=>x.dealerContainer);
+      const onbekend=verwerkt.filter(x=>x.bestemmingOnbekend&&!x.bestemmingHand&&x.total>0);
+      st.className="status-msg "+(onbekend.length?"warn":"ok");
+      st.innerHTML=(blMeldingen.length?esc(blMeldingen.join(" "))+" ":"")+
+        added+" schip(en) verwerkt en opgeslagen."+
+        (naarDealer.length
+          ? " <b>"+naarDealer.length+" daarvan "+(naarDealer.length===1?"is een dealercontainer":"zijn dealercontainers")+"</b> ("+
+            naarDealer.map(x=>esc(x.bestemming||x.ref)).join(", ")+
+            "): die "+(naarDealer.length===1?"vaart":"varen")+" rechtstreeks naar het magazijn van de dealer en "+
+            (naarDealer.length===1?"telt":"tellen")+" dus niet mee als voorraad."
+          : "")+
+        (verwerkt.some(x=>!x.dealerContainer&&x.total>0)
+          ? " Vul per schip de ETA in — wat naar Rotterdam gaat komt in Uddel en telt als voorraad onderweg in Passion Partners."
+          : "")+
+        (onbekend.length
+          ? " <b>Let op:</b> op "+onbekend.map(x=>esc(x.ref)).join(", ")+" staat geen bestemming. "+
+            "Die "+(onbekend.length===1?"staat":"staan")+" nu op Uddel; zet hem hieronder om als hij naar een dealer gaat."
+          : "");
     }
     /* Zat er een packing list bij, dan staan de containers en de labels nu
        klaar. Dat hoort erbij te staan, ook als er verder niets aan spa's uit
@@ -3956,7 +4105,7 @@ function rfVoegToe(){
 async function sendReserveFor(){
   const st=document.getElementById("rfStatus");
   const show=(c,m)=>{ st.className="status-msg "+c; st.textContent=m; st.classList.remove("hidden"); };
-  if(!dpAdminKey()){ show("bad","Beheersleutel niet gevonden op deze computer — ontgrendel eerst het Partnerportaal (tegel Partnerportaal,)."); return; }
+  if(!dpAdminKey()){ show("bad","Beheersleutel niet gevonden op deze computer — ontgrendel eerst de tegel Passion Partners Beheer."); return; }
   const type=document.getElementById("rfType").value;
   const model=document.getElementById("rfModel").value;
   const variant=document.getElementById("rfVariant").value;

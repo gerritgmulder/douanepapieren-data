@@ -599,7 +599,7 @@
       var dat = el("input", "so-trackveld so-datumveld");
       dat.type = "date";
       dat.value = (s.eta || "").slice(0, 10);
-      dat.title = "De verwachte aankomst in Nederland. Telt mee in de volgorde en in het Partnerportaal.";
+      dat.title = "De verwachte aankomst in Nederland. Telt mee in de volgorde en in Passion Partners.";
       dat.addEventListener("change", function () { bewaarSchip(s, { eta: dat.value }, dat); });
       tr.appendChild(dat);
       links.appendChild(tr);

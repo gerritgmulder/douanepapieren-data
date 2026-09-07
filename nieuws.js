@@ -53,6 +53,18 @@
 
     {
       datum: "2026-09-07", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Dealercontainers tellen niet meer als voorraad",
+      wat: "Laad je een commercial invoice op van een container die rechtstreeks naar een dealer gaat, dan telde die lading mee als voorraad onderweg. Dat klopt niet: die spa's komen nooit in Uddel. Het dashboard leest nu op de invoice waar de container heen gaat ('to Rotterdam' of 'to <naam dealer>'), zegt dat bij het uploaden, en je kunt het per schip zelf omzetten.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
+      titel: "ETA bij Partner containers",
+      wat: "In het overzicht van alle partnercontainers bleef de kolom ETA leeg zonder dat je wist waarom. Nu staat de datum er zodra hij bekend is, met het schip erbij, en anders wát eraan ontbreekt: geen containernummer in Logic4, nog geen commercial invoice, of een invoice waarbij de ETA nog niet is ingevuld.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "hersteld",
       titel: "'Op voorraad' klopt nu ook op kleur",
       wat: "Bij de verwachte levering stond soms 'op voorraad' terwijl die kleur er niet lag. Er werd alleen geteld hoeveel spa's van dat model vrij waren, niet welke kleur. Nu pakt elke reservering uit de voorraad van zijn eigen kleur. En de lijst was zes dagen niet ververst; de uursync liep vast en dat is verholpen.",
     },

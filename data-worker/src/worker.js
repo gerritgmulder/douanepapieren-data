@@ -421,8 +421,18 @@ async function dpStockModels(env) {
     e.physical += Number(v.physical != null ? v.physical : v.hal) || 0;
     for (const [code, qty] of Object.entries(v.variants || {})) e.variants[code] = (e.variants[code] || 0) + (Number(qty) || 0);
   }
-  // Schip-voorraad (+ vroegste ETA als bekend)
+  /* Schip-voorraad (+ vroegste ETA als bekend).
+
+     Een container die rechtstreeks naar het magazijn van een dealer vaart telt
+     hier niet mee. Gerrit (7 sep 2026): "Dit is een dealercontainer en het
+     lijkt nu alsof dat voorraad wordt voor dealers om te kunnen bestellen. Dat
+     is niet zo, want die container gaat rechtstreeks naar het magazijn van de
+     dealer." De invoice zegt het zelf: "to Rotterdam" is onze hal in Uddel,
+     "to <naam dealer>" is die dealer. Zonder deze regel staat dezelfde spa
+     twee keer vergeven: één keer aan de dealer die hem koopt en één keer in
+     het portaal, waar iedereen hem ziet staan. */
   for (const ship of (schepen && schepen.ships) || []) {
+    if (ship.dealerContainer) continue;
     for (const [model, qty] of Object.entries(ship.models || {})) {
       const e = ensure(model);
       e.onTheWater += Number(qty) || 0;
@@ -3797,6 +3807,9 @@ async function dpRefreshReservations(env) {
   const prodByModel = productie.models || {};
   const shipsByModel = {};
   for (const s of (schepen.ships || [])) {
+    // Dealercontainers varen naar de dealer en niet naar Uddel; ze kunnen dus
+    // geen reservering van iemand anders dekken. Zie dpStockModels.
+    if (s.dealerContainer) continue;
     for (const [model, q] of Object.entries(s.models || {})) {
       (shipsByModel[model] = shipsByModel[model] || []).push({ eta: s.eta || null, qty: Number(q) || 0, vessel: s.vessel || "" });
     }

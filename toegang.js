@@ -160,7 +160,7 @@
       "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit",
       "gretha",
     ],
-    // Partnerportaal meekijken
+    // Passion Partners meekijken
     "partnerportaal-kijk": [
       /* Gerrit en Fonteynbot stonden hier niet in, terwijl zij overal bij
          horen. Dat kwam niet door de omzetting naar tegels.js - de oude regel
