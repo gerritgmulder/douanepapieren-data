@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-07", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Verwachte levering houdt rekening met de kleur",
+      wat: "Een order werd aan het eerstvolgende schip gekoppeld waar dat model op stond, ongeacht de kleur. Op de commercial invoice staat de schaalkleur, dus dat kan beter: een Mystic Mountain-order landt niet meer op een container vol Sterling White. Sterling Silver #30 op de invoice is Sterling White in Logic4; dat is nu gekoppeld.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "hersteld",
       titel: "Dealercontainers tellen niet meer als voorraad",
       wat: "Laad je een commercial invoice op van een container die rechtstreeks naar een dealer gaat, dan telde die lading mee als voorraad onderweg. Dat klopt niet: die spa's komen nooit in Uddel. Het dashboard leest nu op de invoice waar de container heen gaat ('to Rotterdam' of 'to <naam dealer>'), zegt dat bij het uploaden, en je kunt het per schip zelf omzetten.",
     },

@@ -3856,13 +3856,68 @@ async function dpRefreshReservations(env) {
   const schepen = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
   const productie = (await env.FONTEYN_DATA.get("voorraad-productie", { type: "json" })) || {};
   const prodByModel = productie.models || {};
+  /* De kleur op een commercial invoice is de SCHAALKLEUR, zonder de trim.
+     ═══════════════════════════════════════════════════════════════════════
+     De fabriek schrijft "Mystic Mountain" of "Sterling Silver #30"; Logic4
+     noemt dezelfde spa "Mystic Mountain with OAK" of "Sterling White with
+     GREY/oak trim". Op de schaal is dat prima te vergelijken, op de trim niet
+     - die staat gewoon niet op de invoice. Dat is genoeg om te voorkomen dat
+     een Mystic Mountain-order op een schip vol Sterling White landt, en dat
+     is precies wat er gebeurde.
+
+     Gerrit (7 sep 2026): "Sterling Silver #30 is inderdaad Sterling White."
+     Dat is de enige naam die de fabriek anders schrijft dan Logic4; de rest
+     (Mystic Mountain, Solid White, Espresso, Pearl Shadow) is gelijk. De
+     Mallorca's staan op de invoice als "WHITE ABS SHEET" en "BLACK ABS
+     SHEET", en in Logic4 als "White" en "Black" - het woord ABS SHEET eraf en
+     ze vallen op elkaar.
+
+     De langste naam wint, anders zou "Solid White" op "white" uitkomen.
+     Herkennen we een kleur niet, dan telt hij als "onbekend" en mag hij bij
+     iedereen: liever een ruwe schatting dan een order die nergens meer op
+     past. */
+  const SCHAALKLEUREN = ["sterling white", "mystic mountain", "desert horizon", "pearl shadow",
+                         "solid white", "pure white", "espresso", "white", "black"];
+  const SCHAAL_ANDERS = { "sterling silver": "sterling white" };
+  function schaalKleur(tekst) {
+    let t = String(tekst || "").toLowerCase()
+      .replace(/^customized\s*-\s*/, "")          // "CUSTOMIZED - Sterling White with …"
+      .replace(/#\s*\d+/g, " ")                    // het #30 achter Sterling Silver
+      .replace(/\babs sheet\b/g, " ")              // "WHITE ABS SHEET" → white
+      .replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+    for (const [van, naar] of Object.entries(SCHAAL_ANDERS))
+      if (t === van || t.startsWith(van + " ")) t = naar + t.slice(van.length);
+    for (const k of SCHAALKLEUREN) if (t === k || t.startsWith(k + " ")) return k;
+    return null;
+  }
+
+  /* De schepen, met de kleuren erbij. Eén bak per model én kleur, zodat een
+     reservering alleen uit een bak kan pakken waar zijn eigen schaalkleur in
+     zit. Kent de invoice de kleur niet, dan komt het aantal in een bak zonder
+     kleur en die mag door iedereen gebruikt worden. */
   const shipsByModel = {};
   for (const s of (schepen.ships || [])) {
     // Dealercontainers varen naar de dealer en niet naar Uddel; ze kunnen dus
     // geen reservering van iemand anders dekken. Zie dpStockModels.
     if (s.dealerContainer) continue;
     for (const [model, q] of Object.entries(s.models || {})) {
-      (shipsByModel[model] = shipsByModel[model] || []).push({ eta: s.eta || null, qty: Number(q) || 0, vessel: s.vessel || "" });
+      const totaal = Number(q) || 0;
+      if (totaal <= 0) continue;
+      const perKleur = (s.modelColors || {})[model] || {};
+      const bakken = [];
+      let geteld = 0;
+      for (const [naam, aantal] of Object.entries(perKleur)) {
+        const n = Number(aantal) || 0;
+        if (n <= 0) continue;
+        geteld += n;
+        bakken.push({ eta: s.eta || null, qty: n, vessel: s.vessel || "", kleur: schaalKleur(naam) });
+      }
+      /* Klopt de kleurverdeling niet met het totaal (een oudere invoice zonder
+         kleuren, of een regel die niet gelezen kon worden), dan gaat het
+         verschil in een bak zonder kleur. Zo staat er nooit meer of minder op
+         het schip dan er echt op ligt. */
+      if (geteld < totaal) bakken.push({ eta: s.eta || null, qty: totaal - geteld, vessel: s.vessel || "", kleur: null });
+      (shipsByModel[model] = shipsByModel[model] || []).push(...bakken);
     }
   }
   /* De hal-voorraad telt PER KLEUR, niet per model.
@@ -3884,8 +3939,8 @@ async function dpRefreshReservations(env) {
      komt in een restpotje, en dáár pakken de reserveringen zonder kleur uit -
      zo raakt er niets zoek en wordt er ook niets dubbel vergeven.
 
-     De schepen blijven per model: een commercial invoice noemt het model en
-     niet de kleur, dus daar valt niets fijners over te zeggen. */
+     Bij de schepen gebeurt sinds 7 sep 2026 hetzelfde, alleen op de schaal-
+     kleur: zie schaalKleur() hierboven. */
   const kleurVanCode = {};
   for (const vs of Object.values(catalog.models || {}))
     for (const v of vs) kleurVanCode[String(v.code)] = dpRowColor(v.desc || "");
@@ -3913,12 +3968,13 @@ async function dpRefreshReservations(env) {
     if (!halTotaal && hal > 0) { halPerKleur[""] = hal; halTotaal = hal; }
     (shipsByModel[model] || [])
       .sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")))
-      .forEach(sh => buckets.push({ kind: sh.eta ? "schip" : "op-schip", eta: sh.eta, left: sh.qty, vessel: sh.vessel }));
+      .forEach(sh => buckets.push({ kind: sh.eta ? "schip" : "op-schip", eta: sh.eta, left: sh.qty, vessel: sh.vessel, kleur: sh.kleur }));
     // Productie (open fabrieks-IKO's) ná de schepen, op ETA-volgorde
     (prodByModel[model] || [])
       .slice().sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")))
-      .forEach(p => buckets.push({ kind: "productie", eta: p.eta, left: p.qty, iko: p.iko, fabriek: p.fabriek }));
-    let bi = 0;
+      // Een inkooporder bij de fabriek noemt geen kleur; die bakken staan dus
+      // open voor iedereen (kleur null).
+      .forEach(p => buckets.push({ kind: "productie", eta: p.eta, left: p.qty, iko: p.iko, fabriek: p.fabriek, kleur: null }));
     for (const r of list) {
       // Containerorders (Dealer magazijn) gaan rechtstreeks naar de dealer en
       // trekken NIET uit de Fonteyn-voorraad — die krijgen 'dealer-direct'.
@@ -3936,10 +3992,21 @@ async function dpRefreshReservations(env) {
         halPerKleur[potje] -= pak; need -= pak;
         if (pak > 0) landing = { kind: "voorraad", eta: null };
       }
-      while (need > 0 && bi < buckets.length) {
-        const take = Math.min(need, buckets[bi].left);
-        buckets[bi].left -= take; need -= take; landing = buckets[bi];
-        if (buckets[bi].left <= 0) bi++;
+      /* Dan de schepen en de productie, op volgorde van aankomst. Er wordt
+         hier geen teller meer vooruitgeschoven maar telkens de hele rij
+         langsgelopen: een bak met de verkeerde kleur wordt overgeslagen, en
+         die moet voor de volgende reservering nog wél beschikbaar zijn. Het
+         zijn er een handvol per model, dus dat kost niets.
+
+         De kleurregel: een bak zonder kleur mag door iedereen, een order
+         zonder kleur mag overal uit, en verder moet de schaalkleur kloppen. */
+      const mijnSchaal = schaalKleur(r.kleur);
+      for (const b of buckets) {
+        if (need <= 0) break;
+        if (b.left <= 0) continue;
+        if (b.kleur && mijnSchaal && b.kleur !== mijnSchaal) continue;
+        const take = Math.min(need, b.left);
+        b.left -= take; need -= take; landing = b;
       }
       // 'verwacht' = waar de LAATSTE unit van deze order landt (hele order pas dan compleet)
       /* Ook als de order niet helemaal gedekt is, bewaren we wát we weten van
