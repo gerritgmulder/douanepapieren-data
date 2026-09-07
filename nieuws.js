@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", groep: "planning", soort: "nieuw",
+      titel: "Service en Plaatsing kunnen hun route inzien",
+      wat: "De monteurs van Service en de jongens van Plaatsing kunnen voortaan op hun telefoon zien welke route ze rijden. Zij zien alleen de tegel Planning en verder niets, en ze kunnen niets verzetten: de agenda blijft van de afdeling zelf. Een stop aanklikken laat wel alle gegevens zien die je onderweg nodig hebt, zoals het adres en het telefoonnummer.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "planning.html", soort: "beter",
       titel: "Routebord: volgorde, let op, en vrije dagen",
       wat: "Je sleept een stop nu ook binnen een route naar boven of beneden; die volgorde is de volgorde waarin je rijdt en blijft staan. In het afsprakenvenster kun je Let op aanvinken, dan springt de stop er rood uit voor klussen met twee man of hijsen. Afspraken zonder tijd (vakantie, kantoor, vrij) staan als balkje bovenaan de dag in plaats van tussen de stops. En bij elke route staat hoeveel stops erin zitten, met het dagtotaal in de kop.",

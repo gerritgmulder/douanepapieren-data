@@ -2190,19 +2190,40 @@ async function planAfspraak(r){
       uitVoorraad: r.lineId || null      // waar hij vandaan komt
     };
     try{
+      /* Zonder teamsleutel heeft schrijven geen zin. Dat overkomt iemand die
+         Voorraadbeheer opent vóórdat de sleutel op deze computer is gezet; de
+         melding "403" zegt hem dan niets. */
+      if (!DATA_STORE_AUTH) throw new Error("deze computer heeft nog geen teamsleutel. Ga één keer terug naar het Dashboard en open deze tegel opnieuw");
       /* Lezen, toevoegen, terugschrijven. KV kent alleen 'vervang alles', dus
          eerst de verse lijst ophalen - anders gooit dit venster weg wat een
-         collega net in Planning heeft gezet. */
+         collega net in Planning heeft gezet.
+
+         Alles wat de agenda al had (routes, dagnotities) gaat ongewijzigd mee
+         terug. Alleen { afspraken } terugschrijven zou die wissen. */
       const hu = { "X-Fonteyn-Auth": DATA_STORE_AUTH };
-      const lees = await fetch(WORKER_BASIS+"/data/"+PLANNING_BUCKET, { headers: hu });
-      if (!lees.ok) throw new Error("de agenda is even niet bereikbaar");
+      const adres = WORKER_BASIS+"/data/"+PLANNING_BUCKET;
+      const lees = await fetch(adres, { headers: hu });
+      if (!lees.ok) throw new Error("de agenda is even niet bereikbaar (HTTP "+lees.status+")");
       const j = await lees.json();
       const lijst = (j && Array.isArray(j.afspraken)) ? j.afspraken : [];
       lijst.push(afspraak);
-      const put = await fetch(WORKER_BASIS+"/data/"+PLANNING_BUCKET, { method:"PUT",
-        headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": DATA_STORE_AUTH },
-        body: JSON.stringify({ afspraken: lijst }) });
-      if (!put.ok) throw new Error("bewaren mislukte (HTTP "+put.status+")");
+      const alles = JSON.stringify({ afspraken: lijst,
+        routes: (j && j.routes) || {}, notities: (j && j.notities) || {} });
+      const schrijf = () => fetch(adres, { method:"PUT",
+        headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": DATA_STORE_AUTH }, body: alles });
+      let put = await schrijf();
+      /* Eén keer opnieuw proberen. Een enkele mislukking van het netwerk of
+         een edge is zo weer over, en dan hoeft de planner niet alles opnieuw
+         in te tikken. */
+      if (!put.ok) { await new Promise(r=>setTimeout(r,600)); put = await schrijf(); }
+      if (!put.ok) {
+        /* Zeggen wát de server zei. "HTTP 403" alleen is niet op te lossen:
+           daar kan niemand uit afleiden of het aan de sleutel ligt, aan het
+           adres of aan iets anders. Gerwin liep hier op vast (7 sep 2026). */
+        let uitleg = "";
+        try { uitleg = (await put.text()).slice(0, 160); } catch(e){}
+        throw new Error("bewaren mislukte (HTTP "+put.status+(uitleg?" - "+uitleg:"")+")");
+      }
       seinPlanning();     // openstaande Planning-schermen meteen bijwerken
       try{ if(window.fpLog) window.fpLog("afspraak-gepland-vanuit-voorraad",
         afspraak.soort+" "+afspraak.datum+" "+(afspraak.tijd||"hele dag")+" "+afspraak.klant+" (order "+afspraak.ordernr+")"); }catch(e){}

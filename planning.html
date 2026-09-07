@@ -236,6 +236,11 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .route > h4 .wie{font-weight:700;color:var(--ink);flex:1;min-width:0;cursor:text;
       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .route > h4 .wie:hover{text-decoration:underline dotted;text-underline-offset:2px}
+/* Alleen-lezen: geen streepje en geen tekstcursor, anders lijkt het klikbaar. */
+.route > h4 .wie.vast{cursor:default}
+.route > h4 .wie.vast:hover{text-decoration:none}
+.dagnotitie.vast{cursor:default}
+.dagnotitie.vast:hover{color:var(--grijs)}
 .route > h4 .tel{background:#e5e7eb;color:#4b5563;border-radius:999px;font-size:9.5px;font-weight:700;
       padding:1px 6px;flex:0 0 auto}
 .route > h4 .weg{background:none;border:0;color:var(--grijs);cursor:pointer;font-size:13px;line-height:1;padding:0 2px}
@@ -383,6 +388,16 @@ var UUR_VAN = 6, UUR_TOT = 22;      // het raster loopt van 06:00 tot 22:00
 var UUR_PX = 46;                    // hoogte van één uur
 
 var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+/* Mag deze persoon iets veranderen, of alleen kijken?
+   ═══════════════════════════════════════════════════════════════════
+   De monteurs van Service en de jongens van Plaatsing kijken op hun telefoon
+   welke route ze rijden (Gerrit, 7 sep 2026). Zij zien de agenda volledig,
+   maar mogen er niets in verzetten - anders staat er 's ochtends een route
+   die niemand zo bedoeld heeft.
+
+   Alles wat wijzigt hangt aan deze vlag: de knoppen verschijnen niet, slepen
+   doet niets en het formulier opent zonder opslaan of verwijderen. */
+var MAG_BEWERKEN = window.fpToegang ? window.fpToegang.mag("planning-bewerk", ik) : true;
 var afspraken = [];
 var maandag = weekStart(new Date());
 var filterUit = {};                 // categorie-sleutel -> true als uitgevinkt
@@ -438,6 +453,10 @@ async function lees(){
   }catch(e){ return null; }
 }
 async function bewaar(wijzig){
+  /* Vangnet. De knoppen zijn al weg voor wie niet mag bewerken, maar één
+     vergeten koppeling zou anders alsnog de agenda van de afdeling
+     veranderen. Liever hier hard tegenhouden. */
+  if (!MAG_BEWERKEN) throw new Error("Je kijkt mee met de planning; wijzigen doet de afdeling zelf.");
   /* Verse gegevens ophalen, wijzigen, alles terugschrijven. LET OP: hier
      stond eerder alleen { afspraken }, en dat zou de routes en de
      dagnotities bij elke wijziging aan een afspraak wissen - KV kent alleen
@@ -727,6 +746,7 @@ function teken(){
   });
   document.querySelectorAll(".blok").forEach(koppelBlok);
   document.querySelectorAll(".plus").forEach(function(k){
+    if (!MAG_BEWERKEN){ k.style.display = "none"; return; }
     k.addEventListener("click", function(){ openForm(null, k.dataset.datum); });
   });
   document.querySelectorAll(".route-knop").forEach(function(k){
@@ -736,6 +756,7 @@ function teken(){
   if (itsMeldingen !== null) itsTeken();
   // Klik op een leeg stuk dag = nieuwe afspraak op dat tijdstip, afgerond op het halve uur.
   document.querySelectorAll(".dag-cel").forEach(function(cel){
+    if (!MAG_BEWERKEN) return;
     cel.addEventListener("click", function(e){
       if (e.target!==cel && !e.target.classList.contains("uurlijn")) return;
       var y = e.offsetY, min = UUR_VAN*60 + Math.round(y/UUR_PX*60/30)*30;
@@ -848,21 +869,26 @@ function tekenBord(){
         var stops = stopsVan(w.iso, r.nr, ri===0);
         return '<div class="route" data-datum="'+w.iso+'" data-nr="'+r.nr+'">'+
           '<h4><span class="nr">'+r.nr+'</span>'+
-            '<span class="wie" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Klik om de naam aan te passen">'+
+            '<span class="wie'+(MAG_BEWERKEN?'':' vast')+'" data-datum="'+w.iso+'" data-nr="'+r.nr+'"'+
+              (MAG_BEWERKEN?' title="Klik om de naam aan te passen"':'')+'>'+
               (r.wie ? esc(r.wie) : '<span style="color:#c9cfcb;font-weight:400">wie rijdt?</span>')+'</span>'+
             (stops.length ? '<span class="tel">'+stops.length+'</span>' : '')+
-            '<button type="button" class="weg routeWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route weghalen">&times;</button>'+
+            (MAG_BEWERKEN?'<button type="button" class="weg routeWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route weghalen">&times;</button>':"")+
           '</h4>'+
           '<div class="stops">'+
-            (stops.length ? stops.map(stopHtml).join("") : '<div class="leegdrop">sleep hier een stop</div>')+
+            (stops.length ? stops.map(stopHtml).join("")
+              : '<div class="leegdrop">'+(MAG_BEWERKEN?"sleep hier een stop":"nog niets")+'</div>')+
           '</div>'+
-          '<button type="button" class="plusstop" data-datum="'+w.iso+'" data-nr="'+r.nr+'">+ stop</button>'+
+          (MAG_BEWERKEN?'<button type="button" class="plusstop" data-datum="'+w.iso+'" data-nr="'+r.nr+'">+ stop</button>':"")+
         '</div>';
       }).join("")+
       '</div>'+
-      '<button type="button" class="plusroute" data-datum="'+w.iso+'">+ route</button>'+
-      '<div class="dagnotitie" data-datum="'+w.iso+'" title="Klik om een notitie voor deze dag te zetten">'+
-        (dagNotities[w.iso] ? esc(dagNotities[w.iso]) : "notitie voor deze dag…")+'</div>'+
+      (MAG_BEWERKEN?'<button type="button" class="plusroute" data-datum="'+w.iso+'">+ route</button>':"")+
+      ((dagNotities[w.iso] || MAG_BEWERKEN)
+        ? '<div class="dagnotitie'+(MAG_BEWERKEN?'':' vast')+'" data-datum="'+w.iso+'"'+
+          (MAG_BEWERKEN?' title="Klik om een notitie voor deze dag te zetten"':'')+'>'+
+          (dagNotities[w.iso] ? esc(dagNotities[w.iso]) : "notitie voor deze dag…")+'</div>'
+        : "")+
     '</div>';
   });
   $("bord").innerHTML = html;
@@ -871,7 +897,7 @@ function tekenBord(){
 function stopHtml(a){
   var c = cat(a);
   var regel = [a.plaats, a.wat, a.ordernr].filter(Boolean).join(" - ");
-  return '<div class="stop'+(a.klaar?" klaar":"")+(a.letop?" letop":"")+'" draggable="true" data-id="'+esc(a.id)+'"'+
+  return '<div class="stop'+(a.klaar?" klaar":"")+(a.letop?" letop":"")+'"'+(MAG_BEWERKEN?' draggable="true"':'')+' data-id="'+esc(a.id)+'"'+
     ' style="border-left-color:'+c.kleur+'" title="'+esc((a.tijd?a.tijd+"  ":"")+(a.klant||"")+(regel?"  -  "+regel:""))+'">'+
     betaalStip(a)+'<span class="kl">'+(a.tijd?esc(a.tijd)+" ":"")+esc(a.klant||c.naam)+'</span>'+
     (regel?'<span class="rg">'+esc(regel)+'</span>':"")+
@@ -879,6 +905,9 @@ function stopHtml(a){
 }
 
 function koppelBord(){
+  /* Kijken mag altijd: een stop aanklikken opent het formulier, dat zichzelf
+     alleen-lezen maakt. Al het andere (slepen, plusknoppen, namen wijzigen)
+     hangen we alleen aan als deze persoon mag bewerken. */
   // stop aanklikken = het formulier; slepen = naar een andere route of dag
   $("bord").querySelectorAll(".stop").forEach(function(el){
     el.addEventListener("click", function(){ if(!el.dataset.gesleept) openForm(el.dataset.id); delete el.dataset.gesleept; });
@@ -899,6 +928,12 @@ function koppelBord(){
      stop komt hij ervóór, op de lege ruimte van de route komt hij achteraan.
      Zo kun je ook de volgorde bínnen een route veranderen, en dat is precies
      wat een route is - de volgorde waarin je rijdt. */
+  // De hele-dag-balkjes openen gewoon het formulier.
+  $("bord").querySelectorAll(".dagbalk").forEach(function(el){
+    el.addEventListener("click", function(){ openForm(el.dataset.id); });
+  });
+  if (!MAG_BEWERKEN) return;
+
   var doelStop = null;
   $("bord").querySelectorAll(".stop").forEach(function(el){
     el.addEventListener("dragover", function(e){ e.preventDefault(); e.stopPropagation();
@@ -949,10 +984,6 @@ function koppelBord(){
       }catch(err){ alert(err.message); }
     });
   });
-  // De hele-dag-balkjes openen gewoon het formulier.
-  $("bord").querySelectorAll(".dagbalk").forEach(function(el){
-    el.addEventListener("click", function(){ openForm(el.dataset.id); });
-  });
   // + stop, + route, route weghalen, naam van de rijder, dagnotitie
   $("bord").querySelectorAll(".plusstop").forEach(function(b){
     b.addEventListener("click", function(){
@@ -977,6 +1008,7 @@ function koppelBord(){
    afspraken, dus lezen-wijzigen-terugschrijven op de VERSE lijst - anders
    gooit dit scherm weg wat een collega net heeft gedaan. */
 async function bewaarBord(wijzig){
+  if (!MAG_BEWERKEN) throw new Error("Je kijkt mee met de planning; wijzigen doet de afdeling zelf.");
   var r = await fetch(W+"/data/"+BUCKET, { headers:{ "X-Fonteyn-Auth": teamKey() } });
   if (!r.ok) throw new Error("De opslag is niet bereikbaar. Probeer het zo nog eens.");
   var j = await r.json();
@@ -1099,6 +1131,11 @@ function bewerkDagnotitie(el){
    plannen en grof genoeg om niet op 09:07 uit te komen. */
 var SNAP = 15;                       // minuten
 function koppelBlok(el){
+  if (!MAG_BEWERKEN){
+    el.style.cursor = "pointer";
+    el.addEventListener("click", function(){ openForm(el.dataset.id); });
+    return;
+  }
   el.addEventListener("mousedown", startSleep);
   var naam = el.querySelector('[data-bewerk="klant"]');
   if (naam) naam.addEventListener("click", function(e){
@@ -1356,11 +1393,18 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       (a.gewijzigdDoor&&a.gewijzigdDoor!==a.door?', laatst gewijzigd door '+esc(planNaam(a.gewijzigdDoor)):'')+'</div>')+
     '<div class="melding" id="fMelding"></div>'+
     '<div class="knoppen">'+
-      (nieuw?"":'<button type="button" class="weg" id="fWeg">Verwijderen</button>')+
-      '<button type="button" class="terug" id="fTerug">Annuleren</button>'+
-      '<button type="button" class="doe" id="fDoe">Bewaren</button></div></div>';
+      (MAG_BEWERKEN && !nieuw?'<button type="button" class="weg" id="fWeg">Verwijderen</button>':"")+
+      '<button type="button" class="terug" id="fTerug">'+(MAG_BEWERKEN?"Annuleren":"Sluiten")+'</button>'+
+      (MAG_BEWERKEN?'<button type="button" class="doe" id="fDoe">Bewaren</button>':"")+'</div></div>';
   document.body.appendChild(laag);
 
+  /* Alleen kijken: alle velden op slot. Het venster blijft wel open, want de
+     gegevens erin (adres, telefoon, wat er moet gebeuren) zijn juist wat een
+     monteur onderweg nodig heeft. */
+  if (!MAG_BEWERKEN){
+    laag.querySelectorAll("input,select,textarea").forEach(function(v){ v.disabled = true; });
+    laag.querySelectorAll("#fCats button").forEach(function(v){ v.disabled = true; v.style.cursor = "default"; });
+  }
   var soort = CATS[a.soort] ? a.soort : "intern";
   $("fCats").querySelectorAll("button").forEach(function(b){
     b.addEventListener("click", function(){
@@ -1373,7 +1417,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   $("fTerug").addEventListener("click", dicht);
   laag.addEventListener("click", function(e){ if(e.target===laag) dicht(); });
 
-  $("fDoe").addEventListener("click", async function(){
+  if (MAG_BEWERKEN) $("fDoe").addEventListener("click", async function(){
     var b = {
       id: a.id, datum: $("fDatum").value, tijd: $("fTijd").value,
       duurMin: Number($("fDuur").value)||60, soort: soort,
@@ -1403,7 +1447,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     }catch(e){ $("fMelding").textContent = e.message; this.disabled=false; this.textContent="Bewaren"; }
   });
 
-  if (!nieuw) $("fWeg").addEventListener("click", async function(){
+  if (MAG_BEWERKEN && !nieuw) $("fWeg").addEventListener("click", async function(){
     if (!confirm("Afspraak van "+(a.klant||"?")+" op "+a.datum+" verwijderen?")) return;
     this.disabled = true;
     try{
@@ -1426,6 +1470,7 @@ function itsGepland(id){
   return afspraken.some(function(a){ return Number(a.itsId)===Number(id); });
 }
 async function itsLaad(){
+  if (!MAG_BEWERKEN) return;      // meldingen inplannen hoort bij de afdeling
   try{
     var r = await fetch(W+"/planning/its", { headers:{ "X-Fonteyn-Auth": teamKey() } });
     var j = await r.json();
@@ -1578,6 +1623,16 @@ $("uitKnop").addEventListener("click", function(){
   location.href="dashboard.html";
 });
 $("wie").textContent = ik;
+if (!MAG_BEWERKEN){
+  var nk = $("nieuwKnop"); if (nk) nk.style.display = "none";
+  var ik2 = $("itsKnop"); if (ik2) ik2.style.display = "none";   // servicemeldingen inplannen hoort erbij
+  var balk = document.createElement("div");
+  balk.style.cssText = "background:#eef0f2;border:1px solid var(--rand);border-radius:9px;padding:7px 12px;"+
+    "margin-bottom:10px;font-size:12.5px;color:var(--grijs)";
+  balk.textContent = "Je kijkt mee met de planning. Je ziet alles, maar wijzigen doet de afdeling zelf.";
+  var m = document.querySelector("main");
+  if (m) m.insertBefore(balk, m.firstChild);
+}
 
 function scrollNaarWerkdag(){
   // Bij openen rond 08:00 in beeld beginnen, niet om 06:00.

@@ -187,7 +187,30 @@
        De hele afdeling Spa planning plus de spa-verkoop en de vaste
        beheerlaag (Gerrit, 22 aug 2026). Mike logt in als
        servicespa@fonteyn.nl; dat staat in AFWIJKEND bovenaan. */
+    /* Planning heeft twee kringen.
+
+       'planning' = wie de tegel ziet. Daar zit sinds 7 sep 2026 ook de
+       buitendienst bij: de monteurs van Service en de jongens van Plaatsing
+       kijken op hun telefoon welke route ze rijden. Zij zien alleen deze ene
+       tegel, verder niets.
+
+       'planning-bewerk' = wie er iets in mag veranderen. Dat blijft de
+       afdeling zelf. Wie hier niet in staat, kan alles zien maar niets
+       verzetten, toevoegen of weghalen - het scherm laat die knoppen dan ook
+       niet zien.
+
+       Iemand toevoegen is dus twee keuzes: mag hij kijken, en mag hij ook
+       wijzigen? */
     "planning": [
+      "arno", "bart.vdb", "bertjan", "chantal", "dolf", "don",
+      "fonteynbot", "gerrit", "gerwin", "kevin", "mike", "tim",
+      // Service (alleen kijken)
+      "patrick", "hans.vanputten", "thieme", 
+      // Plaatsing (alleen kijken)
+      "bertjan.kok", "mike.deboer", "joeri", "michael.berghorst",
+      "dylan", "wouter.vedder", "joey",
+    ],
+    "planning-bewerk": [
       "arno", "bart.vdb", "bertjan", "chantal", "dolf", "don",
       "fonteynbot", "gerrit", "gerwin", "kevin", "mike", "tim",
     ],
