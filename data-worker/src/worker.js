@@ -3748,6 +3748,90 @@ function itsKaal(html) {
     .replace(/\s+/g, " ").trim();
 }
 
+/* GET /planning/betaalstatus?orders=3517369,3518891 — is die order betaald?
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (7 sep 2026): "Bij Planning wil ik kunnen zien (met groen, oranje,
+   rood) of een order volledig is betaald, aanbetaald of niet betaald."
+
+   Logic4 geeft dat per order in Totals: AmountIncl (wat het kost),
+   Calc_TotalPayed (wat er binnen is) en IsPaid. Meer is er niet nodig:
+     groen  = IsPaid, of er staat evenveel of meer op als de order kost
+     oranje = er is wél iets betaald, maar niet alles
+     rood   = er is niets betaald
+   Calc_TotalPayed ontbreekt soms in het antwoord; dan telt IsPaid.
+
+   Per order één aanvraag zou de subrequest-grens van een worker raken zodra
+   er een week vol afspraken staat. Daarom vragen we het bereik van
+   ordernummers in één keer op en zoeken we er lokaal uit wat we nodig hebben. */
+async function planningBetaalstatus(env, url) {
+  const gevraagd = String(url.searchParams.get("orders") || "")
+    .split(",").map(x => x.trim()).filter(x => /^\d{4,12}$/.test(x)).slice(0, 200);
+  if (!gevraagd.length) return reply(200, { ok: true, orders: {} });
+
+  /* Eén order per aanvraag.
+     Het filter heet 'Id' en is enkelvoud; een lijst meegeven werkt niet.
+     OrderIds bestaat helemaal niet, en Logic4 negeert een filter dat het niet
+     kent zonder te klagen - dan krijg je gewoon de eerste honderd orders van
+     de hele administratie terug. Nagemeten op 7 sep 2026: met OrderIds kwamen
+     er 100 willekeurige orders terug, met Id precies de gevraagde.
+
+     Eén aanvraag per order betekent wel dat we zuinig moeten zijn: een worker
+     mag ongeveer vijftig keer naar buiten per verzoek. Daarom onthouden we wat
+     we al weten (tien minuten lang) en halen we alleen op wat ontbreekt, met
+     een harde grens per keer. Wat er dan nog over is vraagt het scherm zo
+     weer op. */
+  const CACHE_MIN = 10;
+  const MAX_PER_KEER = 30;
+  const bucket = "planning-betaald";
+  const cache = (await env.FONTEYN_DATA.get(bucket, { type: "json" })) || {};
+  const nu = Date.now();
+  const uit = {};
+  const nodig = [];
+  for (const nr of gevraagd) {
+    const c = cache[nr];
+    if (c && c.ts && (nu - c.ts) < CACHE_MIN * 60000) uit[nr] = c.info;
+    else nodig.push(nr);
+  }
+
+  let opgehaald = 0;
+  if (nodig.length) {
+    const token = await l4Token(env);
+    for (const nr of nodig.slice(0, MAX_PER_KEER)) {
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ Id: Number(nr), TakeRecords: 2 }),
+      });
+      if (!r.ok) continue;
+      const j = await r.json().catch(() => null);
+      const lijst = Array.isArray(j) ? j : ((j && j.Records) || []);
+      const o = lijst.find(x => Number(x.Id ?? x.OrderId) === Number(nr));
+      if (!o) { cache[nr] = { ts: nu, info: null }; continue; }   // bestaat niet
+      const t = o.Totals || {};
+      const kost = Number(t.AmountIncl) || 0;
+      const betaald = Number(t.Calc_TotalPayed) || 0;
+      const helemaal = t.IsPaid === true || (kost > 0 && betaald >= kost - 0.02);
+      const info = {
+        stand: helemaal ? "betaald" : (betaald > 0 ? "aanbetaald" : "open"),
+        bedrag: Math.round(kost * 100) / 100,
+        betaald: Math.round(betaald * 100) / 100,
+        status: (o.OrderStatus && o.OrderStatus.Value) || null,
+      };
+      cache[nr] = { ts: nu, info };
+      uit[nr] = info;
+      opgehaald++;
+    }
+    // Oude regels opruimen zodat de bucket niet eindeloos groeit.
+    for (const k of Object.keys(cache)) if (nu - (cache[k].ts || 0) > 24 * 3600000) delete cache[k];
+    try { await env.FONTEYN_DATA.put(bucket, JSON.stringify(cache)); } catch (e) {}
+  }
+  // Wat Logic4 niet kent blijft leeg: geen kleur is eerlijker dan rood.
+  for (const nr of Object.keys(uit)) if (!uit[nr]) delete uit[nr];
+  return reply(200, { ok: true, orders: uit,
+                      restant: Math.max(0, nodig.length - MAX_PER_KEER),
+                      opgehaald, opgehaaldOp: new Date().toISOString() });
+}
+
 async function planningIts(env, url) {
   const vers = url.searchParams.get("vers") === "1";
   if (!vers) {
@@ -7328,6 +7412,23 @@ export class LiveKamer {
         waarde: d.soort === "zet" ? d.waarde : undefined,
       }, ws);
     }
+
+    /* "gewijzigd": er is iets bewaard, haal het opnieuw op.
+       ═══════════════════════════════════════════════════════════════
+       De kamer stuurt hier geen inhoud rond maar alleen een seintje. Voor de
+       agenda in Planning is dat precies goed: die moet niet alleen zien wat
+       er bijkomt, maar ook wat er wéggaat. Gerrit (7 sep 2026): "als Kevin
+       iets toevoegt kan Gerwin het zien, en als Kevin het weer verwijdert
+       ziet Gerwin die afspraak nog steeds staan."
+
+       Losse velden rondsturen (zoals bij de voorraadnotities) lost dat niet
+       op: een verwijdering is geen veld dat verandert, het is een regel die
+       er niet meer is. Met een seintje leest iedereen gewoon de bucket
+       opnieuw, en dan klopt alles - toevoegen, wijzigen én verwijderen. */
+    if (d.soort === "gewijzigd") {
+      this.rondsturen({ soort: "gewijzigd", wie: att.wie,
+                        wat: String(d.wat || "").slice(0, 60) }, ws);
+    }
   }
 
   webSocketClose(ws) {
@@ -7654,6 +7755,10 @@ export default {
     if (url.pathname.startsWith("/live/")) {
       const kamer = url.pathname.slice(6).replace(/[^a-z0-9-]/gi, "").slice(0, 40) || "algemeen";
       return env.LIVE.get(env.LIVE.idFromName(kamer)).fetch(request);
+    }
+    if (url.pathname === "/planning/betaalstatus" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+      return planningBetaalstatus(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     if (url.pathname === "/planning/its" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });

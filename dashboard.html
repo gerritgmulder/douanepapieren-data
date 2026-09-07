@@ -960,6 +960,7 @@ function showDashboard(email) {
   }
   // Logistiek wordt verderop ook nog gebruikt (buiten de tegels om).
   const isLogistiek = LOGISTIEK_EMAILS.has(lc);
+  tegelsInEigenVenster();
   verbergLegeGroepen();
   herstelScrollpositie();
   /* De takenlijst is geen tegel maar een lade aan de rechterkant (Gerrit,
@@ -1192,6 +1193,33 @@ async function startNieuweRelaties(email){
     }));
   }
   teken(await haal(null));
+}
+
+/* Elke tegel opent in een eigen venster.
+   ═══════════════════════════════════════════════════════════════════
+   Gerrit (7 sep 2026): "IEDEREEN bij Fonteyn heeft twee schermen, dus ik wil
+   een tweede venster kunnen openen zodat Planning en Voorraadbeheer tegelijk
+   open staan. Bij het aanklikken van een tegel start je een nieuw venster."
+
+   Het enige wat hier nodig is, is target="_blank". De schil vangt dat op en
+   maakt er een echt appvenster van; staat die tegel al open, dan komt dat
+   venster naar voren in plaats van dat er een tweede bij komt.
+
+   Twee dingen die bewust NIET meegaan:
+   - Het dashboard zelf en de uitlogknop blijven in dit venster. Anders zou je
+     na het uitloggen met een scherm vol open tegels blijven zitten.
+   - Op de telefoon gebeurt dit niet: daar is één venster het hele scherm en
+     zou een tweede tabblad alleen maar in de weg zitten. */
+function tegelsInEigenVenster(){
+  if (window.matchMedia && window.matchMedia("(max-width: 720px)").matches) return;
+  document.querySelectorAll("a.tile").forEach(a => {
+    const href = a.getAttribute("href") || "";
+    if (!href || href.startsWith("#") || /^https?:/i.test(href)) return;
+    if (href === "dashboard.html") return;
+    a.target = "_blank";
+    a.rel = "noopener";
+    if (!a.title) a.title = "Opent in een eigen venster, zodat je hem naast het dashboard kunt zetten";
+  });
 }
 
 // Een afdelingskop zonder zichtbare tegels heeft geen functie: die verdwijnt.

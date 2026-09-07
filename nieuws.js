@@ -52,6 +52,30 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", iedereen: true, soort: "nieuw",
+      titel: "Elke tegel opent in een eigen venster",
+      wat: "Iedereen werkt met twee schermen, dus vanaf nu opent een tegel in een eigen venster in plaats van over het dashboard heen. Zo kun je Planning op je ene scherm zetten en Voorraadbeheer op je andere. Klik je een tegel aan die al openstaat, dan komt dat venster naar voren; er komt er geen tweede bij.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "planning.html", soort: "nieuw",
+      titel: "Zie meteen of een order betaald is",
+      wat: "Voor de naam van de klant staat een stipje: groen als de order volledig betaald is, oranje als er is aanbetaald en rood als er nog niets binnen is. Ga er met de muis overheen en je ziet hoeveel er van het totaal betaald is. Staat er geen ordernummer bij de afspraak, dan is er ook geen stip.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "planning.html", soort: "beter",
+      titel: "De agenda werkt nu live samen",
+      wat: "Zet iemand anders een afspraak neer of haalt hij er een weg, dan zie je dat meteen op je eigen scherm, zonder te verversen. Rechtsboven in de balk staat wie er nog meer in de agenda kijken. Voorheen bleef een afspraak die een collega verwijderd had bij jou gewoon staan.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "nieuw",
+      titel: "Gepland aanvinken plant nu ook echt",
+      wat: "Vink je een spa op Gepland, dan komt er meteen een venster waarin je de afspraak zet: datum, tijd, wie erheen gaat. Adres en telefoon van de klant worden erbij gezocht. Wat je invult staat daarna als echte afspraak in Planning. Je hoeft hem dus niet nog een keer met de hand in de agenda te zetten.",
+    },
+
+    {
       datum: "2026-09-03", bestand: "dealerportaal.html", soort: "nieuw",
       titel: "Een bestelling terugdraaien",
       wat: "De tegel heet nu Passion Partners Beheer. Bij een aanbetaalde bestelling staat een knop Terugdraaien: die boekt de aanbetaling tegen in het dagboek Mollie, zet de order in Logic4 op Geannuleerd en geeft de vastgehouden voorraad weer vrij. Bedoeld voor testbestellingen. Het geld wordt niet teruggestort bij Mollie; dat doe je zelf als het om een echte bestelling gaat.",

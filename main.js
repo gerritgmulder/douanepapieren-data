@@ -218,6 +218,56 @@ const PORT = 3737;
 const URL  = `http://127.0.0.1:${PORT}/`;
 
 let mainWindow = null;
+/* De extra tegelvensters, op paginanaam. Zo weten we of een tegel al ergens
+   openstaat en kunnen we hem naar voren halen in plaats van verdubbelen. */
+const tegelVensters = new Map();
+
+/* Een tegel in een eigen venster. Iets kleiner dan het hoofdvenster en steeds
+   een stukje verschoven, zodat een tweede venster niet precies op het eerste
+   valt en je denkt dat er niets gebeurde. */
+function opentegel(url) {
+  const naam = (() => { try { return new URL(url).pathname; } catch (e) { return url; } })();
+  const bestaand = tegelVensters.get(naam);
+  if (bestaand && !bestaand.isDestroyed()) {
+    if (bestaand.isMinimized()) bestaand.restore();
+    bestaand.focus();
+    return bestaand;
+  }
+  const n = tegelVensters.size;
+  const hoofd = mainWindow && !mainWindow.isDestroyed() ? mainWindow.getBounds() : { x: 60, y: 60 };
+  const venster = new BrowserWindow({
+    width: 1400, height: 900, minWidth: 900, minHeight: 600,
+    x: hoofd.x + 40 + (n % 5) * 26, y: hoofd.y + 40 + (n % 5) * 26,
+    title: "Fonteyn Dashboard", autoHideMenuBar: true, backgroundColor: "#f6f6f8",
+    webPreferences: {
+      contextIsolation: true, nodeIntegration: false,
+      preload: path.join(__dirname, "preload.js"),
+      scrollBounce: true, enableBlinkFeatures: "OverscrollHistoryNavigation",
+    },
+  });
+  // Ook vanuit een tegelvenster moet een volgende tegel weer een eigen venster
+  // krijgen; anders werkt het alleen vanaf het dashboard.
+  venster.webContents.setWindowOpenHandler(({ url: u }) => {
+    if (!u.startsWith(URL)) { shell.openExternal(u); return { action: "deny" }; }
+    opentegel(u);
+    return { action: "deny" };
+  });
+  /* Binnen het venster mag je gewoon doorklikken (terug naar Dashboard,
+     een andere tegel). De sleutel volgt de pagina waar het venster nú staat,
+     zodat 'al open' blijft kloppen. */
+  venster.webContents.on("did-navigate-in-page", () => onthoud(venster));
+  venster.webContents.on("did-navigate", () => onthoud(venster));
+  venster.on("closed", () => {
+    for (const [k, v] of tegelVensters) if (v === venster) tegelVensters.delete(k);
+  });
+  tegelVensters.set(naam, venster);
+  venster.loadURL(url);
+  return venster;
+}
+function onthoud(venster) {
+  for (const [k, v] of tegelVensters) if (v === venster) tegelVensters.delete(k);
+  try { tegelVensters.set(new URL(venster.webContents.getURL()).pathname, venster); } catch (e) {}
+}
 
 // ═══════════════════════════════════════════════════════════════
 // Helper-server starten als child-import
@@ -366,9 +416,24 @@ function createWindow() {
     if (direction === "left"  && wc.canGoForward()) wc.goForward();
   });
 
-  // Externe links in de standaard-browser openen
+  /* Tweede scherm. Gerrit (7 sep 2026): "IEDEREEN bij Fonteyn heeft twee
+     schermen, dus ik wil een tweede venster kunnen openen zodat Planning en
+     Voorraadbeheer tegelijk open staan."
+
+     Een tegel met target="_blank" komt hier langs. Wijst hij naar het
+     dashboard zelf (127.0.0.1:3737), dan openen we een eigen venster; al het
+     andere gaat naar de standaardbrowser zoals altijd.
+
+     Staat dezelfde tegel al in een venster, dan halen we dát venster naar
+     voren in plaats van er een tweede te maken. Anders zit je na een middag
+     werken met acht keer Voorraadbeheer op je scherm.
+
+     Op een shell die deze regel nog niet heeft (Macs werken zichzelf niet bij)
+     valt het terug op openExternal: de tegel opent dan in de browser, op
+     hetzelfde adres en dus met dezelfde inlog. Onhandiger, maar niet stuk. */
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (!url.startsWith(URL)) { shell.openExternal(url); return { action: "deny" }; }
+    opentegel(url);
     return { action: "deny" };
   });
 

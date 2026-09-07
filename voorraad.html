@@ -2045,6 +2045,154 @@ function zetNotitie(r,veld,waarde){
    aanvinkt of typt verschijnt direct; de rij waar iemand in staat krijgt
    diens kleur en naam. De KV-opslag blijft de waarheid: valt de verbinding
    weg, dan werkt alles gewoon door op de 10-seconden-verversing. */
+/* ── afspraak inplannen vanuit Voorraadbeheer ────────────────────────
+   Het vinkje 'Gepland' zegt dat de afspraak met de klant staat. Tot nu toe
+   bleef dat een vinkje in dit scherm en moest iemand de afspraak daarna nog
+   een keer met de hand in Planning zetten - met alle kans dat dat er niet
+   van kwam. Nu komt er meteen een venster, en wat je daar invult staat als
+   echte afspraak in de agenda van Planning.
+
+   We schrijven rechtstreeks naar dezelfde bucket die Planning gebruikt, in
+   precies hetzelfde formaat, en geven de live-kamer een seintje zodat een
+   openstaande Planning het meteen ziet. */
+/* Een seintje naar de live-kamer van Planning. liveStuur() hierboven gaat naar
+   de kamer van de voorraadnotities; Planning heeft zijn eigen kamer. Voor één
+   berichtje is een korte verbinding genoeg: aanmelden, seinen, dicht. Lukt het
+   niet, dan is dat geen ramp - Planning haalt sowieso elke halve minuut op. */
+function seinPlanning(){
+  if (!DATA_STORE_AUTH) return;
+  try{
+    const ws = new WebSocket("wss://fonteyn-data-store.g-mulder.workers.dev/live/planning");
+    const dicht = () => { try{ ws.close(); }catch(e){} };
+    ws.addEventListener("open", function(){
+      ws.send(JSON.stringify({ soort:"hallo", sleutel: DATA_STORE_AUTH,
+        wie:(localStorage.getItem(EMAIL_KEY)||"onbekend").toLowerCase() }));
+      ws.send(JSON.stringify({ soort:"gewijzigd", wat:"planning" }));
+      setTimeout(dicht, 1200);
+    });
+    ws.addEventListener("error", dicht);
+    setTimeout(dicht, 6000);
+  }catch(e){}
+}
+
+const PLANNING_BUCKET = "planning";
+// DATA_STORE_URL wijst al naar /data/voorraad; hier is het kale adres nodig.
+const WORKER_BASIS = "https://fonteyn-data-store.g-mulder.workers.dev";
+async function planAfspraak(r){
+  const oud = document.getElementById("planLaag");
+  if (oud) oud.remove();
+  const vandaag = new Date();
+  const voorstel = new Date(vandaag.getTime() + 7*86400000);
+  const isoD = d => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+
+  const laag = document.createElement("div");
+  laag.id = "planLaag";
+  laag.style.cssText = "position:fixed;inset:0;background:rgba(16,20,18,.5);z-index:9000;display:flex;"+
+    "align-items:center;justify-content:center;padding:18px;overflow:auto";
+  laag.innerHTML =
+    '<div class="card" style="max-width:520px;width:100%;margin:0">'+
+      '<h3 style="margin:0 0 4px">Afspraak inplannen</h3>'+
+      '<p class="lead" style="margin:0 0 14px;font-size:12.5px">'+esc(r.model)+' voor <b>'+esc(r.naam||"")+'</b> &middot; order '+esc(r.ordernr)+'.'+
+        ' Wat je hier invult komt als afspraak in <b>Planning</b> te staan.</p>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap">'+
+        '<div style="flex:1 1 150px"><label style="font-size:11.5px;color:var(--muted)">Datum</label>'+
+          '<input type="date" id="plDatum" value="'+isoD(voorstel)+'" style="width:100%;padding:8px"></div>'+
+        '<div style="flex:1 1 110px"><label style="font-size:11.5px;color:var(--muted)">Tijd (leeg = hele dag)</label>'+
+          '<input type="time" id="plTijd" value="09:00" style="width:100%;padding:8px"></div>'+
+        '<div style="flex:1 1 110px"><label style="font-size:11.5px;color:var(--muted)">Duur</label>'+
+          '<select id="plDuur" style="width:100%;padding:8px">'+
+            '<option value="60">1 uur</option><option value="90">1,5 uur</option>'+
+            '<option value="120" selected>2 uur</option><option value="180">3 uur</option>'+
+            '<option value="240">4 uur</option><option value="480">hele dag</option></select></div>'+
+      '</div>'+
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">'+
+        '<div style="flex:1 1 150px"><label style="font-size:11.5px;color:var(--muted)">Soort</label>'+
+          '<select id="plSoort" style="width:100%;padding:8px">'+
+            '<option value="levering" selected>Levering</option><option value="service">Service</option>'+
+            '<option value="ophalen">Ophalen / retour</option><option value="intern">Intern / overig</option></select></div>'+
+        '<div style="flex:1 1 150px"><label style="font-size:11.5px;color:var(--muted)">Wie gaat erheen</label>'+
+          '<input id="plWie" placeholder="Naam of team" style="width:100%;padding:8px"></div>'+
+      '</div>'+
+      '<label style="font-size:11.5px;color:var(--muted);margin-top:10px;display:block">Plaats of adres</label>'+
+      '<input id="plPlaats" placeholder="wordt opgehaald…" style="width:100%;padding:8px">'+
+      '<label style="font-size:11.5px;color:var(--muted);margin-top:10px;display:block">Telefoon</label>'+
+      '<input id="plTel" style="width:100%;padding:8px">'+
+      '<label style="font-size:11.5px;color:var(--muted);margin-top:10px;display:block">Bijzonderheden</label>'+
+      '<textarea id="plWat" rows="2" style="width:100%;padding:8px">'+esc(r.model+(r.aantal>1?" ("+r.aantal+"x)":""))+'</textarea>'+
+      '<div id="plMelding" style="margin-top:10px;font-size:12.5px;min-height:18px"></div>'+
+      '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:6px">'+
+        '<button class="btn" id="plNiet" type="button">Later plannen</button>'+
+        '<button class="btn primary" id="plDoe" type="button">In de agenda zetten</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(laag);
+  const dicht = () => laag.remove();
+  laag.addEventListener("click", e => { if (e.target === laag) dicht(); });
+  document.getElementById("plNiet").addEventListener("click", dicht);
+
+  /* Adres en telefoon van de klant erbij halen. Lukt dat niet, dan blijven de
+     velden gewoon leeg - dat mag, ze zijn niet verplicht. */
+  if (r.debtorId) {
+    fetch(WORKER_BASIS+"/planning/its/klant?debiteur="+encodeURIComponent(r.debtorId),
+          { headers:{ "X-Fonteyn-Auth": DATA_STORE_AUTH } })
+      .then(x => x.json()).then(j => {
+        if (!j || !j.ok || !j.klant) { document.getElementById("plPlaats").placeholder = ""; return; }
+        const p = document.getElementById("plPlaats"), t = document.getElementById("plTel");
+        if (p && !p.value) { p.value = j.klant.adres || j.klant.plaats || ""; p.placeholder = ""; }
+        if (t && !t.value) t.value = j.klant.telefoon || "";
+      }).catch(() => { const p = document.getElementById("plPlaats"); if (p) p.placeholder = ""; });
+  } else { document.getElementById("plPlaats").placeholder = ""; }
+
+  document.getElementById("plDoe").addEventListener("click", async function(){
+    const mel = document.getElementById("plMelding");
+    const datum = document.getElementById("plDatum").value;
+    if (!datum) { mel.style.color = "var(--bad)"; mel.textContent = "Kies een datum."; return; }
+    this.disabled = true; this.textContent = "Bezig…";
+    const ik = (localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
+    const afspraak = {
+      id: "p"+Date.now()+Math.random().toString(36).slice(2,6),
+      datum: datum,
+      tijd: document.getElementById("plTijd").value || "",
+      duurMin: Number(document.getElementById("plDuur").value)||120,
+      soort: document.getElementById("plSoort").value,
+      klant: r.naam || ("order "+r.ordernr),
+      telefoon: document.getElementById("plTel").value.trim(),
+      plaats: document.getElementById("plPlaats").value.trim(),
+      ordernr: String(r.ordernr||""),
+      wat: document.getElementById("plWat").value.trim(),
+      wie: document.getElementById("plWie").value.trim(),
+      klaar: false, itsId: null,
+      door: ik, gewijzigdDoor: ik,
+      gemaakt: new Date().toISOString(), gewijzigd: new Date().toISOString(),
+      uitVoorraad: r.lineId || null      // waar hij vandaan komt
+    };
+    try{
+      /* Lezen, toevoegen, terugschrijven. KV kent alleen 'vervang alles', dus
+         eerst de verse lijst ophalen - anders gooit dit venster weg wat een
+         collega net in Planning heeft gezet. */
+      const hu = { "X-Fonteyn-Auth": DATA_STORE_AUTH };
+      const lees = await fetch(WORKER_BASIS+"/data/"+PLANNING_BUCKET, { headers: hu });
+      if (!lees.ok) throw new Error("de agenda is even niet bereikbaar");
+      const j = await lees.json();
+      const lijst = (j && Array.isArray(j.afspraken)) ? j.afspraken : [];
+      lijst.push(afspraak);
+      const put = await fetch(WORKER_BASIS+"/data/"+PLANNING_BUCKET, { method:"PUT",
+        headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": DATA_STORE_AUTH },
+        body: JSON.stringify({ afspraken: lijst }) });
+      if (!put.ok) throw new Error("bewaren mislukte (HTTP "+put.status+")");
+      seinPlanning();     // openstaande Planning-schermen meteen bijwerken
+      try{ if(window.fpLog) window.fpLog("afspraak-gepland-vanuit-voorraad",
+        afspraak.soort+" "+afspraak.datum+" "+(afspraak.tijd||"hele dag")+" "+afspraak.klant+" (order "+afspraak.ordernr+")"); }catch(e){}
+      dicht();
+      setStatus("ok","Afspraak staat in Planning: "+afspraak.datum+(afspraak.tijd?" om "+afspraak.tijd:"")+" bij "+afspraak.klant+".");
+    }catch(e){
+      mel.style.color = "var(--bad)";
+      mel.textContent = "Niet gelukt: "+e.message+" Het vinkje Gepland staat wel goed; je kunt de afspraak ook in Planning zelf zetten.";
+      this.disabled = false; this.textContent = "In de agenda zetten";
+    }
+  });
+}
+
 let liveWs=null, liveKlaar=false, liveAanwezig=[], liveFocus={}; // wie -> {regelId, veld}
 const LIVE_KLEUREN=["#2563eb","#d97706","#059669","#c026d3","#dc2626","#0891b2"];
 function liveKleur(wie){
@@ -2515,6 +2663,13 @@ function koppelNotitieVelden(box,rijen){
       const r=perId[cb.dataset.id]; if(!r) return;
       const veld=cb.dataset.veld;
       zetNotitie(r,veld,cb.checked);
+      /* Gepland aanvinken betekent: de afspraak met de klant staat. Dan hoort
+         die afspraak ook echt in de agenda te komen. Gerrit (7 sep 2026):
+         "als je klikt op Gepland moet je een popup krijgen om die afspraak
+         direct te plannen, en dat ie dan ook in Planning de echte afspraak
+         plant." Uitvinken doet niets met de agenda: een afspraak die al met
+         de klant is gemaakt haal je niet weg omdat hier een vinkje uitgaat. */
+      if(veld==="gepland" && cb.checked) planAfspraak(r);
       try{ if(window.fpLog) window.fpLog(veld+(cb.checked?"-aangevinkt":"-uitgevinkt"),r.ordernr+" "+r.model+" ("+r.naam+")"); }catch(e){}
       /* De regel verhuist bij het aanvinken naar een ander blok. Dat is de
          bedoeling (Chantal, 5 aug), maar zonder uitleg leest het als "reset

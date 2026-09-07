@@ -78,10 +78,21 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .weekbalk input[type=date]{cursor:text;color:var(--grijs);width:150px}
 
 /* ── legenda: de categorieën, tevens filter ── */
-.legenda{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+.legenda{display:flex;gap:7px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .cat-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--rand);background:#fff;
        border-radius:999px;padding:5px 12px;font-size:12px;cursor:pointer;user-select:none}
 .cat-chip .bol{width:10px;height:10px;border-radius:50%}
+/* Live meekijken: wie er nog meer in de agenda zit, en een kort seintje als
+   een collega net iets heeft veranderd. */
+.live-wie{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--grijs);margin-left:auto}
+.live-stip{width:8px;height:8px;border-radius:50%;background:#8bc53f;box-shadow:0 0 0 3px rgba(139,197,63,.25)}
+/* Stip voor de betaalstand van de order: groen betaald, oranje aanbetaald,
+   rood niets binnen. Geen ordernummer of onbekende order = geen stip. */
+.betaalstip{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;
+       vertical-align:middle;flex:0 0 auto}
+.legenda .betaal-uitleg{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--grijs);margin-left:4px}
+.live-melding{font-size:12px;color:var(--groen);font-weight:600;opacity:0;transition:opacity .3s;margin-left:10px;white-space:nowrap}
+#legendaChips{display:inline-flex;gap:8px;flex-wrap:wrap}
 .cat-chip.uit{opacity:.35}
 .cat-chip.uit .bol{background:#d1d5db!important}
 
@@ -214,7 +225,12 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
     <button type="button" id="itsKnop">🔧 Servicemeldingen</button>
     <button type="button" class="nieuw" id="nieuwKnop">+ Afspraak</button>
   </div>
-  <div class="legenda" id="legenda"></div>
+  <div class="legenda" id="legenda">
+    <!-- Wie er nog meer in de agenda kijkt, en een kort seintje als een
+         collega net iets heeft veranderd. -->
+    <span id="liveAanwezig" class="live-wie"></span>
+    <span id="liveMelding" class="live-melding"></span>
+  </div>
 
   <!-- Servicemeldingen uit Logic4 (ITS), status Inplannen. Aanklikken zet de
        melding als afspraak in de week, met naam, adres en telefoon erbij. -->
@@ -312,15 +328,161 @@ async function bewaar(wijzig){
     headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey() },
     body: JSON.stringify({ afspraken: afspraken }) });
   if(!r.ok) throw new Error("Bewaren mislukte (HTTP "+r.status+").");
+  // De anderen die de agenda openhebben laten weten dat er iets veranderd is.
+  liveStuur({ soort:"gewijzigd", wat:"planning" });
+}
+
+/* ── live meekijken ──────────────────────────────────────────────────
+   Gerrit (7 sep 2026): de agenda moet live zijn. Voegt Kevin iets toe, dan
+   ziet Gerwin het; haalt Kevin het weer weg, dan hoort het bij Gerwin ook te
+   verdwijnen - en dat laatste ging mis, want zonder verbinding zag je alleen
+   je eigen scherm van een minuut geleden.
+
+   De kamer stuurt geen afspraken rond maar alleen een seintje "er is iets
+   veranderd". Iedereen leest daarop de bucket opnieuw. Dat is bewust: een
+   verwijderde afspraak is geen veld dat verandert maar een regel die er niet
+   meer is, en die krijg je met losse veldjes nooit goed weg. Zo blijft KV de
+   enige waarheid en klopt toevoegen, wijzigen én verwijderen.
+
+   Valt de verbinding weg, dan werkt alles gewoon door: er staat een
+   verversing van een halve minuut onder. */
+var liveWs = null, liveKlaar = false, liveAanwezig = [];
+function liveStuur(obj){
+  if (liveKlaar && liveWs && liveWs.readyState === 1) { try{ liveWs.send(JSON.stringify(obj)); }catch(e){} }
+}
+function liveStart(){
+  if (!teamKey()) return;
+  try { liveWs = new WebSocket("wss://fonteyn-data-store.g-mulder.workers.dev/live/planning"); }
+  catch(e){ return; }
+  liveWs.addEventListener("open", function(){
+    liveWs.send(JSON.stringify({ soort:"hallo", sleutel: teamKey(), wie: ik || "onbekend" }));
+  });
+  liveWs.addEventListener("message", function(ev){
+    var d = null; try { d = JSON.parse(ev.data); } catch(e){ return; }
+    if (d.soort === "welkom"){ liveKlaar = true; liveAanwezig = d.aanwezig||[]; toonAanwezig(); return; }
+    if (d.soort === "erbij"){ if (liveAanwezig.indexOf(d.wie)<0) liveAanwezig.push(d.wie); toonAanwezig(); return; }
+    if (d.soort === "weg"){ liveAanwezig = liveAanwezig.filter(function(w){ return w!==d.wie; }); toonAanwezig(); return; }
+    if (d.soort === "gewijzigd") ververs(d.wie);
+  });
+  liveWs.addEventListener("close", function(){
+    liveKlaar = false; liveAanwezig = []; toonAanwezig();
+    setTimeout(liveStart, 5000 + Math.random()*5000);
+  });
+  liveWs.addEventListener("error", function(){ try{ liveWs.close(); }catch(e){} });
+}
+/* Opnieuw ophalen en tekenen. Staat er een formulier open, dan wachten we:
+   iemand midden in een afspraak het scherm onder handen wegtrekken is erger
+   dan een paar seconden later bijwerken. */
+var verversTimer = null;
+async function ververs(doorWie){
+  if (document.querySelector(".laag")) { clearTimeout(verversTimer); verversTimer = setTimeout(ververs, 1500); return; }
+  var vers = await lees();
+  if (vers === null) return;
+  afspraken = vers;
+  teken();
+  if (doorWie && doorWie !== ik) meldBijgewerkt(doorWie);
+}
+/* Kort zichtbaar maken dat het scherm net is bijgewerkt door een collega.
+   Zonder dat lijkt het alsof de agenda uit zichzelf verspringt. */
+var meldTimer = null;
+function meldBijgewerkt(wie){
+  var el = $("liveMelding");
+  if (!el) return;
+  el.textContent = "Bijgewerkt door " + voornaam(wie);
+  el.style.opacity = "1";
+  clearTimeout(meldTimer);
+  meldTimer = setTimeout(function(){ el.style.opacity = "0"; }, 4000);
+}
+function toonAanwezig(){
+  var el = $("liveAanwezig");
+  if (!el) return;
+  var anderen = liveAanwezig.filter(function(w){ return w !== ik; });
+  el.innerHTML = anderen.length
+    ? '<span class="live-stip"></span>' + anderen.map(function(w){ return esc(voornaam(w)); }).join(", ") +
+      (anderen.length===1 ? " kijkt mee" : " kijken mee")
+    : "";
+}
+
+/* ── betaald, aanbetaald of niets ────────────────────────────────────
+   Gerrit (7 sep 2026): "Bij Planning wil ik kunnen zien (met groen, oranje,
+   rood) of een order volledig is betaald, aanbetaald of niet betaald."
+
+   De afspraak heeft al een veld ordernummer. Daarmee vragen we bij Logic4 op
+   wat de order kost en wat er binnen is. De worker onthoudt dat tien minuten,
+   dus bladeren door de weken kost bijna niets.
+
+   Staat er geen ordernummer op de afspraak, of kent Logic4 het nummer niet,
+   dan komt er GEEN stip. Grijs zou "niet betaald" kunnen suggereren en dat
+   weten we juist niet. */
+var betaald = {};        // ordernummer -> {stand, bedrag, betaald, status}
+var betaaldBezig = false;
+var BETAALD = {
+  betaald:    { kleur:"#3e7d3f", naam:"volledig betaald" },
+  aanbetaald: { kleur:"#e0a300", naam:"aanbetaald" },
+  open:       { kleur:"#c8102e", naam:"niet betaald" },
+};
+function betaalStip(a){
+  var nr = String(a.ordernr||"").trim();
+  if (!nr) return "";
+  var b = betaald[nr];
+  if (!b || !BETAALD[b.stand]) return "";
+  var t = BETAALD[b.stand];
+  var uitleg = "Order "+nr+": "+t.naam;
+  if (b.bedrag) uitleg += " - "+euro(b.betaald)+" van "+euro(b.bedrag);
+  if (b.status) uitleg += " ("+b.status+")";
+  return '<span class="betaalstip" style="background:'+t.kleur+'" title="'+esc(uitleg)+'"></span>';
+}
+function euro(n){ return "\u20ac " + Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+/* Alleen de ordernummers die nu in beeld staan opvragen. De worker haalt er
+   maximaal dertig per keer op (een worker mag beperkt naar buiten); is er
+   meer nodig, dan vraagt hij vanzelf de rest in een tweede ronde. */
+async function haalBetaald(){
+  if (betaaldBezig || !teamKey()) return;
+  var nrs = {};
+  weekLijst().forEach(function(d){ d.items.forEach(function(a){
+    var nr = String(a.ordernr||"").trim();
+    if (/^\d{4,12}$/.test(nr) && !betaald[nr]) nrs[nr] = 1;
+  }); });
+  var lijst = Object.keys(nrs);
+  if (!lijst.length) return;
+  betaaldBezig = true;
+  try{
+    var r = await fetch(W+"/planning/betaalstatus?orders="+lijst.join(","), { headers:{ "X-Fonteyn-Auth": teamKey() } });
+    var j = await r.json();
+    if (j && j.ok){
+      Object.keys(j.orders||{}).forEach(function(k){ betaald[k] = j.orders[k]; });
+      /* Nummers die Logic4 niet kent onthouden we óók, als "geen stand".
+         Zonder dat zouden ze bij elke keer tekenen opnieuw worden opgevraagd
+         en blijft het scherm zichzelf aan het bevragen. */
+      if (!j.restant) lijst.forEach(function(nr){ if (!betaald[nr]) betaald[nr] = { stand:null }; });
+      teken();
+      // Nog niet alles opgehaald? Dan zo de rest.
+      if (j.restant > 0) setTimeout(function(){ betaaldBezig = false; haalBetaald(); }, 400);
+    }
+  }catch(e){}
+  betaaldBezig = false;
 }
 
 /* ── legenda + filter ── */
 function tekenLegenda(){
-  $("legenda").innerHTML = Object.keys(CATS).map(function(k){
+  /* De twee live-vakjes staan vast in de balk; alleen de categorie-chips
+     worden opnieuw getekend. Anders zou het seintje van een collega
+     verdwijnen zodra iemand een filter aanklikt. */
+  var houder = $("legendaChips");
+  if (!houder) {
+    houder = document.createElement("span");
+    houder.id = "legendaChips";
+    $("legenda").insertBefore(houder, $("liveAanwezig"));
+  }
+  houder.innerHTML = Object.keys(CATS).map(function(k){
     var c = CATS[k];
     return '<span class="cat-chip'+(filterUit[k]?" uit":"")+'" data-cat="'+k+'" title="Klik om deze categorie te tonen of te verbergen">'+
       '<span class="bol" style="background:'+c.kleur+'"></span>'+esc(c.naam)+'</span>';
   }).join("");
+  houder.innerHTML += '<span class="betaal-uitleg" title="De stip voor de klantnaam laat zien hoe de order ervoor staat. Geen stip = geen ordernummer op de afspraak.">'+
+    Object.keys(BETAALD).map(function(k){
+      return '<span class="betaalstip" style="background:'+BETAALD[k].kleur+'"></span>'+esc(BETAALD[k].naam); }).join(" ")+'</span>';
+  toonAanwezig();
   document.querySelectorAll(".cat-chip").forEach(function(ch){
     ch.addEventListener("click", function(){
       filterUit[ch.dataset.cat] = !filterUit[ch.dataset.cat];
@@ -354,6 +516,7 @@ function titel(){
 function teken(){
   titel();
   var week = weekLijst();
+  haalBetaald();
   var vandaagISO = iso(new Date());
   var uren = UUR_TOT - UUR_VAN;
 
@@ -371,7 +534,7 @@ function teken(){
     html += '<div class="heledag-cel">'+hd.map(function(a){
       var c = cat(a);
       return '<div class="hd-blok'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="background:'+c.zacht+';border-left-color:'+c.kleur+'">'+
-        esc(a.klant||c.naam)+(a.wie?' · '+esc(a.wie):'')+'</div>';
+        betaalStip(a)+esc(a.klant||c.naam)+(a.wie?' · '+esc(a.wie):'')+'</div>';
     }).join("")+'</div>';
   });
 
@@ -457,7 +620,7 @@ function blokken(items){
     return '<div class="blok'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="top:'+top+'px;height:'+hoog+'px;'+
       'left:calc('+links+'% + 2px);width:calc('+w+'% - 5px);background:'+c.zacht+';border-left-color:'+c.kleur+';z-index:'+(2+b.lane)+'">'+
       '<div class="t">'+esc(a.tijd)+(a.duurMin?'-'+tijdStr(b.tot):'')+'</div>'+
-      '<div class="k">'+esc(a.klant||c.naam)+'</div>'+
+      '<div class="k">'+betaalStip(a)+esc(a.klant||c.naam)+'</div>'+
       (hoog>50&&sub?'<div class="s">'+esc(sub)+'</div>':"")+
       (hoog>66&&a.wie?'<div class="s">👤 '+esc(a.wie)+'</div>':"")+
       (hoog>82?door:"")+'</div>';
@@ -473,7 +636,7 @@ function kaartje(a){
   return '<div class="afs'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="border-left-color:'+c.kleur+'">'+
     '<div class="kop"><span class="tijd">'+esc(a.tijd||"hele dag")+'</span>'+
     '<span class="badge" style="background:'+c.zacht+';color:'+c.kleur+';filter:brightness(.75)">'+esc(c.naam)+'</span></div>'+
-    '<div class="klant">'+esc(a.klant||"(geen naam)")+'</div>'+
+    '<div class="klant">'+betaalStip(a)+esc(a.klant||"(geen naam)")+'</div>'+
     (sub?'<div class="sub">'+sub+'</div>':"")+
     (voet.length?'<div class="sub">'+voet.join(" · ")+'</div>':"")+'</div>';
 }
@@ -731,8 +894,15 @@ function scrollNaarWerkdag(){
   afspraken = eerste;
   teken();
   scrollNaarWerkdag();
+  liveStart();
   // De nu-lijn elke minuut opnieuw; goedkoop, want teken() is puur lokaal.
   setInterval(function(){ teken(); }, 60000);
+  /* Vangnet voor als de live-verbinding wegvalt (slaapstand, wifi). Elke
+     halve minuut opnieuw ophalen kost bijna niets en houdt de agenda ook
+     zonder verbinding actueel. */
+  setInterval(function(){ if (!liveKlaar) ververs(); }, 30000);
+  // Terug van een ander scherm of uit de slaapstand: meteen bijwerken.
+  document.addEventListener("visibilitychange", function(){ if (!document.hidden) ververs(); });
 })();
 </script>
 
