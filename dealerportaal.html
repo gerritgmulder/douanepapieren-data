@@ -436,12 +436,29 @@ function pDialoog(opties){
 const LANDEN = ["NL","BE","DE","FR","ES","IT","PT","AT","CH","DK","SE","NO","FI","PL","CZ","SK","HU","RO","GR","IE","GB","US","CA","AU","NZ","ZA","AE","overig"];
 const INCOTERMS = ["EXW Uddel","FCA Uddel","FOB Rotterdam","CIF","DAP","DDP","anders"];
 
+/* Bron klant. Gerrit (7 sep 2026): "In Logic4 moet 'Bron klant' altijd worden
+   ingevoerd in het Dashboard (Beurs ofzo, er staan allerlei opties al in
+   Logic4)."
+
+   Deze lijst staat hier en niet in Logic4, omdat de koppeling er niet bij kan:
+   er is geen eindpunt dat de bronnen teruggeeft en geen veld om er een in te
+   zetten. Wat je hier kiest wordt vastgelegd bij de nieuwe relatie en staat in
+   het rijtje dat nog met de hand in Logic4 moet, zodat degene die het overneemt
+   precies weet wat erin hoort.
+
+   Klopt deze lijst niet met wat er in Logic4 staat: hij hoeft maar op één plek
+   aangepast te worden, hier. */
+const BRONNEN = ["Beurs", "Website", "Aanbeveling van een klant", "Bestaande relatie",
+                 "Zelf benaderd", "Belde ons op", "Adverteren", "Social media",
+                 "Via een collega-dealer", "Anders"];
+
 function leegRelatie(){
   return { email:"", company:"", debtorIds:[], region:"EU", soort:"", merk:"", active:true,
     contact:{ voornaam:"", tussenvoegsel:"", achternaam:"", telefoon:"", mobiel:"", website:"" },
     afspraken:{ kortingPct:"", kortingTekst:"", betaaltermijn:"", notitie:"" },
     facturatie:{ straat:"", huisnummer:"", toevoeging:"", postcode:"", plaats:"", land:"NL",
                  btw:"", kvk:"", factuurEmail:"" },
+    bronKlant:"",
     verzending:{ zelfde:true, straat:"", huisnummer:"", toevoeging:"", postcode:"", plaats:"",
                  land:"NL", incoterm:"", opmerking:"" } };
 }
@@ -517,6 +534,7 @@ function relatieKaart(index){
       +   veld("contact.telefoon","Telefoon", d.contact.telefoon)
       +   veld("contact.mobiel","Mobiel", d.contact.mobiel)
       +   veld("contact.website","Website", d.contact.website, {plh:"https://"})
+      +   veld("bronKlant","Bron klant (verplicht)", d.bronKlant, {keuze:[""].concat(BRONNEN)})
       + '</div></div>'
 
       + '<div class="blok"><h4>' + (d.soort==="dealer"?"Dealerafspraken":"Inkoopafspraken") + '</h4>'
@@ -546,6 +564,9 @@ function relatieKaart(index){
       +   veld("facturatie.land","Land", d.facturatie.land, {keuze:LANDEN})
       +   veld("facturatie.btw","Btw-nummer", d.facturatie.btw)
       +   veld("facturatie.kvk","KvK of handelsregister", d.facturatie.kvk)
+      +   '<div class="veld breed"><label>Btw-nummer nakijken bij de EU</label>'
+      +     '<div class="l4rij"><button class="btn sm" id="rkBtwKnop" type="button">Controleer btw-nummer</button>'
+      +       '<span id="rkBtwUit" style="font-size:12.5px;color:var(--muted);align-self:center"></span></div></div>' 
       +   veld("facturatie.factuurEmail","Factuur-e-mail", d.facturatie.factuurEmail, {type:"email", plh:"als die afwijkt"})
       + '</div></div>'
 
@@ -591,6 +612,11 @@ function relatieKaart(index){
     $$("rkZoek").addEventListener("keydown", e => { if (e.key === "Enter") zoekL4(); });
     $$("rkNieuwL4").addEventListener("click", () => { lees(); bevestigAanmaken(); });
     $$("rkAdresKnop").addEventListener("click", zoekAdres);
+    $$("rkBtwKnop").addEventListener("click", checkBtw);
+    // Enter in het btw-veld doet hetzelfde als de knop; dat is wat je verwacht
+    // als je het nummer net hebt overgetypt.
+    laag.querySelector('[data-pad="facturatie.btw"]')
+        .addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); checkBtw(); } });
     $$("rkAdresZoek").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); zoekAdres(); } });
   }
 
@@ -646,6 +672,48 @@ function relatieKaart(index){
     });
   }
 
+  /* Btw-nummer nakijken bij de EU (VIES). Gerrit (7 sep 2026): "Bij het
+     aanmaken checken Chantal en Dolf en wie het aanmaakt ook altijd direct of
+     de nieuwe dealer/partner een geldig btw-nummer heeft."
+
+     Naast geldig/ongeldig komt ook de naam terug die bij dat nummer hoort.
+     Daar gaat het eigenlijk om: een geldig nummer dat op een ánder bedrijf
+     staat is erger dan een nummer dat niet bestaat. Staat er nog geen
+     bedrijfsnaam in het formulier, dan wordt die van VIES aangeboden. */
+  async function checkBtw(){
+    const inv = laag.querySelector('[data-pad="facturatie.btw"]');
+    const uit = $$("rkBtwUit"), knop = $$("rkBtwKnop");
+    const nummer = (inv.value || "").trim();
+    if (!nummer) { uit.textContent = "Vul eerst een btw-nummer in."; uit.style.color = "var(--bad)"; return; }
+    knop.disabled = true; uit.style.color = "var(--muted)"; uit.textContent = "Navragen bij de EU…";
+    try {
+      const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/relatie/btw", {
+        method:"POST", headers:{ "Content-Type":"application/json", "X-DP-Admin": adminKey() },
+        body: JSON.stringify({ btw: nummer }) });
+      const j = await r.json();
+      if (!j.ok) { uit.textContent = j.error || ("HTTP " + r.status); uit.style.color = "var(--bad)"; return; }
+      inv.value = j.nummer;                       // netjes zonder spaties en punten
+      d.facturatie.btw = j.nummer;
+      if (!j.geldig) {
+        uit.innerHTML = "<b>Niet geldig.</b> Dit nummer is bij de EU niet bekend."
+          + (j.uitleg ? " " + esc(j.uitleg) : "");
+        uit.style.color = "var(--bad)";
+        return;
+      }
+      const bedrijf = laag.querySelector('[data-pad="company"]');
+      let tekst = "<b style=\"color:var(--ok,#15803d)\">Geldig.</b>";
+      if (j.naam) {
+        tekst += " Staat op: <b>" + esc(j.naam) + "</b>" + (j.adres ? ", " + esc(j.adres.replace(/\n/g, ", ")) : "") + ".";
+        if (!bedrijf.value.trim()) { bedrijf.value = j.naam; d.company = j.naam; tekst += " Bedrijfsnaam overgenomen."; }
+      } else {
+        tekst += " " + esc(j.land) + " geeft de naam bij een btw-nummer niet vrij, dus die is hier niet te vergelijken.";
+      }
+      uit.innerHTML = tekst; uit.style.color = "var(--muted)";
+    } catch (e) {
+      uit.textContent = "Controleren mislukte: " + e.message; uit.style.color = "var(--bad)";
+    } finally { knop.disabled = false; }
+  }
+
   async function zoekL4(){
     const q = $$("rkZoek").value.trim();
     const uit = $$("rkTreffers");
@@ -684,6 +752,15 @@ function relatieKaart(index){
      dingen die Logic4 niet aanneemt, en pas daarna de knop. */
   function bevestigAanmaken(){
     if (!d.company.trim()) { zeg("Vul eerst een bedrijfsnaam in.", true); return; }
+    /* Gerrit (7 sep 2026): "In Logic4 moet 'Bron klant' altijd worden
+       ingevoerd in het Dashboard." Altijd betekent hier ook: je komt niet
+       langs deze knop zonder. */
+    if (!String(d.bronKlant || "").trim()) {
+      zeg("Kies eerst een bron klant - waar komt deze relatie vandaan?", true);
+      const k = laag.querySelector('[data-pad="bronKlant"]');
+      if (k) { k.focus(); k.style.borderColor = "var(--bad)"; }
+      return;
+    }
     const rij = (k,v) => v ? '<tr><td style="color:var(--muted);padding:2px 10px 2px 0">'+esc(k)+'</td><td>'+esc(v)+'</td></tr>' : "";
     const laag2 = document.createElement("div");
     laag2.className = "kaartlaag"; laag2.style.zIndex = 950;
@@ -699,11 +776,13 @@ function relatieKaart(index){
       +     rij("Adres", [d.facturatie.straat, d.facturatie.huisnummer, d.facturatie.toevoeging].filter(Boolean).join(" "))
       +     rij("Postcode en plaats", [d.facturatie.postcode, d.facturatie.plaats].filter(Boolean).join(" "))
       +     rij("Btw-nummer", d.facturatie.btw) + rij("KvK", d.facturatie.kvk)
+      +     rij("Bron klant", d.bronKlant)
       +   '</table>'
       +   '<div class="waarschuw"><b>Dit kan Logic4 niet aannemen via de koppeling.</b> '
       +     'Na het aanmaken moet iemand in Logic4 zelf zetten:<br>'
       +     '&middot; het land (staat straks op Nederland' + (d.facturatie.land && d.facturatie.land !== "NL" ? ', jij koos ' + esc(d.facturatie.land) : "") + ')<br>'
-      +     '&middot; de soort relatie (staat straks op Particulier, moet Zakelijk)'
+      +     '&middot; de relatiegroep op Dealers zetten<br>'
+      +     '&middot; bron klant: ' + esc(d.bronKlant)
       +     (d.facturatie.factuurEmail ? '<br>&middot; de factuur-e-mail' : "")
       +   '</div>'
       +   '<div class="waarschuw" style="border-left-color:var(--bad);background:#fee2e2;color:#7f1d1d">'
@@ -730,6 +809,7 @@ function relatieKaart(index){
             straat:d.facturatie.straat, huisnummer:d.facturatie.huisnummer, toevoeging:d.facturatie.toevoeging,
             postcode:d.facturatie.postcode, plaats:d.facturatie.plaats, btw:d.facturatie.btw, kvk:d.facturatie.kvk,
             land:d.facturatie.land, soort:d.soort, factuurEmail:d.facturatie.factuurEmail,
+            bronKlant:d.bronKlant,
             door:(localStorage.getItem(EMAIL_KEY)||"") }) });
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));

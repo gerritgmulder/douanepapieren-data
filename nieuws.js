@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Btw-nummer nakijken en bron klant",
+      wat: "Bij een nieuwe dealer of partner kun je het btw-nummer met één knop bij de EU laten nakijken; je ziet meteen of het geldig is en op welk bedrijf het staat, en de bedrijfsnaam wordt overgenomen. Bron klant is nu een verplichte keuze, en een nieuwe debiteur komt meteen als Zakelijk in Logic4 te staan in plaats van als Particulier.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "dealerportaal.html", soort: "hersteld",
+      titel: "Zoeken op bedrijfsnaam doet het weer",
+      wat: "Bij een nieuwe dealer of partner kun je weer op bedrijfsnaam zoeken in Logic4. De zoeklijst waar dat op steunt was nooit opgebouwd; die staat er nu, met 28.620 zakelijke relaties erin.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "container-laden.html", soort: "beter",
       titel: "Geen invulveld meer voor de ruimte ernaast",
       wat: "Het vakje 'Ruimte ernaast' is weg. Er wordt nog steeds met vijf centimeter naast en achter elke spa gerekend, want die ruimte heb je nodig om hem erin te schuiven, maar je hoeft er niets meer aan te draaien.",

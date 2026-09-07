@@ -4330,6 +4330,92 @@ async function relZoek(env, vraag) {
    geeft dan een leeg record terug, dus op die ene aanroep vertrouwen zou
    betekenen dat je niet weet of er iets in staat. Na de PATCH lezen we terug
    wat er werkelijk is blijven staan, en dát gaat naar het scherm. */
+/* ═══════════════════════════════════════════════════════════════════════════
+   BTW-NUMMER CONTROLEREN BIJ DE EU (VIES)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Gerrit (7 sep 2026): "Bij het aanmaken checken Chantal en Dolf en wie het
+   aanmaakt ook altijd direct of de nieuwe dealer/partner een geldig btw-nummer
+   heeft (via https://ec.europa.eu/taxation_customs/vies/#/vat-validation). Ik
+   wil dat je die mogelijkheid ook maakt."
+
+   Dat is nu een tweede tabblad, overtypen en vergelijken. Hier gebeurt het in
+   het scherm zelf, en er komt meer terug dan geldig of niet: VIES geeft ook de
+   naam en het adres zoals ze bij de belastingdienst van dat land bekend zijn.
+   Dat is precies waar je op wilt controleren - een nummer dat geldig is maar
+   op een ander bedrijf staat is een groter probleem dan een nummer dat niet
+   bestaat.
+
+   Waarom via de worker en niet rechtstreeks uit de browser: VIES stuurt geen
+   CORS-koppen mee, dus een pagina mag het antwoord niet lezen.
+
+   Wat VIES teruggeeft:
+     isValid    - bestaat dit nummer
+     name       - de naam die erbij hoort ("---" als het land die niet deelt;
+                  Duitsland en Spanje doen dat bijvoorbeeld niet)
+     address    - idem
+     userError  - VALID, INVALID, of een storing aan de kant van het land
+   Ligt de dienst van dat ene land plat, dan is dat geen ongeldig nummer maar
+   een storing; dat verschil houden we vast, want anders wordt een klant
+   afgewezen om iets waar hij niets aan kan doen. */
+async function btwControle(nummer) {
+  const schoon = String(nummer || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  if (schoon.length < 5) return { ok: false, error: "Vul een btw-nummer in, met de landcode ervoor (NL, BE, DE…)." };
+  const land = schoon.slice(0, 2), rest = schoon.slice(2);
+  /* De landen die aan VIES meedoen: de 27 lidstaten, plus EL voor Griekenland
+     (dat is de btw-code, niet GR) en XI voor Noord-Ierland sinds de Brexit.
+     Zelf controleren scheelt een nutteloze vraag aan Brussel én een
+     foutmelding die naar een storing wijst terwijl er gewoon een typefout in
+     de landcode zit. Groot-Brittannië staat er niet bij: dat land doet sinds
+     de Brexit niet meer mee, dus een GB-nummer is hier niet na te kijken. */
+  const EU = ["AT","BE","BG","CY","CZ","DE","DK","EE","EL","ES","FI","FR","HR","HU",
+              "IE","IT","LT","LU","LV","MT","NL","PL","PT","RO","SE","SI","SK","XI"];
+  if (!EU.includes(land)) {
+    return { ok: false, buitenEU: true, nummer: schoon,
+             error: land === "GR" ? "Griekenland heeft in het btw-nummer de code EL en niet GR."
+                  : land === "GB" ? "Groot-Brittannië doet sinds de Brexit niet meer mee aan deze controle; dit nummer is hier niet na te kijken."
+                  : "\"" + land + "\" is geen EU-landcode. Een btw-nummer begint met de code van het land, bijvoorbeeld NL, BE of DE." };
+  }
+
+  /* De dienst van één land kan even vollopen (MS_MAX_CONCURRENT_REQ) of plat
+     liggen. Dat komt geregeld voor en is meestal na een seconde over, dus
+     proberen we het één keer opnieuw voordat we het een storing noemen. */
+  const STORING = ["MS_MAX_CONCURRENT_REQ", "MS_UNAVAILABLE", "SERVICE_UNAVAILABLE",
+                   "TIMEOUT", "GLOBAL_MAX_CONCURRENT_REQ", "SERVER_BUSY"];
+  const vraag = async () => {
+    const r = await fetch("https://ec.europa.eu/taxation_customs/vies/rest-api/ms/" +
+                          encodeURIComponent(land) + "/vat/" + encodeURIComponent(rest),
+                          { headers: { "Accept": "application/json" } });
+    return { r, j: await r.json().catch(() => null) };
+  };
+  let r, j;
+  try {
+    ({ r, j } = await vraag());
+    if (j && STORING.includes(String(j.userError || ""))) {
+      await new Promise(k => setTimeout(k, 1200));
+      ({ r, j } = await vraag());
+    }
+  } catch (e) {
+    return { ok: false, storing: true, error: "De controledienst van de EU is nu niet bereikbaar. Probeer het zo nog eens." };
+  }
+  if (!r.ok || !j) return { ok: false, storing: true, error: "De controledienst van de EU antwoordde niet (HTTP " + r.status + ")." };
+  const fout = String(j.userError || "");
+  if (fout === "INVALID_INPUT") {
+    return { ok: true, nummer: schoon, land, geldig: false, naam: null, adres: null,
+             uitleg: "Dit nummer heeft niet de vorm die " + land + " gebruikt.",
+             opgevraagd: j.requestDate || new Date().toISOString() };
+  }
+  if (fout && fout !== "VALID" && fout !== "INVALID") {
+    return { ok: false, storing: true, nummer: schoon,
+             error: "De belastingdienst van " + land + " geeft nu geen antwoord (" + fout + "). Dat zegt niets over dit nummer; probeer het later nog eens." };
+  }
+  // "---" betekent: dit land deelt de naam niet. Dat is geen naam.
+  const kaal = (x) => { const t = String(x || "").trim(); return (!t || t === "---") ? null : t; };
+  return { ok: true, nummer: schoon, land, geldig: j.isValid === true,
+           naam: kaal(j.name), adres: kaal(j.address),
+           opgevraagd: j.requestDate || new Date().toISOString() };
+}
+
 async function relAanmaken(env, body) {
   if (body.bevestigd !== true) return { ok: false, error: "niet bevestigd" };
   const bedrijf = String(body.bedrijf || "").trim();
@@ -4351,7 +4437,30 @@ async function relAanmaken(env, body) {
     City: String(body.plaats || "").trim(),
     VatNumber: String(body.btw || "").trim(),
     ChamberOfCommerceCode: String(body.kvk || "").trim(),
+    /* Meteen Zakelijk, en niet Particulier. Gerrit (7 sep 2026): "Direct op
+       'zakelijk' zetten in Logic4 (hij staat nu standaard op 'Particulier')."
+       3 is Zakelijk (1 = Particulier, 2 = Zakelijk met contact); die drie
+       staan in /v3/Relations/GetRelationTypes en veranderen niet.
+       Dit ging tot nu toe met de hand omdat AddCustomer geen velden aanneemt;
+       UpdateCustomer neemt RelationTypeId wél. */
+    RelationTypeId: 3,
+    // 2 = Actief. Anders komt een nieuwe partner op Prospect binnen en kan er
+    // niet voor hem besteld worden.
+    StatusId: 2,
   };
+
+  /* Bron klant. Gerrit (7 sep 2026): "In Logic4 moet 'Bron klant' altijd
+     worden ingevoerd in het Dashboard (Beurs ofzo, er staan allerlei opties al
+     in Logic4)."
+
+     Verplicht bij het aanmaken. Hij gaat NIET mee naar Logic4: de API kent er
+     geen veld voor - niet in CustomerAdd, niet in CustomerUpdate, en er is ook
+     geen eindpunt dat de keuzelijst teruggeeft. Hij wordt hier vastgelegd en
+     komt in de lijst die Chantal en Arno bovenaan hun dashboard zien, bij het
+     rijtje dat nog met de hand in Logic4 moet. Zo raakt het antwoord niet
+     kwijt en weet degene die het overneemt precies wat erin moet. */
+  const bronKlant = String(body.bronKlant || "").trim().slice(0, 60);
+  if (!bronKlant) return { ok: false, error: "Bron klant is verplicht" };
 
   const nieuw = await relL4(env, "/v3/Relations/AddCustomer", {});
   const id = Number(typeof nieuw === "number" ? nieuw : (nieuw && (nieuw.Id || nieuw.CustomerId)));
@@ -4390,7 +4499,10 @@ async function relAanmaken(env, body) {
     ts: new Date().toISOString(),
     /* Wat Logic4 niet kon en dus met de hand moet: land, soort relatie en
        factuur-e-mail. Staat hier zodat het scherm het kan tonen. */
-    handwerk: ["land", "soort relatie (staat nu op Particulier)"]
+    bronKlant,
+    /* Wat de koppeling wél kan staat er niet meer bij: soort relatie wordt nu
+       op Zakelijk gezet. Wat overblijft is waar Logic4 geen veld voor heeft. */
+    handwerk: ["land", "relatiegroep op Dealers zetten", "bron klant: " + bronKlant]
       .concat(body.factuurEmail ? ["factuur-e-mail"] : []),
     gezien: false,
   });
@@ -7688,6 +7800,13 @@ export default {
       if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
       const b = await request.json().catch(() => ({}));
       return reply(200, await relAanmaken(env, b).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    /* Btw-nummer nakijken bij de EU. Beheersleutel, net als de rest van dit
+       blok: het hoort bij het aanmaken van een relatie. */
+    if (url.pathname === "/dealers/admin/relatie/btw" && request.method === "POST") {
+      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      const b = await request.json().catch(() => ({}));
+      return reply(200, await btwControle(b.btw).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/dealers/admin/relatie/zoeklijst" && request.method === "POST") {
       if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
