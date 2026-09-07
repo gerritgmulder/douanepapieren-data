@@ -1008,16 +1008,28 @@ function showDashboard(email) {
 // Deze melding doorbreekt dat: één klik sluit het dashboard netjes af,
 // waarna de klaargezette update alsnog wordt geïnstalleerd. Geen handmatige
 // download, niets installeren - precies zoals afgesproken.
-const APP_MINIMAAL = [0, 20, 1];
+const APP_MINIMAAL = [0, 20, 4];
 function controleerAppVersie() {
-  const m = navigator.userAgent.match(/fonteyn-dashboard\/(\d+)\.(\d+)\.(\d+)/i);
-  if (!m) return;                              // browser of telefoon: niets doen
+  const ua = navigator.userAgent || "";
+  const m = ua.match(/fonteyn-dashboard\/(\d+)\.(\d+)\.(\d+)/i);
+  /* Geen versie in de user-agent maar wél Electron = een schil van vóór
+     0.20.4, want daar is die markering pas bijgekomen. Die telt dus als oud.
+     Zonder deze regel deed de melding niets voor precies de mensen die hem
+     nodig hebben: wie nog op 0.20.2 zat kwam bij "geen match" en ging er
+     zwijgend langs. In een gewone browser blijft het stil. */
+  if (!m) {
+    if (!/Electron/i.test(ua)) return;
+    return meldOudeApp([0, 20, 0]);
+  }
   const huidig = [Number(m[1]), Number(m[2]), Number(m[3])];
   for (let i = 0; i < 3; i++) {
     if (huidig[i] > APP_MINIMAAL[i]) return;   // nieuwer: klaar
     if (huidig[i] < APP_MINIMAAL[i]) break;    // ouder: melden
     if (i === 2) return;                       // precies gelijk: klaar
   }
+  meldOudeApp(huidig);
+}
+function meldOudeApp(huidig) {
   const blok = el("oudeAppBlok");
   if (!blok) return;
   /* Op een Mac blijft dit vak leeg. De zelf-update werkt daar niet (de
@@ -1028,6 +1040,10 @@ function controleerAppVersie() {
   if (/Macintosh|Mac OS X/i.test(navigator.userAgent)) {
     try { if (window.fpLog) window.fpLog("oude-app-mac-stil", "versie " + huidig.join(".")); } catch (e) {}
     return;
+    /* Waarom hier niets komt: de updater weigert een app die niet door Apple
+       is ondertekend, dus op een Mac werkt de zelf-update niet en zou er een
+       melding staan zonder knop die hem oplost. Bijwerken gaat daar met de
+       hand: de .dmg van de laatste release openen en de app erin slepen. */
   }
   blok.innerHTML =
     '<div style="background:#fff;border:1px solid #fecaca;border-left:5px solid #dc2626;border-radius:12px;padding:16px 18px;margin-bottom:18px">' +
@@ -1219,7 +1235,7 @@ function tegelsInEigenVenster(){
      "dat werkt verwarrend". Zolang de markering in de user-agent ontbreekt
      blijft het dus bij openen in hetzelfde venster, precies zoals het was.
      Zodra de schil is bijgewerkt verschijnen de eigen vensters vanzelf. */
-  if (!/fonteyn-dashboard\//.test(navigator.userAgent || "")) { meldSchilVerouderd(); return; }
+  if (!/fonteyn-dashboard\//.test(navigator.userAgent || "")) return;
   document.querySelectorAll("a.tile").forEach(a => {
     const href = a.getAttribute("href") || "";
     if (!href || href.startsWith("#") || /^https?:/i.test(href)) return;
@@ -1228,28 +1244,6 @@ function tegelsInEigenVenster(){
     a.rel = "noopener";
     if (!a.title) a.title = "Opent in een eigen venster, zodat je hem naast het dashboard kunt zetten";
   });
-}
-
-/* Draait het Dashboard als app maar nog op de oude schil, dan kan hij geen
-   tweede venster maken. Dat is niet te zien, en dan zit je te klikken en te
-   wachten op iets dat niet komt - Gerrit, Gerwin en Kevin liepen daar op vast
-   (7 sep 2026). Dus zeggen wat er aan de hand is en wat je eraan doet.
-   In een gewone browser laten we het met rust: daar heeft het geen zin. */
-function meldSchilVerouderd(){
-  var ua = navigator.userAgent || "";
-  if (!/Electron/i.test(ua)) return;                 // gewone browser
-  if (document.getElementById("schilHint")) return;
-  var main = document.querySelector("main");
-  if (!main) return;
-  var d = document.createElement("div");
-  d.id = "schilHint";
-  d.style.cssText = "background:#fff9ae;border:1px solid #e3d658;border-radius:10px;padding:10px 14px;"+
-    "margin:0 0 16px;font-size:13.5px;color:#4a4413;display:flex;gap:10px;align-items:flex-start;line-height:1.5";
-  d.innerHTML = "<span style='font-size:16px;line-height:1.2'>\u2139\uFE0F</span><span><b>Tegels in een eigen venster staan klaar, maar deze " +
-    "computer draait nog de vorige versie van het Dashboard.</b><br>Sluit het Dashboard helemaal af en start het opnieuw " +
-    "(als de update net is binnengehaald kan het zijn dat je dat twee keer moet doen). Daarna opent elke tegel in een eigen " +
-    "venster, met een eigen knop op de taakbalk. Tot die tijd openen tegels gewoon in dit venster.</span>";
-  main.insertBefore(d, main.firstChild);
 }
 
 // Een afdelingskop zonder zichtbare tegels heeft geen functie: die verdwijnt.

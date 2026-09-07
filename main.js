@@ -126,6 +126,41 @@ async function fetchRaw(url) {
   }
 }
 
+/* Hetzelfde, maar met een vraag vooraf: is dit bestand eigenlijk wel veranderd?
+   ═══════════════════════════════════════════════════════════════════════
+   GitHub geeft bij elk bestand een ETag mee. Sturen we die de volgende keer
+   terug, dan antwoordt GitHub met 304 "niet gewijzigd" en komt er geen inhoud
+   over de lijn. Bij een gewone start is er niets veranderd en scheelt dat het
+   grootste deel van het verkeer.
+
+   Geeft hij 304, dan houden we het bestand dat er al staat. */
+async function fetchRawEtag(url, etag) {
+  try {
+    const koppen = { "Accept-Encoding": "gzip" };
+    if (etag) koppen["If-None-Match"] = etag;
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers: koppen });
+    if (r.status === 304) return { ongewijzigd: true, etag };
+    if (!r.ok) { console.warn(`[update] ${url}: HTTP ${r.status}`); return null; }
+    return { buf: Buffer.from(await r.arrayBuffer()), etag: r.headers.get("etag") || null };
+  } catch (e) {
+    console.warn(`[update] ${url} niet opgehaald (offline?):`, e.message);
+    return null;
+  }
+}
+
+/* Een rijtje werk parallel afhandelen. Eén voor één ophalen kostte op een
+   trage kantoorlijn seconden per bestand, en met 77 bestanden liep het
+   opstarten daardoor op tot bijna twintig seconden (Gerrit, 7 sep 2026:
+   "het moet gewoon 3 seconden zijn"). Twaalf tegelijk is genoeg om de lijn te
+   vullen zonder GitHub te overvragen. */
+async function parallel(lijst, aantal, doe) {
+  const rij = lijst.slice();
+  const werkers = Array.from({ length: Math.min(aantal, rij.length) }, async () => {
+    while (rij.length) { const item = rij.shift(); await doe(item); }
+  });
+  await Promise.all(werkers);
+}
+
 async function fetchLiveUpdates() {
   // 1) Haal het manifest op. Valideer als JSON voordat we 'm opslaan.
   //    Eerst rechtstreeks bij GitHub; lukt dat niet, dan via onze eigen
@@ -175,33 +210,60 @@ async function fetchLiveUpdates() {
 
   // 3) Download elk bestand uit het manifest, langs dezelfde weg als het
   //    manifest. Faalt één bestand via GitHub, dan vangt de worker dat op.
-  const basis = bron === "worker" ? OTA_BASE : RAW_BASE;
-  for (const entry of remoteManifest.files) {
-    if (!entry || !entry.name) continue;
-    // Skip manifest.json zelf — die hebben we hierboven al.
-    if (entry.name === "manifest.json") continue;
+  /* Alle bestanden tegelijk in plaats van één voor één, en alleen ophalen wat
+     écht veranderd is.
 
-    let buf = await fetchRaw(`${basis}/${entry.name}`);
-    if ((!buf || buf.length === 0) && basis === RAW_BASE)
-      buf = await fetchRaw(`${OTA_BASE}/${entry.name}`);
-    if (!buf || buf.length === 0) continue;
+     Hiervoor ging dit met een lus van 77 bestanden achter elkaar, elk met een
+     cache-buster erachter zodat er ook nog eens niets gecachet kon worden. Op
+     een trage lijn kostte dat bijna twintig seconden, en al die tijd stond er
+     nog geen venster in beeld. Gerrit (7 sep 2026): "19 seconden duurt het om
+     de app te openen. Het moet gewoon 3 seconden zijn."
+
+     Nu twaalf tegelijk, met de ETag van de vorige keer erbij. Is er niets
+     veranderd, dan antwoordt GitHub met 304 en komt er geen inhoud over de
+     lijn - wat bij een gewone start voor bijna elk bestand geldt. */
+  const basis = bron === "worker" ? OTA_BASE : RAW_BASE;
+  const etagPad = path.join(liveDir, "ota-etags.json");
+  let etags = {};
+  try { etags = JSON.parse(await readLocalText(etagPad) || "{}") || {}; } catch { etags = {}; }
+
+  const teDoen = remoteManifest.files.filter(e => e && e.name && e.name !== "manifest.json");
+  let bij = 0, gelijk = 0, mis = 0;
+  const begonnen = Date.now();
+
+  await parallel(teDoen, 12, async (entry) => {
+    /* Een bestand dat er nog niet staat moet altijd opgehaald worden, ook als
+       we er toevallig een ETag van hebben - anders zou een gewiste live-map
+       leeg blijven. */
+    const doelPad = path.join(liveDir, entry.name);
+    const heeftAl = existsSync(doelPad);
+    let r = await fetchRawEtag(`${basis}/${entry.name}`, heeftAl ? etags[entry.name] : null);
+    if (!r && basis === RAW_BASE) r = await fetchRawEtag(`${OTA_BASE}/${entry.name}`, null);
+    if (!r) { mis++; return; }
+    if (r.ongewijzigd) { gelijk++; return; }
+    const buf = r.buf;
+    if (!buf || buf.length === 0) { mis++; return; }
 
     // Optionele validatie: voor JSON-bestanden niet overschrijven met corrupt bestand
     if (entry.validate === "json" || entry.name.endsWith(".json")) {
       try { JSON.parse(buf.toString("utf-8")); }
       catch {
         console.warn(`[update] ${entry.name}: ongeldige JSON, overschrijven overgeslagen`);
-        continue;
+        return;
       }
     }
-
     try {
-      await fs.writeFile(path.join(liveDir, entry.name), buf);
-      console.log(`[update] ✓ ${entry.name} bijgewerkt (${buf.length} bytes)`);
+      await fs.writeFile(doelPad, buf);
+      etags[entry.name] = r.etag;
+      bij++;
     } catch (e) {
       console.warn(`[update] ${entry.name} niet opgeslagen:`, e.message);
     }
-  }
+  });
+
+  try { await fs.writeFile(etagPad, JSON.stringify(etags)); } catch {}
+  console.log(`[update] ${bij} bijgewerkt, ${gelijk} ongewijzigd, ${mis} niet opgehaald ` +
+              `(${((Date.now()-begonnen)/1000).toFixed(1)}s)`);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -302,18 +364,39 @@ async function startHelper() {
   const shareCandidates = process.platform === "win32"
     ? ["G:\\Fonteyn\\Fonteyn-Dashboard-Data", "\\\\fonfile\\data\\Fonteyn\\Fonteyn-Dashboard-Data"]
     : ["/Volumes/data/Fonteyn/Fonteyn-Dashboard-Data"];
+  /* De netwerkschijf even aftikken - maar met een klok erbij.
+     ═══════════════════════════════════════════════════════════════════
+     Een schrijftest op een netwerkpad dat er niet is geeft geen nette fout:
+     Windows blijft seconden tot minuten wachten op een SMB-antwoord dat nooit
+     komt. Dat gebeurde bij elke start, vóórdat er een venster in beeld stond,
+     en was een groot deel van de negentien seconden waar Gerrit over viel
+     (7 sep 2026).
+
+     Nu krijgt elke kandidaat anderhalve seconde. Antwoordt hij niet, dan gaan
+     we door op de lokale map - precies wat er ook gebeurde als de schijf er
+     echt niet was, alleen nu zonder het wachten. De test zelf blijft in de
+     achtergrond aflopen; daar heeft niemand last van. */
+  const metKlok = (belofte, ms) => Promise.race([
+    belofte,
+    new Promise((_, weiger) => setTimeout(() => weiger(new Error("te traag")), ms)),
+  ]);
   let sharedDir = null;
   for (const cand of shareCandidates) {
     try {
-      await fs.mkdir(cand, { recursive: true });
-      // Schrijftest: schrijf en verwijder een tijdelijk bestand
-      const probe = path.join(cand, ".write-probe");
-      await fs.writeFile(probe, String(Date.now()));
-      await fs.unlink(probe);
+      await metKlok((async () => {
+        await fs.mkdir(cand, { recursive: true });
+        // Schrijftest: schrijf en verwijder een tijdelijk bestand
+        const probe = path.join(cand, ".write-probe");
+        await fs.writeFile(probe, String(Date.now()));
+        await fs.unlink(probe);
+      })(), 1500);
       sharedDir = cand;
       console.log(`[product-specs] gedeeld op netwerkschijf: ${sharedDir}`);
       break;
-    } catch {/* probeer volgende */ }
+    } catch (e) {
+      if (String(e.message) === "te traag")
+        console.warn(`[product-specs] ${cand} antwoordde niet binnen 1,5s - overgeslagen`);
+    }
   }
   if (!sharedDir) {
     sharedDir = app.isPackaged
@@ -680,30 +763,49 @@ ipcMain.handle("fonteyn:print-labels-to-pdf", async (event) => {
 });
 
 app.whenReady().then(async () => {
+  /* Hoe lang elke stap duurt, in de console. Zonder die getallen is "de app
+     start traag" niet op te lossen: op de ene pc is het de netwerkschijf, op
+     de andere de download. Nu staat het er gewoon. */
+  const t0 = Date.now();
+  const klok = (wat, sinds) => console.log(`[start] ${wat}: ${((Date.now()-sinds)/1000).toFixed(1)}s`);
   try {
+    let t = Date.now();
     await bootstrapLiveDir();
-    // Auto-update skippen in dev — anders overschrijft GitHub onze lokale edits
-    if (app.isPackaged) {
-      await fetchLiveUpdates(); // fail-safe — bij offline gewoon doorgaan met cache
-    }
+    klok("live-map klaarzetten", t);
+
+    /* De update ophalen en de helper starten tegelijk. Ze hebben niets van
+       elkaar nodig: de helper leest de bestanden pas als er een verzoek komt,
+       en dat gebeurt pas als het venster er is. Hiervoor stonden ze achter
+       elkaar en telden hun wachttijden bij elkaar op. */
+    t = Date.now();
+    const updateKlaar = (app.isPackaged ? fetchLiveUpdates() : Promise.resolve())
+      .catch(e => console.warn("[update] overgeslagen:", e.message));
+
     /* Alleen zelf een helper starten als er nog geen draait. Zo maakt een
        tweede opstart of een blijven hangen proces de app niet meer stuk. */
     const bestaand = await helperAlActief();
     if (!bestaand.bezet) {
       await startHelper();
       await waitForHelper();
+      klok("hulpprogramma", t);
+      await updateKlaar;
+      klok("klaar om te tonen", t0);
     } else if (bestaand.vanOns) {
       console.log("[helper] draait al op 3737 - die wordt gebruikt.");
+      await updateKlaar;
+      klok("klaar om te tonen", t0);
     } else {
       dialog.showErrorBox("Poort 3737 is bezet",
         "Er luistert al een ander programma op poort 3737, en daardoor kan het dashboard zijn " +
         "hulpprogramma niet starten.\n\nSluit het dashboard helemaal af (ook via Taakbeheer) en " +
         "start het opnieuw. Helpt dat niet, herstart dan de computer.");
+      await updateKlaar;
     }
   } catch (e) {
     console.error("Opstartfout:", e);
   }
   createWindow();
+  console.log(`[start] venster in beeld na ${((Date.now()-t0)/1000).toFixed(1)}s`);
   setupAutoUpdater();
 });
 
