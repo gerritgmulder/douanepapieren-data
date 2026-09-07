@@ -215,9 +215,14 @@
       "bertjan.kok", "mike.deboer", "joeri", "michael.berghorst",
       "dylan", "wouter.vedder", "joey",
     ],
+    /* Wijzigen doen Kevin en Gerwin (Gerrit, 7 sep 2026: "alleen Kevin en
+       Gerwin moeten bewerkingsrechten hebben"). De rest van de afdeling -
+       Bart, Bert-Jan, Tim, Mike - blijft de hele planning zien, maar zet er
+       niets meer in. Dat scheelt ook de vraag of Bart van de Brink en Bert
+       Jan Kok dezelfde personen zijn als de planners met die namen: kijken
+       mogen ze allebei, wijzigen geen van beiden. */
     "planning-bewerk": [
-      "arno", "bart.vdb", "bertjan", "chantal", "dolf", "don",
-      "fonteynbot", "gerrit", "gerwin", "kevin", "mike", "tim",
+      "dolf", "fonteynbot", "gerrit", "gerwin", "kevin",
     ],
     // Personeel
     "personeel": [

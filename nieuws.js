@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", groep: "planning", soort: "beter",
+      titel: "Wijzigen in de planning doen Kevin en Gerwin",
+      wat: "De planning is voor iedereen op de afdeling te zien, maar er iets in zetten of verzetten doen Kevin en Gerwin. Zie je de knoppen niet meer: dat is de bedoeling, je kunt alles nog wel bekijken. Een afspraak aanklikken laat gewoon alle gegevens zien.",
+    },
+
+    {
       datum: "2026-09-07", groep: "planning", soort: "nieuw",
       titel: "Service en Plaatsing kunnen hun route inzien",
       wat: "De monteurs van Service en de jongens van Plaatsing kunnen voortaan op hun telefoon zien welke route ze rijden. Zij zien alleen de tegel Planning en verder niets, en ze kunnen niets verzetten: de agenda blijft van de afdeling zelf. Een stop aanklikken laat wel alle gegevens zien die je onderweg nodig hebt, zoals het adres en het telefoonnummer.",
