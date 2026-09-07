@@ -1219,7 +1219,7 @@ function tegelsInEigenVenster(){
      "dat werkt verwarrend". Zolang de markering in de user-agent ontbreekt
      blijft het dus bij openen in hetzelfde venster, precies zoals het was.
      Zodra de schil is bijgewerkt verschijnen de eigen vensters vanzelf. */
-  if (!/fonteyn-dashboard\//.test(navigator.userAgent || "")) return;
+  if (!/fonteyn-dashboard\//.test(navigator.userAgent || "")) { meldSchilVerouderd(); return; }
   document.querySelectorAll("a.tile").forEach(a => {
     const href = a.getAttribute("href") || "";
     if (!href || href.startsWith("#") || /^https?:/i.test(href)) return;
@@ -1228,6 +1228,28 @@ function tegelsInEigenVenster(){
     a.rel = "noopener";
     if (!a.title) a.title = "Opent in een eigen venster, zodat je hem naast het dashboard kunt zetten";
   });
+}
+
+/* Draait het Dashboard als app maar nog op de oude schil, dan kan hij geen
+   tweede venster maken. Dat is niet te zien, en dan zit je te klikken en te
+   wachten op iets dat niet komt - Gerrit, Gerwin en Kevin liepen daar op vast
+   (7 sep 2026). Dus zeggen wat er aan de hand is en wat je eraan doet.
+   In een gewone browser laten we het met rust: daar heeft het geen zin. */
+function meldSchilVerouderd(){
+  var ua = navigator.userAgent || "";
+  if (!/Electron/i.test(ua)) return;                 // gewone browser
+  if (document.getElementById("schilHint")) return;
+  var main = document.querySelector("main");
+  if (!main) return;
+  var d = document.createElement("div");
+  d.id = "schilHint";
+  d.style.cssText = "background:#fff9ae;border:1px solid #e3d658;border-radius:10px;padding:10px 14px;"+
+    "margin:0 0 16px;font-size:13.5px;color:#4a4413;display:flex;gap:10px;align-items:flex-start;line-height:1.5";
+  d.innerHTML = "<span style='font-size:16px;line-height:1.2'>\u2139\uFE0F</span><span><b>Tegels in een eigen venster staan klaar, maar deze " +
+    "computer draait nog de vorige versie van het Dashboard.</b><br>Sluit het Dashboard helemaal af en start het opnieuw " +
+    "(als de update net is binnengehaald kan het zijn dat je dat twee keer moet doen). Daarna opent elke tegel in een eigen " +
+    "venster, met een eigen knop op de taakbalk. Tot die tijd openen tegels gewoon in dit venster.</span>";
+  main.insertBefore(d, main.firstChild);
 }
 
 // Een afdelingskop zonder zichtbare tegels heeft geen functie: die verdwijnt.

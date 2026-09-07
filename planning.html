@@ -202,6 +202,64 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .route-menu button:hover{background:#f4f9ec}
 
 /* ── formulier (laag over de pagina) ── */
+/* ── Routebord ────────────────────────────────────────────────────────
+   Zo werkt de planning echt (Gerrit, 7 sep 2026, met de Outlook-agenda van
+   de afdeling ernaast): per dag rijden er een paar routes, en elke route is
+   een kolom met stops eronder. "Op maandag heb je route 1, route 2, route 3.
+   En zo iedere dag. Ik wil dus dat je echt routes kunt toevoegen op een dag
+   en die kunt vullen."
+
+   Een tijdraster past daar niet op: de stops staan niet op een tijdstip maar
+   op een volgorde binnen de route. Vandaar dit bord: dagen naast elkaar, in
+   elke dag de routes naast elkaar, in elke route de stops onder elkaar. */
+/* De dagen naast elkaar. Een dag met drie routes hoort breder te zijn dan een
+   dag met één; anders vallen de laatste routes buiten beeld en zie je precies
+   niet wat je zoekt. De breedte wordt per dag gezet uit het aantal routes. */
+.bord{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;align-items:flex-start}
+.borddag{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;overflow:hidden;
+      flex:0 0 auto;display:flex;flex-direction:column}
+.borddag.vandaag{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.25)}
+.borddag > h3{margin:0;padding:8px 10px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;
+      background:var(--groen);color:#fff;display:flex;align-items:center;gap:8px}
+.borddag > h3 .dd{margin-left:auto;font-weight:400;opacity:.85;text-transform:none;letter-spacing:0}
+.dagbalken{padding:5px 6px 0;display:flex;flex-direction:column;gap:3px}
+.dagbalk{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+      border-radius:5px;padding:2px 7px;cursor:pointer;background:#eef0f2;color:#4b5563}
+.dagbalk.let{background:#fee2e2;color:#b91c1c}
+.routes{display:flex;gap:6px;padding:6px;align-items:stretch}
+.route{flex:1 1 0;min-width:0;border:1px solid var(--rand);border-radius:9px;background:#fff;
+      display:flex;flex-direction:column;min-height:60px}
+.route.sleepdoel{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.35)}
+.route > h4{margin:0;padding:5px 7px;font-size:11.5px;background:#f3f6f4;border-bottom:1px solid var(--rand);
+      border-radius:8px 8px 0 0;display:flex;align-items:center;gap:5px;line-height:1.25}
+.route > h4 .nr{background:var(--groen);color:#fff;border-radius:4px;padding:0 5px;font-weight:700;flex:0 0 auto}
+.route > h4 .wie{font-weight:700;color:var(--ink);flex:1;min-width:0;cursor:text;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.route > h4 .wie:hover{text-decoration:underline dotted;text-underline-offset:2px}
+.route > h4 .weg{background:none;border:0;color:var(--grijs);cursor:pointer;font-size:13px;line-height:1;padding:0 2px}
+.route > h4 .weg:hover{color:var(--rood)}
+.route .stops{padding:4px;display:flex;flex-direction:column;gap:3px;flex:1}
+.route .leegdrop{font-size:10.5px;color:#c9cfcb;text-align:center;padding:8px 2px}
+.stop{border-radius:6px;border-left:4px solid;padding:3px 6px;font-size:11px;line-height:1.35;cursor:grab;
+      background:#fff;border-top:1px solid var(--rand);border-right:1px solid var(--rand);border-bottom:1px solid var(--rand)}
+.stop.sleept{opacity:.5}
+.stop .kl{font-weight:700;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stop .rg{color:var(--grijs);font-size:10.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stop.letop{background:#fee2e2;border-color:#b91c1c}
+.stop.klaar{opacity:.45}
+.stop.klaar .kl{text-decoration:line-through}
+.route .plusstop{margin:0 4px 4px;background:none;border:1px dashed var(--rand);border-radius:6px;
+      color:var(--grijs);font:inherit;font-size:10.5px;padding:3px;cursor:pointer}
+.route .plusstop:hover{border-color:var(--lime);color:var(--groen)}
+.plusroute{margin:0 6px 7px;background:none;border:1px dashed var(--rand);border-radius:8px;
+      color:var(--grijs);font:inherit;font-size:11.5px;padding:5px;cursor:pointer;width:calc(100% - 12px)}
+.plusroute:hover{border-color:var(--lime);color:var(--groen)}
+.dagnotitie{margin:0 6px 7px;font-size:10.5px;color:var(--grijs);border-top:1px dashed var(--rand);padding-top:5px;cursor:text}
+.dagnotitie:hover{color:var(--ink)}
+.weergavekeus{display:inline-flex;border:1px solid var(--rand);border-radius:9px;overflow:hidden;background:#fff}
+.weergavekeus button{border:0;background:#fff;font:inherit;font-size:12px;padding:7px 13px;cursor:pointer;color:var(--grijs)}
+.weergavekeus button.aan{background:var(--groen);color:#fff;font-weight:600}
+
 /* Het afsprakenvenster moet op élk bureaubladscherm passen zonder scrollen.
    Gerrit (7 sep 2026): "Nieuwe afspraak plannen, dat venster moet zo gemaakt
    zijn dat je niet hoeft te scrollen op welk desktopscherm dan ook."
@@ -254,6 +312,10 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
     <input type="date" id="springNaar" title="Spring naar de week van deze datum">
     <button type="button" id="itsKnop">🔧 Servicemeldingen</button>
     <button type="button" class="nieuw" id="nieuwKnop">+ Afspraak</button>
+    <span class="weergavekeus" id="weergaveKeus">
+      <button type="button" data-weergave="routes" class="aan">Routes</button>
+      <button type="button" data-weergave="tijd">Tijdraster</button>
+    </span>
   </div>
   <div class="legenda" id="legenda">
     <!-- Wie er nog meer in de agenda kijkt, en een kort seintje als een
@@ -272,8 +334,11 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
     <div id="itsLijst"><div class="its-leeg">Bezig met ophalen…</div></div>
   </div>
 
+  <!-- het routebord: per dag de routes naast elkaar -->
+  <div id="bord" class="bord"></div>
+
   <!-- brede schermen: het tijdraster -->
-  <div class="agenda">
+  <div class="agenda" id="agendaHouder">
     <div class="agenda-scroll" id="agendaScroll">
       <div class="rooster" id="rooster"></div>
     </div>
@@ -357,16 +422,28 @@ async function lees(){
     var r = await fetch(W+"/data/"+BUCKET, { headers:{ "X-Fonteyn-Auth": teamKey() } });
     if(!r.ok) return null;
     var j = await r.json();
+    // De routes en de dagnotities zitten in dezelfde bucket; die halen we hier
+    // meteen op zodat het bord ze heeft.
+    routesPerDag = (j && j.routes && typeof j.routes==="object") ? j.routes : {};
+    dagNotities  = (j && j.notities && typeof j.notities==="object") ? j.notities : {};
     return (j && Array.isArray(j.afspraken)) ? j.afspraken : [];
   }catch(e){ return null; }
 }
 async function bewaar(wijzig){
-  var vers = await lees();
-  if (vers === null) throw new Error("De opslag is niet bereikbaar. Probeer het zo nog eens.");
-  afspraken = wijzig(vers);
+  /* Verse gegevens ophalen, wijzigen, alles terugschrijven. LET OP: hier
+     stond eerder alleen { afspraken }, en dat zou de routes en de
+     dagnotities bij elke wijziging aan een afspraak wissen - KV kent alleen
+     'vervang alles'. */
+  var r0 = await fetch(W+"/data/"+BUCKET, { headers:{ "X-Fonteyn-Auth": teamKey() } });
+  if (!r0.ok) throw new Error("De opslag is niet bereikbaar. Probeer het zo nog eens.");
+  var j = await r0.json();
+  var routes   = (j && j.routes && typeof j.routes==="object") ? j.routes : {};
+  var notities = (j && j.notities && typeof j.notities==="object") ? j.notities : {};
+  afspraken = wijzig(Array.isArray(j.afspraken) ? j.afspraken : []);
+  routesPerDag = routes; dagNotities = notities;
   var r = await fetch(W+"/data/"+BUCKET, { method:"PUT",
     headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey() },
-    body: JSON.stringify({ afspraken: afspraken }) });
+    body: JSON.stringify({ afspraken: afspraken, routes: routes, notities: notities }) });
   if(!r.ok) throw new Error("Bewaren mislukte (HTTP "+r.status+").");
   // De anderen die de agenda openhebben laten weten dat er iets veranderd is.
   liveStuur({ soort:"gewijzigd", wat:"planning" });
@@ -560,6 +637,14 @@ function teken(){
   titel();
   var week = weekLijst();
   haalBetaald();
+  var routeStand = weergave === "routes";
+  $("bord").style.display = routeStand ? "" : "none";
+  var ah = $("agendaHouder"); if (ah) ah.style.display = routeStand ? "none" : "";
+  var lj = $("lijst"); if (lj) lj.style.display = routeStand ? "none" : "";
+  /* Op het bord staan de dagen naast elkaar en schuift het horizontaal; dat
+     werkt ook op een telefoon, dus daar is geen aparte lijstweergave voor
+     nodig. */
+  if (routeStand){ tekenBord(); if (itsMeldingen !== null) itsTeken(); return; }
   var vandaagISO = iso(new Date());
   var uren = UUR_TOT - UUR_VAN;
 
@@ -634,6 +719,247 @@ function teken(){
       openForm(null, cel.dataset.datum, tijdStr(Math.max(UUR_VAN*60, Math.min(UUR_TOT*60-30, min))));
     });
   });
+}
+
+/* ── ROUTEBORD ───────────────────────────────────────────────────────
+   Per dag een paar routes, per route de stops eronder. De routes staan in
+   dezelfde bucket als de afspraken, onder 'routes', per datum:
+
+     routes: { "2026-09-07": [ {nr:1, wie:"Kevin"}, {nr:2, wie:"Gerwin"} ] }
+     notities: { "2026-09-07": "MAX 2 ROUTES · route 1 alleen" }
+
+   Een afspraak hoort bij een route via het veld 'route' (het nummer). Zit er
+   geen nummer op, dan staat hij in de eerste route van die dag - anders zou
+   een afspraak die vanuit Voorraadbeheer of de servicemeldingen binnenkomt
+   nergens te zien zijn.
+
+   De tijd blijft gewoon op de afspraak staan; die telt in het tijdraster en
+   in de stop-regel. Op het bord gaat het om de volgorde binnen de route, en
+   die volgt de tijd. */
+var weergave = "routes";
+try { var w0 = localStorage.getItem("fp.planweergave"); if (w0==="tijd"||w0==="routes") weergave = w0; } catch(e){}
+var routesPerDag = {}, dagNotities = {};
+
+function routesVan(dISO){
+  var r = routesPerDag[dISO];
+  if (Array.isArray(r) && r.length) return r;
+  return [{ nr:1, wie:"" }];               // elke dag heeft er minstens één
+}
+function stopsVan(dISO, nr, eerste){
+  return afspraken.filter(function(a){
+    if (a.datum !== dISO || filterUit[a.soort]) return false;
+    var rn = Number(a.route) || 0;
+    return rn === nr || (!rn && eerste);
+  }).sort(function(x,y){ return String(x.tijd||"99").localeCompare(String(y.tijd||"99")); });
+}
+
+function tekenBord(){
+  var week = weekLijst();
+  var vandaagISO = iso(new Date());
+  var html = "";
+  week.forEach(function(w,i){
+    var routes = routesVan(w.iso);
+    /* Ongeveer 150 pixels per route, plus de randen. Eén route wordt dus
+       een smalle kolom en drie routes een brede - net als op het bord waar de
+       afdeling nu naar kijkt. */
+    var breed = Math.max(190, routes.length * 150 + 14);
+    html += '<div class="borddag'+(w.iso===vandaagISO?" vandaag":"")+'" data-datum="'+w.iso+'" style="width:'+breed+'px">'+
+      '<h3>'+DAGEN[i]+'<span class="dd">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+'</span></h3>'+
+      '<div class="routes">'+
+      routes.map(function(r, ri){
+        var stops = stopsVan(w.iso, r.nr, ri===0);
+        return '<div class="route" data-datum="'+w.iso+'" data-nr="'+r.nr+'">'+
+          '<h4><span class="nr">'+r.nr+'</span>'+
+            '<span class="wie" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Klik om de naam aan te passen">'+
+              (r.wie ? esc(r.wie) : '<span style="color:#c9cfcb;font-weight:400">wie rijdt?</span>')+'</span>'+
+            '<button type="button" class="weg routeWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route weghalen">&times;</button>'+
+          '</h4>'+
+          '<div class="stops">'+
+            (stops.length ? stops.map(stopHtml).join("") : '<div class="leegdrop">sleep hier een stop</div>')+
+          '</div>'+
+          '<button type="button" class="plusstop" data-datum="'+w.iso+'" data-nr="'+r.nr+'">+ stop</button>'+
+        '</div>';
+      }).join("")+
+      '</div>'+
+      '<button type="button" class="plusroute" data-datum="'+w.iso+'">+ route</button>'+
+      '<div class="dagnotitie" data-datum="'+w.iso+'" title="Klik om een notitie voor deze dag te zetten">'+
+        (dagNotities[w.iso] ? esc(dagNotities[w.iso]) : "notitie voor deze dag…")+'</div>'+
+    '</div>';
+  });
+  $("bord").innerHTML = html;
+  koppelBord();
+}
+function stopHtml(a){
+  var c = cat(a);
+  var regel = [a.plaats, a.wat, a.ordernr].filter(Boolean).join(" - ");
+  return '<div class="stop'+(a.klaar?" klaar":"")+(a.letop?" letop":"")+'" draggable="true" data-id="'+esc(a.id)+'"'+
+    ' style="border-left-color:'+c.kleur+'" title="'+esc((a.tijd?a.tijd+"  ":"")+(a.klant||"")+(regel?"  -  "+regel:""))+'">'+
+    betaalStip(a)+'<span class="kl">'+(a.tijd?esc(a.tijd)+" ":"")+esc(a.klant||c.naam)+'</span>'+
+    (regel?'<span class="rg">'+esc(regel)+'</span>':"")+
+    (a.wie?'<span class="rg">\ud83d\udc64 '+esc(a.wie)+'</span>':"")+'</div>';
+}
+
+function koppelBord(){
+  // stop aanklikken = het formulier; slepen = naar een andere route of dag
+  $("bord").querySelectorAll(".stop").forEach(function(el){
+    el.addEventListener("click", function(){ if(!el.dataset.gesleept) openForm(el.dataset.id); delete el.dataset.gesleept; });
+    el.addEventListener("dragstart", function(e){
+      e.dataTransfer.setData("text/plain", el.dataset.id);
+      e.dataTransfer.effectAllowed = "move";
+      el.classList.add("sleept");
+    });
+    el.addEventListener("dragend", function(){ el.classList.remove("sleept"); });
+  });
+  $("bord").querySelectorAll(".route").forEach(function(r){
+    r.addEventListener("dragover", function(e){ e.preventDefault(); r.classList.add("sleepdoel"); });
+    r.addEventListener("dragleave", function(){ r.classList.remove("sleepdoel"); });
+    r.addEventListener("drop", async function(e){
+      e.preventDefault(); r.classList.remove("sleepdoel");
+      var id = e.dataTransfer.getData("text/plain");
+      var a = afspraken.find(function(x){ return x.id===id; });
+      if (!a) return;
+      var nieuweDatum = r.dataset.datum, nieuwNr = Number(r.dataset.nr);
+      if (a.datum===nieuweDatum && (Number(a.route)||0)===nieuwNr) return;
+      var el = $("bord").querySelector('.stop[data-id="'+CSS.escape(id)+'"]');
+      if (el) el.dataset.gesleept = "1";
+      try{
+        await bewaar(function(lijst){
+          var i = lijst.findIndex(function(x){ return x.id===id; });
+          if (i>=0) lijst[i] = Object.assign({}, lijst[i], { datum:nieuweDatum, route:nieuwNr,
+            gewijzigdDoor:ik, gewijzigd:new Date().toISOString() });
+          return lijst;
+        });
+        try{ if(window.fpLog) window.fpLog("stop-verplaatst",(a.klant||"")+" -> "+nieuweDatum+" route "+nieuwNr); }catch(e){}
+        teken();
+      }catch(err){ alert(err.message); }
+    });
+  });
+  // + stop, + route, route weghalen, naam van de rijder, dagnotitie
+  $("bord").querySelectorAll(".plusstop").forEach(function(b){
+    b.addEventListener("click", function(){
+      openForm(null, b.dataset.datum, "", { route: Number(b.dataset.nr) });
+    });
+  });
+  $("bord").querySelectorAll(".plusroute").forEach(function(b){
+    b.addEventListener("click", function(){ voegRouteToe(b.dataset.datum); });
+  });
+  $("bord").querySelectorAll(".routeWeg").forEach(function(b){
+    b.addEventListener("click", function(e){ e.stopPropagation(); haalRouteWeg(b.dataset.datum, Number(b.dataset.nr)); });
+  });
+  $("bord").querySelectorAll(".route .wie").forEach(function(el){
+    el.addEventListener("click", function(){ bewerkRijder(el); });
+  });
+  $("bord").querySelectorAll(".dagnotitie").forEach(function(el){
+    el.addEventListener("click", function(){ bewerkDagnotitie(el); });
+  });
+}
+
+/* Routes en dagnotities bewaren. Ze zitten in dezelfde bucket als de
+   afspraken, dus lezen-wijzigen-terugschrijven op de VERSE lijst - anders
+   gooit dit scherm weg wat een collega net heeft gedaan. */
+async function bewaarBord(wijzig){
+  var r = await fetch(W+"/data/"+BUCKET, { headers:{ "X-Fonteyn-Auth": teamKey() } });
+  if (!r.ok) throw new Error("De opslag is niet bereikbaar. Probeer het zo nog eens.");
+  var j = await r.json();
+  var data = { afspraken: Array.isArray(j.afspraken)?j.afspraken:[],
+               routes: (j.routes && typeof j.routes==="object") ? j.routes : {},
+               notities: (j.notities && typeof j.notities==="object") ? j.notities : {} };
+  wijzig(data);
+  var put = await fetch(W+"/data/"+BUCKET, { method:"PUT",
+    headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey() },
+    body: JSON.stringify(data) });
+  if (!put.ok) throw new Error("Bewaren mislukte (HTTP "+put.status+").");
+  afspraken = data.afspraken; routesPerDag = data.routes; dagNotities = data.notities;
+  liveStuur({ soort:"gewijzigd", wat:"planning" });
+}
+async function voegRouteToe(dISO){
+  try{
+    await bewaarBord(function(d){
+      var lijst = Array.isArray(d.routes[dISO]) && d.routes[dISO].length ? d.routes[dISO] : [{nr:1,wie:""}];
+      var nr = Math.max.apply(null, lijst.map(function(x){ return Number(x.nr)||0; })) + 1;
+      lijst.push({ nr:nr, wie:"" });
+      d.routes[dISO] = lijst;
+    });
+    try{ if(window.fpLog) window.fpLog("route-toegevoegd", dISO); }catch(e){}
+    teken();
+  }catch(e){ alert(e.message); }
+}
+async function haalRouteWeg(dISO, nr){
+  var stops = stopsVan(dISO, nr, routesVan(dISO)[0].nr===nr);
+  if (stops.length && !confirm("Route "+nr+" heeft "+stops.length+" stop(s). Die komen in de eerste route te staan. Doorgaan?")) return;
+  try{
+    await bewaarBord(function(d){
+      var lijst = (d.routes[dISO]||[]).filter(function(x){ return Number(x.nr)!==nr; });
+      d.routes[dISO] = lijst.length ? lijst : [{nr:1,wie:""}];
+      var eerste = Number(d.routes[dISO][0].nr)||1;
+      d.afspraken.forEach(function(a){ if (a.datum===dISO && Number(a.route)===nr) a.route = eerste; });
+    });
+    try{ if(window.fpLog) window.fpLog("route-verwijderd", dISO+" route "+nr); }catch(e){}
+    teken();
+  }catch(e){ alert(e.message); }
+}
+/* De naam van wie de route rijdt. Vaak twee namen ("BART EN JOEY"), dus een
+   vrij tekstveld en geen keuzelijst. */
+function bewerkRijder(el){
+  if (el.dataset.bezig) return;
+  el.dataset.bezig = "1";
+  var dISO = el.dataset.datum, nr = Number(el.dataset.nr);
+  var oud = ((routesVan(dISO).find(function(x){ return Number(x.nr)===nr; })||{}).wie)||"";
+  el.innerHTML = "";
+  var vak = document.createElement("input");
+  vak.className = "naamvak"; vak.value = oud; vak.maxLength = 60;
+  vak.style.width = "100%";
+  el.appendChild(vak); vak.focus(); vak.select();
+  var af = false;
+  async function klaar(bewaren){
+    if (af) return; af = true;
+    var nieuw = vak.value.trim();
+    el.removeAttribute("data-bezig");
+    if (!bewaren || nieuw === oud) { teken(); return; }
+    try{
+      await bewaarBord(function(d){
+        var lijst = Array.isArray(d.routes[dISO]) && d.routes[dISO].length ? d.routes[dISO] : [{nr:1,wie:""}];
+        var r = lijst.find(function(x){ return Number(x.nr)===nr; });
+        if (r) r.wie = nieuw; else lijst.push({ nr:nr, wie:nieuw });
+        d.routes[dISO] = lijst;
+      });
+      try{ if(window.fpLog) window.fpLog("route-rijder-gezet", dISO+" route "+nr+": "+nieuw); }catch(e){}
+    }catch(err){ alert(err.message); }
+    teken();
+  }
+  vak.addEventListener("keydown", function(e){
+    if (e.key==="Enter"){ e.preventDefault(); klaar(true); }
+    if (e.key==="Escape"){ e.preventDefault(); klaar(false); }
+  });
+  vak.addEventListener("blur", function(){ klaar(true); });
+}
+/* De regels onderaan de dag: "MAX 2 ROUTES", "route 1 alleen". */
+function bewerkDagnotitie(el){
+  if (el.dataset.bezig) return;
+  el.dataset.bezig = "1";
+  var dISO = el.dataset.datum, oud = dagNotities[dISO] || "";
+  el.innerHTML = "";
+  var vak = document.createElement("input");
+  vak.className = "naamvak"; vak.value = oud; vak.maxLength = 160; vak.style.width = "100%";
+  vak.placeholder = "bijv. MAX 2 ROUTES - route 1 alleen";
+  el.appendChild(vak); vak.focus(); vak.select();
+  var af = false;
+  async function klaar(bewaren){
+    if (af) return; af = true;
+    var nieuw = vak.value.trim();
+    el.removeAttribute("data-bezig");
+    if (!bewaren || nieuw === oud) { teken(); return; }
+    try{
+      await bewaarBord(function(d){ if (nieuw) d.notities[dISO] = nieuw; else delete d.notities[dISO]; });
+      try{ if(window.fpLog) window.fpLog("dagnotitie-gezet", dISO+": "+nieuw); }catch(e){}
+    }catch(err){ alert(err.message); }
+    teken();
+  }
+  vak.addEventListener("keydown", function(e){
+    if (e.key==="Enter"){ e.preventDefault(); klaar(true); }
+    if (e.key==="Escape"){ e.preventDefault(); klaar(false); }
+  });
+  vak.addEventListener("blur", function(){ klaar(true); });
 }
 
 /* ── slepen, vergroten en direct bewerken ────────────────────────────
@@ -870,7 +1196,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   var nieuw = !a;
   if (nieuw) a = Object.assign({ id:"p"+Date.now()+Math.random().toString(36).slice(2,6),
     datum: datumVoorstel || iso(new Date()), tijd: tijdVoorstel||"", duurMin: 60, soort:"levering",
-    klant:"", telefoon:"", plaats:"", ordernr:"", wat:"", wie:"", klaar:false }, voorvul || {});
+    klant:"", telefoon:"", plaats:"", ordernr:"", wat:"", wie:"", klaar:false, route:null }, voorvul || {});
 
   var namen = {};
   afspraken.forEach(function(x){ if(x.wie) namen[x.wie]=1; });
@@ -930,6 +1256,8 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       wat: $("fWat").value.trim(), wie: $("fWie").value.trim(),
       klaar: nieuw ? false : $("fKlaar").checked,
       itsId: a.itsId || null,
+      route: a.route || null,          // bij welke route van die dag hij hoort
+      letop: !!a.letop,
       door: nieuw ? ik : (a.door||ik), gewijzigdDoor: ik,
       gemaakt: a.gemaakt || new Date().toISOString(), gewijzigd: new Date().toISOString()
     };
@@ -1097,6 +1425,18 @@ $("springNaar").addEventListener("change", function(){
   teken();
 });
 $("nieuwKnop").addEventListener("click", function(){ openForm(null, iso(new Date())); });
+/* Routes of tijdraster. De keuze blijft staan, want iemand die routes plant
+   wil daar de volgende keer weer in beginnen. */
+$("weergaveKeus").querySelectorAll("button").forEach(function(b){
+  if (b.dataset.weergave === weergave) b.classList.add("aan"); else b.classList.remove("aan");
+  b.addEventListener("click", function(){
+    weergave = b.dataset.weergave;
+    try { localStorage.setItem("fp.planweergave", weergave); } catch(e){}
+    $("weergaveKeus").querySelectorAll("button").forEach(function(x){ x.classList.toggle("aan", x===b); });
+    teken();
+    if (weergave === "tijd") scrollNaarWerkdag();
+  });
+});
 $("uitKnop").addEventListener("click", function(){
   localStorage.removeItem("fp.session"); localStorage.removeItem("fp.email");
   location.href="dashboard.html";
