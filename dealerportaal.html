@@ -548,7 +548,8 @@ function relatieKaart(index){
       + '</div>'
       + '<div class="velden" style="margin-top:12px">'
       +   veld("merk","Merk", d.merk, {keuze:["","passion","fonteyn","beide"]})
-      +   veld("region","Regio en valuta", d.region, {keuze:["EU","US"]})
+      +   veld("region","Regio en valuta", d.region, {keuze:["EU","US"],
+            label:["EU - het portaal opent in euro's","US - het portaal opent in dollars"]})
       + '</div></div>'
 
       + '<div class="blok"><h4>Wie is het</h4>'
@@ -645,6 +646,32 @@ function relatieKaart(index){
     // als je het nummer net hebt overgetypt.
     laag.querySelector('[data-pad="facturatie.btw"]')
         .addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); checkBtw(); } });
+    /* Regio volgt het factuurland.
+       ═══════════════════════════════════════════════════════════════════
+       Gerrit (7 sep 2026): "Als ik een Europese dealer ben, wil ik dat de
+       valuta altijd op EU staat en als ik een USA dealer ben wil ik dat
+       Passion Partners altijd opent op USD."
+
+       Het portaal keek al naar dit veld, maar het stond standaard op EU en
+       niemand kwam eraan. Een dealer in Texas kreeg dan gewoon euro's te
+       zien. Het land is verplicht, dus daar kan de valuta uit volgen. Hand
+       eroverheen kan nog steeds: kies je zelf een regio, dan blijft die
+       staan. */
+    const landVeld = laag.querySelector('[data-pad="facturatie.land"]');
+    const regioVeld = laag.querySelector('[data-pad="region"]');
+    if (landVeld && regioVeld) {
+      let handmatig = false;
+      regioVeld.addEventListener("change", () => { handmatig = true; });
+      landVeld.addEventListener("change", () => {
+        if (handmatig) return;
+        const hoort = ["US", "CA"].includes(landVeld.value) ? "US" : "EU";
+        if (regioVeld.value !== hoort) {
+          regioVeld.value = hoort;
+          regioVeld.style.borderColor = "var(--red)";
+          setTimeout(() => { regioVeld.style.borderColor = ""; }, 1500);
+        }
+      });
+    }
     $$("rkAdresZoek").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); zoekAdres(); } });
   }
 

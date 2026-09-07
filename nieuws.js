@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
+      titel: "Proforma inlezen: meer bestanden, en een eerlijke melding",
+      wat: "Drie dingen waren stuk. Een leeg eerste tabblad (zoals 'Macro1') liet de uitlezing stranden terwijl de factuur op het volgende blad stond. Koppen als 'Item no', 'ART. NO' en het door de fabriek verkeerd gespelde 'Quanity' werden niet herkend, en dan kreeg je 'kopregel niet gevonden' terwijl de kop er gewoon stond. En een proforma van tuinmeubelen of pompen kwam er als een rij onbruikbare regels uit; die zegt nu gewoon dat dit scherm alleen inkooporders voor spa's maakt.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Valuta volgt het land van de dealer",
+      wat: "Het portaal opende altijd in euro's, ook voor een dealer in Texas: het regioveld stond standaard op EU en niemand kwam eraan. Vul je nu een factuurland in, dan springt de regio mee (US en CA op dollars, de rest op euro's). Kies je zelf iets anders, dan blijft dat staan.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "dealerportaal.html", soort: "beter",
       titel: "Bezorgkosten rekenen nu ook voor de modellen die eerst wegvielen",
       wat: "Van een aantal modellen kenden we de kistmaat niet, en die telden dan niet mee in de bezorgprijs: de dealer zag een bedrag waar zijn spa niet in zat. De maten uit de douanetegel vullen dat nu aan, waaronder de Vitality Deep en Wim Hof's Ice Barrel XL. Van 17 modellen ontbreekt de maat nog; die staan er met naam bij als je ze in de wagen legt. Ook weg: de zin dat een zware lading hoger kan uitvallen. Dat kan niet: elke tariefband staat op 1750 kg per laadmeter en het zwaarste dat we vervoeren haalt er 500.",

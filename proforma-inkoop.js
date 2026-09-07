@@ -53,10 +53,20 @@ var BRIEFHOOFD=[
 ];
 
 function parseProforma(wb, bestandsnaam){
-  const naam=wb.SheetNames.find(n=>/^pi$/i.test(String(n).trim()))
-          || wb.SheetNames.find(n=>/proforma/i.test(n))
-          || wb.SheetNames.find(n=>/invoice/i.test(n))
-          || wb.SheetNames[0];
+  /* Een leeg tabblad telt niet mee. PI-R26039 van Jiaxing begint met een
+     tabblad "Macro1" dat nul rijen heeft; daar werd de hele uitlezing op
+     stukgelopen terwijl de factuur gewoon op Sheet1 stond. */
+  function gevuld(n){
+    try { const r=XLSX.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:null,blankrows:false}); return r.length>2; }
+    catch(e){ return false; }
+  }
+  const bruikbaar=wb.SheetNames.filter(gevuld);
+  const kandidaat=bruikbaar.length?bruikbaar:wb.SheetNames;
+  const naam=kandidaat.find(n=>/^pi$/i.test(String(n).trim()))
+          || kandidaat.find(n=>/proforma/i.test(n))
+          || kandidaat.find(n=>/invoice/i.test(n))
+          || kandidaat.find(n=>!/packing/i.test(n))
+          || kandidaat[0];
   const rows=XLSX.utils.sheet_to_json(wb.Sheets[naam],{header:1,defval:null,blankrows:false});
   /* Dezelfde regels nog een keer, maar dan zoals ze op het scherm staan.
      ═══════════════════════════════════════════════════════════════════
@@ -109,8 +119,14 @@ function parseProforma(wb, bestandsnaam){
 
      De kleur heet bij hen "Body" (de kuip) met "Skirt" ernaast (de omkasting).
      Die twee samen bepalen welk artikel het wordt, dus allebei meenemen. */
-  var IS_MODEL=/^(MODEL|ITEM|ARTICLE|ARTIKEL)S?$/;
-  var IS_AANTAL=/QUANT|^Q.?TY$|^QTY|^PCS$|^AANTAL$/;
+  /* De koppen mogen er een woordje achter hebben. Elke fabriek doet het net
+     anders: "Item no" (Jiaxing), "ART. NO" (Lodestone), "Model No.". Met de
+     oude eis dat de cel precies "ITEM" moest zijn viel dat allemaal af en
+     kreeg Chantal "kopregel niet gevonden" terwijl de kop er gewoon stond.
+     "Quanity" is geen tikfout van ons maar van de fabriek; die komt in meer
+     dan één bestand voor, dus die vangen we op. */
+  var IS_MODEL=/^(MODEL|ITEM|ARTICLE|ARTIKEL|ART)S?\.?\s*(NO|NR|NUMBER|CODE)?\.?$/;
+  var IS_AANTAL=/QUAN|^Q.?TY\b|^QTY|^PCS\b|^AANTAL$/;
   var IS_KLEUR=/COLOU?R|^BODY$|^SHELL$/;
   let kop=-1,kMod=0,kKleur=1,kSkirt=-1,kAantal=-1,kPrijs=-1;
   for(let i=0;i<Math.min(rows.length,30);i++){
@@ -214,6 +230,22 @@ function parseProforma(wb, bestandsnaam){
       afmeting:maat,
       aantal, prijs:(isFinite(prijs)&&prijs>0)?prijs:null,
     });
+  }
+  /* Geen enkele regel levert een spa op? Dan is dit geen spa-proforma.
+     ═══════════════════════════════════════════════════════════════════
+     In dezelfde map staan ook proforma's van tuinmeubelen (Jiaxing,
+     Lodestone) en van pompen (Lingxiao). Die hebben een fabriekscode als
+     GL9122 of AP300-V2, en daar hoort in Logic4 geen artikel bij. Vroeger
+     kwamen die er als een rij rode regels uit, of helemaal niet, en dan is
+     het zoeken wat er nou mis is. Nu staat het er gewoon: dit gereedschap
+     maakt inkooporders voor spa's, en dit is er geen. */
+  if(regels.length && !regels.some(r=>r.model)){
+    const codes=[...new Set(regels.map(r=>r.code).filter(Boolean))].slice(0,4).join(", ");
+    return {tabblad:naam,leverancier,referentie,regels:[],
+      fout:"dit lijkt geen proforma van spa's. Op tabblad '"+naam+"' staan "+regels.length+
+           " regel(s) met codes als "+codes+", en daar hoort in Logic4 geen spa-artikel bij. "+
+           "Dit scherm maakt alleen inkooporders voor spa's; een proforma van meubelen of onderdelen "+
+           "moet je in Logic4 zelf invoeren."};
   }
   return {tabblad:naam,leverancier,referentie,regels};
 }
