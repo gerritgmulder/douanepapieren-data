@@ -89,6 +89,12 @@ for (const f of (F.lijst || [])) {
     if (dozen[m.model]) continue;
     dozen[m.model] = {
       spa: { l: rond(maat.l), b: rond(maat.b), h: rond(maat.h) },
+      /* Het gewicht van de kist, als de verpakkingslijst dat weet. Nodig voor
+         de vrachtprijs: een vervoerder rekent over de laadmeters tenzij het
+         werkelijke gewicht hoger uitvalt (1 laadmeter = 1.750 kg). Zonder
+         gewicht wordt er alleen op laadmeters gerekend, en dan kan de prijs
+         te laag uitkomen bij een zware spa. */
+      kg: maat.kg > 0 ? Math.round(Number(maat.kg)) : null,
       bron: maat.bron || null,
       cover: cover ? { l: rond(cover.l), b: rond(cover.b), h: rond(cover.h),
                        delen: Number(cover.delen) || 1 } : null,
@@ -121,6 +127,7 @@ if (prijsR.ok) {
     const rond = n => Math.round(Number(n) * 10) / 10;
     dozen[naam] = {
       spa: { l: rond(maat.l), b: rond(maat.b), h: rond(maat.h) },
+      kg: maat.kg > 0 ? Math.round(Number(maat.kg)) : null,
       bron: maat.bron || null,
       cover: cover ? { l: rond(cover.l), b: rond(cover.b), h: rond(cover.h),
                        delen: Number(cover.delen) || 1 } : null,

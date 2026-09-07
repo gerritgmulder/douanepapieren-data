@@ -208,7 +208,16 @@ const uit = {
   /* Hoeveel kilo er in een laadmeter gaat. Bij allebei de vervoerders gelijk;
      staat hier zodat de rekenkant het niet nog eens hoeft te weten. */
   omrekening: { kgPerLaadmeter: 1750, kgPerEuropallet: 700, kgPerBlokpallet: 875, maxHoogteCm: 220 },
-  heugten: { landen, toeslagen, diesel },
+  /* De dieseltoeslag die deze week geldt, in procenten over het tarief.
+     Gerrit (7 sep 2026): "Elke week sturen de transporteurs hun
+     dieseltoeslagen. Voor deze week is dat: Doesburg 16% / Van Heugten 21%."
+
+     Staat hier als los getal en niet in de staffel, want de staffel hangt aan
+     de dieselprijs per liter en die krijgen wij niet - we krijgen het
+     percentage. Bijwerken kan in Passion Partners Beheer; de datum erbij
+     zodat je ziet of het nog van deze week is. */
+  diesel: { doesburg: 16, heugten: 21, gezet: new Date().toISOString().slice(0, 10) },
+  heugten: { landen, toeslagen, dieselStaffel: diesel },
   doesburg: { kolommen: DOESBURG_KOLOMMEN, banden: DOESBURG.map(r => ({
     ldm: r[0], kg: r[1],
     prijzen: Object.fromEntries(DOESBURG_KOLOMMEN.map((k, i) => [k, r[2 + i]])),

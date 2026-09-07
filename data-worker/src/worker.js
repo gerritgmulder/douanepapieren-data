@@ -745,6 +745,124 @@ async function dpHandleStock(env) {
   return reply(200, { ok: true, updated: agg.updated, shipsUpdated: agg.shipsUpdated, rate, models });
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   WAT KOST HET OM HET TE LATEN BEZORGEN
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Gerrit (7 sep 2026): "Als een spa of sauna bij ons op voorraad komt dan kan
+   de dealer meteen kiezen of hij hem wil afhalen of laten bezorgen."
+
+   Twee vervoerders, en wie je ziet hangt van het land af:
+
+     Van Heugten rijdt alles behalve Nederland - hun lijst is een exportlijst
+       en heeft geen binnenlandse tarieven.
+     Van Doesburg rijdt de Benelux. Duitsland en België rijden wij mét
+       Doesburg omdat die goedkoper is, maar de dealer betaalt Van Heugten.
+       Gerrit: "zodat we op leveringen naar Duitsland en België ook nog iets
+       meer verdienen." Nederland gaat met Doesburg of met onze eigen
+       bakwagen, en daar is Doesburg dus wél het tarief dat de dealer ziet -
+       er is niets anders.
+
+   Hoe het bedrag tot stand komt:
+
+     laadmeters   de vloeroppervlakte van de spa's gedeeld door de breedte van
+                  een trailer (240 cm). Covers tellen niet mee: die gaan
+                  bovenop de spa en kosten geen vloer.
+     gewicht      als het gewicht hoger uitvalt dan wat bij die laadmeters
+                  hoort (1 laadmeter = 1.750 kg), rekent de vervoerder over het
+                  gewicht. Van de meeste modellen kennen we het kistgewicht
+                  niet; dan telt alleen de laadmeter en kan de prijs aan de
+                  lage kant zijn. Dat staat erbij in het antwoord.
+     dieseltoeslag een percentage over het tarief, dat elke week verandert.
+     kooiaap      alleen als de dealer erom vraagt. Manon (7 sep 2026):
+                  "kooiaap is niet standaard, is een keuze."
+
+   Het bedrag is een indicatie en geen offerte: de vervoerder rekent af op wat
+   er werkelijk de wagen op gaat. Dat staat ook zo in het portaal. */
+function vrachtLaadmeters(doos) {
+  if (!doos || !(doos.l > 0) || !(doos.b > 0)) return 0;
+  // Vierkante centimeters vloer, gedeeld door een trailerbreedte van 240 cm.
+  return (doos.l * doos.b) / (240 * 100);
+}
+function vrachtBand(banden, ldm, kg) {
+  // De eerste band die groot genoeg is voor allebei; anders de grootste.
+  return banden.find(b => b.ldm >= ldm - 0.001 && b.kg >= kg - 0.5) || banden[banden.length - 1] || null;
+}
+async function dpHandleVracht(request, env) {
+  let body = {}; try { body = await request.json(); } catch {}
+  const land = String(body.land || "").trim().toUpperCase().slice(0, 2);
+  const postcode = String(body.postcode || "").trim().toUpperCase().replace(/\s+/g, "");
+  const wilKooiaap = body.kooiaap === true;
+  const items = Array.isArray(body.items) ? body.items : [];
+  if (!land) return reply(400, { ok: false, error: "geen land opgegeven" });
+
+  const tar = await env.FONTEYN_DATA.get("transport-tarieven", { type: "json" });
+  if (!tar) return reply(200, { ok: false, error: "de tarieven staan nog niet klaar" });
+  const dozen = ((await env.FONTEYN_DATA.get("spa-dozen", { type: "json" })) || {}).dozen || {};
+
+  let ldm = 0, kg = 0, stuks = 0;
+  const onbekend = [];
+  for (const it of items) {
+    if (String(it.soort || "spa") !== "spa") continue;      // onderdelen gaan als pakket mee
+    const n = Math.max(1, Number(it.qty) || 1);
+    const d = dozen[String(it.model || "")];
+    if (!d || !d.spa) { onbekend.push(String(it.model || "?")); continue; }
+    ldm += vrachtLaadmeters(d.spa) * n;
+    if (d.kg > 0) kg += Number(d.kg) * n;
+    stuks += n;
+  }
+  if (!stuks) return reply(200, { ok: false, error: "geen spa's in de wagen waarvoor we de maat kennen", onbekend });
+  ldm = Math.round(ldm * 100) / 100;
+
+  /* Welke vervoerder de dealer te zien krijgt. Nederland heeft alleen
+     Doesburg; alle andere landen rekenen we af op Van Heugten, ook als wij er
+     met Doesburg heen rijden. */
+  const heugtenLand = (tar.heugten && tar.heugten.landen) ? tar.heugten.landen[land] : null;
+  const viaDoesburg = land === "NL" || !heugtenLand;
+  let basis = null, zone = null, vervoerder = null;
+
+  if (!viaDoesburg) {
+    // Postcodegebied: bij de meeste landen de eerste twee cijfers, bij het
+    // Verenigd Koninkrijk de letters vooraan.
+    const sleutel = /^[A-Z]/.test(postcode) ? postcode.replace(/[^A-Z]/g, "").slice(0, 2)
+                                            : postcode.replace(/\D/g, "").slice(0, 2);
+    zone = heugtenLand.postcodes[sleutel] || heugtenLand.postcodes[sleutel.slice(0, 1)] || null;
+    if (!zone) return reply(200, { ok: false, error: "postcode-onbekend",
+      uitleg: "Postcodegebied \"" + sleutel + "\" staat niet in de tarieflijst voor " + land + "." });
+    const band = vrachtBand(heugtenLand.banden, ldm, kg);
+    if (!band || band.prijzen[zone] == null) return reply(200, { ok: false, error: "geen tarief voor deze zone" });
+    basis = band.prijzen[zone];
+    vervoerder = "Van Heugten";
+  } else {
+    const D = tar.doesburg || {};
+    if (!(D.alleenLanden || []).includes(land))
+      return reply(200, { ok: false, error: "land-niet-in-lijst",
+        uitleg: "Voor " + land + " staat er geen tarief in de lijst. Vraag het even bij ons na." });
+    const pc = parseInt(postcode.replace(/\D/g, "").slice(0, 2), 10);
+    let kolom = "nl";
+    if (land === "LU") kolom = "lu";
+    else if (land === "NL") kolom = pc === 45 ? "nl45_be2039" : "nl";
+    else if (land === "BE") kolom = ((pc >= 20 && pc <= 39) || pc === 91) ? "nl45_be2039"
+                                  : (pc >= 50 && pc <= 89) ? "be5089" : "be";
+    const band = vrachtBand(D.banden, ldm, kg);
+    if (!band || band.prijzen[kolom] == null) return reply(200, { ok: false, error: "geen tarief" });
+    basis = band.prijzen[kolom];
+    vervoerder = "Van Doesburg";
+  }
+
+  const dieselPct = Number((tar.diesel || {})[viaDoesburg ? "doesburg" : "heugten"]) || 0;
+  const diesel = Math.round(basis * (dieselPct / 100) * 100) / 100;
+  const kooiaapBedrag = !wilKooiaap ? 0
+    : (viaDoesburg ? Number((tar.doesburg || {}).kooiaap) || 0
+                   : Number(((tar.heugten.toeslagen || {})[land] || {}).kooiaap) || 0);
+  const totaal = Math.round((basis + diesel + kooiaapBedrag) * 100) / 100;
+
+  return reply(200, { ok: true, land, postcode, vervoerder, zone,
+    stuks, ldm, kg: kg || null, gewichtOnbekend: !kg,
+    basis, dieselPct, diesel, kooiaap: kooiaapBedrag, totaal,
+    onbekend, dieselGezet: (tar.diesel || {}).gezet || null });
+}
+
 /* GET /dealers/api/parts — alle spa-onderdelen en covers.
    ═══════════════════════════════════════════════════════════════════════
    Gerrit (3 sep 2026): "alle spa onderdelen en covers. Die worden regelmatig
@@ -1100,6 +1218,19 @@ async function dpHandleReserve(request, env, sess, url) {
       "Geen kleurvoorkeur opgegeven - artikel " + r.code + " gekozen voor " + r.model).join("\n")]
       .filter(Boolean).join("\n"),
     currency, vatPercent, payFull, levering,
+    /* Afhalen of bezorgen, met het bedrag zoals het op het scherm stond. De
+       vracht wordt NIET meegenomen in de Mollie-aanbetaling en komt ook niet
+       als orderregel in Logic4: de vervoerder rekent af op wat er werkelijk
+       de wagen op gaat, en sales zet de definitieve vracht op de order. Dit
+       legt vast wat er is afgesproken. */
+    vracht: body.vracht && typeof body.vracht === "object" ? {
+      wijze: body.vracht.wijze === "afhalen" ? "afhalen" : "bezorgen",
+      land: String(body.vracht.land || "").slice(0, 2),
+      postcode: String(body.vracht.postcode || "").slice(0, 12),
+      kooiaap: body.vracht.kooiaap === true,
+      bedrag: Number(body.vracht.bedrag) > 0 ? Number(body.vracht.bedrag) : null,
+      vervoerder: String(body.vracht.vervoerder || "").slice(0, 40) || null,
+    } : null,
     spaUnit: eersteSpa ? eersteSpa.unit : null,
     packUnit: spaAantal ? packUnit : 0,
     totaalExVat: Math.round(totaalExVat * 100) / 100,
@@ -1141,6 +1272,17 @@ async function dpHandleReserve(request, env, sess, url) {
     '<div style="font-family:Arial,sans-serif;">' +
     '<p><b>Nieuwe bestelling via het partnerportaal</b></p>' +
     '<p><b>Dealer:</b> ' + esc(sess.company || "") + ' &lt;' + esc(sess.email) + '&gt;</p>' +
+    (entry.vracht
+      ? '<p style="background:#eef5ee;border-left:4px solid #3e7d3f;padding:8px 12px;margin:0 0 12px;">' +
+        (entry.vracht.wijze === "afhalen"
+          ? '<b>Haalt zelf op</b> in Uddel.'
+          : '<b>Laten bezorgen</b> naar ' + esc(entry.vracht.land) + ' ' + esc(entry.vracht.postcode) +
+            (entry.vracht.bedrag ? ' &mdash; opgegeven vrachtprijs &euro; ' + entry.vracht.bedrag.toFixed(2) : '') +
+            (entry.vracht.vervoerder ? ' (' + esc(entry.vracht.vervoerder) + ')' : '') +
+            (entry.vracht.kooiaap ? '<br>Mét kooiaap.' : '') +
+            '<br><span style="color:#6b7280;font-size:12px;">Dit bedrag is de schatting uit het portaal en staat niet op de order; zet de definitieve vracht er zelf op.</span>') +
+        '</p>'
+      : '') +
     (levering === "container"
       ? '<p style="background:#fff4e5;border-left:4px solid #e0a300;padding:8px 12px;margin:0 0 12px;">' +
         '<b>HELE CONTAINER</b> — rechtstreeks uit de fabriek. Niet uit Uddel: er is geen voorraad geclaimd ' +
@@ -2241,7 +2383,12 @@ async function handleDealerRoutes(request, env, url) {
        reservering, geen wachtwoord, geen vraag naar sales. Anders zou een
        collega die "even meekijkt" een aanvraag kunnen indienen die als die
        van een partner binnenkomt. */
-    if (sess.medewerker && request.method !== "GET") {
+    /* Uitzondering: de vrachtprijs uitrekenen. Dat is een POST omdat de
+       winkelwagen meegestuurd moet worden, maar het verandert niets - het is
+       een som. Een collega die meekijkt moet gewoon kunnen zien wat een
+       bezorging kost. */
+    const alleenRekenen = p === "/dealers/api/vracht";
+    if (sess.medewerker && request.method !== "GET" && !alleenRekenen) {
       return reply(403, { ok: false, error: "meekijken-is-alleen-lezen" });
     }
     if (p === "/dealers/api/me" && request.method === "GET") {
@@ -2266,6 +2413,7 @@ async function handleDealerRoutes(request, env, url) {
       return reply(200, { ok: true });
     }
     if (p === "/dealers/api/stock" && request.method === "GET") return dpHandleStock(env);
+    if (p === "/dealers/api/vracht" && request.method === "POST") return dpHandleVracht(request, env);
     if (p === "/dealers/api/parts" && request.method === "GET") return dpHandleParts(env);
     if (p === "/dealers/api/photo" && request.method === "GET") return dpHandleSpaPhoto(env, url);
     if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);

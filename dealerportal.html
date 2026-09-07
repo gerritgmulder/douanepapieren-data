@@ -477,6 +477,40 @@ const CART_KEY = "pp_cart_v1";
 const LEVER_KEY = "pp_lever_v1";
 let levering = "voorraad";
 try { const v = localStorage.getItem(LEVER_KEY); if (v === "container") levering = v; } catch(e){}
+
+/* Afhalen of laten bezorgen.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (7 sep 2026): "Als een spa of sauna bij ons op voorraad komt dan kan
+   de dealer meteen kiezen of hij hem wil afhalen of laten bezorgen. Laten
+   bezorgen wordt dan direct op de beurs samen bekeken met de bijlagen."
+
+   Het adres onthouden we per browser: een dealer bestelt bijna altijd naar
+   hetzelfde adres, en dan hoeft hij het niet elke keer opnieuw in te tikken.
+   De kooiaap niet: Manon (7 sep 2026) "kooiaap is niet standaard, is een
+   keuze", en zo'n keuze hoort elke bestelling opnieuw gemaakt te worden. */
+const VRACHT_KEY = "pp_vracht_v1";
+let vracht = { wijze: "afhalen", land: "", postcode: "", kooiaap: false };
+try {
+  const v = JSON.parse(localStorage.getItem(VRACHT_KEY) || "null");
+  if (v && typeof v === "object") {
+    vracht.wijze = v.wijze === "bezorgen" ? "bezorgen" : "afhalen";
+    vracht.land = String(v.land || "").slice(0, 2);
+    vracht.postcode = String(v.postcode || "").slice(0, 10);
+  }
+} catch(e){}
+function vrachtBewaar(){
+  try { localStorage.setItem(VRACHT_KEY, JSON.stringify({ wijze: vracht.wijze, land: vracht.land, postcode: vracht.postcode })); } catch(e){}
+}
+/* De landen waar een tarief voor is. Nederland staat erbij omdat wij dat zelf
+   rijden; de rest komt uit de lijst van de vervoerder. */
+const VRACHT_LANDEN = [
+  ["NL","Netherlands"],["BE","Belgium"],["LU","Luxembourg"],["DE","Germany"],["FR","France"],
+  ["AT","Austria"],["CH","Switzerland"],["IT","Italy"],["ES","Spain"],["PT","Portugal"],
+  ["DK","Denmark"],["SE","Sweden"],["FI","Finland"],["NO","Norway"],["PL","Poland"],
+  ["CZ","Czechia"],["SK","Slovakia"],["HU","Hungary"],["RO","Romania"],["UK","United Kingdom"],
+];
+let vrachtUitkomst = null;      // laatste antwoord van de server
+let vrachtBezig = false;
 let cart = [];
 try { cart = JSON.parse(localStorage.getItem(CART_KEY) || "[]") || []; } catch(e){ cart = []; }
 
@@ -1735,6 +1769,109 @@ function tekenContainer(ov){
 
 }
 
+/* Het bezorgpaneel in de winkelwagen: afhalen of bezorgen, en bij bezorgen
+   het adres en wat het kost. Zie de toelichting bij VRACHT_KEY hierboven. */
+async function vrachtHaalPrijs(){
+  const spas = cart.filter(r => r.soort === "spa");
+  if (!spas.length || vracht.wijze !== "bezorgen" || !vracht.land) { vrachtUitkomst = null; return; }
+  vrachtBezig = true;
+  try {
+    const r = await api("/dealers/api/vracht", { method: "POST", body: JSON.stringify({
+      land: vracht.land, postcode: vracht.postcode, kooiaap: vracht.kooiaap,
+      items: spas.map(x => ({ soort: "spa", model: x.model, qty: x.qty })) }) });
+    vrachtUitkomst = (r.status === 200 && r.data) ? r.data : { ok: false, error: "HTTP " + r.status };
+  } catch (e) {
+    vrachtUitkomst = { ok: false, error: String(e.message || e) };
+  }
+  vrachtBezig = false;
+}
+function tekenVracht(ov){
+  const doel = ov.querySelector("#vrachtPaneel");
+  if (!doel) return;
+  const spas = cart.filter(r => r.soort === "spa");
+  /* Bij een hele container heeft dit geen zin: die zeevracht wordt per zending
+     en bestemming afgesproken en staat niet in de tarieflijst van een
+     wegvervoerder. */
+  if (!spas.length || levering === "container") { doel.innerHTML = ""; return; }
+
+  const u = vrachtUitkomst;
+  const geld2 = (n) => "\u20ac " + Number(n).toLocaleString("de-DE", {minimumFractionDigits:2, maximumFractionDigits:2});
+  let onder = "";
+  if (vracht.wijze === "bezorgen") {
+    const velden =
+      `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+         <div style="flex:1 1 190px;min-width:170px;"><label style="font-size:11.5px;color:var(--muted);display:block;margin-bottom:4px;">Country</label>
+           <div id="vrachtLand" class="kies"></div></div>
+         <div style="flex:0 1 150px;"><label style="font-size:11.5px;color:var(--muted);display:block;margin-bottom:4px;">Postcode</label>
+           <input id="vrachtPc" value="${esc(vracht.postcode)}" placeholder="e.g. 40213" style="font-size:14px;"></div>
+       </div>
+       <label class="vrachtvink" style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12.5px;cursor:pointer;line-height:1.4;">
+         <input type="checkbox" id="vrachtKooi"${vracht.kooiaap?" checked":""} style="width:auto;flex:0 0 auto;margin:0;">
+         <span>Unloading with a truck-mounted forklift</span></label>`;
+    let som = "";
+    if (vrachtBezig) som = `<p class="lead" style="margin:12px 0 0;">Calculating…</p>`;
+    else if (!vracht.land) som = `<p class="lead" style="margin:12px 0 0;">Choose your country and we will show you the cost.</p>`;
+    else if (u && u.ok) {
+      som =
+        `<table class="prijs" style="margin-top:12px;"><tbody>
+           <tr><td>Transport (${u.ldm} loading metres)</td><td class="n">${geld2(u.basis)}</td></tr>
+           <tr><td>Fuel surcharge ${u.dieselPct}%</td><td class="n">${geld2(u.diesel)}</td></tr>
+           ${u.kooiaap ? `<tr><td>Truck-mounted forklift</td><td class="n">${geld2(u.kooiaap)}</td></tr>` : ""}
+           <tr><td><b>Delivery</b></td><td class="n"><b>${geld2(u.totaal)}</b></td></tr>
+         </tbody></table>
+         <p style="margin:8px 0 0;font-size:11.5px;color:var(--muted);line-height:1.55;">
+           An estimate based on the floor space your spas take up. The final invoice follows what
+           actually goes on the truck.${u.gewichtOnbekend ? " Weights are not known for every model, so a heavy load can come out higher." : ""}
+           ${u.onbekend && u.onbekend.length ? " We do not have the crate size for " + esc([...new Set(u.onbekend)].join(", ")) + " yet, so it is not included." : ""}</p>`;
+    } else if (u && !u.ok) {
+      som = `<p class="lead" style="margin:12px 0 0;color:var(--red);">${esc(u.uitleg || (u.error === "postcode-onbekend"
+        ? "We do not have a rate for that postcode. Send us a message and we will quote it."
+        : "We cannot calculate this one automatically. Send us a message and we will quote it."))}</p>`;
+    }
+    onder = velden + som;
+  } else {
+    onder = `<p class="lead" style="margin:10px 0 0;">You collect the spas from our warehouse in Uddel. No transport cost.</p>`;
+  }
+
+  doel.innerHTML =
+    `<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:10px;background:#fbfbfc;">
+       <b style="font-size:13px;display:block;margin-bottom:8px;">Collect or deliver</b>
+       <div id="vrachtWijze" class="kies"></div>
+       ${onder}
+     </div>`;
+
+  maakKiezer(doel.querySelector("#vrachtWijze"), [
+    { waarde: "afhalen",  tekst: "I collect it myself", bij: "free" },
+    { waarde: "bezorgen", tekst: "Have it delivered",   bij: "we arrange transport" },
+  ], vracht.wijze, async (w) => {
+    vracht.wijze = w; vrachtBewaar();
+    vrachtUitkomst = null;
+    tekenVracht(ov);
+    if (w === "bezorgen") { await vrachtHaalPrijs(); tekenVracht(ov); }
+  });
+
+  if (vracht.wijze !== "bezorgen") return;
+  maakKiezer(doel.querySelector("#vrachtLand"),
+    [{ waarde: "", tekst: "choose your country" }].concat(VRACHT_LANDEN.map(([c, n]) => ({ waarde: c, tekst: n }))),
+    vracht.land, async (c) => {
+      vracht.land = c; vrachtBewaar();
+      vrachtBezig = true; tekenVracht(ov);
+      await vrachtHaalPrijs(); tekenVracht(ov);
+    });
+  const pc = doel.querySelector("#vrachtPc");
+  if (pc) pc.addEventListener("change", async () => {
+    vracht.postcode = pc.value.trim(); vrachtBewaar();
+    vrachtBezig = true; tekenVracht(ov);
+    await vrachtHaalPrijs(); tekenVracht(ov);
+  });
+  const kooi = doel.querySelector("#vrachtKooi");
+  if (kooi) kooi.addEventListener("change", async () => {
+    vracht.kooiaap = kooi.checked;
+    vrachtBezig = true; tekenVracht(ov);
+    await vrachtHaalPrijs(); tekenVracht(ov);
+  });
+}
+
 /* ── Winkelwagen ─────────────────────────────────────────────────────
    Gerrit (3 sep 2026): "er moet een winkelwagen komen, omdat ik ook veel meer
    dan 1 spa wil kunnen bestellen. Misschien wil ik wel 10 covers en 2 spa's
@@ -1819,12 +1956,16 @@ function openCart(){
           <tbody>${rijen}</tbody>
         </table></div>
         <p class="lead" style="margin:12px 0 0;text-align:right;">Order value: <b style="font-size:16px;color:var(--ink)">${geld(cartTotaal())}</b> <span style="font-size:12px">excl. VAT</span></p>
+        ${(levering !== "container" && vracht.wijze === "bezorgen" && vrachtUitkomst && vrachtUitkomst.ok)
+          ? `<p class="lead" style="margin:3px 0 0;text-align:right;font-size:12px;">
+               plus delivery <b>\u20ac ${Number(vrachtUitkomst.totaal).toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2})}</b></p>` : ""}
         ${levering === "container" ? `<p class="lead" style="margin:4px 0 0;text-align:right;font-size:12px;">
             Spa prices only. No warehouse freight surcharge and no packing fee, because the container
             ships straight from the factory. Sea freight is quoted per container and destination.</p>` : ""}
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Delivery</label>
         <div id="cartLever" class="kies"></div>
         <div id="ctrPaneel"></div>
+        <div id="vrachtPaneel"></div>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Payment</label>
         <div id="cartPay" class="kies"></div>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Notes (options, delivery, …)</label>
@@ -1870,6 +2011,12 @@ function openCart(){
       sluit(); openCart();
     });
     tekenContainer(ov);
+    /* Afhalen of bezorgen. Alleen bij levering uit voorraad: een hele
+       container heeft zijn eigen zeevracht en die wordt per zending
+       afgesproken, niet uit deze tarieflijst gerekend. */
+    tekenVracht(ov);
+    if (vracht.wijze === "bezorgen" && vracht.land && levering !== "container")
+      vrachtHaalPrijs().then(() => tekenVracht(ov));
   }
   ov.querySelectorAll(".cdel").forEach(b => b.addEventListener("click", () => {
     cart.splice(Number(b.dataset.i), 1); cartBewaar(); sluit(); openCart();
@@ -1899,6 +2046,13 @@ function openCart(){
                               variant: x.soort === "spa" ? x.code : undefined, variantName: x.variantName })),
       note: (ov.querySelector("#cartNote") || {}).value || "",
       levering,
+      /* Wat de dealer koos voor de bezorging. De prijs gaat mee zoals hij op
+         het scherm stond, zodat sales precies ziet wat er is afgesproken. */
+      vracht: (levering !== "container" && vracht.wijze === "bezorgen")
+        ? { land: vracht.land, postcode: vracht.postcode, kooiaap: vracht.kooiaap,
+            bedrag: (vrachtUitkomst && vrachtUitkomst.ok) ? vrachtUitkomst.totaal : null,
+            vervoerder: (vrachtUitkomst && vrachtUitkomst.ok) ? vrachtUitkomst.vervoerder : null }
+        : { wijze: "afhalen" },
       payFull: keuze === "full", payCent: keuze === "cent" }) });
     const m = ov.querySelector("#cartMsg");
     if (r.status === 200 && r.data && r.data.ok && r.data.checkoutUrl) {

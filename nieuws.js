@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "dealerportaal.html", soort: "nieuw",
+      titel: "Partners kiezen zelf: afhalen of bezorgen",
+      wat: "In de winkelwagen van Passion Partners kan een dealer nu kiezen of hij de spa's zelf ophaalt of laat bezorgen. Bij bezorgen kiest hij zijn land en postcode en staat het bedrag er meteen, inclusief brandstoftoeslag en eventueel een kooiaap. Wat hij kiest komt in de mail naar sales te staan.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "amerika.html", soort: "beter",
       titel: "Oudere facturen van een wire staan er nu ook bij",
       wat: "Facturen met een nummer onder de 3300 vielen buiten de lijst en konden daardoor geen Logic4-order krijgen. Staan ze op een wire, dan komen ze er nu wel bij: zes stuks. De rest van de historie blijft buiten beeld, dus de lijst wordt er niet langer van.",
