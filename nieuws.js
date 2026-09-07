@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "amerika.html", soort: "beter",
+      titel: "Oudere facturen van een wire staan er nu ook bij",
+      wat: "Facturen met een nummer onder de 3300 vielen buiten de lijst en konden daardoor geen Logic4-order krijgen. Staan ze op een wire, dan komen ze er nu wel bij: zes stuks. De rest van de historie blijft buiten beeld, dus de lijst wordt er niet langer van.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "amerika.html", soort: "nieuw",
       titel: "Bankkosten gaan mee op 4630",
       wat: "Bij het boeken op 1160 komt de bankkosten van een wire nu als aparte regel op grootboek 4630, zodat er op 1160 precies overblijft wat er op de bank binnenkwam. De kostenplaats Spa Houston USA kan de koppeling niet meegeven; dat staat als herinnering op het scherm en in de bevestiging.",

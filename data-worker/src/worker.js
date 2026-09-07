@@ -5279,10 +5279,25 @@ async function qbHandleData(request, env) {
 
 // ── Amerika → Logic4: nieuwe QuickBooks-facturen accorderen ──────────
 // Vaste gegevens (Gerrit): debiteur 878871433 (Passion Spa South LLC),
-// magazijn 50 (Warehouse Texas). Vanaf factuurnummer 3300 (t/m nieuwste).
+// magazijn 50 (Warehouse Texas).
 const AMERIKA_DEBTOR = 878871433;
 const AMERIKA_WAREHOUSE = 50;
-const AMERIKA_VANAF = 3300;
+/* Vanaf welk factuurnummer QuickBooks-facturen in beeld komen.
+   ═══════════════════════════════════════════════════════════════════════════
+   Stond op 3300, want Chantal hoefde de historie niet na te lopen. Sinds de
+   wires op 1160 geboekt worden is dat te hoog: op de wires staan zes oudere
+   facturen (2528, 2556, 2590, 2636, 2651 en 2730) die daardoor geen
+   Logic4-order konden krijgen en dus ook niet af te boeken waren.
+   Gerrit (7 sep 2026): "Verlaag die ondergrens, dan kan alles geboekt worden."
+
+   2500 dekt alles wat er op de wires staat, met wat lucht eronder. Lager
+   heeft geen zin: het kost per stap een QuickBooks-pagina extra en er staat
+   niets ouders in de betalingen. */
+const AMERIKA_VANAF = 2500;
+/* Wat er standaard in de lijst komt. Alles daaronder alleen als het op een
+   wire staat - anders wordt de lijst drie keer zo lang met historie waar
+   niemand iets mee doet. */
+const QB_LIJST_VANAF = 3300;
 const QB_ART_FEE = "789456";      // Houston Fee + Freight
 const QB_ART_CC = "100000";       // Credit Card Charge
 const QB_ART_PART = "13265448";   // spa-onderdeel (alles zonder spa-naam)
@@ -5439,7 +5454,7 @@ async function qbHandleOmzet(request, env, url) {
 // Alle QuickBooks-facturen ophalen mét paginering. QBO geeft max 1000 rijen
 // per query; met alleen "MAXRESULTS 200" bleef de lijst hangen op de nieuwste
 // ~200 facturen (Chantal zag daardoor niets ouder dan 3408). We pagineren nu
-// op DocNumber tot we voorbij AMERIKA_VANAF zijn, zodat álles vanaf 3300
+// op DocNumber tot we voorbij AMERIKA_VANAF zijn, zodat álles vanaf die grens
 // binnenkomt. Harde cap van 10 pagina's als veiligheidsrem.
 async function qbAllInvoices(env) {
   const PAGE = 1000;
@@ -5466,16 +5481,36 @@ async function qbHandleInvoices(request, env) {
     const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
     const audrey = (await env.FONTEYN_DATA.get("qb-audrey", { type: "json" })) || { ids: {} };
     const verwerkt = (await env.FONTEYN_DATA.get("qb-verwerkt", { type: "json" })) || { ids: {} };
+    /* Welke factuurnummers op een wire staan. Alleen die mogen onder de
+       gewone ondergrens door; zie de filter hieronder. */
+    const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+    const opWire = new Set();
+    for (const w of (wires.wires || [])) for (const r of (w.regels || []))
+      if (String(r.soort || "") === "factuur" && r.factuur) opWire.add(String(r.factuur).trim());
     const raw = await qbAllInvoices(env);
     const invoices = raw
       // Alleen de doorlopende factuurnummering (3300+). QuickBooks bevat ook
       // oude facturen met een datum-nummer ("09232024_02"); parseInt maakte daar
       // 9232024 van, waardoor ze ten onrechte in de lijst kwamen. Daarom eisen
       // we een puur numeriek nummer van 4-5 cijfers.
+      /* De lijst kort houden, maar niets missen wat geboekt moet worden.
+         ═══════════════════════════════════════════════════════════════════
+         De ondergrens ging van 3300 naar 2500 zodat de oudere facturen die op
+         een wire staan ook een Logic4-order kunnen krijgen. Alles wat daartussen
+         zit meenemen zou de lijst van 418 naar 1190 facturen brengen, en dan
+         zit Chantal de historie door te scrollen waar ze eerder juist van af
+         was.
+
+         Dus: alles vanaf 3300 zoals het was, plus precies die oudere facturen
+         die op een van de wires staan. Dat zijn er zes (2528, 2556, 2590,
+         2636, 2651 en 2730) en die horen er te zijn, want daar moet geld op
+         geboekt worden. */
       .filter(inv => {
         const doc = String(inv.DocNumber || "").trim();
         if (!/^\d{4,5}$/.test(doc)) return false;
-        return parseInt(doc, 10) >= AMERIKA_VANAF;
+        const n = parseInt(doc, 10);
+        if (n >= QB_LIJST_VANAF) return true;
+        return n >= AMERIKA_VANAF && opWire.has(doc);
       })
       .map(inv => {
         const m = qbMapInvoice(inv, catalog, spaModels);
