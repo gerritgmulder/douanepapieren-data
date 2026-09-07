@@ -115,6 +115,12 @@ const ALLOWED_BUCKETS = new Set([
      mag de bronbestanden niet zien - daar staan fabrieksnamen en
      inkoopgegevens in. Hier staan alleen zes getallen per model. */
   "spa-dozen",
+  /* De tarieven van de twee vervoerders, uit hun eigen prijslijsten gehaald
+     door tools/build-transport-tarieven.mjs. Van Heugten is wat de dealer
+     betaalt; Van Doesburg staat erbij omdat wij Duitsland en België daarmee
+     rijden en het verschil onze marge is. Bevat geen klantgegevens - alleen
+     postcodegebieden, laadmeters en bedragen. */
+  "transport-tarieven",
   // Bankkoppeling: welk dagboek waarvoor. Bewust bij de worker en niet in de
   // browser: het memoriaal-dagboek en de tussenrekeningen zijn voor iedereen
   // hetzelfde, dus als Osman het één keer aanwijst hoeft niemand het daarna
