@@ -99,7 +99,7 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 /* ── het agendaraster ── */
 .agenda{background:#fff;border:1px solid var(--rand);border-radius:12px;overflow:hidden}
 .agenda-scroll{overflow:auto;max-height:calc(100vh - 240px);min-height:420px;position:relative}
-.rooster{display:grid;grid-template-columns:52px repeat(7,minmax(120px,1fr));min-width:900px}
+.rooster{display:grid;grid-template-columns:52px repeat(var(--dagen,7),minmax(120px,1fr));min-width:900px}
 .dag-kop{position:sticky;top:0;background:#fff;z-index:6;border-bottom:1px solid var(--rand);
        padding:8px 8px 6px;text-align:left}
 .dag-kop .dnaam{font-size:11px;color:var(--grijs);text-transform:lowercase}
@@ -312,6 +312,12 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
     <input type="date" id="springNaar" title="Spring naar de week van deze datum">
     <button type="button" id="itsKnop">🔧 Servicemeldingen</button>
     <button type="button" class="nieuw" id="nieuwKnop">+ Afspraak</button>
+    <span class="weergavekeus" id="periodeKeus">
+      <button type="button" data-periode="dag">Dag</button>
+      <button type="button" data-periode="werkweek" class="aan">Werkweek</button>
+      <button type="button" data-periode="week">Hele week</button>
+      <button type="button" data-periode="maand">Maand</button>
+    </span>
     <span class="weergavekeus" id="weergaveKeus">
       <button type="button" data-weergave="routes" class="aan">Routes</button>
       <button type="button" data-weergave="tijd">Tijdraster</button>
@@ -614,8 +620,9 @@ function tekenLegenda(){
 /* ── weekgegevens ── */
 function weekLijst(){
   var uit = [];
-  for (var i=0;i<7;i++){
-    var dag = new Date(maandag); dag.setDate(dag.getDate()+i);
+  var begin = periodeStart(), n = periodeAantal();
+  for (var i=0;i<n;i++){
+    var dag = new Date(begin); dag.setDate(dag.getDate()+i);
     var dISO = iso(dag);
     uit.push({ datum: dag, iso: dISO,
       items: afspraken.filter(function(a){ return a.datum===dISO && !filterUit[a.soort]; })
@@ -623,10 +630,22 @@ function weekLijst(){
   }
   return uit;
 }
+var MAANDVOL = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
 function titel(){
-  var einde = new Date(maandag); einde.setDate(einde.getDate()+6);
-  $("weekTitel").textContent = "Week "+weekNr(maandag)+" · "+
-    maandag.getDate()+" "+MAANDEN[maandag.getMonth()]+" - "+einde.getDate()+" "+MAANDEN[einde.getMonth()]+" "+einde.getFullYear();
+  var begin = periodeStart(), n = periodeAantal();
+  var einde = new Date(begin); einde.setDate(einde.getDate()+n-1);
+  if (periode === "dag"){
+    $("weekTitel").textContent = DAGEN[(begin.getDay()+6)%7]+" "+begin.getDate()+" "+
+      MAANDVOL[begin.getMonth()]+" "+begin.getFullYear();
+    return;
+  }
+  if (periode === "maand"){
+    $("weekTitel").textContent = MAANDVOL[begin.getMonth()].charAt(0).toUpperCase()+
+      MAANDVOL[begin.getMonth()].slice(1)+" "+begin.getFullYear();
+    return;
+  }
+  $("weekTitel").textContent = "Week "+weekNr(begin)+" · "+
+    begin.getDate()+" "+MAANDEN[begin.getMonth()]+" - "+einde.getDate()+" "+MAANDEN[einde.getMonth()]+" "+einde.getFullYear();
 }
 
 /* ── het tijdraster (brede schermen) ──
@@ -653,7 +672,7 @@ function teken(){
     var route = w.items.some(function(a){ return a.plaats && !a.klaar; })
       ? '<button type="button" class="route-knop" data-datum="'+w.iso+'" title="Route van deze dag in Google Maps">🚗</button>' : "";
     html += '<div class="dag-kop'+(w.iso===vandaagISO?" vandaag":"")+'">'+route+
-      '<span class="dnaam">'+DAGKORT[i]+'</span><br><span class="dnum">'+w.datum.getDate()+'</span></div>';
+      '<span class="dnaam">'+DAGKORT[dagIndex(w.datum)]+'</span><br><span class="dnum">'+w.datum.getDate()+'</span></div>';
   });
 
   html += '<div class="heledag-label">hele dag</div>';
@@ -684,6 +703,8 @@ function teken(){
     html += blokken(w.items) + '</div>';
   });
 
+  $("rooster").style.setProperty("--dagen", week.length);
+  $("rooster").style.minWidth = Math.max(900, 52 + week.length*120) + "px";
   $("rooster").innerHTML = html;
 
   // telefoonweergave
@@ -691,7 +712,7 @@ function teken(){
     var route = w.items.some(function(a){ return a.plaats && !a.klaar; })
       ? '<button type="button" class="route-knop" data-datum="'+w.iso+'" title="Route van deze dag in Google Maps">🚗</button>' : "";
     return '<div class="dagkaart'+(w.iso===vandaagISO?" vandaag":"")+'">'+route+
-      '<h3>'+DAGEN[i]+'</h3><div class="datum">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+'</div>'+
+      '<h3>'+DAGEN[dagIndex(w.datum)]+'</h3><div class="datum">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+'</div>'+
       (w.items.length ? w.items.map(kaartje).join("") : '<div class="leeg">Nog niets gepland</div>')+
       '<button type="button" class="plus" data-datum="'+w.iso+'">+ afspraak</button></div>';
   }).join("");
@@ -736,6 +757,36 @@ function teken(){
    De tijd blijft gewoon op de afspraak staan; die telt in het tijdraster en
    in de stop-regel. Op het bord gaat het om de volgorde binnen de route, en
    die volgt de tijd. */
+/* Welke periode je ziet. Gerrit (7 sep 2026): "Bij de Planning moet het ook
+   mogelijk zijn om Werkweek, Hele week, Maand, Dag te kunnen kiezen."
+   Werkweek is de stand waar de afdeling in werkt (maandag t/m vrijdag), dus
+   dat is de opening. De keuze blijft staan tussen bezoeken door. */
+var periode = "werkweek";
+try { var p0 = localStorage.getItem("fp.planperiode");
+      if (["dag","werkweek","week","maand"].indexOf(p0)>=0) periode = p0; } catch(e){}
+var PERIODE_DAGEN = { dag:1, werkweek:5, week:7 };
+/* De eerste dag van de periode waar 'maandag' in valt. Bij een dagweergave is
+   dat de dag zelf, bij een maand de eerste van die maand. */
+function periodeStart(){
+  if (periode === "dag") return new Date(maandag);
+  if (periode === "maand") return new Date(maandag.getFullYear(), maandag.getMonth(), 1);
+  return weekStart(maandag);
+}
+function periodeAantal(){
+  if (periode === "maand"){
+    var b = periodeStart();
+    return new Date(b.getFullYear(), b.getMonth()+1, 0).getDate();
+  }
+  return PERIODE_DAGEN[periode] || 5;
+}
+/* Eén stap vooruit of achteruit. Een dag springt een dag, een week een week,
+   een maand een maand - anders klopt "volgende" niet met wat je ziet. */
+function schuifPeriode(richting){
+  if (periode === "dag") maandag.setDate(maandag.getDate() + richting);
+  else if (periode === "maand") maandag = new Date(maandag.getFullYear(), maandag.getMonth()+richting, 1);
+  else maandag.setDate(maandag.getDate() + 7*richting);
+}
+
 var weergave = "routes";
 try { var w0 = localStorage.getItem("fp.planweergave"); if (w0==="tijd"||w0==="routes") weergave = w0; } catch(e){}
 var routesPerDag = {}, dagNotities = {};
@@ -764,7 +815,7 @@ function tekenBord(){
        afdeling nu naar kijkt. */
     var breed = Math.max(190, routes.length * 150 + 14);
     html += '<div class="borddag'+(w.iso===vandaagISO?" vandaag":"")+'" data-datum="'+w.iso+'" style="width:'+breed+'px">'+
-      '<h3>'+DAGEN[i]+'<span class="dd">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+'</span></h3>'+
+      '<h3>'+DAGEN[dagIndex(w.datum)]+'<span class="dd">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+'</span></h3>'+
       '<div class="routes">'+
       routes.map(function(r, ri){
         var stops = stopsVan(w.iso, r.nr, ri===0);
@@ -1072,6 +1123,10 @@ function duurTekst(m){
   var u = Math.floor(m/60), r = m%60;
   return u+(r?","+String(Math.round(r/60*10)):"")+" uur";
 }
+/* De naam van de weekdag hoort uit de DATUM te komen, niet uit de plek in de
+   lijst. Bij een werkweek klopte dat toevallig, maar bij een maandweergave
+   loopt de teller door tot 30 en bestaat DAGEN[i] niet meer. */
+function dagIndex(d){ return (d.getDay()+6)%7; }
 function dagNaam(dISO){
   var d = new Date(dISO+"T12:00:00");
   return DAGEN[(d.getDay()+6)%7]+" "+d.getDate()+" "+MAANDEN[d.getMonth()];
@@ -1416,8 +1471,8 @@ function routeKies(dISO, bijKnop){
 }
 
 /* ── navigatie ── */
-$("vorige").addEventListener("click", function(){ maandag.setDate(maandag.getDate()-7); teken(); });
-$("volgende").addEventListener("click", function(){ maandag.setDate(maandag.getDate()+7); teken(); });
+$("vorige").addEventListener("click", function(){ schuifPeriode(-1); teken(); });
+$("volgende").addEventListener("click", function(){ schuifPeriode(1); teken(); });
 $("vandaagKnop").addEventListener("click", function(){ maandag = weekStart(new Date()); teken(); scrollNaarWerkdag(); });
 $("springNaar").addEventListener("change", function(){
   if (!this.value) return;
@@ -1425,6 +1480,15 @@ $("springNaar").addEventListener("change", function(){
   teken();
 });
 $("nieuwKnop").addEventListener("click", function(){ openForm(null, iso(new Date())); });
+$("periodeKeus").querySelectorAll("button").forEach(function(b){
+  if (b.dataset.periode === periode) b.classList.add("aan"); else b.classList.remove("aan");
+  b.addEventListener("click", function(){
+    periode = b.dataset.periode;
+    try { localStorage.setItem("fp.planperiode", periode); } catch(e){}
+    $("periodeKeus").querySelectorAll("button").forEach(function(x){ x.classList.toggle("aan", x===b); });
+    teken();
+  });
+});
 /* Routes of tijdraster. De keuze blijft staan, want iemand die routes plant
    wil daar de volgende keer weer in beginnen. */
 $("weergaveKeus").querySelectorAll("button").forEach(function(b){

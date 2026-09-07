@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-07", bestand: "planning.html", soort: "nieuw",
+      titel: "Dag, werkweek, hele week of maand",
+      wat: "Boven in de balk kies je welke periode je ziet: een dag, de werkweek (maandag tot en met vrijdag), de hele week of een hele maand. De pijltjes springen dan ook met die stap mee: een dag vooruit, een week vooruit of een maand vooruit. Je keuze blijft staan.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "planning.html", soort: "nieuw",
       titel: "Planning werkt nu met routes",
       wat: "Het weekoverzicht is een routebord geworden, zoals de afdeling het gewend is: per dag de routes naast elkaar, met per route wie er rijdt en de stops eronder. Je voegt een route toe met + route, vult hem met + stop, en sleept een stop naar een andere route of een andere dag. Onderaan elke dag kun je een notitie zetten, bijvoorbeeld MAX 2 ROUTES. Het oude tijdraster staat er nog: rechtsboven wissel je tussen Routes en Tijdraster.",
     },
