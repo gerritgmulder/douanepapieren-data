@@ -2346,7 +2346,34 @@ async function dpRefreshHalStock(env) {
 // horen er dus bij. 23 "Geannuleerd" bewust NIET, ook al hangen daar 3 orders
 // met 44 spa's aan: die zijn afgeblazen en zouden het voorraadbeeld juist
 // vervuilen.
-const DP_RESV_STATUSES = [15, 25, 1, 28, 30];
+/* De orderstatussen die tellen als "moet nog geleverd worden".
+   ═══════════════════════════════════════════════════════════════════════════
+   Manon (7 sep 2026): "Ik zie ook dat niet alle orders automatisch in het
+   Dashboard staan. Voorbeeld order 3512746. Deze hebben we net geladen in een
+   vrachtwagen, maar staat nergens onder partner?"
+
+   Die order staat op status 17 (Te factureren) en er stonden er maar vijf in
+   deze lijst: 15, 25, 1, 28 en 30. Alles wat verder in het proces was gekomen
+   viel eruit - en juist die orders zijn interessant, want de spa staat op het
+   punt de deur uit te gaan terwijl hij nog niet is afgeleverd.
+
+   Over een jaar gemeten stonden er zo 91 orders met een openstaande spa-regel
+   buiten beeld:
+     17 Te factureren      59      8 Wordt gepickt        8
+     29 Afhaal              6      6 Bestellen            5
+     32 Nalevering          4     31 Niet op voorraad     4
+     26 Op afroep           3     27 Wordt gemonteerd     2
+   Dat is niet alleen een gat in de lijst: ze claimen ook voorraad, dus stond
+   'beschikbaar' bij die modellen te hoog.
+
+   Wat er bewust NIET bij staat:
+     3  Afgehandeld     - klaar; en 5.000 orders ophalen voor één openstaande
+                          regel kost meer dan het oplevert
+     23 Geannuleerd     - vervallen
+     4/19 Offerte       - nog geen order
+     34 Retour/Omruilen - een terugkomende spa, geen levering die je inplant
+   Komt daar een keer discussie over, dan is dit de plek. */
+const DP_RESV_STATUSES = [15, 25, 1, 28, 30, 17, 8, 29, 6, 32, 31, 26, 27];
 const WH_NAMES = { 19: "Geen", 20: "OUD Kelder", 21: "Fonteyn", 25: "Showroommodel", 26: "Outlet", 27: "Dealer magazijn", 49: "Derving", 50: "Warehouse Texas USA", 51: "Transporteur", 52: "Retouren" };
 const WH_TEXAS = 50, WH_DEALER = 27;
 /* Kleur uit de regelomschrijving. Die is opgebouwd met streepjes:
@@ -3746,8 +3773,13 @@ async function dpRefreshReservations(env) {
   const fromIso = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 19);
   const byModel = {};      // NL (magazijn ≠ Texas): { model: [lijnen] }
   const byModelUSA = {};   // Amerika (magazijn 50)
+  /* De namen zoals ze in Logic4 staan (Orders/GetOrderStatuses). Ze staan in
+     de lijst zodat iemand kan zien waaróm een order er staat: "te factureren"
+     is iets anders dan "wachten op aanbetaling". */
   const statusName = { 15: "wachten op aanbetaling", 25: "30% aanbetaald", 1: "verkooporder",
-    28: "gepland, wacht op betaling", 30: "volledig betaald, vrijgeven leveren" };
+    28: "gepland, wacht op betaling", 30: "volledig betaald, vrijgeven leveren",
+    17: "te factureren", 8: "wordt gepickt", 29: "afhaal", 6: "bestellen",
+    32: "nalevering", 31: "niet op voorraad", 26: "op afroep", 27: "wordt gemonteerd" };
   const medewerkers = await l4Medewerkers(env);
   // 40 pagina's van 500 = 20.000 orders per status. Stond op 8 (4.000), en de
   // lus stopte daarna zonder een spoor achter te laten - dezelfde stille

@@ -2642,7 +2642,22 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
         "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' readonly title='"+esc(n.opmerking||"Klik om een notitie te schrijven")+"' style='width:110px;font-size:12px;padding:4px 7px;cursor:pointer;text-overflow:ellipsis'"+uit+"></td>"+
         (particulier?"<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='afroep' data-id='"+id+"'"+(n.afroep?" checked":"")+uit+"></td>":"")+
         "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='inplannen' data-id='"+id+"'"+(n.inplannen?" checked":"")+uit+"></td>"+
-        "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='gepland' data-id='"+id+"'"+(n.gepland?" checked":"")+uit+"></td>"+
+        /* Bij een dealer geen invulvenster. Manon (7 sep 2026): "Voor de
+           dealers wil ik niet dit allemaal invullen. Dit verwerken we allemaal
+           in Logic met 1 klik. Nu is het allemaal extra werk."
+
+           Klopt: bij een dealerlevering wordt er geen afspraak met een klant
+           thuis gemaakt - dat gaat om een pallet of een container die de deur
+           uit gaat, en dat staat in Logic4. Het vinkje legt hier alleen vast
+           dát het staat. Wil ze er tóch een agenda-afspraak bij (een monteur
+           die meegaat, een afspraak op locatie), dan kan dat met het knopje
+           ernaast. Bij een particulier blijft het venster wél meteen komen:
+           daar is de afspraak met de klant juist het hele punt. */
+        "<td style='text-align:center;white-space:nowrap'>"+
+          "<input type='checkbox' class='notVink' data-veld='gepland' data-id='"+id+"'"+(n.gepland?" checked":"")+uit+">"+
+          (particulier?"":"<button type='button' class='notAgenda' data-id='"+id+"' title='er tóch een afspraak in Planning bij zetten'"+
+            " style='margin-left:5px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:2px 6px;cursor:pointer;font-size:11px;color:var(--muted)'"+uit+">agenda</button>")+
+        "</td>"+
         (MAG_WIJZIGEN?("<td style='text-align:center'>"+(n.verwijderd
           ? "<button class='notTerug' data-id='"+id+"' title='terugzetten in het dashboard' style='background:#fff;border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;font-size:11px'>terug</button>"
           : "<button class='notWeg' data-id='"+id+"' title='deze regel uit het dashboard halen' style='background:#fff;border:1px solid #fecaca;color:#b91c1c;border-radius:6px;padding:3px 7px;cursor:pointer;font-size:12px'>&#10005;</button>")+"</td>"):"")+
@@ -2714,6 +2729,14 @@ function koppelNotitieVelden(box,rijen){
       renderSoortTabs();
     });
   });
+  /* Bij een dealer komt het invulvenster niet vanzelf; met dit knopje haal je
+     hem er alsnog bij. Zie de toelichting bij de kolom hierboven. */
+  box.querySelectorAll(".notAgenda").forEach(function(b){
+    b.addEventListener("click",function(){
+      const r=perId[b.dataset.id]; if(!r) return;
+      planAfspraak(r);
+    });
+  });
   box.querySelectorAll(".notVink").forEach(function(cb){
     cb.addEventListener("change",function(){
       const r=perId[cb.dataset.id]; if(!r) return;
@@ -2725,7 +2748,7 @@ function koppelNotitieVelden(box,rijen){
          direct te plannen, en dat ie dan ook in Planning de echte afspraak
          plant." Uitvinken doet niets met de agenda: een afspraak die al met
          de klant is gemaakt haal je niet weg omdat hier een vinkje uitgaat. */
-      if(veld==="gepland" && cb.checked) planAfspraak(r);
+      if(veld==="gepland" && cb.checked && !isZakelijk(r)) planAfspraak(r);
       try{ if(window.fpLog) window.fpLog(veld+(cb.checked?"-aangevinkt":"-uitgevinkt"),r.ordernr+" "+r.model+" ("+r.naam+")"); }catch(e){}
       /* De regel verhuist bij het aanvinken naar een ander blok. Dat is de
          bedoeling (Chantal, 5 aug), maar zonder uitleg leest het als "reset

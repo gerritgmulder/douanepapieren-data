@@ -53,6 +53,18 @@
 
     {
       datum: "2026-09-07", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Orders die verderop in het proces zijn staan er weer bij",
+      wat: "Een order die al te factureren stond, gepickt werd of op afhaal stond, verdween uit de lijst terwijl de spa nog niet was afgeleverd. Er werd namelijk maar naar vijf orderstatussen gekeken. Nu naar dertien, en dat scheelt 91 orders die buiten beeld stonden. Bij elke regel zie je in welke status hij staat.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
+      titel: "Geen invulvenster meer bij een dealer",
+      wat: "Vink je 'Gepland' aan bij een dealer of zakelijke klant, dan komt er geen venster meer met datum, tijd, adres en telefoon. Dat regel je in Logic4 en het was dubbel werk. Wil je er toch een afspraak in Planning bij, dan staat daar nu een knopje 'agenda' naast. Bij een particulier blijft het venster wel meteen komen, want daar is de afspraak met de klant juist het punt.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "hersteld",
       titel: "Verwachte levering houdt rekening met de kleur",
       wat: "Een order werd aan het eerstvolgende schip gekoppeld waar dat model op stond, ongeacht de kleur. Op de commercial invoice staat de schaalkleur, dus dat kan beter: een Mystic Mountain-order landt niet meer op een container vol Sterling White. Sterling Silver #30 op de invoice is Sterling White in Logic4; dat is nu gekoppeld.",
     },
