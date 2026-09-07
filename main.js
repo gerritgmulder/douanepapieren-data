@@ -260,6 +260,7 @@ function opentegel(url) {
   venster.on("closed", () => {
     for (const [k, v] of tegelVensters) if (v === venster) tegelVensters.delete(k);
   });
+  venster.webContents.setUserAgent(venster.webContents.getUserAgent() + " " + appUA());
   tegelVensters.set(naam, venster);
   venster.loadURL(url);
   return venster;
@@ -388,6 +389,24 @@ function waitForHelper(maxMs = 10000) {
   });
 }
 
+/* De appversie in de user-agent zetten.
+   ═══════════════════════════════════════════════════════════════════
+   Twee dingen tegelijk. Het activiteitenlogboek probeerde de versie hier al
+   uit te lezen ("fonteyn-dashboard/x.y.z") maar die stond er nooit in, dus
+   werd het altijd "app · Electron 3x.y".
+
+   En belangrijker: de pagina's kunnen hieraan zien of ze in een schil draaien
+   die tegels in een eigen appvenster kan openen. Doen ze dat niet, dan komt
+   een tegel met target="_blank" bij de oude schil in de BROWSER terecht -
+   en dan heb je één venster in de app en de rest in Chrome, en zie je op de
+   Windows-taakbalk je andere schermen niet meer staan. Gerrit (7 sep 2026):
+   "dat werkt verwarrend."
+
+   Zolang deze markering ontbreekt houdt het dashboard het bij het oude
+   gedrag: openen in hetzelfde venster. Zodra de schil is bijgewerkt staat de
+   markering er en verschijnen de eigen vensters vanzelf. */
+function appUA(){ try { return "fonteyn-dashboard/" + app.getVersion(); } catch (e) { return "fonteyn-dashboard/0"; } }
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1500,
@@ -437,6 +456,7 @@ function createWindow() {
     return { action: "deny" };
   });
 
+  mainWindow.webContents.setUserAgent(mainWindow.webContents.getUserAgent() + " " + appUA());
   mainWindow.loadURL(URL);
 
   const menu = Menu.buildFromTemplate([

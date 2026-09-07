@@ -54,7 +54,7 @@
     {
       datum: "2026-09-07", iedereen: true, soort: "nieuw",
       titel: "Elke tegel opent in een eigen venster",
-      wat: "Iedereen werkt met twee schermen, dus vanaf nu opent een tegel in een eigen venster in plaats van over het dashboard heen. Zo kun je Planning op je ene scherm zetten en Voorraadbeheer op je andere. Klik je een tegel aan die al openstaat, dan komt dat venster naar voren; er komt er geen tweede bij.",
+      wat: "Iedereen werkt met twee schermen, dus een tegel opent voortaan in een eigen venster van het Dashboard in plaats van over je vorige scherm heen. Zo kun je Planning op je ene scherm zetten en Voorraadbeheer op je andere, en staan ze allebei gewoon op je taakbalk. Klik je een tegel aan die al openstaat, dan komt dat venster naar voren; er komt er geen tweede bij. Je ziet dit zodra het Dashboard zichzelf heeft bijgewerkt.",
     },
 
     {

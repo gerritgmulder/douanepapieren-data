@@ -1212,6 +1212,14 @@ async function startNieuweRelaties(email){
      zou een tweede tabblad alleen maar in de weg zitten. */
 function tegelsInEigenVenster(){
   if (window.matchMedia && window.matchMedia("(max-width: 720px)").matches) return;
+  /* Alleen in een schil die er ook echt een APPvenster van maakt.
+     Een oudere schil stuurt target="_blank" naar de standaardbrowser. Dan heb
+     je één venster in de app en de rest in Chrome, en zie je op de
+     Windows-taakbalk je andere schermen niet meer staan - Gerrit (7 sep 2026):
+     "dat werkt verwarrend". Zolang de markering in de user-agent ontbreekt
+     blijft het dus bij openen in hetzelfde venster, precies zoals het was.
+     Zodra de schil is bijgewerkt verschijnen de eigen vensters vanzelf. */
+  if (!/fonteyn-dashboard\//.test(navigator.userAgent || "")) return;
   document.querySelectorAll("a.tile").forEach(a => {
     const href = a.getAttribute("href") || "";
     if (!href || href.startsWith("#") || /^https?:/i.test(href)) return;
