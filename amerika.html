@@ -1328,6 +1328,14 @@ function audRenderWachtrij(){
         "<button class='btn' type='button' data-boek='alle' title='De facturen van álle wires afboeken op 1160'>alles boeken op 1160</button>"+
       "</div>"+
     "</div>"+
+    /* Osman moet dit weten zonder een venster te hoeven openen, dus het staat
+       vast op het scherm en niet alleen in de bevestiging bij het boeken. */
+    "<div class='status-msg' style='margin:0 0 12px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d'>"+
+      "<b>Bij het boeken op 1160:</b> de bankkosten van een wire gaan als aparte regel op grootboek "+
+      "<b>4630</b> (Bankrente en kosten), zodat er op 1160 precies overblijft wat er op de bank binnenkwam. "+
+      "De kostenplaats <b>Spa Houston USA</b> kan de koppeling niet meegeven &mdash; die moet er in Logic4 "+
+      "met de hand bij op die kostenregel."+
+    "</div>"+
     "<p class='lead' style='font-size:12px;margin:0 0 12px'>Voor deze facturen is een Logic4-order aangemaakt. Ze blijven hier staan tot de betaling is gekoppeld — vink dan <b>Verwerkt in Logic4</b> aan. Het vinkje geldt ook voor dezelfde factuur in het wire-overzicht hieronder.</p>"+
     "<div class='tablewrap'><table class='grid'><thead><tr>"+
       "<th>Factuur</th><th>Klant</th><th>Logic4-order</th><th>Geaccordeerd</th><th>Betaald (QB)</th><th>Ontv. Audrey</th><th>Verwerkt in Logic4</th><th></th></tr></thead><tbody>"+
