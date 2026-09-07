@@ -58,9 +58,9 @@
     },
 
     {
-      datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
-      titel: "ETA's worden zelf opgehaald",
-      wat: "Een schip zonder ETA wordt bij het openen van de tegel automatisch bij de vervoerder opgevraagd; je hoeft er niet meer op te klikken. Een ingelezen commercial invoice krijgt meteen de goede trackingreferentie mee, dus dat werkt ook voor containers die je net hebt geüpload. Staat het schip bij de vervoerder onder een andere naam dan op de invoice, dan zie je ze allebei.",
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "hersteld",
+      titel: "ETA's blijven vanzelf kloppen",
+      wat: "De verwachte aankomst wordt nu elk uur bij de vervoerder nagevraagd, ook voor schepen waar al een datum bij stond. Die schoof namelijk: bij container 3332-7&3342-3 stond 28 augustus terwijl het 11 september was. Vier ETA's zijn daarmee rechtgezet. Vul je zelf een datum in, dan blijft die staan; wijkt de vervoerder daarvan af, dan zie je dat erbij.",
     },
 
     {

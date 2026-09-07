@@ -3259,41 +3259,63 @@ async function loadSchepen(){
   etaAanvullen();
 }
 
-/* Ontbrekende ETA's er zelf bij halen.
+/* De ETA's bijhouden bij de vervoerder.
    ═══════════════════════════════════════════════════════════════════════
-   Een schip komt binnen zonder ETA: die staat niet op de commercial invoice,
-   dus tot nu toe moest iemand op "ETA ophalen" klikken. Deed niemand dat, dan
-   bleef de kolom leeg - en dan zag je bij Partner containers een streepje
-   zonder te weten dat het antwoord gewoon bij de vervoerder klaarstond.
-   Gerrit (7 sep 2026) over container 3376: "een container die via Merzario
-   komt, daarvan is de ETA niet te zien."
+   Manon (7 sep 2026): "Alle ETA's komen nog niet goed naar boven. Deze baden
+   zitten in container 3332-7&3342-3, ETA is 11/9. Kunnen we zorgen dat het
+   dashboard dit automatisch goed gaat overnemen?"
 
-   Dus wordt er bij het openen één keer gevraagd naar de schepen die nog geen
-   ETA hebben. Niet met force: de worker bewaart het antwoord, dus dit kost
-   bij een tweede bezoek niets extra's. Lukt het niet, dan blijft alles staan
-   zoals het stond - er verdwijnt nooit een datum door deze stap. */
+   Twee dingen gingen mis. Een schip zonder ETA werd nooit opgevraagd - dan
+   moest iemand per schip op "ETA ophalen" klikken. En een schip mét ETA werd
+   nooit meer nagekeken, terwijl een aankomst schuift: bij de SANTORINI
+   EXPRESS stond hier 28 augustus terwijl Merzario 11 september meldde, en dat
+   verschil van twee weken stond gewoon door het hele scherm.
+
+   Nu wordt bij het openen van de tegel elk schip nagevraagd waarvan de datum
+   niet door een mens is ingevuld. De vervoerder is daarbij leidend: die weet
+   het als een schip wordt omgeboekt of vertraging heeft, de invoice niet.
+
+   Wat iemand zélf heeft ingevuld blijft staan - dat is meestal een correctie
+   op iets wat de vervoerder niet weet. Zegt de vervoerder daarna iets anders,
+   dan verdwijnt die eigen datum niet maar komt het verschil in beeld, zodat
+   degene die het invulde kan kiezen.
+
+   Zonder force: de worker bewaart het antwoord, dus twee keer openen kost
+   niets extra. Lukt het niet, dan blijft alles staan zoals het stond - er
+   verdwijnt nooit een datum door deze stap. */
 let etaAlGeprobeerd=false;
 async function etaAanvullen(){
   if(etaAlGeprobeerd) return;
   etaAlGeprobeerd=true;
-  const zonder=(shipsData.ships||[]).filter(s=>!s.eta&&String(s.trackRef||"").trim());
-  if(!zonder.length) return;
+  const kandidaten=(shipsData.ships||[]).filter(s=>String(s.trackRef||"").trim());
+  if(!kandidaten.length) return;
   try{
-    const j=await trackRefs(zonder.map(s=>String(s.trackRef).trim()),false);
-    let n=0;
-    for(const s of zonder){
+    const j=await trackRefs(kandidaten.map(s=>String(s.trackRef).trim()),false);
+    let nieuw=0, gewijzigd=0, afwijkend=0;
+    for(const s of kandidaten){
       const rec=j.results&&j.results[String(s.trackRef).trim()];
       if(!rec) continue;
       s.track=rec;
-      if(rec.eta){ s.eta=rec.eta; n++; }
+      if(!rec.eta) continue;
+      if(s.etaHand){ if(s.eta!==rec.eta) afwijkend++; continue; }   // eigen invulling blijft staan
+      if(!s.eta){ s.eta=rec.eta; nieuw++; }
+      else if(s.eta!==rec.eta){ s.eta=rec.eta; gewijzigd++; }
     }
-    if(n){
-      await saveSchepen(); renderSchepen();
-      // Partner containers leest dezelfde lijst, dus die moet mee.
-      try{ renderPartnerContainers(); }catch(e){}
-      setStatus("ok",n+" ETA"+(n===1?"":"'s")+" opgehaald bij de vervoerder.");
+    if(nieuw||gewijzigd||afwijkend){
+      if(nieuw||gewijzigd){
+        await saveSchepen();
+        // Partner containers en de reserveringenlijst lezen dezelfde schepen.
+        try{ renderPartnerContainers(); }catch(e){}
+        try{ renderSoortTabs(); }catch(e){}
+      }
+      renderSchepen();
+      const stukken=[];
+      if(nieuw) stukken.push(nieuw+" ETA"+(nieuw===1?"":"'s")+" opgehaald");
+      if(gewijzigd) stukken.push(gewijzigd+" ETA"+(gewijzigd===1?"":"'s")+" bijgesteld door de vervoerder");
+      if(afwijkend) stukken.push(afwijkend+" schip"+(afwijkend===1?"":"en")+" waar de vervoerder een andere datum geeft dan er met de hand staat");
+      setStatus(afwijkend?"warn":"ok",stukken.join(" · ")+".");
     }
-  }catch(e){ console.warn("[schepen] ETA aanvullen faalde:",e); }
+  }catch(e){ console.warn("[schepen] ETA bijwerken faalde:",e); }
 }
 /* Is dit een Bill of Lading? Zo ja, welke containers staan erop.
    Alleen als de vervoerder er echt containers in noemt; anders laten we het
@@ -3489,7 +3511,12 @@ function renderSchepen(){
       "</td>"+
       "<td>"+spas+(s.dealerContainer&&spas?" <span style='font-size:11px;color:#c2410c' title='rechtstreeks naar de dealer, telt niet als voorraad'>niet als voorraad</span>":"")+"</td>"+
       "<td>"+trackStatusCell(s.track)+"</td>"+
-      "<td><input type='date' class='shipEta' data-i='"+i+"' value='"+esc(s.eta||"")+"' style='font-size:12.5px'></td>"+
+      "<td><input type='date' class='shipEta' data-i='"+i+"' value='"+esc(s.eta||"")+"' style='font-size:12.5px'>"+
+        (s.etaHand&&s.track&&s.track.eta&&s.track.eta!==s.eta
+          ? "<div style='font-size:11px;color:#92400e;margin-top:3px'>de vervoerder zegt "+esc(datumNL(s.track.eta))+
+            " — maak dit veld leeg om die over te nemen</div>"
+          : (s.etaHand?"<div style='font-size:11px;color:var(--muted);margin-top:3px'>zelf ingevuld</div>":""))+
+      "</td>"+
       // De papieren bij dit schip. Ze staan hier zodat Chantal de packing list
       // kan toevoegen op de plek waar ze het schip toch al bijwerkt; bij
       // Schepen & ontvangst zijn ze daarna terug te zien.
@@ -3534,8 +3561,15 @@ function renderSchepen(){
   }));
   document.querySelectorAll(".shipEta").forEach(inp=>inp.addEventListener("change",async()=>{
     try{ const _s=shipsData.ships[Number(inp.dataset.i)]; if(window.fpLog) window.fpLog("schip-eta-gewijzigd",(_s&&(_s.vessel||_s.ref)||"schip")+" → "+(inp.value?datumNL(inp.value):"leeg")); }catch(e){}
-    shipsData.ships[Number(inp.dataset.i)].eta=inp.value;
-    try{ await saveSchepen(); setStatus("ok","ETA opgeslagen — direct zichtbaar in Passion Partners."); }catch(e){ setStatus("bad",e.message); }
+    const sch=shipsData.ships[Number(inp.dataset.i)];
+    sch.eta=inp.value;
+    /* Zelf ingevuld: dat wint van wat de vervoerder zegt. Leeggemaakt betekent
+       "doe maar automatisch", dan pakt de vervoerder het weer over. */
+    sch.etaHand=!!inp.value;
+    try{ await saveSchepen(); renderSchepen();
+      setStatus("ok",inp.value?"ETA opgeslagen — die blijft nu staan, ook als de vervoerder iets anders zegt."
+                              :"ETA leeggemaakt — hij wordt weer bij de vervoerder opgehaald."); }
+    catch(e){ setStatus("bad",e.message); }
   }));
   document.querySelectorAll(".shipRef").forEach(inp=>inp.addEventListener("change",async()=>{
     shipsData.ships[Number(inp.dataset.i)].trackRef=inp.value.trim();

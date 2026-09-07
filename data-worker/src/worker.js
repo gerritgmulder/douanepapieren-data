@@ -2157,6 +2157,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);
     if (p === "/dealers/admin/terugdraaien" && request.method === "POST") return dpAdminTerugdraaien(request, env);
     if (p === "/dealers/admin/refresh-stock" && request.method === "POST") return reply(200, await dpRefreshHalStock(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    if (p === "/dealers/admin/refresh-eta" && request.method === "POST") return reply(200, await dpRefreshShipEtas(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     if (p === "/dealers/admin/refresh-reserveringen" && request.method === "POST") return reply(200, await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) })));
 
     if (p === "/dealers/admin/refresh-productie" && request.method === "POST") return reply(200, await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) })));
@@ -3677,6 +3678,56 @@ async function spaOntvangstBoeken(env, body) {
     } catch (e) { mislukt.push({ buyOrderId: Number(buyOrderId), fout: String(e.message || e) }); }
   }
   return { ok: mislukt.length === 0, gemaakt: gemaakt, mislukt: mislukt };
+}
+
+/* De ETA's van de schepen bijhouden bij de vervoerder.
+   ═══════════════════════════════════════════════════════════════════════════
+   Manon (7 sep 2026): "Alle ETA's komen nog niet goed naar boven. Deze baden
+   zitten in container 3332-7&3342-3, ETA is 11/9. Kunnen we zorgen dat het
+   dashboard dit automatisch goed gaat overnemen?"
+
+   Bij die container stond 28 augustus terwijl Merzario 11 september meldde.
+   De ETA werd namelijk alleen opgehaald als iemand er in de tegel op klikte,
+   en daarna nooit meer nagekeken - terwijl een aankomst schuift.
+
+   Dit hoort niet aan een openstaand scherm te hangen: de leverforecast draait
+   elk uur op de server en gebruikt diezelfde ETA's, dus dan moeten ze op de
+   server ook kloppen. Vandaar hier, vóór de forecast.
+
+   Wat een mens zelf heeft ingevuld (etaHand) blijft staan. Dat is meestal een
+   correctie op iets wat de vervoerder niet weet; de tegel laat zien wanneer
+   die twee uit elkaar lopen zodat iemand kan kiezen.
+
+   Alleen schepen die nog niet binnen zijn: is de container gelost, dan
+   verandert er niets meer aan en hoeft er niet elk uur naar gevraagd te
+   worden. */
+async function dpRefreshShipEtas(env) {
+  const data = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+  const ships = Array.isArray(data.ships) ? data.ships : [];
+  if (!ships.length) return { ok: true, schepen: 0 };
+  const vandaag = new Date().toISOString().slice(0, 10);
+  const kandidaten = ships.filter(s => {
+    if (!String(s.trackRef || "").trim()) return false;
+    if (s.etaHand) return true;              // wel navragen, niet overschrijven
+    // Al meer dan een week binnen? Dan is het klaar.
+    if (s.eta && s.eta < vandaag && s.track && s.track.progress >= 100) return false;
+    return true;
+  });
+  if (!kandidaten.length) return { ok: true, schepen: 0 };
+  const res = await merzarioTrack(env, kandidaten.map(s => String(s.trackRef).trim()), { force: false });
+  delete res.__error;
+  let nieuw = 0, gewijzigd = 0, afwijkend = 0;
+  for (const s of kandidaten) {
+    const rec = res[String(s.trackRef).trim()];
+    if (!rec) continue;
+    s.track = rec;
+    if (!rec.eta) continue;
+    if (s.etaHand) { if (s.eta !== rec.eta) afwijkend++; continue; }
+    if (!s.eta) { s.eta = rec.eta; nieuw++; }
+    else if (s.eta !== rec.eta) { s.eta = rec.eta; gewijzigd++; }
+  }
+  await env.FONTEYN_DATA.put("voorraad-schepen", JSON.stringify({ ...data, ships, updated: new Date().toISOString() }));
+  return { ok: true, schepen: kandidaten.length, nieuw, gewijzigd, afwijkend };
 }
 
 async function dpRefreshReservations(env) {
@@ -7768,6 +7819,11 @@ export default {
            welke het was. */
         const s = await dpRefreshHalStock(env).catch(e => ({ ok: false, error: String(e.message || e) }));
         console.log("[cron] hal-voorraad: " + JSON.stringify(s));
+        /* Eerst de ETA's, dan de forecast: die laatste verdeelt de
+           reserveringen over de schepen op ETA-volgorde, dus met een oude
+           datum komt de hele volgorde anders uit. */
+        const et = await dpRefreshShipEtas(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+        console.log("[cron] scheeps-ETA's: " + JSON.stringify(et));
         const rv = await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) }));
         console.log("[cron] reserveringen: " + JSON.stringify(rv));
         if (uur % 6 === 1) {
