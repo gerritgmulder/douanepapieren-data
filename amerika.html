@@ -1175,6 +1175,54 @@ async function audInit(){
 // Sectie 1: facturen die geaccordeerd zijn (order staat in Logic4) maar waarvan
 // de betaling nog niet is afgevinkt. Deze blijven staan tot Chantal/Osman zegt
 // dat het écht in Logic4 verwerkt is.
+/* De bestaande orders alsnog hun bedragen geven.
+   ═══════════════════════════════════════════════════════════════════════
+   In blokjes van vijf, want elke factuur kost een QuickBooks-query, een order
+   ophalen en een aanroep per regel. Eerst een proef over het eerste blokje,
+   zodat je ziet wat er gaat gebeuren; daarna loopt hij alle facturen langs en
+   houdt de voortgang bij op de knop zelf. */
+async function audPrijzenBijwerken(knop){
+  const roep = async (vanaf, bevestigd) => {
+    const r = await fetch(WORKER+"/amerika/qb/prijzen",{method:"POST",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+      body:JSON.stringify({vanaf:vanaf,bevestigd:bevestigd})});
+    const j = await r.json().catch(()=>null);
+    if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+    return j;
+  };
+  const oud = knop.textContent;
+  knop.disabled = true;
+  try{
+    knop.textContent = "kijken wat er nodig is…";
+    const proef = await roep(0, false);
+    const teZetten = (proef.resultaten||[]).reduce((n,x)=>n+(x.gezet||0),0);
+    if(!confirm(
+      "Bedragen bijwerken op de Logic4-orders uit QuickBooks\n\n"+
+      proef.totaal+" orders worden nagelopen. In het eerste blokje van "+(proef.resultaten||[]).length+
+      " staan "+teZetten+" regels zonder bedrag.\n\n"+
+      "Regels die al een bedrag hebben blijven met rust, dus je kunt dit gerust nog een keer doen.\n\n"+
+      "Doorgaan?")) return;
+
+    let vanaf = 0, gezet = 0, over = 0, fout = 0, orders = 0;
+    while(vanaf != null){
+      knop.textContent = "bijwerken… "+orders+"/"+proef.totaal;
+      const j = await roep(vanaf, true);
+      for(const x of (j.resultaten||[])){
+        orders++;
+        if(x.status === "ok"){ gezet += (x.gezet||0); over += (x.overgeslagen||0); }
+        else fout++;
+      }
+      vanaf = j.volgende;
+    }
+    if(window.fpLog) window.fpLog("amerika-bedragen-bijgewerkt", orders+" orders, "+gezet+" regels");
+    alert(orders+" orders nagelopen.\n\n"+gezet+" regels hebben nu hun bedrag."+
+      (over?("\n"+over+" regels overgeslagen (niet te koppelen aan een factuurregel)."):"")+
+      (fout?("\n"+fout+" orders gaven een fout."):""));
+    await audLoadFacturen(); audRender();
+  }catch(e){ alert("Bijwerken mislukte: "+e.message); }
+  finally{ knop.disabled = false; knop.textContent = oud; }
+}
+
 function audRenderWachtrij(){
   const box=document.getElementById("audWachtrij"); if(!box) return;
   // Een factuur hoort hier pas te staan nadat Chantal bij Verkoop & dealers
@@ -1198,7 +1246,14 @@ function audRenderWachtrij(){
   box.innerHTML="<div class='card'>"+
     "<div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px'>"+
       "<h3 style='margin:0'>Geaccordeerd — nog te verwerken ("+wacht.length+")</h3>"+
-      (klaar.length?"<span class='pill' style='background:#dcfce7;color:#15803d'>"+klaar.length+" afgerond</span>":"")+
+      "<div style='display:flex;gap:8px;align-items:center'>"+
+        (klaar.length?"<span class='pill' style='background:#dcfce7;color:#15803d'>"+klaar.length+" afgerond</span>":"")+
+        /* De bedragen alsnog op de bestaande orders zetten. Zie de
+           toelichting bij /amerika/qb/prijzen in de worker: alles wat vóór
+           7 sep 2026 is aangemaakt staat in Logic4 op nul, en daar valt niets
+           op af te boeken. */
+        "<button class='btn' type='button' id='audPrijzen' title='Alle eerder aangemaakte Logic4-orders alsnog de bedragen uit QuickBooks geven'>bedragen bijwerken</button>"+
+      "</div>"+
     "</div>"+
     "<p class='lead' style='font-size:12px;margin:0 0 12px'>Voor deze facturen is een Logic4-order aangemaakt. Ze blijven hier staan tot de betaling is gekoppeld — vink dan <b>Verwerkt in Logic4</b> aan. Het vinkje geldt ook voor dezelfde factuur in het wire-overzicht hieronder.</p>"+
     "<div class='tablewrap'><table class='grid'><thead><tr>"+
@@ -1222,6 +1277,8 @@ function audRenderWachtrij(){
     "</tbody></table></div></div>";
   box.querySelectorAll(".audVerw").forEach(cb=>cb.addEventListener("change",()=>audVerwerktKlik(cb)));
   box.querySelectorAll(".audVerberg").forEach(b=>b.addEventListener("click",()=>qbVerbergKlik(b.dataset.nr)));
+  const prijsKnop = box.querySelector("#audPrijzen");
+  if (prijsKnop) prijsKnop.addEventListener("click", () => audPrijzenBijwerken(prijsKnop));
 }
 // Eén handler voor beide plekken (wachtrij én wire-regel) → één waarheid.
 async function audVerwerktKlik(cb){

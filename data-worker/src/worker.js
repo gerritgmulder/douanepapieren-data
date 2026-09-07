@@ -5553,6 +5553,120 @@ async function dpCreateAmerikaOrder(env, mapped) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   DE BEDRAGEN ALSNOG OP DE BESTAANDE AMERIKA-ORDERS ZETTEN
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Gerrit (7 sep 2026): "Ja maak die knop die de bestaande 119 orders
+   bijwerkt."
+
+   Alle orders die tot vandaag uit QuickBooks zijn aangemaakt staan in Logic4
+   op nul: dpCreateAmerikaOrder gaf het regelbedrag niet door. Dat is
+   hierboven rechtgezet voor nieuwe orders, maar wat er al staat blijft nul -
+   en daar valt niets op af te boeken.
+
+   Deze route loopt die orders na. Per factuur: het bedrag per regel uit
+   QuickBooks halen, de bijbehorende regel in de Logic4-order opzoeken, en
+   daar de prijs op zetten.
+
+   Drie dingen die van het uitproberen komen en niet uit de documentatie:
+
+   - AddUpdateOrderRow VERVANGT de regel, hij vult hem niet aan. Stuur je
+     alleen Id en NettPrice, dan is de omschrijving daarna leeg. Bij de eerste
+     proef gebeurde dat ook echt (order 3521115, regel "Houston Fee"). Dus
+     gaat de hele regel mee: artikelcode, omschrijving, aantal, magazijn en
+     de prijs.
+
+   - De regels staan in dezelfde volgorde als de QuickBooks-factuur, want ze
+     zijn er in die volgorde uit aangemaakt. We koppelen op omschrijving, en
+     staat dezelfde omschrijving meer dan eens op de factuur, dan op volgorde
+     binnen die groep. Een regel die niet valt thuis te brengen slaan we over
+     en noemen we in het antwoord; liever een regel op nul dan een bedrag op
+     de verkeerde regel.
+
+   - Regels die al een prijs hebben blijven met rust. Zo kan deze knop twee
+     keer gedraaid worden zonder iets te overschrijven wat iemand met de hand
+     heeft gezet.
+
+   Net als bij het boeken: zonder 'bevestigd:true' verandert er niets en komt
+   alleen terug wát er zou gebeuren. En in blokjes, want elke factuur kost een
+   QuickBooks-query, een order ophalen en een aanroep per regel - dat past niet
+   voor 119 facturen in één keer. */
+async function qbHandlePrijzenBijwerken(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
+    return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const echt = body.bevestigd === true;
+  const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
+  const alle = Object.entries(approved.ids || {}).map(([docNr, v]) => ({ docNr, orderId: v && v.orderId }))
+    .filter(x => x.orderId);
+
+  const MAX = 5;                                   // per keer; het scherm loopt door
+  const vanaf = Math.max(0, parseInt(body.vanaf, 10) || 0);
+  const partij = alle.slice(vanaf, vanaf + MAX);
+  if (!partij.length) return reply(200, { ok: true, klaar: true, totaal: alle.length, vanaf, resultaten: [] });
+
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const spaModels = await qbSpaModelList(env, catalog);
+  const token = echt ? await l4Token(env) : null;
+  const resultaten = [];
+
+  for (const { docNr, orderId } of partij) {
+    try {
+      const j = await qbQuery(env, "SELECT * FROM Invoice WHERE DocNumber = '" + String(docNr).replace(/'/g, "") + "'");
+      const inv = ((j.QueryResponse && j.QueryResponse.Invoice) || [])[0];
+      if (!inv) { resultaten.push({ docNr, orderId, status: "factuur niet meer in QuickBooks" }); continue; }
+      const mapped = qbMapInvoice(inv, catalog, spaModels);
+      const wil = mapped.rows.filter(r => r.productCode && Number(r.price) > 0);
+
+      const orToken = token || await l4Token(env);
+      const orRes = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+        method: "POST", headers: { "Authorization": "Bearer " + orToken, "Content-Type": "application/json" },
+        body: JSON.stringify({ Id: Number(orderId), TakeRecords: 1 }),
+      });
+      const orJson = await orRes.json().catch(() => null);
+      const order = ((orJson && (orJson.Records || orJson)) || [])[0];
+      if (!order) { resultaten.push({ docNr, orderId, status: "order niet gevonden" }); continue; }
+      const regels = (order.OrderRows || []).slice();
+
+      let gezet = 0, overgeslagen = 0, alGoed = 0;
+      for (const w of wil) {
+        const i = regels.findIndex(r => !r._op
+          && String(r.Description || "").trim() === String(w.description || "").trim());
+        if (i < 0) { overgeslagen++; continue; }
+        const r = regels[i];
+        r._op = true;
+        if (Number(r.NettPrice) > 0) { alGoed++; continue; }
+        const stuk = Math.round((Number(w.price) / (Number(w.qty) || 1)) * 100) / 100;
+        if (!(stuk > 0)) { overgeslagen++; continue; }
+        if (!echt) { gezet++; continue; }
+        const res = await fetch("https://api.logic4server.nl/v3/Orders/AddUpdateOrderRow", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            Id: r.Id, OrderId: Number(orderId),
+            ProductCode: String(r.ProductCode || w.productCode),
+            Description: r.Description,           // ongewijzigd terugsturen, anders wist hij hem
+            Qty: Number(r.Qty) || 1,
+            WarehouseId: Number(r.WarehouseId) || AMERIKA_WAREHOUSE,
+            NettPrice: stuk, GrossPrice: stuk,
+          }),
+        });
+        if (res.ok) gezet++; else overgeslagen++;
+      }
+      resultaten.push({ docNr, orderId, status: "ok", gezet, alGoed, overgeslagen,
+                        factuurtotaal: mapped.totaal });
+    } catch (e) {
+      resultaten.push({ docNr, orderId, status: "fout", uitleg: String(e.message || e) });
+    }
+  }
+
+  const volgende = vanaf + partij.length;
+  return reply(200, { ok: true, proef: !echt, totaal: alle.length, vanaf,
+                      volgende: volgende < alle.length ? volgende : null,
+                      klaar: volgende >= alle.length, resultaten });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    DE WIRE UIT AMERIKA BOEKEN — OP 1160
    ═══════════════════════════════════════════════════════════════════════════
 
@@ -8947,6 +9061,9 @@ export default {
     if (url.pathname === "/amerika/qb/audrey"  && request.method === "POST") return qbHandleAudrey(request, env);
     /* De wire boeken op 1160. Zonder bevestigd:true is het een proef en
        gebeurt er niets - zie de toelichting bij qbHandleBoeken. */
+    if (url.pathname === "/amerika/qb/prijzen" && request.method === "POST") {
+      return qbHandlePrijzenBijwerken(request, env);
+    }
     if (url.pathname === "/amerika/qb/boeken" && request.method === "POST") {
       return qbHandleBoeken(request, env);
     }
