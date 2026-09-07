@@ -1482,6 +1482,37 @@ function dpOrderRow(r) {
   return rij;
 }
 
+/* Wat er standaard op een order uit Passion Partners hoort te staan.
+   ═══════════════════════════════════════════════════════════════════════════
+   Gerrit (7 sep 2026): "Bij het aanmaken van een order via Passion Partners
+   moeten een aantal zaken nog worden ingevuld die je gewoon standaard bijna
+   kunt invullen: Orderbron 'Bestaande Dealer', Magazijntype 'Magazijn' als het
+   spa's zijn en 'Spa Service Magazijn' bij onderdelen, en Ind. lev. dtm.
+   31-12-2099."
+
+   Orderbron en Magazijntype zijn in Logic4 vrije typevelden (OrderType1Id tot
+   en met OrderType8Id). De API kent daar géén eindpunt voor dat de namen
+   teruggeeft - niet onder /Orders/, niet onder /Types/ - dus de nummers zijn
+   afgelezen aan orders die Chantal en Manon met de hand hebben gemaakt:
+
+     OrderType1Id = Orderbron. Op de dealerorders die ik nakeek staat overal
+       16, en dat is dus 'Bestaande Dealer'. Over 1.486 orders van de laatste
+       vier maanden komen er dertien verschillende waarden voor, wat klopt met
+       een lijst als Beurs / Website / Showroom / Bestaande Dealer.
+
+     OrderType4Id = Magazijntype. Twee waarden in gebruik: 1 (1.104 orders) en
+       2 (258). Van de orders met alleen onderdelen staat 2 er veel vaker op
+       dan bij orders mét een spa (207 tegen 29), dus 1 = Magazijn en
+       2 = Spa Service Magazijn.
+
+   Die laatste is afgeleid en niet uit een lijst gelezen: staan ze omgekeerd,
+   dan is dat hier één regel. De indicatieve leverdatum is wel zeker; 2099-12-31
+   werd al 136 keer met de hand ingevuld. */
+const DP_ORDERBRON_DEALER = 16;      // OrderType1Id: Bestaande Dealer
+const DP_MAGAZIJN_SPA = 1;           // OrderType4Id: Magazijn
+const DP_MAGAZIJN_SERVICE = 2;       // OrderType4Id: Spa Service Magazijn
+const DP_LEVERDATUM = "2099-12-31T00:00:00";
+
 async function dpCreateLogic4Order(env, opts) {
   if (!env.LOGIC4_USERNAME || !env.LOGIC4_PASSWORD) return { ok: false, error: "logic4-user-not-configured" };
   const token = await l4Token(env);
@@ -1492,6 +1523,11 @@ async function dpCreateLogic4Order(env, opts) {
     CreationDate: new Date().toISOString().slice(0, 19),
     Reference: opts.reference || "",
     Notes: opts.remarks || "",
+    /* Zie het blok hierboven. Zonder deze drie moest sales ze bij élke
+       portaalorder met de hand nazetten. */
+    OrderType1Id: DP_ORDERBRON_DEALER,
+    OrderType4Id: opts.alleenOnderdelen ? DP_MAGAZIJN_SERVICE : DP_MAGAZIJN_SPA,
+    DeliveryDate: DP_LEVERDATUM,
     // Regel zonder ProductCode laat Logic4 óók met een 500 crashen — dus:
     // mét artikelcode een echte productregel, zonder code een regel-loze
     // order (model/aantal staan in Notes; sales vult de regel aan).
@@ -1907,6 +1943,10 @@ async function dpHandleMollieWebhook(request, env) {
               }
               const res = await dpCreateLogic4Order(env, {
                 debtorId, rows: regels,
+                /* Alleen onderdelen in de wagen? Dan hoort de order op het
+                   Spa Service Magazijn en niet op het gewone magazijn. Zit er
+                   ook maar één spa bij, dan is het een spa-order. */
+                alleenOnderdelen: spaStuks === 0,
                 statusId: item.payFull ? 30 : 25,        // 30 = volledig betaald, vrijgeven leveren
                 reference: "DP-" + String(item.id).slice(0, 8),
                 remarks: "Partnerportaal-reservering — " + bedragTxt + ": " + sym + " " + (item.deposit || 0).toFixed(2) + " (Mollie " + p.id + ")"

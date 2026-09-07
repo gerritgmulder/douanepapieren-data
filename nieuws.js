@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-07", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Orders uit het portaal staan meteen goed in Logic4",
+      wat: "Een bestelling uit Passion Partners krijgt nu vanzelf de orderbron 'Bestaande Dealer', het juiste magazijntype (Spa Service Magazijn als het alleen onderdelen zijn, anders Magazijn) en 31-12-2099 als indicatieve leverdatum. Dat hoefde sales tot nu toe bij elke order met de hand na te zetten.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "dealerportaal.html", soort: "beter",
       titel: "Verplichte velden en een aanhef",
       wat: "Een nieuwe dealer of partner aanmaken kan niet meer met halve gegevens: bedrijfsnaam, contactpersoon, e-mail, telefoon, adres, land, bron klant en (binnen de EU) het btw-nummer moeten ingevuld zijn. Wat ontbreekt wordt rood omrand. Er is ook een aanhef bijgekomen, zodat er niet meer 'hij' staat bij iemand die geen hij is.",
     },
