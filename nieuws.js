@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", iedereen: true, soort: "hersteld",
+      titel: "De Mac werkt zichzelf nu ook bij",
+      wat: "Op de Mac kwamen updates nooit binnen. Dat lag niet aan Apple maar aan onze eigen bouwinstellingen: er werd geen zip meegeleverd (en die heeft macOS nodig) en de app had een handtekening die aan één bouwsel vastzat. Allebei rechtgezet, zonder dat er iets betaald hoeft te worden. Deze versie moet nog één keer met de hand geïnstalleerd worden; daarna gaat het vanzelf.",
+    },
+
+    {
+      datum: "2026-09-07", groep: "planning", soort: "beter",
+      titel: "De hele week past op één scherm",
+      wat: "Zet je drie routes op elke dag, dan moest je horizontaal schuiven om de vrijdag te zien. Nu delen de dagen de breedte van het scherm, net als de weekweergave in Outlook, en past de hele week er altijd op. Bij 'wie rijdt?' kies je nu uit de collega's van de afdeling; zelf een naam typen kan nog steeds.",
+    },
+
+    {
       datum: "2026-09-07", iedereen: true, soort: "beter",
       titel: "Het dashboard start een stuk sneller op",
       wat: "Het venster wachtte tot alle tegels bij GitHub waren opgehaald voordat er iets in beeld kwam. Dat kon op een trage lijn tientallen seconden duren. Nu staat het scherm er zodra het klaar is en wordt er op de achtergrond bijgewerkt. Let op: dit zit in de app zelf, dus het geldt pas na de volgende installatie (op Windows gaat dat vanzelf).",

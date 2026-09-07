@@ -143,6 +143,12 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .blok .k[data-bewerk]:hover{text-decoration:underline dotted;text-underline-offset:2px}
 .blok .naamvak{width:100%;border:1px solid var(--lime);border-radius:4px;padding:0 3px;
       font:inherit;font-size:11.5px;font-weight:600;background:#fff}
+/* De keuzelijst met collega's in de kop van een route. Zelfde maat als het
+   invulveld ernaast, zodat de kop niet verspringt als je van kiezen naar
+   zelf typen gaat. */
+.route > h4 .naamkies,.route > h4 .naamvak{width:100%;font:inherit;font-size:11px;font-weight:600;
+      padding:0 3px;border:1px solid var(--lime);border-radius:4px;background:#fff;color:var(--ink);
+      max-width:100%;box-sizing:border-box}
 /* Het vlaggetje dat tijdens het slepen laat zien waar je uitkomt. */
 .sleeptip{position:fixed;z-index:200;background:#111827;color:#fff;font-size:11.5px;font-weight:600;
       padding:4px 9px;border-radius:6px;pointer-events:none;white-space:nowrap;display:none;
@@ -215,9 +221,26 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 /* De dagen naast elkaar. Een dag met drie routes hoort breder te zijn dan een
    dag met één; anders vallen de laatste routes buiten beeld en zie je precies
    niet wat je zoekt. De breedte wordt per dag gezet uit het aantal routes. */
-.bord{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;align-items:flex-start}
+/* Alles op één scherm, net als de weekweergave in Outlook.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (7 sep 2026): "Als ik voor iedere dag 3 routes doe dan zie ik het
+   niet op 1 scherm. Ik wil het wel allemaal op 1 scherm zonder horizontaal te
+   scrollen kunnen zien. Dat kan op de afbeelding die ik je stuurde ook (in
+   Outlook)."
+
+   De dagen hadden een vaste breedte die met het aantal routes meegroeide -
+   drie routes werd bijna vijfhonderd pixels per dag, en dan is een werkweek
+   twee en een half scherm breed. Outlook doet het andersom: de dagen delen de
+   ruimte die er is, en wat erin staat wordt smaller naarmate er meer in staat.
+
+   Dus nu: de dagen zijn even breed en vullen samen het scherm, en de routes
+   binnen een dag delen de breedte van die dag. Bij drie routes op vijf dagen
+   is een routekolom een centimeter of twee - smal, maar je ziet de hele week
+   in één blik en dat is waar het bord voor is. Wil je één dag groot zien, dan
+   is daar de knop Dag voor. */
+.bord{display:flex;gap:8px;padding-bottom:6px;align-items:stretch;width:100%}
 .borddag{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;overflow:hidden;
-      flex:0 0 auto;display:flex;flex-direction:column}
+      flex:1 1 0;min-width:0;display:flex;flex-direction:column}
 .borddag.vandaag{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.25)}
 .borddag > h3{margin:0;padding:8px 10px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;
       background:var(--groen);color:#fff;display:flex;align-items:center;gap:8px}
@@ -241,9 +264,9 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
    er "Route 1" voluit boven elke kolom, met de naam van de rijder eronder,
    en heeft elke kolom een vaste minimumhoogte zodat een lege route er ook
    uitziet als een kolom waar iets in moet. */
-.routes{display:flex;gap:8px;padding:8px;align-items:stretch}
-.route{flex:1 1 150px;min-width:140px;border:1px solid var(--rand);border-radius:9px;background:#fff;
-      display:flex;flex-direction:column;min-height:130px}
+.routes{display:flex;gap:5px;padding:6px;align-items:stretch}
+.route{flex:1 1 0;min-width:0;border:1px solid var(--rand);border-radius:9px;background:#fff;
+      display:flex;flex-direction:column;min-height:120px}
 .route.sleepdoel{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.35)}
 .route > h4{margin:0;padding:6px 8px;font-size:11.5px;background:#eef4e8;border-bottom:1px solid var(--rand);
       border-radius:8px 8px 0 0;display:grid;grid-template-columns:1fr auto auto;
@@ -263,8 +286,12 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .route > h4 .weg{grid-area:weg;background:none;border:0;color:var(--grijs);cursor:pointer;font-size:13px;line-height:1;padding:0 2px}
 .route > h4 .weg:hover{color:var(--rood)}
 .route .stops{padding:4px;display:flex;flex-direction:column;gap:3px;flex:1}
-.route .leegdrop{font-size:10.5px;color:#b7bfb9;text-align:center;padding:14px 2px;
+.route .leegdrop{font-size:10.5px;color:#b7bfb9;text-align:center;padding:12px 2px;
       border:1px dashed var(--rand);border-radius:7px;margin:2px}
+/* In een smalle kolom moet de tekst afbreken in plaats van de kolom
+   openduwen; anders is het bord alsnog breder dan het scherm. */
+.route .stop{overflow-wrap:anywhere;white-space:normal}
+.route > h4 .nr{overflow:hidden;text-overflow:ellipsis}
 .stop{border-radius:6px;border-left:4px solid;padding:3px 6px;font-size:11px;line-height:1.35;cursor:grab;
       background:#fff;border-top:1px solid var(--rand);border-right:1px solid var(--rand);border-bottom:1px solid var(--rand)}
 .stop.sleept{opacity:.5}
@@ -448,11 +475,53 @@ function voornaam(wie){
    "Servicespa" moet als Mike in beeld komen; de rest volgt de gewone regel.
    Namen van de afdeling (Gerrit, 7 sep 2026): Mike, Gerwin, Kevin, Bert-Jan,
    Tim en Bart. */
-var PLANNERS = { "servicespa":"Mike", "bertjan":"Bert-Jan", "bart.vdb":"Bart",
-                 "tim.geerestein":"Tim", "fonteynbot":"Fonteynbot" };
+/* Hoe iemand heet op het bord. De inlognaam is niet altijd de naam die de
+   afdeling gebruikt: Mike zit op spaservice@ en Bert-Jan schrijft zichzelf met
+   een streepje. Wat hier niet in staat krijgt gewoon zijn voornaam. */
+var PLANNERS = { "servicespa":"Mike", "spaservice":"Mike", "mike.deboer":"Mike de Boer",
+                 "bertjan":"Bert-Jan", "bertjan.kok":"Bert-Jan Kok",
+                 "bart.vdb":"Bart", "tim.geerestein":"Tim", "fonteynbot":"Fonteynbot",
+                 "hans.vanputten":"Hans van Putten", "michael.berghorst":"Michael Berghorst",
+                 "wouter.vedder":"Wouter Vedder", "thieme":"Thieme", "joeri":"Joeri",
+                 "dylan":"Dylan", "joey":"Joey", "patrick":"Patrick" };
+
+/* Wie er niet in de keuzelijst hoort. Ze mogen de planning wél zien - Chantal
+   en Arno kijken mee, Dolf en Gerrit zitten overal bij - maar ze rijden geen
+   route, en dan hoort hun naam ook niet in dat menu te staan. */
+var NIET_OP_DE_WEG = ["gerrit","dolf","chantal","arno","don","fonteyn.don","maartens",
+                      "fonteynbot","nomi","gretha","osman","manon","reinier.k"];
 function planNaam(wie){
   var lokaal = String(wie||"").split("@")[0].replace(/^fonteyn\./i,"").toLowerCase();
   return PLANNERS[lokaal] || voornaam(wie);
+}
+
+/* Wie kan er op een route gezet worden.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (7 sep 2026): "Wie gaat erheen: dropdownmenu maken van de
+   beschikbare collega's."
+
+   De lijst komt uit toegang.js, uit de groep die Planning mag zien - dat is
+   precies de afdeling: de service- en plaatsingsploeg plus Kevin en Gerwin.
+   Zo hoeft er geen tweede lijst bijgehouden te worden die na een maand niet
+   meer klopt; komt er iemand bij de afdeling, dan staat hij er hier vanzelf
+   bij zodra hij toegang krijgt.
+
+   Zelf typen blijft mogelijk. Er rijdt weleens iemand mee die niet in het
+   dashboard staat (een uitzendkracht, een monteur van een leverancier), en
+   dan moet je die naam gewoon kwijt kunnen. */
+function collegas(){
+  var uit = [];
+  try {
+    var set = window.fpToegang ? window.fpToegang.set("planning") : null;
+    if (set) set.forEach(function(m){
+      var lokaal = String(m||"").split("@")[0].replace(/^fonteyn\./i,"").toLowerCase();
+      if (NIET_OP_DE_WEG.indexOf(lokaal) >= 0) return;
+      var naam = planNaam(m);
+      if (naam && uit.indexOf(naam) < 0) uit.push(naam);
+    });
+  } catch(e){}
+  uit.sort(function(a,b){ return a.localeCompare(b); });
+  return uit;
 }
 function minuten(t){ var m = String(t||"").match(/^(\d{1,2}):(\d{2})/); return m ? (+m[1])*60+(+m[2]) : null; }
 function tijdStr(min){ return String(Math.floor(min/60)).padStart(2,"0")+":"+String(min%60).padStart(2,"0"); }
@@ -870,13 +939,11 @@ function tekenBord(){
   var html = "";
   week.forEach(function(w,i){
     var routes = routesVan(w.iso);
-    /* Ongeveer 150 pixels per route, plus de randen. Eén route wordt dus
-       een smalle kolom en drie routes een brede - net als op het bord waar de
-       afdeling nu naar kijkt. */
-    var breed = Math.max(210, routes.length * 158 + 18);
+    /* Geen vaste breedte meer per dag: de dagen delen het scherm. Zie de
+       toelichting bij .bord in de stijlen hierboven. */
     var heleDag = heleDagVan(w.iso);
     var totaal = routes.reduce(function(n, r, ri){ return n + stopsVan(w.iso, r.nr, ri===0).length; }, 0);
-    html += '<div class="borddag'+(w.iso===vandaagISO?" vandaag":"")+'" data-datum="'+w.iso+'" style="width:'+breed+'px">'+
+    html += '<div class="borddag'+(w.iso===vandaagISO?" vandaag":"")+'" data-datum="'+w.iso+'">'+
       '<h3>'+DAGEN[dagIndex(w.datum)]+'<span class="dd">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+
         (totaal?' &middot; '+totaal+' stop'+(totaal===1?'':'s'):'')+'</span></h3>'+
       (heleDag.length ? '<div class="dagbalken">'+heleDag.map(function(a){
@@ -1075,14 +1142,39 @@ function bewerkRijder(el){
   var dISO = el.dataset.datum, nr = Number(el.dataset.nr);
   var oud = ((routesVan(dISO).find(function(x){ return Number(x.nr)===nr; })||{}).wie)||"";
   el.innerHTML = "";
+  /* Een keuzelijst met de afdeling erin, en een invulveld eronder voor wie er
+     niet in staat. De keuzelijst is een <select> met een lege eerste regel
+     ("niemand"), zodat je een route ook weer kunt leegmaken. */
+  var namen = collegas();
+  var kies = document.createElement("select");
+  kies.className = "naamkies";
+  kies.style.width = "100%";
+  var opties = [""].concat(namen);
+  if (oud && opties.indexOf(oud) < 0) opties.push(oud);      // een eigen naam blijft staan
+  opties.push("\u2026 andere naam");
+  opties.forEach(function(n){
+    var o = document.createElement("option");
+    o.value = n; o.textContent = n === "" ? "wie rijdt?" : n;
+    if (n === oud) o.selected = true;
+    kies.appendChild(o);
+  });
+  el.appendChild(kies);
   var vak = document.createElement("input");
   vak.className = "naamvak"; vak.value = oud; vak.maxLength = 60;
-  vak.style.width = "100%";
-  el.appendChild(vak); vak.focus(); vak.select();
+  vak.style.cssText = "width:100%;margin-top:3px;display:none";
+  el.appendChild(vak);
+  kies.focus();
+  kies.addEventListener("change", function(){
+    if (kies.value === "\u2026 andere naam") {
+      vak.style.display = ""; vak.value = ""; vak.focus();
+    } else { klaar(true); }
+  });
   var af = false;
   async function klaar(bewaren){
     if (af) return; af = true;
-    var nieuw = vak.value.trim();
+    var nieuw = (vak.style.display === "none")
+      ? (kies.value === "\u2026 andere naam" ? "" : kies.value.trim())
+      : vak.value.trim();
     el.removeAttribute("data-bezig");
     if (!bewaren || nieuw === oud) { teken(); return; }
     try{
