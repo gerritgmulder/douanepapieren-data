@@ -182,10 +182,6 @@
 
   <div class="card">
     <div class="instel">
-      <div>
-        <label for="fCtr">Container</label>
-        <select id="fCtr"></select>
-      </div>
       <div class="keuze"><input type="checkbox" id="fKantelen" checked>
         <label for="fKantelen" style="margin:0;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)">Spa's mogen op hun kant</label>
       </div>
@@ -324,16 +320,16 @@ function nl2(n){return Number(n||0).toLocaleString("nl-NL",{maximumFractionDigit
    Bij een 40 ft High Cube is de binnenkant 269,8 hoog maar de deur 258,5 - een
    spa die rechtop 265 hoog is past dus wél in de container maar komt er niet
    doorheen. Daar wordt op gecontroleerd. */
-const CONTAINERS=[
-  {id:"40hc",naam:"40 ft High Cube", l:1203,b:235,h:269,
-   mm:{l:12032,b:2352,h:2698}, deur:{b:2340,h:2585}, m3:76.3, laadvermogen:26580},
-  {id:"40",  naam:"40 ft standaard",  l:1203,b:235,h:239,
-   mm:{l:12032,b:2352,h:2393}, deur:{b:2340,h:2280}, m3:67.7, laadvermogen:26680},
-  {id:"20",  naam:"20 ft standaard",  l:589, b:235,h:239,
-   mm:{l:5898, b:2352,h:2393}, deur:{b:2340,h:2280}, m3:33.2, laadvermogen:28180},
-  {id:"45hc",naam:"45 ft High Cube",  l:1356,b:235,h:269,
-   mm:{l:13556,b:2352,h:2698}, deur:{b:2340,h:2585}, m3:86.0, laadvermogen:25600},
-];
+/* Eén container, geen keuze. Gerrit (7 sep 2026): "We doen alleen 40ft High
+   Cube containers, dus geen keuze daarin geven, dat hoeft niet."
+
+   Hier stonden er vier (40 HC, 40 standaard, 20 standaard, 45 HC). Dat was
+   een keuzelijst waar in de praktijk nooit iets anders dan de eerste uit werd
+   gekozen, en dan leest zo'n lijst als een beslissing die je zou moeten
+   nemen. Komt er ooit toch een ander soort container, dan is dit de plek:
+   de maten van de andere drie staan in de geschiedenis van dit bestand. */
+const CONTAINER={id:"40hc",naam:"40 ft High Cube", l:1203,b:235,h:269,
+   mm:{l:12032,b:2352,h:2698}, deur:{b:2340,h:2585}, m3:76.3, laadvermogen:26580};
 const MAX_CONTAINERS=12;
 
 /* ─── Waar de maten vandaan komen ─────────────────────────────────────────
@@ -643,7 +639,7 @@ function laadEen(C,gesorteerd,kantelen,voorkeur){
    rekenen en geen vastgelegde boeking. Zo staat je lijstje er morgen nog. */
 const BEWAAR="fp.containerladen";
 let keuze={};                 // sleutel van het model -> aantal
-let C=CONTAINERS[0];
+const C=CONTAINER;
 /* De ruimte naast en achter een spa om hem er met de heftruck in te kunnen
    schuiven. Stond tot 7 sep 2026 als invulveld "Ruimte ernaast (cm)" op het
    scherm, met 5 als beginwaarde. Waarom het er stond: bij het bouwen was niet
@@ -661,7 +657,7 @@ let kantelen=true, coversMee=true;
 
 function bewaar(){
   try{ localStorage.setItem(BEWAAR,JSON.stringify({
-    keuze:keuze, container:C.id, kantelen:kantelen, covers:coversMee
+    keuze:keuze, kantelen:kantelen, covers:coversMee
   })); }catch(e){}
 }
 function herstel(){
@@ -669,7 +665,6 @@ function herstel(){
     const j=JSON.parse(localStorage.getItem(BEWAAR)||"{}");
     if(j&&typeof j==="object"){
       if(j.keuze) keuze=j.keuze;
-      const c=CONTAINERS.find(x=>x.id===j.container); if(c) C=c;
       if(j.kantelen!=null) kantelen=!!j.kantelen;
       if(j.covers!=null) coversMee=!!j.covers;
     }
@@ -1225,11 +1220,6 @@ async function zoekInLogic4(){
 el("btnL4").addEventListener("click",zoekInLogic4);
 
 /* ─── Bedienen ────────────────────────────────────────────────────────── */
-function vulContainerKeuze(){
-  el("fCtr").innerHTML=CONTAINERS.map(c=>
-    "<option value='"+c.id+"'"+(c.id===C.id?" selected":"")+">"+esc(c.naam)+
-    " · "+nl(c.l)+" x "+nl(c.b)+" x "+nl(c.h)+" cm</option>").join("");
-}
 function alsInstellingWijzigt(){
   maxCache={};              // de maten zijn veranderd, dus opnieuw rekenen
   bewaar(); tekenModellen(); tekenPlan();
@@ -1247,7 +1237,6 @@ function alsInstellingWijzigt(){
     return;
   }
   herstel();
-  vulContainerKeuze();
   el("fKantelen").checked=kantelen;
   el("fCovers").checked=coversMee;
   // Eerst tekenen met wat er nu al is (de prijslijsten), zodat de pagina
@@ -1266,10 +1255,6 @@ function alsInstellingWijzigt(){
 
 el("logoutBtn").addEventListener("click",()=>{
   localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href="dashboard.html";
-});
-el("fCtr").addEventListener("change",()=>{
-  C=CONTAINERS.find(x=>x.id===el("fCtr").value)||CONTAINERS[0];
-  alsInstellingWijzigt();
 });
 el("fKantelen").addEventListener("change",()=>{
   kantelen=el("fKantelen").checked; alsInstellingWijzigt();

@@ -89,8 +89,8 @@
 
     {
       datum: "2026-09-07", bestand: "container-laden.html", soort: "beter",
-      titel: "Geen invulveld meer voor de ruimte ernaast",
-      wat: "Het vakje 'Ruimte ernaast' is weg. Er wordt nog steeds met vijf centimeter naast en achter elke spa gerekend, want die ruimte heb je nodig om hem erin te schuiven, maar je hoeft er niets meer aan te draaien.",
+      titel: "Minder knoppen: één container, geen ruimte-veld",
+      wat: "De keuzelijst met vier containersoorten is weg; er wordt altijd met de 40 ft High Cube gerekend, want die gebruiken we. Ook het vakje 'Ruimte ernaast' is weg. Er wordt nog steeds met vijf centimeter naast en achter elke spa gerekend, want die ruimte heb je nodig om hem erin te schuiven, maar je hoeft er niets meer aan te draaien.",
     },
 
     {
