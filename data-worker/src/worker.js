@@ -3801,10 +3801,52 @@ async function dpRefreshReservations(env) {
       (shipsByModel[model] = shipsByModel[model] || []).push({ eta: s.eta || null, qty: Number(q) || 0, vessel: s.vessel || "" });
     }
   }
+  /* De hal-voorraad telt PER KLEUR, niet per model.
+
+     Gerrit (7 sep 2026): "Bij Voorraadbeheer-Partner tabblad staat bij
+     reserveringen dat de Recharge (order 3507691) 'Op voorraad' is. Maar dat
+     is ie niet."
+
+     Dat klopte ook niet. Van de Recharge lagen er twee vrij in Uddel, allebei
+     Pearl Shadow with LIGHT GREY (artikel 100570). De twee oudste betaalde
+     reserveringen kregen die toegewezen - maar allebei die orders zijn Mystic
+     Mountain with OAK (artikel 101250), en daar ligt er niet één van. De
+     forecast telde alleen hoeveel Recharges er vrij waren en keek niet welke.
+     Voor een klant is dat het verschil tussen "hij staat klaar" en "hij moet
+     nog gemaakt worden".
+
+     Dus: per model een potje per kleur. Een reservering pakt uit zijn eigen
+     potje. Wat er in de hal ligt waarvan we de kleur niet kunnen thuisbrengen
+     komt in een restpotje, en dáár pakken de reserveringen zonder kleur uit -
+     zo raakt er niets zoek en wordt er ook niets dubbel vergeven.
+
+     De schepen blijven per model: een commercial invoice noemt het model en
+     niet de kleur, dus daar valt niets fijners over te zeggen. */
+  const kleurVanCode = {};
+  for (const vs of Object.values(catalog.models || {}))
+    for (const v of vs) kleurVanCode[String(v.code)] = dpRowColor(v.desc || "");
+  const kleurSleutel = (k) => String(k || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
   for (const [model, list] of Object.entries(byModel)) {
     const buckets = [];
-    const hal = ((hallen.models || {})[model] || {}).available || 0;
-    if (hal > 0) buckets.push({ kind: "voorraad", eta: null, left: hal });
+    const halRec = (hallen.models || {})[model] || {};
+    /* Per kleur wat er vrij ligt. Valt een artikelcode niet thuis te brengen,
+       dan gaat dat aantal naar het restpotje onder sleutel "". */
+    const halPerKleur = {};
+    let halTotaal = 0;
+    for (const [code, q] of Object.entries(halRec.variants || {})) {
+      const n = Number(q) || 0;
+      if (n <= 0) continue;
+      const k = kleurSleutel(kleurVanCode[String(code)]);
+      halPerKleur[k] = (halPerKleur[k] || 0) + n;
+      halTotaal += n;
+    }
+    /* Staat er wel een vrij aantal maar geen enkele kleurverdeling (een oud
+       formaat, of een model dat niet in de catalogus staat), dan valt alles
+       terug op het restpotje. Zo blijft het gedrag voor die modellen precies
+       zoals het was. */
+    const hal = Number(halRec.available) || 0;
+    if (!halTotaal && hal > 0) { halPerKleur[""] = hal; halTotaal = hal; }
     (shipsByModel[model] || [])
       .sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")))
       .forEach(sh => buckets.push({ kind: sh.eta ? "schip" : "op-schip", eta: sh.eta, left: sh.qty, vessel: sh.vessel }));
@@ -3818,6 +3860,18 @@ async function dpRefreshReservations(env) {
       // trekken NIET uit de Fonteyn-voorraad — die krijgen 'dealer-direct'.
       if (r.container && r.warehouseId === WH_DEALER) { r.verwacht = "dealer-direct"; continue; }
       let need = r.qty, landing = null;
+      /* Eerst de hal, in de kleur van deze order. Kent de order geen kleur,
+         dan uit het restpotje. Is er van díe kleur niets vrij, dan slaan we de
+         hal over en gaat hij door naar de schepen - ook als er van een andere
+         kleur nog tien staan. */
+      const eigenSleutel = kleurSleutel(r.kleur);
+      const potje = halPerKleur[eigenSleutel] != null ? eigenSleutel
+                  : (eigenSleutel ? null : "");
+      if (potje != null && halPerKleur[potje] > 0) {
+        const pak = Math.min(need, halPerKleur[potje]);
+        halPerKleur[potje] -= pak; need -= pak;
+        if (pak > 0) landing = { kind: "voorraad", eta: null };
+      }
       while (need > 0 && bi < buckets.length) {
         const take = Math.min(need, buckets[bi].left);
         buckets[bi].left -= take; need -= take; landing = buckets[bi];
@@ -7677,18 +7731,41 @@ export default {
     ctx.waitUntil((async () => {
       try {
         if (!env.LOGIC4_USERNAME) { console.log("[cron] geen Logic4-creds"); return; }
-        const s = await dpRefreshHalStock(env);
+        const uur = new Date().getUTCHours();
+
+        /* Volgorde en frequentie zijn hier belangrijk, en dat was fout.
+
+           Een worker mag maar een beperkt aantal aanroepen naar buiten doen per
+           keer dat hij draait. dpRefreshProductie doet er honderden: het vraagt
+           van élke open inkooporder bij de fabrieken de regels op. Die stond
+           vóór de reserveringen, en dus was het budget op voordat die aan de
+           beurt waren. Gevolg: de reserveringen-ledger is tussen 1 en 7 sep
+           2026 geen enkele keer bijgewerkt, terwijl hal-voorraad en productie
+           elk uur netjes ververst werden. Het viel niet op omdat de fout in de
+           logs verdween: er was geen aparte melding per stap.
+
+           Nu staan de reserveringen vooraan - dat is wat Chantal, Arno en de
+           adviseurs op het scherm zien - en gaat productie erachteraan, vier
+           keer per etmaal. Productie verandert langzaam (een inkooporder bij
+           de fabriek staat maanden open) en levert alleen het ordernummer en
+           de ETA erbij, dus daar is een paar uur vertraging geen bezwaar.
+
+           Elke stap heeft nu ook zijn eigen vangnet en zijn eigen regel in de
+           logs: gaat er één mis, dan draaien de andere gewoon door en staat er
+           welke het was. */
+        const s = await dpRefreshHalStock(env).catch(e => ({ ok: false, error: String(e.message || e) }));
         console.log("[cron] hal-voorraad: " + JSON.stringify(s));
-        const pr = await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) }));
-        console.log("[cron] productie: " + JSON.stringify(pr));
-        const rv = await dpRefreshReservations(env);   // leest voorraad-productie voor de forecast
+        const rv = await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) }));
         console.log("[cron] reserveringen: " + JSON.stringify(rv));
+        if (uur % 6 === 1) {
+          const pr = await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+          console.log("[cron] productie: " + JSON.stringify(pr));
+        }
 
         /* De zoeklijst van zakelijke relaties, één keer per etmaal. Hij kost
            bijna duizend aanroepen aan Logic4 omdat de klantenlijst 468.000
            records telt; dat hoort niet elk uur te gebeuren. 's Nachts tussen
            drie en vier, als er toch niemand zoekt. */
-        const uur = new Date().getUTCHours();
         if (uur === 2) {
           const zi = await relIndexBouw(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           console.log("[cron] zoeklijst relaties: " + JSON.stringify(zi));

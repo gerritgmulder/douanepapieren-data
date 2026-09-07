@@ -1482,11 +1482,13 @@ $("partsSearch").addEventListener("input", renderParts);
    heftruck in kunnen schuiven. Bovenop niet: spa's staan met hun rand op
    elkaar. Onderdelen en covers uit de Parts-tab tellen niet mee; die gaan los
    in dozen en zijn geen blok waar je mee stapelt. */
-const CONTAINERS = [
-  { id:"40hc", naam:"40 ft High Cube", l:1203, b:235, h:269, deur:{b:2340, h:2585} },
-  { id:"40",   naam:"40 ft standard",  l:1203, b:235, h:239, deur:{b:2340, h:2280} },
-  { id:"45hc", naam:"45 ft High Cube", l:1356, b:235, h:269, deur:{b:2340, h:2585} },
-];
+/* Eén container, geen keuze. Gerrit (7 sep 2026): "We doen alleen 40ft High
+   Cube containers, dus geen keuze daarin geven, dat hoeft niet." Een keuzelijst
+   met één zinnig antwoord erin zet iemand alleen maar aan het twijfelen.
+
+   Binnenwerks 1203 x 235 x 269 cm. De deur is smaller en lager dan de
+   binnenkant (234 breed, 258,5 hoog) en daar moet elke spa doorheen. */
+const CONTAINER = { id:"40hc", naam:"40 ft High Cube", l:1203, b:235, h:269, deur:{b:2340, h:2585} };
 const SPELING = 5;          // cm naast en achter, niet erboven
 const MAX_CONTAINERS = 6;   // meer dan dit rekenen we niet door in de browser
 
@@ -1635,11 +1637,10 @@ function ctrTekening(c, C){
     </div>`;
 }
 
-let ctrKeuze = "40hc";
 let ctrCache = {};      // sleutel -> uitkomst, want stapelen kost rekentijd
 function ctrUitkomst(){
   const { dozen, zonderMaat } = cartDozen();
-  const C = CONTAINERS.find(c => c.id === ctrKeuze) || CONTAINERS[0];
+  const C = CONTAINER;
   if (!dozen.length) return { C, leeg: true, zonderMaat };
   const sleutel = C.id + "|" + dozen.map(d => d.model + d.wat).sort().join(",");
   if (ctrCache[sleutel]) return Object.assign({ C, zonderMaat }, ctrCache[sleutel]);
@@ -1668,9 +1669,10 @@ function tekenContainer(ov){
 
   const r = ctrUitkomst();
   const kop =
-    `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+    `<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
        <b style="font-size:13px;">Your container</b>
-       <div id="ctrKies" class="kies" style="min-width:210px;flex:0 1 240px;"></div>
+       <span style="font-size:12px;color:var(--muted);">${esc(CONTAINER.naam)} &middot; ${
+         (CONTAINER.l*CONTAINER.b*CONTAINER.h/1000000).toFixed(0)} m&sup3;</span>
      </div>`;
 
   let body;
@@ -1731,10 +1733,6 @@ function tekenContainer(ov){
        </p>
      </div>`;
 
-  maakKiezer(doel.querySelector("#ctrKies"),
-    CONTAINERS.map(c => ({ waarde: c.id, tekst: c.naam,
-                           bij: (c.l*c.b*c.h/1000000).toFixed(0) + " m³" })),
-    ctrKeuze, (w) => { ctrKeuze = w; tekenContainer(ov); });
 }
 
 /* ── Winkelwagen ─────────────────────────────────────────────────────

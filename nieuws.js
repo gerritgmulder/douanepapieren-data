@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "hersteld",
+      titel: "'Op voorraad' klopt nu ook op kleur",
+      wat: "Bij de verwachte levering stond soms 'op voorraad' terwijl die kleur er niet lag. Er werd alleen geteld hoeveel spa's van dat model vrij waren, niet welke kleur. Nu pakt elke reservering uit de voorraad van zijn eigen kleur. En de lijst was zes dagen niet ververst; de uursync liep vast en dat is verholpen.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
       titel: "IJsbaden staan niet meer op nul",
       wat: "Een ijsbad dat uit onderdelen wordt samengesteld stond op nul beschikbaar, ook als er honderd vaten en chillers in Uddel lagen. Nu zie je hoeveel er van gemaakt kunnen worden, met erbij dat hij bij het bestellen wordt samengesteld.",
