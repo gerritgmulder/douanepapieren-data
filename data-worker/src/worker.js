@@ -788,6 +788,41 @@ function vrachtBand(banden, ldm, kg) {
   // De eerste band die groot genoeg is voor allebei; anders de grootste.
   return banden.find(b => b.ldm >= ldm - 0.001 && b.kg >= kg - 0.5) || banden[banden.length - 1] || null;
 }
+/* POST /voorraad/dieseltoeslag { doesburg, heugten, door }
+   ═══════════════════════════════════════════════════════════════════════════
+   Gerrit (7 sep 2026): "Elke week sturen de transporteurs hun dieseltoeslagen.
+   Zal ik daar een veldje voor maken zodat Manon dat maandagochtend zelf kan
+   doen? Anders moet ik het elke week aanpassen en dat gaat een keer misgaan."
+
+   Alleen deze twee percentages, en niets anders in de tarievenbucket. Het
+   scherm zou de hele bucket kunnen terugsturen, maar dan kan één verkeerde
+   knop de complete tarieflijst wissen; zo kan er hooguit een verkeerd
+   percentage in staan en dat zie je meteen.
+
+   Teamsleutel, geen beheersleutel: Manon werkt in Voorraadbeheer en heeft de
+   beheersleutel van het partnerportaal niet. */
+async function handleDieseltoeslag(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
+    return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const getal = (x) => {
+    const n = Number(String(x).replace(",", "."));
+    return isFinite(n) && n >= 0 && n <= 100 ? Math.round(n * 10) / 10 : null;
+  };
+  const d = getal(body.doesburg), h = getal(body.heugten);
+  if (d === null || h === null)
+    return reply(400, { ok: false, error: "Vul voor allebei een percentage in tussen 0 en 100." });
+
+  const tar = (await env.FONTEYN_DATA.get("transport-tarieven", { type: "json" }));
+  if (!tar) return reply(404, { ok: false, error: "de tarieven staan nog niet klaar" });
+  const vorige = tar.diesel || {};
+  tar.diesel = { doesburg: d, heugten: h,
+                 gezet: new Date().toISOString().slice(0, 10),
+                 door: String(body.door || "").slice(0, 80) || null };
+  await env.FONTEYN_DATA.put("transport-tarieven", JSON.stringify(tar));
+  return reply(200, { ok: true, diesel: tar.diesel, vorige });
+}
+
 async function dpHandleVracht(request, env) {
   let body = {}; try { body = await request.json(); } catch {}
   const land = String(body.land || "").trim().toUpperCase().slice(0, 2);
@@ -5436,6 +5471,11 @@ async function qbHandleData(request, env) {
 // magazijn 50 (Warehouse Texas).
 const AMERIKA_DEBTOR = 878871433;
 const AMERIKA_WAREHOUSE = 50;
+/* Houston is export buiten de EU, dus altijd 0%. Logic4 vult bij een regel
+   zonder btw-code de NL-standaard 21% in; dat gebeurde bij de regels die de
+   knop 'bedragen ophalen' had herschreven, waardoor zes ordertotalen samen
+   EUR 24.357,69 te hoog stonden. Daarom staat de code hier hard mee. */
+const AMERIKA_BTW_CODE = 29;       // "0% leveringen buiten EU (export)"
 /* Vanaf welk factuurnummer QuickBooks-facturen in beeld komen.
    ═══════════════════════════════════════════════════════════════════════════
    Stond op 3300, want Chantal hoefde de historie niet na te lopen. Sinds de
@@ -5455,6 +5495,25 @@ const QB_LIJST_VANAF = 3300;
 const QB_ART_FEE = "789456";      // Houston Fee + Freight
 const QB_ART_CC = "100000";       // Credit Card Charge
 const QB_ART_PART = "13265448";   // spa-onderdeel (alles zonder spa-naam)
+const QB_BIJ_TE_ZETTEN = ["Shipping", "Sales Tax"];   // mag de knop achteraf aanmaken
+
+/* Sleutel voor qb-approved en de vinkjes.
+   ═══════════════════════════════════════════════════════════════════════
+   Dit ging op factuurnummer, en QuickBooks blijkt nummers dubbel te
+   gebruiken: 3496 bestaat twee keer (Kerns 164,57 en Russell Lowry 111,76),
+   3515 ook (A1 Hot Tubs 29,58 en Hot Tub Outpost 1.141,02). Van zo'n paar
+   kreeg er maar één een Logic4-order; de andere was daarna onzichtbaar en
+   werd nooit geboekt. Tien nummers komen dubbel voor.
+
+   Het interne Id van QuickBooks is wel uniek, dus daar gaat het nu op. De
+   prefix houdt de nieuwe sleutels uit de buurt van de oude, want een Id en
+   een factuurnummer zijn allebei een getal van vier cijfers en zouden elkaar
+   anders raken. Bestaande koppelingen op factuurnummer blijven gelden. */
+const qbSleutel = (inv) => "qb:" + String(inv && (inv.Id != null ? inv.Id : inv.id) || "");
+function qbGekoppeld(map, inv) {
+  const ids = (map && map.ids) || {};
+  return ids[qbSleutel(inv)] || ids[String((inv && (inv.DocNumber || inv.docNr)) || "")] || null;
+}
 
 // Vind de Logic4-artikelcode voor een spa-model + kleur via de catalogus
 // (beste kleur-match op woord-overlap; anders de eerste variant).
@@ -5501,17 +5560,45 @@ async function qbSpaModelList(env, catalog) {
 }
 
 // Parse één QBO-invoice → {docNr, id, klant, datum, totaal, rows[], overgeslagen[]}
+/* Eén ruwe factuur uit QuickBooks, ongefilterd. Nodig toen bleek dat de
+   ordertotalen in Logic4 lager stonden dan de facturen: qbMapInvoice kijkt
+   alleen naar SalesItemLineDetail, en wat daarbuiten valt was onzichtbaar.
+   Alleen met de teamsleutel, alleen lezen. */
+async function qbHandleRuw(request, env, url) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
+    return reply(401, { ok: false, error: "Unauthorized" });
+  const docNr = String(url.searchParams.get("docNr") || "").replace(/'/g, "");
+  if (!docNr) return reply(400, { ok: false, error: "docNr ontbreekt" });
+  const j = await qbQuery(env, "SELECT * FROM Invoice WHERE DocNumber = '" + docNr + "'");
+  const lijst = (j.QueryResponse && j.QueryResponse.Invoice) || [];
+  if (!lijst.length) return reply(404, { ok: false, error: "factuur niet gevonden" });
+  return reply(200, { ok: true, aantal: lijst.length, factuur: lijst[0], alle: lijst });
+}
+
 function qbMapInvoice(inv, catalog, spaModels) {
   const rows = [], skipped = [];
   for (const line of (inv.Line || [])) {
     if (line.DetailType !== "SalesItemLineDetail") continue;
     const d = line.SalesItemLineDetail || {};
+    const amount = Number(line.Amount) || 0;
+    /* De verzendregel van QuickBooks staat ná het subtotaal en heeft geen
+       naam, alleen ItemRef "SHIPPING_ITEM_ID". Die viel daardoor weg, en
+       daarmee stonden de kleine onderdelenorders zo'n 18 tot 25 dollar te
+       laag in Logic4. */
+    if (d.ItemRef && String(d.ItemRef.value) === "SHIPPING_ITEM_ID") {
+      if (amount) rows.push({ productCode: QB_ART_FEE, description: "Shipping", qty: 1, price: amount, kind: "kosten" });
+      continue;
+    }
     const name = (d.ItemRef && d.ItemRef.name) || line.Description || "";
     const qty = Number(d.Qty) || 1;
-    const amount = Number(line.Amount) || 0;
     const m = qbMapLine(name, qty, amount, catalog, spaModels);
     if (m) rows.push(m); else if (name) skipped.push(name);
   }
+  /* Texas sales tax (8,25%) zit niet in een regel maar apart in TxnTaxDetail,
+     en telt wel mee in TotalAmt. Zonder deze regel loopt het ordertotaal
+     achter op de factuur en kruist het niet met wat er binnenkomt op 1160. */
+  const belasting = Number(inv.TxnTaxDetail && inv.TxnTaxDetail.TotalTax) || 0;
+  if (belasting) rows.push({ productCode: QB_ART_FEE, description: "Sales Tax", qty: 1, price: belasting, kind: "kosten" });
   // Betaalstatus uit QuickBooks: Balance = wat er nog openstaat. 0 = volledig
   // betaald door de dealer ("payment received" op de invoice), gelijk aan het
   // totaal = niets betaald, ertussenin = deels betaald.
@@ -5668,11 +5755,12 @@ async function qbHandleInvoices(request, env) {
       })
       .map(inv => {
         const m = qbMapInvoice(inv, catalog, spaModels);
-        m.geaccordeerd = !!(approved.ids && approved.ids[m.docNr]);
-        m.logic4Order = m.geaccordeerd ? approved.ids[m.docNr].orderId : null;
-        m.geaccordeerdTs = m.geaccordeerd ? (approved.ids[m.docNr].ts || null) : null;
-        m.audrey = !!(audrey.ids && audrey.ids[m.docNr]);
-        const v = verwerkt.ids && verwerkt.ids[m.docNr];
+        const a = qbGekoppeld(approved, inv);
+        m.geaccordeerd = !!a;
+        m.logic4Order = a ? a.orderId : null;
+        m.geaccordeerdTs = a ? (a.ts || null) : null;
+        m.audrey = !!qbGekoppeld(audrey, inv);
+        const v = qbGekoppeld(verwerkt, inv);
         m.verwerkt = !!v;
         m.verwerktTs = v ? (v.ts || null) : null;
         m.verwerktDoor = v ? (v.user || null) : null;
@@ -5721,10 +5809,12 @@ async function dpCreateAmerikaOrder(env, mapped) {
       const rij = {
         ProductCode: String(r.productCode), Description: r.description,
         Qty: Number(r.qty) || 1, WarehouseId: AMERIKA_WAREHOUSE,
+        VatCodeId: AMERIKA_BTW_CODE,
       };
       const totaal = Number(r.price) || 0;
       const stuks = Number(r.qty) || 1;
-      if (totaal > 0) {
+      // Ook negatief: een Credit Card Charge kan een korting zijn (-216,00).
+      if (totaal !== 0) {
         const stuk = Math.round((totaal / stuks) * 100) / 100;
         rij.NettPrice = stuk;
         rij.GrossPrice = stuk;
@@ -5786,8 +5876,14 @@ async function qbHandlePrijzenBijwerken(request, env) {
   let body = {}; try { body = await request.json(); } catch {}
   const echt = body.bevestigd === true;
   const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
-  const alle = Object.entries(approved.ids || {}).map(([docNr, v]) => ({ docNr, orderId: v && v.orderId }))
-    .filter(x => x.orderId);
+  /* De sleutel is "qb:<id>" sinds QuickBooks dubbele factuurnummers bleek te
+     hebben; oudere koppelingen staan nog op het factuurnummer zelf. */
+  const alle = Object.entries(approved.ids || {}).map(([sleutel, v]) => ({
+    sleutel,
+    qbId: sleutel.startsWith("qb:") ? sleutel.slice(3) : null,
+    docNr: (v && v.docNr) || (sleutel.startsWith("qb:") ? null : sleutel),
+    orderId: v && v.orderId,
+  })).filter(x => x.orderId);
 
   const MAX = 5;                                   // per keer; het scherm loopt door
   const vanaf = Math.max(0, parseInt(body.vanaf, 10) || 0);
@@ -5799,13 +5895,15 @@ async function qbHandlePrijzenBijwerken(request, env) {
   const token = echt ? await l4Token(env) : null;
   const resultaten = [];
 
-  for (const { docNr, orderId } of partij) {
+  for (const { docNr, qbId, orderId } of partij) {
     try {
-      const j = await qbQuery(env, "SELECT * FROM Invoice WHERE DocNumber = '" + String(docNr).replace(/'/g, "") + "'");
+      const waar = qbId ? "Id = '" + String(qbId).replace(/'/g, "") + "'"
+                        : "DocNumber = '" + String(docNr).replace(/'/g, "") + "'";
+      const j = await qbQuery(env, "SELECT * FROM Invoice WHERE " + waar);
       const inv = ((j.QueryResponse && j.QueryResponse.Invoice) || [])[0];
       if (!inv) { resultaten.push({ docNr, orderId, status: "factuur niet meer in QuickBooks" }); continue; }
       const mapped = qbMapInvoice(inv, catalog, spaModels);
-      const wil = mapped.rows.filter(r => r.productCode && Number(r.price) > 0);
+      const wil = mapped.rows.filter(r => r.productCode && Number(r.price) !== 0);
 
       const orToken = token || await l4Token(env);
       const orRes = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
@@ -5817,16 +5915,47 @@ async function qbHandlePrijzenBijwerken(request, env) {
       if (!order) { resultaten.push({ docNr, orderId, status: "order niet gevonden" }); continue; }
       const regels = (order.OrderRows || []).slice();
 
-      let gezet = 0, overgeslagen = 0, alGoed = 0;
+      let gezet = 0, overgeslagen = 0, alGoed = 0, toegevoegd = 0;
       for (const w of wil) {
-        const i = regels.findIndex(r => !r._op
-          && String(r.Description || "").trim() === String(w.description || "").trim());
-        if (i < 0) { overgeslagen++; continue; }
+        /* Een factuur kan twee regels met dezelfde omschrijving hebben en een
+           verschillend aantal (factuur 3575: 1x gratis en 3x betaald). Zoek
+           daarom eerst op omschrijving én aantal; anders belandt het bedrag op
+           de verkeerde regel en klopt het ordertotaal niet. */
+        const zelfde = r => !r._op && String(r.Description || "").trim() === String(w.description || "").trim();
+        let i = regels.findIndex(r => zelfde(r) && (Number(r.Qty) || 1) === (Number(w.qty) || 1));
+        if (i < 0) i = regels.findIndex(zelfde);
+        if (i < 0) {
+          /* Shipping en Sales Tax werden vroeger niet uit QuickBooks gelezen,
+             dus die regels ontbreken op de bestaande orders. Alleen die twee
+             mogen erbij; voor de rest is 'geen match' een naamverschil en zou
+             toevoegen een dubbele regel opleveren. */
+          if (!QB_BIJ_TE_ZETTEN.includes(String(w.description || "").trim())) { overgeslagen++; continue; }
+          const stukN = Math.round((Number(w.price) / (Number(w.qty) || 1)) * 100) / 100;
+          if (!stukN) { overgeslagen++; continue; }
+          if (!echt) { toegevoegd++; continue; }
+          const resN = await fetch("https://api.logic4server.nl/v3/Orders/AddUpdateOrderRow", {
+            method: "POST",
+            headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              OrderId: Number(orderId), ProductCode: String(w.productCode),
+              Description: w.description, Qty: Number(w.qty) || 1,
+              WarehouseId: AMERIKA_WAREHOUSE, VatCodeId: AMERIKA_BTW_CODE,
+              NettPrice: stukN, GrossPrice: stukN,
+            }),
+          });
+          if (resN.ok) toegevoegd++; else overgeslagen++;
+          continue;
+        }
         const r = regels[i];
         r._op = true;
-        if (Number(r.NettPrice) > 0) { alGoed++; continue; }
         const stuk = Math.round((Number(w.price) / (Number(w.qty) || 1)) * 100) / 100;
-        if (!(stuk > 0)) { overgeslagen++; continue; }
+        if (!stuk) { overgeslagen++; continue; }
+        /* Staat het bedrag er al goed op en is de btw nul, dan niets doen.
+           Nul mag zowel code 29 (export) als 17 (btw vrij) zijn; die laatste
+           staat op negentig bestaande regels en die herschrijf ik niet, want
+           dat verschuift ze in de btw-aangifte zonder dat het bedrag wijzigt. */
+        if (Math.abs(Number(r.NettPrice) - stuk) < 0.005
+            && !(Number(r.VATPercentage) > 0)) { alGoed++; continue; }
         if (!echt) { gezet++; continue; }
         const res = await fetch("https://api.logic4server.nl/v3/Orders/AddUpdateOrderRow", {
           method: "POST",
@@ -5837,12 +5966,16 @@ async function qbHandlePrijzenBijwerken(request, env) {
             Description: r.Description,           // ongewijzigd terugsturen, anders wist hij hem
             Qty: Number(r.Qty) || 1,
             WarehouseId: Number(r.WarehouseId) || AMERIKA_WAREHOUSE,
+            /* AddUpdateOrderRow vervangt de regel: laat je de btw-code weg,
+               dan zet Logic4 er 21% NL op. Bij export moet dat nul blijven. */
+            VatCodeId: Number(r.VatCodeId) === AMERIKA_BTW_CODE ? r.VatCodeId
+                     : (Number(r.VATPercentage) > 0 ? AMERIKA_BTW_CODE : (Number(r.VatCodeId) || AMERIKA_BTW_CODE)),
             NettPrice: stuk, GrossPrice: stuk,
           }),
         });
         if (res.ok) gezet++; else overgeslagen++;
       }
-      resultaten.push({ docNr, orderId, status: "ok", gezet, alGoed, overgeslagen,
+      resultaten.push({ docNr, orderId, status: "ok", gezet, toegevoegd, alGoed, overgeslagen,
                         factuurtotaal: mapped.totaal });
     } catch (e) {
       resultaten.push({ docNr, orderId, status: "fout", uitleg: String(e.message || e) });
@@ -6070,11 +6203,78 @@ async function qbHandleBoeken(request, env) {
 
 // POST /amerika/qb/approve { docNrs:[...] } — maak Logic4-orders voor de
 // geselecteerde facturen. Side-effect: alleen op expliciete actie van Chantal.
+/* POST /amerika/qb/sleutels — de bestaande koppelingen omzetten van
+   factuurnummer naar het unieke QuickBooks-id.
+   ═══════════════════════════════════════════════════════════════════════
+   Zolang een koppeling op het nummer staat, wijzen bij een dubbel nummer
+   béide facturen naar dezelfde Logic4-order en blijft de tweede onzichtbaar.
+   Dat gold voor 3496 (Russell Lowry 111,76 stond achter de order van Kerns)
+   en 3515 (Hot Tub Outpost 1.141,02 achter die van A1 Hot Tubs).
+
+   Bij een uniek nummer is de omzetting eenduidig. Bij een dubbel nummer
+   bepaalt het ordertotaal in Logic4 welke van de twee facturen erbij hoort;
+   past geen van beide, dan blijft de oude sleutel staan en komt de factuur
+   in het antwoord terug als onbeslist. Draai hem gerust nog eens: wat al op
+   een id staat wordt overgeslagen. */
+async function qbHandleSleutels(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
+    return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const echt = body.bevestigd === true;
+  const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
+  approved.ids = approved.ids || {};
+  const oud = Object.keys(approved.ids).filter(k => !k.startsWith("qb:"));
+  if (!oud.length) return reply(200, { ok: true, klaar: true, omgezet: 0, melding: "alles staat al op het QuickBooks-id" });
+
+  const alle = await qbAllInvoices(env);
+  const perNr = new Map();
+  for (const inv of alle) {
+    const nr = String(inv.DocNumber || "").trim();
+    if (!nr) continue;
+    if (!perNr.has(nr)) perNr.set(nr, []);
+    perNr.get(nr).push(inv);
+  }
+  const token = await l4Token(env);
+  const omgezet = [], onbeslist = [];
+  for (const nr of oud) {
+    const kandidaten = perNr.get(nr) || [];
+    if (!kandidaten.length) { onbeslist.push({ docNr: nr, reden: "factuur niet meer in QuickBooks" }); continue; }
+    let inv = kandidaten[0];
+    if (kandidaten.length > 1) {
+      const orderId = approved.ids[nr].orderId;
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ Id: Number(orderId), TakeRecords: 1 }),
+      });
+      const j = await r.json().catch(() => null);
+      const order = ((j && (j.Records || j)) || [])[0];
+      const totaal = order && order.Totals ? Number(order.Totals.AmountIncl) : null;
+      const raak = totaal == null ? null
+        : kandidaten.find(k => Math.abs(Number(k.TotalAmt || 0) - totaal) < 0.02);
+      if (!raak) { onbeslist.push({ docNr: nr, orderId, ordertotaal: totaal,
+        kandidaten: kandidaten.map(k => ({ id: k.Id, totaal: k.TotalAmt, klant: k.CustomerRef && k.CustomerRef.name })) }); continue; }
+      inv = raak;
+    }
+    omgezet.push({ docNr: nr, qbId: inv.Id, orderId: approved.ids[nr].orderId,
+                   klant: (inv.CustomerRef && inv.CustomerRef.name) || "" });
+    if (echt) {
+      approved.ids[qbSleutel(inv)] = Object.assign({}, approved.ids[nr], { docNr: nr });
+      delete approved.ids[nr];
+    }
+  }
+  if (echt) await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
+  return reply(200, { ok: true, proef: !echt, omgezet: omgezet.length, onbeslist, voorbeeld: omgezet.slice(0, 5) });
+}
+
 async function qbHandleApprove(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
   let body = {}; try { body = await request.json(); } catch {}
+  /* Het scherm stuurt qbIds (het unieke Id van QuickBooks). docNrs blijft
+     werken voor een oud scherm dat nog in een tabblad openstaat. */
+  const qbIds = (Array.isArray(body.qbIds) ? body.qbIds : []).map(String).filter(Boolean);
   const docNrs = (Array.isArray(body.docNrs) ? body.docNrs : []).map(String);
-  if (!docNrs.length) return reply(400, { ok: false, error: "geen facturen geselecteerd" });
+  const opdrachten = qbIds.length ? qbIds.map(id => ({ qbId: id })) : docNrs.map(d => ({ docNr: d }));
+  if (!opdrachten.length) return reply(400, { ok: false, error: "geen facturen geselecteerd" });
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const spaModels = await qbSpaModelList(env, catalog);
   const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
@@ -6098,27 +6298,32 @@ async function qbHandleApprove(request, env) {
          weesorders. Nu wordt er na élke geslaagde order opgeslagen, dus een
          afgebroken verzoek kan nooit meer dubbele orders opleveren. */
   const MAX_PER_KEER = 10;
-  if (docNrs.length > MAX_PER_KEER) {
+  if (opdrachten.length > MAX_PER_KEER) {
     return reply(400, { ok: false, error: "te-veel-tegelijk", max: MAX_PER_KEER,
       hint: "Stuur ze in blokjes van maximaal " + MAX_PER_KEER + "; het scherm doet dat vanzelf." });
   }
   const results = [];
-  for (const docNr of docNrs) {
-    if (approved.ids[docNr]) { results.push({ docNr, ok: true, orderId: approved.ids[docNr].orderId, already: true }); continue; }
+  for (const opdracht of opdrachten) {
+    const veilig = String(opdracht.qbId || opdracht.docNr).replace(/'/g, "");
+    const waar = opdracht.qbId ? "Id = '" + veilig + "'" : "DocNumber = '" + veilig + "'";
+    let docNr = opdracht.docNr || null;
     try {
-      const j = await qbQuery(env, "SELECT * FROM Invoice WHERE DocNumber = '" + docNr.replace(/'/g, "") + "'");
+      const j = await qbQuery(env, "SELECT * FROM Invoice WHERE " + waar);
       const inv = ((j.QueryResponse && j.QueryResponse.Invoice) || [])[0];
-      if (!inv) { results.push({ docNr, ok: false, error: "factuur niet gevonden" }); continue; }
+      if (!inv) { results.push({ docNr, qbId: opdracht.qbId, ok: false, error: "factuur niet gevonden" }); continue; }
+      docNr = inv.DocNumber || docNr;
+      const bestaand = qbGekoppeld(approved, inv);
+      if (bestaand) { results.push({ docNr, qbId: opdracht.qbId, ok: true, orderId: bestaand.orderId, already: true }); continue; }
       const mapped = qbMapInvoice(inv, catalog, spaModels);
       const res = await dpCreateAmerikaOrder(env, mapped);
       if (res.ok) {
-        approved.ids[docNr] = { orderId: res.orderId, ts: new Date().toISOString() };
+        approved.ids[qbSleutel(inv)] = { orderId: res.orderId, docNr, ts: new Date().toISOString() };
         // Meteen vastleggen. Nooit meer aan het eind van de lus.
         await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
-        results.push({ docNr, ok: true, orderId: res.orderId });
+        results.push({ docNr, qbId: opdracht.qbId, ok: true, orderId: res.orderId });
       }
-      else results.push({ docNr, ok: false, error: res.error });
-    } catch (e) { results.push({ docNr, ok: false, error: String(e.message || e) }); }
+      else results.push({ docNr, qbId: opdracht.qbId, ok: false, error: res.error });
+    } catch (e) { results.push({ docNr, qbId: opdracht.qbId, ok: false, error: String(e.message || e) }); }
   }
   return reply(200, { ok: true, results });
 }
@@ -6251,11 +6456,14 @@ async function qbHandleAudrey(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
   let body = {}; try { body = await request.json(); } catch {}
   const docNr = String(body.docNr || "").trim();
-  if (!docNr) return reply(400, { ok: false, error: "docNr ontbreekt" });
+  /* Op het unieke Id van QuickBooks, niet op het factuurnummer: tien nummers
+     komen dubbel voor en anders zet één vinkje er twee aan. */
+  const sleutel = body.qbId ? "qb:" + String(body.qbId).trim() : docNr;
+  if (!sleutel) return reply(400, { ok: false, error: "docNr ontbreekt" });
   const data = (await env.FONTEYN_DATA.get("qb-audrey", { type: "json" })) || { ids: {} };
   data.ids = data.ids || {};
-  if (body.ontvangen) data.ids[docNr] = { ts: new Date().toISOString(), user: String(body.user || "").slice(0, 80) };
-  else delete data.ids[docNr];
+  if (body.ontvangen) data.ids[sleutel] = { docNr, ts: new Date().toISOString(), user: String(body.user || "").slice(0, 80) };
+  else { delete data.ids[sleutel]; delete data.ids[docNr]; }
   await env.FONTEYN_DATA.put("qb-audrey", JSON.stringify(data));
   return reply(200, { ok: true, ontvangen: !!body.ontvangen });
 }
@@ -6270,11 +6478,12 @@ async function qbHandleVerwerkt(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
   let body = {}; try { body = await request.json(); } catch {}
   const docNr = String(body.docNr || "").trim();
-  if (!docNr) return reply(400, { ok: false, error: "docNr ontbreekt" });
+  const sleutel = body.qbId ? "qb:" + String(body.qbId).trim() : docNr;   // zie qbSleutel
+  if (!sleutel) return reply(400, { ok: false, error: "docNr ontbreekt" });
   const data = (await env.FONTEYN_DATA.get("qb-verwerkt", { type: "json" })) || { ids: {} };
   data.ids = data.ids || {};
-  if (body.verwerkt) data.ids[docNr] = { ts: new Date().toISOString(), user: String(body.user || "").slice(0, 80) };
-  else delete data.ids[docNr];
+  if (body.verwerkt) data.ids[sleutel] = { docNr, ts: new Date().toISOString(), user: String(body.user || "").slice(0, 80) };
+  else { delete data.ids[sleutel]; delete data.ids[docNr]; }
   await env.FONTEYN_DATA.put("qb-verwerkt", JSON.stringify(data));
   return reply(200, { ok: true, verwerkt: !!body.verwerkt, docNr });
 }
@@ -8562,6 +8771,9 @@ export default {
     }
 
     // Merzario-tracking (intern, team-sleutel) — zie handleTrack
+    if (url.pathname === "/voorraad/dieseltoeslag" && request.method === "POST") {
+      return handleDieseltoeslag(request, env);
+    }
     if (url.pathname === "/track" && request.method === "POST") {
       return handleTrack(request, env);
     }
@@ -9329,6 +9541,7 @@ export default {
     if (url.pathname === "/amerika/qb/status")   return qbHandleStatus(request, env);
     if (url.pathname === "/amerika/qb/data")     return qbHandleData(request, env);
     if (url.pathname === "/amerika/qb/invoices") return qbHandleInvoices(request, env);
+    if (url.pathname === "/amerika/qb/ruw")      return qbHandleRuw(request, env, url);
     if (url.pathname === "/amerika/qb/omzet")    return qbHandleOmzet(request, env, url);
     // De wisselkoers staat in dealer-prices, en dat is een dealer-bucket die
     // met de team-sleutel niet gelezen mag worden. Voor de waardebepaling van
@@ -9350,6 +9563,7 @@ export default {
       catch (e) { return reply(200, { ok: false, error: String(e.message || e), ...(cache || {}) }); }
     }
     if (url.pathname === "/amerika/qb/approve" && request.method === "POST") return qbHandleApprove(request, env);
+    if (url.pathname === "/amerika/qb/sleutels" && request.method === "POST") return qbHandleSleutels(request, env);
     if (url.pathname === "/amerika/qb/herstel-koppeling" && request.method === "POST") return qbHandleHerstel(request, env);
     if (url.pathname === "/amerika/qb/audrey"  && request.method === "POST") return qbHandleAudrey(request, env);
     /* De wire boeken op 1160. Zonder bevestigd:true is het een proef en

@@ -52,6 +52,24 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "amerika.html", soort: "beter",
+      titel: "De bedragen van de Amerika-orders kloppen nu met QuickBooks",
+      wat: "Alle 116 orders die uit QuickBooks zijn omgezet staan in Logic4 op precies het factuurbedrag, samen $ 414.719,18. Er ontbrak drie dingen: de sales tax van 8,25% (die zit in QuickBooks niet in een regel maar apart), de verzendregel (die heeft in QuickBooks geen naam en viel weg, zo'n 18 tot 25 dollar per onderdelenorder) en op negen spa-regels stond 21% Nederlandse btw in plaats van 0% export, samen 24.357,69 euro te veel. De knop 'bedragen ophalen uit QuickBooks' zet het voortaan in één keer goed.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "amerika.html", soort: "beter",
+      titel: "Facturen met hetzelfde nummer raken elkaar niet meer kwijt",
+      wat: "QuickBooks gebruikt tien factuurnummers twee keer, op verschillende klanten. Van zo'n paar kreeg maar één factuur een Logic4-order en verdween de andere uit beeld, waaronder Hot Tub Outpost ($ 1.141,02) en Swim King ($ 32.648,52). De koppeling loopt nu op het interne nummer van QuickBooks, dat wel uniek is. Een dubbel nummer krijgt in de lijst het label 'nr 2x'; die facturen mag je allebei accorderen.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "amerika.html", soort: "beter",
+      titel: "Een order verspringt niet meer als je hem aanvinkt",
+      wat: "Vinkte Osman een order af, dan schoot die meteen naar de onderkant van het scherm en moest je zoeken waar je gebleven was. De volgorde ligt nu vast zolang het scherm openstaat.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "dealerportaal.html", soort: "nieuw",
       titel: "Partners kiezen zelf: afhalen of bezorgen",
       wat: "In de winkelwagen van Passion Partners kan een dealer nu kiezen of hij de spa's zelf ophaalt of laat bezorgen. Bij bezorgen kiest hij zijn land en postcode en staat het bedrag er meteen, inclusief brandstoftoeslag en eventueel een kooiaap. Wat hij kiest komt in de mail naar sales te staan.",

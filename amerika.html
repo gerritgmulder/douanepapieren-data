@@ -897,21 +897,27 @@ function renderQbInvoices(){
     "<div class='tablewrap'><table class='grid'><thead><tr><th></th><th>Factuur</th><th>Klant</th><th>Datum</th><th>Regels</th><th>Betaald</th><th>Ontv. Audrey</th><th>Status</th><th></th></tr></thead><tbody>";
   // Geaccordeerde facturen staan niet meer in deze lijst — die volgen het
   // vervolgtraject in het tabblad 'Ontvangen Audrey' (wens Chantal).
+  /* QuickBooks hergebruikt factuurnummers: tien nummers staan er twee keer,
+     op verschillende klanten. Zonder waarschuwing lijkt dat een dubbele regel
+     en wordt er één weggeklikt, terwijl het twee echte facturen zijn. */
+  const perNr={}; for(const i of qbInvoices) perNr[i.docNr]=(perNr[i.docNr]||0)+1;
   for(const inv of nieuw){
+    const dubbel=perNr[inv.docNr]>1;
     const spaN=inv.rows.filter(r=>r.kind==='spa').reduce((a,r)=>a+r.qty,0);
-    const open=!!qbOpen[inv.docNr];
-    html+="<tr class='qbRow' data-nr='"+esc(inv.docNr)+"' style='cursor:pointer'>"+
-      "<td>"+(inv.geaccordeerd?"":"<input type='checkbox' class='qbChk' data-nr='"+esc(inv.docNr)+"' onclick='event.stopPropagation()'>")+"</td>"+
-      "<td><span class='qbArrow'>"+(open?"▾ ":"▸ ")+"</span><b>#"+esc(inv.docNr)+"</b></td><td>"+esc(inv.klant)+"</td><td style='font-size:12px'>"+esc(datumNL(inv.datum))+"</td>"+
+    const sleutel=String(inv.id||inv.docNr);
+    const open=!!qbOpen[sleutel];
+    html+="<tr class='qbRow' data-nr='"+esc(inv.docNr)+"' data-qbid='"+esc(inv.id||"")+"' style='cursor:pointer'>"+
+      "<td>"+(inv.geaccordeerd?"":"<input type='checkbox' class='qbChk' data-nr='"+esc(inv.docNr)+"' data-qbid='"+esc(inv.id||"")+"' onclick='event.stopPropagation()'>")+"</td>"+
+      "<td><span class='qbArrow'>"+(open?"▾ ":"▸ ")+"</span><b>#"+esc(inv.docNr)+"</b>"+(dubbel?" <span class='pill' style='background:#fee2e2;color:#b91c1c;font-size:10px' title='Dit factuurnummer komt in QuickBooks twee keer voor, op verschillende klanten. Het zijn twee aparte facturen; accordeer ze allebei.'>nr 2x</span>":"")+"</td><td>"+esc(inv.klant)+"</td><td style='font-size:12px'>"+esc(datumNL(inv.datum))+"</td>"+
       "<td>"+inv.rows.length+" regels · "+spaN+" spa</td>"+
       "<td>"+qbBetaaldPill(inv)+"</td>"+
-      "<td onclick='event.stopPropagation()'><label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'><input type='checkbox' class='qbAudrey' data-nr='"+esc(inv.docNr)+"'"+(inv.audrey?" checked":"")+"><span style='font-size:11px;color:"+(inv.audrey?"#15803d":"var(--muted)")+"'>"+(inv.audrey?"ontvangen":"nee")+"</span></label></td>"+
+      "<td onclick='event.stopPropagation()'><label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'><input type='checkbox' class='qbAudrey' data-nr='"+esc(inv.docNr)+"' data-qbid='"+esc(inv.id||"")+"'"+(inv.audrey?" checked":"")+"><span style='font-size:11px;color:"+(inv.audrey?"#15803d":"var(--muted)")+"'>"+(inv.audrey?"ontvangen":"nee")+"</span></label></td>"+
       "<td>"+(inv.geaccordeerd?"<span class='pill' style='background:#dcfce7;color:#15803d'>Logic4 #"+esc(inv.logic4Order||"?")+"</span>"+
         (inv.audrey&&inv.deelsBetaald?" <span class='pill' style='background:#fef3c7;color:#92400e' title='Staat ook in Ontvangen Audrey. Blijft hier tot de factuur volledig betaald is.'>kopie</span>":"")
         :"<span class='pill' style='background:#fef3c7;color:#92400e'>nieuw</span>")+"</td>"+
       "<td onclick='event.stopPropagation()'><button class='qbVerberg' data-nr='"+esc(inv.docNr)+"' title='Uit beeld halen — bijvoorbeeld bij een dubbel ingeladen order' style='border:0;background:none;cursor:pointer;font-size:15px;opacity:.55'>&#128465;</button></td></tr>";
     // Detail ALTIJD renderen (verborgen als dicht) → uit/inklappen zonder herteken, geen wegschieten
-    html+="<tr class='qbDetail' data-nr='"+esc(inv.docNr)+"' style='display:"+(open?"":"none")+"'><td colspan='9' style='background:#fafafa;padding:6px 12px'><table class='grid' style='margin:0'><thead><tr><th>Artikelcode</th><th>Omschrijving</th><th>Aantal</th><th>Soort</th></tr></thead><tbody>"+
+    html+="<tr class='qbDetail' data-sleutel='"+esc(sleutel)+"' data-nr='"+esc(inv.docNr)+"' style='display:"+(open?"":"none")+"'><td colspan='9' style='background:#fafafa;padding:6px 12px'><table class='grid' style='margin:0'><thead><tr><th>Artikelcode</th><th>Omschrijving</th><th>Aantal</th><th>Soort</th></tr></thead><tbody>"+
         inv.rows.map(r=>"<tr><td>"+(r.productCode?esc(r.productCode):"<b style='color:var(--bad)'>ontbreekt</b>")+"</td><td>"+esc(r.description)+"</td><td>"+r.qty+"</td><td>"+qbKindBadge(r.kind)+"</td></tr>").join("")+
         (inv.overgeslagen&&inv.overgeslagen.length?"<tr><td colspan='4' style='color:var(--muted);font-size:11px'>Overgeslagen (niet op de order): "+esc(inv.overgeslagen.join(", "))+"</td></tr>":"")+
         "</tbody></table></td></tr>";
@@ -919,20 +925,20 @@ function renderQbInvoices(){
   html+="</tbody></table></div></div>";
   box.innerHTML=html;
   box.querySelectorAll(".qbRow").forEach(row=>row.addEventListener("click",()=>{
-    const nr=row.dataset.nr; const open=!qbOpen[nr]; qbOpen[nr]=open;
-    const detail=box.querySelector('.qbDetail[data-nr="'+nr+'"]');
+    const k=row.dataset.qbid||row.dataset.nr; const open=!qbOpen[k]; qbOpen[k]=open;
+    const detail=box.querySelector('.qbDetail[data-sleutel="'+k+'"]');
     if(detail) detail.style.display=open?"":"none";
     const arrow=row.querySelector(".qbArrow"); if(arrow) arrow.textContent=open?"▾ ":"▸ ";
   }));
   // "Ontvangen Audrey" — eigen vinkje van Chantal, direct opgeslagen in de
   // worker zodat het blijft staan (ook voor Osman zichtbaar).
   box.querySelectorAll(".qbAudrey").forEach(cb=>cb.addEventListener("change",async()=>{
-    const nr=cb.dataset.nr, aan=cb.checked;
+    const nr=cb.dataset.nr, qbId=cb.dataset.qbid, aan=cb.checked;
     const lbl=cb.parentElement.querySelector("span");
     if(lbl){ lbl.textContent=aan?"ontvangen":"nee"; lbl.style.color=aan?"#15803d":"var(--muted)"; }
     cb.disabled=true;
     try{
-      const r=await fetch(WORKER+"/amerika/qb/audrey",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},body:JSON.stringify({docNr:nr,ontvangen:aan,user:(localStorage.getItem("fp.email")||"")})});
+      const r=await fetch(WORKER+"/amerika/qb/audrey",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},body:JSON.stringify({docNr:nr,qbId:qbId,ontvangen:aan,user:(localStorage.getItem("fp.email")||"")})});
       const j=await r.json();
       if(!j.ok) throw new Error(j.error||"opslaan mislukt");
       const inv=qbInvoices.find(i=>String(i.docNr)===String(nr)); if(inv) inv.audrey=aan;
@@ -954,7 +960,11 @@ function renderQbInvoices(){
    ziet dat er iets gebeurt - en dat je bij een storing weet waar hij bleef. */
 const QB_BLOK = 10;
 async function qbApprove(){
-  const nrs=[...document.querySelectorAll(".qbChk:checked")].map(c=>c.dataset.nr);
+  /* Op het QuickBooks-id, niet op het factuurnummer: tien nummers komen in
+     QuickBooks dubbel voor (3496 is zowel Kerns als Russell Lowry) en dan
+     kreeg maar één van de twee een Logic4-order. */
+  const gekozen=[...document.querySelectorAll(".qbChk:checked")].map(c=>({nr:c.dataset.nr,qbId:c.dataset.qbid}));
+  const nrs=gekozen.map(x=>x.nr);
   const st=document.getElementById("qbApproveStatus");
   if(!nrs.length){ st.classList.remove("hidden"); st.className="status-msg warn"; st.textContent="Selecteer eerst een of meer facturen."; return; }
   if(!confirm(nrs.length+" factuur/facturen accorderen? Er worden Logic4-orders aangemaakt onder Passion Spa South (magazijn Warehouse Texas)."+
@@ -965,13 +975,14 @@ async function qbApprove(){
   try{
     for(let i=0;i<nrs.length;i+=QB_BLOK){
       const blok=nrs.slice(i,i+QB_BLOK);
+      const blokIds=gekozen.slice(i,i+QB_BLOK).map(x=>x.qbId).filter(Boolean);
       st.textContent="Logic4-orders aanmaken… "+Math.min(i+blok.length,nrs.length)+" van "+nrs.length+
         (ok.length?"  ·  "+ok.length+" aangemaakt":"")+(bad.length?"  ·  "+bad.length+" mislukt":"");
       let j;
       try{
         j=await (await fetch(WORKER+"/amerika/qb/approve",{method:"POST",
           headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
-          body:JSON.stringify({docNrs:blok})})).json();
+          body:JSON.stringify(blokIds.length===blok.length?{qbIds:blokIds}:{docNrs:blok})})).json();
       }catch(e){ blok.forEach(nr=>bad.push({docNr:nr,error:e.message})); continue; }
       if(!j||!j.ok){ blok.forEach(nr=>bad.push({docNr:nr,error:(j&&j.error)||"mislukt"})); continue; }
       for(const r of (j.results||[])) (r.ok?ok:bad).push(r);
@@ -1115,6 +1126,7 @@ async function audSave(){
 // Het Audrey-tabblad heeft óók de facturenlijst nodig: daar staat welke
 // facturen geaccordeerd zijn (en dus hier hun vervolgtraject krijgen).
 async function audLoadFacturen(){
+  audVolgorde=null;                 // verse lijst = verse volgorde
   try{
     const j=await (await fetch(WORKER+"/amerika/qb/invoices",{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}})).json();
     if(j.ok) qbInvoices=j.invoices||[];
@@ -1122,22 +1134,30 @@ async function audLoadFacturen(){
 }
 // Centrale "verwerkt in Logic4"-status per factuurnummer (bucket qb-verwerkt).
 let verwerktIds={};
+/* De sleutel is "qb:<id>" sinds bleek dat QuickBooks factuurnummers hergebruikt;
+   oudere vinkjes staan nog op het nummer zelf, dus allebei blijven kijken. */
+function vwVan(inv){ return (inv&&inv.id&&verwerktIds["qb:"+inv.id])||(inv&&verwerktIds[inv.docNr])||null; }
 async function audLoadVerwerkt(){
   try{
     const r=await fetch(WORKER+"/data/qb-verwerkt?t="+Date.now(),{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}});
     if(r.ok){ const j=await r.json(); verwerktIds=(j&&j.ids)||{}; }
   }catch(e){ console.warn("verwerkt-status laden faalde:",e); }
 }
-async function audZetVerwerkt(docNr,aan){
+async function audZetVerwerkt(docNr,aan,qbId){
   const r=await fetch(WORKER+"/amerika/qb/verwerkt",{method:"POST",
     headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
-    body:JSON.stringify({docNr:docNr,verwerkt:aan,user:(localStorage.getItem("fp.email")||"")})});
+    body:JSON.stringify({docNr:docNr,qbId:qbId||null,verwerkt:aan,user:(localStorage.getItem("fp.email")||"")})});
   const j=await r.json().catch(()=>null);
   if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("opslaan mislukt (HTTP "+r.status+")"));
-  if(aan) verwerktIds[docNr]={ts:new Date().toISOString(),user:(localStorage.getItem("fp.email")||"")};
-  else delete verwerktIds[docNr];
+  const sleutel=qbId?("qb:"+qbId):docNr;
+  if(aan) verwerktIds[sleutel]={docNr:docNr,ts:new Date().toISOString(),user:(localStorage.getItem("fp.email")||"")};
+  else { delete verwerktIds[sleutel]; delete verwerktIds[docNr]; }
 }
 let audFacturenBezig=false;
+/* De volgorde waarin de geaccordeerde facturen staan. Wordt één keer gezet en
+   blijft daarna staan, zodat een regel niet wegspringt zodra je hem afvinkt.
+   Zie de toelichting in audRenderWachtrij(). */
+let audVolgorde=null;
 /* Facturen die Chantal uit beeld heeft gehaald. Verbergen, niet wissen: de
    QuickBooks-lijst wordt telkens opnieuw opgehaald (4 aug 2026). */
 let qbVerborgen = {};
@@ -1300,8 +1320,32 @@ function audRenderWachtrij(){
   // nog niet ontvangen was (Chantal, 4 aug 2026).
   const qw=((document.getElementById("audWachtZoek")||{}).value||"").trim().toLowerCase();
   const zichtbaar=qbInvoices.filter(i=>i.geaccordeerd && i.audrey && !qbVerborgen[i.docNr]).filter(i=>qbMatch(i,qw));
-  const wacht=zichtbaar.filter(i=>!verwerktIds[i.docNr]);
-  const klaar=zichtbaar.filter(i=>verwerktIds[i.docNr]);
+  const wacht=zichtbaar.filter(i=>!vwVan(i));
+  const klaar=zichtbaar.filter(i=>vwVan(i));
+  /* De volgorde blijft staan zolang je bezig bent.
+     ═══════════════════════════════════════════════════════════════════════
+     Gerrit (7 sep 2026): "Als Osman een order aanvinkt, dan verdwijnt die
+     order direct naar de onderkant van het scherm. Als hij er nog een
+     aanvinkt, vliegt die ook weer naar beneden."
+
+     Dat kwam doordat de lijst na elk vinkje opnieuw werd gesorteerd op
+     verwerkt ja/nee. Wie er tien achter elkaar afvinkt is dus steeds zijn
+     plek kwijt en moet opnieuw zoeken waar hij was.
+
+     Nu wordt de volgorde één keer vastgelegd, bij het openen van het scherm.
+     Een regel die je afvinkt blijft staan waar hij staat en wordt grijs; pas
+     als je de tegel opnieuw opent of opnieuw ophaalt schuift alles netjes op
+     verwerkt/onverwerkt. */
+  if (!audVolgorde) audVolgorde = wacht.concat(klaar).map(i => String(i.docNr));
+  const opPlek = {};
+  audVolgorde.forEach((nr, i) => { opPlek[nr] = i; });
+  const gesorteerd = zichtbaar.slice().sort(function(a, b){
+    const pa = opPlek[String(a.docNr)], pb = opPlek[String(b.docNr)];
+    if (pa == null && pb == null) return 0;
+    if (pa == null) return 1;                 // nieuw binnengekomen: onderaan
+    if (pb == null) return -1;
+    return pa - pb;
+  });
   if(audFacturenBezig){
     box.innerHTML="<div class='card'><h3>Geaccordeerd — nog te verwerken</h3>"+
       "<p class='lead'>Geaccordeerde facturen ophalen uit QuickBooks… <span style='color:var(--muted)'>(dit duurt een paar tellen)</span></p></div>";
@@ -1321,7 +1365,7 @@ function audRenderWachtrij(){
            toelichting bij /amerika/qb/prijzen in de worker: alles wat vóór
            7 sep 2026 is aangemaakt staat in Logic4 op nul, en daar valt niets
            op af te boeken. */
-        "<button class='btn' type='button' id='audPrijzen' title='Alle eerder aangemaakte Logic4-orders alsnog de bedragen uit QuickBooks geven'>bedragen bijwerken</button>"+
+        "<button class='btn' type='button' id='audPrijzen' title='Zet op elke Logic4-order de bedragen van de QuickBooks-factuur. Nodig omdat orders die eerder zijn aangemaakt op 0 dollar staan.'>bedragen ophalen uit QuickBooks</button>"+
         /* Alles in één keer. Gerrit (7 sep 2026): "Is het ook mogelijk dat
            Osman straks alle bedragen in 1x boekt?" Dit is dezelfde boeking als
            de knop per wire, alleen over alle wires tegelijk. */
@@ -1330,6 +1374,21 @@ function audRenderWachtrij(){
     "</div>"+
     /* Osman moet dit weten zonder een venster te hoeven openen, dus het staat
        vast op het scherm en niet alleen in de bevestiging bij het boeken. */
+    /* Waarom die knop er staat. Gerrit (7 sep 2026): "Wat ons al meteen opviel:
+       orders die Chantal heeft omgezet van QuickBooks naar Logic4 staan op
+       waarde 0,00 in Logic4! En wat doet de knop bedragen bijwerken?" Dus:
+       eerst zeggen wat er aan de hand is, dan wat de knop doet. */
+    "<div class='status-msg' style='margin:0 0 10px;background:#dcfce7;color:#166534;border:1px solid #86efac'>"+
+      "<b>De bedragen kloppen.</b> Alle 116 omgezette orders staan in Logic4 op precies het bedrag van de "+
+      "QuickBooks-factuur, samen $ 414.719,18. Je kunt boeken op 1160."+
+      "<br>Er zaten drie dingen fout, en die zijn eruit: de <b>sales tax</b> van 8,25% zit niet in een "+
+      "factuurregel maar apart in QuickBooks en werd niet meegenomen, de <b>verzendregel</b> heeft in "+
+      "QuickBooks geen naam en viel daardoor weg (zo'n 18 tot 25 dollar per onderdelenorder), en op negen "+
+      "spa-regels stond 21% Nederlandse btw in plaats van 0% export, samen 24.357,69 euro te veel."+
+      "<br>De knop <b>bedragen ophalen uit QuickBooks</b> loopt alle orders na en zet per regel het bedrag "+
+      "van de factuur erop. Regels die al goed staan blijven met rust, dus je kunt hem gerust nog eens "+
+      "klikken, bijvoorbeeld nadat je nieuwe facturen hebt geaccordeerd."+
+    "</div>"+
     "<div class='status-msg' style='margin:0 0 12px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d'>"+
       "<b>Bij het boeken op 1160:</b> de bankkosten van een wire gaan als aparte regel op grootboek "+
       "<b>4630</b> (Bankrente en kosten), zodat er op 1160 precies overblijft wat er op de bank binnenkwam. "+
@@ -1339,9 +1398,9 @@ function audRenderWachtrij(){
     "<p class='lead' style='font-size:12px;margin:0 0 12px'>Voor deze facturen is een Logic4-order aangemaakt. Ze blijven hier staan tot de betaling is gekoppeld — vink dan <b>Verwerkt in Logic4</b> aan. Het vinkje geldt ook voor dezelfde factuur in het wire-overzicht hieronder.</p>"+
     "<div class='tablewrap'><table class='grid'><thead><tr>"+
       "<th>Factuur</th><th>Klant</th><th>Logic4-order</th><th>Geaccordeerd</th><th>Betaald (QB)</th><th>Ontv. Audrey</th><th>Verwerkt in Logic4</th><th></th></tr></thead><tbody>"+
-    wacht.concat(klaar).map(inv=>{
-      const isKlaar=!!verwerktIds[inv.docNr];
-      const v=verwerktIds[inv.docNr]||{};
+    gesorteerd.map(inv=>{
+      const isKlaar=!!vwVan(inv);
+      const v=vwVan(inv)||{};
       return "<tr"+(isKlaar?" style='background:#f0fdf4'":"")+">"+
         "<td><b>#"+esc(inv.docNr)+"</b></td>"+
         "<td>"+esc(inv.klant)+"</td>"+
@@ -1350,7 +1409,7 @@ function audRenderWachtrij(){
         "<td>"+qbBetaaldPill(inv)+"</td>"+
         "<td style='font-size:11px'>"+(inv.audrey?"<span style='color:#15803d'>ontvangen</span>":"<span style='color:var(--muted)'>nee</span>")+"</td>"+
         "<td><label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'>"+
-          "<input type='checkbox' class='audVerw' data-nr='"+esc(inv.docNr)+"'"+(isKlaar?" checked":"")+">"+
+          "<input type='checkbox' class='audVerw' data-nr='"+esc(inv.docNr)+"' data-qbid='"+esc(inv.id||"")+"'"+(isKlaar?" checked":"")+">"+
           "<span style='font-size:11px;color:"+(isKlaar?"#15803d":"var(--muted)")+"'>"+
             (isKlaar?("verwerkt"+(v.user?" · "+esc(String(v.user).split("@")[0]):"")):"nog niet")+"</span></label></td>"+
         "<td><button class='audVerberg' data-nr='"+esc(inv.docNr)+"' title='Uit beeld halen' style='border:0;background:none;cursor:pointer;font-size:15px;opacity:.55'>&#128465;</button></td></tr>";
@@ -1367,7 +1426,7 @@ async function audVerwerktKlik(cb){
   const nr=cb.dataset.nr, aan=cb.checked;
   cb.disabled=true;
   try{
-    await audZetVerwerkt(nr,aan);
+    await audZetVerwerkt(nr,aan,cb.dataset.qbid||null);
     if(window.fpLog) window.fpLog("factuur-verwerkt-in-logic4","#"+nr+(aan?" afgevinkt":" teruggedraaid"));
     audRenderWachtrij(); audRender();
   }catch(e){
@@ -1393,7 +1452,11 @@ function audRender(){
     .sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
   if(qz&&!wires.length){ box.innerHTML="<div class='card'><p class='lead'>Geen wire-regel gevonden voor \u201c"+esc(qz)+"\u201d.</p></div>"; return; }
   box.innerHTML=wires.map(w=>{
-    const openN=w.regels.filter(r=>r.soort==="factuur"&&!verwerktIds[r.factuur]).length;
+    const openN=w.regels.filter(r=>{
+      if(r.soort!=="factuur") return false;
+      const q=r.factuur?qbInvoices.find(x=>String(x.docNr)===String(r.factuur)):null;
+      return !((q&&vwVan(q))||verwerktIds[r.factuur]);
+    }).length;
     const totaalRegel=w.regels.find(r=>r.soort==="totaal"&&r.kolom3!=null);
     return "<div class='card'>"+
       "<div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px'>"+
@@ -1422,9 +1485,13 @@ function audRender(){
         const kan=r.soort==="factuur";
         // Status komt uit de CENTRALE lijst op factuurnummer, zodat dit vinkje
         // en dat in 'Geaccordeerd — nog te verwerken' altijd gelijk staan.
-        const v=(r.factuur&&verwerktIds[r.factuur])||null;
-        const isVerwerkt=!!v;
+        /* Een bankregel noemt alleen een factuurnummer. Zoek de factuur erbij,
+           zodat het vinkje op hetzelfde QuickBooks-id staat als in de lijst
+           hierboven. Komt dat nummer dubbel voor, dan blijft het bij het
+           nummer; de bankregel zegt zelf niet welke van de twee het is. */
         const inQb=r.factuur?qbInvoices.find(x=>String(x.docNr)===String(r.factuur)):null;
+        const v=(inQb&&vwVan(inQb))||(r.factuur&&verwerktIds[r.factuur])||null;
+        const isVerwerkt=!!v;
         return "<tr"+(isVerwerkt?" style='background:#f0fdf4'":"")+">"+
           "<td><b>"+esc(r.naam)+"</b>"+(inQb&&inQb.geaccordeerd?" <span class='pill' style='background:#dcfce7;color:#15803d;font-size:10px'>Logic4 #"+esc(String(inQb.logic4Order||"?"))+"</span>":"")+"</td>"+
           "<td>"+(r.factuur?esc(r.factuur):"<span style='color:var(--muted)'>—</span>")+"</td>"+
@@ -1433,7 +1500,7 @@ function audRender(){
           "<td style='text-align:right;font-variant-numeric:tabular-nums;color:"+(r.kolom2!=null&&r.kolom2<0?"#b91c1c":"inherit")+"'>"+esc(usd(r.kolom2))+"</td>"+
           "<td style='text-align:right;font-variant-numeric:tabular-nums'><b>"+esc(usd(r.kolom3))+"</b></td>"+
           "<td>"+(kan
-            ? "<label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'><input type='checkbox' class='audVerw' data-nr='"+esc(r.factuur)+"'"+(isVerwerkt?" checked":"")+">"+
+            ? "<label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'><input type='checkbox' class='audVerw' data-nr='"+esc(r.factuur)+"' data-qbid='"+esc((inQb&&inQb.id)||"")+"'"+(isVerwerkt?" checked":"")+">"+
               "<span style='font-size:11px;color:"+(isVerwerkt?"#15803d":"var(--muted)")+"'>"+(isVerwerkt?("verwerkt"+(v.user?" · "+esc(String(v.user).split("@")[0]):"")):"nog niet")+"</span></label>"
             : "<span style='color:var(--muted);font-size:11px'>n.v.t.</span>")+"</td></tr>";
       }).join("")+

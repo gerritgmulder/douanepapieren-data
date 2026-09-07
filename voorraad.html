@@ -737,6 +737,28 @@
       <div id="ciStatus" class="status-msg hidden" style="margin-top:12px"></div>
     </div>
     <div id="soDoel"></div>
+
+    <!-- De brandstoftoeslag van de wegvervoerders.
+         Gerrit (7 sep 2026): "Elke week sturen de transporteurs hun
+         dieseltoeslagen. Maak dat veldje voor Manon."
+
+         Staat hier en niet in Passion Partners Beheer: Manon heeft alleen deze
+         tegel, en zij is degene die die mail elke maandag krijgt. Wat hier
+         staat bepaalt wat een dealer in het partnerportaal als bezorgkosten
+         ziet, dus daar staat het ook bij. -->
+    <div class="card" id="dieselKaart">
+      <h3>Brandstoftoeslag vervoerders</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">De transporteurs sturen elke week hun percentage door. Wat je hier invult wordt meteen gebruikt voor de bezorgkosten die een dealer in <b>Passion Partners</b> te zien krijgt, dus zet het erin zodra de mail binnen is.</p>
+      <div class="actions" style="gap:14px;align-items:flex-end;margin-top:0;flex-wrap:wrap">
+        <div><label style="display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Van Doesburg</label>
+          <div style="display:flex;align-items:center;gap:5px"><input type="number" id="dieselDoesburg" step="0.1" min="0" max="100" style="width:90px;padding:8px"> <span style="color:var(--muted)">%</span></div></div>
+        <div><label style="display:block;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px">Van Heugten</label>
+          <div style="display:flex;align-items:center;gap:5px"><input type="number" id="dieselHeugten" step="0.1" min="0" max="100" style="width:90px;padding:8px"> <span style="color:var(--muted)">%</span></div></div>
+        <button class="primary" id="dieselBewaar" type="button">Bewaren</button>
+        <span id="dieselStand" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="dieselMelding" class="status-msg hidden" style="margin-top:10px"></div>
+    </div>
     <!-- Verhuisd van het tabblad Schepen, dat helemaal is opgegaan in dit
          scherm. Los opzoeken blijft handig voor een container die nog
          nergens in onze eigen lijst staat. -->
@@ -3281,6 +3303,62 @@ document.querySelectorAll(".verwijderdTonen").forEach(function(v){
   const el=document.getElementById(id);
   if(el) el.addEventListener(id==="stockAlles"?"change":"input",renderStock);
 });
+
+/* ── Brandstoftoeslag van de wegvervoerders ────────────────────────────
+   Zie de kaart in het scherm. Wat hier staat bepaalt de bezorgkosten die een
+   dealer in Passion Partners ziet, dus het is geen los notitieveld. */
+const DIESEL_URL="https://fonteyn-data-store.g-mulder.workers.dev/voorraad/dieseltoeslag";
+const TARIEVEN_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/transport-tarieven";
+async function dieselLaad(){
+  const st=document.getElementById("dieselStand"); if(!st) return;
+  try{
+    const r=await fetch(TARIEVEN_URL+"?t="+Date.now(),{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j=await r.json();
+    const d=(j&&j.diesel)||{};
+    const dd=document.getElementById("dieselDoesburg"), dh=document.getElementById("dieselHeugten");
+    if(dd) dd.value = d.doesburg!=null ? d.doesburg : "";
+    if(dh) dh.value = d.heugten!=null ? d.heugten : "";
+    /* Zeggen hoe oud het is. Een percentage van drie weken geleden ziet er
+       precies zo uit als een van vandaag, en dan reken je een dealer een
+       verkeerd bedrag voor zonder dat iemand het merkt. */
+    if(d.gezet){
+      const dagen=Math.round((Date.now()-Date.parse(d.gezet))/86400000);
+      st.textContent="laatst gezet op "+datumNL(d.gezet)+(d.door?(" door "+String(d.door).split("@")[0]):"")+
+        (dagen>7?"  —  dat is "+dagen+" dagen geleden":"");
+      st.style.color = dagen>7 ? "var(--warn,#92400e)" : "var(--muted)";
+    } else st.textContent="nog niet ingevuld";
+  }catch(e){ st.textContent="tarieven laden faalde: "+e.message; }
+}
+async function dieselBewaar(){
+  const m=document.getElementById("dieselMelding");
+  const toon=(cls,tekst)=>{ m.className="status-msg "+cls; m.textContent=tekst; m.classList.remove("hidden"); };
+  const knop=document.getElementById("dieselBewaar");
+  knop.disabled=true;
+  try{
+    const r=await fetch(DIESEL_URL,{method:"POST",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
+      body:JSON.stringify({
+        doesburg:document.getElementById("dieselDoesburg").value,
+        heugten:document.getElementById("dieselHeugten").value,
+        door:(localStorage.getItem("fp.email")||"")})});
+    const j=await r.json().catch(()=>null);
+    if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+    const v=j.vorige||{};
+    toon("ok","Opgeslagen: Doesburg "+j.diesel.doesburg+"%, Van Heugten "+j.diesel.heugten+"%."+
+      ((v.doesburg!=null&&(v.doesburg!==j.diesel.doesburg||v.heugten!==j.diesel.heugten))
+        ? " Was "+v.doesburg+"% en "+v.heugten+"%." : "")+
+      " Dealers zien vanaf nu de nieuwe bezorgkosten.");
+    try{ if(window.fpLog) window.fpLog("dieseltoeslag-gezet","Doesburg "+j.diesel.doesburg+"% / Van Heugten "+j.diesel.heugten+"%"); }catch(e){}
+    dieselLaad();
+  }catch(e){ toon("bad","Opslaan mislukte: "+e.message); }
+  finally{ knop.disabled=false; }
+}
+(function koppelDiesel(){
+  const k=document.getElementById("dieselBewaar");
+  if(k) k.addEventListener("click",dieselBewaar);
+  dieselLaad();
+})();
 
 // ===================== Schepen (commercial invoices) =====================
 // Chantal uploadt commercial invoices (Excel, één per schip). Client-side
