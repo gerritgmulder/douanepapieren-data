@@ -189,7 +189,22 @@ for (const [model, vs] of Object.entries(catalog)) {
     v.bevat = (Array.isArray(delen) ? delen : []).map(d => ({
       code: String(d.ProductCode || ""), qty: Number(d.Qty) || 1,
       naam: (alleProducten.get(String(d.ProductCode)) || {}).ProductName1 || "",
+      vrij: Number((alleProducten.get(String(d.ProductCode)) || {}).FreeStock) || 0,
     }));
+    /* Hoeveel er van dit samengestelde artikel te maken zijn uit wat er nu
+       ligt. Nodig omdat Logic4 bij zo'n artikel zélf geen bruikbare voorraad
+       geeft: The Iceman's Barrel™ XL (800031) staat op FreeStock -1 terwijl er
+       220 vaten van 350 liter in de hal liggen. In het portaal las dat als
+       "niets beschikbaar", en dat klopt niet - het bad wordt pas op het moment
+       van bestellen samengesteld.
+
+       Het aantal is dat van het krapste onderdeel: heb je één chiller en tien
+       vaten, dan kun je er één maken. Een onderdeel dat Logic4 niet kent telt
+       niet mee; anders zou één ontbrekend regeltje het hele bad op nul zetten. */
+    const uitDelen = v.bevat
+      .filter(d => alleProducten.has(d.code))
+      .map(d => Math.floor((Number(d.vrij) || 0) / Math.max(1, Number(d.qty) || 1)));
+    v.teMaken = uitDelen.length ? Math.max(0, Math.min(...uitDelen)) : 0;
     samengesteld++;
   }
 }

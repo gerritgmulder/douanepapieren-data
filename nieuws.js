@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
+      titel: "IJsbaden staan niet meer op nul",
+      wat: "Een ijsbad dat uit onderdelen wordt samengesteld stond op nul beschikbaar, ook als er honderd vaten en chillers in Uddel lagen. Nu zie je hoeveel er van gemaakt kunnen worden, met erbij dat hij bij het bestellen wordt samengesteld.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "dealerportaal.html", soort: "beter",
       titel: "Btw-nummer nakijken en bron klant",
       wat: "Bij een nieuwe dealer of partner kun je het btw-nummer met één knop bij de EU laten nakijken; je ziet meteen of het geldig is en op welk bedrijf het staat, en de bedrijfsnaam wordt overgenomen. Bron klant is nu een verplichte keuze, en een nieuwe debiteur komt meteen als Zakelijk in Logic4 te staan in plaats van als Particulier.",

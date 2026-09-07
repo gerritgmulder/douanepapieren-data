@@ -583,6 +583,33 @@ async function dpHandleSpaPhoto(env, url) {
 // partnerprijs ($ + Freight Surcharge Warehouse Uddel) + collectie/kleur.
 // ALLEEN modellen die op de prijslijst staan (verkoopbaar assortiment) —
 // oude/uitlopende modellen en andere merken worden niet aan partners getoond.
+/* Hoeveel er van een samengesteld artikel gemaakt kunnen worden uit de
+   onderdelen die nu in de hal liggen.
+
+   Waarom dit nodig is: een samengesteld artikel heeft in Logic4 zelf geen
+   voorraad. The Iceman\u2019s Barrel\u2122 XL (artikel 800031) staat op
+   FreeStock -1, terwijl er 127 vaten van 350 liter, 471 steps en 109 chillers
+   in Uddel liggen. Het bad bestaat pas op het moment dat er een order voor
+   komt; Logic4 klapt de samenstelling dan zelf uit. Voor het portaal las die
+   nul als "niet beschikbaar", en dat is precies verkeerd om: er kunnen er
+   honderd van gemaakt worden.
+
+   tools/build-spa-catalog.mjs rekent per samengestelde variant uit hoeveel dat
+   er zijn - het krapste onderdeel bepaalt het - en zet dat als 'teMaken' in de
+   catalogus. Hier wordt het alleen gebruikt als terugval: staat er van het
+   artikel zelf iets in de hal, dan telt dat. Zo kan dit getal een bestaande
+   telling nooit naar beneden halen. */
+function dpTeMaken(catModels, model, code) {
+  for (const v of (catModels[model] || []))
+    if (String(v.code) === String(code)) return Math.max(0, Number(v.teMaken) || 0);
+  return 0;
+}
+function dpTeMakenModel(catModels, model) {
+  let n = 0;
+  for (const v of (catModels[model] || [])) n += Math.max(0, Number(v.teMaken) || 0);
+  return n;
+}
+
 async function dpHandleStock(env) {
   const agg = await dpStockModels(env);
   const priceData = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
@@ -640,11 +667,19 @@ async function dpHandleStock(env) {
        is in Logic4 één artikel met het vat, twee steps, twee pluggen en de
        chiller erin. Een partner hoort te zien wat hij koopt, en Logic4 zet die
        onderdelen bij het bestellen zelf op de order. */
-    m.variants = (catModels[m.model] || []).map(v => ({
-      code: v.code, name: codeName[v.code] || v.code, free: Number(freeByCode[v.code]) || 0,
-      bevat: Array.isArray(v.bevat) && v.bevat.length
-        ? v.bevat.map(d => ({ qty: Number(d.qty) || 1, naam: d.naam || d.code })) : null,
-    }));
+    m.variants = (catModels[m.model] || []).map(v => {
+      const eigen = Number(freeByCode[v.code]) || 0;
+      const maken = eigen > 0 ? 0 : dpTeMaken(catModels, m.model, v.code);
+      return {
+        code: v.code, name: codeName[v.code] || v.code, free: eigen || maken,
+        // Wordt hij bij een bestelling samengesteld uit onderdelen die er
+        // liggen? Dan hoort het scherm dat te zeggen en niet te doen alsof er
+        // een bad op de plank staat.
+        opBestelling: maken > 0 || undefined,
+        bevat: Array.isArray(v.bevat) && v.bevat.length
+          ? v.bevat.map(d => ({ qty: Number(d.qty) || 1, naam: d.naam || d.code })) : null,
+      };
+    });
     /* Wat er NU vrij in de hal ligt, opgeteld uit de kleuren zelf. Het model
        had ook een eigen 'available' uit een andere telling, en die twee liepen
        uiteen (bij Delight 8 tegenover 10 over de kleuren). Op het scherm stond
@@ -957,7 +992,19 @@ async function dpHandleReserve(request, env, sess, url) {
     const model = String(it.model || "").trim().slice(0, 80);
     const pEntry = (priceData.prices || {})[model];
     if (!model || !(pEntry && Number(pEntry.usd) > 0)) continue;
-    const c = dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, fraction: 1.0 });
+    /* Bij een hele container gaan de vrachttoeslag en de 50 dollar
+       verpakkingskosten eraf. Gerrit (7 sep 2026): "Ja dat moet eraf want ze
+       betalen een eigen freight prijs die altijd verschilt per container en
+       bestemming."
+
+       Dat klopt ook met wat die twee posten zijn: de toeslag heet voluit
+       Freight Surcharge Warehouse Uddel en dekt het stuk vracht naar en uit
+       onze hal, en de verpakkingskosten zijn het klaarmaken van één losse spa
+       voor transport. Een container gaat rechtstreeks van de fabriek naar de
+       partner en komt daar nooit langs. De vracht van die container wordt per
+       zending apart afgesproken en staat dus niet in de prijslijst. */
+    const c = dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, fraction: 1.0,
+                                      withSurcharge: levering !== "container" });
     totaalExVat += c.totalExVat;
     spaAantal += qty;
     packUnit = Math.round(c.packUnit * 100) / 100;
@@ -978,8 +1025,14 @@ async function dpHandleReserve(request, env, sess, url) {
   /* Volledig betalen mag alleen als élke spa in de wagen nu op voorraad is;
      anders is het 30% aanbetaling over de spa's. Onderdelen worden altijd
      volledig betaald, ongeacht wat de spa's doen. */
+  /* Een samengesteld bad ligt niet op de plank maar kan wel meteen mee: de
+     onderdelen liggen er en Logic4 zet ze bij het bestellen op de order. Zo'n
+     model telt hier dus ook als "op voorraad", anders biedt het portaal
+     volledig betalen aan en weigert de worker het meteen daarna. */
+  const catModelsRes = catalog.models || {};
   const alleOpVoorraad = regels.filter(r => r.soort === "spa").every(r =>
-    (((hallen.models || {})[r.model] || {}).available || 0) >= r.qty);
+    Math.max((((hallen.models || {})[r.model] || {}).available || 0),
+             dpTeMakenModel(catModelsRes, r.model)) >= r.qty);
   /* Bij een container kan "nu volledig betalen omdat het op voorraad ligt"
      niet: er wordt niets uit de hal gepakt, de fabriek moet hem nog laden.
      Het blijft dus bij de aanbetaling van 30%. */

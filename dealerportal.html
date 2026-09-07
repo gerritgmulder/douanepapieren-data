@@ -674,8 +674,14 @@ function voorraadRegels(m){
   const kleuren = (m.variants || []).filter(v => Number(v.free) > 0)
                                     .sort((a, b) => (b.free - a.free) || String(a.name).localeCompare(String(b.name)));
   if (!kleuren.length) return `<li style="color:var(--muted)">Not in stock — built to order.</li>`;
+  /* Een bad dat pas bij het bestellen wordt samengesteld staat er wél, maar
+     niet als kant-en-klaar bad op de plank. The Iceman's Barrel™ XL is in
+     Logic4 één samengesteld artikel: vat, chiller, twee steps en vier pluggen.
+     Die onderdelen liggen in Uddel, dus we kunnen er meteen honderd maken -
+     maar het is eerlijker om dat te zeggen dan om te doen alsof ze er staan. */
   return kleuren.map(v =>
-    `<li><b>${v.free}&times;</b> ${esc(v.name)}</li>`).join("");
+    `<li><b>${v.free}&times;</b> ${esc(v.name)}${v.opBestelling
+      ? ` <span style="color:var(--muted);font-size:11px">assembled on order</span>` : ""}</li>`).join("");
 }
 /* Waar de tegels op gesorteerd staan. Gerrit (3 sep 2026): "ik wil altijd
    kunnen kiezen wat je in welke volgorde ziet, en standaard hoogste voorraad
@@ -1762,7 +1768,13 @@ function cartRegelPrijs(r){
   const m = (stockModels || []).find(x => x.model === r.model);
   if (!m) return 0;
   const p = prijsVan(m);
-  return p.totaal;                       // spa + vracht en verpakking
+  /* Bij een hele container vervalt de vrachttoeslag (Freight Surcharge
+     Warehouse Uddel) en de verpakkingskosten: die spa's komen nooit in Uddel
+     en worden niet los ingepakt. De vracht van de container zelf verschilt per
+     zending en bestemming en wordt apart afgesproken, dus die staat hier niet
+     in. Gerrit (7 sep 2026): "ze betalen een eigen freight prijs die altijd
+     verschilt per container en bestemming." */
+  return levering === "container" ? p.prijs : p.totaal;
 }
 function cartTotaal(){ return cart.reduce((t, r) => t + cartRegelPrijs(r) * (Number(r.qty)||1), 0); }
 function geld(n){
@@ -1809,6 +1821,9 @@ function openCart(){
           <tbody>${rijen}</tbody>
         </table></div>
         <p class="lead" style="margin:12px 0 0;text-align:right;">Order value: <b style="font-size:16px;color:var(--ink)">${geld(cartTotaal())}</b> <span style="font-size:12px">excl. VAT</span></p>
+        ${levering === "container" ? `<p class="lead" style="margin:4px 0 0;text-align:right;font-size:12px;">
+            Spa prices only. No warehouse freight surcharge and no packing fee, because the container
+            ships straight from the factory. Sea freight is quoted per container and destination.</p>` : ""}
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Delivery</label>
         <div id="cartLever" class="kies"></div>
         <div id="ctrPaneel"></div>
@@ -1851,7 +1866,10 @@ function openCart(){
     ], levering, (w) => {
       levering = w === "container" ? "container" : "voorraad";
       try { localStorage.setItem(LEVER_KEY, levering); } catch(e){}
-      tekenContainer(ov);
+      /* De bedragen veranderen mee: bij een container vervalt de vracht. De
+         kaart opnieuw opbouwen is hier het eerlijkst - anders staat er een
+         totaal dat niet meer klopt bij de gekozen levering. */
+      sluit(); openCart();
     });
     tekenContainer(ov);
   }
