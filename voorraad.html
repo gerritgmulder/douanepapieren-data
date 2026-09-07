@@ -94,6 +94,47 @@
   table.grid th,table.grid td{padding:3px 8px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:middle;
       white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}
   table.grid th{background:#f9fafb;font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);position:sticky;top:0}
+  /* De reserveringenlijst in twee regels: lezen boven, doen eronder.
+     ═══════════════════════════════════════════════════════════════════════
+     Gerrit (7 sep 2026): "Bij Chantal op het scherm moet ze horizontaal
+     scrollen bij Reserveringen, in zowel Partner als Particulier. Ik wil dat
+     niet. Je kunt er bijvoorbeeld van maken dat er bij iedere regel een
+     subregel komt voor 'Verwachte levering, afroep, inplannen, gepland'. Maar
+     zorg wel echt dat het dun is, want ik wil zoveel mogelijk orders kunnen
+     blijven zien."
+
+     Dertien kolommen naast elkaar passen op geen enkel laptopscherm. De acht
+     die je alleen leest staan nu bovenaan; alles waar je iets mee dóet staat
+     op een dunne strook eronder. Die strook heeft geen eigen kop, kleine
+     letter en weinig lucht, zodat er ongeveer evenveel orders in beeld
+     blijven als toen alles nog naast elkaar stond. */
+  table.grid.resv{table-layout:auto}
+  table.grid.resv tr.hoofdrij td{border-bottom:0;padding-bottom:1px}
+  table.grid.resv tr.subrij td{padding:0 8px 3px 22px;border-top:0;white-space:normal;max-width:none;overflow:visible}
+  /* Zo laag mogelijk: het menu en het notitieveld bepalen de hoogte van de
+     strook, dus die krijgen minder lucht dan een gewoon invulveld. Daarmee
+     kost een order twee regels van samen ongeveer 42 pixels in plaats van
+     50 - er passen er dan zo'n twaalf op een laptopscherm. */
+  table.grid.resv tr.subrij select,
+  table.grid.resv tr.subrij .notOpm{padding:1px 6px!important;font-size:11px!important;height:20px;line-height:18px}
+  /* Het streepje links laat zien dat deze strook bij de order erboven hoort;
+     zonder dat leest een lijst van 233 orders als 466 losse regels. */
+  table.grid.resv tr.subrij .subwerk{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;
+      font-size:11px;color:var(--muted);line-height:1.3;
+      border-left:2px solid #e9edea;padding-left:9px}
+  table.grid.resv tr.subrij .lev{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;max-width:330px}
+  table.grid.resv tr.subrij .lev select{margin-top:0!important;max-width:170px}
+  table.grid.resv tr.subrij .lev br{display:none}
+  table.grid.resv tr.subrij .notOpm{flex:1 1 auto;min-width:90px;font-size:11.5px;
+      padding:3px 7px;cursor:pointer;text-overflow:ellipsis;border:1px solid var(--border);border-radius:6px}
+  /* De vinkjes rechts uitlijnen: dan staan ze bij elke order op dezelfde plek
+     en kun je een kolom afvinken zonder te zoeken. */
+  table.grid.resv tr.subrij .vk:first-of-type{margin-left:auto}
+  table.grid.resv tr.subrij .vk{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer}
+  table.grid.resv tr.subrij .vk input{margin:0}
+  table.grid.resv tr.subrij .notAgenda{background:#fff;border:1px solid var(--border);border-radius:6px;
+      padding:2px 7px;cursor:pointer;font-size:11px;color:var(--muted)}
+  table.grid.resv tr.subrij .notAgenda:hover{border-color:var(--fonteyn-green,#144734)}
   /* Velden in een rij mogen de regel niet hoger maken dan de tekst zelf. */
   table.grid td input[type=text],table.grid td select,table.grid td input:not([type=checkbox]){
       padding:1px 5px;font-size:11px;height:20px;line-height:18px}
@@ -2614,11 +2655,12 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
     return;
   }
   const uit=!MAG_WIJZIGEN?" disabled":"";
-  box.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
+  // Acht kolommen om te lezen; het doen staat op de subregel. Zie de CSS.
+  const kolommen = 8 + (MAG_WIJZIGEN?1:0);
+  box.innerHTML="<div class='tablewrap'><table class='grid resv'><thead><tr>"+
     "<th>Order</th>"+kopSorteer(soort,"model","Spa")+kopSorteer(soort,"kleur","Kleur")+"<th>Aantal</th>"+
     kopSorteer(soort,"naam","Klant")+kopSorteer(soort,"adviseur","Adviseur")+
-    kopSorteer(soort,"datum","Datum")+"<th>Betaling</th>"+kopSorteer(soort,"levering","Verwachte levering")+
-    "<th>Opmerkingen</th>"+(particulier?"<th>Afroep</th>":"")+"<th>Inplannen</th>"+"<th>Gepland</th>"+
+    kopSorteer(soort,"datum","Datum")+"<th>Betaling</th>"+
     (MAG_WIJZIGEN?"<th title='regel uit het dashboard halen'></th>":"")+
     "</tr></thead><tbody>"+
     rijen.map(function(r){
@@ -2629,7 +2671,10 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
       if(n.inplannen) stijl="background:#fef9c3"+(n.afroep?";border-left:4px solid #7c3aed":"");
       else if(n.afroep) stijl="background:#f3e8ff;border-left:4px solid #7c3aed";
       const id=esc(r.regelId||"");
-      return "<tr style='"+stijl+"'>"+
+      const vink=function(veld,label,aan){
+        return "<label class='vk'><input type='checkbox' class='notVink' data-veld='"+veld+"' data-id='"+id+"'"+(aan?" checked":"")+uit+">"+label+"</label>";
+      };
+      return "<tr class='hoofdrij' style='"+stijl+"'>"+
         "<td>"+esc(r.ordernr)+"</td>"+
         "<td><b>"+esc(r.model)+"</b></td>"+
         "<td>"+kleurCel(r.kleur,r)+"</td>"+
@@ -2638,30 +2683,27 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
         "<td>"+adviseurCel(r)+"</td>"+
         "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
         "<td>"+betaalBadge(r)+"</td>"+
-        "<td style='font-size:12px'>"+leveringCel(r,n,id,uit)+"</td>"+
-        "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' readonly title='"+esc(n.opmerking||"Klik om een notitie te schrijven")+"' style='width:110px;font-size:12px;padding:4px 7px;cursor:pointer;text-overflow:ellipsis'"+uit+"></td>"+
-        (particulier?"<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='afroep' data-id='"+id+"'"+(n.afroep?" checked":"")+uit+"></td>":"")+
-        "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='inplannen' data-id='"+id+"'"+(n.inplannen?" checked":"")+uit+"></td>"+
-        /* Bij een dealer geen invulvenster. Manon (7 sep 2026): "Voor de
-           dealers wil ik niet dit allemaal invullen. Dit verwerken we allemaal
-           in Logic met 1 klik. Nu is het allemaal extra werk."
-
-           Klopt: bij een dealerlevering wordt er geen afspraak met een klant
-           thuis gemaakt - dat gaat om een pallet of een container die de deur
-           uit gaat, en dat staat in Logic4. Het vinkje legt hier alleen vast
-           dát het staat. Wil ze er tóch een agenda-afspraak bij (een monteur
-           die meegaat, een afspraak op locatie), dan kan dat met het knopje
-           ernaast. Bij een particulier blijft het venster wél meteen komen:
-           daar is de afspraak met de klant juist het hele punt. */
-        "<td style='text-align:center;white-space:nowrap'>"+
-          "<input type='checkbox' class='notVink' data-veld='gepland' data-id='"+id+"'"+(n.gepland?" checked":"")+uit+">"+
-          (particulier?"":"<button type='button' class='notAgenda' data-id='"+id+"' title='er tóch een afspraak in Planning bij zetten'"+
-            " style='margin-left:5px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:2px 6px;cursor:pointer;font-size:11px;color:var(--muted)'"+uit+">agenda</button>")+
-        "</td>"+
         (MAG_WIJZIGEN?("<td style='text-align:center'>"+(n.verwijderd
           ? "<button class='notTerug' data-id='"+id+"' title='terugzetten in het dashboard' style='background:#fff;border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;font-size:11px'>terug</button>"
           : "<button class='notWeg' data-id='"+id+"' title='deze regel uit het dashboard halen' style='background:#fff;border:1px solid #fecaca;color:#b91c1c;border-radius:6px;padding:3px 7px;cursor:pointer;font-size:12px'>&#10005;</button>")+"</td>"):"")+
-        "</tr>";
+        "</tr>"+
+        /* De subregel: alles waar je iets mee doet, in één dunne strook onder
+           de order waar het bij hoort. Zie de toelichting bij de CSS.
+
+           Bij een dealer komt er geen invulvenster als je 'gepland' aanvinkt.
+           Manon (7 sep 2026): "Voor de dealers wil ik niet dit allemaal
+           invullen. Dit verwerken we allemaal in Logic met 1 klik." Wil ze er
+           tóch een agenda-afspraak bij, dan is daar het knopje 'agenda' voor. */
+        "<tr class='subrij' style='"+stijl+"'><td colspan='"+kolommen+"'>"+
+          "<div class='subwerk'>"+
+            "<span class='lev'>"+leveringCel(r,n,id,uit)+"</span>"+
+            "<input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' readonly title='"+esc(n.opmerking||"Klik om een notitie te schrijven")+"'"+uit+">"+
+            (particulier?vink("afroep","afroep",n.afroep):"")+
+            vink("inplannen","inplannen",n.inplannen)+
+            vink("gepland","gepland",n.gepland)+
+            (particulier?"":"<button type='button' class='notAgenda' data-id='"+id+"' title='er tóch een afspraak in Planning bij zetten'"+uit+">agenda</button>")+
+          "</div>"+
+        "</td></tr>";
     }).join("")+
     "</tbody></table></div>";
   koppelNotitieVelden(box,rijen);

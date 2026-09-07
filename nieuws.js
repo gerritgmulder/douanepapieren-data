@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
+      titel: "Geen horizontaal geschuif meer bij Reserveringen",
+      wat: "De lijsten bij Particulier, Partner, Gepland, Afroep en Binnengekomen pasten niet op het scherm; je moest naar rechts schuiven om bij de vinkjes te komen. Wat je leest staat nu op de regel en wat je doet - verwachte levering, notitie, afroep, inplannen, gepland - op een dunne strook eronder. Alles past nu in de breedte.",
+    },
+
+    {
       datum: "2026-09-07", groep: "planning", soort: "beter",
       titel: "Routes staan als kolommen naast elkaar",
       wat: "Op het routebord staat nu boven elke kolom 'Route 1', 'Route 2' met daaronder wie er rijdt, zodat je per dag in één oogopslag ziet hoeveel routes er staan en welke stops erbij horen. Dat kon al, maar het was niet te zien: een route had alleen een klein nummertje.",
