@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
+      titel: "Deposit-proforma van New Normal wordt herkend",
+      wat: "De deposit-proforma van New Normal kun je nu gewoon uploaden bij 'Inkoop naar Logic4'. De leverancier wordt aan het briefhoofd herkend en het factuurnummer wordt goed gelezen, ook als de fabriek het over drie cellen verdeelt. Staat er geen factuurnummer op, dan pakt hij het containernummer uit de bestandsnaam.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "dealerportaal.html", soort: "beter",
       titel: "Orders uit het portaal staan meteen goed in Logic4",
       wat: "Een bestelling uit Passion Partners krijgt nu vanzelf de orderbron 'Bestaande Dealer', het juiste magazijntype (Spa Service Magazijn als het alleen onderdelen zijn, anders Magazijn) en 31-12-2099 als indicatieve leverdatum. Dat hoefde sales tot nu toe bij elke order met de hand na te zetten.",

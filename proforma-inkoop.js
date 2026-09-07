@@ -33,17 +33,73 @@ function ikoStatus(soort,tekst){
 // als 888G2); dat gebruiken we alleen als er geen PI is. De kolommen worden uit
 // de kopregel gehaald en niet vastgepind, zodat een verschoven kolom in het
 // template van de fabriek de uitlezing niet meteen sloopt.
-function parseProforma(wb){
+/* De negen fabrieken, herkend aan hun briefhoofd.
+   Niet elke proforma zet er netjes "Seller:" boven. De deposit-PI van New
+   Normal begint gewoon met "GUANGZHOU NEW NORMAL BATH WARE CO., LTD." en dan
+   bleef de leverancier leeg, waarna je hem in het scherm zelf moest
+   aanwijzen. Op het briefhoofd is hij prima te herkennen. */
+var BRIEFHOOFD=[
+  [/new\s*normal/i,          "Guangzhou New Normal Bath Ware Co."],
+  [/jazzi/i,                 "Jazzi Pool & Spa (Guangzhou)"],
+  [/kasdaly/i,               "Kasdaly"],
+  [/huantong/i,              "Huantong"],
+  [/mexda/i,                 "Mexda"],
+  [/fenlin/i,                "Fenlin"],
+  [/romex/i,                 "Romex"],
+  [/bigeer/i,                "Bigeer"],
+  [/ponfit/i,                "Ponfit"],
+  [/sunrans/i,               "Sunrans"],
+  [/fukiafu/i,               "Guangdong Foshan Fukiafu"],
+];
+
+function parseProforma(wb, bestandsnaam){
   const naam=wb.SheetNames.find(n=>/^pi$/i.test(String(n).trim()))
           || wb.SheetNames.find(n=>/proforma/i.test(n))
+          || wb.SheetNames.find(n=>/invoice/i.test(n))
           || wb.SheetNames[0];
   const rows=XLSX.utils.sheet_to_json(wb.Sheets[naam],{header:1,defval:null,blankrows:false});
+  /* Dezelfde regels nog een keer, maar dan zoals ze op het scherm staan.
+     ═══════════════════════════════════════════════════════════════════
+     Nodig voor de kop. New Normal zet het factuurnummer over drie cellen:
+     "Invoice No.: T" | een datumcel opgemaakt als jjjjmmdd | "V1  Date:".
+     Ruw uitgelezen is die middelste cel het getal 46217 en dan wordt het
+     factuurnummer "T46217V1" in plaats van "T20260714V1". Met raw:false
+     geeft de lezer terug wat er in Excel staat, en dan klopt het weer.
+
+     Alleen voor de kop: bij de regels zelf willen we de getallen juist ruw
+     hebben, anders wordt een aantal van 22 de tekst "22" en een prijs met een
+     duizendtalpunt onbruikbaar. */
+  let kopRows=rows;
+  try { kopRows=XLSX.utils.sheet_to_json(wb.Sheets[naam],{header:1,defval:null,blankrows:false,raw:false}); }
+  catch(e){ /* lukt dit niet, dan gewoon met de ruwe regels verder */ }
 
   let leverancier=null, referentie=null;
-  for(const r of rows.slice(0,20)) for(const c of (r||[])){
+  for(const r of kopRows.slice(0,20)) for(const c of (r||[])){
     const s=String(c==null?"":c).trim();
     if(!leverancier&&/^seller\s*:/i.test(s)) leverancier=s.replace(/^seller\s*:\s*/i,"").trim();
     if(!referentie&&/order\s*no\.?\s*:/i.test(s)) referentie=s.replace(/.*order\s*no\.?\s*:\s*/i,"").trim();
+  }
+  /* Geen "Seller:"? Dan het briefhoofd. */
+  if(!leverancier){
+    const kop=kopRows.slice(0,6).map(r=>(r||[]).join(" ")).join(" ");
+    for(const [patroon,fabriek] of BRIEFHOOFD) if(patroon.test(kop)){ leverancier=fabriek; break; }
+  }
+  /* Geen "Order No."? Dan het factuurnummer, dat over meerdere cellen kan
+     staan. We plakken de hele regel aan elkaar en pakken wat er achter
+     "Invoice No.:" staat tot aan het woord "Date". */
+  if(!referentie){
+    for(const r of kopRows.slice(0,20)){
+      const regel=(r||[]).map(c=>String(c==null?"":c)).join(" ").replace(/\s+/g," ");
+      const m=regel.match(/invoice\s*no\.?\s*:?\s*(.+?)(?:\s*date\b|$)/i);
+      if(m&&m[1].trim()){ referentie=m[1].replace(/\s+/g,"").trim(); break; }
+    }
+  }
+  /* En anders de containernummers uit de bestandsnaam: "Deposit PI for
+     364-365th containers.xls" gaat over container 364 en 365, en dát is waar
+     Chantal hem op terugzoekt. */
+  if(!referentie&&bestandsnaam){
+    const m=String(bestandsnaam).match(/(\d{2,4}(?:\s*[-&\/]\s*\d{2,4})*)\s*(?:th|e|de)?\s*container/i);
+    if(m) referentie="Container "+m[1].replace(/\s+/g,"");
   }
 
   /* De kopregel opzoeken. Elke fabriek noemt zijn kolommen anders en dat is
@@ -364,7 +420,7 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
       }
     }else{
       const wb=XLSX.read(await f.arrayBuffer(),{type:"array"});
-      p=parseProforma(wb);
+      p=parseProforma(wb, f.name);
     }
     if(p.fout) throw new Error(p.fout);
     if(!p.regels.length) throw new Error("op tabblad '"+p.tabblad+"' staan geen spa-regels.");
