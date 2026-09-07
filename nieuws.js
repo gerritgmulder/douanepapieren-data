@@ -59,6 +59,12 @@
 
     {
       datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
+      titel: "ETA's worden zelf opgehaald",
+      wat: "Een schip zonder ETA wordt bij het openen van de tegel automatisch bij de vervoerder opgevraagd; je hoeft er niet meer op te klikken. Een ingelezen commercial invoice krijgt meteen de goede trackingreferentie mee, dus dat werkt ook voor containers die je net hebt geüpload. Staat het schip bij de vervoerder onder een andere naam dan op de invoice, dan zie je ze allebei.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
       titel: "ETA bij Partner containers",
       wat: "In het overzicht van alle partnercontainers bleef de kolom ETA leeg zonder dat je wist waarom. Nu staat de datum er zodra hij bekend is, met het schip erbij, en anders wát eraan ontbreekt: geen containernummer in Logic4, nog geen commercial invoice, of een invoice waarbij de ETA nog niet is ingevuld.",
     },

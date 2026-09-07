@@ -1351,8 +1351,11 @@ function renderOverviews(){
   const parts   = all.filter(r=>r.type==="particulier");
   renderOverview(document.getElementById("dealerTable"), document.getElementById("dealerBody"), document.getElementById("dealerCount"), dealers);
   renderOverview(document.getElementById("partTable"),   document.getElementById("partBody"),   document.getElementById("partCount"),   parts);
-  document.getElementById("cntDealer").textContent = dealers.length;
-  document.getElementById("cntPart").textContent   = parts.length;
+  /* Hier stonden nog twee regels die 'cntDealer' en 'cntPart' bijwerkten.
+     Die elementen bestaan niet en hebben nooit bestaan, dus die twee regels
+     gooiden bij élke keer laden een fout - en omdat dit in een .then() staat
+     verdween die stilletjes in de console. De aantallen worden hierboven al
+     gezet, door renderOverview zelf (dealerCount en partCount). */
 }
 function renderOverview(table, body, countEl, list){
   const f=readFilters(table);
@@ -3015,7 +3018,20 @@ function renderPartnerContainers(){
       "<td style='font-size:12px'>"+(etaInfo.eta
         ? esc(datumNL(etaInfo.eta))+
           (etaInfo.bron==="tracking"?"<div style='font-size:10.5px;color:var(--muted)'>via tracking</div>":"")+
-          (etaInfo.schip&&etaInfo.schip.vessel?"<div style='font-size:10.5px;color:var(--muted)'>"+esc(etaInfo.schip.vessel)+"</div>":"")
+          /* Het schip dat de vervoerder noemt gaat voor dat op de invoice:
+             een zending wordt onderweg omgeboekt. Bij container 3376 stond
+             GDANSK EXPRESS op het papier en vaart hij volgens Merzario met de
+             AXEL MAERSK. Verschillen ze, dan staan ze er allebei. */
+          (function(){
+            const opPapier=etaInfo.schip&&etaInfo.schip.vessel?String(etaInfo.schip.vessel):"";
+            const echt=etaInfo.schip&&etaInfo.schip.track&&etaInfo.schip.track.vessel?String(etaInfo.schip.track.vessel):"";
+            const kern=(x)=>x.split("/")[0].trim().toLowerCase();
+            if(echt&&opPapier&&kern(echt)!==kern(opPapier))
+              return "<div style='font-size:10.5px;color:var(--muted)'>"+esc(echt)+
+                     "<span style='color:#92400e'> (op de invoice: "+esc(opPapier)+")</span></div>";
+            const naam=echt||opPapier;
+            return naam?"<div style='font-size:10.5px;color:var(--muted)'>"+esc(naam)+"</div>":"";
+          })()
         : "<span style='color:var(--muted);font-size:11.5px'>"+esc(etaInfo.reden||"—")+"</span>")+"</td></tr>";
     if(open){
       const regels=o.regels.slice().sort((a,b)=>String(a.model).localeCompare(String(b.model)));
@@ -3240,6 +3256,44 @@ async function loadSchepen(){
   }catch(e){ console.warn("schepen laden faalde:",e); }
   renderSchepen();
   renderFabrikanten();
+  etaAanvullen();
+}
+
+/* Ontbrekende ETA's er zelf bij halen.
+   ═══════════════════════════════════════════════════════════════════════
+   Een schip komt binnen zonder ETA: die staat niet op de commercial invoice,
+   dus tot nu toe moest iemand op "ETA ophalen" klikken. Deed niemand dat, dan
+   bleef de kolom leeg - en dan zag je bij Partner containers een streepje
+   zonder te weten dat het antwoord gewoon bij de vervoerder klaarstond.
+   Gerrit (7 sep 2026) over container 3376: "een container die via Merzario
+   komt, daarvan is de ETA niet te zien."
+
+   Dus wordt er bij het openen één keer gevraagd naar de schepen die nog geen
+   ETA hebben. Niet met force: de worker bewaart het antwoord, dus dit kost
+   bij een tweede bezoek niets extra's. Lukt het niet, dan blijft alles staan
+   zoals het stond - er verdwijnt nooit een datum door deze stap. */
+let etaAlGeprobeerd=false;
+async function etaAanvullen(){
+  if(etaAlGeprobeerd) return;
+  etaAlGeprobeerd=true;
+  const zonder=(shipsData.ships||[]).filter(s=>!s.eta&&String(s.trackRef||"").trim());
+  if(!zonder.length) return;
+  try{
+    const j=await trackRefs(zonder.map(s=>String(s.trackRef).trim()),false);
+    let n=0;
+    for(const s of zonder){
+      const rec=j.results&&j.results[String(s.trackRef).trim()];
+      if(!rec) continue;
+      s.track=rec;
+      if(rec.eta){ s.eta=rec.eta; n++; }
+    }
+    if(n){
+      await saveSchepen(); renderSchepen();
+      // Partner containers leest dezelfde lijst, dus die moet mee.
+      try{ renderPartnerContainers(); }catch(e){}
+      setStatus("ok",n+" ETA"+(n===1?"":"'s")+" opgehaald bij de vervoerder.");
+    }
+  }catch(e){ console.warn("[schepen] ETA aanvullen faalde:",e); }
 }
 /* Is dit een Bill of Lading? Zo ja, welke containers staan erop.
    Alleen als de vervoerder er echt containers in noemt; anders laten we het
@@ -3625,6 +3679,32 @@ function leesBestemming(tekst){
   return {bestemming:naam, dealerContainer:!NAAR_ONS.test(naam), onbekend:false};
 }
 
+/* De referentie waarop Merzario deze zending kent.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (7 sep 2026): "3376, een container die via Merzario komt, daarvan
+   is de ETA niet te zien. Dat is die dealercontainer die naar Luxury Spas
+   gaat."
+
+   De trackingreferentie viel terug op de hele referentie van het schip, en
+   dat is "RZ2009DF3376 to Luxury spas" - daar kent Merzario niets van. Bij de
+   oudere Jazzi-zendingen had iemand met de hand "3317-7&3332-5" ingetypt en
+   dan werkt het wél. Dat is precies deze referentie zonder de vaste aanloop
+   van Jazzi en zonder de bestemming erachter.
+
+   Dus doen we dat nu zelf: "RZ2009DF3376 to Luxury spas" wordt "3376" en
+   "RZ2009DF3317-7&3332-5 to Rotterdam" wordt "3317-7&3332-5". Nagekeken bij
+   Merzario: op "3376" komt AXEL MAERSK terug met container UACU5841152.
+
+   Een containernummer (vier letters, zeven cijfers) blijft ongemoeid - dat is
+   zelf al een goede trackingreferentie. */
+function trackRefVan(ref){
+  const s=String(ref||"").trim();
+  if(!s) return "";
+  if(/^[A-Z]{4}\d{7}$/i.test(s)) return s.toUpperCase();
+  const kaal=s.replace(/\bRZ\d+DF/i,"").replace(/\s+to\s+.*$/i,"").trim();
+  return kaal||s;
+}
+
 function parseCI(wb,bestandsnaam){
   const ws=wb.Sheets["COMMERCIAL INVOICE"]||wb.Sheets["CI"]||wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false});
@@ -3929,6 +4009,11 @@ async function handleCIUpload(files,statusId){
       /* Heeft iemand de bestemming eerder met de hand gezet, dan wint dat van
          wat er nu uit het papier komt: een correctie hoort niet ongedaan
          gemaakt te worden door dezelfde invoice nog eens te uploaden. */
+      /* De trackingreferentie alleen invullen als hij er nog niet staat: wat
+         iemand met de hand heeft ingetypt blijft staan. */
+      const bestaandeTrack=idx>=0?String(shipsData.ships[idx].trackRef||"").trim():"";
+      rec.trackRef=bestaandeTrack||trackRefVan(ship.ref);
+      if(idx>=0&&shipsData.ships[idx].track) rec.track=shipsData.ships[idx].track;
       if(idx>=0&&shipsData.ships[idx].bestemmingHand){
         rec.bestemmingHand=true;
         rec.dealerContainer=!!shipsData.ships[idx].dealerContainer;
