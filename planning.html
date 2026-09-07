@@ -236,6 +236,8 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .route > h4 .wie{font-weight:700;color:var(--ink);flex:1;min-width:0;cursor:text;
       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .route > h4 .wie:hover{text-decoration:underline dotted;text-underline-offset:2px}
+.route > h4 .tel{background:#e5e7eb;color:#4b5563;border-radius:999px;font-size:9.5px;font-weight:700;
+      padding:1px 6px;flex:0 0 auto}
 .route > h4 .weg{background:none;border:0;color:var(--grijs);cursor:pointer;font-size:13px;line-height:1;padding:0 2px}
 .route > h4 .weg:hover{color:var(--rood)}
 .route .stops{padding:4px;display:flex;flex-direction:column;gap:3px;flex:1}
@@ -796,12 +798,31 @@ function routesVan(dISO){
   if (Array.isArray(r) && r.length) return r;
   return [{ nr:1, wie:"" }];               // elke dag heeft er minstens één
 }
+/* Een afspraak zonder tijd is geen stop maar iets dat de hele dag geldt:
+   "Mike vakantie", "Bertjan kantoor", "Kevin vrij". Op het bord van de
+   afdeling staan die als balkjes bovenaan de dag, niet in een route. */
+function heleDagVan(dISO){
+  return afspraken.filter(function(a){
+    return a.datum === dISO && !filterUit[a.soort] && minuten(a.tijd) === null;
+  });
+}
+/* De stops van één route, op volgorde. 'volg' is de handmatige volgorde die
+   ontstaat als iemand stops binnen een route versleept; staat die er niet,
+   dan is de tijd leidend. Zo blijft een route die nooit is aangeraakt gewoon
+   op tijd staan, en houdt een gesleepte route de volgorde die de planner
+   heeft bedoeld. */
 function stopsVan(dISO, nr, eerste){
   return afspraken.filter(function(a){
     if (a.datum !== dISO || filterUit[a.soort]) return false;
+    if (minuten(a.tijd) === null) return false;          // hele-dag: staat bovenaan
     var rn = Number(a.route) || 0;
     return rn === nr || (!rn && eerste);
-  }).sort(function(x,y){ return String(x.tijd||"99").localeCompare(String(y.tijd||"99")); });
+  }).sort(function(x,y){
+    var vx = Number(x.volg), vy = Number(y.volg);
+    if (isFinite(vx) && isFinite(vy) && vx !== vy) return vx - vy;
+    if (isFinite(vx) !== isFinite(vy)) return isFinite(vx) ? -1 : 1;
+    return String(x.tijd||"99").localeCompare(String(y.tijd||"99"));
+  });
 }
 
 function tekenBord(){
@@ -814,8 +835,14 @@ function tekenBord(){
        een smalle kolom en drie routes een brede - net als op het bord waar de
        afdeling nu naar kijkt. */
     var breed = Math.max(190, routes.length * 150 + 14);
+    var heleDag = heleDagVan(w.iso);
+    var totaal = routes.reduce(function(n, r, ri){ return n + stopsVan(w.iso, r.nr, ri===0).length; }, 0);
     html += '<div class="borddag'+(w.iso===vandaagISO?" vandaag":"")+'" data-datum="'+w.iso+'" style="width:'+breed+'px">'+
-      '<h3>'+DAGEN[dagIndex(w.datum)]+'<span class="dd">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+'</span></h3>'+
+      '<h3>'+DAGEN[dagIndex(w.datum)]+'<span class="dd">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+
+        (totaal?' &middot; '+totaal+' stop'+(totaal===1?'':'s'):'')+'</span></h3>'+
+      (heleDag.length ? '<div class="dagbalken">'+heleDag.map(function(a){
+        return '<div class="dagbalk'+(a.letop?" let":"")+'" data-id="'+esc(a.id)+'" title="Klik om aan te passen">'+
+          esc(a.klant||cat(a).naam)+'</div>'; }).join("")+'</div>' : "")+
       '<div class="routes">'+
       routes.map(function(r, ri){
         var stops = stopsVan(w.iso, r.nr, ri===0);
@@ -823,6 +850,7 @@ function tekenBord(){
           '<h4><span class="nr">'+r.nr+'</span>'+
             '<span class="wie" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Klik om de naam aan te passen">'+
               (r.wie ? esc(r.wie) : '<span style="color:#c9cfcb;font-weight:400">wie rijdt?</span>')+'</span>'+
+            (stops.length ? '<span class="tel">'+stops.length+'</span>' : '')+
             '<button type="button" class="weg routeWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route weghalen">&times;</button>'+
           '</h4>'+
           '<div class="stops">'+
@@ -859,31 +887,71 @@ function koppelBord(){
       e.dataTransfer.effectAllowed = "move";
       el.classList.add("sleept");
     });
-    el.addEventListener("dragend", function(){ el.classList.remove("sleept"); });
+    el.addEventListener("dragend", function(){
+      el.classList.remove("sleept");
+      /* Ook opruimen als er niet is losgelaten (Escape, of naast het bord).
+         Anders blijft de streep staan waar je hem net overheen sleepte. */
+      $("bord").querySelectorAll(".stop").forEach(function(x){ x.style.borderTop = ""; });
+      $("bord").querySelectorAll(".route").forEach(function(x){ x.classList.remove("sleepdoel"); });
+    });
+  });
+  /* Waar de stop terechtkomt hangt af van waar je loslaat: boven een andere
+     stop komt hij ervóór, op de lege ruimte van de route komt hij achteraan.
+     Zo kun je ook de volgorde bínnen een route veranderen, en dat is precies
+     wat een route is - de volgorde waarin je rijdt. */
+  var doelStop = null;
+  $("bord").querySelectorAll(".stop").forEach(function(el){
+    el.addEventListener("dragover", function(e){ e.preventDefault(); e.stopPropagation();
+      doelStop = el.dataset.id;
+      el.closest(".route").classList.add("sleepdoel");
+      el.style.borderTop = "2px solid var(--lime)";
+    });
+    el.addEventListener("dragleave", function(){ el.style.borderTop = ""; });
   });
   $("bord").querySelectorAll(".route").forEach(function(r){
     r.addEventListener("dragover", function(e){ e.preventDefault(); r.classList.add("sleepdoel"); });
-    r.addEventListener("dragleave", function(){ r.classList.remove("sleepdoel"); });
+    r.addEventListener("dragleave", function(e){
+      if (r.contains(e.relatedTarget)) return;
+      r.classList.remove("sleepdoel"); doelStop = null;
+    });
     r.addEventListener("drop", async function(e){
-      e.preventDefault(); r.classList.remove("sleepdoel");
+      e.preventDefault();
+      r.classList.remove("sleepdoel");
+      $("bord").querySelectorAll(".stop").forEach(function(x){ x.style.borderTop = ""; });
       var id = e.dataTransfer.getData("text/plain");
+      var voor = doelStop; doelStop = null;
       var a = afspraken.find(function(x){ return x.id===id; });
-      if (!a) return;
+      if (!a || voor === id) return;
       var nieuweDatum = r.dataset.datum, nieuwNr = Number(r.dataset.nr);
-      if (a.datum===nieuweDatum && (Number(a.route)||0)===nieuwNr) return;
       var el = $("bord").querySelector('.stop[data-id="'+CSS.escape(id)+'"]');
       if (el) el.dataset.gesleept = "1";
+      /* De hele route opnieuw nummeren, met de gesleepte stop op zijn nieuwe
+         plek. Alleen het verplaatste record aanpassen zou niet werken: de rest
+         staat nog op tijd en dan springt hij meteen terug. */
+      var eerste = routesVan(nieuweDatum)[0].nr === nieuwNr;
+      var rij = stopsVan(nieuweDatum, nieuwNr, eerste).filter(function(x){ return x.id !== id; });
+      var plek = voor ? rij.findIndex(function(x){ return x.id === voor; }) : -1;
+      if (plek < 0) rij.push(a); else rij.splice(plek, 0, a);
+      var volgorde = {};
+      rij.forEach(function(x, i){ volgorde[x.id] = i + 1; });
       try{
         await bewaar(function(lijst){
-          var i = lijst.findIndex(function(x){ return x.id===id; });
-          if (i>=0) lijst[i] = Object.assign({}, lijst[i], { datum:nieuweDatum, route:nieuwNr,
-            gewijzigdDoor:ik, gewijzigd:new Date().toISOString() });
-          return lijst;
+          return lijst.map(function(x){
+            if (x.id === id) return Object.assign({}, x, { datum:nieuweDatum, route:nieuwNr,
+              volg: volgorde[x.id], gewijzigdDoor:ik, gewijzigd:new Date().toISOString() });
+            if (volgorde[x.id] != null) return Object.assign({}, x, { volg: volgorde[x.id] });
+            return x;
+          });
         });
-        try{ if(window.fpLog) window.fpLog("stop-verplaatst",(a.klant||"")+" -> "+nieuweDatum+" route "+nieuwNr); }catch(e){}
+        try{ if(window.fpLog) window.fpLog("stop-verplaatst",(a.klant||"")+" -> "+nieuweDatum+" route "+nieuwNr+
+          " (plek "+volgorde[id]+")"); }catch(e){}
         teken();
       }catch(err){ alert(err.message); }
     });
+  });
+  // De hele-dag-balkjes openen gewoon het formulier.
+  $("bord").querySelectorAll(".dagbalk").forEach(function(el){
+    el.addEventListener("click", function(){ openForm(el.dataset.id); });
   });
   // + stop, + route, route weghalen, naam van de rijder, dagnotitie
   $("bord").querySelectorAll(".plusstop").forEach(function(b){
@@ -1279,7 +1347,10 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     '<label>Plaats of adres</label><input id="fPlaats" maxlength="160" value="'+esc(a.plaats)+'">'+
     '<label>Wat (model, klus, bijzonderheden)</label><textarea id="fWat" rows="3" maxlength="400">'+esc(a.wat)+'</textarea>'+
     '</div></div>'+
-    (nieuw?"":'<label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13.5px;color:var(--ink);cursor:pointer">'+
+    '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink);cursor:pointer">'+
+      '<input type="checkbox" id="fLetop" style="width:auto"'+(a.letop?" checked":"")+'> '+
+      '<span>Let op &mdash; springt er rood uit op het bord <span style="color:var(--grijs)">(bijv. met 2 man, hijsen, karretje mee)</span></span></label>'+
+    (nieuw?"":'<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fKlaar" style="width:auto"'+(a.klaar?" checked":"")+'> Gedaan</label>')+
     (nieuw?"":'<div class="gepland-door">Ingepland door '+esc(planNaam(a.door||"?"))+
       (a.gewijzigdDoor&&a.gewijzigdDoor!==a.door?', laatst gewijzigd door '+esc(planNaam(a.gewijzigdDoor)):'')+'</div>')+
@@ -1312,7 +1383,8 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       klaar: nieuw ? false : $("fKlaar").checked,
       itsId: a.itsId || null,
       route: a.route || null,          // bij welke route van die dag hij hoort
-      letop: !!a.letop,
+      volg: a.volg != null ? a.volg : null,
+      letop: $("fLetop").checked,
       door: nieuw ? ik : (a.door||ik), gewijzigdDoor: ik,
       gemaakt: a.gemaakt || new Date().toISOString(), gewijzigd: new Date().toISOString()
     };
