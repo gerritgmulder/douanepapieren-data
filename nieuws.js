@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "dashboard.html", soort: "beter",
+      titel: "Het dashboard raakte bijna zijn dagelijkse opslaglimiet aan",
+      wat: "Cloudflare stuurde bijna dagelijks een waarschuwing dat de helft van de gratis schrijfacties op was. Bij honderd procent stopt niet één tegel maar het hele dashboard. Oorzaak: het activiteitenlogboek herschreef bij elke klik de hele maand (112 kB), goed voor 233 van de 606 schrijfacties op een drukke dag. Dat staat nu in een database waar er 100.000 per dag in mogen in plaats van 1.000. De uursync schrijft bovendien alleen nog weg als er echt iets veranderd is.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
       titel: "Proforma inlezen: meer bestanden, en een eerlijke melding",
       wat: "Drie dingen waren stuk. Een leeg eerste tabblad (zoals 'Macro1') liet de uitlezing stranden terwijl de factuur op het volgende blad stond. Koppen als 'Item no', 'ART. NO' en het door de fabriek verkeerd gespelde 'Quanity' werden niet herkend, en dan kreeg je 'kopregel niet gevonden' terwijl de kop er gewoon stond. En een proforma van tuinmeubelen of pompen kwam er als een rij onbruikbare regels uit; die zegt nu gewoon dat dit scherm alleen inkooporders voor spa's maakt.",

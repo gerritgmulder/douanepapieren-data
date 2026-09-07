@@ -8,6 +8,16 @@ kv_namespaces = [
   { binding = "FONTEYN_DATA", id = "3e8fa24719f04406a167d19d7600d6fa" }
 ]
 
+# Het activiteitenlogboek. Stond in KV, maar daar herschreef elke klik de hele
+# maandblob (112 kB) en dat is één KV-schrijfactie per handeling. Op een drukke
+# dag was dat ruim de helft van de 1.000 gratis schrijfacties per dag, en dan
+# valt het hele dashboard stil. In D1 is het één regel per gebeurtenis, en daar
+# zijn er 100.000 per dag gratis in plaats van 1.000.
+[[d1_databases]]
+binding = "ACTIVITEIT"
+database_name = "fonteyn-activiteit"
+database_id = "61c6ba30-827b-4f44-b8a8-2e2cce051cf0"
+
 # Het taalmodel voor de tegel Vertalen. Zit op dit platform zelf, dus geen
 # extra account en geen sleutel; 10.000 neuronen per dag gratis, elke nacht
 # om 02:00 weer op nul. Zie het blok VERTALEN in worker.js voor waarom het

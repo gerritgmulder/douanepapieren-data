@@ -2622,6 +2622,33 @@ async function handleTeamKey(request, env) {
 // zodat het Partnerportaal altijd actueel is zonder handmatig een script te
 // draaien. Nieuwe aanbetalingen/verkopen wijzigen de reserveringen in Logic4
 // → de vrije voorraad verschuift → hier automatisch opgepikt.
+/* Alleen wegschrijven als er echt iets veranderd is.
+   ═══════════════════════════════════════════════════════════════════════
+   De uursync schreef vier buckets, elk uur, of er nu iets gewijzigd was of
+   niet. Dat zijn bijna honderd van de duizend gratis KV-schrijfacties per dag
+   die 's nachts en in het weekend nergens toe leiden: dezelfde voorraad,
+   dezelfde reserveringen. Lezen kost een fractie van dat budget (7% van de
+   dagelijkse leeslimiet tegenover 60% van de schrijflimiet), dus eerst kijken
+   is bijna gratis.
+
+   Het tijdstempel 'updated' verandert per definitie elke keer, dus dat blijft
+   bij de vergelijking buiten beschouwing. Wel wordt het meegeschreven zodra er
+   inhoudelijk iets wijzigt, en anders blijft het oude staan: dat is eerlijk,
+   want het zegt wanneer de gegevens voor het laatst ánders waren. */
+async function putAlsAnders(env, bucket, obj, negeer) {
+  const weg = (o) => {
+    const kopie = { ...o };
+    for (const k of (negeer || ["updated"])) delete kopie[k];
+    return JSON.stringify(kopie);
+  };
+  try {
+    const oud = await env.FONTEYN_DATA.get(bucket, { type: "json" });
+    if (oud && weg(oud) === weg(obj)) return { gewijzigd: false };
+  } catch (e) { /* niet te lezen? dan gewoon schrijven */ }
+  await env.FONTEYN_DATA.put(bucket, JSON.stringify(obj));
+  return { gewijzigd: true };
+}
+
 async function dpRefreshHalStock(env) {
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const codeToModel = {};
@@ -2657,10 +2684,10 @@ async function dpRefreshHalStock(env) {
     }
     if (rows.length < PAGE) break;
   }
-  await env.FONTEYN_DATA.put("voorraad-hallen", JSON.stringify({
+  await putAlsAnders(env, "voorraad-hallen", {
     updated: new Date().toISOString(), warehouse: "Fonteyn (hallen F/K)",
     basis: "vrije voorraad (fysiek − verkocht/gereserveerd), per kleur afgekapt op 0", models: perModel,
-  }));
+  });
   return { ok: true, models: Object.keys(perModel).length };
 }
 
@@ -2817,7 +2844,7 @@ async function dpRefreshProductie(env) {
       });
     }
   }
-  await env.FONTEYN_DATA.put("voorraad-productie", JSON.stringify({ updated: new Date().toISOString(), models: byModel }));
+  await putAlsAnders(env, "voorraad-productie", { updated: new Date().toISOString(), models: byModel });
   const total = Object.values(byModel).reduce((n, l) => n + l.reduce((a, x) => a + x.qty, 0), 0);
   return { ok: true, modellen: Object.keys(byModel).length, stuks: total, ikos: fact.length };
 }
@@ -4092,7 +4119,7 @@ async function dpRefreshShipEtas(env) {
     if (!s.eta) { s.eta = rec.eta; nieuw++; }
     else if (s.eta !== rec.eta) { s.eta = rec.eta; gewijzigd++; }
   }
-  await env.FONTEYN_DATA.put("voorraad-schepen", JSON.stringify({ ...data, ships, updated: new Date().toISOString() }));
+  await putAlsAnders(env, "voorraad-schepen", { ...data, ships, updated: new Date().toISOString() });
   return { ok: true, schepen: kandidaten.length, nieuw, gewijzigd, afwijkend };
 }
 
@@ -4396,7 +4423,7 @@ async function dpRefreshReservations(env) {
     }
   }
 
-  await env.FONTEYN_DATA.put("reserveringen-live", JSON.stringify({ updated: new Date().toISOString(), byModel, byModelUSA }));
+  await putAlsAnders(env, "reserveringen-live", { updated: new Date().toISOString(), byModel, byModelUSA });
   const total = Object.values(byModel).reduce((n, l) => n + l.length, 0);
   const totalUSA = Object.values(byModelUSA).reduce((n, l) => n + l.length, 0);
   return { ok: true, models: Object.keys(byModel).length, reserveringen: total, amerika: totalUSA };
@@ -5385,21 +5412,83 @@ async function handleLog(request, env) {
     versie: String(b.versie || "").slice(0, 60) || null,
     wijziging: !INZAGE,
   };
-  const bucket = "activiteit-" + ev.ts.slice(0, 7);   // YYYY-MM
+  const maand = ev.ts.slice(0, 7);   // YYYY-MM
+  await actSchrijf(env, "team", maand, ev);
+  return reply(200, { ok: true });
+}
+
+/* Eén gebeurtenis wegschrijven.
+   ═══════════════════════════════════════════════════════════════════════
+   Dit ging naar KV, één blob per maand, en dan herschrijft élke klik het
+   hele ding. Vandaag stonden er 233 gebeurtenissen in van 112 kB per stuk;
+   dat waren 233 van de 1.000 gratis KV-schrijfacties per dag, en Cloudflare
+   mailde bij de helft dat het bijna op was. Bij 1.000 stopt niet alleen het
+   logboek maar het hele dashboard, want alles deelt diezelfde teller.
+
+   In D1 is het één INSERT van één regel, en daar zijn er 100.000 per dag
+   gratis. Honderd keer zoveel ruimte, en het is meteen te bevragen zonder de
+   hele maand op te halen.
+
+   Loggen mag nooit de handeling zelf breken: gaat D1 stuk, dan valt hij terug
+   op de oude KV-blob zodat er niets verloren gaat. */
+async function actSchrijf(env, soort, maand, ev) {
+  const db = env.ACTIVITEIT;
+  if (db) {
+    try {
+      /* Dubbel loggen voorkomen: dezelfde gebruiker, tegel en actie binnen vijf
+         minuten telt één keer. Wijzigingen nooit samenvatten - die moeten stuk
+         voor stuk terug te vinden zijn (wie deed wat, wanneer). */
+      if (!ev.wijziging) {
+        const grens = new Date(Date.parse(ev.ts) - 5 * 60000).toISOString();
+        const r = await db.prepare(
+          "SELECT 1 FROM activiteit WHERE soort=? AND gebruiker=? AND IFNULL(tile,'')=? AND actie=? AND IFNULL(detail,'')=? AND ts>=? LIMIT 1")
+          .bind(soort, ev.user || ev.email || "", ev.tile || "", ev.action || "", ev.detail || "", grens).first();
+        if (r) return;
+      }
+      await db.prepare(
+        "INSERT INTO activiteit (soort,ts,maand,gebruiker,company,tile,actie,detail,rol,computer,platform,versie,wijziging) " +
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        .bind(soort, ev.ts, maand, ev.user || ev.email || "", ev.company || null,
+              ev.tile || null, ev.action || null, ev.detail || null, ev.rol || null,
+              ev.computer || null, ev.platform || null, ev.versie || null,
+              ev.wijziging ? 1 : 0).run();
+      return;
+    } catch (e) { console.log("[log] D1 faalde, terug naar KV: " + String(e.message || e)); }
+  }
+  const bucket = (soort === "partner" ? "partner-activiteit-" : "activiteit-") + maand;
   const data = (await env.FONTEYN_DATA.get(bucket, { type: "json" })) || { events: [] };
   data.events = data.events || [];
-  // Dubbele 'open' binnen 5 min voor dezelfde gebruiker+tegel niet nog eens
-  // loggen. WIJZIGINGEN nooit dedupliceren — die moeten stuk voor stuk
-  // terug te vinden zijn (wie deed wat, wanneer).
-  const last = data.events[data.events.length - 1];
-  const dup = !ev.wijziging && last && last.user === ev.user && last.tile === ev.tile && last.action === ev.action &&
-    (Date.parse(ev.ts) - Date.parse(last.ts)) < 5 * 60000;
-  if (!dup) {
-    data.events.push(ev);
-    if (data.events.length > 5000) data.events = data.events.slice(-5000);
-    await env.FONTEYN_DATA.put(bucket, JSON.stringify(data));
+  data.events.push(ev);
+  if (data.events.length > 5000) data.events = data.events.slice(-5000);
+  await env.FONTEYN_DATA.put(bucket, JSON.stringify(data));
+}
+
+/* Een maand teruglezen in de oude vorm { events: [...] }.
+   De drie schermen die dit lezen (activiteit.html, partneractiviteit.html en
+   order-status.html) blijven zo ongewijzigd werken. Wat vóór de overstap in
+   KV staat wordt erbij gezocht, zodat de historie niet afbreekt. */
+async function actLees(env, soort, maand) {
+  const uit = [];
+  try {
+    const bucket = (soort === "partner" ? "partner-activiteit-" : "activiteit-") + maand;
+    const oud = await env.FONTEYN_DATA.get(bucket, { type: "json" });
+    if (oud && Array.isArray(oud.events)) uit.push(...oud.events);
+  } catch (e) { /* geen oude maand, prima */ }
+  if (env.ACTIVITEIT) {
+    try {
+      const r = await env.ACTIVITEIT.prepare(
+        "SELECT * FROM activiteit WHERE soort=? AND maand=? ORDER BY ts ASC").bind(soort, maand).all();
+      for (const x of (r.results || [])) {
+        uit.push(soort === "partner"
+          ? { ts: x.ts, email: x.gebruiker, company: x.company, action: x.actie, detail: x.detail }
+          : { ts: x.ts, user: x.gebruiker, tile: x.tile, action: x.actie, detail: x.detail,
+              rol: x.rol, computer: x.computer, platform: x.platform, versie: x.versie,
+              wijziging: !!x.wijziging });
+      }
+    } catch (e) { console.log("[log] D1 lezen faalde: " + String(e.message || e)); }
   }
-  return reply(200, { ok: true });
+  uit.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  return { events: uit };
 }
 
 // ─── Partner-activiteitenlogboek ─────────────────────────────────────
@@ -5419,18 +5508,7 @@ async function dpLogPartner(env, sess, action, detail) {
       action: String(action || "open").slice(0, 40),
       detail: String(detail || "").slice(0, 200),
     };
-    const bucket = "partner-activiteit-" + ev.ts.slice(0, 7);   // YYYY-MM
-    const data = (await env.FONTEYN_DATA.get(bucket, { type: "json" })) || { events: [] };
-    data.events = data.events || [];
-    // Zelfde actie+detail binnen 5 min voor dezelfde dealer niet dubbel loggen
-    const last = data.events[data.events.length - 1];
-    const dup = last && last.email === ev.email && last.action === ev.action && last.detail === ev.detail &&
-      (Date.parse(ev.ts) - Date.parse(last.ts)) < 5 * 60000;
-    if (!dup) {
-      data.events.push(ev);
-      if (data.events.length > 5000) data.events = data.events.slice(-5000);
-      await env.FONTEYN_DATA.put(bucket, JSON.stringify(data));
-    }
+    await actSchrijf(env, "partner", ev.ts.slice(0, 7), ev);
   } catch (e) { /* loggen mag nooit een dealer-actie breken */ }
 }
 
@@ -9781,6 +9859,12 @@ export default {
     }
 
     if (request.method === "GET") {
+      /* Het activiteitenlogboek staat sinds 7 sep 2026 in D1 en niet meer in
+         KV; zie actSchrijf(). De drie schermen die het lezen vragen nog steeds
+         om /data/activiteit-YYYY-MM, dus die vorm houden we hier in stand,
+         inclusief de maanden die nog in KV staan. */
+      const act = bucket.match(/^(partner-)?activiteit-(\d{4}-\d{2})$/);
+      if (act) return reply(200, await actLees(env, act[1] ? "partner" : "team", act[2]));
       const data = await env.FONTEYN_DATA.get(bucket, { type: "json" });
       return reply(200, data || {});
     }
