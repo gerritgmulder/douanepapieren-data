@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", iedereen: true, soort: "beter",
+      titel: "Het dashboard start een stuk sneller op",
+      wat: "Het venster wachtte tot alle tegels bij GitHub waren opgehaald voordat er iets in beeld kwam. Dat kon op een trage lijn tientallen seconden duren. Nu staat het scherm er zodra het klaar is en wordt er op de achtergrond bijgewerkt. Let op: dit zit in de app zelf, dus het geldt pas na de volgende installatie (op Windows gaat dat vanzelf).",
+    },
+
+    {
       datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
       titel: "Geen horizontaal geschuif meer bij Reserveringen",
       wat: "De lijsten bij Particulier, Partner, Gepland, Afroep en Binnengekomen pasten niet op het scherm; je moest naar rechts schuiven om bij de vinkjes te komen. Wat je leest staat nu op de regel en wat je doet - verwachte levering, notitie, afroep, inplannen, gepland - op een dunne strook eronder. Alles past nu in de breedte.",

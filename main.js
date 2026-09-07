@@ -252,11 +252,24 @@ async function fetchLiveUpdates() {
         return;
       }
     }
+    /* Eerst ernaast schrijven, dan omwisselen.
+       ═══════════════════════════════════════════════════════════════════
+       Sinds het bijwerken achter het venster door loopt in plaats van
+       ervoor, kan het hulpprogramma een bestand aan het uitserveren zijn op
+       hetzelfde moment dat het hier wordt overschreven. Rechtstreeks
+       schrijven levert dan een halve pagina op - en dat is precies het soort
+       storing waar niemand iets van begrijpt.
+
+       Een rename op hetzelfde volume is één handeling: wie leest, krijgt óf
+       het oude bestand óf het nieuwe, nooit een half bestand. */
+    const tijdelijk = doelPad + ".nieuw";
     try {
-      await fs.writeFile(doelPad, buf);
+      await fs.writeFile(tijdelijk, buf);
+      await fs.rename(tijdelijk, doelPad);
       etags[entry.name] = r.etag;
       bij++;
     } catch (e) {
+      try { await fs.unlink(tijdelijk); } catch {}
       console.warn(`[update] ${entry.name} niet opgeslagen:`, e.message);
     }
   });
@@ -380,8 +393,12 @@ async function startHelper() {
     belofte,
     new Promise((_, weiger) => setTimeout(() => weiger(new Error("te traag")), ms)),
   ]);
-  let sharedDir = null;
-  for (const cand of shareCandidates) {
+  /* De kandidaten tegelijk aftikken, niet na elkaar.
+     Op Windows staan er twee in de lijst. Achter elkaar met anderhalve
+     seconde elk is dat drie seconden voordat er iets in beeld komt, terwijl
+     ze niets van elkaar weten. Tegelijk kost het er anderhalf, en meestal
+     minder: de eerste die antwoordt wint. */
+  const proeven = await Promise.all(shareCandidates.map(async (cand) => {
     try {
       await metKlok((async () => {
         await fs.mkdir(cand, { recursive: true });
@@ -390,14 +407,16 @@ async function startHelper() {
         await fs.writeFile(probe, String(Date.now()));
         await fs.unlink(probe);
       })(), 1500);
-      sharedDir = cand;
-      console.log(`[product-specs] gedeeld op netwerkschijf: ${sharedDir}`);
-      break;
+      return cand;
     } catch (e) {
       if (String(e.message) === "te traag")
         console.warn(`[product-specs] ${cand} antwoordde niet binnen 1,5s - overgeslagen`);
+      return null;
     }
-  }
+  }));
+  // De volgorde van shareCandidates blijft leidend: G: gaat voor \\fonfile.
+  let sharedDir = proeven.find(Boolean) || null;
+  if (sharedDir) console.log(`[product-specs] gedeeld op netwerkschijf: ${sharedDir}`);
   if (!sharedDir) {
     sharedDir = app.isPackaged
       ? path.join(app.getPath("userData"), "product-specs-fallback")
@@ -773,10 +792,22 @@ app.whenReady().then(async () => {
     await bootstrapLiveDir();
     klok("live-map klaarzetten", t);
 
-    /* De update ophalen en de helper starten tegelijk. Ze hebben niets van
-       elkaar nodig: de helper leest de bestanden pas als er een verzoek komt,
-       en dat gebeurt pas als het venster er is. Hiervoor stonden ze achter
-       elkaar en telden hun wachttijden bij elkaar op. */
+    /* Het venster wacht NIET meer op de update.
+       ═══════════════════════════════════════════════════════════════════
+       Gerrit (7 sep 2026): "Het duurde 28(!!!) seconden bij mij om het
+       Dashboard op te starten. We moeten echt <5 seconden zitten, altijd."
+
+       Dat kwam hier vandaan. Er stond 'await updateKlaar' vóór
+       createWindow(), en updateKlaar haalt het manifest plus alle tegels bij
+       GitHub op. Op een trage of hakkelende verbinding is dat tientallen
+       seconden waarin er niets te zien is - en die wachttijd levert niets op,
+       want de app draait op de bestanden die al in de live-map staan. Wat er
+       binnenkomt is voor de vólgende keer dat je een tegel opent.
+
+       Dus: zodra het hulpprogramma luistert komt het venster in beeld. Het
+       bijwerken loopt daarachter door en meldt zich als het klaar is. Alleen
+       de allereerste keer, als de live-map nog helemaal leeg is, wordt er wél
+       gewacht - dan valt er zonder download niets te tonen. */
     t = Date.now();
     const updateKlaar = (app.isPackaged ? fetchLiveUpdates() : Promise.resolve())
       .catch(e => console.warn("[update] overgeslagen:", e.message));
@@ -788,18 +819,30 @@ app.whenReady().then(async () => {
       await startHelper();
       await waitForHelper();
       klok("hulpprogramma", t);
-      await updateKlaar;
-      klok("klaar om te tonen", t0);
     } else if (bestaand.vanOns) {
       console.log("[helper] draait al op 3737 - die wordt gebruikt.");
-      await updateKlaar;
-      klok("klaar om te tonen", t0);
     } else {
       dialog.showErrorBox("Poort 3737 is bezet",
         "Er luistert al een ander programma op poort 3737, en daardoor kan het dashboard zijn " +
         "hulpprogramma niet starten.\n\nSluit het dashboard helemaal af (ook via Taakbeheer) en " +
         "start het opnieuw. Helpt dat niet, herstart dan de computer.");
+    }
+
+    /* De enige keer dat er wél gewacht moet worden: er staat nog geen
+       dashboard.html in de live-map. Dat is de allereerste start na een
+       installatie op een pc waar de gebundelde bestanden niet meekwamen. */
+    if (app.isPackaged && !existsSync(path.join(liveDir, "dashboard.html"))) {
+      console.log("[start] live-map is nog leeg - deze ene keer wachten op de download");
       await updateKlaar;
+      klok("eerste keer inladen", t0);
+    } else {
+      /* Klaar met bijwerken? Dan een seintje naar het dashboard, dat zelf
+         beslist of het iets zegt. Niet opdringen: iemand die midden in een
+         order zit wil geen scherm dat onder zijn handen verspringt. */
+      updateKlaar.then(function(){
+        klok("bijwerken klaar (op de achtergrond)", t0);
+        try { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("ota-klaar"); } catch (e) {}
+      });
     }
   } catch (e) {
     console.error("Opstartfout:", e);
