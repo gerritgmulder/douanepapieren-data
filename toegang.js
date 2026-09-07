@@ -44,6 +44,11 @@
     // 2026: "Mike is servicespa@fonteyn.nl"). Een eigen mike-account is er
     // niet in Logic4.
     "mike":       ["servicespa@fonteyn.nl", "servicespa", "fonteyn.servicespa"],
+    /* Tim Geerestein logt in als tim.geerestein@fonteyn.nl. Let op: er staan
+       in Logic4 ook tim@fonteyn.nl en fonteyn.Tim, maar die zijn allebei
+       ZZ-OUD en van iemand anders. Het gewone patroon zou hem dus precies de
+       verkeerde accounts geven; daarom staat hij hier. */
+    "tim":        ["tim.geerestein@fonteyn.nl", "tim.geerestein"],
   };
 
   function varianten(naam) {
@@ -62,7 +67,7 @@
     "evelinde", "fabiola", "fonteynbot", "fransje", "gerrit", "gerwin",
     "gretha", "julia", "karina", "kevin", "luis", "manon",
     "mike", "nomi", "osman", "patrick", "reinier", "reinier.k",
-    "rico", "rosalie", "rowan", "yves",
+    "rico", "rosalie", "rowan", "tim", "yves",
   ];
 
   /* De groepen. Eén regel per tegel of groep tegels; de namen zijn de
@@ -184,7 +189,7 @@
        servicespa@fonteyn.nl; dat staat in AFWIJKEND bovenaan. */
     "planning": [
       "arno", "bart.vdb", "bertjan", "chantal", "dolf", "don",
-      "fonteynbot", "gerrit", "gerwin", "kevin", "mike",
+      "fonteynbot", "gerrit", "gerwin", "kevin", "mike", "tim",
     ],
     // Personeel
     "personeel": [

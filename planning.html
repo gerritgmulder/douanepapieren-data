@@ -127,6 +127,26 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .blok .s{opacity:.8;font-size:10.5px}
 .blok .d{opacity:.7;font-size:10px;font-style:italic}
 .blok.klaar{opacity:.42}
+/* Slepen en vergroten. De greep is een strookje onderaan het blok; hij valt
+   niet op tot je er met de muis overheen gaat. */
+.blok{cursor:grab}
+.blok.sleept{cursor:grabbing;opacity:.85;box-shadow:0 8px 22px rgba(0,0,0,.28);z-index:60!important}
+.blok .greep{position:absolute;left:0;right:0;bottom:0;height:7px;cursor:ns-resize}
+.blok:hover .greep{background:linear-gradient(to bottom,transparent,rgba(0,0,0,.14))}
+body.bezig-slepen{cursor:grabbing;user-select:none}
+/* Wie het heeft ingepland: een rondje met de eerste letter, rechtsboven. */
+.blok .planner{position:absolute;top:3px;right:4px;width:15px;height:15px;border-radius:50%;
+      background:rgba(255,255,255,.85);border:1px solid rgba(0,0,0,.12);font-size:9px;font-weight:700;
+      line-height:14px;text-align:center;color:#444;z-index:2}
+/* De naam is aanklikbaar om hem direct aan te passen. */
+.blok .k[data-bewerk]{cursor:text}
+.blok .k[data-bewerk]:hover{text-decoration:underline dotted;text-underline-offset:2px}
+.blok .naamvak{width:100%;border:1px solid var(--lime);border-radius:4px;padding:0 3px;
+      font:inherit;font-size:11.5px;font-weight:600;background:#fff}
+/* Het vlaggetje dat tijdens het slepen laat zien waar je uitkomt. */
+.sleeptip{position:fixed;z-index:200;background:#111827;color:#fff;font-size:11.5px;font-weight:600;
+      padding:4px 9px;border-radius:6px;pointer-events:none;white-space:nowrap;display:none;
+      box-shadow:0 4px 14px rgba(0,0,0,.3)}
 .blok.klaar .k{text-decoration:line-through}
 .hd-blok{border-radius:6px;border-left:4px solid;padding:2px 6px;font-size:11px;font-weight:600;
       margin-bottom:2px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -182,17 +202,27 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .route-menu button:hover{background:#f4f9ec}
 
 /* ── formulier (laag over de pagina) ── */
+/* Het afsprakenvenster moet op élk bureaubladscherm passen zonder scrollen.
+   Gerrit (7 sep 2026): "Nieuwe afspraak plannen, dat venster moet zo gemaakt
+   zijn dat je niet hoeft te scrollen op welk desktopscherm dan ook."
+   Een laptop van 1366x768 houdt ongeveer 660 pixels over; daar past dit in
+   door twee kolommen te gebruiken en de tussenruimtes te halveren. */
 .laag{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:50;display:flex;
-      align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto}
-.formkaart{background:#fff;border-radius:14px;max-width:500px;width:100%;padding:22px;margin:auto 0}
-.formkaart h3{margin:0 0 12px;font-size:16px;color:var(--groen)}
-.formkaart label{display:block;font-size:12px;color:var(--grijs);margin:11px 0 4px}
-.formkaart input,.formkaart select,.formkaart textarea{width:100%;padding:10px 11px;border:1px solid var(--rand);
-      border-radius:9px;font:inherit;font-size:14px;color:var(--ink);background:#fff}
+      align-items:center;justify-content:center;padding:12px;overflow-y:auto}
+.formkaart{background:#fff;border-radius:14px;max-width:720px;width:100%;padding:16px 18px;margin:auto}
+.formkaart h3{margin:0 0 8px;font-size:15px;color:var(--groen)}
+.formkaart label{display:block;font-size:11.5px;color:var(--grijs);margin:8px 0 3px}
+.formkaart input,.formkaart select,.formkaart textarea{width:100%;padding:6px 9px;border:1px solid var(--rand);
+      border-radius:8px;font:inherit;font-size:13px;color:var(--ink);background:#fff}
+.formkaart textarea{resize:vertical;min-height:38px}
 .formkaart input:focus,.formkaart select:focus,.formkaart textarea:focus{outline:2px solid var(--lime);outline-offset:-1px}
-.formkaart .rij{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
-.formkaart .rij2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.formkaart .knoppen{display:flex;gap:9px;margin-top:18px;flex-wrap:wrap}
+.formkaart .rij{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+.formkaart .rij2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+/* Twee kolommen naast elkaar: links de afspraak, rechts de klantgegevens.
+   Op een smal scherm vallen ze onder elkaar en mag er wél gescrold worden. */
+.formkaart .kolommen{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+@media (max-width:640px){ .formkaart .kolommen{grid-template-columns:1fr} }
+.formkaart .knoppen{display:flex;gap:9px;margin-top:12px;flex-wrap:wrap}
 .formkaart .knoppen button{font:inherit;font-size:13.5px;border-radius:9px;padding:11px 18px;cursor:pointer}
 .formkaart .doe{background:var(--groen);color:#fff;border:0;font-weight:600;flex:1}
 .formkaart .doe:hover{background:var(--groen-donker)}
@@ -308,6 +338,16 @@ function voornaam(wie){
   return lokaal.split(/[.\-_]/).filter(Boolean).map(function(d){
     return d.charAt(0).toUpperCase()+d.slice(1).toLowerCase(); }).join(" ");
 }
+/* De naam van wie iets plande. Mike werkt op het service-account, dus
+   "Servicespa" moet als Mike in beeld komen; de rest volgt de gewone regel.
+   Namen van de afdeling (Gerrit, 7 sep 2026): Mike, Gerwin, Kevin, Bert-Jan,
+   Tim en Bart. */
+var PLANNERS = { "servicespa":"Mike", "bertjan":"Bert-Jan", "bart.vdb":"Bart",
+                 "tim.geerestein":"Tim", "fonteynbot":"Fonteynbot" };
+function planNaam(wie){
+  var lokaal = String(wie||"").split("@")[0].replace(/^fonteyn\./i,"").toLowerCase();
+  return PLANNERS[lokaal] || voornaam(wie);
+}
 function minuten(t){ var m = String(t||"").match(/^(\d{1,2}):(\d{2})/); return m ? (+m[1])*60+(+m[2]) : null; }
 function tijdStr(min){ return String(Math.floor(min/60)).padStart(2,"0")+":"+String(min%60).padStart(2,"0"); }
 
@@ -361,6 +401,7 @@ function liveStart(){
     var d = null; try { d = JSON.parse(ev.data); } catch(e){ return; }
     if (d.soort === "welkom"){ liveKlaar = true; liveAanwezig = d.aanwezig||[]; toonAanwezig(); return; }
     if (d.soort === "erbij"){ if (liveAanwezig.indexOf(d.wie)<0) liveAanwezig.push(d.wie); toonAanwezig(); return; }
+    // (dubbele namen kunnen ontstaan als iemand twee vensters open heeft)
     if (d.soort === "weg"){ liveAanwezig = liveAanwezig.filter(function(w){ return w!==d.wie; }); toonAanwezig(); return; }
     if (d.soort === "gewijzigd") ververs(d.wie);
   });
@@ -396,7 +437,9 @@ function meldBijgewerkt(wie){
 function toonAanwezig(){
   var el = $("liveAanwezig");
   if (!el) return;
-  var anderen = liveAanwezig.filter(function(w){ return w !== ik; });
+  /* Iemand met twee vensters open staat twee keer in de lijst; dan las het
+     als "Gerwin, Gerwin kijken mee". Eén keer per persoon is genoeg. */
+  var anderen = liveAanwezig.filter(function(w,i){ return w !== ik && liveAanwezig.indexOf(w)===i; });
   el.innerHTML = anderen.length
     ? '<span class="live-stip"></span>' + anderen.map(function(w){ return esc(voornaam(w)); }).join(", ") +
       (anderen.length===1 ? " kijkt mee" : " kijken mee")
@@ -568,9 +611,13 @@ function teken(){
       '<button type="button" class="plus" data-datum="'+w.iso+'">+ afspraak</button></div>';
   }).join("");
 
-  document.querySelectorAll(".blok,.hd-blok,.afs").forEach(function(k){
+  /* Klikken opent het formulier. Bij een blok in het raster geldt dat alleen
+     als er niet gesleept is en niet op de naam is geklikt - dat wordt hieronder
+     afgehandeld. */
+  document.querySelectorAll(".hd-blok,.afs").forEach(function(k){
     k.addEventListener("click", function(e){ e.stopPropagation(); openForm(k.dataset.id); });
   });
+  document.querySelectorAll(".blok").forEach(koppelBlok);
   document.querySelectorAll(".plus").forEach(function(k){
     k.addEventListener("click", function(){ openForm(null, k.dataset.datum); });
   });
@@ -587,6 +634,174 @@ function teken(){
       openForm(null, cel.dataset.datum, tijdStr(Math.max(UUR_VAN*60, Math.min(UUR_TOT*60-30, min))));
     });
   });
+}
+
+/* ── slepen, vergroten en direct bewerken ────────────────────────────
+   Gerrit (7 sep 2026): "Agendapunten moeten ook versleepbaar zijn (groter te
+   maken, verslepen van dag, etc.). Het moet ook zeer makkelijk aanpasbaar
+   zijn (even aanklikken en direct de tekst kunnen aanpassen)."
+
+   Drie dingen op hetzelfde blok, dus ze moeten elkaar niet in de weg zitten:
+     - slepen aan het blok         -> andere dag en/of ander tijdstip
+     - slepen aan de onderrand     -> langer of korter
+     - klikken op de naam          -> naam direct aanpassen
+     - klikken op de rest          -> het hele formulier
+
+   Onderscheid tussen klikken en slepen: pas ná vier pixels beweging is het
+   slepen. Anders zou elke trillende muisklik de afspraak verzetten.
+
+   Alles gaat in stapjes van een kwartier; dat is fijn genoeg om precies te
+   plannen en grof genoeg om niet op 09:07 uit te komen. */
+var SNAP = 15;                       // minuten
+function koppelBlok(el){
+  el.addEventListener("mousedown", startSleep);
+  var naam = el.querySelector('[data-bewerk="klant"]');
+  if (naam) naam.addEventListener("click", function(e){
+    if (el.dataset.gesleept) return;
+    e.stopPropagation();
+    bewerkNaam(el, naam);
+  });
+  el.addEventListener("click", function(e){
+    if (el.dataset.gesleept) { delete el.dataset.gesleept; return; }
+    if (e.target.closest('[data-bewerk="klant"]') || e.target.classList.contains("greep")) return;
+    e.stopPropagation();
+    openForm(el.dataset.id);
+  });
+}
+function startSleep(e){
+  if (e.button !== 0) return;
+  var el = e.currentTarget;
+  var a = afspraken.find(function(x){ return x.id===el.dataset.id; });
+  if (!a) return;
+  var rekken = e.target.classList.contains("greep");
+  e.preventDefault(); e.stopPropagation();
+
+  var startX = e.clientX, startY = e.clientY;
+  var beginTop = parseFloat(el.style.top) || 0;
+  var beginHoog = parseFloat(el.style.height) || UUR_PX;
+  var beginVan = minuten(a.tijd) || UUR_VAN*60;
+  var beginDuur = Number(a.duurMin) || 60;
+  var kolommen = [].slice.call(document.querySelectorAll(".dag-cel")).map(function(c){
+    var r = c.getBoundingClientRect();
+    return { datum: c.dataset.datum, links: r.left, rechts: r.right, cel: c };
+  });
+  var bezig = false, nieuweDatum = a.datum, nieuwVan = beginVan, nieuweDuur = beginDuur;
+
+  function beweeg(ev){
+    var dx = ev.clientX - startX, dy = ev.clientY - startY;
+    if (!bezig && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
+    if (!bezig){ bezig = true; el.classList.add("sleept"); document.body.classList.add("bezig-slepen"); }
+
+    if (rekken){
+      var hoog = Math.max(UUR_PX/2, beginHoog + dy);
+      nieuweDuur = Math.max(SNAP, Math.round(hoog/UUR_PX*60/SNAP)*SNAP);
+      if (beginVan + nieuweDuur > UUR_TOT*60) nieuweDuur = UUR_TOT*60 - beginVan;
+      el.style.height = Math.max(24, nieuweDuur/60*UUR_PX - 2)+"px";
+      toonTip(ev, a.tijd+" - "+tijdStr(beginVan+nieuweDuur)+"  ("+duurTekst(nieuweDuur)+")");
+      return;
+    }
+    // verplaatsen: eerst de dag onder de muis, dan het tijdstip
+    var kol = kolommen.find(function(k){ return ev.clientX >= k.links && ev.clientX <= k.rechts; });
+    if (kol && kol.datum !== nieuweDatum){
+      nieuweDatum = kol.datum;
+      kol.cel.appendChild(el);                 // in de kolom van die dag hangen
+      el.style.left = "2px"; el.style.width = "calc(100% - 5px)"; el.style.zIndex = 40;
+    }
+    var top = beginTop + dy;
+    nieuwVan = Math.round((top/UUR_PX*60 + UUR_VAN*60)/SNAP)*SNAP;
+    nieuwVan = Math.max(UUR_VAN*60, Math.min(UUR_TOT*60 - nieuweDuur, nieuwVan));
+    el.style.top = ((nieuwVan - UUR_VAN*60)/60*UUR_PX)+"px";
+    toonTip(ev, dagNaam(nieuweDatum)+"  "+tijdStr(nieuwVan)+" - "+tijdStr(nieuwVan+nieuweDuur));
+  }
+  async function los(ev){
+    document.removeEventListener("mousemove", beweeg);
+    document.removeEventListener("mouseup", los);
+    verbergTip();
+    el.classList.remove("sleept"); document.body.classList.remove("bezig-slepen");
+    if (!bezig) return;                        // het was toch een klik
+    el.dataset.gesleept = "1";                 // de klik hierna niet als klik tellen
+    var b = rekken
+      ? { duurMin: nieuweDuur }
+      : { datum: nieuweDatum, tijd: tijdStr(nieuwVan) };
+    if ((b.datum===a.datum || b.datum===undefined) && (b.tijd===a.tijd || b.tijd===undefined)
+        && (b.duurMin===a.duurMin || b.duurMin===undefined)) { teken(); return; }
+    try{
+      await bewaar(function(lijst){
+        var i = lijst.findIndex(function(x){ return x.id===a.id; });
+        if (i>=0) lijst[i] = Object.assign({}, lijst[i], b,
+          { gewijzigdDoor: ik, gewijzigd: new Date().toISOString() });
+        return lijst;
+      });
+      try{ if(window.fpLog) window.fpLog(rekken?"afspraak-duur-gewijzigd":"afspraak-verplaatst",
+        (a.klant||"")+" -> "+(b.datum||a.datum)+" "+(b.tijd||a.tijd)+" "+duurTekst(b.duurMin||a.duurMin)); }catch(e){}
+      teken();
+    }catch(err){ alert(err.message); teken(); }
+  }
+  document.addEventListener("mousemove", beweeg);
+  document.addEventListener("mouseup", los);
+}
+function duurTekst(m){
+  m = Number(m)||0;
+  if (m < 60) return m+" min";
+  var u = Math.floor(m/60), r = m%60;
+  return u+(r?","+String(Math.round(r/60*10)):"")+" uur";
+}
+function dagNaam(dISO){
+  var d = new Date(dISO+"T12:00:00");
+  return DAGEN[(d.getDay()+6)%7]+" "+d.getDate()+" "+MAANDEN[d.getMonth()];
+}
+/* Klein vlaggetje bij de muis, zodat je tijdens het slepen ziet waar je
+   uitkomt zonder naar het blok te hoeven turen. */
+function toonTip(ev, tekst){
+  var t = $("sleepTip");
+  if (!t){ t = document.createElement("div"); t.id = "sleepTip"; t.className = "sleeptip"; document.body.appendChild(t); }
+  t.textContent = tekst;
+  t.style.left = (ev.clientX+14)+"px";
+  t.style.top = (ev.clientY+14)+"px";
+  t.style.display = "block";
+}
+function verbergTip(){ var t = $("sleepTip"); if (t) t.style.display = "none"; }
+
+/* De naam direct aanpassen. Enter of wegklikken bewaart, Escape laat het
+   zoals het was. Alleen de naam: voor de rest is er het formulier, en een
+   heel blok bewerkbaar maken leest onrustig. */
+function bewerkNaam(el, naam){
+  if (naam.dataset.bezig) return;
+  var a = afspraken.find(function(x){ return x.id===el.dataset.id; });
+  if (!a) return;
+  naam.dataset.bezig = "1";
+  var oud = a.klant || "";
+  naam.innerHTML = "";
+  var vak = document.createElement("input");
+  vak.className = "naamvak";
+  vak.value = oud;
+  vak.maxLength = 120;
+  naam.appendChild(vak);
+  vak.focus(); vak.select();
+  var af = false;
+  async function klaar(bewaren){
+    if (af) return; af = true;
+    var nieuw = vak.value.trim();
+    naam.removeAttribute("data-bezig");
+    if (!bewaren || nieuw === oud || !nieuw) { teken(); return; }
+    try{
+      await bewaar(function(lijst){
+        var i = lijst.findIndex(function(x){ return x.id===a.id; });
+        if (i>=0) lijst[i] = Object.assign({}, lijst[i],
+          { klant: nieuw, gewijzigdDoor: ik, gewijzigd: new Date().toISOString() });
+        return lijst;
+      });
+      try{ if(window.fpLog) window.fpLog("afspraak-naam-gewijzigd", oud+" -> "+nieuw); }catch(e){}
+    }catch(err){ alert(err.message); }
+    teken();
+  }
+  vak.addEventListener("keydown", function(e){
+    if (e.key==="Enter"){ e.preventDefault(); klaar(true); }
+    if (e.key==="Escape"){ e.preventDefault(); klaar(false); }
+  });
+  vak.addEventListener("blur", function(){ klaar(true); });
+  vak.addEventListener("mousedown", function(e){ e.stopPropagation(); });
+  vak.addEventListener("click", function(e){ e.stopPropagation(); });
 }
 
 function blokken(items){
@@ -615,15 +830,23 @@ function blokken(items){
     var top = (b.van-UUR_VAN*60)/60*UUR_PX;
     var hoog = Math.max(24, (b.tot-b.van)/60*UUR_PX-2);
     var w = 100/b.breed, links = b.lane*w;
-    var door = a.door ? '<div class="d">door '+esc(voornaam(a.door))+'</div>' : "";
     var sub = [a.plaats, a.wat].filter(Boolean).join(" · ");
-    return '<div class="blok'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="top:'+top+'px;height:'+hoog+'px;'+
+    /* Wie het heeft ingepland staat altijd in beeld, ook op een klein blok.
+       Gerrit (7 sep 2026): "Ik wil ook kunnen zien wie het heeft ingepland."
+       Bij een laag blok is er geen ruimte voor een regel, dus dan wordt het
+       een rondje met de initiaal rechtsboven; de hele naam staat in de tip. */
+    var plander = a.door ? '<span class="planner" title="Ingepland door '+esc(planNaam(a.door))+
+      (a.gewijzigdDoor && a.gewijzigdDoor!==a.door ? ', laatst gewijzigd door '+esc(planNaam(a.gewijzigdDoor)) : '')+'">'+
+      esc(planNaam(a.door).slice(0,1).toUpperCase())+'</span>' : "";
+    return '<div class="blok'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" data-datum="'+esc(a.datum)+'" style="top:'+top+'px;height:'+hoog+'px;'+
       'left:calc('+links+'% + 2px);width:calc('+w+'% - 5px);background:'+c.zacht+';border-left-color:'+c.kleur+';z-index:'+(2+b.lane)+'">'+
+      plander+
       '<div class="t">'+esc(a.tijd)+(a.duurMin?'-'+tijdStr(b.tot):'')+'</div>'+
-      '<div class="k">'+betaalStip(a)+esc(a.klant||c.naam)+'</div>'+
+      '<div class="k" data-bewerk="klant" title="Klik om de naam aan te passen">'+betaalStip(a)+esc(a.klant||c.naam)+'</div>'+
       (hoog>50&&sub?'<div class="s">'+esc(sub)+'</div>':"")+
-      (hoog>66&&a.wie?'<div class="s">👤 '+esc(a.wie)+'</div>':"")+
-      (hoog>82?door:"")+'</div>';
+      (hoog>66&&a.wie?'<div class="s">\ud83d\udc64 '+esc(a.wie)+'</div>':"")+
+      (hoog>82&&a.door?'<div class="d">ingepland door '+esc(planNaam(a.door))+'</div>':"")+
+      '<div class="greep" title="Sleep om de afspraak langer of korter te maken"></div></div>';
   }).join("");
 }
 
@@ -657,6 +880,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   laag.className = "laag";
   laag.innerHTML = '<div class="formkaart">'+
     '<h3>'+(nieuw?"Nieuwe afspraak":"Afspraak wijzigen")+'</h3>'+
+    '<div class="kolommen"><div>'+
     '<label>Categorie</label><div class="catkeus" id="fCats">'+
       Object.keys(CATS).map(function(k){ var c=CATS[k];
         return '<button type="button" data-cat="'+k+'" style="'+(a.soort===k?'border-color:'+c.kleur+';background:'+c.zacht:'')+'">'+
@@ -665,17 +889,19 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     '<div><label>Tijd (leeg = hele dag)</label><input type="time" id="fTijd" value="'+esc(a.tijd)+'"></div>'+
     '<div><label>Duur</label><select id="fDuur">'+DUUR.map(function(d){
       return '<option value="'+d[0]+'"'+(Number(a.duurMin||60)===d[0]?" selected":"")+'>'+d[1]+'</option>'; }).join("")+'</select></div></div>'+
+    '<label>Wie gaat erheen</label><input id="fWie" maxlength="80" value="'+esc(a.wie)+'" list="fNamen" placeholder="Naam of team">'+
+    '<datalist id="fNamen">'+Object.keys(namen).sort().map(function(n){ return '<option value="'+esc(n)+'">'; }).join("")+'</datalist>'+
+    '</div><div>'+
     '<label>Klant of onderwerp</label><input id="fKlant" maxlength="120" value="'+esc(a.klant)+'" placeholder="Naam van de klant">'+
     '<div class="rij2"><div><label>Telefoon</label><input id="fTel" maxlength="30" value="'+esc(a.telefoon)+'"></div>'+
     '<div><label>Ordernummer (mag leeg)</label><input id="fOrder" maxlength="20" value="'+esc(a.ordernr)+'"></div></div>'+
     '<label>Plaats of adres</label><input id="fPlaats" maxlength="160" value="'+esc(a.plaats)+'">'+
-    '<label>Wat (model, klus, bijzonderheden)</label><textarea id="fWat" rows="2" maxlength="400">'+esc(a.wat)+'</textarea>'+
-    '<label>Wie gaat erheen</label><input id="fWie" maxlength="80" value="'+esc(a.wie)+'" list="fNamen" placeholder="Naam of team">'+
-    '<datalist id="fNamen">'+Object.keys(namen).sort().map(function(n){ return '<option value="'+esc(n)+'">'; }).join("")+'</datalist>'+
+    '<label>Wat (model, klus, bijzonderheden)</label><textarea id="fWat" rows="3" maxlength="400">'+esc(a.wat)+'</textarea>'+
+    '</div></div>'+
     (nieuw?"":'<label style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:13.5px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fKlaar" style="width:auto"'+(a.klaar?" checked":"")+'> Gedaan</label>')+
-    (nieuw?"":'<div class="gepland-door">Gepland door '+esc(voornaam(a.door||"?"))+
-      (a.gewijzigdDoor&&a.gewijzigdDoor!==a.door?', laatst gewijzigd door '+esc(voornaam(a.gewijzigdDoor)):'')+'</div>')+
+    (nieuw?"":'<div class="gepland-door">Ingepland door '+esc(planNaam(a.door||"?"))+
+      (a.gewijzigdDoor&&a.gewijzigdDoor!==a.door?', laatst gewijzigd door '+esc(planNaam(a.gewijzigdDoor)):'')+'</div>')+
     '<div class="melding" id="fMelding"></div>'+
     '<div class="knoppen">'+
       (nieuw?"":'<button type="button" class="weg" id="fWeg">Verwijderen</button>')+

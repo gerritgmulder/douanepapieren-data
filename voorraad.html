@@ -75,9 +75,32 @@
   .btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important;box-shadow:none!important;background:#fff;color:var(--passion)}
   .status-msg{padding:10px 14px;border-radius:6px;margin:12px 0;font-size:13px}
   .status-msg.ok{background:#dcfce7;color:var(--ok)} .status-msg.bad{background:#fee2e2;color:var(--bad)} .status-msg.warn{background:#fef3c7;color:var(--warn)}
-  table.grid{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
-  table.grid th,table.grid td{padding:6px 9px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:top}
-  table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);white-space:nowrap;position:sticky;top:0}
+  /* ── Dichte regels ──────────────────────────────────────────────────
+     Gerrit (7 sep 2026), met de oude Google-lijst ernaast: "bij die oude
+     lijst kunnen ze veeeel meer zien in 1 oogopslag. Kun je het zo maken dat
+     ze ook veel meer (dus dunnere regels) kunnen zien?"
+
+     De regels waren zo hoog omdat de tekst afbrak: "Fonteyn Bezorgservice -
+     Spa's" nam drie regels, de klantnaam twee, en dan stond er ook nog een
+     keuzelijst in. Zes regels op een scherm, tegen vijfendertig in de oude
+     lijst.
+
+     Nu: één regel per rij, wat niet past krijgt puntjes, en de hoogte is
+     terug van ongeveer 130 naar 26 pixels. Wat afgekapt is staat in de tip
+     als je er met de muis overheen gaat. Dat scheelt ook horizontaal
+     schuiven, waar Kevin last van had: de kolommen blijven binnen het
+     scherm in plaats van uit te dijen op de langste tekst. */
+  table.grid{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
+  table.grid th,table.grid td{padding:3px 8px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:middle;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}
+  table.grid th{background:#f9fafb;font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);position:sticky;top:0}
+  /* Velden in een rij mogen de regel niet hoger maken dan de tekst zelf. */
+  table.grid td input[type=text],table.grid td select,table.grid td input:not([type=checkbox]){
+      padding:1px 5px;font-size:11px;height:20px;line-height:18px}
+  table.grid td input[type=checkbox]{margin:0;vertical-align:middle}
+  table.grid td button{padding:1px 6px !important;font-size:11px !important;line-height:16px}
+  /* Een cel die je wél helemaal wilt lezen (opmerkingen) mag breder zijn. */
+  table.grid td.breed{max-width:340px}
   table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
   table.grid td.code{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--fonteyn-green-dark)}
   table.grid tr:hover td{background:#fbfdf7}
@@ -2613,6 +2636,15 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
 }
 // Opmerkingveld en vinkjes aan de opslag hangen. Bij elke wijziging ook een
 // regel in het activiteitenlogboek: dit stuurt wat de planning gaat doen.
+/* "Fonteyn Bezorgservice - Spa's" en "Transport distributie - Spas" zijn de
+   namen zoals Logic4 ze levert. Ze zijn te lang voor de kolom en het deel dat
+   telt staat vooraan; de hele naam blijft in de tip staan. */
+function kortTransport(t){
+  var s = String(t||"").trim();
+  s = s.replace(/^Fonteyn\s+/i, "").replace(/\s*-\s*Spa'?s$/i, "");
+  return s;
+}
+
 function koppelNotitieVelden(box,rijen){
   const perId={}; (rijen||[]).forEach(function(r){ if(r.regelId) perId[r.regelId]=r; });
   /* Het veld in de rij is te smal om een echte notitie te lezen (Gerrit,
@@ -2763,7 +2795,7 @@ function renderParticulierBlok(){
                                :"background:#f3e8ff;border-left:4px solid #7c3aed";
         return "<tr style='"+stijl+"'>"+
           "<td>"+esc(r.ordernr)+"</td>"+
-          "<td style='font-size:12px'>"+(r.transport?esc(r.transport):"<span style='color:var(--muted)'>—</span>")+"</td>"+
+          "<td style='font-size:12px' title='"+esc(r.transport||"")+"'>"+(r.transport?esc(kortTransport(r.transport)):"<span style='color:var(--muted)'>—</span>")+"</td>"+
           "<td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur,r)+"</td>"+
           "<td>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
           "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
