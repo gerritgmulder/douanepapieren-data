@@ -226,14 +226,31 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .dagbalk{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
       border-radius:5px;padding:2px 7px;cursor:pointer;background:#eef0f2;color:#4b5563}
 .dagbalk.let{background:#fee2e2;color:#b91c1c}
-.routes{display:flex;gap:6px;padding:6px;align-items:stretch}
-.route{flex:1 1 0;min-width:0;border:1px solid var(--rand);border-radius:9px;background:#fff;
-      display:flex;flex-direction:column;min-height:60px}
+/* Het routebord: per dag de routes NAAST elkaar, elk met zijn eigen stops
+   eronder. Gerrit (7 sep 2026) tekende het zo:
+
+       Maandag                Dinsdag
+       Route 1   Route 2      Route 1
+       Stop 1    Stop 1       Stop 1
+       Stop 2    Stop 2
+       Stop 3    Stop 3
+
+   Dat deed het bord al, maar je zag het niet: een route had alleen een klein
+   groen nummertje en verder "wie rijdt?", en met één route per dag las een
+   dag als een los tegeltje in plaats van als een kolom met routes. Nu staat
+   er "Route 1" voluit boven elke kolom, met de naam van de rijder eronder,
+   en heeft elke kolom een vaste minimumhoogte zodat een lege route er ook
+   uitziet als een kolom waar iets in moet. */
+.routes{display:flex;gap:8px;padding:8px;align-items:stretch}
+.route{flex:1 1 150px;min-width:140px;border:1px solid var(--rand);border-radius:9px;background:#fff;
+      display:flex;flex-direction:column;min-height:130px}
 .route.sleepdoel{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.35)}
-.route > h4{margin:0;padding:5px 7px;font-size:11.5px;background:#f3f6f4;border-bottom:1px solid var(--rand);
-      border-radius:8px 8px 0 0;display:flex;align-items:center;gap:5px;line-height:1.25}
-.route > h4 .nr{background:var(--groen);color:#fff;border-radius:4px;padding:0 5px;font-weight:700;flex:0 0 auto}
-.route > h4 .wie{font-weight:700;color:var(--ink);flex:1;min-width:0;cursor:text;
+.route > h4{margin:0;padding:6px 8px;font-size:11.5px;background:#eef4e8;border-bottom:1px solid var(--rand);
+      border-radius:8px 8px 0 0;display:grid;grid-template-columns:1fr auto auto;
+      grid-template-areas:"nr tel weg" "wie wie wie";gap:2px 5px;line-height:1.25}
+.route > h4 .nr{grid-area:nr;color:var(--groen);font-weight:700;font-size:11.5px;
+      text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.route > h4 .wie{grid-area:wie;font-weight:600;color:var(--ink);min-width:0;cursor:text;font-size:11px;
       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .route > h4 .wie:hover{text-decoration:underline dotted;text-underline-offset:2px}
 /* Alleen-lezen: geen streepje en geen tekstcursor, anders lijkt het klikbaar. */
@@ -241,12 +258,13 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .route > h4 .wie.vast:hover{text-decoration:none}
 .dagnotitie.vast{cursor:default}
 .dagnotitie.vast:hover{color:var(--grijs)}
-.route > h4 .tel{background:#e5e7eb;color:#4b5563;border-radius:999px;font-size:9.5px;font-weight:700;
-      padding:1px 6px;flex:0 0 auto}
-.route > h4 .weg{background:none;border:0;color:var(--grijs);cursor:pointer;font-size:13px;line-height:1;padding:0 2px}
+.route > h4 .tel{grid-area:tel;background:var(--groen);color:#fff;border-radius:999px;font-size:9.5px;font-weight:700;
+      padding:1px 6px;align-self:center}
+.route > h4 .weg{grid-area:weg;background:none;border:0;color:var(--grijs);cursor:pointer;font-size:13px;line-height:1;padding:0 2px}
 .route > h4 .weg:hover{color:var(--rood)}
 .route .stops{padding:4px;display:flex;flex-direction:column;gap:3px;flex:1}
-.route .leegdrop{font-size:10.5px;color:#c9cfcb;text-align:center;padding:8px 2px}
+.route .leegdrop{font-size:10.5px;color:#b7bfb9;text-align:center;padding:14px 2px;
+      border:1px dashed var(--rand);border-radius:7px;margin:2px}
 .stop{border-radius:6px;border-left:4px solid;padding:3px 6px;font-size:11px;line-height:1.35;cursor:grab;
       background:#fff;border-top:1px solid var(--rand);border-right:1px solid var(--rand);border-bottom:1px solid var(--rand)}
 .stop.sleept{opacity:.5}
@@ -855,7 +873,7 @@ function tekenBord(){
     /* Ongeveer 150 pixels per route, plus de randen. Eén route wordt dus
        een smalle kolom en drie routes een brede - net als op het bord waar de
        afdeling nu naar kijkt. */
-    var breed = Math.max(190, routes.length * 150 + 14);
+    var breed = Math.max(210, routes.length * 158 + 18);
     var heleDag = heleDagVan(w.iso);
     var totaal = routes.reduce(function(n, r, ri){ return n + stopsVan(w.iso, r.nr, ri===0).length; }, 0);
     html += '<div class="borddag'+(w.iso===vandaagISO?" vandaag":"")+'" data-datum="'+w.iso+'" style="width:'+breed+'px">'+
@@ -868,10 +886,10 @@ function tekenBord(){
       routes.map(function(r, ri){
         var stops = stopsVan(w.iso, r.nr, ri===0);
         return '<div class="route" data-datum="'+w.iso+'" data-nr="'+r.nr+'">'+
-          '<h4><span class="nr">'+r.nr+'</span>'+
+          '<h4><span class="nr">Route '+r.nr+'</span>'+
             '<span class="wie'+(MAG_BEWERKEN?'':' vast')+'" data-datum="'+w.iso+'" data-nr="'+r.nr+'"'+
               (MAG_BEWERKEN?' title="Klik om de naam aan te passen"':'')+'>'+
-              (r.wie ? esc(r.wie) : '<span style="color:#c9cfcb;font-weight:400">wie rijdt?</span>')+'</span>'+
+              (r.wie ? '\ud83d\udc64 '+esc(r.wie) : '<span style="color:#b7bfb9;font-weight:400">wie rijdt?</span>')+'</span>'+
             (stops.length ? '<span class="tel">'+stops.length+'</span>' : '')+
             (MAG_BEWERKEN?'<button type="button" class="weg routeWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route weghalen">&times;</button>':"")+
           '</h4>'+

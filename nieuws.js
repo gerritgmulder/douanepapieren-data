@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", groep: "planning", soort: "beter",
+      titel: "Routes staan als kolommen naast elkaar",
+      wat: "Op het routebord staat nu boven elke kolom 'Route 1', 'Route 2' met daaronder wie er rijdt, zodat je per dag in één oogopslag ziet hoeveel routes er staan en welke stops erbij horen. Dat kon al, maar het was niet te zien: een route had alleen een klein nummertje.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
       titel: "Deposit-proforma van New Normal wordt herkend",
       wat: "De deposit-proforma van New Normal kun je nu gewoon uploaden bij 'Inkoop naar Logic4'. De leverancier wordt aan het briefhoofd herkend en het factuurnummer wordt goed gelezen, ook als de fabriek het over drie cellen verdeelt. Staat er geen factuurnummer op, dan pakt hij het containernummer uit de bestandsnaam.",
