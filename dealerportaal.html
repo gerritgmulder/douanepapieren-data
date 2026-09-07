@@ -448,13 +448,29 @@ const INCOTERMS = ["EXW Uddel","FCA Uddel","FOB Rotterdam","CIF","DAP","DDP","an
 
    Klopt deze lijst niet met wat er in Logic4 staat: hij hoeft maar op één plek
    aangepast te worden, hier. */
+/* Aanhef. Gerrit (7 sep 2026): "Bij het aanmelden van een dealer staat er:
+   'hij ontvangt nu een mail' maar Chantal is geen HIJ. Dus je moet dat wel
+   ergens kunnen kiezen."
+
+   Logic4 kent er twee (Relations/GetGenders: 1 = Man, 2 = Vrouw). Daar zetten
+   we er een derde naast die niet naar Logic4 gaat: bij een bedrijf weet je het
+   vaak gewoon niet, en dan hoort er geen gok in te staan. Wordt er niets
+   gekozen, dan schrijven de schermen over "deze relatie" in plaats van hij of
+   zij. */
+const AANHEFFEN = [
+  { waarde: "", tekst: "onbekend / niet van toepassing", vnw: "deze relatie", l4: null },
+  { waarde: "man", tekst: "Dhr.", vnw: "hij", l4: 1 },
+  { waarde: "vrouw", tekst: "Mevr.", vnw: "zij", l4: 2 },
+];
+function aanhefVan(w){ return AANHEFFEN.find(a => a.waarde === String(w || "")) || AANHEFFEN[0]; }
+
 const BRONNEN = ["Beurs", "Website", "Aanbeveling van een klant", "Bestaande relatie",
                  "Zelf benaderd", "Belde ons op", "Adverteren", "Social media",
                  "Via een collega-dealer", "Anders"];
 
 function leegRelatie(){
   return { email:"", company:"", debtorIds:[], region:"EU", soort:"", merk:"", active:true,
-    contact:{ voornaam:"", tussenvoegsel:"", achternaam:"", telefoon:"", mobiel:"", website:"" },
+    contact:{ aanhef:"", voornaam:"", tussenvoegsel:"", achternaam:"", telefoon:"", mobiel:"", website:"" },
     afspraken:{ kortingPct:"", kortingTekst:"", betaaltermijn:"", notitie:"" },
     facturatie:{ straat:"", huisnummer:"", toevoeging:"", postcode:"", plaats:"", land:"NL",
                  btw:"", kvk:"", factuurEmail:"" },
@@ -471,14 +487,25 @@ function vulAan(d){
   if (!Array.isArray(d.debtorIds)) d.debtorIds = [];
   return d;
 }
+/* Eén invulveld.
+
+   'label' geeft een keuzelijst een eigen opschrift per regel: bij de aanhef is
+   de bewaarde waarde "man" maar hoort er "Dhr." te staan.
+
+   'verplicht' zet er een rood sterretje bij en zorgt dat het veld wordt
+   nagelopen voordat er iets naar Logic4 gaat. Gerrit (7 sep 2026): "De
+   invulvelden bij dealer/partner aanmaken zijn nu niet verplicht. Moet wel
+   verplicht worden." De controle zelf staat in ontbrekendeVelden(); hier
+   alleen hoe het eruitziet. */
 function veld(pad, label, waarde, opties){
   const o = opties || {};
   const attr = 'data-pad="'+pad+'"' + (o.type?' type="'+o.type+'"':'') + (o.plh?' placeholder="'+esc(o.plh)+'"':'');
   const inv = o.keuze
-    ? '<select '+attr+'>'+o.keuze.map(k=>'<option value="'+esc(k)+'"'+(String(waarde)===String(k)?' selected':'')+'>'+esc(k)+'</option>').join("")+'</select>'
+    ? '<select '+attr+'>'+o.keuze.map((k,i)=>'<option value="'+esc(k)+'"'+(String(waarde)===String(k)?' selected':'')+'>'+esc(o.label?o.label[i]:k)+'</option>').join("")+'</select>'
     : (o.regels ? '<textarea '+attr+' rows="'+o.regels+'">'+esc(waarde||"")+'</textarea>'
                 : '<input '+attr+' value="'+esc(waarde==null?"":waarde)+'">');
-  return '<div class="veld'+(o.breed?" breed":"")+'"><label>'+esc(label)+'</label>'+inv+'</div>';
+  return '<div class="veld'+(o.breed?" breed":"")+'"><label>'+esc(label)+
+    (o.verplicht?' <span title="verplicht" style="color:var(--bad)">*</span>':'')+'</label>'+inv+'</div>';
 }
 
 function relatieKaart(index){
@@ -526,15 +553,16 @@ function relatieKaart(index){
 
       + '<div class="blok"><h4>Wie is het</h4>'
       + '<div class="velden">'
-      +   veld("company","Bedrijfsnaam", d.company, {breed:true, plh:"zoals het op de factuur moet staan"})
+      +   veld("company","Bedrijfsnaam", d.company, {breed:true, verplicht:true, plh:"zoals het op de factuur moet staan"})
+      +   veld("contact.aanhef","Aanhef", d.contact.aanhef, {keuze:AANHEFFEN.map(a=>a.waarde), label:AANHEFFEN.map(a=>a.tekst)})
       +   veld("contact.voornaam","Voornaam contactpersoon", d.contact.voornaam)
       +   veld("contact.tussenvoegsel","Tussenvoegsel", d.contact.tussenvoegsel)
-      +   veld("contact.achternaam","Achternaam", d.contact.achternaam)
-      +   veld("email","E-mail (inloggen op het portaal)", d.email, {type:"email", plh:"naam@bedrijf.com"})
-      +   veld("contact.telefoon","Telefoon", d.contact.telefoon)
+      +   veld("contact.achternaam","Achternaam", d.contact.achternaam, {verplicht:true})
+      +   veld("email","E-mail (inloggen op het portaal)", d.email, {type:"email", verplicht:true, plh:"naam@bedrijf.com"})
+      +   veld("contact.telefoon","Telefoon", d.contact.telefoon, {verplicht:true})
       +   veld("contact.mobiel","Mobiel", d.contact.mobiel)
       +   veld("contact.website","Website", d.contact.website, {plh:"https://"})
-      +   veld("bronKlant","Bron klant (verplicht)", d.bronKlant, {keuze:[""].concat(BRONNEN)})
+      +   veld("bronKlant","Bron klant", d.bronKlant, {verplicht:true, keuze:[""].concat(BRONNEN)})
       + '</div></div>'
 
       + '<div class="blok"><h4>' + (d.soort==="dealer"?"Dealerafspraken":"Inkoopafspraken") + '</h4>'
@@ -556,13 +584,13 @@ function relatieKaart(index){
       + '</div>'
       + '<div class="l4uit hidden" id="rkAdresTreffers"></div>'
       + '<div class="velden">'
-      +   veld("facturatie.straat","Straat", d.facturatie.straat)
-      +   veld("facturatie.huisnummer","Huisnummer", d.facturatie.huisnummer)
+      +   veld("facturatie.straat","Straat", d.facturatie.straat, {verplicht:true})
+      +   veld("facturatie.huisnummer","Huisnummer", d.facturatie.huisnummer, {verplicht:true})
       +   veld("facturatie.toevoeging","Toevoeging", d.facturatie.toevoeging)
-      +   veld("facturatie.postcode","Postcode", d.facturatie.postcode)
-      +   veld("facturatie.plaats","Plaats", d.facturatie.plaats)
-      +   veld("facturatie.land","Land", d.facturatie.land, {keuze:LANDEN})
-      +   veld("facturatie.btw","Btw-nummer", d.facturatie.btw)
+      +   veld("facturatie.postcode","Postcode", d.facturatie.postcode, {verplicht:true})
+      +   veld("facturatie.plaats","Plaats", d.facturatie.plaats, {verplicht:true})
+      +   veld("facturatie.land","Land", d.facturatie.land, {verplicht:true, keuze:LANDEN})
+      +   veld("facturatie.btw","Btw-nummer", d.facturatie.btw, {verplicht:true})
       +   veld("facturatie.kvk","KvK of handelsregister", d.facturatie.kvk)
       +   '<div class="veld breed"><label>Btw-nummer nakijken bij de EU</label>'
       +     '<div class="l4rij"><button class="btn sm" id="rkBtwKnop" type="button">Controleer btw-nummer</button>'
@@ -748,17 +776,68 @@ function relatieKaart(index){
     } catch (e) { zeg("Zoeken mislukte: " + e.message, true); }
   }
 
+  /* Wat er ingevuld moet zijn voordat er iets naar Logic4 gaat.
+     ═══════════════════════════════════════════════════════════════════════
+     Gerrit (7 sep 2026): "De invulvelden bij dealer/partner aanmaken zijn nu
+     niet verplicht. Moet wel verplicht worden."
+
+     Alles wat hier staat is nodig om de relatie te kunnen factureren of om
+     hem te bereiken. Een debiteur is achteraf niet meer weg te halen, dus het
+     is beter om vooraf te weigeren dan om er later een halve in Logic4 te
+     hebben staan.
+
+     Het btw-nummer is de enige met een uitzondering: buiten de EU bestaat er
+     geen, dus daar wordt er niet om gevraagd. Binnen de EU wel, en het kan er
+     met de knop ernaast meteen bij de EU worden nagekeken. */
+  const EU_LANDEN = ["NL","BE","DE","FR","ES","IT","PT","AT","DK","SE","FI","PL","CZ","SK","HU","RO","GR","IE"];
+  function ontbrekendeVelden(){
+    const leeg = (x) => !String(x == null ? "" : x).trim();
+    const uit = [];
+    if (leeg(d.company)) uit.push("Bedrijfsnaam");
+    if (leeg(d.soort)) uit.push("Soort relatie (dealer of partner)");
+    if (leeg(d.contact.achternaam)) uit.push("Achternaam contactpersoon");
+    if (leeg(d.email)) uit.push("E-mail");
+    else if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(d.email).trim())) uit.push("E-mail (dit is geen geldig adres)");
+    if (leeg(d.contact.telefoon)) uit.push("Telefoon");
+    if (leeg(d.bronKlant)) uit.push("Bron klant");
+    if (leeg(d.facturatie.straat)) uit.push("Straat");
+    if (leeg(d.facturatie.huisnummer)) uit.push("Huisnummer");
+    if (leeg(d.facturatie.postcode)) uit.push("Postcode");
+    if (leeg(d.facturatie.plaats)) uit.push("Plaats");
+    if (leeg(d.facturatie.land)) uit.push("Land");
+    if (EU_LANDEN.includes(String(d.facturatie.land || "").toUpperCase()) && leeg(d.facturatie.btw))
+      uit.push("Btw-nummer (verplicht binnen de EU)");
+    return uit;
+  }
+  /* Het veld dat ontbreekt ook aanwijzen: een lijstje met namen is niet genoeg
+     als het formulier vijf blokken lang is. */
+  function wijsLeegAan(){
+    laag.querySelectorAll("[data-pad]").forEach(function(el){ el.style.borderColor = ""; });
+    const kaart = laag.querySelector(".relbody");
+    let eerste = null;
+    [["company",d.company],["soort",d.soort],["contact.achternaam",d.contact.achternaam],
+     ["email",d.email],["contact.telefoon",d.contact.telefoon],["bronKlant",d.bronKlant],
+     ["facturatie.straat",d.facturatie.straat],["facturatie.huisnummer",d.facturatie.huisnummer],
+     ["facturatie.postcode",d.facturatie.postcode],["facturatie.plaats",d.facturatie.plaats],
+     ["facturatie.land",d.facturatie.land],
+     ["facturatie.btw", EU_LANDEN.includes(String(d.facturatie.land||"").toUpperCase()) ? d.facturatie.btw : "x"]
+    ].forEach(function(pr){
+      if (String(pr[1] == null ? "" : pr[1]).trim()) return;
+      const el = laag.querySelector('[data-pad="' + pr[0] + '"]');
+      if (!el) return;
+      el.style.borderColor = "var(--bad)";
+      if (!eerste) eerste = el;
+    });
+    if (eerste && kaart) { eerste.scrollIntoView({ block: "center" }); eerste.focus(); }
+  }
+
   /* Aanmaken gaat nooit zomaar. Eerst alles op een rij, inclusief de drie
      dingen die Logic4 niet aanneemt, en pas daarna de knop. */
   function bevestigAanmaken(){
-    if (!d.company.trim()) { zeg("Vul eerst een bedrijfsnaam in.", true); return; }
-    /* Gerrit (7 sep 2026): "In Logic4 moet 'Bron klant' altijd worden
-       ingevoerd in het Dashboard." Altijd betekent hier ook: je komt niet
-       langs deze knop zonder. */
-    if (!String(d.bronKlant || "").trim()) {
-      zeg("Kies eerst een bron klant - waar komt deze relatie vandaan?", true);
-      const k = laag.querySelector('[data-pad="bronKlant"]');
-      if (k) { k.focus(); k.style.borderColor = "var(--bad)"; }
+    const mist = ontbrekendeVelden();
+    if (mist.length) {
+      zeg("Nog niet compleet - vul eerst in: " + mist.join(", ") + ".", true);
+      wijsLeegAan();
       return;
     }
     const rij = (k,v) => v ? '<tr><td style="color:var(--muted);padding:2px 10px 2px 0">'+esc(k)+'</td><td>'+esc(v)+'</td></tr>' : "";
@@ -777,6 +856,7 @@ function relatieKaart(index){
       +     rij("Postcode en plaats", [d.facturatie.postcode, d.facturatie.plaats].filter(Boolean).join(" "))
       +     rij("Btw-nummer", d.facturatie.btw) + rij("KvK", d.facturatie.kvk)
       +     rij("Bron klant", d.bronKlant)
+      +     rij("Aanhef", aanhefVan(d.contact.aanhef).tekst !== AANHEFFEN[0].tekst ? aanhefVan(d.contact.aanhef).tekst : "")
       +   '</table>'
       +   '<div class="waarschuw"><b>Dit kan Logic4 niet aannemen via de koppeling.</b> '
       +     'Na het aanmaken moet iemand in Logic4 zelf zetten:<br>'
@@ -810,6 +890,9 @@ function relatieKaart(index){
             postcode:d.facturatie.postcode, plaats:d.facturatie.plaats, btw:d.facturatie.btw, kvk:d.facturatie.kvk,
             land:d.facturatie.land, soort:d.soort, factuurEmail:d.facturatie.factuurEmail,
             bronKlant:d.bronKlant,
+            // 1 = Man, 2 = Vrouw (Relations/GetGenders). Niets gekozen = niets
+            // meesturen; dan blijft het veld in Logic4 leeg in plaats van een gok.
+            geslacht:(aanhefVan(d.contact.aanhef).l4 || undefined),
             door:(localStorage.getItem(EMAIL_KEY)||"") }) });
         const j = await r.json();
         if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
@@ -888,8 +971,14 @@ function relatieKaart(index){
           titel: "Klaar - de uitnodiging is onderweg",
           html: "<p><b>" + esc(d.company || d.email) + "</b> staat erin als "
               + (d.soort === "dealer" ? "dealer" : "partner") + ".</p>"
-              + "<p>Er is zojuist een mail gestuurd naar <b>" + esc(d.email) + "</b>. Daarmee kiest hij zelf een "
-              + "wachtwoord en kan hij direct inloggen op Passion Partners. De link is zeven dagen geldig.</p>"
+              /* Geen 'hij' meer als we het niet weten. Gerrit (7 sep 2026):
+                 "Chantal is geen HIJ. Dus je moet dat wel ergens kunnen
+                 kiezen." Staat de aanhef op onbekend, dan schrijven we over
+                 "deze relatie". */
+              + "<p>Er is zojuist een mail gestuurd naar <b>" + esc(d.email) + "</b>. Daarmee kiest "
+              + esc(aanhefVan(d.contact.aanhef).vnw) + " zelf een wachtwoord en kan "
+              + esc(aanhefVan(d.contact.aanhef).vnw) + " direct inloggen op Passion Partners. "
+              + "De link is zeven dagen geldig.</p>"
               + "<p>Jij hoeft verder niets te doen. Komt de mail niet aan, gebruik dan de knop <b>uitnodiging</b> in de lijst.</p>",
           bevestig: "Klaar", geenAnnuleren: true });
       } catch(e){
@@ -899,7 +988,7 @@ function relatieKaart(index){
           html: "<p><b>" + esc(d.company || d.email) + "</b> staat erin, maar de welkomstmail kwam niet weg:</p>"
               + "<p style='color:var(--bad)'>" + esc(e.message) + "</p>"
               + "<p>Probeer het opnieuw met de knop <b>uitnodiging</b> in de lijst. Zolang die mail niet is verstuurd "
-              + "heeft deze relatie geen wachtwoord en kan hij niet inloggen.</p>",
+              + "heeft deze relatie geen wachtwoord en kan " + esc(aanhefVan(d.contact.aanhef).vnw) + " niet inloggen.</p>",
           bevestig: "Begrepen", geenAnnuleren: true });
       }
     }

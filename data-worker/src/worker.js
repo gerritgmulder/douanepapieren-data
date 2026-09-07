@@ -358,9 +358,27 @@ function dpAuthPagina(url, t, kop, tekst, knop) {
     "<h2 style='color:#c8102e;margin:0 0 6px'>Passion Partners</h2>" +
     "<h3 style='margin:14px 0 8px'>" + kop + "</h3>" +
     "<p style='color:#555;line-height:1.5'>" + tekst + "</p>" +
-    (knop ? ("<form method='POST' action='" + url.origin + "/dealers/auth'>" +
+    /* De knop klikt zichzelf aan.
+       ═══════════════════════════════════════════════════════════════════
+       Gerrit (7 sep 2026): "Continue to the portal pagina mag je weghalen,
+       heeft geen functie."
+
+       Hij heeft er wél een, en die is niet zichtbaar: mailscanners van
+       bedrijven openen elke link in een mail om hem te controleren. Doen ze
+       dat met een GET die de inlog meteen inwisselt, dan is de link al
+       verbruikt voordat de ontvanger hem aanklikt - en die krijgt dan "link
+       verlopen". Vandaar deze tussenstap: een scanner doet alleen GET, en
+       inwisselen gebeurt pas bij de POST van de knop.
+
+       Wat wél weg kan is de klik. Een scanner voert geen JavaScript uit en
+       stuurt geen formulier op; een browser van een mens doet dat wel. Dus
+       verstuurt de pagina zichzelf zodra hij openstaat, en zie je hem hooguit
+       een fractie van een seconde. De knop blijft staan voor wie JavaScript
+       uit heeft - dan is het weer één klik in plaats van een doodlopende weg. */
+    (knop ? ("<form method='POST' id='dr' action='" + url.origin + "/dealers/auth'>" +
       "<input type='hidden' name='t' value='" + t.replace(/[^A-Za-z0-9-]/g, "") + "'>" +
-      "<button type='submit' style='background:#c8102e;color:#fff;border:0;font-weight:bold;font-size:15px;padding:14px 30px;border-radius:10px;cursor:pointer;margin-top:12px'>" + knop + "</button></form>")
+      "<button type='submit' style='background:#c8102e;color:#fff;border:0;font-weight:bold;font-size:15px;padding:14px 30px;border-radius:10px;cursor:pointer;margin-top:12px'>" + knop + "</button></form>" +
+      "<script>document.getElementById('dr').submit();<\/script>")
       : ("<p style='margin-top:18px'><a href='" + url.origin + "/dealers' style='color:#c8102e;font-weight:bold'>Back to the portal</a></p>")) +
     "</div></body></html>",
     { status: knop ? 200 : 400, headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex" } });
@@ -4714,6 +4732,11 @@ async function relAanmaken(env, body) {
        Dit ging tot nu toe met de hand omdat AddCustomer geen velden aanneemt;
        UpdateCustomer neemt RelationTypeId wél. */
     RelationTypeId: 3,
+    /* Aanhef: 1 = Man, 2 = Vrouw (Relations/GetGenders). Wordt er niets
+       gekozen, dan gaat er ook niets mee - liever leeg dan een gok. Gerrit
+       (7 sep 2026): "Chantal is geen HIJ. Dus je moet dat wel ergens kunnen
+       kiezen." */
+    ...(Number(body.geslacht) === 1 || Number(body.geslacht) === 2 ? { GenderId: Number(body.geslacht) } : {}),
     // 2 = Actief. Anders komt een nieuwe partner op Prospect binnen en kan er
     // niet voor hem besteld worden.
     StatusId: 2,

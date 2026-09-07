@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Verplichte velden en een aanhef",
+      wat: "Een nieuwe dealer of partner aanmaken kan niet meer met halve gegevens: bedrijfsnaam, contactpersoon, e-mail, telefoon, adres, land, bron klant en (binnen de EU) het btw-nummer moeten ingevuld zijn. Wat ontbreekt wordt rood omrand. Er is ook een aanhef bijgekomen, zodat er niet meer 'hij' staat bij iemand die geen hij is.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "voorraad.html", soort: "hersteld",
       titel: "Orders die verderop in het proces zijn staan er weer bij",
       wat: "Een order die al te factureren stond, gepickt werd of op afhaal stond, verdween uit de lijst terwijl de spa nog niet was afgeleverd. Er werd namelijk maar naar vijf orderstatussen gekeken. Nu naar dertien, en dat scheelt 91 orders die buiten beeld stonden. Bij elke regel zie je in welke status hij staat.",
