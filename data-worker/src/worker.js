@@ -224,6 +224,23 @@ function reply(status, body, extraHeaders = {}) {
 
 const DP_LOGIN_TTL = 15 * 60;            // magic-link per mail: 15 min geldig
 const DP_SESS_TTL  = 30 * 24 * 3600;     // sessie 30 dagen
+
+/* Het adres waarop een partner het portaal ziet.
+   ═══════════════════════════════════════════════════════════════════════
+   Alles wat de partner terugkrijgt (de inloglink in de mail, de terugkeer
+   van Mollie, de knop in de uitnodiging) werd opgemaakt uit de origin van
+   het binnenkomende verzoek. Zodra het portaal onder partner.passionspas.com
+   draait komt dat verzoek via een Pages-proxy binnen, en dan is die origin
+   de worker zelf: de dealer krijgt een link naar workers.dev terug.
+
+   Het staat daarom in een instelling en niet in een header. Een header als
+   X-Forwarded-Host kan iedereen meesturen, en dan kan een vreemde een echte
+   inloglink naar zijn eigen domein laten wijzen. Een instelling kan dat niet.
+
+   Leeg gelaten valt hij terug op de origin van het verzoek, dus zolang de
+   DNS nog niet staat verandert er niets. Zetten met:
+       npx wrangler secret put DP_PUBLIC_ORIGIN     (of als var in de toml) */
+const dpOrigin = (env, url) => (env && env.DP_PUBLIC_ORIGIN) || url.origin;
 // Een link die een beheerder zélf aanmaakt en met de hand doorgeeft (mail,
 // WhatsApp, telefonisch) heeft een ander leven dan een link die de bezoeker
 // net zelf heeft aangevraagd: hij ligt vaak een dag stil voordat hij wordt
@@ -263,7 +280,70 @@ async function dpSendEmail(env, to, subject, html, replyTo) {
   });
   const respText = await r.text().catch(() => "");
   console.log("[dp-mail] to=" + to + " status=" + r.status + " resp=" + respText.slice(0, 300));
+  /* Vastleggen wát Resend antwoordde.
+     ═══════════════════════════════════════════════════════════════════
+     Chantal kreeg geen uitnodiging terwijl het scherm zei dat hij verstuurd
+     was (Gerrit, 7 sep 2026). Het antwoord van Resend stond alleen in de
+     logs van dat moment, en die zijn een dag later weg. Nu blijven de
+     laatste vijftig verzendingen staan met hun Resend-id, zodat je bij
+     'komt niet aan' kunt zien of hij überhaupt is aangenomen en zo ja, wat
+     er daarna mee gebeurd is (via /dealers/admin/mailstatus?id=...). */
+  try {
+    let id = null; try { id = (JSON.parse(respText) || {}).id || null; } catch {}
+    const log = (await env.FONTEYN_DATA.get("dp-mail-log", { type: "json" })) || { regels: [] };
+    log.regels = [{ ts: new Date().toISOString(), naar: String(to).toLowerCase(),
+                    onderwerp: String(subject || "").slice(0, 120), status: r.status,
+                    id, fout: r.ok ? null : respText.slice(0, 200) },
+                  ...(log.regels || [])].slice(0, 50);
+    await env.FONTEYN_DATA.put("dp-mail-log", JSON.stringify(log));
+  } catch (e) { console.log("[dp-mail] loggen faalde: " + String(e.message || e)); }
   return { ok: r.ok, status: r.status };
+}
+
+/* GET /dealers/admin/mailcheck - waarom komt er geen mail aan?
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (7 sep 2026): "Chantal ontvangt geen e-mail na het bericht dat er
+   een email is verstuurd." Het scherm zegt dat er een mail uit is, want de
+   knop is gelukt; of Resend hem ook echt aanneemt stond alleen in de logs.
+
+   Deze controle leest bij Resend welke domeinen geverifieerd zijn en houdt
+   het afzenderadres ernaast. Staat het domein er niet bij of is het niet
+   geverifieerd, dan weigert Resend elke mail en is dat meteen te zien. De
+   sleutel zelf komt er niet uit, alleen of hij er is. */
+async function dpMailCheck(env) {
+  const log = (await env.FONTEYN_DATA.get("dp-mail-log", { type: "json" })) || { regels: [] };
+  const laatste = (log.regels || []).slice(0, 15);
+  const from = String(env.MAIL_FROM || "");
+  const domein = (from.match(/@([^>\s]+)/) || [])[1] || from.trim();
+  const uit = { sleutelAanwezig: !!env.RESEND_API_KEY, afzender: from || null, domein: domein || null };
+  if (!env.RESEND_API_KEY) return { ok: false, ...uit, laatste, uitleg: "RESEND_API_KEY staat niet in de worker" };
+  if (!from) return { ok: false, ...uit, laatste, uitleg: "MAIL_FROM staat niet in de worker" };
+  const r = await fetch("https://api.resend.com/domains", {
+    headers: { "Authorization": "Bearer " + env.RESEND_API_KEY },
+  });
+  const tekst = await r.text().catch(() => "");
+  let j = null; try { j = JSON.parse(tekst); } catch {}
+  if (!r.ok) {
+    /* Een sleutel met alleen verzendrechten mag deze lijst niet lezen en geeft
+       ook 401. Dat is geen storing: versturen kan dan gewoon. Het bericht van
+       Resend zegt welk van de twee het is, dus dat geven we door. */
+    const bericht = (j && (j.message || j.error || j.name)) || tekst.slice(0, 200);
+    const alleenVerzenden = /restricted|only send|sending/i.test(String(bericht));
+    return { ok: null, ...uit, laatste, resendStatus: r.status, resendBericht: bericht,
+      uitleg: alleenVerzenden
+        ? "De sleutel mag alleen versturen, niet de domeinlijst lezen. Dat is op zich goed; of het domein geverifieerd is moet je in Resend zelf zien."
+        : "Resend weigert de sleutel (HTTP " + r.status + "). Dan gaat er geen enkele mail uit. Maak een nieuwe API-sleutel in Resend en zet die als RESEND_API_KEY." };
+  }
+  const domeinen = ((j && (j.data || j)) || []).map(d => ({
+    naam: d.name, status: d.status, regio: d.region, aangemaakt: d.created_at }));
+  const raak = domeinen.find(d => String(d.naam).toLowerCase() === domein.toLowerCase());
+  return {
+    ok: !!raak && String(raak.status).toLowerCase() === "verified",
+    ...uit, domeinen, laatste,
+    uitleg: !raak ? "Het domein " + domein + " staat niet bij Resend; elke mail wordt geweigerd."
+          : String(raak.status).toLowerCase() === "verified" ? "Het domein is geverifieerd; mail hoort aan te komen."
+          : "Het domein staat bij Resend maar is niet geverifieerd (status " + raak.status + "); de DNS-records ontbreken nog.",
+  };
 }
 
 async function dpGetAccounts(env) {
@@ -334,7 +414,7 @@ async function dpHandleLogin(request, env, url) {
   if (!dealer) return generic;
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("dp-login:" + token, JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_LOGIN_TTL });
-  const link = url.origin + "/dealers/auth?t=" + token;
+  const link = dpOrigin(env, url) + "/dealers/auth?t=" + token;
   await dpSendEmail(env, email, "Your Passion Partners login link",
     '<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;">' +
     '<h2 style="color:#c8102e;">Passion Partners</h2>' +
@@ -357,7 +437,7 @@ async function dpHandleLogin(request, env, url) {
 // klikte — de scanner was hem voor. Scanners doen GET, geen POST; de knop
 // hieronder is dus onbereikbaar voor de scanner en de link overleeft de
 // controle. Het token blijft eenmalig: de POST wist hem.
-function dpAuthPagina(url, t, kop, tekst, knop) {
+function dpAuthPagina(env, url, t, kop, tekst, knop) {
   return new Response("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
     "<meta name='robots' content='noindex'><title>Passion Partners</title></head>" +
     "<body style='font-family:Arial,sans-serif;background:#f7f7f5;margin:0;padding:40px 16px;text-align:center'>" +
@@ -382,11 +462,11 @@ function dpAuthPagina(url, t, kop, tekst, knop) {
        verstuurt de pagina zichzelf zodra hij openstaat, en zie je hem hooguit
        een fractie van een seconde. De knop blijft staan voor wie JavaScript
        uit heeft - dan is het weer één klik in plaats van een doodlopende weg. */
-    (knop ? ("<form method='POST' id='dr' action='" + url.origin + "/dealers/auth'>" +
+    (knop ? ("<form method='POST' id='dr' action='" + dpOrigin(env, url) + "/dealers/auth'>" +
       "<input type='hidden' name='t' value='" + t.replace(/[^A-Za-z0-9-]/g, "") + "'>" +
       "<button type='submit' style='background:#c8102e;color:#fff;border:0;font-weight:bold;font-size:15px;padding:14px 30px;border-radius:10px;cursor:pointer;margin-top:12px'>" + knop + "</button></form>" +
       "<script>document.getElementById('dr').submit();<\/script>")
-      : ("<p style='margin-top:18px'><a href='" + url.origin + "/dealers' style='color:#c8102e;font-weight:bold'>Back to the portal</a></p>")) +
+      : ("<p style='margin-top:18px'><a href='" + dpOrigin(env, url) + "/dealers' style='color:#c8102e;font-weight:bold'>Back to the portal</a></p>")) +
     "</div></body></html>",
     { status: knop ? 200 : 400, headers: { "Content-Type": "text/html; charset=utf-8", "X-Robots-Tag": "noindex" } });
 }
@@ -401,12 +481,12 @@ async function dpHandleAuth(request, env, url) {
   }
   const login = t ? await env.FONTEYN_DATA.get("dp-login:" + t, { type: "json" }) : null;
   if (!login) {
-    return dpAuthPagina(url, "", "Link expired",
+    return dpAuthPagina(env, url, "", "Link expired",
       "This login link is no longer valid. Please request a new one, or log in with your password.", null);
   }
   if (request.method === "GET") {
     // Alleen kijken, niets inwisselen — dit is wat de scanner ziet.
-    return dpAuthPagina(url, t, "Log in to the portal",
+    return dpAuthPagina(env, url, t, "Log in to the portal",
       "Welcome" + (login.company ? " " + String(login.company).replace(/[<>&]/g, "") : "") +
       ". Click the button to open your Passion Partners portal.", "Continue to the portal");
   }
@@ -416,7 +496,7 @@ async function dpHandleAuth(request, env, url) {
   await dpLogPartner(env, { email: login.email, company: login.company }, "login", "inloglink");
   // Token in het URL-FRAGMENT (#s=…), niet als queryparameter: fragmenten
   // verlaten de browser nooit (geen server/proxy-logs, geen referrers).
-  return new Response(null, { status: 302, headers: { "Location": url.origin + "/dealers#s=" + sess } });
+  return new Response(null, { status: 302, headers: { "Location": dpOrigin(env, url) + "/dealers#s=" + sess } });
 }
 
 // Voorraad-aggregatie per model — NIEUWE definitie (Arno/Chantal, 15 jul):
@@ -1292,7 +1372,7 @@ async function dpHandleReserve(request, env, sess, url) {
                 : (spaAantal ? "30% deposit" : "Payment"));
     const pay = await dpCreateMolliePayment(env, deposit,
       label + " — " + samenvatting + " (" + (sess.company || sess.email) + ")",
-      url.origin + "/dealers?paid=1",
+      dpOrigin(env, url) + "/dealers?paid=1",
       url.origin + "/dealers/webhook",
       { requestId: entry.id }, currency);
     if (pay.ok) {
@@ -1896,7 +1976,7 @@ async function dpAdminReserveFor(request, env, url) {
   const samenvatting = regelsUit.map(r => r.qty + "x " + r.model).join(", ");
   const pay = await dpCreateMolliePayment(env, deposit,
     "30% deposit — " + samenvatting + (entry.company ? " (" + entry.company + ")" : ""),
-    url.origin + "/dealers?paid=1", url.origin + "/dealers/webhook",
+    dpOrigin(env, url) + "/dealers?paid=1", url.origin + "/dealers/webhook",
     { requestId: entry.id }, currency);
   if (!pay.ok) return reply(502, { ok: false, error: pay.error || "mollie-failed" });
   entry.paymentId = pay.id;
@@ -2217,7 +2297,7 @@ async function dpAdminLoginLink(request, env, url) {
   if (!dealer) return reply(404, { ok: false, error: "geen actieve dealer met dit e-mailadres" });
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("dp-login:" + token, JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_ADMIN_LINK_TTL });
-  return reply(200, { ok: true, link: url.origin + "/dealers/auth?t=" + token, validDays: DP_ADMIN_LINK_TTL / 86400 });
+  return reply(200, { ok: true, link: dpOrigin(env, url) + "/dealers/auth?t=" + token, validDays: DP_ADMIN_LINK_TTL / 86400 });
 }
 
 // ─── Uitnodigen van een nieuwe dealer of partner ─────────────────────
@@ -2243,7 +2323,7 @@ async function dpAdminUitnodigen(request, env, url) {
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("dp-invite:" + token,
     JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_INVITE_TTL });
-  const link = url.origin + "/dealers/welkom?t=" + token;
+  const link = dpOrigin(env, url) + "/dealers/welkom?t=" + token;
   const naam = dealer.company ? String(dealer.company) : "partner";
   const sent = await dpSendEmail(env, email, "Welcome to Passion Partners",
     '<div style="font-family:Arial,sans-serif;max-width:540px;margin:0 auto;color:#1f2937;">' +
@@ -2257,8 +2337,8 @@ async function dpAdminUitnodigen(request, env, url) {
     '<p style="margin:28px 0;text-align:center;"><a href="' + link + '" ' +
     'style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;font-size:15px;padding:15px 34px;border-radius:10px;display:inline-block;">Activate your account</a></p>' +
     '<p style="color:#6b7280;font-size:13px;line-height:1.6;">The link is valid for 7 days and lets you choose ' +
-    'your own password. After that, log in any time at <a href="' + url.origin + '/dealers" style="color:#c8102e;">' +
-    url.origin.replace(/^https?:\/\//, "") + '/dealers</a>.</p>' +
+    'your own password. After that, log in any time at <a href="' + dpOrigin(env, url) + '/dealers" style="color:#c8102e;">' +
+    dpOrigin(env, url).replace(/^https?:\/\//, "") + '/dealers</a>.</p>' +
     '<p style="color:#9ca3af;font-size:12px;">Questions? Just reply to this email.</p></div></div>',
     (accounts.contactEmail || undefined));
   await dpLogPartner(env, { email, company: dealer.company || "" }, "uitnodiging-verstuurd",
@@ -2413,6 +2493,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/refresh-reserveringen" && request.method === "POST") return reply(200, await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) })));
 
     if (p === "/dealers/admin/refresh-productie" && request.method === "POST") return reply(200, await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    if (p === "/dealers/admin/mailcheck") return reply(200, await dpMailCheck(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     return reply(404, "Not found");
   }
 
