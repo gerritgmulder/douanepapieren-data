@@ -1208,8 +1208,9 @@ async function audBoekKnop(b){
       const proef=await alles(false);
       const klaar=(proef.regels||[]).filter(x=>x.status==="klaar om te boeken");
       const rest=(proef.regels||[]).filter(x=>x.status!=="klaar om te boeken");
-      const lijst=(arr)=>arr.map(x=>"  • factuur "+x.factuur+" — "+usd(x.bedrag)+
-        (x.order?(" op order "+x.order):"")+(x.status!=="klaar om te boeken"?("  ("+x.status+")"):"")).join("\n");
+      const lijst=(arr)=>arr.map(x=>"  • "+(x.grootboek?"":"factuur ")+x.factuur+" — "+usd(x.bedrag)+
+        (x.order?(" op order "+x.order):"")+(x.grootboek?(" op grootboek "+x.grootboek):"")+
+        (x.status!=="klaar om te boeken"?("  ("+x.status+")"):"")).join("\n");
       if(!klaar.length){
         alert("Er valt nu niets te boeken voor deze wire.\n\n"+lijst(rest)+
           "\n\nEen factuur zonder Logic4-order moet eerst bij Facturen worden omgezet.");
@@ -1220,7 +1221,10 @@ async function audBoekKnop(b){
         "Wire van "+(proef.wire||"")+"\n\n"+
         klaar.length+" factu(u)r(en), samen "+usd(proef.tebeoken)+":\n"+lijst(klaar)+"\n\n"+
         (rest.length?("Niet meegenomen:\n"+lijst(rest)+"\n\n"):"")+
-        "Bankkosten op deze wire: "+usd(proef.bankkosten)+" — die worden NIET geboekt.\n\n"+
+        "De bankkosten gaan als aparte regel op grootboek "+(proef.kostenGrootboek||"4630")+
+        " (Bankrente en kosten). Daarna staat op 1160 precies wat er op de bank binnenkwam.\n\n"+
+        "LET OP: de kostenplaats "+(proef.kostenplaats||"Spa Houston USA")+" kan niet via de koppeling worden meegegeven.\n"+
+        "Die moet je er in Logic4 zelf bij zetten op die kostenregel.\n\n"+
         "Doorgaan?");
       if(!akkoord) return;
       b.textContent="boeken…";
@@ -1228,7 +1232,12 @@ async function audBoekKnop(b){
       const gelukt=(echt.regels||[]).filter(x=>x.status==="geboekt");
       const mis=(echt.regels||[]).filter(x=>x.status==="fout");
       if(window.fpLog) window.fpLog("wire-geboekt-op-1160",(echt.wire||"")+": "+gelukt.length+" facturen, "+usd(echt.tebeoken));
-      alert(gelukt.length+" factu(u)r(en) geboekt op 1160."+
+      const kostenregels=gelukt.filter(x=>x.grootboek);
+      alert(gelukt.filter(x=>!x.grootboek).length+" factu(u)r(en) geboekt op 1160."+
+        (kostenregels.length?("\n\nEn "+kostenregels.length+" bankkostenregel(s) op grootboek "+
+          (echt.kostenGrootboek||"4630")+", samen "+usd(kostenregels.reduce((n,x)=>n+x.bedrag,0))+".\n\n"+
+          "NOG DOEN IN LOGIC4: zet op die kostenregel(s) de kostenplaats "+
+          (echt.kostenplaats||"Spa Houston USA")+". Dat kan de koppeling niet meegeven."):"")+
         (mis.length?("\n\nNiet gelukt:\n"+mis.map(x=>"  • "+x.factuur+" — "+(x.uitleg||"")).join("\n")):""));
       await audLoadFacturen(); audRender();
     }catch(e){ alert("Boeken mislukte: "+e.message); }

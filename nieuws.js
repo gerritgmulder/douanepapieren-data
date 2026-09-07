@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-07", bestand: "amerika.html", soort: "nieuw",
+      titel: "Bankkosten gaan mee op 4630",
+      wat: "Bij het boeken op 1160 komt de bankkosten van een wire nu als aparte regel op grootboek 4630, zodat er op 1160 precies overblijft wat er op de bank binnenkwam. De kostenplaats Spa Houston USA kan de koppeling niet meegeven; dat staat als herinnering op het scherm en in de bevestiging.",
+    },
+
+    {
+      datum: "2026-09-07", bestand: "amerika.html", soort: "nieuw",
       titel: "Alle wires in één keer boeken",
       wat: "Naast de knop per wire staat er nu ook 'alles boeken op 1160', die alle wires achter elkaar afwerkt. Ook hier eerst een proef met wat er gaat gebeuren, en wat al geboekt is wordt overgeslagen.",
     },

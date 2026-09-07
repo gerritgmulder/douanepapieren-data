@@ -5705,6 +5705,27 @@ async function qbHandlePrijzenBijwerken(request, env) {
    het scherm in plaats van dat het ergens ingerekend wordt. */
 const AMERIKA_DAGBOEK = 45;        // "Bank Passion Spas South TX" = grootboek 1160
 const AMERIKA_LEDGER_1160 = 556;   // het grootboek zelf, voor in de uitleg
+/* De bankkosten van een wire.
+   ═══════════════════════════════════════════════════════════════════════════
+   Osman (7 sep 2026): "van de 59.682,13 dollar boeken we 543,40 dollar op
+   grootboekrekening bankkosten 4630 met kostenplaats Spa Houston."
+
+   4630 heet in Logic4 "Bankrente en kosten". De boeking gaat als regel in
+   hetzelfde bankdagboek 45, met een grootboekcode in plaats van een order, en
+   met een NEGATIEF bedrag. Dat laatste is geen truc maar precies wat er
+   gebeurt: de facturen worden voor hun volle bedrag afgeboekt (60.225,53),
+   terwijl er maar 59.682,13 op de bank kwam. Die 543,40 moet er dus weer af
+   en op de kostenrekening. Daarna staat er op 1160 exact wat de bank ook laat
+   zien, en kruist het met de boeking die Osman vanaf het afschrift maakt.
+
+   Wat hier NIET bij kan: de kostenplaats. Een betaling kent in de API alleen
+   ordernummer, factuurnummer, bedrag, omschrijving, dagboek, matching-
+   grootboek en grootboekcode - er is geen veld voor een kostenplaats. "Spa
+   Houston USA" (kostenplaats 41) moet er dus in Logic4 zelf bij. Het scherm
+   zegt dat erbij na elke boeking; anders belandt het bedrag wel op 4630 maar
+   zonder kostenplaats en valt het pas bij de jaarafsluiting op. */
+const AMERIKA_KOSTEN_GROOTBOEK = "4630";
+const AMERIKA_KOSTENPLAATS = "Spa Houston USA (41)";
 
 async function qbHandleBoeken(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
@@ -5752,7 +5773,7 @@ async function qbHandleBoeken(request, env) {
     const datum = (w.datum || new Date().toISOString().slice(0, 10)) + "T12:00:00";
     const factuur = String(r.factuur || "").trim();
     const bedrag = Math.round((Number(r.kolom1) || 0) * 100) / 100;
-    kosten += Math.abs(Number(r.kolom2) || 0);
+    kosten += Math.abs(Number(r.kolom2) || 0);   // alleen factuurregels; zie hieronder
     const order = approved.ids[factuur] && approved.ids[factuur].orderId;
     const al = geboekt.ids[factuur];
 
@@ -5789,9 +5810,66 @@ async function qbHandleBoeken(request, env) {
     }
   }
 
+  /* De bankkosten, één regel per wire. Alleen in het laatste blokje, zodat er
+     bij "alle wires" niet per blokje een halve kostenregel ontstaat. */
   const volgende = vanaf + partij.length;
+  const laatste = volgende >= werk.length;
+  if (laatste) {
+    for (const w of lijst) {
+      /* Alleen de factuurregels optellen. Op de wire staat óók een totaalregel
+         (soort "totaal") die de bankkosten nog een keer noemt; die meetellen
+         gaf 1.086,80 in plaats van 543,40 - precies twee keer. */
+      const kost = Math.round(((w.regels || [])
+        .filter(r => String(r.soort || "") === "factuur")
+        .reduce((n, r) => n + Math.abs(Number(r.kolom2) || 0), 0)) * 100) / 100;
+      if (!(kost > 0)) continue;
+      const sleutel = "bankkosten:" + String(w.id);
+      if (geboekt.ids[sleutel]) {
+        regels.push({ factuur: "bankkosten " + (w.datum || ""), bedrag: -kost,
+                      grootboek: AMERIKA_KOSTEN_GROOTBOEK, status: "al geboekt" });
+        continue;
+      }
+      if (!echt) {
+        regels.push({ factuur: "bankkosten " + (w.datum || ""), bedrag: -kost,
+                      grootboek: AMERIKA_KOSTEN_GROOTBOEK, status: "klaar om te boeken",
+                      kostenplaats: AMERIKA_KOSTENPLAATS });
+        continue;
+      }
+      try {
+        const rr = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            AmountIncl: -kost,
+            LedgerCode: AMERIKA_KOSTEN_GROOTBOEK,
+            BookingId: AMERIKA_DAGBOEK,
+            DateTime: (w.datum || new Date().toISOString().slice(0, 10)) + "T12:00:00",
+            Description: "Bankkosten wire " + (w.datum || "") + " - kostenplaats " + AMERIKA_KOSTENPLAATS,
+          }),
+        });
+        const tekst = await rr.text();
+        if (!rr.ok) {
+          regels.push({ factuur: "bankkosten " + (w.datum || ""), bedrag: -kost,
+                        grootboek: AMERIKA_KOSTEN_GROOTBOEK, status: "fout",
+                        uitleg: "HTTP " + rr.status + " - " + tekst.slice(0, 160) });
+          continue;
+        }
+        geboekt.ids[sleutel] = { bedrag: -kost, wireId: String(w.id), grootboek: AMERIKA_KOSTEN_GROOTBOEK,
+                                 ts: new Date().toISOString(), door: String(body.user || "").slice(0, 80) };
+        await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));
+        regels.push({ factuur: "bankkosten " + (w.datum || ""), bedrag: -kost,
+                      grootboek: AMERIKA_KOSTEN_GROOTBOEK, status: "geboekt",
+                      kostenplaats: AMERIKA_KOSTENPLAATS });
+      } catch (e) {
+        regels.push({ factuur: "bankkosten " + (w.datum || ""), bedrag: -kost,
+                      grootboek: AMERIKA_KOSTEN_GROOTBOEK, status: "fout", uitleg: String(e.message || e) });
+      }
+    }
+  }
+
   return reply(200, { ok: true, proef: !echt,
     wire: alle ? "alle wires" : wire.datum, alle,
+    kostenGrootboek: AMERIKA_KOSTEN_GROOTBOEK, kostenplaats: AMERIKA_KOSTENPLAATS,
     dagboek: AMERIKA_DAGBOEK, grootboek: "1160", ledgerId: AMERIKA_LEDGER_1160,
     totaalRegels: werk.length, vanaf,
     volgende: volgende < werk.length ? volgende : null,
