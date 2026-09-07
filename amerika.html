@@ -1175,6 +1175,66 @@ async function audInit(){
 // Sectie 1: facturen die geaccordeerd zijn (order staat in Logic4) maar waarvan
 // de betaling nog niet is afgevinkt. Deze blijven staan tot Chantal/Osman zegt
 // dat het écht in Logic4 verwerkt is.
+/* Een wire (of alle wires) boeken op 1160. Zit los zodat zowel de knop bij een
+   losse wire als de knop 'alles boeken' er gebruik van maakt. */
+async function audBoekKnop(b){
+  const id=b.dataset.boek;
+  b.disabled=true; const oudeTekst=b.textContent; b.textContent="proef draaien…";
+
+    async function vraag(bevestigd,vanaf){
+      const r=await fetch(WORKER+"/amerika/qb/boeken",{method:"POST",
+        headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+        body:JSON.stringify({wireId:id,bevestigd:bevestigd,vanaf:vanaf||0,user:(localStorage.getItem("fp.email")||"")})});
+      const j=await r.json().catch(()=>null);
+      if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+      return j;
+    }
+    /* Bij "alle wires" komen de facturen in blokjes binnen; alles achter
+       elkaar plakken zodat de proef en het boeken over het geheel gaan. */
+    async function alles(bevestigd){
+      let vanaf=0, regels=[], eerste=null;
+      while(vanaf!=null){
+        const j=await vraag(bevestigd,vanaf);
+        if(!eerste) eerste=j;
+        regels=regels.concat(j.regels||[]);
+        vanaf=j.volgende;
+        if(vanaf!=null && b) b.textContent=(bevestigd?"boeken… ":"proef… ")+regels.length+"/"+(j.totaalRegels||"?");
+      }
+      return Object.assign({},eerste,{regels:regels,
+        tebeoken:regels.filter(x=>x.status==="klaar om te boeken"||x.status==="geboekt")
+                       .reduce((n,x)=>n+(x.bedrag||0),0)});
+    }
+    try{
+      const proef=await alles(false);
+      const klaar=(proef.regels||[]).filter(x=>x.status==="klaar om te boeken");
+      const rest=(proef.regels||[]).filter(x=>x.status!=="klaar om te boeken");
+      const lijst=(arr)=>arr.map(x=>"  • factuur "+x.factuur+" — "+usd(x.bedrag)+
+        (x.order?(" op order "+x.order):"")+(x.status!=="klaar om te boeken"?("  ("+x.status+")"):"")).join("\n");
+      if(!klaar.length){
+        alert("Er valt nu niets te boeken voor deze wire.\n\n"+lijst(rest)+
+          "\n\nEen factuur zonder Logic4-order moet eerst bij Facturen worden omgezet.");
+        return;
+      }
+      const akkoord=confirm(
+        "Boeken in dagboek Bank Passion Spas South TX (grootboek 1160)\n"+
+        "Wire van "+(proef.wire||"")+"\n\n"+
+        klaar.length+" factu(u)r(en), samen "+usd(proef.tebeoken)+":\n"+lijst(klaar)+"\n\n"+
+        (rest.length?("Niet meegenomen:\n"+lijst(rest)+"\n\n"):"")+
+        "Bankkosten op deze wire: "+usd(proef.bankkosten)+" — die worden NIET geboekt.\n\n"+
+        "Doorgaan?");
+      if(!akkoord) return;
+      b.textContent="boeken…";
+      const echt=await alles(true);
+      const gelukt=(echt.regels||[]).filter(x=>x.status==="geboekt");
+      const mis=(echt.regels||[]).filter(x=>x.status==="fout");
+      if(window.fpLog) window.fpLog("wire-geboekt-op-1160",(echt.wire||"")+": "+gelukt.length+" facturen, "+usd(echt.tebeoken));
+      alert(gelukt.length+" factu(u)r(en) geboekt op 1160."+
+        (mis.length?("\n\nNiet gelukt:\n"+mis.map(x=>"  • "+x.factuur+" — "+(x.uitleg||"")).join("\n")):""));
+      await audLoadFacturen(); audRender();
+    }catch(e){ alert("Boeken mislukte: "+e.message); }
+    finally{ b.disabled=false; b.textContent=oudeTekst; }
+  }
+
 /* De bestaande orders alsnog hun bedragen geven.
    ═══════════════════════════════════════════════════════════════════════
    In blokjes van vijf, want elke factuur kost een QuickBooks-query, een order
@@ -1253,6 +1313,10 @@ function audRenderWachtrij(){
            7 sep 2026 is aangemaakt staat in Logic4 op nul, en daar valt niets
            op af te boeken. */
         "<button class='btn' type='button' id='audPrijzen' title='Alle eerder aangemaakte Logic4-orders alsnog de bedragen uit QuickBooks geven'>bedragen bijwerken</button>"+
+        /* Alles in één keer. Gerrit (7 sep 2026): "Is het ook mogelijk dat
+           Osman straks alle bedragen in 1x boekt?" Dit is dezelfde boeking als
+           de knop per wire, alleen over alle wires tegelijk. */
+        "<button class='btn' type='button' data-boek='alle' title='De facturen van álle wires afboeken op 1160'>alles boeken op 1160</button>"+
       "</div>"+
     "</div>"+
     "<p class='lead' style='font-size:12px;margin:0 0 12px'>Voor deze facturen is een Logic4-order aangemaakt. Ze blijven hier staan tot de betaling is gekoppeld — vink dan <b>Verwerkt in Logic4</b> aan. Het vinkje geldt ook voor dezelfde factuur in het wire-overzicht hieronder.</p>"+
@@ -1279,6 +1343,7 @@ function audRenderWachtrij(){
   box.querySelectorAll(".audVerberg").forEach(b=>b.addEventListener("click",()=>qbVerbergKlik(b.dataset.nr)));
   const prijsKnop = box.querySelector("#audPrijzen");
   if (prijsKnop) prijsKnop.addEventListener("click", () => audPrijzenBijwerken(prijsKnop));
+  box.querySelectorAll("[data-boek]").forEach(b=>b.addEventListener("click",()=>audBoekKnop(b)));
 }
 // Eén handler voor beide plekken (wachtrij én wire-regel) → één waarheid.
 async function audVerwerktKlik(cb){
@@ -1378,47 +1443,7 @@ function audRender(){
      25 augustus is dat 543,40 op 60.225,53 aan facturen; waar die kosten heen
      moeten bepaalt Osman, en tot die tijd is zichtbaar maken beter dan ergens
      onderbrengen. */
-  box.querySelectorAll("[data-boek]").forEach(b=>b.addEventListener("click",async()=>{
-    const id=b.dataset.boek;
-    b.disabled=true; const oudeTekst=b.textContent; b.textContent="proef draaien…";
-    async function vraag(bevestigd){
-      const r=await fetch(WORKER+"/amerika/qb/boeken",{method:"POST",
-        headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
-        body:JSON.stringify({wireId:id,bevestigd:bevestigd,user:(localStorage.getItem("fp.email")||"")})});
-      const j=await r.json().catch(()=>null);
-      if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
-      return j;
-    }
-    try{
-      const proef=await vraag(false);
-      const klaar=(proef.regels||[]).filter(x=>x.status==="klaar om te boeken");
-      const rest=(proef.regels||[]).filter(x=>x.status!=="klaar om te boeken");
-      const lijst=(arr)=>arr.map(x=>"  • factuur "+x.factuur+" — "+usd(x.bedrag)+
-        (x.order?(" op order "+x.order):"")+(x.status!=="klaar om te boeken"?("  ("+x.status+")"):"")).join("\n");
-      if(!klaar.length){
-        alert("Er valt nu niets te boeken voor deze wire.\n\n"+lijst(rest)+
-          "\n\nEen factuur zonder Logic4-order moet eerst bij Facturen worden omgezet.");
-        return;
-      }
-      const akkoord=confirm(
-        "Boeken in dagboek Bank Passion Spas South TX (grootboek 1160)\n"+
-        "Wire van "+(proef.wire||"")+"\n\n"+
-        klaar.length+" factu(u)r(en), samen "+usd(proef.tebeoken)+":\n"+lijst(klaar)+"\n\n"+
-        (rest.length?("Niet meegenomen:\n"+lijst(rest)+"\n\n"):"")+
-        "Bankkosten op deze wire: "+usd(proef.bankkosten)+" — die worden NIET geboekt.\n\n"+
-        "Doorgaan?");
-      if(!akkoord) return;
-      b.textContent="boeken…";
-      const echt=await vraag(true);
-      const gelukt=(echt.regels||[]).filter(x=>x.status==="geboekt");
-      const mis=(echt.regels||[]).filter(x=>x.status==="fout");
-      if(window.fpLog) window.fpLog("wire-geboekt-op-1160",(echt.wire||"")+": "+gelukt.length+" facturen, "+usd(echt.tebeoken));
-      alert(gelukt.length+" factu(u)r(en) geboekt op 1160."+
-        (mis.length?("\n\nNiet gelukt:\n"+mis.map(x=>"  • "+x.factuur+" — "+(x.uitleg||"")).join("\n")):""));
-      await audLoadFacturen(); audRender();
-    }catch(e){ alert("Boeken mislukte: "+e.message); }
-    finally{ b.disabled=false; b.textContent=oudeTekst; }
-  }));
+  box.querySelectorAll("[data-boek]").forEach(b=>b.addEventListener("click",()=>audBoekKnop(b)));
   box.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{
     if(!confirm("Dit wire-overzicht verwijderen? De vinkjes gaan ook weg.")) return;
     wiresData.wires=wiresData.wires.filter(w=>String(w.id)!==b.dataset.del);

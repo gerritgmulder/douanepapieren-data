@@ -5715,20 +5715,41 @@ async function qbHandleBoeken(request, env) {
   const echt = body.bevestigd === true;
 
   const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
-  const wire = (wires.wires || []).find(w => String(w.id) === wireId);
-  if (!wire) return reply(404, { ok: false, error: "wire niet gevonden" });
+  /* Eén wire, of alle wires achter elkaar.
+     ═══════════════════════════════════════════════════════════════════════
+     Gerrit (7 sep 2026): "Is het ook mogelijk dat Osman straks alle bedragen
+     in 1x boekt?"
+
+     Met wireId "alle" gaat hij door alle wires heen. De facturen van alle
+     wires komen dan achter elkaar in dezelfde lijst, en er wordt in blokjes
+     gewerkt (vanaf/volgende) zodat het aantal aanroepen per verzoek binnen de
+     perken blijft - net als bij het bijwerken van de bedragen. */
+  const alle = wireId === "alle";
+  const lijst = alle ? (wires.wires || []) : (wires.wires || []).filter(w => String(w.id) === wireId);
+  if (!lijst.length) return reply(404, { ok: false, error: "wire niet gevonden" });
+  const wire = lijst[0];
 
   const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
   const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
   geboekt.ids = geboekt.ids || {};
 
   const token = echt ? await l4Token(env) : null;
-  const datum = (wire.datum || new Date().toISOString().slice(0, 10)) + "T12:00:00";
   const regels = [];
   let som = 0, kosten = 0;
 
-  for (const r of (wire.regels || [])) {
+  /* De werklijst: elke factuurregel van elke gekozen wire, met de datum van
+     zijn eigen wire erbij. Bij één wire is dat gewoon die ene. */
+  const werk = [];
+  for (const w of lijst) for (const r of (w.regels || [])) {
     if (String(r.soort || "") !== "factuur") continue;
+    werk.push({ w, r });
+  }
+  const MAX_BOEKINGEN = alle ? 25 : werk.length;
+  const vanaf = Math.max(0, parseInt(body.vanaf, 10) || 0);
+  const partij = werk.slice(vanaf, vanaf + MAX_BOEKINGEN);
+
+  for (const { w, r } of partij) {
+    const datum = (w.datum || new Date().toISOString().slice(0, 10)) + "T12:00:00";
     const factuur = String(r.factuur || "").trim();
     const bedrag = Math.round((Number(r.kolom1) || 0) * 100) / 100;
     kosten += Math.abs(Number(r.kolom2) || 0);
@@ -5752,13 +5773,13 @@ async function qbHandleBoeken(request, env) {
           AmountIncl: bedrag,
           BookingId: AMERIKA_DAGBOEK,
           DateTime: datum,
-          Description: "Wire " + (wire.datum || "") + " - QuickBooks-factuur " + factuur,
+          Description: "Wire " + (w.datum || "") + " - QuickBooks-factuur " + factuur,
         }),
       });
       const tekst = await rr.text();
       if (!rr.ok) { regels.push({ factuur, bedrag, order, status: "fout",
         uitleg: "HTTP " + rr.status + " - " + tekst.slice(0, 160) }); continue; }
-      geboekt.ids[factuur] = { orderId: order, bedrag, wireId, ts: new Date().toISOString(),
+      geboekt.ids[factuur] = { orderId: order, bedrag, wireId: String(w.id), ts: new Date().toISOString(),
                                door: String(body.user || "").slice(0, 80) };
       // Meteen vastleggen, nooit pas aan het eind van de lus.
       await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));
@@ -5768,8 +5789,13 @@ async function qbHandleBoeken(request, env) {
     }
   }
 
-  return reply(200, { ok: true, proef: !echt, wire: wire.datum, dagboek: AMERIKA_DAGBOEK,
-    grootboek: "1160", ledgerId: AMERIKA_LEDGER_1160,
+  const volgende = vanaf + partij.length;
+  return reply(200, { ok: true, proef: !echt,
+    wire: alle ? "alle wires" : wire.datum, alle,
+    dagboek: AMERIKA_DAGBOEK, grootboek: "1160", ledgerId: AMERIKA_LEDGER_1160,
+    totaalRegels: werk.length, vanaf,
+    volgende: volgende < werk.length ? volgende : null,
+    klaar: volgende >= werk.length,
     tebeoken: Math.round(som * 100) / 100,
     bankkosten: Math.round(kosten * 100) / 100,
     regels });

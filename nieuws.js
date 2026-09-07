@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "amerika.html", soort: "nieuw",
+      titel: "Alle wires in één keer boeken",
+      wat: "Naast de knop per wire staat er nu ook 'alles boeken op 1160', die alle wires achter elkaar afwerkt. Ook hier eerst een proef met wat er gaat gebeuren, en wat al geboekt is wordt overgeslagen.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "amerika.html", soort: "hersteld",
       titel: "De bedragen staan nu op de Amerika-orders",
       wat: "Elke order die uit QuickBooks was aangemaakt stond in Logic4 op nul dollar; het bedrag van de factuurregel werd niet meegestuurd. Dat is rechtgezet, en met de knop 'bedragen bijwerken' bij Geaccordeerd haal je de bedragen alsnog op voor de orders die er al stonden. Regels die al een bedrag hebben blijven met rust.",
