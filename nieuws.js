@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Bezorgkosten rekenen nu ook voor de modellen die eerst wegvielen",
+      wat: "Van een aantal modellen kenden we de kistmaat niet, en die telden dan niet mee in de bezorgprijs: de dealer zag een bedrag waar zijn spa niet in zat. De maten uit de douanetegel vullen dat nu aan, waaronder de Vitality Deep en Wim Hof's Ice Barrel XL. Van 17 modellen ontbreekt de maat nog; die staan er met naam bij als je ze in de wagen legt. Ook weg: de zin dat een zware lading hoger kan uitvallen. Dat kan niet: elke tariefband staat op 1750 kg per laadmeter en het zwaarste dat we vervoeren haalt er 500.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "amerika.html", soort: "beter",
       titel: "De bedragen van de Amerika-orders kloppen nu met QuickBooks",
       wat: "Alle 116 orders die uit QuickBooks zijn omgezet staan in Logic4 op precies het factuurbedrag, samen $ 414.719,18. Er ontbrak drie dingen: de sales tax van 8,25% (die zit in QuickBooks niet in een regel maar apart), de verzendregel (die heeft in QuickBooks geen naam en viel weg, zo'n 18 tot 25 dollar per onderdelenorder) en op negen spa-regels stond 21% Nederlandse btw in plaats van 0% export, samen 24.357,69 euro te veel. De knop 'bedragen ophalen uit QuickBooks' zet het voortaan in één keer goed.",

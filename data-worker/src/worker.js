@@ -784,8 +784,18 @@ function vrachtLaadmeters(doos) {
   // Vierkante centimeters vloer, gedeeld door een trailerbreedte van 240 cm.
   return (doos.l * doos.b) / (240 * 100);
 }
+/* De eerste band die groot genoeg is voor allebei; anders de grootste.
+
+   Het gewicht doet er in de praktijk niet toe, en dat is nagerekend: op één na
+   staat elke band van beide vervoerders op precies 1750 kg per laadmeter, en
+   van de vijftig artikelen waarvan we zowel de kist als het gewicht kennen
+   haalt de zwaarste 500 kg per laadmeter. Dat is 29% van wat een laadmeter
+   mag dragen. Een spa is een holle kuip, dus de laadmeters bepalen de prijs
+   en het gewicht kan de band niet verzetten. Het staat er wel in, want een
+   pallet met onderdelen of een toekomstige tarieflijst kan dat wel doen. Van
+   107 van de 148 modellen kennen we het gewicht niet; dat is dus geen gat in
+   de prijs en er hoort ook geen slag om de arm bij in het portaal. */
 function vrachtBand(banden, ldm, kg) {
-  // De eerste band die groot genoeg is voor allebei; anders de grootste.
   return banden.find(b => b.ldm >= ldm - 0.001 && b.kg >= kg - 0.5) || banden[banden.length - 1] || null;
 }
 /* POST /voorraad/dieseltoeslag { doesburg, heugten, door }

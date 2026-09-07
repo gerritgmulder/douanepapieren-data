@@ -141,8 +141,71 @@ if (prijsR.ok) {
   console.log("partnerprijslijst niet op te halen (HTTP " + prijsR.status + ") - tweede ronde overgeslagen");
 }
 
+/* Derde ronde: gewichten uit de douane-specs.
+
+   De verpakkingslijst kent maar van vier modellen het kistgewicht. De
+   douanetegel houdt per artikelcode een bruto- en nettogewicht bij (voor de
+   commercial invoice) en die zijn wél ingevuld: 137 artikelen. Via de
+   spa-catalogus hoort bij elk model een handvol kleurvarianten met hun
+   artikelcode, en daar hangt het gewicht aan.
+
+   Let op waar dit wél en niet voor telt. Voor de vrachtprijs maakt het niets
+   uit: elke tariefband is precies 1750 kg per laadmeter, en het zwaarste dat
+   we kennen haalt 500 kg per laadmeter (29% daarvan). Een spa is een holle
+   kuip; die wordt nooit op gewicht afgerekend. Het gewicht staat er dus voor
+   de volledigheid en voor wie het voor iets anders nodig heeft, niet omdat de
+   prijs erop wacht. */
+const getal = (n) => Number(String(n == null ? "" : n).replace(",", ".")) || 0;
+try {
+  const [specR, catR] = await Promise.all([
+    echteFetch(BASE + "/data/douane-specs", { headers: { "X-Fonteyn-Auth": teamKey } }),
+    echteFetch(BASE + "/data/spa-catalog", { headers: { "X-Fonteyn-Auth": teamKey } }),
+  ]);
+  const spec = specR.ok ? await specR.json() : {};
+  const cat = catR.ok ? ((await catR.json()) || {}).models || {} : {};
+  let erbij = 0;
+  for (const model of Object.keys(dozen)) {
+    if (getal(dozen[model].kg) > 0) continue;
+    const gewichten = [...new Set((cat[model] || []).map(v => getal(spec[v.code] && spec[v.code].gw)).filter(g => g > 0))];
+    if (!gewichten.length) continue;
+    // Twee varianten van hetzelfde model kunnen verschillen (de Activity 2
+    // staat op 1500 en 1600); dan het zwaarste, want te licht rekenen kost geld.
+    dozen[model].kg = Math.round(Math.max(...gewichten));
+    dozen[model].bronKg = "douane-specs";
+    erbij++;
+  }
+  console.log(erbij + " modellen kregen een gewicht uit de douane-specs");
+
+  /* En andersom: modellen waar we helemáál geen maat van hebben. Die vallen nu
+     uit de vrachtberekening, en dan ziet de dealer een prijs waar zijn spa
+     niet in zit. De douanetegel geeft de kist zoals die is aangegeven ("708 x
+     227 x 155 CM"), dus die maat kunnen we gebruiken. Zo komen de Vitality
+     Deep, de Xtreme Green-warmtepomp en Wim Hof's Ice Barrel XL er alsnog in. */
+  let maten = 0;
+  for (const model of Object.keys(cat)) {
+    if (dozen[model]) continue;
+    for (const v of (cat[model] || [])) {
+      const d = String((spec[v.code] || {}).dims || "").match(/(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/i);
+      if (!d) continue;
+      const l = getal(d[1]), b = getal(d[2]), h = getal(d[3]);
+      // Alleen de lege plaatshouders van 1x1x1 cm weren; een warmtepomp van
+      // 100 x 50 cm is een echte maat.
+      if (!(l >= 20 && b >= 20)) continue;
+      const gw = getal((spec[v.code] || {}).gw);
+      dozen[model] = { spa: { l, b, h }, kg: gw > 0 ? Math.round(gw) : null,
+                       bron: "douane-specs", bronKg: gw > 0 ? "douane-specs" : null, cover: null };
+      maten++;
+      break;
+    }
+  }
+  if (maten) console.log(maten + " modellen kregen hun kistmaat uit de douane-specs");
+} catch (e) {
+  console.log("douane-specs niet op te halen (" + e.message + ") - gewichten overgeslagen");
+}
+
 const aantal = Object.keys(dozen).length;
 console.log(aantal + " modellen met een doosmaat, " + zonder + " zonder");
+console.log(Object.values(dozen).filter(d => getal(d.kg) > 0).length + " daarvan hebben een gewicht");
 const metCover = Object.values(dozen).filter(d => d.cover).length;
 console.log(metCover + " daarvan hebben een cover");
 for (const naam of Object.keys(dozen).slice(0, 5)) {

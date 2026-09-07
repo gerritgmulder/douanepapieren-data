@@ -1821,7 +1821,7 @@ function tekenVracht(ov){
          </tbody></table>
          <p style="margin:8px 0 0;font-size:11.5px;color:var(--muted);line-height:1.55;">
            An estimate based on the floor space your spas take up. The final invoice follows what
-           actually goes on the truck.${u.gewichtOnbekend ? " Weights are not known for every model, so a heavy load can come out higher." : ""}
+           actually goes on the truck.
            ${u.onbekend && u.onbekend.length ? " We do not have the crate size for " + esc([...new Set(u.onbekend)].join(", ")) + " yet, so it is not included." : ""}</p>`;
     } else if (u && !u.ok) {
       som = `<p class="lead" style="margin:12px 0 0;color:var(--red);">${esc(u.uitleg || (u.error === "postcode-onbekend"
