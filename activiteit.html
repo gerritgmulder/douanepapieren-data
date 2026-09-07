@@ -256,10 +256,36 @@ function renderApparaten(evs){
     a.n++; if(e.user) a.users.add(e.user);
     if(e.ts>a.laatst) a.laatst=e.ts;
   }
+  /* Welke computer loopt achter?
+     ═══════════════════════════════════════════════════════════════════
+     De Mac van Gerrit draaide maandenlang versie 0.13.0 uit mei terwijl de
+     rest allang bij was, en niemand zag het: de versie stond hier wel in de
+     tabel, maar er was niets dat zei dat het een oude was. Bij die versie
+     duurde opstarten 28 seconden en kon de app zichzelf niet bijwerken.
+
+     Daarom nu een vergelijking met de nieuwste versie die op de vloer draait.
+     Dat is genoeg: zodra één computer bijwerkt, vallen alle andere op. */
+  const versieGetal = (v) => {
+    const m = String(v||"").match(/(\d+)\.(\d+)\.(\d+)/);
+    return m ? (+m[1])*1e6 + (+m[2])*1e3 + (+m[3]) : 0;
+  };
+  const nieuwste = Math.max(0, ...Object.values(per).map(a=>versieGetal(a.versie)));
+  const nieuwsteTekst = (Object.values(per).find(a=>versieGetal(a.versie)===nieuwste)||{}).versie || "";
   const ids=Object.keys(per).sort((a,b)=>per[b].n-per[a].n);
   if(!ids.length){
     box.innerHTML="<p class='lead' style='font-size:12.5px'>Nog geen computers herkend. Dat verschijnt zodra iemand het dashboard opnieuw opstart.</p>";
     return;
+  }
+  /* Een computer die meer dan een halve versie achterloopt krijgt een label.
+     Twee stappen speling, want wie vandaag nog niet opnieuw is opgestart is
+     niet meteen een probleem; wie er tien achterloopt wel. */
+  function achterLabel(v){
+    const g=versieGetal(v);
+    if(!g || !nieuwste || g>=nieuwste) return "";
+    const stappen=Math.round((nieuwste-g)/1000);
+    if(stappen<2) return " <span style='color:var(--muted);font-size:11px'>(nog niet herstart)</span>";
+    return " <span style='background:#fee2e2;color:#b91c1c;padding:1px 6px;border-radius:8px;font-size:11px' "+
+      "title='De nieuwste die hier draait is "+esc(nieuwsteTekst)+". Loopt een computer ver achter, dan lukt bijwerken daar niet vanzelf meer.'>loopt achter</span>";
   }
   box.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr><th>Computer</th><th>Naam geven</th><th>Gebruikt door</th><th>Platform</th><th>App-versie</th><th>Acties</th><th>Laatst gezien</th></tr></thead><tbody>"+
     ids.map(id=>{
@@ -268,7 +294,7 @@ function renderApparaten(evs){
         "<td><input class='appNaam' data-id='"+esc(id)+"' value='"+esc(apparaatNamen[id]||"")+"' placeholder='bv. laptop Chantal' style='width:170px;font-size:12px;padding:4px 7px'></td>"+
         "<td style='font-size:12px'>"+esc([...a.users].join(", "))+"</td>"+
         "<td style='font-size:12px'>"+esc(a.platform||"—")+"</td>"+
-        "<td style='font-size:12px'>"+esc(a.versie||"—")+"</td>"+
+        "<td style='font-size:12px'>"+esc(a.versie||"—")+achterLabel(a.versie)+"</td>"+
         "<td>"+a.n+"</td>"+
         "<td style='font-size:12px'>"+(a.laatst?new Date(a.laatst).toLocaleString("nl-NL"):"—")+"</td></tr>";
     }).join("")+"</tbody></table></div>";

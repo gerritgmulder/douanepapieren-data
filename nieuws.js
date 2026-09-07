@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-07", bestand: "activiteit.html", soort: "nieuw",
+      titel: "Zichtbaar welke computer achterloopt",
+      wat: "Bij Apparaten staat achter een oude app-versie nu 'loopt achter', vergeleken met de nieuwste die op de vloer draait. Aanleiding: een Mac draaide sinds mei versie 0.13.0 terwijl alle Windows-computers keurig meeliepen. De versie stond wel in de tabel, maar niets zei dat het een oude was. Bij die versie duurde opstarten 28 seconden en kon de app zichzelf niet meer bijwerken.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "dashboard.html", soort: "beter",
       titel: "Het dashboard raakte bijna zijn dagelijkse opslaglimiet aan",
       wat: "Cloudflare stuurde bijna dagelijks een waarschuwing dat de helft van de gratis schrijfacties op was. Bij honderd procent stopt niet één tegel maar het hele dashboard. Oorzaak: het activiteitenlogboek herschreef bij elke klik de hele maand (112 kB), goed voor 233 van de 606 schrijfacties op een drukke dag. Dat staat nu in een database waar er 100.000 per dag in mogen in plaats van 1.000. De uursync schrijft bovendien alleen nog weg als er echt iets veranderd is.",
