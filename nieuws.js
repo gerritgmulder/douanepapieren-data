@@ -53,6 +53,18 @@
 
     {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
+      titel: "Proforma's als pdf worden nu wel herkend",
+      wat: "Bij een proforma in pdf zei het scherm 'onbekende fabriekscode', ook bij codes die het Dashboard allang kent. Die worden nu gewoon herkend: JOYSPA levert Calgary en Kenai op, Arnoswim de Hurricane. Sauna's en losse onderdelen blijven onbekend, daarvoor moeten de codes nog van Gretha komen.",
+    },
+
+    {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Vier swimspa's stonden onder hun merknaam",
+      wat: "Calgary, Vancouver, Anchorage en Hurricane stonden in het Dashboard onder 'Grizzly Spas' en 'Storm Spas' in plaats van onder hun eigen naam. Daardoor vond een bestelling er geen artikel bij. Ze staan nu op hun eigen naam.",
+    },
+
+    {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
       titel: "Binnenkomende schepen staan nu op ETA",
       wat: "Bij Overzicht stonden de schepen door elkaar. Ze staan nu op aankomstdatum, eerstvolgende bovenaan. Schepen waar de ETA nog bij moet staan onderaan, want die moet je juist nog invullen.",
     },

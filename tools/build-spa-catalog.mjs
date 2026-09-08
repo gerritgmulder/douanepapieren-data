@@ -152,6 +152,28 @@ for (let page = 0; page < 200; page++) {
       const delen = naam.split("|").map(s => s.trim());
       if (delen.length >= 3 && delen[1]) model = delen[1].replace(/\s+/g, " ").trim();
     }
+    /* Merk | model | kleur.
+       ═══════════════════════════════════════════════════════════════════
+       Een deel van de spa's heet in Logic4 "Grizzly Spas | Calgary Swimspa |
+       Sterling White with DARK GREY". De regel hierboven pakt het stuk vóór
+       het eerste streepje, en dat is hier het mérk. Calgary, Vancouver,
+       Anchorage en Hurricane kwamen daardoor allemaal onder "Grizzly Spas"
+       en "Storm Spas" te staan in plaats van onder hun eigen naam, en dan
+       vindt een proforma van de fabriek er geen artikel bij (Chantal, 8 sep
+       2026: de codes JY8603 Calgary en WS-S06M Hurricane werden wel herkend
+       maar leverden geen artikel op). Kenai en Kodiak gingen goed omdat die
+       ooit met de hand gekoppeld zijn.
+
+       Bij drie of meer delen waarvan het eerste een merknaam is (eindigt op
+       Spas of Baths) is het model het tweede deel. Dat is dezelfde regel die
+       hierboven al voor de ice baths gold, nu voor alle merken. */
+    const delenAlles = naam.split("|").map(s => s.trim());
+    if (spaGroep && delenAlles.length >= 3 && /\b(spas|baths)$/i.test(delenAlles[0])
+        && delenAlles[1] && !/cover|filter|kussen|hoes|trap|onderhoud|prijskaart|cabinet|jet\b/i.test(naam)) {
+      const uitTweede = delenAlles[1].replace(/\bswimspa\b/ig, " ").replace(/\bspa\b/ig, " ")
+                                     .replace(/\s+/g, " ").trim();
+      if (uitTweede) model = uitTweede;
+    }
     if (!model) continue;
     // ECO is een ánder model dan de gewone uitvoering (Chantal) — apart houden.
     // Bij een handmatig gekoppelde code niet: die staat al onder de naam die
@@ -214,7 +236,15 @@ console.log(models.length + " modellen, " + found + " varianten met Logic4-produ
             samengesteld + " daarvan samengesteld");
 
 if (process.argv.includes("--dry")) {
+  /* Bij een proefdraai ook nakijken of er nog modellen onder een merknaam
+     staan. Daar ging het mis: Calgary stond onder "Grizzly Spas". */
+  const merken = models.filter(m => /\b(spas|baths)$/i.test(m));
   console.log("voorbeeld Soulmate:", JSON.stringify((catalog["Soulmate"] || []).slice(0, 4), null, 1));
+  console.log("modellen die nog als merknaam in de lijst staan: " + (merken.length ? merken.join(", ") : "geen"));
+  for (const naam of ["Calgary", "Vancouver", "Anchorage", "Hurricane", "Kenai", "Kodiak"]) {
+    const v = catalog[naam];
+    console.log("  " + naam.padEnd(12) + (v ? v.length + " variant(en): " + v.map(x => x.code).join(", ") : "ONTBREEKT"));
+  }
   process.exit(0);
 }
 

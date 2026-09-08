@@ -435,8 +435,32 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
           leverancier:doc.leverancier,
           referentie:doc.invoiceNo||null,
           pdf:doc,
+          /* Het model hier opzoeken, niet aan de server overlaten.
+             ═══════════════════════════════════════════════════════════════
+             Chantal, 8 sep 2026: "over deze invoices hebben we het al een
+             aantal keer gehad, kan je er alsjeblieft voor zorgen dat deze
+             gelezen kunnen worden? De codes voor spa's heb ik al meerdere
+             keren doorgegeven."
+
+             Die codes stonden er ook gewoon in. Het lezen van de PDF ging
+             prima - JY8603, JY8805, WS-S06M kwamen er netjes uit - maar hier
+             werd model:null meegestuurd en mocht de server het uitzoeken. Die
+             kent alleen de modelnamen uit de catalogus, geen fabriekscodes,
+             en antwoordde dus "onbekende fabriekscode". Bij een Excel-proforma
+             gebeurde het opzoeken wél in het scherm; alleen de PDF-kant deed
+             het niet. Nu allebei hetzelfde, met spa-codes.js dat die codes al
+             jaren kent.
+
+             Mét de kleur erbij, want die bepaalt bij sommige codes het model:
+             SKT888-G2 is een Mallorca Superior en in het zwart een Blackpool. */
           regels:doc.regels.map(function(r){
-            return { code:r.code, model:null,
+            var mo=r.code
+              ? ((typeof spaModelMetKleur==="function")
+                  ? spaModelMetKleur(r.code, r.kleur||"")
+                  : (typeof spaModel==="function" ? spaModel(r.code) : null))
+              : null;
+            return { code:r.code,
+                     model:(mo&&mo!=="(onbekend SKT-model)")?mo:null,
                      // Bij de proforma staat de kleur in de Picture-kolom; die
                      // bepaalt samen met de omkasting welk artikel het wordt.
                      kleur:r.kleur||null, skirt:r.skirt||null,
