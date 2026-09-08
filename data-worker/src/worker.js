@@ -4196,6 +4196,28 @@ async function dpOrderUitleg(env, nr) {
 
   const statusId = Number(o.OrderStatus && o.OrderStatus.Id) || null;
   const statusTelt = DP_RESV_STATUSES.includes(statusId);
+  /* Welke statussen meetellen erbij, zodat "hoort hij er wel in?" te
+     beantwoorden is zonder in de code te kijken.
+
+     De námen lukken niet: GetOrderStatuses geeft ons niets bruikbaars terug en
+     op de order zelf staat OrderStatus.Name leeg. Daardoor blijft het bij
+     nummers. Dat staat op de vragenlijst voor Logic4. */
+  let statusNaam = (o.OrderStatus && o.OrderStatus.Name) || null;
+  let tellenMee = [];
+  try {
+    const sr = await fetch("https://api.logic4server.nl/v3/Orders/GetOrderStatuses", {
+      method: "GET", headers: { "Authorization": "Bearer " + token },
+    });
+    const sj = await sr.json().catch(() => null);
+    const lijst = (sj && (sj.Records || sj)) || [];
+    for (const st of lijst) {
+      const id = Number(st.Id);
+      // Logic4 noemt het veld niet overal hetzelfde; pak wat er is.
+      const nm = st.Name || st.Description || st.StatusName || st.Omschrijving || st.Value || null;
+      if (id === statusId && !statusNaam) statusNaam = nm;
+      if (DP_RESV_STATUSES.includes(id)) tellenMee.push({ id, naam: nm || String(id) });
+    }
+  } catch (e) { /* zonder namen is de uitleg nog steeds bruikbaar */ }
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const codeToModel = {};
   for (const [model, varianten] of Object.entries(catalog.models || {}))
@@ -4219,7 +4241,8 @@ async function dpOrderUitleg(env, nr) {
   else uitleg = "De status van deze order telt niet mee in de lijst. Hoort hij er wel bij te staan, geef dan door welke status het is, dan zetten we die erbij.";
 
   return { ok: true, nr: Number(nr), zichtbaar, uitleg,
-           status: { id: statusId, naam: (o.OrderStatus && o.OrderStatus.Name) || null, teltMee: statusTelt },
+           status: { id: statusId, naam: statusNaam, teltMee: statusTelt },
+           statussenDieMeetellen: tellenMee,
            klant: (o.InvoiceAddress && o.InvoiceAddress.CompanyName) || (o.InvoiceAddress && o.InvoiceAddress.ContactName) || null,
            debiteur: o.DebtorId || null, regels };
 }
