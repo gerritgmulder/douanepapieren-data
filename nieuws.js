@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "labels.html", soort: "beter",
+      titel: "Het label toont nu het model en het Fonteyn-artikelnummer",
+      wat: "Op het label stond de kale fabriekscode als titel en bij Art.nr. Fonteyn een streepje. Er staat nu bovenaan de volledige omschrijving, zoals 'Bliss Spa | Sterling White with GREY/oak trim', met het Fonteyn-artikelnummer erbij. Dat wordt opgezocht met de kleur erbij, want dezelfde fabriekscode bestaat in meerdere kleuren en elke kleur is een eigen artikelnummer.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
       titel: "Proforma van Huantong wordt nu gelezen",
       wat: "Die proforma leverde geen enkele regel op. Nu komt eruit wat erop staat: 21 Bermuda en 6 Key Largo, met kleur, maat en bedragen. Ook bij andere fabrieken blijft de kleur nu netjes staan in plaats van dat er tekst van de volgende kolom bij kwam.",

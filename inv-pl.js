@@ -361,7 +361,19 @@
          Een bad heeft altijd een spa-code én een omschrijving die zegt dat
          het een bad is. */
       if (/cover/i.test(naam)) continue;
-      var spaCode = tekst(rr[c.code]).split("\n")[0].trim();
+      /* De fabriek zet er soms de modelnaam boven in dezelfde cel: "HAPPY"
+         met op de regel eronder "SKT888A-4S". Het eerste stuk pakken levert
+         dan "HAPPY" op en daar hoort geen artikel bij. Neem daarom het deel
+         dat op een fabriekscode lijkt, en anders het eerste. */
+      // Let op: tekst() haalt de regeleinden er al uit, dus hier op de ruwe
+      // celwaarde splitsen en pas daarna opschonen.
+      var codeDelen = String(rr[c.code] == null ? "" : rr[c.code])
+        .split(/[\r\n]+/).map(function (z) { return z.replace(/\s+/g, " ").trim(); }).filter(Boolean);
+      var spaCode = "";
+      for (var q = 0; q < codeDelen.length; q++) {
+        if (/^[A-Z]{1,4}[-.]?\d[\w.\-]*$/i.test(codeDelen[q])) { spaCode = codeDelen[q]; break; }
+      }
+      if (!spaCode) spaCode = codeDelen[0] || "";
       if (!spaCode) { overig += aantal; continue; }
       if (!/bathtub|bath tub|spa\b|swim/i.test(naam)) { overig += aantal; continue; }
       colli.push({

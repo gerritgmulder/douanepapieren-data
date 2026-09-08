@@ -547,6 +547,9 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
        • JsBarcode — tekent CODE128-barcode in SVG
      Beide worden door Electron's renderer uit cache gehaald na eerste fetch.
      ═════════════════════════════════════════════════════════════════════════════ -->
+<!-- De codelijst fabriekscode naar model. Nodig om bij een containerregel
+     het juiste Fonteyn-artikel te vinden; zie zoekArtikelenBijContainer(). -->
+<script src="spa-codes.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
 
@@ -736,7 +739,15 @@ async function zetContainer(c, wat) {
 function containerNaarLabels(c) {
   state.rows = (c.colli || []).map(x => ({
     supplierCode: x.artikel || "",
+    /* Tot het artikel is opgezocht staat de fabriekscode er als omschrijving.
+       Manon (8 sep 2026) liet zien hoe het label eruit hoort te zien: bovenaan
+       de volledige omschrijving zoals in Logic4, "Bliss Spa | Sterling White
+       with GREY/oak trim", en het Fonteyn-artikelnummer erbij. Dat wordt
+       hieronder opgezocht met de kleur erbij, want SKT888D bestaat in meerdere
+       kleuren en elk daarvan is een eigen artikelnummer. */
     description: x.artikel || "",
+    kleur: x.kleur || "",
+    kast: x.kast || "",
     aantal: x.colli || 1,
     aantalProducten: 1,
     aantalColliPerProduct: x.colli || 1,
@@ -753,6 +764,7 @@ function containerNaarLabels(c) {
   };
   if (!state.rows.length) { setStatus("Deze container heeft geen colli op de packing list.", "bad"); return; }
   renderStep2();
+  zoekArtikelenBijContainer();
   const n = state.rows.reduce((t, r) => t + r.aantalColliPerProduct, 0);
   setStatus("✓ " + (c.nummer || "Container " + c.volgnummer) + " · " + state.rows.length +
     " artikelen, " + n + " labels. Vul de ontbrekende Fonteyn-codes in en klik Voorbeeld tonen.", "ok");
@@ -1152,6 +1164,48 @@ function extractRowsHeuristic(all) {
   return rows;
 }
 
+/* Het Fonteyn-artikelnummer en de omschrijving bij een containerregel.
+   ═══════════════════════════════════════════════════════════════════════
+   De oude weg (/api/products-by-supplier-code) loopt over het hulpprogramma op
+   de pc en gaf voor SKT888D niets terug; op het label stond dan "Art.nr.
+   Fonteyn: —" en als titel de kale fabriekscode.
+
+   De dashboardserver kan dit wel: die kent de codelijst én de catalogus, en
+   houdt rekening met de kleur. Dezelfde weg die het bestellen van een proforma
+   gebruikt, en die alleen leest. */
+async function zoekArtikelenBijContainer() {
+  const regels = state.rows.filter(r => r.supplierCode).map(r => ({
+    code: r.supplierCode,
+    model: (typeof spaModelMetKleur === "function"
+      ? spaModelMetKleur(r.supplierCode, [r.kleur, r.kast].filter(Boolean).join(" "))
+      : (typeof spaModel === "function" ? spaModel(r.supplierCode) : null)) || null,
+    kleur: r.kleur || null, skirt: r.kast || null, aantal: 1,
+  }));
+  if (!regels.length) return;
+  try {
+    const r = await fetch(WORKER_BASE + "/voorraad/inkooporder/voorstel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ regels }),
+    });
+    const j = await r.json();
+    if (!j.ok || !Array.isArray(j.regels)) return;
+    let gevonden = 0;
+    j.regels.forEach((res, i) => {
+      const row = state.rows[i];
+      if (!row) return;
+      if (res.artikelcode) { row.fonteynCode = String(res.artikelcode); gevonden++; }
+      if (res.omschrijving) row.description = res.omschrijving;
+      row.lookupTried = true;
+    });
+    setStatus(gevonden === state.rows.length
+      ? "\u2713 Alle " + gevonden + " artikelnummers gevonden \u2014 klaar om te printen."
+      : gevonden + " van de " + state.rows.length + " artikelnummers gevonden; de rest kun je zelf invullen.",
+      gevonden === state.rows.length ? "ok" : "bad");
+    renderStep2();
+  } catch (e) { /* lukt het niet, dan blijft de oude weg gewoon beschikbaar */ }
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Fonteyn-code lookup via backend
    ═══════════════════════════════════════════════════════════════ */
@@ -1460,7 +1514,10 @@ function buildLabel(row, colliIdx, colliTotal, productIdx, productTotal) {
 
   const fields = document.createElement("div");
   fields.className = "fields";
-  // PO bewust weggelaten — intern ordernummer, niet voor klant.
+  /* De PO-regel staat er wel, maar leeg. Manon liet zien hoe het label eruit
+     hoort te zien en daar staat "PO:" met niets erachter. Het ordernummer
+     zelf blijft eraf: de klant ziet dit label op zijn spa en daaruit hoort
+     onze inkoop niet afleidbaar te zijn. */
   // Ook bewust ALLEEN "Colli A van B" tonen, GEEN "Product X van N"-prefix:
   // de klant ziet het label op het product en daaruit mag Fonteyn-voorraad
   // niet afleidbaar zijn. Bij meerdere producten krijgen we dus dezelfde
@@ -1468,6 +1525,7 @@ function buildLabel(row, colliIdx, colliTotal, productIdx, productTotal) {
   const rows2 = [
     ["Art.nr. Fonteyn:", row.fonteynCode || "—"],
     ["Art.nr. Supplier:", row.supplierCode || "—"],
+    ["PO:", ""],
     ["Boxnr.:", `Colli ${colliIdx} van ${colliTotal}`]
   ];
   for (const [k, v] of rows2) {
