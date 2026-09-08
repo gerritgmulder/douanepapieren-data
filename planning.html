@@ -901,10 +901,19 @@ var weergave = "routes";
 try { var w0 = localStorage.getItem("fp.planweergave"); if (w0==="tijd"||w0==="routes") weergave = w0; } catch(e){}
 var routesPerDag = {}, dagNotities = {};
 
+/* Standaard drie routes per dag.
+   Gerrit (8 sep 2026): "Ik zie dat je nu 6 routes op woensdag en 5 op ma/di en
+   3 op do/vr hebt gemaakt. Houd het gewoon standaard 3 routes per dag."
+   Er stond één route als standaard, en wat je daarna aanklikte bleef per dag
+   bewaard. Zo liep het per dag uit elkaar. Drie is wat er normaal rijdt; meer
+   of minder kan nog steeds per dag, dat blijft gewoon staan. */
+var ROUTES_STANDAARD = 3;
 function routesVan(dISO){
   var r = routesPerDag[dISO];
   if (Array.isArray(r) && r.length) return r;
-  return [{ nr:1, wie:"" }];               // elke dag heeft er minstens één
+  var uit = [];
+  for (var i = 1; i <= ROUTES_STANDAARD; i++) uit.push({ nr:i, wie:"" });
+  return uit;
 }
 /* Een afspraak zonder tijd is geen stop maar iets dat de hele dag geldt:
    "Mike vakantie", "Bertjan kantoor", "Kevin vrij". Op het bord van de

@@ -1,0 +1,121 @@
+{
+  "_uitleg": "Vaste teksten die de afdeling planning naar klanten stuurt. Kwamen uit 'Planning mail en ordermemo 1.2.docx' plus vier teksten die Gerrit los aanleverde (8 sep 2026). Bedoeld om in de tegel Planning te kiezen en te kopieren. Wat tussen {haakjes} staat is een invulveld; de datums en weeknummers in het bronbestand waren voorbeelden en zijn hier vervangen.",
+  "_versie": "1.2",
+  "teksten": [
+    {
+      "id": "distributie-inplannen",
+      "vervoerder": "Transport distributie",
+      "soort": "inplannen",
+      "taal": "nl",
+      "titel": "Datum afspreken (eigen distributie)",
+      "termijn": "minimaal 3 weken vooraf",
+      "tekst": "Ik mail u naar aanleiding van de spa die u bij ons heeft gekocht.\nWe hadden de spa graag met u willen inplannen.\nWe kunnen de spa bij u leveren vanaf maandag {datum} op iedere doordeweekse dag.\nGraag vernemen we van u welke datum u uitkomt.\nHoudt er rekening mee dat we minimaal 3 weken van tevoren de datum van levering moeten weten."
+    },
+    {
+      "id": "afhalen-inplannen",
+      "vervoerder": "Afhalen",
+      "soort": "inplannen",
+      "taal": "nl",
+      "titel": "Afhaaldatum afspreken",
+      "termijn": "minimaal 3 weken vooraf",
+      "tekst": "Ik mail u naar aanleiding van de spa die u bij ons heeft gekocht.\nWe hadden de spa graag met u willen voor het inplannen afhalen.\nWe kunnen de spa klaar hebben staan vanaf {datum}.\nGraag vernemen we van u welke datum u uitkomt.\nHoudt er rekening mee dat we minimaal 3 weken van tevoren moeten weten wanneer u de spa af komt halen. Dit is zodat we de spa getest klaar hebben staan."
+    },
+    {
+      "id": "afhalen-bevestiging",
+      "vervoerder": "Afhalen",
+      "soort": "bevestiging",
+      "taal": "nl",
+      "titel": "Afhalen bevestigen",
+      "tekst": "Het afhalen van uw spa is mogelijk vanaf {datum}.\nU kunt de spa afhalen van maandag tot en met zaterdag tussen 8.00 en 17.00 uur."
+    },
+    {
+      "id": "bekker-inplannen",
+      "vervoerder": "Bekker",
+      "soort": "inplannen",
+      "taal": "de",
+      "titel": "Woche vereinbaren (Bekker)",
+      "termijn": "minimaal 4 weken vooraf",
+      "tekst": "Ich sende Ihnen eine E-Mail bezüglich des Whirlpools, den Sie bei uns gekauft haben.\nIch hätte dies gerne mit Ihnen vereinbart.\nWir können den Spa-Aufenthalt nur für eine Woche und ohne konkretes Datum planen.\nÜber den genauen Termin wird sich das Transportunternehmen noch mit Ihnen in Verbindung setzen.\nWir können das Spa ab KW {week} liefern.\nIch würde gerne von Ihnen hören, in welcher Woche das Spa geliefert werden soll.\nBitte beachten Sie, dass wir dies mindestens 4 Wochen im Voraus wissen müssen."
+    },
+    {
+      "id": "bekker-bevestiging",
+      "vervoerder": "Bekker",
+      "soort": "bevestiging",
+      "taal": "de",
+      "titel": "Abholung bestätigen (Bekker)",
+      "termijn": "betaling minimaal 14 dagen voor verzending",
+      "tekst": "Abholung durch die Spedition Bekker am {datum} von Fonteyn.\nDie Anlieferung wird ca. 3-8 Tage dauern.\nSpedition Bekker wird Sie telefonisch über ein Anlieferdatum informieren.\nBITTE MINDESTENS 14 TAGE VOR DEM VERSAND DIE ZAHLUNG AN UNS UEBERWEISEN!"
+    },
+    {
+      "id": "inter-inplannen",
+      "vervoerder": "Inter",
+      "soort": "inplannen",
+      "taal": "en",
+      "titel": "Arrange week (Inter)",
+      "termijn": "minimaal 4 weken vooraf",
+      "tekst": "I am sending you an email regarding the spa you purchased from us.\nI would like to arrange the delivery with you.\nWe can only plan the spa delivery for a week and without a specific date.\nThe transport company will contact you about the exact date.\nWe can deliver the spa from week {week}.\nI would like to hear from you which week the spa should be delivered.\nPlease note that we need to know this at least 4 weeks in advance."
+    },
+    {
+      "id": "beers-inplannen",
+      "vervoerder": "Beers",
+      "soort": "inplannen",
+      "taal": "nl",
+      "titel": "Leverweek afspreken (Beers)",
+      "termijn": "minimaal 4 weken vooraf",
+      "tekst": "Ik stuur u een e-mail over de spa die u bij ons heeft gekocht.\nIk wil graag een leverweek met u afspreken.\nWe kunnen de levering van de spa slechts voor een week plannen en zonder een specifieke datum.\nHet transportbedrijf neemt contact met u op over de exacte datum.\nWij kunnen de spa leveren vanaf week {week}.\nIk hoor graag van u welke week de spa geleverd moet worden.\nHoud er rekening mee dat wij dit minimaal 4 weken van tevoren moeten weten."
+    },
+    {
+      "id": "heugten-bevestiging",
+      "vervoerder": "Van Heugten",
+      "soort": "bevestiging",
+      "taal": "en",
+      "titel": "Pickup confirmed (Van Heugten)",
+      "termijn": "inplannen op vrijdag; betaling minimaal 10 werkdagen voor verzending",
+      "tekst": "Pickup by van Heugten Transport on {datum} near Fonteyn.\nDelivery will take 2-10 days.\nTransportcompany Van Heugten will send you a track and trace.\nPLEASE MAKE PAYMENT TO US AT LEAST 10 WORKING DAYS BEFORE SHIPPING!"
+    },
+    {
+      "id": "vandenheuvel-bevestiging",
+      "vervoerder": "Van den Heuvel",
+      "soort": "bevestiging",
+      "taal": "nl",
+      "titel": "Leverdatum bevestigen (Van den Heuvel)",
+      "termijn": "betaling 14 dagen voor levering",
+      "tekst": "Hartelijk dank voor uw order. Hierbij bevestigen we de Leverdatum op {datum}.\nEen avond van tevoren krijgt u een mail met een tijdsindicatie van het transportbedrijf.\nVanwege de hoge drukte op dit moment kan het zo zijn dat de transporteur er voor kiest om de spa een werkdag later te leveren.\nKunt u ervoor zorgen dat de betaling 14 dagen voor levering zichtbaar op rekening staat?\nDe betaling kunt u doen via de onderstaande link:\n{betaallink}"
+    },
+    {
+      "id": "fbs-akkoord",
+      "vervoerder": "FBS",
+      "soort": "akkoord",
+      "taal": "nl",
+      "titel": "Akkoord en foto's vragen (FBS)",
+      "termijn": "betaling 7 dagen voor levering",
+      "checklist": ["Werkplaats map invullen", "Betaalmethode aanpassen naar betaling vooraf 3 dagen", "Plan status ingepland", "Inplannen ma, di, wo, do of vr"],
+      "tekst": "Wilt u hierbij alstublieft een schriftelijk akkoord geven dat {datum} in de {dagdeel} u uitkomt?\nDan kunnen we de afspraak definitief maken.\nTevens willen wij u vragen om foto's van de route die wij met de spa moeten afleggen door uw tuin, zo kunnen we de situatie goed inschatten.\nDenkt u alstublieft aan de betaling dat deze 7 dagen voor levering zichtbaar op de rekening staat?\nDe betaling kunt u doen via de onderstaande link:\n{betaallink}"
+    },
+    {
+      "id": "hijsen-akkoord",
+      "vervoerder": "Hijsen",
+      "soort": "akkoord",
+      "taal": "nl",
+      "titel": "Akkoord en kraan vragen (hijsen)",
+      "termijn": "betaling 7 dagen voor levering",
+      "tekst": "Wilt u hierbij alstublieft een schriftelijk akkoord geven dat {datum} u uitkomt?\nKunt u een kraan reserveren om 9.00 uur?\nDenkt u alstublieft aan de betaling dat deze 7 dagen voor levering zichtbaar op de rekening staat?\nDe Betaling kunt u doen via de onderstaande link:\n{betaallink}"
+    },
+    {
+      "id": "niet-bereikbaar",
+      "vervoerder": "",
+      "soort": "herinnering",
+      "taal": "nl",
+      "titel": "Klant niet telefonisch te bereiken",
+      "tekst": "Goedendag,\nWe proberen u al enige tijd telefonisch te bereiken over de spa die u bij ons gekocht heeft.\nEventueel zouden we hiervoor een afleverafspraak kunnen maken.\nZou u kunnen reageren op deze email met een verwachting wanneer u de levering wilt ontvangen?\nEn eventueel een telefoonnummer waarop u bent te bereiken?\nAlvast bedankt!"
+    },
+    {
+      "id": "ordermemo",
+      "vervoerder": "",
+      "soort": "ordermemo",
+      "taal": "nl",
+      "titel": "Order bevestigen, verzending na betaling",
+      "tekst": "Hartelijk dank voor uw order. Graag verwijzen we u naar de order in de bijlagen.\nDe order wordt verstuurd zodra we de betaling ontvangen hebben."
+    }
+  ]
+}

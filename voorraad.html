@@ -1814,7 +1814,19 @@ function toonParserWaarschuwing(){
 }
 function renderOvShips(){
   const q=((document.getElementById("ovShipSearch")||{}).value||"").trim().toLowerCase();
-  const alle=ovShipsCache;
+  /* Op ETA, eerstvolgende bovenaan.
+     Chantal (video, 8 sep 2026): "Ik kan je zorgen dat die gefilterd staat op
+     ETA, dus dat de eerstkomende bovenaan staat en zo opvolgend. Nu staat de
+     crisscross door elkaar heen, dat is niet echt overzichtelijk."
+     Schepen zonder ETA staan onderaan: die moet ze juist nog invullen, en dan
+     helpt het niet als ze tussen de rest verdwijnen. */
+  const alle=ovShipsCache.slice().sort((a,b)=>{
+    const ea=Date.parse(a.eta||""), eb=Date.parse(b.eta||"");
+    const ga=isFinite(ea), gb=isFinite(eb);
+    if(ga&&gb) return ea-eb;
+    if(ga!==gb) return ga?-1:1;              // zonder ETA naar onderen
+    return String(a.ref||a.trackRef||"").localeCompare(String(b.ref||b.trackRef||""));
+  });
   const ships=alle.filter(s=>ovShipMatch(s,q));
   const body=document.getElementById("ovShips");
   const tel=document.getElementById("ovShipCount");

@@ -53,6 +53,18 @@
 
     {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
+      titel: "Binnenkomende schepen staan nu op ETA",
+      wat: "Bij Overzicht stonden de schepen door elkaar. Ze staan nu op aankomstdatum, eerstvolgende bovenaan. Schepen waar de ETA nog bij moet staan onderaan, want die moet je juist nog invullen.",
+    },
+
+    {
+      datum: "2026-09-08", bestand: "planning.html", soort: "beter",
+      titel: "Standaard drie routes per dag",
+      wat: "Een nieuwe dag begon met één route, en wat je daarna aanklikte bleef bewaard. Daardoor liep het per dag uit elkaar: zes routes op woensdag, vijf op maandag, drie op donderdag. Standaard zijn het er nu drie, en meer of minder per dag kan gewoon nog.",
+    },
+
+    {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
       titel: "Commercial invoice van New Normal wordt nu wel gelezen",
       wat: "De Balance PI voor container 364-365 gaf 'geen enkele regel met een artikelcode en een aantal gevonden'. De lezer eiste letterlijk 'Model' en 'Qty' boven de kolommen, terwijl die fabriek 'Item' en 'Q'ty' schrijft. Ook stond de maat aan de code vastgeplakt en had de tweede kleurregel geen code, waardoor de helft zou wegvallen. Alle drie opgelost: 22 Believe, 8 Wonder en 6 Vision, samen 36 spa's. De facturen van Jazzi en Kasdaly lezen ongewijzigd door.",
     },
