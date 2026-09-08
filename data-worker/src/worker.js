@@ -2740,6 +2740,14 @@ async function dpRefreshHalStock(env) {
      34 Retour/Omruilen - een terugkomende spa, geen levering die je inplant
    Komt daar een keer discussie over, dan is dit de plek. */
 const DP_RESV_STATUSES = [15, 25, 1, 28, 30, 17, 8, 29, 6, 32, 31, 26, 27];
+/* Hoe die statussen heten. GetOrderStatuses van Logic4 geeft ons niets
+   bruikbaars terug en op de order zelf blijft OrderStatus.Name leeg, dus deze
+   lijst staat hier. Manon vroeg terecht "over welk vinkje heb je het?"; met
+   alleen een nummer is die vraag niet te beantwoorden. */
+const DP_STATUS_NAMEN = { 15: "wachten op aanbetaling", 25: "30% aanbetaald", 1: "verkooporder",
+  28: "gepland, wacht op betaling", 30: "volledig betaald, vrijgeven leveren",
+  17: "te factureren", 8: "wordt gepickt", 29: "afhaal", 6: "bestellen",
+  32: "nalevering", 31: "niet op voorraad", 26: "op afroep", 27: "wordt gemonteerd" };
 const WH_NAMES = { 19: "Geen", 20: "OUD Kelder", 21: "Fonteyn", 25: "Showroommodel", 26: "Outlet", 27: "Dealer magazijn", 49: "Derving", 50: "Warehouse Texas USA", 51: "Transporteur", 52: "Retouren" };
 const WH_TEXAS = 50, WH_DEALER = 27;
 /* Kleur uit de regelomschrijving. Die is opgebouwd met streepjes:
@@ -4261,22 +4269,8 @@ async function dpOrderUitleg(env, nr) {
      De námen lukken niet: GetOrderStatuses geeft ons niets bruikbaars terug en
      op de order zelf staat OrderStatus.Name leeg. Daardoor blijft het bij
      nummers. Dat staat op de vragenlijst voor Logic4. */
-  let statusNaam = (o.OrderStatus && o.OrderStatus.Name) || null;
-  let tellenMee = [];
-  try {
-    const sr = await fetch("https://api.logic4server.nl/v3/Orders/GetOrderStatuses", {
-      method: "GET", headers: { "Authorization": "Bearer " + token },
-    });
-    const sj = await sr.json().catch(() => null);
-    const lijst = (sj && (sj.Records || sj)) || [];
-    for (const st of lijst) {
-      const id = Number(st.Id);
-      // Logic4 noemt het veld niet overal hetzelfde; pak wat er is.
-      const nm = st.Name || st.Description || st.StatusName || st.Omschrijving || st.Value || null;
-      if (id === statusId && !statusNaam) statusNaam = nm;
-      if (DP_RESV_STATUSES.includes(id)) tellenMee.push({ id, naam: nm || String(id) });
-    }
-  } catch (e) { /* zonder namen is de uitleg nog steeds bruikbaar */ }
+  const statusNaam = DP_STATUS_NAMEN[statusId] || (o.OrderStatus && o.OrderStatus.Name) || null;
+  const tellenMee = DP_RESV_STATUSES.map(id => ({ id, naam: DP_STATUS_NAMEN[id] || String(id) }));
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const codeToModel = {};
   for (const [model, varianten] of Object.entries(catalog.models || {}))
@@ -4325,10 +4319,7 @@ async function dpRefreshReservations(env) {
   /* De namen zoals ze in Logic4 staan (Orders/GetOrderStatuses). Ze staan in
      de lijst zodat iemand kan zien waaróm een order er staat: "te factureren"
      is iets anders dan "wachten op aanbetaling". */
-  const statusName = { 15: "wachten op aanbetaling", 25: "30% aanbetaald", 1: "verkooporder",
-    28: "gepland, wacht op betaling", 30: "volledig betaald, vrijgeven leveren",
-    17: "te factureren", 8: "wordt gepickt", 29: "afhaal", 6: "bestellen",
-    32: "nalevering", 31: "niet op voorraad", 26: "op afroep", 27: "wordt gemonteerd" };
+  const statusName = DP_STATUS_NAMEN;
   const medewerkers = await l4Medewerkers(env);
   // 40 pagina's van 500 = 20.000 orders per status. Stond op 8 (4.000), en de
   // lus stopte daarna zonder een spoor achter te laten - dezelfde stille
