@@ -45,7 +45,16 @@ binding = "AI"
 # Elk uur: voorraad (vrije hal-voorraad uit Logic4) + reserveringsstand
 # (order-statussen, nieuwe aanbetalingen) verversen. Zie scheduled() in worker.js.
 [triggers]
-crons = ["0 * * * *"]
+# Twee momenten, met opzet gescheiden.
+#   elk uur op het hele uur : hal-voorraad, scheeps-ETA's en de reserveringen
+#   :30 op 1, 7, 13 en 19u  : de productie (open inkooporders bij de fabrieken)
+# Een worker mag per keer maar een beperkt aantal aanroepen naar buiten doen.
+# De productiestap vraagt van élke open inkooporder de regels op en liep samen
+# met de rest tegen dat plafond aan: op 8 sep 2026 waren die gegevens 21 uur
+# oud terwijl ze elke 6 uur horen te verversen. Daardoor stond bij een spa die
+# net besteld was nog "nog niet besteld bij de fabriek". Apart draaien geeft
+# hem het hele budget voor zichzelf.
+crons = ["0 * * * *", "30 1,7,13,19 * * *"]
 
 # De "live kamer" voor samenwerken zoals in Google Documenten: iedereen die
 # een klanttab van Voorraadbeheer open heeft, hangt via een WebSocket aan

@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
+      titel: "Bij verwachte levering zie je waar de spa vandaan komt",
+      wat: "Staat er 'volgende productie', dan zie je nu het bestelnummer bij de fabriek en de verwachte datum erbij. Is er nog niets besteld, dan staat dat er ook gewoon: 'nog niet besteld bij de fabriek'. Eerder bleef die regel leeg en was niet te zien of het nummer ontbrak of dat er niets besteld was. De bestelgegevens worden bovendien weer elke zes uur bijgewerkt; die liepen achter.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
       titel: "Een gekozen schip blijft nu staan",
       wat: "Koos je bij een reservering zelf een schip, dan sprong dat later weer terug op automatisch, en ook vinkjes en opmerkingen raakten zoek. Dat gebeurde zodra een spa van magazijn wisselde of we de kleurherkenning verbeterden. Je keuze hangt nu vast aan de orderregel zelf en blijft staan. De 491 aantekeningen die er al waren zijn meegenomen.",

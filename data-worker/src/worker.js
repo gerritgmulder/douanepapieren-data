@@ -9029,6 +9029,15 @@ export default {
         if (!env.LOGIC4_USERNAME) { console.log("[cron] geen Logic4-creds"); return; }
         const uur = new Date().getUTCHours();
 
+        /* De productie draait op een eigen moment (:30) en dan verder niets.
+           Zie wrangler.toml: samen met de rest liep hij tegen het plafond van
+           uitgaande aanroepen aan en werden de gegevens dagenlang niet ververst. */
+        if (String(event && event.cron || "").startsWith("30 ")) {
+          const pr = await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+          console.log("[cron] productie (eigen slot): " + JSON.stringify(pr));
+          return;
+        }
+
         /* Volgorde en frequentie zijn hier belangrijk, en dat was fout.
 
            Een worker mag maar een beperkt aantal aanroepen naar buiten doen per
@@ -9058,10 +9067,6 @@ export default {
         console.log("[cron] scheeps-ETA's: " + JSON.stringify(et));
         const rv = await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) }));
         console.log("[cron] reserveringen: " + JSON.stringify(rv));
-        if (uur % 6 === 1) {
-          const pr = await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) }));
-          console.log("[cron] productie: " + JSON.stringify(pr));
-        }
 
         /* De zoeklijst van zakelijke relaties, één keer per etmaal. Hij kost
            bijna duizend aanroepen aan Logic4 omdat de klantenlijst 468.000

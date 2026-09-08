@@ -2612,6 +2612,15 @@ function fabriekKort(naam){
   return m ? m[1].charAt(0).toUpperCase()+m[1].slice(1).toLowerCase() : s.split(" ")[0];
 }
 function fabrieksRegel(r){
+  /* Staat er "volgende productie" en hoort er geen bestelling bij, zeg dat
+     dan ook. Manon las een lege regel als "hij vergeet het weer", terwijl er
+     bij die spa's gewoon niets besteld is: van de Flame staan er 52
+     gereserveerd tegen 10 besteld en 6 vrij in de hal, en de regels die
+     daarbuiten vallen kunnen dus aan geen enkele bestelling hangen. Nu is het
+     verschil zichtbaar tussen "we weten van welke bestelling hij komt" en
+     "er ligt nog geen bestelling". */
+  if(r && r.verwacht==="productie" && !r.verwachtIko)
+    return "<div style='font-size:11px;color:#b91c1c;margin-top:2px'>nog niet besteld bij de fabriek</div>";
   if(!r || (!r.verwachtIko && !r.verwachtEta)) return "";
   var stukken = [];
   if(r.verwachtIko) stukken.push("<b>"+esc(fabriekKort(r.verwachtFabriek)||"inkooporder")+" "+esc(r.verwachtIko)+"</b>");
