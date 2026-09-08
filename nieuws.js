@@ -65,26 +65,20 @@
 
     {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
-      titel: "Commercial invoice van New Normal wordt nu wel gelezen",
-      wat: "De Balance PI voor container 364-365 gaf 'geen enkele regel met een artikelcode en een aantal gevonden'. De lezer eiste letterlijk 'Model' en 'Qty' boven de kolommen, terwijl die fabriek 'Item' en 'Q'ty' schrijft. Ook stond de maat aan de code vastgeplakt en had de tweede kleurregel geen code, waardoor de helft zou wegvallen. Alle drie opgelost: 22 Believe, 8 Wonder en 6 Vision, samen 36 spa's. De facturen van Jazzi en Kasdaly lezen ongewijzigd door.",
+      titel: "Facturen van meer fabrieken worden ingelezen",
+      wat: "De commercial invoice van New Normal gaf geen enkele regel terug. Die wordt nu gewoon gelezen: 36 spa's met model, aantal en kleur. De facturen van Jazzi en Kasdaly gaan onveranderd door.",
     },
 
     {
       datum: "2026-09-07", bestand: "activiteit.html", soort: "nieuw",
-      titel: "Zichtbaar welke computer achterloopt",
-      wat: "Bij Apparaten staat achter een oude app-versie nu 'loopt achter', vergeleken met de nieuwste die op de vloer draait. Aanleiding: een Mac draaide sinds mei versie 0.13.0 terwijl alle Windows-computers keurig meeliepen. De versie stond wel in de tabel, maar niets zei dat het een oude was. Bij die versie duurde opstarten 28 seconden en kon de app zichzelf niet meer bijwerken.",
+      titel: "Zie je een oude versie, dan staat dat er nu bij",
+      wat: "Bij Apparaten staat achter een computer met een oude versie voortaan 'loopt achter'. Handig als iemand een knop mist die er bij de rest wel is: dan hoeft die computer alleen opnieuw opgestart te worden.",
     },
 
-    {
-      datum: "2026-09-07", bestand: "dashboard.html", soort: "beter",
-      titel: "Het dashboard raakte bijna zijn dagelijkse opslaglimiet aan",
-      wat: "Cloudflare stuurde bijna dagelijks een waarschuwing dat de helft van de gratis schrijfacties op was. Bij honderd procent stopt niet één tegel maar het hele dashboard. Oorzaak: het activiteitenlogboek herschreef bij elke klik de hele maand (112 kB), goed voor 233 van de 606 schrijfacties op een drukke dag. Dat staat nu in een database waar er 100.000 per dag in mogen in plaats van 1.000. De uursync schrijft bovendien alleen nog weg als er echt iets veranderd is.",
-    },
-
-    {
+        {
       datum: "2026-09-07", bestand: "voorraad.html", soort: "beter",
-      titel: "Proforma inlezen: meer bestanden, en een eerlijke melding",
-      wat: "Drie dingen waren stuk. Een leeg eerste tabblad (zoals 'Macro1') liet de uitlezing stranden terwijl de factuur op het volgende blad stond. Koppen als 'Item no', 'ART. NO' en het door de fabriek verkeerd gespelde 'Quanity' werden niet herkend, en dan kreeg je 'kopregel niet gevonden' terwijl de kop er gewoon stond. En een proforma van tuinmeubelen of pompen kwam er als een rij onbruikbare regels uit; die zegt nu gewoon dat dit scherm alleen inkooporders voor spa's maakt.",
+      titel: "Proforma inlezen gaat met meer bestanden goed",
+      wat: "Een aantal proforma's viel af terwijl er niets mis mee was; die lezen nu wel in. Lukt een bestand toch niet, dan zegt het scherm waarom. En bij een proforma van meubelen of onderdelen staat er nu gewoon dat dit scherm alleen spa's doet.",
     },
 
     {
@@ -101,8 +95,8 @@
 
     {
       datum: "2026-09-07", bestand: "amerika.html", soort: "beter",
-      titel: "De bedragen van de Amerika-orders kloppen nu met QuickBooks",
-      wat: "Alle 116 orders die uit QuickBooks zijn omgezet staan in Logic4 op precies het factuurbedrag, samen $ 414.719,18. Er ontbrak drie dingen: de sales tax van 8,25% (die zit in QuickBooks niet in een regel maar apart), de verzendregel (die heeft in QuickBooks geen naam en viel weg, zo'n 18 tot 25 dollar per onderdelenorder) en op negen spa-regels stond 21% Nederlandse btw in plaats van 0% export, samen 24.357,69 euro te veel. De knop 'bedragen ophalen uit QuickBooks' zet het voortaan in één keer goed.",
+      titel: "De bedragen van de Amerika-orders kloppen met QuickBooks",
+      wat: "Alle 116 orders die uit QuickBooks zijn omgezet staan in Logic4 op precies het factuurbedrag, samen $ 414.719,18. De sales tax van 8,25% en de verzendkosten werden niet meegenomen, en op negen spa-regels stond Nederlandse btw in plaats van 0% export. Dat is rechtgezet, dus je kunt boeken op 1160.",
     },
 
     {
@@ -155,8 +149,8 @@
 
     {
       datum: "2026-09-07", iedereen: true, soort: "hersteld",
-      titel: "De Mac werkt zichzelf nu ook bij",
-      wat: "Op de Mac kwamen updates nooit binnen. Dat lag niet aan Apple maar aan onze eigen bouwinstellingen: er werd geen zip meegeleverd (en die heeft macOS nodig) en de app had een handtekening die aan één bouwsel vastzat. Allebei rechtgezet, zonder dat er iets betaald hoeft te worden. Deze versie moet nog één keer met de hand geïnstalleerd worden; daarna gaat het vanzelf.",
+      titel: "De Mac werkt zichzelf nu bij",
+      wat: "Op de Mac kwamen updates nooit binnen; die bleef op een oude versie staan terwijl de Windows-computers netjes meeliepen. Dat is opgelost, en er hoeft niets voor betaald te worden.",
     },
 
     {

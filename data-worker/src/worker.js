@@ -4123,6 +4123,58 @@ async function dpRefreshShipEtas(env) {
   return { ok: true, schepen: kandidaten.length, nieuw, gewijzigd, afwijkend };
 }
 
+/* GET /voorraad/order-uitleg?nr=3512746 - waarom staat deze order er niet bij?
+   ═══════════════════════════════════════════════════════════════════════
+   Manon (8 sep 2026): "Ik zie dat niet alle orders automatisch in het
+   Dashboard staan. Voorbeeld order 3512746. Deze hebben we net geladen in een
+   vrachtwagen, maar staat nergens onder partner." Zoiets uitzoeken kostte
+   telkens een ronde langs Logic4 met de hand. Deze controle doet het in een
+   keer en zegt in gewone taal wat er aan de hand is.
+
+   De regels waarop een order in de lijst komt staan hieronder, en het zijn
+   dezelfde als in dpRefreshReservations - niet een kopie die uit de pas gaat
+   lopen, maar dezelfde drie voorwaarden: de status telt mee, er staat een spa
+   op, en die spa is nog niet afgeleverd. */
+async function dpOrderUitleg(env, nr) {
+  const token = await l4Token(env);
+  const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ Id: Number(nr), TakeRecords: 1 }),
+  });
+  const j = await r.json().catch(() => null);
+  const o = ((j && (j.Records || j)) || [])[0];
+  if (!o) return { ok: false, nr, uitleg: "Deze order bestaat niet in Logic4, of hij is verwijderd." };
+
+  const statusId = Number(o.OrderStatus && o.OrderStatus.Id) || null;
+  const statusTelt = DP_RESV_STATUSES.includes(statusId);
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const codeToModel = {};
+  for (const [model, varianten] of Object.entries(catalog.models || {}))
+    for (const v of (varianten || [])) codeToModel[String(v.code)] = model;
+
+  const regels = (o.OrderRows || []).map(row => {
+    const model = codeToModel[String(row.ProductCode || "")] || null;
+    const open = (Number(row.Qty) || 0) - (Number(row.QtyDeliverd) || 0);
+    return { code: row.ProductCode, omschrijving: row.Description, aantal: Number(row.Qty) || 0,
+             afgeleverd: Number(row.QtyDeliverd) || 0, open, model,
+             magazijn: WH_NAMES[Number(row.WarehouseId)] || String(row.WarehouseId || "") };
+  });
+  const spas = regels.filter(x => x.model);
+  const openSpas = spas.filter(x => x.open > 0);
+  const zichtbaar = statusTelt && openSpas.length > 0;
+
+  let uitleg;
+  if (zichtbaar) uitleg = "Deze order hoort in de lijst te staan.";
+  else if (!spas.length) uitleg = "Er staat geen spa op deze order, alleen onderdelen of toebehoren. De lijst toont alleen spa's.";
+  else if (!openSpas.length) uitleg = "De spa's op deze order zijn in Logic4 al afgeleverd, dus het is geen reservering meer. Klopt dat niet, dan staat de aflevering in Logic4 te vroeg aangevinkt.";
+  else uitleg = "De status van deze order telt niet mee in de lijst. Hoort hij er wel bij te staan, geef dan door welke status het is, dan zetten we die erbij.";
+
+  return { ok: true, nr: Number(nr), zichtbaar, uitleg,
+           status: { id: statusId, naam: (o.OrderStatus && o.OrderStatus.Name) || null, teltMee: statusTelt },
+           klant: (o.InvoiceAddress && o.InvoiceAddress.CompanyName) || (o.InvoiceAddress && o.InvoiceAddress.ContactName) || null,
+           debiteur: o.DebtorId || null, regels };
+}
+
 async function dpRefreshReservations(env) {
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const codeToModel = {};
@@ -8940,6 +8992,12 @@ export default {
     }
 
     // Merzario-tracking (intern, team-sleutel) — zie handleTrack
+    if (url.pathname === "/voorraad/order-uitleg" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const nr = String(url.searchParams.get("nr") || "").replace(/\D/g, "");
+      if (!nr) return reply(400, { ok: false, error: "geef een ordernummer mee" });
+      return reply(200, await dpOrderUitleg(env, nr).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
     if (url.pathname === "/voorraad/dieseltoeslag" && request.method === "POST") {
       return handleDieseltoeslag(request, env);
     }
