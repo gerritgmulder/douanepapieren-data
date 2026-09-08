@@ -541,6 +541,20 @@ async function zdLaad(){
       "<div class='status-msg bad'>De bestellingen konden niet worden opgehaald: "+esc(e.message)+"</div>";
   }
 }
+/* Openklappen om te zien wat erin zit.
+   Chantal (video, 8 sep 2026): "Als ik hier aanklik, zou ik die 7 regels
+   willen kunnen zien. En als ik er weer op klik, dan komt hij weer keurig
+   netjes zo te staan." */
+let zdOpen={};
+function zdInhoudRij(x,kolommen){
+  const a=x.artikelen||[];
+  if(!a.length) return "<tr class='zdDetail'><td colspan='"+kolommen+"' style='background:#fafafa;color:var(--muted);font-size:12px;padding:8px 12px'>Van deze bestelling is niet bewaard wat erin zit. Dat wordt sinds 8 september meegeschreven; oudere bestellingen missen het.</td></tr>";
+  return "<tr class='zdDetail'><td colspan='"+kolommen+"' style='background:#fafafa;padding:6px 12px'>"+
+    "<table class='grid' style='margin:0'><thead><tr><th>Aantal</th><th>Model</th><th>Kleur</th><th>Artikel</th></tr></thead><tbody>"+
+    a.map(y=>"<tr><td>"+(Number(y.aantal)||0)+"</td><td>"+esc(y.model||"—")+"</td>"+
+      "<td style='font-size:12px'>"+esc(y.kleur||"—")+"</td><td style='font-size:12px'>"+esc(y.artikelcode||"—")+"</td></tr>").join("")+
+    "</tbody></table></td></tr>";
+}
 function zdRegelsTekst(rec){
   const a=rec.artikelen||[];
   if(!a.length) return rec.regels?(rec.regels+" regel"+(rec.regels===1?"":"s")):"";
@@ -559,23 +573,30 @@ function zdTeken(){
 
   inProd.innerHTML="<h4 style='margin:0 0 8px'>In productie</h4>"+(a.length
     ? "<div class='tablewrap'><table class='grid'><thead><tr><th>Proforma</th><th>Inkooporder</th><th>Inhoud</th><th>Besteld op</th><th></th></tr></thead><tbody>"+
-      a.map(x=>"<tr><td><b>"+esc(x.ref)+"</b>"+(x.leverancier?"<br><span style='font-size:11px;color:var(--muted)'>"+esc(x.leverancier)+"</span>":"")+"</td>"+
+      a.map(x=>"<tr class='zdRij' data-ref='"+esc(x.ref)+"' style='cursor:pointer'>"+
+        "<td>"+(zdOpen[x.ref]?"▾ ":"▸ ")+"<b>"+esc(x.ref)+"</b>"+(x.leverancier?"<br><span style='font-size:11px;color:var(--muted)'>"+esc(x.leverancier)+"</span>":"")+"</td>"+
         "<td>"+esc(x.buyOrderId||"—")+"</td><td style='font-size:12px'>"+esc(zdRegelsTekst(x))+"</td>"+
         "<td style='font-size:12px'>"+esc(datumNL(x.ts))+"</td>"+
-        "<td><button class='btn sm zdUpload' data-ref='"+esc(x.ref)+"' type='button'>Commercial invoice uploaden</button></td></tr>").join("")+
+        "<td onclick='event.stopPropagation()'><button class='btn sm zdUpload' data-ref='"+esc(x.ref)+"' type='button'>Commercial invoice uploaden</button></td></tr>"+
+        (zdOpen[x.ref]?zdInhoudRij(x,5):"")).join("")+
       "</tbody></table></div>"
     : "<p class='lead' style='font-size:12.5px'>Niets in productie. Maak bij <b>Containers</b> een inkooporder van een proforma, dan verschijnt hij hier.</p>");
 
   onderweg.innerHTML="<h4 style='margin:0 0 8px'>Onderweg</h4>"+(b.length
     ? "<div class='tablewrap'><table class='grid'><thead><tr><th>Proforma</th><th>Inkooporder</th><th>Inhoud</th><th>Commercial invoice</th><th>Verwacht in Houston</th><th></th></tr></thead><tbody>"+
-      b.map(x=>"<tr><td><b>"+esc(x.ref)+"</b>"+(x.leverancier?"<br><span style='font-size:11px;color:var(--muted)'>"+esc(x.leverancier)+"</span>":"")+"</td>"+
+      b.map(x=>"<tr class='zdRij' data-ref='"+esc(x.ref)+"' style='cursor:pointer'>"+
+        "<td>"+(zdOpen[x.ref]?"▾ ":"▸ ")+"<b>"+esc(x.ref)+"</b>"+(x.leverancier?"<br><span style='font-size:11px;color:var(--muted)'>"+esc(x.leverancier)+"</span>":"")+"</td>"+
         "<td>"+esc(x.buyOrderId||"—")+"</td><td style='font-size:12px'>"+esc(zdRegelsTekst(x))+"</td>"+
         "<td style='font-size:12px'>"+esc(x.ci.naam||"—")+"<br><span style='color:var(--muted);font-size:11px'>"+esc(datumNL(x.ci.ts))+"</span></td>"+
-        "<td><input type='date' class='zdEta' data-ref='"+esc(x.ref)+"' value='"+esc(x.eta||"")+"' style='padding:6px;font:inherit'></td>"+
-        "<td><button class='btn sm zdUpload' data-ref='"+esc(x.ref)+"' type='button'>vervangen</button></td></tr>").join("")+
+        "<td onclick='event.stopPropagation()'><input type='date' class='zdEta' data-ref='"+esc(x.ref)+"' value='"+esc(x.eta||"")+"' style='padding:6px;font:inherit'></td>"+
+        "<td onclick='event.stopPropagation()'><button class='btn sm zdUpload' data-ref='"+esc(x.ref)+"' type='button'>vervangen</button></td></tr>"+
+        (zdOpen[x.ref]?zdInhoudRij(x,6):"")).join("")+
       "</tbody></table></div>"
     : "<p class='lead' style='font-size:12.5px'>Nog niets onderweg. Upload de commercial invoice bij een bestelling hierboven.</p>");
 
+  document.querySelectorAll(".zdRij").forEach(tr=>tr.addEventListener("click",()=>{
+    const k=tr.dataset.ref; zdOpen[k]=!zdOpen[k]; zdTeken();
+  }));
   document.querySelectorAll(".zdUpload").forEach(b2=>b2.addEventListener("click",()=>{
     zdBezig=b2.dataset.ref;
     const f=document.getElementById("zdBestand"); f.value=""; f.click();

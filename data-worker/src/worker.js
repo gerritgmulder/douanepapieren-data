@@ -3122,6 +3122,42 @@ async function amerikaZending(env, body) {
   if (body.aangekomen !== undefined) rec.aangekomen = !!body.aangekomen;
   if (body.verwijderCi) delete rec.ci;
 
+  /* De inhoud alsnog ophalen bij Logic4.
+     Sinds 8 sep 2026 wordt bij het aanmaken bewaard wat er in een bestelling
+     zit, maar wat daarvóór is aangemaakt mist dat. Chantal wil een regel
+     kunnen openklappen en zien wat erin zit, ook bij die oudere. */
+  if (body.inhoudOphalen && rec.buyOrderId && !(rec.artikelen || []).length) {
+    try {
+      const token = await l4Token(env);
+      /* De regels van een inkooporder komen niet mee in GetBuyOrders; daar is
+         GetBuyOrderRowsByFilter voor, net als in dpRefreshProductie. */
+      const r = await fetch("https://api.logic4server.nl/v3/BuyOrders/GetBuyOrderRowsByFilter", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ BuyOrderId: Number(rec.buyOrderId), TakeRecords: 200 }),
+      });
+      const j = await r.json().catch(() => null);
+      const rijen = Array.isArray(j) ? j : ((j && j.Records) || []);
+      if (rijen.length) {
+        const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+        const codeToModel = {};
+        for (const [m, vs] of Object.entries(catalog.models || {}))
+          for (const v of (vs || [])) codeToModel[String(v.code)] = m;
+        rec.artikelen = rijen.slice(0, 120).map(x => ({
+          artikelcode: String(x.ProductCode || ""),
+          model: codeToModel[String(x.ProductCode || "")] || null,
+          /* "Believe Spa | Sterling White with Grey" - de kleur is het deel ná
+             het laatste streepje, want bij sommige merken staat de merknaam
+             er nog vóór ("Grizzly Spas | Kenai Spa | Sterling White"). */
+          kleur: (function (d) {
+            const dl = String(d || "").split("|").map(z => z.trim()).filter(Boolean);
+            return dl.length > 1 ? dl[dl.length - 1] : null;
+          })(x.Description),
+          aantal: Number(x.QtyToDeliver) || Number(x.QtyToOrder) || Number(x.Qty) || 0,
+        }));
+      }
+    } catch (e) { console.log("[zending] inhoud ophalen faalde: " + String(e.message || e)); }
+  }
+
   await env.FONTEYN_DATA.put("voorraad-inkooporders", JSON.stringify(data));
   return { ok: true, ref, zending: rec };
 }

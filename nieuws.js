@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "amerika.html", soort: "beter",
+      titel: "Klik een zending open om te zien wat erin zit",
+      wat: "Bij Onderweg naar Houston kun je een regel aanklikken. Dan klapt hij open en zie je per model het aantal, de kleur en het artikelnummer. Nog een keer klikken en hij is weer dicht. Ook bij bestellingen van vóór vandaag: die inhoud is alsnog opgehaald.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
       titel: "Bij verwachte levering zie je waar de spa vandaan komt",
       wat: "Staat er 'volgende productie', dan zie je nu het bestelnummer bij de fabriek en de verwachte datum erbij. Is er nog niets besteld, dan staat dat er ook gewoon: 'nog niet besteld bij de fabriek'. Eerder bleef die regel leeg en was niet te zien of het nummer ontbrak of dat er niets besteld was. De bestelgegevens worden bovendien weer elke zes uur bijgewerkt; die liepen achter.",
