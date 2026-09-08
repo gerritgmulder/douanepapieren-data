@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Een gekozen schip blijft nu staan",
+      wat: "Koos je bij een reservering zelf een schip, dan sprong dat later weer terug op automatisch, en ook vinkjes en opmerkingen raakten zoek. Dat gebeurde zodra een spa van magazijn wisselde of we de kleurherkenning verbeterden. Je keuze hangt nu vast aan de orderregel zelf en blijft staan. De 491 aantekeningen die er al waren zijn meegenomen.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "labels.html", soort: "hersteld",
       titel: "Labels printen per container",
       wat: "Jazzi levert de packing list als een tabblad per container, en zo'n bestand werd helemaal niet ingelezen: de containerlijst bij Inkomende goederen bleef leeg. Nu komt elke container er apart in te staan met zijn eigen baden, zodat je per container in één keer de labels kunt printen. Losse onderdelen tellen niet meer als bad mee.",

@@ -2125,12 +2125,30 @@ setInterval(function(){ if(!document.hidden) resvVerversen(); },10*60000);
 document.addEventListener("visibilitychange",function(){
   if(!document.hidden && Date.now()-resvGeladenOp>5*60000) resvVerversen();
 });
+/* De aantekeningen van een regel.
+   De sleutel stond vroeger op model, kleur, magazijn en variant. Verbeterden
+   we de kleurherkenning of verhuisde een spa van magazijn, dan veranderde die
+   sleutel en waren de vinkjes en het gekozen schip weg - Manon: "hij vergeet
+   dit steeds". De sleutel staat nu op de orderregels uit Logic4, die niet
+   veranderen. Wat onder de oude sleutel staat wordt hier nog gevonden en bij
+   de eerstvolgende wijziging overgezet. */
+function notitieSleutels(r){
+  const uit=[]; if(r.regelId) uit.push(r.regelId); if(r.regelIdOud) uit.push(r.regelIdOud);
+  return uit;
+}
 function notitie(r){
   const k=r.regelId; if(!k) return {};
-  return notities[k]||(notities[k]={});
+  if(notities[k]) return notities[k];
+  if(r.regelIdOud && notities[r.regelIdOud]) return notities[r.regelIdOud];
+  return (notities[k]={});
 }
 function zetNotitie(r,veld,waarde){
   const k=r.regelId; if(!k) return;
+  // Stond er nog iets onder de oude sleutel, dan gaat dat mee naar de nieuwe.
+  if(!notities[k] && r.regelIdOud && notities[r.regelIdOud]){
+    notities[k]=Object.assign({},notities[r.regelIdOud]);
+    notitiesVuil.add(k);
+  }
   const n=notities[k]||(notities[k]={});
   n[veld]=waarde;
   n.door=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();

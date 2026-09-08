@@ -4316,8 +4316,12 @@ async function dpRefreshReservations(env) {
              gewone Soulmate in dezelfde kleur zijn niet hetzelfde en mogen
              niet op één regel belanden. */
           const key = model + "||" + (kleur || "") + "||" + wh + "||" + (info.extra || "");
-          (groups[key] = groups[key] || { model, kleur, extra: info.extra,
-            omschrijving: String(row.Description || "").trim(), wh, qty: 0 }).qty += undelivered;
+          const g = (groups[key] = groups[key] || { model, kleur, extra: info.extra,
+            omschrijving: String(row.Description || "").trim(), wh, qty: 0, rijIds: [] });
+          g.qty += undelivered;
+          /* De id's van de Logic4-orderregels erbij. Daarop staat de sleutel
+             van de aantekeningen, want die veranderen nooit. Zie regelId. */
+          if (row.Id != null) g.rijIds.push(Number(row.Id));
         }
         for (const gkey of Object.keys(groups)) {
           const gr = groups[gkey];
@@ -4344,8 +4348,28 @@ async function dpRefreshReservations(env) {
             // vinkjes eraan blijven hangen als de lijst opnieuw wordt opgehaald.
             /* De variant hoort in de regelsleutel, anders delen een spa mét en
                zonder warmtepomp dezelfde notities en vinkjes. */
-            regelId: o.Id + "|" + gr.model + "|" + (gr.kleur || "") + "|" + gr.wh +
-                     (gr.extra ? "|" + gr.extra : ""),
+            /* De sleutel waaronder de vinkjes, de opmerking en een handmatig
+               gekozen schip worden bewaard.
+               ═══════════════════════════════════════════════════════════════
+               Manon (8 sep 2026): "De orders blijven op automatisch staan.
+               Als we een reservering toekennen met er duidelijk bij staan uit
+               welke bestelling van Jazzi ze komen. Hij 'vergeet' dit steeds."
+
+               Dat kwam hierdoor. De sleutel was opgebouwd uit de modelnaam,
+               de kleur, het magazijn en de variant - allemaal tekst die we uit
+               de omschrijving halen. Verbeteren we die herkenning, of verhuist
+               een spa van magazijn, dan verandert de sleutel en hoort de
+               aantekening ineens nergens meer bij. Op dit moment waren 348 van
+               de 839 aantekeningen zo losgeraakt, waarvan 109 bij orders die
+               gewoon nog in de lijst staan.
+
+               Nu staat de sleutel op de id's van de Logic4-orderregels zelf.
+               Die veranderen niet, wat wij ook aan de herkenning verbeteren.
+               De oude sleutel gaat mee als regelIdOud zodat het scherm de
+               bestaande aantekeningen nog terugvindt en overzet. */
+            regelId: o.Id + "|r" + gr.rijIds.slice().sort((a, b) => a - b).join("."),
+            regelIdOud: o.Id + "|" + gr.model + "|" + (gr.kleur || "") + "|" + gr.wh +
+                        (gr.extra ? "|" + gr.extra : ""),
             datum: String(o.CreationDate).slice(0, 10), statusId: st, status: statusName[st] || String(st),
             // De transporteur van de order ("FBS", "Transport distributie",
             // "Afhalen"). Chantal (video, 25 aug 2026) wil die zien bij de
