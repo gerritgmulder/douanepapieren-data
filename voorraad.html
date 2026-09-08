@@ -3759,26 +3759,96 @@ const CI_DOCBLADEN=/^(ci|pi|pl|commercial\s*invoice|packing\s*list|proforma.*|in
 // in een kolom "Model" en het aantal in een kolom "Qty", terwijl de eerste
 // leeswijze een SKT- of PP-code in de eerste kolom verwacht. Zonder deze
 // tweede poging leverde zo'n bestand nul spa's op (Chantal, 4 aug 2026).
+/* De commercial invoice uitlezen op de kolomkoppen.
+   ═══════════════════════════════════════════════════════════════════════
+   Chantal, 8 sep 2026: de Balance PI van New Normal gaf "er is geen enkele
+   regel met een artikelcode en een aantal gevonden". Terecht, want er werd
+   letterlijk "model" of "item code" geëist en "qty" of "quantity", terwijl
+   die fabriek "Item" en "Q'ty" boven zijn kolommen zet. Dan valt de hele
+   factuur af terwijl hij er gewoon staat.
+
+   Drie dingen gingen mis en zitten hier alle drie in:
+
+   1. De koppen mogen er een woord bij hebben en anders heten: Item, Item no,
+      ART. NO, Model No., Q'ty, PCS. Ook "Quanity", want dat schrijft meer dan
+      één fabriek verkeerd.
+   2. Een model met twee kleuren staat als twee regels onder elkaar en alleen
+      de bovenste heeft een code. Zonder overnemen viel bij New Normal de
+      helft van de ET-160's weg.
+   3. De TOTAL-regel heeft een leeg codeveld en een gevuld aantal, en lijkt
+      daarmee op zo'n tweede kleurregel. Die herkennen we aan het woord
+      'total' of aan een aantal dat precies de som is van wat eraan voorafging.
+
+   De kleur telt mee, want die bepaalt bij sommige codes het model: ET-160 is
+   een Wonder, maar in het zwart een Blackburn. */
 function parseCIOpKop(rows){
-  let iQty=-1,iModel=-1,iNaam=-1,kopRij=-1;
+  /* Sterke koppen eerst, zwakke pas als die er niet zijn.
+     Kasdaly zet "Item No." boven een kolom met regelnummers (1, 2, 3) en de
+     échte code staat verderop onder "Model". Zou "Item" even zwaar wegen als
+     "Model", dan wint de linkerkolom en lees je de nummers 1 en 4 in als
+     artikelcode. Vandaar twee lijstjes: eerst wat onmiskenbaar een code is,
+     daarna pas het losse "Item" dat New Normal gebruikt. */
+  const MODEL_STERK=/^(model|model no\.?|model nr\.?|item code|art\.? ?no\.?|article no\.?|artikelcode|product code)$/;
+  const MODEL_ZWAK=/^(item|items|item no\.?|article|artikel|art\.?)$/;
+  const IS_AANTAL=/quan|^q.?ty\b|^qty|^pcs\b|^aantal$/;
+  const IS_KLEUR=/^(colou?r|body|shell)$/;
+  let iQty=-1,iNaam=-1,iKleur=-1,kopRij=-1;
+  const sterk=[],zwak=[];
   for(let i=0;i<Math.min(rows.length,20);i++){
     for(let c=0;c<((rows[i]||[]).length);c++){
       const t=String((rows[i]||[])[c]==null?"":rows[i][c]).replace(/\s+/g," ").trim().toLowerCase();
-      if(iQty<0&&/^(qty|quantity|aantal)$/.test(t)){ iQty=c; kopRij=Math.max(kopRij,i); }
-      if(iModel<0&&/^(model|model no\.?|item code|art\.? ?no\.?)$/.test(t)){ iModel=c; kopRij=Math.max(kopRij,i); }
+      if(iQty<0&&IS_AANTAL.test(t)){ iQty=c; kopRij=Math.max(kopRij,i); }
+      if(MODEL_STERK.test(t)){ sterk.push({c,i}); }
+      else if(MODEL_ZWAK.test(t)){ zwak.push({c,i}); }
       if(iNaam<0&&/^(product name|description of goods|description)$/.test(t)){ iNaam=c; }
+      if(iKleur<0&&IS_KLEUR.test(t)){ iKleur=c; }
     }
   }
-  if(iQty<0||iModel<0) return null;
+  const kandidaten=sterk.concat(zwak);
+  if(iQty<0||!kandidaten.length) return null;
+  /* Elke kandidaatkolom proberen en de eerste nemen die echte codes oplevert.
+     Een kolom met alleen kale getallen is een regelnummer, geen artikelcode. */
+  for(const k of kandidaten){
+    const uit=ciLeesKolom(rows,Math.max(kopRij,k.i),k.c,iQty,iNaam,iKleur);
+    if(uit&&uit.some(x=>/[a-z]/i.test(x.code))) return uit;
+  }
+  return null;
+}
+
+/* Eén kandidaatkolom uitlezen. Apart gezet zodat parseCIOpKop er meerdere kan
+   proberen zonder de lus te herhalen. */
+function ciLeesKolom(rows,kopRij,iModel,iQty,iNaam,iKleur){
+  {
   const uit=[];
+  let vorigeCode=null;
   for(let i=kopRij+1;i<rows.length;i++){
     const r=rows[i]||[];
     const qty=Number(r[iQty]);
-    const code=String(r[iModel]==null?"":r[iModel]).replace(/\s+/g," ").trim();
-    if(!code||!isFinite(qty)||qty<=0) continue;
-    uit.push({code,qty,naam:iNaam>=0?String(r[iNaam]==null?"":r[iNaam]).trim():""});
+    /* De fabriek plakt de maat achter de code: "EX-155  1550mm×1550mm×800mm".
+       Alleen de code overhouden, anders herkent de codelijst hem niet. Zelfde
+       patroon als de proforma-lezer gebruikt: hooguit een paar letters, dan
+       een cijfer (EX-155, ET-160, S-2202, JY8805, ZR7011, SKT888G-2). */
+    const codeRuw=String(r[iModel]==null?"":r[iModel]).split("\n")[0].replace(/\s+/g," ").trim();
+    const codeM=codeRuw.match(/^([A-Z]{0,3}[-.]?\d[\w.\-]*|(?:SKT|PP|WS)[\w.\-]*)/i);
+    const code=codeM?codeM[1].toUpperCase().replace(/\s+/g,""):codeRuw;
+    const kleur=iKleur>=0?String(r[iKleur]==null?"":r[iKleur]).replace(/\s+/g," ").trim():"";
+    if(!isFinite(qty)||qty<=0){ if(codeRuw) vorigeCode=null; continue; }
+    if(!codeRuw){
+      if(!vorigeCode) continue;
+      // Totaalregel? Dan stoppen met overnemen en hem overslaan.
+      const heleRegel=(r||[]).map(x=>String(x==null?"":x)).join(" ");
+      const som=uit.reduce((n,x)=>n+x.qty,0);
+      if(/\b(grand\s*)?(total|totaal|sub\s*total|sum)\b/i.test(heleRegel)
+         ||(uit.length>=2&&som>0&&Math.abs(som-qty)<0.5)){ vorigeCode=null; continue; }
+      uit.push({code:vorigeCode,qty,kleur,naam:iNaam>=0?String(r[iNaam]==null?"":r[iNaam]).trim():""});
+      continue;
+    }
+    if(/^(total|totaal|sum|subtotal)/i.test(codeRuw)){ vorigeCode=null; continue; }
+    vorigeCode=code;
+    uit.push({code,qty,kleur,naam:iNaam>=0?String(r[iNaam]==null?"":r[iNaam]).trim():""});
   }
   return uit.length?uit:null;
+  }
 }
 
 // Parse één commercial-invoice-werkboek → {ref, vessel, containers, models{model:qty}, unmapped{code:qty}}
@@ -3919,10 +3989,14 @@ function parseCI(wb,bestandsnaam){
   // Leverde de eerste leeswijze niets op, dan het op de kolomkoppen proberen.
   if(!Object.keys(models).length&&!Object.keys(unmapped).length){
     for(const r of (parseCIOpKop(rows)||[])){
-      const model=spaModel(r.code);
+      /* Mét de kleur: ET-160 is een Wonder, maar in het zwart een Blackburn,
+         en S-2202 is een Vision die in het zwart Moondance heet. Zonder de
+         kleur kwam de halve container op het verkeerde model terecht. */
+      const model=(r.kleur?spaModelMetKleur(r.code,r.kleur):null)||spaModel(r.code);
       if(!model||model==="(onbekend SKT-model)"){ unmapped[r.code]=(unmapped[r.code]||0)+r.qty; continue; }
       models[model]=(models[model]||0)+r.qty;
-      (modelColors[model]=modelColors[model]||{})["(geen kleur)"]=(modelColors[model]["(geen kleur)"]||0)+r.qty;
+      const kl=r.kleur||"(geen kleur)";
+      (modelColors[model]=modelColors[model]||{})[kl]=(modelColors[model][kl]||0)+r.qty;
     }
   }
   // Geen referentie op het blad? Dan het containernummer uit de bestandsnaam

@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
+      titel: "Commercial invoice van New Normal wordt nu wel gelezen",
+      wat: "De Balance PI voor container 364-365 gaf 'geen enkele regel met een artikelcode en een aantal gevonden'. De lezer eiste letterlijk 'Model' en 'Qty' boven de kolommen, terwijl die fabriek 'Item' en 'Q'ty' schrijft. Ook stond de maat aan de code vastgeplakt en had de tweede kleurregel geen code, waardoor de helft zou wegvallen. Alle drie opgelost: 22 Believe, 8 Wonder en 6 Vision, samen 36 spa's. De facturen van Jazzi en Kasdaly lezen ongewijzigd door.",
+    },
+
+    {
       datum: "2026-09-07", bestand: "activiteit.html", soort: "nieuw",
       titel: "Zichtbaar welke computer achterloopt",
       wat: "Bij Apparaten staat achter een oude app-versie nu 'loopt achter', vergeleken met de nieuwste die op de vloer draait. Aanleiding: een Mac draaide sinds mei versie 0.13.0 terwijl alle Windows-computers keurig meeliepen. De versie stond wel in de tabel, maar niets zei dat het een oude was. Bij die versie duurde opstarten 28 seconden en kon de app zichzelf niet meer bijwerken.",
