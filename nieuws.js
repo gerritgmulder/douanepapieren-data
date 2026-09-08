@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Een zelf gekozen ETA blijft nu staan",
+      wat: "Koos je bij een reservering zelf een zending, dan verdween die keuze zodra de boot binnen was en zette het scherm er de eerstvolgende zending neer. Dat gold voor 104 regels. De keuze blijft nu staan met de datum van de zending die jij hebt aangewezen, ook als die al aangekomen is, en verandert alleen nog als jij hem zelf verandert.",
+    },
+
+    {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
+      titel: "Kleuren op de proforma van Huantong",
+      wat: "Bij het inlezen van een proforma liep de shell color door in de kolom ernaast: er kwam 'Pure White Rim LED Light' uit in plaats van 'Pure White'. Dat is opgelost, dus de kleur klopt nu meteen en je hoeft hem niet meer met de hand te verbeteren.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "amerika.html", soort: "beter",
       titel: "Batches uit Amerika sluiten nu eerst aan",
       wat: "Een batch wordt pas geboekt als de som klopt: de factuurbedragen min de ingehouden bankkosten moeten precies zijn wat er op de bank binnenkwam, en elke factuur moet een Logic4-order hebben. Klopt er iets niet, dan blijft die batch staan met erbij wat eraan ontbreekt. De orders gaan er voor hun volledige bedrag af en de bankkosten als aparte regel, zodat er nooit meer twee keer bankkosten worden afgetrokken. Staat een batch er per ongeluk twee keer in, dan zegt het scherm dat ook.",

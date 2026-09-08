@@ -260,7 +260,30 @@
       return r.items.map(function (i) { return i.str; }).join(" ");
     });
     if (soortVan(regels) === "topia") return leesTopia(rijen);
-    return leesAuto(regels);
+    return leesAuto(regels, rijen.map(regelMetKolommen));
+  }
+
+  /* Dezelfde regel, maar met de kolommen er nog in.
+     ═══════════════════════════════════════════════════════════════════════
+     pdf.js geeft losse stukjes tekst met een x-positie. Die worden hier
+     normaal met één spatie aan elkaar geplakt, en dan is niet meer te zien
+     waar de ene kolom ophoudt en de volgende begint: "Shell Color: Pure White
+     Rim LED Light (8PCS)" is in de pdf gewoon twee kolommen naast elkaar.
+
+     Deze versie zet er twee spaties tussen zodra er een echt gat zit. Dat is
+     precies wat de kolomlezers verwachten. Alleen de proforma van Huantong
+     gebruikt hem; de andere lezers blijven op de gewone regels werken, zodat
+     daar niets aan verandert. */
+  function regelMetKolommen(rij) {
+    var uit = "", vorigeEind = null;
+    for (var i = 0; i < rij.items.length; i++) {
+      var it = rij.items[i];
+      var breedte = it.breedte || (String(it.str).length * 4.2);
+      if (vorigeEind !== null) uit += (it.x - vorigeEind > 6) ? "   " : " ";
+      uit += it.str;
+      vorigeEind = it.x + breedte;
+    }
+    return uit;
   }
 
   // ─── Tweede soort: de proforma van Huantong ─────────────────────────
@@ -276,26 +299,32 @@
   // spa's, 21 covers, 21 blowers. We nemen daarom het aantal dat het vaakst
   // voorkomt in het blok en niet het eerste of het hoogste; bij een blok waar
   // één optie op een afwijkend aantal staat blijft dat dan goed gaan.
-  function leesProforma(regels) {
+  function leesProforma(regels, kolomRegels) {
     var alles = regels.join("\n");
     var uit = { leverancier: null, invoiceNo: null, datum: null, regels: [], soort: "proforma" };
     var m;
-    if ((m = alles.match(/PI\s*No\.?\s*:?\s*([A-Za-z0-9\- ]{3,40})/i))) uit.invoiceNo = schoon(m[1]);
+    /* "LV20210201J04 -07" staat in de pdf met een spatie voor het streepje;
+       dat is opmaak, geen deel van het nummer. Spaties rond een streepje gaan
+       er daarom uit, anders zoekt Chantal later op iets dat niet bestaat. */
+    if ((m = alles.match(/PI\s*No\.?\s*:?\s*([A-Za-z0-9\- ]{3,40})/i)))
+      uit.invoiceNo = schoon(m[1]).replace(/\s*-\s*/g, "-");
     if ((m = alles.match(/Date\s*:?\s*(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/i)))
       uit.datum = m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
     if ((m = alles.match(/^\s*([A-Z][A-Z .,&\']{6,60}CO\.,?\s*LTD)/im))) uit.leverancier = schoon(m[1]);
     if ((m = alles.match(/Other\s*:\s*\((\d+)\s*Containers?\)/i))) uit.containers = Number(m[1]);
 
     // In blokken hakken op "Total Price".
-    var blokken = [], huidig = [];
+    var kolomIndex = kolomRegels || [];
+    var blokken = [], starts = [], huidig = [], start = 0;
     for (var i = 0; i < regels.length; i++) {
+      if (!huidig.length) start = i;
       huidig.push(regels[i]);
-      if (/Total\s*Price\s*:/i.test(regels[i])) { blokken.push(huidig); huidig = []; }
+      if (/Total\s*Price\s*:/i.test(regels[i])) { blokken.push(huidig); starts.push(start); huidig = []; }
     }
-    if (huidig.length) blokken.push(huidig);
+    if (huidig.length) { blokken.push(huidig); starts.push(start); }
 
     for (var b = 0; b < blokken.length; b++) {
-      var blok = blokken[b];
+      var blok = blokken[b], blokStart = starts[b];
       var naam = null, shell = null, skirt = null, maat = null;
       var tellingen = {}, prijzen = {}, bedragen = [];
       for (var j = 0; j < blok.length; j++) {
@@ -321,8 +350,12 @@
            21 36 756". Daarom ook stoppen bij een cijfer of een haakje, want
            daar begint altijd de volgende kolom. */
         var TOT_KOLOM = "([^\\n]{1,40}?)(?:\\s{2,}|\\s+[\\d(]|$)";
-        if (!shell && (m = r.match(new RegExp("Shell\\s*Colou?r\\s*:?\\s*" + TOT_KOLOM, "i")))) shell = schoon(m[1]);
-        if (!skirt && (m = r.match(new RegExp("Skirt\\s*Colou?r\\s*:?\\s*" + TOT_KOLOM, "i")))) skirt = schoon(m[1]);
+        /* Voor de kleuren de regel mét de kolommen erin, als die er is. Zonder
+           dat liep de Shell Color door in de kolom ernaast: "Pure White Rim
+           LED Light" in plaats van "Pure White" (Chantal, 8 sep 2026). */
+        var rk = kolomIndex[blokStart + j] != null ? kolomIndex[blokStart + j] : r;
+        if (!shell && (m = rk.match(new RegExp("Shell\\s*Colou?r\\s*:?\\s*" + TOT_KOLOM, "i")))) shell = schoon(m[1]);
+        if (!skirt && (m = rk.match(new RegExp("Skirt\\s*Colou?r\\s*:?\\s*" + TOT_KOLOM, "i")))) skirt = schoon(m[1]);
         if (!maat && (m = r.match(/Size\s*:?\s*([\d]{3,4}\s*[*x×]\s*[\d]{3,4}\s*[*x×]\s*[\d]{3,4})\s*mm?/i))) maat = schoon(m[1]).replace(/\s/g, "");
         // Een regel met aantal, stuksprijs en bedrag aan het eind.
         var mq = r.match(/(\d{1,4})\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*$/);
@@ -757,11 +790,11 @@
     if (/PROFORMA\s*INVOICE/i.test(t) && /DESCRIPTIONS?/i.test(t) && /QTY/i.test(t)) return "mexda-proforma";
     return "commercial";
   }
-  function leesAuto(regels) {
+  function leesAuto(regels, kolomRegels) {
     var s = soortVan(regels);
     if (s === "joyspa") return leesJoyspa(regels);
     if (s === "mexda-proforma") return leesMexdaProforma(regels);
-    if (s === "proforma") return leesProforma(regels);
+    if (s === "proforma") return leesProforma(regels, kolomRegels);
     return lees(regels);
   }
 

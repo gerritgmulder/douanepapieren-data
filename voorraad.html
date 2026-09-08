@@ -2594,11 +2594,41 @@ function schepenOnderweg(){
     .filter(function(s){ return s.sleutel; })
     .sort(function(a,b){ return String(a.eta||"9999").localeCompare(String(b.eta||"9999")); });
 }
+/* Alle zendingen, ook de aangekomen.
+   ═══════════════════════════════════════════════════════════════════════
+   Chantal (video, 8 sep 2026): "als ik de eta heb ingevuld, is de eta
+   ingevuld. Dan mag dat niet meer veranderd worden. Dan zou ik dat zelf
+   handmatig aanpassen, maar het systeem mag niet zelfstandig daarin
+   nadenken."
+
+   Dat gebeurde wel. De keuzelijst laat alleen zendingen zien die nog
+   onderweg zijn, en daar werd de gekozen zending ook in opgezocht. Zodra de
+   boot binnen was stond hij daar niet meer in, viel de keuze weg en zette het
+   scherm er de eerstvolgende zending neer - 17 oktober, terwijl die spa's al
+   binnen waren. Dat gold op 8 september voor 104 van de 112 regels waar
+   iemand zelf een zending bij had gezet.
+
+   Daarom wordt de keuze nu opgezocht in álle zendingen. Een aangekomen
+   zending blijft gewoon staan, met zijn eigen datum, tot iemand hem zelf
+   verandert. */
+function alleZendingen(){
+  return (shipsData.ships||[])
+    .map(function(s){ return { sleutel:String(s.ref||s.trackRef||s.file||s.vessel||""),
+                               naam:s.vessel||"(zonder naam)",
+                               ref:String(s.ref||s.trackRef||"")||(s.vessel||"(zonder referentie)"),
+                               eta:s.eta||null }; })
+    .filter(function(s){ return s.sleutel; });
+}
 function schipVan(sleutel){
   if(!sleutel) return null;
-  var lijst=schepenOnderweg();
+  var lijst=alleZendingen();
   for(var i=0;i<lijst.length;i++) if(lijst[i].sleutel===sleutel) return lijst[i];
   return null;
+}
+// Is de gekozen zending al binnen? Dan hoort dat erbij te staan, maar de datum
+// blijft van die zending.
+function zendingBinnen(s){
+  return !!(s && s.eta && s.eta < new Date().toISOString().slice(0,10));
 }
 var VOORRAAD_KEUZE = "__voorraad__";
 /* De fabrieksbestelling achter een verwachte levering. Manon (1 sep 2026):
@@ -2647,21 +2677,31 @@ function leveringCel(r,n,id,uit){
       }).join("");
     return kopV + "<br><select class='notSchip' data-id='"+id+"' style='margin-top:3px;font-size:11px;padding:2px 4px;max-width:140px'"+uit+">"+optiesV+"</select>";
   }
+  /* De gekozen zending. Staat hij niet meer in de lijst - verwijderd,
+     hernoemd - dan tellen de datum en de referentie die bij het kiezen zijn
+     meegeschreven. Er wordt nooit teruggevallen op de automatische datum:
+     wat iemand zelf heeft ingevuld blijft staan. */
   var gekozen = n.schip ? schipVan(n.schip) : null;
+  if(n.schip && !gekozen && (n.schipEta || n.schipRef))
+    gekozen = { sleutel:n.schip, ref:n.schipRef||n.schip, eta:n.schipEta||null, naam:n.schipRef||n.schip };
   var kop = gekozen
     ? "<span style='color:#2563eb;font-weight:600'>"+esc(gekozen.eta?datumNL(gekozen.eta):"ETA volgt")+"</span>"+
-      " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.ref)+", handmatig)</span>"
+      " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.ref)+", handmatig"+
+      (zendingBinnen(gekozen)?", binnen":"")+")</span>"
     : verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")
       +fabrieksRegel(r);
-  // Staat het gekozen schip er niet meer bij, bijvoorbeeld omdat het is
-  // aangekomen, dan de keuze niet stilzwijgend laten verdwijnen.
+  // Een keuze die nergens meer op slaat mag niet stilzwijgend verdwijnen.
   if(n.schip && !gekozen)
-    kop += " <span style='color:var(--warn);font-size:11px'>(gekozen schip niet meer onderweg)</span>";
+    kop += " <span style='color:var(--warn);font-size:11px'>(gekozen zending bestaat niet meer)</span>";
   var lijst = schepenOnderweg();
+  // De gekozen zending hoort in de lijst te blijven staan, ook als hij binnen
+  // is; anders zou het vakje op "automatisch" springen terwijl er wel degelijk
+  // iets gekozen is.
+  if(gekozen && !lijst.some(function(s){ return s.sleutel===gekozen.sleutel; })) lijst = [gekozen].concat(lijst);
   var opties = "<option value=''>automatisch</option>" +
     "<option value='"+VOORRAAD_KEUZE+"'>op voorraad (Uddel)</option>" + lijst.map(function(s){
     return "<option value='"+esc(s.sleutel)+"'"+(n.schip===s.sleutel?" selected":"")+">"+
-      esc(s.ref)+(s.eta?" - "+esc(datumNL(s.eta)):" - ETA volgt")+"</option>";
+      esc(s.ref)+(s.eta?" - "+esc(datumNL(s.eta)):" - ETA volgt")+(zendingBinnen(s)?" (binnen)":"")+"</option>";
   }).join("");
   // max-width 140: op een 15-inch scherm vielen de kolommen Inplannen en
   // Gepland buiten beeld (Gerrit, 24 aug 2026).
@@ -2829,8 +2869,13 @@ function koppelNotitieVelden(box,rijen){
   box.querySelectorAll(".notSchip").forEach(function(sel){
     sel.addEventListener("change",function(){
       const r=perId[sel.dataset.id]; if(!r) return;
-      zetNotitie(r,"schip",sel.value||null);
       const s=schipVan(sel.value);
+      zetNotitie(r,"schip",sel.value||null);
+      /* De datum en de referentie gaan mee. Zolang de zending in de lijst
+         staat is dat dubbelop, maar verdwijnt hij ooit, dan blijft de datum
+         die iemand zelf heeft gekozen gewoon staan. */
+      zetNotitie(r,"schipEta",s?(s.eta||null):null);
+      zetNotitie(r,"schipRef",s?s.ref:null);
       try{ if(window.fpLog) window.fpLog(sel.value?"schip-gekozen":"schip-losgelaten",
         r.ordernr+" "+r.model+" ("+r.naam+")"+(s?" -> "+s.naam+(s.eta?" "+s.eta:""):"")); }catch(e){}
       renderSoortTabs();
