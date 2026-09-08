@@ -188,14 +188,20 @@ const SPA_CODES = [
   ["WS-S09","Aquatic 9"],
   ["WS-692","Monsoon"],
   ["WS-696","Cyclone"],
-  ["WS-506M","Hurricane"],
-  // Op de proforma Arnoswim20260810 staat WS-S06M met een S waar de 506M een
-  // 5 heeft. Dat is dezelfde spa en geen nieuw model: de maat op die proforma
-  // is 5900x2200x1610 mm en de specsheet van de Hurricane Deep is 590x220x161
-  // cm - tot op de millimeter gelijk. Deze fabriek wisselt vaker een letter en
-  // een cijfer om (WS-PC06T tegen WS-PC06ST).
-  ["WS-S06M","Hurricane"],
-  ["WS-06M","Hurricane"],
+  /* Hurricane Deep, zoals hij in Logic4 heet (artikel 100645).
+     Chantal, 8 sep 2026: "We hebben maar 1 hurricane, aanhouden zoals in
+     logic staat hurricane deep." Er stond hier "Hurricane" en dat leverde bij
+     elke proforma van deze fabriek een waarschuwing op dat het model in
+     Logic4 anders heet.
+
+     Op de proforma Arnoswim20260810 staat WS-S06M met een S waar de 506M een
+     5 heeft. Dat is dezelfde spa en geen nieuw model: de maat op die proforma
+     is 5900x2200x1610 mm en de specsheet van de Hurricane Deep is 590x220x161
+     cm - tot op de millimeter gelijk. Deze fabriek wisselt vaker een letter en
+     een cijfer om (WS-PC06T tegen WS-PC06ST). */
+  ["WS-506M","Hurricane Deep"],
+  ["WS-S06M","Hurricane Deep"],
+  ["WS-06M","Hurricane Deep"],
 ];
 // Alles wat geen letter of cijfer is gaat eruit. De fabrieken schrijven dezelfde
 // code namelijk verschillend: wij hebben "SKT888-G1" in de codelijst staan, de
