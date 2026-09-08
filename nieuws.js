@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Meldingen bij Schepen waren onzichtbaar",
+      wat: "Ging er iets mis bij het verwijderen of opslaan van een schip, dan verscheen die melding in een vak op een ander tabblad. Je zag dus niets. Meldingen staan nu bovenaan het tabblad Schepen zelf.",
+    },
+
+    {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
       titel: "Zendingen zonder referentie stonden dubbel en waren niet te openen",
       wat: "Van fabrieken die geen RZ-nummer gebruiken werd het referentienummer niet van de invoice overgenomen. Zo'n zending kwam naamloos in de lijst, en twee naamloze zien er identiek uit: dubbel dus, en bij Schepen & ontvangst kon je de tweede niet openen. Het nummer wordt nu wel gelezen (New Normal, Kasdaly), je kunt het zelf aanpassen, en tweemaal hetzelfde bestand uploaden maakt geen tweede regel meer.",
     },

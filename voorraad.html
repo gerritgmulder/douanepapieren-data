@@ -804,6 +804,10 @@
         <button id="shipRefreshAll" type="button" class="btn">🔄 ETA's verversen (alle schepen)</button>
       </div>
       <p class="lead" style="font-size:12px;margin:8px 0" id="shipUpdated"></p>
+      <!-- Meldingen van dit tabblad. Ze gingen naar #status, en dat vak staat
+           in het tabblad Ophalen: op dit scherm dus onzichtbaar. Ging het
+           verwijderen of opslaan van een schip mis, dan zag je niets. -->
+      <div id="shipStatus" class="status-msg hidden" style="margin:0 0 10px"></div>
       <div class="tablewrap">
         <table class="grid">
           <thead><tr><th>Schip / reis</th><th>Trackingreferentie</th><th>Bestemming</th><th>Spa's</th><th>Status / voortgang</th><th>ETA (aankomst NL)</th><th>Documenten</th><th></th></tr></thead>
@@ -3667,6 +3671,14 @@ async function doTrackLookup(){
   }catch(e){ st.className="status-msg bad"; st.textContent=e.message; }
 }
 
+/* Meldingen op het tabblad Schepen. setStatus() schrijft naar een vak dat in
+   een ánder tabblad staat, dus daar zag Chantal niets van. */
+function meldSchip(soort,tekst){
+  const e=document.getElementById("shipStatus");
+  if(!e){ try{ setStatus(soort,tekst); }catch(x){} return; }
+  if(!tekst){ e.classList.add("hidden"); return; }
+  e.className="status-msg "+soort; e.textContent=tekst; e.classList.remove("hidden");
+}
 function renderSchepen(){
   const ships=shipsData.ships||[];
   document.getElementById("shipCount").textContent=ships.length;
@@ -3722,24 +3734,24 @@ function renderSchepen(){
     sch.bestemmingOnbekend = false;
     try{
       await saveSchepen(); renderSchepen();
-      setStatus("ok",(sch.vessel||sch.ref||"schip")+" gaat nu "+(sch.dealerContainer
+      meldSchip("ok",(sch.vessel||sch.ref||"schip")+" gaat nu "+(sch.dealerContainer
         ? "rechtstreeks naar de dealer en telt niet meer mee als voorraad."
         : "naar Uddel en telt mee als voorraad onderweg."));
       try{ if(window.fpLog) window.fpLog("schip-bestemming-gewijzigd",(sch.vessel||sch.ref||"schip")+" → "+(sch.dealerContainer?"dealer":"Uddel")); }catch(e){}
-    }catch(e){ setStatus("bad",e.message); }
+    }catch(e){ meldSchip("bad",e.message); }
   }));
   // Een document erbij zetten: packing list, of wat er verder bij dit schip hoort.
   document.querySelectorAll(".schipDocIn").forEach(inp=>inp.addEventListener("change",async()=>{
     const f=inp.files&&inp.files[0]; if(!f) return;
     const s=shipsData.ships[Number(inp.dataset.i)];
     const soort=/pack/i.test(f.name)?"packing-list":(/invoice|^ci/i.test(f.name)?"commercial-invoice":"document");
-    setStatus("","Bezig met opslaan van "+f.name+"…");
+    meldSchip("","Bezig met opslaan van "+f.name+"…");
     try{
       zetSchipDocument(s,await bewaarSchipBestand(s.ref||s.vessel||"schip",f,soort));
       await saveSchepen(); renderSchepen();
-      setStatus("ok",f.name+" bewaard bij "+(s.vessel||s.ref)+" — ook zichtbaar bij Schepen & ontvangst.");
+      meldSchip("ok",f.name+" bewaard bij "+(s.vessel||s.ref)+" — ook zichtbaar bij Schepen & ontvangst.");
       try{ if(window.fpLog) window.fpLog("schip-document-toegevoegd",(s.vessel||s.ref||"schip")+": "+f.name); }catch(e){}
-    }catch(e){ setStatus("bad","Opslaan mislukt: "+e.message); }
+    }catch(e){ meldSchip("bad","Opslaan mislukt: "+e.message); }
   }));
   document.querySelectorAll(".schipDoc").forEach(a=>a.addEventListener("click",async(e)=>{
     e.preventDefault(); await openSchipDocument(a);
@@ -3752,9 +3764,9 @@ function renderSchepen(){
        "doe maar automatisch", dan pakt de vervoerder het weer over. */
     sch.etaHand=!!inp.value;
     try{ await saveSchepen(); renderSchepen();
-      setStatus("ok",inp.value?"ETA opgeslagen — die blijft nu staan, ook als de vervoerder iets anders zegt."
+      meldSchip("ok",inp.value?"ETA opgeslagen — die blijft nu staan, ook als de vervoerder iets anders zegt."
                               :"ETA leeggemaakt — hij wordt weer bij de vervoerder opgehaald."); }
-    catch(e){ setStatus("bad",e.message); }
+    catch(e){ meldSchip("bad",e.message); }
   }));
   document.querySelectorAll(".shipRef").forEach(inp=>inp.addEventListener("change",async()=>{
     /* Chantal: "als ik het handmatig wil invullen dan doet hij dat ook niet."
@@ -3765,17 +3777,17 @@ function renderSchepen(){
     const waarde=inp.value.trim();
     s2.trackRef=waarde;
     if(!String(s2.ref||"").trim()&&waarde){ s2.ref=waarde; s2.refHand=true; }
-    try{ await saveSchepen(); renderSchepen(); }catch(e){ setStatus("bad",e.message); }
+    try{ await saveSchepen(); renderSchepen(); }catch(e){ meldSchip("bad",e.message); }
   }));
   document.querySelectorAll(".trkOne").forEach(b=>b.addEventListener("click",()=>trackShip(Number(b.dataset.i),true)));
   document.querySelectorAll(".delShip").forEach(b=>b.addEventListener("click",async()=>{
     const s=shipsData.ships[Number(b.dataset.i)];
-    if(!s){ setStatus("bad","Deze zending staat niet meer in de lijst. Ververs het scherm."); return; }
+    if(!s){ meldSchip("bad","Deze zending staat niet meer in de lijst. Ververs het scherm."); return; }
     const naam=s.vessel||s.ref||s.file||"deze zending";
     if(!confirm("\""+naam+"\" verwijderen? De lading telt dan niet meer als voorraad.")) return;
     try{ if(window.fpLog) window.fpLog("schip-verwijderd",(s.vessel||s.ref||"schip")+" ("+(s.total||0)+" spa's)"); }catch(e){}
     shipsData.ships.splice(Number(b.dataset.i),1);
-    try{ await saveSchepen(); renderSchepen(); }catch(e){ setStatus("bad",e.message); }
+    try{ await saveSchepen(); renderSchepen(); }catch(e){ meldSchip("bad",e.message); }
   }));
   // Niet-herkende SKT-codes tonen. Codes die inmiddels wél in de codelijst staan
   // (bv. SKT888D → Bliss) worden apart getoond: die lading zit nog niet in de
