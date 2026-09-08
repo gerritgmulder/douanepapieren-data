@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "labels.html", soort: "nieuw",
+      titel: "De containers van 3332-6&3342-1 staan klaar",
+      wat: "Tien containers met samen 131 baden staan bij Inkomende goederen, elk met hun eigen baden en trackingnummers. Klik een container aan en print de labels.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
       titel: "Meldingen bij Schepen waren onzichtbaar",
       wat: "Ging er iets mis bij het verwijderen of opslaan van een schip, dan verscheen die melding in een vak op een ander tabblad. Je zag dus niets. Meldingen staan nu bovenaan het tabblad Schepen zelf.",

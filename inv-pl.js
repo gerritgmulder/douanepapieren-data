@@ -409,10 +409,45 @@
       var invB = null;
       for (var w = 0; w < bladen.length; w++) if (isInvoiceBlad(bladen[w].rijen)) { invB = bladen[w]; break; }
       var inv0 = invB ? leesInvoice(invB.rijen) : { leverancier: "", nummer: "", vaart: "", meldingen: [] };
+      /* Het factuurnummer en de leverancier staan óók op elk containerblad, en
+         daar netjes gelabeld: "EXPORTER'S REFERENCE NO" met eronder
+         RZ2009DF3332-6&3342-1, en de SHIPPER-regel met de fabrieksnaam. Het
+         CI-blad van Jazzi geeft ze niet prijs, en zonder nummer krijgt elke
+         container de sleutel "?#1" en vallen ze in de opslag op elkaar. */
+      var kopBlad = perContainer.length ? bladen.filter(isContainerBlad)[0] : null;
+      if (kopBlad) {
+        var kr = kopBlad.rijen || [];
+        for (var y = 0; y < Math.min(kr.length, 14); y++) {
+          var hier = rijTekst(kr[y]), vorige = y ? rijTekst(kr[y - 1]) : "";
+          /* Let op de kolom: op de labelrij staan DATE en EXPORTER'S REFERENCE
+             NO naast elkaar, en op de rij eronder de datum en het nummer. Wie
+             de rij plat leest pakt de datum. */
+          if (!inv0.nummer && /exporter.?s\s*reference|contract\s*no/i.test(vorige)) {
+            var kolom = kolomVan(kr[y - 1], ["exporter", "contract no"]);
+            var mm = kolom >= 0 ? tekst((kr[y] || [])[kolom]) : "";
+            if (mm) inv0.nummer = mm.replace(/\s+/g, " ").slice(0, 60);
+          }
+          if ((!inv0.leverancier || /commercial\s*invoice/i.test(inv0.leverancier))
+              && /shipper/i.test(vorige)) {
+            var ln = hier.split("|")[0].trim();
+            if (ln) inv0.leverancier = ln.replace(/\s+/g, " ").slice(0, 80);
+          }
+          if (!inv0.vaart && /name of the voyage/i.test(vorige)) {
+            var vv = hier.split("|")[0].trim();
+            if (vv) inv0.vaart = vv.replace(/\s+/g, " ").slice(0, 60);
+          }
+        }
+      }
       return { ok: true, leverancier: inv0.leverancier, nummer: inv0.nummer, vaart: inv0.vaart,
                perContainerBladen: true,
-               containers: perContainer.map(function (c) {
-                 return { nummer: c.nummer, zegel: c.zegel, stuks: c.stuks, overig: c.overig, colli: c.colli,
+               containers: perContainer.map(function (c, i) {
+                 /* Het volgnummer hoort erbij: de opslag bewaart een container
+                    onder "factuurnummer#volgnummer", en zonder dat vallen alle
+                    containers van dezelfde factuur op elkaar. */
+                 return { nummer: c.nummer, volgnummer: i + 1, zegel: c.zegel,
+                          stuks: c.stuks, overig: c.overig, colli: c.colli,
+                          totaalStuks: c.stuks,
+                          totaalColli: c.colli.reduce(function (n, x) { return n + (Number(x.colli) || 0); }, 0),
                           labels: c.colli.map(function (x) {
                             return { tracking: x.tracking, artikel: x.artikel, omschrijving: x.omschrijving,
                                      kleur: x.kleur, kast: x.kast, aantal: x.aantal, colli: x.colli,
