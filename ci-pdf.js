@@ -302,11 +302,27 @@
         var r = String(blok[j]);
         // De kolom "No. / Item Name": een klein nummer, dan witruimte, dan de naam.
         if (!naam) {
+          /* Twee schrijfwijzen. In de pdf staat de kolom met flink wat
+             witruimte ertussen, maar de tekstlezer plakt alles met enkele
+             spaties aan elkaar: "1 ZR6005 Insulation Foil on cabinet". Met
+             alleen de eerste vorm bleef de naam leeg en kwam er uit de hele
+             proforma van Huantong geen enkele regel. Daarom ook: een klein
+             nummer gevolgd door iets dat op een fabriekscode lijkt. */
           var mn = r.match(/^\s{0,8}(\d{1,2})\s{2,}(\S[^\s].{0,40}?)(?:\s{2,}|$)/);
           if (mn && !/^\d/.test(mn[2])) naam = schoon(mn[2]);
+          if (!naam) {
+            var mc = r.match(/^\s*(\d{1,2})\s+([A-Z]{1,3}[-.]?\d[A-Z0-9.\-]*)\b/i);
+            if (mc) naam = schoon(mc[2]);
+          }
         }
-        if (!shell && (m = r.match(/Shell\s*Colou?r\s*:?\s*([^\n]{1,40}?)(?:\s{2,}|$)/i))) shell = schoon(m[1]);
-        if (!skirt && (m = r.match(/Skirt\s*Colou?r\s*:?\s*([^\n]{1,40}?)(?:\s{2,}|$)/i))) skirt = schoon(m[1]);
+        /* De kleur loopt tot de volgende kolom. In de pdf is dat een blok
+           witruimte, maar de tekstlezer maakt daar één spatie van en dan liep
+           de kleur door tot het eind van de regel: "Grey LED Cup holder(5pcs)
+           21 36 756". Daarom ook stoppen bij een cijfer of een haakje, want
+           daar begint altijd de volgende kolom. */
+        var TOT_KOLOM = "([^\\n]{1,40}?)(?:\\s{2,}|\\s+[\\d(]|$)";
+        if (!shell && (m = r.match(new RegExp("Shell\\s*Colou?r\\s*:?\\s*" + TOT_KOLOM, "i")))) shell = schoon(m[1]);
+        if (!skirt && (m = r.match(new RegExp("Skirt\\s*Colou?r\\s*:?\\s*" + TOT_KOLOM, "i")))) skirt = schoon(m[1]);
         if (!maat && (m = r.match(/Size\s*:?\s*([\d]{3,4}\s*[*x×]\s*[\d]{3,4}\s*[*x×]\s*[\d]{3,4})\s*mm?/i))) maat = schoon(m[1]).replace(/\s/g, "");
         // Een regel met aantal, stuksprijs en bedrag aan het eind.
         var mq = r.match(/(\d{1,4})\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s*$/);

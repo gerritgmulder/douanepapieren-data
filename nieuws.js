@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
+      titel: "Proforma van Huantong wordt nu gelezen",
+      wat: "Die proforma leverde geen enkele regel op. Nu komt eruit wat erop staat: 21 Bermuda en 6 Key Largo, met kleur, maat en bedragen. Ook bij andere fabrieken blijft de kleur nu netjes staan in plaats van dat er tekst van de volgende kolom bij kwam.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
       titel: "Drie zendingen stonden ten onrechte op nul spa's",
       wat: "De containers HLXU5649735, TEXU1543510 en TEXU1577043 stonden allemaal op 0 spa's. Op die facturen staan de codes met spaties eromheen (WS - PC08T) en daar viel de herkenning op af. Er zitten twee Turbine 8 Grand en een Turbine 7 Grand in, en die tellen nu weer mee als voorraad onderweg. Onderdelen als 'roller shutter for ...' worden niet meer als spa geteld.",
