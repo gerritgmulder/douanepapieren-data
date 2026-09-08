@@ -3678,6 +3678,9 @@ function renderSchepen(){
       "<td><b>"+esc(s.vessel||"—")+"</b>"+(s.track&&s.track.vessel&&s.track.vessel!==s.vessel?("<div style='font-size:11px;color:var(--muted)'>Merzario: "+esc(s.track.vessel)+"</div>"):"")+"</td>"+
       "<td><div style='display:flex;flex-direction:column;gap:8px;align-items:flex-start'>"+
         "<input type='text' class='shipRef' data-i='"+i+"' value='"+esc(trackRef)+"' placeholder='container / orderref' style='font-size:12px;width:160px'>"+
+        (s.ref?("<div style='font-size:11px;color:"+(s.refAuto&&!s.refHand?"#92400e":"var(--muted)")+"'>"+esc(s.ref)+
+                 (s.refHand?" (zelf ingevuld)":(s.refAuto?" — uit de bestandsnaam, pas zo nodig aan":""))+"</div>")
+             : "<div style='font-size:11px;color:#92400e'>geen referentie — vul er zelf een in</div>")+
         "<button class='btn sm trkOne' data-i='"+i+"'>ETA ophalen</button></div></td>"+
       /* Bestemming: naar Uddel of rechtstreeks naar een dealer. Het staat op
          de invoice ("to Rotterdam" / "to Luxury spas") maar moet te
@@ -3754,13 +3757,22 @@ function renderSchepen(){
     catch(e){ setStatus("bad",e.message); }
   }));
   document.querySelectorAll(".shipRef").forEach(inp=>inp.addEventListener("change",async()=>{
-    shipsData.ships[Number(inp.dataset.i)].trackRef=inp.value.trim();
-    try{ await saveSchepen(); }catch(e){ setStatus("bad",e.message); }
+    /* Chantal: "als ik het handmatig wil invullen dan doet hij dat ook niet."
+       Dit veld zette alleen de trackingreferentie; de zending zelf bleef
+       naamloos en bleef daardoor onvindbaar en dubbel ogen. Staat er nog geen
+       referentie op de zending, dan wordt wat ze hier typt óók de referentie. */
+    const s2=shipsData.ships[Number(inp.dataset.i)];
+    const waarde=inp.value.trim();
+    s2.trackRef=waarde;
+    if(!String(s2.ref||"").trim()&&waarde){ s2.ref=waarde; s2.refHand=true; }
+    try{ await saveSchepen(); renderSchepen(); }catch(e){ setStatus("bad",e.message); }
   }));
   document.querySelectorAll(".trkOne").forEach(b=>b.addEventListener("click",()=>trackShip(Number(b.dataset.i),true)));
   document.querySelectorAll(".delShip").forEach(b=>b.addEventListener("click",async()=>{
     const s=shipsData.ships[Number(b.dataset.i)];
-    if(!confirm("Schip \""+(s.vessel||s.ref)+"\" verwijderen? De lading telt dan niet meer als voorraad.")) return;
+    if(!s){ setStatus("bad","Deze zending staat niet meer in de lijst. Ververs het scherm."); return; }
+    const naam=s.vessel||s.ref||s.file||"deze zending";
+    if(!confirm("\""+naam+"\" verwijderen? De lading telt dan niet meer als voorraad.")) return;
     try{ if(window.fpLog) window.fpLog("schip-verwijderd",(s.vessel||s.ref||"schip")+" ("+(s.total||0)+" spa's)"); }catch(e){}
     shipsData.ships.splice(Number(b.dataset.i),1);
     try{ await saveSchepen(); renderSchepen(); }catch(e){ setStatus("bad",e.message); }
@@ -3994,11 +4006,44 @@ function trackRefVan(ref){
 function parseCI(wb,bestandsnaam){
   const ws=wb.Sheets["COMMERCIAL INVOICE"]||wb.Sheets["CI"]||wb.Sheets[wb.SheetNames[0]];
   const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false});
-  let ref=null,vessel=null;
+  let ref=null,vessel=null,refAuto=false;
   for(const r of rows.slice(0,20)) for(const c of (r||[])){
     const s=String(c==null?"":c);
     if(!ref&&s.startsWith("RZ")) ref=s.trim();
     if(!vessel&&/\s\/\s\S*\d/.test(s)&&!/FOB|ROTTERDAM,|YANTIAN/i.test(s)) vessel=s.trim();
+  }
+  /* Niet elke fabriek gebruikt een RZ-nummer.
+     ═══════════════════════════════════════════════════════════════════
+     Chantal (video, 8 sep 2026): "Er staat ook een referentienummer bij. Dat
+     referentienummer neemt hij hier niet over. Dit is gewoon keurig netjes
+     referentienummer, dus ik weet niet waarom hij die niet overneemt."
+
+     Alleen een cel die met RZ begint werd herkend, en dat is de vorm van
+     Jazzi. New Normal schrijft "Invoice No.: T20260714V1" en Kasdaly
+     "Invoice NO: VIGOR20210720-02". Zonder referentie kwam de zending zonder
+     naam in de lijst, en twee naamloze zendingen zien er identiek uit - dat
+     is wat zij als dubbel zag staan.
+
+     Daarom nu ook de gelabelde nummers, over de hele regel gelezen omdat het
+     label en de waarde vaak in verschillende cellen staan. */
+  /* De kopregels ook nog een keer zoals ze op het scherm staan.
+     New Normal zet het factuurnummer over drie cellen: "Invoice No.: T" |
+     een datumcel | "V1  Date:". Ruw uitgelezen is die middelste cel het getal
+     46217 en wordt het nummer "T46217V1" in plaats van "T20260714V1". Met
+     raw:false geeft de lezer terug wat er in Excel staat. Alleen voor de kop;
+     de regels zelf willen we juist ruw hebben, anders wordt een aantal tekst. */
+  let kopRows=rows;
+  try{ kopRows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false,raw:false}); }catch(e){}
+  if(!ref){
+    for(const r of kopRows.slice(0,20)){
+      const regel=(r||[]).map(c=>String(c==null?"":c)).join(" ").replace(/\s+/g," ");
+      /* Alles ná het label tot aan "Date", spaties eruit. Zo blijft
+         "Invoice No.: T 20260714 V1 Date:" gewoon T20260714V1. */
+      const m=regel.match(/(?:invoice|contract|pi|order)\s*(?:no|nr|number)\.?\s*:?\s*(.+?)(?:\s*date\b|$)/i);
+      if(!m) continue;
+      const kaal=m[1].replace(/\s+/g,"").replace(/[.,;:]+$/,"").trim();
+      if(kaal.length>=4&&/[A-Za-z0-9]/.test(kaal)&&!/^(date|no)$/i.test(kaal)){ ref=kaal; break; }
+    }
   }
   const models={},modelColors={},unmapped={},specials=[];
   for(const r of rows){
@@ -4044,6 +4089,17 @@ function parseCI(wb,bestandsnaam){
     const m=String(bestandsnaam).toUpperCase().match(/[A-Z]{4}\d{7}/);
     if(m) ref=m[0];
   }
+  /* Nog steeds niets? Dan de bestandsnaam zelf.
+     Een zending zónder referentie is nergens aan te wijzen: alles in Schepen &
+     ontvangst (documenten, aankomst melden, boeken) gaat op die referentie, en
+     twee lege referenties vallen samen tot één. Chantal zag daardoor twee
+     regels die er identiek uitzagen en kon de tweede niet openen. De
+     bestandsnaam is uniek genoeg om mee verder te kunnen; ze kan hem daarna
+     zelf overschrijven met het echte nummer. */
+  if(!ref&&bestandsnaam){
+    ref=String(bestandsnaam).replace(/\.[a-z0-9]+$/i,"").trim().slice(0,60);
+    refAuto=true;
+  }
   // Jazzi zet elke container op een eigen tabblad. Een fabriek die alleen een
   // CI- en PL-blad levert heeft er dan nul, terwijl het containernummer wel in
   // de bestandsnaam staat — dat is er één.
@@ -4053,7 +4109,7 @@ function parseCI(wb,bestandsnaam){
   // bestandsnaam ("3332-7&3342-3 to Rotterdam Commercial invoice…xlsx").
   const best=leesBestemming(ref)&&!leesBestemming(ref).onbekend?leesBestemming(ref)
             :leesBestemming(String(bestandsnaam||"").replace(/\.[a-z]+$/i,"").replace(/\s*(commercial invoice|packing list).*$/i,""));
-  return {ref,vessel,containers,models,modelColors,unmapped,specials,
+  return {ref,refAuto,vessel,containers,models,modelColors,unmapped,specials,
     bestemming:best.bestemming, dealerContainer:best.dealerContainer, bestemmingOnbekend:best.onbekend,
     total:Object.values(models).reduce((a,b)=>a+b,0)};
 }
@@ -4195,9 +4251,10 @@ async function handleCIUpload(files,statusId){
         const ship=await parseCiPdf(file);
         if(!ship){ overgeslagen.push({naam:file.name,codes:[],bladen:"PDF"}); continue; }
         for(const [k,v] of Object.entries(ship.unmapped||{})) allUnmapped[k]=(allUnmapped[k]||0)+v;
-        const iP=(shipsData.ships||[]).findIndex(x=>x.ref&&ship.ref&&x.ref===ship.ref);
+        const iP=(shipsData.ships||[]).findIndex(x=>
+          (x.ref&&ship.ref&&x.ref===ship.ref) || (x.file&&file.name&&x.file===file.name));
         const etaP=iP>=0?shipsData.ships[iP].eta:"";
-        const recP={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,
+        const recP={file:file.name,ref:ship.ref,refAuto:!!ship.refAuto,vessel:ship.vessel,containers:ship.containers,
           models:ship.models,modelColors:ship.modelColors,specials:ship.specials,total:ship.total,
           eta:etaP,parser:2,pdf:true,doc:ship.doc};
         if(iP>=0) shipsData.ships[iP]=recP; else shipsData.ships.push(recP);
@@ -4262,7 +4319,8 @@ async function handleCIUpload(files,statusId){
           overgeslagen.push({naam:file.name,codes:Object.keys(ship.unmapped||{}),bladen:wb.SheetNames.join(", ")});
           continue;
         }
-        const iA=(shipsData.ships||[]).findIndex(s=>s.ref&&s.ref===ship.ref);
+        const iA=(shipsData.ships||[]).findIndex(s=>
+          (s.ref&&ship.ref&&s.ref===ship.ref) || (s.file&&file.name&&s.file===file.name));
         /* Geen spa's, maar wel leesbare regels? Bij een meubelfabriek staan
            artikelnummer, omschrijving en aantal er netjes in. Die halen we
            eruit zodat straks zichtbaar is wat er in de container zit - zonder
@@ -4273,7 +4331,7 @@ async function handleCIUpload(files,statusId){
           if(window.fpMeubelInvoice&&window.fpMeubelInvoice.isMeubelInvoice(rijenA))
             meubel=window.fpMeubelInvoice.lees(rijenA);
         }catch(e){ console.warn("[schepen] meubelinvoice lezen faalde:",e); }
-        const recA={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,
+        const recA={file:file.name,ref:ship.ref,refAuto:!!ship.refAuto,vessel:ship.vessel,containers:ship.containers,
                     models:{},modelColors:{},specials:[],total:0,
                     eta:iA>=0?shipsData.ships[iA].eta:"",parser:2,
                     alleenDocumenten:true,
@@ -4287,11 +4345,20 @@ async function handleCIUpload(files,statusId){
         continue;
       }
       // Bestaand schip met dezelfde referentie? Dan vervangen (nieuwe upload wint).
-      const idx=(shipsData.ships||[]).findIndex(s=>s.ref&&ship.ref&&s.ref===ship.ref);
+      /* Dezelfde zending herkennen, ook als er geen referentie op het papier
+         staat. Chantal (video, 8 sep 2026): "Nu staat hij er dubbel in. Kijk,
+         hier staan ze twee naast elkaar, allebei zijn het hetzelfde."
+
+         Er werd alleen op de referentie vergeleken, en die was leeg bij de
+         fabrieken die geen RZ-nummer gebruiken. Twee keer hetzelfde bestand
+         uploaden gaf dan twee regels die er identiek uitzien. De bestandsnaam
+         erbij is genoeg: dezelfde invoice heet hetzelfde. */
+      const idx=(shipsData.ships||[]).findIndex(s=>
+        (s.ref&&ship.ref&&s.ref===ship.ref) || (s.file&&file.name&&s.file===file.name));
       const eta=idx>=0?shipsData.ships[idx].eta:"";
       // parser 2 = kent ook de PP-codes van Passion Devine. Schepen die met een
       // oudere versie zijn ingelezen missen die spa's en moeten één keer opnieuw.
-      const rec={file:file.name,ref:ship.ref,vessel:ship.vessel,containers:ship.containers,models:ship.models,modelColors:ship.modelColors,specials:ship.specials,total:ship.total,eta,parser:2,
+      const rec={file:file.name,ref:ship.ref,refAuto:!!ship.refAuto,vessel:ship.vessel,containers:ship.containers,models:ship.models,modelColors:ship.modelColors,specials:ship.specials,total:ship.total,eta,parser:2,
         // Waar hij heen gaat, en of dat een dealer is. Zie leesBestemming().
         bestemming:ship.bestemming||null,
         dealerContainer:!!ship.dealerContainer,
