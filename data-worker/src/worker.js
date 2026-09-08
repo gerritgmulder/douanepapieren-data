@@ -6356,216 +6356,415 @@ async function qbHandlePrijzenBijwerken(request, env) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   DE WIRE UIT AMERIKA BOEKEN — OP 1160
+   DE BATCH UIT AMERIKA BOEKEN
    ═══════════════════════════════════════════════════════════════════════════
 
-   Gerrit (7 sep 2026): "Chantal kan alle QuickBooks-orders omzetten in
-   Logic4-orders. Nu moet het ook mogelijk zijn (zoals bij Bol.com voor Osman)
-   dat die Logic4-orders direct worden geboekt."
+   Een batch is één uitbetaling van Passion Spa aan Fonteyn. In Audrey's mail
+   staan de facturen die bij die ene uitbetaling horen onder elkaar, afgesloten
+   met de regel 'Totaal batch betaling'. Eén batch = één wire in dit scherm.
 
-   Osman: "Graag het totaalbedrag op 1160 boeken, zodat wij in het bankdagboek
-   ook op 1160 boeken en elkaar gaan kruisen."
+   Osman (8 sep 2026) schrijft de werkwijze zo voor:
 
-   Grootboek 1160 heet in Logic4 "Bank Passion Spas South TX" (ledger 556) en
-   het bijbehorende dagboek is nummer 45. Dat is dus waar deze boekingen in
-   gaan: elke factuur van de wire wordt op zijn Logic4-order afgeboekt in
-   dagboek 45, en de som daarvan is het bedrag dat Osman vanuit het
-   bankafschrift op 1160 tegenboekt. Die twee kruisen dan.
+     1. Osman boekt de netto ontvangen bankbetaling in het bankboek volledig
+        op grootboekrekening 1160.
+     2. De koppeling maakt per batch één boeking.
+     3. Daarin worden de orders afgeboekt voor het VOLLEDIGE bruto
+        factuurbedrag.
+     4. Het verschil tussen bruto en netto gaat als bankkosten naar 4630,
+        kostenplaats 41 - Spa Houston USA.
+     5. 1160 is tussenrekening en komt per batch weer op nul uit.
 
-   Dezelfde vorm als bij Bol (Orders/AddPayment met AmountIncl, BookingId en
-   DateTime), want die weg is daar al bevestigd door Logic4 zelf.
+   Met de batch van $ 10.119,83: orders afboeken 10.220,44, bankkosten 100,61,
+   tegenboeking 1160 10.119,83. De bankkosten mogen dus NIET eerst van het
+   orderbedrag af; dan zouden ze twee keer worden verwerkt en bleef er ten
+   onrechte geld openstaan. Dat is precies wat er in de vorige werkwijze
+   gebeurde.
 
-   Twee dingen zijn met opzet zo:
+   Hoe dat hier gebeurt, en waarom niet letterlijk als memoriaalboeking:
+   ---------------------------------------------------------------------------
+   Een order afboeken kan in de Logic4-API maar op één manier, met
+   Orders/AddPayment, en dat wil een bank- of kasdagboek. De drie boekingen
+   die je zelf mag samenstellen (inkoop, verkoop, memoriaal) kennen in hun
+   mutaties alleen een grootboekrekening: geen order, geen debiteur en ook
+   geen kostenplaats. Een memoriaal kan de orders dus niet raken.
 
-   - Er is een proefstand. Zonder 'bevestigd:true' wordt er niets geboekt en
-     komt alleen terug wát er geboekt zou worden. Geld hoort niet in de
-     boekhouding te belanden omdat iemand op de verkeerde knop drukte.
+   Wat de koppeling doet komt op hetzelfde neer, in dagboek 45 (dat ís
+   grootboek 1160):
 
-   - Wat geboekt is wordt meteen vastgelegd in qb-geboekt, per factuur. Valt
-     het verzoek halverwege om, dan kan er bij een tweede poging nooit dubbel
-     geboekt worden. Dat ging bij het aanmaken van de orders al een keer mis
-     (Chantal, 1 sep 2026) en dat willen we bij geld helemaal niet.
+     - per order een afboeking voor het volle bruto bedrag        → 1160 debet
+     - één regel bankkosten, negatief, op grootboek 4630          → 1160 credit
 
-   Wat hier NIET gebeurt: de bankkosten. Op de wire van 25-08 staat 60.225,53
-   aan facturen, 543,40 aan bankkosten en 59.682,13 ontvangen. De facturen
-   worden voor hun eigen bedrag afgeboekt; wat er aan bankkosten tussen zit
-   hoort op een kostenrekening en niet op 1160, en welke rekening dat is
-   bepaalt Osman. Zolang dat niet vaststaat blijft dat verschil zichtbaar in
-   het scherm in plaats van dat het ergens ingerekend wordt. */
+   Onder de streep staat er op 1160 exact de netto bankontvangst, en die
+   kruist met de boeking die Osman vanaf het afschrift maakt. De rekening komt
+   per batch op nul, en de orders staan voor hun volle bedrag afgeboekt. De
+   kostenplaats is het enige dat de API niet meeneemt; die staat als
+   herinnering in het scherm.
+
+   Alles of niets
+   ---------------------------------------------------------------------------
+   Osman: "Als deze aansluiting niet klopt of als een ordernummer niet
+   gevonden wordt, moet de batch niet automatisch worden verwerkt maar als
+   afwijking worden weergegeven."
+
+   Daarom wordt er per batch eerst gerekend en pas daarna geboekt. Klopt er
+   iets niet, dan gaat er van die batch niets weg - ook niet de helft. Half
+   boeken is hier het gevaarlijkste wat er is: 1160 blijft dan met een
+   restbedrag staan en niemand ziet waardoor.
+
+   En zoals eerder: zonder 'bevestigd:true' wordt er niets geboekt, en wat wel
+   geboekt is wordt meteen vastgelegd in qb-geboekt. Valt het verzoek
+   halverwege om, dan kan een tweede poging nooit dubbel boeken. */
 const AMERIKA_DAGBOEK = 45;        // "Bank Passion Spas South TX" = grootboek 1160
 const AMERIKA_LEDGER_1160 = 556;   // het grootboek zelf, voor in de uitleg
-/* De bankkosten van een wire.
-   ═══════════════════════════════════════════════════════════════════════════
-   Osman (7 sep 2026): "van de 59.682,13 dollar boeken we 543,40 dollar op
-   grootboekrekening bankkosten 4630 met kostenplaats Spa Houston."
-
-   4630 heet in Logic4 "Bankrente en kosten". De boeking gaat als regel in
-   hetzelfde bankdagboek 45, met een grootboekcode in plaats van een order, en
-   met een NEGATIEF bedrag. Dat laatste is geen truc maar precies wat er
-   gebeurt: de facturen worden voor hun volle bedrag afgeboekt (60.225,53),
-   terwijl er maar 59.682,13 op de bank kwam. Die 543,40 moet er dus weer af
-   en op de kostenrekening. Daarna staat er op 1160 exact wat de bank ook laat
-   zien, en kruist het met de boeking die Osman vanaf het afschrift maakt.
-
-   Wat hier NIET bij kan: de kostenplaats. Een betaling kent in de API alleen
-   ordernummer, factuurnummer, bedrag, omschrijving, dagboek, matching-
-   grootboek en grootboekcode - er is geen veld voor een kostenplaats. "Spa
-   Houston USA" (kostenplaats 41) moet er dus in Logic4 zelf bij. Het scherm
-   zegt dat erbij na elke boeking; anders belandt het bedrag wel op 4630 maar
-   zonder kostenplaats en valt het pas bij de jaarafsluiting op. */
-const AMERIKA_KOSTEN_GROOTBOEK = "4630";
+const AMERIKA_KOSTEN_GROOTBOEK = "4630";                // "Bankrente en kosten"
 const AMERIKA_KOSTENPLAATS = "Spa Houston USA (41)";
+const AMERIKA_KOSTENPLAATS_ID = 41;
+
+const qbCent = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+/* Welke regels van een batch stellen geld voor?
+
+   'factuur' is een regel die met een factuurnummer begint, 'overig' een regel
+   met een naam maar zonder nummer ("Michigan Swim Pools"), 'balance' een
+   restbedrag uit de vorige batch. Alle drie tellen mee in het totaal dat
+   Audrey onderaan zet, dus alle drie moeten ze hier meedoen - anders lijkt de
+   batch niet aan te sluiten terwijl hij dat wel doet. Wat ze niet alle drie
+   hebben is een factuurnummer, en daar loopt het dan op vast: dat is de
+   afwijking die Osman terug wil zien. */
+const QB_GELDSOORTEN = new Set(["factuur", "overig", "balance"]);
+
+/* Het factuurnummer van een regel.
+
+   De inlezer pakt alleen vier cijfers gevolgd door een spatie. Audrey schrijft
+   ook "3644fantasies" en "3573S Steve Raiche", en dan blijft het nummer leeg
+   terwijl het er gewoon staat. Hier wordt het alsnog uit de naam gehaald, dus
+   ook uit batches die al ingelezen zijn. */
+function qbFactuurVanRegel(r) {
+  const uit = String((r && r.factuur) || "").trim();
+  if (uit) return uit;
+  const m = String((r && r.naam) || "").trim().match(/^(\d{4})(?!\d)/);
+  return m ? m[1] : "";
+}
+
+/* qb-approved staat sinds 7 sep op het unieke QuickBooks-id ("qb:123"), met
+   het factuurnummer als veld erbij. Een wire kent alleen het factuurnummer,
+   dus die kant op moet er een index bij. Oude sleutels (kaal factuurnummer)
+   doen gewoon mee. */
+function qbOrdersPerFactuur(approved) {
+  const per = {};
+  for (const sleutel of Object.keys((approved && approved.ids) || {})) {
+    const v = approved.ids[sleutel] || {};
+    const nr = String(v.docNr || (sleutel.startsWith("qb:") ? "" : sleutel)).trim();
+    if (!nr || !v.orderId) continue;
+    (per[nr] = per[nr] || []).push({ sleutel, orderId: v.orderId });
+  }
+  return per;
+}
+
+/* Een regel zonder factuurnummer alsnog thuisbrengen.
+   ═══════════════════════════════════════════════════════════════════════════
+   Audrey schrijft soms alleen de klantnaam: "Michigan Swim Pools 75,55" en
+   "Mirage 29.180,60". Zo'n regel telt wel mee in het batchtotaal maar is
+   nergens aan te koppelen, en dan blijft de hele batch liggen.
+
+   Dat hoeft niet: in QuickBooks staat maar één factuur van Michigan Swim
+   Pools van precies 75,55 (dat is 3662) en één van Mirage Spas van precies
+   29.180,60 (3583). Naam én bedrag samen, en alleen als er precies één
+   kandidaat is. Bij twijfel wordt er niets geraden en blijft de batch een
+   afwijking; dit is geld, dus liever een keer te weinig gevonden.
+
+   Wat er geraden is staat in het antwoord, zodat het in het scherm te zien is
+   voordat iemand op boeken drukt. */
+function qbNaamSleutel(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+function qbRadenBouwen(facturen) {
+  const lijst = (facturen || []).map(inv => ({
+    docNr: String(inv.DocNumber || "").trim(),
+    klant: qbNaamSleutel((inv.CustomerRef && inv.CustomerRef.name) || ""),
+    totaal: Number(inv.TotalAmt || 0),
+  })).filter(x => x.docNr);
+  return function raad(regel) {
+    const bedrag = Number(regel.kolom1) || 0;
+    const naam = qbNaamSleutel(regel.naam);
+    if (!naam || !(Math.abs(bedrag) > 0)) return null;
+    const eerste = naam.split(" ")[0];
+    if (!eerste || eerste.length < 3) return null;
+    const raak = lijst.filter(x => Math.abs(x.totaal - bedrag) < 0.02 &&
+      (x.klant.indexOf(naam) === 0 || naam.indexOf(x.klant) === 0 || x.klant.split(" ")[0] === eerste));
+    if (raak.length !== 1) return null;
+    return { factuur: raak[0].docNr, uitleg: "op naam en bedrag herkend als factuur " + raak[0].docNr };
+  };
+}
+
+/* Staat een batch er twee keer in?
+   ═══════════════════════════════════════════════════════════════════════════
+   De mail van 17 augustus is twee keer ingelezen; er staan nu twee batches met
+   dezelfde datum, dezelfde facturen en hetzelfde totaal. Zouden ze allebei
+   geboekt worden, dan gaat elke order er twee keer af en staat er 53.578,86 te
+   veel op 1160. Daarom worden ze allebei tegengehouden en moet iemand er eerst
+   één weggooien. */
+function qbBatchVingerafdruk(w) {
+  const geld = (w.regels || []).filter(r => QB_GELDSOORTEN.has(String(r.soort || "")));
+  const bedragen = geld.map(r => qbCent(r.kolom1)).sort((a, b) => a - b).join(",");
+  return String(w.datum || "") + "|" + bedragen;
+}
+
+/* Eén batch doorrekenen. Er wordt hier niets geboekt en niets opgeslagen;
+   dit bepaalt alleen of de batch mag. */
+function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
+  const regels = wire.regels || [];
+  const totaalRegel = regels.find(r => String(r.soort || "") === "totaal");
+  const geld = regels.filter(r => QB_GELDSOORTEN.has(String(r.soort || "")));
+
+  const redenen = [];
+  const tweeling = tweelingen && tweelingen[String(wire.id)];
+  if (tweeling)
+    redenen.push("Deze batch staat er meer dan een keer in (dezelfde datum en dezelfde bedragen als batch " +
+      tweeling.join(" en ") + "). Gooi de dubbele weg; anders wordt alles twee keer geboekt.");
+  const uit = geld.map((r, i) => {
+    let factuur = qbFactuurVanRegel(r), geraden = null;
+    if (!factuur && raad) {
+      const g = raad(r);
+      if (g) { factuur = g.factuur; geraden = g.uitleg; }
+    }
+    const kandidaten = factuur ? (perFactuur[factuur] || []) : [];
+    const rij = {
+      volgnr: i,
+      naam: String(r.naam || ""),
+      soort: String(r.soort || ""),
+      factuur: factuur || null,
+      geraden: geraden || undefined,
+      bedrag: qbCent(r.kolom1),
+      kosten: qbCent(Math.abs(Number(r.kolom2) || 0)),
+      order: kandidaten.length === 1 ? kandidaten[0].orderId : null,
+      sleutel: "batch:" + wire.id + ":r" + i,
+    };
+    // Al geboekt? Zowel de nieuwe regelsleutel als de oude sleutel op
+    // factuurnummer telt, anders zou een batch die vroeger al langskwam er
+    // nu nog een keer doorheen gaan.
+    const al = ((geboekt && geboekt.ids) || {})[rij.sleutel]
+            || (factuur ? ((geboekt && geboekt.ids) || {})[factuur] : null);
+    if (al) { rij.status = "al geboekt"; rij.order = al.orderId || rij.order; rij.ts = al.ts; }
+    else if (!factuur) rij.status = "geen factuurnummer";
+    else if (!kandidaten.length) rij.status = "geen Logic4-order";
+    else if (kandidaten.length > 1) { rij.status = "meerdere orders"; rij.orders = kandidaten.map(k => k.orderId); }
+    else if (!(rij.bedrag > 0)) rij.status = "bedrag is nul of negatief";
+    else rij.status = "klaar om te boeken";
+    return rij;
+  });
+
+  const bruto = qbCent(uit.reduce((n, r) => n + r.bedrag, 0));
+  const kosten = qbCent(uit.reduce((n, r) => n + r.kosten, 0));
+  const netto = totaalRegel && totaalRegel.kolom3 != null ? qbCent(totaalRegel.kolom3) : null;
+  const brutoMail = totaalRegel && totaalRegel.kolom1 != null ? qbCent(totaalRegel.kolom1) : null;
+  const kostenMail = totaalRegel && totaalRegel.kolom2 != null ? qbCent(Math.abs(totaalRegel.kolom2)) : null;
+
+  /* De controle die Osman vraagt: bruto - bankkosten = netto ontvangen.
+     Drie keer, want alle drie kunnen ze losschieten. */
+  if (!totaalRegel || netto == null)
+    redenen.push("Er staat geen regel 'Totaal batch betaling' met een netto bedrag in deze batch. Zonder dat bedrag valt niet te controleren wat er werkelijk op de bank is bijgeschreven.");
+  if (brutoMail != null && Math.abs(brutoMail - bruto) > 0.005)
+    redenen.push("De regels tellen op tot " + qbGeld(bruto) + ", terwijl de totaalregel " + qbGeld(brutoMail) + " noemt. Verschil " + qbGeld(qbCent(brutoMail - bruto)) + ".");
+  if (kostenMail != null && Math.abs(kostenMail - kosten) > 0.005)
+    redenen.push("De bankkosten op de regels tellen op tot " + qbGeld(kosten) + ", terwijl de totaalregel " + qbGeld(kostenMail) + " noemt.");
+  if (netto != null && Math.abs(qbCent(bruto - kosten) - netto) > 0.005)
+    redenen.push("Bruto " + qbGeld(bruto) + " min bankkosten " + qbGeld(kosten) + " is " + qbGeld(qbCent(bruto - kosten)) + ", en er is " + qbGeld(netto) + " ontvangen. Dat sluit niet aan.");
+
+  const zonderNummer = uit.filter(r => r.status === "geen factuurnummer" && r.soort !== "balance");
+  const saldoRegels = uit.filter(r => r.status === "geen factuurnummer" && r.soort === "balance");
+  const zonderOrder = uit.filter(r => r.status === "geen Logic4-order");
+  const dubbel = uit.filter(r => r.status === "meerdere orders");
+  const raar = uit.filter(r => r.status === "bedrag is nul of negatief");
+  if (zonderNummer.length)
+    redenen.push(zonderNummer.length + " regel(s) hebben geen factuurnummer, en er is er ook niet één van te vinden op naam en bedrag: " + zonderNummer.map(r => r.naam + " " + qbGeld(r.bedrag)).join(", ") + ".");
+  if (saldoRegels.length)
+    redenen.push("Er staat een saldoregel in deze batch (" + saldoRegels.map(r => r.naam + " " + qbGeld(r.bedrag)).join(", ") + "). Die hoort bij geen enkele factuur, dus Osman moet zeggen waar dat bedrag heen gaat.");
+  if (zonderOrder.length)
+    redenen.push(zonderOrder.length + " factu(u)r(en) staan nog niet als order in Logic4: " + zonderOrder.map(r => r.factuur).join(", ") + ". Zet die eerst om bij Facturen.");
+  if (dubbel.length)
+    redenen.push("Voor " + dubbel.map(r => "factuur " + r.factuur).join(", ") + " staan er meerdere Logic4-orders. Welke het is moet iemand aanwijzen.");
+  if (raar.length)
+    redenen.push(raar.length + " regel(s) hebben geen positief bedrag: " + raar.map(r => r.naam).join(", ") + ".");
+
+  const geradenLijst = uit.filter(r => r.geraden);
+  const teBoeken = uit.filter(r => r.status === "klaar om te boeken");
+  const alGeboekt = uit.filter(r => r.status === "al geboekt");
+  const kostenSleutel = "bankkosten:" + wire.id;
+  const kostenAl = !!((geboekt && geboekt.ids) || {})[kostenSleutel];
+
+  return {
+    id: String(wire.id), datum: wire.datum || "", bestand: wire.bestand || "",
+    bruto, kosten, netto, brutoMail, kostenMail,
+    aansluiting: netto != null ? { bruto, kosten, netto, verschil: qbCent(bruto - kosten - netto) } : null,
+    afwijking: redenen.length > 0,
+    redenen,
+    geraden: geradenLijst.map(r => ({ naam: r.naam, bedrag: r.bedrag, factuur: r.factuur, uitleg: r.geraden })),
+    regels: uit,
+    teBoeken: teBoeken.length,
+    alGeboekt: alGeboekt.length,
+    klaar: !redenen.length && !teBoeken.length && (kostenAl || !(kosten > 0)),
+    bankkosten: { bedrag: kosten, sleutel: kostenSleutel, alGeboekt: kostenAl,
+                  grootboek: AMERIKA_KOSTEN_GROOTBOEK, kostenplaats: AMERIKA_KOSTENPLAATS },
+  };
+}
+
+// Bedragen in de meldingen: dollars, met punt als duizendtal zoals Osman ze schrijft.
+function qbGeld(n) {
+  const v = Number(n) || 0;
+  return "$ " + v.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 async function qbHandleBoeken(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
     return reply(401, { ok: false, error: "Unauthorized" });
   let body = {}; try { body = await request.json(); } catch {}
   const wireId = String(body.wireId || "");
-  if (!wireId) return reply(400, { ok: false, error: "geen wire opgegeven" });
+  if (!wireId) return reply(400, { ok: false, error: "geen batch opgegeven" });
   const echt = body.bevestigd === true;
 
   const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
-  /* Eén wire, of alle wires achter elkaar.
-     ═══════════════════════════════════════════════════════════════════════
-     Gerrit (7 sep 2026): "Is het ook mogelijk dat Osman straks alle bedragen
-     in 1x boekt?"
-
-     Met wireId "alle" gaat hij door alle wires heen. De facturen van alle
-     wires komen dan achter elkaar in dezelfde lijst, en er wordt in blokjes
-     gewerkt (vanaf/volgende) zodat het aantal aanroepen per verzoek binnen de
-     perken blijft - net als bij het bijwerken van de bedragen. */
   const alle = wireId === "alle";
   const lijst = alle ? (wires.wires || []) : (wires.wires || []).filter(w => String(w.id) === wireId);
-  if (!lijst.length) return reply(404, { ok: false, error: "wire niet gevonden" });
-  const wire = lijst[0];
+  if (!lijst.length) return reply(404, { ok: false, error: "batch niet gevonden" });
 
   const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
   const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
   geboekt.ids = geboekt.ids || {};
+  const perFactuur = qbOrdersPerFactuur(approved);
+
+  /* Dubbele batches opsporen over het hele bestand, niet alleen over wat er nu
+     in behandeling is: de tweeling van een batch kan best in een ander blokje
+     zitten. */
+  const perVinger = {};
+  for (const w of (wires.wires || [])) {
+    const v = qbBatchVingerafdruk(w);
+    (perVinger[v] = perVinger[v] || []).push(w);
+  }
+  const tweelingen = {};
+  for (const v of Object.keys(perVinger)) {
+    const groep = perVinger[v];
+    if (groep.length < 2) continue;
+    for (const w of groep)
+      tweelingen[String(w.id)] = groep.filter(x => String(x.id) !== String(w.id))
+        .map(x => "van " + (x.datum || x.id) + " (ingelezen " + String(x.ts || "").slice(0, 10) + ")");
+  }
+
+  /* Een worker mag maar een beperkt aantal uitgaande verzoeken per aanroep
+     doen. Elke afboeking is er één, plus de kostenregel. Daarom hele batches
+     per keer, tot dit aantal regels vol is; een batch wordt nooit gesplitst,
+     want half boeken mag niet. */
+  const MAX_REGELS = 35;
+  const vanaf = Math.max(0, parseInt(body.vanaf, 10) || 0);
+  const partij = [];
+  let geteld = 0;
+  for (let i = vanaf; i < lijst.length; i++) {
+    const n = (lijst[i].regels || []).filter(r => QB_GELDSOORTEN.has(String(r.soort || ""))).length + 1;
+    if (partij.length && geteld + n > MAX_REGELS) break;
+    partij.push(lijst[i]); geteld += n;
+  }
+  const volgende = vanaf + partij.length;
+
+  /* Alleen QuickBooks bevragen als er ook echt een regel zonder factuurnummer
+     tussen zit. Dat scheelt bij elke andere batch een paar verzoeken, en een
+     worker heeft er maar een beperkt aantal per aanroep. */
+  const naamloos = partij.some(w => (w.regels || [])
+    .some(r => QB_GELDSOORTEN.has(String(r.soort || "")) && !qbFactuurVanRegel(r)));
+  let raad = null;
+  if (naamloos) {
+    try { raad = qbRadenBouwen(await qbAllInvoices(env)); }
+    catch (e) { raad = null; }
+  }
 
   const token = echt ? await l4Token(env) : null;
-  const regels = [];
-  let som = 0, kosten = 0;
+  const uit = [];
 
-  /* De werklijst: elke factuurregel van elke gekozen wire, met de datum van
-     zijn eigen wire erbij. Bij één wire is dat gewoon die ene. */
-  const werk = [];
-  for (const w of lijst) for (const r of (w.regels || [])) {
-    if (String(r.soort || "") !== "factuur") continue;
-    werk.push({ w, r });
-  }
-  const MAX_BOEKINGEN = alle ? 25 : werk.length;
-  const vanaf = Math.max(0, parseInt(body.vanaf, 10) || 0);
-  const partij = werk.slice(vanaf, vanaf + MAX_BOEKINGEN);
+  for (const w of partij) {
+    const b = qbBatchLezen(w, perFactuur, geboekt, raad, tweelingen);
+    /* Klopt er iets niet, dan gaat er van deze batch niets weg. Dat is de
+       kern van wat Osman vraagt. */
+    if (b.afwijking || !echt) { uit.push(b); continue; }
+    if (!b.teBoeken && b.bankkosten.alGeboekt) { uit.push(b); continue; }
 
-  for (const { w, r } of partij) {
     const datum = (w.datum || new Date().toISOString().slice(0, 10)) + "T12:00:00";
-    const factuur = String(r.factuur || "").trim();
-    const bedrag = Math.round((Number(r.kolom1) || 0) * 100) / 100;
-    kosten += Math.abs(Number(r.kolom2) || 0);   // alleen factuurregels; zie hieronder
-    const order = approved.ids[factuur] && approved.ids[factuur].orderId;
-    const al = geboekt.ids[factuur];
-
-    if (al) { regels.push({ factuur, bedrag, order: al.orderId, status: "al geboekt", ts: al.ts }); continue; }
-    if (!order) { regels.push({ factuur, bedrag, status: "geen Logic4-order",
-      uitleg: "Deze factuur is nog niet omgezet naar een order. Doe dat eerst bij Facturen." }); continue; }
-    if (!(bedrag > 0)) { regels.push({ factuur, bedrag, order, status: "bedrag is nul" }); continue; }
-
-    som += bedrag;
-    if (!echt) { regels.push({ factuur, bedrag, order, status: "klaar om te boeken" }); continue; }
-
-    try {
-      const rr = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
-        method: "POST",
-        headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          OrderId: Number(order),
-          AmountIncl: bedrag,
-          BookingId: AMERIKA_DAGBOEK,
-          DateTime: datum,
-          Description: "Wire " + (w.datum || "") + " - QuickBooks-factuur " + factuur,
-        }),
-      });
-      const tekst = await rr.text();
-      if (!rr.ok) { regels.push({ factuur, bedrag, order, status: "fout",
-        uitleg: "HTTP " + rr.status + " - " + tekst.slice(0, 160) }); continue; }
-      geboekt.ids[factuur] = { orderId: order, bedrag, wireId: String(w.id), ts: new Date().toISOString(),
-                               door: String(body.user || "").slice(0, 80) };
-      // Meteen vastleggen, nooit pas aan het eind van de lus.
-      await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));
-      regels.push({ factuur, bedrag, order, status: "geboekt" });
-    } catch (e) {
-      regels.push({ factuur, bedrag, order, status: "fout", uitleg: String(e.message || e) });
-    }
-  }
-
-  /* De bankkosten, één regel per wire. Alleen in het laatste blokje, zodat er
-     bij "alle wires" niet per blokje een halve kostenregel ontstaat. */
-  const volgende = vanaf + partij.length;
-  const laatste = volgende >= werk.length;
-  if (laatste) {
-    for (const w of lijst) {
-      /* Alleen de factuurregels optellen. Op de wire staat óók een totaalregel
-         (soort "totaal") die de bankkosten nog een keer noemt; die meetellen
-         gaf 1.086,80 in plaats van 543,40 - precies twee keer. */
-      const kost = Math.round(((w.regels || [])
-        .filter(r => String(r.soort || "") === "factuur")
-        .reduce((n, r) => n + Math.abs(Number(r.kolom2) || 0), 0)) * 100) / 100;
-      if (!(kost > 0)) continue;
-      const sleutel = "bankkosten:" + String(w.id);
-      if (geboekt.ids[sleutel]) {
-        regels.push({ factuur: "bankkosten " + (w.datum || ""), bedrag: -kost,
-                      grootboek: AMERIKA_KOSTEN_GROOTBOEK, status: "al geboekt" });
-        continue;
-      }
-      if (!echt) {
-        regels.push({ factuur: "bankkosten " + (w.datum || ""), bedrag: -kost,
-                      grootboek: AMERIKA_KOSTEN_GROOTBOEK, status: "klaar om te boeken",
-                      kostenplaats: AMERIKA_KOSTENPLAATS });
-        continue;
-      }
+    let stuk = false;
+    for (const r of b.regels) {
+      if (r.status !== "klaar om te boeken") continue;
       try {
         const rr = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
           method: "POST",
           headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
           body: JSON.stringify({
-            AmountIncl: -kost,
-            LedgerCode: AMERIKA_KOSTEN_GROOTBOEK,
+            OrderId: Number(r.order),
+            AmountIncl: r.bedrag,
             BookingId: AMERIKA_DAGBOEK,
-            DateTime: (w.datum || new Date().toISOString().slice(0, 10)) + "T12:00:00",
-            Description: "Bankkosten wire " + (w.datum || "") + " - kostenplaats " + AMERIKA_KOSTENPLAATS,
+            DateTime: datum,
+            Description: "Batch " + (w.datum || "") + " - QuickBooks-factuur " + r.factuur,
           }),
         });
         const tekst = await rr.text();
         if (!rr.ok) {
-          regels.push({ factuur: "bankkosten " + (w.datum || ""), bedrag: -kost,
-                        grootboek: AMERIKA_KOSTEN_GROOTBOEK, status: "fout",
-                        uitleg: "HTTP " + rr.status + " - " + tekst.slice(0, 160) });
-          continue;
+          r.status = "fout"; r.uitleg = "HTTP " + rr.status + " - " + tekst.slice(0, 160);
+          stuk = true; break;
         }
-        geboekt.ids[sleutel] = { bedrag: -kost, wireId: String(w.id), grootboek: AMERIKA_KOSTEN_GROOTBOEK,
-                                 ts: new Date().toISOString(), door: String(body.user || "").slice(0, 80) };
+        geboekt.ids[r.sleutel] = { orderId: r.order, factuur: r.factuur, bedrag: r.bedrag,
+                                   batch: String(w.id), ts: new Date().toISOString(),
+                                   door: String(body.user || "").slice(0, 80) };
+        // Meteen vastleggen, nooit pas aan het eind van de lus.
         await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));
-        regels.push({ factuur: "bankkosten " + (w.datum || ""), bedrag: -kost,
-                      grootboek: AMERIKA_KOSTEN_GROOTBOEK, status: "geboekt",
-                      kostenplaats: AMERIKA_KOSTENPLAATS });
-      } catch (e) {
-        regels.push({ factuur: "bankkosten " + (w.datum || ""), bedrag: -kost,
-                      grootboek: AMERIKA_KOSTEN_GROOTBOEK, status: "fout", uitleg: String(e.message || e) });
-      }
+        r.status = "geboekt";
+      } catch (e) { r.status = "fout"; r.uitleg = String(e.message || e); stuk = true; break; }
     }
+
+    /* De bankkosten: één negatieve regel op 4630, in hetzelfde dagboek. Pas
+       nadat de orders eruit zijn, want anders staat 1160 even scheef.
+
+       Loopt er hierboven iets vast, dan gaat de kostenregel bewust NIET meer
+       weg: de batch is dan onvolledig en de kosten horen bij het geheel. Wat
+       al geboekt is blijft staan en is aan de sleutels te zien, dus een
+       tweede poging pakt alleen de rest. */
+    if (!stuk && b.bankkosten.bedrag > 0 && !b.bankkosten.alGeboekt) {
+      try {
+        const rr = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
+          method: "POST",
+          headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            AmountIncl: -b.bankkosten.bedrag,
+            LedgerCode: AMERIKA_KOSTEN_GROOTBOEK,
+            BookingId: AMERIKA_DAGBOEK,
+            DateTime: datum,
+            Description: "Bankkosten batch " + (w.datum || "") + " - kostenplaats " + AMERIKA_KOSTENPLAATS,
+          }),
+        });
+        const tekst = await rr.text();
+        if (!rr.ok) { b.bankkosten.status = "fout"; b.bankkosten.uitleg = "HTTP " + rr.status + " - " + tekst.slice(0, 160); }
+        else {
+          geboekt.ids[b.bankkosten.sleutel] = { bedrag: -b.bankkosten.bedrag, batch: String(w.id),
+            grootboek: AMERIKA_KOSTEN_GROOTBOEK, ts: new Date().toISOString(),
+            door: String(body.user || "").slice(0, 80) };
+          await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));
+          b.bankkosten.status = "geboekt";
+        }
+      } catch (e) { b.bankkosten.status = "fout"; b.bankkosten.uitleg = String(e.message || e); }
+    }
+
+    b.geboekt = b.regels.filter(r => r.status === "geboekt").length;
+    b.fout = b.regels.filter(r => r.status === "fout").length;
+    b.klaar = !b.fout && (b.bankkosten.status === "geboekt" || b.bankkosten.alGeboekt || !(b.bankkosten.bedrag > 0));
+    uit.push(b);
   }
 
-  return reply(200, { ok: true, proef: !echt,
-    wire: alle ? "alle wires" : wire.datum, alle,
+  const som = uit.reduce((n, b) => n + (b.afwijking ? 0 : b.bruto), 0);
+  return reply(200, { ok: true, proef: !echt, alle,
     kostenGrootboek: AMERIKA_KOSTEN_GROOTBOEK, kostenplaats: AMERIKA_KOSTENPLAATS,
+    kostenplaatsId: AMERIKA_KOSTENPLAATS_ID,
     dagboek: AMERIKA_DAGBOEK, grootboek: "1160", ledgerId: AMERIKA_LEDGER_1160,
-    totaalRegels: werk.length, vanaf,
-    volgende: volgende < werk.length ? volgende : null,
-    klaar: volgende >= werk.length,
-    tebeoken: Math.round(som * 100) / 100,
-    bankkosten: Math.round(kosten * 100) / 100,
-    regels });
+    totaalBatches: lijst.length, vanaf,
+    volgende: volgende < lijst.length ? volgende : null,
+    klaar: volgende >= lijst.length,
+    afwijkingen: uit.filter(b => b.afwijking).length,
+    tebeoken: qbCent(som),
+    batches: uit });
 }
 
 // POST /amerika/qb/approve { docNrs:[...] } — maak Logic4-orders voor de

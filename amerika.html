@@ -1348,74 +1348,94 @@ async function audInit(){
 // Sectie 1: facturen die geaccordeerd zijn (order staat in Logic4) maar waarvan
 // de betaling nog niet is afgevinkt. Deze blijven staan tot Chantal/Osman zegt
 // dat het écht in Logic4 verwerkt is.
-/* Een wire (of alle wires) boeken op 1160. Zit los zodat zowel de knop bij een
-   losse wire als de knop 'alles boeken' er gebruik van maakt. */
+/* Een batch (of alle batches) boeken.
+   ═══════════════════════════════════════════════════════════════════════
+   Osman (8 sep 2026): per batch wordt eerst gecontroleerd of bruto min
+   bankkosten gelijk is aan wat er netto op de bank kwam, en of elke factuur
+   een Logic4-order heeft. Klopt dat niet, dan wordt die batch NIET geboekt
+   maar als afwijking getoond. Half boeken laat 1160 met een restbedrag staan
+   en dat ziet niemand meer terug, dus dat gebeurt bewust niet.
+
+   De worker doet die controle; hier wordt alleen getoond wat eruit komt. */
 async function audBoekKnop(b){
   const id=b.dataset.boek;
-  b.disabled=true; const oudeTekst=b.textContent; b.textContent="proef draaien…";
+  b.disabled=true; const oudeTekst=b.textContent;
+  b.textContent="controleren…";
 
-    async function vraag(bevestigd,vanaf){
-      const r=await fetch(WORKER+"/amerika/qb/boeken",{method:"POST",
-        headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
-        body:JSON.stringify({wireId:id,bevestigd:bevestigd,vanaf:vanaf||0,user:(localStorage.getItem("fp.email")||"")})});
-      const j=await r.json().catch(()=>null);
-      if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
-      return j;
-    }
-    /* Bij "alle wires" komen de facturen in blokjes binnen; alles achter
-       elkaar plakken zodat de proef en het boeken over het geheel gaan. */
-    async function alles(bevestigd){
-      let vanaf=0, regels=[], eerste=null;
-      while(vanaf!=null){
-        const j=await vraag(bevestigd,vanaf);
-        if(!eerste) eerste=j;
-        regels=regels.concat(j.regels||[]);
-        vanaf=j.volgende;
-        if(vanaf!=null && b) b.textContent=(bevestigd?"boeken… ":"proef… ")+regels.length+"/"+(j.totaalRegels||"?");
-      }
-      return Object.assign({},eerste,{regels:regels,
-        tebeoken:regels.filter(x=>x.status==="klaar om te boeken"||x.status==="geboekt")
-                       .reduce((n,x)=>n+(x.bedrag||0),0)});
-    }
-    try{
-      const proef=await alles(false);
-      const klaar=(proef.regels||[]).filter(x=>x.status==="klaar om te boeken");
-      const rest=(proef.regels||[]).filter(x=>x.status!=="klaar om te boeken");
-      const lijst=(arr)=>arr.map(x=>"  • "+(x.grootboek?"":"factuur ")+x.factuur+" — "+usd(x.bedrag)+
-        (x.order?(" op order "+x.order):"")+(x.grootboek?(" op grootboek "+x.grootboek):"")+
-        (x.status!=="klaar om te boeken"?("  ("+x.status+")"):"")).join("\n");
-      if(!klaar.length){
-        alert("Er valt nu niets te boeken voor deze wire.\n\n"+lijst(rest)+
-          "\n\nEen factuur zonder Logic4-order moet eerst bij Facturen worden omgezet.");
-        return;
-      }
-      const akkoord=confirm(
-        "Boeken in dagboek Bank Passion Spas South TX (grootboek 1160)\n"+
-        "Wire van "+(proef.wire||"")+"\n\n"+
-        klaar.length+" factu(u)r(en), samen "+usd(proef.tebeoken)+":\n"+lijst(klaar)+"\n\n"+
-        (rest.length?("Niet meegenomen:\n"+lijst(rest)+"\n\n"):"")+
-        "De bankkosten gaan als aparte regel op grootboek "+(proef.kostenGrootboek||"4630")+
-        " (Bankrente en kosten). Daarna staat op 1160 precies wat er op de bank binnenkwam.\n\n"+
-        "LET OP: de kostenplaats "+(proef.kostenplaats||"Spa Houston USA")+" kan niet via de koppeling worden meegegeven.\n"+
-        "Die moet je er in Logic4 zelf bij zetten op die kostenregel.\n\n"+
-        "Doorgaan?");
-      if(!akkoord) return;
-      b.textContent="boeken…";
-      const echt=await alles(true);
-      const gelukt=(echt.regels||[]).filter(x=>x.status==="geboekt");
-      const mis=(echt.regels||[]).filter(x=>x.status==="fout");
-      if(window.fpLog) window.fpLog("wire-geboekt-op-1160",(echt.wire||"")+": "+gelukt.length+" facturen, "+usd(echt.tebeoken));
-      const kostenregels=gelukt.filter(x=>x.grootboek);
-      alert(gelukt.filter(x=>!x.grootboek).length+" factu(u)r(en) geboekt op 1160."+
-        (kostenregels.length?("\n\nEn "+kostenregels.length+" bankkostenregel(s) op grootboek "+
-          (echt.kostenGrootboek||"4630")+", samen "+usd(kostenregels.reduce((n,x)=>n+x.bedrag,0))+".\n\n"+
-          "NOG DOEN IN LOGIC4: zet op die kostenregel(s) de kostenplaats "+
-          (echt.kostenplaats||"Spa Houston USA")+". Dat kan de koppeling niet meegeven."):"")+
-        (mis.length?("\n\nNiet gelukt:\n"+mis.map(x=>"  • "+x.factuur+" — "+(x.uitleg||"")).join("\n")):""));
-      await audLoadFacturen(); audRender();
-    }catch(e){ alert("Boeken mislukte: "+e.message); }
-    finally{ b.disabled=false; b.textContent=oudeTekst; }
+  async function vraag(bevestigd,vanaf){
+    const r=await fetch(WORKER+"/amerika/qb/boeken",{method:"POST",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+      body:JSON.stringify({wireId:id,bevestigd:bevestigd,vanaf:vanaf||0,user:(localStorage.getItem("fp.email")||"")})});
+    const j=await r.json().catch(()=>null);
+    if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+    return j;
   }
+  // Bij "alle batches" komen ze in blokjes binnen; alles achter elkaar plakken.
+  async function alles(bevestigd){
+    let vanaf=0, batches=[], eerste=null;
+    while(vanaf!=null){
+      const j=await vraag(bevestigd,vanaf);
+      if(!eerste) eerste=j;
+      batches=batches.concat(j.batches||[]);
+      vanaf=j.volgende;
+      if(vanaf!=null&&b) b.textContent=(bevestigd?"boeken… ":"controleren… ")+batches.length+"/"+(j.totaalBatches||"?");
+    }
+    return Object.assign({},eerste,{batches:batches});
+  }
+  const bat=(x)=>"batch "+(x.datum||x.id);
+  try{
+    const proef=await alles(false);
+    const scheef=(proef.batches||[]).filter(x=>x.afwijking);
+    const goed=(proef.batches||[]).filter(x=>!x.afwijking&&x.teBoeken>0);
+    const af=(proef.batches||[]).filter(x=>!x.afwijking&&!x.teBoeken);
+
+    const uitlegScheef=scheef.map(x=>
+      "  • "+bat(x)+" ("+usd(x.bruto)+")\n"+x.redenen.map(r=>"      - "+r).join("\n")).join("\n\n");
+
+    if(!goed.length){
+      alert("Er valt nu niets te boeken.\n\n"+
+        (af.length?(af.length+" batch(es) zijn al verwerkt.\n\n"):"")+
+        (scheef.length?("Deze batch(es) sluiten niet aan en worden daarom niet geboekt:\n\n"+uitlegScheef):""));
+      return;
+    }
+    const regelsVan=(x)=>x.regels.filter(r=>r.status==="klaar om te boeken")
+      .map(r=>"      "+(r.factuur?("factuur "+r.factuur):r.naam)+" — "+usd(r.bedrag)+" op order "+r.order).join("\n");
+    const akkoord=confirm(
+      "Boeken in dagboek Bank Passion Spas South TX (grootboek 1160)\n\n"+
+      goed.map(x=>
+        bat(x)+"\n"+
+        "    orders afboeken (bruto): "+usd(x.bruto)+"\n"+
+        "    bankkosten op "+(proef.kostenGrootboek||"4630")+": "+usd(x.kosten)+"\n"+
+        "    blijft op 1160 staan (netto): "+usd(x.netto)+"\n"+
+        regelsVan(x)).join("\n\n")+
+      "\n\n"+
+      (scheef.length?("Niet meegenomen, deze sluiten niet aan:\n\n"+uitlegScheef+"\n\n"):"")+
+      "De orders worden voor hun volledige bruto bedrag afgeboekt; de bankkosten gaan als aparte regel op "+
+      (proef.kostenGrootboek||"4630")+". Daarna staat op 1160 precies de netto bankontvangst en komt die rekening "+
+      "op nul zodra Osman het afschrift boekt.\n\n"+
+      "LET OP: de kostenplaats "+(proef.kostenplaats||"Spa Houston USA")+" kan niet via de koppeling worden meegegeven.\n"+
+      "Die moet je er in Logic4 zelf bij zetten op die kostenregel.\n\n"+
+      "Doorgaan?");
+    if(!akkoord) return;
+    b.textContent="boeken…";
+    const echt=await alles(true);
+    const gedaan=(echt.batches||[]).filter(x=>!x.afwijking&&x.geboekt>0);
+    const mis=(echt.batches||[]).filter(x=>x.fout>0||((x.bankkosten||{}).status==="fout"));
+    const totaal=gedaan.reduce((n,x)=>n+(x.bruto||0),0);
+    const kosten=gedaan.reduce((n,x)=>n+(((x.bankkosten||{}).status==="geboekt")?x.kosten:0),0);
+    if(window.fpLog) window.fpLog("batch-geboekt-op-1160",gedaan.length+" batch(es), "+usd(totaal));
+    alert(gedaan.length+" batch(es) geboekt: "+
+      gedaan.reduce((n,x)=>n+x.geboekt,0)+" order(s) afgeboekt voor samen "+usd(totaal)+"."+
+      (kosten?("\n\nBankkosten "+usd(kosten)+" op grootboek "+(echt.kostenGrootboek||"4630")+".\n\n"+
+        "NOG DOEN IN LOGIC4: zet op die kostenregel(s) de kostenplaats "+
+        (echt.kostenplaats||"Spa Houston USA")+". Dat kan de koppeling niet meegeven."):"")+
+      (mis.length?("\n\nNiet gelukt:\n"+mis.map(x=>"  • "+bat(x)+": "+
+        x.regels.filter(r=>r.status==="fout").map(r=>(r.factuur||r.naam)+" "+(r.uitleg||"")).join("; ")+
+        (((x.bankkosten||{}).status==="fout")?(" bankkosten: "+x.bankkosten.uitleg):"")).join("\n")):""));
+    await audLoadFacturen(); audRender();
+  }catch(e){ alert("Boeken mislukte: "+e.message); }
+  finally{ b.disabled=false; b.textContent=oudeTekst; }
+}
 
 /* De bestaande orders alsnog hun bedragen geven.
    ═══════════════════════════════════════════════════════════════════════
@@ -1522,7 +1542,7 @@ function audRenderWachtrij(){
         /* Alles in één keer. Gerrit (7 sep 2026): "Is het ook mogelijk dat
            Osman straks alle bedragen in 1x boekt?" Dit is dezelfde boeking als
            de knop per wire, alleen over alle wires tegelijk. */
-        "<button class='btn' type='button' data-boek='alle' title='De facturen van álle wires afboeken op 1160'>alles boeken op 1160</button>"+
+        "<button class='btn' type='button' data-boek='alle' title='Alle batches controleren en boeken op 1160'>alles boeken op 1160</button>"+
       "</div>"+
     "</div>"+
     /* Osman moet dit weten zonder een venster te hoeven openen, dus het staat
@@ -1543,10 +1563,13 @@ function audRenderWachtrij(){
       "klikken, bijvoorbeeld nadat je nieuwe facturen hebt geaccordeerd."+
     "</div>"+
     "<div class='status-msg' style='margin:0 0 12px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d'>"+
-      "<b>Bij het boeken op 1160:</b> de bankkosten van een wire gaan als aparte regel op grootboek "+
-      "<b>4630</b> (Bankrente en kosten), zodat er op 1160 precies overblijft wat er op de bank binnenkwam. "+
-      "De kostenplaats <b>Spa Houston USA</b> kan de koppeling niet meegeven &mdash; die moet er in Logic4 "+
-      "met de hand bij op die kostenregel."+
+      "<b>Zo wordt een batch geboekt.</b> De orders worden afgeboekt voor het <b>volledige</b> factuurbedrag. "+
+      "De bankkosten gaan als aparte regel op grootboek <b>4630</b>. Daarna staat op 1160 precies het bedrag "+
+      "dat op de bank is binnengekomen, en komt die rekening op nul zodra jij het afschrift boekt."+
+      "<br>Sluit een batch niet aan (bruto min bankkosten is niet het ontvangen bedrag), of ontbreekt er een "+
+      "Logic4-order, dan wordt die batch <b>niet</b> geboekt maar als afwijking getoond."+
+      "<br>De kostenplaats <b>Spa Houston USA</b> kan de koppeling niet meegeven. Die zet je er in Logic4 zelf "+
+      "bij op de kostenregel."+
     "</div>"+
     "<p class='lead' style='font-size:12px;margin:0 0 12px'>Voor deze facturen is een Logic4-order aangemaakt. Ze blijven hier staan tot de betaling is gekoppeld — vink dan <b>Verwerkt in Logic4</b> aan. Het vinkje geldt ook voor dezelfde factuur in het wire-overzicht hieronder.</p>"+
     "<div class='tablewrap'><table class='grid'><thead><tr>"+
@@ -1594,6 +1617,59 @@ function audSoortPill(s){
   if(s==="factuur") return "<span class='pill' style='background:#dcfce7;color:#15803d'>factuur</span>";
   return "<span class='pill'>overig</span>";
 }
+/* Sluit een batch aan?
+   ═══════════════════════════════════════════════════════════════════════
+   Osman (8 sep 2026): "Belangrijk is verder dat de automatisering controleert
+   of per batch geldt: bruto factuurbedragen - bankkosten = netto ontvangen
+   bankbetaling. Als deze aansluiting niet klopt of als een ordernummer niet
+   gevonden wordt, moet de batch niet automatisch worden verwerkt maar als
+   afwijking worden weergegeven."
+
+   De worker doet dezelfde som nog een keer voordat er echt geboekt wordt; dit
+   is er zodat je het ziet zonder ergens op te hoeven klikken. */
+const AUD_GELD=["factuur","overig","balance"];
+function audNaamSleutel(x){ return String(x||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); }
+function audFactuurVan(r){
+  const uit=String(r.factuur||"").trim();
+  if(uit) return uit;
+  const m=String(r.naam||"").trim().match(/^(\d{4})(?!\d)/);
+  if(m) return m[1];
+  /* Audrey schrijft soms alleen de klantnaam ("Michigan Swim Pools 75,55").
+     Staat er in QuickBooks precies één factuur van die klant met precies dat
+     bedrag, dan is het die. Bij meer dan één kandidaat wordt er niets geraden;
+     de worker doet dezelfde controle nog een keer voor het boeken. */
+  const bedrag=Number(r.kolom1)||0, naam=audNaamSleutel(r.naam);
+  if(!naam||!bedrag) return "";
+  const eerste=naam.split(" ")[0];
+  if(!eerste||eerste.length<3) return "";
+  const raak=qbInvoices.filter(x=>{
+    const k=audNaamSleutel(x.klant);
+    return Math.abs((Number(x.totaal)||0)-bedrag)<0.02 &&
+      (k.indexOf(naam)===0||naam.indexOf(k)===0||k.split(" ")[0]===eerste);
+  });
+  return raak.length===1?String(raak[0].docNr):"";
+}
+function audBatchCheck(w){
+  const c2=n=>Math.round((Number(n)||0)*100)/100;
+  const geld=(w.regels||[]).filter(r=>AUD_GELD.indexOf(String(r.soort||""))>=0);
+  const tot=(w.regels||[]).find(r=>String(r.soort||"")==="totaal");
+  const bruto=c2(geld.reduce((n,r)=>n+(Number(r.kolom1)||0),0));
+  const kosten=c2(geld.reduce((n,r)=>n+Math.abs(Number(r.kolom2)||0),0));
+  const netto=tot&&tot.kolom3!=null?c2(tot.kolom3):null;
+  const redenen=[];
+  if(netto===null) redenen.push("er staat geen totaalregel met een ontvangen bedrag bij");
+  else if(Math.abs(c2(bruto-kosten)-netto)>0.005)
+    redenen.push("bruto "+usd(bruto)+" min bankkosten "+usd(kosten)+" is "+usd(c2(bruto-kosten))+", en er is "+usd(netto)+" ontvangen");
+  const geenNr=geld.filter(r=>!audFactuurVan(r));
+  if(geenNr.length) redenen.push(geenNr.length+" regel(s) zonder factuurnummer: "+geenNr.map(r=>r.naam).join(", "));
+  const geenOrder=geld.filter(r=>{
+    const nr=audFactuurVan(r); if(!nr) return false;
+    const q=qbInvoices.find(x=>String(x.docNr)===String(nr));
+    return !(q&&q.logic4Order);
+  });
+  if(geenOrder.length) redenen.push("nog geen Logic4-order voor "+geenOrder.map(r=>audFactuurVan(r)).join(", "));
+  return {bruto:bruto,kosten:kosten,netto:netto,redenen:redenen,klopt:redenen.length===0};
+}
 function audRender(){
   const box=document.getElementById("audList");
   if(!wiresData.wires.length){ box.innerHTML="<div class='card'><p class='lead'>Nog geen wire-overzichten ingelezen. Upload hierboven Audrey's mail (.eml).</p></div>"; return; }
@@ -1617,7 +1693,7 @@ function audRender(){
            de dag van de betaling: Chantal (video, 30 aug 2026) "dit is geen wire,
            want ik heb 'm vandaag ingelezen; dat zegt niet dat de betaling ook van
            vandaag is." */
-        "<h3 style='margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap'>Wire van "+
+        "<h3 style='margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap'>Batch van "+
           "<input type='date' class='audDatum' data-id='"+esc(w.id)+"' value='"+esc(String(w.datum||"").slice(0,10))+"' "+
           "title='Datum van de betaling; pas hem aan als die afwijkt van de dag van inlezen' "+
           "style='border:1px solid var(--border);border-radius:7px;padding:3px 7px;font:inherit;font-size:14px'>"+
@@ -1628,9 +1704,21 @@ function audRender(){
              1160 boeken, zodat wij in het bankdagboek ook op 1160 boeken en
              elkaar gaan kruisen." Eerst altijd een proef; pas na akkoord gaat
              er iets de boekhouding in. */
-          "<button class='btn' type='button' data-boek='"+esc(w.id)+"' title='De facturen van deze wire afboeken in dagboek Bank Passion Spas South TX (grootboek 1160)'>boeken op 1160</button>"+
+          "<button class='btn' type='button' data-boek='"+esc(w.id)+"' title='Deze batch controleren en boeken in dagboek Bank Passion Spas South TX (grootboek 1160)'>boeken op 1160</button>"+
           "<button class='btn' type='button' data-del='"+esc(w.id)+"'>verwijderen</button>"+
         "</div></div>"+
+      (function(){
+        // De aansluiting van deze batch, meteen zichtbaar.
+        const ct=audBatchCheck(w);
+        return ct.klopt
+          ? "<div class='status-msg' style='margin:0 0 10px;background:#dcfce7;color:#166534;border:1px solid #86efac'>"+
+            "<b>Sluit aan.</b> Orders afboeken "+esc(usd(ct.bruto))+", bankkosten "+esc(usd(ct.kosten))+
+            " op 4630, blijft op 1160 "+esc(usd(ct.netto))+"."+
+            "</div>"
+          : "<div class='status-msg' style='margin:0 0 10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5'>"+
+            "<b>Afwijking, deze batch wordt niet geboekt.</b><ul style='margin:6px 0 0;padding-left:18px'>"+
+            ct.redenen.map(r=>"<li>"+esc(r)+"</li>").join("")+"</ul></div>";
+      })()+
       "<p class='lead' style='font-size:12px;margin:0 0 10px'>Bestand: "+esc(w.bestand||"")+" · ingelezen "+esc(datumNL(w.ts))+"</p>"+
       "<div class='tablewrap'><table class='grid'><thead><tr>"+
         "<th>Regel</th><th>Factuur</th><th>Soort</th><th style='text-align:right'>Amount invoice</th><th style='text-align:right'>Bankkosten</th><th style='text-align:right'>Totaal</th><th>Verwerkt in Logic4</th></tr></thead><tbody>"+
@@ -1676,10 +1764,10 @@ function audRender(){
      niets. Dat komt hier op het scherm, met per factuur wat er gebeurt en wat
      er niet kan. Pas als iemand dan op akkoord klikt gaat het echt.
 
-     De bankkosten staan er apart bij en worden NIET meegeboekt. Op de wire van
-     25 augustus is dat 543,40 op 60.225,53 aan facturen; waar die kosten heen
-     moeten bepaalt Osman, en tot die tijd is zichtbaar maken beter dan ergens
-     onderbrengen. */
+     De orders gaan er voor hun volle bruto bedrag af en de bankkosten als
+     aparte regel op 4630. Op de batch van 25 augustus is dat 60.225,53 aan
+     orders en 543,40 aan kosten, zodat er 59.682,13 op 1160 overblijft: precies
+     wat er op de bank binnenkwam. */
   box.querySelectorAll("[data-boek]").forEach(b=>b.addEventListener("click",()=>audBoekKnop(b)));
   box.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{
     if(!confirm("Dit wire-overzicht verwijderen? De vinkjes gaan ook weg.")) return;

@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "amerika.html", soort: "beter",
+      titel: "Batches uit Amerika sluiten nu eerst aan",
+      wat: "Een batch wordt pas geboekt als de som klopt: de factuurbedragen min de ingehouden bankkosten moeten precies zijn wat er op de bank binnenkwam, en elke factuur moet een Logic4-order hebben. Klopt er iets niet, dan blijft die batch staan met erbij wat eraan ontbreekt. De orders gaan er voor hun volledige bedrag af en de bankkosten als aparte regel, zodat er nooit meer twee keer bankkosten worden afgetrokken. Staat een batch er per ongeluk twee keer in, dan zegt het scherm dat ook.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "labels.html", soort: "beter",
       titel: "Het label toont nu het model en het Fonteyn-artikelnummer",
       wat: "Op het label stond de kale fabriekscode als titel en bij Art.nr. Fonteyn een streepje. Er staat nu bovenaan de volledige omschrijving, zoals 'Bliss Spa | Sterling White with GREY/oak trim', met het Fonteyn-artikelnummer erbij. Dat wordt opgezocht met de kleur erbij, want dezelfde fabriekscode bestaat in meerdere kleuren en elke kleur is een eigen artikelnummer.",
