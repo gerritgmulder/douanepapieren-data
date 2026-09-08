@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
+      titel: "25 spa's stonden onder de verkeerde naam op een schip",
+      wat: "Op zending 3332-6&3342-1 stonden 10 Soulmates die Reboots zijn, 5 Ecstatic Wave die Ecstatic Mighty Wave zijn en 10 Mallorca Superior die Blackpool zijn. Die invoice was ingelezen voordat die codes goed werden herkend. Rechtgezet, dus de voorraad onderweg klopt weer per model.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "labels.html", soort: "nieuw",
       titel: "De containers van 3332-6&3342-1 staan klaar",
       wat: "Tien containers met samen 131 baden staan bij Inkomende goederen, elk met hun eigen baden en trackingnummers. Klik een container aan en print de labels.",
