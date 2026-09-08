@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "labels.html", soort: "hersteld",
+      titel: "Labels printen per container",
+      wat: "Jazzi levert de packing list als een tabblad per container, en zo'n bestand werd helemaal niet ingelezen: de containerlijst bij Inkomende goederen bleef leeg. Nu komt elke container er apart in te staan met zijn eigen baden, zodat je per container in één keer de labels kunt printen. Losse onderdelen tellen niet meer als bad mee.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "amerika.html", soort: "nieuw",
       titel: "Zie wat er onderweg is naar Houston",
       wat: "Bovenaan Voorraad Houston staat nu elke bestelling die je bij Containers uit een proforma hebt aangemaakt. Zolang er geen commercial invoice bij zit staat hij onder In productie; upload je die, dan schuift hij door naar Onderweg en kun je zelf invullen wanneer je hem in Houston verwacht.",

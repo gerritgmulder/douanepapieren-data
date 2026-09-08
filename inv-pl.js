@@ -291,16 +291,136 @@
   }
 
   /* ── Het geheel ──────────────────────────────────────────────────── */
+  /* ── Een tabblad dat zélf één container is ──────────────────────────
+     Manon (8 sep 2026): "Ik wil per container de labels kunnen printen. Dus
+     niet per Commercial Invoice, maar per packing list per container. Eerste
+     tabblad is de CI, de andere tabbladen zijn de PL per container."
+
+     Zo levert Jazzi het ook aan: één tabblad per container, met het
+     containernummer als naam van het tabblad. Nergens staat het woord
+     "packing list", en daar liep de herkenning op stuk - er werd niets
+     bewaard en de labeltegel bleef leeg.
+
+     Een blad telt als container als de naam een containernummer is (vier
+     letters, zeven cijfers) of als er een regel "CONTAINER NUMBER" in staat,
+     én er een koprij met de spa-regels op staat. */
+  var CONTAINERNR = /\b([A-Z]{4}\s?\d{7})\b/;
+  function containerVanBlad(blad) {
+    var uitNaam = String(blad.naam || "").toUpperCase().match(/^([A-Z]{4}\d{7})$/);
+    if (uitNaam) return uitNaam[1];
+    var kop = (blad.rijen || []).slice(0, 20).map(rijTekst).join(" ");
+    if (!/container\s*number/i.test(kop)) return null;
+    var m = kop.toUpperCase().match(CONTAINERNR);
+    return m ? m[1].replace(/\s/g, "") : null;
+  }
+  function isContainerBlad(blad) {
+    if (!containerVanBlad(blad)) return false;
+    return zoekKop(blad.rijen || [], ["spa code", "shell color", "product description", "qty"], 30) >= 0;
+  }
+
+  /* De spa-regels van zo'n containerblad. Eén regel per soort bad, met het
+     trackingnummer erbij: dat staat op het label en waarmee zoekt Manon. */
+  function leesContainerBlad(blad) {
+    var rijen = blad.rijen || [];
+    var nummer = containerVanBlad(blad);
+    var kopR = zoekKop(rijen, ["spa code", "shell color", "product description", "qty"], 30);
+    if (kopR < 0) return null;
+    var kop = rijen[kopR];
+    var c = {
+      tracking: kolomVan(kop, ["tracking"]),
+      code:     kolomVan(kop, ["spa code", "jazzi spa"]),
+      shell:    kolomVan(kop, ["shell color", "shell colour"]),
+      kast:     kolomVan(kop, ["cabinet", "cover color", "cover colour"]),
+      naam:     kolomVan(kop, ["product description", "description"]),
+      aantal:   kolomVan(kop, ["qty", "quantity"]),
+      colli:    kolomVan(kop, ["ctn"]),
+      maat:     kolomVan(kop, ["dimension"]),
+      netto:    kolomVan(kop, ["n.w"]),
+      bruto:    kolomVan(kop, ["g.w"]),
+    };
+    var zegel = "";
+    for (var z = 0; z < Math.min(rijen.length, 25); z++) {
+      var t = rijTekst(rijen[z]);
+      var ms = t.match(/\b(HL[A-Z0-9]{6,})\b/);
+      if (/seal/i.test(rijTekst(rijen[Math.max(0, z - 1)])) && ms) { zegel = ms[1]; break; }
+    }
+    var colli = [], laatsteTracking = "", overig = 0;
+    for (var r = kopR + 1; r < rijen.length; r++) {
+      var rr = rijen[r] || [];
+      var naam = tekst(rr[c.naam]);
+      var aantal = getal(rr[c.aantal]);
+      if (!naam || !aantal) continue;
+      if (/^total/i.test(naam)) continue;
+      /* Het trackingnummer staat alleen op de eerste regel van een bad; de
+         cover eronder hoort bij hetzelfde nummer. */
+      var tr = tekst(rr[c.tracking]); if (tr) laatsteTracking = tr;
+      /* Alleen de baden. Een cover hoort bij het bad erboven en krijgt geen
+         eigen label. Onder de baden staan bovendien losse onderdelen zonder
+         spa-code ("100 Relax" 28x, "JASK50" 100x, waterfalls); die telden mee
+         en dan kwamen er 176 baden in één container te staan, wat niet kan.
+         Een bad heeft altijd een spa-code én een omschrijving die zegt dat
+         het een bad is. */
+      if (/cover/i.test(naam)) continue;
+      var spaCode = tekst(rr[c.code]).split("\n")[0].trim();
+      if (!spaCode) { overig += aantal; continue; }
+      if (!/bathtub|bath tub|spa\b|swim/i.test(naam)) { overig += aantal; continue; }
+      colli.push({
+        tracking: laatsteTracking,
+        artikel: spaCode,
+        omschrijving: naam,
+        kleur: tekst(rr[c.shell]),
+        kast: tekst(rr[c.kast]),
+        aantal: aantal,
+        colli: getal(rr[c.colli]) || aantal,
+        maat: tekst(rr[c.maat]),
+        netto: getal(rr[c.netto]),
+        bruto: getal(rr[c.bruto]),
+        container: nummer,
+      });
+    }
+    if (!colli.length) return null;
+    return { nummer: nummer, zegel: zegel, colli: colli, overig: overig,
+             stuks: colli.reduce(function (n, x) { return n + (Number(x.aantal) || 0); }, 0) };
+  }
+
   function isInvPl(bladen) {
     var heeftInv = false, heeftPak = false;
     for (var i = 0; i < bladen.length; i++) {
       if (isInvoiceBlad(bladen[i].rijen)) heeftInv = true;
       if (isPackingBlad(bladen[i].rijen)) heeftPak = true;
+      // Een tabblad per container telt óók als packing list; zie hierboven.
+      if (isContainerBlad(bladen[i])) heeftPak = true;
     }
     return heeftInv && heeftPak;
   }
 
   function lees(bladen) {
+    /* Levert de fabriek een tabblad per container, dan is dat de indeling die
+       we volgen: dat is precies wat Manon nodig heeft om per container te
+       printen. De gewone weg (één invoice + één packing list) blijft eronder
+       staan voor de fabrieken die het zo aanleveren. */
+    var perContainer = [];
+    for (var q = 0; q < bladen.length; q++) {
+      if (!isContainerBlad(bladen[q])) continue;
+      var cc = leesContainerBlad(bladen[q]);
+      if (cc) perContainer.push(cc);
+    }
+    if (perContainer.length) {
+      var invB = null;
+      for (var w = 0; w < bladen.length; w++) if (isInvoiceBlad(bladen[w].rijen)) { invB = bladen[w]; break; }
+      var inv0 = invB ? leesInvoice(invB.rijen) : { leverancier: "", nummer: "", vaart: "", meldingen: [] };
+      return { ok: true, leverancier: inv0.leverancier, nummer: inv0.nummer, vaart: inv0.vaart,
+               perContainerBladen: true,
+               containers: perContainer.map(function (c) {
+                 return { nummer: c.nummer, zegel: c.zegel, stuks: c.stuks, overig: c.overig, colli: c.colli,
+                          labels: c.colli.map(function (x) {
+                            return { tracking: x.tracking, artikel: x.artikel, omschrijving: x.omschrijving,
+                                     kleur: x.kleur, kast: x.kast, aantal: x.aantal, colli: x.colli,
+                                     container: c.nummer, maat: x.maat, bruto: x.bruto };
+                          }) };
+               }),
+               meldingen: inv0.meldingen || [] };
+    }
     var invBlad = null, pakBlad = null;
     for (var i = 0; i < bladen.length; i++) {
       if (!invBlad && isInvoiceBlad(bladen[i].rijen)) invBlad = bladen[i];
@@ -324,7 +444,7 @@
   }
 
   global.fpInvPl = {
-    lees: lees, isInvPl: isInvPl,
+    lees: lees, isInvPl: isInvPl, isContainerBlad: isContainerBlad, leesContainerBlad: leesContainerBlad,
     leesInvoice: leesInvoice, leesPacking: leesPacking,
     bouwContainers: bouwContainers, containersUit: containersUit,
   };
