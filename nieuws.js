@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Drie zendingen stonden ten onrechte op nul spa's",
+      wat: "De containers HLXU5649735, TEXU1543510 en TEXU1577043 stonden allemaal op 0 spa's. Op die facturen staan de codes met spaties eromheen (WS - PC08T) en daar viel de herkenning op af. Er zitten twee Turbine 8 Grand en een Turbine 7 Grand in, en die tellen nu weer mee als voorraad onderweg. Onderdelen als 'roller shutter for ...' worden niet meer als spa geteld.",
+    },
+
+    {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
       titel: "Grote proforma's gaan nu in één keer goed",
       wat: "Bij een proforma met veel regels kwam maar een deel in de inkooporder terecht en kreeg je een scherm vol foutmeldingen. Er kunnen namelijk maar een beperkt aantal regels per keer naar Logic4. Het dashboard doet ze nu in blokken van vijftien en vult de order aan, met de voortgang in de knop. Je hoeft niets anders te doen.",
     },

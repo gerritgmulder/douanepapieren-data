@@ -46,7 +46,13 @@
   // een omschrijving en geen artikelcode.
   // Let op de staart: WS-PC07A-T is één code, niet WS-PC07A. Zonder het
   // tweede streepje leest het dashboard een ander model dan er staat.
-  var CODE = /\b(W[SA]-[A-Z0-9]+(?:-[A-Z0-9]+)*)\b/i;
+  /* Spaties rond de streepjes mogen erin staan. Op de commercial invoices van
+     Foshan Gaoming Yuehua staat "WS - PC08T with roller shutter" en
+     "WS - 1103A Red cedar+ salt stone". Zonder die ruimte werd de code niet
+     herkend en kwam de hele zending op nul spa's te staan, terwijl WS-PC08T
+     gewoon de Turbine 8 Grand is (Chantal had drie van die zendingen op nul
+     staan: HLXU5649735, TEXU1543510 en TEXU1577043). */
+  var CODE = /\b(W[SA]\s*-\s*[A-Z0-9]+(?:\s*-\s*[A-Z0-9]+)*)\b/i;
 
   function schoon(s) { return String(s == null ? "" : s).replace(/\s+/g, " ").trim(); }
 
@@ -118,9 +124,15 @@
         na = s2; break;
       }
       var label = schoon(voor + " " + na);
-      var cm = label.match(CODE);
+      /* Een regel die een code alleen noemt om te zeggen waar hij bij hoort is
+         geen spa: "Roller shutter for WS - PC06ST", "Back for 1102A",
+         "Control panel for saunas". Zonder deze uitzondering telde er een
+         Turbine 6 Grand mee die niet in de container zat. */
+      var toebehoren = /^(roller\s*shutter|back|cover|control\s*panel|spare|parts?|lid|step|frame)\b.*\bfor\b/i.test(label);
+      var cm = toebehoren ? null : label.match(CODE);
       uit.push({
-        code: cm ? cm[1].toUpperCase() : null,
+        // De spaties eruit, anders vindt de codelijst hem alsnog niet.
+        code: cm ? cm[1].toUpperCase().replace(/\s+/g, "") : null,
         omschrijving: label,
         sectie: sectie,
         getallen: g,
