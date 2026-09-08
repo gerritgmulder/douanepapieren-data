@@ -119,6 +119,22 @@
        Houston in Logic4 bestaat hoort dit daaruit te komen; tot die tijd is
        dit een momentopname en dat moet er ook bij staan. -->
   <div id="tab-voorraad" class="hidden">
+    <!-- Wat er onderweg is naar Houston. Chantal (video, 8 sep 2026): de
+         proforma waar ze een inkooporder van heeft gemaakt hoort hier bovenaan
+         als 'in productie', en zodra de commercial invoice erbij is als
+         'onderweg', met een ETA die ze zelf invult. -->
+    <div class="card" id="zdKaart">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <h3 style="margin:0">Onderweg naar Houston</h3>
+        <span id="zdTel" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <p class="lead" style="font-size:12.5px;margin:8px 0 12px">Elke bestelling die je bij <b>Containers</b> uit een proforma hebt aangemaakt staat hier. Zolang er geen commercial invoice bij zit, staat hij <b>in productie</b>. Upload je die, dan schuift hij door naar <b>onderweg</b> en kun je de verwachte aankomst invullen.</p>
+      <div id="zdStatus" class="status-msg hidden" style="margin-bottom:10px"></div>
+      <div id="zdInProductie"></div>
+      <div id="zdOnderweg" style="margin-top:18px"></div>
+      <input type="file" id="zdBestand" accept=".xlsx,.xls,.pdf" style="display:none">
+    </div>
+
     <!-- Live uit Logic4. Tot 1 sep 2026 kwam deze tegel uit een telling die
          Chantal per mail stuurde; die telling wordt nu als beginvoorraad in
          Logic4 gezet. Zodra Osman een order afboekt klopt de stand vanzelf.
@@ -487,7 +503,123 @@ function vlTeken(){
   box.innerHTML=h;
 }
 
+/* ── Onderweg naar Houston ────────────────────────────────────────────
+   Chantal (video, 8 sep 2026): de proforma waar ze bij Containers een
+   inkooporder van heeft gemaakt hoort hier te staan als 'in productie', en
+   zodra de commercial invoice erbij zit als 'onderweg', met een ETA die ze
+   zelf invult. Er is voor Houston geen tracking zoals bij de schepen naar
+   Rotterdam, dus die datum komt met de hand.
+
+   Beide lijstjes komen uit dezelfde bestellingen die bij Containers zijn
+   aangemaakt; er is geen tweede administratie die uit de pas kan lopen. */
+let zdData=null, zdBezig=null;
+const ZD_URL=WORKER+"/data/voorraad-inkooporders";
+function zdKey(){ return localStorage.getItem("fp.teamkey")||""; }
+function zdMelding(soort,tekst){
+  const e=document.getElementById("zdStatus"); if(!e) return;
+  if(!tekst){ e.classList.add("hidden"); return; }
+  e.className="status-msg "+soort; e.textContent=tekst; e.classList.remove("hidden");
+}
+/* Alleen wat naar Houston gaat. De bestemming staat sinds 8 sep 2026 op de
+   bestelling; voor wat daarvoor is aangemaakt valt het terug op de
+   referentie, waar Chantal "to Houston" in zet. */
+function zdNaarHouston(ref,rec){
+  const b=String((rec&&rec.bestemming)||"");
+  if(b) return /texas|houston/i.test(b);
+  return /houston/i.test(String(ref));
+}
+async function zdLaad(){
+  try{
+    const r=await fetch(ZD_URL+"?t="+Date.now(),{headers:{"X-Fonteyn-Auth":zdKey()}});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    const j=await r.json();
+    zdData=Object.entries((j&&j.orders)||{}).filter(([ref,rec])=>zdNaarHouston(ref,rec))
+      .map(([ref,rec])=>Object.assign({ref},rec));
+    zdTeken();
+  }catch(e){
+    document.getElementById("zdInProductie").innerHTML=
+      "<div class='status-msg bad'>De bestellingen konden niet worden opgehaald: "+esc(e.message)+"</div>";
+  }
+}
+function zdRegelsTekst(rec){
+  const a=rec.artikelen||[];
+  if(!a.length) return rec.regels?(rec.regels+" regel"+(rec.regels===1?"":"s")):"";
+  const stuks=a.reduce((n,x)=>n+(Number(x.aantal)||0),0);
+  const namen=[...new Set(a.map(x=>x.model).filter(Boolean))];
+  return stuks+" stuk"+(stuks===1?"":"s")+(namen.length?" · "+namen.slice(0,4).join(", ")+(namen.length>4?" …":""):"");
+}
+function zdTeken(){
+  const inProd=document.getElementById("zdInProductie");
+  const onderweg=document.getElementById("zdOnderweg");
+  if(!inProd||!onderweg) return;
+  const alle=zdData||[];
+  const a=alle.filter(x=>!x.ci), b=alle.filter(x=>x.ci);
+  const tel=document.getElementById("zdTel");
+  if(tel) tel.textContent=alle.length?(a.length+" in productie · "+b.length+" onderweg"):"";
+
+  inProd.innerHTML="<h4 style='margin:0 0 8px'>In productie</h4>"+(a.length
+    ? "<div class='tablewrap'><table class='grid'><thead><tr><th>Proforma</th><th>Inkooporder</th><th>Inhoud</th><th>Besteld op</th><th></th></tr></thead><tbody>"+
+      a.map(x=>"<tr><td><b>"+esc(x.ref)+"</b>"+(x.leverancier?"<br><span style='font-size:11px;color:var(--muted)'>"+esc(x.leverancier)+"</span>":"")+"</td>"+
+        "<td>"+esc(x.buyOrderId||"—")+"</td><td style='font-size:12px'>"+esc(zdRegelsTekst(x))+"</td>"+
+        "<td style='font-size:12px'>"+esc(datumNL(x.ts))+"</td>"+
+        "<td><button class='btn sm zdUpload' data-ref='"+esc(x.ref)+"' type='button'>Commercial invoice uploaden</button></td></tr>").join("")+
+      "</tbody></table></div>"
+    : "<p class='lead' style='font-size:12.5px'>Niets in productie. Maak bij <b>Containers</b> een inkooporder van een proforma, dan verschijnt hij hier.</p>");
+
+  onderweg.innerHTML="<h4 style='margin:0 0 8px'>Onderweg</h4>"+(b.length
+    ? "<div class='tablewrap'><table class='grid'><thead><tr><th>Proforma</th><th>Inkooporder</th><th>Inhoud</th><th>Commercial invoice</th><th>Verwacht in Houston</th><th></th></tr></thead><tbody>"+
+      b.map(x=>"<tr><td><b>"+esc(x.ref)+"</b>"+(x.leverancier?"<br><span style='font-size:11px;color:var(--muted)'>"+esc(x.leverancier)+"</span>":"")+"</td>"+
+        "<td>"+esc(x.buyOrderId||"—")+"</td><td style='font-size:12px'>"+esc(zdRegelsTekst(x))+"</td>"+
+        "<td style='font-size:12px'>"+esc(x.ci.naam||"—")+"<br><span style='color:var(--muted);font-size:11px'>"+esc(datumNL(x.ci.ts))+"</span></td>"+
+        "<td><input type='date' class='zdEta' data-ref='"+esc(x.ref)+"' value='"+esc(x.eta||"")+"' style='padding:6px;font:inherit'></td>"+
+        "<td><button class='btn sm zdUpload' data-ref='"+esc(x.ref)+"' type='button'>vervangen</button></td></tr>").join("")+
+      "</tbody></table></div>"
+    : "<p class='lead' style='font-size:12.5px'>Nog niets onderweg. Upload de commercial invoice bij een bestelling hierboven.</p>");
+
+  document.querySelectorAll(".zdUpload").forEach(b2=>b2.addEventListener("click",()=>{
+    zdBezig=b2.dataset.ref;
+    const f=document.getElementById("zdBestand"); f.value=""; f.click();
+  }));
+  document.querySelectorAll(".zdEta").forEach(inp=>inp.addEventListener("change",()=>zdBewaar(inp.dataset.ref,{eta:inp.value||null})));
+}
+async function zdBewaar(ref,velden){
+  try{
+    const r=await fetch(WORKER+"/amerika/zending",{method:"POST",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":zdKey()},
+      body:JSON.stringify(Object.assign({ref,door:(localStorage.getItem("fp.email")||"")},velden))});
+    const j=await r.json();
+    if(!j.ok) throw new Error(j.error||"opslaan mislukt");
+    zdMelding("ok","Opgeslagen.");
+    setTimeout(()=>zdMelding("",""),2500);
+    await zdLaad();
+  }catch(e){ zdMelding("bad","Opslaan mislukt: "+e.message); }
+}
+/* De commercial invoice wordt hier alleen gelezen om te zien wát erin zit en
+   om hem bij de bestelling te hangen. De voorraadtelling van Houston komt uit
+   Logic4 zelf; die hoeft hier niets van te weten. */
+(function(){
+  const f=document.getElementById("zdBestand"); if(!f) return;
+  f.addEventListener("change",async ev=>{
+    const bestand=(ev.target.files||[])[0]; if(!bestand||!zdBezig) return;
+    zdMelding("info","Commercial invoice inlezen…");
+    let stuks=null, containers=[];
+    try{
+      if(/\.pdf$/i.test(bestand.name)&&window.fpCiPdf){
+        const doc=await window.fpCiPdf.leesBestand(bestand);
+        stuks=(doc.regels||[]).reduce((n,r)=>n+(Number(r.aantal)||0),0)||null;
+        if(doc.container) containers=[String(doc.container)];
+      }else if(window.XLSX){
+        const wb=XLSX.read(await bestand.arrayBuffer(),{type:"array"});
+        containers=wb.SheetNames.filter(n=>/^[A-Z]{4}\d{7}$/i.test(String(n).trim()));
+      }
+    }catch(e){ /* niet kunnen lezen mag het vastleggen niet tegenhouden */ }
+    await zdBewaar(zdBezig,{ci:{naam:bestand.name,stuks,containers}});
+    zdBezig=null; ev.target.value="";
+  });
+})();
+
 async function vhInit(){
+  zdLaad();
   if(!vlData) vlLaad(false);
   if(vhData) return vhTeken();
   const box=document.getElementById("vhLijst");

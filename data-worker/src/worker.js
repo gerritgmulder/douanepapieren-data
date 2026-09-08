@@ -3092,6 +3092,40 @@ async function ikoVoorstel(env, body) {
   };
 }
 
+/* POST /amerika/zending - de commercial invoice en de ETA bij een bestelling.
+   ═══════════════════════════════════════════════════════════════════════
+   Chantal (video, 8 sep 2026): "Eveneens moet ik bij voorraad Houston een knop
+   krijgen waar ik ook de commercial invoice kan uploaden. Zodra ik de
+   commercial invoice heb geupload, dan moet die zichtbaar zijn bij een kopje
+   onderweg. En dan moet ik ook de eta handmatig kunnen invullen."
+
+   Het blijft bij dezelfde bestelling staan die uit de proforma is ontstaan,
+   dus niet in een tweede lijst die uit de pas gaat lopen. Zolang er geen
+   commercial invoice is heet het 'in productie'; zodra die er is 'onderweg'.
+   De ETA komt met de hand, want voor Houston is er geen tracking zoals bij
+   de schepen naar Rotterdam. */
+async function amerikaZending(env, body) {
+  const ref = String(body.ref || "").trim();
+  if (!ref) return { ok: false, error: "geen referentie meegegeven" };
+  const data = (await env.FONTEYN_DATA.get("voorraad-inkooporders", { type: "json" })) || { orders: {} };
+  data.orders = data.orders || {};
+  const rec = data.orders[ref];
+  if (!rec) return { ok: false, error: "Voor " + ref + " staat geen bestelling in het dashboard." };
+
+  if (body.ci) {
+    rec.ci = { naam: String(body.ci.naam || "").slice(0, 200),
+               ts: new Date().toISOString(), door: body.door || null,
+               stuks: Number(body.ci.stuks) || null,
+               containers: Array.isArray(body.ci.containers) ? body.ci.containers.slice(0, 20) : [] };
+  }
+  if (body.eta !== undefined) rec.eta = body.eta ? String(body.eta).slice(0, 10) : null;
+  if (body.aangekomen !== undefined) rec.aangekomen = !!body.aangekomen;
+  if (body.verwijderCi) delete rec.ci;
+
+  await env.FONTEYN_DATA.put("voorraad-inkooporders", JSON.stringify(data));
+  return { ok: true, ref, zending: rec };
+}
+
 async function ikoAanmaken(env, body) {
   const crediteurId = Number(body.crediteurId);
   const regels = Array.isArray(body.regels) ? body.regels : [];
@@ -3176,8 +3210,23 @@ async function ikoAanmaken(env, body) {
   if (ref) {
     reeds.orders = reeds.orders || {};
     const eerder = reeds.orders[ref] || null;
-    reeds.orders[ref] = { buyOrderId, ts: new Date().toISOString(), door: body.door || null,
-      regels: (eerder && aanvullenOp ? (Number(eerder.regels) || 0) : 0) + toegevoegd.length };
+    /* Bestemming en inhoud erbij.
+       ═══════════════════════════════════════════════════════════════════
+       Chantal (video, 8 sep 2026) wil op het tabblad Voorraad Houston zien
+       welke proforma's in productie zijn: "die proforma invoice die ik heb
+       geupload, die moet zichtbaar worden onder voorraad Houston in een apart
+       vak waarin staat in productie." Daarvoor moet hier bewaard blijven
+       waar de lading heen gaat en wat erin zit; alleen een ordernummer zegt
+       niets op dat scherm. Een aanvulling houdt wat er al stond. */
+    reeds.orders[ref] = Object.assign({}, eerder, {
+      buyOrderId, ts: new Date().toISOString(), door: body.door || null,
+      bestemming: body.bestemming || (eerder && eerder.bestemming) || null,
+      leverancier: body.leverancier || (eerder && eerder.leverancier) || null,
+      artikelen: ((eerder && aanvullenOp ? (eerder.artikelen || []) : []))
+        .concat((body.regels || []).filter(r => r && r.artikelcode).map(r => ({
+          artikelcode: r.artikelcode, model: r.model || null,
+          kleur: r.kleur || null, aantal: Number(r.aantal) || 0 }))).slice(0, 120),
+      regels: (eerder && aanvullenOp ? (Number(eerder.regels) || 0) : 0) + toegevoegd.length });
     // Aanvullingen apart bijhouden: anders is later niet te zien dat er in twee
     // keer is besteld, en juist dát was hier het probleem.
     if (aanvullenOp) {
@@ -8992,6 +9041,11 @@ export default {
     }
 
     // Merzario-tracking (intern, team-sleutel) — zie handleTrack
+    if (url.pathname === "/amerika/zending" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const b = await request.json().catch(() => ({}));
+      return reply(200, await amerikaZending(env, b).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
     if (url.pathname === "/voorraad/order-uitleg" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const nr = String(url.searchParams.get("nr") || "").replace(/\D/g, "");

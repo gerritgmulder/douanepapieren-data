@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-08", bestand: "amerika.html", soort: "nieuw",
+      titel: "Zie wat er onderweg is naar Houston",
+      wat: "Bovenaan Voorraad Houston staat nu elke bestelling die je bij Containers uit een proforma hebt aangemaakt. Zolang er geen commercial invoice bij zit staat hij onder In productie; upload je die, dan schuift hij door naar Onderweg en kun je zelf invullen wanneer je hem in Houston verwacht.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "beter",
       titel: "Proforma's als pdf worden nu wel herkend",
       wat: "Bij een proforma in pdf zei het scherm 'onbekende fabriekscode', ook bij codes die het Dashboard allang kent. Die worden nu gewoon herkend: JOYSPA levert Calgary en Kenai op, Arnoswim de Hurricane. Sauna's en losse onderdelen blijven onbekend, daarvoor moeten de codes nog van Gretha komen.",
