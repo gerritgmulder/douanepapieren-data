@@ -3126,7 +3126,8 @@ async function amerikaZending(env, body) {
      Sinds 8 sep 2026 wordt bij het aanmaken bewaard wat er in een bestelling
      zit, maar wat daarvóór is aangemaakt mist dat. Chantal wil een regel
      kunnen openklappen en zien wat erin zit, ook bij die oudere. */
-  if (body.inhoudOphalen && rec.buyOrderId && !(rec.artikelen || []).length) {
+  if ((body.inhoudOphalen || body.inhoudOpnieuw) && rec.buyOrderId
+      && (body.inhoudOpnieuw || !(rec.artikelen || []).length)) {
     try {
       const token = await l4Token(env);
       /* De regels van een inkooporder komen niet mee in GetBuyOrders; daar is
@@ -3137,6 +3138,7 @@ async function amerikaZending(env, body) {
       });
       const j = await r.json().catch(() => null);
       const rijen = Array.isArray(j) ? j : ((j && j.Records) || []);
+      rec.regels = rijen.length;
       if (rijen.length) {
         const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
         const codeToModel = {};
@@ -3169,6 +3171,23 @@ async function ikoAanmaken(env, body) {
   if (!regels.length) return { ok: false, error: "geen regels" };
   if (regels.some(r => !r.artikelcode || !(Number(r.aantal) > 0)))
     return { ok: false, error: "elke regel heeft een artikelcode en een aantal groter dan nul nodig" };
+
+  /* Niet meer regels aannemen dan er in één keer bij Logic4 in passen.
+     ═══════════════════════════════════════════════════════════════════════
+     Elke orderregel is één verzoek aan Logic4, en een worker mag er op het
+     gratis plan vijftig per aanroep doen. Chantal stuurde er 48 in één keer
+     (proforma 3388, inkooporder 37989): de order werd aangemaakt, vijftien
+     regels kwamen erin en 33 vielen om met "Too many subrequests by single
+     Worker invocation". Halverwege omvallen is het ergste wat hier kan
+     gebeuren, want dan staat er een halve bestelling bij de fabriek.
+
+     Het scherm knipt het werk nu op in blokken en vult de order aan. Deze
+     grens is het vangnet daaronder: komt er toch een te grote partij binnen,
+     dan doen we er zoveel als veilig is en zeggen we hoeveel er nog over
+     zijn, in plaats van het te proberen en stuk te gaan. */
+  const MAX_REGELS = 20;
+  const restant = regels.length > MAX_REGELS ? regels.slice(MAX_REGELS) : [];
+  const teDoen = regels.slice(0, MAX_REGELS);
 
   // Dubbel aanmaken voorkomen: dezelfde proforma-referentie mag maar één keer.
   // Zonder dit levert een dubbele klik twee inkooporders op bij de fabriek.
@@ -3226,7 +3245,7 @@ async function ikoAanmaken(env, body) {
   }
 
   const toegevoegd = [], mislukt = [];
-  for (const r of regels) {
+  for (const r of teDoen) {
     try {
       await call("/v3/BuyOrders/AddBuyOrderRow", {
         BuyOrderId: buyOrderId,
@@ -3259,7 +3278,7 @@ async function ikoAanmaken(env, body) {
       bestemming: body.bestemming || (eerder && eerder.bestemming) || null,
       leverancier: body.leverancier || (eerder && eerder.leverancier) || null,
       artikelen: ((eerder && aanvullenOp ? (eerder.artikelen || []) : []))
-        .concat((body.regels || []).filter(r => r && r.artikelcode).map(r => ({
+        .concat(teDoen.filter(r => r && r.artikelcode).map(r => ({
           artikelcode: r.artikelcode, model: r.model || null,
           kleur: r.kleur || null, aantal: Number(r.aantal) || 0 }))).slice(0, 120),
       regels: (eerder && aanvullenOp ? (Number(eerder.regels) || 0) : 0) + toegevoegd.length });
@@ -3273,8 +3292,12 @@ async function ikoAanmaken(env, body) {
     }
     await env.FONTEYN_DATA.put("voorraad-inkooporders", JSON.stringify(reeds));
   }
-  return { ok: mislukt.length === 0, buyOrderId, toegevoegd: toegevoegd.length, mislukt,
-    aangevuld: !!aanvullenOp };
+  return { ok: mislukt.length === 0 && !restant.length, buyOrderId,
+    toegevoegd: toegevoegd.length, mislukt, aangevuld: !!aanvullenOp,
+    /* Wat er niet meer bij paste. Het scherm stuurt die in een volgend blok
+       met aanvullenOp; komt het van elders, dan is hier te zien wat er mist. */
+    restant: restant.length,
+    restantRegels: restant.slice(0, 60) };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

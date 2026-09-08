@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Grote proforma's gaan nu in één keer goed",
+      wat: "Bij een proforma met veel regels kwam maar een deel in de inkooporder terecht en kreeg je een scherm vol foutmeldingen. Er kunnen namelijk maar een beperkt aantal regels per keer naar Logic4. Het dashboard doet ze nu in blokken van vijftien en vult de order aan, met de voortgang in de knop. Je hoeft niets anders te doen.",
+    },
+
+    {
+      datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
       titel: "25 spa's stonden onder de verkeerde naam op een schip",
       wat: "Op zending 3332-6&3342-1 stonden 10 Soulmates die Reboots zijn, 5 Ecstatic Wave die Ecstatic Mighty Wave zijn en 10 Mallorca Superior die Blackpool zijn. Die invoice was ingelezen voordat die codes goed werden herkend. Rechtgezet, dus de voorraad onderweg klopt weer per model.",
     },

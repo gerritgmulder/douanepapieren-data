@@ -371,12 +371,40 @@ async function ikoAanmaken(){
     "\n\nDit maakt een inkooporder aan in Logic4. Er gaat niets naar de fabriek.")) return;
   knop.disabled=true; knop.textContent="Bezig…";
   try{
-    const r=await fetch(IKO_AANMAAK_URL,{method:"POST",
-      headers:{"Content-Type":"application/json","X-DP-Admin":C.adminKey()},
-      body:JSON.stringify({crediteurId:cred,regels:s.mee,referentie:ref,bestemming:C.bestemming,
-        overgeslagen:s.overgeslagen.map(r=>r.aantal+"x "+(r.model||r.code)),
-        eta:(document.getElementById("ikoEta").value||null),door:(C.email)})});
-    const j=await r.json().catch(()=>({}));
+    /* In blokken, want een worker mag per aanroep maar een beperkt aantal
+       verzoeken naar Logic4 doen.
+       ═══════════════════════════════════════════════════════════════════
+       Chantal, 8 sep 2026: inkooporder 37989 werd aangemaakt met 48 regels,
+       maar 33 daarvan kwamen er niet in: "Too many subrequests by single
+       Worker invocation". Elke orderregel is één verzoek aan Logic4, plus de
+       aanmelding en het aanmaken van de order zelf, en op het gratis plan
+       liggen er vijftig per aanroep. Bij 48 regels loopt dat dus altijd stuk,
+       en dat gebeurde stilzwijgend halverwege.
+
+       Het eerste blok maakt de order aan, elk volgend blok vult hem aan - via
+       dezelfde weg die er al was voor een proforma die in twee keer besteld
+       wordt. Vijftien per keer is ruim onder de grens. */
+    const BLOK=15;
+    const blokken=[]; for(let i=0;i<s.mee.length;i+=BLOK) blokken.push(s.mee.slice(i,i+BLOK));
+    let j=null, orderId=null, totaalToegevoegd=0, alleMislukt=[];
+    for(let b=0;b<blokken.length;b++){
+      if(blokken.length>1) knop.textContent="Bezig… blok "+(b+1)+" van "+blokken.length;
+      const body={crediteurId:cred,regels:blokken[b],referentie:ref,bestemming:C.bestemming,
+        overgeslagen:b===0?s.overgeslagen.map(r=>r.aantal+"x "+(r.model||r.code)):[],
+        eta:(document.getElementById("ikoEta").value||null),door:(C.email)};
+      if(b>0) body.aanvullenOp=orderId;
+      const r=await fetch(IKO_AANMAAK_URL,{method:"POST",
+        headers:{"Content-Type":"application/json","X-DP-Admin":C.adminKey()},
+        body:JSON.stringify(body)});
+      j=await r.json().catch(()=>({}));
+      if(b===0&&j.dubbel) break;                       // hieronder afgehandeld
+      if(!j.ok&&!j.buyOrderId) throw new Error((j.error||("HTTP "+r.status))+
+        (b>0?(" — de eerste "+totaalToegevoegd+" regel(s) staan wél in inkooporder "+orderId):""));
+      orderId=orderId||j.buyOrderId;
+      totaalToegevoegd+=Number(j.toegevoegd)||0;
+      if(j.mislukt&&j.mislukt.length) alleMislukt=alleMislukt.concat(j.mislukt);
+    }
+    if(j&&!j.dubbel) j={ok:!alleMislukt.length,buyOrderId:orderId,toegevoegd:totaalToegevoegd,mislukt:alleMislukt};
     if(j.dubbel){
       // Niet alleen melden dát het al bestaat, maar ook de uitweg aanbieden.
       ikoStatus("warn",j.error+" Wil je de regels van deze proforma aan die inkooporder toevoegen, gebruik dan de knop hieronder.");
