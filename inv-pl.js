@@ -116,11 +116,17 @@
     }
     return -1;
   }
+  /* Eerst het meest specifieke woord over alle kolommen, dan het volgende.
+     Zo wint "total cbm" van "cbm" als ze allebei op de regel staan; de kolom
+     CBM is per doos en Total CBM is voor de hele regel. Stond hier eerst
+     andersom (per kolom alle woorden), en dan bepaalde de volgorde van de
+     kolommen wat je kreeg in plaats van wat je bedoelde. */
   function kolomVan(rij, woorden) {
-    for (var c = 0; c < (rij || []).length; c++) {
-      var t = klein(rij[c]);
-      if (!t) continue;
-      for (var i = 0; i < woorden.length; i++) if (t.indexOf(woorden[i]) >= 0) return c;
+    for (var i = 0; i < woorden.length; i++) {
+      for (var c = 0; c < (rij || []).length; c++) {
+        var t = klein(rij[c]);
+        if (t && t.indexOf(woorden[i]) >= 0) return c;
+      }
     }
     return -1;
   }
@@ -177,21 +183,39 @@
   /* ── Het PACKING-blad ────────────────────────────────────────────── */
   function leesPacking(rijen) {
     var uit = { colli: [], totaal: null, meldingen: [] };
-    var kopR = zoekKop(rijen, ["packing", "gross weight", "measurement", "per packing"], 30);
+    /* De koprij herkennen. De afkortingen erbij, want niet elke fabriek
+       schrijft het voluit: Lodestone zet er "QTY (PCS) | CTNS | N.W(KGS) |
+       G.W(KGS) | Total CBM" boven en dan werd de tabel helemaal niet gevonden
+       (Chantal, 9 sep 2026, bestand LS6J323). */
+    var kopR = zoekKop(rijen, ["packing", "gross weight", "measurement", "per packing",
+                               "ctns", "g.w", "n.w", "qty (pcs)", "total cbm"], 30);
     if (kopR < 0) { uit.meldingen.push("Geen koprij op de packing list gevonden."); return uit; }
 
+    /* De kop kan over twee regels lopen. Bij Lodestone staan de aantallen en
+       gewichten op de ene regel en "ART. NO" en "Description of Goods" op de
+       regel eronder. Wie alleen naar één regel kijkt vindt de artikelkolom
+       niet, houdt een lege naam over en slaat elke regel over - dan komt er
+       nul uit een packing list die gewoon gevuld is. */
+    function kolomUitKop(woorden) {
+      for (var d = 0; d < 3 && kopR + d < rijen.length; d++) {
+        var k = kolomVan(rijen[kopR + d] || [], woorden);
+        if (k >= 0) return k;
+      }
+      return -1;
+    }
     var kop = rijen[kopR];
     var c = {
-      artikel:  kolomVan(kop, ["article", "品 名", "description"]),
-      colli:    kolomVan(kop, ["packages", "件 数", "packing  ("]),
-      perColli: kolomVan(kop, ["per packing", "每件台数", "pcs per"]),
-      aantal:   kolomVan(kop, ["quantity", "数 量"]),
-      bruto:    kolomVan(kop, ["total gross", "总毛"]),
-      netto:    kolomVan(kop, ["total net", "总净"]),
-      cbm:      kolomVan(kop, ["measurement", "尺 码", "cbm"]),
+      artikel:  kolomUitKop(["art. no", "art.no", "artikel", "article", "品 名", "description of goods", "description"]),
+      colli:    kolomUitKop(["packages", "件 数", "packing  (", "ctns"]),
+      perColli: kolomUitKop(["per packing", "每件台数", "pcs per"]),
+      aantal:   kolomUitKop(["quantity", "数 量", "qty"]),
+      bruto:    kolomUitKop(["total gross", "总毛", "total g.w"]),
+      netto:    kolomUitKop(["total net", "总净", "total n.w"]),
+      cbm:      kolomUitKop(["total cbm", "measurement", "尺 码", "cbm"]),
     };
 
     var container = null;   // op welke container slaan de volgende regels
+    var vorigArtikel = null;
     for (var r = kopR + 1; r < rijen.length; r++) {
       var rr = rijen[r] || [];
       var regel = rijTekst(rr);
@@ -206,15 +230,38 @@
       }
 
       var naam = tekst(rr[c.artikel >= 0 ? c.artikel : 1]);
-      if (!naam) continue;
-      if (/^total/i.test(naam)) {
+      if (/^total/i.test(naam) || /^total/i.test(tekst(rr[0]))) {
         uit.totaal = {
           colli: getal(rr[c.colli]), aantal: getal(rr[c.aantal]),
           bruto: getal(rr[c.bruto]), netto: getal(rr[c.netto]), cbm: getal(rr[c.cbm]),
         };
+        vorigArtikel = null;
         continue;
       }
       var colli = getal(rr[c.colli]);
+      /* Eén artikel over meerdere regels.
+         ═══════════════════════════════════════════════════════════════════
+         Bij Lodestone staat het artikelnummer alleen op de eerste regel van
+         een set; de dozen eronder hebben wel een omschrijving en een aantal
+         maar geen nummer meer. Zo'n regel overslaan kostte 66 van de 180
+         dozen: van GL9120-2 werden er 22 geteld terwijl er 88 in de container
+         zitten. Het nummer van de regel erboven telt dus door, zolang er een
+         aantal dozen op staat. */
+      var heeftTekst = rr.some(function (x) { return /[a-z]/i.test(tekst(x)); });
+      if (!naam && colli && vorigArtikel && heeftTekst) naam = vorigArtikel;
+      /* Een regel zonder enige tekst maar met aantallen is de subtotaalregel
+         van dit containerblok. Die telt niet als doos - anders staat het
+         aantal er twee keer in (222 in plaats van 111). */
+      if (!naam && colli && !heeftTekst) {
+        uit.totaal = {
+          colli: getal(rr[c.colli]), aantal: getal(rr[c.aantal]),
+          bruto: getal(rr[c.bruto]), netto: getal(rr[c.netto]), cbm: getal(rr[c.cbm]),
+        };
+        vorigArtikel = null;
+        continue;
+      }
+      if (!naam) continue;
+      if (c.artikel >= 0 && tekst(rr[c.artikel])) vorigArtikel = tekst(rr[c.artikel]);
       if (!colli) continue;
       uit.colli.push({
         artikel: naam,
@@ -227,6 +274,12 @@
         container: container && container.nummer ? container.nummer : "",
       });
     }
+    /* Wel een koprij maar geen enkele doos: dan staan de kolommen anders dan
+       verwacht. Dat hoort te worden gezegd, anders komt er stilletjes een
+       container zonder labels uit en denkt iedereen dat het gelukt is. */
+    if (!uit.colli.length)
+      uit.meldingen.push("De koprij van de packing list is gevonden, maar er zijn geen dozen uit te lezen. " +
+        "De kolommen staan anders dan verwacht; stuur dit bestand door.");
     return uit;
   }
 

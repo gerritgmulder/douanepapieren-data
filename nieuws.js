@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-09", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Tuinmeubelcontainers worden goed gelezen",
+      wat: "Bij de invoice van Lodestone stond de melding dat er twee containers zijn maar maar één containernummer. Op de packing list staan ze allebei gewoon, en die worden nu gebruikt. Ook de dozen komen er nu uit: 111 en 69 in plaats van niets, en een set die over meerdere regels staat telt volledig mee.",
+    },
+
+    {
       datum: "2026-09-09", bestand: "dealerportaal.html", soort: "nieuw",
       titel: "Zien of de e-mail eruit kan",
       wat: "Uitnodigingen, inloglinks en aanbetalingsverzoeken gaan per mail de deur uit. Met de knop 'Mail nakijken' zie je vooraf of dat kan, en achteraf van de laatste verzendingen of ze zijn aangenomen. Eerder zei het scherm altijd dat er een mail verstuurd was, ook als hij nooit is aangekomen.",

@@ -73,7 +73,30 @@
      gelezen - de naam van de fabriek stond ineens als artikel in de lijst. */
   var ARTNO = /^[A-Z]{1,4}\d[A-Z0-9.\-\/]{0,12}$/i;
 
-  function lees(rijen) {
+  /* De echte containernummers staan op de packing list.
+     ═══════════════════════════════════════════════════════════════════════
+     Chantal (9 sep 2026) kreeg bij LS6J323 de melding "er staan 2 containers
+     op deze invoice maar 1 verschillend(e) containernummer(s)". Dat klopte
+     voor de invoice: in de kolom Marks & Nos staat bij allebei de blokken
+     HPCU4872476. Op de packing list ernaast staan ze wél goed, elk boven zijn
+     eigen blok: "Container No.: /Seal No.:BSIU8223754/HLK6030351" en
+     "Container No.: /Seal No.: HPCU4872476/HLK6179279".
+
+     Die worden nu overgenomen. Alleen als de packing list er precies evenveel
+     noemt als er blokken zijn, want anders is niet te zeggen welke bij welk
+     blok hoort en is doorvragen beter dan gokken. */
+  function containersUitPacking(rijen) {
+    var uit = [];
+    for (var i = 0; i < (rijen || []).length; i++) {
+      var regel = (rijen[i] || []).map(schoon).join(" ");
+      if (!/container\s*no/i.test(regel)) continue;
+      var m = regel.match(CONTAINER);
+      if (m && uit.indexOf(m[1]) < 0) uit.push(m[1]);
+    }
+    return uit;
+  }
+
+  function lees(rijen, packingRijen) {
     var uit = { fabriek: null, invoiceNo: null, datum: null, containers: [], meldingen: [] };
 
     // De kop: fabriek, invoicenummer, datum. Staan in de eerste tien rijen.
@@ -146,8 +169,15 @@
     // Twee blokken met hetzelfde containernummer: dat kan niet kloppen.
     var nrs = uit.containers.map(function (c) { return c.container; }).filter(Boolean);
     if (uit.containers.length > 1 && new Set(nrs).size < uit.containers.length) {
-      uit.meldingen.push("Er staan " + uit.containers.length + " containers op deze invoice maar " +
-        (new Set(nrs).size || "geen") + " verschillend(e) containernummer(s). Vul het ontbrekende nummer zelf aan.");
+      // Eerst kijken of de packing list ze wél goed noemt.
+      var uitPak = containersUitPacking(packingRijen);
+      if (uitPak.length === uit.containers.length) {
+        for (var q = 0; q < uit.containers.length; q++) uit.containers[q].container = uitPak[q];
+        nrs = uitPak;
+      } else {
+        uit.meldingen.push("Er staan " + uit.containers.length + " containers op deze invoice maar " +
+          (new Set(nrs).size || "geen") + " verschillend(e) containernummer(s). Vul het ontbrekende nummer zelf aan.");
+      }
     }
     uit.totaalStuks = uit.containers.reduce(function (n, c) {
       return n + c.regels.reduce(function (m2, r2) { return m2 + (Number(r2.aantal) || 0); }, 0);
@@ -227,6 +257,7 @@
   }
 
   global.fpMeubelInvoice = { lees: lees, isMeubelInvoice: isMeubelInvoice, kolommen: kolommen,
+                             containersUitPacking: containersUitPacking,
                              leesBillOfLading: leesBillOfLading, koppelContainers: koppelContainers };
 
 })(typeof window !== "undefined" ? window : globalThis);

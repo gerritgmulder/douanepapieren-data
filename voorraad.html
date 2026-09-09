@@ -4535,8 +4535,13 @@ async function handleCIUpload(files,statusId){
         let meubel=null;
         try{
           const rijenA=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:""});
+          /* De packing list erbij. Daar staan de echte containernummers, en op
+             de invoice van Lodestone staat bij beide blokken hetzelfde nummer
+             in de kolom Marks & Nos. Zie de toelichting in meubel-invoice.js. */
+          const pakBlad=wb.SheetNames.find(n=>/packing/i.test(n));
+          const rijenP=pakBlad?XLSX.utils.sheet_to_json(wb.Sheets[pakBlad],{header:1,defval:""}):null;
           if(window.fpMeubelInvoice&&window.fpMeubelInvoice.isMeubelInvoice(rijenA))
-            meubel=window.fpMeubelInvoice.lees(rijenA);
+            meubel=window.fpMeubelInvoice.lees(rijenA,rijenP);
         }catch(e){ console.warn("[schepen] meubelinvoice lezen faalde:",e); }
         const recA={file:file.name,ref:ship.ref,refAuto:!!ship.refAuto,vessel:ship.vessel,containers:ship.containers,
                     models:{},modelColors:{},specials:[],total:0,
