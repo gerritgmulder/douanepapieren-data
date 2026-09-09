@@ -1649,6 +1649,7 @@ function audFactuurVan(r){
   });
   return raak.length===1?String(raak[0].docNr):"";
 }
+function c2v(n){ return Math.round((Number(n)||0)*100)/100; }
 function audBatchCheck(w){
   const c2=n=>Math.round((Number(n)||0)*100)/100;
   const geld=(w.regels||[]).filter(r=>AUD_GELD.indexOf(String(r.soort||""))>=0);
@@ -1660,15 +1661,25 @@ function audBatchCheck(w){
   if(netto===null) redenen.push("er staat geen totaalregel met een ontvangen bedrag bij");
   else if(Math.abs(c2(bruto-kosten)-netto)>0.005)
     redenen.push("bruto "+usd(bruto)+" min bankkosten "+usd(kosten)+" is "+usd(c2(bruto-kosten))+", en er is "+usd(netto)+" ontvangen");
-  const geenNr=geld.filter(r=>!audFactuurVan(r));
+  /* Een saldoregel hoort bij geen enkele factuur en houdt de batch niet tegen.
+     Osman (9 sep 2026) over de 3,20 van 31-07: "mag mee met 4630 bankkosten.
+     Klein bedrag." */
+  const saldo=geld.filter(r=>String(r.soort||"")==="balance");
+  const geenNr=geld.filter(r=>!audFactuurVan(r)&&String(r.soort||"")!=="balance");
   if(geenNr.length) redenen.push(geenNr.length+" regel(s) zonder factuurnummer: "+geenNr.map(r=>r.naam).join(", "));
   const geenOrder=geld.filter(r=>{
+    if(String(r.soort||"")==="balance") return false;
     const nr=audFactuurVan(r); if(!nr) return false;
     const q=qbInvoices.find(x=>String(x.docNr)===String(nr));
     return !(q&&q.logic4Order);
   });
   if(geenOrder.length) redenen.push("nog geen Logic4-order voor "+geenOrder.map(r=>audFactuurVan(r)).join(", "));
-  return {bruto:bruto,kosten:kosten,netto:netto,redenen:redenen,klopt:redenen.length===0};
+  /* Wat er op 4630 komt is het verschil tussen wat er op de orders gaat en de
+     netto ontvangst, precies zoals Osman het beschreef. Zo komt 1160 altijd op
+     nul uit, ook met een saldoregel ertussen. */
+  const opOrders=c2(bruto-saldo.reduce((n,r)=>n+(Number(r.kolom1)||0),0));
+  const naar4630=netto!==null&&redenen.length===0?c2(opOrders-netto):kosten;
+  return {bruto:bruto,kosten:naar4630,kostenMail:kosten,opOrders:opOrders,netto:netto,redenen:redenen,klopt:redenen.length===0};
 }
 function audRender(){
   const box=document.getElementById("audList");
@@ -1712,8 +1723,10 @@ function audRender(){
         const ct=audBatchCheck(w);
         return ct.klopt
           ? "<div class='status-msg' style='margin:0 0 10px;background:#dcfce7;color:#166534;border:1px solid #86efac'>"+
-            "<b>Sluit aan.</b> Orders afboeken "+esc(usd(ct.bruto))+", bankkosten "+esc(usd(ct.kosten))+
+            "<b>Sluit aan.</b> Orders afboeken "+esc(usd(ct.opOrders))+", bankkosten "+esc(usd(ct.kosten))+
             " op 4630, blijft op 1160 "+esc(usd(ct.netto))+"."+
+            (ct.opOrders!==ct.bruto?("<br>Daarvan gaat "+esc(usd(c2v(ct.bruto-ct.opOrders)))+
+              " niet naar een order (saldoregel); dat zit in de "+esc(usd(ct.kosten))+" op 4630."):"")+
             "</div>"
           : "<div class='status-msg' style='margin:0 0 10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5'>"+
             "<b>Afwijking, deze batch wordt niet geboekt.</b><ul style='margin:6px 0 0;padding-left:18px'>"+

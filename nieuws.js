@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-09", bestand: "amerika.html", soort: "beter",
+      titel: "Een saldoregel houdt een batch niet meer tegen",
+      wat: "Staat er in een batch een regel die bij geen enkele factuur hoort, zoals een saldo van een paar dollar, dan blijft de batch niet meer liggen. Dat bedrag gaat mee met de bankkosten op 4630, zodat rekening 1160 precies op nul uitkomt.",
+    },
+
+    {
       datum: "2026-09-09", bestand: "voorraad.html", soort: "hersteld",
       titel: "Tuinmeubelcontainers worden goed gelezen",
       wat: "Bij de invoice van Lodestone stond de melding dat er twee containers zijn maar maar één containernummer. Op de packing list staan ze allebei gewoon, en die worden nu gebruikt. Ook de dozen komen er nu uit: 111 en 69 in plaats van niets, en een set die over meerdere regels staat telt volledig mee.",

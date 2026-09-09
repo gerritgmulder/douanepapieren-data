@@ -6589,14 +6589,19 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
     redenen.push("Bruto " + qbGeld(bruto) + " min bankkosten " + qbGeld(kosten) + " is " + qbGeld(qbCent(bruto - kosten)) + ", en er is " + qbGeld(netto) + " ontvangen. Dat sluit niet aan.");
 
   const zonderNummer = uit.filter(r => r.status === "geen factuurnummer" && r.soort !== "balance");
+  /* Een saldoregel hoort bij geen enkele factuur en wordt dus niet op een
+     order afgeboekt. Osman (9 sep 2026) over de 3,20 van 31-07: "mag mee met
+     4630 bankkosten. Klein bedrag." Zo'n regel houdt de batch dus niet meer
+     tegen; het bedrag komt vanzelf op 4630 terecht doordat de kostenregel het
+     verschil is tussen wat er op de orders gaat en wat er is ontvangen. */
   const saldoRegels = uit.filter(r => r.status === "geen factuurnummer" && r.soort === "balance");
+  saldoRegels.forEach(r => { r.status = "saldoregel, gaat mee met de bankkosten"; });
   const zonderOrder = uit.filter(r => r.status === "geen Logic4-order");
   const dubbel = uit.filter(r => r.status === "meerdere orders");
   const raar = uit.filter(r => r.status === "bedrag is nul of negatief");
   if (zonderNummer.length)
     redenen.push(zonderNummer.length + " regel(s) hebben geen factuurnummer, en er is er ook niet één van te vinden op naam en bedrag: " + zonderNummer.map(r => r.naam + " " + qbGeld(r.bedrag)).join(", ") + ".");
-  if (saldoRegels.length)
-    redenen.push("Er staat een saldoregel in deze batch (" + saldoRegels.map(r => r.naam + " " + qbGeld(r.bedrag)).join(", ") + "). Die hoort bij geen enkele factuur, dus Osman moet zeggen waar dat bedrag heen gaat.");
+
   if (zonderOrder.length)
     redenen.push(zonderOrder.length + " factu(u)r(en) staan nog niet als order in Logic4: " + zonderOrder.map(r => r.factuur).join(", ") + ". Zet die eerst om bij Facturen.");
   if (dubbel.length)
@@ -6610,6 +6615,29 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
   const kostenSleutel = "bankkosten:" + wire.id;
   const kostenAl = !!((geboekt && geboekt.ids) || {})[kostenSleutel];
 
+  /* Het bedrag op 4630 is het verschil tussen wat er op de orders gaat en wat
+     er netto op de bank kwam. Dat is letterlijk wat Osman schreef ("het
+     verschil tussen het bruto factuurbedrag en de netto bankontvangst wordt
+     als bankkosten geboekt op 4630") en het heeft één groot voordeel boven het
+     optellen van de kostenkolom: 1160 komt dan altijd precies op nul uit, ook
+     als er een regel tussen zit die niet op een order kan.
+
+     Dat is bij de batch van 31-07 het geval. Daar staat een saldoregel van
+     3,20 die nergens bij hoort. Op de kostenkolom zou er 505,90 naar 4630
+     gaan en bleef er 3,20 op 1160 staan; nu gaat er 502,70 en klopt het. */
+  const opOrders = qbCent(uit.filter(r => r.status === "klaar om te boeken" || r.status === "al geboekt")
+                             .reduce((n, r) => n + r.bedrag, 0));
+  /* Alleen als de batch verder klopt. Ligt er nog een factuur zonder order,
+     dan gaat er toch niets weg en zou dit verschil een onzinbedrag zijn - het
+     mist immers de orders die er nog niet zijn. Dan blijft het bedrag uit de
+     mail staan, want dat is wat er op het scherm hoort. */
+  const kostenBoeken = (netto != null && !redenen.length) ? qbCent(opOrders - netto) : kosten;
+  /* Wijkt dat af van wat Audrey zelf aan kosten noemt, dan is er meer aan de
+     hand dan een saldoregel. Het verschil mag precies de saldoregels zijn. */
+  const saldoSom = qbCent(saldoRegels.reduce((n, r) => n + r.bedrag, 0));
+  if (netto != null && !redenen.length && Math.abs(qbCent(kosten - kostenBoeken - saldoSom)) > 0.005)
+    redenen.push("De bankkosten die op 4630 zouden komen (" + qbGeld(kostenBoeken) + ") sluiten niet aan op wat de mail noemt (" + qbGeld(kosten) + ").");
+
   return {
     id: String(wire.id), datum: wire.datum || "", bestand: wire.bestand || "",
     bruto, kosten, netto, brutoMail, kostenMail,
@@ -6620,8 +6648,9 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
     regels: uit,
     teBoeken: teBoeken.length,
     alGeboekt: alGeboekt.length,
-    klaar: !redenen.length && !teBoeken.length && (kostenAl || !(kosten > 0)),
-    bankkosten: { bedrag: kosten, sleutel: kostenSleutel, alGeboekt: kostenAl,
+    klaar: !redenen.length && !teBoeken.length && (kostenAl || !(kostenBoeken > 0)),
+    bankkosten: { bedrag: kostenBoeken, uitDeMail: kosten, saldoregels: saldoSom || undefined,
+                  sleutel: kostenSleutel, alGeboekt: kostenAl,
                   grootboek: AMERIKA_KOSTEN_GROOTBOEK, kostenplaats: AMERIKA_KOSTENPLAATS },
   };
 }
