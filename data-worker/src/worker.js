@@ -504,6 +504,40 @@ async function dpHandleAuth(request, env, url) {
 //   onTheWater = op het schip (bucket voorraad-schepen, uit commercial invoices)
 //   Minus de eigen portaal-claims (bucket dealer-requests, betaalde/open).
 // Een partner mag ALTIJD reserveren; niet-op-voorraad = backorder.
+/* De schaalkleur van een spa, los van de trim.
+   ═══════════════════════════════════════════════════════════════════════════
+   De fabriek schrijft "Mystic Mountain" of "Sterling Silver #30"; Logic4 noemt
+   dezelfde spa "Mystic Mountain with OAK" of "Sterling White with GREY/oak
+   trim". Op de schaal is dat prima te vergelijken, op de trim niet - die staat
+   niet op de commercial invoice.
+
+   Gerrit (7 sep 2026): "Sterling Silver #30 is inderdaad Sterling White." Dat
+   is de enige naam die de fabriek anders schrijft dan Logic4; de rest (Mystic
+   Mountain, Solid White, Espresso, Pearl Shadow) is gelijk. De Mallorca's
+   staan op de invoice als "WHITE ABS SHEET" en "BLACK ABS SHEET", en in Logic4
+   als "White" en "Black" - het woord ABS SHEET eraf en ze vallen op elkaar.
+
+   De langste naam wint, anders zou "Solid White" op "white" uitkomen.
+
+   Stond eerst binnen de leverforecast. Sinds 9 sep 2026 gebruikt ook de
+   voorraadtegel van het partnerportaal hem, om de aankomende spa's bij de
+   juiste kleur te kunnen zetten. Twee kopieën zouden na één aanpassing uit
+   elkaar gaan lopen en dan zegt de forecast iets anders dan het portaal. */
+const DP_SCHAALKLEUREN = ["sterling white", "mystic mountain", "desert horizon", "pearl shadow",
+                          "solid white", "pure white", "espresso", "white", "black"];
+const DP_SCHAAL_ANDERS = { "sterling silver": "sterling white" };
+function dpSchaalKleur(tekst) {
+  let t = String(tekst || "").toLowerCase()
+    .replace(/^customized\s*-\s*/, "")          // "CUSTOMIZED - Sterling White with …"
+    .replace(/#\s*\d+/g, " ")                    // het #30 achter Sterling Silver
+    .replace(/\babs sheet\b/g, " ")              // "WHITE ABS SHEET" → white
+    .replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
+  for (const [van, naar] of Object.entries(DP_SCHAAL_ANDERS))
+    if (t === van || t.startsWith(van + " ")) t = naar + t.slice(van.length);
+  for (const k of DP_SCHAALKLEUREN) if (t === k || t.startsWith(k + " ")) return k;
+  return null;
+}
+
 async function dpStockModels(env) {
   const hallen = await env.FONTEYN_DATA.get("voorraad-hallen", { type: "json" });
   const schepen = await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" });
@@ -512,7 +546,7 @@ async function dpStockModels(env) {
   const ledger = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
 
   const byModel = {};
-  const ensure = m => (byModel[m] = byModel[m] || { model: m, available: 0, physical: 0, onTheWater: 0, nextEta: null, variants: {} });
+  const ensure = m => (byModel[m] = byModel[m] || { model: m, available: 0, physical: 0, onTheWater: 0, nextEta: null, variants: {}, water: [] });
 
   // Seed vanuit de prijslijst: élk verkoopbaar model verschijnt (ook met 0
   // voorraad → backorder), zodat partners altijd kunnen bestellen.
@@ -540,8 +574,22 @@ async function dpStockModels(env) {
     if (ship.dealerContainer) continue;
     for (const [model, qty] of Object.entries(ship.models || {})) {
       const e = ensure(model);
-      e.onTheWater += Number(qty) || 0;
+      const totaal = Number(qty) || 0;
+      e.onTheWater += totaal;
       if (ship.eta && (!e.nextEta || ship.eta < e.nextEta)) e.nextEta = ship.eta;
+      /* Per schaalkleur, zodat de tegel bij elke kleur kan zeggen wanneer er
+         weer een aankomt. Kent de invoice de kleur van een deel van de lading
+         niet, dan gaat de rest in een bak zonder kleur - dezelfde verdeling
+         als in de leverforecast. */
+      const perKleur = (ship.modelColors || {})[model] || {};
+      let geteld = 0;
+      for (const [naam, aantal] of Object.entries(perKleur)) {
+        const n = Number(aantal) || 0;
+        if (n <= 0) continue;
+        geteld += n;
+        e.water.push({ eta: ship.eta || null, qty: n, kleur: dpSchaalKleur(naam) });
+      }
+      if (geteld < totaal) e.water.push({ eta: ship.eta || null, qty: totaal - geteld, kleur: null });
     }
   }
   // Portaal-claims aftrekken van 'available'. NIEUW (25 jul, Gerrit): een
@@ -803,6 +851,57 @@ async function dpHandleStock(env) {
        Gerrit (3 sep 2026): "9+29 is niet 30, en ik weet dan nog niet hoeveel er
        per kleur beschikbaar zijn." */
     m.vrijNu = m.variants.reduce((n, v) => n + (Number(v.free) || 0), 0);
+    /* WAT ER AANKOMT, PER KLEUR.
+       ═══════════════════════════════════════════════════════════════════════
+       Gerrit (9 sep 2026) tekende de ideale voorraadweergave voor:
+
+         Sterling White, GREY/oak      10 pcs available
+         Mystic Mountain, OAK/grey      3 pcs ETA 04/10
+         Midnight Espresso, OAK/grey    5 pcs ETA 25/10
+
+       Dus niet alleen wat er ligt, maar ook wanneer de volgende binnenkomt -
+       daar kan een partner een klant iets mee beloven.
+
+       Twee dingen houden dit eerlijk:
+
+       1. Alleen wat nog niet verkocht is. De schepen liggen vol met spa's die
+          al op een order staan. 'beschikbaar' is de hele stroom (hal + water −
+          alle reserveringen); wat daarvan niet nu in de hal ligt, is het deel
+          van de schepen dat nog vrij is. Meer dan dat laten we niet zien, ook
+          al staat er meer op de invoice.
+       2. De vroegste boot eerst. Is er ruimte voor drie, dan zijn dat de drie
+          die het eerst aankomen - zo werkt de toewijzing ook echt.
+
+       De trim staat niet op een commercial invoice: die kent alleen de
+       schaalkleur. Heeft het model precies één kleurvariant met die schaal,
+       dan zetten we de volledige naam erbij ("Mystic Mountain, OAK/grey"); zijn
+       het er meer, dan alleen de schaalkleur. Liever een naam die klopt dan een
+       trim die we erbij verzinnen. */
+    let ruimte = Math.max(0, (Number(m.beschikbaar) || 0) - m.vrijNu);
+    const komt = [];
+    for (const bak of (m.water || []).slice()
+           .sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")))) {
+      if (ruimte <= 0) break;
+      const n = Math.min(ruimte, Number(bak.qty) || 0);
+      if (n <= 0) continue;
+      ruimte -= n;
+      /* Een ETA die al voorbij is, is geen datum meer om aan een klant door te
+         geven: dat schip is er zo. Die gaan op één hoop als "arriving now" -
+         anders staat er bij een model dat al drie weken wordt gelost een rijtje
+         data uit augustus. */
+      const vandaag = new Date().toISOString().slice(0, 10);
+      const komtNog = bak.eta && bak.eta >= vandaag;
+      const sleutel = (bak.kleur || "?") + "|" + (komtNog ? bak.eta : "nu");
+      const bestaat = komt.find(x => x.sleutel === sleutel);
+      if (bestaat) { bestaat.qty += n; continue; }
+      // De volledige kleurnaam erbij als er maar één variant op past.
+      const passend = m.variants.filter(v => bak.kleur && dpSchaalKleur(v.name) === bak.kleur);
+      komt.push({ sleutel, qty: n, eta: komtNog ? bak.eta : null, nu: !komtNog && !!bak.eta,
+        name: passend.length === 1 ? passend[0].name
+            : (bak.kleur ? bak.kleur.replace(/\b[a-z]/g, c => c.toUpperCase()) : null) });
+    }
+    m.onderweg = komt.map(({ sleutel, ...rest }) => rest);
+    delete m.water;
     // Alles wat al vergeven is: reserveringen uit Logic4 plus portaal-aanvragen.
     m.vergeven = Math.max(0, (Number(m.physical) || 0) + (Number(m.onTheWater) || 0) - (Number(m.beschikbaar) || 0));
     m.opAanvraag = opAanvraag;
@@ -878,6 +977,66 @@ function vrachtLaadmeters(doos) {
 function vrachtBand(banden, ldm, kg) {
   return banden.find(b => b.ldm >= ldm - 0.001 && b.kg >= kg - 0.5) || banden[banden.length - 1] || null;
 }
+/* Van een postcode naar het gebied uit de tarieflijst.
+   ═══════════════════════════════════════════════════════════════════════════
+   Gerrit (9 sep 2026): "in m'n basket kan ik kiezen om te laten bezorgen. Maar
+   alleen Nederland werkt. Als ik een ander land kies dan krijg ik: Postcodegebied
+   "" staat niet in de tarieflijst voor DE."
+
+   Er zaten twee dingen fout.
+
+   1. Zonder postcode werd er toch gerekend. Nederland ging dan goed omdat de
+      Doesburg-tabel bij een lege postcode gewoon in de kolom "nl" belandt; elk
+      ander land viel om met een melding over een gebied dat leeg is. Nu vragen
+      we eerst netjes om de postcode.
+
+   2. Excel heeft de nullen vooraan opgegeten. In de lijst staat gebied 01 als
+      "1", 02 als "2", enzovoort. Een Duitse postcode 01067 (Dresden) werd dus
+      opgezocht als "01" en die staat er niet in. Datzelfde gold voor Italië,
+      Polen, Finland, België, Frankrijk, Spanje, Denemarken, Noorwegen,
+      Slowakije en Roemenië - alles onder de 10.000 viel eruit.
+
+   Bij het Verenigd Koninkrijk beginnen postcodes met letters (AL1, B11, EH2).
+   Alleen de letters vooraan tellen, en niet alle letters uit de hele code: van
+   "B11 1AA" maakte de oude regel "BA" - het gebied van Bath, driehonderd
+   kilometer verderop. */
+function vrachtGebied(postcodes, postcode) {
+  const P = String(postcode || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!P) return { sleutel: "", zone: null };
+  const kandidaten = [];
+  const letters = (P.match(/^[A-Z]+/) || [""])[0];
+  if (letters) {
+    if (letters.length >= 2) kandidaten.push(letters.slice(0, 2));
+    kandidaten.push(letters.slice(0, 1));
+  } else {
+    const cijfers = P.replace(/\D/g, "");
+    const twee = cijfers.slice(0, 2);
+    if (twee) {
+      kandidaten.push(twee);                            // 40213 -> "40"
+      kandidaten.push(String(parseInt(twee, 10)));      // 01067 -> "01" -> "1"
+    }
+    if (cijfers) kandidaten.push(cijfers.slice(0, 1));  // laatste kans: "0"
+  }
+  for (const k of kandidaten) {
+    if (k && postcodes && postcodes[k] != null) return { sleutel: k, zone: postcodes[k] };
+  }
+  return { sleutel: kandidaten[0] || P, zone: null };
+}
+/* Hoe een postcode er in dat land uitziet: hoeveel tekens er minimaal in
+   moeten en een voorbeeld. Alleen om vroeg te kunnen zeggen "dit is er nog
+   geen", zodat er niet halverwege het typen een rode melding opspringt. */
+const VRACHT_POSTCODE = {
+  NL: { min: 4, voorbeeld: "3888 NK" }, BE: { min: 4, voorbeeld: "2000" },
+  LU: { min: 4, voorbeeld: "1111" },    DE: { min: 5, voorbeeld: "40213" },
+  FR: { min: 5, voorbeeld: "75001" },   AT: { min: 4, voorbeeld: "1010" },
+  CH: { min: 4, voorbeeld: "8001" },    IT: { min: 5, voorbeeld: "20121" },
+  ES: { min: 5, voorbeeld: "28001" },   PT: { min: 4, voorbeeld: "1000-001" },
+  DK: { min: 4, voorbeeld: "1050" },    SE: { min: 5, voorbeeld: "111 20" },
+  FI: { min: 5, voorbeeld: "00100" },   NO: { min: 4, voorbeeld: "0150" },
+  PL: { min: 5, voorbeeld: "00-001" },  CZ: { min: 5, voorbeeld: "110 00" },
+  SK: { min: 5, voorbeeld: "811 01" },  HU: { min: 4, voorbeeld: "1051" },
+  RO: { min: 6, voorbeeld: "010011" },  UK: { min: 5, voorbeeld: "SW1A 1AA" },
+};
 /* POST /voorraad/dieseltoeslag { doesburg, heugten, door }
    ═══════════════════════════════════════════════════════════════════════════
    Gerrit (7 sep 2026): "Elke week sturen de transporteurs hun dieseltoeslagen.
@@ -921,6 +1080,17 @@ async function dpHandleVracht(request, env) {
   const items = Array.isArray(body.items) ? body.items : [];
   if (!land) return reply(400, { ok: false, error: "geen land opgegeven" });
 
+  /* Eerst de postcode, dan pas rekenen. Zonder postcode is er geen tarief: ook
+     in Nederland niet, want postcodegebied 45 heeft een eigen kolom. */
+  const vorm = VRACHT_POSTCODE[land] || { min: 4, voorbeeld: null };
+  const kaal = postcode.replace(/[^A-Z0-9]/g, "");
+  if (kaal.length < vorm.min) {
+    return reply(200, { ok: false, error: "postcode-nodig", land,
+      voorbeeld: vorm.voorbeeld,
+      uitleg: kaal ? "That does not look like a complete postcode for this country."
+                   : "Fill in the delivery postcode and we will show you the cost." });
+  }
+
   const tar = await env.FONTEYN_DATA.get("transport-tarieven", { type: "json" });
   if (!tar) return reply(200, { ok: false, error: "de tarieven staan nog niet klaar" });
   const dozen = ((await env.FONTEYN_DATA.get("spa-dozen", { type: "json" })) || {}).dozen || {};
@@ -947,13 +1117,13 @@ async function dpHandleVracht(request, env) {
   let basis = null, zone = null, vervoerder = null;
 
   if (!viaDoesburg) {
-    // Postcodegebied: bij de meeste landen de eerste twee cijfers, bij het
-    // Verenigd Koninkrijk de letters vooraan.
-    const sleutel = /^[A-Z]/.test(postcode) ? postcode.replace(/[^A-Z]/g, "").slice(0, 2)
-                                            : postcode.replace(/\D/g, "").slice(0, 2);
-    zone = heugtenLand.postcodes[sleutel] || heugtenLand.postcodes[sleutel.slice(0, 1)] || null;
-    if (!zone) return reply(200, { ok: false, error: "postcode-onbekend",
-      uitleg: "Postcodegebied \"" + sleutel + "\" staat niet in de tarieflijst voor " + land + "." });
+    // Postcodegebied: zie vrachtGebied hierboven.
+    const gebied = vrachtGebied(heugtenLand.postcodes, postcode);
+    zone = gebied.zone;
+    if (!zone) return reply(200, { ok: false, error: "postcode-onbekend", land,
+      gebied: gebied.sleutel,
+      uitleg: "We do not have a rate for postcode area " + gebied.sleutel + " in " +
+              land + " yet. Send us a message and we will quote it." });
     const band = vrachtBand(heugtenLand.banden, ldm, kg);
     if (!band || band.prijzen[zone] == null) return reply(200, { ok: false, error: "geen tarief voor deze zone" });
     basis = band.prijzen[zone];
@@ -4489,20 +4659,7 @@ async function dpRefreshReservations(env) {
      Herkennen we een kleur niet, dan telt hij als "onbekend" en mag hij bij
      iedereen: liever een ruwe schatting dan een order die nergens meer op
      past. */
-  const SCHAALKLEUREN = ["sterling white", "mystic mountain", "desert horizon", "pearl shadow",
-                         "solid white", "pure white", "espresso", "white", "black"];
-  const SCHAAL_ANDERS = { "sterling silver": "sterling white" };
-  function schaalKleur(tekst) {
-    let t = String(tekst || "").toLowerCase()
-      .replace(/^customized\s*-\s*/, "")          // "CUSTOMIZED - Sterling White with …"
-      .replace(/#\s*\d+/g, " ")                    // het #30 achter Sterling Silver
-      .replace(/\babs sheet\b/g, " ")              // "WHITE ABS SHEET" → white
-      .replace(/[^a-z ]+/g, " ").replace(/\s+/g, " ").trim();
-    for (const [van, naar] of Object.entries(SCHAAL_ANDERS))
-      if (t === van || t.startsWith(van + " ")) t = naar + t.slice(van.length);
-    for (const k of SCHAALKLEUREN) if (t === k || t.startsWith(k + " ")) return k;
-    return null;
-  }
+  const schaalKleur = dpSchaalKleur;    // staat boven bij dpStockModels
 
   /* De schepen, met de kleuren erbij. Eén bak per model én kleur, zodat een
      reservering alleen uit een bak kan pakken waar zijn eigen schaalkleur in

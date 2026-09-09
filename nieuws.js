@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-09", bestand: "dealerportaal.html", soort: "beter",
+      titel: "De voorraad per kleur, met de datum erbij",
+      wat: "Een partner ziet in het portaal nu per kleur wat er klaarstaat en wat er aankomt, met de verwachte datum van het schip. Alleen wat nog niet verkocht is. Een model waar niets van in de hal ligt maar wel een boot voor onderweg is, heet geen backorder meer.",
+    },
+
+    {
+      datum: "2026-09-09", bestand: "dealerportaal.html", soort: "hersteld",
+      titel: "Bezorgen naar het buitenland rekent weer door",
+      wat: "Koos een partner een ander land dan Nederland, dan kwam er een melding over een postcodegebied dat niet bestond. Het portaal vraagt nu eerst netjes om de postcode. Daarnaast vielen alle postcodes onder de 10.000 buiten de tarieflijst - Dresden, Rome, Warschau, Oslo - en die worden nu gewoon gevonden.",
+    },
+
+    {
       datum: "2026-09-09", bestand: "amerika.html", soort: "beter",
       titel: "Een saldoregel houdt een batch niet meer tegen",
       wat: "Staat er in een batch een regel die bij geen enkele factuur hoort, zoals een saldo van een paar dollar, dan blijft de batch niet meer liggen. Dat bedrag gaat mee met de bankkosten op 4630, zodat rekening 1160 precies op nul uitkomt.",
