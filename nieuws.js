@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-09", bestand: "tuinmeubelen.html", soort: "beter",
+      titel: "Orderbevestiging mag nu ook een PDF zijn",
+      wat: "Stuurt de fabriek de bevestiging als PDF in plaats van Excel, dan kun je die nu gewoon kiezen. Lukt het lezen niet, dan zegt het scherm wat het wél in het bestand heeft gevonden, zodat duidelijk is wat eraan schort.",
+    },
+
+    {
       datum: "2026-09-09", bestand: "labels.html", soort: "nieuw",
       titel: "Zelf een container toevoegen of verwijderen",
       wat: "Bij Containers onderweg staat nu een knop om zelf een container toe te voegen: kies de commercial invoice met de packing list erin, en de containers met hun labels staan klaar. Een container die gelost is kun je met Verwijderen uit de lijst halen. Alleen dat regeltje verdwijnt, de invoice en de voorraad blijven staan.",

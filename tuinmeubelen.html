@@ -28,6 +28,12 @@
 <!-- Voor het lezen van de orderbevestiging die de fabriek terugstuurt. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="sales-confirmation.js"></script>
+<!-- Chantal (9 sep 2026) stuurt de bevestiging van Guangxi Mibin als PDF
+     ("PI.NO+MS26081701.pdf"). Daarvoor is dezelfde pdf-lezer nodig als bij
+     Voorraadbeheer. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="spa-codes.js"></script>
+<script src="ci-pdf.js"></script>
 <script src="kop.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <!-- ══════════════════════════════════════════════════════════════════════
@@ -145,12 +151,12 @@ td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
        het langs Gretha. -->
   <h2 style="margin-top:34px">Besteld bij de fabriek</h2>
   <p class="lead">
-    De orderbevestiging die de fabriek terugstuurt - de <b>sales confirmation</b> - kun je hier inlezen.
+    De orderbevestiging die de fabriek terugstuurt - de <b>sales confirmation</b> of de proforma - kun je hier inlezen, als Excel of als PDF.
     Het dashboard haalt de fabriek, het S/C-nummer, de artikelnummers, de kleuren en de aantallen eruit,
     en kijkt meteen na of die artikelnummers in Logic4 bestaan. Wat er niet in staat moet langs Gretha.
   </p>
   <div class="card" id="bestelKaart">
-    <input type="file" id="scBestand" accept=".xls,.xlsx" style="display:none">
+    <input type="file" id="scBestand" accept=".xls,.xlsx,.pdf" style="display:none">
     <button class="scknop" id="scKies" type="button">Orderbevestiging inlezen</button>
     <div id="scStatus"></div>
     <div id="scUit"></div>
@@ -349,21 +355,59 @@ laad();
       if (!window.XLSX || !window.fpSalesConfirmation)
         throw new Error("de lezer is niet geladen. Sluit het dashboard af en start het opnieuw.");
 
-      var buf = await file.arrayBuffer();
-      var wb = XLSX.read(buf, { type: "array" });
-
-      /* Zoek het blad met de bevestiging erop. Deze bestanden hebben vaak een
-         Macro1 en een paar lege bladen; alleen op het eerste blad afgaan gaat
-         dan mis. */
       var doc = null;
-      for (var i = 0; i < wb.SheetNames.length && !doc; i++) {
-        var rijen = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[i]], { header:1, defval:"" });
-        if (window.fpSalesConfirmation.isSalesConfirmation(rijen))
-          doc = window.fpSalesConfirmation.lees(rijen);
+      var isPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
+      if (isPdf) {
+        /* Een PDF-bevestiging.
+           ═══════════════════════════════════════════════════════════════════
+           Chantal (9 sep 2026): "dit is het bestand wat ik bij tuinmeubelen
+           wil inladen bij orderbevestiging inlezen. Alle info staat erop." Het
+           gaat om de proforma van Guangxi Mibin, en die komt als PDF.
+
+           Tot nu toe ging elk bestand naar de Excel-lezer, ook een PDF, en
+           daar komt onleesbare rommel uit. Vandaar de melding "dit lijkt geen
+           orderbevestiging" - die klopte technisch maar hielp niemand verder.
+           Een PDF gaat nu naar dezelfde lezer als bij Voorraadbeheer. */
+        if (!window.fpCiPdf) throw new Error("de pdf-lezer is niet geladen. Sluit het dashboard af en start het opnieuw.");
+        var pdfDoc = await window.fpCiPdf.leesBestand(file);
+        var rgls = (pdfDoc && pdfDoc.regels) || [];
+        if (!rgls.length)
+          throw new Error("in deze PDF zijn geen artikelregels gevonden. Herkend als: " +
+            ((pdfDoc && pdfDoc.soort) || "onbekend") + (pdfDoc && pdfDoc.leverancier ? (", leverancier " + pdfDoc.leverancier) : "") +
+            ". Stuur dit bestand door, dan pas ik de lezer erop aan.");
+        doc = {
+          soort: "sales-confirmation",
+          fabriek: pdfDoc.leverancier || null,
+          referentie: pdfDoc.invoiceNo || null,
+          datum: pdfDoc.datum || null,
+          meldingen: [],
+          regels: rgls.map(function (r) {
+            return { set: r.code || r.omschrijving || "", kleur: r.kleur || "",
+                     aantal: Number(r.aantal) || 0, onderdelen: [] };
+          }),
+        };
+        doc.totaal = doc.regels.reduce(function (n, r) { return n + r.aantal; }, 0);
+        var perCode = {};
+        doc.regels.forEach(function (r) { if (r.set) perCode[r.set] = (perCode[r.set] || 0) + r.aantal; });
+        doc.artikelen = Object.keys(perCode).sort().map(function (c) { return { code: c, aantal: perCode[c] }; });
+        if (!doc.referentie) doc.meldingen.push("Geen referentienummer in de PDF gevonden.");
+      } else {
+        var buf = await file.arrayBuffer();
+        var wb = XLSX.read(buf, { type: "array" });
+
+        /* Zoek het blad met de bevestiging erop. Deze bestanden hebben vaak een
+           Macro1 en een paar lege bladen; alleen op het eerste blad afgaan gaat
+           dan mis. */
+        for (var i = 0; i < wb.SheetNames.length && !doc; i++) {
+          var rijen = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[i]], { header:1, defval:"" });
+          if (window.fpSalesConfirmation.isSalesConfirmation(rijen))
+            doc = window.fpSalesConfirmation.lees(rijen);
+        }
+        if (!doc)
+          throw new Error("dit lijkt geen orderbevestiging. Verwacht een blad met \'Sales confirmation\' " +
+                          "of een S/C-nummer, en een tabel met Item no en Quanity. Gevonden tabbladen: " +
+                          wb.SheetNames.join(", ") + ".");
       }
-      if (!doc)
-        throw new Error("dit lijkt geen orderbevestiging. Verwacht een blad met \'Sales confirmation\' " +
-                        "of een S/C-nummer, en een tabel met Item no en Quanity.");
       doc.bestand = file.name;
 
       /* De artikelnummers nakijken in Logic4. Lukt dat niet, dan tonen we de
