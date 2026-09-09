@@ -1742,7 +1742,7 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
     if(actQty>0||voorraad>0||zee>0||conQty>0||prodQty>0) rows.push({m,actQty,conQty,voorraad,zee,gedekt,tekort,
       prodQty, prodRuw, prodRegels,
       kleuren:kleurBreakdown(fon), kleurenCont:kleurBreakdown(con),
-      perKleur:tekortPerKleur(fon,(halM[m]||{}).variants||{})});
+      perKleur:tekortPerKleur(fon,(halM[m]||{}).variants||{},prodRegels)});
   }
   const eur=n=>"€ "+Number(n).toLocaleString("nl-NL");
   document.getElementById("ovKpis").innerHTML=
@@ -1784,19 +1784,37 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
    kleur — dus dat wordt hier bewust NIET over de kleuren verdeeld. Zo'n
    verdeling zou een gok zijn en precies de vraag verpesten waarvoor Chantal
    dit nodig heeft. Het staat als losse regel onder de tabel. */
-function tekortPerKleur(lines,variants){
+function tekortPerKleur(lines,variants,prodRegels){
   const per={};
   const zet=function(kleur,veld,n){
     const k=kleur||"(geen kleur)";
-    if(!per[k]) per[k]={kleur:k,gevraagd:0,voorraad:0};
+    if(!per[k]) per[k]={kleur:k,gevraagd:0,voorraad:0,productie:0};
     per[k][veld]+=n;
   };
   for(const r of lines) zet(r.kleur,"gevraagd",Number(r.qty)||0);
   for(const [code,qty] of Object.entries(variants||{})) zet(ovCodeKleur[code],"voorraad",Number(qty)||0);
+  /* Wat er bij de fabriek in productie staat, per kleur.
+     Chantal (video, 8 sep 2026): "en uiteraard, als ik hem openklap, dat je
+     dus ziet staan wat er in productie is en dat hij dan rekening houdt ook
+     met alle kleuren. Dan is in één oogopslag zichtbaar wat een tekort is en
+     wat er besteld moet worden, welke spa en welke kleuren."
+
+     Bij een inkooporder is de kleur wél bekend, anders dan bij een schip: de
+     artikelcode ís de kleur. Daarom kan dit hier wel per kleur en de lading
+     van een schip niet. */
+  for(const x of (prodRegels||[])) zet(kleurNormaal(x.kleur),"productie",Number(x.qty)||0);
   return Object.values(per).map(function(x){
     x.tekort=Math.max(0,x.gevraagd-x.voorraad);
     return x;
   }).sort((a,b)=>(b.tekort-a.tekort)||(b.gevraagd-a.gevraagd)||a.kleur.localeCompare(b.kleur,"nl"));
+}
+/* De kleurnaam van een inkooporderregel op dezelfde vorm brengen als die van
+   een reservering. De catalogus schrijft "Bliss Spa | Sterling White with
+   GREY/oak trim"; kleurUitOms haalt daar het woord Spa uit, en zonder dat
+   zouden dezelfde kleuren als twee aparte regels in de tabel komen. */
+function kleurNormaal(k){
+  const s=String(k||"").replace(/\b(spa|swimspa)\b/gi,"").replace(/\s+/g," ").trim();
+  return s||null;
 }
 /* De kleurtabel moet optellen tot de regel erboven, anders is hij erger dan
    geen tabel. Hier stond eerst een kolom "Tekort" die alleen de NL-voorraad
@@ -1815,21 +1833,30 @@ function kleurTabel(r){
   if(!rijen.length) return "<p class='lead' style='margin:0'>Geen kleurgegevens.</p>";
   const teDekken=rijen.reduce(function(n,x){ return n+Math.max(0,x.gevraagd-x.voorraad); },0);
   const zee=Number(r.zee)||0;
-  const rest=Math.max(0,teDekken-zee);
+  const prod=Number(r.prodQty)||0;
+  const rest=Math.max(0,teDekken-prod-zee);
   const regel=function(tekst,waarde,kleur,dik){
-    return "<tr><td colspan='3' style='text-align:right;color:"+(kleur||"var(--muted)")+
+    return "<tr><td colspan='4' style='text-align:right;color:"+(kleur||"var(--muted)")+
       (dik?";font-weight:700":"")+"'>"+tekst+"</td><td style='color:"+(kleur||"var(--muted)")+
       (dik?";font-weight:700":"")+"'>"+waarde+"</td></tr>";
   };
   return "<div class='tablewrap'><table class='grid' style='margin:0'><thead><tr>"+
-    "<th>Kleur</th><th>Gevraagd</th><th>Op voorraad NL</th><th>Nog te dekken</th></tr></thead><tbody>"+
+    "<th>Kleur</th><th>Gevraagd</th><th>Op voorraad NL</th><th>In productie</th><th>Nog te dekken</th></tr></thead><tbody>"+
     rijen.map(function(x){
       const open=Math.max(0,x.gevraagd-x.voorraad);
       return "<tr><td>"+esc(x.kleur)+"</td><td>"+(x.gevraagd||"—")+"</td>"+
         "<td style='color:#2563eb'>"+(x.voorraad||"—")+"</td>"+
+        "<td style='color:"+(x.productie?"#7c3aed":"var(--muted)")+"'>"+(x.productie||"—")+"</td>"+
         "<td>"+(open||"—")+"</td></tr>";
     }).join("")+
     regel("samen nog te dekken",teDekken,null,true)+
+    /* In productie wordt hier van het totaal afgetrokken en niet per kleur.
+       Dat is met opzet: bij een deel van de inkooporders vaart de container al
+       terwijl de order in Logic4 nog openstaat, en welke kleuren dat zijn is
+       niet te zeggen. Per kleur aftrekken zou dat bedrag twee keer weghalen -
+       een keer hier en een keer bij 'op zee' - en dan zakt het tekort te ver.
+       Zo sluit deze tabel wél aan op de regel erboven. */
+    (prod?regel("af: in productie bij de fabriek","-"+prod,"#7c3aed"):"")+
     (zee?regel("af: op zee, kleur nog niet bekend","-"+zee,"#2563eb"):"")+
     regel("blijft over — dit is het tekort",rest,rest>0?"#b91c1c":"#15803d",true)+
     "</tbody></table></div>"+
