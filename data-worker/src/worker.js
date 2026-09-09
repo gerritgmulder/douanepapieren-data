@@ -8768,6 +8768,21 @@ async function binnenkomendZet(env, door, body) {
   const c = (alles.lijst || []).find(x => x.sleutel === sleutel);
   if (!c) return { ok: false, error: "container-niet-gevonden" };
 
+  /* Weg mag ook.
+     ═══════════════════════════════════════════════════════════════════════
+     Manon (9 sep 2026): "kan ik de containers ook verwijderen als we ze
+     gelost hebben." De lijst is haar werkvoorraad, en wat gelost is hoort daar
+     niet meer in te staan.
+
+     Alleen de regel uit dit overzicht gaat weg. De commercial invoice, de
+     zending en de voorraad blijven waar ze zijn; dit is geen boeking maar een
+     lijstje met wat er nog binnenkomt. Lees je de invoice opnieuw in, dan
+     staat hij er gewoon weer. */
+  if (body.verwijder === true) {
+    alles.lijst = (alles.lijst || []).filter(x => x.sleutel !== sleutel);
+    await env.FONTEYN_DATA.put("binnenkomend", JSON.stringify(alles));
+    return { ok: true, verwijderd: sleutel };
+  }
   if (typeof body.nummer === "string") c.nummer = body.nummer.trim().toUpperCase().slice(0, 20);
   if (body.binnen === true) c.binnen = { door, op: new Date().toISOString() };
   if (body.binnen === false) c.binnen = null;

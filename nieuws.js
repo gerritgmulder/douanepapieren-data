@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-09", bestand: "labels.html", soort: "nieuw",
+      titel: "Zelf een container toevoegen of verwijderen",
+      wat: "Bij Containers onderweg staat nu een knop om zelf een container toe te voegen: kies de commercial invoice met de packing list erin, en de containers met hun labels staan klaar. Een container die gelost is kun je met Verwijderen uit de lijst halen. Alleen dat regeltje verdwijnt, de invoice en de voorraad blijven staan.",
+    },
+
+    {
       datum: "2026-09-09", bestand: "voorraad.html", soort: "nieuw",
       titel: "In productie staat nu bij Overzicht",
       wat: "Bij Bestellen is er een kolom In productie bij gekomen: wat er bij de fabriek besteld staat. Dat gaat nu ook van het tekort af, want wat je al besteld hebt hoef je niet nog een keer te bestellen. Van 36 Believe met 22 in productie blijft dus een tekort van 14 over. Klap een spa open en je ziet per kleur hoeveel er in productie zijn, met het inkoopordernummer en de verwachte datum erbij.",

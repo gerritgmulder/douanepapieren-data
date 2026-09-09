@@ -452,6 +452,12 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <div class="panel hidden" id="stepC">
     <h2>Containers onderweg</h2>
     <div class="sub">Ingelezen uit de commercial invoice en de packing list. Klik op een container om de labels klaar te zetten.</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 14px">
+      <input type="file" id="contFile" accept=".xls,.xlsx" style="display:none">
+      <button type="button" id="contUpload">Container toevoegen uit een invoice</button>
+      <span style="font-size:12px;color:var(--muted)">Kies de commercial invoice met de packing list erin (.xls of .xlsx). Staat hij er al, dan wordt hij bijgewerkt.</span>
+    </div>
+    <div id="contStatus" class="sub" style="margin-bottom:10px"></div>
     <div id="contLijst"></div>
   </div>
 
@@ -550,6 +556,11 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 <!-- De codelijst fabriekscode naar model. Nodig om bij een containerregel
      het juiste Fonteyn-artikel te vinden; zie zoekArtikelenBijContainer(). -->
 <script src="spa-codes.js"></script>
+<!-- Manon (9 sep 2026): "kan ik ze zelf toevoegen? Heb nu geen upload knop."
+     Daarvoor moeten hier dezelfde lezer en dezelfde Excel-bibliotheek staan
+     als bij Voorraadbeheer, anders kan deze tegel het bestand niet openen. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="inv-pl.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
 
@@ -653,22 +664,35 @@ function escapeHtml(v) {
 }
 const teamKey = () => localStorage.getItem("fp.teamkey") || "";
 let containers = [];
+document.addEventListener("DOMContentLoaded", function () {
+  const knop = $("contUpload"), veld = $("contFile");
+  if (!knop || !veld) return;
+  knop.addEventListener("click", () => veld.click());
+  veld.addEventListener("change", async (e) => {
+    const f = (e.target.files || [])[0];
+    if (f) await containerUploaden(f);
+    e.target.value = "";
+  });
+});
 
 async function laadContainers() {
   if (!teamKey()) return;
   try {
     const r = await fetch(WORKER_BASE + "/data/binnenkomend", { headers: { "X-Fonteyn-Auth": teamKey() } });
-    if (!r.ok) return;
-    const j = await r.json();
-    containers = (j && j.lijst) || [];
-  } catch (e) { console.warn("[containers] laden faalde:", e); return; }
+    if (r.ok) { const j = await r.json(); containers = (j && j.lijst) || []; }
+  } catch (e) { console.warn("[containers] laden faalde:", e); }
+  // Ook bij een lege of mislukte ophaal het paneel tonen: anders is de knop om
+  // zelf een container toe te voegen niet te vinden.
   toonContainers();
 }
 
 function toonContainers() {
   const box = $("contLijst");
-  if (!containers.length) { $("stepC").classList.add("hidden"); return; }
+  /* Het paneel bleef verborgen zolang er nog geen container was, en dan zag
+     Manon de uploadknop dus ook niet - precies het probleem dat ze meldde. Het
+     staat er nu altijd. */
   $("stepC").classList.remove("hidden");
+  if (!containers.length) { box.innerHTML = "<div class='sub'>Nog geen containers. Voeg er een toe met de knop hierboven, of lees bij Voorraadbeheer een commercial invoice in.</div>"; return; }
   box.innerHTML = "";
 
   for (const c of containers) {
@@ -715,10 +739,68 @@ function toonContainers() {
     binnen.textContent = c.binnen ? "Toch niet binnen" : "Binnengekomen";
     binnen.addEventListener("click", () => zetContainer(c, { binnen: !c.binnen }));
     knoppen.appendChild(binnen);
+
+    /* Manon (9 sep 2026): "kan ik de containers ook verwijderen als we ze
+       gelost hebben." Alleen deze regel gaat weg; de invoice, de zending en de
+       voorraad blijven. Lees je de invoice opnieuw in, dan staat hij er weer,
+       en dat staat ook in de vraag zodat niemand schrikt. */
+    const weg = document.createElement("button");
+    weg.type = "button"; weg.className = "secondary";
+    weg.textContent = "Verwijderen";
+    weg.addEventListener("click", async () => {
+      if (!confirm(naam + " uit deze lijst halen?\n\nAlleen dit regeltje verdwijnt. De commercial invoice, de zending en de voorraad blijven gewoon staan, en als je de invoice opnieuw inleest komt hij terug.")) return;
+      await zetContainer(c, { verwijder: true });
+    });
+    knoppen.appendChild(weg);
     d.appendChild(knoppen);
 
     box.appendChild(d);
   }
+}
+
+/* Zelf een container toevoegen.
+   ═══════════════════════════════════════════════════════════════════════════
+   Manon (9 sep 2026): "kan ik ze zelf toevoegen? Heb nu geen upload knop."
+
+   Tot nu toe kwamen containers hier alleen binnen doordat Chantal bij
+   Voorraadbeheer een commercial invoice inlas. Moest Manon een container
+   hebben en was die er nog niet, dan kon ze niets. Dezelfde lezer draait nu
+   ook hier, met hetzelfde bestand: de commercial invoice met de packing list
+   erin. Dat is precies wat de fabriek stuurt.
+
+   Het gaat naar dezelfde opslag, dus wat hier binnenkomt staat ook bij
+   Voorraadbeheer, en andersom. Bestaat de container al, dan wordt hij
+   bijgewerkt en niet verdubbeld: dat regelt de worker op de sleutel. */
+async function containerUploaden(file) {
+  const st = $("contStatus");
+  const zeg = (t, kleur) => { st.textContent = t; st.style.color = kleur || "var(--muted)"; };
+  if (!window.fpInvPl || !window.XLSX) { zeg("De lezer is niet geladen. Herstart het dashboard.", "#b91c1c"); return; }
+  zeg("Inlezen…");
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+    const bladen = wb.SheetNames.map(n => ({ naam: n, rijen: XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: "" }) }));
+    if (!window.fpInvPl.isInvPl(bladen)) {
+      zeg("In dit bestand zit geen commercial invoice met packing list. Tabbladen gevonden: " + wb.SheetNames.join(", ") + ".", "#b91c1c");
+      return;
+    }
+    const doc = window.fpInvPl.lees(bladen);
+    if (!doc.ok || !(doc.containers || []).length) {
+      zeg("Er staan geen containers in dit bestand." + (doc.fout ? (" " + doc.fout) : ""), "#b91c1c");
+      return;
+    }
+    doc.bestand = file.name;
+    const r = await fetch(WORKER_BASE + "/binnenkomend", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ door: (localStorage.getItem("fp.email") || ""), doc }),
+    });
+    const j = await r.json().catch(() => null);
+    if (!j || !j.ok) { zeg("Opslaan mislukte: " + ((j && j.error) || ("HTTP " + r.status)), "#b91c1c"); return; }
+    const labels = doc.containers.reduce((n, c) => n + (c.colli || []).reduce((a, x) => a + (x.colli || 0), 0), 0);
+    zeg((j.nieuw || 0) + " nieuw, " + (j.bijgewerkt || 0) + " bijgewerkt · " + doc.containers.length +
+        " container(s), " + labels + " labels klaar.", "#15803d");
+    await laadContainers();
+  } catch (e) { zeg("Kon niet inlezen: " + e.message, "#b91c1c"); }
 }
 
 async function zetContainer(c, wat) {
@@ -729,7 +811,9 @@ async function zetContainer(c, wat) {
       body: JSON.stringify({ sleutel: c.sleutel, door: (localStorage.getItem("fp.email") || ""), ...wat }),
     });
     const j = await r.json();
-    if (j && j.ok && j.container) Object.assign(c, j.container);
+    if (j && j.ok && j.verwijderd) containers = containers.filter(x => x.sleutel !== j.verwijderd);
+    else if (j && j.ok && j.container) Object.assign(c, j.container);
+    else if (j && !j.ok) alert("Niet gelukt: " + (j.error || "onbekende fout"));
   } catch (e) { console.warn("[containers] bijwerken faalde:", e); }
   toonContainers();
 }
