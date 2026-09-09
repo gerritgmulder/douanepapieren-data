@@ -158,6 +158,20 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     </div>
   </div>
 
+  <!-- Werkt de post? Elke uitnodiging, inloglink en aanbetalingsverzoek gaat
+       via Resend de deur uit. Gaat dáár iets mis, dan zegt het scherm bij elke
+       knop nog steeds "verstuurd" en zoek je je rot (Chantal kreeg op 7 sep
+       geen uitnodiging). Deze knop leest wat Resend werkelijk terugstuurde. -->
+  <div class="card hidden" id="mailCard">
+    <h3>E-mail nakijken</h3>
+    <p class="lead" style="margin-bottom:10px">Controleer of de mail eruit kan voordat je een dealer uitnodigt of een aanbetaling verstuurt. Hieronder staan ook de laatste verzendingen met wat Resend erop antwoordde.</p>
+    <div class="row">
+      <button class="primary" id="mailCheckBtn" type="button">Mail nakijken</button>
+      <span id="mailUitleg" class="lead" style="margin:0"></span>
+    </div>
+    <div id="mailUit" style="margin-top:12px"></div>
+  </div>
+
   <div id="mgmt" class="hidden">
   <div class="card">
     <h3>Partners (<span id="partnerCount">0</span>)</h3>
@@ -299,6 +313,50 @@ function adminKey(){ return localStorage.getItem(ADMIN_KEY_STORE) || ""; }
 const $ = (id) => document.getElementById(id);
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function setStatus(k,m){ const e=$("status"); if(!m){e.classList.add("hidden");return;} e.className="status-msg "+k; e.textContent=m; e.classList.remove("hidden"); }
+
+/* De mailcontrole. Laat drie dingen zien: of de sleutel en het afzenderadres
+   er zijn, of Resend het domein geverifieerd heeft, en wat er van de laatste
+   verzendingen terechtkwam. Een 200 met een id betekent dat Resend hem heeft
+   aangenomen; wat de ontvangende server er daarna mee doet zie je per mail via
+   het id. */
+async function mailNakijken(){
+  const knop = $("mailCheckBtn"); if (!knop) return;
+  knop.disabled = true;
+  $("mailUitleg").textContent = "Bezig…";
+  try{
+    const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/mailcheck",
+      { headers:{ "X-DP-Admin": adminKey() } });
+    if (r.status === 403 || r.status === 401) throw new Error("de beheersleutel wordt niet geaccepteerd");
+    const j = await r.json();
+    const goed = j.ok === true, onbekend = j.ok === null;
+    $("mailUitleg").textContent = "";
+    const rij = (l,v) => "<tr><td style='padding:3px 10px 3px 0;color:#6b7280'>"+l+"</td><td style='padding:3px 0'>"+v+"</td></tr>";
+    let h = "<div class='status-msg "+(goed?"ok":(onbekend?"warn":"bad"))+"'>"+esc(j.uitleg||(goed?"De mail kan eruit.":"Er is iets mis met de mailinstelling."))+"</div>";
+    h += "<table style='font-size:13px;border-collapse:collapse;margin-top:8px'>"+
+      rij("Sleutel aanwezig", j.sleutelAanwezig ? "ja" : "<b>nee</b>")+
+      rij("Afzender", esc(j.afzender||"—"))+
+      rij("Domein", esc(j.domein||"—"))+
+      "</table>";
+    const laatste = j.laatste || [];
+    if (laatste.length){
+      h += "<h4 style='margin:14px 0 6px;font-size:13px'>Laatste verzendingen</h4>"+
+        "<table class='grid' style='font-size:12.5px'><thead><tr><th>Wanneer</th><th>Naar</th><th>Onderwerp</th><th>Antwoord</th></tr></thead><tbody>"+
+        laatste.map(x => "<tr><td style='white-space:nowrap'>"+esc(String(x.ts||"").replace("T"," ").slice(0,16))+"</td>"+
+          "<td>"+esc(x.naar||"")+"</td><td>"+esc(x.onderwerp||"")+"</td>"+
+          "<td>"+(x.status===200?"<span style='color:#15803d'>aangenomen</span>":"<span style='color:#b91c1c'>"+esc(String(x.status))+" "+esc(x.fout||"")+"</span>")+"</td></tr>").join("")+
+        "</tbody></table>";
+    } else {
+      h += "<p class='lead' style='margin-top:10px'>Er is nog niets verstuurd sinds dit wordt bijgehouden.</p>";
+    }
+    $("mailUit").innerHTML = h;
+  }catch(e){
+    $("mailUitleg").textContent = "";
+    $("mailUit").innerHTML = "<div class='status-msg bad'>Nakijken mislukt: "+esc(e.message)+"</div>";
+  }finally{ knop.disabled = false; }
+}
+document.addEventListener("DOMContentLoaded", () => {
+  const b = $("mailCheckBtn"); if (b) b.addEventListener("click", mailNakijken);
+});
 
 /* Toegang komt uit toegang.js, niet uit een eigen lijst. Hier stond tot
    28 aug 2026 een tweede namenlijst, en dat is precies waar toegang.js voor
@@ -1741,6 +1799,8 @@ async function init(){
     renderPartners(); renderReqs(); renderPrices(); renderRate(); renderBib();
     laadKoers();
     document.getElementById("mgmt").classList.remove("hidden");
+    // De mailcontrole hoort bij het beheer en niet bij het inlogscherm.
+    document.getElementById("mailCard").classList.remove("hidden");
   } catch(e){ setStatus("bad", "Laden faalde: "+e.message); }
 }
 

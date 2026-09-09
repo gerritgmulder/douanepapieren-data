@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-09", bestand: "dealerportaal.html", soort: "nieuw",
+      titel: "Zien of de e-mail eruit kan",
+      wat: "Uitnodigingen, inloglinks en aanbetalingsverzoeken gaan per mail de deur uit. Met de knop 'Mail nakijken' zie je vooraf of dat kan, en achteraf van de laatste verzendingen of ze zijn aangenomen. Eerder zei het scherm altijd dat er een mail verstuurd was, ook als hij nooit is aangekomen.",
+    },
+
+    {
       datum: "2026-09-09", bestand: "tuinmeubelen.html", soort: "beter",
       titel: "Orderbevestiging mag nu ook een PDF zijn",
       wat: "Stuurt de fabriek de bevestiging als PDF in plaats van Excel, dan kun je die nu gewoon kiezen. Lukt het lezen niet, dan zegt het scherm wat het wél in het bestand heeft gevonden, zodat duidelijk is wat eraan schort.",
