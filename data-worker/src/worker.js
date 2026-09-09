@@ -2825,8 +2825,23 @@ function dpContainerNr(ref) {
 // 'voorraad-productie'. Komt in de leverforecast ná de schepen.
 async function dpRefreshProductie(env) {
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
-  const codeToModel = {};
-  for (const [model, variants] of Object.entries(catalog.models || {})) for (const v of variants) codeToModel[v.code] = model;
+  const codeToModel = {}, codeToKleur = {}, codeToUitvoering = {};
+  for (const [model, variants] of Object.entries(catalog.models || {})) for (const v of variants) {
+    codeToModel[v.code] = model;
+    /* De kleur staat in het tweede deel van de omschrijving:
+       "Bliss Spa | Sterling White with DARK GREY". Chantal (video) wil bij een
+       spa kunnen zien wélke kleur er in productie staat, en een inkooporder
+       noemt alleen de artikelcode. Die code ís de kleur, want elke kleur is
+       een eigen artikel.
+
+       Het is bewust het tweede deel en niet het laatste: 143 artikelen hebben
+       er nog een derde bij staan, en dat is geen kleur maar een uitvoering
+       ("Admire Spa | Mystic Mountain with OAK/grey trim | IntelliSaver"). Op
+       het laatste deel pakken gaf dus IntelliSaver als kleur. */
+    const stukken = String(v.desc || "").split("|").map(x => x.trim());
+    codeToKleur[v.code] = stukken.length > 1 ? stukken[1] : "";
+    codeToUitvoering[v.code] = stukken.length > 2 ? stukken.slice(2).join(" ") : "";
+  }
   const token = await l4Token(env);
   const call = (path, body) => fetch("https://api.logic4server.nl" + path, {
     method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -2846,9 +2861,11 @@ async function dpRefreshProductie(env) {
     for (const r of rows) {
       const model = codeToModel[String(r.ProductCode || "")]; if (!model) continue;
       const qty = Number(r.QtyToDeliver) || Number(r.QtyToOrder) || 0; if (qty <= 0) continue;
+      const code = String(r.ProductCode || "");
       (byModel[model] = byModel[model] || []).push({
         iko: o.Id, fabriek: o.CreditorCompanyName || "", ref: String(o.Remarks || "").trim().slice(0, 80) || null,
         qty, eta: (r.ExpectedDeliveryDate || "").slice(0, 10) || null,
+        code, kleur: codeToKleur[code] || null, uitvoering: codeToUitvoering[code] || null,
       });
     }
   }

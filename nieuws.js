@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-09", bestand: "voorraad.html", soort: "nieuw",
+      titel: "In productie staat nu bij Overzicht",
+      wat: "Bij Bestellen is er een kolom In productie bij gekomen: wat er bij de fabriek besteld staat. Klap een spa open en je ziet per kleur hoeveel er in productie zijn, met het inkoopordernummer en de verwachte datum erbij. Het telt bewust niet mee in Gedekt, want besteld bij de fabriek is nog niet onderweg.",
+    },
+
+    {
       datum: "2026-09-09", bestand: "labels.html", soort: "hersteld",
       titel: "Op elk label staat nu Colli 1 van 1",
       wat: "Bij vier dezelfde spa's stond er Colli 1 van 4 tot en met Colli 4 van 4, alsof die ene spa uit vier dozen bestond. Eén spa is één collo, dus op elk label staat nu Colli 1 van 1. Je krijgt evenveel labels als eerst.",

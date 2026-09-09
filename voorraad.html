@@ -512,10 +512,10 @@
            mooier als dit verdwijnt en dat we dat aanpassen naar Bestellen."
            Dezelfde lijst, dezelfde volgorde, andere kop. -->
       <h3>Bestellen</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
+      <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <b>In productie</b> staat er los naast: dat is besteld bij de fabriek maar vaart nog niet, dus het dekt nog niets af. Klik een model open om te zien in welke kleur. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
       <div id="ovParserWaarschuwing" class="status-msg warn hidden" style="margin:0 0 10px"></div>
       <div class="tablewrap" style="max-height:52vh"><table class="grid">
-        <thead><tr><th>Model</th><th>Actief res.</th><th>Op voorraad (NL)</th><th>Op zee</th><th>Gedekt</th><th>Tekort</th></tr></thead>
+        <thead><tr><th>Model</th><th>Actief res.</th><th>Op voorraad (NL)</th><th>Op zee</th><th>In productie</th><th>Gedekt</th><th>Tekort</th></tr></thead>
         <tbody id="ovBacklog"></tbody>
       </table></div>
     </div>
@@ -1597,21 +1597,31 @@ function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode, un
 const HALLEN_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-hallen";
 async function loadOverzicht(){
   try{
-    const [resv,hal,ship,prices,cat]=await Promise.all([
+    const [resv,hal,ship,prices,cat,prod]=await Promise.all([
       fetch(RESV_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({byModel:{}})),
       fetch(HALLEN_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({models:{}})),
       fetch(SHIPS_URL,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.json()).catch(()=>({ships:[]})),
       fetch(PRICES_URL_OV,{headers:{"X-DP-Admin":dpAdminKey()}}).then(r=>r.ok?r.json():{prices:{}}).catch(()=>({prices:{}})),
       // De catalogus koppelt artikelcode → kleur. Nodig om de hal-voorraad,
       // die per artikelcode wordt bijgehouden, per kleur te kunnen tonen.
-      fetch(CATALOG_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.ok?r.json():{models:{}}).catch(()=>({models:{}}))
+      fetch(CATALOG_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.ok?r.json():{models:{}}).catch(()=>({models:{}})),
+      /* Wat er bij de fabriek in productie staat.
+         ═══════════════════════════════════════════════════════════════════
+         Chantal (video): "zodra ik een proforma invoice heb geüpload, doet het
+         Dashboard niets met die informatie bij het tabblad Overzicht", en ze
+         vroeg om een kopje In productie waarbij je per spa kunt zien wélke
+         kleur er in productie is gegaan. Dat klopte: een proforma wordt een
+         inkooporder bij de fabriek, die stand werd wel bijgehouden en gebruikt
+         in de leverprognose, maar stond nergens in dit scherm. */
+      fetch(PRODUCTIE_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.ok?r.json():{models:{}}).catch(()=>({models:{}}))
     ]);
     ovCodeKleur=bouwCodeKleur(cat);
-    renderOverzicht(resv,hal,ship,prices);
+    renderOverzicht(resv,hal,ship,prices,prod);
   }catch(e){ document.getElementById("ovKpis").innerHTML="<div class='status-msg bad'>Overzicht laden faalde: "+esc(e.message)+"</div>"; }
 }
 const PRICES_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/dealer-prices";
 const CATALOG_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/spa-catalog";
+const PRODUCTIE_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/voorraad-productie";
 let ovShipsCache=[], ovShipOpen={}, ovBacklogRows=[], ovBacklogOpen={}, ovCodeKleur={};
 let ovContainerOrders=0, ovContainerOudste=null;
 // De kleur staat achter de streep in de artikelomschrijving ("Passion Spa |
@@ -1634,7 +1644,7 @@ function kleurBreakdown(lines){
   const by={}; for(const r of lines){ const k=r.kleur||"(geen kleur)"; by[k]=(by[k]||0)+r.qty; }
   return Object.entries(by).map(([kleur,qty])=>({kleur,qty})).sort((a,b)=>b.qty-a.qty);
 }
-function renderOverzicht(resv,hal,ship,priceData){
+function renderOverzicht(resv,hal,ship,priceData,prodData){
   const byModel=resv.byModel||{}, halM=hal.models||{}, rate=Number((priceData.meta||{}).rate)||1.11, prices=priceData.prices||{};
   // schepen per model
   const shipByModel={}; let shipTotal=0;
@@ -1652,8 +1662,12 @@ function renderOverzicht(resv,hal,ship,priceData){
       if(d&&(!oudsteCont||d<oudsteCont)) oudsteCont=d;
     }
   ovContainerOrders=contOrders.size; ovContainerOudste=oudsteCont;
+  // In productie bij de fabriek, per model en per kleur.
+  const prodM=(prodData&&prodData.models)||{};
+  let prodTotal=0;
+  for(const l of Object.values(prodM)) for(const x of (l||[])) prodTotal+=Number(x.qty)||0;
   const rows=[];
-  const models=new Set([...Object.keys(byModel),...Object.keys(prices)]);
+  const models=new Set([...Object.keys(byModel),...Object.keys(prices),...Object.keys(prodM)]);
   for(const m of models){
     const list=byModel[m]||[];
     const fon=list.filter(r=>!r.container), con=list.filter(r=>r.container);
@@ -1666,7 +1680,15 @@ function renderOverzicht(resv,hal,ship,priceData){
     const gedekt=Math.min(actQty,voorraad+zee);
     const tekort=Math.max(0,actQty-voorraad-zee);
     const p=prices[m]; if(p&&p.usd) orderwaarde+=actQty*Math.round(Number(p.usd)/rate);
-    if(actQty>0||voorraad>0||zee>0||conQty>0) rows.push({m,actQty,conQty,voorraad,zee,gedekt,tekort,
+    /* In productie telt NIET mee in gedekt en tekort. Een inkooporder bij de
+       fabriek is nog geen spa: hij is niet geladen en heeft vaak geen ETA.
+       Zou hij meetellen, dan zou het tekort verdwijnen terwijl er nog niets
+       vaart. Hij staat er als eigen kolom naast, zodat je ziet dat er al iets
+       op besteld is voordat je nog een keer bestelt. */
+    const prodRegels=prodM[m]||[];
+    const prodQty=prodRegels.reduce((a,x)=>a+(Number(x.qty)||0),0);
+    if(actQty>0||voorraad>0||zee>0||conQty>0||prodQty>0) rows.push({m,actQty,conQty,voorraad,zee,gedekt,tekort,
+      prodQty, prodRegels,
       kleuren:kleurBreakdown(fon), kleurenCont:kleurBreakdown(con),
       perKleur:tekortPerKleur(fon,(halM[m]||{}).variants||{})});
   }
@@ -1681,6 +1703,7 @@ function renderOverzicht(resv,hal,ship,priceData){
     kpi(containers,"Spa's op partnercontainers ("+ovContainerOrders+" orders)","#c2410c")+
     kpi(halTotal,"Vrij op voorraad (NL)","#2563eb")+
     kpi(shipTotal,"Op zee (onderweg)","#2563eb")+
+    kpi(prodTotal,"In productie (fabriek)","#7c3aed")+
     kpi(eur(orderwaarde),"Orderwaarde actief*","var(--fonteyn-green)",true);
   // Wat deze cijfers wél en niet zijn. Zonder deze regel las "583" als een
   // stand van nu, terwijl het openstaande regels zijn uit orders die tot een
@@ -1772,9 +1795,41 @@ function kleurChips(list){
   if(!list||!list.length) return "<span style='color:var(--muted)'>—</span>";
   return list.map(c=>"<span class='pill' style='background:#eef2ff;color:#3730a3;margin:2px 3px 0 0'>"+esc(c.kleur)+" <b>"+c.qty+"</b></span>").join("");
 }
+/* In productie, per kleur.
+   ═══════════════════════════════════════════════════════════════════════════
+   Chantal (video): een kopje In productie in Overzicht, en als je een spa
+   openklapt wil ze zien wélke kleur er in productie is gegaan.
+
+   De inkooporder bij de fabriek noemt alleen de artikelcode, maar die code ís
+   de kleur: elke kleur is een eigen artikel. De worker zet daarom de kleur uit
+   de catalogus bij elke productieregel. Regels van dezelfde kleur worden hier
+   bij elkaar opgeteld, met de inkooporders en de verwachte data erachter,
+   zodat te zien is waar het vandaan komt. */
+function productieBlok(r){
+  const regels=r.prodRegels||[];
+  if(!regels.length) return "";
+  const per={};
+  for(const x of regels){
+    const k=(x.kleur||"(geen kleur)")+(x.uitvoering?(" · "+x.uitvoering):"");
+    const g=per[k]||(per[k]={kleur:k,qty:0,ikos:new Set(),etas:new Set()});
+    g.qty+=Number(x.qty)||0;
+    if(x.iko) g.ikos.add(String(x.iko));
+    if(x.eta) g.etas.add(String(x.eta).slice(0,10));
+  }
+  const lijst=Object.values(per).sort((a,b)=>b.qty-a.qty);
+  return "<div style='font-size:11px;color:#7c3aed;text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px'>In productie bij de fabriek</div>"+
+    "<table class='grid' style='font-size:12px'><thead><tr><th>Kleur</th><th style='text-align:right'>Aantal</th><th>Inkooporder</th><th>Verwacht</th></tr></thead><tbody>"+
+    lijst.map(function(g){
+      const etas=[...g.etas].sort();
+      return "<tr><td>"+esc(g.kleur)+"</td>"+
+        "<td style='text-align:right;font-weight:600'>"+g.qty+"</td>"+
+        "<td style='color:var(--muted)'>"+esc([...g.ikos].join(", "))+"</td>"+
+        "<td style='color:var(--muted)'>"+(etas.length?esc(etas.map(datumNL).join(", ")):"nog geen datum")+"</td></tr>";
+    }).join("")+"</tbody></table>";
+}
 function renderBacklog(){
   const body=document.getElementById("ovBacklog");
-  if(!ovBacklogRows.length){ body.innerHTML="<tr><td colspan='6' style='color:var(--muted)'>Geen data. Draait de uur-sync al?</td></tr>"; return; }
+  if(!ovBacklogRows.length){ body.innerHTML="<tr><td colspan='7' style='color:var(--muted)'>Geen data. Draait de uur-sync al?</td></tr>"; return; }
   body.innerHTML=ovBacklogRows.map(r=>{
     const open=!!ovBacklogOpen[r.m];
     let h="<tr class='ovBackRow' data-m='"+esc(r.m)+"' style='cursor:pointer'><td>"+(open?"▾ ":"▸ ")+"<b>"+esc(r.m)+"</b></td>"+
@@ -1782,14 +1837,16 @@ function renderBacklog(){
       // zonder het te hoeven vragen: het zijn de partnercontainers.
       "<td>"+r.actQty+(r.conQty?(" <span style='color:#c2410c;font-size:11px' title='partnercontainers: orders op magazijn Dealer magazijn, rechtstreeks naar de dealer'>+"+r.conQty+" partnercont.</span>"):"")+"</td>"+
       "<td>"+(r.voorraad||"—")+"</td><td>"+(r.zee||"—")+"</td>"+
+      "<td style='color:"+(r.prodQty?"#7c3aed":"var(--muted)")+"'>"+(r.prodQty||"—")+"</td>"+
       "<td style='color:#15803d'>"+r.gedekt+"</td>"+
       "<td style='color:"+(r.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(r.tekort||"—")+"</td></tr>";
     if(open){
-      h+="<tr><td colspan='6' style='background:#fafafa;padding:8px 14px'>"+
+      h+="<tr><td colspan='7' style='background:#fafafa;padding:8px 14px'>"+
         "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-bottom:4px'>Vraag per kleur — waar de dekking naartoe moet</div>"+
         kleurTabel(r)+
         "<div style='font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px'>Kleuren — Fonteyn-reserveringen</div>"+kleurChips(r.kleuren)+
         (r.kleurenCont.length?("<div style='font-size:11px;color:#c2410c;text-transform:uppercase;letter-spacing:.03em;margin:8px 0 4px'>Kleuren — partnercontainers (rechtstreeks naar de dealer)</div>"+kleurChips(r.kleurenCont)):"")+
+        productieBlok(r)+
         "</td></tr>";
     }
     return h;
