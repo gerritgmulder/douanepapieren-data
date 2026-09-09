@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-09", bestand: "labels.html", soort: "hersteld",
+      titel: "Op elk label staat nu Colli 1 van 1",
+      wat: "Bij vier dezelfde spa's stond er Colli 1 van 4 tot en met Colli 4 van 4, alsof die ene spa uit vier dozen bestond. Eén spa is één collo, dus op elk label staat nu Colli 1 van 1. Je krijgt evenveel labels als eerst.",
+    },
+
+    {
+      datum: "2026-09-09", bestand: "voorraad.html", soort: "beter",
+      titel: "Container zonder spa's krijgt het goede nummer",
+      wat: "Laad je een commercial invoice van bijvoorbeeld een pompencontainer, dan kwam die in de lijst te staan onder de bestandsnaam en zonder leverancier. Nu wordt het factuurnummer en de naam van de fabriek van de factuur zelf gebruikt. De inhoud telt nergens als voorraad mee, dat blijft zo.",
+    },
+
+    {
       datum: "2026-09-08", bestand: "voorraad.html", soort: "hersteld",
       titel: "Een zelf gekozen ETA blijft nu staan",
       wat: "Koos je bij een reservering zelf een zending, dan verdween die keuze zodra de boot binnen was en zette het scherm er de eerstvolgende zending neer. Dat gold voor 104 regels. De keuze blijft nu staan met de datum van de zending die jij hebt aangewezen, ook als die al aangekomen is, en verandert alleen nog als jij hem zelf verandert.",

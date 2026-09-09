@@ -748,9 +748,19 @@ function containerNaarLabels(c) {
     description: x.artikel || "",
     kleur: x.kleur || "",
     kast: x.kast || "",
+    /* Eén spa is één collo.
+       ═══════════════════════════════════════════════════════════════════
+       Manon (9 sep 2026): "1 spa is 1 colli. Op elke label moet Colli 1 van 1
+       komen." Er stond "Colli 1 van 4" tot en met "Colli 4 van 4" op de vier
+       Bliss-labels, alsof die ene spa uit vier dozen bestond. Op de packing
+       list van Jazzi is aantal ook altijd gelijk aan colli, dus vier regels
+       betekent vier baden en niet vier dozen.
+
+       Het aantal labels blijft hetzelfde: evenveel labels als baden, alleen
+       telt elk label nu zichzelf. */
     aantal: x.colli || 1,
-    aantalProducten: 1,
-    aantalColliPerProduct: x.colli || 1,
+    aantalProducten: x.colli || 1,
+    aantalColliPerProduct: 1,
     fonteynCode: "",
     po: c.invoice || "",
     print: true,
@@ -765,7 +775,7 @@ function containerNaarLabels(c) {
   if (!state.rows.length) { setStatus("Deze container heeft geen colli op de packing list.", "bad"); return; }
   renderStep2();
   zoekArtikelenBijContainer();
-  const n = state.rows.reduce((t, r) => t + r.aantalColliPerProduct, 0);
+  const n = state.rows.reduce((t, r) => t + (r.aantalProducten || 1) * (r.aantalColliPerProduct || 1), 0);
   setStatus("✓ " + (c.nummer || "Container " + c.volgnummer) + " · " + state.rows.length +
     " artikelen, " + n + " labels. Vul de ontbrekende Fonteyn-codes in en klik Voorbeeld tonen.", "ok");
   $("step2").scrollIntoView({ behavior: "smooth" });

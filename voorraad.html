@@ -4354,9 +4354,19 @@ async function handleCIUpload(files,statusId){
          zijn. Die gebruiken we nu, zodat de zending gewoon in de lijst komt
          met zijn papieren eraan. De inhoud telt nergens als spa-voorraad mee,
          net als bij de meubelcontainers. */
-      if(!ship.total && !ship.ref && invpl){
-        ship.ref = String(invpl.nummer||"").trim() || file.name.replace(/\.[^.]*$/,"");
-        ship.vessel = invpl.leverancier || "";
+      /* Ook als er alleen een referentie uit de bestandsnaam is gevallen.
+         ═══════════════════════════════════════════════════════════════════
+         Dit ging eerst alleen op als er helemaal geen referentie was, en dat
+         gebeurde bijna nooit: kan de lezer er geen vinden, dan pakt hij de
+         bestandsnaam (refAuto). De pompencontainer van Lingxiao kwam daardoor
+         in de lijst te staan als "INV+PL for 202601", zonder leverancier,
+         terwijl op de factuur gewoon De Fonteyn202601 en de fabrieksnaam
+         staan. Een bestandsnaam is geen referentie: hernoemt iemand het
+         bestand, dan komt dezelfde container er een tweede keer in. */
+      if(!ship.total && (!ship.ref || ship.refAuto) && invpl){
+        const nr = String(invpl.nummer||"").trim();
+        if(nr){ ship.ref = nr; ship.refAuto = false; }
+        if(!ship.vessel) ship.vessel = invpl.leverancier || "";
         ship.containers = invpl.containersOpInvoice ? invpl.containersOpInvoice.aantal
                         : ((invpl.containers||[]).length||1);
       }
