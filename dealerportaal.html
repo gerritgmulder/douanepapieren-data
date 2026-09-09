@@ -203,6 +203,13 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <thead><tr><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Aanbetaling</th><th>Logic4-order</th><th></th></tr></thead>
       <tbody id="reqBodyPaid"></tbody>
     </table>
+    <!-- Elk uur wordt vanzelf nagekeken of een van deze orders in Logic4 is
+         geannuleerd; dan komt de voorraad weer vrij. Deze knop doet hetzelfde
+         nu meteen, voor wie er niet een uur op wil wachten. -->
+    <div class="row" style="margin-top:10px;align-items:center;gap:10px;">
+      <button class="secondary" id="annuBtn" type="button">Annuleringen nakijken</button>
+      <span id="annuUitleg" class="lead" style="margin:0"></span>
+    </div>
     <!-- Voor een order waarvan de aanvraag hierboven niet (meer) staat. Dat
          gebeurt als iemand de regel met het kruisje heeft weggehaald: de order
          blijft dan gewoon in Logic4 staan, maar de knop erbij is weg. -->
@@ -319,6 +326,33 @@ function setStatus(k,m){ const e=$("status"); if(!m){e.classList.add("hidden");r
    verzendingen terechtkwam. Een 200 met een id betekent dat Resend hem heeft
    aangenomen; wat de ontvangende server er daarna mee doet zie je per mail via
    het id. */
+/* Nu nakijken of er bestellingen bij zitten waarvan de order in Logic4 is
+   geannuleerd. Dezelfde controle als de uur-sync; zie dpControleerGeannuleerd
+   in de worker. Daarna de lijst opnieuw ophalen, want de regels zijn dan
+   veranderd. */
+async function annuleringenNakijken(){
+  const knop = $("annuBtn"); if (!knop) return;
+  knop.disabled = true;
+  $("annuUitleg").textContent = "Bezig\u2026";
+  try{
+    const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/controleer-annuleringen",
+      { method: "POST", headers:{ "X-DP-Admin": adminKey() } });
+    const d = await r.json().catch(()=>null);
+    if (!r.ok || !d || !d.ok) {
+      $("annuUitleg").textContent = "Lukte niet: " + ((d && d.error) || ("HTTP " + r.status));
+    } else if (!d.gekeken) {
+      $("annuUitleg").textContent = "Niets na te kijken \u2014 alle orders lopen nog.";
+    } else {
+      $("annuUitleg").textContent = d.gekeken + " nagekeken, " + d.geannuleerd + " geannuleerd" +
+        (d.afgerond ? ", " + d.afgerond + " afgerond" : "") +
+        (d.wachtrij ? " (nog " + d.wachtrij + " te gaan)" : "") + ".";
+      reqData = await kvGet("dealer-requests");
+      if (!Array.isArray(reqData.requests)) reqData.requests = [];
+      renderReqs();
+    }
+  }catch(e){ $("annuUitleg").textContent = "Lukte niet: " + (e.message || e); }
+  knop.disabled = false;
+}
 async function mailNakijken(){
   const knop = $("mailCheckBtn"); if (!knop) return;
   knop.disabled = true;
@@ -356,6 +390,7 @@ async function mailNakijken(){
 }
 document.addEventListener("DOMContentLoaded", () => {
   const b = $("mailCheckBtn"); if (b) b.addEventListener("click", mailNakijken);
+  const a = $("annuBtn"); if (a) a.addEventListener("click", annuleringenNakijken);
 });
 
 /* Toegang komt uit toegang.js, niet uit een eigen lijst. Hier stond tot
@@ -1632,17 +1667,28 @@ function renderReqs(){
     /* Terugdraaien: de aanbetaling tegenboeken en de order annuleren. Bedoeld
        voor een testbestelling. Een aanvraag die al is teruggedraaid krijgt de
        knop niet meer en staat vergrijsd. */
+    /* Geannuleerd in Logic4 zelf, buiten dit scherm om. Chantal (9 sep 2026):
+       "inmiddels is deze order geannuleerd in Logic, order is nog wel
+       zichtbaar onder partner beheer." De uur-sync ziet dat nu en zet het
+       hier neer; de spa's zijn op dat moment ook weer vrij in de voorraad.
+       De regel blijft staan - een bestelling die spoorloos verdwijnt is later
+       niet meer terug te vinden - maar vergrijsd en met de datum erbij.
+       De knop terugdraaien blijft staan: de order is dan wel geannuleerd,
+       de aanbetaling is nog niet tegengeboekt. */
+    const gean = r.orderGeannuleerd
+      ? `<span class="pill off" title="${esc(String(r.geannuleerdOp||"").slice(0,16).replace("T"," "))}">geannuleerd in Logic4</span> `
+      : "";
     const terug = r.teruggedraaid
       ? `<span class="pill off" title="${esc(String(r.teruggedraaidOp||"").slice(0,16).replace("T"," "))}">teruggedraaid</span>`
       : (r.logic4OrderId ? `<button class="rmv reqTerug" data-id="${esc(r.id)}">terugdraaien</button>` : "");
-    return `<tr${r.teruggedraaid?' style="opacity:.55"':''}>
+    return `<tr${(r.teruggedraaid||r.orderGeannuleerd)?' style="opacity:.55"':''}>
       <td style="white-space:nowrap">${esc(String(r.ts||"").slice(0,16).replace("T"," "))}</td>
       <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span></td>
       <td>${regelsCel(r)}</td>
       <td>${esc(r.qty)}</td>
       <td style="white-space:nowrap">${dep}</td>
       <td>${l4}</td>
-      <td style="white-space:nowrap">${terug} <button class="rmv reqDel" data-i="${idx}">✕</button></td>
+      <td style="white-space:nowrap">${gean}${terug} <button class="rmv reqDel" data-i="${idx}">✕</button></td>
     </tr>`;
   }).join("") || '<tr><td colspan="7" style="color:var(--muted)">Nog geen aanbetaalde reserveringen.</td></tr>';
 

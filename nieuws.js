@@ -54,13 +54,19 @@
     {
       datum: "2026-09-09", bestand: "dealerportaal.html", soort: "beter",
       titel: "De voorraad per kleur, met de datum erbij",
-      wat: "Een partner ziet in het portaal nu per kleur wat er klaarstaat en wat er aankomt, met de verwachte datum van het schip. Alleen wat nog niet verkocht is. Een model waar niets van in de hal ligt maar wel een boot voor onderweg is, heet geen backorder meer.",
+      wat: "Een partner ziet in het portaal nu per kleur wat er klaarstaat en wat er aankomt, met de verwachte datum van het schip. Alleen wat nog niet verkocht is. Een model waar niets van in de hal ligt maar wel een boot voor onderweg is, heet geen backorder meer. De pagina haalt de voorraad ook zelf elke drie kwartier van een minuut opnieuw op, zodat twee mensen die naast elkaar op een beurs staan hetzelfde zien.",
     },
 
     {
       datum: "2026-09-09", bestand: "dealerportaal.html", soort: "hersteld",
       titel: "Bezorgen naar het buitenland rekent weer door",
-      wat: "Koos een partner een ander land dan Nederland, dan kwam er een melding over een postcodegebied dat niet bestond. Het portaal vraagt nu eerst netjes om de postcode. Daarnaast vielen alle postcodes onder de 10.000 buiten de tarieflijst - Dresden, Rome, Warschau, Oslo - en die worden nu gewoon gevonden.",
+      wat: "Koos een partner een ander land dan Nederland, dan kwam er een melding over een postcodegebied dat niet bestond. Het portaal vraagt nu eerst netjes om de postcode. Daarnaast vielen alle postcodes onder de 10.000 buiten de tarieflijst - Dresden, Rome, Warschau, Oslo - en die worden nu gewoon gevonden. De laadmeters klopten ook niet: een spa gaat op zijn kant de wagen in en niet plat, dus er stond twee keer zoveel als de vervoerder rekent.",
+    },
+
+    {
+      datum: "2026-09-09", bestand: "dealerportaal.html", soort: "hersteld",
+      titel: "Een order die in Logic4 wordt geannuleerd, komt terug in de voorraad",
+      wat: "Werd een bestelling uit het partnerportaal rechtstreeks in Logic4 geannuleerd, dan bleef hij in Beheer staan en hield hij de spa's vast alsof ze verkocht waren. Dat wordt nu elk uur nagekeken, met een knop erbij om het meteen te doen. De partner ziet bij zijn eigen bestelling dat hij geannuleerd is in plaats van dat die zonder uitleg verdwijnt.",
     },
 
     {

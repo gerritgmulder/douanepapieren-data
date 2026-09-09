@@ -958,10 +958,40 @@ async function dpHandleStock(env) {
 
    Het bedrag is een indicatie en geen offerte: de vervoerder rekent af op wat
    er werkelijk de wagen op gaat. Dat staat ook zo in het portaal. */
+const VRACHT_TRAILER_CM = 240;
 function vrachtLaadmeters(doos) {
   if (!doos || !(doos.l > 0) || !(doos.b > 0)) return 0;
-  // Vierkante centimeters vloer, gedeeld door een trailerbreedte van 240 cm.
-  return (doos.l * doos.b) / (240 * 100);
+  const platteVloer = doos.l * doos.b;
+  /* EEN SPA GAAT OP ZIJN KANT DE WAGEN IN.
+     ═══════════════════════════════════════════════════════════════════════
+     Chantal (9 sep 2026): "ik heb een test gedaan met een reflect en een
+     retreat (…) het systeem zegt 4.33 laadmeter, dit is niet correct, het is
+     2 laadmeter."
+
+     Ze heeft gelijk, en het verschil is precies factor twee. Hier stond de
+     vloer van de kist zoals hij plat op de grond staat: 228 x 228 cm is 2,17
+     laadmeter, en twee daarvan is 4,33. Maar zo rijdt er geen enkele spa mee.
+     Hij wordt gekanteld en staat op zijn dunne ribbe: 228 cm dwars over de
+     wagen (die is 240 breed) en 85 cm diep. Dat is 0,81 laadmeter per stuk,
+     samen 1,62 - en dat valt in de tariefband van 2 laadmeter. Precies het
+     getal dat Chantal noemt.
+
+     Wanneer kan dat niet? Als de langste ribbe niet dwars op de wagen past.
+     Dat is meteen ook het verschil tussen een spa en een swimspa: de langste
+     ribbe van een spa is hooguit 240 cm, die van een swimspa begint bij 585
+     en loopt door tot 780. Tussen die twee zit in de hele lijst van 148
+     modellen niets, dus de grens ligt niet op een haar: een swimspa blijft
+     plat liggen en houdt zijn 5,58 tot 7,41 laadmeter.
+
+     Voor de duidelijkheid: dit is een schatting van de vloer die de lading
+     inneemt, geen offerte. De vervoerder rekent af op wat er werkelijk op de
+     wagen komt, en dat staat ook zo in het portaal. */
+  const ribben = [Number(doos.l), Number(doos.b), Number(doos.h)]
+    .filter(x => x > 0).sort((a, b) => a - b);
+  const opDeKant = ribben.length === 3 && ribben[2] <= VRACHT_TRAILER_CM
+    ? ribben[0] * ribben[1]
+    : platteVloer;
+  return Math.min(platteVloer, opDeKant) / (VRACHT_TRAILER_CM * 100);
 }
 /* De eerste band die groot genoeg is voor allebei; anders de grootste.
 
@@ -1689,7 +1719,14 @@ async function dpHandleMyRequests(env, sess) {
                  items: Array.isArray(r.items) && r.items.length > 1
                    ? r.items.map(x => ({ qty: x.qty, naam: x.soort === "spa" ? x.model : (x.naam || x.code),
                                          variantName: x.variantName || null })) : null,
-                 deposit: r.deposit || null, currency: r.currency || null, paymentStatus: r.paymentStatus || null }))
+                 deposit: r.deposit || null, currency: r.currency || null, paymentStatus: r.paymentStatus || null,
+                 /* Geannuleerd in Logic4 (of teruggedraaid in Beheer). Chantal
+                    (9 sep 2026): "de dealer moet dus kunnen zien dat zijn order
+                    geannuleerd is." Uit de ledger verdwijnt hij vanzelf, en dan
+                    is hij weg zonder uitleg - hier blijft hij staan mét reden. */
+                 geannuleerd: !!r.orderGeannuleerd || r.status === "geannuleerd",
+                 geannuleerdOp: r.geannuleerdOp || null,
+                 ordernr: r.logic4OrderId || null }))
     .sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
   return reply(200, { ok: true, requests: mine });
 }
@@ -2661,6 +2698,16 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/refresh-stock" && request.method === "POST") return reply(200, await dpRefreshHalStock(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     if (p === "/dealers/admin/refresh-eta" && request.method === "POST") return reply(200, await dpRefreshShipEtas(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     if (p === "/dealers/admin/refresh-reserveringen" && request.method === "POST") return reply(200, await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    /* Nu nakijken of er portaalbestellingen bij zitten waarvan de order in
+       Logic4 is geannuleerd, zonder op de uur-sync te wachten. Zelfde controle
+       als in de cron; zie dpControleerGeannuleerd. */
+    if (p === "/dealers/admin/controleer-annuleringen" && request.method === "POST") {
+      const ledger = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
+      const lopend = new Set();
+      for (const l of Object.values(ledger.byModel || {})) for (const x of l) lopend.add(String(x.ordernr));
+      for (const l of Object.values(ledger.byModelUSA || {})) for (const x of l) lopend.add(String(x.ordernr));
+      return reply(200, await dpControleerGeannuleerd(env, lopend).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
 
     if (p === "/dealers/admin/refresh-productie" && request.method === "POST") return reply(200, await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     if (p === "/dealers/admin/mailcheck") return reply(200, await dpMailCheck(env).catch(e => ({ ok: false, error: String(e.message || e) })));
@@ -4438,6 +4485,99 @@ async function dpRefreshShipEtas(env) {
    dezelfde als in dpRefreshReservations - niet een kopie die uit de pas gaat
    lopen, maar dezelfde drie voorwaarden: de status telt mee, er staat een spa
    op, en die spa is nog niet afgeleverd. */
+/* ANNULEER JE IN LOGIC4, DAN WEET HET PORTAAL DAT OOK.
+   ═══════════════════════════════════════════════════════════════════════════
+   Chantal (9 sep 2026): "ik heb als test gisteren een order aangemaakt voor
+   mijzelf als partner (…) inmiddels is deze order geannuleerd in Logic, order
+   is nog wel zichtbaar onder partner beheer (…) de spas/sauna moeten dan ook
+   weer terug gezet worden in de voorraad."
+
+   Er is wél een knop 'Terugdraaien' in Passion Partners Beheer, en die doet
+   alles goed: order op status 23 in Logic4, aanbetaling tegengeboekt, claim
+   vrij. Maar wie het rechtstreeks in Logic4 annuleert komt daar niet langs, en
+   dan bleef de bestelling in het portaal gewoon staan én voorraad vasthouden.
+   Bij order 3521551 waren dat twee Ice Barrels, een Recharge en een Reflect
+   die voor iedereen op de beurs onzichtbaar bleven.
+
+   Daarom kijkt de uur-sync het na. Alleen bestellingen met een ordernummer die
+   nog voorraad claimen, en alleen die niet in de zojuist opgehaalde ledger
+   staan - want wat daarin staat is per definitie een lopende order. Dat zijn
+   er in de praktijk een handvol, dus het past ruim binnen wat een worker per
+   keer naar buiten mag vragen; er zit een harde grens op voor het geval dat
+   ooit anders wordt.
+
+   'Geannuleerd' betekent hier: de status van de order telt niet meer mee voor
+   de voorraad (23 Geannuleerd, maar ook een order die uit Logic4 verdwenen
+   is). De regel blijft staan met een datum erbij - een bestelling die zomaar
+   uit het overzicht verdwijnt is voor niemand te volgen, en de partner hoort
+   te kunnen zien dát hij geannuleerd is. */
+const DP_MAX_ORDERCONTROLES = 25;
+async function dpControleerGeannuleerd(env, ledgerOrders) {
+  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  const lijst = Array.isArray(data.requests) ? data.requests : [];
+  const teControleren = lijst.filter(r =>
+    r.logic4OrderId && !r.allocationReleased && !r.orderGeannuleerd &&
+    !ledgerOrders.has(String(r.logic4OrderId)));
+  if (!teControleren.length) return { ok: true, gekeken: 0, geannuleerd: 0 };
+
+  const token = await l4Token(env);
+  let geannuleerd = 0, afgerond = 0, gekeken = 0;
+  for (const r of teControleren.slice(0, DP_MAX_ORDERCONTROLES)) {
+    gekeken++;
+    let statusId = null, bestaat = false;
+    try {
+      const res = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ Id: Number(r.logic4OrderId), TakeRecords: 1 }),
+      });
+      if (!res.ok) continue;                       // storing: volgende keer opnieuw
+      const j = await res.json().catch(() => null);
+      const o = ((j && (j.Records || j)) || [])[0];
+      if (o) { bestaat = true; statusId = Number(o.OrderStatus && o.OrderStatus.Id) || null; }
+    } catch (e) { continue; }
+    // Alleen ingrijpen als we het écht weten. Geen antwoord = niets doen.
+    if (bestaat && DP_RESV_STATUSES.includes(statusId)) continue;
+
+    if (!bestaat) {
+      /* De order is niet meer te vinden. Zo ziet een annulering er in Logic4
+         uit: order 3521551 van Chantal was na het annuleren niet meer op te
+         halen, terwijl elke lopende order dat wél gewoon is. Toch een
+         ondergrens: we halen orders van het afgelopen jaar op, dus een oude
+         bestelling die er buiten valt mag hier niet als 'geannuleerd' eindigen. */
+      const ts = Date.parse(r.ts || "") || 0;
+      if (!ts || Date.now() - ts > 300 * 86400000) continue;
+      r.allocationReleased = true;
+      r.orderGeannuleerd = true;
+      r.orderStatusId = null;
+      r.status = "geannuleerd";
+      r.geannuleerdOp = new Date().toISOString();
+      r.geannuleerdDoor = "Logic4";
+      geannuleerd++;
+      continue;
+    }
+    if (statusId === 23) {                       // 23 = Geannuleerd
+      r.allocationReleased = true;
+      r.orderGeannuleerd = true;
+      r.orderStatusId = statusId;
+      r.status = "geannuleerd";
+      r.geannuleerdOp = new Date().toISOString();
+      r.geannuleerdDoor = "Logic4";
+      geannuleerd++;
+      continue;
+    }
+    /* Alle andere statussen die niet meetellen zijn juist een order die KLAAR
+       is: afgeleverd, gefactureerd. Die claimt geen voorraad meer, maar hem
+       'geannuleerd' noemen zou een partner vertellen dat zijn bestelling niet
+       doorgaat terwijl zijn spa allang bij hem staat. Dus wel de claim
+       loslaten, en verder met rust laten. */
+    r.allocationReleased = true;
+    r.orderStatusId = statusId;
+    afgerond++;
+  }
+  if (geannuleerd || afgerond) await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+  return { ok: true, gekeken, geannuleerd, afgerond, wachtrij: Math.max(0, teControleren.length - gekeken) };
+}
+
 async function dpOrderUitleg(env, nr) {
   const token = await l4Token(env);
   const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
@@ -9534,6 +9674,19 @@ export default {
         console.log("[cron] scheeps-ETA's: " + JSON.stringify(et));
         const rv = await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) }));
         console.log("[cron] reserveringen: " + JSON.stringify(rv));
+
+        /* Meteen hierna: portaalbestellingen waarvan de order in Logic4 is
+           geannuleerd. Die houden anders voorraad vast die er allang weer is.
+           Moet ná de reserveringen, want de zojuist opgehaalde ledger is wat
+           bepaalt welke orders nog lopen. */
+        try {
+          const ledger = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
+          const lopend = new Set();
+          for (const l of Object.values(ledger.byModel || {})) for (const x of l) lopend.add(String(x.ordernr));
+          for (const l of Object.values(ledger.byModelUSA || {})) for (const x of l) lopend.add(String(x.ordernr));
+          const ga = await dpControleerGeannuleerd(env, lopend);
+          console.log("[cron] geannuleerde portaalorders: " + JSON.stringify(ga));
+        } catch (e) { console.log("[cron] geannuleerde portaalorders: " + (e.message || e)); }
 
         /* De zoeklijst van zakelijke relaties, één keer per etmaal. Hij kost
            bijna duizend aanroepen aan Logic4 omdat de klantenlijst 468.000

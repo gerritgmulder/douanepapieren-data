@@ -723,6 +723,38 @@ async function loadStock(){
   if (r.data.updated) $("stockUpdated").textContent = "Last updated: " + new Date(r.data.updated).toLocaleDateString("en-GB") + ".";
   renderStock();
 }
+/* ── De voorraad blijft vanzelf bij ──────────────────────────────────────
+   Chantal (9 sep 2026): "als we straks samen naast elkaar op de beurs nieuwe
+   dealers aan het inschrijven zijn die direct iets willen bestellen, moeten we
+   real time kunnen zien hoeveel er op voorraad is."
+
+   Wat er al goed ging: reserveert iemand in het portaal, dan telt die claim
+   meteen mee in de som die de server maakt. Twee mensen naast elkaar zagen dat
+   alleen niet, want de pagina haalde de voorraad één keer op bij het openen en
+   daarna nooit meer.
+
+   Nu haalt hij hem elke 45 seconden opnieuw op, en meteen zodra je terugkomt
+   op het tabblad - dat laatste is wat je op een beurs het vaakst doet. Alleen
+   als het voorraadtabblad ook echt voor staat: op de prijslijst of in Contact
+   heeft het geen zin en het kost dan alleen batterij.
+
+   Terwijl er een venster open staat (reserveren, downloads, de winkelwagen)
+   wordt er niet opnieuw getekend. Dat venster staat vol met keuzes die iemand
+   net heeft gemaakt en die mogen niet onder zijn handen wegspringen; zodra het
+   dicht is, is de eerstvolgende ronde er binnen drie kwartier van een minuut. */
+const STOCK_VERVERS_MS = 45000;
+function stockTabVoor(){
+  const t = document.querySelector(".tab.active");
+  return !!t && t.dataset.tab === "stock";
+}
+async function stockBijwerken(){
+  if (document.hidden || !stockTabVoor()) return;
+  if (document.querySelector(".laag")) return;          // er staat een venster open
+  await loadStock().catch(() => {});
+}
+setInterval(stockBijwerken, STOCK_VERVERS_MS);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) stockBijwerken(); });
+window.addEventListener("focus", stockBijwerken);
 /* Wat er ECHT staat, per kleur.
 
    Hier stond eerst een rekensom: beschikbaar = voorraad + op het water − wat
@@ -1261,6 +1293,11 @@ async function openBestand(e){
 
 // ── Reservation requests: eigen aanvragen met status ──
 function reqStatusLabel(r){
+  /* Geannuleerd staat boven alles. Chantal (9 sep 2026): "de dealer moet dus
+     kunnen zien dat zijn order geannuleerd is." Uit het overzicht halen kan
+     niet: dan is een bestelling waar iemand op zit te wachten opeens weg,
+     zonder dat er iets staat over waarom. */
+  if (r.geannuleerd) return ["Cancelled" + (r.ordernr ? " (order " + r.ordernr + ")" : ""), "uit"];
   if (r.status === "paid" || r.paymentStatus === "paid") return ["Deposit paid — reservation confirmed", "ok"];
   if (r.deposit && r.paymentStatus === "open") return ["Awaiting deposit payment", ""];
   if (r.status === "done") return ["Handled by our sales team", "ok"];
@@ -1273,11 +1310,11 @@ async function loadMyRequests(){
   $("myReqEmpty").classList.toggle("hidden", reqs.length > 0);
   $("myReqList").innerHTML = reqs.map(x => {
     const [label, cls] = reqStatusLabel(x);
-    return `<div class="doc">
+    return `<div class="doc"${cls==="uit"?' style="opacity:.62;"':''}>
       <div><b>${x.items && x.items.length
             ? x.items.map(i => i.qty + "\u00d7 " + i.naam).join(", ")
             : (x.qty + "\u00d7 " + esc(x.model))}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit?` · paid ${x.currency==="USD"?"$":"€"} ${Number(x.deposit).toFixed(2)}`:""}</span></div>
-      <span style="font-size:13px;${cls==="ok"?"color:#15803d;font-weight:600;":"color:var(--muted);"}">${label}</span>
+      <span style="font-size:13px;${cls==="ok"?"color:#15803d;font-weight:600;":cls==="uit"?"color:#b91c1c;font-weight:600;":"color:var(--muted);"}">${label}</span>
     </div>`;
   }).join("");
 }
@@ -2183,7 +2220,9 @@ function openCart(){
       setTimeout(() => { location.href = r.data.checkoutUrl; }, 1400);
     } else if (r.status === 200 && r.data && r.data.ok) {
       m.className = "msg ok"; m.textContent = "Order sent — you can follow it under My spas."; m.classList.remove("hidden");
-      cart = []; cartBewaar(); loadMyRequests(); setTimeout(sluit, 2200);
+      // Meteen de voorraad opnieuw ophalen: wat deze partner net heeft
+      // vastgelegd, hoort de collega naast hem op de beurs ook te zien.
+      cart = []; cartBewaar(); loadMyRequests(); loadStock(); setTimeout(sluit, 2200);
     } else {
       /* Zeggen wát er misging. "Sending failed" alleen is niet op te lossen:
          daar kan niemand uit afleiden of het aan de verbinding ligt, aan het
