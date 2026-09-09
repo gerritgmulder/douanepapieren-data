@@ -92,6 +92,18 @@
         };
       }
     }
+    /* Staat de maat er niet bij, dan telt een regel als "TWO Containers Total
+       Amount" ook. Lodestone schrijft het zo, en dan stond er ten onrechte
+       "op de invoice staat niet hoeveel containers het zijn" terwijl het er
+       met zoveel woorden staat. Zonder maat, want die noemt hij niet. */
+    var woorden = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
+    for (var r2 = 0; r2 < rijen.length; r2++) {
+      var regel = rijTekst(rijen[r2]);
+      var mw = regel.match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s+containers?\b/i);
+      if (!mw) continue;
+      var n = woorden[mw[1].toLowerCase()] || parseInt(mw[1], 10);
+      if (n > 0 && n < 50) return { aantal: n, maat: "", gevondenIn: tekst(regel).slice(0, 60) };
+    }
     return null;
   }
 
