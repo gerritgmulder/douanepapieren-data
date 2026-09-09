@@ -512,7 +512,7 @@
            mooier als dit verdwijnt en dat we dat aanpassen naar Bestellen."
            Dezelfde lijst, dezelfde volgorde, andere kop. -->
       <h3>Bestellen</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <b>In productie</b> staat er los naast: dat is besteld bij de fabriek maar vaart nog niet, dus het dekt nog niets af. Klik een model open om te zien in welke kleur. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
+      <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <b>In productie</b> is wat er bij de fabriek besteld staat; dat telt mee in Gedekt en gaat dus van het tekort af. Klik een model open om te zien in welke kleur. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
       <div id="ovParserWaarschuwing" class="status-msg warn hidden" style="margin:0 0 10px"></div>
       <div class="tablewrap" style="max-height:52vh"><table class="grid">
         <thead><tr><th>Model</th><th>Actief res.</th><th>Op voorraad (NL)</th><th>Op zee</th><th>In productie</th><th>Gedekt</th><th>Tekort</th></tr></thead>
@@ -1644,13 +1644,46 @@ function kleurBreakdown(lines){
   const by={}; for(const r of lines){ const k=r.kleur||"(geen kleur)"; by[k]=(by[k]||0)+r.qty; }
   return Object.entries(by).map(([kleur,qty])=>({kleur,qty})).sort((a,b)=>b.qty-a.qty);
 }
+/* Welke proforma's zitten er in een referentie?
+   Een containerreferentie noemt er soms twee: "RZ2009DF3332-6&3342-1" is
+   container 6 van proforma 3332 én container 1 van proforma 3342. Een
+   inkooporder noemt er één: "Proforma RZ2009DF3388 to Rotterdam". */
+function proformaNummers(tekst){
+  return [...String(tekst||"").matchAll(/\b(\d{4})\b/g)].map(function(m){ return m[1]; });
+}
+// Per proforma en per model: hoeveel er al op een schip staat.
+function proformaZee(ship){
+  const uit={};
+  for(const s of ((ship&&ship.ships)||[])){
+    const nrs=proformaNummers(s.ref||s.trackRef||s.file);
+    for(const [m,q] of Object.entries(s.models||{}))
+      for(const nr of nrs){ (uit[nr]=uit[nr]||{})[m]=((uit[nr]||{})[m]||0)+q; }
+  }
+  return uit;
+}
+/* Wat er van dit model écht nog bij de fabriek ligt: de open inkooporder min
+   wat er van diezelfde proforma al vaart. Zonder die aftrek telt een spa die
+   al op zee is twee keer mee en zakt het tekort te ver. */
+function productieTelt(regels,model,zeePerProforma){
+  const perPf={};
+  for(const x of (regels||[])){
+    const nr=proformaNummers(x.ref)[0]||"";
+    perPf[nr]=(perPf[nr]||0)+(Number(x.qty)||0);
+  }
+  let som=0;
+  for(const nr of Object.keys(perPf)){
+    const alOnderweg=nr?(((zeePerProforma||{})[nr]||{})[model]||0):0;
+    som+=Math.max(0,perPf[nr]-alOnderweg);
+  }
+  return som;
+}
 function renderOverzicht(resv,hal,ship,priceData,prodData){
   const byModel=resv.byModel||{}, halM=hal.models||{}, rate=Number((priceData.meta||{}).rate)||1.11, prices=priceData.prices||{};
   // schepen per model
   const shipByModel={}; let shipTotal=0;
   for(const s of (ship.ships||[])) for(const [m,q] of Object.entries(s.models||{})){ shipByModel[m]=(shipByModel[m]||0)+q; shipTotal+=q; }
   // aggregaten — containers (dealer-direct) apart van de Fonteyn-vraag
-  let actief=0,betaald=0,wacht=0,containers=0,orderwaarde=0, halTotal=0;
+  let actief=0,betaald=0,wacht=0,containers=0,orderwaarde=0, halTotal=0, prodTotal=0;
   // Aantal container-ORDERS erbij, want het getal eronder telt spa's. En het
   // oudste orderjaar, zodat zichtbaar is hoe ver dit terugkijkt: de tegel toont
   // wat er openstaat, en dat kan uit een order van vorig jaar komen.
@@ -1662,10 +1695,24 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
       if(d&&(!oudsteCont||d<oudsteCont)) oudsteCont=d;
     }
   ovContainerOrders=contOrders.size; ovContainerOudste=oudsteCont;
-  // In productie bij de fabriek, per model en per kleur.
+  /* In productie bij de fabriek, per model en per kleur.
+     ═══════════════════════════════════════════════════════════════════════
+     Chantal (video, 8 sep 2026): "op het moment dat ik een proforma invoer,
+     moet dat wel van het tekort worden afgehaald. Want anders telt mijn
+     tekort alleen maar hetgene wat onderweg is en wat hier in Nederland
+     staat, en dat is natuurlijk niet waar."
+
+     Dus telt het mee. Met één correctie erop, want anders zou hetzelfde bad
+     twee keer meetellen: een inkooporder bij de fabriek blijft in Logic4 open
+     tot de spa's in Uddel zijn ingeboekt, ook als de container al vaart. Op
+     9 sep gold dat voor 18 regels van inkooporder 37829 (proforma 3332),
+     waarvan containers al onderweg zijn.
+
+     Daarom wordt per model en per proforma afgetrokken wat er van diezelfde
+     proforma al op zee staat. Wat overblijft is wat er echt nog bij de
+     fabriek ligt. */
   const prodM=(prodData&&prodData.models)||{};
-  let prodTotal=0;
-  for(const l of Object.values(prodM)) for(const x of (l||[])) prodTotal+=Number(x.qty)||0;
+  const zeePerProforma=proformaZee(ship);
   const rows=[];
   const models=new Set([...Object.keys(byModel),...Object.keys(prices),...Object.keys(prodM)]);
   for(const m of models){
@@ -1677,8 +1724,11 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
     actief+=actQty; betaald+=betQty; wacht+=actQty-betQty; containers+=conQty;
     const voorraad=(halM[m]||{}).available||0; halTotal+=voorraad;
     const zee=shipByModel[m]||0;
-    const gedekt=Math.min(actQty,voorraad+zee);
-    const tekort=Math.max(0,actQty-voorraad-zee);
+    // Zie de toelichting hierboven: wat bij de fabriek in productie staat
+    // dekt de vraag af en gaat dus van het tekort af.
+    const prodVoor=productieTelt(prodM[m]||[],m,zeePerProforma);
+    const gedekt=Math.min(actQty,voorraad+zee+prodVoor);
+    const tekort=Math.max(0,actQty-voorraad-zee-prodVoor);
     const p=prices[m]; if(p&&p.usd) orderwaarde+=actQty*Math.round(Number(p.usd)/rate);
     /* In productie telt NIET mee in gedekt en tekort. Een inkooporder bij de
        fabriek is nog geen spa: hij is niet geladen en heeft vaak geen ETA.
@@ -1686,9 +1736,11 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
        vaart. Hij staat er als eigen kolom naast, zodat je ziet dat er al iets
        op besteld is voordat je nog een keer bestelt. */
     const prodRegels=prodM[m]||[];
-    const prodQty=prodRegels.reduce((a,x)=>a+(Number(x.qty)||0),0);
+    const prodRuw=prodRegels.reduce((a,x)=>a+(Number(x.qty)||0),0);
+    const prodQty=productieTelt(prodRegels,m,zeePerProforma);
+    prodTotal+=prodQty;
     if(actQty>0||voorraad>0||zee>0||conQty>0||prodQty>0) rows.push({m,actQty,conQty,voorraad,zee,gedekt,tekort,
-      prodQty, prodRegels,
+      prodQty, prodRuw, prodRegels,
       kleuren:kleurBreakdown(fon), kleurenCont:kleurBreakdown(con),
       perKleur:tekortPerKleur(fon,(halM[m]||{}).variants||{})});
   }
@@ -1817,7 +1869,11 @@ function productieBlok(r){
     if(x.eta) g.etas.add(String(x.eta).slice(0,10));
   }
   const lijst=Object.values(per).sort((a,b)=>b.qty-a.qty);
+  const alVaart=(r.prodRuw||0)-(r.prodQty||0);
   return "<div style='font-size:11px;color:#7c3aed;text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px'>In productie bij de fabriek</div>"+
+    (alVaart>0?("<div style='font-size:11px;color:var(--muted);margin-bottom:4px'>Van deze "+(r.prodRuw||0)+
+      " staan er "+alVaart+" al op een schip. Die tellen bij Op zee en niet nog een keer hier, dus "+
+      (r.prodQty||0)+" ligt er nog bij de fabriek.</div>"):"")+
     "<table class='grid' style='font-size:12px'><thead><tr><th>Kleur</th><th style='text-align:right'>Aantal</th><th>Inkooporder</th><th>Verwacht</th></tr></thead><tbody>"+
     lijst.map(function(g){
       const etas=[...g.etas].sort();
