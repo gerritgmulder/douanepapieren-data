@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-10", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Passion Partners staat nu op zijn eigen adres",
+      wat: "Het portaal is te bereiken op partner.passionspas.com. Elke link die een dealer krijgt wijst daar nu naartoe: de uitnodiging, de inloglink en de terugkeer na betalen. De tegel Passion Partners opent hetzelfde adres. Het oude adres blijft werken, maar een dealer ziet het niet meer.",
+    },
+
+    {
+      datum: "2026-09-10", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Het Passion-logo staat in de mails en op de inlogpagina's",
+      wat: "De welkomstmail, de inloglinkmail, de activatiepagina en de inlogpagina hadden alle vier hun eigen opmaak. Ze zien er nu hetzelfde uit, met het Passion Spas-logo bovenaan en het adres van het portaal eronder.",
+    },
+
+    {
       datum: "2026-09-10", bestand: "dealerportaal.html", soort: "hersteld",
       titel: "De laadmeters komen nu van Chantal en Manon",
       wat: "De bezorgkosten werden uitgerekend op de maat van de kist, en dat gaf steeds nét te weinig laadmeters: 1,66 waar het er 2 zijn, 0,61 waar het er 1 is. Chantal en Manon hebben de laadmeters van alle modellen uitgeschreven en daar wordt nu mee gerekend. Bij een Turbine komt er geen prijs meer uit maar de vraag om even contact op te nemen; dat transport is altijd maatwerk.",
