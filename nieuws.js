@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-10", iedereen: true, soort: "hersteld",
+      titel: "Nergens meer opzij slepen",
+      wat: "In een aantal tegels liep een tabel buiten beeld en moest je opzij slepen om de rest te zien. Dat kan nu nergens meer: een tabel past altijd binnen het scherm en tekst breekt af in plaats van de tabel op te rekken. Bij Voorraadbeheer staan de kolommen Verwachte levering, opmerking en de vinkjes voortaan op een dunne regel onder de order, net als bij Reserveringen.",
+    },
+
+    {
       datum: "2026-09-09", bestand: "dealerportaal.html", soort: "beter",
       titel: "De voorraad per kleur, met de datum erbij",
       wat: "Een partner ziet in het portaal nu per kleur wat er klaarstaat en wat er aankomt, met de verwachte datum van het schip. Alleen wat nog niet verkocht is. Een model waar niets van in de hal ligt maar wel een boot voor onderweg is, heet geen backorder meer. De pagina haalt de voorraad ook zelf elke drie kwartier van een minuut opnieuw op, zodat twee mensen die naast elkaar op een beurs staan hetzelfde zien.",

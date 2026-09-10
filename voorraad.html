@@ -18,6 +18,7 @@
 <script src="meubel-invoice.js"></script>
 <script src="inv-pl.js"></script>
 <script src="kop.js"></script>
+<script src="breedte.js"></script>
 <style>
   :root{
     --fonteyn-green:#144734; --fonteyn-green-dark:#0d3325;
@@ -119,7 +120,9 @@
   table.grid.resv tr.subrij .notOpm{padding:1px 6px!important;font-size:11px!important;height:20px;line-height:18px}
   /* Het streepje links laat zien dat deze strook bij de order erboven hoort;
      zonder dat leest een lijst van 233 orders als 466 losse regels. */
-  table.grid.resv tr.subrij .subwerk{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;
+  /* flex-wrap:wrap, niet nowrap: op een smal scherm zakt het laatste vinkje
+     naar de volgende regel in plaats van de tabel opzij te duwen. */
+  table.grid.resv tr.subrij .subwerk{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
       font-size:11px;color:var(--muted);line-height:1.3;
       border-left:2px solid #e9edea;padding-left:9px}
   table.grid.resv tr.subrij .lev{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;max-width:330px}
@@ -3125,9 +3128,25 @@ function renderParticulierBlok(){
        "datgene wat bij transporteur staat ingevuld in Logic, moet hier
        automatisch komen - FBS, transportdistributie, afhaal." De waarde komt
        met de uur-sync van de reserveringen mee uit Logic4. */
-    lijst.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
+    /* Zeven kolommen boven, de rest op een dunne subregel eronder.
+       ═══════════════════════════════════════════════════════════════════
+       Hier stonden twaalf kolommen naast elkaar en dan loopt de tabel opzij.
+       Gerrit (9 sep 2026): "ik wil dat er niet meer horizontaal gescrolld
+       wordt op het Dashboard. Nergens niet." Eerder al voor Reserveringen:
+       "er komt bij iedere regel een subregel voor Verwachte levering, afroep,
+       inplannen, gepland. Maar zorg wel echt dat het 'dun' is."
+
+       Dat is precies wat de Reserveringen-tabel al doet, dus hier dezelfde
+       opzet en dezelfde klassen (resv + subrij), zodat het er ook hetzelfde
+       uitziet en er maar één stijl te onderhouden is. */
+    const vinkP=function(veld,tekst,aan,id){
+      return "<label class='vk' title='"+esc(tekst)+"'><input type='checkbox' class='notVink' data-veld='"+veld+"' data-id='"+id+"'"+
+        (aan?" checked":"")+uit+"><span>"+esc(tekst)+"</span></label>";
+    };
+    const KOL=7;
+    lijst.innerHTML="<div class='tablewrap'><table class='grid resv'><thead><tr>"+
       "<th>Order</th><th>Transport</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Klant</th><th>Datum</th>"+
-      "<th>Verwachte levering</th><th>Opmerkingen</th><th>Afroep</th><th>Inplannen</th><th>Gepland</th></tr></thead><tbody>"+
+      "</tr></thead><tbody>"+
       rijen.map(function(r){
         const n=notitie(r), id=esc(r.regelId||"");
         const stijl=n.inplannen?"background:#fef9c3"+(n.afroep?";border-left:4px solid #7c3aed":"")
@@ -3138,12 +3157,16 @@ function renderParticulierBlok(){
           "<td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur,r)+"</td>"+
           "<td>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
           "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
-          "<td style='font-size:12px'>"+leveringCel(r,n,id,uit)+"</td>"+
-          "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' readonly title='"+esc(n.opmerking||"Klik om een notitie te schrijven")+"' style='width:110px;font-size:12px;padding:4px 7px;cursor:pointer;text-overflow:ellipsis'"+uit+"></td>"+
-          "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='afroep' data-id='"+id+"'"+(n.afroep?" checked":"")+uit+"></td>"+
-          "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='inplannen' data-id='"+id+"'"+(n.inplannen?" checked":"")+uit+"></td>"+
-          "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='gepland' data-id='"+id+"'"+(n.gepland?" checked":"")+uit+"></td>"+
-          "</tr>";
+          "</tr>"+
+          "<tr class='subrij' style='"+stijl+"'><td colspan='"+KOL+"'>"+
+            "<div class='subwerk'>"+
+              "<span class='lev'>"+leveringCel(r,n,id,uit)+"</span>"+
+              "<input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' readonly title='"+esc(n.opmerking||"Klik om een notitie te schrijven")+"'"+uit+">"+
+              vinkP("afroep","afroep",n.afroep,id)+
+              vinkP("inplannen","inplannen",n.inplannen,id)+
+              vinkP("gepland","gepland",n.gepland,id)+
+            "</div>"+
+          "</td></tr>";
       }).join("")+"</tbody></table></div>";
     koppelNotitieVelden(lijst,rijen);
   }
