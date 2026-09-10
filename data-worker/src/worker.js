@@ -1182,18 +1182,34 @@ function vrachtKlep(toeslag, basis, viaDoesburg) {
   if (viaDoesburg || !toeslag) return { bedrag: 0, uitleg: "Geen kleptoeslag" };
   const w = Number(toeslag.klep);
   const tekst = String(toeslag.klepUitleg || "");
-  if (!isFinite(w) || w <= 0) return { bedrag: 0, uitleg: tekst || "Geen kleptoeslag" };
   const bedragUit = (re) => { const m = tekst.match(re); return m ? Number(String(m[1]).replace(",", ".")) : null; };
   const bodem = bedragUit(/Min\.?\s*[€e]?\s*([\d.,]+)/i);
   const plafond = bedragUit(/Max\.?\s*[€e]?\s*([\d.,]+)/i);
-  if (/vaste\s*toeslag/i.test(tekst)) return { bedrag: Math.round(w * 100) / 100, uitleg: tekst };
-  if (w < 1) {                                     // een percentage over het tarief
-    let b = basis * w;
+  const metBodem = (b) => {
     if (bodem != null) b = Math.max(b, bodem);
     if (plafond != null) b = Math.min(b, plafond);
-    return { bedrag: Math.round(b * 100) / 100, uitleg: tekst };
+    return Math.round(b * 100) / 100;
+  };
+  /* De factor uit de kolom "Klep (calc)" van Van Heugten is de betrouwbare:
+     leeg = geen toeslag, 1 = het vaste bedrag ernaast, daartussen een
+     percentage over het tarief. De kolom "Klep" zelf bevat door elkaar heen
+     bedragen en percentages. Staat de factor er nog niet in (een bucket van
+     vóór 10 sep 2026), dan valt hij terug op de oude afleiding. */
+  const calc = toeslag.klepCalc;
+  if (calc !== undefined && calc !== null) {
+    const f = Number(calc);
+    if (!isFinite(f) || f <= 0) return { bedrag: 0, uitleg: tekst || "Geen kleptoeslag" };
+    if (f >= 1) return { bedrag: Math.round((isFinite(w) && w > 0 ? w : 0) * 100) / 100, uitleg: tekst };
+    return { bedrag: metBodem(basis * f), uitleg: tekst, pct: f };
   }
-  return { bedrag: Math.round(w * 100) / 100, uitleg: tekst, onzeker: true };
+  if (!isFinite(w) || w <= 0) return { bedrag: 0, uitleg: tekst || "Geen kleptoeslag" };
+  if (/vaste\s*toeslag/i.test(tekst)) return { bedrag: Math.round(w * 100) / 100, uitleg: tekst };
+  if (w < 1) return { bedrag: metBodem(basis * w), uitleg: tekst, pct: w };
+  /* Bij Oostenrijk en Spanje staat er 50 met "Min. 50 / Max. 150" ernaast. Een
+     percentage van 50 kan niet, dus het is een vast bedrag. Dat stond hier
+     eerst als onzeker gemarkeerd; Gerrit heeft het op 10 sep 2026 bevestigd:
+     "maak van die 50 idd maar een vast bedrag van 50". */
+  return { bedrag: Math.round(w * 100) / 100, uitleg: tekst };
 }
 
 async function dpHandleVracht(request, env) {
@@ -1302,7 +1318,8 @@ async function dpHandleVracht(request, env) {
   return reply(200, { ok: true, land, postcode, vervoerder, zone,
     stuks, ldm, kg: kg || null, gewichtOnbekend: !kg,
     basis, dieselPct, diesel, klep: klep.bedrag, klepUitleg: klep.uitleg || null,
-    klepOnzeker: klep.onzeker || false, totaal,
+    klepOnzeker: klep.onzeker || false,   // blijft staan voor een tarieflijst van later
+    totaal,
     onbekend, dieselGezet: (tar.diesel || {}).gezet || null });
 }
 
