@@ -593,6 +593,15 @@ function createWindow() {
   });
 
   mainWindow.webContents.setUserAgent(mainWindow.webContents.getUserAgent() + " " + appUA());
+  /* Zie de toelichting bij window-all-closed hieronder: het hoofdvenster
+     neemt de tegelvensters mee, anders blijft het programma draaien op een
+     venster dat op het tweede scherm staat en sluit niemand het ooit af. */
+  mainWindow.on("close", () => {
+    for (const v of [...tegelVensters.values()]) {
+      try { if (v && !v.isDestroyed()) v.destroy(); } catch (e) {}
+    }
+    tegelVensters.clear();
+  });
   mainWindow.loadURL(URL);
 
   const menu = Menu.buildFromTemplate([
@@ -660,19 +669,10 @@ function setupAutoUpdater() {
         "padding:10px 16px;font:14px/1.45 Montserrat,system-ui,sans-serif;display:flex;gap:12px;"+
         "align-items:center;box-shadow:0 -2px 12px rgba(0,0,0,.25)";
       d.innerHTML = "<span>Er staat een nieuwe versie van het Dashboard klaar (${info.version}). "+
-        "<b>Sluit het Dashboard af en start het opnieuw</b> om hem te installeren.</span>";
-      var n = document.createElement("button");
-      n.textContent = "Nu installeren";
-      n.style.cssText = "margin-left:auto;background:#8bc53f;color:#102b1e;border:0;border-radius:7px;"+
-        "padding:6px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer";
-      n.onclick = function(){
-        n.disabled = true; n.textContent = "Bezig\u2026";
-        try { window.fonteynUpdate && window.fonteynUpdate.nuInstalleren(); } catch(e){}
-      };
-      d.appendChild(n);
+        "Hij wordt vanzelf ge\u00efnstalleerd zodra je het Dashboard vandaag afsluit.</span>";
       var b = document.createElement("button");
       b.textContent = "Later";
-      b.style.cssText = "background:transparent;border:1px solid rgba(255,255,255,.5);"+
+      b.style.cssText = "margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.5);"+
         "color:#fff;border-radius:7px;padding:6px 14px;font:inherit;font-size:13px;cursor:pointer";
       b.onclick = function(){ d.remove(); };
       d.appendChild(b);
@@ -682,20 +682,6 @@ function setupAutoUpdater() {
       if (v && !v.isDestroyed()) v.webContents.executeJavaScript(balk).catch(() => {});
     }
   });
-  /* Zelf installeren in plaats van wachten op het afsluiten.
-     ═══════════════════════════════════════════════════════════════════════
-     autoInstallOnAppQuit staat aan, maar bij Kevin en Gerwin gebeurde er bij
-     afsluiten niets: ze kwamen na drie herstarts nog steeds terug op 0.21.1
-     (te zien in het inloglogboek, 10 sep 2026). Waarom het bij hen niet
-     aanslaat weet ik niet, en dat is precies de reden om er niet meer van
-     afhankelijk te zijn. quitAndInstall() sluit de app zelf af en start het
-     installatieprogramma; dat is één handeling in plaats van hopen dat er bij
-     het afsluiten iets gebeurt. */
-  ipcMain.handle("fonteyn:update-nu", () => {
-    try { autoUpdater.quitAndInstall(false, true); return true; }
-    catch (e) { console.warn("[updater] installeren faalde:", e?.message || e); return false; }
-  });
-
   // Check direct bij starten én daarna elk uur
   autoUpdater.checkForUpdates().catch(e => console.warn("[updater] check fail:", e.message));
   setInterval(() => {
@@ -909,6 +895,28 @@ app.whenReady().then(async () => {
   setupAutoUpdater();
 });
 
+/* HET DASHBOEK SLUITEN MOET HET DASHBOEK OOK ECHT AFSLUITEN.
+   ═══════════════════════════════════════════════════════════════════════════
+   Hier zat de kern van "ik heb ze drie keer laten herstarten en er verandert
+   niets" (Gerrit, 10 sep 2026).
+
+   app.quit() gebeurde pas als ALLE vensters dicht waren. Sinds een tegel in
+   een eigen venster opent - en iedereen bij Fonteyn heeft twee schermen -
+   staat er bijna altijd nog een tegelvenster open op dat tweede scherm. Wie
+   het Dashboard wegklikt sluit dus alleen het hoofdvenster; het programma
+   blijft gewoon draaien. En omdat er maar één exemplaar tegelijk mag draaien,
+   doet opnieuw op het icoon klikken niets anders dan dat draaiende programma
+   naar voren halen.
+
+   Gevolg: er wordt nooit echt opnieuw opgestart. De tegels worden niet
+   opnieuw opgehaald, en een gedownloade nieuwe versie wordt niet
+   geïnstalleerd - want dat gebeurt bij het afsluiten, en dat afsluiten kwam
+   er nooit. In het inloglogboek is het te zien: Kevin kwam om 11:16, 11:24 en
+   11:37 binnen en stond alle drie de keren op dezelfde versie.
+
+   Nu sluit het hoofdvenster alles. Wie het Dashboard wegklikt, sluit het af -
+   zoals iedereen ook verwacht. Daarmee installeert een nieuwe versie zichzelf
+   bij het afsluiten, zonder dat iemand iets hoeft te doen. */
 app.on("window-all-closed", () => { app.quit(); });
 
 const gotLock = app.requestSingleInstanceLock();

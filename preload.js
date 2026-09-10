@@ -25,14 +25,6 @@ const { contextBridge, ipcRenderer } = require("electron");
 // bepalen die info nu zelf uit de user-agent plus een vaste sleutel in
 // localStorage. Zet hier dus niets neer waar een tegel van afhankelijk is.
 
-/* De knop "Nu installeren" in het balkje dat verschijnt zodra er een nieuwe
-   versie is gedownload. Zie setupAutoUpdater in main.js: bij Kevin en Gerwin
-   installeerde het afsluiten de update niet, dus er moet een knop zijn die het
-   zelf doet in plaats van erop te hopen. */
-contextBridge.exposeInMainWorld("fonteynUpdate", {
-  nuInstalleren: () => ipcRenderer.invoke("fonteyn:update-nu"),
-});
-
 contextBridge.exposeInMainWorld("fonteynPrint", {
   isAvailable: true,
   silentPrintLabels: (opts) => ipcRenderer.invoke("fonteyn:print-labels", opts),
