@@ -52,6 +52,24 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-10", iedereen: true, soort: "nieuw",
+      titel: "Zet het dashboard in je eigen volgorde",
+      wat: "Rechtsboven bij de begroeting staat nu een tandwiel met 'Indeling'. Daarmee zet je de afdelingen en de tegels in de volgorde die jij handig vindt, en kies je of de uitleg onder elke afdelingskop zichtbaar is. Het wordt meteen bewaard en geldt alleen voor jou. De afdelingskoppen zijn kleiner geworden en de tegels iets compacter, zodat je minder hoeft te scrollen.",
+    },
+
+    {
+      datum: "2026-09-10", iedereen: true, soort: "beter",
+      titel: "Tegels gebruiken de volle breedte van het venster",
+      wat: "De inhoud van een tegel bleef op een vaste breedte hangen terwijl er rechts ruimte over was; daardoor stonden kolommen op elkaar en braken kolomkoppen midden in een woord af. Alles mag nu meegroeien met het venster, en een kolomkop of knop breekt nooit meer in een woord.",
+    },
+
+    {
+      datum: "2026-09-10", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Je eigen keuze van de zending telt overal",
+      wat: "Een zending die je zelf bij een reservering hebt gekozen stond alleen in de lijsten Particulier en Partner. Het tabblad Reserveringen, de zoekbalk en het partnerportaal lieten nog de berekende datum zien. Nu staat overal dezelfde datum: die van de zending die jij hebt aangewezen, met 'handmatig' erbij.",
+    },
+
+    {
       datum: "2026-09-10", bestand: "dealerportaal.html", soort: "beter",
       titel: "Passion Partners staat nu op zijn eigen adres",
       wat: "Het portaal is te bereiken op partner.passionspas.com. Elke link die een dealer krijgt wijst daar nu naartoe: de uitnodiging, de inloglink en de terugkeer na betalen. De tegel Passion Partners opent hetzelfde adres. Het oude adres blijft werken, maar een dealer ziet het niet meer.",

@@ -142,6 +142,7 @@ const ALLOWED_BUCKETS = new Set([
   // vergelijken met nu zien we vanzelf welke tegel er voor iemand bij is
   // gekomen, zonder dat er iemand aan hoeft te denken dat op te schrijven.
   "dashboard-gezien",
+  "dashboard-indeling",  // Per e-mailadres: eigen volgorde van afdelingen en tegels op het dashboard (het tandwiel)
   // De huisstijl-fonts (Sephir, Helvetica, Univers) zijn commercieel
   // gelicentieerd. Ze staan hier en NIET in de repo, want die is publiek —
   // in de repo zetten zou neerkomen op ze doorgeven aan iedereen.
@@ -5245,6 +5246,45 @@ async function dpRefreshReservations(env) {
       if (landing && landing.fabriek) r.verwachtFabriek = landing.fabriek;
     }
   }
+
+  /* Wat iemand zelf heeft aangewezen gaat vóór de berekening, ook hier.
+     ═══════════════════════════════════════════════════════════════════════
+     Chantal (video, 10 sep 2026): de zendingen die zij op 26 t/m 30 augustus
+     zelf bij de reserveringen had gekozen leken verdwenen. De keuzes stonden
+     er allemaal nog (119 stuks in voorraad-notities); haar scherm draaide
+     alleen nog op de tegelversie van 3 september, die een keuze losliet
+     zodra de boot binnen was. Dat was op 8 september hersteld, maar de tegel
+     kwam pas op 10 september om 14:09 bij haar binnen.
+
+     Wat wél structureel ontbrak: de keuze leefde alleen in het scherm van
+     Voorraadbeheer. Het partnerportaal (/dealers/api/myspas), de zoekbalk en
+     het tabblad Reserveringen lazen deze lijst en toonden dus de berekende
+     datum. Daarom landt de keuze nu al hier, zodat elke lezer dezelfde datum
+     ziet. De berekende datum blijft ernaast staan als verwachtAuto. */
+  try {
+    const aantek = (await env.FONTEYN_DATA.get("voorraad-notities", { type: "json" })) || {};
+    const regels = aantek.regels || {};
+    const perSleutel = {};
+    for (const s of (schepen.ships || [])) {
+      const sl = String(s.ref || s.trackRef || s.file || s.vessel || "");
+      if (sl) perSleutel[sl] = s;
+    }
+    let toegepast = 0;
+    for (const lijst of [byModel, byModelUSA]) for (const rows of Object.values(lijst)) for (const r of rows) {
+      const n = regels[r.regelId] || regels[r.regelIdOud];
+      if (!n || !n.schip) continue;
+      r.verwachtAuto = r.verwacht || null;
+      r.verwachtHandmatig = true;
+      r.verwachtBron = "handmatig";
+      if (n.schip === "__voorraad__") { r.verwacht = "voorraad"; r.verwachtSchip = null; toegepast++; continue; }
+      const s = perSleutel[n.schip];
+      const eta = (s && s.eta) || n.schipEta || null;
+      r.verwacht = eta || "op-schip";
+      r.verwachtSchip = (s && (s.vessel || s.ref)) || n.schipRef || n.schip;
+      toegepast++;
+    }
+    console.log("[reserveringen] handmatige zending toegepast op " + toegepast + " regels");
+  } catch (e) { console.log("[reserveringen] keuze uit voorraad-notities niet toegepast: " + String(e.message || e)); }
 
   await putAlsAnders(env, "reserveringen-live", { updated: new Date().toISOString(), byModel, byModelUSA });
   const total = Object.values(byModel).reduce((n, l) => n + l.length, 0);

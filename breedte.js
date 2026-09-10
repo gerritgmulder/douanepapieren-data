@@ -34,9 +34,9 @@
 
        - Een tabel mag nooit breder worden dan zijn kaart. Was dat wel zo,
          dan schoof de halve tabel buiten beeld.
-       - Een cel breekt af in plaats van de tabel op te rekken. Eerst op een
-         spatie; alleen als één woord echt te lang is, binnen het woord. Een
-         datum als 14.07.2026 blijft dus heel zolang de kolom dat toelaat.
+       - Een cel breekt af in plaats van de tabel op te rekken. Op een
+         spatie; alleen als één woord echt breder is dan de kolom, binnen het
+         woord. Een kolomkop of een knop breekt nooit binnen een woord.
        - white-space:nowrap dat met de hand in een cel is gezet wordt
          overruled. Dat staat in zestien tegels en is precies wat de tabel
          breed hield. Buiten tabellen blijft nowrap gewoon werken, want de
@@ -53,11 +53,29 @@
     if (doc.getElementById("fpBreedteStijl")) return;
     var st = doc.createElement("style");
     st.id = "fpBreedteStijl";
+    /* Gerrit (10 sep 2026), een dag later: "Doordat je het horizontaal
+       scrollen hebt verholpen, is de look and feel van alles slordig
+       geworden." Klopt, en het kwam door één woord: overflow-wrap:anywhere.
+       Dat mag een woord op elke letter afbreken, dus een kolomkop werd
+       "BEDR IJF" en "AANBETALI NG", en een knop in een cel "blokkee r" -
+       overflow-wrap erft namelijk door naar alles wat in de cel staat.
+
+       Nu: een cel breekt alleen op een spatie, en pas als één woord echt
+       breder is dan de kolom binnen dat woord (break-word in plaats van
+       anywhere). Een kolomkop en een knop breken nooit binnen een woord.
+       En de tegels mogen breder: het venster is 1400 breed en op een groot
+       scherm zet iemand het op volledig, maar de inhoud bleef op 1100 tot
+       1400 hangen. Dat is waarom de kolommen elkaar verdrongen terwijl er
+       rechts een halve meter wit stond. */
+    var dashboard = !!doc.getElementById("dashView");   // het dashboard zelf houdt zijn eigen maat
     st.textContent =
       "html,body{max-width:100%}" +
+      (dashboard ? "" : "main{max-width:1800px}") +
       "table{width:100%;max-width:100%}" +
-      "table td,table th{white-space:normal;overflow-wrap:anywhere;min-width:0}" +
-      "table td[style*=nowrap],table th[style*=nowrap]{white-space:normal!important}" +
+      "table td,table th{white-space:normal;overflow-wrap:break-word;min-width:0}" +
+      "table th{overflow-wrap:normal;word-break:keep-all;hyphens:none}" +
+      "table td button,table td .btn,table td .pill,table td a,table td label,table td select{overflow-wrap:normal;word-break:keep-all;white-space:nowrap}" +
+      "table td[style*=nowrap]{white-space:normal!important}" +
       "table td[style*=min-width],table th[style*=min-width]{min-width:0!important}" +
       ".tablewrap{overflow-x:hidden;overflow-y:auto}";
     doc.head.appendChild(st);

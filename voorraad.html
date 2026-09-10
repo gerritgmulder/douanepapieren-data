@@ -93,7 +93,7 @@
      scherm in plaats van uit te dijen op de langste tekst. */
   table.grid{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
   table.grid th,table.grid td{padding:3px 8px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:middle;
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px}
   table.grid th{background:#f9fafb;font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);position:sticky;top:0}
   /* De reserveringenlijst in twee regels: lezen boven, doen eronder.
      ═══════════════════════════════════════════════════════════════════════
@@ -125,8 +125,8 @@
   table.grid.resv tr.subrij .subwerk{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
       font-size:11px;color:var(--muted);line-height:1.3;
       border-left:2px solid #e9edea;padding-left:9px}
-  table.grid.resv tr.subrij .lev{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;max-width:330px}
-  table.grid.resv tr.subrij .lev select{margin-top:0!important;max-width:170px}
+  table.grid.resv tr.subrij .lev{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;max-width:480px}
+  table.grid.resv tr.subrij .lev select{margin-top:0!important;max-width:260px}
   table.grid.resv tr.subrij .lev br{display:none}
   table.grid.resv tr.subrij .notOpm{flex:1 1 auto;min-width:90px;font-size:11.5px;
       padding:3px 7px;cursor:pointer;text-overflow:ellipsis;border:1px solid var(--border);border-radius:6px}
@@ -1530,8 +1530,7 @@ function zoekAllesNu(){
         "<td><b style='color:"+p.kleur+"'>"+esc(p.tekst)+"</b>"+
           (r.container?" <span class='pill' style='background:#e0e7ff;color:#3730a3;font-size:10px'>container</span>":"")+
           (n.opmerking?"<div style='font-size:11px;color:var(--muted)'>"+esc(n.opmerking)+"</div>":"")+"</td>"+
-        "<td style='font-size:12px'>"+verwachtLabel(r.verwacht)+
-          (r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td>"+
+        "<td style='font-size:12px'>"+verwachtCel(r)+"</td>"+
         "<td>"+(p.tab?"<button class='btn zoekGa' type='button' data-tab='"+p.tab+"' data-nr='"+esc(r.ordernr)+"' style='padding:2px 8px;font-size:11px'>toon</button>":"")+"</td></tr>";
     }).join("")+"</tbody></table></div>"+
     "<p class='lead' style='font-size:11.5px;margin:7px 0 0'>"+treffers.length+" treffer(s)"+
@@ -2266,6 +2265,28 @@ function verwachtLabel(v){
   if(v==="dealer-direct") return "<span style='color:#c2410c'>→ dealer (container)</span>";
   return "<span style='color:#2563eb'>"+esc(datumNL(v))+"</span>";
 }
+/* De verwachte levering zoals hij overal getoond hoort te worden: eerst wat
+   iemand zelf heeft aangewezen, pas dan de berekening.
+   ═══════════════════════════════════════════════════════════════════════
+   Chantal (video, 10 sep 2026) miste de zendingen die ze op 26 t/m 30
+   augustus zelf had gekozen. Die keuzes stonden er nog, maar twee plekken in
+   deze tegel keken er niet naar: het tabblad Reserveringen en de zoekbalk
+   lieten de berekende datum zien. Dat komt nu allemaal hierlangs, net als de
+   sortering op levering. */
+function verwachtVanRegel(r){
+  const n=notitie(r);
+  if(n.schip===VOORRAAD_KEUZE) return {v:"voorraad", schip:null, hand:true};
+  if(n.schip){
+    let g=schipVan(n.schip);
+    if(!g && (n.schipEta||n.schipRef)) g={eta:n.schipEta||null, ref:n.schipRef||n.schip};
+    if(g) return {v:g.eta||"op-schip", schip:g.ref||null, hand:true};
+  }
+  return {v:r.verwacht, schip:r.verwachtSchip||null, hand:false};
+}
+function verwachtCel(r){
+  const w=verwachtVanRegel(r);
+  return verwachtLabel(w.v)+(w.schip?" <span style='color:var(--muted);font-size:11px'>("+esc(w.schip)+(w.hand?", handmatig":"")+")</span>":"");
+}
 function betaalBadge(r){
   if(r.betaald) return "<span class='pill' style='background:#dcfce7;color:#15803d'>betaald "+(r.betaaldPct!=null?r.betaaldPct+"%":"")+"</span>";
   return "<span class='pill' style='background:#fef3c7;color:#92400e'>wacht</span>";
@@ -2275,7 +2296,7 @@ function resvRows(list){
     // Oranje rij = containerorder (magazijn Dealer magazijn)
     const rowStyle=r.container?"background:#fff7ed;border-left:3px solid #c2410c":"";
     const cont=r.container?" <span class='pill' style='background:#ffedd5;color:#c2410c;font-size:10px'>dealer mag.</span>":"";
-    return "<tr style='"+rowStyle+"'><td>"+(i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+cont+"</td><td>"+resvTypeBadge(r.type)+"</td><td>"+kleurCel(r.kleur,r)+"</td><td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td><td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td><td>"+betaalBadge(r)+"</td><td style='font-size:12px'>"+verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td></tr>";
+    return "<tr style='"+rowStyle+"'><td>"+(i+1)+"</td><td>"+r.ordernr+"</td><td>"+esc(r.naam)+cont+"</td><td>"+resvTypeBadge(r.type)+"</td><td>"+kleurCel(r.kleur,r)+"</td><td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td><td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td><td>"+betaalBadge(r)+"</td><td style='font-size:12px'>"+verwachtCel(r)+"</td></tr>";
   }).join("");
 }
 document.getElementById("resvSearch")&&document.getElementById("resvSearch").addEventListener("input",renderReserveringen);
@@ -2827,8 +2848,7 @@ function sorteerWaarde(r,kolom){
   if(kolom==="levering"){
     // Een handmatig gekozen schip gaat vóór de berekende verwachting, ook bij
     // het sorteren - anders staat een regel op een andere plek dan zijn datum.
-    const gekozen=schipVan((notities[r.regelId]||{}).schip);
-    const v=gekozen?(gekozen.eta||"op-schip"):r.verwacht;
+    const v=verwachtVanRegel(r).v;
     if(v==="voorraad") return "0";
     if(v==="op-schip") return "8";
     if(!v||v==="productie") return "9";
@@ -2949,7 +2969,7 @@ function leveringCel(r,n,id,uit){
       schepenOnderweg().map(function(s){
         return "<option value='"+esc(s.sleutel)+"'>"+esc(s.ref)+(s.eta?" - "+esc(datumNL(s.eta)):" - ETA volgt")+"</option>";
       }).join("");
-    return kopV + "<br><select class='notSchip' data-id='"+id+"' style='margin-top:3px;font-size:11px;padding:2px 4px;max-width:140px'"+uit+">"+optiesV+"</select>";
+    return kopV + "<br><select class='notSchip' data-id='"+id+"' style='margin-top:3px;font-size:11px;padding:2px 4px;max-width:240px'"+uit+">"+optiesV+"</select>";
   }
   /* De gekozen zending. Staat hij niet meer in de lijst - verwijderd,
      hernoemd - dan tellen de datum en de referentie die bij het kiezen zijn
@@ -2979,7 +2999,7 @@ function leveringCel(r,n,id,uit){
   }).join("");
   // max-width 140: op een 15-inch scherm vielen de kolommen Inplannen en
   // Gepland buiten beeld (Gerrit, 24 aug 2026).
-  return kop + "<br><select class='notSchip' data-id='"+id+"' style='margin-top:3px;font-size:11px;padding:2px 4px;max-width:140px'"+uit+">"+opties+"</select>";
+  return kop + "<br><select class='notSchip' data-id='"+id+"' style='margin-top:3px;font-size:11px;padding:2px 4px;max-width:240px'"+uit+">"+opties+"</select>";
 }
 function adviseurCel(r){
   if(!r.adviseur) return "<span style='color:var(--muted);font-size:11px'>—</span>";

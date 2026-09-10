@@ -65,7 +65,11 @@
   }
   header button.logout:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.5); }
 
-  main { max-width: 1100px; margin: 40px auto 80px; padding: 0 24px; }
+  /* Gerrit (10 sep 2026): "gewoon max 4 naast elkaar op de Dashboard-pagina,
+     die breedte is prima", maar wel minder scrollen tussen de afdelingen.
+     Vier tegels van deze maat vragen 1260 breed; daarboven blijft het bij
+     vier en groeien de tegels een beetje mee. */
+  main { max-width: 1260px; margin: 28px auto 80px; padding: 0 24px; }
 
   /* ─── Login view ──────────────────────────────────────── */
   .login-wrap {
@@ -123,9 +127,9 @@
   .login-wrap .helper-hint.bad .dot { background: var(--bad); }
 
   /* ─── Tiles ───────────────────────────────────────────── */
-  .welcome { margin-bottom: 26px; }
+  .welcome { margin-bottom: 18px; display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
   .welcome h2 {
-    margin: 0 0 6px; font-size: 24px; font-weight: 700;
+    margin: 0 0 4px; font-size: 22px; font-weight: 700;
     color: var(--fonteyn-green); letter-spacing: -0.01em;
   }
   .welcome p { margin: 0; color: var(--muted); font-size: 14px; }
@@ -231,14 +235,16 @@
   .nieuw-datum { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
 
   .tiles {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 18px;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 14px;
   }
+  @media (max-width: 1080px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 760px)  { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   .tile {
     background: #fff; border: 1px solid var(--border); border-radius: 12px;
-    padding: 22px; position: relative; cursor: pointer;
+    padding: 16px 18px; position: relative; cursor: pointer;
     transition: transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s;
-    display: flex; flex-direction: column; gap: 8px; min-height: 150px;
+    display: flex; flex-direction: column; gap: 6px; min-height: 118px;
     text-decoration: none; color: inherit;
   }
   .tile:hover {
@@ -247,13 +253,17 @@
     border-color: var(--fonteyn-lime);
   }
   .tile .icon {
-    width: 40px; height: 40px; border-radius: 10px;
+    width: 34px; height: 34px; border-radius: 9px;
     background: var(--fonteyn-green); color: var(--fonteyn-lime);
     display: flex; align-items: center; justify-content: center;
-    font-size: 20px; margin-bottom: 6px;
+    font-size: 17px; margin-bottom: 2px;
   }
   .tile h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--fonteyn-green); }
-  .tile p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+  /* Twee regels uitleg, meer niet: de rest staat in de tip als je er met de
+     muis overheen gaat. Zo is elke tegel even hoog en past er meer op een
+     scherm. */
+  .tile p { margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.4;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
   .tile.disabled { cursor: not-allowed; background: #fafaf8; }
   .tile.disabled:hover { transform: none; box-shadow: none; border-color: var(--border); }
@@ -269,9 +279,13 @@
   /* ─── Groepen ──────────────────────────────────────────────
      De tegels staan gebundeld per afdeling. Een groep zonder zichtbare
      tegels verdwijnt helemaal (zie verbergLegeGroepen). */
-  .groep { margin-bottom: 30px; }
+  /* De afdelingskop is een dun lijntje met een naam, geen tussenstop. Gerrit
+     (10 sep 2026): "marketing mag je wel zien maar niet zo boeiend groot dat
+     je er lang voor hoeft te scrollen". De uitleg eronder staat standaard
+     uit en is per persoon aan te zetten via het tandwiel. */
+  .groep { margin-bottom: 18px; }
   .groep > h3 {
-    margin: 0 0 3px; font-size: 13px; font-weight: 700; letter-spacing: 0.08em;
+    margin: 0 0 8px; font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em;
     text-transform: uppercase; color: var(--fonteyn-green);
     display: flex; align-items: center; gap: 10px;
   }
@@ -279,7 +293,8 @@
     content: ""; flex: 1; height: 2px; border-radius: 2px;
     background: linear-gradient(to right, var(--fonteyn-lime), transparent);
   }
-  .groep > p.groep-lead { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; }
+  .groep > p.groep-lead { margin: -4px 0 10px; color: var(--muted); font-size: 12px; }
+  body:not(.met-uitleg) .groep > p.groep-lead { display: none; }
 
   /* Spa's draaien onder het merk Passion Spas en krijgen daarom de Passion-
      huisstijl (rood/antraciet). Alle andere groepen blijven Fonteyn groen/geel. */
@@ -288,6 +303,36 @@
   .groep.passion .tile .icon { background: var(--passion-red); color: #fff; }
   .groep.passion .tile h3 { color: var(--passion-red); }
   .groep.passion .tile:hover { border-color: var(--passion-red); box-shadow: 0 6px 16px rgba(200,16,46,0.13); }
+
+  /* ─── Eigen indeling (het tandwiel) ───────────────────── */
+  .indeling-knop {
+    background: #fff; color: var(--fonteyn-green); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 12px; font: inherit; font-size: 12.5px; font-weight: 600;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+  }
+  .indeling-knop:hover { border-color: var(--fonteyn-lime); }
+  .indeling-paneel {
+    background: #fff; border: 1px solid var(--border); border-left: 4px solid var(--fonteyn-lime);
+    border-radius: 12px; padding: 16px 20px 14px; margin-bottom: 22px;
+  }
+  .indeling-paneel h3 { margin: 0 0 4px; font-size: 15px; color: var(--fonteyn-green); }
+  .indeling-paneel .uitleg { margin: 0 0 12px; color: var(--muted); font-size: 12.5px; }
+  .indeling-groepen { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px 18px; }
+  .indeling-groep { border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; background: #fafaf8; }
+  .indeling-rij { display: flex; align-items: center; gap: 6px; padding: 3px 0; font-size: 12.5px; }
+  .indeling-rij.kop { font-weight: 700; color: var(--fonteyn-green); text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; padding-bottom: 5px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+  .indeling-rij .naam { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .indeling-rij button {
+    background: #fff; border: 1px solid var(--border); border-radius: 6px; width: 24px; height: 22px;
+    font: inherit; font-size: 11px; cursor: pointer; color: var(--ink); line-height: 1; padding: 0;
+  }
+  .indeling-rij button:disabled { opacity: .3; cursor: default; }
+  .indeling-rij button:hover:not(:disabled) { border-color: var(--fonteyn-lime); }
+  .indeling-voet { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; }
+  .indeling-voet label { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); }
+  .indeling-voet .rechts { margin-left: auto; display: flex; gap: 8px; }
+  .indeling-voet button { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 12.5px; cursor: pointer; }
+  .indeling-voet button.klaar { background: var(--fonteyn-lime); color: var(--fonteyn-green-dark); border-color: transparent; font-weight: 700; }
 
   .hidden { display: none !important; }
 
@@ -396,9 +441,13 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
   <main>
     <div class="welcome">
-      <h2 id="greeting">Welkom</h2>
-      <p>Kies een tool om mee aan de slag te gaan.</p>
+      <div>
+        <h2 id="greeting">Welkom</h2>
+        <p>Kies een tool om mee aan de slag te gaan.</p>
+      </div>
+      <button class="indeling-knop hidden" id="indelingKnop" type="button" title="Zet de afdelingen en tegels in je eigen volgorde">⚙ Indeling</button>
     </div>
+    <div id="indelingPaneel" class="indeling-paneel hidden"></div>
 
     <!-- Persoonlijk takenblok. Wordt gevuld door taken.js: eigen taken,
          terugkerende momenten en signalen uit Logic4 die op naam staan. -->
@@ -970,6 +1019,7 @@ function showDashboard(email) {
   const isLogistiek = LOGISTIEK_EMAILS.has(lc);
   tegelsInEigenVenster();
   verbergLegeGroepen();
+  fpIndeling.start(lc);
   herstelScrollpositie();
   /* De takenlijst is geen tegel maar een lade aan de rechterkant (Gerrit,
      31 aug 2026: "een soort uitstulpje"). Hij bouwt zichzelf en verschijnt
@@ -1253,6 +1303,167 @@ function tegelsInEigenVenster(){
     if (!a.title) a.title = "Opent in een eigen venster, zodat je hem naast het dashboard kunt zetten";
   });
 }
+
+/* ═══ Eigen indeling van het dashboard (het tandwiel) ═══════════════════
+   Gerrit (10 sep 2026): "Als Manon een andere indeling wil dan Chantal, dan
+   moet ze dat zelf kunnen bepalen ... met een settings tandwiel waar je die
+   optie hebt."
+
+   Wat het doet: de afdelingen en de tegels daarbinnen in je eigen volgorde
+   zetten, en de uitleg onder elke afdelingskop aan of uit. Meer niet. Wie
+   welke tegel ziet blijft in toegang.js staan; hier verandert alleen de
+   plek. Bewaard per e-mailadres in de bucket dashboard-indeling:
+
+       { "manon@fonteyn.nl": { groepen: ["groepSpas", "groepElkeDag", ...],
+                               tegels:  { groepSpas: ["tileVoorraad", ...] },
+                               uitleg:  false } }
+
+   Staat er niets, dan geldt de volgorde uit dit bestand. Een tegel of
+   afdeling die later bijkomt en niet in de bewaarde lijst staat, komt
+   gewoon achteraan in zijn afdeling - niemand raakt iets kwijt. */
+const fpIndeling = (() => {
+  const BUCKET = "dashboard-indeling";
+  const BASIS = "https://fonteyn-data-store.g-mulder.workers.dev/data/";
+  let email = "", mijn = null, standaard = null, bewaarTimer = null;
+  const sleutel = () => localStorage.getItem("fp.teamkey") || "";
+
+  async function lees() {
+    try {
+      const r = await fetch(BASIS + BUCKET, { headers: { "X-Fonteyn-Auth": sleutel() } });
+      if (!r.ok) return {};
+      return (await r.json()) || {};
+    } catch (e) { return {}; }
+  }
+  async function schrijf() {
+    try {
+      const alles = await lees();
+      if (mijn) alles[email] = mijn; else delete alles[email];
+      await fetch(BASIS + BUCKET, { method: "PUT",
+        headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": sleutel() },
+        body: JSON.stringify(alles) });
+    } catch (e) {}
+  }
+  function schrijfStraks() { clearTimeout(bewaarTimer); bewaarTimer = setTimeout(schrijf, 600); }
+
+  const groepen = () => [...document.querySelectorAll("main > section.groep")];
+  const tegelsVan = (g) => [...g.querySelectorAll(".tiles > .tile")];
+  const naamVan = (g) => ((g.querySelector(":scope > h3") || {}).textContent || g.id).trim();
+
+  function vastleggenStandaard() {
+    if (standaard) return;
+    standaard = { groepen: groepen().map(g => g.id), tegels: {} };
+    groepen().forEach(g => { standaard.tegels[g.id] = tegelsVan(g).map(t => t.id); });
+  }
+  /* Bewaarde volgorde vooraan, wat daar niet in staat erachter in de
+     standaardvolgorde. Zo overleeft de instelling een nieuwe tegel. */
+  function volgorde(bewaard, alle) {
+    const b = (bewaard || []).filter(id => alle.includes(id));
+    return b.concat(alle.filter(id => !b.includes(id)));
+  }
+  function pasToe() {
+    vastleggenStandaard();
+    const main = document.querySelector("main");
+    const secs = groepen();
+    if (!main || !secs.length) return;
+    const eind = secs[secs.length - 1].nextSibling;
+    for (const id of volgorde(mijn && mijn.groepen, standaard.groepen)) {
+      const sec = document.getElementById(id);
+      if (sec) main.insertBefore(sec, eind);
+    }
+    for (const g of groepen()) {
+      const box = g.querySelector(".tiles");
+      if (!box) continue;
+      for (const id of volgorde(mijn && mijn.tegels && mijn.tegels[g.id], standaard.tegels[g.id] || [])) {
+        const t = document.getElementById(id);
+        if (t && t.parentElement === box) box.appendChild(t);
+      }
+    }
+    document.body.classList.toggle("met-uitleg", !!(mijn && mijn.uitleg));
+  }
+
+  function huidig() {
+    vastleggenStandaard();
+    const uit = { groepen: groepen().map(g => g.id), tegels: {}, uitleg: !!(mijn && mijn.uitleg) };
+    groepen().forEach(g => { uit.tegels[g.id] = tegelsVan(g).map(t => t.id); });
+    return uit;
+  }
+  function verschuif(lijst, id, stap) {
+    const i = lijst.indexOf(id); const j = i + stap;
+    if (i < 0 || j < 0 || j >= lijst.length) return lijst;
+    lijst.splice(i, 1); lijst.splice(j, 0, id); return lijst;
+  }
+
+  function teken() {
+    const p = el("indelingPaneel");
+    if (!p) return;
+    const zichtbaar = groepen().filter(g => !g.classList.contains("hidden"));
+    let html = "<h3>Jouw indeling</h3>" +
+      "<p class='uitleg'>Zet met de pijltjes de afdelingen en de tegels in de volgorde die jij handig vindt. Het wordt meteen bewaard en geldt alleen voor jou.</p>" +
+      "<div class='indeling-groepen'>";
+    zichtbaar.forEach((g, gi) => {
+      html += "<div class='indeling-groep'><div class='indeling-rij kop'><span class='naam'>" + naamVan(g).replace(/[<>&]/g, "") + "</span>" +
+        "<button type='button' data-groep='" + g.id + "' data-stap='-1' title='Omhoog'" + (gi === 0 ? " disabled" : "") + ">▲</button>" +
+        "<button type='button' data-groep='" + g.id + "' data-stap='1' title='Omlaag'" + (gi === zichtbaar.length - 1 ? " disabled" : "") + ">▼</button></div>";
+      const ts = tegelsVan(g).filter(t => !t.classList.contains("hidden"));
+      ts.forEach((t, ti) => {
+        const naam = ((t.querySelector("h3") || {}).textContent || t.id).trim().replace(/[<>&]/g, "");
+        html += "<div class='indeling-rij'><span class='naam'>" + naam + "</span>" +
+          "<button type='button' data-tegel='" + t.id + "' data-groep='" + g.id + "' data-stap='-1' title='Omhoog'" + (ti === 0 ? " disabled" : "") + ">▲</button>" +
+          "<button type='button' data-tegel='" + t.id + "' data-groep='" + g.id + "' data-stap='1' title='Omlaag'" + (ti === ts.length - 1 ? " disabled" : "") + ">▼</button></div>";
+      });
+      html += "</div>";
+    });
+    html += "</div><div class='indeling-voet'>" +
+      "<label><input type='checkbox' id='indelingUitleg'" + (mijn && mijn.uitleg ? " checked" : "") + "> Uitleg onder elke afdelingskop tonen</label>" +
+      "<div class='rechts'><button type='button' id='indelingStandaard'>Standaard herstellen</button>" +
+      "<button type='button' class='klaar' id='indelingKlaar'>Klaar</button></div></div>";
+    p.innerHTML = html;
+    p.querySelectorAll("button[data-stap]").forEach(b => b.addEventListener("click", () => {
+      const stap = Number(b.dataset.stap);
+      mijn = huidig();
+      if (b.dataset.tegel) {
+        /* Verschuiven tussen de zichtbare tegels; de verborgen tegels van
+           een collega blijven waar ze staan. */
+        const zicht = tegelsVan(document.getElementById(b.dataset.groep)).filter(t => !t.classList.contains("hidden")).map(t => t.id);
+        verschuif(zicht, b.dataset.tegel, stap);
+        const alle = mijn.tegels[b.dataset.groep];
+        const rest = alle.filter(id => !zicht.includes(id));
+        mijn.tegels[b.dataset.groep] = zicht.concat(rest);
+      } else {
+        const zicht = groepen().filter(g => !g.classList.contains("hidden")).map(g => g.id);
+        verschuif(zicht, b.dataset.groep, stap);
+        const rest = mijn.groepen.filter(id => !zicht.includes(id));
+        mijn.groepen = zicht.concat(rest);
+      }
+      pasToe(); teken(); schrijfStraks();
+    }));
+    const u = el("indelingUitleg");
+    if (u) u.addEventListener("change", () => { mijn = huidig(); mijn.uitleg = u.checked; pasToe(); schrijfStraks(); });
+    const st = el("indelingStandaard");
+    if (st) st.addEventListener("click", () => { mijn = null; pasToe(); teken(); schrijfStraks(); });
+    const k = el("indelingKlaar");
+    if (k) k.addEventListener("click", () => p.classList.add("hidden"));
+  }
+
+  async function start(wie) {
+    email = String(wie || "").toLowerCase();
+    vastleggenStandaard();
+    const knop = el("indelingKnop");
+    if (knop) {
+      knop.classList.remove("hidden");
+      knop.onclick = () => { const p = el("indelingPaneel"); if (!p) return; if (p.classList.contains("hidden")) { teken(); p.classList.remove("hidden"); } else p.classList.add("hidden"); };
+    }
+    /* De teamsleutel komt bij een eerste login pas na een paar seconden
+       binnen (provisionTeamKey). Zonder sleutel geeft de worker 401 en dan
+       lijkt het alsof er niets bewaard is. Even wachten dus. */
+    for (let i = 0; i < 20 && !sleutel(); i++) await new Promise(r => setTimeout(r, 500));
+    const alles = await lees();
+    const eigen = alles[email];
+    mijn = eigen && typeof eigen === "object" ? eigen : null;
+    pasToe();
+  }
+  return { start, pasToe };
+})();
 
 // Een afdelingskop zonder zichtbare tegels heeft geen functie: die verdwijnt.
 // Zo ziet Gretha alleen 'Marketing' en niet vier lege kopjes.
