@@ -299,7 +299,25 @@ async function dpSendEmail(env, to, subject, html, replyTo) {
                   ...(log.regels || [])].slice(0, 50);
     await env.FONTEYN_DATA.put("dp-mail-log", JSON.stringify(log));
   } catch (e) { console.log("[dp-mail] loggen faalde: " + String(e.message || e)); }
-  return { ok: r.ok, status: r.status };
+  return { ok: r.ok, status: r.status, reden: r.ok ? null : mailReden(respText, r.status, env) };
+}
+
+/* Waaróm nam Resend de mail niet aan, in taal die iemand aan de balie kan
+   lezen. Gerrit (10 sep 2026) kreeg alleen "mail-versturen-faalde" te zien,
+   en daar kun je niets mee - terwijl het antwoord van Resend precies zegt wat
+   er mis is. Nu staat het gewoon in het venster. */
+function mailReden(respText, status, env) {
+  let m = "";
+  try { m = String((JSON.parse(respText || "{}") || {}).message || ""); } catch {}
+  const domein = String(env.MAIL_FROM || "").split("@").pop().replace(/[>\s]/g, "");
+  if (/not verified/i.test(m))
+    return "Het afzenderadres " + (env.MAIL_FROM || "") + " mag nog niet gebruikt worden: het domein " +
+           domein + " is niet goedgekeurd bij onze mailleverancier. Dat moet daar eerst gebeuren; " +
+           "aan het Dashboard hoeft niets te veranderen.";
+  if (status === 401 || status === 403 && /api key/i.test(m))
+    return "De sleutel van onze mailleverancier wordt niet geaccepteerd.";
+  if (status === 429) return "Onze mailleverancier houdt het even tegen omdat er te snel achter elkaar is verstuurd. Probeer het over een minuut opnieuw.";
+  return m || ("de mailleverancier antwoordde met foutcode " + status);
 }
 
 /* GET /dealers/admin/mailcheck - waarom komt er geen mail aan?
@@ -1846,7 +1864,7 @@ async function dpHandleVraag(request, env, sess) {
     '<p style="color:#888;font-size:12px;">Beantwoord deze mail — reply gaat direct naar de dealer.</p></div>',
     sess.email);
   await dpLogPartner(env, sess, "vraag-gesteld", subject);
-  return reply(sent.ok ? 200 : 502, { ok: sent.ok });
+  return reply(sent.ok ? 200 : 502, { ok: sent.ok, error: sent.ok ? undefined : (sent.reden || null) });
 }
 
 // GET /dealers → portaalpagina vers van GitHub main (cache ≤10s)
@@ -2553,7 +2571,7 @@ async function dpAdminUitnodigen(request, env, url) {
   await dpLogPartner(env, { email, company: dealer.company || "" }, "uitnodiging-verstuurd",
     sent.ok ? "welkomstmail" : "MAIL FAALDE");
   return reply(sent.ok ? 200 : 502, { ok: sent.ok, link, validDays: DP_INVITE_TTL / 86400,
-    error: sent.ok ? undefined : "mail-versturen-faalde (link is wel aangemaakt)" });
+    error: sent.ok ? undefined : (sent.reden || "mail-versturen-faalde (link is wel aangemaakt)") });
 }
 
 // GET  /dealers/welkom?t=… → welkomstpagina met wachtwoord-formulier.
