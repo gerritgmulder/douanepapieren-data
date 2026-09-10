@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-10", bestand: "amerika.html", soort: "nieuw",
+      titel: "Eigen notitie bij een factuur",
+      wat: "Achter elke factuur uit QuickBooks staat nu een vakje waar je zelf een ordernummer of een opmerking bij kunt zetten. Handig voor facturen die je buiten het Dashboard om al in Logic4 hebt gezet. Wat je invult blijft staan en is voor iedereen zichtbaar.",
+    },
+
+    {
       datum: "2026-09-10", bestand: "planning.html", soort: "nieuw",
       titel: "Een route printen",
       wat: "Bij elke route staat een printknop. Je krijgt het hele stel papieren zoals de monteur het gewend is: een voorblad met de dag, de route, wie er rijdt en de stops met tijd, naam en woonplaats, en daarachter de orderbevestiging van elke stop in bezoekvolgorde. De vakjes Akkoord en Gemaild blijven leeg om af te tekenen.",

@@ -51,6 +51,7 @@ const ALLOWED_BUCKETS = new Set([
   "qb-wires",         // Amerika: wire-overzichten van Audrey (uit haar mail)
   "qb-geboekt",       // Amerika: welke QuickBooks-factuur al op 1160 is geboekt (per factuurnummer). Voorkomt dubbel boeken.
   "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
+  "qb-notities",      // Amerika: de eigen aantekening van Chantal per factuur (lezen; schrijven via /amerika/qb/notitie)
   "qb-verborgen",     // Amerika: facturen die Chantal uit beeld heeft gehaald (dubbel ingeladen). Niet gewist: de bron levert ze opnieuw, dus we onthouden wát verborgen is en door wie.
   "spa-verborgen",    // Voorraad: Jazzi-bestellingen die Chantal uit de historie heeft weggeklikt. Zelfde reden — het voorstel wordt telkens opnieuw opgebouwd.
   // Jazzi-bestellingen die écht zijn verwijderd, mét hun regels. Verwijderen
@@ -6521,6 +6522,7 @@ async function qbHandleInvoices(request, env) {
     const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
     const audrey = (await env.FONTEYN_DATA.get("qb-audrey", { type: "json" })) || { ids: {} };
     const verwerkt = (await env.FONTEYN_DATA.get("qb-verwerkt", { type: "json" })) || { ids: {} };
+    const notities = (await env.FONTEYN_DATA.get("qb-notities", { type: "json" })) || { ids: {} };
     /* Welke factuurnummers op een wire staan. Alleen die mogen onder de
        gewone ondergrens door; zie de filter hieronder. */
     const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
@@ -6563,6 +6565,10 @@ async function qbHandleInvoices(request, env) {
         m.verwerkt = !!v;
         m.verwerktTs = v ? (v.ts || null) : null;
         m.verwerktDoor = v ? (v.user || null) : null;
+        // De eigen aantekening van Chantal, zie qbHandleNotitie.
+        const nt = qbGekoppeld(notities, inv);
+        m.notitie = nt ? (nt.tekst || "") : "";
+        m.notitieDoor = nt ? (nt.user || null) : null;
         return m;
       })
       .sort((a, b) => (parseInt(b.docNr, 10) || 0) - (parseInt(a.docNr, 10) || 0));
@@ -7513,6 +7519,35 @@ async function qbHandleVerwerkt(request, env) {
   else { delete data.ids[sleutel]; delete data.ids[docNr]; }
   await env.FONTEYN_DATA.put("qb-verwerkt", JSON.stringify(data));
   return reply(200, { ok: true, verwerkt: !!body.verwerkt, docNr });
+}
+
+/* POST /amerika/qb/notitie { docNr, qbId, tekst, user } - een eigen aantekening.
+   ═══════════════════════════════════════════════════════════════════════════
+   Chantal (video, 9 sep 2026): "Ik heb hier een van de orders, invoice 3312
+   van Backyard & Barnes. Die staat al in Logic. Ik moet hier zelf achter
+   kunnen zetten (...) een vakje waar ik eventueel een ordernummer of een
+   opmerking bij kan zetten. Want dit zal nog wel eens een keer gebeuren."
+
+   Het gaat om facturen die buiten het Dashboard om al in Logic4 zijn gezet.
+   Het Dashboard weet dat niet en blijft ze als nieuw aanbieden; met een eigen
+   regel erachter is voor iedereen te zien dat er al iets mee gedaan is.
+
+   Dit is bewust géén koppeling: er wordt niets mee afgeboekt en niets mee
+   aangemaakt. Het is de kantlijn van Chantal. Wie een echte koppeling wil
+   gebruikt Accorderen, of de herstelknop die weesorders terugvindt. */
+async function qbHandleNotitie(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const docNr = String(body.docNr || "").trim();
+  const sleutel = body.qbId ? "qb:" + String(body.qbId).trim() : docNr;
+  if (!sleutel) return reply(400, { ok: false, error: "docNr ontbreekt" });
+  const tekst = String(body.tekst || "").slice(0, 300).trim();
+  const data = (await env.FONTEYN_DATA.get("qb-notities", { type: "json" })) || { ids: {} };
+  data.ids = data.ids || {};
+  if (tekst) data.ids[sleutel] = { docNr, tekst, ts: new Date().toISOString(), user: String(body.user || "").slice(0, 80) };
+  else { delete data.ids[sleutel]; delete data.ids[docNr]; }
+  await env.FONTEYN_DATA.put("qb-notities", JSON.stringify(data));
+  return reply(200, { ok: true, tekst, docNr });
 }
 
 /* Verbergen in plaats van verwijderen. Zowel de QuickBooks-facturen als de
@@ -10637,6 +10672,7 @@ export default {
       try { return reply(200, { ok: true, ...(await amerikaVoorraadLive(env)) }); }
       catch (e) { return reply(200, { ok: false, error: String(e.message || e), ...(cache || {}) }); }
     }
+    if (url.pathname === "/amerika/qb/notitie" && request.method === "POST") return qbHandleNotitie(request, env);
     if (url.pathname === "/amerika/qb/approve" && request.method === "POST") return qbHandleApprove(request, env);
     if (url.pathname === "/amerika/qb/sleutels" && request.method === "POST") return qbHandleSleutels(request, env);
     if (url.pathname === "/amerika/qb/herstel-koppeling" && request.method === "POST") return qbHandleHerstel(request, env);
