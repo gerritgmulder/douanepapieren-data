@@ -1737,7 +1737,7 @@ async function dpHandleReserve(request, env, sess, url) {
         (entry.vracht.wijze === "afhalen"
           ? '<b>Haalt zelf op</b> in Uddel.'
           : '<b>Laten bezorgen</b> naar ' + esc(entry.vracht.land) + ' ' + esc(entry.vracht.postcode) +
-            (entry.vracht.bedrag ? ' &mdash; opgegeven vrachtprijs &euro; ' + entry.vracht.bedrag.toFixed(2) : '') +
+            (entry.vracht.bedrag ? ' - opgegeven vrachtprijs &euro; ' + entry.vracht.bedrag.toFixed(2) : '') +
             (entry.vracht.vervoerder ? ' (' + esc(entry.vracht.vervoerder) + ')' : '') +
             (entry.vracht.kooiaap ? '<br>Mét kooiaap.' : '') +
             '<br><span style="color:#6b7280;font-size:12px;">Dit bedrag is de schatting uit het portaal en staat niet op de order; zet de definitieve vracht er zelf op.</span>') +
