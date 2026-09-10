@@ -3118,10 +3118,18 @@ async function l4Medewerkers(env) {
       const uitDienst = /^zz[\s-]*oud\b/i.test(naam);
       if (uitDienst) naam = naam.replace(/^zz[\s-]*oud\s*/i, "").trim() || naam;
       /* Het mailadres erbij: op de orderbevestiging staat de adviseur met
-         zijn adres eronder ("Yves / yves@fonteyn.nl"). Heeft Logic4 het niet,
-         dan blijft het leeg - liever geen adres dan een verzonnen adres. */
-      const mail = String(u.EmailAddress || u.Email || u.Mail || "").trim();
-      map[String(id)] = { naam, uitDienst, mail: mail || null };
+         zijn adres eronder ("Yves / yves@fonteyn.nl").
+
+         Logic4 heeft er geen veld voor. In het schema van GetAllUsers staan
+         precies vier dingen: FullName, UserId, Username en EmployeeNumber.
+         Maar de gebruikersnaam ís bij Fonteyn vaak het mailadres - yves@
+         fonteyn.nl logt ook zo in - dus als daar een adres in staat nemen we
+         dat over. Staat er iets anders in (fonteyn.Bert, Fonteyn.MaartenS),
+         dan blijft het leeg. Nooit een adres afleiden uit de voornaam: dat is
+         raden op een papier dat de klant krijgt. */
+      const inlog = String(u.Username || "").trim();
+      const mail = /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(inlog) ? inlog : "";
+      map[String(id)] = { naam, uitDienst, inlog: inlog || null, mail: mail || null };
     }
     return map;
   } catch (e) { return {}; }
