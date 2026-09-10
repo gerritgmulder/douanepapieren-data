@@ -661,9 +661,18 @@ function setupAutoUpdater() {
         "align-items:center;box-shadow:0 -2px 12px rgba(0,0,0,.25)";
       d.innerHTML = "<span>Er staat een nieuwe versie van het Dashboard klaar (${info.version}). "+
         "<b>Sluit het Dashboard af en start het opnieuw</b> om hem te installeren.</span>";
+      var n = document.createElement("button");
+      n.textContent = "Nu installeren";
+      n.style.cssText = "margin-left:auto;background:#8bc53f;color:#102b1e;border:0;border-radius:7px;"+
+        "padding:6px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer";
+      n.onclick = function(){
+        n.disabled = true; n.textContent = "Bezig\u2026";
+        try { window.fonteynUpdate && window.fonteynUpdate.nuInstalleren(); } catch(e){}
+      };
+      d.appendChild(n);
       var b = document.createElement("button");
       b.textContent = "Later";
-      b.style.cssText = "margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.5);"+
+      b.style.cssText = "background:transparent;border:1px solid rgba(255,255,255,.5);"+
         "color:#fff;border-radius:7px;padding:6px 14px;font:inherit;font-size:13px;cursor:pointer";
       b.onclick = function(){ d.remove(); };
       d.appendChild(b);
@@ -673,6 +682,20 @@ function setupAutoUpdater() {
       if (v && !v.isDestroyed()) v.webContents.executeJavaScript(balk).catch(() => {});
     }
   });
+  /* Zelf installeren in plaats van wachten op het afsluiten.
+     ═══════════════════════════════════════════════════════════════════════
+     autoInstallOnAppQuit staat aan, maar bij Kevin en Gerwin gebeurde er bij
+     afsluiten niets: ze kwamen na drie herstarts nog steeds terug op 0.21.1
+     (te zien in het inloglogboek, 10 sep 2026). Waarom het bij hen niet
+     aanslaat weet ik niet, en dat is precies de reden om er niet meer van
+     afhankelijk te zijn. quitAndInstall() sluit de app zelf af en start het
+     installatieprogramma; dat is één handeling in plaats van hopen dat er bij
+     het afsluiten iets gebeurt. */
+  ipcMain.handle("fonteyn:update-nu", () => {
+    try { autoUpdater.quitAndInstall(false, true); return true; }
+    catch (e) { console.warn("[updater] installeren faalde:", e?.message || e); return false; }
+  });
+
   // Check direct bij starten én daarna elk uur
   autoUpdater.checkForUpdates().catch(e => console.warn("[updater] check fail:", e.message));
   setInterval(() => {
