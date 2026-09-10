@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-10", bestand: "voorraad.html", soort: "nieuw",
+      titel: "Een zoekbalk voor alles",
+      wat: "Bovenaan Voorraadbeheer staat nu een zoekbalk die door alle tabbladen tegelijk zoekt. Typ een ordernummer, klantnaam of model en je ziet meteen waar die order staat: gereserveerd, op afroep, binnengekomen of gepland, met de verwachte levering erbij. Met de knop toon spring je naar de juiste lijst. Staat de order er helemaal niet bij, dan kun je Logic4 vragen waarom.",
+    },
+
+    {
       datum: "2026-09-10", bestand: "voorraad.html", soort: "beter",
       titel: "Beter te zien naar welke regel je kijkt",
       wat: "In Reserveringen krijgt elke order om en om een zachte groene tint, en de order waar je met de muis boven zit licht helemaal op, hoofdregel en subregel samen. De kolommen Kleur, Aantal en Adviseur zijn smaller, zodat de klantnaam meer ruimte krijgt. Geel en paars blijven gewoon voorgaan; die zeggen iets over het werk.",

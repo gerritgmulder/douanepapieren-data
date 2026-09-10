@@ -404,6 +404,25 @@
   of <b>Particulier</b> — dat onthoud ik per klant, en de regel verschijnt dan in het
   juiste overzicht.</p>
 
+  <!-- ── EEN ZOEKBALK VOOR ALLES ─────────────────────────────────────
+       Edwin, via Gerrit (10 sep 2026): "als je een order wil checken moet je
+       nu bij ieder onderdeel je ordernummer invoeren (bij Reserveringen, bij
+       Afroep, bij Gepland) maar het is efficienter als je gewoon 1 zoekbalk
+       bovenin hebt en hij dan direct alle uitkomsten laat zien."
+
+       Deze balk zoekt door alle tabbladen tegelijk en zegt per treffer waar
+       de order staat en hoe hij ervoor staat. De acht losse zoekvelden
+       blijven gewoon werken; die zijn handig als je binnen een lijst filtert.
+       Dit is voor de vraag "waar is deze order en wat is de stand". -->
+  <div class="card" style="margin:0 0 14px;padding:13px 15px">
+    <div class="actions" style="gap:10px;align-items:center;margin:0">
+      <input id="zoekAlles" placeholder="zoek een ordernummer, klant of model - overal tegelijk"
+             style="flex:1 1 auto;min-width:0;padding:9px 12px;font-size:14px" autocomplete="off">
+      <button class="btn" type="button" id="zoekAllesLeeg" style="flex:0 0 auto">wissen</button>
+    </div>
+    <div id="zoekAllesUit" style="margin-top:11px"></div>
+  </div>
+
   <div class="tabs">
     <button class="tab active" data-tab="overzicht" type="button">Overzicht</button>
     <button class="tab" data-tab="reserveringen" type="button">Reserveringen</button>
@@ -1459,6 +1478,104 @@ function renderOverview(table, body, countEl, list){
 // Filter-inputs: ophaal-tabel → renderLines; overzicht-tabellen → renderOverviews.
 document.querySelectorAll("#spaTable .filter-row input").forEach(inp=> inp.addEventListener("input", renderLines));
 document.querySelectorAll('.filter-row[data-ov="dealer"] input, .filter-row[data-ov="part"] input').forEach(inp=> inp.addEventListener("input", renderOverviews));
+
+/* ── DE ZOEKBALK BOVENIN ──────────────────────────────────────────────
+   Edwin, via Gerrit (10 sep 2026): "het is efficienter als je gewoon 1
+   zoekbalk bovenin hebt en hij dan direct alle uitkomsten laat zien (of dat
+   nou gereserveerd, gepland of wat dan ook is)."
+
+   Hij zoekt door alles wat er is - particulier, partner en containers - en
+   zegt per treffer waar de regel staat en wat de stand is. Waar hij staat
+   komt uit dezelfde vinkjes die de lijsten zelf gebruiken, dus het kan nooit
+   uit de pas lopen met wat je in een tabblad ziet.
+
+   Levert het niets op en lijkt het op een ordernummer, dan wordt bij Logic4
+   gevraagd waaróm die order er niet bij staat. Dat is precies de vraag die
+   iemand dan heeft, en het antwoord stond al klaar bij Order-uitleg. */
+function zoekPlek(r){
+  const n=notitie(r);
+  if(n.verwijderd) return {tekst:"uit het dashboard gehaald", kleur:"#6b7280", tab:null};
+  if(n.gepland)    return {tekst:"gepland", kleur:"#15803d", tab:isZakelijk(r)?"partner":"particulier"};
+  if(n.inplannen)  return {tekst:"binnengekomen, nog in te plannen", kleur:"#92400e", tab:isZakelijk(r)?"partner":"particulier"};
+  if(n.afroep)     return {tekst:"op afroep", kleur:"#6d28d9", tab:isZakelijk(r)?"partner":"particulier"};
+  return {tekst:"gereserveerd", kleur:"#1d4ed8", tab:r.container?"partnercont":(isZakelijk(r)?"partner":"particulier")};
+}
+let zoekTimer=null;
+function zoekAllesNu(){
+  const q=(document.getElementById("zoekAlles").value||"").trim().toLowerCase();
+  const uit=document.getElementById("zoekAllesUit");
+  if(q.length<2){ uit.innerHTML=""; return; }
+  const treffers=resvAlleRegels().filter(function(r){
+    return [r.ordernr,r.model,r.naam,r.kleur,r.adviseur].some(function(v){
+      return String(v||"").toLowerCase().includes(q);
+    });
+  }).slice(0,40);
+  if(!treffers.length){
+    uit.innerHTML="<p class='lead' style='margin:0'>Niets gevonden voor \u201c"+esc(q)+"\u201d."+
+      (/^\d{6,9}$/.test(q)?" <button class='btn' type='button' id='zoekUitleg'>Vraag Logic4 waarom deze order er niet bij staat</button>":"")+"</p>";
+    const k=document.getElementById("zoekUitleg");
+    if(k) k.addEventListener("click",function(){ zoekOrderUitleg(q,uit); });
+    return;
+  }
+  uit.innerHTML="<div class='tablewrap' style='max-height:46vh'><table class='grid'><thead><tr>"+
+    "<th>Order</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Klant</th><th>Waar staat hij</th>"+
+    "<th>Verwachte levering</th><th></th></tr></thead><tbody>"+
+    treffers.map(function(r){
+      const p=zoekPlek(r), n=notitie(r);
+      return "<tr><td><b>"+esc(r.ordernr)+"</b></td>"+
+        "<td>"+esc(r.model||"")+"</td>"+
+        "<td>"+esc(r.kleur||"")+"</td>"+
+        "<td>"+(r.qty||"")+"</td>"+
+        "<td>"+esc(r.naam||"")+"</td>"+
+        "<td><b style='color:"+p.kleur+"'>"+esc(p.tekst)+"</b>"+
+          (r.container?" <span class='pill' style='background:#e0e7ff;color:#3730a3;font-size:10px'>container</span>":"")+
+          (n.opmerking?"<div style='font-size:11px;color:var(--muted)'>"+esc(n.opmerking)+"</div>":"")+"</td>"+
+        "<td style='font-size:12px'>"+verwachtLabel(r.verwacht)+
+          (r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")+"</td>"+
+        "<td>"+(p.tab?"<button class='btn zoekGa' type='button' data-tab='"+p.tab+"' data-nr='"+esc(r.ordernr)+"' style='padding:2px 8px;font-size:11px'>toon</button>":"")+"</td></tr>";
+    }).join("")+"</tbody></table></div>"+
+    "<p class='lead' style='font-size:11.5px;margin:7px 0 0'>"+treffers.length+" treffer(s)"+
+    (treffers.length===40?" (eerste 40)":"")+".</p>";
+  uit.querySelectorAll(".zoekGa").forEach(function(b){
+    b.addEventListener("click",function(){
+      const t=document.querySelector('.tab[data-tab="'+b.dataset.tab+'"]');
+      if(t) t.click();
+      /* Het zoekveld van dat tabblad meteen invullen, anders sta je in een
+         lijst van honderden regels alsnog te zoeken. */
+      const velden={particulier:"partSearch",partner:"ptnSearch",partnercont:"pcSearch"};
+      const v=document.getElementById(velden[b.dataset.tab]);
+      if(v){ v.value=b.dataset.nr; v.dispatchEvent(new Event("input",{bubbles:true})); }
+      window.scrollTo({top:0,behavior:"smooth"});
+    });
+  });
+}
+async function zoekOrderUitleg(nr,uit){
+  uit.innerHTML="<p class='lead' style='margin:0'>Navragen bij Logic4\u2026</p>";
+  try{
+    const r=await fetch("https://fonteyn-data-store.g-mulder.workers.dev/voorraad/order-uitleg?nr="+encodeURIComponent(nr),
+      {headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
+    const j=await r.json();
+    if(!j.ok) throw new Error(j.error||"onbekend");
+    uit.innerHTML="<div class='status-msg' style='margin:0'><b>Order "+esc(nr)+"</b>"+
+      (j.klant?" \u00b7 "+esc(j.klant):"")+
+      (j.status?" \u00b7 status: "+esc(j.status.naam||j.status.id):"")+
+      "<br>"+esc(j.uitleg||"")+"</div>";
+  }catch(e){
+    uit.innerHTML="<p class='lead' style='margin:0'>Navragen lukte niet: "+esc(e.message)+"</p>";
+  }
+}
+(function(){
+  const veld=document.getElementById("zoekAlles");
+  if(!veld) return;
+  veld.addEventListener("input",function(){
+    clearTimeout(zoekTimer);
+    zoekTimer=setTimeout(zoekAllesNu,180);
+  });
+  veld.addEventListener("keydown",function(e){ if(e.key==="Enter"){ clearTimeout(zoekTimer); zoekAllesNu(); } });
+  document.getElementById("zoekAllesLeeg").addEventListener("click",function(){
+    veld.value=""; document.getElementById("zoekAllesUit").innerHTML=""; veld.focus();
+  });
+})();
 
 // Tabs
 document.querySelectorAll(".tab").forEach(t=> t.addEventListener("click", function(){
