@@ -262,16 +262,50 @@ async function fetchLiveUpdates() {
 
        Een rename op hetzelfde volume is één handeling: wie leest, krijgt óf
        het oude bestand óf het nieuwe, nooit een half bestand. */
+    /* ... maar op Windows mag dat niet altijd, en dáár ging het mis.
+       ═══════════════════════════════════════════════════════════════════
+       Gerrit (10 sep 2026): "het is nu al minuten en minuten verder en toch
+       zien we niks bij Gerwin, Kevin en anderen." Bij hem werkte het wel.
+
+       Het verschil is het besturingssysteem. Op macOS en Linux mag je een
+       bestand hernoemen terwijl een ander proces het openheeft; op Windows
+       niet - dan komt er EPERM of EBUSY. En het hulpprogramma dat de tegels
+       uitserveert heeft die bestanden juist open. Op de Mac van Gerrit lukte
+       elke rename dus, op elke Windows-pc van Fonteyn geen enkele.
+
+       Dat het niemand opviel komt doordat manifest.json hierboven wél
+       rechtstreeks wordt weggeschreven. Het versienummer van de inhoud liep
+       daardoor keurig mee - in het logboek staat bij iedereen "inhoud
+       0.34.1" - terwijl geen enkele tegel werd vervangen. Precies de
+       combinatie die maakt dat het lijkt alsof het bijwerken werkt.
+
+       Deze rename en het bijwerken op de achtergrond kwamen in dezelfde
+       wijziging binnen, op 7 september om 12:26. Vanaf dat moment zat het
+       stil. Vandaar ook "waarom zie ik de nieuwe versie wel en alle mensen
+       niet meer".
+
+       Dus: eerst hernoemen, want dat is de veilige weg waarbij niemand ooit
+       een half bestand kan lezen. Lukt dat niet, dan alsnog rechtstreeks
+       overschrijven. Dat is op Windows de enige manier, en het risico dat
+       iemand precies op dat moment leest is klein en hersteld met één keer
+       vernieuwen - veel kleiner dan wekenlang op oude tegels werken. */
     const tijdelijk = doelPad + ".nieuw";
+    let gelukt = false;
     try {
       await fs.writeFile(tijdelijk, buf);
       await fs.rename(tijdelijk, doelPad);
-      etags[entry.name] = r.etag;
-      bij++;
+      gelukt = true;
     } catch (e) {
+      try {
+        await fs.writeFile(doelPad, buf);
+        gelukt = true;
+        console.warn(`[update] ${entry.name}: hernoemen kon niet (${e.code || e.message}), rechtstreeks overschreven`);
+      } catch (e2) {
+        console.warn(`[update] ${entry.name} niet opgeslagen:`, e2.message);
+      }
       try { await fs.unlink(tijdelijk); } catch {}
-      console.warn(`[update] ${entry.name} niet opgeslagen:`, e.message);
     }
+    if (gelukt) { etags[entry.name] = r.etag; bij++; }
   });
 
   try { await fs.writeFile(etagPad, JSON.stringify(etags)); } catch {}
