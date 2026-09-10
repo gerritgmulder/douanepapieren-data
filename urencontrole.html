@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Urencontrole · Fonteyn Dashboard</title>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script src="taal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--groen:#144734;--lime:#8bc53f;--rand:#e3e8e2;--ink:#1b241f;--grijs:#6b7280;
+      --bg:#f6f8f5;--goed:#86efac;--goedrand:#4ade80;--uit:#1f2937}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{background:var(--groen);color:#fff;padding:11px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:600;flex:1 1 auto}
+main{padding:16px 18px 40px;max-width:1500px;margin:0 auto}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:13px;padding:15px 17px;margin-bottom:15px}
+h2{font-size:15px;margin:0 0 4px}
+.lead{color:var(--grijs);font-size:12.5px;margin:0 0 12px}
+button.doe{background:var(--groen);color:#fff;border:0;border-radius:9px;padding:8px 15px;
+   font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+button.doe:disabled{opacity:.5;cursor:default}
+button.stil{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:7px 13px;
+   font:inherit;font-size:13px;cursor:pointer}
+.rij{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.melding{border-radius:9px;padding:9px 12px;font-size:12.5px;margin:10px 0 0}
+.melding.ok{background:#dcfce7;color:#166534}.melding.bad{background:#fee2e2;color:#991b1b}
+.melding.info{background:#eff6ff;color:#1e40af}
+/* Het rooster. Namen links vast, weken ernaast. */
+.rooster{overflow-y:auto;max-height:70vh;border:1px solid var(--rand);border-radius:10px}
+table.wk{border-collapse:separate;border-spacing:0;width:100%;font-size:11.5px}
+table.wk th,table.wk td{padding:0;border-bottom:1px solid #eef1ee;border-right:1px solid #eef1ee}
+table.wk thead th{position:sticky;top:0;z-index:3;background:#fff;font-weight:600;
+   height:26px;text-align:center;color:var(--grijs);font-size:10.5px}
+table.wk .naam{position:sticky;left:0;z-index:2;background:#fff;text-align:left;
+   padding:4px 9px;min-width:0;width:1%;white-space:nowrap;font-size:12px}
+table.wk thead .naam{z-index:4}
+table.wk .contract{position:sticky;left:0;z-index:2;background:#fff}
+table.wk .uren{text-align:right;padding:4px 8px;color:var(--grijs);width:1%;white-space:nowrap}
+table.wk tr.groep td{background:#f4f9ec;font-weight:700;color:var(--groen);padding:6px 9px;font-size:12px}
+table.wk td.vak{text-align:center;cursor:pointer;height:22px;min-width:20px}
+table.wk td.vak.aan{background:var(--goed);box-shadow:inset 0 0 0 1px var(--goedrand)}
+table.wk td.vak.uit{background:var(--uit);cursor:default}
+table.wk td.vak:not(.uit):hover{outline:2px solid var(--lime);outline-offset:-2px}
+table.wk tr.persoon:hover .naam{background:#fbfdf7}
+.legenda{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--grijs);margin-top:10px}
+.legenda span{display:inline-flex;align-items:center;gap:6px}
+.blokje{width:14px;height:14px;border-radius:3px;display:inline-block}
+.leeg{color:var(--grijs);font-size:13px;padding:14px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>Urencontrole</h1>
+  <button class="logout" type="button">Uitloggen</button>
+</header>
+
+<main>
+  <div class="kaart">
+    <h2>Wie heb je deze week nagekeken?</h2>
+    <p class="lead">Klik een vakje aan zodra je de urenregistratie van die collega voor die week hebt gecontroleerd. Het wordt meteen bewaard, je hoeft niets op te slaan.</p>
+    <div class="rij">
+      <label class="stil" style="cursor:pointer">Overzicht inlezen (.xlsx)
+        <input type="file" id="bestand" accept=".xlsx,.xls" style="display:none"></label>
+      <select id="jaar" class="stil"></select>
+      <span id="tel" class="lead" style="margin:0"></span>
+    </div>
+    <div id="melding" class="melding info" style="display:none"></div>
+  </div>
+
+  <div class="kaart">
+    <div id="rooster"><p class="leeg">Nog niets ingelezen. Lees hierboven je Excel-overzicht in, dan staan alle collega's hier.</p></div>
+    <div class="legenda">
+      <span><i class="blokje" style="background:var(--goed);box-shadow:inset 0 0 0 1px var(--goedrand)"></i> nagekeken</span>
+      <span><i class="blokje" style="background:#fff;border:1px solid var(--rand)"></i> nog niet</span>
+      <span><i class="blokje" style="background:var(--uit)"></i> uit dienst</span>
+    </div>
+  </div>
+</main>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   URENCONTROLE - het overzicht van Gerwin
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Gerrit (10 sep 2026): "Gerwin is leidinggevende van het grootste team,
+   ongeveer 30 collega's. Hij heeft daarom een bestand gemaakt om bij te kunnen
+   houden of hij voor die week de urenregistraties van iedere collega goed
+   heeft gecontroleerd. Hij doet dat door simpelweg een 1 te zetten op de week
+   bij het desbetreffende persoon. Ik wil dat je enkel voor Gerwin een tegel
+   maakt waar hij dat overzicht in kan uploaden en dat hij het voortaan daarin
+   kan doen."
+
+   Zo werkt het nu in zijn Excel: per afdeling een blokje namen, links de
+   contracturen (40), en daarnaast 52 weekkolommen met een 1 waar het
+   nagekeken is. Een zwart blok betekent uit dienst - Gerrit bevestigde dat op
+   10 sep 2026. Dat is dus geen ontbrekende controle maar iemand die er die
+   week niet was, en daarom is het hier ook niet aan te klikken.
+
+   Waar dit naartoe gaat: "urenregistratie komt in het Dashboard voor alle
+   leidinggevenden om te controleren. Bij Gerwin wordt dan automatisch die
+   tegel weer geladen als hij de urenregistraties gecontroleerd heeft en dat
+   hoeft hij dan dus niet meer met de hand te doen." Daarom staat de controle
+   hier per persoon én per week apart, en niet als één vinkje per week: straks
+   moet er per collega automatisch een vinkje in kunnen vallen.
+
+   OTA: deze tegel staat in manifest.json. Nooit opnieuw installeren.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const W = "https://fonteyn-data-store.g-mulder.workers.dev";
+const BUCKET = "uren-controle";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+function teamKey(){ return localStorage.getItem("fp.teamkey") || ""; }
+function ikBen(){ return String(localStorage.getItem("fp.email") || "").toLowerCase(); }
+
+/* De opslag: per jaar een lijst mensen met hun afdeling, contracturen en de
+   weken die nagekeken zijn. Weken staan als een lijst nummers, niet als 52
+   losse velden - dat leest korter terug en houdt de KV-regel klein. */
+let data = { jaren: {} };
+let jaar = String(new Date().getFullYear());
+
+function melding(soort, tekst){
+  const el = $("melding");
+  if (!tekst){ el.style.display = "none"; return; }
+  el.style.display = ""; el.className = "melding " + soort; el.textContent = tekst;
+}
+
+async function laden(){
+  try{
+    const r = await fetch(W + "/data/" + BUCKET, { headers: { "X-Fonteyn-Auth": teamKey() } });
+    if (r.ok){ const j = await r.json(); if (j && j.jaren) data = j; }
+  }catch(e){ console.warn("laden faalde:", e); }
+  vulJaren();
+  teken();
+}
+async function bewaren(){
+  const r = await fetch(W + "/data/" + BUCKET, { method: "PUT",
+    headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+    body: JSON.stringify({ jaren: data.jaren, updated: new Date().toISOString(),
+                           door: ikBen() }) });
+  if (!r.ok) throw new Error("opslaan mislukt (HTTP " + r.status + ")");
+}
+
+function vulJaren(){
+  const jr = Object.keys(data.jaren || {}).sort().reverse();
+  if (!jr.length) jr.push(jaar);
+  if (jr.indexOf(jaar) < 0) jaar = jr[0];
+  $("jaar").innerHTML = jr.map(j => "<option value='" + esc(j) + "'" + (j === jaar ? " selected" : "") + ">" + esc(j) + "</option>").join("");
+}
+
+/* ── Het Excel-overzicht inlezen ─────────────────────────────────────────
+   Zijn bestand heeft per jaar een tabblad (2019 t/m 2026). De opbouw is:
+   een regel met alleen een afdelingsnaam, daaronder de mensen met in kolom B
+   de contracturen en vanaf kolom C de weken. Een 1 betekent nagekeken; een
+   zwarte cel betekent uit dienst, en die is aan de opmaak te zien en niet aan
+   de inhoud. Een zwarte cel is leeg, dus die kunnen we niet aan de waarde
+   herkennen - we lezen daarom de vulkleur van de cel. */
+function leesBlad(wb, naam){
+  const blad = wb.Sheets[naam];
+  const rijen = XLSX.utils.sheet_to_json(blad, { header: 1, defval: "", raw: false });
+  const mensen = [];
+  let afdeling = "";
+  let weekKolom = null;              // in welke kolom week 1 staat
+  for (let r = 0; r < rijen.length; r++){
+    const rij = rijen[r] || [];
+    const eerste = String(rij[0] || "").trim();
+    if (!eerste) continue;
+    /* Een koprij van weken: 1, 2, 3 ... Die staat boven elk afdelingsblok en
+       vertelt waar de weken beginnen. */
+    const cijfers = rij.map((c, i) => ({ i, n: parseInt(String(c).trim(), 10) })).filter(x => isFinite(x.n));
+    const isWeekkop = cijfers.length > 20 && cijfers.slice(0, 5).every((x, k) => x.n === k + 1);
+    if (isWeekkop){ weekKolom = cijfers[0].i; afdeling = eerste; continue; }
+    // Een afdelingsnaam: tekst in kolom A en verder niets ingevuld.
+    const rest = rij.slice(1).filter(c => String(c).trim() !== "");
+    if (!rest.length){ afdeling = eerste; continue; }
+    // Anders: een persoon.
+    const uren = parseInt(String(rij[1] || "").replace(/\D/g, ""), 10);
+    const weken = [], uitDienst = [];
+    const start = weekKolom == null ? 2 : weekKolom;
+    for (let w = 1; w <= 52; w++){
+      const cel = rij[start + w - 1];
+      const tekst = String(cel == null ? "" : cel).trim();
+      if (tekst === "1") weken.push(w);
+      else if (zwart(blad, r, start + w - 1)) uitDienst.push(w);
+    }
+    mensen.push({ naam: eerste, afdeling: afdeling || "Overig",
+                  uren: isFinite(uren) ? uren : null, weken, uitDienst });
+  }
+  return mensen;
+}
+/* Is deze cel zwart gemaakt? Dat is hoe Gerwin 'uit dienst' aangeeft. De
+   opmaak zit in de cel zelf; zonder cellStyles leest de spreadsheet-lezer die
+   niet, dus dat staat aan bij het inlezen. Kunnen we de kleur niet zien, dan
+   nemen we aan dat het gewoon leeg is - liever een lege week te veel dan
+   iemand ten onrechte op uit dienst zetten. */
+function zwart(blad, r, c){
+  try{
+    const cel = blad[XLSX.utils.encode_cell({ r, c })];
+    const kleur = cel && cel.s && cel.s.fgColor && cel.s.fgColor.rgb;
+    if (!kleur) return false;
+    const hex = String(kleur).replace(/^#/, "").slice(-6).toUpperCase();
+    const rr = parseInt(hex.slice(0,2),16), gg = parseInt(hex.slice(2,4),16), bb = parseInt(hex.slice(4,6),16);
+    return isFinite(rr) && (rr + gg + bb) < 150;      // heel donker = zwart
+  }catch(e){ return false; }
+}
+
+$("bestand").addEventListener("change", async (ev) => {
+  const f = (ev.target.files || [])[0];
+  if (!f) return;
+  melding("info", "Inlezen…");
+  try{
+    const wb = XLSX.read(await f.arrayBuffer(), { type: "array", cellStyles: true });
+    /* Een tabblad per jaar. Alleen de jaartabbladen doen mee; de rest van zijn
+       bestand (Roemenen 2024, Blad1, namen van collega's) laten we staan. */
+    const jaren = wb.SheetNames.filter(n => /^(19|20)\d{2}$/.test(String(n).trim()));
+    if (!jaren.length) throw new Error("in dit bestand staat geen tabblad met een jaartal (2026 bijvoorbeeld)");
+    let totaal = 0;
+    for (const n of jaren){
+      const mensen = leesBlad(wb, n);
+      if (!mensen.length) continue;
+      data.jaren[String(n).trim()] = { mensen, ingelezen: new Date().toISOString(), door: ikBen() };
+      totaal += mensen.length;
+    }
+    await bewaren();
+    jaar = jaren.indexOf(jaar) >= 0 ? jaar : String(jaren[jaren.length - 1]).trim();
+    vulJaren(); teken();
+    melding("ok", "Ingelezen: " + jaren.length + " jaar, samen " + totaal + " regel(s). Je kunt nu hieronder aanvinken.");
+    try{ if (window.fpLog) window.fpLog("urencontrole-ingelezen", jaren.join(", ") + " · " + totaal + " regels"); }catch(e){}
+  }catch(e){
+    melding("bad", "Kon het bestand niet inlezen: " + (e.message || e));
+  }
+  ev.target.value = "";
+});
+
+$("jaar").addEventListener("change", () => { jaar = $("jaar").value; teken(); });
+
+function teken(){
+  const box = $("rooster");
+  const jr = (data.jaren || {})[jaar];
+  if (!jr || !jr.mensen || !jr.mensen.length){
+    box.innerHTML = "<p class='leeg'>Nog niets ingelezen voor " + esc(jaar) + ". Lees hierboven je Excel-overzicht in.</p>";
+    $("tel").textContent = "";
+    return;
+  }
+  const mensen = jr.mensen;
+  // De week van vandaag, zodat je ziet waar je bent.
+  const nu = weekNu();
+  let html = "<div class='rooster'><table class='wk'><thead><tr>" +
+    "<th class='naam'>Collega</th><th class='uren'>Uren</th>";
+  for (let w = 1; w <= 52; w++) html += "<th" + (w === nu ? " style='color:var(--groen);font-weight:800'" : "") + ">" + w + "</th>";
+  html += "</tr></thead><tbody>";
+  let vorige = null;
+  mensen.forEach((p, i) => {
+    if (p.afdeling !== vorige){
+      html += "<tr class='groep'><td colspan='54'>" + esc(p.afdeling) + "</td></tr>";
+      vorige = p.afdeling;
+    }
+    html += "<tr class='persoon'><td class='naam'>" + esc(p.naam) + "</td>" +
+      "<td class='uren'>" + (p.uren || "") + "</td>";
+    const aan = new Set(p.weken || []);
+    const uit = new Set(p.uitDienst || []);
+    for (let w = 1; w <= 52; w++){
+      const isUit = uit.has(w);
+      html += "<td class='vak" + (isUit ? " uit" : (aan.has(w) ? " aan" : "")) + "'" +
+        (isUit ? " title='uit dienst'" : " data-p='" + i + "' data-w='" + w + "' title='" + esc(p.naam) + " · week " + w + "'") +
+        "></td>";
+    }
+    html += "</tr>";
+  });
+  html += "</tbody></table></div>";
+  box.innerHTML = html;
+
+  const teDoen = mensen.filter(p => !(p.uitDienst || []).includes(nu) && !(p.weken || []).includes(nu));
+  $("tel").textContent = "Week " + nu + ": " + (mensen.length - teDoen.length) + " van " +
+    mensen.filter(p => !(p.uitDienst || []).includes(nu)).length + " nagekeken" +
+    (teDoen.length ? " · nog te doen: " + teDoen.slice(0, 6).map(p => p.naam).join(", ") + (teDoen.length > 6 ? " en " + (teDoen.length - 6) + " meer" : "") : "");
+
+  box.querySelectorAll("td.vak[data-p]").forEach(td => {
+    td.addEventListener("click", () => zet(Number(td.dataset.p), Number(td.dataset.w), td));
+  });
+}
+
+/* Aan of uit, en meteen bewaren. Lukt het bewaren niet, dan gaat het vakje
+   weer terug - anders denkt Gerwin dat het genoteerd staat terwijl er niets
+   is weggeschreven. */
+async function zet(idx, w, td){
+  const p = ((data.jaren[jaar] || {}).mensen || [])[idx];
+  if (!p) return;
+  p.weken = p.weken || [];
+  const had = p.weken.includes(w);
+  if (had) p.weken = p.weken.filter(x => x !== w);
+  else p.weken.push(w);
+  td.classList.toggle("aan", !had);
+  try{
+    await bewaren();
+    teken();
+    try{ if (window.fpLog) window.fpLog("urencontrole-gezet", p.naam + " week " + w + (had ? " teruggedraaid" : " nagekeken")); }catch(e){}
+  }catch(e){
+    if (had) p.weken.push(w); else p.weken = p.weken.filter(x => x !== w);
+    td.classList.toggle("aan", had);
+    melding("bad", "Niet bewaard: " + (e.message || e));
+  }
+}
+
+// Het weeknummer volgens ISO, zoals Excel het ook telt.
+function weekNu(){
+  const d = new Date();
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  const jan1 = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil((((t - jan1) / 86400000) + 1) / 7);
+}
+
+laden();
+</script>
+<script>
+/* Activiteitenlogboek - helper fpLog(actie,detail) */
+(function(){
+  window.fpLog = function(actie, detail){
+    try{
+      fetch("https://fonteyn-data-store.g-mulder.workers.dev/log", { method:"POST",
+        headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": localStorage.getItem("fp.teamkey")||"" },
+        body: JSON.stringify({ tegel:"urencontrole.html", actie:actie, detail:detail||"",
+                               user: localStorage.getItem("fp.email")||"" }) });
+    }catch(e){}
+  };
+  window.fpLog("tegel-geopend","");
+})();
+</script>
+</body>
+</html>

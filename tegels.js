@@ -48,6 +48,8 @@
       uit:"Postvak, concepten en verzenden",                       mobiel:"goed", tile:"tileMail" },
     { bestand:"tuinmeubelen.html",   groep:"tuinmeubelen",     ic:"🪑",  naam:"Tuinmeubelen",
       uit:"Containers, papieren en meldingen",                     mobiel:"goed", tile:"tileTuinmeubelen" },
+    { bestand:"urencontrole.html",   groep:"urencontrole",     ic:"✅",  naam:"Urencontrole",
+      uit:"Wie heb je deze week nagekeken",                        mobiel:"krap", tile:"tileUrencontrole" },
     { bestand:"order-status.html",   groep:"orderstatus",      ic:"📊",  naam:"Orderstatus",
       uit:"Een order opzoeken en de status bijwerken",             mobiel:"goed", tile:"tileOrderStatus" },
     { bestand:"specsheets.html",     groep:"specsheets",       ic:"📄",  naam:"Specificatiesheets",

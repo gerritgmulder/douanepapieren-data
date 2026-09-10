@@ -52,6 +52,7 @@ const ALLOWED_BUCKETS = new Set([
   "qb-geboekt",       // Amerika: welke QuickBooks-factuur al op 1160 is geboekt (per factuurnummer). Voorkomt dubbel boeken.
   "qb-verwerkt",      // Amerika: 'verwerkt in Logic4' per factuurnummer (lezen; schrijven via /amerika/qb/verwerkt)
   "qb-notities",      // Amerika: de eigen aantekening van Chantal per factuur (lezen; schrijven via /amerika/qb/notitie)
+  "uren-controle",    // Urencontrole: het weekoverzicht van Gerwin, per collega per week
   "qb-verborgen",     // Amerika: facturen die Chantal uit beeld heeft gehaald (dubbel ingeladen). Niet gewist: de bron levert ze opnieuw, dus we onthouden wát verborgen is en door wie.
   "spa-verborgen",    // Voorraad: Jazzi-bestellingen die Chantal uit de historie heeft weggeklikt. Zelfde reden — het voorstel wordt telkens opnieuw opgebouwd.
   // Jazzi-bestellingen die écht zijn verwijderd, mét hun regels. Verwijderen

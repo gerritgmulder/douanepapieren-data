@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-10", bestand: "urencontrole.html", soort: "nieuw",
+      titel: "Urencontrole",
+      wat: "Je eigen weekoverzicht zit nu in het Dashboard. Lees je Excel-bestand een keer in en daarna vink je per collega per week aan dat je de urenregistratie hebt nagekeken. Bovenaan zie je meteen wie er deze week nog open staan. Wie uit dienst was blijft zwart en is niet aan te klikken.",
+    },
+
+    {
       datum: "2026-09-10", bestand: "amerika.html", soort: "nieuw",
       titel: "Eigen notitie bij een factuur",
       wat: "Achter elke factuur uit QuickBooks staat nu een vakje waar je zelf een ordernummer of een opmerking bij kunt zetten. Handig voor facturen die je buiten het Dashboard om al in Logic4 hebt gezet. Wat je invult blijft staan en is voor iedereen zichtbaar.",

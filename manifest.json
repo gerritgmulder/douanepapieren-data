@@ -133,6 +133,10 @@
       "note": "Vult de kop van elke tegel aan: terug naar het dashboard, wie er is ingelogd, NL/EN en uitloggen"
     },
     {
+      "name": "urencontrole.html",
+      "note": "Het weekoverzicht van Gerwin: per collega per week aanvinken of de urenregistratie is nagekeken. Leest zijn eigen Excel in, inclusief de zwarte cellen die 'uit dienst' betekenen."
+    },
+    {
       "name": "route-print.js",
       "note": "Bouwt het stel papieren dat een monteur meekrijgt: een voorblad met de stops van de route en daarachter de orderbevestiging van elke stop, in bezoekvolgorde. Alleen opmaak; de gegevens komen van /planning/route-print."
     },

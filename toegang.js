@@ -224,6 +224,13 @@
     "planning-bewerk": [
       "dolf", "fonteynbot", "gerrit", "gerwin", "kevin",
     ],
+    /* Urencontrole: het weekoverzicht van Gerwin. Gerrit (10 sep 2026): "ik
+       wil dat je enkel voor Gerwin een tegel maakt waar hij dat overzicht in
+       kan uploaden". Dus letterlijk alleen hij, met de beheerlaag erboven
+       zoals overal. */
+    "urencontrole": [
+      "dolf", "fonteynbot", "gerrit", "gerwin",
+    ],
     // Personeel
     "personeel": [
       "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit",
