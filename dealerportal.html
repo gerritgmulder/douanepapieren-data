@@ -107,9 +107,17 @@
      Het pijltje is er om te laten zien dát er iets open kan. Zonder zo'n teken
      klikt niemand op een kop, en dan is de helft van de tegel onvindbaar. */
   .stock-card .m .naam{flex:1 1 auto;min-width:0}
-  .stock-card .m{cursor:pointer;user-select:none;border-radius:7px;margin:0 -5px;padding:2px 5px}
-  .stock-card .m:hover{background:#f5f7f5}
-  .stock-card .m:focus-visible{outline:2px solid var(--green);outline-offset:1px}
+  /* De hele tegel is de knop, niet alleen de regel met de modelnaam.
+     Gerrit (10 sep 2026): "ik wil op DE HELE TEGEL kunnen klikken en dat hij
+     dan uitschuift. Niet alleen op de regel van de modelnaam."
+
+     Wat er níet mee toggelt: de knoppen onderin, en het uitgeschoven deel
+     zelf. Anders klapt de tegel dicht op het moment dat iemand op Reserve
+     drukt of op "+ 3 more colours" klikt. Dat staat in de klikafhandeling,
+     want CSS kan dat onderscheid niet maken. */
+  .stock-card{cursor:pointer;user-select:none}
+  .stock-card:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  .stock-card .knoppen,.stock-card .vouw{cursor:auto;user-select:auto}
   .stock-card .chev{flex:0 0 auto;color:#b6bdb8;font-size:17px;line-height:1;font-weight:400;
                     transition:transform .24s cubic-bezier(.2,.8,.3,1),color .15s}
   .stock-card .m:hover .chev{color:var(--muted)}
@@ -902,8 +910,7 @@ function vouwZet(kaart, open, meteen){
   const v = kaart.querySelector(".vouw");
   if (!v) return;
   kaart.classList.toggle("open", open);
-  const kop = kaart.querySelector(".m");
-  if (kop) kop.setAttribute("aria-expanded", open ? "true" : "false");
+  kaart.setAttribute("aria-expanded", open ? "true" : "false");
   if (meteen) { v.style.height = open ? "auto" : "0"; return; }
   if (open) {
     v.style.height = v.scrollHeight + "px";
@@ -992,9 +999,9 @@ function renderStock(){
   $("stockGrid").innerHTML = list.map(m => {
     const vrij = Number(m.vrijNu) || 0;
     return `
-    <div class="stock-card" data-model="${esc(m.model)}" style="border-top:6px solid ${esc(m.collectionColor||'#9ca3af')}">
+    <div class="stock-card" data-model="${esc(m.model)}" role="button" tabindex="0" aria-expanded="false" style="border-top:6px solid ${esc(m.collectionColor||'#9ca3af')}">
       ${m.collection?`<div style="font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${esc(m.collectionColor)};margin-bottom:3px;">${esc(m.collection)}</div>`:""}
-      <div class="m" role="button" tabindex="0" aria-expanded="false"><span class="naam">${esc(m.model)}</span>${voorraadPil(m)}<span class="chev" aria-hidden="true">&#8250;</span></div>
+      <div class="m"><span class="naam">${esc(m.model)}</span>${voorraadPil(m)}<span class="chev" aria-hidden="true">&#8250;</span></div>
       <div class="vouw"><ul class="vrr">${voorraadRegels(m)}</ul>${pakketRegel(m) ? `<ul>${pakketRegel(m)}</ul>` : ""}</div>
       <ul>
         ${m.opAanvraag?`<li style="margin-top:6px;color:var(--muted)">Price on request &mdash; ask us via the Contact tab.</li>`
@@ -1013,21 +1020,37 @@ function renderStock(){
   document.querySelectorAll(".stock-card").forEach(kaart => {
     if (uitgeklapt.has(kaart.dataset.model)) vouwZet(kaart, true, true);
   });
-  document.querySelectorAll(".stock-card .m").forEach(kop => {
-    kop.addEventListener("click", () => {
-      const kaart = kop.closest(".stock-card");
+  document.querySelectorAll(".stock-card").forEach(kaart => {
+    const wissel = () => {
       const model = kaart.dataset.model;
       const open = !uitgeklapt.has(model);
       if (open) uitgeklapt.add(model); else uitgeklapt.delete(model);
       vouwZet(kaart, open, false);
+    };
+    kaart.addEventListener("click", (e) => {
+      /* Twee plekken in de kaart doen niet mee. De knoppen onderin, want een
+         klik op Reserve of Downloads hoort die knop te bedienen en niet de
+         tegel dicht te vouwen. En het uitgeschoven deel zelf: daar zit
+         "+ 3 more colours" in, en wie daarop klikt wil méér zien, niet alles
+         kwijt. Ook los tekst selecteren in de kleurenlijst blijft zo kunnen. */
+      if (e.target.closest("button, a, input, select, textarea, label, .vouw")) return;
+      wissel();
     });
-    // Met de spatiebalk of Enter moet het ook kunnen: het is een knop.
-    kop.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); kop.click(); }
+    kaart.addEventListener("keydown", (e) => {
+      // Alleen als de kaart zelf de focus heeft. Staat de focus op de knop
+      // Reserve erbinnen, dan is Enter voor die knop en niet voor de tegel.
+      if (e.target !== kaart) return;
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); wissel(); }
     });
   });
   // "+ 3 more colours" klapt de rest van de kleuren uit, alleen op die tegel.
-  document.querySelectorAll(".vrr .meer").forEach(l => l.addEventListener("click", () => {
+  document.querySelectorAll(".vrr .meer").forEach(l => l.addEventListener("click", (e) => {
+    /* stopPropagation moet hier, en om een reden die je niet ziet aankomen:
+       deze regel haalt zichzelf hieronder uit de pagina. Daarna borrelt de
+       klik door naar de tegel, en die kijkt of het doel binnen .vouw lag - maar
+       het doel hangt dan nergens meer aan, dus dat antwoord is nee en de tegel
+       klapte dicht op het moment dat je juist méér wilde zien. */
+    e.stopPropagation();
     l.parentElement.querySelectorAll("li.extra").forEach(x => x.classList.remove("hidden"));
     l.remove();
   }));

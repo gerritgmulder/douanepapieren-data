@@ -60,7 +60,7 @@
     {
       datum: "2026-09-10", bestand: "dealerportaal.html", soort: "beter",
       titel: "Modellen dichtgeklapt, kleuren op een klik",
-      wat: "Een partner ziet in het portaal nu veel meer modellen op een scherm: per tegel alleen de naam, hoeveel er staan en de prijs. Klik je op de modelnaam, dan schuiven de kleuren met hun aantallen en de verwachte schepen eronder open. Wat je open hebt staan blijft open, ook als de voorraad zichzelf ververst.",
+      wat: "Een partner ziet in het portaal nu veel meer modellen op een scherm: per tegel alleen de naam, hoeveel er staan en de prijs. Klik ergens op de tegel en de kleuren met hun aantallen en de verwachte schepen schuiven eronder open. Wat je open hebt staan blijft open, ook als de voorraad zichzelf ververst.",
     },
 
     {
