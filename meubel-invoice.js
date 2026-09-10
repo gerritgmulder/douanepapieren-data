@@ -256,7 +256,226 @@
     return { koppelingen: uit, meldingen: meldingen };
   }
 
+  /* ── EUROFAR INTERNATIONAL: een proforma als PDF ─────────────────────────
+     ═══════════════════════════════════════════════════════════════════════
+     Chantal (10 sep 2026) wil alle commercial invoices van tuinmeubelen
+     gelezen hebben. Eurofar is de eerste die als pdf binnenkomt, en het is
+     geen fabriek maar een Nederlandse agent in Tilburg die voor ons in China
+     inkoopt (Linhai, Qingdao).
+
+     Waarom dit op x-posities werkt en niet op tekstregels
+     ----------------------------------------------------
+     Op deze bladzijde staat een echte tabel: No, Article No, Description,
+     Qnt, Price in USD, Total in USD. Wie de regel plat maakt tot tekst raakt
+     de kolomgrenzen kwijt, en juist die zijn hier het antwoord op de twee
+     dingen die hieronder misgaan. Daarom krijgt deze lezer de rijen mét
+     x-posities (uitPdfKolommen), niet de platte regels.
+
+     Twee vallen, allebei gevonden door de echte bestanden te lezen en niet
+     door naar de eerste regel te kijken
+     -----------------------------------------------------------------------
+     1. HET ARTIKELNUMMER BREEKT OVER TWEE REGELS. In 754221CN staat artikel 2
+        als "COBDB000002" met op de regel eronder een losse "8". Samen is dat
+        COBDB0000028. In 754231CN gebeurt het twee keer: COM0B000001 + "1" en
+        CONKB000001 + "1". Wie per regel leest houdt een half artikelnummer
+        over en dat nummer bestaat niet - het is dus niet "bijna goed" maar
+        onvindbaar in Logic4. Dat losse stukje is te herkennen doordat het in
+        de kolom Article No staat en niet in Description, en dat is precies
+        wat je op een platte tekstregel niet meer kunt zien.
+
+     2. EEN TWEEDE BLADZIJDE IS GEEN TWEEDE CONTAINER. 754231CN loopt door op
+        een volgende bladzijde, met de koprij én de totaalregel er nog een
+        keer boven en onder. Die totaalregel is niet het totaal van die
+        bladzijde maar van het hele document: allebei de keren staat er 185 /
+        24.590,75, en dat is 80 + 80 + 25. Wie per koprij een blok begint
+        krijgt twee containers waar er één is, en wie de totalen optelt komt
+        op het dubbele uit. Eén proforma is hier dus één zending.
+
+     Bedragen staan in EUROPESE notatie (369,95 en 11.098,50). Dat is anders
+     dan bij Guangxi Mibin, waar $1,892.00 staat. Die twee mogen nooit door
+     dezelfde functie: de Europese lezer maakt van 1,892.00 het getal 1,892.
+     Vandaar een eigen eurofarGetal() naast de bestaande getal(). */
+
+  function eurofarGetal(t) {
+    var s = String(t == null ? "" : t).replace(/[^\d.,-]/g, "");
+    if (!s) return null;
+    // Punt als duizendscheiding eruit, komma wordt het decimaalteken.
+    s = s.replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
+    var n = parseFloat(s);
+    return isFinite(n) ? n : null;
+  }
+  // De stukjes tekst van een rij, leeg weggelaten, met hun x erbij.
+  function eurofarStukken(rij) {
+    return (rij && rij.items ? rij.items : []).map(function (i) {
+      return { x: Number(i.x) || 0, s: schoon(i.str) };
+    }).filter(function (i) { return i.s; });
+  }
+  function eurofarTekst(rij) {
+    return eurofarStukken(rij).map(function (i) { return i.s; }).join(" ");
+  }
+  function eurofarBand(rij, van, tot) {
+    return eurofarStukken(rij).filter(function (i) { return i.x >= van && i.x < tot; });
+  }
+  /* Herkennen. Bewust op twee dingen tegelijk: de naam van de agent én dat het
+     een proforma is. Alleen op "Eurofar" zou ook een begeleidende brief of een
+     pakbon van dezelfde afzender inpikken. */
+  function isEurofar(regels) {
+    var t = (regels || []).slice(0, 40).join(" ");
+    return /Eurofar\s+International/i.test(t) && /Proforma\s+Invoice/i.test(t);
+  }
+  // Is dit de koprij van de artikeltabel?
+  function eurofarIsKop(rij) {
+    var t = eurofarTekst(rij);
+    return /\bArticle\s*No\b/i.test(t) && /\bDescription\b/i.test(t) && /\bQnt\b/i.test(t);
+  }
+  var EUROFAR_OPTIE = /^(ALU\b|C_|SEAT\s*:|BACK\s*:|PACKAGING\s+METHOD\s*:)/i;
+
+  function leesEurofar(rijen) {
+    var uit = { fabriek: "Eurofar International B.V.", invoiceNo: null, datum: null,
+                referentie: null, lds: null, laadhaven: null, containerSoort: null,
+                containers: [], meldingen: [] };
+    if (!rijen || !rijen.length) return uit;
+
+    /* De kop. Die staat op elke bladzijde opnieuw, dus de eerste die we
+       tegenkomen telt en de rest wordt overgeslagen. */
+    for (var i = 0; i < rijen.length && i < 40; i++) {
+      var t = eurofarTekst(rijen[i]), m;
+      if (!uit.invoiceNo && (m = t.match(/Proforma\s+Invoice\s*:\s*([A-Za-z0-9\-\/]{3,30})/i))) uit.invoiceNo = m[1];
+      if (!uit.datum && (m = t.match(/\bDate\s*:\s*(\d{2}-\d{2}-\d{4})/i))) uit.datum = m[1];
+      if (!uit.lds && (m = t.match(/\bLDS\s+(\d{2}-\d{2}-\d{4})/i))) uit.lds = m[1];
+      if (!uit.containerSoort && (m = t.match(/\bContainers\s+(\d+\s*x\s*\d+\s*[A-Z]{2,4})/i))) uit.containerSoort = schoon(m[1]);
+      if (!uit.laadhaven && (m = t.match(/Port\s+of\s+Loading\s+(.+)$/i))) uit.laadhaven = schoon(m[1]);
+      /* De referentie kan doorlopen: bij 754231CN staat er "ORDER QINGDAO,"
+         met "CHINA" eronder. Alleen niet op de regel er direct onder - daar
+         staat aan de andere kant van de bladzijde nog "Proforma Invoice". Dus
+         een paar regels vooruit kijken, en alleen een regel meenemen die
+         helemaal in dezelfde kolom staat. Zo pikken we de tekst rechts op de
+         bladzijde niet mee. */
+      if (!uit.referentie) {
+        var stuk = eurofarStukken(rijen[i]);
+        for (var v = 0; v < stuk.length; v++) {
+          if (!/Your\s+reference\s*:/i.test(stuk[v].s)) continue;
+          var waarde = stuk.slice(v + 1).map(function (s) { return s.s; }).join(" ");
+          var xWaarde = stuk[v + 1] ? stuk[v + 1].x : null;
+          for (var n2 = 1; n2 <= 3 && xWaarde != null; n2++) {
+            var volgend = eurofarStukken(rijen[i + n2] || null);
+            if (!volgend.length || eurofarIsKop(rijen[i + n2])) break;
+            var zelfdeKolom = volgend.every(function (s) { return Math.abs(s.x - xWaarde) < 15; });
+            if (!zelfdeKolom) continue;
+            waarde += " " + volgend.map(function (s) { return s.s; }).join(" ");
+            break;
+          }
+          uit.referentie = schoon(waarde) || null;
+          break;
+        }
+      }
+    }
+
+    /* Eén proforma is één zending, ook als hij over twee bladzijden loopt.
+       Zie de toelichting hierboven. */
+    var blok = { container: null, containerSoort: uit.containerSoort, regels: [] };
+    var vorige = null, vorigeIndex = -1, totaalStuksOpInvoice = null, totaalUsd = null;
+
+    for (var k = 0; k < rijen.length; k++) {
+      if (!eurofarIsKop(rijen[k])) continue;
+
+      // Waar de kolommen beginnen. Uit de koprij zelf, want die benoemt zich.
+      var xNo = null, xArt = null, xOms = null, xQnt = null;
+      eurofarStukken(rijen[k]).forEach(function (s) {
+        if (/^No$/i.test(s.s)) xNo = s.x;
+        else if (/^Article\s*No$/i.test(s.s)) xArt = s.x;
+        else if (/^Description$/i.test(s.s)) xOms = s.x;
+        else if (/^Qnt$/i.test(s.s)) xQnt = s.x;
+      });
+      if (xNo == null || xArt == null || xOms == null || xQnt == null) {
+        uit.meldingen.push("Op een van de bladzijden is de koprij van de tabel niet te lezen.");
+        continue;
+      }
+      var grensNo = xArt - 6, grensArt = xOms - 6, grensGetal = xQnt - 24;
+
+      for (var j = k + 1; j < rijen.length; j++) {
+        var rij = rijen[j], tekst = eurofarTekst(rij);
+        if (/Total\s*qnt/i.test(tekst)) {           // einde van de tabel
+          var w = eurofarStukken(rijen[j + 1] || null);
+          if (w.length >= 2) {
+            var stuks = eurofarGetal(w[0].s), bedrag = eurofarGetal(w[w.length - 1].s);
+            /* Deze regel staat op élke bladzijde en noemt elke keer het totaal
+               van het hele document. Verschilt hij tussen twee bladzijden, dan
+               klopt er iets niet en zeggen we dat in plaats van er één te
+               kiezen. */
+            if (totaalStuksOpInvoice != null && stuks != null && totaalStuksOpInvoice !== stuks)
+              uit.meldingen.push("De totaalregel noemt op de ene bladzijde " + totaalStuksOpInvoice +
+                                 " stuks en op de andere " + stuks + ".");
+            if (stuks != null) totaalStuksOpInvoice = stuks;
+            if (bedrag != null) totaalUsd = bedrag;
+          }
+          k = j;                                     // verder zoeken na dit blok
+          break;
+        }
+        if (eurofarIsKop(rij)) { k = j - 1; break; }  // volgende bladzijde
+
+        var noC = eurofarBand(rij, xNo - 6, grensNo).map(function (s) { return s.s; }).join("");
+        var artC = eurofarBand(rij, xArt - 6, grensArt).map(function (s) { return s.s; }).join("");
+        var omsC = eurofarBand(rij, xOms - 6, grensGetal).map(function (s) { return s.s; }).join(" ");
+        var getallen = eurofarStukken(rij).filter(function (s) { return s.x >= grensGetal; });
+
+        // Een nieuwe artikelregel: volgnummer, artikelnummer én drie getallen.
+        if (noC && artC && getallen.length >= 3) {
+          var aantal = eurofarGetal(getallen[0].s);
+          var prijs = eurofarGetal(getallen[1].s);
+          var bedragR = eurofarGetal(getallen[getallen.length - 1].s);
+          /* Zelfde controle als bij de xlsx-lezer: bedrag gedeeld door
+             stuksprijs hoort het aantal te zijn. Klopt dat niet, dan zeggen we
+             het in plaats van er stilletjes één te kiezen. */
+          var berekend = (prijs && bedragR) ? Math.round((bedragR / prijs) * 100) / 100 : null;
+          var regel = { artNo: artC, omschrijving: omsC || null, aantal: aantal,
+                        aantalOpInvoice: aantal, prijsUsd: prijs, bedragUsd: bedragR,
+                        uitvoering: [], onderdelen: [] };
+          if (berekend != null && aantal != null && Math.abs(berekend - aantal) > 0.01) {
+            regel.afwijking = "de invoice noemt " + aantal + ", maar bedrag gedeeld door stuksprijs geeft " + berekend;
+            uit.meldingen.push("Artikel " + artC + ": " + regel.afwijking + ".");
+          }
+          blok.regels.push(regel);
+          vorige = regel; vorigeIndex = j;
+          continue;
+        }
+        if (!vorige) continue;
+
+        /* Een stukje in de kolom Article No op de regel direct onder een
+           artikel is de staart van het artikelnummer. Zie val 1 hierboven.
+           Alleen die ene regel eronder, anders zou een los teken verderop in
+           het blok er ook nog aan geplakt worden. */
+        if (artC && j === vorigeIndex + 1) vorige.artNo += artC;
+
+        if (omsC) {
+          if (EUROFAR_OPTIE.test(omsC)) { vorige.optiesBegonnen = true; vorige.uitvoering.push(omsC); }
+          else if (!vorige.optiesBegonnen) {
+            // De naam van het artikel loopt door op de tweede regel.
+            vorige.omschrijving = (vorige.omschrijving ? vorige.omschrijving + " " : "") + omsC;
+          } else vorige.uitvoering.push(omsC);
+        }
+      }
+    }
+
+    blok.regels.forEach(function (r) { delete r.optiesBegonnen; });
+    blok.totaalUsd = totaalUsd;
+    uit.containers.push(blok);
+    uit.totaalStuks = blok.regels.reduce(function (n, r) { return n + (Number(r.aantal) || 0); }, 0);
+    uit.totaalUsd = totaalUsd;
+
+    /* Wat wij geteld hebben tegen wat de invoice zelf zegt. Loopt dat uiteen,
+       dan is er een regel gemist of dubbel gelezen, en dat hoort iemand te
+       zien voordat het de voorraad in gaat. */
+    if (totaalStuksOpInvoice != null && uit.totaalStuks !== totaalStuksOpInvoice)
+      uit.meldingen.push("De invoice noemt " + totaalStuksOpInvoice + " stuks in totaal, maar over de " +
+        blok.regels.length + " artikelregels geteld zijn het er " + uit.totaalStuks + ".");
+    if (!blok.regels.length) uit.meldingen.push("Er is geen enkele artikelregel gevonden op deze proforma.");
+    uit.totaalStuksOpInvoice = totaalStuksOpInvoice;
+    return uit;
+  }
+
   global.fpMeubelInvoice = { lees: lees, isMeubelInvoice: isMeubelInvoice, kolommen: kolommen,
+                             leesEurofar: leesEurofar, isEurofar: isEurofar,
                              containersUitPacking: containersUitPacking,
                              leesBillOfLading: leesBillOfLading, koppelContainers: koppelContainers };
 
