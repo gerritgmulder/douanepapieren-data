@@ -474,8 +474,181 @@
     return uit;
   }
 
+
+  /* ── RE-BORN (Jepara, Indonesië) en Hangzhou Lodestone ──────────────────
+     Twee proforma's in Excel, allebei met een kolomkop die zichzelf benoemt.
+     Daarom één lezer met een kolomzoeker ervoor: welke kolom het artikelnummer
+     is en welke het aantal, wordt uit de kop gehaald en niet geteld.
+
+     Wat ze onderscheidt van de PDF-vormen (Eurofar en Mibin): hier staat elke
+     regel netjes in zijn eigen cel, dus er breekt geen artikelnummer over twee
+     regels en er hoeft niets aan x-posities te worden opgehangen.
+
+     Wat ze mét die twee gemeen hebben: hun eigen totaal onderaan. Dat wordt
+     ernaast gelegd. Klopt ons aantal daar niet mee, dan komt er een melding -
+     bij RE-BORN gebeurt dat ook echt, zie hieronder. */
+  /* Een bedrag in Amerikaanse notatie: $60,504.00. De komma is duizendtal en
+     de punt is de komma. De bestaande getal() hierboven doet het omgekeerde -
+     die is Europees - en maakte van $60,504.00 het getal 60,50. Dat is precies
+     het soort fout dat pas bij de jaarrekening opvalt, dus die twee blijven
+     gescheiden. Eurofar rekent Europees, RE-BORN en Lodestone Amerikaans. */
+  function getalUS(x) {
+    var t = String(x == null ? "" : x).replace(/[^0-9.,-]/g, "");
+    if (!t) return null;
+    t = t.replace(/,/g, "");
+    var n = parseFloat(t);
+    return isFinite(n) ? n : null;
+  }
+
+  var MEUBEL_KOPPEN = {
+    art:    /^(article\s*no|item\s*code|art\.?\s*no)$/i,
+    aantal: /^(qty\s*\/\s*pcs|order\s*quantity|quantity|qty)$/i,
+    oms:    /^(items|description|omschrijving)$/i,
+    prijs:  /^(price|usd\s*\/\s*set)$/i,
+    bedrag: /^(total|usd\s*\/\s*total|amount)$/i,
+    colli:  /^(number\s+of\s+package|packages|ctns)$/i,
+  };
+  /* De koprij zoeken: de rij waar zowel het artikelnummer als het aantal in
+     staat. Bij Lodestone staan de subkoppen (Frame, Cushion, USD/SET) op de
+     regel eronder; die telt dus niet mee als koprij en dat gaat vanzelf goed
+     omdat daar geen artikelkolom in staat. */
+  function meubelKop(rijen) {
+    for (var r = 0; r < Math.min(rijen.length, 60); r++) {
+      var rij = rijen[r] || [], kol = {};
+      for (var c = 0; c < rij.length; c++) {
+        var t = schoon(rij[c]);
+        if (!t) continue;
+        if (kol.art == null    && MEUBEL_KOPPEN.art.test(t))    kol.art = c;
+        if (kol.aantal == null && MEUBEL_KOPPEN.aantal.test(t)) kol.aantal = c;
+        if (kol.oms == null    && MEUBEL_KOPPEN.oms.test(t))    kol.oms = c;
+        if (kol.prijs == null  && MEUBEL_KOPPEN.prijs.test(t))  kol.prijs = c;
+        if (kol.bedrag == null && MEUBEL_KOPPEN.bedrag.test(t)) kol.bedrag = c;
+        if (kol.colli == null  && MEUBEL_KOPPEN.colli.test(t))  kol.colli = c;
+      }
+      if (kol.art != null && kol.aantal != null) {
+        /* Lodestone zet de subkoppen op de regel eronder: onder FOB staan
+           USD/SET en USD/TOTAL, onder Material staan Frame en Cushion. Die
+           regel dus meenemen, anders blijven prijs en bedrag leeg. */
+        var sub = rijen[r + 1] || [];
+        for (var c2 = 0; c2 < sub.length; c2++) {
+          var t2 = schoon(sub[c2]);
+          if (!t2) continue;
+          if (kol.prijs == null  && MEUBEL_KOPPEN.prijs.test(t2))  kol.prijs = c2;
+          if (kol.bedrag == null && MEUBEL_KOPPEN.bedrag.test(t2)) kol.bedrag = c2;
+        }
+        kol.rij = r + (sub.some(function (c3) { return schoon(c3); }) && kol.prijs != null ? 1 : 0);
+        return kol;
+      }
+    }
+    return null;
+  }
+  function isMeubelProformaXlsx(rijen) { return !!meubelKop(rijen); }
+
+  function leesMeubelProformaXlsx(rijen, bestandsnaam) {
+    var uit = { fabriek: null, invoiceNo: null, datum: null, referentie: null,
+                lds: null, laadhaven: null, containerSoort: null,
+                containers: [], meldingen: [] };
+    var kol = meubelKop(rijen);
+    if (!kol) { uit.meldingen.push("Geen kolomkop met een artikelnummer en een aantal gevonden."); return uit; }
+
+    /* De kop. Alles boven de kolomkop, als één lap tekst - dan maakt het niet
+       uit in welke cel iets staat. */
+    var kop = rijen.slice(0, kol.rij).map(function (r) { return r.map(schoon).filter(Boolean).join(" "); }).join("\n");
+    var m;
+    if ((m = kop.match(/^([^\n]*(?:CO\.,?\s*LTD|CV\.\s*[A-Z-]+|LIMITED|IMPORT[^\n]*EXPORT)[^\n]*)$/im))) {
+      /* Lodestone zet naam, adres en telefoon in één cel. Alles vanaf ADD: of
+         T: hoort niet bij de naam; zonder deze knip staat er een fabrieksnaam
+         van tweehonderd tekens in het overzicht. */
+      uit.fabriek = schoon(String(m[1]).split(/\s+(?:ADD:|T:|TEL:|Tel:)/)[0]);
+    }
+    if ((m = kop.match(/\b(?:P\/I|PI)\s*(?:NO|No)\.?\s*[:.]?\s*([A-Za-z0-9\-\/]{3,40})/))) uit.invoiceNo = schoon(m[1]);
+    if (!uit.invoiceNo && (m = kop.match(/\bNo\.\s*(PI-[A-Za-z0-9\-\/]{3,40})/i))) uit.invoiceNo = schoon(m[1]);
+    if ((m = kop.match(/\b(?:Date|Order date)\s*[:.]?\s*([0-9]{1,4}[-\/][0-9]{1,2}[-\/][0-9]{1,4}|\d{1,2}\s+\w+\s+\d{4})/i))) uit.datum = schoon(m[1]);
+    /* Het containerformaat staat bij RE-BORN als "Size of container : 2x40HC"
+       en bij Lodestone onderaan als "Total volume: 2x 40HQ". Beide pakken. */
+    /* Het containerformaat en de leveringsvoorwaarden staan niet altijd bóven
+       de tabel: RE-BORN zet ze in de kop, Lodestone eronder ("Total volume:
+       2x 40HQ", "Terms of delivery: FOB Ningbo"). Daarom het hele blad
+       afzoeken en niet alleen de kop. */
+    var alles = rijen.map(function (r) { return r.map(schoon).filter(Boolean).join(" "); }).join("\n");
+    if ((m = alles.match(/(?:Size\s+of\s+container|Total\s+volume)\s*:?\s*([0-9]+\s*x\s*[0-9]+\s*[A-Z]{2,4})/i))) uit.containerSoort = schoon(m[1]);
+    if ((m = alles.match(/Terms\s+of\s+delivery\s*:?\s*([^\n]{2,60})/i))) uit.laadhaven = schoon(m[1]);
+
+    var blok = { container: null, containerSoort: uit.containerSoort, regels: [], totaalUsd: null };
+    var eigenBedrag = null, eigenColli = null;
+    for (var r = kol.rij + 1; r < rijen.length; r++) {
+      var rij = rijen[r] || [];
+      var eerste = schoon(rij[0] || "");
+      var code = schoon(rij[kol.art] || "");
+      var aantal = getal(rij[kol.aantal]);
+
+      /* De totaalregel van de fabriek zelf. Die stopt het lezen niet meteen -
+         bij Lodestone staan er daarna nog leveringsvoorwaarden - maar we
+         onthouden hem om ons eigen aantal ernaast te leggen. */
+      /* De totaalregel van de fabriek: "Total" kan in élke kolom staan, bij
+         RE-BORN staat hij niet vooraan. Dus de hele rij aftasten. */
+      var isTotaal = rij.some(function (c) { return /^(total|grand\s*total|totaal)\b/i.test(schoon(c)); });
+      if (isTotaal) {
+        /* Let op wélk getal daar staat. Bij RE-BORN is het totaal onder de
+           tabel 196, en dat zijn COLLI en geen stuks - de kolom Number of
+           Package. Wie dat naast zijn eigen stukstelling van 252 legt denkt dat
+           het niet klopt, terwijl allebei kloppen. Het bedrag is het enige dat
+           met zekerheid over hetzelfde gaat, dus daar wordt op vergeleken. */
+        if (kol.bedrag != null) {
+          var b = getalUS(rij[kol.bedrag]);
+          if (b && (eigenBedrag == null || b > eigenBedrag)) eigenBedrag = b;
+        }
+        if (kol.colli != null) {
+          var cc = getalUS(rij[kol.colli]);
+          if (cc && (eigenColli == null || cc > eigenColli)) eigenColli = cc;
+        }
+        continue;
+      }
+      if (!code || aantal == null || !(aantal > 0)) continue;
+      // Een code moet op zijn minst een letter en een cijfer hebben.
+      if (!/[A-Za-z]/.test(code) || !/\d/.test(code)) continue;
+
+      blok.regels.push({
+        artNo: code,
+        omschrijving: schoon(rij[kol.oms] || "") || null,
+        aantal: aantal, aantalOpInvoice: aantal,
+        colli: kol.colli != null ? getal(rij[kol.colli]) : null,
+        prijsUsd: kol.prijs != null ? getalUS(rij[kol.prijs]) : null,
+        bedragUsd: kol.bedrag != null ? getalUS(rij[kol.bedrag]) : null,
+        uitvoering: [], onderdelen: [],
+      });
+    }
+    if (!blok.regels.length) uit.meldingen.push("Er is geen enkele artikelregel gevonden op deze proforma.");
+    uit.containers.push(blok);
+
+    /* Ons aantal tegen dat van de fabriek. Bij RE-BORN loopt dat uiteen omdat
+       dezelfde meubels er twee keer in staan, een keer met codes als K24130 en
+       een keer met K24130-FTN-CRM-01. Die vraag ligt bij Don; zolang die niet
+       beantwoord is moet het verschil zichtbaar blijven en niet stilletjes
+       worden weggerekend. */
+    var onsTotaal  = blok.regels.reduce(function (n, x) { return n + (x.aantal || 0); }, 0);
+    var onsBedrag  = blok.regels.reduce(function (n, x) { return n + (x.bedragUsd || 0); }, 0);
+    var onsColli   = blok.regels.reduce(function (n, x) { return n + (x.colli || 0); }, 0);
+    uit.totaalStuks = onsTotaal;
+    uit.totaalColli = onsColli || null;
+    uit.totaalUsd = Math.round(onsBedrag * 100) / 100;
+    blok.totaalUsd = uit.totaalUsd;
+    uit.bedragOpInvoice = eigenBedrag;
+    uit.colliOpInvoice = eigenColli;
+    /* Op het bedrag vergelijken, niet op de aantallen: dat is het enige getal
+       waarvan zeker is dat het over hetzelfde gaat. */
+    if (eigenBedrag != null && onsBedrag > 0 && Math.abs(eigenBedrag - onsBedrag) > 0.5) {
+      uit.meldingen.push("Wij tellen " + uit.totaalUsd.toFixed(2) + " dollar, de proforma noemt " +
+                         eigenBedrag.toFixed(2) + ". Controleer de regels voordat dit als voorraad meetelt.");
+    }
+    if (!uit.invoiceNo && bestandsnaam) uit.invoiceNo = String(bestandsnaam).replace(/\.[a-z]+$/i, "").slice(0, 40);
+    return uit;
+  }
+
   global.fpMeubelInvoice = { lees: lees, isMeubelInvoice: isMeubelInvoice, kolommen: kolommen,
                              leesEurofar: leesEurofar, isEurofar: isEurofar,
+                             isMeubelProformaXlsx: isMeubelProformaXlsx,
+                             leesMeubelProformaXlsx: leesMeubelProformaXlsx,
                              containersUitPacking: containersUitPacking,
                              leesBillOfLading: leesBillOfLading, koppelContainers: koppelContainers };
 
