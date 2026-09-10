@@ -645,8 +645,129 @@
     return uit;
   }
 
+
+  /* ── Guangxi Mibin ──────────────────────────────────────────────────────
+     De vierde vorm, en de lastigste. Een pdf met per artikel een blok van tien
+     tot vijftien regels, en twee dingen die je niet ziet als je naar de eerste
+     regel kijkt:
+
+     1. Het artikelnummer breekt over twee regels. Bij MB1708KD(B05)-Beige
+        staat "MB1708KD(B05)-" op de ene regel en "Beige" aan het begin van de
+        volgende. Wie per regel leest houdt een halve code over.
+
+     2. De getallen staan NIET op de regel van de code maar ergens midden in
+        het omschrijvingsblok, op de regel die eindigt met aantal, stuksprijs,
+        bedrag, cbm per stuk en totaal cbm.
+
+     Daarom in blokken hakken op een regel die in kolom 0 begint, en binnen het
+     blok de getallenregel zoeken. Zelfde aanpak als bij de proforma van
+     Huantong in ci-pdf.js, die exact dezelfde opbouw heeft.
+
+     Bedragen zijn Amerikaans ($1,892.00), dus getalUS. */
+  function isMibin(regels) {
+    var kop = (regels || []).slice(0, 25).join(" ");
+    return /GUANGXI\s+MIBIN/i.test(kop) ||
+           (/ITEM\s+NO\./i.test(kop) && /DESCRIPTION\s*&\s*SIZE/i.test(kop));
+  }
+
+  /* Mibin werkt op de rijen MET x-posities, niet op platte tekstregels. Op de
+     bladzijde staat het artikelnummer in een eigen kolom links (x rond 16), de
+     omschrijving vanaf x 112, en de getallen vanaf x 330. Op een platte regel
+     is dat verschil weg, want pdf.js plakt alle stukjes met een enkele spatie
+     aan elkaar - dan is "MB1950(B05) - beige Folded hanging chair" één regel en
+     valt er niets meer te scheiden. Dezelfde les als bij de kleuren van
+     Huantong. */
+  var MIBIN_LINKS = 100;    // alles links hiervan is de kolom ITEM NO.
+  var MIBIN_GETAL = 300;    // alles rechts hiervan zijn de getalkolommen
+  function leesMibin(rijen) {
+    var uit = { fabriek: "Guangxi Mibin Household Products Co., Ltd", invoiceNo: null,
+                datum: null, referentie: null, lds: null, laadhaven: null,
+                containerSoort: null, containers: [], meldingen: [] };
+    var plat = (rijen || []).map(function (r) {
+      return (r.items || []).map(function (i) { return i.str; }).join(" ");
+    });
+    var alles = plat.join("\n");
+    var m;
+    if ((m = alles.match(/P\/I\s*NO\.?\s*[:.]?\s*([A-Za-z0-9\-\/]{3,40})/i))) uit.invoiceNo = schoon(m[1]);
+    if ((m = alles.match(/\bDATE\s*[:.]?\s*(\d{1,2}\s+\w+\s+\d{4})/i))) uit.datum = schoon(m[1]);
+    if ((m = alles.match(/\bTOTAL:\s*(\d+\s*X\s*\d+\s*[A-Z]{2,4})/i))) uit.containerSoort = schoon(m[1]);
+
+    var start = 0;
+    for (var k = 0; k < plat.length; k++) if (/ITEM\s+NO\./i.test(plat[k])) { start = k + 1; break; }
+
+    var blok = { container: null, containerSoort: uit.containerSoort, regels: [], totaalUsd: null };
+    var huidig = null;
+    for (var i = start; i < (rijen || []).length; i++) {
+      if (/^\s*TOTAL:/i.test(plat[i])) break;
+      var items = rijen[i].items || [];
+      if (!items.length) continue;
+      var links = items.filter(function (x) { return x.x < MIBIN_LINKS; })
+                       .map(function (x) { return x.str; }).join("").trim();
+      var midden = schoon(items.filter(function (x) { return x.x >= MIBIN_LINKS && x.x < MIBIN_GETAL; })
+                               .map(function (x) { return x.str; }).join(" "));
+      var getallen = items.filter(function (x) { return x.x >= MIBIN_GETAL; })
+                          .map(function (x) { return x.str.trim(); }).filter(Boolean);
+
+      if (links) {
+        /* Een stuk in de linkerkolom is óf een nieuw artikel, óf de staart van
+           een artikelnummer dat over twee regels brak: bij MB1708KD(B05)-Beige
+           staat "MB1708KD(B05)-" op de ene regel en "Beige" twee regels lager,
+           allebei in die kolom.
+
+           Het verschil zit hem in de vorm, niet in wat er tussen staat. Een
+           artikelnummer begint met een paar letters en dan een cijfer; "Beige"
+           doet dat niet en is dus een staart. Ik had het eerst opgehangen aan
+           "het artikel erboven heeft nog geen omschrijving", en dat ging mis:
+           tussen die twee regels staat de omschrijving "KD Hanging chair", dus
+           er kwam een artikel "Beige" bij van tien stuks. */
+        if (huidig && !/^[A-Z]{1,3}\d/i.test(links)) huidig.artNo += links;
+        else {
+          huidig = { artNo: links, omschrijving: null, aantal: null, aantalOpInvoice: null,
+                     prijsUsd: null, bedragUsd: null, cbm: null, uitvoering: [], onderdelen: [] };
+          blok.regels.push(huidig);
+        }
+      }
+      if (!huidig) continue;
+
+      /* De getalregel: aantal, stuksprijs, bedrag, cbm per stuk, totaal cbm.
+         Alleen aannemen als er minstens drie getallen staan; een losse maat
+         verderop op de bladzijde haalt die drempel niet. */
+      if (getallen.length >= 3 && huidig.aantal == null) {
+        var q = parseInt(String(getallen[0]).replace(/\D/g, ""), 10);
+        if (isFinite(q) && q > 0) {
+          huidig.aantal = q;
+          huidig.aantalOpInvoice = q;
+          huidig.prijsUsd = getalUS(getallen[1]);
+          huidig.bedragUsd = getalUS(getallen[2]);
+          if (getallen[4] != null) huidig.cbm = getalUS(getallen[4]);
+        }
+      }
+      if (midden) {
+        if (!huidig.omschrijving) huidig.omschrijving = midden;
+        else huidig.uitvoering.push(midden);
+      }
+    }
+
+    blok.regels = blok.regels.filter(function (x) { return x.aantal > 0; });
+    if (!blok.regels.length) uit.meldingen.push("Er is geen enkele artikelregel gevonden op deze proforma.");
+    uit.containers.push(blok);
+
+    uit.totaalStuks = blok.regels.reduce(function (n, x) { return n + (x.aantal || 0); }, 0);
+    uit.totaalUsd = Math.round(blok.regels.reduce(function (n, x) { return n + (x.bedragUsd || 0); }, 0) * 100) / 100;
+    blok.totaalUsd = uit.totaalUsd;
+    if ((m = alles.match(/TOTAL:[^\n$]*\$([\d,]+(?:\.\d+)?)/i))) {
+      uit.bedragOpInvoice = getalUS(m[1]);
+      if (uit.bedragOpInvoice != null && Math.abs(uit.bedragOpInvoice - uit.totaalUsd) > 0.5) {
+        uit.meldingen.push("Wij tellen " + uit.totaalUsd.toFixed(2) + " dollar, de proforma noemt " +
+                           uit.bedragOpInvoice.toFixed(2) + ".");
+      }
+    }
+    return uit;
+  }
+
   global.fpMeubelInvoice = { lees: lees, isMeubelInvoice: isMeubelInvoice, kolommen: kolommen,
                              leesEurofar: leesEurofar, isEurofar: isEurofar,
+                             isMibin: isMibin, leesMibin: leesMibin,
                              isMeubelProformaXlsx: isMeubelProformaXlsx,
                              leesMeubelProformaXlsx: leesMeubelProformaXlsx,
                              containersUitPacking: containersUitPacking,
