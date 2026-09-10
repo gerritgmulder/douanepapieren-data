@@ -978,41 +978,79 @@ async function dpHandleStock(env) {
 
    Het bedrag is een indicatie en geen offerte: de vervoerder rekent af op wat
    er werkelijk de wagen op gaat. Dat staat ook zo in het portaal. */
-const VRACHT_TRAILER_CM = 240;
-function vrachtLaadmeters(doos) {
-  if (!doos || !(doos.l > 0) || !(doos.b > 0)) return 0;
-  const platteVloer = doos.l * doos.b;
-  /* EEN SPA GAAT OP ZIJN KANT DE WAGEN IN.
-     ═══════════════════════════════════════════════════════════════════════
-     Chantal (9 sep 2026): "ik heb een test gedaan met een reflect en een
-     retreat (…) het systeem zegt 4.33 laadmeter, dit is niet correct, het is
-     2 laadmeter."
+/* DE LAADMETERS PER MODEL, ZOALS CHANTAL EN MANON ZE HEBBEN OPGESCHREVEN
+   ═══════════════════════════════════════════════════════════════════════════
+   Hier stond een rekensom op de kistmaat: vloeroppervlak gedeeld door de
+   breedte van een trailer, eerst plat en daarna gekanteld. Die som gaf steeds
+   nét te weinig - 1,66 waar het er 2 zijn, 0,61 waar het er 1 zijn - en dat
+   werkt door in de prijs die een partner te zien krijgt.
 
-     Ze heeft gelijk, en het verschil is precies factor twee. Hier stond de
-     vloer van de kist zoals hij plat op de grond staat: 228 x 228 cm is 2,17
-     laadmeter, en twee daarvan is 4,33. Maar zo rijdt er geen enkele spa mee.
-     Hij wordt gekanteld en staat op zijn dunne ribbe: 228 cm dwars over de
-     wagen (die is 240 breed) en 85 cm diep. Dat is 0,81 laadmeter per stuk,
-     samen 1,62 - en dat valt in de tariefband van 2 laadmeter. Precies het
-     getal dat Chantal noemt.
+   Chantal en Manon hebben er een steekproef op gedaan (10 sep 2026) en de
+   laadmeters van álle modellen uitgeschreven. Dat is geen rekensom maar
+   ervaring: hoe de spa's werkelijk op de wagen gaan, inclusief de ruimte die
+   je nodig hebt om ze erin te schuiven en het feit dat een vervoerder in hele
+   en halve laadmeters afrekent en niet in honderdsten.
 
-     Wanneer kan dat niet? Als de langste ribbe niet dwars op de wagen past.
-     Dat is meteen ook het verschil tussen een spa en een swimspa: de langste
-     ribbe van een spa is hooguit 240 cm, die van een swimspa begint bij 585
-     en loopt door tot 780. Tussen die twee zit in de hele lijst van 148
-     modellen niets, dus de grens ligt niet op een haar: een swimspa blijft
-     plat liggen en houdt zijn 5,58 tot 7,41 laadmeter.
+   Voorbeelden uit hun steekproef, en wat het systeem ervan maakte:
+     Retreat + Reflect        2      (was 1,66)
+     Sensation + Admire       2      (was 1,46)   € 745   in plaats van € 471,15
+     Happy                    1      (was 0,61)   € 412   in plaats van € 249,96
+     Relax                    1      (was 0,71)   € 685   in plaats van € 507,85
+     3x Relax                 3      (was 2,13)   € 790   in plaats van € 360,91
+     Activity 1 Deep          4      (was 3,71)   € 1.396 in plaats van € 1.241,71
+     3x Rewind                3      (was 2,13)   € 2.684 in plaats van € 2.538,94
 
-     Voor de duidelijkheid: dit is een schatting van de vloer die de lading
-     inneemt, geen offerte. De vervoerder rekent af op wat er werkelijk op de
-     wagen komt, en dat staat ook zo in het portaal. */
-  const ribben = [Number(doos.l), Number(doos.b), Number(doos.h)]
-    .filter(x => x > 0).sort((a, b) => a - b);
-  const opDeKant = ribben.length === 3 && ribben[2] <= VRACHT_TRAILER_CM
-    ? ribben[0] * ribben[1]
-    : platteVloer;
-  return Math.min(platteVloer, opDeKant) / (VRACHT_TRAILER_CM * 100);
-}
+   Deze lijst is dus de waarheid en de kistmaten worden er niet meer voor
+   gebruikt. De kistmaten blijven wel staan voor het passen van een container;
+   dat is een andere vraag (past het erin) dan deze (hoeveel wagen kost het).
+
+   Staat een model hier niet in, dan wordt er GEEN prijs getoond maar gevraagd
+   om even contact op te nemen. Een spa overslaan in de som - wat er eerst
+   gebeurde bij een onbekende kist - maakt de bezorging goedkoper dan hij is,
+   en dat is de ene fout die je nooit wilt maken.
+
+   Turbine staat er met opzet niet in. Chantal: "Alle turbine spas in transport
+   op aanvraag dit is speciaal transport moet altijd door ons berekend worden." */
+const VRACHT_LAADMETERS = {
+  // Serene-collectie
+  "Renew": 1, "Refresh": 1, "Relax": 1, "Rewind": 1, "Retreat": 1,
+  "Resettle": 1, "Reflect": 1, "Recharge": 2, "Repose": 2.5,
+  // Dream
+  "Spark": 1, "Flame": 1,
+  // Signature en Exclusive
+  "Bliss": 1, "Indulgence": 1, "Soulmate": 1, "Happy": 1, "Pleasure": 1,
+  "Solace": 1, "Delight": 1, "Joy": 1, "Admire": 1, "Devotion": 1,
+  "Heart": 2, "Desire": 2.7, "Harmony": 2.7,
+  // Mighty Wave
+  "Sensation": 1, "Felicity Mighty Wave": 1, "Excite Mighty Wave": 1,
+  "Euphoria Mighty Wave": 1, "Spa Exhilarate Mighty Wave": 1,
+  "Ecstatic Mighty Wave": 3, "Theater": 4,
+  // Serene-nummers
+  "Serene 2": 1, "Serene 3": 1, "Serene 5": 1, "Serene 6": 2.5,
+  // Swimspa's
+  "Aquatic 1": 4, "Aquatic 1 ECO": 4,
+  "Aquatic 2": 6, "Aquatic 3": 6, "Aquatic 3 Deep": 6,
+  "Activity 1": 4, "Activity 1 Deep": 4,
+  "Activity 2": 5.5, "Activity 2 Deep": 5.5, "Spirit": 5.5, "Spirit Deep": 5.5,
+  "Dynamic": 6, "Dynamic Deep": 6, "Aquatic 5": 6, "Balance": 6,
+  "Aquatic 6": 8,
+  "Fitness 1": 4, "Fitness 1 Deep": 4, "Fitness 2": 5, "Fitness 2 Deep": 5,
+  "Vitality": 7.2, "Vitality Deep": 7.2, "Energy": 7.2, "Energy Deep": 7.2,
+  // IJsbaden en sauna's
+  "Wim Hof's Ice Barrel": 0.5, "Wim Hof's Ice Revive": 0.5,
+  "Wim Hof's Ice Breeze": 1, "Wim Hof's Ice Faith": 0.8,
+  "Wim Hof's Ice Elevate": 3,
+  "Mirage": 1.5, "Oasis": 1.5,
+  "Summit": 1, "Aurora": 1, "Lagoon": 1,
+  "Infinity": 2.4,
+  // Warmtepomp
+  "Passion Xtreme Green Heat Pump": 0.4,
+};
+/* Speciaal transport, altijd met de hand. Chantal noemt alleen Turbine; het
+   staat als patroon en niet als lijstje omdat er acht Turbines zijn en er
+   makkelijk een negende bijkomt. */
+const VRACHT_OP_AANVRAAG = /^Turbine\b/i;
+
 /* De eerste band die groot genoeg is voor allebei; anders de grootste.
 
    Het gewicht doet er in de praktijk niet toe, en dat is nagerekend: op één na
@@ -1122,11 +1160,55 @@ async function handleDieseltoeslag(request, env) {
   return reply(200, { ok: true, diesel: tar.diesel, vorige });
 }
 
+/* WAT EEN LAADKLEP KOST
+   ═══════════════════════════════════════════════════════════════════════════
+   Van Heugten rekent de klep per land anders af, en dat staat ook zo in hun
+   tarievenblad:
+
+     "Geen klep toeslag"                       niets
+     "Vaste toeslag"                           een vast bedrag (Denemarken 150)
+     "Min. EUR 50,- / Max. EUR 150,-"          een percentage over het tarief,
+                                               met een bodem en een plafond
+
+   Bij Nederland staat er -1 en "Geen klep toeslag"; Nederland rijden we zelf
+   met Van Doesburg en daar staat geen klep in de lijst. Dus daar niets.
+
+   Twee landen staan er dubbelzinnig in: Oostenrijk en Spanje hebben 50 staan
+   met "Min. EUR 50,- / Max. EUR 150,-" ernaast. Een percentage van 50 kan niet
+   en 50 is precies het minimum, dus dat lezen we als een vast bedrag van 50 -
+   maar het wordt gemarkeerd (onzeker), zodat het nagevraagd kan worden bij Van
+   Heugten in plaats van dat het jaren onopgemerkt blijft staan. */
+function vrachtKlep(toeslag, basis, viaDoesburg) {
+  if (viaDoesburg || !toeslag) return { bedrag: 0, uitleg: "Geen kleptoeslag" };
+  const w = Number(toeslag.klep);
+  const tekst = String(toeslag.klepUitleg || "");
+  if (!isFinite(w) || w <= 0) return { bedrag: 0, uitleg: tekst || "Geen kleptoeslag" };
+  const bedragUit = (re) => { const m = tekst.match(re); return m ? Number(String(m[1]).replace(",", ".")) : null; };
+  const bodem = bedragUit(/Min\.?\s*[€e]?\s*([\d.,]+)/i);
+  const plafond = bedragUit(/Max\.?\s*[€e]?\s*([\d.,]+)/i);
+  if (/vaste\s*toeslag/i.test(tekst)) return { bedrag: Math.round(w * 100) / 100, uitleg: tekst };
+  if (w < 1) {                                     // een percentage over het tarief
+    let b = basis * w;
+    if (bodem != null) b = Math.max(b, bodem);
+    if (plafond != null) b = Math.min(b, plafond);
+    return { bedrag: Math.round(b * 100) / 100, uitleg: tekst };
+  }
+  return { bedrag: Math.round(w * 100) / 100, uitleg: tekst, onzeker: true };
+}
+
 async function dpHandleVracht(request, env) {
   let body = {}; try { body = await request.json(); } catch {}
   const land = String(body.land || "").trim().toUpperCase().slice(0, 2);
   const postcode = String(body.postcode || "").trim().toUpperCase().replace(/\s+/g, "");
-  const wilKooiaap = body.kooiaap === true;
+  /* Laadklep in plaats van kooiaap. Chantal (10 sep 2026): "unloading with a
+     truck mounted forklift die tekst verwijderen, daarvoor in de plaats with
+     tail lift en dit kunnen aanvinken."
+
+     Ook 'kooiaap' wordt nog geaccepteerd: het portaal komt van GitHub en de
+     worker wordt apart uitgerold, dus er is even een moment waarop het oude
+     scherm nog het oude woord meestuurt. Eén regel om dat op te vangen is
+     minder erg dan een vinkje dat een dag lang niets doet. */
+  const wilKlep = body.klep === true || body.kooiaap === true;
   const items = Array.isArray(body.items) ? body.items : [];
   if (!land) return reply(400, { ok: false, error: "geen land opgegeven" });
 
@@ -1146,17 +1228,33 @@ async function dpHandleVracht(request, env) {
   const dozen = ((await env.FONTEYN_DATA.get("spa-dozen", { type: "json" })) || {}).dozen || {};
 
   let ldm = 0, kg = 0, stuks = 0;
-  const onbekend = [];
+  const onbekend = [], opAanvraag = [];
   for (const it of items) {
     if (String(it.soort || "spa") !== "spa") continue;      // onderdelen gaan als pakket mee
+    const model = String(it.model || "").trim();
     const n = Math.max(1, Number(it.qty) || 1);
-    const d = dozen[String(it.model || "")];
-    if (!d || !d.spa) { onbekend.push(String(it.model || "?")); continue; }
-    ldm += vrachtLaadmeters(d.spa) * n;
-    if (d.kg > 0) kg += Number(d.kg) * n;
+    if (VRACHT_OP_AANVRAAG.test(model)) { opAanvraag.push(model); continue; }
+    const perStuk = VRACHT_LAADMETERS[model];
+    if (perStuk == null) { onbekend.push(model || "?"); continue; }
+    ldm += perStuk * n;
+    // Het gewicht speelt alleen mee bij het kiezen van de tariefband en komt
+    // nog steeds uit de kistgegevens; zie de toelichting bij vrachtBand.
+    const d = dozen[model];
+    if (d && d.kg > 0) kg += Number(d.kg) * n;
     stuks += n;
   }
-  if (!stuks) return reply(200, { ok: false, error: "geen spa's in de wagen waarvoor we de maat kennen", onbekend });
+  /* Eén spa waarvan we het niet weten maakt de hele wagen onbekend. Hem
+     overslaan zou de bezorging goedkoper laten lijken dan hij is, en dat merkt
+     een partner pas als de rekening komt. */
+  if (opAanvraag.length)
+    return reply(200, { ok: false, error: "op-aanvraag", modellen: [...new Set(opAanvraag)],
+      uitleg: "Transport for " + [...new Set(opAanvraag)].join(", ") +
+              " is arranged separately. Send us a message and we will quote it." });
+  if (onbekend.length)
+    return reply(200, { ok: false, error: "laadmeters-onbekend", onbekend: [...new Set(onbekend)],
+      uitleg: "We do not have the loading metres for " + [...new Set(onbekend)].join(", ") +
+              " yet. Send us a message and we will quote it." });
+  if (!stuks) return reply(200, { ok: false, error: "geen spa's in de wagen", onbekend });
   ldm = Math.round(ldm * 100) / 100;
 
   /* Welke vervoerder de dealer te zien krijgt. Nederland heeft alleen
@@ -1197,14 +1295,14 @@ async function dpHandleVracht(request, env) {
 
   const dieselPct = Number((tar.diesel || {})[viaDoesburg ? "doesburg" : "heugten"]) || 0;
   const diesel = Math.round(basis * (dieselPct / 100) * 100) / 100;
-  const kooiaapBedrag = !wilKooiaap ? 0
-    : (viaDoesburg ? Number((tar.doesburg || {}).kooiaap) || 0
-                   : Number(((tar.heugten.toeslagen || {})[land] || {}).kooiaap) || 0);
-  const totaal = Math.round((basis + diesel + kooiaapBedrag) * 100) / 100;
+  const klep = wilKlep ? vrachtKlep((tar.heugten.toeslagen || {})[land], basis, viaDoesburg)
+                      : { bedrag: 0 };
+  const totaal = Math.round((basis + diesel + klep.bedrag) * 100) / 100;
 
   return reply(200, { ok: true, land, postcode, vervoerder, zone,
     stuks, ldm, kg: kg || null, gewichtOnbekend: !kg,
-    basis, dieselPct, diesel, kooiaap: kooiaapBedrag, totaal,
+    basis, dieselPct, diesel, klep: klep.bedrag, klepUitleg: klep.uitleg || null,
+    klepOnzeker: klep.onzeker || false, totaal,
     onbekend, dieselGezet: (tar.diesel || {}).gezet || null });
 }
 
@@ -6296,6 +6394,52 @@ async function qbHandleData(request, env) {
 // ── Amerika → Logic4: nieuwe QuickBooks-facturen accorderen ──────────
 // Vaste gegevens (Gerrit): debiteur 878871433 (Passion Spa South LLC),
 // magazijn 50 (Warehouse Texas).
+/* VAN DOLLAR NAAR EURO
+   ═══════════════════════════════════════════════════════════════════════════
+   Gerrit (10 sep 2026): "de QuickBooks-facturen die jij omzet in Logic4-orders
+   zijn dollarbedragen die jij letterlijk omzet in eurobedragen. Dus als de
+   factuur $20.100 is dan wordt het €20.100."
+
+   Zo werkt Logic4: een orderregel heeft één prijsveld en dat is in euro. In het
+   orderscherm staat er een kolom naast, "Stuksprijs incl. voor land", en die
+   rekent Logic4 zelf om met een vaste koers. Voor de Verenigde Staten is dat
+   1,12 (bevestigd door Gerrit, 10 sep 2026).
+
+   Wij zetten er tot nu toe het kale dollarbedrag in. Dat is twee keer fout: het
+   staat als euro in de boeken, en Logic4 zet er in de dollarkolom nóg eens 1,12
+   overheen. Een factuur van $32.761,40 werd zo een order van €32.761,40, en die
+   liet in de dollarkolom $36.692,77 zien.
+
+   Er is geen veld om die dollarkolom rechtstreeks te vullen; de hele v3-API kent
+   het woord valuta niet. Wat wel kan is het omgekeerde: het eurobedrag erin
+   zetten dat na omrekening op het dollarbedrag van de factuur uitkomt.
+
+   Let op de cent. Delen door 1,12 en afronden geeft van de 1.543 regelbedragen
+   er 793 exact terug; de rest komt een cent lager uit doordat Logic4 in die
+   kolom afkapt in plaats van afrondt. Daarom hier een cent-correctie: kom je
+   te laag uit, dan een cent erbij tot het klopt. Daarmee komt 1.447 van de
+   1.543 exact terug. Voor de laatste 96 bestaat er domweg geen eurobedrag dat
+   op die cent uitkomt - dat is gewone valuta-afronding en geen fout. */
+const AMERIKA_KOERS = 1.12;
+function amerikaNaarEuro(dollar) {
+  const d = Number(dollar) || 0;
+  if (!d) return 0;
+  const teken = d < 0 ? -1 : 1;
+  const abs = Math.abs(d);
+  const afkap = (x) => Math.floor(x * 100 + 1e-6) / 100;
+  let euro = Math.round((abs / AMERIKA_KOERS) * 100) / 100;
+  /* De cent-correctie alleen bij een positief bedrag. Bij een korting werkt
+     het afkappen de andere kant op, en dan zou de correctie er juist een cent
+     naast schieten: -216,00 werd -216,01. Een korting een cent laten liggen is
+     onschadelijk, er eentje bij verzinnen niet. */
+  if (teken > 0) {
+    for (let k = 0; k < 3 && afkap(euro * AMERIKA_KOERS) < abs - 0.0001; k++) {
+      euro = Math.round((euro + 0.01) * 100) / 100;
+    }
+  }
+  return teken * euro;
+}
+
 const AMERIKA_DEBTOR = 878871433;
 const AMERIKA_WAREHOUSE = 50;
 /* Houston is export buiten de EU, dus altijd 0%. Logic4 vult bij een regel
@@ -6647,7 +6791,9 @@ async function dpCreateAmerikaOrder(env, mapped) {
       const stuks = Number(r.qty) || 1;
       // Ook negatief: een Credit Card Charge kan een korting zijn (-216,00).
       if (totaal !== 0) {
-        const stuk = Math.round((totaal / stuks) * 100) / 100;
+        // Het bedrag van QuickBooks is in dollars; Logic4 wil euro. Zie
+        // amerikaNaarEuro hierboven.
+        const stuk = amerikaNaarEuro(Math.round((totaal / stuks) * 100) / 100);
         rij.NettPrice = stuk;
         rij.GrossPrice = stuk;
       }
@@ -6780,7 +6926,7 @@ async function qbHandlePrijzenBijwerken(request, env) {
         }
         const r = regels[i];
         r._op = true;
-        const stuk = Math.round((Number(w.price) / (Number(w.qty) || 1)) * 100) / 100;
+        const stuk = amerikaNaarEuro(Math.round((Number(w.price) / (Number(w.qty) || 1)) * 100) / 100);
         if (!stuk) { overgeslagen++; continue; }
         /* Staat het bedrag er al goed op en is de btw nul, dan niets doen.
            Nul mag zowel code 29 (export) als 17 (btw vrij) zijn; die laatste
