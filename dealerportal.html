@@ -592,10 +592,13 @@ try { const v = localStorage.getItem(LEVER_KEY); if (v === "container") levering
 
    Het adres onthouden we per browser: een dealer bestelt bijna altijd naar
    hetzelfde adres, en dan hoeft hij het niet elke keer opnieuw in te tikken.
-   De kooiaap niet: Manon (7 sep 2026) "kooiaap is niet standaard, is een
-   keuze", en zo'n keuze hoort elke bestelling opnieuw gemaakt te worden. */
+   De laadklep niet: Manon (7 sep 2026) "kooiaap is niet standaard, is een
+   keuze", en zo'n keuze hoort elke bestelling opnieuw gemaakt te worden. Sinds
+   10 sep 2026 is dat vinkje een laadklep in plaats van een kooiaap; Chantal:
+   "unloading with a truck mounted forklift die tekst verwijderen, daarvoor in
+   de plaats with tail lift en dit kunnen aanvinken." */
 const VRACHT_KEY = "pp_vracht_v1";
-let vracht = { wijze: "afhalen", land: "", postcode: "", kooiaap: false };
+let vracht = { wijze: "afhalen", land: "", postcode: "", klep: false };
 try {
   const v = JSON.parse(localStorage.getItem(VRACHT_KEY) || "null");
   if (v && typeof v === "object") {
@@ -2073,7 +2076,7 @@ async function vrachtHaalPrijs(){
   vrachtBezig = true;
   try {
     const r = await api("/dealers/api/vracht", { method: "POST", body: JSON.stringify({
-      land: vracht.land, postcode: vracht.postcode, kooiaap: vracht.kooiaap,
+      land: vracht.land, postcode: vracht.postcode, klep: vracht.klep,
       items: spas.map(x => ({ soort: "spa", model: x.model, qty: x.qty })) }) });
     vrachtUitkomst = (r.status === 200 && r.data) ? r.data : { ok: false, error: "HTTP " + r.status };
   } catch (e) {
@@ -2102,8 +2105,8 @@ function tekenVracht(ov){
            <input id="vrachtPc" value="${esc(vracht.postcode)}" placeholder="${esc(vrachtVoorbeeld(vracht.land))}" style="font-size:14px;"></div>
        </div>
        <label class="vrachtvink" style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12.5px;cursor:pointer;line-height:1.4;">
-         <input type="checkbox" id="vrachtKooi"${vracht.kooiaap?" checked":""} style="width:auto;flex:0 0 auto;margin:0;">
-         <span>Unloading with a truck-mounted forklift</span></label>`;
+         <input type="checkbox" id="vrachtKlep"${vracht.klep?" checked":""} style="width:auto;flex:0 0 auto;margin:0;">
+         <span>Delivery with tail lift</span></label>`;
     let som = "";
     if (vrachtBezig) som = `<p class="lead" style="margin:12px 0 0;">Calculating…</p>`;
     else if (!vracht.land) som = `<p class="lead" style="margin:12px 0 0;">Choose your country and we will show you the cost.</p>`;
@@ -2117,13 +2120,13 @@ function tekenVracht(ov){
         `<table class="prijs" style="margin-top:12px;"><tbody>
            <tr><td>Transport (${u.ldm} loading metres)</td><td class="n">${geld2(u.basis)}</td></tr>
            <tr><td>Fuel surcharge ${u.dieselPct}%</td><td class="n">${geld2(u.diesel)}</td></tr>
-           ${u.kooiaap ? `<tr><td>Truck-mounted forklift</td><td class="n">${geld2(u.kooiaap)}</td></tr>` : ""}
+           ${u.klep ? `<tr><td>Tail lift</td><td class="n">${geld2(u.klep)}</td></tr>` : ""}
            <tr><td><b>Delivery</b></td><td class="n"><b>${geld2(u.totaal)}</b></td></tr>
          </tbody></table>
          <p style="margin:8px 0 0;font-size:11.5px;color:var(--muted);line-height:1.55;">
            An estimate based on the floor space your spas take up. The final invoice follows what
            actually goes on the truck.
-           ${u.onbekend && u.onbekend.length ? " We do not have the crate size for " + esc([...new Set(u.onbekend)].join(", ")) + " yet, so it is not included." : ""}</p>`;
+</p>`;
     } else if (u && !u.ok) {
       som = `<p class="lead" style="margin:12px 0 0;color:var(--red);">${esc(u.uitleg || (u.error === "postcode-onbekend"
         ? "We do not have a rate for that postcode. Send us a message and we will quote it."
@@ -2165,9 +2168,9 @@ function tekenVracht(ov){
     vrachtBezig = true; tekenVracht(ov);
     await vrachtHaalPrijs(); tekenVracht(ov);
   });
-  const kooi = doel.querySelector("#vrachtKooi");
-  if (kooi) kooi.addEventListener("change", async () => {
-    vracht.kooiaap = kooi.checked;
+  const klep = doel.querySelector("#vrachtKlep");
+  if (klep) klep.addEventListener("change", async () => {
+    vracht.klep = klep.checked;
     vrachtBezig = true; tekenVracht(ov);
     await vrachtHaalPrijs(); tekenVracht(ov);
   });
@@ -2350,7 +2353,7 @@ function openCart(){
       /* Wat de dealer koos voor de bezorging. De prijs gaat mee zoals hij op
          het scherm stond, zodat sales precies ziet wat er is afgesproken. */
       vracht: (levering !== "container" && vracht.wijze === "bezorgen")
-        ? { land: vracht.land, postcode: vracht.postcode, kooiaap: vracht.kooiaap,
+        ? { land: vracht.land, postcode: vracht.postcode, klep: vracht.klep,
             bedrag: (vrachtUitkomst && vrachtUitkomst.ok) ? vrachtUitkomst.totaal : null,
             vervoerder: (vrachtUitkomst && vrachtUitkomst.ok) ? vrachtUitkomst.vervoerder : null }
         : { wijze: "afhalen" },

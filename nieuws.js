@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-10", bestand: "dealerportaal.html", soort: "hersteld",
+      titel: "De laadmeters komen nu van Chantal en Manon",
+      wat: "De bezorgkosten werden uitgerekend op de maat van de kist, en dat gaf steeds nét te weinig laadmeters: 1,66 waar het er 2 zijn, 0,61 waar het er 1 is. Chantal en Manon hebben de laadmeters van alle modellen uitgeschreven en daar wordt nu mee gerekend. Bij een Turbine komt er geen prijs meer uit maar de vraag om even contact op te nemen; dat transport is altijd maatwerk.",
+    },
+
+    {
+      datum: "2026-09-10", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Laadklep in plaats van kooiaap",
+      wat: "Het vinkje bij de bezorging heette 'unloading with a truck-mounted forklift' en is nu 'delivery with tail lift'. De toeslag die erbij hoort staat per land in de tarieflijst van Van Heugten: bij het ene land niets, bij Denemarken een vast bedrag en bij de rest een percentage met een bodem van 50 euro.",
+    },
+
+    {
       datum: "2026-09-10", bestand: "voorraad.html", soort: "nieuw",
       titel: "Patrick ziet Voorraadbeheer",
       wat: "Patrick kan de tegel Voorraadbeheer nu openen, met de tabbladen Particulier en Partner. Meekijken kan, wijzigen niet.",
