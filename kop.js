@@ -161,15 +161,28 @@
      niets naar luisteren: dat zou in preload.js moeten en dat bestand zit in
      het installatiebestand en wordt nooit bijgewerkt. Deze weg loopt volledig
      via bestanden die wél met de update meekomen. */
-  var versieBijStart = null;
-  function leesVersie(cb) {
+  /* Waar we op letten is de tegel zélf, niet het versienummer in het
+     manifest. Dat nummer wordt namelijk lang niet bij elke wijziging
+     opgehoogd - het stond op 10 september vier commits lang op 0.34.1 - dus
+     daar zou deze melding nooit van afgaan. De pagina haalt daarom zijn eigen
+     bestand nog eens op en kijkt of het veranderd is. Dat is precies het
+     bestand dat opnieuw geladen moet worden, dus nauwkeuriger kan niet. */
+  function eigenBestand(cb) {
     try {
-      fetch("manifest.json?t=" + Date.now(), { cache: "no-store" })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) { cb(j && j.version ? String(j.version) : null); })
+      var pad = global.location.pathname.split("/").pop() || "index.html";
+      fetch(pad + "?t=" + Date.now(), { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (t) { cb(t ? (t.length + ":" + kortHash(t)) : null); })
         .catch(function () { cb(null); });
     } catch (e) { cb(null); }
   }
+  // Genoeg om een wijziging te zien; dit hoeft niets te beveiligen.
+  function kortHash(t) {
+    var h = 0;
+    for (var i = 0; i < t.length; i++) { h = ((h << 5) - h + t.charCodeAt(i)) | 0; }
+    return String(h);
+  }
+  var stempelBijStart = null;
   function toonVernieuwen() {
     if (doc.getElementById("fpNieuweVersie")) return;
     var balk = doc.createElement("div");
@@ -177,7 +190,7 @@
     balk.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#144734;color:#fff;" +
       "padding:10px 16px;display:flex;align-items:center;gap:12px;justify-content:center;" +
       "font:inherit;font-size:13px;box-shadow:0 -2px 12px rgba(0,0,0,.18)";
-    balk.innerHTML = "<span>Er is een nieuwe versie binnengehaald.</span>";
+    balk.innerHTML = "<span>Er is een nieuwe versie van deze tegel binnengehaald.</span>";
     var knop = doc.createElement("button");
     knop.type = "button";
     knop.textContent = "Vernieuwen";
@@ -196,17 +209,17 @@
     doc.body.appendChild(balk);
   }
   function letOpVersie() {
-    leesVersie(function (v) {
-      versieBijStart = v;
-      if (!v) return;                     // geen manifest te lezen: laten rusten
+    eigenBestand(function (v) {
+      stempelBijStart = v;
+      if (!v) return;                     // niet op te halen: laten rusten
       var keer = 0;
       var tik = global.setInterval(function () {
         keer++;
-        leesVersie(function (nu) {
-          if (nu && versieBijStart && nu !== versieBijStart) {
+        eigenBestand(function (nu) {
+          if (nu && stempelBijStart && nu !== stempelBijStart) {
             global.clearInterval(tik);
             toonVernieuwen();
-          } else if (keer >= 6) {         // na twee minuten stoppen met kijken
+          } else if (keer >= 9) {         // na drie minuten stoppen met kijken
             global.clearInterval(tik);
           }
         });

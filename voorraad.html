@@ -145,6 +145,20 @@
   table.grid td button{padding:1px 6px !important;font-size:11px !important;line-height:16px}
   /* Een cel die je wél helemaal wilt lezen (opmerkingen) mag breder zijn. */
   table.grid td.breed{max-width:340px}
+  /* Om en om een zachte huisstijltint, per order. Zonder achtergrondkleur op
+     de cellen zelf, anders dekt die de gele en paarse markering af. */
+  table.grid.resv tr.zebra:not(.gemerkt) td{background:#f4f8f0}
+  table.grid.resv tr.hoofdrij td{border-top:1px solid #e6ebe4}
+  table.grid.resv tr.hoofdrij:first-child td{border-top:0}
+  /* De order waar je met de muis boven zit, hoofdregel en subregel samen. */
+  table.grid.resv tr.hoofdrij:hover td,
+  table.grid.resv tr.hoofdrij:hover + tr.subrij td{background:#eaf3e0}
+  /* Smalle kolommen: aantal is bijna altijd 1, en een adviseursnaam en een
+     kleur hoeven de rest niet weg te drukken. Gerrit (10 sep 2026): "je kunt
+     de kolom adviseur, aantal, kleur nog smaller maken." */
+  table.grid.resv td:nth-child(3),table.grid.resv th:nth-child(3){max-width:210px}
+  table.grid.resv td:nth-child(4),table.grid.resv th:nth-child(4){width:52px;text-align:center}
+  table.grid.resv td:nth-child(6),table.grid.resv th:nth-child(6){max-width:120px}
   table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
   table.grid td.code{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--fonteyn-green-dark)}
   table.grid tr:hover td{background:#fbfdf7}
@@ -2911,18 +2925,28 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
     kopSorteer(soort,"datum","Datum")+"<th>Betaling</th>"+
     (MAG_WIJZIGEN?"<th title='regel uit het dashboard halen'></th>":"")+
     "</tr></thead><tbody>"+
-    rijen.map(function(r){
+    rijen.map(function(r,ri){
       const n=notitie(r);
       // Geel = moet ingepland worden, paars = afroep. Staat er allebei een
       // vinkje, dan wint geel voor de achtergrond en blijft paars als rand.
       let stijl="";
       if(n.inplannen) stijl="background:#fef9c3"+(n.afroep?";border-left:4px solid #7c3aed":"");
       else if(n.afroep) stijl="background:#f3e8ff;border-left:4px solid #7c3aed";
+      /* Om en om een zachte tint, per ORDER en niet per tabelregel: een order
+         is een hoofdregel plus een subregel, en die twee horen zichtbaar bij
+         elkaar. Gerrit (10 sep 2026): "het mag iets duidelijker worden welke
+         regel ik nu precies naar kijk, gebruik bijvoorbeeld de huisstijl
+         kleuren zachtjes ter afwisseling."
+
+         De klasse gaat op allebei de regels. Staat er geel of paars op, dan
+         wint dat: dat zegt iets over het werk en de zebra alleen iets over
+         het lezen. */
+      const zebra=(ri%2 ? " zebra" : "") + (stijl ? " gemerkt" : "");
       const id=esc(r.regelId||"");
       const vink=function(veld,label,aan){
         return "<label class='vk'><input type='checkbox' class='notVink' data-veld='"+veld+"' data-id='"+id+"'"+(aan?" checked":"")+uit+">"+label+"</label>";
       };
-      return "<tr class='hoofdrij' style='"+stijl+"'>"+
+      return "<tr class='hoofdrij"+zebra+"' style='"+stijl+"'>"+
         "<td>"+esc(r.ordernr)+"</td>"+
         "<td><b>"+esc(r.model)+"</b></td>"+
         "<td>"+kleurCel(r.kleur,r)+"</td>"+
@@ -2942,7 +2966,7 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
            Manon (7 sep 2026): "Voor de dealers wil ik niet dit allemaal
            invullen. Dit verwerken we allemaal in Logic met 1 klik." Wil ze er
            tóch een agenda-afspraak bij, dan is daar het knopje 'agenda' voor. */
-        "<tr class='subrij' style='"+stijl+"'><td colspan='"+kolommen+"'>"+
+        "<tr class='subrij"+zebra+"' style='"+stijl+"'><td colspan='"+kolommen+"'>"+
           "<div class='subwerk'>"+
             "<span class='lev'>"+leveringCel(r,n,id,uit)+"</span>"+
             "<input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' readonly title='"+esc(n.opmerking||"Klik om een notitie te schrijven")+"'"+uit+">"+

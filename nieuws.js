@@ -52,6 +52,24 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-10", bestand: "voorraad.html", soort: "beter",
+      titel: "Beter te zien naar welke regel je kijkt",
+      wat: "In Reserveringen krijgt elke order om en om een zachte groene tint, en de order waar je met de muis boven zit licht helemaal op, hoofdregel en subregel samen. De kolommen Kleur, Aantal en Adviseur zijn smaller, zodat de klantnaam meer ruimte krijgt. Geel en paars blijven gewoon voorgaan; die zeggen iets over het werk.",
+    },
+
+    {
+      datum: "2026-09-10", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Modellen dichtgeklapt, kleuren op een klik",
+      wat: "Een partner ziet in het portaal nu veel meer modellen op een scherm: per tegel alleen de naam, hoeveel er staan en de prijs. Klik je op de modelnaam, dan schuiven de kleuren met hun aantallen en de verwachte schepen eronder open. Wat je open hebt staan blijft open, ook als de voorraad zichzelf ververst.",
+    },
+
+    {
+      datum: "2026-09-10", bestand: "dealerportaal.html", soort: "hersteld",
+      titel: "Het partnerportaal past nu op een telefoon",
+      wat: "De balk bovenaan met het logo, je mailadres en de knoppen stond op een telefoon op een regel van 642 pixels in een scherm van 375, en daardoor kon de hele pagina opzij geschoven worden. Die balk gaat nu over twee regels en er valt niets meer buiten beeld.",
+    },
+
+    {
       datum: "2026-09-10", iedereen: true, soort: "beter",
       titel: "Je ziet nu wanneer er een nieuwe versie klaarstaat",
       wat: "Het Dashboard haalt vernieuwingen op de achtergrond binnen terwijl je gewoon doorwerkt. Voortaan zie je onderaan een balkje zodra dat klaar is, met een knop Vernieuwen. Eén keer klikken is genoeg; afsluiten en opnieuw opstarten hoeft niet. Herstart je meteen een paar keer achter elkaar, dan breek je de download juist af.",

@@ -22,6 +22,36 @@
   header .who{font-size:12px;color:var(--muted)}
   header button{background:#fff;color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:6px 13px;font:inherit;font-size:12px;cursor:pointer}
   header button:hover{border-color:var(--red);color:var(--red)}
+  /* Op een telefoon paste de kop niet.
+     ═══════════════════════════════════════════════════════════════════════
+     Gerrit (9 sep 2026): "ik wil dat er niet meer horizontaal gescrolld wordt
+     op het Dashboard. Nergens niet. Dat werkt niet fijn en het mag niet."
+
+     Dit portaal is geen tegel en krijgt breedte.js niet - het draait onder een
+     Content-Security-Policy die alleen inline script toelaat, dus een verwijzing
+     naar een los scriptbestand wordt door de browser geweigerd. Daarom hier, in
+     de eigen stijl van de pagina.
+
+     Het was ook precies één ding: de kop stond op één regel met het logo, de
+     titel, het mailadres en drie knoppen, samen 642 pixels in een scherm van
+     375. De rest van de pagina paste al. Onder de 620 pixels gaat de kop nu
+     over twee regels: logo en titel boven, wie je bent en de knoppen eronder.
+     Verstoppen doen we niet - dan weet een partner op zijn telefoon niet meer
+     onder welk account hij besteld heeft. */
+  @media (max-width: 620px){
+    header{flex-wrap:wrap;row-gap:9px;padding:10px 14px;gap:10px}
+    header img{height:34px}
+    header h1{flex:1 1 auto}
+    header .who{flex:1 1 100%;order:2;font-size:11.5px;overflow-wrap:anywhere}
+    header #cartBtn,header #pwBtn,header #logoutBtn{order:3}
+    header #cartBtn{margin-left:auto}
+    /* Dezelfde regel die breedte.js op het Dashboard toepast: een tabel wordt
+       nooit breder dan zijn kaart, een cel breekt af in plaats van de tabel op
+       te rekken. Op een telefoon is een tabel van zes kolommen anders een
+       schuifbak waarin je de helft niet ziet. */
+    table{width:100%;max-width:100%}
+    table td,table th{white-space:normal;overflow-wrap:anywhere;min-width:0}
+  }
   main{max-width:1080px;margin:26px auto;padding:0 18px}
   .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin:14px 0}
   h2{color:var(--ink);font-size:20px;margin:0 0 8px;font-weight:700}
@@ -41,14 +71,55 @@
   .tabs{display:flex;gap:6px;margin:18px 0 4px;border-bottom:2px solid var(--border);flex-wrap:wrap}
   .tab{background:transparent;border:0;border-bottom:3px solid transparent;padding:10px 16px;font:inherit;font-weight:600;color:var(--muted);cursor:pointer;margin-bottom:-2px}
   .tab.active{color:var(--ink);border-bottom-color:var(--red)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;align-items:stretch}
+  /* Elke tegel zijn eigen hoogte.
+     ═══════════════════════════════════════════════════════════════════════
+     Stond op stretch, zodat de knoppen van vier tegels naast elkaar op één
+     lijn stonden. Dat was nodig toen de kleurenlijst nog openstond en de ene
+     tegel zes regels had en de andere één. Nu de kleuren dichtgeklapt zijn
+     zijn de tegels vanzelf bijna even hoog, en werkt stretch juist tegen:
+     klap er één open en de drie tegels ernaast groeien mee met een witvlak
+     erin. Precies wat Gerrit niet wil - hij wil er meer op een scherm. */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;align-items:start}
   /* De kaart is een kolom die de volle hoogte pakt, en de knoppenrij wordt
      naar onderen geduwd. Zonder dat gingen de knoppen op elke kaart op een
      andere hoogte staan, afhankelijk van hoeveel regels erboven stonden. */
+  /* height:100% stond hier en trok de kaart alsnog uit tot de hoogte van zijn
+     rij, ook met align-items:start op het raster. Weg dus - een kaart is nu zo
+     hoog als wat erin staat, en de knoppenrij eronder heeft geen margin-top
+     meer nodig om onderaan te blijven. */
   .stock-card{border:1px solid var(--border);border-radius:10px;padding:13px 15px;background:#fff;
-              display:flex;flex-direction:column;height:100%;position:relative;transition:box-shadow .15s,border-color .15s}
+              display:flex;flex-direction:column;position:relative;transition:box-shadow .15s,border-color .15s}
   .stock-card:hover{box-shadow:0 4px 14px rgba(0,0,0,.09);border-color:#d7dbd8}
-  .stock-card .m{font-weight:700;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:24px}
+  .stock-card .m{font-weight:700;font-size:15px;display:flex;align-items:center;gap:8px;min-height:24px}
+  /* De modelnaam is de knop.
+     ═══════════════════════════════════════════════════════════════════════
+     Gerrit (10 sep 2026): "als je op PP komt, wil ik veel meer modellen kunnen
+     zien, en ook wel '181 in stock', maar niet meer van welke kleur al direct.
+     Daarvoor moet je dat model aanklikken en dan animeert hij naar beneden en
+     zie je de kleuraantallen die beschikbaar zijn. De prijs moet wel direct
+     zichtbaar zijn."
+
+     Dus dicht: collectie, modelnaam, hoeveel er staan en de prijs. Open: de
+     kleuren met hun aantallen en de schepen die eraan komen. De kaart is
+     daarmee minder dan half zo hoog en er passen ruim twee keer zoveel
+     modellen op een scherm.
+
+     Het pijltje is er om te laten zien dát er iets open kan. Zonder zo'n teken
+     klikt niemand op een kop, en dan is de helft van de tegel onvindbaar. */
+  .stock-card .m .naam{flex:1 1 auto;min-width:0}
+  .stock-card .m{cursor:pointer;user-select:none;border-radius:7px;margin:0 -5px;padding:2px 5px}
+  .stock-card .m:hover{background:#f5f7f5}
+  .stock-card .m:focus-visible{outline:2px solid var(--green);outline-offset:1px}
+  .stock-card .chev{flex:0 0 auto;color:#b6bdb8;font-size:17px;line-height:1;font-weight:400;
+                    transition:transform .24s cubic-bezier(.2,.8,.3,1),color .15s}
+  .stock-card .m:hover .chev{color:var(--muted)}
+  .stock-card.open .chev{transform:rotate(90deg);color:var(--green)}
+  /* Het uitschuivende deel. De hoogte wordt in stappen gezet: van 0 naar de
+     gemeten hoogte, en na de animatie op auto. Dat laatste moet, anders staat
+     er een vaste hoogte in de weg zodra er iets bij komt - "+ 3 more colours"
+     uitklappen, of de voorraad die zichzelf ververst. */
+  .stock-card .vouw{overflow:hidden;height:0;transition:height .26s cubic-bezier(.2,.8,.3,1)}
+  @media (prefers-reduced-motion: reduce){ .stock-card .vouw{transition:none} }
   .stock-card ul{list-style:none;margin:9px 0 0;padding:0;font-size:13px;color:#374151;line-height:1.75}
   /* De voorraadregels per kleur.
      ═══════════════════════════════════════════════════════════════════════
@@ -817,6 +888,39 @@ function voorraadRegel(r){
     <span class="aant">${r.qty} ${r.qty === 1 ? "pc" : "pcs"} <span class="st">${esc(st)}</span></span>
   </li>`;
 }
+/* ── Open- en dichtklappen van een modeltegel ─────────────────────────────
+   Zie de toelichting bij .stock-card .m in de stijl hierboven.
+
+   De hoogte moet in stappen: van 0 naar de gemeten hoogte laten lopen, en na
+   afloop op auto zetten. Direct naar auto animeert namelijk niet - de browser
+   heeft twee getallen nodig - en op de gemeten hoogte blijven staan gaat mis
+   zodra er een regel bij komt. Dichtklappen is hetzelfde andersom: eerst van
+   auto terug naar een getal, dan pas naar nul, met een reflow ertussen zodat
+   de browser die tussenstand ook echt ziet. */
+const uitgeklapt = new Set();
+function vouwZet(kaart, open, meteen){
+  const v = kaart.querySelector(".vouw");
+  if (!v) return;
+  kaart.classList.toggle("open", open);
+  const kop = kaart.querySelector(".m");
+  if (kop) kop.setAttribute("aria-expanded", open ? "true" : "false");
+  if (meteen) { v.style.height = open ? "auto" : "0"; return; }
+  if (open) {
+    v.style.height = v.scrollHeight + "px";
+    /* Op auto zetten zodra de animatie klaar is - én een wekker ernaast voor
+       het geval dat nooit gebeurt. Dat gebeurt echt: wie in zijn systeem heeft
+       staan dat animaties uit moeten, krijgt hier transition:none en dan komt
+       er geen transitionend. Zonder deze vangnet blijft de hoogte op een vast
+       getal staan en valt "+ 3 more colours" er onderaan buiten. */
+    const klaar = () => { if (kaart.classList.contains("open")) v.style.height = "auto"; };
+    v.addEventListener("transitionend", klaar, { once: true });
+    setTimeout(klaar, 400);
+  } else {
+    v.style.height = v.scrollHeight + "px";
+    void v.offsetHeight;
+    v.style.height = "0";
+  }
+}
 /* Het balkje rechts van de modelnaam. Stond hier "backorder" zodra er niets in
    de hal lag - ook als er over tien dagen een boot met vier stuks aankomt. Dat
    is geen backorder maar een leverdatum, en dat is precies wat een partner aan
@@ -890,10 +994,9 @@ function renderStock(){
     return `
     <div class="stock-card" data-model="${esc(m.model)}" style="border-top:6px solid ${esc(m.collectionColor||'#9ca3af')}">
       ${m.collection?`<div style="font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:${esc(m.collectionColor)};margin-bottom:3px;">${esc(m.collection)}</div>`:""}
-      <div class="m">${esc(m.model)}${voorraadPil(m)}</div>
-      <ul class="vrr">${voorraadRegels(m)}</ul>
+      <div class="m" role="button" tabindex="0" aria-expanded="false"><span class="naam">${esc(m.model)}</span>${voorraadPil(m)}<span class="chev" aria-hidden="true">&#8250;</span></div>
+      <div class="vouw"><ul class="vrr">${voorraadRegels(m)}</ul>${pakketRegel(m) ? `<ul>${pakketRegel(m)}</ul>` : ""}</div>
       <ul>
-        ${pakketRegel(m)}
         ${m.opAanvraag?`<li style="margin-top:6px;color:var(--muted)">Price on request &mdash; ask us via the Contact tab.</li>`
           :(m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):"")}
       </ul>
@@ -904,6 +1007,25 @@ function renderStock(){
         <button class="secondary dls" data-model="${esc(m.model)}" style="padding:9px 14px;font-size:13px;">Downloads${aantalDocs(m.model) ? ` <span style="color:var(--muted);font-weight:400;">${aantalDocs(m.model)}</span>` : ""}</button>
       </div>
     </div>`;}).join("");
+  /* Welke modellen open stonden, blijven open. De voorraad ververst zichzelf
+     elke 45 seconden en tekent de hele lijst opnieuw; zonder dit klapte alles
+     onder je handen dicht terwijl je aan het kijken was. */
+  document.querySelectorAll(".stock-card").forEach(kaart => {
+    if (uitgeklapt.has(kaart.dataset.model)) vouwZet(kaart, true, true);
+  });
+  document.querySelectorAll(".stock-card .m").forEach(kop => {
+    kop.addEventListener("click", () => {
+      const kaart = kop.closest(".stock-card");
+      const model = kaart.dataset.model;
+      const open = !uitgeklapt.has(model);
+      if (open) uitgeklapt.add(model); else uitgeklapt.delete(model);
+      vouwZet(kaart, open, false);
+    });
+    // Met de spatiebalk of Enter moet het ook kunnen: het is een knop.
+    kop.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); kop.click(); }
+    });
+  });
   // "+ 3 more colours" klapt de rest van de kleuren uit, alleen op die tegel.
   document.querySelectorAll(".vrr .meer").forEach(l => l.addEventListener("click", () => {
     l.parentElement.querySelectorAll("li.extra").forEach(x => x.classList.remove("hidden"));
