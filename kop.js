@@ -140,6 +140,80 @@
     if (uit.parentNode !== kop) kop.appendChild(uit);
   }
 
+  /* ── NIEUWE VERSIE BINNEN? ────────────────────────────────────────────
+     Gerrit (10 sep 2026): "ik heb net Kevin en Gerwin gevraagd even te
+     herstarten maar de nieuwe versie van Planning komt bij hen niet
+     tevoorschijn (...) ik heb ze drie keer laten herstarten."
+
+     Dat komt hier vandaan. Sinds 7 september wacht het venster niet meer op
+     de update - dat was de reparatie van de 28 seconden opstarttijd. De app
+     opent dus meteen op de bestanden die er al staan en haalt de nieuwe op de
+     achtergrond binnen. Dat werkt, maar er stond nergens dat het gebeurde, en
+     drie keer snel herstarten is juist het slechtste wat je kunt doen: elke
+     herstart breekt de download af die net bezig was.
+
+     Vandaar deze melding. De tegel onthoudt bij het openen welke versie er in
+     de live-map staat en kijkt daarna nog een paar keer. Verandert dat
+     nummer, dan is de download klaar en staat de nieuwe tegel al op schijf -
+     één keer vernieuwen is genoeg, herstarten hoeft niet.
+
+     main.js stuurt hier ook een seintje over ('ota-klaar'), maar daar kan
+     niets naar luisteren: dat zou in preload.js moeten en dat bestand zit in
+     het installatiebestand en wordt nooit bijgewerkt. Deze weg loopt volledig
+     via bestanden die wél met de update meekomen. */
+  var versieBijStart = null;
+  function leesVersie(cb) {
+    try {
+      fetch("manifest.json?t=" + Date.now(), { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { cb(j && j.version ? String(j.version) : null); })
+        .catch(function () { cb(null); });
+    } catch (e) { cb(null); }
+  }
+  function toonVernieuwen() {
+    if (doc.getElementById("fpNieuweVersie")) return;
+    var balk = doc.createElement("div");
+    balk.id = "fpNieuweVersie";
+    balk.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#144734;color:#fff;" +
+      "padding:10px 16px;display:flex;align-items:center;gap:12px;justify-content:center;" +
+      "font:inherit;font-size:13px;box-shadow:0 -2px 12px rgba(0,0,0,.18)";
+    balk.innerHTML = "<span>Er is een nieuwe versie binnengehaald.</span>";
+    var knop = doc.createElement("button");
+    knop.type = "button";
+    knop.textContent = "Vernieuwen";
+    knop.style.cssText = "background:#8bc53f;color:#102b1e;border:0;border-radius:8px;padding:6px 14px;" +
+      "font:inherit;font-size:13px;font-weight:700;cursor:pointer";
+    knop.onclick = function () { global.location.reload(); };
+    var later = doc.createElement("button");
+    later.type = "button";
+    later.textContent = "Later";
+    later.style.cssText = "background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);" +
+      "border-radius:8px;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer";
+    /* Wegklikken mag. Iemand die midden in een order zit moet niet gedwongen
+       worden te vernieuwen; bij de volgende keer openen staat het er toch. */
+    later.onclick = function () { balk.remove(); };
+    balk.appendChild(knop); balk.appendChild(later);
+    doc.body.appendChild(balk);
+  }
+  function letOpVersie() {
+    leesVersie(function (v) {
+      versieBijStart = v;
+      if (!v) return;                     // geen manifest te lezen: laten rusten
+      var keer = 0;
+      var tik = global.setInterval(function () {
+        keer++;
+        leesVersie(function (nu) {
+          if (nu && versieBijStart && nu !== versieBijStart) {
+            global.clearInterval(tik);
+            toonVernieuwen();
+          } else if (keer >= 6) {         // na twee minuten stoppen met kijken
+            global.clearInterval(tik);
+          }
+        });
+      }, 20000);
+    });
+  }
+
   function start() {
     vul();
     /* taal.js draait ook op DOMContentLoaded en plaatst zijn knop vóór
@@ -151,6 +225,7 @@
       var uit = kop && kop.querySelector("button.logout");
       if (kop && t && uit && uit.parentNode === kop && t.nextSibling !== uit) kop.insertBefore(t, uit);
     }, 0);
+    letOpVersie();
   }
 
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", start);

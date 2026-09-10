@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-10", iedereen: true, soort: "beter",
+      titel: "Je ziet nu wanneer er een nieuwe versie klaarstaat",
+      wat: "Het Dashboard haalt vernieuwingen op de achtergrond binnen terwijl je gewoon doorwerkt. Voortaan zie je onderaan een balkje zodra dat klaar is, met een knop Vernieuwen. Eén keer klikken is genoeg; afsluiten en opnieuw opstarten hoeft niet. Herstart je meteen een paar keer achter elkaar, dan breek je de download juist af.",
+    },
+
+    {
       datum: "2026-09-10", bestand: "urencontrole.html", soort: "nieuw",
       titel: "Urencontrole",
       wat: "Je eigen weekoverzicht zit nu in het Dashboard. Lees je Excel-bestand een keer in en daarna vink je per collega per week aan dat je de urenregistratie hebt nagekeken. Bovenaan zie je meteen wie er deze week nog open staan. Wie uit dienst was blijft zwart en is niet aan te klikken.",
