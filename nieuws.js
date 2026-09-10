@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-10", bestand: "planning.html", soort: "nieuw",
+      titel: "Een route printen",
+      wat: "Bij elke route staat een printknop. Je krijgt het hele stel papieren zoals de monteur het gewend is: een voorblad met de dag, de route, wie er rijdt en de stops met tijd, naam en woonplaats, en daarachter de orderbevestiging van elke stop in bezoekvolgorde. De vakjes Akkoord en Gemaild blijven leeg om af te tekenen.",
+    },
+
+    {
+      datum: "2026-09-10", bestand: "planning.html", soort: "beter",
+      titel: "Afspraak maken op ordernummer",
+      wat: "Bovenaan het afsprakenvenster staat nu een veld voor het ordernummer of ITS-nummer. Vul het in en klik Ophalen, dan komen de klant, het telefoonnummer, het adres en wat er geleverd wordt er vanzelf in te staan. Wat je zelf al had ingetypt blijft staan.",
+    },
+
+    {
       datum: "2026-09-10", iedereen: true, soort: "hersteld",
       titel: "Nergens meer opzij slepen",
       wat: "In een aantal tegels liep een tabel buiten beeld en moest je opzij slepen om de rest te zien. Dat kan nu nergens meer: een tabel past altijd binnen het scherm en tekst breekt af in plaats van de tabel op te rekken. Bij Voorraadbeheer staan de kolommen Verwachte levering, opmerking en de vinkjes voortaan op een dunne regel onder de order, net als bij Reserveringen.",

@@ -3115,7 +3115,11 @@ async function l4Medewerkers(env) {
       // erbij, anders lijkt het alsof die adviseur er nog werkt.
       const uitDienst = /^zz[\s-]*oud\b/i.test(naam);
       if (uitDienst) naam = naam.replace(/^zz[\s-]*oud\s*/i, "").trim() || naam;
-      map[String(id)] = { naam, uitDienst };
+      /* Het mailadres erbij: op de orderbevestiging staat de adviseur met
+         zijn adres eronder ("Yves / yves@fonteyn.nl"). Heeft Logic4 het niet,
+         dan blijft het leeg - liever geen adres dan een verzonnen adres. */
+      const mail = String(u.EmailAddress || u.Email || u.Mail || "").trim();
+      map[String(id)] = { naam, uitDienst, mail: mail || null };
     }
     return map;
   } catch (e) { return {}; }
@@ -4576,6 +4580,120 @@ async function dpControleerGeannuleerd(env, ledgerOrders) {
   }
   if (geannuleerd || afgerond) await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
   return { ok: true, gekeken, geannuleerd, afgerond, wachtrij: Math.max(0, teControleren.length - gekeken) };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EEN ROUTE UITPRINTEN
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Gerrit (10 sep 2026): "Als Gerwin of Kevin van Planning een route bedenken
+   voor de servicemonteurs of bezorgers, dan krijgen ze een uitgeprint stel
+   papieren mee. Voorblad met de belangrijkste informatie en daarna de orders
+   die ze in de juiste volgorde bezoeken."
+
+   Zo ziet dat stel papieren er nu uit, met de hand geschreven:
+
+     - een voorblad met dag en datum, het routenummer, en een tabel met per
+       stop de tijd, de naam en de woonplaats, plus twee kolommen Akkoord en
+       Gemaild die de monteur zelf aftekent
+     - daarachter de orderbevestiging van elke order, in bezoekvolgorde
+
+   Wat hier gebeurt: per ordernummer de order uit Logic4 halen met alles wat
+   op zo'n bevestiging staat. Het tekenen zelf doet de tegel, want dat is
+   opmaak en geen gegevens.
+
+   Twee dingen die met opzet zo zijn:
+
+   - Akkoord en Gemaild blijven leeg. Gerrit: "Leeg om af te tekenen idd."
+     Het Dashboard weet heus wel of een order betaald is, maar dit vinkje zet
+     de monteur bij de klant aan de deur en dat is iets anders.
+
+   - "Monteur + Auto" op het voorblad is niet het autonummer maar het
+     routenummer. Gerrit: "2 staat voor route 2. Ze doen vaak 3 routes op een
+     dag, dus ze noemen ze gewoon 1, 2 en 3." De naam van wie er rijdt komt
+     uit de planning en staat er automatisch bij. */
+async function planningRoutePrint(env, url) {
+  const nrs = String(url.searchParams.get("orders") || "")
+    .split(",").map(x => x.trim()).filter(x => /^\d{3,12}$/.test(x));
+  if (!nrs.length) return reply(400, { ok: false, error: "geen ordernummers opgegeven" });
+  /* Een route is een dag werk, dus een handvol stops. De grens zit er om te
+     voorkomen dat iemand per ongeluk een hele week opvraagt en de worker
+     tegen zijn aanroeplimiet loopt. */
+  if (nrs.length > 15) return reply(400, { ok: false, error: "te veel orders in een keer (maximaal 15)" });
+
+  const token = await l4Token(env);
+  const medewerkers = await l4Medewerkers(env);
+  /* De veldnamen van Logic4 zijn hier net anders dan je zou gokken: de naam
+     zit in ContactName (niet Name), de postcode in Zipcode (niet PostalCode)
+     en het telefoonnummer in TelephoneNumber. Op de eerste proef kwamen naam,
+     postcode, telefoon en mail daardoor allemaal leeg terug terwijl ze er
+     gewoon in staan. Address1 is al straat + huisnummer samen; staat die er
+     niet, dan zetten we hem zelf in elkaar. */
+  const adres = (a) => {
+    if (!a) return null;
+    const straat = String(a.Address1 || "").trim() ||
+      [a.Street, a.HouseNumber, a.HouseNumberAddition].filter(Boolean).join(" ").trim();
+    return {
+      naam: String(a.ContactName || "").trim() || String(a.CompanyName || "").trim(),
+      bedrijf: String(a.CompanyName || "").trim(),
+      straat, straat2: String(a.Address2 || "").trim(),
+      postcode: String(a.Zipcode || "").trim(),
+      plaats: String(a.City || "").trim(),
+      land: String(a.CountryCode || "").trim(),
+      telefoon: String(a.TelephoneNumber || "").trim(),
+      mail: String(a.Email || "").trim(),
+    };
+  };
+
+  const orders = [];
+  for (const nr of nrs) {
+    try {
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ Id: Number(nr), TakeRecords: 1 }),
+      });
+      if (!r.ok) { orders.push({ nr, ok: false, error: "HTTP " + r.status }); continue; }
+      const j = await r.json().catch(() => null);
+      const o = ((j && (j.Records || j)) || [])[0];
+      if (!o) { orders.push({ nr, ok: false, error: "order niet gevonden in Logic4" }); continue; }
+      const mw = medewerkers[String(o.UserId)] || {};
+      /* Een samenstelling geeft in Logic4 ook al zijn onderdelen als losse
+         regels terug. Die staan niet op de bevestiging die de klant krijgt -
+         order 3507764 telt er dertien en op het papier staan er zes. Het veld
+         dat ze aanwijst heet IsAssemblyChild. */
+      const regels = (o.OrderRows || [])
+        .filter(x => !x.IsAssemblyChild)
+        .map(x => ({
+          aantal: Number(x.Qty) || 0,
+          code: String(x.ProductCode || "").trim(),
+          omschrijving: String(x.Description || "").trim(),
+          stukprijs: x.InclPrice != null ? Number(x.InclPrice) : null,
+          totaal: x.InclPrice != null ? Math.round(Number(x.InclPrice) * (Number(x.Qty) || 0) * 100) / 100 : null,
+        }));
+      orders.push({
+        nr, ok: true,
+        besteldDoor: adres(o.AccountAddress) || adres(o.InvoiceAddress),
+        leverenAan: adres(o.DeliveryAddress) || adres(o.AccountAddress),
+        adviseur: mw.naam || "", adviseurMail: mw.mail || "",
+        adviseurUitDienst: !!mw.uitDienst,
+        leverdatum: o.DeliveryDate || null,
+        besteldatum: o.CreationDate || null,
+        debiteur: o.DebtorId != null ? String(o.DebtorId) : "",
+        leveringswijze: (o.ShippingMethod && (o.ShippingMethod.Name || o.ShippingMethod.Description)) || "",
+        /* "ZZ-OUD" is de markering die Logic4 voor een uitgefaseerde naam zet.
+           Dat is interne administratie en die hoort niet op een papier dat de
+           klant onder ogen krijgt, dus die gaat eraf. Wat erachter staat is
+           wel de goede conditie. */
+        betaalconditie: String((o.PaymentMethod && (o.PaymentMethod.Name || o.PaymentMethod.Description)) || "")
+          .replace(/^zz[\s-]*oud\s*/i, "").trim(),
+        referentie: o.Reference || "",
+        notities: o.Notes || "",
+        totaal: o.Totals ? Number(o.Totals.AmountIncl) : null,
+        regels,
+      });
+    } catch (e) { orders.push({ nr, ok: false, error: String(e.message || e) }); }
+  }
+  return reply(200, { ok: true, orders });
 }
 
 async function dpOrderUitleg(env, nr) {
@@ -10018,6 +10136,10 @@ export default {
     if (url.pathname === "/planning/betaalstatus" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
       return planningBetaalstatus(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
+    if (url.pathname === "/planning/route-print" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });
+      return planningRoutePrint(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     if (url.pathname === "/planning/its" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });

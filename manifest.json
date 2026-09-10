@@ -133,6 +133,10 @@
       "note": "Vult de kop van elke tegel aan: terug naar het dashboard, wie er is ingelogd, NL/EN en uitloggen"
     },
     {
+      "name": "route-print.js",
+      "note": "Bouwt het stel papieren dat een monteur meekrijgt: een voorblad met de stops van de route en daarachter de orderbevestiging van elke stop, in bezoekvolgorde. Alleen opmaak; de gegevens komen van /planning/route-print."
+    },
+    {
       "name": "breedte.js",
       "note": "Zorgt dat er nergens horizontaal gescrold kan worden: een tabel past altijd binnen zijn kaart en cellen breken af in plaats van de tabel op te rekken. Staat los van kop.js omdat zes pagina's die niet laden, waaronder de twee mobiele schermen."
     },

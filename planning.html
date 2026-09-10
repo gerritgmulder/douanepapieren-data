@@ -6,6 +6,7 @@
 <script src="taal.js"></script>
 <script src="kop.js"></script>
 <script src="breedte.js"></script>
+<script src="route-print.js"></script>
 <script>
 /* Toegangscontrole. Het dashboard verbergt de tegel al, maar met de terugknop
    is een pagina die een vórige gebruiker opende opnieuw te bereiken. */
@@ -202,6 +203,8 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .its-leeg{font-size:12.5px;color:var(--grijs);padding:6px 0}
 
 /* ── routeknop ── */
+.routePrint{background:none;border:0;cursor:pointer;font-size:12px;padding:0 3px;border-radius:5px;opacity:.55;line-height:1}
+.routePrint:hover{opacity:1;background:#eef4e8}
 .route-knop{background:none;border:0;cursor:pointer;font-size:14px;padding:2px 4px;border-radius:6px;float:right}
 .route-knop:hover{background:#eef4e8}
 .route-menu{position:absolute;background:#fff;border:1px solid var(--rand);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:30;padding:6px;min-width:170px}
@@ -320,6 +323,15 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
    door twee kolommen te gebruiken en de tussenruimtes te halveren. */
 .laag{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:50;display:flex;
       align-items:center;justify-content:center;padding:12px;overflow-y:auto}
+.zoekbalk{background:#f4f9ec;border:1px solid #dbe7cc;border-radius:10px;padding:9px 11px;margin:0 0 13px}
+.zoekbalk label{display:block;font-size:11.5px;font-weight:700;color:var(--ink);margin:0 0 4px}
+.zoekrij{display:flex;gap:7px}
+.zoekrij input{flex:1 1 auto;min-width:0}
+.zoekrij button{flex:0 0 auto;background:var(--groen,#144734);color:#fff;border:0;border-radius:8px;
+   padding:0 15px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
+.zoekrij button:disabled{opacity:.55;cursor:default}
+.zoekuit{font-size:11.5px;color:var(--grijs,#6b7280);margin-top:5px;min-height:14px}
+.zoekuit.ok{color:#15803d}.zoekuit.bad{color:#b91c1c}
 .formkaart{background:#fff;border-radius:14px;max-width:720px;width:100%;padding:16px 18px;margin:auto}
 .formkaart h3{margin:0 0 8px;font-size:15px;color:var(--groen)}
 .formkaart label{display:block;font-size:11.5px;color:var(--grijs);margin:8px 0 3px}
@@ -968,6 +980,10 @@ function tekenBord(){
               (MAG_BEWERKEN?' title="Klik om de naam aan te passen"':'')+'>'+
               (r.wie ? '\ud83d\udc64 '+esc(r.wie) : '<span style="color:#b7bfb9;font-weight:400">wie rijdt?</span>')+'</span>'+
             (stops.length ? '<span class="tel">'+stops.length+'</span>' : '')+
+            /* Print route. Gerrit (10 sep 2026): de monteur krijgt een
+               uitgeprint stel papieren mee, voorblad plus de orders in
+               bezoekvolgorde. Alleen tonen als er iets te printen is. */
+            (stops.length ? '<button type="button" class="routePrint" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route printen: voorblad en de orderbevestigingen">\ud83d\udda8</button>' : "")+
             (MAG_BEWERKEN?'<button type="button" class="weg routeWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route weghalen">&times;</button>':"")+
           '</h4>'+
           '<div class="stops">'+
@@ -999,10 +1015,57 @@ function stopHtml(a){
     (a.wie?'<span class="rg">\ud83d\udc64 '+esc(a.wie)+'</span>':"")+'</div>';
 }
 
+/* ── Print route ─────────────────────────────────────────────────────
+   Voorblad plus de orderbevestigingen van de stops, in bezoekvolgorde. De
+   opmaak zit in route-print.js; hier wordt alleen verzameld wat erin moet.
+
+   Alleen stops met een ordernummer krijgen een bevestiging. Een servicemelding
+   zonder order staat wel op het voorblad maar heeft er geen - die bestaat
+   domweg niet. */
+async function printRoute(dISO, nr){
+  var eerste = (routesVan(dISO)[0]||{}).nr === nr;
+  var stops = stopsVan(dISO, nr, eerste);
+  if (!stops.length){ alert("Deze route heeft nog geen stops."); return; }
+  var route = routesVan(dISO).find(function(r){ return r.nr===nr; }) || {};
+  var nrs = stops.map(function(a){ return String(a.ordernr||"").trim(); })
+                 .filter(function(x){ return /^\d{3,12}$/.test(x); });
+  var orders = [];
+  if (nrs.length){
+    try{
+      var r = await fetch(W+"/planning/route-print?orders="+encodeURIComponent(nrs.join(",")),
+        { headers: { "X-Fonteyn-Auth": teamKey() } });
+      var j = await r.json().catch(function(){ return null; });
+      if (!r.ok || !j || !j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+      /* De volgorde van de route aanhouden, niet die van het antwoord: op het
+         papier moet de eerste stop vooraan liggen. */
+      orders = nrs.map(function(n){
+        return (j.orders||[]).find(function(o){ return String(o.nr)===String(n); }) ||
+               { nr:n, ok:false, error:"kwam niet terug uit Logic4" };
+      });
+    }catch(e){
+      if(!confirm("De orders konden niet uit Logic4 worden opgehaald ("+e.message+").\n\nAlleen het voorblad printen?")) return;
+    }
+  }
+  window.fpRoutePrint.print({
+    datum: dISO, routeNr: nr, wie: route.wie || "",
+    stops: stops.map(function(a){ return { tijd:a.tijd||"", klant:a.klant||"", plaats:a.plaats||"" }; }),
+    orders: orders,
+    logo: new URL("fonteyn-logo.png", location.href).href,
+  });
+  try{ if(window.fpLog) window.fpLog("route-geprint", "route "+nr+" van "+dISO+", "+stops.length+" stop(s)"); }catch(e){}
+}
+
 function koppelBord(){
   /* Kijken mag altijd: een stop aanklikken opent het formulier, dat zichzelf
      alleen-lezen maakt. Al het andere (slepen, plusknoppen, namen wijzigen)
      hangen we alleen aan als deze persoon mag bewerken. */
+  // de printknop in de kop van een route
+  $("bord").querySelectorAll(".routePrint").forEach(function(k){
+    k.addEventListener("click", function(e){
+      e.stopPropagation();
+      printRoute(k.dataset.datum, Number(k.dataset.nr));
+    });
+  });
   // stop aanklikken = het formulier; slepen = naar een andere route of dag
   $("bord").querySelectorAll(".stop").forEach(function(el){
     el.addEventListener("click", function(){ if(!el.dataset.gesleept) openForm(el.dataset.id); delete el.dataset.gesleept; });
@@ -1486,6 +1549,25 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   laag.className = "laag";
   laag.innerHTML = '<div class="formkaart">'+
     '<h3>'+(nieuw?"Nieuwe afspraak":"Afspraak wijzigen")+'</h3>'+
+    /* Bovenaan: het ordernummer of ITS-nummer opzoeken.
+       ═══════════════════════════════════════════════════════════════════
+       Gerrit (10 sep 2026): "een afspraak wordt eigenlijk altijd gemaakt adhv
+       het ordernummer of het ITS-nummer. Niet met de naam van de klant. Dus
+       ik wil bovenaan een veld waarin ze het ordernummer kunnen invoeren en
+       dat die dan al direct wordt gevonden in Logic4 (...) anders moeten de
+       planners alles met de hand invullen."
+
+       Wat er wordt ingevuld: klant, telefoon, plaats en het ordernummer zelf.
+       Een veld dat de planner al had getypt blijft staan - anders gooit het
+       opzoeken zijn eigen aanvulling weg. */
+    '<div class="zoekbalk">'+
+      '<label for="fZoek">Ordernummer of ITS-nummer</label>'+
+      '<div class="zoekrij">'+
+        '<input id="fZoek" maxlength="20" placeholder="bijv. 3507764" value="'+esc(a.ordernr||"")+'" autocomplete="off">'+
+        '<button type="button" id="fZoekBtn">Ophalen</button>'+
+      '</div>'+
+      '<div id="fZoekUit" class="zoekuit"></div>'+
+    '</div>'+
     '<div class="kolommen"><div>'+
     '<label>Categorie</label><div class="catkeus" id="fCats">'+
       Object.keys(CATS).map(function(k){ var c=CATS[k];
@@ -1533,6 +1615,69 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       b.style.borderColor = CATS[soort].kleur; b.style.background = CATS[soort].zacht;
     });
   });
+  /* Het ophalen zelf. Een ordernummer gaat naar Logic4; een ITS-nummer is een
+     servicemelding en die hangt aan een debiteur, dus daar is een eigen weg
+     voor. Welke van de twee het is zien we aan het nummer: een ordernummer is
+     zeven cijfers, een ITS-nummer korter of met letters ervoor. */
+  async function haalOrder(){
+    var veld = $("fZoek"), knop = $("fZoekBtn"), uit = $("fZoekUit");
+    var nr = String(veld.value||"").replace(/[^0-9A-Za-z]/g,"").trim();
+    if (!nr){ uit.className="zoekuit"; uit.textContent="Vul eerst een nummer in."; return; }
+    knop.disabled = true; uit.className="zoekuit"; uit.textContent="Zoeken in Logic4\u2026";
+    // Alleen invullen wat nog leeg is: wat de planner zelf typte blijft staan.
+    var zet = function(id, waarde){
+      var el = $(id);
+      if (el && waarde && !String(el.value||"").trim()) el.value = waarde;
+    };
+    try{
+      if (/^\d{6,9}$/.test(nr)){
+        var r = await fetch(W+"/planning/route-print?orders="+encodeURIComponent(nr),
+          { headers: { "X-Fonteyn-Auth": teamKey() } });
+        var j = await r.json().catch(function(){ return null; });
+        if (!r.ok || !j || !j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+        var o = (j.orders||[])[0];
+        if (!o || !o.ok) throw new Error((o&&o.error)||"order niet gevonden");
+        var adr = o.leverenAan || o.besteldDoor || {};
+        zet("fKlant", adr.naam || adr.bedrijf || "");
+        zet("fTel", adr.telefoon || "");
+        zet("fPlaats", [adr.straat, adr.postcode, adr.plaats].filter(Boolean).join(", "));
+        zet("fOrder", String(o.nr));
+        /* Wat er geleverd wordt is voor de monteur het belangrijkste, dus de
+           eerste regel van de order (de spa zelf) komt in het veld Wat. */
+        var eerste = (o.regels||[]).find(function(x){ return x.omschrijving && x.totaal; });
+        if (eerste) zet("fWat", eerste.omschrijving);
+        uit.className="zoekuit ok";
+        uit.textContent = "Gevonden: " + (adr.naam || "order " + o.nr) +
+          (o.leverdatum ? "  \u00b7  leverdatum " + String(o.leverdatum).slice(0,10).split("-").reverse().join("-") : "") +
+          (o.leveringswijze ? "  \u00b7  " + o.leveringswijze : "");
+      } else {
+        // ITS: de servicemelding kent zijn debiteur, en daar zitten de
+        // klantgegevens aan vast.
+        var r2 = await fetch(W+"/planning/its", { headers: { "X-Fonteyn-Auth": teamKey() } });
+        var j2 = await r2.json().catch(function(){ return null; });
+        var m = ((j2&&j2.meldingen)||[]).find(function(x){ return String(x.nr||x.id||"").replace(/\D/g,"") === nr.replace(/\D/g,""); });
+        if (!m) throw new Error("dit ITS-nummer staat niet in de openstaande servicemeldingen");
+        zet("fKlant", m.klant || "");
+        zet("fTel", m.telefoon || "");
+        zet("fPlaats", m.plaats || m.adres || "");
+        zet("fWat", m.omschrijving || m.wat || "");
+        uit.className="zoekuit ok";
+        uit.textContent = "Gevonden: " + (m.klant || "melding " + nr);
+      }
+    }catch(e){
+      uit.className="zoekuit bad";
+      uit.textContent = "Niet gevonden: " + (e.message||e) + ". Je kunt het met de hand invullen.";
+    }
+    knop.disabled = false;
+  }
+  if (MAG_BEWERKEN){
+    $("fZoekBtn").addEventListener("click", haalOrder);
+    // Enter in het zoekveld doet hetzelfde, en bewaart de afspraak niet.
+    $("fZoek").addEventListener("keydown", function(e){
+      if (e.key === "Enter"){ e.preventDefault(); haalOrder(); }
+    });
+  }
+
   function dicht(){ laag.remove(); }
   $("fTerug").addEventListener("click", dicht);
   laag.addEventListener("click", function(e){ if(e.target===laag) dicht(); });
