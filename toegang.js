@@ -276,10 +276,20 @@
        Dezelfde lijst als uren, dus letterlijk iedereen. */
     "vertalen": IEDEREEN,
     // Voorraadbeheer
+    /* Wie hier in staat ziet de tegel Voorraadbeheer. Wijzigen is een aparte
+       vraag: dat regelt KLANT_WIJZIG in voorraad.html, en wie daar niet in
+       staat kan alleen kijken - de vinkjes zijn dan uit én het netwerkslot
+       weigert elke opslagpoging.
+
+       Patrick Grosser erbij (Gerrit, 10 sep 2026: "Patrick Grosser ziet geen
+       Voorraadbeheer tegel. Graag toegang geven (alleen lezen!)"). Hij stond
+       wel in de planning-groep maar niet hier, en zag de tegel daardoor niet.
+       Hij logt in onder zijn oude accountnaam fonteyn.maartens; dat staat in
+       AFWIJKEND hierboven. */
     "voorraad": [
       "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
       "dali", "dolf", "edwin", "fonteynbot", "gerrit", "gerwin",
-      "kevin", "luis", "manon", "yves",
+      "kevin", "luis", "manon", "patrick", "yves",
     ],
   };
 

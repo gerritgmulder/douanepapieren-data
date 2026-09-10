@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-10", bestand: "voorraad.html", soort: "nieuw",
+      titel: "Patrick ziet Voorraadbeheer",
+      wat: "Patrick kan de tegel Voorraadbeheer nu openen, met de tabbladen Particulier en Partner. Meekijken kan, wijzigen niet.",
+    },
+
+    {
+      datum: "2026-09-10", bestand: "voorraad.html", soort: "nieuw",
       titel: "Een zoekbalk voor alles",
       wat: "Bovenaan Voorraadbeheer staat nu een zoekbalk die door alle tabbladen tegelijk zoekt. Typ een ordernummer, klantnaam of model en je ziet meteen waar die order staat: gereserveerd, op afroep, binnengekomen of gepland, met de verwachte levering erbij. Met de knop toon spring je naar de juiste lijst. Staat de order er helemaal niet bij, dan kun je Logic4 vragen waarom.",
     },
