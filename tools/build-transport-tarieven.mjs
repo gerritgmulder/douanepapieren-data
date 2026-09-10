@@ -183,9 +183,22 @@ for (const r of toeslagRows.slice(1)) {
   const code = String((r && r[0]) || "").match(/^([A-Z]{2})-Exp$/);
   const land = code ? code[1] : (String((r && r[1]) || "") === "Nederland" ? "NL" : null);
   if (!land) continue;
+  /* De klep staat er TWEE keer: kolom "Klep" en kolom "Klep (calc)". Alleen de
+     tweede is te vertrouwen. In kolom Klep staat bij Oostenrijk en Spanje 50
+     en bij Polen 0,1 - dat is de ene keer een bedrag en de andere keer een
+     percentage, in dezelfde kolom. In Klep (calc) staat consequent de factor:
+     leeg = geen toeslag, 1 = het vaste bedrag uit de kolom ernaast (Denemarken
+     150), en alles daartussen is een percentage over het tarief (Oostenrijk en
+     Spanje 1%, de rest 10%), met de bodem en het plafond uit de toelichting.
+
+     Zonder dit onderscheid werd 50 als een vast bedrag gelezen waar het 1%
+     hoort te zijn. Bij een spa komt dat toevallig op hetzelfde uit omdat 1%
+     onder de bodem van 50 euro blijft, maar bij een grote zending niet. */
+  const calc = r[2] == null || r[2] === "" ? null : Number(r[2]);
   toeslagen[land] = {
     kooiaap: Number(r[5]) || 0,
     klep: Number(r[3]) || 0,
+    klepCalc: isFinite(calc) ? calc : null,
     klepUitleg: String(r[4] || ""),
   };
 }
@@ -231,6 +244,24 @@ for (const [l, d] of Object.entries(landen))
 if (overgeslagen.length) console.log("overgeslagen tabbladen: " + overgeslagen.join(", "));
 console.log("toeslagen voor " + Object.keys(toeslagen).length + " landen, dieselstaffel " + diesel.length + " treden");
 console.log("Van Doesburg: " + uit.doesburg.banden.length + " laadmeterbanden, " + DOESBURG_KOLOMMEN.length + " gebieden");
+
+/* De dieseltoeslag van deze week NIET overschrijven.
+   ═══════════════════════════════════════════════════════════════════════════
+   Manon zet elke maandag de percentages die de vervoerders doorgeven, in de
+   tegel Voorraadbeheer. Hierboven staan er twee vaste getallen in 'uit', en
+   die zouden haar invoer bij elke herbouw van de tarieven wegvagen zonder dat
+   iemand het ziet - de bezorgkosten in het partnerportaal rekenen dan ineens
+   met een percentage van weken geleden. Dus: staat er al iets in de bucket,
+   dan blijft dat staan. */
+const bestaand = await (await fetch(BASE + "/data/transport-tarieven", {
+  headers: { "X-Fonteyn-Auth": teamKey },
+})).json().catch(() => null);
+const oudeDiesel = bestaand && (bestaand.data || bestaand).diesel;
+if (oudeDiesel && isFinite(Number(oudeDiesel.doesburg)) && isFinite(Number(oudeDiesel.heugten))) {
+  uit.diesel = oudeDiesel;
+  console.log("dieseltoeslag overgenomen uit de bucket: Doesburg " + oudeDiesel.doesburg +
+              "%, Van Heugten " + oudeDiesel.heugten + "% (gezet " + (oudeDiesel.gezet || "?") + ")");
+}
 
 const r = await fetch(BASE + "/data/transport-tarieven", {
   method: "PUT",
