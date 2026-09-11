@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-11", bestand: "planning.html", soort: "beter",
+      titel: "Tijdraster: routes naast elkaar, zoeken, en afspraken over meerdere dagen",
+      wat: "In het tijdraster staan de routes van een dag nu naast elkaar, met R1, R2, R3 en de naam van de rijder erboven. Een blok laat het ordernummer, het ITS-nummer en de klantnaam zien; de tijden staan al aan de zijkant. Er is een zoekbalk die op ordernummer, klantnaam of ITS-nummer zoekt en de treffers uitlicht. Een afspraak zonder tijd kan nu tot en met een latere dag lopen, bijvoorbeeld 'Kevin vakantie' drie weken lang als balk bovenaan. Een nieuwe afspraak staat standaard op 2 uur. En een ITS-nummer opzoeken haalt nu ook naam, adres en telefoon van de klant op.",
+    },
+
+    {
       datum: "2026-09-10", iedereen: true, soort: "nieuw",
       titel: "Zet het dashboard in je eigen volgorde",
       wat: "Rechtsboven bij de begroeting staat nu een tandwiel met 'Indeling'. Daarmee zet je de afdelingen en de tegels in de volgorde die jij handig vindt, en kies je of de uitleg onder elke afdelingskop zichtbaar is. Het wordt meteen bewaard en geldt alleen voor jou. De afdelingskoppen zijn kleiner geworden en de tegels iets compacter, zodat je minder hoeft te scrollen.",

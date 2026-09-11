@@ -101,7 +101,25 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 /* ── het agendaraster ── */
 .agenda{background:#fff;border:1px solid var(--rand);border-radius:12px;overflow:hidden}
 .agenda-scroll{overflow:auto;max-height:calc(100vh - 240px);min-height:420px;position:relative}
-.rooster{display:grid;grid-template-columns:52px repeat(var(--dagen,7),minmax(120px,1fr));min-width:900px}
+.rooster{display:grid;grid-template-columns:52px repeat(var(--dagen,7),minmax(var(--dagbreedte,96px),1fr))}
+/* De routes van een dag naast elkaar, met hun naam erboven. */
+.routekop-cel{display:flex;border-bottom:1px solid var(--rand);border-left:1px solid #f3f4f6;background:#fbfbf9}
+.routekop{flex:1 1 0;min-width:0;padding:3px 4px;font-size:10px;line-height:1.25;border-left:1px dashed #e5e7eb;overflow:hidden}
+.routekop:first-child{border-left:0}
+.routekop .rnr{display:inline-block;background:var(--groen);color:#fff;border-radius:4px;padding:0 4px;font-weight:700;font-size:9.5px;margin-right:3px}
+.routekop .rwie{color:var(--grijs);white-space:nowrap}
+.routekol{position:absolute;top:0;bottom:0}
+.routekol.scheiding{border-left:1px dashed #e5e7eb}
+/* Zoeken in het raster: raak licht op, de rest wordt vaag. */
+.rasterzoek{display:flex;align-items:center;gap:10px;margin:-4px 0 10px}
+.rasterzoek input{border:1px solid var(--rand);border-radius:9px;padding:8px 12px;font:inherit;font-size:13px;width:340px;max-width:100%}
+.rasterzoek span{font-size:12px;color:var(--grijs)}
+.rasterzoek span button{background:#fff;border:1px solid var(--rand);border-radius:7px;padding:3px 9px;font:inherit;font-size:12px;cursor:pointer;color:var(--groen);font-weight:600}
+.blok.zoek-raak,.hd-blok.zoek-raak{box-shadow:0 0 0 2px #c8102e,0 3px 10px rgba(200,16,46,.25);z-index:7!important}
+.blok.zoek-dim,.hd-blok.zoek-dim{opacity:.28}
+/* Een hele-dag-balk die doorloopt naar de volgende dag. */
+.hd-blok.door-rechts{border-top-right-radius:0;border-bottom-right-radius:0;margin-right:-4px}
+.hd-blok.door-links{border-top-left-radius:0;border-bottom-left-radius:0;border-left-width:0;margin-left:-4px}
 .dag-kop{position:sticky;top:0;background:#fff;z-index:6;border-bottom:1px solid var(--rand);
        padding:8px 8px 6px;text-align:left}
 .dag-kop .dnaam{font-size:11px;color:var(--grijs);text-transform:lowercase}
@@ -124,7 +142,7 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .blok{position:absolute;border-radius:7px;padding:4px 6px;font-size:11px;line-height:1.3;cursor:pointer;
       overflow:hidden;border-left:4px solid;box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .blok:hover{box-shadow:0 3px 10px rgba(0,0,0,.18);z-index:5!important}
-.blok .t{font-weight:700;font-size:10.5px}
+.blok .nr{font-weight:700;font-size:10px;letter-spacing:.02em;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .blok .k{font-weight:600;font-size:11.5px}
 .blok .s{opacity:.8;font-size:10.5px}
 .blok .d{opacity:.7;font-size:10px;font-style:italic}
@@ -341,6 +359,7 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .formkaart input:focus,.formkaart select:focus,.formkaart textarea:focus{outline:2px solid var(--lime);outline-offset:-1px}
 .formkaart .rij{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
 .formkaart .rij2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.formkaart .heledagtot{margin-top:2px}
 /* Twee kolommen naast elkaar: links de afspraak, rechts de klantgegevens.
    Op een smal scherm vallen ze onder elkaar en mag er wél gescrold worden. */
 .formkaart .kolommen{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
@@ -387,6 +406,15 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
       <button type="button" data-weergave="routes" class="aan">Routes</button>
       <button type="button" data-weergave="tijd">Tijdraster</button>
     </span>
+  </div>
+  <!-- Zoeken in het tijdraster. Gerrit (11 sep 2026): "een zoekbalk waarin je
+       gemakkelijk het ordernummer, klantnaam of ITS-nummer kunt invullen en hij
+       die dan in de planning uitlicht." Wat raak is licht op, de rest wordt
+       vaag; staat de treffer buiten de periode die je ziet, dan springt de
+       knop ernaartoe. -->
+  <div class="rasterzoek" id="rasterZoekBalk">
+    <input id="rasterZoek" placeholder="Zoek op ordernummer, klantnaam of ITS-nummer" autocomplete="off">
+    <span id="rasterZoekUit"></span>
   </div>
   <div class="legenda" id="legenda">
     <!-- Wie er nog meer in de agenda kijkt, en een kort seintje als een
@@ -746,7 +774,7 @@ function weekLijst(){
     var dag = new Date(begin); dag.setDate(dag.getDate()+i);
     var dISO = iso(dag);
     uit.push({ datum: dag, iso: dISO,
-      items: afspraken.filter(function(a){ return a.datum===dISO && !filterUit[a.soort]; })
+      items: afspraken.filter(function(a){ return opDag(a, dISO) && !filterUit[a.soort]; })
         .sort(function(a,b){ return String(a.tijd||"99").localeCompare(String(b.tijd||"99")); }) });
   }
   return uit;
@@ -781,6 +809,7 @@ function teken(){
   $("bord").style.display = routeStand ? "" : "none";
   var ah = $("agendaHouder"); if (ah) ah.style.display = routeStand ? "none" : "";
   var lj = $("lijst"); if (lj) lj.style.display = routeStand ? "none" : "";
+  var zb = $("rasterZoekBalk"); if (zb) zb.style.display = routeStand ? "none" : "";
   /* Op het bord staan de dagen naast elkaar en schuift het horizontaal; dat
      werkt ook op een telefoon, dus daar is geen aparte lijstweergave voor
      nodig. */
@@ -796,13 +825,32 @@ function teken(){
       '<span class="dnaam">'+DAGKORT[dagIndex(w.datum)]+'</span><br><span class="dnum">'+w.datum.getDate()+'</span></div>';
   });
 
+  /* De routes van de dag, naast elkaar. Gerrit (11 sep 2026): "je moet bij
+     TIJDRASTER ook kunnen zien om welke route het gaat" en "dat de routes
+     naast elkaar staan". Elke dag krijgt per route een eigen strook, met de
+     naam van de route erboven; wie er rijdt staat erbij zodra dat op het
+     routebord is ingevuld. */
+  html += '<div class="heledag-label">route</div>';
+  week.forEach(function(w){
+    var routes = routesVan(w.iso);
+    html += '<div class="routekop-cel">'+routes.map(function(r){
+      return '<div class="routekop"><span class="rnr">R'+r.nr+'</span>'+(r.wie?'<span class="rwie">'+esc(r.wie)+'</span>':'')+'</div>';
+    }).join("")+'</div>';
+  });
+
   html += '<div class="heledag-label">hele dag</div>';
   week.forEach(function(w){
     var hd = w.items.filter(function(a){ return minuten(a.tijd)===null; });
     html += '<div class="heledag-cel">'+hd.map(function(a){
       var c = cat(a);
-      return '<div class="hd-blok'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="background:'+c.zacht+';border-left-color:'+c.kleur+'">'+
-        betaalStip(a)+esc(a.klant||c.naam)+(a.wie?' · '+esc(a.wie):'')+'</div>';
+      /* Een afspraak over meerdere dagen is één balk die doorloopt: geen
+         ronde hoek aan de kant waar hij verder gaat, en de tekst alleen op
+         de eerste dag in beeld. */
+      var meer = a.datumTot && a.datumTot > a.datum;
+      var eersteZicht = !meer || a.datum === w.iso || w.iso === week[0].iso;
+      var kl = "hd-blok"+(a.klaar?" klaar":"")+zoekKlas(a)+(meer && a.datum !== w.iso ? " door-links" : "")+(meer && a.datumTot !== w.iso ? " door-rechts" : "");
+      return '<div class="'+kl+'" data-id="'+esc(a.id)+'" style="background:'+c.zacht+';border-left-color:'+c.kleur+'" title="'+esc(a.klant||c.naam)+(meer?' · '+esc(a.datum)+' t/m '+esc(a.datumTot):'')+'">'+
+        (eersteZicht ? betaalStip(a)+esc(a.klant||c.naam)+(a.wie?' · '+esc(a.wie):'') : '&nbsp;')+'</div>';
     }).join("")+'</div>';
   });
 
@@ -812,8 +860,11 @@ function teken(){
     html += '<div class="uur-label" style="position:absolute;right:0;top:'+((u-UUR_VAN)*UUR_PX)+'px;width:100%">'+String(u).padStart(2,"0")+'</div>';
   html += '</div>';
 
+  var maxRoutes = 1;
   week.forEach(function(w,di){
     var isWeekend = di>=5;
+    var routes = routesVan(w.iso);
+    maxRoutes = Math.max(maxRoutes, routes.length);
     html += '<div class="dag-cel'+(isWeekend?" weekend":"")+'" data-datum="'+w.iso+'" style="height:'+(uren*UUR_PX)+'px">';
     for (var u2=1; u2<uren; u2++) html += '<div class="uurlijn" style="top:'+(u2*UUR_PX)+'px"></div>';
     if (w.iso===vandaagISO){
@@ -821,11 +872,26 @@ function teken(){
       var y = (nm - UUR_VAN*60)/60*UUR_PX;
       if (y>0 && y<uren*UUR_PX) html += '<div class="nu-lijn" style="top:'+y+'px"></div>';
     }
-    html += blokken(w.items) + '</div>';
+    /* Per route een eigen strook in de dagkolom. Een afspraak zonder
+       routenummer hoort bij de eerste route, net als op het bord. */
+    var br = 100/routes.length;
+    routes.forEach(function(r, ri){
+      var items = w.items.filter(function(a){
+        if (minuten(a.tijd)===null) return false;
+        var rn = Number(a.route)||0;
+        return rn === r.nr || (!rn && ri===0);
+      });
+      html += '<div class="routekol'+(ri>0?" scheiding":"")+'" data-datum="'+w.iso+'" data-nr="'+r.nr+'" style="left:'+(ri*br)+'%;width:'+br+'%">'+blokken(items)+'</div>';
+    });
+    html += '</div>';
   });
 
   $("rooster").style.setProperty("--dagen", week.length);
-  $("rooster").style.minWidth = Math.max(900, 52 + week.length*120) + "px";
+  /* Breed genoeg voor de routes naast elkaar, maar nooit breder dan het
+     venster: opzij schuiven mag niet. Past het niet, dan worden de stroken
+     smaller en zie je in het blok alleen het nummer en de naam. */
+  $("rooster").style.minWidth = "0";
+  $("rooster").style.setProperty("--dagbreedte", Math.max(96, 84*maxRoutes) + "px");
   $("rooster").innerHTML = html;
 
   // telefoonweergave
@@ -854,13 +920,16 @@ function teken(){
   });
   // Ook het meldingenpaneel bijwerken: "in de planning" kan veranderd zijn.
   if (itsMeldingen !== null) itsTeken();
+  rasterZoekBijwerken();
   // Klik op een leeg stuk dag = nieuwe afspraak op dat tijdstip, afgerond op het halve uur.
   document.querySelectorAll(".dag-cel").forEach(function(cel){
     if (!MAG_BEWERKEN) return;
     cel.addEventListener("click", function(e){
-      if (e.target!==cel && !e.target.classList.contains("uurlijn")) return;
+      var strook = e.target.classList.contains("routekol") ? e.target : null;
+      if (e.target!==cel && !strook && !e.target.classList.contains("uurlijn")) return;
       var y = e.offsetY, min = UUR_VAN*60 + Math.round(y/UUR_PX*60/30)*30;
-      openForm(null, cel.dataset.datum, tijdStr(Math.max(UUR_VAN*60, Math.min(UUR_TOT*60-30, min))));
+      openForm(null, cel.dataset.datum, tijdStr(Math.max(UUR_VAN*60, Math.min(UUR_TOT*60-30, min))),
+        strook ? { route: Number(strook.dataset.nr) } : undefined);
     });
   });
 }
@@ -933,8 +1002,14 @@ function routesVan(dISO){
    afdeling staan die als balkjes bovenaan de dag, niet in een route. */
 function heleDagVan(dISO){
   return afspraken.filter(function(a){
-    return a.datum === dISO && !filterUit[a.soort] && minuten(a.tijd) === null;
+    return opDag(a, dISO) && !filterUit[a.soort] && minuten(a.tijd) === null;
   });
+}
+/* Valt deze afspraak op deze dag? Een gewone afspraak alleen op zijn eigen
+   datum; een hele-dag-afspraak met 'tot en met' op elke dag ertussen. */
+function opDag(a, dISO){
+  if (a.datum === dISO) return true;
+  return !!(a.datumTot && minuten(a.tijd) === null && a.datum <= dISO && dISO <= a.datumTot);
 }
 /* De stops van één route, op volgorde. 'volg' is de handmatige volgorde die
    ontstaat als iemand stops binnen een route versleept; staat die er niet,
@@ -1346,11 +1421,14 @@ function startSleep(e){
   var beginHoog = parseFloat(el.style.height) || UUR_PX;
   var beginVan = minuten(a.tijd) || UUR_VAN*60;
   var beginDuur = Number(a.duurMin) || 60;
-  var kolommen = [].slice.call(document.querySelectorAll(".dag-cel")).map(function(c){
+  /* De stroken zijn de routes van elke dag; slepen naar een andere strook
+     zet de afspraak in die route. */
+  var kolommen = [].slice.call(document.querySelectorAll(".routekol")).map(function(c){
     var r = c.getBoundingClientRect();
-    return { datum: c.dataset.datum, links: r.left, rechts: r.right, cel: c };
+    return { datum: c.dataset.datum, nr: Number(c.dataset.nr)||1, links: r.left, rechts: r.right, cel: c };
   });
-  var bezig = false, nieuweDatum = a.datum, nieuwVan = beginVan, nieuweDuur = beginDuur;
+  var beginRoute = Number(a.route)||0;
+  var bezig = false, nieuweDatum = a.datum, nieuweRoute = beginRoute, nieuwVan = beginVan, nieuweDuur = beginDuur;
 
   function beweeg(ev){
     var dx = ev.clientX - startX, dy = ev.clientY - startY;
@@ -1367,16 +1445,16 @@ function startSleep(e){
     }
     // verplaatsen: eerst de dag onder de muis, dan het tijdstip
     var kol = kolommen.find(function(k){ return ev.clientX >= k.links && ev.clientX <= k.rechts; });
-    if (kol && kol.datum !== nieuweDatum){
-      nieuweDatum = kol.datum;
-      kol.cel.appendChild(el);                 // in de kolom van die dag hangen
+    if (kol && (kol.datum !== nieuweDatum || kol.nr !== nieuweRoute)){
+      nieuweDatum = kol.datum; nieuweRoute = kol.nr;
+      kol.cel.appendChild(el);                 // in de strook van die dag en route hangen
       el.style.left = "2px"; el.style.width = "calc(100% - 5px)"; el.style.zIndex = 40;
     }
     var top = beginTop + dy;
     nieuwVan = Math.round((top/UUR_PX*60 + UUR_VAN*60)/SNAP)*SNAP;
     nieuwVan = Math.max(UUR_VAN*60, Math.min(UUR_TOT*60 - nieuweDuur, nieuwVan));
     el.style.top = ((nieuwVan - UUR_VAN*60)/60*UUR_PX)+"px";
-    toonTip(ev, dagNaam(nieuweDatum)+"  "+tijdStr(nieuwVan)+" - "+tijdStr(nieuwVan+nieuweDuur));
+    toonTip(ev, dagNaam(nieuweDatum)+"  "+tijdStr(nieuwVan)+" - "+tijdStr(nieuwVan+nieuweDuur)+"  ·  route "+nieuweRoute);
   }
   async function los(ev){
     document.removeEventListener("mousemove", beweeg);
@@ -1387,9 +1465,10 @@ function startSleep(e){
     el.dataset.gesleept = "1";                 // de klik hierna niet als klik tellen
     var b = rekken
       ? { duurMin: nieuweDuur }
-      : { datum: nieuweDatum, tijd: tijdStr(nieuwVan) };
+      : { datum: nieuweDatum, tijd: tijdStr(nieuwVan), route: nieuweRoute || null };
     if ((b.datum===a.datum || b.datum===undefined) && (b.tijd===a.tijd || b.tijd===undefined)
-        && (b.duurMin===a.duurMin || b.duurMin===undefined)) { teken(); return; }
+        && (b.duurMin===a.duurMin || b.duurMin===undefined)
+        && (b.route===undefined || (Number(b.route)||0)===beginRoute)) { teken(); return; }
     try{
       await bewaar(function(lijst){
         var i = lijst.findIndex(function(x){ return x.id===a.id; });
@@ -1473,6 +1552,38 @@ function bewerkNaam(el, naam){
   vak.addEventListener("click", function(e){ e.stopPropagation(); });
 }
 
+/* Zoeken in het raster: welke afspraak is raak op wat er in de zoekbalk
+   staat. Ordernummer en ITS-nummer op de cijfers, de klantnaam op tekst. */
+var rasterZoekTekst = "";
+function zoekRaak(a){
+  var q = rasterZoekTekst;
+  if (!q) return false;
+  var cijfers = q.replace(/\D/g,"");
+  if (cijfers.length >= 3 && (String(a.ordernr||"").indexOf(cijfers) >= 0 || String(a.itsId||"").indexOf(cijfers) >= 0)) return true;
+  return String(a.klant||"").toLowerCase().indexOf(q.toLowerCase()) >= 0;
+}
+function zoekKlas(a){
+  if (!rasterZoekTekst) return "";
+  return zoekRaak(a) ? " zoek-raak" : " zoek-dim";
+}
+function rasterZoekBijwerken(){
+  var uit = $("rasterZoekUit"); if (!uit) return;
+  if (!rasterZoekTekst){ uit.innerHTML = ""; return; }
+  var week = weekLijst();
+  var inBeeld = 0;
+  week.forEach(function(w){ w.items.forEach(function(a){ if (zoekRaak(a)) inBeeld++; }); });
+  var alle = afspraken.filter(zoekRaak).sort(function(x,y){ return String(x.datum).localeCompare(String(y.datum)); });
+  if (inBeeld){ uit.innerHTML = inBeeld + " in beeld"; return; }
+  if (!alle.length){ uit.innerHTML = "niets gevonden"; return; }
+  var vandaag = iso(new Date());
+  var doel = alle.find(function(a){ return a.datum >= vandaag; }) || alle[alle.length-1];
+  uit.innerHTML = 'niet in deze periode · <button type="button" id="rasterZoekSpring">ga naar '+esc(dagNaam(doel.datum))+' '+esc(doel.datum.slice(8,10))+'-'+esc(doel.datum.slice(5,7))+'</button>';
+  $("rasterZoekSpring").addEventListener("click", function(){
+    maandag = weekStart(new Date(doel.datum+"T12:00:00"));
+    if (periode === "dag") maandag = new Date(doel.datum+"T12:00:00");
+    teken();
+  });
+}
 function blokken(items){
   var met = items.map(function(a){
     var van = minuten(a.tijd);
@@ -1507,12 +1618,15 @@ function blokken(items){
     var plander = a.door ? '<span class="planner" title="Ingepland door '+esc(planNaam(a.door))+
       (a.gewijzigdDoor && a.gewijzigdDoor!==a.door ? ', laatst gewijzigd door '+esc(planNaam(a.gewijzigdDoor)) : '')+'">'+
       esc(planNaam(a.door).slice(0,1).toUpperCase())+'</span>' : "";
-    return '<div class="blok'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" data-datum="'+esc(a.datum)+'" style="top:'+top+'px;height:'+hoog+'px;'+
+    return '<div class="blok'+(a.klaar?" klaar":"")+zoekKlas(a)+'" data-id="'+esc(a.id)+'" data-datum="'+esc(a.datum)+'" title="'+esc(a.tijd)+(a.duurMin?' - '+tijdStr(b.tot):'')+(a.wie?' · '+esc(a.wie):'')+'" style="top:'+top+'px;height:'+hoog+'px;'+
       'left:calc('+links+'% + 2px);width:calc('+w+'% - 5px);background:'+c.zacht+';border-left-color:'+c.kleur+';z-index:'+(2+b.lane)+'">'+
       plander+
-      '<div class="t">'+esc(a.tijd)+(a.duurMin?'-'+tijdStr(b.tot):'')+'</div>'+
+      /* Gerrit (11 sep 2026): de tijden staan al aan de zijkant, dus die
+         hoeven niet in het blok. Wat er wél in moet: ordernummer,
+         ITS-nummer en klantnaam. De tijden staan nog in de tip. */
+      ((a.ordernr||a.itsId)?'<div class="nr">'+(a.ordernr?esc(a.ordernr):'')+(a.ordernr&&a.itsId?' · ':'')+(a.itsId?'ITS '+esc(a.itsId):'')+'</div>':'')+
       '<div class="k" data-bewerk="klant" title="Klik om de naam aan te passen">'+betaalStip(a)+esc(a.klant||c.naam)+'</div>'+
-      (hoog>50&&sub?'<div class="s">'+esc(sub)+'</div>':"")+
+      (hoog>62&&sub?'<div class="s">'+esc(sub)+'</div>':"")+
       (hoog>66&&a.wie?'<div class="s">\ud83d\udc64 '+esc(a.wie)+'</div>':"")+
       (hoog>82&&a.door?'<div class="d">ingepland door '+esc(planNaam(a.door))+'</div>':"")+
       '<div class="greep" title="Sleep om de afspraak langer of korter te maken"></div></div>';
@@ -1538,7 +1652,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   var a = id ? afspraken.find(function(x){ return x.id===id; }) : null;
   var nieuw = !a;
   if (nieuw) a = Object.assign({ id:"p"+Date.now()+Math.random().toString(36).slice(2,6),
-    datum: datumVoorstel || iso(new Date()), tijd: tijdVoorstel||"", duurMin: 60, soort:"levering",
+    datum: datumVoorstel || iso(new Date()), tijd: tijdVoorstel||"", duurMin: 120, soort:"levering",
     klant:"", telefoon:"", plaats:"", ordernr:"", wat:"", wie:"", klaar:false, route:null }, voorvul || {});
 
   var namen = {};
@@ -1576,13 +1690,20 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     '<div class="rij"><div><label>Datum</label><input type="date" id="fDatum" value="'+esc(a.datum)+'"></div>'+
     '<div><label>Tijd (leeg = hele dag)</label><input type="time" id="fTijd" value="'+esc(a.tijd)+'"></div>'+
     '<div><label>Duur</label><select id="fDuur">'+DUUR.map(function(d){
-      return '<option value="'+d[0]+'"'+(Number(a.duurMin||60)===d[0]?" selected":"")+'>'+d[1]+'</option>'; }).join("")+'</select></div></div>'+
+      return '<option value="'+d[0]+'"'+(Number(a.duurMin||120)===d[0]?" selected":"")+'>'+d[1]+'</option>'; }).join("")+'</select></div></div>'+
+    /* Meerdere dagen. Gerrit (11 sep 2026): "als Kevin 3 weken op vakantie
+       gaat, dan moet iedereen in de planning bovenaan kunnen zien dat die
+       balk doorloopt". Alleen voor een afspraak zonder tijd (hele dag): een
+       stop van twee uur loopt niet over drie dagen. */
+    '<div class="rij2 heledagtot"><div><label>Tot en met (alleen bij hele dag)</label><input type="date" id="fDatumTot" value="'+esc(a.datumTot||"")+'"></div>'+
+    '<div style="align-self:end;font-size:11.5px;color:var(--grijs);padding-bottom:9px">Laat Tijd leeg en kies hier de laatste dag, dan loopt de balk bovenaan door.</div></div>'+
     '<label>Wie gaat erheen</label><input id="fWie" maxlength="80" value="'+esc(a.wie)+'" list="fNamen" placeholder="Naam of team">'+
     '<datalist id="fNamen">'+Object.keys(namen).sort().map(function(n){ return '<option value="'+esc(n)+'">'; }).join("")+'</datalist>'+
     '</div><div>'+
     '<label>Klant of onderwerp</label><input id="fKlant" maxlength="120" value="'+esc(a.klant)+'" placeholder="Naam van de klant">'+
-    '<div class="rij2"><div><label>Telefoon</label><input id="fTel" maxlength="30" value="'+esc(a.telefoon)+'"></div>'+
-    '<div><label>Ordernummer (mag leeg)</label><input id="fOrder" maxlength="20" value="'+esc(a.ordernr)+'"></div></div>'+
+    '<div class="rij"><div><label>Telefoon</label><input id="fTel" maxlength="30" value="'+esc(a.telefoon)+'"></div>'+
+    '<div><label>Ordernummer</label><input id="fOrder" maxlength="20" value="'+esc(a.ordernr)+'"></div>'+
+    '<div><label>ITS-nummer</label><input id="fIts" maxlength="12" value="'+esc(a.itsId||"")+'"></div></div>'+
     '<label>Plaats of adres</label><input id="fPlaats" maxlength="160" value="'+esc(a.plaats)+'">'+
     '<label>Wat (model, klus, bijzonderheden)</label><textarea id="fWat" rows="3" maxlength="400">'+esc(a.wat)+'</textarea>'+
     '</div></div>'+
@@ -1630,7 +1751,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       if (el && waarde && !String(el.value||"").trim()) el.value = waarde;
     };
     try{
-      if (/^\d{6,9}$/.test(nr)){
+      if (/^\d{7,9}$/.test(nr)){
         var r = await fetch(W+"/planning/route-print?orders="+encodeURIComponent(nr),
           { headers: { "X-Fonteyn-Auth": teamKey() } });
         var j = await r.json().catch(function(){ return null; });
@@ -1653,16 +1774,36 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       } else {
         // ITS: de servicemelding kent zijn debiteur, en daar zitten de
         // klantgegevens aan vast.
+        /* Gerrit (11 sep 2026): "bij het invoeren van een ITS-melding
+           [laadt hij] niet de klantgegevens (en niet alleen de melding)". De
+           melding zelf kent alleen de naam en het debiteurnummer; naam,
+           adres en telefoon komen van de debiteur, net als bij Inplannen
+           vanuit het meldingenpaneel. */
         var r2 = await fetch(W+"/planning/its", { headers: { "X-Fonteyn-Auth": teamKey() } });
         var j2 = await r2.json().catch(function(){ return null; });
-        var m = ((j2&&j2.meldingen)||[]).find(function(x){ return String(x.nr||x.id||"").replace(/\D/g,"") === nr.replace(/\D/g,""); });
-        if (!m) throw new Error("dit ITS-nummer staat niet in de openstaande servicemeldingen");
-        zet("fKlant", m.klant || "");
-        zet("fTel", m.telefoon || "");
-        zet("fPlaats", m.plaats || m.adres || "");
-        zet("fWat", m.omschrijving || m.wat || "");
+        var kaal = nr.replace(/\D/g,"");
+        var m = ((j2&&j2.meldingen)||[]).find(function(x){ return String(x.id||"") === kaal; });
+        if (!m){
+          if (/^\d{5,6}$/.test(kaal)) throw new Error("geen servicemelding met nummer "+kaal+" (openstaand, laatste half jaar)");
+          throw new Error("dit ITS-nummer staat niet in de openstaande servicemeldingen");
+        }
+        var klant = null;
+        if (m.debiteur){
+          try{
+            var r3 = await fetch(W+"/planning/its/klant?debiteur="+m.debiteur, { headers:{ "X-Fonteyn-Auth": teamKey() } });
+            var j3 = await r3.json();
+            if (j3.ok) klant = j3.klant;
+          }catch(e){}
+        }
+        zet("fKlant", (klant && klant.naam) || m.naam || "");
+        zet("fTel", (klant && klant.telefoon) || "");
+        zet("fPlaats", (klant && klant.adres) || "");
+        zet("fWat", ("Melding "+m.id+" \u00b7 "+[m.groep, (m.omschrijving||"").slice(0,140)].filter(Boolean).join(" \u00b7 ")).slice(0,400));
+        zet("fIts", String(m.id));
+        if (soort === "levering"){ soort = "service"; var sb = $("fCats").querySelector('[data-cat="service"]'); if (sb) sb.click(); }
         uit.className="zoekuit ok";
-        uit.textContent = "Gevonden: " + (m.klant || "melding " + nr);
+        uit.textContent = "Gevonden: melding " + m.id + " van " + ((klant && klant.naam) || m.naam || "?") +
+          (klant ? "" : " (klantgegevens niet gevonden bij de debiteur)");
       }
     }catch(e){
       uit.className="zoekuit bad";
@@ -1685,12 +1826,15 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   if (MAG_BEWERKEN) $("fDoe").addEventListener("click", async function(){
     var b = {
       id: a.id, datum: $("fDatum").value, tijd: $("fTijd").value,
-      duurMin: Number($("fDuur").value)||60, soort: soort,
+      duurMin: Number($("fDuur").value)||120, soort: soort,
+      /* Alleen een hele-dag-afspraak mag over meerdere dagen lopen, en de
+         einddatum moet ná de begindatum liggen; anders is er geen balk. */
+      datumTot: (!$("fTijd").value && $("fDatumTot").value && $("fDatumTot").value > $("fDatum").value) ? $("fDatumTot").value : null,
       klant: $("fKlant").value.trim(), telefoon: $("fTel").value.trim(),
       plaats: $("fPlaats").value.trim(), ordernr: $("fOrder").value.trim(),
       wat: $("fWat").value.trim(), wie: $("fWie").value.trim(),
       klaar: nieuw ? false : $("fKlaar").checked,
-      itsId: a.itsId || null,
+      itsId: Number(String($("fIts").value||"").replace(/\D/g,"")) || null,
       route: a.route || null,          // bij welke route van die dag hij hoort
       volg: a.volg != null ? a.volg : null,
       letop: $("fLetop").checked,
@@ -1804,6 +1948,11 @@ $("itsKnop").addEventListener("click", function(){
   if (aan && itsMeldingen === null) itsLaad();
 });
 $("itsZoek").addEventListener("input", function(){ itsToon = 30; itsTeken(); });
+var rasterZoekTimer = null;
+$("rasterZoek").addEventListener("input", function(){
+  clearTimeout(rasterZoekTimer);
+  rasterZoekTimer = setTimeout(function(){ rasterZoekTekst = $("rasterZoek").value.trim(); teken(); }, 180);
+});
 
 /* ── route van de dag ──
    De adressen van een dag in tijdsvolgorde, als route in Google Maps -
