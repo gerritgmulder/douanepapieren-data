@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-11", iedereen: true, soort: "beter",
+      titel: "Overal hetzelfde streepje",
+      wat: "In Voorraadbeheer, Passion Partners Beheer en het partnerportaal stonden in kopjes en teksten nog lange streepjes. Die zijn overal het gewone korte streepje geworden.",
+    },
+
+    {
       datum: "2026-09-11", bestand: "planning.html", soort: "beter",
       titel: "Hele dagen als lange balk boven het tijdraster",
       wat: "In het afsprakenvenster staat nu een vinkje 'Hele dag, of meerdere dagen achter elkaar'. Zet je dat aan, dan kies je een eerste en een laatste dag in plaats van een tijd. Zo'n afspraak staat niet meer tussen de afspraken in het raster maar als één lange balk erboven, over alle dagen die hij duurt. Een vakantie van drie weken is dus één balk.",

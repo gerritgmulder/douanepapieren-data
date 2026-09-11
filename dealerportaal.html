@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
-<title>Passion Partners Beheer — Fonteyn Dashboard</title>
+<title>Passion Partners Beheer - Fonteyn Dashboard</title>
 <script src="toegang.js"></script>
 <script src="taal.js"></script>
 <script src="kop.js"></script>
@@ -135,7 +135,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <img class="logo" src="passion-logo.png" alt="Passion Spas">
   <h1>Passion Partners Beheer</h1>
   <a class="back" href="dashboard.html">← Dashboard</a>
-  <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
+  <div class="user-chip">Ingelogd als <b id="userEmail">-</b></div>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
@@ -145,14 +145,14 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     Beheer hier wie er in het <b>partnerportaal</b> kan (magic-link login op e-mailadres),
     welke <b>documenten</b> partners zien, en waar contactvragen binnenkomen.
     Adres van <b>Passion Partners</b> (het publieke portaal): <a id="portalLink" href="https://partner.passionspas.com/dealers" target="_blank" rel="noopener"><code>partner.passionspas.com/dealers</code></a>
-    <em>(later: partners.fonteyn.nl)</em>. Partners zien alleen geaggregeerde voorraad — geen klantnamen of inkoopprijzen.
+    <em>(later: partners.fonteyn.nl)</em>. Partners zien alleen geaggregeerde voorraad - geen klantnamen of inkoopprijzen.
   </p>
 
   <div id="status" class="status-msg hidden"></div>
 
   <div class="card hidden" id="keyCard">
     <h3>🔐 Beheersleutel</h3>
-    <p class="lead" style="margin-bottom:10px">Partner-data is extra beveiligd. Voer de beheersleutel in (vraag Gerrit) — dit hoeft maar één keer per computer. <b>Zolang de sleutel ontbreekt blijft alles hieronder leeg en kun je niets invullen of bewaren</b> — ook het invoeren van een nieuwe dealer of partner werkt dan niet.</p>
+    <p class="lead" style="margin-bottom:10px">Partner-data is extra beveiligd. Voer de beheersleutel in (vraag Gerrit) - dit hoeft maar één keer per computer. <b>Zolang de sleutel ontbreekt blijft alles hieronder leeg en kun je niets invullen of bewaren</b> - ook het invoeren van een nieuwe dealer of partner werkt dan niet.</p>
     <div class="row">
       <input id="keyInput" type="password" placeholder="beheersleutel" style="min-width:340px">
       <button class="primary" id="keySave" type="button">Ontgrendel</button>
@@ -189,7 +189,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <input id="nCompany" placeholder="Bedrijfsnaam" style="min-width:180px">
       <input id="nDebtors" placeholder="debiteurnr(s), verplicht" style="min-width:170px">
       <select id="nSoort" title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een ander prijsniveau; die krijgt juist die prijslijsten niet te zien, want daarin staat wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt." style="min-width:150px">
-        <option value="">&mdash; partner of dealer? &mdash;</option>
+        <option value="">- partner of dealer? -</option>
         <option value="partner">Partner</option>
         <option value="dealer">Dealer</option>
       </select>
@@ -198,8 +198,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   </div>
 
   <div class="card">
-    <h3>Reserveringen — aanbetaald (<span id="reqCount">0</span>)</h3>
-    <p class="lead" style="margin-bottom:10px">Partners die <b>daadwerkelijk hebben aanbetaald</b>. Deze zijn <b>automatisch</b> als order in Logic4 gezet en claimen voorraad — je hoeft hier niets goed te keuren. Alleen ter info.</p>
+    <h3>Reserveringen - aanbetaald (<span id="reqCount">0</span>)</h3>
+    <p class="lead" style="margin-bottom:10px">Partners die <b>daadwerkelijk hebben aanbetaald</b>. Deze zijn <b>automatisch</b> als order in Logic4 gezet en claimen voorraad - je hoeft hier niets goed te keuren. Alleen ter info.</p>
     <table class="grid">
       <thead><tr><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Aanbetaling</th><th>Logic4-order</th><th></th></tr></thead>
       <tbody id="reqBodyPaid"></tbody>
@@ -226,7 +226,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   </div>
 
   <div class="card">
-    <h3>Aanvragen zonder aanbetaling — leads (<span id="leadCount">0</span>)</h3>
+    <h3>Aanvragen zonder aanbetaling - leads (<span id="leadCount">0</span>)</h3>
     <p class="lead" style="margin-bottom:10px">Partners die een reservering startten maar (nog) <b>niet aanbetaalden</b>. Dit zijn <b>geen</b> reserveringen: ze claimen geen voorraad en staan niet in Logic4. Bel na of archiveer ze.
       <label style="margin-left:8px;font-size:12px;color:var(--ink)"><input type="checkbox" id="showArch" style="vertical-align:-1px"> toon gearchiveerd</label></p>
     <table class="grid">
@@ -280,7 +280,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
        Hier gaat het bestand zelf naar binnen: kies de map, kies het bestand,
        klaar. -->
   <div class="card">
-    <h3>Bibliotheek — bestanden voor partners (<span id="bibTel">0</span>)</h3>
+    <h3>Bibliotheek - bestanden voor partners (<span id="bibTel">0</span>)</h3>
     <p class="lead" style="margin-bottom:10px">Dit is wat partners in het portaal onder <b>Documenten</b> zien, in precies deze volgorde. Zet hier je pdf, handleiding of afbeelding neer; hij staat er meteen in. Toegestaan: pdf, word, excel, jpg, png en webp, tot 24 MB per bestand.<br><b>Staat er iets verkeerd?</b> Sleep een regel naar zijn plek (of gebruik de pijltjes), kies een andere map bij <b>verplaats naar</b>, of gooi hem weg met het prullenbakje. Elke wijziging is meteen zichtbaar voor partners.</p>
     <div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
       <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:3px">Map</label>
@@ -369,8 +369,8 @@ async function mailNakijken(){
     let h = "<div class='status-msg "+(goed?"ok":(onbekend?"warn":"bad"))+"'>"+esc(j.uitleg||(goed?"De mail kan eruit.":"Er is iets mis met de mailinstelling."))+"</div>";
     h += "<table style='font-size:13px;border-collapse:collapse;margin-top:8px'>"+
       rij("Sleutel aanwezig", j.sleutelAanwezig ? "ja" : "<b>nee</b>")+
-      rij("Afzender", esc(j.afzender||"—"))+
-      rij("Domein", esc(j.domein||"—"))+
+      rij("Afzender", esc(j.afzender||"-"))+
+      rij("Domein", esc(j.domein||"-"))+
       "</table>";
     const laatste = j.laatste || [];
     if (laatste.length){
@@ -402,7 +402,7 @@ document.addEventListener("DOMContentLoaded", () => {
 (function boot(){
   if (!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
   const email=(localStorage.getItem(EMAIL_KEY)||"").toLowerCase();
-  $("userEmail").textContent = email || "—";
+  $("userEmail").textContent = email || "-";
   const mag = window.fpToegang && window.fpToegang.mag("dealerportaal", email);
   if (!mag){
     document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'><h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor het team dat het partnerportaal beheert.</p><p>Je bent ingelogd als <code>"+email+"</code>.</p><p><a href='dashboard.html'>← Terug</a></p></main>";
@@ -417,7 +417,7 @@ $("logoutBtn").addEventListener("click", async ()=>{
 
 async function kvGet(bucket){
   const r = await fetch(DATA_BASE+bucket, { headers:{ "X-DP-Admin": adminKey() } });
-  if (r.status===401 || r.status===403) throw new Error("Beheersleutel ongeldig — voer 'm opnieuw in.");
+  if (r.status===401 || r.status===403) throw new Error("Beheersleutel ongeldig - voer 'm opnieuw in.");
   if (!r.ok) throw new Error("Laden faalde: HTTP "+r.status);
   return r.json();
 }
@@ -425,7 +425,7 @@ async function kvPut(bucket, data){
   const r = await fetch(DATA_BASE+bucket, { method:"PUT",
     headers:{ "Content-Type":"application/json", "X-DP-Admin": adminKey() },
     body: JSON.stringify(data) });
-  if (r.status===401 || r.status===403) throw new Error("Beheersleutel ongeldig — voer 'm opnieuw in.");
+  if (r.status===401 || r.status===403) throw new Error("Beheersleutel ongeldig - voer 'm opnieuw in.");
   if (!r.ok) throw new Error("Opslaan faalde: HTTP "+r.status);
 }
 
@@ -1127,12 +1127,12 @@ function renderPartners(){
       <td>${esc(d.company||"")}</td>
       <td><input class="debIn" data-i="${i}" value="${esc((d.debtorIds||[]).join(", "))}" style="width:120px;font-size:12px;padding:4px 7px"></td><td><select class="regIn" data-i="${i}" style="font-size:12px;padding:4px"><option value="EU"${(d.region||"EU")!=="US"?" selected":""}>EU (&euro;)</option><option value="US"${d.region==="US"?" selected":""}>US ($)</option></select></td>
       <td><select class="soortIn" data-i="${i}" title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een ander prijsniveau; die krijgt juist die prijslijsten niet te zien, want daarin staat wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt." style="font-size:12px;padding:4px${d.soort?"":";border-color:#c8102e"}">
-        <option value=""${!d.soort?" selected":""}>&mdash; nog kiezen &mdash;</option>
+        <option value=""${!d.soort?" selected":""}>- nog kiezen -</option>
         <option value="partner"${d.soort==="partner"?" selected":""}>Partner</option>
         <option value="dealer"${d.soort==="dealer"?" selected":""}>Dealer</option>
       </select></td>
       <td><select class="merkIn" data-i="${i}" style="font-size:12px;padding:4px">
-        <option value="">— nog kiezen —</option>
+        <option value="">- nog kiezen -</option>
         <option value="passion"${d.merk==="passion"?" selected":""}>Passion Spas</option>
         <option value="fonteyn"${d.merk==="fonteyn"?" selected":""}>Fonteyn</option>
         <option value="beide"${d.merk==="beide"?" selected":""}>Beide</option>
@@ -1142,16 +1142,16 @@ function renderPartners(){
         const s=[];
         if(a.kortingPct) s.push("<b style='color:var(--ink)'>"+esc(a.kortingPct)+"%</b>"+(a.kortingTekst?" "+esc(a.kortingTekst):""));
         if(a.betaaltermijn) s.push(esc(a.betaaltermijn));
-        return s.join(" &middot; ") || "—";
+        return s.join(" &middot; ") || "-";
       })()}</td>
       <td><span class="pill ${d.active!==false?"on":"off"}">${d.active!==false?"actief":"uit"}</span>
           <button class="rmv togAct" data-i="${i}" style="margin-left:6px">${d.active!==false?"blokkeer":"activeer"}</button></td>
       <td><button class="rmv kaartD" data-i="${i}" title="Alle gegevens van deze relatie: afspraken, facturatie, verzending en het debiteurnummer" style="font-weight:700">bewerken</button>
           <button class="rmv invD" data-i="${i}" title="Stuur de welkomstmail: een nette uitnodiging waarmee deze relatie zelf een wachtwoord kiest en meteen ingelogd het portaal in gaat. De link is 7 dagen geldig en kan tegen mailscanners: pas het instellen van het wachtwoord verbruikt hem." style="color:var(--fonteyn-green,#144734);font-weight:700">uitnodiging</button>
-          <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink zonder mail — voor onboarding via WhatsApp of als de mail niet aankomt. 7 dagen geldig, eenmalig, en sinds 22 aug bestand tegen mailscanners: de link opent eerst een tussenpagina en pas de knop daarop logt in.">inloglink</button>
+          <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink zonder mail - voor onboarding via WhatsApp of als de mail niet aankomt. 7 dagen geldig, eenmalig, en sinds 22 aug bestand tegen mailscanners: de link opent eerst een tussenpagina en pas de knop daarop logt in.">inloglink</button>
           <button class="rmv pwD" data-i="${i}" title="Zet zelf een wachtwoord voor dit account, bijvoorbeeld telefonisch door te geven. Normaal niet nodig: via de uitnodiging kiest de relatie er zelf een.">wachtwoord</button>
           <button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
-    </tr>`).join("") || '<tr><td colspan="9" style="color:var(--muted)">Nog geen dealers of partners — voeg de eerste toe.</td></tr>';
+    </tr>`).join("") || '<tr><td colspan="9" style="color:var(--muted)">Nog geen dealers of partners - voeg de eerste toe.</td></tr>';
   document.querySelectorAll(".kaartD").forEach(b=>b.addEventListener("click",()=>relatieKaart(Number(b.dataset.i))));
   document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
@@ -1224,7 +1224,7 @@ function renderPartners(){
       try{ if(window.fpLog) window.fpLog("partner-wachtwoord-gezet",d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
       // Het wachtwoord één keer teruggeven, want het moet nog doorgegeven
       // worden en is hierna nergens meer op te vragen.
-      setStatus("ok", d.email+" kan nu inloggen met wachtwoord: "+pw+" — noteer het nu, hierna is het niet meer op te vragen. Geef het los van de mail door.");
+      setStatus("ok", d.email+" kan nu inloggen met wachtwoord: "+pw+" - noteer het nu, hierna is het niet meer op te vragen. Geef het los van de mail door.");
     } catch(e){ setStatus("bad","Wachtwoord zetten faalde: "+e.message); }
     b.disabled = false; b.textContent = "wachtwoord";
   }));
@@ -1279,7 +1279,7 @@ $("addPartner").addEventListener("click", async ()=>{
   $("nEmail").value=""; $("nCompany").value=""; $("nDebtors").value=""; $("nSoort").value="";
   renderPartners();
   try{ if(window.fpLog) window.fpLog("partner-toegevoegd",email+($("nCompany").value?"":"")); }catch(e){}
-  setStatus("ok","Partner toegevoegd — die kan nu inloggen op het portaal met een magic-link.");
+  setStatus("ok","Partner toegevoegd - die kan nu inloggen op het portaal met een magic-link.");
 });
 
 
@@ -1532,7 +1532,7 @@ $("saveContact").addEventListener("click", async ()=>{
   if (!v || !v.includes("@")){ setStatus("bad","Vul een geldig e-mailadres in."); return; }
   accounts.contactEmail = v;
   await save("dealer-accounts", accounts);
-  setStatus("ok","Opgeslagen — partnervragen gaan nu naar "+v+".");
+  setStatus("ok","Opgeslagen - partnervragen gaan nu naar "+v+".");
 });
 
 let priceData = { prices: {} };
@@ -1555,10 +1555,10 @@ async function laadKoers(){
       $("rateAuto").innerHTML = "Vandaag ("+esc(j.datum||"")+"): ECB <b>"+j.ecb+"</b> − 0,03 = koers <b>"+j.koers+"</b>. "
         + "Voorbeeld: $ 3.349 ÷ "+j.koers+" = € "+Math.round(3349/j.koers)+" (excl. BTW).";
     } else {
-      $("rateAuto").innerHTML = "<span style='color:#c8102e'>Automatische dagkoers niet beschikbaar — de noodkoers hieronder geldt nu.</span>";
+      $("rateAuto").innerHTML = "<span style='color:#c8102e'>Automatische dagkoers niet beschikbaar - de noodkoers hieronder geldt nu.</span>";
     }
   }catch(e){
-    $("rateAuto").innerHTML = "<span style='color:#c8102e'>Automatische dagkoers niet op te halen — de noodkoers hieronder geldt nu.</span>";
+    $("rateAuto").innerHTML = "<span style='color:#c8102e'>Automatische dagkoers niet op te halen - de noodkoers hieronder geldt nu.</span>";
   }
   renderRate(); renderPrices();
 }
@@ -1597,16 +1597,16 @@ function renderPrices(){
     const code = (val && typeof val === "object" && val.code) ? val.code : "";
     const priceCell = isFinite(price)
       ? `€ ${price.toFixed(2)}${usd!=null?` <span style="color:var(--muted);font-size:11px">($ ${usd})</span>`:""}`
-      : '<span style="color:var(--muted)">—</span>';
-    const depCell = isFinite(price) ? `€ ${(price*0.30).toFixed(2)}` : "—";
+      : '<span style="color:var(--muted)">-</span>';
+    const depCell = isFinite(price) ? `€ ${(price*0.30).toFixed(2)}` : "-";
     return `
     <tr>
       <td><b>${esc(model)}</b></td>
       <td>${priceCell}</td>
       <td style="color:var(--muted)">${depCell}</td>
-      <td>${code ? esc(code) : '<span style="color:var(--muted)">—</span>'}</td>
+      <td>${code ? esc(code) : '<span style="color:var(--muted)">-</span>'}</td>
       <td><button class="rmv delPrice" data-m="${esc(model)}">✕</button></td>
-    </tr>`;}).join("") || '<tr><td colspan="5" style="color:var(--muted)">Nog geen prijzen — reserveringen blijven aanvraag-per-mail.</td></tr>';
+    </tr>`;}).join("") || '<tr><td colspan="5" style="color:var(--muted)">Nog geen prijzen - reserveringen blijven aanvraag-per-mail.</td></tr>';
   document.querySelectorAll(".delPrice").forEach(b=>b.addEventListener("click", async ()=>{
     try{ if(window.fpLog) window.fpLog("partnerprijs-verwijderd",b.dataset.m); }catch(e){}
     delete priceData.prices[b.dataset.m];
@@ -1624,7 +1624,7 @@ document.getElementById("addPrice").addEventListener("click", async ()=>{
   $("pModel").value=""; $("pPrice").value=""; $("pCode").value="";
   renderPrices();
   try{ if(window.fpLog) window.fpLog("partnerprijs-gewijzigd",model+" → € "+price); }catch(e){}
-  setStatus("ok","Prijs opgeslagen — reserveringen voor "+model+" krijgen straks automatisch een 30%-aanbetalingslink.");
+  setStatus("ok","Prijs opgeslagen - reserveringen voor "+model+" krijgen straks automatisch een 30%-aanbetalingslink.");
 });
 
 let reqData = { requests: [] };
@@ -1632,10 +1632,10 @@ let showArch = false;
 // Een aanvraag is pas een échte reservering als er is aanbetaald (Mollie 'paid').
 function reqPaid(r){ return r.paymentStatus === "paid" || r.status === "paid"; }
 function leadLabel(r){
-  if (r.paymentStatus === "open") return "betaallink open — nog niet betaald";
+  if (r.paymentStatus === "open") return "betaallink open - nog niet betaald";
   if (["expired","canceled","failed"].includes(r.paymentStatus)) return "niet betaald (" + r.paymentStatus + ")";
   if (r.status === "done") return "gearchiveerd";
-  return "aanvraag — geen aanbetaling";
+  return "aanvraag - geen aanbetaling";
 }
 function renderReqs(){
   const all = reqData.requests || [];
@@ -1657,14 +1657,14 @@ function renderReqs(){
   $("reqCount").textContent = paid.length;
   $("reqBodyPaid").innerHTML = paid.slice().reverse().map((r)=>{
     const idx = reqData.requests.indexOf(r);
-    const dep = r.deposit ? (r.currency==="USD"?"$":"€") + " " + Number(r.deposit).toFixed(2) + (r.payFull?" (volledig)":" (30%)") : "—";
+    const dep = r.deposit ? (r.currency==="USD"?"$":"€") + " " + Number(r.deposit).toFixed(2) + (r.payFull?" (volledig)":" (30%)") : "-";
     /* Order aangemaakt is niet hetzelfde als betaling geboekt. Ging de order
        goed maar de betaling niet, dan staat er een order zonder geld in Logic4
        en dat moet zichtbaar zijn — anders zoekt iemand zich later suf. */
     const l4 = r.logic4OrderId
       ? `<span class="pill on">#${esc(String(r.logic4OrderId))}</span>` +
         (r.logic4BetalingError ? ` <span class="pill off" title="${esc(r.logic4BetalingError)}">betaling niet geboekt</span>` : "")
-      : (r.logic4Error ? `<span class="pill off" title="${esc(r.logic4Error)}">fout — check</span>` : '<span style="color:var(--muted)">wordt aangemaakt…</span>');
+      : (r.logic4Error ? `<span class="pill off" title="${esc(r.logic4Error)}">fout - check</span>` : '<span style="color:var(--muted)">wordt aangemaakt…</span>');
     /* Terugdraaien: de aanbetaling tegenboeken en de order annuleren. Bedoeld
        voor een testbestelling. Een aanvraag die al is teruggedraaid krijgt de
        knop niet meer en staat vergrijsd. */
@@ -1716,7 +1716,7 @@ function renderReqs(){
     });
     const j = await res.json().catch(()=>({}));
     if (res.ok && j.ok) {
-      try{ if(window.fpLog) window.fpLog("bestelling-teruggedraaid", "#"+r.logic4OrderId+" — "+(r.company||r.email)); }catch(e){}
+      try{ if(window.fpLog) window.fpLog("bestelling-teruggedraaid", "#"+r.logic4OrderId+" - "+(r.company||r.email)); }catch(e){}
       await pDialoog({ titel: "Teruggedraaid", geenAnnuleren: true, bevestig: "Sluiten",
         html: "<ul style=\"margin:0;padding-left:18px;line-height:1.7;\">" +
               (j.stappen||[]).map(t=>"<li>"+esc(t)+"</li>").join("") + "</ul>" });
@@ -1752,14 +1752,14 @@ function renderReqs(){
   document.querySelectorAll(".reqArch").forEach(b=>b.addEventListener("click", async ()=>{
     const r = reqData.requests[Number(b.dataset.i)];
     r.status = r.status === "done" ? "new" : "done";
-    try{ if(window.fpLog) window.fpLog("lead-"+(r.status==="done"?"gearchiveerd":"heropend"),(r.company||r.email)+" — "+r.qty+"x "+r.model); }catch(e){}
+    try{ if(window.fpLog) window.fpLog("lead-"+(r.status==="done"?"gearchiveerd":"heropend"),(r.company||r.email)+" - "+r.qty+"x "+r.model); }catch(e){}
     await save("dealer-requests", reqData); renderReqs();
   }));
   document.querySelectorAll(".reqDel").forEach(b=>b.addEventListener("click", async ()=>{
     if (!await pDialoog({ titel:"Aanvraag verwijderen?",
       html:"<p>De aanvraag verdwijnt uit de lijst. Dit is niet terug te draaien.</p>",
       bevestig:"Verwijderen", gevaarlijk:true })) return;
-    try{ const _r=reqData.requests[Number(b.dataset.i)]; if(window.fpLog) window.fpLog("aanvraag-verwijderd",(_r.company||_r.email)+" — "+_r.qty+"x "+_r.model); }catch(e){}
+    try{ const _r=reqData.requests[Number(b.dataset.i)]; if(window.fpLog) window.fpLog("aanvraag-verwijderd",(_r.company||_r.email)+" - "+_r.qty+"x "+_r.model); }catch(e){}
     reqData.requests.splice(Number(b.dataset.i),1);
     await save("dealer-requests", reqData); renderReqs();
   }));
@@ -1775,7 +1775,7 @@ document.getElementById("terugLos").addEventListener("click", async ()=>{
   const ja = await pDialoog({
     titel: "Order terugdraaien", gevaarlijk: true, bevestig: "Terugdraaien",
     html: `<p>Logic4-order <b>#${esc(nr)}</b>.</p><ul style="margin:8px 0 0;padding-left:18px;line-height:1.7;">`
-      + (bedrag > 0 ? `<li>Er wordt <b>&euro; ${bedrag.toFixed(2)}</b> tegengeboekt in dagboek Mollie.</li>` : `<li>Er wordt <b>niets</b> tegengeboekt — je hebt geen bedrag ingevuld.</li>`)
+      + (bedrag > 0 ? `<li>Er wordt <b>&euro; ${bedrag.toFixed(2)}</b> tegengeboekt in dagboek Mollie.</li>` : `<li>Er wordt <b>niets</b> tegengeboekt - je hebt geen bedrag ingevuld.</li>`)
       + `<li>De order gaat op <b>Geannuleerd</b>.</li></ul>`
       + `<p style="margin-top:10px;color:var(--muted);font-size:12.5px;">Controleer het nummer goed: hier hangt geen aanvraag aan die het kan tegenspreken.</p>`,
   });
@@ -1816,12 +1816,12 @@ document.getElementById("keySave").addEventListener("click", async ()=>{
   if (!v){ setStatus("bad","Vul de beheersleutel in."); return; }
   localStorage.setItem(ADMIN_KEY_STORE, v);
   if (await unlock()){
-    setStatus("ok","Ontgrendeld — deze computer onthoudt de sleutel.");
+    setStatus("ok","Ontgrendeld - deze computer onthoudt de sleutel.");
     document.getElementById("keyCard").classList.add("hidden");
     init();
   } else {
     localStorage.removeItem(ADMIN_KEY_STORE);
-    setStatus("bad","Sleutel niet geldig — controleer en probeer opnieuw.");
+    setStatus("bad","Sleutel niet geldig - controleer en probeer opnieuw.");
   }
 });
 document.getElementById("keyInput") && document.getElementById("keyInput").addEventListener("keydown",(e)=>{ if(e.key==="Enter") document.getElementById("keySave").click(); });

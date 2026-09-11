@@ -342,7 +342,7 @@
   <section id="appView" class="hidden">
     <div id="pwCard" class="card hidden" style="max-width:460px;">
       <h2 id="pwCardTitle">Set a password</h2>
-      <p class="lead" id="pwCardLead">Set a password so you can log in directly next time — no login link needed. Your password is stored encrypted; nobody at Fonteyn can see it.</p>
+      <p class="lead" id="pwCardLead">Set a password so you can log in directly next time - no login link needed. Your password is stored encrypted; nobody at Fonteyn can see it.</p>
       <input type="password" id="npw1" placeholder="New password (min. 8 characters)" autocomplete="new-password">
       <input type="password" id="npw2" placeholder="Repeat password" autocomplete="new-password" style="margin-top:10px;">
       <div style="margin-top:12px;"><button class="primary" id="savePw" type="button">Save password</button></div>
@@ -359,7 +359,7 @@
     <div id="tab-stock">
       <div class="card">
         <h2>Spa availability</h2>
-        <p class="lead">Live overview per model — the colours we have in stock right now, ready to ship. <span id="stockUpdated"></span></p>
+        <p class="lead">Live overview per model - the colours we have in stock right now, ready to ship. <span id="stockUpdated"></span></p>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
           <input id="stockSearch" placeholder="Search model… (e.g. Renew)" style="max-width:300px;flex:1;min-width:180px;">
           <div id="stockSort" class="kies klein" style="width:250px;flex:0 0 auto;"></div>
@@ -369,7 +369,7 @@
           </div>
         </div>
         <div id="stockGrid" class="grid" style="margin-top:14px;"></div>
-        <div id="stockEmpty" class="lead hidden" style="margin-top:12px;">No stock data available right now — please check back later.</div>
+        <div id="stockEmpty" class="lead hidden" style="margin-top:12px;">No stock data available right now - please check back later.</div>
       </div>
     </div>
 
@@ -419,21 +419,21 @@
         <h2>Reservation requests</h2>
         <p class="lead">Requests you submitted via the Stock tab, with their current status.</p>
         <div id="myReqList"></div>
-        <div id="myReqEmpty" class="lead hidden">No requests yet — use the Reserve button on the Stock tab.</div>
+        <div id="myReqEmpty" class="lead hidden">No requests yet - use the Reserve button on the Stock tab.</div>
       </div>
       <div class="card">
         <h2>My spas</h2>
         <p class="lead">Your reserved spas with Fonteyn, with the current status of each model.</p>
         <div id="mySpasList"></div>
         <div id="mySpasEmpty" class="lead hidden">No reservations found for your account.</div>
-        <div id="mySpasUnlinked" class="lead hidden">This overview becomes available once our team links your portal account to your Fonteyn customer number — one quick message via the <b>Contact</b> tab is enough to arrange that.</div>
+        <div id="mySpasUnlinked" class="lead hidden">This overview becomes available once our team links your portal account to your Fonteyn customer number - one quick message via the <b>Contact</b> tab is enough to arrange that.</div>
       </div>
     </div>
 
     <div id="tab-contact" class="hidden">
       <div class="card" style="max-width:600px;">
         <h2>Ask us anything</h2>
-        <p class="lead">Your message goes straight to the Fonteyn sales team — we will reply to your e-mail address.</p>
+        <p class="lead">Your message goes straight to the Fonteyn sales team - we will reply to your e-mail address.</p>
         <input id="qSubject" placeholder="Subject" style="margin-bottom:10px;">
         <textarea id="qMessage" rows="6" placeholder="Your question…"></textarea>
         <div style="margin-top:12px;"><button class="primary" id="qSend" type="button">Send</button></div>
@@ -679,10 +679,10 @@ async function pwLogin(){
       location.reload();
       return;
     }
-    if (r.status === 429) return loginMsg("bad","Too many attempts — please wait 15 minutes and try again.");
+    if (r.status === 429) return loginMsg("bad","Too many attempts - please wait 15 minutes and try again.");
     loginMsg("bad","E-mail address or password not recognised. No password yet? Use the login-link option below.");
   } catch(e) {
-    loginMsg("bad","Something went wrong — please try again.");
+    loginMsg("bad","Something went wrong - please try again.");
   } finally { $("loginBtn").disabled = false; }
 }
 async function sendLink(){
@@ -690,9 +690,9 @@ async function sendLink(){
   if (!email || !email.includes("@")) return loginMsg("bad","Please enter a valid e-mail address.");
   try {
     await api("/dealers/login", { method:"POST", body: JSON.stringify({ email }) });
-    loginMsg("ok","If this address is registered as a partner, a login link is on its way — check your inbox (valid for 15 minutes). Once logged in you can set a password.");
+    loginMsg("ok","If this address is registered as a partner, a login link is on its way - check your inbox (valid for 15 minutes). Once logged in you can set a password.");
   } catch(e) {
-    loginMsg("bad","Something went wrong — please try again.");
+    loginMsg("bad","Something went wrong - please try again.");
   }
 }
 
@@ -738,7 +738,7 @@ async function sendLink(){
     const b = document.createElement("div");
     b.className = "msg ok";
     b.style.margin = "14px 0 0";
-    b.textContent = "Thank you — your deposit payment is being processed. We will confirm your reservation by e-mail.";
+    b.textContent = "Thank you - your deposit payment is being processed. We will confirm your reservation by e-mail.";
     $("appView").insertBefore(b, $("appView").firstChild);
   }
   loadStock(); loadDocs(); loadMySpas(); loadMyRequests();
@@ -759,11 +759,11 @@ $("savePw").addEventListener("click", async ()=>{
   try {
     const r = await api("/dealers/api/setpassword", { method:"POST", body: JSON.stringify({ password: p1 }) });
     if (r.status === 200 && r.data && r.data.ok) {
-      show("ok","Password saved — from now on you can log in directly with your e-mail address and password.");
+      show("ok","Password saved - from now on you can log in directly with your e-mail address and password.");
       $("npw1").value = ""; $("npw2").value = "";
       setTimeout(()=>$("pwCard").classList.add("hidden"), 3000);
-    } else show("bad","Saving failed — please try again.");
-  } catch(e) { show("bad","Saving failed — please try again."); }
+    } else show("bad","Saving failed - please try again.");
+  } catch(e) { show("bad","Saving failed - please try again."); }
   finally { $("savePw").disabled = false; }
 });
 
@@ -966,7 +966,7 @@ function voorraadRegels(m){
   for (const k of (m.onderweg || []))
     rijen.push({ naam: k.name || "Colour confirmed on arrival", qty: Number(k.qty), soort: "komt", eta: k.eta, nu: !!k.nu });
 
-  if (!rijen.length) return `<li class="leeg">Not in stock &mdash; built to order.</li>`;
+  if (!rijen.length) return `<li class="leeg">Not in stock - built to order.</li>`;
   const verborgen = Math.max(0, rijen.length - VOORRAAD_TOON);
   rijen.forEach((r, i) => { r.verstopt = i >= VOORRAAD_TOON; });
   return rijen.map(voorraadRegel).join("") +
@@ -1007,7 +1007,7 @@ function renderStock(){
       <div class="m"><span class="naam">${esc(m.model)}</span>${voorraadPil(m)}<span class="chev" aria-hidden="true">&#8250;</span></div>
       <div class="vouw"><ul class="vrr">${voorraadRegels(m)}</ul>${pakketRegel(m) ? `<ul>${pakketRegel(m)}</ul>` : ""}</div>
       <ul>
-        ${m.opAanvraag?`<li style="margin-top:6px;color:var(--muted)">Price on request &mdash; ask us via the Contact tab.</li>`
+        ${m.opAanvraag?`<li style="margin-top:6px;color:var(--muted)">Price on request - ask us via the Contact tab.</li>`
           :(m.partnerUsd?(window.displayCurrency==="USD"?`<li style="margin-top:6px;">Partner price: <b>$ ${Number(m.partnerUsd).toLocaleString("en-US")}</b> <span style="color:var(--muted)">+ $ ${(m.surchargeUsd||0)+50} freight &amp; packing</span></li>`:`<li style="margin-top:6px;">Partner price: <b>&euro; ${Number(m.partnerEur||0).toLocaleString("de-DE")}</b> <span style="color:var(--muted)">+ &euro; ${(m.surchargeEur||0)+Math.round(50/(window.stockRate||1.11))} freight &amp; packing · excl. VAT</span></li>`):"")}
       </ul>
       <div class="knoppen">
@@ -1412,7 +1412,7 @@ function openDownloads(model){
       </div>
       <button class="sluit" type="button" data-sluit title="Close">&times;</button>
     </div>
-    ${viaBasis ? `<p class="lead" style="margin:10px 0 0;font-size:12.5px;">These documents are published under <b>${esc(viaBasis)}</b> — the same shell as this version.</p>` : ""}
+    ${viaBasis ? `<p class="lead" style="margin:10px 0 0;font-size:12.5px;">These documents are published under <b>${esc(viaBasis)}</b> - the same shell as this version.</p>` : ""}
     ${bestanden.length || algemeen.length || manuals.length ? "" : `<p class="lead" style="margin:14px 0 0;">No documents published for this model yet. Ask us via the Contact tab and we will send them to you.</p>`}
     ${bestanden.length || algemeen.length || manuals.length ? docSectie("Spec sheets", specs, "None published yet.") : ""}
     ${bestanden.length || algemeen.length || manuals.length ? docSectie("Manuals", manuals, "None published yet.") : ""}
@@ -1435,7 +1435,7 @@ async function openBestand(e){
       { headers: { "X-Dealer-Session": localStorage.getItem(SESS_KEY) || "" } });
     if (!r.ok) throw new Error("HTTP " + r.status);
     window.open(URL.createObjectURL(await r.blob()), "_blank");
-  }catch(err){ alert("Could not open document — please try again. (" + err.message + ")"); }
+  }catch(err){ alert("Could not open document - please try again. (" + err.message + ")"); }
   a.textContent = oud;
 }
 
@@ -1446,10 +1446,10 @@ function reqStatusLabel(r){
      niet: dan is een bestelling waar iemand op zit te wachten opeens weg,
      zonder dat er iets staat over waarom. */
   if (r.geannuleerd) return ["Cancelled" + (r.ordernr ? " (order " + r.ordernr + ")" : ""), "uit"];
-  if (r.status === "paid" || r.paymentStatus === "paid") return ["Deposit paid — reservation confirmed", "ok"];
+  if (r.status === "paid" || r.paymentStatus === "paid") return ["Deposit paid - reservation confirmed", "ok"];
   if (r.deposit && r.paymentStatus === "open") return ["Awaiting deposit payment", ""];
   if (r.status === "done") return ["Handled by our sales team", "ok"];
-  return ["Received — our sales team will contact you", ""];
+  return ["Received - our sales team will contact you", ""];
 }
 async function loadMyRequests(){
   const r = await api("/dealers/api/requests");
@@ -1593,13 +1593,13 @@ function renderReis(spas){
         (lijst.length ? lijst.map(c =>
           `<span class="reis-chip${c.betaald ? "" : " wacht"}" title="${c.betaald ? "deposit paid" : "awaiting deposit"}">` +
           `<b>${c.qty}&times;</b> ${esc(c.model)}${c.eta ? ` <span class="eta">${esc(c.eta)}</span>` : ""}</span>`).join("")
-        : '<span class="reis-leeg">&mdash;</span>')}
+        : '<span class="reis-leeg">-</span>')}
     </div>`).join("");
 }
 
 function mySpaEta(s){
   const v = s.verwacht;
-  if (s.vervallen || !v || v==="vervallen") return '<span style="color:var(--muted)">—</span>';
+  if (s.vervallen || !v || v==="vervallen") return '<span style="color:var(--muted)">-</span>';
   if (v==="voorraad") return '<span style="color:#15803d;font-weight:600">available now</span>';
   if (v==="op-schip") return '<span style="color:#2563eb">on the water (date to follow)</span>';
   if (v==="productie") return '<span style="color:#92400e">next production batch</span>';
@@ -1965,7 +1965,7 @@ function ctrTekening(c, C){
   const zij   = teken(c.dozen.slice().sort((a,b)=>b.y-a.y), C.h, d=>d.x, d=>d.z, d=>d.dl, d=>d.dh,
                       d=>d.y > C.b/2);
   return `<div style="margin-top:9px;">
-      <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 3px;">Top view — bottom layer</div>${boven}
+      <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 3px;">Top view - bottom layer</div>${boven}
       <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:8px 0 3px;">Side view</div>${zij}
     </div>`;
 }
@@ -2041,7 +2041,7 @@ function tekenContainer(ov){
          ${passen} of ${r.totaal} packages (spas and their folded covers) fit in
          ${r.containers.length === 1 ? "one" : r.containers.length} &times; ${esc(r.C.naam)}.
          ${r.containers.length === 1 && vrij >= 8
-            ? `About <b>${vrij}%</b> of the space is still free — there is room for more.`
+            ? `About <b>${vrij}%</b> of the space is still free - there is room for more.`
             : ""}
        </p>${balken}${legenda}` +
       (r.buiten.length
@@ -2361,13 +2361,13 @@ function openCart(){
     const m = ov.querySelector("#cartMsg");
     if (r.status === 200 && r.data && r.data.ok && r.data.checkoutUrl) {
       m.className = "msg ok";
-      m.textContent = "Order received — redirecting you to the secure payment page (" +
+      m.textContent = "Order received - redirecting you to the secure payment page (" +
         (r.data.testbetaling ? "TEST - 1 cent" : geld(r.data.deposit || 0)) + ")…";
       m.classList.remove("hidden");
       cart = []; cartBewaar();
       setTimeout(() => { location.href = r.data.checkoutUrl; }, 1400);
     } else if (r.status === 200 && r.data && r.data.ok) {
-      m.className = "msg ok"; m.textContent = "Order sent — you can follow it under My spas."; m.classList.remove("hidden");
+      m.className = "msg ok"; m.textContent = "Order sent - you can follow it under My spas."; m.classList.remove("hidden");
       // Meteen de voorraad opnieuw ophalen: wat deze partner net heeft
       // vastgelegd, hoort de collega naast hem op de beurs ook te zien.
       cart = []; cartBewaar(); loadMyRequests(); loadStock(); setTimeout(sluit, 2200);
@@ -2381,7 +2381,7 @@ function openCart(){
         ? "You are viewing as a Fonteyn colleague; ordering is only possible from a partner account."
         : (reden === "lege winkelwagen"
           ? "Nothing in your basket can be ordered right now."
-          : "Sending failed — " + reden);
+          : "Sending failed - " + reden);
       m.classList.remove("hidden");
       af.disabled = false;
     }
@@ -2398,10 +2398,10 @@ $("qSend").addEventListener("click", async ()=>{
   const r = await api("/dealers/api/vraag", { method:"POST", body: JSON.stringify({ subject, message }) });
   $("qSend").disabled = false;
   if (r.status === 200 && r.data && r.data.ok) {
-    m.className="msg ok"; m.textContent="Thank you — your question has been sent. We will get back to you by e-mail.";
+    m.className="msg ok"; m.textContent="Thank you - your question has been sent. We will get back to you by e-mail.";
     $("qSubject").value = ""; $("qMessage").value = "";
   } else {
-    m.className="msg bad"; m.textContent="Sending failed — please try again or e-mail us directly.";
+    m.className="msg bad"; m.textContent="Sending failed - please try again or e-mail us directly.";
   }
   m.classList.remove("hidden");
 });
