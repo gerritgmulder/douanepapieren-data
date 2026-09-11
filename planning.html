@@ -118,7 +118,13 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
    dag te maken, zoals in Outlook. Gerrit (11 sep 2026): "moet je gewoon
    bovenaan kunnen klikken". */
 .dagband-cel{margin:3px 3px 0;min-height:18px;border-radius:5px;border:1px dashed transparent;cursor:pointer}
-.dagband-cel:hover{border-color:var(--lime);background:#f7fbef}
+.dagband-cel:hover,.dagband-cel.kies{border-color:var(--lime);background:#f7fbef}
+.dagband-cel.kies{background:#e9f4d3;border-style:solid}
+/* Slepen: een balk verschuiven, of aan de rechterkant langer of korter maken. */
+.dagband{position:relative;cursor:grab}
+.dagband.sleept{cursor:grabbing;opacity:.8;box-shadow:0 6px 18px rgba(0,0,0,.22)}
+.dagband .greep-r{position:absolute;top:0;bottom:0;right:0;width:9px;cursor:ew-resize}
+.dagband:hover .greep-r{background:linear-gradient(to right,transparent,rgba(0,0,0,.14))}
 .dagbanden .lbl{grid-column:1;font-size:10px;color:var(--grijs);text-align:right;padding:5px 6px 0;position:sticky;left:0;background:#fff;z-index:5}
 .dagband{margin:3px 3px 0;border-radius:6px;border-left:4px solid;padding:3px 9px;font-size:11.5px;font-weight:600;
        cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:22px;line-height:16px}
@@ -922,16 +928,19 @@ function teken(){
      als er niet gesleept is en niet op de naam is geklikt - dat wordt hieronder
      afgehandeld. */
   document.querySelectorAll(".hd-blok,.afs,.dagband").forEach(function(k){
-    k.addEventListener("click", function(e){ e.stopPropagation(); openForm(k.dataset.id); });
+    k.addEventListener("click", function(e){
+      e.stopPropagation();
+      if (k.dataset.gesleept){ delete k.dataset.gesleept; return; }
+      if (e.target.classList.contains("greep-r")) return;
+      openForm(k.dataset.id);
+    });
   });
   document.querySelectorAll(".blok").forEach(koppelBlok);
   document.querySelectorAll(".plus").forEach(function(k){
     if (!MAG_BEWERKEN){ k.style.display = "none"; return; }
     k.addEventListener("click", function(){ openForm(null, k.dataset.datum); });
   });
-  document.querySelectorAll(".dagband-cel").forEach(function(k){
-    k.addEventListener("click", function(){ openForm(null, k.dataset.datum, "", { datumTot: k.dataset.datum }); });
-  });
+
   document.querySelectorAll(".route-knop").forEach(function(k){
     k.addEventListener("click", function(e){ e.stopPropagation(); routeKies(k.dataset.datum, k); });
   });
@@ -1627,15 +1636,112 @@ function tekenBanden(week){
   var laatsteRegel = balken.reduce(function(m,b){ return Math.max(m, b.regel+1); }, 0);
   band.innerHTML = '<div class="lbl" style="grid-row:1">hele dag</div>' +
     (MAG_BEWERKEN ? week.map(function(w,i){
-      return '<div class="dagband-cel" data-datum="'+w.iso+'" style="grid-column:'+(i+2)+';grid-row:'+(laatsteRegel+1)+'" title="Klik voor een afspraak van een hele dag"></div>';
+      return '<div class="dagband-cel" data-datum="'+w.iso+'" data-idx="'+i+'" style="grid-column:'+(i+2)+';grid-row:'+(laatsteRegel+1)+'" title="Klik, of sleep over meerdere dagen, voor een afspraak van een hele dag"></div>';
     }).join("") : "") + balken.map(function(b){
     var a = b.a, c = cat(a);
     var meer = a.datumTot && a.datumTot > a.datum;
     return '<div class="dagband'+(a.klaar?" klaar":"")+zoekKlas(a)+(b.links?" door-links":"")+(b.rechts?" door-rechts":"")+'" data-id="'+esc(a.id)+'"'+
       ' style="grid-column:'+(b.i0+2)+' / '+(b.i1+3)+';grid-row:'+(b.regel+1)+';background:'+c.zacht+';border-left-color:'+c.kleur+'"'+
       ' title="'+esc(a.klant||c.naam)+(meer?' · '+esc(a.datum.split("-").reverse().join("-"))+' t/m '+esc(a.datumTot.split("-").reverse().join("-")):' · '+esc(a.datum.split("-").reverse().join("-")))+'">'+
-      betaalStip(a)+esc(a.klant||c.naam)+(a.wie?' <span class="wie">· '+esc(a.wie)+'</span>':'')+'</div>';
+      betaalStip(a)+esc(a.klant||c.naam)+(a.wie?' <span class="wie">· '+esc(a.wie)+'</span>':'')+
+      (MAG_BEWERKEN?'<div class="greep-r" title="Sleep om de laatste dag te verplaatsen"></div>':'')+'</div>';
   }).join("");
+  if (MAG_BEWERKEN) koppelBanden(week);
+}
+
+/* Slepen in de band van hele dagen. Gerrit (11 sep 2026): "dat je iets kunt
+   aanklikken om een hele-dag-afspraak te maken maar dat die ook uitsleepbaar
+   is direct". Drie bewegingen:
+     - over de lege cellen slepen: kiest een reeks dagen, en bij het loslaten
+       opent het venster met die eerste en laatste dag al ingevuld;
+     - een balk aan de rechterkant pakken: verlengt of verkort hem;
+     - een balk in het midden pakken: verschuift hem, even lang.
+   Alles werkt in hele dagen; welke dag onder de muis zit volgt uit de cellen
+   onderaan de band, die precies de kolommen van het raster hebben. */
+function dagPlus(isoDag, n){
+  var d = new Date(isoDag+"T12:00:00"); d.setDate(d.getDate()+n); return iso(d);
+}
+function dagenTussen(a, b){
+  return Math.round((new Date(b+"T12:00:00") - new Date(a+"T12:00:00")) / 86400000);
+}
+function koppelBanden(week){
+  var band = $("dagbanden");
+  var cellen = [].slice.call(band.querySelectorAll(".dagband-cel"));
+  function dagOnder(x){
+    var beste = null;
+    cellen.forEach(function(c){ var r = c.getBoundingClientRect(); if (x >= r.left && x <= r.right) beste = c; });
+    if (beste) return Number(beste.dataset.idx);
+    // Buiten de cellen: de dichtstbijzijnde kant.
+    var eerste = cellen[0].getBoundingClientRect(), laatste = cellen[cellen.length-1].getBoundingClientRect();
+    return x < eerste.left ? 0 : (x > laatste.right ? cellen.length-1 : null);
+  }
+  // 1. Slepen over lege cellen = nieuwe afspraak over die dagen.
+  cellen.forEach(function(cel){
+    cel.addEventListener("mousedown", function(e){
+      if (e.button !== 0) return;
+      e.preventDefault();
+      var i0 = Number(cel.dataset.idx), i1 = i0, bewogen = false;
+      function verf(){ cellen.forEach(function(c){ var i = Number(c.dataset.idx); c.classList.toggle("kies", i >= Math.min(i0,i1) && i <= Math.max(i0,i1)); }); }
+      function beweeg(ev){ var i = dagOnder(ev.clientX); if (i === null) return; if (i !== i1) bewogen = true; i1 = i; verf(); }
+      function los(){
+        document.removeEventListener("mousemove", beweeg); document.removeEventListener("mouseup", los);
+        cellen.forEach(function(c){ c.classList.remove("kies"); });
+        var a = Math.min(i0,i1), b = Math.max(i0,i1);
+        openForm(null, week[a].iso, "", { datumTot: week[b].iso });
+      }
+      verf();
+      document.addEventListener("mousemove", beweeg); document.addEventListener("mouseup", los);
+    });
+    // De gewone klik zit al in het mousedown/mouseup hierboven.
+    cel.onclick = null;
+  });
+  // 2 en 3. Een balk verlengen of verschuiven.
+  band.querySelectorAll(".dagband").forEach(function(el){
+    el.addEventListener("mousedown", function(e){
+      if (e.button !== 0) return;
+      var a = afspraken.find(function(x){ return x.id === el.dataset.id; }); if (!a) return;
+      var rekken = e.target.classList.contains("greep-r");
+      e.preventDefault(); e.stopPropagation();
+      var startIdx = dagOnder(e.clientX); if (startIdx === null) return;
+      var van = a.datum, tot = a.datumTot && a.datumTot > a.datum ? a.datumTot : a.datum;
+      var nVan = van, nTot = tot, bezig = false;
+      var eerste = week[0].iso, laatste = week[week.length-1].iso;
+      function toon(){
+        var i0 = nVan < eerste ? 0 : dagenTussen(eerste, nVan), i1 = nTot > laatste ? week.length-1 : dagenTussen(eerste, nTot);
+        el.style.gridColumn = (i0+2)+" / "+(i1+3);
+      }
+      function beweeg(ev){
+        var i = dagOnder(ev.clientX); if (i === null) return;
+        var delta = i - startIdx;
+        if (!bezig && delta === 0) return;
+        if (!bezig){ bezig = true; el.classList.add("sleept"); document.body.classList.add("bezig-slepen"); }
+        // Verlengen: de laatste dag schuift mee met de muis. Verschuiven: de
+        // eerste en de laatste dag allebei, zodat hij even lang blijft.
+        if (rekken){ nVan = van; nTot = dagPlus(tot, delta); if (nTot < van) nTot = van; }
+        else { nVan = dagPlus(van, delta); nTot = dagPlus(tot, delta); }
+        toon();
+        toonTip(ev, (rekken ? "t/m " : "") + dagNaam(rekken ? nTot : nVan) + (rekken ? "" : " t/m " + dagNaam(nTot)));
+      }
+      async function los(){
+        document.removeEventListener("mousemove", beweeg); document.removeEventListener("mouseup", los);
+        verbergTip(); el.classList.remove("sleept"); document.body.classList.remove("bezig-slepen");
+        if (!bezig) return;
+        el.dataset.gesleept = "1";
+        var b = { datum: nVan, datumTot: nTot > nVan ? nTot : null };
+        if (b.datum === a.datum && (b.datumTot || null) === (a.datumTot || null)) { teken(); return; }
+        try{
+          await bewaar(function(lijst){
+            var i = lijst.findIndex(function(x){ return x.id === a.id; });
+            if (i >= 0) lijst[i] = Object.assign({}, lijst[i], b, { gewijzigdDoor: ik, gewijzigd: new Date().toISOString() });
+            return lijst;
+          });
+          try{ if(window.fpLog) window.fpLog("afspraak-verplaatst", (a.klant||"")+" -> "+b.datum+(b.datumTot?" t/m "+b.datumTot:"")); }catch(e){}
+          teken();
+        }catch(err){ alert(err.message); teken(); }
+      }
+      document.addEventListener("mousemove", beweeg); document.addEventListener("mouseup", los);
+    });
+  });
 }
 function blokken(items){
   var met = items.map(function(a){

@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-11", bestand: "planning.html", soort: "beter",
+      titel: "Hele dagen slepen in de band boven het tijdraster",
+      wat: "Sleep in de band 'hele dag' over de dagen die je wilt, en bij het loslaten staat het venster klaar met die eerste en laatste dag. Een balk die er al staat pak je in het midden om hem te verschuiven, of aan de rechterkant om hem langer of korter te maken. Klikken op één dag werkt nog gewoon.",
+    },
+
+    {
       datum: "2026-09-11", iedereen: true, soort: "beter",
       titel: "Overal hetzelfde streepje",
       wat: "In Voorraadbeheer, Passion Partners Beheer en het partnerportaal stonden in kopjes en teksten nog lange streepjes. Die zijn overal het gewone korte streepje geworden.",
