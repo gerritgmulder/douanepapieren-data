@@ -985,6 +985,57 @@ async function logLogin(email) {
   console.warn("[logboek] login niet vastgelegd: geen team-sleutel");
 }
 
+/* HET VENSTER STAAT ER EERDER DAN DE UPDATE, DUS HET VENSTER MOET ZICHZELF
+   VERVERSEN ZODRA DIE BINNEN IS.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (11 sep 2026): "Ik zie alle nieuwe aanpassingen (nog) niet in het
+   Dashboard als ik CMD+Q een paar keer doe en tussendoor een minuut wacht."
+
+   Sinds 7 september wacht het venster niet meer op het ophalen van de tegels
+   (dat kostte 28 seconden). Het venster toont dus wat er bij de VORIGE start
+   is binnengehaald, en wat er tijdens deze start binnenkomt zie je pas de
+   keer erna. Wie snel achter elkaar herstart loopt daardoor altijd één
+   versie achter, en een minuut wachten tussen twee herstarts helpt niets:
+   het ophalen gebeurt terwijl de app draait, niet terwijl hij uit staat.
+
+   De schil stuurt na het ophalen wel een seintje ("ota-klaar"), maar de
+   brug naar de pagina laat dat seintje niet door en die brug zit in het
+   installatiebestand. Daarom kijkt het dashboard zelf: elke vijf seconden,
+   de eerste vier minuten na het openen, vraagt het het hulpprogramma of
+   dashboard.html of manifest.json inmiddels anders is dan wat er getoond
+   wordt. Is dat zo, dan laadt het zichzelf opnieuw. Niet terwijl iemand in
+   een veld staat te typen; dan wacht het tot de volgende ronde. */
+(function () {
+  var eigenStempel = null, eigenVersie = null, begin = Date.now();
+  async function stempel() {
+    try {
+      var r = await fetch("dashboard.html?" + Date.now(), { method: "HEAD", cache: "no-store" });
+      if (!r.ok) return null;
+      return (r.headers.get("Last-Modified") || "") + "|" + (r.headers.get("ETag") || "") + "|" + (r.headers.get("Content-Length") || "");
+    } catch (e) { return null; }
+  }
+  async function versie() {
+    try {
+      var r = await fetch("manifest.json?" + Date.now(), { cache: "no-store" });
+      if (!r.ok) return null;
+      return String(((await r.json()) || {}).version || "");
+    } catch (e) { return null; }
+  }
+  async function ronde() {
+    if (Date.now() - begin > 4 * 60 * 1000) { clearInterval(klok); return; }
+    var st = await stempel(), vs = await versie();
+    if (eigenStempel === null) { eigenStempel = st; eigenVersie = vs; return; }
+    var anders = (st && eigenStempel && st !== eigenStempel) || (vs && eigenVersie && vs !== eigenVersie);
+    if (!anders) return;
+    var actief = document.activeElement;
+    if (actief && /^(INPUT|TEXTAREA|SELECT)$/.test(actief.tagName) && actief.type !== "checkbox") return;
+    clearInterval(klok);
+    location.reload();
+  }
+  var klok = setInterval(ronde, 5000);
+  ronde();
+})();
+
 function showDashboard(email) {
   el("loginView").classList.add("hidden");
   el("dashView").classList.remove("hidden");

@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-11", iedereen: true, soort: "hersteld",
+      titel: "Het dashboard ververst zichzelf zodra een update binnen is",
+      wat: "Het venster kwam eerder in beeld dan de update, en wat er tijdens het opstarten werd opgehaald zag je pas bij de volgende start. Nu kijkt het dashboard de eerste minuten na het openen zelf of er iets nieuws is binnengekomen en laadt het zichzelf dan opnieuw. Tegels die al openstaan houden hun eigen melding met de knop Vernieuwen.",
+    },
+
+    {
       datum: "2026-09-11", bestand: "planning.html", soort: "beter",
       titel: "Tijdraster: routes naast elkaar, zoeken, en afspraken over meerdere dagen",
       wat: "In het tijdraster staan de routes van een dag nu naast elkaar, met R1, R2, R3 en de naam van de rijder erboven. Een blok laat het ordernummer, het ITS-nummer en de klantnaam zien; de tijden staan al aan de zijkant. Er is een zoekbalk die op ordernummer, klantnaam of ITS-nummer zoekt en de treffers uitlicht. Een afspraak zonder tijd kan nu tot en met een latere dag lopen, bijvoorbeeld 'Kevin vakantie' drie weken lang als balk bovenaan. Een nieuwe afspraak staat standaard op 2 uur. En een ITS-nummer opzoeken haalt nu ook naam, adres en telefoon van de klant op.",
