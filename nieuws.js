@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-12", bestand: "planning.html", soort: "hersteld",
+      titel: "Print route werkt weer, en wie rijdt is een keuzelijst",
+      wat: "Onder elke route staat nu een knop 'Print route' in plaats van een printericoontje, en printen opent geen los venster meer, dus de melding over pop-ups is weg. Boven de route staan de plekken voor wie rijdt als echte keuzelijsten met de afdeling erin; kies 'andere naam' voor iemand die er niet in staat.",
+    },
+
+    {
       datum: "2026-09-12", bestand: "planning.html", soort: "beter",
       titel: "Verlof is echt blauw, ook als balk bovenaan",
       wat: "Een hele dag of een vakantie op Verlof stond bovenaan in een lichte tint die op grijs leek. De balken staan nu in de volle kleur van hun categorie, ook op het routebord. Alle bestaande 'vrij' en 'vakantie' die nog op Levering of Intern stonden zijn omgezet naar Verlof. Een nieuwe hele dag vanuit de balk begint voortaan als Verlof.",

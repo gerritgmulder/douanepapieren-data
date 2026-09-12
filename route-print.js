@@ -185,18 +185,50 @@
      erbij. Een eigen venster en geen @media print op de tegel zelf: dan zou de
      hele planning mee in de printopmaak moeten en dat loopt bij de eerste
      wijziging aan het bord alweer uit de pas. */
+  /* Printen zonder een nieuw venster.
+     ═══════════════════════════════════════════════════════════════════
+     Gerrit (12 sep 2026): "De printpagina kon niet worden geopend. Sta
+     pop-ups toe voor het Dashboard. Waar gaat dat over? Ik wil gewoon
+     kunnen printen."
+
+     Dat kwam door window.open. In de app vangt de schil elk nieuw venster
+     af en maakt er een tegelvenster van, of weigert het; de printpagina
+     kreeg daardoor nooit een venster en de pagina dacht dat pop-ups
+     geblokkeerd waren. De schil zit in het installatiebestand, dus die weg
+     is dicht. Daarom nu een onzichtbaar kader in de pagina zelf: daar gaat
+     de printinhoud in, en dat kader print zichzelf. Werkt in de app en in
+     elke browser, zonder venster en zonder pop-upvraag. */
   function print(opts) {
-    var w = global.open("", "_blank", "width=900,height=1000");
-    if (!w) { alert("De printpagina kon niet worden geopend. Sta pop-ups toe voor het Dashboard."); return; }
     var html = "<!doctype html><html lang='nl'><head><meta charset='utf-8'>" +
       "<title>Route " + esc(opts.routeNr) + " - " + esc(datumNL(opts.datum)) + "</title>" +
       "<style>" + STIJL + "</style></head><body>" +
       voorblad(opts) +
       (opts.orders || []).map(function (o) { return bevestiging(o, opts.logo); }).join("") +
       "</body></html>";
-    w.document.open(); w.document.write(html); w.document.close();
-    // Wachten tot het logo geladen is, anders print hij een lege plek.
-    w.onload = function () { setTimeout(function () { w.focus(); w.print(); }, 250); };
+    var oud = document.getElementById("fpPrintKader");
+    if (oud) oud.remove();
+    var kader = document.createElement("iframe");
+    kader.id = "fpPrintKader";
+    kader.setAttribute("aria-hidden", "true");
+    kader.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
+    document.body.appendChild(kader);
+    var d = kader.contentDocument || kader.contentWindow.document;
+    d.open(); d.write(html); d.close();
+    var klaar = false;
+    function doePrint() {
+      if (klaar) return; klaar = true;
+      // Wachten tot het logo geladen is, anders print hij een lege plek.
+      setTimeout(function () {
+        try { kader.contentWindow.focus(); kader.contentWindow.print(); }
+        catch (e) { alert("Printen lukte niet: " + (e.message || e)); }
+        // Het kader mag weg zodra het printvenster dicht is; na een minuut sowieso.
+        var weg = function () { try { kader.remove(); } catch (e2) {} };
+        try { kader.contentWindow.addEventListener("afterprint", weg); } catch (e3) {}
+        setTimeout(weg, 60000);
+      }, 300);
+    }
+    kader.contentWindow.addEventListener("load", doePrint);
+    if (d.readyState === "complete") doePrint();
   }
 
   global.fpRoutePrint = { print: print, voorblad: voorblad, bevestiging: bevestiging };

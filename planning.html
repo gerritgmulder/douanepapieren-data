@@ -273,8 +273,9 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .its-leeg{font-size:12.5px;color:var(--grijs);padding:6px 0}
 
 /* ── routeknop ── */
-.routePrint{background:none;border:0;cursor:pointer;font-size:12px;padding:0 3px;border-radius:5px;opacity:.55;line-height:1}
-.routePrint:hover{opacity:1;background:#eef4e8}
+.routePrint{display:block;width:calc(100% - 8px);margin:2px 4px 4px;background:#fff;border:1px solid var(--rand);border-radius:8px;
+      padding:6px;font:inherit;font-size:11.5px;font-weight:600;color:var(--groen);cursor:pointer}
+.routePrint:hover{border-color:var(--lime);background:#f7fbef}
 .route-knop{background:none;border:0;cursor:pointer;font-size:14px;padding:2px 4px;border-radius:6px;float:right}
 .route-knop:hover{background:#eef4e8}
 .route-menu{position:absolute;background:#fff;border:1px solid var(--rand);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:30;padding:6px;min-width:170px}
@@ -351,6 +352,9 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .route > h4 .rijder{display:flex;align-items:center;gap:3px;min-width:0}
 .route > h4 .wie{font-weight:600;color:var(--ink);min-width:0;cursor:text;font-size:11px;flex:1;
       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.route > h4 .rijderKies{flex:1;min-width:0;font:inherit;font-size:11px;font-weight:600;color:var(--ink);background:#fff;
+      border:1px solid var(--rand);border-radius:6px;padding:2px 4px;max-width:100%}
+.route > h4 .rijderKies:has(option[value=""]:checked){color:var(--grijs);font-weight:400}
 .route > h4 .plekWeg{background:none;border:0;color:var(--grijs);cursor:pointer;font-size:12px;line-height:1;padding:0 2px;flex:none}
 .route > h4 .plekWeg:hover{color:var(--rood)}
 .route > h4 .plekErbij{background:none;border:1px dashed var(--rand);border-radius:5px;color:var(--grijs);cursor:pointer;
@@ -1186,11 +1190,21 @@ function tekenBord(){
         return '<div class="route" data-datum="'+w.iso+'" data-nr="'+r.nr+'">'+
           '<h4><span class="nr">Route '+r.nr+'</span>'+
             '<span class="rijders">'+
-              (function(){ var n = plekkenVan(r), uit = ""; for (var sl = 1; sl <= n; sl++){
+              /* Gerrit (12 sep 2026): "'Wie rijdt' moet niet lichtgrijs zijn
+                 maar gewoon echt een dropdownmenu optie." Dus per plek een
+                 keuzelijst die er meteen staat, met de afdeling erin, de
+                 huidige naam, en onderaan 'andere naam' voor wie er niet in
+                 staat. Wie alleen kijkt ziet de naam als tekst. */
+              (function(){ var n = plekkenVan(r), uit = "", namen = collegas(); for (var sl = 1; sl <= n; sl++){
                 var naam = String(r[sl===1?"wie":"wie"+sl]||"").trim();
-                uit += '<span class="rijder"><span class="wie'+(MAG_BEWERKEN?'':' vast')+'" data-datum="'+w.iso+'" data-nr="'+r.nr+'" data-plek="'+sl+'"'+
-                  (MAG_BEWERKEN?' title="Klik om de naam aan te passen"':'')+'>'+
-                  (naam ? '\ud83d\udc64 '+esc(naam) : '<span style="color:#b7bfb9;font-weight:400">'+(sl===1?"wie rijdt?":"wie rijdt mee?")+'</span>')+'</span>'+
+                var opties = [""].concat(namen);
+                if (naam && opties.indexOf(naam) < 0) opties.push(naam);
+                uit += '<span class="rijder">'+
+                  (MAG_BEWERKEN
+                    ? '<select class="rijderKies" data-datum="'+w.iso+'" data-nr="'+r.nr+'" data-plek="'+sl+'">'+
+                        opties.map(function(o){ return '<option value="'+esc(o)+'"'+(o===naam?' selected':'')+'>'+(o ? esc(o) : (sl===1?"wie rijdt?":"wie rijdt mee?"))+'</option>'; }).join("")+
+                        '<option value="\u2026">\u2026 andere naam</option></select>'
+                    : '<span class="wie vast">'+(naam ? '\ud83d\udc64 '+esc(naam) : '<span style="color:#b7bfb9;font-weight:400">'+(sl===1?"wie rijdt?":"wie rijdt mee?")+'</span>')+'</span>')+
                   (MAG_BEWERKEN && sl > 1 ? '<button type="button" class="plekWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" data-plek="'+sl+'" title="Deze plek weghalen">&times;</button>' : '')+
                   '</span>';
               }
@@ -1201,7 +1215,7 @@ function tekenBord(){
             /* Print route. Gerrit (10 sep 2026): de monteur krijgt een
                uitgeprint stel papieren mee, voorblad plus de orders in
                bezoekvolgorde. Alleen tonen als er iets te printen is. */
-            (stops.length ? '<button type="button" class="routePrint" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route printen: voorblad en de orderbevestigingen">\ud83d\udda8</button>' : "")+
+
             (MAG_BEWERKEN?'<button type="button" class="weg routeWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route weghalen">&times;</button>':"")+
           '</h4>'+
           '<div class="stops">'+
@@ -1209,6 +1223,9 @@ function tekenBord(){
               : '<div class="leegdrop">'+(MAG_BEWERKEN?"sleep hier een stop":"nog niets")+'</div>')+
           '</div>'+
           (MAG_BEWERKEN?'<button type="button" class="plusstop" data-datum="'+w.iso+'" data-nr="'+r.nr+'">+ stop</button>':"")+
+          /* Gerrit (12 sep 2026): "geen printer-icoontje, want niemand snapt
+             dat. Er moet ergens als button staan: print route." */
+          (stops.length ? '<button type="button" class="routePrint" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Voorblad en de orderbevestigingen van deze route printen">Print route</button>' : "")+
         '</div>';
       }).join("")+
       '</div>'+
@@ -1372,8 +1389,8 @@ function koppelBord(){
   $("bord").querySelectorAll(".routeWeg").forEach(function(b){
     b.addEventListener("click", function(e){ e.stopPropagation(); haalRouteWeg(b.dataset.datum, Number(b.dataset.nr)); });
   });
-  $("bord").querySelectorAll(".route .wie").forEach(function(el){
-    el.addEventListener("click", function(){ bewerkRijder(el); });
+  $("bord").querySelectorAll(".rijderKies").forEach(function(sel){
+    sel.addEventListener("change", function(){ rijderGekozen(sel); });
   });
   /* Een plek erbij of eraf. Bij weghalen schuift een naam op de derde plek
      naar de tweede, zodat er niemand kwijtraakt. */
@@ -1451,6 +1468,44 @@ async function haalRouteWeg(dISO, nr){
 }
 /* De naam van wie de route rijdt. Vaak twee namen ("BART EN JOEY"), dus een
    vrij tekstveld en geen keuzelijst. */
+/* Een naam gekozen in de keuzelijst van een route. 'andere naam' maakt er
+   een invulveld van; al het andere wordt meteen bewaard. */
+async function rijderGekozen(sel){
+  var dISO = sel.dataset.datum, nr = Number(sel.dataset.nr), plek = Number(sel.dataset.plek)||1;
+  var veld = plek === 1 ? "wie" : "wie"+plek;
+  if (sel.value === "\u2026"){
+    var vak = document.createElement("input");
+    vak.className = "naamvak"; vak.maxLength = 60; vak.placeholder = "naam";
+    vak.style.cssText = "width:100%";
+    sel.replaceWith(vak); vak.focus();
+    var af = false;
+    async function klaar(bewaren){
+      if (af) return; af = true;
+      var nieuw = vak.value.trim();
+      if (!bewaren || !nieuw){ teken(); return; }
+      await zetRijder(dISO, nr, veld, nieuw, plek);
+    }
+    vak.addEventListener("keydown", function(e){
+      if (e.key==="Enter"){ e.preventDefault(); klaar(true); }
+      if (e.key==="Escape"){ e.preventDefault(); klaar(false); }
+    });
+    vak.addEventListener("blur", function(){ klaar(true); });
+    return;
+  }
+  await zetRijder(dISO, nr, veld, sel.value.trim(), plek);
+}
+async function zetRijder(dISO, nr, veld, nieuw, plek){
+  try{
+    await bewaarBord(function(d){
+      var lijst = Array.isArray(d.routes[dISO]) && d.routes[dISO].length ? d.routes[dISO] : routesVan(dISO).map(function(x){ return Object.assign({}, x); });
+      var r = lijst.find(function(x){ return Number(x.nr)===nr; });
+      if (r) r[veld] = nieuw; else { var nr2 = { nr:nr, wie:"" }; nr2[veld] = nieuw; lijst.push(nr2); }
+      d.routes[dISO] = lijst;
+    });
+    try{ if(window.fpLog) window.fpLog("route-rijder-gezet", dISO+" route "+nr+" plek "+plek+": "+nieuw); }catch(e){}
+  }catch(err){ alert(err.message); }
+  teken();
+}
 function bewerkRijder(el){
   if (el.dataset.bezig) return;
   el.dataset.bezig = "1";
