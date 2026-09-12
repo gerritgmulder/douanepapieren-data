@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-12", bestand: "planning.html", soort: "hersteld",
+      titel: "Print route: ook de servicemeldingen en losse afspraken erbij",
+      wat: "Een route met een levering en een service printte alleen de order van de levering. Nu krijgt elke stop een eigen blad: een order zijn orderbevestiging, een servicemelding een blad met de melding en de klantgegevens, en een stop zonder order of melding een blad met de afspraak zelf. Onderaan staat ruimte voor wat de monteur heeft gedaan.",
+    },
+
+    {
       datum: "2026-09-12", bestand: "planning.html", soort: "beter",
       titel: "Print route laat eerst een afdrukvoorbeeld zien",
       wat: "Klik je op Print route, dan zie je eerst het hele document: het voorblad met de stops en daaronder de orderbevestigingen, zoals het op papier komt. Bovenin staan de knoppen Printen en Sluiten.",

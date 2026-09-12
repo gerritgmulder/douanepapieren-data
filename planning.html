@@ -1281,10 +1281,43 @@ async function printRoute(dISO, nr){
       if(!confirm("De orders konden niet uit Logic4 worden opgehaald ("+e.message+").\n\nAlleen het voorblad printen?")) return;
     }
   }
+  /* Elke stop een blad, in de volgorde van de route: een order zijn
+     bevestiging, een servicemelding de melding met de klant erbij, en een
+     stop zonder beide een blad met de afspraak zelf. */
+  var meldingen = null;
+  if (stops.some(function(a){ return a.itsId && !/^\d{3,12}$/.test(String(a.ordernr||"").trim()); })){
+    try{
+      var rm = await fetch(W+"/planning/its", { headers:{ "X-Fonteyn-Auth": teamKey() } });
+      var jm = await rm.json().catch(function(){ return null; });
+      meldingen = (jm && jm.meldingen) || [];
+    }catch(e){ meldingen = []; }
+  }
+  var stukken = [];
+  for (var si = 0; si < stops.length; si++){
+    var a = stops[si], onr = String(a.ordernr||"").trim();
+    if (/^\d{3,12}$/.test(onr)){
+      stukken.push({ soort:"order", data: orders.find(function(o){ return String(o.nr)===onr; }) || { nr:onr, ok:false, error:"kwam niet terug uit Logic4" } });
+      continue;
+    }
+    if (a.itsId){
+      var m = (meldingen||[]).find(function(x){ return Number(x.id)===Number(a.itsId); }) || { id:a.itsId, naam:a.klant||"" };
+      var klant = null;
+      if (m.debiteur){
+        try{
+          var rk = await fetch(W+"/planning/its/klant?debiteur="+m.debiteur, { headers:{ "X-Fonteyn-Auth": teamKey() } });
+          var jk = await rk.json(); if (jk.ok) klant = jk.klant;
+        }catch(e){}
+      }
+      if (!klant) klant = { naam:a.klant||m.naam||"", adres:a.plaats||"", telefoon:a.telefoon||"" };
+      stukken.push({ soort:"melding", data: Object.assign({}, m, { klant:klant, datum:a.datum, tijd:a.tijd||"", wie:a.wie||"", wat:a.wat||"" }) });
+      continue;
+    }
+    stukken.push({ soort:"afspraak", data: { klant:a.klant||"", plaats:a.plaats||"", telefoon:a.telefoon||"", datum:a.datum, tijd:a.tijd||"", wie:a.wie||"", wat:a.wat||"", soortNaam:cat(a).naam } });
+  }
   window.fpRoutePrint.print({
     datum: dISO, routeNr: nr, wie: rijdersVan(route).join(" & "),
     stops: stops.map(function(a){ return { tijd:a.tijd||"", klant:a.klant||"", plaats:a.plaats||"" }; }),
-    orders: orders,
+    orders: orders, stukken: stukken,
     logo: new URL("fonteyn-logo.png", location.href).href,
   });
   try{ if(window.fpLog) window.fpLog("route-geprint", "route "+nr+" van "+dISO+", "+stops.length+" stop(s)"); }catch(e){}

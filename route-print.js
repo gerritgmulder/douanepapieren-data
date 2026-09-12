@@ -91,6 +91,74 @@
   }
 
   /* ── Eén orderbevestiging ────────────────────────────────────────────── */
+  /* Een servicemelding of een losse afspraak op een eigen blad.
+     ═══════════════════════════════════════════════════════════════════
+     Gerrit (12 sep 2026): "Als ik een route print waar een levering en
+     service op staat dan zie ik alleen het voorblad en de order die hoort
+     bij de levering. Ik wil van de service ook de order zien of de
+     bijbehorende its-melding, want anders staat er niks in die route."
+     Dus elke stop krijgt een blad: een order zijn bevestiging, een
+     servicemelding dit blad met de melding en de klant, en een stop zonder
+     beide een blad met wat er in de afspraak staat. Onderaan ruimte om te
+     schrijven wat er is gedaan. */
+  function briefkop(logo) {
+    return "<div class='briefkop'>" +
+      "<div class='afzender'>Meervelderweg 52<br>3888 NK Uddel<br>Nederland<br>Telefoon: +31 (0)577 456040</div>" +
+      (logo ? "<img class='logo' src='" + esc(logo) + "' alt='Fonteyn'>" : "<div class='logo-tekst'>Fonteyn</div>") +
+      "<div class='bedrijf'>E-mail: ishop@fonteyn.nl<br>Internet: www.fonteyn.nl<br>" +
+        "IBAN: NL34INGB0679207473<br>BIC: INGBNL2A<br>KvK: 08053333<br>BTW nr. NL815219180B01</div>" +
+    "</div>";
+  }
+  function schrijfregels(n) {
+    var uit = "";
+    for (var i = 0; i < n; i++) uit += "<div class='lijn'>&nbsp;</div>";
+    return uit;
+  }
+  function meldingBlad(m, logo) {
+    var k = m.klant || {};
+    return "<section class='blad bevestiging'>" + briefkop(logo) +
+      "<h2>Servicemelding" + (m.id ? " " + esc(m.id) : "") + "</h2>" +
+      "<div class='blokken'>" +
+        "<div><span class='kop'>Klant:</span><div class='adres'>" +
+          esc(k.naam || m.naam || "") + (k.adres ? "<br>" + esc(k.adres) : "") +
+          (k.telefoon ? "<br>Telefoon: " + esc(k.telefoon) : "") + (k.email ? "<br>" + esc(k.email) : "") +
+        "</div></div>" +
+        "<div><span class='kop'>Afspraak:</span><div class='adres'>" +
+          esc(datumNL(m.datum)) + (m.tijd ? " om " + esc(m.tijd) : "") + (m.wie ? "<br>" + esc(m.wie) : "") +
+        "</div></div>" +
+        "<div class='gegevens'>" +
+          rij("Melding:", m.id) +
+          rij("Gemeld op:", datumNL(m.gemeld)) +
+          rij("Uiterlijk:", datumNL(m.uiterlijk)) +
+          rij("Type:", m.type) +
+          rij("Groep:", m.groep) +
+          rij("Verantwoordelijke:", m.verantwoordelijke) +
+          rij("Debiteuren nr:", m.debiteur) +
+        "</div>" +
+      "</div>" +
+      "<h3 class='kopje'>Omschrijving van de melding</h3>" +
+      "<div class='tekstblok'>" + esc(m.omschrijving || "(geen omschrijving in Logic4)") + "</div>" +
+      (m.wat ? "<h3 class='kopje'>Uit de planning</h3><div class='tekstblok'>" + esc(m.wat) + "</div>" : "") +
+      "<h3 class='kopje'>Uitgevoerd / opmerkingen monteur</h3>" + schrijfregels(8) +
+    "</section>";
+  }
+  function afspraakBlad(a, logo) {
+    return "<section class='blad bevestiging'>" + briefkop(logo) +
+      "<h2>Afspraak</h2>" +
+      "<div class='blokken'>" +
+        "<div><span class='kop'>Klant:</span><div class='adres'>" +
+          esc(a.klant || "") + (a.plaats ? "<br>" + esc(a.plaats) : "") +
+          (a.telefoon ? "<br>Telefoon: " + esc(a.telefoon) : "") +
+        "</div></div>" +
+        "<div><span class='kop'>Wanneer:</span><div class='adres'>" +
+          esc(datumNL(a.datum)) + (a.tijd ? " om " + esc(a.tijd) : "") + (a.wie ? "<br>" + esc(a.wie) : "") +
+        "</div></div>" +
+        "<div class='gegevens'>" + rij("Soort:", a.soortNaam) + "</div>" +
+      "</div>" +
+      (a.wat ? "<h3 class='kopje'>Wat er moet gebeuren</h3><div class='tekstblok'>" + esc(a.wat) + "</div>" : "") +
+      "<h3 class='kopje'>Uitgevoerd / opmerkingen monteur</h3>" + schrijfregels(8) +
+    "</section>";
+  }
   function bevestiging(o, logo) {
     if (!o || !o.ok) {
       return "<section class='blad'><h2>Order " + esc(o && o.nr) + "</h2>" +
@@ -205,7 +273,13 @@
       "<style>@media screen{html{background:#cfd4d9}body{max-width:210mm;margin:14px auto;background:#fff;" +
       "box-shadow:0 4px 24px rgba(0,0,0,.3);padding:12mm;box-sizing:border-box}}</style></head><body>" +
       voorblad(opts) +
-      (opts.orders || []).map(function (o) { return bevestiging(o, opts.logo); }).join("") +
+      (opts.stukken
+        ? opts.stukken.map(function (st) {
+            if (st.soort === "melding") return meldingBlad(st.data, opts.logo);
+            if (st.soort === "afspraak") return afspraakBlad(st.data, opts.logo);
+            return bevestiging(st.data, opts.logo);
+          }).join("")
+        : (opts.orders || []).map(function (o) { return bevestiging(o, opts.logo); }).join("")) +
       "</body></html>";
     var oud = document.getElementById("fpPrintLaag");
     if (oud) oud.remove();
@@ -218,9 +292,15 @@
     balk.style.cssText = "flex:none;background:#144734;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap";
     var kop = document.createElement("b");
     kop.style.cssText = "flex:1;font-size:14px;min-width:0";
-    var aantal = (opts.orders || []).length;
+    var st = opts.stukken || (opts.orders || []).map(function (o) { return { soort: "order", data: o }; });
+    var tel = { order: 0, melding: 0, afspraak: 0 };
+    st.forEach(function (x) { tel[x.soort] = (tel[x.soort] || 0) + 1; });
+    var delen = [];
+    if (tel.order) delen.push(tel.order + " orderbevestiging" + (tel.order === 1 ? "" : "en"));
+    if (tel.melding) delen.push(tel.melding + " servicemelding" + (tel.melding === 1 ? "" : "en"));
+    if (tel.afspraak) delen.push(tel.afspraak + " losse afspra" + (tel.afspraak === 1 ? "ak" : "ken"));
     kop.textContent = "Afdrukvoorbeeld: " + titel.replace(/&amp;/g, "&") + "  \u00b7  voorblad" +
-      (aantal ? " + " + aantal + " orderbevestiging" + (aantal === 1 ? "" : "en") : "");
+      (delen.length ? " + " + delen.join(" + ") : "");
     var knopPrint = document.createElement("button");
     knopPrint.type = "button"; knopPrint.textContent = "Printen";
     knopPrint.style.cssText = "background:#8bc53f;color:#102b1e;border:0;border-radius:8px;padding:8px 18px;font:inherit;font-size:13px;font-weight:700;cursor:pointer";
@@ -250,6 +330,9 @@
     });
   }
 
+  STIJL += ".kopje{font-size:12px;margin:14px 0 4px;text-transform:uppercase;letter-spacing:.04em}" +
+    ".tekstblok{border:1px solid #d1d5db;border-radius:4px;padding:8px 10px;font-size:12px;line-height:1.5;white-space:pre-wrap}" +
+    ".lijn{border-bottom:1px solid #9ca3af;height:22px}";
   global.fpRoutePrint = { print: print, voorblad: voorblad, bevestiging: bevestiging };
 
 })(typeof window !== "undefined" ? window : globalThis);
