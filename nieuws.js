@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-12", bestand: "planning.html", soort: "beter",
+      titel: "Herhalen: elke dag, werkdag, week, om de week of maand",
+      wat: "In het afsprakenvenster is Herhalen een keuzelijst geworden: niet herhalen, elke dag, elke werkdag, elke week, om de week, of elke maand op dezelfde datum. Met een einddatum als je wilt. De zin bij 'Let op' is duidelijker: die zet de afspraak rood op het routebord als er iets bijzonders nodig is, zoals twee man of hijsen.",
+    },
+
+    {
       datum: "2026-09-12", iedereen: true, soort: "hersteld",
       titel: "Nieuwste berichten altijd bovenaan",
       wat: "Een 'tegel erbij' bleef altijd bovenaan staan, ook als er daarna nieuwere berichten kwamen. Nu staat alles op datum, het nieuwste eerst.",

@@ -1096,7 +1096,7 @@ function heleDagVan(dISO){
 /* Valt deze afspraak op deze dag? Een gewone afspraak alleen op zijn eigen
    datum; een hele-dag-afspraak met 'tot en met' op elke dag ertussen. */
 function opDag(a, dISO){
-  if (a.herhaal === "week") return !!voorkomen(a, dISO);
+  if (a.herhaal) return !!voorkomen(a, dISO);
   if (a.datum === dISO) return true;
   return !!(a.datumTot && minuten(a.tijd) === null && a.datum <= dISO && dISO <= a.datumTot);
 }
@@ -1108,11 +1108,37 @@ function opDag(a, dISO){
    voorkomen terug waar een dag in valt: zijn eerste en laatste dag. */
 function voorkomen(a, dISO){
   var van = a.datum, tot = a.datumTot && a.datumTot > a.datum ? a.datumTot : a.datum;
-  if (a.herhaal !== "week"){ return (van <= dISO && dISO <= tot) ? { van: van, tot: tot } : null; }
+  if (!a.herhaal){ return (van <= dISO && dISO <= tot) ? { van: van, tot: tot } : null; }
   var n = dagenTussen(van, dISO); if (n < 0) return null;
-  var lengte = dagenTussen(van, tot), k = ((n % 7) + 7) % 7;
-  if (k > lengte) return null;
-  var start = dagPlus(dISO, -k);
+  var lengte = dagenTussen(van, tot), start = null;
+  if (a.herhaal === "dag" || a.herhaal === "werkdag"){
+    /* Elke (werk)dag: de afspraak zelf is dan één dag; een reeks van drie
+       dagen die elke dag terugkomt bestaat niet. */
+    lengte = 0; start = dISO;
+    if (a.herhaal === "werkdag"){ var wd = new Date(dISO+"T12:00:00").getDay(); if (wd === 0 || wd === 6) return null; }
+  } else if (a.herhaal === "week" || a.herhaal === "2weken"){
+    var stap = a.herhaal === "week" ? 7 : 14, k = ((n % stap) + stap) % stap;
+    if (k > lengte) return null;
+    start = dagPlus(dISO, -k);
+  } else if (a.herhaal === "maand"){
+    /* Zelfde datum elke maand. Bestaat die datum niet (31 in een korte
+       maand), dan slaat die maand over. De voorkomen die dISO dekt begint op
+       die datum in de maand van dISO, of in de maand ervoor als de reeks
+       daar nog doorloopt. */
+    var dag = Number(van.slice(8,10));
+    var kand = [0, -1].map(function(m){
+      var d = new Date(dISO+"T12:00:00"); d.setDate(1); d.setMonth(d.getMonth()+m);
+      var dagen = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+      if (dag > dagen) return null;
+      d.setDate(dag); return iso(d);
+    }).filter(Boolean);
+    for (var i = 0; i < kand.length && !start; i++){
+      var kk = dagenTussen(kand[i], dISO);
+      if (kk >= 0 && kk <= lengte && kand[i] >= van) start = kand[i];
+    }
+    if (!start) return null;
+  } else return null;
+  if (start < van) return null;
   if (a.herhaalTot && start > a.herhaalTot) return null;
   return { van: start, tot: dagPlus(start, lengte) };
 }
@@ -1939,6 +1965,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   // Bestaande afspraak zonder tijd = hele dag. Een nieuwe begint als tijdblok,
   // behalve als hij al met een einddag is voorgevuld.
   var heleDag = nieuw ? !!(voorvul && voorvul.datumTot) : minuten(a.tijd) === null;
+  var HERHAAL = [["","Niet herhalen"],["dag","Elke dag"],["werkdag","Elke werkdag (ma t/m vr)"],["week","Elke week, zelfde dag"],["2weken","Om de week, zelfde dag"],["maand","Elke maand, zelfde datum"]];
 
   var laag = document.createElement("div");
   laag.className = "laag";
@@ -1980,9 +2007,13 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     '<div><label>Duur</label><select id="fDuur">'+DUUR.map(function(d){
       return '<option value="'+d[0]+'"'+(Number(a.duurMin||120)===d[0]?" selected":"")+'>'+d[1]+'</option>'; }).join("")+'</select></div></div>'+
 
-    '<label class="heledagkeus"><input type="checkbox" id="fHerhaal"'+(a.herhaal==="week"?' checked':'')+'> Elke week herhalen, op dezelfde dag</label>'+
-    '<div class="rij2" id="rijHerhaal"'+(a.herhaal==="week"?'':' style="display:none"')+'><div><label>Herhalen tot en met (mag leeg)</label><input type="date" id="fHerhaalTot" value="'+esc(a.herhaalTot||"")+'"></div>'+
-    '<div style="align-self:end;font-size:11.5px;color:var(--grijs);padding-bottom:9px">Leeg = tot je hem verwijdert.</div></div>'+
+    /* Herhalen. Gerrit (12 sep 2026): niet alleen wekelijks, maar een
+       keuzelijst met meer mogelijkheden. Wat er staat is wat een planning
+       nodig heeft: elke dag, elke werkdag, elke week, om de week, elke
+       maand. De einddatum blijft optioneel. */
+    '<div class="rij2"><div><label>Herhalen</label><select id="fHerhaal">'+HERHAAL.map(function(h){
+      return '<option value="'+h[0]+'"'+((a.herhaal||"")===h[0]?' selected':'')+'>'+esc(h[1])+'</option>'; }).join("")+'</select></div>'+
+    '<div id="rijHerhaal"'+(a.herhaal?'':' style="display:none"')+'><label>Herhalen tot en met (mag leeg)</label><input type="date" id="fHerhaalTot" value="'+esc(a.herhaalTot||"")+'"></div></div>'+
     '<label>Wie gaat erheen</label><input id="fWie" maxlength="80" value="'+esc(a.wie)+'" list="fNamen" placeholder="Naam of team">'+
     '<datalist id="fNamen">'+Object.keys(namen).sort().map(function(n){ return '<option value="'+esc(n)+'">'; }).join("")+'</datalist>'+
     '</div><div>'+
@@ -1995,7 +2026,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     '</div></div>'+
     '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fLetop" style="width:auto"'+(a.letop?" checked":"")+'> '+
-      '<span>Let op - springt er rood uit op het bord <span style="color:var(--grijs)">(bijv. met 2 man, hijsen, karretje mee)</span></span></label>'+
+      '<span>Let op: deze afspraak rood laten opvallen op het routebord <span style="color:var(--grijs)">(als er iets bijzonders nodig is, zoals twee man, hijsen of een karretje mee)</span></span></label>'+
     (nieuw?"":'<label style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:13px;color:var(--ink);cursor:pointer">'+
       '<input type="checkbox" id="fKlaar" style="width:auto"'+(a.klaar?" checked":"")+'> Gedaan</label>')+
     (nieuw?"":'<div class="gepland-door">Ingepland door '+esc(planNaam(a.door||"?"))+
@@ -2029,7 +2060,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     if (aan && !$("fDatumVan").value) $("fDatumVan").value = $("fDatum").value;
     if (aan && !$("fDatumTot").value) $("fDatumTot").value = $("fDatumVan").value;
   });
-  $("fHerhaal").addEventListener("change", function(){ $("rijHerhaal").style.display = this.checked ? "" : "none"; });
+  $("fHerhaal").addEventListener("change", function(){ $("rijHerhaal").style.display = this.value ? "" : "none"; });
   $("fDatumVan").addEventListener("change", function(){
     if (!$("fDatumTot").value || $("fDatumTot").value < this.value) $("fDatumTot").value = this.value;
   });
@@ -2129,8 +2160,8 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       /* Alleen een hele-dag-afspraak loopt over meerdere dagen; de laatste
          dag moet na de eerste liggen, anders is het gewoon één dag. */
       datumTot: ($("fHeleDag").checked && $("fDatumTot").value > $("fDatumVan").value) ? $("fDatumTot").value : null,
-      herhaal: $("fHerhaal").checked ? "week" : null,
-      herhaalTot: ($("fHerhaal").checked && $("fHerhaalTot").value) ? $("fHerhaalTot").value : null,
+      herhaal: $("fHerhaal").value || null,
+      herhaalTot: ($("fHerhaal").value && $("fHerhaalTot").value) ? $("fHerhaalTot").value : null,
       klant: $("fKlant").value.trim(), telefoon: $("fTel").value.trim(),
       plaats: $("fPlaats").value.trim(), ordernr: $("fOrder").value.trim(),
       wat: $("fWat").value.trim(), wie: $("fWie").value.trim(),
