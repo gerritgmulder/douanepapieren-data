@@ -82,7 +82,11 @@
          te brede kop of balk de hele pagina opzij, en de groene kop houdt dan
          halverwege op (Gerrit, 12 sep 2026). Op de pc blijft de regel van
          hierboven gelden: niet verstoppen, maar melden. */
-      "@media (max-width:600px){html,body{overflow-x:hidden;max-width:100vw}}";
+      /* clip, niet hidden: overflow:hidden maakt van de pagina zelf een
+         schuifvak, en dan plakt een kop met position:sticky nergens meer aan
+         vast. Precies dat gebeurde op de telefoon bij Voorraadbeheer
+         (Gerrit, 12 sep 2026): de balk met terug en zoeken schoof mee weg. */
+      "@media (max-width:600px){html,body{overflow-x:clip;max-width:100vw}}";
     doc.head.appendChild(st);
   }
 

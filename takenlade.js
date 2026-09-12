@@ -539,7 +539,11 @@
       "  transform:translateX(100%);transition:transform .24s ease;display:flex;flex-direction:column;",
       "  font:14px/1.45 Montserrat,system-ui,sans-serif;color:#111827}",
       "#tlLade.tl-uit{transform:translateX(0)}",
-      "#tlKop{background:#144734;color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px;flex:none}",
+      /* padding-top met de veilige rand: op een iPhone die als app op het
+         beginscherm staat, zit de klok óver de bovenste 50 pixels. De kop van
+         de lade viel daar precies onder en de knop Sluiten was onbereikbaar
+         (Gerrit, 12 sep 2026). */
+      "#tlKop{background:#144734;color:#fff;padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top));display:flex;align-items:center;gap:10px;flex:none}",
       "#tlKop b{font-size:15px}",
       "#tlDicht{margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;",
       "  border-radius:7px;padding:4px 11px;font:inherit;font-size:12px;cursor:pointer}",

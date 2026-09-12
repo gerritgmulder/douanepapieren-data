@@ -2674,9 +2674,45 @@ async function dpHandleMollieWebhook(request, env) {
 // (Deze toelichting stond er eerder anders: dat het shared secret in de
 // tegel-HTML zou staan. Dat klopt niet meer — de reden voor de tweede sleutel
 // blijft, de onderbouwing is hierboven bijgesteld.)
-function dpIsAdmin(request, env) {
+/* Wie mag het partnerportaal beheren.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (12 sep 2026): "moet zo'n beheersleutel écht? Ik vind het mega
+   onhandig en wil gewoon mensen kunnen toewijzen ... en dat zij dan alleen
+   maar dealers kunnen aanmaken enzo."
+
+   Dus: geen aparte sleutel meer voor mensen. Wie in toegang.js in de groep
+   'dealerportaal' staat mag hier bij, met de gewone teamsleutel van de
+   computer plus wie hij is (X-Fonteyn-User). Die groep is dezelfde lijst die
+   bepaalt wie de tegel ziet, dus iemand toevoegen is één regel in
+   toegang.js. De oude beheersleutel (X-DP-Admin) blijft werken voor
+   scripts. toegang.js komt van GitHub en blijft tien minuten in het
+   geheugen van de worker; valt GitHub weg, dan geldt de laatste kopie. */
+let toegangCache = { ts: 0, mag: null };
+async function toegangMag(env, groep, wie) {
+  const w = String(wie || "").toLowerCase().trim();
+  if (!w) return false;
+  if (!toegangCache.mag || Date.now() - toegangCache.ts > 10 * 60000) {
+    try {
+      const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/toegang.js?t=" + Date.now(),
+                            { cf: { cacheTtl: 0 } });
+      if (r.ok) {
+        const src = await r.text();
+        const venster = {};
+        new Function("window", src)(venster);
+        if (venster.fpToegang && typeof venster.fpToegang.mag === "function") {
+          toegangCache = { ts: Date.now(), mag: venster.fpToegang.mag };
+        }
+      }
+    } catch (e) { console.log("[toegang] toegang.js niet geladen: " + String(e.message || e)); }
+  }
+  return !!(toegangCache.mag && toegangCache.mag(groep, w));
+}
+async function dpIsAdmin(request, env) {
   const h = request.headers.get("X-DP-Admin") || "";
-  return !!env.DP_ADMIN_KEY && h === env.DP_ADMIN_KEY;
+  if (env.DP_ADMIN_KEY && h === env.DP_ADMIN_KEY) return true;
+  const team = request.headers.get("X-Fonteyn-Auth") || "";
+  if (!env.SHARED_SECRET || team !== env.SHARED_SECRET) return false;
+  return toegangMag(env, "dealerportaal", request.headers.get("X-Fonteyn-User") || "");
 }
 
 async function dpAdminMailStatus(env, url) {
@@ -2843,7 +2879,7 @@ async function handleDealerRoutes(request, env, url) {
 
   // Admin (interne beheertegel, shared secret — géén dealer-sessie)
   if (p.startsWith("/dealers/admin/")) {
-    if (!dpIsAdmin(request, env)) return reply(401, { ok: false, error: "unauthorized" });
+    if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "unauthorized" });
     if (p === "/dealers/admin/mailstatus" && request.method === "GET") return dpAdminMailStatus(env, url);
     if (p === "/dealers/admin/loginlink" && request.method === "POST") return dpAdminLoginLink(request, env, url);
     if (p === "/dealers/admin/uitnodigen" && request.method === "POST") return dpAdminUitnodigen(request, env, url);
@@ -2855,7 +2891,7 @@ async function handleDealerRoutes(request, env, url) {
        warmtepomp op pagina 2 van haar eigen prijslijst staat - dat hoort
        gewoon na te kijken te zijn. */
     if (p === "/dealers/admin/file" && request.method === "GET") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const id = dpFileId(url);
       if (!id) return reply(400, { ok: false, error: "bad-id" });
       const buf = await env.FONTEYN_DATA.get("dpfile:" + id, { type: "arrayBuffer" });
@@ -2871,7 +2907,7 @@ async function handleDealerRoutes(request, env, url) {
        de verkeerde categorie en vroeg om ze te kunnen verplaatsen of zo nodig
        te verwijderen. */
     if (p === "/dealers/admin/file" && request.method === "DELETE") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const id = dpFileId(url);
       if (!id) return reply(400, { ok: false, error: "bad-id" });
       const bestond = await env.FONTEYN_DATA.get("dpfile:" + id, { type: "arrayBuffer" });
@@ -10295,24 +10331,24 @@ export default {
     /* Relaties zoeken en aanmaken voor het Partnerportaal. Beheersleutel, want
        aanmaken schrijft echt in Logic4 en dat is niet terug te draaien. */
     if (url.pathname === "/dealers/admin/relatie/zoek" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const b = await request.json().catch(() => ({}));
       return reply(200, await relZoek(env, b.q).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/dealers/admin/relatie/aanmaken" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const b = await request.json().catch(() => ({}));
       return reply(200, await relAanmaken(env, b).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     /* Btw-nummer nakijken bij de EU. Beheersleutel, net als de rest van dit
        blok: het hoort bij het aanmaken van een relatie. */
     if (url.pathname === "/dealers/admin/relatie/btw" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const b = await request.json().catch(() => ({}));
       return reply(200, await btwControle(b.btw).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/dealers/admin/relatie/zoeklijst" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       return reply(200, await relIndexBouw(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
 
@@ -10417,7 +10453,7 @@ export default {
        postcode, plaats en land terug. Beheersleutel: alleen het beheerscherm
        gebruikt dit, en zo blijft het geen open doorgeefluik naar buiten. */
     if (url.pathname === "/dealers/admin/adres/zoek" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const b = await request.json().catch(() => ({}));
       const q = String(b.q || "").trim().slice(0, 200);
       if (q.length < 3) return reply(400, { ok: false, error: "zoekterm te kort" });
@@ -10504,7 +10540,7 @@ export default {
       return reply(200, await ikoVoorstel(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/voorraad/inkooporder/aanmaken" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const body = await request.json().catch(() => ({}));
       return reply(200, await ikoAanmaken(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
@@ -10521,19 +10557,19 @@ export default {
        aanmaken: dit haalt een bestelling uit de bron waar de forecast en de
        reserveringen ook uit lezen. */
     if (url.pathname === "/voorraad/spa-migratie/verwijderen" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const body = await request.json().catch(() => ({}));
       return reply(200, await spaMigratieVerwijderen(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/voorraad/spa-migratie/uitvoeren" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const body = await request.json().catch(() => ({}));
       return reply(200, await spaMigratieUitvoeren(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     // Een modelnaam die Chantal anders typt dan Logic4 hem kent, eenmalig
     // koppelen. Geldt daarna overal — ook voor de proforma-koppeling.
     if (url.pathname === "/voorraad/spa-migratie/alias" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const body = await request.json().catch(() => ({}));
       const van = ikoNormaliseerModel(body.van), naar = String(body.naar || "").trim();
       if (!van || !naar) return reply(400, { ok: false, error: "van en naar zijn allebei nodig" });
@@ -10916,12 +10952,12 @@ export default {
       return reply(200, await spaOntvangstVoorstel(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/voorraad/spa-ontvangst/eta" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const body = await request.json().catch(() => ({}));
       return reply(200, await spaOntvangstEta(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/voorraad/spa-ontvangst/boeken" && request.method === "POST") {
-      if ((request.headers.get("X-DP-Admin") || "") !== env.DP_ADMIN_KEY) return reply(401, { ok: false, error: "beheersleutel vereist" });
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
       const body = await request.json().catch(() => ({}));
       return reply(200, await spaOntvangstBoeken(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
@@ -11076,7 +11112,7 @@ export default {
     // computer van elke medewerker. Daarvoor geldt de smallere beheersleutel
     // DP_ADMIN_KEY; zie de toelichting bij dpIsAdmin.
     if (bucket.startsWith("dealer-")) {
-      if (!dpIsAdmin(request, env)) return reply(403, "Dealer-buckets vereisen de beheersleutel (X-DP-Admin)");
+      if (!(await dpIsAdmin(request, env))) return reply(403, "Geen toegang tot de partnergegevens: je staat niet in de groep dealerportaal");
     } else {
       const authHeader = request.headers.get("X-Fonteyn-Auth") || "";
       const expected = env.SHARED_SECRET || "";

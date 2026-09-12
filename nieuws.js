@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-12", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Geen beheersleutel meer, en de tegel werkt op de telefoon",
+      wat: "De beheersleutel is weg. Wie deze tegel mag zien, mag er ook in werken: dealers en partners aanmaken, uitnodigen en bewerken. Op de telefoon staan de partners nu als kaarten onder elkaar en past het venster voor een nieuwe relatie op het scherm.",
+    },
+
+    {
+      datum: "2026-09-12", iedereen: true, soort: "hersteld",
+      titel: "Telefoon: takenlijst weer te sluiten, koppen blijven staan",
+      wat: "De kop van de takenlijst viel op een iPhone onder de klok, waardoor Sluiten onbereikbaar was. In Voorraadbeheer op de telefoon blijven de balk met terug en de zoekbalk nu bovenaan staan terwijl je door de lijst scrolt. En de dubbele knop Dashboard in de kop is weg.",
+    },
+
+    {
       datum: "2026-09-12", iedereen: true, soort: "beter",
       titel: "De telefoonversie is opgeruimd",
       wat: "Op de telefoon staan nu alleen de tegels die daar zin hebben: Mijn uren, Planning, Voorraadbeheer, Passion Partners Beheer, Passion Partners en Orderstatus, en alleen als je die op de pc ook mag zien. De groene kop past weer op het scherm, met Uitloggen in beeld, en er valt niets meer opzij te schuiven. De knop Dashboard brengt je terug naar het telefoondashboard in plaats van de pc-versie. In Planning staan de knoppen bovenaan netjes onder elkaar.",

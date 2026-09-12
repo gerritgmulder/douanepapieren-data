@@ -88,7 +88,10 @@
     /* 1. Terug naar het dashboard. Bestaat de link al, dan blijft hij staan;
           alleen een kale pijl krijgt er het woord bij, want "←" alleen zegt
           niet waar je heen gaat. */
-    var terug = kop.querySelector('a[href="dashboard.html"]');
+    /* Op de telefoon herschrijft de server "dashboard.html" naar "./", dus
+       daar heet dezelfde link anders. Zonder deze regel kwam er een tweede
+       knop Dashboard bij (Gerrit, 12 sep 2026). */
+    var terug = kop.querySelector('a[href="dashboard.html"],a[href="./"],a.back');
     if (!terug) {
       terug = doc.createElement("a");
       terug.href = "dashboard.html";

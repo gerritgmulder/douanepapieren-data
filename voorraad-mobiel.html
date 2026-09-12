@@ -80,6 +80,12 @@ main{padding:14px;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
 
 .zoek{width:100%;border:1px solid var(--rand);border-radius:10px;padding:13px;font:inherit;
       font-size:16px;background:#fff;margin-bottom:12px}
+/* De zoekbalk blijft onder de kop staan als je door de lijst scrolt. Gerrit
+   (12 sep 2026): "Als ik bij Overzicht ga scrollen dan verlies ik de bovenste
+   balk om terug te gaan naar het dashboard en ook de zoekfunctie verdwijnt."
+   De kop plakt al; de zoekbalk plakt er nu onder, met de hoogte van de kop
+   als afstand (die zet het script bij het laden). */
+.zoek{position:sticky;top:var(--kophoogte,54px);z-index:15;box-shadow:0 6px 10px -8px rgba(0,0,0,.25)}
 .zoek:focus{outline:none;border-color:var(--lime)}
 .rij{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:13px 14px;margin-bottom:9px}
 .rij h3{margin:0 0 7px;font-size:15px;color:var(--groen);font-weight:600}
@@ -146,6 +152,11 @@ main{padding:14px;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
 </header>
 
 <main>
+  <script>
+    (function(){ var k=document.querySelector("header"); if(!k) return;
+      function zet(){ document.documentElement.style.setProperty("--kophoogte", (k.offsetHeight)+"px"); }
+      zet(); window.addEventListener("resize", zet); })();
+  </script>
   <!-- beginscherm -->
   <div id="s-home">
     <div class="menu">
