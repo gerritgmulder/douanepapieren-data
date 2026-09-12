@@ -185,50 +185,69 @@
      erbij. Een eigen venster en geen @media print op de tegel zelf: dan zou de
      hele planning mee in de printopmaak moeten en dat loopt bij de eerste
      wijziging aan het bord alweer uit de pas. */
-  /* Printen zonder een nieuw venster.
+  /* Eerst kijken, dan printen.
      ═══════════════════════════════════════════════════════════════════
-     Gerrit (12 sep 2026): "De printpagina kon niet worden geopend. Sta
-     pop-ups toe voor het Dashboard. Waar gaat dat over? Ik wil gewoon
-     kunnen printen."
-
-     Dat kwam door window.open. In de app vangt de schil elk nieuw venster
-     af en maakt er een tegelvenster van, of weigert het; de printpagina
-     kreeg daardoor nooit een venster en de pagina dacht dat pop-ups
-     geblokkeerd waren. De schil zit in het installatiebestand, dus die weg
-     is dicht. Daarom nu een onzichtbaar kader in de pagina zelf: daar gaat
-     de printinhoud in, en dat kader print zichzelf. Werkt in de app en in
-     elke browser, zonder venster en zonder pop-upvraag. */
+     Gerrit (12 sep 2026): "Ik wil een afdrukvoorbeeld zien voordat de
+     'print route' knop echt gaat printen. Want nu weet ik niet wat ie gaat
+     printen." Dus geen los venster (dat vangt de app af, en dan komt er
+     niets), maar een laag over de pagina met het hele document erin: het
+     voorblad en daaronder de orderbevestigingen, precies zoals het op papier
+     komt. Bovenin twee knoppen: Printen en Sluiten. Printen gebeurt vanuit
+     dat kader zelf, zodat wat je ziet ook is wat eruit komt. */
   function print(opts) {
+    var titel = "Route " + esc(opts.routeNr) + " - " + esc(datumNL(opts.datum));
     var html = "<!doctype html><html lang='nl'><head><meta charset='utf-8'>" +
-      "<title>Route " + esc(opts.routeNr) + " - " + esc(datumNL(opts.datum)) + "</title>" +
-      "<style>" + STIJL + "</style></head><body>" +
+      "<title>" + titel + "</title>" +
+      "<style>" + STIJL + "</style>" +
+      /* Alleen op het scherm: het document als een vel van A4-breedte op een
+         grijze achtergrond, zodat het voorbeeld eruitziet als het papier.
+         Bij het printen zelf doet deze regel niets. */
+      "<style>@media screen{html{background:#cfd4d9}body{max-width:210mm;margin:14px auto;background:#fff;" +
+      "box-shadow:0 4px 24px rgba(0,0,0,.3);padding:12mm;box-sizing:border-box}}</style></head><body>" +
       voorblad(opts) +
       (opts.orders || []).map(function (o) { return bevestiging(o, opts.logo); }).join("") +
       "</body></html>";
-    var oud = document.getElementById("fpPrintKader");
+    var oud = document.getElementById("fpPrintLaag");
     if (oud) oud.remove();
+
+    var laag = document.createElement("div");
+    laag.id = "fpPrintLaag";
+    laag.style.cssText = "position:fixed;inset:0;z-index:100000;background:rgba(17,24,39,.72);display:flex;flex-direction:column;" +
+      "font-family:Montserrat,system-ui,sans-serif";
+    var balk = document.createElement("div");
+    balk.style.cssText = "flex:none;background:#144734;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap";
+    var kop = document.createElement("b");
+    kop.style.cssText = "flex:1;font-size:14px;min-width:0";
+    var aantal = (opts.orders || []).length;
+    kop.textContent = "Afdrukvoorbeeld: " + titel.replace(/&amp;/g, "&") + "  \u00b7  voorblad" +
+      (aantal ? " + " + aantal + " orderbevestiging" + (aantal === 1 ? "" : "en") : "");
+    var knopPrint = document.createElement("button");
+    knopPrint.type = "button"; knopPrint.textContent = "Printen";
+    knopPrint.style.cssText = "background:#8bc53f;color:#102b1e;border:0;border-radius:8px;padding:8px 18px;font:inherit;font-size:13px;font-weight:700;cursor:pointer";
+    var knopDicht = document.createElement("button");
+    knopDicht.type = "button"; knopDicht.textContent = "Sluiten";
+    knopDicht.style.cssText = "background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:8px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer";
+    balk.appendChild(kop); balk.appendChild(knopPrint); balk.appendChild(knopDicht);
+    laag.appendChild(balk);
+
     var kader = document.createElement("iframe");
     kader.id = "fpPrintKader";
-    kader.setAttribute("aria-hidden", "true");
-    kader.style.cssText = "position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none";
-    document.body.appendChild(kader);
+    kader.title = "Afdrukvoorbeeld";
+    kader.style.cssText = "flex:1;width:100%;border:0;background:#fff";
+    laag.appendChild(kader);
+    document.body.appendChild(laag);
     var d = kader.contentDocument || kader.contentWindow.document;
     d.open(); d.write(html); d.close();
-    var klaar = false;
-    function doePrint() {
-      if (klaar) return; klaar = true;
-      // Wachten tot het logo geladen is, anders print hij een lege plek.
-      setTimeout(function () {
-        try { kader.contentWindow.focus(); kader.contentWindow.print(); }
-        catch (e) { alert("Printen lukte niet: " + (e.message || e)); }
-        // Het kader mag weg zodra het printvenster dicht is; na een minuut sowieso.
-        var weg = function () { try { kader.remove(); } catch (e2) {} };
-        try { kader.contentWindow.addEventListener("afterprint", weg); } catch (e3) {}
-        setTimeout(weg, 60000);
-      }, 300);
-    }
-    kader.contentWindow.addEventListener("load", doePrint);
-    if (d.readyState === "complete") doePrint();
+
+    function dicht() { try { laag.remove(); } catch (e) {} document.removeEventListener("keydown", opEsc); }
+    function opEsc(e) { if (e.key === "Escape") dicht(); }
+    document.addEventListener("keydown", opEsc);
+    knopDicht.addEventListener("click", dicht);
+    laag.addEventListener("click", function (e) { if (e.target === laag) dicht(); });
+    knopPrint.addEventListener("click", function () {
+      try { kader.contentWindow.focus(); kader.contentWindow.print(); }
+      catch (e) { alert("Printen lukte niet: " + (e.message || e)); }
+    });
   }
 
   global.fpRoutePrint = { print: print, voorblad: voorblad, bevestiging: bevestiging };

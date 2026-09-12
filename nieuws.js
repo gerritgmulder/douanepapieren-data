@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-12", bestand: "planning.html", soort: "beter",
+      titel: "Print route laat eerst een afdrukvoorbeeld zien",
+      wat: "Klik je op Print route, dan zie je eerst het hele document: het voorblad met de stops en daaronder de orderbevestigingen, zoals het op papier komt. Bovenin staan de knoppen Printen en Sluiten.",
+    },
+
+    {
       datum: "2026-09-12", bestand: "planning.html", soort: "hersteld",
       titel: "Print route werkt weer, en wie rijdt is een keuzelijst",
       wat: "Onder elke route staat nu een knop 'Print route' in plaats van een printericoontje, en printen opent geen los venster meer, dus de melding over pop-ups is weg. Boven de route staan de plekken voor wie rijdt als echte keuzelijsten met de afdeling erin; kies 'andere naam' voor iemand die er niet in staat.",
