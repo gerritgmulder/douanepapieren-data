@@ -112,8 +112,9 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 /* De balken van hele dagen. Zelfde kolomindeling als het raster eronder,
    zodat een balk precies boven zijn dagen staat; een balk over drie dagen
    is één stuk, niet drie losse blokjes. */
-.dagbanden{display:grid;grid-template-columns:52px repeat(var(--dagen,7),minmax(var(--dagbreedte,96px),1fr));
-       background:#fff;border-bottom:2px solid var(--rand);padding:4px 0 6px;position:sticky;top:0;z-index:7}
+.rasterkop{position:sticky;top:0;z-index:8;background:#fff;border-bottom:2px solid var(--rand)}
+.dagkoppen,.routekoppen,.dagbanden{display:grid;grid-template-columns:52px repeat(var(--dagen,7),minmax(var(--dagbreedte,96px),1fr))}
+.dagbanden{background:#fff;border-top:1px solid var(--rand);padding:4px 0 6px}
 /* Onder de balken een lege regel per dag: daar klik je om iets voor een hele
    dag te maken, zoals in Outlook. Gerrit (11 sep 2026): "moet je gewoon
    bovenaan kunnen klikken". */
@@ -145,13 +146,12 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 /* Een hele-dag-balk die doorloopt naar de volgende dag. */
 .hd-blok.door-rechts{border-top-right-radius:0;border-bottom-right-radius:0;margin-right:-4px}
 .hd-blok.door-links{border-top-left-radius:0;border-bottom-left-radius:0;border-left-width:0;margin-left:-4px}
-.dag-kop{position:sticky;top:0;background:#fff;z-index:6;border-bottom:1px solid var(--rand);
-       padding:8px 8px 6px;text-align:left}
+.dag-kop{background:#fff;padding:8px 8px 6px;text-align:left}
 .dag-kop .dnaam{font-size:11px;color:var(--grijs);text-transform:lowercase}
 .dag-kop .dnum{font-size:17px;font-weight:700;color:var(--ink);line-height:1.2}
 .dag-kop.vandaag .dnum{color:#fff;background:var(--groen);border-radius:50%;display:inline-block;
        width:28px;height:28px;text-align:center;line-height:28px;font-size:14px}
-.hoek{position:sticky;top:0;left:0;background:#fff;z-index:8;border-bottom:1px solid var(--rand)}
+.hoek{position:sticky;left:0;background:#fff;z-index:8}
 .heledag-cel{border-bottom:1px solid var(--rand);border-left:1px solid #f3f4f6;padding:3px 3px 5px;min-height:26px}
 .heledag-label{border-bottom:1px solid var(--rand);font-size:10px;color:var(--grijs);text-align:right;
        padding:6px 6px 0;position:sticky;left:0;background:#fff;z-index:5}
@@ -208,6 +208,15 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 @media (max-width:820px){
   .agenda{display:none}
   .lijst{display:block}
+  /* Het routebord op een telefoon: dagen onder elkaar en per dag de routes
+     onder elkaar, anders staan vijftien routekolommen op 375 pixels en zie
+     je van geen enkele klant de naam (Gerrit, 12 sep 2026). */
+  /* Dubbele klasse: de gewone regels voor .bord en .borddag staan verderop
+     in dit bestand en zouden anders winnen. */
+  .bord.bord{flex-direction:column}
+  .bord .borddag{flex:0 0 auto}
+  .borddag .routes{flex-direction:column}
+  .routes .route{min-height:0;flex:0 0 auto}
 }
 .dagkaart{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:10px;margin-bottom:10px}
 .dagkaart.vandaag{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.25)}
@@ -320,8 +329,15 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
       grid-template-areas:"nr tel weg" "wie wie wie";gap:2px 5px;line-height:1.25}
 .route > h4 .nr{grid-area:nr;color:var(--groen);font-weight:700;font-size:11.5px;
       text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
-.route > h4 .wie{grid-area:wie;font-weight:600;color:var(--ink);min-width:0;cursor:text;font-size:11px;
+.route > h4 .rijders{grid-area:wie;display:flex;flex-direction:column;gap:1px;min-width:0}
+.route > h4 .rijder{display:flex;align-items:center;gap:3px;min-width:0}
+.route > h4 .wie{font-weight:600;color:var(--ink);min-width:0;cursor:text;font-size:11px;flex:1;
       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.route > h4 .plekWeg{background:none;border:0;color:var(--grijs);cursor:pointer;font-size:12px;line-height:1;padding:0 2px;flex:none}
+.route > h4 .plekWeg:hover{color:var(--rood)}
+.route > h4 .plekErbij{background:none;border:1px dashed var(--rand);border-radius:5px;color:var(--grijs);cursor:pointer;
+      font:inherit;font-size:10px;padding:1px 6px;align-self:flex-start;margin-top:1px}
+.route > h4 .plekErbij:hover{border-color:var(--lime);color:var(--groen)}
 .route > h4 .wie:hover{text-decoration:underline dotted;text-underline-offset:2px}
 /* Alleen-lezen: geen streepje en geen tekstcursor, anders lijkt het klikbaar. */
 .route > h4 .wie.vast{cursor:default}
@@ -468,7 +484,15 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
       <!-- Hele dagen, als lange balken boven het raster. Gerrit (11 sep 2026):
            "als een lange balk bovenin, boven de planning, en niet in het
            raster van de dagen waar de afspraken staan." -->
-      <div class="dagbanden" id="dagbanden"></div>
+      <!-- Blijft staan bij het scrollen: de dagen, de hele dagen en de routes.
+           Gerrit (12 sep 2026): "Die datumbalk bovenaan moet fixed zijn zodat
+           je die altijd blijft zien (inclusief afspraken die een hele dag
+           duren)". Eén blok dat plakt, met dezelfde kolommen als het raster. -->
+      <div class="rasterkop" id="rasterKop">
+        <div class="dagkoppen" id="dagKoppen"></div>
+        <div class="dagbanden" id="dagbanden"></div>
+        <div class="routekoppen" id="routeKoppen"></div>
+      </div>
       <div class="rooster" id="rooster"></div>
     </div>
   </div>
@@ -494,8 +518,10 @@ var MAANDEN = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov"
 var CATS = {
   levering:     { naam:"Levering",              kleur:"#8bc53f", zacht:"#f1f8e5" },
   service:      { naam:"Service",               kleur:"#f59e0b", zacht:"#fef3d8" },
-  ophalen:      { naam:"Ophalen / retour",      kleur:"#3b82f6", zacht:"#e3edfd" },
-  bezichtiging: { naam:"Showroom / bezichtiging", kleur:"#a855f7", zacht:"#f3e8fd" },
+  /* Gerrit (12 sep 2026): Ophalen/retour en Showroom/bezichtiging eruit,
+     Verlof erbij in het blauw. Een oude afspraak in een verdwenen categorie
+     valt terug op Intern (zie cat). */
+  verlof:       { naam:"Verlof",                kleur:"#3b82f6", zacht:"#e3edfd" },
   intern:       { naam:"Intern / overig",       kleur:"#6b7280", zacht:"#eef0f2" },
 };
 function cat(a){ return CATS[a.soort] || CATS.intern; }
@@ -513,7 +539,13 @@ var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
 
    Alles wat wijzigt hangt aan deze vlag: de knoppen verschijnen niet, slepen
    doet niets en het formulier opent zonder opslaan of verwijderen. */
-var MAG_BEWERKEN = window.fpToegang ? window.fpToegang.mag("planning-bewerk", ik) : true;
+/* Op de telefoon alleen kijken. Gerrit (12 sep 2026): "als iemand via zijn
+   telefoon kijkt dat die geen aanpassingen kan doen in de agenda". De
+   telefoonversie komt van /m/ en heeft de brug (mobiel-brug.js) geladen;
+   daaraan herkennen we hem, niet aan de schermbreedte, want een smal venster
+   op een pc blijft gewoon een pc. */
+var OP_TELEFOON = !!(window.fpBrug || /^\/m\//.test(location.pathname));
+var MAG_BEWERKEN = !OP_TELEFOON && (window.fpToegang ? window.fpToegang.mag("planning-bewerk", ik) : true);
 var afspraken = [];
 var maandag = weekStart(new Date());
 var filterUit = {};                 // categorie-sleutel -> true als uitgevinkt
@@ -847,24 +879,26 @@ function teken(){
   var vandaagISO = iso(new Date());
   var uren = UUR_TOT - UUR_VAN;
 
-  var html = '<div class="hoek"></div>';
+  var kopHtml = '<div class="hoek"></div>';
   week.forEach(function(w,i){
     var route = w.items.some(function(a){ return a.plaats && !a.klaar; })
       ? '<button type="button" class="route-knop" data-datum="'+w.iso+'" title="Route van deze dag in Google Maps">🚗</button>' : "";
-    html += '<div class="dag-kop'+(w.iso===vandaagISO?" vandaag":"")+'">'+route+
+    kopHtml += '<div class="dag-kop'+(w.iso===vandaagISO?" vandaag":"")+'">'+route+
       '<span class="dnaam">'+DAGKORT[dagIndex(w.datum)]+'</span><br><span class="dnum">'+w.datum.getDate()+'</span></div>';
   });
+  var html = "";
 
   /* De routes van de dag, naast elkaar. Gerrit (11 sep 2026): "je moet bij
      TIJDRASTER ook kunnen zien om welke route het gaat" en "dat de routes
      naast elkaar staan". Elke dag krijgt per route een eigen strook, met de
      naam van de route erboven; wie er rijdt staat erbij zodra dat op het
      routebord is ingevuld. */
-  html += '<div class="heledag-label">route</div>';
+  var routeHtml = '<div class="heledag-label">route</div>';
   week.forEach(function(w){
     var routes = routesVan(w.iso);
-    html += '<div class="routekop-cel">'+routes.map(function(r){
-      return '<div class="routekop"><span class="rnr">R'+r.nr+'</span>'+(r.wie?'<span class="rwie">'+esc(r.wie)+'</span>':'')+'</div>';
+    routeHtml += '<div class="routekop-cel">'+routes.map(function(r){
+      var namen = rijdersVan(r).join(" & ");
+      return '<div class="routekop"><span class="rnr">R'+r.nr+'</span>'+(namen?'<span class="rwie">'+esc(namen)+'</span>':'')+'</div>';
     }).join("")+'</div>';
   });
 
@@ -904,14 +938,16 @@ function teken(){
   });
 
   tekenBanden(week);
-  $("rooster").style.setProperty("--dagen", week.length);
   /* Breed genoeg voor de routes naast elkaar, maar nooit breder dan het
      venster: opzij schuiven mag niet. Past het niet, dan worden de stroken
      smaller en zie je in het blok alleen het nummer en de naam. */
+  ["rooster","rasterKop"].forEach(function(id){
+    $(id).style.setProperty("--dagen", week.length);
+    $(id).style.setProperty("--dagbreedte", Math.max(96, 84*maxRoutes) + "px");
+  });
   $("rooster").style.minWidth = "0";
-  $("rooster").style.setProperty("--dagbreedte", Math.max(96, 84*maxRoutes) + "px");
-  $("dagbanden").style.setProperty("--dagen", week.length);
-  $("dagbanden").style.setProperty("--dagbreedte", Math.max(96, 84*maxRoutes) + "px");
+  $("dagKoppen").innerHTML = kopHtml;
+  $("routeKoppen").innerHTML = routeHtml;
   $("rooster").innerHTML = html;
 
   // telefoonweergave
@@ -1016,6 +1052,15 @@ var routesPerDag = {}, dagNotities = {};
    bewaard. Zo liep het per dag uit elkaar. Drie is wat er normaal rijdt; meer
    of minder kan nog steeds per dag, dat blijft gewoon staan. */
 var ROUTES_STANDAARD = 3;
+/* Wie er op een route rijdt: standaard twee plekken, want ze rijden vaak met
+   z'n tweeën (Gerrit, 12 sep 2026). Een tweede plek kan weg, een derde kan
+   erbij. De namen staan in wie, wie2 en wie3; 'plekken' zegt hoeveel er
+   getoond worden. */
+function plekkenVan(r){ var n = Number(r && r.plekken); return (n >= 1 && n <= 3) ? n : 2; }
+function rijdersVan(r){
+  var uit = [r && r.wie, r && r.wie2, r && r.wie3].slice(0, plekkenVan(r));
+  return uit.map(function(x){ return String(x||"").trim(); }).filter(Boolean);
+}
 function routesVan(dISO){
   var r = routesPerDag[dISO];
   if (Array.isArray(r) && r.length) return r;
@@ -1034,8 +1079,25 @@ function heleDagVan(dISO){
 /* Valt deze afspraak op deze dag? Een gewone afspraak alleen op zijn eigen
    datum; een hele-dag-afspraak met 'tot en met' op elke dag ertussen. */
 function opDag(a, dISO){
+  if (a.herhaal === "week") return !!voorkomen(a, dISO);
   if (a.datum === dISO) return true;
   return !!(a.datumTot && minuten(a.tijd) === null && a.datum <= dISO && dISO <= a.datumTot);
+}
+/* Herhalen. Gerrit (12 sep 2026): "iedere woensdag is bijvoorbeeld 'Gerwin
+   vrij' en dat moet hij niet iedere woensdag er opnieuw in moeten zetten."
+   Een afspraak met herhaal 'week' komt elke week terug op dezelfde weekdag,
+   vanaf zijn datum, tot en met herhaalTot als die is ingevuld. Duurt hij
+   meerdere dagen, dan schuift die hele reeks mee. Deze functie geeft de
+   voorkomen terug waar een dag in valt: zijn eerste en laatste dag. */
+function voorkomen(a, dISO){
+  var van = a.datum, tot = a.datumTot && a.datumTot > a.datum ? a.datumTot : a.datum;
+  if (a.herhaal !== "week"){ return (van <= dISO && dISO <= tot) ? { van: van, tot: tot } : null; }
+  var n = dagenTussen(van, dISO); if (n < 0) return null;
+  var lengte = dagenTussen(van, tot), k = ((n % 7) + 7) % 7;
+  if (k > lengte) return null;
+  var start = dagPlus(dISO, -k);
+  if (a.herhaalTot && start > a.herhaalTot) return null;
+  return { van: start, tot: dagPlus(start, lengte) };
 }
 /* De stops van één route, op volgorde. 'volg' is de handmatige volgorde die
    ontstaat als iemand stops binnen een route versleept; staat die er niet,
@@ -1044,7 +1106,7 @@ function opDag(a, dISO){
    heeft bedoeld. */
 function stopsVan(dISO, nr, eerste){
   return afspraken.filter(function(a){
-    if (a.datum !== dISO || filterUit[a.soort]) return false;
+    if (!opDag(a, dISO) || filterUit[a.soort]) return false;
     if (minuten(a.tijd) === null) return false;          // hele-dag: staat bovenaan
     var rn = Number(a.route) || 0;
     return rn === nr || (!rn && eerste);
@@ -1077,9 +1139,18 @@ function tekenBord(){
         var stops = stopsVan(w.iso, r.nr, ri===0);
         return '<div class="route" data-datum="'+w.iso+'" data-nr="'+r.nr+'">'+
           '<h4><span class="nr">Route '+r.nr+'</span>'+
-            '<span class="wie'+(MAG_BEWERKEN?'':' vast')+'" data-datum="'+w.iso+'" data-nr="'+r.nr+'"'+
-              (MAG_BEWERKEN?' title="Klik om de naam aan te passen"':'')+'>'+
-              (r.wie ? '\ud83d\udc64 '+esc(r.wie) : '<span style="color:#b7bfb9;font-weight:400">wie rijdt?</span>')+'</span>'+
+            '<span class="rijders">'+
+              (function(){ var n = plekkenVan(r), uit = ""; for (var sl = 1; sl <= n; sl++){
+                var naam = String(r[sl===1?"wie":"wie"+sl]||"").trim();
+                uit += '<span class="rijder"><span class="wie'+(MAG_BEWERKEN?'':' vast')+'" data-datum="'+w.iso+'" data-nr="'+r.nr+'" data-plek="'+sl+'"'+
+                  (MAG_BEWERKEN?' title="Klik om de naam aan te passen"':'')+'>'+
+                  (naam ? '\ud83d\udc64 '+esc(naam) : '<span style="color:#b7bfb9;font-weight:400">'+(sl===1?"wie rijdt?":"wie rijdt mee?")+'</span>')+'</span>'+
+                  (MAG_BEWERKEN && sl > 1 ? '<button type="button" class="plekWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" data-plek="'+sl+'" title="Deze plek weghalen">&times;</button>' : '')+
+                  '</span>';
+              }
+              if (MAG_BEWERKEN && n < 3) uit += '<button type="button" class="plekErbij" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Nog iemand erbij">+ rijder</button>';
+              return uit; })()+
+            '</span>'+
             (stops.length ? '<span class="tel">'+stops.length+'</span>' : '')+
             /* Print route. Gerrit (10 sep 2026): de monteur krijgt een
                uitgeprint stel papieren mee, voorblad plus de orders in
@@ -1148,7 +1219,7 @@ async function printRoute(dISO, nr){
     }
   }
   window.fpRoutePrint.print({
-    datum: dISO, routeNr: nr, wie: route.wie || "",
+    datum: dISO, routeNr: nr, wie: rijdersVan(route).join(" & "),
     stops: stops.map(function(a){ return { tijd:a.tijd||"", klant:a.klant||"", plaats:a.plaats||"" }; }),
     orders: orders,
     logo: new URL("fonteyn-logo.png", location.href).href,
@@ -1258,6 +1329,30 @@ function koppelBord(){
   $("bord").querySelectorAll(".route .wie").forEach(function(el){
     el.addEventListener("click", function(){ bewerkRijder(el); });
   });
+  /* Een plek erbij of eraf. Bij weghalen schuift een naam op de derde plek
+     naar de tweede, zodat er niemand kwijtraakt. */
+  $("bord").querySelectorAll(".plekErbij,.plekWeg").forEach(function(b){
+    b.addEventListener("click", async function(e){
+      e.stopPropagation();
+      var dISO = b.dataset.datum, nr = Number(b.dataset.nr), erbij = b.classList.contains("plekErbij"), plek = Number(b.dataset.plek)||2;
+      try{
+        await bewaarBord(function(d){
+          var lijst = Array.isArray(d.routes[dISO]) && d.routes[dISO].length ? d.routes[dISO] : routesVan(dISO).map(function(x){ return Object.assign({}, x); });
+          var r = lijst.find(function(x){ return Number(x.nr)===nr; });
+          if (!r){ r = { nr:nr, wie:"" }; lijst.push(r); }
+          var n = plekkenVan(r);
+          if (erbij) r.plekken = Math.min(3, n + 1);
+          else {
+            if (plek === 2){ r.wie2 = r.wie3 || ""; r.wie3 = ""; }
+            else r.wie3 = "";
+            r.plekken = Math.max(1, n - 1);
+          }
+          d.routes[dISO] = lijst;
+        });
+      }catch(err){ alert(err.message); }
+      teken();
+    });
+  });
   $("bord").querySelectorAll(".dagnotitie").forEach(function(el){
     el.addEventListener("click", function(){ bewerkDagnotitie(el); });
   });
@@ -1313,8 +1408,9 @@ async function haalRouteWeg(dISO, nr){
 function bewerkRijder(el){
   if (el.dataset.bezig) return;
   el.dataset.bezig = "1";
-  var dISO = el.dataset.datum, nr = Number(el.dataset.nr);
-  var oud = ((routesVan(dISO).find(function(x){ return Number(x.nr)===nr; })||{}).wie)||"";
+  var dISO = el.dataset.datum, nr = Number(el.dataset.nr), plek = Number(el.dataset.plek)||1;
+  var veld = plek === 1 ? "wie" : "wie"+plek;
+  var oud = ((routesVan(dISO).find(function(x){ return Number(x.nr)===nr; })||{})[veld])||"";
   el.innerHTML = "";
   /* Een keuzelijst met de afdeling erin, en een invulveld eronder voor wie er
      niet in staat. De keuzelijst is een <select> met een lege eerste regel
@@ -1355,10 +1451,10 @@ function bewerkRijder(el){
       await bewaarBord(function(d){
         var lijst = Array.isArray(d.routes[dISO]) && d.routes[dISO].length ? d.routes[dISO] : [{nr:1,wie:""}];
         var r = lijst.find(function(x){ return Number(x.nr)===nr; });
-        if (r) r.wie = nieuw; else lijst.push({ nr:nr, wie:nieuw });
+        if (r) r[veld] = nieuw; else { var nr2 = { nr:nr, wie:"" }; nr2[veld] = nieuw; lijst.push(nr2); }
         d.routes[dISO] = lijst;
       });
-      try{ if(window.fpLog) window.fpLog("route-rijder-gezet", dISO+" route "+nr+": "+nieuw); }catch(e){}
+      try{ if(window.fpLog) window.fpLog("route-rijder-gezet", dISO+" route "+nr+" plek "+plek+": "+nieuw); }catch(e){}
     }catch(err){ alert(err.message); }
     teken();
   }
@@ -1439,6 +1535,7 @@ function startSleep(e){
   var el = e.currentTarget;
   var a = afspraken.find(function(x){ return x.id===el.dataset.id; });
   if (!a) return;
+  if (a.herhaal) return;         // een reeks versleep je niet
   var rekken = e.target.classList.contains("greep");
   e.preventDefault(); e.stopPropagation();
 
@@ -1624,7 +1721,11 @@ function tekenBanden(week){
   }); });
   var idx = {}; week.forEach(function(w,i){ idx[w.iso] = i; });
   var balken = items.map(function(a){
-    var van = a.datum, tot = a.datumTot && a.datumTot > a.datum ? a.datumTot : a.datum;
+    /* Bij een herhaalde afspraak telt de voorkomen van deze week, niet de
+       eerste keer. */
+    var vk = null;
+    for (var wi = 0; wi < week.length && !vk; wi++) vk = voorkomen(a, week[wi].iso);
+    var van = vk ? vk.van : a.datum, tot = vk ? vk.tot : (a.datumTot && a.datumTot > a.datum ? a.datumTot : a.datum);
     var i0 = van < eerste ? 0 : idx[van], i1 = tot > laatste ? week.length-1 : idx[tot];
     return { a:a, i0:i0, i1:i1, links: van < eerste, rechts: tot > laatste };
   }).sort(function(x,y){ return x.i0-y.i0 || (y.i1-y.i0)-(x.i1-x.i0); });
@@ -1643,8 +1744,8 @@ function tekenBanden(week){
     return '<div class="dagband'+(a.klaar?" klaar":"")+zoekKlas(a)+(b.links?" door-links":"")+(b.rechts?" door-rechts":"")+'" data-id="'+esc(a.id)+'"'+
       ' style="grid-column:'+(b.i0+2)+' / '+(b.i1+3)+';grid-row:'+(b.regel+1)+';background:'+c.zacht+';border-left-color:'+c.kleur+'"'+
       ' title="'+esc(a.klant||c.naam)+(meer?' · '+esc(a.datum.split("-").reverse().join("-"))+' t/m '+esc(a.datumTot.split("-").reverse().join("-")):' · '+esc(a.datum.split("-").reverse().join("-")))+'">'+
-      betaalStip(a)+esc(a.klant||c.naam)+(a.wie?' <span class="wie">· '+esc(a.wie)+'</span>':'')+
-      (MAG_BEWERKEN?'<div class="greep-r" title="Sleep om de laatste dag te verplaatsen"></div>':'')+'</div>';
+      betaalStip(a)+(a.herhaal?'\u21bb ':'')+esc(a.klant||c.naam)+(a.wie?' <span class="wie">· '+esc(a.wie)+'</span>':'')+
+      (MAG_BEWERKEN && !a.herhaal?'<div class="greep-r" title="Sleep om de laatste dag te verplaatsen"></div>':'')+'</div>';
   }).join("");
   if (MAG_BEWERKEN) koppelBanden(week);
 }
@@ -1700,6 +1801,7 @@ function koppelBanden(week){
     el.addEventListener("mousedown", function(e){
       if (e.button !== 0) return;
       var a = afspraken.find(function(x){ return x.id === el.dataset.id; }); if (!a) return;
+      if (a.herhaal) return;     // een reeks versleep je niet; open hem en pas de datum aan
       var rekken = e.target.classList.contains("greep-r");
       e.preventDefault(); e.stopPropagation();
       var startIdx = dagOnder(e.clientX); if (startIdx === null) return;
@@ -1861,6 +1963,9 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     '<div><label>Duur</label><select id="fDuur">'+DUUR.map(function(d){
       return '<option value="'+d[0]+'"'+(Number(a.duurMin||120)===d[0]?" selected":"")+'>'+d[1]+'</option>'; }).join("")+'</select></div></div>'+
 
+    '<label class="heledagkeus"><input type="checkbox" id="fHerhaal"'+(a.herhaal==="week"?' checked':'')+'> Elke week herhalen, op dezelfde dag</label>'+
+    '<div class="rij2" id="rijHerhaal"'+(a.herhaal==="week"?'':' style="display:none"')+'><div><label>Herhalen tot en met (mag leeg)</label><input type="date" id="fHerhaalTot" value="'+esc(a.herhaalTot||"")+'"></div>'+
+    '<div style="align-self:end;font-size:11.5px;color:var(--grijs);padding-bottom:9px">Leeg = tot je hem verwijdert.</div></div>'+
     '<label>Wie gaat erheen</label><input id="fWie" maxlength="80" value="'+esc(a.wie)+'" list="fNamen" placeholder="Naam of team">'+
     '<datalist id="fNamen">'+Object.keys(namen).sort().map(function(n){ return '<option value="'+esc(n)+'">'; }).join("")+'</datalist>'+
     '</div><div>'+
@@ -1907,6 +2012,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     if (aan && !$("fDatumVan").value) $("fDatumVan").value = $("fDatum").value;
     if (aan && !$("fDatumTot").value) $("fDatumTot").value = $("fDatumVan").value;
   });
+  $("fHerhaal").addEventListener("change", function(){ $("rijHerhaal").style.display = this.checked ? "" : "none"; });
   $("fDatumVan").addEventListener("change", function(){
     if (!$("fDatumTot").value || $("fDatumTot").value < this.value) $("fDatumTot").value = this.value;
   });
@@ -2006,6 +2112,8 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       /* Alleen een hele-dag-afspraak loopt over meerdere dagen; de laatste
          dag moet na de eerste liggen, anders is het gewoon één dag. */
       datumTot: ($("fHeleDag").checked && $("fDatumTot").value > $("fDatumVan").value) ? $("fDatumTot").value : null,
+      herhaal: $("fHerhaal").checked ? "week" : null,
+      herhaalTot: ($("fHerhaal").checked && $("fHerhaalTot").value) ? $("fHerhaalTot").value : null,
       klant: $("fKlant").value.trim(), telefoon: $("fTel").value.trim(),
       plaats: $("fPlaats").value.trim(), ordernr: $("fOrder").value.trim(),
       wat: $("fWat").value.trim(), wie: $("fWie").value.trim(),
@@ -2183,8 +2291,13 @@ $("volgende").addEventListener("click", function(){ schuifPeriode(1); teken(); }
 $("vandaagKnop").addEventListener("click", function(){ maandag = weekStart(new Date()); teken(); scrollNaarWerkdag(); });
 $("springNaar").addEventListener("change", function(){
   if (!this.value) return;
-  maandag = weekStart(new Date(this.value+"T12:00:00"));
+  var d = new Date(this.value+"T12:00:00");
+  /* Gerrit (12 sep 2026): "als ik de datum hier selecteer dat die dan gelijk
+     naar die dag in de agenda gaat". In de dagweergave is dat de dag zelf;
+     in de week de week waar hij in valt, in de maand die maand. */
+  maandag = (periode === "dag" || periode === "maand") ? d : weekStart(d);
   teken();
+  if (weergave === "tijd") scrollNaarWerkdag();
 });
 $("nieuwKnop").addEventListener("click", function(){ openForm(null, iso(new Date())); });
 $("periodeKeus").querySelectorAll("button").forEach(function(b){
@@ -2219,7 +2332,9 @@ if (!MAG_BEWERKEN){
   var balk = document.createElement("div");
   balk.style.cssText = "background:#eef0f2;border:1px solid var(--rand);border-radius:9px;padding:7px 12px;"+
     "margin-bottom:10px;font-size:12.5px;color:var(--grijs)";
-  balk.textContent = "Je kijkt mee met de planning. Je ziet alles, maar wijzigen doet de afdeling zelf.";
+  balk.textContent = OP_TELEFOON
+    ? "Op de telefoon kun je de planning alleen bekijken. Wijzigen doe je op de pc."
+    : "Je kijkt mee met de planning. Je ziet alles, maar wijzigen doet de afdeling zelf.";
   var m = document.querySelector("main");
   if (m) m.insertBefore(balk, m.firstChild);
 }

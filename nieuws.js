@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-12", bestand: "planning.html", soort: "beter",
+      titel: "Twee rijders per route, herhalen, Verlof, en een kop die blijft staan",
+      wat: "Boven elke route staan nu twee plekken voor wie rijdt; een tweede kun je weghalen en een derde erbij zetten. Een afspraak kan elke week terugkomen op dezelfde dag, bijvoorbeeld 'Gerwin vrij' op woensdag; je ziet een pijltje bij zo'n afspraak. De categorieën Ophalen/retour en Showroom/bezichtiging zijn weg, Verlof (blauw) is erbij. In het tijdraster blijven de dagen, de hele dagen en de routes bovenaan staan als je naar beneden scrolt. Kies je een datum in het datumveld, dan ga je meteen naar die dag. Op de telefoon staan de routes nu onder elkaar met de klanten leesbaar, en kun je alleen kijken.",
+    },
+
+    {
       datum: "2026-09-11", bestand: "planning.html", soort: "beter",
       titel: "Hele dagen slepen in de band boven het tijdraster",
       wat: "Sleep in de band 'hele dag' over de dagen die je wilt, en bij het loslaten staat het venster klaar met die eerste en laatste dag. Een balk die er al staat pak je in het midden om hem te verschuiven, of aan de rechterkant om hem langer of korter te maken. Klikken op één dag werkt nog gewoon.",

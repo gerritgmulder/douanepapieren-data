@@ -212,7 +212,8 @@
       // Service (alleen kijken)
       "patrick", "hans.vanputten", "thieme", 
       // Plaatsing (alleen kijken)
-      "bertjan.kok", "mike.deboer", "joeri", "michael.berghorst",
+      // bertjan.kok is dezelfde persoon als bertjan (Gerrit, 12 sep 2026)
+      "mike.deboer", "joeri", "michael.berghorst",
       "dylan", "wouter.vedder", "joey",
     ],
     /* Wijzigen doen Kevin en Gerwin (Gerrit, 7 sep 2026: "alleen Kevin en
