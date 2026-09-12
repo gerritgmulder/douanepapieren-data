@@ -590,9 +590,19 @@
       nkop.appendChild(weg);
       nb.appendChild(nkop);
 
-      // Eerst de tegels die erbij zijn gekomen: dat is het grootste nieuws
-      // dat iemand kan hebben, en het staat nergens opgeschreven.
-      nieuweTegels.forEach(function (t) {
+      /* Alles op datum, nieuwste bovenaan. Gerrit (12 sep 2026): "Tegel
+         erbij Urencontrole en tegel erbij Passion Partners blijft de hele
+         tijd bovenaan staan bij mij en ik wil alle LAATSTE berichten altijd
+         bovenaan." Een tegel erbij krijgt de datum van het nieuwste bericht
+         over die tegel; is er geen bericht, dan zakt hij naar onderen. */
+      function tegelDatum(t) {
+        var fn = global.fpNieuws, best = "";
+        if (fn && fn.lijst) fn.lijst.forEach(function (n) {
+          if (n.bestand === t.bestand && String(n.datum || "") > best) best = String(n.datum || "");
+        });
+        return best;
+      }
+      function rijTegel(t) {
         var rij = eltje("div", "nieuw-regel");
         var ic = eltje("div", "nieuw-ic", t.ic);
         rij.appendChild(ic);
@@ -603,6 +613,8 @@
         mid.appendChild(kopje);
         mid.appendChild(eltje("div", "nieuw-wat",
           t.uit + ". Deze tegel is nieuw voor jou - hij staat hieronder tussen de andere."));
+        var d = tegelDatum(t);
+        if (d) mid.appendChild(eltje("div", "nieuw-datum", nlDatum(d)));
         rij.appendChild(mid);
         if (!t.extern) {
           var ga = eltje("a", "taak-ga", "Openen");
@@ -613,11 +625,9 @@
         x1.type = "button"; x1.title = "Dit bericht wegklikken";
         x1.addEventListener("click", function () { eenWegklikken("tegel", t.bestand); });
         rij.appendChild(x1);
-        nb.appendChild(rij);
-      });
-
-      // En dan wat er aan bestaande tegels veranderd is.
-      nieuwsRegels.forEach(function (n) {
+        return rij;
+      }
+      function rijBericht(n) {
         var rij = eltje("div", "nieuw-regel");
         rij.appendChild(eltje("div", "nieuw-ic", ikoonVan(n)));
         var mid = eltje("div", "nieuw-mid");
@@ -640,8 +650,12 @@
           if (fn) eenWegklikken("bericht", fn.sleutelVan(n));
         });
         rij.appendChild(x2);
-        nb.appendChild(rij);
-      });
+        return rij;
+      }
+      var alles = nieuweTegels.map(function (t) { return { datum: tegelDatum(t), el: rijTegel(t) }; })
+        .concat(nieuwsRegels.map(function (n) { return { datum: String(n.datum || ""), el: rijBericht(n) }; }))
+        .sort(function (a, b) { return a.datum < b.datum ? 1 : a.datum > b.datum ? -1 : 0; });
+      alles.forEach(function (x) { nb.appendChild(x.el); });
 
       kaart.appendChild(nb);
     }

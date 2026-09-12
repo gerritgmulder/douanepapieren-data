@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-12", iedereen: true, soort: "hersteld",
+      titel: "Nieuwste berichten altijd bovenaan",
+      wat: "Een 'tegel erbij' bleef altijd bovenaan staan, ook als er daarna nieuwere berichten kwamen. Nu staat alles op datum, het nieuwste eerst.",
+    },
+
+    {
       datum: "2026-09-12", bestand: "dealerportaal.html", soort: "beter",
       titel: "Geen beheersleutel meer, en de tegel werkt op de telefoon",
       wat: "De beheersleutel is weg. Wie deze tegel mag zien, mag er ook in werken: dealers en partners aanmaken, uitnodigen en bewerken. Op de telefoon staan de partners nu als kaarten onder elkaar en past het venster voor een nieuwe relatie op het scherm.",
