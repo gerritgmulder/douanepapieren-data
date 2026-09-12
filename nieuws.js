@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-12", bestand: "planning.html", soort: "beter",
+      titel: "Verlof is echt blauw, ook als balk bovenaan",
+      wat: "Een hele dag of een vakantie op Verlof stond bovenaan in een lichte tint die op grijs leek. De balken staan nu in de volle kleur van hun categorie, ook op het routebord. Alle bestaande 'vrij' en 'vakantie' die nog op Levering of Intern stonden zijn omgezet naar Verlof. Een nieuwe hele dag vanuit de balk begint voortaan als Verlof.",
+    },
+
+    {
+      datum: "2026-09-12", bestand: "planning.html", soort: "beter",
       titel: "Herhalen: elke dag, werkdag, week, om de week of maand",
       wat: "In het afsprakenvenster is Herhalen een keuzelijst geworden: niet herhalen, elke dag, elke werkdag, elke week, om de week, of elke maand op dezelfde datum. Met een einddatum als je wilt. De zin bij 'Let op' is duidelijker: die zet de afspraak rood op het routebord als er iets bijzonders nodig is, zoals twee man of hijsen.",
     },

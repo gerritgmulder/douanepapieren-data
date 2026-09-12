@@ -129,7 +129,8 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .dagbanden .lbl{grid-column:1;font-size:10px;color:var(--grijs);text-align:right;padding:5px 6px 0;position:sticky;left:0;background:#fff;z-index:5}
 .dagband{margin:3px 3px 0;border-radius:6px;border-left:4px solid;padding:3px 9px;font-size:11.5px;font-weight:600;
        cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:22px;line-height:16px}
-.dagband .wie{font-weight:400;color:var(--grijs)}
+.dagband .wie{font-weight:400;color:rgba(255,255,255,.85)}
+.dagband .betaalstip{display:none}
 .dagband.klaar{opacity:.42;text-decoration:line-through}
 .dagband.door-links{border-top-left-radius:0;border-bottom-left-radius:0}
 .dagband.door-rechts{border-top-right-radius:0;border-bottom-right-radius:0}
@@ -1175,8 +1176,10 @@ function tekenBord(){
       '<h3>'+DAGEN[dagIndex(w.datum)]+'<span class="dd">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+
         (totaal?' &middot; '+totaal+' stop'+(totaal===1?'':'s'):'')+'</span></h3>'+
       (heleDag.length ? '<div class="dagbalken">'+heleDag.map(function(a){
-        return '<div class="dagbalk'+(a.letop?" let":"")+'" data-id="'+esc(a.id)+'" title="Klik om aan te passen">'+
-          esc(a.klant||cat(a).naam)+'</div>'; }).join("")+'</div>' : "")+
+        var ck = cat(a);
+        return '<div class="dagbalk'+(a.letop?" let":"")+'" data-id="'+esc(a.id)+'" title="Klik om aan te passen"'+
+          (a.letop ? '' : ' style="background:'+ck.kleur+';color:#fff"')+'>'+
+          esc(a.klant||ck.naam)+'</div>'; }).join("")+'</div>' : "")+
       '<div class="routes">'+
       routes.map(function(r, ri){
         var stops = stopsVan(w.iso, r.nr, ri===0);
@@ -1785,7 +1788,11 @@ function tekenBanden(week){
     var a = b.a, c = cat(a);
     var meer = a.datumTot && a.datumTot > a.datum;
     return '<div class="dagband'+(a.klaar?" klaar":"")+zoekKlas(a)+(b.links?" door-links":"")+(b.rechts?" door-rechts":"")+'" data-id="'+esc(a.id)+'"'+
-      ' style="grid-column:'+(b.i0+2)+' / '+(b.i1+3)+';grid-row:'+(b.regel+1)+';background:'+c.zacht+';border-left-color:'+c.kleur+'"'+
+      /* De balk in de volle kleur van de categorie, met witte tekst. Gerrit
+         (12 sep 2026): Gerwins vakantie stond op Verlof maar de balk oogde
+         grijs, want de lichte tint van blauw en die van grijs liggen te dicht
+         bij elkaar om ze uit elkaar te houden. */
+      ' style="grid-column:'+(b.i0+2)+' / '+(b.i1+3)+';grid-row:'+(b.regel+1)+';background:'+c.kleur+';border-left-color:'+c.kleur+';color:#fff"'+
       ' title="'+esc(a.klant||c.naam)+(meer?' · '+esc(a.datum.split("-").reverse().join("-"))+' t/m '+esc(a.datumTot.split("-").reverse().join("-")):' · '+esc(a.datum.split("-").reverse().join("-")))+'">'+
       betaalStip(a)+(a.herhaal?'\u21bb ':'')+esc(a.klant||c.naam)+(a.wie?' <span class="wie">· '+esc(a.wie)+'</span>':'')+
       (MAG_BEWERKEN && !a.herhaal?'<div class="greep-r" title="Sleep om de laatste dag te verplaatsen"></div>':'')+'</div>';
@@ -1831,7 +1838,9 @@ function koppelBanden(week){
         document.removeEventListener("mousemove", beweeg); document.removeEventListener("mouseup", los);
         cellen.forEach(function(c){ c.classList.remove("kies"); });
         var a = Math.min(i0,i1), b = Math.max(i0,i1);
-        openForm(null, week[a].iso, "", { datumTot: week[b].iso });
+        /* Een hele dag vanuit de band is bijna altijd afwezigheid, dus hij
+           begint als Verlof; een beurs of kantoordag zet je om naar Intern. */
+        openForm(null, week[a].iso, "", { datumTot: week[b].iso, soort: "verlof" });
       }
       verf();
       document.addEventListener("mousemove", beweeg); document.addEventListener("mouseup", los);
