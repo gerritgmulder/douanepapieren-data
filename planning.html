@@ -218,6 +218,23 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
   .borddag .routes{flex-direction:column}
   .routes .route{min-height:0;flex:0 0 auto}
 }
+/* De bovenkant op een telefoon. Gerrit (12 sep 2026): "week, dag tot dag,
+   dan het pijltje links, vandaag en dan op de volgende regel het pijltje
+   naar rechts, enzovoort. Ziet er niet uit." Vaste regels: de titel, dan
+   de knoppen om te bladeren met het datumveld, dan de periode, dan de
+   weergave. Elke regel vult de breedte. */
+@media (max-width:600px){
+  .weekbalk{gap:6px}
+  .weekbalk h2{flex:1 1 100%;min-width:0;font-size:15px;line-height:1.3}
+  .weekbalk #vorige{order:1} .weekbalk #vandaagKnop{order:2} .weekbalk #volgende{order:3}
+  .weekbalk #springNaar{order:4;flex:1 1 auto;width:auto;min-width:0}
+  .weekbalk #itsKnop{order:6;flex:1 1 auto} .weekbalk #nieuwKnop{order:7;flex:1 1 auto}
+  .weekbalk .weergavekeus{order:8;flex:1 1 100%;display:flex}
+  .weekbalk .weergavekeus button{flex:1;padding:8px 2px;font-size:12px}
+  .legenda{gap:5px} .cat-chip{padding:4px 9px;font-size:11.5px}
+  .rasterzoek input{width:100%}
+  main{padding:10px}
+}
 .dagkaart{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:10px;margin-bottom:10px}
 .dagkaart.vandaag{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.25)}
 .dagkaart h3{margin:0 0 2px;font-size:12.5px;color:var(--groen)}

@@ -10582,7 +10582,12 @@ export default {
        komen op het mobiele dashboard. */
     if (url.pathname === "/m" || url.pathname === "/m/" || url.pathname.startsWith("/m/")) {
       if (url.pathname === "/m") return Response.redirect(url.origin + "/m/", 302);
-      const naam = url.pathname.slice(3) || "mobiel.html";
+      /* Elke tegel linkt terug naar dashboard.html en stuurt daar ook heen
+         bij uitloggen of een verlopen sessie. Onder /m/ is dat het
+         telefoondashboard, niet de pc-versie met alle tegels (Gerrit,
+         12 sep 2026: "dan opent hij ineens de desktopversie"). */
+      const naamRuw = url.pathname.slice(3) || "mobiel.html";
+      const naam = naamRuw === "dashboard.html" ? "mobiel.html" : naamRuw;
 
       /* Wat mag hier naar buiten: precies de bestanden uit manifest.json, en
          niets anders. Dat is dezelfde lijst die de app op de pc ophaalt, dus

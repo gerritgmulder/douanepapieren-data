@@ -42,7 +42,7 @@
                  telefoon andere rechten heeft dan de pc en dat mag niet.
      extern: opent buiten het dashboard (nieuw tabblad), niet uit de repo. */
   var TEGELS = [
-    { bestand:"uren.html",           groep:"uren",             ic:"⏱️",  naam:"Mijn uren",
+    { telefoon:true, bestand:"uren.html",           groep:"uren",             ic:"⏱️",  naam:"Mijn uren",
       uit:"Starten, stoppen en bijstellen",                        mobiel:"goed", tile:"tileUren" },
     { bestand:"mail.html",           groep:"mail",             ic:"✉️",  naam:"Mijn mail",
       uit:"Postvak, concepten en verzenden",                       mobiel:"goed", tile:"tileMail" },
@@ -50,7 +50,7 @@
       uit:"Containers, papieren en meldingen",                     mobiel:"goed", tile:"tileTuinmeubelen" },
     { bestand:"urencontrole.html",   groep:"urencontrole",     ic:"✅",  naam:"Urencontrole",
       uit:"Wie heb je deze week nagekeken",                        mobiel:"krap", tile:"tileUrencontrole" },
-    { bestand:"order-status.html",   groep:"orderstatus",      ic:"📊",  naam:"Orderstatus",
+    { telefoon:true, bestand:"order-status.html",   groep:"orderstatus",      ic:"📊",  naam:"Orderstatus",
       uit:"Een order opzoeken en de status bijwerken",             mobiel:"goed", tile:"tileOrderStatus" },
     { bestand:"specsheets.html",     groep:"specsheets",       ic:"📄",  naam:"Specificatiesheets",
       uit:"Specsheets maken en opzoeken",                          mobiel:"krap", tile:"tileSpecsheets" },
@@ -86,7 +86,7 @@
       uit:"De financiële keten van inkoop tot omzet",              mobiel:"pc", tile:"tileGeldGoederen" },
     { bestand:"bol.html",            groep:"bol",              ic:"🛒",  naam:"Bol.com koppeling",
       uit:"Bol-orders en boekingen",                               mobiel:"pc", tile:"tileBol" },
-    { bestand:"dealerportaal.html",  groep:"dealerportaal",    ic:"🤝",  naam:"Passion Partners Beheer",
+    { telefoon:true, bestand:"dealerportaal.html",  groep:"dealerportaal",    ic:"🤝",  naam:"Passion Partners Beheer",
       uit:"Dealers, documenten en aanvragen",                      mobiel:"pc", tile:"tileDealerportaal" },
     { bestand:"amerika.html",        groep:"amerika",          ic:"🇺🇸",  naam:"Amerika",
       uit:"Houston: facturen, voorraad en QuickBooks",             mobiel:"pc", tile:"tileAmerika" },
@@ -95,7 +95,7 @@
     /* Op de telefoon een eigen, smalle weergave met de drie dingen die je
        aan de lijn nodig hebt. Zelfde groep, dus exact dezelfde rechten; alleen
        de weergave verschilt (Gerrit, 19 aug 2026). */
-    { bestand:"voorraad.html",       groep:"voorraad",         ic:"📦",  naam:"Voorraadbeheer",
+    { telefoon:true, bestand:"voorraad.html",       groep:"voorraad",         ic:"📦",  naam:"Voorraadbeheer",
       uit:"Containers, reserveringen, ontvangst en inkoop",        mobiel:"goed", tile:"tileVoorraad",
       mobielBestand:"voorraad-mobiel.html",
       mobielUit:"Voorraad, containers onderweg en een order opzoeken" },
@@ -104,7 +104,7 @@
        doen ze onder 900 pixels, dus geen aparte mobiele pagina nodig. */
     /* Weekoverzicht van de afdeling Spa planning. Werkt op een telefoon
        net zo goed als op de pc: de dagen vallen daar onder elkaar. */
-    { bestand:"planning.html",       groep:"planning",         ic:"📅",  naam:"Planning",
+    { telefoon:true, bestand:"planning.html",       groep:"planning",         ic:"📅",  naam:"Planning",
       uit:"Weekoverzicht van leveringen en service-afspraken",     mobiel:"goed", tile:"tilePlanning" },
     { bestand:"vertalen.html",       groep:"vertalen",         ic:"🌍",  naam:"Vertalen",
       uit:"Mails aan dealers vertalen",                            mobiel:"goed", tile:"tileVertalen" },
@@ -121,7 +121,7 @@
          wachtwoordscherm. Op de bestandsnaam koppelen kan dus niet; de
          controle in tools/tegels-gelijk.mjs gebruikt deze id. */
       tile:"tileStuurcijfers" },
-    { bestand:"https://partner.passionspas.com/dealers",
+    { telefoon:true, bestand:"https://partner.passionspas.com/dealers",
       groep:"partnerportaal-kijk", ic:"🌐", naam:"Passion Partners",
       uit:"Het portaal zoals een dealer het ziet", mobiel:"pc", tile:"tilePassionPartners", extern:true },
   ];
@@ -133,7 +133,12 @@
     var t = global.fpToegang;
     if (!t) return [];
     var lijst = TEGELS.filter(function (x) { return t.mag(x.groep, wie); });
-    if (o.alleenMobiel) lijst = lijst.filter(function (x) { return !x.extern; });
+    /* Op de telefoon alleen de tegels met telefoon:true (Gerrit, 12 sep
+       2026: Mijn uren, Planning, Voorraadbeheer, Passion Partners Beheer,
+       Passion Partners en Orderstatus). De rechten blijven per persoon
+       precies wat ze op de pc zijn; dit zegt alleen welke tegels daar
+       überhaupt staan. */
+    if (o.alleenMobiel) lijst = lijst.filter(function (x) { return !!x.telefoon; });
     return lijst;
   }
 

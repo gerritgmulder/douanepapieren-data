@@ -312,7 +312,7 @@ function toonDash(){
            verandert niets aan wie er in mag. */
         var doel = t.mobielBestand || t.bestand;
         var uitleg = (t.mobielBestand && t.mobielUit) ? t.mobielUit : t.uit;
-        return '<a class="tegel' + breed + '" href="' + doel + '" data-soort="' + soort +
+        return '<a class="tegel' + breed + '" href="' + doel + '"' + (t.extern ? ' target="_blank" rel="noopener"' : '') + ' data-soort="' + soort +
                '" data-naam="' + t.naam.replace(/"/g, "&quot;") + '">' + merk +
                '<div class="ic">' + t.ic + "</div><div><h3>" + t.naam + "</h3><p>" + uitleg + "</p></div></a>";
       }).join("") + "</div>";

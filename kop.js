@@ -61,7 +61,18 @@
         "padding:5px 12px;font:inherit;font-size:12px;background:transparent;cursor:pointer;opacity:.92;white-space:nowrap}" +
       ".fp-kop-knop:hover{opacity:1;background:rgba(255,255,255,.14)}" +
       ".fp-kop-wie{font-size:12px;opacity:.92;white-space:nowrap}" +
-      ".fp-kop-wie b{font-weight:700}";
+      ".fp-kop-wie b{font-weight:700}" +
+      /* Op een telefoon paste de kop niet: de knop Uitloggen viel buiten
+         beeld en de groene balk hield op waar het scherm ophield (Gerrit,
+         12 sep 2026). De kop mag daar over twee regels, de titel krijgt
+         puntjes in plaats van ruimte, en "Ingelogd als" verdwijnt: dat staat
+         al op het telefoondashboard. */
+      "@media (max-width:600px){" +
+        "header{flex-wrap:wrap;gap:6px 8px;padding-left:12px;padding-right:12px;box-sizing:border-box;max-width:100vw}" +
+        "header h1{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px}" +
+        "header .fp-kop-wie,header .user-chip,header #wie,header #gebruiker{display:none}" +
+        "header .fp-kop-knop{padding:5px 9px;font-size:11.5px}" +
+      "}";
     doc.head.appendChild(st);
   }
 

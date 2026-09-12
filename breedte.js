@@ -77,7 +77,12 @@
       "table td button,table td .btn,table td .pill,table td a,table td label,table td select{overflow-wrap:normal;word-break:keep-all;white-space:nowrap}" +
       "table td[style*=nowrap]{white-space:normal!important}" +
       "table td[style*=min-width],table th[style*=min-width]{min-width:0!important}" +
-      ".tablewrap{overflow-x:hidden;overflow-y:auto}";
+      ".tablewrap{overflow-x:hidden;overflow-y:auto}" +
+      /* Op een telefoon wél de bladzijde zelf dichtzetten: daar schuift een
+         te brede kop of balk de hele pagina opzij, en de groene kop houdt dan
+         halverwege op (Gerrit, 12 sep 2026). Op de pc blijft de regel van
+         hierboven gelden: niet verstoppen, maar melden. */
+      "@media (max-width:600px){html,body{overflow-x:hidden;max-width:100vw}}";
     doc.head.appendChild(st);
   }
 
