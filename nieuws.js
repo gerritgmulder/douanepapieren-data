@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-13", bestand: "planning.html", soort: "beter",
+      titel: "Nieuwe kleuren in Planning, en de betaalstand laadt sneller",
+      wat: "Levering is nu lichtblauw, service lila, verlof lichtturquoise en intern lichtgrijs: zachte kleuren die niet meer botsen met de betaling. De rechterrand voor de betaling is juist feller: groen betaald, oranje aanbetaald, rood niet betaald. En het ophalen van de betaalstanden gaat tegelijk in plaats van een voor een, dus de randen staan er in ongeveer een seconde in plaats van acht.",
+    },
+
+    {
+      datum: "2026-09-13", bestand: "planning.html", soort: "beter",
       titel: "Ook bij een servicemelding zie je de betaling",
       wat: "De rechterrand van een service-afspraak laat nu de betaalstand zien van de order waar de monteur voor komt. Staat er op de melding in Logic4 een order, dan die; zo niet, dan de laatste order van die klant. Ga je met de muis over de afspraak, dan staat erbij om welke order het gaat. Zoek je een ITS-nummer op in het afsprakenvenster, dan komt het ordernummer er meteen bij als de melding er een heeft.",
     },

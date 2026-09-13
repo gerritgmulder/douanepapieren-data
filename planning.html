@@ -131,7 +131,7 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .dagbanden .lbl{grid-column:1;font-size:10px;color:var(--grijs);text-align:right;padding:5px 6px 0;position:sticky;left:0;background:#fff;z-index:5}
 .dagband{margin:3px 3px 0;border-radius:6px;border-left:4px solid;padding:3px 9px;font-size:11.5px;font-weight:600;
        cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:22px;line-height:16px}
-.dagband .wie{font-weight:400;color:rgba(255,255,255,.85)}
+.dagband .wie{font-weight:400;opacity:.8}
 .dagband .betaalstip{display:none}
 .dagband.klaar{opacity:.42;text-decoration:line-through}
 .dagband.door-links{border-top-left-radius:0;border-bottom-left-radius:0}
@@ -542,15 +542,18 @@ var MAANDEN = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov"
    naam en kleur mogen wel. 'levering' en 'service' waren er vanaf dag één,
    de rest kwam er op 24 aug 2026 bij ("en nog andere logische categorieën"). */
 var CATS = {
-  /* 'tekst' is de letterkleur op een vlak in de volle kleur: op lime en
-     amber leest donker beter, op blauw en grijs wit. */
-  levering:     { naam:"Levering",              kleur:"#8bc53f", zacht:"#f1f8e5", tekst:"#12301a" },
-  service:      { naam:"Service",               kleur:"#f59e0b", zacht:"#fef3d8", tekst:"#3b2600" },
+  /* Gerrit (13 sep 2026): geen oranje en groen meer voor service en
+     levering, want dat botst met de betaalkleuren, en pastel, "want dan is
+     het niet zo hard". 'vlak' is de pastelachtergrond van een afspraak,
+     'kleur' de vollere tint voor de legenda en de linkerrand, 'tekst' de
+     letterkleur op het vlak. */
+  levering:     { naam:"Levering",              kleur:"#3b82f6", vlak:"#bfdbfe", zacht:"#dbeafe", tekst:"#1e3a8a" },
+  service:      { naam:"Service",               kleur:"#8b5cf6", vlak:"#ddd6fe", zacht:"#ede9fe", tekst:"#3b0764" },
   /* Gerrit (12 sep 2026): Ophalen/retour en Showroom/bezichtiging eruit,
      Verlof erbij in het blauw. Een oude afspraak in een verdwenen categorie
      valt terug op Intern (zie cat). */
-  verlof:       { naam:"Verlof",                kleur:"#3b82f6", zacht:"#e3edfd", tekst:"#fff" },
-  intern:       { naam:"Intern / overig",       kleur:"#6b7280", zacht:"#eef0f2", tekst:"#fff" },
+  verlof:       { naam:"Verlof",                kleur:"#06b6d4", vlak:"#a5f3fc", zacht:"#cffafe", tekst:"#164e63" },
+  intern:       { naam:"Intern / overig",       kleur:"#9ca3af", vlak:"#e5e7eb", zacht:"#f3f4f6", tekst:"#374151" },
 };
 function cat(a){ return CATS[a.soort] || CATS.intern; }
 
@@ -786,9 +789,9 @@ var betaaldBezig = false;
    blijft. Gerrit (13 sep 2026): "die oranje van service en de oranje van
    aanbetaald matchen niet". */
 var BETAALD = {
-  betaald:    { kleur:"#166534", naam:"volledig betaald" },
-  aanbetaald: { kleur:"#b45309", naam:"aanbetaald" },
-  open:       { kleur:"#b91c1c", naam:"niet betaald" },
+  betaald:    { kleur:"#16a34a", naam:"volledig betaald" },
+  aanbetaald: { kleur:"#f97316", naam:"aanbetaald" },
+  open:       { kleur:"#dc2626", naam:"niet betaald" },
 };
 function betaalStip(a){
   var nr = String(a.ordernr||"").trim();
@@ -1241,7 +1244,7 @@ function tekenBord(){
       (heleDag.length ? '<div class="dagbalken">'+heleDag.map(function(a){
         var ck = cat(a);
         return '<div class="dagbalk'+(a.letop?" let":"")+'" data-id="'+esc(a.id)+'" title="Klik om aan te passen"'+
-          (a.letop ? '' : ' style="background:'+ck.kleur+';color:#fff"')+'>'+
+          (a.letop ? '' : ' style="background:'+(ck.vlak||ck.zacht)+';color:'+(ck.tekst||"#111")+'"')+'>'+
           esc(a.klant||ck.naam)+'</div>'; }).join("")+'</div>' : "")+
       '<div class="routes">'+
       routes.map(function(r, ri){
@@ -1303,7 +1306,7 @@ function stopHtml(a){
   var c = cat(a);
   var regel = [a.plaats, a.wat, a.ordernr].filter(Boolean).join(" - ");
   return '<div class="stop'+(a.klaar?" klaar":"")+(a.letop?" letop":"")+'"'+(MAG_BEWERKEN?' draggable="true"':'')+' data-id="'+esc(a.id)+'"'+
-    ' style="border-left-color:'+c.kleur+';'+(a.letop?'':'background:'+c.kleur+';color:'+(c.tekst||"#fff")+';')+betaalRand(a)+'" title="'+esc((a.tijd?a.tijd+"  ":"")+(a.klant||"")+(regel?"  -  "+regel:"")+(betaalUitleg(a)?"\n"+betaalUitleg(a):""))+'">'+
+    ' style="border-left-color:'+c.kleur+';'+(a.letop?'':'background:'+(c.vlak||c.zacht)+';color:'+(c.tekst||"#111")+';')+betaalRand(a)+'" title="'+esc((a.tijd?a.tijd+"  ":"")+(a.klant||"")+(regel?"  -  "+regel:"")+(betaalUitleg(a)?"\n"+betaalUitleg(a):""))+'">'+
     '<span class="kl">'+(a.tijd?esc(a.tijd)+" ":"")+esc(a.klant||c.naam)+'</span>'+
     (regel?'<span class="rg">'+esc(regel)+'</span>':"")+
     (a.wie?'<span class="rg">\ud83d\udc64 '+esc(a.wie)+'</span>':"")+'</div>';
@@ -1939,7 +1942,7 @@ function tekenBanden(week){
          (12 sep 2026): Gerwins vakantie stond op Verlof maar de balk oogde
          grijs, want de lichte tint van blauw en die van grijs liggen te dicht
          bij elkaar om ze uit elkaar te houden. */
-      ' style="grid-column:'+(b.i0+2)+' / '+(b.i1+3)+';grid-row:'+(b.regel+1)+';background:'+c.kleur+';border-left-color:'+c.kleur+';color:#fff"'+
+      ' style="grid-column:'+(b.i0+2)+' / '+(b.i1+3)+';grid-row:'+(b.regel+1)+';background:'+(c.vlak||c.zacht)+';border-left-color:'+c.kleur+';color:'+(c.tekst||"#111")+'"'+
       ' title="'+esc(a.klant||c.naam)+(meer?' · '+esc(a.datum.split("-").reverse().join("-"))+' t/m '+esc(a.datumTot.split("-").reverse().join("-")):' · '+esc(a.datum.split("-").reverse().join("-")))+'">'+
       betaalStip(a)+(a.herhaal?'\u21bb ':'')+esc(a.klant||c.naam)+(a.wie?' <span class="wie">· '+esc(a.wie)+'</span>':'')+
       (MAG_BEWERKEN && !a.herhaal?'<div class="greep-r" title="Sleep om de laatste dag te verplaatsen"></div>':'')+'</div>';
@@ -2079,7 +2082,7 @@ function blokken(items){
       (a.gewijzigdDoor && a.gewijzigdDoor!==a.door ? ', laatst gewijzigd door '+esc(planNaam(a.gewijzigdDoor)) : '')+'">'+
       esc(planNaam(a.door).slice(0,1).toUpperCase())+'</span>' : "";
     return '<div class="blok'+(a.klaar?" klaar":"")+zoekKlas(a)+'" data-id="'+esc(a.id)+'" data-datum="'+esc(a.datum)+'" title="'+esc(a.tijd)+(a.duurMin?' - '+tijdStr(b.tot):'')+(a.wie?' · '+esc(a.wie):'')+(betaalUitleg(a)?'\n'+esc(betaalUitleg(a)):'')+'" style="top:'+top+'px;height:'+hoog+'px;'+
-      'left:calc('+links+'% + 2px);width:calc('+w+'% - 5px);background:'+c.kleur+';color:'+(c.tekst||"#fff")+';border-left-color:'+c.kleur+';z-index:'+(2+b.lane)+';'+betaalRand(a)+'">'+
+      'left:calc('+links+'% + 2px);width:calc('+w+'% - 5px);background:'+(c.vlak||c.zacht)+';color:'+(c.tekst||"#111")+';border-left-color:'+c.kleur+';z-index:'+(2+b.lane)+';'+betaalRand(a)+'">'+
       plander+
       /* Gerrit (11 sep 2026): de tijden staan al aan de zijkant, dus die
          hoeven niet in het blok. Wat er wél in moet: ordernummer,
@@ -2099,9 +2102,9 @@ function kaartje(a){
   var voet = [];
   if (a.wie) voet.push("👤 "+esc(a.wie));
   if (a.door) voet.push("gepland door "+esc(voornaam(a.door)));
-  return '<div class="afs'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="border-left-color:'+c.kleur+';background:'+c.kleur+';color:'+(c.tekst||"#fff")+';'+betaalRand(a)+'">'+
+  return '<div class="afs'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="border-left-color:'+c.kleur+';background:'+(c.vlak||c.zacht)+';color:'+(c.tekst||"#111")+';'+betaalRand(a)+'">'+
     '<div class="kop"><span class="tijd">'+esc(a.tijd||"hele dag")+'</span>'+
-    '<span class="badge" style="background:rgba(255,255,255,.35);color:inherit">'+esc(c.naam)+'</span></div>'+
+    '<span class="badge" style="background:rgba(255,255,255,.55);color:inherit">'+esc(c.naam)+'</span></div>'+
     '<div class="klant">'+esc(a.klant||"(geen naam)")+'</div>'+
     (sub?'<div class="sub">'+sub+'</div>':"")+
     (voet.length?'<div class="sub">'+voet.join(" · ")+'</div>':"")+'</div>';

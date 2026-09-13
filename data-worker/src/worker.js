@@ -5387,18 +5387,21 @@ async function planningBetaalstatusMetIts(env, url) {
        de spa waar de monteur voor komt. Het scherm zegt erbij dat het zo is
        afgeleid. Wat we hebben uitgezocht bewaren we een dag, want dit kost
        per melding twee vragen aan Logic4. */
-    const BUCKET = "planning-its-order", DAG = 24 * 3600000, MAX = 12;
+    const BUCKET = "planning-its-order", DAG = 24 * 3600000, MAX = 8;
     const kaart = (await env.FONTEYN_DATA.get(BUCKET, { type: "json" })) || {};
     const c = await env.FONTEYN_DATA.get(ITS_CACHE, { type: "json" });
     const lijst = (c && c.meldingen) || [];
     const nu = Date.now();
     let gedaan = 0, token = null;
+    const teDoen = [];
     for (const id of its) {
       const k = kaart[id];
       if (k && k.ts && nu - k.ts < DAG) { perIts[id] = k; continue; }
       if (gedaan >= MAX) { restantIts++; continue; }
-      gedaan++;
-      if (!token) token = await l4Token(env);
+      gedaan++; teDoen.push(id);
+    }
+    if (teDoen.length) token = await l4Token(env);
+    const zoekEen = async (id) => {
       const call = async (pad, body) => {
         const r = await fetch("https://api.logic4server.nl" + pad, {
           method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
@@ -5426,7 +5429,9 @@ async function planningBetaalstatusMetIts(env, url) {
       }
       perIts[id] = { order: order || null, afgeleid, debiteur: debiteur || null, ts: nu };
       kaart[id] = perIts[id];
-    }
+    };
+    // Alle meldingen van deze ronde tegelijk opzoeken.
+    await Promise.all(teDoen.map(id => zoekEen(id).catch(() => {})));
     if (gedaan) await env.FONTEYN_DATA.put(BUCKET, JSON.stringify(kaart));
   }
   const orders = String(url.searchParams.get("orders") || "").split(",").map(x => x.trim()).filter(Boolean);
@@ -5460,8 +5465,15 @@ async function planningBetaalstatus(env, url) {
      we al weten (tien minuten lang) en halen we alleen op wat ontbreekt, met
      een harde grens per keer. Wat er dan nog over is vraagt het scherm zo
      weer op. */
+  /* Tegelijk, niet achter elkaar. Gerrit (13 sep 2026): "het duurt bij veel
+     afspraken wel 8 seconden om de betaling-status-kleuren te laden". Dertig
+     vragen achter elkaar aan Logic4 is dertig keer wachten; tien tegelijk in
+     drie rondes is onder de seconde. De grens per keer is iets lager omdat
+     de servicemeldingen (hieronder) uit hetzelfde budget van vijftig
+     aanroepen putten. */
   const CACHE_MIN = 10;
-  const MAX_PER_KEER = 30;
+  const MAX_PER_KEER = 28;
+  const TEGELIJK = 10;
   const bucket = "planning-betaald";
   const cache = (await env.FONTEYN_DATA.get(bucket, { type: "json" })) || {};
   const nu = Date.now();
@@ -5476,17 +5488,17 @@ async function planningBetaalstatus(env, url) {
   let opgehaald = 0;
   if (nodig.length) {
     const token = await l4Token(env);
-    for (const nr of nodig.slice(0, MAX_PER_KEER)) {
+    const eentje = async (nr) => {
       const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
         method: "POST",
         headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
         body: JSON.stringify({ Id: Number(nr), TakeRecords: 2 }),
       });
-      if (!r.ok) continue;
+      if (!r.ok) return;
       const j = await r.json().catch(() => null);
       const lijst = Array.isArray(j) ? j : ((j && j.Records) || []);
       const o = lijst.find(x => Number(x.Id ?? x.OrderId) === Number(nr));
-      if (!o) { cache[nr] = { ts: nu, info: null }; continue; }   // bestaat niet
+      if (!o) { cache[nr] = { ts: nu, info: null }; return; }   // bestaat niet
       const t = o.Totals || {};
       const kost = Number(t.AmountIncl) || 0;
       const betaald = Number(t.Calc_TotalPayed) || 0;
@@ -5500,6 +5512,10 @@ async function planningBetaalstatus(env, url) {
       cache[nr] = { ts: nu, info };
       uit[nr] = info;
       opgehaald++;
+    };
+    const doen = nodig.slice(0, MAX_PER_KEER);
+    for (let i = 0; i < doen.length; i += TEGELIJK) {
+      await Promise.all(doen.slice(i, i + TEGELIJK).map(nr => eentje(nr).catch(() => {})));
     }
     // Oude regels opruimen zodat de bucket niet eindeloos groeit.
     for (const k of Object.keys(cache)) if (nu - (cache[k].ts || 0) > 24 * 3600000) delete cache[k];
