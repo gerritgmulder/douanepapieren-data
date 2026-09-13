@@ -143,6 +143,7 @@ const ALLOWED_BUCKETS = new Set([
   // gekomen, zonder dat er iemand aan hoeft te denken dat op te schrijven.
   "dashboard-gezien",
   "dashboard-indeling",  // Per e-mailadres: eigen volgorde van afdelingen en tegels op het dashboard (het tandwiel)
+  "planning-its-order",  // Per ITS-melding de order (of de laatste order van de klant) voor de betaalstand, een dag bewaard
   // De huisstijl-fonts (Sephir, Helvetica, Univers) zijn commercieel
   // gelicentieerd. Ze staan hier en NIET in de repo, want die is publiek —
   // in de repo zetten zou neerkomen op ze doorgeven aan iedereen.
@@ -5377,42 +5378,69 @@ async function planningBetaalstatusMetIts(env, url) {
   const its = String(url.searchParams.get("its") || "")
     .split(",").map(x => x.trim()).filter(x => /^\d{1,12}$/.test(x)).slice(0, 100);
   const perIts = {};
+  let restantIts = 0;
   if (its.length) {
+    /* Bij Fonteyn staat op een melding vrijwel nooit een OrderId: de melding
+       wordt op de klant gemaakt, niet op de order. Gerrit (13 sep 2026):
+       "Alle service-afspraken hebben geen rechterkant kleur." Daarom, als de
+       melding geen order kent, de laatste order van die klant nemen: dat is
+       de spa waar de monteur voor komt. Het scherm zegt erbij dat het zo is
+       afgeleid. Wat we hebben uitgezocht bewaren we een dag, want dit kost
+       per melding twee vragen aan Logic4. */
+    const BUCKET = "planning-its-order", DAG = 24 * 3600000, MAX = 12;
+    const kaart = (await env.FONTEYN_DATA.get(BUCKET, { type: "json" })) || {};
     const c = await env.FONTEYN_DATA.get(ITS_CACHE, { type: "json" });
     const lijst = (c && c.meldingen) || [];
-    const los = [];
+    const nu = Date.now();
+    let gedaan = 0, token = null;
     for (const id of its) {
-      const m = lijst.find(x => String(x.id) === id);
-      /* Een lijst van vóór vandaag kent het veld 'order' nog niet; dan
-         alsnog los opvragen in plaats van 'geen order' aannemen. */
-      if (m && m.order !== undefined) perIts[id] = m.order ? String(m.order) : null; else los.push(id);
-    }
-    if (los.length) {
-      const token = await l4Token(env);
-      for (const id of los.slice(0, 15)) {
+      const k = kaart[id];
+      if (k && k.ts && nu - k.ts < DAG) { perIts[id] = k; continue; }
+      if (gedaan >= MAX) { restantIts++; continue; }
+      gedaan++;
+      if (!token) token = await l4Token(env);
+      const call = async (pad, body) => {
+        const r = await fetch("https://api.logic4server.nl" + pad, {
+          method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const j = r.ok ? await r.json().catch(() => null) : null;
+        return Array.isArray(j) ? j : ((j && j.Records) || []);
+      };
+      let m = lijst.find(x => String(x.id) === id);
+      let order = m && m.order ? String(m.order) : null;
+      let debiteur = m ? m.debiteur : null;
+      if (!order && (!m || m.order === undefined)) {
         try {
-          const r = await fetch("https://api.logic4server.nl/v3/ITS/GetIssues", {
-            method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-            body: JSON.stringify({ Id: Number(id), TakeRecords: 1 }),
-          });
-          const j = r.ok ? await r.json().catch(() => null) : null;
-          const x = (Array.isArray(j) ? j : (j && j.Records) || []).find(y => String(y.id) === id);
-          perIts[id] = x && x.OrderId ? String(x.OrderId) : null;
-        } catch (e) { perIts[id] = null; }
+          const x = (await call("/v3/ITS/GetIssues", { Id: Number(id), TakeRecords: 1 })).find(y => String(y.id) === id);
+          if (x) { order = x.OrderId ? String(x.OrderId) : null; debiteur = debiteur || x.ReportedByDebtorId || null; }
+        } catch (e) {}
       }
+      let afgeleid = false;
+      if (!order && debiteur) {
+        try {
+          const orders = await call("/v3/Orders/GetOrders", { DebtorId: Number(debiteur), TakeRecords: 30 });
+          orders.sort((a, b) => String(b.CreationDate || "").localeCompare(String(a.CreationDate || "")));
+          if (orders.length) { order = String(orders[0].Id ?? orders[0].OrderId); afgeleid = true; }
+        } catch (e) {}
+      }
+      perIts[id] = { order: order || null, afgeleid, debiteur: debiteur || null, ts: nu };
+      kaart[id] = perIts[id];
     }
+    if (gedaan) await env.FONTEYN_DATA.put(BUCKET, JSON.stringify(kaart));
   }
   const orders = String(url.searchParams.get("orders") || "").split(",").map(x => x.trim()).filter(Boolean);
-  Object.values(perIts).forEach(o => { if (o && orders.indexOf(o) < 0) orders.push(o); });
+  Object.values(perIts).forEach(v => { if (v.order && orders.indexOf(v.order) < 0) orders.push(v.order); });
   const u2 = new URL(url.toString());
   u2.searchParams.set("orders", orders.join(","));
   const antwoord = await planningBetaalstatus(env, u2);
   const j = await antwoord.json().catch(() => ({ ok: false }));
   j.its = {};
   for (const id of Object.keys(perIts)) {
-    const o = perIts[id];
-    j.its[id] = { order: o, info: o && j.orders ? (j.orders[o] || null) : null, onbekend: !o };
+    const v = perIts[id];
+    j.its[id] = { order: v.order, afgeleid: !!v.afgeleid, info: v.order && j.orders ? (j.orders[v.order] || null) : null, onbekend: !v.order };
   }
+  j.restantIts = restantIts;
   return reply(antwoord.status, j);
 }
 async function planningBetaalstatus(env, url) {

@@ -832,6 +832,17 @@ function betaalRand(a){
   var t = betaalStand(a);
   return t ? "border-right:7px solid "+t.kleur+";" : "";
 }
+/* Voor in de tip: welke order de rechterrand bepaalt, en of die van de
+   melding zelf komt of van de laatste order van de klant. */
+function betaalUitleg(a){
+  var nr = String(a.ordernr||"").trim();
+  var b = nr ? betaald[nr] : null, via = "";
+  if (!b && a.itsId){ var v = betaald["its:"+a.itsId]; if (v && v.info){ b = v.info; nr = v.order; via = v.afgeleid ? " (laatste order van deze klant)" : " (order bij de melding)"; } }
+  if (!b || !BETAALD[b.stand]) return "";
+  var t = BETAALD[b.stand], u = "Order "+nr+": "+t.naam+via;
+  if (b.bedrag) u += " - "+euro(b.betaald)+" van "+euro(b.bedrag);
+  return u;
+}
 function betaalPil(a){
   var t = betaalStand(a);
   return t ? '<span class="betpil" style="background:'+t.kleur+'">'+esc(t.naam)+'</span>' : "";
@@ -863,7 +874,7 @@ async function haalBetaald(){
       if (!j.restant) lijst.forEach(function(nr){ if (!betaald[nr]) betaald[nr] = { stand:null }; });
       teken();
       // Nog niet alles opgehaald? Dan zo de rest.
-      if (j.restant > 0) setTimeout(function(){ betaaldBezig = false; haalBetaald(); }, 400);
+      if (j.restant > 0 || j.restantIts > 0) setTimeout(function(){ betaaldBezig = false; haalBetaald(); }, 400);
     }
   }catch(e){}
   betaaldBezig = false;
@@ -1292,7 +1303,7 @@ function stopHtml(a){
   var c = cat(a);
   var regel = [a.plaats, a.wat, a.ordernr].filter(Boolean).join(" - ");
   return '<div class="stop'+(a.klaar?" klaar":"")+(a.letop?" letop":"")+'"'+(MAG_BEWERKEN?' draggable="true"':'')+' data-id="'+esc(a.id)+'"'+
-    ' style="border-left-color:'+c.kleur+';'+(a.letop?'':'background:'+c.kleur+';color:'+(c.tekst||"#fff")+';')+betaalRand(a)+'" title="'+esc((a.tijd?a.tijd+"  ":"")+(a.klant||"")+(regel?"  -  "+regel:""))+'">'+
+    ' style="border-left-color:'+c.kleur+';'+(a.letop?'':'background:'+c.kleur+';color:'+(c.tekst||"#fff")+';')+betaalRand(a)+'" title="'+esc((a.tijd?a.tijd+"  ":"")+(a.klant||"")+(regel?"  -  "+regel:"")+(betaalUitleg(a)?"\n"+betaalUitleg(a):""))+'">'+
     '<span class="kl">'+(a.tijd?esc(a.tijd)+" ":"")+esc(a.klant||c.naam)+'</span>'+
     (regel?'<span class="rg">'+esc(regel)+'</span>':"")+
     (a.wie?'<span class="rg">\ud83d\udc64 '+esc(a.wie)+'</span>':"")+'</div>';
@@ -2067,7 +2078,7 @@ function blokken(items){
     var plander = a.door ? '<span class="planner" title="Ingepland door '+esc(planNaam(a.door))+
       (a.gewijzigdDoor && a.gewijzigdDoor!==a.door ? ', laatst gewijzigd door '+esc(planNaam(a.gewijzigdDoor)) : '')+'">'+
       esc(planNaam(a.door).slice(0,1).toUpperCase())+'</span>' : "";
-    return '<div class="blok'+(a.klaar?" klaar":"")+zoekKlas(a)+'" data-id="'+esc(a.id)+'" data-datum="'+esc(a.datum)+'" title="'+esc(a.tijd)+(a.duurMin?' - '+tijdStr(b.tot):'')+(a.wie?' · '+esc(a.wie):'')+'" style="top:'+top+'px;height:'+hoog+'px;'+
+    return '<div class="blok'+(a.klaar?" klaar":"")+zoekKlas(a)+'" data-id="'+esc(a.id)+'" data-datum="'+esc(a.datum)+'" title="'+esc(a.tijd)+(a.duurMin?' - '+tijdStr(b.tot):'')+(a.wie?' · '+esc(a.wie):'')+(betaalUitleg(a)?'\n'+esc(betaalUitleg(a)):'')+'" style="top:'+top+'px;height:'+hoog+'px;'+
       'left:calc('+links+'% + 2px);width:calc('+w+'% - 5px);background:'+c.kleur+';color:'+(c.tekst||"#fff")+';border-left-color:'+c.kleur+';z-index:'+(2+b.lane)+';'+betaalRand(a)+'">'+
       plander+
       /* Gerrit (11 sep 2026): de tijden staan al aan de zijkant, dus die

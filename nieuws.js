@@ -54,7 +54,7 @@
     {
       datum: "2026-09-13", bestand: "planning.html", soort: "beter",
       titel: "Ook bij een servicemelding zie je de betaling",
-      wat: "Een servicemelding hangt in Logic4 aan een order. De rechterrand van zo'n afspraak laat nu de betaalstand van die order zien, ook als er geen ordernummer op de afspraak staat. Zoek je een ITS-nummer op in het afsprakenvenster, dan komt het ordernummer er meteen bij.",
+      wat: "De rechterrand van een service-afspraak laat nu de betaalstand zien van de order waar de monteur voor komt. Staat er op de melding in Logic4 een order, dan die; zo niet, dan de laatste order van die klant. Ga je met de muis over de afspraak, dan staat erbij om welke order het gaat. Zoek je een ITS-nummer op in het afsprakenvenster, dan komt het ordernummer er meteen bij als de melding er een heeft.",
     },
 
     {
