@@ -53,8 +53,8 @@
 
     {
       datum: "2026-09-13", bestand: "planning.html", soort: "beter",
-      titel: "Betaald, aanbetaald of niet betaald: nu als rand om de afspraak",
-      wat: "Elke afspraak met een ordernummer heeft nu een rand rondom in de kleur van de betaalstand: groen is volledig betaald, oranje aanbetaald, rood niet betaald. Waar ruimte is staat het woord er ook bij. Dat geldt in het tijdraster, op het routebord en op de telefoon. Een servicemelding of een vrije dag heeft geen betaalstand en dus geen rand.",
+      titel: "Afspraken in de kleur van hun soort, met een rand voor de betaling",
+      wat: "Een afspraak staat nu in de volle kleur van de categorie: groen is een levering, oranje service, blauw verlof, grijs intern. Heeft de afspraak een ordernummer, dan zit er een rand omheen in de kleur van de betaalstand: donkergroen volledig betaald, oranje aanbetaald, rood niet betaald. Dat geldt in het tijdraster, op het routebord en op de telefoon. Zonder ordernummer geen rand.",
     },
 
     {
