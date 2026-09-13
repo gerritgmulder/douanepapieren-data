@@ -811,8 +811,12 @@ function betaalStip(a){
    zonder ordernummer (een servicemelding, een vrije dag) heeft geen
    betaalstand en dus geen rand. */
 function betaalStand(a){
-  var nr = String(a.ordernr||"").trim(); if (!nr) return null;
-  var b = betaald[nr]; if (!b || !BETAALD[b.stand]) return null;
+  var nr = String(a.ordernr||"").trim();
+  var b = nr ? betaald[nr] : null;
+  /* Geen ordernummer maar wel een servicemelding: dan telt de order waar
+     die melding in Logic4 aan hangt (Gerrit, 13 sep 2026). */
+  if (!b && a.itsId){ var v = betaald["its:"+a.itsId]; if (v && v.info) b = v.info; }
+  if (!b || !BETAALD[b.stand]) return null;
   return BETAALD[b.stand];
 }
 /* Het vlak is de soort, de rechterrand de betaling.
@@ -838,19 +842,21 @@ function euro(n){ return "\u20ac " + Number(n||0).toLocaleString("nl-NL",{minimu
    meer nodig, dan vraagt hij vanzelf de rest in een tweede ronde. */
 async function haalBetaald(){
   if (betaaldBezig || !teamKey()) return;
-  var nrs = {};
+  var nrs = {}, its = {};
   weekLijst().forEach(function(d){ d.items.forEach(function(a){
     var nr = String(a.ordernr||"").trim();
     if (/^\d{4,12}$/.test(nr) && !betaald[nr]) nrs[nr] = 1;
+    else if (!nr && a.itsId && !betaald["its:"+a.itsId]) its[a.itsId] = 1;
   }); });
-  var lijst = Object.keys(nrs);
-  if (!lijst.length) return;
+  var lijst = Object.keys(nrs), itsLijst = Object.keys(its);
+  if (!lijst.length && !itsLijst.length) return;
   betaaldBezig = true;
   try{
-    var r = await fetch(W+"/planning/betaalstatus?orders="+lijst.join(","), { headers:{ "X-Fonteyn-Auth": teamKey() } });
+    var r = await fetch(W+"/planning/betaalstatus?orders="+lijst.join(",")+(itsLijst.length?"&its="+itsLijst.join(","):""), { headers:{ "X-Fonteyn-Auth": teamKey() } });
     var j = await r.json();
     if (j && j.ok){
       Object.keys(j.orders||{}).forEach(function(k){ betaald[k] = j.orders[k]; });
+      Object.keys(j.its||{}).forEach(function(k){ betaald["its:"+k] = j.its[k]; });
       /* Nummers die Logic4 niet kent onthouden we óók, als "geen stand".
          Zonder dat zouden ze bij elke keer tekenen opnieuw worden opgevraagd
          en blijft het scherm zichzelf aan het bevragen. */
@@ -2267,6 +2273,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
         zet("fPlaats", (klant && klant.adres) || "");
         zet("fWat", ("Melding "+m.id+" \u00b7 "+[m.groep, (m.omschrijving||"").slice(0,140)].filter(Boolean).join(" \u00b7 ")).slice(0,400));
         zet("fIts", String(m.id));
+        if (m.order) zet("fOrder", String(m.order));
         if (soort === "levering"){ soort = "service"; var sb = $("fCats").querySelector('[data-cat="service"]'); if (sb) sb.click(); }
         uit.className="zoekuit ok";
         uit.textContent = "Gevonden: melding " + m.id + " van " + ((klant && klant.naam) || m.naam || "?") +
@@ -2412,6 +2419,7 @@ async function itsInplannen(id, knop){
     plaats: (klant && klant.adres) || "",
     wat: ("Melding "+m.id+" · "+[m.groep, m.omschrijving.slice(0,140)].filter(Boolean).join(" · ")).slice(0,400),
     itsId: m.id,
+    ordernr: m.order ? String(m.order) : "",
   });
 }
 $("itsKnop").addEventListener("click", function(){

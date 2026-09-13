@@ -53,6 +53,12 @@
 
     {
       datum: "2026-09-13", bestand: "planning.html", soort: "beter",
+      titel: "Ook bij een servicemelding zie je de betaling",
+      wat: "Een servicemelding hangt in Logic4 aan een order. De rechterrand van zo'n afspraak laat nu de betaalstand van die order zien, ook als er geen ordernummer op de afspraak staat. Zoek je een ITS-nummer op in het afsprakenvenster, dan komt het ordernummer er meteen bij.",
+    },
+
+    {
+      datum: "2026-09-13", bestand: "planning.html", soort: "beter",
       titel: "Het vlak is de soort, de rechterrand de betaling",
       wat: "Een afspraak staat in de kleur van zijn soort: groen levering, oranje service, blauw verlof, grijs intern. Aan de rechterkant zit een rand in de kleur van de betaling van de order: donkergroen volledig betaald, donkeroranje aanbetaald, donkerrood niet betaald. Geen rechterrand betekent geen ordernummer. Zo in het tijdraster, op het routebord en op de telefoon.",
     },

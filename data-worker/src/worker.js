@@ -5368,6 +5368,53 @@ function itsKaal(html) {
    Per order één aanvraag zou de subrequest-grens van een worker raken zodra
    er een week vol afspraken staat. Daarom vragen we het bereik van
    ordernummers in één keer op en zoeken we er lokaal uit wat we nodig hebben. */
+/* Ook voor servicemeldingen: ?its=48211,48302 — een melding hangt in Logic4
+   aan een order (OrderId), en die order heeft een betaalstand. Gerrit (13 sep
+   2026): "ITS laat nu niet zien of die order waarbij de ITS hoort aanbetaald
+   of betaald ofzo is." De order zoeken we eerst in de meldingenlijst die al
+   in de cache staat; staat hij daar niet, dan vragen we de melding los op. */
+async function planningBetaalstatusMetIts(env, url) {
+  const its = String(url.searchParams.get("its") || "")
+    .split(",").map(x => x.trim()).filter(x => /^\d{1,12}$/.test(x)).slice(0, 100);
+  const perIts = {};
+  if (its.length) {
+    const c = await env.FONTEYN_DATA.get(ITS_CACHE, { type: "json" });
+    const lijst = (c && c.meldingen) || [];
+    const los = [];
+    for (const id of its) {
+      const m = lijst.find(x => String(x.id) === id);
+      /* Een lijst van vóór vandaag kent het veld 'order' nog niet; dan
+         alsnog los opvragen in plaats van 'geen order' aannemen. */
+      if (m && m.order !== undefined) perIts[id] = m.order ? String(m.order) : null; else los.push(id);
+    }
+    if (los.length) {
+      const token = await l4Token(env);
+      for (const id of los.slice(0, 15)) {
+        try {
+          const r = await fetch("https://api.logic4server.nl/v3/ITS/GetIssues", {
+            method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+            body: JSON.stringify({ Id: Number(id), TakeRecords: 1 }),
+          });
+          const j = r.ok ? await r.json().catch(() => null) : null;
+          const x = (Array.isArray(j) ? j : (j && j.Records) || []).find(y => String(y.id) === id);
+          perIts[id] = x && x.OrderId ? String(x.OrderId) : null;
+        } catch (e) { perIts[id] = null; }
+      }
+    }
+  }
+  const orders = String(url.searchParams.get("orders") || "").split(",").map(x => x.trim()).filter(Boolean);
+  Object.values(perIts).forEach(o => { if (o && orders.indexOf(o) < 0) orders.push(o); });
+  const u2 = new URL(url.toString());
+  u2.searchParams.set("orders", orders.join(","));
+  const antwoord = await planningBetaalstatus(env, u2);
+  const j = await antwoord.json().catch(() => ({ ok: false }));
+  j.its = {};
+  for (const id of Object.keys(perIts)) {
+    const o = perIts[id];
+    j.its[id] = { order: o, info: o && j.orders ? (j.orders[o] || null) : null, onbekend: !o };
+  }
+  return reply(antwoord.status, j);
+}
 async function planningBetaalstatus(env, url) {
   const gevraagd = String(url.searchParams.get("orders") || "")
     .split(",").map(x => x.trim()).filter(x => /^\d{4,12}$/.test(x)).slice(0, 200);
@@ -5471,6 +5518,10 @@ async function planningIts(env, url) {
           uiterlijk: String(x.DateTimeMustBeCompletedOn || "").slice(0, 10) || null,
           debiteur: x.ReportedByDebtorId || null,
           verantwoordelijke: x.ResponsibleByUserName || null,
+          /* De order waar de melding bij hoort, als Logic4 die kent. Daarmee
+             kan de planning de betaalstand van een servicemelding laten zien
+             (Gerrit, 13 sep 2026). */
+          order: x.OrderId || null,
         });
       }
       if (lijst.length < 500) break;
@@ -10486,7 +10537,7 @@ export default {
     }
     if (url.pathname === "/planning/betaalstatus" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
-      return planningBetaalstatus(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+      return planningBetaalstatusMetIts(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     if (url.pathname === "/planning/route-print" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });

@@ -128,6 +128,7 @@
         "</div></div>" +
         "<div class='gegevens'>" +
           rij("Melding:", m.id) +
+          rij("Order:", m.order) +
           rij("Gemeld op:", datumNL(m.gemeld)) +
           rij("Uiterlijk:", datumNL(m.uiterlijk)) +
           rij("Type:", m.type) +
