@@ -53,8 +53,8 @@
 
     {
       datum: "2026-09-13", bestand: "planning.html", soort: "beter",
-      titel: "Links de soort, rechts de betaling",
-      wat: "Elke afspraak heeft twee gekleurde zijkanten. Links de soort: groen levering, oranje service, blauw verlof, grijs intern. Rechts de betaling van de order: groen volledig betaald, oranje aanbetaald, rood niet betaald. Geen rechterrand betekent geen ordernummer. Het vlak zelf blijft licht, zodat je gewoon leest wat er staat. Zo in het tijdraster, op het routebord en op de telefoon.",
+      titel: "Het vlak is de soort, de rechterrand de betaling",
+      wat: "Een afspraak staat in de kleur van zijn soort: groen levering, oranje service, blauw verlof, grijs intern. Aan de rechterkant zit een rand in de kleur van de betaling van de order: donkergroen volledig betaald, donkeroranje aanbetaald, donkerrood niet betaald. Geen rechterrand betekent geen ordernummer. Zo in het tijdraster, op het routebord en op de telefoon.",
     },
 
     {
