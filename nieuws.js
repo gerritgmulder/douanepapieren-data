@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-13", bestand: "planning.html", soort: "beter",
+      titel: "Betaald, aanbetaald of niet betaald: nu als rand om de afspraak",
+      wat: "Elke afspraak met een ordernummer heeft nu een rand rondom in de kleur van de betaalstand: groen is volledig betaald, oranje aanbetaald, rood niet betaald. Waar ruimte is staat het woord er ook bij. Dat geldt in het tijdraster, op het routebord en op de telefoon. Een servicemelding of een vrije dag heeft geen betaalstand en dus geen rand.",
+    },
+
+    {
       datum: "2026-09-13", iedereen: true, soort: "hersteld",
       titel: "Telefoon: kop van Voorraadbeheer blijft staan, afdrukvoorbeeld leesbaar",
       wat: "De kop van Voorraadbeheer op de telefoon staat nu vast bovenaan, onder de klok van de telefoon, en de zoekbalk hangt eraan. Het afdrukvoorbeeld van een route past op een telefoonscherm: de blokken staan onder elkaar in plaats van in kolommen van een letter breed.",
