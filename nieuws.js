@@ -53,8 +53,8 @@
 
     {
       datum: "2026-09-13", bestand: "planning.html", soort: "beter",
-      titel: "Afspraken in de kleur van hun soort, met een rand voor de betaling",
-      wat: "Een afspraak staat nu in de volle kleur van de categorie: groen is een levering, oranje service, blauw verlof, grijs intern. Heeft de afspraak een ordernummer, dan zit er een rand omheen in de kleur van de betaalstand: donkergroen volledig betaald, oranje aanbetaald, rood niet betaald. Dat geldt in het tijdraster, op het routebord en op de telefoon. Zonder ordernummer geen rand.",
+      titel: "Links de soort, rechts de betaling",
+      wat: "Elke afspraak heeft twee gekleurde zijkanten. Links de soort: groen levering, oranje service, blauw verlof, grijs intern. Rechts de betaling van de order: groen volledig betaald, oranje aanbetaald, rood niet betaald. Geen rechterrand betekent geen ordernummer. Het vlak zelf blijft licht, zodat je gewoon leest wat er staat. Zo in het tijdraster, op het routebord en op de telefoon.",
     },
 
     {

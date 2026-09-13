@@ -172,10 +172,8 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .blok:hover{box-shadow:0 3px 10px rgba(0,0,0,.18);z-index:5!important}
 .blok .nr{font-weight:700;font-size:10px;letter-spacing:.02em;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .blok .k{font-weight:600;font-size:11.5px}
-.blok .s{opacity:.85;font-size:10.5px}
-.blok .d{opacity:.75;font-size:10px;font-style:italic}
-.blok .nr{color:inherit;opacity:.9}
-.blok .planner{background:rgba(255,255,255,.9)}
+.blok .s{opacity:.8;font-size:10.5px}
+.blok .d{opacity:.7;font-size:10px;font-style:italic}
 .blok.klaar{opacity:.42}
 /* Slepen en vergroten. De greep is een strookje onderaan het blok; hij valt
    niet op tot je er met de muis overheen gaat. */
@@ -252,7 +250,7 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
 .afs .tijd{font-weight:700;font-size:12.5px}
 .afs .badge{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding:1px 6px;border-radius:4px}
 .afs .klant{font-size:13px;font-weight:600;margin-top:3px;line-height:1.35}
-.afs .sub{font-size:11.5px;color:inherit;opacity:.85;margin-top:2px;line-height:1.45}
+.afs .sub{font-size:11.5px;color:var(--grijs);margin-top:2px;line-height:1.45}
 .plus{display:block;width:100%;margin-top:6px;background:none;border:1px dashed var(--rand);
        border-radius:8px;color:var(--grijs);font:inherit;font-size:12px;padding:7px;cursor:pointer}
 .plus:hover{border-color:var(--lime);color:var(--groen)}
@@ -385,7 +383,7 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
       background:#fff;border-top:1px solid var(--rand);border-right:1px solid var(--rand);border-bottom:1px solid var(--rand)}
 .stop.sleept{opacity:.5}
 .stop .kl{font-weight:700;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.stop .rg{color:inherit;opacity:.85;font-size:10.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stop .rg{color:var(--grijs);font-size:10.5px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .stop.letop{background:#fee2e2;border-color:#b91c1c}
 .stop.klaar{opacity:.45}
 .stop.klaar .kl{text-decoration:line-through}
@@ -811,14 +809,18 @@ function betaalStand(a){
   var b = betaald[nr]; if (!b || !BETAALD[b.stand]) return null;
   return BETAALD[b.stand];
 }
-/* Gerrit (13 sep 2026): "nu zie je niet meer of het service of levering is,
-   want de kleur van de betaling is te intens." Dus: het vlak in de volle
-   kleur van de categorie, daaromheen een rand in de betaalkleur met een wit
-   randje ertussen zodat lime en groen, amber en oranje uit elkaar blijven,
-   en geen woorden meer. */
+/* Twee zijkanten, twee betekenissen.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (13 sep 2026), na twee pogingen met randen rondom en volle vlakken:
+   "Nu zie ik echt allemaal kleuren door elkaar heen." Dus één vaste regel:
+   de LINKERrand is de soort (levering, service, verlof, intern), de
+   RECHTERrand is de betaling (groen betaald, oranje aanbetaald, rood niet
+   betaald). Het vlak zelf blijft licht en de tekst zwart, zodat je leest wat
+   er staat en de kleuren alleen aan de zijkanten zitten. Geen rand rechts =
+   geen ordernummer, dus geen betaalstand. */
 function betaalRand(a){
   var t = betaalStand(a);
-  return t ? "box-shadow:inset 0 0 0 2.5px "+t.kleur+", inset 0 0 0 4.5px #fff;" : "";
+  return t ? "border-right:5px solid "+t.kleur+";" : "";
 }
 function betaalPil(a){
   var t = betaalStand(a);
@@ -871,7 +873,8 @@ function tekenLegenda(){
     return '<span class="cat-chip'+(filterUit[k]?" uit":"")+'" data-cat="'+k+'" title="Klik om deze categorie te tonen of te verbergen">'+
       '<span class="bol" style="background:'+c.kleur+'"></span>'+esc(c.naam)+'</span>';
   }).join("");
-  houder.innerHTML += '<span class="betaal-uitleg" title="De stip voor de klantnaam laat zien hoe de order ervoor staat. Geen stip = geen ordernummer op de afspraak.">'+
+  houder.innerHTML += '<span class="betaal-uitleg" title="De linkerrand van een afspraak is de soort, de rechterrand de betaling. Geen rechterrand = geen ordernummer op de afspraak.">'+
+    '<span style="color:var(--grijs)">links: soort &middot; rechts: betaling</span> '+
     Object.keys(BETAALD).map(function(k){
       return '<span class="betaalstip" style="background:'+BETAALD[k].kleur+'"></span>'+esc(BETAALD[k].naam); }).join(" ")+'</span>';
   toonAanwezig();
@@ -1277,7 +1280,7 @@ function stopHtml(a){
   var c = cat(a);
   var regel = [a.plaats, a.wat, a.ordernr].filter(Boolean).join(" - ");
   return '<div class="stop'+(a.klaar?" klaar":"")+(a.letop?" letop":"")+'"'+(MAG_BEWERKEN?' draggable="true"':'')+' data-id="'+esc(a.id)+'"'+
-    ' style="border-left-color:'+c.kleur+';'+(a.letop?'':'background:'+c.kleur+';color:'+(c.tekst||"#fff")+';')+betaalRand(a)+'" title="'+esc((a.tijd?a.tijd+"  ":"")+(a.klant||"")+(regel?"  -  "+regel:""))+'">'+
+    ' style="border-left-color:'+c.kleur+';'+betaalRand(a)+'" title="'+esc((a.tijd?a.tijd+"  ":"")+(a.klant||"")+(regel?"  -  "+regel:""))+'">'+
     '<span class="kl">'+(a.tijd?esc(a.tijd)+" ":"")+esc(a.klant||c.naam)+'</span>'+
     (regel?'<span class="rg">'+esc(regel)+'</span>':"")+
     (a.wie?'<span class="rg">\ud83d\udc64 '+esc(a.wie)+'</span>':"")+'</div>';
@@ -2053,7 +2056,7 @@ function blokken(items){
       (a.gewijzigdDoor && a.gewijzigdDoor!==a.door ? ', laatst gewijzigd door '+esc(planNaam(a.gewijzigdDoor)) : '')+'">'+
       esc(planNaam(a.door).slice(0,1).toUpperCase())+'</span>' : "";
     return '<div class="blok'+(a.klaar?" klaar":"")+zoekKlas(a)+'" data-id="'+esc(a.id)+'" data-datum="'+esc(a.datum)+'" title="'+esc(a.tijd)+(a.duurMin?' - '+tijdStr(b.tot):'')+(a.wie?' · '+esc(a.wie):'')+'" style="top:'+top+'px;height:'+hoog+'px;'+
-      'left:calc('+links+'% + 2px);width:calc('+w+'% - 5px);background:'+c.kleur+';color:'+(c.tekst||"#fff")+';border-left-color:'+c.kleur+';z-index:'+(2+b.lane)+';'+betaalRand(a)+'">'+
+      'left:calc('+links+'% + 2px);width:calc('+w+'% - 5px);background:'+c.zacht+';border-left-color:'+c.kleur+';z-index:'+(2+b.lane)+';'+betaalRand(a)+'">'+
       plander+
       /* Gerrit (11 sep 2026): de tijden staan al aan de zijkant, dus die
          hoeven niet in het blok. Wat er wél in moet: ordernummer,
@@ -2073,9 +2076,9 @@ function kaartje(a){
   var voet = [];
   if (a.wie) voet.push("👤 "+esc(a.wie));
   if (a.door) voet.push("gepland door "+esc(voornaam(a.door)));
-  return '<div class="afs'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="border-left-color:'+c.kleur+';background:'+c.kleur+';color:'+(c.tekst||"#fff")+';'+betaalRand(a)+'">'+
+  return '<div class="afs'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="border-left-color:'+c.kleur+';'+betaalRand(a)+'">'+
     '<div class="kop"><span class="tijd">'+esc(a.tijd||"hele dag")+'</span>'+
-    '<span class="badge" style="background:rgba(255,255,255,.35);color:inherit">'+esc(c.naam)+'</span></div>'+
+    '<span class="badge" style="background:'+c.zacht+';color:'+c.kleur+';filter:brightness(.75)">'+esc(c.naam)+'</span></div>'+
     '<div class="klant">'+esc(a.klant||"(geen naam)")+'</div>'+
     (sub?'<div class="sub">'+sub+'</div>':"")+
     (voet.length?'<div class="sub">'+voet.join(" · ")+'</div>':"")+'</div>';
