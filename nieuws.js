@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-13", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
+      titel: "Sorteren op naam, omschrijving, grootte of datum",
+      wat: "Klik op een kolomkop om de lijst te sorteren; nog een keer klikken draait de volgorde om. Bij grootte en datum staat na de eerste klik de grootste of de nieuwste bovenaan. De keuze blijft staan als je de tegel later weer opent.",
+    },
+
+    {
       datum: "2026-09-13", bestand: "planning.html", soort: "beter",
       titel: "Nieuwe kleuren in Planning, en de betaalstand laadt sneller",
       wat: "Levering is nu lichtblauw, service lila, verlof lichtturquoise en intern lichtgrijs: zachte kleuren die niet meer botsen met de betaling. De rechterrand voor de betaling is juist feller: groen betaald, oranje aanbetaald, rood niet betaald. En het ophalen van de betaalstanden gaat tegelijk in plaats van een voor een, dus de randen staan er in ongeveer een seconde in plaats van acht.",

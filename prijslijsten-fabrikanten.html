@@ -37,6 +37,11 @@
   table.grid{width:100%;border-collapse:collapse;font-size:13px}
   table.grid th,table.grid td{padding:8px 9px;border-bottom:1px solid #f3f4f6;text-align:left;vertical-align:middle}
   table.grid th{background:#f9fafb;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  table.grid th.sorteer{cursor:pointer;user-select:none;white-space:nowrap}
+  table.grid th.sorteer:hover{color:var(--ink)}
+  table.grid th.sorteer .pijl{display:inline-block;margin-left:4px;color:#c7cbd1}
+  table.grid th.sorteer.aan{color:var(--ink)}
+  table.grid th.sorteer.aan .pijl{color:var(--ink)}
   table.grid tr:hover td{background:#fbfdf7}
   .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
   input[type=text],select{border:1px solid var(--border);border-radius:8px;padding:8px 11px;font:inherit;font-size:13px;background:#fff;transition:border-color .14s,box-shadow .14s}
@@ -107,11 +112,14 @@
       <div class="kruimels" id="kruimels"></div>
 
       <table class="grid">
+        <!-- Klik op een kop om te sorteren, nog een keer voor de andere kant.
+             Gerrit (13 sep 2026): "een filter hoog-laag bij de namen die er nu
+             staan (grootte, toegevoegd, etc.)". -->
         <thead><tr>
-          <th style="width:38%">Naam</th>
-          <th style="width:26%">Omschrijving</th>
-          <th style="width:9%">Grootte</th>
-          <th style="width:15%">Toegevoegd</th>
+          <th style="width:38%" class="sorteer" data-kolom="naam" title="Sorteren op naam">Naam</th>
+          <th style="width:26%" class="sorteer" data-kolom="notitie" title="Sorteren op omschrijving">Omschrijving</th>
+          <th style="width:9%" class="sorteer" data-kolom="bytes" title="Sorteren op grootte">Grootte</th>
+          <th style="width:15%" class="sorteer" data-kolom="op" title="Sorteren op datum">Toegevoegd</th>
           <th style="width:12%"></th>
         </tr></thead>
         <tbody id="lijst"></tbody>
@@ -239,9 +247,39 @@ function submappen(pad){
     .filter(m=>m.startsWith(voor)&&m.slice(voor.length).length&&!m.slice(voor.length).includes("/"))
     .sort((a,b)=>a.localeCompare(b,"nl"));
 }
+/* De sortering: welke kolom en welke kant op. Blijft staan tussen bezoeken.
+   Naam is de standaard, oplopend; bij grootte en datum begint een klik met
+   de grootste of nieuwste bovenaan, want dat is wat je dan zoekt. */
+let sortering={kolom:"naam",op:1};
+try{ const s0=JSON.parse(localStorage.getItem("fp.prijslijsten.sortering")||"null"); if(s0&&s0.kolom) sortering=s0; }catch(e){}
+function sorteerBestanden(lijst){
+  const k=sortering.kolom, op=sortering.op;
+  return lijst.slice().sort((a,b)=>{
+    let x, y;
+    if(k==="bytes"){ x=Number(a.bytes)||0; y=Number(b.bytes)||0; return (x-y)*op; }
+    if(k==="op"){ x=String(a.op||""); y=String(b.op||""); return (x<y?-1:x>y?1:0)*op; }
+    x=String(a[k]||"").toLowerCase(); y=String(b[k]||"").toLowerCase();
+    return x.localeCompare(y,"nl")*op;
+  });
+}
+function tekenSorteerkoppen(){
+  document.querySelectorAll("th.sorteer").forEach(th=>{
+    const aan=th.dataset.kolom===sortering.kolom;
+    th.classList.toggle("aan",aan);
+    let pijl=th.querySelector(".pijl");
+    if(!pijl){ pijl=document.createElement("span"); pijl.className="pijl"; th.appendChild(pijl); }
+    pijl.textContent=aan?(sortering.op>0?"\u25b2":"\u25bc"):"\u21c5";
+  });
+}
+document.querySelectorAll("th.sorteer").forEach(th=>th.addEventListener("click",()=>{
+  const k=th.dataset.kolom;
+  if(sortering.kolom===k) sortering.op=-sortering.op;
+  else sortering={kolom:k, op:(k==="bytes"||k==="op")?-1:1};
+  try{ localStorage.setItem("fp.prijslijsten.sortering",JSON.stringify(sortering)); }catch(e){}
+  teken();
+}));
 function bestandenIn(pad){
-  return S.bestanden.filter(b=>(b.map||"")===pad)
-    .sort((a,b)=>String(a.naam).localeCompare(String(b.naam),"nl"));
+  return sorteerBestanden(S.bestanden.filter(b=>(b.map||"")===pad));
 }
 // Alles ónder een map — nodig bij hernoemen en verwijderen.
 function alsOnder(pad){
@@ -324,6 +362,7 @@ function icoon(naam){
 function teken(){
   tekenKpis();
   tekenKruimels();
+  tekenSorteerkoppen();
   const q=(document.getElementById("zoek").value||"").trim().toLowerCase();
   const tb=document.getElementById("lijst");
 
@@ -334,7 +373,7 @@ function teken(){
       String(b.naam||"").toLowerCase().includes(q)||
       String(b.notitie||"").toLowerCase().includes(q)||
       String(b.map||"").toLowerCase().includes(q));
-    tb.innerHTML=treffers.map(b=>rijBestand(Object.assign({},b,{map:b.map}))).join("")||
+    tb.innerHTML=sorteerBestanden(treffers).map(b=>rijBestand(Object.assign({},b,{map:b.map}))).join("")||
       "<tr><td colspan='5' style='color:var(--muted)'>Niets gevonden voor '"+esc(q)+"'.</td></tr>";
     document.getElementById("kruimels").insertAdjacentHTML("beforeend",
       "<span class='sep'>·</span><span class='meta'>"+treffers.length+" treffer"+(treffers.length===1?"":"s")+" in alle mappen</span>");
