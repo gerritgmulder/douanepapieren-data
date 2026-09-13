@@ -57,8 +57,15 @@
 html,body{margin:0;padding:0;min-height:100%}
 body{font-family:"Montserrat",-apple-system,system-ui,sans-serif;background:var(--bg);
      color:var(--ink);font-size:15px;-webkit-text-size-adjust:100%}
+/* De kop staat vast (fixed), niet sticky. Gerrit (13 sep 2026): de kop
+   bleef niet staan bij het scrollen en de klok van de telefoon liep door de
+   titel. Fixed hangt niet af van hoe de pagina scrolt, en de bovenrand houdt
+   rekening met de klok (safe-area). De inhoud begint eronder; de hoogte van
+   de kop zet het script in --kophoogte, en daar plakt ook de zoekbalk aan. */
 header{background:var(--groen);color:#fff;padding:13px 16px;display:flex;align-items:center;gap:11px;
-       position:sticky;top:0;z-index:20;padding-top:calc(13px + env(safe-area-inset-top))}
+       position:fixed;top:0;left:0;right:0;z-index:20;padding-top:calc(13px + env(safe-area-inset-top));
+       box-sizing:border-box}
+main{padding-top:calc(var(--kophoogte,54px) + 12px)}
 header button.terug{background:transparent;border:0;color:rgba(255,255,255,.9);font:inherit;
        font-size:19px;line-height:1;padding:0 2px;cursor:pointer;flex:0 0 auto}
 header h1{flex:1;margin:0;font-size:16px;font-weight:600}
@@ -155,7 +162,7 @@ main{padding:14px;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
   <script>
     (function(){ var k=document.querySelector("header"); if(!k) return;
       function zet(){ document.documentElement.style.setProperty("--kophoogte", (k.offsetHeight)+"px"); }
-      zet(); window.addEventListener("resize", zet); })();
+      zet(); window.addEventListener("resize", zet); window.addEventListener("load", zet); setTimeout(zet, 300); })();
   </script>
   <!-- beginscherm -->
   <div id="s-home">

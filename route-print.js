@@ -271,7 +271,17 @@
          grijze achtergrond, zodat het voorbeeld eruitziet als het papier.
          Bij het printen zelf doet deze regel niets. */
       "<style>@media screen{html{background:#cfd4d9}body{max-width:210mm;margin:14px auto;background:#fff;" +
-      "box-shadow:0 4px 24px rgba(0,0,0,.3);padding:12mm;box-sizing:border-box}}</style></head><body>" +
+      "box-shadow:0 4px 24px rgba(0,0,0,.3);padding:12mm;box-sizing:border-box}}" +
+      /* Op een telefoon is een vel van A4-breedte drie keer het scherm: de
+         blokken naast elkaar werden kolommen van één letter breed (Gerrit,
+         13 sep 2026). Daar staan de blokken onder elkaar, de briefkop over
+         twee regels, en de tabel iets kleiner. Voor het printen zelf blijft
+         alles zoals het was. */
+      "@media screen and (max-width:600px){body{max-width:none;margin:0;padding:10px;box-shadow:none}" +
+      ".blokken{display:block}.blokken>div{margin-bottom:10px}.gegevens .gr>span{flex:0 0 118px}" +
+      ".briefkop{flex-wrap:wrap}.briefkop .bedrijf{text-align:left;flex:1 1 100%}.briefkop .logo{max-height:40px}" +
+      ".regels{font-size:10.5px}.regels th,.regels td{padding:4px 3px}.regels .code{width:58px}.regels .aantal{width:34px}" +
+      ".voorblad table{font-size:10.5px}}</style></head><body>" +
       voorblad(opts) +
       (opts.stukken
         ? opts.stukken.map(function (st) {
@@ -289,9 +299,10 @@
     laag.style.cssText = "position:fixed;inset:0;z-index:100000;background:rgba(17,24,39,.72);display:flex;flex-direction:column;" +
       "font-family:Montserrat,system-ui,sans-serif";
     var balk = document.createElement("div");
-    balk.style.cssText = "flex:none;background:#144734;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap";
+    balk.style.cssText = "flex:none;background:#144734;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;" +
+      "padding-top:calc(10px + env(safe-area-inset-top))";
     var kop = document.createElement("b");
-    kop.style.cssText = "flex:1;font-size:14px;min-width:0";
+    kop.style.cssText = "flex:1;font-size:14px;min-width:0;line-height:1.3;flex-basis:200px";
     var st = opts.stukken || (opts.orders || []).map(function (o) { return { soort: "order", data: o }; });
     var tel = { order: 0, melding: 0, afspraak: 0 };
     st.forEach(function (x) { tel[x.soort] = (tel[x.soort] || 0) + 1; });
