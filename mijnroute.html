@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  // Zonder sessie terug naar het dashboard; met sessie maar zonder toegang
+  // een nette melding. De rechten staan in toegang.js (groep 'planning').
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("planning", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">De tegel Mijn route is voor de afdeling Spa planning.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fonteyn - Mijn route</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     MIJN ROUTE - voor de monteur, op zijn telefoon
+
+     Gerrit (14 sep 2026): "ik moet Route 2 rijden op dinsdag 15 september,
+     en in die route zitten 2 leveringen en 1 ITS-melding. Ik moet de 2
+     orders die ik moet leveren volledig pakken door een paklijst langs te
+     lopen. Ik moet dat kunnen aanvinken en als ik alles heb aangevinkt weet
+     ik zeker dat ik de hele paklijst heb gepakt. Dat blijft wel zichtbaar
+     maar wel afgevinkt."
+
+     Wat hier staat: de routes waar jouw naam op staat, per dag, met de stops
+     in de volgorde van de route. Bij een stop met een order staat de
+     paklijst: elke regel van de order met een vinkje. Bij een servicemelding
+     staat de melding zelf, met Garantie. De vinkjes worden centraal bewaard
+     (bucket planning-paklijst), dus wat je in de loods afvinkt staat op de
+     pc bij Kevin ook zo.
+
+     Alles komt uit dezelfde bronnen als de tegel Planning: de afspraken en
+     routes uit de bucket 'planning', de orderregels uit Logic4 via
+     /planning/route-print, de meldingen via /planning/its. Hier wordt niets
+     aan de planning veranderd; alleen de vinkjes zijn van jou.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{
+  --groen:#144734; --groen-donker:#0d3325; --lime:#8bc53f;
+  --bg:#f5f4ef; --kaart:#fff; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb;
+  --rood:#b91c1c; --oranje:#f97316; --goed:#16a34a;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;min-height:100%}
+body{font-family:"Montserrat",-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;-webkit-text-size-adjust:100%}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+       position:sticky;top:0;z-index:20;padding-top:calc(12px + env(safe-area-inset-top))}
+header h1{margin:0;font-size:15px;font-weight:600;flex:1;min-width:0}
+main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-inset-bottom))}
+
+.dagkeus{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;margin:0 0 6px;-webkit-overflow-scrolling:touch}
+.dagkeus button{flex:0 0 auto;background:#fff;border:1px solid var(--rand);border-radius:10px;padding:8px 11px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink);line-height:1.25;text-align:center}
+.dagkeus button b{display:block;font-size:14px}
+.dagkeus button.aan{background:var(--groen);color:#fff;border-color:var(--groen)}
+.dagkeus button .stip{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--lime);margin-left:4px;vertical-align:middle}
+
+.route{background:var(--kaart);border:1px solid var(--rand);border-radius:14px;margin-bottom:12px;overflow:hidden}
+.route > h2{margin:0;background:var(--groen);color:#fff;font-size:14px;padding:10px 14px;display:flex;align-items:center;gap:8px}
+.route > h2 .nr{background:var(--lime);color:#102b1e;border-radius:6px;padding:1px 7px;font-size:12px;font-weight:700}
+.route > h2 .wie{font-weight:400;opacity:.85;font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.route > h2 .voortgang{font-size:12px;font-weight:600}
+.stop{border-top:1px solid var(--rand);padding:12px 14px}
+.stop .kop{display:flex;align-items:flex-start;gap:10px}
+.stop .tijd{font-weight:700;font-size:15px;flex:0 0 auto}
+.stop .naam{font-weight:600;font-size:15px}
+.stop .sub{font-size:12.5px;color:var(--grijs);margin-top:2px;line-height:1.45}
+.stop .sub a{color:var(--groen)}
+.stop .soort{display:inline-block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 7px;border-radius:999px;margin-left:6px;vertical-align:middle}
+.stop .betaal{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:6px;vertical-align:middle}
+.stop .let{background:#fee2e2;border-left:4px solid var(--rood);padding:6px 10px;border-radius:8px;font-size:12.5px;margin-top:8px;font-weight:600}
+.paklijst{margin-top:10px;border:1px solid var(--rand);border-radius:10px;overflow:hidden}
+.paklijst .pk{display:flex;align-items:center;justify-content:space-between;background:#f8faf5;padding:7px 11px;font-size:12px;font-weight:700;color:var(--groen);text-transform:uppercase;letter-spacing:.04em}
+.paklijst .pk .tel{font-weight:600;text-transform:none;letter-spacing:0;color:var(--grijs)}
+.paklijst .pk .tel.klaar{color:var(--goed)}
+.regel{display:flex;align-items:flex-start;gap:12px;padding:10px 11px;border-top:1px solid #f0f0ea;cursor:pointer;user-select:none}
+.regel input{width:24px;height:24px;flex:0 0 auto;margin:0;accent-color:var(--groen);cursor:pointer}
+.regel .om{flex:1;min-width:0;font-size:14px;line-height:1.35}
+.regel .om small{display:block;color:var(--grijs);font-size:11.5px;margin-top:1px}
+.regel .aantal{flex:0 0 auto;font-weight:700;font-size:15px;min-width:34px;text-align:right}
+.regel.af .om{text-decoration:line-through;color:var(--grijs)}
+.regel.af .aantal{color:var(--grijs)}
+.melding{margin-top:10px;border:1px solid var(--rand);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.5;white-space:pre-wrap}
+.melding .kopje{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--grijs);margin:0 0 3px}
+.melding .stuk+.stuk{border-top:1.5px dashed #c7cbd1;margin-top:8px;padding-top:8px}
+.garantie{display:inline-block;padding:3px 10px;border:2px solid;border-radius:7px;font-size:12.5px;font-weight:700;margin:8px 0 0}
+.garantie.ja{border-color:var(--goed);color:var(--goed)}.garantie.nee{border-color:var(--rood);color:var(--rood)}
+.leeg{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:22px;text-align:center;color:var(--grijs);font-size:13.5px;line-height:1.5}
+.fout{background:#fee2e2;color:var(--rood);border-radius:10px;padding:10px 12px;font-size:13px;margin:0 0 10px}
+.wacht{color:var(--grijs);font-size:12.5px;padding:6px 2px}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🚚 Mijn route</h1>
+</header>
+<main>
+  <div class="dagkeus" id="dagen"></div>
+  <div id="fout"></div>
+  <div id="inhoud"><p class="wacht">Bezig met ophalen&hellip;</p></div>
+</main>
+
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function $(id){ return document.getElementById(id); }
+function esc(t){ return String(t==null?"":t).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+function iso(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+var DAGEN = ["ma","di","wo","do","vr","za","zo"], MAANDEN = ["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+function dagIndex(d){ return (d.getDay()+6)%7; }
+function datumNL(s){ if(!s) return ""; var p=String(s).slice(0,10).split("-"); return p.length===3 ? p[2]+"-"+p[1]+"-"+p[0] : s; }
+
+/* Dezelfde namen als op het routebord: Mike zit op het service-account,
+   Bert-Jan schrijft zichzelf met een streepje. Wat hier niet in staat
+   krijgt zijn voornaam. Een naam op een route past bij mij als hij gelijk is
+   aan mijn naam, of aan mijn voornaam (Bert-Jan Kok is ook Bert-Jan). */
+var PLANNERS = { "servicespa":"Mike", "spaservice":"Mike", "mike.deboer":"Mike de Boer",
+                 "bertjan":"Bert-Jan", "bertjan.kok":"Bert-Jan Kok", "bart.vdb":"Bart",
+                 "tim.geerestein":"Tim", "hans.vanputten":"Hans van Putten", "thieme":"Thieme",
+                 "joeri":"Joeri", "dylan":"Dylan", "joey":"Joey", "patrick":"Patrick" };
+function voornaam(wie){
+  var lokaal = String(wie||"").split("@")[0].replace(/^fonteyn\./i,"");
+  return lokaal.split(/[.\-_]/).filter(Boolean).map(function(d){ return d.charAt(0).toUpperCase()+d.slice(1).toLowerCase(); }).join(" ");
+}
+function mijnNaam(){
+  var lokaal = ik.split("@")[0].replace(/^fonteyn\./,"");
+  return PLANNERS[lokaal] || voornaam(ik);
+}
+function isIk(naam){
+  var n = String(naam||"").trim().toLowerCase(), m = mijnNaam().toLowerCase();
+  if (!n) return false;
+  if (n === m) return true;
+  var kort = function(x){ return x.replace(/[\s\-]/g,"").split(/\s/)[0]; };
+  return n.split(/\s+/)[0] === m.split(/\s+/)[0] || kort(n) === kort(m);
+}
+var CATS = { levering:{naam:"Levering",kleur:"#3b82f6",vlak:"#bfdbfe"}, service:{naam:"Service",kleur:"#8b5cf6",vlak:"#ddd6fe"},
+             verlof:{naam:"Verlof",kleur:"#06b6d4",vlak:"#a5f3fc"}, intern:{naam:"Intern",kleur:"#9ca3af",vlak:"#e5e7eb"} };
+var BETAALD = { betaald:"#16a34a", aanbetaald:"#f97316", open:"#dc2626" };
+
+var plan = { afspraken:[], routes:{} }, paklijst = {}, orders = {}, meldingen = null, betaald = {};
+var dagGekozen = iso(new Date());
+
+async function lees(pad, opties){
+  var r = await fetch(W+pad, Object.assign({ headers:{ "X-Fonteyn-Auth": teamKey(), "Content-Type":"application/json" } }, opties||{}));
+  if (!r.ok) throw new Error("HTTP "+r.status);
+  return r.json();
+}
+function minuten(t){ var m=String(t||"").match(/^(\d{1,2}):(\d{2})/); return m ? (+m[1])*60+(+m[2]) : null; }
+function routesVan(dISO){
+  var r = plan.routes[dISO];
+  if (Array.isArray(r) && r.length) return r;
+  return [{nr:1,wie:""},{nr:2,wie:""},{nr:3,wie:""}];
+}
+function rijders(r){ return [r.wie, r.wie2, r.wie3].map(function(x){ return String(x||"").trim(); }).filter(Boolean); }
+function stopsVan(dISO, nr, eerste){
+  return plan.afspraken.filter(function(a){
+    if (a.datum !== dISO || minuten(a.tijd) === null) return false;
+    var rn = Number(a.route)||0; return rn === nr || (!rn && eerste);
+  }).sort(function(x,y){
+    var vx=Number(x.volg), vy=Number(y.volg);
+    if (isFinite(vx)&&isFinite(vy)&&vx!==vy) return vx-vy;
+    if (isFinite(vx)!==isFinite(vy)) return isFinite(vx)?-1:1;
+    return String(x.tijd||"99").localeCompare(String(y.tijd||"99"));
+  });
+}
+/* Mijn routes op een dag: de routes waar mijn naam op staat. Staat mijn naam
+   nergens die dag, dan alle routes met stops - dan weet je in elk geval wat
+   er die dag rijdt. */
+function mijnRoutes(dISO){
+  var alle = routesVan(dISO), eerste = (alle[0]||{}).nr;
+  var mijn = alle.filter(function(r){ return rijders(r).some(isIk); });
+  var lijst = mijn.length ? mijn : alle;
+  return lijst.map(function(r){ return { r:r, stops: stopsVan(dISO, r.nr, r.nr===eerste), vanMij: rijders(r).some(isIk) }; })
+              .filter(function(x){ return x.stops.length; });
+}
+
+function tekenDagen(){
+  var box = $("dagen"), html = "", vandaag = new Date();
+  for (var i = -1; i < 14; i++){
+    var d = new Date(vandaag); d.setDate(d.getDate()+i);
+    var dISO = iso(d), heeft = mijnRoutes(dISO).some(function(x){ return x.vanMij; });
+    html += '<button type="button" data-d="'+dISO+'" class="'+(dISO===dagGekozen?"aan":"")+'">'+
+      DAGEN[dagIndex(d)]+' '+d.getDate()+' '+MAANDEN[d.getMonth()]+(heeft?'<span class="stip"></span>':'')+
+      '<b>'+(i===0?"vandaag":i===1?"morgen":"&nbsp;")+'</b></button>';
+  }
+  box.innerHTML = html;
+  box.querySelectorAll("button").forEach(function(b){ b.addEventListener("click", function(){ dagGekozen = b.dataset.d; tekenDagen(); teken(); }); });
+  var aan = box.querySelector("button.aan"); if (aan) aan.scrollIntoView({ inline:"center", block:"nearest" });
+}
+
+function sleutel(nr, i){ return String(nr)+"|"+i; }
+function gepakt(nr, i){ var v = paklijst[sleutel(nr,i)]; return !!(v && v.af); }
+
+function stopHtml(a){
+  var c = CATS[a.soort] || CATS.intern;
+  var nr = String(a.ordernr||"").trim();
+  var o = nr ? orders[nr] : null;
+  var b = nr ? betaald[nr] : (a.itsId ? (betaald["its:"+a.itsId]||{}).info : null);
+  var html = '<div class="stop" style="border-left:5px solid '+c.kleur+'">'+
+    '<div class="kop"><div class="tijd">'+esc(a.tijd||"")+'</div><div style="flex:1;min-width:0">'+
+    '<div class="naam">'+esc(a.klant||c.naam)+
+      '<span class="soort" style="background:'+c.vlak+';color:'+c.kleur+'">'+esc(c.naam)+'</span>'+
+      (b && BETAALD[b.stand] ? '<span class="betaal" style="background:'+BETAALD[b.stand]+'" title="'+esc(b.stand)+'"></span>' : '')+'</div>'+
+    '<div class="sub">'+
+      (a.plaats ? '<a href="https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(a.plaats)+'" target="_blank" rel="noopener">'+esc(a.plaats)+'</a>' : '')+
+      (a.telefoon ? ' &middot; <a href="tel:'+esc(String(a.telefoon).replace(/\s/g,""))+'">'+esc(a.telefoon)+'</a>' : '')+
+      (nr ? ' &middot; order '+esc(nr) : '')+(a.itsId ? ' &middot; ITS '+esc(a.itsId) : '')+
+    '</div>'+
+    (a.wat && !a.itsId ? '<div class="sub">'+esc(a.wat)+'</div>' : '')+
+    '</div></div>'+
+    (a.letop ? '<div class="let">Let op: hier is iets bijzonders nodig (twee man, hijsen, karretje)</div>' : '');
+
+  if (nr){
+    if (!o) html += '<p class="wacht">Paklijst wordt opgehaald&hellip;</p>';
+    else if (!o.ok) html += '<p class="fout">Order '+esc(nr)+' kon niet uit Logic4 worden opgehaald: '+esc(o.error||"")+'</p>';
+    else {
+      var regels = (o.regels||[]).filter(function(r){ return r.omschrijving; });
+      var af = regels.filter(function(r,i){ return gepakt(nr,i); }).length;
+      html += '<div class="paklijst"><div class="pk"><span>Paklijst</span><span class="tel'+(af===regels.length&&regels.length?" klaar":"")+'">'+
+        (af===regels.length&&regels.length ? "Alles gepakt ✓" : af+" van "+regels.length+" gepakt")+'</span></div>'+
+        regels.map(function(r,i){
+          return '<label class="regel'+(gepakt(nr,i)?" af":"")+'"><input type="checkbox" data-nr="'+esc(nr)+'" data-i="'+i+'"'+(gepakt(nr,i)?" checked":"")+'>'+
+            '<span class="om">'+esc(r.omschrijving)+(r.code?'<small>'+esc(r.code)+'</small>':'')+'</span>'+
+            '<span class="aantal">'+esc(r.aantal)+'&times;</span></label>';
+        }).join("")+'</div>';
+    }
+  }
+  if (a.itsId){
+    var m = (meldingen||[]).find(function(x){ return Number(x.id)===Number(a.itsId); });
+    if (!meldingen) html += '<p class="wacht">Melding wordt opgehaald&hellip;</p>';
+    else if (!m) html += '<div class="melding"><div class="kopje">Melding '+esc(a.itsId)+'</div>'+esc(a.wat||"(niet meer in de open meldingen)")+'</div>';
+    else {
+      var stukken = String(m.tekst||m.omschrijving||"").split(/\n\s*[_\-=]{3,}\s*\n?/).map(function(t){ return t.trim(); }).filter(Boolean);
+      html += '<div class="melding">'+
+        (m.garantie ? '<div class="garantie '+(/^ja/i.test(m.garantie)?"ja":"nee")+'">Garantie: '+(/^ja/i.test(m.garantie)?"JA":"NEE")+'</div><br>' : '')+
+        stukken.map(function(t,i){ return '<div class="stuk"><div class="kopje">'+(i===0?"Melding "+esc(m.id):"Aanvulling "+i)+'</div>'+esc(t)+'</div>'; }).join("")+
+        '</div>';
+    }
+  }
+  return html + '</div>';
+}
+
+function teken(){
+  var box = $("inhoud"), lijst = mijnRoutes(dagGekozen);
+  if (!lijst.length){
+    box.innerHTML = '<div class="leeg">Geen route met stops op deze dag.</div>';
+    return;
+  }
+  box.innerHTML = lijst.map(function(x){
+    var alleOrders = x.stops.map(function(a){ return String(a.ordernr||"").trim(); }).filter(Boolean);
+    var tot = 0, af = 0;
+    alleOrders.forEach(function(nr){ var o = orders[nr]; if (o && o.ok){ (o.regels||[]).forEach(function(r,i){ if (r.omschrijving){ tot++; if (gepakt(nr,i)) af++; } }); } });
+    return '<section class="route"><h2><span class="nr">Route '+esc(x.r.nr)+'</span>'+
+      '<span class="wie">'+esc(rijders(x.r).join(" & ")||"nog niemand")+(x.vanMij?"":" (niet van jou)")+'</span>'+
+      (tot ? '<span class="voortgang">'+af+'/'+tot+' gepakt</span>' : '')+'</h2>'+
+      x.stops.map(stopHtml).join("")+'</section>';
+  }).join("");
+  box.querySelectorAll("input[type=checkbox][data-nr]").forEach(function(cb){
+    cb.addEventListener("change", function(){ vink(cb.dataset.nr, Number(cb.dataset.i), cb.checked); });
+  });
+  haalOrders(lijst);
+}
+
+/* De orderregels voor de stops die in beeld staan, één keer per order. */
+var bezig = {};
+async function haalOrders(lijst){
+  var nrs = [];
+  lijst.forEach(function(x){ x.stops.forEach(function(a){
+    var nr = String(a.ordernr||"").trim();
+    if (/^\d{3,12}$/.test(nr) && !orders[nr] && !bezig[nr]) nrs.push(nr);
+  }); });
+  var its = [];
+  lijst.forEach(function(x){ x.stops.forEach(function(a){ if (a.itsId && !bezig["its"]) its.push(a.itsId); }); });
+  var wacht = [];
+  if (nrs.length){
+    nrs.forEach(function(n){ bezig[n]=1; });
+    wacht.push(lees("/planning/route-print?orders="+encodeURIComponent(nrs.slice(0,15).join(","))).then(function(j){
+      (j.orders||[]).forEach(function(o){ orders[String(o.nr)] = o; });
+      nrs.forEach(function(n){ if (!orders[n]) orders[n] = { nr:n, ok:false, error:"niet gevonden" }; });
+    }).catch(function(e){ nrs.forEach(function(n){ orders[n] = { nr:n, ok:false, error:e.message }; }); }));
+    wacht.push(lees("/planning/betaalstatus?orders="+nrs.join(",")+(its.length?"&its="+its.join(","):"")).then(function(j){
+      Object.keys(j.orders||{}).forEach(function(k){ betaald[k]=j.orders[k]; });
+      Object.keys(j.its||{}).forEach(function(k){ betaald["its:"+k]=j.its[k]; });
+    }).catch(function(){}));
+  }
+  if (its.length && meldingen === null){
+    bezig["its"]=1;
+    wacht.push(lees("/planning/its").then(function(j){ meldingen = j.meldingen||[]; }).catch(function(){ meldingen = []; }));
+  }
+  if (wacht.length){ await Promise.all(wacht); teken(); }
+}
+
+/* Een vinkje: meteen op het scherm, daarna bewaren. Lukt bewaren niet, dan
+   gaat het vinkje terug en staat er waarom. */
+var bewaarTimer = null;
+async function vink(nr, i, aan){
+  var k = sleutel(nr,i);
+  var vorige = paklijst[k];
+  paklijst[k] = { af: aan, door: ik, ts: new Date().toISOString() };
+  teken();
+  clearTimeout(bewaarTimer);
+  bewaarTimer = setTimeout(async function(){
+    try{
+      var vers = await lees("/data/planning-paklijst");
+      var alles = (vers && vers.regels) || {};
+      Object.keys(paklijst).forEach(function(s){ alles[s] = paklijst[s]; });
+      // Vinkjes van een order die al twee maanden weg is mogen weg.
+      var grens = Date.now() - 60*86400000;
+      Object.keys(alles).forEach(function(s){ var t = Date.parse((alles[s]||{}).ts||""); if (t && t < grens) delete alles[s]; });
+      await lees("/data/planning-paklijst", { method:"PUT", body: JSON.stringify({ regels: alles, updated: new Date().toISOString() }) });
+      try{ if (window.fpLog) window.fpLog(aan?"paklijst-gepakt":"paklijst-teruggezet", "order "+nr+" regel "+(i+1)); }catch(e){}
+    }catch(e){
+      if (vorige) paklijst[k] = vorige; else delete paklijst[k];
+      $("fout").innerHTML = '<div class="fout">Vinkje niet bewaard: '+esc(e.message)+'. Probeer het zo nog eens.</div>';
+      teken();
+    }
+  }, 400);
+}
+
+async function start(){
+  // De teamsleutel komt bij een eerste login pas na een paar seconden binnen.
+  for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
+  try{
+    var pl = await lees("/data/planning");
+    plan.afspraken = Array.isArray(pl.afspraken) ? pl.afspraken : [];
+    plan.routes = (pl.routes && typeof pl.routes === "object") ? pl.routes : {};
+    var pk = await lees("/data/planning-paklijst").catch(function(){ return {}; });
+    paklijst = (pk && pk.regels) || {};
+  }catch(e){
+    $("fout").innerHTML = '<div class="fout">De planning kon niet worden opgehaald: '+esc(e.message)+'</div>';
+  }
+  /* Beginnen op de eerstvolgende dag met een route van mij, vandaag of later. */
+  var vandaag = new Date();
+  for (var d = 0; d < 14; d++){
+    var dd = new Date(vandaag); dd.setDate(dd.getDate()+d);
+    if (mijnRoutes(iso(dd)).some(function(x){ return x.vanMij; })){ dagGekozen = iso(dd); break; }
+  }
+  tekenDagen(); teken();
+}
+start();
+</script>
+<script>
+/* Activiteitenlogboek - zelfde helper als in de andere tegels. */
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){
+    var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/);
+    var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} }
+    return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" };
+  }
+  window.fpLog=function(action,detail){
+    var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||"";
+    if(!email||!key) return;
+    var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"mijnroute",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){});
+  };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

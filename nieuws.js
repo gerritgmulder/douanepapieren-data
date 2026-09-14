@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-14", bestand: "mijnroute.html", soort: "nieuw",
+      titel: "Mijn route",
+      wat: "Voor de afdeling Spa planning, vooral op de telefoon: je ziet per dag de routes waar jouw naam op staat, met de stops op volgorde. Bij een levering staat de paklijst met alle regels van de order; vink af wat je hebt gepakt, en je ziet meteen of alles erin zit. Bij een servicemelding staat de melding zelf met Garantie erbij. Adres en telefoon zijn aanklikbaar.",
+    },
+
+    {
+      datum: "2026-09-14", bestand: "planning.html", soort: "beter",
+      titel: "Dagen om en om in een zachte tint",
+      wat: "In het tijdraster hebben maandag, woensdag en vrijdag een lichtgroene tint en dinsdag en donderdag een lichtblauwe, zodat je ziet waar de ene dag ophoudt en de volgende begint.",
+    },
+
+    {
       datum: "2026-09-14", iedereen: true, soort: "beter",
       titel: "Op de telefoon dezelfde tegels als op de pc",
       wat: "Op de telefoon staan nu alle tegels die je op de pc ook hebt, niets meer en niets minder. Bij een tegel die op een klein scherm minder handig is staat dat erbij.",

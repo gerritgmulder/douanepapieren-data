@@ -143,7 +143,8 @@ const ALLOWED_BUCKETS = new Set([
   // gekomen, zonder dat er iemand aan hoeft te denken dat op te schrijven.
   "dashboard-gezien",
   "dashboard-indeling",  // Per e-mailadres: eigen volgorde van afdelingen en tegels op het dashboard (het tandwiel)
-  "planning-its-order",  // Per ITS-melding de order (of de laatste order van de klant) voor de betaalstand, een dag bewaard
+  "planning-its-order",
+  "planning-paklijst",   // Per orderregel: gepakt of niet, door wie, wanneer (tegel Mijn route)  // Per ITS-melding de order (of de laatste order van de klant) voor de betaalstand, een dag bewaard
   // De huisstijl-fonts (Sephir, Helvetica, Univers) zijn commercieel
   // gelicentieerd. Ze staan hier en NIET in de repo, want die is publiek —
   // in de repo zetten zou neerkomen op ze doorgeven aan iedereen.

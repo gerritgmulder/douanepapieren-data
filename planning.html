@@ -160,8 +160,17 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
        padding:6px 6px 0;position:sticky;left:0;background:#fff;z-index:5}
 .uur-label{font-size:10px;color:var(--grijs);text-align:right;padding-right:6px;transform:translateY(-6px);
        position:sticky;left:0;background:#fff;z-index:5}
-.dag-cel{position:relative;border-left:1px solid #f3f4f6}
-.dag-cel.weekend{background:#fafaf7}
+/* Om en om een zachte tint per dag, zodat je in het raster ziet waar de
+   ene dag ophoudt en de volgende begint. Gerrit (14 sep 2026): "een zachte
+   kleur voor de maandag, een andere voor de dinsdag, woensdag weer dezelfde
+   als maandag". De koppen en de routestroken volgen mee. */
+.dag-cel{position:relative;border-left:1px solid #e5e7eb}
+.dag-cel.even{background:#f8faf5}
+.dag-cel.oneven{background:#f3f6fb}
+.dag-cel.weekend{background:#f5f4f0}
+.dag-kop.even,.routekop-cel.even{background:#f8faf5}
+.dag-kop.oneven,.routekop-cel.oneven{background:#f3f6fb}
+.dag-kop.weekend,.routekop-cel.weekend{background:#f5f4f0}
 .uurlijn{position:absolute;left:0;right:0;border-top:1px solid #f3f4f6;pointer-events:none}
 .nu-lijn{position:absolute;left:0;right:0;border-top:2px solid #c8102e;z-index:4;pointer-events:none}
 .nu-lijn::before{content:"";position:absolute;left:-4px;top:-5px;width:8px;height:8px;border-radius:50%;background:#c8102e}
@@ -967,7 +976,7 @@ function teken(){
   week.forEach(function(w,i){
     var route = w.items.some(function(a){ return a.plaats && !a.klaar; })
       ? '<button type="button" class="route-knop" data-datum="'+w.iso+'" title="Route van deze dag in Google Maps">🚗</button>' : "";
-    kopHtml += '<div class="dag-kop'+(w.iso===vandaagISO?" vandaag":"")+'">'+route+
+    kopHtml += '<div class="dag-kop'+(w.iso===vandaagISO?" vandaag":"")+(i>=5?" weekend":(i%2?" oneven":" even"))+'">'+route+
       '<span class="dnaam">'+DAGKORT[dagIndex(w.datum)]+'</span><br><span class="dnum">'+w.datum.getDate()+'</span></div>';
   });
   var html = "";
@@ -978,9 +987,9 @@ function teken(){
      naam van de route erboven; wie er rijdt staat erbij zodra dat op het
      routebord is ingevuld. */
   var routeHtml = '<div class="heledag-label">route</div>';
-  week.forEach(function(w){
+  week.forEach(function(w,di){
     var routes = routesVan(w.iso);
-    routeHtml += '<div class="routekop-cel">'+routes.map(function(r){
+    routeHtml += '<div class="routekop-cel'+(di>=5?" weekend":(di%2?" oneven":" even"))+'">'+routes.map(function(r){
       var namen = rijdersVan(r).join(" & ");
       return '<div class="routekop"><span class="rnr">R'+r.nr+'</span>'+(namen?'<span class="rwie">'+esc(namen)+'</span>':'')+'</div>';
     }).join("")+'</div>';
@@ -1000,7 +1009,7 @@ function teken(){
     var isWeekend = di>=5;
     var routes = routesVan(w.iso);
     maxRoutes = Math.max(maxRoutes, routes.length);
-    html += '<div class="dag-cel'+(isWeekend?" weekend":"")+'" data-datum="'+w.iso+'" style="height:'+(uren*UUR_PX)+'px">';
+    html += '<div class="dag-cel'+(isWeekend?" weekend":(di%2?" oneven":" even"))+'" data-datum="'+w.iso+'" style="height:'+(uren*UUR_PX)+'px">';
     for (var u2=1; u2<uren; u2++) html += '<div class="uurlijn" style="top:'+(u2*UUR_PX)+'px"></div>';
     if (w.iso===vandaagISO){
       var nu = new Date(); var nm = nu.getHours()*60+nu.getMinutes();

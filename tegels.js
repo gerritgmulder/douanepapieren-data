@@ -104,6 +104,11 @@
        doen ze onder 900 pixels, dus geen aparte mobiele pagina nodig. */
     /* Weekoverzicht van de afdeling Spa planning. Werkt op een telefoon
        net zo goed als op de pc: de dagen vallen daar onder elkaar. */
+    /* Mijn route: de monteur op zijn telefoon, met de paklijst per order.
+       Gerrit (14 sep 2026). Zelfde groep als Planning: wie de planning mag
+       zien, ziet zijn eigen routes. */
+    { bestand:"mijnroute.html",     groep:"planning",         ic:"🚚",  naam:"Mijn route",
+      uit:"Jouw routes per dag, met de paklijst per order",   mobiel:"goed", tile:"tileMijnRoute" },
     { telefoon:true, bestand:"planning.html",       groep:"planning",         ic:"📅",  naam:"Planning",
       uit:"Weekoverzicht van leveringen en service-afspraken",     mobiel:"goed", tile:"tilePlanning" },
     { bestand:"vertalen.html",       groep:"vertalen",         ic:"🌍",  naam:"Vertalen",
