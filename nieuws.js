@@ -50,6 +50,11 @@
   var EERSTE_KEER_DAGEN = 14;
 
   var NIEUWS = [
+    {
+      datum: "2026-09-14", bestand: "dealerportaal.html", soort: "nieuw",
+      titel: "Passion Partners: beursbestellingen, eigen aanbetaling en foto's per kleur",
+      wat: "Een adviseur van Passion kan in het portaal nu zelf een aanbetalingsbedrag kiezen en een beursbestelling later overzetten naar het account van de partner; in Beheer zie je bij zo'n bestelling van wie hij kwam. Nieuw in Beheer: per model een foto per kleur uploaden, zodat een partner bij het kiezen van een kleur de spa in die kleur ziet.",
+    },
 
     {
       datum: "2026-09-14", bestand: "container-laden.html", soort: "beter",

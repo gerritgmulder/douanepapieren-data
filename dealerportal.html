@@ -1459,15 +1459,68 @@ async function loadMyRequests(){
   if (r.status !== 200 || !r.data || !r.data.ok) return;
   const reqs = r.data.requests || [];
   $("myReqEmpty").classList.toggle("hidden", reqs.length > 0);
+  /* Beursflow (Gerrit, 14 sep 2026): een adviseur bestelt op de beurs in zijn
+     eigen omgeving en zet de bestelling daarna over naar het partneraccount
+     dat later is aangemaakt. De knop staat alleen bij een adviseur, en alleen
+     bij een bestelling die nog niet is overgezet of geannuleerd. */
+  const adviseur = window.isFonteyn && !window.meekijken;
   $("myReqList").innerHTML = reqs.map(x => {
     const [label, cls] = reqStatusLabel(x);
+    const over = x.overgezetNaar
+      ? `<span class="pill" style="background:#e0f2fe;color:#075985;margin-left:8px;">transferred to ${esc(x.overgezetNaar)}</span>`
+      : (x.overgezetVan ? `<span class="pill" style="background:#e0f2fe;color:#075985;margin-left:8px;">from the fair</span>` : "");
+    const knop = adviseur && x.id && !x.overgezetNaar && !x.geannuleerd
+      ? ` <button class="secondary reqOver" type="button" data-id="${esc(x.id)}" style="padding:5px 10px;font-size:12px;margin-left:8px;">Transfer to partner</button>`
+      : "";
     return `<div class="doc"${cls==="uit"?' style="opacity:.62;"':''}>
       <div><b>${x.items && x.items.length
             ? x.items.map(i => i.qty + "\u00d7 " + i.naam).join(", ")
-            : (x.qty + "\u00d7 " + esc(x.model))}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit?` · paid ${x.currency==="USD"?"$":"€"} ${Number(x.deposit).toFixed(2)}`:""}</span></div>
-      <span style="font-size:13px;${cls==="ok"?"color:#15803d;font-weight:600;":cls==="uit"?"color:#b91c1c;font-weight:600;":"color:var(--muted);"}">${label}</span>
+            : (x.qty + "\u00d7 " + esc(x.model))}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit?` · paid ${x.currency==="USD"?"$":"€"} ${Number(x.deposit).toFixed(2)}`:""}</span>${over}</div>
+      <span style="font-size:13px;white-space:nowrap;${cls==="ok"?"color:#15803d;font-weight:600;":cls==="uit"?"color:#b91c1c;font-weight:600;":"color:var(--muted);"}">${label}${knop}</span>
     </div>`;
   }).join("");
+  $("myReqList").querySelectorAll(".reqOver").forEach(b => b.addEventListener("click", () => overzetten(b.dataset.id, reqs.find(x => x.id === b.dataset.id))));
+}
+
+/* Overzetten naar een partner: kies uit de partnerlijst, bevestig, klaar.
+   De worker stuurt de partner een mail; de adviseur ziet de bestelling
+   daarna met "transferred to ..." erbij. */
+async function overzetten(id, req){
+  const r = await api("/dealers/api/partners");
+  if (r.status !== 200 || !r.data || !r.data.ok) { alert("Could not load the partner list."); return; }
+  const partners = r.data.partners || [];
+  if (!partners.length) { alert("There are no partner accounts yet. Create the partner first in Passion Partners Beheer."); return; }
+  const wat = req && req.items && req.items.length
+    ? req.items.map(i => i.qty + "\u00d7 " + i.naam).join(", ")
+    : (req ? req.qty + "\u00d7 " + req.model : "");
+  const { laag: ov, sluit } = maakVenster(`<div class="card" style="max-width:480px;width:100%;">
+    <h2 style="margin-top:0;">Transfer to partner</h2>
+    <p class="lead"><b>${esc(wat)}</b> will move to the partner's own Passion Partners account. They will see it under My spas and receive an e-mail.</p>
+    <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Partner</label>
+    <select id="overNaar" style="width:100%;">${partners.map(p => `<option value="${esc(p.email)}">${esc(p.company || p.email)} \u00b7 ${esc(p.email)}</option>`).join("")}</select>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
+      <button class="secondary" type="button" data-sluit style="padding:11px 18px;">Cancel</button>
+      <button class="go" id="overOk" type="button" style="padding:11px 22px;">Transfer</button>
+    </div>
+    <div id="overMsg" class="msg hidden"></div>
+  </div>`);
+  ov.querySelector("#overOk").addEventListener("click", async () => {
+    const naar = ov.querySelector("#overNaar").value;
+    const knop = ov.querySelector("#overOk"); knop.disabled = true;
+    const m = ov.querySelector("#overMsg");
+    const rr = await api("/dealers/api/overzetten", { method: "POST", body: JSON.stringify({ requestId: id, naarEmail: naar }) });
+    if (rr.status === 200 && rr.data && rr.data.ok) {
+      m.className = "msg ok"; m.classList.remove("hidden");
+      m.textContent = "Transferred to " + rr.data.naar + "." +
+        (rr.data.logic4Omzetten ? " Sales will move the Logic4 order to the partner's debtor number." : "");
+      loadMyRequests();
+      setTimeout(sluit, 2200);
+    } else {
+      m.className = "msg bad"; m.classList.remove("hidden");
+      m.textContent = "Transfer failed - " + ((rr.data && rr.data.error) || ("HTTP " + rr.status));
+      knop.disabled = false;
+    }
+  });
 }
 
 // ── My spas (fase 2) ──
@@ -1643,6 +1696,15 @@ function openReserve(model){
   const kiezer = variants.length ? `
     <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:5px;">Colour / version</label>
     <div id="rsvKies" class="kies" style="margin-bottom:14px;"></div>` : "";
+  /* De foto boven de kleurkeuze. Gerrit (14 sep 2026): "bij elke kleur
+     on-hover de spa in de juiste kleur kunt zien." Over een kleur in de lijst
+     gaan wisselt de foto; is er voor die kleur nog geen foto geüpload, dan
+     blijft de modelfoto staan met een regel eronder. */
+  const foto = `
+    <div id="rsvFoto" style="position:relative;height:190px;margin:0 0 14px;border-radius:10px;background:#f3f4f6;overflow:hidden;display:none;">
+      <img alt="" style="width:100%;height:100%;object-fit:contain;display:block;transition:opacity .15s;">
+      <span style="position:absolute;left:0;right:0;bottom:0;padding:5px 10px;font-size:11.5px;color:#fff;background:rgba(17,24,39,.55);display:none;"></span>
+    </div>`;
 
   const html = `
     <div class="card" style="max-width:470px;width:100%;padding:0;overflow:visible;">
@@ -1660,6 +1722,7 @@ function openReserve(model){
             ? `<span style="color:var(--green);font-weight:700;">${Number(m0.vrijNu)} in stock now.</span> Our sales team confirms the details by e-mail.`
             : `<span style="color:#8a6400;font-weight:700;">Currently on backorder.</span> Your reservation is allocated to the next factory production.`}
         </p>
+        ${foto}
         ${kiezer}
         <div style="display:flex;gap:12px;flex-wrap:wrap;">
           <div style="flex:0 0 110px;">
@@ -1684,7 +1747,9 @@ function openReserve(model){
     </div>`;
   const { laag: ov, sluit } = maakVenster(html);
 
-  if (ov.querySelector("#rsvKies")) maakKiezer(ov.querySelector("#rsvKies"), kleurOpties, "");
+  if (ov.querySelector("#rsvKies")) maakKiezer(ov.querySelector("#rsvKies"), kleurOpties, "", (w) =>
+    toonKleurfoto(ov, model, w, ((variants.find(v => String(v.code) === String(w)) || {}).name || "")));
+  koppelKleurfotos(ov, model, variants);
 
   /* Reserveren legt de spa in de winkelwagen; afrekenen gebeurt daar.
      Daarvóór ging elke spa meteen als losse bestelling de deur uit, en dan kun
@@ -1701,6 +1766,55 @@ function openReserve(model){
     m.className = "msg ok"; m.textContent = "Added to your basket."; m.classList.remove("hidden");
     setTimeout(()=>{ sluit(); openCart(); }, 700);
   });
+}
+
+/* ── Foto per kleur in het reserveervenster ─────────────────────────
+   /dealers/api/photo?model=X&code=Y geeft de foto in die kleur als die is
+   geüpload (X-Kleur: ja) en anders de modelfoto (X-Kleur: nee). Beide worden
+   per model+code onthouden, zodat heen en weer bewegen over de kleuren geen
+   nieuwe aanvragen doet. */
+const kleurfotoCache = new Map();          // "model|code" -> { url, echt } of null
+function gekozenKleur(ov){ const k = ov.querySelector("#rsvKies"); return (k && k.dataset.waarde) || ""; }
+async function haalKleurfoto(model, code){
+  const sleutel = model + "|" + (code || "");
+  if (kleurfotoCache.has(sleutel)) return kleurfotoCache.get(sleutel);
+  let uit = null;
+  try {
+    const r = await fetch("/dealers/api/photo?model=" + encodeURIComponent(model) + (code ? "&code=" + encodeURIComponent(code) : ""),
+                          { headers: { "X-Dealer-Session": localStorage.getItem(SESS_KEY) || "" } });
+    if (r.status === 200) uit = { url: URL.createObjectURL(await r.blob()), echt: !code || r.headers.get("X-Kleur") === "ja" };
+  } catch (e) { uit = null; }
+  kleurfotoCache.set(sleutel, uit);
+  return uit;
+}
+let kleurfotoBezig = "";
+async function toonKleurfoto(ov, model, code, naam){
+  const vak = ov.querySelector("#rsvFoto");
+  if (!vak) return;
+  const img = vak.querySelector("img"), tekst = vak.querySelector("span");
+  const sleutel = model + "|" + (code || "");
+  kleurfotoBezig = sleutel;
+  const f = await haalKleurfoto(model, code);
+  if (kleurfotoBezig !== sleutel) return;                        // muis is alweer verder
+  if (!f) { vak.style.display = "none"; return; }
+  vak.style.display = "block";
+  if (img.src !== f.url) { img.style.opacity = "0"; img.src = f.url; img.onload = () => { img.style.opacity = "1"; }; }
+  if (code && !f.echt) { tekst.textContent = (naam ? naam + ": " : "") + "photo in this colour to follow"; tekst.style.display = "block"; }
+  else if (code && naam) { tekst.textContent = naam; tekst.style.display = "block"; }
+  else tekst.style.display = "none";
+}
+function koppelKleurfotos(ov, model, variants){
+  const vak = ov.querySelector("#rsvFoto");
+  if (!vak) return;
+  toonKleurfoto(ov, model, "");
+  const kies = ov.querySelector("#rsvKies");
+  if (!kies) return;
+  const naamVan = (code) => ((variants || []).find(v => String(v.code) === String(code)) || {}).name || "";
+  kies.querySelectorAll(".kies-lijst button[data-w]").forEach(b => {
+    b.addEventListener("mouseenter", () => { if (b.dataset.w) toonKleurfoto(ov, model, b.dataset.w, naamVan(b.dataset.w)); else toonKleurfoto(ov, model, ""); });
+  });
+  const lijst = kies.querySelector(".kies-lijst");
+  if (lijst) lijst.addEventListener("mouseleave", () => { const c = gekozenKleur(ov); toonKleurfoto(ov, model, c, naamVan(c)); });
 }
 
 /* ── Onderdelen en covers ────────────────────────────────────────────
@@ -2339,6 +2453,11 @@ function openCart(){
         <div id="vrachtPaneel"></div>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Payment</label>
         <div id="cartPay" class="kies"></div>
+        <div id="cartEigen" class="hidden" style="margin-top:8px;">
+          <label style="font-size:12px;color:var(--muted);display:block;margin:0 0 5px;">Deposit amount agreed with the customer (incl. VAT)</label>
+          <input type="text" inputmode="decimal" placeholder="e.g. 1500" style="width:180px;">
+          <div class="lead" style="font-size:12px;margin:4px 0 0;">Parts are always paid in full on top of this amount.</div>
+        </div>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Notes (options, delivery, …)</label>
         <textarea id="cartNote" rows="2" placeholder="Anything we should know?"></textarea>
        </div>
@@ -2362,9 +2481,21 @@ function openCart(){
   /* De testbetaling alleen aan wie ook écht kan bestellen. Een meekijkende
      collega mag niets wijzigen (de worker weigert elke POST), dus die optie
      aanbieden levert alleen een foutmelding op. */
+  /* Eigen aanbetalingsbedrag, alleen voor adviseurs van Passion (een
+     portaalsessie op een @fonteyn.nl-account). Gerrit (14 sep 2026): "Dealers
+     moeten deze optie nooit mogen zien." De worker weigert het bedrag ook van
+     een partner, dus dit is geen sier maar het echte hek staat aan de
+     andere kant. */
+  if (window.isFonteyn && !window.meekijken && spaRegels.length)
+    betaalopties.push({ waarde: "eigen", tekst: "Own deposit amount", bij: "Fonteyn only" });
   if (window.isFonteyn && !window.meekijken)
     betaalopties.push({ waarde: "cent", tekst: "TEST \u2014 pay 1 cent", bij: "Fonteyn only" });
-  if (cart.length) maakKiezer(ov.querySelector("#cartPay"), betaalopties, "deposit");
+  if (cart.length) maakKiezer(ov.querySelector("#cartPay"), betaalopties, "deposit", (w) => {
+    const veld = ov.querySelector("#cartEigen");
+    if (!veld) return;
+    veld.classList.toggle("hidden", w !== "eigen");
+    if (w === "eigen") { const inp = veld.querySelector("input"); if (inp) inp.focus(); }
+  });
   /* Uit voorraad of een hele container. Gerrit (7 sep 2026): "Het moet
      mogelijk zijn om te kiezen voor het samenstellen van een container. Dan
      wordt de voorraad namelijk niet uit Uddel gepakt en moet het echt [uit de
@@ -2410,8 +2541,19 @@ function openCart(){
       "You are viewing as a Fonteyn colleague. You can fill the basket and see everything, but ordering is only possible from a partner account."; }
   }
   if (af && !window.meekijken) af.addEventListener("click", async () => {
-    af.disabled = true;
     const keuze = (ov.querySelector("#cartPay") || {}).dataset?.waarde || "deposit";
+    const eigenInp = ov.querySelector("#cartEigen input");
+    /* Gewoon tekstveld: in een getalveld wordt "1500,50" leeg zodra je de
+       komma typt, en op de beurs typt iedereen een komma. */
+    const eigenBedrag = keuze === "eigen" && eigenInp
+      ? Number(String(eigenInp.value).replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")) : null;
+    if (keuze === "eigen" && !(eigenBedrag > 0)) {
+      const m0 = ov.querySelector("#cartMsg");
+      m0.className = "msg bad"; m0.textContent = "Fill in the deposit amount first."; m0.classList.remove("hidden");
+      if (eigenInp) eigenInp.focus();
+      return;
+    }
+    af.disabled = true;
     const r = await api("/dealers/api/reserve", { method:"POST", body: JSON.stringify({
       items: cart.map(x => ({ soort: x.soort, model: x.model, code: x.code, qty: x.qty,
                               variant: x.soort === "spa" ? x.code : undefined, variantName: x.variantName })),
@@ -2424,7 +2566,8 @@ function openCart(){
             bedrag: (vrachtUitkomst && vrachtUitkomst.ok) ? vrachtUitkomst.totaal : null,
             vervoerder: (vrachtUitkomst && vrachtUitkomst.ok) ? vrachtUitkomst.vervoerder : null }
         : { wijze: "afhalen" },
-      payFull: keuze === "full", payCent: keuze === "cent" }) });
+      payFull: keuze === "full", payCent: keuze === "cent",
+      eigenAanbetaling: eigenBedrag > 0 ? eigenBedrag : undefined }) });
     const m = ov.querySelector("#cartMsg");
     if (r.status === 200 && r.data && r.data.ok && r.data.checkoutUrl) {
       m.className = "msg ok";

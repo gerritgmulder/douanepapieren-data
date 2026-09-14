@@ -325,6 +325,22 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <div id="bibLijst" style="margin-top:10px"></div>
   </div>
 
+  <!-- Foto per kleur. Gerrit (14 sep 2026): partners moeten in het portaal
+       bij elke kleur de spa in die kleur zien als ze eroverheen gaan. Die
+       foto's staan nergens klaar: Logic4 heeft alleen een foto bij de
+       standaardkleur en op de website staan ze zonder kleurlabel. Dus hier
+       per kleur uploaden; het portaal pakt ze meteen op. -->
+  <div class="card">
+    <h3>Foto per kleur (partnerportaal)</h3>
+    <p class="lead" style="margin-bottom:10px">In het portaal ziet een partner bij het reserveren een foto van de spa. Gaat hij met de muis over een kleur, dan wisselt de foto naar die kleur - als hier een foto voor staat. Zonder foto blijft de gewone modelfoto staan met "photo in this colour to follow". Kies een model, zet bij elke kleur een foto neer (jpg, png of webp; wordt automatisch verkleind).</p>
+    <div class="row" style="align-items:flex-end;gap:10px;flex-wrap:wrap">
+      <div><label style="display:block;font-size:12px;color:var(--muted);margin-bottom:3px">Model</label>
+        <select id="kfModel" style="min-width:260px"><option value="">kies een model…</option></select></div>
+      <div id="kfMelding" style="font-size:12.5px;color:var(--muted)"></div>
+    </div>
+    <div id="kfLijst" style="margin-top:12px"></div>
+  </div>
+
   <div class="card">
     <h3>Instellingen</h3>
     <div class="row">
@@ -363,6 +379,109 @@ function setStatus(k,m){ const e=$("status"); if(!m){e.classList.add("hidden");r
    geannuleerd. Dezelfde controle als de uur-sync; zie dpControleerGeannuleerd
    in de worker. Daarna de lijst opnieuw ophalen, want de regels zijn dan
    veranderd. */
+/* ── Foto per kleur ──────────────────────────────────────────────────
+   De modellen en kleuren komen uit de spa-catalogus (spa-catalog, dezelfde
+   bron als het portaal). Per kleur: een miniatuur als er een foto staat, een
+   knop om er een te kiezen, en een kruisje om hem weg te halen. De foto wordt
+   in de browser verkleind tot 1400 pixels, zodat de hover in het portaal
+   snel blijft en de opslag klein. */
+const KF_BASE = "https://fonteyn-data-store.g-mulder.workers.dev";
+let kfCatalog = null;
+/* Wat er net is geüpload of weggehaald. De lijst van de worker loopt tot een
+   minuut achter (KV), dus zonder dit zag je een foto die je net weghaalde
+   nog staan, of miste je de foto die je net had gekozen. */
+const kfLokaal = {};
+async function kleurfotosStart(){
+  const sel = $("kfModel"); if (!sel) return;
+  try { kfCatalog = await kvGet("spa-catalog"); } catch(e) { kfCatalog = null; }
+  const modellen = Object.keys((kfCatalog && kfCatalog.models) || {}).sort((a,b)=>a.localeCompare(b));
+  sel.innerHTML = '<option value="">kies een model…</option>' + modellen.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
+  sel.addEventListener("change", () => kleurfotosToon(sel.value));
+}
+function kfKleurNaam(desc, model){
+  const delen = String(desc || "").split("|").map(x => x.trim());
+  if (delen.length >= 2) return delen.slice(1).join(" | ");
+  return String(desc || "").replace(model, "").replace(/^[\s\-|]+/, "") || desc;
+}
+async function kleurfotosToon(model){
+  const lijst = $("kfLijst"), meld = $("kfMelding");
+  if (!model) { lijst.innerHTML = ""; meld.textContent = ""; return; }
+  const varianten = ((kfCatalog && kfCatalog.models) || {})[model] || [];
+  meld.textContent = "Laden\u2026";
+  let met = new Set();
+  try {
+    const r = await fetch(KF_BASE + "/dealers/admin/kleurfotos?model=" + encodeURIComponent(model), { headers: beheerKoppen() });
+    const d = await r.json().catch(()=>null);
+    if (d && d.ok) met = new Set((d.codes || []).map(c => String(c).toLowerCase()));
+  } catch(e) {}
+  for (const v of varianten) {
+    const k = model + "|" + String(v.code).toLowerCase();
+    if (kfLokaal[k] === true) met.add(String(v.code).toLowerCase());
+    if (kfLokaal[k] === false) met.delete(String(v.code).toLowerCase());
+  }
+  meld.textContent = met.size + " van " + varianten.length + " kleuren met foto";
+  lijst.innerHTML = `<table class="grid"><thead><tr><th style="width:90px">Foto</th><th>Artikelcode</th><th>Kleur</th><th></th></tr></thead><tbody>` +
+    varianten.map(v => {
+      const heeft = met.has(String(v.code).toLowerCase());
+      return `<tr data-code="${esc(v.code)}">
+        <td>${heeft ? `<img class="kfMini" alt="" style="width:80px;height:56px;object-fit:cover;border-radius:6px;background:#f3f4f6">` : '<span style="color:var(--muted);font-size:12px">geen</span>'}</td>
+        <td style="font-family:ui-monospace,monospace">${esc(v.code)}</td>
+        <td>${esc(kfKleurNaam(v.desc, model))}</td>
+        <td style="white-space:nowrap">
+          <label class="rmv" style="cursor:pointer">${heeft ? "vervang" : "foto kiezen"}<input type="file" accept=".jpg,.jpeg,.png,.webp" class="kfBestand" data-fp-mooi="1" hidden></label>
+          ${heeft ? `<button class="rmv kfWeg" type="button" title="foto weghalen">\u2715</button>` : ""}
+        </td></tr>`;
+    }).join("") + `</tbody></table>`;
+  /* Miniaturen: een <img src> kan de beheerkoppen niet meesturen, dus
+     ophalen met fetch en als blob neerzetten. */
+  lijst.querySelectorAll("tr[data-code] .kfMini").forEach(async (img) => {
+    const code = img.closest("tr").dataset.code;
+    try {
+      const r = await fetch(KF_BASE + "/dealers/admin/kleurfoto?model=" + encodeURIComponent(model) + "&code=" + encodeURIComponent(code), { headers: beheerKoppen() });
+      if (r.ok) img.src = URL.createObjectURL(await r.blob());
+    } catch(e) {}
+  });
+  lijst.querySelectorAll(".kfBestand").forEach(inp => inp.addEventListener("change", async () => {
+    const f = inp.files && inp.files[0]; if (!f) return;
+    const code = inp.closest("tr").dataset.code;
+    meld.textContent = "Bezig met " + code + "\u2026";
+    try {
+      const data = await kfVerklein(f, 1400);
+      const r = await fetch(KF_BASE + "/dealers/admin/kleurfoto", { method: "POST",
+        headers: { ...beheerKoppen(), "Content-Type": "application/json" },
+        body: JSON.stringify({ model, code, data }) });
+      const d = await r.json().catch(()=>null);
+      if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || ("HTTP " + r.status));
+      kfLokaal[model + "|" + String(code).toLowerCase()] = true;
+      kleurfotosToon(model);
+    } catch(e) { meld.textContent = "Lukte niet: " + e.message; }
+  }));
+  lijst.querySelectorAll(".kfWeg").forEach(b => b.addEventListener("click", async () => {
+    const code = b.closest("tr").dataset.code;
+    if (!confirm("Foto voor " + code + " weghalen?")) return;
+    await fetch(KF_BASE + "/dealers/admin/kleurfoto", { method: "POST",
+      headers: { ...beheerKoppen(), "Content-Type": "application/json" },
+      body: JSON.stringify({ model, code, verwijder: true }) });
+    kfLokaal[model + "|" + String(code).toLowerCase()] = false;
+    kleurfotosToon(model);
+  }));
+}
+function kfVerklein(file, max){
+  return new Promise((ok, nee) => {
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * s); c.height = Math.round(img.height * s);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      ok(c.toDataURL("image/jpeg", 0.86));
+    };
+    img.onerror = () => nee(new Error("bestand is geen afbeelding"));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 async function annuleringenNakijken(){
   const knop = $("annuBtn"); if (!knop) return;
   knop.disabled = true;
@@ -1713,7 +1832,17 @@ function renderReqs(){
   $("reqCount").textContent = paid.length;
   $("reqBodyPaid").innerHTML = paid.slice().reverse().map((r)=>{
     const idx = reqData.requests.indexOf(r);
-    const dep = r.deposit ? (r.currency==="USD"?"$":"€") + " " + Number(r.deposit).toFixed(2) + (r.payFull?" (volledig)":" (30%)") : "-";
+    const dep = r.deposit ? (r.currency==="USD"?"$":"€") + " " + Number(r.deposit).toFixed(2) +
+      (r.payFull ? " (volledig)" : (r.eigenAanbetaling ? " (gekozen door adviseur)" : " (30%)")) : "-";
+    /* Beursflow: de adviseur heeft de bestelling overgezet naar de partner.
+       Staat er al een Logic4-order, dan hangt die nog op de debiteur van de
+       adviseur en moet sales hem omzetten; dat staat er dan bij. */
+    const over = r.overgezetVan
+      ? ` <span class="pill" title="overgezet op ${esc(String(r.overgezetOp||"").slice(0,16).replace("T"," "))}">van ${esc(r.overgezetVan)}</span>` +
+        (r.logic4Omzetten && !r.logic4OmgezetOp
+          ? ` <span class="pill off" title="De Logic4-order staat nog op de debiteur van de adviseur">nog omzetten naar debiteur ${esc(String(r.logic4Omzetten.naarDebtorId || "?"))}</span>`
+          : "")
+      : "";
     /* Order aangemaakt is niet hetzelfde als betaling geboekt. Ging de order
        goed maar de betaling niet, dan staat er een order zonder geld in Logic4
        en dat moet zichtbaar zijn — anders zoekt iemand zich later suf. */
@@ -1740,7 +1869,7 @@ function renderReqs(){
       : (r.logic4OrderId ? `<button class="rmv reqTerug" data-id="${esc(r.id)}">terugdraaien</button>` : "");
     return `<tr${(r.teruggedraaid||r.orderGeannuleerd)?' style="opacity:.55"':''}>
       <td style="white-space:nowrap">${esc(String(r.ts||"").slice(0,16).replace("T"," "))}</td>
-      <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span></td>
+      <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span>${over}</td>
       <td>${regelsCel(r)}</td>
       <td>${esc(r.qty)}</td>
       <td style="white-space:nowrap">${dep}</td>
@@ -1791,9 +1920,10 @@ function renderReqs(){
   $("reqBodyLeads").innerHTML = leads.slice().reverse().map((r)=>{
     const idx = reqData.requests.indexOf(r);
     const archived = r.status === "done";
+    const over = r.overgezetVan ? ` <span class="pill">van ${esc(r.overgezetVan)}</span>` : "";
     return `<tr${archived?' style="opacity:.55"':''}>
       <td style="white-space:nowrap">${esc(String(r.ts||"").slice(0,16).replace("T"," "))}</td>
-      <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span></td>
+      <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span>${over}</td>
       <td>${regelsCel(r)}</td>
       <td>${esc(r.qty)}</td>
       <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(String(r.note||"").slice(0,120))}</td>
@@ -1880,6 +2010,7 @@ async function init(){
     if (!priceData.meta || typeof priceData.meta !== "object") priceData.meta = {};
     renderPartners(); renderReqs(); renderPrices(); renderRate(); renderBib();
     laadKoers();
+    kleurfotosStart();
     document.getElementById("mgmt").classList.remove("hidden");
     // De mailcontrole hoort bij het beheer en niet bij het inlogscherm.
     document.getElementById("mailCard").classList.remove("hidden");

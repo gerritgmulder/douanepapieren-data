@@ -199,6 +199,9 @@ const corsHeaders = {
      de browser weigert dan de hele aanvraag vóór hij verstuurd wordt en het
      scherm zegt alleen "Failed to fetch" (Gerrit, 14 sep 2026). */
   "Access-Control-Allow-Headers": "Content-Type, X-Fonteyn-Auth, X-Fonteyn-User, X-Dealer-Session, X-DP-Admin",
+  /* X-Kleur: of een spafoto écht in de gevraagde kleur is (portaal, hover op
+     een kleur). Zonder Expose-Headers kan de browser die kop niet lezen. */
+  "Access-Control-Expose-Headers": "X-Kleur, X-Bron",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -791,11 +794,29 @@ async function dpHandleSpaPhoto(env, url) {
   const model = String(url.searchParams.get("model") || "").trim();
   if (!model) return reply(400, { ok: false, error: "geen model" });
 
+  /* Foto per kleur. Gerrit (14 sep 2026): "bij elke kleur on-hover de spa in
+     de juiste kleur kunt zien." Die foto's staan nergens klaar - Logic4 heeft
+     alleen een foto bij de standaardkleur en de website mengt kleuren zonder
+     label - dus ze worden in Passion Partners Beheer per kleur geüpload en
+     hier onder spafoto:<model>:<artikelcode> bewaard. Is er voor deze kleur
+     nog niets, dan komt de gewone modelfoto met X-Kleur: nee, zodat het
+     portaal er "photo in this colour to follow" bij kan zetten. */
+  const code = String(url.searchParams.get("code") || "").trim();
+  if (code) {
+    const perKleur = await env.FONTEYN_DATA.get(dpKleurfotoSleutel(model, code), { type: "arrayBuffer" });
+    if (perKleur && perKleur.byteLength > 0) {
+      return new Response(perKleur, { status: 200, headers: {
+        ...corsHeaders, "Content-Type": "image/jpeg",
+        "Cache-Control": "public, max-age=3600", "X-Bron": "kleur", "X-Kleur": "ja" } });
+    }
+  }
+  const kleurKop = code ? { "X-Kleur": "nee" } : {};
+
   const sleutel = "spafoto:" + model.toLowerCase();
   const klaar = await env.FONTEYN_DATA.get(sleutel, { type: "arrayBuffer" });
   if (klaar && klaar.byteLength > 0) {
     return new Response(klaar, { status: 200, headers: {
-      ...corsHeaders, "Content-Type": "image/png",
+      ...corsHeaders, "Content-Type": "image/png", ...kleurKop,
       "Cache-Control": "public, max-age=86400", "X-Bron": "bewaard" } });
   }
 
@@ -823,8 +844,55 @@ async function dpHandleSpaPhoto(env, url) {
   try { await env.FONTEYN_DATA.put(sleutel, bytes); } catch (e) {}
 
   return new Response(bytes, { status: 200, headers: {
-    ...corsHeaders, "Content-Type": soort || "image/png",
+    ...corsHeaders, "Content-Type": soort || "image/png", ...kleurKop,
     "Cache-Control": "public, max-age=86400", "X-Bron": "specsheet" } });
+}
+
+function dpKleurfotoSleutel(model, code) {
+  return "spafoto:" + String(model).toLowerCase() + ":" + String(code).toLowerCase();
+}
+
+/* GET /dealers/admin/kleurfotos?model=X - welke artikelcodes van dit model
+   een eigen kleurfoto hebben. */
+async function dpAdminKleurfotos(env, url) {
+  const model = String(url.searchParams.get("model") || "").trim();
+  if (!model) return reply(400, { ok: false, error: "geen model" });
+  const prefix = "spafoto:" + model.toLowerCase() + ":";
+  const codes = [];
+  let cursor;
+  do {
+    const lijst = await env.FONTEYN_DATA.list({ prefix, cursor });
+    for (const k of lijst.keys) codes.push(k.name.slice(prefix.length));
+    cursor = lijst.list_complete ? null : lijst.cursor;
+  } while (cursor);
+  return reply(200, { ok: true, model, codes });
+}
+
+/* POST /dealers/admin/kleurfoto { model, code, data } - data is een
+   data-URI (jpeg/png/webp), door de beheertegel al verkleind tot maximaal
+   1400 pixels. Met { model, code, verwijder: true } gaat de foto weer weg.
+   KV kan 25 MB per sleutel aan, maar een foto hoort onder de 1 MB te blijven
+   voor een snelle hover; daarboven weigeren we. */
+async function dpAdminKleurfoto(request, env) {
+  let b = {};
+  try { b = await request.json(); } catch {}
+  const model = String(b.model || "").trim();
+  const code = String(b.code || "").trim();
+  if (!model || !code) return reply(400, { ok: false, error: "model en code vereist" });
+  const sleutel = dpKleurfotoSleutel(model, code);
+  if (b.verwijder === true) {
+    await env.FONTEYN_DATA.delete(sleutel);
+    return reply(200, { ok: true, verwijderd: true });
+  }
+  const data = String(b.data || "");
+  const m = /^data:(image\/(?:jpeg|png|webp));base64,(.+)$/s.exec(data);
+  if (!m) return reply(400, { ok: false, error: "geen afbeelding (jpeg, png of webp)" });
+  const ruw = atob(m[2]);
+  if (ruw.length > 1200000) return reply(413, { ok: false, error: "foto te groot (max 1 MB)" });
+  const bytes = new Uint8Array(ruw.length);
+  for (let i = 0; i < ruw.length; i++) bytes[i] = ruw.charCodeAt(i);
+  await env.FONTEYN_DATA.put(sleutel, bytes);
+  return reply(200, { ok: true, bytes: bytes.length });
 }
 
 // GET /dealers/api/stock — geaggregeerd per model, dealer-veilig, mét
@@ -1738,12 +1806,29 @@ async function dpHandleReserve(request, env, sess, url) {
   /* Bij een container kan "nu volledig betalen omdat het op voorraad ligt"
      niet: er wordt niets uit de hal gepakt, de fabriek moet hem nog laden.
      Het blijft dus bij de aanbetaling van 30%. */
-  const payFull = wantsFull && alleOpVoorraad && levering !== "container";
+  let payFull = wantsFull && alleOpVoorraad && levering !== "container";
+  /* Eigen aanbetalingsbedrag. Gerrit (14 sep 2026): "Bij ingelogde adviseurs
+     van Passion (de spa-adviseurs + Chantal + Dolf) moet de optie zichtbaar
+     zijn om zelf een bedrag als aanbetaling te kiezen. Dealers moeten deze
+     optie nooit mogen zien." Op de beurs spreekt de adviseur met de klant
+     een bedrag af; dat hoeft geen 30% te zijn.
+
+     Alleen een sessie op een @fonteyn.nl-account mag dit meesturen. Een
+     partner die het veld toch in zijn verzoek zet, krijgt gewoon de 30%.
+     Het bedrag ligt tussen 1 en het volledige bedrag van de spa's; de
+     onderdelen worden altijd in één keer betaald en tellen er bovenop. */
+  let volSpas = 0;
+  for (const r of regels) if (r.soort === "spa") volSpas += r.volInclVat;
+  const eigenIn = isFonteyn && body.eigenAanbetaling != null ? Number(body.eigenAanbetaling) : NaN;
+  const eigenAanbetaling = spaAantal && eigenIn > 0
+    ? Math.round(Math.max(1, Math.min(volSpas, eigenIn)) * 100) / 100 : null;
+  if (eigenAanbetaling != null) payFull = false;
   for (const r of regels) {
     if (r.soort !== "spa") continue;
-    teBetalen += payFull ? r.volInclVat : r.volInclVat * 0.30;
+    if (eigenAanbetaling == null) teBetalen += payFull ? r.volInclVat : r.volInclVat * 0.30;
     delete r.volInclVat;
   }
+  if (eigenAanbetaling != null) teBetalen += eigenAanbetaling;
   let deposit = Math.round(teBetalen * 100) / 100;
   const currency = isUS ? "USD" : "EUR";
 
@@ -1764,9 +1849,14 @@ async function dpHandleReserve(request, env, sess, url) {
     productCode: regels[0].code || null,
     items: regels, status: "new",
     note: [note, regels.filter(r => r.zonderVoorkeur).map(r =>
-      "Geen kleurvoorkeur opgegeven - artikel " + r.code + " gekozen voor " + r.model).join("\n")]
+      "Geen kleurvoorkeur opgegeven - artikel " + r.code + " gekozen voor " + r.model).join("\n"),
+      eigenAanbetaling != null
+        ? "Aanbetaling door adviseur gekozen: " + (isUS ? "$" : "EUR") + " " + eigenAanbetaling.toFixed(2) +
+          " (30% zou " + (isUS ? "$" : "EUR") + " " + (volSpas * 0.30).toFixed(2) + " zijn)"
+        : ""]
       .filter(Boolean).join("\n"),
     currency, vatPercent, payFull, levering,
+    eigenAanbetaling: eigenAanbetaling != null ? eigenAanbetaling : undefined,
     /* Afhalen of bezorgen, met het bedrag zoals het op het scherm stond. De
        vracht wordt NIET meegenomen in de Mollie-aanbetaling en komt ook niet
        als orderregel in Logic4: de vervoerder rekent af op wat er werkelijk
@@ -1793,7 +1883,8 @@ async function dpHandleReserve(request, env, sess, url) {
     if (wantsCent) { deposit = 0.01; entry.testbetaling = true; entry.payFull = false; }
     const label = wantsCent ? "TEST - 1 cent"
                 : (payFull ? "Full payment (in stock)"
-                : (spaAantal ? "30% deposit" : "Payment"));
+                : (eigenAanbetaling != null ? "Deposit"
+                : (spaAantal ? "30% deposit" : "Payment")));
     const pay = await dpCreateMolliePayment(env, deposit,
       label + " — " + samenvatting + " (" + (sess.company || sess.email) + ")",
       dpOrigin(env, url) + "/dealers?paid=1",
@@ -1934,8 +2025,13 @@ async function dpHandleSetPassword(request, env, sess) {
 // zodat een verzoek na indienen zichtbaar blijft (status: new/paid/…).
 async function dpHandleMyRequests(env, sess) {
   const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  const ik = String(sess.email || "").toLowerCase();
+  /* Ook wat deze adviseur heeft overgezet naar een partner blijft hier
+     zichtbaar, met de naam van die partner erbij. Anders is een beursorder
+     na het overzetten voor de adviseur zelf spoorloos. */
   const mine = (Array.isArray(data.requests) ? data.requests : [])
-    .filter(r => String(r.email || "").toLowerCase() === String(sess.email || "").toLowerCase())
+    .filter(r => String(r.email || "").toLowerCase() === ik ||
+                 String(r.overgezetVan || "").toLowerCase() === ik)
     /* items erbij: sinds de winkelwagen kan één aanvraag meerdere spa's én
        onderdelen bevatten. Zonder deze regel zag een partner alleen de eerste
        regel terug en leek de rest van zijn bestelling verdwenen. */
@@ -1950,7 +2046,14 @@ async function dpHandleMyRequests(env, sess) {
                     is hij weg zonder uitleg - hier blijft hij staan mét reden. */
                  geannuleerd: !!r.orderGeannuleerd || r.status === "geannuleerd",
                  geannuleerdOp: r.geannuleerdOp || null,
-                 ordernr: r.logic4OrderId || null }))
+                 ordernr: r.logic4OrderId || null,
+                 id: r.id || null,
+                 eigenAanbetaling: r.eigenAanbetaling || null,
+                 /* Overgezet: van een adviseur naar een partner (beursflow). */
+                 overgezetNaar: String(r.overgezetVan || "").toLowerCase() === ik
+                   ? (r.company || r.email) : null,
+                 overgezetVan: r.overgezetVan && String(r.email || "").toLowerCase() === ik
+                   ? r.overgezetVan : null }))
     .sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
   return reply(200, { ok: true, requests: mine });
 }
@@ -1964,6 +2067,95 @@ async function dpHandleMyRequests(env, sess) {
 function dpPrijsgevoeligeIds(data) {
   const lijst = (data && data.prijsgevoelig && data.prijsgevoelig.bestanden) || [];
   return new Set(lijst.map(f => String(f.id || "").toLowerCase()).filter(Boolean));
+}
+
+/* ── Beursflow: adviseur bestelt, partner krijgt de order ────────────────
+   Gerrit (14 sep 2026): op een beurs kan een nieuwe partner nog geen account
+   hebben. De adviseur plaatst de bestelling dan in zijn eigen Passion
+   Partners-omgeving (met een zelfgekozen aanbetaling via Mollie). Zodra het
+   partneraccount er is, zet de adviseur de bestelling over naar die partner.
+
+   Wie is adviseur: een gewone portaalsessie op een @fonteyn.nl-account. Een
+   meekijksessie is dat niet (die mag niets doen) en een partner ook niet. */
+function dpIsAdviseur(sess) {
+  return !!sess && !sess.medewerker && /@fonteyn\.nl$/i.test(String(sess.email || ""));
+}
+
+/* GET /dealers/api/partners - de partners waar een adviseur naar kan overzetten.
+   Alleen naam en adres; geen debiteurnummers, geen wachtwoordvelden. */
+async function dpHandlePartnerLijst(env, sess) {
+  if (!dpIsAdviseur(sess)) return reply(403, { ok: false, error: "alleen-adviseurs" });
+  const accounts = await dpGetAccounts(env);
+  const lijst = (accounts.dealers || [])
+    .filter(d => d && d.email && !/@fonteyn\.nl$/i.test(String(d.email)))
+    .map(d => ({ email: String(d.email).toLowerCase(), company: d.company || "", region: d.region || "EU" }))
+    .sort((a, b) => (a.company || a.email).localeCompare(b.company || b.email));
+  return reply(200, { ok: true, partners: lijst });
+}
+
+/* POST /dealers/api/overzetten { requestId, naarEmail }
+   Zet een bestelling van de adviseur over naar een partner. De partner ziet
+   hem daarna onder My spas; de adviseur houdt hem in zijn lijst met de naam
+   van de partner erbij.
+
+   De Logic4-order (als de aanbetaling al binnen is) staat op het
+   debiteurnummer van de adviseur en wordt hier NIET omgehangen: een order
+   overschrijven via AddUpdateOrder is te grof voor iets wat sales in Logic4
+   in een halve minuut doet. Beheer laat zien dat dit nog moet. Is de
+   aanbetaling nog niet binnen, dan komt de order vanzelf op de partner. */
+async function dpHandleOverzetten(request, env, sess, url) {
+  if (!dpIsAdviseur(sess)) return reply(403, { ok: false, error: "alleen-adviseurs" });
+  let b = {};
+  try { b = await request.json(); } catch {}
+  const id = String(b.requestId || "");
+  const naar = String(b.naarEmail || "").trim().toLowerCase();
+  if (!id || !naar.includes("@")) return reply(400, { ok: false, error: "requestId en naarEmail vereist" });
+  const accounts = await dpGetAccounts(env);
+  const partner = dpFindDealer(accounts, naar);
+  if (!partner || /@fonteyn\.nl$/i.test(naar)) return reply(404, { ok: false, error: "partner onbekend" });
+  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  const item = (Array.isArray(data.requests) ? data.requests : []).find(r => r.id === id);
+  if (!item) return reply(404, { ok: false, error: "aanvraag onbekend" });
+  const ik = String(sess.email || "").toLowerCase();
+  if (String(item.email || "").toLowerCase() !== ik) return reply(403, { ok: false, error: "niet jouw aanvraag" });
+  if (item.orderGeannuleerd || item.status === "geannuleerd") return reply(409, { ok: false, error: "aanvraag is geannuleerd" });
+  const partnerDebtor = (partner.debtorIds || [])[0] || null;
+  item.overgezetVan = ik;
+  item.overgezetOp = new Date().toISOString();
+  item.email = naar;
+  item.targetEmail = naar;
+  item.company = partner.company || "";
+  if (partnerDebtor) item.debtorId = partnerDebtor;
+  const regel = "Overgezet door " + ik + " naar " + (partner.company || naar) +
+    (item.logic4OrderId
+      ? " - Logic4-order " + item.logic4OrderId + " staat nog op de debiteur van de adviseur" +
+        (partnerDebtor ? "; omzetten naar debiteur " + partnerDebtor : "; partner heeft nog geen debiteurnummer")
+      : "");
+  if (item.logic4OrderId) item.logic4Omzetten = { naarDebtorId: partnerDebtor, sinds: item.overgezetOp };
+  item.note = [item.note, regel].filter(Boolean).join("\n");
+  await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+  await dpLogPartner(env, sess, "overgezet", (partner.company || naar) + " - " + String(item.model || "") + " x" + (item.qty || 1));
+  console.log("[dp-overzetten] " + regel);
+  /* De partner hoort het ook: zijn beursbestelling staat nu in zijn eigen
+     omgeving. Gaat de mail niet, dan is het overzetten toch gelukt. */
+  let mailSent = false;
+  try {
+    const esc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const wat = Array.isArray(item.items) && item.items.length
+      ? item.items.map(r => r.qty + "x " + (r.soort === "spa" ? r.model : (r.naam || r.code))).join(", ")
+      : (item.qty || 1) + "x " + (item.model || "");
+    const r = await dpSendEmail(env, naar, "Your order is now in your Passion Partners account",
+      dpMailShell(env, url,
+        '<p>Hi ' + esc(partner.company || "") + ',</p>' +
+        '<p>Your order from the fair has been moved to your own Passion Partners account:</p>' +
+        '<p><b>' + esc(wat) + '</b></p>' +
+        '<p>You can follow it under <b>My spas</b> after logging in at ' +
+        '<a href="' + dpOrigin(env, url) + '/dealers">' + esc(dpOrigin(env, url).replace(/^https?:\/\//, "")) + '</a>.</p>'),
+      (accounts.contactEmail || undefined));
+    mailSent = !!(r && r.ok);
+  } catch (e) { /* mail is bijzaak */ }
+  return reply(200, { ok: true, naar: partner.company || naar, mailSent,
+                      logic4Omzetten: !!item.logic4Omzetten, debtorId: partnerDebtor });
 }
 
 async function dpIsDealer(env, sess) {
@@ -2074,8 +2266,13 @@ async function dpHandleVraag(request, env, sess) {
 // GET /dealers → portaalpagina vers van GitHub main (cache ≤10s)
 async function dpHandlePage(env) {
   const cb = Math.floor(Date.now() / 10000);
+  /* DEV_PAGE_URL: alleen bij wrangler dev (--var DEV_PAGE_URL:http://...),
+     om de portaalpagina uit de werkmap te testen vóór hij op GitHub staat.
+     In productie is de variabele er niet en komt de pagina van main. */
   const r = await fetch(
-    "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/dealerportal.html?cb=" + cb,
+    env.DEV_PAGE_URL
+      ? env.DEV_PAGE_URL + "?cb=" + Date.now()
+      : "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/dealerportal.html?cb=" + cb,
     { cf: { cacheTtl: 10, cacheEverything: true } }
   );
   if (!r.ok) {
@@ -2968,6 +3165,15 @@ async function handleDealerRoutes(request, env, url) {
       await env.FONTEYN_DATA.delete("dpfile:" + id);
       return reply(200, { ok: true, id, bestond: !!bestond });
     }
+    if (p === "/dealers/admin/kleurfotos" && request.method === "GET") return dpAdminKleurfotos(env, url);
+    if (p === "/dealers/admin/kleurfoto" && request.method === "POST") return dpAdminKleurfoto(request, env);
+    if (p === "/dealers/admin/kleurfoto" && request.method === "GET") {
+      // De miniatuur in Beheer. Een <img> kan geen beheerkoppen meesturen,
+      // dus de tegel haalt hem met fetch op en zet hem als blob neer.
+      const bytes = await env.FONTEYN_DATA.get(dpKleurfotoSleutel(url.searchParams.get("model") || "", url.searchParams.get("code") || ""), { type: "arrayBuffer" });
+      if (!bytes || !bytes.byteLength) return reply(404, { ok: false, error: "geen foto" });
+      return new Response(bytes, { status: 200, headers: { ...corsHeaders, "Content-Type": "image/jpeg", "Cache-Control": "no-store" } });
+    }
     if (p === "/dealers/admin/testorder" && request.method === "POST") return dpAdminTestOrder(request, env);
     if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);
     if (p === "/dealers/admin/terugdraaien" && request.method === "POST") return dpAdminTerugdraaien(request, env);
@@ -3037,6 +3243,8 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/api/photo" && request.method === "GET") return dpHandleSpaPhoto(env, url);
     if (p === "/dealers/api/myspas" && request.method === "GET") return dpHandleMySpas(env, sess);
     if (p === "/dealers/api/requests" && request.method === "GET") return dpHandleMyRequests(env, sess);
+    if (p === "/dealers/api/partners" && request.method === "GET") return dpHandlePartnerLijst(env, sess);
+    if (p === "/dealers/api/overzetten" && request.method === "POST") return dpHandleOverzetten(request, env, sess, url);
     if (p === "/dealers/api/reserve" && request.method === "POST") return dpHandleReserve(request, env, sess, url);
     if (p === "/dealers/api/docs" && request.method === "GET") return dpHandleDocs(env, sess);
     if (p === "/dealers/api/file" && request.method === "GET") return dpServeFile(env, url, sess);
