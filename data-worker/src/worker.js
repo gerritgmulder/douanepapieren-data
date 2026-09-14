@@ -193,7 +193,11 @@ const ALLOWED_BUCKET_PATTERNS = [
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, PUT, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-Fonteyn-Auth, X-Dealer-Session, X-DP-Admin",
+  /* X-Fonteyn-User staat er sinds 12 sep 2026 bij (wie er ingelogd is, voor
+     Passion Partners Beheer zonder beheersleutel). Ontbrak hier twee dagen:
+     de browser weigert dan de hele aanvraag vóór hij verstuurd wordt en het
+     scherm zegt alleen "Failed to fetch" (Gerrit, 14 sep 2026). */
+  "Access-Control-Allow-Headers": "Content-Type, X-Fonteyn-Auth, X-Fonteyn-User, X-Dealer-Session, X-DP-Admin",
   "Access-Control-Max-Age": "86400",
 };
 
