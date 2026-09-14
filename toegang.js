@@ -212,9 +212,9 @@
       // Service (alleen kijken)
       "patrick", "hans.vanputten", "thieme", 
       // Plaatsing (alleen kijken)
-      // bertjan.kok is dezelfde persoon als bertjan (Gerrit, 12 sep 2026)
-      "mike.deboer", "joeri", "michael.berghorst",
-      "dylan", "wouter.vedder", "joey",
+      // bertjan.kok is dezelfde persoon als bertjan (Gerrit, 12 sep 2026).
+      // Michael Berghorst, Mike de Boer en Wouter Vedder eruit (Gerrit, 14 sep 2026).
+      "joeri", "dylan", "joey",
     ],
     /* Wijzigen doen Kevin en Gerwin (Gerrit, 7 sep 2026: "alleen Kevin en
        Gerwin moeten bewerkingsrechten hebben"). De rest van de afdeling -
@@ -222,8 +222,12 @@
        niets meer in. Dat scheelt ook de vraag of Bart van de Brink en Bert
        Jan Kok dezelfde personen zijn als de planners met die namen: kijken
        mogen ze allebei, wijzigen geen van beiden. */
+    /* Kevin (14 sep 2026): "Bart, Bertjan, Gerwin en ik hebben de rechten
+       nodig om in te plannen, de rest moet alleen lezen hebben." Op de
+       telefoon is het voor iedereen alleen kijken, ook voor deze vier; dat
+       regelt planning.html zelf (OP_TELEFOON). */
     "planning-bewerk": [
-      "dolf", "fonteynbot", "gerrit", "gerwin", "kevin",
+      "bart.vdb", "bertjan", "dolf", "fonteynbot", "gerrit", "gerwin", "kevin",
     ],
     /* Urencontrole: het weekoverzicht van Gerwin. Gerrit (10 sep 2026): "ik
        wil dat je enkel voor Gerwin een tegel maakt waar hij dat overzicht in

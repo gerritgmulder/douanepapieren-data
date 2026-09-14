@@ -42,8 +42,8 @@ table.wk .uren{text-align:right;padding:4px 8px;color:var(--grijs);width:1%;whit
 table.wk tr.groep td{background:#f4f9ec;font-weight:700;color:var(--groen);padding:6px 9px;font-size:12px}
 table.wk td.vak{text-align:center;cursor:pointer;height:22px;min-width:20px}
 table.wk td.vak.aan{background:var(--goed);box-shadow:inset 0 0 0 1px var(--goedrand)}
-table.wk td.vak.uit{background:var(--uit);cursor:default}
-table.wk td.vak:not(.uit):hover{outline:2px solid var(--lime);outline-offset:-2px}
+table.wk td.vak.uit{background:var(--uit)}
+table.wk td.vak:hover{outline:2px solid var(--lime);outline-offset:-2px}
 table.wk tr.persoon:hover .naam{background:#fbfdf7}
 .legenda{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--grijs);margin-top:10px}
 .legenda span{display:inline-flex;align-items:center;gap:6px}
@@ -264,7 +264,7 @@ function teken(){
     for (let w = 1; w <= 52; w++){
       const isUit = uit.has(w);
       html += "<td class='vak" + (isUit ? " uit" : (aan.has(w) ? " aan" : "")) + "'" +
-        (isUit ? " title='uit dienst'" : " data-p='" + i + "' data-w='" + w + "' title='" + esc(p.naam) + " · week " + w + "'") +
+        " data-p='" + i + "' data-w='" + w + "' title='" + esc(p.naam) + " · week " + w + (isUit ? " · uit dienst" : "") + "'" +
         "></td>";
     }
     html += "</tr>";
@@ -272,34 +272,55 @@ function teken(){
   html += "</tbody></table></div>";
   box.innerHTML = html;
 
-  const teDoen = mensen.filter(p => !(p.uitDienst || []).includes(nu) && !(p.weken || []).includes(nu));
-  $("tel").textContent = "Week " + nu + ": " + (mensen.length - teDoen.length) + " van " +
-    mensen.filter(p => !(p.uitDienst || []).includes(nu)).length + " nagekeken" +
-    (teDoen.length ? " · nog te doen: " + teDoen.slice(0, 6).map(p => p.naam).join(", ") + (teDoen.length > 6 ? " en " + (teDoen.length - 6) + " meer" : "") : "");
-
+  tekenTel();
   box.querySelectorAll("td.vak[data-p]").forEach(td => {
     td.addEventListener("click", () => zet(Number(td.dataset.p), Number(td.dataset.w), td));
   });
 }
+function tekenTel(){
+  const mensen = ((data.jaren || {})[jaar] || {}).mensen || [];
+  const nu = weekNu();
+  const teDoen = mensen.filter(p => !(p.uitDienst || []).includes(nu) && !(p.weken || []).includes(nu));
+  $("tel").textContent = "Week " + nu + ": " + (mensen.length - teDoen.length) + " van " +
+    mensen.filter(p => !(p.uitDienst || []).includes(nu)).length + " nagekeken" +
+    (teDoen.length ? " · nog te doen: " + teDoen.slice(0, 6).map(p => p.naam).join(", ") + (teDoen.length > 6 ? " en " + (teDoen.length - 6) + " meer" : "") : "");
+}
 
-/* Aan of uit, en meteen bewaren. Lukt het bewaren niet, dan gaat het vakje
-   weer terug - anders denkt Gerwin dat het genoteerd staat terwijl er niets
-   is weggeschreven. */
+/* Wit, groen of zwart, en meteen bewaren.
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (14 sep 2026): "Gerwin moet bij Urencontrole een vakje ook zwart
+   kunnen maken. Groen en zwart en wit, dat zijn de keuzes." Elke klik gaat
+   een stap verder: wit (nog niet nagekeken), groen (nagekeken), zwart (uit
+   dienst), en dan weer wit. Zwart uit het Excel-bestand telt hetzelfde als
+   zwart met de hand.
+
+   En: alleen de cel zelf en de teller worden bijgewerkt, niet de hele
+   tabel. Het opnieuw tekenen van de tabel zette de pagina terug naar boven
+   (Gerrit: "schiet de pagina terug naar boven"). Lukt het bewaren niet, dan
+   gaat de cel terug naar wat hij was. */
 async function zet(idx, w, td){
   const p = ((data.jaren[jaar] || {}).mensen || [])[idx];
   if (!p) return;
-  p.weken = p.weken || [];
-  const had = p.weken.includes(w);
-  if (had) p.weken = p.weken.filter(x => x !== w);
-  else p.weken.push(w);
-  td.classList.toggle("aan", !had);
+  p.weken = p.weken || []; p.uitDienst = p.uitDienst || [];
+  const wasAan = p.weken.includes(w), wasUit = p.uitDienst.includes(w);
+  const vorige = wasUit ? "uit" : (wasAan ? "aan" : "leeg");
+  const volgende = vorige === "leeg" ? "aan" : (vorige === "aan" ? "uit" : "leeg");
+  function pas(stand){
+    p.weken = p.weken.filter(x => x !== w); p.uitDienst = p.uitDienst.filter(x => x !== w);
+    if (stand === "aan") p.weken.push(w);
+    if (stand === "uit") p.uitDienst.push(w);
+    td.classList.toggle("aan", stand === "aan");
+    td.classList.toggle("uit", stand === "uit");
+    td.title = p.naam + " \u00b7 week " + w + (stand === "uit" ? " \u00b7 uit dienst" : "");
+    tekenTel();
+  }
+  pas(volgende);
   try{
     await bewaren();
-    teken();
-    try{ if (window.fpLog) window.fpLog("urencontrole-gezet", p.naam + " week " + w + (had ? " teruggedraaid" : " nagekeken")); }catch(e){}
+    try{ if (window.fpLog) window.fpLog("urencontrole-gezet", p.naam + " week " + w + " " +
+      (volgende === "aan" ? "nagekeken" : volgende === "uit" ? "uit dienst" : "teruggedraaid")); }catch(e){}
   }catch(e){
-    if (had) p.weken.push(w); else p.weken = p.weken.filter(x => x !== w);
-    td.classList.toggle("aan", had);
+    pas(vorige);
     melding("bad", "Niet bewaard: " + (e.message || e));
   }
 }

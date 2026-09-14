@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-14", bestand: "urencontrole.html", soort: "beter",
+      titel: "Wit, groen of zwart, en de pagina blijft staan",
+      wat: "Klik op een vakje en het gaat van wit naar groen (nagekeken), nog een klik maakt het zwart (uit dienst), en nog een klik weer wit. De pagina springt na een klik niet meer naar boven.",
+    },
+
+    {
+      datum: "2026-09-14", bestand: "planning.html", soort: "beter",
+      titel: "Servicemelding op het printblad zoals in Logic4, met Garantie erbij",
+      wat: "Op het blad van een servicemelding staat de omschrijving nu met de regels zoals de monteurs hem in Logic4 typen. Wat er later bij is gezet (achter de streep) staat als 'Aanvulling 1, 2' in een eigen vak, zodat je ziet wat de eerste melding was en wat erbij kwam. Bovenaan staat groot of het Garantie is: JA of NEE. In het meldingenpaneel staat garantie ook bij elke melding. Bart en Bertjan kunnen nu ook inplannen; op de telefoon blijft het voor iedereen alleen kijken.",
+    },
+
+    {
       datum: "2026-09-13", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
       titel: "Sorteren op naam, omschrijving, grootte of datum",
       wat: "Klik op een kolomkop om de lijst te sorteren; nog een keer klikken draait de volgorde om. Bij grootte en datum staat na de eerste klik de grootste of de nieuwste bovenaan. De keuze blijft staan als je de tegel later weer opent.",

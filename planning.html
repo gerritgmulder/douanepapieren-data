@@ -2394,7 +2394,7 @@ function itsTeken(){
   $("itsTitel").textContent = "Servicemeldingen uit Logic4 · "+raak.length+" in te plannen";
   $("itsLijst").innerHTML = (raak.slice(0, itsToon).map(function(m){
     var telaat = m.uiterlijk && m.uiterlijk < vandaag;
-    var sub = [m.type, m.groep, "gemeld "+m.gemeld].filter(Boolean).join(" · ")+
+    var sub = [m.type, m.groep, "gemeld "+m.gemeld, (m.garantie ? "garantie: "+m.garantie.toLowerCase() : "")].filter(Boolean).join(" · ")+
       (m.uiterlijk ? ' · <span class="'+(telaat?"telaat":"")+'">uiterlijk '+esc(m.uiterlijk)+'</span>' : "");
     var knop = itsGepland(m.id)
       ? '<span class="alGepland">in de planning ✓</span>'

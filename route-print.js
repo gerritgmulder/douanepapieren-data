@@ -114,10 +114,28 @@
     for (var i = 0; i < n; i++) uit += "<div class='lijn'>&nbsp;</div>";
     return uit;
   }
+  /* De omschrijving zoals in Logic4: de eerste melding, en daaronder wat
+     er later bij is gezet, telkens achter een streep. Elk stuk een eigen
+     vak, met een kopje: 'Melding' en dan 'Aanvulling 1', 'Aanvulling 2'.
+     Zo zie je wat er het eerst was en wat erbij kwam. */
+  function meldingBlokken(tekst) {
+    var stukken = String(tekst || "").split(/\n\s*[_\-=]{3,}\s*\n?/).map(function (t) { return t.trim(); }).filter(Boolean);
+    if (!stukken.length) return "<div class='tekstblok'>(geen omschrijving in Logic4)</div>";
+    return stukken.map(function (t, i) {
+      return "<div class='meldstuk'><div class='meldkop'>" + (i === 0 ? "Melding" : "Aanvulling " + i) + "</div>" +
+        "<div class='tekstblok'>" + esc(t) + "</div></div>";
+    }).join("");
+  }
+  function garantieRegel(m) {
+    if (!m.garantie) return "";
+    var ja = /^ja/i.test(m.garantie);
+    return "<div class='garantie " + (ja ? "ja" : "nee") + "'>Garantie: " + (ja ? "JA" : "NEE") + "</div>";
+  }
   function meldingBlad(m, logo) {
     var k = m.klant || {};
     return "<section class='blad bevestiging'>" + briefkop(logo) +
       "<h2>Servicemelding" + (m.id ? " " + esc(m.id) : "") + "</h2>" +
+      garantieRegel(m) +
       "<div class='blokken'>" +
         "<div><span class='kop'>Klant:</span><div class='adres'>" +
           esc(k.naam || m.naam || "") + (k.adres ? "<br>" + esc(k.adres) : "") +
@@ -138,7 +156,7 @@
         "</div>" +
       "</div>" +
       "<h3 class='kopje'>Omschrijving van de melding</h3>" +
-      "<div class='tekstblok'>" + esc(m.omschrijving || "(geen omschrijving in Logic4)") + "</div>" +
+      meldingBlokken(m.tekst || m.omschrijving) +
       (m.wat ? "<h3 class='kopje'>Uit de planning</h3><div class='tekstblok'>" + esc(m.wat) + "</div>" : "") +
       "<h3 class='kopje'>Uitgevoerd / opmerkingen monteur</h3>" + schrijfregels(8) +
     "</section>";
@@ -343,6 +361,10 @@
   }
 
   STIJL += ".kopje{font-size:12px;margin:14px 0 4px;text-transform:uppercase;letter-spacing:.04em}" +
+    ".garantie{display:inline-block;margin:0 0 10px;padding:5px 14px;border:2.5px solid #111;border-radius:6px;font-size:14px;font-weight:700;letter-spacing:.04em}" +
+    ".garantie.ja{border-color:#166534;color:#166534}.garantie.nee{border-color:#b91c1c;color:#b91c1c}" +
+    ".meldstuk{margin-bottom:8px}.meldstuk .meldkop{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#555;margin:0 0 2px}" +
+    ".meldstuk+.meldstuk{border-top:1.5px dashed #9ca3af;padding-top:8px}" +
     ".tekstblok{border:1px solid #d1d5db;border-radius:4px;padding:8px 10px;font-size:12px;line-height:1.5;white-space:pre-wrap}" +
     ".lijn{border-bottom:1px solid #9ca3af;height:22px}";
   global.fpRoutePrint = { print: print, voorblad: voorblad, bevestiging: bevestiging };

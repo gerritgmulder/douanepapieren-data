@@ -5347,11 +5347,27 @@ const ITS_CACHE_MIN = 10;
 const ITS_MAANDEN = 6;
 
 function itsKaal(html) {
+  return itsTekst(html).replace(/\s+/g, " ").trim();
+}
+/* De omschrijving mét regels. Logic4 bewaart hem als HTML met <br /> tussen
+   de regels en een streep van underscores als de monteur er later iets bij
+   zet. Gerrit (14 sep 2026): "jij zet het allemaal achter elkaar op het
+   blad. Je moet het neerzetten op dezelfde manier zoals het in Logic4 ook
+   wordt neergezet." Dus regeleinden bewaren; het scherm maakt er blokken van
+   op de streep. */
+function itsTekst(html) {
   return String(html || "")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">")
-    .replace(/\s+/g, " ").trim();
+    .replace(/<head[\s\S]*?<\/head>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<[^>]*>/g, "")
+    .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"')
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 /* GET /planning/betaalstatus?orders=3517369,3518891 — is die order betaald?
@@ -5415,14 +5431,14 @@ async function planningBetaalstatusMetIts(env, url) {
       let debiteur = m ? m.debiteur : null;
       if (!order && (!m || m.order === undefined)) {
         try {
-          const x = (await call("/v3/ITS/GetIssues", { Id: Number(id), TakeRecords: 1 })).find(y => String(y.id) === id);
+          const x = (await call("/v3/ITS/GetIssues", { Id: Number(id), SkipRecords: 0, TakeRecords: 1 })).find(y => String(y.id) === id);
           if (x) { order = x.OrderId ? String(x.OrderId) : null; debiteur = debiteur || x.ReportedByDebtorId || null; }
         } catch (e) {}
       }
       let afgeleid = false;
       if (!order && debiteur) {
         try {
-          const orders = await call("/v3/Orders/GetOrders", { DebtorId: Number(debiteur), TakeRecords: 30 });
+          const orders = await call("/v3/Orders/GetOrders", { DebtorId: Number(debiteur), SkipRecords: 0, TakeRecords: 30 });
           orders.sort((a, b) => String(b.CreationDate || "").localeCompare(String(a.CreationDate || "")));
           if (orders.length) { order = String(orders[0].Id ?? orders[0].OrderId); afgeleid = true; }
         } catch (e) {}
@@ -5558,6 +5574,13 @@ async function planningIts(env, url) {
           id: x.id, naam: x.Name || "", status: (x.Status && x.Status.Name) || "",
           type: (x.Type && x.Type.Name) || "", groep: (x.Group && x.Group.Name) || "",
           omschrijving: itsKaal(x.Description).slice(0, 300),
+          /* De hele tekst met regels, voor het blad van de monteur. En de
+             vrije velden: het eerste is Garantie (Ja/Nee), in 126 van de
+             300 meldingen op Ja. Gerrit (14 sep 2026): "dat moet ook terug
+             te lezen zijn op het document wat de monteurs gebruiken". */
+          tekst: itsTekst(x.Description).slice(0, 4000),
+          garantie: (x.FreeValueType1 && x.FreeValueType1.Name) || null,
+          vrij2: (x.FreeValueType2 && x.FreeValueType2.Name) || null,
           gemeld: String(x.DateTimeReported || x.DateTimeCreatedOn || "").slice(0, 10),
           uiterlijk: String(x.DateTimeMustBeCompletedOn || "").slice(0, 10) || null,
           debiteur: x.ReportedByDebtorId || null,
@@ -6116,7 +6139,7 @@ async function relAanmaken(env, body) {
              pr.status + "). Vul hem in Logic4 verder in of blokkeer hem." };
   }
 
-  const terug = await relL4(env, "/v3/Relations/GetCustomers", { Id: id, TakeRecords: 1 });
+  const terug = await relL4(env, "/v3/Relations/GetCustomers", { Id: id, SkipRecords: 0, TakeRecords: 1 });
   const staat = Array.isArray(terug) && terug[0] ? terug[0] : {};
 
   /* In de lijst voor Chantal en Arno zetten. Die zien hem bovenaan hun
@@ -8174,7 +8197,7 @@ async function bankDebiteuren(env, ids) {
     try {
       const r = await fetch("https://api.logic4server.nl/v3/Relations/GetCustomers", {
         method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-        body: JSON.stringify({ Id: id, TakeRecords: 1 }),
+        body: JSON.stringify({ Id: id, SkipRecords: 0, TakeRecords: 1 }),
       });
       const j = await r.json().catch(() => null);
       const c = Array.isArray(j) ? j[0] : null;
@@ -10586,6 +10609,26 @@ export default {
     if (url.pathname === "/planning/route-print" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });
       return planningRoutePrint(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
+    /* Eén melding onbewerkt, om te zien wat Logic4 precies meegeeft
+       (opmaak van de omschrijving, de vrije velden zoals Garantie). Alleen
+       met de teamsleutel. */
+    if (url.pathname === "/planning/its/ruw" && request.method === "GET") {
+      // DEV_OPEN bestaat alleen bij een lokale proefdraai (wrangler dev --var), nooit in de uitrol.
+      if (!env.DEV_OPEN && (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const id = Number(url.searchParams.get("id"));
+      const token = await l4Token(env);
+      const r = await fetch("https://api.logic4server.nl/v3/ITS/GetIssues", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify(id ? { Id: id, SkipRecords: 0, TakeRecords: 1 } : { StatusId: 1, StartDate: "2026-06-01", SkipRecords: 0, TakeRecords: 300 }),
+      });
+      const j = await r.json().catch(() => null);
+      const vrij = {};
+      for (const n of [1, 2, 3]) {
+        const rv = await fetch("https://api.logic4server.nl/v3/ITS/GetFreeValues" + n, { headers: { "Authorization": "Bearer " + token } });
+        vrij[n] = rv.ok ? await rv.json().catch(() => null) : { status: rv.status };
+      }
+      return reply(200, { ok: true, melding: j, vrijeVelden: vrij });
     }
     if (url.pathname === "/planning/its" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
