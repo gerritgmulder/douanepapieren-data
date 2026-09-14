@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-14", bestand: "dealerportaal.html", soort: "hersteld",
+      titel: "Passion Partners Beheer geeft weer toegang, en het portaal opent weer",
+      wat: "Wie in de lijst voor deze tegel staat kreeg sinds zaterdag toch 'geen toegang'; dat is verholpen. De tegel Passion Partners opent voorlopig weer via het oude adres, omdat het nieuwe adres op het kantoor nog niet wordt gevonden. Aan de dealers verandert er niets.",
+    },
+
+    {
       datum: "2026-09-14", bestand: "urencontrole.html", soort: "beter",
       titel: "Wit, groen of zwart, en de pagina blijft staan",
       wat: "Klik op een vakje en het gaat van wit naar groen (nagekeken), nog een klik maakt het zwart (uit dienst), en nog een klik weer wit. De pagina springt na een klik niet meer naar boven.",
