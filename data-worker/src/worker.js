@@ -92,6 +92,7 @@ const ALLOWED_BUCKETS = new Set([
   "bezorgingen",
   "takenlijst",       // Takenlijst: eigen weektaken en gedelegeerde klussen, per taak één record
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
+  "voorraad-wijzigingen", // Orderregels die in Logic4 van model, kleur of uitvoering zijn veranderd sinds de vorige sync (laatste 300)
   "geldgoederen",     // Geld-goederenbeweging: laatste controle-momentopname + historie van de totalen
   "gg-bevindingen",   // Geld-goederenbeweging: per bevinding de status (open/opgepakt/opgelost/akkoord) + notitie
   "flexport-zendingen",// Flexport-overzicht (zendingen + containers). Ophalen duurt ~2,5 min, dus dit wordt hergebruikt.
@@ -4751,6 +4752,15 @@ async function spaOntvangstVoorstel(env) {
     uit.push({
       ref: s.ref, vessel: s.vessel || "", eta: s.eta || null,
       containers: s.containers || null, bestand: s.file || "",
+      /* Het vinkje "Container is binnen" ging hier NIET mee terug naar het
+         scherm. Chantal (video, 14 sep 2026): "die knop, container is binnen,
+         werkt niet. Hij blijft gewoon overal in het systeem zichtbaar." Het
+         opslaan werkte wél - in de bucket stond het keurig - maar dit
+         voorstel liet het veld weg, dus na elke herlaad stond de container
+         weer als "ETA verstreken - nog niet binnen gemeld" en de knop weer op
+         "Container is binnen". Alsof je het nooit had gedaan. */
+      binnenGemeld: s.binnenGemeld || null,
+      dealerContainer: !!s.dealerContainer,
       /* De trackingreferentie en wat de vervoerder er het laatst over zei.
          Stonden op het tabblad Schepen; dat is opgegaan in dit scherm, dus ze
          horen nu per container hier te staan (Chantal, 13 aug 2026). */
@@ -5285,9 +5295,17 @@ async function dpRefreshReservations(env) {
         const betaald = !!T.IsPaid || aanbetaling > 0;   // er is écht geld binnen
         const dId = String(o.DebtorId);
         const company = (o.InvoiceAddress && o.InvoiceAddress.CompanyName) || (o.AccountAddress && o.AccountAddress.CompanyName) || "";
+        /* Wat Chantal zelf heeft aangewezen gaat vóór de bedrijfsnaam.
+           Chantal (14 sep 2026): "order 3506832 staat in het dashboard bij
+           partner (…) dit is een particulier. Ook al is het een bedrijfsnaam,
+           het is gewoon een particulier." Een particulier die zijn spa op zijn
+           eenmanszaak bestelt heeft een bedrijfsnaam in Logic4 en werd hier
+           'zakelijk', en dat belandt in het scherm bij Partner. Hier stond
+           alleen de richting particulier -> dealer; andersom deed niets. */
         const type = partnerDebtors.has(dId) ? "partner"
           : (klantType[dId] === "dealer" ? "partner"
-            : (company.trim() ? "zakelijk" : "particulier"));
+            : (klantType[dId] === "particulier" ? "particulier"
+              : (company.trim() ? "zakelijk" : "particulier")));
         const naam = company.trim() || (o.InvoiceAddress && o.InvoiceAddress.ContactName) || ("Debiteur " + o.DebtorId);
         // Regels groeperen per model+kleur+magazijn binnen deze order.
         const groups = {};
@@ -5462,9 +5480,42 @@ async function dpRefreshReservations(env) {
      Bij de schepen gebeurt sinds 7 sep 2026 hetzelfde, alleen op de schaal-
      kleur: zie schaalKleur() hierboven. */
   const kleurVanCode = {};
+  /* DE UITVOERING HOORT BIJ DE KLEUR, OOK HIER.
+     ═══════════════════════════════════════════════════════════════════════
+     Chantal (video, 14 sep 2026) over order 3506832: "als ik naar de order
+     ga, dan zie ik dat het om een Pleasure Mystic Mountain gaat met Integrated
+     Heat Pump (…) Hier, verwachte levering 29/8. Ik krijg op 29/8 helemaal
+     geen Pleasure Mystic Mountain binnen met Integrated Heat Pump."
+
+     Klopt: de forecast keek alleen naar de kleur. Een Pleasure mét warmtepomp
+     werd gedekt door een gewone Pleasure op de plank of op een schip, en dat
+     is een andere spa. Vanaf nu telt de uitvoering mee in de sleutel: uit de
+     hal alleen een artikel met dezelfde uitvoering, uit de productie alleen
+     een inkooporderregel met dezelfde uitvoering, en van een schip helemaal
+     niet zolang de commercial invoice de uitvoering niet noemt - dan weten we
+     het gewoon niet, en 'we weten het niet' is eerlijker dan 29/8.
+
+     De naam wisselt per bron: de order zegt "Integrated Heat Pump", het
+     portaal en de productielijst zeggen "IntelliSaver". Hier is dat één
+     sleutel. */
+  const extraSleutel = (x) => {
+    const t = String(x || "").toLowerCase();
+    if (!t.trim()) return "";
+    if (/integrated\s*heat\s*pump|intellisaver/.test(t)) return "ihp";
+    return t.replace(/[^a-z0-9]/g, "");
+  };
   for (const vs of Object.values(catalog.models || {}))
-    for (const v of vs) kleurVanCode[String(v.code)] = dpRowColor(v.desc || "");
+    for (const v of vs) {
+      const info = dpRowInfo(v.desc || "");
+      kleurVanCode[String(v.code)] = { kleur: info.kleur, extra: extraSleutel(info.extra) };
+    }
   const kleurSleutel = (k) => String(k || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  // Kleur én uitvoering samen; een lege kleur blijft leeg zodat het restpotje
+  // (sleutel "") blijft werken zoals het was.
+  const potSleutel = (kleur, extra) => {
+    const k = kleurSleutel(kleur);
+    return k ? (k + "|" + extraSleutel(extra)) : "";
+  };
 
   for (const [model, list] of Object.entries(byModel)) {
     const buckets = [];
@@ -5476,7 +5527,8 @@ async function dpRefreshReservations(env) {
     for (const [code, q] of Object.entries(halRec.variants || {})) {
       const n = Number(q) || 0;
       if (n <= 0) continue;
-      const k = kleurSleutel(kleurVanCode[String(code)]);
+      const kv = kleurVanCode[String(code)] || {};
+      const k = potSleutel(kv.kleur, kv.extra);
       halPerKleur[k] = (halPerKleur[k] || 0) + n;
       halTotaal += n;
     }
@@ -5492,9 +5544,11 @@ async function dpRefreshReservations(env) {
     // Productie (open fabrieks-IKO's) ná de schepen, op ETA-volgorde
     (prodByModel[model] || [])
       .slice().sort((a, b) => String(a.eta || "9999").localeCompare(String(b.eta || "9999")))
-      // Een inkooporder bij de fabriek noemt geen kleur; die bakken staan dus
-      // open voor iedereen (kleur null).
-      .forEach(p => buckets.push({ kind: "productie", eta: p.eta, left: p.qty, iko: p.iko, fabriek: p.fabriek, kleur: null }));
+      // Een inkooporder bij de fabriek noemt geen kleur in de zin van de
+      // schaal; die bakken staan open voor iedereen (kleur null). De
+      // uitvoering kent hij wél - de artikelcode zegt het - en die telt mee.
+      .forEach(p => buckets.push({ kind: "productie", eta: p.eta, left: p.qty, iko: p.iko, fabriek: p.fabriek,
+                                   kleur: null, extra: extraSleutel(p.uitvoering) }));
     for (const r of list) {
       // Containerorders (Dealer magazijn) gaan rechtstreeks naar de dealer en
       // trekken NIET uit de Fonteyn-voorraad — die krijgen 'dealer-direct'.
@@ -5504,7 +5558,7 @@ async function dpRefreshReservations(env) {
          dan uit het restpotje. Is er van díe kleur niets vrij, dan slaan we de
          hal over en gaat hij door naar de schepen - ook als er van een andere
          kleur nog tien staan. */
-      const eigenSleutel = kleurSleutel(r.kleur);
+      const eigenSleutel = potSleutel(r.kleur, r.extra);
       const potje = halPerKleur[eigenSleutel] != null ? eigenSleutel
                   : (eigenSleutel ? null : "");
       if (potje != null && halPerKleur[potje] > 0) {
@@ -5521,10 +5575,17 @@ async function dpRefreshReservations(env) {
          De kleurregel: een bak zonder kleur mag door iedereen, een order
          zonder kleur mag overal uit, en verder moet de schaalkleur kloppen. */
       const mijnSchaal = schaalKleur(r.kleur);
+      const mijnExtra = extraSleutel(r.extra);
       for (const b of buckets) {
         if (need <= 0) break;
         if (b.left <= 0) continue;
         if (b.kleur && mijnSchaal && b.kleur !== mijnSchaal) continue;
+        /* De uitvoering: een schip zegt er niets over, dus daar mag een order
+           mét uitvoering niet uit pakken. Bij de productie moet hij gelijk zijn,
+           beide kanten op - een gewone order mag ook geen warmtepomp-spa
+           opeten die voor iemand anders besteld is. */
+        if (b.kind !== "productie" && mijnExtra) continue;
+        if (b.kind === "productie" && (b.extra || "") !== mijnExtra) continue;
         const take = Math.min(need, b.left);
         b.left -= take; need -= take; landing = b;
       }
@@ -5583,6 +5644,61 @@ async function dpRefreshReservations(env) {
     }
     console.log("[reserveringen] handmatige zending toegepast op " + toegepast + " regels");
   } catch (e) { console.log("[reserveringen] keuze uit voorraad-notities niet toegepast: " + String(e.message || e)); }
+
+  /* WAT ER IN LOGIC4 AAN EEN ORDER IS VERANDERD, ZICHTBAAR MAKEN.
+     ═══════════════════════════════════════════════════════════════════════
+     Chantal (14 sep 2026): "soms gebeurt het dat orders tussentijds worden
+     veranderd, soms verandert de kleur, soms verandert de complete spa,
+     voorbeeld 3519120. Graag het systeem elke ochtend laten scannen op
+     wijzigingen in een order (…) Zo weten we zeker dat we de juiste order in
+     het dashboard hebben staan."
+
+     De stand zelf volgt al elk uur uit Logic4, en de aantekeningen hangen aan
+     de id van de orderregel, dus die blijven staan als de kleur verandert.
+     Wat ontbrak is dat iemand het ZIET: de regel stond er ineens anders en
+     niemand wist dat hij veranderd was - laat staan dat een zelf gekozen
+     zending of een notitie "ETA 13/9 zelf trim vervangen" nog bij de nieuwe
+     kleur past.
+
+     Daarom: bij elke sync de nieuwe stand naast de vorige leggen, per
+     orderregel. Verschilt model, kleur of uitvoering, dan komt dat op de
+     regel te staan (gewijzigd: was …) en in de lijst voorraad-wijzigingen,
+     zodat het ook terug te vinden is als de regel alweer een keer is
+     veranderd. Een wijziging blijft veertien dagen op de regel staan; lang
+     genoeg om hem te zien, kort genoeg om niet eeuwig te blijven hangen. */
+  try {
+    const vorige = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
+    const oudPerRegel = {};
+    for (const lijst of [vorige.byModel || {}, vorige.byModelUSA || {}])
+      for (const [model, rows] of Object.entries(lijst)) for (const r of rows) {
+        oudPerRegel[r.regelId] = { model, kleur: r.kleur || "", extra: r.extra || "", gewijzigd: r.gewijzigd || null };
+      }
+    const logBucket = (await env.FONTEYN_DATA.get("voorraad-wijzigingen", { type: "json" })) || { regels: [] };
+    const nu = new Date().toISOString();
+    const houdbaar = Date.now() - 14 * 86400000;
+    let nieuw = 0;
+    for (const lijst of [byModel, byModelUSA]) for (const [model, rows] of Object.entries(lijst)) for (const r of rows) {
+      const o = oudPerRegel[r.regelId];
+      if (!o) continue;                                   // nieuwe regel, niets om mee te vergelijken
+      const zelfde = o.model === model && o.kleur === (r.kleur || "") && o.extra === (r.extra || "");
+      if (zelfde) {
+        // Een eerdere wijziging blijft staan tot hij verjaard is.
+        if (o.gewijzigd && Date.parse(o.gewijzigd.op) > houdbaar) r.gewijzigd = o.gewijzigd;
+        continue;
+      }
+      const was = [o.model, o.kleur, o.extra].filter(Boolean).join(" · ");
+      const is = [model, r.kleur || "", r.extra || ""].filter(Boolean).join(" · ");
+      r.gewijzigd = { op: nu, was };
+      logBucket.regels.unshift({ ts: nu, ordernr: r.ordernr, naam: r.naam || "", regelId: r.regelId, was, is });
+      nieuw++;
+    }
+    if (nieuw) {
+      logBucket.regels = logBucket.regels.slice(0, 300);
+      logBucket.updated = nu;
+      await env.FONTEYN_DATA.put("voorraad-wijzigingen", JSON.stringify(logBucket));
+      console.log("[reserveringen] " + nieuw + " orderregel(s) in Logic4 gewijzigd sinds de vorige sync");
+    }
+  } catch (e) { console.log("[reserveringen] wijzigingen vergelijken mislukt: " + String(e.message || e)); }
 
   await putAlsAnders(env, "reserveringen-live", { updated: new Date().toISOString(), byModel, byModelUSA });
   const total = Object.values(byModel).reduce((n, l) => n + l.length, 0);

@@ -50,6 +50,24 @@
   var EERSTE_KEER_DAGEN = 14;
 
   var NIEUWS = [
+
+    {
+      datum: "2026-09-14", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Container is binnen blijft nu binnen",
+      wat: "De knop 'Container is binnen' bij Schepen en ontvangst sloeg het vinkje wel op, maar na een herlaad stond de container weer als 'ETA verstreken - nog niet binnen gemeld'. Dat is gerepareerd. Andersom ook: een zending met een verstreken ETA die nog niet binnen is gemeld, blijft gewoon te kiezen bij een reservering.",
+    },
+
+    {
+      datum: "2026-09-14", bestand: "voorraad.html", soort: "nieuw",
+      titel: "Een klant naar Partner of Particulier zetten",
+      wat: "Onder elke reservering bij Partner en Particulier staat een knop 'naar particulier' of 'naar partner'. Die geldt voor de klant, dus voor al zijn orders. Een particulier die op zijn bedrijfsnaam bestelt stond tot nu toe bij Partner en was daar niet weg te krijgen.",
+    },
+
+    {
+      datum: "2026-09-14", bestand: "voorraad.html", soort: "beter",
+      titel: "Warmtepomp telt mee, gewijzigde orders vallen op",
+      wat: "Een spa met Integrated Heat Pump is een andere spa dan een gewone. In Overzicht staat hij nu op een eigen regel per kleur, en een reservering ervoor wordt niet meer gedekt door een gewone spa op de plank of op een schip. Verandert een order in Logic4 van kleur of model, dan staat er veertien dagen 'gewijzigd - was …' bij de regel. In Bestellen telt de productie nu per kleur mee bij 'nog te dekken', en er is een zoekveld. Bij Partner is de lijst per adviseur smaller en staat de betaling erbij.",
+    },
     {
       datum: "2026-09-14", bestand: "dealerportaal.html", soort: "nieuw",
       titel: "Passion Partners: beursbestellingen, eigen aanbetaling en foto's per kleur",

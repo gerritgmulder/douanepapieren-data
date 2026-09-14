@@ -139,6 +139,17 @@
   table.grid.resv tr.subrij .notAgenda{background:#fff;border:1px solid var(--border);border-radius:6px;
       padding:2px 7px;cursor:pointer;font-size:11px;color:var(--muted)}
   table.grid.resv tr.subrij .notAgenda:hover{border-color:var(--fonteyn-green,#144734)}
+  /* De omzetknop: zelfde vorm als 'agenda', rechts in de strook en wat
+     stiller, want je gebruikt hem zelden en hij verhuist een hele klant. */
+  table.grid.resv tr.subrij .notOmzet{background:#fff;border:1px solid var(--border);border-radius:6px;
+      padding:2px 7px;cursor:pointer;font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap}
+  table.grid.resv tr.subrij .notOmzet:hover{border-color:#3730a3;color:#3730a3}
+  /* Binnen per adviseur: het kleine regeltje onder dealer en ordernummer, en
+     de tabel mag nooit breder worden dan zijn kaart. */
+  table.grid.advtab{table-layout:auto;width:100%}
+  table.grid.advtab td{vertical-align:top;overflow-wrap:break-word}
+  table.grid.advtab .onder{font-size:11px;color:var(--muted);margin-top:2px}
+  table.grid.advtab th{white-space:normal}
   /* Velden in een rij mogen de regel niet hoger maken dan de tekst zelf. */
   table.grid td input[type=text],table.grid td select,table.grid td input:not([type=checkbox]){
       padding:1px 5px;font-size:11px;height:20px;line-height:18px}
@@ -549,6 +560,13 @@
            mooier als dit verdwijnt en dat we dat aanpassen naar Bestellen."
            Dezelfde lijst, dezelfde volgorde, andere kop. -->
       <h3>Bestellen</h3>
+      <!-- Chantal (video, 14 sep 2026): "Ik moet hier kunnen zoeken op een
+           spa. Nu moet ik continu heen en weer scrollen en zelf op zoek naar
+           een spa. Dat kost veel te veel tijd." -->
+      <div style="display:flex;gap:10px;align-items:center;margin:0 0 8px;flex-wrap:wrap">
+        <input id="ovBestelZoek" placeholder="zoek een spa-model…" style="min-width:240px;padding:8px">
+        <span id="ovBestelTel" style="font-size:12px;color:var(--muted)"></span>
+      </div>
       <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <b>In productie</b> is wat er bij de fabriek besteld staat; dat telt mee in Gedekt en gaat dus van het tekort af. Klik een model open om te zien in welke kleur. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
       <div id="ovParserWaarschuwing" class="status-msg warn hidden" style="margin:0 0 10px"></div>
       <div class="tablewrap" style="max-height:52vh"><table class="grid">
@@ -1918,15 +1936,45 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
    kleur — dus dat wordt hier bewust NIET over de kleuren verdeeld. Zo'n
    verdeling zou een gok zijn en precies de vraag verpesten waarvoor Chantal
    dit nodig heeft. Het staat als losse regel onder de tabel. */
+/* De uitvoering hoort bij de kleur.
+   ═══════════════════════════════════════════════════════════════════════════
+   Chantal (video, 14 sep 2026): "als een klant met integrated heat pump
+   besteld moet dit achter de spa zichtbaar zijn (…) Dat moet echt overal
+   zichtbaar zijn." Een Pleasure met warmtepomp is een ander artikel dan een
+   Pleasure zonder, en een reservering voor de ene is niet gedekt door de
+   andere op de plank.
+
+   Drie bronnen schreven dat elk anders op. De orderregel splitst kleur en
+   uitvoering ("Integrated Heat Pump"); de hal-voorraad heeft de hele staart
+   van de catalogus ("… trim | Integrated Heat Pump"); de inkooporder heeft
+   'uitvoering' apart en noemt het IntelliSaver, de naam die het portaal
+   gebruikt. Zonder gelijktrekken landde de vraag naar een warmtepomp-spa bij
+   de gewone kleur en stond de warmtepomp op de plank als aparte regel met
+   nul gevraagd. Hier krijgen ze alle drie dezelfde sleutel. */
+function uitvoeringNaam(x){
+  const t=String(x||"").replace(/\s+/g," ").trim();
+  if(!t) return "";
+  if(/integrated\s*heat\s*pump|intellisaver/i.test(t)) return "Integrated Heat Pump";
+  return t;
+}
+function kleurSleutel(kleur,uitvoering){
+  const k=kleurNormaal(kleur)||"(geen kleur)";
+  const u=uitvoeringNaam(uitvoering);
+  return u?(k+" · "+u):k;
+}
 function tekortPerKleur(lines,variants,prodRegels){
   const per={};
-  const zet=function(kleur,veld,n){
-    const k=kleur||"(geen kleur)";
+  const zet=function(sleutel,veld,n){
+    const k=sleutel||"(geen kleur)";
     if(!per[k]) per[k]={kleur:k,gevraagd:0,voorraad:0,productie:0};
     per[k][veld]+=n;
   };
-  for(const r of lines) zet(r.kleur,"gevraagd",Number(r.qty)||0);
-  for(const [code,qty] of Object.entries(variants||{})) zet(ovCodeKleur[code],"voorraad",Number(qty)||0);
+  for(const r of lines) zet(kleurSleutel(r.kleur,r.extra),"gevraagd",Number(r.qty)||0);
+  for(const [code,qty] of Object.entries(variants||{})){
+    // De catalogus zet de uitvoering achter een tweede streep.
+    const delen=String(ovCodeKleur[code]||"").split("|").map(function(d){ return d.trim(); });
+    zet(kleurSleutel(delen[0],delen.slice(1).join(" · ")),"voorraad",Number(qty)||0);
+  }
   /* Wat er bij de fabriek in productie staat, per kleur.
      Chantal (video, 8 sep 2026): "en uiteraard, als ik hem openklap, dat je
      dus ziet staan wat er in productie is en dat hij dan rekening houdt ook
@@ -1936,7 +1984,7 @@ function tekortPerKleur(lines,variants,prodRegels){
      Bij een inkooporder is de kleur wél bekend, anders dan bij een schip: de
      artikelcode ís de kleur. Daarom kan dit hier wel per kleur en de lading
      van een schip niet. */
-  for(const x of (prodRegels||[])) zet(kleurNormaal(x.kleur),"productie",Number(x.qty)||0);
+  for(const x of (prodRegels||[])) zet(kleurSleutel(x.kleur,x.uitvoering),"productie",Number(x.qty)||0);
   return Object.values(per).map(function(x){
     x.tekort=Math.max(0,x.gevraagd-x.voorraad);
     return x;
@@ -1963,12 +2011,26 @@ function kleurNormaal(k){
    dekken is, wat er aan komt en wat er overblijft. Die drie regels tellen op
    tot het tekort in de modelregel. */
 function kleurTabel(r){
-  const rijen=(r.perKleur||[]).filter(x=>x.gevraagd>0||x.voorraad>0);
+  const rijen=(r.perKleur||[]).filter(x=>x.gevraagd>0||x.voorraad>0||x.productie>0);
   if(!rijen.length) return "<p class='lead' style='margin:0'>Geen kleurgegevens.</p>";
-  const teDekken=rijen.reduce(function(n,x){ return n+Math.max(0,x.gevraagd-x.voorraad); },0);
+  /* Wat in productie staat telt nu PER KLEUR mee, niet alleen onderaan.
+     ═══════════════════════════════════════════════════════════════════════
+     Chantal (video, 14 sep 2026): "Mystic Mountain met Grey: er worden er 11
+     gevraagd, ik heb er 27 in productie, dus waarom moet ik er dan nog 11
+     dekken? Dat hoort op nul te staan. Datzelfde geldt voor de Sterling White
+     met Dark Grey: 1 gevraagd, 10 in productie, en dan zegt hij alsnog nog te
+     dekken 1."
+
+     Ze heeft gelijk. De inkooporder bij de fabriek noemt de artikelcode en die
+     ís de kleur, dus per kleur is precies bekend wat er komt. De kolom liet
+     dat buiten beschouwing en trok de productie pas onderaan van het totaal
+     af; per kleur stond er dan een tekort dat er niet is. De reden daarvoor -
+     een container die al vaart terwijl de inkooporder nog openstaat - is
+     echt, maar die gaat over 'op zee', en dat staat nog steeds onderaan
+     omdat een schip zijn kleuren niet noemt. */
+  const teDekken=rijen.reduce(function(n,x){ return n+Math.max(0,x.gevraagd-x.voorraad-x.productie); },0);
   const zee=Number(r.zee)||0;
-  const prod=Number(r.prodQty)||0;
-  const rest=Math.max(0,teDekken-prod-zee);
+  const rest=Math.max(0,teDekken-zee);
   const regel=function(tekst,waarde,kleur,dik){
     return "<tr><td colspan='4' style='text-align:right;color:"+(kleur||"var(--muted)")+
       (dik?";font-weight:700":"")+"'>"+tekst+"</td><td style='color:"+(kleur||"var(--muted)")+
@@ -1977,20 +2039,13 @@ function kleurTabel(r){
   return "<div class='tablewrap'><table class='grid' style='margin:0'><thead><tr>"+
     "<th>Kleur</th><th>Gevraagd</th><th>Op voorraad NL</th><th>In productie</th><th>Nog te dekken</th></tr></thead><tbody>"+
     rijen.map(function(x){
-      const open=Math.max(0,x.gevraagd-x.voorraad);
+      const open=Math.max(0,x.gevraagd-x.voorraad-x.productie);
       return "<tr><td>"+esc(x.kleur)+"</td><td>"+(x.gevraagd||"-")+"</td>"+
         "<td style='color:#2563eb'>"+(x.voorraad||"-")+"</td>"+
         "<td style='color:"+(x.productie?"#7c3aed":"var(--muted)")+"'>"+(x.productie||"-")+"</td>"+
-        "<td>"+(open||"-")+"</td></tr>";
+        "<td style='color:"+(open?"#b91c1c;font-weight:700":"#15803d")+"'>"+(open||"0")+"</td></tr>";
     }).join("")+
-    regel("samen nog te dekken",teDekken,null,true)+
-    /* In productie wordt hier van het totaal afgetrokken en niet per kleur.
-       Dat is met opzet: bij een deel van de inkooporders vaart de container al
-       terwijl de order in Logic4 nog openstaat, en welke kleuren dat zijn is
-       niet te zeggen. Per kleur aftrekken zou dat bedrag twee keer weghalen -
-       een keer hier en een keer bij 'op zee' - en dan zakt het tekort te ver.
-       Zo sluit deze tabel wél aan op de regel erboven. */
-    (prod?regel("af: in productie bij de fabriek","-"+prod,"#7c3aed"):"")+
+    regel("samen nog te dekken (na voorraad en productie)",teDekken,null,true)+
     (zee?regel("af: op zee, kleur nog niet bekend","-"+zee,"#2563eb"):"")+
     regel("blijft over - dit is het tekort",rest,rest>0?"#b91c1c":"#15803d",true)+
     "</tbody></table></div>"+
@@ -2047,7 +2102,13 @@ function productieBlok(r){
 function renderBacklog(){
   const body=document.getElementById("ovBacklog");
   if(!ovBacklogRows.length){ body.innerHTML="<tr><td colspan='7' style='color:var(--muted)'>Geen data. Draait de uur-sync al?</td></tr>"; return; }
-  body.innerHTML=ovBacklogRows.map(r=>{
+  const zoekEl=document.getElementById("ovBestelZoek");
+  const q=((zoekEl&&zoekEl.value)||"").trim().toLowerCase();
+  const rijen=q?ovBacklogRows.filter(r=>String(r.m||"").toLowerCase().includes(q)):ovBacklogRows;
+  const telEl=document.getElementById("ovBestelTel");
+  if(telEl) telEl.textContent=q?(rijen.length+" van "+ovBacklogRows.length+" modellen"):(ovBacklogRows.length+" modellen");
+  if(!rijen.length){ body.innerHTML="<tr><td colspan='7' style='color:var(--muted)'>Geen model gevonden voor '"+esc(q)+"'.</td></tr>"; return; }
+  body.innerHTML=rijen.map(r=>{
     const open=!!ovBacklogOpen[r.m];
     let h="<tr class='ovBackRow' data-m='"+esc(r.m)+"' style='cursor:pointer'><td>"+(open?"▾ ":"▸ ")+"<b>"+esc(r.m)+"</b></td>"+
       // Chantal vroeg wat die "+29 cont." betekent. Dat is nu uit te lezen
@@ -2158,6 +2219,7 @@ function ovSpecialsHtml(specials){
     "</tbody></table></div>";
 }
 document.getElementById("ovShipSearch")&&document.getElementById("ovShipSearch").addEventListener("input",renderOvShips);
+document.getElementById("ovBestelZoek")&&document.getElementById("ovBestelZoek").addEventListener("input",renderBacklog);
 function kpi(n,l,color,small){ return "<div class='kpi' style='border-top-color:"+color+"'><div class='n"+(small?" sm":"")+"' style='color:"+color+"'>"+n+"</div><div class='l'>"+l+"</div></div>"; }
 
 // ===================== Reserveringen (live ledger) =====================
@@ -2217,7 +2279,17 @@ function kleurCel(k,r){
     ? " <span title='"+esc(r.omschrijving||r.extra)+"' style='display:inline-block;font-size:10.5px;font-weight:700;"+
       "padding:1px 7px;border-radius:999px;background:#fef3c7;color:#92400e;white-space:nowrap'>"+esc(r.extra)+"</span>"
     : "";
-  return kleur+extra;
+  /* In Logic4 veranderd sinds de vorige sync. Chantal (14 sep 2026): "soms
+     verandert de kleur, soms verandert de complete spa". De worker zet erbij
+     wat het wás; hier staat het veertien dagen in het rood naast de kleur,
+     zodat een notitie of gekozen zending van vóór die wijziging nagekeken
+     kan worden. */
+  const gew = r && r.gewijzigd && r.gewijzigd.was
+    ? " <span title='in Logic4 gewijzigd op "+esc(datumNL(String(r.gewijzigd.op||"").slice(0,10)))+" - was: "+esc(r.gewijzigd.was)+"' "+
+      "style='display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;"+
+      "background:#fee2e2;color:#b91c1c;white-space:nowrap'>gewijzigd · was "+esc(r.gewijzigd.was)+"</span>"
+    : "";
+  return kleur+extra+gew;
 }
 function renderReserveringen(){
   document.getElementById("resvUpdated").textContent = resvData.updated ? ("Laatst ververst: "+new Date(resvData.updated).toLocaleString("nl-NL")) : "(nog niet geladen)";
@@ -2316,7 +2388,16 @@ function resvAlleRegels(){
   }
   return uit;
 }
-function isZakelijk(r){ return r.type==="partner"||r.type==="zakelijk"; }
+/* Partner of particulier? Eerst wat Chantal zelf heeft aangewezen, daarna
+   wat de worker ervan maakte. Zie klantType hierboven: die keuze wordt per
+   klant onthouden en de uur-sync neemt hem over, maar hier telt hij meteen -
+   anders staat een order na het omzetten nog een uur op de verkeerde plek. */
+function isZakelijk(r){
+  const t=klantType[String(r.debtorId)]||"";
+  if(t==="particulier") return false;
+  if(t==="dealer") return true;
+  return r.type==="partner"||r.type==="zakelijk";
+}
 
 // ===== Aantekeningen per reserveringsregel (Chantal, 29 jul) ===============
 // Opmerkingen en de vinkjes afroep/inplannen/gepland horen bij de regel, niet
@@ -2874,9 +2955,21 @@ function kopSorteer(soort,kolom,tekst){
    bewaard, net als de vinkjes en de opmerking, en gaat vóór de berekening.
    Kiest ze niets, dan blijft het gewoon de automatische ETA. */
 function schepenOnderweg(){
-  var vandaag = new Date().toISOString().slice(0,10);
+  /* Niet op de datum, maar op het vinkje.
+     ═══════════════════════════════════════════════════════════════════════
+     Hier viel een zending uit de keuzelijst zodra zijn ETA voorbij was.
+     Chantal (video, 14 sep 2026): "Gisteren is er een container binnengekomen
+     met ETA 13.9, maar goed, dat is op zondag. Ik ga vandaag die containers
+     toekennen (…) maar dat kan dus niet, want ik zie deze helemaal niet in de
+     lijst staan. Container staat namelijk ook nog niet als binnen gemeld."
+
+     Een boot met een ETA van gisteren is niet binnen; hij is hooguit een dag
+     te laat, of de ETA klopte niet. Binnen is hij pas als iemand dat bij
+     Schepen en ontvangst heeft aangevinkt. Dat vinkje is dus wat hier telt.
+     Containers waarvan alleen de papieren bewaard worden (tuinmeubelen,
+     sauna's) horen er sowieso niet in: daar zit geen spa in om toe te wijzen. */
   return (shipsData.ships||[])
-    .filter(function(s){ return !s.eta || s.eta >= vandaag; })   // aangekomen schepen niet meer aanbieden
+    .filter(function(s){ return !s.binnenGemeld && !s.alleenDocumenten; })
     /* Chantal (video, 19 aug 2026): "ik zie daar nu de namen staan van de
        schepen met de eta daarachter. Ik wil hier het referentienummer
        zichtbaar hebben en de eta, dus niet de naam van het schip." Zij zoekt
@@ -3112,6 +3205,14 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
             vink("inplannen","inplannen",n.inplannen)+
             vink("gepland","gepland",n.gepland)+
             (particulier?"":"<button type='button' class='notAgenda' data-id='"+id+"' title='er tóch een afspraak in Planning bij zetten'"+uit+">agenda</button>")+
+            /* Naar de andere kant. Chantal (14 sep 2026): "Ik moet deze
+               mogelijkheid zelf ook hebben in het systeem om een reservering
+               die verkeerd staat over te zetten naar de juiste plek,
+               particulieren of partner." Geldt voor de klant, niet alleen
+               deze regel: al zijn orders verhuizen mee, ook de volgende. */
+            (MAG_WIJZIGEN?"<button type='button' class='notOmzet' data-id='"+id+"' title='"+
+              (particulier?"deze klant is een partner: alle orders naar het tabblad Partner":"deze klant is een particulier: alle orders naar het tabblad Particulier")+
+              "'>&#8644; "+(particulier?"naar partner":"naar particulier")+"</button>":"")+
           "</div>"+
         "</td></tr>";
     }).join("")+
@@ -3148,6 +3249,21 @@ function koppelNotitieVelden(box,rijen){
     });
     inp.addEventListener("keydown",function(e){
       if(e.key==="Enter"||e.key===" "){ e.preventDefault(); const r=perId[inp.dataset.id]; if(r) openNotitieEditor(r); }
+    });
+  });
+  box.querySelectorAll(".notOmzet").forEach(function(b){
+    b.addEventListener("click",async function(){
+      const r=perId[b.dataset.id]; if(!r) return;
+      const naarPartner=!isZakelijk(r);
+      const naar=naarPartner?"dealer":"particulier";
+      if(!confirm(esc(r.naam)+" ("+r.ordernr+", "+r.model+") "+(naarPartner?"als partner":"als particulier")+" aanmerken?\n\n"+
+                  "Dat geldt voor deze klant, dus voor al zijn orders - ook de volgende. In Logic4 verandert er niets.\n"+
+                  "Terugdraaien kan met dezelfde knop op de andere kant.")) return;
+      b.disabled=true;
+      await setKlantType(r.debtorId, naar);
+      try{ if(window.fpLog) window.fpLog("klant-omgezet",r.naam+" ("+r.debtorId+") -> "+(naarPartner?"partner":"particulier")+" via order "+r.ordernr); }catch(e){}
+      setStatus("ok",r.naam+" staat nu bij "+(naarPartner?"Partner":"Particulier")+". De uur-sync neemt het over.");
+      renderSoortTabs();
     });
   });
   box.querySelectorAll(".notWeg").forEach(function(b){
@@ -3380,25 +3496,31 @@ function renderAdviseurTabs(){
       (actief?(ptnAdvSort.op>0?" ▲":" ▼"):"<span style='color:#d1d5db'> ⇅</span>")+"</th>";
   };
   const uit=!MAG_WIJZIGEN?" disabled":"";
-  lijst.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
-    kop("naam","Dealer")+kop("adviseur","Adviseur")+"<th>Order</th>"+kop("model","Spa")+
-    kop("kleur","Kleur")+"<th>Aantal</th>"+kop("datum","Datum")+
+  /* Tien kolommen in plaats van elf, en geen vaste breedte meer op het
+     notitieveld. Chantal (video, 14 sep 2026): "ik zie hierover nog steeds
+     een balk dat ik van links naar rechts moet schuiven" en "kun je hier ook
+     laten zien hoe ver de betaling is gedaan van zo'n spa (…) want hij gaat in
+     principe vanuit zijn eigen tablet werken." Adviseur staat nu klein onder
+     de dealer en de datum onder het ordernummer: zelfde gegevens, twee
+     kolommen minder, en daar past de betaling in. */
+  lijst.innerHTML="<div class='tablewrap'><table class='grid advtab'><thead><tr>"+
+    kop("naam","Dealer")+kop("datum","Order")+kop("model","Spa")+
+    kop("kleur","Kleur")+"<th>Aantal</th><th>Betaling</th>"+
     "<th>Verwachte levering</th><th>Opmerkingen</th><th>Inplannen</th><th>Ingepland</th></tr></thead><tbody>"+
     rijen.map(function(r){
       const n=notitie(r), id=esc(r.regelId||"");
       return "<tr style='background:#fef9c3'>"+
-        "<td><b>"+esc(r.naam)+"</b></td>"+
-        "<td>"+adviseurCel(r)+"</td>"+
-        "<td>"+esc(r.ordernr)+"</td>"+
+        "<td><b>"+esc(r.naam)+"</b><div class='onder'>"+adviseurCel(r)+"</div></td>"+
+        "<td>"+esc(r.ordernr)+"<div class='onder'>"+esc(datumNL(r.datum))+"</div></td>"+
         "<td>"+esc(r.model)+"</td>"+
         "<td>"+kleurCel(r.kleur,r)+"</td>"+
         "<td>"+r.qty+"</td>"+
-        "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
+        "<td>"+betaalBadge(r)+"</td>"+
         "<td style='font-size:12px'>"+leveringCel(r,n,id,uit)+"</td>"+
         // Bewerkbaar veld, geen platte tekst meer: de adviseur moet hier zijn
         // aantekening kwijt kunnen zonder terug te gaan naar de bovenste lijst,
         // waar de regel inmiddels niet meer staat.
-        "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' style='width:180px;font-size:12px;padding:4px 7px'"+uit+"></td>"+
+        "<td><input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' style='width:100%;min-width:90px;font-size:12px;padding:4px 7px;box-sizing:border-box'"+uit+"></td>"+
         // Inplannen blijft zichtbaar zodat een per ongeluk aangevinkte regel
         // hiervandaan terug kan; Ingepland haalt hem uit beide lijsten.
         "<td style='text-align:center'><input type='checkbox' class='notVink' data-veld='inplannen' data-id='"+id+"'"+(n.inplannen?" checked":"")+uit+"></td>"+
