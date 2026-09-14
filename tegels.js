@@ -86,6 +86,8 @@
       uit:"De financiële keten van inkoop tot omzet",              mobiel:"pc", tile:"tileGeldGoederen" },
     { bestand:"bol.html",            groep:"bol",              ic:"🛒",  naam:"Bol.com koppeling",
       uit:"Bol-orders en boekingen",                               mobiel:"pc", tile:"tileBol" },
+    { bestand:"amerika-partners.html", groep:"partners-amerika",  ic:"🇺🇸", naam:"Passion Partners Amerika",
+      uit:"In voorbereiding: het portaal voor de VS",                mobiel:"goed", tile:"tilePartnersAmerika" },
     { telefoon:true, bestand:"dealerportaal.html",  groep:"dealerportaal",    ic:"🤝",  naam:"Passion Partners Beheer",
       uit:"Dealers, documenten en aanvragen",                      mobiel:"pc", tile:"tileDealerportaal" },
     { bestand:"amerika.html",        groep:"amerika",          ic:"🇺🇸",  naam:"Amerika",

@@ -52,6 +52,24 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-14", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Partnerportaal: echt totaal, postcode moet bij het land passen, 50 euro op elk transport",
+      wat: "In de winkelwagen staat nu een totaal onderaan: goederen plus bezorging, excl. btw. Bij een hele container staat erbij dat de zeevracht apart wordt opgegeven. Een postcode die niet bij het gekozen land past (3824VM in Duitsland) geeft nu een foutmelding in plaats van een prijs. Op elk transport zit 50 euro marge, in de transportregel. 'Arriving now' heet nu 'arriving in Uddel any day'. En bij het aanmaken of bewaren van een dealer zijn de verplichte velden nu echt verplicht, met een controle van de postcode.",
+    },
+
+    {
+      datum: "2026-09-14", bestand: "voorraad.html", soort: "beter",
+      titel: "Stock: zie welke orders er achter 'verkocht' zitten",
+      wat: "Ga met de muis over het aantal bij 'Al verkocht' of over '(5 verkocht)' bij een kleur, en je ziet de orders die eraan hangen: ordernummer, klant, aantal en een stip voor de betaling (groen volledig betaald, oranje aanbetaald, rood niets betaald).",
+    },
+
+    {
+      datum: "2026-09-14", bestand: "amerika-partners.html", soort: "nieuw",
+      titel: "Passion Partners Amerika",
+      wat: "Een lege tegel, alvast, voor het aparte portaal voor de Verenigde Staten. Er staat in wat er straks in komt. Alleen voor Chantal en Arno.",
+    },
+
+    {
       datum: "2026-09-14", bestand: "mijnroute.html", soort: "nieuw",
       titel: "Mijn route",
       wat: "Voor de afdeling Spa planning, vooral op de telefoon: je ziet per dag de routes waar jouw naam op staat, met de stops op volgorde. Bij een levering staat de paklijst met alle regels van de order; vink af wat je hebt gepakt, en je ziet meteen of alles erin zit. Bij een servicemelding staat de melding zelf met Garantie erbij. Adres en telefoon zijn aanklikbaar.",

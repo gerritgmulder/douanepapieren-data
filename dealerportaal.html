@@ -960,7 +960,26 @@ function relatieKaart(index){
     if (leeg(d.facturatie.land)) uit.push("Land");
     if (EU_LANDEN.includes(String(d.facturatie.land || "").toUpperCase()) && leeg(d.facturatie.btw))
       uit.push("Btw-nummer (verplicht binnen de EU)");
+    /* De postcode moet bij het land passen. Gerrit (14 sep 2026): "3824VM in
+       Duitsland kan helemaal niet ... dan moet ik een foutmelding krijgen met
+       ongeldige postcode." */
+    const pcFout = postcodeFout(d.facturatie.land, d.facturatie.postcode);
+    if (pcFout) uit.push(pcFout);
+    if (d.verzending && !d.verzending.zelfde) {
+      const pcFout2 = postcodeFout(d.verzending.land, d.verzending.postcode);
+      if (pcFout2) uit.push("Verzending: " + pcFout2);
+    }
     return uit;
+  }
+  const POSTCODE_VORM = {
+    NL:/^\d{4}[A-Z]{2}$/, BE:/^\d{4}$/, LU:/^\d{4}$/, DE:/^\d{5}$/, FR:/^\d{5}$/, AT:/^\d{4}$/, CH:/^\d{4}$/,
+    IT:/^\d{5}$/, ES:/^\d{5}$/, PT:/^\d{4}(\d{3})?$/, DK:/^\d{4}$/, SE:/^\d{5}$/, FI:/^\d{5}$/, NO:/^\d{4}$/,
+    PL:/^\d{5}$/, CZ:/^\d{5}$/, SK:/^\d{5}$/, HU:/^\d{4}$/, RO:/^\d{6}$/, GB:/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/, UK:/^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/,
+    US:/^\d{5}(\d{4})?$/, IE:/^[A-Z]\d{2}[A-Z0-9]{4}$/ };
+  function postcodeFout(land, pc){
+    const L = String(land||"").toUpperCase(), kaal = String(pc||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+    if (!kaal || !POSTCODE_VORM[L]) return "";
+    return POSTCODE_VORM[L].test(kaal) ? "" : "Postcode '" + String(pc).trim() + "' is geen geldige postcode voor " + L;
   }
   /* Het veld dat ontbreekt ook aanwijzen: een lijstje met namen is niet genoeg
      als het formulier vijf blokken lang is. */
@@ -1092,6 +1111,11 @@ function relatieKaart(index){
   laag.addEventListener("click", e => { if (e.target === laag && startNaast) sluiten(); });
   $$("rkBewaar").addEventListener("click", async () => {
     lees();
+    /* Verplicht is verplicht, ook bij Bewaren. Gerrit (14 sep 2026): "Ik kan
+       nu van alles wat verplicht lijkt niet invullen en dan kan ik gewoon
+       verder." De controle stond alleen op het aanmaken in Logic4. */
+    const mist = ontbrekendeVelden();
+    if (mist.length) { zeg("Nog niet compleet - vul eerst in: " + mist.join(", ") + ".", true); wijsLeegAan(); return; }
     if (!d.email.trim()) { zeg("Een e-mailadres is nodig, daarmee logt de relatie in op het portaal.", true); return; }
     if (!d.soort) { zeg("Kies eerst partner of dealer.", true); return; }
     /* Gerrit (26 aug 2026): een relatie zonder debiteurnummer mag niet meer

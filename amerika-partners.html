@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("partners-amerika", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#c8102e;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is voor Chantal en Arno.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Passion Partners Amerika - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     PASSION PARTNERS AMERIKA - nog leeg, met opzet
+
+     Gerrit (14 sep 2026): "Passion Partners werkt niet als we straks naar de
+     beurs in Amerika gaan. De voorraad van Amerika staat totaal los van het
+     bedrijf in Nederland. Dat is echt een compleet ander bedrijf. Dus als we
+     naar de beurs in Amerika gaan zullen we een aparte Passion Partners
+     moeten maken (dat doen we niet nu maar wel later). Je mag vast een tegel
+     maken die nog niets doet - alleen zichtbaar voor Chantal en Arno."
+
+     Wat er straks in moet, zodat het niet vergeten wordt:
+       - eigen voorraad: de hal in Houston (de Amerika-tegel kent die al) in
+         plaats van Uddel en de schepen;
+       - eigen prijzen in dollars, zonder wisselkoers;
+       - eigen dealers, want een Amerikaanse dealer koopt nooit uit Uddel;
+       - eigen betaling (Mollie werkt daar niet zomaar) en eigen orders in
+         de Amerikaanse administratie van Logic4;
+       - eigen mailadres en eigen portaaladres.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --passion-red:#c8102e; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#f6f6f8; }
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--passion-red);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:760px;margin:40px auto;padding:0 20px}
+.kaart{background:#fff;border:1px solid var(--border);border-radius:14px;padding:28px 30px}
+h2{color:var(--passion-red);margin:0 0 8px;font-size:22px}
+p{line-height:1.6;color:var(--muted)}
+ul{color:var(--ink);line-height:1.7}
+.merk{display:inline-block;background:#fee2e2;color:var(--passion-red);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 9px;border-radius:999px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>Passion Partners Amerika</h1>
+</header>
+<main>
+  <div class="kaart">
+    <span class="merk">In voorbereiding</span>
+    <h2>Passion Partners voor de Verenigde Staten</h2>
+    <p>Deze tegel doet nog niets. Hij staat hier alvast omdat het Amerikaanse portaal los komt te staan van het Nederlandse: andere voorraad (Houston in plaats van Uddel), prijzen in dollars, eigen dealers en een eigen administratie in Logic4.</p>
+    <p>Wat er straks in komt:</p>
+    <ul>
+      <li>De voorraad in Houston, zoals de tegel Amerika die nu al laat zien</li>
+      <li>Prijzen in dollars, zonder wisselkoers</li>
+      <li>Eigen dealers en partners, los van de Europese lijst</li>
+      <li>Orders in de Amerikaanse administratie</li>
+      <li>Een eigen adres en een eigen mailadres voor het portaal</li>
+    </ul>
+    <p>Zodra we hiermee beginnen hoor je het via het nieuwsblok op het dashboard.</p>
+  </div>
+</main>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||"";
+  if(!email||!key) return;
+  var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/);
+  fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"amerika-partners",action:"open",detail:"",computer:localStorage.getItem("fp.apparaat")||"",platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"",versie:m?"app "+m[1]:"browser"})}).catch(function(){});
+})();
+</script>
+</body>
+</html>

@@ -1178,6 +1178,17 @@ function vrachtGebied(postcodes, postcode) {
 /* Hoe een postcode er in dat land uitziet: hoeveel tekens er minimaal in
    moeten en een voorbeeld. Alleen om vroeg te kunnen zeggen "dit is er nog
    geen", zodat er niet halverwege het typen een rode melding opspringt. */
+/* Hoe een postcode er per land uitziet. 'vorm' is het patroon na het weghalen
+   van spaties en streepjes. Gerrit (14 sep 2026): "als ik 3824VM in Duitsland
+   doe (kan helemaal niet) dan krijg ik een transportprijs berekend. Dat moet
+   niet kunnen." */
+const VRACHT_POSTCODE_VORM = {
+  NL: /^\d{4}[A-Z]{2}$/, BE: /^\d{4}$/, LU: /^\d{4}$/, DE: /^\d{5}$/, FR: /^\d{5}$/,
+  AT: /^\d{4}$/, CH: /^\d{4}$/, IT: /^\d{5}$/, ES: /^\d{5}$/, PT: /^\d{4}(\d{3})?$/,
+  DK: /^\d{4}$/, SE: /^\d{5}$/, FI: /^\d{5}$/, NO: /^\d{4}$/, PL: /^\d{5}$/,
+  CZ: /^\d{5}$/, SK: /^\d{5}$/, HU: /^\d{4}$/, RO: /^\d{6}$/,
+  UK: /^[A-Z]{1,2}\d[A-Z\d]?\d[A-Z]{2}$/,
+};
 const VRACHT_POSTCODE = {
   NL: { min: 4, voorbeeld: "3888 NK" }, BE: { min: 4, voorbeeld: "2000" },
   LU: { min: 4, voorbeeld: "1111" },    DE: { min: 5, voorbeeld: "40213" },
@@ -1303,6 +1314,12 @@ async function dpHandleVracht(request, env) {
       uitleg: kaal ? "That does not look like a complete postcode for this country."
                    : "Fill in the delivery postcode and we will show you the cost." });
   }
+  const patroon = VRACHT_POSTCODE_VORM[land];
+  if (patroon && !patroon.test(kaal)) {
+    return reply(200, { ok: false, error: "postcode-ongeldig", land, voorbeeld: vorm.voorbeeld,
+      uitleg: "\"" + postcode + "\" is not a valid postcode for " + land +
+              (vorm.voorbeeld ? " (for example " + vorm.voorbeeld + ")" : "") + ". Check the country and the postcode." });
+  }
 
   const tar = await env.FONTEYN_DATA.get("transport-tarieven", { type: "json" });
   if (!tar) return reply(200, { ok: false, error: "de tarieven staan nog niet klaar" });
@@ -1374,15 +1391,22 @@ async function dpHandleVracht(request, env) {
     vervoerder = "Van Doesburg";
   }
 
+  /* Vijftig euro marge op elke rit. Gerrit (14 sep 2026): "iedere transport
+     rit heeft 50 euro extra marge en die tellen we op bij de 'transport'
+     plek. Op die manier hebben we marge om fouten bij transport te maken.
+     Niet bij de brandstoftoeslag optellen." De toeslag en de laadklep rekenen
+     dus over het kale tarief; de vijftig zit alleen in de transportregel. */
+  const VRACHT_MARGE = 50;
   const dieselPct = Number((tar.diesel || {})[viaDoesburg ? "doesburg" : "heugten"]) || 0;
   const diesel = Math.round(basis * (dieselPct / 100) * 100) / 100;
   const klep = wilKlep ? vrachtKlep((tar.heugten.toeslagen || {})[land], basis, viaDoesburg)
                       : { bedrag: 0 };
-  const totaal = Math.round((basis + diesel + klep.bedrag) * 100) / 100;
+  const transport = Math.round((basis + VRACHT_MARGE) * 100) / 100;
+  const totaal = Math.round((transport + diesel + klep.bedrag) * 100) / 100;
 
   return reply(200, { ok: true, land, postcode, vervoerder, zone,
     stuks, ldm, kg: kg || null, gewichtOnbekend: !kg,
-    basis, dieselPct, diesel, klep: klep.bedrag, klepUitleg: klep.uitleg || null,
+    basis, transport, marge: VRACHT_MARGE, dieselPct, diesel, klep: klep.bedrag, klepUitleg: klep.uitleg || null,
     klepOnzeker: klep.onzeker || false,   // blijft staan voor een tarieflijst van later
     totaal,
     onbekend, dieselGezet: (tar.diesel || {}).gezet || null });

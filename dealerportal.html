@@ -891,7 +891,10 @@ function voorraadRegel(r){
   const st = r.soort === "op"   ? "available"
            : r.soort === "maak" ? "made to order"
            : r.eta              ? "ETA " + etaKort(r.eta)
-           : r.nu               ? "arriving now" : "on the water";
+           /* Gerrit (14 sep 2026): "arriving now, wat is dat?" Dit is een
+              zending waarvan de ETA vandaag of al voorbij is en die nog niet
+              als binnen is gemeld. Zeg dat dan ook. */
+           : r.nu               ? "arriving in Uddel any day" : "on the water";
   const onder = [k.trim, k.uitv].filter(Boolean).join(" · ");
   return `<li class="${r.soort}${r.verstopt ? " extra hidden" : ""}">
     <span class="dot" style="background:${esc(schaalHex(k.schaal))}"></span>
@@ -2118,7 +2121,7 @@ function tekenVracht(ov){
     else if (u && u.ok) {
       som =
         `<table class="prijs" style="margin-top:12px;"><tbody>
-           <tr><td>Transport (${u.ldm} loading metres)</td><td class="n">${geld2(u.basis)}</td></tr>
+           <tr><td>Transport (${u.ldm} loading metres)</td><td class="n">${geld2(u.transport != null ? u.transport : u.basis)}</td></tr>
            <tr><td>Fuel surcharge ${u.dieselPct}%</td><td class="n">${geld2(u.diesel)}</td></tr>
            ${u.klep ? `<tr><td>Tail lift</td><td class="n">${geld2(u.klep)}</td></tr>` : ""}
            <tr><td><b>Delivery</b></td><td class="n"><b>${geld2(u.totaal)}</b></td></tr>
@@ -2259,13 +2262,29 @@ function openCart(){
           <thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Total</th><th></th></tr></thead>
           <tbody>${rijen}</tbody>
         </table></div>
-        <p class="lead" style="margin:12px 0 0;text-align:right;">Order value: <b style="font-size:16px;color:var(--ink)">${geld(cartTotaal())}</b> <span style="font-size:12px">excl. VAT</span></p>
-        ${(levering !== "container" && vracht.wijze === "bezorgen" && vrachtUitkomst && vrachtUitkomst.ok)
-          ? `<p class="lead" style="margin:3px 0 0;text-align:right;font-size:12px;">
-               plus delivery <b>\u20ac ${Number(vrachtUitkomst.totaal).toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2})}</b></p>` : ""}
-        ${levering === "container" ? `<p class="lead" style="margin:4px 0 0;text-align:right;font-size:12px;">
-            Spa prices only. No warehouse freight surcharge and no packing fee, because the container
-            ships straight from the factory. Sea freight is quoted per container and destination.</p>` : ""}
+        ${(() => {
+          /* Eén totaal onderaan. Gerrit (14 sep 2026): "er komt nergens een
+             totaalbedrag zichtbaar ... geen totaal opgeteld. Maak dat." En bij
+             een container: zeggen dat de zeevracht er nog bij komt en apart
+             wordt opgegeven, want daar stond helemaal niets. */
+          const goederen = cartTotaal();
+          const bezorg = (levering !== "container" && vracht.wijze === "bezorgen" && vrachtUitkomst && vrachtUitkomst.ok) ? Number(vrachtUitkomst.totaal) : 0;
+          const e = (n) => "\u20ac " + Number(n).toLocaleString("de-DE", {minimumFractionDigits:2, maximumFractionDigits:2});
+          let h = `<table class="prijs" style="margin-top:10px;margin-left:auto;width:auto;min-width:260px;"><tbody>
+            <tr><td>Goods</td><td class="n">${e(goederen)}</td></tr>`;
+          if (levering === "container")
+            h += `<tr><td>Sea freight</td><td class="n" style="color:var(--muted);font-weight:400;">quoted separately</td></tr>`;
+          else if (vracht.wijze === "bezorgen")
+            h += `<tr><td>Delivery</td><td class="n">${bezorg ? e(bezorg) : '<span style="color:var(--muted);font-weight:400;">see below</span>'}</td></tr>`;
+          else
+            h += `<tr><td>Delivery</td><td class="n">collect, \u20ac 0,00</td></tr>`;
+          h += `<tr style="border-top:2px solid var(--ink);"><td><b>Total excl. VAT</b></td><td class="n"><b style="font-size:16px;">${e(goederen + bezorg)}${levering === "container" ? " + sea freight" : ""}</b></td></tr>
+            </tbody></table>`;
+          if (levering === "container")
+            h += `<p class="lead" style="margin:6px 0 0;text-align:right;font-size:12px;">Spa prices only, straight from the factory: no warehouse freight surcharge and no packing fee.
+                  The sea freight for a full container depends on the destination; we quote it before you pay anything beyond the deposit.</p>`;
+          return h;
+        })()}
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Delivery</label>
         <div id="cartLever" class="kies"></div>
         <div id="ctrPaneel"></div>

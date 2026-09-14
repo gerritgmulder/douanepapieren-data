@@ -119,6 +119,11 @@
     "dealerportaal": [
       "arno", "chantal", "don", "fonteynbot", "gerrit", "gretha",
     ],
+    /* Passion Partners Amerika: nog een lege tegel, alleen voor Chantal en
+       Arno (Gerrit, 14 sep 2026). */
+    "partners-amerika": [
+      "arno", "chantal", "dolf", "fonteynbot", "gerrit",
+    ],
     // Eikensingel
     "eikensingel": [
       "danique", "evelinde", "fabiola", "fonteynbot", "fransje", "gerrit",
