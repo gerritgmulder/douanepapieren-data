@@ -52,6 +52,18 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-14", bestand: "container-laden.html", soort: "beter",
+      titel: "Container laden: pallets, tussenplaten, recht stapelen, en zelf schuiven",
+      wat: "Elke spa staat nu op een pallet van 14 cm en tussen twee spa's op elkaar zit een plaat van 6 cm; dat telt mee in de hoogte. Stapelen kan alleen nog recht op één spa eronder, nooit half over twee. Alle spa's van hetzelfde model staan in dezelfde stand. Zit er een zwemspa bij, dan gaan alle covers daarin en tellen ze niet mee. En onder de tekening staat een bovenaanzicht waarin je zelf kunt schuiven: klik op een spa om hem een kwartslag te draaien, sleep hem naar een lege plek of bovenop een andere spa. Past het niet, dan springt hij terug en staat erbij waarom.",
+    },
+
+    {
+      datum: "2026-09-14", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Partnerportaal: dezelfde containerregels, en gestapelde spa's zichtbaar",
+      wat: "De containerpassing in het portaal rekent nu ook met pallets, tussenplaten en recht stapelen, laat covers weg als er een zwemspa in de wagen zit, en toont in het bovenaanzicht met een nummer welke spa op een andere staat.",
+    },
+
+    {
       datum: "2026-09-14", bestand: "dealerportaal.html", soort: "beter",
       titel: "Partnerportaal: echt totaal, postcode moet bij het land passen, 50 euro op elk transport",
       wat: "In de winkelwagen staat nu een totaal onderaan: goederen plus bezorging, excl. btw. Bij een hele container staat erbij dat de zeevracht apart wordt opgegeven. Een postcode die niet bij het gekozen land past (3824VM in Duitsland) geeft nu een foutmelding in plaats van een prijs. Op elk transport zit 50 euro marge, in de transportregel. 'Arriving now' heet nu 'arriving in Uddel any day'. En bij het aanmaken of bewaren van een dealer zijn de verplichte velden nu echt verplicht, met een controle van de postcode.",

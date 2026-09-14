@@ -436,14 +436,16 @@ function standen(d,kantelen,ctr){
      Een spa gaat er in de lengterichting in, dus wat door de deur moet is zijn
      breedte en zijn hoogte - de lengte niet. */
   const deurB=K.deur?K.deur.b/10:9999, deurH=K.deur?K.deur.h/10:9999;
-  const zet=(a,b,hoog)=>{
-    if(b>deurB+0.001||hoog>deurH+0.001) return;   // komt de deur niet door
-    rij.push([a+s,b+s,hoog]);
+  // Een spa staat op een pallet; die telt bij de hoogte, in elke stand.
+  const pallet=d.soort==="cover"?0:PALLET;
+  const zet=(a,b,hoog,plat)=>{
+    if(b>deurB+0.001||hoog+pallet>deurH+0.001) return;   // komt de deur niet door
+    const st=[a+s,b+s,hoog+pallet]; st.plat=!!plat; rij.push(st);
   };
-  zet(d.l,d.b,d.h); zet(d.b,d.l,d.h);
+  zet(d.l,d.b,d.h,true); zet(d.b,d.l,d.h,true);
   if(kantelen){
-    zet(d.l,d.h,d.b); zet(d.h,d.l,d.b);
-    zet(d.b,d.h,d.l); zet(d.h,d.b,d.l);
+    zet(d.l,d.h,d.b,false); zet(d.h,d.l,d.b,false);
+    zet(d.b,d.h,d.l,false); zet(d.h,d.b,d.l,false);
   }
   // Dubbele standen eruit (een kubus levert zes keer hetzelfde op).
   const gezien={}, uit=[];
@@ -451,10 +453,33 @@ function standen(d,kantelen,ctr){
   d._st=uit; d._stSleutel=sleutel;
   return uit;
 }
+/* Past deze doos in deze stand op dit punt. Geeft de hoogte terug die hij
+   dan inneemt (met plaat), of 0 als het niet past.
+
+   Stapelen kan alleen recht op elkaar. Gerrit (14 sep 2026): "jij hebt nu dat
+   je een spa half op de ene spa en half op een andere kan stapelen, maar dat
+   gebeurt in de praktijk niet (anders krijg je die spa nooit meer uit de
+   container met een heftruck). Dus: alleen recht op elkaar stapelen." Een doos
+   boven de vloer moet dus helemaal op één doos eronder staan, en die doos moet
+   plat liggen (op een spa op zijn kant stapel je niets). Een spa plat op een
+   spa krijgt de plaat van 6 cm ertussen. */
 function past(C,doos,st,p,geplaatst){
-  if(p.x+st[0]>C.l+0.001) return false;
-  if(p.y+st[1]>C.b+0.001) return false;
-  if(p.z+st[2]>C.h+0.001) return false;
+  if(p.x+st[0]>C.l+0.001) return 0;
+  if(p.y+st[1]>C.b+0.001) return 0;
+  let hoog=st[2];
+  if(p.z>0.001){
+    let drager=null;
+    for(let i=geplaatst.length-1;i>=0;i--){
+      const q=geplaatst[i];
+      if(Math.abs(q.z+q.dh-p.z)<0.001 && p.x>=q.x-0.001 && p.x+st[0]<=q.x+q.dl+0.001 &&
+         p.y>=q.y-0.001 && p.y+st[1]<=q.y+q.db+0.001){ drager=q; break; }
+    }
+    if(!drager) return 0;                       // hangt half in de lucht
+    if(drager.plat===false) return 0;           // op een gekantelde spa stapel je niets
+    if(st.plat===false && doos.soort!=="cover") return 0;   // een spa op zijn kant hoort op de vloer
+    if(doos.soort!=="cover" && drager.soort!=="cover") hoog+=PLAAT;   // spa op spa: de plaat
+  }
+  if(p.z+hoog>C.h+0.001) return 0;
   // Van achter naar voren: de laatst geplaatste dozen liggen het dichtst bij
   // de plek die we nu proberen, dus daar botst hij het snelst op. Dat scheelt
   // bij een volle container een veelvoud aan vergelijkingen.
@@ -462,9 +487,9 @@ function past(C,doos,st,p,geplaatst){
     const q=geplaatst[i];
     if(p.x<q.x+q.dl-0.001 && p.x+st[0]>q.x+0.001 &&
        p.y<q.y+q.db-0.001 && p.y+st[1]>q.y+0.001 &&
-       p.z<q.z+q.dh-0.001 && p.z+st[2]>q.z+0.001) return false;
+       p.z<q.z+q.dh-0.001 && p.z+hoog>q.z+0.001) return 0;
   }
-  return true;
+  return hoog;
 }
 /* De vrije hoekpunten waar een volgende doos kan beginnen.
 
@@ -505,21 +530,33 @@ function ordenStanden(st,voorkeur){
   for(let i=0;i<st.length;i++) if(i!==voorkeur) uit.push(st[i]);
   return uit;
 }
-function zoekPlek(C,doos,geplaatst,kantelen,voorkeur){
+/* Alle dozen van één model staan in dezelfde stand. Gerrit (14 sep 2026)
+   over veertien Relaxen plat en één rechtop: "Heel vaag dat je dat kiest."
+   De eerste doos van een model die geplaatst wordt, legt de stand vast voor
+   de rest van dat model in die container ('vast'). */
+function zoekPlek(C,doos,geplaatst,kantelen,voorkeur,vast){
   const punten=hoekpunten(geplaatst);
-  const st=ordenStanden(standen(doos,kantelen,C),voorkeur);
+  let st=ordenStanden(standen(doos,kantelen,C),voorkeur);
+  if(vast&&vast[doos.id+"|"+doos.soort]){
+    const v=vast[doos.id+"|"+doos.soort];
+    st=st.filter(s=>s[0]===v[0]&&s[1]===v[1]&&s[2]===v[2]);
+  }
   for(const p of punten){
     for(const s of st){
-      if(past(C,doos,s,p,geplaatst)) return {x:p.x,y:p.y,z:p.z,dl:s[0],db:s[1],dh:s[2]};
+      const hoog=past(C,doos,s,p,geplaatst);
+      if(hoog){
+        if(vast&&!vast[doos.id+"|"+doos.soort]) vast[doos.id+"|"+doos.soort]=[s[0],s[1],s[2]];
+        return {x:p.x,y:p.y,z:p.z,dl:s[0],db:s[1],dh:hoog,plat:s.plat!==false,plaat:hoog-s[2]};
+      }
     }
   }
   return null;
 }
 // Zoveel mogelijk dozen in één container, met een vaste voorkeursstand.
 function vulEen(C,dozen,kantelen,voorkeur){
-  const erin=[], rest=[];
+  const erin=[], rest=[], vast={};
   for(const d of dozen){
-    const p=zoekPlek(C,d,erin,kantelen,voorkeur);
+    const p=zoekPlek(C,d,erin,kantelen,voorkeur,vast);
     if(p) erin.push(Object.assign({},d,p)); else rest.push(d);
   }
   return {erin,rest};
@@ -538,11 +575,11 @@ function maxVanEenBeste(C,doos,kantelen){
   let beste=0, besteV=0;
   const standenAantal=standen(doos,kantelen,C).length;
   for(let v=0;v<standenAantal;v++){
-    const erin=[]; let n=0;
+    const erin=[], vast={}; let n=0;
     // 150 is ruim boven wat er ooit in past; een noodrem tegen een rekenfout
     // die de pagina laat vastlopen, geen echte grens.
     while(n<150){
-      const p=zoekPlek(C,doos,erin,kantelen,v);
+      const p=zoekPlek(C,doos,erin,kantelen,v,vast);
       if(!p) break;
       erin.push(Object.assign({},doos,p)); n++;
     }
@@ -565,7 +602,7 @@ function maxSets(C,spa,cover,kantelen,coverDelen){
   // Bovengrens ook op volume: meer sets dan er kubieke meters zijn kan niet,
   // en dat scheelt bij een klein model een paar dure pogingen.
   const inhoud=C.l*C.b*C.h;
-  const perSet=(spa.l+SPELING)*(spa.b+SPELING)*spa.h+delen*(cover.l+SPELING)*(cover.b+SPELING)*cover.h;
+  const perSet=(spa.l+SPELING)*(spa.b+SPELING)*(spa.h+PALLET)+delen*(cover.l+SPELING)*(cover.b+SPELING)*cover.h;
   let hoog=Math.min(alleen.n,Math.max(1,Math.floor(inhoud/perSet)));
   const past=n=>{
     const dozen=[];
@@ -622,12 +659,12 @@ function laadEen(C,gesorteerd,kantelen,voorkeur){
   for(const d of gesorteerd){
     let klaar=false;
     for(const c of containers){
-      const p=zoekPlek(C,d,c.dozen,kantelen,voorkeur);
+      const p=zoekPlek(C,d,c.dozen,kantelen,voorkeur,c.vast);
       if(p){ c.dozen.push(Object.assign({},d,p)); klaar=true; break; }
     }
     if(!klaar&&containers.length<MAX_CONTAINERS){
-      const c={dozen:[]};
-      const p=zoekPlek(C,d,c.dozen,kantelen,voorkeur);
+      const c={dozen:[],vast:{}};
+      const p=zoekPlek(C,d,c.dozen,kantelen,voorkeur,c.vast);
       if(p){ c.dozen.push(Object.assign({},d,p)); containers.push(c); klaar=true; }
     }
     if(!klaar) nietGeplaatst.push(d);
@@ -654,6 +691,19 @@ const C=CONTAINER;
 
    Bovenop komt er niets bij - spa's staan met hun rand op elkaar. */
 const SPELING=5;
+/* Pallet en tussenplaat. Gerrit (14 sep 2026): "iedere spa die in een
+   container gaat komt op een pallet van 14 cm hoog. Die pallet moet je wel
+   meenemen in de berekening. En er worden ook spa's op elkaar gestapeld, en
+   dat gebeurt dan met een houten plaat van 6 cm. Die gebruik je alleen bij
+   plat stapelen op elkaar." Dus: elke spa staat op zijn pallet (14 cm bij de
+   hoogte), en een spa die plat op een andere spa staat krijgt er nog de plaat
+   van 6 cm bij. Covers gaan zonder pallet mee. */
+const PALLET=14, PLAAT=6;
+/* Een zwemspa is een lege bak van vijf, zes meter: daar gaan alle covers van
+   de zending in. Gerrit (14 sep 2026): "koopt een dealer een swimspa? Dan
+   kunnen ALLE covers daarin. Dus selecteer je een swimspa? Mogen de covers
+   direct verdwijnen van het voorbeeld." Herkend aan de naam. */
+function isZwemspa(model){ return /swim|zwem|^activity|^aquatic|^dynamic|^fitness|^spirit|^hurricane|^turbine/i.test(String(model||"")); }
 let kantelen=true, coversMee=true;
 
 function bewaar(){
@@ -687,11 +737,16 @@ function coverDoosVan(m){
   return {id:m.id, model:m.model, code:m.code, soort:"cover",
     l:c.l, b:c.b, h:c.h, m3:(c.l/100)*(c.b/100)*(c.h/100)};
 }
+function metZwemspa(){
+  return MODELLEN.some(m=>Number(keuze[m.id]||0)>0&&isZwemspa(m.model));
+}
 function gekozenDozen(){
   const uit=[];
+  const zwem=metZwemspa();
   for(const m of MODELLEN){
     const n=Number(keuze[m.id]||0);
-    const cd=coversMee?coverDoosVan(m):null;
+    // Zit er een zwemspa bij, dan gaan alle covers daarin en tellen ze niet mee.
+    const cd=(coversMee&&!zwem)?coverDoosVan(m):null;
     // Een lange cover komt in delen mee (Chantal, 27 aug 2026), dus dan gaan
     // er meer, kleinere dozen in plaats van één lange.
     const delen=cd?(Number(m.cover&&m.cover.delen)||1):0;
@@ -993,7 +1048,9 @@ function tekenPlan(){
     "Binnenwerks "+nl(C.l)+" x "+nl(C.b)+" x "+nl(C.h)+" cm, dat is "+inhoud.toFixed(1).replace(".",",")+" m&sup3; ruimte. "+
     "De deur is "+nl2(C.deur.b/10)+" cm breed en "+nl2(C.deur.h/10)+" cm hoog, en daar moet elke spa doorheen. "+
     "Elke spa krijgt er "+SPELING+" cm ruimte naast en achter zich, om hem erin te kunnen schuiven; "+
-    "bovenop niet, want spa's staan gewoon op elkaar. "+
+    "bovenop niet, want spa's staan gewoon op elkaar. Elke spa staat op een pallet van "+PALLET+" cm, en tussen twee spa's op elkaar zit een plaat van "+PLAAT+" cm. "+
+    "Stapelen kan alleen recht op elkaar, nooit half over twee spa's. "+
+    (metZwemspa()?"<b>Er zit een zwemspa bij: alle covers gaan daarin en tellen niet mee.</b> ":"")+
     (kantelen?"Op de kant leggen mag.":"De spa's blijven rechtop staan.")+
     " Het vulpercentage telt die verpakkingsruimte mee."+
     "<details style='margin-top:6px'><summary style='cursor:pointer;color:var(--fonteyn-green);font-weight:600'>"+
@@ -1029,6 +1086,11 @@ function tekenPlan(){
       ? "<div class='status-msg warn'><b>"+nietGeplaatst.length+" stuk(s) passen er niet bij</b> - "+
         "meer dan "+MAX_CONTAINERS+" containers wordt hier niet doorgerekend. Haal er wat af of splits de zending.</div>"
       : "");
+
+  // Het 2D-plan waar je in kunt klikken en slepen. Zie tekenPlan2D.
+  planStand=containers.map(c=>c.dozen.map(d=>Object.assign({},d)));
+  planMeld={};
+  containers.forEach((c,i)=>tekenPlan2D(i));
 
   // De tekening pas ná het plaatsen van de kaarten, anders bestaan de
   // canvassen nog niet. Ontbreekt Three.js, dan blijft de rest gewoon staan.
@@ -1078,7 +1140,142 @@ function kaart(c,i,inhoud){
     "<div class='ctr-body'>"+
       "<canvas class='ctr-canvas' id='ctrCanvas"+i+"'></canvas>"+
       "<div class='ctr-lijst'><h5>Wat er in staat</h5>"+rijen+"</div>"+
-    "</div></div>";
+    "</div>"+
+    "<div class='plan2d' id='plan2d_"+i+"'></div>"+
+    "</div>";
+}
+
+/* ─── Zelf schuiven: klikken draait, slepen verplaatst of stapelt ─────────
+   Gerrit (14 sep 2026): "jij weet echt alle details niet (de ene spa gaat
+   recht overeind, de andere komt altijd liggend, etc.): ik wil dat je op het
+   voorbeeld kan klikken op een artikel en dat hij dan 90 graden draait, en
+   sleepbaar dat je een spa kunt slepen om hem ergens anders weer bovenop te
+   kunnen zetten."
+
+   Het bovenaanzicht hieronder is bewerkbaar. De regels blijven dezelfde als
+   bij het automatisch laden (past): binnen de container, niet door een ander
+   heen, en stapelen alleen recht op één doos eronder. Wat niet past springt
+   terug, met een korte uitleg. Het 3D-beeld erboven volgt mee. */
+let planStand=[];        // per container de dozen zoals ze nu staan
+let planMeld={};         // per container de laatste uitleg (blijft staan bij hertekenen)
+const SCHAAL2D=0.42;     // pixels per cm
+function tekenPlan2D(i){
+  const box=el("plan2d_"+i); if(!box) return;
+  const dozen=planStand[i]||[];
+  const W2=Math.round(C.l*SCHAAL2D), H2=Math.round(C.b*SCHAAL2D), Z2=Math.round(C.h*SCHAAL2D);
+  // Van laag naar hoog tekenen, zodat wat bovenop staat ook bovenop ligt.
+  const volg=dozen.map((d,k)=>({d,k})).sort((a,b)=>a.d.z-b.d.z);
+  const boven=volg.map(({d,k})=>{
+    const laag=Math.round(d.z)>0;
+    return "<g class='doos' data-k='"+k+"' style='cursor:grab'>"+
+      "<rect x='"+(d.x*SCHAAL2D)+"' y='"+(d.y*SCHAAL2D)+"' width='"+(d.dl*SCHAAL2D)+"' height='"+(d.db*SCHAAL2D)+"' rx='3' "+
+        "fill='"+kleurVan(d.id,d.soort==="cover")+"' stroke='"+(laag?"#111":"#fff")+"' stroke-width='"+(laag?2:1)+"' "+(laag?"stroke-dasharray='5 3'":"")+" opacity='"+(d.soort==="cover"?0.85:0.95)+"'/>"+
+      "<text x='"+((d.x+d.dl/2)*SCHAAL2D)+"' y='"+((d.y+d.db/2)*SCHAAL2D)+"' text-anchor='middle' dominant-baseline='middle' font-size='10' font-weight='700' fill='#fff' style='pointer-events:none;paint-order:stroke;stroke:rgba(0,0,0,.35);stroke-width:2px'>"+
+        esc(d.soort==="cover"?"cover":d.model)+(laag?" ↑"+Math.round(d.z):"")+(d.plat===false?" ↻":"")+"</text></g>";
+  }).join("");
+  const zij=volg.map(({d,k})=>"<rect x='"+(d.x*SCHAAL2D)+"' y='"+((C.h-d.z-d.dh)*SCHAAL2D)+"' width='"+(d.dl*SCHAAL2D)+"' height='"+(d.dh*SCHAAL2D)+"' rx='2' fill='"+kleurVan(d.id,d.soort==="cover")+"' stroke='#fff' stroke-width='1'/>").join("");
+  box.innerHTML=
+    "<div style='display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:10px 0 4px'>"+
+      "<b style='font-size:12px'>Zelf schuiven</b>"+
+      "<span style='font-size:11.5px;color:var(--muted)'>Klik op een spa om hem een kwartslag te draaien. Sleep hem naar een lege plek, of bovenop een andere spa om te stapelen. "+
+      "Een stippellijn met ↑ is een spa die bovenop staat; ↻ is een spa op zijn kant.</span>"+
+      "<button class='mini' type='button' id='plan2dReset_"+i+"' style='margin-left:auto'>Automatisch opnieuw</button></div>"+
+    "<div id='plan2dMeld_"+i+"' style='font-size:12px;color:var(--warn);min-height:16px;margin-bottom:4px'>"+esc(planMeld[i]||"")+"</div>"+
+    "<div style='font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em'>Bovenaanzicht (deur rechts)</div>"+
+    "<svg class='plan2dSvg' data-i='"+i+"' width='"+W2+"' height='"+H2+"' viewBox='0 0 "+W2+" "+H2+"' style='background:#f3f4f6;border:1px solid var(--border);border-radius:6px;display:block;max-width:100%;height:auto;touch-action:none'>"+boven+"</svg>"+
+    "<div style='font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:6px'>Zijaanzicht</div>"+
+    "<svg width='"+W2+"' height='"+Z2+"' viewBox='0 0 "+W2+" "+Z2+"' style='background:#f3f4f6;border:1px solid var(--border);border-radius:6px;display:block;max-width:100%;height:auto'>"+zij+"</svg>";
+  koppelPlan2D(i);
+}
+function plan2dMeld(i,t){ planMeld[i]=t||""; const m=el("plan2dMeld_"+i); if(m) m.textContent=t||""; }
+function plan2dHerteken(i){
+  tekenPlan2D(i);
+  const cv=el("ctrCanvas"+i);
+  if(cv&&window.fpContainer3D) window.fpContainer3D(cv,C,planStand[i],d=>kleurVan(d.id,d.soort==="cover"));
+}
+/* Een doos op een plek proberen te zetten, in zijn huidige stand. */
+function plan2dProbeer(i,k,x,y,z){
+  const dozen=planStand[i], d=dozen[k];
+  const andere=dozen.filter((_,j)=>j!==k);
+  const st=[d.dl,d.db,d.dh-(d.plaat||0)]; st.plat=d.plat!==false;
+  const hoog=past(C,d,st,{x,y,z},andere);
+  if(!hoog) return false;
+  d.x=x; d.y=y; d.z=z; d.dh=hoog; d.plaat=hoog-st[2];
+  return true;
+}
+function koppelPlan2D(i){
+  const svg=el("plan2d_"+i).querySelector(".plan2dSvg"); if(!svg) return;
+  el("plan2dReset_"+i).addEventListener("click",()=>tekenPlan());
+  const naCm=(ev)=>{
+    const r=svg.getBoundingClientRect(), sx=C.l/r.width, sy=C.b/r.height;
+    return { x:(ev.clientX-r.left)*sx, y:(ev.clientY-r.top)*sy };
+  };
+  svg.querySelectorAll("g.doos").forEach(g=>{
+    const k=Number(g.dataset.k);
+    let start=null, bewogen=false, offset=null;
+    g.addEventListener("pointerdown",ev=>{
+      ev.preventDefault(); try{ g.setPointerCapture(ev.pointerId); }catch(e){}
+      const p=naCm(ev), d=planStand[i][k];
+      start=p; bewogen=false; offset={x:p.x-d.x,y:p.y-d.y};
+      g.style.cursor="grabbing";
+    });
+    g.addEventListener("pointermove",ev=>{
+      if(!start) return;
+      const p=naCm(ev);
+      if(!bewogen&&Math.hypot(p.x-start.x,p.y-start.y)<4) return;
+      bewogen=true;
+      const rect=g.querySelector("rect"), tx=g.querySelector("text");
+      const d=planStand[i][k], nx=(p.x-offset.x)*SCHAAL2D, ny=(p.y-offset.y)*SCHAAL2D;
+      rect.setAttribute("x",nx); rect.setAttribute("y",ny);
+      tx.setAttribute("x",nx+d.dl*SCHAAL2D/2); tx.setAttribute("y",ny+d.db*SCHAAL2D/2);
+      g.parentNode.appendChild(g);
+    });
+    g.addEventListener("pointerup",ev=>{
+      if(!start) return;
+      const p=naCm(ev); const was=start; start=null; g.style.cursor="grab";
+      const dozen=planStand[i], d=dozen[k];
+      if(!bewogen){
+        /* Klik: een kwartslag draaien. */
+        const oud={dl:d.dl,db:d.db};
+        const st=[d.db,d.dl,d.dh-(d.plaat||0)]; st.plat=d.plat!==false;
+        const andere=dozen.filter((_,j)=>j!==k);
+        const hoog=past(C,d,st,{x:d.x,y:d.y,z:d.z},andere);
+        if(hoog){ d.dl=st[0]; d.db=st[1]; d.dh=hoog; d.plaat=hoog-st[2]; plan2dMeld(i,""); }
+        else plan2dMeld(i,"Gedraaid past hij hier niet (buiten de container, tegen een andere spa, of niet meer recht op de spa eronder).");
+        plan2dHerteken(i); return;
+      }
+      /* Loslaten: bovenop de doos onder het loslaatpunt, anders op de vloer. */
+      const rond=v=>Math.round(v/5)*5;
+      let x=rond(p.x-offset.x), y=rond(p.y-offset.y);
+      x=Math.max(0,Math.min(C.l-d.dl,x)); y=Math.max(0,Math.min(C.b-d.db,y));
+      const mx=x+d.dl/2, my=y+d.db/2;
+      /* Waar zet je hem op: de hoogste spa onder het loslaatpunt. Een cover
+         is geen drager voor een spa (die ligt zelf op een spa); voor een
+         cover mag alles als drager dienen. */
+      const onder=dozen.map((q,j)=>({q,j})).filter(({q,j})=>j!==k&&(d.soort==="cover"||q.soort!=="cover")&&mx>=q.x&&mx<=q.x+q.dl&&my>=q.y&&my<=q.y+q.db).sort((a,b)=>(b.q.z+b.q.dh)-(a.q.z+a.q.dh))[0];
+      const oud={x:d.x,y:d.y,z:d.z,dh:d.dh,plaat:d.plaat};
+      let gelukt=false, reden="";
+      if(onder){
+        const q=onder.q;
+        // Bovenop: uitlijnen op de hoek van de drager, binnen zijn vloerplan.
+        const bx=Math.max(q.x,Math.min(q.x+q.dl-d.dl,x)), by=Math.max(q.y,Math.min(q.y+q.db-d.db,y));
+        gelukt=plan2dProbeer(i,k,bx,by,q.z+q.dh);
+        if(!gelukt){
+          const coversErop=dozen.some((c,j)=>j!==k&&c.soort==="cover"&&Math.abs(c.z-(q.z+q.dh))<0.01&&c.x<q.x+q.dl&&c.x+c.dl>q.x&&c.y<q.y+q.db&&c.y+c.db>q.y);
+          reden=(d.dl>q.dl+0.01||d.db>q.db+0.01)?"Deze spa is groter dan de spa eronder; stapelen kan alleen recht op een grotere of even grote spa."
+          :(q.plat===false?"Op een spa die op zijn kant staat kun je niet stapelen."
+          :(d.plat===false?"Een spa op zijn kant hoort op de vloer, niet bovenop."
+          :(coversErop?"Er liggen covers op die spa. Sleep die eerst ergens anders heen."
+          :(q.z+q.dh+d.dh+PLAAT>C.h+0.01?"Te hoog: met pallet en plaat komt hij boven het dak van de container."
+          :"Zo past hij daar niet (tegen een andere spa aan)."))));
+        }
+      }
+      if(!gelukt&&!onder){ gelukt=plan2dProbeer(i,k,x,y,0); if(!gelukt) reden="Op die plek staat al iets, of hij steekt buiten de container."; }
+      if(!gelukt){ Object.assign(d,oud); plan2dMeld(i,reden); } else plan2dMeld(i,"");
+      plan2dHerteken(i);
+    });
+    g.addEventListener("pointercancel",()=>{ start=null; plan2dHerteken(i); });
+  });
 }
 
 /* ─── Ontbrekende maten opzoeken in Logic4 ────────────────────────────────

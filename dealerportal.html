@@ -1827,34 +1827,54 @@ $("partsSearch").addEventListener("input", renderParts);
 const CONTAINER = { id:"40hc", naam:"40 ft High Cube", l:1203, b:235, h:269, deur:{b:2340, h:2585} };
 const SPELING = 5;          // cm naast en achter, niet erboven
 const MAX_CONTAINERS = 6;   // meer dan dit rekenen we niet door in de browser
+/* Dezelfde regels als in de tegel Container laden (14 sep 2026): elke spa op
+   een pallet van 14 cm, een plaat van 6 cm tussen twee spa's op elkaar,
+   stapelen alleen recht op één spa eronder, en alle spa's van een model in
+   dezelfde stand. */
+const PALLET = 14, PLAAT = 6;
+const isZwemspa = (model) => /swim|zwem|^activity|^aquatic|^dynamic|^fitness|^spirit|^hurricane|^turbine/i.test(String(model||""));
 
 function pakStanden(d, C){
   const sleutel = C.id;
   if (d._st && d._stK === sleutel) return d._st;
   const rij = [], s = SPELING;
   const deurB = C.deur.b/10, deurH = C.deur.h/10;
+  const pallet = d.wat === "cover" ? 0 : PALLET;
   // De speling telt niet bij de deur: die ruimte heb je nodig om hem naar
   // binnen te schuiven, niet om hem door de opening te krijgen.
-  const zet = (a,b,hoog) => { if (b > deurB+0.001 || hoog > deurH+0.001) return; rij.push([a+s, b+s, hoog]); };
-  zet(d.l,d.b,d.h); zet(d.b,d.l,d.h);
-  zet(d.l,d.h,d.b); zet(d.h,d.l,d.b);
-  zet(d.b,d.h,d.l); zet(d.h,d.b,d.l);
+  const zet = (a,b,hoog,plat) => { if (b > deurB+0.001 || hoog+pallet > deurH+0.001) return; const st=[a+s, b+s, hoog+pallet]; st.plat=!!plat; rij.push(st); };
+  zet(d.l,d.b,d.h,true); zet(d.b,d.l,d.h,true);
+  zet(d.l,d.h,d.b,false); zet(d.h,d.l,d.b,false);
+  zet(d.b,d.h,d.l,false); zet(d.h,d.b,d.l,false);
   const gezien = {}, uit = [];
   for (const st of rij) { const k = st.join("|"); if (!gezien[k]) { gezien[k]=1; uit.push(st); } }
   d._st = uit; d._stK = sleutel;
   return uit;
 }
-function pakPast(C, st, p, erin){
-  if (p.x+st[0] > C.l+0.001) return false;
-  if (p.y+st[1] > C.b+0.001) return false;
-  if (p.z+st[2] > C.h+0.001) return false;
+/* Geeft de hoogte terug die de doos inneemt (met plaat), of 0 als het niet past. */
+function pakPast(C, doos, st, p, erin){
+  if (p.x+st[0] > C.l+0.001) return 0;
+  if (p.y+st[1] > C.b+0.001) return 0;
+  let hoog = st[2];
+  if (p.z > 0.001) {
+    let drager = null;
+    for (let i = erin.length-1; i >= 0; i--) {
+      const q = erin[i];
+      if (Math.abs(q.z+q.dh-p.z) < 0.001 && p.x >= q.x-0.001 && p.x+st[0] <= q.x+q.dl+0.001 &&
+          p.y >= q.y-0.001 && p.y+st[1] <= q.y+q.db+0.001) { drager = q; break; }
+    }
+    if (!drager || drager.plat === false) return 0;
+    if (st.plat === false && doos.wat !== "cover") return 0;
+    if (doos.wat !== "cover" && drager.wat !== "cover") hoog += PLAAT;
+  }
+  if (p.z+hoog > C.h+0.001) return 0;
   for (let i = erin.length-1; i >= 0; i--) {
     const q = erin[i];
     if (p.x < q.x+q.dl-0.001 && p.x+st[0] > q.x+0.001 &&
         p.y < q.y+q.db-0.001 && p.y+st[1] > q.y+0.001 &&
-        p.z < q.z+q.dh-0.001 && p.z+st[2] > q.z+0.001) return false;
+        p.z < q.z+q.dh-0.001 && p.z+hoog > q.z+0.001) return 0;
   }
-  return true;
+  return hoog;
 }
 function pakHoeken(erin){
   const punten = [{x:0,y:0,z:0}], gezien = new Set([0]);
@@ -1866,12 +1886,19 @@ function pakHoeken(erin){
   punten.sort((a,b)=>a.z-b.z||a.x-b.x||a.y-b.y);
   return punten;
 }
-function pakPlek(C, doos, erin, voorkeur){
+function pakPlek(C, doos, erin, voorkeur, vast){
   const punten = pakHoeken(erin);
   let st = pakStanden(doos, C);
   if (voorkeur > 0 && voorkeur < st.length) st = [st[voorkeur]].concat(st.filter((_,i)=>i!==voorkeur));
-  for (const p of punten) for (const s of st)
-    if (pakPast(C, s, p, erin)) return { x:p.x, y:p.y, z:p.z, dl:s[0], db:s[1], dh:s[2] };
+  const vk = doos.model + "|" + doos.wat;
+  if (vast && vast[vk]) { const v = vast[vk]; st = st.filter(x => x[0]===v[0] && x[1]===v[1] && x[2]===v[2]); }
+  for (const p of punten) for (const s of st) {
+    const hoog = pakPast(C, doos, s, p, erin);
+    if (hoog) {
+      if (vast && !vast[vk]) vast[vk] = [s[0], s[1], s[2]];
+      return { x:p.x, y:p.y, z:p.z, dl:s[0], db:s[1], dh:hoog, plat: s.plat !== false };
+    }
+  }
   return null;
 }
 /* De hele lijst over zo weinig mogelijk containers. Elke beginstand wordt
@@ -1887,12 +1914,12 @@ function pakLaad(C, dozen){
     for (const d of gesorteerd) {
       let klaar = false;
       for (const c of containers) {
-        const p = pakPlek(C, d, c.dozen, v);
+        const p = pakPlek(C, d, c.dozen, v, c.vast);
         if (p) { c.dozen.push(Object.assign({}, d, p)); klaar = true; break; }
       }
       if (!klaar && containers.length < MAX_CONTAINERS) {
-        const c = { dozen: [] };
-        const p = pakPlek(C, d, c.dozen, v);
+        const c = { dozen: [], vast: {} };
+        const p = pakPlek(C, d, c.dozen, v, c.vast);
         if (p) { c.dozen.push(Object.assign({}, d, p)); containers.push(c); klaar = true; }
       }
       if (!klaar) buiten.push(d);
@@ -1911,6 +1938,9 @@ function pakLaad(C, dozen){
    kon meerekenen in plaats van stilletjes een te mooi getal te laten zien. */
 function cartDozen(){
   const dozen = [], zonderMaat = [];
+  /* Zit er een zwemspa in de wagen, dan gaan alle covers daarin (Gerrit,
+     14 sep 2026) en nemen ze geen plek in. */
+  const zwem = cart.some(r => r.soort === "spa" && isZwemspa(r.model));
   for (const r of cart) {
     if (r.soort !== "spa") continue;
     const m = (stockModels || []).find(x => x.model === r.model);
@@ -1920,11 +1950,11 @@ function cartDozen(){
     for (let i = 0; i < n; i++) {
       dozen.push({ model: r.model, wat: "spa", l:d.l, b:d.b, h:d.h });
       const c = m.coverDoos;
-      if (c && c.l > 0) for (let k = 0; k < (Number(c.delen)||1); k++)
+      if (!zwem && c && c.l > 0) for (let k = 0; k < (Number(c.delen)||1); k++)
         dozen.push({ model: r.model, wat: "cover", l:c.l, b:c.b, h:c.h });
     }
   }
-  return { dozen, zonderMaat };
+  return { dozen, zonderMaat, zwem };
 }
 
 /* Vaste kleur per model, uit de naam gerekend en niet uit de plek in de lijst:
@@ -1962,22 +1992,39 @@ function ctrTekening(c, C){
     return `<svg viewBox="0 0 ${breed} ${hoog.toFixed(1)}" style="display:block;width:100%;height:auto;`
       + `border:1px solid var(--border);border-radius:5px;background:#fff;">${vakken}</svg>`;
   };
-  // Onderste laag voor het bovenaanzicht: alles wat op de vloer staat.
-  const vloer = c.dozen.filter(d => d.z < 0.5);
-  const boven = teken(vloer, C.b, d=>d.x, d=>d.y, d=>d.dl, d=>d.db, ()=>false);
+  /* Bovenaanzicht met alle lagen. Gerrit (14 sep 2026): "Als er spa's op
+     elkaar staan, zie je dat niet op het bovenaanzicht." Van laag naar hoog
+     getekend; wat bovenop staat krijgt een donkere stippelrand en een
+     laagnummer, en staat iets kleiner zodat de onderste nog zichtbaar is. */
+  const stapel = c.dozen.slice().sort((a,b)=>a.z-b.z).map(d => {
+    const laag = d.z > 0.5 ? 1 + c.dozen.filter(q => q.z < d.z-0.5 && q.x < d.x+d.dl && q.x+q.dl > d.x && q.y < d.y+d.db && q.y+q.db > d.y).length : 0;
+    return Object.assign({}, d, { laag });
+  });
+  const boven = (() => {
+    const hoog = Math.max(28, C.b * schaal);
+    const vakken = stapel.map(d => {
+      const krimp = d.laag ? 5 * d.laag : 0;
+      const x = d.x*schaal + krimp, y = d.y*schaal + krimp, w = d.dl*schaal - krimp*2, h = d.db*schaal - krimp*2;
+      const cover = d.wat === "cover";
+      return `<rect x="${(x+marge).toFixed(1)}" y="${(hoog-y-h+marge).toFixed(1)}" width="${Math.max(1,w-marge*2).toFixed(1)}" height="${Math.max(1,h-marge*2).toFixed(1)}" rx="1.5" `
+        + `fill="${ctrKleur(d.model, cover)}" fill-opacity="${cover?0.72:0.95}" stroke="${d.laag?'#111':'#fff'}" stroke-width="${d.laag?1.2:0.7}" ${d.laag?'stroke-dasharray="3 2"':''}></rect>`
+        + (d.laag && !cover ? `<text x="${(x+w/2).toFixed(1)}" y="${(hoog-y-h/2+3).toFixed(1)}" text-anchor="middle" font-size="9" font-weight="700" fill="#111">${d.laag+1}</text>` : "");
+    }).join("");
+    return `<svg viewBox="0 0 ${breed} ${hoog.toFixed(1)}" style="display:block;width:100%;height:auto;border:1px solid var(--border);border-radius:5px;background:#fff;">${vakken}</svg>`;
+  })();
   const zij   = teken(c.dozen.slice().sort((a,b)=>b.y-a.y), C.h, d=>d.x, d=>d.z, d=>d.dl, d=>d.dh,
                       d=>d.y > C.b/2);
   return `<div style="margin-top:9px;">
-      <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 3px;">Top view - bottom layer</div>${boven}
+      <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 3px;">Top view - a number marks a spa stacked on top (layer 2, 3)</div>${boven}
       <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:8px 0 3px;">Side view</div>${zij}
     </div>`;
 }
 
 let ctrCache = {};      // sleutel -> uitkomst, want stapelen kost rekentijd
 function ctrUitkomst(){
-  const { dozen, zonderMaat } = cartDozen();
+  const { dozen, zonderMaat, zwem } = cartDozen();
   const C = CONTAINER;
-  if (!dozen.length) return { C, leeg: true, zonderMaat };
+  if (!dozen.length) return { C, leeg: true, zonderMaat, zwem };
   const sleutel = C.id + "|" + dozen.map(d => d.model + d.wat).sort().join(",");
   if (ctrCache[sleutel]) return Object.assign({ C, zonderMaat }, ctrCache[sleutel]);
   const r = pakLaad(C, dozen);
@@ -1988,7 +2035,7 @@ function ctrUitkomst(){
     // van, want "78% vol" laat je niet zien hóe je lading erin ligt.
     return { aantal: c.dozen.length, vol: Math.round(m3 / inhoud * 100), dozen: c.dozen };
   });
-  const uit = { containers: geladen, buiten: r.buiten, totaal: dozen.length, inhoud };
+  const uit = { containers: geladen, buiten: r.buiten, totaal: dozen.length, inhoud, zwem: !!zwem };
   ctrCache[sleutel] = uit;
   return Object.assign({ C, zonderMaat }, uit);
 }
@@ -2062,8 +2109,9 @@ function tekenContainer(ov){
     `<div style="border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-top:10px;background:#fbfbfc;">
        ${kop}${body}
        <p style="margin:12px 0 0;font-size:11.5px;color:var(--muted);line-height:1.55;">
-         Every spa travels with its cover, folded in half, and each spa gets 5 cm of clearance
-         beside and behind it so it can be pushed in. Stacking on top needs no gap.
+         Every spa ships on a 14 cm pallet, with its cover folded in half, and gets 5 cm of clearance
+         beside and behind it so it can be pushed in. Spas stack straight on top of each other with a
+         6 cm board in between, never half over two spas.${r && r.zwem ? " A swim spa is in the load: all covers travel inside it and take no space." : ""}
          This is the tightest possible load, so treat it as an upper limit rather than a promise.
          Nothing is taken from our Uddel warehouse for a container order.
        </p>
