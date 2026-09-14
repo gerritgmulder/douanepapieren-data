@@ -2692,25 +2692,49 @@ async function dpHandleMollieWebhook(request, env) {
    toegang.js. De oude beheersleutel (X-DP-Admin) blijft werken voor
    scripts. toegang.js komt van GitHub en blijft tien minuten in het
    geheugen van de worker; valt GitHub weg, dan geldt de laatste kopie. */
-let toegangCache = { ts: 0, mag: null };
+let toegangCache = { ts: 0, groepen: null, afwijkend: null };
+/* toegang.js lezen zonder hem uit te voeren.
+   ═══════════════════════════════════════════════════════════════════════
+   Eerst stond hier new Function(...) om toegang.js gewoon te draaien. Dat
+   mag niet in een worker (code uit tekst is daar verboden) en de fout werd
+   stil weggeslikt, met als gevolg dat iedereen "geen toegang" kreeg, ook
+   Chantal die er gewoon in staat (Gerrit, 14 sep 2026). Nu lezen we de
+   lijsten uit de tekst: de groep tussen de rechte haken, en de afwijkende
+   inlognamen uit AFWIJKEND. Commentaar wordt eerst weggehaald. */
+function toegangLees(src) {
+  const kaal = String(src || "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
+  const namen = (blok) => Array.from(blok.matchAll(/"([^"]+)"/g)).map(m => m[1].toLowerCase());
+  const groepen = {};
+  for (const m of kaal.matchAll(/"([a-z0-9_-]+)"\s*:\s*\[([^\]]*)\]/gi)) {
+    // Groepsnamen mogen een streepje hebben (planning-bewerk); de vier namen
+    // hieronder zijn de sleutels van AFWIJKEND, geen groepen.
+    if (["fonteynbot", "patrick", "mike", "tim"].indexOf(m[1].toLowerCase()) < 0) groepen[m[1].toLowerCase()] = namen(m[2]);
+  }
+  const afwijkend = {};
+  const blokA = (kaal.match(/AFWIJKEND\s*=\s*\{([\s\S]*?)\n\s*\};/) || [])[1] || "";
+  for (const m of blokA.matchAll(/"([^"]+)"\s*:\s*\[([^\]]*)\]/g)) afwijkend[m[1].toLowerCase()] = namen(m[2]);
+  return { groepen, afwijkend };
+}
 async function toegangMag(env, groep, wie) {
   const w = String(wie || "").toLowerCase().trim();
   if (!w) return false;
-  if (!toegangCache.mag || Date.now() - toegangCache.ts > 10 * 60000) {
+  if (!toegangCache.groepen || Date.now() - toegangCache.ts > 10 * 60000) {
     try {
       const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/toegang.js?t=" + Date.now(),
                             { cf: { cacheTtl: 0 } });
       if (r.ok) {
-        const src = await r.text();
-        const venster = {};
-        new Function("window", src)(venster);
-        if (venster.fpToegang && typeof venster.fpToegang.mag === "function") {
-          toegangCache = { ts: Date.now(), mag: venster.fpToegang.mag };
-        }
+        const g = toegangLees(await r.text());
+        if (g.groepen[groep]) toegangCache = { ts: Date.now(), groepen: g.groepen, afwijkend: g.afwijkend };
       }
     } catch (e) { console.log("[toegang] toegang.js niet geladen: " + String(e.message || e)); }
   }
-  return !!(toegangCache.mag && toegangCache.mag(groep, w));
+  const lijst = (toegangCache.groepen || {})[groep] || [];
+  const afw = toegangCache.afwijkend || {};
+  for (const naam of lijst) {
+    const varianten = afw[naam] || [naam + "@fonteyn.nl", naam, "fonteyn." + naam];
+    if (varianten.indexOf(w) >= 0) return true;
+  }
+  return false;
 }
 async function dpIsAdmin(request, env) {
   const h = request.headers.get("X-DP-Admin") || "";
@@ -10617,6 +10641,12 @@ export default {
     /* Eén melding onbewerkt, om te zien wat Logic4 precies meegeeft
        (opmaak van de omschrijving, de vrije velden zoals Garantie). Alleen
        met de teamsleutel. */
+    /* Alleen bij een lokale proefdraai: klopt de toegangscontrole voor deze naam? */
+    if (url.pathname === "/toegang-test" && env.DEV_OPEN) {
+      const wie = url.searchParams.get("wie") || "", groep = url.searchParams.get("groep") || "dealerportaal";
+      const mag = await toegangMag(env, groep, wie);
+      return reply(200, { wie, groep, mag, geladen: !!toegangCache.groepen, groepen: Object.keys(toegangCache.groepen || {}).length, lijst: (toegangCache.groepen || {})[groep] || null });
+    }
     if (url.pathname === "/planning/its/ruw" && request.method === "GET") {
       // DEV_OPEN bestaat alleen bij een lokale proefdraai (wrangler dev --var), nooit in de uitrol.
       if (!env.DEV_OPEN && (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
