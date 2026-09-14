@@ -52,6 +52,12 @@
   var NIEUWS = [
 
     {
+      datum: "2026-09-14", iedereen: true, soort: "beter",
+      titel: "Op de telefoon dezelfde tegels als op de pc",
+      wat: "Op de telefoon staan nu alle tegels die je op de pc ook hebt, niets meer en niets minder. Bij een tegel die op een klein scherm minder handig is staat dat erbij.",
+    },
+
+    {
       datum: "2026-09-14", bestand: "dealerportaal.html", soort: "hersteld",
       titel: "Passion Partners Beheer geeft weer toegang, en het portaal opent weer",
       wat: "Wie in de lijst voor deze tegel staat kreeg sinds zaterdag toch 'geen toegang'; dat is verholpen. De tegel Passion Partners opent voorlopig weer via het oude adres, omdat het nieuwe adres op het kantoor nog niet wordt gevonden. Aan de dealers verandert er niets.",

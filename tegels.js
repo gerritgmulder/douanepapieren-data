@@ -133,12 +133,14 @@
     var t = global.fpToegang;
     if (!t) return [];
     var lijst = TEGELS.filter(function (x) { return t.mag(x.groep, wie); });
-    /* Op de telefoon alleen de tegels met telefoon:true (Gerrit, 12 sep
-       2026: Mijn uren, Planning, Voorraadbeheer, Passion Partners Beheer,
-       Passion Partners en Orderstatus). De rechten blijven per persoon
-       precies wat ze op de pc zijn; dit zegt alleen welke tegels daar
-       überhaupt staan. */
-    if (o.alleenMobiel) lijst = lijst.filter(function (x) { return !!x.telefoon; });
+    /* Op de telefoon dezelfde tegels als op de pc. Gerrit (14 sep 2026):
+       "alle medewerkers dezelfde rechten op de mobiele versie als op de
+       desktopversie. Dus Gerwin moet ook Urencontrole kunnen zien op zijn
+       mobiel, en Manon haar logistieke tegels." Dat draait de keuze van 12
+       september (zes tegels) terug. Hoe goed een tegel op een telefoon werkt
+       staat per tegel in 'mobiel' en dat laat het telefoondashboard zien als
+       waarschuwing, niet als gesloten deur. */
+    if (o.alleenMobiel) lijst = lijst.slice();
     return lijst;
   }
 
