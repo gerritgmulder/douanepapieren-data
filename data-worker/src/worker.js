@@ -92,6 +92,7 @@ const ALLOWED_BUCKETS = new Set([
   "bezorgingen",
   "takenlijst",       // Takenlijst: eigen weektaken en gedelegeerde klussen, per taak één record
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
+  "mollie-uitbetaling-geboekt", // Mollie: welk settlement al een uitbetalings-memoriaal heeft (nooit dubbel)
   "bol-provisie-geboekt", // Bol.com: welke factuurspecificatie al een provisie-memoriaal heeft gekregen (nooit dubbel)
   "pib-partners",     // PIBs: partners in business, hun toestemming en de sleutel van hun meter (uren en metingen staan in D1)
   "voorraad-wijzigingen", // Orderregels die in Logic4 van model, kleur of uitvoering zijn veranderd sinds de vorige sync (laatste 300)

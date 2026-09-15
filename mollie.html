@@ -353,12 +353,44 @@ function tekenSluit() {
     (eind != null ? rij("Uitbetaald volgens het bestand", eind) : "") +
     "</table>" +
     (klopt === null ? "" : klopt
-      ? "<div class='status-msg ok' style='margin-top:10px'>Het settlement sluit. De tegenboeking op kruisposten " +
-        esc($("rekKruis").value) + " is " + fmtEur(totaal) + " en valt weg tegen de boeking vanuit de bank.</div>"
+      ? "<div class='status-msg ok' style='margin-top:10px'>Het settlement sluit. De uitbetaling van " + fmtEur(totaal) +
+        " boek je hieronder als memoriaal naar kruisposten " + esc($("rekKruis").value) + " tegenover 1134; die valt weg zodra je de ING-regel van Mollie bij het afschrift aan " +
+        esc($("rekKruis").value) + " toewijst.<div style='margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap'>" +
+        "<button class='cta secondary' type='button' id='uitbetalingBtn'>Uitbetaling " + fmtEur(totaal) + " boeken als memoriaal</button>" +
+        "<span id='uitbetalingMsg' class='muted' style='font-size:12px'></span></div></div>"
       : "<div class='status-msg error' style='margin-top:10px'>Dit settlement sluit niet: de regels tellen op tot " +
         fmtEur(totaal) + " en er is " + fmtEur(eind) + " uitbetaald. Zoek dat eerst uit; de tegenboeking op " +
         esc($("rekKruis").value) + " klopt dan namelijk ook niet.</div>");
 }
+
+/* De uitbetaling van het settlement als memoriaal: kruisposten 1220 debet,
+   1134 credit. De uitbetaling staat niet als regel in het bestand (het
+   settlement als geheel wordt uitbetaald), dus hij komt hier apart. Per
+   bestand onthouden in de worker, zodat hij nooit twee keer gaat. */
+document.addEventListener("click", async (e) => {
+  const knop = e.target.closest("#uitbetalingBtn"); if (!knop) return;
+  const msg = $("uitbetalingMsg"); const sleutel = String(state.bestand || "");
+  const bedrag = Math.round(Number(state.eind) * 100) / 100;
+  if (!sleutel || !(Math.abs(bedrag) > 0)) { msg.textContent = "Geen bestand of geen uitbetaald bedrag."; return; }
+  knop.disabled = true; msg.textContent = "Nakijken\u2026";
+  try {
+    const gb = await fetch(WORKER + "/data/mollie-uitbetaling-geboekt", { headers: { "X-Fonteyn-Auth": teamKey() } }).then(r => r.ok ? r.json() : {}).catch(() => ({}));
+    const al = gb && gb.geboekt && gb.geboekt[sleutel];
+    if (al) { msg.textContent = "Al geboekt op " + new Date(al.ts).toLocaleString("nl-NL") + " door " + (al.door || "?") + "."; return; }
+    if (!confirm("Memoriaal boeken: uitbetaling " + fmtEur(bedrag) + " op " + $("rekKruis").value + " tegenover 1134 (Mollie), referentie " + sleutel + "?")) { knop.disabled = false; msg.textContent = ""; return; }
+    const laatste = state.transactions.map(x => x.tx.date).filter(Boolean).sort().pop() || new Date().toISOString().slice(0, 10);
+    const r = await fetch(WORKER + "/bank/memoriaal", { method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
+      body: JSON.stringify({ door: localStorage.getItem(EMAIL_KEY) || "", bankBookingId: Number($("dagboek").value), bankLedgerId: mollieLedgerId(),
+        regels: [{ rekening: String($("rekKruis").value).trim(), bedrag: Math.abs(bedrag), uit: bedrag > 0, datum: laatste,
+                   omschrijving: ("Mollie uitbetaling settlement " + sleutel).slice(0, 140), referentie: ("Mollie " + sleutel).slice(0, 60) }] }) });
+    const j = await r.json().catch(() => ({})); const res = (j.resultaten || [])[0];
+    if (!j.ok || !res || !res.ok) throw new Error((res && res.error) || j.error || ("HTTP " + r.status));
+    const nieuw = gb && typeof gb === "object" ? gb : {}; nieuw.geboekt = nieuw.geboekt || {};
+    nieuw.geboekt[sleutel] = { ts: new Date().toISOString(), door: localStorage.getItem(EMAIL_KEY) || "", bedrag };
+    await fetch(WORKER + "/data/mollie-uitbetaling-geboekt", { method: "PUT", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() }, body: JSON.stringify(nieuw) });
+    msg.textContent = "Geboekt in dagboek " + (res.dagboek || "Memoriaal") + " op " + laatste + ".";
+  } catch (err) { msg.textContent = "Boeken lukte niet: " + (err.message || err); knop.disabled = false; }
+});
 
 // ─── Selectie ───────────────────────────────────────────────────────
 document.addEventListener("change", e => {
@@ -452,14 +484,20 @@ $("boekBtn").addEventListener("click", async () => {
       opOrder.push({ x, orderNr: nr, bedrag, terugbetaling: true,
         omschrijving: "Mollie terugbetaling " + (x.tx.date || "") + " - " + state.bestand });
     } else {
-      const rek = m.soort === "kosten" ? $("rekFee").value
-                : m.soort === "terugbetaling" ? $("rekRetour").value
-                : $("rekKruis").value;
-      naarGrootboek.push({ x, rekening: String(rek).trim(), bedrag: Math.abs(bedrag), datum: x.tx.date,
+      /* Regels zonder order. Drie soorten, met een richting:
+           - de fee van Mollie: kosten, geld gaat uit 1134 (4572 debet);
+           - een terugbetaling zonder order: geld gaat uit 1134 (2100 debet,
+             tot Osman weet bij welke order hij hoort);
+           - een betaling zonder herkende order: geld komt ín 1134, en gaat
+             naar 2100 vraagposten (credit) tot de order gevonden is. Die
+             stond eerst op kruisposten, maar daar hoort hij niet: 1220 is
+             alleen voor de uitbetaling die naar de bank gaat. */
+      const uit = m.soort !== "betaling";
+      const rek = m.soort === "kosten" ? $("rekFee").value : $("rekRetour").value;
+      naarGrootboek.push({ x, rekening: String(rek).trim(), bedrag: Math.abs(bedrag), datum: x.tx.date, uit,
         omschrijving: (x.tx.description || "").slice(0, 140), referentie: "Mollie " + state.bestand });
     }
   }
-
   melding($("boekStatus"), "Bezig met boeken…", "info");
   let gelukt = 0; const fouten = [];
   if (opOrder.length) {
@@ -515,12 +553,15 @@ $("boekBtn").addEventListener("click", async () => {
          dagboek dat wél is zoekt hij zelf op. */
       body: JSON.stringify({ door: localStorage.getItem(EMAIL_KEY) || "",
         bankBookingId: dagboek, bankLedgerId: mollieLedgerId(),
-        regels: naarGrootboek.map(g => ({ rekening: g.rekening, bedrag: g.bedrag, datum: g.datum, uit: true,
+        regels: naarGrootboek.map(g => ({ rekening: g.rekening, bedrag: g.bedrag, datum: g.datum, uit: g.uit === true,
                                           omschrijving: g.omschrijving, referentie: g.referentie })) }) });
     const j = await r.json().catch(() => ({}));
     let geblokkeerd = false;
     (j.resultaten || []).forEach((res, i) => {
-      if (res.ok) { naarGrootboek[i].x.geboekt = "memoriaal " + naarGrootboek[i].rekening + " tegenover 1134"; gelukt++; }
+      if (res.ok) {
+        if (naarGrootboek[i].x) naarGrootboek[i].x.geboekt = "memoriaal " + naarGrootboek[i].rekening + " tegenover 1134";
+        gelukt++;
+      }
       else { if (res.geblokkeerd) geblokkeerd = true; fouten.push("grootboek " + naarGrootboek[i].rekening + ": " + (res.error || "onbekend")); }
     });
     if (geblokkeerd) fouten.push("Rekening 1134 (Mollie) staat in Logic4 geblokkeerd voor memoriaalboekingen. Laat Osman die blokkering " +

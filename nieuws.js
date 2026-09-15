@@ -58,7 +58,7 @@
     {
       datum: "2026-09-15", bestand: "mollie.html", soort: "beter",
       titel: "Mollie: terugbetalingen op de order, fee en uitbetaling als memoriaal",
-      wat: "Een terugbetaling gaat nu echt als negatieve betaling op de order (dat faalde stil). De fee, de uitbetaling en een terugbetaling zonder order gaan als memoriaal tegenover rekening 1134. Staat 1134 in Logic4 geblokkeerd voor memoriaal, dan zegt het scherm dat en moet die blokkering er eerst af.",
+      wat: "Een terugbetaling gaat nu echt als negatieve betaling op de order (dat faalde stil). De fee en een terugbetaling zonder order gaan als memoriaal tegenover rekening 1134, een betaling zonder herkende order naar vraagposten 2100, en de uitbetaling van het settlement boek je met een eigen knop naar kruisposten 1220. Staat 1134 in Logic4 geblokkeerd voor memoriaal, dan zegt het scherm dat en moet die blokkering er eerst af.",
     },
     {
       datum: "2026-09-15", bestand: "amerika.html", soort: "hersteld",
