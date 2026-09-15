@@ -445,9 +445,12 @@ $("boekBtn").addEventListener("click", async () => {
       opOrder.push({ x, orderNr: nr, bedrag,
         omschrijving: "Mollie " + (x.tx.date || "") + " — " + state.bestand });
     } else if (m.soort === "terugbetaling" && nr) {
-      // Een terugbetaling is een betaling de andere kant op.
-      opOrder.push({ x, orderNr: nr, bedrag,
-        omschrijving: "Mollie terugbetaling " + (x.tx.date || "") + " — " + state.bestand });
+      /* Een terugbetaling is een betaling de andere kant op: negatief op
+         dezelfde order. De worker weigert een negatief bedrag tenzij de regel
+         uitdrukkelijk als terugbetaling is gemerkt; zonder die vlag faalden
+         terugbetalingen stil met "bedrag is niet positief" (15 sep 2026). */
+      opOrder.push({ x, orderNr: nr, bedrag, terugbetaling: true,
+        omschrijving: "Mollie terugbetaling " + (x.tx.date || "") + " - " + state.bestand });
     } else {
       const rek = m.soort === "kosten" ? $("rekFee").value
                 : m.soort === "terugbetaling" ? $("rekRetour").value
@@ -463,7 +466,7 @@ $("boekBtn").addEventListener("click", async () => {
     const r = await fetch(WORKER + "/bank/boeken", {
       method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
       body: JSON.stringify({ door: localStorage.getItem(EMAIL_KEY) || "", bookingId: dagboek,
-        regels: opOrder.map(o => ({ orderNr: o.orderNr, bedrag: o.bedrag, datum: o.x.tx.date, omschrijving: o.omschrijving })) }) });
+        regels: opOrder.map(o => ({ orderNr: o.orderNr, bedrag: o.bedrag, terugbetaling: o.terugbetaling === true, datum: o.x.tx.date, omschrijving: o.omschrijving })) }) });
     const j = await r.json().catch(() => ({}));
     (j.resultaten || []).forEach((res, i) => {
       /* De gebruikte datum erbij. Gerrit (19 aug 2026): "ik wil dat die
@@ -488,13 +491,20 @@ $("boekBtn").addEventListener("click", async () => {
      financieel dagboek 42 is een Bank boek." Er bestaat in de hele API geen
      eindpunt dat een bankboeking toevoegt; er zijn er vier, voor inkoop,
      verkoop, memoriaal en een betaling op een order. */
-  const MEMORIAAL_AAN = false;
-  if (naarGrootboek.length && !MEMORIAAL_AAN) {
-    fouten.push(naarGrootboek.length + " regel(s) niet geboekt: die horen in het bankdagboek van Mollie, en " +
-      "Logic4 laat via de API alleen inkoop-, verkoop- en memoriaalboekingen toe. In een bankdagboek kom je " +
-      "alleen met een betaling op een order of factuur, en deze regels horen bij geen van beide. Dit ligt niet " +
-      "aan de rechten - nagegaan op 19 aug 2026. Zet ze met de hand; de rekening staat per regel in beeld.");
-  }
+  /* Opnieuw aan, 15 sep 2026, en nu de goede kant op.
+     ═══════════════════════════════════════════════════════════════════════
+     De fee, een terugbetaling zonder order en de uitbetaling zijn geen
+     bankregels van de ING maar mutaties op de Mollie-rekening 1134, en die
+     kunnen als memoriaal: 4572 debet tegenover 1134 credit voor de fee, 1220
+     debet tegenover 1134 credit voor de uitbetaling. Dat is precies wat er
+     gebeurt, en dan hoeft in het Mollie-dagboek niets meer met de hand.
+
+     Eén voorwaarde: rekening 1134 mag in Logic4 niet geblokkeerd staan voor
+     memoriaalboekingen. Op 15 sep 2026 stond hij dat wél ("Grootboek(en) met
+     id 149 zijn geblokkeerd"). Dan boekt Logic4 niets en zegt het scherm
+     hieronder wat Osman in Logic4 moet omzetten. De rekeningen 1185 en 1160
+     staan niet op slot; dit is een instelling per rekening. */
+  const MEMORIAAL_AAN = true;
   if (naarGrootboek.length && MEMORIAAL_AAN) {
     const r = await fetch(WORKER + "/bank/memoriaal", {
       method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
@@ -505,13 +515,17 @@ $("boekBtn").addEventListener("click", async () => {
          dagboek dat wél is zoekt hij zelf op. */
       body: JSON.stringify({ door: localStorage.getItem(EMAIL_KEY) || "",
         bankBookingId: dagboek, bankLedgerId: mollieLedgerId(),
-        regels: naarGrootboek.map(g => ({ rekening: g.rekening, bedrag: g.bedrag, datum: g.datum,
+        regels: naarGrootboek.map(g => ({ rekening: g.rekening, bedrag: g.bedrag, datum: g.datum, uit: true,
                                           omschrijving: g.omschrijving, referentie: g.referentie })) }) });
     const j = await r.json().catch(() => ({}));
+    let geblokkeerd = false;
     (j.resultaten || []).forEach((res, i) => {
-      if (res.ok) { naarGrootboek[i].x.geboekt = "grootboek " + naarGrootboek[i].rekening; gelukt++; }
-      else fouten.push("grootboek " + naarGrootboek[i].rekening + ": " + (res.error || "onbekend"));
+      if (res.ok) { naarGrootboek[i].x.geboekt = "memoriaal " + naarGrootboek[i].rekening + " tegenover 1134"; gelukt++; }
+      else { if (res.geblokkeerd) geblokkeerd = true; fouten.push("grootboek " + naarGrootboek[i].rekening + ": " + (res.error || "onbekend")); }
     });
+    if (geblokkeerd) fouten.push("Rekening 1134 (Mollie) staat in Logic4 geblokkeerd voor memoriaalboekingen. Laat Osman die blokkering " +
+      "eraf halen (Logic4, grootboekrekening 1134, blokkeren uit); daarna gaan de fee en de uitbetaling met deze knop mee. " +
+      "Tot die tijd: zet ze met de hand in het Mollie-dagboek, de rekening staat per regel in beeld.");
     if (!j.resultaten) fouten.push("memoriaal: " + (j.error || "geen antwoord"));
   }
   state.transactions.forEach(x => { if (x.geboekt) x.kies = false; });

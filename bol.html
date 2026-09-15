@@ -359,9 +359,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         Alleen orders met een openstaande factuur worden geboekt.
       </p>
       <p class="lead" style="font-size:13px;color:var(--warn);">
-        ⚠ De 2 debet-regels (verkoopprovisie + Bol-overschrijving) blijven
-        Excel-export — die kunnen niet via API (boekhoud-module zit niet
-        in scope). Osman voert die twee handmatig in Logic4 in.
+        Na het doorvoeren boek je de <b>provisie</b> met één knop als memoriaal (4570 tegenover 1185).
+        Alleen de <b>uitbetaling</b> op het ING-afschrift blijft handwerk: die wijs je in Logic4 toe aan 1185.
       </p>
       <div style="background:#f9fafb;border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin:10px 0;">
         <label style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Bol-dagboek (BookingId)</label>
@@ -2073,20 +2072,23 @@ function showAfterApplyExplanation(results, verifiedCount, totalCount, data) {
         Don/Osman/jij/Fonteynbot kunnen die file openen om te zien wie wanneer wat heeft doorgevoerd.
       </p>
 
-      <h3 style="color:#144734;margin:20px 0 8px;">Wat moet je nog handmatig doen?</h3>
+      <h3 style="color:#144734;margin:20px 0 8px;">De provisie en de uitbetaling</h3>
       <p style="color:#374151;line-height:1.6;">
-        De 2 <b>debet-regels</b> kunnen NIET via API (de boekhoud-module zit niet in jullie
-        Logic4-scope). Voer die handmatig in via Logic4 → Administratie →
-        Dagboeken handmatig → Memoriaal:
+        De betalingen staan nu per bestelling op dagboek 22 (tussenrekening 1185). Wat daar nog
+        tegenover moet: de <b>provisie</b> van bol.com, en de <b>uitbetaling</b> op de bank.
       </p>
       <ul style="line-height:1.7;color:#374151;">
-        <li>${fmtEur(verkoopprovisie.bedrag)} → GB-rekening <b>4570 Verkoopprovisie</b> (debet)</li>
-        <li>${fmtEur(bolOverschrijving.bedrag)} → GB-rekening <b>4999 Verschillenrekening</b> (debet) — naam: "${escapeHtml(bolOverschrijving.info)}"</li>
+        <li><b>Provisie ${fmtEur(verkoopprovisie.bedrag)}</b> gaat met de knop hieronder als memoriaal de boeken in:
+          4570 Verkoopprovisie tegenover 1185. Dat is dezelfde boeking die je anders zelf maakte.
+          <div style="margin:8px 0 4px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <button id="provisieBtn" style="background:#144734;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:600;cursor:pointer;font-family:inherit;font-size:13px;">Provisie boeken als memoriaal</button>
+            <span id="provisieMsg" style="font-size:12.5px;color:#6b7280;"></span>
+          </div></li>
+        <li><b>Uitbetaling ${fmtEur(bolOverschrijving.bedrag)}</b>: die staat als één regel op het ING-afschrift
+          ("${escapeHtml(bolOverschrijving.info)}"). Wijs die bij het verwerken van het afschrift in Logic4 toe aan
+          <b>1185 Tussenrekening Online Payments</b>. Daarna staat 1185 voor deze periode op nul.
+          Een bankregel kan niet via de koppeling; dat is de enige handeling die overblijft.</li>
       </ul>
-      <p style="color:#374151;line-height:1.6;font-size:13px;">
-        Pas na inbreng van die twee regels klopt het memoriaal volledig en is de Bol-periode
-        boekhoudkundig dichtgezet.
-      </p>
 
       ${verifiedCount < totalCount ? `
         <div style="background:#fef3c7;border-radius:8px;padding:14px;margin-top:18px;">
@@ -2107,6 +2109,52 @@ function showAfterApplyExplanation(results, verifiedCount, totalCount, data) {
   document.body.appendChild(modal);
   modal.querySelector("#closeApplyModal").addEventListener("click", () => modal.remove());
   modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
+  const pb = modal.querySelector("#provisieBtn");
+  if (pb) pb.addEventListener("click", () => boekProvisie(data, verkoopprovisie.bedrag, modal.querySelector("#provisieMsg"), pb));
+}
+
+/* De provisie van bol.com als memoriaal: 4570 debet, 1185 credit.
+   ═══════════════════════════════════════════════════════════════════════
+   Getest op 15 sep 2026 met een cent heen en terug: 1185 staat niet op slot
+   (de bankrekeningen wél, daarom kan dit niet voor de uitbetaling zelf).
+   De worker-route boekt met uit:true de rekening (4570) debet en de
+   tussenrekening (1185) credit. Het bedrag is inclusief btw, zoals Osman het zelf ook in
+   zijn memoriaal zette; de btw-code is 0%. Wil Osman de btw apart, dan is
+   dat een aanpassing in de worker, niet hier.
+   Per factuurnummer wordt onthouden dat hij is geboekt, zodat een tweede
+   klik geen tweede memoriaal geeft. */
+const WORKER_BASIS = "https://fonteyn-data-store.g-mulder.workers.dev";
+function bolKoppen(){ return { "Content-Type": "application/json", "X-Fonteyn-Auth": localStorage.getItem("fp.teamkey") || "" }; }
+async function boekProvisie(data, bedrag, msg, knop) {
+  const sleutel = String(data.factuurnr || ("periode " + data.periode));
+  if (!(bedrag > 0)) { msg.textContent = "Geen provisiebedrag gevonden in deze specificatie."; return; }
+  knop.disabled = true; msg.textContent = "Nakijken of hij al geboekt is\u2026";
+  try {
+    const gb = await fetch(WORKER_BASIS + "/data/bol-provisie-geboekt", { headers: bolKoppen() }).then(r => r.ok ? r.json() : {}).catch(() => ({}));
+    const al = (gb && gb.geboekt && gb.geboekt[sleutel]) || null;
+    if (al) { msg.textContent = "Al geboekt op " + new Date(al.ts).toLocaleString("nl-NL") + " door " + (al.door || "?") + " (" + fmtEur(al.bedrag) + "). Niet nog een keer."; return; }
+    if (!confirm("Memoriaal boeken: " + fmtEur(bedrag) + " op 4570 Verkoopprovisie tegenover 1185, referentie Bol " + sleutel + "?")) { knop.disabled = false; msg.textContent = ""; return; }
+    msg.textContent = "Grootboeken ophalen\u2026";
+    const lijsten = await fetch(WORKER_BASIS + "/bank/grootboeken", { headers: bolKoppen() }).then(r => r.json());
+    const g1185 = (lijsten.grootboeken || []).find(x => String(x.code) === "1185");
+    if (!g1185) throw new Error("grootboek 1185 niet gevonden in Logic4");
+    const dag = await fetch(WORKER_BASIS + "/bank/dagboeken", { headers: bolKoppen() }).then(r => r.json()).catch(() => ({}));
+    const boekDatum = document.getElementById("boekDatum").value || new Date().toISOString().slice(0, 10);
+    msg.textContent = "Boeken\u2026";
+    const r = await fetch(WORKER_BASIS + "/bank/memoriaal", { method: "POST", headers: bolKoppen(),
+      body: JSON.stringify({ door: (localStorage.getItem("fp.email") || "").toLowerCase(), bankLedgerId: g1185.id, bookingId: dag.memBookingId || 20,
+        regels: [{ rekening: "4570", uit: true, bedrag: Math.round(bedrag * 100) / 100, datum: boekDatum,
+                   omschrijving: ("Bol.com provisie " + (data.periode || "") + " factuur " + sleutel).slice(0, 200),
+                   referentie: ("Bol " + sleutel).slice(0, 60) }] }) });
+    const j = await r.json();
+    const res = (j.resultaten || [])[0];
+    if (!j.ok || !res || !res.ok) throw new Error((res && res.error) || j.error || ("HTTP " + r.status));
+    const nieuw = gb && typeof gb === "object" ? gb : {}; nieuw.geboekt = nieuw.geboekt || {};
+    nieuw.geboekt[sleutel] = { ts: new Date().toISOString(), door: (localStorage.getItem("fp.email") || "").toLowerCase(), bedrag, dagboek: res.dagboek || "" };
+    await fetch(WORKER_BASIS + "/data/bol-provisie-geboekt", { method: "PUT", headers: bolKoppen(), body: JSON.stringify(nieuw) });
+    msg.textContent = "Geboekt in dagboek " + (res.dagboek || "Memoriaal") + " op " + boekDatum + ".";
+    if (window.fpLog) window.fpLog("provisie-geboekt", sleutel + " " + fmtEur(bedrag));
+  } catch (e) { msg.textContent = "Boeken lukte niet: " + (e.message || e); knop.disabled = false; }
 }
 
 // ─────────────────────────────────────────────────────────────────

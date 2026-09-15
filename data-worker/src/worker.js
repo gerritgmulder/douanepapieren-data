@@ -92,6 +92,7 @@ const ALLOWED_BUCKETS = new Set([
   "bezorgingen",
   "takenlijst",       // Takenlijst: eigen weektaken en gedelegeerde klussen, per taak één record
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
+  "bol-provisie-geboekt", // Bol.com: welke factuurspecificatie al een provisie-memoriaal heeft gekregen (nooit dubbel)
   "pib-partners",     // PIBs: partners in business, hun toestemming en de sleutel van hun meter (uren en metingen staan in D1)
   "voorraad-wijzigingen", // Orderregels die in Logic4 van model, kleur of uitvoering zijn veranderd sinds de vorige sync (laatste 300)
   "geldgoederen",     // Geld-goederenbeweging: laatste controle-momentopname + historie van de totalen
@@ -8494,6 +8495,7 @@ async function qbHandleBoeken(request, env) {
   }
 
   const token = echt ? await l4Token(env) : null;
+  let amerikaGb = null;   // grootboeken voor de kostenregel, pas ophalen als het nodig is
   const uit = [];
 
   for (const w of partij) {
@@ -8540,17 +8542,39 @@ async function qbHandleBoeken(request, env) {
        weg: de batch is dan onvolledig en de kosten horen bij het geheel. Wat
        al geboekt is blijft staan en is aan de sleutels te zien, dus een
        tweede poging pakt alleen de rest. */
+    /* De bankkosten gaan als memoriaal: 4630 tegenover 1160.
+       ═══════════════════════════════════════════════════════════════════
+       Hier stond een AddPayment met alleen een grootboekrekening. Dat kan
+       niet: Logic4 antwoordt "Geen order/factuurnummer opgegeven" (proef,
+       15 sep 2026). Een betaling hoort altijd bij een order of factuur.
+
+       Een memoriaal kan wél op 1160, want die rekening staat niet op slot
+       (ook getest op 15 sep 2026, met een cent heen en terug). Het effect is
+       hetzelfde als een regel in dagboek 45: 4630 debet, 1160 credit, en per
+       batch komt 1160 op nul. Alleen de kostenplaats kan niet mee, want een
+       memoriaalregel heeft dat veld niet; die zet Osman er zelf op. */
     if (!stuk && b.bankkosten.bedrag > 0 && !b.bankkosten.alGeboekt) {
       try {
-        const rr = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
+        if (!amerikaGb) {
+          const g = await bankGrootboeken(env);
+          amerikaGb = { kosten: (g.grootboeken || []).find(x => String(x.code) === AMERIKA_KOSTEN_GROOTBOEK),
+                        tussen: (g.grootboeken || []).find(x => String(x.code) === "1160"), btw: g.btwNul };
+          const inst = (await env.FONTEYN_DATA.get("bank-instellingen", { type: "json" })) || {};
+          amerikaGb.dagboek = Number(inst.memBookingId) || 20;
+        }
+        if (!amerikaGb.kosten || !amerikaGb.tussen || !amerikaGb.btw) throw new Error("grootboek 4630 of 1160 of de btw-code van 0% niet gevonden in Logic4");
+        const oms = "Bankkosten Passion Spas batch " + (w.datum || "") + " - kostenplaats " + AMERIKA_KOSTENPLAATS + " nog zetten";
+        const rr = await fetch("https://api.logic4server.nl/v3/Financial/AddFinancialGeneralBookingWithMutations", {
           method: "POST",
           headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
           body: JSON.stringify({
-            AmountIncl: -b.bankkosten.bedrag,
-            LedgerCode: AMERIKA_KOSTEN_GROOTBOEK,
-            BookingId: AMERIKA_DAGBOEK,
-            DateTime: datum,
-            Description: "Bankkosten batch " + (w.datum || "") + " - kostenplaats " + AMERIKA_KOSTENPLAATS,
+            Reference: ("Passion Spas " + (w.datum || "")).slice(0, 60),
+            BookingDateTime: datum,
+            FinancialBookId: amerikaGb.dagboek,
+            Mutations: [
+              { LedgerId: amerikaGb.kosten.id, VatCode: amerikaGb.btw.id, AmountIncl: b.bankkosten.bedrag, Description: oms },
+              { LedgerId: amerikaGb.tussen.id, VatCode: amerikaGb.btw.id, AmountIncl: -b.bankkosten.bedrag, Description: oms },
+            ],
           }),
         });
         const tekst = await rr.text();
@@ -9232,6 +9256,7 @@ async function bankBoeken(env, body) {
   const token = await l4Token(env);
   const door = String(body.door || "").slice(0, 80);
   const uit = [];
+  let grootboeken = null;   // pas ophalen als er een regel op grootboek bij zit
   for (const r of regels) {
     const orderNr = Number(r.orderNr) || 0;
     /* Een betaling mag ook rechtstreeks op een factuur. AddPayment kent naast
@@ -9240,8 +9265,42 @@ async function bankBoeken(env, body) {
        Fennema Elektro (Gerrit, 19 aug 2026). */
     const factuurNr = Number(r.invoiceId || r.factuurNr) || 0;
     const bedrag = Number(r.bedrag);
-    if (!orderNr && !factuurNr) { uit.push({ ...r, ok: false, error: "geen ordernummer en geen factuurnummer" }); continue; }
-    if (!(bedrag > 0)) { uit.push({ ...r, ok: false, error: "bedrag ontbreekt of is niet positief" }); continue; }
+    /* Een regel zonder order of factuur, rechtstreeks op een grootboekrekening.
+       ═══════════════════════════════════════════════════════════════════════
+       Dit is de omweg voor alles wat níet bij een order hoort: de uitbetaling
+       van Mollie of Pay.nl op de bank (naar kruisposten 1220 of de eigen
+       tussenrekening), bankkosten en rente (4630), de Mollie-fee (4572), de
+       bol.com-provisie (4570). AddPayment kent daarvoor het veld LedgerCode,
+       en dan mag OrderId leeg blijven en het bedrag negatief zijn (een
+       uitgave). De Amerika-tegel gebruikt datzelfde veld voor de bankkosten
+       van Passion Spas.
+
+       Mark van Logic4 (18 aug 2026): "een bankboekregel kan gekoppeld worden
+       aan een grootboekrekening". Dit is die koppeling, alleen dan via het
+       eindpunt dat wél in een bankdagboek schrijft. Het memoriaal was de
+       verkeerde weg: dat kwam in het verkeerde dagboek terecht en Osman moest
+       het weer weggooien (14 aug 2026).
+
+       Het rekeningnummer wordt eerst nagekeken in de grootboeklijst van
+       Logic4: een tikfout in een rekeningnummer mag geen boeking opleveren
+       op een rekening die niet bestaat. */
+    const grootboek = String(r.grootboek || "").trim();
+    if (grootboek) {
+      if (!/^\d{3,6}$/.test(grootboek)) { uit.push({ ...r, ok: false, error: "grootboekrekening " + grootboek + " is geen rekeningnummer" }); continue; }
+      if (!grootboeken) {
+        try { const g = await bankGrootboeken(env); grootboeken = new Set((g.grootboeken || []).map(x => String(x.code))); }
+        catch (e) { uit.push({ ...r, ok: false, error: "grootboeklijst niet op te halen: " + String(e.message || e) }); continue; }
+      }
+      if (!grootboeken.has(grootboek)) { uit.push({ ...r, ok: false, error: "grootboekrekening " + grootboek + " bestaat niet in Logic4" }); continue; }
+      if (!(Math.abs(bedrag) > 0)) { uit.push({ ...r, ok: false, error: "bedrag ontbreekt" }); continue; }
+    } else {
+      if (!orderNr && !factuurNr) { uit.push({ ...r, ok: false, error: "geen ordernummer, geen factuurnummer en geen grootboekrekening" }); continue; }
+      /* Negatief mag alleen als de regel uitdrukkelijk een terugbetaling is:
+         geld dat naar de klant teruggaat, op dezelfde order. Zo werkt ook het
+         terugdraaien in Passion Partners. Zonder die vlag blijft een negatief
+         bedrag een fout, want dan is het meestal een verkeerd gelezen regel. */
+      if (!(bedrag > 0) && !(r.terugbetaling === true && bedrag < 0)) { uit.push({ ...r, ok: false, error: "bedrag ontbreekt of is niet positief" }); continue; }
+    }
     // De omschrijving is wat Osman later in Logic4 terugziet. Datum en
     // afschrift erin, zodat een boeking naar de bankregel terug te leiden is.
     const omschrijving = String(r.omschrijving || "").slice(0, 200) || "Bankbetaling";
@@ -9263,14 +9322,12 @@ async function bankBoeken(env, body) {
     try {
       const resp = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
         method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...(orderNr ? { OrderId: orderNr } : { InvoiceId: factuurNr }),
-          AmountIncl: bedrag,
-          BookingId: bookingId,
-          MatchingLedgerId: matchingLedgerId,
-          DateTime: datum + "T12:00:00",
-          Description: omschrijving,
-        }),
+        body: JSON.stringify(grootboek
+          ? { AmountIncl: bedrag, LedgerCode: grootboek, BookingId: bookingId,
+              DateTime: datum + "T12:00:00", Description: omschrijving }
+          : { ...(orderNr ? { OrderId: orderNr } : { InvoiceId: factuurNr }),
+              AmountIncl: bedrag, BookingId: bookingId, MatchingLedgerId: matchingLedgerId,
+              DateTime: datum + "T12:00:00", Description: omschrijving }),
       });
       const tekst = await resp.text();
       let j = null; try { j = JSON.parse(tekst); } catch {}
@@ -9283,7 +9340,7 @@ async function bankBoeken(env, body) {
           antwoord: tekst.slice(0, 300) });
       } else {
         uit.push({ ...r, ok: true, geboekt: bedrag, datumGebruikt: datum,
-                   op: orderNr ? ("order " + orderNr) : ("factuur " + factuurNr) });
+                   op: grootboek ? ("grootboek " + grootboek) : (orderNr ? ("order " + orderNr) : ("factuur " + factuurNr)) });
       }
     } catch (e) { uit.push({ ...r, ok: false, error: String(e.message || e) }); }
   }
@@ -9294,7 +9351,7 @@ async function bankBoeken(env, body) {
   logboek.boekingen = (logboek.boekingen || []).slice(-4000);
   logboek.boekingen.push({ ts: new Date().toISOString(), door, aantal: gelukt,
     totaal: uit.filter(x => x.ok).reduce((n, x) => n + Number(x.geboekt || 0), 0),
-    regels: uit.map(x => ({ orderNr: x.orderNr, factuur: x.invoiceId || null, bedrag: x.bedrag, ok: x.ok, error: x.error || null })) });
+    regels: uit.map(x => ({ orderNr: x.orderNr, factuur: x.invoiceId || null, grootboek: x.grootboek || null, bedrag: x.bedrag, ok: x.ok, error: x.error || null })) });
   await env.FONTEYN_DATA.put("bank-geboekt", JSON.stringify(logboek));
   return { ok: true, gelukt, mislukt: uit.length - gelukt, resultaten: uit };
 }
@@ -9783,11 +9840,15 @@ async function bankMemoriaal(env, body) {
             Reference: String(r.referentie || "Bankafschrift").slice(0, 60),
             BookingDateTime: datum + "T12:00:00",
             FinancialBookId: bookingIdNu(),
+            /* De tegenrekening erbij, anders staat de boeking niet in evenwicht.
+               Positief is debet. Een ontvangst: de tegenrekening (bank of
+               tussenrekening) debet, de rekening credit. Een uitgave (uit:true,
+               zoals de Mollie-fee of de bol.com-provisie) precies andersom:
+               de kostenrekening debet, de tussenrekening credit. */
             Mutations: [
-              // De tegenrekening erbij, anders staat de boeking niet in evenwicht.
-              { LedgerId: tegen.id, VatCode: lijsten.btwNul.id, AmountIncl: bedrag,
+              { LedgerId: tegen.id, VatCode: lijsten.btwNul.id, AmountIncl: r.uit === true ? -bedrag : bedrag,
                 Description: String(r.omschrijving || "").slice(0, 200) || "Bankafschrift" },
-              { LedgerId: gb.id, VatCode: lijsten.btwNul.id, AmountIncl: -bedrag,
+              { LedgerId: gb.id, VatCode: lijsten.btwNul.id, AmountIncl: r.uit === true ? bedrag : -bedrag,
                 Description: String(r.omschrijving || "").slice(0, 200) || "Bankafschrift" },
             ],
           }),

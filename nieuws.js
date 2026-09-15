@@ -51,6 +51,21 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-15", bestand: "bol.html", soort: "nieuw",
+      titel: "Bol.com: de provisie gaat met één knop als memoriaal de boeken in",
+      wat: "Na het doorvoeren van een bol.com-specificatie boek je de verkoopprovisie met de knop 'Provisie boeken als memoriaal' (4570 tegenover 1185). Alleen de uitbetaling op het ING-afschrift blijft handwerk: die wijs je in Logic4 toe aan 1185.",
+    },
+    {
+      datum: "2026-09-15", bestand: "mollie.html", soort: "beter",
+      titel: "Mollie: terugbetalingen op de order, fee en uitbetaling als memoriaal",
+      wat: "Een terugbetaling gaat nu echt als negatieve betaling op de order (dat faalde stil). De fee, de uitbetaling en een terugbetaling zonder order gaan als memoriaal tegenover rekening 1134. Staat 1134 in Logic4 geblokkeerd voor memoriaal, dan zegt het scherm dat en moet die blokkering er eerst af.",
+    },
+    {
+      datum: "2026-09-15", bestand: "amerika.html", soort: "hersteld",
+      titel: "Amerika: de bankkosten van een batch gaan als memoriaal",
+      wat: "De kostenregel (4630 tegenover 1160) ging als betaling zonder order en dat weigert Logic4. Hij gaat nu als memoriaal, met dezelfde uitkomst op de rekeningen. De kostenplaats moet nog steeds met de hand.",
+    },
+    {
       datum: "2026-09-15", bestand: "pibs.html", soort: "nieuw",
       titel: "Nieuwe tegel PIBs: uren en meter van de partners in business",
       wat: "De ingehuurde partijen van Fonteyn loggen hun uren in een eigen portaal en geven daar toestemming voor een meter op hun laptop. In deze tegel zet je partners op, nodig je ze uit en zie je per dag de gelogde uren naast de gemeten actieve tijd.",
