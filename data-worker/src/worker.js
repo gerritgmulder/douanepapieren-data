@@ -92,6 +92,7 @@ const ALLOWED_BUCKETS = new Set([
   "bezorgingen",
   "takenlijst",       // Takenlijst: eigen weektaken en gedelegeerde klussen, per taak één record
   "voorraad-notities",// Per reserveringsregel: opmerking + vinkjes afroep/inplannen/gepland (Chantal)
+  "pib-partners",     // PIBs: partners in business, hun toestemming en de sleutel van hun meter (uren en metingen staan in D1)
   "voorraad-wijzigingen", // Orderregels die in Logic4 van model, kleur of uitvoering zijn veranderd sinds de vorige sync (laatste 300)
   "geldgoederen",     // Geld-goederenbeweging: laatste controle-momentopname + historie van de totalen
   "gg-bevindingen",   // Geld-goederenbeweging: per bevinding de status (open/opgepakt/opgelost/akkoord) + notitie
@@ -199,7 +200,7 @@ const corsHeaders = {
      Passion Partners Beheer zonder beheersleutel). Ontbrak hier twee dagen:
      de browser weigert dan de hele aanvraag vóór hij verstuurd wordt en het
      scherm zegt alleen "Failed to fetch" (Gerrit, 14 sep 2026). */
-  "Access-Control-Allow-Headers": "Content-Type, X-Fonteyn-Auth, X-Fonteyn-User, X-Dealer-Session, X-DP-Admin",
+  "Access-Control-Allow-Headers": "Content-Type, X-Fonteyn-Auth, X-Fonteyn-User, X-Dealer-Session, X-DP-Admin, X-Pib-Session, X-Pib-Agent",
   /* X-Kleur: of een spafoto écht in de gevraagde kleur is (portaal, hover op
      een kleur). Zonder Expose-Headers kan de browser die kop niet lezen. */
   "Access-Control-Expose-Headers": "X-Kleur, X-Bron",
@@ -3117,6 +3118,544 @@ async function dpAdminSetPassword(request, env) {
   console.log("[dp-pw] wachtwoord door beheerder gezet voor " + email);
   await dpLogPartner(env, { email, company: dealer.company || "" }, "wachtwoord-ingesteld", "door beheerder");
   return reply(200, { ok: true, email });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PIBs - Partners in Business
+   ═══════════════════════════════════════════════════════════════════════════
+   Gerrit (15 sep 2026): "een omgeving waar de partners in business van
+   Fonteyn (Intenza, Optivaize, Elevate, ...) in kunnen inloggen om hun
+   gewerkte uren te loggen die ze werken voor Fonteyn, maar dat niet alleen:
+   ze moeten via dat portaal toegang geven om hun activiteiten op hun laptop
+   bij te laten houden. Dolf wil kunnen controleren hoe je effectief bezig bent
+   geweest voor Fonteyn."
+
+   Drie kanten:
+     1. Het portaal (/pib): de partner logt in met een inloglink per mail, zet
+        zijn uren erin, geeft toestemming voor de activiteitenmeting en haalt
+        daar de meter voor zijn laptop op. Hij ziet zijn eigen metingen terug,
+        want wat je over iemand vastlegt hoort die persoon ook te kunnen zien.
+     2. De meter (/pib/activiteit): een klein script op de laptop van de
+        partner dat elke halve minuut kijkt welk programma en welk venster
+        voorop staat, en dat elke vijf minuten hierheen stuurt. Alleen als de
+        partner toestemming heeft gegeven; de sleutel van de meter bestaat
+        pas na die toestemming en vervalt zodra hij haar intrekt.
+     3. De tegel PIBs (/pib/admin): alleen voor Dolf en Gerrit. Uren naast
+        gemeten actieve tijd, per partner, per dag.
+
+   Opslag: partners en toestemmingen in KV (pib-partners), uren en metingen
+   in D1 (pib_uren, pib_activiteit). Metingen zijn er te veel voor KV: één
+   partner levert er honderden per dag, en KV telt elke schrijfactie mee in
+   de daglimiet die het hele dashboard deelt.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const PIB_SESS_TTL = 30 * 24 * 3600;
+const PIB_LOGIN_TTL = 7 * 24 * 3600;
+const PIB_GROEP = "pibs";
+let pibLaatsteLink = null;
+/* De tekst waar de partner ja tegen zegt. Versie meesturen met de
+   toestemming: verandert de tekst, dan is te zien onder welke versie iemand
+   akkoord ging. */
+const PIB_TOESTEMMING_VERSIE = "2026-09-15";
+const PIB_TOESTEMMING_TEKST =
+  "Ik geef Fonteyn toestemming om op de computer waarop ik de meter installeer bij te houden welk " +
+  "programma en welk venster voorop staan, elke dertig seconden, zolang ik actief ben (niet bij " +
+  "meer dan drie minuten zonder toetsenbord of muis). Die gegevens worden naar Fonteyn gestuurd en " +
+  "zijn zichtbaar voor Dolf Nieland en Gerrit Mulder, en voor mijzelf. Ze worden gebruikt om mijn " +
+  "gedeclareerde uren voor Fonteyn te kunnen nalopen. Ik kan de meter op elk moment stilzetten of " +
+  "verwijderen en deze toestemming in het portaal intrekken; dan stopt het vastleggen meteen.";
+
+function pibOrigin(env, url) { return env.PIB_ORIGIN || url.origin; }
+function pibToken() { return crypto.randomUUID() + crypto.randomUUID().replace(/-/g, ""); }
+function pibEsc(x) { return String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function pibId() { return crypto.randomUUID().slice(0, 8) + Date.now().toString(36); }
+
+async function pibPartners(env) {
+  const d = (await env.FONTEYN_DATA.get("pib-partners", { type: "json" })) || {};
+  if (!Array.isArray(d.partners)) d.partners = [];
+  return d;
+}
+function pibVind(d, email) {
+  const e = String(email || "").toLowerCase().trim();
+  return d.partners.find(p => String(p.email || "").toLowerCase() === e) || null;
+}
+async function pibSessie(env, request) {
+  const tok = request.headers.get("X-Pib-Session") || "";
+  if (!tok || tok.length < 20) return null;
+  const s = await env.FONTEYN_DATA.get("pib-sess:" + tok, { type: "json" });
+  if (!s) return null;
+  const d = await pibPartners(env);
+  const p = pibVind(d, s.email);
+  if (!p || p.actief === false) return null;
+  return { email: p.email, partner: p, data: d };
+}
+/* Beheer: teamsleutel plus een naam uit de groep pibs in toegang.js (Dolf,
+   Gerrit, Fonteynbot). Dezelfde constructie als Passion Partners Beheer. */
+async function pibIsBeheer(request, env) {
+  if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return false;
+  const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase().trim();
+  if (env.DEV_OPEN && wie === "gerrit") return true;   // wrangler dev: toegang.js op main kent de groep nog niet
+  return wie ? toegangMag(env, PIB_GROEP, wie) : false;
+}
+
+function pibShell(titel, binnen, status) {
+  return new Response("<!doctype html><html lang='nl'><head><meta charset='utf-8'>" +
+    "<meta name='viewport' content='width=device-width,initial-scale=1'><meta name='robots' content='noindex'>" +
+    "<title>" + pibEsc(titel) + "</title></head>" +
+    "<body style='font-family:Montserrat,Arial,Helvetica,sans-serif;background:#f3f4f6;margin:0;padding:44px 16px;'>" +
+    "<div style='max-width:460px;margin:0 auto;'>" +
+    "<div style='text-align:center;margin-bottom:18px;font-weight:700;font-size:22px;color:#144734'>Fonteyn</div>" +
+    "<div style='background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:32px 30px;text-align:center'>" +
+    "<div style='height:3px;width:46px;background:#144734;border-radius:2px;margin:0 auto 20px'></div>" +
+    binnen + "</div>" +
+    "<p style='text-align:center;color:#9ca3af;font-size:12px;margin:20px 0 0'>Partners in Business</p>" +
+    "</div></body></html>", { status: status || 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } });
+}
+
+/* GET /pib - de portaalpagina, uit de repo (net als /dealers). */
+async function pibHandlePage(env) {
+  const cb = Math.floor(Date.now() / 10000);
+  const r = await fetch(env.DEV_PIB_URL
+      ? env.DEV_PIB_URL + "?cb=" + Date.now()
+      : "https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/pib-portaal.html?cb=" + cb,
+    { cf: { cacheTtl: 10, cacheEverything: true } });
+  if (!r.ok) return new Response("Het portaal is even niet bereikbaar. Probeer het over een minuut opnieuw.", { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  return new Response(await r.text(), { headers: {
+    "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store",
+    "Content-Security-Policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    "X-Frame-Options": "DENY", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow",
+  } });
+}
+
+/* POST /pib/login { email } - inloglink per mail. Antwoord is altijd "ok":
+   aan de reactie mag niet te zien zijn of een adres bekend is. */
+async function pibHandleLogin(request, env, url) {
+  if (await rateLimited(env, request, "pib-login", 10, 900)) return reply(429, { ok: false, error: "te-vaak" });
+  let b = {}; try { b = await request.json(); } catch {}
+  const email = String(b.email || "").trim().toLowerCase();
+  if (!email.includes("@")) return reply(400, { ok: false, error: "geen-adres" });
+  const d = await pibPartners(env);
+  const p = pibVind(d, email);
+  if (p && p.actief !== false) await pibStuurInloglink(env, url, p);
+  return reply(200, { ok: true });
+}
+async function pibStuurInloglink(env, url, p) {
+  const t = pibToken();
+  await env.FONTEYN_DATA.put("pib-login:" + t, JSON.stringify({ email: p.email, naam: p.naam || "", ts: new Date().toISOString() }), { expirationTtl: PIB_LOGIN_TTL });
+  const link = pibOrigin(env, url) + "/pib/auth?t=" + t;
+  pibLaatsteLink = env.DEV_OPEN ? link : null;   // alleen bij wrangler dev, om te testen zonder mailbox
+  const r = await dpSendEmail(env, p.email, "Inloggen bij Fonteyn - Partners in Business",
+    "<div style='font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#1f2937'>" +
+    "<h2 style='color:#144734;margin:0 0 12px'>Fonteyn - Partners in Business</h2>" +
+    "<p>Hi " + pibEsc(p.naam || p.bedrijf || "") + ",</p>" +
+    "<p>Met de knop hieronder log je in op het portaal waar je je uren voor Fonteyn vastlegt. De link is zeven dagen geldig en werkt één keer.</p>" +
+    "<p style='margin:26px 0'><a href='" + link + "' style='background:#144734;color:#fff;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:10px;display:inline-block'>Inloggen</a></p>" +
+    "<p style='color:#6b7280;font-size:12px'>Werkt de knop niet, kopieer dan dit adres in je browser:<br>" + pibEsc(link) + "</p></div>");
+  return r;
+}
+/* GET /pib/auth?t= toont de knop (mailscanners doen alleen GET); POST wisselt
+   de link in. Zelfde reden als bij Passion Partners: een scanner die de link
+   opent mag hem niet verbruiken. */
+async function pibHandleAuth(request, env, url) {
+  let t = "";
+  if (request.method === "POST") { const f = await request.formData().catch(() => null); t = String((f && f.get("t")) || ""); }
+  else t = url.searchParams.get("t") || "";
+  t = t.replace(/[^A-Za-z0-9-]/g, "");
+  const login = t ? await env.FONTEYN_DATA.get("pib-login:" + t, { type: "json" }) : null;
+  if (!login) return pibShell("Link verlopen", "<h2 style='margin:0 0 10px;font-size:19px;color:#1f2937'>Link verlopen</h2><p style='color:#555;line-height:1.6;margin:0'>Deze inloglink is niet meer geldig. Vraag in het portaal een nieuwe aan.</p><p style='margin:20px 0 0'><a href='" + pibOrigin(env, url) + "/pib' style='color:#144734;font-weight:bold;text-decoration:none'>Naar het portaal</a></p>", 400);
+  if (request.method === "GET") {
+    return pibShell("Inloggen", "<h2 style='margin:0 0 10px;font-size:19px;color:#1f2937'>Inloggen</h2><p style='color:#555;line-height:1.6;margin:0'>Welkom " + pibEsc(login.naam) + ". Klik op de knop om het portaal te openen.</p>" +
+      "<form method='POST' id='dr' action='" + pibOrigin(env, url) + "/pib/auth'><input type='hidden' name='t' value='" + t + "'>" +
+      "<button type='submit' style='background:#144734;color:#fff;border:0;font-weight:bold;font-size:15px;padding:14px 30px;border-radius:10px;cursor:pointer;margin-top:12px'>Verder naar het portaal</button></form>" +
+      "<script>document.getElementById('dr').submit();<\/script>");
+  }
+  await env.FONTEYN_DATA.delete("pib-login:" + t);
+  const d = await pibPartners(env);
+  const p = pibVind(d, login.email);
+  if (!p || p.actief === false) return pibShell("Geen toegang", "<p>Dit account is niet (meer) actief.</p>", 403);
+  const sess = pibToken();
+  await env.FONTEYN_DATA.put("pib-sess:" + sess, JSON.stringify({ email: p.email, since: new Date().toISOString() }), { expirationTtl: PIB_SESS_TTL });
+  p.laatsteLogin = new Date().toISOString();
+  await env.FONTEYN_DATA.put("pib-partners", JSON.stringify(d));
+  return new Response(null, { status: 302, headers: { "Location": pibOrigin(env, url) + "/pib#s=" + sess } });
+}
+
+/* ─── Uren ───────────────────────────────────────────────────────────── */
+function pibDatumOk(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || "")) && !isNaN(new Date(s).getTime()); }
+async function pibUrenLijst(env, email, van, tot) {
+  const r = await env.ACTIVITEIT.prepare(
+    "SELECT id, datum, uren, omschrijving, categorie, ts FROM pib_uren WHERE partner = ?1 AND datum >= ?2 AND datum <= ?3 ORDER BY datum DESC, ts DESC")
+    .bind(email, van, tot).all();
+  return r.results || [];
+}
+async function pibHandleUren(request, env, sess, url) {
+  const email = sess.email;
+  if (request.method === "GET") {
+    const van = pibDatumOk(url.searchParams.get("van")) ? url.searchParams.get("van") : "2000-01-01";
+    const tot = pibDatumOk(url.searchParams.get("tot")) ? url.searchParams.get("tot") : "2999-12-31";
+    return reply(200, { ok: true, regels: await pibUrenLijst(env, email, van, tot) });
+  }
+  if (request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const datum = String(b.datum || "");
+    const uren = Math.round(Number(String(b.uren || "").replace(",", ".")) * 4) / 4;   // kwartieren
+    const omschrijving = String(b.omschrijving || "").trim().slice(0, 500);
+    const categorie = String(b.categorie || "").trim().slice(0, 60);
+    if (!pibDatumOk(datum)) return reply(400, { ok: false, error: "datum ontbreekt of is ongeldig" });
+    if (!(uren > 0 && uren <= 24)) return reply(400, { ok: false, error: "uren moet tussen 0,25 en 24 liggen" });
+    if (omschrijving.length < 5) return reply(400, { ok: false, error: "omschrijving is te kort: zeg wat je hebt gedaan" });
+    /* Niet meer dan een week terug, en niet in de toekomst: uren die je pas
+       een maand later invult zijn geen registratie meer maar een herinnering. */
+    const vandaag = new Date().toISOString().slice(0, 10);
+    const grens = new Date(Date.now() - 8 * 86400000).toISOString().slice(0, 10);
+    if (datum > vandaag) return reply(400, { ok: false, error: "de datum ligt in de toekomst" });
+    if (datum < grens && !b.id) return reply(400, { ok: false, error: "uren kunnen tot een week terug worden ingevuld; neem voor oudere uren contact op met Gerrit" });
+    const id = String(b.id || "");
+    if (id) {
+      const bestaand = await env.ACTIVITEIT.prepare("SELECT id FROM pib_uren WHERE id = ?1 AND partner = ?2").bind(id, email).first();
+      if (!bestaand) return reply(404, { ok: false, error: "regel niet gevonden" });
+      await env.ACTIVITEIT.prepare("UPDATE pib_uren SET datum=?1, uren=?2, omschrijving=?3, categorie=?4, bewerkt=?5 WHERE id=?6 AND partner=?7")
+        .bind(datum, uren, omschrijving, categorie, new Date().toISOString(), id, email).run();
+      return reply(200, { ok: true, id });
+    }
+    const nieuw = pibId();
+    await env.ACTIVITEIT.prepare("INSERT INTO pib_uren (id, partner, datum, uren, omschrijving, categorie, ts) VALUES (?1,?2,?3,?4,?5,?6,?7)")
+      .bind(nieuw, email, datum, uren, omschrijving, categorie, new Date().toISOString()).run();
+    return reply(200, { ok: true, id: nieuw });
+  }
+  if (request.method === "DELETE") {
+    const id = String(url.searchParams.get("id") || "");
+    const r = await env.ACTIVITEIT.prepare("DELETE FROM pib_uren WHERE id = ?1 AND partner = ?2").bind(id, email).run();
+    return reply(200, { ok: true, verwijderd: (r.meta && r.meta.changes) || 0 });
+  }
+  return reply(405, { ok: false });
+}
+
+/* ─── Toestemming en de meter ───────────────────────────────────────── */
+async function pibHandleToestemming(request, env, sess) {
+  let b = {}; try { b = await request.json(); } catch {}
+  const p = sess.partner;
+  if (b.akkoord === true) {
+    p.toestemming = { gegeven: true, ts: new Date().toISOString(), versie: PIB_TOESTEMMING_VERSIE,
+                      ip: request.headers.get("CF-Connecting-IP") || "", ua: String(request.headers.get("User-Agent") || "").slice(0, 200) };
+    if (!p.agentToken) p.agentToken = pibToken();
+  } else if (b.akkoord === false) {
+    p.toestemming = { gegeven: false, ts: new Date().toISOString(), versie: PIB_TOESTEMMING_VERSIE, ingetrokken: true };
+    p.agentToken = null;    // de meter kan vanaf nu niets meer sturen
+  } else return reply(400, { ok: false, error: "akkoord ontbreekt" });
+  await env.FONTEYN_DATA.put("pib-partners", JSON.stringify(sess.data));
+  return reply(200, { ok: true, toestemming: p.toestemming, meterActief: !!p.agentToken });
+}
+
+/* De meter voor de laptop. Twee smaken: een shell-script voor de Mac (in
+   een LaunchAgent) en een PowerShell-script voor Windows (als geplande taak
+   bij aanmelden). Beide bufferen lokaal en sturen elke vijf minuten. */
+function pibAgentMac(token, basis) {
+  return `#!/bin/bash
+# Fonteyn PIB-meter voor macOS. Dubbelklik op dit bestand om te installeren.
+# Wat hij doet: elke 30 seconden kijken welk programma en venster voorop staan
+# (alleen als je actief bent) en dat elke 5 minuten naar Fonteyn sturen.
+# Stoppen: launchctl unload ~/Library/LaunchAgents/nl.fonteyn.pib.plist
+# Verwijderen: rm ~/Library/LaunchAgents/nl.fonteyn.pib.plist en de map ~/Library/Application\\ Support/fonteyn-pib
+set -e
+DIR="$HOME/Library/Application Support/fonteyn-pib"
+mkdir -p "$DIR"
+cat > "$DIR/meter.sh" <<'METER'
+#!/bin/bash
+TOKEN="${token}"
+URL="${basis}/pib/activiteit"
+DIR="$HOME/Library/Application Support/fonteyn-pib"
+BUF="$DIR/buffer.jsonl"
+jsonstr() { printf '%s' "$1" | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g' | tr -d '\\000-\\037'; }
+n=0
+while true; do
+  idle=$(ioreg -c IOHIDSystem 2>/dev/null | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}')
+  [ -z "$idle" ] && idle=0
+  if [ "$idle" -lt 180 ]; then
+    app=$(osascript -e 'with timeout of 5 seconds' -e 'tell application "System Events" to get name of first application process whose frontmost is true' -e 'end timeout' 2>/dev/null)
+    titel=$(osascript -e 'with timeout of 5 seconds' -e 'tell application "System Events" to tell (first application process whose frontmost is true) to get name of front window' -e 'end timeout' 2>/dev/null)
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    printf '{"ts":"%s","app":"%s","titel":"%s"}\\n' "$ts" "$(jsonstr "$app")" "$(jsonstr "$titel")" >> "$BUF"
+  fi
+  n=$((n+1))
+  if [ "$n" -ge 10 ] && [ -s "$BUF" ]; then
+    n=0
+    body="{\\"samples\\":[$(paste -sd, "$BUF")]}"
+    if curl -s -m 20 -o /dev/null -w '%{http_code}' -H "Content-Type: application/json" -H "X-Pib-Agent: $TOKEN" --data-binary "$body" "$URL" | grep -q '^200'; then
+      : > "$BUF"
+    fi
+  fi
+  sleep 30
+done
+METER
+chmod +x "$DIR/meter.sh"
+cat > "$HOME/Library/LaunchAgents/nl.fonteyn.pib.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>nl.fonteyn.pib</string>
+  <key>ProgramArguments</key><array><string>/bin/bash</string><string>$DIR/meter.sh</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$DIR/meter.log</string>
+  <key>StandardErrorPath</key><string>$DIR/meter.log</string>
+</dict></plist>
+PLIST
+launchctl unload "$HOME/Library/LaunchAgents/nl.fonteyn.pib.plist" 2>/dev/null || true
+launchctl load "$HOME/Library/LaunchAgents/nl.fonteyn.pib.plist"
+echo
+echo "De Fonteyn PIB-meter is geinstalleerd en draait. Je mag dit venster sluiten."
+echo "Krijg je een vraag over Toegankelijkheid of Automatisering: sta die toe, anders ziet de meter geen venstertitels."
+`;
+}
+function pibMeterWindows(token, basis) {
+  /* De meter zelf, als PowerShell. Wordt door het installatiebestand
+     opgehaald met de meter-sleutel in de URL; die sleutel is er alleen na
+     toestemming en vervalt zodra de toestemming wordt ingetrokken. */
+  return `$Token = '${token}'
+$Url = '${basis}/pib/activiteit'
+$Dir = Join-Path $env:APPDATA 'FonteynPIB'
+$Buf = Join-Path $Dir 'buffer.jsonl'
+Add-Type @"
+using System; using System.Runtime.InteropServices; using System.Text;
+public class PibWin {
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [StructLayout(LayoutKind.Sequential)] public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+  [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO p);
+}
+"@
+$n = 0
+while ($true) {
+  $li = New-Object PibWin+LASTINPUTINFO
+  $li.cbSize = [System.Runtime.InteropServices.Marshal]::SizeOf($li)
+  [void][PibWin]::GetLastInputInfo([ref]$li)
+  $idle = ([Environment]::TickCount - $li.dwTime) / 1000
+  if ($idle -lt 180) {
+    $h = [PibWin]::GetForegroundWindow()
+    $sb = New-Object System.Text.StringBuilder 512
+    [void][PibWin]::GetWindowText($h, $sb, 512)
+    $procId = 0
+    [void][PibWin]::GetWindowThreadProcessId($h, [ref]$procId)
+    $app = ''
+    try { $app = (Get-Process -Id $procId -ErrorAction Stop).ProcessName } catch {}
+    $rec = @{ ts = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'); app = $app; titel = $sb.ToString() } | ConvertTo-Json -Compress
+    Add-Content -Path $Buf -Value $rec -Encoding UTF8
+  }
+  $n++
+  if ($n -ge 10 -and (Test-Path $Buf)) {
+    $n = 0
+    $lines = Get-Content $Buf -Encoding UTF8 | Where-Object { $_ -ne '' }
+    if ($lines) {
+      $body = '{"samples":[' + ($lines -join ',') + ']}'
+      try {
+        Invoke-RestMethod -Uri $Url -Method Post -ContentType 'application/json; charset=utf-8' -Headers @{ 'X-Pib-Agent' = $Token } -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -TimeoutSec 20 | Out-Null
+        Clear-Content $Buf
+      } catch {}
+    }
+  }
+  Start-Sleep -Seconds 30
+}
+`;
+}
+function pibAgentWindows(token, basis) {
+  /* Het installatiebestand: een .bat die PowerShell aanroept met een kort,
+     base64-gecodeerd script (UTF-16LE, zoals -EncodedCommand wil). Dat script
+     haalt de meter op en zet hem als geplande taak bij aanmelden. De meter
+     zelf staat niet in de .bat: met de meter erin werd de regel langer dan
+     de 8.191 tekens die cmd toelaat. */
+  const installer = `$Dir = Join-Path $env:APPDATA 'FonteynPIB'
+New-Item -ItemType Directory -Force -Path $Dir | Out-Null
+$pad = Join-Path $Dir 'meter.ps1'
+Invoke-WebRequest -Uri '${basis}/pib/meter/windows.ps1?k=${token}' -OutFile $pad -UseBasicParsing
+$cmd = 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "' + $pad + '"'
+schtasks /create /tn FonteynPIB /sc onlogon /rl limited /f /tr $cmd | Out-Null
+schtasks /run /tn FonteynPIB | Out-Null
+Write-Host ''
+Write-Host 'De Fonteyn PIB-meter is geinstalleerd en draait. Je mag dit venster sluiten.'
+Write-Host 'Verwijderen kan later met: schtasks /delete /tn FonteynPIB /f'
+`;
+  return "@echo off\r\nrem Fonteyn PIB-meter voor Windows. Dubbelklik om te installeren.\r\n" +
+    "rem Elke 30 seconden: welk programma en venster staan voorop (alleen als je actief bent); elke 5 minuten naar Fonteyn.\r\n" +
+    "powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand " + pibB64Utf16(installer) + "\r\npause\r\n";
+}
+function pibB64Utf8(s) {
+  const b = new TextEncoder().encode(s); let bin = ""; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]); return btoa(bin);
+}
+function pibB64Utf16(s) {
+  let bin = ""; for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); bin += String.fromCharCode(c & 255, c >> 8); } return btoa(bin);
+}
+async function pibHandleAgentDownload(env, sess, url, soort) {
+  const p = sess.partner;
+  if (!p.agentToken || !(p.toestemming && p.toestemming.gegeven)) return reply(403, { ok: false, error: "eerst toestemming geven" });
+  const basis = pibOrigin(env, url);
+  if (soort === "mac") return new Response(pibAgentMac(p.agentToken, basis), { headers: { ...corsHeaders, "Content-Type": "application/x-sh; charset=utf-8", "Content-Disposition": "attachment; filename=\"fonteyn-pib-meter.command\"", "Cache-Control": "no-store" } });
+  return new Response(pibAgentWindows(p.agentToken, basis), { headers: { ...corsHeaders, "Content-Type": "application/x-bat; charset=utf-8", "Content-Disposition": "attachment; filename=\"fonteyn-pib-meter.bat\"", "Cache-Control": "no-store" } });
+}
+
+/* POST /pib/activiteit (kop X-Pib-Agent) { samples:[{ts,app,titel}] }
+   Per minuut, programma en venster één rij met een teller. Zo blijft een dag
+   van acht uur hooguit een paar honderd rijen, en is later exact te zien
+   hoeveel halve minuten er in welk venster zaten. */
+async function pibHandleActiviteit(request, env) {
+  const tok = request.headers.get("X-Pib-Agent") || "";
+  if (!tok || tok.length < 20) return reply(401, { ok: false, error: "geen sleutel" });
+  const d = await pibPartners(env);
+  const p = d.partners.find(x => x.agentToken && x.agentToken === tok && x.actief !== false && x.toestemming && x.toestemming.gegeven);
+  if (!p) return reply(403, { ok: false, error: "sleutel onbekend of toestemming ingetrokken" });
+  let b = {}; try { b = await request.json(); } catch { return reply(400, { ok: false, error: "geen json" }); }
+  const samples = Array.isArray(b.samples) ? b.samples.slice(0, 2000) : [];
+  const tel = new Map();
+  for (const s of samples) {
+    const t = new Date(String(s.ts || "")); if (isNaN(t.getTime())) continue;
+    if (Date.now() - t.getTime() > 14 * 86400000) continue;          // ouder dan twee weken: niet meer bewaren
+    const minuut = t.toISOString().slice(0, 16);                        // 2026-09-15T20:31
+    const app = String(s.app || "").slice(0, 80);
+    const titel = String(s.titel || "").slice(0, 200);
+    const k = minuut + "" + app + "" + titel;
+    tel.set(k, (tel.get(k) || 0) + 1);
+  }
+  const stmt = env.ACTIVITEIT.prepare(
+    "INSERT INTO pib_activiteit (partner, minuut, app, titel, n) VALUES (?1,?2,?3,?4,?5) " +
+    "ON CONFLICT(partner, minuut, app, titel) DO UPDATE SET n = n + excluded.n");
+  const batch = [];
+  for (const [k, n] of tel) { const [minuut, app, titel] = k.split(""); batch.push(stmt.bind(p.email, minuut, app, titel, n)); }
+  for (let i = 0; i < batch.length; i += 100) await env.ACTIVITEIT.batch(batch.slice(i, i + 100));
+  p.meterLaatst = new Date().toISOString();
+  p.meterPlatform = /powershell|windows/i.test(request.headers.get("User-Agent") || "") ? "windows" : "mac";
+  await env.FONTEYN_DATA.put("pib-partners", JSON.stringify(d));
+  return reply(200, { ok: true, rijen: batch.length });
+}
+
+/* Samenvatting van metingen: per dag actieve minuten en de programma's en
+   vensters waar de tijd in zat. Eén minuut telt als actief zodra er in die
+   minuut minstens één meting was. */
+async function pibActiviteitOverzicht(env, email, van, tot) {
+  const r = await env.ACTIVITEIT.prepare(
+    "SELECT substr(minuut,1,10) AS dag, COUNT(DISTINCT minuut) AS minuten FROM pib_activiteit WHERE partner = ?1 AND minuut >= ?2 AND minuut < ?3 GROUP BY dag ORDER BY dag")
+    .bind(email, van + "T00:00", tot + "T24:00").all();
+  const apps = await env.ACTIVITEIT.prepare(
+    "SELECT substr(minuut,1,10) AS dag, app, SUM(n) AS n FROM pib_activiteit WHERE partner = ?1 AND minuut >= ?2 AND minuut < ?3 GROUP BY dag, app ORDER BY dag, n DESC")
+    .bind(email, van + "T00:00", tot + "T24:00").all();
+  const perDag = {};
+  for (const x of (r.results || [])) perDag[x.dag] = { minuten: x.minuten, apps: [] };
+  for (const x of (apps.results || [])) if (perDag[x.dag]) perDag[x.dag].apps.push({ app: x.app, halveMinuten: x.n });
+  return perDag;
+}
+async function pibActiviteitDag(env, email, dag) {
+  const r = await env.ACTIVITEIT.prepare(
+    "SELECT minuut, app, titel, n FROM pib_activiteit WHERE partner = ?1 AND minuut >= ?2 AND minuut < ?3 ORDER BY minuut, n DESC")
+    .bind(email, dag + "T00:00", dag + "T24:00").all();
+  return r.results || [];
+}
+/* De tijdzone: metingen staan in UTC, de partners werken in Nederland. Voor
+   dagtotalen kijken we naar de Nederlandse dag. Het verschil zit in de
+   nachtelijke uren, en daar wordt zelden voor Fonteyn gewerkt; goed genoeg
+   zonder een kalender met zomertijd mee te slepen. Alleen tonen doet het
+   scherm in lokale tijd. */
+
+/* ─── Beheer ─────────────────────────────────────────────────────────── */
+async function pibAdmin(request, env, url, p) {
+  if (!(await pibIsBeheer(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep pibs" });
+  const d = await pibPartners(env);
+  const veilig = (x) => ({ id: x.id, email: x.email, naam: x.naam || "", bedrijf: x.bedrijf || "", tarief: x.tarief || null,
+    actief: x.actief !== false, sinds: x.sinds || null, laatsteLogin: x.laatsteLogin || null,
+    toestemming: x.toestemming || null, meterActief: !!x.agentToken, meterLaatst: x.meterLaatst || null, meterPlatform: x.meterPlatform || null,
+    uitgenodigd: x.uitgenodigd || null, notitie: x.notitie || "" });
+  if (p === "/pib/admin/partners" && request.method === "GET") return reply(200, { ok: true, partners: d.partners.map(veilig) });
+  if (p === "/pib/admin/partner" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const email = String(b.email || "").trim().toLowerCase();
+    if (!email.includes("@")) return reply(400, { ok: false, error: "e-mailadres ontbreekt" });
+    let x = pibVind(d, email);
+    if (!x) { x = { id: pibId(), email, sinds: new Date().toISOString(), actief: true }; d.partners.push(x); }
+    if (b.naam != null) x.naam = String(b.naam).trim().slice(0, 80);
+    if (b.bedrijf != null) x.bedrijf = String(b.bedrijf).trim().slice(0, 80);
+    if (b.tarief != null) x.tarief = Number(b.tarief) > 0 ? Number(b.tarief) : null;
+    if (b.notitie != null) x.notitie = String(b.notitie).slice(0, 500);
+    if (b.actief != null) x.actief = b.actief !== false;
+    await env.FONTEYN_DATA.put("pib-partners", JSON.stringify(d));
+    return reply(200, { ok: true, partner: veilig(x) });
+  }
+  if (p === "/pib/admin/uitnodigen" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const x = pibVind(d, b.email);
+    if (!x) return reply(404, { ok: false, error: "partner onbekend" });
+    const r = await pibStuurInloglink(env, url, x);
+    x.uitgenodigd = new Date().toISOString();
+    await env.FONTEYN_DATA.put("pib-partners", JSON.stringify(d));
+    return reply(200, { ok: true, mailSent: !!r.ok, reden: r.reden || null, link: pibLaatsteLink || undefined });
+  }
+  if (p === "/pib/admin/overzicht" && request.method === "GET") {
+    const van = pibDatumOk(url.searchParams.get("van")) ? url.searchParams.get("van") : new Date(Date.now() - 27 * 86400000).toISOString().slice(0, 10);
+    const tot = pibDatumOk(url.searchParams.get("tot")) ? url.searchParams.get("tot") : new Date().toISOString().slice(0, 10);
+    const uit = [];
+    for (const x of d.partners) {
+      const uren = await pibUrenLijst(env, x.email, van, tot);
+      const act = await pibActiviteitOverzicht(env, x.email, van, tot);
+      const dagen = {};
+      for (const u of uren) { dagen[u.datum] = dagen[u.datum] || { uren: 0, regels: [], minuten: 0, apps: [] }; dagen[u.datum].uren += Number(u.uren) || 0; dagen[u.datum].regels.push(u); }
+      for (const [dag, a] of Object.entries(act)) { dagen[dag] = dagen[dag] || { uren: 0, regels: [], minuten: 0, apps: [] }; dagen[dag].minuten = a.minuten; dagen[dag].apps = a.apps.slice(0, 8); }
+      uit.push({ partner: veilig(x), dagen,
+        totaalUren: uren.reduce((n, u) => n + (Number(u.uren) || 0), 0),
+        totaalMinuten: Object.values(act).reduce((n, a) => n + a.minuten, 0) });
+    }
+    return reply(200, { ok: true, van, tot, partners: uit });
+  }
+  if (p === "/pib/admin/dag" && request.method === "GET") {
+    const email = String(url.searchParams.get("partner") || "").toLowerCase();
+    const dag = url.searchParams.get("dag");
+    if (!pibVind(d, email) || !pibDatumOk(dag)) return reply(400, { ok: false, error: "partner of dag ontbreekt" });
+    return reply(200, { ok: true, rijen: await pibActiviteitDag(env, email, dag), uren: await pibUrenLijst(env, email, dag, dag) });
+  }
+  return reply(404, { ok: false, error: "onbekend" });
+}
+
+async function handlePibRoutes(request, env, url) {
+  const p = url.pathname.replace(/\/+$/, "");
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
+  if (p === "/pib" && request.method === "GET") return pibHandlePage(env);
+  if (p === "/pib/login" && request.method === "POST") return pibHandleLogin(request, env, url);
+  if (p === "/pib/auth") return pibHandleAuth(request, env, url);
+  if (p === "/pib/activiteit" && request.method === "POST") return pibHandleActiviteit(request, env);
+  if (p === "/pib/meter/windows.ps1" && request.method === "GET") {
+    const k = String(url.searchParams.get("k") || "");
+    const d = await pibPartners(env);
+    const x = k.length >= 20 ? d.partners.find(y => y.agentToken === k && y.actief !== false && y.toestemming && y.toestemming.gegeven) : null;
+    if (!x) return reply(403, { ok: false, error: "sleutel onbekend of toestemming ingetrokken" });
+    return new Response(pibMeterWindows(k, pibOrigin(env, url)).replace(/\n/g, "\r\n"), { headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+  }
+  if (p.startsWith("/pib/admin/")) return pibAdmin(request, env, url, p);
+  if (p.startsWith("/pib/api/")) {
+    const sess = await pibSessie(env, request);
+    if (!sess) return reply(401, { ok: false, error: "niet ingelogd" });
+    if (p === "/pib/api/me") {
+      const x = sess.partner;
+      return reply(200, { ok: true, email: x.email, naam: x.naam || "", bedrijf: x.bedrijf || "",
+        toestemming: x.toestemming || null, meterActief: !!x.agentToken, meterLaatst: x.meterLaatst || null,
+        toestemmingTekst: PIB_TOESTEMMING_TEKST, toestemmingVersie: PIB_TOESTEMMING_VERSIE });
+    }
+    if (p === "/pib/api/uren") return pibHandleUren(request, env, sess, url);
+    if (p === "/pib/api/toestemming" && request.method === "POST") return pibHandleToestemming(request, env, sess);
+    if (p === "/pib/api/meter/mac") return pibHandleAgentDownload(env, sess, url, "mac");
+    if (p === "/pib/api/meter/windows") return pibHandleAgentDownload(env, sess, url, "windows");
+    if (p === "/pib/api/activiteit" && request.method === "GET") {
+      const van = pibDatumOk(url.searchParams.get("van")) ? url.searchParams.get("van") : new Date(Date.now() - 27 * 86400000).toISOString().slice(0, 10);
+      const tot = pibDatumOk(url.searchParams.get("tot")) ? url.searchParams.get("tot") : new Date().toISOString().slice(0, 10);
+      return reply(200, { ok: true, dagen: await pibActiviteitOverzicht(env, sess.email, van, tot) });
+    }
+    if (p === "/pib/api/activiteit/dag" && request.method === "GET") {
+      const dag = url.searchParams.get("dag");
+      if (!pibDatumOk(dag)) return reply(400, { ok: false, error: "dag ontbreekt" });
+      return reply(200, { ok: true, rijen: await pibActiviteitDag(env, sess.email, dag) });
+    }
+    if (p === "/pib/api/logout" && request.method === "POST") {
+      const tok = request.headers.get("X-Pib-Session") || "";
+      if (tok) await env.FONTEYN_DATA.delete("pib-sess:" + tok);
+      return reply(200, { ok: true });
+    }
+  }
+  return reply(404, { ok: false, error: "onbekend" });
 }
 
 async function handleDealerRoutes(request, env, url) {
@@ -11616,6 +12155,10 @@ export default {
     if (url.pathname === "/prijslijst/bestand" && request.method === "GET") return plGeefBestand(request, env, url);
     if (url.pathname === "/prijslijst/verwijder" && request.method === "POST") return plWisBestand(request, env);
 
+    // Partners in Business (publiek portaal met eigen sessie; beheer met teamsleutel plus groep pibs)
+    if (url.pathname === "/pib" || url.pathname.startsWith("/pib/")) {
+      return handlePibRoutes(request, env, url);
+    }
     // Dealerportaal (publiek, eigen sessie-auth — géén shared secret)
     if (url.pathname === "/dealers" || url.pathname.startsWith("/dealers/")) {
       return handleDealerRoutes(request, env, url);

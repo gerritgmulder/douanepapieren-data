@@ -1,5 +1,5 @@
 {
-  "version": "0.34.35",
+  "version": "0.34.36",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -207,6 +207,10 @@
     {
       "name": "activiteit.html",
       "note": "Activiteitenlogboek — wie logt wanneer in en welke tegels worden gebruikt (uit bucket activiteit-YYYY-MM via /log). Alleen Gerrit/Dolf/Fonteynbot."
+    },
+    {
+      "name": "pibs.html",
+      "note": "Partners in Business: uren en meter van de ingehuurde partijen; alleen Dolf en Gerrit"
     },
     {
       "name": "specsheets.html",

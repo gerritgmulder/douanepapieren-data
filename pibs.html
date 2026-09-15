@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("pibs", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is niet voor jou bedoeld.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PIBs - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     PIBs - PARTNERS IN BUSINESS (beheer, alleen Dolf en Gerrit)
+
+     Gerrit (15 sep 2026): een omgeving waar de ingehuurde partijen van
+     Fonteyn (Intenza, Optivaize, Elevate, ...) hun uren voor Fonteyn loggen
+     en toestemming geven om hun activiteit op hun laptop bij te houden, zodat
+     Dolf kan zien hoe effectief er voor Fonteyn is gewerkt.
+
+     Deze tegel is de beheerkant: partners aanmaken en uitnodigen, en per
+     partner de gelogde uren naast de gemeten actieve tijd. Het portaal voor
+     de partners zelf staat op /pib van de worker (pib-portaal.html).
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#7ab648; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#f6f6f8; --rood:#b91c1c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--groen);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1200px;margin:22px auto;padding:0 18px 40px}
+.kaart{background:#fff;border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:16px}
+h2{margin:0 0 6px;font-size:17px;color:var(--groen)}
+h3{margin:16px 0 8px;font-size:14px}
+p.lead{color:var(--muted);line-height:1.6;margin:0 0 12px;font-size:13px}
+label{display:block;font-size:11.5px;color:var(--muted);margin:0 0 3px}
+input,select,textarea{font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;width:100%}
+.rij{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.rij>div{flex:1 1 150px}
+button{font:inherit;cursor:pointer}
+button.go{background:var(--groen);color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:600}
+button.stil{background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12.5px}
+button.klein{background:transparent;border:0;color:var(--groen);font-size:12px;padding:2px 4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:7px 6px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:8px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+td.n,th.n{text-align:right;white-space:nowrap}
+.pil{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#e5e7eb;color:#374151;white-space:nowrap}
+.pil.aan{background:#dcfce7;color:#166534}.pil.uit{background:#fee2e2;color:var(--rood)}.pil.half{background:#fef3c7;color:#92400e}
+.msg{margin-top:10px;padding:9px 12px;border-radius:8px;font-size:13px}.msg.ok{background:#dcfce7;color:#166534}.msg.bad{background:#fee2e2;color:var(--rood)}
+.hidden{display:none!important}
+.balk{height:7px;background:#e5e7eb;border-radius:4px;overflow:hidden;min-width:80px}.balk i{display:block;height:100%;background:var(--lime)}
+.balk i.uren{background:var(--groen)}
+.dagen td{font-size:12.5px}
+.apps{color:var(--muted);font-size:11.5px}
+.verhouding{font-weight:600}
+tr.klik{cursor:pointer}tr.klik:hover td{background:#f9fafb}
+.kpis{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 12px}
+.kpi{flex:1 1 130px;background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.kpi b{display:block;font-size:19px;color:var(--groen)}.kpi span{font-size:11px;color:var(--muted)}
+code{background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>PIBs - Partners in Business</h1>
+</header>
+<main>
+  <div class="kaart">
+    <h2>Wat dit is</h2>
+    <p class="lead">De ingehuurde partijen van Fonteyn loggen hier hun uren en geven toestemming voor een meter op hun laptop die bijhoudt welk programma en venster voorop staan. Hieronder zie je per partner de gelogde uren naast de gemeten actieve tijd. Het portaal voor de partners zelf: <a id="portaalLink" href="#" target="_blank">de inlogpagina</a>. Een partner logt in met een link per mail; die stuur je hier met <b>uitnodigen</b>.</p>
+  </div>
+
+  <div class="kaart">
+    <h2>Partners</h2>
+    <div class="rij">
+      <div><label>Naam</label><input id="pNaam" placeholder="bv. Max Bladt"></div>
+      <div><label>Bedrijf</label><input id="pBedrijf" placeholder="bv. Optivaize"></div>
+      <div style="flex:1.4 1 200px"><label>E-mailadres (hierop logt hij in)</label><input id="pEmail" type="email" placeholder="naam@bedrijf.nl"></div>
+      <div style="flex:0 1 120px"><label>Uurtarief (optioneel)</label><input id="pTarief" type="text" inputmode="decimal" placeholder="€"></div>
+      <div style="flex:0 0 auto"><button class="go" id="pToevoegen">Toevoegen</button></div>
+    </div>
+    <div id="pMsg" class="msg hidden"></div>
+    <div style="overflow-x:auto;margin-top:12px"><table><thead><tr><th>Partner</th><th>E-mail</th><th>Toestemming</th><th>Meter</th><th>Laatste login</th><th></th></tr></thead><tbody id="pLijst"></tbody></table></div>
+  </div>
+
+  <div class="kaart">
+    <h2>Uren naast gemeten tijd</h2>
+    <p class="lead">Per partner per dag: wat hij zelf heeft ingevuld (donkergroen) en hoeveel minuten de meter hem actief zag (lichtgroen). De verhouding is gemeten tijd gedeeld door gelogde uren. Boven de 100% zat hij langer achter zijn computer dan hij declareert, wat op zich niets zegt; onder de 60% is een gesprek waard. Let op: de meter meet alle activiteit op die computer, ook werk voor anderen, en zonder meter is er alleen wat de partner zelf invult.</p>
+    <div class="rij" style="margin-bottom:10px">
+      <div style="flex:0 1 160px"><label>Van</label><input type="date" id="oVan"></div>
+      <div style="flex:0 1 160px"><label>Tot en met</label><input type="date" id="oTot"></div>
+      <div style="flex:0 0 auto"><button class="stil" id="oLaad">Tonen</button></div>
+      <div style="flex:0 0 auto"><button class="stil" id="oCsv">Als CSV</button></div>
+    </div>
+    <div id="oStatus" class="lead"></div>
+    <div id="oLijst"></div>
+    <div id="oDag" class="hidden" style="margin-top:14px"></div>
+  </div>
+</main>
+<script>
+const WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
+const $ = (id) => document.getElementById(id);
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function koppen(){ return { "X-Fonteyn-Auth": localStorage.getItem("fp.teamkey") || "", "X-Fonteyn-User": (localStorage.getItem("fp.email") || "").toLowerCase(), "Content-Type": "application/json" }; }
+async function api(pad, opties){ const r = await fetch(WORKER + pad, Object.assign({ headers: koppen() }, opties || {})); let d = null; try { d = await r.json(); } catch(e){} return { status: r.status, data: d }; }
+function toon(el, soort, tekst){ el.className = "msg " + soort; el.textContent = tekst; el.classList.remove("hidden"); }
+function uren(n){ return Number(n||0).toLocaleString("nl-NL", { maximumFractionDigits: 2 }); }
+function minutenTekst(m){ m = Math.round(m); const h = Math.floor(m/60), r = m%60; return h ? h + " u " + (r ? r + " min" : "") : r + " min"; }
+function datumNl(s){ const d = new Date(s + "T12:00:00"); return isNaN(d) ? s : d.toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" }); }
+function wanneer(s){ if (!s) return "-"; const d = new Date(s); return isNaN(d) ? s : d.toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
+$("portaalLink").href = WORKER + "/pib";
+
+// ── Partners ──
+let partners = [];
+async function laadPartners(){
+  const r = await api("/pib/admin/partners");
+  if (r.status !== 200 || !r.data || !r.data.ok) { $("pLijst").innerHTML = "<tr><td colspan='6' style='color:var(--rood)'>Laden faalde: " + esc((r.data && r.data.error) || ("HTTP " + r.status)) + "</td></tr>"; return; }
+  partners = r.data.partners || [];
+  $("pLijst").innerHTML = partners.length ? partners.map(p => {
+    const t = p.toestemming;
+    const toest = t && t.gegeven ? "<span class='pil aan'>ja, " + new Date(t.ts).toLocaleDateString("nl-NL") + "</span>" : (t && t.ingetrokken ? "<span class='pil uit'>ingetrokken</span>" : "<span class='pil'>nog niet</span>");
+    const meter = p.meterLaatst ? "<span class='pil " + (Date.now() - new Date(p.meterLaatst) < 3600000 ? "aan" : "half") + "'>" + (p.meterPlatform || "") + " " + wanneer(p.meterLaatst) + "</span>" : "<span class='pil'>niets ontvangen</span>";
+    return "<tr" + (p.actief ? "" : " style='opacity:.5'") + "><td><b>" + esc(p.naam || "") + "</b>" + (p.bedrijf ? "<br><span style='color:var(--muted);font-size:12px'>" + esc(p.bedrijf) + "</span>" : "") + (p.tarief ? "<br><span style='color:var(--muted);font-size:11.5px'>€ " + uren(p.tarief) + " per uur</span>" : "") + "</td>" +
+      "<td>" + esc(p.email) + "</td><td>" + toest + "</td><td>" + meter + "</td><td>" + wanneer(p.laatsteLogin) + (p.uitgenodigd ? "<br><span style='color:var(--muted);font-size:11.5px'>uitgenodigd " + wanneer(p.uitgenodigd) + "</span>" : "") + "</td>" +
+      "<td style='white-space:nowrap'><button class='klein' data-uit='" + esc(p.email) + "'>uitnodigen</button> <button class='klein' data-aan='" + esc(p.email) + "'>" + (p.actief ? "uitzetten" : "aanzetten") + "</button></td></tr>";
+  }).join("") : "<tr><td colspan='6' style='color:var(--muted)'>Nog geen partners. Voeg hierboven de eerste toe.</td></tr>";
+  $("pLijst").querySelectorAll("[data-uit]").forEach(b => b.addEventListener("click", async () => {
+    b.disabled = true;
+    const r = await api("/pib/admin/uitnodigen", { method: "POST", body: JSON.stringify({ email: b.dataset.uit }) });
+    toon($("pMsg"), r.data && r.data.ok && r.data.mailSent ? "ok" : "bad", r.data && r.data.ok ? (r.data.mailSent ? "Inloglink gestuurd naar " + b.dataset.uit + "." : "Mail is niet aangenomen: " + (r.data.reden || "onbekend")) : "Uitnodigen lukte niet.");
+    laadPartners();
+  }));
+  $("pLijst").querySelectorAll("[data-aan]").forEach(b => b.addEventListener("click", async () => {
+    const p = partners.find(x => x.email === b.dataset.aan);
+    await api("/pib/admin/partner", { method: "POST", body: JSON.stringify({ email: p.email, actief: !p.actief }) });
+    laadPartners();
+  }));
+}
+$("pToevoegen").addEventListener("click", async () => {
+  const email = $("pEmail").value.trim().toLowerCase();
+  if (!email.includes("@")) { toon($("pMsg"), "bad", "Vul een e-mailadres in."); return; }
+  const r = await api("/pib/admin/partner", { method: "POST", body: JSON.stringify({ email, naam: $("pNaam").value.trim(), bedrijf: $("pBedrijf").value.trim(), tarief: Number(String($("pTarief").value).replace(",", ".")) || null }) });
+  if (r.status === 200 && r.data && r.data.ok) { toon($("pMsg"), "ok", "Opgeslagen. Klik op uitnodigen om de inloglink te sturen."); $("pNaam").value = $("pBedrijf").value = $("pEmail").value = $("pTarief").value = ""; laadPartners(); }
+  else toon($("pMsg"), "bad", (r.data && r.data.error) || ("Opslaan lukte niet (HTTP " + r.status + ")"));
+});
+
+// ── Overzicht ──
+let overzicht = null;
+function verhouding(minuten, urenGelogd){ if (!urenGelogd) return null; return minuten / 60 / urenGelogd; }
+function verhoudingPil(v){ if (v == null) return "<span class='pil'>geen uren</span>"; const pct = Math.round(v * 100); return "<span class='pil " + (v >= 0.6 ? "aan" : "uit") + " verhouding'>" + pct + "%</span>"; }
+async function laadOverzicht(){
+  $("oStatus").textContent = "Laden…";
+  const r = await api("/pib/admin/overzicht?van=" + $("oVan").value + "&tot=" + $("oTot").value);
+  if (r.status !== 200 || !r.data || !r.data.ok) { $("oStatus").textContent = "Laden faalde: " + ((r.data && r.data.error) || ("HTTP " + r.status)); return; }
+  overzicht = r.data; $("oStatus").textContent = "";
+  const ps = overzicht.partners.filter(p => p.partner.actief !== false || p.totaalUren || p.totaalMinuten);
+  if (!ps.length) { $("oLijst").innerHTML = "<p class='lead'>Nog niets om te tonen.</p>"; return; }
+  $("oLijst").innerHTML = ps.map(p => {
+    const dagen = Object.keys(p.dagen).sort().reverse();
+    const maxMin = Math.max(...dagen.map(d => Math.max(p.dagen[d].minuten, p.dagen[d].uren * 60)), 60);
+    const v = verhouding(p.totaalMinuten, p.totaalUren);
+    const bedrag = p.partner.tarief ? " · € " + uren(Math.round(p.totaalUren * p.partner.tarief)) : "";
+    return "<h3>" + esc(p.partner.naam || p.partner.email) + (p.partner.bedrijf ? " <span style='color:var(--muted);font-weight:400'>" + esc(p.partner.bedrijf) + "</span>" : "") + "</h3>" +
+      "<div class='kpis'><div class='kpi'><b>" + uren(p.totaalUren) + "</b><span>uur gelogd" + bedrag + "</span></div>" +
+      "<div class='kpi'><b>" + minutenTekst(p.totaalMinuten) + "</b><span>actief gemeten</span></div>" +
+      "<div class='kpi'><b>" + (v == null ? "-" : Math.round(v * 100) + "%") + "</b><span>gemeten tegenover gelogd</span></div>" +
+      "<div class='kpi'><b>" + dagen.filter(d => p.dagen[d].uren).length + "</b><span>dagen met uren</span></div></div>" +
+      (dagen.length ? "<div style='overflow-x:auto'><table class='dagen'><thead><tr><th>Dag</th><th class='n'>Gelogd</th><th class='n'>Gemeten</th><th style='width:26%'></th><th>Verhouding</th><th>Wat hij invulde</th><th>Waar de tijd zat</th></tr></thead><tbody>" +
+        dagen.map(d => { const x = p.dagen[d]; const tot = x.apps.reduce((n, a) => n + a.halveMinuten, 0) || 1;
+          return "<tr class='klik' data-p='" + esc(p.partner.email) + "' data-d='" + d + "'><td style='white-space:nowrap'>" + esc(datumNl(d)) + "</td>" +
+            "<td class='n'>" + (x.uren ? uren(x.uren) + " u" : "-") + "</td><td class='n'>" + (x.minuten ? minutenTekst(x.minuten) : "-") + "</td>" +
+            "<td><div class='balk' style='margin-bottom:3px'><i class='uren' style='width:" + Math.round(100 * x.uren * 60 / maxMin) + "%'></i></div><div class='balk'><i style='width:" + Math.round(100 * x.minuten / maxMin) + "%'></i></div></td>" +
+            "<td>" + (x.uren ? verhoudingPil(verhouding(x.minuten, x.uren)) : (x.minuten ? "<span class='pil half'>gemeten, niets gelogd</span>" : "")) + "</td>" +
+            "<td class='apps'>" + x.regels.map(u => esc(u.categorie || "") + ": " + esc(u.omschrijving || "")).join("<br>") + "</td>" +
+            "<td class='apps'>" + x.apps.slice(0, 4).map(a => esc(a.app || "?") + " " + Math.round(100 * a.halveMinuten / tot) + "%").join(" · ") + "</td></tr>"; }).join("") +
+        "</tbody></table></div>" : "<p class='lead'>Geen uren en geen metingen in deze periode.</p>");
+  }).join("");
+  $("oLijst").querySelectorAll("tr.klik").forEach(tr => tr.addEventListener("click", () => laadDag(tr.dataset.p, tr.dataset.d)));
+}
+async function laadDag(email, dag){
+  const r = await api("/pib/admin/dag?partner=" + encodeURIComponent(email) + "&dag=" + dag);
+  const box = $("oDag"); box.classList.remove("hidden");
+  const rijen = (r.data && r.data.rijen) || [], urenRegels = (r.data && r.data.uren) || [];
+  const perMin = new Map();
+  for (const x of rijen) { if (!perMin.has(x.minuut) || perMin.get(x.minuut).n < x.n) perMin.set(x.minuut, x); }
+  const blokken = [];
+  for (const k of [...perMin.keys()].sort()) { const x = perMin.get(k); const l = blokken[blokken.length - 1];
+    if (l && l.app === x.app && l.titel === x.titel && (new Date(k + ":00Z") - new Date(l.tot + ":00Z")) <= 60000) l.tot = k; else blokken.push({ van: k, tot: k, app: x.app, titel: x.titel }); }
+  const tijd = (m) => new Date(m + ":00Z").toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+  const p = partners.find(x => x.email === email) || {};
+  box.innerHTML = "<h3>" + esc(p.naam || email) + ", " + esc(datumNl(dag)) + " <button class='klein' id='oDicht'>sluiten</button></h3>" +
+    (urenRegels.length ? "<p class='lead'>Ingevuld: " + urenRegels.map(u => uren(u.uren) + " u " + esc(u.categorie || "") + " (" + esc(u.omschrijving || "") + ")").join("; ") + "</p>" : "<p class='lead'>Geen uren ingevuld op deze dag.</p>") +
+    (blokken.length ? "<div style='overflow-x:auto'><table><thead><tr><th>Van</th><th>Tot</th><th>Programma</th><th>Venster</th></tr></thead><tbody>" +
+      blokken.map(b => "<tr><td>" + tijd(b.van) + "</td><td>" + tijd(b.tot) + "</td><td>" + esc(b.app) + "</td><td>" + esc(b.titel) + "</td></tr>").join("") + "</tbody></table></div>" : "<p class='lead'>Niets gemeten op deze dag.</p>");
+  $("oDicht").addEventListener("click", () => box.classList.add("hidden"));
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+$("oLaad").addEventListener("click", laadOverzicht);
+$("oCsv").addEventListener("click", () => {
+  if (!overzicht) return;
+  const regels = [["partner","bedrijf","dag","uren_gelogd","minuten_gemeten","verhouding","wat","programma's"]];
+  for (const p of overzicht.partners) for (const d of Object.keys(p.dagen).sort()) { const x = p.dagen[d]; const v = verhouding(x.minuten, x.uren);
+    regels.push([p.partner.naam || p.partner.email, p.partner.bedrijf || "", d, String(x.uren).replace(".", ","), x.minuten, v == null ? "" : Math.round(v * 100) + "%", x.regels.map(u => u.omschrijving).join(" | "), x.apps.map(a => a.app).join(" | ")]); }
+  const csv = regels.map(r => r.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(";")).join("\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv" })); a.download = "pibs-" + overzicht.van + "-" + overzicht.tot + ".csv"; a.click();
+});
+(function(){
+  const tot = new Date(), van = new Date(); van.setDate(van.getDate() - 27);
+  $("oVan").value = van.toISOString().slice(0, 10); $("oTot").value = tot.toISOString().slice(0, 10);
+  laadPartners().then(laadOverzicht);
+})();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||"";
+  if(!email||!key) return;
+  var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/);
+  fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"pibs",action:"open",detail:"",computer:localStorage.getItem("fp.apparaat")||"",platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"",versie:m?"app "+m[1]:"browser"})}).catch(function(){});
+})();
+</script>
+</body>
+</html>

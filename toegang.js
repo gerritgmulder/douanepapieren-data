@@ -83,6 +83,11 @@
     "activiteit": [
       "dolf", "fonteynbot", "gerrit",
     ],
+    /* PIBs, Partners in Business: de uren en de meter van de ingehuurde
+       partijen. Alleen Dolf en Gerrit (Gerrit, 15 sep 2026). */
+    "pibs": [
+      "dolf", "fonteynbot", "gerrit",
+    ],
     /* Afbeeldingen op maat. Gretha en Demi maken het drukwerk en de
        productfoto's; de rest van de groep is de vaste beheerlaag. */
     "afbeeldingen": [

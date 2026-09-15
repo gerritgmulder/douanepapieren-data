@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Fonteyn - Partners in Business</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     PARTNERS IN BUSINESS - het portaal voor de ingehuurde partijen van Fonteyn
+
+     Deze pagina wordt door de worker uitgeserveerd op /pib (uit de repo, net
+     als het partnerportaal op /dealers). Er is geen teamsleutel: de partner
+     logt in met een inloglink per mail en krijgt een eigen sessie.
+
+     Wat een partner hier doet:
+       1. uren invullen, per dag, met wat hij heeft gedaan;
+       2. toestemming geven voor de meter op zijn laptop en die meter ophalen;
+       3. zijn eigen metingen terugzien, want wat over hem wordt vastgelegd
+          mag hij zelf ook zien.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --groen-d:#0d3325; --lime:#7ab648; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#f3f4f6; --rood:#b91c1c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--groen);color:#fff;padding:14px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header .merk{font-weight:700;font-size:18px;letter-spacing:.02em}
+header .sub{opacity:.8;font-size:12px}
+header .wie{margin-left:auto;font-size:12.5px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+header button{background:transparent;color:#fff;border:1px solid rgba(255,255,255,.45);border-radius:8px;padding:6px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+main{max-width:960px;margin:26px auto;padding:0 16px 40px}
+.kaart{background:#fff;border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin-bottom:18px}
+h2{margin:0 0 6px;font-size:18px;color:var(--groen)}
+h3{margin:18px 0 8px;font-size:14px}
+p.lead{color:var(--muted);line-height:1.6;margin:0 0 14px}
+label{display:block;font-size:12px;color:var(--muted);margin:0 0 4px}
+input,select,textarea{width:100%;font:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:#fff}
+textarea{min-height:64px;resize:vertical}
+.rij{display:flex;gap:12px;flex-wrap:wrap}
+.rij>div{flex:1 1 160px}
+button.go{background:var(--groen);color:#fff;border:0;border-radius:9px;padding:11px 20px;font:inherit;font-weight:600;cursor:pointer}
+button.go:hover{background:var(--groen-d)}
+button.go:disabled{opacity:.5;cursor:default}
+button.stil{background:#fff;color:var(--ink);border:1px solid var(--border);border-radius:9px;padding:9px 14px;font:inherit;cursor:pointer}
+button.weg{background:transparent;border:0;color:var(--rood);cursor:pointer;font:inherit;font-size:12px}
+.msg{margin-top:12px;padding:10px 12px;border-radius:9px;font-size:13px}
+.msg.ok{background:#dcfce7;color:#166534}
+.msg.bad{background:#fee2e2;color:var(--rood)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:8px 6px;border-bottom:1px solid var(--border)}
+td{padding:9px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+td.n,th.n{text-align:right;white-space:nowrap}
+.kpis{display:flex;gap:12px;flex-wrap:wrap;margin:6px 0 14px}
+.kpi{flex:1 1 140px;background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+.kpi b{display:block;font-size:20px;color:var(--groen)}
+.kpi span{font-size:11.5px;color:var(--muted)}
+.pil{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px;background:#e5e7eb;color:#374151}
+.pil.aan{background:#dcfce7;color:#166534}
+.pil.uit{background:#fee2e2;color:var(--rood)}
+.toestemming{background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:14px 16px;line-height:1.6;font-size:13px}
+.hidden{display:none!important}
+.login{max-width:440px;margin:60px auto}
+.balk{height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden}
+.balk i{display:block;height:100%;background:var(--lime)}
+.apps{font-size:12px;color:var(--muted)}
+@media(max-width:600px){ main{margin:14px auto} .kaart{padding:16px} }
+</style>
+</head>
+<body>
+<header>
+  <div><div class="merk">Fonteyn</div><div class="sub">Partners in Business</div></div>
+  <div class="wie" id="wie"></div>
+</header>
+<main>
+  <!-- Inloggen -->
+  <div class="kaart login" id="login">
+    <h2>Inloggen</h2>
+    <p class="lead">Vul je e-mailadres in. Je krijgt een link waarmee je inlogt; die is zeven dagen geldig.</p>
+    <label>E-mailadres</label>
+    <input type="email" id="lEmail" placeholder="naam@bedrijf.nl" autocomplete="email">
+    <div style="margin-top:12px"><button class="go" id="lKnop">Stuur mij een inloglink</button></div>
+    <div id="lMsg" class="msg hidden"></div>
+  </div>
+
+  <div id="app" class="hidden">
+    <!-- Uren -->
+    <div class="kaart">
+      <h2>Uren voor Fonteyn</h2>
+      <p class="lead">Vul per dag in hoeveel uur je voor Fonteyn hebt gewerkt en wat je hebt gedaan. Kwartieren zijn goed genoeg. Uren kunnen tot een week terug worden ingevuld.</p>
+      <div class="rij">
+        <div style="flex:0 1 160px"><label>Datum</label><input type="date" id="uDatum"></div>
+        <div style="flex:0 1 110px"><label>Uren</label><input type="text" inputmode="decimal" id="uUren" placeholder="bv. 2,5"></div>
+        <div style="flex:0 1 200px"><label>Soort werk</label>
+          <select id="uCat">
+            <option value="ontwikkeling">Ontwikkeling</option>
+            <option value="marketing">Marketing</option>
+            <option value="overleg">Overleg</option>
+            <option value="advies">Advies</option>
+            <option value="beheer">Beheer en onderhoud</option>
+            <option value="overig">Overig</option>
+          </select></div>
+        <div style="flex:2 1 260px"><label>Wat heb je gedaan</label><textarea id="uWat" placeholder="Zeg concreet wat je hebt opgeleverd of waaraan je hebt gewerkt"></textarea></div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="go" id="uKnop">Uren opslaan</button>
+        <button class="stil hidden" id="uAnnuleer">Annuleren</button>
+        <span id="uMsg" class="msg hidden" style="margin:0"></span>
+      </div>
+      <h3>Deze maand</h3>
+      <div class="kpis" id="uKpis"></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Datum</th><th class="n">Uren</th><th>Soort</th><th>Wat</th><th></th></tr></thead><tbody id="uLijst"></tbody></table></div>
+      <div style="margin-top:10px"><button class="stil" id="uMeer">Eerdere maanden tonen</button></div>
+    </div>
+
+    <!-- Toestemming en meter -->
+    <div class="kaart">
+      <h2>De meter op je laptop</h2>
+      <p class="lead">Fonteyn wil naast de uren ook kunnen zien hoe die uren zijn besteed. Daarvoor draait er op je computer een kleine meter. Dit is precies wat hij doet en wat er met de gegevens gebeurt:</p>
+      <div class="toestemming" id="tTekst"></div>
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <span id="tStand" class="pil"></span>
+        <button class="go" id="tJa">Ik geef toestemming</button>
+        <button class="stil" id="tNee">Toestemming intrekken</button>
+      </div>
+      <div id="tMsg" class="msg hidden"></div>
+      <div id="tMeter" class="hidden">
+        <h3>De meter installeren</h3>
+        <p class="lead" style="margin-bottom:8px">Haal het bestand voor je computer op en dubbelklik erop. De meter start dan vanzelf, ook na opnieuw opstarten. Op een Mac vraagt macOS bij de eerste keer om toestemming voor Toegankelijkheid of Automatisering; sta dat toe, anders ziet de meter geen venstertitels.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="stil" id="dlMac">Voor Mac (macOS)</button>
+          <button class="stil" id="dlWin">Voor Windows</button>
+        </div>
+        <p class="lead" style="margin-top:10px;font-size:12.5px" id="tLaatst"></p>
+        <p class="lead" style="font-size:12.5px">Stoppen kan altijd: op een Mac met <code>launchctl unload ~/Library/LaunchAgents/nl.fonteyn.pib.plist</code>, op Windows met <code>schtasks /delete /tn FonteynPIB /f</code>. Trek je hier de toestemming in, dan wordt alles wat de meter nog stuurt geweigerd.</p>
+      </div>
+    </div>
+
+    <!-- Eigen metingen -->
+    <div class="kaart" id="aKaart">
+      <h2>Wat de meter over jou heeft vastgelegd</h2>
+      <p class="lead">Per dag: hoeveel minuten je actief was met de meter aan, en in welke programma's die tijd zat. Klik op een dag voor de vensters per minuut. Dit is dezelfde informatie die Dolf en Gerrit zien.</p>
+      <div id="aLijst"></div>
+      <div id="aDag" class="hidden" style="margin-top:14px"></div>
+    </div>
+  </div>
+</main>
+<script>
+const SESS_KEY = "pib.session";
+const $ = (id) => document.getElementById(id);
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function toon(el, soort, tekst){ el.className = "msg " + soort; el.textContent = tekst; el.classList.remove("hidden"); }
+async function api(pad, opties){
+  const o = Object.assign({ headers: {} }, opties || {});
+  o.headers = Object.assign({ "Content-Type": "application/json", "X-Pib-Session": localStorage.getItem(SESS_KEY) || "" }, o.headers);
+  const r = await fetch(pad, o);
+  let data = null; try { data = await r.json(); } catch(e) {}
+  return { status: r.status, data };
+}
+/* Sessie uit het URL-fragment (#s=...) na de inloglink. Het fragment verlaat
+   de browser nooit, dus het token komt niet in logs terecht. */
+(function(){
+  const m = location.hash.match(/s=([A-Za-z0-9-]{20,})/);
+  if (m) { try { localStorage.setItem(SESS_KEY, m[1]); } catch(e){} history.replaceState(null, "", location.pathname); }
+})();
+function uren(n){ return Number(n||0).toLocaleString("nl-NL", { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+function datumNl(s){ const d = new Date(s + "T12:00:00"); return isNaN(d) ? s : d.toLocaleDateString("nl-NL", { weekday: "short", day: "numeric", month: "short" }); }
+function minutenTekst(m){ const h = Math.floor(m/60), r = m%60; return h ? h + " u " + (r ? r + " min" : "") : r + " min"; }
+
+// ── Inloggen ──
+$("lKnop").addEventListener("click", async () => {
+  const email = $("lEmail").value.trim();
+  if (!email.includes("@")) { toon($("lMsg"), "bad", "Vul een geldig e-mailadres in."); return; }
+  $("lKnop").disabled = true;
+  const r = await api("/pib/login", { method: "POST", body: JSON.stringify({ email }) });
+  $("lKnop").disabled = false;
+  if (r.status === 200) toon($("lMsg"), "ok", "Als dit adres bij ons bekend is, staat er nu een inloglink in je mail. Kijk ook in de ongewenste post.");
+  else toon($("lMsg"), "bad", "Dat lukte niet" + (r.data && r.data.error === "te-vaak" ? ": te veel pogingen, probeer het over een kwartier opnieuw." : ". Probeer het opnieuw."));
+});
+$("lEmail").addEventListener("keydown", e => { if (e.key === "Enter") $("lKnop").click(); });
+
+// ── Start ──
+let ik = null;
+async function start(){
+  if (!localStorage.getItem(SESS_KEY)) { $("login").classList.remove("hidden"); return; }
+  const r = await api("/pib/api/me");
+  if (r.status !== 200 || !r.data || !r.data.ok) { localStorage.removeItem(SESS_KEY); $("login").classList.remove("hidden"); return; }
+  ik = r.data;
+  $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+  $("wie").innerHTML = "<span>" + esc(ik.naam || ik.email) + (ik.bedrijf ? " · " + esc(ik.bedrijf) : "") + "</span><button id='uit'>Uitloggen</button>";
+  $("uit").addEventListener("click", async () => { await api("/pib/api/logout", { method: "POST" }); localStorage.removeItem(SESS_KEY); location.reload(); });
+  $("uDatum").value = new Date().toISOString().slice(0, 10);
+  $("uDatum").max = $("uDatum").value;
+  tekenToestemming();
+  laadUren(); laadActiviteit();
+}
+
+// ── Uren ──
+let urenAlle = [], bewerkId = null, maandenTerug = 0;
+async function laadUren(){
+  const tot = new Date().toISOString().slice(0, 10);
+  const vanD = new Date(); vanD.setMonth(vanD.getMonth() - 1 - maandenTerug); vanD.setDate(1);
+  const r = await api("/pib/api/uren?van=" + vanD.toISOString().slice(0, 10) + "&tot=" + tot);
+  urenAlle = (r.data && r.data.regels) || [];
+  tekenUren();
+}
+function tekenUren(){
+  const maand = new Date().toISOString().slice(0, 7);
+  const deze = urenAlle.filter(u => String(u.datum).startsWith(maand));
+  const somMaand = deze.reduce((n, u) => n + Number(u.uren || 0), 0);
+  const weekStart = (() => { const d = new Date(); const dag = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dag); return d.toISOString().slice(0, 10); })();
+  const somWeek = urenAlle.filter(u => u.datum >= weekStart).reduce((n, u) => n + Number(u.uren || 0), 0);
+  $("uKpis").innerHTML =
+    "<div class='kpi'><b>" + uren(somWeek) + "</b><span>uur deze week</span></div>" +
+    "<div class='kpi'><b>" + uren(somMaand) + "</b><span>uur deze maand</span></div>" +
+    "<div class='kpi'><b>" + deze.length + "</b><span>regels deze maand</span></div>";
+  $("uLijst").innerHTML = urenAlle.length ? urenAlle.map(u => "<tr>" +
+    "<td style='white-space:nowrap'>" + esc(datumNl(u.datum)) + "</td>" +
+    "<td class='n'>" + uren(u.uren) + "</td>" +
+    "<td>" + esc(u.categorie || "") + "</td>" +
+    "<td>" + esc(u.omschrijving || "") + "</td>" +
+    "<td style='white-space:nowrap'><button class='weg' data-b='" + esc(u.id) + "'>wijzig</button> <button class='weg' data-w='" + esc(u.id) + "'>weg</button></td></tr>").join("")
+    : "<tr><td colspan='5' style='color:var(--muted)'>Nog geen uren ingevuld.</td></tr>";
+  $("uLijst").querySelectorAll("[data-w]").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm("Deze regel weghalen?")) return;
+    await api("/pib/api/uren?id=" + encodeURIComponent(b.dataset.w), { method: "DELETE" });
+    laadUren();
+  }));
+  $("uLijst").querySelectorAll("[data-b]").forEach(b => b.addEventListener("click", () => {
+    const u = urenAlle.find(x => x.id === b.dataset.b); if (!u) return;
+    bewerkId = u.id; $("uDatum").value = u.datum; $("uUren").value = String(u.uren).replace(".", ","); $("uCat").value = u.categorie || "overig"; $("uWat").value = u.omschrijving || "";
+    $("uKnop").textContent = "Wijziging opslaan"; $("uAnnuleer").classList.remove("hidden"); window.scrollTo({ top: 0, behavior: "smooth" });
+  }));
+}
+$("uAnnuleer").addEventListener("click", () => { bewerkId = null; $("uKnop").textContent = "Uren opslaan"; $("uAnnuleer").classList.add("hidden"); $("uUren").value = ""; $("uWat").value = ""; });
+$("uKnop").addEventListener("click", async () => {
+  const body = { datum: $("uDatum").value, uren: $("uUren").value, categorie: $("uCat").value, omschrijving: $("uWat").value.trim() };
+  if (bewerkId) body.id = bewerkId;
+  $("uKnop").disabled = true;
+  const r = await api("/pib/api/uren", { method: "POST", body: JSON.stringify(body) });
+  $("uKnop").disabled = false;
+  if (r.status === 200 && r.data && r.data.ok) {
+    toon($("uMsg"), "ok", bewerkId ? "Gewijzigd." : "Opgeslagen.");
+    $("uAnnuleer").click(); laadUren();
+    setTimeout(() => $("uMsg").classList.add("hidden"), 2500);
+  } else toon($("uMsg"), "bad", (r.data && r.data.error) || ("Opslaan lukte niet (HTTP " + r.status + ")"));
+});
+$("uMeer").addEventListener("click", () => { maandenTerug += 2; laadUren(); });
+
+// ── Toestemming ──
+function tekenToestemming(){
+  $("tTekst").textContent = ik.toestemmingTekst;
+  const t = ik.toestemming;
+  const aan = !!(t && t.gegeven);
+  $("tStand").className = "pil " + (aan ? "aan" : "uit");
+  $("tStand").textContent = aan ? "Toestemming gegeven op " + new Date(t.ts).toLocaleDateString("nl-NL") : (t && t.ingetrokken ? "Toestemming ingetrokken" : "Nog geen toestemming");
+  $("tJa").classList.toggle("hidden", aan); $("tNee").classList.toggle("hidden", !aan);
+  $("tMeter").classList.toggle("hidden", !aan);
+  $("aKaart").classList.toggle("hidden", !aan && !ik.meterLaatst);
+  $("tLaatst").textContent = ik.meterLaatst ? "De meter heeft voor het laatst iets gestuurd op " + new Date(ik.meterLaatst).toLocaleString("nl-NL") + "." : "De meter heeft nog niets gestuurd.";
+}
+async function zetToestemming(akkoord){
+  const r = await api("/pib/api/toestemming", { method: "POST", body: JSON.stringify({ akkoord }) });
+  if (r.status === 200 && r.data && r.data.ok) { ik.toestemming = r.data.toestemming; ik.meterActief = r.data.meterActief; tekenToestemming(); toon($("tMsg"), "ok", akkoord ? "Vastgelegd. Haal hieronder de meter op." : "Ingetrokken. De meter kan niets meer sturen."); }
+  else toon($("tMsg"), "bad", "Dat lukte niet.");
+}
+$("tJa").addEventListener("click", () => { if (confirm("Je geeft hiermee de toestemming zoals hierboven beschreven. Doorgaan?")) zetToestemming(true); });
+$("tNee").addEventListener("click", () => { if (confirm("Toestemming intrekken? De meter stopt dan meteen met sturen.")) zetToestemming(false); });
+async function download(soort){
+  const r = await fetch("/pib/api/meter/" + soort, { headers: { "X-Pib-Session": localStorage.getItem(SESS_KEY) || "" } });
+  if (!r.ok) { toon($("tMsg"), "bad", "Ophalen lukte niet. Geef eerst toestemming."); return; }
+  const blob = await r.blob();
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+  a.download = soort === "mac" ? "fonteyn-pib-meter.command" : "fonteyn-pib-meter.bat";
+  document.body.appendChild(a); a.click(); a.remove();
+  toon($("tMsg"), "ok", soort === "mac"
+    ? "Bestand opgehaald. Open het uit je Downloads (rechtsklik, Open, als macOS het eerst tegenhoudt). Het installeert de meter en start hem."
+    : "Bestand opgehaald. Dubbelklik erop in je Downloads. Windows kan eerst waarschuwen; kies Meer informatie en Toch uitvoeren.");
+}
+$("dlMac").addEventListener("click", () => download("mac"));
+$("dlWin").addEventListener("click", () => download("windows"));
+
+// ── Eigen metingen ──
+async function laadActiviteit(){
+  const r = await api("/pib/api/activiteit");
+  const dagen = (r.data && r.data.dagen) || {};
+  const keys = Object.keys(dagen).sort().reverse();
+  if (!keys.length) { $("aLijst").innerHTML = "<p class='lead'>Nog geen metingen.</p>"; return; }
+  const max = Math.max(...keys.map(k => dagen[k].minuten), 1);
+  $("aLijst").innerHTML = "<div style='overflow-x:auto'><table><thead><tr><th>Dag</th><th class='n'>Actief</th><th style='width:30%'></th><th>Programma's</th></tr></thead><tbody>" +
+    keys.map(k => { const d = dagen[k]; const tot = d.apps.reduce((n, a) => n + a.halveMinuten, 0) || 1;
+      return "<tr style='cursor:pointer' data-dag='" + k + "'><td style='white-space:nowrap'>" + esc(datumNl(k)) + "</td><td class='n'>" + minutenTekst(d.minuten) + "</td>" +
+        "<td><div class='balk'><i style='width:" + Math.round(100 * d.minuten / max) + "%'></i></div></td>" +
+        "<td class='apps'>" + d.apps.slice(0, 5).map(a => esc(a.app || "?") + " " + Math.round(100 * a.halveMinuten / tot) + "%").join(" · ") + "</td></tr>"; }).join("") + "</tbody></table></div>";
+  $("aLijst").querySelectorAll("[data-dag]").forEach(tr => tr.addEventListener("click", () => laadDag(tr.dataset.dag)));
+}
+async function laadDag(dag){
+  const r = await api("/pib/api/activiteit/dag?dag=" + dag);
+  const rijen = (r.data && r.data.rijen) || [];
+  const box = $("aDag"); box.classList.remove("hidden");
+  /* Per minuut het venster dat het vaakst voorop stond; opeenvolgende minuten
+     met hetzelfde venster samengevoegd, anders is een dag 480 regels. */
+  const perMin = new Map();
+  for (const x of rijen) { const k = x.minuut; if (!perMin.has(k) || perMin.get(k).n < x.n) perMin.set(k, x); }
+  const blokken = [];
+  for (const k of [...perMin.keys()].sort()) { const x = perMin.get(k); const l = blokken[blokken.length - 1];
+    if (l && l.app === x.app && l.titel === x.titel && (new Date(k + ":00Z") - new Date(l.tot + ":00Z")) <= 60000) l.tot = k; else blokken.push({ van: k, tot: k, app: x.app, titel: x.titel }); }
+  const tijd = (m) => new Date(m + ":00Z").toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+  box.innerHTML = "<h3>" + esc(datumNl(dag)) + " <button class='weg' id='aDicht'>sluiten</button></h3>" +
+    (blokken.length ? "<div style='overflow-x:auto'><table><thead><tr><th>Van</th><th>Tot</th><th>Programma</th><th>Venster</th></tr></thead><tbody>" +
+      blokken.map(b => "<tr><td>" + tijd(b.van) + "</td><td>" + tijd(b.tot) + "</td><td>" + esc(b.app) + "</td><td>" + esc(b.titel) + "</td></tr>").join("") + "</tbody></table></div>" : "<p class='lead'>Niets gemeten op deze dag.</p>");
+  $("aDicht").addEventListener("click", () => box.classList.add("hidden"));
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+start();
+</script>
+</body>
+</html>

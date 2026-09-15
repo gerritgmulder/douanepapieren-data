@@ -50,6 +50,11 @@
   var EERSTE_KEER_DAGEN = 14;
 
   var NIEUWS = [
+    {
+      datum: "2026-09-15", bestand: "pibs.html", soort: "nieuw",
+      titel: "Nieuwe tegel PIBs: uren en meter van de partners in business",
+      wat: "De ingehuurde partijen van Fonteyn loggen hun uren in een eigen portaal en geven daar toestemming voor een meter op hun laptop. In deze tegel zet je partners op, nodig je ze uit en zie je per dag de gelogde uren naast de gemeten actieve tijd.",
+    },
 
     {
       datum: "2026-09-14", bestand: "voorraad.html", soort: "hersteld",
