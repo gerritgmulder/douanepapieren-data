@@ -3571,6 +3571,19 @@ async function pibAdmin(request, env, url, p) {
     if (!email.includes("@")) return reply(400, { ok: false, error: "e-mailadres ontbreekt" });
     let x = pibVind(d, email);
     if (!x) { x = { id: pibId(), email, sinds: new Date().toISOString(), actief: true }; d.partners.push(x); }
+    /* Een ander e-mailadres: het adres is de sleutel van uren en metingen in
+       D1, dus die verhuizen mee. Een adres dat al van een andere partner is
+       wordt geweigerd; anders lopen twee mensen door elkaar. */
+    const nieuwEmail = String(b.nieuwEmail || "").trim().toLowerCase();
+    if (nieuwEmail && nieuwEmail !== email) {
+      if (!nieuwEmail.includes("@")) return reply(400, { ok: false, error: "nieuw e-mailadres is ongeldig" });
+      if (pibVind(d, nieuwEmail)) return reply(409, { ok: false, error: "dat adres is al van een andere partner" });
+      await env.ACTIVITEIT.batch([
+        env.ACTIVITEIT.prepare("UPDATE pib_uren SET partner = ?1 WHERE partner = ?2").bind(nieuwEmail, email),
+        env.ACTIVITEIT.prepare("UPDATE pib_activiteit SET partner = ?1 WHERE partner = ?2").bind(nieuwEmail, email),
+      ]);
+      x.email = nieuwEmail;
+    }
     if (b.naam != null) x.naam = String(b.naam).trim().slice(0, 80);
     if (b.bedrijf != null) x.bedrijf = String(b.bedrijf).trim().slice(0, 80);
     if (b.tarief != null) x.tarief = Number(b.tarief) > 0 ? Number(b.tarief) : null;

@@ -91,7 +91,8 @@ code{background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:12px}
       <div><label>Bedrijf</label><input id="pBedrijf" placeholder="bv. Optivaize"></div>
       <div style="flex:1.4 1 200px"><label>E-mailadres (hierop logt hij in)</label><input id="pEmail" type="email" placeholder="naam@bedrijf.nl"></div>
       <div style="flex:0 1 120px"><label>Uurtarief (optioneel)</label><input id="pTarief" type="text" inputmode="decimal" placeholder="€"></div>
-      <div style="flex:0 0 auto"><button class="go" id="pToevoegen">Toevoegen</button></div>
+      <div style="flex:1 1 200px"><label>Notitie (optioneel)</label><input id="pNotitie" placeholder="bv. afspraak, contactpersoon"></div>
+      <div style="flex:0 0 auto;display:flex;gap:8px"><button class="go" id="pToevoegen">Toevoegen</button><button class="stil hidden" id="pAnnuleer">Annuleren</button></div>
     </div>
     <div id="pMsg" class="msg hidden"></div>
     <div style="overflow-x:auto;margin-top:12px"><table><thead><tr><th>Partner</th><th>E-mail</th><th>Toestemming</th><th>Meter</th><th>Laatste login</th><th></th></tr></thead><tbody id="pLijst"></tbody></table></div>
@@ -134,9 +135,9 @@ async function laadPartners(){
     const t = p.toestemming;
     const toest = t && t.gegeven ? "<span class='pil aan'>ja, " + new Date(t.ts).toLocaleDateString("nl-NL") + "</span>" : (t && t.ingetrokken ? "<span class='pil uit'>ingetrokken</span>" : "<span class='pil'>nog niet</span>");
     const meter = p.meterLaatst ? "<span class='pil " + (Date.now() - new Date(p.meterLaatst) < 3600000 ? "aan" : "half") + "'>" + (p.meterPlatform || "") + " " + wanneer(p.meterLaatst) + "</span>" : "<span class='pil'>niets ontvangen</span>";
-    return "<tr" + (p.actief ? "" : " style='opacity:.5'") + "><td><b>" + esc(p.naam || "") + "</b>" + (p.bedrijf ? "<br><span style='color:var(--muted);font-size:12px'>" + esc(p.bedrijf) + "</span>" : "") + (p.tarief ? "<br><span style='color:var(--muted);font-size:11.5px'>€ " + uren(p.tarief) + " per uur</span>" : "") + "</td>" +
+    return "<tr" + (p.actief ? "" : " style='opacity:.5'") + "><td><b>" + esc(p.naam || "") + "</b>" + (p.bedrijf ? "<br><span style='color:var(--muted);font-size:12px'>" + esc(p.bedrijf) + "</span>" : "") + (p.tarief ? "<br><span style='color:var(--muted);font-size:11.5px'>€ " + uren(p.tarief) + " per uur</span>" : "") + (p.notitie ? "<br><span style='color:var(--muted);font-size:11.5px'>" + esc(p.notitie) + "</span>" : "") + "</td>" +
       "<td>" + esc(p.email) + "</td><td>" + toest + "</td><td>" + meter + "</td><td>" + wanneer(p.laatsteLogin) + (p.uitgenodigd ? "<br><span style='color:var(--muted);font-size:11.5px'>uitgenodigd " + wanneer(p.uitgenodigd) + "</span>" : "") + "</td>" +
-      "<td style='white-space:nowrap'><button class='klein' data-uit='" + esc(p.email) + "'>uitnodigen</button> <button class='klein' data-aan='" + esc(p.email) + "'>" + (p.actief ? "uitzetten" : "aanzetten") + "</button></td></tr>";
+      "<td style='white-space:nowrap'><button class='klein' data-bewerk='" + esc(p.email) + "'>wijzig</button> <button class='klein' data-uit='" + esc(p.email) + "'>uitnodigen</button> <button class='klein' data-aan='" + esc(p.email) + "'>" + (p.actief ? "uitzetten" : "aanzetten") + "</button></td></tr>";
   }).join("") : "<tr><td colspan='6' style='color:var(--muted)'>Nog geen partners. Voeg hierboven de eerste toe.</td></tr>";
   $("pLijst").querySelectorAll("[data-uit]").forEach(b => b.addEventListener("click", async () => {
     b.disabled = true;
@@ -144,17 +145,35 @@ async function laadPartners(){
     toon($("pMsg"), r.data && r.data.ok && r.data.mailSent ? "ok" : "bad", r.data && r.data.ok ? (r.data.mailSent ? "Inloglink gestuurd naar " + b.dataset.uit + "." : "Mail is niet aangenomen: " + (r.data.reden || "onbekend")) : "Uitnodigen lukte niet.");
     laadPartners();
   }));
+  /* Wijzigen: alles is aan te passen, ook het e-mailadres en het tarief.
+     Gerrit (15 sep 2026): "Ik moet alles kunnen aanpassen." Het formulier
+     bovenaan wordt gevuld en de knop wordt "Wijziging opslaan"; het oude
+     adres gaat mee zodat de worker weet wie het is. */
+  $("pLijst").querySelectorAll("[data-bewerk]").forEach(b => b.addEventListener("click", () => {
+    const p = partners.find(x => x.email === b.dataset.bewerk); if (!p) return;
+    bewerkEmail = p.email;
+    $("pNaam").value = p.naam || ""; $("pBedrijf").value = p.bedrijf || ""; $("pEmail").value = p.email; $("pTarief").value = p.tarief ? String(p.tarief).replace(".", ",") : "";
+    $("pNotitie").value = p.notitie || "";
+    $("pToevoegen").textContent = "Wijziging opslaan"; $("pAnnuleer").classList.remove("hidden");
+    window.scrollTo({ top: 0, behavior: "smooth" }); $("pNaam").focus();
+  }));
   $("pLijst").querySelectorAll("[data-aan]").forEach(b => b.addEventListener("click", async () => {
     const p = partners.find(x => x.email === b.dataset.aan);
     await api("/pib/admin/partner", { method: "POST", body: JSON.stringify({ email: p.email, actief: !p.actief }) });
     laadPartners();
   }));
 }
+let bewerkEmail = null;
+function formulierLeeg(){ bewerkEmail = null; $("pNaam").value = $("pBedrijf").value = $("pEmail").value = $("pTarief").value = $("pNotitie").value = ""; $("pToevoegen").textContent = "Toevoegen"; $("pAnnuleer").classList.add("hidden"); }
+$("pAnnuleer").addEventListener("click", formulierLeeg);
 $("pToevoegen").addEventListener("click", async () => {
   const email = $("pEmail").value.trim().toLowerCase();
   if (!email.includes("@")) { toon($("pMsg"), "bad", "Vul een e-mailadres in."); return; }
-  const r = await api("/pib/admin/partner", { method: "POST", body: JSON.stringify({ email, naam: $("pNaam").value.trim(), bedrijf: $("pBedrijf").value.trim(), tarief: Number(String($("pTarief").value).replace(",", ".")) || null }) });
-  if (r.status === 200 && r.data && r.data.ok) { toon($("pMsg"), "ok", "Opgeslagen. Klik op uitnodigen om de inloglink te sturen."); $("pNaam").value = $("pBedrijf").value = $("pEmail").value = $("pTarief").value = ""; laadPartners(); }
+  const body = { email: bewerkEmail || email, naam: $("pNaam").value.trim(), bedrijf: $("pBedrijf").value.trim(),
+                 tarief: Number(String($("pTarief").value).replace(",", ".")) || null, notitie: $("pNotitie").value.trim() };
+  if (bewerkEmail && email !== bewerkEmail) body.nieuwEmail = email;
+  const r = await api("/pib/admin/partner", { method: "POST", body: JSON.stringify(body) });
+  if (r.status === 200 && r.data && r.data.ok) { toon($("pMsg"), "ok", bewerkEmail ? "Gewijzigd." : "Opgeslagen. Klik op uitnodigen om de inloglink te sturen."); formulierLeeg(); laadPartners(); }
   else toon($("pMsg"), "bad", (r.data && r.data.error) || ("Opslaan lukte niet (HTTP " + r.status + ")"));
 });
 
