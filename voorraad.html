@@ -2670,36 +2670,31 @@ async function planAfspraak(r){
       /* Zonder teamsleutel heeft schrijven geen zin. Dat overkomt iemand die
          Voorraadbeheer opent vóórdat de sleutel op deze computer is gezet; de
          melding "403" zegt hem dan niets. */
-      if (!DATA_STORE_AUTH) throw new Error("deze computer heeft nog geen teamsleutel. Ga één keer terug naar het Dashboard en open deze tegel opnieuw");
-      /* Lezen, toevoegen, terugschrijven. KV kent alleen 'vervang alles', dus
-         eerst de verse lijst ophalen - anders gooit dit venster weg wat een
-         collega net in Planning heeft gezet.
-
-         Alles wat de agenda al had (routes, dagnotities) gaat ongewijzigd mee
-         terug. Alleen { afspraken } terugschrijven zou die wissen. */
-      const hu = { "X-Fonteyn-Auth": DATA_STORE_AUTH };
-      const adres = WORKER_BASIS+"/data/"+PLANNING_BUCKET;
-      const lees = await fetch(adres, { headers: hu });
-      if (!lees.ok) throw new Error("de agenda is even niet bereikbaar (HTTP "+lees.status+")");
-      const j = await lees.json();
-      const lijst = (j && Array.isArray(j.afspraken)) ? j.afspraken : [];
-      lijst.push(afspraak);
-      const alles = JSON.stringify({ afspraken: lijst,
-        routes: (j && j.routes) || {}, notities: (j && j.notities) || {} });
-      const schrijf = () => fetch(adres, { method:"PUT",
-        headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": DATA_STORE_AUTH }, body: alles });
-      let put = await schrijf();
-      /* Eén keer opnieuw proberen. Een enkele mislukking van het netwerk of
-         een edge is zo weer over, en dan hoeft de planner niet alles opnieuw
-         in te tikken. */
-      if (!put.ok) { await new Promise(r=>setTimeout(r,600)); put = await schrijf(); }
+      /* De sleutel op het moment van klikken lezen, niet die van het laden
+         van de pagina: wie de tegel opende vóór het dashboard de sleutel
+         zette, had anders een lege sleutel in handen. */
+      const sleutel = localStorage.getItem("fp.teamkey") || "";
+      if (!sleutel) throw new Error("deze computer heeft nog geen teamsleutel. Ga één keer terug naar het Dashboard en open deze tegel opnieuw");
+      /* Alleen de afspraak zelf gaat over de lijn; de worker voegt hem toe
+         aan de agenda. Eerder las en schreef dit venster de hele agenda, en
+         dat liep bij de planners vast op een 403 die niet uit de worker
+         kwam (16 sep 2026). Eén keer opnieuw proberen bij een haperende
+         verbinding. */
+      const stuur = () => fetch(WORKER_BASIS+"/planning/afspraak", { method:"POST",
+        headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": sleutel, "X-Fonteyn-User": ik },
+        body: JSON.stringify({ afspraak }) });
+      let put = await stuur();
+      if (!put.ok && put.status >= 500) { await new Promise(r=>setTimeout(r,600)); put = await stuur(); }
       if (!put.ok) {
-        /* Zeggen wát de server zei. "HTTP 403" alleen is niet op te lossen:
-           daar kan niemand uit afleiden of het aan de sleutel ligt, aan het
-           adres of aan iets anders. Gerwin liep hier op vast (7 sep 2026). */
         let uitleg = "";
-        try { uitleg = (await put.text()).slice(0, 160); } catch(e){}
-        throw new Error("bewaren mislukte (HTTP "+put.status+(uitleg?" - "+uitleg:"")+")");
+        try { uitleg = (await put.text()).slice(0, 300); } catch(e){}
+        let j = null; try { j = JSON.parse(uitleg); } catch(e){}
+        const reden = (j && j.error) ? j.error
+          : (/<html|<!doctype/i.test(uitleg) ? "het verzoek is onderweg tegengehouden (geen antwoord van het dashboard zelf)" : uitleg);
+        /* Vastleggen wát er misging, zodat het de volgende keer in het
+           logboek staat en niet alleen op het scherm van de planner. */
+        try{ if(window.fpLog) window.fpLog("afspraak-plannen-mislukt", "HTTP "+put.status+" - "+reden.slice(0,200)+" - order "+afspraak.ordernr); }catch(e){}
+        throw new Error("bewaren mislukte (HTTP "+put.status+(reden?" - "+reden:"")+")");
       }
       seinPlanning();     // openstaande Planning-schermen meteen bijwerken
       try{ if(window.fpLog) window.fpLog("afspraak-gepland-vanuit-voorraad",

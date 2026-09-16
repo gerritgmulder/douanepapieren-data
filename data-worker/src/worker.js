@@ -11609,6 +11609,29 @@ export default {
       const kamer = url.pathname.slice(6).replace(/[^a-z0-9-]/gi, "").slice(0, 40) || "algemeen";
       return env.LIVE.get(env.LIVE.idFromName(kamer)).fetch(request);
     }
+    /* Eén afspraak toevoegen aan de planning, vanuit Voorraadbeheer.
+       ═══════════════════════════════════════════════════════════════════
+       De tegel deed dit zelf: hele bucket lezen, regel erbij, hele bucket
+       terugschrijven. Dat ging bij de planners mis met een 403 die uit de
+       worker zelf niet kan komen (Gerrit, 16 sep 2026; er is geen 403-pad
+       voor deze bucket) en die dus ergens onderweg ontstond. Hier gaat alleen
+       de ene afspraak over de lijn, in één POST, en het samenvoegen gebeurt
+       op de server. Dat scheelt ook de kans dat twee mensen elkaars werk
+       overschrijven: de tegel las de lijst en schreef hem seconden later
+       terug. Wat er misgaat komt als JSON terug, met reden. */
+    if (url.pathname === "/planning/afspraak" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel: ga één keer terug naar het Dashboard en open de tegel opnieuw" });
+      let b = {}; try { b = await request.json(); } catch { return reply(400, { ok: false, error: "geen leesbare afspraak" }); }
+      const a = b && b.afspraak;
+      if (!a || typeof a !== "object" || !/^\d{4}-\d{2}-\d{2}$/.test(String(a.datum || ""))) return reply(400, { ok: false, error: "afspraak zonder datum" });
+      if (!a.id) a.id = "p" + Date.now() + Math.random().toString(36).slice(2, 6);
+      const d = (await env.FONTEYN_DATA.get("planning", { type: "json" })) || {};
+      const lijst = Array.isArray(d.afspraken) ? d.afspraken : [];
+      if (lijst.some(x => x && x.id === a.id)) return reply(200, { ok: true, aantal: lijst.length, alBekend: true });
+      lijst.push(a);
+      await env.FONTEYN_DATA.put("planning", JSON.stringify({ ...d, afspraken: lijst, routes: d.routes || {}, notities: d.notities || {} }));
+      return reply(200, { ok: true, aantal: lijst.length });
+    }
     if (url.pathname === "/planning/betaalstatus" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
       return planningBetaalstatusMetIts(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));

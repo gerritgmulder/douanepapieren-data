@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-16", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Gepland: de afspraak komt nu wel in Planning",
+      wat: "Vanuit Gepland een afspraak in de agenda zetten liep vast op een foutmelding. De afspraak gaat nu in één keer naar de agenda en als het toch misgaat staat er precies waarom. Op de telefoon stond de bovenste kaart Overzicht achter de groene kop en was niet aan te klikken; dat is ook gemaakt.",
+    },
+    {
       datum: "2026-09-15", bestand: "bol.html", soort: "nieuw",
       titel: "Bol.com: de provisie gaat met één knop als memoriaal de boeken in",
       wat: "Na het doorvoeren van een bol.com-specificatie boek je de verkoopprovisie met de knop 'Provisie boeken als memoriaal' (4570 tegenover 1185). Alleen de uitbetaling op het ING-afschrift blijft handwerk: die wijs je in Logic4 toe aan 1185.",

@@ -65,12 +65,16 @@ body{font-family:"Montserrat",-apple-system,system-ui,sans-serif;background:var(
 header{background:var(--groen);color:#fff;padding:13px 16px;display:flex;align-items:center;gap:11px;
        position:fixed;top:0;left:0;right:0;z-index:20;padding-top:calc(13px + env(safe-area-inset-top));
        box-sizing:border-box}
-main{padding-top:calc(var(--kophoogte,54px) + 12px)}
 header button.terug{background:transparent;border:0;color:rgba(255,255,255,.9);font:inherit;
        font-size:19px;line-height:1;padding:0 2px;cursor:pointer;flex:0 0 auto}
 header h1{flex:1;margin:0;font-size:16px;font-weight:600}
 header a.ververs{color:rgba(255,255,255,.85);text-decoration:none;font-size:13px;flex:0 0 auto}
-main{padding:14px;padding-bottom:calc(30px + env(safe-area-inset-bottom))}
+/* De inhoud begint ónder de vaste kop. Deze regel stond eerst boven de
+   algemene padding-regel en werd daardoor overschreven: de bovenste kaart
+   (Overzicht) zat achter de kop en was niet aan te klikken; omhoog slepen
+   liet hem even zien en dan veerde hij terug (Kevin en Gerwin, 16 sep 2026). */
+main{padding:14px;padding-bottom:calc(30px + env(safe-area-inset-bottom));
+     padding-top:calc(var(--kophoogte,54px) + 12px)}
 
 /* ── het beginscherm: de onderdelen onder elkaar ── */
 .menu{display:block}
