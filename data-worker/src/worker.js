@@ -3188,7 +3188,7 @@ async function pibSessie(env, request) {
   const d = await pibPartners(env);
   const p = pibVind(d, s.email);
   if (!p || p.actief === false) return null;
-  return { email: p.email, partner: p, data: d };
+  return { email: p.email, partner: p, data: d, meekijk: !!s.meekijk, door: s.door || null };
 }
 /* Beheer: teamsleutel plus een naam uit de groep pibs in toegang.js (Dolf,
    Gerrit, Fonteynbot). Dezelfde constructie als Passion Partners Beheer. */
@@ -3601,6 +3601,21 @@ async function pibAdmin(request, env, url, p) {
     await env.FONTEYN_DATA.put("pib-partners", JSON.stringify(d));
     return reply(200, { ok: true, mailSent: !!r.ok, reden: r.reden || null, link: pibLaatsteLink || undefined });
   }
+  /* Meekijken: Dolf of Gerrit opent het portaal zoals de partner het ziet.
+     Gerrit (16 sep 2026): "laat mij als Fonteynbot dan even de
+     g.mulder@intenza.nl omgeving zien." Alleen kijken: elke wijziging
+     (uren, toestemming, meter) wordt met deze sessie geweigerd, zodat
+     niemand namens een partner iets kan invullen of toestemming kan geven.
+     Sessie van een uur. */
+  if (p === "/pib/admin/meekijken" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const x = pibVind(d, b.email);
+    if (!x) return reply(404, { ok: false, error: "partner onbekend" });
+    const sess = pibToken();
+    const door = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+    await env.FONTEYN_DATA.put("pib-sess:" + sess, JSON.stringify({ email: x.email, since: new Date().toISOString(), meekijk: true, door }), { expirationTtl: 3600 });
+    return reply(200, { ok: true, url: pibOrigin(env, url) + "/pib#s=" + sess });
+  }
   if (p === "/pib/admin/overzicht" && request.method === "GET") {
     const van = pibDatumOk(url.searchParams.get("van")) ? url.searchParams.get("van") : new Date(Date.now() - 27 * 86400000).toISOString().slice(0, 10);
     const tot = pibDatumOk(url.searchParams.get("tot")) ? url.searchParams.get("tot") : new Date().toISOString().slice(0, 10);
@@ -3644,9 +3659,10 @@ async function handlePibRoutes(request, env, url) {
   if (p.startsWith("/pib/api/")) {
     const sess = await pibSessie(env, request);
     if (!sess) return reply(401, { ok: false, error: "niet ingelogd" });
+    if (sess.meekijk && request.method !== "GET") return reply(403, { ok: false, error: "je kijkt mee als beheerder; wijzigen kan alleen de partner zelf" });
     if (p === "/pib/api/me") {
       const x = sess.partner;
-      return reply(200, { ok: true, email: x.email, naam: x.naam || "", bedrijf: x.bedrijf || "",
+      return reply(200, { ok: true, email: x.email, naam: x.naam || "", bedrijf: x.bedrijf || "", meekijk: !!sess.meekijk, meekijkDoor: sess.door || null,
         toestemming: x.toestemming || null, meterActief: !!x.agentToken, meterLaatst: x.meterLaatst || null,
         toestemmingTekst: PIB_TOESTEMMING_TEKST, toestemmingVersie: PIB_TOESTEMMING_VERSIE });
     }

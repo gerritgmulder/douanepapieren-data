@@ -186,8 +186,18 @@ async function start(){
   if (r.status !== 200 || !r.data || !r.data.ok) { localStorage.removeItem(SESS_KEY); $("login").classList.remove("hidden"); return; }
   ik = r.data;
   $("login").classList.add("hidden"); $("app").classList.remove("hidden");
-  $("wie").innerHTML = "<span>" + esc(ik.naam || ik.email) + (ik.bedrijf ? " · " + esc(ik.bedrijf) : "") + "</span><button id='uit'>Uitloggen</button>";
-  $("uit").addEventListener("click", async () => { await api("/pib/api/logout", { method: "POST" }); localStorage.removeItem(SESS_KEY); location.reload(); });
+  $("wie").innerHTML = "<span>" + esc(ik.naam || ik.email) + (ik.bedrijf ? " · " + esc(ik.bedrijf) : "") + "</span><button id='uit'>" + (ik.meekijk ? "Meekijken stoppen" : "Uitloggen") + "</button>";
+  $("uit").addEventListener("click", async () => { if (!ik.meekijk) await api("/pib/api/logout", { method: "POST" }); localStorage.removeItem(SESS_KEY); location.reload(); });
+  /* Meekijken als beheerder: een balk bovenaan en alle knoppen die iets
+     veranderen uit, zodat duidelijk is dat dit het portaal van de partner is
+     en niet van degene die kijkt. */
+  if (ik.meekijk) {
+    const balk = document.createElement("div");
+    balk.style.cssText = "background:#fef3c7;color:#92400e;padding:9px 20px;font-size:13px;border-bottom:1px solid #fcd34d";
+    balk.textContent = "Je kijkt mee" + (ik.meekijkDoor ? " als " + ik.meekijkDoor : "") + " in het portaal van " + (ik.naam || ik.email) + ". Je ziet precies wat de partner ziet, maar kunt niets invullen of wijzigen.";
+    document.querySelector("header").after(balk);
+    ["uKnop", "tJa", "tNee", "dlMac", "dlWin"].forEach(id => { const e = $(id); if (e) { e.disabled = true; e.title = "Alleen de partner zelf kan dit"; } });
+  }
   $("uDatum").value = new Date().toISOString().slice(0, 10);
   $("uDatum").max = $("uDatum").value;
   tekenToestemming();
@@ -218,7 +228,7 @@ function tekenUren(){
     "<td class='n'>" + uren(u.uren) + "</td>" +
     "<td>" + esc(u.categorie || "") + "</td>" +
     "<td>" + esc(u.omschrijving || "") + "</td>" +
-    "<td style='white-space:nowrap'><button class='weg' data-b='" + esc(u.id) + "'>wijzig</button> <button class='weg' data-w='" + esc(u.id) + "'>weg</button></td></tr>").join("")
+    "<td style='white-space:nowrap'>" + (ik && ik.meekijk ? "" : "<button class='weg' data-b='" + esc(u.id) + "'>wijzig</button> <button class='weg' data-w='" + esc(u.id) + "'>weg</button>") + "</td></tr>").join("")
     : "<tr><td colspan='5' style='color:var(--muted)'>Nog geen uren ingevuld.</td></tr>";
   $("uLijst").querySelectorAll("[data-w]").forEach(b => b.addEventListener("click", async () => {
     if (!confirm("Deze regel weghalen?")) return;

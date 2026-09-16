@@ -137,7 +137,7 @@ async function laadPartners(){
     const meter = p.meterLaatst ? "<span class='pil " + (Date.now() - new Date(p.meterLaatst) < 3600000 ? "aan" : "half") + "'>" + (p.meterPlatform || "") + " " + wanneer(p.meterLaatst) + "</span>" : "<span class='pil'>niets ontvangen</span>";
     return "<tr" + (p.actief ? "" : " style='opacity:.5'") + "><td><b>" + esc(p.naam || "") + "</b>" + (p.bedrijf ? "<br><span style='color:var(--muted);font-size:12px'>" + esc(p.bedrijf) + "</span>" : "") + (p.tarief ? "<br><span style='color:var(--muted);font-size:11.5px'>€ " + uren(p.tarief) + " per uur</span>" : "") + (p.notitie ? "<br><span style='color:var(--muted);font-size:11.5px'>" + esc(p.notitie) + "</span>" : "") + "</td>" +
       "<td>" + esc(p.email) + "</td><td>" + toest + "</td><td>" + meter + "</td><td>" + wanneer(p.laatsteLogin) + (p.uitgenodigd ? "<br><span style='color:var(--muted);font-size:11.5px'>uitgenodigd " + wanneer(p.uitgenodigd) + "</span>" : "") + "</td>" +
-      "<td style='white-space:nowrap'><button class='klein' data-bewerk='" + esc(p.email) + "'>wijzig</button> <button class='klein' data-uit='" + esc(p.email) + "'>uitnodigen</button> <button class='klein' data-aan='" + esc(p.email) + "'>" + (p.actief ? "uitzetten" : "aanzetten") + "</button></td></tr>";
+      "<td style='white-space:nowrap'><button class='klein' data-kijk='" + esc(p.email) + "'>meekijken</button> <button class='klein' data-bewerk='" + esc(p.email) + "'>wijzig</button> <button class='klein' data-uit='" + esc(p.email) + "'>uitnodigen</button> <button class='klein' data-aan='" + esc(p.email) + "'>" + (p.actief ? "uitzetten" : "aanzetten") + "</button></td></tr>";
   }).join("") : "<tr><td colspan='6' style='color:var(--muted)'>Nog geen partners. Voeg hierboven de eerste toe.</td></tr>";
   $("pLijst").querySelectorAll("[data-uit]").forEach(b => b.addEventListener("click", async () => {
     b.disabled = true;
@@ -149,6 +149,14 @@ async function laadPartners(){
      Gerrit (15 sep 2026): "Ik moet alles kunnen aanpassen." Het formulier
      bovenaan wordt gevuld en de knop wordt "Wijziging opslaan"; het oude
      adres gaat mee zodat de worker weet wie het is. */
+  /* Meekijken: het portaal openen zoals deze partner het ziet, alleen lezen. */
+  $("pLijst").querySelectorAll("[data-kijk]").forEach(b => b.addEventListener("click", async () => {
+    b.disabled = true;
+    const r = await api("/pib/admin/meekijken", { method: "POST", body: JSON.stringify({ email: b.dataset.kijk }) });
+    b.disabled = false;
+    if (r.status === 200 && r.data && r.data.ok) window.open(r.data.url, "_blank");
+    else toon($("pMsg"), "bad", "Meekijken lukte niet: " + ((r.data && r.data.error) || ("HTTP " + r.status)));
+  }));
   $("pLijst").querySelectorAll("[data-bewerk]").forEach(b => b.addEventListener("click", () => {
     const p = partners.find(x => x.email === b.dataset.bewerk); if (!p) return;
     bewerkEmail = p.email;
