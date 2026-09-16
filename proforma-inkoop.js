@@ -339,7 +339,7 @@ async function ikoAanvullen(bestaandeOrder){
   if(knop){ knop.disabled=true; knop.textContent="Bezig…"; }
   try{
     const r=await fetch(IKO_AANMAAK_URL,{method:"POST",
-      headers:{"Content-Type":"application/json","X-DP-Admin":C.adminKey()},
+      headers:{"Content-Type":"application/json","X-DP-Admin":C.adminKey(),"X-Fonteyn-Auth":C.teamKey(),"X-Fonteyn-User":String(C.email||"").toLowerCase()},
       body:JSON.stringify({crediteurId:Number((document.getElementById("ikoCred")||{}).value||0),
         regels:s.mee, referentie:(document.getElementById("ikoRef").value||"").trim(),
         aanvullenOp:bestaandeOrder, bestemming:C.bestemming,
@@ -394,7 +394,7 @@ async function ikoAanmaken(){
         eta:(document.getElementById("ikoEta").value||null),door:(C.email)};
       if(b>0) body.aanvullenOp=orderId;
       const r=await fetch(IKO_AANMAAK_URL,{method:"POST",
-        headers:{"Content-Type":"application/json","X-DP-Admin":C.adminKey()},
+        headers:{"Content-Type":"application/json","X-DP-Admin":C.adminKey(),"X-Fonteyn-Auth":C.teamKey(),"X-Fonteyn-User":String(C.email||"").toLowerCase()},
         body:JSON.stringify(body)});
       j=await r.json().catch(()=>({}));
       if(b===0&&j.dubbel) break;                       // hieronder afgehandeld

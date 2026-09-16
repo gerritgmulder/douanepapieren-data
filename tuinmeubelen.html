@@ -405,9 +405,10 @@ laad();
             doc = window.fpSalesConfirmation.lees(rijen);
         }
         if (!doc)
-          throw new Error("dit lijkt geen orderbevestiging. Verwacht een blad met \'Sales confirmation\' " +
-                          "of een S/C-nummer, en een tabel met Item no en Quanity. Gevonden tabbladen: " +
-                          wb.SheetNames.join(", ") + ".");
+          throw new Error("in dit bestand is geen tabel met artikelnummers en aantallen gevonden. " +
+                          "Een sales confirmation of proforma invoice hoort een kolom met het artikelnummer " +
+                          "(Item no, Article no, Model) en een kolom met het aantal (Quantity, Qty) te hebben. Gevonden tabbladen: " +
+                          wb.SheetNames.join(", ") + ". Stuur dit bestand door, dan pas ik de lezer erop aan.");
       }
       doc.bestand = file.name;
 

@@ -2962,6 +2962,16 @@ async function toegangMag(env, groep, wie) {
   }
   return false;
 }
+/* Schrijven naar Logic4 vanuit Voorraadbeheer (inkooporder aanmaken, de
+   spa-migratie). Teamsleutel plus een naam uit de groep voorraad-beheer in
+   toegang.js. De oude beheersleutel van Passion Partners blijft werken voor
+   wie hem nog heeft, maar is niet meer nodig. */
+async function voorraadIsBeheer(request, env) {
+  const h = request.headers.get("X-DP-Admin") || "";
+  if (env.DP_ADMIN_KEY && h === env.DP_ADMIN_KEY) return true;
+  if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return false;
+  return toegangMag(env, "voorraad-beheer", request.headers.get("X-Fonteyn-User") || "");
+}
 async function dpIsAdmin(request, env) {
   const h = request.headers.get("X-DP-Admin") || "";
   if (env.DP_ADMIN_KEY && h === env.DP_ADMIN_KEY) return true;
@@ -11714,7 +11724,7 @@ export default {
       return reply(200, await ikoVoorstel(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/voorraad/inkooporder/aanmaken" && request.method === "POST") {
-      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
+      if (!(await voorraadIsBeheer(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep voorraad-beheer (Chantal, Arno, Manon, Dolf)" });
       const body = await request.json().catch(() => ({}));
       return reply(200, await ikoAanmaken(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
@@ -11731,19 +11741,19 @@ export default {
        aanmaken: dit haalt een bestelling uit de bron waar de forecast en de
        reserveringen ook uit lezen. */
     if (url.pathname === "/voorraad/spa-migratie/verwijderen" && request.method === "POST") {
-      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
+      if (!(await voorraadIsBeheer(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep voorraad-beheer (Chantal, Arno, Manon, Dolf)" });
       const body = await request.json().catch(() => ({}));
       return reply(200, await spaMigratieVerwijderen(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/voorraad/spa-migratie/uitvoeren" && request.method === "POST") {
-      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
+      if (!(await voorraadIsBeheer(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep voorraad-beheer (Chantal, Arno, Manon, Dolf)" });
       const body = await request.json().catch(() => ({}));
       return reply(200, await spaMigratieUitvoeren(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     // Een modelnaam die Chantal anders typt dan Logic4 hem kent, eenmalig
     // koppelen. Geldt daarna overal — ook voor de proforma-koppeling.
     if (url.pathname === "/voorraad/spa-migratie/alias" && request.method === "POST") {
-      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep dealerportaal" });
+      if (!(await voorraadIsBeheer(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep voorraad-beheer (Chantal, Arno, Manon, Dolf)" });
       const body = await request.json().catch(() => ({}));
       const van = ikoNormaliseerModel(body.van), naar = String(body.naar || "").trim();
       if (!van || !naar) return reply(400, { ok: false, error: "van en naar zijn allebei nodig" });

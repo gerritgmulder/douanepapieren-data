@@ -52,6 +52,16 @@
   var NIEUWS = [
     {
       datum: "2026-09-16", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Inkooporder aanmaken werkt weer",
+      wat: "Bij het aanmaken van een inkooporder kwam de melding 'geen toegang, je staat niet in de groep dealerportaal'. Dat was een verkeerde sleutel uit Passion Partners. Chantal, Arno en Manon kunnen weer gewoon een inkooporder aanmaken vanuit een proforma.",
+    },
+    {
+      datum: "2026-09-16", bestand: "tuinmeubelen.html", soort: "beter",
+      titel: "Orderbevestiging inlezen leest nu ook een proforma invoice",
+      wat: "Bij Besteld bij de fabriek kun je naast een sales confirmation ook een proforma invoice van de fabriek inlezen. De lezer zoekt zelf de kolom met het artikelnummer en het aantal op, ook als de kop halverwege het blad staat of de fabriek er 'Article No' of 'Qty/pcs' boven zet. Nagekeken met de proforma's van Lodestone en RE-BORN.",
+    },
+    {
+      datum: "2026-09-16", bestand: "voorraad.html", soort: "hersteld",
       titel: "Gepland: de afspraak komt nu wel in Planning",
       wat: "Vanuit Gepland een afspraak in de agenda zetten liep vast op een foutmelding. De afspraak gaat nu in één keer naar de agenda en als het toch misgaat staat er precies waarom. Op de telefoon stond de bovenste kaart Overzicht achter de groene kop en was niet aan te klikken; dat is ook gemaakt.",
     },

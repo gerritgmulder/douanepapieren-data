@@ -301,6 +301,14 @@
        wel in de planning-groep maar niet hier, en zag de tegel daardoor niet.
        Hij logt in onder zijn oude accountnaam fonteyn.maartens; dat staat in
        AFWIJKEND hierboven. */
+    /* Wie in Voorraadbeheer mag schrijven naar Logic4: een inkooporder
+       aanmaken, de spa-migratie. Dezelfde mensen als BEHEER in voorraad.html.
+       Tot 16 sep 2026 liep dit over de oude beheersleutel van Passion
+       Partners; die is er niet meer en Chantal kreeg "geen toegang: je staat
+       niet in de groep dealerportaal" bij het aanmaken van een inkooporder. */
+    "voorraad-beheer": [
+      "arno", "chantal", "dolf", "fonteynbot", "gerrit", "manon",
+    ],
     "voorraad": [
       "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
       "dali", "dolf", "edwin", "fonteynbot", "gerrit", "gerwin",

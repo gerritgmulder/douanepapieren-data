@@ -66,7 +66,7 @@
   async function maakInkooporder(nr, ookNakijken) {
     var r = await fetch(BASIS + "/voorraad/spa-migratie/uitvoeren", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-DP-Admin": cfg.adminKey },
+      headers: { "Content-Type": "application/json", "X-DP-Admin": cfg.adminKey, "X-Fonteyn-Auth": cfg.teamKey || "", "X-Fonteyn-User": String(cfg.email || "").toLowerCase() },
       body: JSON.stringify({ nr: nr, ookNakijken: !!ookNakijken, door: cfg.email })
     });
     return await r.json();
@@ -80,7 +80,7 @@
   async function verwijderBestelling(nr) {
     var r = await fetch(BASIS + "/voorraad/spa-migratie/verwijderen", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-DP-Admin": cfg.adminKey },
+      headers: { "Content-Type": "application/json", "X-DP-Admin": cfg.adminKey, "X-Fonteyn-Auth": cfg.teamKey || "", "X-Fonteyn-User": String(cfg.email || "").toLowerCase() },
       body: JSON.stringify({ nr: String(nr), door: cfg.email || "" })
     });
     return await r.json();
@@ -89,7 +89,7 @@
   async function bewaarAlias(van, naar) {
     var r = await fetch(BASIS + "/voorraad/spa-migratie/alias", {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-DP-Admin": cfg.adminKey },
+      headers: { "Content-Type": "application/json", "X-DP-Admin": cfg.adminKey, "X-Fonteyn-Auth": cfg.teamKey || "", "X-Fonteyn-User": String(cfg.email || "").toLowerCase() },
       body: JSON.stringify({ van: van, naar: naar })
     });
     return await r.json();
