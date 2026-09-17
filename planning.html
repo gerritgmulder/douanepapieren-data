@@ -183,6 +183,30 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .blok .k{font-weight:600;font-size:11.5px}
 .blok .s{opacity:.85;font-size:10.5px}
 .blok .d{opacity:.75;font-size:10px;font-style:italic}
+/* Gerrit (17 sep 2026): in het blok alleen ordernummer, klantnaam, plaatsnaam
+   en spanaam, alle vier dik. De rest komt pas als je op het blok klikt. */
+.blok .p,.blok .m{font-weight:700;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blok .m{opacity:.9}
+.blokinfo{position:fixed;z-index:45;background:#fff;border:1px solid var(--rand);border-radius:12px;
+   box-shadow:0 10px 30px rgba(15,23,42,.22);padding:12px 14px;width:290px;max-width:calc(100vw - 24px);
+   font-size:12.5px;color:var(--ink);line-height:1.45}
+.blokinfo h4{margin:0 0 6px;font-size:13.5px;color:var(--groen)}
+.blokinfo .r{display:grid;grid-template-columns:78px 1fr;gap:2px 8px;margin:2px 0}
+.blokinfo .r b{color:var(--grijs);font-weight:600}
+.blokinfo .r span{overflow-wrap:break-word;min-width:0;white-space:pre-line}
+.blokinfo .knoppen{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+.blokinfo button{border:1px solid var(--rand);background:#fff;border-radius:8px;padding:6px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+.blokinfo button.doe{background:var(--groen);color:#fff;border-color:var(--groen);font-weight:600}
+/* Op de telefoon: telefoonnummer en adres zijn tikvelden (bellen, navigeren). */
+.tapveld{display:flex;align-items:center;gap:8px;width:100%;padding:9px 11px;border:1px solid var(--rand);
+   border-radius:8px;font:inherit;font-size:14px;color:var(--groen);background:#f4f9ec;text-align:left;cursor:pointer;min-height:40px}
+.tapveld .pijl{margin-left:auto;color:var(--grijs);font-size:12px}
+.vraagkaart{background:#fff;border-radius:16px;max-width:360px;width:100%;padding:20px 18px;margin:auto;text-align:center}
+.vraagkaart h3{margin:0 0 6px;font-size:17px;color:var(--groen)}
+.vraagkaart p{margin:0 0 16px;font-size:14px;color:var(--ink);overflow-wrap:break-word;white-space:pre-line}
+.vraagkaart .knoppen{display:flex;gap:10px}
+.vraagkaart button{flex:1;border:1px solid var(--rand);background:#fff;border-radius:10px;padding:11px 10px;font:inherit;font-size:14px;cursor:pointer}
+.vraagkaart button.doe{background:var(--groen);color:#fff;border-color:var(--groen);font-weight:700}
 .blok .nr{color:inherit;opacity:.9}
 .blok .planner{background:rgba(255,255,255,.9)}
 .blok.klaar{opacity:.42}
@@ -668,6 +692,20 @@ function collegas(){
 }
 function minuten(t){ var m = String(t||"").match(/^(\d{1,2}):(\d{2})/); return m ? (+m[1])*60+(+m[2]) : null; }
 function tijdStr(min){ return String(Math.floor(min/60)).padStart(2,"0")+":"+String(min%60).padStart(2,"0"); }
+/* De plaatsnaam uit "Straat 1, 7461 AB Rijssen": het laatste stuk na de komma,
+   zonder postcode. De spanaam is het eerste stuk van "Wat" (de voorraadtegel
+   vult daar het model in), of het model als dat apart is meegegeven. */
+function stadUit(plaats){
+  var d = String(plaats||"").split(/[,\n]/).map(function(x){ return x.trim(); }).filter(Boolean);
+  if (!d.length) return "";
+  var laatste = d[d.length-1].replace(/\b\d{4}\s?[A-Za-z]{2}\b/g,"").replace(/\s{2,}/g," ").trim();
+  if (!laatste && d.length>1) laatste = d[d.length-2].replace(/\b\d{4}\s?[A-Za-z]{2}\b/g,"").trim();
+  return laatste;
+}
+function spaNaam(a){
+  if (a.model) return String(a.model).trim();
+  return String(a.wat||"").split(/[,\n|]/)[0].trim();
+}
 
 /* ── opslag ── */
 async function lees(){
@@ -1718,7 +1756,7 @@ var SNAP = 15;                       // minuten
 function koppelBlok(el){
   if (!MAG_BEWERKEN){
     el.style.cursor = "pointer";
-    el.addEventListener("click", function(){ openForm(el.dataset.id); });
+    el.addEventListener("click", function(){ toonBlokInfo(el); });
     return;
   }
   el.addEventListener("mousedown", startSleep);
@@ -1732,8 +1770,59 @@ function koppelBlok(el){
     if (el.dataset.gesleept) { delete el.dataset.gesleept; return; }
     if (e.target.closest('[data-bewerk="klant"]') || e.target.classList.contains("greep")) return;
     e.stopPropagation();
-    openForm(el.dataset.id);
+    toonBlokInfo(el);
   });
+}
+/* Klik op een blok: eerst een kaartje met alles wat niet in het blok past
+   (tijd, wie, wat, adres, telefoon, wie het plande, betaalstatus). Vanuit
+   dat kaartje kun je pas naar het formulier. Gerrit (17 sep 2026): "de
+   overige info zichtbaar worden als je op die melding KLIKT, en anders niet." */
+function sluitBlokInfo(){
+  var oud = document.getElementById("blokInfo");
+  if (oud) oud.remove();
+  document.removeEventListener("mousedown", blokInfoBuiten, true);
+  document.removeEventListener("keydown", blokInfoEsc, true);
+}
+function blokInfoBuiten(e){ if (!e.target.closest("#blokInfo")) sluitBlokInfo(); }
+function blokInfoEsc(e){ if (e.key === "Escape") sluitBlokInfo(); }
+function nlD(d){ return String(d||"").split("-").reverse().join("-"); }
+function toonBlokInfo(el){
+  var a = afspraken.find(function(x){ return x.id===el.dataset.id; });
+  if (!a) return;
+  sluitBlokInfo();
+  var c = cat(a);
+  var tot = minuten(a.tijd) !== null && a.duurMin ? " - "+tijdStr(minuten(a.tijd)+Number(a.duurMin)) : "";
+  var rijen = [
+    ["Wanneer", (a.datumTot && a.datumTot!==a.datum ? nlD(a.datum)+" t/m "+nlD(a.datumTot) : nlD(a.datum))+(a.tijd?", "+a.tijd+tot:" (hele dag)")],
+    ["Categorie", c.naam],
+    ["Wie", a.wie],
+    ["Wat", a.wat],
+    ["Adres", a.plaats],
+    ["Telefoon", a.telefoon],
+    ["Order", [a.ordernr, a.itsId?"ITS "+a.itsId:""].filter(Boolean).join(" · ")],
+    ["Betaling", betaalUitleg(a)],
+    ["Ingepland", a.door ? planNaam(a.door)+(a.gewijzigdDoor&&a.gewijzigdDoor!==a.door?", laatst gewijzigd door "+planNaam(a.gewijzigdDoor):"") : ""]
+  ].filter(function(r){ return r[1]; });
+  var kaart = document.createElement("div");
+  kaart.id = "blokInfo"; kaart.className = "blokinfo";
+  kaart.innerHTML = '<h4>'+esc(a.klant||c.naam)+(a.klaar?' <span style="font-weight:400;color:var(--grijs)">(gedaan)</span>':'')+'</h4>'+
+    rijen.map(function(r){ return '<div class="r"><b>'+esc(r[0])+'</b><span>'+esc(r[1])+'</span></div>'; }).join("")+
+    '<div class="knoppen"><button type="button" id="biSluit">Sluiten</button>'+
+    (MAG_BEWERKEN?'<button type="button" class="doe" id="biBewerk">Bewerken</button>':'')+'</div>';
+  document.body.appendChild(kaart);
+  var r = el.getBoundingClientRect(), kb = kaart.getBoundingClientRect();
+  var links = r.right + 8, boven = r.top;
+  if (links + kb.width > window.innerWidth - 8) links = Math.max(8, r.left - kb.width - 8);
+  if (links + kb.width > window.innerWidth - 8) links = Math.max(8, window.innerWidth - kb.width - 8);
+  if (boven + kb.height > window.innerHeight - 8) boven = Math.max(8, window.innerHeight - kb.height - 8);
+  kaart.style.left = links+"px"; kaart.style.top = boven+"px";
+  kaart.querySelector("#biSluit").addEventListener("click", sluitBlokInfo);
+  var bw = kaart.querySelector("#biBewerk");
+  if (bw) bw.addEventListener("click", function(){ sluitBlokInfo(); openForm(a.id); });
+  setTimeout(function(){
+    document.addEventListener("mousedown", blokInfoBuiten, true);
+    document.addEventListener("keydown", blokInfoEsc, true);
+  }, 0);
 }
 function startSleep(e){
   if (e.button !== 0) return;
@@ -2082,7 +2171,7 @@ function blokken(items){
     var top = (b.van-UUR_VAN*60)/60*UUR_PX;
     var hoog = Math.max(24, (b.tot-b.van)/60*UUR_PX-2);
     var w = 100/b.breed, links = b.lane*w;
-    var sub = [a.plaats, a.wat].filter(Boolean).join(" · ");
+    var stad = stadUit(a.plaats), spa = spaNaam(a);
     /* Wie het heeft ingepland staat altijd in beeld, ook op een klein blok.
        Gerrit (7 sep 2026): "Ik wil ook kunnen zien wie het heeft ingepland."
        Bij een laag blok is er geen ruimte voor een regel, dus dan wordt het
@@ -2098,9 +2187,10 @@ function blokken(items){
          ITS-nummer en klantnaam. De tijden staan nog in de tip. */
       ((a.ordernr||a.itsId)?'<div class="nr">'+(a.ordernr?esc(a.ordernr):'')+(a.ordernr&&a.itsId?' · ':'')+(a.itsId?'ITS '+esc(a.itsId):'')+'</div>':'')+
       '<div class="k" data-bewerk="klant" title="Klik om de naam aan te passen">'+esc(a.klant||c.naam)+'</div>'+
-      (hoog>62&&sub?'<div class="s">'+esc(sub)+'</div>':"")+
-      (hoog>66&&a.wie?'<div class="s">\ud83d\udc64 '+esc(a.wie)+'</div>':"")+
-      (hoog>82&&a.door?'<div class="d">ingepland door '+esc(planNaam(a.door))+'</div>':"")+
+      /* Gerrit (17 sep 2026): plaatsnaam en spanaam ook dik in het blok; de
+         rest (wie, tijd, adres, telefoon, wie het plande) pas na een klik. */
+      (hoog>48&&stad?'<div class="p">'+esc(stad)+'</div>':"")+
+      (hoog>62&&spa?'<div class="m">'+esc(spa)+'</div>':"")+
       '<div class="greep" title="Sleep om de afspraak langer of korter te maken"></div></div>';
   }).join("");
 }
@@ -2117,6 +2207,47 @@ function kaartje(a){
     '<div class="klant">'+esc(a.klant||"(geen naam)")+'</div>'+
     (sub?'<div class="sub">'+sub+'</div>':"")+
     (voet.length?'<div class="sub">'+voet.join(" · ")+'</div>':"")+'</div>';
+}
+
+/* Een nette vraag op de telefoon, in plaats van de kale confirm() van de
+   browser. Geeft een belofte die waar wordt als op de groene knop is getikt. */
+function vraagVenster(titel, tekst, knop){
+  return new Promise(function(klaar){
+    var laag = document.createElement("div");
+    laag.className = "laag";
+    laag.innerHTML = '<div class="vraagkaart"><h3>'+esc(titel)+'</h3><p>'+esc(tekst)+'</p>'+
+      '<div class="knoppen"><button type="button" class="nee">Nee</button>'+
+      '<button type="button" class="doe">'+esc(knop)+'</button></div></div>';
+    document.body.appendChild(laag);
+    function weg(ja){ laag.remove(); klaar(ja); }
+    laag.querySelector(".nee").addEventListener("click", function(){ weg(false); });
+    laag.querySelector(".doe").addEventListener("click", function(){ weg(true); });
+    laag.addEventListener("click", function(e){ if (e.target === laag) weg(false); });
+  });
+}
+function belKlant(nummer, klant){
+  var schoon = String(nummer||"").replace(/[^\d+]/g,"");
+  if (!schoon) return;
+  vraagVenster("Klant bellen?", (klant?klant+"\n":"")+nummer, "Bellen").then(function(ja){
+    if (ja) location.href = "tel:"+schoon;
+  });
+}
+/* Navigeren: op een iPhone opent maps.apple.com in Kaarten (of in Google
+   Maps als iemand dat als standaard heeft), op Android opent geo: de
+   standaard-kaartenapp. Verder Google Maps in de browser. */
+function navigeerNaar(adres, klant){
+  var q = String(adres||"").trim();
+  if (!q) return;
+  vraagVenster("Navigeren?", (klant?klant+"\n":"")+q, "Navigeren").then(function(ja){
+    if (!ja) return;
+    var ua = navigator.userAgent||"";
+    var url;
+    if (/iPhone|iPad|iPod/i.test(ua)) url = "https://maps.apple.com/?daddr="+encodeURIComponent(q);
+    else if (/Android/i.test(ua)) url = "geo:0,0?q="+encodeURIComponent(q);
+    else url = "https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(q);
+    if (/^https:/.test(url)){ var w = window.open(url, "_blank"); if (!w) location.href = url; }
+    else location.href = url;
+  });
 }
 
 /* ── formulier ── */
@@ -2186,10 +2317,16 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     '<datalist id="fNamen">'+Object.keys(namen).sort().map(function(n){ return '<option value="'+esc(n)+'">'; }).join("")+'</datalist>'+
     '</div><div>'+
     '<label>Klant of onderwerp</label><input id="fKlant" maxlength="120" value="'+esc(a.klant)+'" placeholder="Naam van de klant">'+
-    '<div class="rij"><div><label>Telefoon</label><input id="fTel" maxlength="30" value="'+esc(a.telefoon)+'"></div>'+
+    (OP_TELEFOON && a.telefoon
+      ? '<label>Telefoon</label><button type="button" class="tapveld" id="fTelTap">\ud83d\udcde '+esc(a.telefoon)+'<span class="pijl">bellen</span></button>'+
+        '<input id="fTel" type="hidden" value="'+esc(a.telefoon)+'"><div class="rij2">'
+      : '<div class="rij"><div><label>Telefoon</label><input id="fTel" maxlength="30" value="'+esc(a.telefoon)+'"></div>')+
     '<div><label>Ordernummer</label><input id="fOrder" maxlength="20" value="'+esc(a.ordernr)+'"></div>'+
     '<div><label>ITS-nummer</label><input id="fIts" maxlength="12" value="'+esc(a.itsId||"")+'"></div></div>'+
-    '<label>Plaats of adres</label><input id="fPlaats" maxlength="160" value="'+esc(a.plaats)+'">'+
+    '<label>Plaats of adres</label>'+
+      (OP_TELEFOON && a.plaats
+        ? '<button type="button" class="tapveld" id="fPlaatsTap">\ud83d\udccd '+esc(a.plaats)+'<span class="pijl">navigeren</span></button><input id="fPlaats" type="hidden" value="'+esc(a.plaats)+'">'
+        : '<input id="fPlaats" maxlength="160" value="'+esc(a.plaats)+'">')+
     '<label>Wat (model, klus, bijzonderheden)</label><textarea id="fWat" rows="3" maxlength="400">'+esc(a.wat)+'</textarea>'+
     '</div></div>'+
     '<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--ink);cursor:pointer">'+
@@ -2213,6 +2350,12 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
     laag.querySelectorAll("input,select,textarea").forEach(function(v){ v.disabled = true; });
     laag.querySelectorAll("#fCats button").forEach(function(v){ v.disabled = true; v.style.cursor = "default"; });
   }
+  /* Op de telefoon: tik op het nummer om te bellen, tik op het adres om te
+     navigeren. Gerrit (17 sep 2026) wil daar eerst een nette vraag tussen. */
+  var telTap = laag.querySelector("#fTelTap");
+  if (telTap) telTap.addEventListener("click", function(){ belKlant(a.telefoon, a.klant); });
+  var plTap = laag.querySelector("#fPlaatsTap");
+  if (plTap) plTap.addEventListener("click", function(){ navigeerNaar(a.plaats, a.klant); });
   var soort = CATS[a.soort] ? a.soort : "intern";
   $("fCats").querySelectorAll("button").forEach(function(b){
     b.addEventListener("click", function(){
@@ -2338,6 +2481,8 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
       itsId: Number(String($("fIts").value||"").replace(/\D/g,"")) || null,
       route: a.route || null,          // bij welke route van die dag hij hoort
       volg: a.volg != null ? a.volg : null,
+      model: a.model || null,          // spanaam uit Voorraadbeheer, dik in het tijdraster
+      uitVoorraad: a.uitVoorraad || null,
       letop: $("fLetop").checked,
       door: nieuw ? ik : (a.door||ik), gewijzigdDoor: ik,
       gemaakt: a.gemaakt || new Date().toISOString(), gewijzigd: new Date().toISOString()

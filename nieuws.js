@@ -51,6 +51,21 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-17", bestand: "voorraad.html", soort: "beter",
+      titel: "Binnengekomen spa's: sorteren, filteren en postcode",
+      wat: "Bij 'Binnengekomen spa's' en 'Op afroep' kun je nu op elke kolomkop klikken om te sorteren, en bovenaan kiezen of je alleen bijvoorbeeld Bezorgservice of Transport distributie wilt zien. De postcode en plaats van de klant staan er nu ook bij."
+    },
+    {
+      datum: "2026-09-17", bestand: "planning.html", soort: "beter",
+      titel: "Tijdraster: alleen wat je moet weten",
+      wat: "In het tijdraster staat per afspraak nu dikgedrukt het ordernummer, de klantnaam, de plaats en de spa. De rest (tijd, wie erheen gaat, adres, telefoon, betaling, wie het plande) zie je pas als je op de afspraak klikt; vanuit dat kaartje kun je door naar Bewerken."
+    },
+    {
+      datum: "2026-09-17", bestand: "planning.html", soort: "nieuw",
+      titel: "Op de telefoon: bellen en navigeren",
+      wat: "Open je op de telefoon een afspraak, dan kun je op het telefoonnummer tikken om de klant te bellen en op het adres om te navigeren (Kaarten of Google Maps, wat je telefoon gebruikt). Je krijgt eerst een vraag, zodat je niet per ongeluk belt."
+    },
+    {
       datum: "2026-09-16", bestand: "voorraad.html", soort: "hersteld",
       titel: "Inkooporder aanmaken werkt weer",
       wat: "Bij het aanmaken van een inkooporder kwam de melding 'geen toegang, je staat niet in de groep dealerportaal'. Dat was een verkeerde sleutel uit Passion Partners. Chantal, Arno en Manon kunnen weer gewoon een inkooporder aanmaken vanuit een proforma.",

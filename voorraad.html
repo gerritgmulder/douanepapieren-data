@@ -2642,9 +2642,10 @@ async function planAfspraak(r){
     fetch(WORKER_BASIS+"/planning/its/klant?debiteur="+encodeURIComponent(r.debtorId),
           { headers:{ "X-Fonteyn-Auth": DATA_STORE_AUTH } })
       .then(x => x.json()).then(j => {
-        if (!j || !j.ok || !j.klant) { document.getElementById("plPlaats").placeholder = ""; return; }
+        const p0 = document.getElementById("plPlaats");
+        if (!j || !j.ok || !j.klant) { if (p0) { p0.placeholder = ""; if (!p0.value && (r.postcode || r.plaats)) p0.value = [r.postcode, r.plaats].filter(Boolean).join(" "); } return; }
         const p = document.getElementById("plPlaats"), t = document.getElementById("plTel");
-        if (p && !p.value) { p.value = j.klant.adres || j.klant.plaats || ""; p.placeholder = ""; }
+        if (p && !p.value) { p.value = j.klant.adres || j.klant.plaats || [r.postcode, r.plaats].filter(Boolean).join(" ") || ""; p.placeholder = ""; }
         if (t && !t.value) t.value = j.klant.telefoon || "";
       }).catch(() => { const p = document.getElementById("plPlaats"); if (p) p.placeholder = ""; });
   } else { document.getElementById("plPlaats").placeholder = ""; }
@@ -2666,6 +2667,7 @@ async function planAfspraak(r){
       plaats: document.getElementById("plPlaats").value.trim(),
       ordernr: String(r.ordernr||""),
       wat: document.getElementById("plWat").value.trim(),
+      model: r.model || "",             // spanaam, dik in het tijdraster van Planning
       wie: document.getElementById("plWie").value.trim(),
       klaar: false, itsId: null,
       door: ik, gewijzigdDoor: ik,
@@ -2928,6 +2930,10 @@ function sorteerWaarde(r,kolom){
   if(kolom==="naam")     return String(r.naam||"");
   if(kolom==="adviseur") return String(r.adviseur||"zzz");
   if(kolom==="datum")    return String(r.datum||"");
+  if(kolom==="transport") return String(r.transport||"zzz");
+  if(kolom==="postcode") return String(r.postcode||"zzz");
+  if(kolom==="ordernr")  return String(r.ordernr||"");
+  if(kolom==="qty")      return String(1000000+(Number(r.qty)||0));
   if(kolom==="levering"){
     // Een handmatig gekozen schip gaat vóór de berekende verwachting, ook bij
     // het sorteren - anders staat een regel op een andere plek dan zijn datum.
@@ -3374,6 +3380,12 @@ function renderSoortTabs(){
    Eén regel kan allebei aan hebben staan; die telt dan in beide tabbladen mee,
    want het zijn twee verschillende acties. */
 let partBlokActief="inplannen";
+/* Sorteren en filteren in dit blok. Gerrit (17 sep 2026): "je moet erop
+   kunnen klikken en dan staat ie daar op" en "dat je alleen 'bezorgservice'
+   ziet of 'transport distributie'". De keuze blijft staan bij een verversing;
+   de tabel wordt elk uur opnieuw opgebouwd en dan wil je niet steeds opnieuw
+   klikken. */
+let partBlokSort={kolom:"model",op:1}, partBlokTransport="";
 function renderParticulierBlok(){
   const tabs=document.getElementById("partBlokTabs"), lijst=document.getElementById("partBlokLijst");
   if(!tabs||!lijst) return;
@@ -3393,14 +3405,28 @@ function renderParticulierBlok(){
     return "<button type='button' class='tab partBlokTab"+(p[0]===partBlokActief?" active":"")+
       "' data-groep='"+p[0]+"'>"+p[1]+" ("+groepen[p[0]].length+")</button>";
   }).join("");
-  const rijen=groepen[partBlokActief]||[];
+  /* Het filter op transport: de vervoerders die in deze lijst voorkomen, als
+     knoppen naast de tabbladen. Eén klik laat alleen die zien, nog een klik
+     zet het weer uit. */
+  const alleRijen=groepen[partBlokActief]||[];
+  const vervoerders={};
+  alleRijen.forEach(function(r){ const t=kortTransport(r.transport||"")||"(geen)"; vervoerders[t]=(vervoerders[t]||0)+1; });
+  if(partBlokTransport&&!vervoerders[partBlokTransport]) partBlokTransport="";
+  const filterHtml=Object.keys(vervoerders).length>1
+    ? "<span class='partTransFilter' style='display:inline-flex;gap:6px;flex-wrap:wrap;align-items:center;margin-left:14px;font-size:12px'><span style='color:var(--muted)'>Transport:</span>"+
+      Object.keys(vervoerders).sort((a,b)=>a.localeCompare(b,"nl")).map(function(t){
+        const aan=t===partBlokTransport;
+        return "<button type='button' class='partTransKnop' data-t='"+esc(t)+"' style='font:inherit;font-size:12px;padding:3px 10px;border-radius:999px;cursor:pointer;border:1px solid "+(aan?"#144734":"var(--border)")+";background:"+(aan?"#144734":"#fff")+";color:"+(aan?"#fff":"var(--ink)")+"'>"+esc(t)+" ("+vervoerders[t]+")</button>";
+      }).join("")+"</span>"
+    : "";
+  const rijen=partBlokTransport?alleRijen.filter(function(r){ return (kortTransport(r.transport||"")||"(geen)")===partBlokTransport; }):alleRijen;
   if(!rijen.length){
-    lijst.innerHTML="<p class='lead'>Niets in deze lijst. Vink hierboven <b>"+
+    lijst.innerHTML=filterHtml+"<p class='lead'>Niets in deze lijst. Vink hierboven <b>"+
       (partBlokActief==="afroep"?"Afroep":"Inplannen")+"</b> aan bij een reservering.</p>";
   }else{
     rijen.sort(function(a,b){
-      return String(a.model||"").localeCompare(String(b.model||""),"nl",{numeric:true})
-        ||String(a.ordernr).localeCompare(String(b.ordernr));
+      const va=sorteerWaarde(a,partBlokSort.kolom), vb=sorteerWaarde(b,partBlokSort.kolom);
+      return (va.localeCompare(vb,"nl",{numeric:true})||String(a.ordernr).localeCompare(String(b.ordernr)))*(partBlokSort.op||1);
     });
     const uit=!MAG_WIJZIGEN?" disabled":"";
     /* Kolom Transport tussen Order en Spa. Chantal (video, 25 aug 2026):
@@ -3422,9 +3448,14 @@ function renderParticulierBlok(){
       return "<label class='vk' title='"+esc(tekst)+"'><input type='checkbox' class='notVink' data-veld='"+veld+"' data-id='"+id+"'"+
         (aan?" checked":"")+uit+"><span>"+esc(tekst)+"</span></label>";
     };
-    const KOL=7;
-    lijst.innerHTML="<div class='tablewrap'><table class='grid resv'><thead><tr>"+
-      "<th>Order</th><th>Transport</th><th>Spa</th><th>Kleur</th><th>Aantal</th><th>Klant</th><th>Datum</th>"+
+    const KOL=8;
+    const kop=function(kolom,tekst){
+      const actief=partBlokSort.kolom===kolom;
+      return "<th class='partBlokKop' data-kolom='"+kolom+"' style='cursor:pointer;white-space:nowrap' title='Klik om te sorteren'>"+esc(tekst)+
+        (actief?(partBlokSort.op>0?" ▲":" ▼"):"<span style='color:#d1d5db'> ⇅</span>")+"</th>";
+    };
+    lijst.innerHTML=filterHtml+"<div class='tablewrap'><table class='grid resv'><thead><tr>"+
+      kop("ordernr","Order")+kop("transport","Transport")+kop("model","Spa")+kop("kleur","Kleur")+kop("qty","Aantal")+kop("naam","Klant")+kop("postcode","Postcode")+kop("datum","Datum")+
       "</tr></thead><tbody>"+
       rijen.map(function(r){
         const n=notitie(r), id=esc(r.regelId||"");
@@ -3435,6 +3466,7 @@ function renderParticulierBlok(){
           "<td style='font-size:12px' title='"+esc(r.transport||"")+"'>"+(r.transport?esc(kortTransport(r.transport)):"<span style='color:var(--muted)'>-</span>")+"</td>"+
           "<td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur,r)+"</td>"+
           "<td>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
+          "<td style='font-size:12px;white-space:nowrap' title='"+esc(r.plaats||"")+"'>"+(r.postcode?esc(r.postcode)+(r.plaats?" <span style='color:var(--muted)'>"+esc(r.plaats)+"</span>":""):"<span style='color:var(--muted)'>-</span>")+"</td>"+
           "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
           "</tr>"+
           "<tr class='subrij' style='"+stijl+"'><td colspan='"+KOL+"'>"+
@@ -3448,7 +3480,17 @@ function renderParticulierBlok(){
           "</td></tr>";
       }).join("")+"</tbody></table></div>";
     koppelNotitieVelden(lijst,rijen);
+    lijst.querySelectorAll(".partBlokKop").forEach(function(th){
+      th.addEventListener("click",function(){
+        const k=th.dataset.kolom;
+        if(partBlokSort.kolom===k) partBlokSort.op=-partBlokSort.op; else partBlokSort={kolom:k,op:1};
+        renderParticulierBlok();
+      });
+    });
   }
+  lijst.querySelectorAll(".partTransKnop").forEach(function(b){
+    b.addEventListener("click",function(){ partBlokTransport=(partBlokTransport===b.dataset.t)?"":b.dataset.t; renderParticulierBlok(); });
+  });
   tabs.querySelectorAll(".partBlokTab").forEach(function(b){
     b.addEventListener("click",function(){ partBlokActief=b.dataset.groep; renderParticulierBlok(); });
   });

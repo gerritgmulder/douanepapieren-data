@@ -5960,6 +5960,12 @@ async function dpRefreshReservations(env) {
             // "Afhalen"). Chantal (video, 25 aug 2026) wil die zien bij de
             // binnengekomen spa's, zodat ze weet hoe hij weggaat.
             transport: (o.ShippingMethod && o.ShippingMethod.Name) || null,
+            /* Postcode en plaats van het afleveradres. Gerrit (17 sep 2026):
+               de planners willen bij de binnengekomen spa's zien waar de spa
+               heen moet. Valt terug op het factuuradres als er geen apart
+               afleveradres is. */
+            postcode: String(((o.DeliveryAddress || o.AccountAddress || o.InvoiceAddress || {}).Zipcode) || "").trim() || null,
+            plaats: String(((o.DeliveryAddress || o.AccountAddress || o.InvoiceAddress || {}).City) || "").trim() || null,
             betaald, betaaldPct, aanbetaling: Math.round(aanbetaling), totaal: Math.round(totaal),
           };
           const bucket = usa ? byModelUSA : byModel;
