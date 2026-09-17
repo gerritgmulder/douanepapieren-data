@@ -166,6 +166,11 @@
   table.items td.code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
   table.items td.desc { max-width: 340px; }
   table.items td.desc input { width: 100%; min-width: 220px; }
+  table.items td.desc input { border: 1px solid #e5e7eb; background: #fcfcfc; }
+  table.items td.desc input:hover, table.items td.desc input:focus { border-color: #94a3b8; background: #fff; }
+  table.items td.del { white-space: nowrap; }
+  table.items td.del button.collo-plus { font-size: 11px; padding: 1px 6px; margin-right: 4px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--muted); cursor: pointer; }
+  table.items td.del button.collo-plus:hover { color: var(--ink, #111); border-color: #94a3b8; }
 
   /* Drag handle + delete button per regel */
   table.items td.drag {
@@ -376,7 +381,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
           <th style="width:70px">Origin</th>
           <th style="width:80px">Unit $</th>
           <th style="width:80px">Total $</th>
-          <th style="width:32px"></th>
+          <th style="width:86px"></th>
         </tr>
       </thead>
       <tbody id="items-body"></tbody>
@@ -744,8 +749,22 @@ function extractDimsFromDescription(desc) {
 // Die regel-omschrijving is de meest betrouwbare bron voor de modelnaam — vaak
 // betrouwbaarder dan articleCodes (dat de Excel-omschrijving van Manon volgt en
 // soms met "Spa Muse" of "Passion | …" begint).
-function getSpec(code, description) {
+function getSpec(code, description, item) {
   const merged = {};
+  /* Een extra collo (Manon, 17 sep 2026: "als een artikel uit meerdere
+     colli's bestaat, een regel eronder waar ik aparte maten en gewichten kan
+     toevoegen"). Zo'n regel erft alleen HS-code en herkomst van het artikel;
+     maten en gewichten zijn van dat collo zelf en worden onder een eigen
+     sleutel bewaard, zodat ze de volgende keer bij hetzelfde artikel
+     terugkomen. */
+  if (item && item.collo) {
+    const basis = getSpec(code, description);
+    if (basis.hs) merged.hs = basis.hs;
+    if (basis.origin) merged.origin = basis.origin;
+    if (basis.sku) merged.sku = basis.sku;
+    mergeNonEmpty(merged, state.userSpecs[item.specKey]);
+    return merged;
+  }
 
   // Laag 1 (laagste prio): artikelcode-DB levert de SKU.
   const fromArticles = state.articleCodes[code];
@@ -1121,7 +1140,7 @@ function computeDouaneLoadStats() {
   for (const it of (state.lineItems || [])) {
     if (it.service || it.dropped) continue;
     lines++;
-    let spec = {}; try { spec = getSpec(it.code, it.description) || {}; } catch (e) {}
+    let spec = {}; try { spec = getSpec(it.code, it.description, it) || {}; } catch (e) {}
     const missing = fields.filter(f => spec[f] == null || spec[f] === "");
     preF += fields.length - missing.length; manF += missing.length;
     if (missing.length === 0) fullPre++;
@@ -1264,12 +1283,13 @@ function renderItems() {
       </tr>`;
     }
     const isService = it.service;
-    const spec = getSpec(it.code, it.description) || {};
+    const spec = getSpec(it.code, it.description, it) || {};
     // Is dit item een bundle-parent (= hoofdregel met sub-pakketten)?
     const parentBundle = (state.bundles || []).find(b => b.parent === it);
     const isBundleParent = !!parentBundle;
     let badge = "";
-    if (it.bundleChild) badge = `<span class="badge bundle-child">SUB</span>`;
+    if (it.collo) badge = `<span class="badge bundle-child" title="Extra collo van het artikel erboven: eigen maten en gewichten">COLLO ${it.colloNr}</span>`;
+    else if (it.bundleChild) badge = `<span class="badge bundle-child">SUB</span>`;
     else if (isBundleParent) badge = `<span class="badge bundle-parent-active" title="Klik × om de hoofdregel te verwijderen en de prijs over de ${parentBundle.children.length} subpakketten te verdelen. Of verwijder de subpakketten als je deze hoofdregel wilt behouden.">HOOFDREGEL · ${parentBundle.children.length} pakketten</span>`;
     else if (isService) badge = `<span class="badge service">SERVICE</span>`;
     const specCells = isService
@@ -1279,16 +1299,21 @@ function renderItems() {
           const missing = val === "" ? "missing" : "";
           return `<td><input class="${missing}" data-item="${idx}" data-spec="${k}" value="${String(val).replace(/"/g,"&quot;")}"></td>`;
         }).join("");
-    const rowClass = it.bundleChild ? "bundle-child" : (isService ? "service" : "");
+    const rowClass = (it.bundleChild || it.collo) ? "bundle-child" : (isService ? "service" : "");
+    // Manon (17 sep 2026): een knop om onder een artikel een extra collo te
+    // zetten met eigen maten en gewichten. Alleen bij een fysiek artikel.
+    const colloKnop = (!isService && !it.collo)
+      ? `<button type="button" class="collo-plus" data-collo="${idx}" title="Extra collo onder deze regel zetten (eigen maten en gewichten)">+ collo</button>`
+      : "";
     return `<tr class="${rowClass}" data-idx="${idx}">
       <td class="drag" draggable="true" title="Sleep om te verplaatsen">⋮⋮</td>
       <td class="num">${it.qty}</td>
       <td class="code">${escapeHtml(it.code)}</td>
-      <td class="desc"><input data-item="${idx}" data-desc value="${String(it.description).replace(/"/g,"&quot;")}">${badge}</td>
+      <td class="desc"><input data-item="${idx}" data-desc title="Klik om de omschrijving aan te passen" value="${String(it.description).replace(/"/g,"&quot;")}">${badge}</td>
       ${specCells}
       <td class="num">${formatPrice(it.unitPrice)}</td>
       <td class="num">${formatPrice(it.total)}</td>
-      <td class="del"><button type="button" data-del="${idx}" title="Regel verwijderen">×</button></td>
+      <td class="del">${colloKnop}<button type="button" data-del="${idx}" title="Regel verwijderen">×</button></td>
     </tr>`;
   }).join("");
 
@@ -1298,10 +1323,11 @@ function renderItems() {
       const idx = +el.dataset.item;
       const key = el.dataset.spec;
       const it = state.lineItems[idx];
-      state.userSpecs[it.code] = state.userSpecs[it.code] || {...(SEED_SPECS[it.code] || {})};
+      const sleutel = it.collo ? it.specKey : it.code;
+      state.userSpecs[sleutel] = state.userSpecs[sleutel] || (it.collo ? {} : {...(SEED_SPECS[it.code] || {})});
       const raw = el.value;
-      state.userSpecs[it.code][key] = (key === "gw" || key === "nw") ? (parseFloat(raw) || 0) : raw;
-      saveUserSpecs(it.code);
+      state.userSpecs[sleutel][key] = (key === "gw" || key === "nw") ? (parseFloat(raw) || 0) : raw;
+      saveUserSpecs(sleutel);
       el.classList.toggle("missing", raw.trim() === "");
       renderTotals();
     });
@@ -1319,6 +1345,29 @@ function renderItems() {
     // ingevuld vanuit spec-database. Re-render kost de focus, maar dat is OK
     // op blur (gebruiker is klaar met typen).
     el.addEventListener("change", () => {
+      renderItems();
+      renderTotals();
+    });
+  });
+
+  // Extra collo: een regel eronder met dezelfde code en omschrijving, aantal
+  // 1, zonder prijs (de prijs zit op het artikel zelf). De maten en gewichten
+  // vult Manon in; die worden bewaard onder code + collonummer.
+  body.querySelectorAll("[data-collo]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = +btn.dataset.collo;
+      const it = state.lineItems[idx];
+      if (!it) return;
+      let na = idx, nr = 1;
+      while (state.lineItems[na + 1] && state.lineItems[na + 1].collo && state.lineItems[na + 1].colloVan === it) { na++; nr++; }
+      nr++;
+      const collo = {
+        qty: 1, code: it.code,
+        description: String(it.description || "").replace(/\s*-\s*collo \d+$/i, "") + " - collo " + nr,
+        unitPrice: 0, total: 0, eurUnitPrice: 0,
+        collo: true, colloNr: nr, colloVan: it, specKey: it.code + "#collo" + nr
+      };
+      state.lineItems.splice(na + 1, 0, collo);
       renderItems();
       renderTotals();
     });
@@ -1423,10 +1472,10 @@ function renderTotals() {
   const autoColli = items.filter(i => !i.service).reduce((s,i) => s + i.qty, 0);
   const colli = state.colliOverride != null ? state.colliOverride : autoColli;
   const gw = items.filter(i => !i.service).reduce((s,i) => {
-    const spec = getSpec(i.code, i.description); return s + (spec && spec.gw ? spec.gw * i.qty : 0);
+    const spec = getSpec(i.code, i.description, i); return s + (spec && spec.gw ? spec.gw * i.qty : 0);
   }, 0);
   const nw = items.filter(i => !i.service).reduce((s,i) => {
-    const spec = getSpec(i.code, i.description); return s + (spec && spec.nw ? spec.nw * i.qty : 0);
+    const spec = getSpec(i.code, i.description, i); return s + (spec && spec.nw ? spec.nw * i.qty : 0);
   }, 0);
   // Hint over auto-suggestie: alleen tonen als override afwijkt
   const colliHint = (state.colliOverride != null && state.colliOverride !== autoColli)
@@ -2431,7 +2480,7 @@ async function buildPdf(brand = "passion") {
 
   const items = state.lineItems.filter(i => !i.dropped);
   for (const it of items) {
-    const spec = getSpec(it.code, it.description);
+    const spec = getSpec(it.code, it.description, it);
     // hasSpec = niet-service én spec heeft minstens één bruikbaar veld.
     // (getSpec geeft tegenwoordig altijd een object terug, dus alleen op
     // bestaan checken is niet meer voldoende.)
@@ -2483,10 +2532,10 @@ async function buildPdf(brand = "passion") {
   const autoColli = items.filter(i => !i.service).reduce((s,i) => s + i.qty, 0);
   const colli = state.colliOverride != null ? state.colliOverride : autoColli;
   const gw = items.filter(i => !i.service).reduce((s,i) => {
-    const sp = getSpec(i.code); return s + (sp && sp.gw ? sp.gw * i.qty : 0);
+    const sp = getSpec(i.code, i.description, i); return s + (sp && sp.gw ? sp.gw * i.qty : 0);
   }, 0);
   const nw = items.filter(i => !i.service).reduce((s,i) => {
-    const sp = getSpec(i.code); return s + (sp && sp.nw ? sp.nw * i.qty : 0);
+    const sp = getSpec(i.code, i.description, i); return s + (sp && sp.nw ? sp.nw * i.qty : 0);
   }, 0);
 
   ensureSpace(90);

@@ -6103,6 +6103,26 @@ async function dpRefreshReservations(env) {
     return k ? (k + "|" + extraSleutel(extra)) : "";
   };
 
+  /* WAT AL BINNEN IS, IS BINNEN.
+     ═══════════════════════════════════════════════════════════════════════
+     Manon (17 sep 2026): "vorige week hebben we gevraagd om met terugwerkende
+     kracht de juiste ETA toe te voegen; alles staat nog op automatisch."
+     In Voorraadbeheer vinkt Chantal een spa op Inplannen zodra hij binnen
+     is; 355 regels stonden zo, 243 daarvan zonder zelf gekozen zending. De
+     berekening hieronder wist dat niet en hing er de eerstvolgende boot aan:
+     "24.10.2026 GDANSK EXPRESS" bij een spa die al in Uddel stond. Daarom
+     tellen die vinkjes hier mee, vóór de berekening: zo'n regel is
+     "voorraad" met bron "binnen", en trekt zijn stuk uit de hal als dat er
+     is. Een zelf gekozen zending gaat daar verderop nog overheen. */
+  let aantekBinnen = {};
+  try {
+    const aantek0 = (await env.FONTEYN_DATA.get("voorraad-notities", { type: "json" })) || {};
+    aantekBinnen = aantek0.regels || {};
+  } catch {}
+  const isBinnenGevinkt = (r) => {
+    const n = aantekBinnen[r.regelId] || aantekBinnen[r.regelIdOud];
+    return !!(n && !n.verwijderd && (n.inplannen || n.gepland));
+  };
   for (const [model, list] of Object.entries(byModel)) {
     const buckets = [];
     const halRec = (hallen.models || {})[model] || {};
@@ -6140,6 +6160,13 @@ async function dpRefreshReservations(env) {
       // trekken NIET uit de Fonteyn-voorraad — die krijgen 'dealer-direct'.
       if (r.container && r.warehouseId === WH_DEALER) { r.verwacht = "dealer-direct"; continue; }
       let need = r.qty, landing = null;
+      if (isBinnenGevinkt(r)) {
+        const bs = potSleutel(r.kleur, r.extra);
+        const bp = halPerKleur[bs] != null ? bs : (bs ? null : "");
+        if (bp != null && halPerKleur[bp] > 0) halPerKleur[bp] -= Math.min(need, halPerKleur[bp]);
+        r.verwacht = "voorraad"; r.verwachtBron = "binnen"; r.verwachtSchip = null;
+        continue;
+      }
       /* Eerst de hal, in de kleur van deze order. Kent de order geen kleur,
          dan uit het restpotje. Is er van díe kleur niets vrij, dan slaan we de
          hal over en gaat hij door naar de schepen - ook als er van een andere
@@ -6207,8 +6234,7 @@ async function dpRefreshReservations(env) {
      datum. Daarom landt de keuze nu al hier, zodat elke lezer dezelfde datum
      ziet. De berekende datum blijft ernaast staan als verwachtAuto. */
   try {
-    const aantek = (await env.FONTEYN_DATA.get("voorraad-notities", { type: "json" })) || {};
-    const regels = aantek.regels || {};
+    const regels = aantekBinnen;
     const perSleutel = {};
     for (const s of (schepen.ships || [])) {
       const sl = String(s.ref || s.trackRef || s.file || s.vessel || "");

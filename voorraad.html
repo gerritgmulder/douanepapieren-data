@@ -150,6 +150,11 @@
   table.grid.advtab td{vertical-align:top;overflow-wrap:break-word}
   table.grid.advtab .onder{font-size:11px;color:var(--muted);margin-top:2px}
   table.grid.advtab th{white-space:normal}
+  table.grid.advtab select.notSchip{max-width:150px!important}
+  table.grid.advtab td{font-size:12px;white-space:normal}
+  table.grid.advtab td:nth-child(4){max-width:190px}
+  table.grid.advtab td:nth-child(7){max-width:230px}
+  table.grid.advtab td .pill{white-space:nowrap}
   /* Velden in een rij mogen de regel niet hoger maken dan de tekst zelf. */
   table.grid td input[type=text],table.grid td select,table.grid td input:not([type=checkbox]){
       padding:1px 5px;font-size:11px;height:20px;line-height:18px}
@@ -3079,10 +3084,19 @@ function leveringCel(r,n,id,uit){
   var gekozen = n.schip ? schipVan(n.schip) : null;
   if(n.schip && !gekozen && (n.schipEta || n.schipRef))
     gekozen = { sleutel:n.schip, ref:n.schipRef||n.schip, eta:n.schipEta||null, naam:n.schipRef||n.schip };
+  /* Op Inplannen of Gepland gezet = de spa is binnen. Dan hoort hier geen
+     volgende boot te staan (Manon, 17 sep 2026: "alles staat nog op
+     automatisch"), maar dat hij binnen is, en sinds wanneer dat zo is
+     aangevinkt. Wie de zending alsnog wil aanwijzen kiest hem hieronder. */
+  var binnenGevinkt = !gekozen && !!(n.inplannen || n.gepland);
   var kop = gekozen
     ? "<span style='color:#2563eb;font-weight:600'>"+esc(gekozen.eta?datumNL(gekozen.eta):"ETA volgt")+"</span>"+
       " <span style='color:var(--muted);font-size:11px'>("+esc(gekozen.ref)+", handmatig"+
       (zendingBinnen(gekozen)?", binnen":"")+")</span>"
+    : binnenGevinkt
+    ? "<span style='color:#15803d;font-weight:600'>binnen in Uddel</span>"+
+      " <span style='color:var(--muted);font-size:11px'>("+(n.gepland?"gepland":"op Inplannen gezet")+
+      (n.ts?" "+esc(datumNL(String(n.ts).slice(0,10))):"")+(n.door?" door "+esc(String(n.door).split("@")[0]):"")+")</span>"
     : verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")
       +fabrieksRegel(r);
   // Een keuze die nergens meer op slaat mag niet stilzwijgend verdwijnen.

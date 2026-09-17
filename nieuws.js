@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-17", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Binnen is binnen bij Verwachte levering",
+      wat: "Een spa die op Inplannen of Gepland staat is binnen. Bij Verwachte levering stond daar toch de eerstvolgende boot, ook bij Partner onder 'Binnen per adviseur'. Nu staat er 'binnen in Uddel' met de dag waarop het vinkje is gezet; een zelf gekozen zending blijft gewoon staan. Dat geldt voor alle bestaande regels, ook in het partnerportaal. De tabel Binnen per adviseur past nu ook zonder opzij te schuiven, met de opmerkingen in beeld."
+    },
+    {
+      datum: "2026-09-17", bestand: "douane.html", soort: "nieuw",
+      titel: "Extra collo en omschrijving aanpassen",
+      wat: "Bestaat een artikel uit meer dan een collo, klik dan op '+ collo' achter de regel: er komt een regel onder met eigen afmetingen en gewichten, die de volgende keer bij dat artikel worden onthouden. De omschrijving kun je per regel gewoon overtypen; het vak heeft nu een rand zodat je ziet dat het kan."
+    },
+    {
       datum: "2026-09-17", bestand: "amerika.html", soort: "hersteld",
       titel: "Batches van Passion Spas boeken werkt",
       wat: "Het boeken van een uitbetaling gaf 'Internal server error' en er werd niets geboekt. Dat is verholpen. De orders worden nu in euro afgeboekt (precies wat er op de order open staat, tegen dezelfde koers als waarmee de order is aangemaakt); het dollarbedrag staat in de omschrijving van de boeking."
