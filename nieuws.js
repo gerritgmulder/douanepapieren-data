@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-17", bestand: "amerika.html", soort: "hersteld",
+      titel: "Batches van Passion Spas boeken werkt",
+      wat: "Het boeken van een uitbetaling gaf 'Internal server error' en er werd niets geboekt. Dat is verholpen. De orders worden nu in euro afgeboekt (precies wat er op de order open staat, tegen dezelfde koers als waarmee de order is aangemaakt); het dollarbedrag staat in de omschrijving van de boeking."
+    },
+    {
+      datum: "2026-09-17", bestand: "retouren.html", soort: "beter",
+      titel: "Reden 'Pickfout' erbij",
+      wat: "Bij Reden kun je nu ook Pickfout kiezen, voor een retour die ontstond doordat het verkeerde artikel is gepickt."
+    },
+    {
       datum: "2026-09-17", bestand: "voorraad.html", soort: "beter",
       titel: "Binnengekomen spa's: sorteren, filteren en postcode",
       wat: "Bij 'Binnengekomen spa's' en 'Op afroep' kun je nu op elke kolomkop klikken om te sorteren, en bovenaan kiezen of je alleen bijvoorbeeld Bezorgservice of Transport distributie wilt zien. De postcode en plaats van de klant staan er nu ook bij."

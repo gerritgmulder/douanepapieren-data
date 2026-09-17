@@ -1448,6 +1448,9 @@ async function audBoekKnop(b){
       "op nul zodra Osman het afschrift boekt.\n\n"+
       "LET OP: de kostenplaats "+(proef.kostenplaats||"Spa Houston USA")+" kan niet via de koppeling worden meegegeven.\n"+
       "Die moet je er in Logic4 zelf bij zetten op die kostenregel.\n\n"+
+      "De bedragen hierboven zijn dollars. De orders staan in Logic4 in euro (omgerekend tegen 1,12 bij het aanmaken); "+
+      "per order wordt precies het openstaande eurobedrag afgeboekt, en de bankkosten gaan tegen dezelfde koers in euro. "+
+      "In de omschrijving van elke boeking staat het dollarbedrag erbij.\n\n"+
       "Doorgaan?");
     if(!akkoord) return;
     b.textContent="boeken…";
@@ -1455,10 +1458,12 @@ async function audBoekKnop(b){
     const gedaan=(echt.batches||[]).filter(x=>!x.afwijking&&x.geboekt>0);
     const mis=(echt.batches||[]).filter(x=>x.fout>0||((x.bankkosten||{}).status==="fout"));
     const totaal=gedaan.reduce((n,x)=>n+(x.bruto||0),0);
+    const totaalEur=gedaan.reduce((n,x)=>n+(x.regels||[]).filter(r=>r.status==="geboekt").reduce((m,r)=>m+(Number(r.bedragEur)||0),0),0);
     const kosten=gedaan.reduce((n,x)=>n+(((x.bankkosten||{}).status==="geboekt")?x.kosten:0),0);
+    const eur=v=>"\u20ac "+Number(v||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2});
     if(window.fpLog) window.fpLog("batch-geboekt-op-1160",gedaan.length+" batch(es), "+usd(totaal));
     alert(gedaan.length+" batch(es) geboekt: "+
-      gedaan.reduce((n,x)=>n+x.geboekt,0)+" order(s) afgeboekt voor samen "+usd(totaal)+"."+
+      gedaan.reduce((n,x)=>n+x.geboekt,0)+" order(s) afgeboekt voor samen "+usd(totaal)+(totaalEur?" (in Logic4 "+eur(totaalEur)+")":"")+"."+
       (kosten?("\n\nBankkosten "+usd(kosten)+" op grootboek "+(echt.kostenGrootboek||"4630")+".\n\n"+
         "NOG DOEN IN LOGIC4: zet op die kostenregel(s) de kostenplaats "+
         (echt.kostenplaats||"Spa Houston USA")+". Dat kan de koppeling niet meegeven."):"")+

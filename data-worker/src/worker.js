@@ -8518,7 +8518,7 @@ async function qbHandleBoeken(request, env) {
      doen. Elke afboeking is er één, plus de kostenregel. Daarom hele batches
      per keer, tot dit aantal regels vol is; een batch wordt nooit gesplitst,
      want half boeken mag niet. */
-  const MAX_REGELS = 35;
+  const MAX_REGELS = 16;   // per regel twee verzoeken: order opvragen en afboeken
   const vanaf = Math.max(0, parseInt(body.vanaf, 10) || 0);
   const partij = [];
   let geteld = 0;
@@ -8556,15 +8556,47 @@ async function qbHandleBoeken(request, env) {
     for (const r of b.regels) {
       if (r.status !== "klaar om te boeken") continue;
       try {
+        /* DE BEDRAGEN ZIJN DOLLARS, DE ORDER STAAT IN EURO.
+           ═══════════════════════════════════════════════════════════════
+           De QuickBooks-factuur is in dollars; de Logic4-order is bij het
+           aanmaken omgerekend met AMERIKA_KOERS (1,12). Osman zag op
+           3521206 een order van 5.057,07 euro, terwijl hier 5.663,90 werd
+           afgeboekt: dat had de order 606 euro te veel betaald gemaakt.
+           Dus hier dezelfde omrekening, en liever nog: precies wat er op
+           de order open staat, zodat hij op nul sluit en er geen cent
+           blijft hangen door afronding per regel. Alleen als het open
+           bedrag meer dan tien cent afwijkt van de omgerekende factuur
+           gaat de omgerekende factuur, en staat dat in de uitleg. */
+        let eur = amerikaNaarEuro(r.bedrag);
+        try {
+          const or = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+            method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+            body: JSON.stringify({ Id: Number(r.order), TakeRecords: 1 }),
+          });
+          const oj = await or.json().catch(() => null);
+          const o = Array.isArray(oj) ? oj[0] : (oj && (oj.Orders || oj.Records || [])[0]);
+          const tot = o && o.Totals ? o.Totals : null;
+          if (o && Number(o.Id) === Number(r.order) && tot) {
+            const open = Math.round(((Number(tot.AmountIncl) || 0) - (Number(tot.Calc_TotalPayed) || 0)) * 100) / 100;
+            r.openOpOrder = open;
+            if (open > 0 && Math.abs(open - eur) <= 0.10) eur = open;
+            else if (open > 0) r.uitleg = "open op de order: " + open.toFixed(2) + " euro, factuur omgerekend: " + eur.toFixed(2) + " euro";
+          }
+        } catch {}
+        r.bedragEur = eur;
         const rr = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
           method: "POST",
           headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+          /* MatchingLedgerId is verplicht: zonder dat veld antwoordt Logic4
+             met een kale 500 "ServerError" (Osman, 17 sep 2026, order
+             3521206). 78 is Vooruit ontvangen, net als bij Mollie en bol.com. */
           body: JSON.stringify({
             OrderId: Number(r.order),
-            AmountIncl: r.bedrag,
+            AmountIncl: eur,
             BookingId: AMERIKA_DAGBOEK,
+            MatchingLedgerId: 78,
             DateTime: datum,
-            Description: "Batch " + (w.datum || "") + " - QuickBooks-factuur " + r.factuur,
+            Description: "Batch " + (w.datum || "") + " - QuickBooks-factuur " + r.factuur + " (" + r.bedrag.toFixed(2) + " USD)",
           }),
         });
         const tekst = await rr.text();
@@ -8572,7 +8604,7 @@ async function qbHandleBoeken(request, env) {
           r.status = "fout"; r.uitleg = "HTTP " + rr.status + " - " + tekst.slice(0, 160);
           stuk = true; break;
         }
-        geboekt.ids[r.sleutel] = { orderId: r.order, factuur: r.factuur, bedrag: r.bedrag,
+        geboekt.ids[r.sleutel] = { orderId: r.order, factuur: r.factuur, bedrag: r.bedrag, bedragEur: eur,
                                    batch: String(w.id), ts: new Date().toISOString(),
                                    door: String(body.user || "").slice(0, 80) };
         // Meteen vastleggen, nooit pas aan het eind van de lus.
@@ -8609,7 +8641,8 @@ async function qbHandleBoeken(request, env) {
           amerikaGb.dagboek = Number(inst.memBookingId) || 20;
         }
         if (!amerikaGb.kosten || !amerikaGb.tussen || !amerikaGb.btw) throw new Error("grootboek 4630 of 1160 of de btw-code van 0% niet gevonden in Logic4");
-        const oms = "Bankkosten Passion Spas batch " + (w.datum || "") + " - kostenplaats " + AMERIKA_KOSTENPLAATS + " nog zetten";
+        const oms = "Bankkosten Passion Spas batch " + (w.datum || "") + " (" + b.bankkosten.bedrag.toFixed(2) + " USD) - kostenplaats " + AMERIKA_KOSTENPLAATS + " nog zetten";
+        const kostenEur = amerikaNaarEuro(b.bankkosten.bedrag);   // zelfde koers als de orders
         const rr = await fetch("https://api.logic4server.nl/v3/Financial/AddFinancialGeneralBookingWithMutations", {
           method: "POST",
           headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
@@ -8618,15 +8651,15 @@ async function qbHandleBoeken(request, env) {
             BookingDateTime: datum,
             FinancialBookId: amerikaGb.dagboek,
             Mutations: [
-              { LedgerId: amerikaGb.kosten.id, VatCode: amerikaGb.btw.id, AmountIncl: b.bankkosten.bedrag, Description: oms },
-              { LedgerId: amerikaGb.tussen.id, VatCode: amerikaGb.btw.id, AmountIncl: -b.bankkosten.bedrag, Description: oms },
+              { LedgerId: amerikaGb.kosten.id, VatCode: amerikaGb.btw.id, AmountIncl: kostenEur, Description: oms },
+              { LedgerId: amerikaGb.tussen.id, VatCode: amerikaGb.btw.id, AmountIncl: -kostenEur, Description: oms },
             ],
           }),
         });
         const tekst = await rr.text();
         if (!rr.ok) { b.bankkosten.status = "fout"; b.bankkosten.uitleg = "HTTP " + rr.status + " - " + tekst.slice(0, 160); }
         else {
-          geboekt.ids[b.bankkosten.sleutel] = { bedrag: -b.bankkosten.bedrag, batch: String(w.id),
+          geboekt.ids[b.bankkosten.sleutel] = { bedrag: -b.bankkosten.bedrag, bedragEur: -kostenEur, batch: String(w.id),
             grootboek: AMERIKA_KOSTEN_GROOTBOEK, ts: new Date().toISOString(),
             door: String(body.user || "").slice(0, 80) };
           await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));

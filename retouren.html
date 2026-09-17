@@ -283,10 +283,10 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 const SESSION_KEY = "fp.session";
 const EMAIL_KEY = "fp.email";
 
-const REASONS = ["Fout klant","Fout adviseur","Reparatie","Productfout","Nalevering","Klacht","Transportschade","Overig"];
+const REASONS = ["Fout klant","Fout adviseur","Pickfout","Reparatie","Productfout","Nalevering","Klacht","Transportschade","Overig"];
 const LOCATIONS = ["Voorraad","Outlet","Derving","Showroommodel"];
 const REASON_COLORS = {
-  "Fout klant":"#3b82f6","Fout adviseur":"#8b5cf6","Reparatie":"#0ea5e9","Productfout":"#ef4444",
+  "Fout klant":"#3b82f6","Fout adviseur":"#8b5cf6","Pickfout":"#f97316","Reparatie":"#0ea5e9","Productfout":"#ef4444",
   "Nalevering":"#10b981","Klacht":"#f59e0b","Transportschade":"#ec4899","Overig":"#6b7280","(geen reden)":"#cbd5e1"
 };
 
@@ -610,6 +610,7 @@ function guessReason(text) {
   if (/reparat/.test(t)) return "Reparatie";
   if (/nalever/.test(t)) return "Nalevering";
   if (/klacht/.test(t)) return "Klacht";
+  if (/pickfout|verkeerd gepickt|verkeerd geleverd|verkeerd artikel geleverd/.test(t)) return "Pickfout";
   if (/fout adviseur|verkeerd geadviseerd/.test(t)) return "Fout adviseur";
   if (/fout klant|verkeerd besteld|verkeerd gekozen|niet bevallen|retour/.test(t)) return "Fout klant";
   return "";
