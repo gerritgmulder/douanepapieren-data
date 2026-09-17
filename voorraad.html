@@ -1148,8 +1148,14 @@ function alleenKlantnotities(){
        werken, maar elke opslag kreeg stilletjes een 403 - na een herstart
        was alles weer terug. De $ aan het eind van /data/voorraad$ deed
        precies wat hij moest doen, alleen op de verkeerde lijst. */
+    /* En dit was de "403" bij Gepland (Gerwin, 15 en 17 sep 2026: "alleen
+       klanttabs"). De afspraak die het Gepland-venster in de agenda zet is
+       een schrijfactie, en die stond niet op deze lijst - terwijl juist de
+       planners dat venster gebruiken. De agenda vullen hoort bij Gepland,
+       dus /planning/afspraak mag. */
     const MAG=[/\/api\/logic4-call$/,/\/api\/health$/,/\/api\/me$/,/\/api\/logout$/,
-               /\/track$/,/\/log$/,/\/data\/voorraad$/,/\/data\/voorraad-notities$/];
+               /\/track$/,/\/log$/,/\/data\/voorraad$/,/\/data\/voorraad-notities$/,
+               /\/planning\/afspraak$/];
     if(methode!=="GET"&&!MAG.some(re=>re.test(adres))){
       try{ setStatus("bad","Hier kun je alleen de vinkjes en notities aanpassen. De rest doen Chantal, Arno en Manon."); }catch(e){}
       return Promise.resolve(new Response('{"ok":false,"error":"alleen klanttabs"}',
