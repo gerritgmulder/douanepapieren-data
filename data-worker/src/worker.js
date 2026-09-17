@@ -5778,6 +5778,204 @@ async function planningRoutePrint(env, url) {
   return reply(200, { ok: true, orders });
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OPLEVERBON - de checklist die de monteur bij de klant invult
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Kevin (video's, 17 sep 2026): de papieren "Checklist Fonteyn Bezorgservice"
+   moet in Mijn route: per stop de vragen (Ja / Nee / n.v.t. met een reden als
+   het geen Ja is), het openstaande bedrag en of er contant is betaald, een
+   handtekening van de monteur en van de klant, en op kantoor een overzicht
+   van alle bonnen om ze na te kijken, te accorderen en naar de klant te
+   mailen.
+
+   Opslag: elke bon apart onder planning-bon:<afspraak-id> (met de twee
+   handtekeningen als kleine PNG's erin), en één index planning-bonnen met
+   per bon alleen de kerngegevens, zodat het overzicht licht blijft.
+
+   Status: concept (monteur is bezig) -> klaar (monteur heeft afgerond,
+   beide handtekeningen staan erop) -> akkoord (kantoor) -> gemaild. */
+const BON_SLEUTEL = (id) => "planning-bon:" + String(id).replace(/[^\w\-.:|]/g, "_").slice(0, 80);
+const BON_MAX_HANDTEKENING = 120000;   // tekens dataURL, ruim voor een PNG van 600x200
+
+async function bonIndexBijwerken(env, bon) {
+  const idx = (await env.FONTEYN_DATA.get("planning-bonnen", { type: "json" })) || { bonnen: {} };
+  idx.bonnen = idx.bonnen || {};
+  idx.bonnen[bon.id] = {
+    id: bon.id, datum: bon.datum || null, tijd: bon.tijd || null, klant: bon.klant || "",
+    plaats: bon.plaats || "", ordernr: bon.ordernr || "", itsId: bon.itsId || null,
+    monteur: bon.monteur || "", status: bon.status || "concept",
+    openstaand: bon.betaling && bon.betaling.openstaand != null ? bon.betaling.openstaand : null,
+    methode: (bon.betaling && bon.betaling.methode) || "",
+    ontvangen: (bon.betaling && bon.betaling.bedrag) || 0,
+    nee: Object.values(bon.checklist || {}).filter(x => x && x.a === "nee").length,
+    gewijzigd: bon.gewijzigd || new Date().toISOString(),
+    akkoordDoor: bon.akkoordDoor || null, gemaildTs: bon.gemaildTs || null, gemaildNaar: bon.gemaildNaar || null,
+  };
+  /* Bonnen van meer dan een jaar oud gaan uit het overzicht; de bon zelf
+     blijft bestaan. */
+  const grens = Date.now() - 366 * 86400000;
+  for (const k of Object.keys(idx.bonnen)) {
+    const t = Date.parse((idx.bonnen[k] || {}).gewijzigd || "");
+    if (t && t < grens) delete idx.bonnen[k];
+  }
+  idx.updated = new Date().toISOString();
+  await env.FONTEYN_DATA.put("planning-bonnen", JSON.stringify(idx));
+}
+
+function bonSchoon(b, wie) {
+  const s = (v, n) => String(v == null ? "" : v).slice(0, n || 200);
+  const hand = (v) => { const t = String(v || ""); return /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(t) && t.length <= BON_MAX_HANDTEKENING ? t : ""; };
+  const check = {};
+  for (const [k, v] of Object.entries(b.checklist || {})) {
+    if (!/^[\w-]{1,40}$/.test(k) || !v) continue;
+    check[k] = { a: ["ja", "nee", "nvt"].includes(v.a) ? v.a : "", opm: s(v.opm, 300) };
+  }
+  const bt = b.betaling || {};
+  return {
+    id: s(b.id, 80), datum: s(b.datum, 10), tijd: s(b.tijd, 5), klant: s(b.klant, 120), plaats: s(b.plaats, 200),
+    telefoon: s(b.telefoon, 40), klantMail: s(b.klantMail, 120).toLowerCase(), ordernr: s(b.ordernr, 20), itsId: b.itsId ? s(b.itsId, 12) : null,
+    monteur: s(b.monteur, 80), monteur2: s(b.monteur2, 80), kenteken: s(b.kenteken, 12), soort: ["levering", "nalevering", "service"].includes(b.soort) ? b.soort : "levering",
+    spaType: s(b.spaType, 120), serienr: s(b.serienr, 60), adviseur: s(b.adviseur, 80),
+    checklist: check,
+    betaling: {
+      orderbedrag: Number(bt.orderbedrag) || 0, reedsBetaald: Number(bt.reedsBetaald) || 0,
+      openstaand: bt.openstaand != null ? Number(bt.openstaand) || 0 : null,
+      methode: ["bank", "contant", "geen"].includes(bt.methode) ? bt.methode : "",
+      bedrag: Number(bt.bedrag) || 0, contantAan: ["monteur", "kantoor"].includes(bt.contantAan) ? bt.contantAan : "",
+    },
+    opmerking: s(b.opmerking, 1000),
+    handtekeningMonteur: hand(b.handtekeningMonteur), handtekeningKlant: hand(b.handtekeningKlant),
+    klantNaamHandtekening: s(b.klantNaamHandtekening, 80),
+    status: ["concept", "klaar"].includes(b.status) ? b.status : "concept",
+    gemaakt: s(b.gemaakt, 30) || new Date().toISOString(), gewijzigd: new Date().toISOString(), door: s(wie, 80),
+  };
+}
+
+async function bonHandle(request, env, url) {
+  const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+  const p = url.pathname;
+  if (p === "/planning/bonnen" && request.method === "GET") {
+    const idx = (await env.FONTEYN_DATA.get("planning-bonnen", { type: "json" })) || { bonnen: {} };
+    const lijst = Object.values(idx.bonnen || {}).sort((a, b) => String(b.datum || "").localeCompare(String(a.datum || "")) || String(b.gewijzigd || "").localeCompare(String(a.gewijzigd || "")));
+    return reply(200, { ok: true, bonnen: lijst });
+  }
+  if (p === "/planning/bon" && request.method === "GET") {
+    const id = url.searchParams.get("id") || "";
+    if (!id) return reply(400, { ok: false, error: "geen id" });
+    const bon = await env.FONTEYN_DATA.get(BON_SLEUTEL(id), { type: "json" });
+    return reply(200, { ok: true, bon: bon || null });
+  }
+  if (p === "/planning/bon" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch { return reply(400, { ok: false, error: "geen leesbare bon" }); }
+    const inkomend = b && b.bon;
+    if (!inkomend || !inkomend.id) return reply(400, { ok: false, error: "bon zonder id" });
+    const oud = await env.FONTEYN_DATA.get(BON_SLEUTEL(inkomend.id), { type: "json" });
+    /* Een bon die kantoor al heeft goedgekeurd of gemaild verandert de
+       monteur niet meer; kantoor zet hem desnoods eerst terug op concept. */
+    if (oud && ["akkoord", "gemaild"].includes(oud.status)) return reply(409, { ok: false, error: "deze bon is al " + oud.status + " op kantoor en kan niet meer worden veranderd" });
+    const bon = bonSchoon(inkomend, wie);
+    if (oud) { bon.gemaakt = oud.gemaakt || bon.gemaakt; }
+    if (bon.status === "klaar") {
+      if (!bon.handtekeningMonteur || !bon.handtekeningKlant) return reply(400, { ok: false, error: "zonder beide handtekeningen kan de bon niet worden afgerond" });
+      const open = Object.entries(bon.checklist).filter(([, v]) => !v.a);
+      if (open.length) return reply(400, { ok: false, error: open.length + " vraag(en) nog niet beantwoord" });
+      const zonderReden = Object.entries(bon.checklist).filter(([, v]) => v.a !== "ja" && !v.opm.trim());
+      if (zonderReden.length) return reply(400, { ok: false, error: "bij Nee of n.v.t. hoort een reden (" + zonderReden.length + " keer leeg)" });
+    }
+    await env.FONTEYN_DATA.put(BON_SLEUTEL(bon.id), JSON.stringify(bon));
+    await bonIndexBijwerken(env, bon);
+    return reply(200, { ok: true, status: bon.status });
+  }
+  /* Vanaf hier is het kantoor: akkoord geven, terugzetten, mailen. */
+  const magKantoor = await toegangMag(env, "planning-bewerk", wie);
+  if (!magKantoor) return reply(403, { ok: false, error: "alleen de planners mogen een bon accorderen of mailen" });
+  if (p === "/planning/bon/status" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const bon = b.id ? await env.FONTEYN_DATA.get(BON_SLEUTEL(b.id), { type: "json" }) : null;
+    if (!bon) return reply(404, { ok: false, error: "bon niet gevonden" });
+    if (b.status === "akkoord") {
+      if (bon.status === "concept") return reply(400, { ok: false, error: "de monteur heeft deze bon nog niet afgerond" });
+      bon.status = "akkoord"; bon.akkoordDoor = wie; bon.akkoordTs = new Date().toISOString();
+    } else if (b.status === "concept") {
+      bon.status = "concept"; bon.akkoordDoor = null; bon.akkoordTs = null;
+    } else return reply(400, { ok: false, error: "onbekende status" });
+    bon.gewijzigd = new Date().toISOString();
+    await env.FONTEYN_DATA.put(BON_SLEUTEL(bon.id), JSON.stringify(bon));
+    await bonIndexBijwerken(env, bon);
+    return reply(200, { ok: true, status: bon.status });
+  }
+  if (p === "/planning/bon/mail" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const bon = b.id ? await env.FONTEYN_DATA.get(BON_SLEUTEL(b.id), { type: "json" }) : null;
+    if (!bon) return reply(404, { ok: false, error: "bon niet gevonden" });
+    if (!["klaar", "akkoord", "gemaild"].includes(bon.status)) return reply(400, { ok: false, error: "de bon is nog niet afgerond" });
+    const naar = String(b.naar || bon.klantMail || "").trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar)) return reply(400, { ok: false, error: "geen geldig mailadres van de klant" });
+    if (!env.RESEND_API_KEY || !env.MAIL_FROM) return reply(500, { ok: false, error: "mail is niet ingericht in de worker" });
+    const html = bonHtml(bon, Array.isArray(b.vragen) ? b.vragen : []);
+    const adres = (String(env.MAIL_FROM).match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM);
+    const bijlagen = [];
+    for (const [naam, d] of [["handtekening-monteur.png", bon.handtekeningMonteur], ["handtekening-klant.png", bon.handtekeningKlant]])
+      if (d) bijlagen.push({ filename: naam, content: d.split(",")[1] });
+    const r = await fetch("https://api.resend.com/emails", {
+      method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: "Fonteyn Bezorgservice <" + adres + ">", to: [naar],
+        reply_to: /@/.test(wie) ? [wie] : undefined,
+        subject: "Opleverbon Fonteyn" + (bon.ordernr ? " - order " + bon.ordernr : "") + (bon.datum ? " - " + bon.datum.split("-").reverse().join("-") : ""),
+        html, attachments: bijlagen,
+      }),
+    });
+    const tekst = await r.text();
+    if (!r.ok) return reply(502, { ok: false, error: "Resend weigerde: HTTP " + r.status + " " + tekst.slice(0, 200) });
+    bon.status = "gemaild"; bon.gemaildTs = new Date().toISOString(); bon.gemaildNaar = naar; bon.gemaildDoor = wie;
+    bon.gewijzigd = bon.gemaildTs;
+    await env.FONTEYN_DATA.put(BON_SLEUTEL(bon.id), JSON.stringify(bon));
+    await bonIndexBijwerken(env, bon);
+    return reply(200, { ok: true, naar });
+  }
+  return reply(404, { ok: false, error: "onbekende bon-route" });
+}
+
+/* De bon als mail. De vragen komen mee van het scherm (tekst per sleutel),
+   zodat de worker de lijst niet hoeft te kennen. */
+function bonHtml(bon, vragen) {
+  const e = (t) => String(t == null ? "" : t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const geld = (v) => "€ " + (Number(v) || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const tekst = {}; for (const v of vragen) if (v && v.k) tekst[v.k] = v.t;
+  const antwoord = { ja: "Ja", nee: "Nee", nvt: "n.v.t." };
+  const rijen = Object.entries(bon.checklist || {}).map(([k, v]) =>
+    "<tr><td style='padding:4px 8px;border-bottom:1px solid #eee'>" + e(tekst[k] || k) + "</td>" +
+    "<td style='padding:4px 8px;border-bottom:1px solid #eee;font-weight:600;color:" + (v.a === "ja" ? "#15803d" : v.a === "nee" ? "#b91c1c" : "#6b7280") + "'>" + e(antwoord[v.a] || "-") + "</td>" +
+    "<td style='padding:4px 8px;border-bottom:1px solid #eee;color:#374151'>" + e(v.opm || "") + "</td></tr>").join("");
+  const bt = bon.betaling || {};
+  const betaling = bt.openstaand == null ? "" :
+    "<h3 style='color:#144734;margin:18px 0 6px'>Betaling</h3><table style='border-collapse:collapse;font-size:13px'>" +
+    "<tr><td style='padding:3px 8px'>Orderbedrag</td><td style='padding:3px 8px'>" + geld(bt.orderbedrag) + "</td></tr>" +
+    "<tr><td style='padding:3px 8px'>Al betaald</td><td style='padding:3px 8px'>" + geld(bt.reedsBetaald) + "</td></tr>" +
+    "<tr><td style='padding:3px 8px'>Openstaand bij levering</td><td style='padding:3px 8px'>" + geld(bt.openstaand) + "</td></tr>" +
+    (bt.methode ? "<tr><td style='padding:3px 8px'>Bij levering voldaan</td><td style='padding:3px 8px'>" + (bt.methode === "geen" ? "niets" : geld(bt.bedrag) + " " + (bt.methode === "contant" ? "contant" : "per bank")) + "</td></tr>" : "") +
+    "</table>";
+  return "<div style='font-family:Arial,sans-serif;color:#1f2937;max-width:640px'>" +
+    "<h2 style='color:#144734;margin:0 0 4px'>Opleverbon Fonteyn Bezorgservice</h2>" +
+    "<p style='margin:0 0 14px;color:#6b7280;font-size:13px'>" + e(bon.datum ? bon.datum.split("-").reverse().join("-") : "") + (bon.tijd ? " " + e(bon.tijd) : "") +
+    (bon.ordernr ? " &middot; order " + e(bon.ordernr) : "") + (bon.monteur ? " &middot; monteur " + e(bon.monteur) : "") + "</p>" +
+    "<p style='font-size:14px'>Beste " + e(bon.klant || "klant") + ",<br><br>Hierbij de opleverbon van de bezorging en installatie van uw spa. Bewaar deze bij uw aankoopgegevens.</p>" +
+    "<table style='border-collapse:collapse;font-size:13px;margin:6px 0'>" +
+    (bon.spaType ? "<tr><td style='padding:3px 8px;color:#6b7280'>Spa</td><td style='padding:3px 8px'>" + e(bon.spaType) + "</td></tr>" : "") +
+    (bon.serienr ? "<tr><td style='padding:3px 8px;color:#6b7280'>Serienummer</td><td style='padding:3px 8px'>" + e(bon.serienr) + "</td></tr>" : "") +
+    (bon.plaats ? "<tr><td style='padding:3px 8px;color:#6b7280'>Adres</td><td style='padding:3px 8px'>" + e(bon.plaats) + "</td></tr>" : "") +
+    "</table>" +
+    "<h3 style='color:#144734;margin:18px 0 6px'>Gedaan bij u thuis</h3>" +
+    "<table style='border-collapse:collapse;font-size:13px;width:100%'>" + rijen + "</table>" +
+    betaling +
+    (bon.opmerking ? "<h3 style='color:#144734;margin:18px 0 6px'>Opmerkingen</h3><p style='font-size:13px;white-space:pre-line'>" + e(bon.opmerking) + "</p>" : "") +
+    "<p style='font-size:12px;color:#6b7280;margin-top:18px'>De handtekeningen van de monteur en van u zitten als bijlage bij deze mail.</p>" +
+    "<p style='font-size:14px'>Veel plezier met uw spa!<br>Fonteyn Bezorgservice</p></div>";
+}
+
 async function dpOrderUitleg(env, nr) {
   const token = await l4Token(env);
   const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
@@ -11714,6 +11912,12 @@ export default {
     if (url.pathname === "/planning/route-print" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });
       return planningRoutePrint(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
+    /* De opleverbon van de monteur (tegel Mijn route) en het overzicht ervan
+       in Planning. Zie bonHandle hieronder. */
+    if (url.pathname.startsWith("/planning/bon")) {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel: ga één keer terug naar het Dashboard en open de tegel opnieuw" });
+      return bonHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     /* Eén melding onbewerkt, om te zien wat Logic4 precies meegeeft
        (opmaak van de omschrijving, de vrije velden zoals Garantie). Alleen

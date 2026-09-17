@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-17", bestand: "mijnroute.html", soort: "nieuw",
+      titel: "Opleverbon op de telefoon",
+      wat: "Onder elke stop staat nu een Opleverbon: de checklist van de bezorgservice (Ja, Nee of n.v.t., met een reden als het geen Ja is), het openstaande bedrag en wat er bij de klant is voldaan, en de handtekening van de monteur en van de klant. Bewaren gaat vanzelf; met Bon afronden gaat hij naar kantoor. Het ordermemo uit Logic4 staat er nu ook bij."
+    },
+    {
+      datum: "2026-09-17", bestand: "planning.html", soort: "nieuw",
+      titel: "Opleverbonnen nakijken en mailen",
+      wat: "Met de knop Opleverbonnen zie je de bonnen die de monteurs bij de klant hebben ingevuld. Per bon kun je alles nakijken, Akkoord geven, de bon naar de klant mailen of hem teruggeven aan de monteur."
+    },
+    {
       datum: "2026-09-17", bestand: "voorraad.html", soort: "hersteld",
       titel: "Binnen is binnen bij Verwachte levering",
       wat: "Een spa die op Inplannen of Gepland staat is binnen. Bij Verwachte levering stond daar toch de eerstvolgende boot, ook bij Partner onder 'Binnen per adviseur'. Nu staat er 'binnen in Uddel' met de dag waarop het vinkje is gezet; een zelf gekozen zending blijft gewoon staan. Dat geldt voor alle bestaande regels, ook in het partnerportaal. De tabel Binnen per adviseur past nu ook zonder opzij te schuiven, met de opmerkingen in beeld."

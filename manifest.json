@@ -1,5 +1,5 @@
 {
-  "version": "0.34.44",
+  "version": "0.34.45",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -135,6 +135,10 @@
     {
       "name": "urencontrole.html",
       "note": "Het weekoverzicht van Gerwin: per collega per week aanvinken of de urenregistratie is nagekeken. Leest zijn eigen Excel in, inclusief de zwarte cellen die 'uit dienst' betekenen."
+    },
+    {
+      "name": "opleverbon.js",
+      "note": "De vragen van de opleverbon (checklist Fonteyn Bezorgservice), gedeeld door Mijn route en Planning. Een vraag hoeft maar op een plek te veranderen."
     },
     {
       "name": "route-print.js",

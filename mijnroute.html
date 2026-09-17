@@ -6,6 +6,7 @@
 <script src="taal.js"></script>
 <script src="kop.js"></script>
 <script src="breedte.js"></script>
+<script src="opleverbon.js"></script>
 <script>
   // Zonder sessie terug naar het dashboard; met sessie maar zonder toegang
   // een nette melding. De rechten staan in toegang.js (groep 'planning').
@@ -101,6 +102,46 @@ main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-i
 .leeg{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;padding:22px;text-align:center;color:var(--grijs);font-size:13.5px;line-height:1.5}
 .fout{background:#fee2e2;color:var(--rood);border-radius:10px;padding:10px 12px;font-size:13px;margin:0 0 10px}
 .wacht{color:var(--grijs);font-size:12.5px;padding:6px 2px}
+/* Het ordermemo uit Logic4. Kevin (17 sep 2026): "het enige wat ik nog mis
+   is het ordermemo, dat moet er ook bij komen te staan." */
+.memo{margin-top:8px;background:#fff7ed;border-left:4px solid var(--oranje);border-radius:8px;padding:7px 10px;font-size:13px;white-space:pre-wrap;line-height:1.45}
+.memo b{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:#9a3412;margin-bottom:2px}
+/* De opleverbon. */
+.bonknop{margin-top:10px;width:100%;background:#fff;border:2px solid var(--groen);color:var(--groen);border-radius:10px;padding:10px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;display:flex;justify-content:space-between;align-items:center}
+.bonknop .st{font-size:11.5px;font-weight:600;color:var(--grijs)}
+.bonknop .st.klaar{color:var(--goed)}.bonknop .st.akkoord,.bonknop .st.gemaild{color:#2563eb}
+.bon{margin-top:8px;border:2px solid var(--groen);border-radius:12px;padding:12px;background:#fff}
+.bon h4{margin:12px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--groen);border-bottom:1px solid var(--rand);padding-bottom:4px}
+.bon h4:first-child{margin-top:0}
+.bon label{display:block;font-size:11.5px;color:var(--grijs);margin:6px 0 2px}
+.bon input[type=text],.bon input[type=number],.bon textarea{width:100%;padding:8px 10px;border:1px solid var(--rand);border-radius:8px;font:inherit;font-size:14px;background:#fff}
+.bon .rij2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.bon .vraag{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid #f0f0ea}
+.bon .vraag .t{flex:1 1 160px;font-size:13.5px;line-height:1.3}
+.bon .keus{display:flex;flex:0 0 auto;border:1px solid var(--rand);border-radius:9px;overflow:hidden}
+.bon .keus button{border:0;background:#fff;font:inherit;font-size:12.5px;font-weight:600;padding:7px 10px;cursor:pointer;color:var(--grijs);min-width:44px}
+.bon .keus button+button{border-left:1px solid var(--rand)}
+.bon .keus button.ja.aan{background:var(--goed);color:#fff}
+.bon .keus button.nee.aan{background:var(--rood);color:#fff}
+.bon .keus button.nvt.aan{background:var(--grijs);color:#fff}
+.bon .vraag input.reden{flex:1 1 100%;margin-top:2px;padding:7px 9px;border:1px solid #fca5a5;border-radius:8px;font:inherit;font-size:13px;background:#fff5f5}
+.bon .segment{display:flex;gap:6px;flex-wrap:wrap}
+.bon .segment button{flex:1 1 auto;border:1px solid var(--rand);background:#fff;border-radius:9px;padding:9px 8px;font:inherit;font-size:13px;font-weight:600;color:var(--grijs);cursor:pointer}
+.bon .segment button.aan{background:var(--groen);color:#fff;border-color:var(--groen)}
+.bon .geld{display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:13.5px;margin:4px 0 8px}
+.bon .geld b{text-align:right}
+.bon .geld .open{color:var(--rood);font-weight:700}
+.bon .hand{border:1px dashed #9ca3af;border-radius:10px;background:#fff;position:relative;touch-action:none}
+.bon .hand canvas{display:block;width:100%;height:150px;border-radius:10px}
+.bon .hand .wis{position:absolute;right:6px;top:6px;border:1px solid var(--rand);background:#fff;border-radius:7px;padding:3px 9px;font:inherit;font-size:11.5px;cursor:pointer}
+.bon .hand .hint{position:absolute;left:10px;bottom:6px;font-size:11px;color:#9ca3af;pointer-events:none}
+.bon .bonvoet{display:flex;gap:8px;margin-top:14px}
+.bon .bonvoet button{flex:1;border-radius:10px;padding:12px;font:inherit;font-size:14px;font-weight:700;cursor:pointer;border:1px solid var(--rand);background:#fff}
+.bon .bonvoet button.doe{background:var(--groen);color:#fff;border-color:var(--groen)}
+.bon .bonvoet button:disabled{opacity:.5}
+.bon .melding{font-size:12.5px;margin-top:8px;min-height:16px}
+.bon .melding.bad{color:var(--rood)}.bon .melding.ok{color:var(--goed)}
+.bon .slot{background:#eff6ff;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#1e40af;margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -156,8 +197,11 @@ var plan = { afspraken:[], routes:{} }, paklijst = {}, orders = {}, meldingen = 
 var dagGekozen = iso(new Date());
 
 async function lees(pad, opties){
-  var r = await fetch(W+pad, Object.assign({ headers:{ "X-Fonteyn-Auth": teamKey(), "Content-Type":"application/json" } }, opties||{}));
-  if (!r.ok) throw new Error("HTTP "+r.status);
+  var r = await fetch(W+pad, Object.assign({ headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik, "Content-Type":"application/json" } }, opties||{}));
+  if (!r.ok){
+    var t = ""; try{ var j = await r.json(); t = j && j.error ? j.error : ""; }catch(e){}
+    throw new Error(t || ("HTTP "+r.status));
+  }
   return r.json();
 }
 function minuten(t){ var m=String(t||"").match(/^(\d{1,2}):(\d{2})/); return m ? (+m[1])*60+(+m[2]) : null; }
@@ -252,7 +296,193 @@ function stopHtml(a){
         '</div>';
     }
   }
+  /* Ordermemo uit Logic4 (het veld Notes, op de orderbevestiging "Order memo"). */
+  if (o && o.ok && String(o.notities||"").trim())
+    html += '<div class="memo"><b>Order memo</b>'+esc(String(o.notities).trim())+'</div>';
+  html += bonBlok(a, o);
   return html + '</div>';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OPLEVERBON
+   ═══════════════════════════════════════════════════════════════════════════
+   Kevin (17 sep 2026): de papieren checklist in de telefoon. Per stop een
+   bon: de vragen (Ja / Nee / n.v.t., bij geen Ja een reden), het openstaande
+   bedrag en wat er bij de klant is voldaan, en de handtekening van monteur
+   en klant. Bewaren gaat vanzelf bij elke wijziging (concept); Afronden
+   controleert alles en zet hem op klaar, waarna kantoor hem in Planning
+   ziet, accordeert en naar de klant mailt. */
+var bonnen = {}, bonOpen = {}, bonTimers = {}, bonIndex = {};
+function bonVan(a, o){
+  var id = String(a.id);
+  if (bonnen[id]) return bonnen[id];
+  var nr = String(a.ordernr||"").trim();
+  var b = nr ? betaald[nr] : (a.itsId ? (betaald["its:"+a.itsId]||{}).info : null);
+  var eerste = o && o.ok ? (o.regels||[]).find(function(r){ return r.omschrijving && r.totaal; }) : null;
+  var lever = o && o.ok ? (o.leverenAan || o.besteldDoor || {}) : {};
+  bonnen[id] = {
+    id: id, datum: a.datum, tijd: a.tijd||"", klant: a.klant||"", plaats: a.plaats||"", telefoon: a.telefoon||"",
+    klantMail: (lever.mail || (o && o.ok && (o.besteldDoor||{}).mail) || ""), ordernr: nr, itsId: a.itsId||null,
+    monteur: mijnNaam(), monteur2: "", kenteken: "", soort: a.soort==="service" ? "service" : "levering",
+    spaType: eerste ? eerste.omschrijving.split(/[|,]/)[0].trim() : "", serienr: "", adviseur: (o && o.ok && o.adviseur) || "",
+    checklist: {}, betaling: { orderbedrag: b ? b.bedrag : 0, reedsBetaald: b ? b.betaald : 0,
+      openstaand: b ? Math.round((b.bedrag - b.betaald)*100)/100 : null, methode: "", bedrag: 0, contantAan: "" },
+    opmerking: "", handtekeningMonteur: "", handtekeningKlant: "", status: "concept"
+  };
+  return bonnen[id];
+}
+function geld(v){ return "\u20ac "+(Number(v)||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function bonBlok(a, o){
+  if (a.soort === "verlof" || a.soort === "intern") return "";
+  var id = esc(String(a.id));
+  /* Dicht: alleen de knop met de stand uit het overzicht. De bon zelf wordt
+     pas gemaakt of opgehaald als de monteur hem opent, zodat de gegevens
+     van de order (bedrag, mail) er dan al zijn. */
+  if (!bonOpen[a.id]){
+    var st0 = (bonnen[a.id] && bonnen[a.id].status) || (bonIndex[a.id] && bonIndex[a.id].status) || "";
+    return '<button type="button" class="bonknop" data-bon="'+id+'"><span>\u25b8 Opleverbon</span><span class="st '+st0+'">'+esc(st0 ? (window.OPLEVERBON_STATUS||{})[st0]||st0 : "nog niet ingevuld")+'</span></button>';
+  }
+  var bon = bonVan(a, o);
+  var st = bon.status || "concept";
+  var stTekst = (window.OPLEVERBON_STATUS||{})[st] || st;
+  var knop = '<button type="button" class="bonknop" data-bon="'+id+'"><span>\u25be Opleverbon</span><span class="st '+st+'">'+esc(stTekst)+'</span></button>';
+  var slot = st === "akkoord" || st === "gemaild";
+  var dis = slot ? " disabled" : "";
+  var vragen = (window.OPLEVERBON_VRAGEN||[]).map(function(v){
+    var ant = (bon.checklist[v.k]||{}).a || "", opm = (bon.checklist[v.k]||{}).opm || "";
+    return '<div class="vraag"><span class="t">'+esc(v.t)+'</span><span class="keus">'+
+      ["ja","nee","nvt"].map(function(x){ return '<button type="button" class="'+x+(ant===x?" aan":"")+'" data-vraag="'+v.k+'" data-a="'+x+'"'+dis+'>'+esc(OPLEVERBON_ANTWOORD[x])+'</button>'; }).join("")+'</span>'+
+      (ant && ant!=="ja" ? '<input type="text" class="reden" data-reden="'+v.k+'" placeholder="Reden / extra info (verplicht)" value="'+esc(opm)+'" maxlength="300"'+dis+'>' : '')+'</div>';
+  }).join("");
+  var bt = bon.betaling;
+  var betaling = bt.openstaand == null
+    ? '<p class="wacht">Het orderbedrag kon niet worden opgehaald; vul hieronder in wat er is voldaan.</p>'
+    : '<div class="geld"><span>Orderbedrag</span><b>'+geld(bt.orderbedrag)+'</b><span>Al betaald</span><b>'+geld(bt.reedsBetaald)+'</b>'+
+      '<span>Openstaand</span><b class="'+(bt.openstaand>0.01?"open":"")+'">'+geld(bt.openstaand)+'</b></div>';
+  return knop + '<div class="bon" data-bonvak="'+id+'">'+
+    (slot ? '<div class="slot">Deze bon is op kantoor '+esc(stTekst)+'. Wijzigen kan niet meer.</div>' : '')+
+    '<h4>Algemeen</h4>'+
+    '<div class="rij2"><div><label>Monteur</label><input type="text" data-veld="monteur" value="'+esc(bon.monteur)+'" maxlength="80"'+dis+'></div>'+
+    '<div><label>2e monteur</label><input type="text" data-veld="monteur2" value="'+esc(bon.monteur2)+'" maxlength="80"'+dis+'></div></div>'+
+    '<label>Kenteken auto</label><input type="text" data-veld="kenteken" value="'+esc(bon.kenteken)+'" maxlength="12"'+dis+'>'+
+    '<label>Soort</label><div class="segment">'+["levering","nalevering","service"].map(function(x){ return '<button type="button" data-soort="'+x+'" class="'+(bon.soort===x?"aan":"")+'"'+dis+'>'+x.charAt(0).toUpperCase()+x.slice(1)+'</button>'; }).join("")+'</div>'+
+    '<h4>Spa</h4>'+
+    '<div class="rij2"><div><label>Type spa</label><input type="text" data-veld="spaType" value="'+esc(bon.spaType)+'" maxlength="120"'+dis+'></div>'+
+    '<div><label>Serienummer</label><input type="text" data-veld="serienr" value="'+esc(bon.serienr)+'" maxlength="60"'+dis+'></div></div>'+
+    '<h4>Te doen bij klant</h4>'+vragen+
+    '<h4>Betaling</h4>'+betaling+
+    '<label>Bij de klant voldaan</label><div class="segment">'+
+      [["geen","Niets"],["bank","Per bank"],["contant","Contant"]].map(function(x){ return '<button type="button" data-methode="'+x[0]+'" class="'+(bt.methode===x[0]?"aan":"")+'"'+dis+'>'+x[1]+'</button>'; }).join("")+'</div>'+
+    (bt.methode==="bank"||bt.methode==="contant" ? '<label>Bedrag</label><input type="number" inputmode="decimal" step="0.01" data-veld="bedrag" value="'+(bt.bedrag||"")+'"'+dis+'>' : '')+
+    (bt.methode==="contant" ? '<label>Contant geld gaat naar</label><div class="segment">'+[["monteur","Monteur"],["kantoor","Kantoor"]].map(function(x){ return '<button type="button" data-contant="'+x[0]+'" class="'+(bt.contantAan===x[0]?"aan":"")+'"'+dis+'>'+x[1]+'</button>'; }).join("")+'</div>' : '')+
+    '<h4>Opmerkingen</h4><textarea data-veld="opmerking" rows="2" maxlength="1000" placeholder="Bijzonderheden voor kantoor of de klant"'+dis+'>'+esc(bon.opmerking)+'</textarea>'+
+    '<h4>Akkoord monteur</h4><div class="hand" data-hand="handtekeningMonteur"><canvas></canvas><button type="button" class="wis"'+dis+'>Wissen</button><span class="hint">Teken hier</span></div>'+
+    '<h4>Akkoord klant</h4><label>Naam</label><input type="text" data-veld="klantNaamHandtekening" value="'+esc(bon.klantNaamHandtekening||bon.klant)+'" maxlength="80"'+dis+'>'+
+    '<div class="hand" style="margin-top:6px" data-hand="handtekeningKlant"><canvas></canvas><button type="button" class="wis"'+dis+'>Wissen</button><span class="hint">Laat de klant hier tekenen</span></div>'+
+    '<label>Mailadres klant (voor de bon)</label><input type="text" data-veld="klantMail" value="'+esc(bon.klantMail)+'" maxlength="120" inputmode="email"'+dis+'>'+
+    '<div class="melding" data-melding="'+id+'"></div>'+
+    (slot ? '' : '<div class="bonvoet"><button type="button" data-bewaar="'+id+'">Bewaren</button><button type="button" class="doe" data-afrond="'+id+'">'+(st==="klaar"?"Opnieuw afronden":"Bon afronden")+'</button></div>')+
+    '</div>';
+}
+function koppelBon(box){
+  box.querySelectorAll("[data-bon]").forEach(function(k){
+    k.addEventListener("click", async function(){
+      var id = k.dataset.bon;
+      bonOpen[id] = !bonOpen[id];
+      if (bonOpen[id] && !bonnen[id]){
+        k.querySelector(".st").textContent = "ophalen\u2026";
+        try{ var j = await lees("/planning/bon?id="+encodeURIComponent(id)); if (j.bon){ j.bon._geladen = true; bonnen[id] = j.bon; } }
+        catch(e){}
+      }
+      teken();
+    });
+  });
+  box.querySelectorAll("[data-bonvak]").forEach(function(vak){
+    var id = vak.dataset.bonvak, bon = bonnen[id];
+    if (!bon) return;
+    var wijzig = function(){ bonBewaar(id, "concept"); };
+    vak.querySelectorAll("[data-veld]").forEach(function(inp){
+      inp.addEventListener("input", function(){
+        if (inp.dataset.veld === "bedrag") bon.betaling.bedrag = parseFloat(String(inp.value).replace(",", ".")) || 0;
+        else bon[inp.dataset.veld] = inp.value;
+        wijzig();
+      });
+    });
+    vak.querySelectorAll("[data-vraag]").forEach(function(b){
+      b.addEventListener("click", function(){
+        var k = b.dataset.vraag; bon.checklist[k] = bon.checklist[k] || { a:"", opm:"" };
+        bon.checklist[k].a = b.dataset.a; if (b.dataset.a === "ja") bon.checklist[k].opm = "";
+        wijzig(); teken();
+        var r = document.querySelector('[data-bonvak="'+id+'"] [data-reden="'+k+'"]'); if (r) r.focus();
+      });
+    });
+    vak.querySelectorAll("[data-reden]").forEach(function(inp){
+      inp.addEventListener("input", function(){ var k = inp.dataset.reden; bon.checklist[k] = bon.checklist[k] || { a:"", opm:"" }; bon.checklist[k].opm = inp.value; wijzig(); });
+    });
+    vak.querySelectorAll("[data-soort]").forEach(function(b){ b.addEventListener("click", function(){ bon.soort = b.dataset.soort; wijzig(); teken(); }); });
+    vak.querySelectorAll("[data-methode]").forEach(function(b){ b.addEventListener("click", function(){ bon.betaling.methode = b.dataset.methode; if (b.dataset.methode==="geen") bon.betaling.bedrag = 0; if (b.dataset.methode!=="contant") bon.betaling.contantAan = ""; wijzig(); teken(); }); });
+    vak.querySelectorAll("[data-contant]").forEach(function(b){ b.addEventListener("click", function(){ bon.betaling.contantAan = b.dataset.contant; wijzig(); teken(); }); });
+    vak.querySelectorAll("[data-hand]").forEach(function(h){ koppelHandtekening(h, bon, h.dataset.hand, wijzig); });
+    var bw = vak.querySelector("[data-bewaar]"); if (bw) bw.addEventListener("click", function(){ bonBewaar(id, "concept", true); });
+    var af = vak.querySelector("[data-afrond]"); if (af) af.addEventListener("click", function(){ bonAfronden(id); });
+  });
+}
+/* Handtekening: tekenen met vinger of pen, bewaard als kleine PNG. */
+function koppelHandtekening(h, bon, veld, wijzig){
+  var c = h.querySelector("canvas"), ctx = c.getContext("2d");
+  var breed = h.clientWidth || 320, hoog = 150, dpr = Math.min(window.devicePixelRatio||1, 2);
+  c.width = Math.round(breed*dpr); c.height = Math.round(hoog*dpr); ctx.scale(dpr,dpr);
+  ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#111";
+  var hint = h.querySelector(".hint");
+  if (bon[veld]){ var img = new Image(); img.onload = function(){ ctx.drawImage(img, 0, 0, breed, hoog); }; img.src = bon[veld]; if (hint) hint.style.display = "none"; }
+  if (h.querySelector(".wis").disabled) return;
+  var bezig = false, was = false;
+  function pos(e){ var r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  c.addEventListener("pointerdown", function(e){ e.preventDefault(); bezig = true; was = true; c.setPointerCapture(e.pointerId); var p = pos(e); ctx.beginPath(); ctx.moveTo(p[0],p[1]); if (hint) hint.style.display = "none"; });
+  c.addEventListener("pointermove", function(e){ if (!bezig) return; e.preventDefault(); var p = pos(e); ctx.lineTo(p[0],p[1]); ctx.stroke(); });
+  function klaar(e){ if (!bezig) return; bezig = false; if (was){
+    /* Kleiner bewaren dan het scherm: 600 breed is genoeg voor een handtekening. */
+    var k = document.createElement("canvas"); k.width = 600; k.height = 200; k.getContext("2d").drawImage(c, 0, 0, 600, 200);
+    bon[veld] = k.toDataURL("image/png"); wijzig(); } }
+  c.addEventListener("pointerup", klaar); c.addEventListener("pointercancel", klaar); c.addEventListener("pointerleave", klaar);
+  h.querySelector(".wis").addEventListener("click", function(){ ctx.clearRect(0,0,breed,hoog); bon[veld] = ""; was = false; if (hint) hint.style.display = ""; wijzig(); });
+}
+function bonMelding(id, tekst, klas){
+  var m = document.querySelector('[data-melding="'+id+'"]'); if (m){ m.textContent = tekst; m.className = "melding "+(klas||""); }
+}
+function bonBewaar(id, status, meteen){
+  var bon = bonnen[id]; if (!bon) return;
+  clearTimeout(bonTimers[id]);
+  bonTimers[id] = setTimeout(async function(){
+    try{
+      bon.status = status;
+      var kopie = Object.assign({}, bon); delete kopie._geladen;
+      var j = await lees("/planning/bon", { method:"POST", body: JSON.stringify({ bon: kopie }) });
+      if (!j.ok) throw new Error(j.error||"niet bewaard");
+      bonMelding(id, meteen ? "Bewaard." : "", "ok");
+    }catch(e){ bonMelding(id, "Niet bewaard: "+e.message, "bad"); }
+  }, meteen ? 0 : 700);
+}
+async function bonAfronden(id){
+  var bon = bonnen[id]; if (!bon) return;
+  var open = (window.OPLEVERBON_VRAGEN||[]).filter(function(v){ return !(bon.checklist[v.k]||{}).a; });
+  if (open.length){ bonMelding(id, open.length+" vraag(en) nog niet beantwoord: "+open.slice(0,3).map(function(v){ return v.t; }).join(", ")+(open.length>3?" ...":""), "bad"); return; }
+  var zonder = (window.OPLEVERBON_VRAGEN||[]).filter(function(v){ var c = bon.checklist[v.k]||{}; return c.a !== "ja" && !String(c.opm||"").trim(); });
+  if (zonder.length){ bonMelding(id, "Vul een reden in bij: "+zonder.map(function(v){ return v.t; }).join(", "), "bad"); return; }
+  if ((bon.betaling.methode==="bank"||bon.betaling.methode==="contant") && !(bon.betaling.bedrag>0)){ bonMelding(id, "Vul het bedrag in dat bij de klant is voldaan.", "bad"); return; }
+  if (bon.betaling.methode==="contant" && !bon.betaling.contantAan){ bonMelding(id, "Geef aan of het contante geld bij de monteur of op kantoor is.", "bad"); return; }
+  if (!bon.handtekeningMonteur){ bonMelding(id, "De handtekening van de monteur ontbreekt.", "bad"); return; }
+  if (!bon.handtekeningKlant){ bonMelding(id, "De handtekening van de klant ontbreekt.", "bad"); return; }
+  clearTimeout(bonTimers[id]);
+  try{
+    bon.status = "klaar";
+    var kopie = Object.assign({}, bon); delete kopie._geladen;
+    var j = await lees("/planning/bon", { method:"POST", body: JSON.stringify({ bon: kopie }) });
+    if (!j.ok) throw new Error(j.error||"niet gelukt");
+    try{ if (window.fpLog) window.fpLog("opleverbon-afgerond", "afspraak "+id+(bon.ordernr?" order "+bon.ordernr:"")); }catch(e){}
+    teken();
+    bonMelding(id, "Bon afgerond. Kantoor ziet hem nu in Planning.", "ok");
+  }catch(e){ bon.status = "concept"; bonMelding(id, "Afronden mislukt: "+e.message, "bad"); }
 }
 
 function teken(){
@@ -273,6 +503,7 @@ function teken(){
   box.querySelectorAll("input[type=checkbox][data-nr]").forEach(function(cb){
     cb.addEventListener("change", function(){ vink(cb.dataset.nr, Number(cb.dataset.i), cb.checked); });
   });
+  koppelBon(box);
   haalOrders(lijst);
 }
 
@@ -341,6 +572,8 @@ async function start(){
     plan.routes = (pl.routes && typeof pl.routes === "object") ? pl.routes : {};
     var pk = await lees("/data/planning-paklijst").catch(function(){ return {}; });
     paklijst = (pk && pk.regels) || {};
+    var bi = await lees("/planning/bonnen").catch(function(){ return {}; });
+    (bi.bonnen||[]).forEach(function(b){ bonIndex[b.id] = b; });
   }catch(e){
     $("fout").innerHTML = '<div class="fout">De planning kon niet worden opgehaald: '+esc(e.message)+'</div>';
   }
