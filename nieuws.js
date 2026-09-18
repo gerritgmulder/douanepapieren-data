@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-19", bestand: "mijnroute.html", soort: "beter",
+      titel: "Meekijken met alle routes",
+      wat: "Voor de beheerlaag staat rechtsboven een keuze: Alle routes, of de routes zoals een monteur ze ziet. De keuze wordt onthouden."
+    },
+    {
       datum: "2026-09-19", bestand: "prijslijsten-fabrikanten.html", soort: "nieuw",
       titel: "Prijsafspraken per leverancier",
       wat: "Open je de map van een leverancier, dan staat bovenaan een uitklapbaar blok Prijsafspraken: betaalconditie, incoterm en haven, valuta, korting, prijzen geldig tot, levertijd, contactpersoon, garantie en een vak voor de rest. Wat je typt wordt vanzelf bewaard en staat dichtgeklapt als één regel samengevat. In de lijst zie je per leverancier of er al afspraken zijn vastgelegd."

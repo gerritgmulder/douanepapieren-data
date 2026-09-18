@@ -156,6 +156,7 @@ main{max-width:760px;margin:0 auto;padding:12px 12px calc(30px + env(safe-area-i
 <header>
   <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
   <h1>🚚 Mijn route</h1>
+  <select id="kijkAls" style="display:none;font:inherit;font-size:12.5px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.12);color:#fff;border-radius:8px;padding:5px 8px;max-width:180px" title="Bekijk de routes zoals een monteur ze ziet"></select>
 </header>
 <main>
   <div class="dagkeus" id="dagen"></div>
@@ -186,11 +187,20 @@ function voornaam(wie){
   var lokaal = String(wie||"").split("@")[0].replace(/^fonteyn\./i,"");
   return lokaal.split(/[.\-_]/).filter(Boolean).map(function(d){ return d.charAt(0).toUpperCase()+d.slice(1).toLowerCase(); }).join(" ");
 }
+/* Meekijken. Gerrit (19 sep 2026): "bij Mijn route wil ik (Fonteynbot) alle
+   routes kunnen zien die nu door monteurs gezien kunnen worden." De
+   beheerlaag krijgt bovenin een keuze: alle routes, of de route zoals één
+   monteur hem ziet. De keuze wordt onthouden op deze telefoon. */
+var BEHEER = ["dolf", "gerrit", "fonteynbot"].indexOf(ik.split("@")[0].replace(/^fonteyn\./,"")) >= 0;
+var kijkAls = "";     // "" = ikzelf, "*" = alle routes, anders de naam van een monteur
+try { kijkAls = BEHEER ? (localStorage.getItem("fp.route.kijkals") || "*") : ""; } catch(e){}
 function mijnNaam(){
+  if (kijkAls && kijkAls !== "*") return kijkAls;
   var lokaal = ik.split("@")[0].replace(/^fonteyn\./,"");
   return PLANNERS[lokaal] || voornaam(ik);
 }
 function isIk(naam){
+  if (kijkAls === "*") return true;
   var n = String(naam||"").trim().toLowerCase(), m = mijnNaam().toLowerCase();
   if (!n) return false;
   if (n === m) return true;
@@ -236,7 +246,7 @@ function stopsVan(dISO, nr, eerste){
 function mijnRoutes(dISO){
   var alle = routesVan(dISO), eerste = (alle[0]||{}).nr;
   var mijn = alle.filter(function(r){ return rijders(r).some(isIk); });
-  var lijst = mijn.length ? mijn : alle;
+  var lijst = (kijkAls === "*" || !mijn.length) ? alle : mijn;
   return lijst.map(function(r){ return { r:r, stops: stopsVan(dISO, r.nr, r.nr===eerste), vanMij: rijders(r).some(isIk) }; })
               .filter(function(x){ return x.stops.length; });
 }
@@ -575,7 +585,7 @@ function teken(){
     var tot = 0, af = 0;
     alleOrders.forEach(function(nr){ var o = orders[nr]; if (o && o.ok){ (o.regels||[]).forEach(function(r,i){ if (r.omschrijving){ tot++; if (gepakt(nr,i)) af++; } }); } });
     return '<section class="route"><h2><span class="nr">Route '+esc(x.r.nr)+'</span>'+
-      '<span class="wie">'+esc(rijders(x.r).join(" & ")||"nog niemand")+(x.vanMij?"":" (niet van jou)")+'</span>'+
+      '<span class="wie">'+esc(rijders(x.r).join(" & ")||"nog niemand")+(x.vanMij||kijkAls==="*"?"":" (niet van jou)")+'</span>'+
       (tot ? '<span class="voortgang">'+af+'/'+tot+' gepakt</span>' : '')+'</h2>'+
       x.stops.map(stopHtml).join("")+'</section>';
   }).join("");
@@ -655,6 +665,17 @@ async function start(){
     (bi.bonnen||[]).forEach(function(b){ bonIndex[b.id] = b; });
   }catch(e){
     $("fout").innerHTML = '<div class="fout">De planning kon niet worden opgehaald: '+esc(e.message)+'</div>';
+  }
+  if (BEHEER){
+    var sel = $("kijkAls"), namen = {};
+    var vandaagK = new Date(); vandaagK.setDate(vandaagK.getDate()-1);
+    var vanK = iso(vandaagK);
+    Object.keys(plan.routes||{}).forEach(function(d){ if (d < vanK) return; (plan.routes[d]||[]).forEach(function(r){ rijders(r).forEach(function(n){ namen[n]=1; }); }); });
+    var lijst = Object.keys(namen).sort();
+    sel.innerHTML = '<option value="*">Alle routes</option>' + lijst.map(function(n){ return '<option value="'+esc(n)+'">Als '+esc(n)+'</option>'; }).join("");
+    if (kijkAls && kijkAls !== "*" && lijst.indexOf(kijkAls) < 0) kijkAls = "*";
+    sel.value = kijkAls || "*"; sel.style.display = "";
+    sel.addEventListener("change", function(){ kijkAls = sel.value; try{ localStorage.setItem("fp.route.kijkals", kijkAls); }catch(e){} bonnen = {}; bonOpen = {}; tekenDagen(); teken(); });
   }
   /* Beginnen op de eerstvolgende dag met een route van mij, vandaag of later. */
   var vandaag = new Date();
