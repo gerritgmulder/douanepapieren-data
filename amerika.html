@@ -1179,7 +1179,7 @@ async function qbApprove(){
       (ok.length?" — ze staan nu onder ‘Ontvangen Audrey’ tot je ze als verwerkt afvinkt.":"");
     try{ if(ok.length&&window.fpLog) window.fpLog("qb-orders-geaccordeerd",ok.length+" van "+nrs.length+" facturen → Logic4"); }catch(e){}
     await qbInit(true);
-    try{ await audLoadVerwerkt(); audRenderWachtrij(); }catch(e){}
+    try{ await audLoadVerwerkt(); await audLoadGeboekt(); audRenderWachtrij(); }catch(e){}
   }catch(e){ st.className="status-msg bad"; st.textContent=e.message; }
   finally{ if(knop) knop.disabled=false; }
 }
@@ -1323,6 +1323,25 @@ let verwerktIds={};
 /* De sleutel is "qb:<id>" sinds bleek dat QuickBooks factuurnummers hergebruikt;
    oudere vinkjes staan nog op het nummer zelf, dus allebei blijven kijken. */
 function vwVan(inv){ return (inv&&inv.id&&verwerktIds["qb:"+inv.id])||(inv&&verwerktIds[inv.docNr])||null; }
+/* Wat de koppeling zelf op 1160 heeft geboekt (bucket qb-geboekt): nodig
+   om per batch te weten of hij helemaal geboekt is en of het koersverschil
+   al is verwerkt. */
+let geboektIds={};
+async function audLoadGeboekt(){
+  try{
+    const r=await fetch(WORKER+"/data/qb-geboekt?t="+Date.now(),{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}});
+    if(r.ok){ const j=await r.json(); geboektIds=(j&&j.ids)||{}; }
+  }catch(e){ console.warn("geboekt-status laden faalde:",e); }
+}
+function batchGeboekt(w){
+  const regels=Object.entries(geboektIds).filter(([k,v])=>v&&String(v.batch)===String(w.id));
+  const orders=regels.filter(([k])=>k.startsWith("batch:"));
+  const kosten=regels.find(([k])=>k.startsWith("bankkosten:"));
+  const koers=geboektIds["koers:"+w.id]||null;
+  const teller=(w.regels||[]).filter(r=>["factuur","overig","balance"].includes(String(r.soort||""))&&(Number(r.bedrag)||0)>0).length;
+  const op1160=Math.round((orders.reduce((n,[,v])=>n+(Number(v.bedragEur)||0),0)+(kosten?(Number(kosten[1].bedragEur)||0):0))*100)/100;
+  return { compleet: orders.length>0&&orders.length>=teller&&!!kosten, orders:orders.length, teller, op1160, koers };
+}
 async function audLoadVerwerkt(){
   try{
     const r=await fetch(WORKER+"/data/qb-verwerkt?t="+Date.now(),{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}});
@@ -1370,7 +1389,7 @@ async function audInit(){
   // facturenlijst duurt ~10s (de worker pagineert door QuickBooks) en wordt
   // daarna bijgewerkt — met een laadmelding zodat het niet leeg lijkt.
   audFacturenBezig = !qbInvoices.length;
-  await Promise.all([audLoad(),audLoadVerwerkt(),qbLaadVerborgen()]);
+  await Promise.all([audLoad(),audLoadVerwerkt(),audLoadGeboekt(),qbLaadVerborgen()]);
   audRenderWachtrij(); audRender();
   if(audFacturenBezig){
     await audLoadFacturen();
@@ -1770,6 +1789,22 @@ function audRender(){
             "<b>Afwijking, deze batch wordt niet geboekt.</b><ul style='margin:6px 0 0;padding-left:18px'>"+
             ct.redenen.map(r=>"<li>"+esc(r)+"</li>").join("")+"</ul></div>";
       })()+
+      (function(){
+        /* Koersverschil. Osman (18 sep 2026): "1160 hoort hetzelfde te zijn
+           als de uitbetaling in euro." Pas als de hele batch op 1160 staat:
+           dan vult hij in wat er op de bank kwam, en gaat het verschil naar
+           9075 Koersverschil. */
+        const g=batchGeboekt(w);
+        if(!g.compleet) return "";
+        const eur=v=>"\u20ac "+Number(v||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2});
+        if(g.koers) return "<div class='status-msg' style='margin:0 0 10px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe'>"+
+          "<b>Koersverschil geboekt.</b> Op 1160 stond "+esc(eur(g.koers.op1160))+", op de bank kwam "+esc(eur(g.koers.ontvangenEur))+
+          (g.koers.bedragEur?"; verschil "+esc(eur(g.koers.bedragEur))+" naar 9075 Koersverschil":"; geen verschil")+" ("+esc(datumNL(g.koers.ts))+").</div>";
+        return "<div class='status-msg' style='margin:0 0 10px;background:#f8faf5;color:#1f2937;border:1px solid #dbe7cc;display:flex;gap:10px;align-items:center;flex-wrap:wrap'>"+
+          "<span><b>Koersverschil.</b> Op 1160 staat nu "+esc(eur(g.op1160))+" (tegen 1,12). Wat kwam er in euro op de bank?</span>"+
+          "<input type='text' inputmode='decimal' data-koers-eur='"+esc(w.id)+"' placeholder='bv. 33.850,12' style='width:130px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit'>"+
+          "<button class='btn' type='button' data-koers='"+esc(w.id)+"'>verschil naar 9075 boeken</button></div>";
+      })()+
       "<p class='lead' style='font-size:12px;margin:0 0 10px'>Bestand: "+esc(w.bestand||"")+" · ingelezen "+esc(datumNL(w.ts))+"</p>"+
       "<div class='tablewrap'><table class='grid'><thead><tr>"+
         "<th>Regel</th><th>Factuur</th><th>Soort</th><th style='text-align:right'>Amount invoice</th><th style='text-align:right'>Bankkosten</th><th style='text-align:right'>Totaal</th><th>Verwerkt in Logic4</th></tr></thead><tbody>"+
@@ -1820,6 +1855,25 @@ function audRender(){
      orders en 543,40 aan kosten, zodat er 59.682,13 op 1160 overblijft: precies
      wat er op de bank binnenkwam. */
   box.querySelectorAll("[data-boek]").forEach(b=>b.addEventListener("click",()=>audBoekKnop(b)));
+  box.querySelectorAll("[data-koers]").forEach(b=>b.addEventListener("click",async()=>{
+    const inp=box.querySelector("[data-koers-eur='"+b.dataset.koers+"']");
+    const raw=String((inp&&inp.value)||"").trim().replace(/\./g,"").replace(",",".");
+    const bedrag=Number(raw);
+    if(!(bedrag>0)){ alert("Vul eerst het bedrag in euro in dat op de bank is ontvangen."); return; }
+    const g=batchGeboekt(wiresData.wires.find(x=>String(x.id)===b.dataset.koers)||{regels:[]});
+    const verschil=Math.round((g.op1160-bedrag)*100)/100;
+    const eur=v=>"\u20ac "+Number(v||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2});
+    if(!confirm("Op 1160 staat "+eur(g.op1160)+", ontvangen "+eur(bedrag)+".\nVerschil "+eur(verschil)+" gaat als memoriaal naar 9075 Koersverschil"+(verschil>0?" (verlies)":" (winst)")+", tegenover 1160.\n\nDoorgaan?")) return;
+    b.disabled=true; b.textContent="boeken…";
+    try{
+      const r=await fetch(WORKER+"/amerika/qb/koersverschil",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+        body:JSON.stringify({wireId:b.dataset.koers,ontvangenEur:bedrag,user:(localStorage.getItem("fp.email")||"")})});
+      const j=await r.json().catch(()=>null);
+      if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+      if(window.fpLog) window.fpLog("koersverschil-geboekt","batch "+b.dataset.koers+" verschil "+j.verschil);
+      await audLoadGeboekt(); audRender();
+    }catch(e){ alert("Koersverschil boeken mislukte: "+e.message); b.disabled=false; b.textContent="verschil naar 9075 boeken"; }
+  }));
   box.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{
     if(!confirm("Dit wire-overzicht verwijderen? De vinkjes gaan ook weg.")) return;
     wiresData.wires=wiresData.wires.filter(w=>String(w.id)!==b.dataset.del);

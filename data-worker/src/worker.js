@@ -8997,6 +8997,75 @@ function qbGeld(n) {
   return "$ " + v.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+
+/* Koersverschil per batch.
+   ═══════════════════════════════════════════════════════════════════════
+   Osman (18 sep 2026): "1160 hoort hetzelfde te zijn als de uitbetaling in
+   euro." De orders en de bankkosten staan tegen 1,12 op 1160; wat er
+   werkelijk in euro op de bank kwam wijkt daarvan af. Osman vult dat
+   eurobedrag in, en het verschil gaat als memoriaal naar 9075
+   Koersverschil, zodat 1160 precies op de bankontvangst uitkomt en na zijn
+   afschrift op nul. Eén keer per batch (sleutel koers:<batch> in
+   qb-geboekt); pas mogelijk als de hele batch is geboekt. */
+const AMERIKA_KOERS_GROOTBOEK = "9075";
+async function qbHandleKoersverschil(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
+    return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const wireId = String(body.wireId || "");
+  const ontvangen = Math.round((Number(String(body.ontvangenEur || "").replace(",", ".")) || 0) * 100) / 100;
+  if (!wireId) return reply(400, { ok: false, error: "geen batch opgegeven" });
+  if (!(ontvangen > 0)) return reply(400, { ok: false, error: "vul het bedrag in euro in dat op de bank is ontvangen" });
+  const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+  const w = (wires.wires || []).find(x => String(x.id) === wireId);
+  if (!w) return reply(404, { ok: false, error: "batch niet gevonden" });
+  const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
+  geboekt.ids = geboekt.ids || {};
+  if (geboekt.ids["koers:" + wireId]) return reply(409, { ok: false, error: "het koersverschil van deze batch is al geboekt (" + String(geboekt.ids["koers:" + wireId].ts || "").slice(0, 10) + ")" });
+  /* Wat er op 1160 staat voor deze batch: de afgeboekte orders (debet) min de
+     bankkosten (credit), allemaal in euro tegen 1,12. */
+  const regels = Object.entries(geboekt.ids).filter(([k, v]) => v && String(v.batch) === wireId);
+  const orders = regels.filter(([k]) => k.startsWith("batch:"));
+  const kosten = regels.find(([k]) => k.startsWith("bankkosten:"));
+  const teller = (w.regels || []).filter(r => QB_GELDSOORTEN.has(String(r.soort || "")) && (Number(r.bedrag) || 0) > 0).length;
+  if (!orders.length || orders.length < teller) return reply(400, { ok: false, error: "eerst de hele batch boeken op 1160 (" + orders.length + " van " + teller + " orders geboekt)" });
+  if (!kosten) return reply(400, { ok: false, error: "de bankkosten van deze batch zijn nog niet geboekt" });
+  const op1160 = Math.round((orders.reduce((n, [, v]) => n + (Number(v.bedragEur) || 0), 0) + (Number(kosten[1].bedragEur) || 0)) * 100) / 100;
+  const verschil = Math.round((op1160 - ontvangen) * 100) / 100;
+  if (Math.abs(verschil) < 0.005) {
+    geboekt.ids["koers:" + wireId] = { bedragEur: 0, ontvangenEur: ontvangen, op1160, batch: wireId, ts: new Date().toISOString(), door: String(body.user || "").slice(0, 80) };
+    await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));
+    return reply(200, { ok: true, verschil: 0, op1160, ontvangen });
+  }
+  const g = await bankGrootboeken(env);
+  const koers = (g.grootboeken || []).find(x => String(x.code) === AMERIKA_KOERS_GROOTBOEK);
+  const tussen = (g.grootboeken || []).find(x => String(x.code) === "1160");
+  if (!koers || !tussen || !g.btwNul) return reply(500, { ok: false, error: "grootboek 9075 of 1160 of de btw-code van 0% niet gevonden in Logic4" });
+  const inst = (await env.FONTEYN_DATA.get("bank-instellingen", { type: "json" })) || {};
+  const token = await l4Token(env);
+  const oms = "Koersverschil Passion Spas batch " + (w.datum || "") + ": op 1160 " + op1160.toFixed(2) + ", ontvangen " + ontvangen.toFixed(2);
+  /* verschil > 0: er staat meer op 1160 dan er binnenkwam, dus 1160 credit
+     en het verlies op 9075 debet. verschil < 0: andersom. */
+  const rr = await fetch("https://api.logic4server.nl/v3/Financial/AddFinancialGeneralBookingWithMutations", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      Reference: ("Koersverschil " + (w.datum || "")).slice(0, 60),
+      BookingDateTime: (w.datum || new Date().toISOString().slice(0, 10)) + "T12:00:00",
+      FinancialBookId: Number(inst.memBookingId) || 20,
+      JournalStatusId: 1,
+      Mutations: [
+        { LedgerId: koers.id, VatCode: g.btwNul.id, AmountIncl: verschil, Description: oms },
+        { LedgerId: tussen.id, VatCode: g.btwNul.id, AmountIncl: -verschil, Description: oms },
+      ],
+    }),
+  });
+  const tekst = await rr.text();
+  if (!rr.ok) return reply(502, { ok: false, error: "Logic4 weigerde het memoriaal: HTTP " + rr.status + " " + tekst.slice(0, 200) });
+  geboekt.ids["koers:" + wireId] = { bedragEur: verschil, ontvangenEur: ontvangen, op1160, batch: wireId, grootboek: AMERIKA_KOERS_GROOTBOEK, ts: new Date().toISOString(), door: String(body.user || "").slice(0, 80) };
+  await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));
+  return reply(200, { ok: true, verschil, op1160, ontvangen });
+}
+
 async function qbHandleBoeken(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
     return reply(401, { ok: false, error: "Unauthorized" });
@@ -9164,10 +9233,15 @@ async function qbHandleBoeken(request, env) {
         const rr = await fetch("https://api.logic4server.nl/v3/Financial/AddFinancialGeneralBookingWithMutations", {
           method: "POST",
           headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+          /* Status "Controleren" (1), niet "Geimporteerd API" (3): Osman
+             (18 sep 2026) kon de kostenregel niet meer op kostenplaats
+             Spa Houston USA zetten. Met status 1 blijft de boeking in
+             Logic4 bewerkbaar tot hij hem zelf op gecontroleerd zet. */
           body: JSON.stringify({
             Reference: ("Passion Spas " + (w.datum || "")).slice(0, 60),
             BookingDateTime: datum,
             FinancialBookId: amerikaGb.dagboek,
+            JournalStatusId: 1,
             Mutations: [
               { LedgerId: amerikaGb.kosten.id, VatCode: amerikaGb.btw.id, AmountIncl: kostenEur, Description: oms },
               { LedgerId: amerikaGb.tussen.id, VatCode: amerikaGb.btw.id, AmountIncl: -kostenEur, Description: oms },
@@ -12758,6 +12832,7 @@ export default {
       return qbHandleBoeken(request, env);
     }
     if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);
+    if (url.pathname === "/amerika/qb/koersverschil" && request.method === "POST") return qbHandleKoersverschil(request, env);
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
     if (url.pathname === "/voorraad/verberg" && request.method === "POST") return verbergHandler(request, env, "spa-verborgen");
 

@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-18", bestand: "amerika.html", soort: "nieuw",
+      titel: "Koersverschil per batch",
+      wat: "Is een batch helemaal op 1160 geboekt, dan staat er een vakje: vul in wat er in euro op de bank is ontvangen, en het verschil met wat er tegen 1,12 op 1160 staat gaat als memoriaal naar 9075 Koersverschil. Daarna staat op 1160 precies het bankbedrag. De memoriaalboekingen staan nu op status Controleren, zodat de kostenplaats in Logic4 nog aan te passen is."
+    },
+    {
       datum: "2026-09-18", bestand: "keten.html", soort: "nieuw",
       titel: "Ketenbewaking (proef)",
       wat: "Wat in de keten te lang op een stap blijft liggen: schepen die niet binnen zijn gemeld, bonnen die niet zijn gemaild, batches uit Amerika die niet zijn geboekt, dealerorders zonder Logic4-order. Per melding wie het moet oppakken, hoe lang het al open staat en om hoeveel geld het gaat. Wat te lang open staat komt ook bovenaan het dashboard."
