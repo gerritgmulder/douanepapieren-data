@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-19", bestand: "prijslijsten-fabrikanten.html", soort: "nieuw",
+      titel: "Prijsafspraken per leverancier",
+      wat: "Open je de map van een leverancier, dan staat bovenaan een uitklapbaar blok Prijsafspraken: betaalconditie, incoterm en haven, valuta, korting, prijzen geldig tot, levertijd, contactpersoon, garantie en een vak voor de rest. Wat je typt wordt vanzelf bewaard en staat dichtgeklapt als één regel samengevat. In de lijst zie je per leverancier of er al afspraken zijn vastgelegd."
+    },
+    {
       datum: "2026-09-18", bestand: "amerika.html", soort: "nieuw",
       titel: "Telling Houston naar Logic4",
       wat: "Onder Voorraad Houston staat 'Telling naar Logic4 zetten'. Voorstel maken laat per artikel zien wat er geteld is en wat Logic4 heeft; je kunt de getelde aantallen aanpassen. Klaarzetten maakt er een voorraadcontrole van in Logic4 op Warehouse Texas USA; die verwerk je daar zelf, en daarna staat Houston gelijk aan de telling."

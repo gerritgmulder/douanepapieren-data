@@ -52,6 +52,18 @@
   button.mini{background:#fff;border:1px solid var(--border);border-radius:7px;padding:4px 9px;font:inherit;font-size:11.5px;cursor:pointer;color:var(--ink);transition:all .12s}
   button.mini:hover{border-color:var(--fonteyn-lime-dark);background:#f7fbf1}
   button.mini.gevaar:hover{border-color:var(--bad);color:var(--bad);background:#fef2f2}
+  /* Prijsafspraken per leverancier: dicht een regel, open een formulier */
+  details.afspraken{border:1px solid var(--border);border-left:4px solid var(--fonteyn-lime);border-radius:10px;background:#fbfdf7;margin:0 0 14px;padding:0}
+  details.afspraken summary{cursor:pointer;padding:11px 16px;font-weight:600;color:var(--fonteyn-green);display:flex;gap:12px;align-items:center;list-style:none}
+  details.afspraken summary::-webkit-details-marker{display:none}
+  details.afspraken summary::before{content:"\25B8";font-size:12px;color:var(--fonteyn-green)}
+  details.afspraken[open] summary::before{content:"\25BE"}
+  details.afspraken summary .meta{font-weight:400;color:var(--muted);font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .afspraken-body{padding:4px 16px 14px;border-top:1px solid #e9eedc}
+  .afspraken-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 14px;margin:10px 0}
+  .afspraken-body label{display:block;font-size:11.5px;color:var(--muted)}
+  .afspraken-body input,.afspraken-body textarea{display:block;width:100%;margin-top:3px;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px;background:#fff;box-sizing:border-box}
+  .afspraken-body textarea{resize:vertical}
   /* Kruimelpad: waar zit ik, en hoe kom ik terug */
   .kruimels{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13px;margin-bottom:12px}
   .kruimels a{color:var(--fonteyn-green);text-decoration:none;font-weight:600;cursor:pointer}
@@ -110,6 +122,28 @@
       </div>
 
       <div class="kruimels" id="kruimels"></div>
+
+      <!-- Prijsafspraken per leverancier. Gerrit (19 sep 2026): "bij elke
+           leverancier moet zichtbaar worden wat de prijsafspraken zijn, een
+           invulvenster dat uitschuift." Staat alleen in de map van een
+           leverancier (het eerste niveau), bewaart vanzelf. -->
+      <details class="afspraken" id="afspraken" style="display:none">
+        <summary><span id="afsprakenKop">Prijsafspraken</span><span class="meta" id="afsprakenSamenvatting"></span></summary>
+        <div class="afspraken-body">
+          <div class="afspraken-grid">
+            <label>Betaalconditie<input type="text" data-a="betaling" placeholder="bv. 30% bij order, 70% voor verscheping"></label>
+            <label>Incoterm en haven<input type="text" data-a="incoterm" placeholder="bv. FOB Yantian"></label>
+            <label>Valuta<input type="text" data-a="valuta" placeholder="bv. USD"></label>
+            <label>Korting<input type="text" data-a="korting" placeholder="bv. 5% vanaf 10 containers per jaar"></label>
+            <label>Prijzen geldig tot<input type="text" data-a="geldig" placeholder="bv. 31-12-2026, prijslijst juni 2026"></label>
+            <label>Levertijd<input type="text" data-a="levertijd" placeholder="bv. 8 weken na aanbetaling"></label>
+            <label>Contactpersoon<input type="text" data-a="contact" placeholder="naam, mail, telefoon"></label>
+            <label>Garantie<input type="text" data-a="garantie" placeholder="bv. 2 jaar op de schaal, 1 jaar onderdelen"></label>
+          </div>
+          <label>Overige afspraken<textarea data-a="tekst" rows="4" placeholder="Alles wat is afgesproken en niet in de vakjes past: minimumafname, verpakking, wie de vracht regelt, wat er bij schade gebeurt..."></textarea></label>
+          <div class="meta" id="afsprakenStand"></div>
+        </div>
+      </details>
 
       <table class="grid">
         <!-- Klik op een kop om te sorteren, nog een keer voor de andere kant.
@@ -226,6 +260,7 @@ async function laad(){
     const j=await r.json();
     S={mappen:Array.isArray(j.mappen)?j.mappen:[],
        bestanden:Array.isArray(j.bestanden)?j.bestanden:[],
+       afspraken:(j.afspraken&&typeof j.afspraken==="object")?j.afspraken:{},
        gewijzigd:j.gewijzigd||null};
   }catch(e){
     melding("bad","Het overzicht kon niet worden opgehaald: "+e.message+". Ververs de pagina; er is niets gewijzigd.");
@@ -323,7 +358,7 @@ function rijMap(pad){
   const aantal=onder.bestanden.length;
   return "<tr class='rij-map' data-map='"+esc(pad)+"'>"+
     "<td><div class='naam'><span class='ic'>📁</span><b class='klik openMap'>"+esc(naam)+"</b></div></td>"+
-    "<td class='meta'>"+aantal+" bestand"+(aantal===1?"":"en")+"</td>"+
+    "<td class='meta'>"+aantal+" bestand"+(aantal===1?"":"en")+(pad.indexOf("/")<0?(((S.afspraken||{})[pad]&&Object.keys(S.afspraken[pad]).some(k=>k!=="op"&&k!=="door"&&S.afspraken[pad][k]))?" · <span style='color:#15803d'>afspraken vastgelegd</span>":" · <span style='color:#b45309'>nog geen prijsafspraken</span>"):"")+"</td>"+
     "<td class='meta'>"+mb(onder.bestanden.reduce((s,b)=>s+(Number(b.bytes)||0),0))+"</td>"+
     "<td class='meta'>—</td>"+
     "<td style='white-space:nowrap'>"+
@@ -359,10 +394,48 @@ function icoon(naam){
   return "📄";
 }
 
+/* ─── Prijsafspraken per leverancier ──────────────────────────────────
+   Bewaard in dezelfde bucket, onder S.afspraken[leverancier]. De leverancier
+   is de map op het eerste niveau; in een submap (Jazzi/2026) gelden de
+   afspraken van Jazzi. */
+const AFSPRAAK_VELDEN=[["betaling","betaling"],["incoterm","incoterm"],["valuta","valuta"],["korting","korting"],["geldig","geldig tot"],["levertijd","levertijd"],["contact","contact"],["garantie","garantie"]];
+let afsprakenTimer=null;
+function leverancierVan(pad){ return String(pad||"").split("/")[0]||""; }
+function tekenAfspraken(){
+  const box=document.getElementById("afspraken");
+  const lev=leverancierVan(hier);
+  const q=(document.getElementById("zoek").value||"").trim();
+  if(!lev||q){ box.style.display="none"; return; }
+  box.style.display="";
+  S.afspraken=S.afspraken||{};
+  const a=S.afspraken[lev]||{};
+  document.getElementById("afsprakenKop").textContent="Prijsafspraken met "+lev;
+  const delen=AFSPRAAK_VELDEN.filter(([k])=>a[k]).map(([k,l])=>l+": "+a[k]);
+  document.getElementById("afsprakenSamenvatting").textContent=delen.length?delen.join(" · "):(a.tekst?String(a.tekst).slice(0,120):"nog niets vastgelegd, klik om in te vullen");
+  box.querySelectorAll("[data-a]").forEach(inp=>{ inp.value=a[inp.dataset.a]||""; });
+  document.getElementById("afsprakenStand").textContent=a.op?("Laatst gewijzigd "+datum(a.op)+(a.door?" door "+korteNaam(a.door):"")):"";
+}
+document.querySelectorAll("#afspraken [data-a]").forEach(inp=>inp.addEventListener("input",()=>{
+  const lev=leverancierVan(hier); if(!lev) return;
+  S.afspraken=S.afspraken||{};
+  const a=S.afspraken[lev]=S.afspraken[lev]||{};
+  a[inp.dataset.a]=inp.value; a.op=new Date().toISOString(); a.door=IK;
+  clearTimeout(afsprakenTimer);
+  document.getElementById("afsprakenStand").textContent="Bewaren…";
+  afsprakenTimer=setTimeout(async()=>{
+    try{ await bewaar(); document.getElementById("afsprakenStand").textContent="Bewaard, "+datum(a.op)+" door "+korteNaam(IK);
+      const delen=AFSPRAAK_VELDEN.filter(([k])=>a[k]).map(([k,l])=>l+": "+a[k]);
+      document.getElementById("afsprakenSamenvatting").textContent=delen.length?delen.join(" · "):(a.tekst?String(a.tekst).slice(0,120):"");
+      try{ if(window.fpLog) window.fpLog("prijsafspraken-gewijzigd",lev+" "+inp.dataset.a); }catch(e){}
+    }catch(e){ document.getElementById("afsprakenStand").textContent="Niet bewaard: "+e.message; }
+  },800);
+}));
+
 function teken(){
   tekenKpis();
   tekenKruimels();
   tekenSorteerkoppen();
+  tekenAfspraken();
   const q=(document.getElementById("zoek").value||"").trim().toLowerCase();
   const tb=document.getElementById("lijst");
 
@@ -421,6 +494,8 @@ async function hernoemMap(pad){
     if(m===pad) b.map=doel; else if(m.startsWith(voor)) b.map=doel+m.slice(pad.length);
   });
   if(hier===pad||hier.startsWith(voor)) hier=doel+hier.slice(pad.length);
+  // De prijsafspraken hangen aan de naam van de leverancier; die verhuizen mee.
+  if(!pad.includes("/")&&S.afspraken&&S.afspraken[pad]){ S.afspraken[doel]=S.afspraken[pad]; delete S.afspraken[pad]; }
   try{ await bewaar(); melding("ok","Map heet nu '"+nieuw+"'."); }
   catch(e){ melding("bad",e.message); await laad(); }
   teken();
