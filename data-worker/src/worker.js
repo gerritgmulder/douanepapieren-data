@@ -5839,6 +5839,8 @@ async function bonIndexBijwerken(env, bon) {
     methode: (bon.betaling && bon.betaling.methode) || "",
     ontvangen: (bon.betaling && bon.betaling.bedrag) || 0,
     nee: Object.values(bon.checklist || {}).filter(x => x && x.a === "nee").length,
+    soort: bon.soort || "levering",
+    serviceTotaal: (bon.soort === "service" || bon.itsId) ? bonServiceTotalen(bon.service).totaal : null,
     gewijzigd: bon.gewijzigd || new Date().toISOString(),
     akkoordDoor: bon.akkoordDoor || null, gemaildTs: bon.gemaildTs || null, gemaildNaar: bon.gemaildNaar || null,
   };
@@ -5875,6 +5877,14 @@ function bonSchoon(b, wie) {
       bedrag: Number(bt.bedrag) || 0, contantAan: ["monteur", "kantoor"].includes(bt.contantAan) ? bt.contantAan : "",
     },
     opmerking: s(b.opmerking, 1000),
+    /* Servicebon (Kevin, 18 sep 2026): vier vakken in plaats van de checklist. */
+    service: (() => {
+      const sv = b.service || {};
+      const mats = Array.isArray(sv.materialen) ? sv.materialen.slice(0, 40).map(r => ({
+        oms: s(r && r.oms, 120), aantal: Math.max(0, Number(r && r.aantal) || 0), prijs: Math.max(0, Math.round((Number(r && r.prijs) || 0) * 100) / 100) })) : [];
+      return { melding: s(sv.melding, 2000), gedaan: s(sv.gedaan, 2000), materialen: mats,
+               km: Math.max(0, Number(sv.km) || 0), uren: Math.max(0, Number(sv.uren) || 0) };
+    })(),
     handtekeningMonteur: hand(b.handtekeningMonteur), handtekeningKlant: hand(b.handtekeningKlant),
     klantNaamHandtekening: s(b.klantNaamHandtekening, 80),
     status: ["concept", "klaar"].includes(b.status) ? b.status : "concept",
@@ -5908,10 +5918,14 @@ async function bonHandle(request, env, url) {
     if (oud) { bon.gemaakt = oud.gemaakt || bon.gemaakt; }
     if (bon.status === "klaar") {
       if (!bon.handtekeningMonteur || !bon.handtekeningKlant) return reply(400, { ok: false, error: "zonder beide handtekeningen kan de bon niet worden afgerond" });
-      const open = Object.entries(bon.checklist).filter(([, v]) => !v.a);
-      if (open.length) return reply(400, { ok: false, error: open.length + " vraag(en) nog niet beantwoord" });
-      const zonderReden = Object.entries(bon.checklist).filter(([, v]) => v.a !== "ja" && !v.opm.trim());
-      if (zonderReden.length) return reply(400, { ok: false, error: "bij Nee of n.v.t. hoort een reden (" + zonderReden.length + " keer leeg)" });
+      if (bon.soort === "service" || bon.itsId) {
+        if (!bon.service.gedaan.trim()) return reply(400, { ok: false, error: "vul in wat er bij de klant is gedaan" });
+      } else {
+        const open = Object.entries(bon.checklist).filter(([, v]) => !v.a);
+        if (open.length) return reply(400, { ok: false, error: open.length + " vraag(en) nog niet beantwoord" });
+        const zonderReden = Object.entries(bon.checklist).filter(([, v]) => v.a !== "ja" && !v.opm.trim());
+        if (zonderReden.length) return reply(400, { ok: false, error: "bij Nee of n.v.t. hoort een reden (" + zonderReden.length + " keer leeg)" });
+      }
     }
     await env.FONTEYN_DATA.put(BON_SLEUTEL(bon.id), JSON.stringify(bon));
     await bonIndexBijwerken(env, bon);
@@ -5953,7 +5967,7 @@ async function bonHandle(request, env, url) {
       body: JSON.stringify({
         from: "Fonteyn Bezorgservice <" + adres + ">", to: [naar],
         reply_to: /@/.test(wie) ? [wie] : undefined,
-        subject: "Opleverbon Fonteyn" + (bon.ordernr ? " - order " + bon.ordernr : "") + (bon.datum ? " - " + bon.datum.split("-").reverse().join("-") : ""),
+        subject: ((bon.soort === "service" || bon.itsId) ? "Servicebon Fonteyn" : "Opleverbon Fonteyn") + (bon.ordernr ? " - order " + bon.ordernr : "") + (bon.itsId ? " - melding " + bon.itsId : "") + (bon.datum ? " - " + bon.datum.split("-").reverse().join("-") : ""),
         html, attachments: bijlagen,
       }),
     });
@@ -5968,6 +5982,14 @@ async function bonHandle(request, env, url) {
   return reply(404, { ok: false, error: "onbekende bon-route" });
 }
 
+const BON_KM_TARIEF = 1.25, BON_UUR_TARIEF = 60;   // zelfde als in opleverbon.js
+function bonServiceTotalen(sv) {
+  sv = sv || {};
+  const mat = (sv.materialen || []).reduce((n, r) => n + (Number(r.aantal) || 0) * (Number(r.prijs) || 0), 0);
+  const rij = (Number(sv.km) || 0) * BON_KM_TARIEF, arb = (Number(sv.uren) || 0) * BON_UUR_TARIEF;
+  const c = (x) => Math.round(x * 100) / 100;
+  return { materiaal: c(mat), voorrij: c(rij), arbeid: c(arb), totaal: c(mat + rij + arb) };
+}
 /* De bon als mail. De vragen komen mee van het scherm (tekst per sleutel),
    zodat de worker de lijst niet hoeft te kennen. */
 function bonHtml(bon, vragen) {
@@ -5987,18 +6009,29 @@ function bonHtml(bon, vragen) {
     "<tr><td style='padding:3px 8px'>Openstaand bij levering</td><td style='padding:3px 8px'>" + geld(bt.openstaand) + "</td></tr>" +
     (bt.methode ? "<tr><td style='padding:3px 8px'>Bij levering voldaan</td><td style='padding:3px 8px'>" + (bt.methode === "geen" ? "niets" : geld(bt.bedrag) + " " + (bt.methode === "contant" ? "contant" : "per bank")) + "</td></tr>" : "") +
     "</table>";
+  const isService = bon.soort === "service" || !!bon.itsId;
+  const sv = bon.service || {}, st = bonServiceTotalen(sv);
+  const td = "style='padding:4px 8px;border-bottom:1px solid #eee'";
+  const serviceBlok = !isService ? "" :
+    "<h3 style='color:#144734;margin:18px 0 6px'>Melding</h3><p style='font-size:13px;white-space:pre-line;margin:0'>" + e(sv.melding || "-") + "</p>" +
+    "<h3 style='color:#144734;margin:18px 0 6px'>Uitgevoerd</h3><p style='font-size:13px;white-space:pre-line;margin:0'>" + e(sv.gedaan || "-") + "</p>" +
+    "<h3 style='color:#144734;margin:18px 0 6px'>Materialen en kosten</h3><table style='border-collapse:collapse;font-size:13px;width:100%'>" +
+    (sv.materialen || []).map(r => "<tr><td " + td + ">" + e(r.oms) + "</td><td " + td + " align='right'>" + e(r.aantal) + " x " + geld(r.prijs) + "</td><td " + td + " align='right'>" + geld((Number(r.aantal) || 0) * (Number(r.prijs) || 0)) + "</td></tr>").join("") +
+    (sv.km ? "<tr><td " + td + ">Voorrijkosten</td><td " + td + " align='right'>" + e(sv.km) + " km x " + geld(BON_KM_TARIEF) + "</td><td " + td + " align='right'>" + geld(st.voorrij) + "</td></tr>" : "") +
+    (sv.uren ? "<tr><td " + td + ">Arbeid</td><td " + td + " align='right'>" + e(sv.uren) + " uur x " + geld(BON_UUR_TARIEF) + "</td><td " + td + " align='right'>" + geld(st.arbeid) + "</td></tr>" : "") +
+    "<tr><td " + td + " colspan='2'><b>Totaal</b></td><td " + td + " align='right'><b>" + geld(st.totaal) + "</b></td></tr></table>";
   return "<div style='font-family:Arial,sans-serif;color:#1f2937;max-width:640px'>" +
-    "<h2 style='color:#144734;margin:0 0 4px'>Opleverbon Fonteyn Bezorgservice</h2>" +
+    "<h2 style='color:#144734;margin:0 0 4px'>" + (isService ? "Servicebon Fonteyn" : "Opleverbon Fonteyn Bezorgservice") + "</h2>" +
     "<p style='margin:0 0 14px;color:#6b7280;font-size:13px'>" + e(bon.datum ? bon.datum.split("-").reverse().join("-") : "") + (bon.tijd ? " " + e(bon.tijd) : "") +
     (bon.ordernr ? " &middot; order " + e(bon.ordernr) : "") + (bon.monteur ? " &middot; monteur " + e(bon.monteur) : "") + "</p>" +
-    "<p style='font-size:14px'>Beste " + e(bon.klant || "klant") + ",<br><br>Hierbij de opleverbon van de bezorging en installatie van uw spa. Bewaar deze bij uw aankoopgegevens.</p>" +
+    "<p style='font-size:14px'>Beste " + e(bon.klant || "klant") + ",<br><br>" + (isService ? "Hierbij de servicebon van ons bezoek." : "Hierbij de opleverbon van de bezorging en installatie van uw spa. Bewaar deze bij uw aankoopgegevens.") + "</p>" +
     "<table style='border-collapse:collapse;font-size:13px;margin:6px 0'>" +
     (bon.spaType ? "<tr><td style='padding:3px 8px;color:#6b7280'>Spa</td><td style='padding:3px 8px'>" + e(bon.spaType) + "</td></tr>" : "") +
     (bon.serienr ? "<tr><td style='padding:3px 8px;color:#6b7280'>Serienummer</td><td style='padding:3px 8px'>" + e(bon.serienr) + "</td></tr>" : "") +
     (bon.plaats ? "<tr><td style='padding:3px 8px;color:#6b7280'>Adres</td><td style='padding:3px 8px'>" + e(bon.plaats) + "</td></tr>" : "") +
     "</table>" +
-    "<h3 style='color:#144734;margin:18px 0 6px'>Gedaan bij u thuis</h3>" +
-    "<table style='border-collapse:collapse;font-size:13px;width:100%'>" + rijen + "</table>" +
+    (isService ? serviceBlok : "<h3 style='color:#144734;margin:18px 0 6px'>Gedaan bij u thuis</h3>" +
+    "<table style='border-collapse:collapse;font-size:13px;width:100%'>" + rijen + "</table>") +
     betaling +
     (bon.opmerking ? "<h3 style='color:#144734;margin:18px 0 6px'>Opmerkingen</h3><p style='font-size:13px;white-space:pre-line'>" + e(bon.opmerking) + "</p>" : "") +
     "<p style='font-size:12px;color:#6b7280;margin-top:18px'>De handtekeningen van de monteur en van u zitten als bijlage bij deze mail.</p>" +

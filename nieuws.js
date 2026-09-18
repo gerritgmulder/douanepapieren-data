@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-18", bestand: "mijnroute.html", soort: "beter",
+      titel: "Servicebon en een kortere paklijst",
+      wat: "Bij een servicemelding is de checklist vervangen door vier vakken: de melding, wat je hebt gedaan, gebruikte materialen (aantal maal stukprijs, telt zelf op) en voorrijkosten (1,25 per km) plus arbeid (60 per uur), met het totaal eronder. In de paklijst staan de vaste regels die op elke order staan (transport, voorbereidingen, de tekst over vrije ruimte) niet meer."
+    },
+    {
+      datum: "2026-09-18", bestand: "planning.html", soort: "beter",
+      titel: "Servicebonnen in het overzicht",
+      wat: "Bij Opleverbonnen staat bij een servicebon het totaal van materialen, voorrijkosten en arbeid, en in de bon zelf de vier vakken. Mailen naar de klant gaat als Servicebon."
+    },
+    {
       datum: "2026-09-18", bestand: "pibs.html", soort: "nieuw",
       titel: "Uren invoeren namens een partner",
       wat: "Bij elke partner staat een knop 'uren invoeren'. Voor uren die de partner niet zelf heeft ingevuld, bijvoorbeeld per mail doorgegeven. Zo'n regel krijgt 'ingevoerd door kantoor', in het overzicht en in het portaal van de partner, en is in het dagdetail weer te verwijderen."

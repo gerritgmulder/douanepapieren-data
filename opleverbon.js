@@ -43,5 +43,15 @@
     { k: "wifi",         t: "Wifi getest?" }
   ];
   global.OPLEVERBON_ANTWOORD = { ja: "Ja", nee: "Nee", nvt: "n.v.t." };
+  /* Servicebon (Kevin, 18 sep 2026): bij een servicemelding geen checklist
+     maar vier vakken: de melding, wat er is gedaan, gebruikte materialen met
+     aantal en stukprijs, en voorrijkosten (per km) plus arbeid (per uur). */
+  global.OPLEVERBON_KM_TARIEF = 1.25;
+  global.OPLEVERBON_UUR_TARIEF = 60;
+  /* Regels die op elke order staan en niets zeggen over wat er mee moet
+     (Kevin, 18 sep 2026: "die mogen eraf zodat het op de order overzichtelijk
+     blijft"). Op artikelcode, plus alles wat met ** begint: dat zijn de vaste
+     teksten over vrije ruimte rond de spa. */
+  global.PAKLIJST_VERBERGEN = ["100193", "100989", "152289", "152369", "100993"];
   global.OPLEVERBON_STATUS = { concept: "nog bezig", klaar: "afgerond door monteur", akkoord: "akkoord kantoor", gemaild: "gemaild naar klant" };
 })(window);

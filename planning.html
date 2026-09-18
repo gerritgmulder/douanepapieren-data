@@ -2658,7 +2658,7 @@ async function bonOverzicht(){
       lijst.map(function(b){
         return '<tr class="rij" data-id="'+esc(b.id)+'"><td>'+esc(nlD(b.datum))+(b.tijd?' '+esc(b.tijd):'')+'</td><td><b>'+esc(b.klant)+'</b><div style="color:var(--grijs);font-size:11px">'+esc(b.plaats||"")+'</div></td>'+
           '<td>'+esc(b.ordernr||(b.itsId?"ITS "+b.itsId:""))+'</td><td>'+esc(b.monteur||"")+'</td>'+
-          '<td>'+(b.openstaand!=null?bonGeld(b.openstaand):"-")+'</td><td>'+(b.methode&&b.methode!=="geen"?bonGeld(b.ontvangen)+" "+(b.methode==="contant"?"contant":"bank"):(b.methode==="geen"?"niets":"-"))+'</td>'+
+          '<td>'+(b.serviceTotaal!=null?'<span title="servicebon: materialen, voorrijkosten en arbeid">service '+bonGeld(b.serviceTotaal)+'</span>':(b.openstaand!=null?bonGeld(b.openstaand):"-"))+'</td><td>'+(b.methode&&b.methode!=="geen"?bonGeld(b.ontvangen)+" "+(b.methode==="contant"?"contant":"bank"):(b.methode==="geen"?"niets":"-"))+'</td>'+
           '<td>'+(b.nee?'<span style="color:#b91c1c;font-weight:700">'+b.nee+'</span>':'')+'</td>'+
           '<td><span class="bonstatus '+esc(b.status)+'">'+esc((window.OPLEVERBON_STATUS||{})[b.status]||b.status)+'</span></td></tr>';
       }).join("")+'</tbody></table>';
@@ -2673,6 +2673,18 @@ async function bonDetail(id){
   catch(e){ box.innerHTML = '<p style="color:var(--rood)">'+esc(e.message)+'</p>'; return; }
   var vragen = window.OPLEVERBON_VRAGEN||[], A = window.OPLEVERBON_ANTWOORD||{};
   var bt = bon.betaling||{};
+  var isService = bon.soort === "service" || !!bon.itsId, sv = bon.service || {};
+  var KM = window.OPLEVERBON_KM_TARIEF||1.25, UU = window.OPLEVERBON_UUR_TARIEF||60;
+  var mat = (sv.materialen||[]).reduce(function(n,r){ return n + (Number(r.aantal)||0)*(Number(r.prijs)||0); }, 0);
+  var voorrij = (Number(sv.km)||0)*KM, arbeid = (Number(sv.uren)||0)*UU;
+  var serviceHtml = '<h4>1. Melding</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(sv.melding||"-")+'</p>'+
+    '<h4>2. Wat is er gedaan</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(sv.gedaan||"-")+'</p>'+
+    '<h4>3. Materialen</h4><table class="vr">'+((sv.materialen||[]).length ? (sv.materialen||[]).map(function(r){ return '<tr><td style="width:45%">'+esc(r.oms)+'</td><td>'+esc(r.aantal)+' x '+bonGeld(r.prijs)+'</td><td style="text-align:right">'+bonGeld((Number(r.aantal)||0)*(Number(r.prijs)||0))+'</td></tr>'; }).join("") : '<tr><td colspan="3" style="color:var(--grijs)">geen materialen</td></tr>')+'</table>'+
+    '<h4>4. Voorrijkosten en arbeid</h4><table class="vr">'+
+      '<tr><td style="width:45%">Voorrijkosten</td><td>'+esc(sv.km||0)+' km x '+bonGeld(KM)+'</td><td style="text-align:right">'+bonGeld(voorrij)+'</td></tr>'+
+      '<tr><td>Arbeid</td><td>'+esc(sv.uren||0)+' uur x '+bonGeld(UU)+'</td><td style="text-align:right">'+bonGeld(arbeid)+'</td></tr>'+
+      '<tr><td>Materialen</td><td></td><td style="text-align:right">'+bonGeld(mat)+'</td></tr>'+
+      '<tr><td><b>Totaal</b></td><td></td><td style="text-align:right"><b>'+bonGeld(mat+voorrij+arbeid)+'</b></td></tr></table>';
   box.innerHTML = '<div class="bondetail">'+
     '<p><button type="button" id="bonTerug" style="border:1px solid var(--rand);background:#fff;border-radius:8px;padding:5px 11px;font:inherit;font-size:12.5px;cursor:pointer">\u2190 Overzicht</button> '+
     '<span class="bonstatus '+esc(bon.status)+'" style="margin-left:8px">'+esc((window.OPLEVERBON_STATUS||{})[bon.status]||bon.status)+'</span></p>'+
@@ -2682,8 +2694,8 @@ async function bonDetail(id){
     '<div><span>Monteur</span> '+esc([bon.monteur,bon.monteur2].filter(Boolean).join(" & "))+'</div><div><span>Kenteken</span> '+esc(bon.kenteken||"-")+'</div>'+
     '<div><span>Spa</span> '+esc(bon.spaType||"-")+'</div><div><span>Serienummer</span> '+esc(bon.serienr||"-")+'</div>'+
     '<div><span>Adviseur</span> '+esc(bon.adviseur||"-")+'</div><div><span>Laatst gewijzigd</span> '+esc(String(bon.gewijzigd||"").replace("T"," ").slice(0,16))+' door '+esc(planNaam(bon.door||""))+'</div></div>'+
-    '<h4>Te doen bij klant</h4><table class="vr">'+vragen.map(function(v){ var c = (bon.checklist||{})[v.k]||{};
-      return '<tr><td style="width:45%">'+esc(v.t)+'</td><td class="'+esc(c.a||"")+'" style="width:70px">'+esc(A[c.a]||"-")+'</td><td>'+esc(c.opm||"")+'</td></tr>'; }).join("")+'</table>'+
+    (isService ? serviceHtml : '<h4>Te doen bij klant</h4><table class="vr">'+vragen.map(function(v){ var c = (bon.checklist||{})[v.k]||{};
+      return '<tr><td style="width:45%">'+esc(v.t)+'</td><td class="'+esc(c.a||"")+'" style="width:70px">'+esc(A[c.a]||"-")+'</td><td>'+esc(c.opm||"")+'</td></tr>'; }).join("")+'</table>')+
     '<h4>Betaling</h4><table class="vr">'+
       '<tr><td style="width:45%">Orderbedrag</td><td>'+bonGeld(bt.orderbedrag)+'</td></tr><tr><td>Al betaald</td><td>'+bonGeld(bt.reedsBetaald)+'</td></tr>'+
       '<tr><td>Openstaand bij levering</td><td><b>'+(bt.openstaand!=null?bonGeld(bt.openstaand):"onbekend")+'</b></td></tr>'+
