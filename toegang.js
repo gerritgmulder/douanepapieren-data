@@ -83,6 +83,11 @@
     "activiteit": [
       "dolf", "fonteynbot", "gerrit",
     ],
+    /* Ketenbewaking: proef. Gerrit (18 sep 2026): "eerst in een testomgeving
+       voor mij, zodat ik het kan beoordelen (Fonteynbot dus)". */
+    "keten": [
+      "dolf", "fonteynbot", "gerrit",
+    ],
     /* PIBs, Partners in Business: de uren en de meter van de ingehuurde
        partijen. Alleen Dolf en Gerrit (Gerrit, 15 sep 2026). */
     "pibs": [
@@ -312,7 +317,7 @@
     "voorraad": [
       "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
       "dali", "dolf", "edwin", "fonteynbot", "gerrit", "gerwin",
-      "kevin", "luis", "manon", "patrick", "yves",
+      "kevin", "luis", "manon", "nomi", "patrick", "yves",
     ],
   };
 
