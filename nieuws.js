@@ -53,7 +53,7 @@
     {
       datum: "2026-09-18", bestand: "mijnroute.html", soort: "beter",
       titel: "Servicebon en een kortere paklijst",
-      wat: "Bij een servicemelding is de checklist vervangen door vier vakken: de melding, wat je hebt gedaan, gebruikte materialen (aantal maal stukprijs, telt zelf op) en voorrijkosten (1,25 per km) plus arbeid (60 per uur), met het totaal eronder. In de paklijst staan de vaste regels die op elke order staan (transport, voorbereidingen, de tekst over vrije ruimte) niet meer."
+      wat: "Bij een servicemelding is de checklist vervangen door vier vakken: de melding, wat je hebt gedaan, gebruikte materialen (aantal maal stukprijs, telt zelf op) en voorrijkosten (1,25 per km) plus arbeid (60 per uur), met het totaal eronder. Bij een servicebon tekent alleen de klant. In de paklijst staan de vaste regels die op elke order staan (transport, voorbereidingen, de tekst over vrije ruimte) niet meer."
     },
     {
       datum: "2026-09-18", bestand: "planning.html", soort: "beter",

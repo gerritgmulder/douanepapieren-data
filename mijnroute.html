@@ -400,7 +400,7 @@ function bonBlok(a, o){
     (bt.methode==="bank"||bt.methode==="contant" ? '<label>Bedrag</label><input type="number" inputmode="decimal" step="0.01" data-veld="bedrag" value="'+(bt.bedrag||"")+'"'+dis+'>' : '')+
     (bt.methode==="contant" ? '<label>Contant geld gaat naar</label><div class="segment">'+[["monteur","Monteur"],["kantoor","Kantoor"]].map(function(x){ return '<button type="button" data-contant="'+x[0]+'" class="'+(bt.contantAan===x[0]?"aan":"")+'"'+dis+'>'+x[1]+'</button>'; }).join("")+'</div>' : '')+
     '<h4>Opmerkingen</h4><textarea data-veld="opmerking" rows="2" maxlength="1000" placeholder="Bijzonderheden voor kantoor of de klant"'+dis+'>'+esc(bon.opmerking)+'</textarea>'+
-    '<h4>Akkoord monteur</h4><div class="hand" data-hand="handtekeningMonteur"><canvas></canvas><button type="button" class="wis"'+dis+'>Wissen</button><span class="hint">Teken hier</span></div>'+
+    (isService ? '' : '<h4>Akkoord monteur</h4><div class="hand" data-hand="handtekeningMonteur"><canvas></canvas><button type="button" class="wis"'+dis+'>Wissen</button><span class="hint">Teken hier</span></div>')+
     '<h4>Akkoord klant</h4><label>Naam</label><input type="text" data-veld="klantNaamHandtekening" value="'+esc(bon.klantNaamHandtekening||bon.klant)+'" maxlength="80"'+dis+'>'+
     '<div class="hand" style="margin-top:6px" data-hand="handtekeningKlant"><canvas></canvas><button type="button" class="wis"'+dis+'>Wissen</button><span class="hint">Laat de klant hier tekenen</span></div>'+
     '<label>Mailadres klant (voor de bon)</label><input type="text" data-veld="klantMail" value="'+esc(bon.klantMail)+'" maxlength="120" inputmode="email"'+dis+'>'+
@@ -550,7 +550,7 @@ async function bonAfronden(id){
   }
   if ((bon.betaling.methode==="bank"||bon.betaling.methode==="contant") && !(bon.betaling.bedrag>0)){ bonMelding(id, "Vul het bedrag in dat bij de klant is voldaan.", "bad"); return; }
   if (bon.betaling.methode==="contant" && !bon.betaling.contantAan){ bonMelding(id, "Geef aan of het contante geld bij de monteur of op kantoor is.", "bad"); return; }
-  if (!bon.handtekeningMonteur){ bonMelding(id, "De handtekening van de monteur ontbreekt.", "bad"); return; }
+  if (!isService && !bon.handtekeningMonteur){ bonMelding(id, "De handtekening van de monteur ontbreekt.", "bad"); return; }
   if (!bon.handtekeningKlant){ bonMelding(id, "De handtekening van de klant ontbreekt.", "bad"); return; }
   clearTimeout(bonTimers[id]);
   try{

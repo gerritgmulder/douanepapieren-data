@@ -5917,10 +5917,13 @@ async function bonHandle(request, env, url) {
     const bon = bonSchoon(inkomend, wie);
     if (oud) { bon.gemaakt = oud.gemaakt || bon.gemaakt; }
     if (bon.status === "klaar") {
-      if (!bon.handtekeningMonteur || !bon.handtekeningKlant) return reply(400, { ok: false, error: "zonder beide handtekeningen kan de bon niet worden afgerond" });
+      /* Kevin (18 sep 2026): bij een servicemelding geen handtekening van
+         de monteur, wel van de klant. */
       if (bon.soort === "service" || bon.itsId) {
+        if (!bon.handtekeningKlant) return reply(400, { ok: false, error: "zonder handtekening van de klant kan de bon niet worden afgerond" });
         if (!bon.service.gedaan.trim()) return reply(400, { ok: false, error: "vul in wat er bij de klant is gedaan" });
       } else {
+        if (!bon.handtekeningMonteur || !bon.handtekeningKlant) return reply(400, { ok: false, error: "zonder beide handtekeningen kan de bon niet worden afgerond" });
         const open = Object.entries(bon.checklist).filter(([, v]) => !v.a);
         if (open.length) return reply(400, { ok: false, error: open.length + " vraag(en) nog niet beantwoord" });
         const zonderReden = Object.entries(bon.checklist).filter(([, v]) => v.a !== "ja" && !v.opm.trim());

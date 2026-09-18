@@ -2701,7 +2701,7 @@ async function bonDetail(id){
       '<tr><td>Openstaand bij levering</td><td><b>'+(bt.openstaand!=null?bonGeld(bt.openstaand):"onbekend")+'</b></td></tr>'+
       '<tr><td>Bij de klant voldaan</td><td>'+(bt.methode==="geen"?"niets":bt.methode?bonGeld(bt.bedrag)+" "+(bt.methode==="contant"?"contant, geld bij "+(bt.contantAan||"?"):"per bank"):"-")+'</td></tr></table>'+
     (bon.opmerking?'<h4>Opmerkingen</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(bon.opmerking)+'</p>':'')+
-    '<h4>Handtekeningen</h4><div class="handt"><div><div style="font-size:11.5px;color:var(--grijs);margin-bottom:3px">Monteur</div>'+(bon.handtekeningMonteur?'<img src="'+bon.handtekeningMonteur+'" alt="handtekening monteur">':'<div class="leeg">nog geen handtekening</div>')+'</div>'+
+    '<h4>Handtekeningen</h4><div class="handt">'+(isService?'':'<div><div style="font-size:11.5px;color:var(--grijs);margin-bottom:3px">Monteur</div>'+(bon.handtekeningMonteur?'<img src="'+bon.handtekeningMonteur+'" alt="handtekening monteur">':'<div class="leeg">nog geen handtekening</div>')+'</div>')+
     '<div><div style="font-size:11.5px;color:var(--grijs);margin-bottom:3px">Klant'+(bon.klantNaamHandtekening?' ('+esc(bon.klantNaamHandtekening)+')':'')+'</div>'+(bon.handtekeningKlant?'<img src="'+bon.handtekeningKlant+'" alt="handtekening klant">':'<div class="leeg">nog geen handtekening</div>')+'</div></div>'+
     '<div class="mailrij"><label style="font-size:12.5px;color:var(--grijs)">Mail naar</label><input type="email" id="bonMail" value="'+esc(bon.klantMail||"")+'" placeholder="mailadres van de klant"></div>'+
     '<div class="knoppen" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+
