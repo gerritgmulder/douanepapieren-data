@@ -170,6 +170,22 @@
       <div id="vlVerschil"></div>
     </div>
 
+    <!-- De telling als voorraadcontrole in Logic4. Chantal (video, 17 sep
+         2026): "er staan geen 44 Joy in Houston; als ik nu een Joy verkoop
+         moet hij van 14 naar 13, vanaf mijn telling. Je kunt niet met
+         terugwerkende kracht afboeken, dus we moeten dit strak trekken." -->
+    <div class="card" id="vlTellingKaart">
+      <h3>Telling naar Logic4 zetten</h3>
+      <p class="lead" style="font-size:12.5px;margin-bottom:10px">Dit maakt van de telling een <b>voorraadcontrole</b> in Logic4 op de locatie Warehouse Texas USA: per artikel het getelde aantal naast wat Logic4 er nu heeft. Daarna verwerk je die controle in Logic4 zelf (Voorraad, Voorraadcontrole), en dan staat Houston gelijk aan de telling en gaat elke verkoop er vanaf het juiste getal af. Klopt een trim niet (grey of oak), pas het getelde aantal hieronder aan voordat je hem klaarzet.</p>
+      <div class="actions" style="gap:10px;align-items:center;margin:0 0 10px">
+        <label style="font-size:12.5px">Peildatum van de telling <input type="date" id="vlTelDatum" style="padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit"></label>
+        <button class="btn" type="button" id="vlTelProef">Voorstel maken</button>
+        <button class="btn" type="button" id="vlTelDoe" disabled style="background:var(--groen);color:#fff">Voorraadcontrole klaarzetten in Logic4</button>
+        <span id="vlTelStatus" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div id="vlTelVoorstel"></div>
+    </div>
+
     <div id="vhKpis" class="kpi-row"></div>
     <div class="card">
       <div id="vhUitleg" class="status-msg" style="margin-bottom:12px"></div>
@@ -379,6 +395,57 @@ async function vhHaalKoers(){
   }catch(e){}
   if(!vhKoers) vhKoers={koers:1.11,bron:"terugval; het partnerportaal gaf geen koers"};
 }
+/* ─── Telling naar Logic4 als voorraadcontrole ─────────────────────────── */
+let vlTelData=null;
+async function vlTelProef(){
+  const st=document.getElementById("vlTelStatus"), box=document.getElementById("vlTelVoorstel");
+  st.textContent="Voorstel maken…"; document.getElementById("vlTelDoe").disabled=true;
+  try{
+    const r=await fetch(WORKER+"/amerika/voorraad-telling",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+      body:JSON.stringify({dry:true,peildatum:document.getElementById("vlTelDatum").value||undefined})});
+    const j=await r.json().catch(()=>null);
+    if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+    vlTelData=j;
+    if(!document.getElementById("vlTelDatum").value) document.getElementById("vlTelDatum").value=j.peildatum||"";
+    const rij=x=>"<tr data-code='"+esc(x.code)+"'><td>"+esc(x.model)+"</td><td style='font-family:ui-monospace,monospace;font-size:12px'>"+esc(x.code)+"</td><td style='font-size:12px'>"+esc(String(x.omschrijving||"").split("|").slice(1).join("|").trim())+"</td>"+
+      "<td style='font-size:12px;color:var(--muted)'>"+esc(x.tellingKleur)+"</td><td style='text-align:right'>"+x.logic4+"</td>"+
+      "<td style='text-align:right'><input type='number' min='0' step='1' class='vlTelGeteld' data-code='"+esc(x.code)+"' value='"+x.geteld+"' style='width:64px;text-align:right;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit'></td>"+
+      "<td style='text-align:right;font-weight:600;color:"+(x.geteld-x.logic4<0?"#b91c1c":x.geteld-x.logic4>0?"#15803d":"inherit")+"' class='vlTelVerschil'>"+(x.geteld-x.logic4>0?"+":"")+(x.geteld-x.logic4)+"</td></tr>";
+    box.innerHTML="<div class='status-msg warn' style='margin-bottom:10px'>"+j.rijen.length+" artikelen: <b>"+j.somGeteld+"</b> geteld tegenover <b>"+j.somLogic4+"</b> in Logic4 op Houston. "+
+      "Regels met '(niet in de telling)' staan wel in Logic4 maar niet in de telling en gaan naar 0.</div>"+
+      "<div class='tablewrap' style='max-height:420px;overflow:auto'><table class='grid'><thead><tr><th>Model</th><th>Artikel</th><th>Uitvoering in Logic4</th><th>Kleur in de telling</th><th style='text-align:right'>Logic4 nu</th><th style='text-align:right'>Geteld</th><th style='text-align:right'>Verschil</th></tr></thead><tbody>"+
+      j.rijen.map(rij).join("")+"</tbody></table></div>"+
+      (j.onbekend.length?"<p class='lead' style='font-size:12px;margin-top:10px'><b>Niet mee (geen spa in de catalogus, dus niet aan een Logic4-artikel te koppelen):</b> "+
+        Object.entries(j.onbekend.reduce((m,o)=>{m[o.model]=(m[o.model]||0)+o.aantal;return m;},{})).map(([m,a])=>esc(m)+" "+a).join(", ")+". Die blijven zoals ze in Logic4 staan.</p>":"")+
+      (j.nietGeteld.length?"<p class='lead' style='font-size:12px'><b>Staat in Logic4 op Houston, maar het model komt niet in de telling voor (blijft staan):</b> "+
+        j.nietGeteld.map(o=>esc(o.model)+" "+esc(o.code)+" ("+o.aantal+")").join(", ")+".</p>":"");
+    box.querySelectorAll(".vlTelGeteld").forEach(inp=>inp.addEventListener("input",()=>{
+      const x=vlTelData.rijen.find(r=>r.code===inp.dataset.code); if(!x) return;
+      x.geteld=Math.max(0,Math.round(Number(inp.value)||0));
+      const cel=inp.closest("tr").querySelector(".vlTelVerschil"); const d=x.geteld-x.logic4;
+      cel.textContent=(d>0?"+":"")+d; cel.style.color=d<0?"#b91c1c":d>0?"#15803d":"inherit";
+    }));
+    st.textContent="Kijk het na en pas aan waar nodig."; document.getElementById("vlTelDoe").disabled=false;
+  }catch(e){ st.textContent=""; box.innerHTML="<div class='status-msg bad'>Voorstel maken mislukte: "+esc(e.message)+"</div>"; }
+}
+async function vlTelDoe(){
+  if(!vlTelData) return;
+  const som=vlTelData.rijen.reduce((n,r)=>n+r.geteld,0);
+  if(!confirm("Er wordt een voorraadcontrole klaargezet in Logic4 op Warehouse Texas USA met "+vlTelData.rijen.length+" artikelen en "+som+" getelde spa's (peildatum "+(document.getElementById("vlTelDatum").value||vlTelData.peildatum)+").\n\nDe voorraad verandert pas als jij die controle in Logic4 verwerkt.\n\nDoorgaan?")) return;
+  const st=document.getElementById("vlTelStatus"), b=document.getElementById("vlTelDoe"); b.disabled=true; st.textContent="Klaarzetten…";
+  try{
+    const r=await fetch(WORKER+"/amerika/voorraad-telling",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+      body:JSON.stringify({dry:false,peildatum:document.getElementById("vlTelDatum").value||undefined,rijen:vlTelData.rijen.map(x=>({code:x.code,geteld:x.geteld})),user:(localStorage.getItem("fp.email")||"")})});
+    const j=await r.json().catch(()=>null);
+    if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+    if(window.fpLog) window.fpLog("houston-telling-naar-logic4",j.rijen+" artikelen, controle "+(j.controleId||"?"));
+    st.textContent="";
+    document.getElementById("vlTelVoorstel").insertAdjacentHTML("afterbegin","<div class='status-msg ok' style='margin-bottom:10px'><b>Klaargezet.</b> Voorraadcontrole"+(j.controleId?" nummer "+esc(String(j.controleId)):"")+" staat in Logic4 op Warehouse Texas USA, nog niet verwerkt. Open hem in Logic4 (Voorraad, Voorraadcontrole), kijk hem na en verwerk hem; daarna staat Houston op de telling.</div>");
+  }catch(e){ st.textContent=""; alert("Klaarzetten mislukte: "+e.message); b.disabled=false; }
+}
+document.getElementById("vlTelProef").addEventListener("click",vlTelProef);
+document.getElementById("vlTelDoe").addEventListener("click",vlTelDoe);
+
 /* ─── Voorraad Houston, live uit Logic4 ──────────────────────────────────
    Chantal (1 sep 2026): "als jij mijn lijst in Logic4 zet, kunnen we vanaf nu
    gaan afboeken. Op het moment dat Osman de order afboekt wordt de voorraad

@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-09-18", bestand: "amerika.html", soort: "nieuw",
+      titel: "Telling Houston naar Logic4",
+      wat: "Onder Voorraad Houston staat 'Telling naar Logic4 zetten'. Voorstel maken laat per artikel zien wat er geteld is en wat Logic4 heeft; je kunt de getelde aantallen aanpassen. Klaarzetten maakt er een voorraadcontrole van in Logic4 op Warehouse Texas USA; die verwerk je daar zelf, en daarna staat Houston gelijk aan de telling."
+    },
+    {
+      datum: "2026-09-18", bestand: "amerika.html", soort: "nieuw",
       titel: "Batchregel zonder factuurnummer zelf koppelen",
       wat: "Staat er in een batch een regel zonder factuurnummer (zoals 'Tatum refund'), dan kun je het nummer nu zelf in het vakje typen en op Enter drukken. Een negatieve regel met een order wordt bij het boeken als terugbetaling op die order gezet."
     },

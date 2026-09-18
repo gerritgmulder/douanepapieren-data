@@ -9548,6 +9548,120 @@ async function qbHandleHerstel(request, env) {
    covers en trapjes - waar Chantal nooit een lijst van had. Wat in de
    spa-catalogus staat wordt per model gegroepeerd; de rest komt apart terug
    zodat het niet stilzwijgend in een spa-totaal verdwijnt. */
+
+/* Chantals telling als voorraadcontrole in Logic4.
+   ═══════════════════════════════════════════════════════════════════════
+   Chantal (video, 17 sep 2026): "Er staan geen 44 Joy in Houston. Al deze
+   aantallen kloppen helemaal niks van. Als ik nu een Joy verkoop moet hij
+   van 14 naar 13, vanaf mijn telling. Je kunt niet met terugwerkende kracht
+   afboeken, dus we moeten dit strak trekken, anders krijgen we nooit de
+   juiste voorraad in Logic4."
+
+   Logic4 kent hiervoor een eigen middel: de voorraadcontrole (een telling
+   per locatie, die na verwerken de voorraad gelijkzet). Deze route zet de
+   telling van Chantal als zo'n controle klaar op locatie 1812 "Warehouse
+   Texas USA - Rechtstreeks", per artikel (model plus kleur, via de
+   spa-catalogus), met het getelde aantal ernaast wat Logic4 er nu heeft.
+   Verwerken gebeurt daarna in Logic4 zelf door Chantal of Osman, zodat de
+   correctie een gewone, controleerbare voorraadcontrole is en geen losse
+   mutatie uit een koppeling. Eerst altijd een proef (dry), die alleen de
+   regels teruggeeft. */
+const HOUSTON_LOCATIE = 1812;
+async function amerikaTellingNaarLogic4(request, env) {
+  let body = {}; try { body = await request.json(); } catch {}
+  const dry = body.dry !== false;
+  const telling = (await env.FONTEYN_DATA.get("amerika-voorraad", { type: "json" })) || {};
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const live = await amerikaVoorraadLive(env);
+  const peildatum = /^\d{4}-\d{2}-\d{2}$/.test(String(body.peildatum || "")) ? body.peildatum : (telling.peildatum || new Date().toISOString().slice(0, 10));
+  const liveCode = {};
+  for (const m of (live.modellen || [])) for (const c of (m.codes || [])) liveCode[c.code] = { model: m.model, aantal: c.aantal };
+  const trimWoorden = (t) => String(t || "").toLowerCase().replace(/\bchoc\b/g, "chocolate").replace(/\b(with|and|trim|cabinet|spa|\/)\b/g, " ").replace(/[^a-z ]/g, " ").split(/\s+/).filter(w => w.length > 2);
+  const rijen = [], onbekend = [];
+  const gebruikt = new Set();
+  /* Modelnamen in de telling wijken af van de catalogus: "Renew NEW",
+     "Excite" (catalogus: Excite Mighty Wave), "Felicity". Eerst exact, dan
+     zonder NEW, dan het enige catalogusmodel dat zo begint. */
+  const modellen = Object.keys(catalog.models || {});
+  const norm = (t) => String(t || "").toLowerCase().replace(/^spa\s+/, "").replace(/\s+new$/, "").replace(/\s+mighty\b/, "").replace(/\s+/g, " ").trim();
+  const zoekModel = (naam) => {
+    if ((catalog.models || {})[naam]) return naam;
+    const n = norm(naam);
+    const exact = modellen.find(m => norm(m) === n); if (exact) return exact;
+    const begint = modellen.filter(m => norm(m).startsWith(n + " "));
+    return begint.length === 1 ? begint[0] : null;
+  };
+  for (const r0 of (telling.regels || [])) {
+    if (!(Number(r0.aantal) > 0)) continue;
+    const modelNaam = zoekModel(r0.model);
+    const r = Object.assign({}, r0, { model: modelNaam || r0.model });
+    const varianten = modelNaam ? (catalog.models || {})[modelNaam] : null;
+    if (!varianten || !varianten.length) { onbekend.push({ model: r.model, kleur: r.kleur, aantal: r.aantal, reden: "model staat niet in de spa-catalogus" }); continue; }
+
+    const schaal = dpSchaalKleur(r.kleur);
+    let kand = varianten.filter(v => dpSchaalKleur(dpRowInfo(v.desc).kleur || "") === schaal);
+    if (!kand.length) kand = varianten.slice();
+    /* Meerdere varianten met dezelfde schaalkleur: de trim beslist (grey,
+       oak, chocolate). Eerst wat Logic4 op Houston heeft staan, dan de
+       beste woordovereenkomst. */
+    const tw = new Set(trimWoorden(r.kleur));
+    kand.sort((a, b) => {
+      const sa = (liveCode[a.code] ? 100 : 0) + trimWoorden(dpRowInfo(a.desc).kleur).filter(w => tw.has(w)).length;
+      const sb = (liveCode[b.code] ? 100 : 0) + trimWoorden(dpRowInfo(b.desc).kleur).filter(w => tw.has(w)).length;
+      return sb - sa;
+    });
+    const v = kand[0];
+    if (!v.productId) { onbekend.push({ model: r.model, kleur: r.kleur, aantal: r.aantal, reden: "geen artikelnummer bij " + v.code }); continue; }
+    const bestaand = rijen.find(x => x.code === v.code);
+    if (bestaand) { bestaand.geteld += Number(r.aantal); bestaand.tellingKleur += " + " + r.kleur; }
+    else rijen.push({ productId: v.productId, code: v.code, omschrijving: v.desc, model: r.model, tellingKleur: r.kleur, geteld: Number(r.aantal), logic4: liveCode[v.code] ? liveCode[v.code].aantal : 0, exact: !!(liveCode[v.code]) });
+    gebruikt.add(v.code);
+  }
+  /* Spa-artikelen die Logic4 op Houston heeft maar die niet in de telling
+     voorkomen: geteld 0, anders blijft er spookvoorraad staan. Alleen
+     modellen die Chantal wél telde; wat zij helemaal niet noemt laten we
+     staan en zetten we apart. */
+  const geteldeModellen = new Set((telling.regels || []).map(r => zoekModel(r.model) || r.model));
+  const nietGeteld = [];
+  for (const [code, x] of Object.entries(liveCode)) {
+    if (gebruikt.has(code) || !(x.aantal > 0)) continue;
+    const v = ((catalog.models || {})[x.model] || []).find(y => y.code === code);
+    if (geteldeModellen.has(x.model) && v && v.productId) rijen.push({ productId: v.productId, code, omschrijving: v.desc, model: x.model, tellingKleur: "(niet in de telling)", geteld: 0, logic4: x.aantal, exact: true });
+    else nietGeteld.push({ code, model: x.model, aantal: x.aantal, omschrijving: v ? v.desc : "" });
+  }
+  rijen.sort((a, b) => a.model.localeCompare(b.model) || a.code.localeCompare(b.code));
+  const somGeteld = rijen.reduce((n, r) => n + r.geteld, 0), somLogic4 = rijen.reduce((n, r) => n + r.logic4, 0);
+  if (dry) return reply(200, { ok: true, dry: true, peildatum, locatie: HOUSTON_LOCATIE, rijen, onbekend, nietGeteld, somGeteld, somLogic4 });
+
+  /* Het scherm mag de getelde aantallen per artikel hebben aangepast
+     (Chantal weet welke trim er staat); die tellen dan. */
+  if (Array.isArray(body.rijen) && body.rijen.length) {
+    const per = {}; for (const x of body.rijen) if (x && x.code != null) per[String(x.code)] = Math.max(0, Math.round(Number(x.geteld) || 0));
+    for (const r of rijen) if (per[r.code] != null) r.geteld = per[r.code];
+  }
+  const token = await l4Token(env);
+  const head = {
+    Id: null, LocationId: HOUSTON_LOCATIE, LocationName: "Warehouse Texas USA -   -   - Rechtstreeks",
+    CreatedDate: new Date().toISOString().slice(0, 19), ProcessDate: null, UserId: null,
+    EventLog: "Telling Houston van " + peildatum + " uit het Fonteyn Dashboard, klaargezet door " + String(body.user || "").slice(0, 60),
+    Rows: rijen.map(r => ({ Id: null, ProductStockHeadId: null, ProductId: r.productId, ProductCode: r.code, ProductDescription: String(r.omschrijving || "").slice(0, 200),
+      StockTotal: r.logic4, StockOnCurrentLocation: r.logic4, StockCountedByUser: r.geteld, StockLevelDate: peildatum + "T00:00:00" })),
+  };
+  const rr = await fetch("https://api.logic4server.nl/v3/Stock/UpdateOrCreateStockControlHeads", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(head),
+  });
+  const tekst = await rr.text();
+  if (!rr.ok) return reply(502, { ok: false, error: "Logic4 weigerde de voorraadcontrole: HTTP " + rr.status + " " + tekst.slice(0, 300) });
+  let j = null; try { j = JSON.parse(tekst); } catch {}
+  const id = (j && (j.Id || j.id || (j.Value && j.Value.Id))) || null;
+  const somGeteld2 = rijen.reduce((n, r) => n + r.geteld, 0);
+  const log = (await env.FONTEYN_DATA.get("amerika-voorraad", { type: "json" })) || {};
+  log.correcties = log.correcties || [];
+  log.correcties.push({ ts: new Date().toISOString(), door: String(body.user || "").slice(0, 80), wat: "Telling van " + peildatum + " als voorraadcontrole naar Logic4 gezet (locatie Warehouse Texas USA" + (id ? ", controle " + id : "") + "): " + rijen.length + " artikelen, " + somGeteld2 + " geteld tegenover " + somLogic4 + " in Logic4." });
+  await env.FONTEYN_DATA.put("amerika-voorraad", JSON.stringify(log));
+  return reply(200, { ok: true, dry: false, controleId: id, antwoord: j, rijen: rijen.length, somGeteld, somLogic4 });
+}
+
 async function amerikaVoorraadLive(env) {
   const WH_HOUSTON = 50;
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
@@ -12893,6 +13007,10 @@ export default {
     if (url.pathname === "/amerika/koers" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       return reply(200, { ok: true, koers: await dpRate(env), bron: "ECB-dagkoers EUR/USD min 0,03 (automatisch)" });
+    }
+    if (url.pathname === "/amerika/voorraad-telling" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+      return amerikaTellingNaarLogic4(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     if (url.pathname === "/amerika/voorraad-live" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
