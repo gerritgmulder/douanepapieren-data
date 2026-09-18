@@ -227,7 +227,7 @@ function tekenUren(){
     "<td style='white-space:nowrap'>" + esc(datumNl(u.datum)) + "</td>" +
     "<td class='n'>" + uren(u.uren) + "</td>" +
     "<td>" + esc(u.categorie || "") + "</td>" +
-    "<td>" + esc(u.omschrijving || "") + "</td>" +
+    "<td>" + esc(u.omschrijving || "") + (u.door ? " <span style='color:var(--muted);font-size:11px'>(ingevoerd door kantoor)</span>" : "") + "</td>" +
     "<td style='white-space:nowrap'>" + (ik && ik.meekijk ? "" : "<button class='weg' data-b='" + esc(u.id) + "'>wijzig</button> <button class='weg' data-w='" + esc(u.id) + "'>weg</button>") + "</td></tr>").join("")
     : "<tr><td colspan='5' style='color:var(--muted)'>Nog geen uren ingevuld.</td></tr>";
   $("uLijst").querySelectorAll("[data-w]").forEach(b => b.addEventListener("click", async () => {

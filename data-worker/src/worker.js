@@ -3295,7 +3295,7 @@ async function pibHandleAuth(request, env, url) {
 function pibDatumOk(s) { return /^\d{4}-\d{2}-\d{2}$/.test(String(s || "")) && !isNaN(new Date(s).getTime()); }
 async function pibUrenLijst(env, email, van, tot) {
   const r = await env.ACTIVITEIT.prepare(
-    "SELECT id, datum, uren, omschrijving, categorie, ts FROM pib_uren WHERE partner = ?1 AND datum >= ?2 AND datum <= ?3 ORDER BY datum DESC, ts DESC")
+    "SELECT id, datum, uren, omschrijving, categorie, ts, door FROM pib_uren WHERE partner = ?1 AND datum >= ?2 AND datum <= ?3 ORDER BY datum DESC, ts DESC")
     .bind(email, van, tot).all();
   return r.results || [];
 }
@@ -3641,6 +3641,35 @@ async function pibAdmin(request, env, url, p) {
         totaalMinuten: Object.values(act).reduce((n, a) => n + a.minuten, 0) });
     }
     return reply(200, { ok: true, van, tot, partners: uit });
+  }
+  /* Uren invoeren namens een partner. Gerrit (18 sep 2026): "ik wil als
+     Fonteynbot mijn uren (Gerrit Mulder) invoeren." De regel krijgt in de
+     kolom door wie op kantoor hem invoerde, zodat in het overzicht en in
+     het portaal van de partner zichtbaar blijft dat de partner het niet
+     zelf was. Geen weekgrens: dit is juist voor uren die later binnenkomen.
+     Verwijderen kan hier alleen van regels die kantoor zelf invoerde. */
+  if (p === "/pib/admin/uren" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const x = pibVind(d, b.email);
+    if (!x) return reply(404, { ok: false, error: "partner onbekend" });
+    const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+    const datum = String(b.datum || "");
+    const uren = Math.round(Number(String(b.uren || "").replace(",", ".")) * 4) / 4;
+    const omschrijving = String(b.omschrijving || "").trim().slice(0, 500);
+    const categorie = String(b.categorie || "").trim().slice(0, 60);
+    if (!pibDatumOk(datum)) return reply(400, { ok: false, error: "datum ontbreekt of is ongeldig" });
+    if (datum > new Date().toISOString().slice(0, 10)) return reply(400, { ok: false, error: "de datum ligt in de toekomst" });
+    if (!(uren > 0 && uren <= 24)) return reply(400, { ok: false, error: "uren moet tussen 0,25 en 24 liggen" });
+    if (omschrijving.length < 5) return reply(400, { ok: false, error: "omschrijving is te kort: zeg wat er is gedaan" });
+    const nieuw = pibId();
+    await env.ACTIVITEIT.prepare("INSERT INTO pib_uren (id, partner, datum, uren, omschrijving, categorie, ts, door) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)")
+      .bind(nieuw, x.email, datum, uren, omschrijving, categorie, new Date().toISOString(), wie || "kantoor").run();
+    return reply(200, { ok: true, id: nieuw });
+  }
+  if (p === "/pib/admin/uren" && request.method === "DELETE") {
+    const id = String(url.searchParams.get("id") || "");
+    const r = await env.ACTIVITEIT.prepare("DELETE FROM pib_uren WHERE id = ?1 AND door IS NOT NULL").bind(id).run();
+    return reply(200, { ok: true, verwijderd: (r.meta && r.meta.changes) || 0 });
   }
   if (p === "/pib/admin/dag" && request.method === "GET") {
     const email = String(url.searchParams.get("partner") || "").toLowerCase();

@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-18", bestand: "pibs.html", soort: "nieuw",
+      titel: "Uren invoeren namens een partner",
+      wat: "Bij elke partner staat een knop 'uren invoeren'. Voor uren die de partner niet zelf heeft ingevuld, bijvoorbeeld per mail doorgegeven. Zo'n regel krijgt 'ingevoerd door kantoor', in het overzicht en in het portaal van de partner, en is in het dagdetail weer te verwijderen."
+    },
+    {
       datum: "2026-09-17", bestand: "mijnroute.html", soort: "nieuw",
       titel: "Opleverbon op de telefoon",
       wat: "Onder elke stop staat nu een Opleverbon: de checklist van de bezorgservice (Ja, Nee of n.v.t., met een reden als het geen Ja is), het openstaande bedrag en wat er bij de klant is voldaan, en de handtekening van de monteur en van de klant. Bewaren gaat vanzelf; met Bon afronden gaat hij naar kantoor. Het ordermemo uit Logic4 staat er nu ook bij."

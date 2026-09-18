@@ -95,6 +95,18 @@ code{background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:12px}
       <div style="flex:0 0 auto;display:flex;gap:8px"><button class="go" id="pToevoegen">Toevoegen</button><button class="stil hidden" id="pAnnuleer">Annuleren</button></div>
     </div>
     <div id="pMsg" class="msg hidden"></div>
+    <div id="nVak" class="hidden" style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#f8faf5">
+      <h3 style="margin:0 0 4px">Uren invoeren namens <span id="nWie"></span> <button class="klein" id="nDicht" style="float:right">sluiten</button></h3>
+      <p class="lead" style="margin:0 0 8px">Voor uren die de partner niet zelf heeft ingevuld, bijvoorbeeld doorgegeven per mail. De regel krijgt "ingevoerd door kantoor" en is voor de partner zichtbaar in zijn portaal.</p>
+      <div class="rij" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+        <div><label>Datum</label><input type="date" id="nDatum"></div>
+        <div style="width:90px"><label>Uren</label><input id="nUren" placeholder="bv. 2,5" inputmode="decimal"></div>
+        <div><label>Soort</label><select id="nCat"><option value="ontwikkeling">Ontwikkeling</option><option value="marketing">Marketing</option><option value="overleg">Overleg</option><option value="advies">Advies</option><option value="beheer">Beheer</option><option value="overig">Overig</option></select></div>
+        <div style="flex:1 1 260px"><label>Wat is er gedaan</label><input id="nWat" placeholder="korte omschrijving" maxlength="500"></div>
+        <div style="flex:0 0 auto"><button class="go" id="nOpslaan">Opslaan</button></div>
+      </div>
+      <div id="nMsg" class="msg hidden" style="margin-top:8px"></div>
+    </div>
     <div style="overflow-x:auto;margin-top:12px"><table><thead><tr><th>Partner</th><th>E-mail</th><th>Toestemming</th><th>Meter</th><th>Laatste login</th><th></th></tr></thead><tbody id="pLijst"></tbody></table></div>
   </div>
 
@@ -137,7 +149,7 @@ async function laadPartners(){
     const meter = p.meterLaatst ? "<span class='pil " + (Date.now() - new Date(p.meterLaatst) < 3600000 ? "aan" : "half") + "'>" + (p.meterPlatform || "") + " " + wanneer(p.meterLaatst) + "</span>" : "<span class='pil'>niets ontvangen</span>";
     return "<tr" + (p.actief ? "" : " style='opacity:.5'") + "><td><b>" + esc(p.naam || "") + "</b>" + (p.bedrijf ? "<br><span style='color:var(--muted);font-size:12px'>" + esc(p.bedrijf) + "</span>" : "") + (p.tarief ? "<br><span style='color:var(--muted);font-size:11.5px'>€ " + uren(p.tarief) + " per uur</span>" : "") + (p.notitie ? "<br><span style='color:var(--muted);font-size:11.5px'>" + esc(p.notitie) + "</span>" : "") + "</td>" +
       "<td>" + esc(p.email) + "</td><td>" + toest + "</td><td>" + meter + "</td><td>" + wanneer(p.laatsteLogin) + (p.uitgenodigd ? "<br><span style='color:var(--muted);font-size:11.5px'>uitgenodigd " + wanneer(p.uitgenodigd) + "</span>" : "") + "</td>" +
-      "<td style='white-space:nowrap'><button class='klein' data-kijk='" + esc(p.email) + "'>meekijken</button> <button class='klein' data-bewerk='" + esc(p.email) + "'>wijzig</button> <button class='klein' data-uit='" + esc(p.email) + "'>uitnodigen</button> <button class='klein' data-aan='" + esc(p.email) + "'>" + (p.actief ? "uitzetten" : "aanzetten") + "</button></td></tr>";
+      "<td style='white-space:nowrap'><button class='klein' data-uren='" + esc(p.email) + "'>uren invoeren</button> <button class='klein' data-kijk='" + esc(p.email) + "'>meekijken</button> <button class='klein' data-bewerk='" + esc(p.email) + "'>wijzig</button> <button class='klein' data-uit='" + esc(p.email) + "'>uitnodigen</button> <button class='klein' data-aan='" + esc(p.email) + "'>" + (p.actief ? "uitzetten" : "aanzetten") + "</button></td></tr>";
   }).join("") : "<tr><td colspan='6' style='color:var(--muted)'>Nog geen partners. Voeg hierboven de eerste toe.</td></tr>";
   $("pLijst").querySelectorAll("[data-uit]").forEach(b => b.addEventListener("click", async () => {
     b.disabled = true;
@@ -165,12 +177,34 @@ async function laadPartners(){
     $("pToevoegen").textContent = "Wijziging opslaan"; $("pAnnuleer").classList.remove("hidden");
     window.scrollTo({ top: 0, behavior: "smooth" }); $("pNaam").focus();
   }));
+  /* Uren invoeren namens een partner (Gerrit, 18 sep 2026). Het formulier
+     staat onder de partnerlijst; de regel krijgt "ingevoerd door kantoor". */
+  $("pLijst").querySelectorAll("[data-uren]").forEach(b => b.addEventListener("click", () => {
+    const p = partners.find(x => x.email === b.dataset.uren); if (!p) return;
+    urenNamens = p.email;
+    $("nWie").textContent = (p.naam || p.email) + (p.bedrijf ? " (" + p.bedrijf + ")" : "");
+    $("nDatum").value = new Date().toISOString().slice(0, 10); $("nUren").value = ""; $("nWat").value = "";
+    $("nVak").classList.remove("hidden"); $("nVak").scrollIntoView({ behavior: "smooth", block: "start" }); $("nUren").focus();
+  }));
   $("pLijst").querySelectorAll("[data-aan]").forEach(b => b.addEventListener("click", async () => {
     const p = partners.find(x => x.email === b.dataset.aan);
     await api("/pib/admin/partner", { method: "POST", body: JSON.stringify({ email: p.email, actief: !p.actief }) });
     laadPartners();
   }));
 }
+let urenNamens = null;
+$("nDicht").addEventListener("click", () => $("nVak").classList.add("hidden"));
+$("nOpslaan").addEventListener("click", async () => {
+  if (!urenNamens) return;
+  const body = { email: urenNamens, datum: $("nDatum").value, uren: $("nUren").value, categorie: $("nCat").value, omschrijving: $("nWat").value.trim() };
+  const r = await api("/pib/admin/uren", { method: "POST", body: JSON.stringify(body) });
+  if (r.status === 200 && r.data && r.data.ok) {
+    toon($("nMsg"), "ok", "Opgeslagen: " + $("nUren").value + " uur op " + datumNl($("nDatum").value) + ", ingevoerd door kantoor.");
+    $("nUren").value = ""; $("nWat").value = "";
+    try { if (window.fpLog) window.fpLog("pib-uren-namens", urenNamens + " " + body.datum + " " + body.uren + "u"); } catch(e){}
+    if (overzicht) laadOverzicht();
+  } else toon($("nMsg"), "bad", (r.data && r.data.error) || ("Opslaan lukte niet (HTTP " + r.status + ")"));
+});
 let bewerkEmail = null;
 function formulierLeeg(){ bewerkEmail = null; $("pNaam").value = $("pBedrijf").value = $("pEmail").value = $("pTarief").value = $("pNotitie").value = ""; $("pToevoegen").textContent = "Toevoegen"; $("pAnnuleer").classList.add("hidden"); }
 $("pAnnuleer").addEventListener("click", formulierLeeg);
@@ -212,7 +246,7 @@ async function laadOverzicht(){
             "<td class='n'>" + (x.uren ? uren(x.uren) + " u" : "-") + "</td><td class='n'>" + (x.minuten ? minutenTekst(x.minuten) : "-") + "</td>" +
             "<td><div class='balk' style='margin-bottom:3px'><i class='uren' style='width:" + Math.round(100 * x.uren * 60 / maxMin) + "%'></i></div><div class='balk'><i style='width:" + Math.round(100 * x.minuten / maxMin) + "%'></i></div></td>" +
             "<td>" + (x.uren ? verhoudingPil(verhouding(x.minuten, x.uren)) : (x.minuten ? "<span class='pil half'>gemeten, niets gelogd</span>" : "")) + "</td>" +
-            "<td class='apps'>" + x.regels.map(u => esc(u.categorie || "") + ": " + esc(u.omschrijving || "")).join("<br>") + "</td>" +
+            "<td class='apps'>" + x.regels.map(u => esc(u.categorie || "") + ": " + esc(u.omschrijving || "") + (u.door ? " <span class='pil half' title='ingevoerd door " + esc(u.door) + "'>kantoor</span>" : "")).join("<br>") + "</td>" +
             "<td class='apps'>" + x.apps.slice(0, 4).map(a => esc(a.app || "?") + " " + Math.round(100 * a.halveMinuten / tot) + "%").join(" · ") + "</td></tr>"; }).join("") +
         "</tbody></table></div>" : "<p class='lead'>Geen uren en geen metingen in deze periode.</p>");
   }).join("");
@@ -230,10 +264,15 @@ async function laadDag(email, dag){
   const tijd = (m) => new Date(m + ":00Z").toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
   const p = partners.find(x => x.email === email) || {};
   box.innerHTML = "<h3>" + esc(p.naam || email) + ", " + esc(datumNl(dag)) + " <button class='klein' id='oDicht'>sluiten</button></h3>" +
-    (urenRegels.length ? "<p class='lead'>Ingevuld: " + urenRegels.map(u => uren(u.uren) + " u " + esc(u.categorie || "") + " (" + esc(u.omschrijving || "") + ")").join("; ") + "</p>" : "<p class='lead'>Geen uren ingevuld op deze dag.</p>") +
+    (urenRegels.length ? "<p class='lead'>Ingevuld: " + urenRegels.map(u => uren(u.uren) + " u " + esc(u.categorie || "") + " (" + esc(u.omschrijving || "") + ")" + (u.door ? " [kantoor: " + esc(u.door) + "] <button class='klein' data-wegn='" + esc(u.id) + "'>weg</button>" : "")).join("; ") + "</p>" : "<p class='lead'>Geen uren ingevuld op deze dag.</p>") +
     (blokken.length ? "<div style='overflow-x:auto'><table><thead><tr><th>Van</th><th>Tot</th><th>Programma</th><th>Venster</th></tr></thead><tbody>" +
       blokken.map(b => "<tr><td>" + tijd(b.van) + "</td><td>" + tijd(b.tot) + "</td><td>" + esc(b.app) + "</td><td>" + esc(b.titel) + "</td></tr>").join("") + "</tbody></table></div>" : "<p class='lead'>Niets gemeten op deze dag.</p>");
   $("oDicht").addEventListener("click", () => box.classList.add("hidden"));
+  box.querySelectorAll("[data-wegn]").forEach(b => b.addEventListener("click", async () => {
+    if (!confirm("Deze door kantoor ingevoerde regel weghalen?")) return;
+    await api("/pib/admin/uren?id=" + encodeURIComponent(b.dataset.wegn), { method: "DELETE" });
+    laadOverzicht(); laadDag(email, dag);
+  }));
   box.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 $("oLaad").addEventListener("click", laadOverzicht);
