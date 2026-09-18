@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-18", bestand: "keten.html", soort: "nieuw",
+      titel: "Ketenbewaking (proef)",
+      wat: "Wat in de keten te lang op een stap blijft liggen: schepen die niet binnen zijn gemeld, bonnen die niet zijn gemaild, batches uit Amerika die niet zijn geboekt, dealerorders zonder Logic4-order. Per melding wie het moet oppakken, hoe lang het al open staat en om hoeveel geld het gaat. Wat te lang open staat komt ook bovenaan het dashboard."
+    },
+    {
+      datum: "2026-09-18", bestand: "voorraad.html", soort: "nieuw",
+      titel: "Nomi heeft Voorraadbeheer erbij",
+      wat: "Nomi kan nu ook in Voorraadbeheer."
+    },
+    {
       datum: "2026-09-18", bestand: "mijnroute.html", soort: "beter",
       titel: "Servicebon en een kortere paklijst",
       wat: "Bij een servicemelding is de checklist vervangen door vier vakken: de melding, wat je hebt gedaan, gebruikte materialen (aantal maal stukprijs, telt zelf op) en voorrijkosten (1,25 per km) plus arbeid (60 per uur), met het totaal eronder. Bij een servicebon tekent alleen de klant. In de paklijst staan de vaste regels die op elke order staan (transport, voorbereidingen, de tekst over vrije ruimte) niet meer."

@@ -78,6 +78,8 @@
       uit:"Cijfers per afdeling",                                  mobiel:"krap", tile:"tileRapportage" },
     { bestand:"activiteit.html",     groep:"activiteit",       ic:"📋",  naam:"Activiteitenlogboek",
       uit:"Wie wat heeft gedaan",                                  mobiel:"krap", tile:"tileActiviteit" },
+    { bestand:"keten.html",          groep:"keten",            ic:"🔔",  naam:"Ketenbewaking",
+      uit:"Wat in de keten blijft liggen (proef)",                  mobiel:"krap", tile:"tileKeten" },
     { bestand:"pibs.html",           groep:"pibs",             ic:"🧾",  naam:"PIBs",
       uit:"Partners in Business: uren en meter",                  mobiel:"krap", tile:"tilePibs" },
     { bestand:"personeel.html",      groep:"personeel",        ic:"👥",  naam:"Personeel",

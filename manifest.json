@@ -1,5 +1,5 @@
 {
-  "version": "0.34.48",
+  "version": "0.34.49",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -211,6 +211,10 @@
     {
       "name": "activiteit.html",
       "note": "Activiteitenlogboek — wie logt wanneer in en welke tegels worden gebruikt (uit bucket activiteit-YYYY-MM via /log). Alleen Gerrit/Dolf/Fonteynbot."
+    },
+    {
+      "name": "keten.html",
+      "note": "Ketenbewaking (proef): wat in de keten te lang op een stap blijft liggen, met eigenaar, termijn en bedrag. Regels in de worker (KETEN_REGELS)."
     },
     {
       "name": "pibs.html",

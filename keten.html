@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("keten", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is nog een proef.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ketenbewaking - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     KETENBEWAKING (proef, alleen de groep keten)
+
+     Gerrit (18 sep 2026): de keten van inkoop tot factuur leunt te veel op
+     het geheugen van een paar mensen; vorig jaar is zo ruim 300.000 dollar
+     over het hoofd gezien. Deze tegel toont wat er in de keten te lang op
+     een stap blijft liggen. De regels en termijnen staan in de worker
+     (KETEN_REGELS); de meldingen komen uit wat het Dashboard al weet.
+
+     Wat je hier kunt: per melding zien wat er moet gebeuren, door wie en
+     hoe lang het al open staat; doorklikken naar de tegel; een melding
+     afgehandeld melden of uitstellen met een notitie.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#7ab648; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#f6f6f8; --rood:#b91c1c; --oranje:#c2410c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--groen);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1200px;margin:22px auto;padding:0 18px 40px}
+.kaart{background:#fff;border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:16px}
+h2{margin:0 0 6px;font-size:17px;color:var(--groen)}
+p.lead{color:var(--muted);line-height:1.6;margin:0 0 12px;font-size:13px}
+button{font:inherit;cursor:pointer}
+button.stil{background:#fff;border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12.5px}
+button.klein{background:transparent;border:1px solid var(--border);border-radius:7px;color:var(--groen);font-size:12px;padding:4px 9px}
+.kpis{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 14px}
+.kpi{flex:1 1 130px;background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.kpi b{display:block;font-size:20px;color:var(--groen)}.kpi span{font-size:11px;color:var(--muted)}
+.kpi.rood b{color:var(--rood)}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.filters button{border:1px solid var(--border);background:#fff;border-radius:999px;padding:5px 12px;font-size:12px}
+.filters button.aan{background:var(--groen);color:#fff;border-color:var(--groen)}
+.melding{border:1px solid var(--border);border-left:5px solid var(--lime);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:#fff;display:grid;grid-template-columns:1fr auto;gap:6px 14px}
+.melding.esc{border-left-color:var(--rood);background:#fff7f7}
+.melding.uit{opacity:.6}
+.melding .kop{font-weight:600;font-size:14px}
+.melding .kop .pil{margin-left:6px}
+.melding .tekst{font-size:13px;color:#374151;line-height:1.5;margin-top:3px}
+.melding .meta{font-size:11.5px;color:var(--muted);margin-top:5px}
+.melding .rechts{display:flex;flex-direction:column;align-items:flex-end;gap:6px;min-width:150px}
+.melding .bedrag{font-size:16px;font-weight:700;color:var(--groen)}
+.melding.esc .bedrag{color:var(--rood)}
+.melding .knoppen{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.melding a.ga{background:var(--groen);color:#fff;border-radius:7px;padding:5px 11px;font-size:12px;text-decoration:none;font-weight:600}
+.pil{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#e5e7eb;color:#374151;white-space:nowrap}
+.pil.rood{background:#fee2e2;color:var(--rood)}.pil.oranje{background:#ffedd5;color:var(--oranje)}.pil.groen{background:#dcfce7;color:#166534}
+.leeg{color:var(--muted);font-size:13px;padding:10px 0}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:6px;border-bottom:1px solid var(--border)}
+td{padding:6px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+.hidden{display:none!important}
+@media (max-width:640px){ .melding{grid-template-columns:1fr} .melding .rechts{align-items:flex-start} }
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🔔 Ketenbewaking <span style="font-weight:400;opacity:.8;font-size:12px">proef</span></h1>
+  <button class="stil" id="ververs" style="padding:6px 10px">Opnieuw controleren</button>
+</header>
+<main>
+  <div class="kaart">
+    <h2>Wat hier staat</h2>
+    <p class="lead">Elke zaak in de keten (inkoop, levering, Amerika, dealers, service) heeft vaste stappen met een termijn. Wat langer op een stap blijft liggen dan de termijn staat hier, met wie het moet oppakken en om hoeveel geld het gaat. Rood is te lang open en komt ook bij Dolf en Gerrit terecht. Alles komt uit wat het Dashboard al weet; niets is met de hand ingevoerd.</p>
+    <div class="kpis" id="kpis"></div>
+    <div class="filters" id="filters"></div>
+    <div id="lijst"><p class="leeg">Bezig met controleren…</p></div>
+    <p class="lead" id="stand" style="margin-top:8px"></p>
+  </div>
+  <div class="kaart">
+    <h2>De regels</h2>
+    <p class="lead">Per stap: wie het moet doen en hoeveel dagen het mag duren voordat het een melding wordt. Deze lijst groeit; wat er nu staat is wat er uit de bestaande gegevens te halen is.</p>
+    <table><thead><tr><th>Keten</th><th>Stap</th><th>Eigenaar</th><th>Termijn</th><th>Tegel</th></tr></thead><tbody id="regels"></tbody></table>
+  </div>
+</main>
+<script>
+const WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+function koppen(){ return { "X-Fonteyn-Auth": localStorage.getItem("fp.teamkey") || "", "X-Fonteyn-User": (localStorage.getItem("fp.email") || "").toLowerCase(), "Content-Type": "application/json" }; }
+async function api(pad, opties){ const r = await fetch(WORKER + pad, Object.assign({ headers: koppen() }, opties || {})); let d = null; try { d = await r.json(); } catch(e){} return { status: r.status, data: d }; }
+const geld = (v, val) => (val === "USD" ? "$ " : "€ ") + Number(v || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const datumNl = (d) => d ? String(d).slice(0, 10).split("-").reverse().join("-") : "";
+const naam = (e) => ({ chantal:"Chantal", kevin:"Kevin", osman:"Osman", arno:"Arno", manon:"Manon" })[e] || e;
+let data = null, filter = "alle";
+
+async function laad(vers){
+  $("lijst").innerHTML = '<p class="leeg">Bezig met controleren…</p>';
+  const r = await api("/keten/meldingen" + (vers ? "?vers=1" : ""));
+  if (r.status !== 200 || !r.data || !r.data.ok) { $("lijst").innerHTML = '<p class="leeg" style="color:var(--rood)">Controleren lukte niet: ' + esc((r.data && r.data.error) || ("HTTP " + r.status)) + '</p>'; return; }
+  data = r.data; teken();
+}
+function teken(){
+  const alle = data.meldingen || [];
+  const open = alle.filter(m => !m.uitgesteld);
+  const esc_ = open.filter(m => m.escalatie);
+  const eur = open.filter(m => m.bedrag && m.valuta !== "USD").reduce((n, m) => n + m.bedrag, 0);
+  const usd = open.filter(m => m.bedrag && m.valuta === "USD").reduce((n, m) => n + m.bedrag, 0);
+  $("kpis").innerHTML =
+    '<div class="kpi"><b>' + open.length + '</b><span>open meldingen</span></div>' +
+    '<div class="kpi' + (esc_.length ? ' rood' : '') + '"><b>' + esc_.length + '</b><span>te lang open (ook bij Dolf en Gerrit)</span></div>' +
+    '<div class="kpi"><b>' + geld(eur) + '</b><span>ermee gemoeid in euro</span></div>' +
+    '<div class="kpi"><b>' + geld(usd, "USD") + '</b><span>ermee gemoeid in dollar</span></div>';
+  const eigenaren = {}; alle.forEach(m => { eigenaren[m.eigenaar] = (eigenaren[m.eigenaar] || 0) + 1; });
+  const ketens = {}; alle.forEach(m => { ketens[m.keten] = (ketens[m.keten] || 0) + 1; });
+  const knop = (k, t) => '<button type="button" data-f="' + esc(k) + '"' + (filter === k ? ' class="aan"' : '') + '>' + esc(t) + '</button>';
+  $("filters").innerHTML = knop("alle", "Alles (" + alle.length + ")") + knop("esc", "Te lang open (" + esc_.length + ")") +
+    Object.keys(ketens).sort().map(k => knop("k:" + k, k + " (" + ketens[k] + ")")).join("") +
+    Object.keys(eigenaren).sort().map(e => knop("e:" + e, naam(e) + " (" + eigenaren[e] + ")")).join("");
+  $("filters").querySelectorAll("[data-f]").forEach(b => b.addEventListener("click", () => { filter = b.dataset.f; teken(); }));
+  const lijst = alle.filter(m => filter === "alle" ? true : filter === "esc" ? m.escalatie : filter.startsWith("k:") ? m.keten === filter.slice(2) : m.eigenaar === filter.slice(2));
+  $("lijst").innerHTML = lijst.length ? lijst.map(m =>
+    '<div class="melding' + (m.escalatie ? ' esc' : '') + (m.uitgesteld ? ' uit' : '') + '">' +
+      '<div><div class="kop">' + esc(m.zaak) + ' <span class="pil">' + esc(m.keten) + '</span>' + (m.escalatie ? ' <span class="pil rood">te lang open</span>' : '') + (m.uitgesteld ? ' <span class="pil oranje">uitgesteld tot ' + esc(datumNl(m.uitgesteld)) + '</span>' : '') + '</div>' +
+      '<div class="tekst">' + esc(m.tekst) + '</div>' +
+      '<div class="meta"><b>' + esc(m.stap) + '</b> door <b>' + esc(naam(m.eigenaar)) + '</b> · open sinds ' + esc(datumNl(m.sinds)) + ' (' + m.open + ' dag' + (m.open === 1 ? '' : 'en') + ', termijn ' + (data.regels[m.regel] || {}).dagen + ')' + (m.notitie ? ' · notitie: ' + esc(m.notitie) : '') + '</div></div>' +
+      '<div class="rechts">' + (m.bedrag != null ? '<div class="bedrag">' + geld(m.bedrag, m.valuta) + '</div>' : (m.aantal != null ? '<div class="bedrag">' + m.aantal + " spa's</div>" : '')) +
+      '<div class="knoppen"><a class="ga" href="' + esc(m.tegel) + '">Openen</a>' +
+        (m.uitgesteld ? '<button class="klein" data-terug="' + esc(m.id) + '">Weer tonen</button>' : '<button class="klein" data-uitstel="' + esc(m.id) + '">Uitstellen</button><button class="klein" data-af="' + esc(m.id) + '">Afgehandeld</button>') + '</div></div>' +
+    '</div>').join("") : '<p class="leeg">Niets blijft liggen in deze groep.</p>';
+  $("lijst").querySelectorAll("[data-af]").forEach(b => b.addEventListener("click", async () => {
+    const n = prompt("Afgehandeld. Wil je er iets bij zetten (mag leeg)?", ""); if (n === null) return;
+    await api("/keten/status", { method: "POST", body: JSON.stringify({ id: b.dataset.af, actie: "afgehandeld", notitie: n }) }); laad();
+  }));
+  $("lijst").querySelectorAll("[data-uitstel]").forEach(b => b.addEventListener("click", async () => {
+    const tot = prompt("Uitstellen tot (jjjj-mm-dd)", new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)); if (!tot) return;
+    const n = prompt("Waarom (mag leeg)?", "") || "";
+    await api("/keten/status", { method: "POST", body: JSON.stringify({ id: b.dataset.uitstel, actie: "uitstellen", tot, notitie: n }) }); laad();
+  }));
+  $("lijst").querySelectorAll("[data-terug]").forEach(b => b.addEventListener("click", async () => {
+    await api("/keten/status", { method: "POST", body: JSON.stringify({ id: b.dataset.terug, actie: "terug" }) }); laad();
+  }));
+  $("stand").textContent = "Laatste controle: " + String(data.ts || "").replace("T", " ").slice(0, 16) + " (elke 10 minuten opnieuw als iemand kijkt).";
+  $("regels").innerHTML = Object.values(data.regels || {}).map(r => '<tr><td>' + esc(r.keten) + '</td><td>' + esc(r.stap) + '</td><td>' + esc(naam(r.eigenaar)) + '</td><td>' + r.dagen + ' dag' + (r.dagen === 1 ? '' : 'en') + '</td><td>' + esc(r.tegel.replace(".html", "")) + '</td></tr>').join("");
+}
+$("ververs").addEventListener("click", () => laad(true));
+(async function(){ for (let i = 0; i < 20 && !localStorage.getItem("fp.teamkey"); i++) await new Promise(r => setTimeout(r, 500)); laad(); })();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"keten",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

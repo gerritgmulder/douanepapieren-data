@@ -455,7 +455,9 @@
     try { uitTaken = await signalenTaken(); } catch (e) { /* lade niet geladen: dan niets */ }
     var uitPrijslijst = [];
     try { uitPrijslijst = await signalenPrijslijsten(); } catch (e) { /* geen bucket: dan niets */ }
-    signalen = uitTaken.concat(uitPrijslijst);
+    var uitKeten = [];
+    try { uitKeten = await signalenKeten(); } catch (e) { /* proef: dan niets */ }
+    signalen = uitTaken.concat(uitPrijslijst, uitKeten);
     teken();
 
     var uid = null, uitControle = [], uitVers = [];
@@ -464,7 +466,7 @@
       uitControle = await signalenUitControle(uid);
     } catch (e) { /* Logic4 niet bereikbaar: de rest blijft gewoon staan */ }
     try { uitVers = await signalenUitVerseOrders(uid); } catch (e) { /* idem */ }
-    signalen = uitTaken.concat(uitPrijslijst, uitVers, uitControle);
+    signalen = uitTaken.concat(uitPrijslijst, uitKeten, uitVers, uitControle);
     signalenBezig = false;
     try {
       localStorage.setItem("fp.signalen." + cfg.email, JSON.stringify({
@@ -495,6 +497,31 @@
         bedrag: 0, eenheid: "", datum: (t.deelnemers && t.deelnemers[
           String(cfg.email || "").split("@")[0].replace(/^fonteyn\./, "")] || {}).op || t.op || null,
         takenlade: true
+      };
+    });
+  }
+
+  /* (b2) Ketenbewaking, proef (Gerrit, 18 sep 2026). Wat er in de keten te
+     lang op een stap blijft liggen: de meldingen waar jij eigenaar van bent,
+     plus, voor de beheerlaag, alles wat te lang open staat. Zolang het een
+     proef is ziet alleen de groep 'keten' dit; de worker weigert de rest. */
+  async function signalenKeten() {
+    if (!cfg.teamKey) return [];
+    var ik = String(cfg.email || "").split("@")[0].replace(/^fonteyn\./, "");
+    if (global.fpToegang && !global.fpToegang.mag("keten", cfg.email)) return [];
+    var r = await fetch(BASIS + "/keten/meldingen", { headers: { "X-Fonteyn-Auth": cfg.teamKey, "X-Fonteyn-User": String(cfg.email || "").toLowerCase() } });
+    if (!r.ok) return [];
+    var j = await r.json();
+    var beheer = ["dolf", "gerrit", "fonteynbot"].indexOf(ik) >= 0;
+    return (j.meldingen || []).filter(function (m) {
+      if (m.uitgesteld) return false;
+      return m.eigenaar === ik || (beheer && m.escalatie) || ik === "fonteynbot";
+    }).slice(0, 12).map(function (m) {
+      return {
+        bron: "keten", titel: m.stap + (m.eigenaar !== ik ? " (" + m.eigenaar + ")" : ""),
+        verwijzing: m.zaak, detail: m.keten + " · " + m.open + " dag" + (m.open === 1 ? "" : "en") + " open" + (m.escalatie ? " · te lang" : ""),
+        actie: m.tekst, bedrag: m.valuta === "USD" ? 0 : (m.bedrag || 0), eenheid: "eur",
+        datum: m.sinds, tegel: "keten.html"
       };
     });
   }
@@ -760,6 +787,7 @@
         s.bron === "vers" ? "uit Logic4"
         : s.bron === "taakuitnodiging" ? "takenlijst"
         : s.bron === "prijslijst" ? "wacht op jou"
+        : s.bron === "keten" ? "blijft liggen"
         : "uit de controle"));
       kopje.appendChild(document.createTextNode(" " + s.titel));
       mid.appendChild(kopje);

@@ -148,6 +148,8 @@ const ALLOWED_BUCKETS = new Set([
   "dashboard-gezien",
   "dashboard-indeling",  // Per e-mailadres: eigen volgorde van afdelingen en tegels op het dashboard (het tandwiel)
   "planning-its-order",
+  "keten-meldingen",     // Ketenbewaking: de open meldingen van de laatste controle (worker schrijft, tegel leest)
+  "keten-status",        // Ketenbewaking: per melding afgehandeld/uitgesteld met notitie (tegel schrijft via /keten/status)
   "planning-paklijst",   // Per orderregel: gepakt of niet, door wie, wanneer (tegel Mijn route)  // Per ITS-melding de order (of de laatste order van de klant) voor de betaalstand, een dag bewaard
   // De huisstijl-fonts (Sephir, Helvetica, Univers) zijn commercieel
   // gelicentieerd. Ze staan hier en NIET in de repo, want die is publiek —
@@ -6039,6 +6041,233 @@ function bonHtml(bon, vragen) {
     (bon.opmerking ? "<h3 style='color:#144734;margin:18px 0 6px'>Opmerkingen</h3><p style='font-size:13px;white-space:pre-line'>" + e(bon.opmerking) + "</p>" : "") +
     "<p style='font-size:12px;color:#6b7280;margin-top:18px'>De handtekeningen van de monteur en van u zitten als bijlage bij deze mail.</p>" +
     "<p style='font-size:14px'>Veel plezier met uw spa!<br>Fonteyn Bezorgservice</p></div>";
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   KETENBEWAKING - wat er in de keten blijft liggen, zonder dat een mens het
+   hoeft te onthouden
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Gerrit (18 sep 2026): Chantal heeft "een gevaarlijke baan": als zij een
+   schip niet binnen meldt, wordt er misschien nooit gefactureerd. Vorig jaar
+   is zo ruim 300.000 dollar over het hoofd gezien. Daarom hier: per keten
+   vaste stappen met een termijn; wat te lang open staat wordt een melding,
+   met eigenaar en bedrag, en gaat na de termijn ook naar Dolf en Gerrit.
+
+   Eerste versie (proef voor Fonteynbot). Alles komt uit wat het Dashboard al
+   weet; er gaat geen enkele aanroep naar Logic4 of QuickBooks. De regels:
+
+     1 Inkoop      ETA verstreken, niet binnen gemeld ............ chantal, 2 dagen
+                   inkooporder zonder commercial invoice ......... chantal, 45 dagen
+                   fabrieksbestelling met verstreken ETA zonder
+                   zending ...................................... chantal, 7 dagen
+     2 Levering    geleverd (afspraak voorbij) zonder opleverbon . kevin, 1 dag
+                   opleverbon afgerond, niet gemaild ............. kevin, 3 dagen
+                   opleverbon gemaild, nog openstaand bedrag ..... osman, 7 dagen
+     3 Amerika     batch van Audrey niet geboekt ................. osman, 14 dagen
+                   batchregel zonder factuur of Logic4-order ..... chantal, 0 dagen
+     4 Dealers     aanbetaling betaald, geen Logic4-order ........ chantal, 2 dagen
+     5 Service     servicemelding voorbij zonder servicebon ...... kevin, 1 dag
+                   servicebon afgerond, niet gemaild ............. kevin, 3 dagen
+
+   Escalatie: staat een melding langer open dan twee keer de termijn (en
+   minstens 5 dagen), dan komt hij ook bij Dolf en Gerrit in beeld.
+
+   Een melding heeft een vaste sleutel (keten + zaak + stap), dus dezelfde
+   zaak levert elke controle dezelfde melding op; wie hem afhandelt in de
+   tegel ziet hem niet meer terug tot de zaak echt verandert. */
+const KETEN_REGELS = {
+  "inkoop-eta":        { keten: "Inkoop",   eigenaar: "chantal", dagen: 2,  tegel: "voorraad.html", stap: "Schip binnen melden" },
+  "inkoop-ci":         { keten: "Inkoop",   eigenaar: "chantal", dagen: 45, tegel: "voorraad.html", stap: "Commercial invoice inlezen" },
+  "inkoop-productie":  { keten: "Inkoop",   eigenaar: "chantal", dagen: 7,  tegel: "voorraad.html", stap: "Zending van de fabriek opvragen" },
+  "levering-bon":      { keten: "Levering", eigenaar: "kevin",   dagen: 1,  tegel: "planning.html", stap: "Opleverbon laten invullen" },
+  "levering-mail":     { keten: "Levering", eigenaar: "kevin",   dagen: 3,  tegel: "planning.html", stap: "Opleverbon nakijken en mailen" },
+  "levering-betaling": { keten: "Levering", eigenaar: "osman",   dagen: 7,  tegel: "planning.html", stap: "Openstaand bedrag innen" },
+  "amerika-batch":     { keten: "Amerika",  eigenaar: "osman",   dagen: 14, tegel: "amerika.html",  stap: "Batch boeken" },
+  "amerika-regel":     { keten: "Amerika",  eigenaar: "chantal", dagen: 0,  tegel: "amerika.html",  stap: "Factuur of order koppelen" },
+  "dealer-order":      { keten: "Dealers",  eigenaar: "chantal", dagen: 2,  tegel: "dealerportaal.html", stap: "Logic4-order aanmaken" },
+  "service-bon":       { keten: "Service",  eigenaar: "kevin",   dagen: 1,  tegel: "planning.html", stap: "Servicebon laten invullen" },
+  "service-mail":      { keten: "Service",  eigenaar: "kevin",   dagen: 3,  tegel: "planning.html", stap: "Servicebon nakijken en mailen" },
+};
+function ketenDagen(vanISO, totISO) {
+  const a = Date.parse(String(vanISO || "").slice(0, 10) + "T12:00:00Z"), b = Date.parse(String(totISO || "").slice(0, 10) + "T12:00:00Z");
+  if (!a || !b) return 0;
+  return Math.round((b - a) / 86400000);
+}
+async function ketenControle(env) {
+  const vandaag = new Date().toISOString().slice(0, 10);
+  const uit = [];
+  const meld = (regel, zaakId, velden) => {
+    const r = KETEN_REGELS[regel];
+    const sinds = velden.sinds || vandaag;
+    const open = ketenDagen(sinds, vandaag);
+    if (open < r.dagen) return;           // nog binnen de termijn: geen melding
+    const teLaat = open - r.dagen;
+    uit.push({
+      id: regel + "|" + String(zaakId).replace(/[|]/g, "_"), regel, keten: r.keten, stap: r.stap,
+      eigenaar: r.eigenaar, tegel: r.tegel, sinds, open, teLaat,
+      escalatie: teLaat >= Math.max(5, r.dagen * 2),
+      zaak: velden.zaak, tekst: velden.tekst, bedrag: velden.bedrag != null ? velden.bedrag : null,
+      valuta: velden.valuta || "EUR", aantal: velden.aantal != null ? velden.aantal : null,
+    });
+  };
+  const lees = async (b) => (await env.FONTEYN_DATA.get(b, { type: "json" })) || {};
+
+  /* 1 Inkoop */
+  try {
+    const schepen = await lees("voorraad-schepen");
+    for (const sh of (schepen.ships || [])) {
+      if (sh.alleenDocumenten || sh.dealerContainer || !sh.eta) continue;
+      if (sh.binnenGemeld) continue;
+      if (sh.eta >= vandaag) continue;
+      meld("inkoop-eta", sh.ref || sh.file, { sinds: sh.eta, zaak: String(sh.ref || sh.file || ""),
+        tekst: "ETA " + String(sh.eta).split("-").reverse().join("-") + " is verstreken en de zending is niet binnen gemeld. Zolang dat niet gebeurt staan " + (sh.total || 0) + " spa's nergens als voorraad.",
+        aantal: sh.total || null });
+    }
+    const iko = await lees("voorraad-inkooporders");
+    for (const [ref, o] of Object.entries(iko.orders || {})) {
+      if (!o || o.ci) continue;
+      if (schepen.ships && schepen.ships.some(sh => String(sh.ref || "") === ref)) continue;
+      meld("inkoop-ci", ref, { sinds: String(o.ts || "").slice(0, 10), zaak: ref + (o.buyOrderId ? " (IKO " + o.buyOrderId + ")" : ""),
+        tekst: "Inkooporder gemaakt op " + String(o.ts || "").slice(0, 10).split("-").reverse().join("-") + ", maar er is nog geen commercial invoice ingelezen. Zonder CI weet niemand wat er op de boot staat en wanneer hij komt." });
+    }
+    const prod = await lees("voorraad-productie");
+    const gezien = new Set();
+    /* Een fabrieksbestelling en een zending horen bij elkaar op het
+       proformanummer (RZ2009DF3342, T20260714V1, 3379); de rest van de tekst
+       verschilt ("Proforma ... via dashboard door chantal"). Dus op nummers
+       vergelijken, niet op de hele tekst. */
+    const nummers = (t) => (String(t || "").toUpperCase().match(/[A-Z]{1,3}\d{4,}[A-Z]*\d*|\b\d{4,}\b/g) || []);
+    const schipNummers = new Set(); for (const sh of (schepen.ships || [])) for (const n of nummers(sh.ref || sh.file)) schipNummers.add(n);
+    for (const n of Object.keys(iko.orders || {})) for (const x of nummers(n)) schipNummers.add(x);   // ook een IKO met CI telt als "bekend"
+    for (const lijst of Object.values(prod.models || {})) for (const p of lijst) {
+      const ref = String(p.ref || p.iko || "");
+      if (!ref || gezien.has(ref) || !p.eta || p.eta >= vandaag) continue;
+      gezien.add(ref);
+      if (/showmodel|voorraad/i.test(ref) && !/\d{4}/.test(ref)) continue;   // een verzamelbestelling zonder nummer is geen zending
+      if (nummers(ref).some(n => schipNummers.has(n))) continue;
+      meld("inkoop-productie", ref, { sinds: p.eta, zaak: ref + (p.fabriek ? " (" + p.fabriek + ")" : "") + (p.iko ? ", IKO " + p.iko : ""),
+        tekst: "Fabrieksbestelling met ETA " + String(p.eta).split("-").reverse().join("-") + ", maar er is geen zending of commercial invoice van bekend. Is hij verscheept?" });
+    }
+  } catch (e) { console.log("[keten] inkoop: " + String(e.message || e)); }
+
+  /* 2 Levering en 5 Service: afspraken uit Planning tegenover de bonnen */
+  try {
+    const plan = await lees("planning");
+    const bonnen = (await lees("planning-bonnen")).bonnen || {};
+    const gisteren = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const sindsStart = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);   // ouder dan twee maanden: geen melding meer
+    for (const a of (plan.afspraken || [])) {
+      if (!a || !a.datum || a.datum > gisteren || a.datum < sindsStart) continue;
+      if (a.datum < "2026-09-17") continue;   // de opleverbon bestaat sinds 17 sep 2026; eerder is er niets te verwachten
+      const isService = !!a.itsId || a.soort === "service";
+      if (!isService && a.soort !== "levering") continue;
+      if (!a.tijd) continue;   // hele-dag-blokken zijn geen stops
+      const bon = bonnen[a.id];
+      const zaak = (a.klant || "") + (a.ordernr ? ", order " + a.ordernr : "") + (a.itsId ? ", melding " + a.itsId : "");
+      if (!bon || bon.status === "concept") {
+        meld(isService ? "service-bon" : "levering-bon", a.id, { sinds: a.datum, zaak,
+          tekst: (isService ? "Servicebezoek" : "Levering") + " op " + a.datum.split("-").reverse().join("-") + (a.wie ? " door " + a.wie : "") + ", maar er is " + (bon ? "alleen een onafgemaakte bon" : "geen bon") + ". Zonder bon weet kantoor niet wat er is gedaan en wat er nog gefactureerd moet worden.",
+          bedrag: bon && bon.serviceTotaal != null ? bon.serviceTotaal : null });
+        continue;
+      }
+      if (bon.status === "klaar" || bon.status === "akkoord") {
+        meld(isService ? "service-mail" : "levering-mail", a.id, { sinds: String(bon.gewijzigd || a.datum).slice(0, 10), zaak,
+          tekst: "De bon is " + (bon.status === "akkoord" ? "akkoord" : "door de monteur afgerond") + " maar nog niet naar de klant gemaild.",
+          bedrag: bon.serviceTotaal != null ? bon.serviceTotaal : null });
+        continue;
+      }
+      if (!isService && bon.status === "gemaild" && Number(bon.openstaand) > 0 && (!bon.methode || bon.methode === "geen")) {
+        meld("levering-betaling", a.id, { sinds: a.datum, zaak,
+          tekst: "Geleverd op " + a.datum.split("-").reverse().join("-") + " en er stond bij levering nog " + Number(bon.openstaand).toFixed(2) + " euro open, zonder betaling ter plekke. Is dat inmiddels binnen?",
+          bedrag: Number(bon.openstaand) });
+      }
+    }
+  } catch (e) { console.log("[keten] levering: " + String(e.message || e)); }
+
+  /* 3 Amerika: de batches van Audrey */
+  try {
+    const wires = await lees("qb-wires");
+    const approved = await lees("qb-approved");
+    const geboekt = await lees("qb-geboekt");
+    geboekt.ids = geboekt.ids || {};
+    const perFactuur = qbOrdersPerFactuur(approved);
+    /* Wat Osman met de hand in Logic4 heeft verwerkt (qb-verwerkt) telt als
+       klaar, ook al is het niet via de koppeling geboekt. */
+    const verwerkt = await lees("qb-verwerkt");
+    const verwerktNrs = new Set(Object.values(verwerkt.ids || {}).map(v => String((v && v.docNr) || "")).filter(Boolean));
+    for (const k of Object.keys(verwerkt.ids || {})) if (!k.startsWith("qb:")) verwerktNrs.add(k);
+    for (const w of (wires.wires || [])) {
+      let b; try { b = qbBatchLezen(w, perFactuur, geboekt, null, {}); } catch { continue; }
+      const regels = (b.regels || []).filter(r => !verwerktNrs.has(String(r.factuur || "")) && (Number(r.bedrag) || 0) > 0);
+      const los = regels.filter(r => r.status === "geen factuurnummer" || r.status === "geen Logic4-order" || r.status === "meerdere orders");
+      for (const r of los) {
+        meld("amerika-regel", String(w.id) + ":" + (r.factuur || r.naam), { sinds: w.datum, zaak: "Batch " + (w.datum || w.id) + ", regel " + (r.factuur || r.naam || "?"),
+          tekst: r.status === "geen factuurnummer" ? "Deze regel in de batch heeft geen factuurnummer; hij kan niet worden afgeboekt en het geld blijft op 1160 hangen."
+               : r.status === "meerdere orders" ? "Bij deze factuur horen meerdere Logic4-orders; kantoor moet kiezen welke."
+               : "Bij factuur " + (r.factuur || "?") + " is geen Logic4-order bekend. Is de order wel aangemaakt uit QuickBooks?",
+          bedrag: r.bedrag, valuta: "USD" });
+      }
+      const teBoeken = regels.filter(r => r.status === "klaar om te boeken");
+      if (teBoeken.length) {
+        meld("amerika-batch", String(w.id), { sinds: w.datum, zaak: "Batch " + (w.datum || w.id),
+          tekst: teBoeken.length + " order(s) van deze batch zijn nog niet afgeboekt in Logic4" + (b.afwijking ? " (de batch sluit bovendien niet aan)" : "") + ".",
+          bedrag: Math.round(teBoeken.reduce((n, r) => n + (Number(r.bedrag) || 0), 0) * 100) / 100, valuta: "USD" });
+      }
+    }
+  } catch (e) { console.log("[keten] amerika: " + String(e.message || e)); }
+
+  /* 4 Dealers: aanbetaald via Mollie, nog geen order in Logic4 */
+  try {
+    const dr = await lees("dealer-requests");
+    for (const r of (dr.requests || [])) {
+      const paid = r.paymentStatus === "paid" || r.status === "paid";
+      if (!paid || r.logic4OrderId || r.status === "cancelled" || r.vervallen) continue;
+      meld("dealer-order", r.id, { sinds: String(r.paidAt || r.ts || "").slice(0, 10), zaak: (r.company || r.email || "") + ", " + (r.model || "") + (r.qty ? " x" + r.qty : ""),
+        tekst: "De aanbetaling is binnen via Mollie, maar er is geen Logic4-order aan gekoppeld. Zonder order wordt de spa niet gereserveerd en niet gefactureerd.",
+        bedrag: Number(r.depositAmount || r.amount || 0) || null });
+    }
+  } catch (e) { console.log("[keten] dealers: " + String(e.message || e)); }
+
+  uit.sort((a, b) => (b.escalatie - a.escalatie) || ((b.bedrag || 0) - (a.bedrag || 0)) || (b.open - a.open));
+  return { ok: true, ts: new Date().toISOString(), meldingen: uit, regels: KETEN_REGELS };
+}
+async function ketenHandle(request, env, url) {
+  const p = url.pathname;
+  const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+  if (!(await toegangMag(env, "keten", wie))) return reply(403, { ok: false, error: "ketenbewaking is nog een proef: alleen de groep keten" });
+  if (p === "/keten/meldingen" && request.method === "GET") {
+    let d = await env.FONTEYN_DATA.get("keten-meldingen", { type: "json" });
+    const oud = !d || !d.ts || (Date.now() - Date.parse(d.ts)) > 10 * 60000 || url.searchParams.get("vers") === "1";
+    if (oud) { d = await ketenControle(env); await env.FONTEYN_DATA.put("keten-meldingen", JSON.stringify(d)); }
+    const status = (await env.FONTEYN_DATA.get("keten-status", { type: "json" })) || {};
+    const vandaag = new Date().toISOString().slice(0, 10);
+    const lijst = d.meldingen.map(m => {
+      const st = status[m.id];
+      /* Afgehandeld blijft weg zolang de zaak niet verder open staat dan
+         toen; uitgesteld tot een datum. */
+      if (st && st.afgehandeld && st.open != null && m.open <= st.open + 0) return null;
+      if (st && st.tot && st.tot >= vandaag) return { ...m, uitgesteld: st.tot, notitie: st.notitie || "" };
+      return { ...m, notitie: (st && st.notitie) || "" };
+    }).filter(Boolean);
+    return reply(200, { ok: true, ts: d.ts, meldingen: lijst, regels: d.regels || KETEN_REGELS });
+  }
+  if (p === "/keten/status" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const id = String(b.id || "");
+    if (!id) return reply(400, { ok: false, error: "geen melding" });
+    const status = (await env.FONTEYN_DATA.get("keten-status", { type: "json" })) || {};
+    const d = (await env.FONTEYN_DATA.get("keten-meldingen", { type: "json" })) || { meldingen: [] };
+    const m = (d.meldingen || []).find(x => x.id === id);
+    if (b.actie === "afgehandeld") status[id] = { afgehandeld: true, open: m ? m.open : 0, door: wie, ts: new Date().toISOString(), notitie: String(b.notitie || "").slice(0, 300) };
+    else if (b.actie === "uitstellen") status[id] = { tot: /^\d{4}-\d{2}-\d{2}$/.test(String(b.tot)) ? b.tot : new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), door: wie, ts: new Date().toISOString(), notitie: String(b.notitie || "").slice(0, 300) };
+    else if (b.actie === "terug") delete status[id];
+    else return reply(400, { ok: false, error: "onbekende actie" });
+    await env.FONTEYN_DATA.put("keten-status", JSON.stringify(status));
+    return reply(200, { ok: true });
+  }
+  return reply(404, { ok: false });
 }
 
 async function dpOrderUitleg(env, nr) {
@@ -11977,6 +12206,10 @@ export default {
     if (url.pathname === "/planning/route-print" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });
       return planningRoutePrint(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
+    if (url.pathname.startsWith("/keten/")) {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
+      return ketenHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     /* De opleverbon van de monteur (tegel Mijn route) en het overzicht ervan
        in Planning. Zie bonHandle hieronder. */
