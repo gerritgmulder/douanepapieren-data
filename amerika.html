@@ -1787,7 +1787,15 @@ function audRender(){
             "</div>"
           : "<div class='status-msg' style='margin:0 0 10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5'>"+
             "<b>Afwijking, deze batch wordt niet geboekt.</b><ul style='margin:6px 0 0;padding-left:18px'>"+
-            ct.redenen.map(r=>"<li>"+esc(r)+"</li>").join("")+"</ul></div>";
+            ct.redenen.map(r=>"<li>"+esc(r)+"</li>").join("")+"</ul>"+
+            /* Osman (14 sep 2026): "kan ik dit niet boeken omdat er geen
+               orders zijn gevonden; ligt dit bij Chantal?" Niet meer: het
+               geld staat al op de bank, dus de orders mogen hiervandaan
+               worden aangemaakt. */
+            (ct.redenen.some(r=>/geen Logic4-order/i.test(r))
+              ? "<div style='margin-top:8px'><button class='btn' type='button' data-orders='"+esc(w.id)+"' title='Voor elke factuur in deze batch zonder Logic4-order de order aanmaken uit QuickBooks, net als bij accorderen'>ontbrekende orders aanmaken</button>"+
+                " <span style='font-size:12px'>Maakt de Logic4-orders aan uit QuickBooks voor de facturen die er nog niet zijn; daarna kun je boeken.</span></div>"
+              : "")+"</div>";
       })()+
       (function(){
         /* Koersverschil. Osman (18 sep 2026): "1160 hoort hetzelfde te zijn
@@ -1855,6 +1863,28 @@ function audRender(){
      orders en 543,40 aan kosten, zodat er 59.682,13 op 1160 overblijft: precies
      wat er op de bank binnenkwam. */
   box.querySelectorAll("[data-boek]").forEach(b=>b.addEventListener("click",()=>audBoekKnop(b)));
+  box.querySelectorAll("[data-orders]").forEach(b=>b.addEventListener("click",async()=>{
+    if(!confirm("Voor elke factuur in deze batch zonder Logic4-order wordt nu een order aangemaakt in Logic4 (op de debiteur Passion Spa South). Doorgaan?")) return;
+    b.disabled=true; const oud=b.textContent; b.textContent="orders aanmaken…";
+    const alles=[];
+    try{
+      for(let ronde=0;ronde<8;ronde++){
+        const r=await fetch(WORKER+"/amerika/qb/batch-orders",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+          body:JSON.stringify({wireId:b.dataset.orders,user:(localStorage.getItem("fp.email")||"")})});
+        const j=await r.json().catch(()=>null);
+        if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+        alles.push(...(j.results||[]));
+        if(j.klaar||!(j.results||[]).length) break;
+        b.textContent="orders aanmaken… "+alles.length;
+      }
+      const ok=alles.filter(x=>x.ok&&!x.already), al=alles.filter(x=>x.already), mis=alles.filter(x=>!x.ok);
+      if(window.fpLog) window.fpLog("batch-orders-aangemaakt","batch "+b.dataset.orders+": "+ok.length+" nieuw, "+mis.length+" mislukt");
+      alert(ok.length+" order(s) aangemaakt"+(al.length?", "+al.length+" bestonden al":"")+"."+
+        (mis.length?("\n\nNiet gelukt:\n"+mis.map(x=>"  • factuur "+x.factuur+": "+x.error).join("\n")):"")+
+        (ok.length?"\n\nDe batch kan nu worden geboekt met 'boeken op 1160'.":""));
+      await qbInit(true).catch(()=>{}); await audLoadFacturen(); audRender();
+    }catch(e){ alert("Orders aanmaken mislukte: "+e.message); b.disabled=false; b.textContent=oud; }
+  }));
   box.querySelectorAll("[data-koers]").forEach(b=>b.addEventListener("click",async()=>{
     const inp=box.querySelector("[data-koers-eur='"+b.dataset.koers+"']");
     const raw=String((inp&&inp.value)||"").trim().replace(/\./g,"").replace(",",".");

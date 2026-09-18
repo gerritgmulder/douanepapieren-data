@@ -9066,6 +9066,61 @@ async function qbHandleKoersverschil(request, env) {
   return reply(200, { ok: true, verschil, op1160, ontvangen });
 }
 
+
+/* Ontbrekende Logic4-orders van een batch aanmaken.
+   ═══════════════════════════════════════════════════════════════════════
+   Osman (mail 14 sep 2026): "Ligt dit nog bij Chantal? Want ik kan dit niet
+   boeken omdat er geen orders zijn gevonden." Een batch is geld dat al op
+   de bank staat; de facturen erin zijn dus echt. Daarom mag Osman ze zelf
+   in Logic4 laten zetten, met dezelfde code als Chantals accordeerknop. Per
+   factuurnummer wordt de QuickBooks-factuur opgezocht; staan er meerdere
+   met dat nummer (QuickBooks hergebruikt nummers), dan telt die met het
+   bedrag van de batchregel. Maximaal 8 per keer; het scherm herhaalt. */
+async function qbHandleBatchOrders(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const wireId = String(body.wireId || "");
+  const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+  const w = (wires.wires || []).find(x => String(x.id) === wireId);
+  if (!w) return reply(404, { ok: false, error: "batch niet gevonden" });
+  const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
+  approved.ids = approved.ids || {};
+  const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
+  const perFactuur = qbOrdersPerFactuur(approved);
+  const b = qbBatchLezen(w, perFactuur, geboekt, null, {});
+  const nodig = [];
+  const gezien = new Set();
+  for (const r of (b.regels || [])) {
+    if (r.status !== "geen Logic4-order" || !(Number(r.bedrag) > 0)) continue;
+    const f = String(r.factuur || "");
+    if (!f || gezien.has(f + ":" + r.bedrag)) continue;
+    gezien.add(f + ":" + r.bedrag); nodig.push({ factuur: f, bedrag: Number(r.bedrag) });
+  }
+  if (!nodig.length) return reply(200, { ok: true, results: [], klaar: true });
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const spaModels = await qbSpaModelList(env, catalog);
+  const results = [];
+  for (const n of nodig.slice(0, 8)) {
+    try {
+      const j = await qbQuery(env, "SELECT * FROM Invoice WHERE DocNumber = '" + n.factuur.replace(/'/g, "") + "'");
+      const lijst = (j.QueryResponse && j.QueryResponse.Invoice) || [];
+      if (!lijst.length) { results.push({ factuur: n.factuur, ok: false, error: "factuur " + n.factuur + " staat niet in QuickBooks" }); continue; }
+      let inv = lijst.find(x => Math.abs((Number(x.TotalAmt) || 0) - n.bedrag) < 0.01) || null;
+      if (!inv && lijst.length === 1) inv = lijst[0];
+      if (!inv) { results.push({ factuur: n.factuur, ok: false, error: lijst.length + " facturen met nummer " + n.factuur + " in QuickBooks en geen enkele met bedrag " + n.bedrag.toFixed(2) }); continue; }
+      const bestaand = qbGekoppeld(approved, inv);
+      if (bestaand) { results.push({ factuur: n.factuur, ok: true, orderId: bestaand.orderId, already: true }); continue; }
+      const mapped = qbMapInvoice(inv, catalog, spaModels);
+      const res = await dpCreateAmerikaOrder(env, mapped);
+      if (!res.ok) { results.push({ factuur: n.factuur, ok: false, error: res.error }); continue; }
+      approved.ids[qbSleutel(inv)] = { orderId: res.orderId, docNr: inv.DocNumber || n.factuur, ts: new Date().toISOString(), via: "batch", door: String(body.user || "").slice(0, 80) };
+      await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
+      results.push({ factuur: n.factuur, ok: true, orderId: res.orderId });
+    } catch (e) { results.push({ factuur: n.factuur, ok: false, error: String(e.message || e) }); }
+  }
+  return reply(200, { ok: true, results, klaar: nodig.length <= 8 });
+}
+
 async function qbHandleBoeken(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
     return reply(401, { ok: false, error: "Unauthorized" });
@@ -9166,7 +9221,13 @@ async function qbHandleBoeken(request, env) {
           if (o && Number(o.Id) === Number(r.order) && tot) {
             const open = Math.round(((Number(tot.AmountIncl) || 0) - (Number(tot.Calc_TotalPayed) || 0)) * 100) / 100;
             r.openOpOrder = open;
-            if (open > 0 && Math.abs(open - eur) <= 0.10) eur = open;
+            /* Oudere orders zijn 1 op 1 aangemaakt (dollarbedrag als euro,
+               Osman zag order 3521186 met 20.296,70 euro voor factuur
+               3603 van 20.296,70 dollar); nieuwere tegen 1,12. Ligt het
+               openstaande bedrag ergens tussen die twee, dan sluiten we
+               de order: het koersverschil wordt per batch rechtgetrokken. */
+            const onder = Math.round(Number(r.bedrag) / AMERIKA_KOERS * 100) / 100 - 0.10, boven = Number(r.bedrag) + 0.10;
+            if (open > 0 && open >= onder && open <= boven) eur = open;
             else if (open > 0) r.uitleg = "open op de order: " + open.toFixed(2) + " euro, factuur omgerekend: " + eur.toFixed(2) + " euro";
           }
         } catch {}
@@ -12833,6 +12894,7 @@ export default {
     }
     if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);
     if (url.pathname === "/amerika/qb/koersverschil" && request.method === "POST") return qbHandleKoersverschil(request, env);
+    if (url.pathname === "/amerika/qb/batch-orders" && request.method === "POST") return qbHandleBatchOrders(request, env);
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
     if (url.pathname === "/voorraad/verberg" && request.method === "POST") return verbergHandler(request, env, "spa-verborgen");
 

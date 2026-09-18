@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-09-18", bestand: "amerika.html", soort: "nieuw",
+      titel: "Ontbrekende orders vanuit de batch aanmaken",
+      wat: "Staat een batch op 'nog geen Logic4-order voor ...', dan staat daar nu de knop 'ontbrekende orders aanmaken'. Die maakt de Logic4-orders aan uit QuickBooks voor de facturen in die batch, net als bij accorderen. Daarna kun je boeken. Bij het boeken sluit een order ook als hij 1 op 1 in euro is aangemaakt."
+    },
+    {
+      datum: "2026-09-18", bestand: "amerika.html", soort: "nieuw",
       titel: "Koersverschil per batch",
       wat: "Is een batch helemaal op 1160 geboekt, dan staat er een vakje: vul in wat er in euro op de bank is ontvangen, en het verschil met wat er tegen 1,12 op 1160 staat gaat als memoriaal naar 9075 Koersverschil. Daarna staat op 1160 precies het bankbedrag. De memoriaalboekingen staan nu op status Controleren, zodat de kostenplaats in Logic4 nog aan te passen is."
     },
