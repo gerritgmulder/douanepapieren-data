@@ -1829,7 +1829,11 @@ function audRender(){
         const isVerwerkt=!!v;
         return "<tr"+(isVerwerkt?" style='background:#f0fdf4'":"")+">"+
           "<td><b>"+esc(r.naam)+"</b>"+(inQb&&inQb.geaccordeerd?" <span class='pill' style='background:#dcfce7;color:#15803d;font-size:10px'>Logic4 #"+esc(String(inQb.logic4Order||"?"))+"</span>":"")+"</td>"+
-          "<td>"+(r.factuur?esc(r.factuur):"<span style='color:var(--muted)'>—</span>")+"</td>"+
+          /* Geen nummer: dan een vakje om het erbij te zetten (Chantal weet
+             vaak wel bij welke factuur "Tatum refund" hoort). */
+          "<td>"+(r.factuur?esc(r.factuur)+(r.factuurDoor?" <span title='gezet door "+esc(r.factuurDoor)+"' style='color:var(--muted);font-size:10px'>✎</span>":"")
+            :(r.soort==="balance"||r.soort==="totaal"?"<span style='color:var(--muted)'>—</span>"
+              :"<input type='text' class='audRegelFactuur' data-wire='"+esc(w.id)+"' data-i='"+i+"' placeholder='factuurnr' maxlength='12' style='width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:12px' title='Bij welke factuur hoort deze regel? Vul het nummer in en druk op Enter'>"))+"</td>"+
           "<td>"+audSoortPill(r.soort)+"</td>"+
           "<td style='text-align:right;font-variant-numeric:tabular-nums'>"+esc(usd(r.kolom1))+"</td>"+
           "<td style='text-align:right;font-variant-numeric:tabular-nums;color:"+(r.kolom2!=null&&r.kolom2<0?"#b91c1c":"inherit")+"'>"+esc(usd(r.kolom2))+"</td>"+
@@ -1863,6 +1867,20 @@ function audRender(){
      orders en 543,40 aan kosten, zodat er 59.682,13 op 1160 overblijft: precies
      wat er op de bank binnenkwam. */
   box.querySelectorAll("[data-boek]").forEach(b=>b.addEventListener("click",()=>audBoekKnop(b)));
+  box.querySelectorAll(".audRegelFactuur").forEach(inp=>inp.addEventListener("keydown",async(e)=>{
+    if(e.key!=="Enter") return;
+    const nr=inp.value.trim(); if(!nr) return;
+    inp.disabled=true;
+    try{
+      const r=await fetch(WORKER+"/amerika/qb/regel-factuur",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+        body:JSON.stringify({wireId:inp.dataset.wire,index:Number(inp.dataset.i),factuur:nr,user:(localStorage.getItem("fp.email")||"")})});
+      const j=await r.json().catch(()=>null);
+      if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+      const w=wiresData.wires.find(x=>String(x.id)===inp.dataset.wire); if(w&&w.regels[Number(inp.dataset.i)]){ w.regels[Number(inp.dataset.i)].factuur=nr; w.regels[Number(inp.dataset.i)].factuurDoor=(localStorage.getItem("fp.email")||""); }
+      if(window.fpLog) window.fpLog("batchregel-factuur","batch "+inp.dataset.wire+" regel "+inp.dataset.i+" -> "+nr);
+      audRender();
+    }catch(err){ alert("Factuurnummer bewaren mislukte: "+err.message); inp.disabled=false; }
+  }));
   box.querySelectorAll("[data-orders]").forEach(b=>b.addEventListener("click",async()=>{
     if(!confirm("Voor elke factuur in deze batch zonder Logic4-order wordt nu een order aangemaakt in Logic4 (op de debiteur Passion Spa South). Doorgaan?")) return;
     b.disabled=true; const oud=b.textContent; b.textContent="orders aanmaken…";

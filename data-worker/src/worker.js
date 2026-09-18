@@ -8902,8 +8902,13 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
     else if (!factuur) rij.status = "geen factuurnummer";
     else if (!kandidaten.length) rij.status = "geen Logic4-order";
     else if (kandidaten.length > 1) { rij.status = "meerdere orders"; rij.orders = kandidaten.map(k => k.orderId); }
-    else if (!(rij.bedrag > 0)) rij.status = "bedrag is nul of negatief";
+    else if (rij.bedrag === 0) rij.status = "bedrag is nul of negatief";
     else rij.status = "klaar om te boeken";
+    /* Een negatieve regel met een order is een terugbetaling aan die klant
+       (Chantal, 18 sep 2026: "Tatum refund is voor invoice 3591; als die in
+       Logic staat kan het als credit verwerkt worden"). Die wordt als
+       negatieve betaling op de order geboekt. */
+    if (rij.bedrag < 0 && rij.status === "klaar om te boeken") rij.terugbetaling = true;
     return rij;
   });
 
@@ -9076,6 +9081,26 @@ async function qbHandleKoersverschil(request, env) {
    factuurnummer wordt de QuickBooks-factuur opgezocht; staan er meerdere
    met dat nummer (QuickBooks hergebruikt nummers), dan telt die met het
    bedrag van de batchregel. Maximaal 8 per keer; het scherm herhaalt. */
+
+/* Een factuurnummer zetten op een batchregel die er geen heeft.
+   Audrey schrijft soms alleen een naam ("Tatum refund"); Chantal weet dan
+   bij welke factuur het hoort. Wordt op de regel zelf bewaard, met wie het
+   zei, zodat de batch daarna gewoon meeloopt. Leeg = nummer weer weghalen. */
+async function qbHandleRegelFactuur(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const wireId = String(body.wireId || ""), i = Number(body.index);
+  const factuur = String(body.factuur || "").trim().replace(/[^0-9A-Za-z-]/g, "").slice(0, 12);
+  const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+  const w = (wires.wires || []).find(x => String(x.id) === wireId);
+  if (!w || !Array.isArray(w.regels) || !w.regels[i]) return reply(404, { ok: false, error: "batchregel niet gevonden" });
+  const r = w.regels[i];
+  if (factuur) { r.factuur = factuur; r.factuurDoor = String(body.user || "").slice(0, 80); r.factuurTs = new Date().toISOString(); }
+  else { delete r.factuur; delete r.factuurDoor; delete r.factuurTs; }
+  await env.FONTEYN_DATA.put("qb-wires", JSON.stringify(wires));
+  return reply(200, { ok: true, factuur: factuur || null });
+}
+
 async function qbHandleBatchOrders(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
   let body = {}; try { body = await request.json(); } catch {}
@@ -9091,10 +9116,10 @@ async function qbHandleBatchOrders(request, env) {
   const nodig = [];
   const gezien = new Set();
   for (const r of (b.regels || [])) {
-    if (r.status !== "geen Logic4-order" || !(Number(r.bedrag) > 0)) continue;
+    if (r.status !== "geen Logic4-order" || !Number(r.bedrag)) continue;
     const f = String(r.factuur || "");
     if (!f || gezien.has(f + ":" + r.bedrag)) continue;
-    gezien.add(f + ":" + r.bedrag); nodig.push({ factuur: f, bedrag: Number(r.bedrag) });
+    gezien.add(f + ":" + r.bedrag); nodig.push({ factuur: f, bedrag: Math.abs(Number(r.bedrag)) });
   }
   if (!nodig.length) return reply(200, { ok: true, results: [], klaar: true });
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
@@ -9211,6 +9236,7 @@ async function qbHandleBoeken(request, env) {
            gaat de omgerekende factuur, en staat dat in de uitleg. */
         let eur = amerikaNaarEuro(r.bedrag);
         try {
+          if (r.bedrag < 0) throw new Error("terugbetaling: geen open bedrag nodig");
           const or = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
             method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
             body: JSON.stringify({ Id: Number(r.order), TakeRecords: 1 }),
@@ -9244,7 +9270,7 @@ async function qbHandleBoeken(request, env) {
             BookingId: AMERIKA_DAGBOEK,
             MatchingLedgerId: 78,
             DateTime: datum,
-            Description: "Batch " + (w.datum || "") + " - QuickBooks-factuur " + r.factuur + " (" + r.bedrag.toFixed(2) + " USD)",
+            Description: "Batch " + (w.datum || "") + (r.bedrag < 0 ? " - terugbetaling op" : " -") + " QuickBooks-factuur " + r.factuur + " (" + r.bedrag.toFixed(2) + " USD)",
           }),
         });
         const tekst = await rr.text();
@@ -12895,6 +12921,7 @@ export default {
     if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);
     if (url.pathname === "/amerika/qb/koersverschil" && request.method === "POST") return qbHandleKoersverschil(request, env);
     if (url.pathname === "/amerika/qb/batch-orders" && request.method === "POST") return qbHandleBatchOrders(request, env);
+    if (url.pathname === "/amerika/qb/regel-factuur" && request.method === "POST") return qbHandleRegelFactuur(request, env);
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
     if (url.pathname === "/voorraad/verberg" && request.method === "POST") return verbergHandler(request, env, "spa-verborgen");
 

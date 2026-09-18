@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-09-18", bestand: "amerika.html", soort: "nieuw",
+      titel: "Batchregel zonder factuurnummer zelf koppelen",
+      wat: "Staat er in een batch een regel zonder factuurnummer (zoals 'Tatum refund'), dan kun je het nummer nu zelf in het vakje typen en op Enter drukken. Een negatieve regel met een order wordt bij het boeken als terugbetaling op die order gezet."
+    },
+    {
+      datum: "2026-09-18", bestand: "amerika.html", soort: "nieuw",
       titel: "Ontbrekende orders vanuit de batch aanmaken",
       wat: "Staat een batch op 'nog geen Logic4-order voor ...', dan staat daar nu de knop 'ontbrekende orders aanmaken'. Die maakt de Logic4-orders aan uit QuickBooks voor de facturen in die batch, net als bij accorderen. Daarna kun je boeken. Bij het boeken sluit een order ook als hij 1 op 1 in euro is aangemaakt."
     },
