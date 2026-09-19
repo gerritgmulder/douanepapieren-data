@@ -103,6 +103,11 @@
       "chantal", "dolf", "fonteynbot", "gerrit", "osman",
     ],
     // Bankkoppeling maken
+    /* Herinneringen: betalingsherinneringen in één keer naar meerdere
+       debiteuren (Osman, 22 aug 2026; gebouwd 19 sep 2026). */
+    "herinneringen": [
+      "dolf", "fonteynbot", "gerrit", "osman", "reinier", "reinier.k", "rico", "rowan",
+    ],
     "bankkoppeling": [
       "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
       "reinier", "reinier.k", "rico", "rowan",
