@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-19", bestand: "amerika.html", soort: "nieuw",
+      titel: "Batch opnieuw kunnen boeken",
+      wat: "Zijn de boekingen van een batch in Logic4 met de hand verwijderd, dan kun je met 'opnieuw kunnen boeken' het Dashboard laten vergeten dat hij geboekt was. Daarna werkt 'boeken op 1160' weer. In Logic4 verandert er niets door."
+    },
+    {
+      datum: "2026-09-19", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Oude open orders weer in beeld",
+      wat: "Reserveringen keken maar één jaar terug; open orders van langer geleden (zoals 3490755) stonden er daardoor niet. Nu twee jaar."
+    },
+    {
       datum: "2026-09-19", bestand: "voorraad.html", soort: "beter",
       titel: "Schepen: binnen is binnen",
       wat: "Bij Schepen & ontvangst kan elke container binnen gemeld worden, ook zonder gekoppelde inkooporder. Wat binnen is verdwijnt uit de tabbladen en staat onder 'Binnen gemeld'. Klik op een zending bij Onderweg naar Uddel en hij opent eronder; de tabbladen lopen door op een nieuwe regel."

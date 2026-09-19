@@ -150,7 +150,8 @@ const ALLOWED_BUCKETS = new Set([
   "planning-its-order",
   "herinneringen-debiteuren", // Herinneringen: naam, bedrijf en mailadres per debiteur, uit Logic4 (cache, vult zich aan)
   "herinneringen-log",
-  "dhl-push",            // DHL Push API v2: de berichten die DHL zelf stuurt over zendingen   // Herinneringen: wanneer welke debiteur voor welke facturen een herinnering kreeg, en door wie
+  "dhl-push",            // DHL Push API v2: de berichten die DHL zelf stuurt over zendingen
+  "qb-geboekt-terug",    // Amerika: wat er uit qb-geboekt is gehaald toen een batch opnieuw geboekt moest worden   // Herinneringen: wanneer welke debiteur voor welke facturen een herinnering kreeg, en door wie
   "herinneringen-tekst", // Herinneringen: de mailtekst (Engels en Nederlands), aanpasbaar in de tegel
   "keten-meldingen",     // Ketenbewaking: de open meldingen van de laatste controle (worker schrijft, tegel leest)
   "keten-status",        // Ketenbewaking: per melding afgehandeld/uitgesteld met notitie (tegel schrijft via /keten/status)
@@ -6490,7 +6491,11 @@ async function dpRefreshReservations(env) {
   const klantType = voorraad.klantType || {};
 
   const token = await l4Token(env);
-  const fromIso = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 19);
+  /* Twee jaar terug, geen één. Chantal (19 sep 2026): "order 3490755 is niet te
+     vinden bij particuliere reserveringen" - die order was ouder dan een jaar
+     en viel buiten het venster, terwijl hij gewoon open stond (30% aanbetaald).
+     Een open order blijft een reservering, hoe oud hij ook is. */
+  const fromIso = new Date(Date.now() - 730 * 86400000).toISOString().slice(0, 19);
   const byModel = {};      // NL (magazijn ≠ Texas): { model: [lijnen] }
   const byModelUSA = {};   // Amerika (magazijn 50)
   /* De namen zoals ze in Logic4 staan (Orders/GetOrderStatuses). Ze staan in
@@ -9300,6 +9305,37 @@ function qbGeld(n) {
    afschrift op nul. Eén keer per batch (sleutel koers:<batch> in
    qb-geboekt); pas mogelijk als de hele batch is geboekt. */
 const AMERIKA_KOERS_GROOTBOEK = "9075";
+/* POST /amerika/qb/boeking-terugzetten { wireId, user }
+   ═══════════════════════════════════════════════════════════════════════════
+   Osman (19 sep 2026): "Ik heb memoriaal en bankboek verwijderd. Wilde opnieuw
+   gaan boeken, maar krijg deze melding" - "1 batch(es) zijn al verwerkt". Het
+   Dashboard onthoudt per batch wat het geboekt heeft (qb-geboekt) en weigert
+   daarna een tweede keer, en dat is goed. Maar als de boekingen in Logic4 met
+   de hand zijn weggegooid, moet dat geheugen ook leeg, anders kan de batch
+   nooit meer opnieuw. Dit haalt alleen de eigen aantekening weg; in Logic4
+   verandert er niets. Wat er stond wordt bewaard onder qb-geboekt-terug. */
+async function qbHandleBoekingTerugzetten(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
+    return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const wireId = String(body.wireId || "");
+  if (!wireId) return reply(400, { ok: false, error: "geen batch opgegeven" });
+  const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
+  geboekt.ids = geboekt.ids || {};
+  const weg = {};
+  for (const [k, v] of Object.entries(geboekt.ids)) {
+    const vanDeze = k === "koers:" + wireId || k === "bankkosten:" + wireId || k.startsWith("batch:" + wireId + ":") || (v && String(v.batch) === wireId);
+    if (vanDeze) { weg[k] = v; delete geboekt.ids[k]; }
+  }
+  if (!Object.keys(weg).length) return reply(200, { ok: true, verwijderd: 0 });
+  const terug = (await env.FONTEYN_DATA.get("qb-geboekt-terug", { type: "json" })) || { rondes: [] };
+  terug.rondes.push({ ts: new Date().toISOString(), wireId, door: String(body.user || "").slice(0, 80), ids: weg });
+  terug.rondes = terug.rondes.slice(-100);
+  await env.FONTEYN_DATA.put("qb-geboekt-terug", JSON.stringify(terug));
+  await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));
+  return reply(200, { ok: true, verwijderd: Object.keys(weg).length });
+}
+
 async function qbHandleKoersverschil(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
     return reply(401, { ok: false, error: "Unauthorized" });
@@ -13336,6 +13372,7 @@ export default {
     }
     if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);
     if (url.pathname === "/amerika/qb/koersverschil" && request.method === "POST") return qbHandleKoersverschil(request, env);
+    if (url.pathname === "/amerika/qb/boeking-terugzetten" && request.method === "POST") return qbHandleBoekingTerugzetten(request, env);
     if (url.pathname === "/amerika/qb/batch-orders" && request.method === "POST") return qbHandleBatchOrders(request, env);
     if (url.pathname === "/amerika/qb/regel-factuur" && request.method === "POST") return qbHandleRegelFactuur(request, env);
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");

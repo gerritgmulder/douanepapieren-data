@@ -1854,6 +1854,12 @@ function audRender(){
              elkaar gaan kruisen." Eerst altijd een proef; pas na akkoord gaat
              er iets de boekhouding in. */
           "<button class='btn' type='button' data-boek='"+esc(w.id)+"' title='Deze batch controleren en boeken in dagboek Bank Passion Spas South TX (grootboek 1160)'>boeken op 1160</button>"+
+          /* Osman (19 sep 2026) had memoriaal en bankboek in Logic4 weggegooid
+             en wilde opnieuw boeken; het Dashboard zei "al verwerkt". Deze
+             knop maakt het geheugen van deze batch leeg, meer niet. */
+          (batchGeboekt(w).orders>0||geboektIds["koers:"+w.id]
+            ? "<button class='btn' type='button' data-terug='"+esc(w.id)+"' title='Alleen als de boekingen van deze batch in Logic4 met de hand zijn verwijderd: het Dashboard vergeet dat hij geboekt is, zodat je opnieuw kunt boeken. In Logic4 verandert er niets.'>opnieuw kunnen boeken</button>"
+            : "")+
           "<button class='btn' type='button' data-del='"+esc(w.id)+"'>verwijderen</button>"+
         "</div></div>"+
       (function(){
@@ -1949,6 +1955,23 @@ function audRender(){
      orders en 543,40 aan kosten, zodat er 59.682,13 op 1160 overblijft: precies
      wat er op de bank binnenkwam. */
   box.querySelectorAll("[data-boek]").forEach(b=>b.addEventListener("click",()=>audBoekKnop(b)));
+  box.querySelectorAll("[data-terug]").forEach(b=>b.addEventListener("click",async()=>{
+    const w=wiresData.wires.find(x=>String(x.id)===b.dataset.terug); const g=batchGeboekt(w||{});
+    if(!confirm("Batch van "+(w&&w.datum||b.dataset.terug)+" opnieuw kunnen boeken?\n\n"+
+      "Het Dashboard vergeet dat deze batch geboekt is ("+g.orders+" orders"+(g.koers?", koersverschil":"")+"). "+
+      "Doe dit alleen als je de boekingen van deze batch in Logic4 zelf al hebt verwijderd; anders wordt alles twee keer geboekt.\n\n"+
+      "In Logic4 verandert hier niets door.")) return;
+    b.disabled=true;
+    try{
+      const r=await fetch(WORKER+"/amerika/qb/boeking-terugzetten",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+        body:JSON.stringify({wireId:b.dataset.terug,user:(localStorage.getItem("fp.email")||"")})});
+      const j=await r.json().catch(()=>null);
+      if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+      if(window.fpLog) window.fpLog("batch-boeking-teruggezet","batch "+b.dataset.terug+": "+j.verwijderd+" aantekeningen weg");
+      await audLoadGeboekt(); audRender();
+      alert("Klaar. Deze batch kan nu opnieuw geboekt worden met 'boeken op 1160'.");
+    }catch(e){ alert("Terugzetten lukte niet: "+e.message); b.disabled=false; }
+  }));
   box.querySelectorAll(".audRegelFactuur").forEach(inp=>inp.addEventListener("keydown",async(e)=>{
     if(e.key!=="Enter") return;
     const nr=inp.value.trim(); if(!nr) return;
