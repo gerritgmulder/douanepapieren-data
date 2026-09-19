@@ -149,7 +149,8 @@ const ALLOWED_BUCKETS = new Set([
   "dashboard-indeling",  // Per e-mailadres: eigen volgorde van afdelingen en tegels op het dashboard (het tandwiel)
   "planning-its-order",
   "herinneringen-debiteuren", // Herinneringen: naam, bedrijf en mailadres per debiteur, uit Logic4 (cache, vult zich aan)
-  "herinneringen-log",   // Herinneringen: wanneer welke debiteur voor welke facturen een herinnering kreeg, en door wie
+  "herinneringen-log",
+  "dhl-push",            // DHL Push API v2: de berichten die DHL zelf stuurt over zendingen   // Herinneringen: wanneer welke debiteur voor welke facturen een herinnering kreeg, en door wie
   "herinneringen-tekst", // Herinneringen: de mailtekst (Engels en Nederlands), aanpasbaar in de tegel
   "keten-meldingen",     // Ketenbewaking: de open meldingen van de laatste controle (worker schrijft, tegel leest)
   "keten-status",        // Ketenbewaking: per melding afgehandeld/uitgesteld met notitie (tegel schrijft via /keten/status)
@@ -7453,13 +7454,142 @@ async function aankomstFlexport(env, ref) {
   return { eta: raak.eta || null, vessel: raak.vessel || null, status: raak.status || null };
 }
 
-/* DHL Global Forwarding. De aanvraag voor API-toegang loopt: er zijn een App
-   ID en REST-inloggegevens nodig, en die geeft DHL alleen uit na goedkeuring
-   per API. Zodra ze er zijn hoeft hier alleen de aanroep ingevuld te worden;
-   de rest van de keten staat al klaar. */
+/* DHL Global Forwarding - Shipment Tracking v2, met Shipment Status als reserve.
+
+   Stand 19 sep 2026 (mail Jamal Belaghzal, DHL NL, 27 aug): DHL geeft per API
+   én per omgeving aparte sleutels uit. Tracking v2 moet eerst in de sandbox
+   bewezen worden voordat productie opengaat; Shipment Status (alleen het
+   laatste event) heeft geen sandbox en mag meteen in productie (Starter,
+   50 aanroepen per dag, automatisch goedgekeurd).
+
+   Sleutels (npx wrangler secret put ...):
+     DHL_API_KEY        Tracking v2 (header DHL-API-Key)
+     DHL_OMGEVING       "sandbox" (standaard) of "productie" - bepaalt de host
+     DHL_STATUS_KEY     Shipment Status, productie; alleen als reserve gebruikt
+
+   De referentie uit Voorraadbeheer kan een containernummer zijn (MSKU1234567),
+   een housebill (DHL-zendingnummer) of een eigen referentie (PI-nummer). Bij
+   een containernummer gaat hij eerst via /shipment-list naar de housebill;
+   anders probeert hij housebill, consigneeReference en shipperReference. */
+const DHL_CONTAINER = /^[A-Z]{4}\d{7}$/;
+function dhlBasis(env) {
+  return (String(env.DHL_OMGEVING || "sandbox").toLowerCase() === "productie" ? "https://api.dhl.com" : "https://api-sandbox.dhl.com") + "/dgff/transportation";
+}
+async function dhlGet(env, pad, sleutel) {
+  const r = await fetch(pad, { headers: { "DHL-API-Key": sleutel, "Accept": "application/json" } });
+  const tekst = await r.text();
+  if (r.status === 404) return null;
+  if (!r.ok) throw new Error("DHL " + r.status + ": " + tekst.slice(0, 160));
+  try { return JSON.parse(tekst); } catch { return null; }
+}
+/* Uit een tracking-v2-antwoord de drie dingen halen die het scherm toont. De
+   aankomst is de (werkelijke, anders verwachte) aankomst van de laatste
+   vervoersfase; het schip de laatste fase met een scheepsnaam. */
+function dhlSamenvatting(sh) {
+  if (!sh) return null;
+  const legs = Array.isArray(sh.transportLegs) ? sh.transportLegs : [];
+  const laatste = legs[legs.length - 1] || {};
+  const metSchip = [...legs].reverse().find(l => l.vesselName) || {};
+  const ev = sh.lastEvent || {};
+  const eta = laatste.actualArrivalDate || laatste.estimatedArrivalDate || null;
+  const status = [ev.timestampDescription, ev.locationName].filter(Boolean).join(", ") + (sh.status ? " (" + sh.status + ")" : "");
+  return { eta: eta ? String(eta).slice(0, 10) : null, vessel: metSchip.vesselName || null, status: status || sh.phase || null,
+           housebill: sh.housebillNumber || null, fase: sh.phase || null };
+}
 async function aankomstDHL(env, ref) {
-  if (!env.DHL_API_KEY) return { nogNiet: true, reden: "DHL is nog niet aangesloten; de API-aanvraag loopt" };
+  if (!env.DHL_API_KEY && !env.DHL_STATUS_KEY) return { nogNiet: true, reden: "DHL is nog niet aangesloten; de API-aanvraag loopt" };
+  const zoek = String(ref).trim().toUpperCase().replace(/\s+/g, "");
+  if (env.DHL_API_KEY) {
+    const basis = dhlBasis(env) + "/v2";
+    const soorten = DHL_CONTAINER.test(zoek) ? [] : ["housebill", "consigneeReference", "shipperReference"];
+    if (DHL_CONTAINER.test(zoek)) {
+      /* Containernummer: eerst de lijst, die geeft de housebill(s). */
+      const van = new Date(Date.now() - 365 * 86400000).toISOString(), tot = new Date().toISOString();
+      const r = await fetch(basis + "/shipment-list", {
+        method: "POST", headers: { "DHL-API-Key": env.DHL_API_KEY, "Content-Type": "application/json", "Accept": "application/json" },
+        body: JSON.stringify({ "container-number": { operator: "OR", values: [zoek] }, lastUpdateFrom: van, lastUpdateTo: tot, size: 5 }),
+      });
+      if (r.ok) {
+        const lijst = await r.json().catch(() => ({}));
+        for (const s of (lijst.shipments || [])) if (s.housebill) soorten.push("housebill:" + s.housebill);
+      }
+    }
+    for (const soort of soorten) {
+      const [type, waarde] = soort.includes(":") ? soort.split(":") : [soort, zoek];
+      const j = await dhlGet(env, basis + "/shipment-tracking?search-type=" + encodeURIComponent(type) + "&value=" + encodeURIComponent(waarde), env.DHL_API_KEY);
+      const uit = dhlSamenvatting(j && j.shipmentTracking && j.shipmentTracking.shipment);
+      if (uit && (uit.eta || uit.status || uit.vessel)) return uit;
+    }
+  }
+  if (env.DHL_STATUS_KEY) {
+    /* Reserve: Shipment Status (productie, alleen het laatste event). Bij een
+       containernummer of eigen referentie eerst /housebill-numbers. */
+    const basis = "https://api.dhl.com/dgff/transportation";
+    let hbs = [zoek];
+    if (DHL_CONTAINER.test(zoek) || !/^[A-Z0-9]{6,12}$/.test(zoek)) {
+      const j = await dhlGet(env, basis + "/housebill-numbers?search-type=" + (DHL_CONTAINER.test(zoek) ? "container-number" : "customer-reference") + "&value=" + encodeURIComponent(zoek), env.DHL_STATUS_KEY);
+      const lijst = j && (j["housebill-numbers"] || j.housebillNumbers);
+      hbs = Array.isArray(lijst) ? lijst.map(x => (typeof x === "string" ? x : x.housebillNumber)).filter(Boolean) : [];
+    }
+    for (const hb of hbs) {
+      const j = await dhlGet(env, basis + "/shipment-status?housebill=" + encodeURIComponent(hb), env.DHL_STATUS_KEY);
+      const sh = j && j.ShipmentStatus && j.ShipmentStatus.Shipment;
+      if (!sh) continue;
+      const ts = sh.Timestamp || {};
+      return { eta: null, vessel: null, status: [ts.TimestampDescription, ts.TimestampDateTime ? String(ts.TimestampDateTime).slice(0, 10) : ""].filter(Boolean).join(" "), housebill: sh.HousebillNumber || hb };
+    }
+  }
   return null;
+}
+
+/* DHL Push (Timestamp Push API v2): DHL stuurt zelf een bericht zodra er een
+   nieuw event is, in plaats van dat wij vragen. Het aanmelden van deze URL
+   gebeurt bij DHL (subscription met callback-URL en een X-API-Key die wij
+   kiezen: DHL_PUSH_SLEUTEL). Elk bericht wordt bewaard en, als het over een
+   container of housebill uit Voorraadbeheer gaat, meteen bij dat schip gezet.
+   De ETA zelf wordt alleen ingevuld als er nog geen stond, net als bij het
+   handmatig ophalen. */
+async function dhlPushOntvang(request, env) {
+  if (!env.DHL_PUSH_SLEUTEL) return reply(503, { ok: false, error: "push nog niet ingericht" });
+  const sleutel = request.headers.get("X-API-Key") || (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  if (sleutel !== env.DHL_PUSH_SLEUTEL) return reply(401, { ok: false });
+  let b = {}; try { b = await request.json(); } catch { return reply(400, { ok: false, error: "geen JSON" }); }
+  const n = b.timestampNotification || {};
+  const st = b.shipmentTracking || b.ShipmentTracking || {};
+  const sh = st.shipment || st.Shipment || null;
+  const samen = sh ? dhlSamenvatting(sh) : null;
+  const regel = {
+    ts: new Date().toISOString(),
+    housebill: n.housebillNumber || (samen && samen.housebill) || null,
+    shipmentID: n.shipmentID || (sh && sh.shipmentID) || null,
+    code: n.timestampCode || (samen && sh.lastEvent && sh.lastEvent.timestampCode) || null,
+    omschrijving: n.timestampDescription || (samen && samen.status) || null,
+    wanneer: n.timestampDateTime || null,
+    container: n.transportUnitID || n.containerNumber || null,
+    eta: samen ? samen.eta : null, vessel: samen ? samen.vessel : null,
+  };
+  const bak = (await env.FONTEYN_DATA.get("dhl-push", { type: "json" })) || { berichten: [] };
+  bak.berichten.push(Object.assign({}, regel, { ruw: JSON.stringify(b).slice(0, 4000) }));
+  bak.berichten = bak.berichten.slice(-500);
+  await env.FONTEYN_DATA.put("dhl-push", JSON.stringify(bak));
+  /* Koppelen aan een schip in Voorraadbeheer op containernummer, housebill of trackRef. */
+  try {
+    const data = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+    const sleutels = [regel.housebill, regel.container, regel.shipmentID].filter(Boolean).map(x => String(x).toUpperCase());
+    const containers = sh && Array.isArray(sh.transportUnits) ? sh.transportUnits.map(u => String(u.transportUnitID || "").toUpperCase()).filter(Boolean) : [];
+    const schip = (data.ships || []).find(x => {
+      const eigen = [x.ref, x.trackRef, x.containerNr, ...(x.containers || [])].filter(Boolean).map(v => String(v).toUpperCase());
+      return eigen.some(v => sleutels.includes(v) || containers.includes(v));
+    });
+    if (schip) {
+      schip.track = { vervoerder: "DHL", eta: regel.eta || (schip.track && schip.track.eta) || null, vessel: regel.vessel || (schip.track && schip.track.vessel) || null,
+                      status: [regel.omschrijving, regel.wanneer ? String(regel.wanneer).slice(0, 10) : ""].filter(Boolean).join(" "), opgehaald: regel.ts, push: true };
+      if (!schip.eta && regel.eta) schip.eta = regel.eta;
+      data.updated = regel.ts;
+      await env.FONTEYN_DATA.put("voorraad-schepen", JSON.stringify(data));
+    }
+  } catch (e) { /* een bericht bewaren mag niet stuklopen op het koppelen */ }
+  return reply(200, { ok: true });
 }
 // MTO: nog geen afspraak over een koppeling.
 async function aankomstMTO(env, ref) {
@@ -12639,7 +12769,14 @@ export default {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });
       return planningRoutePrint(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
-    if (url.pathname.startsWith("/herinneringen/")) {
+    /* DHL stuurt hierheen (Push API v2); geen teamsleutel maar de push-sleutel. */
+  if (url.pathname === "/dhl/push" && request.method === "POST") return dhlPushOntvang(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+  if (url.pathname === "/dhl/push" && request.method === "GET") {
+    if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+    const bak = (await env.FONTEYN_DATA.get("dhl-push", { type: "json" })) || { berichten: [] };
+    return reply(200, { ok: true, berichten: bak.berichten.slice(-100).reverse().map(x => { const { ruw, ...rest } = x; return rest; }) });
+  }
+  if (url.pathname.startsWith("/herinneringen/")) {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
       return herinneringenHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
