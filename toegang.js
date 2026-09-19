@@ -312,7 +312,7 @@
        Partners; die is er niet meer en Chantal kreeg "geen toegang: je staat
        niet in de groep dealerportaal" bij het aanmaken van een inkooporder. */
     "voorraad-beheer": [
-      "arno", "chantal", "dolf", "fonteynbot", "gerrit", "manon",
+      "arno", "chantal", "dolf", "fonteynbot", "gerrit", "manon", "nomi",
     ],
     "voorraad": [
       "ahmed", "arno", "bart.vdb", "bert", "bertjan", "chantal",
