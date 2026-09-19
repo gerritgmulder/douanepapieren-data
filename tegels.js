@@ -84,6 +84,8 @@
       uit:"Partners in Business: uren en meter",                  mobiel:"krap", tile:"tilePibs" },
     { bestand:"personeel.html",      groep:"personeel",        ic:"👥",  naam:"Personeel",
       uit:"Personeelsgegevens",                                    mobiel:"pc", tile:"tilePersoneel" },
+    { bestand:"herinneringen.html",  groep:"herinneringen",    ic:"✉️",  naam:"Herinneringen",
+      uit:"Betalingsherinneringen in één keer versturen",           mobiel:"krap", tile:"tileHerinneringen" },
     { bestand:"bankkoppeling.html",  groep:"bankkoppeling",    ic:"🏦",  naam:"Bankkoppeling maken",
       uit:"Bankafschrift inlezen en boeken",                       mobiel:"pc", tile:"tileBankkoppeling" },
     { bestand:"geldgoederen.html",   groep:"geldgoederen",     ic:"⛓️",  naam:"Geld-goederenbeweging",

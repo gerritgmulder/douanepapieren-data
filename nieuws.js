@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-19", bestand: "herinneringen.html", soort: "nieuw",
+      titel: "Herinneringen in één keer",
+      wat: "Alle openstaande facturen uit Logic4 per debiteur. Vink aan wie een herinnering krijgt, kies Engels of Nederlands en verstuur ze in één keer. De mail is aan te passen en er is een testknop naar jezelf."
+    },
+    {
       datum: "2026-09-19", bestand: "mijnroute.html", soort: "beter",
       titel: "Meekijken met alle routes",
       wat: "Voor de beheerlaag staat rechtsboven een keuze: Alle routes, of de routes zoals een monteur ze ziet. De keuze wordt onthouden."

@@ -148,6 +148,9 @@ const ALLOWED_BUCKETS = new Set([
   "dashboard-gezien",
   "dashboard-indeling",  // Per e-mailadres: eigen volgorde van afdelingen en tegels op het dashboard (het tandwiel)
   "planning-its-order",
+  "herinneringen-debiteuren", // Herinneringen: naam, bedrijf en mailadres per debiteur, uit Logic4 (cache, vult zich aan)
+  "herinneringen-log",   // Herinneringen: wanneer welke debiteur voor welke facturen een herinnering kreeg, en door wie
+  "herinneringen-tekst", // Herinneringen: de mailtekst (Engels en Nederlands), aanpasbaar in de tegel
   "keten-meldingen",     // Ketenbewaking: de open meldingen van de laatste controle (worker schrijft, tegel leest)
   "keten-status",        // Ketenbewaking: per melding afgehandeld/uitgesteld met notitie (tegel schrijft via /keten/status)
   "planning-paklijst",   // Per orderregel: gepakt of niet, door wie, wanneer (tegel Mijn route)  // Per ITS-melding de order (of de laatste order van de klant) voor de betaalstand, een dag bewaard
@@ -6266,6 +6269,160 @@ async function ketenHandle(request, env, url) {
     else return reply(400, { ok: false, error: "onbekende actie" });
     await env.FONTEYN_DATA.put("keten-status", JSON.stringify(status));
     return reply(200, { ok: true });
+  }
+  return reply(404, { ok: false });
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   HERINNERINGEN - betalingsherinneringen in één keer naar meerdere debiteuren
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Osman (mail 22 aug 2026): "We kunnen vanuit Logic4 wel sturen, maar dat
+   kan per openstaande post en niet alles tegelijk. Als we meerdere vinkjes
+   kunnen zetten en tegelijkertijd dezelfde mail kunnen versturen zou dat
+   top zijn." Gerrit (19 sep 2026): maak die knop in het Dashboard.
+
+   De openstaande facturen komen uit Logic4 (GetOpenPaymentInvoices, alle
+   debiteuren in één aanroep). Naam en mailadres van de debiteur komen uit
+   de zoeklijst van zakelijke relaties, en voor wie daar niet in staat uit
+   GetCustomers; dat wordt per debiteur bewaard zodat het maar één keer
+   hoeft. Logic4 kent per debiteur een apart adres voor herinneringen
+   (PaymentReminderEmail); dat gaat voor.
+
+   Per debiteur gaat er één mail met een tabel van de aangevinkte facturen,
+   in het Engels of Nederlands, via Resend, met het adres van de verzender
+   als antwoordadres. Wat verstuurd is staat in herinneringen-log, en bij de
+   debiteur staat daarna "laatst herinnerd op". */
+const HER_TEKST_STANDAARD = {
+  en: { onderwerp: "Payment reminder - Fonteyn Outdoor Living Mall",
+        aanhef: "Dear Sir/Madam,",
+        tekst: "Our records indicate that one or more invoices have not been (fully) paid yet. In the overview below, you can see which invoice(s), due dates, and outstanding amounts are involved.\n\nWe kindly request the payment of the outstanding item(s) with reference to the order or invoice number as soon as possible. This will prevent the claim from being transferred to an external collection agency.\n\nWe hope this message has provided you with sufficient information, and we thank you for your cooperation.",
+        groet: "Kind regards,\nAccounts Receivable Department\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel\nThe Netherlands\nT +31 577 456040",
+        kolommen: ["Invoice", "Invoice date", "Due date", "Days overdue", "Amount", "Paid", "Outstanding"], totaal: "Total outstanding" },
+  nl: { onderwerp: "Betalingsherinnering - Fonteyn Outdoor Living Mall",
+        aanhef: "Geachte heer/mevrouw,",
+        tekst: "Uit onze administratie blijkt dat een of meer facturen nog niet (volledig) zijn betaald. In het overzicht hieronder ziet u om welke factuur/facturen, vervaldata en openstaande bedragen het gaat.\n\nWij verzoeken u vriendelijk het openstaande bedrag zo spoedig mogelijk te voldoen onder vermelding van het order- of factuurnummer. Daarmee voorkomt u dat de vordering wordt overgedragen aan een incassobureau.\n\nWij vertrouwen erop u hiermee voldoende te hebben geïnformeerd en danken u voor uw medewerking.",
+        groet: "Met vriendelijke groet,\nDebiteurenadministratie\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel\nT +31 577 456040",
+        kolommen: ["Factuur", "Factuurdatum", "Vervaldatum", "Dagen te laat", "Bedrag", "Betaald", "Openstaand"], totaal: "Totaal openstaand" },
+};
+async function herDebiteuren(env, ids) {
+  /* Naam, bedrijf en mailadres per debiteur: eerst de eigen cache, dan de
+     zoeklijst van zakelijke relaties, dan Logic4 zelf (maximaal 25 per keer;
+     het scherm vraagt door tot alles bekend is). */
+  const cache = (await env.FONTEYN_DATA.get("herinneringen-debiteuren", { type: "json" })) || {};
+  const index = (await env.FONTEYN_DATA.get(REL_INDEX, { type: "json" })) || {};
+  const perId = {}; for (const r of (index.rijen || [])) perId[String(r.i)] = r;
+  let opgehaald = 0, nogOnbekend = 0, gewijzigd = false;
+  for (const id of ids) {
+    const k = String(id);
+    if (cache[k]) continue;
+    const r = perId[k];
+    if (r) { cache[k] = { naam: r.n, bedrijf: r.b, email: r.e, iso: r.l, plaats: r.p, bron: "index", ts: new Date().toISOString() }; gewijzigd = true; continue; }
+    if (opgehaald >= 25) { nogOnbekend++; continue; }
+    opgehaald++;
+    try {
+      const c = await relL4(env, "/v3/Relations/GetCustomers", { Id: Number(id), TakeRecords: 1 });
+      const x = Array.isArray(c) && c[0] && c[0].Id === Number(id) ? c[0] : null;
+      cache[k] = x ? { naam: [x.FirstName, x.Preposition, x.LastName].map(v => String(v || "").trim()).filter(Boolean).join(" "), bedrijf: x.CompanyName || "", email: x.EmailAddress || "",
+                       herinneringMail: x.PaymentReminderEmail || "", factuurMail: x.InvoiceEmail || "", iso: x.IsoCode || x.CountryCode || "", plaats: x.City || "", soort: (x.Type && x.Type.Description) || "", bron: "logic4", ts: new Date().toISOString() }
+                 : { naam: "", bedrijf: "", email: "", onbekend: true, bron: "logic4", ts: new Date().toISOString() };
+      gewijzigd = true;
+    } catch (e) { nogOnbekend++; }
+  }
+  if (gewijzigd) await env.FONTEYN_DATA.put("herinneringen-debiteuren", JSON.stringify(cache));
+  return { cache, nogOnbekend };
+}
+function herGeld(v) { return "€ " + (Number(v) || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function herDatum(d) { return d ? String(d).slice(0, 10).split("-").reverse().join("-") : ""; }
+function herMailHtml(t, facturen) {
+  const e = (x) => String(x == null ? "" : x).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const td = "style='padding:5px 9px;border-bottom:1px solid #e5e7eb;font-size:13px'";
+  const som = facturen.reduce((n, f) => n + (Number(f.openstaand) || 0), 0);
+  return "<div style='font-family:Arial,sans-serif;color:#1f2937;max-width:680px'>" +
+    "<p style='font-size:14px'>" + e(t.aanhef) + "</p>" +
+    "<p style='font-size:14px;white-space:pre-line'>" + e(t.tekst) + "</p>" +
+    "<table style='border-collapse:collapse;margin:12px 0'><thead><tr>" + t.kolommen.map((k, i) => "<th style='text-align:" + (i >= 3 ? "right" : "left") + ";padding:6px 9px;border-bottom:2px solid #144734;font-size:12px;color:#144734'>" + e(k) + "</th>").join("") + "</tr></thead><tbody>" +
+    facturen.map(f => "<tr><td " + td + ">" + e(f.factuur) + (f.order ? " <span style='color:#6b7280'>(order " + e(f.order) + ")</span>" : "") + "</td><td " + td + ">" + e(herDatum(f.factuurdatum)) + "</td><td " + td + ">" + e(herDatum(f.vervaldatum)) + "</td>" +
+      "<td " + td + " align='right'>" + e(f.dagen) + "</td><td " + td + " align='right'>" + herGeld(f.bedrag) + "</td><td " + td + " align='right'>" + herGeld(f.betaald) + "</td><td " + td + " align='right'><b>" + herGeld(f.openstaand) + "</b></td></tr>").join("") +
+    "<tr><td colspan='6' style='padding:7px 9px;text-align:right;font-size:13px'><b>" + e(t.totaal) + "</b></td><td style='padding:7px 9px;text-align:right;font-size:13px'><b>" + herGeld(som) + "</b></td></tr></tbody></table>" +
+    "<p style='font-size:14px;white-space:pre-line'>" + e(t.groet) + "</p></div>";
+}
+async function herinneringenHandle(request, env, url) {
+  const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+  if (!(await toegangMag(env, "herinneringen", wie))) return reply(403, { ok: false, error: "geen toegang: je staat niet in de groep herinneringen" });
+  const p = url.pathname;
+  if (p === "/herinneringen/open" && request.method === "GET") {
+    const vers = url.searchParams.get("vers") === "1";
+    let d = vers ? null : await env.FONTEYN_DATA.get("herinneringen-open", { type: "json" });
+    if (!d || !d.ts || Date.now() - Date.parse(d.ts) > 30 * 60000) {
+      const lijst = await relL4(env, "/v3/Orders/GetOpenPaymentInvoices", {});
+      d = { ts: new Date().toISOString(), facturen: (Array.isArray(lijst) ? lijst : []).map(x => ({
+        factuur: x.InvoiceId, debiteur: x.DebtorId, factuurdatum: x.InvoiceDate, vervaldatum: x.DueDate, dagen: Number(x.DaysPastDueDate) || 0,
+        bedrag: Math.round((Number(x.TotalAmount) || 0) * 100) / 100, betaald: Math.round((Number(x.TotalAmountPayed) || 0) * 100) / 100,
+        openstaand: Math.round((Number(x.AmountOutstanding) || 0) * 100) / 100, betaalmethode: x.PaymentMethodId || null })).filter(f => f.openstaand > 0) };
+      await env.FONTEYN_DATA.put("herinneringen-open", JSON.stringify(d));
+    }
+    const ids = [...new Set(d.facturen.map(f => String(f.debiteur)))];
+    const { cache, nogOnbekend } = await herDebiteuren(env, ids);
+    const log = (await env.FONTEYN_DATA.get("herinneringen-log", { type: "json" })) || { regels: [] };
+    const laatst = {};
+    for (const r of (log.regels || [])) { const k = String(r.debiteur); if (!laatst[k] || r.ts > laatst[k].ts) laatst[k] = { ts: r.ts, door: r.door, facturen: r.facturen, naar: r.naar }; }
+    const debiteuren = {};
+    for (const id of ids) {
+      const c = cache[id] || {};
+      debiteuren[id] = { id: Number(id), naam: c.naam || "", bedrijf: c.bedrijf || "", email: c.herinneringMail || c.factuurMail || c.email || "", iso: c.iso || "", plaats: c.plaats || "", soort: c.soort || (c.bron === "index" ? "zakelijk" : ""), bekend: !!cache[id] && !c.onbekend, laatst: laatst[id] || null };
+    }
+    const tekst = (await env.FONTEYN_DATA.get("herinneringen-tekst", { type: "json" })) || HER_TEKST_STANDAARD;
+    return reply(200, { ok: true, ts: d.ts, facturen: d.facturen, debiteuren, nogOnbekend, tekst, standaard: HER_TEKST_STANDAARD });
+  }
+  if (p === "/herinneringen/tekst" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const uit = {};
+    for (const taal of ["en", "nl"]) {
+      const t = b[taal] || {}, st = HER_TEKST_STANDAARD[taal];
+      uit[taal] = { onderwerp: String(t.onderwerp || st.onderwerp).slice(0, 150), aanhef: String(t.aanhef || st.aanhef).slice(0, 200), tekst: String(t.tekst || st.tekst).slice(0, 3000), groet: String(t.groet || st.groet).slice(0, 800), kolommen: st.kolommen, totaal: st.totaal };
+    }
+    await env.FONTEYN_DATA.put("herinneringen-tekst", JSON.stringify(uit));
+    return reply(200, { ok: true, tekst: uit });
+  }
+  if (p === "/herinneringen/stuur" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const taal = b.taal === "nl" ? "nl" : "en";
+    const tekst = ((await env.FONTEYN_DATA.get("herinneringen-tekst", { type: "json" })) || HER_TEKST_STANDAARD)[taal] || HER_TEKST_STANDAARD[taal];
+    const opdrachten = Array.isArray(b.debiteuren) ? b.debiteuren.slice(0, 40) : [];
+    if (!opdrachten.length) return reply(400, { ok: false, error: "geen debiteuren gekozen" });
+    if (!env.RESEND_API_KEY || !env.MAIL_FROM) return reply(500, { ok: false, error: "mail is niet ingericht in de worker" });
+    const open = (await env.FONTEYN_DATA.get("herinneringen-open", { type: "json" })) || { facturen: [] };
+    const log = (await env.FONTEYN_DATA.get("herinneringen-log", { type: "json" })) || { regels: [] };
+    const adres = (String(env.MAIL_FROM).match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM);
+    const results = [];
+    for (const o of opdrachten) {
+      /* b.test: dezelfde mail, maar naar de verzender zelf en zonder logregel.
+         Zo kan iemand eerst zien wat de klant krijgt. */
+      const id = String(o.id || ""), naar = b.test ? String(wie).toLowerCase() : String(o.email || "").trim().toLowerCase();
+      const gekozen = new Set((o.facturen || []).map(String));
+      const facturen = open.facturen.filter(f => String(f.debiteur) === id && (!gekozen.size || gekozen.has(String(f.factuur))));
+      if (!facturen.length) { results.push({ id, ok: false, error: "geen openstaande facturen gevonden" }); continue; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar)) { results.push({ id, ok: false, error: "geen geldig mailadres" }); continue; }
+      if (b.proef) { results.push({ id, ok: true, proef: true, html: herMailHtml(tekst, facturen), onderwerp: tekst.onderwerp, naar }); continue; }
+      try {
+        const rr = await fetch("https://api.resend.com/emails", {
+          method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ from: "Fonteyn Outdoor Living Mall <" + adres + ">", to: [naar], reply_to: /@/.test(wie) ? [wie] : undefined, subject: tekst.onderwerp, html: herMailHtml(tekst, facturen) }),
+        });
+        const t = await rr.text();
+        if (!rr.ok) { results.push({ id, ok: false, error: "Resend: HTTP " + rr.status + " " + t.slice(0, 120) }); continue; }
+        if (!b.test) log.regels.push({ ts: new Date().toISOString(), debiteur: Number(id), naar, taal, facturen: facturen.map(f => f.factuur), bedrag: Math.round(facturen.reduce((n, f) => n + f.openstaand, 0) * 100) / 100, door: wie });
+        results.push({ id, ok: true, naar, facturen: facturen.length });
+      } catch (e) { results.push({ id, ok: false, error: String(e.message || e) }); }
+    }
+    if (!b.proef && !b.test) { log.regels = log.regels.slice(-3000); await env.FONTEYN_DATA.put("herinneringen-log", JSON.stringify(log)); }
+    return reply(200, { ok: true, results });
+  }
+  if (p === "/herinneringen/log" && request.method === "GET") {
+    const log = (await env.FONTEYN_DATA.get("herinneringen-log", { type: "json" })) || { regels: [] };
+    return reply(200, { ok: true, regels: (log.regels || []).slice(-300).reverse() });
   }
   return reply(404, { ok: false });
 }
@@ -12481,6 +12638,10 @@ export default {
     if (url.pathname === "/planning/route-print" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen toegang" });
       return planningRoutePrint(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
+    if (url.pathname.startsWith("/herinneringen/")) {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
+      return herinneringenHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     if (url.pathname.startsWith("/keten/")) {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
