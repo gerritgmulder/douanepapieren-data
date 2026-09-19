@@ -369,8 +369,11 @@
 /* ── De zendingen als tabbladen, op volgorde van aankomst ──
    Het label is wat Chantal herkent: het ordernummer groot, daaronder de
    referentie van de fabriek en de aankomstdatum. */
-.so-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;margin-bottom:-1px;
+.so-tabs{display:flex;flex-wrap:wrap;gap:6px;padding-bottom:2px;margin-bottom:-1px;
   border-bottom:2px solid var(--border,#e0e0d8)}
+.so-binnen-knop{margin-top:14px}
+.so-onderweg-rij{cursor:pointer}
+.so-onderweg-rij.gekozen{box-shadow:inset 3px 0 0 var(--fonteyn-green,#144734)}
 .so-tab{flex:0 0 auto;display:flex;flex-direction:column;gap:1px;align-items:flex-start;
   background:transparent;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;
   padding:9px 14px;font:inherit;cursor:pointer;text-align:left;color:var(--muted,#6b7280)}
@@ -2293,12 +2296,27 @@ function resvMatch(r,m,q){
    terwijl dit echt een bijzondere, aparte bestelling is." De aantekening komt
    nu met de uur-sync mee en staat als oranje label achter de kleur; de hele
    regel zoals Logic4 hem heeft staat in de tooltip. */
-function kleurCel(k,r){
+/* De warmtepomp valt niet genoeg op. Chantal (video, 19 sep 2026, order
+   3510162): "ik moet dat gewoon in één oogopslag duidelijk hebben dat het met
+   Integrated Heat Pump is (…) anders pak ik hier gewoon een normale Soulmate
+   Mystic Mountain voor." Het oranje label achter de kleur was er al, maar
+   stond tussen de kleurtekst en viel weg. Nu: een groen blokje direct achter
+   de spanaam, in elke lijst waar de spa staat, en nog eens achter de kleur. */
+function isWarmtepomp(r){ return !!(r&&r.extra&&/integrated\s*heat\s*pump|intellisaver/i.test(String(r.extra))); }
+function warmtepompBadge(r){
+  return isWarmtepomp(r)
+    ? " <span title='"+esc(r.omschrijving||r.extra)+"' style='display:inline-block;font-size:10.5px;font-weight:700;"+
+      "padding:2px 8px;border-radius:6px;background:#dcfce7;color:#15803d;border:1px solid #86efac;white-space:nowrap'>&#9889; IntelliSaver &middot; Integrated Heat Pump</span>"
+    : "";
+}
+function spaCel(r){ return "<b>"+esc(r.model)+"</b>"+warmtepompBadge(r); }
+function kleurCel(k,r,badgeStaatAlBijSpa){
   const kleur = k ? "<span style='font-size:12px'>"+esc(k)+"</span>"
                   : "<span style='color:var(--muted);font-size:12px'>-</span>";
   const extra = r && r.extra
-    ? " <span title='"+esc(r.omschrijving||r.extra)+"' style='display:inline-block;font-size:10.5px;font-weight:700;"+
-      "padding:1px 7px;border-radius:999px;background:#fef3c7;color:#92400e;white-space:nowrap'>"+esc(r.extra)+"</span>"
+    ? (isWarmtepomp(r) ? (badgeStaatAlBijSpa ? "" : warmtepompBadge(r))
+      : " <span title='"+esc(r.omschrijving||r.extra)+"' style='display:inline-block;font-size:10.5px;font-weight:700;"+
+      "padding:1px 7px;border-radius:999px;background:#fef3c7;color:#92400e;white-space:nowrap'>"+esc(r.extra)+"</span>")
     : "";
   /* In Logic4 veranderd sinds de vorige sync. Chantal (14 sep 2026): "soms
      verandert de kleur, soms verandert de complete spa". De worker zet erbij
@@ -3210,8 +3228,8 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
       };
       return "<tr class='hoofdrij"+zebra+"' style='"+stijl+"'>"+
         "<td>"+esc(r.ordernr)+"</td>"+
-        "<td><b>"+esc(r.model)+"</b></td>"+
-        "<td>"+kleurCel(r.kleur,r)+"</td>"+
+        "<td>"+spaCel(r)+"</td>"+
+        "<td>"+kleurCel(r.kleur,r,true)+"</td>"+
         "<td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td>"+
         "<td>"+esc(r.naam)+"</td>"+
         "<td>"+adviseurCel(r)+"</td>"+
@@ -3488,7 +3506,7 @@ function renderParticulierBlok(){
         return "<tr style='"+stijl+"'>"+
           "<td>"+esc(r.ordernr)+"</td>"+
           "<td style='font-size:12px' title='"+esc(r.transport||"")+"'>"+(r.transport?esc(kortTransport(r.transport)):"<span style='color:var(--muted)'>-</span>")+"</td>"+
-          "<td><b>"+esc(r.model)+"</b></td><td>"+kleurCel(r.kleur,r)+"</td>"+
+          "<td>"+spaCel(r)+"</td><td>"+kleurCel(r.kleur,r,true)+"</td>"+
           "<td>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
           "<td style='font-size:12px;white-space:nowrap' title='"+esc(r.plaats||"")+"'>"+(r.postcode?esc(r.postcode)+(r.plaats?" <span style='color:var(--muted)'>"+esc(r.plaats)+"</span>":""):"<span style='color:var(--muted)'>-</span>")+"</td>"+
           "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
@@ -3579,8 +3597,8 @@ function renderAdviseurTabs(){
       return "<tr style='background:#fef9c3'>"+
         "<td><b>"+esc(r.naam)+"</b><div class='onder'>"+adviseurCel(r)+"</div></td>"+
         "<td>"+esc(r.ordernr)+"<div class='onder'>"+esc(datumNL(r.datum))+"</div></td>"+
-        "<td>"+esc(r.model)+"</td>"+
-        "<td>"+kleurCel(r.kleur,r)+"</td>"+
+        "<td>"+spaCel(r)+"</td>"+
+        "<td>"+kleurCel(r.kleur,r,true)+"</td>"+
         "<td>"+r.qty+"</td>"+
         "<td>"+betaalBadge(r)+"</td>"+
         "<td style='font-size:12px'>"+leveringCel(r,n,id,uit)+"</td>"+
@@ -3727,7 +3745,7 @@ function renderPartnerContainers(){
       html+="<tr><td colspan='6' style='background:#fafafa;padding:8px 14px'>"+
         "<div style='font-size:12px;font-weight:600;margin-bottom:4px'>Inhoud van deze container - "+o.qty+" spa's</div>"+
         "<table class='grid' style='margin:0;font-size:12px'><thead><tr><th>Aantal</th><th>Spa</th><th>Kleur</th></tr></thead><tbody>"+
-        regels.map(r=>"<tr><td><b>"+r.qty+"×</b></td><td>"+esc(r.model)+"</td><td>"+kleurCel(r.kleur,r)+"</td></tr>").join("")+
+        regels.map(r=>"<tr><td><b>"+r.qty+"×</b></td><td>"+spaCel(r)+"</td><td>"+kleurCel(r.kleur,r,true)+"</td></tr>").join("")+
         "</tbody></table>"+
         (o.referentie?"<div style='font-size:11px;color:var(--muted);margin-top:5px'>Uw referentie in Logic4: "+esc(o.referentie)+"</div>":"")+
         (o.containerNr&&!eta

@@ -26,6 +26,7 @@
   var docsOpen = {};   // per schip: staat het documentenblok open
   var actief = null;   // welk schip staat open (ref); leeg = het eerstvolgende
   var zoek = "";       // zoekterm in "Onderweg naar Uddel"; blijft staan bij hertekenen
+  var binnenOpen = false; // de strip met binnen gemelde zendingen uitgeklapt?
 
   /* De naam waarmee een zending wordt aangeduid. Chantal (video, 24 aug
      2026): "geen bootnaam, ik wil daar het referentienummer hebben staan -
@@ -144,10 +145,18 @@
 
        Op volgorde van aankomst, dus het eerstvolgende schip staat vooraan en
        is meteen open. */
-    if (opVolgorde.length) {
-      if (!opVolgorde.some(function (s) { return s.ref === actief; })) actief = opVolgorde[0].ref;
+    /* Wat binnen gemeld is hoort hier niet meer tussen. Chantal (video, 19 sep
+       2026): "als ze zijn binnen gemeld moeten ze ook gewoon verdwijnen, want
+       anders blijf ik hier eeuwig alles houden." Ze gaan naar een eigen,
+       ingeklapte strip eronder, zodat "Toch niet binnen" en de documenten
+       bereikbaar blijven. De tabbladen lopen bovendien door op een nieuwe
+       regel in plaats van opzij te schuiven: de zendingen achter de rand van
+       het scherm kon zij niet vinden. */
+    var varendTabs = opVolgorde.filter(function (s) { return !s.binnenGemeld; });
+    var binnenTabs = opVolgorde.filter(function (s) { return !!s.binnenGemeld; });
+    function tabStrip(lijst) {
       var strip = el("div", "so-tabs");
-      opVolgorde.forEach(function (s) {
+      lijst.forEach(function (s) {
         var t = el("button", "so-tab" + (s.ref === actief ? " aan" : ""));
         t.type = "button";
         var orders = (s.jazziOrders && s.jazziOrders.length) ? s.jazziOrders.join(" + ") : "geen order";
@@ -155,14 +164,34 @@
         t.appendChild(el("span", "so-tab-ref", zendingNaam(s)));
         var dg = dagenTot(s.eta);
         t.appendChild(el("span", "so-tab-eta",
-          s.eta ? (nlDatum(s.eta) + (dg !== null && dg > 0 ? "  ·  " + dg + "d" : "")) : "geen aankomst"));
+          s.binnenGemeld ? "binnen " + nlDatum(s.binnenGemeld.op)
+          : s.eta ? (nlDatum(s.eta) + (dg !== null && dg > 0 ? "  ·  " + dg + "d" : "")) : "geen aankomst"));
         t.addEventListener("click", function () { actief = s.ref; teken(); });
         strip.appendChild(t);
       });
-      doel.appendChild(strip);
+      return strip;
+    }
+    if (opVolgorde.length) {
+      var gekozen = opVolgorde.find(function (s) { return s.ref === actief; });
+      if (!gekozen) { gekozen = varendTabs[0] || opVolgorde[0]; actief = gekozen.ref; }
+      if (gekozen.binnenGemeld) binnenOpen = true;
+      doel.appendChild(tabStrip(varendTabs));
+      if (!varendTabs.length)
+        doel.appendChild(el("p", "so-meta klein", "Alles wat er stond is binnen gemeld."));
+      if (!gekozen.binnenGemeld) doel.appendChild(kaart(gekozen));
 
-      var nu = opVolgorde.find(function (s) { return s.ref === actief; }) || opVolgorde[0];
-      doel.appendChild(kaart(nu));
+      if (binnenTabs.length) {
+        var bk = el("button", "so-knop licht so-binnen-knop",
+          (binnenOpen ? "▾ " : "▸ ") + "Binnen gemeld (" + binnenTabs.length + ")");
+        bk.type = "button";
+        bk.title = "Zendingen die als binnen zijn aangevinkt. Hier kun je ze nog openen of het vinkje weghalen.";
+        bk.addEventListener("click", function () { binnenOpen = !binnenOpen; teken(); });
+        doel.appendChild(bk);
+        if (binnenOpen) {
+          doel.appendChild(tabStrip(binnenTabs));
+          if (gekozen.binnenGemeld) doel.appendChild(kaart(gekozen));
+        }
+      }
     }
 
     // Wat de expediteur zelf weet, naast onze eigen schepenlijst.
@@ -412,9 +441,17 @@
     veld.addEventListener("input", function () { zoek = veld.value; zoekToepassen(d); });
 
     varend.forEach(function (s) {
-      var r = el("div", "so-onderweg-rij");
+      var r = el("div", "so-onderweg-rij" + (s.ref === actief ? " gekozen" : ""));
       r.dataset.zoek = [s.vessel, s.ref, s.trackRef, (s.jazziOrders || []).join(" ")]
         .filter(Boolean).join(" ").toLowerCase();
+      /* Klikken opent dezelfde zending onderaan, waar de knoppen staan. Zo is
+         wat hier "nog niet binnen gemeld" staat in één klik binnen te melden. */
+      r.title = "Klik om deze zending te openen";
+      r.addEventListener("click", function () {
+        actief = s.ref; teken();
+        var k = document.querySelector(".so-kaart");
+        if (k && k.scrollIntoView) k.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
 
       var links = el("div", "so-onderweg-wie");
       links.appendChild(el("strong", null, zendingNaam(s)));
@@ -679,6 +716,18 @@
          Daarom staat "Container is binnen" nu los van het boeken. Het eerste
          is een vinkje van haar, het tweede raakt de voorraad in Logic4 en
          blijft een aparte, bewuste handeling. */
+      var ont = el("button", "so-knop licht", "Ontvangst boeken in Logic4");
+      ont.type = "button";
+      ont.title = "Boekt de ontvangst in Logic4 - dit verhoogt de voorraad daar.";
+      ont.addEventListener("click", function () { doeOntvangst(s, ont); });
+      knoppen.appendChild(ont);
+    }
+    /* Binnen melden kan bij élke zending, ook zonder gekoppelde
+       inkooporderregels. Chantal (video, 19 sep 2026): "er staat nergens een
+       knopje dat ik die kan binnen melden ... ik moet alle containers kunnen
+       binnen melden." Het vinkje raakt Logic4 niet, dus er is geen reden om
+       het aan de koppeling te hangen. */
+    if (cfg.magWijzigen) {
       var binnenAan = !!s.binnenGemeld;
       var mld = el("button", "so-knop" + (binnenAan ? " licht" : ""),
         binnenAan ? "Toch niet binnen" : "Container is binnen");
@@ -688,12 +737,6 @@
         : "Zet in het dashboard dat deze container binnen is. Verandert niets in Logic4.";
       mld.addEventListener("click", function () { meldBinnen(s, mld, !binnenAan); });
       knoppen.appendChild(mld);
-
-      var ont = el("button", "so-knop licht", "Ontvangst boeken in Logic4");
-      ont.type = "button";
-      ont.title = "Boekt de ontvangst in Logic4 - dit verhoogt de voorraad daar.";
-      ont.addEventListener("click", function () { doeOntvangst(s, ont); });
-      knoppen.appendChild(ont);
     }
     if (cfg.magWijzigen) {
       var weg = el("button", "so-knop licht gevaar", "Verwijderen");

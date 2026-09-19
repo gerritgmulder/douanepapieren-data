@@ -51,6 +51,26 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-19", bestand: "voorraad.html", soort: "beter",
+      titel: "Schepen: binnen is binnen",
+      wat: "Bij Schepen & ontvangst kan elke container binnen gemeld worden, ook zonder gekoppelde inkooporder. Wat binnen is verdwijnt uit de tabbladen en staat onder 'Binnen gemeld'. Klik op een zending bij Onderweg naar Uddel en hij opent eronder; de tabbladen lopen door op een nieuwe regel."
+    },
+    {
+      datum: "2026-09-19", bestand: "voorraad.html", soort: "beter",
+      titel: "Warmtepomp in één oogopslag",
+      wat: "Een spa met Integrated Heat Pump (IntelliSaver) heeft nu een groen blokje direct achter de spanaam, bij Partner, Particulier en Reserveringen."
+    },
+    {
+      datum: "2026-09-19", bestand: "amerika.html", soort: "beter",
+      titel: "Notitie reist mee",
+      wat: "De eigen notitie bij een QuickBooks-factuur staat nu ook bij Ontvangen Audrey en in het wire-overzicht, en blijft dus zichtbaar waar de order ook heen gaat."
+    },
+    {
+      datum: "2026-09-19", bestand: "prijslijsten-fabrikanten.html", soort: "hersteld",
+      titel: "Toegang voor Chantal, Manon en Arno",
+      wat: "De tegel liet 'geen toegang' zien voor wie wel in de lijst stond. Chantal, Manon en Arno kunnen er nu bij."
+    },
+    {
       datum: "2026-09-19", bestand: "herinneringen.html", soort: "nieuw",
       titel: "Herinneringen in één keer",
       wat: "Alle openstaande facturen uit Logic4 per debiteur. Vink aan wie een herinnering krijgt, kies Engels of Nederlands en verstuur ze in één keer. De mail is aan te passen en er is een testknop naar jezelf."

@@ -1101,6 +1101,42 @@ function qbMatch(inv,q){
   if(!q) return true;
   return String(inv.docNr||"").toLowerCase().includes(q) || String(inv.klant||inv.customer||"").toLowerCase().includes(q);
 }
+/* De notitievelden en hun opslag. Eén functie voor elke plek waar het veld
+   staat. Chantal (video, 19 sep 2026): "op het moment dat de order verplaatst
+   naar Ontvangen Audrey, dan verdwijnt ook mijn hele notitie ... die moet
+   zichtbaar blijven, waar die ook heen gaat." */
+function qbNotitieVeld(inv){
+  return "<td onclick='event.stopPropagation()'><input class='qbNotitie' data-nr='"+esc(inv.docNr)+"' data-qbid='"+esc(inv.id||"")+"' value='"+esc(inv.notitie||"")+"' maxlength='300' placeholder='ordernr of opmerking…' title='"+esc(inv.notitie?("Genoteerd door "+(inv.notitieDoor||"iemand")):"Zet hier zelf een ordernummer of opmerking bij")+"' style='width:100%;min-width:120px;font-size:11.5px;padding:3px 6px;border:1px solid var(--border);border-radius:6px'></td>";
+}
+function qbNotitieKoppel(box){
+  box.querySelectorAll(".qbNotitie").forEach(inp=>{
+    let vorige=inp.value;
+    inp.addEventListener("blur",async()=>{
+      const tekst=inp.value.trim();
+      if(tekst===vorige) return;
+      inp.disabled=true;
+      try{
+        const r=await fetch(WORKER+"/amerika/qb/notitie",{method:"POST",
+          headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+          body:JSON.stringify({docNr:inp.dataset.nr,qbId:inp.dataset.qbid,tekst:tekst,user:(localStorage.getItem("fp.email")||"")})});
+        const j=await r.json();
+        if(!j.ok) throw new Error(j.error||"opslaan mislukt");
+        vorige=tekst;
+        const inv=qbInvoices.find(i=>String(i.id||i.docNr)===String(inp.dataset.qbid||inp.dataset.nr));
+        if(inv) inv.notitie=tekst;
+        // Dezelfde notitie staat ook in het andere tabblad; die meteen gelijk trekken.
+        document.querySelectorAll(".qbNotitie").forEach(x=>{ if(x!==inp&&x.dataset.nr===inp.dataset.nr&&x.dataset.qbid===inp.dataset.qbid) x.value=tekst; });
+        if(window.fpLog) window.fpLog("qb-notitie","#"+inp.dataset.nr+": "+(tekst||"(leeggemaakt)"));
+      }catch(e){
+        inp.value=vorige;
+        alert("De notitie kon niet worden bewaard: "+e.message);
+      }
+      inp.disabled=false;
+    });
+    // Enter = klaar, dan hoeft er niet eerst ergens anders geklikt te worden.
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter") inp.blur(); });
+  });
+}
 function renderQbInvoices(){
   const box=document.getElementById("qbData");
   // Een factuur verdwijnt hier pas als het geld van Audrey is ontvangen én de
@@ -1140,7 +1176,7 @@ function renderQbInvoices(){
          kunnen zetten (...) een vakje waar ik eventueel een ordernummer of een
          opmerking bij kan zetten." Voor facturen die buiten het Dashboard om
          al in Logic4 staan, zoals 3312 van Backyard & Barnes. */
-      "<td onclick='event.stopPropagation()'><input class='qbNotitie' data-nr='"+esc(inv.docNr)+"' data-qbid='"+esc(inv.id||"")+"' value='"+esc(inv.notitie||"")+"' maxlength='300' placeholder='ordernr of opmerking…' title='"+esc(inv.notitie?("Genoteerd door "+(inv.notitieDoor||"iemand")):"Zet hier zelf een ordernummer of opmerking bij")+"' style='width:100%;min-width:0;font-size:11.5px;padding:3px 6px;border:1px solid var(--border);border-radius:6px'></td>"+
+      qbNotitieVeld(inv)+
       "<td onclick='event.stopPropagation()'><button class='qbVerberg' data-nr='"+esc(inv.docNr)+"' title='Uit beeld halen — bijvoorbeeld bij een dubbel ingeladen order' style='border:0;background:none;cursor:pointer;font-size:15px;opacity:.55'>&#128465;</button></td></tr>";
     // Detail ALTIJD renderen (verborgen als dicht) → uit/inklappen zonder herteken, geen wegschieten
     html+="<tr class='qbDetail' data-sleutel='"+esc(sleutel)+"' data-nr='"+esc(inv.docNr)+"' style='display:"+(open?"":"none")+"'><td colspan='10' style='background:#fafafa;padding:6px 12px'><table class='grid' style='margin:0'><thead><tr><th>Artikelcode</th><th>Omschrijving</th><th>Aantal</th><th>Soort</th></tr></thead><tbody>"+
@@ -1160,31 +1196,7 @@ function renderQbInvoices(){
   // worker zodat het blijft staan (ook voor Osman zichtbaar).
   /* De notitie bewaren zodra het veld de aandacht verliest. Niet bij elke
      toetsaanslag: dat zou per getypte letter een schrijfactie zijn. */
-  box.querySelectorAll(".qbNotitie").forEach(inp=>{
-    let vorige=inp.value;
-    inp.addEventListener("blur",async()=>{
-      const tekst=inp.value.trim();
-      if(tekst===vorige) return;
-      inp.disabled=true;
-      try{
-        const r=await fetch(WORKER+"/amerika/qb/notitie",{method:"POST",
-          headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
-          body:JSON.stringify({docNr:inp.dataset.nr,qbId:inp.dataset.qbid,tekst:tekst,user:(localStorage.getItem("fp.email")||"")})});
-        const j=await r.json();
-        if(!j.ok) throw new Error(j.error||"opslaan mislukt");
-        vorige=tekst;
-        const inv=qbInvoices.find(i=>String(i.id||i.docNr)===String(inp.dataset.qbid||inp.dataset.nr));
-        if(inv) inv.notitie=tekst;
-        if(window.fpLog) window.fpLog("qb-notitie","#"+inp.dataset.nr+": "+(tekst||"(leeggemaakt)"));
-      }catch(e){
-        inp.value=vorige;
-        alert("De notitie kon niet worden bewaard: "+e.message);
-      }
-      inp.disabled=false;
-    });
-    // Enter = klaar, dan hoeft er niet eerst ergens anders geklikt te worden.
-    inp.addEventListener("keydown",e=>{ if(e.key==="Enter") inp.blur(); });
-  });
+  qbNotitieKoppel(box);
   box.querySelectorAll(".qbAudrey").forEach(cb=>cb.addEventListener("change",async()=>{
     const nr=cb.dataset.nr, qbId=cb.dataset.qbid, aan=cb.checked;
     const lbl=cb.parentElement.querySelector("span");
@@ -1697,7 +1709,7 @@ function audRenderWachtrij(){
     "</div>"+
     "<p class='lead' style='font-size:12px;margin:0 0 12px'>Voor deze facturen is een Logic4-order aangemaakt. Ze blijven hier staan tot de betaling is gekoppeld — vink dan <b>Verwerkt in Logic4</b> aan. Het vinkje geldt ook voor dezelfde factuur in het wire-overzicht hieronder.</p>"+
     "<div class='tablewrap'><table class='grid'><thead><tr>"+
-      "<th>Factuur</th><th>Klant</th><th>Logic4-order</th><th>Geaccordeerd</th><th>Betaald (QB)</th><th>Ontv. Audrey</th><th>Verwerkt in Logic4</th><th></th></tr></thead><tbody>"+
+      "<th>Factuur</th><th>Klant</th><th>Logic4-order</th><th>Geaccordeerd</th><th>Betaald (QB)</th><th>Ontv. Audrey</th><th>Eigen notitie</th><th>Verwerkt in Logic4</th><th></th></tr></thead><tbody>"+
     gesorteerd.map(inv=>{
       const isKlaar=!!vwVan(inv);
       const v=vwVan(inv)||{};
@@ -1708,6 +1720,7 @@ function audRenderWachtrij(){
         "<td style='font-size:12px'>"+esc(datumNL(inv.geaccordeerdTs))+"</td>"+
         "<td>"+qbBetaaldPill(inv)+"</td>"+
         "<td style='font-size:11px'>"+(inv.audrey?"<span style='color:#15803d'>ontvangen</span>":"<span style='color:var(--muted)'>nee</span>")+"</td>"+
+        qbNotitieVeld(inv)+
         "<td><label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'>"+
           "<input type='checkbox' class='audVerw' data-nr='"+esc(inv.docNr)+"' data-qbid='"+esc(inv.id||"")+"'"+(isKlaar?" checked":"")+">"+
           "<span style='font-size:11px;color:"+(isKlaar?"#15803d":"var(--muted)")+"'>"+
@@ -1716,6 +1729,7 @@ function audRenderWachtrij(){
     }).join("")+
     "</tbody></table></div></div>";
   box.querySelectorAll(".audVerw").forEach(cb=>cb.addEventListener("change",()=>audVerwerktKlik(cb)));
+  qbNotitieKoppel(box);
   box.querySelectorAll(".audVerberg").forEach(b=>b.addEventListener("click",()=>qbVerbergKlik(b.dataset.nr)));
   const prijsKnop = box.querySelector("#audPrijzen");
   if (prijsKnop) prijsKnop.addEventListener("click", () => audPrijzenBijwerken(prijsKnop));
@@ -1895,7 +1909,8 @@ function audRender(){
         const v=(inQb&&vwVan(inQb))||(r.factuur&&verwerktIds[r.factuur])||null;
         const isVerwerkt=!!v;
         return "<tr"+(isVerwerkt?" style='background:#f0fdf4'":"")+">"+
-          "<td><b>"+esc(r.naam)+"</b>"+(inQb&&inQb.geaccordeerd?" <span class='pill' style='background:#dcfce7;color:#15803d;font-size:10px'>Logic4 #"+esc(String(inQb.logic4Order||"?"))+"</span>":"")+"</td>"+
+          "<td><b>"+esc(r.naam)+"</b>"+(inQb&&inQb.geaccordeerd?" <span class='pill' style='background:#dcfce7;color:#15803d;font-size:10px'>Logic4 #"+esc(String(inQb.logic4Order||"?"))+"</span>":"")+
+            (inQb&&inQb.notitie?"<div style='font-size:11px;color:var(--muted)' title='Eigen notitie bij deze factuur'>&#9998; "+esc(inQb.notitie)+"</div>":"")+"</td>"+
           /* Geen nummer: dan een vakje om het erbij te zetten (Chantal weet
              vaak wel bij welke factuur "Tatum refund" hoort). */
           "<td>"+(r.factuur?esc(r.factuur)+(r.factuurDoor?" <span title='gezet door "+esc(r.factuurDoor)+"' style='color:var(--muted);font-size:10px'>✎</span>":"")

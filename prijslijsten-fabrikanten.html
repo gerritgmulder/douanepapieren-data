@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>Prijslijsten fabrikanten — Fonteyn Dashboard</title>
 <script src="taal.js"></script>
+<script src="toegang.js"></script>
 <script src="kop.js"></script>
 <script src="breedte.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
@@ -782,7 +783,12 @@ document.getElementById("logoutBtn").addEventListener("click",()=>{
 (async function boot(){
   if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
   document.getElementById("userEmail").textContent=IK||"—";
-  if(!ALLOWED.has(IK)){
+  /* De groep prijslijsten in toegang.js bepaalt wie erbij mag; de lijst
+     hierboven is alleen nog het vangnet als toegang.js niet laadt. Chantal en
+     Arno stonden wel in de groep maar kregen hier "geen toegang" (19 sep 2026),
+     net als Nomi eerder bij Voorraadbeheer. */
+  const mag = (window.fpToegang && typeof fpToegang.mag==="function") ? fpToegang.mag("prijslijsten", IK) : ALLOWED.has(IK);
+  if(!mag){
     window.fpGeenToegang=true;
     document.getElementById("deny").classList.remove("hidden");
     document.getElementById("content").classList.add("hidden");
