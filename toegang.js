@@ -265,7 +265,7 @@
     // zij zetten de partner- en dealerprijzen op en hebben de inkooplijsten
     // van de fabrieken daarvoor nodig.
     "prijslijsten": [
-      "arno", "chantal", "dolf", "fonteynbot", "gerrit", "gretha",
+      "arno", "chantal", "dolf", "fonteynbot", "gerrit", "gretha", "manon",
     ],
     // Rapportage
     "rapportage": [
