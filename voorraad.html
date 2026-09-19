@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Voorraadbeheer - Fonteyn Dashboard</title>
+<script src="toegang.js"></script>
 <script src="taal.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <!-- SheetJS — voor het inlezen van het Passion-bestellingen-document (pipeline) -->
@@ -1051,6 +1052,14 @@ const KLANT_LEES = new Set([
   "fonteyn.maartens",
 ]);
 const ALLOWED = new Set([...BEHEER,...KLANT_WIJZIG,...KLANT_LEES]);
+/* De groep 'voorraad' in toegang.js is de bron voor wie de tegel mag zien;
+   de lijsten hierboven zeggen alleen wat iemand erin mag. Nomi stond op
+   18 sep 2026 in toegang.js maar niet hier en kreeg "geen toegang"
+   (Gerrit, 19 sep 2026). Wie in toegang.js staat en hier niet, komt binnen
+   als alleen-lezen. */
+if (window.fpToegang && window.fpToegang.set){
+  try{ window.fpToegang.set("voorraad").forEach(function(v){ if(!ALLOWED.has(v)){ ALLOWED.add(v); KLANT_LEES.add(v); } }); }catch(e){}
+}
 let MAG_WIJZIGEN = false;   // vinkjes en notities; door boot() gezet
 let MAG_BEHEREN  = false;   // uploads, schepen, prioriteiten, inkoop naar Logic4
 (function boot(){
