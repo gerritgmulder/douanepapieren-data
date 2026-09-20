@@ -226,6 +226,13 @@
 
        Iemand toevoegen is dus twee keuzes: mag hij kijken, en mag hij ook
        wijzigen? */
+    /* Werkplaats: de lijst met spa's die getest moeten worden voordat ze de
+       deur uitgaan (Kevin, 20 sep 2026). De werkplaatsmensen zelf hebben nog
+       geen Logic4-account in deze lijst; zodra hun namen bekend zijn horen ze
+       hier bij. */
+    "werkplaats": [
+      "arno", "chantal", "dolf", "fonteynbot", "gerrit", "gerwin", "kevin", "manon", "nomi",
+    ],
     "planning": [
       "arno", "bart.vdb", "bertjan", "chantal", "dolf", "don",
       "fonteynbot", "gerrit", "gerwin", "kevin", "mike", "tim",
