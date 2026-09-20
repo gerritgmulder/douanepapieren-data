@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script src="route-print.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("werkplaats", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">De tegel Werkplaats is voor de werkplaats en Spa planning.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Werkplaats - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     WERKPLAATS - welke spa's getest moeten worden, op volgorde van levering
+
+     Kevin (20 sep 2026): "een lijst voor de werkplaats waar iedere spa
+     automatisch in komt te staan zodra we op het vakje Ingepland drukken in
+     het Voorraadbeheer. Hier moet de werkplaats hun bonnen uithalen van de
+     spa's die ze moeten testen: de volledige order kunnen zien en printen.
+     Getest? Vinkje, dan gaat de spa naar de lijst met geteste spa's. Alles op
+     volgorde van leverdatum, de eerste levering bovenaan."
+
+     Bronnen: de reserveringen uit Logic4 (uur-sync), de vinkjes uit
+     Voorraadbeheer (voorraad-notities, veld gepland), de afspraken uit
+     Planning (voor de leverdatum) en de eigen bucket werkplaats (getest,
+     door wie, wanneer, en een leverdatum als Planning er geen heeft).
+     Een spa verdwijnt vanzelf uit beide lijsten zodra hij in Logic4 is
+     afgeleverd: dan staat hij niet meer in de reserveringen.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --goed:#16a34a; --rood:#b91c1c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1100px;margin:16px auto;padding:0 14px 40px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tab{background:#fff;border:1px solid var(--rand);border-radius:10px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink)}
+.tab.aan{background:var(--groen);color:#fff;border-color:var(--groen)}
+.zoek{width:100%;max-width:360px;font:inherit;font-size:13px;padding:8px 11px;border:1px solid var(--rand);border-radius:10px;margin-bottom:12px}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:12px 14px;margin-bottom:10px;border-left:5px solid var(--lime)}
+.kaart.getest{border-left-color:var(--goed)}
+.kaart.laat{border-left-color:var(--rood)}
+.kop{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.datum{flex:0 0 auto;min-width:96px;font-weight:700;color:var(--groen);font-size:15px;line-height:1.2}
+.datum small{display:block;font-weight:500;color:var(--grijs);font-size:11px}
+.datum input{font:inherit;font-size:12px;padding:3px 6px;border:1px solid var(--rand);border-radius:7px;margin-top:2px;max-width:140px}
+.wat{flex:1 1 220px;min-width:0}
+.wat b{font-size:15px}
+.wat .sub{color:var(--grijs);font-size:12.5px;margin-top:2px;overflow-wrap:break-word}
+.badge{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:6px;background:#dcfce7;color:#15803d;border:1px solid #86efac;white-space:nowrap;vertical-align:middle}
+.pil{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#eef2e6;color:var(--groen);white-space:nowrap}
+.knoppen{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.knop{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink)}
+.knop.groen{background:var(--groen);color:#fff;border-color:var(--groen);font-weight:600}
+.knop.licht{color:var(--grijs)}
+label.vink{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:600;cursor:pointer;padding:7px 10px;border:1px solid var(--rand);border-radius:9px;background:#fff}
+label.vink input{width:18px;height:18px;accent-color:var(--goed)}
+.order{margin-top:10px;border:1px solid var(--rand);border-radius:10px;overflow:hidden}
+.order .ok{background:#f8faf5;padding:6px 10px;font-size:11.5px;font-weight:700;color:var(--groen);text-transform:uppercase;letter-spacing:.04em;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.order .ok span{font-weight:500;text-transform:none;letter-spacing:0;color:var(--grijs)}
+.order .regel{display:flex;gap:10px;padding:6px 10px;border-top:1px solid #f1f1ee;font-size:12.5px}
+.order .regel .n{flex:0 0 34px;font-weight:700}
+.order .regel .om{flex:1;min-width:0;overflow-wrap:break-word}
+.order .regel .om small{display:block;color:var(--grijs);font-size:11px}
+.order .regel.weg{color:#9ca3af}
+.order .adres{padding:8px 10px;font-size:12px;color:var(--grijs);border-top:1px solid #f1f1ee}
+.leeg{color:var(--grijs);padding:20px 4px}
+.fout{background:#fee2e2;color:var(--rood);padding:10px 12px;border-radius:10px;margin-bottom:10px}
+.opm{margin-top:6px;font-size:12.5px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 9px}
+@media (max-width:600px){ .datum{min-width:0} main{padding:0 10px 40px} }
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🔧 Werkplaats</h1>
+  <span id="stand" style="font-size:12px;opacity:.85"></span>
+</header>
+<main>
+  <div id="fout"></div>
+  <div class="tabs">
+    <button class="tab aan" data-tab="open" type="button">Te testen (<span id="nOpen">0</span>)</button>
+    <button class="tab" data-tab="getest" type="button">Getest (<span id="nGetest">0</span>)</button>
+  </div>
+  <input class="zoek" id="zoek" type="search" placeholder="zoek op order, klant of spa…">
+  <div id="lijst"></div>
+</main>
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+async function lees(pad, opties){
+  var o = Object.assign({ headers: { "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik, "Content-Type": "application/json" } }, opties||{});
+  var r = await fetch(W+pad, o);
+  if (!r.ok) throw new Error("HTTP "+r.status);
+  return r.json();
+}
+function datumNL(v){ if(!v) return ""; var s=String(v).slice(0,10).split("-"); return s.length===3 ? s[2]+"-"+s[1]+"-"+s[0] : v; }
+function dagNaam(iso){ var d=new Date(iso+"T12:00:00"); if(isNaN(d)) return ""; return ["zondag","maandag","dinsdag","woensdag","donderdag","vrijdag","zaterdag"][d.getDay()]; }
+function vandaagIso(){ var d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function isWarmtepomp(r){ return !!(r && r.extra && /integrated\s*heat\s*pump|intellisaver/i.test(String(r.extra))); }
+
+var regels = [], notities = {}, afspraken = [], wp = { regels: {} }, orders = {}, open = {}, tab = "open", zoek = "";
+
+/* Alles ophalen en samenvoegen tot één lijst. */
+async function laad(){
+  var r = await Promise.all([
+    lees("/data/reserveringen-live"),
+    lees("/data/voorraad-notities").catch(function(){ return {}; }),
+    lees("/data/planning").catch(function(){ return {}; }),
+    lees("/data/werkplaats").catch(function(){ return {}; }),
+  ]);
+  var live = r[0]||{}; notities = (r[1] && r[1].regels) || {}; afspraken = (r[2]&&r[2].afspraken)||[]; wp = r[3]&&r[3].regels ? r[3] : { regels: {} };
+  var alle = [];
+  Object.keys(live.byModel||{}).forEach(function(m){ (live.byModel[m]||[]).forEach(function(x){ alle.push(x); }); });
+  regels = alle.filter(function(x){
+    var n = notities[x.regelId] || (x.regelIdOud && notities[x.regelIdOud]) || {};
+    return n.gepland && !n.verwijderd;
+  }).map(function(x){
+    var n = notities[x.regelId] || (x.regelIdOud && notities[x.regelIdOud]) || {};
+    var w = wp.regels[x.regelId] || {};
+    /* De leverdatum: de afspraak in Planning voor deze order (de eerste die
+       nog niet klaar is), anders wat de werkplaats zelf heeft ingevuld. */
+    var afs = afspraken.filter(function(a){ return String(a.ordernr||"") === String(x.ordernr) && !a.klaar && a.datum; })
+      .sort(function(a,b){ return String(a.datum).localeCompare(String(b.datum)); });
+    var lever = afs.length ? afs[0].datum : (w.leverdatum || "");
+    return { r: x, n: n, w: w, lever: lever, leverBron: afs.length ? "planning" : (w.leverdatum ? "werkplaats" : ""), tijd: afs.length ? (afs[0].tijd||"") : "" };
+  });
+  $("stand").textContent = "stand " + (live.updated ? String(live.updated).replace("T"," ").slice(0,16) : "");
+  teken();
+}
+function zichtbaar(){
+  var q = zoek.trim().toLowerCase();
+  return regels.filter(function(x){ return tab === "getest" ? !!x.w.getest : !x.w.getest; })
+    .filter(function(x){ if(!q) return true; var r=x.r; return (String(r.ordernr)+" "+(r.naam||"")+" "+(r.model||"")+" "+(r.kleur||"")+" "+(r.adviseur||"")).toLowerCase().indexOf(q) >= 0; })
+    .sort(function(a,b){
+      /* Eerste levering bovenaan; zonder datum onderaan. Bij de geteste lijst
+         de laatst geteste bovenaan. */
+      if (tab === "getest") return String(b.w.getestTs||"").localeCompare(String(a.w.getestTs||""));
+      if (!a.lever && !b.lever) return String(a.r.ordernr).localeCompare(String(b.r.ordernr));
+      if (!a.lever) return 1; if (!b.lever) return -1;
+      return a.lever.localeCompare(b.lever) || String(a.tijd).localeCompare(String(b.tijd));
+    });
+}
+function teken(){
+  $("nOpen").textContent = regels.filter(function(x){ return !x.w.getest; }).length;
+  $("nGetest").textContent = regels.filter(function(x){ return !!x.w.getest; }).length;
+  document.querySelectorAll(".tab").forEach(function(b){ b.classList.toggle("aan", b.dataset.tab === tab); });
+  var lijst = zichtbaar(), vandaag = vandaagIso();
+  if (!lijst.length){
+    $("lijst").innerHTML = '<div class="leeg">' + (tab === "getest" ? "Nog geen geteste spa's." : "Niets te testen. Zodra in Voorraadbeheer bij een spa 'Ingepland' wordt aangevinkt, staat hij hier.") + '</div>';
+    return;
+  }
+  $("lijst").innerHTML = lijst.map(function(x){
+    var r = x.r, id = esc(r.regelId), o = orders[String(r.ordernr)];
+    var laat = x.lever && x.lever < vandaag && !x.w.getest;
+    var datum = x.lever
+      ? '<div class="datum">' + esc(datumNL(x.lever)) + '<small>' + esc(dagNaam(x.lever)) + (x.tijd ? " " + esc(x.tijd) : "") + (x.leverBron === "werkplaats" ? " · zelf gezet" : "") + '</small></div>'
+      : '<div class="datum"><small>geen leverdatum</small><input type="date" data-datum="' + id + '" title="Leverdatum zelf zetten (er staat nog geen afspraak in Planning)"></div>';
+    return '<div class="kaart' + (x.w.getest ? " getest" : "") + (laat ? " laat" : "") + '">' +
+      '<div class="kop">' + datum +
+        '<div class="wat"><b>' + esc(r.model) + '</b>' + (isWarmtepomp(r) ? ' <span class="badge">&#9889; IntelliSaver · Integrated Heat Pump</span>' : (r.extra ? ' <span class="pil">' + esc(r.extra) + '</span>' : "")) +
+          (Number(r.qty) > 1 ? ' <span class="pil">' + esc(r.qty) + '×</span>' : "") +
+          '<div class="sub">' + esc(r.kleur || "") + '</div>' +
+          '<div class="sub">order <b>' + esc(r.ordernr) + '</b> · ' + esc(r.naam || "") + (r.plaats ? ", " + esc(r.plaats) : "") + (r.adviseur ? ' · adviseur ' + esc(r.adviseur) : "") + (r.transport ? ' · ' + esc(r.transport) : "") + '</div>' +
+          (x.n.opmerking ? '<div class="opm">' + esc(x.n.opmerking) + '</div>' : "") +
+          (x.w.getest ? '<div class="sub" style="color:var(--goed)">getest op ' + esc(datumNL(x.w.getestTs)) + (x.w.getestDoor ? ' door ' + esc(String(x.w.getestDoor).split("@")[0]) : "") + '</div>' : "") +
+        '</div>' +
+      '</div>' +
+      '<div class="knoppen">' +
+        '<button class="knop" type="button" data-order="' + esc(r.ordernr) + '">' + (open[r.ordernr] ? "Order verbergen" : "Order tonen") + '</button>' +
+        '<button class="knop" type="button" data-print="' + esc(r.ordernr) + '">Printen</button>' +
+        '<label class="vink"><input type="checkbox" data-getest="' + id + '"' + (x.w.getest ? " checked" : "") + '> ' + (x.w.getest ? "Getest" : "Getest, klaar voor levering") + '</label>' +
+      '</div>' +
+      (open[r.ordernr] ? orderHtml(r.ordernr, o) : "") +
+    '</div>';
+  }).join("");
+  $("lijst").querySelectorAll("[data-order]").forEach(function(b){ b.addEventListener("click", function(){ toon(b.dataset.order); }); });
+  $("lijst").querySelectorAll("[data-print]").forEach(function(b){ b.addEventListener("click", function(){ print(b.dataset.print, b); }); });
+  $("lijst").querySelectorAll("[data-getest]").forEach(function(c){ c.addEventListener("change", function(){ zetGetest(c.dataset.getest, c.checked); }); });
+  $("lijst").querySelectorAll("[data-datum]").forEach(function(i){ i.addEventListener("change", function(){ zetDatum(i.dataset.datum, i.value); }); });
+}
+/* De volledige order uit Logic4, regel voor regel. Wat al geleverd is staat
+   er grijs bij; de werkplaats test wat er nog uit moet. */
+function orderHtml(nr, o){
+  if (!o) return '<div class="order"><div class="ok">Order ' + esc(nr) + ' <span>wordt opgehaald…</span></div></div>';
+  if (!o.ok) return '<div class="order"><div class="ok">Order ' + esc(nr) + ' <span style="color:var(--rood)">' + esc(o.error||"niet gevonden") + '</span></div></div>';
+  var adr = o.leverenAan || o.besteldDoor || {};
+  return '<div class="order"><div class="ok">Order ' + esc(nr) + ' <span>' + esc(datumNL(o.besteldatum)) + (o.adviseur ? " · " + esc(o.adviseur) : "") + (o.leveringswijze ? " · " + esc(o.leveringswijze) : "") + '</span></div>' +
+    (o.regels||[]).map(function(x){
+      var weg = x.open != null && x.afgeleverd > 0 && x.open <= 0;
+      return '<div class="regel' + (weg ? " weg" : "") + '"><span class="n">' + esc(x.aantal) + '×</span><span class="om">' + esc(x.omschrijving) + (weg ? " (al geleverd)" : "") + (x.code ? '<small>' + esc(x.code) + '</small>' : "") + '</span></div>';
+    }).join("") +
+    '<div class="adres">' + esc([adr.naam || adr.bedrijf, adr.straat, [adr.postcode, adr.plaats].filter(Boolean).join(" "), adr.telefoon].filter(Boolean).join(" · ")) + '</div></div>';
+}
+async function haalOrder(nr){
+  if (orders[nr]) return orders[nr];
+  try{
+    var j = await lees("/planning/route-print?orders=" + encodeURIComponent(nr));
+    orders[nr] = (j.orders||[])[0] || { nr: nr, ok: false, error: "niet gevonden" };
+  }catch(e){ orders[nr] = { nr: nr, ok: false, error: e.message }; }
+  return orders[nr];
+}
+async function toon(nr){
+  open[nr] = !open[nr]; teken();
+  if (open[nr] && !orders[nr]) { await haalOrder(nr); teken(); }
+}
+async function print(nr, knop){
+  knop.disabled = true; var oud = knop.textContent; knop.textContent = "ophalen…";
+  var o = await haalOrder(nr);
+  knop.disabled = false; knop.textContent = oud;
+  window.fpRoutePrint.print({ titel: "Order " + nr + " - testbon werkplaats", zonderVoorblad: true, orders: [o], logo: new URL("fonteyn-logo.png", location.href).href });
+  try{ if (window.fpLog) window.fpLog("werkplaats-geprint", "order " + nr); }catch(e){}
+}
+/* Bewaren: eerst het scherm, dan de opslag. Twee mensen tegelijk is geen
+   probleem: we lezen vers, zetten alleen onze regel en schrijven terug. */
+async function bewaar(regelId, velden, logActie, logTekst){
+  var x = regels.find(function(y){ return y.r.regelId === regelId; });
+  if (x) { x.w = Object.assign({}, x.w, velden); }
+  teken();
+  try{
+    var vers = await lees("/data/werkplaats").catch(function(){ return {}; });
+    var alles = (vers && vers.regels) || {};
+    alles[regelId] = Object.assign({}, alles[regelId] || {}, velden);
+    wp.regels = alles;
+    await lees("/data/werkplaats", { method: "PUT", body: JSON.stringify({ regels: alles, updated: new Date().toISOString() }) });
+    try{ if (window.fpLog) window.fpLog(logActie, logTekst); }catch(e){}
+  }catch(e){ alert("Bewaren lukte niet: " + e.message); laad(); }
+}
+function zetGetest(regelId, aan){
+  var x = regels.find(function(y){ return y.r.regelId === regelId; });
+  var tekst = x ? (x.r.ordernr + " " + x.r.model + " (" + (x.r.naam||"") + ")") : regelId;
+  bewaar(regelId, { getest: aan, getestTs: aan ? new Date().toISOString() : null, getestDoor: aan ? ik : null }, aan ? "spa-getest" : "spa-getest-teruggedraaid", tekst);
+}
+function zetDatum(regelId, datum){
+  if (!datum) return;
+  var x = regels.find(function(y){ return y.r.regelId === regelId; });
+  if (x) { x.lever = datum; x.leverBron = "werkplaats"; }
+  bewaar(regelId, { leverdatum: datum }, "werkplaats-leverdatum", (x ? x.r.ordernr + " " + x.r.model : regelId) + " → " + datum);
+}
+document.querySelectorAll(".tab").forEach(function(b){ b.addEventListener("click", function(){ tab = b.dataset.tab; teken(); }); });
+$("zoek").addEventListener("input", function(){ zoek = $("zoek").value; teken(); });
+(async function(){
+  for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
+  try { await laad(); } catch(e){ $("fout").innerHTML = '<div class="fout">De lijst kon niet worden opgehaald: ' + esc(e.message) + '</div>'; }
+  /* Elke minuut opnieuw: een vinkje in Voorraadbeheer of een nieuwe afspraak
+     in Planning hoort hier vanzelf te verschijnen. */
+  setInterval(function(){ laad().catch(function(){}); }, 60000);
+  document.addEventListener("visibilitychange", function(){ if (!document.hidden) laad().catch(function(){}); });
+})();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"werkplaats",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

@@ -117,6 +117,8 @@
        zien, ziet zijn eigen routes. */
     { bestand:"mijnroute.html",     groep:"planning",         ic:"🚚",  naam:"Mijn route",
       uit:"Jouw routes per dag, met de paklijst per order",   mobiel:"goed", tile:"tileMijnRoute" },
+    { telefoon:true, bestand:"werkplaats.html",     groep:"werkplaats",       ic:"🔧",  naam:"Werkplaats",
+      uit:"Spa's die getest moeten worden, op leverdatum",     mobiel:"goed", tile:"tileWerkplaats" },
     { telefoon:true, bestand:"planning.html",       groep:"planning",         ic:"📅",  naam:"Planning",
       uit:"Weekoverzicht van leveringen en service-afspraken",     mobiel:"goed", tile:"tilePlanning" },
     { bestand:"vertalen.html",       groep:"vertalen",         ic:"🌍",  naam:"Vertalen",

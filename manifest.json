@@ -1,5 +1,5 @@
 {
-  "version": "0.34.61",
+  "version": "0.34.62",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -167,6 +167,10 @@
     {
       "name": "prijslijst.html",
       "note": "Prijslijst maken — leveranciers-PDF (invoice/catalogus) → Fonteyn/Passion-stijl prijslijst"
+    },
+    {
+      "name": "werkplaats.html",
+      "note": "Werkplaats: ingeplande spa's op leverdatum, order tonen, testbon printen, getest afvinken. Bucket werkplaats."
     },
     {
       "name": "herinneringen.html",

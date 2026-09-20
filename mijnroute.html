@@ -702,6 +702,54 @@ async function start(){
     if (mijnRoutes(iso(dd)).some(function(x){ return x.vanMij; })){ dagGekozen = iso(dd); break; }
   }
   tekenDagen(); teken();
+  liveStart();
+  /* Elke halve minuut opnieuw, en meteen als het scherm terugkomt (telefoon
+     uit de zak). Kevin (20 sep 2026): "als ik iets toevoeg in de planning
+     moet het gelijk bij mijn routes zichtbaar zijn." */
+  setInterval(function(){ ververs(); }, 30000);
+  document.addEventListener("visibilitychange", function(){ if (!document.hidden) ververs(); });
+}
+
+/* Opnieuw ophalen zonder het scherm te storen: alleen als er echt iets
+   veranderd is wordt er getekend, en een open bon of memo blijft open. */
+var verversBezig = false, planStand = "";
+async function ververs(){
+  if (verversBezig || !teamKey()) return;
+  verversBezig = true;
+  try{
+    var pl = await lees("/data/planning");
+    var stand = JSON.stringify([pl.afspraken||[], pl.routes||{}]);
+    if (stand !== planStand){
+      var eerste = !planStand;
+      planStand = stand;
+      plan.afspraken = Array.isArray(pl.afspraken) ? pl.afspraken : [];
+      plan.routes = (pl.routes && typeof pl.routes === "object") ? pl.routes : {};
+      if (!eerste){
+        var bi = await lees("/planning/bonnen").catch(function(){ return {}; });
+        (bi.bonnen||[]).forEach(function(b){ bonIndex[b.id] = b; });
+        tekenDagen(); teken();
+      }
+    }
+  }catch(e){}
+  verversBezig = false;
+}
+/* De live-kamer van Planning: zodra een planner iets bewaart komt er een
+   seintje, en dan halen we meteen opnieuw op. Valt de verbinding weg, dan
+   blijft de halve minuut hierboven over. */
+var liveWs = null;
+function liveStart(){
+  if (!teamKey()) return;
+  try { liveWs = new WebSocket("wss://fonteyn-data-store.g-mulder.workers.dev/live/planning"); } catch(e){ return; }
+  liveWs.addEventListener("open", function(){
+    liveWs.send(JSON.stringify({ soort:"hallo", sleutel: teamKey(), wie: ik || "onbekend" }));
+    planStand = JSON.stringify([plan.afspraken||[], plan.routes||{}]);
+  });
+  liveWs.addEventListener("message", function(ev){
+    var d = null; try { d = JSON.parse(ev.data); } catch(e){ return; }
+    if (d.soort === "gewijzigd") ververs();
+  });
+  liveWs.addEventListener("close", function(){ setTimeout(liveStart, 5000 + Math.random()*5000); });
+  liveWs.addEventListener("error", function(){ try{ liveWs.close(); }catch(e){} });
 }
 start();
 </script>

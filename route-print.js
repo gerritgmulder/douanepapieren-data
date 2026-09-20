@@ -285,7 +285,9 @@
      komt. Bovenin twee knoppen: Printen en Sluiten. Printen gebeurt vanuit
      dat kader zelf, zodat wat je ziet ook is wat eruit komt. */
   function print(opts) {
-    var titel = "Route " + esc(opts.routeNr) + " - " + esc(datumNL(opts.datum));
+    /* Eigen titel en geen voorblad: de werkplaats print één orderbevestiging
+       om de spa te testen, dat is geen route. */
+    var titel = opts.titel ? esc(opts.titel) : "Route " + esc(opts.routeNr) + " - " + esc(datumNL(opts.datum));
     var html = "<!doctype html><html lang='nl'><head><meta charset='utf-8'>" +
       "<title>" + titel + "</title>" +
       "<style>" + STIJL + "</style>" +
@@ -304,7 +306,7 @@
       ".briefkop{flex-wrap:wrap}.briefkop .bedrijf{text-align:left;flex:1 1 100%}.briefkop .logo{max-height:40px}" +
       ".regels{font-size:10.5px}.regels th,.regels td{padding:4px 3px}.regels .code{width:58px}.regels .aantal{width:34px}" +
       ".voorblad table{font-size:10.5px}}</style></head><body>" +
-      voorblad(opts) +
+      (opts.zonderVoorblad ? "" : voorblad(opts)) +
       (opts.stukken
         ? opts.stukken.map(function (st) {
             if (st.soort === "melding") return meldingBlad(st.data, opts.logo);
@@ -332,8 +334,8 @@
     if (tel.order) delen.push(tel.order + " orderbevestiging" + (tel.order === 1 ? "" : "en"));
     if (tel.melding) delen.push(tel.melding + " servicemelding" + (tel.melding === 1 ? "" : "en"));
     if (tel.afspraak) delen.push(tel.afspraak + " losse afspra" + (tel.afspraak === 1 ? "ak" : "ken"));
-    kop.textContent = "Afdrukvoorbeeld: " + titel.replace(/&amp;/g, "&") + "  \u00b7  voorblad" +
-      (delen.length ? " + " + delen.join(" + ") : "");
+    kop.textContent = "Afdrukvoorbeeld: " + titel.replace(/&amp;/g, "&") + (opts.zonderVoorblad ? "" : "  \u00b7  voorblad") +
+      (delen.length ? (opts.zonderVoorblad ? "  \u00b7  " : " + ") + delen.join(" + ") : "");
     var knopPrint = document.createElement("button");
     knopPrint.type = "button"; knopPrint.textContent = "Printen";
     knopPrint.style.cssText = "background:#8bc53f;color:#102b1e;border:0;border-radius:8px;padding:8px 18px;font:inherit;font-size:13px;font-weight:700;cursor:pointer";

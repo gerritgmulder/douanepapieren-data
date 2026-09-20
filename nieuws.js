@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-20", bestand: "werkplaats.html", soort: "nieuw",
+      titel: "Werkplaats: wat er getest moet worden",
+      wat: "Elke spa die in Voorraadbeheer op Ingepland staat, op volgorde van leverdatum. Order bekijken, testbon printen en afvinken als hij getest is; dan gaat hij naar de lijst Getest."
+    },
+    {
+      datum: "2026-09-20", bestand: "mijnroute.html", soort: "beter",
+      titel: "Planning meteen zichtbaar",
+      wat: "Wat een planner toevoegt of wijzigt staat binnen een paar seconden in Mijn route, zonder opnieuw openen."
+    },
+    {
       datum: "2026-09-20", bestand: "mijnroute.html", soort: "beter",
       titel: "Paklijst: alleen wat nog moet",
       wat: "Wat in Logic4 al als geleverd staat, staat niet meer op de paklijst. Bij een nalevering zie je dus alleen wat er nog mee moet, met een regel eronder hoeveel er al eerder geleverd is."
