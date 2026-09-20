@@ -185,9 +185,12 @@
         esc((o && o.error) || "onbekende reden") + ". Print hem met de hand mee.</p></section>";
     }
     var regels = (o.regels || []).map(function (r) {
-      return "<tr><td class='aantal'>" + esc(r.aantal) + "</td>" +
+      // Al geleverd volgens Logic4: blijft op de bevestiging staan, maar grijs
+      // en met de melding erbij, zodat niemand het nog een keer inlaadt.
+      var klaar = r.open != null && r.afgeleverd > 0 && r.open <= 0;
+      return "<tr" + (klaar ? " style='color:#9ca3af'" : "") + "><td class='aantal'>" + esc(r.aantal) + "</td>" +
         "<td class='code'>" + esc(r.code) + "</td>" +
-        "<td>" + esc(r.omschrijving) + "</td>" +
+        "<td>" + esc(r.omschrijving) + (klaar ? " <i>(al geleverd)</i>" : "") + "</td>" +
         "<td class='geld'>" + esc(euro(r.stukprijs)) + "</td>" +
         "<td class='geld'>" + esc(euro(r.totaal)) + "</td></tr>";
     }).join("");

@@ -267,6 +267,21 @@ function tekenDagen(){
 
 function sleutel(nr, i){ return String(nr)+"|"+i; }
 function gepakt(nr, i){ var v = paklijst[sleutel(nr,i)]; return !!(v && v.af); }
+/* Alleen wat nog geleverd moet worden. Kevin (20 sep 2026, order 3516642):
+   "in Logic staat alleen de CM2 nog open, de rest is al geleverd. Kan je
+   ervoor zorgen dat de jongens alleen maar zien wat ze nog moeten leveren."
+   De regels houden hun plek in de volledige lijst (het vinkje hangt aan dat
+   nummer), er valt alleen weg wat Logic4 al als geleverd heeft staan. */
+function pakRegels(o){
+  var verberg = window.PAKLIJST_VERBERGEN || [];
+  var uit = [];
+  (o && o.regels || []).forEach(function(r, i){
+    if (!r.omschrijving || verberg.indexOf(String(r.code||"").trim()) >= 0 || /^\s*\*\*/.test(r.omschrijving)) return;
+    if (r.open != null && r.afgeleverd > 0 && r.open <= 0) return;
+    uit.push({ r: r, i: i, aantal: (r.open != null && r.afgeleverd > 0) ? r.open : r.aantal });
+  });
+  return uit;
+}
 
 function stopHtml(a){
   var c = CATS[a.soort] || CATS.intern;
@@ -291,16 +306,19 @@ function stopHtml(a){
     if (!o) html += '<p class="wacht">Paklijst wordt opgehaald&hellip;</p>';
     else if (!o.ok) html += '<p class="fout">Order '+esc(nr)+' kon niet uit Logic4 worden opgehaald: '+esc(o.error||"")+'</p>';
     else {
-      var verberg = window.PAKLIJST_VERBERGEN || [];
-      var regels = (o.regels||[]).filter(function(r){ return r.omschrijving && verberg.indexOf(String(r.code||"").trim()) < 0 && !/^\s*\*\*/.test(r.omschrijving); });
-      var af = regels.filter(function(r,i){ return gepakt(nr,i); }).length;
+      var regels = pakRegels(o);
+      var alGeleverd = (o.regels||[]).filter(function(r){ return r.open != null && r.afgeleverd > 0 && r.open <= 0; }).length;
+      var af = regels.filter(function(x){ return gepakt(nr,x.i); }).length;
       html += '<div class="paklijst"><div class="pk"><span>Paklijst</span><span class="tel'+(af===regels.length&&regels.length?" klaar":"")+'">'+
         (af===regels.length&&regels.length ? "Alles gepakt ✓" : af+" van "+regels.length+" gepakt")+'</span></div>'+
-        regels.map(function(r,i){
+        regels.map(function(x){
+          var r = x.r, i = x.i;
           return '<label class="regel'+(gepakt(nr,i)?" af":"")+'"><input type="checkbox" data-nr="'+esc(nr)+'" data-i="'+i+'"'+(gepakt(nr,i)?" checked":"")+'>'+
             '<span class="om">'+esc(r.omschrijving)+(r.code?'<small>'+esc(r.code)+'</small>':'')+'</span>'+
-            '<span class="aantal">'+esc(r.aantal)+'&times;</span></label>';
-        }).join("")+'</div>';
+            '<span class="aantal">'+esc(x.aantal)+'&times;</span></label>';
+        }).join("")+
+        (alGeleverd ? '<div class="regel" style="color:var(--grijs);font-size:12px">'+alGeleverd+' regel'+(alGeleverd===1?"":"s")+' al eerder geleverd, staat er niet meer bij</div>' : '')+
+        (!regels.length && !alGeleverd ? '<div class="regel" style="color:var(--grijs);font-size:12px">Geen regels om te pakken</div>' : '')+'</div>';
     }
   }
   if (a.itsId){
@@ -583,7 +601,7 @@ function teken(){
   box.innerHTML = lijst.map(function(x){
     var alleOrders = x.stops.map(function(a){ return String(a.ordernr||"").trim(); }).filter(Boolean);
     var tot = 0, af = 0;
-    alleOrders.forEach(function(nr){ var o = orders[nr]; if (o && o.ok){ (o.regels||[]).forEach(function(r,i){ if (r.omschrijving){ tot++; if (gepakt(nr,i)) af++; } }); } });
+    alleOrders.forEach(function(nr){ var o = orders[nr]; if (o && o.ok){ pakRegels(o).forEach(function(x){ tot++; if (gepakt(nr,x.i)) af++; }); } });
     return '<section class="route"><h2><span class="nr">Route '+esc(x.r.nr)+'</span>'+
       '<span class="wie">'+esc(rijders(x.r).join(" & ")||"nog niemand")+(x.vanMij||kijkAls==="*"?"":" (niet van jou)")+'</span>'+
       (tot ? '<span class="voortgang">'+af+'/'+tot+' gepakt</span>' : '')+'</h2>'+

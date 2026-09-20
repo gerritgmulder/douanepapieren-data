@@ -2454,6 +2454,16 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
         var j2 = await r2.json().catch(function(){ return null; });
         var kaal = nr.replace(/\D/g,"");
         var m = ((j2&&j2.meldingen)||[]).find(function(x){ return String(x.id||"") === kaal; });
+        /* Net aangemaakt in Logic4? Dan zit hij nog niet in de lijst van tien
+           minuten geleden. Kevin (video, 20 sep 2026): "ik heb net een
+           melding aangemaakt, maar als ik hem hier invoer kan ik hem niet
+           toevoegen." Dus bij geen treffer één keer vers ophalen. */
+        if (!m){
+          uit.textContent = "Niet in de lijst; even vers ophalen uit Logic4\u2026";
+          var r2b = await fetch(W+"/planning/its?vers=1", { headers: { "X-Fonteyn-Auth": teamKey() } });
+          var j2b = await r2b.json().catch(function(){ return null; });
+          m = ((j2b&&j2b.meldingen)||[]).find(function(x){ return String(x.id||"") === kaal; });
+        }
         if (!m){
           if (/^\d{5,6}$/.test(kaal)) throw new Error("geen servicemelding met nummer "+kaal+" (openstaand, laatste half jaar)");
           throw new Error("dit ITS-nummer staat niet in de openstaande servicemeldingen");

@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-20", bestand: "mijnroute.html", soort: "beter",
+      titel: "Paklijst: alleen wat nog moet",
+      wat: "Wat in Logic4 al als geleverd staat, staat niet meer op de paklijst. Bij een nalevering zie je dus alleen wat er nog mee moet, met een regel eronder hoeveel er al eerder geleverd is."
+    },
+    {
+      datum: "2026-09-20", bestand: "planning.html", soort: "hersteld",
+      titel: "Nieuwe servicemelding meteen vindbaar",
+      wat: "Een net in Logic4 aangemaakte ITS-melding werd bij Ophalen niet gevonden omdat de lijst tien minuten oud kon zijn. Nu wordt bij geen treffer meteen vers gekeken."
+    },
+    {
       datum: "2026-09-19", bestand: "amerika.html", soort: "nieuw",
       titel: "Batch opnieuw kunnen boeken",
       wat: "Zijn de boekingen van een batch in Logic4 met de hand verwijderd, dan kun je met 'opnieuw kunnen boeken' het Dashboard laten vergeten dat hij geboekt was. Daarna werkt 'boeken op 1160' weer. In Logic4 verandert er niets door."

@@ -5779,10 +5779,16 @@ async function planningRoutePrint(env, url) {
          regels terug. Die staan niet op de bevestiging die de klant krijgt -
          order 3507764 telt er dertien en op het papier staan er zes. Het veld
          dat ze aanwijst heet IsAssemblyChild. */
+      /* Wat er al geleverd is gaat mee (QtyDeliverd, zo heet het veld echt).
+         Kevin (20 sep 2026, order 3516642): "in Logic staat alleen de CM2 nog
+         open, de rest is al geleverd. Kan je ervoor zorgen dat de jongens
+         alleen maar zien wat ze nog moeten leveren." */
       const regels = (o.OrderRows || [])
         .filter(x => !x.IsAssemblyChild)
         .map(x => ({
           aantal: Number(x.Qty) || 0,
+          afgeleverd: Number(x.QtyDeliverd) || 0,
+          open: Math.max(0, (Number(x.Qty) || 0) - (Number(x.QtyDeliverd) || 0)),
           code: String(x.ProductCode || "").trim(),
           omschrijving: String(x.Description || "").trim(),
           stukprijs: x.InclPrice != null ? Number(x.InclPrice) : null,
