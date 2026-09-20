@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-20", bestand: "planning.html", soort: "beter",
+      titel: "Tijdraster: de hele werkdag in beeld",
+      wat: "Het tijdraster loopt van 09:00 tot 18:00 zonder schuifbalk, en de regel met de categorieën erboven is weg. Staat er een afspraak vroeger of later, dan rekt het raster voor die week vanzelf op."
+    },
+    {
       datum: "2026-09-20", bestand: "werkplaats.html", soort: "nieuw",
       titel: "Werkplaats: wat er getest moet worden",
       wat: "Elke spa die in Voorraadbeheer op Ingepland staat, op volgorde van leverdatum. Order bekijken, testbon printen en afvinken als hij getest is; dan gaat hij naar de lijst Getest."

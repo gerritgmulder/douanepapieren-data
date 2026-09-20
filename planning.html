@@ -103,7 +103,12 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 
 /* ── het agendaraster ── */
 .agenda{background:#fff;border:1px solid var(--rand);border-radius:12px;overflow:hidden}
-.agenda-scroll{overflow:auto;max-height:calc(100vh - 240px);min-height:420px;position:relative}
+/* Geen schuifbalk meer: het raster laat de hele werkdag in één keer zien.
+   Kevin (video, 20 sep 2026): "ik wil dat die scrollbalk weggaat en dat de
+   tijd van negen tot zes gewoon standaard vaststaat; daarbuiten plannen we
+   toch niets." Valt er toch een afspraak buiten, dan rekt het raster voor
+   die week vanzelf op (zie teken). */
+.agenda-scroll{overflow:visible;position:relative}
 .rooster{display:grid;grid-template-columns:52px repeat(var(--dagen,7),minmax(var(--dagbreedte,96px),1fr))}
 /* De routes van een dag naast elkaar, met hun naam erboven. */
 .routekop-cel{display:flex;border-bottom:1px solid var(--rand);border-left:1px solid #f3f4f6;background:#fbfbf9}
@@ -545,13 +550,13 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
        die dan in de planning uitlicht." Wat raak is licht op, de rest wordt
        vaag; staat de treffer buiten de periode die je ziet, dan springt de
        knop ernaartoe. -->
+  <!-- De regel met de categorieën (Levering, Service, ...) en de uitleg van
+       de kleuren stond hier. Kevin (video, 20 sep 2026): "die regel hierboven
+       mag gewoon weggehaald worden, zodat het raster wat verder omhoog komt."
+       De kleuren spreken voor zich; wie er meekijkt staat nu in de zoekbalk. -->
   <div class="rasterzoek" id="rasterZoekBalk">
     <input id="rasterZoek" placeholder="Zoek op ordernummer, klantnaam of ITS-nummer" autocomplete="off">
     <span id="rasterZoekUit"></span>
-  </div>
-  <div class="legenda" id="legenda">
-    <!-- Wie er nog meer in de agenda kijkt, en een kort seintje als een
-         collega net iets heeft veranderd. -->
     <span id="liveAanwezig" class="live-wie"></span>
     <span id="liveMelding" class="live-melding"></span>
   </div>
@@ -622,7 +627,8 @@ var CATS = {
 };
 function cat(a){ return CATS[a.soort] || CATS.intern; }
 
-var UUR_VAN = 6, UUR_TOT = 22;      // het raster loopt van 06:00 tot 22:00
+var UUR_STANDAARD_VAN = 9, UUR_STANDAARD_TOT = 18;   // de werkdag, Kevin (20 sep 2026): "tussen negen en zes"
+var UUR_VAN = UUR_STANDAARD_VAN, UUR_TOT = UUR_STANDAARD_TOT;   // per week opgerekt als een afspraak erbuiten valt
 var UUR_PX = 46;                    // hoogte van één uur
 
 var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
@@ -964,31 +970,9 @@ async function haalBetaald(){
 
 /* ── legenda + filter ── */
 function tekenLegenda(){
-  /* De twee live-vakjes staan vast in de balk; alleen de categorie-chips
-     worden opnieuw getekend. Anders zou het seintje van een collega
-     verdwijnen zodra iemand een filter aanklikt. */
-  var houder = $("legendaChips");
-  if (!houder) {
-    houder = document.createElement("span");
-    houder.id = "legendaChips";
-    $("legenda").insertBefore(houder, $("liveAanwezig"));
-  }
-  houder.innerHTML = Object.keys(CATS).map(function(k){
-    var c = CATS[k];
-    return '<span class="cat-chip'+(filterUit[k]?" uit":"")+'" data-cat="'+k+'" title="Klik om deze categorie te tonen of te verbergen">'+
-      '<span class="bol" style="background:'+c.kleur+'"></span>'+esc(c.naam)+'</span>';
-  }).join("");
-  houder.innerHTML += '<span class="betaal-uitleg" title="De linkerrand van een afspraak is de soort, de rechterrand de betaling. Geen rechterrand = geen ordernummer op de afspraak.">'+
-    '<span style="color:var(--grijs)">vlak: soort &middot; rechterrand: betaling</span> '+
-    Object.keys(BETAALD).map(function(k){
-      return '<span class="betaalstip" style="background:'+BETAALD[k].kleur+'"></span>'+esc(BETAALD[k].naam); }).join(" ")+'</span>';
+  /* De categorie-chips en de kleuruitleg zijn weg (Kevin, 20 sep 2026); er
+     wordt dus ook niets meer gefilterd. Alleen wie er meekijkt blijft. */
   toonAanwezig();
-  document.querySelectorAll(".cat-chip").forEach(function(ch){
-    ch.addEventListener("click", function(){
-      filterUit[ch.dataset.cat] = !filterUit[ch.dataset.cat];
-      tekenLegenda(); teken();
-    });
-  });
 }
 
 /* ── weekgegevens ── */
@@ -1040,6 +1024,16 @@ function teken(){
      nodig. */
   if (routeStand){ tekenBord(); if (itsMeldingen !== null) itsTeken(); return; }
   var vandaagISO = iso(new Date());
+  /* De werkdag staat vast op 09:00 tot 18:00. Staat er in deze week toch een
+     afspraak eerder of later, dan schuift de rand voor deze week mee, zodat
+     niets buiten beeld valt. */
+  UUR_VAN = UUR_STANDAARD_VAN; UUR_TOT = UUR_STANDAARD_TOT;
+  week.forEach(function(w){ (w.items||[]).forEach(function(a){
+    var van = minuten(a.tijd); if (van == null) return;
+    var tot = van + (Number(a.duurMin) || 120);
+    if (van < UUR_VAN*60) UUR_VAN = Math.max(0, Math.floor(van/60));
+    if (tot > UUR_TOT*60) UUR_TOT = Math.min(24, Math.ceil(tot/60));
+  }); });
   var uren = UUR_TOT - UUR_VAN;
 
   var kopHtml = '<div class="hoek"></div>';
@@ -2846,11 +2840,7 @@ if (!MAG_BEWERKEN){
   if (m) m.insertBefore(balk, m.firstChild);
 }
 
-function scrollNaarWerkdag(){
-  // Bij openen rond 08:00 in beeld beginnen, niet om 06:00.
-  var s = $("agendaScroll");
-  if (s) s.scrollTop = Math.max(0, (8-UUR_VAN)*UUR_PX - 10);
-}
+function scrollNaarWerkdag(){ /* het raster schuift niet meer; de werkdag staat er helemaal op */ }
 
 /* ── start ── */
 (async function(){
