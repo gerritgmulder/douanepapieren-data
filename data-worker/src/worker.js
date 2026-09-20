@@ -9342,6 +9342,26 @@ async function qbHandleBoekingTerugzetten(request, env) {
   return reply(200, { ok: true, verwijderd: Object.keys(weg).length });
 }
 
+/* POST /amerika/qb/proef-betaling { orderId, bookingId, bedrag, omschrijving }
+   Beheer-only proef: één AddPayment op een gekozen dagboek, om te meten wat
+   Logic4 accepteert (bv. een dagboek van het type Tussenrekening, wat Mark
+   van Logic4 adviseerde in plaats van het bankdagboek 45). Alleen met een
+   cent en op de proeforder gebruiken; boekt echt. */
+async function qbHandleProefBetaling(request, env) {
+  if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "alleen beheer" });
+  let b = {}; try { b = await request.json(); } catch {}
+  const bedrag = Number(b.bedrag);
+  if (!b.orderId || !b.bookingId || !bedrag || Math.abs(bedrag) > 0.05) return reply(400, { ok: false, error: "orderId, bookingId en een bedrag van hooguit 5 cent" });
+  const token = await l4Token(env);
+  const rr = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ OrderId: Number(b.orderId), AmountIncl: bedrag, BookingId: Number(b.bookingId), MatchingLedgerId: 78,
+      DateTime: new Date().toISOString().slice(0, 19), Description: String(b.omschrijving || "Proef koppeling (cent)").slice(0, 120) }),
+  });
+  const tekst = await rr.text();
+  return reply(200, { ok: rr.ok, status: rr.status, antwoord: tekst.slice(0, 400) });
+}
+
 async function qbHandleKoersverschil(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
     return reply(401, { ok: false, error: "Unauthorized" });
@@ -13379,6 +13399,7 @@ export default {
     if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);
     if (url.pathname === "/amerika/qb/koersverschil" && request.method === "POST") return qbHandleKoersverschil(request, env);
     if (url.pathname === "/amerika/qb/boeking-terugzetten" && request.method === "POST") return qbHandleBoekingTerugzetten(request, env);
+    if (url.pathname === "/amerika/qb/proef-betaling" && request.method === "POST") return qbHandleProefBetaling(request, env);
     if (url.pathname === "/amerika/qb/batch-orders" && request.method === "POST") return qbHandleBatchOrders(request, env);
     if (url.pathname === "/amerika/qb/regel-factuur" && request.method === "POST") return qbHandleRegelFactuur(request, env);
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
