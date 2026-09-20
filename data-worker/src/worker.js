@@ -6618,6 +6618,12 @@ async function dpRefreshReservations(env) {
             regelIdOud: o.Id + "|" + gr.model + "|" + (gr.kleur || "") + "|" + gr.wh +
                         (gr.extra ? "|" + gr.extra : ""),
             datum: String(o.CreationDate).slice(0, 10), statusId: st, status: statusName[st] || String(st),
+            /* De leverdatum zoals hij in Logic4 op de order staat (Ind. lev.
+               dtm). Kevin (video, 20 sep 2026): "altijd de datum die in Logic
+               staat is leidend"; de werkplaatslijst sorteert erop. Zonder
+               echte datum staat er 2099-12-31 (gemeten), 9998 of zelfs 1920-01-01;
+               alleen een jaar vanaf 2020 telt. */
+            leverdatum: (o.DeliveryDate && /^20[2-9]\d/.test(String(o.DeliveryDate)) && !/^2099/.test(String(o.DeliveryDate))) ? String(o.DeliveryDate).slice(0, 10) : null,
             // De transporteur van de order ("FBS", "Transport distributie",
             // "Afhalen"). Chantal (video, 25 aug 2026) wil die zien bij de
             // binnengekomen spa's, zodat ze weet hoe hij weggaat.

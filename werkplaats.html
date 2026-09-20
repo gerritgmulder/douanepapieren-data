@@ -137,12 +137,16 @@ async function laad(){
   }).map(function(x){
     var n = notities[x.regelId] || (x.regelIdOud && notities[x.regelIdOud]) || {};
     var w = wp.regels[x.regelId] || {};
-    /* De leverdatum: de afspraak in Planning voor deze order (de eerste die
-       nog niet klaar is), anders wat de werkplaats zelf heeft ingevuld. */
+    /* De leverdatum: wat er in Logic4 op de order staat is leidend (Kevin,
+       video 20 sep 2026: "altijd de datum die in Logic staat"), en die komt
+       elk uur opnieuw mee. Staat er in Logic4 niets, dan de afspraak in
+       Planning; en anders wat de werkplaats zelf heeft ingevuld. */
     var afs = afspraken.filter(function(a){ return String(a.ordernr||"") === String(x.ordernr) && !a.klaar && a.datum; })
       .sort(function(a,b){ return String(a.datum).localeCompare(String(b.datum)); });
-    var lever = afs.length ? afs[0].datum : (w.leverdatum || "");
-    return { r: x, n: n, w: w, lever: lever, leverBron: afs.length ? "planning" : (w.leverdatum ? "werkplaats" : ""), tijd: afs.length ? (afs[0].tijd||"") : "" };
+    var lever = x.leverdatum || (afs.length ? afs[0].datum : (w.leverdatum || ""));
+    var bron = x.leverdatum ? "logic4" : (afs.length ? "planning" : (w.leverdatum ? "werkplaats" : ""));
+    var tijd = afs.length && (!x.leverdatum || afs[0].datum === x.leverdatum) ? (afs[0].tijd||"") : "";
+    return { r: x, n: n, w: w, lever: lever, leverBron: bron, tijd: tijd };
   });
   $("stand").textContent = "stand " + (live.updated ? String(live.updated).replace("T"," ").slice(0,16) : "");
   teken();
@@ -173,8 +177,8 @@ function teken(){
     var r = x.r, id = esc(r.regelId), o = orders[String(r.ordernr)];
     var laat = x.lever && x.lever < vandaag && !x.w.getest;
     var datum = x.lever
-      ? '<div class="datum">' + esc(datumNL(x.lever)) + '<small>' + esc(dagNaam(x.lever)) + (x.tijd ? " " + esc(x.tijd) : "") + (x.leverBron === "werkplaats" ? " · zelf gezet" : "") + '</small></div>'
-      : '<div class="datum"><small>geen leverdatum</small><input type="date" data-datum="' + id + '" title="Leverdatum zelf zetten (er staat nog geen afspraak in Planning)"></div>';
+      ? '<div class="datum">' + esc(datumNL(x.lever)) + '<small>' + esc(dagNaam(x.lever)) + (x.tijd ? " " + esc(x.tijd) : "") + (x.leverBron === "werkplaats" ? " · zelf gezet" : x.leverBron === "planning" ? " · uit Planning" : "") + '</small></div>'
+      : '<div class="datum"><small>geen leverdatum in Logic4</small><input type="date" data-datum="' + id + '" title="Leverdatum zelf zetten; zodra er in Logic4 een leverdatum op de order staat gaat die voor"></div>';
     return '<div class="kaart' + (x.w.getest ? " getest" : "") + (laat ? " laat" : "") + '">' +
       '<div class="kop">' + datum +
         '<div class="wat"><b>' + esc(r.model) + '</b>' + (isWarmtepomp(r) ? ' <span class="badge">&#9889; IntelliSaver · Integrated Heat Pump</span>' : (r.extra ? ' <span class="pil">' + esc(r.extra) + '</span>' : "")) +

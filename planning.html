@@ -1114,7 +1114,7 @@ function teken(){
     var route = w.items.some(function(a){ return a.plaats && !a.klaar; })
       ? '<button type="button" class="route-knop" data-datum="'+w.iso+'" title="Route van deze dag in Google Maps">🚗</button>' : "";
     return '<div class="dagkaart'+(w.iso===vandaagISO?" vandaag":"")+'">'+route+
-      '<h3>'+DAGEN[dagIndex(w.datum)]+'</h3><div class="datum">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+'</div>'+
+      '<h3>'+DAGEN[dagIndex(w.datum)]+'</h3><div class="datum">'+w.datum.getDate()+'-'+String(w.datum.getMonth()+1).padStart(2,"0")+'</div>'+
       (w.items.length ? w.items.map(kaartje).join("") : '<div class="leeg">Nog niets gepland</div>')+
       '<button type="button" class="plus" data-datum="'+w.iso+'">+ afspraak</button></div>';
   }).join("");
@@ -1314,7 +1314,7 @@ function tekenBord(){
     var heleDag = heleDagVan(w.iso);
     var totaal = routes.reduce(function(n, r, ri){ return n + stopsVan(w.iso, r.nr, ri===0).length; }, 0);
     html += '<div class="borddag'+(w.iso===vandaagISO?" vandaag":"")+'" data-datum="'+w.iso+'">'+
-      '<h3>'+DAGEN[dagIndex(w.datum)]+'<span class="dd">'+w.datum.getDate()+' '+MAANDEN[w.datum.getMonth()]+
+      '<h3>'+DAGEN[dagIndex(w.datum)]+'<span class="dd">'+w.datum.getDate()+'-'+String(w.datum.getMonth()+1).padStart(2,"0")+
         (totaal?' &middot; '+totaal+' stop'+(totaal===1?'':'s'):'')+'</span></h3>'+
       (heleDag.length ? '<div class="dagbalken">'+heleDag.map(function(a){
         var ck = cat(a);

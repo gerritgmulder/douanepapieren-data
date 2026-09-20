@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-20", bestand: "werkplaats.html", soort: "beter",
+      titel: "Leverdatum uit Logic4",
+      wat: "De leverdatum in de werkplaatslijst is de datum die op de order in Logic4 staat en komt elk uur opnieuw mee. Staat er in Logic4 geen datum, dan die van de afspraak in Planning."
+    },
+    {
+      datum: "2026-09-20", bestand: "planning.html", soort: "beter",
+      titel: "Datum als 19-10, overal",
+      wat: "Ook op het routebord en in de lijstweergave staat de datum nu als dag-maand."
+    },
+    {
       datum: "2026-09-20", bestand: "planning.html", soort: "beter",
       titel: "Tijdraster: de hele werkdag in beeld",
       wat: "Het tijdraster loopt van 09:00 tot 18:00 zonder schuifbalk, en de regel met de categorieën erboven is weg. Staat er een afspraak vroeger of later, dan rekt het raster voor die week vanzelf op. Boven elke dag staat nu ook de maand (19-10, 20-10)."
