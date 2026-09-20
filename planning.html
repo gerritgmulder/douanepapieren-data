@@ -158,8 +158,8 @@ main{max-width:1500px;margin:0 auto;padding:14px;padding-bottom:calc(24px + env(
 .dag-kop{background:#fff;padding:8px 8px 6px;text-align:left}
 .dag-kop .dnaam{font-size:11px;color:var(--grijs);text-transform:lowercase}
 .dag-kop .dnum{font-size:17px;font-weight:700;color:var(--ink);line-height:1.2}
-.dag-kop.vandaag .dnum{color:#fff;background:var(--groen);border-radius:50%;display:inline-block;
-       width:28px;height:28px;text-align:center;line-height:28px;font-size:14px}
+.dag-kop.vandaag .dnum{color:#fff;background:var(--groen);border-radius:999px;display:inline-block;
+       padding:0 9px;height:28px;text-align:center;line-height:28px;font-size:14px}
 .hoek{position:sticky;left:0;background:#fff;z-index:8}
 .heledag-cel{border-bottom:1px solid var(--rand);border-left:1px solid #f3f4f6;padding:3px 3px 5px;min-height:26px}
 .heledag-label{border-bottom:1px solid var(--rand);font-size:10px;color:var(--grijs);text-align:right;
@@ -1041,7 +1041,9 @@ function teken(){
     var route = w.items.some(function(a){ return a.plaats && !a.klaar; })
       ? '<button type="button" class="route-knop" data-datum="'+w.iso+'" title="Route van deze dag in Google Maps">🚗</button>' : "";
     kopHtml += '<div class="dag-kop'+(w.iso===vandaagISO?" vandaag":"")+(i>=5?" weekend":(i%2?" oneven":" even"))+'">'+route+
-      '<span class="dnaam">'+DAGKORT[dagIndex(w.datum)]+'</span><br><span class="dnum">'+w.datum.getDate()+'</span></div>';
+      /* Dag én maand. Gerrit (20 sep 2026): "er staat nu 19, 20, 21; je mag
+         gewoon 19-10, 20-10 doen." */
+      '<span class="dnaam">'+DAGKORT[dagIndex(w.datum)]+'</span><br><span class="dnum">'+w.datum.getDate()+'-'+String(w.datum.getMonth()+1).padStart(2,"0")+'</span></div>';
   });
   var html = "";
 
