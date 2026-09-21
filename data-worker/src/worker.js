@@ -4468,15 +4468,53 @@ async function amerikaZending(env, body) {
   const rec = data.orders[ref];
   if (!rec) return { ok: false, error: "Voor " + ref + " staat geen bestelling in het dashboard." };
 
-  if (body.ci) {
-    rec.ci = { naam: String(body.ci.naam || "").slice(0, 200),
-               ts: new Date().toISOString(), door: body.door || null,
-               stuks: Number(body.ci.stuks) || null,
-               containers: Array.isArray(body.ci.containers) ? body.ci.containers.slice(0, 20) : [] };
+  /* Zendingen in delen.
+     ═══════════════════════════════════════════════════════════════════════
+     Chantal (video, 20 sep 2026): "als ik een order bestel van 80 spa's gaan
+     die niet in één keer verstuurd worden, dat wordt in parts gedaan. Zolang
+     een order niet volledig is verstuurd blijft hij zichtbaar bij proforma;
+     alles wat verscheept is staat op een commercial invoice en gaat naar
+     onderweg." Eén bestelling heeft daarom een lijst zendingen (rec.zendingen),
+     elk met wat er volgens de commercial invoice in zit. Het oude enkele
+     veld rec.ci wordt bij het eerste gebruik omgezet naar zo'n zending. */
+  if (rec.ci && !Array.isArray(rec.zendingen)) {
+    rec.zendingen = [{ id: "z" + Date.parse(rec.ci.ts || 0) || "z0", naam: rec.ci.naam, ts: rec.ci.ts, door: rec.ci.door,
+                       stuks: rec.ci.stuks || null, containers: rec.ci.containers || [], eta: rec.eta || null,
+                       regels: [], models: {}, modelColors: {}, oud: true }];
   }
+  rec.zendingen = Array.isArray(rec.zendingen) ? rec.zendingen : [];
+  const zendingSchoon = (z) => ({
+    id: String(z.id || ("z" + Date.now() + Math.random().toString(36).slice(2, 6))).slice(0, 40),
+    naam: String(z.naam || "").slice(0, 200), ts: new Date().toISOString(), door: body.door || null,
+    stuks: Number(z.stuks) || null,
+    containers: Array.isArray(z.containers) ? z.containers.slice(0, 20).map(String) : [],
+    eta: z.eta ? String(z.eta).slice(0, 10) : null,
+    regels: Array.isArray(z.regels) ? z.regels.slice(0, 200).map(r => ({
+      code: String(r.code || "").slice(0, 40), kleur: String(r.kleur || "").slice(0, 80),
+      model: r.model ? String(r.model).slice(0, 60) : null, aantal: Number(r.aantal) || 0 })) : [],
+    models: (z.models && typeof z.models === "object") ? z.models : {},
+    modelColors: (z.modelColors && typeof z.modelColors === "object") ? z.modelColors : {},
+  });
+  if (body.zending) {
+    const z = zendingSchoon(body.zending);
+    const i = rec.zendingen.findIndex(x => x.id === z.id);
+    if (i >= 0) { z.eta = z.eta || rec.zendingen[i].eta || null; rec.zendingen[i] = z; } else rec.zendingen.push(z);
+  }
+  if (body.ci) {   // oude aanroep: één commercial invoice = één zending erbij
+    rec.zendingen.push(zendingSchoon({ naam: body.ci.naam, stuks: body.ci.stuks, containers: body.ci.containers, regels: body.ci.regels, models: body.ci.models, modelColors: body.ci.modelColors }));
+  }
+  if (body.zendingEta && body.zendingEta.id) {
+    const z = rec.zendingen.find(x => x.id === String(body.zendingEta.id));
+    if (z) z.eta = body.zendingEta.eta ? String(body.zendingEta.eta).slice(0, 10) : null;
+  }
+  if (body.verwijderZending) rec.zendingen = rec.zendingen.filter(x => x.id !== String(body.verwijderZending));
+  if (body.verwijderCi) rec.zendingen = [];
+  /* rec.ci blijft bestaan als samenvatting voor wie er nog naar kijkt: de
+     laatste zending, of niets meer. */
+  if (rec.zendingen.length) { const l = rec.zendingen[rec.zendingen.length - 1]; rec.ci = { naam: l.naam, ts: l.ts, door: l.door, stuks: l.stuks, containers: l.containers }; }
+  else delete rec.ci;
   if (body.eta !== undefined) rec.eta = body.eta ? String(body.eta).slice(0, 10) : null;
   if (body.aangekomen !== undefined) rec.aangekomen = !!body.aangekomen;
-  if (body.verwijderCi) delete rec.ci;
 
   /* De inhoud alsnog ophalen bij Logic4.
      Sinds 8 sep 2026 wordt bij het aanmaken bewaard wat er in een bestelling

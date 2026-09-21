@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="spa-codes.js"></script>
+<script src="inv-pl.js"></script>
 <script src="spa-fabrikanten.js"></script>
 <script src="spa-afmetingen.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -630,35 +631,125 @@ function zdRegelsTekst(rec){
   const namen=[...new Set(a.map(x=>x.model).filter(Boolean))];
   return stuks+" stuk"+(stuks===1?"":"s")+(namen.length?" · "+namen.slice(0,4).join(", ")+(namen.length>4?" …":""):"");
 }
+/* ── Zendingen in delen ──────────────────────────────────────────────
+   Chantal (video, 20 sep 2026): "als ik een order bestel van 80 spa's gaan
+   die niet in één keer verstuurd worden, dat wordt in parts gedaan. Zolang
+   een order niet volledig is verstuurd blijft hij zichtbaar bij proforma;
+   alles wat verscheept is staat op een commercial invoice en gaat naar
+   onderweg. Als ik bij onderweg klik zie ik precies wat er in die container
+   zit."
+
+   Elke commercial invoice is één zending (deel) van de bestelling. Wat erop
+   staat wordt per model en kleur afgetrokken van wat besteld is; de rest
+   blijft in productie. */
+function zdZendingen(rec){
+  if(Array.isArray(rec.zendingen)) return rec.zendingen;
+  if(rec.ci) return [{id:"oud",naam:rec.ci.naam,ts:rec.ci.ts,stuks:rec.ci.stuks,containers:rec.ci.containers||[],eta:rec.eta||null,regels:[],models:{},modelColors:{},oud:true}];
+  return [];
+}
+/* De schaalkleur: wat er op de invoice staat ("Sterling Silver #30") en wat
+   Logic4 zegt ("Sterling White with GREY/oak trim") op elkaar leggen. Zelfde
+   regel als in de worker: alles vóór "with" en zonder het nummer, en Sterling
+   Silver is Sterling White (Gerrit, 7 sep 2026). */
+function zdSchaal(k){
+  let s=String(k||"").toLowerCase().replace(/\bjazzi\s*colou?r\b/g,"").replace(/#\s*\d+/g,"").replace(/\(.*?\)/g,"");
+  s=s.split(/\bwith\b/)[0].split("|")[0].replace(/[,\/].*$/,"").replace(/\s+/g," ").trim();
+  if(/sterling\s*silver/.test(s)) s="sterling white";
+  return s;
+}
+/* Per model en kleur: besteld, verscheept (over alle zendingen), nog in
+   productie. Een zending zonder regels (oude invoice, alleen een aantal
+   stuks) wordt over de bestelling verdeeld op volgorde, zodat het totaal
+   wel klopt. */
+function zdStand(rec){
+  const besteld=(rec.artikelen||[]).map(a=>({model:a.model||a.artikelcode||"?",kleur:a.kleur||"",schaal:zdSchaal(a.kleur),besteld:Number(a.aantal)||0,verscheept:0}));
+  let losseStuks=0, alsGeheel=false;
+  for(const z of zdZendingen(rec)){
+    const regels=(z.regels||[]).filter(r=>(Number(r.aantal)||0)>0);
+    /* Een invoice van vóór 21 sep 2026: alleen het bestand is bewaard, niet
+       wat erop staat. Die telde als "hele bestelling verscheept" en dat
+       blijft zo tot iemand hem vervangt; anders springt alles terug naar
+       in productie. */
+    if(!regels.length&&!(Number(z.stuks)>0)){ alsGeheel=true; continue; }
+    if(!regels.length){ losseStuks+=Number(z.stuks)||0; continue; }
+    for(const r of regels){
+      let rest=Number(r.aantal)||0;
+      const past=besteld.filter(b=>r.model&&b.model===r.model&&b.schaal&&b.schaal===zdSchaal(r.kleur));
+      const pastModel=besteld.filter(b=>r.model&&b.model===r.model);
+      for(const b of past.concat(pastModel)){ if(rest<=0) break; const n=Math.min(rest,b.besteld-b.verscheept); if(n>0){ b.verscheept+=n; rest-=n; } }
+      if(rest>0) losseStuks+=rest;   // niet te plaatsen: telt wel mee in het totaal
+    }
+  }
+  for(const b of besteld){ if(losseStuks<=0) break; const n=Math.min(losseStuks,b.besteld-b.verscheept); if(n>0){ b.verscheept+=n; losseStuks-=n; } }
+  if(alsGeheel) for(const b of besteld) b.verscheept=b.besteld;
+  const tb=besteld.reduce((n,b)=>n+b.besteld,0), tv=besteld.reduce((n,b)=>n+b.verscheept,0);
+  return {regels:besteld,besteld:tb,verscheept:tv,open:Math.max(0,tb-tv),onbekend:!besteld.length};
+}
+function zdStandTekst(rec){
+  const s=zdStand(rec);
+  if(s.onbekend) return zdRegelsTekst(rec);
+  const namen=[...new Set(s.regels.filter(b=>b.besteld>b.verscheept).map(b=>b.model))];
+  return "<b>"+s.open+"</b> van "+s.besteld+" nog in productie"+(s.verscheept?" · "+s.verscheept+" verscheept":"")+(namen.length?"<br><span style='color:var(--muted)'>"+esc(namen.slice(0,4).join(", "))+(namen.length>4?" …":"")+"</span>":"");
+}
+function zdStandRij(rec,kolommen){
+  const s=zdStand(rec);
+  if(s.onbekend) return zdInhoudRij(rec,kolommen);
+  return "<tr class='zdDetail'><td colspan='"+kolommen+"' style='background:#fafafa;padding:6px 12px'>"+
+    "<table class='grid' style='margin:0'><thead><tr><th>Model</th><th>Kleur</th><th style='text-align:right'>Besteld</th><th style='text-align:right'>Verscheept</th><th style='text-align:right'>In productie</th></tr></thead><tbody>"+
+    s.regels.map(b=>"<tr"+(b.besteld-b.verscheept<=0?" style='color:#9ca3af'":"")+"><td>"+esc(b.model)+"</td><td style='font-size:12px'>"+esc(b.kleur||"—")+"</td>"+
+      "<td style='text-align:right'>"+b.besteld+"</td><td style='text-align:right'>"+b.verscheept+"</td><td style='text-align:right'><b>"+(b.besteld-b.verscheept)+"</b></td></tr>").join("")+
+    "</tbody></table></td></tr>";
+}
+function zdZendingInhoud(z,kolommen){
+  const regels=(z.regels||[]).filter(r=>(Number(r.aantal)||0)>0);
+  if(!regels.length) return "<tr class='zdDetail'><td colspan='"+kolommen+"' style='background:#fafafa;color:var(--muted);font-size:12px;padding:8px 12px'>"+
+    (z.stuks?z.stuks+" stuks volgens de commercial invoice; wat het precies is, is niet uit dit bestand gelezen. Vervang de invoice om de inhoud alsnog te lezen.":"Van deze zending is de inhoud niet gelezen; hij telt daarom als de hele bestelling. Klik op 'vervangen' en kies dezelfde commercial invoice opnieuw, dan wordt gelezen wat erin zit en blijft de rest in productie staan.")+"</td></tr>";
+  return "<tr class='zdDetail'><td colspan='"+kolommen+"' style='background:#fafafa;padding:6px 12px'>"+
+    "<table class='grid' style='margin:0'><thead><tr><th>Aantal</th><th>Model</th><th>Kleur</th><th>Fabriekscode</th></tr></thead><tbody>"+
+    regels.map(r=>"<tr><td>"+(Number(r.aantal)||0)+"</td><td>"+esc(r.model||"(onbekend)")+"</td><td style='font-size:12px'>"+esc(r.kleur||"—")+"</td><td style='font-size:12px'>"+esc(r.code||"—")+"</td></tr>").join("")+
+    "</tbody></table></td></tr>";
+}
+function zdZendingTekst(z){
+  const regels=(z.regels||[]).filter(r=>(Number(r.aantal)||0)>0);
+  const stuks=regels.length?regels.reduce((n,r)=>n+(Number(r.aantal)||0),0):(Number(z.stuks)||0);
+  const namen=[...new Set(regels.map(r=>r.model).filter(Boolean))];
+  return (stuks?stuks+" stuk"+(stuks===1?"":"s"):"inhoud niet gelezen")+(namen.length?" · "+namen.slice(0,4).join(", ")+(namen.length>4?" …":""):"");
+}
 function zdTeken(){
   const inProd=document.getElementById("zdInProductie");
   const onderweg=document.getElementById("zdOnderweg");
   if(!inProd||!onderweg) return;
   const alle=zdData||[];
-  const a=alle.filter(x=>!x.ci), b=alle.filter(x=>x.ci);
+  /* In productie: alles wat nog niet volledig verscheept is. Onderweg: elke
+     zending apart, ook als de bestelling nog deels in productie is. */
+  const a=alle.filter(x=>{ const s=zdStand(x); return s.onbekend ? !zdZendingen(x).length : s.open>0; });
+  const b=[]; alle.forEach(x=>zdZendingen(x).forEach((z,i)=>b.push({rec:x,z,deel:i+1,delen:zdZendingen(x).length})));
+  b.sort((p,q)=>String(p.z.eta||"9999").localeCompare(String(q.z.eta||"9999"))||String(p.rec.ref).localeCompare(String(q.rec.ref)));
   const tel=document.getElementById("zdTel");
-  if(tel) tel.textContent=alle.length?(a.length+" in productie · "+b.length+" onderweg"):"";
+  if(tel) tel.textContent=alle.length?(a.length+" in productie · "+b.length+" zending"+(b.length===1?"":"en")+" onderweg"):"";
 
   inProd.innerHTML="<h4 style='margin:0 0 8px'>In productie</h4>"+(a.length
-    ? "<div class='tablewrap'><table class='grid'><thead><tr><th>Proforma</th><th>Inkooporder</th><th>Inhoud</th><th>Besteld op</th><th></th></tr></thead><tbody>"+
+    ? "<div class='tablewrap'><table class='grid'><thead><tr><th>Proforma</th><th>Inkooporder</th><th>Nog in productie</th><th>Besteld op</th><th></th></tr></thead><tbody>"+
       a.map(x=>"<tr class='zdRij' data-ref='"+esc(x.ref)+"' style='cursor:pointer'>"+
         "<td>"+(zdOpen[x.ref]?"▾ ":"▸ ")+"<b>"+esc(x.ref)+"</b>"+(x.leverancier?"<br><span style='font-size:11px;color:var(--muted)'>"+esc(x.leverancier)+"</span>":"")+"</td>"+
-        "<td>"+esc(x.buyOrderId||"—")+"</td><td style='font-size:12px'>"+esc(zdRegelsTekst(x))+"</td>"+
+        "<td>"+esc(x.buyOrderId||"—")+"</td><td style='font-size:12px'>"+zdStandTekst(x)+"</td>"+
         "<td style='font-size:12px'>"+esc(datumNL(x.ts))+"</td>"+
         "<td onclick='event.stopPropagation()'><button class='btn sm zdUpload' data-ref='"+esc(x.ref)+"' type='button'>Commercial invoice uploaden</button></td></tr>"+
-        (zdOpen[x.ref]?zdInhoudRij(x,5):"")).join("")+
+        (zdOpen[x.ref]?zdStandRij(x,5):"")).join("")+
       "</tbody></table></div>"
     : "<p class='lead' style='font-size:12.5px'>Niets in productie. Maak bij <b>Containers</b> een inkooporder van een proforma, dan verschijnt hij hier.</p>");
 
   onderweg.innerHTML="<h4 style='margin:0 0 8px'>Onderweg</h4>"+(b.length
-    ? "<div class='tablewrap'><table class='grid'><thead><tr><th>Proforma</th><th>Inkooporder</th><th>Inhoud</th><th>Commercial invoice</th><th>Verwacht in Houston</th><th></th></tr></thead><tbody>"+
-      b.map(x=>"<tr class='zdRij' data-ref='"+esc(x.ref)+"' style='cursor:pointer'>"+
-        "<td>"+(zdOpen[x.ref]?"▾ ":"▸ ")+"<b>"+esc(x.ref)+"</b>"+(x.leverancier?"<br><span style='font-size:11px;color:var(--muted)'>"+esc(x.leverancier)+"</span>":"")+"</td>"+
-        "<td>"+esc(x.buyOrderId||"—")+"</td><td style='font-size:12px'>"+esc(zdRegelsTekst(x))+"</td>"+
-        "<td style='font-size:12px'>"+esc(x.ci.naam||"—")+"<br><span style='color:var(--muted);font-size:11px'>"+esc(datumNL(x.ci.ts))+"</span></td>"+
-        "<td onclick='event.stopPropagation()'><input type='date' class='zdEta' data-ref='"+esc(x.ref)+"' value='"+esc(x.eta||"")+"' style='padding:6px;font:inherit'></td>"+
-        "<td onclick='event.stopPropagation()'><button class='btn sm zdUpload' data-ref='"+esc(x.ref)+"' type='button'>vervangen</button></td></tr>"+
-        (zdOpen[x.ref]?zdInhoudRij(x,6):"")).join("")+
+    ? "<div class='tablewrap'><table class='grid'><thead><tr><th>Proforma</th><th>Container</th><th>Inhoud</th><th>Commercial invoice</th><th>Verwacht in Houston</th><th></th></tr></thead><tbody>"+
+      b.map(x=>{ const k=x.rec.ref+"#"+x.z.id; return "<tr class='zdRij' data-ref='"+esc(k)+"' style='cursor:pointer'>"+
+        "<td>"+(zdOpen[k]?"▾ ":"▸ ")+"<b>"+esc(x.rec.ref)+"</b>"+(x.delen>1?" <span class='pill' style='background:#eef2ff;color:#3730a3;font-size:10px'>deel "+x.deel+" van "+x.delen+"</span>":"")+
+          (x.rec.leverancier?"<br><span style='font-size:11px;color:var(--muted)'>"+esc(x.rec.leverancier)+"</span>":"")+"</td>"+
+        "<td style='font-size:12px'>"+esc((x.z.containers||[]).join(", ")||"—")+"</td><td style='font-size:12px'>"+esc(zdZendingTekst(x.z))+"</td>"+
+        "<td style='font-size:12px'>"+esc(x.z.naam||"—")+"<br><span style='color:var(--muted);font-size:11px'>"+esc(datumNL(x.z.ts))+"</span></td>"+
+        "<td onclick='event.stopPropagation()'><input type='date' class='zdEta' data-ref='"+esc(x.rec.ref)+"' data-z='"+esc(x.z.id)+"' value='"+esc(x.z.eta||"")+"' style='padding:6px;font:inherit'></td>"+
+        "<td onclick='event.stopPropagation()' style='white-space:nowrap'><button class='btn sm zdUpload' data-ref='"+esc(x.rec.ref)+"' data-z='"+esc(x.z.id)+"' type='button'>vervangen</button> "+
+          "<button class='btn sm zdWeg' data-ref='"+esc(x.rec.ref)+"' data-z='"+esc(x.z.id)+"' type='button' title='Deze zending weghalen; de spa's tellen dan weer als in productie'>weg</button></td></tr>"+
+        (zdOpen[k]?zdZendingInhoud(x.z,6):""); }).join("")+
       "</tbody></table></div>"
     : "<p class='lead' style='font-size:12.5px'>Nog niets onderweg. Upload de commercial invoice bij een bestelling hierboven.</p>");
 
@@ -666,11 +757,16 @@ function zdTeken(){
     const k=tr.dataset.ref; zdOpen[k]=!zdOpen[k]; zdTeken();
   }));
   document.querySelectorAll(".zdUpload").forEach(b2=>b2.addEventListener("click",()=>{
-    zdBezig=b2.dataset.ref;
+    zdBezig=b2.dataset.ref; zdBezigZending=b2.dataset.z||null;
     const f=document.getElementById("zdBestand"); f.value=""; f.click();
   }));
-  document.querySelectorAll(".zdEta").forEach(inp=>inp.addEventListener("change",()=>zdBewaar(inp.dataset.ref,{eta:inp.value||null})));
+  document.querySelectorAll(".zdEta").forEach(inp=>inp.addEventListener("change",()=>zdBewaar(inp.dataset.ref,{zendingEta:{id:inp.dataset.z,eta:inp.value||null}})));
+  document.querySelectorAll(".zdWeg").forEach(b2=>b2.addEventListener("click",()=>{
+    if(!confirm("Deze zending weghalen? De spa's erop tellen dan weer als in productie.")) return;
+    zdBewaar(b2.dataset.ref,{verwijderZending:b2.dataset.z});
+  }));
 }
+let zdBezigZending=null;
 async function zdBewaar(ref,velden){
   try{
     const r=await fetch(WORKER+"/amerika/zending",{method:"POST",
@@ -691,18 +787,43 @@ async function zdBewaar(ref,velden){
   f.addEventListener("change",async ev=>{
     const bestand=(ev.target.files||[])[0]; if(!bestand||!zdBezig) return;
     zdMelding("info","Commercial invoice inlezen…");
-    let stuks=null, containers=[];
+    let stuks=null, containers=[], regels=[], models={}, modelColors={};
+    const zet=function(code,kleur,aantal){
+      const k=String(kleur||"").replace(/\bjazzi\s*colou?r\b/ig,"").replace(/[,\s]+$/,"").replace(/\s+/g," ").trim();
+      const model=(window.spaModelMetKleur?spaModelMetKleur(code,k):null)||(window.spaModel?spaModel(code):null);
+      const m=(model&&model!=="(onbekend SKT-model)")?model:null;
+      regels.push({code:code,kleur:k,aantal:aantal,model:m});
+      if(m){ models[m]=(models[m]||0)+aantal; (modelColors[m]=modelColors[m]||{})[k||"(geen kleur)"]=(modelColors[m][k||"(geen kleur)"]||0)+aantal; }
+    };
     try{
       if(/\.pdf$/i.test(bestand.name)&&window.fpCiPdf){
         const doc=await window.fpCiPdf.leesBestand(bestand);
-        stuks=(doc.regels||[]).reduce((n,r)=>n+(Number(r.aantal)||0),0)||null;
+        (doc.regels||[]).forEach(function(r){ const n=Number(r.aantal)||0; if(n>0) zet(String(r.code||r.omschrijving||""),"",n); });
         if(doc.container) containers=[String(doc.container)];
       }else if(window.XLSX){
         const wb=XLSX.read(await bestand.arrayBuffer(),{type:"array"});
-        containers=wb.SheetNames.filter(n=>/^[A-Z]{4}\d{7}$/i.test(String(n).trim()));
+        containers=wb.SheetNames.filter(n=>/^[A-Z]{4}\d{7}$/i.test(String(n).trim())).map(n=>String(n).trim().toUpperCase());
+        /* Jazzi: code in kolom A (SKT888AA ...), kleur in kolom B, aantal in
+           kolom F. Zelfde leeswijze als Voorraadbeheer. */
+        const ws=wb.Sheets["COMMERCIAL INVOICE"]||wb.Sheets["CI"]||wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false});
+        for(const r of rows){
+          const c0=String((r&&r[0])==null?"":r[0]).split("\n")[0].trim();
+          const m=c0.match(/^((?:SKT|PP)[\w.-]+)/); const qty=Number(r&&r[5]);
+          if(!m||!isFinite(qty)||qty<=0) continue;
+          zet(c0,String((r&&r[1])==null?"":r[1]),qty);
+        }
+        if(!regels.length&&window.fpInvPl){
+          try{ const j=fpInvPl.lees(wb); (j&&j.regels||[]).forEach(function(r){ const n=Number(r.aantal)||0; if(n>0) zet(String(r.code||r.omschrijving||""),String(r.kleur||""),n); }); }catch(e){}
+        }
       }
+      stuks=regels.reduce((n,r)=>n+(Number(r.aantal)||0),0)||null;
     }catch(e){ /* niet kunnen lezen mag het vastleggen niet tegenhouden */ }
-    await zdBewaar(zdBezig,{ci:{naam:bestand.name,stuks,containers}});
+    const zending={id:zdBezigZending||undefined,naam:bestand.name,stuks,containers,regels,models,modelColors};
+    if(!regels.length&&!confirm("Uit dit bestand kon niet gelezen worden welke spa's erin zitten. Toch vastleggen als zending? (De bestelling blijft dan in productie staan tot je de inhoud alsnog inleest.)")){ zdMelding("",""); zdBezig=null; zdBezigZending=null; ev.target.value=""; return; }
+    await zdBewaar(zdBezig,{zending});
+    try{ if(window.fpLog) window.fpLog("zending-ci-ingelezen",zdBezig+": "+bestand.name+" ("+(stuks||0)+" stuks, "+regels.length+" regels)"); }catch(e){}
+    zdBezigZending=null;
     zdBezig=null; ev.target.value="";
   });
 })();
