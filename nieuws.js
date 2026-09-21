@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-09-21", bestand: "amerika.html", soort: "hersteld",
+      titel: "Batchregels met een rare naam",
+      wat: "'3573S Steve Raiche', '3644fantasies' en 'Michigan Swim Pools' zonder nummer worden nu gewoon herkend (letter tegen het nummer, geen spatie, of op naam en bedrag). En elk factuurnummer in een batch is met het potlood aan te passen."
+    },
+    {
+      datum: "2026-09-21", bestand: "amerika.html", soort: "hersteld",
       titel: "Dubbel factuurnummer in een batch",
       wat: "QuickBooks gebruikt een factuurnummer soms twee keer (3497 bestaat voor twee klanten). De batch keek naar de eerste en zei 'geen Logic4-order'. Nu wijst het bedrag aan welke factuur het is."
     },

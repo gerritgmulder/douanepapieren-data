@@ -9138,7 +9138,8 @@ const QB_GELDSOORTEN = new Set(["factuur", "overig", "balance"]);
 function qbFactuurVanRegel(r) {
   const uit = String((r && r.factuur) || "").trim();
   if (uit) return uit;
-  const m = String((r && r.naam) || "").trim().match(/^(\d{4})(?!\d)/);
+  // "3573S Steve Raiche": een letter aan het nummer geplakt hoort er niet bij.
+  const m = String((r && r.naam) || "").trim().match(/^(\d{4})[A-Za-z]?(?!\d)/);
   return m ? m[1] : "";
 }
 
@@ -9510,7 +9511,11 @@ async function qbHandleRegelFactuur(request, env) {
   const w = (wires.wires || []).find(x => String(x.id) === wireId);
   if (!w || !Array.isArray(w.regels) || !w.regels[i]) return reply(404, { ok: false, error: "batchregel niet gevonden" });
   const r = w.regels[i];
-  if (factuur) { r.factuur = factuur; r.factuurDoor = String(body.user || "").slice(0, 80); r.factuurTs = new Date().toISOString(); }
+  if (factuur) {
+    r.factuur = factuur; r.factuurDoor = String(body.user || "").slice(0, 80); r.factuurTs = new Date().toISOString();
+    // Een regel die bij het inlezen als "overig" was gezien is met een factuurnummer gewoon een factuurregel.
+    if (String(r.soort || "") === "overig" || String(r.soort || "") === "balance") r.soort = "factuur";
+  }
   else { delete r.factuur; delete r.factuurDoor; delete r.factuurTs; }
   await env.FONTEYN_DATA.put("qb-wires", JSON.stringify(wires));
   return reply(200, { ok: true, factuur: factuur || null });

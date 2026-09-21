@@ -1466,7 +1466,9 @@ function audParse(raw){
     const bedragen=cs.slice(1).map(audBedrag).filter(v=>v!==null);
     if(!bedragen.length) continue;                       // rij zonder bedragen
     const isBalance=/^balance\b/i.test(naam);
-    const factuur=(naam.match(/^(\d{4})\b/)||[])[1]||null;
+    /* "3573S Steve Raiche": een letter tegen het nummer aan (Gerrit, 21 sep
+       2026) mag het nummer niet onleesbaar maken. */
+    const factuur=(naam.match(/^(\d{4})[A-Za-z]?(?!\d)/)||[])[1]||null;
     const heeftNaam=/[a-z]/i.test(naam);
     rijen.push({
       naam: naam || "(totaal)",
@@ -1906,7 +1908,7 @@ function audNaamSleutel(x){ return String(x||"").toLowerCase().replace(/[^a-z0-9
 function audFactuurVan(r){
   const uit=String(r.factuur||"").trim();
   if(uit) return uit;
-  const m=String(r.naam||"").trim().match(/^(\d{4})(?!\d)/);
+  const m=String(r.naam||"").trim().match(/^(\d{4})[A-Za-z]?(?!\d)/);
   if(m) return m[1];
   /* Audrey schrijft soms alleen de klantnaam ("Michigan Swim Pools 75,55").
      Staat er in QuickBooks precies één factuur van die klant met precies dat
@@ -1942,6 +1944,7 @@ function audFactuurInQb(nr,bedrag){
   const metOrder=alle.filter(x=>x.logic4Order);
   return metOrder.length===1?metOrder[0]:(metOrder[0]||alle[0]);
 }
+let audFactuurWijzig={};   // welke batchregel staat open om het factuurnummer te wijzigen
 function audBatchCheck(w){
   const c2=n=>Math.round((Number(n)||0)*100)/100;
   const geld=(w.regels||[]).filter(r=>AUD_GELD.indexOf(String(r.soort||""))>=0);
@@ -2076,30 +2079,38 @@ function audRender(){
         "<th>Regel</th><th>Factuur</th><th>Soort</th><th style='text-align:right'>Amount invoice</th><th style='text-align:right'>Bankkosten</th><th style='text-align:right'>Totaal</th>"+
         "<th><label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0'><input type='checkbox' data-alle-verwerkt='"+esc(w.id)+"'"+(openN===0&&w.regels.some(r=>r.soort==='factuur')?" checked":"")+" title='Alle regels van deze batch in één keer aan- of uitvinken'> Verwerkt in Logic4</label></th></tr></thead><tbody>"+
       w.regels.map((r,i)=>{
-        const kan=r.soort==="factuur";
+        // Afvinken kan zodra er een factuurnummer bij hoort, ook als de regel
+        // bij het inlezen als "overig" was gezien ("Michigan Swim Pools").
+        const kan=r.soort==="factuur"||(r.soort!=="totaal"&&!!audFactuurVan(r));
         // Status komt uit de CENTRALE lijst op factuurnummer, zodat dit vinkje
         // en dat in 'Geaccordeerd — nog te verwerken' altijd gelijk staan.
         /* Een bankregel noemt alleen een factuurnummer. Zoek de factuur erbij,
            zodat het vinkje op hetzelfde QuickBooks-id staat als in de lijst
            hierboven. Komt dat nummer dubbel voor, dan blijft het bij het
            nummer; de bankregel zegt zelf niet welke van de twee het is. */
-        const inQb=audFactuurInQb(r.factuur,r.kolom1);
-        const v=(inQb&&vwVan(inQb))||(r.factuur&&verwerktIds[r.factuur])||null;
+        const nrVan=audFactuurVan(r);
+        const inQb=audFactuurInQb(nrVan,r.kolom1);
+        const v=(inQb&&vwVan(inQb))||(nrVan&&verwerktIds[nrVan])||null;
         const isVerwerkt=!!v;
         return "<tr"+(isVerwerkt?" style='background:#f0fdf4'":"")+">"+
           "<td><b>"+esc(r.naam)+"</b>"+(inQb&&inQb.geaccordeerd?" <span class='pill' style='background:#dcfce7;color:#15803d;font-size:10px'>Logic4 #"+esc(String(inQb.logic4Order||"?"))+"</span>":"")+
             (inQb&&inQb.notitie?"<div style='font-size:11px;color:var(--muted)' title='Eigen notitie bij deze factuur'>&#9998; "+esc(inQb.notitie)+"</div>":"")+"</td>"+
           /* Geen nummer: dan een vakje om het erbij te zetten (Chantal weet
              vaak wel bij welke factuur "Tatum refund" hoort). */
-          "<td>"+(r.factuur?esc(r.factuur)+(r.factuurDoor?" <span title='gezet door "+esc(r.factuurDoor)+"' style='color:var(--muted);font-size:10px'>✎</span>":"")
-            :(r.soort==="balance"||r.soort==="totaal"?"<span style='color:var(--muted)'>—</span>"
-              :"<input type='text' class='audRegelFactuur' data-wire='"+esc(w.id)+"' data-i='"+i+"' placeholder='factuurnr' maxlength='12' style='width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:12px' title='Bij welke factuur hoort deze regel? Vul het nummer in en druk op Enter'>"))+"</td>"+
+          /* Het factuurnummer is altijd aan te passen: klik op het potlood en
+             typ het goede nummer (Gerrit, 21 sep 2026: "nu is dat niet te
+             fixen door Osman"). */
+          "<td>"+(r.soort==="totaal"?"<span style='color:var(--muted)'>—</span>"
+            :(audFactuurWijzig[w.id+":"+i]
+              ?"<input type='text' class='audRegelFactuur' data-wire='"+esc(w.id)+"' data-i='"+i+"' value='"+esc(nrVan||"")+"' placeholder='factuurnr' maxlength='12' style='width:80px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:12px' title='Typ het factuurnummer en druk op Enter; leeg + Enter haalt het weg' autofocus>"
+              :(nrVan?esc(nrVan):"<span style='color:var(--muted)'>geen</span>")+
+               " <button type='button' class='audFactuurPen' data-k='"+esc(w.id+":"+i)+"' title='"+(r.factuurDoor?"gezet door "+esc(r.factuurDoor)+" - ":"")+"factuurnummer aanpassen' style='border:0;background:none;cursor:pointer;color:var(--muted);font-size:12px;padding:0 2px'>✎</button>"))+"</td>"+
           "<td>"+audSoortPill(r.soort)+"</td>"+
           "<td style='text-align:right;font-variant-numeric:tabular-nums'>"+esc(usd(r.kolom1))+"</td>"+
           "<td style='text-align:right;font-variant-numeric:tabular-nums;color:"+(r.kolom2!=null&&r.kolom2<0?"#b91c1c":"inherit")+"'>"+esc(usd(r.kolom2))+"</td>"+
           "<td style='text-align:right;font-variant-numeric:tabular-nums'><b>"+esc(usd(r.kolom3))+"</b></td>"+
           "<td>"+(kan
-            ? "<label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'><input type='checkbox' class='audVerw' data-nr='"+esc(r.factuur)+"' data-qbid='"+esc((inQb&&inQb.id)||"")+"'"+(isVerwerkt?" checked":"")+">"+
+            ? "<label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'><input type='checkbox' class='audVerw' data-nr='"+esc(nrVan)+"' data-qbid='"+esc((inQb&&inQb.id)||"")+"'"+(isVerwerkt?" checked":"")+">"+
               "<span style='font-size:11px;color:"+(isVerwerkt?"#15803d":"var(--muted)")+"'>"+(isVerwerkt?("verwerkt"+(v.user?" · "+esc(String(v.user).split("@")[0]):"")):"nog niet")+"</span></label>"
             : "<span style='color:var(--muted);font-size:11px'>n.v.t.</span>")+"</td></tr>";
       }).join("")+
@@ -2144,16 +2155,19 @@ function audRender(){
       alert("Klaar. Deze batch kan nu opnieuw geboekt worden met 'boeken op 1160'.");
     }catch(e){ alert("Terugzetten lukte niet: "+e.message); b.disabled=false; }
   }));
+  box.querySelectorAll(".audFactuurPen").forEach(b=>b.addEventListener("click",()=>{ audFactuurWijzig[b.dataset.k]=true; audRender(); const i=box.querySelector(".audRegelFactuur[data-wire='"+CSS.escape(b.dataset.k.split(":")[0])+"'][data-i='"+b.dataset.k.split(":")[1]+"']"); if(i) i.focus(); }));
   box.querySelectorAll(".audRegelFactuur").forEach(inp=>inp.addEventListener("keydown",async(e)=>{
+    if(e.key==="Escape"){ delete audFactuurWijzig[inp.dataset.wire+":"+inp.dataset.i]; audRender(); return; }
     if(e.key!=="Enter") return;
-    const nr=inp.value.trim(); if(!nr) return;
+    const nr=inp.value.trim().replace(/[^0-9A-Za-z-]/g,"");
+    delete audFactuurWijzig[inp.dataset.wire+":"+inp.dataset.i];
     inp.disabled=true;
     try{
       const r=await fetch(WORKER+"/amerika/qb/regel-factuur",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
         body:JSON.stringify({wireId:inp.dataset.wire,index:Number(inp.dataset.i),factuur:nr,user:(localStorage.getItem("fp.email")||"")})});
       const j=await r.json().catch(()=>null);
       if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
-      const w=wiresData.wires.find(x=>String(x.id)===inp.dataset.wire); if(w&&w.regels[Number(inp.dataset.i)]){ w.regels[Number(inp.dataset.i)].factuur=nr; w.regels[Number(inp.dataset.i)].factuurDoor=(localStorage.getItem("fp.email")||""); }
+      const w=wiresData.wires.find(x=>String(x.id)===inp.dataset.wire); if(w&&w.regels[Number(inp.dataset.i)]){ const rg=w.regels[Number(inp.dataset.i)]; if(nr){ rg.factuur=nr; rg.factuurDoor=(localStorage.getItem("fp.email")||""); if(rg.soort==="overig"||rg.soort==="balance") rg.soort="factuur"; } else { delete rg.factuur; delete rg.factuurDoor; } }
       if(window.fpLog) window.fpLog("batchregel-factuur","batch "+inp.dataset.wire+" regel "+inp.dataset.i+" -> "+nr);
       audRender();
     }catch(err){ alert("Factuurnummer bewaren mislukte: "+err.message); inp.disabled=false; }
@@ -2263,7 +2277,9 @@ function audParseTekst(tekst){
     const naam=velden.slice(0,i+1).join(" ").trim();
     if(!naam) continue;
     const isBalance=/^balance\b/i.test(naam);
-    const factuur=(naam.match(/^(\d{4})\b/)||[])[1]||null;
+    /* "3573S Steve Raiche": een letter tegen het nummer aan (Gerrit, 21 sep
+       2026) mag het nummer niet onleesbaar maken. */
+    const factuur=(naam.match(/^(\d{4})[A-Za-z]?(?!\d)/)||[])[1]||null;
     const heeftNaam=/[a-z]/i.test(naam);
     rijen.push({ naam, factuur,
       soort: isBalance?"balance":(factuur?"factuur":(heeftNaam?"overig":"totaal")),
