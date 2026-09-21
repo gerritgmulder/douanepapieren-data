@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-21", bestand: "debiteuren.html", soort: "nieuw",
+      titel: "Debiteuren (proef)",
+      wat: "Tegel 4 van het plan. Alle openstaande facturen per klant, en per klant welke stap aan de beurt is: eerste herinnering na 14 dagen, tweede na 30, aanmaning na 45. Groen gaat met één knop (of alles tegelijk), afspraken en interne debiteuren blijven met rust, en na de aanmaning vraagt het scherm om een besluit."
+    },
+    {
       datum: "2026-09-21", bestand: "labels.html", soort: "verbeterd",
       titel: "Labels: eerst alle colli 1, dan alle colli 2",
       wat: "Bij een artikel met meerdere dozen komen nu per artikel eerst alle labels 'Colli 1 van N' uit de printer en daarna alle 'Colli 2 van N'. Zo plak je een stapel eerste dozen in één keer."

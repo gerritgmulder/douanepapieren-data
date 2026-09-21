@@ -91,6 +91,8 @@
       uit:"Inkoopfacturen lezen en boeken; betaalbestand voor de bank", mobiel:"krap", tile:"tileInkoop" },
     { bestand:"uitbetalingen.html",  groep:"administratie-proef", ic:"💶", naam:"Uitbetalingen",
       uit:"Mollie, Amerika, bol.com: per uitbetaling één knop naar Logic4", mobiel:"krap", tile:"tileUitbetalingen" },
+    { bestand:"debiteuren.html",     groep:"administratie-proef", ic:"📬", naam:"Debiteuren",
+      uit:"Wie moet een herinnering krijgen, welke stap, één knop", mobiel:"krap", tile:"tileDebiteuren" },
     { bestand:"herinneringen.html",  groep:"herinneringen",    ic:"✉️",  naam:"Herinneringen",
       uit:"Betalingsherinneringen in één keer versturen",           mobiel:"krap", tile:"tileHerinneringen" },
     { bestand:"bankkoppeling.html",  groep:"bankkoppeling",    ic:"🏦",  naam:"Bankkoppeling maken",

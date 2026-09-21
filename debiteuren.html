@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("administratie-proef", ik) && !fpToegang.mag("debiteuren", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Debiteuren - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     DEBITEUREN (proef) - tegel 4 van het plan "administratie op knoppen"
+
+     De werklijst voor Rico. Per debiteur staat wat de volgende stap is en
+     of die nu aan de beurt is; hij drukt op de knop en de mail gaat. De
+     regels (14, 30, 45 dagen) en de teksten staan in de worker en zijn
+     onderaan aan te passen. De tegel Herinneringen blijft bestaan voor
+     wie zelf een lijstje wil aanvinken; wat daar verstuurd is telt hier
+     als stap 1.
+
+       groen    aan de beurt: één knop
+       oranje   iets om naar te kijken: geen mailadres, afspraak verlopen,
+                of na de aanmaning nog steeds open (beslissen)
+       wacht    nog niet aan de beurt
+       afspraak tot een datum met rust gelaten
+       intern   Lugarde, Icebath, UK, Passion Spas South: nooit een mail
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --goed:#16a34a; --rood:#b91c1c; --oranje:#c2410c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1300px;margin:16px auto;padding:0 14px 60px}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+h2{margin:0 0 6px;font-size:15px;color:var(--groen)}
+.lead{color:var(--grijs);font-size:12.5px;margin:0 0 10px;line-height:1.5}
+.knop{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink);white-space:nowrap}
+.knop.groen{background:var(--groen);color:#fff;border-color:var(--groen);font-weight:600}
+.knop:disabled{opacity:.5;cursor:default}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tab{background:#fff;border:1px solid var(--rand);border-radius:10px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink)}
+.tab.aan{background:var(--groen);color:#fff;border-color:var(--groen)}
+.rij{border:1px solid var(--rand);border-radius:12px;padding:10px 14px;margin-bottom:8px;background:#fff;border-left:5px solid #d1d5db;display:grid;grid-template-columns:minmax(200px,1.4fr) 110px 70px minmax(220px,2fr) auto;gap:6px 14px;align-items:center}
+.rij.groen{border-left-color:var(--goed)}.rij.oranje{border-left-color:#f59e0b}.rij.afspraak{border-left-color:#3b82f6}.rij.intern{border-left-color:#9ca3af}
+.rij .naam b{font-size:13.5px}.rij .naam div{font-size:11.5px;color:var(--grijs)}
+.rij .n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rij .reden{font-size:12px;color:var(--grijs);line-height:1.4}
+.rij .acties{display:flex;gap:6px;flex-wrap:wrap;justify-self:end}
+@media (max-width:900px){ .rij{grid-template-columns:1fr 1fr} .rij .reden,.rij .acties{grid-column:1 / -1} .rij .acties{justify-self:start} }
+.pil{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#eef2e6;color:var(--groen);white-space:nowrap}
+.pil.oranje{background:#ffedd5;color:var(--oranje)}.pil.grijs{background:#f3f4f6;color:#374151}.pil.blauw{background:#dbeafe;color:#1d4ed8}.pil.rood{background:#fee2e2;color:var(--rood)}
+.msg{margin-top:8px;padding:8px 11px;border-radius:8px;font-size:12.5px}.msg.ok{background:#dcfce7;color:#166534}.msg.bad{background:#fee2e2;color:var(--rood)}.msg.info{background:#eff6ff;color:#1e40af}
+.zoek{font:inherit;font-size:13px;padding:7px 10px;border:1px solid var(--rand);border-radius:9px;min-width:260px}
+select.keuze,input.veld{font:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--rand);border-radius:7px}
+textarea.veld{font:inherit;font-size:12px;padding:6px 8px;border:1px solid var(--rand);border-radius:7px;width:100%;min-height:90px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;color:var(--grijs);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:6px;border-bottom:1px solid var(--rand);white-space:nowrap}
+td{padding:6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-wrap:break-word}
+td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.hidden{display:none!important}
+.venster{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.venster .in{background:#fff;border-radius:12px;max-width:760px;width:100%;max-height:90vh;overflow:auto;padding:18px}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>📬 Debiteuren <span class="pil grijs" style="vertical-align:middle">proef</span></h1>
+</header>
+<main>
+  <div class="kaart">
+    <h2>Wie moet er nu een herinnering krijgen</h2>
+    <p class="lead">Alle openstaande facturen uit Logic4, per klant. De koppeling weet welke stap aan de beurt is: eerste herinnering na <b id="t1">14</b> dagen, tweede na <b id="t2">30</b>, aanmaning na <b id="t3">45</b>, telkens minstens <b id="t4">10</b> dagen na de vorige. Groen gaat met één knop; oranje vraagt om een blik. Iemand die een afspraak heeft laat je met rust tot die datum.</p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input class="zoek" id="zoek" placeholder="zoek op naam, plaats of debiteurnummer…">
+      <button class="knop groen" id="allesKnop" disabled>Alles wat groen is versturen</button>
+      <button class="knop" id="vers">Opnieuw ophalen uit Logic4</button>
+      <span id="stand" style="font-size:12px;color:var(--grijs)"></span>
+    </div>
+    <div id="msg"></div>
+  </div>
+  <div class="tabs">
+    <button class="tab aan" data-tab="nu" type="button">Nu (<span id="nNu">0</span>)</button>
+    <button class="tab" data-tab="wacht" type="button">Wachten (<span id="nWacht">0</span>)</button>
+    <button class="tab" data-tab="afspraak" type="button">Afspraken (<span id="nAfspraak">0</span>)</button>
+    <button class="tab" data-tab="intern" type="button">Intern (<span id="nIntern">0</span>)</button>
+    <button class="tab" data-tab="log" type="button">Verstuurd</button>
+    <button class="tab" data-tab="inst" type="button">Termijnen en teksten</button>
+  </div>
+  <div id="lijst"></div>
+  <div id="blokLog" class="hidden"><div class="kaart"><h2>Verstuurd en besloten</h2><div id="logLijst"></div></div></div>
+  <div id="blokInst" class="hidden">
+    <div class="kaart">
+      <h2>Termijnen</h2>
+      <p class="lead">Dagen over de vervaldatum waarop een stap aan de beurt is, en hoeveel dagen er minimaal tussen twee stappen zitten.</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:end">
+        <label style="font-size:12px">eerste herinnering<br><input class="veld" id="iT1" type="number" min="0" max="365" style="width:80px"></label>
+        <label style="font-size:12px">tweede herinnering<br><input class="veld" id="iT2" type="number" min="0" max="365" style="width:80px"></label>
+        <label style="font-size:12px">aanmaning<br><input class="veld" id="iT3" type="number" min="0" max="365" style="width:80px"></label>
+        <label style="font-size:12px">minimaal tussen twee stappen<br><input class="veld" id="iT4" type="number" min="0" max="365" style="width:80px"></label>
+        <button class="knop" id="iTBewaar">Bewaren</button>
+      </div>
+    </div>
+    <div class="kaart">
+      <h2>Teksten</h2>
+      <p class="lead">De tekst van de eerste herinnering is dezelfde als in de tegel Herinneringen en pas je daar aan. Hier de tweede herinnering en de aanmaning, in het Nederlands en Engels. De factuurtabel komt er automatisch onder.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+        <select class="keuze" id="iStap"><option value="stap2">tweede herinnering</option><option value="stap3">aanmaning</option></select>
+        <select class="keuze" id="iTaal"><option value="nl">Nederlands</option><option value="en">Engels</option></select>
+      </div>
+      <label style="font-size:12px">onderwerp<br><input class="veld" id="iOnderwerp" style="width:100%"></label>
+      <label style="font-size:12px;display:block;margin-top:6px">aanhef<br><input class="veld" id="iAanhef" style="width:100%"></label>
+      <label style="font-size:12px;display:block;margin-top:6px">tekst<br><textarea class="veld" id="iTekst"></textarea></label>
+      <label style="font-size:12px;display:block;margin-top:6px">groet<br><textarea class="veld" id="iGroet" style="min-height:60px"></textarea></label>
+      <div style="margin-top:8px"><button class="knop" id="iTekstBewaar">Bewaren</button> <span id="iMsg" style="font-size:12px;color:var(--grijs)"></span></div>
+    </div>
+  </div>
+</main>
+<div id="venster" class="venster hidden"><div class="in" id="vensterIn"></div></div>
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+async function api(pad, body, method){
+  var r = await fetch(W+pad, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik }, body: body ? JSON.stringify(body) : undefined });
+  var j = null; try { j = await r.json(); } catch(e){}
+  if (!r.ok) throw new Error((j && j.error) || ("HTTP " + r.status));
+  return j;
+}
+function eur(n){ return "€ " + Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function datumNL(v){ if(!v) return ""; var s=String(v).slice(0,10).split("-"); return s.length===3 ? s[2]+"-"+s[1]+"-"+s[0] : v; }
+function msg(el, tekst, soort){ el.innerHTML = tekst ? '<div class="msg '+(soort||"info")+'">'+tekst+'</div>' : ""; }
+var STAP = ["", "eerste herinnering", "tweede herinnering", "aanmaning", "beslissen"];
+var data = null, tab = "nu";
+function taalVan(d){ return /^(nl|nld|be|bel)$/i.test(d.iso||"") || (!d.iso && /nederland|netherlands/i.test(d.plaats||"")) ? "nl" : "en"; }
+
+async function laad(vers){
+  msg($("msg"), vers ? "Openstaande facturen ophalen uit Logic4…" : "Laden…", "info");
+  try{
+    data = await api("/debiteuren/open" + (vers ? "?vers=1" : ""));
+    if (!data.ok) throw new Error(data.error || "laden mislukt");
+    /* Namen van debiteuren die nog niet bekend zijn komen in porties van 25;
+       zolang er nog zijn, nog een keer vragen. */
+    for (var k = 0; k < 6 && data.nogOnbekend > 0; k++){ var d2 = await api("/debiteuren/open"); if (d2.ok) data = d2; }
+    msg($("msg"), "", "");
+    ["t1","t2","t3","t4"].forEach(function(id, i){ $(id).textContent = data.termijnen[["stap1","stap2","stap3","tussen"][i]]; });
+    $("iT1").value = data.termijnen.stap1; $("iT2").value = data.termijnen.stap2; $("iT3").value = data.termijnen.stap3; $("iT4").value = data.termijnen.tussen;
+    vulTekst();
+  }catch(e){ msg($("msg"), "Laden lukte niet: " + esc(e.message), "bad"); }
+  teken();
+}
+function lijstVan(){
+  var q = ($("zoek").value||"").trim().toLowerCase();
+  return Object.values((data && data.debiteuren) || {}).filter(function(d){
+    if (!q) return true;
+    return (d.bedrijf + " " + d.naam + " " + d.plaats + " " + d.id).toLowerCase().indexOf(q) >= 0;
+  });
+}
+function teken(){
+  document.querySelectorAll(".tab").forEach(function(b){ b.classList.toggle("aan", b.dataset.tab === tab); });
+  $("lijst").classList.toggle("hidden", tab === "log" || tab === "inst");
+  $("blokLog").classList.toggle("hidden", tab !== "log"); $("blokInst").classList.toggle("hidden", tab !== "inst");
+  if (!data) return;
+  var alle = Object.values(data.debiteuren);
+  var tel = { nu: 0, wacht: 0, afspraak: 0, intern: 0, groen: 0 }, open = 0;
+  alle.forEach(function(d){ open += d.open; if (d.status === "groen" || d.status === "oranje") tel.nu++; else tel[d.status]++; if (d.status === "groen") tel.groen++; });
+  $("nNu").textContent = tel.nu; $("nWacht").textContent = tel.wacht; $("nAfspraak").textContent = tel.afspraak; $("nIntern").textContent = tel.intern;
+  $("stand").textContent = alle.length + " klanten met " + data.facturen.length + " open facturen, samen " + eur(open) + " · stand " + new Date(data.ts).toLocaleString("nl-NL");
+  $("allesKnop").disabled = !tel.groen; $("allesKnop").textContent = "Alles wat groen is versturen (" + tel.groen + ")";
+  if (tab === "log") { laadLog(); return; }
+  if (tab === "inst") return;
+  var lijst = lijstVan().filter(function(d){ return tab === "nu" ? (d.status === "groen" || d.status === "oranje") : d.status === tab; });
+  lijst.sort(function(a,b){ return (a.status === "oranje" ? 0 : 1) - (b.status === "oranje" ? 0 : 1) || b.open - a.open; });
+  $("lijst").innerHTML = lijst.length ? lijst.map(rijHtml).join("") : '<p class="lead" style="padding:4px 2px">' + (tab === "nu" ? "Niets aan de beurt. Alles staat op wachten, afspraak of intern." : "Niets in deze lijst.") + '</p>';
+  $("lijst").querySelectorAll("[data-stuur]").forEach(function(b){ b.addEventListener("click", function(){ stuur([b.dataset.stuur], Number(b.dataset.stap), b); }); });
+  $("lijst").querySelectorAll("[data-proef]").forEach(function(b){ b.addEventListener("click", function(){ proef(b.dataset.proef, Number(b.dataset.stap)); }); });
+  $("lijst").querySelectorAll("[data-afspraak]").forEach(function(b){ b.addEventListener("click", function(){ afspraak(b.dataset.afspraak); }); });
+  $("lijst").querySelectorAll("[data-afspraakweg]").forEach(function(b){ b.addEventListener("click", async function(){ await api("/debiteuren/werk", { id: b.dataset.afspraakweg, afspraak: null }); laad(); }); });
+  $("lijst").querySelectorAll("[data-intern]").forEach(function(b){ b.addEventListener("click", async function(){ await api("/debiteuren/werk", { id: b.dataset.intern, intern: b.dataset.aan === "1" }); try{ if(window.fpLog) window.fpLog("debiteur-intern", b.dataset.intern + " -> " + (b.dataset.aan === "1" ? "intern" : "gewoon")); }catch(e){} laad(); }); });
+  $("lijst").querySelectorAll("[data-besluit]").forEach(function(b){ b.addEventListener("click", function(){ besluit(b.dataset.besluit); }); });
+  $("lijst").querySelectorAll("[data-facturen]").forEach(function(b){ b.addEventListener("click", function(){ facturen(b.dataset.facturen); }); });
+}
+function rijHtml(d){
+  var pil = d.status === "groen" ? '<span class="pil">' + esc(STAP[d.volgende]) + '</span>' : d.status === "oranje" ? '<span class="pil oranje">kijk even</span>' : d.status === "afspraak" ? '<span class="pil blauw">afspraak</span>' : d.status === "intern" ? '<span class="pil grijs">intern' + (d.internAuto ? " (herkend)" : "") + '</span>' : '<span class="pil grijs">wacht</span>';
+  var acties = "";
+  if (d.status === "groen") acties += '<button class="knop groen" data-stuur="' + d.id + '" data-stap="' + d.volgende + '">Stuur ' + esc(STAP[d.volgende]) + ' (' + taalVan(d).toUpperCase() + ')</button><button class="knop" data-proef="' + d.id + '" data-stap="' + d.volgende + '">voorbeeld</button>';
+  if (d.status === "oranje" && d.volgende === 4) acties += '<button class="knop" data-besluit="' + d.id + '">Besluit…</button>';
+  if (d.status === "oranje" && d.volgende && d.volgende < 4 && d.email) acties += '<button class="knop groen" data-stuur="' + d.id + '" data-stap="' + d.volgende + '">Stuur ' + esc(STAP[d.volgende]) + '</button>';
+  if (d.status === "oranje" && !d.email) acties += '<span class="pil rood">geen mailadres in Logic4</span>';
+  if (d.status !== "intern" && d.status !== "afspraak") acties += '<button class="knop" data-afspraak="' + d.id + '">Afspraak…</button>';
+  if (d.status === "afspraak") acties += '<button class="knop" data-afspraakweg="' + d.id + '">afspraak weghalen</button>';
+  acties += d.status === "intern" ? '<button class="knop" data-intern="' + d.id + '" data-aan="0">toch gewoon herinneren</button>' : '<button class="knop" data-intern="' + d.id + '" data-aan="1" title="deze klant krijgt nooit een herinnering">intern</button>';
+  acties += '<button class="knop" data-facturen="' + d.id + '">facturen</button>';
+  return '<div class="rij ' + d.status + '"><div class="naam"><b>' + esc(d.bedrijf || d.naam || ("debiteur " + d.id)) + '</b> ' + pil + '<div>' + esc([d.bedrijf ? d.naam : "", d.plaats, d.iso, "nr " + d.id].filter(Boolean).join(" · ")) + (d.email ? " · " + esc(d.email) : "") + '</div></div>' +
+    '<div class="n"><b>' + esc(eur(d.open)) + '</b><div style="font-size:11px;color:var(--grijs)">' + d.facturen + ' factu' + (d.facturen === 1 ? 'ur' : 'ren') + '</div></div>' +
+    '<div class="n">' + d.oudste + '<div style="font-size:11px;color:var(--grijs)">dagen</div></div>' +
+    '<div class="reden">' + esc(d.reden) + (d.laatste ? '<div style="font-size:11px">laatste: stap ' + d.laatste.stap + ' op ' + esc(datumNL(d.laatste.ts)) + (d.laatste.door ? ' door ' + esc(String(d.laatste.door).split("@")[0]) : '') + '</div>' : '') + '</div>' +
+    '<div class="acties">' + acties + '</div></div>';
+}
+async function stuur(ids, stap, knop){
+  var ds = ids.map(function(id){ return data.debiteuren[id]; }).filter(Boolean);
+  if (!ds.length) return;
+  if (!confirm(ds.length === 1 ? STAP[stap] + " sturen naar " + (ds[0].bedrijf || ds[0].naam) + " (" + ds[0].email + ")?" : ds.length + " mails versturen, ieder de stap die bij die klant aan de beurt is?")) return;
+  if (knop) knop.disabled = true;
+  msg($("msg"), "Versturen…", "info");
+  var gelukt = 0, fouten = [];
+  /* Per stap een verzoek, in porties van 40 (de worker doet niet meer per keer). */
+  var perStap = {}; ds.forEach(function(d){ var s = stap || d.volgende; (perStap[s] = perStap[s] || []).push(d); });
+  for (var s in perStap){
+    for (var i = 0; i < perStap[s].length; i += 40){
+      try{
+        var j = await api("/debiteuren/stuur", { stap: Number(s), debiteuren: perStap[s].slice(i, i+40).map(function(d){ return { id: d.id, email: d.email, taal: taalVan(d) }; }) });
+        (j.results||[]).forEach(function(r){ if (r.ok) gelukt++; else fouten.push((data.debiteuren[r.id] ? (data.debiteuren[r.id].bedrijf || data.debiteuren[r.id].naam) : r.id) + ": " + r.error); });
+      }catch(e){ fouten.push(e.message); }
+    }
+  }
+  try{ if(window.fpLog) window.fpLog("debiteuren-verstuurd", gelukt + " mails" + (fouten.length ? ", " + fouten.length + " mislukt" : "")); }catch(e){}
+  await laad();
+  msg($("msg"), gelukt + " mail" + (gelukt === 1 ? "" : "s") + " verstuurd." + (fouten.length ? " Mislukt: " + esc(fouten.slice(0, 5).join("; ")) : ""), fouten.length ? "bad" : "ok");
+}
+async function proef(id, stap){
+  var d = data.debiteuren[id];
+  try{
+    var j = await api("/debiteuren/stuur", { stap: stap, proef: true, debiteuren: [{ id: d.id, email: d.email || ik, taal: taalVan(d) }] });
+    var r = (j.results||[])[0]; if (!r || !r.ok) throw new Error((r && r.error) || "geen voorbeeld");
+    venster('<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px"><b>' + esc(r.onderwerp) + '</b><span style="font-size:12px;color:var(--grijs)">naar ' + esc(r.naar) + '</span></div>' + r.html + '<div style="margin-top:14px;display:flex;gap:8px"><button class="knop" id="vSluit">Sluiten</button><button class="knop" id="vTest">Stuur een test naar mijzelf</button></div>');
+    $("vSluit").addEventListener("click", venster); $("vTest").addEventListener("click", async function(){ $("vTest").disabled = true; try{ await api("/debiteuren/stuur", { stap: stap, test: true, debiteuren: [{ id: d.id, email: ik, taal: taalVan(d) }] }); $("vTest").textContent = "Verstuurd naar " + ik; }catch(e){ $("vTest").textContent = "Mislukt: " + e.message; } });
+  }catch(e){ msg($("msg"), "Voorbeeld lukte niet: " + esc(e.message), "bad"); }
+}
+function venster(html){ if (!html || typeof html !== "string") { $("venster").classList.add("hidden"); return; } $("vensterIn").innerHTML = html; $("venster").classList.remove("hidden"); }
+$("venster").addEventListener("click", function(e){ if (e.target === $("venster")) venster(); });
+function afspraak(id){
+  var d = data.debiteuren[id];
+  var over = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+  venster('<h2>Afspraak met ' + esc(d.bedrijf || d.naam) + '</h2><p class="lead">Tot deze datum krijgt de klant geen herinnering. Daarna komt hij vanzelf terug in de lijst, oranje, met deze notitie erbij.</p>' +
+    '<label style="font-size:12px">met rust laten tot<br><input class="veld" id="aTot" type="date" value="' + over + '"></label>' +
+    '<label style="font-size:12px;display:block;margin-top:8px">wat is er afgesproken<br><input class="veld" id="aNot" style="width:100%" placeholder="bijv. betaalt na levering, of: in behandeling bij Chantal"></label>' +
+    '<div style="margin-top:12px;display:flex;gap:8px"><button class="knop groen" id="aOk">Bewaren</button><button class="knop" id="aNee">Annuleren</button></div>');
+  $("aNee").addEventListener("click", venster);
+  $("aOk").addEventListener("click", async function(){ await api("/debiteuren/werk", { id: id, afspraak: { tot: $("aTot").value, notitie: $("aNot").value } }); try{ if(window.fpLog) window.fpLog("debiteur-afspraak", id + " tot " + $("aTot").value + ": " + $("aNot").value); }catch(e){} venster(); laad(); });
+}
+function besluit(id){
+  var d = data.debiteuren[id];
+  venster('<h2>' + esc(d.bedrijf || d.naam) + ': ' + esc(eur(d.open)) + ' na de aanmaning nog open</h2><p class="lead">Dit is geen mail maar een keuze. Incasso loopt buiten het Dashboard; afschrijven doet Osman in Logic4. Na het besluit staat de klant drie maanden bij Afspraken, met het besluit erbij.</p>' +
+    '<select class="keuze" id="bWat"><option value="incasso">naar het incassobureau</option><option value="afschrijven">afschrijven (oninbaar)</option><option value="nog eens bellen">eerst nog eens bellen</option><option value="anders">anders</option></select>' +
+    '<label style="font-size:12px;display:block;margin-top:8px">toelichting<br><input class="veld" id="bNot" style="width:100%"></label>' +
+    '<div style="margin-top:12px;display:flex;gap:8px"><button class="knop groen" id="bOk">Vastleggen</button><button class="knop" id="bNee">Annuleren</button></div>');
+  $("bNee").addEventListener("click", venster);
+  $("bOk").addEventListener("click", async function(){ await api("/debiteuren/werk", { id: id, besluit: $("bWat").value, notitie: $("bNot").value }); try{ if(window.fpLog) window.fpLog("debiteur-besluit", id + ": " + $("bWat").value + " " + $("bNot").value); }catch(e){} venster(); laad(); });
+}
+function facturen(id){
+  var d = data.debiteuren[id], fs = data.facturen.filter(function(f){ return String(f.debiteur) === String(id); }).sort(function(a,b){ return b.dagen - a.dagen; });
+  venster('<h2>' + esc(d.bedrijf || d.naam) + '</h2><div style="overflow:auto"><table><thead><tr><th>Factuur</th><th>Factuurdatum</th><th>Vervaldatum</th><th class="n">Dagen</th><th class="n">Bedrag</th><th class="n">Betaald</th><th class="n">Open</th></tr></thead><tbody>' +
+    fs.map(function(f){ return '<tr><td>' + esc(f.factuur) + '</td><td>' + esc(datumNL(f.factuurdatum)) + '</td><td>' + esc(datumNL(f.vervaldatum)) + '</td><td class="n">' + f.dagen + '</td><td class="n">' + esc(eur(f.bedrag)) + '</td><td class="n">' + esc(eur(f.betaald)) + '</td><td class="n"><b>' + esc(eur(f.openstaand)) + '</b></td></tr>'; }).join("") +
+    '</tbody></table></div><div style="margin-top:12px"><button class="knop" id="fSluit">Sluiten</button></div>');
+  $("fSluit").addEventListener("click", venster);
+}
+async function laadLog(){
+  try{
+    var j = await api("/debiteuren/log");
+    $("logLijst").innerHTML = (j.regels||[]).length ? '<div style="overflow:auto"><table><thead><tr><th>Wanneer</th><th>Klant</th><th>Stap</th><th>Naar</th><th class="n">Bedrag</th><th>Door</th></tr></thead><tbody>' +
+      j.regels.map(function(r){ var d = data.debiteuren[String(r.debiteur)]; return '<tr><td style="white-space:nowrap">' + esc(new Date(r.ts).toLocaleString("nl-NL")) + '</td><td>' + esc(d ? (d.bedrijf || d.naam) : ("debiteur " + r.debiteur)) + '</td><td>' + (r.stap === 4 ? 'besluit: ' + esc(r.besluit) + (r.notitie ? ' - ' + esc(r.notitie) : '') : esc(STAP[r.stap] || ("stap " + r.stap)) + (r.taal ? ' (' + r.taal.toUpperCase() + ')' : '')) + '</td><td>' + esc(r.naar || "") + '</td><td class="n">' + (r.bedrag != null ? esc(eur(r.bedrag)) : '') + '</td><td>' + esc(String(r.door||"").split("@")[0]) + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<p class="lead">Nog niets verstuurd.</p>';
+  }catch(e){ $("logLijst").innerHTML = '<p class="lead">' + esc(e.message) + '</p>'; }
+}
+function vulTekst(){
+  if (!data) return;
+  var t = data.tekst[$("iStap").value][$("iTaal").value];
+  $("iOnderwerp").value = t.onderwerp; $("iAanhef").value = t.aanhef; $("iTekst").value = t.tekst; $("iGroet").value = t.groet;
+}
+$("iStap").addEventListener("change", vulTekst); $("iTaal").addEventListener("change", vulTekst);
+$("iTekstBewaar").addEventListener("click", async function(){
+  var b = { tekst: {} }; b.tekst[$("iStap").value] = {}; b.tekst[$("iStap").value][$("iTaal").value] = { onderwerp: $("iOnderwerp").value, aanhef: $("iAanhef").value, tekst: $("iTekst").value, groet: $("iGroet").value };
+  try{ await api("/debiteuren/werk", b); $("iMsg").textContent = "Bewaard."; await laad(); }catch(e){ $("iMsg").textContent = "Mislukt: " + e.message; }
+});
+$("iTBewaar").addEventListener("click", async function(){
+  try{ await api("/debiteuren/werk", { termijnen: { stap1: $("iT1").value, stap2: $("iT2").value, stap3: $("iT3").value, tussen: $("iT4").value } }); try{ if(window.fpLog) window.fpLog("debiteuren-termijnen", [$("iT1").value,$("iT2").value,$("iT3").value,$("iT4").value].join("/")); }catch(e){} await laad(); }catch(e){ msg($("msg"), "Bewaren lukte niet: " + esc(e.message), "bad"); }
+});
+/* De mailserver laat 100 mails per dag door. Daarom per klik hooguit 80,
+   de grootste bedragen eerst; de rest staat morgen gewoon weer groen. */
+var MAX_PER_KEER = 80;
+$("allesKnop").addEventListener("click", function(){
+  var groen = Object.values(data.debiteuren).filter(function(d){ return d.status === "groen"; }).sort(function(a,b){ return b.open - a.open; });
+  if (groen.length > MAX_PER_KEER && !confirm("Er staan " + groen.length + " klanten groen. Er kunnen hooguit " + MAX_PER_KEER + " mails per keer weg (de mailserver laat 100 per dag door). De " + MAX_PER_KEER + " grootste bedragen gaan nu; de rest morgen. Doorgaan?")) return;
+  stuur(groen.slice(0, MAX_PER_KEER).map(function(d){ return String(d.id); }), 0, $("allesKnop"));
+});
+$("vers").addEventListener("click", function(){ laad(true); });
+$("zoek").addEventListener("input", teken);
+document.querySelectorAll(".tab").forEach(function(b){ b.addEventListener("click", function(){ tab = b.dataset.tab; teken(); }); });
+(async function(){
+  for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
+  laad();
+})();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"debiteuren",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

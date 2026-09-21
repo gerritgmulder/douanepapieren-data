@@ -150,6 +150,8 @@ const ALLOWED_BUCKETS = new Set([
   "planning-its-order",
   "herinneringen-debiteuren", // Herinneringen: naam, bedrijf en mailadres per debiteur, uit Logic4 (cache, vult zich aan)
   "herinneringen-log",
+  "debiteuren-werk",     // Debiteuren (proef): afspraken, interne debiteuren, termijnen en de teksten van stap 2 en 3
+  "debiteuren-log",      // Debiteuren (proef): wat er per stap verstuurd of besloten is
   "dhl-push",            // DHL Push API v2: de berichten die DHL zelf stuurt over zendingen
   "qb-geboekt-terug",    // Amerika: wat er uit qb-geboekt is gehaald toen een batch opnieuw geboekt moest worden
   "werkplaats",          // Werkplaats: per orderregel getest ja/nee (door, wanneer) en een eigen leverdatum als Planning er geen heeft
@@ -6476,6 +6478,209 @@ async function herinneringenHandle(request, env, url) {
   if (p === "/herinneringen/log" && request.method === "GET") {
     const log = (await env.FONTEYN_DATA.get("herinneringen-log", { type: "json" })) || { regels: [] };
     return reply(200, { ok: true, regels: (log.regels || []).slice(-300).reverse() });
+  }
+  return reply(404, { ok: false });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DEBITEUREN (proef) - tegel 4 van het plan "administratie op knoppen"
+   ═══════════════════════════════════════════════════════════════════════════
+
+   De tegel Herinneringen stuurt één tekst naar wie je aanvinkt. Dit is de
+   werklijst eromheen, voor Rico: per debiteur wat de volgende stap is en
+   wanneer die aan de beurt is, zodat hij alleen op de knop hoeft te drukken.
+
+     stap 1  herinnering        vanaf 14 dagen over de vervaldatum
+     stap 2  tweede herinnering vanaf 30 dagen, en minstens 10 dagen na stap 1
+     stap 3  aanmaning          vanaf 45 dagen, en minstens 10 dagen na stap 2
+     stap 4  beslissen          incasso of afschrijven; geen mail, een keuze
+                                van Gerrit of Osman (oranje, niet groen)
+
+   Een afspraak ("betaalt 15 oktober", "in behandeling bij Chantal") zet de
+   debiteur tot die datum op de wachtlijst; daarna komt hij vanzelf terug.
+   Interne debiteuren (Lugarde, Passion Icebath, Fonteyn UK) krijgen nooit
+   een mail; die staan apart. De termijnen en de teksten van stap 2 en 3
+   staan in debiteuren-werk; stap 1 deelt de tekst met de tegel Herinneringen.
+   De openstaande facturen en de debiteurgegevens komen uit dezelfde caches
+   als die tegel, en wat daar verstuurd is telt hier als stap 1. */
+const DEB_TERMIJNEN = { stap1: 14, stap2: 30, stap3: 45, tussen: 10 };
+const DEB_INTERN = /lugarde|icebath|ice\s*bath|\bfonteyn\b|passion\s*spas?\s*(south|inc|usa)/i;
+const DEB_TEKST_STANDAARD = {
+  stap2: {
+    en: { onderwerp: "Second payment reminder - Fonteyn Outdoor Living Mall", aanhef: "Dear Sir/Madam,",
+          tekst: "Despite our earlier reminder, the invoice(s) below are still outstanding according to our records.\n\nWe kindly but urgently request payment within 7 days, quoting the invoice number. If payment has been made in the meantime, please disregard this message.\n\nShould there be a reason the invoice cannot be paid, please contact us so we can find a solution together.",
+          groet: HER_TEKST_STANDAARD.en.groet, kolommen: HER_TEKST_STANDAARD.en.kolommen, totaal: HER_TEKST_STANDAARD.en.totaal },
+    nl: { onderwerp: "Tweede betalingsherinnering - Fonteyn Outdoor Living Mall", aanhef: "Geachte heer/mevrouw,",
+          tekst: "Ondanks onze eerdere herinnering staan onderstaande factuur/facturen volgens onze administratie nog open.\n\nWij verzoeken u dringend het openstaande bedrag binnen 7 dagen te voldoen onder vermelding van het factuurnummer. Heeft u inmiddels betaald, dan kunt u dit bericht als niet verzonden beschouwen.\n\nIs er een reden waarom de factuur niet betaald kan worden, neem dan contact met ons op zodat we samen een oplossing vinden.",
+          groet: HER_TEKST_STANDAARD.nl.groet, kolommen: HER_TEKST_STANDAARD.nl.kolommen, totaal: HER_TEKST_STANDAARD.nl.totaal },
+  },
+  stap3: {
+    en: { onderwerp: "Final notice - Fonteyn Outdoor Living Mall", aanhef: "Dear Sir/Madam,",
+          tekst: "We have reminded you twice about the outstanding invoice(s) below without receiving payment or a response.\n\nThis is our final notice. If the full amount has not been received within 5 days of the date of this message, we will hand the claim over to our collection agency. The additional costs of collection and statutory interest will then be charged to you.\n\nWe would much prefer to resolve this with you directly; please contact us today if you wish to discuss the invoice.",
+          groet: HER_TEKST_STANDAARD.en.groet, kolommen: HER_TEKST_STANDAARD.en.kolommen, totaal: HER_TEKST_STANDAARD.en.totaal },
+    nl: { onderwerp: "Aanmaning - Fonteyn Outdoor Living Mall", aanhef: "Geachte heer/mevrouw,",
+          tekst: "Wij hebben u tweemaal herinnerd aan onderstaande openstaande factuur/facturen, zonder betaling of reactie te ontvangen.\n\nDit is onze laatste aanmaning. Is het volledige bedrag niet binnen 5 dagen na dagtekening van dit bericht ontvangen, dan dragen wij de vordering over aan ons incassobureau. De incassokosten en de wettelijke rente komen dan voor uw rekening.\n\nWij lossen dit liever rechtstreeks met u op: neem vandaag nog contact met ons op als u de factuur wilt bespreken.",
+          groet: HER_TEKST_STANDAARD.nl.groet, kolommen: HER_TEKST_STANDAARD.nl.kolommen, totaal: HER_TEKST_STANDAARD.nl.totaal },
+  },
+};
+async function debOpenFacturen(env, vers) {
+  let d = vers ? null : await env.FONTEYN_DATA.get("herinneringen-open", { type: "json" });
+  if (!d || !d.ts || Date.now() - Date.parse(d.ts) > 30 * 60000) {
+    const lijst = await relL4(env, "/v3/Orders/GetOpenPaymentInvoices", {});
+    d = { ts: new Date().toISOString(), facturen: (Array.isArray(lijst) ? lijst : []).map(x => ({
+      factuur: x.InvoiceId, debiteur: x.DebtorId, factuurdatum: x.InvoiceDate, vervaldatum: x.DueDate, dagen: Number(x.DaysPastDueDate) || 0,
+      bedrag: Math.round((Number(x.TotalAmount) || 0) * 100) / 100, betaald: Math.round((Number(x.TotalAmountPayed) || 0) * 100) / 100,
+      openstaand: Math.round((Number(x.AmountOutstanding) || 0) * 100) / 100, betaalmethode: x.PaymentMethodId || null })).filter(f => f.openstaand > 0) };
+    await env.FONTEYN_DATA.put("herinneringen-open", JSON.stringify(d));
+  }
+  return d;
+}
+function debTekstVan(werk, herTekst, stap, taal) {
+  if (stap === 1) return (herTekst || HER_TEKST_STANDAARD)[taal] || HER_TEKST_STANDAARD[taal];
+  const st = DEB_TEKST_STANDAARD["stap" + stap] || DEB_TEKST_STANDAARD.stap3;
+  const eigen = ((werk.tekst || {})["stap" + stap] || {})[taal] || {};
+  return { onderwerp: eigen.onderwerp || st[taal].onderwerp, aanhef: eigen.aanhef || st[taal].aanhef, tekst: eigen.tekst || st[taal].tekst, groet: eigen.groet || st[taal].groet, kolommen: st[taal].kolommen, totaal: st[taal].totaal };
+}
+async function debiteurenHandle(request, env, url) {
+  const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+  if (!(await toegangMag(env, "administratie-proef", wie)) && !(await toegangMag(env, "debiteuren", wie))) return reply(403, { ok: false, error: "geen toegang: deze tegel is nog in aanbouw" });
+  const p = url.pathname;
+  const werkLees = async () => (await env.FONTEYN_DATA.get("debiteuren-werk", { type: "json" })) || { afspraken: {}, intern: {}, nietIntern: {}, termijnen: {}, tekst: {} };
+  if (p === "/debiteuren/open" && request.method === "GET") {
+    const d = await debOpenFacturen(env, url.searchParams.get("vers") === "1");
+    const ids = [...new Set(d.facturen.map(f => String(f.debiteur)))];
+    const { cache, nogOnbekend } = await herDebiteuren(env, ids);
+    const werk = await werkLees();
+    const termijnen = { ...DEB_TERMIJNEN, ...(werk.termijnen || {}) };
+    /* Wat er al verstuurd is: stap 1 uit de tegel Herinneringen, de rest uit
+       het eigen logboek. Per debiteur de hoogste stap en wanneer. */
+    const herLog = (await env.FONTEYN_DATA.get("herinneringen-log", { type: "json" })) || { regels: [] };
+    const log = (await env.FONTEYN_DATA.get("debiteuren-log", { type: "json" })) || { regels: [] };
+    const hist = {};
+    const zet = (id, stap, ts, door, facturen) => { const k = String(id); (hist[k] = hist[k] || []).push({ stap, ts, door, facturen: facturen || [] }); };
+    for (const r of (herLog.regels || [])) zet(r.debiteur, 1, r.ts, r.door, r.facturen);
+    for (const r of (log.regels || [])) zet(r.debiteur, r.stap, r.ts, r.door, r.facturen);
+    const vandaag = new Date().toISOString().slice(0, 10);
+    const debiteuren = {};
+    for (const id of ids) {
+      const c = cache[id] || {};
+      const facturen = d.facturen.filter(f => String(f.debiteur) === id);
+      const open = Math.round(facturen.reduce((n, f) => n + f.openstaand, 0) * 100) / 100;
+      const oudste = Math.max(0, ...facturen.map(f => f.dagen));
+      /* Alleen stappen die over de facturen van nu gingen tellen; een
+         herinnering van vorig jaar over een allang betaalde factuur zegt
+         niets over de open posten van vandaag. Staat er geen factuurlijst
+         bij (oude logregel), dan telt hij wel. */
+      const nuIds = new Set(facturen.map(f => String(f.factuur)));
+      const h = (hist[id] || []).filter(x => !x.facturen.length || x.facturen.some(f => nuIds.has(String(f)))).sort((a, b) => (b.stap - a.stap) || String(b.ts).localeCompare(String(a.ts)));
+      const laatste = h[0] || null;
+      const sindsLaatste = laatste ? Math.floor((Date.now() - Date.parse(laatste.ts)) / 86400000) : null;
+      const naam = c.bedrijf || c.naam || "";
+      const intern = werk.nietIntern && werk.nietIntern[id] ? false : (!!(werk.intern || {})[id] || DEB_INTERN.test(naam));
+      const afspraak = (werk.afspraken || {})[id] || null;
+      const email = c.herinneringMail || c.factuurMail || c.email || "";
+      let volgende = 0, status = "wacht", reden = "";
+      const laatsteStap = laatste ? Number(laatste.stap) || 0 : 0;
+      if (laatsteStap >= 3 && sindsLaatste >= termijnen.tussen) { volgende = 4; }
+      else if (laatsteStap === 2 && oudste >= termijnen.stap3 && sindsLaatste >= termijnen.tussen) volgende = 3;
+      else if (laatsteStap === 1 && oudste >= termijnen.stap2 && sindsLaatste >= termijnen.tussen) volgende = 2;
+      else if (laatsteStap === 0 && oudste >= termijnen.stap1) volgende = 1;
+      if (intern) { status = "intern"; reden = "interne debiteur, krijgt geen herinnering"; }
+      else if (afspraak && afspraak.tot >= vandaag) { status = "afspraak"; reden = "afspraak tot " + herDatum(afspraak.tot) + (afspraak.notitie ? ": " + afspraak.notitie : ""); }
+      else if (afspraak && afspraak.tot < vandaag) { status = "oranje"; reden = "de afspraak tot " + herDatum(afspraak.tot) + " is verlopen" + (afspraak.notitie ? " (" + afspraak.notitie + ")" : "") + "; nog steeds " + herGeld(open) + " open"; }
+      else if (volgende === 4) { status = "oranje"; reden = "na de aanmaning van " + herDatum(laatste.ts) + " is er nog " + herGeld(open) + " open: beslissen over incasso of afschrijven"; }
+      else if (volgende && !email) { status = "oranje"; reden = "stap " + volgende + " is aan de beurt, maar er is geen mailadres bekend"; }
+      else if (volgende) { status = "groen"; reden = ["", "eerste herinnering", "tweede herinnering", "aanmaning"][volgende] + ": oudste factuur " + oudste + " dagen over de vervaldatum" + (laatste ? ", stap " + laatsteStap + " was " + herDatum(laatste.ts) : ""); }
+      else { status = "wacht"; reden = laatste ? "stap " + laatsteStap + " verstuurd op " + herDatum(laatste.ts) + "; volgende stap over " + Math.max(0, termijnen.tussen - (sindsLaatste || 0)) + " dagen of zodra de factuur ouder is" : (oudste > 0 ? "over " + (termijnen.stap1 - oudste) + " dagen aan de beurt voor de eerste herinnering" : "nog niet vervallen"); }
+      debiteuren[id] = { id: Number(id), naam: c.naam || "", bedrijf: c.bedrijf || "", email, iso: c.iso || "", plaats: c.plaats || "", bekend: !!cache[id] && !c.onbekend,
+        open, facturen: facturen.length, oudste, laatste: laatste ? { stap: laatsteStap, ts: laatste.ts, door: laatste.door } : null, volgende, status, reden, intern, internAuto: intern && !(werk.intern || {})[id], afspraak };
+    }
+    const herTekst = (await env.FONTEYN_DATA.get("herinneringen-tekst", { type: "json" })) || HER_TEKST_STANDAARD;
+    const tekst = { stap1: herTekst, stap2: { nl: debTekstVan(werk, herTekst, 2, "nl"), en: debTekstVan(werk, herTekst, 2, "en") }, stap3: { nl: debTekstVan(werk, herTekst, 3, "nl"), en: debTekstVan(werk, herTekst, 3, "en") } };
+    return reply(200, { ok: true, ts: d.ts, facturen: d.facturen, debiteuren, nogOnbekend, termijnen, tekst });
+  }
+  if (p === "/debiteuren/werk" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const werk = await werkLees();
+    const id = String(b.id || "");
+    if (b.afspraak !== undefined && id) {
+      werk.afspraken = werk.afspraken || {};
+      if (b.afspraak && /^\d{4}-\d{2}-\d{2}$/.test(String(b.afspraak.tot || ""))) werk.afspraken[id] = { tot: b.afspraak.tot, notitie: String(b.afspraak.notitie || "").slice(0, 200), door: wie, ts: new Date().toISOString() };
+      else delete werk.afspraken[id];
+    }
+    if (b.intern !== undefined && id) {
+      werk.intern = werk.intern || {}; werk.nietIntern = werk.nietIntern || {};
+      if (b.intern) { werk.intern[id] = { door: wie, ts: new Date().toISOString() }; delete werk.nietIntern[id]; }
+      else { delete werk.intern[id]; werk.nietIntern[id] = { door: wie, ts: new Date().toISOString() }; }
+    }
+    if (b.termijnen) { werk.termijnen = {}; for (const k of Object.keys(DEB_TERMIJNEN)) { const v = Number(b.termijnen[k]); if (v >= 0 && v <= 365) werk.termijnen[k] = v; } }
+    if (b.tekst) {
+      werk.tekst = werk.tekst || {};
+      for (const stap of ["stap2", "stap3"]) if (b.tekst[stap]) { werk.tekst[stap] = werk.tekst[stap] || {}; for (const taal of ["nl", "en"]) if (b.tekst[stap][taal]) { const t = b.tekst[stap][taal]; werk.tekst[stap][taal] = { onderwerp: String(t.onderwerp || "").slice(0, 150), aanhef: String(t.aanhef || "").slice(0, 200), tekst: String(t.tekst || "").slice(0, 3000), groet: String(t.groet || "").slice(0, 800) }; } }
+    }
+    if (b.besluit && id) {
+      const log = (await env.FONTEYN_DATA.get("debiteuren-log", { type: "json" })) || { regels: [] };
+      log.regels.push({ ts: new Date().toISOString(), debiteur: Number(id), stap: 4, besluit: String(b.besluit).slice(0, 40), notitie: String(b.notitie || "").slice(0, 300), door: wie, facturen: [] });
+      log.regels = log.regels.slice(-3000); await env.FONTEYN_DATA.put("debiteuren-log", JSON.stringify(log));
+      /* Na een besluit is de debiteur van de lijst: incasso loopt buiten het
+         Dashboard, afschrijven doet Osman in Logic4. Tot de posten weg zijn
+         staat hij als afspraak, zodat hij niet elke dag oranje terugkomt. */
+      werk.afspraken = werk.afspraken || {};
+      const tot = new Date(Date.now() + 90 * 86400000).toISOString().slice(0, 10);
+      werk.afspraken[id] = { tot, notitie: "besluit: " + String(b.besluit).slice(0, 40) + (b.notitie ? " - " + String(b.notitie).slice(0, 150) : ""), door: wie, ts: new Date().toISOString() };
+    }
+    await env.FONTEYN_DATA.put("debiteuren-werk", JSON.stringify(werk));
+    return reply(200, { ok: true });
+  }
+  if (p === "/debiteuren/stuur" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const stap = [1, 2, 3].includes(Number(b.stap)) ? Number(b.stap) : 1;
+    const werk = await werkLees();
+    const herTekst = (await env.FONTEYN_DATA.get("herinneringen-tekst", { type: "json" })) || HER_TEKST_STANDAARD;
+    const opdrachten = Array.isArray(b.debiteuren) ? b.debiteuren.slice(0, 40) : [];
+    if (!opdrachten.length) return reply(400, { ok: false, error: "geen debiteuren gekozen" });
+    if (!b.proef && (!env.RESEND_API_KEY || !env.MAIL_FROM)) return reply(500, { ok: false, error: "mail is niet ingericht in de worker" });
+    const open = await debOpenFacturen(env, false);
+    const log = (await env.FONTEYN_DATA.get("debiteuren-log", { type: "json" })) || { regels: [] };
+    const herLog = (await env.FONTEYN_DATA.get("herinneringen-log", { type: "json" })) || { regels: [] };
+    const adres = (String(env.MAIL_FROM || "").match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM || "");
+    const results = [];
+    for (const o of opdrachten) {
+      const id = String(o.id || ""), taal = o.taal === "nl" ? "nl" : "en";
+      const tekst = debTekstVan(werk, herTekst, stap, taal);
+      const naar = b.test ? wie : String(o.email || "").trim().toLowerCase();
+      const facturen = open.facturen.filter(f => String(f.debiteur) === id);
+      if (!facturen.length) { results.push({ id, ok: false, error: "geen openstaande facturen gevonden" }); continue; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar)) { results.push({ id, ok: false, error: "geen geldig mailadres" }); continue; }
+      if (b.proef) { results.push({ id, ok: true, proef: true, html: herMailHtml(tekst, facturen), onderwerp: tekst.onderwerp, naar }); continue; }
+      try {
+        const rr = await fetch("https://api.resend.com/emails", {
+          method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
+          body: JSON.stringify({ from: "Fonteyn Outdoor Living Mall <" + adres + ">", to: [naar], reply_to: /@/.test(wie) ? [wie] : undefined, subject: tekst.onderwerp, html: herMailHtml(tekst, facturen) }),
+        });
+        const t = await rr.text();
+        if (!rr.ok) { results.push({ id, ok: false, error: "Resend: HTTP " + rr.status + " " + t.slice(0, 120) }); continue; }
+        if (!b.test) {
+          const regel = { ts: new Date().toISOString(), debiteur: Number(id), stap, naar, taal, facturen: facturen.map(f => f.factuur), bedrag: Math.round(facturen.reduce((n, f) => n + f.openstaand, 0) * 100) / 100, door: wie };
+          log.regels.push(regel);
+          // Stap 1 ook in het logboek van de tegel Herinneringen, zodat die "laatst herinnerd" blijft kloppen.
+          if (stap === 1) herLog.regels.push(regel);
+        }
+        results.push({ id, ok: true, naar, facturen: facturen.length });
+      } catch (e) { results.push({ id, ok: false, error: String(e.message || e) }); }
+    }
+    if (!b.proef && !b.test) {
+      log.regels = log.regels.slice(-3000); await env.FONTEYN_DATA.put("debiteuren-log", JSON.stringify(log));
+      herLog.regels = herLog.regels.slice(-3000); await env.FONTEYN_DATA.put("herinneringen-log", JSON.stringify(herLog));
+    }
+    return reply(200, { ok: true, results });
+  }
+  if (p === "/debiteuren/log" && request.method === "GET") {
+    const log = (await env.FONTEYN_DATA.get("debiteuren-log", { type: "json" })) || { regels: [] };
+    const herLog = (await env.FONTEYN_DATA.get("herinneringen-log", { type: "json" })) || { regels: [] };
+    const alles = [...(log.regels || []), ...(herLog.regels || []).filter(r => !(log.regels || []).some(x => x.ts === r.ts && x.debiteur === r.debiteur)).map(r => ({ ...r, stap: 1 }))];
+    alles.sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+    return reply(200, { ok: true, regels: alles.slice(0, 400) });
   }
   return reply(404, { ok: false });
 }
@@ -13138,6 +13343,10 @@ export default {
     const bak = (await env.FONTEYN_DATA.get("dhl-push", { type: "json" })) || { berichten: [] };
     return reply(200, { ok: true, berichten: bak.berichten.slice(-100).reverse().map(x => { const { ruw, ...rest } = x; return rest; }) });
   }
+  if (url.pathname.startsWith("/debiteuren/")) {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
+      return debiteurenHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
   if (url.pathname.startsWith("/herinneringen/")) {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
       return herinneringenHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
