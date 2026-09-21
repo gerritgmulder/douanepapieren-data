@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-21", bestand: "amerika.html", soort: "hersteld",
+      titel: "Ontvangen bedrag: komma en punt",
+      wat: "Bij het zelf invullen van het ontvangen bedrag mag je 99.757,07 of 20,000 typen; de laatste twee cijfers achter komma of punt zijn de centen. Het bedrag is achteraf aan te passen."
+    },
+    {
       datum: "2026-09-21", bestand: "amerika.html", soort: "beter",
       titel: "Batches: per batch boeken",
       wat: "Het overzicht 'Geaccordeerd, nog te verwerken' staat ingeklapt; boeken doe je per batch. Per batch is er een vinkje om alle regels in één keer af te vinken. Een 'Balance Due' die niet in de betaling zit telt niet meer mee. Mist de totaalregel, dan vul je het ontvangen bedrag zelf in. En de koppeling boekt nooit meer dan een order open heeft: klopt een regel niet met de factuur, dan wordt de hele batch tegengehouden met uitleg."

@@ -1924,6 +1924,9 @@ function audFactuurVan(r){
   return raak.length===1?String(raak[0].docNr):"";
 }
 function c2v(n){ return Math.round((Number(n)||0)*100)/100; }
+/* Bedrag zoals Osman het leest: 99.757,07. De tabel zelf blijft in dollars
+   op zijn Amerikaans, dit is alleen het invulveld. */
+function nlBedrag(n){ return Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function audBatchCheck(w){
   const c2=n=>Math.round((Number(n)||0)*100)/100;
   const geld=(w.regels||[]).filter(r=>AUD_GELD.indexOf(String(r.soort||""))>=0);
@@ -2015,6 +2018,9 @@ function audRender(){
             (ct.opOrders!==ct.bruto?("<br>Daarvan gaat "+esc(usd(c2v(ct.bruto-ct.opOrders)))+
               " niet naar een order (saldoregel); dat zit in de "+esc(usd(ct.kosten))+" op 4630."):"")+
             (ct.balansBuiten?("<br>De Balance Due van "+esc(usd(ct.balansBuiten))+" is wat de klant nog moet betalen; die zit niet in deze betaling en wordt niet geboekt."):"")+
+            (totaalRegel&&totaalRegel.handmatig?"<div style='margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap'><span style='font-size:12px'>Ontvangen bedrag (zelf ingevuld), aanpassen:</span>"+
+                "<input type='text' inputmode='decimal' data-ontvangen-usd='"+esc(w.id)+"' value='"+esc(nlBedrag(totaalRegel.kolom3))+"' style='width:130px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit'>"+
+                "<button class='btn' type='button' data-ontvangen='"+esc(w.id)+"'>bedrag aanpassen</button></div>":"")+
             "</div>"
           : "<div class='status-msg' style='margin:0 0 10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5'>"+
             "<b>Afwijking, deze batch wordt niet geboekt.</b><ul style='margin:6px 0 0;padding-left:18px'>"+
@@ -2023,10 +2029,11 @@ function audRender(){
                orders zijn gevonden; ligt dit bij Chantal?" Niet meer: het
                geld staat al op de bank, dus de orders mogen hiervandaan
                worden aangemaakt. */
-            (ct.redenen.some(r=>/geen totaalregel/i.test(r))
-              ? "<div style='margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap'><span style='font-size:12px'>Wat is er op de bank ontvangen voor deze batch?</span>"+
-                "<input type='text' inputmode='decimal' data-ontvangen-usd='"+esc(w.id)+"' placeholder='bv. 100,289.71' style='width:130px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit'>"+
-                "<button class='btn' type='button' data-ontvangen='"+esc(w.id)+"'>ontvangen bedrag vastleggen</button></div>"
+            (ct.redenen.some(r=>/geen totaalregel/i.test(r))||(totaalRegel&&totaalRegel.handmatig)
+              ? "<div style='margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap'><span style='font-size:12px'>"+(totaalRegel&&totaalRegel.handmatig?"Ontvangen bedrag (zelf ingevuld), aanpassen:":"Wat is er op de bank ontvangen voor deze batch?")+"</span>"+
+                "<input type='text' inputmode='decimal' data-ontvangen-usd='"+esc(w.id)+"' value='"+(totaalRegel&&totaalRegel.handmatig?esc(nlBedrag(totaalRegel.kolom3)):"")+"' placeholder='bv. 99.757,07' style='width:130px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit'>"+
+                "<button class='btn' type='button' data-ontvangen='"+esc(w.id)+"'>"+(totaalRegel&&totaalRegel.handmatig?"bedrag aanpassen":"ontvangen bedrag vastleggen")+"</button>"+
+                "<span style='font-size:11px;color:var(--muted)'>komma voor de centen, punt voor de duizendtallen (99.757,07); 20,000 wordt 20.000</span></div>"
               : "")+
             (ct.redenen.some(r=>/geen Logic4-order/i.test(r))
               ? "<div style='margin-top:8px'><button class='btn' type='button' data-orders='"+esc(w.id)+"' title='Voor elke factuur in deze batch zonder Logic4-order de order aanmaken uit QuickBooks, net als bij accorderen'>ontbrekende orders aanmaken</button>"+
@@ -2143,11 +2150,12 @@ function audRender(){
     b.disabled=true;
     try{
       const r=await fetch(WORKER+"/amerika/qb/ontvangen",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
-        body:JSON.stringify({wireId:b.dataset.ontvangen,bedrag:bedrag.replace(/,/g,""),user:(localStorage.getItem("fp.email")||"")})});
+        body:JSON.stringify({wireId:b.dataset.ontvangen,bedrag:bedrag,user:(localStorage.getItem("fp.email")||"")})});
       const j=await r.json().catch(()=>null);
       if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
       if(window.fpLog) window.fpLog("batch-ontvangen-gezet","batch "+b.dataset.ontvangen+": "+j.bedrag);
       await audLoad(); audRender();
+      alert("Vastgelegd als $ "+nlBedrag(j.bedrag)+" ontvangen.");
     }catch(e){ alert("Vastleggen lukte niet: "+e.message); b.disabled=false; }
   }));
   /* Alles in deze batch in één keer aan- of uitvinken (Osman via Gerrit,

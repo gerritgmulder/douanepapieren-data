@@ -13505,8 +13505,17 @@ export default {
     if (url.pathname === "/amerika/qb/ontvangen" && request.method === "POST") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       let b = {}; try { b = await request.json(); } catch {}
-      const bedrag = qbCent(Number(String(b.bedrag || "").replace(/[^\d.,-]/g, "").replace(",", ".")));
+      /* Punt of komma, Osman typt het op zijn Nederlands (99.757,07) of op
+         zijn Amerikaans (99,757.07), en een keer 99,757,07 (21 sep 2026:
+         dat werd 9.975.707). Regel: het laatste scheidingsteken is de
+         decimaal als er precies twee cijfers achter staan; alle andere
+         scheidingstekens zijn duizendtallen. */
+      const ruw = String(b.bedrag || "").replace(/[^\d.,-]/g, "");
+      const m = ruw.match(/^(-?)(.*?)(?:[.,](\d{1,2}))?$/);
+      const heel = (m ? m[2] : ruw).replace(/[.,]/g, "");
+      const bedrag = qbCent(Number((m && m[1] ? "-" : "") + heel + "." + (m && m[3] != null ? m[3].padEnd(2, "0") : "00")));
       if (!(bedrag > 0)) return reply(400, { ok: false, error: "vul het ontvangen bedrag in dollars in" });
+      if (bedrag > 5000000) return reply(400, { ok: false, error: "dat bedrag (" + qbGeld(bedrag) + ") kan niet kloppen; kijk naar punt en komma" });
       const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
       const w = (wires.wires || []).find(x => String(x.id) === String(b.wireId));
       if (!w) return reply(404, { ok: false, error: "batch niet gevonden" });
