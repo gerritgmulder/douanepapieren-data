@@ -105,6 +105,14 @@
     // Bankkoppeling maken
     /* Herinneringen: betalingsherinneringen in één keer naar meerdere
        debiteuren (Osman, 22 aug 2026; gebouwd 19 sep 2026). */
+    /* Administratie (proef): de nieuwe administratie-tegels in aanbouw.
+       Gerrit (21 sep 2026): "een categorie Administratie die alleen door
+       Fonteynbot kan worden gezien, als staging om mee te testen." Zodra een
+       tegel af is verhuist hij naar Financiën en komt de groep van die tegel
+       erbij. */
+    "administratie-proef": [
+      "dolf", "fonteynbot", "gerrit",
+    ],
     "herinneringen": [
       "dolf", "fonteynbot", "gerrit", "osman", "reinier", "reinier.k", "rico", "rowan",
     ],
