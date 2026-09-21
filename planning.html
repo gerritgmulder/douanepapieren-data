@@ -2730,6 +2730,18 @@ async function bonDetail(id){
 }
 $("bonKnop").addEventListener("click", bonOverzicht);
 if (!MAG_BEWERKEN){ $("bonKnop").style.display = "none"; }
+/* Hoeveel bonnen er na te kijken staan, op de knop zelf. Gerrit (21 sep
+   2026) zocht een afgeronde bon en vond hem nergens; het getal zegt nu waar. */
+async function bonTeller(){
+  if (!MAG_BEWERKEN) return;
+  try{
+    var r = await fetch(W+"/planning/bonnen", { headers:{ "X-Fonteyn-Auth": teamKey() } });
+    var j = await r.json();
+    var n = (j.bonnen||[]).filter(function(b){ return b.status === "klaar"; }).length;
+    $("bonKnop").textContent = "\ud83d\udccb Opleverbonnen" + (n ? " (" + n + " na te kijken)" : "");
+  }catch(e){}
+}
+bonTeller(); setInterval(bonTeller, 120000);
 $("itsKnop").addEventListener("click", function(){
   var aan = $("itsPaneel").classList.toggle("aan");
   if (aan && itsMeldingen === null) itsLaad();
