@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-21", bestand: "uitbetalingen.html", soort: "nieuw",
+      titel: "Uitbetalingen (proef)",
+      wat: "Tegel 2 van het plan. Eén tegel voor alles wat via een tussenpartij binnenkomt: Mollie (settlement erin, betalingen op de orders, fee als kosten, één knop per settlement), Amerika (de batches van Audrey met dezelfde controle als in de tegel Amerika) en bol.com. Shopify en PIN komen er later bij."
+    },
+    {
       datum: "2026-09-21", bestand: "inkoop.html", soort: "nieuw",
       titel: "Inkoop en betalen (proef)",
       wat: "Tegel 3 van het plan. Inkoopfacturen erin (pdf, ook gescand, of UBL), het scherm leest leverancier, nummer, datum en bedragen, en de knop zet de factuur in het inkoopboek van Logic4 op Controleren. Bij Betalen vink je open posten aan en komt er een betaalbestand voor ING."

@@ -156,6 +156,7 @@ const ALLOWED_BUCKETS = new Set([
   "inkoop-werk",         // Inkoop en betalen (proef): elke inkoopfactuur met wat eruit gelezen is, het voorstel en de boeking in Logic4
   "inkoop-geleerd",      // Inkoop en betalen (proef): per crediteur wat de vorige keer is gekozen (grootboek, kostenplaats)
   "inkoop-betaald",      // Inkoop en betalen (proef): welke crediteurposten in welk betaalbestand zitten
+  "uitbetalingen-werk",  // Uitbetalingen (proef): de Mollie-settlements in de werklijst, met keuzes en wat al geboekt is
   "bank-werk",           // Bank (proef): elke afschriftregel met zijn voorstel, keuze en of hij al in Logic4 staat
   "bank-geleerd",        // Bank (proef): namen op het afschrift die iemand een keer heeft aangewezen (tussenrekening, debiteur)   // Herinneringen: wanneer welke debiteur voor welke facturen een herinnering kreeg, en door wie
   "herinneringen-tekst", // Herinneringen: de mailtekst (Engels en Nederlands), aanpasbaar in de tegel
