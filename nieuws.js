@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-09-21", bestand: "amerika.html", soort: "hersteld",
+      titel: "Dubbel factuurnummer in een batch",
+      wat: "QuickBooks gebruikt een factuurnummer soms twee keer (3497 bestaat voor twee klanten). De batch keek naar de eerste en zei 'geen Logic4-order'. Nu wijst het bedrag aan welke factuur het is."
+    },
+    {
+      datum: "2026-09-21", bestand: "amerika.html", soort: "hersteld",
       titel: "Ontvangen bedrag: komma en punt",
       wat: "Bij het zelf invullen van het ontvangen bedrag mag je 99.757,07 of 20,000 typen; de laatste twee cijfers achter komma of punt zijn de centen. Het bedrag is achteraf aan te passen."
     },

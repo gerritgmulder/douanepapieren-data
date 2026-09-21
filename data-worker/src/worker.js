@@ -9152,7 +9152,7 @@ function qbOrdersPerFactuur(approved) {
     const v = approved.ids[sleutel] || {};
     const nr = String(v.docNr || (sleutel.startsWith("qb:") ? "" : sleutel)).trim();
     if (!nr || !v.orderId) continue;
-    (per[nr] = per[nr] || []).push({ sleutel, orderId: v.orderId });
+    (per[nr] = per[nr] || []).push({ sleutel, orderId: v.orderId, totaal: v.totaal != null ? Number(v.totaal) : (v.amount != null ? Number(v.amount) : null) });
   }
   return per;
 }
@@ -9224,7 +9224,12 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
       const g = raad(r);
       if (g) { factuur = g.factuur; geraden = g.uitleg; }
     }
-    const kandidaten = factuur ? (perFactuur[factuur] || []) : [];
+    let kandidaten = factuur ? (perFactuur[factuur] || []) : [];
+    /* Dubbel factuurnummer met twee orders: het bedrag wijst aan welke. */
+    if (kandidaten.length > 1) {
+      const opBedrag = kandidaten.filter(k => k.totaal != null && Math.abs(k.totaal - Math.abs(Number(r.kolom1) || 0)) < 0.02);
+      if (opBedrag.length === 1) kandidaten = opBedrag;
+    }
     const rij = {
       volgnr: i,
       naam: String(r.naam || ""),
@@ -9548,7 +9553,7 @@ async function qbHandleBatchOrders(request, env) {
       const mapped = qbMapInvoice(inv, catalog, spaModels);
       const res = await dpCreateAmerikaOrder(env, mapped);
       if (!res.ok) { results.push({ factuur: n.factuur, ok: false, error: res.error }); continue; }
-      approved.ids[qbSleutel(inv)] = { orderId: res.orderId, docNr: inv.DocNumber || n.factuur, ts: new Date().toISOString(), via: "batch", door: String(body.user || "").slice(0, 80) };
+      approved.ids[qbSleutel(inv)] = { orderId: res.orderId, docNr: inv.DocNumber || n.factuur, totaal: Number(inv.TotalAmt) || null, ts: new Date().toISOString(), via: "batch", door: String(body.user || "").slice(0, 80) };
       await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
       results.push({ factuur: n.factuur, ok: true, orderId: res.orderId });
     } catch (e) { results.push({ factuur: n.factuur, ok: false, error: String(e.message || e) }); }
@@ -9931,7 +9936,7 @@ async function qbHandleApprove(request, env) {
       const mapped = qbMapInvoice(inv, catalog, spaModels);
       const res = await dpCreateAmerikaOrder(env, mapped);
       if (res.ok) {
-        approved.ids[qbSleutel(inv)] = { orderId: res.orderId, docNr, ts: new Date().toISOString() };
+        approved.ids[qbSleutel(inv)] = { orderId: res.orderId, docNr, totaal: Number(inv.TotalAmt) || null, ts: new Date().toISOString() };
         // Meteen vastleggen. Nooit meer aan het eind van de lus.
         await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
         results.push({ docNr, qbId: opdracht.qbId, ok: true, orderId: res.orderId });
