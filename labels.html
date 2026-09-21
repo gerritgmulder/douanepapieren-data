@@ -1571,8 +1571,9 @@ function showPreview(rows) {
   for (const row of rows) {
     const productTotal = Math.max(1, row.aantalProducten || row.aantal || 1);
     const colliTotal   = Math.max(1, row.aantalColliPerProduct || 1);
-    for (let p = 1; p <= productTotal; p++) {
-      for (let c = 1; c <= colliTotal; c++) {
+    // Zelfde volgorde als bij het printen: eerst alle colli 1, dan alle colli 2.
+    for (let c = 1; c <= colliTotal; c++) {
+      for (let p = 1; p <= productTotal; p++) {
         const frame = document.createElement("div");
         frame.className = "label-frame";
         const scale = document.createElement("div");
@@ -1721,12 +1722,17 @@ async function doPrint() {
 
   // Bouw eerst de volledige logische lijst van labels — daarna pak
   // we een subset op basis van "Start vanaf" + "Aantal".
+  /* Volgorde: per artikel eerst alle "Colli 1 van N", dan alle "Colli 2
+     van N", enzovoort. Manon (21 sep 2026): "Kunnen we zorgen dat eerst
+     alles van een artikel colli 1/2 uit de printer komt en later dat aantal
+     colli 2/2?" In de hal staan alle eerste dozen bij elkaar; dan wil je
+     niet om en om plakken. */
   const allLabels = [];
   for (const row of toPrint) {
     const productTotal = Math.max(1, row.aantalProducten || row.aantal || 1);
     const colliTotal   = Math.max(1, row.aantalColliPerProduct || 1);
-    for (let p = 1; p <= productTotal; p++) {
-      for (let c = 1; c <= colliTotal; c++) {
+    for (let c = 1; c <= colliTotal; c++) {
+      for (let p = 1; p <= productTotal; p++) {
         allLabels.push({ row, c, colliTotal, p, productTotal });
       }
     }
