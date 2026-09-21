@@ -167,6 +167,7 @@
     "Maak en bewerk de specificatiesheets van de spa's — vul de velden in, upload foto's en sla op als PDF. Geen InDesign meer nodig.":
       "Create and edit the spa specification sheets - fill in the fields, upload photos and save as PDF. No more InDesign.",
     "Prijslijsten fabrikanten": "Manufacturer price lists",
+    "Leveranciersinformatie": "Supplier information",
     "Alle prijsafspraken met leveranciers en fabrieken op één plek. Per leverancier een map, met de prijslijst erin — en de oude versies blijven bewaard.":
       "All price agreements with suppliers and factories in one place. A folder per supplier with the price list in it - and older versions are kept.",
 

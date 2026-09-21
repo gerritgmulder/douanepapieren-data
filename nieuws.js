@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-21", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
+      titel: "Nieuwe naam: Leveranciersinformatie",
+      wat: "De tegel Prijslijsten fabrikanten heet nu Leveranciersinformatie. Zelfde plek, zelfde inhoud: prijslijsten en afspraken per leverancier."
+    },
+    {
       datum: "2026-09-21", bestand: "amerika.html", soort: "hersteld",
       titel: "Batchregels met een rare naam",
       wat: "'3573S Steve Raiche', '3644fantasies' en 'Michigan Swim Pools' zonder nummer worden nu gewoon herkend (letter tegen het nummer, geen spatie, of op naam en bedrag). En elk factuurnummer in een batch is met het potlood aan te passen."
