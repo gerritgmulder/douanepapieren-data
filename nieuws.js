@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-21", bestand: "werkplaats.html", soort: "beter",
+      titel: "Werkplaats: zwemspa's apart, memo erbij, order toevoegen",
+      wat: "Zwemspa's staan in een eigen lijst naast de spa's. Bij elke spa staat of hij op voorraad is, op welk schip met welke datum, of nog in productie. Bij Order tonen en op de testbon staat de ordermemo uit Logic4 eronder. Met '+ Ordernummer toevoegen' zet je een order in de lijst die niet via Ingepland binnenkwam."
+    },
+    {
       datum: "2026-09-21", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
       titel: "Nieuwe naam: Leveranciersinformatie",
       wat: "De tegel Prijslijsten fabrikanten heet nu Leveranciersinformatie. Zelfde plek, zelfde inhoud: prijslijsten en afspraken per leverancier."

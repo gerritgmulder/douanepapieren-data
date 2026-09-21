@@ -222,6 +222,11 @@
         "<th class='geld'>Stukprijs</th><th class='geld'>Totaal</th>" +
       "</tr></thead><tbody>" + regels + "</tbody></table>" +
       (o.totaal != null ? "<div class='totaalregel'>Totaal: " + esc(euro(o.totaal)) + "</div>" : "") +
+      /* De ordermemo uit Logic4 eronder. Kevin (video, 20 sep 2026): "wat in
+         de ordermemo in Logic staat moet daar onder komen." */
+      (String(o.notities || "").trim()
+        ? "<h3 class='kopje'>Order memo</h3><div class='tekstblok'>" + esc(String(o.notities).trim()) + "</div>"
+        : "") +
       "<div class='voet'>Op het moment dat de aanbetaling wordt uitgevoerd gaat De Fonteyn BV ervan uit dat de klant " +
         "de bestelling en de algemene voorwaarden heeft gecontroleerd en het hiermee eens is.<br><br>" +
         "Op alle aanbiedingen van, leveringen door en overeenkomsten met ons gesloten zijn toepasselijk onze Algemene " +

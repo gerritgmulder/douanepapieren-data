@@ -83,6 +83,10 @@ label.vink input{width:18px;height:18px;accent-color:var(--goed)}
 .leeg{color:var(--grijs);padding:20px 4px}
 .fout{background:#fee2e2;color:var(--rood);padding:10px 12px;border-radius:10px;margin-bottom:10px}
 .opm{margin-top:6px;font-size:12.5px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:6px 9px}
+.waar{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:999px;margin-top:4px}
+.waar.groen{background:#dcfce7;color:#15803d}.waar.blauw{background:#dbeafe;color:#1d4ed8}.waar.oranje{background:#ffedd5;color:#c2410c}
+.memo{margin-top:8px;font-size:12.5px;background:#f8faf5;border:1px solid var(--rand);border-radius:8px;padding:7px 10px;white-space:pre-wrap}
+.memo b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--groen);margin-bottom:3px}
 @media (max-width:600px){ .datum{min-width:0} main{padding:0 10px 40px} }
 </style>
 </head>
@@ -95,8 +99,10 @@ label.vink input{width:18px;height:18px;accent-color:var(--goed)}
 <main>
   <div id="fout"></div>
   <div class="tabs">
-    <button class="tab aan" data-tab="open" type="button">Te testen (<span id="nOpen">0</span>)</button>
+    <button class="tab aan" data-tab="open" type="button">Spa's te testen (<span id="nOpen">0</span>)</button>
+    <button class="tab" data-tab="zwem" type="button">Zwemspa's te testen (<span id="nZwem">0</span>)</button>
     <button class="tab" data-tab="getest" type="button">Getest (<span id="nGetest">0</span>)</button>
+    <button class="knop" id="extraKnop" type="button" style="margin-left:auto">+ Ordernummer toevoegen</button>
   </div>
   <input class="zoek" id="zoek" type="search" placeholder="zoek op order, klant of spa…">
   <div id="lijst"></div>
@@ -118,7 +124,27 @@ function dagNaam(iso){ var d=new Date(iso+"T12:00:00"); if(isNaN(d)) return ""; 
 function vandaagIso(){ var d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 function isWarmtepomp(r){ return !!(r && r.extra && /integrated\s*heat\s*pump|intellisaver/i.test(String(r.extra))); }
 
-var regels = [], notities = {}, afspraken = [], wp = { regels: {} }, orders = {}, open = {}, tab = "open", zoek = "";
+var regels = [], notities = {}, afspraken = [], wp = { regels: {}, extra: {} }, orders = {}, open = {}, tab = "open", zoek = "", zwemModellen = {};
+/* Zwemspa of gewone spa: de catalogus zegt het in de omschrijving van de
+   variant ("Aquatic 1 Swimspa | ..."). Kevin (video, 20 sep 2026) wil de
+   zwemspa's in een eigen lijst. */
+function isZwemspa(r){
+  if (r.model && zwemModellen[r.model] != null) return zwemModellen[r.model];
+  return /swim\s*spa|zwemspa/i.test(String(r.omschrijving || ""));
+}
+/* Waar de spa is: op voorraad in Uddel, op een schip met datum, of nog in
+   productie. Kevin (video, 20 sep 2026): "bij iedere spa moet erbij staan of
+   die op voorraad is of wat de ETA is." Komt uit de uur-sync, met wat
+   Voorraadbeheer zelf heeft aangewezen erin verwerkt. */
+function waarLabel(r){
+  var v = r.verwacht, s = r.verwachtSchip ? ' <small style="font-weight:500">(' + esc(r.verwachtSchip) + ')</small>' : "";
+  if (!v) return "";
+  if (v === "voorraad") return '<span class="waar groen">op voorraad in Uddel</span>';
+  if (v === "op-schip") return '<span class="waar blauw">op schip, datum volgt' + s + '</span>';
+  if (v === "productie") return '<span class="waar oranje">nog in productie</span>';
+  if (v === "dealer-direct") return '<span class="waar oranje">container naar dealer</span>';
+  return '<span class="waar blauw">verwacht in Uddel ' + esc(datumNL(v)) + s + '</span>';
+}
 
 /* Alles ophalen en samenvoegen tot één lijst. */
 async function laad(){
@@ -127,11 +153,33 @@ async function laad(){
     lees("/data/voorraad-notities").catch(function(){ return {}; }),
     lees("/data/planning").catch(function(){ return {}; }),
     lees("/data/werkplaats").catch(function(){ return {}; }),
+    Object.keys(zwemModellen).length ? Promise.resolve(null) : lees("/data/spa-catalog").catch(function(){ return null; }),
   ]);
   var live = r[0]||{}; notities = (r[1] && r[1].regels) || {}; afspraken = (r[2]&&r[2].afspraken)||[]; wp = r[3]&&r[3].regels ? r[3] : { regels: {} };
+  wp.extra = wp.extra || {};
+  if (r[4] && r[4].models) Object.keys(r[4].models).forEach(function(m){ zwemModellen[m] = (r[4].models[m]||[]).some(function(v){ return /swim\s*spa|zwemspa/i.test(v.desc||""); }); });
   var alle = [];
   Object.keys(live.byModel||{}).forEach(function(m){ (live.byModel[m]||[]).forEach(function(x){ alle.push(x); }); });
+  /* Met de hand toegevoegde ordernummers: die tellen mee ook zonder het
+     vinkje Ingepland. Staat de order niet in de reserveringen (bv. al
+     afgeleverd of zonder spa-regel), dan komt hij uit Logic4 zelf. */
+  var extraNrs = Object.keys(wp.extra);
+  var ontbreekt = extraNrs.filter(function(nr){ return !alle.some(function(x){ return String(x.ordernr) === String(nr); }); });
+  for (var i = 0; i < ontbreekt.length; i++) {
+    var o = await haalOrder(ontbreekt[i]);
+    if (!o || !o.ok) continue;
+    var adr = o.leverenAan || o.besteldDoor || {};
+    (o.regels||[]).forEach(function(rg, k){
+      if (!/\bspa\b|swimspa/i.test(rg.omschrijving||"") || /cover|step|filter|lifter|trap|hoes|pakket|transport/i.test(rg.omschrijving||"")) return;
+      if (rg.open != null && rg.afgeleverd > 0 && rg.open <= 0) return;
+      var delen = String(rg.omschrijving||"").split("|").map(function(z){ return z.trim(); });
+      alle.push({ regelId: "wp|" + o.nr + "|" + k, ordernr: o.nr, naam: adr.naam || adr.bedrijf || "", plaats: adr.plaats || "",
+        model: delen[0].replace(/\s*(spa|swimspa)\s*$/i, ""), kleur: delen[1] || "", extra: delen[2] || null, omschrijving: rg.omschrijving, qty: rg.aantal,
+        adviseur: o.adviseur || "", transport: o.leveringswijze || "", leverdatum: o.leverdatum ? String(o.leverdatum).slice(0,10) : null, verwacht: null, handmatig: true });
+    });
+  }
   regels = alle.filter(function(x){
+    if (wp.extra[String(x.ordernr)]) return true;
     var n = notities[x.regelId] || (x.regelIdOud && notities[x.regelIdOud]) || {};
     return n.gepland && !n.verwijderd;
   }).map(function(x){
@@ -153,7 +201,7 @@ async function laad(){
 }
 function zichtbaar(){
   var q = zoek.trim().toLowerCase();
-  return regels.filter(function(x){ return tab === "getest" ? !!x.w.getest : !x.w.getest; })
+  return regels.filter(function(x){ return tab === "getest" ? !!x.w.getest : (!x.w.getest && (tab === "zwem") === isZwemspa(x.r)); })
     .filter(function(x){ if(!q) return true; var r=x.r; return (String(r.ordernr)+" "+(r.naam||"")+" "+(r.model||"")+" "+(r.kleur||"")+" "+(r.adviseur||"")).toLowerCase().indexOf(q) >= 0; })
     .sort(function(a,b){
       /* Eerste levering bovenaan; zonder datum onderaan. Bij de geteste lijst
@@ -165,12 +213,13 @@ function zichtbaar(){
     });
 }
 function teken(){
-  $("nOpen").textContent = regels.filter(function(x){ return !x.w.getest; }).length;
+  $("nOpen").textContent = regels.filter(function(x){ return !x.w.getest && !isZwemspa(x.r); }).length;
+  $("nZwem").textContent = regels.filter(function(x){ return !x.w.getest && isZwemspa(x.r); }).length;
   $("nGetest").textContent = regels.filter(function(x){ return !!x.w.getest; }).length;
   document.querySelectorAll(".tab").forEach(function(b){ b.classList.toggle("aan", b.dataset.tab === tab); });
   var lijst = zichtbaar(), vandaag = vandaagIso();
   if (!lijst.length){
-    $("lijst").innerHTML = '<div class="leeg">' + (tab === "getest" ? "Nog geen geteste spa's." : "Niets te testen. Zodra in Voorraadbeheer bij een spa 'Ingepland' wordt aangevinkt, staat hij hier.") + '</div>';
+    $("lijst").innerHTML = '<div class="leeg">' + (tab === "getest" ? "Nog geen geteste spa's." : tab === "zwem" ? "Geen zwemspa's te testen." : "Niets te testen. Zodra in Voorraadbeheer bij een spa 'Ingepland' wordt aangevinkt, staat hij hier.") + '</div>';
     return;
   }
   $("lijst").innerHTML = lijst.map(function(x){
@@ -184,7 +233,8 @@ function teken(){
         '<div class="wat"><b>' + esc(r.model) + '</b>' + (isWarmtepomp(r) ? ' <span class="badge">&#9889; IntelliSaver · Integrated Heat Pump</span>' : (r.extra ? ' <span class="pil">' + esc(r.extra) + '</span>' : "")) +
           (Number(r.qty) > 1 ? ' <span class="pil">' + esc(r.qty) + '×</span>' : "") +
           '<div class="sub">' + esc(r.kleur || "") + '</div>' +
-          '<div class="sub">order <b>' + esc(r.ordernr) + '</b> · ' + esc(r.naam || "") + (r.plaats ? ", " + esc(r.plaats) : "") + (r.adviseur ? ' · adviseur ' + esc(r.adviseur) : "") + (r.transport ? ' · ' + esc(r.transport) : "") + '</div>' +
+          '<div class="sub">order <b>' + esc(r.ordernr) + '</b> · ' + esc(r.naam || "") + (r.plaats ? ", " + esc(r.plaats) : "") + (r.adviseur ? ' · adviseur ' + esc(r.adviseur) : "") + (r.transport ? ' · ' + esc(r.transport) : "") + (wp.extra[String(r.ordernr)] ? ' · <span class="pil">zelf toegevoegd</span>' : "") + '</div>' +
+          waarLabel(r) +
           (x.n.opmerking ? '<div class="opm">' + esc(x.n.opmerking) + '</div>' : "") +
           (x.w.getest ? '<div class="sub" style="color:var(--goed)">getest op ' + esc(datumNL(x.w.getestTs)) + (x.w.getestDoor ? ' door ' + esc(String(x.w.getestDoor).split("@")[0]) : "") + '</div>' : "") +
         '</div>' +
@@ -213,7 +263,8 @@ function orderHtml(nr, o){
       var weg = x.open != null && x.afgeleverd > 0 && x.open <= 0;
       return '<div class="regel' + (weg ? " weg" : "") + '"><span class="n">' + esc(x.aantal) + '×</span><span class="om">' + esc(x.omschrijving) + (weg ? " (al geleverd)" : "") + (x.code ? '<small>' + esc(x.code) + '</small>' : "") + '</span></div>';
     }).join("") +
-    '<div class="adres">' + esc([adr.naam || adr.bedrijf, adr.straat, [adr.postcode, adr.plaats].filter(Boolean).join(" "), adr.telefoon].filter(Boolean).join(" · ")) + '</div></div>';
+    '<div class="adres">' + esc([adr.naam || adr.bedrijf, adr.straat, [adr.postcode, adr.plaats].filter(Boolean).join(" "), adr.telefoon].filter(Boolean).join(" · ")) + '</div>' +
+    (String(o.notities||"").trim() ? '<div class="memo" style="margin:8px 10px 10px"><b>Order memo uit Logic4</b>' + esc(String(o.notities).trim()) + '</div>' : "") + '</div>';
 }
 async function haalOrder(nr){
   if (orders[nr]) return orders[nr];
@@ -245,7 +296,7 @@ async function bewaar(regelId, velden, logActie, logTekst){
     var alles = (vers && vers.regels) || {};
     alles[regelId] = Object.assign({}, alles[regelId] || {}, velden);
     wp.regels = alles;
-    await lees("/data/werkplaats", { method: "PUT", body: JSON.stringify({ regels: alles, updated: new Date().toISOString() }) });
+    await lees("/data/werkplaats", { method: "PUT", body: JSON.stringify({ regels: alles, extra: (vers && vers.extra) || wp.extra || {}, updated: new Date().toISOString() }) });
     try{ if (window.fpLog) window.fpLog(logActie, logTekst); }catch(e){}
   }catch(e){ alert("Bewaren lukte niet: " + e.message); laad(); }
 }
@@ -261,6 +312,24 @@ function zetDatum(regelId, datum){
   bewaar(regelId, { leverdatum: datum }, "werkplaats-leverdatum", (x ? x.r.ordernr + " " + x.r.model : regelId) + " → " + datum);
 }
 document.querySelectorAll(".tab").forEach(function(b){ b.addEventListener("click", function(){ tab = b.dataset.tab; teken(); }); });
+/* Een order met de hand erbij. Kevin (video, 20 sep 2026): "een knop
+   Ordernummer toevoegen, en dat hij dan automatisch zoals de andere spa's in
+   de lijst komt." Blijft staan tot de spa getest én afgeleverd is. */
+$("extraKnop").addEventListener("click", async function(){
+  var nr = String(prompt("Welk ordernummer wil je in de werkplaatslijst zetten?") || "").replace(/\D/g, "");
+  if (!nr) return;
+  $("extraKnop").disabled = true;
+  try{
+    var vers = await lees("/data/werkplaats").catch(function(){ return {}; });
+    var extra = (vers && vers.extra) || {};
+    extra[nr] = { door: ik, ts: new Date().toISOString() };
+    await lees("/data/werkplaats", { method: "PUT", body: JSON.stringify({ regels: (vers && vers.regels) || {}, extra: extra, updated: new Date().toISOString() }) });
+    try{ if (window.fpLog) window.fpLog("werkplaats-order-toegevoegd", "order " + nr); }catch(e){}
+    await laad();
+    if (!regels.some(function(x){ return String(x.r.ordernr) === nr; })) alert("Order " + nr + " is vastgelegd, maar er staat geen spa op die nog geleverd moet worden. Controleer het nummer in Logic4.");
+  }catch(e){ alert("Toevoegen lukte niet: " + e.message); }
+  $("extraKnop").disabled = false;
+});
 $("zoek").addEventListener("input", function(){ zoek = $("zoek").value; teken(); });
 (async function(){
   for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
