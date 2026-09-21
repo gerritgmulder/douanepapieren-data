@@ -111,39 +111,50 @@
      op een dunne strook eronder. Die strook heeft geen eigen kop, kleine
      letter en weinig lucht, zodat er ongeveer evenveel orders in beeld
      blijven als toen alles nog naast elkaar stond. */
-  table.grid.resv{table-layout:auto}
-  table.grid.resv tr.hoofdrij td{border-bottom:0;padding-bottom:1px}
-  table.grid.resv tr.subrij td{padding:0 8px 3px 22px;border-top:0;white-space:normal;max-width:none;overflow:visible}
-  /* Zo laag mogelijk: het menu en het notitieveld bepalen de hoogte van de
-     strook, dus die krijgen minder lucht dan een gewoon invulveld. Daarmee
-     kost een order twee regels van samen ongeveer 42 pixels in plaats van
-     50 - er passen er dan zo'n twaalf op een laptopscherm. */
+  /* Manon (21 sep 2026): "kun je zorgen dat de kolom kleur helemaal zichtbaar
+     wordt? Nu vallen er vaak belangrijke regels vanaf." En Gerrit vond het
+     geheel een "onoverzichtelijk gedrocht": kolommen waar je zaken goed kunt
+     lezen, beter onder elkaar. Daarom nu vaste kolommen (table-layout:fixed
+     met een colgroup in de tabel), tekst die gewoon doorloopt op een tweede
+     regel in plaats van afgekapt wordt, een duidelijke lijn tussen de
+     orders, en de werkstrook in altijd dezelfde volgorde: levering links,
+     notitie in het midden, de vinkjes rechts. */
+  table.grid.resv{table-layout:fixed;font-size:12.5px}
+  table.grid.resv th,table.grid.resv td{white-space:normal;overflow:visible;text-overflow:clip;max-width:none;
+      overflow-wrap:break-word;vertical-align:top}
+  table.grid.resv th{padding:6px 10px;white-space:nowrap}
+  table.grid.resv tr.hoofdrij td{border-bottom:0;padding:7px 10px 2px;line-height:1.35}
+  table.grid.resv tr.hoofdrij td:first-child{font-variant-numeric:tabular-nums;color:#374151}
+  table.grid.resv tr.hoofdrij td:nth-child(2) b{font-size:13px}
+  table.grid.resv tr.hoofdrij td.mid{white-space:nowrap;text-align:center}
+  table.grid.resv tr.hoofdrij td.dat{white-space:nowrap}
+  table.grid.resv tr.subrij td{padding:2px 10px 8px;border-top:0}
   table.grid.resv tr.subrij select,
-  table.grid.resv tr.subrij .notOpm{padding:1px 6px!important;font-size:11px!important;height:20px;line-height:18px}
-  /* Het streepje links laat zien dat deze strook bij de order erboven hoort;
-     zonder dat leest een lijst van 233 orders als 466 losse regels. */
-  /* flex-wrap:wrap, niet nowrap: op een smal scherm zakt het laatste vinkje
-     naar de volgende regel in plaats van de tabel opzij te duwen. */
-  table.grid.resv tr.subrij .subwerk{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-      font-size:11px;color:var(--muted);line-height:1.3;
-      border-left:2px solid #e9edea;padding-left:9px}
-  table.grid.resv tr.subrij .lev{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;max-width:480px}
-  table.grid.resv tr.subrij .lev select{margin-top:0!important;max-width:260px}
+  table.grid.resv tr.subrij .notOpm{padding:1px 6px!important;font-size:11px!important;height:22px;line-height:20px}
+  table.grid.resv tr.subrij .subwerk{display:grid;grid-template-columns:minmax(320px,2fr) minmax(120px,1fr) auto;
+      gap:6px 16px;align-items:center;font-size:11.5px;color:var(--muted);line-height:1.35}
+  @media (max-width:1100px){ table.grid.resv tr.subrij .subwerk{grid-template-columns:1fr 1fr} table.grid.resv tr.subrij .acties{grid-column:1 / -1} }
+  /* Telefoon: de vaste kolommen loslaten, dan zoekt de tabel zelf de
+     smalste verdeling, en de werkstrook onder elkaar. */
+  @media (max-width:700px){ table.grid.resv{table-layout:auto;font-size:12px} table.grid.resv col{width:auto!important}
+    table.grid.resv th,table.grid.resv td{padding-left:6px;padding-right:6px}
+    table.grid.resv tr.hoofdrij td span,table.grid.resv tr.subrij .lev span{white-space:normal!important}
+    table.grid.resv tr.subrij .subwerk{grid-template-columns:1fr} table.grid.resv tr.subrij .acties{justify-self:start;flex-wrap:wrap;white-space:normal} }
+  table.grid.resv tr.subrij .lev{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+  table.grid.resv tr.subrij .lev::before{content:"Levering";font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#9ca3af;flex:0 0 auto}
+  table.grid.resv tr.subrij .lev select{margin-top:0!important;max-width:180px;color:var(--muted)}
   table.grid.resv tr.subrij .lev br{display:none}
-  table.grid.resv tr.subrij .notOpm{flex:1 1 auto;min-width:90px;font-size:11.5px;
-      padding:3px 7px;cursor:pointer;text-overflow:ellipsis;border:1px solid var(--border);border-radius:6px}
-  /* De vinkjes rechts uitlijnen: dan staan ze bij elke order op dezelfde plek
-     en kun je een kolom afvinken zonder te zoeken. */
-  table.grid.resv tr.subrij .vk:first-of-type{margin-left:auto}
-  table.grid.resv tr.subrij .vk{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer}
+  table.grid.resv tr.subrij .lev .fab{display:inline-block;font-size:10.5px;font-weight:600;padding:0 7px;border-radius:999px;background:#fee2e2;color:#b91c1c;white-space:nowrap}
+  table.grid.resv tr.subrij .notOpm{min-width:0;width:100%;font-size:11.5px;
+      padding:3px 7px;cursor:pointer;text-overflow:ellipsis;white-space:nowrap;overflow:hidden;border:1px solid var(--border);border-radius:6px;background:#fff}
+  table.grid.resv tr.subrij .acties{display:flex;align-items:center;gap:12px;white-space:nowrap;justify-self:end}
+  table.grid.resv tr.subrij .vk{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;cursor:pointer;color:#374151}
   table.grid.resv tr.subrij .vk input{margin:0}
   table.grid.resv tr.subrij .notAgenda{background:#fff;border:1px solid var(--border);border-radius:6px;
       padding:2px 7px;cursor:pointer;font-size:11px;color:var(--muted)}
   table.grid.resv tr.subrij .notAgenda:hover{border-color:var(--fonteyn-green,#144734)}
-  /* De omzetknop: zelfde vorm als 'agenda', rechts in de strook en wat
-     stiller, want je gebruikt hem zelden en hij verhuist een hele klant. */
   table.grid.resv tr.subrij .notOmzet{background:#fff;border:1px solid var(--border);border-radius:6px;
-      padding:2px 7px;cursor:pointer;font-size:11px;color:var(--muted);margin-left:auto;white-space:nowrap}
+      padding:2px 7px;cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap}
   table.grid.resv tr.subrij .notOmzet:hover{border-color:#3730a3;color:#3730a3}
   /* Binnen per adviseur: het kleine regeltje onder dealer en ordernummer, en
      de tabel mag nooit breder worden dan zijn kaart. */
@@ -166,17 +177,12 @@
   /* Om en om een zachte huisstijltint, per order. Zonder achtergrondkleur op
      de cellen zelf, anders dekt die de gele en paarse markering af. */
   table.grid.resv tr.zebra:not(.gemerkt) td{background:#f4f8f0}
-  table.grid.resv tr.hoofdrij td{border-top:1px solid #e6ebe4}
+  /* Een duidelijke lijn tussen twee orders; binnen de order geen lijn. */
+  table.grid.resv tr.hoofdrij td{border-top:2px solid #dfe6dc}
   table.grid.resv tr.hoofdrij:first-child td{border-top:0}
   /* De order waar je met de muis boven zit, hoofdregel en subregel samen. */
   table.grid.resv tr.hoofdrij:hover td,
   table.grid.resv tr.hoofdrij:hover + tr.subrij td{background:#eaf3e0}
-  /* Smalle kolommen: aantal is bijna altijd 1, en een adviseursnaam en een
-     kleur hoeven de rest niet weg te drukken. Gerrit (10 sep 2026): "je kunt
-     de kolom adviseur, aantal, kleur nog smaller maken." */
-  table.grid.resv td:nth-child(3),table.grid.resv th:nth-child(3){max-width:210px}
-  table.grid.resv td:nth-child(4),table.grid.resv th:nth-child(4){width:52px;text-align:center}
-  table.grid.resv td:nth-child(6),table.grid.resv th:nth-child(6){max-width:120px}
   table.grid td.num{text-align:right;font-variant-numeric:tabular-nums}
   table.grid td.code{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--fonteyn-green-dark)}
   table.grid tr:hover td{background:#fbfdf7}
@@ -3082,14 +3088,14 @@ function fabrieksRegel(r){
      verschil zichtbaar tussen "we weten van welke bestelling hij komt" en
      "er ligt nog geen bestelling". */
   if(r && r.verwacht==="productie" && !r.verwachtIko)
-    return "<div style='font-size:11px;color:#b91c1c;margin-top:2px'>nog niet besteld bij de fabriek</div>";
+    return " <span class='fab' title='er ligt bij de fabriek nog geen bestelling waar deze spa van kan komen' style='font-size:11px;color:#b91c1c'>nog niet besteld</span>";
   if(!r || (!r.verwachtIko && !r.verwachtEta)) return "";
   var stukken = [];
   if(r.verwachtIko) stukken.push("<b>"+esc(fabriekKort(r.verwachtFabriek)||"inkooporder")+" "+esc(r.verwachtIko)+"</b>");
   // De ETA alleen apart tonen als hij niet al als datum boven staat.
   if(r.verwachtEta && r.verwacht!==r.verwachtEta) stukken.push("ETA "+esc(datumNL(r.verwachtEta)));
   if(!stukken.length) return "";
-  return "<div style='font-size:11px;color:#92400e;margin-top:2px'>"+stukken.join(" · ")+"</div>";
+  return " <span style='font-size:11px;color:#92400e;white-space:nowrap'>"+stukken.join(" · ")+"</span>";
 }
 function leveringCel(r,n,id,uit){
   /* Naast de schepen kan de spa ook gewoon in Uddel staan. Chantal kon dat
@@ -3123,8 +3129,8 @@ function leveringCel(r,n,id,uit){
       (zendingBinnen(gekozen)?", binnen":"")+")</span>"
     : binnenGevinkt
     ? "<span style='color:#15803d;font-weight:600'>binnen in Uddel</span>"+
-      " <span style='color:var(--muted);font-size:11px'>("+(n.gepland?"gepland":"op Inplannen gezet")+
-      (n.ts?" "+esc(datumNL(String(n.ts).slice(0,10))):"")+(n.door?" door "+esc(String(n.door).split("@")[0]):"")+")</span>"
+      " <span style='color:var(--muted);font-size:11px'>("+(n.gepland?"gepland":"inplannen")+
+      (n.ts?" "+esc(datumNL(String(n.ts).slice(0,10))):"")+(n.door?", "+esc(String(n.door).split("@")[0]):"")+")</span>"
     : verwachtLabel(r.verwacht)+(r.verwachtSchip?" <span style='color:var(--muted);font-size:11px'>("+esc(r.verwachtSchip)+")</span>":"")
       +fabrieksRegel(r);
   // Een keuze die nergens meer op slaat mag niet stilzwijgend verdwijnen.
@@ -3199,8 +3205,14 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
   const uit=!MAG_WIJZIGEN?" disabled":"";
   // Acht kolommen om te lezen; het doen staat op de subregel. Zie de CSS.
   const kolommen = 8 + (MAG_WIJZIGEN?1:0);
-  box.innerHTML="<div class='tablewrap'><table class='grid resv'><thead><tr>"+
-    "<th>Order</th>"+kopSorteer(soort,"model","Spa")+kopSorteer(soort,"kleur","Kleur")+"<th>Aantal</th>"+
+  /* Vaste kolombreedtes, zodat kleur en klant altijd helemaal te lezen zijn
+     en elke order op dezelfde plek begint. Wat niet past loopt door op een
+     tweede regel; er wordt niets meer afgekapt. */
+  box.innerHTML="<div class='tablewrap'><table class='grid resv'><colgroup>"+
+    "<col style='width:78px'><col style='width:15%'><col style='width:22%'><col style='width:46px'>"+
+    "<col style='width:18%'><col style='width:11%'><col style='width:84px'><col style='width:96px'>"+
+    (MAG_WIJZIGEN?"<col style='width:36px'>":"")+"</colgroup><thead><tr>"+
+    "<th>Order</th>"+kopSorteer(soort,"model","Spa")+kopSorteer(soort,"kleur","Kleur")+"<th style='text-align:center'>Aantal</th>"+
     kopSorteer(soort,"naam","Klant")+kopSorteer(soort,"adviseur","Adviseur")+
     kopSorteer(soort,"datum","Datum")+"<th>Betaling</th>"+
     (MAG_WIJZIGEN?"<th title='regel uit het dashboard halen'></th>":"")+
@@ -3230,10 +3242,10 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
         "<td>"+esc(r.ordernr)+"</td>"+
         "<td>"+spaCel(r)+"</td>"+
         "<td>"+kleurCel(r.kleur,r,true)+"</td>"+
-        "<td"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td>"+
+        "<td class='mid'"+(r.qty>2?" style='color:#c2410c;font-weight:700'":"")+">"+r.qty+"</td>"+
         "<td>"+esc(r.naam)+"</td>"+
         "<td>"+adviseurCel(r)+"</td>"+
-        "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
+        "<td class='dat'>"+esc(datumNL(r.datum))+"</td>"+
         "<td>"+betaalBadge(r)+"</td>"+
         (MAG_WIJZIGEN?("<td style='text-align:center'>"+(n.verwijderd
           ? "<button class='notTerug' data-id='"+id+"' title='terugzetten in het dashboard' style='background:#fff;border:1px solid var(--border);border-radius:6px;padding:3px 7px;cursor:pointer;font-size:11px'>terug</button>"
@@ -3250,6 +3262,7 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
           "<div class='subwerk'>"+
             "<span class='lev'>"+leveringCel(r,n,id,uit)+"</span>"+
             "<input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' readonly title='"+esc(n.opmerking||"Klik om een notitie te schrijven")+"'"+uit+">"+
+            "<span class='acties'>"+
             (particulier?vink("afroep","afroep",n.afroep):"")+
             vink("inplannen","inplannen",n.inplannen)+
             vink("gepland","gepland",n.gepland)+
@@ -3262,6 +3275,7 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
             (MAG_WIJZIGEN?"<button type='button' class='notOmzet' data-id='"+id+"' title='"+
               (particulier?"deze klant is een partner: alle orders naar het tabblad Partner":"deze klant is een particulier: alle orders naar het tabblad Particulier")+
               "'>&#8644; "+(particulier?"naar partner":"naar particulier")+"</button>":"")+
+            "</span>"+
           "</div>"+
         "</td></tr>";
     }).join("")+
@@ -3496,28 +3510,34 @@ function renderParticulierBlok(){
       return "<th class='partBlokKop' data-kolom='"+kolom+"' style='cursor:pointer;white-space:nowrap' title='Klik om te sorteren'>"+esc(tekst)+
         (actief?(partBlokSort.op>0?" ▲":" ▼"):"<span style='color:#d1d5db'> ⇅</span>")+"</th>";
     };
-    lijst.innerHTML=filterHtml+"<div class='tablewrap'><table class='grid resv'><thead><tr>"+
+    // Zelfde vaste kolommen als de lijst erboven, zodat kleur en klant ook
+    // hier helemaal te lezen zijn en de twee lijsten hetzelfde ogen.
+    lijst.innerHTML=filterHtml+"<div class='tablewrap'><table class='grid resv'><colgroup>"+
+      "<col style='width:78px'><col style='width:11%'><col style='width:14%'><col style='width:22%'><col style='width:46px'>"+
+      "<col style='width:18%'><col style='width:15%'><col style='width:84px'></colgroup><thead><tr>"+
       kop("ordernr","Order")+kop("transport","Transport")+kop("model","Spa")+kop("kleur","Kleur")+kop("qty","Aantal")+kop("naam","Klant")+kop("postcode","Postcode")+kop("datum","Datum")+
       "</tr></thead><tbody>"+
       rijen.map(function(r){
         const n=notitie(r), id=esc(r.regelId||"");
         const stijl=n.inplannen?"background:#fef9c3"+(n.afroep?";border-left:4px solid #7c3aed":"")
                                :"background:#f3e8ff;border-left:4px solid #7c3aed";
-        return "<tr style='"+stijl+"'>"+
+        return "<tr class='hoofdrij gemerkt' style='"+stijl+"'>"+
           "<td>"+esc(r.ordernr)+"</td>"+
           "<td style='font-size:12px' title='"+esc(r.transport||"")+"'>"+(r.transport?esc(kortTransport(r.transport)):"<span style='color:var(--muted)'>-</span>")+"</td>"+
           "<td>"+spaCel(r)+"</td><td>"+kleurCel(r.kleur,r,true)+"</td>"+
-          "<td>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
-          "<td style='font-size:12px;white-space:nowrap' title='"+esc(r.plaats||"")+"'>"+(r.postcode?esc(r.postcode)+(r.plaats?" <span style='color:var(--muted)'>"+esc(r.plaats)+"</span>":""):"<span style='color:var(--muted)'>-</span>")+"</td>"+
-          "<td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td>"+
+          "<td class='mid'>"+r.qty+"</td><td>"+esc(r.naam)+"</td>"+
+          "<td style='font-size:12px' title='"+esc(r.plaats||"")+"'>"+(r.postcode?esc(r.postcode)+(r.plaats?" <span style='color:var(--muted)'>"+esc(r.plaats)+"</span>":""):"<span style='color:var(--muted)'>-</span>")+"</td>"+
+          "<td class='dat'>"+esc(datumNL(r.datum))+"</td>"+
           "</tr>"+
           "<tr class='subrij' style='"+stijl+"'><td colspan='"+KOL+"'>"+
             "<div class='subwerk'>"+
               "<span class='lev'>"+leveringCel(r,n,id,uit)+"</span>"+
               "<input class='notOpm' data-id='"+id+"' value='"+esc(n.opmerking||"")+"' placeholder='notitie…' readonly title='"+esc(n.opmerking||"Klik om een notitie te schrijven")+"'"+uit+">"+
+              "<span class='acties'>"+
               vinkP("afroep","afroep",n.afroep,id)+
               vinkP("inplannen","inplannen",n.inplannen,id)+
               vinkP("gepland","gepland",n.gepland,id)+
+              "</span>"+
             "</div>"+
           "</td></tr>";
       }).join("")+"</tbody></table></div>";
@@ -4840,6 +4860,13 @@ async function leesBinnenkomend(wb,bestandsnaam){
     body:JSON.stringify({door:(localStorage.getItem(EMAIL_KEY)||""),doc}),
   });
   const j=await r.json();
+  if(j&&j.ok&&j.overgeslagen){
+    /* Een dealercontainer: die komt nooit in Uddel, dus Manon heeft er geen
+       labels voor nodig (21 sep 2026). Wel even zeggen, anders lijkt het
+       alsof er iets mis ging. */
+    binnenkomendGemeld.push("De container(s) uit "+bestandsnaam+" gaan naar "+j.bestemming+" en niet naar Rotterdam; ze staan daarom niet bij Inkomende goederen.");
+    return doc;
+  }
   if(j&&j.ok){
     const labels=doc.containers.reduce((n,c)=>n+(c.labels?c.labels.length:0),0);
     binnenkomendGemeld.push(doc.containers.length+" container"+(doc.containers.length===1?"":"s")+

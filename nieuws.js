@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-21", bestand: "voorraad.html", soort: "verbeterd",
+      titel: "Particulier en Partner: rustiger en helemaal te lezen",
+      wat: "De lijsten hebben vaste kolommen; kleur en klant worden niet meer afgekapt maar lopen door op een tweede regel. Tussen twee orders staat een duidelijke lijn en de werkstrook is altijd in dezelfde volgorde: levering, notitie, vinkjes. Losse warmtepompen (HeatMaster, X-treme Green Heat Pump) staan er niet meer tussen: dat zijn geen spa's."
+    },
+    {
+      datum: "2026-09-21", bestand: "labels.html", soort: "verbeterd",
+      titel: "Containers onderweg: alleen naar Rotterdam",
+      wat: "Een container die rechtstreeks naar een dealer vaart (Noorwegen, Spanje, Amerika) komt niet meer bij Containers onderweg. Die komt nooit in Uddel, dus daar zijn geen labels voor nodig."
+    },
+    {
       datum: "2026-09-21", bestand: "uitbetalingen.html", soort: "nieuw",
       titel: "Uitbetalingen (proef)",
       wat: "Tegel 2 van het plan. Eén tegel voor alles wat via een tussenpartij binnenkomt: Mollie (settlement erin, betalingen op de orders, fee als kosten, één knop per settlement), Amerika (de batches van Audrey met dezelfde controle als in de tegel Amerika) en bol.com. Shopify en PIN komen er later bij."

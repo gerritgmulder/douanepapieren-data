@@ -452,7 +452,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
        een commercial invoice met packing list is ingelezen. -->
   <div class="panel hidden" id="stepC">
     <h2>Containers onderweg</h2>
-    <div class="sub">Ingelezen uit de commercial invoice en de packing list. Klik op een container om de labels klaar te zetten.</div>
+    <div class="sub">Ingelezen uit de commercial invoice en de packing list, alleen de containers naar Rotterdam. Klik op een container om de labels klaar te zetten.</div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0 14px">
       <input type="file" id="contFile" accept=".xls,.xlsx" style="display:none">
       <button type="button" id="contUpload">Container toevoegen uit een invoice</button>
@@ -693,6 +693,9 @@ function toonContainers() {
      Manon de uploadknop dus ook niet - precies het probleem dat ze meldde. Het
      staat er nu altijd. */
   $("stepC").classList.remove("hidden");
+  /* Wat er al stond van vóór 21 sep 2026 kan nog een dealercontainer zijn;
+     die hoort hier niet (Manon: alleen Rotterdam). */
+  containers = containers.filter(c => { const m = String(c.invoice || "").match(/\bto\s+(.{2,60})$/i); return !m || /^(rotterdam|uddel|nederland|the netherlands|holland|nl)\b/i.test(m[1].trim()); });
   if (!containers.length) { box.innerHTML = "<div class='sub'>Nog geen containers. Voeg er een toe met de knop hierboven, of lees bij Voorraadbeheer een commercial invoice in.</div>"; return; }
   box.innerHTML = "";
 
@@ -797,6 +800,7 @@ async function containerUploaden(file) {
     });
     const j = await r.json().catch(() => null);
     if (!j || !j.ok) { zeg("Opslaan mislukte: " + ((j && j.error) || ("HTTP " + r.status)), "#b91c1c"); return; }
+    if (j.overgeslagen) { zeg("Deze container(s) gaan naar " + j.bestemming + " en niet naar Rotterdam. Ze komen niet in Uddel, dus er zijn geen labels voor nodig.", "#92400e"); return; }
     const labels = doc.containers.reduce((n, c) => n + (c.colli || []).reduce((a, x) => a + (x.colli || 0), 0), 0);
     zeg((j.nieuw || 0) + " nieuw, " + (j.bijgewerkt || 0) + " bijgewerkt · " + doc.containers.length +
         " container(s), " + labels + " labels klaar.", "#15803d");

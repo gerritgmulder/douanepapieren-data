@@ -6529,11 +6529,21 @@ async function dpOrderUitleg(env, nr) {
            debiteur: o.DebtorId || null, regels };
 }
 
+/* Wat in de catalogus staat maar geen spa is.
+   ═══════════════════════════════════════════════════════════════════════
+   De warmtepompen staan in de spa-catalogus omdat partners ze via de
+   prijslijst bestellen; daardoor kwam elke bestelde HeatMaster of X-treme
+   Green Heat Pump als eigen regel in de reserveringen. Manon (21 sep 2026):
+   "Dit is geen spa. Deze mag uit het reserveringensysteem gehaald worden."
+   Een spa mét geïntegreerde warmtepomp is iets anders: dat is één artikel en
+   die blijft gewoon staan, met het badge erbij. */
+const DP_GEEN_SPA = /heat\s*pump|heatmaster/i;
+
 async function dpRefreshReservations(env) {
   const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
   const codeToModel = {};
   for (const [model, variants] of Object.entries(catalog.models || {}))
-    for (const v of variants) codeToModel[v.code] = model;
+    if (!DP_GEEN_SPA.test(model)) for (const v of variants) codeToModel[v.code] = model;
   // partner/particulier: dealer-accounts (debtorIds) + klantType-hint uit 'voorraad'
   const accounts = await dpGetAccounts(env);
   const partnerDebtors = new Set();
@@ -12092,10 +12102,28 @@ function binnenkomendSleutel(invoice, volgnummer) {
   return String(invoice || "?").trim() + "#" + Number(volgnummer || 1);
 }
 
+/* Alleen wat naar Rotterdam vaart hoort bij Inkomende goederen.
+   ═══════════════════════════════════════════════════════════════════════
+   Manon (21 sep 2026): "Krijg bij Containers onderweg alle containers van
+   Jazzi die binnenkomen. Hierin staat ook Noorwegen, Spanje en USA. Ik wil
+   alleen de containers naar Rotterdam." Een dealercontainer komt nooit in
+   Uddel, dus labels ervoor zijn zinloos. De invoice noemt de bestemming
+   ("RZ2009DF3368 to Paramount"); zelfde regel als bij Voorraadbeheer
+   (leesBestemming). Zonder bestemming op het papier: gewoon meenemen. */
+const BINNENKOMEND_NAAR_ONS = /^(rotterdam|uddel|nederland|the netherlands|holland|nl)\b/i;
+function binnenkomendDealerContainer(doc) {
+  const m = String((doc && doc.nummer) || "").match(/\bto\s+(.{2,60})$/i);
+  if (!m) return null;
+  const naam = m[1].replace(/[\s.,;]+$/, "").trim();
+  return BINNENKOMEND_NAAR_ONS.test(naam) ? null : naam;
+}
+
 async function binnenkomendBewaren(env, door, doc) {
   if (!doc || !Array.isArray(doc.containers) || !doc.containers.length) {
     return { ok: false, error: "geen-containers" };
   }
+  const dealer = binnenkomendDealerContainer(doc);
+  if (dealer) return { ok: true, overgeslagen: true, bestemming: dealer, nieuw: 0, bijgewerkt: 0, containers: doc.containers.length };
   const alles = (await env.FONTEYN_DATA.get("binnenkomend", { type: "json" })) || { lijst: [] };
   const nu = new Date().toISOString();
   let nieuw = 0, bijgewerkt = 0;
