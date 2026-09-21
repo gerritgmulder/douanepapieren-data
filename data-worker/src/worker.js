@@ -9255,9 +9255,25 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
     return rij;
   });
 
-  const bruto = qbCent(uit.reduce((n, r) => n + r.bedrag, 0));
+  let bruto = qbCent(uit.reduce((n, r) => n + r.bedrag, 0));
   const kosten = qbCent(uit.reduce((n, r) => n + r.kosten, 0));
   const netto = totaalRegel && totaalRegel.kolom3 != null ? qbCent(totaalRegel.kolom3) : null;
+  /* "Balance Due" is wat de klant nog moet betalen, niet wat er is
+     overgemaakt. Gerrit (21 sep 2026, batch 10-06): bruto 57.741,11 min
+     kosten 933,40 is 56.807,71, ontvangen 41.807,71; het gat is precies de
+     Balance Due van 15.000. Sluit de batch zonder de saldoregels wél aan, dan
+     tellen die niet mee en worden ze niet geboekt. Een kleine saldoregel die
+     wél in de betaling zit (de 3,20 van 31-07) blijft zoals hij was: die gaat
+     mee met de bankkosten. */
+  const balansRegels = uit.filter(r => r.soort === "balance" && !r.factuur);
+  const balansSom = qbCent(balansRegels.reduce((n, r) => n + r.bedrag, 0));
+  let balansBuiten = false;
+  if (netto != null && balansRegels.length && Math.abs(qbCent(bruto - kosten) - netto) > 0.005 &&
+      Math.abs(qbCent(bruto - balansSom - kosten) - netto) <= 0.005) {
+    balansBuiten = true;
+    balansRegels.forEach(r => { r.status = "nog te betalen door de klant, zit niet in deze betaling"; r.buiten = true; });
+    bruto = qbCent(bruto - balansSom);
+  }
   const brutoMail = totaalRegel && totaalRegel.kolom1 != null ? qbCent(totaalRegel.kolom1) : null;
   const kostenMail = totaalRegel && totaalRegel.kolom2 != null ? qbCent(Math.abs(totaalRegel.kolom2)) : null;
 
@@ -9278,7 +9294,7 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
      4630 bankkosten. Klein bedrag." Zo'n regel houdt de batch dus niet meer
      tegen; het bedrag komt vanzelf op 4630 terecht doordat de kostenregel het
      verschil is tussen wat er op de orders gaat en wat er is ontvangen. */
-  const saldoRegels = uit.filter(r => r.status === "geen factuurnummer" && r.soort === "balance");
+  const saldoRegels = uit.filter(r => r.status === "geen factuurnummer" && r.soort === "balance" && !r.buiten);
   saldoRegels.forEach(r => { r.status = "saldoregel, gaat mee met de bankkosten"; });
   const zonderOrder = uit.filter(r => r.status === "geen Logic4-order");
   const dubbel = uit.filter(r => r.status === "meerdere orders");
@@ -9324,7 +9340,7 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
 
   return {
     id: String(wire.id), datum: wire.datum || "", bestand: wire.bestand || "",
-    bruto, kosten, netto, brutoMail, kostenMail,
+    bruto, kosten, netto, brutoMail, kostenMail, balansBuiten: balansBuiten ? balansSom : 0,
     aansluiting: netto != null ? { bruto, kosten, netto, verschil: qbCent(bruto - kosten - netto) } : null,
     afwijking: redenen.length > 0,
     redenen,
@@ -9613,6 +9629,43 @@ async function qbHandleBoeken(request, env) {
     if (!b.teBoeken && b.bankkosten.alGeboekt) { uit.push(b); continue; }
 
     const datum = (w.datum || new Date().toISOString().slice(0, 10)) + "T12:00:00";
+    /* EERST KIJKEN, DAN BOEKEN.
+       ═══════════════════════════════════════════════════════════════════
+       Gerrit (21 sep 2026, batch 16-06): factuur 3460 stond in Audrey's mail
+       voor 3.193,54 dollar, maar de QuickBooks-factuur en dus de Logic4-order
+       (3522237) zijn 2.093,54 dollar, 1.869,29 euro. De koppeling boekte de
+       omgerekende 2.851,38 euro: 982 euro te veel op de order. Daarom nu
+       vooraf per regel het openstaande bedrag van de order ophalen; is de
+       betaling meer dan de order open heeft, dan gaat er van de hele batch
+       niets weg en staat erbij welke regel niet klopt. */
+    const vooraf = [];
+    for (const r of b.regels) {
+      if (r.status !== "klaar om te boeken" || !(r.bedrag > 0)) continue;
+      try {
+        const or = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+          method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+          body: JSON.stringify({ Id: Number(r.order), TakeRecords: 1 }),
+        });
+        const oj = await or.json().catch(() => null);
+        const o = Array.isArray(oj) ? oj[0] : (oj && (oj.Orders || oj.Records || [])[0]);
+        const tot = o && o.Totals ? o.Totals : null;
+        if (!(o && Number(o.Id) === Number(r.order) && tot)) { vooraf.push("order " + r.order + " (factuur " + r.factuur + ") is niet op te halen uit Logic4"); continue; }
+        const totaal = Math.round((Number(tot.AmountIncl) || 0) * 100) / 100;
+        const open = Math.round(((Number(tot.AmountIncl) || 0) - (Number(tot.Calc_TotalPayed) || 0)) * 100) / 100;
+        r.openOpOrder = open; r.totaalOrder = totaal;
+        const eurLaag = Math.round(Number(r.bedrag) / AMERIKA_KOERS * 100) / 100;
+        if (open <= 0)
+          vooraf.push("factuur " + r.factuur + ": order " + r.order + " staat al volledig betaald (" + totaal.toFixed(2) + " euro), er kan niets meer op");
+        else if (eurLaag > open + 0.10)
+          vooraf.push("factuur " + r.factuur + ": de batch noemt " + qbGeld(r.bedrag) + " (" + eurLaag.toFixed(2) + " euro), maar order " + r.order +
+            " heeft nog maar " + open.toFixed(2) + " euro open van " + totaal.toFixed(2) + ". Controleer de factuur in QuickBooks tegenover de mail van Audrey.");
+      } catch (e) { vooraf.push("order " + r.order + " (factuur " + r.factuur + "): " + String(e.message || e)); }
+    }
+    if (vooraf.length) {
+      b.afwijking = true;
+      b.redenen = (b.redenen || []).concat(vooraf.map(x => "Niet geboekt: " + x));
+      uit.push(b); continue;
+    }
     let stuk = false;
     for (const r of b.regels) {
       if (r.status !== "klaar om te boeken") continue;
@@ -9649,8 +9702,10 @@ async function qbHandleBoeken(request, env) {
             const onder = Math.round(Number(r.bedrag) / AMERIKA_KOERS * 100) / 100 - 0.10, boven = Number(r.bedrag) + 0.10;
             if (open > 0 && open >= onder && open <= boven) eur = open;
             else if (open > 0) r.uitleg = "open op de order: " + open.toFixed(2) + " euro, factuur omgerekend: " + eur.toFixed(2) + " euro";
+            // Nooit meer boeken dan er open staat; de controle hierboven vangt dit al, dit is de grendel.
+            if (open > 0 && eur > open + 0.10) throw new Error("betaling " + eur.toFixed(2) + " is meer dan het open bedrag " + open.toFixed(2) + " op order " + r.order);
           }
-        } catch {}
+        } catch (e) { if (/meer dan het open bedrag/.test(String(e.message || e))) throw e; }
         r.bedragEur = eur;
         const rr = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
           method: "POST",
@@ -13444,6 +13499,24 @@ export default {
     if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);
     if (url.pathname === "/amerika/qb/koersverschil" && request.method === "POST") return qbHandleKoersverschil(request, env);
     if (url.pathname === "/amerika/qb/boeking-terugzetten" && request.method === "POST") return qbHandleBoekingTerugzetten(request, env);
+    /* Het ontvangen bedrag met de hand erbij als de mail geen totaalregel
+       had (Gerrit, 21 sep 2026, batch 26-06: "er staat geen totaalregel met
+       een ontvangen bedrag bij ... het moet geboekt kunnen worden"). */
+    if (url.pathname === "/amerika/qb/ontvangen" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      let b = {}; try { b = await request.json(); } catch {}
+      const bedrag = qbCent(Number(String(b.bedrag || "").replace(/[^\d.,-]/g, "").replace(",", ".")));
+      if (!(bedrag > 0)) return reply(400, { ok: false, error: "vul het ontvangen bedrag in dollars in" });
+      const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+      const w = (wires.wires || []).find(x => String(x.id) === String(b.wireId));
+      if (!w) return reply(404, { ok: false, error: "batch niet gevonden" });
+      w.regels = w.regels || [];
+      let tot = w.regels.find(r => String(r.soort || "") === "totaal");
+      if (!tot) { tot = { naam: "(totaal)", factuur: null, soort: "totaal", kolom1: null, kolom2: null, kolom3: null, verwerkt: false }; w.regels.push(tot); }
+      tot.kolom3 = bedrag; tot.handmatig = true; tot.door = String(b.user || "").slice(0, 80); tot.ts = new Date().toISOString();
+      await env.FONTEYN_DATA.put("qb-wires", JSON.stringify(wires));
+      return reply(200, { ok: true, bedrag });
+    }
     if (url.pathname === "/amerika/qb/proef-betaling" && request.method === "POST") return qbHandleProefBetaling(request, env);
     if (url.pathname === "/amerika/qb/batch-orders" && request.method === "POST") return qbHandleBatchOrders(request, env);
     if (url.pathname === "/amerika/qb/regel-factuur" && request.method === "POST") return qbHandleRegelFactuur(request, env);

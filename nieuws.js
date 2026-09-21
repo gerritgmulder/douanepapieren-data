@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-09-21", bestand: "amerika.html", soort: "beter",
+      titel: "Batches: per batch boeken",
+      wat: "Het overzicht 'Geaccordeerd, nog te verwerken' staat ingeklapt; boeken doe je per batch. Per batch is er een vinkje om alle regels in één keer af te vinken. Een 'Balance Due' die niet in de betaling zit telt niet meer mee. Mist de totaalregel, dan vul je het ontvangen bedrag zelf in. En de koppeling boekt nooit meer dan een order open heeft: klopt een regel niet met de factuur, dan wordt de hele batch tegengehouden met uitleg."
+    },
+    {
+      datum: "2026-09-21", bestand: "amerika.html", soort: "beter",
       titel: "Houston: zendingen in delen",
       wat: "Een bestelling gaat in delen op transport. Elke commercial invoice is nu een eigen zending bij Onderweg, met erin wat er echt in de container zit; wat nog niet verscheept is blijft bij In productie staan, per model en kleur. Bij invoices van vóór vandaag: klik 'vervangen' en kies hetzelfde bestand opnieuw, dan wordt de inhoud gelezen."
     },

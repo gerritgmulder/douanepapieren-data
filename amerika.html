@@ -1742,6 +1742,7 @@ async function audPrijzenBijwerken(knop){
   finally{ knop.disabled = false; knop.textContent = oud; }
 }
 
+let audWachtOpen=(function(){ try{ return localStorage.getItem("fp.amerika.wachtrij")==="open"; }catch(e){ return false; } })();
 function audRenderWachtrij(){
   const box=document.getElementById("audWachtrij"); if(!box) return;
   // Een factuur hoort hier pas te staan nadat Chantal bij Verkoop & dealers
@@ -1786,11 +1787,24 @@ function audRenderWachtrij(){
       "<p class='lead'>Nog niets ontvangen van Audrey. Zodra je in <b>Verkoop &amp; dealers</b> bij een geaccordeerde factuur aanvinkt dat het geld binnen is, verschijnt hij hier.</p></div>";
     return;
   }
+  /* Ingeklapt, tenzij iemand hem openzet. Osman (via Gerrit, 21 sep 2026)
+     boekt per batch en nooit alles in één keer; dit overzicht is om te
+     kijken, niet om vanuit te werken. */
+  if(!audWachtOpen){
+    box.innerHTML="<div class='card' style='padding:12px 18px'><div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px'>"+
+      "<h3 style='margin:0'>Geaccordeerd — nog te verwerken ("+wacht.length+")</h3>"+
+      "<div style='display:flex;gap:8px;align-items:center'>"+
+        (klaar.length?"<span class='pill' style='background:#dcfce7;color:#15803d'>"+klaar.length+" afgerond</span>":"")+
+        "<button class='btn' type='button' id='audWachtToon'>overzicht tonen</button></div></div></div>";
+    document.getElementById("audWachtToon").addEventListener("click",()=>{ audWachtOpen=true; try{ localStorage.setItem("fp.amerika.wachtrij","open"); }catch(e){} audRenderWachtrij(); });
+    return;
+  }
   box.innerHTML="<div class='card'>"+
     "<div style='display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px'>"+
       "<h3 style='margin:0'>Geaccordeerd — nog te verwerken ("+wacht.length+")</h3>"+
       "<div style='display:flex;gap:8px;align-items:center'>"+
         (klaar.length?"<span class='pill' style='background:#dcfce7;color:#15803d'>"+klaar.length+" afgerond</span>":"")+
+        "<button class='btn' type='button' id='audWachtDicht'>inklappen</button>"+
         /* De bedragen alsnog op de bestaande orders zetten. Zie de
            toelichting bij /amerika/qb/prijzen in de worker: alles wat vóór
            7 sep 2026 is aangemaakt staat in Logic4 op nul, en daar valt niets
@@ -1851,6 +1865,7 @@ function audRenderWachtrij(){
     "</tbody></table></div></div>";
   box.querySelectorAll(".audVerw").forEach(cb=>cb.addEventListener("change",()=>audVerwerktKlik(cb)));
   qbNotitieKoppel(box);
+  const dicht=document.getElementById("audWachtDicht"); if(dicht) dicht.addEventListener("click",()=>{ audWachtOpen=false; try{ localStorage.setItem("fp.amerika.wachtrij","dicht"); }catch(e){} audRenderWachtrij(); });
   box.querySelectorAll(".audVerberg").forEach(b=>b.addEventListener("click",()=>qbVerbergKlik(b.dataset.nr)));
   const prijsKnop = box.querySelector("#audPrijzen");
   if (prijsKnop) prijsKnop.addEventListener("click", () => audPrijzenBijwerken(prijsKnop));
@@ -1913,17 +1928,24 @@ function audBatchCheck(w){
   const c2=n=>Math.round((Number(n)||0)*100)/100;
   const geld=(w.regels||[]).filter(r=>AUD_GELD.indexOf(String(r.soort||""))>=0);
   const tot=(w.regels||[]).find(r=>String(r.soort||"")==="totaal");
-  const bruto=c2(geld.reduce((n,r)=>n+(Number(r.kolom1)||0),0));
+  let bruto=c2(geld.reduce((n,r)=>n+(Number(r.kolom1)||0),0));
   const kosten=c2(geld.reduce((n,r)=>n+Math.abs(Number(r.kolom2)||0),0));
   const netto=tot&&tot.kolom3!=null?c2(tot.kolom3):null;
   const redenen=[];
+  /* "Balance Due" is wat de klant nog moet betalen, niet wat er is
+     overgemaakt. Sluit de batch zonder die regels wél aan, dan tellen ze niet
+     mee (zelfde regel als in de worker). */
+  const balans=geld.filter(r=>String(r.soort||"")==="balance"&&!audFactuurVan(r));
+  const balansSom=c2(balans.reduce((n,r)=>n+(Number(r.kolom1)||0),0));
+  let balansBuiten=false;
+  if(netto!==null&&balans.length&&Math.abs(c2(bruto-kosten)-netto)>0.005&&Math.abs(c2(bruto-balansSom-kosten)-netto)<=0.005){ balansBuiten=true; bruto=c2(bruto-balansSom); }
   if(netto===null) redenen.push("er staat geen totaalregel met een ontvangen bedrag bij");
   else if(Math.abs(c2(bruto-kosten)-netto)>0.005)
     redenen.push("bruto "+usd(bruto)+" min bankkosten "+usd(kosten)+" is "+usd(c2(bruto-kosten))+", en er is "+usd(netto)+" ontvangen");
   /* Een saldoregel hoort bij geen enkele factuur en houdt de batch niet tegen.
      Osman (9 sep 2026) over de 3,20 van 31-07: "mag mee met 4630 bankkosten.
      Klein bedrag." */
-  const saldo=geld.filter(r=>String(r.soort||"")==="balance");
+  const saldo=balansBuiten?[]:geld.filter(r=>String(r.soort||"")==="balance");
   const geenNr=geld.filter(r=>!audFactuurVan(r)&&String(r.soort||"")!=="balance");
   if(geenNr.length) redenen.push(geenNr.length+" regel(s) zonder factuurnummer: "+geenNr.map(r=>r.naam).join(", "));
   const geenOrder=geld.filter(r=>{
@@ -1938,7 +1960,7 @@ function audBatchCheck(w){
      nul uit, ook met een saldoregel ertussen. */
   const opOrders=c2(bruto-saldo.reduce((n,r)=>n+(Number(r.kolom1)||0),0));
   const naar4630=netto!==null&&redenen.length===0?c2(opOrders-netto):kosten;
-  return {bruto:bruto,kosten:naar4630,kostenMail:kosten,opOrders:opOrders,netto:netto,redenen:redenen,klopt:redenen.length===0};
+  return {bruto:bruto,kosten:naar4630,kostenMail:kosten,opOrders:opOrders,netto:netto,redenen:redenen,klopt:redenen.length===0,balansBuiten:balansBuiten?balansSom:0};
 }
 function audRender(){
   const box=document.getElementById("audList");
@@ -1992,6 +2014,7 @@ function audRender(){
             " op 4630, blijft op 1160 "+esc(usd(ct.netto))+"."+
             (ct.opOrders!==ct.bruto?("<br>Daarvan gaat "+esc(usd(c2v(ct.bruto-ct.opOrders)))+
               " niet naar een order (saldoregel); dat zit in de "+esc(usd(ct.kosten))+" op 4630."):"")+
+            (ct.balansBuiten?("<br>De Balance Due van "+esc(usd(ct.balansBuiten))+" is wat de klant nog moet betalen; die zit niet in deze betaling en wordt niet geboekt."):"")+
             "</div>"
           : "<div class='status-msg' style='margin:0 0 10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5'>"+
             "<b>Afwijking, deze batch wordt niet geboekt.</b><ul style='margin:6px 0 0;padding-left:18px'>"+
@@ -2000,6 +2023,11 @@ function audRender(){
                orders zijn gevonden; ligt dit bij Chantal?" Niet meer: het
                geld staat al op de bank, dus de orders mogen hiervandaan
                worden aangemaakt. */
+            (ct.redenen.some(r=>/geen totaalregel/i.test(r))
+              ? "<div style='margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap'><span style='font-size:12px'>Wat is er op de bank ontvangen voor deze batch?</span>"+
+                "<input type='text' inputmode='decimal' data-ontvangen-usd='"+esc(w.id)+"' placeholder='bv. 100,289.71' style='width:130px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit'>"+
+                "<button class='btn' type='button' data-ontvangen='"+esc(w.id)+"'>ontvangen bedrag vastleggen</button></div>"
+              : "")+
             (ct.redenen.some(r=>/geen Logic4-order/i.test(r))
               ? "<div style='margin-top:8px'><button class='btn' type='button' data-orders='"+esc(w.id)+"' title='Voor elke factuur in deze batch zonder Logic4-order de order aanmaken uit QuickBooks, net als bij accorderen'>ontbrekende orders aanmaken</button>"+
                 " <span style='font-size:12px'>Maakt de Logic4-orders aan uit QuickBooks voor de facturen die er nog niet zijn; daarna kun je boeken.</span></div>"
@@ -2023,7 +2051,8 @@ function audRender(){
       })()+
       "<p class='lead' style='font-size:12px;margin:0 0 10px'>Bestand: "+esc(w.bestand||"")+" · ingelezen "+esc(datumNL(w.ts))+"</p>"+
       "<div class='tablewrap'><table class='grid'><thead><tr>"+
-        "<th>Regel</th><th>Factuur</th><th>Soort</th><th style='text-align:right'>Amount invoice</th><th style='text-align:right'>Bankkosten</th><th style='text-align:right'>Totaal</th><th>Verwerkt in Logic4</th></tr></thead><tbody>"+
+        "<th>Regel</th><th>Factuur</th><th>Soort</th><th style='text-align:right'>Amount invoice</th><th style='text-align:right'>Bankkosten</th><th style='text-align:right'>Totaal</th>"+
+        "<th><label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0'><input type='checkbox' data-alle-verwerkt='"+esc(w.id)+"'"+(openN===0&&w.regels.some(r=>r.soort==='factuur')?" checked":"")+" title='Alle regels van deze batch in één keer aan- of uitvinken'> Verwerkt in Logic4</label></th></tr></thead><tbody>"+
       w.regels.map((r,i)=>{
         const kan=r.soort==="factuur";
         // Status komt uit de CENTRALE lijst op factuurnummer, zodat dit vinkje
@@ -2106,6 +2135,33 @@ function audRender(){
       if(window.fpLog) window.fpLog("batchregel-factuur","batch "+inp.dataset.wire+" regel "+inp.dataset.i+" -> "+nr);
       audRender();
     }catch(err){ alert("Factuurnummer bewaren mislukte: "+err.message); inp.disabled=false; }
+  }));
+  box.querySelectorAll("[data-ontvangen]").forEach(b=>b.addEventListener("click",async()=>{
+    const inp=box.querySelector("[data-ontvangen-usd='"+CSS.escape(b.dataset.ontvangen)+"']");
+    const bedrag=inp?inp.value.trim():"";
+    if(!bedrag){ alert("Vul eerst het ontvangen bedrag in."); return; }
+    b.disabled=true;
+    try{
+      const r=await fetch(WORKER+"/amerika/qb/ontvangen",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+        body:JSON.stringify({wireId:b.dataset.ontvangen,bedrag:bedrag.replace(/,/g,""),user:(localStorage.getItem("fp.email")||"")})});
+      const j=await r.json().catch(()=>null);
+      if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+      if(window.fpLog) window.fpLog("batch-ontvangen-gezet","batch "+b.dataset.ontvangen+": "+j.bedrag);
+      await audLoad(); audRender();
+    }catch(e){ alert("Vastleggen lukte niet: "+e.message); b.disabled=false; }
+  }));
+  /* Alles in deze batch in één keer aan- of uitvinken (Osman via Gerrit,
+     21 sep 2026). Gaat regel voor regel door dezelfde bewaarroute. */
+  box.querySelectorAll("[data-alle-verwerkt]").forEach(cb=>cb.addEventListener("change",async()=>{
+    const tabel=cb.closest("table"); if(!tabel) return;
+    const aan=cb.checked; cb.disabled=true;
+    const cbs=[...tabel.querySelectorAll("tbody .audVerw")].filter(x=>x.checked!==aan);
+    for(const x of cbs){
+      try{ await audZetVerwerkt(x.dataset.nr,aan,x.dataset.qbid||null); }
+      catch(e){ alert("Kon niet opslaan bij #"+x.dataset.nr+": "+e.message); break; }
+    }
+    if(window.fpLog) window.fpLog("batch-alles-verwerkt","batch "+cb.dataset.alleVerwerkt+(aan?" alles afgevinkt":" alles teruggedraaid")+" ("+cbs.length+")");
+    audRenderWachtrij(); audRender();
   }));
   box.querySelectorAll("[data-orders]").forEach(b=>b.addEventListener("click",async()=>{
     if(!confirm("Voor elke factuur in deze batch zonder Logic4-order wordt nu een order aangemaakt in Logic4 (op de debiteur Passion Spa South). Doorgaan?")) return;
