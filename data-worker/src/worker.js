@@ -152,7 +152,9 @@ const ALLOWED_BUCKETS = new Set([
   "herinneringen-log",
   "dhl-push",            // DHL Push API v2: de berichten die DHL zelf stuurt over zendingen
   "qb-geboekt-terug",    // Amerika: wat er uit qb-geboekt is gehaald toen een batch opnieuw geboekt moest worden
-  "werkplaats",          // Werkplaats: per orderregel getest ja/nee (door, wanneer) en een eigen leverdatum als Planning er geen heeft   // Herinneringen: wanneer welke debiteur voor welke facturen een herinnering kreeg, en door wie
+  "werkplaats",          // Werkplaats: per orderregel getest ja/nee (door, wanneer) en een eigen leverdatum als Planning er geen heeft
+  "bank-werk",           // Bank (proef): elke afschriftregel met zijn voorstel, keuze en of hij al in Logic4 staat
+  "bank-geleerd",        // Bank (proef): namen op het afschrift die iemand een keer heeft aangewezen (tussenrekening, debiteur)   // Herinneringen: wanneer welke debiteur voor welke facturen een herinnering kreeg, en door wie
   "herinneringen-tekst", // Herinneringen: de mailtekst (Engels en Nederlands), aanpasbaar in de tegel
   "keten-meldingen",     // Ketenbewaking: de open meldingen van de laatste controle (worker schrijft, tegel leest)
   "keten-status",        // Ketenbewaking: per melding afgehandeld/uitgesteld met notitie (tegel schrijft via /keten/status)

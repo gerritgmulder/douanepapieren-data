@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-21", bestand: "bank.html", soort: "nieuw",
+      titel: "Bank (proef): de werklijst",
+      wat: "Nieuwe categorie Administratie (proef) voor de beheerlaag. Eerste tegel: Bank. Alle afschriften in één werklijst, groen gaat mee met de knop, oranje bekijk je even, en namen die je één keer aanwijst onthoudt hij."
+    },
+    {
       datum: "2026-09-21", bestand: "planning.html", soort: "beter",
       titel: "Opleverbonnen: aantal op de knop",
       wat: "Op de knop Opleverbonnen staat nu hoeveel afgeronde bonnen er na te kijken zijn. Een bon die een monteur in Mijn route afrondt komt daar terecht."

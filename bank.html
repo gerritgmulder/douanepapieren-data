@@ -1,0 +1,525 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script src="mt940.js"></script>
+<script src="bank-matching.js"></script>
+<script src="bank-crediteuren.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("administratie-proef", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bank - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     BANK (proef) - tegel 1 van het plan "administratie op knoppen"
+
+     Gerrit (21 sep 2026): het werk van de administratie automatiseren, met
+     knoppen waar ze op kunnen drukken en verder niks. Dit is de eerste tegel:
+     elk afschrift van elke rekening komt hier binnen, de koppeling herkent de
+     regels, en de mens kijkt alleen naar wat oranje is.
+
+     Drie kolommen, overal hetzelfde:
+       GROEN   herkend zonder twijfel; gaat mee met de knop
+       ORANJE  één voorstel, één klik (of een keuze uit een paar)
+       KLAAR   staat in Logic4, of is bewust niet geboekt
+
+     Wat de knop "Naar Logic4" doet, en wat bewust niet:
+       - betalingen op een order of factuur: als betaling in het
+         tussenrekening-dagboek (instelling), zodat de bankregel in Logic4
+         zelf nog maar één toewijzing op die tussenrekening is
+       - uitbetalingen van Mollie, bol.com, Shopify, PIN, Pay.nl: NIET
+         geboekt; die staan al op hun tussenrekening via hun eigen tegel, de
+         bankregel is in Logic4 één toewijzing op die rekening
+       - betalingen aan leveranciers: NIET geboekt (kan niet via de koppeling);
+         de bankregel wordt in Logic4 aan de crediteurfactuur toegewezen, of
+         sluit vanzelf als hij via de SEPA-batch is betaald
+       - kruisposten tussen eigen rekeningen: NIET geboekt; toewijzen op 1220
+
+     De motor is dezelfde als in Bankkoppeling maken (mt940.js,
+     bank-matching.js, bank-crediteuren.js en de /bank-routes). Nieuw is dat
+     alles bewaard blijft (bucket bank-werk), dat namen geleerd worden (bucket
+     bank-geleerd) en dat het scherm een werklijst is in plaats van een
+     bestand.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --goed:#16a34a; --rood:#b91c1c; --oranje:#c2410c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1300px;margin:16px auto;padding:0 14px 60px}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+h2{margin:0 0 6px;font-size:15px;color:var(--groen)}
+.lead{color:var(--grijs);font-size:12.5px;margin:0 0 10px;line-height:1.5}
+.knop{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink)}
+.knop.groen{background:var(--groen);color:#fff;border-color:var(--groen);font-weight:600}
+.knop:disabled{opacity:.5;cursor:default}
+.drop{border:2px dashed var(--rand);border-radius:12px;padding:18px;text-align:center;color:var(--grijs);cursor:pointer;background:#fafaf8}
+.drop.over{border-color:var(--groen);background:#f0f7e8;color:var(--ink)}
+.kpis{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px}
+.kpi{flex:1 1 130px;background:#f9fafb;border:1px solid var(--rand);border-radius:10px;padding:8px 11px;cursor:pointer}
+.kpi.aan{border-color:var(--groen);background:#f0f7e8}
+.kpi b{display:block;font-size:19px;color:var(--groen)}.kpi span{font-size:11px;color:var(--grijs)}
+.kpi.oranje b{color:var(--oranje)}.kpi.goed b{color:var(--goed)}
+.filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.filters input,.filters select{font:inherit;font-size:12.5px;padding:6px 9px;border:1px solid var(--rand);border-radius:8px;background:#fff}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;color:var(--grijs);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:6px 6px;border-bottom:1px solid var(--rand);white-space:nowrap}
+td{padding:7px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-wrap:break-word}
+td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.groen td:first-child{box-shadow:inset 4px 0 0 var(--goed)}
+tr.oranje td:first-child{box-shadow:inset 4px 0 0 #f59e0b}
+tr.klaar td{color:var(--grijs)}tr.klaar td:first-child{box-shadow:inset 4px 0 0 #d1d5db}
+.oms{font-size:12px;color:var(--grijs);max-width:420px}
+.wie{font-weight:600}
+.pil{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#eef2e6;color:var(--groen);white-space:nowrap}
+.pil.oranje{background:#ffedd5;color:var(--oranje)}.pil.blauw{background:#dbeafe;color:#1d4ed8}.pil.grijs{background:#f3f4f6;color:#374151}.pil.rood{background:#fee2e2;color:var(--rood)}
+.voorstel{font-size:12px}
+.voorstel small{display:block;color:var(--grijs)}
+.acties{white-space:nowrap}
+.acties button{margin-right:4px;margin-bottom:3px}
+select.keuze{font:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--rand);border-radius:7px;max-width:320px}
+.msg{margin-top:8px;padding:8px 11px;border-radius:8px;font-size:12.5px}.msg.ok{background:#dcfce7;color:#166534}.msg.bad{background:#fee2e2;color:var(--rood)}.msg.info{background:#eff6ff;color:#1e40af}
+.balk{position:sticky;bottom:0;background:#fff;border-top:2px solid var(--groen);padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px -16px -14px;border-radius:0 0 12px 12px}
+.instel{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;font-size:12.5px}
+@media (max-width:800px){ .instel{grid-template-columns:1fr} .oms{max-width:none} }
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🏦 Bank <span class="pil grijs" style="vertical-align:middle">proef</span></h1>
+  <button class="knop" id="instelKnop" style="padding:6px 10px">Instellingen</button>
+</header>
+<main>
+  <div class="kaart" id="instelKaart" style="display:none">
+    <h2>Instellingen</h2>
+    <p class="lead">Eén keer zetten. Het tussenrekening-dagboek is waar de koppeling de betalingen op orders en facturen neerzet; in Logic4 wijs je de bankregel daarna in één keer toe aan die tussenrekening. Logic4 laat de koppeling niet rechtstreeks in een bankdagboek schrijven.</p>
+    <div class="instel">
+      <label>Tussenrekening-dagboek voor betalingen op orders en facturen<br><select id="instDagboek"><option value="">kies…</option></select></label>
+      <label>Kruisposten (tussen eigen rekeningen) toewijzen op grootboek<br><input id="instKruis" value="1220" style="width:90px"></label>
+    </div>
+    <p style="margin:10px 0 0"><button class="knop groen" id="instBewaar">Bewaren</button> <span id="instMsg" style="font-size:12px"></span></p>
+  </div>
+
+  <div class="kaart">
+    <h2>Afschriften inlezen</h2>
+    <p class="lead">Sleep één of meer MT940-bestanden hierheen (ING, Rabo, Volksbank; euro en dollar). Regels die er al staan worden overgeslagen, dus twee keer inlezen kan geen kwaad.</p>
+    <div class="drop" id="drop">Klik of sleep de afschriften hierheen</div>
+    <input type="file" id="bestand" multiple accept=".txt,.sta,.swi,.940,.mt940" style="display:none">
+    <div id="dropMsg"></div>
+  </div>
+
+  <div class="kaart">
+    <h2>Werklijst</h2>
+    <div class="kpis" id="kpis"></div>
+    <div class="filters">
+      <input type="search" id="zoek" placeholder="zoek op naam, bedrag, omschrijving…" style="flex:1 1 220px">
+      <select id="fRekening"><option value="">alle rekeningen</option></select>
+      <select id="fRichting"><option value="">in en uit</option><option value="in">alleen ontvangsten</option><option value="uit">alleen uitgaven</option></select>
+      <label style="font-size:12px;color:var(--grijs)"><input type="checkbox" id="fKlaar"> ook wat klaar is</label>
+    </div>
+    <div style="overflow:auto"><table><thead><tr><th>Datum</th><th>Rekening</th><th>Wie / omschrijving</th><th class="n">Bedrag</th><th>Voorstel</th><th></th></tr></thead><tbody id="lijst"></tbody></table></div>
+    <div class="balk">
+      <b id="tel">0 regels klaar om te boeken</b>
+      <button class="knop groen" id="boek" disabled>Naar Logic4</button>
+      <span id="boekMsg" style="font-size:12.5px"></span>
+    </div>
+  </div>
+</main>
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+async function api(pad, body, method){
+  var r = await fetch(W+pad, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik }, body: body ? JSON.stringify(body) : undefined });
+  var j = null; try { j = await r.json(); } catch(e){}
+  if (!r.ok) throw new Error((j && j.error) || ("HTTP " + r.status));
+  return j;
+}
+function geld(n, munt){ var v = Number(n)||0; return (munt === "USD" ? "$ " : "€ ") + Math.abs(v).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function datumNL(v){ if(!v) return ""; var s=String(v).slice(0,10).split("-"); return s.length===3 ? s[2]+"-"+s[1]+"-"+s[0] : v; }
+function msg(el, tekst, soort){ el.innerHTML = tekst ? '<div class="msg '+(soort||"info")+'">'+tekst+'</div>' : ""; }
+
+/* ── de werklijst ───────────────────────────────────────────────────── */
+var werk = { regels: {}, afschriften: [] }, geleerd = { namen: {} }, inst = {};
+var openIndex = null, credIndex = null, orderCache = {}, grootboeken = null, dagboeken = [];
+var zoek = "", fRek = "", fRicht = "", fKlaar = false;
+
+/* Wat voor regel is dit? Dezelfde herkenning als in Bankkoppeling maken,
+   plus de eigen rekeningen (kruispost) en wat er geleerd is. */
+var EIGEN_IBANS = {};
+var TUSSEN = {
+  mollie:  { naam: "Mollie",           rekening: "1134", uitleg: "uitbetaling van Mollie; de orders staan al op 1134 via de Mollie-tegel" },
+  bol:     { naam: "bol.com",          rekening: "1185", uitleg: "uitbetaling van bol.com; de orders staan al op 1185 via de bol.com-tegel" },
+  paynl:   { naam: "Pay.nl",           rekening: "2030", uitleg: "uitbetaling van Pay.nl over meerdere bestellingen" },
+  shopify: { naam: "Shopify",          rekening: "1175", uitleg: "uitbetaling van Shopify" },
+  pin:     { naam: "Pinautomaat",      rekening: "2030", uitleg: "dagafrekening van de pinautomaat" },
+  airbnb:  { naam: "Airbnb",           rekening: "1452", uitleg: "uitbetaling van Airbnb voor de huizen" },
+  amerika: { naam: "Passion Spas South", rekening: "1160", uitleg: "wire van Audrey; de orders staan al op 1160 via de Amerika-tegel" },
+};
+function soortVan(r){
+  var d = ((r.omschrijving||"") + " " + (r.ruw||"")).toLowerCase().replace(/\r?\n/g, " ");
+  var tegen = (r.tegenIban||"").replace(/\s+/g,"").toUpperCase();
+  if (tegen && EIGEN_IBANS[tegen]) return "kruispost";
+  var sl = window.fpBankMatch.naamSleutel ? window.fpBankMatch.naamSleutel(r.wie||"") : String(r.wie||"").toLowerCase();
+  if (sl && geleerd.namen[sl]) return geleerd.namen[sl].soort;
+  if (/(?:^|[^a-z])mollie(?:[^a-z]|$)/.test(d)) return "mollie";
+  if (/bol\.com|bol com b\.?v/.test(d)) return "bol";
+  if (/pay\.?nl|paynl|stichting\s+pay(?:\s|$)/.test(d)) return "paynl";
+  if (/stripe|shopify/.test(d)) return "shopify";
+  if (/airbnb/.test(d)) return "airbnb";
+  if (/afrek\.? betaalautomaat|betaalautomaat|pinautomaat/.test(d)) return "pin";
+  if (/passion spa|passion spas south|audrey/.test(d) && r.bedrag > 0) return "amerika";
+  return r.bedrag > 0 ? "ontvangst" : "uitgave";
+}
+
+async function laad(){
+  var r = await Promise.all([
+    api("/data/bank-werk").catch(function(){ return null; }),
+    api("/data/bank-geleerd").catch(function(){ return null; }),
+    api("/data/bank-instellingen").catch(function(){ return null; }),
+  ]);
+  werk = (r[0] && r[0].regels) ? r[0] : { regels: {}, afschriften: [] };
+  werk.afschriften = werk.afschriften || [];
+  geleerd = (r[1] && r[1].namen) ? r[1] : { namen: {} };
+  inst = r[2] || {};
+  werk.afschriften.forEach(function(a){ if (a.iban) EIGEN_IBANS[String(a.iban).replace(/\s+/g,"").toUpperCase()] = a.naam || a.iban; });
+  vulRekeningen();
+  teken();
+  await voorstellen();
+  teken();
+}
+function vulRekeningen(){
+  var s = $("fRekening"), oud = s.value; var ibans = {};
+  Object.values(werk.regels).forEach(function(r){ ibans[r.iban] = 1; });
+  s.innerHTML = '<option value="">alle rekeningen</option>' + Object.keys(ibans).sort().map(function(i){ return '<option value="'+esc(i)+'"'+(i===oud?' selected':'')+'>'+esc(rekNaam(i))+'</option>'; }).join("");
+}
+function rekNaam(iban){ var k = String(iban||"").replace(/\s+/g,"").toUpperCase(); var m = k.match(/^([A-Z]{2})\d{2}([A-Z]{4})/); return (m ? (m[2] + " " + m[1]) : "") + " …" + k.slice(-4); }
+
+/* Inlezen: één of meer MT940-bestanden. Elke regel krijgt een vaste sleutel,
+   zodat twee keer inlezen niets dubbel zet. */
+async function inlezen(files){
+  var nieuw = 0, dubbel = 0, fout = [];
+  for (var i = 0; i < files.length; i++){
+    var f = files[i];
+    try{
+      var tekst = await f.text();
+      var p = window.fpMT940.parse(tekst);
+      if (!p || !p.transactions) throw new Error("geen MT940");
+      /* ING plakt de munt achter het IBAN (NL34INGB0679207473EUR); die gaat eraf. */
+      var iban = String(p.iban||"").replace(/\s+/g,"").toUpperCase().replace(/(EUR|USD|GBP)$/,"") || ("BESTAND:" + f.name);
+      var munt = (p.openingBalance && p.openingBalance.currency) || (p.closingBalance && p.closingBalance.currency) || "EUR";
+      EIGEN_IBANS[iban] = iban;
+      var afs = { iban: iban, nr: p.statementNr || "", bestand: f.name, ts: new Date().toISOString(), door: ik,
+        begin: p.openingBalance ? p.openingBalance.amount : null, eind: p.closingBalance ? p.closingBalance.amount : null,
+        van: p.openingBalance ? p.openingBalance.date : null, tot: p.closingBalance ? p.closingBalance.date : null,
+        regels: p.transactions.length, munt: munt };
+      if (werk.afschriften.some(function(a){ return a.iban === iban && a.nr === afs.nr && a.regels === afs.regels; })) { dubbel += p.transactions.length; continue; }
+      if (p.telling){
+        var af = p.transactions.filter(function(t){ return t.amount < 0; }), bij = p.transactions.filter(function(t){ return t.amount > 0; });
+        if (af.length !== p.telling.afboekingen || bij.length !== p.telling.bijboekingen) afs.let = "de bank telt " + p.telling.bijboekingen + " bij en " + p.telling.afboekingen + " af, gelezen " + bij.length + " en " + af.length;
+      }
+      werk.afschriften.push(afs);
+      p.transactions.forEach(function(t, k){
+        var tp = window.fpBankMatch.tegenpartij ? window.fpBankMatch.tegenpartij(t.descRaw || t.description || "") : null;
+        var id = iban + "|" + (t.date||"") + "|" + Math.round((Number(t.amount)||0)*100) + "|" + hash((t.descRaw||t.description||"") + "|" + k);
+        if (werk.regels[id]) { dubbel++; return; }
+        var r = { id: id, iban: iban, munt: munt, datum: t.date || "", bedrag: Number(t.amount)||0,
+          omschrijving: String(t.description||"").replace(/\s+/g," ").trim().slice(0, 400), ruw: String(t.descRaw||"").slice(0, 600),
+          wie: (tp && (tp.naam || tp.name)) || "", tegenIban: (tp && (tp.iban || tp.IBAN)) || "",
+          afschrift: afs.nr, status: "nieuw", ts: afs.ts };
+        r.soort = soortVan(r);
+        werk.regels[id] = r; nieuw++;
+      });
+    }catch(e){ fout.push(f.name + ": " + (e.message||e)); }
+  }
+  await bewaarWerk();
+  vulRekeningen();
+  msg($("dropMsg"), nieuw + " nieuwe regel" + (nieuw===1?"":"s") + " ingelezen" + (dubbel ? ", " + dubbel + " stonden er al" : "") + (fout.length ? ". Niet gelezen: " + esc(fout.join("; ")) : "."), fout.length ? "bad" : "ok");
+  try{ if (window.fpLog) window.fpLog("afschrift-ingelezen", files.length + " bestand(en), " + nieuw + " nieuw"); }catch(e){}
+  teken();
+  await voorstellen();
+  teken();
+}
+function hash(s){ var h = 0; for (var i = 0; i < s.length; i++){ h = ((h << 5) - h + s.charCodeAt(i)) | 0; } return (h >>> 0).toString(36); }
+async function bewaarWerk(){ werk.updated = new Date().toISOString(); await api("/data/bank-werk", werk, "PUT"); }
+async function bewaarGeleerd(){ geleerd.updated = new Date().toISOString(); await api("/data/bank-geleerd", geleerd, "PUT"); }
+
+/* Voorstellen: voor elke regel die nog niet klaar is. Ontvangsten tegen de
+   open debiteurenposten, uitgaven tegen de open crediteurposten,
+   uitbetalingen van betaaldiensten naar hun tussenrekening. */
+async function voorstellen(){
+  var open = Object.values(werk.regels).filter(function(r){ return r.status !== "klaar" && r.status !== "genegeerd"; });
+  if (!open.length) return;
+  msg($("boekMsg"), "Voorstellen maken…", "info");
+  try{
+    if (!openIndex){ var j = await api("/bank/openstaand", { vers: false }); openIndex = window.fpBankMatch.bouwIndex(j.posten||[]); }
+    if (!credIndex){ var j2 = await api("/bank/openstaand-crediteuren", { vers: false }); credIndex = window.fpBankCred.bouwIndex(j2.posten||[]); }
+  }catch(e){ msg($("boekMsg"), "Openstaande posten ophalen lukte niet: " + esc(e.message), "bad"); return; }
+  var opzoeken = [];
+  open.forEach(function(r){
+    if (r.keuze) return;   // iemand heeft al gekozen
+    r.soort = soortVan(r);
+    var tx = { amount: r.bedrag, description: r.omschrijving, descRaw: r.ruw, date: r.datum };
+    if (TUSSEN[r.soort]){ r.voorstel = { type: "tussen", rekening: TUSSEN[r.soort].rekening, uitleg: TUSSEN[r.soort].uitleg, zeker: true }; return; }
+    if (r.soort === "kruispost"){ r.voorstel = { type: "kruispost", rekening: inst.kruisGrootboek || "1220", uitleg: "overboeking tussen eigen rekeningen", zeker: true }; return; }
+    if (r.bedrag > 0){
+      var m = window.fpBankMatch.koppel(tx, openIndex);
+      if (m.status === "opzoeken" && m.orderNr){ opzoeken.push({ r: r, m: m }); r.voorstel = { type: "wacht", uitleg: m.reden }; return; }
+      r.voorstel = uitMatch(m);
+    } else {
+      tx.tegenpartij = window.fpBankMatch.tegenpartij ? window.fpBankMatch.tegenpartij(r.ruw || r.omschrijving) : null;
+      var c = window.fpBankCred.koppel(tx, credIndex);
+      r.voorstel = uitCred(c);
+    }
+  });
+  if (opzoeken.length){
+    var nrs = opzoeken.map(function(x){ return x.m.orderNr; }).filter(function(n){ return !(n in orderCache); });
+    for (var i = 0; i < nrs.length; i += 40){
+      try{ var jo = await api("/bank/orders", { nrs: nrs.slice(i, i+40) }); Object.assign(orderCache, jo.orders||{}); nrs.slice(i,i+40).forEach(function(n){ if(!(n in orderCache)) orderCache[n]=null; }); }catch(e){}
+    }
+    var gevonden = {}; Object.keys(orderCache).forEach(function(n){ if (orderCache[n]) gevonden[n] = orderCache[n]; });
+    opzoeken.forEach(function(x){ x.r.voorstel = uitMatch(window.fpBankMatch.bevestigOrder(x.m, gevonden)); });
+  }
+  msg($("boekMsg"), "", "");
+  await bewaarWerk();
+}
+function uitMatch(m){
+  if (!m) return { type: "geen", uitleg: "geen voorstel" };
+  var post = m.beste;
+  var kand = (m.kandidaten||[]).map(function(p){ return { invoiceId: p.InvoiceId, debtorId: p.DebtorId, open: p.AmountOutstanding, totaal: p.TotalAmount, orderNr: p.OrderNumber || null }; });
+  if (m.status === "zeker" && post) return { type: "factuur", invoiceId: post.InvoiceId, orderNr: post.OrderNumber || m.orderNr || null, debtorId: post.DebtorId, open: post.AmountOutstanding, uitleg: m.reden, zeker: true, kandidaten: kand };
+  if (m.status === "zeker" && m.orderNr) return { type: "order", orderNr: m.orderNr, uitleg: m.reden, zeker: true, kandidaten: kand };
+  if (post) return { type: "factuur", invoiceId: post.InvoiceId, orderNr: post.OrderNumber || m.orderNr || null, debtorId: post.DebtorId, open: post.AmountOutstanding, uitleg: m.reden, zeker: false, kandidaten: kand };
+  if (m.orderNr && m.status !== "geen") return { type: "order", orderNr: m.orderNr, uitleg: m.reden, zeker: false, kandidaten: kand };
+  return { type: "geen", uitleg: m.reden || "geen voorstel", kandidaten: kand };
+}
+function uitCred(c){
+  if (!c) return { type: "geen", uitleg: "geen voorstel" };
+  var post = c.beste;
+  var kand = (c.kandidaten||[]).map(function(p){ return { id: p.Id, crediteur: p.CreditorId, naam: p.CompanyName, ref: p.Reference, open: p.AmountOpen }; });
+  if (post) return { type: "crediteur", id: post.Id, crediteur: post.CreditorId, naam: post.CompanyName, ref: post.Reference, open: post.AmountOpen, uitleg: c.reden || (c.status === "zeker" ? "referentie en bedrag kloppen" : "lijkt op deze factuur"), zeker: c.status === "zeker", kandidaten: kand };
+  return { type: "geen", uitleg: c.reden || "geen open crediteurfactuur gevonden", kandidaten: kand };
+}
+/* De kleur van een regel: groen als er zonder twijfel iets mee kan, oranje
+   als er een mens naar moet kijken, klaar als hij afgehandeld is. */
+function kleur(r){
+  if (r.status === "klaar" || r.status === "genegeerd") return "klaar";
+  var v = r.keuze || r.voorstel;
+  if (!v || v.type === "geen" || v.type === "wacht") return "oranje";
+  return (r.keuze || v.zeker) ? "groen" : "oranje";
+}
+function zichtbaar(){
+  var q = zoek.trim().toLowerCase();
+  return Object.values(werk.regels).filter(function(r){
+    if (!fKlaar && kleur(r) === "klaar") return false;
+    if (fRek && r.iban !== fRek) return false;
+    if (fRicht === "in" && r.bedrag <= 0) return false;
+    if (fRicht === "uit" && r.bedrag >= 0) return false;
+    if (q && ((r.wie||"") + " " + (r.omschrijving||"") + " " + String(Math.abs(r.bedrag)).replace(".", ",") + " " + r.datum).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).sort(function(a,b){ var ka = kleur(a) === "oranje" ? 0 : kleur(a) === "groen" ? 1 : 2, kb = kleur(b) === "oranje" ? 0 : kleur(b) === "groen" ? 1 : 2; return ka - kb || String(b.datum).localeCompare(String(a.datum)); });
+}
+function voorstelHtml(r){
+  var v = r.keuze || r.voorstel;
+  if (r.status === "klaar") return '<span class="pil">' + esc(r.geboekt && r.geboekt.tekst || "in Logic4") + '</span>';
+  if (r.status === "genegeerd") return '<span class="pil grijs">niet boeken</span><small style="display:block;color:var(--grijs)">' + esc(r.reden||"") + '</small>';
+  if (!v) return '<span class="pil grijs">nog geen voorstel</span>';
+  var kop = "";
+  if (v.type === "factuur") kop = 'betaling op factuur ' + esc(v.invoiceId) + (v.orderNr ? ' (order ' + esc(v.orderNr) + ')' : '') + (v.open != null ? ' · open ' + esc(geld(v.open)) : '');
+  else if (v.type === "order") kop = 'betaling op order ' + esc(v.orderNr);
+  else if (v.type === "crediteur") kop = 'leverancier ' + esc(v.naam || v.crediteur) + (v.ref ? ' · factuur ' + esc(v.ref) : '') + ' <span class="pil blauw">in Logic4 toewijzen</span>';
+  else if (v.type === "tussen") kop = 'tussenrekening ' + esc(v.rekening) + ' <span class="pil blauw">in Logic4 toewijzen</span>';
+  else if (v.type === "kruispost") kop = 'kruispost, grootboek ' + esc(v.rekening) + ' <span class="pil blauw">in Logic4 toewijzen</span>';
+  else if (v.type === "wacht") kop = 'order wordt opgezocht…';
+  else kop = '<span class="pil oranje">niet herkend</span>';
+  var keuzes = "";
+  if (!r.keuze && v.kandidaten && v.kandidaten.length > 1){
+    keuzes = '<select class="keuze" data-kies="' + esc(r.id) + '"><option value="">kies de juiste…</option>' + v.kandidaten.slice(0, 25).map(function(k, i){
+      return '<option value="' + i + '">' + esc(k.invoiceId ? ("factuur " + k.invoiceId + (k.orderNr ? " / order " + k.orderNr : "") + " · open " + geld(k.open)) : (k.naam + " · " + (k.ref||"") + " · open " + geld(Math.abs(k.open)))) + '</option>'; }).join("") + '</select>';
+  }
+  return '<div class="voorstel">' + kop + (r.keuze ? ' <span class="pil">gekozen' + (r.keuzeDoor ? ' door ' + esc(String(r.keuzeDoor).split("@")[0]) : '') + '</span>' : '') + '<small>' + esc(v.uitleg||"") + '</small>' + keuzes + '</div>';
+}
+function actiesHtml(r){
+  if (r.status === "klaar") return "";
+  if (r.status === "genegeerd") return '<button class="knop" data-terug="' + esc(r.id) + '">terug</button>';
+  var v = r.voorstel || {};
+  var h = "";
+  if (!r.keuze && v.type && v.type !== "geen" && v.type !== "wacht" && !v.zeker) h += '<button class="knop groen" data-ok="' + esc(r.id) + '">Klopt</button>';
+  if (r.keuze) h += '<button class="knop" data-los="' + esc(r.id) + '">keuze weg</button>';
+  h += '<button class="knop" data-nr="' + esc(r.id) + '" title="Zelf een factuur- of ordernummer opgeven">nummer…</button>';
+  h += '<button class="knop" data-tussen="' + esc(r.id) + '" title="Deze naam voortaan altijd op een tussenrekening zetten">altijd…</button>';
+  h += '<button class="knop" data-nee="' + esc(r.id) + '" title="Niet vanuit hier boeken">niet</button>';
+  return h;
+}
+function teken(){
+  var alle = Object.values(werk.regels);
+  var n = { groen: 0, oranje: 0, klaar: 0 };
+  alle.forEach(function(r){ n[kleur(r)]++; });
+  $("kpis").innerHTML =
+    '<div class="kpi goed" data-f="groen"><b>' + n.groen + '</b><span>groen: gaat mee met de knop</span></div>' +
+    '<div class="kpi oranje" data-f="oranje"><b>' + n.oranje + '</b><span>oranje: even naar kijken</span></div>' +
+    '<div class="kpi" data-f="klaar"><b>' + n.klaar + '</b><span>klaar</span></div>' +
+    '<div class="kpi"><b>' + werk.afschriften.length + '</b><span>afschriften ingelezen</span></div>';
+  var lijst = zichtbaar();
+  $("lijst").innerHTML = lijst.length ? lijst.map(function(r){
+    return '<tr class="' + kleur(r) + '"><td style="white-space:nowrap">' + esc(datumNL(r.datum)) + '</td><td style="white-space:nowrap;font-size:11.5px">' + esc(rekNaam(r.iban)) + '</td>' +
+      '<td><div class="wie">' + esc(r.wie || "(geen naam)") + '</div><div class="oms">' + esc(r.omschrijving) + '</div></td>' +
+      '<td class="n" style="color:' + (r.bedrag < 0 ? 'var(--rood)' : 'var(--goed)') + '">' + (r.bedrag < 0 ? "-" : "+") + esc(geld(r.bedrag, r.munt)) + '</td>' +
+      '<td>' + voorstelHtml(r) + '</td><td class="acties">' + actiesHtml(r) + '</td></tr>';
+  }).join("") : '<tr><td colspan="6" style="color:var(--grijs);padding:16px 6px">' + (alle.length ? "Niets in beeld met deze filters." : "Nog geen afschriften. Sleep er een naar boven.") + '</td></tr>';
+  var teBoeken = alle.filter(boekbaar);
+  $("tel").textContent = teBoeken.length + " betaling" + (teBoeken.length===1?"":"en") + " klaar om in Logic4 te zetten";
+  $("boek").disabled = !teBoeken.length;
+  $("lijst").querySelectorAll("[data-ok]").forEach(function(b){ b.addEventListener("click", function(){ kies(b.dataset.ok, null); }); });
+  $("lijst").querySelectorAll("[data-kies]").forEach(function(s){ s.addEventListener("change", function(){ if (s.value !== "") kies(s.dataset.kies, Number(s.value)); }); });
+  $("lijst").querySelectorAll("[data-los]").forEach(function(b){ b.addEventListener("click", function(){ var r = werk.regels[b.dataset.los]; delete r.keuze; delete r.keuzeDoor; bewaarWerk(); teken(); }); });
+  $("lijst").querySelectorAll("[data-nr]").forEach(function(b){ b.addEventListener("click", function(){ nummer(b.dataset.nr); }); });
+  $("lijst").querySelectorAll("[data-tussen]").forEach(function(b){ b.addEventListener("click", function(){ leer(b.dataset.tussen); }); });
+  $("lijst").querySelectorAll("[data-nee]").forEach(function(b){ b.addEventListener("click", function(){ var r = werk.regels[b.dataset.nee]; var reden = prompt("Waarom niet vanuit hier? (korte reden, komt in de lijst te staan)"); if (reden === null) return; r.status = "genegeerd"; r.reden = reden; r.door = ik; bewaarWerk(); teken(); }); });
+  $("lijst").querySelectorAll("[data-terug]").forEach(function(b){ b.addEventListener("click", function(){ var r = werk.regels[b.dataset.terug]; r.status = "nieuw"; delete r.reden; bewaarWerk(); teken(); }); });
+  document.querySelectorAll(".kpi[data-f]").forEach(function(k){ k.addEventListener("click", function(){ fKlaar = k.dataset.f === "klaar"; $("fKlaar").checked = fKlaar; teken(); }); });
+}
+/* Boekbaar via de koppeling: alleen betalingen op een order of factuur.
+   De rest (tussenrekening, crediteur, kruispost) is een toewijzing in Logic4
+   zelf en gaat met de knop naar "klaar" met die instructie erbij. */
+function boekbaar(r){
+  if (r.status === "klaar" || r.status === "genegeerd") return false;
+  var v = r.keuze || r.voorstel; if (!v) return false;
+  if (v.type === "factuur" || v.type === "order") return !!(r.keuze || v.zeker);
+  if (v.type === "tussen" || v.type === "kruispost" || v.type === "crediteur") return !!(r.keuze || v.zeker);
+  return false;
+}
+function kies(id, i){
+  var r = werk.regels[id]; if (!r) return;
+  var v = r.voorstel || {};
+  if (i == null) r.keuze = Object.assign({}, v, { zeker: true, kandidaten: undefined });
+  else {
+    var k = (v.kandidaten||[])[i]; if (!k) return;
+    r.keuze = k.invoiceId ? { type: "factuur", invoiceId: k.invoiceId, orderNr: k.orderNr || null, debtorId: k.debtorId, open: k.open, uitleg: "gekozen uit " + v.kandidaten.length + " kandidaten", zeker: true }
+                          : { type: "crediteur", id: k.id, crediteur: k.crediteur, naam: k.naam, ref: k.ref, open: k.open, uitleg: "gekozen uit " + v.kandidaten.length + " kandidaten", zeker: true };
+  }
+  r.keuzeDoor = ik;
+  bewaarWerk(); teken();
+}
+function nummer(id){
+  var r = werk.regels[id]; if (!r) return;
+  var nr = String(prompt("Factuur- of ordernummer waar deze betaling op hoort:") || "").replace(/\D/g, "");
+  if (!nr) return;
+  var post = openIndex && openIndex.perFactuur ? openIndex.perFactuur[nr] : null;
+  if (post) r.keuze = { type: "factuur", invoiceId: post.InvoiceId, orderNr: post.OrderNumber || null, debtorId: post.DebtorId, open: post.AmountOutstanding, uitleg: "factuurnummer zelf opgegeven", zeker: true };
+  else r.keuze = { type: "order", orderNr: nr, uitleg: "ordernummer zelf opgegeven", zeker: true };
+  r.keuzeDoor = ik;
+  bewaarWerk(); teken();
+}
+/* Leren: deze naam is voortaan altijd die tussenrekening. Geldt meteen voor
+   alle open regels met dezelfde naam. */
+async function leer(id){
+  var r = werk.regels[id]; if (!r) return;
+  var opties = Object.keys(TUSSEN).map(function(k){ return k + " = " + TUSSEN[k].naam + " (" + TUSSEN[k].rekening + ")"; }).concat(["kruispost = eigen rekening"]);
+  var keus = prompt("'" + (r.wie || r.omschrijving.slice(0,40)) + "' voortaan altijd zien als:\n\n" + opties.join("\n") + "\n\nTyp het woord vóór het =-teken:", "");
+  if (!keus) return;
+  keus = keus.trim().toLowerCase();
+  if (!TUSSEN[keus] && keus !== "kruispost") { alert("Onbekende keuze."); return; }
+  var sl = window.fpBankMatch.naamSleutel ? window.fpBankMatch.naamSleutel(r.wie||"") : String(r.wie||"").toLowerCase();
+  if (!sl) { alert("Deze regel heeft geen naam om te onthouden."); return; }
+  geleerd.namen[sl] = { soort: keus, door: ik, ts: new Date().toISOString(), voorbeeld: r.wie };
+  await bewaarGeleerd();
+  Object.values(werk.regels).forEach(function(x){ if (x.status !== "klaar" && x.status !== "genegeerd"){ var s2 = window.fpBankMatch.naamSleutel ? window.fpBankMatch.naamSleutel(x.wie||"") : ""; if (s2 === sl){ delete x.keuze; delete x.voorstel; } } });
+  try{ if (window.fpLog) window.fpLog("bank-naam-geleerd", (r.wie||"") + " → " + keus); }catch(e){}
+  await voorstellen(); teken();
+}
+
+/* Naar Logic4. Betalingen op orders en facturen gaan als betaling in het
+   tussenrekening-dagboek; de rest wordt "klaar" met de instructie wat er in
+   Logic4 bij de bankregel toegewezen moet worden. */
+$("boek").addEventListener("click", async function(){
+  var lijst = Object.values(werk.regels).filter(boekbaar);
+  var boeken = lijst.filter(function(r){ var v = r.keuze || r.voorstel; return v.type === "factuur" || v.type === "order"; });
+  var rest = lijst.filter(function(r){ return boeken.indexOf(r) < 0; });
+  if (boeken.length && !inst.bankWerkDagboek){ $("instelKaart").style.display = ""; msg($("boekMsg"), "Kies eerst het tussenrekening-dagboek bij Instellingen; daar komen de betalingen op orders en facturen.", "bad"); return; }
+  if (!confirm(boeken.length + " betaling(en) op orders en facturen naar Logic4, en " + rest.length + " regel(s) op klaar zetten met de toewijzing erbij.\n\nDoorgaan?")) return;
+  $("boek").disabled = true; msg($("boekMsg"), "Bezig…", "info");
+  var gelukt = 0, fouten = [];
+  for (var i = 0; i < boeken.length; i += 30){
+    var portie = boeken.slice(i, i+30);
+    try{
+      var j = await api("/bank/boeken", { door: ik, bookingId: inst.bankWerkDagboek, regels: portie.map(function(r){ var v = r.keuze || r.voorstel; return { orderNr: v.orderNr || null, invoiceId: v.invoiceId || null, bedrag: r.bedrag, datum: r.datum || null, omschrijving: ("Bank " + datumNL(r.datum) + " " + (r.wie||"") + " " + r.omschrijving).slice(0, 200) }; }) });
+      (j.resultaten||[]).forEach(function(res, k){
+        var r = portie[k]; if (!r) return;
+        if (res.ok){ r.status = "klaar"; r.geboekt = { tekst: "geboekt op " + (res.orderNr ? "order " + res.orderNr : "factuur " + res.invoiceId), ts: new Date().toISOString(), door: ik }; gelukt++; }
+        else fouten.push((r.wie||r.omschrijving.slice(0,30)) + ": " + (res.error||"fout"));
+      });
+    }catch(e){ fouten.push(e.message); }
+  }
+  rest.forEach(function(r){ var v = r.keuze || r.voorstel; r.status = "klaar"; r.geboekt = { tekst: v.type === "crediteur" ? "in Logic4 toewijzen aan " + (v.naam||"crediteur") + (v.ref ? " " + v.ref : "") : "in Logic4 toewijzen op " + v.rekening, ts: new Date().toISOString(), door: ik, toewijzen: true }; });
+  await bewaarWerk();
+  try{ if (window.fpLog) window.fpLog("bank-naar-logic4", gelukt + " geboekt, " + rest.length + " op klaar" + (fouten.length ? ", " + fouten.length + " mislukt" : "")); }catch(e){}
+  msg($("boekMsg"), gelukt + " betaling(en) in Logic4 gezet, " + rest.length + " regel(s) op klaar." + (fouten.length ? " Mislukt: " + esc(fouten.slice(0,4).join("; ")) : ""), fouten.length ? "bad" : "ok");
+  teken();
+});
+
+/* Instellingen */
+$("instelKnop").addEventListener("click", async function(){
+  var k = $("instelKaart"); k.style.display = k.style.display === "none" ? "" : "none";
+  if (k.style.display === "" && !dagboeken.length){
+    try{ var j = await api("/bank/dagboeken"); dagboeken = j.dagboeken || []; }catch(e){}
+    var s = $("instDagboek");
+    s.innerHTML = '<option value="">kies…</option>' + dagboeken.filter(function(d){ return d.type === 10 || d.type === 3; }).map(function(d){ return '<option value="' + esc(d.id) + '"' + (String(d.id) === String(inst.bankWerkDagboek||"") ? ' selected' : '') + '>' + esc(d.naam) + ' (' + (d.type === 10 ? "tussenrekening" : "memoriaal") + ')</option>'; }).join("");
+    $("instKruis").value = inst.kruisGrootboek || "1220";
+  }
+});
+$("instBewaar").addEventListener("click", async function(){
+  inst.bankWerkDagboek = $("instDagboek").value ? Number($("instDagboek").value) : null;
+  inst.kruisGrootboek = $("instKruis").value.trim() || "1220";
+  try{ await api("/data/bank-instellingen", inst, "PUT"); $("instMsg").textContent = "Bewaard."; }catch(e){ $("instMsg").textContent = "Bewaren lukte niet: " + e.message; }
+});
+
+/* Inlezen: klik of slepen */
+$("drop").addEventListener("click", function(){ $("bestand").click(); });
+$("bestand").addEventListener("change", function(){ if ($("bestand").files.length) inlezen([].slice.call($("bestand").files)); $("bestand").value = ""; });
+["dragenter","dragover"].forEach(function(ev){ $("drop").addEventListener(ev, function(e){ e.preventDefault(); $("drop").classList.add("over"); }); });
+["dragleave","drop"].forEach(function(ev){ $("drop").addEventListener(ev, function(e){ e.preventDefault(); $("drop").classList.remove("over"); }); });
+$("drop").addEventListener("drop", function(e){ var fs = [].slice.call(e.dataTransfer.files||[]); if (fs.length) inlezen(fs); });
+$("zoek").addEventListener("input", function(){ zoek = $("zoek").value; teken(); });
+$("fRekening").addEventListener("change", function(){ fRek = $("fRekening").value; teken(); });
+$("fRichting").addEventListener("change", function(){ fRicht = $("fRichting").value; teken(); });
+$("fKlaar").addEventListener("change", function(){ fKlaar = $("fKlaar").checked; teken(); });
+
+(async function(){
+  for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
+  try { await laad(); } catch(e){ msg($("dropMsg"), "Laden lukte niet: " + esc(e.message), "bad"); }
+})();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"bank",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

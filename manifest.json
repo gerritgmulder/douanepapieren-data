@@ -1,5 +1,5 @@
 {
-  "version": "0.34.73",
+  "version": "0.34.74",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -167,6 +167,10 @@
     {
       "name": "prijslijst.html",
       "note": "Prijslijst maken — leveranciers-PDF (invoice/catalogus) → Fonteyn/Passion-stijl prijslijst"
+    },
+    {
+      "name": "bank.html",
+      "note": "Bank (proef, groep administratie-proef): werklijst van alle afschriftregels, groen/oranje/klaar, leren van namen, betalingen op orders via het tussenrekening-dagboek. Buckets bank-werk en bank-geleerd."
     },
     {
       "name": "werkplaats.html",
