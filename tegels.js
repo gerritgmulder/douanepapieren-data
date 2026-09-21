@@ -87,6 +87,8 @@
     /* Administratie (proef) - staging, alleen de beheerlaag. */
     { bestand:"bank.html",           groep:"administratie-proef", ic:"🏦", naam:"Bank",
       uit:"Afschriften inlezen, alles herkend, één knop naar Logic4", mobiel:"krap", tile:"tileBank" },
+    { bestand:"inkoop.html",         groep:"administratie-proef", ic:"🧾", naam:"Inkoop en betalen",
+      uit:"Inkoopfacturen lezen en boeken; betaalbestand voor de bank", mobiel:"krap", tile:"tileInkoop" },
     { bestand:"herinneringen.html",  groep:"herinneringen",    ic:"✉️",  naam:"Herinneringen",
       uit:"Betalingsherinneringen in één keer versturen",           mobiel:"krap", tile:"tileHerinneringen" },
     { bestand:"bankkoppeling.html",  groep:"bankkoppeling",    ic:"🏦",  naam:"Bankkoppeling maken",

@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("administratie-proef", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Inkoop en betalen - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     INKOOP EN BETALEN (proef) - tegel 3 van het plan "administratie op knoppen"
+
+     Rowan. Twee blokken:
+       FACTUREN  een inkoopfactuur (pdf of UBL-xml) erin, het scherm leest
+                 leverancier, nummer, datum, bedragen en btw, zoekt de
+                 crediteur en de open inkooporder erbij, en onthoudt per
+                 leverancier wat de vorige keer is gekozen. Knop: als UBL naar
+                 het inkoopboek van Logic4, status Controleren.
+       BETALEN   de open crediteurposten met vervaldatum; aanvinken, knop, en
+                 er komt een SEPA-bestand (pain.001) dat Rowan bij de bank
+                 inlaadt. Zodra het afschrift binnenkomt boekt Logic4 de
+                 betaling zelf af op de factuur.
+
+     Wat bewust niet: een nieuwe crediteur aanmaken (kan niet via de
+     koppeling; dat blijft in Logic4 zelf) en de betaling afboeken tegen de
+     factuur (idem; Logic4 doet dat bij het bankafschrift).
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --goed:#16a34a; --rood:#b91c1c; --oranje:#c2410c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1300px;margin:16px auto;padding:0 14px 60px}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+h2{margin:0 0 6px;font-size:15px;color:var(--groen)}
+.lead{color:var(--grijs);font-size:12.5px;margin:0 0 10px;line-height:1.5}
+.knop{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink)}
+.knop.groen{background:var(--groen);color:#fff;border-color:var(--groen);font-weight:600}
+.knop:disabled{opacity:.5;cursor:default}
+.drop{border:2px dashed var(--rand);border-radius:12px;padding:18px;text-align:center;color:var(--grijs);cursor:pointer;background:#fafaf8}
+.drop.over{border-color:var(--groen);background:#f0f7e8;color:var(--ink)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.tab{background:#fff;border:1px solid var(--rand);border-radius:10px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink)}
+.tab.aan{background:var(--groen);color:#fff;border-color:var(--groen)}
+.fact{border:1px solid var(--rand);border-radius:12px;padding:12px 14px;margin-bottom:10px;border-left:5px solid #f59e0b;background:#fff}
+.fact.groen{border-left-color:var(--goed)}.fact.klaar{border-left-color:#d1d5db;color:var(--grijs)}
+.fact .kop{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.fact .kop b{font-size:15px}
+.fact .velden{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px 14px;margin-top:8px}
+.fact label{font-size:11px;color:var(--grijs);display:block}
+.fact input,.fact select{width:100%;font:inherit;font-size:12.5px;padding:5px 8px;border:1px solid var(--rand);border-radius:7px;background:#fff}
+.fact .acties{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;align-items:center}
+.pil{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#eef2e6;color:var(--groen);white-space:nowrap}
+.pil.oranje{background:#ffedd5;color:var(--oranje)}.pil.grijs{background:#f3f4f6;color:#374151}.pil.rood{background:#fee2e2;color:var(--rood)}.pil.blauw{background:#dbeafe;color:#1d4ed8}
+.msg{margin-top:8px;padding:8px 11px;border-radius:8px;font-size:12.5px}.msg.ok{background:#dcfce7;color:#166534}.msg.bad{background:#fee2e2;color:var(--rood)}.msg.info{background:#eff6ff;color:#1e40af}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;color:var(--grijs);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:6px;border-bottom:1px solid var(--rand);white-space:nowrap}
+td{padding:7px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-wrap:break-word}
+td.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.laat td:first-child{box-shadow:inset 4px 0 0 var(--rood)}
+.balk{position:sticky;bottom:0;background:#fff;border-top:2px solid var(--groen);padding:10px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px -16px -14px;border-radius:0 0 12px 12px}
+.hidden{display:none!important}
+@media (max-width:700px){ .fact .velden{grid-template-columns:1fr 1fr} }
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🧾 Inkoop en betalen <span class="pil grijs" style="vertical-align:middle">proef</span></h1>
+</header>
+<main>
+  <div class="tabs">
+    <button class="tab aan" data-tab="facturen" type="button">Facturen (<span id="nFact">0</span>)</button>
+    <button class="tab" data-tab="betalen" type="button">Betalen (<span id="nBet">0</span>)</button>
+    <button class="tab" data-tab="klaar" type="button">Geboekt (<span id="nKlaar">0</span>)</button>
+  </div>
+
+  <div id="blokFacturen">
+    <div class="kaart">
+      <h2>Facturen binnen</h2>
+      <p class="lead">Sleep inkoopfacturen hierheen (pdf, of UBL-xml als de leverancier die stuurt). Het scherm leest wat erop staat en zoekt de leverancier en de inkooporder erbij. Later komen ze vanzelf uit de mailbox facturen@fonteyn.nl.</p>
+      <div class="drop" id="drop">Klik of sleep facturen hierheen</div>
+      <input type="file" id="bestand" multiple accept=".pdf,.xml" style="display:none">
+      <div id="dropMsg"></div>
+    </div>
+    <div id="factLijst"></div>
+  </div>
+
+  <div id="blokBetalen" class="hidden">
+    <div class="kaart">
+      <h2>Betalen</h2>
+      <p class="lead">Alle openstaande leveranciersfacturen uit Logic4. Vink aan wat je betaalt, kies de uitvoerdatum en maak het betaalbestand; dat laad je bij ING in en keur je daar goed. Zodra het afschrift binnenkomt boekt Logic4 de betaling zelf af.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <input type="search" id="betZoek" placeholder="zoek leverancier of factuur…" style="font:inherit;font-size:12.5px;padding:6px 9px;border:1px solid var(--rand);border-radius:8px;flex:1 1 200px">
+        <select id="betFilter" style="font:inherit;font-size:12.5px;padding:6px 9px;border:1px solid var(--rand);border-radius:8px"><option value="vervallen">vervallen en deze week</option><option value="alles">alles wat open staat</option></select>
+        <button class="knop" id="betVers">Opnieuw uit Logic4</button>
+        <span id="betMeta" style="font-size:12px;color:var(--grijs)"></span>
+      </div>
+      <div style="overflow:auto"><table><thead><tr><th><input type="checkbox" id="betAlle" title="alles in beeld"></th><th>Leverancier</th><th>Factuur</th><th>Datum</th><th>Vervalt</th><th class="n">Open</th><th>Status</th></tr></thead><tbody id="betLijst"></tbody></table></div>
+      <div class="balk">
+        <b id="betTel">niets gekozen</b>
+        <label style="font-size:12px">uitvoerdatum <input type="date" id="betDatum" style="font:inherit;font-size:12.5px;padding:5px 8px;border:1px solid var(--rand);border-radius:7px"></label>
+        <button class="knop groen" id="betMaak" disabled>Betaalbestand maken</button>
+        <span id="betMsg" style="font-size:12.5px"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="blokKlaar" class="hidden">
+    <div class="kaart"><h2>Geboekt in Logic4</h2><div id="klaarLijst"></div></div>
+  </div>
+</main>
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+async function api(pad, body, method){
+  var r = await fetch(W+pad, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik }, body: body ? JSON.stringify(body) : undefined });
+  var j = null; try { j = await r.json(); } catch(e){}
+  if (!r.ok) throw new Error((j && j.error) || ("HTTP " + r.status));
+  return j;
+}
+function geld(n){ return "€ " + Math.abs(Number(n)||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function datumNL(v){ if(!v) return ""; var s=String(v).slice(0,10).split("-"); return s.length===3 ? s[2]+"-"+s[1]+"-"+s[0] : v; }
+function vandaag(){ return new Date().toISOString().slice(0,10); }
+function msg(el, tekst, soort){ el.innerHTML = tekst ? '<div class="msg '+(soort||"info")+'">'+tekst+'</div>' : ""; }
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+var werk = { facturen: {} }, geleerd = { crediteuren: {} }, crediteuren = [], inkooporders = [], posten = [], betaald = { posten: {}, bestanden: [] }, tab = "facturen", betKeuze = {};
+
+async function laad(){
+  var r = await Promise.all([
+    api("/data/inkoop-werk").catch(function(){ return null; }),
+    api("/data/inkoop-geleerd").catch(function(){ return null; }),
+    api("/inkoop/crediteuren").catch(function(){ return null; }),
+    api("/data/inkoop-betaald").catch(function(){ return null; }),
+  ]);
+  werk = (r[0] && r[0].facturen) ? r[0] : { facturen: {} };
+  geleerd = (r[1] && r[1].crediteuren) ? r[1] : { crediteuren: {} };
+  crediteuren = (r[2] && r[2].crediteuren) || [];
+  betaald = (r[3] && r[3].posten) ? r[3] : { posten: {}, bestanden: [] };
+  teken();
+  api("/inkoop/inkooporders").then(function(j){ inkooporders = j.inkooporders || []; teken(); }).catch(function(){});
+}
+async function bewaarWerk(){ werk.updated = new Date().toISOString(); await api("/data/inkoop-werk", werk, "PUT"); }
+async function bewaarGeleerd(){ geleerd.updated = new Date().toISOString(); await api("/data/inkoop-geleerd", geleerd, "PUT"); }
+
+/* ── lezen ─────────────────────────────────────────────────────────── */
+/* Gescande facturen hebben geen tekst; dan leest tesseract (in de browser)
+   het beeld. Traag (tien seconden per pagina) maar het werkt, en het blijft
+   op deze computer. */
+var ocrWorker = null;
+async function ocrPagina(page){
+  if (!window.Tesseract){ await new Promise(function(res, rej){ var s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"; s.onload = res; s.onerror = function(){ rej(new Error("tekstherkenning niet te laden")); }; document.head.appendChild(s); }); }
+  if (!ocrWorker){ ocrWorker = await Tesseract.createWorker("nld+eng"); }
+  var vp = page.getViewport({ scale: 2 });
+  var c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
+  await page.render({ canvasContext: c.getContext("2d"), viewport: vp }).promise;
+  var r = await ocrWorker.recognize(c);
+  return String(r.data.text || "").split(/\n/).map(function(s){ return s.replace(/\s+/g, " ").trim(); }).filter(Boolean);
+}
+async function pdfTekst(file){
+  var buf = await file.arrayBuffer();
+  var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  var regels = [];
+  for (var p = 1; p <= Math.min(pdf.numPages, 6); p++){
+    var page = await pdf.getPage(p);
+    var tc = await page.getTextContent();
+    // Tekstblokjes op dezelfde hoogte samenvoegen tot regels.
+    var rijen = {};
+    tc.items.forEach(function(it){ if (!it.str || !it.str.trim()) return; var y = Math.round(it.transform[5] / 3) * 3; (rijen[y] = rijen[y] || []).push({ x: it.transform[4], s: it.str }); });
+    Object.keys(rijen).map(Number).sort(function(a,b){ return b - a; }).forEach(function(y){ regels.push(rijen[y].sort(function(a,b){ return a.x - b.x; }).map(function(z){ return z.s; }).join(" ").replace(/\s+/g, " ").trim()); });
+  }
+  if (regels.join("").replace(/\s+/g, "").length < 40){
+    msg($("dropMsg"), "Dit is een gescande factuur; de tekst wordt herkend, dat duurt even…", "info");
+    regels = [];
+    for (var q = 1; q <= Math.min(pdf.numPages, 2); q++) regels = regels.concat(await ocrPagina(await pdf.getPage(q)));
+    regels.ocr = true;
+  }
+  return regels;
+}
+function getal(s){ if (s == null) return null; var t = String(s).replace(/[^\d.,-]/g, ""); if (!t) return null; var m = t.match(/^(-?)(.*?)(?:[.,](\d{1,2}))?$/); var heel = (m ? m[2] : t).replace(/[.,]/g, ""); var v = Number((m && m[1] ? "-" : "") + heel + "." + (m && m[3] != null ? m[3].padEnd(2, "0") : "00")); return isFinite(v) ? v : null; }
+function datumUit(s){
+  var m = String(s||"").match(/(\d{1,2})[-\/. ](\d{1,2})[-\/. ](20\d{2})/); if (m) return m[3] + "-" + m[2].padStart(2,"0") + "-" + m[1].padStart(2,"0");
+  m = String(s||"").match(/(20\d{2})-(\d{2})-(\d{2})/); if (m) return m[0];
+  var MND = { jan:1, feb:2, mrt:3, mar:3, apr:4, mei:5, may:5, jun:6, jul:7, aug:8, sep:9, okt:10, oct:10, nov:11, dec:12 };
+  m = String(s||"").toLowerCase().match(/(\d{1,2})\s+([a-z]{3})[a-z]*\.?\s+(20\d{2})/); if (m && MND[m[2]]) return m[3] + "-" + String(MND[m[2]]).padStart(2,"0") + "-" + m[1].padStart(2,"0");
+  return null;
+}
+function naamSleutel(s){ return String(s||"").toLowerCase().replace(/\b(b\.?v\.?|bv|gmbh|ltd|limited|inc|nv|n\.v\.|vof|v\.o\.f\.|co\.|&|the|de|het)\b/g, " ").replace(/[^a-z0-9]+/g, " ").trim(); }
+/* De crediteur zoeken: eerst op IBAN (hard), dan op btw- of KvK-nummer, dan
+   op naam in de tekst (de langste crediteurnaam die letterlijk voorkomt). */
+function zoekCrediteur(tekst, ibans){
+  var t = tekst.toLowerCase();
+  for (var i = 0; i < ibans.length; i++){ var c = crediteuren.find(function(x){ return x.iban && x.iban === ibans[i]; }); if (c && !/INGB0679207473|INGB0020101619|INGB0661907724|RABO0112531784/.test(ibans[i])) return { c: c, hoe: "IBAN " + ibans[i] }; }
+  var btw = (tekst.match(/\bNL\d{9}B\d{2}\b/gi) || []).map(function(x){ return x.toUpperCase(); }).filter(function(x){ return x !== "NL815219180B01"; });
+  for (var b = 0; b < btw.length; b++){ var c2 = crediteuren.find(function(x){ return x.btw && String(x.btw).replace(/[.\s]/g,"").toUpperCase() === btw[b]; }); if (c2) return { c: c2, hoe: "btw-nummer " + btw[b] }; }
+  var kvk = (tekst.match(/\b\d{8}\b/g) || []).filter(function(x){ return x !== "08053333"; });
+  for (var k = 0; k < kvk.length; k++){ var c3 = crediteuren.find(function(x){ return x.kvk && String(x.kvk) === kvk[k]; }); if (c3) return { c: c3, hoe: "KvK " + kvk[k] }; }
+  var best = null;
+  crediteuren.forEach(function(c){ var n = naamSleutel(c.naam); if (n.length < 4) return; if (t.replace(/[^a-z0-9]+/g, " ").indexOf(n) >= 0 && (!best || n.length > naamSleutel(best.naam).length)) best = c; });
+  return best ? { c: best, hoe: "naam op de factuur" } : null;
+}
+function leesFactuur(regels, bestandsnaam){
+  var tekst = regels.join("\n");
+  var f = { leverancier: "", nummer: "", datum: "", vervaldatum: "", incl: null, excl: null, btw: null, btwPct: null, munt: "EUR", inkooporder: "", omschrijving: "", gelezen: {} };
+  var ibans = (tekst.match(/\b[A-Z]{2}\d{2}[A-Z0-9]{4}\s?(?:\d{2,4}\s?){2,6}\d{0,4}\b/g) || []).map(function(x){ return x.replace(/\s+/g, "").toUpperCase(); }).filter(function(x){ return x.length >= 15; });
+  var cr = zoekCrediteur(tekst, ibans);
+  if (cr){ f.crediteurId = cr.c.id; f.leverancier = cr.c.naam; f.gelezen.leverancier = cr.hoe; }
+  var nr = tekst.match(/(?:factuur\s*(?:nummer|nr\.?|no\.?|#)|invoice\s*(?:number|no\.?|nr\.?|#)|rechnungs?(?:nummer|-?nr\.?)|nota\s*(?:nummer|nr\.?)|factuur\s*:|invoice\s*:)\s*[:#]?\s*([A-Z0-9][A-Z0-9\-\/._]{2,30})/i);
+  if (nr && !/^(datum|date|nummer|number|adres)$/i.test(nr[1])) { f.nummer = nr[1].replace(/[.:]+$/, "").split(/\s*\/\s*/)[0]; f.gelezen.nummer = "achter 'factuurnummer'"; }
+  var dt = tekst.match(/(?:factuurdatum|invoice\s*date|datum|date|rechnungsdatum)\s*[:]?\s*([0-9]{1,2}[-\/. ][0-9]{1,2}[-\/. ]20[0-9]{2}|20[0-9]{2}-[0-9]{2}-[0-9]{2}|[0-9]{1,2}\s+[a-z]{3,9}\.?\s+20[0-9]{2})/i);
+  if (dt) f.datum = datumUit(dt[1]) || "";
+  if (!f.datum){ var d2 = datumUit(tekst); if (d2) f.datum = d2; }
+  var vv = tekst.match(/(?:vervaldatum|verval\s*datum|due\s*date|te betalen v[oó]{2}r|betalen voor|payment due|f[äa]llig(?:keitsdatum)?)\s*[:]?\s*([0-9]{1,2}[-\/. ][0-9]{1,2}[-\/. ]20[0-9]{2}|20[0-9]{2}-[0-9]{2}-[0-9]{2}|[0-9]{1,2}\s+[a-z]{3,9}\.?\s+20[0-9]{2})/i);
+  if (vv) f.vervaldatum = datumUit(vv[1]) || "";
+  if (/\bUSD\b|\$/.test(tekst) && !/€|\bEUR\b/.test(tekst)) f.munt = "USD";
+  /* Bedragen: totaal incl. (te betalen), btw, excl. Het grootste 'totaal'
+     dat na 'incl', 'te betalen', 'total' staat is het factuurbedrag. */
+  var kand = [];
+  regels.forEach(function(r){
+    var rl = r.toLowerCase();
+    var getallen = (r.match(/-?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})|-?\d+[.,]\d{2}/g) || []).map(getal).filter(function(v){ return v != null; });
+    if (!getallen.length) return;
+    var laatste = getallen[getallen.length - 1];
+    if (/te betalen|totaal\s*(incl|inclusief|te betalen|in eur|:)|total\s*(incl|amount|due|in eur|:)|amount due|eindtotaal|gesamtbetrag|totaalbedrag|totaal generaal|grand total|^\s*totaal\s*[€$]|^\s*total\s*[€$]/i.test(rl) && !/excl|subtotaal|sub\s*total/i.test(rl)) kand.push({ soort: "incl", v: laatste });
+    else if (/excl|subtotaal|sub\s*total|netto|net amount|zwischensumme/i.test(rl)) kand.push({ soort: "excl", v: laatste });
+    else if (/btw|vat|mwst|tax/i.test(rl) && !/nummer|number|nr\b|id\b/i.test(rl)) { kand.push({ soort: "btw", v: laatste }); var pc = rl.match(/(\d{1,2})[.,]?\d{0,2}\s*%/); if (pc && !f.btwPct) f.btwPct = Number(pc[1]); }
+  });
+  var incl = kand.filter(function(k){ return k.soort === "incl"; }).map(function(k){ return k.v; });
+  var btw = kand.filter(function(k){ return k.soort === "btw"; }).map(function(k){ return k.v; });
+  var excl = kand.filter(function(k){ return k.soort === "excl"; }).map(function(k){ return k.v; });
+  /* De combinatie die optelt (excl + btw = incl) wint; anders de grootste. */
+  var gevonden = null;
+  incl.slice().sort(function(a,b){ return b - a; }).forEach(function(i){ excl.forEach(function(e){ btw.forEach(function(b){ if (!gevonden && Math.abs(e + b - i) < 0.05) gevonden = { i: i, e: e, b: b }; }); }); });
+  if (gevonden){ f.incl = gevonden.i; f.excl = gevonden.e; f.btw = gevonden.b; }
+  else {
+    if (incl.length) f.incl = Math.max.apply(null, incl);
+    if (excl.length) f.excl = Math.max.apply(null, excl);
+    if (btw.length) f.btw = Math.min.apply(null, btw.filter(function(b){ return f.incl == null || b < f.incl; }).concat(btw.length ? [] : [0])) || null;
+  }
+  if (f.incl != null && f.excl != null && f.btw == null) f.btw = Math.round((f.incl - f.excl) * 100) / 100;
+  if (f.incl == null && f.excl != null && f.btw != null) f.incl = Math.round((f.excl + f.btw) * 100) / 100;
+  if (f.incl != null && f.btw != null && f.excl == null) f.excl = Math.round((f.incl - f.btw) * 100) / 100;
+  if (f.btwPct == null && f.excl > 0 && f.btw != null) f.btwPct = Math.round((f.btw / f.excl) * 100);
+  var iko = tekst.match(/\b(3[5-9]\d{5}|4\d{6})\b/);   // Logic4-inkoopordernummers zijn zeven cijfers
+  if (iko) f.inkooporder = iko[1];
+  if (!f.nummer && bestandsnaam){ var bn = bestandsnaam.replace(/\.[a-z]+$/i, "").match(/[A-Z0-9][A-Z0-9\-]{3,}/i); if (bn) { f.nummer = bn[0]; f.gelezen.nummer = "uit de bestandsnaam"; } }
+  return f;
+}
+function leesUbl(xmlTekst){
+  var doc = new DOMParser().parseFromString(xmlTekst, "application/xml");
+  var q = function(pad){ var el = doc.getElementsByTagNameNS("*", pad)[0]; return el ? el.textContent.trim() : ""; };
+  var f = { leverancier: "", nummer: q("ID"), datum: q("IssueDate"), vervaldatum: q("DueDate"), munt: q("DocumentCurrencyCode") || "EUR", gelezen: { bron: "UBL" }, ublXml: xmlTekst };
+  var sup = doc.getElementsByTagNameNS("*", "AccountingSupplierParty")[0];
+  if (sup){ var n = sup.getElementsByTagNameNS("*", "Name")[0] || sup.getElementsByTagNameNS("*", "RegistrationName")[0]; f.leverancier = n ? n.textContent.trim() : ""; var ib = sup.getElementsByTagNameNS("*", "CompanyID")[0]; f.btwOfKvk = ib ? ib.textContent.trim() : ""; }
+  var pa = doc.getElementsByTagNameNS("*", "PayeeFinancialAccount")[0]; f.ibanOpFactuur = pa ? (pa.getElementsByTagNameNS("*","ID")[0]||{}).textContent : "";
+  var tot = doc.getElementsByTagNameNS("*", "LegalMonetaryTotal")[0];
+  if (tot){ var g = function(t){ var e = tot.getElementsByTagNameNS("*", t)[0]; return e ? Number(e.textContent) : null; }; f.incl = g("TaxInclusiveAmount") != null ? g("TaxInclusiveAmount") : g("PayableAmount"); f.excl = g("TaxExclusiveAmount"); }
+  var tx = doc.getElementsByTagNameNS("*", "TaxTotal")[0]; if (tx){ var ta = tx.getElementsByTagNameNS("*", "TaxAmount")[0]; f.btw = ta ? Number(ta.textContent) : null; }
+  var cr = zoekCrediteur([f.leverancier, f.btwOfKvk].join(" "), f.ibanOpFactuur ? [String(f.ibanOpFactuur).replace(/\s+/g,"").toUpperCase()] : []);
+  if (cr){ f.crediteurId = cr.c.id; f.leverancier = cr.c.naam; f.gelezen.leverancier = cr.hoe; }
+  return f;
+}
+
+async function inlezen(files){
+  var n = 0, fouten = [];
+  for (var i = 0; i < files.length; i++){
+    var file = files[i];
+    try{
+      var f;
+      if (/\.xml$/i.test(file.name)) f = leesUbl(await file.text());
+      else { var rg = await pdfTekst(file); f = leesFactuur(rg, file.name); if (rg.ocr) f.gelezen.bron = "gescand, tekst herkend"; }
+      var id = "f" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      var bestandId = id + "." + (/\.xml$/i.test(file.name) ? "xml" : "pdf");
+      try{ await fetch(W + "/inkoop/bestand?id=" + encodeURIComponent(bestandId), { method: "PUT", headers: { "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik }, body: file }); f.bestand = bestandId; }catch(e){}
+      f.id = id; f.bestandsnaam = file.name; f.ts = new Date().toISOString(); f.door = ik;
+      // Wat er de vorige keer voor deze leverancier is gekozen.
+      var g = f.crediteurId ? geleerd.crediteuren[String(f.crediteurId)] : null;
+      if (g){ f.grootboek = g.grootboek || ""; f.kostenplaats = g.kostenplaats || ""; f.gelezen.geleerd = "grootboek en kostenplaats van de vorige factuur"; }
+      werk.facturen[id] = f; n++;
+    }catch(e){ fouten.push(file.name + ": " + (e.message || e)); }
+  }
+  await bewaarWerk();
+  msg($("dropMsg"), n + " factu" + (n===1?"ur":"ren") + " gelezen." + (fouten.length ? " Niet gelezen: " + esc(fouten.join("; ")) : ""), fouten.length ? "bad" : "ok");
+  try{ if (window.fpLog) window.fpLog("inkoopfactuur-ingelezen", n + " bestand(en)"); }catch(e){}
+  teken();
+}
+
+/* ── facturen tonen ───────────────────────────────────────────────── */
+function compleet(f){ return !!(f.crediteurId && f.nummer && f.datum && Number(f.incl) > 0); }
+function ikoVan(f){ if (!f.crediteurId) return []; return inkooporders.filter(function(o){ return String(o.crediteur) === String(f.crediteurId); }); }
+function factHtml(f){
+  var klaar = !!f.geboekt, kl = klaar ? "klaar" : (compleet(f) ? "groen" : "");
+  var cs = crediteuren.slice().sort(function(a,b){ return a.naam.localeCompare(b.naam, "nl"); });
+  var ikos = ikoVan(f);
+  return '<div class="fact ' + kl + '" data-id="' + esc(f.id) + '">' +
+    '<div class="kop"><b>' + esc(f.leverancier || "leverancier onbekend") + '</b>' + (f.nummer ? ' <span>factuur ' + esc(f.nummer) + '</span>' : '') + (f.datum ? ' <span style="color:var(--grijs)">' + esc(datumNL(f.datum)) + '</span>' : '') +
+      (f.incl != null ? ' <b style="margin-left:auto">' + esc(geld(f.incl)) + (f.munt === "USD" ? ' (USD)' : '') + '</b>' : '') +
+      (klaar ? ' <span class="pil">' + esc(f.geboekt.tekst) + '</span>' : compleet(f) ? ' <span class="pil">klaar om te boeken</span>' : ' <span class="pil oranje">nog aanvullen</span>') + '</div>' +
+    '<div style="font-size:11.5px;color:var(--grijs);margin-top:3px">' + esc(f.bestandsnaam || "") + (f.gelezen && f.gelezen.leverancier ? ' · leverancier herkend op ' + esc(f.gelezen.leverancier) : ' · leverancier niet herkend') + (f.gelezen && f.gelezen.geleerd ? ' · ' + esc(f.gelezen.geleerd) : '') + (f.bestand ? ' · <a href="' + W + '/inkoop/bestand?id=' + encodeURIComponent(f.bestand) + '" target="_blank">bekijk</a>' : '') + '</div>' +
+    (klaar ? '' :
+    '<div class="velden">' +
+      '<div><label>Leverancier (crediteur in Logic4)</label><select data-veld="crediteurId"><option value="">kies…</option>' + cs.map(function(c){ return '<option value="' + esc(c.id) + '"' + (String(c.id) === String(f.crediteurId||"") ? ' selected' : '') + '>' + esc(c.naam) + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Factuurnummer</label><input data-veld="nummer" value="' + esc(f.nummer||"") + '"></div>' +
+      '<div><label>Factuurdatum</label><input type="date" data-veld="datum" value="' + esc(f.datum||"") + '"></div>' +
+      '<div><label>Vervaldatum</label><input type="date" data-veld="vervaldatum" value="' + esc(f.vervaldatum||"") + '"></div>' +
+      '<div><label>Bedrag incl. btw</label><input data-veld="incl" inputmode="decimal" value="' + (f.incl != null ? esc(String(f.incl).replace(".", ",")) : "") + '"></div>' +
+      '<div><label>Btw</label><input data-veld="btw" inputmode="decimal" value="' + (f.btw != null ? esc(String(f.btw).replace(".", ",")) : "") + '"></div>' +
+      '<div><label>Inkooporder in Logic4</label>' + (ikos.length ? '<select data-veld="inkooporder"><option value="">geen / onbekend</option>' + ikos.map(function(o){ return '<option value="' + esc(o.id) + '"' + (String(o.id) === String(f.inkooporder||"") ? ' selected' : '') + '>' + esc(o.id) + ' · ' + esc(datumNL(o.datum)) + (o.opmerking ? ' · ' + esc(o.opmerking.slice(0,30)) : '') + '</option>'; }).join("") + '</select>' : '<input data-veld="inkooporder" value="' + esc(f.inkooporder||"") + '" placeholder="nummer, of leeg">') + '</div>' +
+      '<div><label>Grootboek (voorstel, wordt onthouden)</label><input data-veld="grootboek" value="' + esc(f.grootboek||"") + '" placeholder="bv. 7000"></div>' +
+      '<div><label>Kostenplaats</label><input data-veld="kostenplaats" value="' + esc(f.kostenplaats||"") + '" placeholder="bv. Houston"></div>' +
+      '<div><label>Omschrijving</label><input data-veld="omschrijving" value="' + esc(f.omschrijving||"") + '"></div>' +
+    '</div>' +
+    '<div class="acties"><button class="knop groen" data-boek="' + esc(f.id) + '"' + (compleet(f) ? '' : ' disabled') + '>Boeken in Logic4</button><button class="knop" data-weg="' + esc(f.id) + '">weghalen</button><span data-msg="' + esc(f.id) + '" style="font-size:12px"></span></div>') +
+  '</div>';
+}
+function teken(){
+  var alle = Object.values(werk.facturen).sort(function(a,b){ return String(b.ts).localeCompare(String(a.ts)); });
+  var open = alle.filter(function(f){ return !f.geboekt; }), klaar = alle.filter(function(f){ return !!f.geboekt; });
+  $("nFact").textContent = open.length; $("nKlaar").textContent = klaar.length;
+  document.querySelectorAll(".tab").forEach(function(b){ b.classList.toggle("aan", b.dataset.tab === tab); });
+  $("blokFacturen").classList.toggle("hidden", tab !== "facturen"); $("blokBetalen").classList.toggle("hidden", tab !== "betalen"); $("blokKlaar").classList.toggle("hidden", tab !== "klaar");
+  $("factLijst").innerHTML = open.length ? open.map(factHtml).join("") : '<p class="lead" style="padding:4px 2px">Geen facturen in de werklijst. Sleep er een naar boven.</p>';
+  $("klaarLijst").innerHTML = klaar.length ? klaar.map(factHtml).join("") : '<p class="lead">Nog niets geboekt vanuit hier.</p>';
+  document.querySelectorAll(".fact [data-veld]").forEach(function(el){ el.addEventListener("change", function(){
+    var f = werk.facturen[el.closest(".fact").dataset.id]; if (!f) return;
+    var v = el.value; var veld = el.dataset.veld;
+    if (veld === "incl" || veld === "btw") v = getal(v);
+    f[veld] = v;
+    if (veld === "crediteurId"){ var c = crediteuren.find(function(x){ return String(x.id) === String(v); }); f.leverancier = c ? c.naam : f.leverancier; var g = geleerd.crediteuren[String(v)]; if (g && !f.grootboek){ f.grootboek = g.grootboek || ""; f.kostenplaats = g.kostenplaats || ""; } }
+    if (f.incl != null && f.btw != null) f.excl = Math.round((f.incl - f.btw) * 100) / 100;
+    bewaarWerk(); teken();
+  }); });
+  document.querySelectorAll("[data-boek]").forEach(function(b){ b.addEventListener("click", function(){ boek(b.dataset.boek, b); }); });
+  document.querySelectorAll("[data-weg]").forEach(function(b){ b.addEventListener("click", function(){ if (!confirm("Deze factuur uit de werklijst halen?")) return; delete werk.facturen[b.dataset.weg]; bewaarWerk(); teken(); }); });
+  if (tab === "betalen") tekenBetalen();
+}
+async function boek(id, knop){
+  var f = werk.facturen[id]; if (!f) return;
+  var m = document.querySelector("[data-msg='" + CSS.escape(id) + "']");
+  knop.disabled = true; if (m) m.textContent = "Bezig…";
+  try{
+    var j = await api("/inkoop/boeken", { id: id, door: ik });
+    if (!j.ok) throw new Error(j.error || "boeken mislukt");
+    if (f.crediteurId && (f.grootboek || f.kostenplaats)){ geleerd.crediteuren[String(f.crediteurId)] = { grootboek: f.grootboek || "", kostenplaats: f.kostenplaats || "", ts: new Date().toISOString(), door: ik }; await bewaarGeleerd(); }
+    try{ if (window.fpLog) window.fpLog("inkoopfactuur-geboekt", (f.leverancier||"") + " " + (f.nummer||"") + " " + geld(f.incl)); }catch(e){}
+    await laad();
+  }catch(e){ if (m) m.innerHTML = '<span style="color:var(--rood)">' + esc(e.message) + '</span>'; knop.disabled = false; }
+}
+
+/* ── betalen ──────────────────────────────────────────────────────── */
+var postenMeta = null;
+async function laadPosten(vers){
+  $("betMeta").textContent = "Open posten ophalen…";
+  try{
+    var j = await api("/bank/openstaand-crediteuren", { vers: !!vers });
+    posten = j.posten || []; postenMeta = { updated: j.updated, uitCache: j.uitCache };
+    $("betMeta").textContent = posten.length + " open posten" + (postenMeta.updated ? " · stand " + datumNL(postenMeta.updated) : "") + (postenMeta.uitCache ? " (uit de cache)" : "");
+  }catch(e){ $("betMeta").textContent = "Ophalen lukte niet: " + e.message; }
+  tekenBetalen();
+}
+function betZichtbaar(){
+  var q = ($("betZoek").value||"").trim().toLowerCase(), f = $("betFilter").value;
+  var week = new Date(); week.setDate(week.getDate() + 7); var grens = week.toISOString().slice(0,10);
+  return posten.filter(function(p){
+    if (f === "vervallen" && String(p.PayBefore||"").slice(0,10) > grens) return false;
+    if (q && ((p.CompanyName||"") + " " + (p.Reference||"") + " " + (p.Description||"")).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  }).sort(function(a,b){ return String(a.PayBefore||"9999").localeCompare(String(b.PayBefore||"9999")); });
+}
+function tekenBetalen(){
+  if (!posten.length && !postenMeta){ laadPosten(false); return; }
+  var lijst = betZichtbaar(), nu = vandaag();
+  $("nBet").textContent = posten.length;
+  $("betLijst").innerHTML = lijst.length ? lijst.map(function(p){
+    var b = betaald.posten[String(p.Id)];
+    var laat = String(p.PayBefore||"").slice(0,10) < nu;
+    return '<tr class="' + (laat && !b ? "laat" : "") + '"><td><input type="checkbox" class="betVink" data-id="' + esc(p.Id) + '"' + (betKeuze[p.Id] ? ' checked' : '') + (b ? ' disabled' : '') + '></td>' +
+      '<td><b>' + esc(p.CompanyName||"") + '</b></td><td>' + esc(p.Reference||"") + (p.Description ? '<div style="font-size:11px;color:var(--grijs)">' + esc(String(p.Description).slice(0,60)) + '</div>' : '') + '</td>' +
+      '<td style="white-space:nowrap">' + esc(datumNL(p.Date)) + '</td><td style="white-space:nowrap;color:' + (laat ? 'var(--rood)' : 'inherit') + '">' + esc(datumNL(p.PayBefore)) + '</td>' +
+      '<td class="n">' + esc(geld(p.AmountOpen)) + '</td><td>' + (b ? '<span class="pil blauw">in betaalbestand ' + esc(datumNL(b.ts)) + '</span>' : laat ? '<span class="pil rood">vervallen</span>' : '<span class="pil grijs">open</span>') + '</td></tr>';
+  }).join("") : '<tr><td colspan="7" style="color:var(--grijs);padding:14px 6px">Niets in beeld.</td></tr>';
+  $("betLijst").querySelectorAll(".betVink").forEach(function(c){ c.addEventListener("change", function(){ if (c.checked) betKeuze[c.dataset.id] = true; else delete betKeuze[c.dataset.id]; telBet(); }); });
+  telBet();
+}
+function telBet(){
+  var gekozen = posten.filter(function(p){ return betKeuze[p.Id] && !betaald.posten[String(p.Id)]; });
+  var som = gekozen.reduce(function(n,p){ return n + (Number(p.AmountOpen)||0); }, 0);
+  $("betTel").textContent = gekozen.length ? gekozen.length + " post" + (gekozen.length===1?"":"en") + " gekozen · " + geld(som) : "niets gekozen";
+  $("betMaak").disabled = !gekozen.length;
+}
+$("betAlle").addEventListener("change", function(){ betZichtbaar().forEach(function(p){ if (betaald.posten[String(p.Id)]) return; if ($("betAlle").checked) betKeuze[p.Id] = true; else delete betKeuze[p.Id]; }); tekenBetalen(); });
+$("betZoek").addEventListener("input", tekenBetalen); $("betFilter").addEventListener("change", tekenBetalen);
+$("betVers").addEventListener("click", function(){ laadPosten(true); });
+$("betMaak").addEventListener("click", async function(){
+  var gekozen = posten.filter(function(p){ return betKeuze[p.Id] && !betaald.posten[String(p.Id)]; });
+  if (!gekozen.length) return;
+  var datum = $("betDatum").value || vandaag();
+  if (!confirm("Betaalbestand maken voor " + gekozen.length + " post(en), uitvoerdatum " + datumNL(datum) + "?\n\nHet bestand laad je daarna zelf bij ING in en keur je daar goed; er gaat vanuit hier geen geld weg.")) return;
+  $("betMaak").disabled = true; $("betMsg").textContent = "Bezig…";
+  try{
+    var j = await api("/inkoop/betaalbestand", { door: ik, uitvoerdatum: datum, posten: gekozen.map(function(p){ return { id: p.Id, crediteurId: p.CreditorId, naam: p.CompanyName, bedrag: p.AmountOpen, ref: p.Reference || "" }; }) });
+    if (!j.ok) throw new Error(j.error || "mislukt");
+    var blob = new Blob([j.xml], { type: "application/xml" }); var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = j.bestand + ".xml"; document.body.appendChild(a); a.click(); a.remove();
+    betKeuze = {};
+    $("betMsg").innerHTML = '<span style="color:#166534">' + j.aantal + ' betalingen, ' + esc(geld(j.totaal)) + '. Het bestand is gedownload; laad het in bij ING.</span>' + (j.zonder && j.zonder.length ? ' <span style="color:var(--rood)">Niet meegenomen (geen IBAN in Logic4): ' + esc(j.zonder.map(function(z){ return z.naam; }).join(", ")) + '</span>' : '');
+    try{ if (window.fpLog) window.fpLog("betaalbestand-gemaakt", j.bestand + ": " + j.aantal + " posten, " + geld(j.totaal)); }catch(e){}
+    betaald = await api("/data/inkoop-betaald").catch(function(){ return betaald; });
+    tekenBetalen();
+  }catch(e){ $("betMsg").innerHTML = '<span style="color:var(--rood)">' + esc(e.message) + '</span>'; $("betMaak").disabled = false; }
+});
+
+document.querySelectorAll(".tab").forEach(function(b){ b.addEventListener("click", function(){ tab = b.dataset.tab; teken(); }); });
+$("drop").addEventListener("click", function(){ $("bestand").click(); });
+$("bestand").addEventListener("change", function(){ if ($("bestand").files.length) inlezen([].slice.call($("bestand").files)); $("bestand").value = ""; });
+["dragenter","dragover"].forEach(function(ev){ $("drop").addEventListener(ev, function(e){ e.preventDefault(); $("drop").classList.add("over"); }); });
+["dragleave","drop"].forEach(function(ev){ $("drop").addEventListener(ev, function(e){ e.preventDefault(); $("drop").classList.remove("over"); }); });
+$("drop").addEventListener("drop", function(e){ var fs = [].slice.call(e.dataTransfer.files||[]); if (fs.length) inlezen(fs); });
+$("betDatum").value = vandaag();
+(async function(){
+  for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
+  try { await laad(); } catch(e){ msg($("dropMsg"), "Laden lukte niet: " + esc(e.message), "bad"); }
+})();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"inkoop",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

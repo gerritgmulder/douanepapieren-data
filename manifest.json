@@ -1,5 +1,5 @@
 {
-  "version": "0.34.74",
+  "version": "0.34.75",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -167,6 +167,10 @@
     {
       "name": "prijslijst.html",
       "note": "Prijslijst maken — leveranciers-PDF (invoice/catalogus) → Fonteyn/Passion-stijl prijslijst"
+    },
+    {
+      "name": "inkoop.html",
+      "note": "Inkoop en betalen (proef, groep administratie-proef): inkoopfacturen lezen (pdf met tekst of gescand via tesseract, UBL-xml), crediteur en inkooporder erbij, als UBL naar het inkoopboek; betaalvoorstel en SEPA-betaalbestand. Buckets inkoop-werk, inkoop-geleerd, inkoop-betaald."
     },
     {
       "name": "bank.html",

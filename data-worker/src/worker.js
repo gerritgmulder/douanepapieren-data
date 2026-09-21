@@ -153,6 +153,9 @@ const ALLOWED_BUCKETS = new Set([
   "dhl-push",            // DHL Push API v2: de berichten die DHL zelf stuurt over zendingen
   "qb-geboekt-terug",    // Amerika: wat er uit qb-geboekt is gehaald toen een batch opnieuw geboekt moest worden
   "werkplaats",          // Werkplaats: per orderregel getest ja/nee (door, wanneer) en een eigen leverdatum als Planning er geen heeft
+  "inkoop-werk",         // Inkoop en betalen (proef): elke inkoopfactuur met wat eruit gelezen is, het voorstel en de boeking in Logic4
+  "inkoop-geleerd",      // Inkoop en betalen (proef): per crediteur wat de vorige keer is gekozen (grootboek, kostenplaats)
+  "inkoop-betaald",      // Inkoop en betalen (proef): welke crediteurposten in welk betaalbestand zitten
   "bank-werk",           // Bank (proef): elke afschriftregel met zijn voorstel, keuze en of hij al in Logic4 staat
   "bank-geleerd",        // Bank (proef): namen op het afschrift die iemand een keer heeft aangewezen (tussenrekening, debiteur)   // Herinneringen: wanneer welke debiteur voor welke facturen een herinnering kreeg, en door wie
   "herinneringen-tekst", // Herinneringen: de mailtekst (Engels en Nederlands), aanpasbaar in de tegel
@@ -9431,6 +9434,162 @@ async function qbHandleProefBetaling(request, env) {
   return reply(200, { ok: rr.ok, status: rr.status, antwoord: tekst.slice(0, 400) });
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   INKOOP EN BETALEN (proef) - tegel 3 van het plan "administratie op knoppen"
+   ═══════════════════════════════════════════════════════════════════════════
+   Rowan. Een inkoopfactuur komt binnen (upload; later de mailbox facturen@),
+   het scherm leest hem, koppelt hem aan de crediteur en de inkooporder, en de
+   knop zet hem als UBL in het inkoopboek van Logic4 (PostUblInvoiceToBuyBooking,
+   status Controleren). Betalen: een betaalvoorstel uit de open crediteurposten
+   en een SEPA-betaalbestand (pain.001) dat Rowan bij de bank inlaadt. Logic4
+   zelf boekt de betaling af zodra het bankafschrift binnenkomt; dat kan de
+   koppeling niet (Mark, 8 sep 2026) en hoeft dan ook niet meer. */
+const INKOOP_DAGBOEK = 18;          // "Inkopen"
+const FONTEYN_IBAN = "NL34INGB0679207473", FONTEYN_BIC = "INGBNL2A", FONTEYN_NAAM = "De Fonteyn B.V.";
+
+async function inkoopCrediteuren(env, vers) {
+  const cache = vers ? null : await env.FONTEYN_DATA.get("inkoop-crediteuren-cache", { type: "json" });
+  if (cache && cache.ts && Date.now() - new Date(cache.ts).getTime() < 6 * 3600000) return { ok: true, uitCache: true, ts: cache.ts, crediteuren: cache.crediteuren };
+  const token = await l4Token(env);
+  const uit = [];
+  for (let p = 0; p < 20; p++) {
+    const r = await fetch("https://api.logic4server.nl/v3/Relations/GetCreditors", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ TakeRecords: 500, SkipRecords: p * 500 }),
+    });
+    if (!r.ok) throw new Error("GetCreditors HTTP " + r.status);
+    const j = await r.json().catch(() => null);
+    const lijst = Array.isArray(j) ? j : ((j && j.Records) || []);
+    for (const c of lijst) uit.push({
+      id: c.Id, naam: String(c.CompanyName || ((c.FirstName || "") + " " + (c.LastName || ""))).trim(),
+      iban: String(c.BankAccount || "").replace(/\s+/g, "").toUpperCase() || null,
+      btw: c.VatNumber || null, kvk: c.KvkNumber || null, email: c.EmailAddress || null,
+      betaalconditie: c.PaymentCondition != null ? c.PaymentCondition : null, soort: c.CreditorType || null,
+    });
+    if (lijst.length < 500) break;
+  }
+  const ts = new Date().toISOString();
+  await env.FONTEYN_DATA.put("inkoop-crediteuren-cache", JSON.stringify({ ts, crediteuren: uit }));
+  return { ok: true, uitCache: false, ts, crediteuren: uit };
+}
+
+async function inkoopInkooporders(env) {
+  const token = await l4Token(env);
+  const uit = [];
+  for (let p = 0; p < 10; p++) {
+    const r = await fetch("https://api.logic4server.nl/v3/BuyOrders/GetBuyOrders", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ BuyOrderIsClosed: false, TakeRecords: 500, SkipRecords: p * 500 }),
+    });
+    if (!r.ok) throw new Error("GetBuyOrders HTTP " + r.status);
+    const j = await r.json().catch(() => null);
+    const lijst = Array.isArray(j) ? j : ((j && j.Records) || []);
+    for (const o of lijst) uit.push({ id: o.Id, crediteur: o.CreditorId, naam: o.CreditorCompanyName || "", datum: String(o.CreatedAt || "").slice(0, 10), regels: o.AmountOfRows, opmerking: o.Remarks || "" });
+    if (lijst.length < 500) break;
+  }
+  return { ok: true, inkooporders: uit };
+}
+
+function xmlEsc(s) { return String(s == null ? "" : s).replace(/[<>&"']/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[c])); }
+function geld2(n) { return (Math.round((Number(n) || 0) * 100) / 100).toFixed(2); }
+
+/* Een UBL 2.1-factuur uit wat er van de pdf gelezen is. Eén regel voor het
+   hele bedrag (de regels van de leverancier zijn voor Logic4 niet nodig om
+   te boeken; grootboek en kostenplaats zet Rowan in Logic4 bij Controleren
+   of komen uit wat er geleerd is). */
+function inkoopUbl(f, cred) {
+  const excl = geld2(f.excl != null ? f.excl : (Number(f.incl) || 0) - (Number(f.btw) || 0));
+  const btw = geld2(f.btw || 0), incl = geld2(f.incl || 0);
+  const pct = Number(f.btwPct) || (Number(excl) > 0 ? Math.round((Number(btw) / Number(excl)) * 100) : 0);
+  return '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">' +
+    '<cbc:UBLVersionID>2.1</cbc:UBLVersionID><cbc:CustomizationID>urn:cen.eu:en16931:2017#compliant#urn:fdc:nen.nl:nlcius:v1.0</cbc:CustomizationID>' +
+    '<cbc:ID>' + xmlEsc(f.nummer) + '</cbc:ID><cbc:IssueDate>' + xmlEsc(f.datum) + '</cbc:IssueDate>' +
+    (f.vervaldatum ? '<cbc:DueDate>' + xmlEsc(f.vervaldatum) + '</cbc:DueDate>' : '') +
+    '<cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>' + xmlEsc(f.munt || "EUR") + '</cbc:DocumentCurrencyCode>' +
+    (f.inkooporder ? '<cac:OrderReference><cbc:ID>' + xmlEsc(f.inkooporder) + '</cbc:ID></cac:OrderReference>' : '') +
+    '<cac:AccountingSupplierParty><cac:Party>' +
+      (cred && cred.iban ? '' : '') +
+      '<cac:PartyName><cbc:Name>' + xmlEsc(cred ? cred.naam : f.leverancier) + '</cbc:Name></cac:PartyName>' +
+      (cred && cred.btw ? '<cac:PartyTaxScheme><cbc:CompanyID>' + xmlEsc(cred.btw) + '</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>' : '') +
+      '<cac:PartyLegalEntity><cbc:RegistrationName>' + xmlEsc(cred ? cred.naam : f.leverancier) + '</cbc:RegistrationName>' + (cred && cred.kvk ? '<cbc:CompanyID>' + xmlEsc(cred.kvk) + '</cbc:CompanyID>' : '') + '</cac:PartyLegalEntity>' +
+    '</cac:Party></cac:AccountingSupplierParty>' +
+    '<cac:AccountingCustomerParty><cac:Party><cac:PartyName><cbc:Name>' + FONTEYN_NAAM + '</cbc:Name></cac:PartyName><cac:PartyLegalEntity><cbc:RegistrationName>' + FONTEYN_NAAM + '</cbc:RegistrationName><cbc:CompanyID>08053333</cbc:CompanyID></cac:PartyLegalEntity></cac:Party></cac:AccountingCustomerParty>' +
+    (cred && cred.iban ? '<cac:PaymentMeans><cbc:PaymentMeansCode>30</cbc:PaymentMeansCode><cac:PayeeFinancialAccount><cbc:ID>' + xmlEsc(cred.iban) + '</cbc:ID></cac:PayeeFinancialAccount></cac:PaymentMeans>' : '') +
+    '<cac:TaxTotal><cbc:TaxAmount currencyID="EUR">' + btw + '</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxableAmount currencyID="EUR">' + excl + '</cbc:TaxableAmount><cbc:TaxAmount currencyID="EUR">' + btw + '</cbc:TaxAmount><cac:TaxCategory><cbc:ID>' + (pct > 0 ? 'S' : 'Z') + '</cbc:ID><cbc:Percent>' + pct + '</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>' +
+    '<cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="EUR">' + excl + '</cbc:LineExtensionAmount><cbc:TaxExclusiveAmount currencyID="EUR">' + excl + '</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="EUR">' + incl + '</cbc:TaxInclusiveAmount><cbc:PayableAmount currencyID="EUR">' + incl + '</cbc:PayableAmount></cac:LegalMonetaryTotal>' +
+    '<cac:InvoiceLine><cbc:ID>1</cbc:ID><cbc:InvoicedQuantity unitCode="C62">1</cbc:InvoicedQuantity><cbc:LineExtensionAmount currencyID="EUR">' + excl + '</cbc:LineExtensionAmount>' +
+      '<cac:Item><cbc:Name>' + xmlEsc((f.omschrijving || ("Factuur " + f.nummer)).slice(0, 100)) + '</cbc:Name><cac:ClassifiedTaxCategory><cbc:ID>' + (pct > 0 ? 'S' : 'Z') + '</cbc:ID><cbc:Percent>' + pct + '</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>' +
+      '<cac:Price><cbc:PriceAmount currencyID="EUR">' + excl + '</cbc:PriceAmount></cac:Price></cac:InvoiceLine>' +
+    '</Invoice>';
+}
+
+/* POST /inkoop/boeken { id, door }  - één factuur uit inkoop-werk naar Logic4. */
+async function inkoopBoeken(env, body) {
+  const werk = (await env.FONTEYN_DATA.get("inkoop-werk", { type: "json" })) || { facturen: {} };
+  const f = (werk.facturen || {})[String(body.id || "")];
+  if (!f) return { ok: false, error: "factuur niet gevonden in de werklijst" };
+  if (f.geboekt) return { ok: false, error: "deze factuur staat al in Logic4 (" + (f.geboekt.tekst || "") + ")" };
+  if (!f.crediteurId) return { ok: false, error: "kies eerst de leverancier" };
+  if (!f.nummer || !f.datum || !(Number(f.incl) > 0)) return { ok: false, error: "factuurnummer, datum en bedrag moeten gevuld zijn" };
+  const cl = await inkoopCrediteuren(env, false);
+  const cred = (cl.crediteuren || []).find(c => String(c.id) === String(f.crediteurId)) || null;
+  let xml = f.ublXml || inkoopUbl(f, cred);
+  const token = await l4Token(env);
+  const r = await fetch("https://api.logic4server.nl/v3/Financial/PostUblInvoiceToBuyBooking", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ Xml: xml, BookId: INKOOP_DAGBOEK, StatusId: 1, CreditorId: Number(f.crediteurId),
+      Description: ("Factuur " + f.nummer + " " + (cred ? cred.naam : f.leverancier || "")).slice(0, 120),
+      BookingDateTime: f.datum + "T12:00:00", FreeValue1: f.inkooporder ? "IKO " + f.inkooporder : null }),
+  });
+  const tekst = await r.text();
+  let j = null; try { j = JSON.parse(tekst); } catch {}
+  if (!r.ok) return { ok: false, error: "Logic4 " + r.status + ": " + ((j && (j.detail || j.title)) || tekst.slice(0, 200)) };
+  f.geboekt = { ts: new Date().toISOString(), door: String(body.door || "").slice(0, 80), antwoord: tekst.slice(0, 300), tekst: "in het inkoopboek, status Controleren" };
+  werk.facturen[String(body.id)] = f;
+  await env.FONTEYN_DATA.put("inkoop-werk", JSON.stringify(werk));
+  return { ok: true, antwoord: j || tekst.slice(0, 300) };
+}
+
+/* POST /inkoop/betaalbestand { posten:[{id, crediteurId, bedrag, ref, naam}], uitvoerdatum, door }
+   Eén SEPA-overboekingsbestand (pain.001.001.03) voor de bank. De IBAN komt
+   van de crediteur in Logic4; zonder IBAN gaat een post niet mee. */
+async function inkoopBetaalbestand(env, body) {
+  const posten = Array.isArray(body.posten) ? body.posten.slice(0, 200) : [];
+  if (!posten.length) return { ok: false, error: "geen posten gekozen" };
+  const cl = await inkoopCrediteuren(env, false);
+  const perId = {}; (cl.crediteuren || []).forEach(c => { perId[String(c.id)] = c; });
+  const datum = /^\d{4}-\d{2}-\d{2}$/.test(String(body.uitvoerdatum || "")) ? body.uitvoerdatum : new Date().toISOString().slice(0, 10);
+  const mee = [], zonder = [];
+  for (const p of posten) {
+    const c = perId[String(p.crediteurId)];
+    const iban = (p.iban || (c && c.iban) || "").replace(/\s+/g, "").toUpperCase();
+    const bedrag = Math.round((Number(p.bedrag) || 0) * 100) / 100;
+    if (!/^[A-Z]{2}\d{2}[A-Z0-9]{10,30}$/.test(iban) || !(bedrag > 0)) { zonder.push({ id: p.id, naam: p.naam || (c && c.naam) || "", reden: !(bedrag > 0) ? "geen bedrag" : "geen geldig IBAN bij de crediteur in Logic4" }); continue; }
+    mee.push({ id: p.id, naam: (c && c.naam) || p.naam || "", iban, bedrag, ref: String(p.ref || "").slice(0, 100) });
+  }
+  if (!mee.length) return { ok: false, error: "geen enkele post heeft een IBAN en een bedrag", zonder };
+  const msgId = "FONTEYN-" + datum.replace(/-/g, "") + "-" + Date.now().toString(36).toUpperCase();
+  const totaal = geld2(mee.reduce((n, x) => n + x.bedrag, 0));
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.001.001.03"><CstmrCdtTrfInitn>' +
+    '<GrpHdr><MsgId>' + msgId + '</MsgId><CreDtTm>' + new Date().toISOString().slice(0, 19) + '</CreDtTm><NbOfTxs>' + mee.length + '</NbOfTxs><CtrlSum>' + totaal + '</CtrlSum><InitgPty><Nm>' + xmlEsc(FONTEYN_NAAM) + '</Nm></InitgPty></GrpHdr>' +
+    '<PmtInf><PmtInfId>' + msgId + '-1</PmtInfId><PmtMtd>TRF</PmtMtd><BtchBookg>false</BtchBookg><NbOfTxs>' + mee.length + '</NbOfTxs><CtrlSum>' + totaal + '</CtrlSum>' +
+    '<PmtTpInf><SvcLvl><Cd>SEPA</Cd></SvcLvl></PmtTpInf><ReqdExctnDt>' + datum + '</ReqdExctnDt>' +
+    '<Dbtr><Nm>' + xmlEsc(FONTEYN_NAAM) + '</Nm></Dbtr><DbtrAcct><Id><IBAN>' + FONTEYN_IBAN + '</IBAN></Id></DbtrAcct><DbtrAgt><FinInstnId><BIC>' + FONTEYN_BIC + '</BIC></FinInstnId></DbtrAgt><ChrgBr>SLEV</ChrgBr>' +
+    mee.map((x, i) => '<CdtTrfTxInf><PmtId><EndToEndId>' + xmlEsc((x.ref || x.id || ("post" + i)).replace(/[^A-Za-z0-9\-]/g, "").slice(0, 35) || ("P" + i)) + '</EndToEndId></PmtId>' +
+      '<Amt><InstdAmt Ccy="EUR">' + geld2(x.bedrag) + '</InstdAmt></Amt><Cdtr><Nm>' + xmlEsc(x.naam.slice(0, 70)) + '</Nm></Cdtr><CdtrAcct><Id><IBAN>' + x.iban + '</IBAN></Id></CdtrAcct>' +
+      '<RmtInf><Ustrd>' + xmlEsc((x.ref ? "Factuur " + x.ref : "Betaling") + " De Fonteyn").slice(0, 140) + '</Ustrd></RmtInf></CdtTrfTxInf>').join("") +
+    '</PmtInf></CstmrCdtTrfInitn></Document>';
+  const betaald = (await env.FONTEYN_DATA.get("inkoop-betaald", { type: "json" })) || { posten: {}, bestanden: [] };
+  betaald.posten = betaald.posten || {}; betaald.bestanden = betaald.bestanden || [];
+  mee.forEach(x => { betaald.posten[String(x.id)] = { bestand: msgId, bedrag: x.bedrag, iban: x.iban, ts: new Date().toISOString(), door: String(body.door || "").slice(0, 80) }; });
+  betaald.bestanden.push({ id: msgId, ts: new Date().toISOString(), door: String(body.door || "").slice(0, 80), uitvoerdatum: datum, aantal: mee.length, totaal: Number(totaal) });
+  betaald.bestanden = betaald.bestanden.slice(-200);
+  await env.FONTEYN_DATA.put("inkoop-betaald", JSON.stringify(betaald));
+  return { ok: true, bestand: msgId, xml, aantal: mee.length, totaal: Number(totaal), zonder };
+}
+
 async function qbHandleKoersverschil(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
     return reply(401, { ok: false, error: "Unauthorized" });
@@ -13511,6 +13670,34 @@ export default {
     if (url.pathname === "/amerika/qb/verwerkt" && request.method === "POST") return qbHandleVerwerkt(request, env);
     if (url.pathname === "/amerika/qb/koersverschil" && request.method === "POST") return qbHandleKoersverschil(request, env);
     if (url.pathname === "/amerika/qb/boeking-terugzetten" && request.method === "POST") return qbHandleBoekingTerugzetten(request, env);
+    /* Inkoop en betalen (proef). Teamsleutel plus de groep administratie-proef. */
+    if (url.pathname.startsWith("/inkoop/")) {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
+      const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+      if (!(await toegangMag(env, "administratie-proef", wie)) && !(await toegangMag(env, "inkoop", wie))) return reply(403, { ok: false, error: "geen toegang: deze tegel is nog in aanbouw" });
+      try {
+        if (url.pathname === "/inkoop/crediteuren" && request.method === "GET") return reply(200, await inkoopCrediteuren(env, url.searchParams.get("vers") === "1"));
+        if (url.pathname === "/inkoop/inkooporders" && request.method === "GET") return reply(200, await inkoopInkooporders(env));
+        if (url.pathname === "/inkoop/bestand" && request.method === "PUT") {
+          const id = (url.searchParams.get("id") || "").toLowerCase();
+          if (!/^[a-z0-9_.\-]{3,120}$/.test(id)) return reply(400, { ok: false, error: "ongeldige bestandsnaam" });
+          const buf = await request.arrayBuffer();
+          if (!buf.byteLength || buf.byteLength > 24 * 1024 * 1024) return reply(413, { ok: false, error: "leeg of groter dan 24 MB" });
+          await env.FONTEYN_DATA.put("inkoopfile:" + id, buf);
+          return reply(200, { ok: true, id });
+        }
+        if (url.pathname === "/inkoop/bestand" && request.method === "GET") {
+          const id = (url.searchParams.get("id") || "").toLowerCase();
+          const buf = await env.FONTEYN_DATA.get("inkoopfile:" + id, { type: "arrayBuffer" });
+          if (!buf) return reply(404, { ok: false, error: "bestand niet gevonden" });
+          const ext = id.split(".").pop();
+          return new Response(buf, { status: 200, headers: { "Content-Type": ext === "pdf" ? "application/pdf" : ext === "xml" ? "application/xml" : "application/octet-stream", "Content-Disposition": 'inline; filename="' + id.split("/").pop() + '"', "Access-Control-Allow-Origin": "*" } });
+        }
+        if (url.pathname === "/inkoop/boeken" && request.method === "POST") return reply(200, await inkoopBoeken(env, await request.json().catch(() => ({}))));
+        if (url.pathname === "/inkoop/betaalbestand" && request.method === "POST") return reply(200, await inkoopBetaalbestand(env, await request.json().catch(() => ({}))));
+      } catch (e) { return reply(502, { ok: false, error: String(e.message || e) }); }
+      return reply(404, { ok: false });
+    }
     /* Het ontvangen bedrag met de hand erbij als de mail geen totaalregel
        had (Gerrit, 21 sep 2026, batch 26-06: "er staat geen totaalregel met
        een ontvangen bedrag bij ... het moet geboekt kunnen worden"). */
