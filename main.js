@@ -323,8 +323,35 @@ process.env.LOGIC4_COMPANYKEY     = "9mNSxLw2zHCs";
 process.env.LOGIC4_ADMINISTRATION = "1";
 process.env.PORT                  = "3737";
 
-const PORT = 3737;
-const URL  = `http://127.0.0.1:${PORT}/`;
+/* De poort van het hulpprogramma. Eerst 3737; is die bezet, dan de volgende.
+   ═══════════════════════════════════════════════════════════════════════
+   Chantal, Manon en Kevin werken op de terminalserver (rds.fonteyn.local).
+   Daar delen alle ingelogde gebruikers dezelfde 127.0.0.1, dus tot 22 sep
+   2026 luisterde alleen het dashboard van wie het eerst startte op 3737, en
+   de dashboards van de anderen leunden daarop ("draait al op 3737 - die
+   wordt gebruikt"). Sloot die eerste zijn dashboard af of logde hij uit,
+   dan was er voor de rest ineens niets meer dat antwoordde: elke tegel die
+   daarna werd geopend bleef een wit venster (Chantal: "Amerika doet het
+   ook niet meer, Vertalen ook niet"). Bovendien kregen ze zijn bestanden
+   en zijn inlog te zien in plaats van die van henzelf.
+
+   Daarom start elk dashboard nu zijn eigen hulpprogramma, op de eerste
+   vrije poort vanaf 3737. De pagina's praten met "/api/..." zonder
+   poortnummer, dus die merken er niets van. */
+let PORT = 3737;
+let URL  = `http://127.0.0.1:${PORT}/`;
+function zetPoort(p) { PORT = p; URL = `http://127.0.0.1:${PORT}/`; process.env.PORT = String(p); }
+function poortVrij(p, maxMs = 1200) {
+  return new Promise((resolve) => {
+    const req = http.get(`http://127.0.0.1:${p}/api/health`, (res) => { res.resume(); resolve(false); });
+    req.on("error", (err) => resolve(!!(err && err.code === "ECONNREFUSED")));
+    req.setTimeout(maxMs, () => { req.destroy(); resolve(false); });
+  });
+}
+async function kiesVrijePoort() {
+  for (let p = 3737; p < 3737 + 40; p++) if (await poortVrij(p)) return p;
+  return null;
+}
 
 let mainWindow = null;
 /* De extra tegelvensters, op paginanaam. Zo weten we of een tegel al ergens
@@ -370,9 +397,26 @@ function opentegel(url) {
     for (const [k, v] of tegelVensters) if (v === venster) tegelVensters.delete(k);
   });
   venster.webContents.setUserAgent(venster.webContents.getUserAgent() + " " + appUA());
+  nietWitBlijven(venster);
   tegelVensters.set(naam, venster);
   venster.loadURL(url);
   return venster;
+}
+/* Een venster dat zijn pagina niet kan laden blijft in Electron gewoon wit,
+   zonder één woord. Dat was precies wat Chantal zag. Nu: een paar keer
+   opnieuw proberen, en anders zeggen wat er aan de hand is. */
+function nietWitBlijven(venster) {
+  let pogingen = 0;
+  venster.webContents.on("did-fail-load", (_e, code, omschrijving, url, hoofdframe) => {
+    if (!hoofdframe || code === -3) return;   // -3 = afgebroken door een nieuwe navigatie, geen fout
+    pogingen++;
+    if (pogingen <= 4) { setTimeout(() => { try { if (!venster.isDestroyed()) venster.loadURL(url); } catch (e) {} }, 1500); return; }
+    const html = "<!doctype html><meta charset='utf-8'><body style='font-family:Segoe UI,Arial,sans-serif;padding:40px;color:#1f2937;background:#f5f4ef'>" +
+      "<h2 style='color:#144734'>Deze pagina kon niet worden geladen</h2>" +
+      "<p>Het hulpprogramma van het dashboard antwoordt niet (" + String(omschrijving || code) + ").</p>" +
+      "<p>Sluit dit venster en het dashboard helemaal af en start het dashboard opnieuw.</p></body>";
+    try { venster.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html)); } catch (e) {}
+  });
 }
 function onthoud(venster) {
   for (const [k, v] of tegelVensters) if (v === venster) tegelVensters.delete(k);
@@ -602,6 +646,7 @@ function createWindow() {
     }
     tegelVensters.clear();
   });
+  nietWitBlijven(mainWindow);
   mainWindow.loadURL(URL);
 
   const menu = Menu.buildFromTemplate([
@@ -857,18 +902,20 @@ app.whenReady().then(async () => {
 
     /* Alleen zelf een helper starten als er nog geen draait. Zo maakt een
        tweede opstart of een blijven hangen proces de app niet meer stuk. */
-    const bestaand = await helperAlActief();
-    if (!bestaand.bezet) {
+    /* Altijd een eigen hulpprogramma, op een vrije poort. Zie de toelichting
+       bij PORT hierboven: op de terminalserver mag niemand op dat van een
+       ander leunen. */
+    const poort = await kiesVrijePoort();
+    if (poort == null) {
+      dialog.showErrorBox("Geen vrije poort",
+        "Het dashboard kan zijn hulpprogramma nergens starten (poorten 3737 tot 3776 zijn allemaal bezet).\n\n" +
+        "Sluit het dashboard helemaal af (ook via Taakbeheer) en start het opnieuw. Helpt dat niet, herstart dan de computer.");
+    } else {
+      zetPoort(poort);
+      if (poort !== 3737) console.log(`[helper] 3737 is bezet, eigen hulpprogramma op ${poort}`);
       await startHelper();
       await waitForHelper();
       klok("hulpprogramma", t);
-    } else if (bestaand.vanOns) {
-      console.log("[helper] draait al op 3737 - die wordt gebruikt.");
-    } else {
-      dialog.showErrorBox("Poort 3737 is bezet",
-        "Er luistert al een ander programma op poort 3737, en daardoor kan het dashboard zijn " +
-        "hulpprogramma niet starten.\n\nSluit het dashboard helemaal af (ook via Taakbeheer) en " +
-        "start het opnieuw. Helpt dat niet, herstart dan de computer.");
     }
 
     /* De enige keer dat er wél gewacht moet worden: er staat nog geen
