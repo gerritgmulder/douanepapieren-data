@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script src="opleverbon.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("planning-bewerk", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">De opleverbonnen zijn voor de planning.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Opleverbonnen - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     OPLEVERBONNEN - wat de monteurs bij de klant hebben ingevuld (Mijn route)
+
+     Kevin (17 sep 2026): "in het dashboard een overzicht met alle bonnen,
+     dat wij ze kunnen inzien en kunnen accorderen, en vanuit daar naar de
+     klant kunnen mailen." Dat zat als venster in Planning; Gerrit (22 sep
+     2026): "Opleverbonnen mag een aparte tegel worden." De knop in Planning
+     komt hierheen. Zelfde routes (/planning/bon...), zelfde rechten als
+     het bewerken van de planning.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --rood:#b91c1c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1000px;margin:16px auto;padding:0 14px 60px}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.lead{color:var(--grijs);font-size:12.5px;margin:0 0 10px;line-height:1.5}
+.bonlijst{width:100%;border-collapse:collapse;font-size:12.5px}
+.bonlijst th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--grijs);padding:6px 8px;border-bottom:1px solid var(--rand);white-space:nowrap}
+.bonlijst td{padding:7px 8px;border-bottom:1px solid #f0f0ea;vertical-align:top}
+.bonlijst tr.rij{cursor:pointer}.bonlijst tr.rij:hover td{background:#f8faf5}
+.bonstatus{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap}
+.bonstatus.concept{background:#f3f4f6;color:#6b7280}.bonstatus.klaar{background:#fef3c7;color:#92400e}
+.bonstatus.akkoord{background:#dcfce7;color:#15803d}.bonstatus.gemaild{background:#dbeafe;color:#1d4ed8}
+.bonfilter{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+.bonfilter button{border:1px solid var(--rand);background:#fff;border-radius:999px;padding:5px 12px;font:inherit;font-size:12px;cursor:pointer}
+.bonfilter button.aan{background:var(--groen);color:#fff;border-color:var(--groen)}
+.bondetail .kop2{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:13px;margin-bottom:10px}
+.bondetail .kop2 span{color:var(--grijs)}
+.bondetail h4{margin:14px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--groen);border-bottom:1px solid var(--rand);padding-bottom:4px}
+.bondetail table.vr{width:100%;border-collapse:collapse;font-size:12.5px}
+.bondetail table.vr td{padding:4px 8px;border-bottom:1px solid #f0f0ea}
+.bondetail .ja{color:#15803d;font-weight:700}.bondetail .nee{color:#b91c1c;font-weight:700}.bondetail .nvt{color:#6b7280;font-weight:700}
+.bondetail .handt{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.bondetail .handt img{width:100%;border:1px solid var(--rand);border-radius:8px;background:#fff}
+.bondetail .handt .leeg{border:1px dashed var(--rand);border-radius:8px;padding:30px;text-align:center;color:var(--grijs);font-size:12px}
+.bondetail .mailrij{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.bondetail .mailrij input{flex:1 1 220px;padding:8px 10px;border:1px solid var(--rand);border-radius:8px;font:inherit;font-size:13px}
+.bondetail .knoppen button{font:inherit;font-size:13px;border-radius:9px;padding:9px 16px;cursor:pointer;border:1px solid var(--rand);background:#fff}
+.bondetail .knoppen button.doe{background:var(--groen);color:#fff;border-color:var(--groen);font-weight:600}
+.bondetail .knoppen button:disabled{opacity:.5;cursor:default}
+.bondetail .bonmelding{font-size:12.5px;margin-top:8px;min-height:16px}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>📋 Opleverbonnen</h1>
+</header>
+<main>
+  <div class="kaart">
+    <p class="lead">De bonnen die de monteurs in Mijn route bij de klant invullen. Kijk ze na, zet ze op akkoord en mail ze naar de klant. "Terug naar de monteur" geeft de bon terug zodat hij hem kan aanpassen.</p>
+    <div class="bonfilter" id="bonFilters"></div>
+    <div id="bonInhoud"><p style="color:var(--grijs);font-size:13px">Ophalen\u2026</p></div>
+  </div>
+</main>
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+function $(id){ return document.getElementById(id); }
+function esc(t){ return String(t==null?"":t).replace(/[&<>"']/g,function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function nlD(d){ return String(d||"").split("-").reverse().join("-"); }
+function planNaam(wie){ var n = String(wie||"").split("@")[0].replace(/^fonteyn\./i,""); return n ? n.charAt(0).toUpperCase()+n.slice(1) : ""; }
+var bonFilter = "open";
+async function bonApi(pad, body){
+  var r = await fetch(W+pad, { method: body ? "POST" : "GET", headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik, "Content-Type":"application/json" }, body: body ? JSON.stringify(body) : undefined });
+  var j = await r.json().catch(function(){ return null; });
+  if (!r.ok || !j || !j.ok) throw new Error((j && j.error) || ("HTTP "+r.status));
+  return j;
+}
+function bonGeld(v){ return "\u20ac "+(Number(v)||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+var FILTERS = [["open","Na te kijken"],["akkoord","Akkoord, nog mailen"],["gemaild","Gemaild"],["concept","Nog bezig"],["alles","Alles"]];
+async function bonOverzicht(){
+  var box = $("bonInhoud");
+  box.innerHTML = '<p style="color:var(--grijs);font-size:13px">Ophalen\u2026</p>';
+  try{
+    var j = await bonApi("/planning/bonnen");
+    var alle = j.bonnen||[];
+    var tel = {}; alle.forEach(function(b){ var k = b.status === "klaar" ? "open" : b.status; tel[k] = (tel[k]||0)+1; });
+    $("bonFilters").innerHTML = FILTERS.map(function(f){ var n = f[0] === "alles" ? alle.length : (tel[f[0]]||0);
+      return '<button type="button" data-f="'+f[0]+'"'+(bonFilter===f[0]?' class="aan"':'')+'>'+f[1]+(n?' ('+n+')':'')+'</button>'; }).join("");
+    $("bonFilters").querySelectorAll("[data-f]").forEach(function(b){ b.addEventListener("click", function(){ bonFilter = b.dataset.f; bonOverzicht(); }); });
+    var lijst = alle.filter(function(b){
+      if (bonFilter === "alles") return true;
+      if (bonFilter === "open") return b.status === "klaar";
+      return b.status === bonFilter;
+    });
+    if (!lijst.length){ box.innerHTML = '<p style="color:var(--grijs);font-size:13px">Geen bonnen in deze groep.</p>'; return; }
+    box.innerHTML = '<div style="overflow:auto"><table class="bonlijst"><thead><tr><th>Datum</th><th>Klant</th><th>Order</th><th>Monteur</th><th>Openstaand</th><th>Voldaan</th><th>Nee</th><th>Status</th></tr></thead><tbody>'+
+      lijst.map(function(b){
+        return '<tr class="rij" data-id="'+esc(b.id)+'"><td style="white-space:nowrap">'+esc(nlD(b.datum))+(b.tijd?' '+esc(b.tijd):'')+'</td><td><b>'+esc(b.klant)+'</b><div style="color:var(--grijs);font-size:11px">'+esc(b.plaats||"")+'</div></td>'+
+          '<td>'+esc(b.ordernr||(b.itsId?"ITS "+b.itsId:""))+'</td><td>'+esc(b.monteur||"")+'</td>'+
+          '<td>'+(b.serviceTotaal!=null?'<span title="servicebon: materialen, voorrijkosten en arbeid">service '+bonGeld(b.serviceTotaal)+'</span>':(b.openstaand!=null?bonGeld(b.openstaand):"-"))+'</td><td>'+(b.methode&&b.methode!=="geen"?bonGeld(b.ontvangen)+" "+(b.methode==="contant"?"contant":"bank"):(b.methode==="geen"?"niets":"-"))+'</td>'+
+          '<td>'+(b.nee?'<span style="color:#b91c1c;font-weight:700">'+b.nee+'</span>':'')+'</td>'+
+          '<td><span class="bonstatus '+esc(b.status)+'">'+esc((window.OPLEVERBON_STATUS||{})[b.status]||b.status)+'</span></td></tr>';
+      }).join("")+'</tbody></table></div>';
+    box.querySelectorAll("tr.rij").forEach(function(r){ r.addEventListener("click", function(){ bonDetail(r.dataset.id); }); });
+  }catch(e){ box.innerHTML = '<p style="color:var(--rood);font-size:13px">Ophalen mislukte: '+esc(e.message)+'</p>'; }
+}
+async function bonDetail(id){
+  var box = document.getElementById("bonInhoud"); if (!box) return;
+  box.innerHTML = '<p style="color:var(--grijs);font-size:13px">Bon ophalen\u2026</p>';
+  var bon;
+  try{ bon = (await bonApi("/planning/bon?id="+encodeURIComponent(id))).bon; if (!bon) throw new Error("bon niet gevonden"); }
+  catch(e){ box.innerHTML = '<p style="color:var(--rood)">'+esc(e.message)+'</p>'; return; }
+  var vragen = window.OPLEVERBON_VRAGEN||[], A = window.OPLEVERBON_ANTWOORD||{};
+  var bt = bon.betaling||{};
+  var isService = bon.soort === "service" || !!bon.itsId, sv = bon.service || {};
+  var KM = window.OPLEVERBON_KM_TARIEF||1.25, UU = window.OPLEVERBON_UUR_TARIEF||60;
+  var mat = (sv.materialen||[]).reduce(function(n,r){ return n + (Number(r.aantal)||0)*(Number(r.prijs)||0); }, 0);
+  var voorrij = (Number(sv.km)||0)*KM, arbeid = (Number(sv.uren)||0)*UU;
+  var serviceHtml = '<h4>1. Melding</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(sv.melding||"-")+'</p>'+
+    '<h4>2. Wat is er gedaan</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(sv.gedaan||"-")+'</p>'+
+    '<h4>3. Materialen</h4><table class="vr">'+((sv.materialen||[]).length ? (sv.materialen||[]).map(function(r){ return '<tr><td style="width:45%">'+esc(r.oms)+'</td><td>'+esc(r.aantal)+' x '+bonGeld(r.prijs)+'</td><td style="text-align:right">'+bonGeld((Number(r.aantal)||0)*(Number(r.prijs)||0))+'</td></tr>'; }).join("") : '<tr><td colspan="3" style="color:var(--grijs)">geen materialen</td></tr>')+'</table>'+
+    '<h4>4. Voorrijkosten en arbeid</h4><table class="vr">'+
+      '<tr><td style="width:45%">Voorrijkosten</td><td>'+esc(sv.km||0)+' km x '+bonGeld(KM)+'</td><td style="text-align:right">'+bonGeld(voorrij)+'</td></tr>'+
+      '<tr><td>Arbeid</td><td>'+esc(sv.uren||0)+' uur x '+bonGeld(UU)+'</td><td style="text-align:right">'+bonGeld(arbeid)+'</td></tr>'+
+      '<tr><td>Materialen</td><td></td><td style="text-align:right">'+bonGeld(mat)+'</td></tr>'+
+      '<tr><td><b>Totaal</b></td><td></td><td style="text-align:right"><b>'+bonGeld(mat+voorrij+arbeid)+'</b></td></tr></table>';
+  box.innerHTML = '<div class="bondetail">'+
+    '<p><button type="button" id="bonTerug" style="border:1px solid var(--rand);background:#fff;border-radius:8px;padding:5px 11px;font:inherit;font-size:12.5px;cursor:pointer">\u2190 Overzicht</button> '+
+    '<span class="bonstatus '+esc(bon.status)+'" style="margin-left:8px">'+esc((window.OPLEVERBON_STATUS||{})[bon.status]||bon.status)+'</span></p>'+
+    '<div class="kop2"><div><span>Klant</span> <b>'+esc(bon.klant)+'</b></div><div><span>Datum</span> '+esc(nlD(bon.datum))+(bon.tijd?' '+esc(bon.tijd):'')+'</div>'+
+    '<div><span>Adres</span> '+esc(bon.plaats)+'</div><div><span>Order</span> '+esc(bon.ordernr||(bon.itsId?"ITS "+bon.itsId:"-"))+'</div>'+
+    '<div><span>Telefoon</span> '+esc(bon.telefoon||"-")+'</div><div><span>Soort</span> '+esc(bon.soort)+'</div>'+
+    '<div><span>Monteur</span> '+esc([bon.monteur,bon.monteur2].filter(Boolean).join(" & "))+'</div><div><span>Kenteken</span> '+esc(bon.kenteken||"-")+'</div>'+
+    '<div><span>Spa</span> '+esc(bon.spaType||"-")+'</div><div><span>Serienummer</span> '+esc(bon.serienr||"-")+'</div>'+
+    '<div><span>Adviseur</span> '+esc(bon.adviseur||"-")+'</div><div><span>Laatst gewijzigd</span> '+esc(String(bon.gewijzigd||"").replace("T"," ").slice(0,16))+' door '+esc(planNaam(bon.door||""))+'</div></div>'+
+    (isService ? serviceHtml : '<h4>Te doen bij klant</h4><table class="vr">'+vragen.map(function(v){ var c = (bon.checklist||{})[v.k]||{};
+      return '<tr><td style="width:45%">'+esc(v.t)+'</td><td class="'+esc(c.a||"")+'" style="width:70px">'+esc(A[c.a]||"-")+'</td><td>'+esc(c.opm||"")+'</td></tr>'; }).join("")+'</table>')+
+    '<h4>Betaling</h4><table class="vr">'+
+      '<tr><td style="width:45%">Orderbedrag</td><td>'+bonGeld(bt.orderbedrag)+'</td></tr><tr><td>Al betaald</td><td>'+bonGeld(bt.reedsBetaald)+'</td></tr>'+
+      '<tr><td>Openstaand bij levering</td><td><b>'+(bt.openstaand!=null?bonGeld(bt.openstaand):"onbekend")+'</b></td></tr>'+
+      '<tr><td>Bij de klant voldaan</td><td>'+(bt.methode==="geen"?"niets":bt.methode?bonGeld(bt.bedrag)+" "+(bt.methode==="contant"?"contant, geld bij "+(bt.contantAan||"?"):"per bank"):"-")+'</td></tr></table>'+
+    (bon.opmerking?'<h4>Opmerkingen</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(bon.opmerking)+'</p>':'')+
+    '<h4>Handtekeningen</h4><div class="handt">'+(isService?'':'<div><div style="font-size:11.5px;color:var(--grijs);margin-bottom:3px">Monteur</div>'+(bon.handtekeningMonteur?'<img src="'+bon.handtekeningMonteur+'" alt="handtekening monteur">':'<div class="leeg">nog geen handtekening</div>')+'</div>')+
+    '<div><div style="font-size:11.5px;color:var(--grijs);margin-bottom:3px">Klant'+(bon.klantNaamHandtekening?' ('+esc(bon.klantNaamHandtekening)+')':'')+'</div>'+(bon.handtekeningKlant?'<img src="'+bon.handtekeningKlant+'" alt="handtekening klant">':'<div class="leeg">nog geen handtekening</div>')+'</div></div>'+
+    '<div class="mailrij"><label style="font-size:12.5px;color:var(--grijs)">Mail naar</label><input type="email" id="bonMail" value="'+esc(bon.klantMail||"")+'" placeholder="mailadres van de klant"></div>'+
+    '<div class="knoppen" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+
+      (bon.status==="klaar"?'<button type="button" class="doe" id="bonAkkoord">Akkoord</button>':'')+
+      (bon.status!=="concept"?'<button type="button" class="doe" id="bonMailKnop">'+(bon.status==="gemaild"?"Opnieuw mailen":"Mail naar klant")+'</button>':'')+
+      (bon.status!=="concept"?'<button type="button" id="bonTerugConcept" title="De monteur kan de bon dan weer aanpassen">Terug naar de monteur</button>':'')+
+    '</div><div class="bonmelding" id="bonMelding">'+(bon.gemaildTs?'Gemaild op '+esc(String(bon.gemaildTs).replace("T"," ").slice(0,16))+' naar '+esc(bon.gemaildNaar||"")+'.':'')+(bon.akkoordDoor?' Akkoord door '+esc(planNaam(bon.akkoordDoor))+'.':'')+'</div></div>';
+  $("bonTerug").addEventListener("click", bonOverzicht);
+  var meld = function(t, bad){ var m = $("bonMelding"); m.textContent = t; m.style.color = bad ? "var(--rood)" : "#15803d"; };
+  var ak = $("bonAkkoord"); if (ak) ak.addEventListener("click", async function(){ ak.disabled = true; try{ await bonApi("/planning/bon/status", { id: id, status: "akkoord" }); bonDetail(id); }catch(e){ meld(e.message, true); ak.disabled = false; } });
+  var tc = $("bonTerugConcept"); if (tc) tc.addEventListener("click", async function(){ if (!confirm("De bon teruggeven aan de monteur? Hij kan hem dan weer aanpassen en moet hem opnieuw afronden.")) return; try{ await bonApi("/planning/bon/status", { id: id, status: "concept" }); bonDetail(id); }catch(e){ meld(e.message, true); } });
+  var mk = $("bonMailKnop"); if (mk) mk.addEventListener("click", async function(){
+    var naar = $("bonMail").value.trim();
+    if (!naar){ meld("Vul het mailadres van de klant in.", true); return; }
+    if (!confirm("De opleverbon mailen naar "+naar+"?")) return;
+    mk.disabled = true; meld("Versturen\u2026");
+    try{ await bonApi("/planning/bon/mail", { id: id, naar: naar, vragen: vragen }); bonDetail(id); }
+    catch(e){ meld("Mailen mislukte: "+e.message, true); mk.disabled = false; }
+  });
+}
+/* Rechtstreeks naar één bon, bijvoorbeeld vanuit een melding: ?bon=<id> */
+(async function(){
+  for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
+  var id = new URLSearchParams(location.search).get("bon");
+  if (id) bonDetail(id); else bonOverzicht();
+})();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"opleverbonnen",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>

@@ -130,6 +130,8 @@
       uit:"Spa's die getest moeten worden, op leverdatum",     mobiel:"goed", tile:"tileWerkplaats" },
     { telefoon:true, bestand:"planning.html",       groep:"planning",         ic:"📅",  naam:"Planning",
       uit:"Weekoverzicht van leveringen en service-afspraken",     mobiel:"goed", tile:"tilePlanning" },
+    { bestand:"opleverbonnen.html",  groep:"planning-bewerk",  ic:"📋", naam:"Opleverbonnen",
+      uit:"Bonnen van de monteurs nakijken, akkoord geven en mailen", mobiel:"krap", tile:"tileOpleverbonnen" },
     { bestand:"vertalen.html",       groep:"vertalen",         ic:"🌍",  naam:"Vertalen",
       uit:"Mails aan dealers vertalen",                            mobiel:"goed", tile:"tileVertalen" },
 

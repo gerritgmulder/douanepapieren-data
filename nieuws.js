@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-22", bestand: "opleverbonnen.html", soort: "nieuw",
+      titel: "Opleverbonnen: eigen tegel",
+      wat: "De opleverbonnen van de monteurs staan nu in een eigen tegel: nakijken, akkoord geven, naar de klant mailen of terug naar de monteur. De knop in Planning opent dezelfde tegel."
+    },
+    {
       datum: "2026-09-22", bestand: "amerika.html", soort: "hersteld",
       titel: "Amerika: de lijst Bestellingen op Warehouse Texas is terug",
       wat: "Het eerste tabblad (Containers) bleef leeg: geen orders, geen aantallen. De lijst laadt nu weer, met de tellers erboven."
