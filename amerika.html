@@ -313,6 +313,14 @@
 
 <script>
 const SESSION_KEY="fp.session", EMAIL_KEY="fp.email";
+/* Deze drie stonden ver onder boot(), en boot() roept loadUSA() meteen aan.
+   Een const die later in hetzelfde script staat bestaat op dat moment nog
+   niet ("Cannot access 'RESV_URL' before initialization"), dus de lijst
+   "Bestellingen op Warehouse Texas" bleef sinds juli leeg. Gevonden bij de
+   foutanalyse van 22 sep 2026 (Chantal: "Amerika doet het niet"). */
+const RESV_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/reserveringen-live";
+const TEAM=(localStorage.getItem("fp.teamkey")||"");
+let usaData={byModelUSA:{}};
 const ALLOWED=new Set(["chantal@fonteyn.nl","chantal","fonteyn.chantal","dolf@fonteyn.nl","fonteyn.dolf","osman@fonteyn.nl","osman","fonteyn.osman","gerrit@fonteyn.nl","gerrit","fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"]);
 (function boot(){
   if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
@@ -1384,9 +1392,6 @@ async function qbApprove(){
   finally{ if(knop) knop.disabled=false; }
 }
 
-const RESV_URL="https://fonteyn-data-store.g-mulder.workers.dev/data/reserveringen-live";
-const TEAM=(localStorage.getItem("fp.teamkey")||"");
-let usaData={byModelUSA:{}};
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function loadUSA(){
   try{

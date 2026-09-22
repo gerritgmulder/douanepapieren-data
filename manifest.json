@@ -1,5 +1,5 @@
 {
-  "version": "0.34.79",
+  "version": "0.34.80",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -354,6 +354,14 @@
     },
     {
       "name": "amerika-partners.html"
+    },
+    {
+      "name": "uitbetalingen.html",
+      "note": "Uitbetalingen (proef): Mollie, Amerika, bol.com per uitbetaling naar Logic4"
+    },
+    {
+      "name": "debiteuren.html",
+      "note": "Debiteuren (proef): per klant de volgende herinneringsstap"
     }
   ]
 }

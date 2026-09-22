@@ -51,22 +51,27 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-22", bestand: "amerika.html", soort: "hersteld",
+      titel: "Amerika: de lijst Bestellingen op Warehouse Texas is terug",
+      wat: "Het eerste tabblad (Containers) bleef leeg: geen orders, geen aantallen. De lijst laadt nu weer, met de tellers erboven."
+    },
+    {
       datum: "2026-09-21", bestand: "debiteuren.html", soort: "nieuw",
       titel: "Debiteuren (proef)",
       wat: "Tegel 4 van het plan. Alle openstaande facturen per klant, en per klant welke stap aan de beurt is: eerste herinnering na 14 dagen, tweede na 30, aanmaning na 45. Groen gaat met één knop (of alles tegelijk), afspraken en interne debiteuren blijven met rust, en na de aanmaning vraagt het scherm om een besluit."
     },
     {
-      datum: "2026-09-21", bestand: "labels.html", soort: "verbeterd",
+      datum: "2026-09-21", bestand: "labels.html", soort: "beter",
       titel: "Labels: eerst alle colli 1, dan alle colli 2",
       wat: "Bij een artikel met meerdere dozen komen nu per artikel eerst alle labels 'Colli 1 van N' uit de printer en daarna alle 'Colli 2 van N'. Zo plak je een stapel eerste dozen in één keer."
     },
     {
-      datum: "2026-09-21", bestand: "voorraad.html", soort: "verbeterd",
+      datum: "2026-09-21", bestand: "voorraad.html", soort: "beter",
       titel: "Particulier en Partner: rustiger en helemaal te lezen",
       wat: "De lijsten hebben vaste kolommen; kleur en klant worden niet meer afgekapt maar lopen door op een tweede regel. Tussen twee orders staat een duidelijke lijn en de werkstrook is altijd in dezelfde volgorde: levering, notitie, vinkjes. Losse warmtepompen (HeatMaster, X-treme Green Heat Pump) staan er niet meer tussen: dat zijn geen spa's."
     },
     {
-      datum: "2026-09-21", bestand: "labels.html", soort: "verbeterd",
+      datum: "2026-09-21", bestand: "labels.html", soort: "beter",
       titel: "Containers onderweg: alleen naar Rotterdam",
       wat: "Een container die rechtstreeks naar een dealer vaart (Noorwegen, Spanje, Amerika) komt niet meer bij Containers onderweg. Die komt nooit in Uddel, dus daar zijn geen labels voor nodig."
     },
