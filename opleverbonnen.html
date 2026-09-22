@@ -79,6 +79,9 @@ main{max-width:1000px;margin:16px auto;padding:0 14px 60px}
 <main>
   <div class="kaart">
     <p class="lead">De bonnen die de monteurs in Mijn route bij de klant invullen. Kijk ze na, zet ze op akkoord en mail ze naar de klant. "Terug naar de monteur" geeft de bon terug zodat hij hem kan aanpassen.</p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <input id="bonZoek" placeholder="zoek op klant, plaats, ordernummer, monteur, spa of serienummer…" style="flex:1 1 320px;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--rand);border-radius:9px">
+    </div>
     <div class="bonfilter" id="bonFilters"></div>
     <div id="bonInhoud"><p style="color:var(--grijs);font-size:13px">Ophalen\u2026</p></div>
   </div>
@@ -100,22 +103,32 @@ async function bonApi(pad, body){
 }
 function bonGeld(v){ return "\u20ac "+(Number(v)||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
 var FILTERS = [["open","Na te kijken"],["akkoord","Akkoord, nog mailen"],["gemaild","Gemaild"],["concept","Nog bezig"],["alles","Alles"]];
-async function bonOverzicht(){
+var bonnenCache = null;
+$("bonZoek").addEventListener("input", function(){ bonOverzicht(true); });
+async function bonOverzicht(uitGeheugen){
   var box = $("bonInhoud");
-  box.innerHTML = '<p style="color:var(--grijs);font-size:13px">Ophalen\u2026</p>';
+  if (!(uitGeheugen && bonnenCache)) box.innerHTML = '<p style="color:var(--grijs);font-size:13px">Ophalen\u2026</p>';
   try{
-    var j = await bonApi("/planning/bonnen");
-    var alle = j.bonnen||[];
+    if (!(uitGeheugen && bonnenCache)) { var j = await bonApi("/planning/bonnen"); bonnenCache = j.bonnen||[]; }
+    var alle = bonnenCache;
     var tel = {}; alle.forEach(function(b){ var k = b.status === "klaar" ? "open" : b.status; tel[k] = (tel[k]||0)+1; });
     $("bonFilters").innerHTML = FILTERS.map(function(f){ var n = f[0] === "alles" ? alle.length : (tel[f[0]]||0);
       return '<button type="button" data-f="'+f[0]+'"'+(bonFilter===f[0]?' class="aan"':'')+'>'+f[1]+(n?' ('+n+')':'')+'</button>'; }).join("");
     $("bonFilters").querySelectorAll("[data-f]").forEach(function(b){ b.addEventListener("click", function(){ bonFilter = b.dataset.f; bonOverzicht(); }); });
-    var lijst = alle.filter(function(b){
+    /* Zoeken (Kevin, 22 sep 2026): over alles wat er op de bon staat, in
+       elke groep. Typ je iets, dan doorzoekt hij ook de andere groepen en
+       zegt dat erbij, zodat een bon nooit "weg" is omdat het filter op
+       Na te kijken staat. */
+    var q = ($("bonZoek").value || "").trim().toLowerCase();
+    var past = function(b){ return !q || [b.klant, b.plaats, b.ordernr, b.itsId, b.monteur, b.monteur2, b.spaType, b.serienr, b.adviseur, b.datum].map(function(v){ return String(v == null ? "" : v).toLowerCase(); }).join(" ").indexOf(q) >= 0; };
+    var inGroep = function(b){
       if (bonFilter === "alles") return true;
       if (bonFilter === "open") return b.status === "klaar";
       return b.status === bonFilter;
-    });
-    if (!lijst.length){ box.innerHTML = '<p style="color:var(--grijs);font-size:13px">Geen bonnen in deze groep.</p>'; return; }
+    };
+    var lijst = alle.filter(function(b){ return past(b) && inGroep(b); });
+    var elders = q ? alle.filter(function(b){ return past(b) && !inGroep(b); }).length : 0;
+    if (!lijst.length){ box.innerHTML = '<p style="color:var(--grijs);font-size:13px">' + (q ? 'Niets gevonden voor "' + esc(q) + '" in deze groep.' + (elders ? ' Wel ' + elders + ' in een andere groep; kies Alles.' : '') : 'Geen bonnen in deze groep.') + '</p>'; return; }
     box.innerHTML = '<div style="overflow:auto"><table class="bonlijst"><thead><tr><th>Datum</th><th>Klant</th><th>Order</th><th>Monteur</th><th>Openstaand</th><th>Voldaan</th><th>Nee</th><th>Status</th></tr></thead><tbody>'+
       lijst.map(function(b){
         return '<tr class="rij" data-id="'+esc(b.id)+'"><td style="white-space:nowrap">'+esc(nlD(b.datum))+(b.tijd?' '+esc(b.tijd):'')+'</td><td><b>'+esc(b.klant)+'</b><div style="color:var(--grijs);font-size:11px">'+esc(b.plaats||"")+'</div></td>'+
@@ -123,7 +136,7 @@ async function bonOverzicht(){
           '<td>'+(b.serviceTotaal!=null?'<span title="servicebon: materialen, voorrijkosten en arbeid">service '+bonGeld(b.serviceTotaal)+'</span>':(b.openstaand!=null?bonGeld(b.openstaand):"-"))+'</td><td>'+(b.methode&&b.methode!=="geen"?bonGeld(b.ontvangen)+" "+(b.methode==="contant"?"contant":"bank"):(b.methode==="geen"?"niets":"-"))+'</td>'+
           '<td>'+(b.nee?'<span style="color:#b91c1c;font-weight:700">'+b.nee+'</span>':'')+'</td>'+
           '<td><span class="bonstatus '+esc(b.status)+'">'+esc((window.OPLEVERBON_STATUS||{})[b.status]||b.status)+'</span></td></tr>';
-      }).join("")+'</tbody></table></div>';
+      }).join("")+'</tbody></table></div>' + (elders ? '<p style="color:var(--grijs);font-size:12px;margin:8px 0 0">Nog ' + elders + ' bon' + (elders === 1 ? '' : 'nen') + ' met "' + esc(q) + '" in een andere groep; kies Alles om die ook te zien.</p>' : '');
     box.querySelectorAll("tr.rij").forEach(function(r){ r.addEventListener("click", function(){ bonDetail(r.dataset.id); }); });
   }catch(e){ box.innerHTML = '<p style="color:var(--rood);font-size:13px">Ophalen mislukte: '+esc(e.message)+'</p>'; }
 }

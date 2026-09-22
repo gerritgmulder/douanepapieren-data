@@ -5897,7 +5897,9 @@ async function bonIndexBijwerken(env, bon) {
   idx.bonnen[bon.id] = {
     id: bon.id, datum: bon.datum || null, tijd: bon.tijd || null, klant: bon.klant || "",
     plaats: bon.plaats || "", ordernr: bon.ordernr || "", itsId: bon.itsId || null,
-    monteur: bon.monteur || "", status: bon.status || "concept",
+    monteur: bon.monteur || "", monteur2: bon.monteur2 || "", status: bon.status || "concept",
+    // Voor het zoekvak in de tegel Opleverbonnen (Kevin, 22 sep 2026).
+    spaType: bon.spaType || "", serienr: bon.serienr || "", adviseur: bon.adviseur || "",
     openstaand: bon.betaling && bon.betaling.openstaand != null ? bon.betaling.openstaand : null,
     methode: (bon.betaling && bon.betaling.methode) || "",
     ontvangen: (bon.betaling && bon.betaling.bedrag) || 0,

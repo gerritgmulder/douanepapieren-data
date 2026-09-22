@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-22", bestand: "opleverbonnen.html", soort: "beter",
+      titel: "Opleverbonnen: zoeken",
+      wat: "Een zoekvak boven de lijst: klant, plaats, ordernummer, monteur, spa of serienummer. Staat de bon in een andere groep dan het filter, dan zegt het scherm dat."
+    },
+    {
       datum: "2026-09-22", bestand: "maandcontrole.html", soort: "nieuw",
       titel: "Maandcontrole (proef)",
       wat: "Tegel 5 van het plan. Kies een maand en zie of elke tussenrekening op nul staat, of debiteuren en crediteuren aansluiten op de open facturen, en de banksaldi. Klik op een rekening voor de regels van die maand; met een notitie zet je hem op verklaard."
