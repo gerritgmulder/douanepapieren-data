@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-22", bestand: "maandcontrole.html", soort: "nieuw",
+      titel: "Maandcontrole (proef)",
+      wat: "Tegel 5 van het plan. Kies een maand en zie of elke tussenrekening op nul staat, of debiteuren en crediteuren aansluiten op de open facturen, en de banksaldi. Klik op een rekening voor de regels van die maand; met een notitie zet je hem op verklaard."
+    },
+    {
       datum: "2026-09-22", bestand: "opleverbonnen.html", soort: "nieuw",
       titel: "Opleverbonnen: eigen tegel",
       wat: "De opleverbonnen van de monteurs staan nu in een eigen tegel: nakijken, akkoord geven, naar de klant mailen of terug naar de monteur. De knop in Planning opent dezelfde tegel."

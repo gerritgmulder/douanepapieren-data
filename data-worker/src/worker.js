@@ -150,6 +150,9 @@ const ALLOWED_BUCKETS = new Set([
   "planning-its-order",
   "herinneringen-debiteuren", // Herinneringen: naam, bedrijf en mailadres per debiteur, uit Logic4 (cache, vult zich aan)
   "herinneringen-log",
+  "maand-werk",          // Maandcontrole (proef): per maand en rekening wie wat heeft nagekeken en wat de verklaring is
+  "maand-cache",         // Maandcontrole (proef): de saldi per rekening per maand uit Logic4, een uur geldig
+  "maand-instellingen",  // Maandcontrole (proef): welke rekeningen tussenrekeningen zijn, intern, bank
   "debiteuren-werk",     // Debiteuren (proef): afspraken, interne debiteuren, termijnen en de teksten van stap 2 en 3
   "debiteuren-log",      // Debiteuren (proef): wat er per stap verstuurd of besloten is
   "dhl-push",            // DHL Push API v2: de berichten die DHL zelf stuurt over zendingen
@@ -6681,6 +6684,128 @@ async function debiteurenHandle(request, env, url) {
     const alles = [...(log.regels || []), ...(herLog.regels || []).filter(r => !(log.regels || []).some(x => x.ts === r.ts && x.debiteur === r.debiteur)).map(r => ({ ...r, stap: 1 }))];
     alles.sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
     return reply(200, { ok: true, regels: alles.slice(0, 400) });
+  }
+  return reply(404, { ok: false });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MAANDCONTROLE (proef) - tegel 5 van het plan "administratie op knoppen"
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Eén scherm per maand: staat elke tussenrekening op nul, sluiten de
+   debiteuren en crediteuren aan op de open posten, en wat zijn de
+   banksaldi. Rood is een lijst met regels, geen zoektocht.
+
+   De saldi komen uit GetReportingLedgerHistoryAndBudget (TimeFrame 2 =
+   per maand, Value = het saldo aan het eind van die maand, één rekening
+   per aanroep; met meerdere codes telt Logic4 ze op). De regels van een
+   maand komen uit GetFinancialJournals (LedgerCode, datum van/tot). Beide
+   zijn alleen-lezen. */
+const MAAND_STANDAARD = {
+  tussen: [1134, 1160, 1175, 1185, 1220, 1221, 1222, 2005, 2010, 2030, 2040, 2050, 2060, 2070, 2080, 2090, 2100, 2101, 2110, 2200, 2210],
+  intern: [2020, 2025, 2026, 2027, 2028, 2029, 1440, 1441, 1442, 1443, 1444, 1445, 1446, 1447, 1448, 1449, 1452, 1453],
+  bank: [1000, 1001, 1002, 1003, 1130, 1131, 1132, 1133, 1135, 1136, 1150, 1151, 1152, 1153, 1154, 1155, 1156, 1157],
+  debiteuren: 1300, crediteuren: 1600,
+};
+async function maandLedgers(env) {
+  const cache = (await env.FONTEYN_DATA.get("maand-cache", { type: "json" })) || {};
+  if (cache.ledgers && cache.ledgersTs && Date.now() - Date.parse(cache.ledgersTs) < 24 * 3600000) return cache.ledgers;
+  const token = await l4Token(env);
+  const r = await fetch("https://api.logic4server.nl/v3/Financial/GetLedgers", { headers: { "Authorization": "Bearer " + token } });
+  const j = await r.json().catch(() => []);
+  const lijst = Array.isArray(j) ? j : (j.Records || j.Value || []);
+  const ledgers = {}; for (const x of lijst) ledgers[String(x.Code)] = { id: x.Id, naam: x.Description || "" };
+  cache.ledgers = ledgers; cache.ledgersTs = new Date().toISOString();
+  await env.FONTEYN_DATA.put("maand-cache", JSON.stringify(cache));
+  return ledgers;
+}
+/* Saldo per maand voor één rekening: { "2026-09": 123.45, ... } voor de
+   laatste 14 maanden. Een uur in de cache, want dit is één aanroep per
+   rekening en het scherm vraagt er veertig tegelijk. */
+async function maandSaldi(env, token, code, cache) {
+  const k = String(code);
+  const c = cache.saldi && cache.saldi[k];
+  if (c && c.ts && Date.now() - Date.parse(c.ts) < 3600000) return c.per;
+  const r = await fetch("https://api.logic4server.nl/v3/Management/GetReportingLedgerHistoryAndBudget", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ LedgerCodes: [Number(code)], GetOnlyMutationTotal: false, TimeFrame: 2, IncludingCurrentPeriod: true, HistoryPoints: 14 }),
+  });
+  const j = await r.json().catch(() => []);
+  const per = {};
+  for (const x of (Array.isArray(j) ? j : [])) { const m = String(x.DateStart || "").slice(0, 7); if (m) per[m] = Math.round((Number(x.Value) || 0) * 100) / 100; }
+  cache.saldi = cache.saldi || {}; cache.saldi[k] = { ts: new Date().toISOString(), per };
+  return per;
+}
+function maandVorige(m) { const [y, mm] = m.split("-").map(Number); const d = new Date(Date.UTC(y, mm - 2, 1)); return d.toISOString().slice(0, 7); }
+async function maandcontroleHandle(request, env, url) {
+  const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+  if (!(await toegangMag(env, "administratie-proef", wie)) && !(await toegangMag(env, "maandcontrole", wie))) return reply(403, { ok: false, error: "geen toegang: deze tegel is nog in aanbouw" });
+  const p = url.pathname;
+  const inst = { ...MAAND_STANDAARD, ...((await env.FONTEYN_DATA.get("maand-instellingen", { type: "json" })) || {}) };
+  if (p === "/maand/stand" && request.method === "GET") {
+    const maand = /^\d{4}-\d{2}$/.test(url.searchParams.get("maand") || "") ? url.searchParams.get("maand") : new Date().toISOString().slice(0, 7);
+    const deel = url.searchParams.get("deel") || "tussen";
+    const vers = url.searchParams.get("vers") === "1";
+    const cache = (await env.FONTEYN_DATA.get("maand-cache", { type: "json" })) || {};
+    if (vers) cache.saldi = {};
+    const ledgers = await maandLedgers(env);
+    const token = await l4Token(env);
+    const codes = deel === "tussen" ? inst.tussen : deel === "intern" ? inst.intern : deel === "bank" ? inst.bank : [inst.debiteuren, inst.crediteuren];
+    const vorige = maandVorige(maand);
+    const uit = [];
+    for (const code of codes) {
+      let per = {};
+      try { per = await maandSaldi(env, token, code, cache); } catch (e) { per = {}; }
+      const saldo = per[maand] != null ? per[maand] : null, saldoVorige = per[vorige] != null ? per[vorige] : null;
+      uit.push({ code: Number(code), naam: (ledgers[String(code)] || {}).naam || "", saldo, saldoVorige, mutatie: (saldo != null && saldoVorige != null) ? Math.round((saldo - saldoVorige) * 100) / 100 : null, bekend: per[maand] != null });
+    }
+    await env.FONTEYN_DATA.put("maand-cache", JSON.stringify(cache));
+    const werk = (await env.FONTEYN_DATA.get("maand-werk", { type: "json" })) || {};
+    const extra = {};
+    if (deel === "aansluiting") {
+      /* Open posten uit dezelfde caches als Debiteuren en Bank. */
+      try { const d = await debOpenFacturen(env, false); extra.openDebiteuren = Math.round(d.facturen.reduce((n, f) => n + f.openstaand, 0) * 100) / 100; extra.openDebiteurenN = d.facturen.length; extra.openDebiteurenTs = d.ts; } catch (e) {}
+      try { const c = await bankOpenstaandCrediteuren(env, false); extra.openCrediteuren = Math.round((c.posten || []).reduce((n, x) => n + (Number(x.open != null ? x.open : x.AmountOpen) || 0), 0) * 100) / 100; extra.openCrediteurenN = (c.posten || []).length; extra.openCrediteurenTs = c.updated; } catch (e) {}
+    }
+    return reply(200, { ok: true, maand, vorige, deel, rekeningen: uit, werk: werk[maand] || {}, ...extra });
+  }
+  if (p === "/maand/regels" && request.method === "GET") {
+    const code = Number(url.searchParams.get("code")); const maand = url.searchParams.get("maand") || "";
+    if (!code || !/^\d{4}-\d{2}$/.test(maand)) return reply(400, { ok: false, error: "rekening en maand nodig" });
+    const [y, m] = maand.split("-").map(Number); const van = maand + "-01"; const tot = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+    const token = await l4Token(env);
+    const regels = [];
+    for (let skip = 0; skip < 2000; skip += 500) {
+      const r = await fetch("https://api.logic4server.nl/v3/Financial/GetFinancialJournals", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ LedgerCode: code, DateTimeFrom: van, DateTimeTo: tot + "T23:59:59", SkipRecords: skip, TakeRecords: 500 }),
+      });
+      const j = await r.json().catch(() => []);
+      const lijst = Array.isArray(j) ? j : [];
+      for (const x of lijst) regels.push({ boeking: x.BookingId, datum: String(x.DateTime || "").slice(0, 10), omschrijving: String(x.Description || "").slice(0, 160), bedrag: Math.round((Number(x.Amount) || 0) * 100) / 100, factuur: x.InvoiceNr || null, debiteur: x.DebtorId || null, crediteur: x.CreditorId || null });
+      if (lijst.length < 500) break;
+    }
+    return reply(200, { ok: true, code, maand, regels, som: Math.round(regels.reduce((n, r) => n + r.bedrag, 0) * 100) / 100 });
+  }
+  if (p === "/maand/werk" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const maand = String(b.maand || ""), code = String(b.code || "");
+    if (!/^\d{4}-\d{2}$/.test(maand) || !code) return reply(400, { ok: false, error: "maand en rekening nodig" });
+    const werk = (await env.FONTEYN_DATA.get("maand-werk", { type: "json" })) || {};
+    werk[maand] = werk[maand] || {};
+    if (b.status === null) delete werk[maand][code];
+    else werk[maand][code] = { status: b.status === "verklaard" ? "verklaard" : "gezien", notitie: String(b.notitie || "").slice(0, 300), door: wie, ts: new Date().toISOString() };
+    await env.FONTEYN_DATA.put("maand-werk", JSON.stringify(werk));
+    return reply(200, { ok: true });
+  }
+  if (p === "/maand/instellingen" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const nieuw = {};
+    for (const k of ["tussen", "intern", "bank"]) if (Array.isArray(b[k])) nieuw[k] = b[k].map(Number).filter(n => n > 0 && n < 100000).slice(0, 80);
+    for (const k of ["debiteuren", "crediteuren"]) if (Number(b[k]) > 0) nieuw[k] = Number(b[k]);
+    const oud = (await env.FONTEYN_DATA.get("maand-instellingen", { type: "json" })) || {};
+    await env.FONTEYN_DATA.put("maand-instellingen", JSON.stringify({ ...oud, ...nieuw }));
+    return reply(200, { ok: true });
   }
   return reply(404, { ok: false });
 }
@@ -13343,6 +13468,10 @@ export default {
     const bak = (await env.FONTEYN_DATA.get("dhl-push", { type: "json" })) || { berichten: [] };
     return reply(200, { ok: true, berichten: bak.berichten.slice(-100).reverse().map(x => { const { ruw, ...rest } = x; return rest; }) });
   }
+  if (url.pathname.startsWith("/maand/")) {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
+      return maandcontroleHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
   if (url.pathname.startsWith("/debiteuren/")) {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
       return debiteurenHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));

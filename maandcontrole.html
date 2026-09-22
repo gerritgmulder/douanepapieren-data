@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("administratie-proef", ik) && !fpToegang.mag("maandcontrole", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Maandcontrole - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     MAANDCONTROLE (proef) - tegel 5 van het plan "administratie op knoppen"
+
+     Eén scherm per maand, in de woorden van het werkdocument: "elke
+     tussenrekening op nul, voorraad aangesloten, btw-codes gecontroleerd.
+     Rood is een lijst met regels, geen zoektocht."
+
+       Tussenrekeningen  hoort op nul aan het eind van de maand. Staat er
+                         iets, dan is de rekening oranje; klik erop en je
+                         ziet de regels van die maand en het bedrag dat
+                         blijft hangen. "Verklaard" met een notitie maakt
+                         hem grijs, zodat Frank later ziet wat het was.
+       Aansluiting       grootboek Debiteuren en Crediteuren naast wat er
+                         echt open staat aan facturen (alleen voor de
+                         lopende maand een eerlijke vergelijking).
+       Bank en kas       de saldi per rekening; leg ze naast het afschrift.
+       Intern            rekening-courant met de zusterbedrijven; mag een
+                         saldo hebben, maar hoort verklaard te zijn.
+
+     Alles komt live uit Logic4 (alleen lezen); wat iemand hier vastlegt
+     staat in de worker, per maand.
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --goed:#16a34a; --rood:#b91c1c; --oranje:#c2410c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1200px;margin:16px auto;padding:0 14px 60px}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+h2{margin:0 0 6px;font-size:15px;color:var(--groen);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.lead{color:var(--grijs);font-size:12.5px;margin:0 0 10px;line-height:1.5}
+.knop{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer;color:var(--ink);white-space:nowrap}
+.knop.groen{background:var(--groen);color:#fff;border-color:var(--groen);font-weight:600}
+.knop:disabled{opacity:.5;cursor:default}
+select.keuze,input.veld{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--rand);border-radius:8px}
+.pil{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:#eef2e6;color:var(--groen);white-space:nowrap}
+.pil.oranje{background:#ffedd5;color:var(--oranje)}.pil.grijs{background:#f3f4f6;color:#374151}.pil.rood{background:#fee2e2;color:var(--rood)}.pil.blauw{background:#dbeafe;color:#1d4ed8}
+.msg{margin-top:8px;padding:8px 11px;border-radius:8px;font-size:12.5px}.msg.ok{background:#dcfce7;color:#166534}.msg.bad{background:#fee2e2;color:var(--rood)}.msg.info{background:#eff6ff;color:#1e40af}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{text-align:left;color:var(--grijs);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:6px;border-bottom:1px solid var(--rand);white-space:nowrap}
+td{padding:7px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-wrap:break-word}
+td.n,th.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.rij{cursor:pointer}tr.rij:hover td{background:#f8faf5}
+tr.groen td:first-child{box-shadow:inset 4px 0 0 var(--goed)}tr.oranje td:first-child{box-shadow:inset 4px 0 0 #f59e0b}tr.verklaard td:first-child{box-shadow:inset 4px 0 0 #9ca3af}tr.verklaard td{color:var(--grijs)}
+.kop3{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin:6px 0 10px}
+.kop3 div{background:#f8faf5;border:1px solid var(--rand);border-radius:10px;padding:10px 12px}
+.kop3 b{display:block;font-size:18px}
+.kop3 span{font-size:11.5px;color:var(--grijs)}
+.hidden{display:none!important}
+.venster{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.venster .in{background:#fff;border-radius:12px;max-width:900px;width:100%;max-height:90vh;overflow:auto;padding:18px}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>🧮 Maandcontrole <span class="pil grijs" style="vertical-align:middle">proef</span></h1>
+</header>
+<main>
+  <div class="kaart">
+    <h2>Maand <select class="keuze" id="maand"></select> <button class="knop" id="vers">Opnieuw uit Logic4</button></h2>
+    <p class="lead">Staat alles op nul wat op nul hoort? Groen is klaar, oranje vraagt om een blik: klik op de regel en je ziet wat er die maand op de rekening is gebeurd. Kun je het verklaren, zet er dan een notitie bij; dan is de regel grijs en weet de accountant later wat het was.</p>
+    <div class="kop3" id="samen"></div>
+    <div id="msg"></div>
+  </div>
+
+  <div class="kaart">
+    <h2>Tussenrekeningen <span class="pil" id="tTel"></span></h2>
+    <p class="lead">Geld dat onderweg is van de ene plek naar de andere: Mollie, bol.com, Shopify, PIN, Amerika, kruisposten, SEPA-batches. Aan het eind van de maand hoort hier niets meer te staan.</p>
+    <div id="tussen"></div>
+  </div>
+
+  <div class="kaart">
+    <h2>Aansluiting debiteuren en crediteuren</h2>
+    <p class="lead">Het grootboek naast de open facturen. Die twee horen gelijk te zijn; de open facturen zijn de stand van nu, dus alleen voor de lopende maand is dit een eerlijke vergelijking.</p>
+    <div id="aansluiting"></div>
+  </div>
+
+  <div class="kaart">
+    <h2>Bank en kas</h2>
+    <p class="lead">Het saldo per rekening aan het eind van de maand volgens Logic4. Leg het naast het afschrift; verschilt het, dan mist er een afschrift of staat er een regel verkeerd.</p>
+    <div id="bank"></div>
+  </div>
+
+  <div class="kaart">
+    <h2>Intern (rekening-courant)</h2>
+    <p class="lead">Wat de zusterbedrijven aan elkaar schuldig zijn (Nieland, Mosselweg, Houtzagerij, Fonteyn UK, Icebath, Passion Spas USA). Hoeft niet nul te zijn, maar hoort te kloppen met de andere kant.</p>
+    <div id="intern"></div>
+  </div>
+
+  <div class="kaart">
+    <h2>Voorraad en btw</h2>
+    <p class="lead">De voorraadaansluiting (Logic4 tegenover wat er echt ligt) staat in de tegel <a href="geldgoederen.html">Geld-goederenbeweging</a>. De btw-aangifte maakt Logic4 zelf; een controle op btw-codes per factuur is hier nog niet gebouwd.</p>
+  </div>
+</main>
+<div id="venster" class="venster hidden"><div class="in" id="vensterIn"></div></div>
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var $ = function(id){ return document.getElementById(id); };
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+async function api(pad, body, method){
+  var r = await fetch(W+pad, { method: method || (body ? "POST" : "GET"), headers: { "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik }, body: body ? JSON.stringify(body) : undefined });
+  var j = null; try { j = await r.json(); } catch(e){}
+  if (!r.ok) throw new Error((j && j.error) || ("HTTP " + r.status));
+  return j;
+}
+function eur(n){ return "€ " + Number(n||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function datumNL(v){ if(!v) return ""; var s=String(v).slice(0,10).split("-"); return s.length===3 ? s[2]+"-"+s[1]+"-"+s[0] : v; }
+function msg(el, tekst, soort){ el.innerHTML = tekst ? '<div class="msg '+(soort||"info")+'">'+tekst+'</div>' : ""; }
+var MAANDEN = ["januari","februari","maart","april","mei","juni","juli","augustus","september","oktober","november","december"];
+function maandNaam(m){ var p = m.split("-"); return MAANDEN[Number(p[1])-1] + " " + p[0]; }
+var maand = "", werk = {}, stand = {};
+(function(){
+  var nu = new Date(), opties = [];
+  for (var i = 0; i < 13; i++){ var d = new Date(Date.UTC(nu.getFullYear(), nu.getMonth() - i, 1)); opties.push(d.toISOString().slice(0, 7)); }
+  $("maand").innerHTML = opties.map(function(m){ return '<option value="' + m + '">' + maandNaam(m) + '</option>'; }).join("");
+  /* Standaard de vorige maand: die is af en kan gecontroleerd worden. */
+  maand = opties[1]; $("maand").value = maand;
+})();
+$("maand").addEventListener("change", function(){ maand = $("maand").value; laad(false); });
+$("vers").addEventListener("click", function(){ laad(true); });
+var lopend = new Date().toISOString().slice(0, 7);
+
+async function laad(vers){
+  msg($("msg"), "Saldi ophalen uit Logic4" + (vers ? " (opnieuw)" : "") + "…", "info");
+  ["tussen","aansluiting","bank","intern"].forEach(function(id){ $(id).innerHTML = '<p class="lead">Ophalen…</p>'; });
+  stand = {};
+  try{
+    for (var i = 0; i < 4; i++){
+      var deel = ["tussen","aansluiting","bank","intern"][i];
+      var j = await api("/maand/stand?maand=" + maand + "&deel=" + deel + (vers ? "&vers=1" : ""));
+      if (!j.ok) throw new Error(j.error || "ophalen mislukt");
+      stand[deel] = j; werk = j.werk || werk;
+      teken(deel);
+    }
+    msg($("msg"), "", "");
+  }catch(e){ msg($("msg"), "Ophalen lukte niet: " + esc(e.message), "bad"); }
+  samenvatting();
+}
+function statusVan(r){
+  var w = werk[String(r.code)];
+  if (w && w.status === "verklaard") return "verklaard";
+  if (r.saldo == null) return "onbekend";
+  return Math.abs(r.saldo) < 0.005 ? "groen" : "oranje";
+}
+function rijHtml(r, soort){
+  var st = soort === "tussen" ? statusVan(r) : (werk[String(r.code)] && werk[String(r.code)].status === "verklaard" ? "verklaard" : "");
+  var w = werk[String(r.code)];
+  var pil = soort !== "tussen" ? "" : st === "groen" ? '<span class="pil">op nul</span>' : st === "oranje" ? '<span class="pil oranje">blijft staan</span>' : st === "verklaard" ? '<span class="pil grijs">verklaard</span>' : '<span class="pil grijs">geen cijfer</span>';
+  return '<tr class="rij ' + st + '" data-code="' + r.code + '"><td><b>' + r.code + '</b> ' + esc(r.naam) + ' ' + pil + (w && w.notitie ? '<div style="font-size:11.5px;color:var(--grijs)">' + esc(w.notitie) + ' <span style="color:#9ca3af">(' + esc(String(w.door||"").split("@")[0]) + ', ' + esc(datumNL(w.ts)) + ')</span></div>' : '') + '</td>' +
+    '<td class="n">' + (r.saldoVorige != null ? esc(eur(r.saldoVorige)) : '-') + '</td><td class="n">' + (r.mutatie != null ? esc(eur(r.mutatie)) : '-') + '</td><td class="n"><b>' + (r.saldo != null ? esc(eur(r.saldo)) : '-') + '</b></td></tr>';
+}
+function tabel(rijen, soort){
+  return '<div style="overflow:auto"><table><thead><tr><th>Rekening</th><th class="n">Begin van de maand</th><th class="n">Mutatie in de maand</th><th class="n">Eind van de maand</th></tr></thead><tbody>' + rijen.map(function(r){ return rijHtml(r, soort); }).join("") + '</tbody></table></div>';
+}
+function teken(deel){
+  var j = stand[deel]; if (!j) return;
+  var box = $(deel);
+  if (deel === "aansluiting"){
+    var deb = j.rekeningen[0] || {}, cred = j.rekeningen[1] || {};
+    var eerlijk = maand === lopend;
+    var vgl = function(gb, open, n, ts, teken){
+      if (gb.saldo == null) return '<span class="pil grijs">geen cijfer</span>';
+      if (open == null) return '<span class="pil grijs">open posten niet bekend</span>';
+      var v = Math.round((gb.saldo * teken - open) * 100) / 100;
+      return (eerlijk ? (Math.abs(v) < 1 ? '<span class="pil">sluit aan</span>' : '<span class="pil oranje">verschil ' + esc(eur(v)) + '</span>') : '<span class="pil grijs">vergelijking alleen in de lopende maand</span>') +
+        '<div style="font-size:11.5px;color:var(--grijs)">open facturen nu: ' + esc(eur(open)) + ' (' + n + ' stuks, stand ' + esc(datumNL(ts)) + ')</div>';
+    };
+    box.innerHTML = '<div style="overflow:auto"><table><thead><tr><th>Rekening</th><th class="n">Grootboek eind van de maand</th><th>Naast de open posten</th></tr></thead><tbody>' +
+      '<tr class="rij" data-code="' + deb.code + '"><td><b>' + deb.code + '</b> ' + esc(deb.naam) + '</td><td class="n"><b>' + (deb.saldo != null ? esc(eur(deb.saldo)) : '-') + '</b></td><td>' + vgl(deb, j.openDebiteuren, j.openDebiteurenN, j.openDebiteurenTs, 1) + '</td></tr>' +
+      '<tr class="rij" data-code="' + cred.code + '"><td><b>' + cred.code + '</b> ' + esc(cred.naam) + '</td><td class="n"><b>' + (cred.saldo != null ? esc(eur(cred.saldo)) : '-') + '</b></td><td>' + vgl(cred, j.openCrediteuren, j.openCrediteurenN, j.openCrediteurenTs, -1) + '</td></tr>' +
+      '</tbody></table></div>';
+  } else {
+    var rijen = j.rekeningen.slice();
+    if (deel === "tussen") rijen.sort(function(a,b){ var o = { oranje: 0, onbekend: 1, verklaard: 2, groen: 3 }; return (o[statusVan(a)] - o[statusVan(b)]) || Math.abs(b.saldo||0) - Math.abs(a.saldo||0); });
+    if (deel === "bank" || deel === "intern") rijen = rijen.filter(function(r){ return r.saldo != null; });
+    box.innerHTML = rijen.length ? tabel(rijen, deel) : '<p class="lead">Geen rekeningen met een saldo.</p>';
+    if (deel === "tussen"){ var t = { groen: 0, oranje: 0, verklaard: 0 }; rijen.forEach(function(r){ var s = statusVan(r); if (t[s] != null) t[s]++; }); $("tTel").textContent = t.oranje ? t.oranje + " om naar te kijken" : "alles op nul of verklaard"; $("tTel").className = "pil" + (t.oranje ? " oranje" : ""); }
+  }
+  box.querySelectorAll("tr.rij").forEach(function(tr){ tr.addEventListener("click", function(){ regels(Number(tr.dataset.code)); }); });
+}
+function samenvatting(){
+  var t = (stand.tussen && stand.tussen.rekeningen) || [];
+  var oranje = t.filter(function(r){ return statusVan(r) === "oranje"; });
+  var som = oranje.reduce(function(n, r){ return n + Math.abs(r.saldo || 0); }, 0);
+  var bank = ((stand.bank && stand.bank.rekeningen) || []).reduce(function(n, r){ return n + (r.saldo || 0); }, 0);
+  $("samen").innerHTML = '<div><b>' + oranje.length + '</b><span>tussenrekeningen die niet op nul staan</span></div>' +
+    '<div><b>' + esc(eur(som)) + '</b><span>samen (absoluut) blijft daar hangen</span></div>' +
+    '<div><b>' + esc(eur(bank)) + '</b><span>bank en kas samen, eind ' + esc(maandNaam(maand)) + '</span></div>';
+}
+async function regels(code){
+  var alle = [].concat.apply([], Object.values(stand).map(function(j){ return (j && j.rekeningen) || []; }));
+  var r = alle.find(function(x){ return x.code === code; }) || { code: code, naam: "" };
+  var w = werk[String(code)] || {};
+  venster('<h2 style="margin:0 0 4px">' + r.code + ' ' + esc(r.naam) + '</h2><p class="lead">' + esc(maandNaam(maand)) + ': begin ' + (r.saldoVorige != null ? esc(eur(r.saldoVorige)) : '-') + ', eind <b>' + (r.saldo != null ? esc(eur(r.saldo)) : '-') + '</b>. Hieronder alle regels van deze maand op deze rekening.</p>' +
+    '<div id="vRegels"><p class="lead">Regels ophalen…</p></div>' +
+    '<div style="margin-top:12px;border-top:1px solid var(--rand);padding-top:10px"><label style="font-size:12px;color:var(--grijs)">Wat is dit, of wat is ermee gedaan</label><br><input class="veld" id="vNot" style="width:100%" value="' + esc(w.notitie || "") + '" placeholder="bijv. Mollie-uitbetaling van 31-08 staat pas 02-09 op de bank"></div>' +
+    '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap"><button class="knop groen" id="vVerklaard">Verklaard, mag grijs</button><button class="knop" id="vGezien">Alleen notitie bewaren</button>' + (w.status ? '<button class="knop" id="vWeg">Notitie weghalen</button>' : '') + '<button class="knop" id="vSluit" style="margin-left:auto">Sluiten</button></div>');
+  $("vSluit").addEventListener("click", venster);
+  var bewaar = async function(status){ await api("/maand/werk", { maand: maand, code: code, status: status, notitie: $("vNot") ? $("vNot").value : "" }); try{ if(window.fpLog) window.fpLog("maandcontrole-" + (status || "weg"), maand + " " + code + ": " + ($("vNot") ? $("vNot").value : "")); }catch(e){} venster(); await laad(false); };
+  $("vVerklaard").addEventListener("click", function(){ bewaar("verklaard"); });
+  $("vGezien").addEventListener("click", function(){ bewaar("gezien"); });
+  if ($("vWeg")) $("vWeg").addEventListener("click", function(){ bewaar(null); });
+  try{
+    var j = await api("/maand/regels?code=" + code + "&maand=" + maand);
+    var box = $("vRegels"); if (!box) return;
+    box.innerHTML = (j.regels || []).length ? '<div style="overflow:auto;max-height:45vh"><table><thead><tr><th>Datum</th><th>Boeking</th><th>Omschrijving</th><th>Factuur / relatie</th><th class="n">Bedrag</th></tr></thead><tbody>' +
+      j.regels.map(function(x){ return '<tr><td style="white-space:nowrap">' + esc(datumNL(x.datum)) + '</td><td>' + esc(x.boeking) + '</td><td style="font-size:11.5px">' + esc(x.omschrijving) + '</td><td style="font-size:11.5px;white-space:nowrap">' + esc(x.factuur || x.debiteur || x.crediteur || "") + '</td><td class="n" style="color:' + (x.bedrag < 0 ? 'var(--rood)' : 'inherit') + '">' + esc(eur(x.bedrag)) + '</td></tr>'; }).join("") +
+      '<tr><td colspan="4" style="text-align:right"><b>Som van de maand</b></td><td class="n"><b>' + esc(eur(j.som)) + '</b></td></tr></tbody></table></div>' +
+      (j.regels.length >= 2000 ? '<p class="lead">Alleen de eerste 2000 regels.</p>' : '')
+      : '<p class="lead">Geen regels in deze maand op deze rekening.</p>';
+  }catch(e){ var b2 = $("vRegels"); if (b2) b2.innerHTML = '<p class="lead" style="color:var(--rood)">' + esc(e.message) + '</p>'; }
+}
+function venster(html){ if (!html || typeof html !== "string") { $("venster").classList.add("hidden"); return; } $("vensterIn").innerHTML = html; $("venster").classList.remove("hidden"); }
+$("venster").addEventListener("click", function(e){ if (e.target === $("venster")) venster(); });
+(async function(){
+  for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
+  laad(false);
+})();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"maandcontrole",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>
