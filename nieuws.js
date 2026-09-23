@@ -50,6 +50,11 @@
   var EERSTE_KEER_DAGEN = 14;
 
   var NIEUWS = [
+    {
+      datum: "2026-09-23", bestand: "labels.html", soort: "beter",
+      titel: "Labels: omschrijving aanpassen",
+      wat: "Het vak voor de omschrijving is breder en groeit mee, zodat de hele naam te lezen is. Wat je daar aanpast blijft staan: het werd eerst na een paar seconden weer overschreven door de naam uit Logic4. Een aangepaste regel krijgt het merkje 'omschrijving aangepast'."
+    },
 
     {
       datum: "2026-09-23", bestand: "dealerportaal.html", soort: "nieuw",
