@@ -282,6 +282,12 @@
     "prijslijsten": [
       "arno", "chantal", "dolf", "fonteynbot", "gerrit", "gretha", "manon",
     ],
+    /* Voorraadbepaling: bestellen in de verhouding van de verkoop. Gerrit
+       (23 sep 2026): "een aparte tegel die alleen Chantal, Arno en ik kunnen
+       zien." */
+    "voorraadbepaling": [
+      "arno", "chantal", "dolf", "fonteynbot", "gerrit",
+    ],
     // Rapportage
     "rapportage": [
       "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
