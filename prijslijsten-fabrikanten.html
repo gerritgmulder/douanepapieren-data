@@ -129,6 +129,8 @@
   table.art input.n{text-align:right}
   table.art tr.leeg td{color:var(--muted);font-style:italic;padding:10px 6px}
   .ov-stand{font-size:11.5px;color:var(--muted);margin-top:8px;min-height:15px}
+  table.art tr.voorstel td{background:#fffbeb}
+  table.art .bron{font-size:10.5px;color:#92400e;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   @media (max-width:700px){
     main{padding:0 12px} .ov-lijst{max-height:40vh}
     table.velden td{display:block;width:auto!important} table.velden td.uitleg{padding-top:0}
@@ -695,7 +697,7 @@ document.getElementById("nieuweMap").addEventListener("click",async ()=>{
   teken();
   /* Een map op het eerste niveau is een nieuwe leverancier, en die begint
      altijd met de afspraken (Gerrit, 23 sep 2026). */
-  if(!hier && S.mappen.includes(pad)){ ovGekozen=pad; zetWeergave("overzicht"); }
+  if(!hier && S.mappen.includes(pad)){ ovGekozen=pad; ART[pad]=ART[pad]||{artikelen:[]}; zetWeergave("overzicht"); }
 });
 
 document.getElementById("kiesBestand").addEventListener("click",()=>document.getElementById("bestandIn").click());
@@ -870,11 +872,47 @@ document.getElementById("logoutBtn").addEventListener("click",()=>{
 const VORMEN=[["magazijn","Magazijn","De fabriek heeft een warehouse in Nederland."],["bezorgd","Bezorgd","De leverancier bezorgt zelf."],["ft40","40ft","Per volle 40-voets container."],["ft20","20ft","Per volle 20-voets container."]];
 const STARTMOMENTEN=["akkoord proforma","aanbetaling","orderbevestiging"];
 const INCOTERMS=[["exw","Ex Works","Geen transportkosten naar de haven in China; havenkosten zijn voor ons."],["fob","FOB (Free On Board)","De fabriek betaalt transport en havenkosten tot en met de haven in China."],["cif","CIF (Cost Insurance & Freight)","De fabriek betaalt alle kosten tot de haven in Rotterdam."],["afhaal","Afhaal magazijn","Wij halen op bij het magazijn van de leverancier."],["fonteyn","Bezorgd bij Fonteyn","De leverancier levert af bij ons."],["klant","Bezorgd bij klant","De leverancier levert rechtstreeks bij de klant af."]];
-const ART_VELDEN=[["codeExtern","Artikelcode (extern)","12%"],["naamExtern","Artikel (extern)","19%"],["codeIntern","Artikelcode (intern)","11%"],["naamIntern","Artikel (intern)","19%"],["incoterm","IncoTerms","15%"],["prijs","Prijs","10%"],["levertijd","Levertijd","10%"]];
+const ART_VELDEN=[["codeExtern","Artikelcode (extern)","11%"],["naamExtern","Artikel (extern)","18%"],["codeIntern","Artikelcode (intern)","10%"],["naamIntern","Artikel (intern)","17%"],["incoterm","IncoTerms","14%"],["prijs","Prijs","9%"],["cbm","CBM","7%"],["levertijd","Levertijd","10%"]];
 let ovGekozen="", ovTimer=null;
 function leveranciers(){ return S.mappen.filter(m=>!m.includes("/")).sort((a,b)=>a.localeCompare(b,"nl")); }
-function levData(lev){ S.afspraken=S.afspraken||{}; const a=S.afspraken[lev]=S.afspraken[lev]||{}; a.inkoop=a.inkoop||{}; a.artikelen=Array.isArray(a.artikelen)?a.artikelen:[]; return a; }
-function levLees(lev){ const a=(S.afspraken||{})[lev]||{}; return { contact:a.contact||"", fi:a.fabriekIntern||"", fe:a.fabriekExtern||"", inkoop:a.inkoop||{}, start:a.startmoment||"", boete:a.boete||"", artikelen:Array.isArray(a.artikelen)?a.artikelen:[], op:a.op, door:a.door }; }
+function levData(lev){ S.afspraken=S.afspraken||{}; const a=S.afspraken[lev]=S.afspraken[lev]||{}; a.inkoop=a.inkoop||{}; return a; }
+function levLees(lev){ const a=(S.afspraken||{})[lev]||{}; return { contact:a.contact||"", fi:a.fabriekIntern||"", fe:a.fabriekExtern||"", inkoop:a.inkoop||{}, start:a.startmoment||"", boete:a.boete||"", artikelen:artVan(lev), op:a.op, door:a.door }; }
+/* De artikelen staan per leverancier in een eigen sleutel (levart-...), niet in
+   de grote lijst: bij Borek en SCP zijn het er duizenden. Ze worden pas
+   opgehaald als je de leverancier aanklikt. Oude artikelen die nog in de
+   grote lijst stonden gaan bij de eerste keer bewaren vanzelf mee. */
+const ART={};
+function levSleutel(lev){
+  let h=5381; for(let i=0;i<lev.length;i++){ h=((h<<5)+h+lev.charCodeAt(i))>>>0; }
+  const basis=lev.toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,24);
+  return "levart-"+basis+h.toString(36).padStart(7,"0");
+}
+function artVan(lev){ if(ART[lev]) return ART[lev].artikelen; const a=(S.afspraken||{})[lev]||{}; return Array.isArray(a.artikelen)?a.artikelen:[]; }
+async function laadArtikelen(lev){
+  if(ART[lev]) return;
+  let lijst=null;
+  try{ const r=await fetch(WORKER+"/data/"+levSleutel(lev),{headers:{"X-Fonteyn-Auth":TEAM}}); if(r.ok){ const j=await r.json(); if(j&&Array.isArray(j.artikelen)) lijst=j.artikelen; } }catch(e){}
+  if(!lijst){ const a=(S.afspraken||{})[lev]||{}; lijst=Array.isArray(a.artikelen)?a.artikelen.slice():[]; }
+  ART[lev]={artikelen:lijst};
+}
+let artTimer=null;
+function artBewaarStraks(lev, wacht){
+  const st=document.getElementById("ovStand"); if(st) st.textContent="Bewaren\u2026";
+  /* Een voorstel dat helemaal is ingevuld is geen voorstel meer. */
+  artVan(lev).forEach(r=>{ if(r.voorstel && !ART_VELDEN.some(([k])=>!String(r[k]||"").trim())) delete r.voorstel; });
+  clearTimeout(artTimer);
+  artTimer=setTimeout(async()=>{
+    try{
+      const r=await fetch(WORKER+"/data/"+levSleutel(lev),{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM},body:JSON.stringify({leverancier:lev,artikelen:artVan(lev),op:new Date().toISOString(),door:IK})});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      ovBewaarStraks(lev,0);
+    }catch(e){ const st3=document.getElementById("ovStand"); if(st3) st3.textContent="Artikelen niet bewaard: "+e.message; }
+  }, wacht==null?800:wacht);
+}
+function artTelling(lev){
+  const l=artVan(lev); const echt=l.filter(r=>!r.voorstel&&!leegArtikel(r));
+  return { n:l.length, voorstel:l.filter(r=>r.voorstel).length, compleet:echt.filter(r=>!ART_VELDEN.some(([k])=>!String(r[k]||"").trim())).length, half:echt.filter(r=>ART_VELDEN.some(([k])=>!String(r[k]||"").trim())).length };
+}
 function incoNaam(k){ const x=INCOTERMS.find(i=>i[0]===k); return x?x[1]:""; }
 function leegArtikel(r){ return !ART_VELDEN.some(([k])=>String(r[k]||"").trim()); }
 /* Wat er nog ontbreekt; leeg = compleet en dan mag er besteld worden. */
@@ -886,10 +924,12 @@ function ontbreekt(lev){
   if(!VORMEN.some(([k])=>String((d.inkoop[k]||{}).lt||"").trim())) mis.push("productietijd bij minstens één inkoopvorm");
   if(!d.start) mis.push("startmoment productietijd");
   if(!d.boete.trim()) mis.push("boeteclausule productietijd");
-  const art=d.artikelen.filter(r=>!leegArtikel(r));
-  if(!art.length) mis.push("minstens één artikel");
-  const half=art.filter(r=>ART_VELDEN.some(([k])=>!String(r[k]||"").trim())).length;
-  if(half) mis.push(half+" artikel"+(half===1?"":"en")+" niet helemaal ingevuld");
+  /* Klaargezette regels uit de prijslijsten ("voorstel") tellen niet mee:
+     die blokkeren niets, maar bestellen kan pas met minstens één artikel dat
+     helemaal is ingevuld. */
+  const t=ART[lev]?artTelling(lev):(((S.afspraken||{})[lev]||{}).artStand||{compleet:0,half:0});
+  if(!t.compleet) mis.push("minstens één artikel helemaal ingevuld");
+  if(t.half) mis.push(t.half+" artikel"+(t.half===1?"":"en")+" niet helemaal ingevuld");
   return mis;
 }
 function vormenTekst(inkoop){ return VORMEN.filter(([k])=>String((inkoop[k]||{}).lt||"").trim()).map(([k,l])=>"<span class='vorm'>"+esc(l)+" · "+esc(inkoop[k].lt)+"</span>").join(""); }
@@ -906,14 +946,15 @@ function tekenOverzicht(){
   document.getElementById("ovRijen").innerHTML=lijst.length?lijst.map(({l,t})=>{
     const d=levLees(l), mis=ontbreekt(l);
     const sub=[d.contact, d.fi&&("fabriek: "+d.fi)].filter(Boolean).join(" · ");
-    const n=d.artikelen.filter(r=>!leegArtikel(r)).length;
+    const st=ART[l]?artTelling(l):(((S.afspraken||{})[l]||{}).artStand||{n:(d.artikelen||[]).length,voorstel:0});
+    const n=st.n||0;
     return "<div class='ov-lev"+(l===ovGekozen?" aan":"")+"' data-lev=\""+esc(l)+"\"><b>"+esc(l)+"</b>"+
       (sub?"<div class='sub'>"+esc(sub)+"</div>":"")+
-      "<div>"+(mis.length?"<span class='vorm' style='background:#fef3c7;color:#92400e'>afspraken onvolledig</span>":"<span class='vorm'>klaar om te bestellen</span>")+vormenTekst(d.inkoop)+(n?"<span class='vorm' style='background:#f3f4f6;color:#374151'>"+n+" artikel"+(n===1?"":"en")+"</span>":"")+"</div>"+
+      "<div>"+(mis.length?"<span class='vorm' style='background:#fef3c7;color:#92400e'>afspraken onvolledig</span>":"<span class='vorm'>klaar om te bestellen</span>")+vormenTekst(d.inkoop)+(n?"<span class='vorm' style='background:#f3f4f6;color:#374151'>"+n+" artikel"+(n===1?"":"en")+(st.voorstel?", "+st.voorstel+" voorstel":"")+"</span>":"")+"</div>"+
       (t.art.length?"<div class='treffer'>"+t.art.slice(0,3).map(r=>esc((r.codeExtern||r.naamExtern||"")+" → "+(r.codeIntern||r.naamIntern||"nog niet gekoppeld"))).join("<br>")+(t.art.length>3?"<br>en nog "+(t.art.length-3):"")+"</div>":"")+
       "</div>";
   }).join(""):"<div class='ov-lev' style='cursor:default;color:var(--muted)'>Niets gevonden"+(q?" voor '"+esc(q)+"'":"")+".</div>";
-  document.querySelectorAll("#ovRijen [data-lev]").forEach(x=>x.addEventListener("click",()=>{ ovGekozen=x.dataset.lev; tekenOverzicht(); tekenLeverancier(); }));
+  document.querySelectorAll("#ovRijen [data-lev]").forEach(x=>x.addEventListener("click",async()=>{ ovGekozen=x.dataset.lev; artZoek=""; artSoort=""; artToon=50; tekenOverzicht(); document.getElementById("ovDetail").innerHTML="<p class='meta'>Artikelen ophalen\u2026</p>"; await laadArtikelen(ovGekozen); tekenLeverancier(); }));
 }
 function veldRij(id, waarde, titel, uitleg, plaats){
   return "<tr><td class='w'><input type='text' data-ov='"+id+"' value=\""+esc(waarde)+"\" placeholder=\""+esc(plaats||"")+"\"></td><td class='uitleg'><b>"+esc(titel)+"</b>"+esc(uitleg)+"</td></tr>";
@@ -926,10 +967,52 @@ function tekenKnop(lev){
   u.innerHTML=mis.length?"Nog in te vullen: "+esc(mis.join(", "))+".":"Alle afspraken zijn ingevuld.";
   u.style.color=mis.length?"#92400e":"#15803d";
 }
+let artZoek="", artSoort="", artToon=50;
+function artGefilterd(lev){
+  const q=artZoek.trim().toLowerCase();
+  return artVan(lev).map((r,i)=>({r,i})).filter(({r})=>{
+    if(artSoort==="voorstel"&&!r.voorstel) return false;
+    if(artSoort==="eigen"&&r.voorstel) return false;
+    if(artSoort==="zonder"&&String(r.codeIntern||"").trim()) return false;
+    if(!q) return true;
+    return ["codeExtern","naamExtern","codeIntern","naamIntern"].some(k=>String(r[k]||"").toLowerCase().includes(q));
+  });
+}
+function artRijen(lev){
+  const alle=artGefilterd(lev), l=alle.slice(0,artToon);
+  if(!artVan(lev).length) return "<tr class='leeg'><td colspan='9'>Nog geen artikelen. Voeg er een toe met de knop hieronder.</td></tr>";
+  if(!alle.length) return "<tr class='leeg'><td colspan='9'>Geen artikelen gevonden.</td></tr>";
+  return l.map(({r,i})=>"<tr"+(r.voorstel?" class='voorstel' title=\"Klaargezet uit "+esc(r.bron||"de prijslijst")+(r.prijsSoort?" (prijs: "+esc(r.prijsSoort)+")":"")+"\"":"")+">"+
+    ART_VELDEN.map(([k,lab])=>"<td>"+(k==="incoterm"
+      ?"<select data-art='"+i+"' data-k='incoterm' style='width:100%;padding:5px 4px;font-size:12px' title='"+esc(lab)+"'><option value=''>kies\u2026</option>"+INCOTERMS.map(([v,n,u])=>"<option value='"+v+"' title=\""+esc(u)+"\""+(r.incoterm===v?" selected":"")+">"+esc(n)+"</option>").join("")+"</select>"
+      :"<input data-art='"+i+"' data-k='"+k+"' placeholder='"+esc(lab.toLowerCase())+"' value=\""+esc(r[k]||"")+"\""+((k==="prijs"||k==="cbm")?" class='n' inputmode='decimal'":"")+">")+
+      (k==="naamExtern"&&r.voorstel&&r.bron?"<div class='bron'>"+esc(String(r.bron).slice(0,60))+"</div>":"")+"</td>").join("")+
+    "<td><button class='mini gevaar' data-artweg='"+i+"' title='deze regel weghalen'>\u2715</button></td></tr>").join("");
+}
+function koppelArtRijen(lev){
+  const box=document.getElementById("ovDetail");
+  box.querySelectorAll("[data-art]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{ const r=artVan(lev)[Number(inp.dataset.art)]; if(r){ r[inp.dataset.k]=inp.value; tekenKnop(lev); artBewaarStraks(lev); } }));
+  box.querySelectorAll("[data-artweg]").forEach(b=>b.addEventListener("click",async()=>{
+    const l=artVan(lev); const i=Number(b.dataset.artweg); const r=l[i]||{};
+    if(!r.voorstel && !leegArtikel(r) && !(await vraagJaNee("Artikel weghalen?",(r.naamExtern||r.codeExtern||"Deze regel")+" gaat uit de lijst van "+lev+".","Weghalen",true))) return;
+    l.splice(i,1); artBewaarStraks(lev,0); ververs(lev);
+  }));
+  const alle=artGefilterd(lev).length, m=document.getElementById("artMeer");
+  if(m) m.innerHTML=alle>artToon?(artToon+" van "+alle+" getoond \u00b7 <a class='klik' id='artMeerKnop'>toon 50 meer</a> \u00b7 <a class='klik' id='artAllesKnop'>toon alles</a>"):(alle?alle+" regel"+(alle===1?"":"s"):"");
+  const mk=document.getElementById("artMeerKnop"); if(mk) mk.addEventListener("click",()=>{ artToon+=50; ververs(lev); });
+  const ak=document.getElementById("artAllesKnop"); if(ak) ak.addEventListener("click",()=>{ artToon=100000; ververs(lev); });
+}
+function ververs(lev){
+  const tb=document.querySelector("#ovDetail table.art tbody"); if(!tb) return;
+  tb.innerHTML=artRijen(lev); koppelArtRijen(lev); tekenKnop(lev);
+}
 function tekenLeverancier(){
   const box=document.getElementById("ovDetail");
   const lev=ovGekozen;
   if(!lev){ box.innerHTML="<p class='meta'>Kies links een leverancier.</p>"; return; }
+  /* Nooit tekenen (en dus nooit bewaren) op een lijst die nog niet is
+     opgehaald: dan zou een wijziging de echte artikelen overschrijven. */
+  if(!ART[lev]){ box.innerHTML="<p class='meta'>Artikelen ophalen\u2026</p>"; laadArtikelen(lev).then(()=>{ if(ovGekozen===lev) tekenLeverancier(); }); return; }
   const d=levLees(lev);
   box.innerHTML="<div style='display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap'><div style='flex:1;min-width:220px'><h3>"+esc(lev)+"</h3><div class='meta'>"+(d.op?"Laatst gewijzigd "+datum(d.op)+(d.door?" door "+esc(korteNaam(d.door)):""):"Nog niets vastgelegd.")+" · <a class='klik' id='ovNaarMap'>prijslijsten van deze leverancier</a></div></div>"+
       "<div style='text-align:right'><button class='primary' id='ovIko' type='button' disabled>Inkooporder maken</button><div class='meta' id='ovIkoUitleg' style='max-width:340px;margin-top:4px'></div></div></div>"+
@@ -951,30 +1034,25 @@ function tekenLeverancier(){
     "</table>"+
     "<h4>Artikelen</h4>"+
     "<p class='meta' style='margin:0 0 6px'>Links wat de fabriek op de factuur zet, rechts wat het bij ons is. Zo koppelt Reinier bij de betaling de naam van de fabriek aan ons artikel. IncoTerms: "+INCOTERMS.slice(0,3).map(i=>"<b>"+esc(i[1].split(" (")[0])+"</b> "+esc(i[2].charAt(0).toLowerCase()+i[2].slice(1))).join(" ")+"</p>"+
-    "<table class='art'><thead><tr>"+ART_VELDEN.map(([k,l,w])=>"<th style='width:"+w+"'>"+esc(l)+"</th>").join("")+"<th style='width:32px'></th></tr></thead><tbody>"+
-      (d.artikelen.length?d.artikelen.map((r,i)=>"<tr>"+
-        ART_VELDEN.map(([k,l])=>"<td>"+(k==="incoterm"
-          ?"<select data-art='"+i+"' data-k='incoterm' style='width:100%;padding:5px 4px;font-size:12px' title='"+esc(l)+"'><option value=''>kies…</option>"+INCOTERMS.map(([v,n,u])=>"<option value='"+v+"' title=\""+esc(u)+"\""+(r.incoterm===v?" selected":"")+">"+esc(n)+"</option>").join("")+"</select>"
-          :"<input data-art='"+i+"' data-k='"+k+"' placeholder='"+esc(l.toLowerCase())+"' value=\""+esc(r[k]||"")+"\""+(k==="prijs"?" class='n' inputmode='decimal'":"")+">")+"</td>").join("")+
-        "<td><button class='mini gevaar' data-artweg='"+i+"' title='deze regel weghalen'>✕</button></td></tr>").join(""):"<tr class='leeg'><td colspan='8'>Nog geen artikelen. Voeg er een toe met de knop hieronder.</td></tr>")+
-    "</tbody></table>"+
+    (artTelling(lev).voorstel?"<p class='meta' style='margin:0 0 6px;color:#92400e'>Gele regels zijn klaargezet uit de prijslijsten van deze leverancier, met ons artikel erbij waar Logic4 dat weet. Controleer ze en vul aan; een regel die helemaal is ingevuld is geen voorstel meer.</p>":"")+
+    "<div style='display:flex;gap:8px;flex-wrap:wrap;margin:0 0 6px'><input type='text' id='artZoek' placeholder='zoek in de artikelen\u2026' value=\""+esc(artZoek)+"\" style='flex:1;min-width:180px'><select id='artSoort'><option value=''>alle regels</option><option value='voorstel'"+(artSoort==="voorstel"?" selected":"")+">alleen voorstellen</option><option value='eigen'"+(artSoort==="eigen"?" selected":"")+">alleen ingevuld of eigen</option><option value='zonder'"+(artSoort==="zonder"?" selected":"")+">nog zonder artikel van ons</option></select></div>"+
+    "<table class='art'><thead><tr>"+ART_VELDEN.map(([k,l,w])=>"<th style='width:"+w+"'>"+esc(l)+"</th>").join("")+"<th style='width:32px'></th></tr></thead><tbody>"+artRijen(lev)+"</tbody></table>"+
+    "<div id='artMeer' class='meta' style='margin-top:6px'></div>"+
     "<div style='margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap'><button class='primary' id='ovArtNieuw' type='button'>+ Artikel toevoegen</button><button class='primary' id='ovOpslaan' type='button' style='background:#fff;color:var(--fonteyn-green);border:1.5px solid var(--fonteyn-green)'>Opslaan</button><span class='ov-stand' id='ovStand' style='margin:0'></span></div>";
   tekenKnop(lev);
   document.getElementById("ovNaarMap").addEventListener("click",()=>{ hier=lev; zetWeergave("bestanden"); teken(); });
   const na=()=>{ tekenKnop(lev); ovBewaarStraks(lev); };
   box.querySelectorAll("[data-ov]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{ levData(lev)[inp.dataset.ov]=inp.value; na(); }));
   box.querySelectorAll("[data-lt]").forEach(inp=>inp.addEventListener("input",()=>{ const a=levData(lev); const k=inp.dataset.lt; a.inkoop[k]=a.inkoop[k]||{}; a.inkoop[k].lt=inp.value; delete a.inkoop[k].aan; na(); }));
-  box.querySelectorAll("[data-art]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{ const a=levData(lev); const r=a.artikelen[Number(inp.dataset.art)]; if(r){ r[inp.dataset.k]=inp.value; na(); } }));
-  box.querySelectorAll("[data-artweg]").forEach(b=>b.addEventListener("click",async()=>{
-    const a=levData(lev); const i=Number(b.dataset.artweg); const r=a.artikelen[i]||{};
-    if(!leegArtikel(r) && !(await vraagJaNee("Artikel weghalen?",(r.naamExtern||r.codeExtern||"Deze regel")+" gaat uit de lijst van "+lev+".","Weghalen",true))) return;
-    a.artikelen.splice(i,1); ovBewaarStraks(lev,0); tekenLeverancier(); tekenOverzicht();
-  }));
+  koppelArtRijen(lev);
+  document.getElementById("artZoek").addEventListener("input",e=>{ artZoek=e.target.value; artToon=50; ververs(lev); });
+  document.getElementById("artSoort").addEventListener("change",e=>{ artSoort=e.target.value; artToon=50; ververs(lev); });
   document.getElementById("ovArtNieuw").addEventListener("click",()=>{
-    const a=levData(lev); a.artikelen.push({codeExtern:"",naamExtern:"",codeIntern:"",naamIntern:"",incoterm:"",prijs:"",levertijd:""});
-    tekenLeverancier(); const rijen=box.querySelectorAll("table.art tbody tr"); const laatste=rijen[rijen.length-1]; const eerste=laatste&&laatste.querySelector("input"); if(eerste) eerste.focus();
+    const l=artVan(lev); l.unshift({codeExtern:"",naamExtern:"",codeIntern:"",naamIntern:"",incoterm:"",prijs:"",cbm:"",levertijd:""});
+    artZoek=""; artSoort=""; const z=document.getElementById("artZoek"); if(z) z.value=""; const so=document.getElementById("artSoort"); if(so) so.value="";
+    ververs(lev); const eerste=document.querySelector("#ovDetail table.art tbody tr input"); if(eerste) eerste.focus();
   });
-  document.getElementById("ovOpslaan").addEventListener("click",()=>ovBewaarStraks(lev,0));
+  document.getElementById("ovOpslaan").addEventListener("click",()=>{ ovBewaarStraks(lev,0); artBewaarStraks(lev,0); });
   document.getElementById("ovIko").addEventListener("click",()=>{ if(ontbreekt(lev).length) return; openInkooporder(lev); });
 }
 /* De proforma-koppeling van Voorraadbeheer, pas geladen als iemand op de
@@ -1010,6 +1088,7 @@ async function openInkooporder(lev){
    prijslijst toevoegt. */
 function ovBewaarStraks(lev, wacht){
   const a=levData(lev); a.op=new Date().toISOString(); a.door=IK;
+  if(ART[lev]){ a.artStand=artTelling(lev); delete a.artikelen; }
   const st=document.getElementById("ovStand"); if(st) st.textContent="Bewaren…";
   clearTimeout(ovTimer);
   ovTimer=setTimeout(async()=>{
@@ -1020,6 +1099,7 @@ function ovBewaarStraks(lev, wacht){
         S.mappen=Array.isArray(j.mappen)?j.mappen:S.mappen; S.bestanden=Array.isArray(j.bestanden)?j.bestanden:S.bestanden;
         S.afspraken=(j.afspraken&&typeof j.afspraken==="object")?j.afspraken:{}; }
       S.afspraken[lev]=Object.assign({}, S.afspraken[lev]||{}, mijn);
+      if(ART[lev]) delete S.afspraken[lev].artikelen;
       await bewaar();
       const st2=document.getElementById("ovStand"); if(st2) st2.textContent="Bewaard, "+datum(mijn.op)+" door "+korteNaam(IK);
       tekenOverzicht();
@@ -1042,7 +1122,7 @@ document.getElementById("ovNieuw").addEventListener("click",async()=>{
   if(S.mappen.includes(naam)){ ovGekozen=naam; tekenOverzicht(); tekenLeverancier(); return; }
   S.mappen.push(naam);
   try{ await bewaar(); try{ if(window.fpLog) window.fpLog("leverancier-nieuw",naam); }catch(e){} }catch(e){ melding("bad",e.message); await laad(); }
-  ovGekozen=naam; document.getElementById("ovZoek").value=""; tekenOverzicht(); tekenLeverancier();
+  ovGekozen=naam; ART[naam]=ART[naam]||{artikelen:[]}; document.getElementById("ovZoek").value=""; tekenOverzicht(); tekenLeverancier();
 });
 
 (async function boot(){

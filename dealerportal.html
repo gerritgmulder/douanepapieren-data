@@ -1449,10 +1449,27 @@ function reqStatusLabel(r){
      niet: dan is een bestelling waar iemand op zit te wachten opeens weg,
      zonder dat er iets staat over waarom. */
   if (r.geannuleerd) return ["Cancelled" + (r.ordernr ? " (order " + r.ordernr + ")" : ""), "uit"];
+  /* De restbetaling, zodra de container binnen is gemeld. Zie dpRestStart in
+     de worker: dan loopt er een klok van 48 werkuren. */
+  if (r.restBetaald) return ["Paid in full - ready for you", "ok"];
+  if (r.restVerlopen) return ["Moved to the next arrival", ""];
+  if (r.restDeadline && r.restBedrag) return ["Your spa has arrived - complete the payment", "nu"];
   if (r.status === "paid" || r.paymentStatus === "paid") return ["Deposit paid - reservation confirmed", "ok"];
   if (r.deposit && r.paymentStatus === "open") return ["Awaiting deposit payment", ""];
   if (r.status === "done") return ["Handled by our sales team", "ok"];
   return ["Received - our sales team will contact you", ""];
+}
+/* De restbetaling. Vraagt een Mollie-link aan en stuurt door; de bevestiging
+   komt daarna per mail en de status op deze pagina loopt mee. */
+async function restBetalen(id, knop){
+  if (knop) { knop.disabled = true; knop.textContent = "One moment\u2026"; }
+  try {
+    const r = await api("/dealers/api/restbetaling", { method: "POST", body: JSON.stringify({ requestId: id }) });
+    if (r.status === 200 && r.data && r.data.ok && r.data.checkoutUrl) { location.href = r.data.checkoutUrl; return; }
+    if (r.status === 200 && r.data && r.data.alBetaald) { alert("This one is already paid in full."); loadMyRequests(); return; }
+    alert((r.data && (r.data.uitleg || r.data.error)) || ("Could not open the payment page (HTTP " + r.status + ")."));
+  } catch (e) { alert("Could not open the payment page: " + (e.message || e)); }
+  if (knop) { knop.disabled = false; loadMyRequests(); }
 }
 async function loadMyRequests(){
   const r = await api("/dealers/api/requests");
@@ -1472,14 +1489,28 @@ async function loadMyRequests(){
     const knop = adviseur && x.id && !x.overgezetNaar && !x.geannuleerd
       ? ` <button class="secondary reqOver" type="button" data-id="${esc(x.id)}" style="padding:5px 10px;font-size:12px;margin-left:8px;">Transfer to partner</button>`
       : "";
+    /* De spa staat klaar en er moet nog betaald worden. De knop staat hier én
+       in de mail; wie op de knop in de mail klikt komt hier uit met #rest=<id>
+       in de link en gaat meteen door naar Mollie. */
+    const rest = (x.restDeadline && x.restBedrag && !x.restBetaald && !x.restVerlopen)
+      ? ` <button class="go reqRest" type="button" data-id="${esc(x.id)}" style="padding:6px 13px;font-size:12.5px;margin-left:8px;">Complete payment ${x.currency==="USD"?"$":"€"} ${Number(x.restBedrag).toFixed(2)}</button>`
+      : "";
     return `<div class="doc"${cls==="uit"?' style="opacity:.62;"':''}>
       <div><b>${x.items && x.items.length
             ? x.items.map(i => i.qty + "\u00d7 " + i.naam).join(", ")
             : (x.qty + "\u00d7 " + esc(x.model))}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit?` · paid ${x.currency==="USD"?"$":"€"} ${Number(x.deposit).toFixed(2)}`:""}</span>${over}</div>
-      <span style="font-size:13px;white-space:nowrap;${cls==="ok"?"color:#15803d;font-weight:600;":cls==="uit"?"color:#b91c1c;font-weight:600;":"color:var(--muted);"}">${label}${knop}</span>
+      <span style="font-size:13px;white-space:nowrap;${cls==="ok"?"color:#15803d;font-weight:600;":cls==="uit"?"color:#b91c1c;font-weight:600;":cls==="nu"?"color:#b45309;font-weight:600;":"color:var(--muted);"}">${label}${rest}${knop}</span>
     </div>`;
   }).join("");
   $("myReqList").querySelectorAll(".reqOver").forEach(b => b.addEventListener("click", () => overzetten(b.dataset.id, reqs.find(x => x.id === b.dataset.id))));
+  $("myReqList").querySelectorAll(".reqRest").forEach(b => b.addEventListener("click", () => restBetalen(b.dataset.id, b)));
+  /* Uit de mail: .../dealers#rest=<id> gaat meteen door naar de betaalpagina,
+     zodat de partner na het klikken in de mail niet zelf hoeft te zoeken. */
+  const uitMail = (location.hash.match(/rest=([0-9a-f-]{8,})/i) || [])[1];
+  if (uitMail && reqs.some(x => x.id === uitMail && x.restDeadline && !x.restBetaald && !x.restVerlopen)) {
+    history.replaceState(null, "", location.pathname + location.search);
+    restBetalen(uitMail, $("myReqList").querySelector('.reqRest[data-id="' + uitMail + '"]'));
+  }
 }
 
 /* Overzetten naar een partner: kies uit de partnerlijst, bevestig, klaar.
