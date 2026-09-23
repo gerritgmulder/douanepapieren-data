@@ -679,8 +679,8 @@ async function pwLogin(){
       location.reload();
       return;
     }
-    if (r.status === 429) return loginMsg("bad","Too many attempts - please wait 15 minutes and try again.");
-    loginMsg("bad","E-mail address or password not recognised. No password yet? Use the login-link option below.");
+    if (r.status === 429) return loginMsg("bad","That is a lot of attempts in a row. Take 15 minutes and we will let you try again.");
+    loginMsg("bad","Check your e-mail address and password. Still getting stuck? Use the login-link option below and we will send you a link.");
   } catch(e) {
     loginMsg("bad","Something went wrong - please try again.");
   } finally { $("loginBtn").disabled = false; }
@@ -753,8 +753,8 @@ $("pwBtn").addEventListener("click", ()=>{
 $("savePw").addEventListener("click", async ()=>{
   const p1 = $("npw1").value, p2 = $("npw2").value, m = $("pwMsg");
   const show = (cls,txt)=>{ m.className="msg "+cls; m.textContent=txt; m.classList.remove("hidden"); };
-  if (p1.length < 8) return show("bad","Password must be at least 8 characters.");
-  if (p1 !== p2) return show("bad","Passwords do not match.");
+  if (p1.length < 8) return show("bad","Use at least 8 characters for your password.");
+  if (p1 !== p2) return show("bad","Type the same password twice and you are set.");
   $("savePw").disabled = true;
   try {
     const r = await api("/dealers/api/setpassword", { method:"POST", body: JSON.stringify({ password: p1 }) });
@@ -762,8 +762,8 @@ $("savePw").addEventListener("click", async ()=>{
       show("ok","Password saved - from now on you can log in directly with your e-mail address and password.");
       $("npw1").value = ""; $("npw2").value = "";
       setTimeout(()=>$("pwCard").classList.add("hidden"), 3000);
-    } else show("bad","Saving failed - please try again.");
-  } catch(e) { show("bad","Saving failed - please try again."); }
+    } else show("bad","One more try and it saves - tap Save again.");
+  } catch(e) { show("bad","One more try and it saves - tap Save again."); }
   finally { $("savePw").disabled = false; }
 });
 
@@ -969,7 +969,7 @@ function voorraadRegels(m){
   for (const k of (m.onderweg || []))
     rijen.push({ naam: k.name || "Colour confirmed on arrival", qty: Number(k.qty), soort: "komt", eta: k.eta, nu: !!k.nu });
 
-  if (!rijen.length) return `<li class="leeg">Not in stock - built to order.</li>`;
+  if (!rijen.length) return `<li class="leeg">Built to order - we make this one for you.</li>`;
   const verborgen = Math.max(0, rijen.length - VOORRAAD_TOON);
   rijen.forEach((r, i) => { r.verstopt = i >= VOORRAAD_TOON; });
   return rijen.map(voorraadRegel).join("") +
@@ -1438,7 +1438,7 @@ async function openBestand(e){
       { headers: { "X-Dealer-Session": localStorage.getItem(SESS_KEY) || "" } });
     if (!r.ok) throw new Error("HTTP " + r.status);
     window.open(URL.createObjectURL(await r.blob()), "_blank");
-  }catch(err){ alert("Could not open document - please try again. (" + err.message + ")"); }
+  }catch(err){ alert("The document needs another try - tap it once more. (" + err.message + ")"); }
   a.textContent = oud;
 }
 
@@ -1467,8 +1467,8 @@ async function restBetalen(id, knop){
     const r = await api("/dealers/api/restbetaling", { method: "POST", body: JSON.stringify({ requestId: id }) });
     if (r.status === 200 && r.data && r.data.ok && r.data.checkoutUrl) { location.href = r.data.checkoutUrl; return; }
     if (r.status === 200 && r.data && r.data.alBetaald) { alert("This one is already paid in full."); loadMyRequests(); return; }
-    alert((r.data && (r.data.uitleg || r.data.error)) || ("Could not open the payment page (HTTP " + r.status + ")."));
-  } catch (e) { alert("Could not open the payment page: " + (e.message || e)); }
+    alert((r.data && (r.data.uitleg || r.data.error)) || ("The payment page needs another try (HTTP " + r.status + ")."));
+  } catch (e) { alert("The payment page needs another try: " + (e.message || e)); }
   if (knop) { knop.disabled = false; loadMyRequests(); }
 }
 async function loadMyRequests(){
@@ -1518,9 +1518,9 @@ async function loadMyRequests(){
    daarna met "transferred to ..." erbij. */
 async function overzetten(id, req){
   const r = await api("/dealers/api/partners");
-  if (r.status !== 200 || !r.data || !r.data.ok) { alert("Could not load the partner list."); return; }
+  if (r.status !== 200 || !r.data || !r.data.ok) { alert("The partner list needs another try - refresh the page."); return; }
   const partners = r.data.partners || [];
-  if (!partners.length) { alert("There are no partner accounts yet. Create the partner first in Passion Partners Beheer."); return; }
+  if (!partners.length) { alert("Create the partner first in Passion Partners Beheer, then it appears here."); return; }
   const wat = req && req.items && req.items.length
     ? req.items.map(i => i.qty + "\u00d7 " + i.naam).join(", ")
     : (req ? req.qty + "\u00d7 " + req.model : "");
@@ -1548,7 +1548,7 @@ async function overzetten(id, req){
       setTimeout(sluit, 2200);
     } else {
       m.className = "msg bad"; m.classList.remove("hidden");
-      m.textContent = "Transfer failed - " + ((rr.data && rr.data.error) || ("HTTP " + rr.status));
+      m.textContent = "The transfer needs another try - " + ((rr.data && rr.data.error) || ("HTTP " + rr.status));
       knop.disabled = false;
     }
   });
@@ -2256,7 +2256,7 @@ function tekenContainer(ov){
        <p style="margin:12px 0 0;font-size:11.5px;color:var(--muted);line-height:1.55;">
          Every spa ships on a 14 cm pallet, with its cover folded in half, and gets 5 cm of clearance
          beside and behind it so it can be pushed in. Spas stack straight on top of each other with a
-         6 cm board in between, never half over two spas.${r && r.zwem ? " A swim spa is in the load: all covers travel inside it and take no space." : ""}
+         6 cm board in between, never half over two spas.${r && r.zwem ? " A swim spa is in the load: all covers travel inside it, so they come along for free." : ""}
          This is the tightest possible load, so treat it as an upper limit rather than a promise.
          Nothing is taken from our Uddel warehouse for a container order.
        </p>
@@ -2325,8 +2325,8 @@ function tekenVracht(ov){
 </p>`;
     } else if (u && !u.ok) {
       som = `<p class="lead" style="margin:12px 0 0;color:var(--red);">${esc(u.uitleg || (u.error === "postcode-onbekend"
-        ? "We do not have a rate for that postcode. Send us a message and we will quote it."
-        : "We cannot calculate this one automatically. Send us a message and we will quote it."))}</p>`;
+        ? "Send us a message with that postcode and we will quote the delivery for you."
+        : "Send us a message and we will quote this delivery for you."))}</p>`;
     }
     onder = velden + som;
   } else {
@@ -2562,7 +2562,7 @@ function openCart(){
   if (leeg) leeg.addEventListener("click", () => { cart = []; cartBewaar(); sluit(); openCart(); });
   const af = ov.querySelector("#cartAf");
   /* Meekijken is kijken. Zonder deze regel loopt een collega tot de laatste
-     knop door en krijgt dan "Sending failed" - Gerrit liep daar op vast
+     knop door en krijgt dan "Your message needs another try" - Gerrit liep daar op vast
      (7 sep 2026). Nu staat het er vooraf, met de reden erbij. */
   if (af && window.meekijken) {
     af.disabled = true;
@@ -2613,7 +2613,7 @@ function openCart(){
       // vastgelegd, hoort de collega naast hem op de beurs ook te zien.
       cart = []; cartBewaar(); loadMyRequests(); loadStock(); setTimeout(sluit, 2200);
     } else {
-      /* Zeggen wát er misging. "Sending failed" alleen is niet op te lossen:
+      /* Zeggen wát er misging. "Your message needs another try" alleen is niet op te lossen:
          daar kan niemand uit afleiden of het aan de verbinding ligt, aan het
          account of aan de winkelwagen. */
       const reden = (r.data && (r.data.error || r.data.uitleg)) || ("HTTP " + r.status);
@@ -2621,8 +2621,8 @@ function openCart(){
       m.textContent = reden === "meekijken-is-alleen-lezen"
         ? "You are viewing as a Fonteyn colleague; ordering is only possible from a partner account."
         : (reden === "lege winkelwagen"
-          ? "Nothing in your basket can be ordered right now."
-          : "Sending failed - " + reden);
+          ? "Add a spa with a partner price to your basket and you can order straight away."
+          : "Your message needs another try - " + reden);
       m.classList.remove("hidden");
       af.disabled = false;
     }

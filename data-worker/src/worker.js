@@ -580,7 +580,7 @@ async function dpHandleLogin(request, env, url) {
       '<p style="margin:0 0 8px;">Click the button below to log in. This link is valid for 15 minutes.</p>' +
       '<p style="margin:28px 0;text-align:center;"><a href="' + link + '" ' +
       'style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;font-size:15px;padding:15px 34px;border-radius:10px;display:inline-block;">Log in to the portal</a></p>' +
-      '<p style="color:#6b7280;font-size:13px;margin:0;">If you did not request this, you can ignore this email.</p>'),
+      '<p style="color:#6b7280;font-size:13px;margin:0;">Requested by someone else? Then you can safely ignore this email.</p>'),
     undefined, dpAdviseurVan(accounts, email));
   return generic;
 }
@@ -636,7 +636,7 @@ async function dpHandleAuth(request, env, url) {
   const login = t ? await env.FONTEYN_DATA.get("dp-login:" + t, { type: "json" }) : null;
   if (!login) {
     return dpAuthPagina(env, url, "", "Link expired",
-      "This login link is no longer valid. Please request a new one, or log in with your password.", null);
+      "This login link has done its work. Request a fresh one, or log in with your password.", null);
   }
   if (request.method === "GET") {
     // Alleen kijken, niets inwisselen — dit is wat de scanner ziet.
@@ -1445,14 +1445,14 @@ async function dpHandleVracht(request, env) {
   if (kaal.length < vorm.min) {
     return reply(200, { ok: false, error: "postcode-nodig", land,
       voorbeeld: vorm.voorbeeld,
-      uitleg: kaal ? "That does not look like a complete postcode for this country."
+      uitleg: kaal ? "Add the full postcode for this country and we will show you the cost."
                    : "Fill in the delivery postcode and we will show you the cost." });
   }
   const patroon = VRACHT_POSTCODE_VORM[land];
   if (patroon && !patroon.test(kaal)) {
     return reply(200, { ok: false, error: "postcode-ongeldig", land, voorbeeld: vorm.voorbeeld,
-      uitleg: "\"" + postcode + "\" is not a valid postcode for " + land +
-              (vorm.voorbeeld ? " (for example " + vorm.voorbeeld + ")" : "") + ". Check the country and the postcode." });
+      uitleg: "Check the postcode for " + land +
+              (vorm.voorbeeld ? " - it looks like " + vorm.voorbeeld : "") + ", then we will show you the cost." });
   }
 
   const tar = await env.FONTEYN_DATA.get("transport-tarieven", { type: "json" });
@@ -1484,7 +1484,7 @@ async function dpHandleVracht(request, env) {
               " is arranged separately. Send us a message and we will quote it." });
   if (onbekend.length)
     return reply(200, { ok: false, error: "laadmeters-onbekend", onbekend: [...new Set(onbekend)],
-      uitleg: "We do not have the loading metres for " + [...new Set(onbekend)].join(", ") +
+      uitleg: "Send us a message about " + [...new Set(onbekend)].join(", ") +
               " yet. Send us a message and we will quote it." });
   if (!stuks) return reply(200, { ok: false, error: "geen spa's in de wagen", onbekend });
   ldm = Math.round(ldm * 100) / 100;
@@ -1502,8 +1502,8 @@ async function dpHandleVracht(request, env) {
     zone = gebied.zone;
     if (!zone) return reply(200, { ok: false, error: "postcode-onbekend", land,
       gebied: gebied.sleutel,
-      uitleg: "We do not have a rate for postcode area " + gebied.sleutel + " in " +
-              land + " yet. Send us a message and we will quote it." });
+      uitleg: "Send us a message with your postcode in " + land +
+              " and we will quote the delivery for you." });
     const band = vrachtBand(heugtenLand.banden, ldm, kg);
     if (!band || band.prijzen[zone] == null) return reply(200, { ok: false, error: "geen tarief voor deze zone" });
     basis = band.prijzen[zone];
@@ -2867,8 +2867,8 @@ async function dpRestMail(env, item, accounts, soort, url) {
       'Still to pay: <b>' + dpGeld(item, rest) + '</b></p>' +
       '<p>Complete the payment within 48 hours and we will get it to you straight away - collection or delivery, whichever you chose.</p>' +
       knop("Complete payment") +
-      '<p style="color:#6b7280;font-size:13px;">If the payment has not reached us by ' + tot +
-      ', we will make the next customer happy with this spa. Your reservation then simply moves to the next one that comes in, so you keep your place.</p>';
+      '<p style="color:#6b7280;font-size:13px;">As soon as your payment reaches us the spa is yours. After ' + tot +
+      ' we will make the next customer happy with this one, and your reservation moves to the next spa that comes in - so you keep your place.</p>';
   } else if (soort === "herinnering") {
     onderwerp = "24 hours left on your spa";
     binnen =
@@ -2878,7 +2878,7 @@ async function dpRestMail(env, item, accounts, soort, url) {
       'Still to pay: <b>' + dpGeld(item, rest) + '</b><br>' +
       'Ready for you until: <b>' + tot + '</b></p>' +
       knop("Complete payment") +
-      '<p style="color:#6b7280;font-size:13px;">After that we will pass this one on to the next customer and your reservation moves to the next spa that arrives. Nothing is lost - it just takes a little longer.</p>';
+      '<p style="color:#6b7280;font-size:13px;">After that we will pass this one on to the next customer and your reservation moves to the next spa that arrives. Your place in the queue stays yours - it just takes a little longer.</p>';
   } else if (soort === "verlopen") {
     onderwerp = "Your spa moves to the next arrival";
     binnen =
@@ -2886,7 +2886,7 @@ async function dpRestMail(env, item, accounts, soort, url) {
       '<p>The 48 hours have passed, so this spa is going to another customer who is ready for it today.</p>' +
       '<p>Your reservation stays exactly where it was: the next one that arrives in Uddel is yours.</p>' +
       '<p><b>' + wat + '</b></p>' +
-      '<p>Your deposit stays with your reservation - nothing to arrange.</p>' +
+      '<p>Your deposit stays with your reservation, so everything is already arranged.</p>' +
       '<p>Would you rather have it sooner, or a different colour? Reply to this e-mail and we will look at what is on the water.</p>';
   } else if (soort === "voldaan") {
     onderwerp = "Paid in full - your spa is on its way";
@@ -2928,7 +2928,7 @@ async function dpHandleRestbetaling(request, env, sess, url) {
     return reply(403, { ok: false, error: "niet jouw bestelling" });
   if (item.restBetaald) return reply(200, { ok: true, alBetaald: true });
   if (!item.restKlaar) return reply(409, { ok: false, error: "nog-niet-aangekomen",
-    uitleg: "This spa has not arrived yet. We will e-mail you the moment it does." });
+    uitleg: "We will e-mail you the moment this spa arrives in Uddel." });
   if (item.restVerlopen) return reply(409, { ok: false, error: "verlopen",
     uitleg: "This spa has gone to another customer. Your reservation moves to the next arrival - reply to our e-mail and we will tell you when that is." });
   const bedrag = dpRestBedrag(item);
@@ -3471,16 +3471,16 @@ async function dpHandleWelkom(request, env, url) {
       "</form>" +
       "<script>document.getElementById('f').addEventListener('submit',async function(e){" +
       "e.preventDefault();var a=document.getElementById('pw1').value,b=document.getElementById('pw2').value,f=document.getElementById('fout');" +
-      "if(a!==b){f.textContent='The passwords do not match.';return;}" +
+      "if(a!==b){f.textContent='Type the same password twice and you are set.';return;}" +
       "f.textContent='';" +
       "var r=await fetch('/dealers/welkom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({t:" + JSON.stringify(t.replace(/[^A-Za-z0-9-]/g, "")) + ",password:a})});" +
       "var j=await r.json().catch(function(){return{}});" +
       "if(j.ok){location.href='/dealers#s='+j.session;}" +
-      "else{f.textContent=j.error==='wachtwoord-te-kort'?'Password must be at least 8 characters.':'This link is no longer valid. Please contact us for a new invitation.';}" +
+      "else{f.textContent=j.error==='wachtwoord-te-kort'?'Use at least 8 characters for your password.':'This link has done its work. Ask us for a fresh invitation.';}" +
       "});</script>"
     : "<h2 style='margin:0 0 10px;font-size:19px;color:#1f2937'>Link expired</h2>" +
-      "<p style='color:#555;line-height:1.5'>This invitation link is no longer valid. " +
-      "Please contact us for a new invitation, or log in with your password if you already chose one.</p>" +
+      "<p style='color:#555;line-height:1.5'>This invitation link has done its work. " +
+      "Ask us for a fresh invitation, or log in with your password if you already chose one.</p>" +
       "<p style='margin:20px 0 0'><a href='/dealers' style='color:#c8102e;font-weight:bold;text-decoration:none'>Go to the portal</a></p>";
 
   return dpPaginaShell(env, url, "Welcome to Passion Partners", binnen, invite ? 200 : 400);
