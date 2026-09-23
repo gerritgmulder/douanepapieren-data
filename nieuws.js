@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-23", bestand: "prijslijsten-fabrikanten.html", soort: "nieuw",
+      titel: "Leveranciersinformatie: overzicht per leverancier",
+      wat: "Een nieuw tabblad met alle leveranciers. Per leverancier: contactpersoon, fabriek (intern en extern), inkoopvorm (magazijn, bezorgd, 40ft, 20ft) met de levertijd, en per artikel de code en naam van de fabriek naast die van ons, met prijs en CBM. Zoeken werkt ook op artikelcode en artikelnaam, over alle leveranciers. De prijslijsten staan onder het tweede tabblad."
+    },
+    {
       datum: "2026-09-22", bestand: "opleverbonnen.html", soort: "beter",
       titel: "Opleverbonnen: zoeken",
       wat: "Een zoekvak boven de lijst: klant, plaats, ordernummer, monteur, spa of serienummer. Staat de bon in een andere groep dan het filter, dan zegt het scherm dat."

@@ -2,6 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Leveranciersinformatie — Fonteyn Dashboard</title>
 <script src="taal.js"></script>
 <script src="toegang.js"></script>
@@ -89,6 +90,57 @@
   .hidden{display:none!important}
   .versies{font-size:11.5px;color:var(--muted);margin-top:3px}
   .versies a{color:var(--fonteyn-green);cursor:pointer}
+  /* Overzicht per leverancier (Gerrit, 23 sep 2026). Links de leveranciers,
+     rechts de gegevens van de gekozen leverancier. Twee kolommen naast elkaar
+     in plaats van één brede tabel: dan past het zonder opzij te schuiven. */
+  .weergave{display:flex;gap:6px;margin:6px 0 4px;flex-wrap:wrap}
+  .weergave button{border:1px solid var(--border);background:#fff;border-radius:9px;padding:8px 15px;font:inherit;font-size:13px;cursor:pointer;color:var(--ink)}
+  .weergave button.aan{background:var(--fonteyn-green);color:#fff;border-color:var(--fonteyn-green);font-weight:600}
+  .ov{display:grid;grid-template-columns:minmax(260px,330px) 1fr;gap:14px;align-items:start}
+  @media (max-width:900px){ .ov{grid-template-columns:1fr} }
+  .ov-lijst{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;max-height:calc(100vh - 230px);display:flex;flex-direction:column}
+  .ov-lijst .zoekbalk{padding:10px;border-bottom:1px solid var(--border)}
+  .ov-lijst .zoekbalk input{width:100%;box-sizing:border-box}
+  .ov-lijst .rijen{overflow:auto}
+  .ov-lev{padding:9px 12px;border-bottom:1px solid #f3f4f6;cursor:pointer}
+  .ov-lev:hover{background:#fbfdf7}
+  .ov-lev.aan{background:#eef6e2;box-shadow:inset 4px 0 0 var(--fonteyn-lime)}
+  .ov-lev b{font-size:13px;font-weight:600;display:block}
+  .ov-lev .sub{font-size:11.5px;color:var(--muted);margin-top:2px;overflow-wrap:break-word}
+  .ov-lev .treffer{font-size:11.5px;color:var(--fonteyn-green);margin-top:3px}
+  .vorm{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:#eef2e6;color:var(--fonteyn-green);margin:2px 4px 0 0;white-space:nowrap}
+  .ov-detail{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+  .ov-detail h3{margin:0 0 4px;color:var(--fonteyn-green);font-size:17px}
+  .ov-detail h4{margin:18px 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--fonteyn-green);border-bottom:1px solid var(--border);padding-bottom:4px}
+  /* Elke regel: links wat je invult, rechts wat die regel laat zien. */
+  table.velden{width:100%;border-collapse:collapse;font-size:13px}
+  table.velden td{padding:5px 6px;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+  table.velden td.w{width:62%}
+  table.velden td.uitleg{color:var(--muted);font-size:12px;line-height:1.35}
+  table.velden td.uitleg b{color:var(--ink);font-weight:600;font-size:12.5px;display:block}
+  table.velden input[type=text]{width:100%;box-sizing:border-box}
+  .vormrij{display:flex;gap:10px;align-items:center}
+  .vormrij label{display:flex;gap:6px;align-items:center;min-width:110px;font-weight:600;cursor:pointer}
+  .vormrij input[type=text]{flex:1}
+  table.art{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
+  table.art th{background:#f9fafb;font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);text-align:left;padding:6px 5px;border-bottom:1px solid var(--border)}
+  table.art td{padding:3px 4px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+  table.art input{width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;padding:5px 6px;font:inherit;font-size:12.5px;background:#fff}
+  table.art input.n{text-align:right}
+  table.art tr.leeg td{color:var(--muted);font-style:italic;padding:10px 6px}
+  .ov-stand{font-size:11.5px;color:var(--muted);margin-top:8px;min-height:15px}
+  @media (max-width:700px){
+    main{padding:0 12px} .ov-lijst{max-height:40vh}
+    table.velden td{display:block;width:auto!important} table.velden td.uitleg{padding-top:0}
+    table.art,table.art tbody,table.art tr,table.art td{display:block;width:auto!important} table.art thead{display:none}
+    table.art tr{border:1px solid var(--border);border-radius:8px;padding:6px;margin-bottom:8px}
+    table.art td{border:0;padding:2px 0}
+    table.art td input::placeholder{color:#9ca3af}
+    /* De bestandenlijst: grootte en datum passen niet naast naam en
+       omschrijving; op de telefoon weg, de rest blijft. */
+    table.grid th:nth-child(3),table.grid td:nth-child(3),table.grid th:nth-child(4),table.grid td:nth-child(4){display:none}
+    table.grid td{overflow-wrap:break-word}
+  }
 </style>
 </head>
 <body>
@@ -102,12 +154,33 @@
 </header>
 
 <main>
-  <h2>Prijslijsten van leveranciers en fabrieken</h2>
-  <p class="lead">Alle prijsafspraken op één plek. Maak per leverancier of fabriek een map en zet de prijslijst erin — als PDF, Excel of Word. Vervang je een lijst door een nieuwere, dan blijft de oude als versie bewaard, zodat altijd terug te vinden is welke prijs wanneer gold.</p>
+  <h2>Leveranciers en fabrieken</h2>
+  <p class="lead">Per leverancier de contactpersoon, de fabriek, hoe en hoe snel er geleverd wordt, en welk artikel van de fabriek welk artikel van ons is. Onder "Prijslijsten en mappen" staan de prijslijsten zelf; een vervangen lijst blijft als versie bewaard.</p>
 
   <div id="deny" class="status-msg bad hidden">Geen toegang tot de prijslijsten.</div>
 
   <div id="content">
+    <div class="weergave">
+      <button type="button" data-w="overzicht" class="aan">Overzicht per leverancier</button>
+      <button type="button" data-w="bestanden">Prijslijsten en mappen</button>
+    </div>
+
+    <!-- Overzicht per leverancier. Gerrit (23 sep 2026): per leverancier
+         contactpersoon, fabriek intern en extern, inkoopvorm met levertijd, en
+         per artikel de code en naam van de fabriek naast die van ons, prijs en
+         CBM. Reinier herkent bij de betalingen de naam van de fabriek en ziet
+         hier welk artikel van ons dat is. -->
+    <div id="wOverzicht">
+      <div class="ov">
+        <div class="ov-lijst">
+          <div class="zoekbalk"><input type="text" id="ovZoek" placeholder="zoek leverancier, fabriek, artikelcode of artikelnaam…"></div>
+          <div class="rijen" id="ovRijen"></div>
+        </div>
+        <div class="ov-detail" id="ovDetail"><p class="meta">Kies links een leverancier.</p></div>
+      </div>
+    </div>
+
+    <div id="wBestanden" class="hidden">
     <div id="kpis" class="kpi-row"></div>
 
     <div id="melding" class="status-msg hidden"></div>
@@ -161,6 +234,7 @@
       </table>
 
       <div class="sleep" id="sleepzone">Sleep hier bestanden of een hele map naartoe — mappen worden met submappen en al overgenomen</div>
+    </div>
     </div>
   </div>
 </main>
@@ -780,6 +854,115 @@ document.getElementById("logoutBtn").addEventListener("click",()=>{
   localStorage.removeItem(SESSION_KEY); localStorage.removeItem(EMAIL_KEY); location.href="dashboard.html";
 });
 
+/* ═══ Overzicht per leverancier ════════════════════════════════════════
+   Een leverancier is een map op het eerste niveau (Eurofar heeft daaronder
+   nog drie jaarmappen; die tellen niet als eigen leverancier). De gegevens
+   staan in S.afspraken[leverancier], naast de prijsafspraken die er al
+   stonden; "contact" is hetzelfde veld als daar. */
+const VORMEN=[["magazijn","Magazijn","Levering op ons magazijn."],["bezorgd","Bezorgd","De leverancier bezorgt zelf."],["ft40","40ft","Per volle 40-voets container."],["ft20","20ft","Per volle 20-voets container."]];
+let ovGekozen="", ovTimer=null;
+function leveranciers(){ return S.mappen.filter(m=>!m.includes("/")).sort((a,b)=>a.localeCompare(b,"nl")); }
+function levData(lev){ S.afspraken=S.afspraken||{}; const a=S.afspraken[lev]=S.afspraken[lev]||{}; a.inkoop=a.inkoop||{}; a.artikelen=Array.isArray(a.artikelen)?a.artikelen:[]; return a; }
+function levLees(lev){ const a=(S.afspraken||{})[lev]||{}; return { contact:a.contact||"", fi:a.fabriekIntern||"", fe:a.fabriekExtern||"", inkoop:a.inkoop||{}, artikelen:Array.isArray(a.artikelen)?a.artikelen:[], op:a.op, door:a.door }; }
+function vormenTekst(inkoop){ return VORMEN.filter(([k])=>inkoop[k]&&inkoop[k].aan).map(([k,l])=>"<span class='vorm'>"+esc(l)+(inkoop[k].lt?" · LT "+esc(inkoop[k].lt):"")+"</span>").join(""); }
+function ovTreffers(lev, q){
+  const d=levLees(lev);
+  if(!q) return { past:true, art:[] };
+  const inNaam=[lev,d.contact,d.fi,d.fe].some(x=>String(x||"").toLowerCase().includes(q));
+  const art=d.artikelen.filter(r=>[r.codeExtern,r.naamExtern,r.codeIntern,r.naamIntern].some(x=>String(x||"").toLowerCase().includes(q)));
+  return { past:inNaam||art.length>0, art };
+}
+function tekenOverzicht(){
+  const q=(document.getElementById("ovZoek").value||"").trim().toLowerCase();
+  const lijst=leveranciers().map(l=>({l,t:ovTreffers(l,q)})).filter(x=>x.t.past);
+  document.getElementById("ovRijen").innerHTML=lijst.length?lijst.map(({l,t})=>{
+    const d=levLees(l);
+    const sub=[d.contact, d.fi&&("fabriek: "+d.fi)].filter(Boolean).join(" · ");
+    return "<div class='ov-lev"+(l===ovGekozen?" aan":"")+"' data-lev=\""+esc(l)+"\"><b>"+esc(l)+"</b>"+
+      (sub?"<div class='sub'>"+esc(sub)+"</div>":"")+
+      "<div>"+vormenTekst(d.inkoop)+(d.artikelen.length?"<span class='vorm' style='background:#f3f4f6;color:#374151'>"+d.artikelen.length+" artikel"+(d.artikelen.length===1?"":"en")+"</span>":"")+"</div>"+
+      (t.art.length?"<div class='treffer'>"+t.art.slice(0,3).map(r=>esc((r.codeExtern||r.naamExtern||"")+" → "+(r.codeIntern||r.naamIntern||"nog niet gekoppeld"))).join("<br>")+(t.art.length>3?"<br>en nog "+(t.art.length-3):"")+"</div>":"")+
+      "</div>";
+  }).join(""):"<div class='ov-lev' style='cursor:default;color:var(--muted)'>Niets gevonden"+(q?" voor '"+esc(q)+"'":"")+".</div>";
+  document.querySelectorAll("#ovRijen [data-lev]").forEach(x=>x.addEventListener("click",()=>{ ovGekozen=x.dataset.lev; tekenOverzicht(); tekenLeverancier(); }));
+}
+function veldRij(id, waarde, titel, uitleg, plaats){
+  return "<tr><td class='w'><input type='text' data-ov='"+id+"' value=\""+esc(waarde)+"\" placeholder=\""+esc(plaats||"")+"\"></td><td class='uitleg'><b>"+esc(titel)+"</b>"+esc(uitleg)+"</td></tr>";
+}
+function tekenLeverancier(){
+  const box=document.getElementById("ovDetail");
+  const lev=ovGekozen;
+  if(!lev){ box.innerHTML="<p class='meta'>Kies links een leverancier.</p>"; return; }
+  const d=levLees(lev);
+  box.innerHTML="<h3>"+esc(lev)+"</h3><div class='meta'>"+(d.op?"Laatst gewijzigd "+datum(d.op)+(d.door?" door "+esc(korteNaam(d.door)):""):"Nog niets vastgelegd.")+" · <a class='klik' id='ovNaarMap'>prijslijsten van deze leverancier</a></div>"+
+    "<h4>Leverancier</h4><table class='velden'>"+
+      veldRij("contact",d.contact,"Contactpersoon","Naam, mail en telefoon van ons contact bij deze leverancier.","bv. Linda Chen, linda@…, +86 …")+
+      veldRij("fabriekIntern",d.fi,"Fabriek (intern)","Hoe wij deze fabriek noemen.","bv. Jazzi")+
+      veldRij("fabriekExtern",d.fe,"Fabriek (extern)","De naam zoals de fabriek zelf op facturen en papieren staat.","bv. Guangdong Jazzi Spa Tech Co., Ltd")+
+    "</table>"+
+    "<h4>Inkoopvorm en levertijd</h4><table class='velden'>"+
+      VORMEN.map(([k,l,u])=>{ const v=d.inkoop[k]||{};
+        return "<tr><td class='w'><div class='vormrij'><label><input type='checkbox' data-vorm='"+k+"'"+(v.aan?" checked":"")+"> "+esc(l)+"</label>"+
+          "<input type='text' data-lt='"+k+"' value=\""+esc(v.lt||"")+"\" placeholder='levertijd, bv. 6 weken'"+(v.aan?"":" disabled")+"></div></td>"+
+          "<td class='uitleg'><b>Levertijd (LT) bij "+esc(l.toLowerCase())+"</b>"+esc(u)+" Aanvinken als deze leverancier zo levert.</td></tr>"; }).join("")+
+    "</table>"+
+    "<h4>Artikelen</h4>"+
+    "<p class='meta' style='margin:0 0 6px'>Links wat de fabriek op de factuur zet, rechts wat het bij ons is. Zo koppelt Reinier bij de betaling de naam van de fabriek aan ons artikel.</p>"+
+    "<table class='art'><thead><tr><th style='width:13%'>Artikelcode (extern)</th><th style='width:22%'>Artikel (extern)</th><th style='width:13%'>Artikelcode (intern)</th><th style='width:22%'>Artikel (intern)</th><th style='width:11%'>Prijs</th><th style='width:9%'>CBM</th><th style='width:32px'></th></tr></thead><tbody>"+
+      (d.artikelen.length?d.artikelen.map((r,i)=>"<tr>"+
+        ["codeExtern","naamExtern","codeIntern","naamIntern","prijs","cbm"].map(k=>"<td><input data-art='"+i+"' data-k='"+k+"' placeholder='"+({codeExtern:"artikelcode (extern)",naamExtern:"artikel (extern)",codeIntern:"artikelcode (intern)",naamIntern:"artikel (intern)",prijs:"prijs",cbm:"CBM"})[k]+"' value=\""+esc(r[k]||"")+"\""+((k==="prijs"||k==="cbm")?" class='n' inputmode='decimal'":"")+"></td>").join("")+
+        "<td><button class='mini gevaar' data-artweg='"+i+"' title='deze regel weghalen'>✕</button></td></tr>").join(""):"<tr class='leeg'><td colspan='7'>Nog geen artikelen. Voeg er een toe met de knop hieronder.</td></tr>")+
+    "</tbody></table>"+
+    "<div style='margin-top:8px'><button class='primary' id='ovArtNieuw' type='button'>+ Artikel toevoegen</button></div>"+
+    "<div class='ov-stand' id='ovStand'></div>";
+  document.getElementById("ovNaarMap").addEventListener("click",()=>{ hier=lev; zetWeergave("bestanden"); teken(); });
+  box.querySelectorAll("[data-ov]").forEach(inp=>inp.addEventListener("input",()=>{ levData(lev)[inp.dataset.ov]=inp.value; ovBewaarStraks(lev); }));
+  box.querySelectorAll("[data-vorm]").forEach(cb=>cb.addEventListener("change",()=>{ const a=levData(lev); const k=cb.dataset.vorm; a.inkoop[k]=a.inkoop[k]||{}; a.inkoop[k].aan=cb.checked; box.querySelector("[data-lt='"+k+"']").disabled=!cb.checked; ovBewaarStraks(lev); }));
+  box.querySelectorAll("[data-lt]").forEach(inp=>inp.addEventListener("input",()=>{ const a=levData(lev); const k=inp.dataset.lt; a.inkoop[k]=a.inkoop[k]||{}; a.inkoop[k].lt=inp.value; ovBewaarStraks(lev); }));
+  box.querySelectorAll("[data-art]").forEach(inp=>inp.addEventListener("input",()=>{ const a=levData(lev); const r=a.artikelen[Number(inp.dataset.art)]; if(r){ r[inp.dataset.k]=inp.value; ovBewaarStraks(lev); } }));
+  box.querySelectorAll("[data-artweg]").forEach(b=>b.addEventListener("click",async()=>{
+    const a=levData(lev); const i=Number(b.dataset.artweg); const r=a.artikelen[i]||{};
+    const leeg=!["codeExtern","naamExtern","codeIntern","naamIntern","prijs","cbm"].some(k=>String(r[k]||"").trim());
+    if(!leeg && !(await vraagJaNee("Artikel weghalen?",(r.naamExtern||r.codeExtern||"Deze regel")+" gaat uit de lijst van "+lev+".","Weghalen",true))) return;
+    a.artikelen.splice(i,1); ovBewaarStraks(lev,0); tekenLeverancier(); tekenOverzicht();
+  }));
+  document.getElementById("ovArtNieuw").addEventListener("click",()=>{
+    const a=levData(lev); a.artikelen.push({codeExtern:"",naamExtern:"",codeIntern:"",naamIntern:"",prijs:"",cbm:""});
+    tekenLeverancier(); const rijen=box.querySelectorAll("table.art tbody tr"); const laatste=rijen[rijen.length-1]; const eerste=laatste&&laatste.querySelector("input"); if(eerste) eerste.focus();
+  });
+}
+/* Bewaren: eerst de laatste stand ophalen en alleen deze leverancier
+   vervangen. Zo gaat er niets verloren als Gretha op hetzelfde moment een
+   prijslijst toevoegt. */
+function ovBewaarStraks(lev, wacht){
+  const a=levData(lev); a.op=new Date().toISOString(); a.door=IK;
+  const st=document.getElementById("ovStand"); if(st) st.textContent="Bewaren…";
+  clearTimeout(ovTimer);
+  ovTimer=setTimeout(async()=>{
+    try{
+      const mijn=JSON.parse(JSON.stringify(a));
+      const r=await fetch(BUCKET,{headers:{"X-Fonteyn-Auth":TEAM}});
+      if(r.ok){ const j=await r.json();
+        S.mappen=Array.isArray(j.mappen)?j.mappen:S.mappen; S.bestanden=Array.isArray(j.bestanden)?j.bestanden:S.bestanden;
+        S.afspraken=(j.afspraken&&typeof j.afspraken==="object")?j.afspraken:{}; }
+      S.afspraken[lev]=Object.assign({}, S.afspraken[lev]||{}, mijn);
+      await bewaar();
+      const st2=document.getElementById("ovStand"); if(st2) st2.textContent="Bewaard, "+datum(mijn.op)+" door "+korteNaam(IK);
+      tekenOverzicht();
+      try{ if(window.fpLog) window.fpLog("leveranciersgegevens-gewijzigd",lev); }catch(e){}
+    }catch(e){ const st3=document.getElementById("ovStand"); if(st3) st3.textContent="Niet bewaard: "+e.message; }
+  }, wacht==null?800:wacht);
+}
+function zetWeergave(w){
+  document.querySelectorAll(".weergave [data-w]").forEach(b=>b.classList.toggle("aan",b.dataset.w===w));
+  document.getElementById("wOverzicht").classList.toggle("hidden",w!=="overzicht");
+  document.getElementById("wBestanden").classList.toggle("hidden",w!=="bestanden");
+  try{ localStorage.setItem("fp.leveranciers.weergave",w); }catch(e){}
+  if(w==="overzicht"){ tekenOverzicht(); tekenLeverancier(); }
+}
+document.querySelectorAll(".weergave [data-w]").forEach(b=>b.addEventListener("click",()=>zetWeergave(b.dataset.w)));
+document.getElementById("ovZoek").addEventListener("input",tekenOverzicht);
+
 (async function boot(){
   if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
   document.getElementById("userEmail").textContent=IK||"—";
@@ -796,6 +979,8 @@ document.getElementById("logoutBtn").addEventListener("click",()=>{
   }
   await laad();
   teken();
+  let w="overzicht"; try{ w=localStorage.getItem("fp.leveranciers.weergave")||"overzicht"; }catch(e){}
+  zetWeergave(w==="bestanden"?"bestanden":"overzicht");
 })();
 </script>
 
