@@ -51,17 +51,7 @@
 
   var NIEUWS = [
 
-    {
-      datum: "2026-09-23", bestand: "dealerportaal.html", soort: "nieuw",
-      titel: "De restbetaling gaat vanzelf",
-      wat: "Meldt Manon een container binnen, dan krijgt elke partner die op een spa uit die container wacht meteen bericht dat hij klaarstaat, met een betaalknop voor het restbedrag. Na 24 werkuren volgt een herinnering. Is er na 48 werkuren niet betaald, dan komt de spa vrij voor een andere klant en houdt de partner zijn plek voor de volgende aankomst. De klok telt alleen werkdagen, dus een container die vrijdagmiddag binnenkomt geeft een deadline op dinsdag.",
-    },
 
-    {
-      datum: "2026-09-23", bestand: "dealerportaal.html", soort: "nieuw",
-      titel: "De adviseur staat in de cc",
-      wat: "Elke mail die het partnerportaal naar een partner stuurt gaat voortaan in cc naar de adviseur die die partner heeft aangemaakt. Belt een dealer over een mail, dan weet de adviseur meteen welke dat is. Bij relaties van voor vandaag staat nog geen adviseur; die mails gaan gewoon door, alleen zonder cc.",
-    },
     {
       datum: "2026-09-23", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
       titel: "Leveranciersinformatie: afspraken eerst, dan pas bestellen",

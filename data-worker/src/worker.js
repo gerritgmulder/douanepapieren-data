@@ -280,10 +280,7 @@ const DP_SESS_TTL  = 30 * 24 * 3600;     // sessie 30 dagen
    Leeg gelaten valt hij terug op de origin van het verzoek, dus zolang de
    DNS nog niet staat verandert er niets. Zetten met:
        npx wrangler secret put DP_PUBLIC_ORIGIN     (of als var in de toml) */
-/* url mag ontbreken: de uurronde voor de restbetaling stuurt ook mails en die
-   draait in de cron, waar geen verzoek en dus geen url is. DP_PUBLIC_ORIGIN
-   staat in wrangler.toml, dus in de praktijk komt hij daar nooit voorbij. */
-const dpOrigin = (env, url) => (env && env.DP_PUBLIC_ORIGIN) || (url && url.origin) || "";
+const dpOrigin = (env, url) => (env && env.DP_PUBLIC_ORIGIN) || url.origin;
 
 /* HUISSTIJL VAN HET PORTAAL - logo, mailopmaak, paginaopmaak
    ═══════════════════════════════════════════════════════════════════════
@@ -373,45 +370,13 @@ async function rateLimited(env, request, scope, limit, windowSec) {
   return false;
 }
 
-/* De adviseur van een partner: wie hem heeft aangemaakt in Passion Partners
-   Beheer. Gerrit (23 sep 2026): "Ik wil dat de adviseur die de partner/dealer
-   als nieuwe partner/dealer in het systeem zet, altijd in de cc wordt
-   meegenomen als zo'n bericht gemaild wordt aan de partner/dealer! Dit is een
-   hele belangrijke."
-
-   Accounts van vóór die dag hebben dat veld niet. Dan valt hij terug op
-   addedBy, dat de snelle invoerregel altijd al vulde, en anders op niets - een
-   ontbrekende adviseur mag nooit een bericht tegenhouden. */
-function dpAdviseurVan(accounts, email) {
-  const d = dpFindDealer(accounts, email);
-  const a = String((d && (d.adviseur || d.addedBy)) || "").trim().toLowerCase();
-  if (!a || !a.includes("@")) return null;
-  // Niet in cc bij een mail aan jezelf: een adviseur bestelt ook voor de beurs.
-  if (a === String(email || "").trim().toLowerCase()) return null;
-  return a;
-}
-/* Dezelfde cc, maar opgezocht in de opslag. Voor de plekken waar de accounts
-   niet toch al in de hand zijn; die kosten een KV-lees en dat is bij een mail
-   geen bezwaar. */
-async function dpCcAdviseur(env, email) {
-  try { return dpAdviseurVan(await dpGetAccounts(env), email); } catch (e) { return null; }
-}
-
-async function dpSendEmail(env, to, subject, html, replyTo, cc) {
+async function dpSendEmail(env, to, subject, html, replyTo) {
   if (!env.RESEND_API_KEY || !env.MAIL_FROM) {
     console.log("[dp-mail] niet geconfigureerd (RESEND_API_KEY/MAIL_FROM ontbreekt)");
     return { ok: false, error: "mail-not-configured" };
   }
   const body = { from: env.MAIL_FROM, to: [String(to).toLowerCase()], subject, html };
   if (replyTo) body.reply_to = [replyTo];
-  /* De adviseur in cc. Meerdere adressen mogen, dubbele en het eigen adres
-     gaan eruit - Resend weigert een cc die gelijk is aan de ontvanger. */
-  if (cc) {
-    const lijst = [...new Set((Array.isArray(cc) ? cc : [cc])
-      .map(x => String(x || "").trim().toLowerCase())
-      .filter(x => x && x.includes("@") && x !== String(to).toLowerCase()))];
-    if (lijst.length) body.cc = lijst;
-  }
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { "Authorization": `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
@@ -431,7 +396,6 @@ async function dpSendEmail(env, to, subject, html, replyTo, cc) {
     let id = null; try { id = (JSON.parse(respText) || {}).id || null; } catch {}
     const log = (await env.FONTEYN_DATA.get("dp-mail-log", { type: "json" })) || { regels: [] };
     log.regels = [{ ts: new Date().toISOString(), naar: String(to).toLowerCase(),
-                    cc: (body.cc || []).join(", ") || null,
                     onderwerp: String(subject || "").slice(0, 120), status: r.status,
                     id, fout: r.ok ? null : respText.slice(0, 200) },
                   ...(log.regels || [])].slice(0, 50);
@@ -579,8 +543,7 @@ async function dpHandleLogin(request, env, url) {
       '<p style="margin:0 0 8px;">Click the button below to log in. This link is valid for 15 minutes.</p>' +
       '<p style="margin:28px 0;text-align:center;"><a href="' + link + '" ' +
       'style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;font-size:15px;padding:15px 34px;border-radius:10px;display:inline-block;">Log in to the portal</a></p>' +
-      '<p style="color:#6b7280;font-size:13px;margin:0;">If you did not request this, you can ignore this email.</p>'),
-    undefined, dpAdviseurVan(accounts, email));
+      '<p style="color:#6b7280;font-size:13px;margin:0;">If you did not request this, you can ignore this email.</p>'));
   return generic;
 }
 
@@ -2114,14 +2077,6 @@ async function dpHandleMyRequests(env, sess) {
                  ordernr: r.logic4OrderId || null,
                  id: r.id || null,
                  eigenAanbetaling: r.eigenAanbetaling || null,
-                 /* De restbetaling. Zie dpRestStart: zodra de container binnen
-                    is gemeld loopt er een klok van 48 werkuren, en de partner
-                    hoort op zijn eigen scherm te zien hoeveel er open staat en
-                    tot wanneer - niet alleen in de mail. */
-                 restBedrag: dpRestBedrag(r) || null,
-                 restDeadline: (r.restKlaar && r.restKlaar.deadline) || null,
-                 restBetaald: r.restBetaald || null,
-                 restVerlopen: r.restVerlopen || null,
                  /* Overgezet: van een adviseur naar een partner (beursflow). */
                  overgezetNaar: String(r.overgezetVan || "").toLowerCase() === ik
                    ? (r.company || r.email) : null,
@@ -2224,7 +2179,7 @@ async function dpHandleOverzetten(request, env, sess, url) {
         '<p><b>' + esc(wat) + '</b></p>' +
         '<p>You can follow it under <b>My spas</b> after logging in at ' +
         '<a href="' + dpOrigin(env, url) + '/dealers">' + esc(dpOrigin(env, url).replace(/^https?:\/\//, "")) + '</a>.</p>'),
-      (accounts.contactEmail || undefined), dpAdviseurVan(accounts, naar));
+      (accounts.contactEmail || undefined));
     mailSent = !!(r && r.ok);
   } catch (e) { /* mail is bijzaak */ }
   return reply(200, { ok: true, naar: partner.company || naar, mailSent,
@@ -2698,284 +2653,8 @@ async function dpAdminReserveFor(request, env, url) {
     '</ul>' +
     '<p style="margin:26px 0;"><a href="' + pay.checkoutUrl + '" style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:10px;display:inline-block;">Aanbetaling voldoen</a></p>' +
     '<p style="color:#888;font-size:12px;">Na ontvangst bevestigen wij uw reservering. Vragen? Beantwoord deze e-mail.</p></div>',
-    (accounts.contactEmail || undefined), dpAdviseurVan(accounts, email));
+    (accounts.contactEmail || undefined));
   return reply(200, { ok: true, deposit, currency, emailedTo: email, mailSent: sent.ok, checkoutUrl: pay.checkoutUrl, regels: regelsUit.length });
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   DE RESTBETALING: 48 WERKUREN NADAT DE CONTAINER BINNEN IS GEMELD
-   ═══════════════════════════════════════════════════════════════════════════
-
-   Gerrit (23 sep 2026): "Je bestelling staat klaar bij ons. Je kunt de
-   restbetaling 48 uur voldoen en anders maken we graag een volgende klant blij
-   met de spa. De volgende spa die bij ons binnenkomt wordt dan weer jouw
-   reservering."
-
-   Tot hier hield het portaal op bij de aanbetaling. Een partner betaalde 30%,
-   zag zijn spa onder My spas met een verwachte datum, en daarna stuurde het
-   systeem nooit meer iets - ook niet toen de spa er echt stond.
-
-   Hoe het loopt:
-     Manon meldt de container binnen  ->  klok start voor elke betaalde
-                                          portaalbestelling die op een spa uit
-                                          die container wacht
-     meteen                           ->  mail "Your spa has arrived"
-     nog 24 werkuren te gaan          ->  mail "24 hours left"
-     klok afgelopen                   ->  reservering vrij, mail "moves to the
-                                          next arrival", partner houdt zijn
-                                          plek voor de volgende aankomst
-
-   De klok loopt alleen op werkdagen. Gerrit (23 sep 2026): "werkdagen doen
-   idd." Een container die vrijdag om vier uur binnenkomt geeft dus een
-   deadline op dinsdagmiddag en niet op zondag - anders verloopt de termijn in
-   een weekend waarin niemand kan betalen en waarin wij ook niets uitleveren. */
-
-// Werkdagen: maandag t/m vrijdag. Feestdagen staan er bewust niet in; die
-// vallen per land anders en een dag te veel is hier het goede foutje.
-function dpIsWerkdag(d) { const n = d.getUTCDay(); return n >= 1 && n <= 5; }
-/* Zoveel werkuren verder. Uren op zaterdag en zondag tellen niet mee, dus
-   telt hij per uur door en slaat het weekend over. 48 uur is twee dagen; met
-   het weekend erin loopt dat op tot hooguit vier kalenderdagen. */
-function dpWerkurenLater(vanaf, uren) {
-  const d = new Date(vanaf.getTime());
-  let over = uren;
-  // Begint hij in het weekend, dan begint de klok maandag 08:00 UTC.
-  while (!dpIsWerkdag(d)) { d.setUTCDate(d.getUTCDate() + 1); d.setUTCHours(8, 0, 0, 0); }
-  while (over > 0) {
-    d.setUTCHours(d.getUTCHours() + 1);
-    if (dpIsWerkdag(d)) over--;
-  }
-  return d;
-}
-const DP_REST_UREN = 48;
-const DP_REST_HERINNERING_UREN = 24;   // wat er over moet zijn als de herinnering gaat
-
-/* Wat er nog openstaat. Het totaal staat als `totaalExVat` op de bestelling,
-   met het BTW-percentage van die debiteur ernaast; het bedrag inclusief BTW is
-   nergens bewaard. Dus hier uitrekenen, op precies dezelfde manier als bij het
-   aanbetalingsbedrag - anders sluit de rest niet aan op de order in Logic4.
-
-   Een testbetaling van een cent telt niet: daar hoort geen restbetaling bij. */
-function dpRestBedrag(item) {
-  if (item.testbetaling) return 0;
-  const ex = Number(item.totaalExVat || 0);
-  const btw = 1 + (Number(item.vatPercent) || 0) / 100;
-  const totaal = Math.round(ex * btw * 100) / 100;
-  const rest = totaal - Number(item.deposit || 0);
-  return rest > 0.5 ? Math.round(rest * 100) / 100 : 0;
-}
-function dpWat(item) {
-  if (Array.isArray(item.items) && item.items.length)
-    return item.items.filter(x => x.soort !== "onderdeel")
-      .map(x => x.qty + "× " + (x.model || x.naam || x.code) + (x.variantName ? " (" + x.variantName + ")" : ""))
-      .join("<br>");
-  return (item.qty || 1) + "× " + (item.model || "");
-}
-const dpEsc = (x) => String(x == null ? "" : x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-function dpGeld(item, bedrag) {
-  // Zelfde schrijfwijze als in het portaal: duizendtallen met een punt en twee
-  // decimalen achter de komma. "€ 10889.03" leest niemand goed.
-  const n = Number(bedrag).toFixed(2).split(".");
-  const dui = n[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-  return (item.currency === "USD" ? "$ " : "€ ") + dui + "," + n[1];
-}
-// "Tuesday 14:00" - de partner moet kunnen zien wanneer het afloopt zonder te rekenen.
-function dpWanneer(iso) {
-  const d = new Date(iso);
-  const dag = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][d.getUTCDay()];
-  return dag + " " + String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0");
-}
-
-/* DE KLOK STARTEN. Aangeroepen zodra een container op binnen wordt gezet.
-
-   Welke bestellingen horen bij deze container? Alles wat betaald is, nog niet
-   volledig is voldaan en nog geen klok heeft lopen, voor een model dat in deze
-   container zit. Oudste bestelling eerst en nooit meer dan er in de container
-   zitten - dat is ook hoe de spa's echt worden toegewezen: wie het eerst
-   betaalde, is het eerst aan de beurt.
-
-   Bewust niet op kleur: de commercial invoice noemt alleen de schaalkleur en
-   niet de trim (zie de forecast). Een spa aan de verkeerde partner beloven is
-   erger dan Manon even laten kijken, dus staat er in Beheer bij welke
-   container het was en kan ze het terugdraaien. */
-async function dpRestStart(env, schip, url) {
-  const inhoud = {};
-  for (const [model, q] of Object.entries((schip && schip.models) || {})) {
-    const n = Number(q) || 0;
-    if (n > 0) inhoud[model] = n;
-  }
-  if (!Object.keys(inhoud).length) return { ok: true, gestart: 0, reden: "container zonder spa's" };
-
-  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
-  const lijst = Array.isArray(data.requests) ? data.requests : [];
-  const accounts = await dpGetAccounts(env);
-  const wachtend = lijst
-    .filter(r => (r.paymentStatus === "paid" || r.status === "paid"))
-    .filter(r => !r.restKlaar && !r.restBetaald && !r.allocationReleased && !r.orderGeannuleerd)
-    .filter(r => dpRestBedrag(r) > 0)
-    .sort((a, b) => String(a.ts || "").localeCompare(String(b.ts || "")));
-
-  const nu = new Date();
-  const deadline = dpWerkurenLater(nu, DP_REST_UREN).toISOString();
-  let gestart = 0;
-  for (const r of wachtend) {
-    const modellen = Array.isArray(r.items) && r.items.length
-      ? r.items.filter(x => x.soort !== "onderdeel").map(x => String(x.model || ""))
-      : [String(r.model || "")];
-    // Elke spa van deze bestelling moet uit deze container kunnen komen.
-    if (!modellen.length || !modellen.every(m => inhoud[m] > 0)) continue;
-    for (const m of modellen) inhoud[m]--;
-    r.restKlaar = { op: nu.toISOString(), container: schip.ref || null, deadline };
-    r.status = "wacht-restbetaling";
-    gestart++;
-    await dpRestMail(env, r, accounts, "aangekomen", url);
-  }
-  if (gestart) await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
-  return { ok: true, gestart, deadline };
-}
-
-/* De vier berichten. Teksten door Gerrit goedgekeurd op 23 sep 2026; de toon
-   is met opzet positief - ook het bericht dat de spa naar een ander gaat.
-   Gerrit: "hij moet altijd positieve taal als bericht krijgen". */
-async function dpRestMail(env, item, accounts, soort, url) {
-  const naar = item.targetEmail || item.email;
-  if (!naar) return { ok: false };
-  const dealer = dpFindDealer(accounts, naar);
-  const naam = dpEsc(item.company || (dealer && dealer.company) || "");
-  const wat = dpWat(item);
-  const rest = dpRestBedrag(item);
-  const tot = item.restKlaar ? dpWanneer(item.restKlaar.deadline) : "";
-  const knop = (tekst) =>
-    '<p style="margin:26px 0;text-align:center;"><a href="' + dpOrigin(env, url) +
-    '/dealers#rest=' + encodeURIComponent(item.id) + '" style="background:#c8102e;color:#fff;' +
-    'text-decoration:none;font-weight:bold;font-size:15px;padding:15px 34px;border-radius:10px;' +
-    'display:inline-block;">' + tekst + '</a></p>';
-
-  let onderwerp = "", binnen = "";
-  if (soort === "aangekomen") {
-    onderwerp = "Your spa has arrived - ready for you";
-    binnen =
-      '<p>Hi ' + naam + ',</p>' +
-      '<p>Your spa is here. It arrived in Uddel today and it is standing ready with your name on it.</p>' +
-      '<p><b>' + wat + '</b><br>' +
-      (item.logic4OrderId ? 'Order ' + dpEsc(item.logic4OrderId) + '<br>' : '') +
-      'Still to pay: <b>' + dpGeld(item, rest) + '</b></p>' +
-      '<p>Complete the payment within 48 hours and we will get it to you straight away - collection or delivery, whichever you chose.</p>' +
-      knop("Complete payment") +
-      '<p style="color:#6b7280;font-size:13px;">If the payment has not reached us by ' + tot +
-      ', we will make the next customer happy with this spa. Your reservation then simply moves to the next one that comes in, so you keep your place.</p>';
-  } else if (soort === "herinnering") {
-    onderwerp = "24 hours left on your spa";
-    binnen =
-      '<p>Hi ' + naam + ',</p>' +
-      '<p>Just a reminder: your spa is still standing ready in Uddel.</p>' +
-      '<p><b>' + wat + '</b><br>' +
-      'Still to pay: <b>' + dpGeld(item, rest) + '</b><br>' +
-      'Ready for you until: <b>' + tot + '</b></p>' +
-      knop("Complete payment") +
-      '<p style="color:#6b7280;font-size:13px;">After that we will pass this one on to the next customer and your reservation moves to the next spa that arrives. Nothing is lost - it just takes a little longer.</p>';
-  } else if (soort === "verlopen") {
-    onderwerp = "Your spa moves to the next arrival";
-    binnen =
-      '<p>Hi ' + naam + ',</p>' +
-      '<p>The 48 hours have passed, so this spa is going to another customer who is ready for it today.</p>' +
-      '<p>Your reservation stays exactly where it was: the next one that arrives in Uddel is yours.</p>' +
-      '<p><b>' + wat + '</b></p>' +
-      '<p>Your deposit stays with your reservation - nothing to arrange.</p>' +
-      '<p>Would you rather have it sooner, or a different colour? Reply to this e-mail and we will look at what is on the water.</p>';
-  } else if (soort === "voldaan") {
-    onderwerp = "Paid in full - your spa is on its way";
-    const afhalen = !item.vracht || item.vracht.wijze !== "bezorgen";
-    binnen =
-      '<p>Hi ' + naam + ',</p>' +
-      '<p>Thank you, the payment is complete.</p>' +
-      '<p><b>' + wat + '</b>' + (item.logic4OrderId ? '<br>Order ' + dpEsc(item.logic4OrderId) : '') + '</p>' +
-      (afhalen
-        ? '<p>You can collect it from Uddel. Let us know which day suits you and we will have it ready at the dock.</p>'
-        : '<p>We are scheduling the transport now and you will hear the delivery date from us shortly.</p>');
-  } else if (soort === "bevestigd") {
-    onderwerp = "Your spa is reserved - Passion Partners";
-    binnen =
-      '<p>Hi ' + naam + ',</p>' +
-      '<p>Great news: your deposit has arrived and your spa is reserved in your name.</p>' +
-      '<p><b>' + wat + '</b></p>' +
-      '<p>We will let you know the moment it arrives in Uddel. From that point you have 48 hours to complete the payment, and then it is ready for you to collect or for us to deliver.</p>' +
-      '<p>You can follow your order any time under <b>My spas</b>.</p>';
-  } else return { ok: false };
-
-  return dpSendEmail(env, naar, onderwerp, dpMailShell(env, url, binnen),
-    (accounts.contactEmail || undefined), dpAdviseurVan(accounts, naar));
-}
-
-/* POST /dealers/api/restbetaling { requestId } - een betaallink voor het
-   restbedrag. Alleen voor je eigen bestelling, alleen als de klok loopt en
-   alleen zolang die niet is afgelopen: is de spa doorgegeven aan een andere
-   klant, dan hoort er geen betaalknop meer te werken. */
-async function dpHandleRestbetaling(request, env, sess, url) {
-  let b = {}; try { b = await request.json(); } catch {}
-  const id = String(b.requestId || "");
-  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
-  const lijst = Array.isArray(data.requests) ? data.requests : [];
-  const item = lijst.find(x => x.id === id);
-  if (!item) return reply(404, { ok: false, error: "bestelling onbekend" });
-  const ik = String(sess.email || "").toLowerCase();
-  if (String(item.targetEmail || item.email || "").toLowerCase() !== ik)
-    return reply(403, { ok: false, error: "niet jouw bestelling" });
-  if (item.restBetaald) return reply(200, { ok: true, alBetaald: true });
-  if (!item.restKlaar) return reply(409, { ok: false, error: "nog-niet-aangekomen",
-    uitleg: "This spa has not arrived yet. We will e-mail you the moment it does." });
-  if (item.restVerlopen) return reply(409, { ok: false, error: "verlopen",
-    uitleg: "This spa has gone to another customer. Your reservation moves to the next arrival - reply to our e-mail and we will tell you when that is." });
-  const bedrag = dpRestBedrag(item);
-  if (bedrag <= 0) return reply(409, { ok: false, error: "niets-open" });
-
-  const pay = await dpCreateMolliePayment(env, bedrag,
-    "Restbetaling " + (item.logic4OrderId ? "order " + item.logic4OrderId : "Passion Partners"),
-    dpOrigin(env, url) + "/dealers?restpaid=1", (url ? url.origin : dpOrigin(env, url)) + "/dealers/webhook",
-    { requestId: item.id, rest: "1" }, item.currency || "EUR");
-  if (!pay.ok) return reply(502, { ok: false, error: pay.error || "mollie-failed" });
-  item.restPaymentId = pay.id;
-  await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
-  return reply(200, { ok: true, bedrag, currency: item.currency || "EUR", checkoutUrl: pay.checkoutUrl });
-}
-
-/* ELK UUR: wie moet een herinnering, en wie is over tijd?
-   Draait mee in de cron, na de reserveringen. Kost geen enkele aanroep naar
-   buiten behalve de mails zelf. */
-async function dpRestRonde(env, url) {
-  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
-  const lijst = Array.isArray(data.requests) ? data.requests : [];
-  const accounts = await dpGetAccounts(env);
-  const nu = Date.now();
-  let herinnerd = 0, verlopen = 0;
-  for (const r of lijst) {
-    if (!r.restKlaar || r.restBetaald || r.restVerlopen) continue;
-    const eind = Date.parse(r.restKlaar.deadline);
-    if (!eind) continue;
-    if (nu >= eind) {
-      /* Over tijd. De spa gaat naar de volgende klant: de claim op de voorraad
-         valt weg, de bestelling blijft staan met zijn aanbetaling en de partner
-         houdt zijn plek in de rij voor de volgende aankomst. De Logic4-order
-         blijft ook staan - daar zit het geld van de aanbetaling op. */
-      r.restVerlopen = new Date().toISOString();
-      r.allocationReleased = true;
-      r.status = "wacht-volgende-aankomst";
-      await dpRestMail(env, r, accounts, "verlopen", url);
-      verlopen++;
-      continue;
-    }
-    // De herinnering als er nog 24 werkuren over zijn, één keer.
-    if (!r.restHerinnerd) {
-      const herOp = dpWerkurenLater(new Date(r.restKlaar.op), DP_REST_UREN - DP_REST_HERINNERING_UREN).getTime();
-      if (nu >= herOp) {
-        r.restHerinnerd = new Date().toISOString();
-        await dpRestMail(env, r, accounts, "herinnering", url);
-        herinnerd++;
-      }
-    }
-  }
-  if (herinnerd || verlopen) await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
-  return { ok: true, herinnerd, verlopen };
 }
 
 /* POST /dealers/admin/terugdraaien { requestId } — een bestelling terugdraaien.
@@ -3109,7 +2788,7 @@ async function dpAdminTestOrder(request, env) {
 // de bijbehorende reserveringsaanvraag bij (koppeling via metadata.requestId
 // die we bij het aanmaken van de betaling meegeven). Altijd 200 antwoorden —
 // anders blijft Mollie eindeloos retryen.
-async function dpHandleMollieWebhook(request, env, url) {
+async function dpHandleMollieWebhook(request, env) {
   if (!env.MOLLIE_API_KEY) return reply(200, { ok: true });   // nog niet actief
   let id = "";
   try { id = new URLSearchParams(await request.text()).get("id") || ""; } catch {}
@@ -3120,46 +2799,14 @@ async function dpHandleMollieWebhook(request, env, url) {
   const p = await r.json().catch(() => null);
   if (!r.ok || !p) return reply(200, { ok: true });
   const reqId = p.metadata && p.metadata.requestId;
-  const isRest = !!(p.metadata && p.metadata.rest);
-  if (reqId && isRest) {
-    /* De restbetaling. Die maakt geen nieuwe order aan - de order staat er al
-       sinds de aanbetaling - maar boekt het bedrag erbij en zet de klok stil. */
-    const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
-    const list = Array.isArray(data.requests) ? data.requests : [];
-    const item = list.find(x => x.id === reqId);
-    if (item && p.status === "paid" && !item.restBetaald) {
-      item.restBetaald = new Date().toISOString();
-      item.restPaymentId = p.id;
-      item.status = "volledig-betaald";
-      if (item.logic4OrderId) {
-        const res = await dpRegisterPayment(env, item.logic4OrderId, Number(p.amount && p.amount.value) || 0, p.id)
-          .catch(e => ({ ok: false, error: String(e.message || e) }));
-        if (!res.ok) item.restLogic4Error = res.error;
-      }
-      await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
-      try { await dpRestMail(env, item, await dpGetAccounts(env), "voldaan", url); }
-      catch (e) { console.log("[rest] bevestiging voldaan niet verstuurd: " + (e.message || e)); }
-    }
-    return reply(200, { ok: true });
-  }
   if (reqId) {
     const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
     const list = Array.isArray(data.requests) ? data.requests : [];
     const item = list.find(x => x.id === reqId);
     if (item) {
-      const wasBetaald = item.paymentStatus === "paid" || item.status === "paid";
       item.paymentId = p.id;
       item.paymentStatus = p.status;   // paid / open / failed / expired / canceled
       if (p.status === "paid") item.status = "paid";
-      /* De partner hoort te weten dát het gelukt is. Tot 23 sep 2026 stuurde
-         het portaal na de aanbetaling niets meer: geen bevestiging, en later
-         ook niets toen de spa er stond. Eén keer, alleen bij de overgang naar
-         betaald. */
-      if (p.status === "paid" && !wasBetaald && !item.testbetaling) {
-        try {
-          await dpRestMail(env, item, await dpGetAccounts(env), "bevestigd", url);
-        } catch (e) { console.log("[rest] bevestiging niet verstuurd: " + (e.message || e)); }
-      }
       // Betaling niet doorgegaan → geclaimde voorraad weer vrijgeven
       // Betaling niet doorgegaan → claim vervalt (available telt 'm niet meer mee)
       if (["expired", "canceled", "failed"].includes(p.status)) item.allocationReleased = true;
@@ -3415,7 +3062,7 @@ async function dpAdminUitnodigen(request, env, url) {
       '<p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0;">The link is valid for 7 days and lets you choose ' +
       'your own password. After that, log in any time at <a href="' + dpOrigin(env, url) + '/dealers" style="color:#c8102e;">' +
       dpOrigin(env, url).replace(/^https?:\/\//, "") + '/dealers</a>.</p>'),
-    (accounts.contactEmail || undefined), dpAdviseurVan(accounts, email));
+    (accounts.contactEmail || undefined));
   await dpLogPartner(env, { email, company: dealer.company || "" }, "uitnodiging-verstuurd",
     sent.ok ? "welkomstmail" : "MAIL FAALDE");
   return reply(sent.ok ? 200 : 502, { ok: sent.ok, link, validDays: DP_INVITE_TTL / 86400,
@@ -4113,7 +3760,7 @@ async function handleDealerRoutes(request, env, url) {
   if (p === "/dealers/logo.png" && request.method === "GET") return dpLogoResponse();
   if (p === "/dealers/welkom" && (request.method === "GET" || request.method === "POST")) return dpHandleWelkom(request, env, url);
 
-  if (p === "/dealers/webhook" && request.method === "POST") return dpHandleMollieWebhook(request, env, url);
+  if (p === "/dealers/webhook" && request.method === "POST") return dpHandleMollieWebhook(request, env);
 
   // Admin (interne beheertegel, shared secret — géén dealer-sessie)
   if (p.startsWith("/dealers/admin/")) {
@@ -4236,12 +3883,6 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/api/docs" && request.method === "GET") return dpHandleDocs(env, sess);
     if (p === "/dealers/api/file" && request.method === "GET") return dpServeFile(env, url, sess);
     if (p === "/dealers/api/vraag" && request.method === "POST") return dpHandleVraag(request, env, sess);
-    /* De restbetaling. De partner klikt in de mail op "Complete payment" en
-       komt op het portaal uit; die vraagt hier een Mollie-link aan. Dezelfde
-       functie als bij de aanbetaling, met metadata.rest zodat de webhook de
-       twee uit elkaar houdt. */
-    if (p === "/dealers/api/restbetaling" && request.method === "POST")
-      return dpHandleRestbetaling(request, env, sess, url);
   }
   return reply(404, "Not found");
 }
@@ -13456,15 +13097,6 @@ export default {
         const rv = await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) }));
         console.log("[cron] reserveringen: " + JSON.stringify(rv));
 
-        /* De restbetaling: wie moet een herinnering, en wie is over tijd?
-           Elk uur, zodat een deadline nooit meer dan een uur overloopt. Los
-           in een eigen try zodat een mail die niet lukt de rest van de cron
-           niet meeneemt. */
-        try {
-          const rb = await dpRestRonde(env, null);
-          if (rb.herinnerd || rb.verlopen) console.log("[cron] restbetaling: " + JSON.stringify(rb));
-        } catch (e) { console.log("[cron] restbetaling: " + (e.message || e)); }
-
         /* Meteen hierna: portaalbestellingen waarvan de order in Logic4 is
            geannuleerd. Die houden anders voorraad vast die er allang weer is.
            Moet ná de reserveringen, want de zojuist opgehaalde ledger is wat
@@ -13571,16 +13203,7 @@ export default {
         : null;
       data.updated = new Date().toISOString();
       await env.FONTEYN_DATA.put("voorraad-schepen", JSON.stringify(data));
-      /* Hier begint de restbetaling. Gerrit (23 sep 2026) op de vraag wanneer
-         een spa als binnen telt: "Zodra Manon de container binnen meldt."
-         Zie dpRestStart; gaat er iets mis met de mails, dan is de container
-         nog steeds gewoon binnen gemeld. */
-      let rest = null;
-      if (b.binnen) {
-        rest = await dpRestStart(env, schip, url).catch(e => ({ ok: false, error: String(e.message || e) }));
-        console.log("[rest] container " + ref + " binnen: " + JSON.stringify(rest));
-      }
-      return reply(200, { ok: true, binnenGemeld: schip.binnenGemeld, restbetaling: rest });
+      return reply(200, { ok: true, binnenGemeld: schip.binnenGemeld });
     }
 
     if (url.pathname === "/voorraad/schip/document" && request.method === "POST") {
