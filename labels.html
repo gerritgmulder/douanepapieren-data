@@ -186,7 +186,7 @@
 
   .label-row {
     display: grid;
-    grid-template-columns: 30px 260px 1fr 80px 80px 110px 110px;
+    grid-template-columns: 30px minmax(260px,1.7fr) minmax(130px,.6fr) 80px 80px 100px 110px;
     gap: 10px; align-items: center;
     padding: 10px; border: 1px solid var(--border); border-radius: 8px;
     background: #fff;
@@ -205,12 +205,19 @@
     font: inherit; color: var(--ink); background: #fff; text-align: right;
   }
   .label-row .desc { font-size: 13px; }
+  /* Omschrijving: een tekstvak dat meegroeit, zodat de hele naam te lezen
+     en aan te passen is (Manon, 23 sep 2026). */
+  .label-row textarea.desc { width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+    font: inherit; font-size: 13px; color: var(--ink); background: #fff; resize: none; overflow: hidden;
+    line-height: 1.35; min-height: 32px; box-sizing: border-box; }
+  .label-row textarea.desc:focus { outline: none; border-color: var(--fonteyn-green); }
+  .label-row .desc-eigen { font-size: 11px; color: var(--fonteyn-green); }
   .label-row .code-hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .label-row button.mini { padding: 5px 9px; font-size: 12px; font-weight: 500; }
 
   .label-row-header {
     display: grid;
-    grid-template-columns: 30px 260px 1fr 80px 80px 110px 110px;
+    grid-template-columns: 30px minmax(260px,1.7fr) minmax(130px,.6fr) 80px 80px 100px 110px;
     gap: 10px;
     padding: 0 10px 8px;
     font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
@@ -1030,7 +1037,7 @@ async function fillFromPurchaseOrder(poNumber) {
       const hit = bySupplier.get((row.supplierCode || "").toLowerCase());
       if (hit) {
         row.fonteynCode = hit.fonteynCode;
-        if (hit.description) row.description = hit.description;
+        if (hit.description && !row.descEigen) row.description = hit.description;
         row.lookupTried = true;
         matched++;
       }
@@ -1294,7 +1301,7 @@ async function zoekArtikelenBijContainer() {
       const row = state.rows[i];
       if (!row) return;
       if (res.artikelcode) { row.fonteynCode = String(res.artikelcode); gevonden++; }
-      if (res.omschrijving) row.description = res.omschrijving;
+      if (res.omschrijving && !row.descEigen) row.description = res.omschrijving;
       row.lookupTried = true;
     });
     setStatus(gevonden === state.rows.length
@@ -1430,8 +1437,8 @@ function rowElement(row, idx) {
   wrap.innerHTML = `
     <input type="checkbox" class="check" ${row.print ? "checked" : ""} aria-label="Printen">
     <div>
-      <input type="text" class="desc in-desc" value="${escapeAttr(row.description)}">
-      <div class="code-hint">Supplier: <b>${escape(row.supplierCode || "—")}</b></div>
+      <textarea class="desc in-desc" rows="1" title="Pas de omschrijving aan zoals hij op het label moet komen">${escape(row.description || "")}</textarea>
+      <div class="code-hint">Supplier: <b>${escape(row.supplierCode || "—")}</b>${row.descEigen ? " · <span class='desc-eigen'>omschrijving aangepast</span>" : ""}</div>
     </div>
     <div>
       <div class="code-hint">Fonteyn-code:</div>
@@ -1447,7 +1454,14 @@ function rowElement(row, idx) {
     row.print = e.target.checked;
     updateCount();
   });
-  wrap.querySelector(".in-desc").addEventListener("input", (e) => row.description = e.target.value);
+  /* Wat iemand zelf typt blijft staan: het opzoeken in Logic4 dat een paar
+     seconden na het laden terugkomt overschreef de omschrijving eerst weer,
+     waardoor een aanpassing verdween (Manon, 23 sep 2026). */
+  const desc = wrap.querySelector(".in-desc");
+  const groei = () => { desc.style.height = "auto"; desc.style.height = desc.scrollHeight + "px"; };
+  desc.addEventListener("input", (e) => { row.description = e.target.value.replace(/\n/g, " "); row.descEigen = true; groei(); });
+  desc.addEventListener("keydown", (e) => { if (e.key === "Enter") e.preventDefault(); });
+  requestAnimationFrame(groei);
   wrap.querySelector(".in-fonteyn").addEventListener("input", (e) => {
     row.fonteynCode = e.target.value.trim();
     wrap.classList.toggle("pending", !row.fonteynCode);
