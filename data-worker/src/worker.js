@@ -2755,9 +2755,13 @@ const DP_REST_HERINNERING_UREN = 24;   // wat er over moet zijn als de herinneri
    nergens bewaard. Dus hier uitrekenen, op precies dezelfde manier als bij het
    aanbetalingsbedrag - anders sluit de rest niet aan op de order in Logic4.
 
-   Een testbetaling van een cent telt niet: daar hoort geen restbetaling bij. */
+   Bij een testbestelling is de rest ook één cent. Gerrit (23 sep 2026): "test
+   die restbetaling met die cent." Anders is de keten niet te proberen zonder
+   dat er een echte spa wordt afgerekend: hij stopte bij de aanbetaling en de
+   restbetaling kwam nooit in beeld. Een testbestelling loopt nu dus helemaal
+   door, van aanbetaling tot restbetaling, voor twee cent. */
 function dpRestBedrag(item) {
-  if (item.testbetaling) return 0;
+  if (item.testbetaling) return 0.01;
   const ex = Number(item.totaalExVat || 0);
   const btw = 1 + (Number(item.vatPercent) || 0) / 100;
   const totaal = Math.round(ex * btw * 100) / 100;
@@ -4170,6 +4174,30 @@ async function handleDealerRoutes(request, env, url) {
     /* Nu nakijken of er portaalbestellingen bij zitten waarvan de order in
        Logic4 is geannuleerd, zonder op de uur-sync te wachten. Zelfde controle
        als in de cron; zie dpControleerGeannuleerd. */
+    /* De klok voor de restbetaling met de hand starten voor één bestelling.
+       Normaal doet Manon dat door de container binnen te melden; dit is voor
+       een spa die buiten een container om binnenkomt, voor een correctie, en
+       om de keten te kunnen proberen zonder een container aan te raken. */
+    if (p === "/dealers/admin/restklaar" && request.method === "POST") {
+      let b = {}; try { b = await request.json(); } catch {}
+      const id = String(b.requestId || "");
+      const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+      const item = (Array.isArray(data.requests) ? data.requests : []).find(x => x.id === id);
+      if (!item) return reply(404, { ok: false, error: "bestelling onbekend" });
+      if (item.paymentStatus !== "paid" && item.status !== "paid")
+        return reply(409, { ok: false, error: "er is nog niet aanbetaald" });
+      const bedrag = dpRestBedrag(item);
+      if (bedrag <= 0) return reply(409, { ok: false, error: "er staat niets meer open" });
+      const nu = new Date();
+      item.restKlaar = { op: nu.toISOString(), container: String(b.container || "met de hand"),
+                         deadline: dpWerkurenLater(nu, DP_REST_UREN).toISOString() };
+      item.restVerlopen = null; item.restHerinnerd = null;
+      item.status = "wacht-restbetaling";
+      await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+      const mail = await dpRestMail(env, item, await dpGetAccounts(env), "aangekomen", url)
+        .catch(e => ({ ok: false, error: String(e.message || e) }));
+      return reply(200, { ok: true, bedrag, deadline: item.restKlaar.deadline, mail: !!(mail && mail.ok) });
+    }
     if (p === "/dealers/admin/controleer-annuleringen" && request.method === "POST") {
       const ledger = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
       const lopend = new Set();
