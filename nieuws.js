@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-23", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
+      titel: "Leveranciersinformatie: magazijn in Nederland en betalingsvoorwaarden",
+      wat: "Per leverancier staat nu of hij een magazijn in Nederland heeft. Zo ja, dan vul je per keuze in of het kan en wat het kost: afhalen bij hun magazijn, bezorgen bij Fonteyn, of bezorgen bij de klant. Ook de betalingsvoorwaarden horen er nu bij (bijvoorbeeld 50% aanbetaling, 50% na productie). Allebei moeten ze ingevuld zijn voordat je een inkooporder kunt maken."
+    },
+    {
       datum: "2026-09-23", bestand: "labels.html", soort: "beter",
       titel: "Labels: omschrijving aanpassen",
       wat: "Het vak voor de omschrijving is breder en groeit mee, zodat de hele naam te lezen is. Wat je daar aanpast blijft staan: het werd eerst na een paar seconden weer overschreven door de naam uit Logic4. Een aangepaste regel krijgt het merkje 'omschrijving aangepast'."

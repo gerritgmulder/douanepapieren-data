@@ -876,7 +876,11 @@ const ART_VELDEN=[["codeExtern","Artikelcode (extern)","11%"],["naamExtern","Art
 let ovGekozen="", ovTimer=null;
 function leveranciers(){ return S.mappen.filter(m=>!m.includes("/")).sort((a,b)=>a.localeCompare(b,"nl")); }
 function levData(lev){ S.afspraken=S.afspraken||{}; const a=S.afspraken[lev]=S.afspraken[lev]||{}; a.inkoop=a.inkoop||{}; return a; }
-function levLees(lev){ const a=(S.afspraken||{})[lev]||{}; return { contact:a.contact||"", fi:a.fabriekIntern||"", fe:a.fabriekExtern||"", inkoop:a.inkoop||{}, start:a.startmoment||"", boete:a.boete||"", artikelen:artVan(lev), op:a.op, door:a.door }; }
+function levLees(lev){ const a=(S.afspraken||{})[lev]||{}; return { contact:a.contact||"", fi:a.fabriekIntern||"", fe:a.fabriekExtern||"", betaling:a.betaling||"", magNL:a.magazijnNL||"", nl:a.nl||{}, inkoop:a.inkoop||{}, start:a.startmoment||"", boete:a.boete||"", artikelen:artVan(lev), op:a.op, door:a.door }; }
+/* Heeft de leverancier een magazijn in Nederland, dan wil je weten wat je
+   daar kunt: afhalen, laten bezorgen bij Fonteyn, of rechtstreeks bij de
+   klant, en wat dat elk kost (Gerrit, 23 sep 2026). */
+const NL_OPTIES=[["afhalen","Afhalen bij hun magazijn","Wij halen het op bij het magazijn van de leverancier."],["fonteyn","Bezorgen bij Fonteyn","De leverancier brengt het naar ons in Nederland."],["klant","Bezorgen bij de klant","De leverancier levert rechtstreeks bij de klant af."]];
 /* De artikelen staan per leverancier in een eigen sleutel (levart-...), niet in
    de grote lijst: bij Borek en SCP zijn het er duizenden. Ze worden pas
    opgehaald als je de leverancier aanklikt. Oude artikelen die nog in de
@@ -921,6 +925,11 @@ function ontbreekt(lev){
   if(!d.contact.trim()) mis.push("contactpersoon");
   if(!d.fi.trim()) mis.push("fabriek (intern)");
   if(!d.fe.trim()) mis.push("fabriek (extern)");
+  if(!d.betaling.trim()) mis.push("betalingsvoorwaarden");
+  if(!d.magNL) mis.push("magazijn in Nederland (ja of nee)");
+  if(d.magNL==="ja") NL_OPTIES.forEach(([k,l])=>{ const o=d.nl[k]||{};
+    if(!o.kan) mis.push(l.toLowerCase()+": kan het of niet");
+    else if(o.kan==="ja"&&!String(o.kosten||"").trim()) mis.push("kosten bij "+l.toLowerCase()); });
   if(!VORMEN.some(([k])=>String((d.inkoop[k]||{}).lt||"").trim())) mis.push("productietijd bij minstens één inkoopvorm");
   if(!d.start) mis.push("startmoment productietijd");
   if(!d.boete.trim()) mis.push("boeteclausule productietijd");
@@ -1024,6 +1033,13 @@ function tekenLeverancier(){
       veldRij("contact",d.contact,"Contactpersoon","Naam, mail en telefoon van ons contact bij deze leverancier.","bv. Linda Chen, linda@…, +86 …")+
       veldRij("fabriekIntern",d.fi,"Fabriek (intern)","Hoe wij deze fabriek noemen.","bv. Jazzi")+
       veldRij("fabriekExtern",d.fe,"Fabriek (extern)","De naam zoals de fabriek zelf op facturen en papieren staat.","bv. Guangdong Jazzi Spa Tech Co., Ltd")+
+      veldRij("betaling",d.betaling,"Betalingsvoorwaarden","Wanneer wat betaald wordt.","bv. 50% aanbetaling, 50% na productie")+
+    "</table>"+
+    "<h4>Magazijn in Nederland</h4><table class='velden'>"+
+      "<tr><td class='w'><select data-ov='magazijnNL' style='width:100%'><option value=''>kies\u2026</option><option value='ja'"+(d.magNL==="ja"?" selected":"")+">ja</option><option value='nee'"+(d.magNL==="nee"?" selected":"")+">nee</option></select></td><td class='uitleg'><b>Magazijn in Nederland</b>Heeft deze leverancier een magazijn in Nederland?</td></tr>"+
+      (d.magNL==="ja"?NL_OPTIES.map(([k,l,u])=>{ const o=d.nl[k]||{};
+        return "<tr><td class='w'><div class='vormrij'><select data-nlkan='"+k+"' style='min-width:110px'><option value=''>kan het?</option><option value='ja'"+(o.kan==="ja"?" selected":"")+">ja</option><option value='nee'"+(o.kan==="nee"?" selected":"")+">nee</option></select>"+
+          "<input type='text' data-nlkosten='"+k+"' value=\""+esc(o.kosten||"")+"\" placeholder='kosten, bv. € 75 per levering of gratis'"+(o.kan==="ja"?"":" disabled")+"></div></td><td class='uitleg'><b>"+esc(l)+"</b>"+esc(u)+" Kan het, vul dan in wat het kost.</td></tr>"; }).join(""):"")+
     "</table>"+
     "<h4>Inkoopvorm en productietijd</h4><table class='velden'>"+
       VORMEN.map(([k,l,u])=>{ const v=d.inkoop[k]||{};
@@ -1042,7 +1058,9 @@ function tekenLeverancier(){
   tekenKnop(lev);
   document.getElementById("ovNaarMap").addEventListener("click",()=>{ hier=lev; zetWeergave("bestanden"); teken(); });
   const na=()=>{ tekenKnop(lev); ovBewaarStraks(lev); };
-  box.querySelectorAll("[data-ov]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{ levData(lev)[inp.dataset.ov]=inp.value; na(); }));
+  box.querySelectorAll("[data-ov]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{ levData(lev)[inp.dataset.ov]=inp.value; na(); if(inp.dataset.ov==="magazijnNL") tekenLeverancier(); }));
+  box.querySelectorAll("[data-nlkan]").forEach(sel=>sel.addEventListener("change",()=>{ const a=levData(lev); a.nl=a.nl||{}; const k=sel.dataset.nlkan; a.nl[k]=a.nl[k]||{}; a.nl[k].kan=sel.value; const inp=box.querySelector("[data-nlkosten='"+k+"']"); if(inp) inp.disabled=sel.value!=="ja"; na(); }));
+  box.querySelectorAll("[data-nlkosten]").forEach(inp=>inp.addEventListener("input",()=>{ const a=levData(lev); a.nl=a.nl||{}; const k=inp.dataset.nlkosten; a.nl[k]=a.nl[k]||{}; a.nl[k].kosten=inp.value; na(); }));
   box.querySelectorAll("[data-lt]").forEach(inp=>inp.addEventListener("input",()=>{ const a=levData(lev); const k=inp.dataset.lt; a.inkoop[k]=a.inkoop[k]||{}; a.inkoop[k].lt=inp.value; delete a.inkoop[k].aan; na(); }));
   koppelArtRijen(lev);
   document.getElementById("artZoek").addEventListener("input",e=>{ artZoek=e.target.value; artToon=50; ververs(lev); });
