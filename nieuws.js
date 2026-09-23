@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-23", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
+      titel: "Leveranciersinformatie: afspraken eerst, dan pas bestellen",
+      wat: "Per leverancier nu ook de productietijd per inkoopvorm, het startmoment van de productietijd, de boeteclausule, en per artikel de IncoTerms en de levertijd. Bovenaan staat de knop Inkooporder maken; die gaat pas aan als alle afspraken zijn ingevuld, en tot die tijd staat erbij wat er nog ontbreekt. Een nieuwe leverancier begint meteen bij de afspraken."
+    },
+    {
       datum: "2026-09-23", bestand: "prijslijsten-fabrikanten.html", soort: "nieuw",
       titel: "Leveranciersinformatie: overzicht per leverancier",
       wat: "Een nieuw tabblad met alle leveranciers. Per leverancier: contactpersoon, fabriek (intern en extern), inkoopvorm (magazijn, bezorgd, 40ft, 20ft) met de levertijd, en per artikel de code en naam van de fabriek naast die van ons, met prijs en CBM. Zoeken werkt ook op artikelcode en artikelnaam, over alle leveranciers. De prijslijsten staan onder het tweede tabblad."

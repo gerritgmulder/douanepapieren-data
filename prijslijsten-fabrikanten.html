@@ -173,7 +173,7 @@
     <div id="wOverzicht">
       <div class="ov">
         <div class="ov-lijst">
-          <div class="zoekbalk"><input type="text" id="ovZoek" placeholder="zoek leverancier, fabriek, artikelcode of artikelnaam…"></div>
+          <div class="zoekbalk" style="display:flex;gap:8px"><input type="text" id="ovZoek" placeholder="zoek leverancier, fabriek, artikelcode of artikelnaam…" style="flex:1;min-width:0"><button class="primary" id="ovNieuw" type="button" title="Nieuwe leverancier: begint met de afspraken" style="white-space:nowrap;padding:8px 11px">+ Nieuw</button></div>
           <div class="rijen" id="ovRijen"></div>
         </div>
         <div class="ov-detail" id="ovDetail"><p class="meta">Kies links een leverancier.</p></div>
@@ -693,6 +693,9 @@ document.getElementById("nieuweMap").addEventListener("click",async ()=>{
   S.mappen.push(pad);
   try{ await bewaar(); melding("ok","Map '"+naam+"' aangemaakt."); }catch(e){ melding("bad",e.message); await laad(); }
   teken();
+  /* Een map op het eerste niveau is een nieuwe leverancier, en die begint
+     altijd met de afspraken (Gerrit, 23 sep 2026). */
+  if(!hier && S.mappen.includes(pad)){ ovGekozen=pad; zetWeergave("overzicht"); }
 });
 
 document.getElementById("kiesBestand").addEventListener("click",()=>document.getElementById("bestandIn").click());
@@ -859,12 +862,37 @@ document.getElementById("logoutBtn").addEventListener("click",()=>{
    nog drie jaarmappen; die tellen niet als eigen leverancier). De gegevens
    staan in S.afspraken[leverancier], naast de prijsafspraken die er al
    stonden; "contact" is hetzelfde veld als daar. */
-const VORMEN=[["magazijn","Magazijn","Levering op ons magazijn."],["bezorgd","Bezorgd","De leverancier bezorgt zelf."],["ft40","40ft","Per volle 40-voets container."],["ft20","20ft","Per volle 20-voets container."]];
+/* Wat per leverancier bekend moet zijn voordat er besteld mag worden.
+   Gerrit (23 sep 2026): "Een nieuwe leverancier moet altijd starten met deze
+   afspraken. Als die niet bekend zijn, moet er niet eens een inkooporder
+   gemaakt kunnen worden." Productietijd staat per inkoopvorm; een leeg vak
+   betekent dat de leverancier zo niet levert. */
+const VORMEN=[["magazijn","Magazijn","De fabriek heeft een warehouse in Nederland."],["bezorgd","Bezorgd","De leverancier bezorgt zelf."],["ft40","40ft","Per volle 40-voets container."],["ft20","20ft","Per volle 20-voets container."]];
+const STARTMOMENTEN=["akkoord proforma","aanbetaling","orderbevestiging"];
+const INCOTERMS=[["exw","Ex Works","Geen transportkosten naar de haven in China; havenkosten zijn voor ons."],["fob","FOB (Free On Board)","De fabriek betaalt transport en havenkosten tot en met de haven in China."],["cif","CIF (Cost Insurance & Freight)","De fabriek betaalt alle kosten tot de haven in Rotterdam."],["afhaal","Afhaal magazijn","Wij halen op bij het magazijn van de leverancier."],["fonteyn","Bezorgd bij Fonteyn","De leverancier levert af bij ons."],["klant","Bezorgd bij klant","De leverancier levert rechtstreeks bij de klant af."]];
+const ART_VELDEN=[["codeExtern","Artikelcode (extern)","12%"],["naamExtern","Artikel (extern)","19%"],["codeIntern","Artikelcode (intern)","11%"],["naamIntern","Artikel (intern)","19%"],["incoterm","IncoTerms","15%"],["prijs","Prijs","10%"],["levertijd","Levertijd","10%"]];
 let ovGekozen="", ovTimer=null;
 function leveranciers(){ return S.mappen.filter(m=>!m.includes("/")).sort((a,b)=>a.localeCompare(b,"nl")); }
 function levData(lev){ S.afspraken=S.afspraken||{}; const a=S.afspraken[lev]=S.afspraken[lev]||{}; a.inkoop=a.inkoop||{}; a.artikelen=Array.isArray(a.artikelen)?a.artikelen:[]; return a; }
-function levLees(lev){ const a=(S.afspraken||{})[lev]||{}; return { contact:a.contact||"", fi:a.fabriekIntern||"", fe:a.fabriekExtern||"", inkoop:a.inkoop||{}, artikelen:Array.isArray(a.artikelen)?a.artikelen:[], op:a.op, door:a.door }; }
-function vormenTekst(inkoop){ return VORMEN.filter(([k])=>inkoop[k]&&inkoop[k].aan).map(([k,l])=>"<span class='vorm'>"+esc(l)+(inkoop[k].lt?" · LT "+esc(inkoop[k].lt):"")+"</span>").join(""); }
+function levLees(lev){ const a=(S.afspraken||{})[lev]||{}; return { contact:a.contact||"", fi:a.fabriekIntern||"", fe:a.fabriekExtern||"", inkoop:a.inkoop||{}, start:a.startmoment||"", boete:a.boete||"", artikelen:Array.isArray(a.artikelen)?a.artikelen:[], op:a.op, door:a.door }; }
+function incoNaam(k){ const x=INCOTERMS.find(i=>i[0]===k); return x?x[1]:""; }
+function leegArtikel(r){ return !ART_VELDEN.some(([k])=>String(r[k]||"").trim()); }
+/* Wat er nog ontbreekt; leeg = compleet en dan mag er besteld worden. */
+function ontbreekt(lev){
+  const d=levLees(lev), mis=[];
+  if(!d.contact.trim()) mis.push("contactpersoon");
+  if(!d.fi.trim()) mis.push("fabriek (intern)");
+  if(!d.fe.trim()) mis.push("fabriek (extern)");
+  if(!VORMEN.some(([k])=>String((d.inkoop[k]||{}).lt||"").trim())) mis.push("productietijd bij minstens één inkoopvorm");
+  if(!d.start) mis.push("startmoment productietijd");
+  if(!d.boete.trim()) mis.push("boeteclausule productietijd");
+  const art=d.artikelen.filter(r=>!leegArtikel(r));
+  if(!art.length) mis.push("minstens één artikel");
+  const half=art.filter(r=>ART_VELDEN.some(([k])=>!String(r[k]||"").trim())).length;
+  if(half) mis.push(half+" artikel"+(half===1?"":"en")+" niet helemaal ingevuld");
+  return mis;
+}
+function vormenTekst(inkoop){ return VORMEN.filter(([k])=>String((inkoop[k]||{}).lt||"").trim()).map(([k,l])=>"<span class='vorm'>"+esc(l)+" · "+esc(inkoop[k].lt)+"</span>").join(""); }
 function ovTreffers(lev, q){
   const d=levLees(lev);
   if(!q) return { past:true, art:[] };
@@ -876,11 +904,12 @@ function tekenOverzicht(){
   const q=(document.getElementById("ovZoek").value||"").trim().toLowerCase();
   const lijst=leveranciers().map(l=>({l,t:ovTreffers(l,q)})).filter(x=>x.t.past);
   document.getElementById("ovRijen").innerHTML=lijst.length?lijst.map(({l,t})=>{
-    const d=levLees(l);
+    const d=levLees(l), mis=ontbreekt(l);
     const sub=[d.contact, d.fi&&("fabriek: "+d.fi)].filter(Boolean).join(" · ");
+    const n=d.artikelen.filter(r=>!leegArtikel(r)).length;
     return "<div class='ov-lev"+(l===ovGekozen?" aan":"")+"' data-lev=\""+esc(l)+"\"><b>"+esc(l)+"</b>"+
       (sub?"<div class='sub'>"+esc(sub)+"</div>":"")+
-      "<div>"+vormenTekst(d.inkoop)+(d.artikelen.length?"<span class='vorm' style='background:#f3f4f6;color:#374151'>"+d.artikelen.length+" artikel"+(d.artikelen.length===1?"":"en")+"</span>":"")+"</div>"+
+      "<div>"+(mis.length?"<span class='vorm' style='background:#fef3c7;color:#92400e'>afspraken onvolledig</span>":"<span class='vorm'>klaar om te bestellen</span>")+vormenTekst(d.inkoop)+(n?"<span class='vorm' style='background:#f3f4f6;color:#374151'>"+n+" artikel"+(n===1?"":"en")+"</span>":"")+"</div>"+
       (t.art.length?"<div class='treffer'>"+t.art.slice(0,3).map(r=>esc((r.codeExtern||r.naamExtern||"")+" → "+(r.codeIntern||r.naamIntern||"nog niet gekoppeld"))).join("<br>")+(t.art.length>3?"<br>en nog "+(t.art.length-3):"")+"</div>":"")+
       "</div>";
   }).join(""):"<div class='ov-lev' style='cursor:default;color:var(--muted)'>Niets gevonden"+(q?" voor '"+esc(q)+"'":"")+".</div>";
@@ -889,47 +918,92 @@ function tekenOverzicht(){
 function veldRij(id, waarde, titel, uitleg, plaats){
   return "<tr><td class='w'><input type='text' data-ov='"+id+"' value=\""+esc(waarde)+"\" placeholder=\""+esc(plaats||"")+"\"></td><td class='uitleg'><b>"+esc(titel)+"</b>"+esc(uitleg)+"</td></tr>";
 }
+function tekenKnop(lev){
+  const mis=ontbreekt(lev), k=document.getElementById("ovIko"), u=document.getElementById("ovIkoUitleg");
+  if(!k) return;
+  k.disabled=mis.length>0;
+  k.title=mis.length?"Eerst invullen: "+mis.join(", "):"Een inkooporder maken voor "+lev;
+  u.innerHTML=mis.length?"Nog in te vullen: "+esc(mis.join(", "))+".":"Alle afspraken zijn ingevuld.";
+  u.style.color=mis.length?"#92400e":"#15803d";
+}
 function tekenLeverancier(){
   const box=document.getElementById("ovDetail");
   const lev=ovGekozen;
   if(!lev){ box.innerHTML="<p class='meta'>Kies links een leverancier.</p>"; return; }
   const d=levLees(lev);
-  box.innerHTML="<h3>"+esc(lev)+"</h3><div class='meta'>"+(d.op?"Laatst gewijzigd "+datum(d.op)+(d.door?" door "+esc(korteNaam(d.door)):""):"Nog niets vastgelegd.")+" · <a class='klik' id='ovNaarMap'>prijslijsten van deze leverancier</a></div>"+
+  box.innerHTML="<div style='display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap'><div style='flex:1;min-width:220px'><h3>"+esc(lev)+"</h3><div class='meta'>"+(d.op?"Laatst gewijzigd "+datum(d.op)+(d.door?" door "+esc(korteNaam(d.door)):""):"Nog niets vastgelegd.")+" · <a class='klik' id='ovNaarMap'>prijslijsten van deze leverancier</a></div></div>"+
+      "<div style='text-align:right'><button class='primary' id='ovIko' type='button' disabled>Inkooporder maken</button><div class='meta' id='ovIkoUitleg' style='max-width:340px;margin-top:4px'></div></div></div>"+
+    "<div id='ovIkoPaneel' class='hidden' style='margin-top:12px;border:1px solid var(--border);border-left:4px solid var(--fonteyn-lime);border-radius:10px;padding:12px 14px;background:#fbfdf7'>"+
+      "<b style='color:var(--fonteyn-green)'>Inkooporder uit de proforma</b><div class='meta' style='margin:3px 0 8px'>Kies de proforma invoice van "+esc(lev)+" (Excel). Het scherm leest de regels uit en laat een voorstel zien; pas na jouw akkoord komt de inkooporder in Logic4.</div>"+
+      "<div style='display:flex;gap:8px;flex-wrap:wrap;align-items:center'><input type='file' id='ikoFile' accept='.xlsx,.xls,.csv,.pdf'><input type='text' id='ikoRef' placeholder='proforma-referentie' style='min-width:180px'><input type='date' id='ikoEta' title='verwachte leverdatum' style='padding:7px;border:1px solid var(--border);border-radius:8px'></div>"+
+      "<div id='ikoStatus' class='status-msg hidden' style='margin-top:10px'></div><div id='ikoVoorstel' style='margin-top:10px'></div></div>"+
     "<h4>Leverancier</h4><table class='velden'>"+
       veldRij("contact",d.contact,"Contactpersoon","Naam, mail en telefoon van ons contact bij deze leverancier.","bv. Linda Chen, linda@…, +86 …")+
       veldRij("fabriekIntern",d.fi,"Fabriek (intern)","Hoe wij deze fabriek noemen.","bv. Jazzi")+
       veldRij("fabriekExtern",d.fe,"Fabriek (extern)","De naam zoals de fabriek zelf op facturen en papieren staat.","bv. Guangdong Jazzi Spa Tech Co., Ltd")+
     "</table>"+
-    "<h4>Inkoopvorm en levertijd</h4><table class='velden'>"+
+    "<h4>Inkoopvorm en productietijd</h4><table class='velden'>"+
       VORMEN.map(([k,l,u])=>{ const v=d.inkoop[k]||{};
-        return "<tr><td class='w'><div class='vormrij'><label><input type='checkbox' data-vorm='"+k+"'"+(v.aan?" checked":"")+"> "+esc(l)+"</label>"+
-          "<input type='text' data-lt='"+k+"' value=\""+esc(v.lt||"")+"\" placeholder='levertijd, bv. 6 weken'"+(v.aan?"":" disabled")+"></div></td>"+
-          "<td class='uitleg'><b>Levertijd (LT) bij "+esc(l.toLowerCase())+"</b>"+esc(u)+" Aanvinken als deze leverancier zo levert.</td></tr>"; }).join("")+
+        return "<tr><td class='w'><input type='text' data-lt='"+k+"' value=\""+esc(v.lt||"")+"\" placeholder='productietijd (LT), bv. 6 weken'></td>"+
+          "<td class='uitleg'><b>Productietijd bij "+esc(l)+"</b>"+esc(u)+" Leeg laten als deze leverancier zo niet levert.</td></tr>"; }).join("")+
+      "<tr><td class='w'><select data-ov='startmoment' style='width:100%'><option value=''>kies…</option>"+STARTMOMENTEN.map(x=>"<option"+(d.start===x?" selected":"")+">"+esc(x)+"</option>").join("")+"</select></td><td class='uitleg'><b>Startmoment productietijd</b>Vanaf welk moment de productietijd telt.</td></tr>"+
+      "<tr><td class='w'><input type='text' data-ov='boete' value=\""+esc(d.boete)+"\" placeholder='bv. 1% van de orderwaarde per week te laat, maximaal 10%'></td><td class='uitleg'><b>Boeteclausule productietijd</b>Wat de fabriek betaalt als de productietijd niet wordt gehaald.</td></tr>"+
     "</table>"+
     "<h4>Artikelen</h4>"+
-    "<p class='meta' style='margin:0 0 6px'>Links wat de fabriek op de factuur zet, rechts wat het bij ons is. Zo koppelt Reinier bij de betaling de naam van de fabriek aan ons artikel.</p>"+
-    "<table class='art'><thead><tr><th style='width:13%'>Artikelcode (extern)</th><th style='width:22%'>Artikel (extern)</th><th style='width:13%'>Artikelcode (intern)</th><th style='width:22%'>Artikel (intern)</th><th style='width:11%'>Prijs</th><th style='width:9%'>CBM</th><th style='width:32px'></th></tr></thead><tbody>"+
+    "<p class='meta' style='margin:0 0 6px'>Links wat de fabriek op de factuur zet, rechts wat het bij ons is. Zo koppelt Reinier bij de betaling de naam van de fabriek aan ons artikel. IncoTerms: "+INCOTERMS.slice(0,3).map(i=>"<b>"+esc(i[1].split(" (")[0])+"</b> "+esc(i[2].charAt(0).toLowerCase()+i[2].slice(1))).join(" ")+"</p>"+
+    "<table class='art'><thead><tr>"+ART_VELDEN.map(([k,l,w])=>"<th style='width:"+w+"'>"+esc(l)+"</th>").join("")+"<th style='width:32px'></th></tr></thead><tbody>"+
       (d.artikelen.length?d.artikelen.map((r,i)=>"<tr>"+
-        ["codeExtern","naamExtern","codeIntern","naamIntern","prijs","cbm"].map(k=>"<td><input data-art='"+i+"' data-k='"+k+"' placeholder='"+({codeExtern:"artikelcode (extern)",naamExtern:"artikel (extern)",codeIntern:"artikelcode (intern)",naamIntern:"artikel (intern)",prijs:"prijs",cbm:"CBM"})[k]+"' value=\""+esc(r[k]||"")+"\""+((k==="prijs"||k==="cbm")?" class='n' inputmode='decimal'":"")+"></td>").join("")+
-        "<td><button class='mini gevaar' data-artweg='"+i+"' title='deze regel weghalen'>✕</button></td></tr>").join(""):"<tr class='leeg'><td colspan='7'>Nog geen artikelen. Voeg er een toe met de knop hieronder.</td></tr>")+
+        ART_VELDEN.map(([k,l])=>"<td>"+(k==="incoterm"
+          ?"<select data-art='"+i+"' data-k='incoterm' style='width:100%;padding:5px 4px;font-size:12px' title='"+esc(l)+"'><option value=''>kies…</option>"+INCOTERMS.map(([v,n,u])=>"<option value='"+v+"' title=\""+esc(u)+"\""+(r.incoterm===v?" selected":"")+">"+esc(n)+"</option>").join("")+"</select>"
+          :"<input data-art='"+i+"' data-k='"+k+"' placeholder='"+esc(l.toLowerCase())+"' value=\""+esc(r[k]||"")+"\""+(k==="prijs"?" class='n' inputmode='decimal'":"")+">")+"</td>").join("")+
+        "<td><button class='mini gevaar' data-artweg='"+i+"' title='deze regel weghalen'>✕</button></td></tr>").join(""):"<tr class='leeg'><td colspan='8'>Nog geen artikelen. Voeg er een toe met de knop hieronder.</td></tr>")+
     "</tbody></table>"+
-    "<div style='margin-top:8px'><button class='primary' id='ovArtNieuw' type='button'>+ Artikel toevoegen</button></div>"+
-    "<div class='ov-stand' id='ovStand'></div>";
+    "<div style='margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap'><button class='primary' id='ovArtNieuw' type='button'>+ Artikel toevoegen</button><button class='primary' id='ovOpslaan' type='button' style='background:#fff;color:var(--fonteyn-green);border:1.5px solid var(--fonteyn-green)'>Opslaan</button><span class='ov-stand' id='ovStand' style='margin:0'></span></div>";
+  tekenKnop(lev);
   document.getElementById("ovNaarMap").addEventListener("click",()=>{ hier=lev; zetWeergave("bestanden"); teken(); });
-  box.querySelectorAll("[data-ov]").forEach(inp=>inp.addEventListener("input",()=>{ levData(lev)[inp.dataset.ov]=inp.value; ovBewaarStraks(lev); }));
-  box.querySelectorAll("[data-vorm]").forEach(cb=>cb.addEventListener("change",()=>{ const a=levData(lev); const k=cb.dataset.vorm; a.inkoop[k]=a.inkoop[k]||{}; a.inkoop[k].aan=cb.checked; box.querySelector("[data-lt='"+k+"']").disabled=!cb.checked; ovBewaarStraks(lev); }));
-  box.querySelectorAll("[data-lt]").forEach(inp=>inp.addEventListener("input",()=>{ const a=levData(lev); const k=inp.dataset.lt; a.inkoop[k]=a.inkoop[k]||{}; a.inkoop[k].lt=inp.value; ovBewaarStraks(lev); }));
-  box.querySelectorAll("[data-art]").forEach(inp=>inp.addEventListener("input",()=>{ const a=levData(lev); const r=a.artikelen[Number(inp.dataset.art)]; if(r){ r[inp.dataset.k]=inp.value; ovBewaarStraks(lev); } }));
+  const na=()=>{ tekenKnop(lev); ovBewaarStraks(lev); };
+  box.querySelectorAll("[data-ov]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{ levData(lev)[inp.dataset.ov]=inp.value; na(); }));
+  box.querySelectorAll("[data-lt]").forEach(inp=>inp.addEventListener("input",()=>{ const a=levData(lev); const k=inp.dataset.lt; a.inkoop[k]=a.inkoop[k]||{}; a.inkoop[k].lt=inp.value; delete a.inkoop[k].aan; na(); }));
+  box.querySelectorAll("[data-art]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{ const a=levData(lev); const r=a.artikelen[Number(inp.dataset.art)]; if(r){ r[inp.dataset.k]=inp.value; na(); } }));
   box.querySelectorAll("[data-artweg]").forEach(b=>b.addEventListener("click",async()=>{
     const a=levData(lev); const i=Number(b.dataset.artweg); const r=a.artikelen[i]||{};
-    const leeg=!["codeExtern","naamExtern","codeIntern","naamIntern","prijs","cbm"].some(k=>String(r[k]||"").trim());
-    if(!leeg && !(await vraagJaNee("Artikel weghalen?",(r.naamExtern||r.codeExtern||"Deze regel")+" gaat uit de lijst van "+lev+".","Weghalen",true))) return;
+    if(!leegArtikel(r) && !(await vraagJaNee("Artikel weghalen?",(r.naamExtern||r.codeExtern||"Deze regel")+" gaat uit de lijst van "+lev+".","Weghalen",true))) return;
     a.artikelen.splice(i,1); ovBewaarStraks(lev,0); tekenLeverancier(); tekenOverzicht();
   }));
   document.getElementById("ovArtNieuw").addEventListener("click",()=>{
-    const a=levData(lev); a.artikelen.push({codeExtern:"",naamExtern:"",codeIntern:"",naamIntern:"",prijs:"",cbm:""});
+    const a=levData(lev); a.artikelen.push({codeExtern:"",naamExtern:"",codeIntern:"",naamIntern:"",incoterm:"",prijs:"",levertijd:""});
     tekenLeverancier(); const rijen=box.querySelectorAll("table.art tbody tr"); const laatste=rijen[rijen.length-1]; const eerste=laatste&&laatste.querySelector("input"); if(eerste) eerste.focus();
   });
+  document.getElementById("ovOpslaan").addEventListener("click",()=>ovBewaarStraks(lev,0));
+  document.getElementById("ovIko").addEventListener("click",()=>{ if(ontbreekt(lev).length) return; openInkooporder(lev); });
+}
+/* De proforma-koppeling van Voorraadbeheer, pas geladen als iemand op de
+   knop drukt: de Excel- en pdf-lezer zijn samen een paar megabyte. Aanmaken
+   in Logic4 mag alleen wie ook in Voorraadbeheer mag bestellen. */
+let ikoGeladen=false;
+function laadScript(src){ return new Promise((ok,fout)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=()=>fout(new Error("kon "+src+" niet laden")); document.head.appendChild(s); }); }
+async function openInkooporder(lev){
+  const p=document.getElementById("ovIkoPaneel"); p.classList.remove("hidden");
+  if(!ikoGeladen){
+    const st=document.getElementById("ikoStatus"); st.className="status-msg bezig"; st.textContent="De proforma-lezer laden…"; st.classList.remove("hidden");
+    try{
+      await laadScript("https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js");
+      await laadScript("spa-codes.js");
+      await laadScript("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js");
+      if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+      await laadScript("ci-pdf.js");
+      await laadScript("proforma-inkoop.js");
+      ikoGeladen=true; st.classList.add("hidden");
+    }catch(e){ st.className="status-msg bad"; st.textContent=e.message+". Ververs de pagina en probeer het opnieuw."; return; }
+  }
+  if(window.fpProforma) window.fpProforma.start({
+    teamKey:()=>TEAM, adminKey:()=>(localStorage.getItem("dp.adminkey")||""),
+    magWijzigen:!!(window.fpToegang&&fpToegang.mag("voorraad-beheer",IK)),
+    email:IK, bestemming:null,
+    log:(a,d)=>{ try{ if(window.fpLog) window.fpLog(a,(d||"")+" (via Leveranciersinformatie, "+lev+")"); }catch(e){} },
+  });
+  try{ if(window.fpLog) window.fpLog("inkooporder-gestart",lev); }catch(e){}
+  p.scrollIntoView({behavior:"smooth",block:"start"});
 }
 /* Bewaren: eerst de laatste stand ophalen en alleen deze leverancier
    vervangen. Zo gaat er niets verloren als Gretha op hetzelfde moment een
@@ -962,6 +1036,14 @@ function zetWeergave(w){
 }
 document.querySelectorAll(".weergave [data-w]").forEach(b=>b.addEventListener("click",()=>zetWeergave(b.dataset.w)));
 document.getElementById("ovZoek").addEventListener("input",tekenOverzicht);
+document.getElementById("ovNieuw").addEventListener("click",async()=>{
+  const naam=schoneNaam(await vraagTekst("Nieuwe leverancier","","De naam van de leverancier of fabriek. Daarna vul je de afspraken in; zolang die niet compleet zijn kan er geen inkooporder worden gemaakt."));
+  if(!naam) return;
+  if(S.mappen.includes(naam)){ ovGekozen=naam; tekenOverzicht(); tekenLeverancier(); return; }
+  S.mappen.push(naam);
+  try{ await bewaar(); try{ if(window.fpLog) window.fpLog("leverancier-nieuw",naam); }catch(e){} }catch(e){ melding("bad",e.message); await laad(); }
+  ovGekozen=naam; document.getElementById("ovZoek").value=""; tekenOverzicht(); tekenLeverancier();
+});
 
 (async function boot(){
   if(!localStorage.getItem(SESSION_KEY)){ location.href="dashboard.html"; return; }
