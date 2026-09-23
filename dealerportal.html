@@ -1419,7 +1419,7 @@ function openDownloads(model){
     ${bestanden.length || algemeen.length || manuals.length ? "" : `<p class="lead" style="margin:14px 0 0;">No documents published for this model yet. Ask us via the Contact tab and we will send them to you.</p>`}
     ${bestanden.length || algemeen.length || manuals.length ? docSectie("Spec sheets", specs, "None published yet.") : ""}
     ${bestanden.length || algemeen.length || manuals.length ? docSectie("Manuals", manuals, "None published yet.") : ""}
-    ${bestanden.length || algemeen.length ? docSectie("Images", beeld, "No images published yet.") : ""}
+    ${bestanden.length || algemeen.length ? docSectie("Images", beeld, "Images appear here as soon as we publish them.") : ""}
     ${algemeen.length ? docSectie("General for this range", algemeen, "") : ""}
     </div>
   </div>`;
@@ -1716,7 +1716,7 @@ function openReserve(model){
   /* De kleuren als opties voor het gedeelde keuzelijst-component: een stip
      voor op voorraad of backorder, het aantal rechts, en bij een samengesteld
      artikel eronder wat er in het pakket zit. */
-  const kleurOpties = [{ waarde: "", tekst: "No preference", stip: "geen" }].concat(
+  const kleurOpties = [{ waarde: "", tekst: "Any colour is fine", stip: "geen" }].concat(
     variants.map(v => {
       const op = Number(v.free) > 0;
       const inh = bevatTekst(v);
@@ -2642,7 +2642,7 @@ $("qSend").addEventListener("click", async ()=>{
     m.className="msg ok"; m.textContent="Thank you - your question has been sent. We will get back to you by e-mail.";
     $("qSubject").value = ""; $("qMessage").value = "";
   } else {
-    m.className="msg bad"; m.textContent="Sending failed - please try again or e-mail us directly.";
+    m.className="msg bad"; m.textContent="Your message needs another try - send it again, or e-mail us directly.";
   }
   m.classList.remove("hidden");
 });
