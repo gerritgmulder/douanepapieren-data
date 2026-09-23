@@ -1243,6 +1243,16 @@ function relatieKaart(index){
     const anders = (accounts.dealers || []).findIndex((x,i) => i !== index && String(x.email||"").toLowerCase() === d.email.toLowerCase());
     if (anders >= 0) { zeg("Dit e-mailadres hoort al bij een andere relatie.", true); return; }
     accounts.dealers = accounts.dealers || [];
+    /* Wie deze relatie aanmaakt is zijn adviseur, en die gaat vanaf nu in cc
+       bij élke mail die het portaal naar deze partner stuurt. Gerrit (23 sep
+       2026): "Ik wil dat de adviseur die de partner/dealer als nieuwe
+       partner/dealer in het systeem zet, altijd in de cc wordt meegenomen."
+       Alleen bij het aanmaken: wie later iets aan de kaart wijzigt neemt de
+       relatie niet over. */
+    if (nieuw && !d.adviseur) {
+      d.adviseur = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
+      d.adviseurSinds = new Date().toISOString();
+    }
     if (nieuw) accounts.dealers.push(d); else accounts.dealers[index] = d;
     try{ if(window.fpLog) window.fpLog(nieuw?"relatie-toegevoegd":"relatie-gewijzigd", d.email+" ("+d.company+")"); }catch(e){}
     await save("dealer-accounts", accounts);
@@ -1449,6 +1459,9 @@ $("addPartner").addEventListener("click", async ()=>{
     email, company: $("nCompany").value.trim(), soort,
     debtorIds: nDebs,
     active: true, addedBy: localStorage.getItem(EMAIL_KEY)||"", addedAt: new Date().toISOString(),
+    // Zie de toelichting bij de relatiekaart: de aanmaker is de adviseur en
+    // gaat in cc bij elke mail aan deze partner.
+    adviseur: (localStorage.getItem(EMAIL_KEY)||"").toLowerCase(), adviseurSinds: new Date().toISOString(),
   });
   await save("dealer-accounts", accounts);
   $("nEmail").value=""; $("nCompany").value=""; $("nDebtors").value=""; $("nSoort").value="";
