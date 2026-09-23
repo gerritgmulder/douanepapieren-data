@@ -150,6 +150,7 @@ const ALLOWED_BUCKETS = new Set([
   "planning-its-order",
   "herinneringen-debiteuren", // Herinneringen: naam, bedrijf en mailadres per debiteur, uit Logic4 (cache, vult zich aan)
   "herinneringen-log",
+  "voorraadbepaling",    // Voorraadbepaling: verkoop per model (12 mnd) naast de open inkooporders, zes uur geldig
   "maand-werk",          // Maandcontrole (proef): per maand en rekening wie wat heeft nagekeken en wat de verklaring is
   "maand-cache",         // Maandcontrole (proef): de saldi per rekening per maand uit Logic4, een uur geldig
   "maand-instellingen",  // Maandcontrole (proef): welke rekeningen tussenrekeningen zijn, intern, bank
@@ -7204,6 +7205,98 @@ async function maandcontroleHandle(request, env, url) {
   return reply(404, { ok: false });
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   VOORRAADBEPALING - bestellen in dezelfde verhouding als er verkocht wordt
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Gerrit (23 sep 2026): "als er 6.000 spa's zijn verkocht en 600 daarvan
+   waren de Renew (10%), dan moeten we diezelfde percentages ook aanhouden bij
+   het bestellen. Bestellen we 1.000 spa's, dan moeten 100 ervan de Renew
+   zijn. Zien we dat er 80 zijn besteld, dan moet het systeem melden dat er
+   eigenlijk nog 20 bij besteld moeten worden."
+
+   Keuzes van Gerrit: de laatste 12 maanden, per model, alle open
+   inkooporders, particulier en partner samen, en Amerika helemaal los.
+
+     verkocht  Logic4 GetProductCollectionSalesInformation: aantallen per
+               artikel per maand (Value = stuks), de lopende maand plus de
+               elf daarvoor, zonder debiteur Passion Spa South (Amerika).
+               Per model opgeteld via de spa-catalogus (warmtepompen niet).
+     besteld   alle open inkooporders bij de spa-fabrieken, nog te leveren
+               stuks per model. Een inkooporder voor Amerika telt niet mee:
+               die herkennen we aan de opmerking ("Warehouse Texas USA",
+               "to Houston"), die het Dashboard er bij het aanmaken inzet.
+     hoort     aandeel in de verkoop x totaal besteld. Verschil = hoort min
+               besteld: positief is nog bij te bestellen. */
+const VB_AMERIKA_IKO = /texas|houston|\busa\b|amerika|america/i;
+async function voorraadbepalingBereken(env) {
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const codeToModel = {};
+  for (const [model, variants] of Object.entries(catalog.models || {}))
+    if (!DP_GEEN_SPA.test(model)) for (const v of variants) codeToModel[String(v.code)] = model;
+  const codes = Object.keys(codeToModel);
+  if (!codes.length) return { ok: false, error: "de spa-catalogus is leeg" };
+  const token = await l4Token(env);
+  const post = (path, body) => fetch("https://api.logic4server.nl" + path, {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(body),
+  }).then(async r => { if (!r.ok) throw new Error(path + " HTTP " + r.status); return r.json(); });
+
+  // Verkocht per model, 12 maanden, zonder Amerika
+  const verkocht = {}, perMaand = {}; let vanaf = null, tot = null;
+  for (let i = 0; i < codes.length; i += 80) {
+    const l = await post("/v3/Management/GetProductCollectionSalesInformation", {
+      TimeFrame: 2, HistoryPoints: 12, IncludingCurrentPeriod: true,
+      ProductCodes: codes.slice(i, i + 80), ExcludeDebtorIds: [AMERIKA_DEBTOR],
+    });
+    for (const x of (Array.isArray(l) ? l : [])) {
+      const m = codeToModel[String(x.ProductCode)]; if (!m) continue;
+      const n = Number(x.Value) || 0; if (!n) continue;
+      verkocht[m] = (verkocht[m] || 0) + n;
+      const mnd = String(x.DateStart || "").slice(0, 7);
+      if (mnd) { perMaand[mnd] = (perMaand[mnd] || 0) + n; if (!vanaf || mnd < vanaf) vanaf = mnd; if (!tot || mnd > tot) tot = mnd; }
+    }
+  }
+  // Besteld: open inkooporders bij de spa-fabrieken, zonder Amerika
+  let orders = [];
+  for (let page = 0; page < 12; page++) {
+    const arr = await post("/v3/BuyOrders/GetBuyOrders", { BuyOrderIsClosed: false, TakeRecords: 500, SkipRecords: page * 500 });
+    const list = Array.isArray(arr) ? arr : ((arr && (arr.Records || arr.BuyOrders)) || []);
+    if (!list.length) break; orders = orders.concat(list); if (list.length < 500) break;
+  }
+  const fabriek = orders.filter(o => isSpaFactory(o.CreditorCompanyName));
+  const besteld = {}, ikosPerModel = {}; let overgeslagen = 0;
+  for (const o of fabriek) {
+    if (VB_AMERIKA_IKO.test(String(o.Remarks || ""))) { overgeslagen++; continue; }
+    const rr = await post("/v3/BuyOrders/GetBuyOrderRowsByFilter", { BuyOrderId: o.Id, TakeRecords: 200 }).catch(() => []);
+    for (const r of (Array.isArray(rr) ? rr : [])) {
+      const m = codeToModel[String(r.ProductCode || "")]; if (!m) continue;
+      const q = Number(r.QtyToDeliver) || 0; if (q <= 0) continue;
+      besteld[m] = (besteld[m] || 0) + q;
+      (ikosPerModel[m] = ikosPerModel[m] || []).push({ iko: o.Id, fabriek: o.CreditorCompanyName || "", ref: String(o.Remarks || "").trim().slice(0, 90), qty: q, eta: String(r.ExpectedDeliveryDate || "").slice(0, 10) || null });
+    }
+  }
+  const totaalVerkocht = Object.values(verkocht).reduce((a, b) => a + b, 0);
+  const totaalBesteld = Object.values(besteld).reduce((a, b) => a + b, 0);
+  const modellen = [...new Set([...Object.keys(verkocht), ...Object.keys(besteld)])].map(m => {
+    const v = verkocht[m] || 0, b = besteld[m] || 0;
+    const aandeel = totaalVerkocht ? v / totaalVerkocht : 0;
+    const hoort = aandeel * totaalBesteld;
+    return { model: m, verkocht: v, aandeel: Math.round(aandeel * 10000) / 100, besteld: b, hoort: Math.round(hoort * 10) / 10, verschil: Math.round(hoort - b), ikos: ikosPerModel[m] || [] };
+  }).sort((a, b) => b.verschil - a.verschil || b.verkocht - a.verkocht);
+  return { ok: true, ts: new Date().toISOString(), periode: { vanaf, tot }, perMaand, totaalVerkocht, totaalBesteld,
+           ikosFabriek: fabriek.length, ikosAmerika: overgeslagen, modellen };
+}
+async function voorraadbepalingHandle(request, env, url) {
+  const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+  if (!(await toegangMag(env, "voorraadbepaling", wie))) return reply(403, { ok: false, error: "geen toegang" });
+  const vers = url.searchParams.get("vers") === "1";
+  const oud = await env.FONTEYN_DATA.get("voorraadbepaling", { type: "json" });
+  if (!vers && oud && oud.ts && Date.now() - Date.parse(oud.ts) < 6 * 3600000) return reply(200, { ...oud, uitCache: true });
+  const nieuw = await voorraadbepalingBereken(env);
+  if (nieuw.ok) await env.FONTEYN_DATA.put("voorraadbepaling", JSON.stringify(nieuw));
+  return reply(200, nieuw);
+}
+
 async function dpOrderUitleg(env, nr) {
   const token = await l4Token(env);
   const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
@@ -13880,6 +13973,10 @@ export default {
     const bak = (await env.FONTEYN_DATA.get("dhl-push", { type: "json" })) || { berichten: [] };
     return reply(200, { ok: true, berichten: bak.berichten.slice(-100).reverse().map(x => { const { ruw, ...rest } = x; return rest; }) });
   }
+  if (url.pathname === "/voorraadbepaling" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
+      return voorraadbepalingHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
   if (url.pathname.startsWith("/maand/")) {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
       return maandcontroleHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));

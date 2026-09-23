@@ -118,6 +118,8 @@
       uit:"Containers, reserveringen, ontvangst en inkoop",        mobiel:"goed", tile:"tileVoorraad",
       mobielBestand:"voorraad-mobiel.html",
       mobielUit:"Voorraad, containers onderweg en een order opzoeken" },
+    { bestand:"voorraadbepaling.html", groep:"voorraadbepaling", ic:"📊", naam:"Voorraadbepaling",
+      uit:"Bestellen in de verhouding van de verkoop: wat moet er nog bij", mobiel:"goed", tile:"tileVoorraadbepaling" },
     /* Vertalen is een tekstvak met een knop: dat werkt op een telefoon net
        zo goed als op een pc, mits de twee vlakken onder elkaar vallen. Dat
        doen ze onder 900 pixels, dus geen aparte mobiele pagina nodig. */

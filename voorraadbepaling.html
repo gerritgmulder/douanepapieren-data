@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("voorraadbepaling", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is voor Chantal en Arno.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Voorraadbepaling - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     VOORRAADBEPALING - bestellen in dezelfde verhouding als er verkocht wordt
+
+     Gerrit (23 sep 2026): verkopen we 10% Renew, dan hoort 10% van wat er
+     besteld staat een Renew te zijn. Staat er minder, dan meldt dit scherm
+     hoeveel er nog bij moeten. Basis: de laatste 12 maanden, per model, alle
+     open inkooporders, particulier en partner samen, Amerika los.
+     De berekening staat in de worker (voorraadbepalingBereken).
+
+     OTA: staat in manifest.json. Nooit opnieuw installeren.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#8bc53f; --ink:#1f2937; --grijs:#6b7280; --rand:#e5e7eb; --bg:#f5f4ef; --oranje:#c2410c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:13.5px}
+header{background:var(--groen);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1100px;margin:16px auto;padding:0 14px 60px}
+.kaart{background:#fff;border:1px solid var(--rand);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.lead{color:var(--grijs);font-size:12.5px;margin:0 0 10px;line-height:1.5}
+.kop3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:6px 0 4px}
+.kop3 div{background:#f8faf5;border:1px solid var(--rand);border-radius:10px;padding:10px 12px}
+.kop3 b{display:block;font-size:20px}
+.kop3 span{font-size:11.5px;color:var(--grijs)}
+.knop{background:#fff;border:1px solid var(--rand);border-radius:9px;padding:7px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--grijs);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:7px 6px;border-bottom:1px solid var(--rand);white-space:nowrap}
+td{padding:7px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+.n{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.rij{cursor:pointer}tr.rij:hover td{background:#f8faf5}
+.pil{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;white-space:nowrap}
+.pil.bij{background:#ffedd5;color:var(--oranje)}.pil.teveel{background:#f3f4f6;color:#374151}.pil.goed{background:#eef2e6;color:var(--groen)}
+.iko{font-size:12px;color:var(--grijs)}
+.hidden{display:none!important}
+@media (max-width:700px){ .verberg-mob{display:none} }
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>📊 Voorraadbepaling</h1>
+</header>
+<main>
+  <div class="kaart">
+    <p class="lead">Wat er besteld staat hoort in dezelfde verhouding te zijn als wat er verkocht wordt. Verkoopt de Renew 10%, dan hoort 10% van wat er bij de fabrieken besteld staat een Renew te zijn. Hieronder per model hoeveel er nog bij moeten om die verhouding te halen.</p>
+    <div class="kop3" id="kop"></div>
+    <p class="lead" id="basis" style="margin-top:8px"></p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <label style="font-size:12.5px"><input type="checkbox" id="alles"> ook modellen tonen die kloppen of te veel hebben</label>
+      <button class="knop" id="vers">Opnieuw uit Logic4</button>
+      <span id="stand" style="font-size:12px;color:var(--grijs)"></span>
+    </div>
+  </div>
+  <div class="kaart"><div style="overflow:auto"><table><thead><tr><th>Model</th><th class="n">Verkocht</th><th class="n">Aandeel</th><th class="n">Besteld</th><th class="n verberg-mob">Hoort</th><th>Actie</th></tr></thead><tbody id="lijst"><tr><td colspan="6" class="lead">Ophalen uit Logic4…</td></tr></tbody></table></div></div>
+</main>
+<script>
+var W = "https://fonteyn-data-store.g-mulder.workers.dev";
+var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+function teamKey(){ return localStorage.getItem("fp.teamkey")||""; }
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s == null ? "" : s).replace(/[&<>"']/g, function(c){ return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+function nl(n){ return Number(n||0).toLocaleString("nl-NL"); }
+function datumNL(v){ if(!v) return ""; var s=String(v).slice(0,10).split("-"); return s.length===3 ? s[2]+"-"+s[1]+"-"+s[0] : v; }
+var MND=["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"];
+function mnd(m){ var p=String(m||"").split("-"); return p.length===2 ? MND[Number(p[1])-1]+" "+p[0] : m; }
+var data=null, open={};
+async function laad(vers){
+  $("stand").textContent = vers ? "Opnieuw uitrekenen…" : "";
+  try{
+    var r = await fetch(W+"/voorraadbepaling"+(vers?"?vers=1":""), { headers:{ "X-Fonteyn-Auth": teamKey(), "X-Fonteyn-User": ik } });
+    var j = await r.json(); if (!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    data = j; teken();
+    $("stand").textContent = "Stand "+new Date(j.ts).toLocaleString("nl-NL");
+  }catch(e){ $("lijst").innerHTML = '<tr><td colspan="6" style="color:#b91c1c">Ophalen lukte niet: '+esc(e.message)+'</td></tr>'; }
+}
+function teken(){
+  var j=data, bij=j.modellen.filter(function(m){ return m.verschil>0; });
+  var nodig=bij.reduce(function(n,m){ return n+m.verschil; },0);
+  $("kop").innerHTML = '<div><b>'+nl(j.totaalVerkocht)+'</b><span>spa\'s verkocht in de laatste 12 maanden</span></div>'+
+    '<div><b>'+nl(j.totaalBesteld)+'</b><span>spa\'s besteld bij de fabrieken (open inkooporders)</span></div>'+
+    '<div><b>'+bij.length+'</b><span>modellen met te weinig besteld, samen '+nl(nodig)+' spa\'s</span></div>';
+  $("basis").textContent = "Verkoop van "+mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot)+", particulier en partner samen. Amerika telt niet mee: niet in de verkoop en niet in de "+j.ikosAmerika+" inkooporders voor Houston.";
+  var lijst = $("alles").checked ? j.modellen : bij;
+  $("lijst").innerHTML = lijst.length ? lijst.map(function(m){
+    var pil = m.verschil>0 ? '<span class="pil bij">nog '+m.verschil+' bijbestellen</span>' : m.verschil<0 ? '<span class="pil teveel">'+(-m.verschil)+' meer dan de verhouding</span>' : '<span class="pil goed">klopt</span>';
+    return '<tr class="rij" data-m="'+esc(m.model)+'"><td><b>'+esc(m.model)+'</b></td><td class="n">'+nl(m.verkocht)+'</td><td class="n">'+m.aandeel.toLocaleString("nl-NL")+'%</td><td class="n">'+nl(m.besteld)+'</td><td class="n verberg-mob">'+m.hoort.toLocaleString("nl-NL")+'</td><td>'+pil+'</td></tr>'+
+      (open[m.model] ? '<tr><td colspan="6" class="iko">'+(m.ikos.length ? m.ikos.map(function(x){ return 'Inkooporder '+x.iko+' · '+esc(x.fabriek)+' · '+x.qty+' stuks'+(x.eta?' · verwacht '+datumNL(x.eta):'')+(x.ref?' · '+esc(x.ref):''); }).join('<br>') : 'Er staat voor dit model nu niets besteld.')+'</td></tr>' : '');
+  }).join("") : '<tr><td colspan="6" class="lead">Alle modellen zitten op of boven de verhouding.</td></tr>';
+  document.querySelectorAll("tr.rij").forEach(function(tr){ tr.addEventListener("click", function(){ open[tr.dataset.m]=!open[tr.dataset.m]; teken(); }); });
+}
+$("alles").addEventListener("change", teken);
+$("vers").addEventListener("click", function(){ laad(true); });
+(async function(){ for (var i=0;i<20&&!teamKey();i++) await new Promise(function(r){ setTimeout(r,500); }); laad(false); })();
+</script>
+<script>
+(function(){
+  var W="https://fonteyn-data-store.g-mulder.workers.dev/log";
+  function apparaat(){ var ua=navigator.userAgent||"", m=ua.match(/Fonteyn-Dashboard\/([\d.]+)/); var id=localStorage.getItem("fp.apparaat"); if(!id){ id="PC-"+Math.random().toString(36).slice(2,8).toUpperCase(); try{localStorage.setItem("fp.apparaat",id);}catch(e){} } return { computer:id, platform:(ua.match(/\(([^)]+)\)/)||[])[1]||"", versie: m?"app "+m[1]:"browser" }; }
+  window.fpLog=function(action,detail){ var email=(localStorage.getItem("fp.email")||"").toLowerCase(), key=localStorage.getItem("fp.teamkey")||""; if(!email||!key) return; var app=apparaat();
+    fetch(W,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":key},body:JSON.stringify({user:email,tile:"voorraadbepaling",action:action||"open",detail:(detail||"").slice(0,1200),computer:app.computer,platform:app.platform,versie:app.versie})}).catch(function(){}); };
+  window.fpLog("open","");
+})();
+</script>
+</body>
+</html>
