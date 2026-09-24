@@ -306,7 +306,7 @@
     /* "LV20210201J04 -07" staat in de pdf met een spatie voor het streepje;
        dat is opmaak, geen deel van het nummer. Spaties rond een streepje gaan
        er daarom uit, anders zoekt Chantal later op iets dat niet bestaat. */
-    if ((m = alles.match(/PI\s*No\.?\s*:?\s*([A-Za-z0-9\- ]{3,40})/i)))
+    if ((m = alles.match(/(?:PI|CI)\s*No\.?\s*[:：]?\s*([A-Za-z0-9\- ]{3,40})/i)))
       uit.invoiceNo = schoon(m[1]).replace(/\s*-\s*/g, "-");
     if ((m = alles.match(/Date\s*:?\s*(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/i)))
       uit.datum = m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
@@ -378,6 +378,8 @@
       uit.regels.push({
         code: naam, omschrijving: naam, aantal: aantal,
         kleur: shell || null, skirt: skirt || null, afmeting: maat || null,
+        // Chantal (24 sep 2026): de kleur is de Shell Color, de omkasting de Skirt Color.
+        kleurVol: shell ? (skirt ? shell + " with " + skirt : shell) : null,
         prijsUsd: hoofd.prijs || null,
         // Alles wat op dit blok is gefactureerd, dus inclusief de opties.
         bedragUsd: Math.round(bedragen.reduce(function (n, x) { return n + x; }, 0) * 100) / 100,
@@ -787,6 +789,10 @@
     if (/Main\s*components/i.test(t) && /Quantity\s+needed/i.test(t)) return "joyspa";
     if (/SALES\s*CONTRACT/i.test(t) && /Your\s*Art\.?\s*No/i.test(t)) return "topia";
     if (/PROFORMA\s*INVOICE/i.test(t) && /Item\s*Name/i.test(t)) return "proforma";
+    /* De commercial invoice van Huantong heeft dezelfde opbouw als hun
+       proforma (blokken per spa, afgesloten met "Total Price") en werd
+       daarom niet gelezen: 0 regels (Chantal, 24 sep 2026). */
+    if (/COMMERCIAL\s*INVOICE/i.test(t) && /Item\s*Name/i.test(t) && /Total\s*Price/i.test(t)) return "huantong-ci";
     if (/PROFORMA\s*INVOICE/i.test(t) && /DESCRIPTIONS?/i.test(t) && /QTY/i.test(t)) return "mexda-proforma";
     return "commercial";
   }
@@ -795,6 +801,7 @@
     if (s === "joyspa") return leesJoyspa(regels);
     if (s === "mexda-proforma") return leesMexdaProforma(regels);
     if (s === "proforma") return leesProforma(regels, kolomRegels);
+    if (s === "huantong-ci") { var ci = leesProforma(regels, kolomRegels); ci.soort = "commercial"; return ci; }
     return lees(regels);
   }
 

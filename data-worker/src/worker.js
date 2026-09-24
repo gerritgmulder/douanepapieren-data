@@ -4648,6 +4648,19 @@ async function l4Medewerkers(env) {
 // Leverancier (fabrieksnaam) → CreditorId. Uit de bestaande inkooporders, want
 // dáár staat welke naam bij welk crediteurnummer hoort. Geen giswerk.
 async function ikoCrediteuren(env) {
+  /* Alle crediteuren uit Logic4, niet alleen die van de laatste 500
+     inkooporders. Huantong en Kasdaly hadden al een tijd geen inkooporder en
+     stonden daardoor niet in de lijst, terwijl ze in Logic4 gewoon bestaan
+     (Chantal, 24 sep 2026). De lijst hieronder blijft als reserve. */
+  try {
+    const alle = await inkoopCrediteuren(env, false);
+    const map = {};
+    for (const c of (alle.crediteuren || [])) {
+      const naam = String(c.naam || "").trim();
+      if (naam && c.id != null && !/niet gebruiken/i.test(naam) && !map[naam.toLowerCase()]) map[naam.toLowerCase()] = { id: c.id, naam };
+    }
+    if (Object.keys(map).length > 50) return map;
+  } catch (e) { /* dan de oude weg */ }
   const token = await l4Token(env);
   const r = await fetch("https://api.logic4server.nl/v3/BuyOrders/GetBuyOrders", {
     method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
@@ -4789,8 +4802,13 @@ function ikoZoekArtikel(catalog, model, kleur, skirt, aliassen) {
     }
     if (beste && besteScore > 0) return { ...beste, zeker: modelZeker, viaAndereNaam };
   }
-  // Is er maar één uitvoering, dan kan het niet mis: die nemen we.
-  if (varianten.length === 1) return { ...varianten[0], zeker: false, viaAndereNaam };
+  // Is er maar één uitvoering, dan kan het niet mis: die nemen we. Staat er in
+  // Logic4 bij die ene uitvoering geen kleur ("Tropic Spas | Bermuda Spa",
+  // 100626), dan is er ook niets te controleren (Chantal, 24 sep 2026).
+  if (varianten.length === 1) {
+    const zonderKleur = String(varianten[0].desc || "").split("|").length <= 2;
+    return { ...varianten[0], zeker: zonderKleur && modelZeker, viaAndereNaam };
+  }
   // Anders: de gevraagde kleur bestaat niet bij dit model. Vroeger pakten we
   // dan de eerste uitvoering en zetten er 'onzeker' bij — dat leverde een
   // geloofwaardige maar verkeerde artikelcode op (Aquatic 3 in Mystic Mountain
@@ -4818,6 +4836,27 @@ async function ikoVoorstel(env, body) {
     const sleutels = Object.keys(crediteuren);
     let hit = sleutels.find(n => plat(n) === gevraagd);
     if (!hit) hit = sleutels.find(n => plat(n).includes(gevraagd) || gevraagd.includes(plat(n)));
+    /* Op woorden: "Guangdong Kasdaly Pool Spa Equipment Co., Ltd." heet in
+       Logic4 "Guangdong Kasdaly Pool Spa (Joyspa)", en "MEI YA XIN FURNITURE
+       INTERNATIONAL CO.,LTD" is "Mei Ya Xin Industrial". Zonder de algemene
+       woorden moet minstens driekwart van de kortste naam in de andere staan,
+       en er mag maar één beste zijn. */
+    if (!hit) {
+      const ALG = new Set("co ltd limited company inc bv b v gmbh industry industrial international furniture products product equipment trading trade import export group the and of".split(" "));
+      const woorden = n => plat(n).split(" ").filter(w => w.length > 1 && !ALG.has(w));
+      const gw = woorden(body.leverancier);
+      let beste = null, besteScore = 0, gelijk = false;
+      for (const n of sleutels) {
+        const nw = woorden(n); if (!nw.length || !gw.length) continue;
+        const samen = gw.filter(w => nw.includes(w)).length;
+        const score = samen / Math.min(gw.length, nw.length);
+        if (samen >= 2 && score >= 0.75) {
+          if (score > besteScore) { beste = n; besteScore = score; gelijk = false; }
+          else if (score === besteScore) gelijk = true;
+        }
+      }
+      if (beste && !gelijk) hit = beste;
+    }
     if (hit) crediteur = crediteuren[hit];
   }
   const uit = [], waarschuwingen = [];

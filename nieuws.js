@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-24", bestand: "voorraad.html", soort: "hersteld",
+      titel: "Huantong en Kasdaly: invoices en proforma's worden gelezen",
+      wat: "De commercial invoice van Huantong wordt nu gelezen, met de kleur als kuip en omkasting (bijvoorbeeld Pure White with Grey). Bij een proforma van Huantong of Kasdaly (Joyspa) vindt het scherm de leverancier nu zelf; alle leveranciers uit Logic4 staan in de keuzelijst. De Bermuda wordt meteen gekoppeld aan artikel 100626."
+    },
+    {
       datum: "2026-09-23", bestand: "voorraadbepaling.html", soort: "nieuw",
       titel: "Voorraadbepaling",
       wat: "Een nieuwe tegel die laat zien of wat er bij de fabrieken besteld staat in dezelfde verhouding is als wat er verkocht wordt. Per model: verkocht in de laatste 12 maanden, het aandeel daarvan, wat er besteld staat, en hoeveel er nog bij moeten. Particulier en partner samen; Amerika telt niet mee. Klik een model open voor de inkooporders."

@@ -4589,6 +4589,9 @@ async function parseCiPdf(file){
     const model=r.code?spaModel(r.code):null;
     if(model&&model!=="(onbekend SKT-model)"){
       models[model]=(models[model]||0)+aantal;
+      // Kleur erbij als de factuur die noemt (Huantong: kuip en omkasting).
+      const kl=r.kleurVol||r.kleur||null;
+      if(kl) (modelColors[model]=modelColors[model]||{})[kl]=(modelColors[model][kl]||0)+aantal;
     }else{
       if(r.code) unmapped[r.code]=(unmapped[r.code]||0)+aantal;
       specials.push({omschrijving:r.omschrijving,code:r.code||null,aantal:aantal,
