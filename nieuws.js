@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-24", bestand: "amerika.html", soort: "hersteld",
+      titel: "Batches met een dubbel factuurnummer worden geboekt",
+      wat: "QuickBooks gebruikt soms hetzelfde factuurnummer voor twee klanten (3496 en 3515 in de batch van 29-06). Het scherm kiest nu zelf de juiste order, op bedrag en anders op de naam van de klant. De batch van 29-06 is weer klaar om te boeken."
+    },
+    {
       datum: "2026-09-24", bestand: "voorraad.html", soort: "nieuw",
       titel: "Partner containers: cargo ready en de balance",
       wat: "Klap een container open onder Partner containers. Daar zet je de proforma van Jazzi en de dag waarop je akkoord gaf; het scherm rekent cargo ready uit (2 maanden later). Een week ervoor krijg je bovenaan een melding om bij de fabriek te checken, met een knop voor de balance-mail aan de dealer. Is de balance daarna nog niet binnen, dan meldt het scherm elke dag dat er een herinnering kan. Elke mail staat met datum bij de container. De teksten van de mails pas je aan onderaan het tabblad."

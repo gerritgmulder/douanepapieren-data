@@ -1940,12 +1940,24 @@ function nlBedrag(n){ return Number(n||0).toLocaleString("nl-NL",{minimumFractio
    de eerste, zonder order, en dan zei het scherm "geen Logic4-order" terwijl
    de tweede gewoon een order heeft (Gerrit, 21 sep 2026). Daarom: bij een
    dubbel nummer eerst op bedrag, en anders die met een Logic4-order. */
-function audFactuurInQb(nr,bedrag){
+/* QuickBooks hergebruikt factuurnummers (3496 is Russell Lowry én Kerns
+   Fireplace). Eerst op bedrag; lukt dat niet, zoals bij een deelbetaling,
+   dan op de naam op de batchregel. Zelfde regel als qbKiesOpNaam in de worker. */
+const AUD_ALGEMEEN=new Set(["spas","pool","pools","tubs","fireplace","and","the","outdoor","living","store","shop","company","inc","llc"]);
+function audKiesOpNaam(lijst,naam){
+  const woorden=x=>String(x||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim().split(" ").filter(w=>w.length>=4&&!/^\d+$/.test(w)&&!AUD_ALGEMEEN.has(w));
+  const eigen=woorden(naam); if(!eigen.length) return null;
+  const lijkt=(a,b)=>a===b||(a.length>=5&&b.length>=5&&(a.startsWith(b)||b.startsWith(a)));
+  const sc=lijst.map(x=>({x,n:woorden(x.klant).filter(w=>eigen.some(e=>lijkt(e,w))).length})).sort((a,b)=>b.n-a.n);
+  return sc[0].n>0&&(sc.length<2||sc[1].n<sc[0].n)?sc[0].x:null;
+}
+function audFactuurInQb(nr,bedrag,naam){
   if(!nr) return null;
   const alle=qbInvoices.filter(x=>String(x.docNr)===String(nr));
   if(alle.length<=1) return alle[0]||null;
   const b=Number(bedrag);
   if(isFinite(b)){ const opBedrag=alle.filter(x=>Math.abs((Number(x.totaal)||0)-Math.abs(b))<0.02); if(opBedrag.length===1) return opBedrag[0]; }
+  const opNaam=naam?audKiesOpNaam(alle,naam):null; if(opNaam) return opNaam;
   const metOrder=alle.filter(x=>x.logic4Order);
   return metOrder.length===1?metOrder[0]:(metOrder[0]||alle[0]);
 }
@@ -1977,7 +1989,7 @@ function audBatchCheck(w){
   const geenOrder=geld.filter(r=>{
     if(String(r.soort||"")==="balance") return false;
     const nr=audFactuurVan(r); if(!nr) return false;
-    const q=audFactuurInQb(nr,r.kolom1);
+    const q=audFactuurInQb(nr,r.kolom1,r.naam);
     return !(q&&q.logic4Order);
   });
   if(geenOrder.length) redenen.push("nog geen Logic4-order voor "+geenOrder.map(r=>audFactuurVan(r)).join(", "));
@@ -2001,7 +2013,7 @@ function audRender(){
   box.innerHTML=wires.map(w=>{
     const openN=w.regels.filter(r=>{
       if(r.soort!=="factuur") return false;
-      const q=audFactuurInQb(r.factuur,r.kolom1);
+      const q=audFactuurInQb(r.factuur,r.kolom1,r.naam);
       return !((q&&vwVan(q))||verwerktIds[r.factuur]);
     }).length;
     const totaalRegel=w.regels.find(r=>r.soort==="totaal"&&r.kolom3!=null);
@@ -2094,7 +2106,7 @@ function audRender(){
            hierboven. Komt dat nummer dubbel voor, dan blijft het bij het
            nummer; de bankregel zegt zelf niet welke van de twee het is. */
         const nrVan=audFactuurVan(r);
-        const inQb=audFactuurInQb(nrVan,r.kolom1);
+        const inQb=audFactuurInQb(nrVan,r.kolom1,r.naam);
         const v=(inQb&&vwVan(inQb))||(nrVan&&verwerktIds[nrVan])||null;
         const isVerwerkt=!!v;
         return "<tr"+(isVerwerkt?" style='background:#f0fdf4'":"")+">"+

@@ -6687,7 +6687,7 @@ async function ketenControle(env) {
     const approved = await lees("qb-approved");
     const geboekt = await lees("qb-geboekt");
     geboekt.ids = geboekt.ids || {};
-    const perFactuur = qbOrdersPerFactuur(approved);
+    const perFactuur = await qbVerrijkDubbel(env, qbOrdersPerFactuur(approved));
     /* Wat Osman met de hand in Logic4 heeft verwerkt (qb-verwerkt) telt als
        klaar, ook al is het niet via de koppeling geboekt. */
     const verwerkt = await lees("qb-verwerkt");
@@ -10277,6 +10277,55 @@ function qbOrdersPerFactuur(approved) {
   return per;
 }
 
+/* Dubbele factuurnummers uit QuickBooks.
+   ═══════════════════════════════════════════════════════════════════════════
+   QuickBooks hergebruikt nummers: 3496 is zowel Russell Lowry ($111,76) als
+   Kerns Fireplace ($164,57), 3515 zowel Hot Tub Outpost als A1 Hot Tubs. Beide
+   zijn als order in Logic4 gezet. Bij het boeken wees de batch van 29-06 dan
+   niets aan ("meerdere Logic4-orders", Osman 24 sep 2026), want in qb-approved
+   staat alleen het nummer en de order, niet de klant of het bedrag.
+
+   Daarom halen we bij een dubbel nummer de facturen zelf op (één vraag aan
+   QuickBooks voor alle dubbele samen) en zetten het dollarbedrag en de klant
+   bij elke kandidaat. qbBatchLezen kiest daarna op bedrag, en anders op naam. */
+async function qbVerrijkDubbel(env, perFactuur) {
+  const ids = [];
+  for (const lijst of Object.values(perFactuur)) {
+    if (lijst.length < 2) continue;
+    for (const k of lijst) if (String(k.sleutel).startsWith("qb:")) ids.push(String(k.sleutel).slice(3).replace(/[^0-9]/g, ""));
+  }
+  if (!ids.length) return perFactuur;
+  try {
+    const j = await qbQuery(env, "SELECT * FROM Invoice WHERE Id IN (" +
+      [...new Set(ids)].filter(Boolean).slice(0, 200).map(x => "'" + x + "'").join(",") + ")");
+    const perId = {};
+    for (const inv of ((j.QueryResponse && j.QueryResponse.Invoice) || [])) perId[String(inv.Id)] = inv;
+    for (const lijst of Object.values(perFactuur)) {
+      if (lijst.length < 2) continue;
+      for (const k of lijst) {
+        const inv = perId[String(k.sleutel).slice(3)];
+        if (!inv) continue;
+        k.totaalUsd = Number(inv.TotalAmt) || 0;
+        k.klant = String((inv.CustomerRef && inv.CustomerRef.name) || "");
+      }
+    }
+  } catch (e) { console.error("[qb] dubbele facturen ophalen faalde: " + String(e.message || e)); /* dan blijft het "meerdere orders" en kiest een mens */ }
+  return perFactuur;
+}
+/* Welke kandidaat hoort bij de naam op de batchregel ("3496 russel lowry")?
+   Tellen van gedeelde woorden van 4+ letters, waarbij een tikfout aan het
+   eind mag ("russel" en "russell"). Alleen een duidelijke winnaar telt. */
+const QB_ALGEMEEN = new Set(["spas", "pool", "pools", "tubs", "fireplace", "and", "the", "outdoor", "living", "store", "shop", "company", "inc", "llc"]);
+function qbKiesOpNaam(kandidaten, regelNaam) {
+  const woorden = (x) => qbNaamSleutel(x).split(" ").filter(w => w.length >= 4 && !/^\d+$/.test(w) && !QB_ALGEMEEN.has(w));
+  const eigen = woorden(regelNaam);
+  if (!eigen.length) return null;
+  const lijkt = (a, b) => a === b || (a.length >= 5 && b.length >= 5 && (a.startsWith(b) || b.startsWith(a)));
+  const scores = kandidaten.map(k => ({ k, n: k.klant ? woorden(k.klant).filter(w => eigen.some(e => lijkt(e, w))).length : 0 }));
+  scores.sort((a, b) => b.n - a.n);
+  return scores[0].n > 0 && (scores.length < 2 || scores[1].n < scores[0].n) ? scores[0].k : null;
+}
+
 /* Een regel zonder factuurnummer alsnog thuisbrengen.
    ═══════════════════════════════════════════════════════════════════════════
    Audrey schrijft soms alleen de klantnaam: "Michigan Swim Pools 75,55" en
@@ -10347,8 +10396,18 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
     let kandidaten = factuur ? (perFactuur[factuur] || []) : [];
     /* Dubbel factuurnummer met twee orders: het bedrag wijst aan welke. */
     if (kandidaten.length > 1) {
-      const opBedrag = kandidaten.filter(k => k.totaal != null && Math.abs(k.totaal - Math.abs(Number(r.kolom1) || 0)) < 0.02);
+      const b = Math.abs(Number(r.kolom1) || 0);
+      const opBedrag = kandidaten.filter(k => {
+        const t = k.totaalUsd != null ? k.totaalUsd : k.totaal;
+        return t != null && Math.abs(t - b) < 0.02;
+      });
       if (opBedrag.length === 1) kandidaten = opBedrag;
+      else {
+        // Een deelbetaling (twee regels van 84,76 en 27,00 voor één factuur
+        // van 111,76) valt niet op bedrag; de naam wijst hem dan aan.
+        const opNaam = qbKiesOpNaam(opBedrag.length > 1 ? opBedrag : kandidaten, r.naam);
+        if (opNaam) kandidaten = [opNaam];
+      }
     }
     const rij = {
       volgnr: i,
@@ -10806,7 +10865,7 @@ async function qbHandleBatchOrders(request, env) {
   const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
   approved.ids = approved.ids || {};
   const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
-  const perFactuur = qbOrdersPerFactuur(approved);
+  const perFactuur = await qbVerrijkDubbel(env, qbOrdersPerFactuur(approved));
   const b = qbBatchLezen(w, perFactuur, geboekt, null, {});
   const nodig = [];
   const gezien = new Set();
@@ -10857,7 +10916,7 @@ async function qbHandleBoeken(request, env) {
   const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
   const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
   geboekt.ids = geboekt.ids || {};
-  const perFactuur = qbOrdersPerFactuur(approved);
+  const perFactuur = await qbVerrijkDubbel(env, qbOrdersPerFactuur(approved));
 
   /* Dubbele batches opsporen over het hele bestand, niet alleen over wat er nu
      in behandeling is: de tweeling van een batch kan best in een ander blokje
