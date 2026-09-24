@@ -450,6 +450,8 @@
     <div id="zoekAllesUit" style="margin-top:11px"></div>
   </div>
 
+  <!-- Meldingen van Partner containers (cargo ready, balance); zichtbaar in elk tabblad. -->
+  <div id="pcMeldBalk"></div>
   <div class="tabs">
     <button class="tab active" data-tab="overzicht" type="button">Overzicht</button>
     <button class="tab" data-tab="reserveringen" type="button">Reserveringen</button>
@@ -864,6 +866,13 @@
       </div>
       <div id="pcCiStatus" class="status-msg hidden" style="margin-top:10px"></div>
     </div>
+    <div class="card" id="pcTekstKaart">
+      <details>
+        <summary style="cursor:pointer;font-weight:600">Teksten van de balance-mail en de herinnering</summary>
+        <p class="lead" style="font-size:12px;margin:8px 0 10px">Bij het opstellen worden <b>{dealer}</b>, <b>{container}</b>, <b>{order}</b>, <b>{cargoReady}</b> en <b>{openstaand}</b> vanzelf ingevuld. De groet met het adres van Fonteyn komt er altijd onder. Voor een dealer in Nederland of België wordt de Nederlandse tekst gekozen, anders de Engelse; dat kun je per mail omzetten.</p>
+        <div id="pcTeksten"><p class="lead" style="font-size:12px">Laden…</p></div>
+      </details>
+    </div>
   </div>
 
 
@@ -1134,7 +1143,7 @@ function alleenLezen(){
   };
   // Wijzig-onderdelen verbergen: uploads, verwijderknoppen, prioriteit-pijlen.
   const verberg=function(){
-    ["ciUploadCard","pcUploadCard","ikoCard"].forEach(function(id){
+    ["ciUploadCard","pcUploadCard","pcTekstKaart","ikoCard"].forEach(function(id){
       const el=document.getElementById(id); if(el) el.style.display="none";
     });
     document.querySelectorAll("input[type=file]").forEach(function(el){
@@ -1213,7 +1222,7 @@ function beperkTotKlantTabs(alleenParticulier){
   });
   if(alleenParticulier){ const e=document.getElementById("tab-partner"); if(e) e.classList.add("hidden"); }
   // Upload-kaart in Partner containers is een wijzig-actie → weg
-  ["pcUploadCard","ikoCard"].forEach(function(id){ const el=document.getElementById(id); if(el) el.style.display="none"; });
+  ["pcUploadCard","pcTekstKaart","ikoCard"].forEach(function(id){ const el=document.getElementById(id); if(el) el.style.display="none"; });
   // Kop + werkwijze-balk gaan over beheer-tabs die een adviseur niet heeft
   const lead=document.querySelector("main > .lead"); if(lead) lead.style.display="none";
   const h1=document.querySelector("main > h2, main > h1");
@@ -3728,7 +3737,7 @@ function renderPartnerContainers(){
   if(tel) tel.textContent=orders.length+" container-order(s) · "+stuks+" spa's"+(resvData.updated?(" · ververst "+new Date(resvData.updated).toLocaleString("nl-NL")):"");
   if(!orders.length){ box.innerHTML="<p class='lead'>Geen container-orders gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
   let html="<div class='tablewrap'><table class='grid'><thead><tr>"+
-    "<th>Ordernummer</th><th>Container</th><th>Klant</th><th>Datum</th><th>Betaling</th><th>ETA</th></tr></thead><tbody>";
+    "<th>Ordernummer</th><th>Container</th><th>Klant</th><th>Datum</th><th>Betaling</th><th>ETA</th><th>Cargo ready</th></tr></thead><tbody>";
   for(const o of orders){
     const k=String(o.ordernr);
     const open=!!pcOpen[k]||(!!q&&orders.length<=3);
@@ -3739,10 +3748,10 @@ function renderPartnerContainers(){
       "<td>"+(o.containerNr?("<b>"+esc(o.containerNr)+"</b>")
         :(o.referentie?"<span style='font-size:12px;color:var(--muted)'>"+esc(o.referentie)+"</span>"
                       :"<span style='color:var(--warn);font-size:12px'>nog invullen in Logic4</span>"))+"</td>"+
-      "<td>"+esc(o.naam)+"</td>"+
+      "<td style='white-space:normal'>"+esc(o.naam)+"</td>"+
       "<td style='font-size:12px'>"+esc(datumNL(o.datum))+"</td>"+
       "<td>"+betaalBadge(o)+"</td>"+
-      "<td style='font-size:12px'>"+(etaInfo.eta
+      "<td style='font-size:12px;white-space:normal'>"+(etaInfo.eta
         ? esc(datumNL(etaInfo.eta))+
           (etaInfo.bron==="tracking"?"<div style='font-size:10.5px;color:var(--muted)'>via tracking</div>":"")+
           /* Het schip dat de vervoerder noemt gaat voor dat op de invoice:
@@ -3759,10 +3768,11 @@ function renderPartnerContainers(){
             const naam=echt||opPapier;
             return naam?"<div style='font-size:10.5px;color:var(--muted)'>"+esc(naam)+"</div>":"";
           })()
-        : "<span style='color:var(--muted);font-size:11.5px'>"+esc(etaInfo.reden||"-")+"</span>")+"</td></tr>";
+        : "<span style='color:var(--muted);font-size:11.5px'>"+esc(etaInfo.reden||"-")+"</span>")+"</td>"+
+      "<td style='font-size:12px'>"+pcCargoCel(o)+"</td></tr>";
     if(open){
       const regels=o.regels.slice().sort((a,b)=>String(a.model).localeCompare(String(b.model)));
-      html+="<tr><td colspan='6' style='background:#fafafa;padding:8px 14px'>"+
+      html+="<tr><td colspan='7' style='background:#fafafa;padding:8px 14px'>"+
         "<div style='font-size:12px;font-weight:600;margin-bottom:4px'>Inhoud van deze container - "+o.qty+" spa's</div>"+
         "<table class='grid' style='margin:0;font-size:12px'><thead><tr><th>Aantal</th><th>Spa</th><th>Kleur</th></tr></thead><tbody>"+
         regels.map(r=>"<tr><td><b>"+r.qty+"×</b></td><td>"+spaCel(r)+"</td><td>"+kleurCel(r.kleur,r,true)+"</td></tr>").join("")+
@@ -3776,14 +3786,216 @@ function renderPartnerContainers(){
               : "Nog geen ETA - upload de commercial invoice van container "+esc(o.containerNr)+".")+
             "</div>"
           : "")+
+        pcPaneel(o)+
         "</td></tr>";
     }
   }
   box.innerHTML=html+"</tbody></table></div>";
+  pcKoppelPaneel(box);
   box.querySelectorAll(".pcRow").forEach(row=>row.addEventListener("click",()=>{
     const k=row.dataset.k; pcOpen[k]=!pcOpen[k]; renderPartnerContainers();
   }));
 }
+/* ===== Partner containers: cargo ready en de balance (Chantal, 24 sep 2026) =====
+   Per container de proforma van Jazzi en de dag waarop Chantal akkoord gaf.
+   Cargo ready = akkoord + 2 maanden. Een week ervoor verschijnt bovenaan een
+   melding om bij de fabriek te checken en de balance-mail te sturen; daarna
+   elke dag dat er nog geen volledige betaling is een melding dat er een
+   herinnering kan. Elke mail staat met datum bij de container. De rekenregels
+   en het versturen staan in de worker (pcHandle). */
+const PC_URL="https://fonteyn-data-store.g-mulder.workers.dev/partnercontainer";
+let pcStand=null, pcStandBezig=false, pcMail={};
+function pcKop(json){
+  const h={"X-Fonteyn-Auth":DATA_STORE_AUTH,"X-Fonteyn-User":(localStorage.getItem(EMAIL_KEY)||"").toLowerCase()};
+  if(json) h["Content-Type"]="application/json";
+  return h;
+}
+function pcGeld(v){ return v==null?"-":"€ "+Number(v).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function pcDagTijd(ts){ const d=new Date(ts); return isNaN(d)?"":d.toLocaleDateString("nl-NL",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); }
+function pcVan(k){ return (pcStand&&pcStand.containers&&pcStand.containers[String(k)])||{}; }
+async function laadPcStand(){
+  if(pcStandBezig||!DATA_STORE_AUTH) return;
+  pcStandBezig=true;
+  try{
+    const r=await fetch(PC_URL+"/stand",{headers:pcKop()});
+    const j=await r.json().catch(()=>({}));
+    pcStand=j.ok?j:{fout:j.error||("HTTP "+r.status),containers:{},meldingen:[]};
+  }catch(e){ pcStand={fout:e.message,containers:{},meldingen:[]}; }
+  pcStandBezig=false;
+  tekenPcMeldingen();
+  const tab=document.getElementById("tab-partnercont");
+  if(tab&&!tab.classList.contains("hidden")) renderPartnerContainers();
+  tekenPcTeksten();
+}
+function tekenPcMeldingen(){
+  const balk=document.getElementById("pcMeldBalk"); if(!balk) return;
+  const lijst=(pcStand&&pcStand.meldingen)||[];
+  const knop=document.querySelector('.tab[data-tab="partnercont"]');
+  if(knop){
+    const oud=knop.querySelector(".pcTel"); if(oud) oud.remove();
+    if(lijst.length) knop.insertAdjacentHTML("beforeend"," <span class='pcTel pill' style='background:#c2410c;color:#fff;font-size:10.5px;padding:1px 7px'>"+lijst.length+"</span>");
+  }
+  if(!lijst.length){ balk.innerHTML=""; return; }
+  balk.innerHTML="<div class='card' style='margin:0 0 14px;padding:12px 15px;border-left:4px solid #c2410c'>"+
+    "<b style='color:#c2410c'>Partner containers - "+lijst.length+" om op te pakken</b>"+
+    lijst.map(m=>{
+      const wat=m.soort==="balance"
+        ? "cargo ready <b>"+esc(datumNL(m.cargoReady))+"</b>. Check bij Jazzi of hij klaar is en stuur de balance-mail."
+        : "balance "+esc(pcGeld(m.openstaand))+" is nog open (laatste mail "+esc(pcDagTijd(m.laatsteMail).slice(0,10))+"). Er kan vandaag een herinnering naar de dealer.";
+      return "<div style='display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:1px solid #f3f4f6;font-size:13px'>"+
+        "<div style='flex:1;min-width:240px'><b>"+esc(m.containerNr||("order "+m.ordernr))+"</b> · "+esc(m.naam||"")+" - "+wat+"</div>"+
+        "<button class='btn sm pcNaar' type='button' data-k='"+esc(m.ordernr)+"' data-soort='"+esc(m.soort)+"'>"+(m.soort==="balance"?"Balance-mail opstellen":"Herinnering opstellen")+"</button></div>";
+    }).join("")+"</div>";
+  balk.querySelectorAll(".pcNaar").forEach(b=>b.addEventListener("click",()=>{
+    const k=b.dataset.k;
+    const tab=document.querySelector('.tab[data-tab="partnercont"]'); if(tab) tab.click();
+    pcOpen[k]=true;
+    pcMailOpstellen(k,b.dataset.soort);
+    setTimeout(()=>{ const r=document.querySelector(".pcRow[data-k='"+k+"']"); if(r) r.scrollIntoView({block:"center"}); },300);
+  }));
+}
+// De cel in de lijst: cargo ready met in één oogopslag hoe het met de balance staat.
+function pcCargoCel(o){
+  const s=pcVan(o.ordernr);
+  if(pcStand&&pcStand.fout) return "<span style='color:var(--muted);font-size:11.5px'>-</span>";
+  if(!s.cargoReady) return "<span style='color:var(--muted);font-size:11.5px'>akkoord invullen</span>";
+  let onder="";
+  if(s.betaald) onder="<span style='color:#15803d'>balance binnen</span>";
+  else if(s.melding==="balance") onder="<span style='color:#c2410c;font-weight:600'>balance-mail sturen</span>";
+  else if(s.melding==="herinnering") onder="<span style='color:#c2410c;font-weight:600'>herinnering kan</span>";
+  else if(s.balanceVerstuurd) onder="balance-mail "+esc(pcDagTijd(s.balanceVerstuurd).slice(0,10));
+  return esc(datumNL(s.cargoReady))+(onder?"<div style='font-size:10.5px;color:var(--muted)'>"+onder+"</div>":"");
+}
+function pcPaneel(o){
+  const k=String(o.ordernr), s=pcVan(k);
+  if(!pcStand) return "<div style='margin-top:10px;font-size:12px;color:var(--muted)'>Proforma en balance laden…</div>";
+  if(pcStand.fout) return "<div style='margin-top:10px;font-size:12px;color:var(--muted)'>Proforma en balance: "+esc(pcStand.fout)+"</div>";
+  const log=(s.log||[]).slice().reverse();
+  const m=pcMail[k];
+  let h="<div class='pcPaneel' style='margin-top:12px;border-top:1px solid #e5e7eb;padding-top:10px;display:grid;gap:9px;font-size:12.5px'>";
+  h+="<div><b>Proforma van Jazzi</b>: "+(s.proforma
+      ? "<a href='#' class='pcDoc' data-id='"+esc(s.proforma.id)+"'>"+esc(s.proforma.naam)+"</a> <span style='color:var(--muted)'>("+esc(String(s.proforma.door||"").split("@")[0])+", "+esc(pcDagTijd(s.proforma.ts))+")</span>"
+      : "<span style='color:var(--muted)'>nog geen proforma</span>")+
+    "<div style='margin-top:5px'><input type='file' class='pcProforma' data-k='"+esc(k)+"' accept='.pdf,.xlsx,.xls'></div></div>";
+  h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>Akkoord gegeven op</b>"+
+    "<input type='date' class='pcAkkoord' data-k='"+esc(k)+"' value='"+esc(s.akkoord||"")+"' style='padding:4px 6px;font:inherit;font-size:12.5px'>"+
+    (s.cargoReady
+      ? "<span>→ <b>cargo ready "+esc(datumNL(s.cargoReady))+"</b> <span style='color:var(--muted)'>(akkoord + 2 maanden; melding vanaf "+esc(datumNL(s.meldVanaf))+")</span></span>"
+      : "<span style='color:var(--muted)'>vul de datum in waarop je akkoord gaf op de proforma; cargo ready is 2 maanden later</span>")+"</div>";
+  h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>Balance</b>"+
+    (s.betaald ? "<span class='pill' style='background:#dcfce7;color:#15803d'>volledig betaald</span>"
+               : "<span>"+(o.regels[0]&&o.regels[0].betaaldPct!=null?o.regels[0].betaaldPct+"% betaald · ":"")+"open "+esc(pcGeld(s.openstaand))+"</span>")+
+    (!s.betaald&&s.cargoReady ? "<button class='btn sm pcOpstellen' type='button' data-k='"+esc(k)+"' data-soort='"+(s.balanceVerstuurd?"herinnering":"balance")+"'>"+
+                   (s.balanceVerstuurd?"Herinnering opstellen":"Balance-mail opstellen")+"</button>" : "")+"</div>";
+  if(m){
+    h+="<div style='border:1px solid #e5e7eb;border-radius:9px;padding:10px 12px;background:#fff;display:grid;gap:7px'>";
+    if(m.bezig) h+="<div style='color:var(--muted)'>"+esc(m.bezig)+"</div>";
+    else {
+      h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>"+(m.soort==="balance"?"Balance-mail":"Herinnering")+"</b>"+
+         "<span>aan</span><input class='pcM' data-k='"+esc(k)+"' data-veld='naar' value='"+esc(m.naar||"")+"' style='min-width:240px;padding:4px 6px;font:inherit;font-size:12.5px'>"+
+         "<select class='pcTaal' data-k='"+esc(k)+"' style='padding:4px;font:inherit;font-size:12.5px'><option value='en'"+(m.taal==="en"?" selected":"")+">Engels</option><option value='nl'"+(m.taal==="nl"?" selected":"")+">Nederlands</option></select>"+
+         (m.cc?"<span style='color:var(--muted)'>cc "+esc(m.cc)+" (adviseur)</span>":"")+"</div>"+
+         "<input class='pcM' data-k='"+esc(k)+"' data-veld='onderwerp' value='"+esc(m.onderwerp||"")+"' style='padding:6px 8px;font:inherit;font-size:12.5px'>"+
+         "<textarea class='pcM' data-k='"+esc(k)+"' data-veld='tekst' rows='11' style='padding:7px 8px;font:inherit;font-size:12.5px;line-height:1.45'>"+esc(m.tekst||"")+"</textarea>"+
+         "<div style='display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"+
+         "<button class='btn solid sm pcStuur' type='button' data-k='"+esc(k)+"'>Versturen</button>"+
+         "<button class='btn sm pcStuur' type='button' data-k='"+esc(k)+"' data-test='1'>Eerst naar mezelf</button>"+
+         "<button class='btn sm pcSluit' type='button' data-k='"+esc(k)+"'>Annuleren</button>"+
+         (m.melding?"<span style='font-size:12px;color:"+(m.fout?"#b91c1c":"#15803d")+"'>"+esc(m.melding)+"</span>":"")+"</div>";
+    }
+    h+="</div>";
+  }
+  h+="<div><b>Verstuurd</b>"+(log.length
+      ? "<table class='grid' style='margin:4px 0 0;font-size:12px'><thead><tr><th>Datum</th><th>Wat</th><th>Aan</th><th>Door</th></tr></thead><tbody>"+
+        log.map(x=>"<tr><td>"+esc(pcDagTijd(x.ts))+"</td><td>"+(x.soort==="balance"?"balance-mail":"herinnering")+(x.openstaand!=null?" <span style='color:var(--muted)'>("+esc(pcGeld(x.openstaand))+")</span>":"")+"</td><td>"+esc(x.naar)+(x.cc?"<div style='font-size:10.5px;color:var(--muted)'>cc "+esc(x.cc)+"</div>":"")+"</td><td>"+esc(String(x.door||"").split("@")[0])+"</td></tr>").join("")+
+        "</tbody></table>"
+      : " <span style='color:var(--muted)'>nog niets</span>")+"</div>";
+  return h+"</div>";
+}
+async function pcZet(k,body){
+  const r=await fetch(PC_URL+"/zet",{method:"POST",headers:pcKop(true),body:JSON.stringify(Object.assign({ordernr:Number(k)},body))});
+  const j=await r.json().catch(()=>({}));
+  if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+  pcStand.containers[String(k)]=Object.assign({},pcVan(k),j.container);
+  await laadPcStand();
+}
+async function pcMailOpstellen(k,soort,taal){
+  pcMail[k]={soort,bezig:"Mail opstellen…"}; renderPartnerContainers();
+  try{
+    const r=await fetch(PC_URL+"/mail",{method:"POST",headers:pcKop(true),body:JSON.stringify({ordernr:Number(k),soort,proef:true,taal})});
+    const j=await r.json().catch(()=>({}));
+    if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    pcMail[k]={soort,naar:j.naar||j.standaardNaar||"",cc:j.cc||"",taal:j.taal,onderwerp:j.onderwerp,tekst:j.tekst};
+  }catch(e){ pcMail[k]={soort,naar:"",taal:taal||"en",onderwerp:"",tekst:"",melding:"Opstellen lukte niet: "+e.message,fout:true}; }
+  renderPartnerContainers();
+}
+async function pcStuur(k,test){
+  const m=pcMail[k]; if(!m) return;
+  if(!test&&!confirm((m.soort==="balance"?"Balance-mail":"Herinnering")+" versturen aan "+m.naar+"?")) return;
+  m.melding="Versturen…"; m.fout=false; renderPartnerContainers();
+  try{
+    const r=await fetch(PC_URL+"/mail",{method:"POST",headers:pcKop(true),body:JSON.stringify({ordernr:Number(k),soort:m.soort,naar:m.naar,taal:m.taal,onderwerp:m.onderwerp,tekst:m.tekst,test:!!test})});
+    const j=await r.json().catch(()=>({}));
+    if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    if(test){ m.melding="Verstuurd naar "+j.naar+" - kijk in je mail hoe hij eruitziet."; renderPartnerContainers(); return; }
+    delete pcMail[k];
+    await laadPcStand();
+  }catch(e){ m.melding="Versturen lukte niet: "+e.message; m.fout=true; renderPartnerContainers(); }
+}
+function pcKoppelPaneel(box){
+  box.querySelectorAll(".pcDoc").forEach(a=>a.addEventListener("click",e=>{ e.preventDefault(); openSchipDocument(a); }));
+  box.querySelectorAll(".pcProforma").forEach(inp=>inp.addEventListener("change",async()=>{
+    const f=inp.files&&inp.files[0]; if(!f) return;
+    const k=inp.dataset.k;
+    try{
+      const doc=await bewaarSchipBestand("partnercontainer-"+k,f,"proforma");
+      await pcZet(k,{proforma:{id:doc.id,naam:f.name}});
+    }catch(e){ alert("De proforma kon niet worden bewaard: "+e.message); }
+  }));
+  box.querySelectorAll(".pcAkkoord").forEach(inp=>inp.addEventListener("change",async()=>{
+    try{ await pcZet(inp.dataset.k,{akkoord:inp.value||null}); }catch(e){ alert("Opslaan lukte niet: "+e.message); }
+  }));
+  box.querySelectorAll(".pcOpstellen").forEach(b=>b.addEventListener("click",()=>pcMailOpstellen(b.dataset.k,b.dataset.soort)));
+  box.querySelectorAll(".pcM").forEach(inp=>inp.addEventListener("input",()=>{ const m=pcMail[inp.dataset.k]; if(m) m[inp.dataset.veld]=inp.value; }));
+  box.querySelectorAll(".pcTaal").forEach(sel=>sel.addEventListener("change",()=>{ const m=pcMail[sel.dataset.k]; if(m) pcMailOpstellen(sel.dataset.k,m.soort,sel.value); }));
+  box.querySelectorAll(".pcStuur").forEach(b=>b.addEventListener("click",()=>pcStuur(b.dataset.k,!!b.dataset.test)));
+  box.querySelectorAll(".pcSluit").forEach(b=>b.addEventListener("click",()=>{ delete pcMail[b.dataset.k]; renderPartnerContainers(); }));
+}
+/* De teksten van de twee mails. Chantal stuurt de definitieve tekst; tot die
+   tijd staat hier een voorstel dat ze zelf kan aanpassen. {dealer},
+   {container}, {order}, {cargoReady} en {openstaand} worden bij het opstellen
+   ingevuld. */
+function tekenPcTeksten(){
+  const box=document.getElementById("pcTeksten"); if(!box||!pcStand||!pcStand.tekst) return;
+  if(box.dataset.getekend) return;
+  box.dataset.getekend="1";
+  const t=pcStand.tekst;
+  const blok=(soort,taal,titel)=>"<div style='display:grid;gap:5px'><b style='font-size:12.5px'>"+titel+(t[soort][taal].eigen?"":" <span style='font-weight:400;color:var(--muted)'>(voorstel)</span>")+"</b>"+
+    "<input class='pcT' data-s='"+soort+"' data-t='"+taal+"' data-v='onderwerp' value='"+esc(t[soort][taal].onderwerp)+"' style='padding:6px 8px;font:inherit;font-size:12.5px'>"+
+    "<textarea class='pcT' data-s='"+soort+"' data-t='"+taal+"' data-v='tekst' rows='9' style='padding:7px 8px;font:inherit;font-size:12.5px;line-height:1.45'>"+esc(t[soort][taal].tekst)+"</textarea></div>";
+  box.innerHTML="<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px'>"+
+    blok("balance","en","Balance-mail (Engels)")+blok("balance","nl","Balance-mail (Nederlands)")+
+    blok("herinnering","en","Herinnering (Engels)")+blok("herinnering","nl","Herinnering (Nederlands)")+"</div>"+
+    "<div style='margin-top:10px;display:flex;gap:10px;align-items:center'><button class='btn solid sm' id='pcTBewaar' type='button'>Teksten bewaren</button><span id='pcTStatus' style='font-size:12px;color:var(--muted)'></span></div>";
+  document.getElementById("pcTBewaar").addEventListener("click",async()=>{
+    const tekst={};
+    box.querySelectorAll(".pcT").forEach(el=>{ tekst[el.dataset.s]=tekst[el.dataset.s]||{}; tekst[el.dataset.s][el.dataset.t]=tekst[el.dataset.s][el.dataset.t]||{}; tekst[el.dataset.s][el.dataset.t][el.dataset.v]=el.value; });
+    const st=document.getElementById("pcTStatus"); st.textContent="Bewaren…";
+    try{
+      const r=await fetch(PC_URL+"/tekst",{method:"POST",headers:pcKop(true),body:JSON.stringify({tekst})});
+      const j=await r.json().catch(()=>({})); if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
+      pcStand.tekst=j.tekst; st.textContent="Bewaard. Nieuwe mails gebruiken deze tekst.";
+    }catch(e){ st.textContent="Bewaren lukte niet: "+e.message; }
+  });
+}
+laadPcStand();
+setInterval(laadPcStand, 30*60000);
+// Vanaf de melding op het dashboard (voorraad.html#partnercont) meteen dit tabblad.
+if(location.hash==="#partnercont") setTimeout(function(){
+  const t=document.querySelector('.tab[data-tab="partnercont"]');
+  if(t&&t.style.display!=="none") t.click();
+},400);
+
 ["partSearch","ptnSearch","pcSearch"].forEach(id=>{
   const el=document.getElementById(id);
   if(el) el.addEventListener("input",renderSoortTabs);

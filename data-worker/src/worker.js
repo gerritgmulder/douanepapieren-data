@@ -7325,6 +7325,253 @@ async function voorraadbepalingBereken(env) {
   return { ok: true, ts: new Date().toISOString(), periode: { vanaf, tot }, perMaand, totaalVerkocht, totaalBesteld,
            ikosFabriek: fabriek.length, ikosAmerika: overgeslagen, modellen };
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+   PARTNER CONTAINERS - cargo ready en de balance (Chantal, 24 sep 2026)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Een dealercontainer vaart rechtstreeks naar de dealer, en de balance moet
+   binnen zijn voordat hij vertrekt. Per container (= Logic4-order op het
+   Dealer magazijn) houden we hier bij:
+
+     proforma   de proforma van Jazzi voor deze container (het bestand zelf
+                staat in /voorraad/schip/bestand onder partnercontainer/<order>/)
+     akkoord    de dag waarop Chantal akkoord gaf op die proforma
+     log        elke balance-mail en herinnering, met datum en ontvanger
+
+   Daaruit volgt:
+     cargo ready    akkoord + 2 maanden
+     een week ervoor   melding: bij de fabriek checken of hij klaar is, en de
+                       balance-mail sturen
+     na de balance-mail   elke dag dat er nog geen volledige betaling is en
+                          er vandaag nog niets ging, de melding dat er een
+                          herinnering kan
+
+   Betaald = Logic4 zegt 99% of meer van het orderbedrag binnen (uur-sync in
+   reserveringen-live). Mail gaat via Resend, de adviseur van de dealer in cc
+   (zie dpAdviseurVan), en antwoorden komen bij wie de mail verstuurde.
+   Teksten voor dealers zijn positief geformuleerd (Gerrit, 23 sep 2026). */
+const PC_KEY = "partnercontainers";
+const PC_GROET = {
+  nl: "Met vriendelijke groet,\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel\nT +31 577 456040",
+  en: "Kind regards,\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel, The Netherlands\nT +31 577 456040",
+};
+const PC_TEKST_STANDAARD = {
+  balance: {
+    en: { onderwerp: "Container {container} is almost ready - balance payment",
+          tekst: "Dear {dealer},\n\nGood news: your container {container} (order {order}) will be ready at the factory around {cargoReady}.\n\nTo keep everything on schedule, we kindly ask you to transfer the balance of {openstaand} before that date, quoting order number {order}. As soon as the balance has arrived, we arrange the shipment to you.\n\nThank you in advance. We are happy to help with any questions." },
+    nl: { onderwerp: "Container {container} is bijna klaar - restbetaling",
+          tekst: "Beste {dealer},\n\nGoed nieuws: uw container {container} (order {order}) is rond {cargoReady} klaar bij de fabriek.\n\nOm alles volgens planning te laten verlopen, vragen wij u de restbetaling van {openstaand} vóór die datum over te maken, onder vermelding van ordernummer {order}. Zodra de restbetaling binnen is, regelen wij de verzending naar u.\n\nAlvast bedankt. Wij helpen u graag bij vragen." },
+  },
+  herinnering: {
+    en: { onderwerp: "Reminder: balance payment for container {container}",
+          tekst: "Dear {dealer},\n\nA friendly reminder about the balance of {openstaand} for container {container} (order {order}). Your container is ready at the factory around {cargoReady}.\n\nAs soon as the balance has arrived, we arrange the shipment to you right away. Has the payment just been made? Then thank you very much, and this message has crossed it.\n\nWe are happy to help with any questions." },
+    nl: { onderwerp: "Herinnering: restbetaling container {container}",
+          tekst: "Beste {dealer},\n\nEen vriendelijke herinnering aan de restbetaling van {openstaand} voor container {container} (order {order}). Uw container is rond {cargoReady} klaar bij de fabriek.\n\nZodra de restbetaling binnen is, regelen wij direct de verzending naar u. Heeft u net betaald? Dan hartelijk dank, en dan hebben dit bericht en uw betaling elkaar gekruist.\n\nWij helpen u graag bij vragen." },
+  },
+};
+function pcDatum(d) { return d ? String(d).slice(0, 10).split("-").reverse().join("-") : ""; }
+function pcPlusMaanden(d, n) {
+  const [y, m, dag] = String(d).split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1 + n, dag));
+  if (t.getUTCDate() !== dag) t.setUTCDate(0);        // 31 aug + 2 mnd = 31 okt, 31 dec + 2 = 28/29 feb
+  return t.toISOString().slice(0, 10);
+}
+function pcPlusDagen(d, n) { return new Date(Date.parse(d + "T00:00:00Z") + n * 86400000).toISOString().slice(0, 10); }
+function pcVandaag() {
+  // De dag in Nederland, niet in UTC: om kwart over één 's nachts is het hier al morgen.
+  return new Date().toLocaleString("sv-SE", { timeZone: "Europe/Amsterdam" }).slice(0, 10);
+}
+function pcOrdersUitLedger(ledger) {
+  const per = {};
+  for (const lijst of Object.values((ledger && ledger.byModel) || {})) {
+    for (const r of (lijst || [])) {
+      if (!r || !r.container) continue;
+      const k = String(r.ordernr);
+      const o = per[k] || (per[k] = { ordernr: r.ordernr, debtorId: r.debtorId, naam: r.naam,
+        containerNr: r.containerNr || null, referentie: r.referentie || null,
+        totaal: Number(r.totaal) || 0, aanbetaling: Number(r.aanbetaling) || 0, betaaldPct: Number(r.betaaldPct) || 0, qty: 0 });
+      o.qty += Number(r.qty) || 0;
+      if (!o.containerNr && r.containerNr) o.containerNr = r.containerNr;
+    }
+  }
+  return per;
+}
+function pcToestand(order, rec, vandaag) {
+  rec = rec || {};
+  const log = rec.log || [];
+  const uit = { akkoord: rec.akkoord || null, cargoReady: null, meldVanaf: null, betaald: false,
+                openstaand: null, balanceVerstuurd: null, laatsteMail: null, melding: null };
+  if (order) {
+    uit.betaald = order.betaaldPct >= 99;
+    uit.openstaand = Math.max(0, Math.round((order.totaal - order.aanbetaling) * 100) / 100);
+  }
+  const balance = log.filter(x => x.soort === "balance").slice(-1)[0];
+  uit.balanceVerstuurd = balance ? balance.ts : null;
+  uit.laatsteMail = log.length ? log[log.length - 1].ts : null;
+  if (!rec.akkoord) return uit;
+  uit.cargoReady = pcPlusMaanden(rec.akkoord, 2);
+  uit.meldVanaf = pcPlusDagen(uit.cargoReady, -7);
+  if (!order || uit.betaald) return uit;              // geleverd of betaald: klaar
+  const laatsteDag = uit.laatsteMail
+    ? new Date(uit.laatsteMail).toLocaleString("sv-SE", { timeZone: "Europe/Amsterdam" }).slice(0, 10) : null;
+  if (!balance && vandaag >= uit.meldVanaf) uit.melding = "balance";
+  else if (balance && laatsteDag && laatsteDag < vandaag) uit.melding = "herinnering";
+  return uit;
+}
+/* Het bedrag voor in de mail rechtstreeks uit Logic4. De uur-sync rondt af
+   op hele euro's, en in een betaalverzoek hoort het bedrag op de cent. */
+async function pcOrderLive(env, nr) {
+  try {
+    const token = await l4Token(env);
+    const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ Id: Number(nr), TakeRecords: 1 }),
+    });
+    const j = await r.json().catch(() => null);
+    const o = ((j && (j.Records || j)) || [])[0];
+    if (!o || Number(o.Id) !== Number(nr)) return null;
+    const T = o.Totals || {};
+    const totaal = Number(T.AmountIncl) || 0, betaald = Number(T.Calc_TotalPayed) || 0;
+    return { totaal, betaald, openstaand: Math.max(0, Math.round((totaal - betaald) * 100) / 100),
+             volledig: !!T.IsPaid || (totaal > 0 && betaald / totaal >= 0.99) };
+  } catch (e) { return null; }
+}
+function pcVul(s, w) { return String(s || "").replace(/\{(\w+)\}/g, (m, k) => (w[k] != null ? String(w[k]) : m)); }
+function pcMailHtml(tekst, groet) {
+  const e = (x) => String(x == null ? "" : x).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  return "<div style='font-family:Arial,sans-serif;color:#1f2937;max-width:680px'>" +
+    "<p style='font-size:14px;white-space:pre-line;line-height:1.5'>" + e(tekst) + "</p>" +
+    "<p style='font-size:14px;white-space:pre-line;line-height:1.5'>" + e(groet) + "</p></div>";
+}
+/* Aan wie: het mailadres van het dealeraccount in Passion Partners als die
+   deze debiteur heeft, anders het herinnerings-, factuur- of gewone adres uit
+   Logic4. Taal: Nederlands voor NL en BE, anders Engels. */
+async function pcOntvanger(env, debtorId) {
+  const accounts = await dpGetAccounts(env).catch(() => ({ dealers: [] }));
+  const dealer = (accounts.dealers || []).find(d => d.active !== false &&
+    (d.debtorIds || []).map(String).includes(String(debtorId))) || null;
+  const { cache } = await herDebiteuren(env, [debtorId]);
+  const l4 = cache[String(debtorId)] || {};
+  const naar = String((dealer && dealer.email) || l4.herinneringMail || l4.factuurMail || l4.email || "").trim().toLowerCase();
+  const iso = String(l4.iso || (dealer && dealer.land) || "").toUpperCase();
+  const cc = dealer ? dpAdviseurVan(accounts, dealer.email) : null;
+  return { naar, cc, taal: /^(NL|BE)$/.test(iso) ? "nl" : "en", bedrijf: (dealer && dealer.company) || l4.bedrijf || l4.naam || "" };
+}
+async function pcHandle(request, env, url) {
+  const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+  if (!(await voorraadIsBeheer(request, env))) return reply(403, { ok: false, error: "geen toegang: je staat niet in de groep voorraad-beheer" });
+  const p = url.pathname;
+  const data = (await env.FONTEYN_DATA.get(PC_KEY, { type: "json" })) || { containers: {} };
+  data.containers = data.containers || {};
+  const bewaar = () => env.FONTEYN_DATA.put(PC_KEY, JSON.stringify(data));
+  const ledger = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
+  const orders = pcOrdersUitLedger(ledger);
+  const vandaag = pcVandaag();
+  const teksten = () => {
+    const t = JSON.parse(JSON.stringify(PC_TEKST_STANDAARD));
+    for (const soort of ["balance", "herinnering"]) for (const taal of ["nl", "en"]) {
+      const eigen = ((data.tekst || {})[soort] || {})[taal];
+      if (eigen && eigen.onderwerp) t[soort][taal].onderwerp = eigen.onderwerp;
+      if (eigen && eigen.tekst) t[soort][taal].tekst = eigen.tekst;
+      t[soort][taal].eigen = !!(eigen && (eigen.onderwerp || eigen.tekst));
+    }
+    return t;
+  };
+
+  if (p === "/partnercontainer/stand" && request.method === "GET") {
+    const containers = {};
+    const meldingen = [];
+    const alle = new Set([...Object.keys(orders), ...Object.keys(data.containers)]);
+    for (const k of alle) {
+      const rec = data.containers[k] || {};
+      const t = pcToestand(orders[k], rec, vandaag);
+      containers[k] = { ...rec, ...t, bekend: !!orders[k] };
+      if (t.melding) {
+        const o = orders[k];
+        meldingen.push({ ordernr: Number(k), soort: t.melding, naam: o.naam, containerNr: o.containerNr, cargoReady: t.cargoReady,
+                         openstaand: t.openstaand, laatsteMail: t.laatsteMail });
+      }
+    }
+    meldingen.sort((a, b) => String(a.cargoReady).localeCompare(String(b.cargoReady)));
+    return reply(200, { ok: true, vandaag, containers, meldingen, tekst: teksten() });
+  }
+  if (p === "/partnercontainer/zet" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const k = String(Number(b.ordernr) || "");
+    if (!k || k === "0") return reply(400, { ok: false, error: "ordernummer ontbreekt" });
+    const rec = data.containers[k] || (data.containers[k] = { log: [] });
+    if (b.akkoord !== undefined) {
+      if (b.akkoord && !/^\d{4}-\d{2}-\d{2}$/.test(String(b.akkoord))) return reply(400, { ok: false, error: "datum als jjjj-mm-dd" });
+      rec.akkoord = b.akkoord || null; rec.akkoordDoor = wie; rec.akkoordTs = new Date().toISOString();
+    }
+    if (b.proforma !== undefined) {
+      rec.proforma = b.proforma && b.proforma.id
+        ? { id: String(b.proforma.id).slice(0, 200), naam: String(b.proforma.naam || "").slice(0, 160), door: wie, ts: new Date().toISOString() }
+        : null;
+    }
+    await bewaar();
+    return reply(200, { ok: true, container: { ...rec, ...pcToestand(orders[k], rec, vandaag) } });
+  }
+  if (p === "/partnercontainer/tekst" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    data.tekst = data.tekst || {};
+    for (const soort of ["balance", "herinnering"]) for (const taal of ["nl", "en"]) {
+      const t = ((b.tekst || {})[soort] || {})[taal];
+      if (!t) continue;
+      data.tekst[soort] = data.tekst[soort] || {};
+      data.tekst[soort][taal] = { onderwerp: String(t.onderwerp || "").slice(0, 160), tekst: String(t.tekst || "").slice(0, 4000), door: wie, ts: new Date().toISOString() };
+    }
+    await bewaar();
+    return reply(200, { ok: true, tekst: teksten() });
+  }
+  if (p === "/partnercontainer/mail" && request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const k = String(Number(b.ordernr) || "");
+    const o = orders[k];
+    if (!o) return reply(404, { ok: false, error: "deze containerorder staat niet (meer) in de reserveringen" });
+    const soort = b.soort === "herinnering" ? "herinnering" : "balance";
+    const rec = data.containers[k] || (data.containers[k] = { log: [] });
+    rec.log = rec.log || [];
+    const t = pcToestand(o, rec, vandaag);
+    if (!t.cargoReady) return reply(400, { ok: false, error: "vul eerst de datum in waarop je akkoord gaf op de proforma; daaruit volgt cargo ready" });
+    const live = await pcOrderLive(env, o.ordernr);
+    if (live) t.openstaand = live.openstaand;
+    if (live && live.volledig) return reply(409, { ok: false, error: "deze order is in Logic4 al volledig betaald" });
+    const ontv = await pcOntvanger(env, o.debtorId);
+    const taal = b.taal === "nl" || b.taal === "en" ? b.taal : ontv.taal;
+    const sjabloon = teksten()[soort][taal];
+    const w = { dealer: ontv.bedrijf || o.naam, container: o.containerNr || o.referentie || ("order " + o.ordernr), order: o.ordernr,
+                cargoReady: new Date(t.cargoReady + "T12:00:00Z").toLocaleDateString(taal === "nl" ? "nl-NL" : "en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }),
+                openstaand: taal === "nl" ? herGeld(t.openstaand)
+                  : "€" + (Number(t.openstaand) || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) };
+    const onderwerp = pcVul(b.onderwerp || sjabloon.onderwerp, w);
+    const tekst = pcVul(b.tekst || sjabloon.tekst, w);
+    const naar = b.test ? wie : String(b.naar || ontv.naar || "").trim().toLowerCase();
+    const html = pcMailHtml(tekst, PC_GROET[taal]);
+    if (b.proef) return reply(200, { ok: true, proef: true, naar, cc: ontv.cc, taal, onderwerp, tekst, html, standaardNaar: ontv.naar });
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar)) return reply(400, { ok: false, error: "geen geldig mailadres voor deze dealer - vul er een in" });
+    if (!env.RESEND_API_KEY || !env.MAIL_FROM) return reply(500, { ok: false, error: "mail is niet ingericht in de worker" });
+    const adres = (String(env.MAIL_FROM || "").match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM || "");
+    const cc = b.test ? [] : [ontv.cc].filter(x => x && x !== naar);
+    const rr = await fetch("https://api.resend.com/emails", {
+      method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
+      body: JSON.stringify({ from: "Fonteyn Outdoor Living Mall <" + adres + ">", to: [naar], cc: cc.length ? cc : undefined,
+                             reply_to: /@/.test(wie) ? [wie] : undefined, subject: onderwerp, html }),
+    });
+    const antw = await rr.text();
+    if (!rr.ok) return reply(502, { ok: false, error: "Resend: HTTP " + rr.status + " " + antw.slice(0, 160) });
+    if (!b.test) {
+      let id = null; try { id = JSON.parse(antw).id || null; } catch {}
+      rec.log.push({ ts: new Date().toISOString(), soort, naar, cc: cc.join(", ") || null, taal, onderwerp: onderwerp.slice(0, 160),
+                     openstaand: t.openstaand, door: wie, id });
+      rec.log = rec.log.slice(-200);
+      await bewaar();
+    }
+    return reply(200, { ok: true, naar, cc, test: !!b.test, container: { ...rec, ...pcToestand(o, rec, vandaag) } });
+  }
+  return reply(404, { ok: false });
+}
+
 async function voorraadbepalingHandle(request, env, url) {
   const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
   if (!(await toegangMag(env, "voorraadbepaling", wie))) return reply(403, { ok: false, error: "geen toegang" });
@@ -14012,6 +14259,10 @@ export default {
     const bak = (await env.FONTEYN_DATA.get("dhl-push", { type: "json" })) || { berichten: [] };
     return reply(200, { ok: true, berichten: bak.berichten.slice(-100).reverse().map(x => { const { ruw, ...rest } = x; return rest; }) });
   }
+  if (url.pathname.startsWith("/partnercontainer/")) {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
+      return pcHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
   if (url.pathname === "/voorraadbepaling" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });
       return voorraadbepalingHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));

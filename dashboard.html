@@ -457,6 +457,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
          verwijderen, dus dat moet met de hand en het liefst snel. -->
     <div id="oudeAppBlok"></div>
     <div id="nieuweRelatiesBlok"></div>
+    <div id="partnercontainerBlok"></div>
     <div id="takenBlok"></div>
 
     <!-- ══════════ ELKE DAG ══════════
@@ -1188,6 +1189,7 @@ function showDashboard(email) {
   try { if (window.fpTakenlade) window.fpTakenlade.start(email); } catch (e) {}
   startTakenblok(email);
   startNieuweRelaties(email);
+  startPartnercontainerMeldingen(email);
   controleerAppVersie();
 }
 
@@ -1355,6 +1357,38 @@ const NIEUWE_REL_VOOR = new Set([
   "gerrit@fonteyn.nl","gerrit",
   "fonteynbot@fonteyn.nl","fonteynbot","fonteyn.bot",
 ]);
+/* ── Partner containers: cargo ready en de balance ─────────────────────────
+   Chantal (24 sep 2026): een week voor cargo ready een melding in beeld om bij
+   de fabriek te checken en de balance-mail te sturen, en daarna elke dag tot er
+   betaald is dat er een herinnering kan. De melding staat ook bovenaan
+   Voorraadbeheer; hier alleen de samenvatting met een knop ernaartoe. Alleen
+   voor de groep voorraad-beheer; de worker kijkt dat zelf ook na. */
+async function startPartnercontainerMeldingen(email){
+  const lc = String(email||"").toLowerCase();
+  if (!window.fpToegang || !fpToegang.mag("voorraad-beheer", lc)) return;
+  const key = localStorage.getItem("fp.teamkey") || "";
+  const blok = el("partnercontainerBlok");
+  if (!key || !blok) return;
+  try {
+    const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/partnercontainer/stand",
+      { headers: { "X-Fonteyn-Auth": key, "X-Fonteyn-User": lc } });
+    const j = await r.json();
+    const lijst = (j && j.ok && j.meldingen) || [];
+    if (!lijst.length) { blok.innerHTML = ""; return; }
+    const d = (x)=>{ const p=String(x||"").slice(0,10).split("-"); return p.length===3 ? p[2]+"-"+p[1]+"-"+p[0] : ""; };
+    blok.innerHTML =
+      '<section style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #c2410c;border-radius:10px;padding:14px 20px;margin-bottom:22px">'
+      + '<h3 style="margin:0 0 6px;font-size:15px;color:#c2410c">Partner containers - ' + lijst.length + ' om op te pakken</h3>'
+      + lijst.map(m => '<div style="font-size:13px;padding:5px 0;border-top:1px solid #f3f4f6">'
+          + '<b>' + relEsc(m.containerNr || ("order " + m.ordernr)) + '</b> · ' + relEsc(m.naam || "") + ' - '
+          + (m.soort === "balance"
+              ? 'cargo ready ' + relEsc(d(m.cargoReady)) + ': check bij Jazzi en stuur de balance-mail.'
+              : 'balance nog open, er kan vandaag een herinnering naar de dealer.')
+          + '</div>').join("")
+      + '<a href="voorraad.html#partnercont"' + (/fonteyn-dashboard\//.test(navigator.userAgent || "") ? ' target="_blank" rel="noopener"' : '') + ' style="display:inline-block;margin-top:8px;font-size:12.5px;font-weight:600;color:#144734">Naar Partner containers &rarr;</a>'
+      + '</section>';
+  } catch (e) { blok.innerHTML = ""; }
+}
 async function startNieuweRelaties(email){
   const lc = String(email||"").toLowerCase();
   if (!NIEUWE_REL_VOOR.has(lc)) return;
