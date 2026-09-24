@@ -383,7 +383,11 @@ laad();
           datum: pdfDoc.datum || null,
           meldingen: [],
           regels: rgls.map(function (r) {
-            return { set: r.code || r.omschrijving || "", kleur: r.kleur || "",
+            var set = r.code || r.omschrijving || "";
+            // De omschrijving erbij als die iets toevoegt (de parasols van
+            // Linhai Taicheng: "Middle Roma Umbrella with tilt ...").
+            var oms = r.omschrijving && set.indexOf(r.omschrijving) < 0 ? r.omschrijving : "";
+            return { set: set, kleur: r.kleur || "", omschrijving: oms,
                      aantal: Number(r.aantal) || 0, onderdelen: [] };
           }),
         };

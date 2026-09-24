@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-24", bestand: "tuinmeubelen.html", soort: "beter",
+      titel: "Proforma's van Linhai Taicheng en Mei Ya Xin worden gelezen",
+      wat: "Bij Orderbevestiging inlezen kun je nu ook de proforma's van Linhai Taicheng (parasols) en Mei Ya Xin (loungesets) kiezen. Het scherm haalt per artikel het artikelnummer, de kleur en het aantal eruit. Artikelen die Logic4 nog niet kent staan apart, zodat je ze met Gretha kunt doornemen."
+    },
+    {
       datum: "2026-09-24", bestand: "voorraad.html", soort: "hersteld",
       titel: "Huantong en Kasdaly: invoices en proforma's worden gelezen",
       wat: "De commercial invoice van Huantong wordt nu gelezen, met de kleur als kuip en omkasting (bijvoorbeeld Pure White with Grey). Bij een proforma van Huantong of Kasdaly (Joyspa) vindt het scherm de leverancier nu zelf; alle leveranciers uit Logic4 staan in de keuzelijst. De Bermuda wordt meteen gekoppeld aan artikel 100626."

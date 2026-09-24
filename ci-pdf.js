@@ -260,6 +260,8 @@
       return r.items.map(function (i) { return i.str; }).join(" ");
     });
     if (soortVan(regels) === "topia") return leesTopia(rijen);
+    if (isLinhai(regels)) return leesLinhai(rijen);
+    if (isMeiYaXin(regels)) return leesMeiYaXin(rijen);
     return leesAuto(regels, rijen.map(regelMetKolommen));
   }
 
@@ -782,6 +784,198 @@
     return uit;
   }
 
+  // ─── Tuinmeubelen: Linhai Taicheng en Mei Ya Xin ────────────────────
+  /* Chantal (24 sep 2026): de proforma's van Linhai Taicheng (parasols,
+     LHTC-PI...-FTN-1 en -2) en Mei Ya Xin (loungesets, MYX20260916J) moeten
+     onder Tuinmeubelen gelezen worden: artikel, kleur en aantal. Vragen over
+     de artikelen gaan naar Gretha.
+
+     Beide zijn echte tabellen met samengevoegde cellen: de kleur staat één
+     keer in het midden van een blok van twee of drie artikelen, en bij
+     Linhai loopt het artikelnummer over drie regels ("TA009-LED-" / "3X3M" /
+     "+ B030"). Daarom werken deze lezers op de x/y van elk stukje tekst. */
+  var MAAND_EN = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+  function rijTekst(rij, van, tot) {
+    return schoon(rij.items.filter(function (i) { return i.x >= van && i.x < tot; })
+      .map(function (i) { return i.str; }).join(" "));
+  }
+  function bedrag(s) { var n = Number(String(s || "").replace(/[^\d.]/g, "")); return isFinite(n) && n > 0 ? n : null; }
+  function kopX(rijen, r, woord) {
+    // De x van een kopwoord, gezocht in de koprij en de rijen er vlak omheen.
+    for (var d = 0; d < rijen.length; d++) {
+      var rij = rijen[d];
+      if (rij.bladzijde !== rijen[r].bladzijde || Math.abs(rij.y - rijen[r].y) > 14) continue;
+      for (var i = 0; i < rij.items.length; i++) if (woord.test(rij.items[i].str)) return rij.items[i].x;
+    }
+    return null;
+  }
+  function naastBij(lijst, y) {
+    var best = null;
+    lijst.forEach(function (a) { if (!best || Math.abs(a.y - y) < Math.abs(best.y - y)) best = a; });
+    return best;
+  }
+
+  function isLinhai(regels) {
+    var t = regels.join(" ");
+    return /LINHAI\s+TAICHENG/i.test(t) && /PROFORMA\s*INVOICE/i.test(t) && /ITEM\s*NO/i.test(t);
+  }
+  function leesLinhai(rijen) {
+    var uit = { leverancier: "Linhai Taicheng Artware Co", invoiceNo: null, datum: null, regels: [],
+                soort: "proforma", packing: [], verschillen: [] };
+    var alles = rijen.map(function (r) { return schoon(r.items.map(function (i) { return i.str; }).join(" ")); }).join("\n");
+    var m;
+    if ((m = alles.match(/NO\.?\s*:\s*(LHTC[\sA-Z0-9\-]+?)\s*$/im))) uit.invoiceNo = m[1].replace(/\s*-\s*/g, "-").replace(/\s+/g, "");
+    if ((m = alles.match(/Date\s*:?\s*(\d{1,2})\s*(?:st|nd|rd|th)?\s+([A-Za-z]{3})[a-z]*\.?\s+(\d{4})/i)) && MAAND_EN[m[2].toLowerCase()])
+      uit.datum = m[3] + "-" + ("0" + MAAND_EN[m[2].toLowerCase()]).slice(-2) + "-" + ("0" + m[1]).slice(-2);
+
+    // De koprij van de proforma (bladzijde 1). Bladzijde 2 en 3 zijn de
+    // commercial invoice en de paklijst; die hebben geen kleurkolom.
+    var kop = -1;
+    for (var r = 0; r < rijen.length; r++) {
+      var t = rijen[r].items.map(function (i) { return i.str; }).join(" ");
+      if (/ITEM/.test(t) && /DESCRIPTION/i.test(t) && /Colou?r/i.test(t) && /PRICE/i.test(t)) { kop = r; break; }
+    }
+    if (kop < 0) return uit;
+    var xPics = kopX(rijen, kop, /^Pics/i), xKleur = kopX(rijen, kop, /^Colou?r$/i),
+        xPack = kopX(rijen, kop, /^PACKING/i), xPrijs = kopX(rijen, kop, /^(PRICE|UNIT|FOB)/i),
+        xQty = kopX(rijen, kop, /^QTY/i), xBedrag = kopX(rijen, kop, /^AMOUNT/i);
+    if ([xPics, xKleur, xPack, xPrijs, xQty, xBedrag].some(function (x) { return x == null; })) return uit;
+    var grens = { code: xPics + 30, oms: xKleur - 30, kleur: xPack - 10, prijs: xQty - 10, qty: xBedrag - 12 };
+
+    var tabel = [];
+    for (r = kop + 1; r < rijen.length; r++) {
+      if (rijen[r].bladzijde !== rijen[kop].bladzijde) break;
+      var plat = schoon(rijen[r].items.map(function (i) { return i.str; }).join(" "));
+      if (/^TOTAL\b/i.test(plat) || /^Payment/i.test(plat)) break;
+      if (rijen[kop].y - rijen[r].y < 12) continue;       // de rest van de kop (QTY, (PCS), FOB(USD))
+      tabel.push(rijen[r]);
+    }
+    // Blokken: een artikel of een groep artikelen met één gedeelde kleurcel.
+    // Binnen een blok staan de regels ~10 punten uit elkaar, ertussen 20+.
+    var blokken = [], blok = null;
+    tabel.forEach(function (rij, i) {
+      if (!blok || tabel[i - 1].y - rij.y > 15) { blok = { rijen: [] }; blokken.push(blok); }
+      blok.rijen.push(rij);
+    });
+    blokken.forEach(function (b) {
+      var ankers = [];
+      b.rijen.forEach(function (rij) {
+        var prijs = rijTekst(rij, grens.kleur, grens.prijs), qty = rijTekst(rij, grens.prijs, grens.qty);
+        if (/\$/.test(prijs) && /^\d[\d,]*$/.test(qty))
+          ankers.push({ y: rij.y, prijs: bedrag(prijs), aantal: Number(qty.replace(/,/g, "")),
+                        bedrag: bedrag(rijTekst(rij, grens.qty, 9999)), code: [] });
+      });
+      if (!ankers.length) return;
+      b.rijen.forEach(function (rij) {
+        var c = rijTekst(rij, 0, grens.code);
+        if (c) naastBij(ankers, rij.y).code.push(c);
+      });
+      var kleuren = b.rijen.map(function (rij) { return rijTekst(rij, grens.oms, grens.kleur); })
+        .filter(function (k) { return k && !/^[\d.,\s×x*]+(cm)?$/i.test(k); });
+      var hoofd = kleuren.filter(function (k) { return /^[A-Z][A-Z &\/]+$/.test(k); });
+      var oms = b.rijen.map(function (rij) { return rijTekst(rij, grens.code, grens.oms); }).filter(Boolean);
+      ankers.forEach(function (a) {
+        var code = schoon(a.code.join(" ")).replace(/\s*-\s*/g, "-").replace(/-\s+/g, "-");
+        uit.regels.push({
+          code: code, omschrijving: (oms[0] || "").replace(/[\s,，;]+$/, ""), sectie: null, aantal: a.aantal,
+          kleur: hoofd.length ? hoofd.join(" / ") : kleuren.join(", ").replace(/\s*[：:]\s*/g, ": "),
+          kleurVol: kleuren.join(", ").replace(/\s*[：:]\s*/g, ": ").replace(/\s+-\s+/g, "-"),
+          skirt: null, afmeting: null, eenheid: "pcs", verpakking: null, venster: null,
+          prijsUsd: a.prijs, bedragUsd: a.bedrag,
+        });
+      });
+    });
+    uit.totaalStuks = uit.regels.reduce(function (n, x) { return n + (Number(x.aantal) || 0); }, 0);
+    uit.totaalUsd = Math.round(uit.regels.reduce(function (n, x) { return n + (Number(x.bedragUsd) || 0); }, 0) * 100) / 100;
+    return uit;
+  }
+
+  function isMeiYaXin(regels) {
+    var t = regels.join(" ");
+    return /MEI\s*YA\s*XIN/i.test(t) && /PROFORMA\s*INVOICE/i.test(t) && /Q'?\s*ty/i.test(t);
+  }
+  function leesMeiYaXin(rijen) {
+    var uit = { leverancier: "Mei Ya Xin Industrial", invoiceNo: null, datum: null, regels: [],
+                soort: "proforma", packing: [], verschillen: [] };
+    var alles = rijen.map(function (r) { return schoon(r.items.map(function (i) { return i.str; }).join(" ")); }).join("\n");
+    var m;
+    if ((m = alles.match(/PI\s*NO\.?\s*:?\s*([A-Z0-9\-]{5,30})/i))) uit.invoiceNo = m[1];
+    if ((m = alles.match(/Date\s*:?\s*(\d{4})\s*[\-\/.]\s*(\d{1,2})\s*[\-\/.]\s*(\d{1,2})/i)))
+      uit.datum = m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
+
+    var kop = -1;
+    for (var r = 0; r < rijen.length; r++) {
+      var t = rijen[r].items.map(function (i) { return i.str; }).join(" ");
+      if (/Item/.test(t) && /Picture/i.test(t) && /Description/i.test(t)) { kop = r; break; }
+    }
+    if (kop < 0) return uit;
+    var xPic = kopX(rijen, kop, /^Picture/i), xSpec = kopX(rijen, kop, /^Specification/i),
+        xPack = kopX(rijen, kop, /^Packing/i), xOms = kopX(rijen, kop, /^Product/i),
+        xQty = kopX(rijen, kop, /^Q'?ty/i), xAlu = kopX(rijen, kop, /^Alu$/i),
+        xStof = kopX(rijen, kop, /^Fabric$/i), xBlad = kopX(rijen, kop, /^Table$/i),
+        xTouw = kopX(rijen, kop, /rattan|rope/i), xVol = kopX(rijen, kop, /^Unit\/set/i),
+        xFob = kopX(rijen, kop, /^FOB$/i), xBedrag = kopX(rijen, kop, /^Amount/i);
+    if ([xPic, xSpec, xPack, xOms, xQty, xAlu, xStof, xBlad, xTouw, xVol, xFob, xBedrag].some(function (x) { return x == null; })) return uit;
+    var kolKleur = [
+      { naam: "Alu", van: xAlu - 5, tot: xStof - 3 },
+      { naam: "Fabric", van: xStof - 3, tot: xBlad - 1 },
+      { naam: "Table top", van: xBlad - 1, tot: xTouw - 3 },
+      { naam: "Rope", van: xTouw - 3, tot: xVol - 3 },
+    ];
+
+    var kopOnder = rijen[kop].y, tabel = [];
+    for (r = kop + 1; r < rijen.length; r++) {
+      if (rijen[r].bladzijde !== rijen[kop].bladzijde) break;
+      var plat = schoon(rijen[r].items.map(function (i) { return i.str; }).join(" "));
+      if (/^TOTAL\b/i.test(plat)) break;
+      if (rijen[kop].y - rijen[r].y < 6) { kopOnder = Math.min(kopOnder, rijen[r].y); continue; }
+      tabel.push(rijen[r]);
+    }
+    // De modelnaam (Aries, Elba) staat in het midden van zijn samengevoegde
+    // cel. Van boven naar beneden: de onderkant van een cel ligt even ver
+    // onder het midden als de bovenkant erboven.
+    var modellen = [];
+    tabel.forEach(function (rij) {
+      var naam = rijTekst(rij, 0, xPic - 10);
+      if (naam) modellen.push({ naam: naam, y: rij.y });
+    });
+    var boven = kopOnder - 5;
+    modellen.forEach(function (md) { md.boven = boven; md.onder = 2 * md.y - boven; boven = md.onder; });
+    function modelVan(y) {
+      for (var i = 0; i < modellen.length; i++) if (y <= modellen[i].boven && y > modellen[i].onder) return modellen[i];
+      return naastBij(modellen, y);
+    }
+    var namen = [];
+    tabel.forEach(function (rij) {
+      var s = rijTekst(rij, xSpec - 5, xPack - 6), mm = s.match(/^([A-Za-z][A-Za-z ]*?)\s*:/);
+      if (mm) namen.push({ y: rij.y, naam: mm[1] });
+    });
+    modellen.forEach(function (md) {
+      var rijenIn = tabel.filter(function (rij) { return modelVan(rij.y) === md; });
+      md.kleur = kolKleur.map(function (k) {
+        var s = schoon(rijenIn.map(function (rij) { return rijTekst(rij, k.van, k.tot); }).join(" ")
+          .replace(/(^|\s)\/(?=\s|$)/g, " ")).replace(/\s+-\s+/g, "-").replace(/\s+-(?=\S)/g, "-");
+        return s ? k.naam + ": " + s : "";
+      }).filter(Boolean).join(" · ");
+    });
+    tabel.forEach(function (rij) {
+      var qty = rijTekst(rij, xQty - 5, xAlu - 5), prijs = rijTekst(rij, xFob - 5, xBedrag - 5);
+      if (!/^\d+$/.test(qty) || !/\$/.test(prijs)) return;
+      var md = modelVan(rij.y);
+      var kandidaten = namen.filter(function (n) { return n.y >= rij.y - 2 && n.y - rij.y < 14; });
+      var deel = kandidaten.length ? naastBij(kandidaten, rij.y).naam : "";
+      uit.regels.push({
+        code: schoon((md ? md.naam : "") + " " + deel), omschrijving: deel, sectie: md ? md.naam : null,
+        aantal: Number(qty), kleur: md ? md.kleur : "", kleurVol: md ? md.kleur : "",
+        skirt: null, afmeting: null, eenheid: "set", verpakking: null, venster: null,
+        prijsUsd: bedrag(prijs), bedragUsd: bedrag(rijTekst(rij, xBedrag - 5, 9999)),
+      });
+    });
+    uit.totaalStuks = uit.regels.reduce(function (n, x) { return n + (Number(x.aantal) || 0); }, 0);
+    uit.totaalUsd = Math.round(uit.regels.reduce(function (n, x) { return n + (Number(x.bedragUsd) || 0); }, 0) * 100) / 100;
+    return uit;
+  }
+
   // Welk soort bladzijde is dit? De keuze mag niet op de bestandsnaam
   // berusten; die zegt bij deze fabrieken niets.
   function soortVan(regels) {
@@ -807,7 +1001,7 @@
 
   global.fpCiPdf = { lees: lees, leesProforma: leesProforma, leesJoyspa: leesJoyspa,
                      leesMexdaProforma: leesMexdaProforma, leesTopia: leesTopia,
-                     leesAuto: leesAuto, leesBestand: leesBestand, soortVan: soortVan,
+                     leesAuto: leesAuto, leesBestand: leesBestand, leesLinhai: leesLinhai, leesMeiYaXin: leesMeiYaXin, soortVan: soortVan,
                      uitPdf: uitPdf, uitPdfKolommen: uitPdfKolommen,
                      kop: kop, tabel: tabel, getallen: getallen, koppel: koppel };
 
