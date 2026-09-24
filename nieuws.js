@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-24", iedereen: true, soort: "beter",
+      titel: "Bestanden slepen naar elke uploadplek",
+      wat: "Overal waar je een bestand uploadt, kun je het nu ook vanaf je bureaublad of uit Verkenner naar het scherm slepen. Het vak waar het in komt licht groen op; laat los en het bestand wordt ingelezen, net als met de knop."
+    },
+    {
       datum: "2026-09-24", bestand: "tuinmeubelen.html", soort: "beter",
       titel: "Proforma's van Linhai Taicheng en Mei Ya Xin worden gelezen",
       wat: "Bij Orderbevestiging inlezen kun je nu ook de proforma's van Linhai Taicheng (parasols) en Mei Ya Xin (loungesets) kiezen. Het scherm haalt per artikel het artikelnummer, de kleur en het aantal eruit. Artikelen die Logic4 nog niet kent staan apart, zodat je ze met Gretha kunt doornemen."

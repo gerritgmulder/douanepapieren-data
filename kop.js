@@ -258,6 +258,18 @@
   if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", start);
   else start();
 
+  /* Bestanden kunnen slepen naar elke uploadplek (Chantal, 24 sep 2026).
+     Het werk staat in slepen.js; kop.js laadt het mee omdat elke tegel met
+     een upload ook deze kop heeft. Zelfde map als dit bestand. */
+  try {
+    var hier = doc.currentScript && doc.currentScript.src;
+    if (hier && !global.__fpSlepen) {
+      var sl = doc.createElement("script");
+      sl.src = hier.replace(/kop\.js(\?.*)?$/, "slepen.js");
+      (doc.head || doc.documentElement).appendChild(sl);
+    }
+  } catch (e) {}
+
   global.fpKop = { vul: vul };
 
 })(typeof window !== "undefined" ? window : globalThis);
