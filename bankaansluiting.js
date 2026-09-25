@@ -141,7 +141,7 @@
     var eerste = String(tekst).slice(0, 4000).split(/\r?\n/)[0] || "";
     var sep = eerste.split(";").length > eerste.split(",").length ? ";" : ",";
     var rijen = csvRijen(tekst, sep).filter(function (r) { return r.length > 1 || (r[0] && r[0].trim()); });
-    if (rijen.length < 2) throw new Error(naam + ": geen bruikbare regels gevonden.");
+    if (rijen.length < 2) throw new Error(naam + ": hierin staan 0 bruikbare regels.");
     var kop = rijen[0].map(function (h) { return String(h).replace(/^﻿/, "").trim().toLowerCase(); });
 
     var iD = kolom(kop, ["boekdatum", "datum", "transactiedatum", "date", "rentedatum"]);
@@ -152,7 +152,7 @@
     var iV = kolom(kop, ["valuta", "munt", "currency"]);
     // Sommige banken zetten het teken in een aparte kolom in plaats van in het bedrag.
     var iAf = kolom(kop, ["af bij", "af/bij", "bij/af", "debet/credit"]);
-    if (iD < 0 || iB < 0) throw new Error(naam + ": geen kolom met een datum en een bedrag gevonden.");
+    if (iD < 0 || iB < 0) throw new Error(naam + ": vraagt een kolom met een datum en een kolom met een bedrag.");
 
     var tx = [], iban = "", munten = {};
     for (var i = 1; i < rijen.length; i++) {
@@ -176,7 +176,7 @@
         .filter(Boolean).join(" — ").replace(/\s+/g, " ");
       tx.push({ datum: d, bedrag: b, oms: oms.slice(0, 160) });
     }
-    if (!tx.length) throw new Error(naam + ": wel regels, maar geen bruikbare datum/bedrag-combinatie.");
+    if (!tx.length) throw new Error(naam + ": bevat regels, maar 0 met een bruikbare datum en een bruikbaar bedrag.");
 
     // De valuta staat in de export maar werd niet gelezen. De dollarrekening
     // van Fonteyn kwam als gewone CSV binnen en zou zo bij de euro's zijn
@@ -221,7 +221,7 @@
     return Promise.all(lijst.map(function (f) {
       return new Promise(function (klaar, mis) {
         var r = new FileReader();
-        r.onerror = function () { mis(new Error("kon " + f.name + " niet lezen")); };
+        r.onerror = function () { mis(new Error(f.name + " lezen vraagt een nieuwe poging")); };
         var tweedePoging = false;
         r.onload = function (e) {
           var tekst = String(e.target.result);
@@ -340,14 +340,14 @@
     afschriften = afschriften.filter(function (a) { return !a.valuta || a.valuta === "EUR"; });
     if (!afschriften.length) {
       throw new Error("Alleen bestanden in een andere valuta dan euro gevonden (" +
-        vreemd.map(function (a) { return a.valuta; }).join(", ") + "). Die kan ik niet tegen het grootboek leggen.");
+        vreemd.map(function (a) { return a.valuta; }).join(", ") + "). Het grootboek werkt in euro, dus deze vragen een eigen aansluiting.");
     }
 
     var alleTx = [];
     afschriften.forEach(function (a) {
       a.transacties.forEach(function (t) { alleTx.push(Object.assign({ iban: a.iban }, t)); });
     });
-    if (!alleTx.length) throw new Error("Geen transacties in deze bestanden gevonden.");
+    if (!alleTx.length) throw new Error("Deze bestanden bevatten 0 transacties.");
 
     var eigenIbans = afschriften.map(function (a) {
       return String(a.iban || "").replace(/[\s.]/g, "").toUpperCase();
@@ -465,8 +465,8 @@
     var kop = el("div", "ba-uitleg");
     kop.appendChild(el("h3", null, "Bankaansluiting — kwam het geld ook echt binnen?"));
     kop.appendChild(el("p", null,
-      "De andere controles gebruiken de betaalregistratie in Logic4. Die zegt wat er als betaald is geboekt, " +
-      "niet dat het geld op de rekening staat. Hier zetten we de bankafschriften ernaast."));
+      "De andere controles gebruiken de betaalregistratie in Logic4. Die zegt wat er als betaald is geboekt; " +
+      "of het geld ook op de rekening staat, laat de bank zien. Hier zetten we de bankafschriften ernaast."));
     doel.appendChild(kop);
 
     var vak = el("div", "ba-invoer");
@@ -483,9 +483,9 @@
 
     if (!u) {
       doel.appendChild(el("p", "uitleg",
-        "Nog geen aansluiting gemaakt. Laad de afschriften van de periode die je wilt controleren; " +
+        "Hier komt de aansluiting te staan. Laad de afschriften van de periode die je wilt controleren; " +
         "de bijbehorende betalingen uit Logic4 komen er vanzelf bij. MT940 heeft de voorkeur, want daar " +
-        "staan de saldi in en dan kan ik ook controleren of er geen afschrift ontbreekt. Geeft de bank " +
+        "staan de saldi in en dan kan ik ook controleren of alle afschriften er zijn. Geeft de bank " +
         "alleen een CSV over een langere periode — zoals ING — laad die dan; alleen die ene controle valt weg."));
       return;
     }
@@ -494,10 +494,10 @@
     var kapot = (u.afschriften || []).filter(function (a) { return a.sluit === false; });
     if (kapot.length) {
       var w = el("div", "ba-let");
-      w.appendChild(el("strong", null, "Let op: " + kapot.length + " afschrift(en) sluiten niet op zichzelf. "));
+      w.appendChild(el("strong", null, "Let op: " + kapot.length + " afschrift(en) hebben een verschil in zichzelf. "));
       w.appendChild(document.createTextNode(
-        "Beginsaldo plus mutaties komt niet uit op het eindsaldo. Dan mist er een afschrift of is er een " +
-        "regel weggevallen, en heeft vergelijken met Logic4 pas zin nadat dat is opgelost."));
+        "Beginsaldo plus mutaties wijkt af van het eindsaldo. Dan is er een afschrift of een regel " +
+        "weggevallen; los dat eerst op, daarna heeft vergelijken met Logic4 zin."));
       doel.appendChild(w);
     }
 
@@ -507,10 +507,10 @@
     var vv = u.vreemdeValuta || [];
     if (vv.length) {
       var vw = el("div", "ba-let");
-      vw.appendChild(el("strong", null, vv.length + " bestand(en) in een andere valuta, niet meegeteld. "));
+      vw.appendChild(el("strong", null, vv.length + " bestand(en) in een andere valuta, apart gehouden. "));
       vw.appendChild(document.createTextNode(
         vv.map(function (a) { return (a.iban || a.bestand) + " (" + a.valuta + ", " + a.aantal + " regels)"; }).join(", ") +
-        ". Het grootboek staat in euro, dus die bedragen kunnen er niet zomaar bij opgeteld worden. " +
+        ". Het grootboek staat in euro, dus die bedragen tellen apart. " +
         "Voor die rekening is een aparte aansluiting met de gehanteerde koersen nodig."));
       doel.appendChild(vw);
     }
@@ -520,8 +520,8 @@
       var z = el("div", "ba-let zacht");
       z.appendChild(el("strong", null, zonder.length + " bestand(en) zonder saldi. "));
       z.appendChild(document.createTextNode(
-        "Een CSV bevat geen begin- en eindsaldo, dus voor die bestanden kan ik niet nagaan of de reeks " +
-        "compleet is. Kijk zelf of de eerste en laatste datum kloppen met wat je hebt opgevraagd."));
+        "Een CSV bevat alleen de regels, zonder begin- en eindsaldo, dus of de reeks compleet is controleer " +
+        "je zelf. Kijk of de eerste en laatste datum kloppen met wat je hebt opgevraagd."));
       doel.appendChild(z);
     }
 
@@ -544,7 +544,7 @@
     if (u.doorboeking && u.doorboeking.aantal) {
       doel.appendChild(el("p", "uitleg",
         "Buiten de vergelijking gehouden: " + euro(u.doorboeking.bedrag) + " over " + u.doorboeking.aantal +
-        " bijschrijvingen die geen omzet van buiten zijn — uitbetalingen van betaaldienstverleners, " +
+        " bijschrijvingen die doorgeboekt geld zijn in plaats van omzet van buiten - uitbetalingen van betaaldienstverleners, " +
         "overboekingen tussen eigen rekeningen en financiering. Dat geld staat vaak al op een ander " +
         "ingelezen afschrift als losse klantbetaling; zou je het hier meetellen, dan telde het dubbel."));
     }
@@ -575,15 +575,15 @@
     t1.appendChild(tb1); w1.appendChild(t1); doel.appendChild(w1);
 
     // wat niet koppelt
-    doel.appendChild(el("h4", "ba-kop", "Wat niet aan elkaar te koppelen is"));
+    doel.appendChild(el("h4", "ba-kop", "Wat los staat"));
     var g = el("div", "ba-cijfers");
-    g.appendChild(blok("Op de bank, niet in Logic4", euro(u.bankLos.bedrag), u.bankLos.aantal + " bijschrijvingen", u.bankLos.aantal ? "let" : ""));
-    g.appendChild(blok("In Logic4, niet op de bank", euro(u.logic4Los.bedrag), u.logic4Los.aantal + " betalingen", u.logic4Los.aantal ? "let" : ""));
+    g.appendChild(blok("Alleen op de bank", euro(u.bankLos.bedrag), u.bankLos.aantal + " bijschrijvingen", u.bankLos.aantal ? "let" : ""));
+    g.appendChild(blok("Alleen in Logic4", euro(u.logic4Los.bedrag), u.logic4Los.aantal + " betalingen", u.logic4Los.aantal ? "let" : ""));
     doel.appendChild(g);
     doel.appendChild(el("p", "uitleg",
-      "Gekoppeld op bedrag met vijf dagen speling. Wat overblijft is niet meteen fout: betaaldiensten als " +
+      "Gekoppeld op bedrag met vijf dagen speling. Wat overblijft kan gewoon kloppen: betaaldiensten als " +
       "Mollie en Multisafepay schrijven per dag één verzamelbedrag over terwijl Logic4 elke klantbetaling apart " +
-      "registreert, en kasontvangsten staan helemaal niet op een afschrift. Neem dus eerst de grote posten door."));
+      "registreert, en kasontvangsten staan alleen in de kas, buiten het afschrift. Neem dus eerst de grote posten door."));
 
     if (u.bankLos.lijst && u.bankLos.lijst.length) {
       var w2 = el("div", "ba-tabelwrap");
@@ -625,11 +625,11 @@
     ["Geregistreerd in Logic4", u.logic4.aantal, u.logic4.bedrag],
     ["Verschil", "", u.verschil],
     ["Doorboekingen (buiten de vergelijking)", (u.doorboeking || {}).aantal || 0, (u.doorboeking || {}).bedrag || 0], [],
-    ["Op de bank, niet in Logic4", u.bankLos.aantal, u.bankLos.bedrag],
-    ["In Logic4, niet op de bank", u.logic4Los.aantal, u.logic4Los.bedrag], [],
+    ["Alleen op de bank", u.bankLos.aantal, u.bankLos.bedrag],
+    ["Alleen in Logic4", u.logic4Los.aantal, u.logic4Los.bedrag], [],
     ["AFSCHRIFTEN"], ["Bestand", "IBAN", "Valuta", "Nr", "Beginsaldo", "Mutaties", "Eindsaldo", "Sluit", "Verschil", "Transacties"]];
     (u.afschriften || []).forEach(function (a) {
-      r.push([a.bestand, a.iban, a.valuta || "EUR", a.afschrift, a.begin, a.mutaties, a.eind, a.sluit === null ? "geen saldi" : (a.sluit ? "ja" : "NEE"), a.verschil, a.aantal]);
+      r.push([a.bestand, a.iban, a.valuta || "EUR", a.afschrift, a.begin, a.mutaties, a.eind, a.sluit === null ? "zonder saldi" : (a.sluit ? "ja" : "NEE"), a.verschil, a.aantal]);
     });
     r.push([], ["PER MAAND"], ["Maand", "Bank EUR", "Logic4 EUR", "Verschil EUR"]);
     Object.keys(u.perMaand).sort().forEach(function (m) {
@@ -637,8 +637,8 @@
     });
     download("bankaansluiting-" + d + ".csv", r);
     var r2 = [["Kant", "Datum", "Bedrag EUR", "Order", "Rekening", "Omschrijving"]];
-    (u.bankLos.lijst || []).forEach(function (t) { r2.push(["bank, niet in Logic4", t.datum, t.bedrag, "", t.iban || "", t.oms]); });
-    (u.logic4Los.lijst || []).forEach(function (p) { r2.push(["Logic4, niet op de bank", p.datum, p.bedrag, p.order, p.rekening, p.oms]); });
+    (u.bankLos.lijst || []).forEach(function (t) { r2.push(["alleen bank", t.datum, t.bedrag, "", t.iban || "", t.oms]); });
+    (u.logic4Los.lijst || []).forEach(function (p) { r2.push(["alleen Logic4", p.datum, p.bedrag, p.order, p.rekening, p.oms]); });
     download("bankaansluiting-verschillen-" + d + ".csv", r2);
     if (cfg.log) cfg.log("geldgoederen", "bankaansluiting-export", nl(u.vanaf) + " t/m " + nl(u.tot));
   }
@@ -647,7 +647,7 @@
 
   async function start(knop) {
     if (bezig) return;
-    if (!global.fpMT940) { alert("De bankafschrift-lezer is niet geladen. Sluit de app af en start hem opnieuw."); return; }
+    if (!global.fpMT940) { alert("De bankafschrift-lezer vraagt een herstart: sluit de app af en start hem opnieuw."); return; }
     if (!bestanden.length) { alert("Kies eerst één of meer MT940-bestanden."); return; }
     bezig = true; knop.disabled = true; knop.textContent = "Bezig…";
     var melden = cfg.melden || function () {};
@@ -658,7 +658,7 @@
         uitkomst.vanaf + " t/m " + uitkomst.tot + ", verschil " + Math.round(uitkomst.verschil));
       teken(await laadLaatste());
     } catch (e) {
-      alert("Niet gelukt: " + (e.message || e));
+      alert("Dit vraagt een nieuwe poging: " + (e.message || e));
     }
     bezig = false;
     if (knop) { knop.disabled = false; knop.textContent = "Aansluiten"; }

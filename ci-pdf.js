@@ -170,8 +170,8 @@
     pl.forEach(function (r) { if (r.code) perCode[r.code] = perCode[r.code] || {}; if (r.code) perCode[r.code].pl = r; });
     Object.keys(perCode).forEach(function (code) {
       var p = perCode[code];
-      if (p.ci && !p.pl) verschillen.push({ code: code, wat: "staat wel op de factuur maar niet op de pakbon", ci: p.ci.aantal, pl: null });
-      else if (!p.ci && p.pl) verschillen.push({ code: code, wat: "staat wel op de pakbon maar niet op de factuur", ci: null, pl: p.pl.aantal });
+      if (p.ci && !p.pl) verschillen.push({ code: code, wat: "staat alleen op de factuur", ci: p.ci.aantal, pl: null });
+      else if (!p.ci && p.pl) verschillen.push({ code: code, wat: "staat alleen op de pakbon", ci: null, pl: p.pl.aantal });
       else if (p.ci && p.pl && Number(p.ci.aantal) !== Number(p.pl.aantal))
         verschillen.push({ code: code, wat: "factuur zegt " + p.ci.aantal + ", pakbon zegt " + p.pl.aantal, ci: p.ci.aantal, pl: p.pl.aantal });
     });
@@ -189,7 +189,7 @@
   // Zelfde aanpak als in de douanetegel: pdf.js geeft losse tekstblokjes met
   // een x/y, en alles wat op (ongeveer) dezelfde hoogte staat is één regel.
   async function uitPdf(bestand) {
-    if (!global.pdfjsLib) throw new Error("de pdf-lezer is niet geladen");
+    if (!global.pdfjsLib) throw new Error("de pdf-lezer moet nog laden");
     var buf = await bestand.arrayBuffer();
     var pdf = await global.pdfjsLib.getDocument({ data: buf }).promise;
     var regels = [];
@@ -221,7 +221,7 @@
      zodra een leverancier een echte tabel gebruikt en twee kolommen naast
      elkaar doorlopen - dan is een platte regel niet meer te ontleden. */
   async function uitPdfKolommen(bestand) {
-    if (!global.pdfjsLib) throw new Error("de pdf-lezer is niet geladen");
+    if (!global.pdfjsLib) throw new Error("de pdf-lezer moet nog laden");
     var buf = await bestand.arrayBuffer();
     var pdf = await global.pdfjsLib.getDocument({ data: buf }).promise;
     var rijen = [];

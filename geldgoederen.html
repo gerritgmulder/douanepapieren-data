@@ -25,7 +25,7 @@
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
     '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
-    '<div class="gt"><h1>Geen toegang</h1><p>De Geld-goederenbeweging is niet beschikbaar voor jouw account.</p>'+
+    '<div class="gt"><h1>Deze tegel is afgeschermd</h1><p>De Geld-goederenbeweging is voor een vaste groep medewerkers.</p>'+
     '<p style="font-size:12.5px">Je bent ingelogd als <code>'+(email||"(onbekend)")+'</code>.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
@@ -343,7 +343,7 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
       <div class="titel">
         <h3>Van de voorraad van vandaag terug naar de peildatum</h3>
         <p>Voorraad nu min alle mutaties sinds de peildatum is de voorraad toen. Per artikel,
-           met de tellijst ernaast en een verschillenlijst waar het niet sluit.</p>
+           met de tellijst ernaast en een verschillenlijst waar het afwijkt.</p>
       </div>
       <div class="cijfers"><div class="groot" id="rbGroot">—</div><div class="klein">artikelen</div></div>
     </div>
@@ -413,12 +413,12 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
     <div class="body">
       <ol class="afspraken">
         <li><b>Rechtstreekse levering krijgt altijd een inkooporder.</b> Gaat een goed van de leverancier direct naar de klant, dan is de inkooporder de enige plek waar staat dát het is ingekocht. Koppel hem aan de verkooporder. <i>(controle 3.1)</i></li>
-        <li><b>Bij maatwerk vul je de inkoopprijs op de orderregel in.</b> Zodra de leverancier de prijs bevestigt. Zonder inkoopprijs is de marge op die order niet te berekenen — en juist maatwerk gaat om grote bedragen. <i>(6.1)</i></li>
+        <li><b>Bij maatwerk vul je de inkoopprijs op de orderregel in.</b> Zodra de leverancier de prijs bevestigt. Met de inkoopprijs erbij is de marge op die order te berekenen - en juist maatwerk gaat om grote bedragen. <i>(6.1)</i></li>
         <li><b>Inkooporder dicht zodra alles binnen is.</b> Een open order zegt tegen de administratie dat er nog goederen komen. <i>(1.1)</i></li>
-        <li><b>Inkooporder ouder dan een half jaar wordt beoordeeld.</b> Alsnog ontvangen boeken, of annuleren en afsluiten. Niet laten staan. <i>(1.2)</i></li>
-        <li><b>Voorraad blijft nooit staan op Dealer magazijn, ‘Geen’ of Transporteur.</b> Dat zijn geen plekken waar iets ligt; wat er blijft staan, is administratief kwijt. <i>(2.2 en 2.3)</i></li>
-        <li><b>Negatieve voorraad los je binnen een week op.</b> Minder dan nul kan fysiek niet, dus er ontbreekt een ontvangst. <i>(2.1)</i></li>
-        <li><b>Geleverd is gefactureerd.</b> Binnen de maand, of vastleggen waarom niet (garantie, coulance, showroom). <i>(4.1)</i></li>
+        <li><b>Inkooporder ouder dan een half jaar wordt beoordeeld.</b> Alsnog ontvangen boeken, of annuleren en afsluiten. Zo blijft de lijst schoon. <i>(1.2)</i></li>
+        <li><b>Voorraad gaat altijd door vanaf Dealer magazijn, ‘Geen’ of Transporteur.</b> Dat zijn doorgangsplekken; wat er blijft staan, raakt administratief uit beeld. <i>(2.2 en 2.3)</i></li>
+        <li><b>Negatieve voorraad los je binnen een week op.</b> Fysiek is voorraad altijd nul of meer, dus er hoort nog een ontvangst bij. <i>(2.1)</i></li>
+        <li><b>Geleverd is gefactureerd.</b> Binnen de maand, of vastleggen waarom het anders is (garantie, coulance, showroom). <i>(4.1)</i></li>
         <li><b>Elke handmatige voorraadcorrectie krijgt een reden mee.</b> In het opmerkingenveld van de mutatie. Een correctie zonder reden is een gat in de keten. <i>(1.3 en 3.2)</i></li>
         <li><b>Eén keer per maand draait iemand deze controle.</b> Nieuwe punten worden verdeeld over Inkoop, Magazijn, Verkoop en Administratie, en blijven staan tot ze opgelost of bewust geaccepteerd zijn.</li>
       </ol>
@@ -430,7 +430,7 @@ footer{max-width:1240px;margin:0 auto;padding:10px 24px 40px;font-size:11.5px;co
 
 <footer>
   Elke controle volgt de keten Inkoop → Voorraad → Verkoop → Factuur → Bank van de accountant.
-  De gegevens komen rechtstreeks uit Logic4; er wordt niets in Logic4 gewijzigd.
+  De gegevens komen rechtstreeks uit Logic4; Logic4 zelf blijft ongewijzigd.
   <span id="versie"></span>
 </footer>
 
@@ -668,7 +668,7 @@ if (window.fp1630) window.fp1630.init({
 
 document.getElementById("btnDebiteuren").addEventListener("click", async function(){
   if (bezig) return;
-  if (!window.fpDebiteuren) { alert("De debiteuren-module is nog niet geladen. Sluit de app af en start hem opnieuw."); return; }
+  if (!window.fpDebiteuren) { alert("De debiteuren-module vraagt een herstart: sluit de app af en start hem opnieuw."); return; }
   if (!confirm("De debiteurenlijst opbouwen duurt ongeveer twee tot drie minuten, omdat elke openstaande factuur apart uit Logic4 wordt gehaald.\n\nDoorgaan?")) return;
   bezig = true;
   var knop = this; knop.disabled = true; knop.textContent = "Bezig…";
@@ -686,7 +686,7 @@ document.getElementById("btnDebiteuren").addEventListener("click", async functio
     window.fpDebiteuren.download(uit);
     log("debiteurenlijst", Math.round((Date.now()-t0)/1000) + "s — " + uit.klanten.length + " klanten over " + uit.aantalPosten + " posten");
   } catch (e) {
-    tekst.textContent = "Niet gelukt: " + (e.message || e);
+    tekst.textContent = "Dit vraagt een nieuwe poging: " + (e.message || e);
     balk.style.width = "0%";
     bezig = false; knop.disabled = false; knop.textContent = "Debiteurenlijst maken";
     return;
@@ -713,7 +713,7 @@ function toonDebiteuren(uit){
        blok("Openstaand", euro(totOpen), uit.klanten.length + " klanten") +
        blok("Waarvan &gt;90 dagen", euro(telaat90), "te laat") +
        blok("Te veel ontvangen", euro(totTeveel), "bij klanten die óók iets openstaan hebben") +
-       blok("Mogelijk fout gekoppeld", euro(totGekoppeld), totExact + " keer exact gelijk") +
+       blok("Mogelijk verkeerd gekoppeld", euro(totGekoppeld), totExact + " keer exact gelijk") +
        '</div>';
 
   h += '<div class="tabelwrap"><table class="dbtabel"><thead><tr>' +
@@ -784,7 +784,7 @@ document.getElementById("btnScan").addEventListener("click", async function(){
     log("controle-gedraaid", (diep ? "diepe controle, " : "") + momentopname.duur + "s — " + samen);
     tekenen();
   } catch(e){
-    tekst.textContent = "De controle is niet afgemaakt: " + e.message;
+    tekst.textContent = "De controle vraagt een nieuwe poging: " + e.message;
     balk.style.background = "#b91c1c";
     log("controle-mislukt", String(e.message).slice(0,300));
     bezig = false; knop.disabled = false; knop.textContent = "Nieuwe controle draaien";
@@ -800,7 +800,7 @@ document.getElementById("btnScan").addEventListener("click", async function(){
 function tekenen(){
   var wanneer = document.getElementById("wanneer");
   if (!momentopname) {
-    wanneer.innerHTML = "<b>Er is nog geen controle gedraaid.</b><br>" +
+    wanneer.innerHTML = "<b>De eerste controle staat klaar om te draaien.</b><br>" +
       "Druk op ‘Nieuwe controle draaien’. Dat duurt ongeveer drie minuten — de tegel haalt dan het hele artikelbestand, alle orders, de voorraad per magazijn en de inkooporders op.";
     document.getElementById("keten").innerHTML = "";
     document.getElementById("inhoud").innerHTML = "";
@@ -867,7 +867,7 @@ function tekenKeten(){
     html += '<a class="schakel ' + kleur + '" href="#schakel-' + s.id + '">' +
       '<div class="naam">' + s.naam + '</div>' +
       '<div class="cijfer">' + getal(p.aantal) + '</div>' +
-      '<div class="onder">' + (p.aantal === 0 ? "niets te doen" : (p.aantal === 1 ? "punt open" : "punten open")) + '</div>' +
+      '<div class="onder">' + (p.aantal === 0 ? "alles op orde" : (p.aantal === 1 ? "punt open" : "punten open")) + '</div>' +
       (i < 4 ? '<div class="pijl">›</div>' : '') +
       '</a>';
   });
@@ -914,7 +914,7 @@ function kaartHtml(c){
       '<div class="titel"><h3>' + ontsnap(c.naam) + '</h3><p>' + ontsnap(c.vraag) + '</p></div>' +
       '<div class="cijfers">' +
         '<div class="groot">' + (c.gedraaid ? getal(t.aantal) : "—") + '</div>' +
-        '<div class="klein">' + (c.gedraaid ? omvangLabel(c.eenheid, t.bedrag, t.aantal) : "niet gedraaid") + '</div>' +
+        '<div class="klein">' + (c.gedraaid ? omvangLabel(c.eenheid, t.bedrag, t.aantal) : "overgeslagen") + '</div>' +
         (trend ? '<div class="klein">' + trend + '</div>' : '') +
       '</div>' +
     '</div>' +
@@ -925,7 +925,7 @@ function kaartHtml(c){
         '<span class="merk">controle ' + c.id + '</span>' +
         (t.afgehandeld ? '<span class="merk">' + t.afgehandeld + ' afgehandeld</span>' : '') + '</p>' +
       (c.toelichting ? '<div class="let">' + ontsnap(c.toelichting) + '</div>' : '') +
-      (!c.gedraaid ? '<div class="let">Deze controle is niet meegedraaid: ' + ontsnap(c.reden) + '</div>' : '') +
+      (!c.gedraaid ? '<div class="let">Deze controle is deze keer overgeslagen: ' + ontsnap(c.reden) + '</div>' : '') +
       '<div class="regels"></div>' +
     '</div>' +
   '</div>';
@@ -944,7 +944,7 @@ function trendTekst(id, nu){
 function regelsHtml(c){
   if (!c.gedraaid) return "";
   var regels = c.regels || [];
-  if (!regels.length) return '<div class="leeg">Geen bevindingen — deze schakel sluit aan.</div>';
+  if (!regels.length) return '<div class="leeg">0 bevindingen - deze schakel sluit aan.</div>';
   var h = '<div class="tabelwrap"><table><thead><tr>' +
     '<th>Verwijzing</th><th>Datum</th><th>Omschrijving</th><th>Wat er aan de hand is</th>' +
     '<th style="text-align:right">' + (c.eenheid === "eur" ? "Bedrag" : "Aantal") + '</th>' +
@@ -1014,7 +1014,7 @@ document.getElementById("btnExport").addEventListener("click", function(){
   momentopname.controles.forEach(function(c){
     var t = openTotalen(c);
     r.push([c.schakel, c.naam, c.id, c.eigenaar, c.ernst,
-            c.gedraaid ? t.aantal : "niet gedraaid",
+            c.gedraaid ? t.aantal : "overgeslagen",
             c.gedraaid ? omvang({eenheid:c.eenheid, bedrag:t.bedrag}) : "",
             t.afgehandeld].map(q).join(";"));
   });
@@ -1075,9 +1075,9 @@ laden();
   }
 
   var TITELS = {
-    1: "1 · Inkooporders met factuur, per peildatum niet volledig geleverd",
+    1: "1 · Inkooporders met factuur, per peildatum nog (deels) te leveren",
     2: "2 · Inkoopfacturen zonder inkooporder",
-    3: "3 · Daarvan per vandaag nog niet afgewikkeld",
+    3: "3 · Daarvan per vandaag nog af te wikkelen",
     4: "4 · Openstaande inkooporders per vandaag",
     5: "5 · Goederenontvangsten zonder order en zonder factuur",
     6: "6 · Overige boekingen op 1630",
@@ -1099,7 +1099,7 @@ laden();
     $$("ikExport").disabled = true;
     $$("ikUit").innerHTML = "";
     try {
-      if (!window.fpInkoopketen) throw new Error("de module is niet geladen. Sluit het dashboard af en start opnieuw.");
+      if (!window.fpInkoopketen) throw new Error("de module vraagt een herstart: sluit het dashboard af en start opnieuw.");
       var peil = $$("ikPeil").value || "2025-12-31";
       laatst = await window.fpInkoopketen.bouw({
         logic4: logic4,
@@ -1114,7 +1114,7 @@ laden();
       if (window.fpLog) window.fpLog("inkoopketen opgebouwd",
         "peildatum " + peil + ", " + laatst.aantallen.orders + " orders in " + laatst.seconden + "s");
     } catch (e) {
-      status("bad", "Opbouwen mislukt: " + (e.message || e));
+      status("bad", "Opbouwen vraagt een nieuwe poging: " + (e.message || e));
     } finally {
       knop.disabled = false;
     }
@@ -1137,7 +1137,7 @@ laden();
       var lijst = r.overzichten[k];
       h += '<h3 style="margin:18px 0 6px;font-size:14px">' + esc(TITELS[k]) +
            ' <span style="font-weight:400;color:var(--muted)">' + lijst.length + " regels</span></h3>";
-      if (!lijst.length) { h += '<p class="uitleg" style="margin:0">Geen regels.</p>'; return; }
+      if (!lijst.length) { h += '<p class="uitleg" style="margin:0">0 regels.</p>'; return; }
       /* Alle kolommen die in dit overzicht voorkomen, in een vaste volgorde:
          eerst het format van de accountant, daarna wat er per overzicht extra
          bij hoort. */
@@ -1180,7 +1180,7 @@ laden();
       status("ok", rijen.length + " grootboekregels ingelezen uit " + f.name +
                    ". Draai de opbouw opnieuw; overzicht 6 wordt dan gevuld.");
     } catch (err) {
-      status("bad", "Kon het bestand niet lezen: " + (err.message || err));
+      status("bad", "Het bestand lezen vraagt een nieuwe poging: " + (err.message || err));
     }
   };
 
@@ -1240,7 +1240,7 @@ laden();
     $$("gbUit").innerHTML = "";
     st("info", "Bezig met lezen van " + f.name + " (" + Math.round(f.size/1e6) + " MB)…");
     try {
-      if (!window.fpGoederenbeweging) throw new Error("de module is niet geladen. Herstart het dashboard.");
+      if (!window.fpGoederenbeweging) throw new Error("de module vraagt een herstart van het dashboard.");
       var buf = await f.arrayBuffer();
       /* Alleen de twee tabbladen die we nodig hebben. Het werkboek heeft er
          tweeëntwintig en de rest is voor dit doel ballast. */
@@ -1248,7 +1248,7 @@ laden();
 
       var wsG = wb.Sheets["Grootboektransacties"];
       var wsB = wb.Sheets["Beginbalans"];
-      if (!wsG) throw new Error("het tabblad Grootboektransacties zit er niet in.");
+      if (!wsG) throw new Error("dit bestand vraagt het tabblad Grootboektransacties.");
 
       st("info", "Beginbalans lezen…");
       var begin = {};
@@ -1273,7 +1273,7 @@ laden();
       if (window.fpLog) window.fpLog("goederenbeweging opgebouwd",
         f.name + ", jaar " + jaar + ", " + laatst.regels + " regels");
     } catch (err) {
-      st("bad", "Inlezen mislukt: " + (err.message || err));
+      st("bad", "Inlezen vraagt een nieuwe poging: " + (err.message || err));
     }
   };
 
@@ -1343,7 +1343,7 @@ laden();
     var vormen = Object.keys(b.overigVormen||{});
     if (vormen.length) {
       vormen.sort(function(x,y){ return Math.abs(b.overigVormen[y].bedrag)-Math.abs(b.overigVormen[x].bedrag); });
-      h += '<h3 style="margin:20px 0 6px;font-size:14px">Niet geclassificeerd, naar soort omschrijving</h3>' +
+      h += '<h3 style="margin:20px 0 6px;font-size:14px">Nog te classificeren, naar soort omschrijving</h3>' +
         '<table class="grid"><thead><tr><th>Omschrijving</th><th>Regels</th><th>Bedrag</th></tr></thead><tbody>' +
         vormen.slice(0,15).map(function(v){
           return "<tr><td>" + esc(v) + '</td><td class="num">' + b.overigVormen[v].aantal +
@@ -1443,7 +1443,7 @@ laden();
   $$("vpDraai").onclick = async function(){
     var kn = $$("vpDraai"); kn.disabled = true; $$("vpExport").disabled = true; $$("vpUit").innerHTML = "";
     try {
-      if (!window.fpVooruitPeil) throw new Error("de module is niet geladen. Herstart het dashboard.");
+      if (!window.fpVooruitPeil) throw new Error("de module vraagt een herstart van het dashboard.");
       var peildata = String($$("vpPeil").value||"").split(/[,;]/)
         .map(function(x){ return x.trim(); }).filter(function(x){ return /^\d{4}-\d{2}-\d{2}$/.test(x); });
       if (!peildata.length) throw new Error("vul minstens één peildatum in als jjjj-mm-dd.");
@@ -1456,7 +1456,7 @@ laden();
       vpToon(vpLaatst);
       $$("vpExport").disabled = false;
       if (window.fpLog) window.fpLog("vooruitontvangen per peildatum opgebouwd", peildata.join(", "));
-    } catch(e){ melding("vpStatus","bad","Opbouwen mislukt: " + (e.message||e)); }
+    } catch(e){ melding("vpStatus","bad","Opbouwen vraagt een nieuwe poging: " + (e.message||e)); }
     finally { kn.disabled = false; }
   };
 
@@ -1486,7 +1486,7 @@ laden();
   }
 
   function vpTabel(lijst, kols){
-    if (!lijst.length) return '<p class="uitleg" style="margin:0">Geen orders.</p>';
+    if (!lijst.length) return '<p class="uitleg" style="margin:0">0 orders.</p>';
     return '<div style="overflow-x:auto"><table class="grid"><thead><tr>' +
       kols.map(function(c){ return "<th>"+esc(VP_KOP[c]||c)+"</th>"; }).join("") +
       "</tr></thead><tbody>" +
@@ -1540,13 +1540,13 @@ laden();
         return { artikel: code, aantal: aantal };
       }).filter(function(x){ return x.artikel; });
       melding("rbStatus","ok", rbTelling.length + " tellijstregels ingelezen uit " + f.name + ".");
-    } catch(err){ melding("rbStatus","bad","Kon de tellijst niet lezen: " + (err.message||err)); }
+    } catch(err){ melding("rbStatus","bad","De tellijst lezen vraagt een nieuwe poging: " + (err.message||err)); }
   };
 
   $$("rbDraai").onclick = async function(){
     var kn = $$("rbDraai"); kn.disabled = true; $$("rbExport").disabled = true; $$("rbUit").innerHTML = "";
     try {
-      if (!window.fpRollback) throw new Error("de module is niet geladen. Herstart het dashboard.");
+      if (!window.fpRollback) throw new Error("de module vraagt een herstart van het dashboard.");
       rbLaatst = await window.fpRollback.bouw({
         logic4: logic4,
         peildatum: $$("rbPeil").value || "2025-12-31",
@@ -1558,7 +1558,7 @@ laden();
       rbToon(rbLaatst);
       $$("rbExport").disabled = false;
       if (window.fpLog) window.fpLog("roll-back opgebouwd", rbLaatst.peildatum);
-    } catch(e){ melding("rbStatus","bad","Terugrekenen mislukt: " + (e.message||e)); }
+    } catch(e){ melding("rbStatus","bad","Terugrekenen vraagt een nieuwe poging: " + (e.message||e)); }
     finally { kn.disabled = false; }
   };
 

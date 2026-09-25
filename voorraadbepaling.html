@@ -13,7 +13,7 @@
     if (window.fpToegang && !fpToegang.mag("voorraadbepaling", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is voor Chantal en Arno.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Voorraadbepaling</h2><p style="color:#6b7280">Deze tegel is voor Chantal en Arno.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -95,7 +95,7 @@ async function laad(vers){
     var j = await r.json(); if (!j.ok) throw new Error(j.error||("HTTP "+r.status));
     data = j; teken();
     $("stand").textContent = "Stand "+new Date(j.ts).toLocaleString("nl-NL");
-  }catch(e){ $("lijst").innerHTML = '<tr><td colspan="6" style="color:#b91c1c">Ophalen lukte niet: '+esc(e.message)+'</td></tr>'; }
+  }catch(e){ $("lijst").innerHTML = '<tr><td colspan="6" style="color:#b91c1c">Ophalen vraagt een nieuwe poging: '+esc(e.message)+'</td></tr>'; }
 }
 function teken(){
   var j=data, bij=j.modellen.filter(function(m){ return m.verschil>0; });
@@ -103,12 +103,12 @@ function teken(){
   $("kop").innerHTML = '<div><b>'+nl(j.totaalVerkocht)+'</b><span>spa\'s verkocht in de laatste 12 maanden</span></div>'+
     '<div><b>'+nl(j.totaalBesteld)+'</b><span>spa\'s besteld bij de fabrieken (open inkooporders)</span></div>'+
     '<div><b>'+bij.length+'</b><span>modellen met te weinig besteld, samen '+nl(nodig)+' spa\'s</span></div>';
-  $("basis").textContent = "Verkoop van "+mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot)+", particulier en partner samen. Amerika telt niet mee: niet in de verkoop en niet in de "+j.ikosAmerika+" inkooporders voor Houston.";
+  $("basis").textContent = "Verkoop van "+mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot)+", particulier en partner samen. Amerika blijft buiten deze telling: de verkoop én de "+j.ikosAmerika+" inkooporders voor Houston.";
   var lijst = $("alles").checked ? j.modellen : bij;
   $("lijst").innerHTML = lijst.length ? lijst.map(function(m){
     var pil = m.verschil>0 ? '<span class="pil bij">nog '+m.verschil+' bijbestellen</span>' : m.verschil<0 ? '<span class="pil teveel">'+(-m.verschil)+' meer dan de verhouding</span>' : '<span class="pil goed">klopt</span>';
     return '<tr class="rij" data-m="'+esc(m.model)+'"><td><b>'+esc(m.model)+'</b></td><td class="n">'+nl(m.verkocht)+'</td><td class="n">'+m.aandeel.toLocaleString("nl-NL")+'%</td><td class="n">'+nl(m.besteld)+'</td><td class="n verberg-mob">'+m.hoort.toLocaleString("nl-NL")+'</td><td>'+pil+'</td></tr>'+
-      (open[m.model] ? '<tr><td colspan="6" class="iko">'+(m.ikos.length ? m.ikos.map(function(x){ return 'Inkooporder '+x.iko+' · '+esc(x.fabriek)+' · '+x.qty+' stuks'+(x.eta?' · verwacht '+datumNL(x.eta):'')+(x.ref?' · '+esc(x.ref):''); }).join('<br>') : 'Er staat voor dit model nu niets besteld.')+'</td></tr>' : '');
+      (open[m.model] ? '<tr><td colspan="6" class="iko">'+(m.ikos.length ? m.ikos.map(function(x){ return 'Inkooporder '+x.iko+' · '+esc(x.fabriek)+' · '+x.qty+' stuks'+(x.eta?' · verwacht '+datumNL(x.eta):'')+(x.ref?' · '+esc(x.ref):''); }).join('<br>') : 'Voor dit model staan nu 0 stuks besteld.')+'</td></tr>' : '');
   }).join("") : '<tr><td colspan="6" class="lead">Alle modellen zitten op of boven de verhouding.</td></tr>';
   document.querySelectorAll("tr.rij").forEach(function(tr){ tr.addEventListener("click", function(){ open[tr.dataset.m]=!open[tr.dataset.m]; teken(); }); });
 }

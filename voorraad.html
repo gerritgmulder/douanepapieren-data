@@ -418,7 +418,7 @@
   <h1>Voorraadbeheer</h1>
   <a class="back" href="dashboard.html">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">-</b></div>
-  <button class="logout hidden" id="demoBtn" type="button" title="Laad voorbeeld-spa-orders om de tegel te demonstreren (slaat niets op)">🎬 Demo</button>
+  <button class="logout hidden" id="demoBtn" type="button" title="Laad voorbeeld-spa-orders om de tegel te demonstreren (alles blijft zoals het was)">🎬 Demo</button>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
@@ -638,8 +638,8 @@
     <div class="card">
       <h3>Reserveringen - de actuele stand (Fonteyn NL)</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Elke openstaande Logic4-order met een spa (magazijn <b>Fonteyn</b>) is een reservering. Elk uur ververst.
-        <span style="color:#15803d">Betaald</span> = er is écht geld binnen (aanbetaling of meer). <span style="color:var(--warn)">Wacht</span> = nog niets betaald.
-        <b>Containerorders</b> (Dealer magazijn) staan hier bewust <b>niet</b> tussen - die vertroebelden het beeld en hebben een eigen tab: <b>Partner containers</b>. Amerika staat ook in een eigen tegel.
+        <span style="color:#15803d">Betaald</span> = er is écht geld binnen (aanbetaling of meer). <span style="color:var(--warn)">Wacht</span> = wacht nog op de eerste betaling.
+        <b>Containerorders</b> (Dealer magazijn) hebben bewust een eigen tab: <b>Partner containers</b>. Zo blijft dit beeld helder. Amerika staat ook in een eigen tegel.
       </p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="resvSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:280px;padding:8px">
@@ -754,8 +754,8 @@
         Alle spa's met voorraad in de hallen in Uddel (locatie Fonteyn in Logic4). <b>Vrij</b> is wat er
         nog te verkopen is: de voorraad min de orders die er al aan hangen, per kleur, en dan opgeteld -
         precies wat je in Logic4 naspeelt bij artikel &rarr; voorraad. <b>Fysiek</b> is alles wat er
-        werkelijk staat, alle kleuren samen, inclusief wat al verkocht of gereserveerd is maar nog niet
-        weg. Klap een model open om per kleur fysiek én vrij te zien.
+        werkelijk staat, alle kleuren samen, inclusief wat al verkocht of gereserveerd is en nog in de hal
+        staat. Klap een model open om per kleur fysiek én vrij te zien.
       </p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="stockSearch" placeholder="zoek een model of kleur…" style="min-width:280px;padding:8px">
@@ -776,7 +776,7 @@
   <div id="tab-spainkoop" class="hidden">
     <div class="card" id="ikoCard">
       <h3>Proforma invoice → inkooporder in Logic4</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Upload de <b>proforma invoice</b> van de fabriek - Jazzi, Kasdaly, Huantong, New Normal of Mexda. Het dashboard leest hem uit en laat zien welke inkooporder hij zou aanmaken: spa's, kleuren, aantallen en artikelcodes. De leverancier kies je zelf in de lijst eronder. <b>Er wordt niets weggeschreven tot je zelf op akkoord klikt.</b></p>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Upload de <b>proforma invoice</b> van de fabriek - Jazzi, Kasdaly, Huantong, New Normal of Mexda. Het dashboard leest hem uit en laat zien welke inkooporder hij zou aanmaken: spa's, kleuren, aantallen en artikelcodes. De leverancier kies je zelf in de lijst eronder. <b>Het dashboard schrijft pas iets weg als je zelf op akkoord klikt.</b></p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0;flex-wrap:wrap">
         <input type="file" id="ikoFile" accept=".xlsx,.xls,.csv">
         <input type="text" id="ikoRef" placeholder="proforma-referentie (bv. PI-3352)" style="min-width:200px;padding:8px">
@@ -850,7 +850,7 @@
   <div id="tab-partnercont" class="hidden">
     <div class="card">
       <h3>Partner containers - rechtstreeks naar de dealer</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Uitsluitend orders op magazijn <b>Dealer magazijn</b>: containers die rechtstreeks naar de partner gaan en dus niet uit de Fonteyn-voorraad komen. Daarom staan ze <b>niet</b> in Overzicht of Reserveringen. Een gewone partnerorder met meerdere spa's is géén container en staat onder <b>Partner</b>. Klik op het <b>ordernummer</b> voor de volledige inhoud van de container. Het containernummer komt uit <b>Uw referentie</b> in Logic4 (bijvoorbeeld "container 3376").</p>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Uitsluitend orders op magazijn <b>Dealer magazijn</b>: containers die rechtstreeks naar de partner gaan, buiten de Fonteyn-voorraad om. Daarom staan ze alleen hier, apart van Overzicht en Reserveringen. Een gewone partnerorder met meerdere spa's telt als partnerorder en staat onder <b>Partner</b>. Klik op het <b>ordernummer</b> voor de volledige inhoud van de container. Het containernummer komt uit <b>Uw referentie</b> in Logic4 (bijvoorbeeld "container 3376").</p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="pcSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
         <span id="pcCount" style="font-size:12px;color:var(--muted)"></span>
@@ -904,11 +904,11 @@
 
   <div id="tab-pipe" class="hidden">
     <div class="card">
-      <div class="status-msg warn" style="margin-bottom:12px"><b>Verouderd.</b> Deze pipeline telde alle bestellingen sinds 2024 op en wordt niet meer door Passion Partners gebruikt. De echte voorraad komt nu uit Logic4 (in NL) + de tab <b>Schepen</b> (onderweg). Laat staan voor de historie; niet meer bijwerken.</div>
+      <div class="status-msg warn" style="margin-bottom:12px"><b>Verouderd.</b> Deze pipeline telde alle bestellingen sinds 2024 op; Passion Partners werkt inmiddels met een nieuwe bron. De echte voorraad komt nu uit Logic4 (in NL) + de tab <b>Schepen</b> (onderweg). Laat staan voor de historie; deze lijst is afgesloten.</div>
       <h3>Voorraad &amp; pipeline - waar is elke spa?</h3>
       <p class="lead" style="font-size:12px;margin-bottom:10px">Beheer hier de <b>containers</b> met spa's. Per container: nummer, herkomst, besteld-datum en ETA.
         Ik bepaal automatisch of de spa's <b>in productie</b>, <b>op het schip</b> of <b>in Nederland</b> zijn
-        (voorraad telt vanaf vertrek schip ≈ 5,5 wk vóór ETA). Alles wordt centraal opgeslagen - geen Excel meer nodig.
+        (voorraad telt vanaf vertrek schip ≈ 5,5 wk vóór ETA). Alles wordt centraal opgeslagen - het dashboard vervangt Excel.
       </p>
       <div class="actions" style="margin-top:0">
         <button class="primary" id="addContBtn" type="button">Nieuwe container</button>
@@ -1095,7 +1095,7 @@ let MAG_BEHEREN  = false;   // uploads, schepen, prioriteiten, inkoop naar Logic
         body:JSON.stringify({user:email,tile:"voorraad",action:"open-geweigerd",detail:"geen toegang tot Voorraadbeheer"})}).catch(function(){});
     }catch(e){}
     document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'>"+
-      "<h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor de spa-afdeling (sales, logistiek en adviseurs).</p>"+
+      "<h1 style='color:#144734'>Voorraadbeheer</h1><p>Deze tegel is voor de spa-afdeling (sales, logistiek en adviseurs).</p>"+
       "<p>Je bent ingelogd als <code>"+(email||"(onbekend)")+"</code>.</p>"+
       "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
     throw new Error("geen toegang");
@@ -1301,7 +1301,7 @@ async function tryLoadMedewerkers(){
       body:JSON.stringify({ path:"/v3/User/GetAllUsers", method:"GET" })
     });
     const j = await r.json().catch(()=>({}));
-    if (!j || !j.ok){ autoUsersInfo.error = "status "+(j&&j.status)+(j&&j.status===404?" (geen scope)":""); return; }
+    if (!j || !j.ok){ autoUsersInfo.error = "status "+(j&&j.status)+(j&&j.status===404?" (scope nog aan te vragen)":""); return; }
     let arr = j.data;
     if (!Array.isArray(arr) && arr && typeof arr==="object") arr = arr.Users||arr.Items||arr.value||[];
     if (!Array.isArray(arr)){ autoUsersInfo.error="onverwacht antwoord"; return; }
@@ -1438,7 +1438,7 @@ document.getElementById("fetchBtn").addEventListener("click", async ()=>{
     renderDiag(orders.length, onDay.length, verkocht, lines, rowsTotal, rowsWithCode, undetected);
     setStatus("ok", lines.length+" spa-regel(s) gevonden in "+verkocht.length+" verkochte order(s) op "+datum+".");
   }catch(e){
-    console.error(e); setStatus("bad","Fout bij ophalen: "+e.message);
+    console.error(e); setStatus("bad","Ophalen vraagt een nieuwe poging: "+e.message);
   }finally{ btn.disabled=false; }
 });
 
@@ -1569,8 +1569,8 @@ function zoekAllesNu(){
     });
   }).slice(0,40);
   if(!treffers.length){
-    uit.innerHTML="<p class='lead' style='margin:0'>Niets gevonden voor \u201c"+esc(q)+"\u201d."+
-      (/^\d{6,9}$/.test(q)?" <button class='btn' type='button' id='zoekUitleg'>Vraag Logic4 waarom deze order er niet bij staat</button>":"")+"</p>";
+    uit.innerHTML="<p class='lead' style='margin:0'>0 treffers voor \u201c"+esc(q)+"\u201d."+
+      (/^\d{6,9}$/.test(q)?" <button class='btn' type='button' id='zoekUitleg'>Vraag Logic4 waar deze order staat</button>":"")+"</p>";
     const k=document.getElementById("zoekUitleg");
     if(k) k.addEventListener("click",function(){ zoekOrderUitleg(q,uit); });
     return;
@@ -1618,7 +1618,7 @@ async function zoekOrderUitleg(nr,uit){
       (j.status?" \u00b7 status: "+esc(j.status.naam||j.status.id):"")+
       "<br>"+esc(j.uitleg||"")+"</div>";
   }catch(e){
-    uit.innerHTML="<p class='lead' style='margin:0'>Navragen lukte niet: "+esc(e.message)+"</p>";
+    uit.innerHTML="<p class='lead' style='margin:0'>Navragen vraagt een nieuwe poging: "+esc(e.message)+"</p>";
   }
 }
 (function(){
@@ -1717,8 +1717,8 @@ function renderAdvisorPanel(){
     "<p class='lead' style='font-size:12px;margin-bottom:8px'>"+
       (autoUsersInfo.ok
         ? "<span style='color:var(--ok)'>✓ "+autoUsersInfo.count+" medewerkers automatisch uit Logic4 geladen - de namen vullen vanzelf in. Een keuze hieronder overschrijft de automatische naam.</span>"
-        : "<span style='color:var(--warn)'>Medewerkers konden niet automatisch worden opgehaald ("+esc(autoUsersInfo.error||"onbekend")+"). Koppel elk UserId één keer handmatig - dat onthoud ik voortaan.</span>")+
-      " Herken je 'm niet? Open de voorbeeld-order even in Logic4.</p>"+
+        : "<span style='color:var(--warn)'>Medewerkers automatisch ophalen vraagt een nieuwe poging ("+esc(autoUsersInfo.error||"onbekend")+"). Koppel elk UserId één keer handmatig - dat onthoud ik voortaan.</span>")+
+      " Twijfel je wie het is? Open de voorbeeld-order even in Logic4.</p>"+
     "<table class='grid'><thead><tr><th>UserId</th><th>Spa-regels</th><th>Voorbeeld-order</th><th>Adviseur</th></tr></thead><tbody>"+rows+"</tbody></table>"+
     "</div>";
   panel.querySelectorAll("select").forEach(function(se){
@@ -1739,16 +1739,16 @@ function diagWrap(inner){
 function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode, undetected){
   const b=[];
   b.push("<b>"+scanned+"</b> orders opgehaald · <b>"+onDay+"</b> op deze dag · <b>"+verkocht.length+"</b> met status Verkooporder/30% · <b>"+rowsTotal+"</b> orderregels (waarvan "+rowsWithCode+" met productcode) · <b>"+lines.length+"</b> spa-regels herkend.");
-  b.push("<b>Medewerkers automatisch ophalen (/v3/User/GetAllUsers):</b> "+(autoUsersInfo.ok ? ("✓ "+autoUsersInfo.count+" geladen - velden: <code>"+esc(autoUsersInfo.sampleKeys)+"</code>") : ("mislukt - "+esc(autoUsersInfo.error||"?"))));
+  b.push("<b>Medewerkers automatisch ophalen (/v3/User/GetAllUsers):</b> "+(autoUsersInfo.ok ? ("✓ "+autoUsersInfo.count+" geladen - velden: <code>"+esc(autoUsersInfo.sampleKeys)+"</code>") : ("nieuwe poging nodig - "+esc(autoUsersInfo.error||"?"))));
   if (!verkocht.length){ document.getElementById("diag").innerHTML = diagWrap(b.join("<br>")); return; }
   if (rowsTotal===0){
-    b.push("<b style='color:#b91c1c'>Geen orderregels in de respons</b> - GetOrders levert de regels mogelijk niet mee onder 'OrderRows'. Zie de top-level velden hieronder; anders haal ik ze per order op via GetOrderRows.");
+    b.push("<b style='color:#b91c1c'>De respons bevat 0 orderregels</b> - GetOrders levert de regels mogelijk apart aan, buiten 'OrderRows'. Zie de top-level velden hieronder; anders haal ik ze per order op via GetOrderRows.");
   }
   const o = verkocht[0];
   const keys = Object.keys(o).sort();
   b.push("<b>Voorbeeld-order "+o.Id+" - alle top-level velden:</b><br><code style='font-size:10px'>"+esc(keys.join(", "))+"</code>");
   const advCand = keys.filter(k=>/user|sales|employ|medewerk|adviseur|verkoop|account|rep/i.test(k));
-  const advDump = advCand.map(k=>"<code>"+esc(k)+"</code> = "+esc(JSON.stringify(o[k]).slice(0,90))).join("<br>") || "(geen voor de hand liggend adviseur-veld)";
+  const advDump = advCand.map(k=>"<code>"+esc(k)+"</code> = "+esc(JSON.stringify(o[k]).slice(0,90))).join("<br>") || "(adviseur-veld nog te vinden)";
   b.push("<b>Mogelijke adviseur-velden op order "+o.Id+":</b><br>"+advDump);
   const firstRow = (o.OrderRows && o.OrderRows[0]) || null;
   if (firstRow){
@@ -1765,7 +1765,7 @@ function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode, un
     }
     if (sampleRows.length>=20) break;
   }
-  b.push("<b>Voorbeeld orderregels (code | aantal | omschrijving):</b><br>"+(sampleRows.join("<br>")||"(geen orderregels gevonden)"));
+  b.push("<b>Voorbeeld orderregels (code | aantal | omschrijving):</b><br>"+(sampleRows.join("<br>")||"(0 orderregels gevonden)"));
   if (lines.length){
     const adv={}; for (const l of lines) adv[l.adviseur]=(adv[l.adviseur]||0)+1;
     b.push("<b>Adviseur-waarden in herkende spa-regels:</b> "+Object.keys(adv).map(k=>esc(k)+" ("+adv[k]+")").join(", "));
@@ -1774,7 +1774,7 @@ function renderDiag(scanned, onDay, verkocht, lines, rowsTotal, rowsWithCode, un
   if (undetected){
     const us = Object.keys(undetected).sort((a,b2)=>undetected[b2]-undetected[a]);
     if (us.length){
-      b.push("<b>Niet-herkende orderregels ("+us.length+" unieke, top 30 - staat hier een gemiste spa tussen?):</b><br>"+
+      b.push("<b>Nog te herkennen orderregels ("+us.length+" unieke, top 30 - staat hier een gemiste spa tussen?):</b><br>"+
         us.slice(0,30).map(d=>esc(d)+" <span style='color:var(--muted)'>("+undetected[d]+")</span>").join("<br>"));
     }
   }
@@ -1808,7 +1808,7 @@ async function loadOverzicht(){
     ]);
     ovCodeKleur=bouwCodeKleur(cat);
     renderOverzicht(resv,hal,ship,prices,prod);
-  }catch(e){ document.getElementById("ovKpis").innerHTML="<div class='status-msg bad'>Overzicht laden faalde: "+esc(e.message)+"</div>"; }
+  }catch(e){ document.getElementById("ovKpis").innerHTML="<div class='status-msg bad'>Overzicht laden vraagt een nieuwe poging: "+esc(e.message)+"</div>"; }
 }
 const PRICES_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/dealer-prices";
 const CATALOG_URL_OV="https://fonteyn-data-store.g-mulder.workers.dev/data/spa-catalog";
@@ -1952,7 +1952,7 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
   // stand van nu, terwijl het openstaande regels zijn uit orders die tot een
   // jaar terug kunnen lopen - en dan klopt "actueel" niet met wat je ziet.
   const bereik=document.getElementById("ovBereik");
-  if(bereik) bereik.innerHTML="Alle getallen zijn <b>nog niet geleverde</b> orderregels: wat er openstaat, niet wat er is verkocht. "+
+  if(bereik) bereik.innerHTML="Alle getallen zijn <b>nog te leveren</b> orderregels: ze tonen wat er openstaat, los van het totaal verkocht. "+
     "Reserveringen komen uit orders van het afgelopen jaar"+
     (ovContainerOudste?(", de oudste containerorder is van "+esc(datumNL(ovContainerOudste))):"")+
     ". Zodra een regel is geleverd valt hij hier vanzelf uit.";
@@ -2051,7 +2051,7 @@ function kleurNormaal(k){
    tot het tekort in de modelregel. */
 function kleurTabel(r){
   const rijen=(r.perKleur||[]).filter(x=>x.gevraagd>0||x.voorraad>0||x.productie>0);
-  if(!rijen.length) return "<p class='lead' style='margin:0'>Geen kleurgegevens.</p>";
+  if(!rijen.length) return "<p class='lead' style='margin:0'>Kleurgegevens zijn nog leeg.</p>";
   /* Wat in productie staat telt nu PER KLEUR mee, niet alleen onderaan.
      ═══════════════════════════════════════════════════════════════════════
      Chantal (video, 14 sep 2026): "Mystic Mountain met Grey: er worden er 11
@@ -2085,17 +2085,17 @@ function kleurTabel(r){
         "<td style='color:"+(open?"#b91c1c;font-weight:700":"#15803d")+"'>"+(open||"0")+"</td></tr>";
     }).join("")+
     regel("samen nog te dekken (na voorraad en productie)",teDekken,null,true)+
-    (zee?regel("af: op zee, kleur nog niet bekend","-"+zee,"#2563eb"):"")+
+    (zee?regel("af: op zee, kleur volgt","-"+zee,"#2563eb"):"")+
     regel("blijft over - dit is het tekort",rest,rest>0?"#b91c1c":"#15803d",true)+
     "</tbody></table></div>"+
-    (zee?("<p class='lead' style='font-size:11.5px;margin:6px 0 0'>De "+zee+" stuks op zee staan niet per kleur in de "+
-      "commercial invoices, dus welke kleuren daarmee gedekt zijn is nog niet te zeggen. Bestel pas bij als je weet "+
+    (zee?("<p class='lead' style='font-size:11.5px;margin:6px 0 0'>De "+zee+" stuks op zee staan in de "+
+      "commercial invoices zonder kleur, dus welke kleuren daarmee gedekt zijn blijkt later. Bestel pas bij als je weet "+
       "welke kleuren er aan boord zitten.</p>"):"")+
     (function(){
       const verdeeld=rijen.reduce((n,x)=>n+x.voorraad,0);
       const over=Math.max(0,(Number(r.voorraad)||0)-verdeeld);
       return over?("<p class='lead' style='font-size:11.5px;margin:6px 0 0;color:#92400e'><b>"+over+"</b> stuks op voorraad "+
-        "waarvan de kleur niet te bepalen was; die staan hierboven nergens bij.</p>"):"";
+        "waarvan de kleur nog onbekend is; die staan los van de kleuren hierboven.</p>"):"";
     })();
 }
 function kleurChips(list){
@@ -2127,7 +2127,7 @@ function productieBlok(r){
   const alVaart=(r.prodRuw||0)-(r.prodQty||0);
   return "<div style='font-size:11px;color:#7c3aed;text-transform:uppercase;letter-spacing:.03em;margin:10px 0 4px'>In productie bij de fabriek</div>"+
     (alVaart>0?("<div style='font-size:11px;color:var(--muted);margin-bottom:4px'>Van deze "+(r.prodRuw||0)+
-      " staan er "+alVaart+" al op een schip. Die tellen bij Op zee en niet nog een keer hier, dus "+
+      " staan er "+alVaart+" al op een schip. Die tellen al bij Op zee, dus "+
       (r.prodQty||0)+" ligt er nog bij de fabriek.</div>"):"")+
     "<table class='grid' style='font-size:12px'><thead><tr><th>Kleur</th><th style='text-align:right'>Aantal</th><th>Inkooporder</th><th>Verwacht</th></tr></thead><tbody>"+
     lijst.map(function(g){
@@ -2135,18 +2135,18 @@ function productieBlok(r){
       return "<tr><td>"+esc(g.kleur)+"</td>"+
         "<td style='text-align:right;font-weight:600'>"+g.qty+"</td>"+
         "<td style='color:var(--muted)'>"+esc([...g.ikos].join(", "))+"</td>"+
-        "<td style='color:var(--muted)'>"+(etas.length?esc(etas.map(datumNL).join(", ")):"nog geen datum")+"</td></tr>";
+        "<td style='color:var(--muted)'>"+(etas.length?esc(etas.map(datumNL).join(", ")):"datum volgt")+"</td></tr>";
     }).join("")+"</tbody></table>";
 }
 function renderBacklog(){
   const body=document.getElementById("ovBacklog");
-  if(!ovBacklogRows.length){ body.innerHTML="<tr><td colspan='7' style='color:var(--muted)'>Geen data. Draait de uur-sync al?</td></tr>"; return; }
+  if(!ovBacklogRows.length){ body.innerHTML="<tr><td colspan='7' style='color:var(--muted)'>Data volgt na de uur-sync. Blijft dit leeg, kijk dan of de uur-sync draait.</td></tr>"; return; }
   const zoekEl=document.getElementById("ovBestelZoek");
   const q=((zoekEl&&zoekEl.value)||"").trim().toLowerCase();
   const rijen=q?ovBacklogRows.filter(r=>String(r.m||"").toLowerCase().includes(q)):ovBacklogRows;
   const telEl=document.getElementById("ovBestelTel");
   if(telEl) telEl.textContent=q?(rijen.length+" van "+ovBacklogRows.length+" modellen"):(ovBacklogRows.length+" modellen");
-  if(!rijen.length){ body.innerHTML="<tr><td colspan='7' style='color:var(--muted)'>Geen model gevonden voor '"+esc(q)+"'.</td></tr>"; return; }
+  if(!rijen.length){ body.innerHTML="<tr><td colspan='7' style='color:var(--muted)'>0 modellen voor '"+esc(q)+"'.</td></tr>"; return; }
   body.innerHTML=rijen.map(r=>{
     const open=!!ovBacklogOpen[r.m];
     let h="<tr class='ovBackRow' data-m='"+esc(r.m)+"' style='cursor:pointer'><td>"+(open?"▾ ":"▸ ")+"<b>"+esc(r.m)+"</b></td>"+
@@ -2187,8 +2187,8 @@ function toonParserWaarschuwing(){
   const oud=(ovShipsCache||[]).filter(s=>!s.parser||s.parser<2);
   if(!oud.length){ el.classList.add("hidden"); return; }
   el.classList.remove("hidden");
-  el.innerHTML="<b>'Op zee' klopt nog niet voor alle modellen.</b> "+oud.length+
-    " commercial invoice(s) zijn ingelezen toen de Passion Devine-codes (PP01 Reflect, PP02 Retreat, PP03 Resettle) nog niet herkend werden - die spa's ontbreken daardoor in de lading. Upload ze bij <b>Schepen</b> één keer opnieuw.";
+  el.innerHTML="<b>'Op zee' vraagt nog een correctie voor een paar modellen.</b> "+oud.length+
+    " commercial invoice(s) zijn ingelezen toen de Passion Devine-codes (PP01 Reflect, PP02 Retreat, PP03 Resettle) nog onbekend waren - die spa's staan daardoor nog buiten de lading. Upload ze bij <b>Schepen</b> één keer opnieuw.";
 }
 function renderOvShips(){
   const q=((document.getElementById("ovShipSearch")||{}).value||"").trim().toLowerCase();
@@ -2209,8 +2209,8 @@ function renderOvShips(){
   const body=document.getElementById("ovShips");
   const tel=document.getElementById("ovShipCount");
   if(tel) tel.textContent=q?(ships.length+" van "+alle.length+" schepen"):(alle.length+" schepen");
-  if(!alle.length){ body.innerHTML="<tr><td colspan='4' style='color:var(--muted)'>Geen schepen. Upload commercial invoices bij Schepen.</td></tr>"; return; }
-  if(!ships.length){ body.innerHTML="<tr><td colspan='4' style='color:var(--muted)'>Niets gevonden voor '"+esc(q)+"'.</td></tr>"; return; }
+  if(!alle.length){ body.innerHTML="<tr><td colspan='4' style='color:var(--muted)'>Upload commercial invoices bij Schepen, dan verschijnen de schepen hier.</td></tr>"; return; }
+  if(!ships.length){ body.innerHTML="<tr><td colspan='4' style='color:var(--muted)'>0 treffers voor '"+esc(q)+"'.</td></tr>"; return; }
   let html="";
   ships.forEach(s=>{
     const n=Object.values(s.models||{}).reduce((a,b)=>a+b,0);
@@ -2233,7 +2233,7 @@ function renderOvShips(){
         const cols=mc[m]?Object.entries(mc[m]).sort((a,b)=>b[1]-a[1])
           .map(([k,n2])=>"<span class='pill' style='background:#eef2ff;color:#3730a3;margin:1px 3px 0 0'>"+esc(k)+" <b>"+n2+"</b></span>").join(""):"";
         return "<li style='margin-bottom:4px'>"+esc(m)+" - <b>"+aantal+"×</b>"+(cols?"<br>"+cols:"")+"</li>";
-      }).join("")||"<li style='color:var(--muted)'>(geen spa's herkend)</li>";
+      }).join("")||"<li style='color:var(--muted)'>(0 spa's herkend)</li>";
       const heeftKleur=Object.keys(mc).length>0;
       html+="<tr><td colspan='4' style='background:#fafafa;padding:8px 14px'><ul style='margin:0;list-style:none;padding:0;font-size:13px'>"+items+"</ul>"+
         ovSpecialsHtml(s.specials)+
@@ -2346,7 +2346,7 @@ function kleurCel(k,r,badgeStaatAlBijSpa){
   return kleur+extra+gew;
 }
 function renderReserveringen(){
-  document.getElementById("resvUpdated").textContent = resvData.updated ? ("Laatst ververst: "+new Date(resvData.updated).toLocaleString("nl-NL")) : "(nog niet geladen)";
+  document.getElementById("resvUpdated").textContent = resvData.updated ? ("Laatst ververst: "+new Date(resvData.updated).toLocaleString("nl-NL")) : "(nog te laden)";
   const q=(document.getElementById("resvSearch").value||"").trim().toLowerCase();
   const ov=document.getElementById("resvOverview");
   const all=Object.keys(resvData.byModel);
@@ -2359,7 +2359,7 @@ function renderReserveringen(){
   const zichtbaar=m=>(resvData.byModel[m]||[]).filter(r=>!r.container&&kleurMatch(r,gekozenKleur));
   const models=all.filter(m=>zichtbaar(m).some(r=>resvMatch(r,m,q)))
     .sort((a,b)=>zichtbaar(b).length-zichtbaar(a).length);
-  if(!models.length){ ov.innerHTML="<p class='lead'>Geen reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
+  if(!models.length){ ov.innerHTML="<p class='lead'>0 reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
   let html="<table class='grid'><thead><tr><th>Model</th><th>Actief</th><th>Betaald</th><th>Wacht</th></tr></thead><tbody>";
   for(const m of models){
     const lines=zichtbaar(m).filter(r=>resvMatch(r,m,q));
@@ -2514,7 +2514,7 @@ async function saveNotities(){
       body:JSON.stringify({regels:notities,updated:new Date().toISOString()})});
     if(!r.ok) throw new Error("HTTP "+r.status);
     mijnVuil.forEach(function(k){ notitiesVuil.delete(k); });
-  }catch(e){ setStatus("bad","Opslaan aantekening faalde: "+e.message+" - probeer het vinkje zo nog eens."); }
+  }catch(e){ setStatus("bad","Opslaan aantekening vraagt een nieuwe poging: "+e.message+" - zet het vinkje zo nog eens."); }
 }
 
 /* Live meekijken met elkaar. Spa planning (video, 24 aug 2026): "op het
@@ -2730,7 +2730,7 @@ async function planAfspraak(r){
          van de pagina: wie de tegel opende vóór het dashboard de sleutel
          zette, had anders een lege sleutel in handen. */
       const sleutel = localStorage.getItem("fp.teamkey") || "";
-      if (!sleutel) throw new Error("deze computer heeft nog geen teamsleutel. Ga één keer terug naar het Dashboard en open deze tegel opnieuw");
+      if (!sleutel) throw new Error("deze computer heeft de teamsleutel nog nodig. Ga één keer terug naar het Dashboard en open deze tegel opnieuw");
       /* Alleen de afspraak zelf gaat over de lijn; de worker voegt hem toe
          aan de agenda. Eerder las en schreef dit venster de hele agenda, en
          dat liep bij de planners vast op een 403 die niet uit de worker
@@ -2746,11 +2746,11 @@ async function planAfspraak(r){
         try { uitleg = (await put.text()).slice(0, 300); } catch(e){}
         let j = null; try { j = JSON.parse(uitleg); } catch(e){}
         const reden = (j && j.error) ? j.error
-          : (/<html|<!doctype/i.test(uitleg) ? "het verzoek is onderweg tegengehouden (geen antwoord van het dashboard zelf)" : uitleg);
+          : (/<html|<!doctype/i.test(uitleg) ? "het verzoek is onderweg tegengehouden (het antwoord kwam van buiten het dashboard)" : uitleg);
         /* Vastleggen wát er misging, zodat het de volgende keer in het
            logboek staat en niet alleen op het scherm van de planner. */
         try{ if(window.fpLog) window.fpLog("afspraak-plannen-mislukt", "HTTP "+put.status+" - "+reden.slice(0,200)+" - order "+afspraak.ordernr); }catch(e){}
-        throw new Error("bewaren mislukte (HTTP "+put.status+(reden?" - "+reden:"")+")");
+        throw new Error("de agenda gaf een melding (HTTP "+put.status+(reden?" - "+reden:"")+")");
       }
       seinPlanning();     // openstaande Planning-schermen meteen bijwerken
       try{ if(window.fpLog) window.fpLog("afspraak-gepland-vanuit-voorraad",
@@ -2759,7 +2759,7 @@ async function planAfspraak(r){
       setStatus("ok","Afspraak staat in Planning: "+afspraak.datum+(afspraak.tijd?" om "+afspraak.tijd:"")+" bij "+afspraak.klant+".");
     }catch(e){
       mel.style.color = "var(--bad)";
-      mel.textContent = "Niet gelukt: "+e.message+" Het vinkje Gepland staat wel goed; je kunt de afspraak ook in Planning zelf zetten.";
+      mel.textContent = "In de agenda zetten vraagt een nieuwe poging: "+e.message+" Het vinkje Gepland staat goed; je kunt de afspraak ook in Planning zelf zetten.";
       this.disabled = false; this.textContent = "In de agenda zetten";
     }
   });
@@ -3097,7 +3097,7 @@ function fabrieksRegel(r){
      verschil zichtbaar tussen "we weten van welke bestelling hij komt" en
      "er ligt nog geen bestelling". */
   if(r && r.verwacht==="productie" && !r.verwachtIko)
-    return " <span class='fab' title='er ligt bij de fabriek nog geen bestelling waar deze spa van kan komen' style='font-size:11px;color:#b91c1c'>nog niet besteld</span>";
+    return " <span class='fab' title='bij de fabriek moet voor deze spa nog een bestelling worden geplaatst' style='font-size:11px;color:#b91c1c'>nog te bestellen</span>";
   if(!r || (!r.verwachtIko && !r.verwachtEta)) return "";
   var stukken = [];
   if(r.verwachtIko) stukken.push("<b>"+esc(fabriekKort(r.verwachtFabriek)||"inkooporder")+" "+esc(r.verwachtIko)+"</b>");
@@ -3144,7 +3144,7 @@ function leveringCel(r,n,id,uit){
       +fabrieksRegel(r);
   // Een keuze die nergens meer op slaat mag niet stilzwijgend verdwijnen.
   if(n.schip && !gekozen)
-    kop += " <span style='color:var(--warn);font-size:11px'>(gekozen zending bestaat niet meer)</span>";
+    kop += " <span style='color:var(--warn);font-size:11px'>(gekozen zending is vervallen, kies opnieuw)</span>";
   var lijst = schepenOnderweg();
   // De gekozen zending hoort in de lijst te blijven staan, ook als hij binnen
   // is; anders zou het vakje op "automatisch" springen terwijl er wel degelijk
@@ -3207,8 +3207,8 @@ function renderResvSoort(soort,zoekId,lijstId,telId,modus){
     : (rijen.length+" reservering(en) · "+totaal+" spa's"+(resvData.updated?(" · ververst "+new Date(resvData.updated).toLocaleString("nl-NL")):""));
   if(!rijen.length){
     box.innerHTML="<p class='lead'>"+(alleenGepland
-      ? "Nog niets op gepland gezet."
-      : ("Geen reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+"."))+"</p>";
+      ? "Hier komen de regels die je op gepland zet."
+      : ("0 reserveringen gevonden"+(q?" voor '"+esc(q)+"'":"")+"."))+"</p>";
     return;
   }
   const uit=!MAG_WIJZIGEN?" disabled":"";
@@ -3329,7 +3329,7 @@ function koppelNotitieVelden(box,rijen){
       const naarPartner=!isZakelijk(r);
       const naar=naarPartner?"dealer":"particulier";
       if(!confirm(esc(r.naam)+" ("+r.ordernr+", "+r.model+") "+(naarPartner?"als partner":"als particulier")+" aanmerken?\n\n"+
-                  "Dat geldt voor deze klant, dus voor al zijn orders - ook de volgende. In Logic4 verandert er niets.\n"+
+                  "Dat geldt voor deze klant, dus voor al zijn orders - ook de volgende. Logic4 blijft zoals het is.\n"+
                   "Terugdraaien kan met dezelfde knop op de andere kant.")) return;
       b.disabled=true;
       await setKlantType(r.debtorId, naar);
@@ -3342,7 +3342,7 @@ function koppelNotitieVelden(box,rijen){
     b.addEventListener("click",function(){
       const r=perId[b.dataset.id]; if(!r) return;
       if(!confirm("Order "+r.ordernr+" ("+r.model+", "+r.naam+") uit het dashboard halen?\n\n"+
-                  "De regel verdwijnt uit alle lijsten van deze tegel. In Logic4 verandert er niets.\n"+
+                  "De regel verdwijnt uit alle lijsten van deze tegel. Logic4 blijft zoals het is.\n"+
                   "Terughalen kan met het vinkje 'verwijderde regels tonen' bovenaan.")) return;
       zetNotitie(r,"verwijderd",true);
       try{ if(window.fpLog) window.fpLog("reservering-verwijderd",r.ordernr+" "+r.model+" ("+r.naam+")"); }catch(e){}
@@ -3486,7 +3486,7 @@ function renderParticulierBlok(){
     : "";
   const rijen=partBlokTransport?alleRijen.filter(function(r){ return (kortTransport(r.transport||"")||"(geen)")===partBlokTransport; }):alleRijen;
   if(!rijen.length){
-    lijst.innerHTML=filterHtml+"<p class='lead'>Niets in deze lijst. Vink hierboven <b>"+
+    lijst.innerHTML=filterHtml+"<p class='lead'>Deze lijst is nog leeg. Vink hierboven <b>"+
       (partBlokActief==="afroep"?"Afroep":"Inplannen")+"</b> aan bij een reservering.</p>";
   }else{
     rijen.sort(function(a,b){
@@ -3586,7 +3586,7 @@ function renderAdviseurTabs(){
   const telEl=document.getElementById("ptnAdvTotaal"); if(telEl) telEl.textContent=totaal;
   if(!binnen.length){
     tabs.innerHTML="";
-    lijst.innerHTML="<p class='lead'>Nog niets binnengemeld. Vink hierboven <b>Inplannen</b> aan bij een reservering waarvan de spa binnen is.</p>";
+    lijst.innerHTML="<p class='lead'>Hier komen de binnengemelde spa's. Vink hierboven <b>Inplannen</b> aan bij een reservering waarvan de spa binnen is.</p>";
     return;
   }
   const perAdviseur={};
@@ -3714,12 +3714,12 @@ function pcEtaInfo(o){
   const nr=String(o.containerNr||"").trim();
   const schip=pcSchipVan(o);
   if(!schip) return {eta:null, reden: nr
-    ? "nog geen commercial invoice voor "+nr
-    : "geen containernummer in Logic4"};
+    ? "commercial invoice volgt voor "+nr
+    : "containernummer nog in te vullen in Logic4"};
   if(schip.eta) return {eta:schip.eta, bron:"invoice", schip:schip};
   // Merzario weet het soms wél, ook als de datum hier nog niet is ingevuld.
   if(schip.track&&schip.track.eta) return {eta:schip.track.eta, bron:"tracking", schip:schip};
-  return {eta:null, schip:schip, reden:"invoice is er, ETA nog niet ingevuld"};
+  return {eta:null, schip:schip, reden:"invoice is er, ETA nog in te vullen"};
 }
 function pcEta(o){ return pcEtaInfo(o).eta; }
 function pcMatch(o,q){
@@ -3735,7 +3735,7 @@ function renderPartnerContainers(){
   const tel=document.getElementById("pcCount");
   const stuks=orders.reduce((n,o)=>n+o.qty,0);
   if(tel) tel.textContent=orders.length+" container-order(s) · "+stuks+" spa's"+(resvData.updated?(" · ververst "+new Date(resvData.updated).toLocaleString("nl-NL")):"");
-  if(!orders.length){ box.innerHTML="<p class='lead'>Geen container-orders gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
+  if(!orders.length){ box.innerHTML="<p class='lead'>0 container-orders gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
   let html="<div class='tablewrap'><table class='grid'><thead><tr>"+
     "<th>Ordernummer</th><th>Container</th><th>Klant</th><th>Datum</th><th>Betaling</th><th>ETA</th><th>Cargo ready</th></tr></thead><tbody>";
   for(const o of orders){
@@ -3782,8 +3782,8 @@ function renderPartnerContainers(){
           ? "<div style='font-size:11px;color:var(--warn);margin-top:4px'>"+
             (etaInfo.schip
               ? "De commercial invoice van container "+esc(o.containerNr)+" is ingelezen ("+esc(etaInfo.schip.vessel||etaInfo.schip.ref)+
-                "), maar er staat nog geen ETA bij. Vul die in bij <b>Schepen &amp; ontvangst</b>."
-              : "Nog geen ETA - upload de commercial invoice van container "+esc(o.containerNr)+".")+
+                "), de ETA volgt nog. Vul die in bij <b>Schepen &amp; ontvangst</b>."
+              : "ETA volgt - upload de commercial invoice van container "+esc(o.containerNr)+".")+
             "</div>"
           : "")+
         pcPaneel(o)+
@@ -3878,7 +3878,7 @@ function pcPaneel(o){
   let h="<div class='pcPaneel' style='margin-top:12px;border-top:1px solid #e5e7eb;padding-top:10px;display:grid;gap:9px;font-size:12.5px'>";
   h+="<div><b>Proforma van Jazzi</b>: "+(s.proforma
       ? "<a href='#' class='pcDoc' data-id='"+esc(s.proforma.id)+"'>"+esc(s.proforma.naam)+"</a> <span style='color:var(--muted)'>("+esc(String(s.proforma.door||"").split("@")[0])+", "+esc(pcDagTijd(s.proforma.ts))+")</span>"
-      : "<span style='color:var(--muted)'>nog geen proforma</span>")+
+      : "<span style='color:var(--muted)'>proforma volgt</span>")+
     "<div style='margin-top:5px'><input type='file' class='pcProforma' data-k='"+esc(k)+"' accept='.pdf,.xlsx,.xls'></div></div>";
   h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>Akkoord gegeven op</b>"+
     "<input type='date' class='pcAkkoord' data-k='"+esc(k)+"' value='"+esc(s.akkoord||"")+"' style='padding:4px 6px;font:inherit;font-size:12.5px'>"+
@@ -3922,7 +3922,7 @@ function pcPaneel(o){
           (x.bedragUsd!=null?" <span style='color:var(--muted)'>("+esc(pcUsd(x.bedragUsd))+")</span>":(x.openstaand!=null?" <span style='color:var(--muted)'>("+esc(pcGeld(x.openstaand))+")</span>":""))+
           (x.bijlage?"<div style='font-size:10.5px;color:var(--muted)'>bijlage "+esc(x.bijlage)+"</div>":"")+"</td><td>"+esc(x.naar)+(x.cc?"<div style='font-size:10.5px;color:var(--muted)'>cc "+esc(x.cc)+"</div>":"")+"</td><td>"+esc(String(x.door||"").split("@")[0])+"</td></tr>").join("")+
         "</tbody></table>"
-      : " <span style='color:var(--muted)'>nog niets</span>")+"</div>";
+      : " <span style='color:var(--muted)'>0 tot nu toe</span>")+"</div>";
   return h+"</div>";
 }
 async function pcZet(k,body){
@@ -3940,7 +3940,7 @@ async function pcMailOpstellen(k,soort,taal){
     if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
     const oud=pcMail[k]&&pcMail[k].bijlage;
     pcMail[k]={soort,naar:j.naar||j.standaardNaar||"",cc:j.cc||"",taal:j.taal,onderwerp:j.onderwerp,tekst:j.tekst,bijlage:oud||null};
-  }catch(e){ pcMail[k]={soort,naar:"",taal:taal||"en",onderwerp:"",tekst:"",melding:"Opstellen lukte niet: "+e.message,fout:true}; }
+  }catch(e){ pcMail[k]={soort,naar:"",taal:taal||"en",onderwerp:"",tekst:"",melding:"Opstellen vraagt een nieuwe poging: "+e.message,fout:true}; }
   renderPartnerContainers();
 }
 async function pcStuur(k,test){
@@ -3954,7 +3954,7 @@ async function pcStuur(k,test){
     if(test){ m.melding="Verstuurd naar "+j.naar+" - kijk in je mail hoe hij eruitziet."; renderPartnerContainers(); return; }
     delete pcMail[k];
     await laadPcStand();
-  }catch(e){ m.melding="Versturen lukte niet: "+e.message; m.fout=true; renderPartnerContainers(); }
+  }catch(e){ m.melding="Versturen vraagt een nieuwe poging: "+e.message; m.fout=true; renderPartnerContainers(); }
 }
 function pcKoppelPaneel(box){
   box.querySelectorAll(".pcDoc").forEach(a=>a.addEventListener("click",e=>{ e.preventDefault(); openSchipDocument(a); }));
@@ -3964,10 +3964,10 @@ function pcKoppelPaneel(box){
     try{
       const doc=await bewaarSchipBestand("partnercontainer-"+k,f,"proforma");
       await pcZet(k,{proforma:{id:doc.id,naam:f.name}});
-    }catch(e){ alert("De proforma kon niet worden bewaard: "+e.message); }
+    }catch(e){ alert("Bewaren van de proforma vraagt een nieuwe poging: "+e.message); }
   }));
   box.querySelectorAll(".pcAkkoord").forEach(inp=>inp.addEventListener("change",async()=>{
-    try{ await pcZet(inp.dataset.k,{akkoord:inp.value||null}); }catch(e){ alert("Opslaan lukte niet: "+e.message); }
+    try{ await pcZet(inp.dataset.k,{akkoord:inp.value||null}); }catch(e){ alert("Opslaan vraagt een nieuwe poging: "+e.message); }
   }));
   box.querySelectorAll(".pcOpstellen").forEach(b=>b.addEventListener("click",()=>pcMailOpstellen(b.dataset.k,b.dataset.soort)));
   box.querySelectorAll(".pcM").forEach(inp=>inp.addEventListener("input",()=>{ const m=pcMail[inp.dataset.k]; if(m) m[inp.dataset.veld]=inp.value; }));
@@ -4008,7 +4008,7 @@ function tekenPcTeksten(){
       const r=await fetch(PC_URL+"/tekst",{method:"POST",headers:pcKop(true),body:JSON.stringify({tekst})});
       const j=await r.json().catch(()=>({})); if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
       pcStand.tekst=j.tekst; st.textContent="Bewaard. Nieuwe mails gebruiken deze tekst.";
-    }catch(e){ st.textContent="Bewaren lukte niet: "+e.message; }
+    }catch(e){ st.textContent="Bewaren vraagt een nieuwe poging: "+e.message; }
   });
 }
 laadPcStand();
@@ -4051,7 +4051,7 @@ async function laadStock(){
     const t=setTimeout(()=>stop.abort(),20000);
     return fetch(url,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH},signal:stop.signal})
       .then(r=>{ clearTimeout(t);
-        if(!r.ok) throw new Error("HTTP "+r.status+(r.status===401?" - de teamsleutel ontbreekt op deze computer; log opnieuw in via het dashboard":""));
+        if(!r.ok) throw new Error("HTTP "+r.status+(r.status===401?" - deze computer heeft de teamsleutel nog nodig; log opnieuw in via het dashboard":""));
         return r.json(); });
   };
   try{
@@ -4062,9 +4062,9 @@ async function laadStock(){
     stockData={hal:hal||{},codeKleur:bouwCodeKleur(cat)};
     renderStock();
   }catch(e){
-    const reden=e.name==="AbortError"?"geen antwoord binnen 20 seconden (netwerk?)":e.message;
+    const reden=e.name==="AbortError"?"20 seconden gewacht op antwoord (netwerk?)":e.message;
     try{ if(window.fpLog) window.fpLog("stock-laden-faalde",reden); }catch(x){}
-    box.innerHTML="<div class='status-msg bad'>Voorraad laden faalde: "+esc(reden)+
+    box.innerHTML="<div class='status-msg bad'>Voorraad laden vraagt een nieuwe poging: "+esc(reden)+
       " <button type='button' id='stockRetry' style='margin-left:10px;padding:6px 14px;font:inherit;cursor:pointer;border:1px solid var(--border);border-radius:7px;background:#fff'>Opnieuw proberen</button></div>";
     const k=document.getElementById("stockRetry");
     if(k) k.addEventListener("click",function(){ stockData=null; laadStock(); });
@@ -4109,7 +4109,7 @@ function renderStock(){
   if(tel) tel.textContent=rijen.length+" model(len) · "+totVrij+" vrij · "+totFys+" fysiek"+
     (stockData.hal.updated?(" · ververst "+new Date(stockData.hal.updated).toLocaleString("nl-NL")):"");
 
-  if(!rijen.length){ box.innerHTML="<p class='lead'>Niets gevonden"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
+  if(!rijen.length){ box.innerHTML="<p class='lead'>0 treffers"+(q?" voor '"+esc(q)+"'":"")+".</p>"; return; }
   box.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr>"+
     /* De betekenis van de kolommen hoort in de tabel te staan en niet alleen
        in een alinea erboven (Chantal, 29 aug 2026). Vandaar de tweede regel
@@ -4117,7 +4117,7 @@ function renderStock(){
     "<th>Spa</th>"+
     "<th style='text-align:right' title='Wat er nog te verkopen is: de voorraad min de orders die er al aan hangen. Dit is hetzelfde getal als op het tabblad Overzicht.'>Vrij"+
       "<div style='font-weight:400;font-size:10.5px;color:var(--muted);text-transform:none;letter-spacing:0'>nog te verkopen</div></th>"+
-    "<th style='text-align:right' title='Alles wat er werkelijk in de hallen in Uddel staat, alle kleuren samen, inclusief wat al verkocht of gereserveerd is maar nog niet is opgehaald.'>Fysiek"+
+    "<th style='text-align:right' title='Alles wat er werkelijk in de hallen in Uddel staat, alle kleuren samen, inclusief wat al verkocht of gereserveerd is en nog op ophalen wacht.'>Fysiek"+
       "<div style='font-weight:400;font-size:10.5px;color:var(--muted);text-transform:none;letter-spacing:0'>staat er, ook al verkocht</div></th>"+
     "<th style='text-align:right' title='Fysiek min vrij: staat er wel, maar hangt al aan een order.'>Al verkocht"+
       "<div style='font-weight:400;font-size:10.5px;color:var(--muted);text-transform:none;letter-spacing:0'>fysiek min vrij</div></th>"+
@@ -4142,7 +4142,7 @@ function renderStock(){
                 return "<div style='font-size:12px'>"+stuk+esc(v.kleur)+
                   " <span style='color:var(--muted);font-size:11px'>"+esc(v.code)+"</span></div>"; }).join("")
             : "<span style='font-size:12px;color:var(--muted)'>"+r.varianten.length+" kleur(en)</span>")
-        : "<span style='font-size:12px;color:var(--muted)'>geen verdeling bekend</span>";
+        : "<span style='font-size:12px;color:var(--muted)'>verdeling volgt</span>";
       return "<tr class='stockRij' data-model='"+esc(r.model)+"' style='cursor:pointer'>"+
         "<td><b>"+esc(r.model)+"</b></td>"+
         "<td style='text-align:right;font-weight:600"+(r.vrij>0?";color:#15803d":";color:var(--muted)")+"'>"+r.vrij+"</td>"+
@@ -4174,7 +4174,7 @@ function verkochtStand(r){
   const pct=Number(r.betaaldPct);
   if(r.betaald && (!isFinite(pct) || pct>=99.5)) return {kleur:"#16a34a",naam:"volledig betaald"};
   if(r.betaald || pct>0) return {kleur:"#f97316",naam:"aanbetaald"+(isFinite(pct)&&pct>0?" ("+Math.round(pct)+"%)":"")};
-  return {kleur:"#dc2626",naam:"niets betaald"};
+  return {kleur:"#dc2626",naam:"wacht op betaling"};
 }
 function koppelVerkochtHover(box){
   let tip=document.getElementById("vkTip");
@@ -4193,7 +4193,7 @@ function koppelVerkochtHover(box){
     el.addEventListener("mouseenter",async function(ev){
       if(!resvData || !Object.keys(resvData.byModel||{}).length){ try{ await loadReserveringen(); }catch(e){} }
       const lijst=orders(el.dataset.model, el.dataset.kleur||"");
-      if(!lijst.length){ tip.innerHTML="<span style='color:var(--muted)'>Geen openstaande order gevonden voor "+esc(el.dataset.model)+(el.dataset.kleur?" in "+esc(el.dataset.kleur):"")+". Mogelijk staat hij op een containerorder of is de lijst nog niet ververst.</span>"; }
+      if(!lijst.length){ tip.innerHTML="<span style='color:var(--muted)'>0 openstaande orders gevonden voor "+esc(el.dataset.model)+(el.dataset.kleur?" in "+esc(el.dataset.kleur):"")+". Mogelijk staat hij op een containerorder of volgt hij bij de volgende verversing.</span>"; }
       else {
         tip.innerHTML="<div style='font-weight:700;margin-bottom:6px'>"+esc(el.dataset.model)+(el.dataset.kleur?" &middot; "+esc(el.dataset.kleur):"")+" &middot; "+lijst.length+" order"+(lijst.length===1?"":"s")+"</div>"+
           "<table style='border-collapse:collapse'>"+lijst.map(function(r){ const st=verkochtStand(r);
@@ -4255,8 +4255,8 @@ async function dieselLaad(){
       st.textContent="laatst gezet op "+datumNL(d.gezet)+(d.door?(" door "+String(d.door).split("@")[0]):"")+
         (dagen>7?"  -  dat is "+dagen+" dagen geleden":"");
       st.style.color = dagen>7 ? "var(--warn,#92400e)" : "var(--muted)";
-    } else st.textContent="nog niet ingevuld";
-  }catch(e){ st.textContent="tarieven laden faalde: "+e.message; }
+    } else st.textContent="nog in te vullen";
+  }catch(e){ st.textContent="tarieven laden vraagt een nieuwe poging: "+e.message; }
 }
 async function dieselBewaar(){
   const m=document.getElementById("dieselMelding");
@@ -4279,7 +4279,7 @@ async function dieselBewaar(){
       " Dealers zien vanaf nu de nieuwe bezorgkosten.");
     try{ if(window.fpLog) window.fpLog("dieseltoeslag-gezet","Doesburg "+j.diesel.doesburg+"% / Van Heugten "+j.diesel.heugten+"%"); }catch(e){}
     dieselLaad();
-  }catch(e){ toon("bad","Opslaan mislukte: "+e.message); }
+  }catch(e){ toon("bad","Opslaan vraagt een nieuwe poging: "+e.message); }
   finally{ knop.disabled=false; }
 }
 (function koppelDiesel(){
@@ -4307,7 +4307,7 @@ function renderFabrikanten(){
     "<div style='margin-bottom:16px'>"+
     "<div style='font-weight:600;font-size:13px'>"+esc(f.merk)+" <span style='font-weight:400;color:var(--muted)'>- "+esc(f.fabriek)+"</span></div>"+
     "<div style='font-size:12px;color:var(--muted);margin:2px 0 6px'>"+
-      (f.contact?("Contact: "+esc(f.contact)+(f.email?" · "+esc(f.email):"")):"Geen contactpersoon bekend")+
+      (f.contact?("Contact: "+esc(f.contact)+(f.email?" · "+esc(f.email):"")):"Contactpersoon volgt")+
       (f.opmerking?" · "+esc(f.opmerking):"")+"</div>"+
     "<table class='grid' style='font-size:12px'><thead><tr><th>Model</th><th>Fabriekscode</th><th>Inkoop</th><th>Verkoop</th></tr></thead><tbody>"+
     f.modellen.map(m=>"<tr><td>"+esc(m.model)+(m.reeks?" <span style='color:var(--muted)'>("+esc(m.reeks)+")</span>":"")+"</td>"+
@@ -4317,7 +4317,7 @@ function renderFabrikanten(){
       ? "<div class='status-msg warn' style='font-size:12px'>Nog navragen bij de fabriek: "+
         window.fpFabrikanten.onduidelijk.map(o=>esc(o.tekst)+" ("+esc(o.fabriek)+")").join(" · ")+"</div>"
       : "")+
-    "<div style='font-size:11.5px;color:var(--muted);margin-top:6px'>Een streepje betekent dat het bedrag niet op het prijsblad stond of niet leesbaar was. Klopt er iets niet? Geef het door, dan pas ik het aan.</div>";
+    "<div style='font-size:11.5px;color:var(--muted);margin-top:6px'>Een streepje betekent dat het prijsblad dit bedrag open liet of dat het onleesbaar was. Zie je iets wat anders moet? Geef het door, dan pas ik het aan.</div>";
 }
 
 async function loadSchepen(){
@@ -4458,7 +4458,7 @@ async function openSchipDocument(a){
       {headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}});
     if(!r.ok) throw new Error("HTTP "+r.status);
     bestandTonen(await r.blob(), oud);   // oud is de bestandsnaam die in de link stond
-  }catch(e){ alert("Kon het document niet openen: "+e.message); }
+  }catch(e){ alert("Document openen vraagt een nieuwe poging: "+e.message); }
   a.textContent=oud;
 }
 // Eén verwijzing bij een schip zetten; dezelfde naam tweemaal wordt vervangen.
@@ -4471,7 +4471,7 @@ async function saveSchepen(){
   shipsData.updated=new Date().toISOString();
   const r=await fetch(SHIPS_URL,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH},
     body:JSON.stringify(shipsData)});
-  if(!r.ok) throw new Error("opslaan faalde: HTTP "+r.status);
+  if(!r.ok) throw new Error("opslaan gaf HTTP "+r.status);
 }
 // ── Merzario-tracking via de Worker-proxy (/track). Referentie = de sleutel;
 //    geen aparte api-key. Antwoord: {ok,error,results:{ref:record|null}}. ──
@@ -4492,7 +4492,7 @@ function trackBar(pct){
 // Statuscel voor de schepentabel
 function trackStatusCell(t){
   if(!t) return "<span style='color:var(--muted)'>-</span>";
-  if(t.notFound) return "<span style='color:var(--warn)'>niet gevonden</span>";
+  if(t.notFound) return "<span style='color:var(--warn)'>nog onbekend bij de vervoerder</span>";
   const pct=(t.progress==null?"":t.progress+"% ");
   const ev=t.lastEvent?("<div style='font-size:11px;color:var(--muted);margin-top:3px;max-width:260px'>"+esc(t.lastEvent)+"</div>"):"";
   return "<div style='display:flex;align-items:center;gap:7px'>"+trackBar(t.progress)+"<span style='font-size:11px;color:var(--muted)'>"+pct+"</span></div>"+ev;
@@ -4500,7 +4500,7 @@ function trackStatusCell(t){
 // Kaart voor de losse "zoek een zending"
 function renderTrackCard(ref, rec){
   if(!rec) return "<div style='border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:8px'>"+
-    "<b>"+esc(ref)+"</b> - <span style='color:var(--warn)'>geen tracking gevonden</span></div>";
+    "<b>"+esc(ref)+"</b> - <span style='color:var(--warn)'>nog onbekend bij de vervoerder</span></div>";
   const route=[rec.originPort,rec.destPort].filter(Boolean).join(" → ");
   const etaBadge=rec.eta?("<b>"+esc(datumNL(rec.eta))+"</b>"+(rec.arrivalIsEstimate?" <span style='font-size:10px;color:var(--muted)'>(verwacht)</span>":" <span style='font-size:10px;color:#15803d'>(aangekomen)</span>")):"-";
   return "<div style='border:1px solid var(--border);border-radius:8px;padding:11px 13px;margin-bottom:8px'>"+
@@ -4515,7 +4515,7 @@ function renderTrackCard(ref, rec){
 // Per schip ETA ophalen
 async function trackShip(i, force){
   const s=shipsData.ships[i]; const ref=String(s.trackRef||s.ref||"").trim();
-  if(!ref){ setStatus("bad","Geen trackingreferentie voor dit schip - vul een containernummer of orderreferentie in."); return; }
+  if(!ref){ setStatus("bad","Dit schip heeft nog een trackingreferentie nodig - vul een containernummer of orderreferentie in."); return; }
   setStatus("","ETA ophalen…");
   try{
     const j=await trackRefs([ref],force);
@@ -4523,14 +4523,14 @@ async function trackShip(i, force){
     if(rec){ s.track=rec; if(rec.eta) s.eta=rec.eta; await saveSchepen(); renderSchepen();
       setStatus("ok","ETA opgehaald: "+(rec.eta?datumNL(rec.eta):"onbekend")+(rec.vessel?(" · "+rec.vessel):"")); }
     else { s.track={notFound:true}; await saveSchepen(); renderSchepen();
-      setStatus("bad","Geen tracking gevonden voor '"+ref+"'."+(j.error?(" ("+j.error+")"):"")); }
+      setStatus("bad","'"+ref+"' is nog onbekend bij de vervoerder."+(j.error?(" ("+j.error+")"):"")); }
   }catch(e){ setStatus("bad",e.message); }
 }
 // Alle schepen in één keer verversen
 async function trackAllShips(){
   const ships=shipsData.ships||[];
   const refs=ships.map(s=>String(s.trackRef||s.ref||"").trim()).filter(Boolean);
-  if(!refs.length){ setStatus("bad","Geen enkel schip heeft een trackingreferentie."); return; }
+  if(!refs.length){ setStatus("bad","De schepen hebben nog een trackingreferentie nodig."); return; }
   setStatus("","Alle ETA's verversen…");
   try{
     const j=await trackRefs(refs,true); let n=0;
@@ -4577,7 +4577,7 @@ function renderSchepen(){
         "<input type='text' class='shipRef' data-i='"+i+"' value='"+esc(trackRef)+"' placeholder='container / orderref' style='font-size:12px;width:160px'>"+
         (s.ref?("<div style='font-size:11px;color:"+(s.refAuto&&!s.refHand?"#92400e":"var(--muted)")+"'>"+esc(s.ref)+
                  (s.refHand?" (zelf ingevuld)":(s.refAuto?" - uit de bestandsnaam, pas zo nodig aan":""))+"</div>")
-             : "<div style='font-size:11px;color:#92400e'>geen referentie - vul er zelf een in</div>")+
+             : "<div style='font-size:11px;color:#92400e'>vul hier zelf een referentie in</div>")+
         "<button class='btn sm trkOne' data-i='"+i+"'>ETA ophalen</button></div></td>"+
       /* Bestemming: naar Uddel of rechtstreeks naar een dealer. Het staat op
          de invoice ("to Rotterdam" / "to Luxury spas") maar moet te
@@ -4589,9 +4589,9 @@ function renderSchepen(){
         "</select>"+
         (s.bestemming?("<div style='font-size:11px;color:var(--muted);margin-top:2px'>op de invoice: "+esc(s.bestemming)+"</div>"):"")+
         (s.bestemmingOnbekend&&!s.bestemmingHand&&spas
-          ? "<div style='font-size:11px;color:#92400e;margin-top:2px'>geen bestemming op het papier</div>" : "")+
+          ? "<div style='font-size:11px;color:#92400e;margin-top:2px'>het papier laat de bestemming open - kies hem zelf</div>" : "")+
       "</td>"+
-      "<td>"+spas+(s.dealerContainer&&spas?" <span style='font-size:11px;color:#c2410c' title='rechtstreeks naar de dealer, telt niet als voorraad'>niet als voorraad</span>":"")+"</td>"+
+      "<td>"+spas+(s.dealerContainer&&spas?" <span style='font-size:11px;color:#c2410c' title='rechtstreeks naar de dealer, buiten de voorraad'>buiten voorraad</span>":"")+"</td>"+
       "<td>"+trackStatusCell(s.track)+"</td>"+
       "<td><input type='date' class='shipEta' data-i='"+i+"' value='"+esc(s.eta||"")+"' style='font-size:12.5px'>"+
         (s.etaHand&&s.track&&s.track.eta&&s.track.eta!==s.eta
@@ -4605,13 +4605,13 @@ function renderSchepen(){
       "<td><div style='display:flex;flex-direction:column;gap:5px;align-items:flex-start'>"+
         ((s.documenten||[]).map(d=>
           "<a href='#' class='schipDoc' data-id='"+esc(d.id)+"' style='font-size:11.5px'>"+esc(d.naam)+"</a>").join("")||
-          "<span style='font-size:11.5px;color:var(--muted)'>geen</span>")+
+          "<span style='font-size:11.5px;color:var(--muted)'>-</span>")+
         "<label class='btn sm' style='cursor:pointer'>+ document"+
           "<input type='file' class='schipDocIn' data-i='"+i+"' accept='.pdf,.xls,.xlsx,.docx,.csv,.txt,.jpg,.jpeg,.png' style='display:none'></label>"+
       "</div></td>"+
       "<td><button class='rmv delShip' data-i='"+i+"'>✕ verwijder</button></td>"+
     "</tr>";
-  }).join("") || "<tr><td colspan='8' style='color:var(--muted)'>Nog geen schepen. Upload een commercial invoice.</td></tr>";
+  }).join("") || "<tr><td colspan='8' style='color:var(--muted)'>Upload een commercial invoice, dan verschijnt het schip hier.</td></tr>";
   document.querySelectorAll(".shipBest").forEach(sel=>sel.addEventListener("change",async()=>{
     const sch=shipsData.ships[Number(sel.dataset.i)];
     sch.dealerContainer = sel.value==="dealer";
@@ -4620,7 +4620,7 @@ function renderSchepen(){
     try{
       await saveSchepen(); renderSchepen();
       meldSchip("ok",(sch.vessel||sch.ref||"schip")+" gaat nu "+(sch.dealerContainer
-        ? "rechtstreeks naar de dealer en telt niet meer mee als voorraad."
+        ? "rechtstreeks naar de dealer en valt nu buiten de voorraad."
         : "naar Uddel en telt mee als voorraad onderweg."));
       try{ if(window.fpLog) window.fpLog("schip-bestemming-gewijzigd",(sch.vessel||sch.ref||"schip")+" → "+(sch.dealerContainer?"dealer":"Uddel")); }catch(e){}
     }catch(e){ meldSchip("bad",e.message); }
@@ -4636,7 +4636,7 @@ function renderSchepen(){
       await saveSchepen(); renderSchepen();
       meldSchip("ok",f.name+" bewaard bij "+(s.vessel||s.ref)+" - ook zichtbaar bij Schepen & ontvangst.");
       try{ if(window.fpLog) window.fpLog("schip-document-toegevoegd",(s.vessel||s.ref||"schip")+": "+f.name); }catch(e){}
-    }catch(e){ meldSchip("bad","Opslaan mislukt: "+e.message); }
+    }catch(e){ meldSchip("bad","Opslaan vraagt een nieuwe poging: "+e.message); }
   }));
   document.querySelectorAll(".schipDoc").forEach(a=>a.addEventListener("click",async(e)=>{
     e.preventDefault(); await openSchipDocument(a);
@@ -4667,9 +4667,9 @@ function renderSchepen(){
   document.querySelectorAll(".trkOne").forEach(b=>b.addEventListener("click",()=>trackShip(Number(b.dataset.i),true)));
   document.querySelectorAll(".delShip").forEach(b=>b.addEventListener("click",async()=>{
     const s=shipsData.ships[Number(b.dataset.i)];
-    if(!s){ meldSchip("bad","Deze zending staat niet meer in de lijst. Ververs het scherm."); return; }
+    if(!s){ meldSchip("bad","Deze zending is uit de lijst gehaald. Ververs het scherm."); return; }
     const naam=s.vessel||s.ref||s.file||"deze zending";
-    if(!confirm("\""+naam+"\" verwijderen? De lading telt dan niet meer als voorraad.")) return;
+    if(!confirm("\""+naam+"\" verwijderen? De lading valt dan buiten de voorraad.")) return;
     try{ if(window.fpLog) window.fpLog("schip-verwijderd",(s.vessel||s.ref||"schip")+" ("+(s.total||0)+" spa's)"); }catch(e){}
     shipsData.ships.splice(Number(b.dataset.i),1);
     try{ await saveSchepen(); renderSchepen(); }catch(e){ meldSchip("bad",e.message); }
@@ -4689,13 +4689,13 @@ function renderSchepen(){
   const oudIngelezen=ships.filter(s=>!s.parser||s.parser<2);
   document.getElementById("ciUnmapped").innerHTML=
     (oudIngelezen.length
-      ? "<div class='status-msg warn'><b>Let op - "+oudIngelezen.length+" schip(en) opnieuw uploaden.</b> Deze zijn ingelezen toen de codes van Passion Devine (PP01 = Reflect, PP02 = Retreat, PP03 = Resettle) nog niet herkend werden; die spa's tellen daardoor niet mee als voorraad op zee. Upload die commercial invoices één keer opnieuw, dan klopt het overzicht weer. Het gaat om: "+
+      ? "<div class='status-msg warn'><b>Let op - "+oudIngelezen.length+" schip(en) opnieuw uploaden.</b> Deze zijn ingelezen toen de codes van Passion Devine (PP01 = Reflect, PP02 = Retreat, PP03 = Resettle) nog onbekend waren; die spa's staan daardoor nog buiten de voorraad op zee. Upload die commercial invoices één keer opnieuw, dan klopt het overzicht weer. Het gaat om: "+
         oudIngelezen.map(s=>esc(s.vessel||s.ref||s.file||"?")).join(", ")+"</div>" : "")+
     (nuBekend.length
       ? "<div class='status-msg ok'>Inmiddels ingesteld: "+nuBekend.map(p=>esc(p[0])+" = <b>"+esc(p[1])+"</b> ("+un[p[0]]+"×)").join(", ")+
         ". Upload die commercial invoice nog één keer opnieuw, dan tellen deze spa's mee in de lading.</div>" : "")+
     (echtOnbekend.length
-      ? "<div class='status-msg warn'>Niet-herkende fabriekscodes (welk model?): "+echtOnbekend.map(k=>esc(k)+" ("+un[k]+"×)").join(", ")+"</div>" : "");
+      ? "<div class='status-msg warn'>Nog te herkennen fabriekscodes (welk model?): "+echtOnbekend.map(k=>esc(k)+" ("+un[k]+"×)").join(", ")+"</div>" : "");
 }
 
 // Bladen die een document zijn en geen container. Jazzi zet elke container op
@@ -4809,14 +4809,14 @@ function ciLeesKolom(rows,kopRij,iModel,iQty,iNaam,iKleur){
 // fabriek is dat de meerderheid: het zijn sauna's en onderdelen, en die staan
 // niet in de spa-codelijst.
 async function parseCiPdf(file){
-  if(!window.fpCiPdf) throw new Error("de pdf-lezer is niet geladen. Herstart het dashboard.");
+  if(!window.fpCiPdf) throw new Error("de pdf-lezer moet nog laden. Herstart het dashboard.");
   const doc=await window.fpCiPdf.leesBestand(file);
   if(!doc.regels.length) return null;
   // Een proforma is géén commercial invoice: die gaat over wat besteld wordt,
   // niet over wat er vaart. Belandt hij hier, dan zou er een schip verschijnen
   // dat niet bestaat.
   if(doc.soort==="proforma") throw new Error("dit is een proforma invoice ("+file.name+
-    "), geen commercial invoice. Gebruik daarvoor de kaart hierboven, Proforma invoice naar inkooporder. Er is niets gewijzigd aan de schepen.");
+    "), bedoeld voor de kaart hierboven, Proforma invoice naar inkooporder. De schepen blijven zoals ze waren.");
   const models={},modelColors={},unmapped={},specials=[];
   for(const r of doc.regels){
     const aantal=Number(r.aantal)||0;
@@ -5102,7 +5102,7 @@ async function leesBinnenkomend(wb,bestandsnaam){
     /* Een dealercontainer: die komt nooit in Uddel, dus Manon heeft er geen
        labels voor nodig (21 sep 2026). Wel even zeggen, anders lijkt het
        alsof er iets mis ging. */
-    binnenkomendGemeld.push("De container(s) uit "+bestandsnaam+" gaan naar "+j.bestemming+" en niet naar Rotterdam; ze staan daarom niet bij Inkomende goederen.");
+    binnenkomendGemeld.push("De container(s) uit "+bestandsnaam+" gaan rechtstreeks naar "+j.bestemming+", buiten Rotterdam om; ze staan daarom apart van Inkomende goederen.");
     return doc;
   }
   if(j&&j.ok){
@@ -5176,8 +5176,8 @@ async function handleCIUpload(files,statusId){
                        && !wb.SheetNames.some(n=>/commercial\s*invoice/i.test(n));
       if(isProforma){
         st.className="status-msg bad";
-        st.textContent="Dit is een proforma invoice ("+file.name+"), geen commercial invoice. Gebruik daarvoor de kaart "+
-          "\"Proforma invoice → inkooporder in Logic4\" hierboven. Er is niets gewijzigd aan de schepen.";
+        st.textContent="Dit is een proforma invoice ("+file.name+"), bedoeld voor de kaart "+
+          "\"Proforma invoice → inkooporder in Logic4\" hierboven. De schepen blijven zoals ze waren.";
         return;
       }
       /* Staat er een packing list bij? Dan komen daar de containers en de
@@ -5326,13 +5326,13 @@ async function handleCIUpload(files,statusId){
     if(overgeslagen.length){
       st.className="status-msg "+(added?"warn":"bad");
       st.innerHTML=(added?added+" schip(en) verwerkt, maar ":"")+
-        "<b>"+overgeslagen.length+" bestand(en) leverden geen enkele spa op</b> en zijn dus níet toegevoegd:<br>"+
+        "<b>"+overgeslagen.length+" bestand(en) leverden 0 spa's op</b> en zijn nog apart gehouden:<br>"+
         overgeslagen.map(function(o){
           return "&bull; "+esc(o.naam)+" - "+(o.codes.length
-            ? "wel regels gevonden, maar de fabriekscode"+(o.codes.length>1?"s zijn":" is")+" niet bekend: <b>"+o.codes.map(esc).join(", ")+
+            ? "regels gevonden, alleen de fabriekscode"+(o.codes.length>1?"s zijn":" is")+" nog onbekend: <b>"+o.codes.map(esc).join(", ")+
               "</b>. Geef door welk model daarbij hoort, dan lees ik hem alsnog in."
-            : "er is geen enkele regel met een artikelcode en een aantal gevonden. Tabbladen in dit bestand: "+esc(o.bladen)+
-              ". Waarschijnlijk gebruikt deze fabriek een indeling die ik nog niet ken - stuur het bestand door.");
+            : "ik vond 0 regels met een artikelcode en een aantal. Tabbladen in dit bestand: "+esc(o.bladen)+
+              ". Waarschijnlijk gebruikt deze fabriek een indeling die nieuw voor me is - stuur het bestand door.");
         }).join("<br>");
     } else {
       /* De melding zegt nu wát er met de lading gebeurt, en dat hangt van de
@@ -5349,13 +5349,13 @@ async function handleCIUpload(files,statusId){
           ? " <b>"+naarDealer.length+" daarvan "+(naarDealer.length===1?"is een dealercontainer":"zijn dealercontainers")+"</b> ("+
             naarDealer.map(x=>esc(x.bestemming||x.ref)).join(", ")+
             "): die "+(naarDealer.length===1?"vaart":"varen")+" rechtstreeks naar het magazijn van de dealer en "+
-            (naarDealer.length===1?"telt":"tellen")+" dus niet mee als voorraad."
+            (naarDealer.length===1?"valt":"vallen")+" dus buiten de voorraad."
           : "")+
         (verwerkt.some(x=>!x.dealerContainer&&x.total>0)
           ? " Vul per schip de ETA in - wat naar Rotterdam gaat komt in Uddel en telt als voorraad onderweg in Passion Partners."
           : "")+
         (onbekend.length
-          ? " <b>Let op:</b> op "+onbekend.map(x=>esc(x.ref)).join(", ")+" staat geen bestemming. "+
+          ? " <b>Let op:</b> op "+onbekend.map(x=>esc(x.ref)).join(", ")+" is de bestemming nog open. "+
             "Die "+(onbekend.length===1?"staat":"staan")+" nu op Uddel; zet hem hieronder om als hij naar een dealer gaat."
           : "");
     }
@@ -5369,7 +5369,7 @@ async function handleCIUpload(files,statusId){
     }
     try{ if(added&&window.fpLog) window.fpLog("commercial-invoice-geupload",added+" schip(en)"); }catch(e){}
     try{ if(overgeslagen.length&&window.fpLog) window.fpLog("commercial-invoice-niet-gelukt",overgeslagen.map(function(o){return o.naam;}).join(", ")); }catch(e){}
-  }catch(e){ console.error(e); st.className="status-msg bad"; st.textContent="Kon niet inlezen: "+e.message; }
+  }catch(e){ console.error(e); st.className="status-msg bad"; st.textContent="Inlezen vraagt een nieuwe poging: "+e.message; }
 }
 
 // ===================== Prioriteit (allocatie) =====================
@@ -5469,7 +5469,7 @@ function rfVoegToe(){
 async function sendReserveFor(){
   const st=document.getElementById("rfStatus");
   const show=(c,m)=>{ st.className="status-msg "+c; st.textContent=m; st.classList.remove("hidden"); };
-  if(!dpAdminKey()){ show("bad","Beheersleutel niet gevonden op deze computer - ontgrendel eerst de tegel Passion Partners Beheer."); return; }
+  if(!dpAdminKey()){ show("bad","Deze computer heeft de beheersleutel nog nodig - ontgrendel eerst de tegel Passion Partners Beheer."); return; }
   const type=document.getElementById("rfType").value;
   const model=document.getElementById("rfModel").value;
   const variant=document.getElementById("rfVariant").value;
@@ -5492,15 +5492,15 @@ async function sendReserveFor(){
     if(r.ok&&j.ok){
       const sym=j.currency==="USD"?"$":"€";
       const samen=regels.map(r=>r.qty+"x "+r.model).join(", ");
-      show("ok","Aanbetalingsverzoek voor "+samen+" ("+sym+" "+Number(j.deposit).toFixed(2)+") gemaild naar "+j.emailedTo+(j.mailSent?"":" - LET OP: mail niet bevestigd")+".");
+      show("ok","Aanbetalingsverzoek voor "+samen+" ("+sym+" "+Number(j.deposit).toFixed(2)+") gemaild naar "+j.emailedTo+(j.mailSent?"":" - LET OP: controleer of de mail is aangekomen")+".");
       try{ if(window.fpLog) window.fpLog("reservering-aangemaakt",samen+" ("+type+")"); }catch(e){}
       document.getElementById("rfEmail").value=""; document.getElementById("rfOrder").value="";
       rfMandje=[]; rfTekenMandje();
       document.getElementById("rfModel").value="";
       document.getElementById("rfVariant").innerHTML="<option value=''>- kleur (optioneel) -</option>";
       document.getElementById("rfQty").value="1";
-    } else show("bad","Mislukt: "+(j.error||("HTTP "+r.status)));
-  }catch(e){ show("bad","Fout: "+e.message); }
+    } else show("bad","Nieuwe poging nodig: "+(j.error||("HTTP "+r.status)));
+  }catch(e){ show("bad","Nieuwe poging nodig: "+e.message); }
   finally{ btn.disabled=false; }
 }
 
@@ -5533,7 +5533,7 @@ async function loadPrioModel(model){
     });
     renderPrio(model, dekking, halQty, shipQty);
     prioStatus("ok", prioRows.length+" open order(s) gevonden.");
-  }catch(e){ console.error(e); prioStatus("bad","Ophalen faalde: "+e.message); }
+  }catch(e){ console.error(e); prioStatus("bad","Ophalen vraagt een nieuwe poging: "+e.message); }
 }
 
 // Laatste weergave onthouden, zodat het zoekveld opnieuw kan tekenen zonder
@@ -5628,7 +5628,7 @@ function renderPrio(model, dekking, halQty, shipQty){
       "</td></tr>"+
       (cutHere&&i<prioRows.length-1?"<tr><td colspan='9' style='text-align:center;color:#b91c1c;font-size:11px;padding:2px'>- grens huidige voorraad ("+dekking+") -</td></tr>":"");
   }).join("") || "<tr><td colspan='9' style='color:var(--muted)'>"+
-    (q?"Niets gevonden voor '"+esc(q)+"'.":"Geen open orders voor dit model.")+"</td></tr>";
+    (q?"0 treffers voor '"+esc(q)+"'.":"Dit model heeft 0 open orders.")+"</td></tr>";
   if(q&&getoond) document.getElementById("prioSummary").innerHTML+=
     " · <span style='color:#2563eb'>"+getoond+" van "+prioRows.length+" regels getoond</span>";
   const zoekVeld=document.getElementById("prioZoek");
@@ -5686,7 +5686,7 @@ async function bewaarPrio(model, regel, plek){
         model+": order "+(regel?regel.ordernr:"?")+(regel&&regel.naam?" ("+regel.naam+")":"")+
         " naar plek "+(plek+1)+" van "+prioRows.length);
     }catch(e){}
-  }catch(e){ prioStatus("bad","Opslaan volgorde faalde: "+e.message); }
+  }catch(e){ prioStatus("bad","Opslaan volgorde vraagt een nieuwe poging: "+e.message); }
 }
 
 // ===================== Voorraad & pipeline (VEROUDERD) =====================
@@ -5745,8 +5745,8 @@ function renderZones(){
         ((Number(l.reserved)||0)?" <span class='resv'>("+(Number(l.reserved)||0)+" gereserveerd)</span>":"")+
         (((Number(l.qty)||0)-(Number(l.reserved)||0))>0?" <span class='free'>("+((Number(l.qty)||0)-(Number(l.reserved)||0))+" vrij)</span>":"")+"</li>").join("");
       return "<div class='cont'><div class='hd'><span>"+esc(c.nr||"(zonder nr)")+(c.herkomst?" <span style='color:var(--muted);font-weight:400'>"+esc(c.herkomst)+"</span>":"")+"</span>"+
-        "<span class='eta'>"+(c.eta?("ETA "+esc(datumNL(c.eta))):(c.besteld?("besteld "+esc(datumNL(c.besteld))):""))+"</span></div><ul>"+(items||"<li style='color:var(--muted)'>(nog geen regels)</li>")+"</ul></div>";
-    }).join("") || "<p style='color:var(--muted);font-size:12px'>(geen)</p>";
+        "<span class='eta'>"+(c.eta?("ETA "+esc(datumNL(c.eta))):(c.besteld?("besteld "+esc(datumNL(c.besteld))):""))+"</span></div><ul>"+(items||"<li style='color:var(--muted)'>(regels volgen)</li>")+"</ul></div>";
+    }).join("") || "<p style='color:var(--muted);font-size:12px'>(leeg)</p>";
   }
   document.getElementById("pipeContCount").textContent=pipeContainers.length;
 }
@@ -5769,12 +5769,12 @@ function renderPipeStock(){
   document.getElementById("stockBody").innerHTML = rows.map(r=>"<tr>"+
     "<td><b>"+esc(r.model)+"</b></td><td class='num'>"+r.prod+"</td><td class='num'>"+r.ship+"</td><td class='num'>"+r.nl+"</td>"+
     "<td class='num'><b>"+r.total+"</b></td><td class='num resv'>"+r.reserved+"</td><td class='num free'>"+r.free+"</td></tr>").join("")
-    || "<tr><td colspan='7' style='color:var(--muted)'>Nog geen containers. Voeg er een toe of importeer uit Excel.</td></tr>";
+    || "<tr><td colspan='7' style='color:var(--muted)'>Voeg een container toe of importeer uit Excel.</td></tr>";
 }
 
 function renderManager(){
   const wrap=document.getElementById("contManager");
-  if(!pipeContainers.length){ wrap.innerHTML="<p style='color:var(--muted);font-size:13px'>Nog geen containers. Klik <b>Nieuwe container</b> of <b>Importeer uit Excel</b>.</p>"; return; }
+  if(!pipeContainers.length){ wrap.innerHTML="<p style='color:var(--muted);font-size:13px'>Klik <b>Nieuwe container</b> of <b>Importeer uit Excel</b> om te beginnen.</p>"; return; }
   const sorted=pipeContainers.slice().sort((a,b)=>String(b.eta||b.besteld||"").localeCompare(String(a.eta||a.besteld||"")));
   wrap.innerHTML = sorted.map(c=>{
     const st=pipeStatus(c);
@@ -5893,7 +5893,7 @@ async function handlePipeImport(file){
       else if(k.indexOf("griztrop")===0) part=parseBlockSheet(rows);
       if(part){ imported=imported.concat(part); diag.push(sn+": "+part.length+" containers"); }
     }
-    if(!imported.length){ st.className="status-msg warn"; st.textContent="Geen containers gevonden in: "+wb.SheetNames.join(", "); return; }
+    if(!imported.length){ st.className="status-msg warn"; st.textContent="0 containers gevonden in: "+wb.SheetNames.join(", "); return; }
     const have={}; for(const c of pipeContainers) have[String(c.nr)]=1;
     const fresh=imported.filter(c=>!have[String(c.nr)]);
     if(!confirm("Importeren: "+fresh.length+" nieuwe containers toevoegen ("+(imported.length-fresh.length)+" bestaan al en worden overgeslagen).\n\nDaarna beheer je alles in het dashboard.")) { st.classList.add("hidden"); return; }
@@ -5906,7 +5906,7 @@ async function handlePipeImport(file){
     pipeContainers=pipeContainers.concat(fresh); await savePipe(); renderPipeAll();
     try{ if(window.fpLog) window.fpLog("pipeline-geimporteerd",fresh.length+" containers uit "+file.name+" ("+diag.join(" · ")+")"); }catch(e){}
     st.className="status-msg ok"; st.textContent="Geïmporteerd: "+fresh.length+" containers toegevoegd uit "+file.name+". "+diag.join(" · ")+". Controleer/bewerk hieronder - ETA-jaar is afgeleid, pas zo nodig aan.";
-  }catch(e){ console.error(e); st.className="status-msg bad"; st.textContent="Kon Excel niet inlezen: "+e.message; }
+  }catch(e){ console.error(e); st.className="status-msg bad"; st.textContent="Excel inlezen vraagt een nieuwe poging: "+e.message; }
 }
 
 // ---- Dealer-view (concept): beschikbaarheid per model + reserveren ----
@@ -5946,7 +5946,7 @@ function renderDealerView(){
           "</ul>"+
           "<button class='primary dv-resv' data-model=\""+esc(m.model)+"\" style='margin-top:8px;padding:6px 12px;font-size:12px'>Reserveren</button>"+
         "</div>").join("")+"</div>"
-    : "<div class='card'><p style='color:var(--muted)'>Nog geen voorraad/containers. Voeg containers toe of importeer in de pipeline-tab.</p></div>";
+    : "<div class='card'><p style='color:var(--muted)'>Voeg containers toe of importeer in de pipeline-tab, dan verschijnt de voorraad hier.</p></div>";
   document.getElementById("dvCards").querySelectorAll(".dv-resv").forEach(b=> b.addEventListener("click", function(){ dealerReserve(b.dataset.model); }));
   renderDealerResv();
 }
@@ -5988,7 +5988,7 @@ function renderDealerResv(){
     ? "<div class='tablewrap'><table class='grid'><thead><tr><th>Datum</th><th>Model</th><th>Dealer/klant</th><th></th></tr></thead><tbody>"+
       dealerReservations.slice().reverse().map(r=>"<tr><td>"+esc(datumNL(r.date))+"</td><td><b>"+esc(r.model)+"</b></td><td>"+esc(r.dealer)+"</td>"+
         "<td><button class='rmv dv-del' data-id='"+esc(r.id)+"'>✕</button></td></tr>").join("")+"</tbody></table></div>"
-    : "<p style='color:var(--muted);font-size:13px'>Nog geen reserveringen.</p>";
+    : "<p style='color:var(--muted);font-size:13px'>0 reserveringen.</p>";
   wrap.querySelectorAll(".dv-del").forEach(b=> b.addEventListener("click", async function(){ dealerReservations=dealerReservations.filter(x=>String(x.id)!==String(b.dataset.id)); await savePipe(); renderDealerResv(); }));
 }
 
@@ -6076,7 +6076,7 @@ function loadVoorraadDemo(){
   renderAdvisorPanel();
   renderLines();
   renderOverviews();
-  setStatus("ok", "🎬 Demo - 5 voorbeeld-spa-regels geladen (2 klanten al gemarkeerd, 2 nog te kiezen). Er wordt NIETS opgeslagen; ververs voor echte data.");
+  setStatus("ok", "🎬 Demo - 5 voorbeeld-spa-regels geladen (2 klanten al gemarkeerd, 2 nog te kiezen). Alles blijft zoals het was; ververs voor echte data.");
   document.querySelector(".tabs").scrollIntoView({ behavior:"smooth", block:"start" });
 }
 (function initVoorraadDemo(){
@@ -6154,13 +6154,13 @@ function loadVoorraadDemo(){
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Nog te kiezen";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Nog te kiezen"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

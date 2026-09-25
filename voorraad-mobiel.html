@@ -16,7 +16,7 @@
     '.gt{margin:14vh 18px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:26px;text-align:center}'+
     '.gt h1{color:#144734;font-size:19px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
     '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px}</style>'+
-    '<div class="gt"><h1>Geen toegang</h1><p>Voorraadbeheer is niet beschikbaar voor jouw account.</p>'+
+    '<div class="gt"><h1>Voorraadbeheer</h1><p>Deze tegel is voor de spa-afdeling (sales, logistiek en adviseurs).</p>'+
     '<a href="./">&larr; Terug</a></div>');
   window.stop();
 })();
@@ -229,7 +229,7 @@ function esc(s){ var d=document.createElement("div"); d.textContent=(s==null?"":
 function teamKey(){ return localStorage.getItem("fp.teamkey") || ""; }
 function mailKey(){ return localStorage.getItem("fp.mailkey") || ""; }
 function mij(){ return (localStorage.getItem("fp.email")||"").toLowerCase(); }
-function nlDatum(s){ if(!s) return "—"; var d=new Date(s); return isNaN(d)?"—":
+function nlDatum(s){ if(!s) return "-"; var d=new Date(s); return isNaN(d)?"-":
   String(d.getDate()).padStart(2,"0")+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+d.getFullYear(); }
 function dagenTot(s){
   if(!s) return null;
@@ -269,7 +269,7 @@ async function laad(){
     tekenOverzicht(); tekenStock(); tekenOnderweg(); tekenMenu();
   }catch(e){
     $("bron").textContent = "";
-    var fout = '<div class="melding fout">Laden mislukt: ' + esc(e.message) +
+    var fout = '<div class="melding fout">Laden vraagt een nieuwe poging: ' + esc(e.message) +
       '. Log opnieuw in op het dashboard, dan wordt de sleutel opgehaald.</div>';
     $("ovLijst").innerHTML = fout; $("stLijst").innerHTML = fout; $("owLijst").innerHTML = fout;
   }
@@ -320,7 +320,7 @@ function tekenOverzicht(){
 
   $("ovTel").textContent = rijen.length + " model" + (rijen.length===1?"":"len") +
     (q ? " voor '"+q+"'" : "");
-  if(!rijen.length){ $("ovLijst").innerHTML='<div class="leeg">Niets gevonden.</div>'; return; }
+  if(!rijen.length){ $("ovLijst").innerHTML='<div class="leeg">0 treffers.</div>'; return; }
   $("ovLijst").innerHTML = rijen.map(function(r){
     var schip=r.zee?eersteSchip(r.model):null;
     return '<div class="rij"><h3>'+esc(r.model)+'</h3><div class="getallen">'+
@@ -358,7 +358,7 @@ function tekenStock(){
 
   var tv=rijen.reduce(function(n,r){ return n+r.vrij; },0);
   $("stTel").textContent = rijen.length + " model" + (rijen.length===1?"":"len") + " · " + tv + " vrij in Nederland";
-  if(!rijen.length){ $("stLijst").innerHTML='<div class="leeg">Niets op voorraad gevonden.</div>'; return; }
+  if(!rijen.length){ $("stLijst").innerHTML='<div class="leeg">0 treffers in de voorraad.</div>'; return; }
   $("stLijst").innerHTML = rijen.map(function(r){
     return '<div class="rij"><h3>'+esc(r.model)+'</h3><div class="getallen">'+
       '<div class="getal op"><b>'+r.vrij+'</b><span>vrij</span></div>'+
@@ -438,9 +438,9 @@ function schipKaart(s, i){
     '<div class="meta">'+esc(s.ref)+
       (s.containers?' &middot; '+s.containers+' container'+(s.containers===1?"":"s"):'')+
       (s.spas?' &middot; '+s.spas+" spa's":'')+'</div>'+
-    (stukken?'<div class="lading">'+stukken+'</div>':'<div class="meta">inhoud nog niet ingelezen</div>')+
+    (stukken?'<div class="lading">'+stukken+'</div>':'<div class="meta">inhoud volgt</div>')+
     '<button class="melder'+(s.binnenGemeld?" terug":"")+'" data-ref="'+esc(s.ref)+'" data-aan="'+(s.binnenGemeld?"0":"1")+'" type="button">'+
-      (s.binnenGemeld?"Toch nog niet binnen":"Deze container is binnen")+'</button>'+
+      (s.binnenGemeld?"Toch nog onderweg":"Deze container is binnen")+'</button>'+
     '</div>';
 }
 
@@ -451,7 +451,7 @@ function tekenOnderweg(){
   var binnen = schepenLijst.filter(function(s){ return !!s.binnenGemeld; });
   if(!schepenLijst.length){
     $("owTel").textContent = "";
-    $("owLijst").innerHTML='<div class="leeg">Er vaart op dit moment niets. Zodra een commercial invoice is ingelezen verschijnt de zending hier.</div>';
+    $("owLijst").innerHTML='<div class="leeg">0 zendingen onderweg. Zodra een commercial invoice is ingelezen verschijnt de zending hier.</div>';
     return;
   }
   var html = varend.map(function(s){ return schipKaart(s, schepenLijst.indexOf(s)); }).join("");
@@ -498,7 +498,7 @@ function zoekOnderweg(){
   });
   $("owTel").textContent = nZend
     ? (nZend + " zending" + (nZend===1?"":"en") + (nStuks ? " · " + nStuks + " stuks" : ""))
-    : "niets gevonden";
+    : "0 treffers";
 }
 
 /* Binnen melden zet alleen een vinkje in het dashboard. Er gaat geen enkel
@@ -522,7 +522,7 @@ async function meldBinnen(knop){
     if(window.fpLog) window.fpLog(aan?"container-binnen-gemeld":"container-binnen-teruggedraaid", ref);
     tekenOnderweg(); tekenMenu();
   }catch(e){
-    alert("Kon het niet opslaan: " + (e.message||e));
+    alert("Opslaan vraagt een nieuwe poging: " + (e.message||e));
     knop.textContent=oud; knop.disabled=false;
   }
 }
@@ -549,7 +549,7 @@ async function zoekOrder(){
   try{
     var d = await logic4("/v3/Orders/GetOrders", { Id: parseInt(nr,10), TakeRecords:1 });
     var arr = Array.isArray(d) ? d : ((d&&(d.Orders||d.Items))||[]);
-    if(!arr.length){ uit.innerHTML='<div class="melding fout">Order '+esc(nr)+' bestaat niet in Logic4.</div>'; return; }
+    if(!arr.length){ uit.innerHTML='<div class="melding fout">Order '+esc(nr)+' is onbekend in Logic4. Kijk het nummer even na.</div>'; return; }
     var o=arr[0];
     var adr=o.InvoiceAddress||o.DeliveryAddress||o.AccountAddress||{};
     var klant=adr.CompanyName||adr.ContactName||("debiteur "+o.DebtorId);
@@ -579,7 +579,7 @@ async function zoekOrder(){
                  '</span><b>'+merk+'</b></div>';
         }).join("")+'</div>':'');
   }catch(e){
-    uit.innerHTML='<div class="melding fout">Opzoeken mislukt: '+esc(e.message)+'</div>';
+    uit.innerHTML='<div class="melding fout">Opzoeken vraagt een nieuwe poging: '+esc(e.message)+'</div>';
   }finally{
     $("orKnop").disabled=false;
   }
@@ -592,7 +592,7 @@ function tekenMenu(){
   var ov=overzichtRijen();
   var tekort=ov.filter(function(r){ return r.tekort>0; }).length;
   $("sumOverzicht").textContent = ov.length + " model" + (ov.length===1?"":"len") +
-    (tekort ? " · " + tekort + " met een tekort" : " · geen tekorten");
+    (tekort ? " · " + tekort + " met een tekort" : " · alles gedekt");
   var st=stockRijen();
   $("sumStock").textContent = st.reduce(function(n,r){ return n+r.vrij; },0) +
     " vrij in Uddel · " + st.length + " model" + (st.length===1?"":"len");
@@ -600,7 +600,7 @@ function tekenMenu(){
   $("sumOnderweg").textContent = sch.length
     ? (sch.length + " zending" + (sch.length===1?"":"en") + " · " +
        sch.reduce(function(n,s){ return n+s.spas; },0) + " spa's")
-    : "er vaart op dit moment niets";
+    : "0 zendingen onderweg";
 }
 
 /* ── schermen ────────────────────────────────────────────────────────

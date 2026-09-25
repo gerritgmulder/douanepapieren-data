@@ -16,7 +16,7 @@
     if (window.fpToegang && !fpToegang.mag("administratie-proef", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Nog even geduld</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -112,7 +112,7 @@ select.keuze{font:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--
 <main>
   <div class="kaart" id="instelKaart" style="display:none">
     <h2>Instellingen</h2>
-    <p class="lead">Eén keer zetten. Het tussenrekening-dagboek is waar de koppeling de betalingen op orders en facturen neerzet; in Logic4 wijs je de bankregel daarna in één keer toe aan die tussenrekening. Logic4 laat de koppeling niet rechtstreeks in een bankdagboek schrijven.</p>
+    <p class="lead">Eén keer zetten. Het tussenrekening-dagboek is waar de koppeling de betalingen op orders en facturen neerzet; in Logic4 wijs je de bankregel daarna in één keer toe aan die tussenrekening. Logic4 houdt het bankdagboek voor zichzelf: de koppeling schrijft naar de tussenrekening.</p>
     <div class="instel">
       <label>Tussenrekening-dagboek voor betalingen op orders en facturen<br><select id="instDagboek"><option value="">kies…</option></select></label>
       <label>Kruisposten (tussen eigen rekeningen) toewijzen op grootboek<br><input id="instKruis" value="1220" style="width:90px"></label>
@@ -122,7 +122,7 @@ select.keuze{font:inherit;font-size:12px;padding:4px 6px;border:1px solid var(--
 
   <div class="kaart">
     <h2>Afschriften inlezen</h2>
-    <p class="lead">Sleep één of meer MT940-bestanden hierheen (ING, Rabo, Volksbank; euro en dollar). Regels die er al staan worden overgeslagen, dus twee keer inlezen kan geen kwaad.</p>
+    <p class="lead">Sleep één of meer MT940-bestanden hierheen (ING, Rabo, Volksbank; euro en dollar). Regels die er al staan worden overgeslagen, dus twee keer inlezen is veilig.</p>
     <div class="drop" id="drop">Klik of sleep de afschriften hierheen</div>
     <input type="file" id="bestand" multiple accept=".txt,.sta,.swi,.940,.mt940" style="display:none">
     <div id="dropMsg"></div>
@@ -226,7 +226,7 @@ async function inlezen(files){
     try{
       var tekst = await f.text();
       var p = window.fpMT940.parse(tekst);
-      if (!p || !p.transactions) throw new Error("geen MT940");
+      if (!p || !p.transactions) throw new Error("ander formaat dan MT940");
       /* ING plakt de munt achter het IBAN (NL34INGB0679207473EUR); die gaat eraf. */
       var iban = String(p.iban||"").replace(/\s+/g,"").toUpperCase().replace(/(EUR|USD|GBP)$/,"") || ("BESTAND:" + f.name);
       var munt = (p.openingBalance && p.openingBalance.currency) || (p.closingBalance && p.closingBalance.currency) || "EUR";
@@ -256,7 +256,7 @@ async function inlezen(files){
   }
   await bewaarWerk();
   vulRekeningen();
-  msg($("dropMsg"), nieuw + " nieuwe regel" + (nieuw===1?"":"s") + " ingelezen" + (dubbel ? ", " + dubbel + " stonden er al" : "") + (fout.length ? ". Niet gelezen: " + esc(fout.join("; ")) : "."), fout.length ? "bad" : "ok");
+  msg($("dropMsg"), nieuw + " nieuwe regel" + (nieuw===1?"":"s") + " ingelezen" + (dubbel ? ", " + dubbel + " stonden er al" : "") + (fout.length ? ". Deze bestanden vragen aandacht: " + esc(fout.join("; ")) : "."), fout.length ? "bad" : "ok");
   try{ if (window.fpLog) window.fpLog("afschrift-ingelezen", files.length + " bestand(en), " + nieuw + " nieuw"); }catch(e){}
   teken();
   await voorstellen();
@@ -276,7 +276,7 @@ async function voorstellen(){
   try{
     if (!openIndex){ var j = await api("/bank/openstaand", { vers: false }); openIndex = window.fpBankMatch.bouwIndex(j.posten||[]); }
     if (!credIndex){ var j2 = await api("/bank/openstaand-crediteuren", { vers: false }); credIndex = window.fpBankCred.bouwIndex(j2.posten||[]); }
-  }catch(e){ msg($("boekMsg"), "Openstaande posten ophalen lukte niet: " + esc(e.message), "bad"); return; }
+  }catch(e){ msg($("boekMsg"), "Openstaande posten ophalen vraagt een nieuwe poging: " + esc(e.message), "bad"); return; }
   var opzoeken = [];
   open.forEach(function(r){
     if (r.keuze) return;   // iemand heeft al gekozen
@@ -306,21 +306,21 @@ async function voorstellen(){
   await bewaarWerk();
 }
 function uitMatch(m){
-  if (!m) return { type: "geen", uitleg: "geen voorstel" };
+  if (!m) return { type: "geen", uitleg: "zelf kiezen" };
   var post = m.beste;
   var kand = (m.kandidaten||[]).map(function(p){ return { invoiceId: p.InvoiceId, debtorId: p.DebtorId, open: p.AmountOutstanding, totaal: p.TotalAmount, orderNr: p.OrderNumber || null }; });
   if (m.status === "zeker" && post) return { type: "factuur", invoiceId: post.InvoiceId, orderNr: post.OrderNumber || m.orderNr || null, debtorId: post.DebtorId, open: post.AmountOutstanding, uitleg: m.reden, zeker: true, kandidaten: kand };
   if (m.status === "zeker" && m.orderNr) return { type: "order", orderNr: m.orderNr, uitleg: m.reden, zeker: true, kandidaten: kand };
   if (post) return { type: "factuur", invoiceId: post.InvoiceId, orderNr: post.OrderNumber || m.orderNr || null, debtorId: post.DebtorId, open: post.AmountOutstanding, uitleg: m.reden, zeker: false, kandidaten: kand };
   if (m.orderNr && m.status !== "geen") return { type: "order", orderNr: m.orderNr, uitleg: m.reden, zeker: false, kandidaten: kand };
-  return { type: "geen", uitleg: m.reden || "geen voorstel", kandidaten: kand };
+  return { type: "geen", uitleg: m.reden || "zelf kiezen", kandidaten: kand };
 }
 function uitCred(c){
-  if (!c) return { type: "geen", uitleg: "geen voorstel" };
+  if (!c) return { type: "geen", uitleg: "zelf kiezen" };
   var post = c.beste;
   var kand = (c.kandidaten||[]).map(function(p){ return { id: p.Id, crediteur: p.CreditorId, naam: p.CompanyName, ref: p.Reference, open: p.AmountOpen }; });
   if (post) return { type: "crediteur", id: post.Id, crediteur: post.CreditorId, naam: post.CompanyName, ref: post.Reference, open: post.AmountOpen, uitleg: c.reden || (c.status === "zeker" ? "referentie en bedrag kloppen" : "lijkt op deze factuur"), zeker: c.status === "zeker", kandidaten: kand };
-  return { type: "geen", uitleg: c.reden || "geen open crediteurfactuur gevonden", kandidaten: kand };
+  return { type: "geen", uitleg: c.reden || "nog te koppelen aan een open crediteurfactuur", kandidaten: kand };
 }
 /* De kleur van een regel: groen als er zonder twijfel iets mee kan, oranje
    als er een mens naar moet kijken, klaar als hij afgehandeld is. */
@@ -344,8 +344,8 @@ function zichtbaar(){
 function voorstelHtml(r){
   var v = r.keuze || r.voorstel;
   if (r.status === "klaar") return '<span class="pil">' + esc(r.geboekt && r.geboekt.tekst || "in Logic4") + '</span>';
-  if (r.status === "genegeerd") return '<span class="pil grijs">niet boeken</span><small style="display:block;color:var(--grijs)">' + esc(r.reden||"") + '</small>';
-  if (!v) return '<span class="pil grijs">nog geen voorstel</span>';
+  if (r.status === "genegeerd") return '<span class="pil grijs">elders boeken</span><small style="display:block;color:var(--grijs)">' + esc(r.reden||"") + '</small>';
+  if (!v) return '<span class="pil grijs">voorstel volgt</span>';
   var kop = "";
   if (v.type === "factuur") kop = 'betaling op factuur ' + esc(v.invoiceId) + (v.orderNr ? ' (order ' + esc(v.orderNr) + ')' : '') + (v.open != null ? ' · open ' + esc(geld(v.open)) : '');
   else if (v.type === "order") kop = 'betaling op order ' + esc(v.orderNr);
@@ -353,7 +353,7 @@ function voorstelHtml(r){
   else if (v.type === "tussen") kop = 'tussenrekening ' + esc(v.rekening) + ' <span class="pil blauw">in Logic4 toewijzen</span>';
   else if (v.type === "kruispost") kop = 'kruispost, grootboek ' + esc(v.rekening) + ' <span class="pil blauw">in Logic4 toewijzen</span>';
   else if (v.type === "wacht") kop = 'order wordt opgezocht…';
-  else kop = '<span class="pil oranje">niet herkend</span>';
+  else kop = '<span class="pil oranje">zelf kiezen</span>';
   var keuzes = "";
   if (!r.keuze && v.kandidaten && v.kandidaten.length > 1){
     keuzes = '<select class="keuze" data-kies="' + esc(r.id) + '"><option value="">kies de juiste…</option>' + v.kandidaten.slice(0, 25).map(function(k, i){
@@ -370,7 +370,7 @@ function actiesHtml(r){
   if (r.keuze) h += '<button class="knop" data-los="' + esc(r.id) + '">keuze weg</button>';
   h += '<button class="knop" data-nr="' + esc(r.id) + '" title="Zelf een factuur- of ordernummer opgeven">nummer…</button>';
   h += '<button class="knop" data-tussen="' + esc(r.id) + '" title="Deze naam voortaan altijd op een tussenrekening zetten">altijd…</button>';
-  h += '<button class="knop" data-nee="' + esc(r.id) + '" title="Niet vanuit hier boeken">niet</button>';
+  h += '<button class="knop" data-nee="' + esc(r.id) + '" title="Elders boeken, buiten deze tegel">elders</button>';
   return h;
 }
 function teken(){
@@ -385,10 +385,10 @@ function teken(){
   var lijst = zichtbaar();
   $("lijst").innerHTML = lijst.length ? lijst.map(function(r){
     return '<tr class="' + kleur(r) + '"><td style="white-space:nowrap">' + esc(datumNL(r.datum)) + '</td><td style="white-space:nowrap;font-size:11.5px">' + esc(rekNaam(r.iban)) + '</td>' +
-      '<td><div class="wie">' + esc(r.wie || "(geen naam)") + '</div><div class="oms">' + esc(r.omschrijving) + '</div></td>' +
+      '<td><div class="wie">' + esc(r.wie || "(zonder naam)") + '</div><div class="oms">' + esc(r.omschrijving) + '</div></td>' +
       '<td class="n" style="color:' + (r.bedrag < 0 ? 'var(--rood)' : 'var(--goed)') + '">' + (r.bedrag < 0 ? "-" : "+") + esc(geld(r.bedrag, r.munt)) + '</td>' +
       '<td>' + voorstelHtml(r) + '</td><td class="acties">' + actiesHtml(r) + '</td></tr>';
-  }).join("") : '<tr><td colspan="6" style="color:var(--grijs);padding:16px 6px">' + (alle.length ? "Niets in beeld met deze filters." : "Nog geen afschriften. Sleep er een naar boven.") + '</td></tr>';
+  }).join("") : '<tr><td colspan="6" style="color:var(--grijs);padding:16px 6px">' + (alle.length ? "Met deze filters is de lijst leeg." : "Sleep een afschrift naar boven om te beginnen.") + '</td></tr>';
   var teBoeken = alle.filter(boekbaar);
   $("tel").textContent = teBoeken.length + " betaling" + (teBoeken.length===1?"":"en") + " klaar om in Logic4 te zetten";
   $("boek").disabled = !teBoeken.length;
@@ -397,7 +397,7 @@ function teken(){
   $("lijst").querySelectorAll("[data-los]").forEach(function(b){ b.addEventListener("click", function(){ var r = werk.regels[b.dataset.los]; delete r.keuze; delete r.keuzeDoor; bewaarWerk(); teken(); }); });
   $("lijst").querySelectorAll("[data-nr]").forEach(function(b){ b.addEventListener("click", function(){ nummer(b.dataset.nr); }); });
   $("lijst").querySelectorAll("[data-tussen]").forEach(function(b){ b.addEventListener("click", function(){ leer(b.dataset.tussen); }); });
-  $("lijst").querySelectorAll("[data-nee]").forEach(function(b){ b.addEventListener("click", function(){ var r = werk.regels[b.dataset.nee]; var reden = prompt("Waarom niet vanuit hier? (korte reden, komt in de lijst te staan)"); if (reden === null) return; r.status = "genegeerd"; r.reden = reden; r.door = ik; bewaarWerk(); teken(); }); });
+  $("lijst").querySelectorAll("[data-nee]").forEach(function(b){ b.addEventListener("click", function(){ var r = werk.regels[b.dataset.nee]; var reden = prompt("Waarom elders boeken? (korte reden, komt in de lijst te staan)"); if (reden === null) return; r.status = "genegeerd"; r.reden = reden; r.door = ik; bewaarWerk(); teken(); }); });
   $("lijst").querySelectorAll("[data-terug]").forEach(function(b){ b.addEventListener("click", function(){ var r = werk.regels[b.dataset.terug]; r.status = "nieuw"; delete r.reden; bewaarWerk(); teken(); }); });
   document.querySelectorAll(".kpi[data-f]").forEach(function(k){ k.addEventListener("click", function(){ fKlaar = k.dataset.f === "klaar"; $("fKlaar").checked = fKlaar; teken(); }); });
 }
@@ -441,9 +441,9 @@ async function leer(id){
   var keus = prompt("'" + (r.wie || r.omschrijving.slice(0,40)) + "' voortaan altijd zien als:\n\n" + opties.join("\n") + "\n\nTyp het woord vóór het =-teken:", "");
   if (!keus) return;
   keus = keus.trim().toLowerCase();
-  if (!TUSSEN[keus] && keus !== "kruispost") { alert("Onbekende keuze."); return; }
+  if (!TUSSEN[keus] && keus !== "kruispost") { alert("Kies een van de woorden uit de lijst."); return; }
   var sl = window.fpBankMatch.naamSleutel ? window.fpBankMatch.naamSleutel(r.wie||"") : String(r.wie||"").toLowerCase();
-  if (!sl) { alert("Deze regel heeft geen naam om te onthouden."); return; }
+  if (!sl) { alert("Onthouden gaat op naam, en deze regel is zonder naam."); return; }
   geleerd.namen[sl] = { soort: keus, door: ik, ts: new Date().toISOString(), voorbeeld: r.wie };
   await bewaarGeleerd();
   Object.values(werk.regels).forEach(function(x){ if (x.status !== "klaar" && x.status !== "genegeerd"){ var s2 = window.fpBankMatch.naamSleutel ? window.fpBankMatch.naamSleutel(x.wie||"") : ""; if (s2 === sl){ delete x.keuze; delete x.voorstel; } } });
@@ -469,14 +469,14 @@ $("boek").addEventListener("click", async function(){
       (j.resultaten||[]).forEach(function(res, k){
         var r = portie[k]; if (!r) return;
         if (res.ok){ r.status = "klaar"; r.geboekt = { tekst: "geboekt op " + (res.orderNr ? "order " + res.orderNr : "factuur " + res.invoiceId), ts: new Date().toISOString(), door: ik }; gelukt++; }
-        else fouten.push((r.wie||r.omschrijving.slice(0,30)) + ": " + (res.error||"fout"));
+        else fouten.push((r.wie||r.omschrijving.slice(0,30)) + ": " + (res.error||"reden onbekend"));
       });
     }catch(e){ fouten.push(e.message); }
   }
   rest.forEach(function(r){ var v = r.keuze || r.voorstel; r.status = "klaar"; r.geboekt = { tekst: v.type === "crediteur" ? "in Logic4 toewijzen aan " + (v.naam||"crediteur") + (v.ref ? " " + v.ref : "") : "in Logic4 toewijzen op " + v.rekening, ts: new Date().toISOString(), door: ik, toewijzen: true }; });
   await bewaarWerk();
   try{ if (window.fpLog) window.fpLog("bank-naar-logic4", gelukt + " geboekt, " + rest.length + " op klaar" + (fouten.length ? ", " + fouten.length + " mislukt" : "")); }catch(e){}
-  msg($("boekMsg"), gelukt + " betaling(en) in Logic4 gezet, " + rest.length + " regel(s) op klaar." + (fouten.length ? " Mislukt: " + esc(fouten.slice(0,4).join("; ")) : ""), fouten.length ? "bad" : "ok");
+  msg($("boekMsg"), gelukt + " betaling(en) in Logic4 gezet, " + rest.length + " regel(s) op klaar." + (fouten.length ? " Nog te boeken: " + esc(fouten.slice(0,4).join("; ")) : ""), fouten.length ? "bad" : "ok");
   teken();
 });
 
@@ -493,7 +493,7 @@ $("instelKnop").addEventListener("click", async function(){
 $("instBewaar").addEventListener("click", async function(){
   inst.bankWerkDagboek = $("instDagboek").value ? Number($("instDagboek").value) : null;
   inst.kruisGrootboek = $("instKruis").value.trim() || "1220";
-  try{ await api("/data/bank-instellingen", inst, "PUT"); $("instMsg").textContent = "Bewaard."; }catch(e){ $("instMsg").textContent = "Bewaren lukte niet: " + e.message; }
+  try{ await api("/data/bank-instellingen", inst, "PUT"); $("instMsg").textContent = "Bewaard."; }catch(e){ $("instMsg").textContent = "Bewaren vraagt een nieuwe poging: " + e.message; }
 });
 
 /* Inlezen: klik of slepen */
@@ -509,7 +509,7 @@ $("fKlaar").addEventListener("change", function(){ fKlaar = $("fKlaar").checked;
 
 (async function(){
   for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
-  try { await laad(); } catch(e){ msg($("dropMsg"), "Laden lukte niet: " + esc(e.message), "bad"); }
+  try { await laad(); } catch(e){ msg($("dropMsg"), "Laden vraagt een nieuwe poging: " + esc(e.message), "bad"); }
 })();
 </script>
 <script>

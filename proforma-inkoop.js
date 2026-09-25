@@ -141,7 +141,7 @@ function parseProforma(wb, bestandsnaam){
       break;
     }
   }
-  if(kop<0) return {fout:"kopregel niet gevonden op tabblad '"+naam+"'. Er moet een kolom staan met Model of Item, en een met Quantity, Q'ty of Qty.",regels:[]};
+  if(kop<0) return {fout:"tabblad '"+naam+"' vraagt nog een kopregel. Er moet een kolom staan met Model of Item, en een met Quantity, Q'ty of Qty.",regels:[]};
 
   /* Een totaalregel herkennen. Twee aanwijzingen, en één is genoeg:
        1. ergens in de regel staat "total", "totaal" of "sum";
@@ -242,10 +242,10 @@ function parseProforma(wb, bestandsnaam){
   if(regels.length && !regels.some(r=>r.model)){
     const codes=[...new Set(regels.map(r=>r.code).filter(Boolean))].slice(0,4).join(", ");
     return {tabblad:naam,leverancier,referentie,regels:[],
-      fout:"dit lijkt geen proforma van spa's. Op tabblad '"+naam+"' staan "+regels.length+
-           " regel(s) met codes als "+codes+", en daar hoort in Logic4 geen spa-artikel bij. "+
+      fout:"dit lijkt een proforma van iets anders dan spa's. Op tabblad '"+naam+"' staan "+regels.length+
+           " regel(s) met codes als "+codes+", en die horen in Logic4 bij andere artikelen dan spa's. "+
            "Dit scherm maakt alleen inkooporders voor spa's; een proforma van meubelen of onderdelen "+
-           "moet je in Logic4 zelf invoeren."};
+           "voer je in Logic4 zelf in."};
   }
   return {tabblad:naam,leverancier,referentie,regels};
 }
@@ -273,18 +273,18 @@ function renderIkoVoorstel(v){
     "<div class='actions' style='gap:10px;align-items:center;margin:0 0 10px;flex-wrap:wrap'>"+
       "<label style='font-size:12px;color:var(--muted)'>Leverancier</label>"+
       "<select id='ikoCred' style='min-width:260px;padding:8px'>"+
-        "<option value=''>— kies leverancier —</option>"+
+        "<option value=''>- kies leverancier -</option>"+
         (v.leveranciers||[]).map(c=>"<option value='"+c.id+"'"+((v.crediteur&&v.crediteur.id===c.id)?" selected":"")+">"+esc(c.naam)+"</option>").join("")+
       "</select>"+
       "<span style='font-size:12px;color:var(--muted)'>"+(v.regels||[]).length+" regel(s) · "+v.totaalStuks+" spa's</span>"+
     "</div>"+
-    "<div class='tablewrap'><table class='grid'><thead><tr><th>Fabriekscode</th><th>Spa</th><th>Kleur</th><th>Omkasting</th><th>Aantal</th><th>Artikelcode Logic4</th><th>Omschrijving</th><th>Niet meebestellen</th></tr></thead><tbody>"+
+    "<div class='tablewrap'><table class='grid'><thead><tr><th>Fabriekscode</th><th>Spa</th><th>Kleur</th><th>Omkasting</th><th>Aantal</th><th>Artikelcode Logic4</th><th>Omschrijving</th><th>Overslaan</th></tr></thead><tbody>"+
     (v.regels||[]).map((r,i)=>"<tr data-rij='"+i+"'"+(r.artikelcode?(r.zeker?"":" style='background:#fef3c7'"):" style='background:#fee2e2'")+">"+
-      "<td>"+esc(r.code||"—")+"</td><td><b>"+esc(r.model||"onbekend")+"</b></td><td>"+esc(r.kleur||"—")+"</td>"+
-      "<td style='font-size:11.5px'>"+esc(r.skirt||"—")+"</td>"+
-      "<td>"+r.aantal+"</td><td>"+esc(r.artikelcode||"— niet gevonden —")+"</td>"+
+      "<td>"+esc(r.code||"-")+"</td><td><b>"+esc(r.model||"onbekend")+"</b></td><td>"+esc(r.kleur||"-")+"</td>"+
+      "<td style='font-size:11.5px'>"+esc(r.skirt||"-")+"</td>"+
+      "<td>"+r.aantal+"</td><td>"+esc(r.artikelcode||"- nog te koppelen -")+"</td>"+
       "<td style='font-size:11.5px;color:var(--muted)'>"+esc(r.omschrijving||"")+"</td>"+
-      "<td style='text-align:center'>"+(r.artikelcode?"":"<input type='checkbox' class='ikoSkip' data-rij='"+i+"' title='deze regel niet meebestellen'>")+"</td>"+
+      "<td style='text-align:center'>"+(r.artikelcode?"":"<input type='checkbox' class='ikoSkip' data-rij='"+i+"' title='deze regel overslaan'>")+"</td>"+
       "</tr>").join("")+
     "</tbody></table></div>"+
     "<div class='actions' style='margin-top:12px'>"+
@@ -292,7 +292,7 @@ function renderIkoVoorstel(v){
       "<button class='btn' id='ikoWissen' type='button'>Opnieuw beginnen</button>"+
       "<span id='ikoTelling' style='font-size:11.5px;color:var(--muted)'></span>"+
     "</div>"+
-    "<p class='lead' style='font-size:11.5px;margin-top:6px'>Geel = de kleur is niet zeker herkend, controleer de artikelcode. Rood = er is in Logic4 geen artikel voor dit model in deze kleur; los dat daar op óf vink <b>Niet meebestellen</b> aan. Aanmaken zet een inkooporder in Logic4 — er gaat niets naar de fabriek.</p>";
+    "<p class='lead' style='font-size:11.5px;margin-top:6px'>Geel = de kleur is met twijfel herkend, controleer de artikelcode. Rood = Logic4 heeft voor dit model in deze kleur nog een artikel nodig; maak dat daar aan óf vink <b>Overslaan</b> aan. Aanmaken zet een inkooporder in Logic4 - de fabriek blijft erbuiten.</p>";
   document.getElementById("ikoAanmaken").addEventListener("click",ikoAanmaken);
   // Een geüploade proforma wordt nergens bewaard — hij staat alleen op het
   // scherm. 'Opnieuw beginnen' maakt dat zichtbaar, zodat duidelijk is dat er
@@ -301,7 +301,7 @@ function renderIkoVoorstel(v){
     ikoLaatst=null;
     el("ikoVoorstel").innerHTML="";
     el("ikoRef").value=""; el("ikoEta").value="";
-    ikoStatus("ok","Leeggemaakt. Er is niets opgeslagen — je kunt de proforma opnieuw uploaden.");
+    ikoStatus("ok","Leeggemaakt. Alles blijft zoals het was - je kunt de proforma opnieuw uploaden.");
   });
   document.querySelectorAll(".ikoSkip").forEach(cb=>cb.addEventListener("change",ikoTel));
   ikoTel();
@@ -319,8 +319,8 @@ function ikoTel(){
   const s=ikoMeeTeBestellen();
   const stuks=s.mee.reduce((n,r)=>n+r.aantal,0);
   t.innerHTML=s.blokkeert.length
-    ? "<span style='color:#b91c1c'>"+s.blokkeert.length+" regel(s) zonder artikelcode — los op of vink 'niet meebestellen' aan.</span>"
-    : s.mee.length+" regel(s) · "+stuks+" spa's"+(s.overgeslagen.length?(" · <b style='color:#c2410c'>"+s.overgeslagen.length+" regel(s) worden NIET meebesteld</b>"):"");
+    ? "<span style='color:#b91c1c'>"+s.blokkeert.length+" regel(s) zonder artikelcode - vul die aan of vink 'Overslaan' aan.</span>"
+    : s.mee.length+" regel(s) · "+stuks+" spa's"+(s.overgeslagen.length?(" · <b style='color:#c2410c'>"+s.overgeslagen.length+" regel(s) worden OVERGESLAGEN</b>"):"");
 }
 /* Aanvullen in een bestaande inkooporder (Chantal, 6 aug 2026).
    Een proforma wordt soms maar half besteld, bijvoorbeeld omdat een model nog
@@ -331,10 +331,10 @@ function ikoTel(){
    het dubbele bestelt. */
 async function ikoAanvullen(bestaandeOrder){
   const s=ikoMeeTeBestellen();
-  if(s.blokkeert.length){ ikoStatus("bad",s.blokkeert.length+" regel(s) hebben geen artikelcode — los dat op of vink 'niet meebestellen' aan."); return; }
-  if(!s.mee.length){ ikoStatus("bad","Er blijft geen enkele regel over om toe te voegen."); return; }
+  if(s.blokkeert.length){ ikoStatus("bad",s.blokkeert.length+" regel(s) wachten nog op een artikelcode - vul die aan of vink 'Overslaan' aan."); return; }
+  if(!s.mee.length){ ikoStatus("bad","Er blijven 0 regels over om toe te voegen."); return; }
   const aantal=s.mee.reduce((n,r)=>n+r.aantal,0);
-  if(!confirm("Aanvullen in inkooporder "+bestaandeOrder+"?\n\n"+s.mee.length+" regels · "+aantal+" spa's worden toegevoegd aan de bestaande inkooporder.\n\nArtikelen die er al op staan worden geweigerd, dus er wordt niets dubbel besteld.")) return;
+  if(!confirm("Aanvullen in inkooporder "+bestaandeOrder+"?\n\n"+s.mee.length+" regels · "+aantal+" spa's worden toegevoegd aan de bestaande inkooporder.\n\nArtikelen die er al op staan worden overgeslagen, dus alles wordt één keer besteld.")) return;
   const knop=document.getElementById("ikoAanvullen");
   if(knop){ knop.disabled=true; knop.textContent="Bezig…"; }
   try{
@@ -348,11 +348,11 @@ async function ikoAanvullen(bestaandeOrder){
     if(j.dubbeleRegels){ ikoStatus("warn",j.error); if(knop){ knop.disabled=false; knop.textContent="Aanvullen in inkooporder "+bestaandeOrder; } return; }
     if(!j.ok&&!j.buyOrderId) throw new Error(j.error||("HTTP "+r.status));
     ikoStatus("ok","Inkooporder "+j.buyOrderId+" aangevuld met "+j.toegevoegd+" regel(s)."+
-      (j.mislukt&&j.mislukt.length?(" "+j.mislukt.length+" regel(s) niet: "+j.mislukt.map(m=>m.artikelcode+" ("+m.fout+")").join("; ")):""));
+      (j.mislukt&&j.mislukt.length?(" "+j.mislukt.length+" regel(s) nog open: "+j.mislukt.map(m=>m.artikelcode+" ("+m.fout+")").join("; ")):""));
     if(knop){ knop.textContent="Aangevuld ✓"; }
     try{ if(C.log) C.log("inkooporder-aangevuld","order "+j.buyOrderId+", "+j.toegevoegd+" regel(s)"); }catch(e){}
   }catch(e){
-    ikoStatus("bad","Aanvullen mislukt: "+e.message);
+    ikoStatus("bad","Aanvullen vraagt een nieuwe poging: "+e.message);
     if(knop){ knop.disabled=false; knop.textContent="Aanvullen in inkooporder "+bestaandeOrder; }
   }
 }
@@ -361,14 +361,14 @@ async function ikoAanmaken(){
   const cred=Number((document.getElementById("ikoCred")||{}).value||0);
   if(!cred){ ikoStatus("bad","Kies eerst de leverancier."); return; }
   const s=ikoMeeTeBestellen();
-  if(s.blokkeert.length){ ikoStatus("bad",s.blokkeert.length+" regel(s) hebben geen artikelcode — los dat op of vink 'niet meebestellen' aan."); return; }
-  if(!s.mee.length){ ikoStatus("bad","Er blijft geen enkele regel over om te bestellen."); return; }
+  if(s.blokkeert.length){ ikoStatus("bad",s.blokkeert.length+" regel(s) wachten nog op een artikelcode - vul die aan of vink 'Overslaan' aan."); return; }
+  if(!s.mee.length){ ikoStatus("bad","Er blijven 0 regels over om te bestellen."); return; }
   const ref=(document.getElementById("ikoRef").value||"").trim();
   const aantal=s.mee.reduce((n,r)=>n+r.aantal,0);
   if(!confirm("Inkooporder aanmaken in Logic4?\n\n"+s.mee.length+" regels · "+aantal+" spa's"+(ref?("\nProforma: "+ref):"")+
-    (s.overgeslagen.length?("\n\nLET OP: "+s.overgeslagen.length+" regel(s) gaan NIET mee ("+
-      s.overgeslagen.map(r=>r.aantal+"x "+(r.model||r.code)).join(", ")+"). Die moet je zelf bestellen."):"")+
-    "\n\nDit maakt een inkooporder aan in Logic4. Er gaat niets naar de fabriek.")) return;
+    (s.overgeslagen.length?("\n\nLET OP: "+s.overgeslagen.length+" regel(s) worden OVERGESLAGEN ("+
+      s.overgeslagen.map(r=>r.aantal+"x "+(r.model||r.code)).join(", ")+"). Die bestel je zelf."):"")+
+    "\n\nDit maakt een inkooporder aan in Logic4. De fabriek blijft erbuiten.")) return;
   knop.disabled=true; knop.textContent="Bezig…";
   try{
     /* In blokken, want een worker mag per aanroep maar een beperkt aantal
@@ -399,7 +399,7 @@ async function ikoAanmaken(){
       j=await r.json().catch(()=>({}));
       if(b===0&&j.dubbel) break;                       // hieronder afgehandeld
       if(!j.ok&&!j.buyOrderId) throw new Error((j.error||("HTTP "+r.status))+
-        (b>0?(" — de eerste "+totaalToegevoegd+" regel(s) staan wél in inkooporder "+orderId):""));
+        (b>0?(" - de eerste "+totaalToegevoegd+" regel(s) staan wél in inkooporder "+orderId):""));
       orderId=orderId||j.buyOrderId;
       totaalToegevoegd+=Number(j.toegevoegd)||0;
       if(j.mislukt&&j.mislukt.length) alleMislukt=alleMislukt.concat(j.mislukt);
@@ -421,14 +421,14 @@ async function ikoAanmaken(){
     }
     if(!j.ok&&!j.buyOrderId) throw new Error(j.error||("HTTP "+r.status));
     if(j.mislukt&&j.mislukt.length){
-      ikoStatus("warn","Inkooporder "+j.buyOrderId+" aangemaakt met "+j.toegevoegd+" regel(s), maar "+j.mislukt.length+" regel(s) niet: "+
-        j.mislukt.map(m=>m.artikelcode+" ("+m.fout+")").join("; ")+" — vul die handmatig aan in Logic4.");
+      ikoStatus("warn","Inkooporder "+j.buyOrderId+" aangemaakt met "+j.toegevoegd+" regel(s); "+j.mislukt.length+" regel(s) vragen nog aandacht: "+
+        j.mislukt.map(m=>m.artikelcode+" ("+m.fout+")").join("; ")+" - vul die handmatig aan in Logic4.");
     }else{
       ikoStatus("ok","Inkooporder "+j.buyOrderId+" aangemaakt in Logic4 met "+j.toegevoegd+" regel(s).");
       knop.textContent="Aangemaakt ✓";
     }
     try{ if(C.log) C.log("inkooporder-aangemaakt","Logic4 inkooporder "+j.buyOrderId+" · "+j.toegevoegd+" regels"+(ref?(" · proforma "+ref):"")); }catch(e){}
-  }catch(e){ ikoStatus("bad","Aanmaken faalde: "+e.message); knop.disabled=false; knop.textContent="Inkooporder aanmaken in Logic4"; }
+  }catch(e){ ikoStatus("bad","Aanmaken vraagt een nieuwe poging: "+e.message); knop.disabled=false; knop.textContent="Inkooporder aanmaken in Logic4"; }
 }
 // Een PDF komt hier geregeld langs, want fabrieken sturen hun proforma net zo
 // vaak als PDF als in Excel. XLSX maakt daar iets onherkenbaars van en de
@@ -449,14 +449,14 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
     // zo'n bladzijde (Chantal, 8 aug 2026).
     var p;
     if(isPdf(f)){
-      if(!window.fpCiPdf) throw new Error("de pdf-lezer is niet geladen. Herstart het dashboard.");
+      if(!window.fpCiPdf) throw new Error("de pdf-lezer moet nog laden. Herstart het dashboard.");
       // Twee soorten bladzijden: de commercial invoice van MEXDA en de
       // proforma van Huantong, met per spa een blok en de kleuren ernaast.
       // De lezer kiest zelf op de inhoud; de bestandsnaam zegt niets.
       // leesBestand kiest zelf de juiste lezer, ook voor formaten die de
       // x-posities nodig hebben (TOPIA-tuinmeubelen).
       const doc=await window.fpCiPdf.leesBestand(f);
-      if(!doc.regels.length) throw new Error("in deze PDF staan geen artikelregels. Staat er wel een tabel met een artikelnaam en een aantal in?");
+      if(!doc.regels.length) throw new Error("in deze PDF staan 0 artikelregels. Staat er een tabel met een artikelnaam en een aantal in?");
       p={ tabblad:(doc.soort==="proforma"?"proforma":"commercial invoice")+
                   (doc.container?" · container "+doc.container:"")+
                   (doc.containers?" · "+doc.containers+" containers":""),
@@ -498,7 +498,7 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
       // Spreken factuur en pakbon elkaar tegen, dan mag daar niet overheen
       // gelezen worden: hierop wordt straks voorraad geteld.
       if((doc.verschillen||[]).length){
-        ikoStatus("bad","Let op - de commercial invoice en de packing list in dit bestand komen niet overeen: "+
+        ikoStatus("bad","Let op - de commercial invoice en de packing list in dit bestand verschillen van elkaar: "+
           doc.verschillen.map(function(v){ return v.code+" ("+v.wat+")"; }).join("; ")+
           ". Zoek dit eerst uit met de fabriek; het voorstel hieronder volgt de factuur.");
       }
@@ -507,7 +507,7 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
       p=parseProforma(wb, f.name);
     }
     if(p.fout) throw new Error(p.fout);
-    if(!p.regels.length) throw new Error("op tabblad '"+p.tabblad+"' staan geen spa-regels.");
+    if(!p.regels.length) throw new Error("op tabblad '"+p.tabblad+"' staan 0 spa-regels.");
     // Referentie uit het document zelf ("Order No.: RZ2009DF3352 to Rotterdam"),
     // want dat is waarop we later herkennen of een proforma al besteld is.
     if(!document.getElementById("ikoRef").value)
@@ -519,13 +519,13 @@ function koppelBestandsveld(){ var inp=el("ikoFile"); if(!inp) return; inp.addEv
     // Zeg wát er misging. "voorstel maken faalde" liet iemand met lege handen
     // staan; met de status erbij is meteen duidelijk of het aan de inlog ligt.
     if(!r.ok||!v.ok){
-      if(r.status===401) throw new Error("het dashboard is niet ontgrendeld op deze computer. Log opnieuw in via het dashboard, dan wordt de sleutel opgehaald.");
-      throw new Error((v.error||("de server antwoordde met HTTP "+r.status))+" — het bestand zelf is wel goed uitgelezen ("+p.regels.length+" regels).");
+      if(r.status===401) throw new Error("het dashboard moet op deze computer nog ontgrendeld worden. Log opnieuw in via het dashboard, dan wordt de sleutel opgehaald.");
+      throw new Error((v.error||("de server antwoordde met HTTP "+r.status))+" - het bestand zelf is goed uitgelezen ("+p.regels.length+" regels).");
     }
     ikoLaatst=v; renderIkoVoorstel(v);
     if(!p.pdf||!p.pdf.verschillen.length) ikoStatus("ok","Uitgelezen van '"+p.tabblad+"': "+v.regels.length+" regel(s), "+v.totaalStuks+" spa's"+
       (p.leverancier?(" · "+p.leverancier):"")+". Controleer hieronder en klik pas daarna op aanmaken.");
-  }catch(e){ ikoStatus("bad","Kon niet inlezen: "+e.message); }
+  }catch(e){ ikoStatus("bad","Inlezen vraagt een nieuwe poging: "+e.message); }
   ev.target.value="";
   });
 }

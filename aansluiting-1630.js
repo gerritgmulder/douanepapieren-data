@@ -131,7 +131,7 @@
   async function bouw(saldoBalans, melden) {
     melden("Grootboek 1630 uit Logic4 lezen…", 5);
     var g = await groepeerUitGrootboek("2025-12-31T23:59:59", melden);
-    if (!g.regels) throw new Error("Logic4 gaf geen enkele boekingsregel op 1630 terug.");
+    if (!g.regels) throw new Error("Logic4 gaf 0 boekingsregels op 1630 terug.");
 
     var leveringen = await haalLeveringen(melden);
     melden("Aansluiting opstellen…", 80);
@@ -258,7 +258,7 @@
     doel.appendChild(vak);
 
     if (!u) {
-      doel.appendChild(el("p", "uitleg", "Nog geen aansluiting opgesteld. Exporteer in Logic4 het grootboek van rekening 1630, gegroepeerd op inkooplevering, en laad hem hier."));
+      doel.appendChild(el("p", "uitleg", "Hier komt de aansluiting te staan. Exporteer in Logic4 het grootboek van rekening 1630, gegroepeerd op inkooplevering, en laad hem hier."));
       return;
     }
 
@@ -272,8 +272,8 @@
       tr.appendChild(el("td", "r", bedrag == null ? "" : euro2(bedrag)));
       tb.appendChild(tr);
     }
-    rij("A  Ontvangen, nog niet gefactureerd", u.A.aantal, u.A.bedrag);
-    rij("B  Gefactureerd, geen ontvangst geboekt", u.B.aantal, u.B.bedrag);
+    rij("A  Ontvangen, nog te factureren", u.A.aantal, u.A.bedrag);
+    rij("B  Gefactureerd, ontvangst nog te boeken", u.B.aantal, u.B.bedrag);
     rij("Subtotaal openstaande inkoopleveringen", u.A.aantal + u.B.aantal, u.A.bedrag + u.B.bedrag, "sub");
     rij("C  Handmatige correcties zonder leveringnummer", u.correcties.aantal, u.correcties.bedrag);
     rij("D  Afrondingsresidu op afgewikkelde leveringen", u.afgewikkeld.aantal, u.afgewikkeld.bedrag);
@@ -290,12 +290,12 @@
 
     // ── wat opvalt ──
     var punten = [];
-    if (Math.abs(u.verschil) > 1) punten.push("De specificatie sluit niet aan op de balans: er blijft " + euro(Math.abs(u.verschil)) +
-      " onverklaard. Dat is geen afronding — of de export mist boekingen, of de balans bevat iets wat niet op 1630 staat.");
+    if (Math.abs(u.verschil) > 1) punten.push("De specificatie wijkt af van de balans: er blijft " + euro(Math.abs(u.verschil)) +
+      " onverklaard. Dat is meer dan een afronding - of er staan boekingen buiten de export, of de balans bevat iets wat buiten 1630 staat.");
     if (u.correcties.bedrag && Math.abs(u.correcties.bedrag) > Math.abs(u.A.bedrag + u.B.bedrag) / 4)
       punten.push("Het saldo wordt voor een groot deel bepaald door " + u.correcties.aantal +
-        " handmatige correcties (" + euro(u.correcties.bedrag) + ") die geen leveringnummer dragen. Zolang die er zijn, is de rekening niet te specificeren.");
-    if (u.zonderLevering) punten.push(u.zonderLevering + " openstaande posten verwijzen naar een inkoopleveringnummer dat niet meer in Logic4 bestaat. Die kunnen nooit aflopen.");
+        " handmatige correcties (" + euro(u.correcties.bedrag) + ") zonder leveringnummer. De rekening is pas te specificeren als die zijn uitgezocht.");
+    if (u.zonderLevering) punten.push(u.zonderLevering + " openstaande posten verwijzen naar een inkoopleveringnummer dat uit Logic4 is verdwenen. Die blijven altijd openstaan.");
     if (punten.length) {
       var w = el("div", "zes-let");
       var ul = el("ul");
@@ -324,9 +324,9 @@
       var tr = el("tr", r.bestaat ? "" : "weg");
       tr.appendChild(el("td", null, r.nr));
       tr.appendChild(el("td", "r", euro2(r.som)));
-      tr.appendChild(el("td", null, r.soort === "A" ? "ontvangen, niet gefactureerd" : "gefactureerd, geen ontvangst"));
+      tr.appendChild(el("td", null, r.soort === "A" ? "ontvangen, nog te factureren" : "gefactureerd, ontvangst nog te boeken"));
       tr.appendChild(el("td", null, nl(r.eerste)));
-      tr.appendChild(el("td", null, r.bo || (r.bestaat ? "—" : "levering bestaat niet meer")));
+      tr.appendChild(el("td", null, r.bo || (r.bestaat ? "—" : "levering verdwenen uit Logic4")));
       tr.appendChild(el("td", null, r.sup || "—"));
       tr.appendChild(el("td", null, String(r.omschr || "").slice(0, 60)));
       tb2.appendChild(tr);
@@ -378,8 +378,8 @@
       ["Aansluiting grootboekrekening 1630 - Te ontvangen facturen"],
       ["Opgesteld", nl(u.gemaakt), u.door || ""],
       [], ["", "Aantal", "Bedrag EUR"],
-      ["A  Ontvangen, nog niet gefactureerd", u.A.aantal, u.A.bedrag],
-      ["B  Gefactureerd, geen ontvangst geboekt", u.B.aantal, u.B.bedrag],
+      ["A  Ontvangen, nog te factureren", u.A.aantal, u.A.bedrag],
+      ["B  Gefactureerd, ontvangst nog te boeken", u.B.aantal, u.B.bedrag],
       ["Subtotaal openstaande inkoopleveringen", u.A.aantal + u.B.aantal, u.A.bedrag + u.B.bedrag],
       ["C  Handmatige correcties zonder leveringnummer", u.correcties.aantal, u.correcties.bedrag],
       ["D  Afrondingsresidu op afgewikkelde leveringen", u.afgewikkeld.aantal, u.afgewikkeld.bedrag],
@@ -391,7 +391,7 @@
     var r2 = [["Levering", "Saldo EUR", "Soort", "Eerste boeking", "Laatste boeking", "Boekingen",
       "Inkooporder", "Leverancier", "Ontvangen op", "Stuks", "Waarde ontvangst EUR", "Bestaat in Logic4", "Omschrijving"]];
     (u.regels || []).forEach(function (r) {
-      r2.push([r.nr, r.som, r.soort === "A" ? "A ontvangen niet gefactureerd" : "B gefactureerd geen ontvangst",
+      r2.push([r.nr, r.som, r.soort === "A" ? "A ontvangen nog te factureren" : "B gefactureerd ontvangst nog te boeken",
       r.eerste || "", r.laatste || "", r.boekingen, r.bo || "", r.sup || "", r.ontvangen || "",
       r.stuks == null ? "" : r.stuks, r.waarde == null ? "" : Math.round(r.waarde), r.bestaat ? "ja" : "nee", r.omschr]);
     });
@@ -406,7 +406,7 @@
 
   async function start(saldo, knop) {
     if (bezig) return;
-    if (!global.fpGrootboek) { alert("De grootboeklezer is niet geladen. Sluit de app af en start hem opnieuw."); return; }
+    if (!global.fpGrootboek) { alert("De grootboeklezer vraagt een herstart: sluit de app af en start hem opnieuw."); return; }
     var s = Number(String(saldo).replace(/[^\d,-]/g, "").replace(/\./g, "").replace(",", "."));
     if (!isFinite(s) || !s) { alert("Vul het saldo volgens de balans in, dan kan ik het verschil berekenen."); return; }
     bezig = true; knop.disabled = true; knop.textContent = "Bezig…";
@@ -420,7 +420,7 @@
       var bewaard = await laadLaatste();
       teken(bewaard);
     } catch (e) {
-      alert("Niet gelukt: " + (e.message || e));
+      alert("Dit vraagt een nieuwe poging: " + (e.message || e));
     }
     bezig = false;
     if (knop) { knop.disabled = false; knop.textContent = "Aansluiting opstellen"; }

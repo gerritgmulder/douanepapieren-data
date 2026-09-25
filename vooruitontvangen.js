@@ -267,7 +267,7 @@
       vak.appendChild(el("p", "uitleg",
         "Rechtstreeks uit het grootboek van Logic4 gelezen: " + gb.regels.toLocaleString("nl-NL") +
         " boekingsregels tot en met " + nl((bewaard && bewaard.laatste && bewaard.laatste.balansdatum) || "") +
-        ". Er is geen exportbestand meer nodig, en de boekingen zonder ordernummer zijn nu wél zichtbaar."));
+        ". Een exportbestand is overbodig geworden, en de boekingen zonder ordernummer zijn nu ook zichtbaar."));
 
       var t0 = el("table", "vo-tabel"), tb0 = el("tbody");
       function rij0(l, b, klas) {
@@ -305,7 +305,7 @@
       if (gb.zonder.lijst && gb.zonder.lijst.length) {
         vak.appendChild(el("p", "uitleg",
           "De zwaarste boekingen zonder ordernummer. Dit zijn handmatige correcties en jaarafsluitingen; " +
-          "ze zijn niet aan een klant of order te koppelen en moeten dus los onderbouwd worden."));
+          "ze staan los van een klant of order en worden dus apart onderbouwd."));
         var w1 = el("div", "vo-tabelwrap");
         var t1 = el("table", "vo-tabel"), th1 = el("thead"), hr1 = el("tr");
         ["Datum", "Bedrag", "Boeking", "Omschrijving"].forEach(function (h) { hr1.appendChild(el("th", null, h)); });
@@ -326,10 +326,10 @@
         "het verschil is. Bij de meting van 4 aug 2026 was dat € 774,20 op € 3,7 miljoen."));
     } else {
       vak.appendChild(el("p", "uitleg",
-        (gb && gb.fout ? "Het grootboek kon niet gelezen worden (" + gb.fout + "). " : "") +
-        "Wij zien dan alleen de beweging op 1350, niet de stand die er bij het begin van die periode al stond. " +
-        "Vul die twee getallen hieronder in — ze komen uit het grootboek, niet uit Logic4 — en wat dan " +
-        "overblijft is het bedrag dat werkelijk niet verklaard is."));
+        (gb && gb.fout ? "Het grootboek lezen vraagt een nieuwe poging (" + gb.fout + "). " : "") +
+        "Wij zien dan alleen de beweging op 1350; de stand die er bij het begin van die periode al stond komt uit het grootboek. " +
+        "Vul die twee getallen hieronder in - ze komen uit het grootboek, los van Logic4 - en wat dan " +
+        "overblijft is het bedrag dat werkelijk nog verklaard moet worden."));
     }
 
     var f = el("div", "vo-invoer");
@@ -385,8 +385,8 @@
       uitslag.appendChild(t);
       uitslag.appendChild(el("p", "uitleg", Math.abs(rest) < 1
         ? "Het sluit aan. Het verschil met het grootboek was volledig de stand die er al stond."
-        : "Dit bedrag is niet te verklaren uit de beweging die wij kunnen zien. Dat zijn boekingen zonder " +
-          "order — handmatige correcties en overboekingen — die via de API niet zichtbaar zijn."));
+        : "Dit bedrag valt buiten de beweging die wij kunnen zien. Dat zijn boekingen zonder " +
+          "order - handmatige correcties en overboekingen - die de API buiten beeld laat."));
     }
     [iBegin, iGb, iBeginD, iGbD].forEach(function (i) { i.addEventListener("input", reken); });
     knop.addEventListener("click", function () {
@@ -417,7 +417,7 @@
     kop.appendChild(el("p", null,
       "Betaalt een klant vooruit, dan staat dat als schuld op 1350 tot er is gefactureerd. " +
       "Dit blok rekent alle orders door en laat zien welke aanbetalingen nog openstaan — en vooral " +
-      "welke daar niet meer horen te staan."));
+      "welke daar weg horen."));
     doel.appendChild(kop);
 
     var vak = el("div", "vo-invoer");
@@ -432,7 +432,7 @@
     doel.appendChild(vak);
 
     if (!u) {
-      doel.appendChild(el("p", "uitleg", "Nog niet doorgerekend. Duurt ongeveer twee minuten; daarna staat het bewaard."));
+      doel.appendChild(el("p", "uitleg", "Klaar om door te rekenen. Duurt ongeveer twee minuten; daarna staat het bewaard."));
       return;
     }
 
@@ -446,18 +446,18 @@
     }
     c.appendChild(blok("Openstaande aanbetalingen", euro(-u.open.bedrag), u.open.aantal + " orders"));
     c.appendChild(blok("Te veel afgeboekt", euro(u.teveel.bedrag), u.teveel.aantal + " orders"));
-    c.appendChild(blok("Saldo op de orders", euro(u.saldo), "niet gelijk aan het grootboek"));
-    c.appendChild(blok("Order loopt niet meer", euro(-u.dood.bedrag), u.dood.aantal + " orders", "let"));
+    c.appendChild(blok("Saldo op de orders", euro(u.saldo), "anders dan het grootboek"));
+    c.appendChild(blok("Order afgesloten", euro(-u.dood.bedrag), u.dood.aantal + " orders", "let"));
     doel.appendChild(c);
 
     // Eerlijk zijn over wat dit cijfer wél en niet is.
     var b = el("div", "vo-bron");
     b.appendChild(el("strong", null, "Let op bij het saldo. "));
     b.appendChild(document.createTextNode(
-      "Dit is opgebouwd uit de betaalregels op de orders zelf. Boekingen op 1350 die niet aan een order " +
-      "hangen — handmatige correcties, overboekingen — zijn via de API niet zichtbaar en zitten hier dus niet in. " +
+      "Dit is opgebouwd uit de betaalregels op de orders zelf. Boekingen op 1350 die los van een order " +
+      "staan - handmatige correcties, overboekingen - blijven via de API buiten beeld en tellen hier dus buiten. " +
       "In de grootboekexport van de accountant ging dat over 187 regels van samen ruim 774.000 euro. " +
-      "Het saldo hierboven sluit daarom niet één op één aan op de balans. Voor die aansluiting is toegang tot de " +
+      "Het saldo hierboven wijkt daarom af van de balans. Voor die aansluiting is toegang tot de " +
       "financiële endpoints van Logic4 nodig; die staat nu op 403."));
     doel.appendChild(b);
 
@@ -467,10 +467,10 @@
     w.appendChild(el("strong", null, "Waar het om gaat: "));
     w.appendChild(document.createTextNode(
       u.dood.aantal + " orders met status Afgehandeld of Geannuleerd hebben nog een aanbetaling van samen " +
-      euro(-u.dood.bedrag) + ". Bij een order die niet meer loopt hoort geen vooruitontvangen bedrag: " +
+      euro(-u.dood.bedrag) + ". Een afgesloten order hoort 0 vooruitontvangen te hebben: " +
       "dat geld moet terug naar de klant of alsnog gefactureerd worden. " +
       "Daarnaast staat er " + euro(-u.nietGeleverd.bedrag) + " aan aanbetalingen op " + u.nietGeleverd.aantal +
-      " orders die nog niet (volledig) geleverd zijn — dat is de normale situatie, maar wel de post die op de balans hoort."));
+      " orders die nog (deels) geleverd moeten worden - dat is de normale situatie, maar wel de post die op de balans hoort."));
     doel.appendChild(w);
 
     doel.appendChild(el("p", "uitleg",
@@ -532,7 +532,7 @@
       var w3 = el("div", "vo-tabelwrap");
       var t3 = el("table", "vo-tabel klein");
       var th3 = el("thead"), hr3 = el("tr");
-      ["Meting", "Saldo", "Openstaand", "Orders", "Loopt niet meer"].forEach(function (h) { hr3.appendChild(el("th", null, h)); });
+      ["Meting", "Saldo", "Openstaand", "Orders", "Afgesloten"].forEach(function (h) { hr3.appendChild(el("th", null, h)); });
       th3.appendChild(hr3); t3.appendChild(th3);
       var tb3 = el("tbody");
       hist.slice(0, 12).forEach(function (h) {
@@ -572,11 +572,11 @@
       ["Openstaande aanbetalingen (credit)", u.open.aantal, u.open.bedrag],
       ["Te veel afgeboekt (debet)", u.teveel.aantal, u.teveel.bedrag],
       ["Saldo op de orders", "", u.saldo],
-      ["LET OP: boekingen zonder order zitten hier niet in (via de API niet zichtbaar)", "", ""],
+      ["LET OP: boekingen zonder order tellen hier buiten (via de API buiten beeld)", "", ""],
       ["Volledig afgelopen orders", u.afgewikkeld, 0],
       [],
-      ["Aanbetaling op een order die niet meer loopt", u.dood.aantal, u.dood.bedrag],
-      ["Aanbetaling op een order die nog niet geleverd is", u.nietGeleverd.aantal, u.nietGeleverd.bedrag],
+      ["Aanbetaling op een afgesloten order", u.dood.aantal, u.dood.bedrag],
+      ["Aanbetaling op een order die nog geleverd moet worden", u.nietGeleverd.aantal, u.nietGeleverd.bedrag],
       ["Orderwaarde wijkt >2% af van prijs x hoeveelheid", u.scheef.aantal, ""],
     ]);
     var r = [["Order", "Klant", "Debiteur", "Orderdatum", "Aanbetaald EUR", "Orderbedrag incl EUR",
@@ -606,7 +606,7 @@
         uitkomst.dood.aantal + " op een order die niet meer loopt");
       teken(await laadLaatste());
     } catch (e) {
-      alert("Niet gelukt: " + (e.message || e));
+      alert("Dit vraagt een nieuwe poging: " + (e.message || e));
     }
     bezig = false;
     if (knop) { knop.disabled = false; knop.textContent = "Doorrekenen"; }

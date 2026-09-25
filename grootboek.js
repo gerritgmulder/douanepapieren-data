@@ -74,8 +74,8 @@
     // méér. Doorgaan met wat we hebben zou een saldo opleveren dat nergens
     // op slaat, dus liever hard stoppen dan stilletjes de helft tonen.
     throw new Error("Grootboek " + code + " heeft meer dan " +
-      (MAX_PAGINAS * PER).toLocaleString("nl-NL") + " regels. De uitlezing is niet compleet " +
-      "en het saldo zou dus niet kloppen. Verhoog MAX_PAGINAS in grootboek.js.");
+      (MAX_PAGINAS * PER).toLocaleString("nl-NL") + " regels. De uitlezing stopt daar " +
+      "en het saldo zou dus afwijken. Verhoog MAX_PAGINAS in grootboek.js.");
   }
 
   /* Het ordernummer staat niet in een eigen veld maar in de omschrijving

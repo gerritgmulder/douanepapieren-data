@@ -46,9 +46,9 @@
     return e;
   }
   function nlDatum(s) {
-    if (!s) return "—";
+    if (!s) return "-";
     var d = new Date(s);
-    if (isNaN(d)) return "—";
+    if (isNaN(d)) return "-";
     return String(d.getDate()).padStart(2, "0") + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + d.getFullYear();
   }
 
@@ -59,7 +59,7 @@
       body: "{}"
     });
     var j = await r.json();
-    if (!j.ok) throw new Error(j.error || "voorstel ophalen mislukt");
+    if (!j.ok) throw new Error(j.error || "onbekende reden");
     return j;
   }
 
@@ -102,7 +102,7 @@
     doel.innerHTML = "";
 
     if (!voorstel) {
-      doel.appendChild(el("p", "status-msg", bezig ? "Bezig met het opbouwen van het voorstel…" : "Nog niet geladen."));
+      doel.appendChild(el("p", "status-msg", bezig ? "Bezig met het opbouwen van het voorstel…" : "Nog te laden."));
       return;
     }
 
@@ -117,7 +117,7 @@
     var p = el("p", null,
       "Elke container hieronder is één bestelling bij Jazzi. Hiervan maken we een echte inkooporder in Logic4, " +
       "zodat de spa-inkoop meetelt in de administratie in plaats van alleen in dit dashboard te staan. " +
-      "Een inkooporder aanmaken stuurt niets naar de fabriek — Jazzi zit niet in Logic4.");
+      "Een inkooporder aanmaken blijft binnen Logic4 - Jazzi werkt buiten Logic4.");
     uitleg.appendChild(p);
     doel.appendChild(uitleg);
 
@@ -135,8 +135,8 @@
       var w = el("div", "sm-waarschuwing");
       w.appendChild(el("strong", null, "Let op: "));
       w.appendChild(document.createTextNode(
-        "Jazzi-order " + wees.join(", ") + " vaart wel mee op een schip, maar staat niet in de containerlijst. " +
-        "Voeg die bestelling toe bij Schepen/Pipeline, anders ontbreekt hij straks ook in Logic4."));
+        "Jazzi-order " + wees.join(", ") + " vaart mee op een schip en staat nog buiten de containerlijst. " +
+        "Voeg die bestelling toe bij Schepen/Pipeline, dan komt hij straks ook in Logic4."));
       doel.appendChild(w);
     }
 
@@ -192,12 +192,12 @@
         body: JSON.stringify({ id: String(nr), verborgen: aan !== false, user: cfg.email || "" })
       });
       var j = await r.json();
-      if (!j.ok) throw new Error(j.error || "opslaan mislukt");
+      if (!j.ok) throw new Error(j.error || "onbekende reden");
       if (aan === false) delete verborgen[String(nr)];
       else verborgen[String(nr)] = { ts: new Date().toISOString(), user: cfg.email || "" };
       if (cfg.log) cfg.log("voorraad", "jazzi-order-" + (aan === false ? "teruggehaald" : "verborgen"), String(nr));
       teken();
-    } catch (e) { alert("Kon niet opslaan: " + e.message); }
+    } catch (e) { alert("Opslaan vraagt een nieuwe poging: " + e.message); }
   }
 
   function kaart(c) {
@@ -234,7 +234,7 @@
       weg.title = "Uit beeld halen. De bestelling zelf blijft bestaan; dit haalt hem alleen van je scherm.";
       weg.addEventListener("click", function (e) {
         e.stopPropagation();
-        if (confirm("Jazzi-order " + c.nr + " uit de historie halen?\n\nHij verdwijnt van je scherm. De bestelling blijft gewoon bestaan — dit is alleen om het overzicht schoon te houden.")) verberg(c.nr, true);
+        if (confirm("Jazzi-order " + c.nr + " uit de historie halen?\n\nHij verdwijnt van je scherm. De bestelling blijft gewoon bestaan - dit is alleen om het overzicht schoon te houden.")) verberg(c.nr, true);
       });
       rij.appendChild(weg);
     }
@@ -264,7 +264,7 @@
     if (cfg.magWijzigen) {
       var del = el("button", "sm-knop licht gevaar", "Verwijderen");
       del.type = "button";
-      del.title = "Haalt deze bestelling helemaal weg — ook uit de forecast, de reserveringen en het containerladen.";
+      del.title = "Haalt deze bestelling helemaal weg - ook uit de forecast, de reserveringen en het containerladen.";
       del.addEventListener("click", function () { verwijderen(c, del); });
       knoppen.appendChild(del);
     }
@@ -293,7 +293,7 @@
       if (r.artikelcode) {
         td.appendChild(el("code", null, r.artikelcode));
         td.appendChild(document.createTextNode(" " + (r.artikelnaam || "")));
-      } else td.appendChild(el("span", "sm-leeg", "—"));
+      } else td.appendChild(el("span", "sm-leeg", "-"));
       tr.appendChild(td);
       var st = el("td");
       st.appendChild(el("span", "sm-pil " + (r.staat === "zeker" ? "zeker" : r.staat === "nakijken" ? "nakijk" : "fout"),
@@ -317,12 +317,12 @@
       // window.prompt() bestaat niet in de app (Electron kent het niet): deze
       // knop deed daardoor niets. voorraad.html levert het invoervenster.
       var naar = typeof window.askText === "function"
-        ? await window.askText("Hoe heet \"" + model + "\" in Logic4? Typ de modelnaam precies zoals hij in de spa-catalogus staat — deze koppeling wordt onthouden en geldt daarna overal.")
+        ? await window.askText("Hoe heet \"" + model + "\" in Logic4? Typ de modelnaam precies zoals hij in de spa-catalogus staat - deze koppeling wordt onthouden en geldt daarna overal.")
         : null;
       if (!naar) return;
       knop.disabled = true; knop.textContent = "bezig…";
       var j = await bewaarAlias(model, naar.trim());
-      if (!j.ok) { alert("Niet gelukt: " + (j.error || "onbekende fout")); knop.disabled = false; return; }
+      if (!j.ok) { alert("Nieuwe poging nodig: " + (j.error || "onbekende reden")); knop.disabled = false; return; }
       if (cfg.log) cfg.log("voorraad", "spa-alias vastgelegd", model + " → " + naar.trim());
       await herlaad();
     });
@@ -331,27 +331,27 @@
 
   async function aanmaken(c, knop) {
     var extra = c.nakijken
-      ? "\n\nLet op: " + c.nakijken + " regel(s) staan op 'nakijken'. Die gaan NIET mee tenzij je ze eerst controleert."
+      ? "\n\nLet op: " + c.nakijken + " regel(s) staan op 'nakijken'. Die gaan ALLEEN mee als je ze eerst controleert."
       : "";
-    var mis = c.onmogelijk ? "\n" + c.onmogelijk + " regel(s) zijn niet te koppelen en gaan niet mee (staan wel in de opmerking van de order)." : "";
+    var mis = c.onmogelijk ? "\n" + c.onmogelijk + " regel(s) zijn nog onbekend; die komen in de opmerking van de order in plaats van als regel." : "";
     if (!confirm("Inkooporder aanmaken bij Jazzi voor order " + c.nr + "?\n\n" +
       c.zeker + " regels gaan mee." + extra + mis +
-      "\n\nEr gaat niets naar de fabriek — dit zet de bestelling alleen in Logic4.")) return;
+      "\n\nDit zet de bestelling alleen in Logic4 - de fabriek blijft erbuiten.")) return;
     knop.disabled = true; knop.textContent = "bezig…";
     try {
       var j = await maakInkooporder(c.nr, false);
       if (j.dubbel) { alert(j.error); }
-      else if (!j.ok && !j.buyOrderId) { alert("Niet gelukt: " + (j.error || "onbekende fout")); }
+      else if (!j.ok && !j.buyOrderId) { alert("Nieuwe poging nodig: " + (j.error || "onbekende reden")); }
       else {
         var melding = "Inkooporder " + j.buyOrderId + " aangemaakt met " + j.toegevoegd + " regels.";
-        if (j.mislukt && j.mislukt.length) melding += "\n\n" + j.mislukt.length + " regel(s) mislukten:\n" +
+        if (j.mislukt && j.mislukt.length) melding += "\n\n" + j.mislukt.length + " regel(s) vragen een nieuwe poging:\n" +
           j.mislukt.map(function (m) { return "· " + m.artikelcode + ": " + m.fout; }).join("\n");
         alert(melding);
         if (cfg.log) cfg.log("voorraad", "spa-inkooporder aangemaakt",
           "Jazzi-order " + c.nr + " → inkooporder " + j.buyOrderId + " (" + j.toegevoegd + " regels)");
       }
     } catch (e) {
-      alert("Niet gelukt: " + (e.message || e));
+      alert("Nieuwe poging nodig: " + (e.message || e));
     }
     await herlaad();
   }
@@ -366,23 +366,23 @@
     });
     var tekst = "Jazzi-order " + c.nr + " helemaal verwijderen?\n\n" +
       "Weg is: " + c.spas + " spa's in " + c.regels.length + " regels.\n" +
-      "Hij telt daarna nergens meer mee — niet in dit scherm, niet in de forecast, " +
-      "niet in de reserveringen en niet bij het containerladen.";
+      "Hij verdwijnt daarna uit dit scherm, de forecast, " +
+      "de reserveringen en het containerladen.";
     if (c.alGedaan) tekst += "\n\nOok het briefje 'inkooporder " + c.alGedaan + " aangemaakt' gaat weg. " +
-      "Die inkooporder zelf staat in Logic4 en verdwijnt hier niet mee — verwijder hem daar zelf.";
+      "Die inkooporder zelf blijft in Logic4 staan - verwijder hem daar zelf.";
     if (opSchip.length) tekst += "\n\nLet op: deze order staat nog op " + opSchip.length + " schip/schepen:\n· " +
       opSchip.join("\n· ") + "\nDie regels blijven staan; pas ze zelf aan bij Schepen/Pipeline.";
-    tekst += "\n\nWat weggaat wordt bewaard, dus een vergissing is terug te draaien — vraag Gerrit.";
+    tekst += "\n\nWat weggaat wordt bewaard, dus een vergissing is terug te draaien - vraag Gerrit.";
     if (!confirm(tekst)) return;
     knop.disabled = true; knop.textContent = "bezig…";
     try {
       var j = await verwijderBestelling(c.nr);
-      if (!j.ok) { alert("Niet gelukt: " + (j.error || "onbekende fout")); knop.disabled = false; knop.textContent = "Verwijderen"; return; }
+      if (!j.ok) { alert("Nieuwe poging nodig: " + (j.error || "onbekende reden")); knop.disabled = false; knop.textContent = "Verwijderen"; return; }
       if (cfg.log) cfg.log("voorraad", "jazzi-bestelling verwijderd",
         "Jazzi-order " + j.nr + " — " + j.spas + " spa's, " + j.regels + " regels" +
         (j.inkooporder ? ", briefje inkooporder " + j.inkooporder + " verwijderd" : ""));
     } catch (e) {
-      alert("Niet gelukt: " + (e.message || e));
+      alert("Nieuwe poging nodig: " + (e.message || e));
       knop.disabled = false; knop.textContent = "Verwijderen"; return;
     }
     await herlaad();
@@ -391,7 +391,7 @@
   async function herlaad() {
     bezig = true; teken();
     try { voorstel = await haalVoorstel(); }
-    catch (e) { doel.innerHTML = ""; doel.appendChild(el("p", "status-msg", "Voorstel ophalen mislukt: " + (e.message || e))); bezig = false; return; }
+    catch (e) { doel.innerHTML = ""; doel.appendChild(el("p", "status-msg", "Voorstel ophalen vraagt een nieuwe poging: " + (e.message || e))); bezig = false; return; }
     bezig = false; teken();
   }
 

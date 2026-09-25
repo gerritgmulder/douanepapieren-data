@@ -16,7 +16,7 @@
     if (window.fpToegang && !fpToegang.mag("administratie-proef", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Nog even geduld</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -112,7 +112,7 @@ select.keuze{font:inherit;font-size:12px;padding:3px 6px;border:1px solid var(--
   <div id="blokAmerika" class="hidden">
     <div class="kaart">
       <h2>Amerika: wires van Audrey</h2>
-      <p class="lead">Dezelfde batches als in de tegel Amerika, met dezelfde controle: bruto min bankkosten moet de ontvangst zijn, elke factuur moet een Logic4-order hebben, en er wordt nooit meer geboekt dan een order open heeft. Groen is te boeken; oranje niet, met de reden erbij. Details, notities en het koersverschil blijven in de tegel Amerika.</p>
+      <p class="lead">Dezelfde batches als in de tegel Amerika, met dezelfde controle: bruto min bankkosten moet de ontvangst zijn, elke factuur moet een Logic4-order hebben, en er wordt hooguit geboekt wat een order open heeft. Groen is te boeken; oranje wacht nog, met de reden erbij. Details, notities en het koersverschil blijven in de tegel Amerika.</p>
       <div id="aMsg"></div>
     </div>
     <div id="aLijst"></div>
@@ -129,7 +129,7 @@ select.keuze{font:inherit;font-size:12px;padding:3px 6px;border:1px solid var(--
   <div id="blokOverig" class="hidden">
     <div class="kaart">
       <h2>Shopify en pinautomaat</h2>
-      <p class="lead">Nog niet gebouwd. De dagafsluiting van Shopify en van de pinautomaat komt hier straks op dezelfde manier binnen: inlezen, de bedragen op de tussenrekening (1175 Shopify, 2030 PIN), en de uitbetaling op het afschrift is in Logic4 één toewijzing. Daarvoor is een voorbeeld van beide bestanden nodig.</p>
+      <p class="lead">Dit onderdeel volgt. De dagafsluiting van Shopify en van de pinautomaat komt hier straks op dezelfde manier binnen: inlezen, de bedragen op de tussenrekening (1175 Shopify, 2030 PIN), en de uitbetaling op het afschrift is in Logic4 één toewijzing. Daarvoor is een voorbeeld van beide bestanden nodig.</p>
     </div>
   </div>
 </main>
@@ -180,7 +180,7 @@ async function mInlezen(files){
     var f = files[i];
     try{
       var p = window.fpMT940.parse(await f.text());
-      if (!p.transactions.length) throw new Error("geen regels in dit bestand");
+      if (!p.transactions.length) throw new Error("dit bestand bevat 0 regels");
       var sleutel = f.name;
       if (mWerk.settlements[sleutel] && mWerk.settlements[sleutel].geboekt) { fouten.push(f.name + " is al geboekt"); continue; }
       mWerk.settlements[sleutel] = { bestand: f.name, ts: new Date().toISOString(), door: ik, iban: p.iban || "", eind: p.closingBalance ? p.closingBalance.amount : null,
@@ -236,13 +236,13 @@ function tekenMollie(){
     var open = !!mOpen[s.bestand];
     return '<div class="batch ' + kl + '"><div class="kop"><b>' + esc(s.bestand) + '</b><span>' + s.regels.length + ' regels · ' + esc(eur(st.som)) + (s.eind != null ? ' uitbetaald ' + esc(eur(s.eind)) : '') + '</span>' +
       (s.geboekt ? '<span class="pil">geboekt ' + esc(datumNL(s.geboekt.ts)) + '</span>' : st.tel.oranje ? '<span class="pil oranje">' + st.tel.oranje + ' om naar te kijken</span>' : '<span class="pil">klaar om te boeken</span>') +
-      (!st.sluit ? '<span class="pil rood">regels tellen niet op tot het uitbetaalde bedrag</span>' : '') + '</div>' +
+      (!st.sluit ? '<span class="pil rood">regels wijken af van het uitbetaalde bedrag</span>' : '') + '</div>' +
       '<div class="uitleg">' + st.tel.groen + ' groen · ' + st.tel.oranje + ' oranje · ' + st.tel.klaar + ' klaar · ingelezen ' + esc(datumNL(s.ts)) + (s.eind != null ? ' · de uitbetaling van ' + esc(eur(s.eind)) + ' gaat mee als ' + MOLLIE.kruis + ' tegenover ' + MOLLIE.rekening + (s.uitbetalingGeboekt ? ' (al geboekt)' : '') : '') + '</div>' +
       '<div class="acties"><button class="knop" data-open="' + esc(s.bestand) + '">' + (open ? "regels verbergen" : "regels tonen") + '</button>' +
         (s.geboekt ? '' : '<button class="knop groen" data-boek="' + esc(s.bestand) + '"' + (st.tel.oranje ? ' disabled title="eerst de oranje regels afhandelen"' : '') + '>Naar Logic4</button><button class="knop" data-weg="' + esc(s.bestand) + '">weghalen</button>') +
         '<span data-msg="' + esc(s.bestand) + '" style="font-size:12px"></span></div>' +
       (open ? mRegelsHtml(s) : '') + '</div>';
-  }).join("") : '<p class="lead" style="padding:4px 2px">Nog geen settlements. Sleep er een naar boven.</p>';
+  }).join("") : '<p class="lead" style="padding:4px 2px">Sleep een settlement naar boven om te beginnen.</p>';
   $("mLijst").querySelectorAll("[data-open]").forEach(function(b){ b.addEventListener("click", function(){ mOpen[b.dataset.open] = !mOpen[b.dataset.open]; tekenMollie(); }); });
   $("mLijst").querySelectorAll("[data-weg]").forEach(function(b){ b.addEventListener("click", function(){ if (!confirm("Dit settlement uit de lijst halen?")) return; delete mWerk.settlements[b.dataset.weg]; bewaarMollie(); tekenMollie(); }); });
   $("mLijst").querySelectorAll("[data-boek]").forEach(function(b){ b.addEventListener("click", function(){ mBoek(b.dataset.boek, b); }); });
@@ -266,7 +266,7 @@ function mRegelsHtml(s){
         : m.soort === "kosten" ? 'fee van Mollie → kosten ' + MOLLIE.fee + ' tegenover ' + MOLLIE.rekening
         : m.soort === "uitbetaling" ? 'uitbetaling naar de bank → ' + MOLLIE.kruis + ' tegenover ' + MOLLIE.rekening
         : m.soort === "geen" && r.keuze ? 'zonder order → ' + esc(m.rekening)
-        : (mOrderNrVan(r) ? (m.soort === "terugbetaling" ? "terugbetaling op order " : "betaling op order ") + esc(mOrderNrVan(r)) + (m.order && m.order.naam ? " · " + esc(m.order.naam) : "") : (m.beste ? "factuur " + esc(m.beste.InvoiceId) : '<span class="pil oranje">niet herkend</span>'));
+        : (mOrderNrVan(r) ? (m.soort === "terugbetaling" ? "terugbetaling op order " : "betaling op order ") + esc(mOrderNrVan(r)) + (m.order && m.order.naam ? " · " + esc(m.order.naam) : "") : (m.beste ? "factuur " + esc(m.beste.InvoiceId) : '<span class="pil oranje">zelf kiezen</span>'));
       var keuzes = "";
       if (!r.geboekt && !r.keuze && kl === "oranje"){
         var kand = (r.match && r.match.kandidaten) || [];
@@ -288,21 +288,21 @@ async function mBoek(sleutel, knop){
     else if (k.soort === "uitbetaling") memoriaal.push({ r: r, rekening: MOLLIE.kruis, bedrag: Math.abs(r.bedrag), uit: true, datum: r.datum, omschrijving: ("Mollie uitbetaling " + s.bestand).slice(0, 140), referentie: ("Mollie " + s.bestand).slice(0, 60) });
     else memoriaal.push({ r: r, rekening: (k.rekening || MOLLIE.retour), bedrag: Math.abs(r.bedrag), uit: r.bedrag < 0, datum: r.datum, omschrijving: r.omschrijving.slice(0, 140), referentie: ("Mollie " + s.bestand).slice(0, 60) });
   });
-  if (!confirm(opOrder.length + " betaling(en) op orders en " + memoriaal.length + " memoriaalregel(s) naar Logic4 voor " + sleutel + "?\n\nDit is niet met een knop terug te draaien.")) return;
+  if (!confirm(opOrder.length + " betaling(en) op orders en " + memoriaal.length + " memoriaalregel(s) naar Logic4 voor " + sleutel + "?\n\nLet op: dit is definitief.")) return;
   knop.disabled = true; if (m) m.textContent = "Bezig…";
   var gelukt = 0, fouten = [];
   if (opOrder.length){
     try{
       var j = await api("/bank/boeken", { door: ik, bookingId: MOLLIE.dagboek, regels: opOrder.map(function(o){ return { orderNr: o.orderNr, bedrag: o.bedrag, terugbetaling: o.terugbetaling, datum: o.r.datum, omschrijving: o.omschrijving }; }) });
-      (j.resultaten||[]).forEach(function(res, i){ if (res.ok){ opOrder[i].r.geboekt = "op order " + opOrder[i].orderNr; gelukt++; } else fouten.push("order " + opOrder[i].orderNr + ": " + (res.error||"fout")); });
-      if (!j.resultaten) fouten.push(j.error || "geen antwoord bij orders");
+      (j.resultaten||[]).forEach(function(res, i){ if (res.ok){ opOrder[i].r.geboekt = "op order " + opOrder[i].orderNr; gelukt++; } else fouten.push("order " + opOrder[i].orderNr + ": " + (res.error||"reden onbekend")); });
+      if (!j.resultaten) fouten.push(j.error || "antwoord bij orders blijft uit");
     }catch(e){ fouten.push(e.message); }
   }
   if (memoriaal.length){
     try{
       var j2 = await api("/bank/memoriaal", { door: ik, bankBookingId: MOLLIE.dagboek, bankLedgerId: MOLLIE.ledgerId, regels: memoriaal.map(function(g){ return { rekening: g.rekening, bedrag: g.bedrag, datum: g.datum, uit: g.uit, omschrijving: g.omschrijving, referentie: g.referentie }; }) });
-      (j2.resultaten||[]).forEach(function(res, i){ if (res.ok){ memoriaal[i].r.geboekt = "memoriaal " + memoriaal[i].rekening + " tegenover " + MOLLIE.rekening; gelukt++; } else fouten.push("grootboek " + memoriaal[i].rekening + ": " + (res.error||"fout") + (res.geblokkeerd ? " (rekening 1134 staat in Logic4 op slot voor memoriaal; Osman kan dat vrijgeven)" : "")); });
-      if (!j2.resultaten) fouten.push(j2.error || "geen antwoord bij memoriaal");
+      (j2.resultaten||[]).forEach(function(res, i){ if (res.ok){ memoriaal[i].r.geboekt = "memoriaal " + memoriaal[i].rekening + " tegenover " + MOLLIE.rekening; gelukt++; } else fouten.push("grootboek " + memoriaal[i].rekening + ": " + (res.error||"reden onbekend") + (res.geblokkeerd ? " (rekening 1134 staat in Logic4 op slot voor memoriaal; Osman kan dat vrijgeven)" : "")); });
+      if (!j2.resultaten) fouten.push(j2.error || "antwoord bij memoriaal blijft uit");
     }catch(e){ fouten.push(e.message); }
   }
   /* De uitbetaling zelf staat niet als regel in het bestand: het settlement
@@ -318,7 +318,7 @@ async function mBoek(sleutel, knop){
         var bedrag = Math.round(Number(s.eind) * 100) / 100;
         var j3 = await api("/bank/memoriaal", { door: ik, bankBookingId: MOLLIE.dagboek, bankLedgerId: MOLLIE.ledgerId, regels: [{ rekening: MOLLIE.kruis, bedrag: Math.abs(bedrag), uit: bedrag > 0, datum: laatste, omschrijving: ("Mollie uitbetaling settlement " + s.bestand).slice(0, 140), referentie: ("Mollie " + s.bestand).slice(0, 60) }] });
         var res3 = (j3.resultaten||[])[0];
-        if (!j3.ok || !res3 || !res3.ok) fouten.push("uitbetaling " + MOLLIE.kruis + ": " + ((res3 && res3.error) || j3.error || "fout") + (res3 && res3.geblokkeerd ? " (rekening 1134 staat in Logic4 op slot voor memoriaal; Osman kan dat vrijgeven)" : ""));
+        if (!j3.ok || !res3 || !res3.ok) fouten.push("uitbetaling " + MOLLIE.kruis + ": " + ((res3 && res3.error) || j3.error || "reden onbekend") + (res3 && res3.geblokkeerd ? " (rekening 1134 staat in Logic4 op slot voor memoriaal; Osman kan dat vrijgeven)" : ""));
         else { s.uitbetalingGeboekt = { ts: new Date().toISOString(), door: ik, bedrag: bedrag }; gb.geboekt[s.bestand] = s.uitbetalingGeboekt; await api("/data/mollie-uitbetaling-geboekt", gb, "PUT"); gelukt++; }
       }
     }catch(e){ fouten.push("uitbetaling: " + e.message); }
@@ -328,7 +328,7 @@ async function mBoek(sleutel, knop){
   try{ if (window.fpLog) window.fpLog("mollie-settlement-geboekt", sleutel + ": " + gelukt + " regels" + (fouten.length ? ", " + fouten.length + " mislukt" : "")); }catch(e){}
   tekenMollie();
   var m2 = document.querySelector("[data-msg='" + CSS.escape(sleutel) + "']");
-  if (m2) m2.innerHTML = fouten.length ? '<span style="color:var(--rood)">' + gelukt + ' gelukt, mislukt: ' + esc(fouten.slice(0,4).join("; ")) + '</span>' : '<span style="color:#166534">' + gelukt + ' regels in Logic4 gezet.</span>';
+  if (m2) m2.innerHTML = fouten.length ? '<span style="color:var(--rood)">' + gelukt + ' gelukt, nog te doen: ' + esc(fouten.slice(0,4).join("; ")) + '</span>' : '<span style="color:#166534">' + gelukt + ' regels in Logic4 gezet.</span>';
 }
 $("mDrop").addEventListener("click", function(){ $("mBestand").click(); });
 $("mBestand").addEventListener("change", function(){ if ($("mBestand").files.length) mInlezen([].slice.call($("mBestand").files)); $("mBestand").value = ""; });
@@ -349,7 +349,7 @@ async function laadAmerika(){
     var vanaf = 0, totaal = null;
     while (vanaf != null){
       var j = await api("/amerika/qb/boeken", { wireId: "alle", bevestigd: false, vanaf: vanaf, user: ik });
-      if (!j.ok) throw new Error(j.error || "controle mislukt");
+      if (!j.ok) throw new Error(j.error || "controle vraagt een nieuwe poging");
       totaal = j.totaalBatches || totaal;
       aBatches = aBatches.concat(j.batches||[]).sort(function(a,b){ return String(b.datum).localeCompare(String(a.datum)); });
       vanaf = j.volgende;
@@ -357,7 +357,7 @@ async function laadAmerika(){
       tekenAmerika();
     }
     aGeladen = true;
-  }catch(e){ msg($("aMsg"), "Controleren lukte niet: " + esc(e.message), "bad"); }
+  }catch(e){ msg($("aMsg"), "Controleren vraagt een nieuwe poging: " + esc(e.message), "bad"); }
   tekenAmerika();
 }
 function tekenAmerika(){
@@ -366,16 +366,16 @@ function tekenAmerika(){
   $("aLijst").innerHTML = aBatches.length ? aBatches.map(function(b){
     var klaar = !b.afwijking && !b.teBoeken, kl = klaar ? "klaar" : (b.afwijking ? "" : "groen");
     return '<div class="batch ' + kl + '"><div class="kop"><b>Batch van ' + esc(datumNL(b.datum)) + '</b><span>' + esc(usd(b.bruto)) + ' bruto · ' + esc(usd(b.kosten)) + ' kosten' + (b.netto != null ? ' · ' + esc(usd(b.netto)) + ' ontvangen' : '') + '</span>' +
-      (klaar ? '<span class="pil">alles geboekt</span>' : b.afwijking ? '<span class="pil oranje">niet te boeken</span>' : '<span class="pil">' + b.teBoeken + ' te boeken</span>') + '</div>' +
-      (b.afwijking ? '<div class="uitleg">' + (b.redenen||[]).map(function(r){ return '• ' + esc(r); }).join('<br>') + '<br><a href="amerika.html">Regel het in de tegel Amerika</a> (ontbrekende orders aanmaken, factuurnummer zetten, ontvangen bedrag invullen).</div>' : '') +
+      (klaar ? '<span class="pil">alles geboekt</span>' : b.afwijking ? '<span class="pil oranje">wacht op controle</span>' : '<span class="pil">' + b.teBoeken + ' te boeken</span>') + '</div>' +
+      (b.afwijking ? '<div class="uitleg">' + (b.redenen||[]).map(function(r){ return '• ' + esc(r); }).join('<br>') + '<br><a href="amerika.html">Regel het in de tegel Amerika</a> (nieuwe orders aanmaken waar ze nodig zijn, factuurnummer zetten, ontvangen bedrag invullen).</div>' : '') +
       (!klaar && !b.afwijking ? '<div class="acties"><button class="knop groen" data-aboek="' + esc(b.id) + '">Boeken op 1160</button><span data-amsg="' + esc(b.id) + '" style="font-size:12px"></span></div>' : '') + '</div>';
-  }).join("") : '<p class="lead">Geen batches gevonden.</p>';
+  }).join("") : '<p class="lead">0 batches gevonden.</p>';
   $("aLijst").querySelectorAll("[data-aboek]").forEach(function(k){ k.addEventListener("click", async function(){
     var b = aBatches.find(function(x){ return String(x.id) === k.dataset.aboek; });
-    if (!confirm("Batch van " + datumNL(b.datum) + " boeken: orders bruto afboeken " + usd(b.bruto) + ", bankkosten " + usd(b.kosten) + " op 4630?\n\nDit is niet met een knop terug te draaien.")) return;
+    if (!confirm("Batch van " + datumNL(b.datum) + " boeken: orders bruto afboeken " + usd(b.bruto) + ", bankkosten " + usd(b.kosten) + " op 4630?\n\nLet op: dit is definitief.")) return;
     k.disabled = true; var m = document.querySelector("[data-amsg='" + CSS.escape(k.dataset.aboek) + "']"); if (m) m.textContent = "Bezig…";
     try{ var j = await api("/amerika/qb/boeken", { wireId: k.dataset.aboek, bevestigd: true, user: ik }); var r = (j.batches||[])[0] || {};
-      if (m) m.innerHTML = r.klaar ? '<span style="color:#166534">geboekt: ' + r.geboekt + ' orders' + (r.bankkosten && r.bankkosten.status === "geboekt" ? ' en de bankkosten' : '') + '</span>' : '<span style="color:var(--rood)">' + (r.fout||0) + ' mislukt; zie de tegel Amerika</span>';
+      if (m) m.innerHTML = r.klaar ? '<span style="color:#166534">geboekt: ' + r.geboekt + ' orders' + (r.bankkosten && r.bankkosten.status === "geboekt" ? ' en de bankkosten' : '') + '</span>' : '<span style="color:var(--rood)">' + (r.fout||0) + ' nog te boeken; zie de tegel Amerika</span>';
       try{ if (window.fpLog) window.fpLog("amerika-batch-geboekt", "batch " + k.dataset.aboek + " via Uitbetalingen"); }catch(e){}
       aGeladen = false; setTimeout(laadAmerika, 1500);
     }catch(e){ if (m) m.innerHTML = '<span style="color:var(--rood)">' + esc(e.message) + '</span>'; k.disabled = false; }
@@ -384,13 +384,13 @@ function tekenAmerika(){
 
 /* ════════ BOL.COM ════════ */
 async function laadBol(){
-  try{ var j = await api("/data/bol-provisie-geboekt"); var l = Object.keys((j && j.geboekt) || j || {}).filter(function(k){ return k !== "updated"; }); $("bStand").textContent = l.length ? l.length + " specificatie(s) verwerkt via de tegel Bol.com koppeling; laatste: " + l.sort().pop() : "Nog geen specificaties verwerkt."; }
+  try{ var j = await api("/data/bol-provisie-geboekt"); var l = Object.keys((j && j.geboekt) || j || {}).filter(function(k){ return k !== "updated"; }); $("bStand").textContent = l.length ? l.length + " specificatie(s) verwerkt via de tegel Bol.com koppeling; laatste: " + l.sort().pop() : "0 specificaties verwerkt."; }
   catch(e){ $("bStand").textContent = ""; }
 }
 
 (async function(){
   for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
-  try { await laadMollie(); } catch(e){ msg($("mMsg"), "Laden lukte niet: " + esc(e.message), "bad"); }
+  try { await laadMollie(); } catch(e){ msg($("mMsg"), "Laden vraagt een nieuwe poging: " + esc(e.message), "bad"); }
 })();
 </script>
 <script>

@@ -176,7 +176,7 @@
         nrs = uitPak;
       } else {
         uit.meldingen.push("Er staan " + uit.containers.length + " containers op deze invoice maar " +
-          (new Set(nrs).size || "geen") + " verschillend(e) containernummer(s). Vul het ontbrekende nummer zelf aan.");
+          (new Set(nrs).size || "0") + " verschillend(e) containernummer(s). Vul de andere nummers zelf aan.");
       }
     }
     uit.totaalStuks = uit.containers.reduce(function (n, c) {
@@ -250,7 +250,7 @@
         uit.push({ blok: b, container: raak.container, seal: raak.seal, viaBl: true });
       } else {
         uit.push({ blok: b, container: b.container || null, seal: null, viaBl: false });
-        meldingen.push("Voor een blok met " + (b.dozen || "?") + " dozen is op de Bill of Lading geen passende container gevonden.");
+        meldingen.push("Voor een blok met " + (b.dozen || "?") + " dozen is de container nog onbekend: kijk de Bill of Lading even na.");
       }
     });
     return { koppelingen: uit, meldingen: meldingen };
@@ -388,7 +388,7 @@
         else if (/^Qnt$/i.test(s.s)) xQnt = s.x;
       });
       if (xNo == null || xArt == null || xOms == null || xQnt == null) {
-        uit.meldingen.push("Op een van de bladzijden is de koprij van de tabel niet te lezen.");
+        uit.meldingen.push("Op een van de bladzijden is de koprij van de tabel onleesbaar.");
         continue;
       }
       var grensNo = xArt - 6, grensArt = xOms - 6, grensGetal = xQnt - 24;
@@ -469,7 +469,7 @@
     if (totaalStuksOpInvoice != null && uit.totaalStuks !== totaalStuksOpInvoice)
       uit.meldingen.push("De invoice noemt " + totaalStuksOpInvoice + " stuks in totaal, maar over de " +
         blok.regels.length + " artikelregels geteld zijn het er " + uit.totaalStuks + ".");
-    if (!blok.regels.length) uit.meldingen.push("Er is geen enkele artikelregel gevonden op deze proforma.");
+    if (!blok.regels.length) uit.meldingen.push("Op deze proforma zijn 0 artikelregels gevonden.");
     uit.totaalStuksOpInvoice = totaalStuksOpInvoice;
     return uit;
   }
@@ -549,7 +549,7 @@
                 lds: null, laadhaven: null, containerSoort: null,
                 containers: [], meldingen: [] };
     var kol = meubelKop(rijen);
-    if (!kol) { uit.meldingen.push("Geen kolomkop met een artikelnummer en een aantal gevonden."); return uit; }
+    if (!kol) { uit.meldingen.push("De kolomkop met een artikelnummer en een aantal is nog onbekend."); return uit; }
 
     /* De kop. Alles boven de kolomkop, als één lap tekst - dan maakt het niet
        uit in welke cel iets staat. */
@@ -618,7 +618,7 @@
         uitvoering: [], onderdelen: [],
       });
     }
-    if (!blok.regels.length) uit.meldingen.push("Er is geen enkele artikelregel gevonden op deze proforma.");
+    if (!blok.regels.length) uit.meldingen.push("Op deze proforma zijn 0 artikelregels gevonden.");
     uit.containers.push(blok);
 
     /* Ons aantal tegen dat van de fabriek. Bij RE-BORN loopt dat uiteen omdat
@@ -749,7 +749,7 @@
     }
 
     blok.regels = blok.regels.filter(function (x) { return x.aantal > 0; });
-    if (!blok.regels.length) uit.meldingen.push("Er is geen enkele artikelregel gevonden op deze proforma.");
+    if (!blok.regels.length) uit.meldingen.push("Op deze proforma zijn 0 artikelregels gevonden.");
     uit.containers.push(blok);
 
     uit.totaalStuks = blok.regels.reduce(function (n, x) { return n + (x.aantal || 0); }, 0);

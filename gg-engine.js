@@ -127,23 +127,23 @@
     /* ── SCHAKEL 1: INKOOP → VOORRAAD ───────────────────────────────── */
     {
       id: "1.1", schakel: "inkoop", ernst: "midden", eenheid: "aantal", eigenaar: "Inkoop",
-      naam: "Inkooporder volledig ontvangen maar niet afgesloten",
+      naam: "Inkooporder volledig ontvangen, nog af te sluiten",
       vraag: "Staan er inkooporders open waarvan alles allang binnen is?",
-      waarom: "Een open inkooporder zegt tegen de administratie dat er nog goederen onderweg zijn. Zolang die niet wordt afgesloten, klopt de verplichting aan de leverancier niet.",
+      waarom: "Een open inkooporder zegt tegen de administratie dat er nog goederen onderweg zijn. Pas na het afsluiten klopt de verplichting aan de leverancier weer.",
       actie: "Inkooporder in Logic4 afsluiten."
     },
     {
       id: "1.2", schakel: "inkoop", ernst: "hoog", eenheid: "eur", eigenaar: "Inkoop",
-      naam: "Inkooporder al lang open met goederen die nooit kwamen",
+      naam: "Inkooporder al lang open met goederen die nog altijd uitblijven",
       vraag: "Staan er inkooporders langer dan een half jaar open met nog te ontvangen goederen?",
-      waarom: "Dit bedrag staat in de administratie als 'komt nog binnen'. Als het er nooit komt, is de inkoop en daarmee de voorraad structureel te hoog ingeschat.",
+      waarom: "Dit bedrag staat in de administratie als 'komt nog binnen'. Blijft het weg, dan is de inkoop en daarmee de voorraad structureel te hoog ingeschat.",
       actie: "Per order bepalen: alsnog ontvangen boeken, of de order annuleren en afsluiten."
     },
     {
       id: "1.3", schakel: "inkoop", ernst: "hoog", eenheid: "eur", eigenaar: "Magazijn", zwaar: true,
       naam: "Voorraad handmatig verhoogd zonder inkooporder",
       vraag: "Zijn er goederen bijgeboekt zonder dat er een inkoop tegenover staat?",
-      waarom: "Voorraad die uit het niets ontstaat, heeft geen inkoopfactuur. Precies de aansluiting die de accountant niet kan leggen.",
+      waarom: "Voorraad die zomaar ontstaat, staat los van elke inkoopfactuur. Precies die aansluiting zoekt de accountant.",
       actie: "Per correctie de reden vastleggen, of alsnog aan een inkooporder koppelen."
     },
 
@@ -152,28 +152,28 @@
       id: "2.1", schakel: "voorraad", ernst: "hoog", eenheid: "stuks", eigenaar: "Magazijn",
       naam: "Negatieve voorraad",
       vraag: "Staan er artikelen op een negatief aantal?",
-      waarom: "Minder dan nul stuks kan fysiek niet. Er is dus meer verkocht dan ingekocht, of een ontvangst is nooit geboekt.",
-      actie: "Ontbrekende ontvangst opsporen en alsnog boeken, daarna tellen."
+      waarom: "Fysiek is een voorraad altijd nul of meer. Er is dus meer verkocht dan ingekocht, of een ontvangst wacht nog op boeking.",
+      actie: "De ontvangst opsporen en alsnog boeken, daarna tellen."
     },
     {
       id: "2.2", schakel: "voorraad", ernst: "hoog", eenheid: "stuks", eigenaar: "Magazijn",
-      naam: "Voorraad op een magazijn waar niets ligt",
+      naam: "Voorraad op een magazijn dat leeg hoort te zijn",
       vraag: "Staat er voorraad op Dealer magazijn of op 'leverancier rechtstreeks naar klant/monteur'?",
-      waarom: "Deze goederen komen nooit in Uddel binnen. Voorraad hier is per definitie een registratiefout — dit is wat de accountant in zijn Excel rood heeft gemarkeerd.",
-      actie: "Uitboeken naar de juiste bestemming, en de route zo inrichten dat er niets blijft staan."
+      waarom: "Deze goederen gaan buiten Uddel om. Voorraad hier staat per definitie verkeerd geregistreerd - dit is wat de accountant in zijn Excel rood heeft gemarkeerd.",
+      actie: "Uitboeken naar de juiste bestemming, en de route zo inrichten dat alles doorloopt."
     },
     {
       id: "2.3", schakel: "voorraad", ernst: "midden", eenheid: "stuks", eigenaar: "Magazijn",
       naam: "Voorraad blijft hangen op een tussenstation",
       vraag: "Staat er voorraad op 'Geen', 'Transporteur' of op een vervallen magazijn?",
-      waarom: "Tussenstations horen leeg te zijn. Wat blijft staan, is onderweg kwijtgeraakt in de administratie.",
+      waarom: "Tussenstations horen leeg te zijn. Wat blijft staan, is onderweg uit beeld geraakt in de administratie.",
       actie: "Doorboeken naar de eindbestemming."
     },
     {
       id: "2.4", schakel: "voorraad", ernst: "midden", eenheid: "stuks", eigenaar: "Inkoop",
       naam: "Voorraad zonder kostprijs",
       vraag: "Liggen er goederen op voorraad waarvan de kostprijs 0 is?",
-      waarom: "De voorraadwaarde op de balans telt deze artikelen voor niets mee. De eindvoorraad is dan te laag.",
+      waarom: "De voorraadwaarde op de balans telt deze artikelen voor 0 mee. De eindvoorraad is dan te laag.",
       actie: "Kostprijs invullen op het artikel."
     },
 
@@ -182,30 +182,30 @@
       id: "3.1", schakel: "verkoop", ernst: "hoog", eenheid: "eur", eigenaar: "Inkoop",
       naam: "Rechtstreeks geleverd zonder gekoppelde inkooporder",
       vraag: "Welke orders gingen rechtstreeks van de leverancier naar de klant zonder dat er een inkooporder aan hangt?",
-      waarom: "Bij een rechtstreekse levering komt het goed nooit in Uddel, dus de enige vastlegging dat het is ingekocht is de inkooporder. Ontbreekt die koppeling, dan staat er omzet tegenover een inkoop die nergens te vinden is.",
-      actie: "Inkooporder alsnog aan de verkooporder koppelen, of vastleggen waarom er geen inkoop tegenover staat."
+      waarom: "Bij een rechtstreekse levering gaat het goed buiten Uddel om, dus de enige vastlegging dat het is ingekocht is de inkooporder. Zonder die koppeling staat er omzet tegenover een inkoop die nog gevonden moet worden.",
+      actie: "Inkooporder alsnog aan de verkooporder koppelen, of vastleggen waarom het zonder inkoop kan."
     },
     {
       id: "3.2", schakel: "verkoop", ernst: "midden", eenheid: "eur", eigenaar: "Magazijn", zwaar: true,
       naam: "Voorraad handmatig afgeboekt zonder order",
       vraag: "Zijn er goederen afgeboekt zonder verkoop of derving erachter?",
-      waarom: "Goederen die verdwijnen zonder verkoop leveren geen omzet op, maar wel een lagere voorraad. Dat verstoort de brutomarge.",
+      waarom: "Goederen die verdwijnen zonder verkoop leveren alleen een lagere voorraad op, zonder omzet. Dat verstoort de brutomarge.",
       actie: "Reden vastleggen: derving, breuk, showroom of eigen gebruik."
     },
 
     /* ── SCHAKEL 4: VERKOOP → FACTUUR ───────────────────────────────── */
     {
       id: "4.1", schakel: "factuur", ernst: "hoog", eenheid: "eur", eigenaar: "Administratie",
-      naam: "Geleverd maar niet gefactureerd",
-      vraag: "Zijn er goederen de deur uit die nooit op een factuur zijn beland?",
-      waarom: "Dit is omzet die je bent misgelopen én de directe reden dat de volledigheid van de omzet niet vast te stellen is.",
-      actie: "Alsnog factureren, of onderbouwen waarom niet (garantie, coulance, showroom)."
+      naam: "Geleverd, nog te factureren",
+      vraag: "Zijn er goederen de deur uit die nog op een factuur moeten?",
+      waarom: "Dit is omzet die blijft liggen, én de directe reden dat de volledigheid van de omzet nog vast te stellen is.",
+      actie: "Alsnog factureren, of onderbouwen waarom het anders is (garantie, coulance, showroom)."
     },
     {
       id: "4.2", schakel: "factuur", ernst: "midden", eenheid: "eur", eigenaar: "Verkoop",
-      naam: "Order afgehandeld terwijl er niets geleverd is",
-      vraag: "Staan er orders op 'Afgehandeld' waarvan de regels nooit zijn afgeleverd?",
-      waarom: "Afgehandeld zonder levering betekent dat de voorraad niet is afgeboekt terwijl de order wel uit beeld is.",
+      naam: "Order afgehandeld met 0 geleverde regels",
+      vraag: "Staan er orders op 'Afgehandeld' waarvan alle regels nog op levering wachten?",
+      waarom: "Afgehandeld zonder levering betekent dat de voorraad nog afgeboekt moet worden terwijl de order al uit beeld is.",
       actie: "Levering alsnog boeken, of de order terugzetten."
     },
 
@@ -214,7 +214,7 @@
       id: "5.1", schakel: "bank", ernst: "hoog", eenheid: "eur", eigenaar: "Administratie",
       naam: "Factuur staat te lang open",
       vraag: "Welke facturen zijn meer dan 90 dagen over de vervaldatum?",
-      waarom: "De debiteurenstand loopt vol met posten die nooit binnenkomen. De schakel factuur → bank sluit dan niet.",
+      waarom: "De debiteurenstand loopt vol met posten die uitblijven. De schakel factuur → bank blijft dan open.",
       actie: "Innen, een regeling treffen, of afboeken met reden."
     },
     {
@@ -235,7 +235,7 @@
       id: "5.3", schakel: "bank", ernst: "midden", eenheid: "eur", eigenaar: "Verkoop",
       naam: "Aanbetaling ontvangen, order blijft liggen",
       vraag: "Staan er orders waarop meer dan 120 dagen geleden is aanbetaald zonder levering?",
-      waarom: "Het geld is binnen, de goederen niet geleverd. Dat is een verplichting aan de klant die op de balans hoort.",
+      waarom: "Het geld is binnen, de goederen moeten nog geleverd worden. Dat is een verplichting aan de klant die op de balans hoort.",
       actie: "Uitleveren, of met de klant afstemmen en de order sluiten."
     },
 
@@ -244,7 +244,7 @@
       id: "6.1", schakel: "marge", ernst: "hoog", eenheid: "eur", eigenaar: "Inkoop",
       naam: "Goed verkocht zonder kostprijs",
       vraag: "Welke echte goederen zijn geleverd terwijl de inkoopprijs op de orderregel 0 is?",
-      waarom: "Zonder kostprijs is de brutomarge op deze omzet niet te berekenen. Dit is de grootste reden dat kostprijs, omzet en marge niet samenhangen.",
+      waarom: "De brutomarge op deze omzet is pas te berekenen met een kostprijs. Dit is de grootste reden dat kostprijs, omzet en marge uit elkaar lopen.",
       actie: "Inkoopprijs op de orderregel invullen — vooral bij maatwerk, waar de prijs per order wordt afgesproken."
     },
     {
@@ -299,7 +299,7 @@
       catch (e) {
         laatste = e;
         if (poging === 3) break;
-        if (melden) melden("Logic4 antwoordde niet, poging " + (poging + 1) + " van 3…");
+        if (melden) melden("Logic4 krijgt nog een poging, " + (poging + 1) + " van 3…");
         await wacht(poging * 4000);
       }
     }
@@ -459,7 +459,7 @@
     melden("Openstaande facturen ophalen…", 78);
     var openFacturen = [];
     try { openFacturen = await metHerkansing(l4, "/v3/Orders/GetOpenPaymentInvoices", {}, function (t) { melden(t, 78); }) || []; }
-    catch (e) { sla("5.1", "openstaande facturen niet op te halen: " + e.message); }
+    catch (e) { sla("5.1", "openstaande facturen ophalen vraagt een nieuwe poging: " + e.message); }
 
     /* ── 4f. Voorraadmutaties (alleen bij een diepe scan) ───────────── */
     var mutaties = null;
@@ -470,8 +470,8 @@
         melden: function (n) { melden("Voorraadmutaties ophalen… " + n.toLocaleString("nl-NL"), 82 + Math.min(8, n / 60000)); }
       });
     } else {
-      sla("1.3", "handmatige correcties zijn niet meegescand (zet 'diepe controle' aan)");
-      sla("3.2", "handmatige correcties zijn niet meegescand (zet 'diepe controle' aan)");
+      sla("1.3", "handmatige correcties komen mee bij de diepe controle (zet 'diepe controle' aan)");
+      sla("3.2", "handmatige correcties komen mee bij de diepe controle (zet 'diepe controle' aan)");
     }
 
     melden("Controles uitvoeren…", 92);
@@ -538,7 +538,7 @@
         else c32.push(regel);
       }
       zet("1.3", c13, c13.reduce(function (s, x) { return s + x.bedrag; }, 0),
-        "Alleen correcties zonder inkooporder erachter. Logic4 levert bij deze mutaties geen gebruikersnaam mee — wie het deed staat wel in Logic4 zelf.");
+        "Alleen correcties zonder inkooporder erachter. Logic4 levert bij deze mutaties alleen de correctie mee, zonder gebruikersnaam - wie het deed staat wel in Logic4 zelf.");
       zet("3.2", c32, c32.reduce(function (s, x) { return s + x.bedrag; }, 0));
     }
 
@@ -558,7 +558,7 @@
         c21.push(Object.assign({}, basis, { sleutel: "2.1|" + basis.sleutel, bedrag: Math.abs(s.qty) * (art2 ? art2.k : 0), detail: s.qty + " stuks in " + mg.naam }));
       }
       if (s.qty > 0 && virtueel[s.mag]) {
-        c22.push(Object.assign({}, basis, { sleutel: "2.2|" + basis.sleutel, bedrag: s.qty * (art2 ? art2.k : 0), detail: s.qty + " stuks staan in " + mg.naam + ", waar niets ligt" }));
+        c22.push(Object.assign({}, basis, { sleutel: "2.2|" + basis.sleutel, bedrag: s.qty * (art2 ? art2.k : 0), detail: s.qty + " stuks staan in " + mg.naam + ", een magazijn dat leeg hoort te zijn" }));
       }
       if (s.qty > 0 && tussen[s.mag]) {
         c23.push(Object.assign({}, basis, { sleutel: "2.3|" + basis.sleutel, bedrag: s.qty * (art2 ? art2.k : 0), detail: s.qty + " stuks blijven staan in " + mg.naam }));
@@ -629,7 +629,7 @@
         var nietGef = num(row.QtyDeliverd_NotInvoiced);
         if (nietGef > 0) c41.push(Object.assign({}, regelBasis, {
           sleutel: "4.1|" + ord.Id + "|" + row.Id, aantal: nietGef, bedrag: nietGef * np,
-          detail: nietGef + " stuks geleverd, niet op een factuur"
+          detail: nietGef + " stuks geleverd, nog te factureren"
         }));
 
         // 3.1 — rechtstreekse levering: optellen, de beoordeling volgt na de
@@ -665,21 +665,21 @@
         sleutel: "3.1|" + ord.Id, verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""), door: num(ord.UserId),
         datum: ord.CreationDate, omschrijving: rechtstreeksWat || ord.Description || "",
         aantal: 1, bedrag: rechtstreeksWaarde,
-        detail: "geleverd via " + rechtstreeksMag + ", geen inkooporder gekoppeld"
+        detail: "geleverd via " + rechtstreeksMag + ", inkooporder nog te koppelen"
       });
 
       // 4.2 — afgehandeld terwijl er niets geleverd is
       if (/afgehandeld/i.test(status) && rows.length && !ietsGeleverd && incl > 0) c42.push({
         sleutel: "4.2|" + ord.Id, verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""), door: num(ord.UserId),
         datum: ord.CreationDate, omschrijving: ord.Description || "", aantal: rows.length, bedrag: incl,
-        detail: "status Afgehandeld, geen enkele regel geleverd"
+        detail: "status Afgehandeld, 0 regels geleverd"
       });
 
       // 5.3 — aanbetaling binnen, order blijft liggen
       if (betaald > 1 && !allesGeleverd && !/afgehandeld|geannuleerd/i.test(status) && ouderdom !== null && ouderdom > 120) c53.push({
         sleutel: "5.3|" + ord.Id, verwijzing: "Order " + ord.Id, wie: String(ord.DebtorId || ""), door: num(ord.UserId),
         datum: ord.CreationDate, omschrijving: ord.Description || "", aantal: ouderdom, bedrag: betaald,
-        detail: ouderdom + " dagen geleden aanbetaald, nog niet volledig geleverd (" + status + ")"
+        detail: ouderdom + " dagen geleden aanbetaald, levering nog (deels) open (" + status + ")"
       });
     }
 

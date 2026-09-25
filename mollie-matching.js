@@ -65,8 +65,8 @@
   }
 
   var SOORT_UITLEG = {
-    kosten: "De fee die Mollie inhoudt op deze uitbetaling. Hoort op een kostenrekening en niet op een order.",
-    terugbetaling: "Geld dat is teruggegaan naar de klant. Dit is geen betaling en mag niet als betaling op een order.",
+    kosten: "De fee die Mollie inhoudt op deze uitbetaling. Hoort op een kostenrekening, los van een order.",
+    terugbetaling: "Geld dat is teruggegaan naar de klant. Dit is een terugbetaling en wordt ook zo geboekt, apart van de betalingen op een order.",
     chargeback: "Een teruggeboekte betaling (chargeback). Zoek eerst uit welke order dit was voordat er iets mee gebeurt.",
   };
 
@@ -80,7 +80,7 @@
     var basis = { soort: soort, tegenpartij: tp, kandidaten: [], order: null };
 
     if (soort !== "betaling") {
-      return Object.assign(basis, { status: "grootboek", reden: SOORT_UITLEG[soort] || "Geen betaling van een klant." });
+      return Object.assign(basis, { status: "grootboek", reden: SOORT_UITLEG[soort] || "Dit is iets anders dan een betaling van een klant." });
     }
 
     var bedrag = Number(tx.amount) || 0;
@@ -95,7 +95,7 @@
         // niet. Dat is iets anders dan "geen match" en moet dat ook zeggen.
         return Object.assign(basis, {
           status: "controleren", ordernummer: nr,
-          reden: "ordernummer " + nr + " staat in de omschrijving, maar die order is niet gevonden in Logic4",
+          reden: "ordernummer " + nr + " staat in de omschrijving; die order is onbekend in Logic4",
         });
       }
       var open = Number(o.open);

@@ -199,7 +199,7 @@
       fabriek: "Foshan Gaoming Yuehua Sanitary (MEXDA)",
       merk: "Storm Spas",
       contact: "Boey Deng", email: "angus4a@china-yuehua.com",
-      opmerking: "Alle spa's solid white with grey. Op dit blad stonden geen prijzen. LET OP (Gretha, 27 aug 2026): de sauna's van MEXDA zijn uitlopende sauna's voor PARTICULIEREN, niet voor partners. Er is alleen een kleine hoeveelheid besteld om de containers met zwemspa's mee te vullen; de inkooporders daarvan staan al in Logic4. De sauna's die partners kopen komen van een andere fabriek, Guangdong Foshan Fukiafu - die twee niet door elkaar halen.",
+      opmerking: "Alle spa's solid white with grey. Dit blad liet de prijzen open. LET OP (Gretha, 27 aug 2026): de sauna's van MEXDA zijn uitlopende sauna's, uitsluitend voor PARTICULIEREN. Er is alleen een kleine hoeveelheid besteld om de containers met zwemspa's mee te vullen; de inkooporders daarvan staan al in Logic4. De sauna's die partners kopen komen van een andere fabriek, Guangdong Foshan Fukiafu - houd die twee goed uit elkaar.",
       bron: "codelijst Chantal, 4 aug 2026",
       /* De vrachttoeslag staat bij deze fabriek bewust op nul in de
          partnerprijslijst. Gretha (27 aug 2026): "de kosten voor de containers
@@ -243,7 +243,7 @@
       contact: null, email: null,
       bron: "artikelbestand Logic4, opgevraagd 08-08-2026",
       munt: "EUR",
-      opmerking: "Bedragen in EURO - deze baden komen uit Nederland, niet uit China. In Houston worden de onderdelen los geteld (barrels apart van de koelers), dus de losse artikelprijzen zijn hier de juiste. Een 'Compleet'-artikel staat in Logic4 op nul: dat is een samenstelling van losse regels.",
+      opmerking: "Bedragen in EURO - deze baden komen uit Nederland, anders dan de rest uit China. In Houston worden de onderdelen los geteld (barrels apart van de koelers), dus de losse artikelprijzen zijn hier de juiste. Een 'Compleet'-artikel staat in Logic4 op nul: dat is een samenstelling van losse regels.",
       modellen: [
         { model: "Wim Hof Barrel", code: "800062", inkoopEur: 119.40, verkoopEur: null,
           let: "De 240 liter; bevestigd door Chantal, 8 aug 2026." },
@@ -262,7 +262,7 @@
         { model: "Revive Granite Grey", code: "800058", inkoopEur: 230.41, verkoopEur: null },
         { model: "Revive Ice Blue", code: "800050", inkoopEur: 228.41, verkoopEur: null },
         { model: "Revive Black Marble", code: "800002", inkoopEur: 224.41, verkoopEur: null,
-          let: "Black Marble staat niet in Logic4; de zeven kleuren die er wel staan lopen van EUR 224,41 (Solid Grey) tot EUR 251,41 (Moss Stone). Gerekend met de laagste, net als bij de andere onzekere regels. Het gaat om hooguit 27 euro per stuk." },
+          let: "Black Marble is nog onbekend in Logic4; de zeven kleuren die er staan lopen van EUR 224,41 (Solid Grey) tot EUR 251,41 (Moss Stone). Gerekend met de laagste, net als bij de andere onzekere regels. Het gaat om hooguit 27 euro per stuk." },
         { model: "Water chiller", code: "800015", inkoopEur: 325.89, verkoopEur: null,
           let: "De 110V/60Hz-uitvoering; in Logic4 staat er letterlijk bij dat die alleen voor de VS is. De 50Hz-versie (EUR 303,57) hoort in Europa." },
         { model: "Faith", code: "800049", inkoopEur: 1482.14, verkoopEur: null },
@@ -293,7 +293,7 @@
         { model: "Barrel Sauna 8 ft", code: "454123", inkoopEur: 1383.93, verkoopEur: null,
           let: "Rustic-uitvoering; bevestigd door Chantal, 8 aug 2026. Zij stuurt haar eigen prijslijst nog na." },
         { model: "Barrel Sauna 7+1 combi", code: "454115", inkoopEur: 1540.18, verkoopEur: null,
-          let: "Bestaat alleen als Rustic - geen keuze, geen onzekerheid." },
+          let: "Bestaat alleen als Rustic - de prijs staat dus vast." },
       ],
     },
   ];

@@ -140,7 +140,7 @@
       regels: [], meldingen: [],
     };
     var k = kolommen(rijen);
-    if (!k) { uit.meldingen.push("Geen tabel met artikelnummers en aantallen gevonden."); return uit; }
+    if (!k) { uit.meldingen.push("Er zijn 0 tabellen met artikelnummers en aantallen gevonden."); return uit; }
 
     /* De fabrieksnaam staat bovenaan, meestal in de eerste gevulde cel en met
        een rechtsvorm erachter. Zonder die rechtsvorm pakken we gewoon de
@@ -229,8 +229,8 @@
       });
     }
 
-    if (!uit.regels.length) uit.meldingen.push("Geen bestelregels met een aantal gevonden.");
-    if (!uit.referentie) uit.meldingen.push("Geen S/C- of PI-nummer gevonden.");
+    if (!uit.regels.length) uit.meldingen.push("Er zijn 0 bestelregels met een aantal gevonden.");
+    if (!uit.referentie) uit.meldingen.push("Zoek het S/C- of PI-nummer zelf op; het bestand laat het open.");
     uit.totaal = uit.regels.reduce(function (n, r) { return n + r.aantal; }, 0);
 
     /* Alle artikelnummers die in dit document voorkomen, met hoeveel stuks er

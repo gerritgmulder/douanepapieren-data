@@ -262,7 +262,7 @@
       return Object.assign(basis, {
         status: "kandidaten", beste: null, kandidaten: vanHem.slice(0, 25),
         crediteur: cred[0].id, crediteurNaam: cred[0].naam,
-        reden: "betaling aan " + cred[0].naam + "; geen factuur die op dit bedrag past. " +
+        reden: "betaling aan " + cred[0].naam + "; 0 facturen passen op dit bedrag. " +
                vanHem.length + " staan er open",
       });
     }
@@ -273,20 +273,20 @@
       return Object.assign(basis, {
         status: "controleren", beste: opBedrag[0], kandidaten: opBedrag,
         crediteur: opBedrag[0].CreditorId,
-        reden: "geen leverancier of factuurnummer herkend; dit bedrag hoort bij precies één openstaande factuur (" +
+        reden: "leverancier en factuurnummer nog onbekend; dit bedrag hoort bij precies één openstaande factuur (" +
                (opBedrag[0].CompanyName || "onbekend") + ")",
       });
     }
     if (opBedrag.length > 1) {
       return Object.assign(basis, {
         status: "kandidaten", beste: null, kandidaten: opBedrag,
-        reden: "geen leverancier of factuurnummer herkend; " + opBedrag.length +
+        reden: "leverancier en factuurnummer nog onbekend; " + opBedrag.length +
                " openstaande facturen met dit bedrag",
       });
     }
     return Object.assign(basis, {
       status: "geen", beste: null,
-      reden: "geen factuurnummer, geen bekende leverancier en geen openstaande factuur met dit bedrag",
+      reden: "factuurnummer en leverancier onbekend, en dit bedrag komt bij 0 openstaande facturen voor",
     });
   }
 

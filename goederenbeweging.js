@@ -66,7 +66,7 @@
     { sleutel: "aansluiting", naam: "Handmatige aansluitboekingen",
       test: /voorraadaansluiting|terugdraaien:\s*aansluiting voorraad/i, apart: true },
   ];
-  var OVERIG = { sleutel: "overig", naam: "Overig / niet geclassificeerd" };
+  var OVERIG = { sleutel: "overig", naam: "Overig / nog te classificeren" };
 
   function soortVan(omschrijving) {
     var o = String(omschrijving || "");
@@ -145,7 +145,7 @@
     opties = opties || {};
     var k = kolommen(rijen[0]);
     if (!k) return { ok: false, error: "kolommen-niet-herkend",
-                     uitleg: "In de kopregel ontbreekt een grootboekcode of een bedrag." };
+                     uitleg: "De kopregel vraagt een kolom met de grootboekcode en een kolom met het bedrag." };
 
     var totaal = nieuweTelling();
     var perRekening = {}, perGroep = {}, perArtikel = {};
@@ -185,7 +185,7 @@
       tel(perRekening[nr], s.sleutel, bedrag);
 
       if (k.groep !== undefined) {
-        var g = String(rij[k.groep] || "(geen groep)");
+        var g = String(rij[k.groep] || "(zonder groep)");
         perGroep[g] = perGroep[g] || nieuweTelling();
         tel(perGroep[g], s.sleutel, bedrag);
       }
@@ -264,26 +264,26 @@
   function meldingen(k, perArtikel, totaal) {
     var m = [];
     if (k.artikel === undefined) {
-      m.push("Er is geen kolom Artikelcode gevonden. De uitsplitsing per artikel ontbreekt.");
+      m.push("De uitsplitsing per artikel volgt zodra er een kolom Artikelcode in het bestand staat.");
     } else if (!Object.keys(perArtikel).length) {
       /* Dit is het geval bij het datamodel van december 2025: de artikelcode
          staat wél op de omzet- en kostprijsrekeningen, maar op geen enkele van
          de 108.993 voorraadregels. Nagelopen 17 aug 2026. */
-      m.push("Op de voorraadregels staat geen artikelcode ingevuld, alleen op de omzet- en " +
-             "kostprijsrekeningen. De goederenbeweging is daarom op te bouwen per grootboekrekening " +
-             "en per artikelgroep, maar niet per artikel. Voor artikelniveau zijn de voorraadmutaties " +
+      m.push("De artikelcode staat alleen op de omzet- en kostprijsrekeningen; de voorraadregels zijn " +
+             "zonder artikelcode. De goederenbeweging is daarom op te bouwen per grootboekrekening " +
+             "en per artikelgroep. Voor artikelniveau zijn de voorraadmutaties " +
              "uit Logic4 nodig.");
     }
     if (totaal.perSoort.aansluiting) {
       m.push("Er staan handmatige aansluitboekingen in van " +
              Math.round(totaal.perSoort.aansluiting).toLocaleString("nl-NL") +
              ". Die staan apart geteld: een goederenbeweging waarin zo'n post als gewone correctie " +
-             "meeloopt sluit altijd, en dan is de vraag waar het verschil vandaan komt niet " +
-             "beantwoord maar weggeboekt.");
+             "meeloopt sluit altijd, en dan is de vraag waar het verschil vandaan komt weggeboekt " +
+             "in plaats van beantwoord.");
     }
     if (totaal.perSoort.overig && Math.abs(totaal.perSoort.overig) > 100000) {
       m.push("Voor " + Math.round(totaal.perSoort.overig).toLocaleString("nl-NL") +
-             " aan mutaties is uit de omschrijving niet af te leiden wat voor soort boeking het is.");
+             " aan mutaties is de soort boeking nog uit te zoeken; de omschrijving geeft daar te weinig houvast voor.");
     }
     return m;
   }

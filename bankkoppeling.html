@@ -25,7 +25,7 @@
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
     '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
-    '<div class="gt"><h1>Geen toegang</h1><p>Bankkoppeling maken is niet beschikbaar voor jouw account.</p>'+
+    '<div class="gt"><h1>Deze tegel is afgeschermd</h1><p>Bankkoppeling maken is voor een vaste groep medewerkers.</p>'+
     '<p style="font-size:12.5px">Je bent ingelogd als <code>'+(email||"(onbekend)")+'</code>.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
@@ -241,7 +241,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   </div>
   <div class="user">
     <span id="userEmail">—</span>
-    <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-bankafschrift met matches (geen MT940/Logic4 nodig)">🎬 Demo</button>
+    <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-bankafschrift met matches (werkt los van MT940 en Logic4)">🎬 Demo</button>
     <button class="logout" id="hdr-logout">Uitloggen</button>
   </div>
 </header>
@@ -262,17 +262,17 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <li><b>Het bedrag</b> tegen de openstaande posten. Levert dat precies één post op,
           dan is dat een aanwijzing; komt het bedrag vaker voor, dan krijg je de kandidaten
           te zien en kies je zelf.</li>
-      <li><b>De naam</b> van de tegenpartij. Die koppelt nooit op zichzelf, maar bevestigt
-          de rest — of haalt hem onderuit. Klopt het nummer wel maar hoort de naam bij een
+      <li><b>De naam</b> van de tegenpartij. Die telt alleen samen met de andere drie: hij bevestigt
+          de rest, of haalt hem onderuit. Klopt het nummer wel maar hoort de naam bij een
           andere klant, dan gaat de regel bewust terug naar <i>controleren</i>.</li>
     </ul>
     <p style="margin: 0 0 14px; font-size: 13px; color: var(--muted); line-height: 1.55;">
-      Verzamelbetalingen gaan niet naar een order maar naar een grootboekrekening:
+      Verzamelbetalingen gaan naar een grootboekrekening in plaats van naar een order:
       Mollie naar 1175, Pay.nl en de dagafrekening van de pinautomaat naar 2030, en
-      Stripe en Shopify naar 2100. Die gaan over veel klanten tegelijk, dus er ís geen
-      order om ze aan te hangen — dat is geen probleem maar een ander soort boeking, en
+      Stripe en Shopify naar 2100. Die gaan over veel klanten tegelijk en horen daarom
+      op een grootboekrekening - dat is gewoon een ander soort boeking, en
       ze staan daarom ook op <i>zeker</i>. Ze komen onderaan in een memoriaal-voorstel
-      te staan. Er wordt niets geboekt zolang jij niets aanvinkt.
+      te staan. Er wordt alleen geboekt wat jij aanvinkt.
     </p>
     <label class="dropzone" id="dropzone">
       <input type="file" id="fileInput" accept=".sta,.940,.txt,.mt940,application/octet-stream,text/plain">
@@ -361,10 +361,10 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
            weg te schrijven: alleen betalingen op een order, en inkoop-,
            verkoop- en memoriaalboekingen. Er is dus geen derde. -->
       <p class="muted" style="margin:8px 0 0;font-size:12px;line-height:1.55">
-        <strong>Staat de bankrekening in Logic4 op slot?</strong> Dan is er een keuze te maken, en die is niet aan
-        het dashboard.<br>
+        <strong>Staat de bankrekening in Logic4 op slot?</strong> Dan is er een keuze te maken, en die maak
+        jij.<br>
         <strong>1.</strong> De bankrekening deblokkeren in Logic4. Dan boekt het dashboard de regel meteen goed:
-        bank tegen tussenrekening, klaar, geen nawerk.<br>
+        bank tegen tussenrekening, klaar, zonder nawerk.<br>
         <strong>2.</strong> Op slot laten en hier een kruisposten-rekening invullen. Het dashboard boekt dan de
         tussenrekening tegen die kruisposten, en de bankkant boek je zelf in het bankdagboek tegen diezelfde
         kruisposten. Veiliger, maar je houdt er werk aan.
@@ -377,8 +377,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <button class="cta secondary" id="resetBtn">Ander bestand laden</button>
     </div>
     <p class="muted" style="margin:10px 0 0;font-size:12px;">
-      Boeken schrijft de betaling weg op de order in Logic4 en is niet terug te draaien.
-      Vink daarom aan wat je wilt boeken — één regel, een deel, of alles. Er wordt vastgelegd wie wat heeft geboekt.
+      Boeken schrijft de betaling weg op de order in Logic4 en is definitief.
+      Vink daarom aan wat je wilt boeken - één regel, een deel, of alles.
     </p>
     <div id="actionStatus"></div>
   </div>
@@ -397,8 +397,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     </div>
     <p class="muted" id="uitMeta" style="margin:10px 0 0;font-size:12.5px;"></p>
     <div class="status warn" style="margin-top:14px;">
-      <b>De uitgaven zijn gekoppeld, maar Logic4 laat ze niet wegschrijven.</b> Op 19 augustus 2026
-      alle drie de wegen geprobeerd, met verzoeken die zo waren opgezet dat er niets kon ontstaan:
+      <b>De uitgaven zijn gekoppeld; het wegschrijven gaat met de hand in Logic4.</b> Op 19 augustus 2026
+      alle drie de wegen geprobeerd, met verzoeken die zo waren opgezet dat de administratie ongemoeid bleef:
       <br>&bull; <b>Betaling op een factuur</b> (dezelfde weg als bij de inkomsten): een crediteurfactuur
       geeft "Factuur 788113 niet gevonden", precies dezelfde melding als een verzonnen nummer.
       Dat eindpunt kent alleen verkoopfacturen.
@@ -406,8 +406,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       Memoriaal toevoegen, maar het meegegeven financieel dagboek 42 is een Bank boek."
       <br>&bull; <b>Inkoopboeking</b> in het bankdagboek: hetzelfde, nu met "type Inkoop". In het
       inkoopdagboek werd het dagboek wél geaccepteerd, wat bewijst dat de proef zelf klopte.
-      <br>Elk schrijf-eindpunt zit vast aan zijn eigen soort dagboek en geen van de vier schrijft in
-      een bankboek. Aanvinken kan wel: wat je aanvinkt komt met de knop hierboven naar buiten als
+      <br>Elk schrijf-eindpunt zit vast aan zijn eigen soort dagboek; het bankboek valt bij alle vier
+      buiten het bereik. Aanvinken kan wel: wat je aanvinkt komt met de knop hierboven naar buiten als
       kant-en-klare boekregels met crediteurnummer, factuurnummer, bedrag en datum erbij.
     </div>
   </div>
@@ -522,9 +522,9 @@ async function handleFile(file) {
         && Math.abs(rond(af.reduce((n, t) => n - t.amount, 0)) - parsed.telling.afTotaal) < 0.02
         && Math.abs(rond(bij.reduce((n, t) => n + t.amount, 0)) - parsed.telling.bijTotaal) < 0.02;
       if (!klopt) {
-        showStatus($("dropStatus"), "Let op: dit afschrift klopt niet met zijn eigen telling. De bank meldt " +
+        showStatus($("dropStatus"), "Let op: dit afschrift wijkt af van zijn eigen telling. De bank meldt " +
           parsed.telling.bijboekingen + " bijboekingen en " + parsed.telling.afboekingen + " afboekingen, " +
-          "het dashboard leest er " + bij.length + " en " + af.length + ". Boek hier niets op voordat dit is uitgezocht.", "error");
+          "het dashboard leest er " + bij.length + " en " + af.length + ". Zoek dit eerst uit en boek daarna.", "error");
       }
     }
     state.transactions = parsed.transactions
@@ -540,7 +540,7 @@ async function handleFile(file) {
       .filter(t => t.amount < 0)
       .map(t => ({ ...t, match: null }));
     if (!state.transactions.length && !state.uitgaven.length) {
-      showStatus($("dropStatus"), "Geen betalingen in dit MT940-bestand gevonden.", "error");
+      showStatus($("dropStatus"), "Dit MT940-bestand bevat 0 betalingen.", "error");
       return;
     }
     showStatus($("dropStatus"), state.transactions.length + " inkomende betalingen gevonden — openstaande posten ophalen…", "info");
@@ -560,7 +560,7 @@ async function handleFile(file) {
     await koppelUitgaven();
   } catch (e) {
     console.error(e);
-    showStatus($("dropStatus"), "Kon MT940 niet inlezen: " + e.message, "error");
+    showStatus($("dropStatus"), "MT940 inlezen vraagt een nieuwe poging: " + e.message, "error");
   }
 }
 
@@ -610,7 +610,7 @@ const TUSSEN = {
   pin:    { label: "Pinautomaat",
             uitleg: "Dagafrekening van de pinautomaat in de showroom. Gaat over meerdere klanten en hoort op de tussenrekening 2030, net als Pay.nl." },
   airbnb: { label: "Airbnb",
-            uitleg: "Uitbetaling van Airbnb voor de huizen. Hoort op grootboek 1452 en niet bij een order." },
+            uitleg: "Uitbetaling van Airbnb voor de huizen. Hoort op grootboek 1452, los van een order." },
 };
 function tussenLabel(kind) {
   const t = TUSSEN[kind];
@@ -637,9 +637,9 @@ async function haalOpenstaand(vers) {
   const r = await fetch(WORKER + "/bank/openstaand", {
     method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
     body: JSON.stringify({ vers: !!vers }) });
-  if (!r.ok) throw new Error("openstaande posten ophalen faalde (HTTP " + r.status + ")");
+  if (!r.ok) throw new Error("openstaande posten ophalen vraagt een nieuwe poging (HTTP " + r.status + ")");
   const j = await r.json();
-  if (!j.ok) throw new Error(j.error || "openstaande posten ophalen faalde");
+  if (!j.ok) throw new Error(j.error || "openstaande posten ophalen vraagt een nieuwe poging");
   openMeta = { updated: j.updated, aantal: (j.posten || []).length, uitCache: j.uitCache };
   openIndex = BM().bouwIndex(j.posten || []);
   return openIndex;
@@ -721,7 +721,7 @@ const STATUS_UITERLIJK = {
   controleren: { klasse: "partial", tekst: "Controleren" },
   kandidaten:  { klasse: "partial", tekst: "Kiezen" },
   opzoeken:    { klasse: "partial", tekst: "Order genoemd" },
-  geen:        { klasse: "miss",    tekst: "Geen match" },
+  geen:        { klasse: "miss",    tekst: "Nog te koppelen" },
 };
 
 function postLabel(p) {
@@ -751,7 +751,7 @@ function renderResults() {
     // hij heen moet, alleen is dat een grootboekrekening en geen order.
     "<div class='stat'><div class='lbl'>Zeker</div><div class='val'>" + (tel("zeker") + t.filter(x => x.kind !== "direct").length) + "</div></div>" +
     "<div class='stat warn'><div class='lbl'>Controleren</div><div class='val'>" + (tel("controleren") + tel("kandidaten") + tel("opzoeken")) + "</div></div>" +
-    "<div class='stat bad'><div class='lbl'>Geen match</div><div class='val'>" + tel("geen") + "</div></div>" +
+    "<div class='stat bad'><div class='lbl'>Nog te koppelen</div><div class='val'>" + tel("geen") + "</div></div>" +
     "<div class='stat tussen'><div class='lbl'>Naar grootboek</div><div class='val'>" + t.filter(x => x.kind !== "direct").length + "</div></div>";
 
   const tbody = $("txBody");
@@ -968,9 +968,9 @@ async function haalOpenstaandCrediteuren(vers) {
   const r = await fetch(WORKER + "/bank/openstaand-crediteuren", {
     method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
     body: JSON.stringify({ vers: !!vers }) });
-  if (!r.ok) throw new Error("openstaande crediteuren ophalen faalde (HTTP " + r.status + ")");
+  if (!r.ok) throw new Error("openstaande crediteuren ophalen vraagt een nieuwe poging (HTTP " + r.status + ")");
   const j = await r.json();
-  if (!j.ok) throw new Error(j.error || "openstaande crediteuren ophalen faalde");
+  if (!j.ok) throw new Error(j.error || "openstaande crediteuren ophalen vraagt een nieuwe poging");
   credMeta = { updated: j.updated, aantal: (j.posten || []).length, uitCache: j.uitCache };
   credIndex = window.fpBankCred.bouwIndex(j.posten || []);
   return credIndex;
@@ -1009,7 +1009,7 @@ if ($("uitKopieer")) $("uitKopieer").addEventListener("click", async () => {
     showStatus($("actionStatus"), (rijen.length - 1) + " boekregel(s) gekopieerd. Plak ze in Excel of rechtstreeks in " +
       "het bankdagboek van Logic4; crediteurnummer, factuurnummer, bedrag en datum staan erin.", "ok");
   } catch (e) {
-    showStatus($("actionStatus"), "Kopiëren lukte niet: " + e.message, "error");
+    showStatus($("actionStatus"), "Kopiëren vraagt een nieuwe poging: " + e.message, "error");
   }
 });
 
@@ -1031,12 +1031,12 @@ function renderUitgaven() {
       (eind == null ? "—" : fmtEur(eind)) + "</div></div>" +
     "</div>" +
     (berekend == null || eind == null
-      ? "<p class='muted' style='margin:10px 0 0;font-size:12.5px'>De bank geeft geen begin- of eindsaldo mee in dit bestand, dus de optelsom is niet te controleren.</p>"
+      ? "<p class='muted' style='margin:10px 0 0;font-size:12.5px'>De controle van de optelsom vraagt een begin- en eindsaldo, en de bank laat die in dit bestand weg.</p>"
       : klopt
         ? "<p style='margin:10px 0 0;font-size:13px;color:var(--ok,#15803d)'><b>Sluit aan.</b> Beginsaldo plus alle bij- en afboekingen komt precies uit op het eindsaldo van de bank.</p>"
-        : "<p style='margin:10px 0 0;font-size:13px;color:var(--bad,#b91c1c)'><b>Sluit niet aan.</b> Beginsaldo plus alle regels geeft " +
+        : "<p style='margin:10px 0 0;font-size:13px;color:var(--bad,#b91c1c)'><b>Verschil met de bank.</b> Beginsaldo plus alle regels geeft " +
           fmtEur(berekend) + ", de bank meldt " + fmtEur(eind) + " — een verschil van " + fmtEur(berekend - eind) +
-          ". Boek hier niets voordat dit is uitgezocht.</p>");
+          ". Zoek dit eerst uit en boek daarna.</p>");
 }
 
 // ─── Selectie ───────────────────────────────────────────────────────
@@ -1089,7 +1089,7 @@ async function laadGrootboek() {
 function rekeningNaam(nr) {
   const g = grootboek.perCode[String(nr || "").trim()];
   if (g) return g.naam || "";
-  return grootboek.geladen ? "— bestaat niet in Logic4" : "";
+  return grootboek.geladen ? "- nog onbekend in Logic4" : "";
 }
 laadGrootboek();
 
@@ -1112,7 +1112,7 @@ function werkSelectieBij() {
   const kiesbaar = state.transactions.filter(t => (t.gekozen || t.orderNr) && !t.geboekt).length;
   const tekst = s.length
     ? s.length + " van " + kiesbaar + " aangevinkt — samen " + fmtEur(totaal)
-    : (kiesbaar ? "niets aangevinkt van de " + kiesbaar + " koppelbare betalingen" : "nog niets te koppelen");
+    : (kiesbaar ? "0 van " + kiesbaar + " koppelbare betalingen aangevinkt" : "0 koppelbare betalingen");
   document.querySelectorAll(".selInfo").forEach(e => { e.textContent = tekst; });
   /* De knop "Alles aanvinken" wordt "Alles uitvinken" zodra alles aanstaat,
      zodat één knop beide kanten op werkt - net als het vinkje in de kop. */
@@ -1205,7 +1205,7 @@ async function laadDagboeken() {
   try {
     const r = await fetch(WORKER + "/bank/dagboeken", { headers: { "X-Fonteyn-Auth": teamKey() } });
     const j = await r.json();
-    if (!j.ok) { $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + (j.error || "") + ". Je kunt niet boeken zonder dagboek."; return; }
+    if (!j.ok) { $("dagboekInfo").textContent = "Dagboeken ophalen vraagt een nieuwe poging: " + (j.error || "") + ". Boeken kan zodra er een dagboek gekozen is."; return; }
     dagboeken = j.dagboeken || [];
     const onthouden = localStorage.getItem(DAGBOEK_KEY) || "";
     const opties = (lijst, gekozen, leeg) => "<option value=''>" + leeg + "</option>" +
@@ -1236,7 +1236,7 @@ async function laadDagboeken() {
     }
     $("dagboekInfo").textContent = onthouden ? "" : "Kies het dagboek van de bankrekening waar dit afschrift bij hoort.";
   } catch (e) {
-    $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + e.message;
+    $("dagboekInfo").textContent = "Dagboeken ophalen vraagt een nieuwe poging: " + e.message;
   }
 }
 if ($("memDagboek")) $("memDagboek").addEventListener("change", () => {
@@ -1244,7 +1244,7 @@ if ($("memDagboek")) $("memDagboek").addEventListener("change", () => {
   // Alleen bij de worker bewaren, niet ook hier: twee plekken die hetzelfde
   // onthouden lopen vroeg of laat uit elkaar.
   if (v) bewaarMemDagboek(v); else bewaarInstelling({ memBookingId: null, memNaam: "" });
-  $("memDagboekInfo").textContent = v ? "Onthouden - dit hoeft niemand nog een keer aan te wijzen." : "";
+  $("memDagboekInfo").textContent = v ? "Onthouden - dit staat nu voor iedereen vast." : "";
 });
 if ($("tegenRekening")) $("tegenRekening").addEventListener("change", async () => {
   const v = String($("tegenRekening").value || "").trim();
@@ -1264,15 +1264,15 @@ $("boekBtn").addEventListener("click", async () => {
   const rijen = selectie();
   if (!rijen.length) return;
   if (!gekozenDagboek()) {
-    showStatus($("actionStatus"), "Kies eerst het dagboek van deze bankrekening. Zonder dagboek weigert Logic4 de boeking, " +
-      "en in het verkeerde dagboek staat het geld op de verkeerde plek. Er is niets geboekt.", "error");
+    showStatus($("actionStatus"), "Kies eerst het dagboek van deze bankrekening. Logic4 boekt alleen met een dagboek, " +
+      "en het juiste dagboek zet het geld op de juiste plek. Alles staat nog klaar om te boeken.", "error");
     return;
   }
   // De demo draait op verzonnen facturen. Zonder deze stop zou een klik hier
   // wél Logic4 aanspreken om te boeken - met factuurnummers die niet
   // bestaan. Dat hoort niet te kunnen.
   if (state.demo) {
-    showStatus($("actionStatus"), "Dit is de demo met een voorbeeldafschrift; er wordt niets geboekt. " +
+    showStatus($("actionStatus"), "Dit is de demo met een voorbeeldafschrift, dus alles blijft ongeboekt. " +
       "Laad een echt MT940-bestand om te boeken.", "info");
     return;
   }
@@ -1307,10 +1307,10 @@ $("boekBtn").addEventListener("click", async () => {
      financieel dagboek 42 is een Bank boek." */
   const MEMORIAAL_AAN = false;
   if (naarGrootboek.length && !MEMORIAAL_AAN) {
-    gbFouten.push(naarGrootboek.length + " regel(s) zijn niet geboekt. Ze horen in het bankdagboek, en Logic4 " +
+    gbFouten.push(naarGrootboek.length + " regel(s) wachten op boeking met de hand. Ze horen in het bankdagboek, en Logic4 " +
       "laat via de API alleen inkoop-, verkoop- en memoriaalboekingen toe. In een bankdagboek kom je alleen met " +
-      "een betaling op een order of factuur, en deze regels horen bij geen van beide. Dit ligt niet aan de " +
-      "rechten - nagegaan op 19 aug 2026. Zet ze met de hand in het bankdagboek; de rekening staat per regel in beeld.");
+      "een betaling op een order of factuur, en deze regels staan los van allebei. De rechten zijn " +
+      "in orde - nagegaan op 19 aug 2026. Zet ze met de hand in het bankdagboek; de rekening staat per regel in beeld.");
   }
   if (naarGrootboek.length && MEMORIAAL_AAN) {
     showStatus($("actionStatus"), naarGrootboek.length + " regel(s) op een grootboekrekening boeken…", "info");
@@ -1336,7 +1336,7 @@ $("boekBtn").addEventListener("click", async () => {
       const t = naarGrootboek[i];
       if (res.ok && t) { t.geboekt = "Op grootboek " + res.rekening + (res.rekeningNaam ? " (" + res.rekeningNaam + ")" : "") +
         (res.dagboek ? " · memoriaal " + res.dagboek : ""); t.kies = false; gbGelukt++; }
-      else gbFouten.push("rekening " + (res.rekening || "?") + ": " + (res.error || "onbekende fout") + (res.antwoord ? " — " + res.antwoord : ""));
+      else gbFouten.push("rekening " + (res.rekening || "?") + ": " + (res.error || "reden onbekend") + (res.antwoord ? " — " + res.antwoord : ""));
     });
     /* Kon hij het memoriaal-dagboek niet zelf vinden, dan komt het vakje
        alsnog tevoorschijn - één keer aanwijzen en het staat voorgoed vast,
@@ -1421,11 +1421,11 @@ $("boekBtn").addEventListener("click", async () => {
         regels: portie.map(x => ({ orderNr: x.orderNr, invoiceId: x.invoiceId, bedrag: x.bedrag,
                                    datum: x.datum, omschrijving: x.omschrijving })) }) });
     if (r.status === 403) {
-      showStatus($("actionStatus"), "Jouw account mag betalingen niet wegschrijven. Er is niets geboekt en je selectie staat er nog. Vraag Gerrit om je toe te voegen.", "error");
+      showStatus($("actionStatus"), "Betalingen wegschrijven is voor een vaste groep medewerkers. Je selectie staat er nog en alles is ongeboekt. Vraag Gerrit om je toe te voegen.", "error");
       $("boekBtn").disabled = false; return;
     }
     if (r.status === 401) {
-      showStatus($("actionStatus"), "Het dashboard is niet ontgrendeld op deze computer. Log opnieuw in via het dashboard, dan wordt de sleutel opgehaald. Er is niets geboekt.", "error");
+      showStatus($("actionStatus"), "Het dashboard vraagt op deze computer om ontgrendeling. Log opnieuw in via het dashboard, dan wordt de sleutel opgehaald. Alles staat nog klaar om te boeken.", "error");
       $("boekBtn").disabled = false; return;
     }
     const j = await r.json();
@@ -1436,17 +1436,17 @@ $("boekBtn").addEventListener("click", async () => {
       if (res.ok && bij) {
         bij.tx.geboekt = "Geboekt op " + waarop + (res.datumGebruikt ? " · " + res.datumGebruikt : "");
         bij.tx.kies = false; gelukt++;
-      } else fouten.push(waarop + ": " + (res.error || "onbekende fout") + (res.antwoord ? " — " + res.antwoord : ""));
+      } else fouten.push(waarop + ": " + (res.error || "reden onbekend") + (res.antwoord ? " — " + res.antwoord : ""));
     }
   }
 
   let bericht = gelukt + " betaling" + (gelukt === 1 ? "" : "en") + " geboekt op een order in Logic4.";
   if (gbGelukt) bericht += " " + gbGelukt + " regel(s) als memoriaal op een grootboekrekening" +
     (gbDagboek ? " in dagboek " + gbDagboek : "") + ".";
-  if (gbFouten.length) bericht += " Grootboek mislukt: " + gbFouten.slice(0, 3).join("; ") + ".";
-  if (geenOrder.length) bericht += " " + geenOrder.length + " niet geboekt omdat er geen ordernummer bij de factuur staat: " +
-    geenOrder.slice(0, 5).map(g => g.invoiceId).join(", ") + (geenOrder.length > 5 ? " en meer" : "") + ". Die moeten handmatig.";
-  if (fouten.length) bericht += " Mislukt: " + fouten.slice(0, 4).join("; ") + ".";
+  if (gbFouten.length) bericht += " Grootboek vraagt aandacht: " + gbFouten.slice(0, 3).join("; ") + ".";
+  if (geenOrder.length) bericht += " " + geenOrder.length + " wachten op een ordernummer bij de factuur: " +
+    geenOrder.slice(0, 5).map(g => g.invoiceId).join(", ") + (geenOrder.length > 5 ? " en meer" : "") + ". Die boek je met de hand.";
+  if (fouten.length) bericht += " Nog te boeken: " + fouten.slice(0, 4).join("; ") + ".";
   showStatus($("actionStatus"), bericht, (fouten.length || gbFouten.length) ? "error" : "ok");
   try { if (window.fpLog) window.fpLog("bankbetalingen-geboekt", gelukt + " betalingen, afschrift " + (state.statementNr || state.fileName)); } catch (e) {}
 
@@ -1486,7 +1486,7 @@ function vensterje(titel, uitleg, invoer, okTekst, gevaar) {
 function bevestigBoeken(aantal, totaal) {
   return vensterje("Nu " + aantal + " betaling" + (aantal === 1 ? "" : "en") + " boeken?",
     "Samen <b>" + fmtEur(totaal) + "</b>. De betalingen worden op de bijbehorende orders in Logic4 gezet. " +
-    "Dit is niet met een knop terug te draaien — een verkeerde koppeling moet handmatig worden rechtgezet.",
+    "Let op: dit is definitief - een verkeerde koppeling zet je met de hand recht.",
     false, "Ja, boeken", true);
 }
 
@@ -1506,7 +1506,7 @@ $("exportBtn").addEventListener("click", () => {
   const csv = [header, ...rows].map(r => r.map(c => /[;"\n]/.test(String(c)) ? '"' + String(c).replace(/"/g, '""') + '"' : String(c)).join(";")).join("\n");
   navigator.clipboard.writeText(csv).then(() => {
     showStatus($("actionStatus"), rows.length + " regels naar het klembord (CSV, scheidingsteken ';' — plak in Excel).", "ok");
-  }).catch(e => showStatus($("actionStatus"), "Klembord niet beschikbaar: " + e.message, "error"));
+  }).catch(e => showStatus($("actionStatus"), "Het klembord vraagt een nieuwe poging: " + e.message, "error"));
 });
 
 
@@ -1586,7 +1586,7 @@ function loadBankDemo() {
     t.kies = t.match.status === "zeker";
   }
   renderResults();
-  showStatus($("dropStatus"), "DEMO — 7 betalingen op verzonnen openstaande posten. De koppeling is de echte; er staat geen verbinding met Logic4 open, dus boeken zal niets vinden.", "ok");
+  showStatus($("dropStatus"), "DEMO - 7 betalingen op verzonnen openstaande posten. De koppeling is de echte; Logic4 blijft hier buiten beeld, dus alles blijft een voorbeeld.", "ok");
   $("resultCard").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 (function initBankDemo(){
@@ -1671,13 +1671,13 @@ function loadBankDemo() {
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

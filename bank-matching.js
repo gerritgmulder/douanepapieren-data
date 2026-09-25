@@ -291,7 +291,7 @@
     if (nrs.facturen.length) {
       return Object.assign(basis, {
         status: "controleren", beste: null,
-        reden: "factuur " + nrs.facturen[0] + " genoemd, maar die staat niet open (mogelijk al betaald)",
+        reden: "factuur " + nrs.facturen[0] + " genoemd; die staat buiten de openstaande posten (mogelijk al betaald)",
       });
     }
 
@@ -323,19 +323,19 @@
     if (opBedrag.length === 1) {
       return Object.assign(basis, {
         status: "kandidaten", beste: opBedrag[0], kandidaten: opBedrag,
-        reden: "geen nummer in de omschrijving; dit bedrag hoort bij precies één openstaande post",
+        reden: "omschrijving zonder nummer; dit bedrag hoort bij precies één openstaande post",
         bedragRol: "volledig", uniekOpBedrag: true,
       });
     }
     if (opBedrag.length > 1) {
       return Object.assign(basis, {
         status: "kandidaten", beste: null, kandidaten: opBedrag,
-        reden: "geen nummer in de omschrijving; " + opBedrag.length + " openstaande posten met dit bedrag",
+        reden: "omschrijving zonder nummer; " + opBedrag.length + " openstaande posten met dit bedrag",
       });
     }
     return Object.assign(basis, {
       status: "geen", beste: null,
-      reden: "geen factuur- of ordernummer in de omschrijving en geen openstaande post met dit bedrag",
+      reden: "omschrijving zonder factuur- of ordernummer, en dit bedrag komt bij 0 openstaande posten voor",
     });
   }
 
@@ -378,7 +378,7 @@
       // precies het geval waarin blind boeken fout gaat.
       match.status = "controleren";
       match.naamBotst = true;
-      match.reden += "; let op: de naam op het afschrift ('" + tegen + "') lijkt niet op '" + top.naam + "'";
+      match.reden += "; let op: de naam op het afschrift ('" + tegen + "') wijkt af van '" + top.naam + "'";
     }
     return match;
   }
@@ -399,7 +399,7 @@
     var o = orders[String(match.orderNr)];
     if (!o) {
       match.status = "geen";
-      match.reden = "ordernummer " + match.orderNr + " genoemd, maar dat order bestaat niet in Logic4";
+      match.reden = "ordernummer " + match.orderNr + " genoemd; dat order is onbekend in Logic4";
       return match;
     }
     var bedrag = Number(match.bedrag) || 0;

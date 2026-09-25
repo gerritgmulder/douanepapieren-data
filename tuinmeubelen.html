@@ -17,13 +17,13 @@
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
     '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
-    '<div class="gt"><h1>Geen toegang</h1><p>De tegel Tuinmeubelen is niet beschikbaar voor jouw account.</p>'+
+    '<div class="gt"><h1>Tuinmeubelen</h1><p>Deze tegel is voor wie de containers met tuinmeubelen bijhoudt en inkoopt.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
 })();
 </script>
 <meta charset="UTF-8">
-<title>Fonteyn — Tuinmeubelen</title>
+<title>Fonteyn - Tuinmeubelen</title>
 <script src="taal.js"></script>
 <!-- Voor het lezen van de orderbevestiging die de fabriek terugstuurt. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -139,9 +139,9 @@ td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 <main>
   <h2>Containers met tuinmeubelen</h2>
   <p class="lead">
-    Alles wat Chantal en Manon bij <b>Voorraadbeheer → Schepen &amp; ontvangst</b> uploaden en waar geen spa's
-    in zitten, komt hier terecht: tuinmeubelen, sauna's en wat er verder meevaart. De inhoud telt bewust
-    <b>niet</b> als voorraad mee; dit is een overzicht van wat er in de container zit en welke papieren erbij horen.
+    Alles wat Chantal en Manon bij <b>Voorraadbeheer → Schepen &amp; ontvangst</b> uploaden zonder spa's
+    erin, komt hier terecht: tuinmeubelen, sauna's en wat er verder meevaart. De inhoud staat bewust
+    <b>buiten</b> de voorraad; dit is een overzicht van wat er in de container zit en welke papieren erbij horen.
   </p>
   <div id="status"></div>
   <div id="lijst"></div>
@@ -154,7 +154,7 @@ td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
   <p class="lead">
     De orderbevestiging die de fabriek terugstuurt - de <b>sales confirmation</b> of de proforma - kun je hier inlezen, als Excel of als PDF.
     Het dashboard haalt de fabriek, het S/C-nummer, de artikelnummers, de kleuren en de aantallen eruit,
-    en kijkt meteen na of die artikelnummers in Logic4 bestaan. Wat er niet in staat moet langs Gretha.
+    en kijkt meteen na of die artikelnummers in Logic4 bestaan. Nieuwe artikelnummers gaan langs Gretha.
   </p>
   <div class="card" id="bestelKaart">
     <input type="file" id="scBestand" accept=".xls,.xlsx,.pdf" style="display:none">
@@ -175,9 +175,9 @@ const teamKey = () => localStorage.getItem("fp.teamkey") || "";
 function esc(s){ return String(s == null ? "" : s).replace(/[<>&"]/g, c =>
   ({ "<":"&lt;", ">":"&gt;", "&":"&amp;", '"':"&quot;" }[c])); }
 function nlDatum(s){
-  if (!s) return "—";
+  if (!s) return "-";
   const d = new Date(s);
-  return isNaN(d) ? "—" : String(d.getDate()).padStart(2,"0") + "-" +
+  return isNaN(d) ? "-" : String(d.getDate()).padStart(2,"0") + "-" +
     String(d.getMonth()+1).padStart(2,"0") + "-" + d.getFullYear();
 }
 function kb(n){ return n >= 1048576 ? (n/1048576).toFixed(1)+" MB" : Math.max(1, Math.round(n/1024))+" KB"; }
@@ -209,7 +209,7 @@ async function laad(){
     if (!r.ok) throw new Error("HTTP " + r.status);
     data = await r.json();
   }catch(e){
-    $("status").innerHTML = '<div class="status-msg error">Ophalen mislukt: ' + esc(e.message) + '</div>';
+    $("status").innerHTML = '<div class="status-msg error">Ophalen vraagt een nieuwe poging: ' + esc(e.message) + '</div>';
     return;
   }
   const alle = (data && data.ships) || [];
@@ -218,8 +218,8 @@ async function laad(){
 
   if (!onze.length){
     $("lijst").innerHTML = '<div class="card"><p class="lead" style="margin:0">' +
-      'Er staan nog geen containers met tuinmeubelen in het dashboard. Zodra Chantal of Manon een commercial ' +
-      'invoice of een Bill of Lading uploadt bij Voorraadbeheer waar geen spa\'s op staan, verschijnt hij hier.' +
+      'Hier komen de containers met tuinmeubelen. Zodra Chantal of Manon een commercial ' +
+      'invoice of een Bill of Lading zonder spa\'s uploadt bij Voorraadbeheer, verschijnt hij hier.' +
       '</p></div>';
     return;
   }
@@ -256,15 +256,15 @@ function kaart(s){
         '<th class="num">Aantal</th><th>Wat het is volgens de fabriek</th></tr></thead><tbody>' +
         regels.map(r =>
           '<tr><td><b>' + esc(r.artNo) + '</b></td>' +
-          '<td>' + esc(r.omschrijving || "—") +
+          '<td>' + esc(r.omschrijving || "-") +
             ((r.onderdelen || []).length
               ? '<div class="onderdeel">' + r.onderdelen.map(o => esc(o.aantal + "× " + o.omschrijving)).join(", ") + '</div>'
               : "") + '</td>' +
-          '<td class="num">' + esc(r.aantal != null ? r.aantal : "—") + '</td>' +
-          '<td class="klein">' + esc(r.fabrieksOmschrijving || "—") + '</td></tr>').join("") +
+          '<td class="num">' + esc(r.aantal != null ? r.aantal : "-") + '</td>' +
+          '<td class="klein">' + esc(r.fabrieksOmschrijving || "-") + '</td></tr>').join("") +
         '</tbody></table>'
       : '<p class="klein" style="margin:10px 0 0">Van deze container zijn alleen de papieren bekend; ' +
-        'de artikelen zijn niet uit het bestand te lezen.</p>') +
+        'de artikelen lees je in de papieren zelf.</p>') +
     (meldingen.length
       ? '<div class="let-op"><b>Let op bij deze invoice:</b><br>' +
         meldingen.map(x => "• " + esc(x)).join("<br>") + '</div>'
@@ -273,7 +273,7 @@ function kaart(s){
       ? '<div class="docs">' + docs.map(d =>
           '<a href="#" data-file="' + esc(d.id) + '">' + esc(d.naam) +
           ' <span class="klein">· ' + esc(kb(d.grootte || 0)) + '</span></a>').join("") + '</div>'
-      : '<p class="klein" style="margin:10px 0 0">Nog geen papieren bij deze container.</p>') +
+      : '<p class="klein" style="margin:10px 0 0">Papieren voor deze container volgen.</p>') +
   '</div>';
 }
 
@@ -287,7 +287,7 @@ async function openBestand(a){
       { headers: { "X-Fonteyn-Auth": teamKey() } });
     if (!r.ok) throw new Error("HTTP " + r.status);
     window.open(URL.createObjectURL(await r.blob()), "_blank");
-  }catch(e){ alert("Kon het document niet openen: " + (e.message || e)); }
+  }catch(e){ alert("Document openen vraagt een nieuwe poging: " + (e.message || e)); }
   a.innerHTML = oud;
 }
 
@@ -354,7 +354,7 @@ laad();
 
     try {
       if (!window.XLSX || !window.fpSalesConfirmation)
-        throw new Error("de lezer is niet geladen. Sluit het dashboard af en start het opnieuw.");
+        throw new Error("de lezer moet nog laden. Sluit het dashboard af en start het opnieuw.");
 
       var doc = null;
       var isPdf = /\.pdf$/i.test(file.name) || file.type === "application/pdf";
@@ -369,11 +369,11 @@ laad();
            daar komt onleesbare rommel uit. Vandaar de melding "dit lijkt geen
            orderbevestiging" - die klopte technisch maar hielp niemand verder.
            Een PDF gaat nu naar dezelfde lezer als bij Voorraadbeheer. */
-        if (!window.fpCiPdf) throw new Error("de pdf-lezer is niet geladen. Sluit het dashboard af en start het opnieuw.");
+        if (!window.fpCiPdf) throw new Error("de pdf-lezer moet nog laden. Sluit het dashboard af en start het opnieuw.");
         var pdfDoc = await window.fpCiPdf.leesBestand(file);
         var rgls = (pdfDoc && pdfDoc.regels) || [];
         if (!rgls.length)
-          throw new Error("in deze PDF zijn geen artikelregels gevonden. Herkend als: " +
+          throw new Error("in deze PDF zijn 0 artikelregels gevonden. Herkend als: " +
             ((pdfDoc && pdfDoc.soort) || "onbekend") + (pdfDoc && pdfDoc.leverancier ? (", leverancier " + pdfDoc.leverancier) : "") +
             ". Stuur dit bestand door, dan pas ik de lezer erop aan.");
         doc = {
@@ -395,7 +395,7 @@ laad();
         var perCode = {};
         doc.regels.forEach(function (r) { if (r.set) perCode[r.set] = (perCode[r.set] || 0) + r.aantal; });
         doc.artikelen = Object.keys(perCode).sort().map(function (c) { return { code: c, aantal: perCode[c] }; });
-        if (!doc.referentie) doc.meldingen.push("Geen referentienummer in de PDF gevonden.");
+        if (!doc.referentie) doc.meldingen.push("Zoek het referentienummer zelf op; de PDF laat het open.");
       } else {
         var buf = await file.arrayBuffer();
         var wb = XLSX.read(buf, { type: "array" });
@@ -409,7 +409,7 @@ laad();
             doc = window.fpSalesConfirmation.lees(rijen);
         }
         if (!doc)
-          throw new Error("in dit bestand is geen tabel met artikelnummers en aantallen gevonden. " +
+          throw new Error("in dit bestand zijn 0 tabellen met artikelnummers en aantallen gevonden. " +
                           "Een sales confirmation of proforma invoice hoort een kolom met het artikelnummer " +
                           "(Item no, Article no, Model) en een kolom met het aantal (Quantity, Qty) te hebben. Gevonden tabbladen: " +
                           wb.SheetNames.join(", ") + ". Stuur dit bestand door, dan pas ik de lezer erop aan.");
@@ -443,7 +443,7 @@ laad();
       laadBestellingen();
       if (window.fpLog) window.fpLog("bestelling-gelezen", doc.referentie + " " + file.name);
     } catch (err) {
-      melding("bad", "Lezen mislukt: " + (err.message || err));
+      melding("bad", "Lezen vraagt een nieuwe poging: " + (err.message || err));
     } finally {
       $$("scKies").disabled = false;
     }
@@ -463,13 +463,13 @@ laad();
     if (check && check.codes) {
       var mist = Object.keys(check.codes).filter(function(c){ return check.codes[c].gevonden === false; });
       if (mist.length) {
-        h += '<div class="sc-mist"><b>Niet gevonden in Logic4 - even met Gretha afstemmen</b>' +
+        h += '<div class="sc-mist"><b>Nog te koppelen in Logic4 - even met Gretha afstemmen</b>' +
              mist.map(function(c){ return "<code>" + esc(c) + "</code>"; }).join(" ") + "</div>";
       } else if (Object.keys(check.codes).length) {
         h += '<div class="sc-goed">Alle artikelnummers staan in Logic4.</div>';
       }
       if (check.waarschuwing)
-        h += '<div class="sc-mist">Logic4 was even niet bereikbaar, dus de artikelnummers zijn niet nagekeken.</div>';
+        h += '<div class="sc-mist">Logic4 was even onbereikbaar, dus het nakijken van de artikelnummers volgt nog.</div>';
     }
 
     h += '<table class="grid"><thead><tr><th>Artikelnummer</th><th>Kleur</th>' +
@@ -490,7 +490,7 @@ laad();
            "<td>" + esc(r.kleur || "-") + "</td>" +
            '<td class="num">' + r.aantal + "</td>" +
            "<td><input class=\"scArt\" data-wat=\"" + esc(sleutelTekst) + "\" value=\"" +
-             esc(bekendeCode(sleutelTekst) || r.artikelcode || "") + "\" placeholder=\"nog niet bekend\" " +
+             esc(bekendeCode(sleutelTekst) || r.artikelcode || "") + "\" placeholder=\"nog in te vullen\" " +
              "style=\"width:110px;padding:4px 6px;border:1px solid var(--border,#e0e0d8);border-radius:6px;font:inherit;font-size:12px\">" +
              "<span class=\"scArtOk\" style=\"font-size:11px;margin-left:6px;color:var(--muted)\"></span></td>" +
            "<td>" + esc(String(r.omschrijving||"").slice(0,90)) + (String(r.omschrijving||"").length>90?"…":"") + "</td></tr>";
@@ -502,9 +502,9 @@ laad();
            '<table class="grid"><thead><tr><th>Artikelnummer</th><th class="num">Stuks</th><th>In Logic4</th></tr></thead><tbody>';
       doc.artikelen.forEach(function(a){
         var st = check && check.codes && check.codes[a.code];
-        var oordeel = !st ? "<span class=\'muted\'>niet nagekeken</span>"
+        var oordeel = !st ? "<span class=\'muted\'>nog na te kijken</span>"
           : st.gevonden === true ? "ja" + (st.naam ? " <span class=\'muted\'>" + esc(st.naam) + "</span>" : "")
-          : st.gevonden === false ? "<b style=\'color:var(--warn)\'>nee - via Gretha</b>"
+          : st.gevonden === false ? "<b style=\'color:var(--warn)\'>nog onbekend - via Gretha</b>"
           : "<span class=\'muted\'>onbekend</span>";
         h += "<tr><td>" + esc(a.code) + '</td><td class="num">' + a.aantal + "</td><td>" + oordeel + "</td></tr>";
       });
@@ -554,8 +554,8 @@ laad();
              en dat staat er dan ook. */
           if (!j || !j.ok) {
             melding.textContent = j && j.error === "artikel-onbekend"
-              ? "staat niet in Logic4 - even met Gretha afstemmen"
-              : ("mislukt: " + ((j && (j.uitleg || j.error)) || "onbekend"));
+              ? "nog onbekend in Logic4 - even met Gretha afstemmen"
+              : ("nieuwe poging nodig: " + ((j && (j.uitleg || j.error)) || "onbekend"));
             melding.style.color = "var(--warn)";
             return;
           }
@@ -564,7 +564,7 @@ laad();
           melding.style.color = "#15803d";
           if (window.fpLog) window.fpLog("artikel-gekoppeld", wat + " → " + (code||"(los)"));
         } catch (e) {
-          melding.textContent = "mislukt: " + (e.message || e);
+          melding.textContent = "nieuwe poging nodig: " + (e.message || e);
           melding.style.color = "var(--bad,#b91c1c)";
         }
       });
@@ -597,7 +597,7 @@ laad();
                   (k.vanzelf ? "" : '<button data-los="' + esc(b.referentie) + '|' + esc(k.ref) +
                                     '" title="losmaken">&times;</button>') + "</span>";
               }).join("")
-            : '<span class="geen">nog geen zending gekoppeld</span>';
+            : '<span class="geen">zending nog te koppelen</span>';
 
           var keuze = vrijeZendingen.length
             ? '<div class="sc-koppel"><select data-voor="' + esc(b.referentie) + '">' +
@@ -640,11 +640,11 @@ laad();
         body: JSON.stringify({ referentie: referentie, zending: zending, los: !!los }),
       });
       var j = await r.json();
-      if (!j.ok) { melding("bad", "Koppelen mislukt: " + (j.error || "")); return; }
+      if (!j.ok) { melding("bad", "Koppelen vraagt een nieuwe poging: " + (j.error || "")); return; }
       if (window.fpLog) window.fpLog(los ? "bestelling-losgemaakt" : "bestelling-gekoppeld",
                                      referentie + " - " + zending);
       laadBestellingen();
-    } catch (e) { melding("bad", "Koppelen mislukt: " + (e.message || e)); }
+    } catch (e) { melding("bad", "Koppelen vraagt een nieuwe poging: " + (e.message || e)); }
   }
 
   laadKoppelingen();

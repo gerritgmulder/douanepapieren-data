@@ -256,10 +256,10 @@
       per[id].betalingen.forEach(function (b) { if (!b.datum) zonderBetaaldatum++; });
     });
     if (zonderBetaaldatum)
-      meldingen.push(zonderBetaaldatum + " betaling(en) hebben geen datum. Die tellen bij geen enkele " +
-                     "peildatum mee, waardoor de aanbetaling daar te laag uitkomt.");
+      meldingen.push(zonderBetaaldatum + " betaling(en) staan zonder datum. Die tellen buiten alle " +
+                     "peildata, waardoor de aanbetaling daar te laag uitkomt.");
     if (!(bron.leveringen || []).length)
-      meldingen.push("Er kwamen geen leveringen terug. De kolom 'leveringen tot peildatum' blijft dan leeg.");
+      meldingen.push("Logic4 gaf 0 leveringen terug. De kolom 'leveringen tot peildatum' blijft dan leeg.");
 
     return {
       vandaag: opties.vandaag,

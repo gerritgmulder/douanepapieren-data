@@ -171,7 +171,7 @@
 
     uit.containers = containersUit(rijen);
     if (!uit.containers) uit.meldingen.push(
-      "Op de invoice staat niet hoeveel containers het zijn. Er wordt van één container uitgegaan.");
+      "De invoice laat het aantal containers open. Er wordt van één container uitgegaan.");
 
     /* De artikeltabel: koprij met "article" en "quantity". */
     var kopR = zoekKop(rijen, ["article", "quantity", "unit price", "amount"], 30);
@@ -201,7 +201,7 @@
        (Chantal, 9 sep 2026, bestand LS6J323). */
     var kopR = zoekKop(rijen, ["packing", "gross weight", "measurement", "per packing",
                                "ctns", "g.w", "n.w", "qty (pcs)", "total cbm"], 30);
-    if (kopR < 0) { uit.meldingen.push("Geen koprij op de packing list gevonden."); return uit; }
+    if (kopR < 0) { uit.meldingen.push("De koprij van de packing list is nog onbekend."); return uit; }
 
     /* De kop kan over twee regels lopen. Bij Lodestone staan de aantallen en
        gewichten op de ene regel en "ART. NO" en "Description of Goods" op de
@@ -290,7 +290,7 @@
        verwacht. Dat hoort te worden gezegd, anders komt er stilletjes een
        container zonder labels uit en denkt iedereen dat het gelukt is. */
     if (!uit.colli.length)
-      uit.meldingen.push("De koprij van de packing list is gevonden, maar er zijn geen dozen uit te lezen. " +
+      uit.meldingen.push("De koprij van de packing list is gevonden, en er zijn 0 dozen uit gelezen. " +
         "De kolommen staan anders dan verwacht; stuur dit bestand door.");
     return uit;
   }
@@ -322,7 +322,7 @@
       for (var k = 0; k < aantal; k++) containers.push({ nummer: "", volgnummer: k + 1, maat: maat, colli: [] });
       containers[0].colli = pak.colli.slice();
       if (aantal > 1) meldingen.push(
-        "De packing list splitst niet per container. Alles staat voorlopig bij container 1; " +
+        "De packing list geeft alles samen, voor alle containers tegelijk. Alles staat voorlopig bij container 1; " +
         "verdeel het zelf zodra bekend is wat waarin gaat.");
     }
 
@@ -540,7 +540,7 @@
     }
     if (!invBlad) return { ok: false, error: "geen-invoice" };
     var inv = leesInvoice(invBlad.rijen);
-    var pak = pakBlad ? leesPacking(pakBlad.rijen) : { colli: [], totaal: null, meldingen: ["Geen packing list in dit bestand."] };
+    var pak = pakBlad ? leesPacking(pakBlad.rijen) : { colli: [], totaal: null, meldingen: ["Dit bestand bevat alleen de invoice, zonder packing list."] };
     var samen = bouwContainers(inv, pak);
     return {
       ok: true,

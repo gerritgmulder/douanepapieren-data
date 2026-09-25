@@ -45,9 +45,9 @@
     return e;
   }
   function nlDatum(s) {
-    if (!s) return "—";
+    if (!s) return "-";
     var d = new Date(s);
-    if (isNaN(d)) return "—";
+    if (isNaN(d)) return "-";
     return String(d.getDate()).padStart(2, "0") + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + d.getFullYear();
   }
   function dagenTot(s) {
@@ -64,7 +64,7 @@
       body: "{}"
     });
     var j = await r.json();
-    if (!j.ok) throw new Error(j.error || "voorstel ophalen mislukt");
+    if (!j.ok) throw new Error(j.error || "onbekende reden");
     return j;
   }
   async function stuur(pad, body) {
@@ -82,7 +82,7 @@
     if (!doel) return;
     doel.innerHTML = "";
     if (!voorstel) {
-      doel.appendChild(el("p", "status-msg", bezig ? "Bezig met opbouwen…" : "Nog niet geladen."));
+      doel.appendChild(el("p", "status-msg", bezig ? "Bezig met opbouwen…" : "Nog te laden."));
       return;
     }
 
@@ -90,7 +90,7 @@
     uitleg.appendChild(el("h3", null, "Van commercial invoice naar de inkooporder"));
     uitleg.appendChild(el("p", null,
       "Elk schip hieronder hoort bij één of twee Jazzi-orders. Zolang de goederen varen zetten we alleen de " +
-      "verwachte aankomst op de inkooporder. Pas als de container in Uddel staat boeken we de ontvangst — dán " +
+      "verwachte aankomst op de inkooporder. Pas als de container in Uddel staat boeken we de ontvangst - dán " +
       "gaat de voorraad omhoog. Andersom zou je spa's op voorraad zetten die nog op zee liggen."));
     doel.appendChild(uitleg);
 
@@ -100,9 +100,9 @@
     var mistLijst = Object.keys(mist);
     if (mistLijst.length) {
       var w = el("div", "so-waarschuwing");
-      w.appendChild(el("strong", null, "Nog geen inkooporder voor Jazzi-order " + mistLijst.join(", ") + ". "));
+      w.appendChild(el("strong", null, "Jazzi-order " + mistLijst.join(", ") + " wacht nog op een inkooporder. "));
       w.appendChild(document.createTextNode(
-        "Zolang die niet in Logic4 staat, is er niets om de lading aan te koppelen. " +
+        "Zodra die in Logic4 staat, kun je de lading eraan koppelen. " +
         "Maak ze aan op het tabblad “Inkoop naar Logic4”."));
       doel.appendChild(w);
     }
@@ -125,9 +125,9 @@
     var onbekend = Object.keys(voorstel.unmapped || {});
     if (onbekend.length) {
       var u = el("div", "so-waarschuwing");
-      u.appendChild(el("strong", null, onbekend.length + " fabriekscode(s) zijn aan geen model gekoppeld. "));
+      u.appendChild(el("strong", null, onbekend.length + " fabriekscode(s) wachten nog op een model. "));
       u.appendChild(document.createTextNode(
-        "Die spa's staan wel op de invoice maar tellen nergens mee. Het gaat om: " +
+        "Die spa's staan op de invoice en tellen mee zodra het model bekend is. Het gaat om: " +
         onbekend.map(function (k) { return k + " (" + voorstel.unmapped[k] + "×)"; }).join(", ") +
         ". Geef door welk model daarbij hoort, dan lees ik ze alsnog in."));
       doel.appendChild(u);
@@ -159,13 +159,13 @@
       lijst.forEach(function (s) {
         var t = el("button", "so-tab" + (s.ref === actief ? " aan" : ""));
         t.type = "button";
-        var orders = (s.jazziOrders && s.jazziOrders.length) ? s.jazziOrders.join(" + ") : "geen order";
+        var orders = (s.jazziOrders && s.jazziOrders.length) ? s.jazziOrders.join(" + ") : "order volgt";
         t.appendChild(el("span", "so-tab-order", orders));
         t.appendChild(el("span", "so-tab-ref", zendingNaam(s)));
         var dg = dagenTot(s.eta);
         t.appendChild(el("span", "so-tab-eta",
           s.binnenGemeld ? "binnen " + nlDatum(s.binnenGemeld.op)
-          : s.eta ? (nlDatum(s.eta) + (dg !== null && dg > 0 ? "  ·  " + dg + "d" : "")) : "geen aankomst"));
+          : s.eta ? (nlDatum(s.eta) + (dg !== null && dg > 0 ? "  ·  " + dg + "d" : "")) : "aankomst volgt"));
         t.addEventListener("click", function () { actief = s.ref; teken(); });
         strip.appendChild(t);
       });
@@ -309,9 +309,9 @@
       : "alles gekoppeld"));
     d.appendChild(kop);
     d.appendChild(el("p", "so-meta klein",
-      "Deze regels staan wel op de factuur maar horen nog bij geen artikel in Logic4. " +
+      "Deze regels staan op de factuur en wachten nog op een artikel in Logic4. " +
       "Vul de artikelcode in en het dashboard herkent ze voortaan zelf, ook in de volgende container. " +
-      "Weet je het niet zeker, vraag het dan aan Gretha."));
+      "Twijfel je, vraag het dan aan Gretha."));
 
     lijst.forEach(function (x) {
       var r = el("div", "so-koppel-rij" + (x.artikel ? " klaar" : ""));
@@ -365,7 +365,7 @@
       });
       var j = await r.json();
       if (!j.ok) {
-        var f = el("div", "so-koppel-fout", j.uitleg || j.error || "koppelen mislukt");
+        var f = el("div", "so-koppel-fout", j.uitleg || j.error || "koppelen vraagt een nieuwe poging");
         rij.appendChild(f);
         return;
       }
@@ -373,7 +373,7 @@
                            omschrijving + (code ? " → " + code : ""));
       await herlaad();
     } catch (e) {
-      rij.appendChild(el("div", "so-koppel-fout", "koppelen mislukt: " + (e.message || e)));
+      rij.appendChild(el("div", "so-koppel-fout", "koppelen vraagt een nieuwe poging: " + (e.message || e)));
     }
   }
 
@@ -410,11 +410,11 @@
       varend.length + " zending" + (varend.length === 1 ? "" : "en") +
       (conts ? "  ·  " + conts + " containers" : "") +
       "  ·  " + totaal + " spa's" +
-      (los ? "  ·  " + los + " nog niet gekoppeld" : "")));
+      (los ? "  ·  " + los + " nog te koppelen" : "")));
     d.appendChild(kop);
 
     if (!varend.length) {
-      d.appendChild(el("p", "so-meta klein", "Er vaart op dit moment niets. Zodra een commercial invoice is ingelezen verschijnt de zending hier."));
+      d.appendChild(el("p", "so-meta klein", "0 zendingen onderweg. Zodra een commercial invoice is ingelezen verschijnt de zending hier."));
       return d;
     }
 
@@ -463,7 +463,7 @@
         : dg > 1 ? "over " + dg + " dagen"
         : dg === 1 ? "morgen"
         : dg === 0 ? "vandaag verwacht"
-        : "ETA verstreken - nog niet binnen gemeld";
+        : "ETA verstreken - nog binnen te melden";
       var etaRegel = el("span", "so-meta klein",
         nlDatum(s.eta) + "  ·  " + wanneer +
         (s.vessel && s.vessel !== zendingNaam(s) ? "  ·  " + s.vessel : ""));
@@ -527,7 +527,7 @@
       });
 
       if (!lijst.length && !(s.ongekoppeld || []).length)
-        inhoud.appendChild(el("span", "so-meta klein", "inhoud nog niet ingelezen"));
+        inhoud.appendChild(el("span", "so-meta klein", "inhoud volgt"));
       r.appendChild(inhoud);
       d.appendChild(r);
     });
@@ -573,7 +573,7 @@
       teller.textContent = nContainers
         ? (nContainers + " zending" + (nContainers === 1 ? "" : "en") +
            (nStuks ? "  ·  " + nStuks + " stuks" : ""))
-        : "niets gevonden";
+        : "0 treffers";
       teller.classList.toggle("leeg", !nContainers);
     }
   }
@@ -611,8 +611,8 @@
        lijkt het op een spa-container waarvan het inlezen is mislukt. */
     if (s.alleenDocumenten) {
       links.appendChild(el("div", "so-meta klein",
-        "Alleen de papieren. Geen spa's herkend op deze invoice - tuinmeubelen en sauna's " +
-        "tellen hier bewust niet mee als voorraad."));
+        "Alleen de papieren. Deze invoice bevat 0 spa's - tuinmeubelen en sauna's " +
+        "staan hier bewust buiten de voorraad."));
     }
 
     /* De trackingreferentie stond op het tabblad Schepen, in een tabel waar je
@@ -656,14 +656,14 @@
       if (t.opgehaald) stukjes.push("opgehaald " + nlDatum(t.opgehaald));
       links.appendChild(el("div", "so-meta klein",
         "volgens " + (t.vervoerder || "de vervoerder") + ": " +
-        (stukjes.join("  ·  ") || "geen bijzonderheden")));
+        (stukjes.join("  ·  ") || "details volgen")));
     }
     rij.appendChild(links);
 
     var rechts = el("div", "so-rechts");
     var pillen = el("div", "so-pillen");
     pillen.appendChild(el("span", "so-pil zeker", s.raak + " gekoppeld"));
-    if (s.mis) pillen.appendChild(el("span", "so-pil fout", s.mis + " niet"));
+    if (s.mis) pillen.appendChild(el("span", "so-pil fout", s.mis + " nog los"));
     rechts.appendChild(pillen);
 
     var knoppen = el("div", "so-knoppen");
@@ -682,7 +682,7 @@
     docKnop.type = "button";
     docKnop.title = docs.length
       ? "De commercial invoice en packing list van dit schip."
-      : "Nog geen papieren bij dit schip. Voeg ze toe bij Schepen.";
+      : "Voeg de papieren van dit schip toe bij Schepen.";
     docKnop.addEventListener("click", function () { docsOpen[s.ref] = !docsOpen[s.ref]; teken(); });
     knoppen.appendChild(docKnop);
 
@@ -701,7 +701,7 @@
     if (cfg.magWijzigen && s.raak > 0) {
       var eta = el("button", "so-knop licht", "Aankomst bijwerken");
       eta.type = "button";
-      eta.title = "Zet de verwachte leverdatum op de inkooporderregels. Verandert niets aan de voorraad.";
+      eta.title = "Zet de verwachte leverdatum op de inkooporderregels. De voorraad blijft zoals hij is.";
       eta.addEventListener("click", function () { doeEta(s, eta); });
       knoppen.appendChild(eta);
 
@@ -730,18 +730,18 @@
     if (cfg.magWijzigen) {
       var binnenAan = !!s.binnenGemeld;
       var mld = el("button", "so-knop" + (binnenAan ? " licht" : ""),
-        binnenAan ? "Toch niet binnen" : "Container is binnen");
+        binnenAan ? "Toch nog onderweg" : "Container is binnen");
       mld.type = "button";
       mld.title = binnenAan
-        ? "Haalt het vinkje weg. Verandert niets in Logic4."
-        : "Zet in het dashboard dat deze container binnen is. Verandert niets in Logic4.";
+        ? "Haalt het vinkje weg. Logic4 blijft zoals het is."
+        : "Zet in het dashboard dat deze container binnen is. Logic4 blijft zoals het is.";
       mld.addEventListener("click", function () { meldBinnen(s, mld, !binnenAan); });
       knoppen.appendChild(mld);
     }
     if (cfg.magWijzigen) {
       var weg = el("button", "so-knop licht gevaar", "Verwijderen");
       weg.type = "button";
-      weg.title = "Haalt deze zending weg. De lading telt daarna niet meer mee als voorraad onderweg.";
+      weg.title = "Haalt deze zending weg. De lading valt daarna buiten de voorraad onderweg.";
       weg.addEventListener("click", function () { verwijderSchip(s, weg); });
       knoppen.appendChild(weg);
     }
@@ -764,7 +764,7 @@
     var docs = s.documenten || [];
     if (!docs.length) {
       wrap.appendChild(el("p", "so-meta klein",
-        "Nog geen papieren bij deze container. Zet ze hier neer met “+ document”; de commercial " +
+        "Zet de papieren van deze container hier neer met “+ document”; de commercial " +
         "invoice die je bovenaan uploadt komt er vanzelf bij te staan."));
     }
     /* Een document erbij zetten. Chantal (video, 13 aug 2026): "documenten
@@ -825,13 +825,13 @@
         body: JSON.stringify({ ref: s.ref, doc: { id: id, naam: f.name, soort: soort,
                                                   grootte: f.size, door: cfg.email || "" } }) });
       var j2 = await r2.json();
-      if (!j2.ok) throw new Error(j2.error || "koppelen mislukt");
+      if (!j2.ok) throw new Error(j2.error || "koppelen vraagt een nieuwe poging");
       s.documenten = j2.documenten;
       if (cfg.log) cfg.log("voorraad", "schip-document-toegevoegd", s.ref + ": " + f.name);
       teken();
       return;
     } catch (e) {
-      alert("Uploaden mislukt: " + (e.message || e));
+      alert("Uploaden vraagt een nieuwe poging: " + (e.message || e));
     }
     knop.firstChild.nodeValue = oud;
     invoer.value = "";
@@ -880,7 +880,7 @@
       teken();
       return;
     } catch (e) {
-      alert("Kon het niet opslaan: " + (e.message || e));
+      alert("Opslaan vraagt een nieuwe poging: " + (e.message || e));
     }
     knop.textContent = oud; knop.disabled = false;
   }
@@ -892,7 +892,7 @@
         { headers: { "X-Fonteyn-Auth": cfg.teamKey } });
       if (!r.ok) throw new Error("HTTP " + r.status);
       bestandTonen(await r.blob(), doc.naam);
-    } catch (e) { alert("Kon het document niet openen: " + (e.message || e)); }
+    } catch (e) { alert("Document openen vraagt een nieuwe poging: " + (e.message || e)); }
     a.textContent = oud;
   }
 
@@ -911,17 +911,17 @@
         tdModel.appendChild(el("div", "so-klantlabel", "👤 " + t));
       });
       tr.appendChild(tdModel);
-      tr.appendChild(el("td", null, r.kleur || "—"));
+      tr.appendChild(el("td", null, r.kleur || "-"));
       tr.appendChild(el("td", "num", String(r.aantal)));
       var td = el("td");
       if (r.artikelcode) {
         td.appendChild(el("code", null, r.artikelcode));
         if (r.artikelnaam) td.appendChild(document.createTextNode(" " + String(r.artikelnaam).slice(0, 40)));
-      } else td.appendChild(el("span", "so-leeg", "—"));
+      } else td.appendChild(el("span", "so-leeg", "-"));
       tr.appendChild(td);
-      tr.appendChild(el("td", null, r.buyOrderId ? String(r.buyOrderId) : "—"));
-      tr.appendChild(el("td", "num", r.nogTeLeveren == null ? "—" : String(r.nogTeLeveren)));
-      tr.appendChild(el("td", null, r.huidigeEta ? nlDatum(r.huidigeEta) : "—"));
+      tr.appendChild(el("td", null, r.buyOrderId ? String(r.buyOrderId) : "-"));
+      tr.appendChild(el("td", "num", r.nogTeLeveren == null ? "-" : String(r.nogTeLeveren)));
+      tr.appendChild(el("td", null, r.huidigeEta ? nlDatum(r.huidigeEta) : "-"));
       var st = el("td");
       if (r.buyOrderRowId) {
         st.appendChild(el("span", "so-pil " + (r.viaModel ? "nakijk" : "zeker"), r.viaModel ? "op model" : "gekoppeld"));
@@ -948,14 +948,14 @@
 
   async function doeEta(s, knop) {
     var datum = await vraagTekst("Verwachte aankomst zetten op de inkooporderregels van " + zendingNaam(s) +
-      " — datum (jjjj-mm-dd):", String(s.eta || "").slice(0, 10));
+      " - datum (jjjj-mm-dd):", String(s.eta || "").slice(0, 10));
     if (!datum) return;
     knop.disabled = true; knop.textContent = "bezig…";
     var j = await stuur("/voorraad/spa-ontvangst/eta", { ref: s.ref, eta: datum.trim(), door: cfg.email });
-    if (!j.ok && !j.bijgewerkt) alert("Niet gelukt: " + (j.error || "onbekende fout"));
+    if (!j.ok && !j.bijgewerkt) alert("Nieuwe poging nodig: " + (j.error || "onbekende reden"));
     else {
       alert(j.bijgewerkt + " inkooporderregels staan nu op " + j.eta + "." +
-        (j.mislukt && j.mislukt.length ? ("\n\n" + j.mislukt.length + " regel(s) mislukten.") : ""));
+        (j.mislukt && j.mislukt.length ? ("\n\n" + j.mislukt.length + " regel(s) vragen een nieuwe poging.") : ""));
       if (cfg.log) cfg.log("voorraad", "aankomst bijgewerkt", s.ref + " → " + j.eta + " (" + j.bijgewerkt + " regels)");
     }
     await herlaad();
@@ -967,17 +967,17 @@
       .reduce(function (t, r) { return t + r.aantal; }, 0);
     if (!confirm("Ontvangst boeken voor " + zendingNaam(s) + "?\n\n" +
       mee + " spa's worden als ontvangen geboekt in Logic4. Dit verhoogt de voorraad." +
-      (los.length ? ("\n\n" + los.length + " regel(s) zijn niet gekoppeld en gaan NIET mee.") : "") +
+      (los.length ? ("\n\n" + los.length + " regel(s) zijn nog los en blijven BUITEN deze boeking.") : "") +
       "\n\nDoe dit alleen als de container fysiek in Uddel staat.")) return;
     knop.disabled = true; knop.textContent = "bezig…";
     var j = await stuur("/voorraad/spa-ontvangst/boeken", { ref: s.ref, door: cfg.email });
-    if (!j.ok && !(j.gemaakt && j.gemaakt.length)) alert("Niet gelukt: " + (j.error || "onbekende fout"));
+    if (!j.ok && !(j.gemaakt && j.gemaakt.length)) alert("Nieuwe poging nodig: " + (j.error || "onbekende reden"));
     else {
       var m = (j.gemaakt || []).map(function (g) {
         return "inkooporder " + g.buyOrderId + " → levering " + (g.levering || "(zonder nummer)") + ", " + g.regels + " regels";
       }).join("\n");
       alert("Ontvangst geboekt:\n" + m +
-        (j.mislukt && j.mislukt.length ? ("\n\nMislukt: " + j.mislukt.map(function (x) { return x.buyOrderId + ": " + x.fout; }).join("; ")) : ""));
+        (j.mislukt && j.mislukt.length ? ("\n\nNieuwe poging nodig: " + j.mislukt.map(function (x) { return x.buyOrderId + ": " + x.fout; }).join("; ")) : ""));
       if (cfg.log) cfg.log("voorraad", "container ontvangen geboekt", s.ref + " — " + m.replace(/\n/g, " | "));
     }
     await herlaad();
@@ -999,7 +999,7 @@
       body: JSON.stringify({ vers: !!vers })
     });
     var j = await r.json();
-    if (!j.ok) throw new Error(j.error || "Flexport-overzicht ophalen mislukt");
+    if (!j.ok) throw new Error(j.error || "Flexport-overzicht vraagt een nieuwe poging");
     return j;
   }
 
@@ -1010,7 +1010,7 @@
     t.appendChild(el("h3", null, "Volgens Flexport"));
     t.appendChild(el("p", null, flexport
       ? ("Bijgewerkt " + nlDatum(flexport.opgehaald) + (flexport.uitCache ? " (uit de opslag)" : " (net opgehaald)") +
-        " — " + flexport.zendingen.length + " zendingen, " + flexport.aantalContainers + " containers.")
+        " - " + flexport.zendingen.length + " zendingen, " + flexport.aantalContainers + " containers.")
       : "De expediteur weet zelf waar de containers zijn en wanneer ze aankomen."));
     kop.appendChild(t);
     var knop = el("button", "so-knop licht", flexportBezig ? "bezig…" : (flexport ? "Verversen" : "Ophalen"));
@@ -1020,7 +1020,7 @@
     knop.addEventListener("click", async function () {
       flexportBezig = true; teken();
       try { flexport = await haalFlexport(!!flexport); }
-      catch (e) { alert("Niet gelukt: " + (e.message || e)); }
+      catch (e) { alert("Nieuwe poging nodig: " + (e.message || e)); }
       flexportBezig = false; teken();
     });
     kop.appendChild(knop);
@@ -1042,10 +1042,10 @@
 
     if (onbekend.length) {
       var w = el("div", "so-waarschuwing");
-      w.appendChild(el("strong", null, "Verscheept, maar geen inkooporder: Jazzi-order " + onbekend.join(", ") + ". "));
+      w.appendChild(el("strong", null, "Verscheept en nog zonder inkooporder: Jazzi-order " + onbekend.join(", ") + ". "));
       w.appendChild(document.createTextNode(
-        "Flexport heeft deze containers vervoerd, maar er staat bij ons geen bestelling tegenover. " +
-        "Dat betekent goederen binnen zonder inkoop — precies wat de accountant zoekt."));
+        "Flexport heeft deze containers vervoerd; bij ons moet de bestelling daarvoor nog worden vastgelegd. " +
+        "Dat betekent goederen binnen zonder inkoop - precies wat de accountant zoekt."));
       d.appendChild(w);
     }
 
@@ -1059,11 +1059,11 @@
     flexport.zendingen.slice(0, 40).forEach(function (z) {
       var los = z.jazziOrders.length && z.jazziOrders.every(function (nr) { return !onze[nr]; });
       var tr = el("tr", los ? "los" : "");
-      tr.appendChild(el("td", null, String(z.naam || "").slice(0, 42) || "—"));
-      tr.appendChild(el("td", null, z.jazziOrders.length ? z.jazziOrders.join(" + ") : "—"));
+      tr.appendChild(el("td", null, String(z.naam || "").slice(0, 42) || "-"));
+      tr.appendChild(el("td", null, z.jazziOrders.length ? z.jazziOrders.join(" + ") : "-"));
       tr.appendChild(el("td", "num", String(z.containers.length)));
       tr.appendChild(el("td", null, nlDatum(z.eta)));
-      tr.appendChild(el("td", null, z.aangekomen ? nlDatum(z.aangekomen) : "—"));
+      tr.appendChild(el("td", null, z.aangekomen ? nlDatum(z.aangekomen) : "-"));
       tr.appendChild(el("td", null, String(z.status || "").replace(/_/g, " ")));
       body.appendChild(tr);
     });
@@ -1071,7 +1071,7 @@
     d.appendChild(wrap);
     d.appendChild(el("p", "so-meta klein",
       metOrder.length + " zendingen met een herkend ordernummer, " + zonderOrder.length +
-      " zonder — dat laatste is meestal geen spa-lading maar tuinmeubelen of onderdelen." +
+      " zonder - dat laatste zijn meestal tuinmeubelen of onderdelen." +
       (flexport.zendingen.length > 40 ? "  De veertig recentste staan hierboven." : "")));
     return d;
   }
@@ -1091,12 +1091,12 @@
         body: JSON.stringify(Object.assign({ ref: s.ref }, velden)),
       });
       var j = await r.json();
-      if (!j.ok) throw new Error(j.error || "opslaan mislukt");
+      if (!j.ok) throw new Error(j.error || "opslaan vraagt een nieuwe poging");
       if (velden.trackRef !== undefined) s.trackRef = j.trackRef;
       if (velden.eta !== undefined) { s.eta = j.eta; teken(); }   // volgorde kan wijzigen
       if (cfg.log) cfg.log("voorraad", "schip-gewijzigd", s.ref + ": " + JSON.stringify(velden));
     } catch (e) {
-      alert("Kon het niet opslaan: " + (e.message || e));
+      alert("Opslaan vraagt een nieuwe poging: " + (e.message || e));
       invoer.value = was;
     }
   }
@@ -1106,7 +1106,7 @@
      weggaat wordt bewaard, dus een vergissing is terug te draaien. */
   async function verwijderSchip(s, knop) {
     if (!confirm("Zending " + (s.vessel || s.ref) + " verwijderen?\n\n" +
-      s.spas + " spa's tellen daarna niet meer mee als voorraad onderweg.\n\n" +
+      s.spas + " spa's vallen daarna buiten de voorraad onderweg.\n\n" +
       "Wat weggaat wordt bewaard, dus een vergissing is terug te draaien.")) return;
     knop.disabled = true; knop.textContent = "bezig…";
     try {
@@ -1116,12 +1116,12 @@
         body: JSON.stringify({ ref: s.ref, door: cfg.email || "" }),
       });
       var j = await r.json();
-      if (!j.ok) throw new Error(j.error || "verwijderen mislukt");
+      if (!j.ok) throw new Error(j.error || "verwijderen vraagt een nieuwe poging");
       if (cfg.log) cfg.log("voorraad", "schip-verwijderd", (s.vessel || s.ref) + " (" + s.spas + " spa's)");
       actief = null;
       await herlaad();
     } catch (e) {
-      alert("Verwijderen mislukt: " + (e.message || e));
+      alert("Verwijderen vraagt een nieuwe poging: " + (e.message || e));
       knop.disabled = false; knop.textContent = "Verwijderen";
     }
   }
@@ -1137,21 +1137,21 @@
       });
       var j = await r.json();
       if (!j.ok) {
-        alert("Geen aankomst gevonden voor " + s.ref + ".\n\n" + (j.error || "") +
+        alert("Aankomst van " + s.ref + " is nog onbekend.\n\n" + (j.error || "") +
           (j.nietAangesloten && j.nietAangesloten.length
-            ? "\n\nNog niet aangesloten: " + j.nietAangesloten.join(", ") + "."
+            ? "\n\nNog aan te sluiten: " + j.nietAangesloten.join(", ") + "."
             : ""));
       } else {
         alert("Volgens " + j.vervoerder + ":\n\n" +
           "Aankomst: " + (j.eta ? nlDatum(j.eta) : "onbekend") + "\n" +
           (j.vessel ? "Schip: " + j.vessel + "\n" : "") +
           (j.status ? "Status: " + j.status + "\n" : "") +
-          "\nDeze datum wordt niet vanzelf overgenomen; gebruik “Aankomst bijwerken” om hem op de inkooporder te zetten.");
+          "\nNeem deze datum over met “Aankomst bijwerken”, dan komt hij op de inkooporder.");
         if (cfg.log) cfg.log("voorraad", "aankomst-opgehaald", s.ref + " via " + j.vervoerder + ": " + (j.eta || "geen datum"));
         if (j.bewaard) { await herlaad(); return; }
       }
     } catch (e) {
-      alert("Opvragen mislukt: " + (e.message || e));
+      alert("Opvragen vraagt een nieuwe poging: " + (e.message || e));
     }
     knop.disabled = false; knop.textContent = oud;
   }
@@ -1161,7 +1161,7 @@
     try { voorstel = await haal(); }
     catch (e) {
       doel.innerHTML = "";
-      doel.appendChild(el("p", "status-msg", "Voorstel ophalen mislukt: " + (e.message || e)));
+      doel.appendChild(el("p", "status-msg", "Voorstel ophalen vraagt een nieuwe poging: " + (e.message || e)));
       bezig = false; return;
     }
     bezig = false; teken();

@@ -192,7 +192,7 @@
   function bewaarMaat(model, code, maat, door) {
     if (!hand) hand = {};
     var k = handSleutel(model, code);
-    if (!k) return Promise.reject(new Error("Dit model heeft geen naam en geen code."));
+    if (!k) return Promise.reject(new Error("Dit model heeft eerst een naam of code nodig."));
     // Een bestaande covermaat blijft staan: die gaat over de cover en niet
     // over de spa, en anders raakt hij hem kwijt zodra iemand de spa aanpast.
     var rec = hand[k] || {};
@@ -216,7 +216,7 @@
       headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamSleutel() },
       body: JSON.stringify({ maten: hand, updated: new Date().toISOString() }),
     }).then(function (r) {
-      if (!r.ok) throw new Error("opslaan faalde (HTTP " + r.status + ")");
+      if (!r.ok) throw new Error("opslaan vraagt een nieuwe poging (HTTP " + r.status + ")");
       return hand[k] || null;
     });
   }
@@ -361,7 +361,7 @@
   function bewaarCover(model, code, cover, door) {
     if (!hand) hand = {};
     var k = handSleutel(model, code);
-    if (!k) return Promise.reject(new Error("Dit model heeft geen naam en geen code."));
+    if (!k) return Promise.reject(new Error("Dit model heeft eerst een naam of code nodig."));
     var rec = hand[k] || { model: model || "", code: code || "" };
     if (cover === null) delete rec.cover;
     else if (cover === false) rec.cover = false;
@@ -376,7 +376,7 @@
       headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamSleutel() },
       body: JSON.stringify({ maten: hand, updated: new Date().toISOString() }),
     }).then(function (r) {
-      if (!r.ok) throw new Error("opslaan faalde (HTTP " + r.status + ")");
+      if (!r.ok) throw new Error("opslaan vraagt een nieuwe poging (HTTP " + r.status + ")");
       return hand[k] || null;
     });
   }

@@ -17,7 +17,7 @@
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
     '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
-    '<div class="gt"><h1>Geen toegang</h1><p>De Mollie-tegel is niet beschikbaar voor jouw account.</p>'+
+    '<div class="gt"><h1>Deze tegel is afgeschermd</h1><p>De Mollie-tegel is voor een vaste groep medewerkers.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
 })();
@@ -140,8 +140,8 @@ td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
     <div class="card">
       <h3>Boeken</h3>
       <p class="lead" style="margin:0 0 12px">
-        Betalingen gaan op hun order in Logic4. De fee en wat niet op een order past gaan als
-        memoriaalregel naar een grootboekrekening. Niets wordt geboekt zolang je niets aanvinkt.
+        Betalingen gaan op hun order in Logic4. De fee en wat buiten een order valt gaan als
+        memoriaalregel naar een grootboekrekening. Er wordt alleen geboekt wat jij aanvinkt.
       </p>
       <div class="rij-flex" style="margin-bottom:12px">
         <label class="muted" for="dagboek" style="font-size:12px">Dagboek van Mollie</label>
@@ -219,7 +219,7 @@ async function verwerkBestand(f) {
   try {
     const tekst = await f.text();
     const r = window.fpMT940.parse(tekst);
-    if (!r.transactions.length) throw new Error("er staan geen transacties in dit bestand");
+    if (!r.transactions.length) throw new Error("dit bestand bevat 0 transacties");
     state = { transactions: r.transactions.map(t => ({ tx: t, match: null, kies: false, geboekt: null })),
               iban: r.iban, eind: r.closingBalance ? r.closingBalance.amount : null, bestand: f.name };
     melding($("dropStatus"), esc(f.name) + " gelezen: " + r.transactions.length + " regels. Bezig met koppelen…", "info");
@@ -227,7 +227,7 @@ async function verwerkBestand(f) {
     await koppelAlles();
     melding($("dropStatus"), esc(f.name) + " · " + r.transactions.length + " regels · rekening " + esc(r.iban || "?"), "ok");
   } catch (e) {
-    melding($("dropStatus"), "Inlezen mislukt: " + esc(e.message), "error");
+    melding($("dropStatus"), "Inlezen vraagt een nieuwe poging: " + esc(e.message), "error");
   }
 }
 
@@ -238,7 +238,7 @@ async function koppelAlles() {
     method: "POST", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() },
     body: JSON.stringify({ vers: false }) });
   const j = await r.json();
-  if (!j.ok) throw new Error(j.error || "openstaande posten ophalen faalde");
+  if (!j.ok) throw new Error(j.error || "openstaande posten ophalen vraagt een nieuwe poging");
   openIndex = BM().bouwIndex(j.posten || []);
 
   // 2. De orders die met naam en nummer in de omschrijving staan.
@@ -291,7 +291,7 @@ const BADGE = {
   controleren: { k: "warn", t: "Controleren" },
   kandidaten:  { k: "warn", t: "Controleren" },
   opzoeken:    { k: "warn", t: "Controleren" },
-  geen:        { k: "bad",  t: "Geen match" },
+  geen:        { k: "bad",  t: "Nog te koppelen" },
   grootboek:   { k: "gb",   t: "Grootboek" },
 };
 function teken() {
@@ -301,7 +301,7 @@ function teken() {
     "<div class='stat'><div class='lbl'>Regels</div><div class='val'>" + t.length + "</div></div>" +
     "<div class='stat'><div class='lbl'>Zeker</div><div class='val'>" + tel.zeker + "</div></div>" +
     "<div class='stat warn'><div class='lbl'>Controleren</div><div class='val'>" + tel.controleren + "</div></div>" +
-    "<div class='stat bad'><div class='lbl'>Geen match</div><div class='val'>" + tel.geen + "</div></div>" +
+    "<div class='stat bad'><div class='lbl'>Nog te koppelen</div><div class='val'>" + tel.geen + "</div></div>" +
     "<div class='stat gb'><div class='lbl'>Naar grootboek</div><div class='val'>" + tel.grootboek + "</div></div>";
 
   $("rijen").innerHTML = t.map((x, i) => {
@@ -358,9 +358,9 @@ function tekenSluit() {
         esc($("rekKruis").value) + " toewijst.<div style='margin-top:8px;display:flex;gap:10px;align-items:center;flex-wrap:wrap'>" +
         "<button class='cta secondary' type='button' id='uitbetalingBtn'>Uitbetaling " + fmtEur(totaal) + " boeken als memoriaal</button>" +
         "<span id='uitbetalingMsg' class='muted' style='font-size:12px'></span></div></div>"
-      : "<div class='status-msg error' style='margin-top:10px'>Dit settlement sluit niet: de regels tellen op tot " +
+      : "<div class='status-msg error' style='margin-top:10px'>Dit settlement heeft een verschil: de regels tellen op tot " +
         fmtEur(totaal) + " en er is " + fmtEur(eind) + " uitbetaald. Zoek dat eerst uit; de tegenboeking op " +
-        esc($("rekKruis").value) + " klopt dan namelijk ook niet.</div>");
+        esc($("rekKruis").value) + " wijkt dan namelijk ook af.</div>");
 }
 
 /* De uitbetaling van het settlement als memoriaal: kruisposten 1220 debet,
@@ -371,7 +371,7 @@ document.addEventListener("click", async (e) => {
   const knop = e.target.closest("#uitbetalingBtn"); if (!knop) return;
   const msg = $("uitbetalingMsg"); const sleutel = String(state.bestand || "");
   const bedrag = Math.round(Number(state.eind) * 100) / 100;
-  if (!sleutel || !(Math.abs(bedrag) > 0)) { msg.textContent = "Geen bestand of geen uitbetaald bedrag."; return; }
+  if (!sleutel || !(Math.abs(bedrag) > 0)) { msg.textContent = "Hiervoor zijn een bestand en een uitbetaald bedrag nodig."; return; }
   knop.disabled = true; msg.textContent = "Nakijken\u2026";
   try {
     const gb = await fetch(WORKER + "/data/mollie-uitbetaling-geboekt", { headers: { "X-Fonteyn-Auth": teamKey() } }).then(r => r.ok ? r.json() : {}).catch(() => ({}));
@@ -389,7 +389,7 @@ document.addEventListener("click", async (e) => {
     nieuw.geboekt[sleutel] = { ts: new Date().toISOString(), door: localStorage.getItem(EMAIL_KEY) || "", bedrag };
     await fetch(WORKER + "/data/mollie-uitbetaling-geboekt", { method: "PUT", headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": teamKey() }, body: JSON.stringify(nieuw) });
     msg.textContent = "Geboekt in dagboek " + (res.dagboek || "Memoriaal") + " op " + laatste + ".";
-  } catch (err) { msg.textContent = "Boeken lukte niet: " + (err.message || err); knop.disabled = false; }
+  } catch (err) { msg.textContent = "Boeken vraagt een nieuwe poging: " + (err.message || err); knop.disabled = false; }
 });
 
 // ─── Selectie ───────────────────────────────────────────────────────
@@ -409,7 +409,7 @@ function selectie() { return state.transactions.filter(x => x.kies && !x.geboekt
 function werkSelectieBij() {
   const s = selectie();
   const som = s.reduce((n, x) => n + Number(x.tx.amount), 0);
-  $("selInfo").textContent = s.length ? s.length + " regel(s) geselecteerd, samen " + fmtEur(som) : "Niets geselecteerd.";
+  $("selInfo").textContent = s.length ? s.length + " regel(s) geselecteerd, samen " + fmtEur(som) : "0 regels geselecteerd.";
   $("boekBtn").disabled = !s.length || !$("dagboek").value;
 }
 
@@ -426,7 +426,7 @@ async function laadDagboeken() {
   try {
     const r = await fetch(WORKER + "/bank/dagboeken", { headers: { "X-Fonteyn-Auth": teamKey() } });
     const j = await r.json();
-    if (!j.ok) { $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + (j.error || ""); return; }
+    if (!j.ok) { $("dagboekInfo").textContent = "Dagboeken ophalen vraagt een nieuwe poging: " + (j.error || ""); return; }
     dagboeken = j.dagboeken || [];
     /* Nog niets gekozen? Dan het dagboek van Mollie voorstellen. Dat is het
        enige dat hier logisch is, en het scheelt een zoektocht door twintig
@@ -441,7 +441,7 @@ async function laadDagboeken() {
       dagboeken.map(d => "<option value='" + d.id + "'" + (String(d.id) === onthouden ? " selected" : "") +
         ">" + esc(d.naam) + " (" + d.id + ")</option>").join("");
     werkSelectieBij();
-  } catch (e) { $("dagboekInfo").textContent = "Dagboeken ophalen lukte niet: " + e.message; }
+  } catch (e) { $("dagboekInfo").textContent = "Dagboeken ophalen vraagt een nieuwe poging: " + e.message; }
 }
 $("dagboek").addEventListener("change", () => {
   const v = $("dagboek").value;
@@ -467,7 +467,7 @@ $("boekBtn").addEventListener("click", async () => {
   const dagboek = Number($("dagboek").value);
   if (!dagboek) { melding($("boekStatus"), "Kies eerst het dagboek van Mollie.", "error"); return; }
   if (!confirm(s.length + " regel(s) boeken, samen " + fmtEur(s.reduce((n, x) => n + Number(x.tx.amount), 0)) +
-      "?\n\nDit is niet met een knop terug te draaien.")) return;
+      "?\n\nLet op: dit is definitief.")) return;
 
   const opOrder = [], naarGrootboek = [];
   for (const x of s) {
@@ -517,7 +517,7 @@ $("boekBtn").addEventListener("click", async () => {
         gelukt++;
       } else fouten.push("order " + opOrder[i].orderNr + ": " + (res.error || "onbekend"));
     });
-    if (!j.resultaten) fouten.push("boeken op orders: " + (j.error || "geen antwoord"));
+    if (!j.resultaten) fouten.push("boeken op orders: " + (j.error || "antwoord blijft uit"));
   }
   /* Zie bankkoppeling.html: deze regels horen in het bankdagboek en Logic4
      laat dat via de API niet toe. Een memoriaal maken levert een boeking op
@@ -567,12 +567,12 @@ $("boekBtn").addEventListener("click", async () => {
     if (geblokkeerd) fouten.push("Rekening 1134 (Mollie) staat in Logic4 geblokkeerd voor memoriaalboekingen. Laat Osman die blokkering " +
       "eraf halen (Logic4, grootboekrekening 1134, blokkeren uit); daarna gaan de fee en de uitbetaling met deze knop mee. " +
       "Tot die tijd: zet ze met de hand in het Mollie-dagboek, de rekening staat per regel in beeld.");
-    if (!j.resultaten) fouten.push("memoriaal: " + (j.error || "geen antwoord"));
+    if (!j.resultaten) fouten.push("memoriaal: " + (j.error || "antwoord blijft uit"));
   }
   state.transactions.forEach(x => { if (x.geboekt) x.kies = false; });
   teken();
   melding($("boekStatus"),
-    gelukt + " regel(s) geboekt." + (fouten.length ? " Niet gelukt: " + esc(fouten.join("; ")) : ""),
+    gelukt + " regel(s) geboekt." + (fouten.length ? " Nog te doen: " + esc(fouten.join("; ")) : ""),
     fouten.length ? "warn" : "ok");
 });
 </script>
