@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-25", bestand: "planning.html", soort: "hersteld",
+      titel: "Typen na verwijderen werkt weer",
+      wat: "Na het verwijderen van een afspraak of melding kon je in de Planning niets meer intypen tot je de tegel opnieuw opende. De vraag Weet je het zeker? staat nu in de Planning zelf, en daarna kun je gewoon verder typen."
+    },
+    {
       datum: "2026-09-25", bestand: "amerika.html", soort: "beter",
       titel: "Batches: koppelen aan een order, naar Chantal sturen, en een Historie",
       wat: "Een regel zonder order (zoals een terugbetaling of een Balance zonder factuurnummer) koppel je nu met de knop Koppel aan order aan een order die al in Logic4 staat. Staat een regel niet in QuickBooks, dan zet Naar Chantal er een taak voor haar bij. Bij Facturen kun je een factuur aan een bestaande order hangen in plaats van een nieuwe te maken. Geen bankkosten in de mail maar wel minder ontvangen? Dan gaat het verschil als bankkosten op 4630. Wordt een batch bij het boeken tegengehouden, dan staat erbij waarom. Geboekte batches staan onderaan onder Historie."

@@ -1398,7 +1398,7 @@ function stopHtml(a){
 async function printRoute(dISO, nr){
   var eerste = (routesVan(dISO)[0]||{}).nr === nr;
   var stops = stopsVan(dISO, nr, eerste);
-  if (!stops.length){ alert("Deze route heeft nog geen stops."); return; }
+  if (!stops.length){ meldVenster("Deze route heeft nog geen stops."); return; }
   var route = routesVan(dISO).find(function(r){ return r.nr===nr; }) || {};
   var nrs = stops.map(function(a){ return String(a.ordernr||"").trim(); })
                  .filter(function(x){ return /^\d{3,12}$/.test(x); });
@@ -1416,7 +1416,7 @@ async function printRoute(dISO, nr){
                { nr:n, ok:false, error:"kwam niet terug uit Logic4" };
       });
     }catch(e){
-      if(!confirm("De orders konden niet uit Logic4 worden opgehaald ("+e.message+").\n\nAlleen het voorblad printen?")) return;
+      if(!(await vraagVenster("Orders niet opgehaald", "De orders konden niet uit Logic4 worden opgehaald ("+e.message+").\n\nAlleen het voorblad printen?", "Voorblad printen"))) return;
     }
   }
   /* Elke stop een blad, in de volgorde van de route: een order zijn
@@ -1545,7 +1545,7 @@ function koppelBord(){
         try{ if(window.fpLog) window.fpLog("stop-verplaatst",(a.klant||"")+" -> "+nieuweDatum+" route "+nieuwNr+
           " (plek "+volgorde[id]+")"); }catch(e){}
         teken();
-      }catch(err){ alert(err.message); }
+      }catch(err){ meldVenster(err.message); }
     });
   });
   // + stop, + route, route weghalen, naam van de rijder, dagnotitie
@@ -1583,7 +1583,7 @@ function koppelBord(){
           }
           d.routes[dISO] = lijst;
         });
-      }catch(err){ alert(err.message); }
+      }catch(err){ meldVenster(err.message); }
       teken();
     });
   });
@@ -1621,11 +1621,11 @@ async function voegRouteToe(dISO){
     });
     try{ if(window.fpLog) window.fpLog("route-toegevoegd", dISO); }catch(e){}
     teken();
-  }catch(e){ alert(e.message); }
+  }catch(e){ meldVenster(e.message); }
 }
 async function haalRouteWeg(dISO, nr){
   var stops = stopsVan(dISO, nr, routesVan(dISO)[0].nr===nr);
-  if (stops.length && !confirm("Route "+nr+" heeft "+stops.length+" stop(s). Die komen in de eerste route te staan. Doorgaan?")) return;
+  if (stops.length && !(await vraagVenster("Route weghalen?", "Route "+nr+" heeft "+stops.length+" stop(s). Die komen in de eerste route te staan. Doorgaan?", "Doorgaan"))) return;
   try{
     await bewaarBord(function(d){
       var lijst = (d.routes[dISO]||[]).filter(function(x){ return Number(x.nr)!==nr; });
@@ -1635,7 +1635,7 @@ async function haalRouteWeg(dISO, nr){
     });
     try{ if(window.fpLog) window.fpLog("route-verwijderd", dISO+" route "+nr); }catch(e){}
     teken();
-  }catch(e){ alert(e.message); }
+  }catch(e){ meldVenster(e.message); }
 }
 /* De naam van wie de route rijdt. Vaak twee namen ("BART EN JOEY"), dus een
    vrij tekstveld en geen keuzelijst. */
@@ -1674,7 +1674,7 @@ async function zetRijder(dISO, nr, veld, nieuw, plek){
       d.routes[dISO] = lijst;
     });
     try{ if(window.fpLog) window.fpLog("route-rijder-gezet", dISO+" route "+nr+" plek "+plek+": "+nieuw); }catch(e){}
-  }catch(err){ alert(err.message); }
+  }catch(err){ meldVenster(err.message); }
   teken();
 }
 function bewerkRijder(el){
@@ -1727,7 +1727,7 @@ function bewerkRijder(el){
         d.routes[dISO] = lijst;
       });
       try{ if(window.fpLog) window.fpLog("route-rijder-gezet", dISO+" route "+nr+" plek "+plek+": "+nieuw); }catch(e){}
-    }catch(err){ alert(err.message); }
+    }catch(err){ meldVenster(err.message); }
     teken();
   }
   vak.addEventListener("keydown", function(e){
@@ -1755,7 +1755,7 @@ function bewerkDagnotitie(el){
     try{
       await bewaarBord(function(d){ if (nieuw) d.notities[dISO] = nieuw; else delete d.notities[dISO]; });
       try{ if(window.fpLog) window.fpLog("dagnotitie-gezet", dISO+": "+nieuw); }catch(e){}
-    }catch(err){ alert(err.message); }
+    }catch(err){ meldVenster(err.message); }
     teken();
   }
   vak.addEventListener("keydown", function(e){
@@ -1925,7 +1925,7 @@ function startSleep(e){
       try{ if(window.fpLog) window.fpLog(rekken?"afspraak-duur-gewijzigd":"afspraak-verplaatst",
         (a.klant||"")+" -> "+(b.datum||a.datum)+" "+(b.tijd||a.tijd)+" "+duurTekst(b.duurMin||a.duurMin)); }catch(e){}
       teken();
-    }catch(err){ alert(err.message); teken(); }
+    }catch(err){ meldVenster(err.message); teken(); }
   }
   document.addEventListener("mousemove", beweeg);
   document.addEventListener("mouseup", los);
@@ -1986,7 +1986,7 @@ function bewerkNaam(el, naam){
         return lijst;
       });
       try{ if(window.fpLog) window.fpLog("afspraak-naam-gewijzigd", oud+" -> "+nieuw); }catch(e){}
-    }catch(err){ alert(err.message); }
+    }catch(err){ meldVenster(err.message); }
     teken();
   }
   vak.addEventListener("keydown", function(e){
@@ -2199,7 +2199,7 @@ function koppelBanden(week){
           });
           try{ if(window.fpLog) window.fpLog("afspraak-verplaatst", (a.klant||"")+" -> "+b.datum+(b.datumTot?" t/m "+b.datumTot:"")); }catch(e){}
           teken();
-        }catch(err){ alert(err.message); teken(); }
+        }catch(err){ meldVenster(err.message); teken(); }
       }
       document.addEventListener("mousemove", beweeg); document.addEventListener("mouseup", los);
     });
@@ -2284,6 +2284,23 @@ function vraagVenster(titel, tekst, knop){
     laag.querySelector(".doe").addEventListener("click", function(){ weg(true); });
     laag.addEventListener("click", function(e){ if (e.target === laag) weg(false); });
   });
+}
+/* Een melding met alleen OK, in plaats van de melding van de browser. Waarom de kale alert-
+   en confirm() hier niet meer staan: in de app op Windows pakt na zo'n
+   venster geen enkel tekstvak meer toetsen aan, tot de tegel opnieuw wordt
+   geopend (video 25 sep 2026: "als ik een melding of order via bewerken
+   verwijder en ik wil op een andere dag iets intypen, dan werkt het niet").
+   Een venster in de pagina zelf heeft dat niet. */
+function meldVenster(tekst){
+  var laag = document.createElement("div");
+  laag.className = "laag";
+  laag.innerHTML = '<div class="vraagkaart"><p>'+esc(tekst)+'</p><div class="knoppen"><button type="button" class="doe">OK</button></div></div>';
+  document.body.appendChild(laag);
+  var knop = laag.querySelector(".doe");
+  function weg(){ laag.remove(); }
+  knop.addEventListener("click", weg);
+  laag.addEventListener("click", function(e){ if (e.target === laag) weg(); });
+  setTimeout(function(){ try{ knop.focus(); }catch(e){} }, 0);
 }
 function belKlant(nummer, klant){
   var schoon = String(nummer||"").replace(/[^\d+]/g,"");
@@ -2573,13 +2590,14 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   });
 
   if (MAG_BEWERKEN && !nieuw) $("fWeg").addEventListener("click", async function(){
-    if (!confirm("Afspraak van "+(a.klant||"?")+" op "+a.datum+" verwijderen?")) return;
-    this.disabled = true;
+    var knop = this;
+    if (!(await vraagVenster("Afspraak verwijderen?", "Afspraak van "+(a.klant||"?")+" op "+a.datum+" verwijderen?", "Verwijderen"))) return;
+    knop.disabled = true;
     try{
       await bewaar(function(lijst){ return lijst.filter(function(x){ return x.id!==a.id; }); });
       try{ if(window.fpLog) window.fpLog("afspraak-verwijderd", a.soort+" "+a.datum+" "+(a.klant||"")); }catch(e){}
       dicht(); teken();
-    }catch(e){ $("fMelding").textContent = e.message; this.disabled=false; }
+    }catch(e){ $("fMelding").textContent = e.message; knop.disabled=false; }
   });
 }
 
