@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-25", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
+      titel: "Jazzi-artikelen klaargezet en leveranciers met hun eigen naam",
+      wat: "Bij Jazzi staan nu alle 105 spa's uit de prijslijst onder Artikelen: de code en naam van Jazzi, onze artikelnummers en modelnaam, en de bevestigde prijs in dollars. Kijk ze na; een geel voorstel wordt wit zodra alles is ingevuld. Een leverancier heet voortaan contactpersoon - fabriek (intern) - fabriek (extern), bijvoorbeeld Jason - Passion Saunas - Fukiafu, zodra die velden zijn ingevuld."
+    },
+    {
       datum: "2026-09-25", bestand: "voorraad.html", soort: "beter",
       titel: "Partner containers: deposit-mail en bedragen in dollars",
       wat: "Bij een container staat nu ook een knop voor de deposit-mail (30% van de order). De deposit-mail, de balance-mail en de herinnering gebruiken de teksten van Chantal, met de bankgegevens erin. Bedragen staan in dollars, zoals de dealer betaalt. Je kunt de orderbevestiging als bijlage meesturen."

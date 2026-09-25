@@ -410,8 +410,9 @@ function tekenKruimels(){
   let html="<a data-pad=''>🏠 Alle leveranciers</a>";
   let op="";
   for(const d of delen){
+    const eerste=!op;
     op=op?op+"/"+d:d;
-    html+="<span class='sep'>›</span><a data-pad='"+esc(op)+"'>"+esc(d)+"</a>";
+    html+="<span class='sep'>›</span><a data-pad='"+esc(op)+"'>"+esc(eerste?levWeergave(d):d)+"</a>";
   }
   k.innerHTML=html;
   k.querySelectorAll("a").forEach(a=>a.addEventListener("click",()=>{
@@ -430,7 +431,7 @@ function tekenKpis(){
 }
 
 function rijMap(pad){
-  const naam=pad.split("/").pop();
+  const naam=pad.includes("/")?pad.split("/").pop():levWeergave(pad);
   const onder=alsOnder(pad);
   const aantal=onder.bestanden.length;
   return "<tr class='rij-map' data-map='"+esc(pad)+"'>"+
@@ -450,7 +451,7 @@ function rijBestand(b){
         "<b class='klik openBestand'>"+esc(b.naam)+"</b></div>"+
         (versies?"<div class='versies'>"+versies+" oudere versie"+(versies===1?"":"s")+": "+
           (b.versies||[]).map((v,i)=>"<a class='openVersie' data-v='"+i+"'>"+esc(datum(v.op))+"</a>").join(" · ")+"</div>":"")+
-        (hier===""&&b.map?"<div class='meta'>in "+esc(b.map)+"</div>":"")+
+        (hier===""&&b.map?"<div class='meta'>in "+esc(padWeergave(b.map))+"</div>":"")+
     "</td>"+
     "<td><span class='notitie klik bewerkNotitie"+(b.notitie?"":" leeg")+"'>"+esc(b.notitie||"omschrijving toevoegen")+"</span></td>"+
     "<td class='meta'>"+mb(b.bytes)+"</td>"+
@@ -874,7 +875,21 @@ const STARTMOMENTEN=["akkoord proforma","aanbetaling","orderbevestiging"];
 const INCOTERMS=[["exw","Ex Works","Geen transportkosten naar de haven in China; havenkosten zijn voor ons."],["fob","FOB (Free On Board)","De fabriek betaalt transport en havenkosten tot en met de haven in China."],["cif","CIF (Cost Insurance & Freight)","De fabriek betaalt alle kosten tot de haven in Rotterdam."],["afhaal","Afhaal magazijn","Wij halen op bij het magazijn van de leverancier."],["fonteyn","Bezorgd bij Fonteyn","De leverancier levert af bij ons."],["klant","Bezorgd bij klant","De leverancier levert rechtstreeks bij de klant af."]];
 const ART_VELDEN=[["codeExtern","Artikelcode (extern)","11%"],["naamExtern","Artikel (extern)","18%"],["codeIntern","Artikelcode (intern)","10%"],["naamIntern","Artikel (intern)","17%"],["incoterm","IncoTerms","14%"],["prijs","Prijs","9%"],["cbm","CBM","7%"],["levertijd","Levertijd","10%"]];
 let ovGekozen="", ovTimer=null;
-function leveranciers(){ return S.mappen.filter(m=>!m.includes("/")).sort((a,b)=>a.localeCompare(b,"nl")); }
+/* Hoe een leverancier heet op het scherm (Gerrit, 25 sep 2026): "naam
+   contactpersoon - fabrieksnaam (intern) - fabrieksnaam (extern)", dus
+   bijvoorbeeld "Jason - Passion Spas - Jazzi". Wat nog niet is ingevuld valt
+   weg; staat er nog niets, dan blijft de naam van de map. De map zelf houdt
+   zijn naam: daar hangen de bestanden en de afspraken aan. */
+function levWeergave(lev){
+  const a=(S.afspraken||{})[lev]||{};
+  // Uit de contactpersoon alleen de naam; mail en telefoon staan er vaak achter.
+  const naam=String(a.contact||"").split(/[,;|\n]/)[0].replace(/\S+@\S+/g,"").replace(/\+?\d[\d\s()-]{6,}/g,"").trim();
+  const delen=[naam,a.fabriekIntern,a.fabriekExtern].map(x=>String(x||"").trim()).filter(Boolean);
+  return delen.length?delen.join(" - "):lev;
+}
+// De weergave van een pad: alleen het eerste stuk is een leverancier.
+function padWeergave(pad){ const d=String(pad||"").split("/"); d[0]=levWeergave(d[0]); return d.join(" / "); }
+function leveranciers(){ return S.mappen.filter(m=>!m.includes("/")).sort((a,b)=>levWeergave(a).localeCompare(levWeergave(b),"nl")); }
 function levData(lev){ S.afspraken=S.afspraken||{}; const a=S.afspraken[lev]=S.afspraken[lev]||{}; a.inkoop=a.inkoop||{}; return a; }
 function levLees(lev){ const a=(S.afspraken||{})[lev]||{}; return { contact:a.contact||"", fi:a.fabriekIntern||"", fe:a.fabriekExtern||"", betaling:a.betaling||"", magNL:a.magazijnNL||"", nl:a.nl||{}, inkoop:a.inkoop||{}, start:a.startmoment||"", boete:a.boete||"", artikelen:artVan(lev), op:a.op, door:a.door }; }
 /* Heeft de leverancier een magazijn in Nederland, dan wil je weten wat je
@@ -954,10 +969,11 @@ function tekenOverzicht(){
   const lijst=leveranciers().map(l=>({l,t:ovTreffers(l,q)})).filter(x=>x.t.past);
   document.getElementById("ovRijen").innerHTML=lijst.length?lijst.map(({l,t})=>{
     const d=levLees(l), mis=ontbreekt(l);
-    const sub=[d.contact, d.fi&&("fabriek: "+d.fi)].filter(Boolean).join(" · ");
+    // De naam van de map eronder, zolang de kop een andere naam toont.
+    const sub=levWeergave(l)!==l?l:"";
     const st=ART[l]?artTelling(l):(((S.afspraken||{})[l]||{}).artStand||{n:(d.artikelen||[]).length,voorstel:0});
     const n=st.n||0;
-    return "<div class='ov-lev"+(l===ovGekozen?" aan":"")+"' data-lev=\""+esc(l)+"\"><b>"+esc(l)+"</b>"+
+    return "<div class='ov-lev"+(l===ovGekozen?" aan":"")+"' data-lev=\""+esc(l)+"\"><b>"+esc(levWeergave(l))+"</b>"+
       (sub?"<div class='sub'>"+esc(sub)+"</div>":"")+
       "<div>"+(mis.length?"<span class='vorm' style='background:#fef3c7;color:#92400e'>afspraken onvolledig</span>":"<span class='vorm'>klaar om te bestellen</span>")+vormenTekst(d.inkoop)+(n?"<span class='vorm' style='background:#f3f4f6;color:#374151'>"+n+" artikel"+(n===1?"":"en")+(st.voorstel?", "+st.voorstel+" voorstel":"")+"</span>":"")+"</div>"+
       (t.art.length?"<div class='treffer'>"+t.art.slice(0,3).map(r=>esc((r.codeExtern||r.naamExtern||"")+" → "+(r.codeIntern||r.naamIntern||"nog niet gekoppeld"))).join("<br>")+(t.art.length>3?"<br>en nog "+(t.art.length-3):"")+"</div>":"")+
@@ -1023,7 +1039,7 @@ function tekenLeverancier(){
      opgehaald: dan zou een wijziging de echte artikelen overschrijven. */
   if(!ART[lev]){ box.innerHTML="<p class='meta'>Artikelen ophalen\u2026</p>"; laadArtikelen(lev).then(()=>{ if(ovGekozen===lev) tekenLeverancier(); }); return; }
   const d=levLees(lev);
-  box.innerHTML="<div style='display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap'><div style='flex:1;min-width:220px'><h3>"+esc(lev)+"</h3><div class='meta'>"+(d.op?"Laatst gewijzigd "+datum(d.op)+(d.door?" door "+esc(korteNaam(d.door)):""):"Nog niets vastgelegd.")+" · <a class='klik' id='ovNaarMap'>prijslijsten van deze leverancier</a></div></div>"+
+  box.innerHTML="<div style='display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap'><div style='flex:1;min-width:220px'><h3>"+esc(levWeergave(lev))+"</h3>"+(levWeergave(lev)!==lev?"<div class='meta'>"+esc(lev)+"</div>":"")+"<div class='meta'>"+(d.op?"Laatst gewijzigd "+datum(d.op)+(d.door?" door "+esc(korteNaam(d.door)):""):"Nog niets vastgelegd.")+" · <a class='klik' id='ovNaarMap'>prijslijsten van deze leverancier</a></div></div>"+
       "<div style='text-align:right'><button class='primary' id='ovIko' type='button' disabled>Inkooporder maken</button><div class='meta' id='ovIkoUitleg' style='max-width:340px;margin-top:4px'></div></div></div>"+
     "<div id='ovIkoPaneel' class='hidden' style='margin-top:12px;border:1px solid var(--border);border-left:4px solid var(--fonteyn-lime);border-radius:10px;padding:12px 14px;background:#fbfdf7'>"+
       "<b style='color:var(--fonteyn-green)'>Inkooporder uit de proforma</b><div class='meta' style='margin:3px 0 8px'>Kies de proforma invoice van "+esc(lev)+" (Excel). Het scherm leest de regels uit en laat een voorstel zien; pas na jouw akkoord komt de inkooporder in Logic4.</div>"+
@@ -1031,8 +1047,8 @@ function tekenLeverancier(){
       "<div id='ikoStatus' class='status-msg hidden' style='margin-top:10px'></div><div id='ikoVoorstel' style='margin-top:10px'></div></div>"+
     "<h4>Leverancier</h4><table class='velden'>"+
       veldRij("contact",d.contact,"Contactpersoon","Naam, mail en telefoon van ons contact bij deze leverancier.","bv. Linda Chen, linda@…, +86 …")+
-      veldRij("fabriekIntern",d.fi,"Fabriek (intern)","Hoe wij deze fabriek noemen.","bv. Jazzi")+
-      veldRij("fabriekExtern",d.fe,"Fabriek (extern)","De naam zoals de fabriek zelf op facturen en papieren staat.","bv. Guangdong Jazzi Spa Tech Co., Ltd")+
+      veldRij("fabriekIntern",d.fi,"Fabriek (intern)","Hoe wij deze fabriek noemen.","bv. Passion Spas")+
+      veldRij("fabriekExtern",d.fe,"Fabriek (extern)","Hoe de fabriek zichzelf noemt.","bv. Jazzi")+
       veldRij("betaling",d.betaling,"Betalingsvoorwaarden","Wanneer wat betaald wordt.","bv. 50% aanbetaling, 50% na productie")+
     "</table>"+
     "<h4>Magazijn in Nederland</h4><table class='velden'>"+
@@ -1058,7 +1074,9 @@ function tekenLeverancier(){
   tekenKnop(lev);
   document.getElementById("ovNaarMap").addEventListener("click",()=>{ hier=lev; zetWeergave("bestanden"); teken(); });
   const na=()=>{ tekenKnop(lev); ovBewaarStraks(lev); };
-  box.querySelectorAll("[data-ov]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{ levData(lev)[inp.dataset.ov]=inp.value; na(); if(inp.dataset.ov==="magazijnNL") tekenLeverancier(); }));
+  box.querySelectorAll("[data-ov]").forEach(inp=>inp.addEventListener(inp.tagName==="SELECT"?"change":"input",()=>{ levData(lev)[inp.dataset.ov]=inp.value; na(); if(inp.dataset.ov==="magazijnNL") tekenLeverancier();
+    // De kop volgt de naam meteen (contactpersoon - fabriek intern - fabriek extern).
+    if(["contact","fabriekIntern","fabriekExtern"].includes(inp.dataset.ov)){ const h=box.querySelector("h3"); if(h) h.textContent=levWeergave(lev); } }));
   box.querySelectorAll("[data-nlkan]").forEach(sel=>sel.addEventListener("change",()=>{ const a=levData(lev); a.nl=a.nl||{}; const k=sel.dataset.nlkan; a.nl[k]=a.nl[k]||{}; a.nl[k].kan=sel.value; const inp=box.querySelector("[data-nlkosten='"+k+"']"); if(inp) inp.disabled=sel.value!=="ja"; na(); }));
   box.querySelectorAll("[data-nlkosten]").forEach(inp=>inp.addEventListener("input",()=>{ const a=levData(lev); a.nl=a.nl||{}; const k=inp.dataset.nlkosten; a.nl[k]=a.nl[k]||{}; a.nl[k].kosten=inp.value; na(); }));
   box.querySelectorAll("[data-lt]").forEach(inp=>inp.addEventListener("input",()=>{ const a=levData(lev); const k=inp.dataset.lt; a.inkoop[k]=a.inkoop[k]||{}; a.inkoop[k].lt=inp.value; delete a.inkoop[k].aan; na(); }));
