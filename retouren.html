@@ -284,6 +284,11 @@ const SESSION_KEY = "fp.session";
 const EMAIL_KEY = "fp.email";
 
 const REASONS = ["Fout klant","Fout adviseur","Pickfout","Reparatie","Productfout","Nalevering","Klacht","Transportschade","Overig"];
+/* Wat er op het scherm staat (Gerrit, 25 sep 2026: ook de categorieën in
+   positieve taal). Opgeslagen blijft de oude waarde, zodat bestaande retouren
+   en het overzicht blijven kloppen; dit is alleen de naam die je ziet. */
+const REASON_LABEL = { "Fout klant":"Bij de klant", "Fout adviseur":"Bij de adviseur", "Pickfout":"Bij het picken", "Productfout":"In het product" };
+const redenNaam = (r) => REASON_LABEL[r] || r;
 const LOCATIONS = ["Voorraad","Outlet","Derving","Showroommodel"];
 const REASON_COLORS = {
   "Fout klant":"#3b82f6","Fout adviseur":"#8b5cf6","Pickfout":"#f97316","Reparatie":"#0ea5e9","Productfout":"#ef4444",
@@ -805,7 +810,7 @@ function periodLabelText() {
 function currentRecords() {
   let recs = Object.values(store.records).filter(inPeriod);
   if (searchTerm) {
-    recs = recs.filter(r => [r.orderNr,r.customer,r.advisor,r.product,r.reason,r.location,r.explanation]
+    recs = recs.filter(r => [r.orderNr,r.customer,r.advisor,r.product,r.reason,redenNaam(r.reason),r.location,r.explanation]
       .join(" ").toLowerCase().indexOf(searchTerm) !== -1);
   }
   /* Nieuwste eerst, en binnen één order de regels op volgorde van toevoegen,
@@ -887,8 +892,8 @@ function textareaInput(rec, field) {
 }
 function selectInput(rec, field, options) {
   const s = document.createElement("select");
-  s.appendChild(new Option("—",""));
-  for (const o of options) s.appendChild(new Option(o,o));
+  s.appendChild(new Option("-",""));
+  for (const o of options) s.appendChild(new Option(field==="reason"?redenNaam(o):o,o));
   s.value = rec[field]||"";
   s.addEventListener("change", () => { commitField(rec, field, s.value); if (field==="reason") renderPie(currentRecords()); });
   return s;
@@ -922,7 +927,7 @@ function renderPie(recs) {
     }
     start = end;
     const li = document.createElement("div"); li.className="li";
-    li.innerHTML = '<span class="sw" style="background:'+color+'"></span>' + escapeHtml(reason)
+    li.innerHTML = '<span class="sw" style="background:'+color+'"></span>' + escapeHtml(redenNaam(reason))
       + '<span class="n">' + n + " (" + Math.round(frac*100) + "%)</span>";
     legend.appendChild(li);
   }
@@ -930,7 +935,7 @@ function renderPie(recs) {
 
 // ── Handmatig toevoegen ──
 (function initManual(){
-  const rs = el("mReason"); rs.appendChild(new Option("—","")); REASONS.forEach(o=>rs.appendChild(new Option(o,o)));
+  const rs = el("mReason"); rs.appendChild(new Option("—","")); REASONS.forEach(o=>rs.appendChild(new Option(redenNaam(o),o)));
   const ls = el("mLocation"); ls.appendChild(new Option("—","")); LOCATIONS.forEach(o=>ls.appendChild(new Option(o,o)));
 })();
 el("addManualBtn").addEventListener("click", () => {

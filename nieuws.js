@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-25", bestand: "retouren.html", soort: "beter",
+      titel: "Nieuwe namen voor de redenen",
+      wat: "De redenen heten nu Bij de klant, Bij de adviseur, Bij het picken en In het product. Bestaande retouren en het overzicht tellen gewoon door onder de nieuwe naam."
+    },
+    {
       datum: "2026-09-25", iedereen: true, soort: "beter",
       titel: "Alles in positieve taal",
       wat: "Elke melding, knop en uitleg in het dashboard zegt nu wat er wél kan of wat de volgende stap is. Waar eerst stond dat iets mislukte, staat nu bijvoorbeeld dat het nog een poging vraagt, en waar iets ontbrak staat nu wat je invult. Zo weet je meteen wat je kunt doen."
