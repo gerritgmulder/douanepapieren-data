@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-25", bestand: "amerika.html", soort: "beter",
+      titel: "Amerika-orders op naam van de klant",
+      wat: "Een order uit QuickBooks staat in Logic4 nu met de naam, het adres, de mail en de telefoon van de klant zoals in QuickBooks, en niet meer met die van Passion Spa South. De bestaande orders zijn ook bijgewerkt; de bedragen zijn gebleven zoals ze waren. Bij Ontvangen Audrey staat in de kolom Totaal nu per regel het factuurbedrag min de bankkosten, en Amount invoice heet voortaan Factuurbedrag."
+    },
+    {
       datum: "2026-09-25", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
       titel: "Artikelen bij bijna alle leveranciers, met de laagste inkoopprijs",
       wat: "Ook uit facturen, proforma's en pdf-prijslijsten zijn de artikelen nu uitgelezen, bij 27 leveranciers die nog leeg waren (onder andere Harvia, Rumo BBQ, Aluxe, Biohort, Keter en Winza). De prijs is steeds de laagste die we ooit van die fabrikant kregen; de kolom heet daarom Laagste inkoopprijs. Beweeg over een gele regel om te zien uit welk bestand de prijs komt."

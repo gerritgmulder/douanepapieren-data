@@ -277,7 +277,7 @@
     <div class="card">
       <h3>Wire-overzicht van Audrey inlezen</h3>
       <p class="lead" style="font-size:13px"><b>De makkelijkste manier: plakken.</b> Open Audrey's mail, selecteer de tabel met bedragen (of de hele mail met Ctrl+A), kopieer met Ctrl+C en plak hem hieronder met Ctrl+V. Meer is het niet - je hoeft niets op te slaan.
-        Het systeem leest de tabel letterlijk uit: de <b>Balance</b>-regel, elke factuurregel (bijv. <code>3553 Paradise</code>) met <b>amount invoice</b>, <b>bankkosten</b> en - indien aanwezig - <b>totaal</b>.</p>
+        Het systeem leest de tabel letterlijk uit: de <b>Balance</b>-regel, elke factuurregel (bijv. <code>3553 Paradise</code>) met het <b>factuurbedrag</b> (amount invoice), <b>bankkosten</b> en - indien aanwezig - <b>totaal</b>.</p>
       <!-- Plakvak. Chantal (video, 29 aug 2026): "ik kan de mail helemaal niet
            opslaan als EML... dan staat er helemaal geen e-mail tussen." In de
            nieuwe Outlook bestaat 'Opslaan als' niet meer, dus die weg was voor
@@ -2093,7 +2093,7 @@ function audRender(){
       })()+
       "<p class='lead' style='font-size:12px;margin:0 0 10px'>Bestand: "+esc(w.bestand||"")+" · ingelezen "+esc(datumNL(w.ts))+"</p>"+
       "<div class='tablewrap'><table class='grid'><thead><tr>"+
-        "<th>Regel</th><th>Factuur</th><th>Soort</th><th style='text-align:right'>Amount invoice</th><th style='text-align:right'>Bankkosten</th><th style='text-align:right'>Totaal</th>"+
+        "<th>Regel</th><th>Factuur</th><th>Soort</th><th style='text-align:right'>Factuurbedrag</th><th style='text-align:right'>Bankkosten</th><th style='text-align:right'>Totaal</th>"+
         "<th><label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0'><input type='checkbox' data-alle-verwerkt='"+esc(w.id)+"'"+(openN===0&&w.regels.some(r=>r.soort==='factuur')?" checked":"")+" title='Alle regels van deze batch in één keer aan- of uitvinken'> Verwerkt in Logic4</label></th></tr></thead><tbody>"+
       w.regels.map((r,i)=>{
         // Afvinken kan zodra er een factuurnummer bij hoort, ook als de regel
@@ -2125,7 +2125,10 @@ function audRender(){
           "<td>"+audSoortPill(r.soort)+"</td>"+
           "<td style='text-align:right;font-variant-numeric:tabular-nums'>"+esc(usd(r.kolom1))+"</td>"+
           "<td style='text-align:right;font-variant-numeric:tabular-nums;color:"+(r.kolom2!=null&&r.kolom2<0?"#b91c1c":"inherit")+"'>"+esc(usd(r.kolom2))+"</td>"+
-          "<td style='text-align:right;font-variant-numeric:tabular-nums'><b>"+esc(usd(r.kolom3))+"</b></td>"+
+          /* Totaal = factuurbedrag min bankkosten (Gerrit, 25 sep 2026). Audrey
+             zet dat alleen op de totaalregel; per factuur rekenen we het uit. */
+          "<td style='text-align:right;font-variant-numeric:tabular-nums'><b>"+esc(usd(r.kolom3!=null?r.kolom3
+            :(r.kolom1!=null?Math.round(((Number(r.kolom1)||0)-Math.abs(Number(r.kolom2)||0))*100)/100:null)))+"</b></td>"+
           "<td>"+(kan
             ? "<label style='display:inline-flex;align-items:center;gap:6px;cursor:pointer'><input type='checkbox' class='audVerw' data-nr='"+esc(nrVan)+"' data-qbid='"+esc((inQb&&inQb.id)||"")+"'"+(isVerwerkt?" checked":"")+">"+
               "<span style='font-size:11px;color:"+(isVerwerkt?"#15803d":"var(--muted)")+"'>"+(isVerwerkt?("verwerkt"+(v.user?" · "+esc(String(v.user).split("@")[0]):"")):"nog niet")+"</span></label>"

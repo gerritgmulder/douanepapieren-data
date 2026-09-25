@@ -10075,11 +10075,147 @@ async function qbHandleInvoices(request, env) {
 }
 
 // Maak één Logic4-order voor een geparste Amerika-factuur (magazijn Texas).
+/* De klant van een QuickBooks-factuur als adres voor Logic4.
+   ═══════════════════════════════════════════════════════════════════════════
+   Gerrit (25 sep 2026): "Elke order uit de batch lijkt nu van Audrey te zijn
+   en alsof we het geld hebben ontvangen van Passion Spas South. Ik wil dat je
+   de Logic4 order aanmaakt zoals de order ook in QuickBooks staat (dus alleen
+   de klantgegevens moeten letterlijk overgenomen worden uit QuickBooks). De
+   bedragen kloppen wel allemaal, en daar moet je van afblijven."
+
+   De debiteur blijft Passion Spa South (878871433): daar lopen de betalingen
+   van Audrey en het boeken van de batches op. Wat verandert is het factuur-
+   en het afleveradres op de order: dat zijn nu de naam, het adres, de mail en
+   de telefoon van de klant zoals ze in QuickBooks staan. BillAddr wordt het
+   factuuradres, ShipAddr het afleveradres (valt terug op BillAddr).
+
+   QuickBooks zet de naam vaak als eerste adresregel en soms "Plaats, ST 12345"
+   als losse regel; beide worden herkend en niet dubbel overgenomen. */
+function qbAdresVoorLogic4(adr, naam, bedrijf) {
+  if (!adr) return null;
+  const regels = [adr.Line1, adr.Line2, adr.Line3, adr.Line4, adr.Line5].map(x => String(x || "").trim()).filter(Boolean);
+  const kaal = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  let stad = String(adr.City || "").trim(), staat = String(adr.CountrySubDivisionCode || "").trim(), post = String(adr.PostalCode || "").trim();
+  const straat = [];
+  for (const r of regels) {
+    if (kaal(r) && (kaal(r) === kaal(naam) || kaal(r) === kaal(bedrijf))) continue;
+    if (/^(us|usa|united states( of america)?)$/i.test(r)) continue;          // het land als losse regel
+    if (/^p\.?\s?o\.?\s*#/i.test(r)) continue;                               // een ordernummer (PO#), geen adres
+    const m = r.match(/^(.+?),?\s+([A-Za-z]{2})\.?\s+(\d{5}(?:-\d{4})?)(?:\s+(?:us|usa|united states))?$/i);
+    if (m) { if (!stad) { stad = m[1].trim(); staat = staat || m[2].toUpperCase(); post = post || m[3]; } continue; }
+    straat.push(r);
+  }
+  const land = String(adr.Country || "").trim();
+  const iso = !land || /^(us|usa|united states|united states of america|u\.s\.a?\.?)$/i.test(land) ? "US" : (land.length === 2 ? land.toUpperCase() : "US");
+  // Is er geen aparte persoon, dan alleen de bedrijfsnaam (niet twee keer hetzelfde).
+  const zelfde = kaal(naam) && kaal(naam) === kaal(bedrijf);
+  return {
+    ContactName: (zelfde ? "" : String(naam || "")).slice(0, 100) || null,
+    CompanyName: String(bedrijf || "").slice(0, 100) || null,
+    Street: straat.join(", ").slice(0, 120) || null,
+    PostalCode: post.slice(0, 20) || null,
+    City: [stad, staat].filter(Boolean).join(", ").slice(0, 80) || null,
+    CountryCode: iso,
+  };
+}
+async function qbKlantVoorLogic4(env, inv, klantCache) {
+  const id = inv.CustomerRef && inv.CustomerRef.value;
+  let c = null;
+  if (id) {
+    if (klantCache && klantCache[id] !== undefined) c = klantCache[id];
+    else {
+      try { const j = await qbQuery(env, "SELECT * FROM Customer WHERE Id = '" + String(id).replace(/'/g, "") + "'"); c = ((j.QueryResponse && j.QueryResponse.Customer) || [])[0] || null; }
+      catch (e) { c = null; }
+      if (klantCache) klantCache[id] = c;
+    }
+  }
+  const weergave = String((inv.CustomerRef && inv.CustomerRef.name) || (c && c.DisplayName) || "").replace(/\*+$/, "").trim();
+  const bedrijf = String((c && c.CompanyName) || "").replace(/\*+$/, "").trim();
+  const persoon = [c && c.GivenName, c && c.FamilyName].map(x => String(x || "").trim()).filter(Boolean).join(" ");
+  const naam = persoon || (bedrijf ? "" : weergave);
+  const firma = bedrijf || (persoon && persoon.toLowerCase() !== weergave.toLowerCase() ? weergave : "");
+  const mail = String((inv.BillEmail && inv.BillEmail.Address) || (c && c.PrimaryEmailAddr && c.PrimaryEmailAddr.Address) || "").split(/[,;\s]+/)[0] || null;
+  const tel = String((c && ((c.PrimaryPhone && c.PrimaryPhone.FreeFormNumber) || (c.Mobile && c.Mobile.FreeFormNumber))) || "").trim() || null;
+  const factuur = qbAdresVoorLogic4(inv.BillAddr || (c && c.BillAddr), naam || weergave, firma);
+  const aflever = qbAdresVoorLogic4(inv.ShipAddr || inv.BillAddr || (c && (c.ShipAddr || c.BillAddr)), naam || weergave, firma);
+  if (aflever) { aflever.Email = mail; aflever.TelephoneNumber = tel; }
+  return { weergave, InvoiceAddress: factuur, DeliveryAddress: aflever, mail, tel };
+}
+
+/* POST /amerika/qb/klant-bijwerken - de klant alsnog op bestaande orders.
+   ═══════════════════════════════════════════════════════════════════════
+   De orders die vóór 25 sep 2026 uit QuickBooks zijn aangemaakt staan met het
+   adres van Passion Spa South. Deze route zet er het factuur- en afleveradres
+   van de echte klant op, via de twee aparte adresopdrachten van Logic4. Die
+   raken alleen het adres: geen regel, geen bedrag, geen debiteur.
+
+   { orderIds?: [..] }  alleen deze orders, anders de eerstvolgende die nog
+                        niet zijn bijgewerkt
+   { proef: true }      laat zien wat er zou komen, verandert niets
+   Maximaal 8 per keer (elke order kost vier verzoeken); het scherm of het
+   script vraagt door tot "nog" nul is. Een bijgewerkte order krijgt in
+   qb-approved het veld klant, zodat hij niet twee keer gaat. */
+async function qbHandleKlantBijwerken(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let b = {}; try { b = await request.json(); } catch {}
+  const proef = b.proef !== false;
+  const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
+  approved.ids = approved.ids || {};
+  const alleen = Array.isArray(b.orderIds) ? new Set(b.orderIds.map(Number)) : null;
+  // Een order kan onder twee sleutels staan (factuurnummer en QuickBooks-Id); één keer is genoeg.
+  const klaarOrders = new Set(Object.values(approved.ids).filter(v => v && v.klant).map(v => Number(v.orderId)));
+  const gezien = new Set();
+  const open = Object.entries(approved.ids)
+    .sort(([a], [b]) => (a.startsWith("qb:") ? 0 : 1) - (b.startsWith("qb:") ? 0 : 1))
+    .filter(([k, v]) => {
+      if (!v || !v.orderId || v.klant || klaarOrders.has(Number(v.orderId)) || gezien.has(Number(v.orderId))) return false;
+      if (alleen && !alleen.has(Number(v.orderId))) return false;
+      gezien.add(Number(v.orderId)); return true;
+    });
+  const partij = open.slice(0, Math.min(8, Number(b.max) || 8));
+  const token = proef ? null : await l4Token(env);
+  const uit = [];
+  for (const [k, v] of partij) {
+    try {
+      let inv = null;
+      if (k.startsWith("qb:")) {
+        const j = await qbQuery(env, "SELECT * FROM Invoice WHERE Id = '" + k.slice(3).replace(/\D/g, "") + "'");
+        inv = ((j.QueryResponse && j.QueryResponse.Invoice) || [])[0] || null;
+      } else {
+        const j = await qbQuery(env, "SELECT * FROM Invoice WHERE DocNumber = '" + String(v.docNr || k).replace(/'/g, "") + "'");
+        const lijst = (j.QueryResponse && j.QueryResponse.Invoice) || [];
+        inv = lijst.length === 1 ? lijst[0] : (lijst.find(x => v.totaal != null && Math.abs(Number(x.TotalAmt) - Number(v.totaal)) < 0.02) || null);
+        if (!inv && lijst.length > 1) { uit.push({ orderId: v.orderId, docNr: v.docNr || k, ok: false, error: lijst.length + " facturen met dit nummer in QuickBooks; welke is het?" }); continue; }
+      }
+      if (!inv) { uit.push({ orderId: v.orderId, docNr: v.docNr || k, ok: false, error: "factuur niet (meer) in QuickBooks" }); continue; }
+      const klant = await qbKlantVoorLogic4(env, inv, null);
+      const regel = { orderId: v.orderId, docNr: inv.DocNumber, klant: klant.weergave, factuur: klant.InvoiceAddress, aflever: klant.DeliveryAddress };
+      if (proef) { uit.push({ ...regel, ok: true, proef: true }); continue; }
+      const roep = async (pad, lijf) => {
+        const r = await fetch("https://api.logic4server.nl/v3/Orders/" + pad, { method: "POST",
+          headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(lijf) });
+        const t = await r.text();
+        return { ok: r.ok, status: r.status, t: t.slice(0, 200) };
+      };
+      const f = klant.InvoiceAddress ? await roep("UpdateInvoiceAddressForOrderOrInvoice", { OrderId: Number(v.orderId), InvoiceAddress: klant.InvoiceAddress }) : { ok: true };
+      const a = klant.DeliveryAddress ? await roep("UpdateDeliveryAddressForOrderOrInvoice", { OrderId: Number(v.orderId), DeliveryAddress: klant.DeliveryAddress }) : { ok: true };
+      if (f.ok && a.ok) {
+        for (const [k2, v2] of Object.entries(approved.ids))
+          if (v2 && Number(v2.orderId) === Number(v.orderId)) approved.ids[k2].klant = { ts: new Date().toISOString(), naam: klant.weergave };
+        await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
+        uit.push({ ...regel, ok: true });
+      } else uit.push({ ...regel, ok: false, error: (f.ok ? "" : "factuuradres HTTP " + f.status + " " + f.t) + (a.ok ? "" : " afleveradres HTTP " + a.status + " " + a.t) });
+    } catch (e) { uit.push({ orderId: v.orderId, docNr: v.docNr || k, ok: false, error: String(e.message || e) }); }
+  }
+  return reply(200, { ok: true, proef, gedaan: uit, nog: open.length - (proef ? 0 : uit.filter(x => x.ok).length), totaalOpen: open.length });
+}
+
 async function dpCreateAmerikaOrder(env, mapped) {
   const token = await l4Token(env);
   const withCode = mapped.rows.filter(r => r.productCode);
   const missing = mapped.rows.filter(r => !r.productCode);   // spa zonder gevonden artikelcode
-  let notes = "Automatisch uit QuickBooks-factuur " + (mapped.docNr || "") + " (Passion Spa South).";
+  let notes = "Automatisch uit QuickBooks-factuur " + (mapped.docNr || "") + " (Passion Spa South)" +
+    (mapped.klant && mapped.klant.weergave ? ", klant " + mapped.klant.weergave : "") + ".";
   if (missing.length) notes += "\nLET OP — handmatig toevoegen (geen artikelcode gevonden):\n" +
     missing.map(r => "  • " + r.qty + "x " + r.description).join("\n");
   const payload = {
@@ -10088,6 +10224,9 @@ async function dpCreateAmerikaOrder(env, mapped) {
     CreationDate: new Date().toISOString().slice(0, 19),   // verplicht
     Reference: "QuickBooks " + (mapped.docNr || ""),
     Notes: notes,
+    // De klant zoals op de QuickBooks-factuur (zie qbKlantVoorLogic4).
+    ...(mapped.klant && mapped.klant.InvoiceAddress ? { InvoiceAddress: mapped.klant.InvoiceAddress } : {}),
+    ...(mapped.klant && mapped.klant.DeliveryAddress ? { DeliveryAddress: mapped.klant.DeliveryAddress } : {}),
     /* Mét het bedrag van de QuickBooks-factuur.
        ═══════════════════════════════════════════════════════════════════
        Hier stonden alleen artikelcode, omschrijving en aantal, en dus kwam
@@ -11010,9 +11149,11 @@ async function qbHandleBatchOrders(request, env) {
       const bestaand = qbGekoppeld(approved, inv);
       if (bestaand) { results.push({ factuur: n.factuur, ok: true, orderId: bestaand.orderId, already: true }); continue; }
       const mapped = qbMapInvoice(inv, catalog, spaModels);
+      mapped.klant = await qbKlantVoorLogic4(env, inv, null);
       const res = await dpCreateAmerikaOrder(env, mapped);
       if (!res.ok) { results.push({ factuur: n.factuur, ok: false, error: res.error }); continue; }
-      approved.ids[qbSleutel(inv)] = { orderId: res.orderId, docNr: inv.DocNumber || n.factuur, totaal: Number(inv.TotalAmt) || null, ts: new Date().toISOString(), via: "batch", door: String(body.user || "").slice(0, 80) };
+      approved.ids[qbSleutel(inv)] = { orderId: res.orderId, docNr: inv.DocNumber || n.factuur, totaal: Number(inv.TotalAmt) || null, ts: new Date().toISOString(), via: "batch", door: String(body.user || "").slice(0, 80),
+        klant: mapped.klant && mapped.klant.InvoiceAddress ? { ts: new Date().toISOString(), naam: mapped.klant.weergave, bijAanmaken: true } : undefined };
       await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
       results.push({ factuur: n.factuur, ok: true, orderId: res.orderId });
     } catch (e) { results.push({ factuur: n.factuur, ok: false, error: String(e.message || e) }); }
@@ -11393,9 +11534,11 @@ async function qbHandleApprove(request, env) {
       const bestaand = qbGekoppeld(approved, inv);
       if (bestaand) { results.push({ docNr, qbId: opdracht.qbId, ok: true, orderId: bestaand.orderId, already: true }); continue; }
       const mapped = qbMapInvoice(inv, catalog, spaModels);
+      mapped.klant = await qbKlantVoorLogic4(env, inv, null);
       const res = await dpCreateAmerikaOrder(env, mapped);
       if (res.ok) {
-        approved.ids[qbSleutel(inv)] = { orderId: res.orderId, docNr, totaal: Number(inv.TotalAmt) || null, ts: new Date().toISOString() };
+        approved.ids[qbSleutel(inv)] = { orderId: res.orderId, docNr, totaal: Number(inv.TotalAmt) || null, ts: new Date().toISOString(),
+          klant: mapped.klant && mapped.klant.InvoiceAddress ? { ts: new Date().toISOString(), naam: mapped.klant.weergave, bijAanmaken: true } : undefined };
         // Meteen vastleggen. Nooit meer aan het eind van de lus.
         await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
         results.push({ docNr, qbId: opdracht.qbId, ok: true, orderId: res.orderId });
@@ -14978,6 +15121,18 @@ export default {
     if (url.pathname === "/amerika/qb/status")   return qbHandleStatus(request, env);
     if (url.pathname === "/amerika/qb/data")     return qbHandleData(request, env);
     if (url.pathname === "/amerika/qb/invoices") return qbHandleInvoices(request, env);
+    if (url.pathname === "/amerika/qb/klant-bijwerken" && request.method === "POST") return qbHandleKlantBijwerken(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    /* Alleen lezen: wat er als klant op de Logic4-order komt voor één
+       QuickBooks-factuur (?id=<QuickBooks Id>). Voor de controle vooraf. */
+    if (url.pathname === "/amerika/qb/klant" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const id = String(url.searchParams.get("id") || "").replace(/\D/g, "");
+      const j = await qbQuery(env, "SELECT * FROM Invoice WHERE Id = '" + id + "'");
+      const inv = ((j.QueryResponse && j.QueryResponse.Invoice) || [])[0];
+      if (!inv) return reply(404, { ok: false, error: "factuur niet gevonden" });
+      return reply(200, { ok: true, docNr: inv.DocNumber, ruw: { CustomerRef: inv.CustomerRef, BillAddr: inv.BillAddr, ShipAddr: inv.ShipAddr, BillEmail: inv.BillEmail },
+                          klant: await qbKlantVoorLogic4(env, inv, {}) });
+    }
     if (url.pathname === "/amerika/qb/ruw")      return qbHandleRuw(request, env, url);
     if (url.pathname === "/amerika/qb/omzet")    return qbHandleOmzet(request, env, url);
     // De wisselkoers staat in dealer-prices, en dat is een dealer-bucket die
