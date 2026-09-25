@@ -11276,6 +11276,10 @@ async function qbHandleBatchOrders(request, env) {
       if (!inv) { results.push({ factuur: n.factuur, ok: false, error: lijst.length + " facturen met nummer " + n.factuur + " in QuickBooks en geen enkele met bedrag " + n.bedrag.toFixed(2) }); continue; }
       const bestaand = qbGekoppeld(approved, inv);
       if (bestaand) { results.push({ factuur: n.factuur, ok: true, orderId: bestaand.orderId, already: true }); continue; }
+      {
+        const dub = await qbMogelijkDubbel(env, inv, await qbDubbelIndex(env), await l4Token(env));
+        if (dub) { results.push({ factuur: n.factuur, ok: false, dubbel: dub, error: "lijkt al in Logic4 te staan als order " + dub.orderId + " (" + dub.klant + "); koppel hem bij Facturen met 'bestaande order' of kies daar 'toch nieuwe order'" }); continue; }
+      }
       const mapped = qbMapInvoice(inv, catalog, spaModels);
       mapped.klant = await qbKlantVoorLogic4(env, inv, null);
       const res = await dpCreateAmerikaOrder(env, mapped);
@@ -11402,11 +11406,18 @@ async function qbHandleBoeken(request, env) {
         }
       } catch (e) { vooraf.push("order " + r.order + " (factuur " + r.factuur + "): " + String(e.message || e)); }
     }
-    if (vooraf.length) {
-      b.afwijking = true;
+    /* Gerrit (25 sep 2026): na de melding moet Osman de batch alsnog kunnen
+       boeken en daarna in Logic4 met de hand corrigeren. Met dochBoeken gaat
+       hij door; de regels waar het niet klopt krijgen het volle bedrag uit de
+       batch (zodat 1160 op de bankontvangst uitkomt) en staan in het antwoord
+       als "met de hand corrigeren". */
+    const dochBoeken = Array.isArray(body.dochBoeken) ? body.dochBoeken.map(String).includes(String(w.id)) : !!body.dochBoeken;
+    if (vooraf.length && !dochBoeken) {
+      b.afwijking = true; b.tochMogelijk = true;
       b.redenen = (b.redenen || []).concat(vooraf.map(x => "Niet geboekt: " + x));
       uit.push(b); continue;
     }
+    if (vooraf.length) b.handwerk = vooraf;
     let stuk = false;
     for (const r of b.regels) {
       if (r.status !== "klaar om te boeken") continue;
@@ -11444,7 +11455,8 @@ async function qbHandleBoeken(request, env) {
             if (open > 0 && open >= onder && open <= boven) eur = open;
             else if (open > 0) r.uitleg = "open op de order: " + open.toFixed(2) + " euro, factuur omgerekend: " + eur.toFixed(2) + " euro";
             // Nooit meer boeken dan er open staat; de controle hierboven vangt dit al, dit is de grendel.
-            if (open > 0 && eur > open + 0.10) throw new Error("betaling " + eur.toFixed(2) + " is meer dan het open bedrag " + open.toFixed(2) + " op order " + r.order);
+            if (open > 0 && eur > open + 0.10 && !dochBoeken) throw new Error("betaling " + eur.toFixed(2) + " is meer dan het open bedrag " + open.toFixed(2) + " op order " + r.order);
+            if ((open <= 0 || eur > open + 0.10) && dochBoeken) r.handwerk = "geboekt: " + eur.toFixed(2) + " euro, open stond " + open.toFixed(2) + " euro; corrigeer dit in Logic4";
           }
         } catch (e) { if (/meer dan het open bedrag/.test(String(e.message || e))) throw e; }
         r.bedragEur = eur;
@@ -11621,6 +11633,50 @@ async function qbHandleSleutels(request, env) {
   return reply(200, { ok: true, proef: !echt, omgezet: omgezet.length, onbeslist, voorbeeld: omgezet.slice(0, 5) });
 }
 
+/* Staat deze klant al met een order van ongeveer dit bedrag in Logic4?
+   ═══════════════════════════════════════════════════════════════════════════
+   Gerrit (25 sep 2026): factuur 3312 van Backyards & Barns werd een order op
+   Passion Spa South (3522329), terwijl dezelfde container al order 3508050 was
+   op hun eigen debiteur. Dat is makkelijk over het hoofd te zien, dus nu kijkt
+   het Dashboard vóór het aanmaken: een debiteur met dezelfde bedrijfsnaam of
+   hetzelfde mailadres als de QuickBooks-klant, met een order van het laatste
+   jaar waarvan het bedrag binnen 10% ligt (in euro na omrekening, of 1 op 1
+   zoals bij oudere orders). Zo'n factuur wordt niet aangemaakt tot iemand
+   kiest: koppelen aan die order, of toch een nieuwe. */
+async function qbDubbelIndex(env) {
+  const idx = (await env.FONTEYN_DATA.get(REL_INDEX, { type: "json" })) || {};
+  return idx.rijen || [];
+}
+async function qbMogelijkDubbel(env, inv, rijen, token) {
+  const kaal = (x) => String(x || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const naam = kaal(String((inv.CustomerRef && inv.CustomerRef.name) || "").replace(/\*+$/, ""));
+  const mail = String((inv.BillEmail && inv.BillEmail.Address) || "").trim().toLowerCase();
+  if (!naam && !mail) return null;
+  const usd = Number(inv.TotalAmt) || 0;
+  if (!(usd > 0)) return null;
+  const debs = rijen.filter(r => Number(r.i) !== AMERIKA_DEBTOR &&
+    ((naam && naam.length >= 5 && (kaal(r.b) === naam || kaal(r.n) === naam)) || (mail && String(r.e || "").toLowerCase() === mail))).slice(0, 3);
+  const grens = Date.now() - 400 * 86400000;
+  for (const d of debs) {
+    const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ DebtorId: Number(d.i), TakeRecords: 100 }),
+    });
+    const j = await r.json().catch(() => null);
+    for (const o of ((j && (j.Records || j)) || [])) {
+      if (Date.parse(o.CreationDate || "") < grens) continue;
+      const tot = Number((o.Totals || {}).AmountIncl) || 0;
+      const eur = usd / AMERIKA_KOERS;
+      if (Math.abs(tot - eur) <= eur * 0.10 || Math.abs(tot - usd) <= usd * 0.10) {
+        const a = o.InvoiceAddress || o.AccountAddress || {};
+        return { orderId: Number(o.Id), debiteur: Number(d.i), klant: a.CompanyName || d.b || "", totaal: Math.round(tot * 100) / 100,
+                 referentie: o.Reference || "", datum: String(o.CreationDate || "").slice(0, 10) };
+      }
+    }
+  }
+  return null;
+}
+
 async function qbHandleApprove(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
   let body = {}; try { body = await request.json(); } catch {}
@@ -11658,6 +11714,9 @@ async function qbHandleApprove(request, env) {
       hint: "Stuur ze in blokjes van maximaal " + MAX_PER_KEER + "; het scherm doet dat vanzelf." });
   }
   const results = [];
+  // Facturen waarvoor iemand bewust "toch een nieuwe order" heeft gekozen.
+  const toch = new Set((Array.isArray(body.toch) ? body.toch : []).map(String));
+  let dubbelRijen = null, dubbelToken = null;
   for (const opdracht of opdrachten) {
     const veilig = String(opdracht.qbId || opdracht.docNr).replace(/'/g, "");
     const waar = opdracht.qbId ? "Id = '" + veilig + "'" : "DocNumber = '" + veilig + "'";
@@ -11669,6 +11728,13 @@ async function qbHandleApprove(request, env) {
       docNr = inv.DocNumber || docNr;
       const bestaand = qbGekoppeld(approved, inv);
       if (bestaand) { results.push({ docNr, qbId: opdracht.qbId, ok: true, orderId: bestaand.orderId, already: true }); continue; }
+      if (!toch.has(String(inv.Id))) {
+        dubbelRijen = dubbelRijen || await qbDubbelIndex(env);
+        dubbelToken = dubbelToken || await l4Token(env);
+        const dub = await qbMogelijkDubbel(env, inv, dubbelRijen, dubbelToken);
+        if (dub) { results.push({ docNr, qbId: String(inv.Id), ok: false, dubbel: dub,
+          error: "lijkt al in Logic4 te staan als order " + dub.orderId + " (" + dub.klant + ", " + dub.totaal.toFixed(2) + " euro" + (dub.referentie ? ", " + dub.referentie : "") + ")" }); continue; }
+      }
       const mapped = qbMapInvoice(inv, catalog, spaModels);
       mapped.klant = await qbKlantVoorLogic4(env, inv, null);
       const res = await dpCreateAmerikaOrder(env, mapped);
@@ -15368,6 +15434,14 @@ export default {
     if (url.pathname === "/amerika/qb/proef-betaling" && request.method === "POST") return qbHandleProefBetaling(request, env);
     if (url.pathname === "/amerika/qb/batch-orders" && request.method === "POST") return qbHandleBatchOrders(request, env);
     if (url.pathname === "/amerika/qb/regel-factuur" && request.method === "POST") return qbHandleRegelFactuur(request, env);
+    if (url.pathname === "/amerika/qb/dubbelcheck" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const id = String(url.searchParams.get("id") || "").replace(/\D/g, "");
+      const j = await qbQuery(env, "SELECT * FROM Invoice WHERE Id = '" + id + "'");
+      const inv = ((j.QueryResponse && j.QueryResponse.Invoice) || [])[0];
+      if (!inv) return reply(404, { ok: false, error: "factuur niet gevonden" });
+      return reply(200, { ok: true, docNr: inv.DocNumber, dubbel: await qbMogelijkDubbel(env, inv, await qbDubbelIndex(env), await l4Token(env)) });
+    }
     if (url.pathname === "/amerika/qb/koppel-regel" && request.method === "POST") return qbHandleKoppelRegel(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     if (url.pathname === "/amerika/qb/koppel-factuur" && request.method === "POST") return qbHandleKoppelFactuur(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     if (url.pathname === "/amerika/qb/naar-chantal" && request.method === "POST") return qbHandleNaarChantal(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));

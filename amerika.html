@@ -1188,7 +1188,7 @@ document.getElementById("qbConnectBtn").addEventListener("click",()=>{
   const key=localStorage.getItem("fp.teamkey")||"";
   window.open(WORKER+"/amerika/qb/connect?key="+encodeURIComponent(key),"_blank","noopener");
 });
-let qbInvoices=[], qbOpen={}, qbKoppelOpen={};
+let qbInvoices=[], qbOpen={}, qbKoppelOpen={}, qbDubbel={};
 async function qbLoadData(){
   const box=document.getElementById("qbData"); if(!box) return;
   box.innerHTML="<p class='lead'>Nieuwe QuickBooks-facturen laden…</p>";
@@ -1199,6 +1199,7 @@ async function qbLoadData(){
   }catch(e){ box.innerHTML="<div class='status-msg bad'>"+esc(e.message)+"</div>"; }
 }
 // Datum altijd Europees tonen: 2026-07-18 → 18.07.2026 (nooit Amerikaans).
+function eurNL(v){ return "\u20ac "+Number(v||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function datumNL(v){
   if(!v) return "";
   const s=String(v);
@@ -1305,6 +1306,13 @@ function renderQbInvoices(){
              rechtstreeks is aangemaakt, zoals 3312 van Backyards & Barns op
              3508050)? Dan koppelen in plaats van een tweede order maken
              (Gerrit, 25 sep 2026). */
+          (qbDubbel[inv.id]
+            ? "<div onclick='event.stopPropagation()' style='margin-top:4px;padding:6px 8px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;font-size:11.5px;color:#9a3412;max-width:320px;white-space:normal'>"+
+              "<b>Staat mogelijk al in Logic4:</b> order "+esc(String(qbDubbel[inv.id].orderId))+" van "+esc(qbDubbel[inv.id].klant)+" ("+esc(eurNL(qbDubbel[inv.id].totaal))+
+              (qbDubbel[inv.id].referentie?", "+esc(qbDubbel[inv.id].referentie):"")+", "+esc(datumNL(qbDubbel[inv.id].datum))+"). Daarom is er geen nieuwe order gemaakt.<br>"+
+              "<button type='button' class='qbDubbelKoppel' data-qbid='"+esc(inv.id)+"' data-order='"+esc(String(qbDubbel[inv.id].orderId))+"' style='margin-top:5px;border:1px solid #fdba74;background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer'>koppel aan "+esc(String(qbDubbel[inv.id].orderId))+"</button> "+
+              "<button type='button' class='qbDubbelToch' data-qbid='"+esc(inv.id)+"' style='margin-top:5px;border:1px solid var(--border);background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer'>toch nieuwe order</button></div>"
+            : "")+
           "<div onclick='event.stopPropagation()' style='margin-top:4px'>"+
           (qbKoppelOpen[sleutel]
             ? "<input type='text' inputmode='numeric' class='qbKoppelNr' data-qbid='"+esc(inv.id||"")+"' placeholder='Logic4-ordernummer' style='width:130px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:12px'> "+
@@ -1342,6 +1350,20 @@ function renderQbInvoices(){
       alert("Gekoppeld aan order "+j.orderId+" ("+((j.order||{}).klant||"")+"). Er is geen nieuwe order gemaakt.");
     }catch(err){ alert("Koppelen lukte niet: "+err.message); if(knop) knop.disabled=false; }
   };
+  box.querySelectorAll(".qbDubbelKoppel").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); delete qbDubbel[b.dataset.qbid]; qbKoppelDoe(b.dataset.qbid,b.dataset.order,b); }));
+  box.querySelectorAll(".qbDubbelToch").forEach(b=>b.addEventListener("click",async e=>{ e.stopPropagation();
+    if(!confirm("Toch een nieuwe order in Logic4 maken voor deze factuur, naast order "+((qbDubbel[b.dataset.qbid]||{}).orderId||"")+"?")) return;
+    b.disabled=true;
+    try{
+      const j=await (await fetch(WORKER+"/amerika/qb/approve",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+        body:JSON.stringify({qbIds:[b.dataset.qbid],toch:[b.dataset.qbid]})})).json();
+      const r=(j&&j.results||[])[0];
+      if(!j||!j.ok||!r||!r.ok) throw new Error((r&&r.error)||(j&&j.error)||"mislukt");
+      delete qbDubbel[b.dataset.qbid];
+      if(window.fpLog) window.fpLog("qb-toch-nieuw","QuickBooks "+b.dataset.qbid+" -> order "+r.orderId);
+      await qbInit(true);
+    }catch(err){ alert("Aanmaken lukte niet: "+err.message); b.disabled=false; }
+  }));
   box.querySelectorAll(".qbKoppel").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation();
     const inp=box.querySelector(".qbKoppelNr[data-qbid='"+CSS.escape(b.dataset.qbid)+"']"); qbKoppelDoe(b.dataset.qbid,String((inp&&inp.value)||"").replace(/\D/g,""),b); }));
   box.querySelectorAll(".qbKoppelNr").forEach(inp=>{ inp.addEventListener("click",e=>e.stopPropagation()); inp.addEventListener("keydown",e=>{
@@ -1411,11 +1433,13 @@ async function qbApprove(){
           body:JSON.stringify(blokIds.length===blok.length?{qbIds:blokIds}:{docNrs:blok})})).json();
       }catch(e){ blok.forEach(nr=>bad.push({docNr:nr,error:e.message})); continue; }
       if(!j||!j.ok){ blok.forEach(nr=>bad.push({docNr:nr,error:(j&&j.error)||"mislukt"})); continue; }
-      for(const r of (j.results||[])) (r.ok?ok:bad).push(r);
+      for(const r of (j.results||[])){ (r.ok?ok:bad).push(r); if(r.dubbel&&r.qbId) qbDubbel[r.qbId]=r.dubbel; }
     }
     st.className="status-msg "+(bad.length?"warn":"ok");
+    const dub=bad.filter(r=>r.dubbel);
     st.textContent=ok.length+" Logic4-order(s) aangemaakt van de "+nrs.length+" geselecteerd"+
-      (bad.length?(" · "+bad.length+" mislukt: "+bad.slice(0,6).map(r=>"#"+r.docNr+" ("+r.error+")").join("; ")+(bad.length>6?" …":"")):"")+
+      (dub.length?(" · "+dub.length+" niet aangemaakt omdat de klant al een order van dit bedrag heeft in Logic4 (zie de oranje melding bij de factuur): "+dub.map(r=>"#"+r.docNr+" → order "+r.dubbel.orderId).join(", ")):"")+
+      (bad.length>dub.length?(" · "+(bad.length-dub.length)+" mislukt: "+bad.filter(r=>!r.dubbel).slice(0,6).map(r=>"#"+r.docNr+" ("+r.error+")").join("; ")+(bad.length-dub.length>6?" …":"")):"")+
       (ok.length?" — ze staan nu onder ‘Ontvangen Audrey’ tot je ze als verwerkt afvinkt.":"");
     try{ if(ok.length&&window.fpLog) window.fpLog("qb-orders-geaccordeerd",ok.length+" van "+nrs.length+" facturen → Logic4"); }catch(e){}
     await qbInit(true);
@@ -1653,6 +1677,7 @@ async function audBoekKnop(b){
   b.disabled=true; const oudeTekst=b.textContent;
   b.textContent="controleren…";
 
+  let tochIds=null;
   async function vraag(bevestigd,vanaf){
     const r=await fetch(WORKER+"/amerika/qb/boeken",{method:"POST",
       headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
@@ -1713,11 +1738,33 @@ async function audBoekKnop(b){
     if(!akkoord) return;
     b.textContent="boeken…";
     const echt=await alles(true);
-    const gedaan=(echt.batches||[]).filter(x=>!x.afwijking&&x.geboekt>0);
+    let gedaan=(echt.batches||[]).filter(x=>!x.afwijking&&x.geboekt>0);
     /* Bij het echte boeken kijkt de koppeling nog per order wat er open staat.
        Werd een batch daardoor tegengehouden, dan moet de reden in beeld
        (Gerrit, 25 sep 2026: "sluit aan, maar toch boekt ie 0"). */
-    const tegen=(echt.batches||[]).filter(x=>x.afwijking);
+    let tegen=(echt.batches||[]).filter(x=>x.afwijking);
+    /* Tegengehouden omdat een bedrag niet past bij wat er op de order open
+       staat? Dan mag Osman toch boeken en het daarna in Logic4 rechtzetten
+       (Gerrit, 25 sep 2026). */
+    const kanToch=tegen.filter(x=>x.tochMogelijk);
+    if(kanToch.length&&confirm("Deze batch(es) zijn tegengehouden:\n\n"+kanToch.map(x=>"  • "+bat(x)+"\n"+(x.redenen||[]).map(r=>"      - "+r).join("\n")).join("\n\n")+
+        "\n\nToch boeken? Dan gaan de bedragen uit de batch zoals ze er staan de boeken in, zodat 1160 op de bankontvangst uitkomt. De orders hierboven moet je daarna in Logic4 met de hand rechtzetten.")){
+      tochIds=kanToch.map(x=>String(x.id));
+      // Alleen de tegengehouden batches zelf, één voor één; de rest is al geboekt.
+      const extra=[];
+      for(const tid of tochIds){
+        const r=await fetch(WORKER+"/amerika/qb/boeken",{method:"POST",
+          headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+          body:JSON.stringify({wireId:tid,bevestigd:true,user:(localStorage.getItem("fp.email")||""),dochBoeken:[tid]})});
+        const j=await r.json().catch(()=>null);
+        if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+        extra.push(...(j.batches||[]));
+      }
+      echt.batches=(echt.batches||[]).filter(x=>!tochIds.includes(String(x.id))).concat(extra);
+      tegen=(echt.batches||[]).filter(x=>x.afwijking);
+      gedaan=(echt.batches||[]).filter(x=>!x.afwijking&&x.geboekt>0);
+    }
+    const handwerk=(echt.batches||[]).filter(x=>(x.regels||[]).some(r=>r.handwerk));
     const mis=(echt.batches||[]).filter(x=>x.fout>0||((x.bankkosten||{}).status==="fout"));
     const totaal=gedaan.reduce((n,x)=>n+(x.bruto||0),0);
     const totaalEur=gedaan.reduce((n,x)=>n+(x.regels||[]).filter(r=>r.status==="geboekt").reduce((m,r)=>m+(Number(r.bedragEur)||0),0),0);
@@ -1729,6 +1776,7 @@ async function audBoekKnop(b){
       (kosten?("\n\nBankkosten "+usd(kosten)+" op grootboek "+(echt.kostenGrootboek||"4630")+".\n\n"+
         "NOG DOEN IN LOGIC4: zet op die kostenregel(s) de kostenplaats "+
         (echt.kostenplaats||"Spa Houston USA")+". Dat kan de koppeling niet meegeven."):"")+
+      (handwerk.length?("\n\nMET DE HAND RECHTZETTEN IN LOGIC4:\n"+handwerk.map(x=>"  • "+bat(x)+"\n"+x.regels.filter(r=>r.handwerk).map(r=>"      - factuur "+(r.factuur||r.naam)+", order "+r.order+": "+r.handwerk).join("\n")).join("\n")):"")+
       (tegen.length?("\n\nNiet geboekt, omdat er iets niet klopt:\n\n"+tegen.map(x=>"  • "+bat(x)+"\n"+(x.redenen||[]).map(r=>"      - "+r).join("\n")).join("\n\n")):"")+
       (mis.length?("\n\nNiet gelukt:\n"+mis.map(x=>"  • "+bat(x)+": "+
         x.regels.filter(r=>r.status==="fout").map(r=>(r.factuur||r.naam)+" "+(r.uitleg||"")).join("; ")+

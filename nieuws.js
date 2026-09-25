@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-25", bestand: "amerika.html", soort: "beter",
+      titel: "Geen dubbele orders meer uit QuickBooks, en toch kunnen boeken",
+      wat: "Voordat er een order uit QuickBooks wordt gemaakt, kijkt het Dashboard of die klant al een order van ongeveer hetzelfde bedrag in Logic4 heeft, zoals een dealercontainer. Zo ja, dan wordt er niets aangemaakt en zie je een oranje melding met die order: koppel de factuur eraan, of kies bewust toch een nieuwe order. Houdt het boeken een batch tegen omdat een bedrag niet past bij wat er op de order open staat, dan kun je nu toch boeken en het daarna in Logic4 rechtzetten; de melding zegt welke orders dat zijn."
+    },
+    {
       datum: "2026-09-25", bestand: "planning.html", soort: "hersteld",
       titel: "Typen na verwijderen werkt weer",
       wat: "Na het verwijderen van een afspraak of melding kon je in de Planning niets meer intypen tot je de tegel opnieuw opende. De vraag Weet je het zeker? staat nu in de Planning zelf, en daarna kun je gewoon verder typen."

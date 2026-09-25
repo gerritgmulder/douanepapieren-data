@@ -263,9 +263,17 @@
   function gezienSleutel() { return "fp.takenlade.gezien." + IKNAAM; }
   function nieuwVoorMij() {
     var gezien = ""; try { gezien = localStorage.getItem(gezienSleutel()) || ""; } catch (e) {}
-    return lijstEigen().concat(lijstUitnodiging()).filter(function (t) {
+    /* Een toegewezen taak (uitnodiging) telt vanaf het moment van toewijzen,
+       een taak die iemand anders bij jou neerzette vanaf het aanmaken. */
+    var eigen = lijstEigen().filter(function (t) {
       return t.op && kort(t.door || "") !== IKNAAM && (!gezien || String(t.op) > gezien);
-    }).length;
+    });
+    var toegewezen = lijstUitnodiging().filter(function (t) {
+      var d = (t.deelnemers || {})[IKNAAM] || {};
+      var sinds = d.op || t.op;
+      return sinds && (!gezien || String(sinds) > gezien);
+    });
+    return eigen.length + toegewezen.length;
   }
   function licht() {
     var s = $("tlStulp"); if (!s) return;
