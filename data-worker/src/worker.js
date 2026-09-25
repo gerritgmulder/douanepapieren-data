@@ -11368,6 +11368,52 @@ async function qbHandleKoppelFactuur(request, env) {
    zij gaat ermee terug naar Audrey, die hem in QuickBooks zet, zodat hij op
    een (nieuwe) order in Logic4 kan. Gerrit (25 sep 2026). De taak komt in de
    Takenlijst (bucket takenlijst), en die licht op tot ze hem opent. */
+/* De reden van een refund, uit QuickBooks.
+   ═══════════════════════════════════════════════════════════════════════════
+   Dolf (25 sep 2026): staat er in een batch een refund, dan moet altijd te
+   zien zijn waarom. Die reden haalt het Dashboard uit QuickBooks: bij een
+   terugbetaling (RefundReceipt) of creditnota (CreditMemo) met dat nummer het
+   interne memo, het memo voor de klant en de omschrijving van de regels.
+   Staat er niets, dan stuurt Osman de regel met "reden vragen" naar Chantal. */
+async function qbRefundReden(env, docNr, naam) {
+  const nr = String(docNr || "").replace(/[^0-9A-Za-z-]/g, "");
+  const kandidaten = [];
+  for (const soort of ["RefundReceipt", "CreditMemo"]) {
+    try {
+      const q = nr ? "SELECT * FROM " + soort + " WHERE DocNumber = '" + nr + "'" : null;
+      if (!q) continue;
+      const j = await qbQuery(env, q);
+      for (const x of ((j.QueryResponse && j.QueryResponse[soort]) || [])) kandidaten.push({ soort, x });
+    } catch (e) { /* soort onbekend bij deze administratie: overslaan */ }
+  }
+  if (!kandidaten.length) return { gevonden: false };
+  const k = kandidaten[0], x = k.x;
+  const regels = (x.Line || []).map(l => String(l.Description || (l.SalesItemLineDetail && l.SalesItemLineDetail.ItemRef && l.SalesItemLineDetail.ItemRef.name) || "").trim()).filter(Boolean);
+  const reden = [String(x.PrivateNote || "").trim(), String((x.CustomerMemo && x.CustomerMemo.value) || "").trim()].filter(Boolean).join(" · ");
+  return {
+    gevonden: true, soort: k.soort === "RefundReceipt" ? "terugbetaling" : "creditnota",
+    docNr: x.DocNumber || nr, klant: (x.CustomerRef && x.CustomerRef.name) || "", datum: x.TxnDate || "",
+    bedrag: Number(x.TotalAmt) || 0, reden: reden || null, regels: regels.slice(0, 8),
+  };
+}
+async function qbHandleRefundReden(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const wireId = String(body.wireId || ""), i = Number(body.index);
+  const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+  const w = (wires.wires || []).find(x => String(x.id) === wireId);
+  if (!w || !Array.isArray(w.regels) || !w.regels[i]) return reply(404, { ok: false, error: "batchregel niet gevonden" });
+  const r = w.regels[i];
+  // Eén keer opzoeken en bewaren; daarna uit de batch zelf (scheelt QuickBooks en opslag).
+  if (r.refund && !body.opnieuw) return reply(200, { ok: true, refund: r.refund });
+  const nr = String(r.factuur || (String(r.naam || "").match(/\b(\d{4,6})\b/) || [])[1] || "");
+  const uit = await qbRefundReden(env, nr, r.naam);
+  uit.opgezocht = new Date().toISOString();
+  r.refund = uit;
+  await env.FONTEYN_DATA.put("qb-wires", JSON.stringify(wires));
+  return reply(200, { ok: true, refund: uit });
+}
+
 async function qbHandleNaarChantal(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
   let body = {}; try { body = await request.json(); } catch {}
@@ -11379,22 +11425,28 @@ async function qbHandleNaarChantal(request, env) {
   const wie = String(body.user || "").toLowerCase();
   const bedrag = Number(r.kolom1) || 0;
   const dag = (w.datum || "").split("-").reverse().join("-");
-  const id = "amerika:" + wireId + ":" + i;
+  let id = "amerika:" + wireId + ":" + i;
   const opslag = (await env.FONTEYN_DATA.get("takenlijst", { type: "json" })) || { taken: {}, ritmes: {} };
   opslag.taken = opslag.taken || {};
   const nu = new Date().toISOString();
+  const vraagReden = body.soort === "reden";
+  const tekstTaak = vraagReden
+    ? "Batch van " + dag + ": bij de refund \"" + String(r.naam || "").slice(0, 60) + "\" ($" + bedrag.toLocaleString("en-US", { minimumFractionDigits: 2 }) +
+      (r.factuur ? ", nummer " + r.factuur : "") + ") staat in QuickBooks nog geen reden. Vraag Audrey waarom er is terugbetaald en laat haar de reden in QuickBooks bij de refund zetten."
+    : "Batch van " + dag + ": de regel \"" + String(r.naam || "").slice(0, 60) + "\" ($" + bedrag.toLocaleString("en-US", { minimumFractionDigits: 2 }) +
+      (r.factuur ? ", factuur " + r.factuur : "") + ") staat nog in te voeren in QuickBooks. Vraag Audrey om hem in QuickBooks te zetten; daarna kan hij op een order in Logic4 en kan de batch geboekt worden.";
+  if (vraagReden) id += ":reden";
   if (!opslag.taken[id] || opslag.taken[id].klaar) {
     opslag.taken[id] = {
       id, eigenaar: "chantal", lijst: "eigen",
-      tekst: "Batch van " + dag + ": de regel \"" + String(r.naam || "").slice(0, 60) + "\" ($" + bedrag.toLocaleString("en-US", { minimumFractionDigits: 2 }) +
-        (r.factuur ? ", factuur " + r.factuur : "") + ") staat niet in QuickBooks. Vraag Audrey om hem in QuickBooks te zetten; daarna kan hij op een order in Logic4 en de batch geboekt worden.",
+      tekst: tekstTaak,
       wie: "", dag: nu.slice(0, 10), door: wie || "fonteynbot@fonteyn.nl", op: nu, klaar: false, deelnemers: {},
       bron: "amerika", tegel: "amerika.html", nieuw: true,
     };
     opslag.bijgewerkt = nu; opslag.door = wie || "fonteynbot@fonteyn.nl";
     await env.FONTEYN_DATA.put("takenlijst", JSON.stringify(opslag));
   }
-  r.naarChantal = nu; r.naarChantalDoor = wie;
+  if (vraagReden) { r.redenGevraagd = nu; r.redenGevraagdDoor = wie; } else { r.naarChantal = nu; r.naarChantalDoor = wie; }
   await env.FONTEYN_DATA.put("qb-wires", JSON.stringify(wires));
   return reply(200, { ok: true, taak: id });
 }
@@ -15620,6 +15672,7 @@ export default {
     }
     if (url.pathname === "/amerika/qb/koppel-regel" && request.method === "POST") return qbHandleKoppelRegel(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     if (url.pathname === "/amerika/qb/koppel-factuur" && request.method === "POST") return qbHandleKoppelFactuur(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    if (url.pathname === "/amerika/qb/refund-reden" && request.method === "POST") return qbHandleRefundReden(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     if (url.pathname === "/amerika/qb/naar-chantal" && request.method === "POST") return qbHandleNaarChantal(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
     if (url.pathname === "/voorraad/verberg" && request.method === "POST") return verbergHandler(request, env, "spa-verborgen");
