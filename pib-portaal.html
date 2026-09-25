@@ -125,10 +125,15 @@ td.n,th.n{text-align:right;white-space:nowrap}
       <div id="tMsg" class="msg hidden"></div>
       <div id="tMeter" class="hidden">
         <h3>De meter installeren</h3>
-        <p class="lead" style="margin-bottom:8px">Haal het bestand voor je computer op en dubbelklik erop. De meter start dan vanzelf, ook na opnieuw opstarten. Op een Mac vraagt macOS bij de eerste keer om toestemming voor Toegankelijkheid of Automatisering; sta dat toe, dan ziet de meter de venstertitels.</p>
+        <p class="lead" style="margin-bottom:6px"><b>Op een Mac</b>: open Terminal (Cmd + spatie, typ Terminal, Enter), plak de regel hieronder en druk op Enter. De meter start meteen, en ook na opnieuw opstarten. Vraagt macOS om toestemming voor Automatisering of Toegankelijkheid, sta dat dan toe; dan ziet de meter ook de venstertitels.</p>
+        <div style="display:flex;gap:8px;align-items:stretch;flex-wrap:wrap;margin-bottom:12px">
+          <code id="macRegel" style="flex:1 1 320px;display:block;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:8px;padding:9px 10px;font-size:12px;word-break:break-all;user-select:all">Geef eerst toestemming; dan verschijnt hier je eigen installatieregel.</code>
+          <button class="go" id="kopieerMac" type="button">Kopiëren</button>
+        </div>
+        <p class="lead" style="margin-bottom:6px"><b>Op Windows</b>: haal het bestand op en dubbelklik erop in je Downloads. Waarschuwt Windows eerst, kies dan Meer informatie en Toch uitvoeren.</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="stil" id="dlMac">Voor Mac (macOS)</button>
           <button class="stil" id="dlWin">Voor Windows</button>
+          <button class="stil" id="dlMac" style="display:none">Voor Mac (bestand)</button>
         </div>
         <p class="lead" style="margin-top:10px;font-size:12.5px" id="tLaatst"></p>
         <p class="lead" style="font-size:12.5px">Stoppen kan altijd: op een Mac met <code>launchctl unload ~/Library/LaunchAgents/nl.fonteyn.pib.plist</code>, op Windows met <code>schtasks /delete /tn FonteynPIB /f</code>. Trek je hier de toestemming in, dan wordt alles wat de meter nog stuurt geweigerd.</p>
@@ -194,9 +199,9 @@ async function start(){
   if (ik.meekijk) {
     const balk = document.createElement("div");
     balk.style.cssText = "background:#fef3c7;color:#92400e;padding:9px 20px;font-size:13px;border-bottom:1px solid #fcd34d";
-    balk.textContent = "Je kijkt mee" + (ik.meekijkDoor ? " als " + ik.meekijkDoor : "") + " in het portaal van " + (ik.naam || ik.email) + ". Je ziet precies wat de partner ziet; invullen en wijzigen doet de partner zelf. invullen of wijzigen.";
+    balk.textContent = "Je kijkt mee" + (ik.meekijkDoor ? " als " + ik.meekijkDoor : "") + " in het portaal van " + (ik.naam || ik.email) + ". Je ziet precies wat de partner ziet; invullen en wijzigen doet de partner zelf.";
     document.querySelector("header").after(balk);
-    ["uKnop", "tJa", "tNee", "dlMac", "dlWin"].forEach(id => { const e = $(id); if (e) { e.disabled = true; e.title = "Alleen de partner zelf kan dit"; } });
+    ["uKnop", "tJa", "tNee", "dlMac", "dlWin", "kopieerMac"].forEach(id => { const e = $(id); if (e) { e.disabled = true; e.title = "Alleen de partner zelf kan dit"; } });
   }
   $("uDatum").value = new Date().toISOString().slice(0, 10);
   $("uDatum").max = $("uDatum").value;
@@ -266,7 +271,8 @@ function tekenToestemming(){
   $("tJa").classList.toggle("hidden", aan); $("tNee").classList.toggle("hidden", !aan);
   $("tMeter").classList.toggle("hidden", !aan);
   $("aKaart").classList.toggle("hidden", !aan && !ik.meterLaatst);
-  $("tLaatst").textContent = ik.meterLaatst ? "De meter heeft voor het laatst iets gestuurd op " + new Date(ik.meterLaatst).toLocaleString("nl-NL") + "." : "De eerste meting volgt nog.";
+  $("tLaatst").textContent = ik.meterLaatst ? "De meter heeft voor het laatst iets gestuurd op " + new Date(ik.meterLaatst).toLocaleString("nl-NL") + (ik.meterPlatform ? " (" + ik.meterPlatform + ")" : "") + "." : "De eerste meting volgt een halve minuut na het installeren.";
+  if (ik.macInstall) $("macRegel").textContent = ik.macInstall;
 }
 async function zetToestemming(akkoord){
   const r = await api("/pib/api/toestemming", { method: "POST", body: JSON.stringify({ akkoord }) });
@@ -287,6 +293,12 @@ async function download(soort){
     : "Bestand opgehaald. Dubbelklik erop in je Downloads. Windows kan eerst waarschuwen; kies Meer informatie en Toch uitvoeren.");
 }
 $("dlMac").addEventListener("click", () => download("mac"));
+$("kopieerMac").addEventListener("click", async () => {
+  const t = $("macRegel").textContent;
+  if (!/^curl /.test(t)) { toon($("tMsg"), "bad", "Geef eerst toestemming; dan verschijnt je installatieregel."); return; }
+  try { await navigator.clipboard.writeText(t); toon($("tMsg"), "ok", "Gekopieerd. Plak de regel in Terminal en druk op Enter."); }
+  catch (e) { const r = document.createRange(); r.selectNodeContents($("macRegel")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); toon($("tMsg"), "ok", "De regel is geselecteerd; kopieer hem met Cmd + C."); }
+});
 $("dlWin").addEventListener("click", () => download("windows"));
 
 // ── Eigen metingen ──
@@ -294,7 +306,7 @@ async function laadActiviteit(){
   const r = await api("/pib/api/activiteit");
   const dagen = (r.data && r.data.dagen) || {};
   const keys = Object.keys(dagen).sort().reverse();
-  if (!keys.length) { $("aLijst").innerHTML = "<p class='lead'>Nog geen metingen.</p>"; return; }
+  if (!keys.length) { $("aLijst").innerHTML = "<p class='lead'>Hier komen je metingen te staan zodra de meter iets heeft gestuurd.</p>"; return; }
   const max = Math.max(...keys.map(k => dagen[k].minuten), 1);
   $("aLijst").innerHTML = "<div style='overflow-x:auto'><table><thead><tr><th>Dag</th><th class='n'>Actief</th><th style='width:30%'></th><th>Programma's</th></tr></thead><tbody>" +
     keys.map(k => { const d = dagen[k]; const tot = d.apps.reduce((n, a) => n + a.halveMinuten, 0) || 1;

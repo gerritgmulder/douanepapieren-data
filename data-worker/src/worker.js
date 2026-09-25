@@ -3933,12 +3933,19 @@ URL="${basis}/pib/activiteit"
 DIR="$HOME/Library/Application Support/fonteyn-pib"
 BUF="$DIR/buffer.jsonl"
 jsonstr() { printf '%s' "$1" | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g' | tr -d '\\000-\\037'; }
-n=0
+# Het eerste bericht gaat na een halve minuut, zodat in het portaal meteen te
+# zien is dat de meter draait; daarna elke vijf minuten.
+n=9
 while true; do
   idle=$(ioreg -c IOHIDSystem 2>/dev/null | awk '/HIDIdleTime/ {print int($NF/1000000000); exit}')
   [ -z "$idle" ] && idle=0
   if [ "$idle" -lt 180 ]; then
-    app=$(osascript -e 'with timeout of 5 seconds' -e 'tell application "System Events" to get name of first application process whose frontmost is true' -e 'end timeout' 2>/dev/null)
+    # Het programma voorop via lsappinfo: dat vraagt geen toestemming van
+    # macOS, dus het werkt ook als de meter als achtergrondtaak draait. De
+    # venstertitel kan alleen via System Events; staat dat (nog) dicht, dan
+    # blijft de titel leeg en telt de minuut wel mee.
+    app=$(lsappinfo info -only name "$(lsappinfo front 2>/dev/null)" 2>/dev/null | sed -n 's/.*"LSDisplayName"="\\(.*\\)".*/\\1/p')
+    [ -z "$app" ] && app=$(osascript -e 'with timeout of 5 seconds' -e 'tell application "System Events" to get name of first application process whose frontmost is true' -e 'end timeout' 2>/dev/null)
     titel=$(osascript -e 'with timeout of 5 seconds' -e 'tell application "System Events" to tell (first application process whose frontmost is true) to get name of front window' -e 'end timeout' 2>/dev/null)
     ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     printf '{"ts":"%s","app":"%s","titel":"%s"}\\n' "$ts" "$(jsonstr "$app")" "$(jsonstr "$titel")" >> "$BUF"
@@ -3971,7 +3978,8 @@ launchctl unload "$HOME/Library/LaunchAgents/nl.fonteyn.pib.plist" 2>/dev/null |
 launchctl load "$HOME/Library/LaunchAgents/nl.fonteyn.pib.plist"
 echo
 echo "De Fonteyn PIB-meter is geinstalleerd en draait. Je mag dit venster sluiten."
-echo "Krijg je een vraag over Toegankelijkheid of Automatisering: sta die toe, anders ziet de meter geen venstertitels."
+echo "Krijg je een vraag over Toegankelijkheid of Automatisering: sta die toe, dan ziet de meter ook de venstertitels."
+echo "Die toestemming vind je later terug in Systeeminstellingen > Privacy en beveiliging > Automatisering."
 `;
 }
 function pibMeterWindows(token, basis) {
@@ -4088,9 +4096,17 @@ async function pibHandleActiviteit(request, env) {
   const batch = [];
   for (const [k, n] of tel) { const [minuut, app, titel] = k.split(""); batch.push(stmt.bind(p.email, minuut, app, titel, n)); }
   for (let i = 0; i < batch.length; i += 100) await env.ACTIVITEIT.batch(batch.slice(i, i + 100));
-  p.meterLaatst = new Date().toISOString();
-  p.meterPlatform = /powershell|windows/i.test(request.headers.get("User-Agent") || "") ? "windows" : "mac";
-  await env.FONTEYN_DATA.put("pib-partners", JSON.stringify(d));
+  /* Niet bij elk bericht de partnerlijst herschrijven: dat was elke vijf
+     minuten een KV-schrijfactie per partner, tegen een gratis grens van
+     duizend per dag. Wanneer de meter het laatst iets stuurde, komt nu uit
+     D1 (pibMeterLaatst); hier alleen bij de eerste keer, bij een ander
+     platform, of eens per zes uur. */
+  const platform = /powershell|windows/i.test(request.headers.get("User-Agent") || "") ? "windows" : "mac";
+  const oud = Date.parse(p.meterLaatst || "") || 0;
+  if (!oud || p.meterPlatform !== platform || Date.now() - oud > 6 * 3600000) {
+    p.meterLaatst = new Date().toISOString(); p.meterPlatform = platform;
+    await env.FONTEYN_DATA.put("pib-partners", JSON.stringify(d));
+  }
   return reply(200, { ok: true, rijen: batch.length });
 }
 
@@ -4108,6 +4124,13 @@ async function pibActiviteitOverzicht(env, email, van, tot) {
   for (const x of (r.results || [])) perDag[x.dag] = { minuten: x.minuten, apps: [] };
   for (const x of (apps.results || [])) if (perDag[x.dag]) perDag[x.dag].apps.push({ app: x.app, halveMinuten: x.n });
   return perDag;
+}
+/* De laatste minuut waarin de meter iets stuurde, uit de metingen zelf. */
+async function pibMeterLaatst(env, email) {
+  try {
+    const r = await env.ACTIVITEIT.prepare("SELECT MAX(minuut) AS m FROM pib_activiteit WHERE partner = ?1").bind(email).first();
+    return r && r.m ? r.m + ":00Z" : null;
+  } catch (e) { return null; }
 }
 async function pibActiviteitDag(env, email, dag) {
   const r = await env.ACTIVITEIT.prepare(
@@ -4129,7 +4152,11 @@ async function pibAdmin(request, env, url, p) {
     actief: x.actief !== false, sinds: x.sinds || null, laatsteLogin: x.laatsteLogin || null,
     toestemming: x.toestemming || null, meterActief: !!x.agentToken, meterLaatst: x.meterLaatst || null, meterPlatform: x.meterPlatform || null,
     uitgenodigd: x.uitgenodigd || null, notitie: x.notitie || "" });
-  if (p === "/pib/admin/partners" && request.method === "GET") return reply(200, { ok: true, partners: d.partners.map(veilig) });
+  if (p === "/pib/admin/partners" && request.method === "GET") {
+    const lijst = [];
+    for (const x of d.partners) { const v = veilig(x); const m = await pibMeterLaatst(env, x.email); if (m && (!v.meterLaatst || m > v.meterLaatst)) v.meterLaatst = m; lijst.push(v); }
+    return reply(200, { ok: true, partners: lijst });
+  }
   if (p === "/pib/admin/partner" && request.method === "POST") {
     let b = {}; try { b = await request.json(); } catch {}
     const email = String(b.email || "").trim().toLowerCase();
@@ -4242,6 +4269,17 @@ async function handlePibRoutes(request, env, url) {
   if (p === "/pib/login" && request.method === "POST") return pibHandleLogin(request, env, url);
   if (p === "/pib/auth") return pibHandleAuth(request, env, url);
   if (p === "/pib/activiteit" && request.method === "POST") return pibHandleActiviteit(request, env);
+  /* De Mac-meter installeren met één regel in Terminal (Gerrit, 25 sep 2026:
+     "het werkt nog niet goed"). Een gedownload .command-bestand start niet
+     met een dubbelklik: het mist na downloaden de uitvoerrechten en macOS
+     houdt een onbekend bestand tegen. curl ... | bash heeft dat allebei niet. */
+  if (p === "/pib/meter/mac.sh" && request.method === "GET") {
+    const k = String(url.searchParams.get("k") || "");
+    const d = await pibPartners(env);
+    const x = k.length >= 20 ? d.partners.find(y => y.agentToken === k && y.actief !== false && y.toestemming && y.toestemming.gegeven) : null;
+    if (!x) return new Response("echo 'Deze installatieregel hoort bij een ingetrokken of vervangen toestemming. Haal in het portaal een nieuwe op.'\n", { status: 403, headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8" } });
+    return new Response(pibAgentMac(k, pibOrigin(env, url)), { headers: { ...corsHeaders, "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+  }
   if (p === "/pib/meter/windows.ps1" && request.method === "GET") {
     const k = String(url.searchParams.get("k") || "");
     const d = await pibPartners(env);
@@ -4256,8 +4294,12 @@ async function handlePibRoutes(request, env, url) {
     if (sess.meekijk && request.method !== "GET") return reply(403, { ok: false, error: "je kijkt mee als beheerder; wijzigen kan alleen de partner zelf" });
     if (p === "/pib/api/me") {
       const x = sess.partner;
+      const m = await pibMeterLaatst(env, x.email);
+      if (m && (!x.meterLaatst || m > x.meterLaatst)) x.meterLaatst = m;
       return reply(200, { ok: true, email: x.email, naam: x.naam || "", bedrijf: x.bedrijf || "", meekijk: !!sess.meekijk, meekijkDoor: sess.door || null,
-        toestemming: x.toestemming || null, meterActief: !!x.agentToken, meterLaatst: x.meterLaatst || null,
+        toestemming: x.toestemming || null, meterActief: !!x.agentToken, meterLaatst: x.meterLaatst || null, meterPlatform: x.meterPlatform || null,
+        // De installatieregel voor de Mac; alleen voor de partner zelf, niet bij meekijken.
+        macInstall: (!sess.meekijk && x.agentToken) ? 'curl -fsSL "' + pibOrigin(env, url) + '/pib/meter/mac.sh?k=' + x.agentToken + '" | bash' : null,
         toestemmingTekst: PIB_TOESTEMMING_TEKST, toestemmingVersie: PIB_TOESTEMMING_VERSIE });
     }
     if (p === "/pib/api/uren") return pibHandleUren(request, env, sess, url);
