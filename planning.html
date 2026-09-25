@@ -556,7 +556,7 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
        mag gewoon weggehaald worden, zodat het raster wat verder omhoog komt."
        De kleuren spreken voor zich; wie er meekijkt staat nu in de zoekbalk. -->
   <div class="rasterzoek" id="rasterZoekBalk">
-    <input id="rasterZoek" placeholder="Zoek op ordernummer, klantnaam of ITS-nummer" autocomplete="off">
+    <input id="rasterZoek" placeholder="Zoek op ordernummer, ITS-nummer, klantnaam, postcode, mailadres of debiteurnummer" autocomplete="off">
     <span id="rasterZoekUit"></span>
     <span id="liveAanwezig" class="live-wie"></span>
     <span id="liveMelding" class="live-melding"></span>
@@ -2001,12 +2001,43 @@ function bewerkNaam(el, naam){
 /* Zoeken in het raster: welke afspraak is raak op wat er in de zoekbalk
    staat. Ordernummer en ITS-nummer op de cijfers, de klantnaam op tekst. */
 var rasterZoekTekst = "";
+/* Kevin (25 sep 2026): ook zoeken op postcode, mailadres en debiteurnummer.
+   De postcode staat in het adres; debiteur en mailadres haalt de worker bij
+   het eerste zoeken op per order en ITS-melding (/planning/klantinfo). */
+var klantInfo = { orders:{}, its:{} }, klantInfoBezig = false, klantInfoKlaar = false;
+async function laadKlantInfo(){
+  if (klantInfoBezig || klantInfoKlaar) return;
+  klantInfoBezig = true;
+  var orders = [], its = [];
+  afspraken.forEach(function(a){ if (a.ordernr) orders.push(String(a.ordernr)); if (a.itsId) its.push(String(a.itsId)); });
+  for (var ronde = 0; ronde < 12; ronde++){
+    try{
+      var r = await fetch(W+"/planning/klantinfo", { method:"POST", headers:{ "X-Fonteyn-Auth": teamKey(), "Content-Type":"application/json" },
+        body: JSON.stringify({ orders: orders, its: its }) });
+      var j = await r.json();
+      if (!j.ok) break;
+      klantInfo = { orders: j.orders||{}, its: j.its||{} };
+      if (rasterZoekTekst) teken();
+      if (!j.nogOnbekend) { klantInfoKlaar = true; break; }
+    }catch(e){ break; }
+  }
+  klantInfoBezig = false;
+}
+function klantInfoVan(a){
+  var o = klantInfo.orders[String(a.ordernr||"").replace(/\D/g,"")] || {}, i = klantInfo.its[String(a.itsId||"")] || {};
+  return { debiteur: [o.debiteur, i.debiteur].filter(Boolean).join(" "), mail: [a.klantMail, o.mail, i.mail].filter(Boolean).join(" ") };
+}
 function zoekRaak(a){
   var q = rasterZoekTekst;
   if (!q) return false;
-  var cijfers = q.replace(/\D/g,"");
-  if (cijfers.length >= 3 && (String(a.ordernr||"").indexOf(cijfers) >= 0 || String(a.itsId||"").indexOf(cijfers) >= 0)) return true;
-  return String(a.klant||"").toLowerCase().indexOf(q.toLowerCase()) >= 0;
+  var cijfers = q.replace(/\D/g,""), info = klantInfoVan(a);
+  if (cijfers.length >= 3 && /^\s*(its|order|deb\w*)?[\s:#.-]*[\d\s-]+$/i.test(q) && (String(a.ordernr||"").indexOf(cijfers) >= 0 || String(a.itsId||"").indexOf(cijfers) >= 0 || info.debiteur.indexOf(cijfers) >= 0)) return true;
+  var ql = q.toLowerCase(), kaal = ql.replace(/\s+/g,"");
+  if (String(a.klant||"").toLowerCase().indexOf(ql) >= 0) return true;
+  if (info.mail.toLowerCase().indexOf(ql) >= 0) return true;
+  // Postcode met of zonder spatie: "3888 NK" en "3888nk" zijn dezelfde.
+  if (kaal.length >= 4 && /\d{4}/.test(kaal) && String(a.plaats||"").toLowerCase().replace(/\s+/g,"").indexOf(kaal) >= 0) return true;
+  return false;
 }
 function zoekKlas(a){
   if (!rasterZoekTekst) return "";
@@ -2654,7 +2685,7 @@ $("itsZoek").addEventListener("input", function(){ itsToon = 30; itsTeken(); });
 var rasterZoekTimer = null;
 $("rasterZoek").addEventListener("input", function(){
   clearTimeout(rasterZoekTimer);
-  rasterZoekTimer = setTimeout(function(){ rasterZoekTekst = $("rasterZoek").value.trim(); teken(); }, 180);
+  rasterZoekTimer = setTimeout(function(){ rasterZoekTekst = $("rasterZoek").value.trim(); teken(); if (rasterZoekTekst) laadKlantInfo(); }, 180);
 });
 
 /* ── route van de dag ──

@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-25", bestand: "planning.html", soort: "beter",
+      titel: "Zoeken op postcode, mailadres en debiteurnummer",
+      wat: "In de zoekbalk van de planning kun je nu ook zoeken op postcode (met of zonder spatie), het mailadres van de klant en het debiteurnummer, naast ordernummer, ITS-nummer en klantnaam."
+    },
+    {
+      datum: "2026-09-25", bestand: "opleverbonnen.html", soort: "beter",
+      titel: "Zoeken op postcode, mailadres en debiteurnummer",
+      wat: "In Opleverbonnen zoek je nu ook op postcode (met of zonder spatie), het mailadres van de klant en het debiteurnummer, naast ordernummer en ITS-nummer."
+    },
+    {
       datum: "2026-09-25", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
       titel: "Jazzi-artikelen klaargezet en leveranciers met hun eigen naam",
       wat: "Bij Jazzi staan nu alle 105 spa's uit de prijslijst onder Artikelen: de code en naam van Jazzi, onze artikelnummers en modelnaam, en de bevestigde prijs in dollars. Kijk ze na; een geel voorstel wordt wit zodra alles is ingevuld. Een leverancier heet voortaan contactpersoon - fabriek (intern) - fabriek (extern), bijvoorbeeld Jason - Passion Saunas - Fukiafu, zodra die velden zijn ingevuld."

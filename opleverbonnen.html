@@ -80,7 +80,7 @@ main{max-width:1000px;margin:16px auto;padding:0 14px 60px}
   <div class="kaart">
     <p class="lead">De bonnen die de monteurs in Mijn route bij de klant invullen. Kijk ze na, zet ze op akkoord en mail ze naar de klant. "Terug naar de monteur" geeft de bon terug zodat hij hem kan aanpassen.</p>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-      <input id="bonZoek" placeholder="zoek op klant, plaats, ordernummer, monteur, spa of serienummer…" style="flex:1 1 320px;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--rand);border-radius:9px">
+      <input id="bonZoek" placeholder="zoek op klant, ordernummer, ITS-nummer, postcode, mailadres, debiteurnummer, monteur, spa of serienummer…" style="flex:1 1 320px;font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--rand);border-radius:9px">
     </div>
     <div class="bonfilter" id="bonFilters"></div>
     <div id="bonInhoud"><p style="color:var(--grijs);font-size:13px">Ophalen\u2026</p></div>
@@ -104,7 +104,26 @@ async function bonApi(pad, body){
 function bonGeld(v){ return "\u20ac "+(Number(v)||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
 var FILTERS = [["open","Na te kijken"],["akkoord","Akkoord, nog mailen"],["gemaild","Gemaild"],["concept","Nog bezig"],["alles","Alles"]];
 var bonnenCache = null;
-$("bonZoek").addEventListener("input", function(){ bonOverzicht(true); });
+$("bonZoek").addEventListener("input", function(){ bonOverzicht(true); if (($("bonZoek").value||"").trim()) laadKlantInfo(); });
+/* Kevin (25 sep 2026): zoeken op ordernummer, ITS-nummer, postcode, mailadres
+   en debiteurnummer. Debiteur en mailadres zoekt de worker bij het eerste
+   zoeken op per order en ITS-melding. */
+var klantInfo = { orders:{}, its:{} }, klantInfoBezig = false, klantInfoKlaar = false;
+async function laadKlantInfo(){
+  if (klantInfoBezig || klantInfoKlaar || !bonnenCache) return;
+  klantInfoBezig = true;
+  var orders = [], its = [];
+  bonnenCache.forEach(function(b){ if (b.ordernr) orders.push(String(b.ordernr)); if (b.itsId) its.push(String(b.itsId)); });
+  for (var ronde = 0; ronde < 12; ronde++){
+    try{
+      var j = await bonApi("/planning/klantinfo", { orders: orders, its: its });
+      klantInfo = { orders: j.orders||{}, its: j.its||{} };
+      if (($("bonZoek").value||"").trim()) bonOverzicht(true);
+      if (!j.nogOnbekend) { klantInfoKlaar = true; break; }
+    }catch(e){ break; }
+  }
+  klantInfoBezig = false;
+}
 async function bonOverzicht(uitGeheugen){
   var box = $("bonInhoud");
   if (!(uitGeheugen && bonnenCache)) box.innerHTML = '<p style="color:var(--grijs);font-size:13px">Ophalen\u2026</p>';
@@ -120,7 +139,15 @@ async function bonOverzicht(uitGeheugen){
        zegt dat erbij, zodat een bon nooit "weg" is omdat het filter op
        Na te kijken staat. */
     var q = ($("bonZoek").value || "").trim().toLowerCase();
-    var past = function(b){ return !q || [b.klant, b.plaats, b.ordernr, b.itsId, b.monteur, b.monteur2, b.spaType, b.serienr, b.adviseur, b.datum].map(function(v){ return String(v == null ? "" : v).toLowerCase(); }).join(" ").indexOf(q) >= 0; };
+    var kaal = q.replace(/\s+/g,"");
+    var past = function(b){
+      if (!q) return true;
+      var o = klantInfo.orders[String(b.ordernr||"").replace(/\D/g,"")] || {}, i = klantInfo.its[String(b.itsId||"")] || {};
+      var tekst = [b.klant, b.plaats, b.ordernr, b.itsId, b.monteur, b.monteur2, b.spaType, b.serienr, b.adviseur, b.datum,
+                   b.klantMail, o.mail, i.mail, o.debiteur, i.debiteur].map(function(v){ return String(v == null ? "" : v).toLowerCase(); }).join(" ");
+      // Postcode met of zonder spatie ("3888 NK" of "3888nk").
+      return tekst.indexOf(q) >= 0 || (kaal.length >= 4 && tekst.replace(/\s+/g,"").indexOf(kaal) >= 0);
+    };
     var inGroep = function(b){
       if (bonFilter === "alles") return true;
       if (bonFilter === "open") return b.status === "klaar";

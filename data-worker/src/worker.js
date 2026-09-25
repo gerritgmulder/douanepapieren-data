@@ -6329,6 +6329,7 @@ async function bonIndexBijwerken(env, bon) {
   idx.bonnen[bon.id] = {
     id: bon.id, datum: bon.datum || null, tijd: bon.tijd || null, klant: bon.klant || "",
     plaats: bon.plaats || "", ordernr: bon.ordernr || "", itsId: bon.itsId || null,
+    klantMail: bon.klantMail || "",   // zoeken op mailadres (Kevin, 25 sep 2026)
     monteur: bon.monteur || "", monteur2: bon.monteur2 || "", status: bon.status || "concept",
     // Voor het zoekvak in de tegel Opleverbonnen (Kevin, 22 sep 2026).
     spaType: bon.spaType || "", serienr: bon.serienr || "", adviseur: bon.adviseur || "",
@@ -8463,6 +8464,77 @@ async function planningIts(env, url) {
   const nu = new Date().toISOString();
   await env.FONTEYN_DATA.put(ITS_CACHE, JSON.stringify({ ts: nu, meldingen: uit }));
   return reply(200, { ok: true, bron: "logic4", ts: nu, meldingen: uit });
+}
+
+/* Debiteurnummer en mailadres bij een order of servicemelding.
+   ═══════════════════════════════════════════════════════════════════════════
+   Kevin (25 sep 2026) wil in Planning en Opleverbonnen kunnen zoeken op
+   ordernummer, ITS-nummer, postcode, mailadres en debiteurnummer. Een afspraak
+   en een bon kennen de eerste drie; het debiteurnummer en het mailadres
+   niet. Die zoeken we hier op en onthouden we in 'planning-klantinfo': eerst
+   uit wat de worker toch al weet (de reserveringen, de ITS-lijst, de
+   debiteurenlijst), en pas daarna in Logic4, maximaal 20 orders per aanroep.
+   Het scherm vraagt door tot alles bekend is. */
+async function planningKlantinfo(request, env) {
+  let b = {}; try { b = await request.json(); } catch {}
+  const orders = [...new Set((b.orders || []).map(x => String(x || "").replace(/\D/g, "")).filter(x => /^\d{5,9}$/.test(x)))].slice(0, 3000);
+  const its = [...new Set((b.its || []).map(x => String(x || "").replace(/\D/g, "")).filter(Boolean))].slice(0, 3000);
+  const cache = (await env.FONTEYN_DATA.get("planning-klantinfo", { type: "json" })) || { o: {}, i: {} };
+  cache.o = cache.o || {}; cache.i = cache.i || {};
+  let gewijzigd = false;
+  // 1. Wat de worker al weet.
+  const openO = orders.filter(o => !cache.o[o]), openI = its.filter(i => !cache.i[i]);
+  if (openO.length) {
+    const ledger = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
+    for (const lijst of [...Object.values(ledger.byModel || {}), ...Object.values(ledger.byModelUSA || {})])
+      for (const r of (lijst || [])) {
+        const k = String(r.ordernr || "");
+        if (openO.includes(k) && !cache.o[k] && r.debtorId) { cache.o[k] = { deb: Number(r.debtorId) }; gewijzigd = true; }
+      }
+  }
+  if (openI.length) {
+    const c = (await env.FONTEYN_DATA.get(ITS_CACHE, { type: "json" })) || {};
+    for (const m of (c.meldingen || [])) {
+      const k = String(m.id || "");
+      if (openI.includes(k) && !cache.i[k]) { cache.i[k] = { deb: m.debiteur ? Number(m.debiteur) : null, order: m.order || null }; gewijzigd = true; }
+    }
+  }
+  // 2. De orders die nog onbekend zijn: Logic4, een handvol per keer.
+  const nogO = orders.filter(o => !cache.o[o]);
+  let token = null, gevraagd = 0;
+  for (const o of nogO) {
+    if (gevraagd >= 20) break;
+    gevraagd++;
+    try {
+      token = token || await l4Token(env);
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ Id: Number(o), TakeRecords: 1 }),
+      });
+      const j = await r.json().catch(() => null);
+      const x = ((j && (j.Records || j)) || [])[0];
+      if (x && Number(x.Id) === Number(o)) {
+        const mails = [x.InvoiceAddress, x.DeliveryAddress, x.AccountAddress].map(a => String((a && (a.Email || a.EmailAddress)) || "").trim().toLowerCase()).filter(Boolean);
+        cache.o[o] = { deb: x.DebtorId ? Number(x.DebtorId) : null, mail: [...new Set(mails)].join(" ") || null };
+      } else cache.o[o] = { deb: null, onbekend: true };
+      gewijzigd = true;
+    } catch (e) { break; }
+  }
+  // 3. Het mailadres van elke debiteur (herDebiteuren vraagt er zelf 25 per keer op).
+  const debs = [...new Set([...orders.map(o => cache.o[o]), ...its.map(i => cache.i[i])].filter(v => v && v.deb).map(v => v.deb))];
+  const { cache: debCache, nogOnbekend } = await herDebiteuren(env, debs);
+  if (gewijzigd) await env.FONTEYN_DATA.put("planning-klantinfo", JSON.stringify(cache));
+  const mailVan = (v) => {
+    if (!v) return null;
+    const d = v.deb ? debCache[String(v.deb)] || {} : {};
+    const alle = [v.mail, d.email, d.factuurMail, d.herinneringMail].map(x => String(x || "").trim().toLowerCase()).filter(Boolean).join(" ");
+    return alle ? [...new Set(alle.split(/\s+/))].join(" ") : null;
+  };
+  const uitO = {}, uitI = {};
+  for (const o of orders) if (cache.o[o]) uitO[o] = { debiteur: cache.o[o].deb || null, mail: mailVan(cache.o[o]) };
+  for (const i of its) if (cache.i[i]) uitI[i] = { debiteur: cache.i[i].deb || null, mail: mailVan(cache.i[i]) };
+  const openNog = orders.filter(o => !cache.o[o]).length + (nogOnbekend || 0);
+  return reply(200, { ok: true, orders: uitO, its: uitI, nogOnbekend: openNog });
 }
 
 async function planningItsKlant(env, url) {
@@ -14425,6 +14497,10 @@ export default {
     if (url.pathname === "/planning/its" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
       return planningIts(env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
+    if (url.pathname === "/planning/klantinfo" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+      return planningKlantinfo(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     }
     if (url.pathname === "/planning/its/klant" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
