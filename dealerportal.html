@@ -1465,6 +1465,7 @@ function reqStatusLabel(r){
      de worker: dan loopt er een klok van 48 werkuren. */
   if (r.restBetaald) return ["Paid in full - ready for you", "ok"];
   if (r.restVerlopen) return ["Moved to the next arrival", ""];
+  if (r.keuzeGevraagd) return ["Your spa is waiting - let us know which way", "nu"];
   if (r.restDeadline && r.restBedrag) return ["Your spa has arrived - complete the payment", "nu"];
   if (r.status === "paid" || r.paymentStatus === "paid") return ["Deposit paid - reservation confirmed", "ok"];
   if (r.deposit && r.paymentStatus === "open") return ["Awaiting deposit payment", ""];
@@ -1482,6 +1483,32 @@ async function restBetalen(id, knop){
     alert((r.data && (r.data.uitleg || r.data.error)) || ("The payment page needs another try (HTTP " + r.status + ")."));
   } catch (e) { alert("The payment page needs another try: " + (e.message || e)); }
   if (knop) { knop.disabled = false; loadMyRequests(); }
+}
+/* Ja of nee op de vraag na 48 uur. Het antwoord gaat naar de server, die de
+   reservering verplaatst of er 24 uur bij geeft, en stuurt de bevestiging. */
+async function restKeuze(id, antwoord){
+  try {
+    const r = await api("/dealers/api/restkeuze", { method: "POST", body: JSON.stringify({ requestId: id, antwoord }) });
+    const t = (r.data && (r.data.uitleg || r.data.error)) || ("HTTP " + r.status);
+    melding(r.status === 200 && r.data && r.data.ok ? "ok" : "bad", t);
+  } catch (e) { melding("bad", "That needs another try: " + (e.message || e)); }
+  loadMyRequests();
+}
+/* Een balk bovenin met de uitkomst. Een venster met OK erin blokkeert in de
+   app op Windows daarna het typen, dus dat gebruiken we hier niet. */
+function melding(soort, tekst){
+  let b = document.getElementById("ppMelding");
+  if (!b) {
+    b = document.createElement("div"); b.id = "ppMelding";
+    b.style.cssText = "position:fixed;left:50%;transform:translateX(-50%);top:14px;z-index:2000;max-width:min(560px,92vw);" +
+      "padding:12px 18px;border-radius:10px;font-size:13.5px;line-height:1.5;box-shadow:0 8px 24px rgba(0,0,0,.18);cursor:pointer";
+    b.addEventListener("click", () => b.remove());
+    document.body.appendChild(b);
+  }
+  b.style.background = soort === "ok" ? "#dcfce7" : "#fee2e2";
+  b.style.color = soort === "ok" ? "#15803d" : "#b91c1c";
+  b.textContent = tekst;
+  clearTimeout(b._weg); b._weg = setTimeout(() => b.remove(), 12000);
 }
 async function loadMyRequests(){
   const r = await api("/dealers/api/requests");
@@ -1504,18 +1531,34 @@ async function loadMyRequests(){
     /* De spa staat klaar en er moet nog betaald worden. De knop staat hier én
        in de mail; wie op de knop in de mail klikt komt hier uit met #rest=<id>
        in de link en gaat meteen door naar Mollie. */
-    const rest = (x.restDeadline && x.restBedrag && !x.restBetaald && !x.restVerlopen)
+    /* Staat de vraag open, dan staan ja en nee ook gewoon in het portaal -
+       handig voor wie de mail kwijt is. */
+    const vraag = (x.keuzeGevraagd && !x.restBetaald && !x.restVerlopen)
+      ? ` <button class="go reqJa" type="button" data-id="${esc(x.id)}" style="padding:6px 12px;font-size:12.5px;margin-left:8px;">Move to the next one</button>` +
+        ` <button class="secondary reqNee" type="button" data-id="${esc(x.id)}" style="padding:6px 12px;font-size:12.5px;margin-left:6px;">Keep this one</button>`
+      : "";
+    const rest = (x.restDeadline && x.restBedrag && !x.restBetaald && !x.restVerlopen && !x.keuzeGevraagd)
       ? ` <button class="go reqRest" type="button" data-id="${esc(x.id)}" style="padding:6px 13px;font-size:12.5px;margin-left:8px;">Complete payment ${x.currency==="USD"?"$":"€"} ${Number(x.restBedrag).toFixed(2)}</button>`
       : "";
     return `<div class="doc"${cls==="uit"?' style="opacity:.62;"':''}>
       <div><b>${x.items && x.items.length
             ? x.items.map(i => i.qty + "\u00d7 " + i.naam).join(", ")
             : (x.qty + "\u00d7 " + esc(x.model))}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit?` · paid ${x.currency==="USD"?"$":"€"} ${Number(x.deposit).toFixed(2)}`:""}</span>${over}</div>
-      <span style="font-size:13px;white-space:nowrap;${cls==="ok"?"color:#15803d;font-weight:600;":cls==="uit"?"color:#b91c1c;font-weight:600;":cls==="nu"?"color:#b45309;font-weight:600;":"color:var(--muted);"}">${label}${rest}${knop}</span>
+      <span style="font-size:13px;white-space:nowrap;${cls==="ok"?"color:#15803d;font-weight:600;":cls==="uit"?"color:#b91c1c;font-weight:600;":cls==="nu"?"color:#b45309;font-weight:600;":"color:var(--muted);"}">${label}${vraag}${rest}${knop}</span>
     </div>`;
   }).join("");
   $("myReqList").querySelectorAll(".reqOver").forEach(b => b.addEventListener("click", () => overzetten(b.dataset.id, reqs.find(x => x.id === b.dataset.id))));
   $("myReqList").querySelectorAll(".reqRest").forEach(b => b.addEventListener("click", () => restBetalen(b.dataset.id, b)));
+  $("myReqList").querySelectorAll(".reqJa").forEach(b => b.addEventListener("click", () => { b.disabled = true; restKeuze(b.dataset.id, "ja"); }));
+  $("myReqList").querySelectorAll(".reqNee").forEach(b => b.addEventListener("click", () => { b.disabled = true; restKeuze(b.dataset.id, "nee"); }));
+  /* Uit de keuzemail: .../dealers#keuze=<id>&antwoord=ja of nee. De partner
+     heeft in de mail al geklikt; hier wordt het antwoord vastgelegd zodra hij
+     is ingelogd, en hij ziet meteen wat eruit gekomen is. */
+  const keuze = location.hash.match(/keuze=([0-9a-f-]{8,})[^]*antwoord=(ja|nee)/i);
+  if (keuze) {
+    history.replaceState(null, "", location.pathname + location.search);
+    restKeuze(keuze[1], keuze[2].toLowerCase());
+  }
   /* Uit de mail "Shall we set this one up again for you?": .../dealers#opnieuw=<id>
      zet dezelfde spa's terug in de mand en opent hem. De prijzen en de voorraad
      worden op dat moment opnieuw opgehaald, dus de partner ziet meteen of alles

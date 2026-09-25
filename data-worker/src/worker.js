@@ -2144,6 +2144,9 @@ async function dpHandleMyRequests(env, sess) {
                  restDeadline: (r.restKlaar && r.restKlaar.deadline) || null,
                  restBetaald: r.restBetaald || null,
                  restVerlopen: r.restVerlopen || null,
+                 keuzeGevraagd: r.keuzeGevraagd || null,
+                 keuzeDeadline: r.keuzeDeadline || null,
+                 keuzeAntwoord: r.keuzeAntwoord || null,
                  /* Overgezet: van een adviseur naar een partner (beursflow). */
                  overgezetNaar: String(r.overgezetVan || "").toLowerCase() === ik
                    ? (r.company || r.email) : null,
@@ -2771,6 +2774,8 @@ function dpWerkurenLater(vanaf, uren) {
 }
 const DP_REST_UREN = 48;
 const DP_REST_HERINNERING_UREN = 24;   // wat er over moet zijn als de herinnering gaat
+// Zoveel werkuren om te antwoorden op de keuzevraag, en zoveel extra bij 'nee'.
+const DP_REST_KEUZE_UREN = 24;
 
 /* Wat er nog openstaat. Het totaal staat als `totaalExVat` op de bestelling,
    met het BTW-percentage van die debiteur ernaast; het bedrag inclusief BTW is
@@ -2919,6 +2924,39 @@ async function dpRestMail(env, item, accounts, soort, url) {
       (afhalen
         ? '<p>You can collect it from Uddel. Let us know which day suits you and we will have it ready at the dock.</p>'
         : '<p>We are scheduling the transport now and you will hear the delivery date from us shortly.</p>');
+  } else if (soort === "keuze") {
+    /* De vraag na 48 uur. Positief gesteld, ook al gaat het over geld dat nog
+       moet komen: zie de regel dat een partner nooit een ontkenning leest. */
+    const knopJa =
+      '<a href="' + dpOrigin(env, url) + '/dealers#keuze=' + encodeURIComponent(item.id) + '&antwoord=ja" ' +
+      'style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;font-size:14px;' +
+      'padding:13px 26px;border-radius:10px;display:inline-block;margin:0 6px 8px 0;">Yes, move my reservation</a>';
+    const knopNee =
+      '<a href="' + dpOrigin(env, url) + '/dealers#keuze=' + encodeURIComponent(item.id) + '&antwoord=nee" ' +
+      'style="background:#ffffff;color:#c8102e;border:2px solid #c8102e;text-decoration:none;font-weight:bold;' +
+      'font-size:14px;padding:11px 24px;border-radius:10px;display:inline-block;margin:0 0 8px 0;">Keep this one, I will pay</a>';
+    onderwerp = "Your spa is waiting - which way would you like it?";
+    binnen =
+      '<p>Hi ' + naam + ',</p>' +
+      '<p>Your spa is still standing ready in Uddel and the balance of 70% is on its way to us.</p>' +
+      '<p><b>' + wat + '</b><br>' +
+      (item.logic4OrderId ? 'Order ' + dpEsc(item.logic4OrderId) + '<br>' : '') +
+      'Still to pay: <b>' + dpGeld(item, rest) + '</b></p>' +
+      '<p>Shall we move your reservation to the next spa of this model that arrives? Your deposit moves with it and you keep your place in the queue.</p>' +
+      '<p style="margin:24px 0;text-align:center;">' + knopJa + knopNee + '</p>' +
+      '<p style="color:#6b7280;font-size:13px;">Choose "Keep this one" and you have another 24 hours to complete the payment. ' +
+      'Let us hear from you within 24 hours; after that we move your reservation to the next arrival for you.</p>';
+  } else if (soort === "verlengd") {
+    onderwerp = "Your spa is yours for another 24 hours";
+    binnen =
+      '<p>Hi ' + naam + ',</p>' +
+      '<p>Good - we keep this one for you.</p>' +
+      '<p><b>' + wat + '</b><br>' +
+      'Still to pay: <b>' + dpGeld(item, rest) + '</b><br>' +
+      'Ready for you until: <b>' + tot + '</b></p>' +
+      '<p>Complete the payment before then and we will get it to you straight away.</p>' +
+      knop("Complete payment") +
+      '<p style="color:#6b7280;font-size:13px;">After that we will move your reservation to the next spa of this model that arrives, so you keep your place either way.</p>';
   } else if (soort === "opnieuw") {
     onderwerp = "Shall we set this one up again for you?";
     binnen =
@@ -2977,6 +3015,72 @@ async function dpHandleRestbetaling(request, env, sess, url) {
   return reply(200, { ok: true, bedrag, currency: item.currency || "EUR", checkoutUrl: pay.checkoutUrl });
 }
 
+/* POST /dealers/api/restkeuze { requestId, antwoord }
+   ═══════════════════════════════════════════════════════════════════════════
+   Het antwoord op de vraag uit de mail na 48 uur.
+
+     ja   - de reservering gaat naar de eerstvolgende spa van dit model. De
+            aanbetaling gaat mee en de partner houdt zijn plek.
+     nee  - hij houdt deze spa en krijgt 24 werkuren extra om de rest te
+            voldoen. Eén keer; daarna gaat hij alsnog naar de volgende.
+
+   Alleen voor je eigen bestelling, en alleen zolang de vraag openstaat. Wie
+   al betaald heeft krijgt netjes te horen dat er niets meer te kiezen valt. */
+async function dpHandleRestKeuze(request, env, sess, url) {
+  let b = {}; try { b = await request.json(); } catch {}
+  const id = String(b.requestId || "");
+  const antwoord = String(b.antwoord || "").toLowerCase();
+  if (antwoord !== "ja" && antwoord !== "nee")
+    return reply(400, { ok: false, error: "antwoord-onbekend" });
+  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  const item = (Array.isArray(data.requests) ? data.requests : []).find(x => x.id === id);
+  if (!item) return reply(404, { ok: false, error: "bestelling onbekend" });
+  if (String(item.targetEmail || item.email || "").toLowerCase() !== String(sess.email || "").toLowerCase())
+    return reply(403, { ok: false, error: "niet jouw bestelling" });
+  if (item.restBetaald) return reply(200, { ok: true, alBetaald: true,
+    uitleg: "This one is already paid in full - your spa is on its way." });
+  if (item.restVerlopen) return reply(200, { ok: true, alVerplaatst: true,
+    uitleg: "Your reservation already moved to the next arrival, and your deposit moved with it." });
+  if (!item.restKlaar) return reply(409, { ok: false, error: "nog-niet-aangekomen",
+    uitleg: "Your spa is still reserved for you. We will e-mail you the moment it arrives in Uddel." });
+  /* "Nee" is een verlenging en kan alleen als de vraag openstaat. "Ja" mag
+     altijd zolang er nog een restbetaling loopt: bedenkt een partner zich een
+     dag later, dan hoort hij zijn reservering gewoon te kunnen doorschuiven
+     zonder op de volgende mail te wachten. */
+  if (antwoord === "nee" && !item.keuzeGevraagd)
+    return reply(200, { ok: true, antwoord: "nee", alVerlengd: true,
+      uitleg: "Your spa is reserved for you until " +
+              String(item.restKlaar.deadline).slice(0, 16).replace("T", " ") + "." });
+
+  const accounts = await dpGetAccounts(env);
+  if (antwoord === "ja") {
+    item.keuzeAntwoord = "ja";
+    item.keuzeAntwoordOp = new Date().toISOString();
+    item.restVerlopen = item.keuzeAntwoordOp;
+    item.allocationReleased = true;
+    item.status = "wacht-volgende-aankomst";
+    await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+    await dpRestMail(env, item, accounts, "verlopen", url).catch(() => {});
+    return reply(200, { ok: true, antwoord: "ja",
+      uitleg: "Done - your reservation moves to the next one that arrives, and your deposit moves with it." });
+  }
+  /* Nee: 24 werkuren erbij, één keer. Vroeg hij dat al eens, dan blijft de
+     datum staan die er is - anders kan hij de spa eindeloos vasthouden. */
+  if (item.keuzeAntwoord === "nee")
+    return reply(200, { ok: true, antwoord: "nee", alVerlengd: true,
+      uitleg: "Your spa is already reserved for you until " +
+              String(item.restKlaar.deadline).slice(0, 16).replace("T", " ") + "." });
+  item.keuzeAntwoord = "nee";
+  item.keuzeAntwoordOp = new Date().toISOString();
+  item.restKlaar.deadline = dpWerkurenLater(new Date(), DP_REST_KEUZE_UREN).toISOString();
+  item.keuzeGevraagd = null; item.keuzeDeadline = null;
+  item.status = "wacht-restbetaling";
+  await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+  await dpRestMail(env, item, accounts, "verlengd", url).catch(() => {});
+  return reply(200, { ok: true, antwoord: "nee", deadline: item.restKlaar.deadline,
+    uitleg: "Great - this one stays yours. You have another 24 hours to complete the payment." });
+}
+
 /* ELK UUR: wie moet een herinnering, en wie is over tijd?
    Draait mee in de cron, na de reserveringen. Kost geen enkele aanroep naar
    buiten behalve de mails zelf. */
@@ -2985,16 +3089,36 @@ async function dpRestRonde(env, url) {
   const lijst = Array.isArray(data.requests) ? data.requests : [];
   const accounts = await dpGetAccounts(env);
   const nu = Date.now();
-  let herinnerd = 0, verlopen = 0;
+  let herinnerd = 0, verlopen = 0, gevraagd = 0;
   for (const r of lijst) {
     if (!r.restKlaar || r.restBetaald || r.restVerlopen) continue;
     const eind = Date.parse(r.restKlaar.deadline);
     if (!eind) continue;
     if (nu >= eind) {
-      /* Over tijd. De spa gaat naar de volgende klant: de claim op de voorraad
-         valt weg, de bestelling blijft staan met zijn aanbetaling en de partner
-         houdt zijn plek in de rij voor de volgende aankomst. De Logic4-order
-         blijft ook staan - daar zit het geld van de aanbetaling op. */
+      /* DE 48 UUR ZIJN OM - EERST VRAGEN, DAN PAS DOORGEVEN.
+         ═══════════════════════════════════════════════════════════════════
+         Gerrit (25 sep 2026): "Na 48 uur krijgt de dealer/partner een positief
+         bericht dat de restbetaling van 70% niet is binnengekomen en krijgt
+         hij de vraag: vind je het goed dat je reservering over gaat naar de
+         volgende binnenkomende spa? Dan moet hij ja of nee kiezen. Ja = dan
+         gaat hij over naar de volgend binnenkomende spa (zelfde model) en bij
+         nee krijgt hij nog 24 uur om de restbetaling te doen."
+
+         Hier ging de spa meteen naar de volgende klant. Nu krijgt de partner
+         eerst de vraag, en houdt hij zijn spa zolang hij nog kan antwoorden. */
+      if (!r.keuzeGevraagd) {
+        r.keuzeGevraagd = new Date().toISOString();
+        r.keuzeDeadline = dpWerkurenLater(new Date(), DP_REST_KEUZE_UREN).toISOString();
+        r.status = "wacht-antwoord";
+        await dpRestMail(env, r, accounts, "keuze", url);
+        gevraagd++;
+        continue;
+      }
+      /* Blijft het antwoord uit, dan gaat de spa alsnog naar de volgende klant.
+         Anders staat hij stil zolang niemand iets doet, en dat is precies wat
+         deze termijn moet voorkomen. */
+      const keuzeEind = Date.parse(r.keuzeDeadline || "") || 0;
+      if (keuzeEind && nu < keuzeEind) continue;
       r.restVerlopen = new Date().toISOString();
       r.allocationReleased = true;
       r.status = "wacht-volgende-aankomst";
@@ -3012,8 +3136,8 @@ async function dpRestRonde(env, url) {
       }
     }
   }
-  if (herinnerd || verlopen) await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
-  return { ok: true, herinnerd, verlopen };
+  if (herinnerd || verlopen || gevraagd) await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+  return { ok: true, herinnerd, verlopen, gevraagd };
 }
 
 /* POST /dealers/admin/terugdraaien { requestId } — een bestelling terugdraaien.
@@ -4320,6 +4444,9 @@ async function handleDealerRoutes(request, env, url) {
        twee uit elkaar houdt. */
     if (p === "/dealers/api/restbetaling" && request.method === "POST")
       return dpHandleRestbetaling(request, env, sess, url);
+    /* Het antwoord op de keuzevraag na 48 uur: ja of nee. */
+    if (p === "/dealers/api/restkeuze" && request.method === "POST")
+      return dpHandleRestKeuze(request, env, sess, url);
   }
   return reply(404, "Not found");
 }
