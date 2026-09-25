@@ -255,8 +255,25 @@
 
   /* Het aantal op het uitstulpje: openstaande uitnodigingen wegen het zwaarst,
      want daar wacht iemand anders op. Anders het aantal open taken. */
+  /* Oplichten bij een nieuwe taak (Gerrit, 25 sep 2026): "Als er een nieuwe
+     taak is ingeschoten, dan moet de Takenlijst blijven oplichten tot de
+     takenlijst wordt aangeklikt." Nieuw = door iemand anders (of door het
+     Dashboard zelf, zoals een Amerika-regel voor Chantal) bij jou neergezet,
+     na het laatste moment dat je de lade opende. */
+  function gezienSleutel() { return "fp.takenlade.gezien." + IKNAAM; }
+  function nieuwVoorMij() {
+    var gezien = ""; try { gezien = localStorage.getItem(gezienSleutel()) || ""; } catch (e) {}
+    return lijstEigen().concat(lijstUitnodiging()).filter(function (t) {
+      return t.op && kort(t.door || "") !== IKNAAM && (!gezien || String(t.op) > gezien);
+    }).length;
+  }
+  function licht() {
+    var s = $("tlStulp"); if (!s) return;
+    s.classList.toggle("tl-licht", !open_ && nieuwVoorMij() > 0);
+  }
   function telBij() {
     var u = lijstUitnodiging().length, o = lijstEigen().length + lijstDelegeren().length;
+    licht();
     var bol = $("tlBadge"); if (!bol) return;
     if (u) { bol.textContent = u; bol.className = "tl-badge tl-let"; bol.style.display = ""; }
     else if (o) { bol.textContent = o; bol.className = "tl-badge"; bol.style.display = ""; }
@@ -520,7 +537,11 @@
     l.classList.toggle("tl-uit", open_);
     if (s) s.setAttribute("aria-expanded", open_ ? "true" : "false");
     try { localStorage.setItem("fp.takenlade", open_ ? "1" : "0"); } catch (e) {}
-    if (open_) { laad(); setTimeout(function () { var t = $("tlTekst"); if (t) t.focus(); }, 260); }
+    if (open_) {
+      try { localStorage.setItem(gezienSleutel(), new Date().toISOString()); } catch (e) {}
+      laad(); setTimeout(function () { var t = $("tlTekst"); if (t) t.focus(); }, 260);
+    }
+    licht();
   }
 
   function bouw() {
@@ -531,6 +552,8 @@
       "  font:600 12px/1.2 Montserrat,system-ui,sans-serif;cursor:pointer;writing-mode:vertical-rl;",
       "  box-shadow:-2px 0 10px rgba(0,0,0,.16);letter-spacing:.04em;display:flex;align-items:center;gap:8px}",
       "#tlStulp:hover{background:#0d3325}",
+      "#tlStulp.tl-licht{background:#c2410c;animation:tlLicht 1.4s ease-in-out infinite}",
+      "@keyframes tlLicht{0%,100%{box-shadow:-2px 0 10px rgba(0,0,0,.16)}50%{box-shadow:-2px 0 22px 6px rgba(245,158,11,.75)}}",
       ".tl-badge{writing-mode:horizontal-tb;background:#8bc53f;color:#123;border-radius:999px;",
       "  padding:1px 7px;font-size:11px;font-weight:700}",
       ".tl-badge.tl-let{background:#f59e0b;color:#3b2600}",

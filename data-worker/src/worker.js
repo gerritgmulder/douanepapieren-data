@@ -10684,7 +10684,13 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
     // nu nog een keer doorheen gaan.
     const al = ((geboekt && geboekt.ids) || {})[rij.sleutel]
             || (factuur ? ((geboekt && geboekt.ids) || {})[factuur] : null);
+    /* Met de hand aan een order gekoppeld (Gerrit, 25 sep 2026: de "Tatum
+       refund" hoort bij Backyards & Barns, order 3508050, en die staat niet
+       als factuur in QuickBooks). Die keuze gaat voor alles. */
+    const hand = Number(r.orderHand) || null;
+    if (hand && !al) { rij.order = hand; rij.handGekoppeld = true; }
     if (al) { rij.status = "al geboekt"; rij.order = al.orderId || rij.order; rij.ts = al.ts; }
+    else if (hand) rij.status = rij.bedrag === 0 ? "bedrag is nul of negatief" : "klaar om te boeken";
     else if (!factuur) rij.status = "geen factuurnummer";
     else if (!kandidaten.length) rij.status = "geen Logic4-order";
     else if (kandidaten.length > 1) { rij.status = "meerdere orders"; rij.orders = kandidaten.map(k => k.orderId); }
@@ -10699,7 +10705,7 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
   });
 
   let bruto = qbCent(uit.reduce((n, r) => n + r.bedrag, 0));
-  const kosten = qbCent(uit.reduce((n, r) => n + r.kosten, 0));
+  let kosten = qbCent(uit.reduce((n, r) => n + r.kosten, 0));
   const netto = totaalRegel && totaalRegel.kolom3 != null ? qbCent(totaalRegel.kolom3) : null;
   /* "Balance Due" is wat de klant nog moet betalen, niet wat er is
      overgemaakt. Gerrit (21 sep 2026, batch 10-06): bruto 57.741,11 min
@@ -10718,7 +10724,17 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
     bruto = qbCent(bruto - balansSom);
   }
   const brutoMail = totaalRegel && totaalRegel.kolom1 != null ? qbCent(totaalRegel.kolom1) : null;
-  const kostenMail = totaalRegel && totaalRegel.kolom2 != null ? qbCent(Math.abs(totaalRegel.kolom2)) : null;
+  let kostenMail = totaalRegel && totaalRegel.kolom2 != null ? qbCent(Math.abs(totaalRegel.kolom2)) : null;
+  /* Geen bankkosten in de mail, maar wel minder ontvangen dan gefactureerd
+     (Gerrit, 25 sep 2026, batch 06-07: $20.835,82 gefactureerd, $20.639,31
+     ontvangen, geen enkele regel met kosten). Dan is het verschil de
+     bankkosten van de hele batch; Audrey heeft ze alleen niet per factuur
+     uitgesplitst. Alleen als het verschil klein is (hooguit 5%) en er geen
+     enkele regel kosten noemt. */
+  let kostenUitVerschil = false;
+  if (!kosten && netto != null && qbCent(bruto - netto) > 0.005 && qbCent(bruto - netto) <= bruto * 0.05 && !uit.some(r => r.kosten)) {
+    kosten = qbCent(bruto - netto); kostenUitVerschil = true; kostenMail = null;
+  }
 
   /* De controle die Osman vraagt: bruto - bankkosten = netto ontvangen.
      Drie keer, want alle drie kunnen ze losschieten. */
@@ -10737,8 +10753,20 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
      4630 bankkosten. Klein bedrag." Zo'n regel houdt de batch dus niet meer
      tegen; het bedrag komt vanzelf op 4630 terecht doordat de kostenregel het
      verschil is tussen wat er op de orders gaat en wat er is ontvangen. */
-  const saldoRegels = uit.filter(r => r.status === "geen factuurnummer" && r.soort === "balance" && !r.buiten);
+  /* Alleen een klein saldo gaat mee met de bankkosten (de 3,20 van 31-07).
+     Een groot bedrag is echt ontvangen geld voor een order: batch 09-07 had
+     een Balance van $15.879,29 die zo als min-kosten op 4630 zou belanden
+     (Gerrit, 25 sep 2026: "Hij moet meegaan, want anders sluit het
+     bankdagboek niet aan"). Die moet aan een order worden gekoppeld. */
+  const SALDO_KLEIN = 25;
+  const saldoAlle = uit.filter(r => r.status === "geen factuurnummer" && r.soort === "balance" && !r.buiten);
+  const saldoRegels = saldoAlle.filter(r => Math.abs(r.bedrag) <= SALDO_KLEIN);
+  const saldoGroot = saldoAlle.filter(r => Math.abs(r.bedrag) > SALDO_KLEIN);
   saldoRegels.forEach(r => { r.status = "saldoregel, gaat mee met de bankkosten"; });
+  saldoGroot.forEach(r => { r.status = "saldo zonder order"; });
+  if (saldoGroot.length)
+    redenen.push(saldoGroot.map(r => "De regel " + (r.naam || "Balance") + " van " + qbGeld(r.bedrag)).join(", ") +
+      " hoort bij geen factuur. Dat is ontvangen geld: koppel de regel aan de order waar hij bij hoort (knop 'koppel aan order'), anders sluit het bankdagboek niet aan.");
   const zonderOrder = uit.filter(r => r.status === "geen Logic4-order");
   const dubbel = uit.filter(r => r.status === "meerdere orders");
   const raar = uit.filter(r => r.status === "bedrag is nul of negatief");
@@ -10783,7 +10811,7 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
 
   return {
     id: String(wire.id), datum: wire.datum || "", bestand: wire.bestand || "",
-    bruto, kosten, netto, brutoMail, kostenMail, balansBuiten: balansBuiten ? balansSom : 0,
+    bruto, kosten, netto, brutoMail, kostenMail, balansBuiten: balansBuiten ? balansSom : 0, kostenUitVerschil,
     aansluiting: netto != null ? { bruto, kosten, netto, verschil: qbCent(bruto - kosten - netto) } : null,
     afwijking: redenen.length > 0,
     redenen,
@@ -11095,6 +11123,106 @@ async function qbHandleKoersverschil(request, env) {
    Audrey schrijft soms alleen een naam ("Tatum refund"); Chantal weet dan
    bij welke factuur het hoort. Wordt op de regel zelf bewaard, met wie het
    zei, zodat de batch daarna gewoon meeloopt. Leeg = nummer weer weghalen. */
+/* Een Logic4-order opzoeken om te laten zien waar je aan koppelt. */
+async function qbOrderKort(env, id) {
+  const token = await l4Token(env);
+  const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ Id: Number(id), TakeRecords: 1 }),
+  });
+  const j = await r.json().catch(() => null);
+  const o = ((j && (j.Records || j)) || [])[0];
+  if (!o || Number(o.Id) !== Number(id)) return null;
+  const a = o.InvoiceAddress || o.AccountAddress || {};
+  const T = o.Totals || {};
+  return { id: Number(o.Id), debiteur: o.DebtorId, klant: a.CompanyName || a.ContactName || ("debiteur " + o.DebtorId),
+           referentie: o.Reference || "", totaal: Math.round((Number(T.AmountIncl) || 0) * 100) / 100,
+           betaald: Math.round((Number(T.Calc_TotalPayed) || 0) * 100) / 100 };
+}
+/* POST /amerika/qb/koppel-regel { wireId, index, orderId|null, user }
+   Een batchregel aan een bestaande Logic4-order hangen (of losmaken). Voor
+   een regel die niet als factuur in QuickBooks staat, zoals een terugbetaling
+   ("Tatum refund" op order 3508050) of een Balance zonder factuurnummer. */
+async function qbHandleKoppelRegel(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const wireId = String(body.wireId || ""), i = Number(body.index);
+  const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+  const w = (wires.wires || []).find(x => String(x.id) === wireId);
+  if (!w || !Array.isArray(w.regels) || !w.regels[i]) return reply(404, { ok: false, error: "batchregel niet gevonden" });
+  const r = w.regels[i];
+  const id = Number(String(body.orderId || "").replace(/\D/g, "")) || null;
+  if (!id) { delete r.orderHand; delete r.orderHandDoor; delete r.orderHandTs; delete r.orderHandKlant; }
+  else {
+    const o = await qbOrderKort(env, id);
+    if (!o) return reply(404, { ok: false, error: "order " + id + " bestaat niet in Logic4" });
+    r.orderHand = id; r.orderHandKlant = o.klant; r.orderHandDoor = String(body.user || "").slice(0, 80); r.orderHandTs = new Date().toISOString();
+    if (String(r.soort || "") === "overig" || String(r.soort || "") === "balance") r.soort = "factuur";
+  }
+  await env.FONTEYN_DATA.put("qb-wires", JSON.stringify(wires));
+  return reply(200, { ok: true, orderId: id, order: id ? { klant: r.orderHandKlant } : null });
+}
+/* POST /amerika/qb/koppel-factuur { qbId, orderId, user }
+   Een QuickBooks-factuur aan een order hangen die al in Logic4 staat, in
+   plaats van een nieuwe aan te maken. Gerrit (25 sep 2026): factuur 3312 van
+   Backyards & Barns was al order 3508050 (hun container, rechtstreeks), en
+   werd daarna nog eens als 3522329 aangemaakt. Met deze keuze gebeurt dat niet. */
+async function qbHandleKoppelFactuur(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const qbId = String(body.qbId || "").replace(/\D/g, "");
+  const id = Number(String(body.orderId || "").replace(/\D/g, "")) || null;
+  if (!qbId || !id) return reply(400, { ok: false, error: "factuur en ordernummer zijn nodig" });
+  const j = await qbQuery(env, "SELECT * FROM Invoice WHERE Id = '" + qbId + "'");
+  const inv = ((j.QueryResponse && j.QueryResponse.Invoice) || [])[0];
+  if (!inv) return reply(404, { ok: false, error: "factuur niet gevonden in QuickBooks" });
+  const o = await qbOrderKort(env, id);
+  if (!o) return reply(404, { ok: false, error: "order " + id + " bestaat niet in Logic4" });
+  const approved = (await env.FONTEYN_DATA.get("qb-approved", { type: "json" })) || { ids: {} };
+  approved.ids = approved.ids || {};
+  const al = qbGekoppeld(approved, inv);
+  if (al && Number(al.orderId) !== id) return reply(409, { ok: false, error: "deze factuur hangt al aan order " + al.orderId });
+  approved.ids[qbSleutel(inv)] = { orderId: id, docNr: inv.DocNumber, totaal: Number(inv.TotalAmt) || null, ts: new Date().toISOString(),
+    handmatig: true, door: String(body.user || "").slice(0, 80), klant: { ts: new Date().toISOString(), naam: o.klant, bestaandeOrder: true } };
+  await env.FONTEYN_DATA.put("qb-approved", JSON.stringify(approved));
+  return reply(200, { ok: true, orderId: id, order: o });
+}
+/* POST /amerika/qb/naar-chantal { wireId, index, user }
+   Een batchregel die niet in QuickBooks staat als taak bij Chantal zetten:
+   zij gaat ermee terug naar Audrey, die hem in QuickBooks zet, zodat hij op
+   een (nieuwe) order in Logic4 kan. Gerrit (25 sep 2026). De taak komt in de
+   Takenlijst (bucket takenlijst), en die licht op tot ze hem opent. */
+async function qbHandleNaarChantal(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const wireId = String(body.wireId || ""), i = Number(body.index);
+  const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+  const w = (wires.wires || []).find(x => String(x.id) === wireId);
+  if (!w || !Array.isArray(w.regels) || !w.regels[i]) return reply(404, { ok: false, error: "batchregel niet gevonden" });
+  const r = w.regels[i];
+  const wie = String(body.user || "").toLowerCase();
+  const bedrag = Number(r.kolom1) || 0;
+  const dag = (w.datum || "").split("-").reverse().join("-");
+  const id = "amerika:" + wireId + ":" + i;
+  const opslag = (await env.FONTEYN_DATA.get("takenlijst", { type: "json" })) || { taken: {}, ritmes: {} };
+  opslag.taken = opslag.taken || {};
+  const nu = new Date().toISOString();
+  if (!opslag.taken[id] || opslag.taken[id].klaar) {
+    opslag.taken[id] = {
+      id, eigenaar: "chantal", lijst: "eigen",
+      tekst: "Batch van " + dag + ": de regel \"" + String(r.naam || "").slice(0, 60) + "\" ($" + bedrag.toLocaleString("en-US", { minimumFractionDigits: 2 }) +
+        (r.factuur ? ", factuur " + r.factuur : "") + ") staat niet in QuickBooks. Vraag Audrey om hem in QuickBooks te zetten; daarna kan hij op een order in Logic4 en de batch geboekt worden.",
+      wie: "", dag: nu.slice(0, 10), door: wie || "fonteynbot@fonteyn.nl", op: nu, klaar: false, deelnemers: {},
+      bron: "amerika", tegel: "amerika.html", nieuw: true,
+    };
+    opslag.bijgewerkt = nu; opslag.door = wie || "fonteynbot@fonteyn.nl";
+    await env.FONTEYN_DATA.put("takenlijst", JSON.stringify(opslag));
+  }
+  r.naarChantal = nu; r.naarChantalDoor = wie;
+  await env.FONTEYN_DATA.put("qb-wires", JSON.stringify(wires));
+  return reply(200, { ok: true, taak: id });
+}
+
 async function qbHandleRegelFactuur(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
   let body = {}; try { body = await request.json(); } catch {}
@@ -11261,9 +11389,17 @@ async function qbHandleBoeken(request, env) {
         const eurLaag = Math.round(Number(r.bedrag) / AMERIKA_KOERS * 100) / 100;
         if (open <= 0)
           vooraf.push("factuur " + r.factuur + ": order " + r.order + " staat al volledig betaald (" + totaal.toFixed(2) + " euro), er kan niets meer op");
-        else if (eurLaag > open + 0.10)
+        else if (eurLaag > open + 0.10) {
+          /* Al eerder geboekt uit een andere batch? Dat zeggen we erbij: bij
+             3606 stond $12.142,20 in de batch van 21-08 én $36.325 (de hele
+             factuur) in die van 17-09 (Gerrit, 25 sep 2026). */
+          const eerder = Object.values(geboekt.ids || {}).filter(x => x && Number(x.orderId) === Number(r.order) && String(x.batch) !== String(w.id));
+          const wiresAl = eerder.length ? ((await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] }).wires || [] : [];
+          const uitleg = eerder.map(x => { const bw = wiresAl.find(y => String(y.id) === String(x.batch)); return qbGeld(x.bedrag) + " uit de batch van " + String((bw && bw.datum) || x.batch).split("-").reverse().join("-"); }).join(" en ");
           vooraf.push("factuur " + r.factuur + ": de batch noemt " + qbGeld(r.bedrag) + " (" + eurLaag.toFixed(2) + " euro), maar order " + r.order +
-            " heeft nog maar " + open.toFixed(2) + " euro open van " + totaal.toFixed(2) + ". Controleer de factuur in QuickBooks tegenover de mail van Audrey.");
+            " heeft nog maar " + open.toFixed(2) + " euro open van " + totaal.toFixed(2) + "." +
+            (uitleg ? " Er is al " + uitleg + " op deze order geboekt; samen is dat meer dan de factuur. Vraag Chantal of Audrey welk bedrag klopt." : " Controleer de factuur in QuickBooks tegenover de mail van Audrey."));
+        }
       } catch (e) { vooraf.push("order " + r.order + " (factuur " + r.factuur + "): " + String(e.message || e)); }
     }
     if (vooraf.length) {
@@ -15232,6 +15368,9 @@ export default {
     if (url.pathname === "/amerika/qb/proef-betaling" && request.method === "POST") return qbHandleProefBetaling(request, env);
     if (url.pathname === "/amerika/qb/batch-orders" && request.method === "POST") return qbHandleBatchOrders(request, env);
     if (url.pathname === "/amerika/qb/regel-factuur" && request.method === "POST") return qbHandleRegelFactuur(request, env);
+    if (url.pathname === "/amerika/qb/koppel-regel" && request.method === "POST") return qbHandleKoppelRegel(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    if (url.pathname === "/amerika/qb/koppel-factuur" && request.method === "POST") return qbHandleKoppelFactuur(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    if (url.pathname === "/amerika/qb/naar-chantal" && request.method === "POST") return qbHandleNaarChantal(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
     if (url.pathname === "/voorraad/verberg" && request.method === "POST") return verbergHandler(request, env, "spa-verborgen");
 

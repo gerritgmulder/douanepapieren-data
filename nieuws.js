@@ -52,6 +52,16 @@
   var NIEUWS = [
     {
       datum: "2026-09-25", bestand: "amerika.html", soort: "beter",
+      titel: "Batches: koppelen aan een order, naar Chantal sturen, en een Historie",
+      wat: "Een regel zonder order (zoals een terugbetaling of een Balance zonder factuurnummer) koppel je nu met de knop Koppel aan order aan een order die al in Logic4 staat. Staat een regel niet in QuickBooks, dan zet Naar Chantal er een taak voor haar bij. Bij Facturen kun je een factuur aan een bestaande order hangen in plaats van een nieuwe te maken. Geen bankkosten in de mail maar wel minder ontvangen? Dan gaat het verschil als bankkosten op 4630. Wordt een batch bij het boeken tegengehouden, dan staat erbij waarom. Geboekte batches staan onderaan onder Historie."
+    },
+    {
+      datum: "2026-09-25", iedereen: true, soort: "beter",
+      titel: "De Takenlijst licht op bij een nieuwe taak",
+      wat: "Zet iemand een taak bij je neer, dan licht de Takenlijst aan de rechterkant oranje op tot je hem openklikt."
+    },
+    {
+      datum: "2026-09-25", bestand: "amerika.html", soort: "beter",
       titel: "Amerika-orders op naam van de klant",
       wat: "Een order uit QuickBooks staat in Logic4 nu met de naam, het adres, de mail en de telefoon van de klant zoals in QuickBooks, en niet meer met die van Passion Spa South. De bestaande orders zijn ook bijgewerkt; de bedragen zijn gebleven zoals ze waren. Bij Ontvangen Audrey staat in de kolom Totaal nu per regel het factuurbedrag min de bankkosten, en Amount invoice heet voortaan Factuurbedrag."
     },
