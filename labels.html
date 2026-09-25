@@ -19,13 +19,13 @@
     if (email && k) fetch("https://fonteyn-data-store.g-mulder.workers.dev/log", {
       method:"POST", headers:{"Content-Type":"application/json","X-Fonteyn-Auth":k},
       body: JSON.stringify({user:email, tile:"labels", action:"open-geweigerd",
-        detail:"geen toegang tot Inkomende goederen"})}).catch(function(){});
+        detail:"toegang op aanvraag voor Inkomende goederen"})}).catch(function(){});
   } catch(e) {}
   document.write('<style>body{margin:0;font-family:Montserrat,-apple-system,sans-serif;background:#f5f4ef;color:#1f2937}'+
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
     '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
-    '<div class="gt"><h1>Geen toegang</h1><p>Inkomende goederen is niet beschikbaar voor jouw account.</p>'+
+    '<div class="gt"><h1>Toegang op aanvraag</h1><p>Inkomende goederen staat klaar zodra je account er toegang voor heeft.</p>'+
     '<p style="font-size:12.5px">Je bent ingelogd als <code>'+(email||"(onbekend)")+'</code>.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
@@ -445,7 +445,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <h1>Inkomende goederen — labels printen</h1>
   <div class="right">
     <div class="user-chip">Ingelogd als <b id="hdr-user">—</b></div>
-    <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-inkooporder met labels (geen PDF/Logic4 nodig)">🎬 Demo</button>
+    <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-inkooporder met labels (werkt op zichzelf, zonder PDF of Logic4)">🎬 Demo</button>
     <button class="logout" id="hdr-logout" type="button">Uitloggen</button>
   </div>
 </header>
@@ -497,7 +497,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <!-- ───── STAP 2: regels bewerken ───── -->
   <div class="panel hidden" id="step2">
     <h2>2. Controleer de labels</h2>
-    <div class="sub">Pas velden aan als dat nodig is. Vink uit wat je niet wil printen. Elke regel = één label (bij meerdere colli krijg je meerdere labels: "Colli 1 van N" enz.).</div>
+    <div class="sub">Pas velden aan waar dat handig is. Vink aan wat je wilt printen. Elke regel = één label (bij meerdere colli krijg je meerdere labels: "Colli 1 van N" enz.).</div>
 
     <div class="order-meta" id="orderMeta"></div>
 
@@ -584,7 +584,7 @@ const EMAIL_KEY   = "fp.email";
   const sessionId = localStorage.getItem(SESSION_KEY);
   if (!sessionId) {
     window.location.replace("dashboard.html");
-    throw new Error("Geen sessie — doorverwijzen naar dashboard");
+    throw new Error("Log opnieuw in - je gaat terug naar het dashboard");
   }
 })();
 
@@ -703,7 +703,7 @@ function toonContainers() {
   /* Wat er al stond van vóór 21 sep 2026 kan nog een dealercontainer zijn;
      die hoort hier niet (Manon: alleen Rotterdam). */
   containers = containers.filter(c => { const m = String(c.invoice || "").match(/\bto\s+(.{2,60})$/i); return !m || /^(rotterdam|uddel|nederland|the netherlands|holland|nl)\b/i.test(m[1].trim()); });
-  if (!containers.length) { box.innerHTML = "<div class='sub'>Nog geen containers. Voeg er een toe met de knop hierboven, of lees bij Voorraadbeheer een commercial invoice in.</div>"; return; }
+  if (!containers.length) { box.innerHTML = "<div class='sub'>Voeg een container toe met de knop hierboven, of lees bij Voorraadbeheer een commercial invoice in.</div>"; return; }
   box.innerHTML = "";
 
   for (const c of containers) {
@@ -747,7 +747,7 @@ function toonContainers() {
 
     const binnen = document.createElement("button");
     binnen.type = "button"; binnen.className = "secondary";
-    binnen.textContent = c.binnen ? "Toch niet binnen" : "Binnengekomen";
+    binnen.textContent = c.binnen ? "Toch nog onderweg" : "Binnengekomen";
     binnen.addEventListener("click", () => zetContainer(c, { binnen: !c.binnen }));
     knoppen.appendChild(binnen);
 
@@ -785,18 +785,18 @@ function toonContainers() {
 async function containerUploaden(file) {
   const st = $("contStatus");
   const zeg = (t, kleur) => { st.textContent = t; st.style.color = kleur || "var(--muted)"; };
-  if (!window.fpInvPl || !window.XLSX) { zeg("De lezer is niet geladen. Herstart het dashboard.", "#b91c1c"); return; }
+  if (!window.fpInvPl || !window.XLSX) { zeg("Herstart het dashboard, dan staat de lezer klaar.", "#b91c1c"); return; }
   zeg("Inlezen…");
   try {
     const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
     const bladen = wb.SheetNames.map(n => ({ naam: n, rijen: XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: "" }) }));
     if (!window.fpInvPl.isInvPl(bladen)) {
-      zeg("In dit bestand zit geen commercial invoice met packing list. Tabbladen gevonden: " + wb.SheetNames.join(", ") + ".", "#b91c1c");
+      zeg("Kies een bestand met een commercial invoice én packing list. Dit bestand heeft de tabbladen: " + wb.SheetNames.join(", ") + ".", "#b91c1c");
       return;
     }
     const doc = window.fpInvPl.lees(bladen);
     if (!doc.ok || !(doc.containers || []).length) {
-      zeg("Er staan geen containers in dit bestand." + (doc.fout ? (" " + doc.fout) : ""), "#b91c1c");
+      zeg("De containers staan in dit bestand nog open." + (doc.fout ? (" " + doc.fout) : ""), "#b91c1c");
       return;
     }
     doc.bestand = file.name;
@@ -806,13 +806,13 @@ async function containerUploaden(file) {
       body: JSON.stringify({ door: (localStorage.getItem("fp.email") || ""), doc }),
     });
     const j = await r.json().catch(() => null);
-    if (!j || !j.ok) { zeg("Opslaan mislukte: " + ((j && j.error) || ("HTTP " + r.status)), "#b91c1c"); return; }
-    if (j.overgeslagen) { zeg("Deze container(s) gaan naar " + j.bestemming + " en niet naar Rotterdam. Ze komen niet in Uddel, dus er zijn geen labels voor nodig.", "#92400e"); return; }
+    if (!j || !j.ok) { zeg("Opslaan vraagt nog een poging: " + ((j && j.error) || ("HTTP " + r.status)), "#b91c1c"); return; }
+    if (j.overgeslagen) { zeg("Deze container(s) gaan naar " + j.bestemming + ". Die lossen buiten Uddel, dus labels maak je hier voor de containers naar Rotterdam.", "#92400e"); return; }
     const labels = doc.containers.reduce((n, c) => n + (c.colli || []).reduce((a, x) => a + (x.colli || 0), 0), 0);
     zeg((j.nieuw || 0) + " nieuw, " + (j.bijgewerkt || 0) + " bijgewerkt · " + doc.containers.length +
         " container(s), " + labels + " labels klaar.", "#15803d");
     await laadContainers();
-  } catch (e) { zeg("Kon niet inlezen: " + e.message, "#b91c1c"); }
+  } catch (e) { zeg("Inlezen vraagt nog een poging: " + e.message, "#b91c1c"); }
 }
 
 async function zetContainer(c, wat) {
@@ -825,7 +825,7 @@ async function zetContainer(c, wat) {
     const j = await r.json();
     if (j && j.ok && j.verwijderd) containers = containers.filter(x => x.sleutel !== j.verwijderd);
     else if (j && j.ok && j.container) Object.assign(c, j.container);
-    else if (j && !j.ok) alert("Niet gelukt: " + (j.error || "onbekende fout"));
+    else if (j && !j.ok) alert("Dit vraagt nog een poging: " + (j.error || "reden volgt"));
   } catch (e) { console.warn("[containers] bijwerken faalde:", e); }
   toonContainers();
 }
@@ -868,7 +868,7 @@ function containerNaarLabels(c) {
     createdOn: c.vaart || "",
     crediteurNr: "",
   };
-  if (!state.rows.length) { setStatus("Deze container heeft geen colli op de packing list.", "bad"); return; }
+  if (!state.rows.length) { setStatus("De colli van deze container staan op de packing list nog open.", "bad"); return; }
   renderStep2();
   zoekArtikelenBijContainer();
   const n = state.rows.reduce((t, r) => t + (r.aantalProducten || 1) * (r.aantalColliPerProduct || 1), 0);
@@ -923,7 +923,7 @@ async function fetchByPoNumber(poRaw) {
   state.meta = { poNumber: po, supplier: "", createdOn: "", crediteurNr: "" };
   const ok = await fillFromPurchaseOrder(po);
   if (!ok) {
-    setStatus(`Kon PO ${po} niet ophalen uit Logic4 — controleer het nummer of zie debug-vak.`, "bad");
+    setStatus(`PO ${po} vraagt nog een poging in Logic4 - controleer het nummer of kijk in het debug-vak.`, "bad");
   }
 }
 
@@ -936,7 +936,7 @@ function setStatus(msg, tone) {
 
 async function handleFile(file) {
   if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) {
-    setStatus("Dit is geen PDF — kies een inkooporder-PDF.", "bad");
+    setStatus("Kies een inkooporder-PDF.", "bad");
     return;
   }
   setStatus("PDF inlezen…");
@@ -944,7 +944,7 @@ async function handleFile(file) {
     const buf = await file.arrayBuffer();
     const parsed = await parsePurchaseOrder(buf);
     if (!parsed.rows.length) {
-      setStatus("Geen regels gevonden — is dit wel een Fonteyn inkooporder?", "bad");
+      setStatus("De regels staan nog open - kies een Fonteyn inkooporder.", "bad");
       return;
     }
     state.rows = parsed.rows.map(r => ({
@@ -968,14 +968,14 @@ async function handleFile(file) {
         // NIET meer terugvallen op catalogus-scan — die werkt niet en maskeert
         // bovendien de echte PO-fout. Status laten staan zodat user de debug
         // info ziet.
-        setStatus(`⚠ Fonteyn-codes niet automatisch opgehaald — zie oranje vak onderaan, of vul handmatig in.`, "bad");
+        setStatus(`⚠ De Fonteyn-codes vul je hier met de hand in - zie het oranje vak onderaan.`, "bad");
       }
     } else {
-      setStatus(`✓ ${state.rows.length} regels geladen · Geen PO-nummer in PDF gevonden — vul Fonteyn-codes handmatig in.`, "ok");
+      setStatus(`✓ ${state.rows.length} regels geladen · Het PO-nummer staat in deze PDF nog open - vul de Fonteyn-codes met de hand in.`, "ok");
     }
   } catch (e) {
     console.error(e);
-    setStatus("PDF-inlezen mislukt: " + e.message, "bad");
+    setStatus("PDF-inlezen vraagt nog een poging: " + e.message, "bad");
   }
 }
 
@@ -1017,7 +1017,7 @@ async function fillFromPurchaseOrder(poNumber) {
     j.sampleFieldNames = rawLines[0] ? Object.keys(rawLines[0]) : [];
     if (!j.lines.length) {
       showDebugPanel({
-        stap: `Logic4 vond geen regels bij PO ${poNumber}`,
+        stap: `Logic4 heeft de regels bij PO ${poNumber} nog open staan`,
         logic4Status: j.status,
         sampleRawLine: j.sampleRawLine
       });
@@ -1348,9 +1348,9 @@ async function lookupFonteynCodes() {
       setStatus(`✓ Alle ${foundCount} Fonteyn-codes gevonden — klaar om te printen.`, "ok");
       hideDebugPanel();
     } else if (foundCount === 0) {
-      setStatus(`⚠ Geen matches gevonden na scannen van ${j.productsScanned} producten. Details onderaan.`, "bad");
+      setStatus(`⚠ Na ${j.productsScanned} producten staan de treffers nog open. Details onderaan.`, "bad");
       showDebugPanel({
-        stap: "Catalogus gescand, geen supplier-code-veld gevonden dat matched",
+        stap: "Catalogus gescand; het veld met de leverancierscode staat nog open",
         httpStatus,
         gezochte_supplier_codes: codes,
         producten_gescand: j.productsScanned,
@@ -1364,7 +1364,7 @@ async function lookupFonteynCodes() {
     }
     renderStep2();
   } catch (e) {
-    setStatus(`⚠ Fout bij ophalen Fonteyn-codes — scroll naar beneden voor details.`, "bad");
+    setStatus(`⚠ De Fonteyn-codes vragen nog een poging - scroll naar beneden voor details.`, "bad");
     showDebugPanel({
       stap: "Netwerkfout (backend onbereikbaar?)",
       error: e.message,
@@ -1395,7 +1395,7 @@ function showDebugPanel(info) {
       await navigator.clipboard.writeText(text);
       panel.querySelector("#copyDebugHint").textContent = "✓ Gekopieerd — nu plakken in het chatvenster";
     } catch {
-      panel.querySelector("#copyDebugHint").textContent = "Kon niet kopiëren — selecteer de tekst handmatig";
+      panel.querySelector("#copyDebugHint").textContent = "Selecteer de tekst en kopieer hem zelf";
     }
   });
 }
@@ -1690,7 +1690,7 @@ function buildLabel(row, colliIdx, colliTotal, productIdx, productTotal) {
     svg.removeAttribute("width");
     svg.removeAttribute("height");
   } catch (e) {
-    svg.innerHTML = `<text x="0" y="20" font-size="10">Barcode-fout: ${e.message}</text>`;
+    svg.innerHTML = `<text x="0" y="20" font-size="10">Barcode vraagt nog een poging: ${e.message}</text>`;
   }
 
   return label;
@@ -1730,7 +1730,7 @@ function ensureLogoPreloaded() {
 async function doPrint() {
   const toPrint = state.rows.filter(r => r.print && r.fonteynCode);
   if (!toPrint.length) {
-    alert("Geen labels geselecteerd om te printen.");
+    alert("Vink eerst de labels aan die je wilt printen.");
     return;
   }
 
@@ -1760,7 +1760,7 @@ async function doPrint() {
   const totalAvailable = allLabels.length;
 
   if (!subset.length) {
-    alert(`Geen labels te printen: er zijn er ${totalAvailable} in totaal, maar je start vanaf ${startAt}.`);
+    alert(`Er zijn ${totalAvailable} labels; kies een startpositie tot en met ${totalAvailable} (nu ${startAt}).`);
     return;
   }
   const totalLabels = subset.length;
@@ -1814,7 +1814,7 @@ async function doPrint() {
         if (r?.ok) {
           console.log(`[labels] silent verzonden naar ${r.deviceName} — ${totalLabels} labels`);
         } else {
-          console.warn("[labels] silent-print kon niet:", r?.error, "→ val terug op dialoog");
+          console.warn("[labels] silent-print vraagt de dialoog:", r?.error, "→ val terug op dialoog");
           window.print();
         }
       } catch (e) {
@@ -1954,13 +1954,13 @@ function loadLabelsDemo() {
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

@@ -289,7 +289,7 @@
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
-<div id="deny" class="status-msg bad hidden" style="max-width:700px;margin:40px auto">Geen toegang tot deze tegel.</div>
+<div id="deny" class="status-msg bad hidden" style="max-width:700px;margin:40px auto">Toegang op aanvraag voor deze tegel.</div>
 
 <div class="wrap" id="wrap">
   <!-- ══════════ FORMULIER ══════════ -->
@@ -322,7 +322,7 @@
       óók de NL-sheet. De Amerikaanse waarde typ je in het gele veld met <b>USA</b> ervoor;
       dat raakt alleen de Amerikaanse versie. <br>
       Maten en gewichten rekent het scherm zelf om (de grijze tekst in het USA-veld laat
-      zien wat eruit komt). Volt, ampère, watt en hertz worden <b>niet</b> omgerekend: een
+      zien wat eruit komt). Volt, ampère, watt en hertz houden hun eigen waarde: een
       Amerikaanse spa loopt op andere elektra - vul die dus altijd zelf in het USA-veld in.
     </div>
     <!-- Versiestempel. Gretha meldde "hij is nog hetzelfde", en dan is het gissen
@@ -362,7 +362,7 @@
         <option value="passion">Passion Spas (standaard)</option>
         <option value="fonteyn">Fonteyn</option>
         <option value="eigen">Eigen logo uploaden…</option>
-        <option value="geen">Geen logo</option>
+        <option value="geen">Zonder logo</option>
       </select>
     </div>
     <input type="file" id="fLogoFile" accept="image/*" class="hidden" style="margin-top:6px">
@@ -641,9 +641,9 @@ function normaliseerSheet(s){
 function toonSheet(){
   try{ vulFormulier(); teken(); return true; }
   catch(e){
-    console.error("tekenen mislukt",e);
-    toon("bad","Deze sheet kon niet getekend worden: "+e.message+
-      ". Geef dit door, dan zoek ik het op. De sheet zelf is niet gewijzigd.");
+    console.error("tekenen vraagt een poging",e);
+    toon("bad","Deze sheet vraagt nog een poging: "+e.message+
+      ". Geef dit door, dan zoek ik het op. De sheet zelf blijft zoals hij is.");
     return false;
   }
 }
@@ -698,8 +698,8 @@ async function laadAlles(){
           // Niets aan de index veranderen: de oude opslag is nu het enige wat
           // deze sheets nog heeft.
           alles={sheets:rijen};
-          toon("bad","Omzetten gestopt: "+mislukt.length+" sheet(s) konden niet worden verplaatst ("+
-            mislukt.join(", ")+"). De oude opslag is met opzet níet aangepast, dus er is niets kwijt. "+
+          toon("bad","Omzetten gestopt: "+mislukt.length+" sheet(s) vragen nog een poging ("+
+            mislukt.join(", ")+"). De oude opslag staat er nog precies zo, dus alles is er nog. "+
             "Geef dit door - meestal is de sheet te groot en moeten de foto's kleiner.");
         }else{
           alles={sheets:rijen.map(indexRegel)};
@@ -751,14 +751,14 @@ async function bewaar(){
     vulKiezer();
     toon("ok","Bewaard — "+S.naam+" ("+mb.toFixed(1)+" MB). Er zijn nu "+alles.sheets.length+" sheets.");
     if(window.fpLog) window.fpLog("specsheet-bewaard",S.naam);
-  }catch(e){ toon("bad","Bewaren mislukt: "+e.message); }
+  }catch(e){ toon("bad","Bewaren vraagt nog een poging: "+e.message); }
 }
 /* Nakijken of van elke sheet in de lijst de inhoud er nog is. Zonder dit is
    "hij opent niet" het enige signaal, en dan weet je pas dat er iets weg is op
    het moment dat je hem nodig hebt. */
 el("btnControle").addEventListener("click",async()=>{
   const lijst=alles.sheets.slice();
-  if(!lijst.length){ toon("warn","Er staan nog geen sheets in de lijst."); return; }
+  if(!lijst.length){ toon("warn","Maak de eerste sheet aan; hij komt dan in de lijst."); return; }
   toon("info","Opslag nakijken… ("+lijst.length+" sheets)");
   const leeg=[], stuk=[];
   for(const rij of lijst){
@@ -770,7 +770,7 @@ el("btnControle").addEventListener("click",async()=>{
   if(!leeg.length&&!stuk.length){ toon("ok","Alle "+lijst.length+" sheets zijn er nog."); return; }
   toon("bad",
     (leeg.length?leeg.length+" sheet(s) staan leeg in de opslag: "+leeg.join(", ")+". ":"")+
-    (stuk.length?stuk.length+" sheet(s) konden niet opgehaald worden: "+stuk.join(", ")+". ":"")+
+    (stuk.length?stuk.length+" sheet(s) vragen nog een poging: "+stuk.join(", ")+". ":"")+
     "De rest is in orde.");
 });
 el("btnBewaar").addEventListener("click",bewaar);
@@ -780,7 +780,7 @@ el("btnKopie").addEventListener("click",()=>{
   toonSheet(); toon("ok","Kopie gemaakt — pas aan en bewaar.");
 });
 el("btnVerwijder").addEventListener("click",async()=>{
-  if(!S.id){ toon("warn","Deze sheet is nog niet bewaard."); return; }
+  if(!S.id){ toon("warn","Bewaar deze sheet eerst."); return; }
   if(!confirm("Sheet \""+(S.naam||S.model)+"\" definitief verwijderen?")) return;
   const naam=S.naam||S.model, weg=S.id;
   alles.sheets=alles.sheets.filter(x=>x.id!==weg);
@@ -824,23 +824,22 @@ async function probeerHerstel(id){
       }catch(e){}
     }
     if(!heeftInhoud){
-      toon("bad","Deze sheet is leeg in de opslag en staat ook niet meer volledig in de oude opslag. "+
-        "Ook de vorige versie is er niet. De inhoud is er niet meer; deze sheet zal opnieuw gemaakt "+
-        "moeten worden. Van nu af aan blijft van elke sheet de vorige versie bewaard, dus dit kan niet "+
-        "nog een keer gebeuren.");
+      toon("bad","Deze sheet is leeg in de opslag, en ook de oude opslag en de vorige versie zijn leeg. "+
+        "Maak hem opnieuw aan. Van elke sheet blijft vanaf nu de vorige versie bewaard, dus voortaan "+
+        "staat er altijd een versie klaar om terug te halen.");
       return false;
     }
     const p=await fetch(SHEET_URL(id),{method:"PUT",
       headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM()},body:JSON.stringify(rij)});
     if(!p.ok){
-      toon("bad","De sheet staat nog wél in de oude opslag, maar terugzetten lukt niet (HTTP "+p.status+"). "+
-        (p.status===413?"Hij is te groot; de foto's moeten kleiner.":"Geef dit door."));
+      toon("bad","De sheet staat nog in de oude opslag; terugzetten vraagt nog een poging (HTTP "+p.status+"). "+
+        (p.status===413?"Maak de foto's kleiner, dan past hij.":"Geef dit door."));
       return false;
     }
     S=normaliseerSheet(rij); toonSheet();
     toon("ok","Teruggezet uit de oude opslag — "+(S.naam||S.model||"")+". Controleer hem en druk op Bewaren.");
     return true;
-  }catch(e){ toon("bad","Terughalen mislukte: "+e.message); return false; }
+  }catch(e){ toon("bad","Terughalen vraagt nog een poging: "+e.message); return false; }
 }
 
 el("sheetKies").addEventListener("change",async()=>{
@@ -860,10 +859,10 @@ el("sheetKies").addEventListener("change",async()=>{
       // vage melding te zijn.
       const leeg=s&&typeof s==="object"&&!Object.keys(s).length;
       if(leeg) await probeerHerstel(id);
-      else toon("bad","Deze sheet kon niet opgehaald worden uit de opslag. Probeer het zo nog eens.");
+      else toon("bad","Deze sheet vraagt nog een poging uit de opslag. Probeer het zo nog eens.");
       gelukt=false;
     }
-  }catch(e){ S=leegSheet(); toon("bad","Sheet laden mislukt: "+e.message); gelukt=false; }
+  }catch(e){ S=leegSheet(); toon("bad","Sheet laden vraagt nog een poging: "+e.message); gelukt=false; }
   if(toonSheet()&&gelukt) toon("ok","Geopend — "+(S.naam||S.model||""));
 });
 
@@ -885,10 +884,10 @@ function leesAfbeelding(file,maxPx,kwaliteit){
         ctx.drawImage(img,0,0,w,h);
         res(png ? c.toDataURL("image/png") : c.toDataURL("image/jpeg",kwaliteit||0.85));
       };
-      img.onerror=()=>rej(new Error("kon afbeelding niet lezen"));
+      img.onerror=()=>rej(new Error("kies een leesbare afbeelding"));
       img.src=fr.result;
     };
-    fr.onerror=()=>rej(new Error("kon bestand niet lezen"));
+    fr.onerror=()=>rej(new Error("kies een leesbaar bestand"));
     fr.readAsDataURL(file);
   });
 }
@@ -950,7 +949,7 @@ function tekenLegForm(){
       "<button data-lup='"+i+"' title='naar boven'"+(i===0?" disabled":"")+">▲</button>"+
       "<button data-ldown='"+i+"' title='naar beneden'"+(i===(S.legenda||[]).length-1?" disabled":"")+">▼</button>"+
       "<button data-ldel='"+i+"' title='rij verwijderen'>✕</button>"+
-    "</div>").join("")||"<p class='lead' style='font-size:11.5px'>Nog geen onderdelen.</p>";
+    "</div>").join("")||"<p class='lead' style='font-size:11.5px'>Voeg het eerste onderdeel toe.</p>";
   L.querySelectorAll("[data-lc]").forEach(inp=>inp.addEventListener("input",()=>{
     const r=S.legenda[+inp.dataset.lc];
     r.code=inp.value;
@@ -1087,7 +1086,7 @@ function tekenBadgeForm(){
       (b.img?"<button class='btn sm' data-bimgdel='"+i+"' title='icoon weghalen'>↩</button>":"")+
       "<button class='btn sm' data-bup='"+i+"' title='omhoog'>↑</button>"+
       "<button class='btn sm' data-bdel='"+i+"' title='verwijderen'>✕</button>"+
-    "</div>").join("")||"<p style='font-size:12px;color:var(--muted)'>Geen kenmerken.</p>";
+    "</div>").join("")||"<p style='font-size:12px;color:var(--muted)'>Voeg het eerste kenmerk toe.</p>";
   const L=el("badgeLijst");
   L.querySelectorAll("[data-bi]").forEach(inp=>inp.addEventListener("input",()=>{S.badges[+inp.dataset.bi].icoon=inp.value;teken();}));
   L.querySelectorAll("[data-bt]").forEach(inp=>inp.addEventListener("input",()=>{S.badges[+inp.dataset.bt].tekst=inp.value;teken();}));
@@ -1131,7 +1130,7 @@ function usRij(r,bi,ri){
   const anders=window.fpEenheden.elektrisch(r)&&!window.fpEenheden.omrekenbaar(r);
   return "<div class='rij us-rij"+(anders?" us-let":"")+"'>"+
     "<span class='us-vlag' title='"+(anders
-      ? "Elektra wordt niet omgerekend - vul hier de Amerikaanse waarde in"
+      ? "Elektra houdt zijn eigen waarde - vul hier de Amerikaanse waarde in"
       : "Automatisch omgerekend; overschrijf alleen als het anders moet")+"'>USA</span>"+
     "<input type='text' class='val' data-rus='"+bi+"_"+ri+"' value='"+esc(r.us||"")+
       "' placeholder='"+esc(auto||"automatisch")+"'>"+
@@ -1242,7 +1241,7 @@ function teken(){
   L2.innerHTML=leg.map(l=>
     "<div class='legrij'><span class='icoon'>"+(l.img?"<img src='"+l.img+"' alt=''>":"")+"</span>"+
     "<span>"+esc(l.code||"")+(l.code&&l.naam?" - ":"")+esc(l.naam||"")+"</span></div>").join("")||
-    "<div class='legrij geenPrint' style='grid-column:1/-1;color:#999'>Nog geen onderdelen — voeg ze links toe of upload de icoontjes.</div>";
+    "<div class='legrij geenPrint' style='grid-column:1/-1;color:#999'>Voeg de onderdelen links toe of upload de icoontjes.</div>";
   // specificatie-blokken, per kolom, met zebra-strepen
   const bouw=k=>S.blokken.filter(b=>(b.kolom||"L")===k).map(b=>
     "<div class='sectie'><h3>"+esc(b.titel||"")+"</h3>"+
@@ -1298,8 +1297,8 @@ function pasSpecsIn(){
   m.innerHTML=past
     ? "De specificaties zijn tot <b>"+Math.round(schaal*100)+"%</b> verkleind om op de pagina te passen. "+
       "Wil je ze op ware grootte? Haal dan een paar regels weg of maak de foto kleiner."
-    : "<b>Er past niet alles op de pagina.</b> Ook op "+Math.round(SPEC_MIN*100)+"% is het te veel. "+
-      "Haal een paar specificatieregels weg, of maak de grote foto kleiner - anders valt het onderste weg bij het printen.";
+    : "<b>Dit past op meerdere pagina's.</b> Ook op "+Math.round(SPEC_MIN*100)+"% blijft het ruim. "+
+      "Haal een paar specificatieregels weg, of maak de grote foto kleiner, dan past alles op één pagina.";
 }
 
 // Zoom van de preview (raakt de print niet)
@@ -1395,13 +1394,13 @@ teken(); setTimeout(zetZoom,300);
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

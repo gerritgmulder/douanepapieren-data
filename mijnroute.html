@@ -16,7 +16,7 @@
     if (window.fpToegang && !fpToegang.mag("planning", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">De tegel Mijn route is voor de afdeling Spa planning.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">De tegel Mijn route is voor de afdeling Spa planning.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -304,7 +304,7 @@ function stopHtml(a){
 
   if (nr){
     if (!o) html += '<p class="wacht">Paklijst wordt opgehaald&hellip;</p>';
-    else if (!o.ok) html += '<p class="fout">Order '+esc(nr)+' kon niet uit Logic4 worden opgehaald: '+esc(o.error||"")+'</p>';
+    else if (!o.ok) html += '<p class="fout">Order '+esc(nr)+' vraagt Logic4 nog een keer: '+esc(o.error||"")+'</p>';
     else {
       var regels = pakRegels(o);
       var alGeleverd = (o.regels||[]).filter(function(r){ return r.open != null && r.afgeleverd > 0 && r.open <= 0; }).length;
@@ -318,13 +318,13 @@ function stopHtml(a){
             '<span class="aantal">'+esc(x.aantal)+'&times;</span></label>';
         }).join("")+
         (alGeleverd ? '<div class="regel" style="color:var(--grijs);font-size:12px">'+alGeleverd+' regel'+(alGeleverd===1?"":"s")+' al eerder geleverd, staat er niet meer bij</div>' : '')+
-        (!regels.length && !alGeleverd ? '<div class="regel" style="color:var(--grijs);font-size:12px">Geen regels om te pakken</div>' : '')+'</div>';
+        (!regels.length && !alGeleverd ? '<div class="regel" style="color:var(--grijs);font-size:12px">Alles staat al klaar</div>' : '')+'</div>';
     }
   }
   if (a.itsId){
     var m = (meldingen||[]).find(function(x){ return Number(x.id)===Number(a.itsId); });
     if (!meldingen) html += '<p class="wacht">Melding wordt opgehaald&hellip;</p>';
-    else if (!m) html += '<div class="melding"><div class="kopje">Melding '+esc(a.itsId)+'</div>'+esc(a.wat||"(niet meer in de open meldingen)")+'</div>';
+    else if (!m) html += '<div class="melding"><div class="kopje">Melding '+esc(a.itsId)+'</div>'+esc(a.wat||"(staat buiten de open meldingen)")+'</div>';
     else {
       var stukken = String(m.tekst||m.omschrijving||"").split(/\n\s*[_\-=]{3,}\s*\n?/).map(function(t){ return t.trim(); }).filter(Boolean);
       html += '<div class="melding">'+
@@ -408,11 +408,11 @@ function bonBlok(a, o){
   var betaling = isService
     ? '<p class="wacht">Het totaal van deze servicebon staat hierboven. Vul in of de klant ter plekke heeft betaald.</p>'
     : bt.openstaand == null
-    ? '<p class="wacht">Het orderbedrag kon niet worden opgehaald; vul hieronder in wat er is voldaan.</p>'
+    ? '<p class="wacht">Vul hieronder in wat er is voldaan; het orderbedrag volgt nog.</p>'
     : '<div class="geld"><span>Orderbedrag</span><b>'+geld(bt.orderbedrag)+'</b><span>Al betaald</span><b>'+geld(bt.reedsBetaald)+'</b>'+
       '<span>Openstaand</span><b class="'+(bt.openstaand>0.01?"open":"")+'">'+geld(bt.openstaand)+'</b></div>';
   return knop + '<div class="bon" data-bonvak="'+id+'">'+
-    (slot ? '<div class="slot">Deze bon is op kantoor '+esc(stTekst)+'. Wijzigen kan niet meer.</div>' : '')+
+    (slot ? '<div class="slot">Deze bon is op kantoor '+esc(stTekst)+'. Wijzigen gaat voortaan via kantoor.</div>' : '')+
     '<h4>Algemeen</h4>'+
     '<div class="rij2"><div><label>Monteur</label><input type="text" data-veld="monteur" value="'+esc(bon.monteur)+'" maxlength="80"'+dis+'></div>'+
     '<div><label>2e monteur</label><input type="text" data-veld="monteur2" value="'+esc(bon.monteur2)+'" maxlength="80"'+dis+'></div></div>'+
@@ -558,9 +558,9 @@ function bonBewaar(id, status, meteen){
       bon.status = status;
       var kopie = Object.assign({}, bon); delete kopie._geladen;
       var j = await lees("/planning/bon", { method:"POST", body: JSON.stringify({ bon: kopie }) });
-      if (!j.ok) throw new Error(j.error||"niet bewaard");
+      if (!j.ok) throw new Error(j.error||"vraagt nog een poging");
       bonMelding(id, meteen ? "Bewaard." : "", "ok");
-    }catch(e){ bonMelding(id, "Niet bewaard: "+e.message, "bad"); }
+    }catch(e){ bonMelding(id, "Bewaren vraagt nog een poging: "+e.message, "bad"); }
   }, meteen ? 0 : 700);
 }
 async function bonAfronden(id){
@@ -572,20 +572,20 @@ async function bonAfronden(id){
     if (leeg.length){ bonMelding(id, "Er staat een materiaalregel zonder omschrijving; vul die in of haal hem weg.", "bad"); return; }
   } else {
     var open = (window.OPLEVERBON_VRAGEN||[]).filter(function(v){ return !(bon.checklist[v.k]||{}).a; });
-    if (open.length){ bonMelding(id, open.length+" vraag(en) nog niet beantwoord: "+open.slice(0,3).map(function(v){ return v.t; }).join(", ")+(open.length>3?" ...":""), "bad"); return; }
+    if (open.length){ bonMelding(id, open.length+" vraag(en) staan nog open: "+open.slice(0,3).map(function(v){ return v.t; }).join(", ")+(open.length>3?" ...":""), "bad"); return; }
     var zonder = (window.OPLEVERBON_VRAGEN||[]).filter(function(v){ var c = bon.checklist[v.k]||{}; return c.a !== "ja" && !String(c.opm||"").trim(); });
     if (zonder.length){ bonMelding(id, "Vul een reden in bij: "+zonder.map(function(v){ return v.t; }).join(", "), "bad"); return; }
   }
   if ((bon.betaling.methode==="bank"||bon.betaling.methode==="contant") && !(bon.betaling.bedrag>0)){ bonMelding(id, "Vul het bedrag in dat bij de klant is voldaan.", "bad"); return; }
   if (bon.betaling.methode==="contant" && !bon.betaling.contantAan){ bonMelding(id, "Geef aan of het contante geld bij de monteur of op kantoor is.", "bad"); return; }
-  if (!isService && !bon.handtekeningMonteur){ bonMelding(id, "De handtekening van de monteur ontbreekt.", "bad"); return; }
-  if (!bon.handtekeningKlant){ bonMelding(id, "De handtekening van de klant ontbreekt.", "bad"); return; }
+  if (!isService && !bon.handtekeningMonteur){ bonMelding(id, "Zet nog even de handtekening van de monteur.", "bad"); return; }
+  if (!bon.handtekeningKlant){ bonMelding(id, "Zet nog even de handtekening van de klant.", "bad"); return; }
   clearTimeout(bonTimers[id]);
   try{
     bon.status = "klaar";
     var kopie = Object.assign({}, bon); delete kopie._geladen;
     var j = await lees("/planning/bon", { method:"POST", body: JSON.stringify({ bon: kopie }) });
-    if (!j.ok) throw new Error(j.error||"niet gelukt");
+    if (!j.ok) throw new Error(j.error||"vraagt nog een poging");
     try{ if (window.fpLog) window.fpLog("opleverbon-afgerond", "afspraak "+id+(bon.ordernr?" order "+bon.ordernr:"")); }catch(e){}
     teken();
     bonMelding(id, "Bon afgerond. Kantoor ziet hem nu in Planning.", "ok");
@@ -595,7 +595,7 @@ async function bonAfronden(id){
 function teken(){
   var box = $("inhoud"), lijst = mijnRoutes(dagGekozen);
   if (!lijst.length){
-    box.innerHTML = '<div class="leeg">Geen route met stops op deze dag.</div>';
+    box.innerHTML = '<div class="leeg">Op deze dag staat de route nog open.</div>';
     return;
   }
   box.innerHTML = lijst.map(function(x){
@@ -603,7 +603,7 @@ function teken(){
     var tot = 0, af = 0;
     alleOrders.forEach(function(nr){ var o = orders[nr]; if (o && o.ok){ pakRegels(o).forEach(function(x){ tot++; if (gepakt(nr,x.i)) af++; }); } });
     return '<section class="route"><h2><span class="nr">Route '+esc(x.r.nr)+'</span>'+
-      '<span class="wie">'+esc(rijders(x.r).join(" & ")||"nog niemand")+(x.vanMij||kijkAls==="*"?"":" (niet van jou)")+'</span>'+
+      '<span class="wie">'+esc(rijders(x.r).join(" & ")||"nog niemand")+(x.vanMij||kijkAls==="*"?"":" (van een collega)")+'</span>'+
       (tot ? '<span class="voortgang">'+af+'/'+tot+' gepakt</span>' : '')+'</h2>'+
       x.stops.map(stopHtml).join("")+'</section>';
   }).join("");
@@ -629,7 +629,7 @@ async function haalOrders(lijst){
     nrs.forEach(function(n){ bezig[n]=1; });
     wacht.push(lees("/planning/route-print?orders="+encodeURIComponent(nrs.slice(0,15).join(","))).then(function(j){
       (j.orders||[]).forEach(function(o){ orders[String(o.nr)] = o; });
-      nrs.forEach(function(n){ if (!orders[n]) orders[n] = { nr:n, ok:false, error:"niet gevonden" }; });
+      nrs.forEach(function(n){ if (!orders[n]) orders[n] = { nr:n, ok:false, error:"staat nog open" }; });
     }).catch(function(e){ nrs.forEach(function(n){ orders[n] = { nr:n, ok:false, error:e.message }; }); }));
     wacht.push(lees("/planning/betaalstatus?orders="+nrs.join(",")+(its.length?"&its="+its.join(","):"")).then(function(j){
       Object.keys(j.orders||{}).forEach(function(k){ betaald[k]=j.orders[k]; });
@@ -664,7 +664,7 @@ async function vink(nr, i, aan){
       try{ if (window.fpLog) window.fpLog(aan?"paklijst-gepakt":"paklijst-teruggezet", "order "+nr+" regel "+(i+1)); }catch(e){}
     }catch(e){
       if (vorige) paklijst[k] = vorige; else delete paklijst[k];
-      $("fout").innerHTML = '<div class="fout">Vinkje niet bewaard: '+esc(e.message)+'. Probeer het zo nog eens.</div>';
+      $("fout").innerHTML = '<div class="fout">Vinkje vraagt nog een poging: '+esc(e.message)+'. Probeer het zo nog eens.</div>';
       teken();
     }
   }, 400);

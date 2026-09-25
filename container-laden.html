@@ -173,7 +173,7 @@
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
-<div id="deny" class="status-msg bad hidden" style="max-width:700px;margin:40px auto">Geen toegang tot deze tegel.</div>
+<div id="deny" class="status-msg bad hidden" style="max-width:700px;margin:40px auto">Toegang op aanvraag voor deze tegel.</div>
 
 <main id="wrapAlles">
   <h2>Container laden</h2>
@@ -203,7 +203,7 @@
       <input type="text" id="zoek" placeholder="Zoek op modelnaam of fabriekscode…">
       <p class="lead" style="font-size:11.5px;margin:8px 0 0">Achter elk model staat hoeveel er van dát model alleen
         in de gekozen container gaan. Klik op de regel om er één toe te voegen.
-        Klopt een maat niet? Met ✏ pas je hem aan; dat geldt dan overal, ook in de voorraadwaardering van Amerika.</p>
+        Wijkt een maat af? Met ✏ pas je hem aan; dat geldt dan overal, ook in de voorraadwaardering van Amerika.</p>
       <p class="lead" style="font-size:11.5px;margin:4px 0 0" id="matenStand"></p>
       <div id="modelLijst"></div>
       <details class="zonder" id="zonderMaat"></details>
@@ -218,11 +218,11 @@
 
   <!-- ══════════ ONTBREKENDE MATEN IN LOGIC4 ══════════ -->
   <div class="card" id="l4Kaart">
-    <h3>Ontbrekende maten opzoeken in Logic4</h3>
+    <h3>Openstaande maten opzoeken in Logic4</h3>
     <p class="lead" style="margin:0 0 12px">De maten hierboven komen uit de prijslijsten, de verpakkingslijst en de
-      specificatiesheets. Wat daar niet in staat, staat misschien wel in Logic4 bij het artikel zelf. Deze knop
-      zoekt dat op onder jouw eigen Logic4-login en laat zien wát hij vindt - er wordt niets automatisch
-      overgenomen, want een maat die nergens op slaat is erger dan geen maat.</p>
+      specificatiesheets. Wat daar nog open staat, staat misschien wel in Logic4 bij het artikel zelf. Deze knop
+      zoekt dat op onder jouw eigen Logic4-login en laat zien wát hij vindt - overnemen doe je zelf, zodat
+      er alleen maten in komen die kloppen.</p>
     <button class="btn solid" id="btnL4" type="button">🔎 Zoeken in Logic4</button>
     <div id="l4Status" class="status-msg hidden"></div>
     <div id="l4Uit"></div>
@@ -244,7 +244,7 @@
 
     <div style="border-top:1px solid var(--border);margin-top:14px;padding-top:12px">
       <div class="keuze" style="padding:0 0 6px"><input type="checkbox" id="dlgGeenCover">
-        <label for="dlgGeenCover" style="margin:0;font-size:13px;color:var(--ink)">Dit model heeft geen cover</label>
+        <label for="dlgGeenCover" style="margin:0;font-size:13px;color:var(--ink)">Dit model gaat zonder cover</label>
       </div>
       <div id="dlgCoverVelden">
         <div class="maten" style="margin-top:4px">
@@ -315,7 +315,7 @@ function nl2(n){return Number(n||0).toLocaleString("nl-NL",{maximumFractionDigit
 /* De maten hieronder zijn de gangbare ISO-maten. Let op: ze verschillen een
    paar millimeter per bouwer en per bouwjaar, dus voor het rekenen wordt naar
    beneden afgerond op hele centimeters. Dat is de veilige kant: liever een
-   spa te weinig ingepland dan een container die aan de kade niet dichtgaat.
+   spa te weinig ingepland dan een container die aan de kade net te vol is.
 
    'deur' is de deuropening en die is smaller en lager dan de container zelf.
    Bij een 40 ft High Cube is de binnenkant 269,8 hoog maar de deur 258,5 - een
@@ -365,7 +365,7 @@ function bouwModellen(){
       const maat=window.fpAfmetingen ? window.fpAfmetingen.maatVan(m.model,m.afmeting,m.code) : null;
       if(maat){
         // Elke spa gaat met zijn cover mee. Die maat volgt uit de spa zelf,
-        // tenzij Chantal hem heeft ingevuld of op 'geen cover' gezet.
+        // tenzij Chantal hem heeft ingevuld of op 'zonder cover' gezet.
         const cover=window.fpAfmetingen.coverVan(m.model,m.code,maat,f.fabriek);
         uit.push({
           cover:cover,
@@ -809,13 +809,13 @@ function tekenModellen(){
               (m.cover.bron==="handmatig"?", zelf ingevuld":"")+"'>cover "+
               ((m.cover.delen||1)>1?(m.cover.delen+"&times; "):"")+
               nl2(m.cover.l)+" x "+nl2(m.cover.b)+" x "+nl(m.cover.h)+"</span>"
-            : " · <span title='Dit model heeft geen cover'>geen cover</span>")+
+            : " · <span title='Dit model gaat zonder cover'>zonder cover</span>")+
           // Waar de maat vandaan komt. Bij een verschil tussen de bronnen moet
           // je kunnen zien welke je voor je hebt.
           (m.bron==="handmatig"
             ? " · <b style='color:var(--passion)' title='Hier zelf ingevuld; gaat voor alle lijsten'>zelf ingevuld</b>"
             : m.bron==="specsheet"
-              ? " · <span title='Maat van de specificatiesheet, niet van de prijslijst'>specsheet</span>"
+              ? " · <span title='Maat van de specificatiesheet (de prijslijst geeft hier de ruimte)'>specsheet</span>"
               : m.bron==="verpakkingslijst"
                 ? " · <span title='Maat van de kist zoals hij vervoerd wordt, uit Maten + gewichten'>kistmaat</span>"
                 : "")+
@@ -823,9 +823,9 @@ function tekenModellen(){
         (mx===0
           ? "<span class='past' style='color:#b91c1c' title='"+
             (Math.min(m.b,m.h)>C.b/100
-              ? "Dit model is breder dan een zeecontainer binnenwerks ("+nl2(C.b/100)+" cm). Chantal (27 aug 2026): de Turbine Grand komt daarom in een open container naar Nederland, en gaat niet naar Amerika."
-              : "Dit model past in geen enkele stand in de gekozen container.")+
-            "'><b data-max='"+m.i+"'>past niet</b>"+
+              ? "Dit model is breder dan een zeecontainer binnenwerks ("+nl2(C.b/100)+" cm). Chantal (27 aug 2026): de Turbine Grand komt daarom in een open container naar Nederland, en blijft binnen Europa. Amerika."
+              : "Dit model vraagt een andere container; voor de gekozen container is hij te groot.")+
+            "'><b data-max='"+m.i+"'>vraagt een andere container</b>"+
             (Math.min(m.b,m.h)>C.b/100?"open container":"in deze container")+"</span>"
           : "<span class='past'><b data-max='"+m.i+"'>"+(mx==null?"…":mx)+"</b>per container</span>")+
         "<button type='button' class='pen' data-stop='1' data-pen='"+m.i+"' title='Maat aanpassen'>✏</button>"+
@@ -835,7 +835,7 @@ function tekenModellen(){
           "<button type='button' data-plus2='"+m.i+"' title='eentje erbij'>+</button>"+
         "</span></div>";
     }).join("")+"</div>"
-  ).join("") : "<p class='lead' style='font-size:12.5px;margin-top:14px'>Geen model gevonden.</p>";
+  ).join("") : "<p class='lead' style='font-size:12.5px;margin-top:14px'>Hier komen de modellen - probeer een ander zoekwoord.</p>";
 
   // In de HTML staat de plek in de lijst, want die is kort en veilig als
   // attribuut. De keuze zelf gaat op de vaste sleutel van het model.
@@ -885,12 +885,12 @@ function tekenZonderMaat(){
   if(!ZONDER_MAAT.length){
     d.classList.remove("hidden");
     d.innerHTML="<summary>Van alle modellen is de maat bekend</summary>"+
-      "<p class='lead' style='font-size:11.5px;margin:6px 0'>Er staat niets meer open.</p>";
+      "<p class='lead' style='font-size:11.5px;margin:6px 0'>Alles staat compleet.</p>";
     return;
   }
   d.classList.remove("hidden");
   d.innerHTML="<summary>"+ZONDER_MAAT.length+" modellen zonder afmeting - vul ze hier in</summary>"+
-    "<p class='lead' style='font-size:11.5px;margin:6px 0'>Van deze modellen staat geen maat op de prijslijst, de "+
+    "<p class='lead' style='font-size:11.5px;margin:6px 0'>Van deze modellen komt de maat nog ergens anders vandaan dan de prijslijst, de "+
     "verpakkingslijst of een specificatiesheet. Weet je de maat, vul hem dan in: hij wordt centraal bewaard en geldt "+
     "meteen voor iedereen, ook in de voorraadwaardering van Amerika.</p>"+
     "<table class='grid'><thead><tr><th>Model</th><th>Code</th><th>Fabriek</th><th></th></tr></thead><tbody>"+
@@ -929,7 +929,7 @@ function openMaat(m){
       ? "Nu ingevuld op <b>"+maatTekst(eigen)+"</b>"+(eigen.door?" door "+esc(eigen.door):"")+"."
       : auto
         ? "Nu <b>"+maatTekst(auto)+"</b>, volgens "+bronTekst(auto.bron)+"."
-        : "Van dit model is nog nergens een maat bekend.")+
+        : "De maat van dit model volgt nog.")+
     (eigen&&auto ? " Zonder jouw invulling zou hij "+maatTekst(auto)+" zijn ("+bronTekst(auto.bron)+")." : "");
   const start=eigen||auto||{l:"",b:"",h:""};
   el("dlgL").value=start.l||""; el("dlgB").value=start.b||""; el("dlgH").value=start.h||"";
@@ -965,7 +965,7 @@ el("dlgGeenCover").addEventListener("change",coverVeldenTonen);
 function sluitMaat(){ el("dlgLaag").classList.add("hidden"); dlgHuidig=null; }
 /* Opslaan. cover mag zijn:
      {l,b}  een eigen covermaat (open, niet gevouwen)
-     false  dit model heeft geen cover
+     false  dit model gaat zonder cover
      null   volg de spa-maat weer, oftewel automatisch
    Wat gelijk is aan wat het dashboard zelf zou uitrekenen, wordt als null
    bewaard. Zo blijft de cover meebewegen als de spa-maat later wijzigt. */
@@ -1038,7 +1038,7 @@ function containerSpec(){
     "<p class='lead' style='font-size:11.5px;margin:8px 0 0'>Gangbare ISO-maten. Ze lopen een paar millimeter "+
     "uiteen per bouwer en bouwjaar, dus er wordt gerekend met "+nl(C.l)+" x "+nl(C.b)+" x "+nl(C.h)+
     " cm - naar beneden afgerond op hele centimeters. Liever een spa te weinig ingepland dan een container "+
-    "die aan de kade niet dichtgaat.</p>";
+    "die aan de kade net te vol is.</p>";
 }
 
 function tekenPlan(){
@@ -1048,9 +1048,9 @@ function tekenPlan(){
     "Binnenwerks "+nl(C.l)+" x "+nl(C.b)+" x "+nl(C.h)+" cm, dat is "+inhoud.toFixed(1).replace(".",",")+" m&sup3; ruimte. "+
     "De deur is "+nl2(C.deur.b/10)+" cm breed en "+nl2(C.deur.h/10)+" cm hoog, en daar moet elke spa doorheen. "+
     "Elke spa krijgt er "+SPELING+" cm ruimte naast en achter zich, om hem erin te kunnen schuiven; "+
-    "bovenop niet, want spa's staan gewoon op elkaar. Elke spa staat op een pallet van "+PALLET+" cm, en tussen twee spa's op elkaar zit een plaat van "+PLAAT+" cm. "+
-    "Stapelen kan alleen recht op elkaar, nooit half over twee spa's. "+
-    (metZwemspa()?"<b>Er zit een zwemspa bij: alle covers gaan daarin en tellen niet mee.</b> ":"")+
+    "bovenop houd je vrij, want spa's staan gewoon op elkaar. Elke spa staat op een pallet van "+PALLET+" cm, en tussen twee spa's op elkaar zit een plaat van "+PLAAT+" cm. "+
+    "Stapelen gaat recht op elkaar, steeds één spa op één spa. "+
+    (metZwemspa()?"<b>Er zit een zwemspa bij: alle covers gaan daarin en blijven buiten de telling.</b> ":"")+
     (kantelen?"Op de kant leggen mag.":"De spa's blijven rechtop staan.")+
     " Het vulpercentage telt die verpakkingsruimte mee."+
     "<details style='margin-top:6px'><summary style='cursor:pointer;color:var(--fonteyn-green);font-weight:600'>"+
@@ -1083,7 +1083,7 @@ function tekenPlan(){
   el("plan").innerHTML=
     containers.map((c,i)=>kaart(c,i,inhoud)).join("")+
     (nietGeplaatst.length
-      ? "<div class='status-msg warn'><b>"+nietGeplaatst.length+" stuk(s) passen er niet bij</b> - "+
+      ? "<div class='status-msg warn'><b>"+nietGeplaatst.length+" stuk(s) gaan mee in een volgende container</b> - "+
         "meer dan "+MAX_CONTAINERS+" containers wordt hier niet doorgerekend. Haal er wat af of splits de zending.</div>"
       : "");
 
@@ -1104,7 +1104,7 @@ function tekenPlan(){
   }else{
     containers.forEach((c,i)=>{
       const cv=el("ctrCanvas"+i);
-      if(cv) cv.outerHTML="<div class='geen3d'>De 3D-tekening kon niet geladen worden (geen internet?). "+
+      if(cv) cv.outerHTML="<div class='geen3d'>De 3D-tekening komt zodra er internet is. "+
         "De aantallen hiernaast kloppen wel.</div>";
     });
   }
@@ -1241,7 +1241,7 @@ function koppelPlan2D(i){
         const andere=dozen.filter((_,j)=>j!==k);
         const hoog=past(C,d,st,{x:d.x,y:d.y,z:d.z},andere);
         if(hoog){ d.dl=st[0]; d.db=st[1]; d.dh=hoog; d.plaat=hoog-st[2]; plan2dMeld(i,""); }
-        else plan2dMeld(i,"Gedraaid past hij hier niet (buiten de container, tegen een andere spa, of niet meer recht op de spa eronder).");
+        else plan2dMeld(i,"Gedraaid vraagt hij meer ruimte dan hier is (de container, een andere spa, of recht op de spa eronder).");
         plan2dHerteken(i); return;
       }
       /* Loslaten: bovenop de doos onder het loslaatpunt, anders op de vloer. */
@@ -1263,11 +1263,11 @@ function koppelPlan2D(i){
         if(!gelukt){
           const coversErop=dozen.some((c,j)=>j!==k&&c.soort==="cover"&&Math.abs(c.z-(q.z+q.dh))<0.01&&c.x<q.x+q.dl&&c.x+c.dl>q.x&&c.y<q.y+q.db&&c.y+c.db>q.y);
           reden=(d.dl>q.dl+0.01||d.db>q.db+0.01)?"Deze spa is groter dan de spa eronder; stapelen kan alleen recht op een grotere of even grote spa."
-          :(q.plat===false?"Op een spa die op zijn kant staat kun je niet stapelen."
-          :(d.plat===false?"Een spa op zijn kant hoort op de vloer, niet bovenop."
+          :(q.plat===false?"Op een spa die op zijn kant staat blijft de plek vrij."
+          :(d.plat===false?"Een spa op zijn kant hoort op de vloer."
           :(coversErop?"Er liggen covers op die spa. Sleep die eerst ergens anders heen."
           :(q.z+q.dh+d.dh+PLAAT>C.h+0.01?"Te hoog: met pallet en plaat komt hij boven het dak van de container."
-          :"Zo past hij daar niet (tegen een andere spa aan)."))));
+          :"Zo vraagt hij meer ruimte dan er is (tegen een andere spa aan)."))));
         }
       }
       if(!gelukt&&!onder){ gelukt=plan2dProbeer(i,k,x,y,0); if(!gelukt) reden="Op die plek staat al iets, of hij steekt buiten de container."; }
@@ -1301,9 +1301,9 @@ async function helperCall(pad,opties){
   o.headers=Object.assign({"Authorization":"Bearer "+sessie()},o.headers||{});
   let r;
   try{ r=await fetch(pad,o); }
-  catch(e){ throw new Error("De helper op deze computer reageert niet. Draait het dashboard als app?"); }
+  catch(e){ throw new Error("De helper op deze computer komt zo terug. Draait het dashboard als app?"); }
   if(r.status===401) throw new Error("Je Logic4-sessie is verlopen. Ga terug naar het dashboard en log opnieuw in.");
-  if(r.status===404) throw new Error("Deze pagina draait niet in de Fonteyn-app, dus Logic4 is hier niet bereikbaar.");
+  if(r.status===404) throw new Error("Open deze pagina in de Fonteyn-app, dan is Logic4 hier bereikbaar.");
   const j=await r.json().catch(()=>null);
   if(!j) throw new Error("Onleesbaar antwoord van de helper (HTTP "+r.status+").");
   if(j.ok===false) throw new Error(j.error||("HTTP "+r.status));
@@ -1338,7 +1338,7 @@ async function zoekInLogic4(){
   const knop=el("btnL4"); knop.disabled=true;
   el("l4Uit").innerHTML="";
   try{
-    if(!ZONDER_MAAT.length){ l4Melding("ok","Er ontbreekt geen enkele maat meer."); return; }
+    if(!ZONDER_MAAT.length){ l4Melding("ok","Alle maten staan er."); return; }
     // Een artikelnummer van Logic4 is puur cijfers (800052, 454117). Alles met
     // letters erin is een fabriekscode en moet via de leverancierscode gezocht.
     const nummers=ZONDER_MAAT.filter(m=>/^\d{4,}$/.test(String(m.code||"").trim()));
@@ -1390,7 +1390,7 @@ async function zoekInLogic4(){
       metIets.length
         ? "Bij <b>"+metIets.length+"</b> van de "+gevonden.length+" modellen staat er iets in Logic4 dat op een maat lijkt. "+
           "Kijk hieronder of het klopt; overnemen doe ik pas als jij het zegt."
-        : "Logic4 heeft bij deze artikelen geen enkel veld dat op een maat lijkt. Dan moeten de maten bij de fabriek vandaan komen.");
+        : "Bij deze artikelen houdt Logic4 de maat elders bij. De maten komen dan bij de fabriek vandaan.");
 
     el("l4Uit").innerHTML=
       "<div class='tablewrap' style='margin-top:12px'><table class='grid'><thead><tr>"+
@@ -1403,8 +1403,8 @@ async function zoekInLogic4(){
       (voorbeeld
         ? "<details style='margin-top:10px'><summary style='cursor:pointer;font-size:12px;color:var(--fonteyn-green);font-weight:600'>"+
           "Alle velden die Logic4 bij een artikel bijhoudt</summary>"+
-          "<p class='lead' style='font-size:11.5px;margin:6px 0'>Uit één willekeurig artikel. Staat er hier geen enkel "+
-          "veld voor lengte, breedte of hoogte tussen, dan houdt Logic4 die simpelweg niet bij.</p>"+
+          "<p class='lead' style='font-size:11.5px;margin:6px 0'>Uit één willekeurig artikel. Staat er een "+
+          "veld voor lengte, breedte of hoogte tussen, dan houdt Logic4 die bij; anders komen de maten bij de fabriek vandaan.</p>"+
           "<pre style='font-size:11px;background:#f9fafb;border:1px solid var(--border);border-radius:8px;"+
           "padding:10px;overflow:auto;max-height:260px'>"+esc(Object.keys(voorbeeld).join("\n"))+"</pre></details>"
         : "");

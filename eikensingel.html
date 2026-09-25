@@ -307,7 +307,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   const sessionId = localStorage.getItem(SESSION_KEY);
   if (!sessionId) {
     window.location.replace("dashboard.html");
-    throw new Error("Geen sessie — doorverwijzen naar dashboard");
+    throw new Error("Log opnieuw in - je gaat terug naar het dashboard");
   }
   const origFetch = window.fetch.bind(window);
   window.fetch = function (input, opts) {
@@ -444,20 +444,20 @@ function houseStatus(house) {
 
   // Als er nu een gast is en niet betaald → rood
   if (current && !current.paid) {
-    return { color: "red", reason: `Huidige gast (${current.guestName}) heeft niet betaald` };
+    return { color: "red", reason: `Huidige gast (${current.guestName}) wacht nog op betaling` };
   }
 
   // Volgende boeking aankomt: hoeveel uur tot check-in?
   if (next) {
     const hoursToArrival = (arrivalDateTime(next).getTime() - nowMs()) / (1000 * 3600);
     if (!next.cleanedBefore) {
-      if (hoursToArrival < 3)  return { color: "red",    reason: `Nog niet schoongemaakt — ${next.guestName} komt over <3 u` };
-      if (hoursToArrival < 6)  return { color: "orange", reason: `Nog niet schoongemaakt — ${next.guestName} komt over <6 u` };
+      if (hoursToArrival < 3)  return { color: "red",    reason: `Schoonmaak staat nog open — ${next.guestName} komt over <3 u` };
+      if (hoursToArrival < 6)  return { color: "orange", reason: `Schoonmaak staat nog open — ${next.guestName} komt over <6 u` };
     }
     if (!next.paid) {
       const hoursToArrivalAbs = Math.max(0, hoursToArrival);
-      if (hoursToArrivalAbs < 24) return { color: "red",    reason: `${next.guestName} (volgende gast) heeft niet betaald, komt <24 u` };
-      if (hoursToArrivalAbs < 48) return { color: "orange", reason: `${next.guestName} (volgende gast) heeft niet betaald, komt <48 u` };
+      if (hoursToArrivalAbs < 24) return { color: "red",    reason: `${next.guestName} (volgende gast) wacht nog op betaling, komt <24 u` };
+      if (hoursToArrivalAbs < 48) return { color: "orange", reason: `${next.guestName} (volgende gast) wacht nog op betaling, komt <48 u` };
     }
   }
 
@@ -614,14 +614,14 @@ async function load() {
   try {
     const r = await fetch("/api/eikensingel");
     if (r.status === 403) {
-      alert("Je hebt geen toegang tot Eikensingel.");
+      alert("Toegang tot Eikensingel is op aanvraag.");
       window.location.replace("dashboard.html"); return;
     }
     if (!r.ok) throw new Error("HTTP " + r.status);
     state.parkState = await r.json();
   } catch (e) {
     console.error(e);
-    alert("Kon Eikensingel-data niet laden: " + e.message);
+    alert("De gegevens van Eikensingel vragen nog een poging: " + e.message);
     state.parkState = { houses: {} };
   }
   // Sync-balkje voor full-rol — sync draait volledig in de browser, dus geen
@@ -658,11 +658,11 @@ function updateIcalStatus() {
   const withSync = houses.filter(h => h.lastIcalSync);
   const configured = houses.filter(h => (h.icalFeedUrl || "").trim()).length;
   if (configured === 0) {
-    el("icalStatus").textContent = "AirBnB iCal nog niet ingesteld — open een huis om de feed-URL in te vullen";
+    el("icalStatus").textContent = "AirBnB iCal staat klaar om ingesteld te worden — open een huis en vul de feed-URL in";
     return;
   }
   if (!withSync.length) {
-    el("icalStatus").textContent = `${configured} feed${configured === 1 ? "" : "s"} ingesteld — nog niet gesynchroniseerd`;
+    el("icalStatus").textContent = `${configured} feed${configured === 1 ? "" : "s"} ingesteld — de eerste synchronisatie volgt`;
     return;
   }
   const lastIso = withSync.map(h => h.lastIcalSync).sort().slice(-1)[0];
@@ -670,7 +670,7 @@ function updateIcalStatus() {
   const ago = minsAgo < 1 ? "< 1 min" : minsAgo < 60 ? `${minsAgo} min` : `${Math.round(minsAgo/60)} u`;
   const errors = houses.filter(h => h.lastIcalError).length;
   let txt = `AirBnB sync: ${ago} geleden`;
-  if (errors) txt += ` ⚠️ ${errors} fout${errors === 1 ? "" : "en"}`;
+  if (errors) txt += ` ⚠️ ${errors} huis${errors === 1 ? "" : "zen"} vraagt nog een poging`;
   el("icalStatus").textContent = txt;
 }
 
@@ -714,8 +714,8 @@ function renderHouseCard(h) {
           ? `<div class="guest">${escapeHtml(current.guestName)}</div>
              <div class="period">${escapeHtml(formatPeriode(current))}</div>
              <div class="flags">
-               ${current.paid ? `<span class="flag ok">betaald</span>` : `<span class="flag bad">niet betaald</span>`}
-               ${current.cleanedBefore ? `<span class="flag ok">schoon</span>` : `<span class="flag todo">nog niet schoon</span>`}
+               ${current.paid ? `<span class="flag ok">betaald</span>` : `<span class="flag bad">wacht op betaling</span>`}
+               ${current.cleanedBefore ? `<span class="flag ok">schoon</span>` : `<span class="flag todo">schoonmaak volgt</span>`}
                <span class="flag info">${escapeHtml(SOURCE_LABELS[current.source] || current.source)}</span>
              </div>`
           : `<div class="empty">— leeg —</div>`}
@@ -729,7 +729,7 @@ function renderHouseCard(h) {
                ${next.paid ? `<span class="flag ok">betaald</span>` : `<span class="flag todo">betaling open</span>`}
                ${next.cleanedBefore ? `<span class="flag ok">huis schoon</span>` : `<span class="flag todo">schoonmaak open</span>`}
              </div>`
-          : `<div class="empty">— niets gepland —</div>`}
+          : `<div class="empty">— vrij —</div>`}
       </div>
     `;
   }
@@ -815,7 +815,7 @@ function renderModal() {
       ${h.type === "rental" ? `
         <h3>Boekingen</h3>
         <div class="bookings" id="bookingsList">
-          ${bookingCards || `<div style="color:var(--muted);font-style:italic;padding:14px;text-align:center;background:#fafaf8;border-radius:8px;">Nog geen boekingen — voeg er één toe ↓</div>`}
+          ${bookingCards || `<div style="color:var(--muted);font-style:italic;padding:14px;text-align:center;background:#fafaf8;border-radius:8px;">Voeg de eerste boeking toe ↓</div>`}
         </div>
         <div class="toolbar">
           <button class="cta" type="button" onclick="window._addBooking()">+ Nieuwe boeking</button>
@@ -875,7 +875,7 @@ function renderModal() {
       try {
         txt = (await navigator.clipboard.readText()).trim();
       } catch (err) {
-        alert("Kon klembord niet lezen: " + err.message + "\n\nKopieer iets en probeer opnieuw, of plak handmatig met Cmd+V in het veld.");
+        alert("Het klembord vraagt nog een poging: " + err.message + "\n\nKopieer iets en probeer opnieuw, of plak zelf met Cmd+V in het veld.");
         return;
       }
       if (!txt) { alert("Klembord is leeg."); return; }
@@ -1024,7 +1024,7 @@ window._addBooking = async () => {
     if (ss) { ss.textContent = "✓ boeking toegevoegd — laat Fransje 'm zo nodig nog aanvullen"; ss.className = "save-status ok"; }
   } catch (e) {
     console.error(e);
-    if (ss) { ss.textContent = "Toevoegen mislukt: " + e.message; ss.className = "save-status bad"; }
+    if (ss) { ss.textContent = "Toevoegen vraagt nog een poging: " + e.message; ss.className = "save-status bad"; }
   }
 };
 
@@ -1052,7 +1052,7 @@ function saveHouse(h) {
       if (ss) { ss.textContent = "✓ opgeslagen"; ss.className = "save-status ok"; }
     } catch (e) {
       console.error(e);
-      if (ss) { ss.textContent = "Opslaan mislukt: " + e.message; ss.className = "save-status bad"; }
+      if (ss) { ss.textContent = "Opslaan vraagt nog een poging: " + e.message; ss.className = "save-status bad"; }
     }
   }, 400);
 }
@@ -1074,7 +1074,7 @@ el("icalSyncBtn").addEventListener("click", async () => {
     const houses = Object.values(state.parkState?.houses || {})
       .filter(h => (h.icalFeedUrl || "").trim());
     if (!houses.length) {
-      alert("Nog geen iCal-feed-URLs ingesteld. Open een huis en plak de AirBnB-kalender-export-URL in het iCal-feed-veld.");
+      alert("Stel eerst een iCal-feed-URL in: open een huis en plak de AirBnB-kalender-export-URL in het iCal-feed-veld.");
       return;
     }
     for (const h of houses) {
@@ -1096,7 +1096,7 @@ el("icalSyncBtn").addEventListener("click", async () => {
     if (errors.length) msg += `\n\nFouten:\n${errors.join("\n")}`;
     alert(msg);
   } catch (e) {
-    alert("Sync mislukt: " + e.message);
+    alert("Synchroniseren vraagt nog een poging: " + e.message);
   } finally {
     btn.disabled = false; btn.textContent = "🔄 Sync AirBnB";
   }
@@ -1110,7 +1110,7 @@ async function saveHouseImmediate(h) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(h),
   });
-  if (!r.ok) throw new Error("Opslaan huis " + h.id + " mislukt: HTTP " + r.status);
+  if (!r.ok) throw new Error("Opslaan huis " + h.id + " vraagt nog een poging: HTTP " + r.status);
 }
 
 load();
@@ -1182,13 +1182,13 @@ load();
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

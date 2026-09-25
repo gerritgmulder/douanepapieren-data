@@ -13,7 +13,7 @@
     if (window.fpToegang && !fpToegang.mag("pibs", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is niet voor jou bedoeld.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">Deze tegel is voor het team dat de PIBs beheert.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -97,7 +97,7 @@ code{background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:12px}
     <div id="pMsg" class="msg hidden"></div>
     <div id="nVak" class="hidden" style="margin-top:14px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#f8faf5">
       <h3 style="margin:0 0 4px">Uren invoeren namens <span id="nWie"></span> <button class="klein" id="nDicht" style="float:right">sluiten</button></h3>
-      <p class="lead" style="margin:0 0 8px">Voor uren die de partner niet zelf heeft ingevuld, bijvoorbeeld doorgegeven per mail. De regel krijgt "ingevoerd door kantoor" en is voor de partner zichtbaar in zijn portaal.</p>
+      <p class="lead" style="margin:0 0 8px">Voor uren die de partner via een andere weg doorgeeft, bijvoorbeeld per mail. De regel krijgt "ingevoerd door kantoor" en is voor de partner zichtbaar in zijn portaal.</p>
       <div class="rij" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
         <div><label>Datum</label><input type="date" id="nDatum"></div>
         <div style="width:90px"><label>Uren</label><input id="nUren" placeholder="bv. 2,5" inputmode="decimal"></div>
@@ -150,11 +150,11 @@ async function laadPartners(){
     return "<tr" + (p.actief ? "" : " style='opacity:.5'") + "><td><b>" + esc(p.naam || "") + "</b>" + (p.bedrijf ? "<br><span style='color:var(--muted);font-size:12px'>" + esc(p.bedrijf) + "</span>" : "") + (p.tarief ? "<br><span style='color:var(--muted);font-size:11.5px'>€ " + uren(p.tarief) + " per uur</span>" : "") + (p.notitie ? "<br><span style='color:var(--muted);font-size:11.5px'>" + esc(p.notitie) + "</span>" : "") + "</td>" +
       "<td>" + esc(p.email) + "</td><td>" + toest + "</td><td>" + meter + "</td><td>" + wanneer(p.laatsteLogin) + (p.uitgenodigd ? "<br><span style='color:var(--muted);font-size:11.5px'>uitgenodigd " + wanneer(p.uitgenodigd) + "</span>" : "") + "</td>" +
       "<td style='white-space:nowrap'><button class='klein' data-uren='" + esc(p.email) + "'>uren invoeren</button> <button class='klein' data-kijk='" + esc(p.email) + "'>meekijken</button> <button class='klein' data-bewerk='" + esc(p.email) + "'>wijzig</button> <button class='klein' data-uit='" + esc(p.email) + "'>uitnodigen</button> <button class='klein' data-aan='" + esc(p.email) + "'>" + (p.actief ? "uitzetten" : "aanzetten") + "</button></td></tr>";
-  }).join("") : "<tr><td colspan='6' style='color:var(--muted)'>Nog geen partners. Voeg hierboven de eerste toe.</td></tr>";
+  }).join("") : "<tr><td colspan='6' style='color:var(--muted)'>Voeg hierboven de eerste partner toe.</td></tr>";
   $("pLijst").querySelectorAll("[data-uit]").forEach(b => b.addEventListener("click", async () => {
     b.disabled = true;
     const r = await api("/pib/admin/uitnodigen", { method: "POST", body: JSON.stringify({ email: b.dataset.uit }) });
-    toon($("pMsg"), r.data && r.data.ok && r.data.mailSent ? "ok" : "bad", r.data && r.data.ok ? (r.data.mailSent ? "Inloglink gestuurd naar " + b.dataset.uit + "." : "Mail is niet aangenomen: " + (r.data.reden || "onbekend")) : "Uitnodigen lukte niet.");
+    toon($("pMsg"), r.data && r.data.ok && r.data.mailSent ? "ok" : "bad", r.data && r.data.ok ? (r.data.mailSent ? "Inloglink gestuurd naar " + b.dataset.uit + "." : "De mail vraagt nog een poging: " + (r.data.reden || "onbekend")) : "Uitnodigen vraagt nog een poging.");
     laadPartners();
   }));
   /* Wijzigen: alles is aan te passen, ook het e-mailadres en het tarief.
@@ -167,7 +167,7 @@ async function laadPartners(){
     const r = await api("/pib/admin/meekijken", { method: "POST", body: JSON.stringify({ email: b.dataset.kijk }) });
     b.disabled = false;
     if (r.status === 200 && r.data && r.data.ok) window.open(r.data.url, "_blank");
-    else toon($("pMsg"), "bad", "Meekijken lukte niet: " + ((r.data && r.data.error) || ("HTTP " + r.status)));
+    else toon($("pMsg"), "bad", "Meekijken vraagt nog een poging: " + ((r.data && r.data.error) || ("HTTP " + r.status)));
   }));
   $("pLijst").querySelectorAll("[data-bewerk]").forEach(b => b.addEventListener("click", () => {
     const p = partners.find(x => x.email === b.dataset.bewerk); if (!p) return;
@@ -222,7 +222,7 @@ $("pToevoegen").addEventListener("click", async () => {
 // ── Overzicht ──
 let overzicht = null;
 function verhouding(minuten, urenGelogd){ if (!urenGelogd) return null; return minuten / 60 / urenGelogd; }
-function verhoudingPil(v){ if (v == null) return "<span class='pil'>geen uren</span>"; const pct = Math.round(v * 100); return "<span class='pil " + (v >= 0.6 ? "aan" : "uit") + " verhouding'>" + pct + "%</span>"; }
+function verhoudingPil(v){ if (v == null) return "<span class='pil'>uren volgen</span>"; const pct = Math.round(v * 100); return "<span class='pil " + (v >= 0.6 ? "aan" : "uit") + " verhouding'>" + pct + "%</span>"; }
 async function laadOverzicht(){
   $("oStatus").textContent = "Laden…";
   const r = await api("/pib/admin/overzicht?van=" + $("oVan").value + "&tot=" + $("oTot").value);
@@ -248,7 +248,7 @@ async function laadOverzicht(){
             "<td>" + (x.uren ? verhoudingPil(verhouding(x.minuten, x.uren)) : (x.minuten ? "<span class='pil half'>gemeten, niets gelogd</span>" : "")) + "</td>" +
             "<td class='apps'>" + x.regels.map(u => esc(u.categorie || "") + ": " + esc(u.omschrijving || "") + (u.door ? " <span class='pil half' title='ingevoerd door " + esc(u.door) + "'>kantoor</span>" : "")).join("<br>") + "</td>" +
             "<td class='apps'>" + x.apps.slice(0, 4).map(a => esc(a.app || "?") + " " + Math.round(100 * a.halveMinuten / tot) + "%").join(" · ") + "</td></tr>"; }).join("") +
-        "</tbody></table></div>" : "<p class='lead'>Geen uren en geen metingen in deze periode.</p>");
+        "</tbody></table></div>" : "<p class='lead'>Hier komen de uren en metingen van deze periode.</p>");
   }).join("");
   $("oLijst").querySelectorAll("tr.klik").forEach(tr => tr.addEventListener("click", () => laadDag(tr.dataset.p, tr.dataset.d)));
 }
@@ -266,7 +266,7 @@ async function laadDag(email, dag){
   box.innerHTML = "<h3>" + esc(p.naam || email) + ", " + esc(datumNl(dag)) + " <button class='klein' id='oDicht'>sluiten</button></h3>" +
     (urenRegels.length ? "<p class='lead'>Ingevuld: " + urenRegels.map(u => uren(u.uren) + " u " + esc(u.categorie || "") + " (" + esc(u.omschrijving || "") + ")" + (u.door ? " [kantoor: " + esc(u.door) + "] <button class='klein' data-wegn='" + esc(u.id) + "'>weg</button>" : "")).join("; ") + "</p>" : "<p class='lead'>Geen uren ingevuld op deze dag.</p>") +
     (blokken.length ? "<div style='overflow-x:auto'><table><thead><tr><th>Van</th><th>Tot</th><th>Programma</th><th>Venster</th></tr></thead><tbody>" +
-      blokken.map(b => "<tr><td>" + tijd(b.van) + "</td><td>" + tijd(b.tot) + "</td><td>" + esc(b.app) + "</td><td>" + esc(b.titel) + "</td></tr>").join("") + "</tbody></table></div>" : "<p class='lead'>Niets gemeten op deze dag.</p>");
+      blokken.map(b => "<tr><td>" + tijd(b.van) + "</td><td>" + tijd(b.tot) + "</td><td>" + esc(b.app) + "</td><td>" + esc(b.titel) + "</td></tr>").join("") + "</tbody></table></div>" : "<p class='lead'>Hier komen de metingen van deze dag.</p>");
   $("oDicht").addEventListener("click", () => box.classList.add("hidden"));
   box.querySelectorAll("[data-wegn]").forEach(b => b.addEventListener("click", async () => {
     if (!confirm("Deze door kantoor ingevoerde regel weghalen?")) return;

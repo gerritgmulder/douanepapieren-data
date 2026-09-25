@@ -124,7 +124,7 @@
 <main>
   <h2>Afbeeldingen op maat</h2>
   <p class="lead">Sleep er zoveel foto's in als je wilt, kies de maat, en haal ze in één keer weer op.
-  Alles gebeurt op deze computer: er gaat geen foto naar internet, dus er is geen limiet en geen wachttijd.
+  Alles gebeurt op deze computer: je foto's blijven hier, dus je kunt onbeperkt door en het gaat meteen.
   De bestandsnamen blijven zoals ze waren.</p>
 
   <div class="kaart">
@@ -462,12 +462,12 @@ function knoppen(){
 }
 function teken(){
   el("raster").innerHTML = lijst.map((r,i)=>{
-    const merk = !r.uit ? '<span class="merk let">nog niet omgezet</span>'
+    const merk = !r.uit ? '<span class="merk let">omzetten volgt</span>'
       : r.uit.soort==="aangevuld" ? '<span class="merk let">achtergrond erbij</span>'
       : r.uit.soort==="gesneden"  ? '<span class="merk fout">bijgesneden</span>'
       : '<span class="merk ok">precies passend</span>';
     const keuze = (r.uit && (r.uit.soort==="aangevuld"||r.uit.soort==="gesneden"))
-      ? '<div class="keuze">Deze foto past niet in de verhouding:'
+      ? '<div class="keuze">Deze foto vraagt een andere verhouding:'
         + '<div style="margin-top:5px">'
         + '<button data-i="'+i+'" data-s="0" class="'+(!r.magSnijden?"aan":"")+'">achtergrond erbij</button>'
         + '<button data-i="'+i+'" data-s="1" class="'+(r.magSnijden?"aan":"")+'">liever bijsnijden</button>'
@@ -489,7 +489,7 @@ function laadPlaatje(file){
   return new Promise((klaar,mis)=>{
     const img=new Image(); const url=URL.createObjectURL(file);
     img.onload=()=>{ URL.revokeObjectURL(url); klaar(img); };
-    img.onerror=()=>{ URL.revokeObjectURL(url); mis(new Error("kan deze afbeelding niet openen")); };
+    img.onerror=()=>{ URL.revokeObjectURL(url); mis(new Error("kies een afbeelding die het dashboard kan openen")); };
     img.src=url;
   });
 }
@@ -559,13 +559,13 @@ el("doe").addEventListener("click", async ()=>{
   el("balk").classList.add("hidden"); el("balkI").style.width="0";
   const aangevuld=lijst.filter(r=>r.uit&&r.uit.soort==="aangevuld").length;
   const gesneden =lijst.filter(r=>r.uit&&r.uit.soort==="gesneden").length;
-  if(mis.length) meld({soort:"fout",tekst:"<b>"+mis.length+" foto('s) lukten niet:</b> "+mis.join(", ")});
+  if(mis.length) meld({soort:"fout",tekst:"<b>"+mis.length+" foto('s) vragen nog een poging:</b> "+mis.join(", ")});
   else if(aangevuld||gesneden) meld({soort:"let",tekst:
       "<b>Let op bij "+(aangevuld+gesneden)+" foto('s).</b> "
-      + (aangevuld?aangevuld+" pasten niet in deze verhouding; daar staat nu achtergrond omheen in dezelfde kleur als de foto zelf had. ":"")
+      + (aangevuld?aangevuld+" kregen achtergrond in dezelfde kleur als de foto zelf, zodat ze precies in deze verhouding passen. ":"")
       + (gesneden ?gesneden +" zijn bijgesneden, dus daar is iets van het product af. ":"")
       + "Per foto kun je hieronder wisselen."});
-  else meld({soort:"rustig",tekst:"Alle foto's passen precies in deze verhouding; er is niets afgesneden en niets bijgekomen."});
+  else meld({soort:"rustig",tekst:"Alle foto's passen precies in deze verhouding; ze zijn volledig gebleven."});
   if(window.fpLog) window.fpLog("afbeeldingen-omgezet", lijst.length+" stuks naar "+doelW+"x"+doelH);
 });
 
@@ -749,7 +749,7 @@ document.getElementById("vtDoe").addEventListener("click", async function(){
     for(const blok of (res.data.blocks||[])) for(const par of (blok.paragraphs||[])) for(const r of (par.lines||[])) regels.push(r);
     if(!regels.length && res.data.lines) regels=res.data.lines;
     regels=regels.filter(r => String(r.text||"").trim().length>1 && (r.confidence==null || r.confidence>45));
-    if(!regels.length) throw new Error("geen tekst gevonden in deze afbeelding");
+    if(!regels.length) throw new Error("kies een afbeelding met tekst erin");
 
     vtStand(regels.length+" regel(s) gevonden, vertalen…"); vtBalk(0.6);
     const naar=document.getElementById("vtNaar").value;
@@ -759,7 +759,7 @@ document.getElementById("vtDoe").addEventListener("click", async function(){
       headers:{"Content-Type":"application/json","X-Fonteyn-Auth":vtTeam()},
       body: JSON.stringify({ tekst: bron, naar: naar })});
     const vj=await vr.json();
-    if(!vj.ok) throw new Error(vj.error||("vertalen mislukt (HTTP "+vr.status+")"));
+    if(!vj.ok) throw new Error(vj.error||("vertalen vraagt nog een poging (HTTP "+vr.status+")"));
     let uit=String(vj.tekst||"").split("\n").map(x=>x.trim()).filter(x=>x.length);
     // Komt er een ander aantal regels terug, dan plakken we niet blind: dan is
     // de kans op verschoven tekst groot en melden we dat eerlijk.

@@ -461,7 +461,7 @@ const EMAIL_KEY   = "fp.email";
 (function sessionGuard() {
   if (!localStorage.getItem(SESSION_KEY)) {
     window.location.replace("dashboard.html");
-    throw new Error("Geen sessie");
+    throw new Error("Log opnieuw in");
   }
 })();
 
@@ -588,7 +588,7 @@ async function loadState() {
     "fonteynbot@fonteyn.nl", "fonteyn.bot", "fonteynbot",
   ]);
   if (!allowed.has(email)) {
-    document.body.innerHTML = "<main style='padding:40px;text-align:center;'><h1>Geen toegang</h1><p>Vraag Gerrit om toegang tot deze module.</p><p><a href='dashboard.html'>Terug</a></p></main>";
+    document.body.innerHTML = "<main style='padding:40px;text-align:center;'><h1>Toegang op aanvraag</h1><p>Vraag Gerrit om toegang tot deze module.</p><p><a href='dashboard.html'>Terug</a></p></main>";
     return;
   }
   // Worker-aanroepen gaan rechtstreeks naar Cloudflare — niet via onze
@@ -1112,13 +1112,13 @@ loadState().catch(e => {
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

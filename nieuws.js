@@ -52,11 +52,6 @@
   var NIEUWS = [
     {
       datum: "2026-09-25", iedereen: true, soort: "beter",
-      titel: "Vriendelijkere teksten",
-      wat: "De meldingen en uitleg in het Dashboard zijn herschreven: ze zeggen nu wat er klaarstaat, wat er nog komt en wat je kunt doen."
-    },
-    {
-      datum: "2026-09-25", iedereen: true, soort: "beter",
       titel: "Alles in positieve taal",
       wat: "Elke melding, knop en uitleg in het dashboard zegt nu wat er wél kan of wat de volgende stap is. Waar eerst stond dat iets mislukte, staat nu bijvoorbeeld dat het nog een poging vraagt, en waar iets ontbrak staat nu wat je invult. Zo weet je meteen wat je kunt doen."
     },

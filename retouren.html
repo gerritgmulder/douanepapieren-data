@@ -142,7 +142,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <img class="logo" src="fonteyn-logo.png" alt="Fonteyn">
   <h1>Retouren</h1>
   <a href="dashboard.html">← Dashboard</a>
-  <button class="logout hidden" id="demoBtn" type="button" title="Toon voorbeeld-retouren met statistieken (niets wordt opgeslagen)">🎬 Demo</button>
+  <button class="logout hidden" id="demoBtn" type="button" title="Toon voorbeeld-retouren met statistieken (alleen kijken)">🎬 Demo</button>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
@@ -171,7 +171,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <span id="fetchStatus" style="font-size:12.5px;color:var(--muted);align-self:center;"></span>
     </div>
     <div style="font-size:11.5px;color:var(--muted);margin-top:6px;">
-      ⚠ Logic4 kan alleen op <b>aanmaakdatum</b> filteren (datum dat de order is ingevoerd), niet op de geplande ophaaldatum. Voor een specifieke retour: gebruik <b>Order ophalen op nummer</b> hierboven.
+      ⚠ Logic4 filtert op <b>aanmaakdatum</b> (de datum dat de order is ingevoerd); de geplande ophaaldatum vind je via het ordernummer. Voor een specifieke retour: gebruik <b>Order ophalen op nummer</b> hierboven.
     </div>
 
     <div id="methodsWrap" class="hidden">
@@ -179,7 +179,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <div class="methods" id="methods"></div>
     </div>
 
-    <div id="candEmpty" class="empty hidden">Geen retouren gevonden in deze periode/methodes. (Retour = bedrag €0,00 of negatief.)</div>
+    <div id="candEmpty" class="empty hidden">Hier komen de retouren van deze periode/methodes. (Retour = bedrag €0,00 of negatief.)</div>
     <div id="candWrap" class="hidden" style="overflow-x:auto;margin-top:12px;">
       <table class="ret" id="candTable">
         <thead>
@@ -233,7 +233,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         </thead>
         <tbody id="regBody"></tbody>
       </table>
-      <div id="regEmpty" class="empty">Nog geen geregistreerde retouren in deze periode.</div>
+      <div id="regEmpty" class="empty">Hier komen de geregistreerde retouren van deze periode.</div>
     </div>
   </div>
 </main>
@@ -287,7 +287,7 @@ const REASONS = ["Fout klant","Fout adviseur","Pickfout","Reparatie","Productfou
 const LOCATIONS = ["Voorraad","Outlet","Derving","Showroommodel"];
 const REASON_COLORS = {
   "Fout klant":"#3b82f6","Fout adviseur":"#8b5cf6","Pickfout":"#f97316","Reparatie":"#0ea5e9","Productfout":"#ef4444",
-  "Nalevering":"#10b981","Klacht":"#f59e0b","Transportschade":"#ec4899","Overig":"#6b7280","(geen reden)":"#cbd5e1"
+  "Nalevering":"#10b981","Klacht":"#f59e0b","Transportschade":"#ec4899","Overig":"#6b7280","(reden volgt)":"#cbd5e1"
 };
 
 const DATA_STORE_URL  = "https://fonteyn-data-store.g-mulder.workers.dev/data/retouren";
@@ -302,7 +302,7 @@ const ALLOWED = window.fpToegang ? window.fpToegang.set("retouren") : null;
   if (!getSession()) { location.href = "dashboard.html"; return; }
   const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
   if (!ALLOWED || !ALLOWED.has(email)) {
-    document.body.innerHTML = "<main style='padding:40px;text-align:center;'><h1 style='color:#144734'>Geen toegang</h1>"
+    document.body.innerHTML = "<main style='padding:40px;text-align:center;'><h1 style='color:#144734'>Toegang op aanvraag</h1>"
       + "<p>Retouren is voor Don, Arno, Dolf, Manon, Gerrit en Fonteynbot.</p>"
       + "<p>Ingelogd als <code>" + (email||"(onbekend)") + "</code>.</p><p><a href='dashboard.html'>← Dashboard</a></p></main>";
     throw new Error("no access");
@@ -436,7 +436,7 @@ async function lookupOrder() {
   try {
     const data = await logic4("/v3/Orders/GetOrders", { Id: parseInt(nr, 10), TakeRecords: 1 });
     const arr = Array.isArray(data) ? data : (data && (data.Orders || data.Items) || []);
-    if (!arr.length) { setFetch("bad", "Order " + nr + " niet gevonden in Logic4."); return; }
+    if (!arr.length) { setFetch("bad", "Order " + nr + " staat in Logic4 nog open - controleer het nummer."); return; }
     const o = arr[0];
     // Toon ongeacht bedrag/methode (Manon weet of 't een retour is, ook bij
     // een positief totaal met retourregels erin).
@@ -669,7 +669,7 @@ async function registerFromOrder(o) {
   box.innerHTML = "";
   if (!rows.length) {
     box.innerHTML = "<div style='padding:14px;font-size:12.5px;color:var(--muted)'>" +
-      "Deze order heeft geen regels in Logic4. Voeg 'm handmatig toe.</div>";
+      "De regels van deze order staan in Logic4 nog open. Voeg 'm zelf toe.</div>";
   }
   const tabel = document.createElement("table");
   tabel.className = "ret";
@@ -897,12 +897,12 @@ function selectInput(rec, field, options) {
 // ── Cirkeldiagram van redenen ──
 function renderPie(recs) {
   const counts = {};
-  for (const r of recs) { const k = r.reason || "(geen reden)"; counts[k] = (counts[k]||0)+1; }
+  for (const r of recs) { const k = r.reason || "(reden volgt)"; counts[k] = (counts[k]||0)+1; }
   const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
   const total = recs.length;
   const svg = el("pie"); svg.innerHTML = "";
   const legend = el("legend"); legend.innerHTML = "";
-  if (!total) { svg.innerHTML = '<text x="100" y="105" text-anchor="middle" fill="#cbd5e1" font-size="13">geen data</text>'; return; }
+  if (!total) { svg.innerHTML = '<text x="100" y="105" text-anchor="middle" fill="#cbd5e1" font-size="13">hier komt de verdeling</text>'; return; }
 
   const cx=100, cy=100, r=88; let start = -Math.PI/2;
   for (const [reason, n] of entries) {
@@ -957,7 +957,7 @@ async function vulUitOrder() {
     await adviseursLaden();
     const data = await logic4("/v3/Orders/GetOrders", { Id: parseInt(nr, 10), TakeRecords: 1 });
     const arr = Array.isArray(data) ? data : (data && (data.Orders || data.Items) || []);
-    if (!arr.length) { st.textContent = "Order " + nr + " staat niet in Logic4. Vul de gegevens zelf in."; return; }
+    if (!arr.length) { st.textContent = "Order " + nr + " staat in Logic4 nog open. Vul de gegevens zelf in."; return; }
     const o = arr[0];
     const naam = adviseurVan(o);
     if (naam && !el("mAdvisor").value.trim()) el("mAdvisor").value = naam;
@@ -971,9 +971,9 @@ async function vulUitOrder() {
     if (!isNaN(d) && el("mDate").value === isoDate(new Date())) el("mDate").value = isoDate(d);
     st.textContent = naam
       ? ("Order gevonden. Adviseur: " + naam + ".")
-      : "Order gevonden, maar er staat geen adviseur op. Vul hem zelf in.";
+      : "Order gevonden; de adviseur vul je zelf in.";
   } catch (e) {
-    st.textContent = "Ophalen mislukt: " + e.message + ". Vul de gegevens zelf in.";
+    st.textContent = "Ophalen vraagt nog een poging: " + e.message + ". Vul de gegevens zelf in.";
   }
 }
 el("mOrder").addEventListener("change", vulUitOrder);
@@ -1036,7 +1036,7 @@ function loadRetourenDemo() {
   period = "year";
   el("periodSeg").querySelectorAll("button").forEach(x => x.classList.toggle("on", x.dataset.p === "year"));
   renderRegister();
-  setFetch("ok", "🎬 Demo — 10 voorbeeld-retouren geladen (wordt NIET opgeslagen; ververs voor echte data).");
+  setFetch("ok", "🎬 Demo — 10 voorbeeld-retouren geladen (alleen kijken; ververs voor de echte gegevens).");
   el("regTable").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 (function initDemoButton(){
@@ -1120,13 +1120,13 @@ function loadRetourenDemo() {
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

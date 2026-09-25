@@ -14,7 +14,7 @@
     if (window.fpToegang && !fpToegang.mag("werkplaats", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">De tegel Werkplaats is voor de werkplaats en Spa planning.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">De tegel Werkplaats is voor de werkplaats en Spa planning.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -219,7 +219,7 @@ function teken(){
   document.querySelectorAll(".tab").forEach(function(b){ b.classList.toggle("aan", b.dataset.tab === tab); });
   var lijst = zichtbaar(), vandaag = vandaagIso();
   if (!lijst.length){
-    $("lijst").innerHTML = '<div class="leeg">' + (tab === "getest" ? "Nog geen geteste spa's." : tab === "zwem" ? "Geen zwemspa's te testen." : "Niets te testen. Zodra in Voorraadbeheer bij een spa 'Ingepland' wordt aangevinkt, staat hij hier.") + '</div>';
+    $("lijst").innerHTML = '<div class="leeg">' + (tab === "getest" ? "Hier komen de geteste spa's." : tab === "zwem" ? "Hier komen de zwemspa's die getest worden." : "Hier komen de spa's die getest worden. Zodra in Voorraadbeheer bij een spa 'Ingepland' wordt aangevinkt, staat hij hier.") + '</div>';
     return;
   }
   $("lijst").innerHTML = lijst.map(function(x){
@@ -227,7 +227,7 @@ function teken(){
     var laat = x.lever && x.lever < vandaag && !x.w.getest;
     var datum = x.lever
       ? '<div class="datum">' + esc(datumNL(x.lever)) + '<small>' + esc(dagNaam(x.lever)) + (x.tijd ? " " + esc(x.tijd) : "") + (x.leverBron === "werkplaats" ? " · zelf gezet" : x.leverBron === "planning" ? " · uit Planning" : "") + '</small></div>'
-      : '<div class="datum"><small>geen leverdatum in Logic4</small><input type="date" data-datum="' + id + '" title="Leverdatum zelf zetten; zodra er in Logic4 een leverdatum op de order staat gaat die voor"></div>';
+      : '<div class="datum"><small>leverdatum volgt uit Logic4</small><input type="date" data-datum="' + id + '" title="Leverdatum zelf zetten; zodra er in Logic4 een leverdatum op de order staat gaat die voor"></div>';
     return '<div class="kaart' + (x.w.getest ? " getest" : "") + (laat ? " laat" : "") + '">' +
       '<div class="kop">' + datum +
         '<div class="wat"><b>' + esc(r.model) + '</b>' + (isWarmtepomp(r) ? ' <span class="badge">&#9889; IntelliSaver · Integrated Heat Pump</span>' : (r.extra ? ' <span class="pil">' + esc(r.extra) + '</span>' : "")) +
@@ -256,7 +256,7 @@ function teken(){
    er grijs bij; de werkplaats test wat er nog uit moet. */
 function orderHtml(nr, o){
   if (!o) return '<div class="order"><div class="ok">Order ' + esc(nr) + ' <span>wordt opgehaald…</span></div></div>';
-  if (!o.ok) return '<div class="order"><div class="ok">Order ' + esc(nr) + ' <span style="color:var(--rood)">' + esc(o.error||"niet gevonden") + '</span></div></div>';
+  if (!o.ok) return '<div class="order"><div class="ok">Order ' + esc(nr) + ' <span style="color:var(--rood)">' + esc(o.error||"staat nog open") + '</span></div></div>';
   var adr = o.leverenAan || o.besteldDoor || {};
   return '<div class="order"><div class="ok">Order ' + esc(nr) + ' <span>' + esc(datumNL(o.besteldatum)) + (o.adviseur ? " · " + esc(o.adviseur) : "") + (o.leveringswijze ? " · " + esc(o.leveringswijze) : "") + '</span></div>' +
     (o.regels||[]).map(function(x){
@@ -270,7 +270,7 @@ async function haalOrder(nr){
   if (orders[nr]) return orders[nr];
   try{
     var j = await lees("/planning/route-print?orders=" + encodeURIComponent(nr));
-    orders[nr] = (j.orders||[])[0] || { nr: nr, ok: false, error: "niet gevonden" };
+    orders[nr] = (j.orders||[])[0] || { nr: nr, ok: false, error: "staat nog open" };
   }catch(e){ orders[nr] = { nr: nr, ok: false, error: e.message }; }
   return orders[nr];
 }
@@ -298,7 +298,7 @@ async function bewaar(regelId, velden, logActie, logTekst){
     wp.regels = alles;
     await lees("/data/werkplaats", { method: "PUT", body: JSON.stringify({ regels: alles, extra: (vers && vers.extra) || wp.extra || {}, updated: new Date().toISOString() }) });
     try{ if (window.fpLog) window.fpLog(logActie, logTekst); }catch(e){}
-  }catch(e){ alert("Bewaren lukte niet: " + e.message); laad(); }
+  }catch(e){ alert("Bewaren vraagt nog een poging: " + e.message); laad(); }
 }
 function zetGetest(regelId, aan){
   var x = regels.find(function(y){ return y.r.regelId === regelId; });
@@ -326,8 +326,8 @@ $("extraKnop").addEventListener("click", async function(){
     await lees("/data/werkplaats", { method: "PUT", body: JSON.stringify({ regels: (vers && vers.regels) || {}, extra: extra, updated: new Date().toISOString() }) });
     try{ if (window.fpLog) window.fpLog("werkplaats-order-toegevoegd", "order " + nr); }catch(e){}
     await laad();
-    if (!regels.some(function(x){ return String(x.r.ordernr) === nr; })) alert("Order " + nr + " is vastgelegd, maar er staat geen spa op die nog geleverd moet worden. Controleer het nummer in Logic4.");
-  }catch(e){ alert("Toevoegen lukte niet: " + e.message); }
+    if (!regels.some(function(x){ return String(x.r.ordernr) === nr; })) alert("Order " + nr + " is vastgelegd; de spa's op deze order staan al geleverd. Controleer het nummer in Logic4.");
+  }catch(e){ alert("Toevoegen vraagt nog een poging: " + e.message); }
   $("extraKnop").disabled = false;
 });
 $("zoek").addEventListener("input", function(){ zoek = $("zoek").value; teken(); });

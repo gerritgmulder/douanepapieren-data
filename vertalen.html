@@ -170,7 +170,7 @@
       <label class="schakel" style="margin-left:8px"><input type="checkbox" id="terugAan"> terugvertaling tonen</label>
     </div>
     <div class="regel">
-      <span class="kop">Niet vertalen</span>
+      <span class="kop">Onvertaald laten</span>
       <input type="text" id="namen" class="namen" placeholder="Fonteyn, Passion Spas, Uddel">
       <span style="font-size:12px;color:var(--muted)">namen en merken, gescheiden door komma's</span>
     </div>
@@ -208,7 +208,7 @@
   </div>
 
   <div class="voet">
-    <span>Vertaald door een taalmodel op Cloudflare - goed, maar geen mens. Zet bij een belangrijke mail de terugvertaling even aan.</span>
+    <span>Vertaald door een taalmodel op Cloudflare - goed werk, en mensenwerk blijft mensenwerk. Zet bij een belangrijke mail de terugvertaling even aan.</span>
   </div>
 </main>
 
@@ -224,11 +224,11 @@ const el = (id) => document.getElementById(id);
   el("userEmail").textContent = email || "—";
   if(!TOEGANG || !TOEGANG.has(email)){
     window.fpGeenToegang = true;
-    document.body.innerHTML = "<main style='padding:48px;text-align:center'><h1 style='color:#144734'>Geen toegang</h1>"
-      + "<p>Vertalen is niet beschikbaar voor jouw account.</p>"
+    document.body.innerHTML = "<main style='padding:48px;text-align:center'><h1 style='color:#144734'>Toegang op aanvraag</h1>"
+      + "<p>Vertalen staat klaar zodra je account er toegang voor heeft.</p>"
       + "<p>Ingelogd als <code>" + (email||"(onbekend)") + "</code>.</p>"
       + "<p><a href='dashboard.html'>← Dashboard</a></p></main>";
-    throw new Error("geen toegang");
+    throw new Error("toegang op aanvraag");
   }
 })();
 el("logoutBtn").addEventListener("click", async ()=>{
@@ -270,7 +270,7 @@ async function laadTalen(){
     if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
     TALEN = j.talen||{};
   }catch(e){
-    fout("De talenlijst kon niet worden opgehaald: "+e.message+". Log opnieuw in op het dashboard, dan wordt de sleutel opgehaald.");
+    fout("De talenlijst vraagt nog een poging: "+e.message+". Log opnieuw in op het dashboard, dan wordt de sleutel opgehaald.");
     return;
   }
   const meer = el("meerTalen"), bron = el("bronTaal");
@@ -376,7 +376,7 @@ async function vertaalNu(){
   }catch(e){
     if(mijn !== teller) return;
     el("stand").textContent = "";
-    fout("Vertalen mislukt: " + e.message);
+    fout("Vertalen vraagt nog een poging: " + e.message);
   }
 }
 

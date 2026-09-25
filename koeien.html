@@ -345,13 +345,13 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <select id="f-reg">
         <option value="">Aangemeld: alles</option>
         <option value="ja">Aangemeld</option>
-        <option value="nee">Niet aangemeld</option>
+        <option value="nee">Aanmelding open</option>
       </select>
       <select id="f-loc">
         <option value="">Alle locaties</option>
         <option value="Privé (6257)">Privé (6257)</option>
         <option value="Mosselweg (0750)">Mosselweg (0750)</option>
-        <option value="—">Geen / onbekend</option>
+        <option value="—">Nog te bepalen</option>
       </select>
       <span class="sep"></span>
       <div class="view-toggle">
@@ -405,7 +405,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         </thead>
         <tbody id="tbody"></tbody>
       </table>
-      <div class="empty hidden" id="empty-table">Geen koeien gevonden met deze filters.</div>
+      <div class="empty hidden" id="empty-table">Pas de filters aan om koeien te zien.</div>
     </div>
 
     <div id="cards-view" class="cards hidden"></div>
@@ -451,8 +451,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       Klik op naam, tagnummer of geboortedatum om te bewerken — wijzigingen zijn direct
       zichtbaar in het dashboard. Hover over een kaart voor moeder/vader-info.
       Moederlijnen zijn doorgetrokken (roze), vaderlijnen gestippeld (blauw).
-      Voor niet-aangemelde mannetjes (Pablo, Rooie Evert, Chuck) zijn de vaderlijnen bewust
-      weggelaten — de vader is niet zeker.
+      Bij de mannetjes met de aanmelding nog open (Pablo, Rooie Evert, Chuck) staan de
+      vaderlijnen er bewust naast — de vader is daar een aanname.
     </p>
     <div class="stamboom-info">
       <div class="stamboom-info-hint">✎ Klik om te bewerken — wijzigingen worden centraal opgeslagen voor iedereen</div>
@@ -497,7 +497,7 @@ const EMAIL_KEY   = "fp.email";
 (function sessionGuard() {
   if (!localStorage.getItem(SESSION_KEY)) {
     window.location.replace("dashboard.html");
-    throw new Error("Geen sessie");
+    throw new Error("Log opnieuw in");
   }
 })();
 
@@ -514,9 +514,9 @@ const KOEIEN_ALLOWED = new Set([
   if (!KOEIEN_ALLOWED.has(email)) {
     document.body.innerHTML =
       "<main style='padding:40px;text-align:center;font-family:system-ui;'>" +
-      "<h1>Geen toegang</h1><p>Deze tegel is alleen voor Dolf, Gerrit en Fonteynbot.</p>" +
+      "<h1>Toegang op aanvraag</h1><p>Deze tegel is voor Dolf, Gerrit en Fonteynbot.</p>" +
       "<p><a href='dashboard.html'>Terug naar dashboard</a></p></main>";
-    throw new Error("Geen toegang");
+    throw new Error("toegang op aanvraag");
   }
 })();
 
@@ -613,7 +613,7 @@ const INITIAL_COWS = [
     tree:{col:5,row:4}},
   {id:"rooie-evert", naam:"Rooie Evert", tag:"NL0750200963", geslacht:"M", geboorte:"04/2024",
     status:"bij-dolf", aangemeld:"nee", locatie:"Mosselweg (0750)",
-    opmerking:"Roodbont. Niet aangemeld — wordt geslacht.",
+    opmerking:"Roodbont. Aanmelding open — gaat naar de slacht.",
     tree:{col:6,row:3}},
   {id:"cheyenne", naam:"Cheyenne", tag:"NL0750201036", geslacht:"V", geboorte:"2024",
     status:"afgemeld", aangemeld:"ja", locatie:"—",
@@ -629,15 +629,15 @@ const INITIAL_COWS = [
     tree:{col:6,row:6}},
   {id:"pablo", naam:"Pablo", tag:"NL0625704525", geslacht:"M", geboorte:"20/06/2025",
     status:"bij-dolf", aangemeld:"nee", locatie:"Privé (6257)",
-    opmerking:"Gecastreerd (os). Niet aangemeld.",
+    opmerking:"Gecastreerd (os). Aanmelding open.",
     tree:{col:7,row:1}},
   {id:"chuck", naam:"Chuck", tag:"NL0750201060", geslacht:"M", geboorte:"12/08/2025",
     status:"bij-dolf", aangemeld:"nee", locatie:"Mosselweg (0750)",
-    opmerking:"Niet aangemeld — mannetje.",
+    opmerking:"Aanmelding open — mannetje.",
     tree:{col:7,row:6}},
   {id:"angel", naam:"Angel", tag:"NL0625704501", geslacht:"V", geboorte:"10/03/2026",
     status:"bij-dolf", aangemeld:"nee", locatie:"Privé (6257)",
-    opmerking:"Nog niet aangemeld, nog geen DNA.",
+    opmerking:"Aanmelding en DNA volgen nog.",
     tree:{col:8,row:1}},
   {id:"mr-first", naam:"Mr. First", tag:"NL0625704518", geslacht:"M", geboorte:"03/2026",
     status:"bij-dolf", aangemeld:"nee", locatie:"Privé (6257)",
@@ -673,7 +673,7 @@ const DEFAULT_INFO_HTML = `<h4>Locaties</h4>
 <ul>
   <li><b>Privé (6257):</b> Madonna, Miss First, Benny, Montana — maximaal 5 bereikt. Angel wilden we ook hier, dus er kan wellicht een oudere naar Cor. Starynight is afgemeld.</li>
   <li><b>Mosselweg (0750):</b> Mr. Outlaw, Eagle, Torq, Mr. Jim, Saar</li>
-  <li><b>Niet aangemeld (mannen):</b> Pablo 0452, Rooie Evert 0096, Chuck 0106 — worden ook nooit aangemeld.</li>
+  <li><b>Aanmelding open (mannen):</b> Pablo 0452, Rooie Evert 0096, Chuck 0106 — die blijven buiten de aanmelding.</li>
 </ul>
 <p>
   Van de niet-aangemelde koeien weten we niet zeker wie de vader is, daarom zijn
@@ -711,7 +711,7 @@ async function loadStateFromKV(){
       infoHtml: (typeof j.infoHtml === "string" && j.infoHtml.trim()) ? j.infoHtml : DEFAULT_INFO_HTML,
     };
   }catch(e){
-    console.error("[koeien] kon state niet laden:", e);
+    console.error("[koeien] state vraagt nog een poging:", e);
     state = {
       cows: JSON.parse(JSON.stringify(INITIAL_COWS)),
       relations: JSON.parse(JSON.stringify(INITIAL_RELATIONS)),
@@ -745,7 +745,7 @@ async function saveStateNow(){
     });
     if (!r.ok) throw new Error("HTTP " + r.status);
   }catch(e){
-    console.error("[koeien] opslaan mislukt:", e);
+    console.error("[koeien] opslaan vraagt nog een poging:", e);
   }
 }
 
@@ -841,7 +841,7 @@ function renderStats(){
     <div class="stat"><div class="n" style="color:var(--v)">${v}</div><div class="l">Vrouwen (bij Dolf)</div></div>
     <div class="stat"><div class="n" style="color:var(--m)">${m}</div><div class="l">Mannen (bij Dolf)</div></div>
     <div class="stat"><div class="n" style="color:var(--ok)">${aang}</div><div class="l">Aangemeld</div></div>
-    <div class="stat"><div class="n" style="color:var(--bad)">${niet}</div><div class="l">Niet aangemeld</div></div>
+    <div class="stat"><div class="n" style="color:var(--bad)">${niet}</div><div class="l">Aanmelding open</div></div>
     <div class="stat"><div class="n" style="color:var(--warn)">${afg}</div><div class="l">Afgemeld/verkocht</div></div>
     <div class="stat"><div class="n" style="color:var(--neutral)">${over}</div><div class="l">Overleden/geslacht</div></div>`;
 }
@@ -888,7 +888,7 @@ function renderTable(){
 function renderCards(){
   const f = currentFilters();
   const rows = state.cows.filter(r=>matches(r,f));
-  if(rows.length===0){ $cards.innerHTML = `<div class="empty">Geen koeien gevonden.</div>`; return; }
+  if(rows.length===0){ $cards.innerHTML = `<div class="empty">Hier komen de koeien te staan.</div>`; return; }
   $cards.innerHTML = rows.map(r=>{
     const cls = "card "+(r.geslacht==="V"?"gender-v":r.geslacht==="M"?"gender-m":"")+
       (r.status==="overleden"?" deceased":r.status==="afgemeld"?" gone":"");
@@ -900,7 +900,7 @@ function renderCards(){
         <div class="row">
           <span class="${genderChipClass(r.geslacht)}">${GESLACHT_LABEL[r.geslacht]||"?"}</span>
           <span class="${statusChipClass(r.status)}">${STATUS_LABEL[r.status]}</span>
-          <span class="${regChipClass(r.aangemeld)}">${r.aangemeld==="ja"?"Aangemeld":"Niet aangemeld"}</span>
+          <span class="${regChipClass(r.aangemeld)}">${r.aangemeld==="ja"?"Aangemeld":"Aanmelding open"}</span>
           ${r.locatie && r.locatie!=="—" ? `<span class="chip loc">${escapeHtml(r.locatie)}</span>`:""}
         </div>
         <div style="color:var(--muted);font-size:12.5px;margin-top:4px">
@@ -1118,7 +1118,7 @@ function renderStamboom(){
       </div>
       <div class="tc-tag" data-f="tag" title="Klik om te bewerken">${escapeHtml(c.tag||"—")}</div>
       <div class="tc-meta" data-f="geboorte" title="Klik om te bewerken">${escapeHtml(c.geboorte||"???")}</div>
-      ${c.aangemeld==="nee" ? `<span class="tc-badge reg-nee">niet aangemeld</span>`:""}
+      ${c.aangemeld==="nee" ? `<span class="tc-badge reg-nee">aanmelding open</span>`:""}
       ${c.status==="afgemeld" ? `<span class="tc-status s-afgemeld">afgemeld</span>`
         : c.status==="overleden" ? `<span class="tc-status s-overleden">overleden</span>` : ""}`;
     $grid.appendChild(el);
@@ -1581,13 +1581,13 @@ init();
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

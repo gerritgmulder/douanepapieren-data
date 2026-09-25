@@ -179,7 +179,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     Beheer hier wie er in het <b>partnerportaal</b> kan (magic-link login op e-mailadres),
     welke <b>documenten</b> partners zien, en waar contactvragen binnenkomen.
     Adres van <b>Passion Partners</b> (het publieke portaal): <a id="portalLink" href="https://partner.passionspas.com/dealers" target="_blank" rel="noopener"><code>partner.passionspas.com/dealers</code></a>
-    <em>(later: partners.fonteyn.nl)</em>. Partners zien alleen geaggregeerde voorraad - geen klantnamen of inkoopprijzen.
+    <em>(later: partners.fonteyn.nl)</em>. Partners zien alleen de totale voorraad - klantnamen en inkoopprijzen blijven intern.
   </p>
 
   <div id="status" class="status-msg hidden"></div>
@@ -203,7 +203,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <div class="card">
     <h3>Partners (<span id="partnerCount">0</span>)</h3>
     <table class="grid partners">
-      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een ander prijsniveau; die krijgt juist die prijslijsten niet te zien, want daarin staat wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Merk</th><th>Afspraken</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een eigen prijsniveau; die ziet zijn eigen prijslijst, want de andere lijsten laten zien wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Merk</th><th>Afspraken</th><th>Status</th><th></th></tr></thead>
       <tbody id="partnerBody"></tbody>
     </table>
     <div class="row" style="margin-top:12px">
@@ -214,7 +214,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <input id="nEmail" type="email" placeholder="partner@bedrijf.com" style="min-width:220px">
       <input id="nCompany" placeholder="Bedrijfsnaam" style="min-width:180px">
       <input id="nDebtors" placeholder="debiteurnr(s), verplicht" style="min-width:170px">
-      <select id="nSoort" title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een ander prijsniveau; die krijgt juist die prijslijsten niet te zien, want daarin staat wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt." style="min-width:150px">
+      <select id="nSoort" title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een eigen prijsniveau; die ziet zijn eigen prijslijst, want de andere lijsten laten zien wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt." style="min-width:150px">
         <option value="">- partner of dealer? -</option>
         <option value="partner">Partner</option>
         <option value="dealer">Dealer</option>
@@ -225,7 +225,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
   <div class="card">
     <h3>Reserveringen - aanbetaald (<span id="reqCount">0</span>)</h3>
-    <p class="lead" style="margin-bottom:10px">Partners die <b>daadwerkelijk hebben aanbetaald</b>. Deze zijn <b>automatisch</b> als order in Logic4 gezet en claimen voorraad - je hoeft hier niets goed te keuren. Alleen ter info.</p>
+    <p class="lead" style="margin-bottom:10px">Partners die <b>daadwerkelijk hebben aanbetaald</b>. Deze zijn <b>automatisch</b> als order in Logic4 gezet en claimen voorraad - hier kijk je alleen mee.</p>
     <table class="grid">
       <thead><tr><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Aanbetaling</th><th>Logic4-order</th><th></th></tr></thead>
       <tbody id="reqBodyPaid"></tbody>
@@ -241,7 +241,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
          gebeurt als iemand de regel met het kruisje heeft weggehaald: de order
          blijft dan gewoon in Logic4 staan, maar de knop erbij is weg. -->
     <details style="margin-top:12px">
-      <summary style="cursor:pointer;font-size:13px;color:var(--muted)">Een order terugdraaien die hierboven niet staat</summary>
+      <summary style="cursor:pointer;font-size:13px;color:var(--muted)">Een andere order terugdraaien</summary>
       <p class="lead" style="margin:8px 0 8px">Vul het Logic4-ordernummer in. Staat er een aanbetaling op die tegengeboekt moet worden, vul dan ook het bedrag in; laat je dat leeg, dan wordt de order alleen geannuleerd.</p>
       <div class="row">
         <input id="terugOrder" placeholder="Ordernummer, bv. 3517369" style="max-width:200px">
@@ -253,7 +253,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
   <div class="card">
     <h3>Aanvragen zonder aanbetaling - leads (<span id="leadCount">0</span>)</h3>
-    <p class="lead" style="margin-bottom:10px">Partners die een reservering startten maar (nog) <b>niet aanbetaalden</b>. Dit zijn <b>geen</b> reserveringen: ze claimen geen voorraad en staan niet in Logic4. Bel na of archiveer ze.
+    <p class="lead" style="margin-bottom:10px">Partners die een reservering startten en nog op de <b>aanbetaling</b> staan. Dit zijn aanvragen: ze claimen voorraad zodra de aanbetaling binnen is en staan dan in Logic4. Bel na of archiveer ze.
       <label style="margin-left:8px;font-size:12px;color:var(--ink)"><input type="checkbox" id="showArch" style="vertical-align:-1px"> toon gearchiveerd</label></p>
     <table class="grid">
       <thead><tr><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Notitie</th><th>Status</th><th></th></tr></thead>
@@ -263,10 +263,10 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
   <div class="card">
     <h3>Wisselkoers EUR/USD</h3>
-    <p class="lead" style="margin-bottom:10px">De partnerprijzen zijn in dollars. Voor EU-partners rekent het portaal om naar euro's: <b>€ = $ ÷ koers</b>. De koers gaat vanaf nu vanzelf: elke dag wordt de officiële ECB-dagkoers opgehaald en daar gaat <b>0,03 vanaf</b> (veilige marge). Je hoeft hier dus niets meer bij te houden. BTW komt daarna automatisch uit Logic4 per partner (NL 21%, EU met geldig BTW-nummer 0%, buiten EU 0%).</p>
+    <p class="lead" style="margin-bottom:10px">De partnerprijzen zijn in dollars. Voor EU-partners rekent het portaal om naar euro's: <b>€ = $ ÷ koers</b>. De koers gaat vanaf nu vanzelf: elke dag wordt de officiële ECB-dagkoers opgehaald en daar gaat <b>0,03 vanaf</b> (veilige marge). Het bijhouden doet het portaal voor je. BTW komt daarna automatisch uit Logic4 per partner (NL 21%, EU met geldig BTW-nummer 0%, buiten EU 0%).</p>
     <p id="rateAuto" style="font-size:14px;margin-bottom:10px">Koers van vandaag wordt opgehaald…</p>
     <div class="row" style="align-items:center;gap:10px">
-      <label style="font-size:13px" title="Wordt alleen gebruikt als de automatische dagkoers een keer niet lukt">Noodkoers:</label>
+      <label style="font-size:13px" title="Wordt gebruikt zodra de automatische dagkoers een keer overslaat">Noodkoers:</label>
       <input id="rateInput" type="number" min="0.5" max="2" step="0.001" style="width:120px">
       <button class="primary" id="saveRate" type="button">Noodkoers opslaan</button>
       <span id="rateEx" style="font-size:12px;color:var(--muted)"></span>
@@ -454,7 +454,7 @@ async function kleurfotosToon(model){
       if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || ("HTTP " + r.status));
       kfLokaal[model + "|" + String(code).toLowerCase()] = true;
       kleurfotosToon(model);
-    } catch(e) { meld.textContent = "Lukte niet: " + e.message; }
+    } catch(e) { meld.textContent = "Vraagt nog een poging: " + e.message; }
   }));
   lijst.querySelectorAll(".kfWeg").forEach(b => b.addEventListener("click", async () => {
     const code = b.closest("tr").dataset.code;
@@ -477,7 +477,7 @@ function kfVerklein(file, max){
       URL.revokeObjectURL(img.src);
       ok(c.toDataURL("image/jpeg", 0.86));
     };
-    img.onerror = () => nee(new Error("bestand is geen afbeelding"));
+    img.onerror = () => nee(new Error("kies een afbeelding"));
     img.src = URL.createObjectURL(file);
   });
 }
@@ -491,9 +491,9 @@ async function annuleringenNakijken(){
       { method: "POST", headers:{ ...beheerKoppen() } });
     const d = await r.json().catch(()=>null);
     if (!r.ok || !d || !d.ok) {
-      $("annuUitleg").textContent = "Lukte niet: " + ((d && d.error) || ("HTTP " + r.status));
+      $("annuUitleg").textContent = "Vraagt nog een poging: " + ((d && d.error) || ("HTTP " + r.status));
     } else if (!d.gekeken) {
-      $("annuUitleg").textContent = "Niets na te kijken \u2014 alle orders lopen nog.";
+      $("annuUitleg").textContent = "Alle orders lopen nog.";
     } else {
       $("annuUitleg").textContent = d.gekeken + " nagekeken, " + d.geannuleerd + " geannuleerd" +
         (d.afgerond ? ", " + d.afgerond + " afgerond" : "") +
@@ -502,7 +502,7 @@ async function annuleringenNakijken(){
       if (!Array.isArray(reqData.requests)) reqData.requests = [];
       renderReqs();
     }
-  }catch(e){ $("annuUitleg").textContent = "Lukte niet: " + (e.message || e); }
+  }catch(e){ $("annuUitleg").textContent = "Vraagt nog een poging: " + (e.message || e); }
   knop.disabled = false;
 }
 async function mailNakijken(){
@@ -512,7 +512,7 @@ async function mailNakijken(){
   try{
     const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/mailcheck",
       { headers:{ ...beheerKoppen() } });
-    if (r.status === 403 || r.status === 401) throw new Error("de beheersleutel wordt niet geaccepteerd");
+    if (r.status === 403 || r.status === 401) throw new Error("de beheersleutel vraagt om een nieuwe");
     const j = await r.json();
     const goed = j.ok === true, onbekend = j.ok === null;
     $("mailUitleg").textContent = "";
@@ -532,12 +532,12 @@ async function mailNakijken(){
           "<td>"+(x.status===200?"<span style='color:#15803d'>aangenomen</span>":"<span style='color:#b91c1c'>"+esc(String(x.status))+" "+esc(x.fout||"")+"</span>")+"</td></tr>").join("")+
         "</tbody></table>";
     } else {
-      h += "<p class='lead' style='margin-top:10px'>Er is nog niets verstuurd sinds dit wordt bijgehouden.</p>";
+      h += "<p class='lead' style='margin-top:10px'>De verstuurde berichten komen hier te staan.</p>";
     }
     $("mailUit").innerHTML = h;
   }catch(e){
     $("mailUitleg").textContent = "";
-    $("mailUit").innerHTML = "<div class='status-msg bad'>Nakijken mislukt: "+esc(e.message)+"</div>";
+    $("mailUit").innerHTML = "<div class='status-msg bad'>Nakijken vraagt nog een poging: "+esc(e.message)+"</div>";
   }finally{ knop.disabled = false; }
 }
 document.addEventListener("DOMContentLoaded", () => {
@@ -556,8 +556,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("userEmail").textContent = email || "-";
   const mag = window.fpToegang && window.fpToegang.mag("dealerportaal", email);
   if (!mag){
-    document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'><h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor het team dat het partnerportaal beheert.</p><p>Je bent ingelogd als <code>"+email+"</code>.</p><p><a href='dashboard.html'>← Terug</a></p></main>";
-    throw new Error("geen toegang");
+    document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'><h1 style='color:#144734'>Toegang op aanvraag</h1><p>Deze tegel is voor het team dat het partnerportaal beheert.</p><p>Je bent ingelogd als <code>"+email+"</code>.</p><p><a href='dashboard.html'>← Terug</a></p></main>";
+    throw new Error("toegang op aanvraag");
   }
 })();
 $("logoutBtn").addEventListener("click", async ()=>{
@@ -568,7 +568,7 @@ $("logoutBtn").addEventListener("click", async ()=>{
 
 async function kvGet(bucket){
   const r = await fetch(DATA_BASE+bucket, { headers:{ ...beheerKoppen() } });
-  if (r.status===401 || r.status===403) throw new Error("Geen toegang: je staat niet in de groep voor Passion Partners Beheer. Vraag Gerrit om je toe te voegen.");
+  if (r.status===401 || r.status===403) throw new Error("Toegang op aanvraag: Gerrit zet je in de groep voor Passion Partners Beheer.");
   if (!r.ok) throw new Error("Laden faalde: HTTP "+r.status);
   return r.json();
 }
@@ -576,7 +576,7 @@ async function kvPut(bucket, data){
   const r = await fetch(DATA_BASE+bucket, { method:"PUT",
     headers:{ "Content-Type":"application/json", ...beheerKoppen() },
     body: JSON.stringify(data) });
-  if (r.status===401 || r.status===403) throw new Error("Geen toegang: je staat niet in de groep voor Passion Partners Beheer. Vraag Gerrit om je toe te voegen.");
+  if (r.status===401 || r.status===403) throw new Error("Toegang op aanvraag: Gerrit zet je in de groep voor Passion Partners Beheer.");
   if (!r.ok) throw new Error("Opslaan faalde: HTTP "+r.status);
 }
 
@@ -596,7 +596,7 @@ function vraagWachtwoord(email){
     ov.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px";
     ov.innerHTML="<div style='background:#fff;border-radius:12px;padding:22px 24px;max-width:460px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.25)'>"+
       "<div style='font-weight:600;color:var(--fonteyn-green);font-size:15px;margin-bottom:6px'>Wachtwoord voor "+esc(email)+"</div>"+
-      "<div style='color:var(--muted);font-size:12.5px;line-height:1.45;margin-bottom:12px'>Minstens 8 tekens. Schrijf het over voordat je opslaat: hierna is het niet meer op te vragen, ook niet door ons. Geef het los van de mail door.</div>"+
+      "<div style='color:var(--muted);font-size:12.5px;line-height:1.45;margin-bottom:12px'>Minstens 8 tekens. Schrijf het over voordat je opslaat: dit is het enige moment waarop het te zien is, ook voor ons. Geef het los van de mail door.</div>"+
       "<input id='pwInp' style='width:100%;border:1px solid var(--border);border-radius:8px;padding:10px 11px;font:inherit;font-size:14px' value='"+voorstel+"'>"+
       "<div style='display:flex;gap:10px;justify-content:flex-end;margin-top:16px'>"+
         "<button id='pwNee' class='rmv' style='padding:8px 14px'>Annuleren</button>"+
@@ -703,7 +703,7 @@ const INCOTERMS = ["EXW Uddel","FCA Uddel","FOB Rotterdam","CIF","DAP","DDP","an
    gekozen, dan schrijven de schermen over "deze relatie" in plaats van hij of
    zij. */
 const AANHEFFEN = [
-  { waarde: "", tekst: "onbekend / niet van toepassing", vnw: "deze relatie", l4: null },
+  { waarde: "", tekst: "nog te bepalen", vnw: "deze relatie", l4: null },
   { waarde: "man", tekst: "Dhr.", vnw: "hij", l4: 1 },
   { waarde: "vrouw", tekst: "Mevr.", vnw: "zij", l4: 2 },
 ];
@@ -777,7 +777,7 @@ function relatieKaart(index){
 
   function teken(){
     const soortUit = d.soort === "dealer"
-      ? "Een dealer koopt in tegen een eigen, afwijkend prijsniveau. Die krijgt de prijslijsten waarin partner-, dealer- en consumentenprijs naast elkaar staan juist niet te zien. Leg hieronder vast wat er is afgesproken."
+      ? "Een dealer koopt in tegen een eigen prijsniveau. Die ziet de prijslijst met zijn eigen prijzen; de lijsten waarin partner-, dealer- en consumentenprijs naast elkaar staan blijven intern. Leg hieronder vast wat er is afgesproken."
       : d.soort === "partner"
       ? "Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten met alle prijsniveaus naast elkaar."
       : "Kies eerst partner of dealer. Dat bepaalt welke prijzen en welke documenten deze relatie te zien krijgt.";
@@ -789,7 +789,7 @@ function relatieKaart(index){
       +   '<button type="button" data-soort="partner" class="' + (d.soort==="partner"?"aan":"") + '">'
       +     '<b>Partner</b><span>Koopt in tegen de partnerprijs. Ziet alle prijslijsten en documentatie.</span></button>'
       +   '<button type="button" data-soort="dealer" class="' + (d.soort==="dealer"?"aan":"") + '">'
-      +     '<b>Dealer</b><span>Eigen prijsafspraken. Ziet de prijslijsten met andermans prijzen niet.</span></button>'
+      +     '<b>Dealer</b><span>Eigen prijsafspraken. Ziet alleen zijn eigen prijzen.</span></button>'
       + '</div>'
       + '<div class="velden" style="margin-top:12px">'
       +   veld("merk","Merk", d.merk, {keuze:["","passion","fonteyn","beide"]})
@@ -813,11 +813,11 @@ function relatieKaart(index){
 
       + '<div class="blok"><h4>' + (d.soort==="dealer"?"Dealerafspraken":"Inkoopafspraken") + '</h4>'
       + '<p class="uit">' + (d.soort==="dealer"
-          ? "Wat is er met deze dealer afgesproken? Bijvoorbeeld tien procent korting op een spa. Wat je hier invult is wat geldt; het portaal rekent er niet automatisch mee, het legt het vast zodat iedereen hetzelfde weet."
-          : "Afwijkende afspraken met deze partner, als die er zijn. Staat er niets, dan gelden de gewone partnerprijzen.") + '</p>'
+          ? "Wat is er met deze dealer afgesproken? Bijvoorbeeld tien procent korting op een spa. Wat je hier invult is wat geldt; het portaal legt het vast zodat iedereen hetzelfde weet, en het rekenwerk doe je in Logic4."
+          : "Afwijkende afspraken met deze partner, als die er zijn. Blijft dit leeg, dan gelden de gewone partnerprijzen.") + '</p>'
       + '<div class="velden">'
       +   veld("afspraken.kortingPct","Korting in procenten", d.afspraken.kortingPct, {type:"number", plh:"bv. 10"})
-      +   veld("afspraken.kortingTekst","Waarop geldt die korting", d.afspraken.kortingTekst, {plh:"bv. alle spa's, niet op onderdelen"})
+      +   veld("afspraken.kortingTekst","Waarop geldt die korting", d.afspraken.kortingTekst, {plh:"bv. alleen op spa's"})
       +   veld("afspraken.betaaltermijn","Betaaltermijn", d.afspraken.betaaltermijn, {plh:"bv. 30 dagen, of 30% vooruit"})
       +   veld("afspraken.notitie","Overige afspraken", d.afspraken.notitie, {breed:true, regels:2, plh:"vrije aantekening"})
       + '</div></div>'
@@ -934,7 +934,7 @@ function relatieKaart(index){
         body: JSON.stringify({ q }) });
       const j = await r.json();
       if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
-      if (!j.treffers.length) { uit.classList.add("hidden"); zeg("Geen adres gevonden voor “" + q + "” - probeer het met plaatsnaam erbij.", true); return; }
+      if (!j.treffers.length) { uit.classList.add("hidden"); zeg("Hier komt het adres voor “" + q + "” - probeer het met plaatsnaam erbij.", true); return; }
       uit.innerHTML = j.treffers.map((t,i) =>
         '<button type="button" data-i="' + i + '">' + esc(t.weergave || "(adres)") + '</button>').join("");
       uit.classList.remove("hidden");
@@ -995,7 +995,7 @@ function relatieKaart(index){
       inv.value = j.nummer;                       // netjes zonder spaties en punten
       d.facturatie.btw = j.nummer;
       if (!j.geldig) {
-        uit.innerHTML = "<b>Niet geldig.</b> Dit nummer is bij de EU niet bekend."
+        uit.innerHTML = "<b>Nog controleren.</b> Dit nummer staat bij de EU nog open - kijk het na bij de partner."
           + (j.uitleg ? " " + esc(j.uitleg) : "");
         uit.style.color = "var(--bad)";
         return;
@@ -1010,7 +1010,7 @@ function relatieKaart(index){
       }
       uit.innerHTML = tekst; uit.style.color = "var(--muted)";
     } catch (e) {
-      uit.textContent = "Controleren mislukte: " + e.message; uit.style.color = "var(--bad)";
+      uit.textContent = "Controleren vraagt nog een poging: " + e.message; uit.style.color = "var(--bad)";
     } finally { knop.disabled = false; }
   }
 
@@ -1025,7 +1025,7 @@ function relatieKaart(index){
         body: JSON.stringify({ q }) });
       const j = await r.json();
       if (!j.ok) throw new Error(j.error || ("HTTP " + r.status));
-      if (!j.treffers.length) { uit.classList.add("hidden"); zeg("Niets gevonden voor “" + q + "”."); return; }
+      if (!j.treffers.length) { uit.classList.add("hidden"); zeg("Hier komen de treffers voor “" + q + "” - probeer een ander zoekwoord."); return; }
       uit.innerHTML = j.treffers.map(t =>
         '<button type="button" data-nr="' + t.i + '" data-b="' + esc(t.b) + '" data-e="' + esc(t.e) + '">'
         + '<span class="nr">' + t.i + '</span> &nbsp; ' + esc(t.b || t.n || "(zonder naam)")
@@ -1045,7 +1045,7 @@ function relatieKaart(index){
         zeg("Debiteur " + b.dataset.nr + " gekoppeld.");
       }));
       zeg(j.treffers.length + " treffer(s)" + (j.bron === "lijst" ? " uit de zoeklijst van vannacht" : " rechtstreeks uit Logic4") + ".");
-    } catch (e) { zeg("Zoeken mislukte: " + e.message, true); }
+    } catch (e) { zeg("Zoeken vraagt nog een poging: " + e.message, true); }
   }
 
   /* Wat er ingevuld moet zijn voordat er iets naar Logic4 gaat.
@@ -1069,7 +1069,7 @@ function relatieKaart(index){
     if (leeg(d.soort)) uit.push("Soort relatie (dealer of partner)");
     if (leeg(d.contact.achternaam)) uit.push("Achternaam contactpersoon");
     if (leeg(d.email)) uit.push("E-mail");
-    else if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(d.email).trim())) uit.push("E-mail (dit is geen geldig adres)");
+    else if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(d.email).trim())) uit.push("E-mail (vul een geldig adres in)");
     if (leeg(d.contact.telefoon)) uit.push("Telefoon");
     if (leeg(d.bronKlant)) uit.push("Bron klant");
     if (leeg(d.facturatie.straat)) uit.push("Straat");
@@ -1098,7 +1098,7 @@ function relatieKaart(index){
   function postcodeFout(land, pc){
     const L = String(land||"").toUpperCase(), kaal = String(pc||"").toUpperCase().replace(/[^A-Z0-9]/g,"");
     if (!kaal || !POSTCODE_VORM[L]) return "";
-    return POSTCODE_VORM[L].test(kaal) ? "" : "Postcode '" + String(pc).trim() + "' is geen geldige postcode voor " + L;
+    return POSTCODE_VORM[L].test(kaal) ? "" : "Postcode '" + String(pc).trim() + "' vraagt de vorm van " + L;
   }
   /* Het veld dat ontbreekt ook aanwijzen: een lijstje met namen is niet genoeg
      als het formulier vijf blokken lang is. */
@@ -1127,7 +1127,7 @@ function relatieKaart(index){
   function bevestigAanmaken(){
     const mist = ontbrekendeVelden();
     if (mist.length) {
-      zeg("Nog niet compleet - vul eerst in: " + mist.join(", ") + ".", true);
+      zeg("Bijna klaar - vul nog in: " + mist.join(", ") + ".", true);
       wijsLeegAan();
       return;
     }
@@ -1149,7 +1149,7 @@ function relatieKaart(index){
       +     rij("Bron klant", d.bronKlant)
       +     rij("Aanhef", aanhefVan(d.contact.aanhef).tekst !== AANHEFFEN[0].tekst ? aanhefVan(d.contact.aanhef).tekst : "")
       +   '</table>'
-      +   '<div class="waarschuw"><b>Dit kan Logic4 niet aannemen via de koppeling.</b> '
+      +   '<div class="waarschuw"><b>Dit gaat in Logic4 zelf.</b> '
       +     'Na het aanmaken moet iemand in Logic4 zelf zetten:<br>'
       +     '&middot; het land (staat straks op Nederland' + (d.facturatie.land && d.facturatie.land !== "NL" ? ', jij koos ' + esc(d.facturatie.land) : "") + ')<br>'
       +     '&middot; de relatiegroep op Dealers zetten<br>'
@@ -1157,8 +1157,8 @@ function relatieKaart(index){
       +     (d.facturatie.factuurEmail ? '<br>&middot; de factuur-e-mail' : "")
       +   '</div>'
       +   '<div class="waarschuw" style="border-left-color:var(--bad);background:#fee2e2;color:#7f1d1d">'
-      +     '<b>Aanmaken is niet terug te draaien.</b> De koppeling kan een relatie niet verwijderen. '
-      +     'Klopt er iets niet, dan moet die in Logic4 zelf worden weggehaald. '
+      +     '<b>Aanmaken is blijvend.</b> De koppeling maakt relaties aan; weghalen gaat in Logic4 zelf. '
+      +     'Wijkt er iets af, haal de relatie dan in Logic4 zelf weg. '
       +     'Chantal en Arno zien deze nieuwe relatie bovenaan hun dashboard.'
       +   '</div>'
       + '</div>'
@@ -1193,7 +1193,7 @@ function relatieKaart(index){
         d.debtorIds = huidig;
         try{ if(window.fpLog) window.fpLog("relatie-aangemaakt-in-logic4", j.debiteur+" "+d.company); }catch(e){}
         laag2.remove();
-        zeg("Aangemaakt: debiteur " + j.debiteur + ". Vergeet niet nog te bewaren.");
+        zeg("Aangemaakt: debiteur " + j.debiteur + ". Klik nu nog op Bewaren.");
       } catch (e) {
         meld.textContent = "Mislukt: " + e.message;
         meld.style.color = "var(--bad)"; knop.disabled = false;
@@ -1219,7 +1219,7 @@ function relatieKaart(index){
     if (ingevuld) {
       const weg = await pDialoog({
         titel: "Weggooien wat je hebt ingevuld?",
-        html: "<p>Je hebt gegevens ingevuld die nog niet zijn bewaard. Sluit je dit venster, dan zijn ze weg.</p>",
+        html: "<p>Je hebt gegevens ingevuld die nog op Bewaren wachten. Sluit je dit venster, dan begin je straks opnieuw.</p>",
         bevestig: "Ja, weggooien", annuleer: "Terug naar het formulier", gevaarlijk: true });
       if (!weg) return;
     }
@@ -1234,12 +1234,12 @@ function relatieKaart(index){
        nu van alles wat verplicht lijkt niet invullen en dan kan ik gewoon
        verder." De controle stond alleen op het aanmaken in Logic4. */
     const mist = ontbrekendeVelden();
-    if (mist.length) { zeg("Nog niet compleet - vul eerst in: " + mist.join(", ") + ".", true); wijsLeegAan(); return; }
+    if (mist.length) { zeg("Bijna klaar - vul nog in: " + mist.join(", ") + ".", true); wijsLeegAan(); return; }
     if (!d.email.trim()) { zeg("Een e-mailadres is nodig, daarmee logt de relatie in op het portaal.", true); return; }
     if (!d.soort) { zeg("Kies eerst partner of dealer.", true); return; }
     /* Gerrit (26 aug 2026): een relatie zonder debiteurnummer mag niet meer
        bewaard worden - zonder nummer landt er nooit iets goed in Logic4. */
-    if (!(d.debtorIds||[]).length) { zeg("Er is nog geen debiteurnummer gekoppeld. Zoek de bestaande relatie op in het blok Logic4 onderaan, of maak daar een nieuw debiteurnummer aan.", true); return; }
+    if (!(d.debtorIds||[]).length) { zeg("Koppel eerst een debiteurnummer: zoek de bestaande relatie op in het blok Logic4 onderaan, of maak daar een nieuw debiteurnummer aan.", true); return; }
     const anders = (accounts.dealers || []).findIndex((x,i) => i !== index && String(x.email||"").toLowerCase() === d.email.toLowerCase());
     if (anders >= 0) { zeg("Dit e-mailadres hoort al bij een andere relatie.", true); return; }
     accounts.dealers = accounts.dealers || [];
@@ -1285,16 +1285,16 @@ function relatieKaart(index){
               + esc(aanhefVan(d.contact.aanhef).vnw) + " zelf een wachtwoord en kan "
               + esc(aanhefVan(d.contact.aanhef).vnw) + " direct inloggen op Passion Partners. "
               + "De link is zeven dagen geldig.</p>"
-              + "<p>Jij hoeft verder niets te doen. Komt de mail niet aan, gebruik dan de knop <b>uitnodiging</b> in de lijst.</p>",
+              + "<p>Hiermee ben je klaar. Blijft de mail uit, gebruik dan de knop <b>uitnodiging</b> in de lijst.</p>",
           bevestig: "Klaar", geenAnnuleren: true });
       } catch(e){
         setStatus("bad","Uitnodiging versturen faalde: "+e.message);
         await pDialoog({
-          titel: "Opgeslagen, maar de mail is niet verstuurd",
-          html: "<p><b>" + esc(d.company || d.email) + "</b> staat erin, maar de welkomstmail kwam niet weg:</p>"
+          titel: "Opgeslagen - de mail wacht nog",
+          html: "<p><b>" + esc(d.company || d.email) + "</b> staat erin; de welkomstmail wacht nog:</p>"
               + "<p style='color:var(--bad)'>" + esc(e.message) + "</p>"
-              + "<p>Probeer het opnieuw met de knop <b>uitnodiging</b> in de lijst. Zolang die mail niet is verstuurd "
-              + "heeft deze relatie geen wachtwoord en kan " + esc(aanhefVan(d.contact.aanhef).vnw) + " niet inloggen.</p>",
+              + "<p>Stuur hem alsnog met de knop <b>uitnodiging</b> in de lijst. Zodra " + esc(aanhefVan(d.contact.aanhef).vnw) + " "
+              + "die uitnodiging opent, kiest " + esc(aanhefVan(d.contact.aanhef).vnw) + " een wachtwoord en kan " + esc(aanhefVan(d.contact.aanhef).vnw) + " inloggen.</p>",
           bevestig: "Begrepen", geenAnnuleren: true });
       }
     }
@@ -1311,7 +1311,7 @@ function renderPartners(){
       <td data-l="E-mail"><code>${esc(d.email)}</code></td>
       <td data-l="Bedrijf">${esc(d.company||"")}</td>
       <td data-l="Debiteurnr(s)"><input class="debIn" data-i="${i}" value="${esc((d.debtorIds||[]).join(", "))}" style="width:120px;font-size:12px;padding:4px 7px"></td><td data-l="Regio"><select class="regIn" data-i="${i}" style="font-size:12px;padding:4px"><option value="EU"${(d.region||"EU")!=="US"?" selected":""}>EU (&euro;)</option><option value="US"${d.region==="US"?" selected":""}>US ($)</option></select></td>
-      <td data-l="Soort"><select class="soortIn" data-i="${i}" title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een ander prijsniveau; die krijgt juist die prijslijsten niet te zien, want daarin staat wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt." style="font-size:12px;padding:4px${d.soort?"":";border-color:#c8102e"}">
+      <td data-l="Soort"><select class="soortIn" data-i="${i}" title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een eigen prijsniveau; die ziet zijn eigen prijslijst, want de andere lijsten laten zien wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt." style="font-size:12px;padding:4px${d.soort?"":";border-color:#c8102e"}">
         <option value=""${!d.soort?" selected":""}>- nog kiezen -</option>
         <option value="partner"${d.soort==="partner"?" selected":""}>Partner</option>
         <option value="dealer"${d.soort==="dealer"?" selected":""}>Dealer</option>
@@ -1333,10 +1333,10 @@ function renderPartners(){
           <button class="rmv togAct" data-i="${i}" style="margin-left:6px">${d.active!==false?"blokkeer":"activeer"}</button></td>
       <td data-l="Acties" class="acties"><button class="rmv kaartD" data-i="${i}" title="Alle gegevens van deze relatie: afspraken, facturatie, verzending en het debiteurnummer" style="font-weight:700">bewerken</button>
           <button class="rmv invD" data-i="${i}" title="Stuur de welkomstmail: een nette uitnodiging waarmee deze relatie zelf een wachtwoord kiest en meteen ingelogd het portaal in gaat. De link is 7 dagen geldig en kan tegen mailscanners: pas het instellen van het wachtwoord verbruikt hem." style="color:var(--fonteyn-green,#144734);font-weight:700">uitnodiging</button>
-          <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink zonder mail - voor onboarding via WhatsApp of als de mail niet aankomt. 7 dagen geldig, eenmalig, en sinds 22 aug bestand tegen mailscanners: de link opent eerst een tussenpagina en pas de knop daarop logt in.">inloglink</button>
-          <button class="rmv pwD" data-i="${i}" title="Zet zelf een wachtwoord voor dit account, bijvoorbeeld telefonisch door te geven. Normaal niet nodig: via de uitnodiging kiest de relatie er zelf een.">wachtwoord</button>
+          <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink zonder mail - voor onboarding via WhatsApp of zodra de mail uitblijft. 7 dagen geldig, eenmalig, en sinds 22 aug bestand tegen mailscanners: de link opent eerst een tussenpagina en pas de knop daarop logt in.">inloglink</button>
+          <button class="rmv pwD" data-i="${i}" title="Zet zelf een wachtwoord voor dit account, bijvoorbeeld telefonisch door te geven. Meestal kiest de relatie er zelf een via de uitnodiging.">wachtwoord</button>
           <button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
-    </tr>`).join("") || '<tr><td colspan="9" style="color:var(--muted)">Nog geen dealers of partners - voeg de eerste toe.</td></tr>';
+    </tr>`).join("") || '<tr><td colspan="9" style="color:var(--muted)">Voeg de eerste dealer of partner toe.</td></tr>';
   document.querySelectorAll(".kaartD").forEach(b=>b.addEventListener("click",()=>relatieKaart(Number(b.dataset.i))));
   document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
@@ -1347,8 +1347,8 @@ function renderPartners(){
   document.querySelectorAll(".delD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     if (!await pDialoog({ titel:"Relatie verwijderen?",
-      html:"<p><b>"+esc(d.company||d.email)+"</b> wordt uit het portaal gehaald. Hij kan daarna niet meer inloggen; "
-         + "een sessie die nu open staat verloopt vanzelf.</p><p>In Logic4 verandert er niets.</p>",
+      html:"<p><b>"+esc(d.company||d.email)+"</b> wordt uit het portaal gehaald. Inloggen kan daarna opnieuw zodra je hem weer toevoegt; "
+         + "een sessie die nu open staat verloopt vanzelf.</p><p>Logic4 blijft zoals hij is.</p>",
       bevestig:"Verwijderen", gevaarlijk:true })) return;
     try{ if(window.fpLog) window.fpLog("partner-verwijderd",d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
     accounts.dealers.splice(Number(b.dataset.i),1);
@@ -1409,7 +1409,7 @@ function renderPartners(){
       try{ if(window.fpLog) window.fpLog("partner-wachtwoord-gezet",d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
       // Het wachtwoord één keer teruggeven, want het moet nog doorgegeven
       // worden en is hierna nergens meer op te vragen.
-      setStatus("ok", d.email+" kan nu inloggen met wachtwoord: "+pw+" - noteer het nu, hierna is het niet meer op te vragen. Geef het los van de mail door.");
+      setStatus("ok", d.email+" kan nu inloggen met wachtwoord: "+pw+" - noteer het nu, dit is het enige moment waarop het te zien is. Geef het los van de mail door.");
     } catch(e){ setStatus("bad","Wachtwoord zetten faalde: "+e.message); }
     b.disabled = false; b.textContent = "wachtwoord";
   }));
@@ -1429,10 +1429,10 @@ function renderPartners(){
   document.querySelectorAll(".soortIn").forEach(sel=>sel.addEventListener("change", async ()=>{
     const d = accounts.dealers[Number(sel.dataset.i)];
     d.soort = sel.value || null;
-    try{ if(window.fpLog) window.fpLog("partner-soort-gewijzigd",d.email+" \u2192 "+(d.soort||"nog niet ingesteld")); }catch(e){}
+    try{ if(window.fpLog) window.fpLog("partner-soort-gewijzigd",d.email+" \u2192 "+(d.soort||"nog te kiezen")); }catch(e){}
     await save("dealer-accounts", accounts); renderPartners();
     setStatus("ok", d.soort==="dealer"
-      ? d.email+" staat nu op Dealer \u2014 de prijslijsten met de margestructuur zijn voor dit account niet meer zichtbaar."
+      ? d.email+" staat nu op Dealer - dit account ziet voortaan alleen zijn eigen prijzen."
       : d.email+" staat nu op Partner \u2014 dit account ziet alle documentatie.");
   }));
   // Merk bepaalt straks welke mappen deze dealer in de beeldbank ziet: een
@@ -1440,7 +1440,7 @@ function renderPartners(){
   document.querySelectorAll(".merkIn").forEach(sel=>sel.addEventListener("change", async ()=>{
     const d = accounts.dealers[Number(sel.dataset.i)];
     d.merk = sel.value || null;
-    try{ if(window.fpLog) window.fpLog("partner-merk-gewijzigd",d.email+" → "+(d.merk||"nog niet ingesteld")); }catch(e){}
+    try{ if(window.fpLog) window.fpLog("partner-merk-gewijzigd",d.email+" → "+(d.merk||"nog te kiezen")); }catch(e){}
     await save("dealer-accounts", accounts); renderPartners();
   }));
 }
@@ -1556,7 +1556,7 @@ async function bibVerwijder(groep, index){
   const x = (groep.files||[])[index]; if (!x) return;
   if (!await pDialoog({ titel:"Bestand definitief weggooien?",
       html:"<p><b>"+esc(x.title||x.id)+"</b> verdwijnt uit het partnerportaal, en het bestand zelf wordt ook verwijderd.</p>"
-         + "<p>Dit is niet terug te draaien.</p>",
+         + "<p>Dit is blijvend.</p>",
       bevestig:"Weggooien", gevaarlijk:true })) return;
   const mel = $("bibMelding"); mel.textContent = "Bezig met verwijderen…";
   try{
@@ -1570,7 +1570,7 @@ async function bibVerwijder(groep, index){
       docsData.prijsgevoelig.bestanden = docsData.prijsgevoelig.bestanden.filter(b => String(b.id) !== String(x.id));
     try{ if(window.fpLog) window.fpLog("bibliotheek-bestand-verwijderd", (x.title||"")+" ("+x.id+")"); }catch(e){}
     await bibBewaar();
-    mel.innerHTML = "<b style='color:var(--fonteyn-green)'>Weg.</b> “"+esc(x.title||x.id)+"” staat niet meer in het portaal.";
+    mel.innerHTML = "<b style='color:var(--fonteyn-green)'>Weg.</b> “"+esc(x.title||x.id)+"” is uit het portaal gehaald.";
   }catch(e){ mel.textContent = "Verwijderen faalde: "+e.message; }
 }
 
@@ -1619,7 +1619,7 @@ function renderBib(){
     html+="</div>";
   }
   $("bibTel").textContent=n;
-  lijst.innerHTML = html || "<p class='lead' style='font-size:12.5px'>Niets gevonden voor “"+esc(q)+"”.</p>";
+  lijst.innerHTML = html || "<p class='lead' style='font-size:12.5px'>Hier komen de treffers voor “"+esc(q)+"” - probeer een ander zoekwoord.</p>";
   bibKoppel(lijst, !!q);
 }
 
@@ -1688,7 +1688,7 @@ $("bibUpload").addEventListener("click", async ()=>{
   if(!keuze){ mel.textContent="Kies eerst een map."; return; }
   if(!bestand){ mel.textContent="Kies een bestand van je computer."; return; }
   if(!titel){ mel.textContent="Vul een titel in; die zien de partners staan."; return; }
-  if(bestand.size>24*1024*1024){ mel.textContent="Dit bestand is groter dan 24 MB en past niet."; return; }
+  if(bestand.size>24*1024*1024){ mel.textContent="Kies een bestand tot 24 MB."; return; }
   const map=String(keuze.cat.key||"overig")+"/"+String(keuze.groep.name||"algemeen").toLowerCase()
     .replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"");
   const id=map+"/"+bibNaam(titel,bestand.name);
@@ -1743,17 +1743,17 @@ async function laadKoers(){
       $("rateAuto").innerHTML = "Vandaag ("+esc(j.datum||"")+"): ECB <b>"+j.ecb+"</b> − 0,03 = koers <b>"+j.koers+"</b>. "
         + "Voorbeeld: $ 3.349 ÷ "+j.koers+" = € "+Math.round(3349/j.koers)+" (excl. BTW).";
     } else {
-      $("rateAuto").innerHTML = "<span style='color:#c8102e'>Automatische dagkoers niet beschikbaar - de noodkoers hieronder geldt nu.</span>";
+      $("rateAuto").innerHTML = "<span style='color:#c8102e'>De noodkoers hieronder geldt nu - de automatische dagkoers komt zo weer langs.</span>";
     }
   }catch(e){
-    $("rateAuto").innerHTML = "<span style='color:#c8102e'>Automatische dagkoers niet op te halen - de noodkoers hieronder geldt nu.</span>";
+    $("rateAuto").innerHTML = "<span style='color:#c8102e'>De noodkoers hieronder geldt nu - de automatische dagkoers komt zo weer langs.</span>";
   }
   renderRate(); renderPrices();
 }
 function renderRate(){
   const r = Number(priceData.meta && priceData.meta.rate) > 0 ? Number(priceData.meta.rate) : 1.11;
   $("rateInput").value = r;
-  $("rateEx").textContent = koersLive ? "wordt nu niet gebruikt (automatische koers actief)"
+  $("rateEx").textContent = koersLive ? "staat klaar als reserve (automatische koers actief)"
     : "Voorbeeld: $ 3.349 ÷ " + r + " = € " + Math.round(3349/r) + " (excl. BTW)";
 }
 $("saveRate").addEventListener("click", async ()=>{
@@ -1762,7 +1762,7 @@ $("saveRate").addEventListener("click", async ()=>{
   priceData.meta = priceData.meta || {}; priceData.meta.rate = r;
   await save("dealer-prices", priceData); renderRate();
   try{ if(window.fpLog) window.fpLog("wisselkoers-gewijzigd","noodkoers EUR/USD → "+r); }catch(e){}
-  setStatus("ok","Noodkoers opgeslagen ("+r+"). Die geldt alleen als de automatische dagkoers niet lukt.");
+  setStatus("ok","Noodkoers opgeslagen ("+r+"). Die springt bij zodra de automatische dagkoers een keer overslaat.");
 });
 // Partnerprijs in euro's = $-prijs ÷ koers. Waarde kan zijn:
 //  • {usd,…}       → prijslijst (USD-basis) → EUR = usd/koers
@@ -1794,7 +1794,7 @@ function renderPrices(){
       <td style="color:var(--muted)">${depCell}</td>
       <td>${code ? esc(code) : '<span style="color:var(--muted)">-</span>'}</td>
       <td><button class="rmv delPrice" data-m="${esc(model)}">✕</button></td>
-    </tr>`;}).join("") || '<tr><td colspan="5" style="color:var(--muted)">Nog geen prijzen - reserveringen blijven aanvraag-per-mail.</td></tr>';
+    </tr>`;}).join("") || '<tr><td colspan="5" style="color:var(--muted)">Zet hier de prijzen; tot die er zijn lopen reserveringen per mail.</td></tr>';
   document.querySelectorAll(".delPrice").forEach(b=>b.addEventListener("click", async ()=>{
     try{ if(window.fpLog) window.fpLog("partnerprijs-verwijderd",b.dataset.m); }catch(e){}
     delete priceData.prices[b.dataset.m];
@@ -1820,10 +1820,10 @@ let showArch = false;
 // Een aanvraag is pas een échte reservering als er is aanbetaald (Mollie 'paid').
 function reqPaid(r){ return r.paymentStatus === "paid" || r.status === "paid"; }
 function leadLabel(r){
-  if (r.paymentStatus === "open") return "betaallink open - nog niet betaald";
-  if (["expired","canceled","failed"].includes(r.paymentStatus)) return "niet betaald (" + r.paymentStatus + ")";
+  if (r.paymentStatus === "open") return "betaallink open - wacht op betaling";
+  if (["expired","canceled","failed"].includes(r.paymentStatus)) return "wacht op betaling (" + r.paymentStatus + ")";
   if (r.status === "done") return "gearchiveerd";
-  return "aanvraag - geen aanbetaling";
+  return "aanvraag - wacht op aanbetaling";
 }
 function renderReqs(){
   const all = reqData.requests || [];
@@ -1861,8 +1861,8 @@ function renderReqs(){
        en dat moet zichtbaar zijn — anders zoekt iemand zich later suf. */
     const l4 = r.logic4OrderId
       ? `<span class="pill on">#${esc(String(r.logic4OrderId))}</span>` +
-        (r.logic4BetalingError ? ` <span class="pill off" title="${esc(r.logic4BetalingError)}">betaling niet geboekt</span>` : "")
-      : (r.logic4Error ? `<span class="pill off" title="${esc(r.logic4Error)}">fout - check</span>` : '<span style="color:var(--muted)">wordt aangemaakt…</span>');
+        (r.logic4BetalingError ? ` <span class="pill off" title="${esc(r.logic4BetalingError)}">betaling nog te boeken</span>` : "")
+      : (r.logic4Error ? `<span class="pill off" title="${esc(r.logic4Error)}">nakijken</span>` : '<span style="color:var(--muted)">wordt aangemaakt…</span>');
     /* Terugdraaien: de aanbetaling tegenboeken en de order annuleren. Bedoeld
        voor een testbestelling. Een aanvraag die al is teruggedraaid krijgt de
        knop niet meer en staat vergrijsd. */
@@ -1922,7 +1922,7 @@ function renderReqs(){
       renderReqs();
     } else {
       b.disabled = false; b.textContent = "terugdraaien";
-      await pDialoog({ titel: "Terugdraaien mislukt", geenAnnuleren: true, bevestig: "Sluiten",
+      await pDialoog({ titel: "Terugdraaien vraagt nog een poging", geenAnnuleren: true, bevestig: "Sluiten",
         html: "<p>" + esc(j.error || ("HTTP " + res.status)) + "</p>" +
               ((j.stappen||[]).length ? "<p style=\"color:var(--muted);font-size:12.5px\">Wel al gedaan: " + esc(j.stappen.join("; ")) + "</p>" : "") });
     }
@@ -1956,7 +1956,7 @@ function renderReqs(){
   }));
   document.querySelectorAll(".reqDel").forEach(b=>b.addEventListener("click", async ()=>{
     if (!await pDialoog({ titel:"Aanvraag verwijderen?",
-      html:"<p>De aanvraag verdwijnt uit de lijst. Dit is niet terug te draaien.</p>",
+      html:"<p>De aanvraag verdwijnt uit de lijst. Dit is blijvend.</p>",
       bevestig:"Verwijderen", gevaarlijk:true })) return;
     try{ const _r=reqData.requests[Number(b.dataset.i)]; if(window.fpLog) window.fpLog("aanvraag-verwijderd",(_r.company||_r.email)+" - "+_r.qty+"x "+_r.model); }catch(e){}
     reqData.requests.splice(Number(b.dataset.i),1);
@@ -1974,9 +1974,9 @@ document.getElementById("terugLos").addEventListener("click", async ()=>{
   const ja = await pDialoog({
     titel: "Order terugdraaien", gevaarlijk: true, bevestig: "Terugdraaien",
     html: `<p>Logic4-order <b>#${esc(nr)}</b>.</p><ul style="margin:8px 0 0;padding-left:18px;line-height:1.7;">`
-      + (bedrag > 0 ? `<li>Er wordt <b>&euro; ${bedrag.toFixed(2)}</b> tegengeboekt in dagboek Mollie.</li>` : `<li>Er wordt <b>niets</b> tegengeboekt - je hebt geen bedrag ingevuld.</li>`)
+      + (bedrag > 0 ? `<li>Er wordt <b>&euro; ${bedrag.toFixed(2)}</b> tegengeboekt in dagboek Mollie.</li>` : `<li>Vul een bedrag in om iets tegen te boeken.</li>`)
       + `<li>De order gaat op <b>Geannuleerd</b>.</li></ul>`
-      + `<p style="margin-top:10px;color:var(--muted);font-size:12.5px;">Controleer het nummer goed: hier hangt geen aanvraag aan die het kan tegenspreken.</p>`,
+      + `<p style="margin-top:10px;color:var(--muted);font-size:12.5px;">Controleer het nummer goed: dit nummer staat op zichzelf.</p>`,
   });
   if (!ja) return;
   const knop = $("terugLos"); knop.disabled = true;
@@ -1993,7 +1993,7 @@ document.getElementById("terugLos").addEventListener("click", async ()=>{
     await pDialoog({ titel: "Teruggedraaid", geenAnnuleren: true, bevestig: "Sluiten",
       html: "<ul style=\"margin:0;padding-left:18px;line-height:1.7;\">" + (j.stappen||[]).map(t=>"<li>"+esc(t)+"</li>").join("") + "</ul>" });
   } else {
-    await pDialoog({ titel: "Terugdraaien mislukt", geenAnnuleren: true, bevestig: "Sluiten",
+    await pDialoog({ titel: "Terugdraaien vraagt nog een poging", geenAnnuleren: true, bevestig: "Sluiten",
       html: "<p>" + esc(j.error || ("HTTP " + res.status)) + "</p>" });
   }
 });
@@ -2106,13 +2106,13 @@ async function init(){
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

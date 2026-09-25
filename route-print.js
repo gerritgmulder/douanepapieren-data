@@ -120,7 +120,7 @@
      Zo zie je wat er het eerst was en wat erbij kwam. */
   function meldingBlokken(tekst) {
     var stukken = String(tekst || "").split(/\n\s*[_\-=]{3,}\s*\n?/).map(function (t) { return t.trim(); }).filter(Boolean);
-    if (!stukken.length) return "<div class='tekstblok'>(geen omschrijving in Logic4)</div>";
+    if (!stukken.length) return "<div class='tekstblok'>(omschrijving volgt uit Logic4)</div>";
     return stukken.map(function (t, i) {
       return "<div class='meldstuk'><div class='meldkop'>" + (i === 0 ? "Melding" : "Aanvulling " + i) + "</div>" +
         "<div class='tekstblok'>" + esc(t) + "</div></div>";
@@ -181,8 +181,8 @@
   function bevestiging(o, logo) {
     if (!o || !o.ok) {
       return "<section class='blad'><h2>Order " + esc(o && o.nr) + "</h2>" +
-        "<p class='fout'>Deze order kon niet uit Logic4 worden opgehaald: " +
-        esc((o && o.error) || "onbekende reden") + ". Print hem met de hand mee.</p></section>";
+        "<p class='fout'>Deze order vraagt Logic4 nog een keer: " +
+        esc((o && o.error) || "reden volgt") + ". Print hem met de hand mee.</p></section>";
     }
     var regels = (o.regels || []).map(function (r) {
       // Al geleverd volgens Logic4: blijft op de bevestiging staan, maar grijs
@@ -366,7 +366,7 @@
     laag.addEventListener("click", function (e) { if (e.target === laag) dicht(); });
     knopPrint.addEventListener("click", function () {
       try { kader.contentWindow.focus(); kader.contentWindow.print(); }
-      catch (e) { alert("Printen lukte niet: " + (e.message || e)); }
+      catch (e) { alert("Printen vraagt nog een poging: " + (e.message || e)); }
     });
   }
 

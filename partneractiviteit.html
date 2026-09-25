@@ -89,7 +89,7 @@
     <span id="updated" style="font-size:12px;color:var(--muted)"></span>
   </div>
 
-  <div id="deny" class="status-msg bad hidden">Geen toegang tot het partner-activiteitenlogboek.</div>
+  <div id="deny" class="status-msg bad hidden">Toegang op aanvraag voor deze tegel.</div>
 
   <div id="content">
     <div id="kpis" class="kpi-row"></div>
@@ -202,13 +202,13 @@ function render(){
   const rows=Object.values(byUser).sort((a,b)=>String(b.last).localeCompare(String(a.last)));
   document.getElementById("perUser").innerHTML=rows.map(d=>
     "<tr><td>"+partnerLabel(d)+"</td><td>"+d.login+"</td><td>"+d.visit+"</td><td>"+(d.reserve?"<b style='color:var(--passion)'>"+d.reserve+"</b>":"0")+"</td><td>"+d.doc+"</td><td>"+d.vraag+"</td><td>"+d.days.size+"</td><td style='font-size:12px'>"+(d.last?new Date(d.last).toLocaleString("nl-NL"):"—")+"</td></tr>"
-  ).join("")||"<tr><td colspan='8' style='color:var(--muted)'>Nog geen partner-activiteit deze maand.</td></tr>";
+  ).join("")||"<tr><td colspan='8' style='color:var(--muted)'>Hier komt de partner-activiteit van deze maand.</td></tr>";
   // Alle gebeurtenissen (nieuwste eerst)
   const sorted=evs.slice().sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
   document.getElementById("evCount").textContent="("+sorted.length+")";
   document.getElementById("events").innerHTML=sorted.slice(0,1000).map(e=>
     "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+partnerLabel(e)+"</td><td>"+actionPill(e.action)+"</td><td style='color:#374151'>"+esc(e.detail||"")+"</td></tr>"
-  ).join("")||"<tr><td colspan='4' style='color:var(--muted)'>Geen gebeurtenissen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
+  ).join("")||"<tr><td colspan='4' style='color:var(--muted)'>Hier komen de gebeurtenissen"+(q?" voor '"+esc(q)+"'":"")+".</td></tr>";
 }
 </script>
 <script>
@@ -278,13 +278,13 @@ function render(){
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

@@ -86,6 +86,18 @@
     "Bestand kiezen": "Choose file",
     "Bestanden kiezen": "Choose files",
     "Nog geen bestand gekozen": "No file chosen",
+    /* Positieve taal (25 sep 2026): de herschreven Nederlandse zinnen. De oude
+       sleutels blijven staan voor zover ze nog ergens voorkomen. */
+    "Kies een bestand": "Choose a file",
+    "Nog te kiezen": "To be chosen",
+    "Dit model gaat zonder cover": "This model comes without a cover",
+    "Alles staat compleet.": "Everything is complete.",
+    "Hier komen de modellen - probeer een ander zoekwoord.": "Models appear here - try another search term.",
+    "Toegang op aanvraag voor deze tegel.": "Access to this tile is available on request.",
+    "Maat van de specificatiesheet (de prijslijst geeft hier de ruimte)": "Size from the specification sheet (the price list gives the space here)",
+    "Hier komen de resultaten te staan - probeer een ander zoekwoord.": "Results appear here - try another search term.",
+    "Aanmelding open": "Registration open",
+    "Maak en bewerk de specificatiesheets van de spa's - vul de velden in, upload foto's en sla op als PDF. Werkt zonder InDesign.": "Create and edit the spa specification sheets - fill in the fields, upload photos and save as PDF. Works without InDesign.",
     "Model": "Model",
     "Modellen": "Models",
     "Code": "Code",

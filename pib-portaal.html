@@ -125,7 +125,7 @@ td.n,th.n{text-align:right;white-space:nowrap}
       <div id="tMsg" class="msg hidden"></div>
       <div id="tMeter" class="hidden">
         <h3>De meter installeren</h3>
-        <p class="lead" style="margin-bottom:8px">Haal het bestand voor je computer op en dubbelklik erop. De meter start dan vanzelf, ook na opnieuw opstarten. Op een Mac vraagt macOS bij de eerste keer om toestemming voor Toegankelijkheid of Automatisering; sta dat toe, anders ziet de meter geen venstertitels.</p>
+        <p class="lead" style="margin-bottom:8px">Haal het bestand voor je computer op en dubbelklik erop. De meter start dan vanzelf, ook na opnieuw opstarten. Op een Mac vraagt macOS bij de eerste keer om toestemming voor Toegankelijkheid of Automatisering; sta dat toe, dan ziet de meter de venstertitels.</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="stil" id="dlMac">Voor Mac (macOS)</button>
           <button class="stil" id="dlWin">Voor Windows</button>
@@ -174,7 +174,7 @@ $("lKnop").addEventListener("click", async () => {
   const r = await api("/pib/login", { method: "POST", body: JSON.stringify({ email }) });
   $("lKnop").disabled = false;
   if (r.status === 200) toon($("lMsg"), "ok", "Als dit adres bij ons bekend is, staat er nu een inloglink in je mail. Kijk ook in de ongewenste post.");
-  else toon($("lMsg"), "bad", "Dat lukte niet" + (r.data && r.data.error === "te-vaak" ? ": te veel pogingen, probeer het over een kwartier opnieuw." : ". Probeer het opnieuw."));
+  else toon($("lMsg"), "bad", "Dat vraagt nog een poging" + (r.data && r.data.error === "te-vaak" ? ": probeer het over een kwartier opnieuw." : ". Probeer het opnieuw."));
 });
 $("lEmail").addEventListener("keydown", e => { if (e.key === "Enter") $("lKnop").click(); });
 
@@ -194,7 +194,7 @@ async function start(){
   if (ik.meekijk) {
     const balk = document.createElement("div");
     balk.style.cssText = "background:#fef3c7;color:#92400e;padding:9px 20px;font-size:13px;border-bottom:1px solid #fcd34d";
-    balk.textContent = "Je kijkt mee" + (ik.meekijkDoor ? " als " + ik.meekijkDoor : "") + " in het portaal van " + (ik.naam || ik.email) + ". Je ziet precies wat de partner ziet, maar kunt niets invullen of wijzigen.";
+    balk.textContent = "Je kijkt mee" + (ik.meekijkDoor ? " als " + ik.meekijkDoor : "") + " in het portaal van " + (ik.naam || ik.email) + ". Je ziet precies wat de partner ziet; invullen en wijzigen doet de partner zelf. invullen of wijzigen.";
     document.querySelector("header").after(balk);
     ["uKnop", "tJa", "tNee", "dlMac", "dlWin"].forEach(id => { const e = $(id); if (e) { e.disabled = true; e.title = "Alleen de partner zelf kan dit"; } });
   }
@@ -229,7 +229,7 @@ function tekenUren(){
     "<td>" + esc(u.categorie || "") + "</td>" +
     "<td>" + esc(u.omschrijving || "") + (u.door ? " <span style='color:var(--muted);font-size:11px'>(ingevoerd door kantoor)</span>" : "") + "</td>" +
     "<td style='white-space:nowrap'>" + (ik && ik.meekijk ? "" : "<button class='weg' data-b='" + esc(u.id) + "'>wijzig</button> <button class='weg' data-w='" + esc(u.id) + "'>weg</button>") + "</td></tr>").join("")
-    : "<tr><td colspan='5' style='color:var(--muted)'>Nog geen uren ingevuld.</td></tr>";
+    : "<tr><td colspan='5' style='color:var(--muted)'>Hier komen de ingevulde uren.</td></tr>";
   $("uLijst").querySelectorAll("[data-w]").forEach(b => b.addEventListener("click", async () => {
     if (!confirm("Deze regel weghalen?")) return;
     await api("/pib/api/uren?id=" + encodeURIComponent(b.dataset.w), { method: "DELETE" });
@@ -262,22 +262,22 @@ function tekenToestemming(){
   const t = ik.toestemming;
   const aan = !!(t && t.gegeven);
   $("tStand").className = "pil " + (aan ? "aan" : "uit");
-  $("tStand").textContent = aan ? "Toestemming gegeven op " + new Date(t.ts).toLocaleDateString("nl-NL") : (t && t.ingetrokken ? "Toestemming ingetrokken" : "Nog geen toestemming");
+  $("tStand").textContent = aan ? "Toestemming gegeven op " + new Date(t.ts).toLocaleDateString("nl-NL") : (t && t.ingetrokken ? "Toestemming ingetrokken" : "Toestemming volgt");
   $("tJa").classList.toggle("hidden", aan); $("tNee").classList.toggle("hidden", !aan);
   $("tMeter").classList.toggle("hidden", !aan);
   $("aKaart").classList.toggle("hidden", !aan && !ik.meterLaatst);
-  $("tLaatst").textContent = ik.meterLaatst ? "De meter heeft voor het laatst iets gestuurd op " + new Date(ik.meterLaatst).toLocaleString("nl-NL") + "." : "De meter heeft nog niets gestuurd.";
+  $("tLaatst").textContent = ik.meterLaatst ? "De meter heeft voor het laatst iets gestuurd op " + new Date(ik.meterLaatst).toLocaleString("nl-NL") + "." : "De eerste meting volgt nog.";
 }
 async function zetToestemming(akkoord){
   const r = await api("/pib/api/toestemming", { method: "POST", body: JSON.stringify({ akkoord }) });
-  if (r.status === 200 && r.data && r.data.ok) { ik.toestemming = r.data.toestemming; ik.meterActief = r.data.meterActief; tekenToestemming(); toon($("tMsg"), "ok", akkoord ? "Vastgelegd. Haal hieronder de meter op." : "Ingetrokken. De meter kan niets meer sturen."); }
-  else toon($("tMsg"), "bad", "Dat lukte niet.");
+  if (r.status === 200 && r.data && r.data.ok) { ik.toestemming = r.data.toestemming; ik.meterActief = r.data.meterActief; tekenToestemming(); toon($("tMsg"), "ok", akkoord ? "Vastgelegd. Haal hieronder de meter op." : "Ingetrokken. De meter houdt er nu mee op."); }
+  else toon($("tMsg"), "bad", "Dat vraagt nog een poging.");
 }
 $("tJa").addEventListener("click", () => { if (confirm("Je geeft hiermee de toestemming zoals hierboven beschreven. Doorgaan?")) zetToestemming(true); });
 $("tNee").addEventListener("click", () => { if (confirm("Toestemming intrekken? De meter stopt dan meteen met sturen.")) zetToestemming(false); });
 async function download(soort){
   const r = await fetch("/pib/api/meter/" + soort, { headers: { "X-Pib-Session": localStorage.getItem(SESS_KEY) || "" } });
-  if (!r.ok) { toon($("tMsg"), "bad", "Ophalen lukte niet. Geef eerst toestemming."); return; }
+  if (!r.ok) { toon($("tMsg"), "bad", "Geef eerst toestemming, dan kun je hem ophalen."); return; }
   const blob = await r.blob();
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
   a.download = soort === "mac" ? "fonteyn-pib-meter.command" : "fonteyn-pib-meter.bat";
@@ -317,7 +317,7 @@ async function laadDag(dag){
   const tijd = (m) => new Date(m + ":00Z").toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
   box.innerHTML = "<h3>" + esc(datumNl(dag)) + " <button class='weg' id='aDicht'>sluiten</button></h3>" +
     (blokken.length ? "<div style='overflow-x:auto'><table><thead><tr><th>Van</th><th>Tot</th><th>Programma</th><th>Venster</th></tr></thead><tbody>" +
-      blokken.map(b => "<tr><td>" + tijd(b.van) + "</td><td>" + tijd(b.tot) + "</td><td>" + esc(b.app) + "</td><td>" + esc(b.titel) + "</td></tr>").join("") + "</tbody></table></div>" : "<p class='lead'>Niets gemeten op deze dag.</p>");
+      blokken.map(b => "<tr><td>" + tijd(b.van) + "</td><td>" + tijd(b.tot) + "</td><td>" + esc(b.app) + "</td><td>" + esc(b.titel) + "</td></tr>").join("") + "</tbody></table></div>" : "<p class='lead'>Hier komen de metingen van deze dag.</p>");
   $("aDicht").addEventListener("click", () => box.classList.add("hidden"));
   box.scrollIntoView({ behavior: "smooth", block: "start" });
 }

@@ -303,7 +303,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <h1>Orderstatus</h1>
   <div class="right">
     <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
-    <button class="logout hidden" id="demoBtn" type="button" title="Toon een voorbeeld-dry-run (wijzigt niets in Logic4)">🎬 Demo</button>
+    <button class="logout hidden" id="demoBtn" type="button" title="Toon een voorbeeld-dry-run (alleen kijken, Logic4 blijft zoals hij is)">🎬 Demo</button>
     <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
   </div>
 </header>
@@ -313,7 +313,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <!-- Toegang geweigerd -->
   <div id="accessDenied" class="panel hidden">
     <div class="access-denied">
-      <h2>Geen toegang</h2>
+      <h2>Toegang op aanvraag</h2>
       <p>Deze pagina is alleen beschikbaar voor Gerrit, Don, Arno en Dolf.</p>
       <p><a href="dashboard.html">← Terug naar dashboard</a></p>
     </div>
@@ -328,7 +328,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         Logic4 markeert een order pas als "officieel" zodra de status handmatig is aangepast
         nadat er een betaling is binnengekomen. Deze tool zoekt orders die nog op
         <b>Verkooporder</b> of <b>30% aanbetaald</b> staan terwijl er (meer) is betaald, en
-        adviseert de juiste status. Bij een dry-run wordt nog niets in Logic4 gewijzigd.
+        adviseert de juiste status. Bij een dry-run kijk je alleen mee; Logic4 blijft zoals hij is.
       </p>
 
       <div id="lastDoorvoer" class="last-doorvoer">Laatste doorvoer wordt geladen…</div>
@@ -385,7 +385,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       </div>
 
       <div id="emptyState" class="empty-state hidden">
-        Geen wijzigingen nodig — alle relevante orders staan al op de juiste status.
+        Alles staat goed — alle relevante orders hebben al de juiste status.
       </div>
     </div>
 
@@ -607,11 +607,11 @@ async function runDryRun() {
     try {
       if (window.fpLog) window.fpLog("orderstatussen-gecontroleerd", candidates.length + " kandidaten uit " + allOrders.length + " orders");
     } catch (logErr) {
-      console.warn("[activiteit] kon controle niet vastleggen:", logErr.message);
+      console.warn("[activiteit] controle vraagt nog een poging:", logErr.message);
     }
   } catch (e) {
     console.error(e);
-    setStatus("bad", "Fout bij dry-run: " + e.message);
+    setStatus("bad", "De dry-run vraagt nog een poging: " + e.message);
     setProgress(null);
   } finally {
     el("btnDryRun").disabled = false;
@@ -774,7 +774,7 @@ async function refreshLastDoorvoer() {
     }
     if (!last || !last.ts) {
       box.classList.add("never");
-      box.innerHTML = `<span class="clock">⏱</span><span>Nog niet eerder doorgevoerd (deze/vorige maand).</span>`;
+      box.innerHTML = `<span class="clock">⏱</span><span>Dit is de eerste keer deze maand (en vorige maand).</span>`;
       return;
     }
     const d = new Date(last.ts);
@@ -851,7 +851,7 @@ async function runApply() {
 
   const ok = window.confirm(
     `${changes.length} statuswijziging(en) doorvoeren in Logic4?\n\n` +
-    `Dit wordt vastgelegd in het Activiteitenlogboek en is niet automatisch terug te draaien.`
+    `Dit is blijvend; terugzetten doe je in Logic4 zelf.`
   );
   if (!ok) return;
 
@@ -889,12 +889,12 @@ async function runApply() {
         if (cb) { cb.checked = false; cb.disabled = true; }
       } else {
         tr.classList.add("failed");
-        if (cell) cell.innerHTML = `<span class="row-status bad" title="${escapeHtml(result.error || "Onbekende fout")}">✗ Mislukt</span>`;
+        if (cell) cell.innerHTML = `<span class="row-status bad" title="${escapeHtml(result.error || "reden volgt")}">✗ Vraagt een poging</span>`;
       }
     });
 
     if (j.failed > 0) {
-      setStatus("warn", `Klaar — ${j.applied} doorgevoerd, ${j.failed} mislukt. Hover over "Mislukt" voor de foutmelding.`);
+      setStatus("warn", `Klaar — ${j.applied} doorgevoerd, ${j.failed} vragen nog een poging. Hover over de regel voor de melding.`);
     } else {
       setStatus("ok", `Klaar — alle ${j.applied} wijziging(en) zijn doorgevoerd en vastgelegd in het Activiteitenlogboek.`);
     }
@@ -904,7 +904,7 @@ async function runApply() {
     refreshLastDoorvoer();
   } catch (e) {
     console.error(e);
-    setStatus("bad", "Fout bij doorvoeren: " + e.message);
+    setStatus("bad", "Doorvoeren vraagt nog een poging: " + e.message);
     setProgress(null);
   } finally {
     el("btnDryRun").disabled = false;
@@ -948,7 +948,7 @@ function loadOrderstatusDemo(){
   const btn = el("btnApply");
   if (btn) { btn.disabled = true; btn.title = "🎬 Demo-modus — doorvoeren is uitgeschakeld."; btn.textContent = "Doorvoeren (demo)"; }
   const bar = el("statusBar");
-  if (bar) bar.textContent = "🎬 Demo — voorbeeld-dry-run: 1.247 orders gecheckt, 6 kandidaat-wijzigingen. Er wordt NIETS gewijzigd; ververs voor de echte tool.";
+  if (bar) bar.textContent = "🎬 Demo — voorbeeld-dry-run: 1.247 orders gecheckt, 6 kandidaat-wijzigingen. Je kijkt hier alleen mee; ververs voor de echte tool.";
   el("resultsPanel").scrollIntoView({ behavior:"smooth", block:"start" });
 }
 (function initOsDemo(){
@@ -1026,13 +1026,13 @@ function loadOrderstatusDemo(){
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

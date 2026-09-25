@@ -228,7 +228,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   <h1>Bol.com koppeling <span style="font-size:10px;font-weight:400;opacity:.55;" title="Versie van deze tegel — handig om te checken of de app de nieuwste heeft opgehaald">v2026-07-07k</span></h1>
   <a href="dashboard.html" style="color:#fff;text-decoration:none;border:1px solid rgba(255,255,255,0.4);border-radius:6px;padding:6px 14px;font-size:12px;">← Dashboard</a>
   <div class="user-chip">Ingelogd als <b id="userEmail">—</b></div>
-  <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-Bol-factuur met gesimuleerde match (boekt niets)">🎬 Demo</button>
+  <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-Bol-factuur met gesimuleerde match (alleen kijken, boeken doe je zelf)">🎬 Demo</button>
   <button class="logout" id="logoutBtn" type="button">Uitloggen</button>
 </header>
 
@@ -286,7 +286,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       </div>
       <div style="margin-top:10px;font-size:12px;color:var(--muted);">
         💡 Tussentijdse Bol-specificaties bevatten ook regels die al eerder
-        verwerkt zijn. Filter op de eerste-nog-niet-verwerkte datum.
+        verwerkt zijn. Filter op de eerste datum die nog open staat.
         De 2 debet-regels (provisie + overschrijving) zijn voor de hele
         periode — boek die <b>pas in als ALLE regels van de periode klaar zijn</b>.
       </div>
@@ -355,8 +355,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <b id="matchCount">0</b> van <b id="totalCount">0</b> credit-regels zijn
         gematcht met een Logic4-order. De Bol-order is meestal al afgeboekt naar een
         <b>factuur</b>, dus de betaling wordt via <code>/v3/Orders/AddPayment</code>
-        op de <b>InvoiceId</b> geboekt (uitleg Osman) — geen handmatige actie meer per regel.
-        Alleen orders met een openstaande factuur worden geboekt.
+        op de <b>InvoiceId</b> geboekt (uitleg Osman) - dat gaat vanzelf, regel voor regel.
+        Orders met een openstaande factuur worden geboekt.
       </p>
       <p class="lead" style="font-size:13px;color:var(--warn);">
         Na het doorvoeren boek je de <b>provisie</b> met één knop als memoriaal (4570 tegenover 1185).
@@ -367,7 +367,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <div style="display:flex;gap:10px;align-items:center;margin-top:4px;">
           <input type="number" id="bolBookingId" placeholder="22 (standaard)" style="border:1px solid var(--border);border-radius:6px;padding:7px 9px;font:inherit;width:120px;">
           <span style="font-size:12px;color:var(--muted);">
-            Standaard <b>22 = Tussenrekening Online Payments</b> — er is geen apart Bol-dagboek, dus dit is de juiste boeking voor Bol-uitbetalingen. <code>MatchingLedgerId=78</code> (vooruitontvangen) staat ook vast. Leeg laten = 22.
+            Standaard <b>22 = Tussenrekening Online Payments</b> — dit is het dagboek voor Bol-uitbetalingen. <code>MatchingLedgerId=78</code> (vooruitontvangen) staat ook vast. Leeg laten = 22.
           </span>
         </div>
       </div>
@@ -382,7 +382,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         hierboven om <b>regel voor regel</b> door te voeren en elke boeking in
         Logic4 te controleren. Al-geboekte regels worden bij "Doorvoeren"
         automatisch overgeslagen, dus je kunt daarna veilig de rest in één
-        keer doen — geen dubbele boekingen mogelijk.
+        keer doen - elke regel wordt precies één keer geboekt.
       </p>
       <div id="applyStatus" class="status-msg hidden" style="margin-top:12px;"></div>
       <div id="applyResults" class="hidden" style="margin-top:12px;"></div>
@@ -427,11 +427,11 @@ const ALLOWED = new Set([
   if (!ALLOWED.has(email)) {
     document.body.innerHTML =
       "<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui;'>" +
-      "<h1 style='color:#144734;'>Geen toegang</h1>" +
+      "<h1 style='color:#144734;'>Toegang op aanvraag</h1>" +
       "<p>Deze tegel is alleen voor Don, Osman, Gerrit en Fonteynbot.</p>" +
       "<p>Je bent ingelogd als <code>" + (email || "(onbekend)") + "</code>.</p>" +
       "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
-    throw new Error("Geen toegang");
+    throw new Error("toegang op aanvraag");
   }
 })();
 
@@ -497,9 +497,9 @@ document.getElementById("scrollBottomBtn").addEventListener("click", () =>
 // (zo bleef de Doorvoeren-knop 'doen niks' door de niet-ondersteunde prompt()).
 // Elke onverwachte fout wordt nu als rode toast getoond.
 window.addEventListener("unhandledrejection", (e) => {
-  const msg = (e && e.reason && (e.reason.message || String(e.reason))) || "onbekende fout";
-  console.error("[bol] onverwachte fout:", e.reason);
-  showToast("✗ Onverwachte fout: " + escapeHtml(msg), "bad", 8000);
+  const msg = (e && e.reason && (e.reason.message || String(e.reason))) || "reden volgt";
+  console.error("[bol] onverwachte melding:", e.reason);
+  showToast("✗ Dit vraagt nog een poging: " + escapeHtml(msg), "bad", 8000);
 });
 window.addEventListener("error", (e) => {
   if (e && e.message) showToast("✗ Fout: " + escapeHtml(e.message), "bad", 8000);
@@ -544,7 +544,7 @@ async function handleFile(file) {
     setStatus("ok", `Bol-factuur ingelezen: ${parsedData.factuurnr || "(tussentijds)"} (${parsedData.creditRegels.length} klant-betalingen)`);
   } catch (e) {
     console.error(e);
-    setStatus("bad", `Kon Excel niet inlezen: ${e.message}`);
+    setStatus("bad", `Excel inlezen vraagt nog een poging: ${e.message}`);
   }
 }
 
@@ -710,7 +710,7 @@ function parseBolFactuur(rows) {
 // ─────────────────────────────────────────────────────────────────
 function renderResult(data) {
   document.getElementById("resultSection").classList.remove("hidden");
-  document.getElementById("infoFactuurnr").textContent = data.factuurnr || "(geen — tussentijdse spec)";
+  document.getElementById("infoFactuurnr").textContent = data.factuurnr || "(tussentijdse spec)";
   document.getElementById("infoPeriode").textContent = data.periode || "—";
   document.getElementById("infoVerkopernr").textContent = data.verkopernr || "—";
   document.getElementById("infoAantalRijen").textContent = data.creditRegels.length;
@@ -765,7 +765,7 @@ function renderResult(data) {
         // Resultaat van een per-regel-boeking — blijft staan na re-render
         statusPill = r.bookResult.ok
           ? `<span class="match-pill ok" title="${escapeHtml(r.bookResult.detail || "")}">✓ geboekt (${fmtEur(r.bookResult.amount)})</span>`
-          : `<span class="match-pill ${r.bookResult.skipped ? "todo" : "fail"}" title="${escapeHtml(r.bookResult.detail || "")}">${r.bookResult.skipped ? "⏭ al betaald" : "✗ fout bij boeken"}</span>`;
+          : `<span class="match-pill ${r.bookResult.skipped ? "todo" : "fail"}" title="${escapeHtml(r.bookResult.detail || "")}">${r.bookResult.skipped ? "⏭ al betaald" : "✗ boeken vraagt nog een poging"}</span>`;
         infoExtra = ` — ${escapeHtml(r.bookResult.detail || "")}`;
       } else if (m.invoiceId == null) {
         // Geen openstaande factuur — DRIE smaken. Eerst: is de factuur-check
@@ -773,15 +773,15 @@ function renderResult(data) {
         // als "geen factuur" gepresenteerd worden — toon 'm met een 🔁-knop.
         const orderPaid = (Number(r.bedrag) > 0.01 && m.payed >= Number(r.bedrag) - 0.01) || (m.paymentsCount > 0);
         if (m.invoiceLookupFailed) {
-          statusPill = `<span class="match-pill fail" title="De factuur-opzoek-call faalde (tijdelijke API-fout, bv. rate-limit). De factuur kan gewoon openstaan — probeer opnieuw.">⚠ factuur-check mislukt</span>`
+          statusPill = `<span class="match-pill fail" title="Logic4 had het even druk (rate-limit). De factuur staat waarschijnlijk gewoon open - probeer het opnieuw.">⚠ factuur-check vraagt een poging</span>`
             + ` <button class="rowBookBtn rowRetryBtn" data-nr="${escapeHtml(r.bestelnr)}" title="Factuur-check opnieuw uitvoeren voor deze regel">🔁 opnieuw</button>`;
-          infoExtra = ` — order ${m.orderId}: factuur-check mislukt, klik 🔁`;
+          infoExtra = ` — order ${m.orderId}: factuur-check vraagt een poging, klik 🔁`;
         } else if (orderPaid) {
           statusPill = `<span class="match-pill ok" title="Order ${m.orderId}: Betaald ${fmtEur(m.payed)}${m.paymentsCount ? " (" + m.paymentsCount + " betaling(en))" : ""} — factuur gesloten en uit de open-lijst">✓ al betaald</span>`;
           infoExtra = ` — order ${m.orderId}, betaald ${fmtEur(m.payed)} (factuur gesloten)`;
         } else {
-          statusPill = `<span class="match-pill todo" title="Geen openstaande factuur én geen betaling op de order — waarschijnlijk nog niet afgeboekt naar een factuur">nog niet gefactureerd</span>`;
-          infoExtra = ` — order ${m.orderId} (geen factuur, geen betaling geregistreerd)`;
+          statusPill = `<span class="match-pill todo" title="Op deze order staat de factuur nog open en er staat nog een betaling bij - hij wacht op de facturatie">wacht op facturatie</span>`;
+          infoExtra = ` — order ${m.orderId} (factuur en betaling staan nog open)`;
         }
       } else if (amountToBook(r) < 0.01) {
         statusPill = `<span class="match-pill ok" title="Factuur ${m.invoiceId} — openstaand ${fmtEur(m.invoiceOutstanding||0)}">✓ al betaald</span>`;
@@ -794,15 +794,15 @@ function renderResult(data) {
     } else if (r.match === null) {
       // Match-poging gedaan maar niets gevonden — bied handmatig koppelen aan:
       // ordernummer intikken → koppelen → daarna gewone ⏵ Boek-flow.
-      debiteurCell = `<span class="match-pill fail">✗ niet gevonden</span>`;
-      statusPill = `<span class="match-pill fail" title="Geen Logic4-order met dit bestelnummer in de Referentie of Omschrijving — koppel 'm handmatig via het ordernummer">niet gevonden</span>`
+      debiteurCell = `<span class="match-pill fail">✗ nog te koppelen</span>`;
+      statusPill = `<span class="match-pill fail" title="Dit bestelnummer staat nog buiten de Referentie en Omschrijving van een Logic4-order - koppel 'm zelf via het ordernummer">nog te koppelen</span>`
         + `<div style="margin-top:3px;white-space:nowrap;">`
         + `<input class="rowLinkInp" data-nr="${escapeHtml(r.bestelnr)}" placeholder="ordernr 3…" style="width:88px;border:1px solid var(--border);border-radius:5px;padding:2px 5px;font:inherit;font-size:11px;">`
         + ` <button class="rowBookBtn rowLinkBtn" data-nr="${escapeHtml(r.bestelnr)}" title="Koppel dit Bol-bestelnummer aan een Logic4-order — daarna kun je 'm gewoon boeken">Koppel</button></div>`;
     } else {
       // Nog geen match-poging
       debiteurCell = `<span class="match-pill todo">handmatig in Logic4</span>`;
-      statusPill = `<span class="match-pill todo">match nog niet</span>`;
+      statusPill = `<span class="match-pill todo">match volgt</span>`;
     }
     tr.innerHTML = `
       <td>${escapeHtml(datumStr)}</td>
@@ -846,7 +846,7 @@ function renderResult(data) {
     trWarn.innerHTML = `
       <td colspan="9" style="background:#fef3c7;color:#92400e;font-size:11.5px;text-align:center;font-style:italic;padding:8px;">
         ⚠ Datum-filter actief — debet-regels (verkoopprovisie + Bol-overschrijving)
-        gelden voor de HELE periode en worden hier niet getoond.
+        gelden voor de HELE periode en staan daarom buiten dit overzicht.
         Boek die pas in Logic4 als ALLE regels van deze Bol-periode klaar zijn.
       </td>
     `;
@@ -918,7 +918,7 @@ function renderResult(data) {
 // ─────────────────────────────────────────────────────────────────
 async function bookSingleRow(bestelnr, btn) {
   if (typeof bolDemoActive !== "undefined" && bolDemoActive) {
-    alert("🎬 Demo-modus — er wordt niets echt geboekt. Ververs de pagina voor de echte tool.");
+    alert("🎬 Demo-modus — je kijkt hier alleen mee. Ververs de pagina voor de echte tool.");
     return;
   }
   const r = parsedData && parsedData.creditRegels.find(x => x.bestelnr === bestelnr);
@@ -963,10 +963,10 @@ async function bookSingleRow(bestelnr, btn) {
       r.bookResult = { ok: true, amount: amount,
         detail: "geboekt op factuur " + r.match.invoiceId + " — openstaand " + (ob != null ? fmtEur(ob) : "?") + " → " + (fullyPaid ? "€ 0,00 (betaald)" : fmtEur(oa)) };
     } else if (apiErr) {
-      r.bookResult = { ok: false, amount: amount, detail: "API-fout: " + apiErr };
+      r.bookResult = { ok: false, amount: amount, detail: "Logic4 vraagt nog een poging: " + apiErr };
     } else {
       r.bookResult = { ok: false, amount: amount,
-        detail: "API zei OK maar openstaand bewoog niet zoals verwacht (−" + (drop != null ? fmtEur(drop) : "?") + " i.p.v. −" + fmtEur(amount) + ") — check in Logic4" };
+        detail: "Logic4 gaf OK; het openstaande bedrag staat nog op (−" + (drop != null ? fmtEur(drop) : "?") + " i.p.v. −" + fmtEur(amount) + ") — check in Logic4" };
     }
     // Audit-log (zelfde endpoint als de batch, met 1 regel)
     try {
@@ -984,14 +984,14 @@ async function bookSingleRow(bestelnr, btn) {
     if (geboekt) {
       showToast("✓ Geboekt: " + escapeHtml(r.bestelnr) + " — " + fmtEur(amount) + (fullyPaid ? " · factuur volledig betaald" : ""), "ok");
     } else if (apiErr) {
-      showToast("✗ Boeken mislukt: " + escapeHtml(r.bestelnr) + " — " + escapeHtml(apiErr), "bad", 6500);
+      showToast("✗ Boeken vraagt nog een poging: " + escapeHtml(r.bestelnr) + " — " + escapeHtml(apiErr), "bad", 6500);
     } else {
-      showToast("⚠ " + escapeHtml(r.bestelnr) + ": API zei OK maar openstaand bewoog niet zoals verwacht — check de regel", "warn", 6500);
+      showToast("⚠ " + escapeHtml(r.bestelnr) + ": Logic4 gaf OK; kijk de regel na, het openstaande bedrag staat nog gelijk", "warn", 6500);
     }
   } catch (e) {
     r.bookResult = { ok: false, amount: 0, detail: "Fout: " + e.message };
     renderResult(parsedData);
-    showToast("✗ Fout bij boeken: " + escapeHtml(e.message), "bad", 6500);
+    showToast("✗ Boeken vraagt nog een poging: " + escapeHtml(e.message), "bad", 6500);
   }
 }
 
@@ -1016,7 +1016,7 @@ async function retryInvoiceRow(bestelnr, btn) {
     } else {
       r.match.invoiceId = null;
       r.match.invoiceOutstanding = null;
-      showToast("Factuur-check gelukt voor " + escapeHtml(r.bestelnr) + " — geen openstaande factuur (al betaald of nog niet gefactureerd)", "warn");
+      showToast("Factuur-check gelukt voor " + escapeHtml(r.bestelnr) + " — deze staat al rond (betaald of wacht op facturatie)", "warn");
     }
   } else {
     r.match.invoiceLookupFailed = true;
@@ -1049,7 +1049,7 @@ async function linkSingleRow(bestelnr, orderNrRaw) {
     const data = await logic4Call("/v3/Orders/GetOrders", { Id: parseInt(clean, 10), TakeRecords: 1 });
     const arr = Array.isArray(data) ? data : ((data && data.Orders) || []);
     const o = arr[0];
-    if (!o) { alert("Order " + clean + " niet gevonden in Logic4 — controleer het nummer."); return; }
+    if (!o) { alert("Order " + clean + " staat in Logic4 nog open — controleer het nummer."); return; }
     const totals = o.Totals || {};
     const name = (o.InvoiceAddress && (o.InvoiceAddress.CompanyName || o.InvoiceAddress.ContactName))
       || (o.AccountAddress && o.AccountAddress.CompanyName) || "—";
@@ -1085,7 +1085,7 @@ async function linkSingleRow(bestelnr, orderNrRaw) {
     renderResult(parsedData);
     if (invoiceId == null) {
       if (invoiceLookupFailed) {
-        alert("Gekoppeld aan order " + o.Id + " (" + name + "), maar de factuur-check faalde (tijdelijke API-fout). Klik op de 🔁-knop op de regel om het opnieuw te proberen.");
+        alert("Gekoppeld aan order " + o.Id + " (" + name + "), de factuur-check vraagt nog een poging (Logic4 had het even druk). Klik op de 🔁-knop op de regel.");
       } else {
         const paidSignal = (Number(totals.Calc_TotalPayed) || 0) >= Number(r.bedrag) - 0.01 || (Array.isArray(o.Payments) && o.Payments.length > 0);
         alert(paidSignal
@@ -1260,7 +1260,7 @@ function pickBolInvoice(list, bolBedrag) {
 
 // Factuur-lookup MET retries. Kritisch: een tijdelijke API-fout (rate-limit,
 // verlopen token) mag NOOIT stilletjes als "geen open factuur" gelezen worden
-// — dat liet boekbare regels onterecht als 'nog niet gefactureerd' zien.
+// — dat liet boekbare regels onterecht als 'wacht op facturatie' zien.
 // Bij aanhoudende fout geven we ok:false terug zodat de UI het kan tonen.
 async function fetchOpenInvoice(debtorId, richtBedrag) {
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -1308,7 +1308,7 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
 
     if (!uniqueNrs.length) {
       progressEl.className = "status-msg warn";
-      progressEl.textContent = "Geen Bol-bestelnummers in de (gefilterde) regels om op te zoeken.";
+      progressEl.textContent = "Kies regels met een Bol-bestelnummer om op te zoeken.";
       return;
     }
 
@@ -1338,7 +1338,7 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
             data = await logic4Call("/v3/Orders/GetOrders", body);
           } catch (e) {
             diag.errors++;
-            if (diag.samples.length < 6) diag.samples.push("<code>" + escapeHtml(nr) + "</code> → API-fout (" + veld + "): " + escapeHtml(e.message));
+            if (diag.samples.length < 6) diag.samples.push("<code>" + escapeHtml(nr) + "</code> → Logic4 vraagt een poging (" + veld + "): " + escapeHtml(e.message));
             continue;
           }
           const arr = Array.isArray(data) ? data : ((data && data.Orders) || []);
@@ -1392,7 +1392,7 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     });
 
     await runWithLimit(tasks, 4, function (done, total) {
-      progressEl.textContent = "Opzoeken… " + done + "/" + total + " — " + diag.found + " gevonden (" + diag.viaRef + " via Referentie, " + diag.viaDesc + " via Omschrijving), " + diag.noOrders + " niet gevonden";
+      progressEl.textContent = "Opzoeken… " + done + "/" + total + " — " + diag.found + " gevonden (" + diag.viaRef + " via Referentie, " + diag.viaDesc + " via Omschrijving), " + diag.noOrders + " nog te koppelen";
     });
 
     // ── 2e ronde: omschrijvingen SCANNEN voor nummers zonder treffer ──
@@ -1486,10 +1486,10 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
     const diagBlocks = [];
     const zonderFactuur = matched - diag.withInvoice;
     if (zonderFactuur > 0) diagBlocks.push("<b>" + zonderFactuur + "</b> order(s) hadden géén openstaande factuur — die zijn al betaald óf nog niet afgeboekt. Die worden overgeslagen (niet automatisch geboekt).");
-    if (diag.noOrders) diagBlocks.push("<b>" + diag.noOrders + "</b> bestelnummer(s) niet gevonden in Referentie óf Omschrijving — die order bestaat (nog) niet in Logic4, of het nummer is anders genoteerd. Koppel ze handmatig via het ordernr-veld in de tabel.");
+    if (diag.noOrders) diagBlocks.push("<b>" + diag.noOrders + "</b> bestelnummer(s) staan nog buiten Referentie en Omschrijving — die order volgt nog in Logic4, of het nummer staat er anders genoteerd. Koppel ze zelf via het ordernr-veld in de tabel.");
     if (diag.viaDesc) diagBlocks.push("<b>" + diag.viaDesc + "</b> bestelnummer(s) niet in de Referentie maar wél in de <b>Omschrijving</b> gevonden — automatisch gematcht.");
-    if (diag.invErrors) diagBlocks.push("<b style=\"color:#b91c1c\">⚠ " + diag.invErrors + "</b> regel(s): de factuur-check faalde ook na 3 pogingen (Logic4 waarschijnlijk tijdelijk overbelast). Die regels tonen een 🔁-knop — of wacht een minuut en klik Match opnieuw. Ze zijn dus NIET per se 'nog niet gefactureerd'.");
-    if (diag.errors) diagBlocks.push("<b style=\"color:#b91c1c\">" + diag.errors + "</b> API-fout(en) tijdens opzoeken.");
+    if (diag.invErrors) diagBlocks.push("<b style=\"color:#b91c1c\">⚠ " + diag.invErrors + "</b> regel(s): de factuur-check vraagt na 3 pogingen nog een keer (Logic4 had het druk). Die regels tonen een 🔁-knop — of wacht een minuut en klik Match opnieuw. Waarschijnlijk staan ze gewoon gefactureerd.");
+    if (diag.errors) diagBlocks.push("<b style=\"color:#b91c1c\">" + diag.errors + "</b> keer dat Logic4 nog een poging vraagt tijdens opzoeken.");
     if (diag.samples.length) diagBlocks.push("<b>Voorbeelden:</b><br>" + diag.samples.join("<br>"));
 
     if (diagBlocks.length) {
@@ -1513,7 +1513,7 @@ document.getElementById("matchBtn").addEventListener("click", async () => {
   } catch (e) {
     console.error(e);
     progressEl.className = "status-msg bad";
-    progressEl.textContent = "Fout bij matchen: " + e.message;
+    progressEl.textContent = "Matchen vraagt nog een poging: " + e.message;
   } finally {
     btn.disabled = false;
   }
@@ -1604,7 +1604,7 @@ document.getElementById("diagPayBtn").addEventListener("click", async () => {
         const keys = Object.keys(o).sort();
         const interesting = keys.filter(k => /invoice|factu|paid|payment|ledger|debtor|journal|booking/i.test(k));
         const kv = interesting.map(k => "<code>" + escapeHtml(k) + "</code> = " + escapeHtml(JSON.stringify(o[k])));
-        blocks.push("<b>Order " + orderId + " — invoice/payment-velden:</b><br>" + (kv.join("<br>") || "(geen op top-level)"));
+        blocks.push("<b>Order " + orderId + " — invoice/payment-velden:</b><br>" + (kv.join("<br>") || "(alles staat dieper in de structuur)"));
         blocks.push("<b>Totals:</b> <code>" + escapeHtml(JSON.stringify(o.Totals || {})) + "</code>");
         blocks.push("<b>Alle top-level keys:</b> <code style='font-size:10px'>" + escapeHtml(keys.join(", ")) + "</code>");
       } else {
@@ -1712,7 +1712,7 @@ document.getElementById("test1Btn").addEventListener("click", async () => {
   statusEl.classList.remove("hidden");
   if (!r) {
     statusEl.className = "status-msg warn";
-    statusEl.textContent = "Geen gematchte, nog-niet-betaalde order gevonden om te testen.";
+    statusEl.textContent = "Kies een gematchte order die nog openstaat om te testen.";
     return;
   }
   const boekDatum = document.getElementById("boekDatum").value;
@@ -1737,7 +1737,7 @@ document.getElementById("test1Btn").addEventListener("click", async () => {
     const fresh = await freshPaidCheck(r);
     if (fresh.skip) {
       statusEl.className = "status-msg warn";
-      statusEl.innerHTML = "<b>⏭ Niet geboekt — al betaald.</b><br>" + escapeHtml(fresh.reason) +
+      statusEl.innerHTML = "<b>⏭ Deze stond al betaald.</b><br>" + escapeHtml(fresh.reason) +
         ". Er is géén betaling toegevoegd (dat zou een dubbele boeking geven).";
       return;
     }
@@ -1763,8 +1763,8 @@ document.getElementById("test1Btn").addEventListener("click", async () => {
 
     let verdict;
     if (moved) verdict = `<span class="match-pill ok">✓ Openstaand daalde met ${drop != null ? fmtEur(drop) : fmtEur(expected)}${fullyPaid ? " — factuur volledig betaald!" : ""} — het werkt!</span>`;
-    else if (!apiErr && drop === 0) verdict = `<span class="match-pill fail">⚠ API zei OK maar openstaand bedrag bewoog niet. Deel dit met Claude (mogelijk BookingId/dagboek).</span>`;
-    else if (apiErr) verdict = `<span class="match-pill fail">✗ API-fout: ${escapeHtml(apiErr)}</span>`;
+    else if (!apiErr && drop === 0) verdict = `<span class="match-pill fail">⚠ Logic4 gaf OK; het openstaande bedrag staat nog gelijk. Deel dit met Claude (mogelijk BookingId/dagboek).</span>`;
+    else if (apiErr) verdict = `<span class="match-pill fail">✗ Logic4 vraagt nog een poging: ${escapeHtml(apiErr)}</span>`;
     else verdict = `<span class="match-pill fail">⚠ Openstaand −${drop != null ? fmtEur(drop) : "?"}, verwacht −${fmtEur(expected)}</span>`;
 
     statusEl.className = "status-msg " + (moved ? "ok" : "warn");
@@ -1795,7 +1795,7 @@ document.getElementById("dryRunBtn").addEventListener("click", () => {
   statusEl.className = "status-msg ok";
   statusEl.classList.remove("hidden");
   statusEl.innerHTML = `<b>Dry-run — ${payments.length} betalingen zouden gestuurd worden naar <code>/v3/Orders/AddPayment</code>:</b>
-    ${reedsBetaald ? `<div style="font-size:12px;color:var(--warn);margin:4px 0;">${reedsBetaald} regel(s) worden overgeslagen (al betaald óf geen openstaande factuur).</div>` : ""}
+    ${reedsBetaald ? `<div style="font-size:12px;color:var(--warn);margin:4px 0;">${reedsBetaald} regel(s) staan al rond (betaald of wachtend op facturatie).</div>` : ""}
     <pre style="background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;overflow:auto;max-height:300px;font-size:11px;margin-top:8px;">${escapeHtml(JSON.stringify(payments.slice(0, 5), null, 2))}${payments.length > 5 ? "\n\n... en " + (payments.length - 5) + " meer (eerste 5 getoond)" : ""}</pre>
     <div style="margin-top:8px;font-size:12px;color:var(--muted);">
       De betaling wordt op de <b>InvoiceId</b> (factuur) geboekt met <code>MatchingLedgerId 78</code> + <code>BookingId ${bolBookingId()}</code>. <code>AmountIncl</code> = het openstaande factuurbedrag (max. het Bol-bedrag). Klik 'Doorvoeren' om écht te boeken.
@@ -1812,8 +1812,8 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
   const matched = matchedAll.filter(r => amountToBook(r) >= 0.01);
   if (!matched.length) {
     alert(matchedAll.length
-      ? `Geen van de ${matchedAll.length} gematchte order(s) heeft een openstaande factuur (al betaald of nog niet afgeboekt) — niets door te voeren.`
-      : "Geen gematchte regels om door te voeren.");
+      ? `Alle ${matchedAll.length} gematchte order(s) staan al rond (betaald of wachtend op facturatie).`
+      : "Koppel eerst regels om ze door te voeren.");
     return;
   }
   // Dubbele bevestiging — boekhouding is gevoelig
@@ -1837,7 +1837,7 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
     `Klik OK om echt te starten.`
   );
   if (!confirm2) {
-    showToast("Geannuleerd — er is niets geboekt.", "warn");
+    showToast("Gestopt — de boeking staat nog open.", "warn");
     return;
   }
 
@@ -1936,13 +1936,13 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
     } else if (apiOk && delta === 0) {
       failCount++;
       statusHtml = `<span class="match-pill fail">⚠ API OK maar stand ongewijzigd</span>`;
-      detailExtra = "Logic4 accepteerde de call maar er veranderde niets — deel dit met Claude (mogelijk BookingId/dagboek).";
+      detailExtra = "Logic4 nam de boeking aan; het saldo staat nog gelijk - deel dit met Claude (mogelijk BookingId/dagboek).";
     } else if (apiOk) {
       failCount++;
       statusHtml = `<span class="match-pill fail">⚠ verschil: verwacht ${fmtEur(expected)}, gemeten ${delta != null ? fmtEur(delta) : "?"}</span>`;
     } else {
       failCount++;
-      statusHtml = `<span class="match-pill fail">✗ API-fout</span>`;
+      statusHtml = `<span class="match-pill fail">✗ Logic4 vraagt een poging</span>`;
       detailExtra = apiError;
     }
 
@@ -1989,7 +1989,7 @@ document.getElementById("applyBtn").addEventListener("click", async () => {
     console.warn("[bol] apply-log faalde:", logErr.message);
   }
 
-  const skipNote = skipCount > 0 ? `<br>⏭ ${skipCount} regel(s) overgeslagen omdat ze al betaald waren (geen dubbele boeking gemaakt).` : "";
+  const skipNote = skipCount > 0 ? `<br>⏭ ${skipCount} regel(s) stonden al betaald - die zijn één keer geboekt gebleven.` : "";
   if (failCount === 0 && verifiedCount === matched.length - skipCount) {
     statusEl.className = "status-msg ok";
     statusEl.innerHTML = `<b>✓ Klaar — ${verifiedCount} betaling(en) succesvol gekoppeld én verifieerd in Logic4.</b>${skipNote}<br>
@@ -2064,12 +2064,12 @@ function showAfterApplyExplanation(results, verifiedCount, totalCount, data) {
         <li>Op de factuur: knop <b>Betalingen</b> — daar staat de nieuwe betalings-regel (dagboek 22, Tussenrekening Online Payments)</li>
       </ol>
 
-      <h3 style="color:#144734;margin:20px 0 8px;">Waar staat het in onze audit-log?</h3>
+      <h3 style="color:#144734;margin:20px 0 8px;">Waar staat het overzicht van de boekingen?</h3>
       <p style="color:#374151;line-height:1.6;">
         Op de fileshare <code>\\fonfile\\data\\Fonteyn\\Orderstatus-Audit\\bol-apply.csv</code>
         staat een nieuwe regel met: tijdstempel, jouw e-mail, factuurnr, periode, en per
         regel het Bol-bestelnummer + Logic4 order-ID + bedrag + status.
-        Don/Osman/jij/Fonteynbot kunnen die file openen om te zien wie wanneer wat heeft doorgevoerd.
+        Zo staat elke doorgevoerde boeking ook buiten Logic4 nog een keer op een rij.
       </p>
 
       <h3 style="color:#144734;margin:20px 0 8px;">De provisie en de uitbetaling</h3>
@@ -2127,7 +2127,7 @@ const WORKER_BASIS = "https://fonteyn-data-store.g-mulder.workers.dev";
 function bolKoppen(){ return { "Content-Type": "application/json", "X-Fonteyn-Auth": localStorage.getItem("fp.teamkey") || "" }; }
 async function boekProvisie(data, bedrag, msg, knop) {
   const sleutel = String(data.factuurnr || ("periode " + data.periode));
-  if (!(bedrag > 0)) { msg.textContent = "Geen provisiebedrag gevonden in deze specificatie."; return; }
+  if (!(bedrag > 0)) { msg.textContent = "Het provisiebedrag staat in deze specificatie nog open."; return; }
   knop.disabled = true; msg.textContent = "Nakijken of hij al geboekt is\u2026";
   try {
     const gb = await fetch(WORKER_BASIS + "/data/bol-provisie-geboekt", { headers: bolKoppen() }).then(r => r.ok ? r.json() : {}).catch(() => ({}));
@@ -2137,7 +2137,7 @@ async function boekProvisie(data, bedrag, msg, knop) {
     msg.textContent = "Grootboeken ophalen\u2026";
     const lijsten = await fetch(WORKER_BASIS + "/bank/grootboeken", { headers: bolKoppen() }).then(r => r.json());
     const g1185 = (lijsten.grootboeken || []).find(x => String(x.code) === "1185");
-    if (!g1185) throw new Error("grootboek 1185 niet gevonden in Logic4");
+    if (!g1185) throw new Error("grootboek 1185 staat in Logic4 nog open");
     const dag = await fetch(WORKER_BASIS + "/bank/dagboeken", { headers: bolKoppen() }).then(r => r.json()).catch(() => ({}));
     const boekDatum = document.getElementById("boekDatum").value || new Date().toISOString().slice(0, 10);
     msg.textContent = "Boeken\u2026";
@@ -2154,7 +2154,7 @@ async function boekProvisie(data, bedrag, msg, knop) {
     await fetch(WORKER_BASIS + "/data/bol-provisie-geboekt", { method: "PUT", headers: bolKoppen(), body: JSON.stringify(nieuw) });
     msg.textContent = "Geboekt in dagboek " + (res.dagboek || "Memoriaal") + " op " + boekDatum + ".";
     if (window.fpLog) window.fpLog("provisie-geboekt", sleutel + " " + fmtEur(bedrag));
-  } catch (e) { msg.textContent = "Boeken lukte niet: " + (e.message || e); knop.disabled = false; }
+  } catch (e) { msg.textContent = "Boeken vraagt nog een poging: " + (e.message || e); knop.disabled = false; }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -2226,7 +2226,7 @@ function loadBolDemo() {
     mk(5, "C0006DEMO5", "El Fuego | Barbecue Ottawa S",            99.00,  "M. Peeters"),
     mk(6, "C0006DEMO6", "Ergonomische hoofdsteun rond | Red",      62.00,  "S. Willems", { paid: true }),
     mk(7, "C0006DEMO7", "Passion Spa Filter C-4950",               55.00,  "T. Visser",  { noInvoice: true }),
-    mk(8, "C0006DEMO8", "Bestway | Flowclear Chloordispenser",     14.95,  "(order nog niet in Logic4)", { unmatched: true }),
+    mk(8, "C0006DEMO8", "Bestway | Flowclear Chloordispenser",     14.95,  "(order volgt nog in Logic4)", { unmatched: true }),
   ];
   const totCredit = creditRegels.reduce((s, r) => s + r.bedrag, 0);
   const provisie = Math.round(totCredit * 0.145 * 100) / 100;
@@ -2252,7 +2252,7 @@ function loadBolDemo() {
     const b = document.getElementById(id);
     if (b) { b.disabled = true; b.title = "🎬 Demo-modus — deze actie zou echt naar Logic4 gaan en is daarom uitgeschakeld. Dry-run werkt wél."; }
   });
-  setStatus("ok", "🎬 Demo — voorbeeld-Bol-factuur geladen met gesimuleerde match (7 van 8 gekoppeld, 1 al betaald, 1 zonder open factuur). Er wordt NIETS geboekt; ververs voor de echte tool.");
+  setStatus("ok", "🎬 Demo — voorbeeld-Bol-factuur geladen met gesimuleerde match (7 van 8 gekoppeld, 1 al betaald, 1 die al rond staat). Je kijkt hier alleen mee; ververs voor de echte tool.");
 }
 (function initBolDemo(){
   const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
@@ -2330,13 +2330,13 @@ function loadBolDemo() {
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

@@ -19,13 +19,13 @@
     if (email && k) fetch("https://fonteyn-data-store.g-mulder.workers.dev/log", {
       method:"POST", headers:{"Content-Type":"application/json","X-Fonteyn-Auth":k},
       body: JSON.stringify({user:email, tile:"douane", action:"open-geweigerd",
-        detail:"geen toegang tot Douanepapieren"})}).catch(function(){});
+        detail:"toegang op aanvraag voor Douanepapieren"})}).catch(function(){});
   } catch(e) {}
   document.write('<style>body{margin:0;font-family:Montserrat,-apple-system,sans-serif;background:#f5f4ef;color:#1f2937}'+
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
     '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
-    '<div class="gt"><h1>Geen toegang</h1><p>Douanepapieren is niet beschikbaar voor jouw account.</p>'+
+    '<div class="gt"><h1>Toegang op aanvraag</h1><p>Douanepapieren staat klaar zodra je account er toegang voor heeft.</p>'+
     '<p style="font-size:12.5px">Je bent ingelogd als <code>'+(email||"(onbekend)")+'</code>.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
@@ -269,7 +269,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   if (!sessionId) {
     window.location.replace("dashboard.html");
     // Stop verdere script-uitvoering tijdens de redirect
-    throw new Error("Geen sessie — doorverwijzen naar dashboard");
+    throw new Error("Log opnieuw in - je gaat terug naar het dashboard");
   }
 
   // 2) Fetch monkey-patch: auto-auth voor same-origin /api/-requests
@@ -320,7 +320,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   </span>
   <div class="user-chip">
     <span class="u">Ingelogd als <b id="hdr-user">—</b></span>
-    <button type="button" class="logout hidden" id="demoBtn" title="Laad een voorbeeld-order om de tool te demonstreren (geen Logic4 nodig)">🎬 Demo</button>
+    <button type="button" class="logout hidden" id="demoBtn" title="Laad een voorbeeld-order om de tool te laten zien (werkt op zichzelf, zonder Logic4)">🎬 Demo</button>
     <button type="button" class="logout" id="hdr-logout">Uitloggen</button>
   </div>
 </header>
@@ -335,12 +335,12 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <span class="status" id="fetch-status"></span>
     </div>
     <p style="color:var(--muted);font-size:12px;margin:10px 0 0">
-      Tip: typ het ordernummer en druk Enter. De helper-server (lokaal) praat met Logic4 — geen handmatige PDF-export meer nodig.
+      Tip: typ het ordernummer en druk Enter. De helper-server (lokaal) praat met Logic4 - de PDF-export gaat vanzelf.
     </p>
     <div class="or-divider">of — sleep de PDF zoals voorheen</div>
     <div id="dropzone">
       <strong>Sleep de Logic4-PDF hier of klik om te kiezen</strong>
-      <p>Fallback voor als de Logic4-koppeling even niet werkt.</p>
+      <p>Reserveweg voor als de Logic4-koppeling even wacht.</p>
       <input type="file" id="fileinput" accept="application/pdf,.pdf">
     </div>
     <div class="status" id="parse-status"></div>
@@ -404,7 +404,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
   <details class="debug">
     <summary>Debug: rauwe PDF-tekst</summary>
-    <pre id="debug-text">(nog geen bestand geladen)</pre>
+    <pre id="debug-text">(kies een bestand)</pre>
   </details>
 
 </main>
@@ -634,7 +634,7 @@ async function loadUserSpecsFromServer() {
     console.log(`User-specs van KV: ${Object.keys(state.userSpecs).length} codes`);
     if (state.lineItems.length) renderItems();
   } catch (e) {
-    console.warn("Kon user-specs niet van KV laden — fallback naar localStorage:", e.message);
+    console.warn("User-specs komen nu uit localStorage in plaats van KV:", e.message);
   }
 }
 
@@ -896,7 +896,7 @@ async function handleFile(file) {
     status.className = "status ok";
   } catch (e) {
     console.error(e);
-    status.textContent = "Fout bij inlezen: " + e.message;
+    status.textContent = "Inlezen vraagt nog een poging: " + e.message;
     status.className = "status bad";
   }
 }
@@ -1177,7 +1177,7 @@ function renderMeta() {
       const icon = ok ? "✓" : (d.level === "error" ? "⚠" : "ⓘ");
       const label = ok
         ? `Adviseur auto-gevuld: ${escapeHtml(m.advisor)}${m.advisorEmail ? " <" + escapeHtml(m.advisorEmail) + ">" : ""}`
-        : "Adviseur niet auto-gevuld — handmatig invullen hieronder. Klik voor diagnose.";
+        : "Vul de adviseur hieronder zelf in. Klik voor diagnose.";
       diagEl.innerHTML =
         `<details><summary style="cursor:pointer;font-weight:600;list-style:none;">${icon} ${label}</summary>` +
         `<div style="margin-top:8px;">` +
@@ -1293,7 +1293,7 @@ function renderItems() {
     else if (isBundleParent) badge = `<span class="badge bundle-parent-active" title="Klik × om de hoofdregel te verwijderen en de prijs over de ${parentBundle.children.length} subpakketten te verdelen. Of verwijder de subpakketten als je deze hoofdregel wilt behouden.">HOOFDREGEL · ${parentBundle.children.length} pakketten</span>`;
     else if (isService) badge = `<span class="badge service">SERVICE</span>`;
     const specCells = isService
-      ? `<td colspan="6" style="color:var(--muted);font-style:italic">geen fysiek product</td>`
+      ? `<td colspan="6" style="color:var(--muted);font-style:italic">dienst, dus zonder fysiek product</td>`
       : ["sku","dims","gw","nw","hs","origin"].map(k => {
           const val = spec[k] != null ? spec[k] : "";
           const missing = val === "" ? "missing" : "";
@@ -1536,12 +1536,12 @@ async function checkHelperHealth() {
     } else {
       ind.className = "conn bad";
       const missing = (j.missing || []).join(", ");
-      lbl.textContent = "Credentials onvolledig" + (missing ? `: ${missing}` : "");
+      lbl.textContent = "Inloggegevens nog aanvullen" + (missing ? `: ${missing}` : "");
       lbl.title = "Vul deze waarden in server/.env in en herstart de helper.";
     }
   } catch (e) {
     ind.className = "conn bad";
-    lbl.textContent = "Helper-server niet bereikbaar";
+    lbl.textContent = "Helper-server komt zo terug";
     lbl.title = "Open de tool via http://localhost:3737/ — start anders eerst start.command of start.bat.";
   }
 }
@@ -1612,7 +1612,7 @@ async function getLogic4UserById(userId) {
         });
         const j = await r.json();
         if (!r.ok || !j.ok) {
-          console.warn(`[adviseur] ${ep} faalde: ${j.error || ("HTTP " + r.status)}`);
+          console.warn(`[adviseur] ${ep} vraagt een poging: ${j.error || ("HTTP " + r.status)}`);
           continue;
         }
         const arr = Array.isArray(j.data) ? j.data
@@ -1633,12 +1633,12 @@ async function getLogic4UserById(userId) {
       }
     }
     if (_usersCache.size === 0) {
-      console.warn("[adviseur] geen werkend users-endpoint gevonden — adviseur blijft handmatig invullen");
+      console.warn("[adviseur] users-endpoint staat nog open - de adviseur vul je zelf in");
     }
   }
   const found = _usersCache.get(String(userId)) || null;
   if (!found) {
-    console.warn(`[adviseur] userId ${userId} niet gevonden in cache van ${_usersCache.size} users`);
+    console.warn(`[adviseur] userId ${userId} staat nog buiten de cache van ${_usersCache.size} users`);
   } else {
     console.log(`[adviseur] userId ${userId} → match`, found);
   }
@@ -1648,7 +1648,7 @@ async function getLogic4UserById(userId) {
 async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
   // orderHeader = j.order (array, neem eerste); rows kunnen ook in header.OrderRows zitten.
   const o = Array.isArray(orderHeader) ? orderHeader[0] : orderHeader;
-  if (!o) throw new Error("Geen order in response.");
+  if (!o) throw new Error("De order staat in het antwoord nog open.");
   const rows = (orderRows && orderRows.length ? orderRows : (o.OrderRows || []));
   const debtor = Array.isArray(debtorResp) ? debtorResp[0] : (debtorResp || {});
   // Houd bij hoe de debtor-fetch verliep — surfacen we straks in de diag-box
@@ -1713,7 +1713,7 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
   // het diagnosticeren van portal-orders (Customer ipv Debtor).
   const debtorAttempts = window._lastDebtorAttempts || [];
   diag.steps.push(
-    `Klant-fetch: ${debtorState.fetched ? `OK (${debtorState.type}, ${debtorState.keys} velden)` : `<b style="color:#b91c1c">geen record gevonden</b>`}`
+    `Klant-fetch: ${debtorState.fetched ? `OK (${debtorState.type}, ${debtorState.keys} velden)` : `<b style="color:#b91c1c">record staat nog open</b>`}`
   );
   if (debtorAttempts.length) {
     const rows = debtorAttempts.map(a => {
@@ -1740,10 +1740,10 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
         diag.steps.push(`✓ Adviseur gevonden: <b>${advisor}</b>${advisorEmail ? ` &lt;${advisorEmail}&gt;` : ""}`);
         return true;
       } else {
-        diag.steps.push(`User-record gevonden maar geen bruikbare naam-velden — keys: <code>${Object.keys(u).join(", ").slice(0, 200)}</code>`);
+        diag.steps.push(`User-record gevonden; de naam staat in andere velden - keys: <code>${Object.keys(u).join(", ").slice(0, 200)}</code>`);
       }
     } else {
-      diag.steps.push(`User <code>${found.id}</code> niet gevonden in users-cache`);
+      diag.steps.push(`User <code>${found.id}</code> staat nog buiten de users-cache`);
     }
     return false;
   }
@@ -1845,7 +1845,7 @@ async function mapLogic4Order(orderHeader, orderRows, debtorResp) {
     // werkt aan jouw kant" — dat willen we voorkomen.
     let debtorDump;
     if (!debtorState.fetched) {
-      debtorDump = `<details open style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:#b91c1c;"><b>Debtor-velden (klant)</b> — fetch faalde, geen response</summary><div style="padding:6px 8px;font-size:11px;color:#7f1d1d">Server kon klant ${debtor && debtor.Id || "(geen DebtorId)"} niet ophalen via <code>/api/debtor</code>. Controleer of <code>/v3/Debtors/GetDebtors</code> Logic4-toegang heeft, of dat de helper-server een fout retourneert. Kijk in DevTools-console voor "Debtor niet ophaalbaar".</div></details>`;
+      debtorDump = `<details open style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:#b91c1c;"><b>Debtor-velden (klant)</b> — vraagt nog een poging</summary><div style="padding:6px 8px;font-size:11px;color:#7f1d1d">De server vraagt nog een poging voor klant ${debtor && debtor.Id || "(DebtorId volgt)"} via <code>/api/debtor</code>. Controleer of <code>/v3/Debtors/GetDebtors</code> Logic4-toegang heeft, of wat de helper-server terugmeldt. Kijk in DevTools-console voor "Debtor niet ophaalbaar".</div></details>`;
     } else if (debtorState.keys === 0) {
       debtorDump = `<details open style="margin-top:6px"><summary style="cursor:pointer;font-size:11px;color:#92400e;"><b>Debtor-velden (klant)</b> — leeg (${debtorState.type})</summary><div style="padding:6px 8px;font-size:11px;color:#6b5e1f">Logic4 gaf <code>${debtorState.type}</code> terug voor deze klant. Mogelijk bestaat de debtor wel maar zonder uitgebreide velden, of de API gaf een lege array. Open "Debug rauwe pdf-tekst" onderaan om de ruwe response te zien.</div></details>`;
     } else {
@@ -1960,11 +1960,11 @@ async function fetchOrderFromLogic4() {
           debtorAttempts.push({ endpoint: "/api/debtor/" + debtorId, ok: arr.length > 0, info: `${arr.length} record(s)` });
           if (arr.length) debtor = arr[0];
         } else {
-          debtorAttempts.push({ endpoint: "/api/debtor/" + debtorId, ok: false, info: `HTTP ${dr.status} — ${dj.error || "(geen body)"}` });
+          debtorAttempts.push({ endpoint: "/api/debtor/" + debtorId, ok: false, info: `HTTP ${dr.status} — ${dj.error || "(leeg antwoord)"}` });
         }
       } catch (de) {
         debtorAttempts.push({ endpoint: "/api/debtor/" + debtorId, ok: false, info: "exception: " + de.message });
-        console.warn("Debtor niet ophaalbaar:", de.message);
+        console.warn("Debtor vraagt nog een poging:", de.message);
       }
 
       // 2) Fallback: probeer een lange lijst Logic4-endpoint-varianten via /api/logic4-call.
@@ -2013,7 +2013,7 @@ async function fetchOrderFromLogic4() {
               const upstreamStatus = jj.status || "?";
               const upstreamErr = (jj.data && typeof jj.data === "object" && (jj.data.title || jj.data.error || jj.data.Message))
                 || (typeof jj.data === "string" ? jj.data.slice(0, 80) : "")
-                || "(geen body)";
+                || "(leeg antwoord)";
               debtorAttempts.push({ endpoint: label, ok: false, info: `Logic4 ${upstreamStatus} — ${upstreamErr}` });
               continue;
             }
@@ -2125,7 +2125,7 @@ function loadDemoOrder() {
   state.bundles = detectBundles(state.lineItems);
   for (const it of state.lineItems) { if (it.eurUnitPrice == null) it.eurUnitPrice = it.unitPrice; }
   applyFxRate(state.fxRate);
-  state.rawText = "(🎬 DEMO-order — voorbeeld, niet uit Logic4)";
+  state.rawText = "(🎬 DEMO-order — een voorbeeld, los van Logic4)";
   renderAll();
   if (status) {
     status.textContent = "🎬 Demo-order geladen — " + state.lineItems.filter(i => !i.dropped).length + " regels.";
@@ -2174,7 +2174,7 @@ async function loadArticleCodesFromHelper() {
     console.log(`Artikelcodes geladen: ${Object.keys(state.articleCodes).length} entries`);
     if (state.lineItems.length) renderItems();
   } catch (e) {
-    console.warn("Kon artikelcodes niet laden van helper:", e.message);
+    console.warn("Artikelcodes vragen de helper nog een keer:", e.message);
   }
 }
 
@@ -2187,7 +2187,7 @@ async function loadSpecDatabaseFromHelper() {
     console.log(`Spec-database geladen: ${Object.keys(state.specDatabase).length} modellen`);
     if (state.lineItems.length) renderItems();
   } catch (e) {
-    console.warn("Kon spec-database niet laden van helper:", e.message);
+    console.warn("Spec-database vraagt de helper nog een keer:", e.message);
   }
 }
 
@@ -2203,7 +2203,7 @@ document.getElementById("reset").addEventListener("click", () => {
   document.getElementById("bundles-panel").classList.add("hidden");
   document.getElementById("parse-status").textContent = "";
   document.getElementById("gen-status").textContent = "";
-  document.getElementById("debug-text").textContent = "(nog geen bestand geladen)";
+  document.getElementById("debug-text").textContent = "(kies een bestand)";
   fileinput.value = "";
 });
 
@@ -2230,7 +2230,7 @@ async function generatePdfFor(brand) {
       const _s = state._douaneLoadStats || {};
       let _d = brandSuffix + " · " + invNr;
       if (_s.lines) _d += " — " + _s.fullPre + "/" + _s.lines + " regels vooraf compleet"
-        + (_s.manF ? (", " + _s.manF + " veld(en) door Manon: " + (_s.detail || []).slice(0, 3).join("; ") + ((_s.detail || []).length > 3 ? " …" : "")) : " (niets handmatig)");
+        + (_s.manF ? (", " + _s.manF + " veld(en) door Manon: " + (_s.detail || []).slice(0, 3).join("; ") + ((_s.detail || []).length > 3 ? " …" : "")) : " (alles automatisch)");
       if (window.fpLog) window.fpLog("douanepapier-gemaakt", _d);
     } catch (e) {}
   } catch (e) {
@@ -2668,13 +2668,13 @@ function wrapText(s, maxWidth, size) {
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

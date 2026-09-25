@@ -19,7 +19,7 @@
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
     '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
-    '<div class="gt"><h1>Geen toegang</h1><p>De tegel Mijn uren is niet beschikbaar voor jouw account.</p>'+
+    '<div class="gt"><h1>Toegang op aanvraag</h1><p>De tegel Mijn uren staat klaar zodra je account er toegang voor heeft.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
 })();
@@ -200,7 +200,7 @@ nav.weergaven button.aan{background:var(--groen);border-color:var(--groen);color
 
   <div class="klok" id="klok">
     <div class="tijd" id="tijd">0:00</div>
-    <div class="sinds" id="sinds">Nog niet begonnen vandaag</div>
+    <div class="sinds" id="sinds">Klaar om te beginnen</div>
     <div class="waaraan">
       <input type="text" id="waaraan" placeholder="Waar ben je mee bezig?" autocomplete="off">
     </div>
@@ -241,8 +241,8 @@ nav.weergaven button.aan{background:var(--groen);border-color:var(--groen);color
 <div id="codevenster">
   <div class="kaart">
     <h3 id="codeTitel">Je eigen code</h3>
-    <p class="uitleg">Met deze code kan een collega jou in- en uitklokken als jij je telefoon
-      niet bij je hebt. Geef hem alleen aan wie het echt voor je doet: wat er met jouw code
+    <p class="uitleg">Met deze code kan een collega jou in- en uitklokken, ook als jij je telefoon
+      even ergens anders hebt. Geef hem alleen aan wie het echt voor je doet: wat er met jouw code
       wordt geklokt staat op jouw naam, met die van de ander ernaast.</p>
     <div id="codeFout"></div>
     <label id="oudRegel" style="display:none">Je huidige code
@@ -274,7 +274,7 @@ nav.weergaven button.aan{background:var(--groen);border-color:var(--groen);color
 
 <script>
 "use strict";
-if (window.fpGeenToegang) throw new Error("geen toegang");
+if (window.fpGeenToegang) throw new Error("toegang op aanvraag");
 
 var WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
 var bezig = null;      // de lopende registratie, of null
@@ -438,7 +438,7 @@ function tekenLijst(){
         return "<div class='regel' data-id='" + tekst(r.id) + "'>" +
           "<span class='tijden'>" + klokTijd(r.start) + " - " + klokTijd(r.eind) + "</span>" +
           "<span class='wat" + (r.omschrijving ? "" : " leeg") + "'>" +
-            tekst(r.omschrijving || "geen omschrijving") + doorWie(r) + "</span>" +
+            tekst(r.omschrijving || "omschrijving volgt") + doorWie(r) + "</span>" +
           (r.metDeHand ? "<span class='hand'>hand</span>" : "") +
           "<span class='duur'>" + duur(r.minuten||0) + "</span>" +
           onderRegel(r) + "</div>";
@@ -483,8 +483,8 @@ function tekenIedereen(data){
      locatie weinig. Ga op de zaak staan en druk op de knop; dat is
      nauwkeuriger dan een adres opzoeken. */
   if (!vestigingGezet) {
-    uit += '<div class="melding">De plek van de zaak is nog niet vastgelegd, dus er staat bij ' +
-      'geen enkele registratie of iemand er was. Sta je nu op de zaak? ' +
+    uit += '<div class="melding">Leg de plek van de zaak vast, dan staat bij elke registratie ' +
+      'of iemand er was. Sta je nu op de zaak? ' +
       '<b><a href="#" id="zetZaak" style="color:inherit">Leg deze plek vast</a></b></div>';
   }
 
@@ -524,7 +524,7 @@ function tekenIedereen(data){
             return "<div class='regel'>" +
               "<span class='tijden'>" + klokTijd(r.start) + " - " + klokTijd(r.eind) + "</span>" +
               "<span class='wat" + (r.omschrijving ? "" : " leeg") + "'>" +
-                tekst(r.omschrijving || "geen omschrijving") + doorWie(r) + "</span>" +
+                tekst(r.omschrijving || "omschrijving volgt") + doorWie(r) + "</span>" +
               (r.metDeHand ? "<span class='hand'>hand</span>" : "") +
               "<span class='duur'>" + duur(r.minuten||0) + "</span>" +
               onderRegel(r) + "</div>";
@@ -542,11 +542,11 @@ function tekenIedereen(data){
     z.textContent = "Locatie bepalen…";
     var loc = await haalLocatie();
     if (!loc || typeof loc.lat !== "number") {
-      z.textContent = "Lukte niet: " + (loc && loc.reden || "geen locatie");
+      z.textContent = "Dit vraagt nog een poging: " + (loc && loc.reden || "locatie volgt");
       return;
     }
     var r = await roep("/uren/vestiging", { lat: loc.lat, lon: loc.lon, naam: "de zaak", straal: 300 });
-    if (!r.ok) { z.textContent = "Lukte niet: " + (r.uitleg || r.error); return; }
+    if (!r.ok) { z.textContent = "Dit vraagt nog een poging: " + (r.uitleg || r.error); return; }
     vestigingGezet = true;
     el("melding").innerHTML = '<div class="melding">De plek van de zaak staat vast. Vanaf nu zie je ' +
       'bij elke registratie of iemand er was.</div>';
@@ -600,7 +600,7 @@ function zetWeergave(w){
    zonder plaats. */
 function haalLocatie(){
   return new Promise(function(klaar){
-    if (!navigator.geolocation) return klaar({ reden: "toestel deelt geen locatie" });
+    if (!navigator.geolocation) return klaar({ reden: "toestel houdt de locatie voor zich" });
     var af = false;
     var wacht = setTimeout(function(){ if (!af) { af = true; klaar({ reden: "duurde te lang" }); } }, 8000);
     navigator.geolocation.getCurrentPosition(
@@ -610,7 +610,7 @@ function haalLocatie(){
       },
       function(e){
         if (af) return; af = true; clearTimeout(wacht);
-        klaar({ reden: e && e.code === 1 ? "niet gedeeld" : "niet beschikbaar" });
+        klaar({ reden: e && e.code === 1 ? "privé gehouden" : "volgt zo" });
       },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
     );
@@ -620,7 +620,7 @@ function haalLocatie(){
 function toonPlaats(p){
   var d = el("plaatsje");
   if (!p) { d.innerHTML = ""; return; }
-  if (!p.gegeven) { d.innerHTML = "Locatie: <span class='geen'>" + tekst(p.reden || "niet gedeeld") + "</span>"; return; }
+  if (!p.gegeven) { d.innerHTML = "Locatie: <span class='geen'>" + tekst(p.reden || "privé gehouden") + "</span>"; return; }
   if (p.opZaak) { d.innerHTML = "<span class='zaak'>&#10003; Op de zaak</span>"; return; }
   if (typeof p.afstand === "number") {
     d.innerHTML = "<span class='elders'>" + (p.afstand > 1500
@@ -677,8 +677,8 @@ async function openVoorAnder(){
   var r = await roep("/uren/collegas");
   if (!r.ok || !r.namen || !r.namen.length) {
     s.innerHTML = "";
-    el("anderFout").innerHTML = '<div class="melding">Er is nog niemand met een eigen code. ' +
-      'Zolang een collega die niet heeft ingesteld, kun je niet voor hem of haar klokken.</div>';
+    el("anderFout").innerHTML = '<div class="melding">De eerste eigen code komt er nog aan. ' +
+      'Zodra een collega die heeft ingesteld, kun je voor hem of haar klokken.</div>';
     return;
   }
   s.innerHTML = r.namen.map(function(n){
@@ -750,7 +750,7 @@ el("codeOpslaan").onclick = async function(){
       "code-vorm": "Een code is vier tot acht cijfers.",
       "code-te-simpel": "Kies iets anders dan alleen dezelfde cijfers of een rijtje.",
       "oude-code-nodig": "Vul ook je huidige code in.",
-      "oude-code-klopt-niet": "Je huidige code klopt niet.",
+      "oude-code-klopt-niet": "Vul je huidige code opnieuw in.",
     };
     el("codeFout").innerHTML = '<div class="fout">' + tekst(tekstjes[r.error] || r.uitleg || r.error) + "</div>";
     return;
@@ -758,7 +758,7 @@ el("codeOpslaan").onclick = async function(){
   heeftCode = true;
   el("codevenster").classList.remove("aan");
   el("melding").innerHTML = '<div class="melding">Je code staat klaar. Een collega kan je nu ' +
-    'in- en uitklokken als jij je telefoon niet bij je hebt.</div>';
+    'in- en uitklokken, ook als jij je telefoon even ergens anders hebt.</div>';
 };
 
 /* De omschrijving bijwerken terwijl de klok loopt: bij het stoppen gaat mee
@@ -845,14 +845,14 @@ el("knopCode").onclick = openCode;
   heeftCode = !!r.heeftCode;
   vestigingGezet = !!r.vestiging;
   if (!heeftCode) {
-    el("melding").innerHTML = '<div class="melding">Je hebt nog geen eigen code. Zonder die code ' +
-      'kan een collega je niet in- of uitklokken als je je telefoon niet bij je hebt. ' +
+    el("melding").innerHTML = '<div class="melding">Stel je eigen code in. Met die code ' +
+      'kan een collega je in- en uitklokken, ook als je je telefoon even ergens anders hebt. ' +
       '<b><a href="#" id="codeNu" style="color:inherit">Nu instellen</a></b></div>';
     var a = el("codeNu");
     if (a) a.onclick = function(e){ e.preventDefault(); openCode(); };
   }
   if (!r.vestiging) {
-    console.log("[uren] geen vestiging ingesteld - afstanden worden niet berekend");
+    console.log("[uren] vestiging volgt nog - afstanden komen daarna");
   }
 })();
 

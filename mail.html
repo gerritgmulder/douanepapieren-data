@@ -21,7 +21,7 @@
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
     '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
-    '<div class="gt"><h1>Geen toegang</h1><p>De tegel Mijn mail is niet beschikbaar voor jouw account.</p>'+
+    '<div class="gt"><h1>Toegang op aanvraag</h1><p>De tegel Mijn mail staat klaar zodra je account er toegang voor heeft.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
 })();
@@ -203,7 +203,7 @@ button.stil{background:var(--card);color:var(--ink);border:1px solid var(--borde
 
 <script>
 "use strict";
-if (window.fpGeenToegang) throw new Error("geen toegang");
+if (window.fpGeenToegang) throw new Error("toegang op aanvraag");
 
 var WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
 var MAPPEN = [
@@ -265,8 +265,8 @@ function toonMelding(r){
   if (!r || r.ok) { m.innerHTML = ""; return false; }
 
   if (r.error === "mail-niet-ingesteld") {
-    m.innerHTML = '<div class="melding"><b>De mailkoppeling is nog niet aangezet</b>' +
-      'Het serviceaccount bij de mailserver bestaat nog niet of het wachtwoord staat er nog niet in. ' +
+    m.innerHTML = '<div class="melding"><b>De mailkoppeling staat klaar om aangezet te worden</b>' +
+      'Het serviceaccount bij de mailserver en het wachtwoord komen er nog in. ' +
       'Zodra André het account heeft aangemaakt zet Gerrit het wachtwoord weg met ' +
       '<code>npx wrangler secret put EWS_WACHTWOORD</code> en werkt deze tegel meteen.</div>';
     return true;
@@ -278,9 +278,9 @@ function toonMelding(r){
     return true;
   }
   if (r.error === "geen-mailbox-bekend") {
-    m.innerHTML = '<div class="melding"><b>Geen mailadres gekoppeld</b>' +
-      'Voor jouw inlog staat nog geen mailadres in de lijst. Dat moet apart, want je ' +
-      'Logic4-account en je mailadres hoeven niet hetzelfde te zijn. Geef het door aan Gerrit.</div>';
+    m.innerHTML = '<div class="melding"><b>Mailadres nog te koppelen</b>' +
+      'Voor jouw inlog komt het mailadres nog in de lijst. Dat gaat apart, want je ' +
+      'Logic4-account en je mailadres mogen verschillen. Geef het door aan Gerrit.</div>';
     return true;
   }
   if (r.error === "geen-toegang-tot-mailbox") {
@@ -319,7 +319,7 @@ function tekenLijst(meer){
     return '<li data-i="' + i + '"' + (!b.gelezen && !isConcept ? ' class="ongelezen"' : "") + ">" +
       '<div class="regel1"><span class="van">' + tekst(b.van || b.vanAdres || "(zonder afzender)") + "</span>" +
       '<span class="wanneer">' + wanneer(b.ontvangen) + "</span></div>" +
-      '<div class="onderwerp">' + tekst(b.onderwerp || "(geen onderwerp)") + "</div>" +
+      '<div class="onderwerp">' + tekst(b.onderwerp || "(zonder onderwerp)") + "</div>" +
       (b.bijlagen ? '<div class="merk"><span class="clip">&#128206; bijlage</span></div>' : "") +
       "</li>";
   }).join("") + "</ul>";
@@ -344,7 +344,7 @@ async function open(b){
 
   var r = await roep("/mail/bericht?id=" + encodeURIComponent(b.id) + "&sleutel=" + encodeURIComponent(b.sleutel || ""));
   if (!r.ok) {
-    el("leesInhoud").innerHTML = '<div class="fout">' + tekst(r.uitleg || r.error || "Kon het bericht niet ophalen") + "</div>";
+    el("leesInhoud").innerHTML = '<div class="fout">' + tekst(r.uitleg || r.error || "Dit bericht vraagt nog een poging") + "</div>";
     return;
   }
   var m = r.bericht;
@@ -352,7 +352,7 @@ async function open(b){
   var cc  = (m.cc  || []).map(function(x){ return x.naam || x.adres; }).join(", ");
 
   el("leesInhoud").innerHTML =
-    '<div class="beriKop"><h2>' + tekst(m.onderwerp || "(geen onderwerp)") + "</h2>" +
+    '<div class="beriKop"><h2>' + tekst(m.onderwerp || "(zonder onderwerp)") + "</h2>" +
     '<div class="rij"><b>' + tekst(m.van || m.vanAdres) + "</b>" +
       (m.vanAdres && m.van !== m.vanAdres ? "<span>" + tekst(m.vanAdres) + "</span>" : "") + "</div>" +
     (aan ? '<div class="rij">Aan: ' + tekst(aan) + "</div>" : "") +
@@ -447,7 +447,7 @@ async function bewaar(danVerzenden){
     return;
   }
   if (!onderwerp && !body.trim()) {
-    el("schrijfFout").innerHTML = '<div class="fout">Er staat nog niets in het bericht.</div>';
+    el("schrijfFout").innerHTML = '<div class="fout">Schrijf eerst je bericht.</div>';
     return;
   }
 
@@ -469,7 +469,7 @@ async function bewaar(danVerzenden){
   if (danVerzenden) {
     var v = await roep("/mail/verzend", { body: { id:r.id, sleutel:r.sleutel } });
     if (!v.ok) {
-      el("schrijfFout").innerHTML = '<div class="fout">Het concept is bewaard, maar verzenden lukte niet: ' +
+      el("schrijfFout").innerHTML = '<div class="fout">Het concept is bewaard; verzenden vraagt nog een poging: ' +
                                     tekst(v.uitleg || v.error) + "</div>";
       el("knopBewaar").disabled = false; el("knopBewaarVerzend").disabled = false;
       return;
@@ -489,7 +489,7 @@ async function bewaar(danVerzenden){
 
 async function naarPrullenbak(m){
   var r = await roep("/mail/prullenbak", { body: { id:m.id, sleutel:m.sleutel } });
-  if (!r.ok) { alert(r.uitleg || r.error || "Verplaatsen lukte niet"); return; }
+  if (!r.ok) { alert(r.uitleg || r.error || "Verplaatsen vraagt nog een poging"); return; }
   sluitLezen();
   vanaf = 0; lijstNu = [];
   haalLijst();
