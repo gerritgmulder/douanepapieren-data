@@ -1792,7 +1792,7 @@ async function dpHandleReserve(request, env, sess, url) {
     return (opVoorraad[0] || vs[0]) || null;
   }
 
-  const wantsFull = body.payFull === true;
+  let wantsFull = body.payFull === true;
   /* Testbetaling van één cent. Alleen voor mensen van Fonteyn zelf; een echte
      partner kan hem niet kiezen en ook niet meesturen, want dat zou een
      reservering opleveren waar niets voor betaald is. */
@@ -1872,7 +1872,20 @@ async function dpHandleReserve(request, env, sess, url) {
   /* Bij een container kan "nu volledig betalen omdat het op voorraad ligt"
      niet: er wordt niets uit de hal gepakt, de fabriek moet hem nog laden.
      Het blijft dus bij de aanbetaling van 30%. */
-  let payFull = wantsFull && alleOpVoorraad && levering !== "container";
+  /* Ligt alles klaar, dan is volledig betalen de enige weg.
+     ═══════════════════════════════════════════════════════════════════════
+     Gerrit (25 sep 2026): "Als een product bij Passion Partners OP VOORRAAD
+     is, dan moet er maar 1 mogelijkheid zijn en dat is volledig betalen."
+
+     Hier stond dat volledig betalen MOCHT als alles op voorraad lag; nu MOET
+     het. De 30% hoort bij een spa die nog moet komen: die houdt hem vast tot
+     het schip er is. Wat klaarstaat gaat direct mee, dus daar valt niets vast
+     te houden.
+
+     De proefaccounts van Fonteyn houden hun keuze, anders is de keten met de
+     cent en met een eigen bedrag niet te testen. */
+  const moetVolledig = alleOpVoorraad && levering !== "container" && !isFonteyn;
+  let payFull = (wantsFull || moetVolledig) && alleOpVoorraad && levering !== "container";
   /* Eigen aanbetalingsbedrag. Gerrit (14 sep 2026): "Bij ingelogde adviseurs
      van Passion (de spa-adviseurs + Chantal + Dolf) moet de optie zichtbaar
      zijn om zelf een bedrag als aanbetaling te kiezen. Dealers moeten deze
@@ -2105,6 +2118,14 @@ async function dpHandleMyRequests(env, sess) {
                  items: Array.isArray(r.items) && r.items.length > 1
                    ? r.items.map(x => ({ qty: x.qty, naam: x.soort === "spa" ? x.model : (x.naam || x.code),
                                          variantName: x.variantName || null })) : null,
+                 /* Alles wat nodig is om de winkelwagen opnieuw te vullen als
+                    de aanbetaling is blijven liggen; zie de mail "opnieuw". */
+                 mand: Array.isArray(r.items) && r.items.length
+                   ? r.items.map(x => ({ soort: x.soort || "spa", model: x.model || null,
+                                         code: x.code || null, naam: x.naam || null,
+                                         variantName: x.variantName || null, qty: Number(x.qty) || 1 }))
+                   : (r.model ? [{ soort: "spa", model: r.model, code: r.productCode || null,
+                                   variantName: r.variantName || null, qty: Number(r.qty) || 1 }] : null),
                  deposit: r.deposit || null, currency: r.currency || null, paymentStatus: r.paymentStatus || null,
                  /* Geannuleerd in Logic4 (of teruggedraaid in Beheer). Chantal
                     (9 sep 2026): "de dealer moet dus kunnen zien dat zijn order
@@ -2898,6 +2919,18 @@ async function dpRestMail(env, item, accounts, soort, url) {
       (afhalen
         ? '<p>You can collect it from Uddel. Let us know which day suits you and we will have it ready at the dock.</p>'
         : '<p>We are scheduling the transport now and you will hear the delivery date from us shortly.</p>');
+  } else if (soort === "opnieuw") {
+    onderwerp = "Shall we set this one up again for you?";
+    binnen =
+      '<p>Hi ' + naam + ',</p>' +
+      '<p>Your reservation is waiting for a deposit, so your spa is back in stock for now.</p>' +
+      '<p><b>' + wat + '</b></p>' +
+      '<p>Want it after all? One click puts everything back in your basket with the same prices, and you can pay straight away.</p>' +
+      '<p style="margin:26px 0;text-align:center;"><a href="' + dpOrigin(env, url) +
+      '/dealers#opnieuw=' + encodeURIComponent(item.id) + '" style="background:#c8102e;color:#fff;' +
+      'text-decoration:none;font-weight:bold;font-size:15px;padding:15px 34px;border-radius:10px;' +
+      'display:inline-block;">Reserve again</a></p>' +
+      '<p style="color:#6b7280;font-size:13px;">Prefer a different model or colour? Reply to this e-mail and your advisor will look at it with you.</p>';
   } else if (soort === "bevestigd") {
     onderwerp = "Your spa is reserved - Passion Partners";
     binnen =
@@ -3167,7 +3200,23 @@ async function dpHandleMollieWebhook(request, env, url) {
       }
       // Betaling niet doorgegaan → geclaimde voorraad weer vrijgeven
       // Betaling niet doorgegaan → claim vervalt (available telt 'm niet meer mee)
-      if (["expired", "canceled", "failed"].includes(p.status)) item.allocationReleased = true;
+      if (["expired", "canceled", "failed"].includes(p.status)) {
+        item.allocationReleased = true;
+        /* De dealer hoort het te weten. Gerrit (25 sep 2026): "als de
+           aanbetalingslink wordt weggeklikt of er wordt iig niet aanbetaald
+           dan moet er een mail worden verstuurd aan de dealer dat de betaling
+           niet is gelukt en de reservering nogmaals kan worden gedaan via een
+           link in die mail."
+
+           Tot nu toe bleef het stil: de spa kwam terug in de voorraad en de
+           bestelling werd een regel in Beheer waar iemand achteraan moest
+           bellen. Eén keer sturen, ook als Mollie zijn bericht herhaalt. */
+        if (!item.opnieuwGemaild && !item.testbetaling) {
+          item.opnieuwGemaild = new Date().toISOString();
+          try { await dpRestMail(env, item, await dpGetAccounts(env), "opnieuw", url); }
+          catch (e) { console.log("[rest] herkansing niet verstuurd: " + (e.message || e)); }
+        }
+      }
       // Aanbetaling binnen → Logic4 bijwerken. Twee gevallen:
       //  A) particulier / bestaande order (existingOrderId): de order stáát al
       //     in Logic4 (showroomverkoop) → alleen de 30%-betaling registreren

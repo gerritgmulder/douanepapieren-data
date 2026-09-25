@@ -138,7 +138,17 @@
      wat eraan komt. Een stipje in de schaalkleur ervoor maakt de regel
      leesbaar zonder er een plaatje bij te hoeven laden. */
   .vrr{list-style:none;margin:11px 0 0;padding:0}
-  .vrr li{display:flex;align-items:baseline;gap:9px;padding:6px 0;border-top:1px solid #f1f2f1}
+  /* De regel mag doorlopen op een tweede regel.
+     ═══════════════════════════════════════════════════════════════════════
+     Gerrit (25 sep 2026) stuurde een schermafbeelding waarop "Sterling White"
+     en "4 pcs arriving in Uddel any day" dwars over elkaar heen stonden. De
+     status was langer geworden ("arriving now" werd "arriving in Uddel any
+     day") en dat vak stond op nowrap zonder te mogen krimpen. In een tegel
+     van 230 px past dat niet, en dan loopt het over de kleurnaam heen.
+
+     Nu mag de regel afbreken: past het aantal met zijn status niet naast de
+     kleur, dan zakt het naar de regel eronder en blijft het rechts staan. */
+  .vrr li{display:flex;align-items:baseline;gap:9px;padding:6px 0;border-top:1px solid #f1f2f1;flex-wrap:wrap}
   .vrr li:first-child{border-top:0;padding-top:2px}
   .vrr .dot{flex:0 0 auto;align-self:center;width:12px;height:12px;border-radius:50%;
             border:1px solid rgba(0,0,0,.16);box-shadow:inset 0 -2px 3px rgba(0,0,0,.13)}
@@ -147,8 +157,10 @@
      een tegel van 230px altijd een afbreking halverwege de naam, en dan staan
      de aantallen ernaast scheef. Zo is elke regel even hoog. */
   .vrr .kl .trim{display:block;font-size:10.5px;color:var(--muted);letter-spacing:.01em;margin-top:1px}
-  .vrr .aant{flex:0 0 auto;text-align:right;white-space:nowrap;font-size:12.5px;font-weight:700;color:var(--ink)}
-  .vrr .aant .st{font-weight:600;font-size:11px;letter-spacing:.02em}
+  .vrr .aant{flex:0 1 auto;margin-left:auto;text-align:right;font-size:12.5px;font-weight:700;color:var(--ink)}
+  /* Het getal blijft bij zijn eenheid; alleen de status mag afbreken. */
+  .vrr .aant .n{white-space:nowrap}
+  .vrr .aant .st{font-weight:600;font-size:11px;letter-spacing:.02em;overflow-wrap:break-word}
   .vrr .op .st{color:var(--green)}
   .vrr .komt .st{color:#2563eb}
   .vrr .maak .st{color:#8a6400}
@@ -899,7 +911,7 @@ function voorraadRegel(r){
   return `<li class="${r.soort}${r.verstopt ? " extra hidden" : ""}">
     <span class="dot" style="background:${esc(schaalHex(k.schaal))}"></span>
     <span class="kl">${esc(k.schaal)}${onder ? `<span class="trim">${esc(onder)}</span>` : ""}</span>
-    <span class="aant">${r.qty} ${r.qty === 1 ? "pc" : "pcs"} <span class="st">${esc(st)}</span></span>
+    <span class="aant"><span class="n">${r.qty} ${r.qty === 1 ? "pc" : "pcs"}</span> <span class="st">${esc(st)}</span></span>
   </li>`;
 }
 /* ── Open- en dichtklappen van een modeltegel ─────────────────────────────
@@ -1504,6 +1516,24 @@ async function loadMyRequests(){
   }).join("");
   $("myReqList").querySelectorAll(".reqOver").forEach(b => b.addEventListener("click", () => overzetten(b.dataset.id, reqs.find(x => x.id === b.dataset.id))));
   $("myReqList").querySelectorAll(".reqRest").forEach(b => b.addEventListener("click", () => restBetalen(b.dataset.id, b)));
+  /* Uit de mail "Shall we set this one up again for you?": .../dealers#opnieuw=<id>
+     zet dezelfde spa's terug in de mand en opent hem. De prijzen en de voorraad
+     worden op dat moment opnieuw opgehaald, dus de partner ziet meteen of alles
+     er nog is. Eén klik en hij kan afrekenen. */
+  const nogmaals = (location.hash.match(/opnieuw=([0-9a-f-]{8,})/i) || [])[1];
+  if (nogmaals) {
+    history.replaceState(null, "", location.pathname + location.search);
+    const b = reqs.find(x => x.id === nogmaals);
+    if (b && b.mand && b.mand.length) {
+      for (const r of b.mand) {
+        cartVoegToe(r.soort === "part"
+          ? { soort: "part", code: r.code, naam: r.naam || r.code, qty: r.qty }
+          : { soort: "spa", model: r.model, code: r.code || null,
+              variantName: r.variantName || null, qty: r.qty });
+      }
+      openCart();
+    }
+  }
   /* Uit de mail: .../dealers#rest=<id> gaat meteen door naar de betaalpagina,
      zodat de partner na het klikken in de mail niet zelf hoeft te zoeken. */
   const uitMail = (location.hash.match(/rest=([0-9a-f-]{8,})/i) || [])[1];
@@ -2420,9 +2450,20 @@ function openCart(){
   const bestaand = document.getElementById("cartOv"); if (bestaand) bestaand.remove();
   // Volledig betalen mag alleen als élke spa in de wagen nu op voorraad is.
   const spaRegels = cart.filter(r => r.soort === "spa");
+  /* Ligt alles wat in de mand zit nu echt in Uddel?
+     ═══════════════════════════════════════════════════════════════════════
+     Koos de partner een kleur, dan telt die kleur en niet het model: van de
+     Delight kunnen er tien staan terwijl juist zijn Espresso weg is. Koos hij
+     geen kleur ("Any colour is fine"), dan telt wat er van het model vrij is. */
   const alleOpVoorraad = spaRegels.length > 0 && spaRegels.every(r => {
     const m = (stockModels || []).find(x => x.model === r.model);
-    return m && Number(m.vrijNu) >= (Number(r.qty) || 1);
+    if (!m) return false;
+    const nodig = Number(r.qty) || 1;
+    if (r.code) {
+      const v = (m.variants || []).find(x => String(x.code) === String(r.code));
+      return !!v && Number(v.free) >= nodig;
+    }
+    return Number(m.vrijNu) >= nodig;
   });
   const rijen = cart.map((r, i) => `
     <tr>
@@ -2505,10 +2546,25 @@ function openCart(){
   ov.id = "cartOv";
   /* Betaalkeuze als eigen lijst: bij "volledig betalen" hoort uitleg waaróm
      dat mag, en dat past niet in een gewone keuzelijst. */
-  const betaalopties = [{ waarde: "deposit",
-      tekst: spaRegels.length ? "30% deposit on the spas" : "Pay in full",
-      bij: spaRegels.length ? "parts in full" : "" }];
-  if (alleOpVoorraad) betaalopties.push({ waarde: "full", tekst: "Pay everything in full", bij: "shipped right away" });
+  /* Staat alles in Uddel, dan betaalt de partner in één keer.
+     ═══════════════════════════════════════════════════════════════════════
+     Gerrit (25 sep 2026): "Als een product bij Passion Partners OP VOORRAAD
+     is, dan moet er maar 1 mogelijkheid zijn en dat is volledig betalen."
+
+     De aanbetaling van 30% hoort bij een spa die nog moet komen: die houdt
+     hem vast tot het schip er is. Een spa die klaarstaat gaat direct mee, dus
+     daar is niets voor vast te houden. De keuze staat er dan ook niet meer,
+     zodat er geen twijfel over kan ontstaan.
+
+     Voor de proefaccounts van Fonteyn blijven de cent en het eigen bedrag wel
+     staan, anders is de keten niet te testen. */
+  const betaalopties = alleOpVoorraad
+    ? [{ waarde: "full", tekst: "Pay in full", bij: "your spa is ready in Uddel" }]
+    : [{ waarde: "deposit",
+         tekst: spaRegels.length ? "30% deposit on the spas" : "Pay in full",
+         bij: spaRegels.length ? "parts in full" : "" }];
+  if (!alleOpVoorraad && spaRegels.length)
+    betaalopties.push({ waarde: "full", tekst: "Pay everything in full", bij: "shipped as soon as it arrives" });
   /* De testbetaling alleen aan wie ook écht kan bestellen. Een meekijkende
      collega mag niets wijzigen (de worker weigert elke POST), dus die optie
      aanbieden levert alleen een foutmelding op. */
@@ -2518,10 +2574,10 @@ function openCart(){
      een partner, dus dit is geen sier maar het echte hek staat aan de
      andere kant. */
   if (window.isFonteyn && !window.meekijken && spaRegels.length)
-    betaalopties.push({ waarde: "eigen", tekst: "Own deposit amount", bij: "Fonteyn only" });
+    betaalopties.push({ waarde: "eigen", tekst: "Own deposit amount", bij: "Fonteyn only" });   // proefaccounts
   if (window.isFonteyn && !window.meekijken)
     betaalopties.push({ waarde: "cent", tekst: "TEST \u2014 pay 1 cent", bij: "Fonteyn only" });
-  if (cart.length) maakKiezer(ov.querySelector("#cartPay"), betaalopties, "deposit", (w) => {
+  if (cart.length) maakKiezer(ov.querySelector("#cartPay"), betaalopties, betaalopties[0].waarde, (w) => {
     const veld = ov.querySelector("#cartEigen");
     if (!veld) return;
     veld.classList.toggle("hidden", w !== "eigen");
