@@ -873,7 +873,9 @@ document.getElementById("logoutBtn").addEventListener("click",()=>{
 const VORMEN=[["magazijn","Magazijn","De fabriek heeft een warehouse in Nederland."],["bezorgd","Bezorgd","De leverancier bezorgt zelf."],["ft40","40ft","Per volle 40-voets container."],["ft20","20ft","Per volle 20-voets container."]];
 const STARTMOMENTEN=["akkoord proforma","aanbetaling","orderbevestiging"];
 const INCOTERMS=[["exw","Ex Works","Geen transportkosten naar de haven in China; havenkosten zijn voor ons."],["fob","FOB (Free On Board)","De fabriek betaalt transport en havenkosten tot en met de haven in China."],["cif","CIF (Cost Insurance & Freight)","De fabriek betaalt alle kosten tot de haven in Rotterdam."],["afhaal","Afhaal magazijn","Wij halen op bij het magazijn van de leverancier."],["fonteyn","Bezorgd bij Fonteyn","De leverancier levert af bij ons."],["klant","Bezorgd bij klant","De leverancier levert rechtstreeks bij de klant af."]];
-const ART_VELDEN=[["codeExtern","Artikelcode (extern)","11%"],["naamExtern","Artikel (extern)","18%"],["codeIntern","Artikelcode (intern)","10%"],["naamIntern","Artikel (intern)","17%"],["incoterm","IncoTerms","14%"],["prijs","Prijs","9%"],["cbm","CBM","7%"],["levertijd","Levertijd","10%"]];
+/* De prijs is de laagste inkoopprijs die we ooit van deze fabrikant kregen
+   (Gerrit, 25 sep 2026): uit prijslijsten én facturen, de laagste wint. */
+const ART_VELDEN=[["codeExtern","Artikelcode (extern)","11%"],["naamExtern","Artikel (extern)","16%"],["codeIntern","Artikelcode (intern)","10%"],["naamIntern","Artikel (intern)","16%"],["incoterm","IncoTerms","13%"],["prijs","Laagste inkoopprijs","12%"],["cbm","CBM","7%"],["levertijd","Levertijd","10%"]];
 let ovGekozen="", ovTimer=null;
 /* Hoe een leverancier heet op het scherm (Gerrit, 25 sep 2026): "naam
    contactpersoon - fabrieksnaam (intern) - fabrieksnaam (extern)", dus

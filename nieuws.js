@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-25", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
+      titel: "Artikelen bij bijna alle leveranciers, met de laagste inkoopprijs",
+      wat: "Ook uit facturen, proforma's en pdf-prijslijsten zijn de artikelen nu uitgelezen, bij 27 leveranciers die nog leeg waren (onder andere Harvia, Rumo BBQ, Aluxe, Biohort, Keter en Winza). De prijs is steeds de laagste die we ooit van die fabrikant kregen; de kolom heet daarom Laagste inkoopprijs. Beweeg over een gele regel om te zien uit welk bestand de prijs komt."
+    },
+    {
       datum: "2026-09-25", bestand: "planning.html", soort: "beter",
       titel: "Zoeken op postcode, mailadres en debiteurnummer",
       wat: "In de zoekbalk van de planning kun je nu ook zoeken op postcode (met of zonder spatie), het mailadres van de klant en het debiteurnummer, naast ordernummer, ITS-nummer en klantnaam."
