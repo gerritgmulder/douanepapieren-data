@@ -868,8 +868,8 @@
     </div>
     <div class="card" id="pcTekstKaart">
       <details>
-        <summary style="cursor:pointer;font-weight:600">Teksten van de balance-mail en de herinnering</summary>
-        <p class="lead" style="font-size:12px;margin:8px 0 10px">Bij het opstellen worden <b>{dealer}</b>, <b>{container}</b>, <b>{order}</b>, <b>{cargoReady}</b> en <b>{openstaand}</b> vanzelf ingevuld. De groet met het adres van Fonteyn komt er altijd onder. Voor een dealer in Nederland of België wordt de Nederlandse tekst gekozen, anders de Engelse; dat kun je per mail omzetten.</p>
+        <summary style="cursor:pointer;font-weight:600">Teksten van de deposit-mail, de balance-mail en de herinnering</summary>
+        <p class="lead" style="font-size:12px;margin:8px 0 10px">Bij het opstellen worden <b>{dealer}</b>, <b>{container}</b>, <b>{order}</b>, <b>{cargoReady}</b>, <b>{bedrag}</b> (in dollars) en <b>{percentage}</b> vanzelf ingevuld. Bij de deposit-mail is het bedrag 30% van de order, bij de balance-mail wat er nog open staat. De groet met het adres van Fonteyn komt er altijd onder. Voor een dealer in Nederland of België wordt de Nederlandse tekst gekozen, anders de Engelse; dat kun je per mail omzetten.</p>
         <div id="pcTeksten"><p class="lead" style="font-size:12px">Laden…</p></div>
       </details>
     </div>
@@ -3811,6 +3811,9 @@ function pcKop(json){
   return h;
 }
 function pcGeld(v){ return v==null?"-":"€ "+Number(v).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+// Containerdealers betalen in dollars (Gerrit, 25 sep 2026); de worker rekent terug met de vaste koers.
+function pcUsd(v){ return v==null?"-":"$ "+Number(v).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+const PC_SOORT_NAAM={deposit:"Deposit-mail",balance:"Balance-mail",herinnering:"Herinnering"};
 function pcDagTijd(ts){ const d=new Date(ts); return isNaN(d)?"":d.toLocaleDateString("nl-NL",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); }
 function pcVan(k){ return (pcStand&&pcStand.containers&&pcStand.containers[String(k)])||{}; }
 async function laadPcStand(){
@@ -3841,7 +3844,7 @@ function tekenPcMeldingen(){
     lijst.map(m=>{
       const wat=m.soort==="balance"
         ? "cargo ready <b>"+esc(datumNL(m.cargoReady))+"</b>. Check bij Jazzi of hij klaar is en stuur de balance-mail."
-        : "balance "+esc(pcGeld(m.openstaand))+" is nog open (laatste mail "+esc(pcDagTijd(m.laatsteMail).slice(0,10))+"). Er kan vandaag een herinnering naar de dealer.";
+        : "balance "+esc(pcUsd(m.openstaandUsd))+" is nog open (laatste mail "+esc(pcDagTijd(m.laatsteMail).slice(0,10))+"). Er kan vandaag een herinnering naar de dealer.";
       return "<div style='display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:7px 0;border-top:1px solid #f3f4f6;font-size:13px'>"+
         "<div style='flex:1;min-width:240px'><b>"+esc(m.containerNr||("order "+m.ordernr))+"</b> · "+esc(m.naam||"")+" - "+wat+"</div>"+
         "<button class='btn sm pcNaar' type='button' data-k='"+esc(m.ordernr)+"' data-soort='"+esc(m.soort)+"'>"+(m.soort==="balance"?"Balance-mail opstellen":"Herinnering opstellen")+"</button></div>";
@@ -3882,21 +3885,29 @@ function pcPaneel(o){
     (s.cargoReady
       ? "<span>→ <b>cargo ready "+esc(datumNL(s.cargoReady))+"</b> <span style='color:var(--muted)'>(akkoord + 2 maanden; melding vanaf "+esc(datumNL(s.meldVanaf))+")</span></span>"
       : "<span style='color:var(--muted)'>vul de datum in waarop je akkoord gaf op de proforma; cargo ready is 2 maanden later</span>")+"</div>";
-  h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>Balance</b>"+
+  const magDeposit=!s.betaald&&!s.depositVerstuurd&&(Number(s.betaaldPct)||0)<30;
+  h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>Betaling</b>"+
     (s.betaald ? "<span class='pill' style='background:#dcfce7;color:#15803d'>volledig betaald</span>"
-               : "<span>"+(o.regels[0]&&o.regels[0].betaaldPct!=null?o.regels[0].betaaldPct+"% betaald · ":"")+"open "+esc(pcGeld(s.openstaand))+"</span>")+
+               : "<span>"+(s.betaaldPct!=null?s.betaaldPct+"% betaald · ":"")+"open "+esc(pcUsd(s.openstaandUsd))+" <span style='color:var(--muted)'>van "+esc(pcUsd(s.totaalUsd))+"</span></span>")+
+    (magDeposit ? "<button class='btn sm pcOpstellen' type='button' data-k='"+esc(k)+"' data-soort='deposit'>Deposit-mail opstellen</button>" : "")+
     (!s.betaald&&s.cargoReady ? "<button class='btn sm pcOpstellen' type='button' data-k='"+esc(k)+"' data-soort='"+(s.balanceVerstuurd?"herinnering":"balance")+"'>"+
                    (s.balanceVerstuurd?"Herinnering opstellen":"Balance-mail opstellen")+"</button>" : "")+"</div>";
   if(m){
     h+="<div style='border:1px solid #e5e7eb;border-radius:9px;padding:10px 12px;background:#fff;display:grid;gap:7px'>";
     if(m.bezig) h+="<div style='color:var(--muted)'>"+esc(m.bezig)+"</div>";
     else {
-      h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>"+(m.soort==="balance"?"Balance-mail":"Herinnering")+"</b>"+
+      h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>"+esc(PC_SOORT_NAAM[m.soort]||"Mail")+"</b>"+
          "<span>aan</span><input class='pcM' data-k='"+esc(k)+"' data-veld='naar' value='"+esc(m.naar||"")+"' style='min-width:240px;padding:4px 6px;font:inherit;font-size:12.5px'>"+
          "<select class='pcTaal' data-k='"+esc(k)+"' style='padding:4px;font:inherit;font-size:12.5px'><option value='en'"+(m.taal==="en"?" selected":"")+">Engels</option><option value='nl'"+(m.taal==="nl"?" selected":"")+">Nederlands</option></select>"+
          (m.cc?"<span style='color:var(--muted)'>cc "+esc(m.cc)+" (adviseur)</span>":"")+"</div>"+
          "<input class='pcM' data-k='"+esc(k)+"' data-veld='onderwerp' value='"+esc(m.onderwerp||"")+"' style='padding:6px 8px;font:inherit;font-size:12.5px'>"+
-         "<textarea class='pcM' data-k='"+esc(k)+"' data-veld='tekst' rows='11' style='padding:7px 8px;font:inherit;font-size:12.5px;line-height:1.45'>"+esc(m.tekst||"")+"</textarea>"+
+         "<textarea class='pcM' data-k='"+esc(k)+"' data-veld='tekst' rows='16' style='padding:7px 8px;font:inherit;font-size:12.5px;line-height:1.45'>"+esc(m.tekst||"")+"</textarea>"+
+         /* De tekst noemt een bijlage: de orderbevestiging van Fonteyn aan de
+            dealer. Die zit niet in het Dashboard, dus hier kiezen. */
+         "<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>Bijlage</b>"+
+         (m.bijlage?"<span>"+esc(m.bijlage.naam)+"</span> <button class='btn sm pcBijWeg' type='button' data-k='"+esc(k)+"'>weghalen</button>"
+                   :"<input type='file' class='pcBijlage' data-k='"+esc(k)+"' accept='.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx'>"+
+                    "<span style='color:var(--muted);font-size:11.5px'>de orderbevestiging van Fonteyn aan de dealer</span>")+"</div>"+
          "<div style='display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"+
          "<button class='btn solid sm pcStuur' type='button' data-k='"+esc(k)+"'>Versturen</button>"+
          "<button class='btn sm pcStuur' type='button' data-k='"+esc(k)+"' data-test='1'>Eerst naar mezelf</button>"+
@@ -3907,7 +3918,9 @@ function pcPaneel(o){
   }
   h+="<div><b>Verstuurd</b>"+(log.length
       ? "<table class='grid' style='margin:4px 0 0;font-size:12px'><thead><tr><th>Datum</th><th>Wat</th><th>Aan</th><th>Door</th></tr></thead><tbody>"+
-        log.map(x=>"<tr><td>"+esc(pcDagTijd(x.ts))+"</td><td>"+(x.soort==="balance"?"balance-mail":"herinnering")+(x.openstaand!=null?" <span style='color:var(--muted)'>("+esc(pcGeld(x.openstaand))+")</span>":"")+"</td><td>"+esc(x.naar)+(x.cc?"<div style='font-size:10.5px;color:var(--muted)'>cc "+esc(x.cc)+"</div>":"")+"</td><td>"+esc(String(x.door||"").split("@")[0])+"</td></tr>").join("")+
+        log.map(x=>"<tr><td>"+esc(pcDagTijd(x.ts))+"</td><td>"+esc((PC_SOORT_NAAM[x.soort]||x.soort).toLowerCase())+
+          (x.bedragUsd!=null?" <span style='color:var(--muted)'>("+esc(pcUsd(x.bedragUsd))+")</span>":(x.openstaand!=null?" <span style='color:var(--muted)'>("+esc(pcGeld(x.openstaand))+")</span>":""))+
+          (x.bijlage?"<div style='font-size:10.5px;color:var(--muted)'>bijlage "+esc(x.bijlage)+"</div>":"")+"</td><td>"+esc(x.naar)+(x.cc?"<div style='font-size:10.5px;color:var(--muted)'>cc "+esc(x.cc)+"</div>":"")+"</td><td>"+esc(String(x.door||"").split("@")[0])+"</td></tr>").join("")+
         "</tbody></table>"
       : " <span style='color:var(--muted)'>nog niets</span>")+"</div>";
   return h+"</div>";
@@ -3920,21 +3933,22 @@ async function pcZet(k,body){
   await laadPcStand();
 }
 async function pcMailOpstellen(k,soort,taal){
-  pcMail[k]={soort,bezig:"Mail opstellen…"}; renderPartnerContainers();
+  pcMail[k]={soort,bezig:"Mail opstellen…",bijlage:(pcMail[k]&&pcMail[k].soort===soort&&pcMail[k].bijlage)||null}; renderPartnerContainers();
   try{
     const r=await fetch(PC_URL+"/mail",{method:"POST",headers:pcKop(true),body:JSON.stringify({ordernr:Number(k),soort,proef:true,taal})});
     const j=await r.json().catch(()=>({}));
     if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
-    pcMail[k]={soort,naar:j.naar||j.standaardNaar||"",cc:j.cc||"",taal:j.taal,onderwerp:j.onderwerp,tekst:j.tekst};
+    const oud=pcMail[k]&&pcMail[k].bijlage;
+    pcMail[k]={soort,naar:j.naar||j.standaardNaar||"",cc:j.cc||"",taal:j.taal,onderwerp:j.onderwerp,tekst:j.tekst,bijlage:oud||null};
   }catch(e){ pcMail[k]={soort,naar:"",taal:taal||"en",onderwerp:"",tekst:"",melding:"Opstellen lukte niet: "+e.message,fout:true}; }
   renderPartnerContainers();
 }
 async function pcStuur(k,test){
   const m=pcMail[k]; if(!m) return;
-  if(!test&&!confirm((m.soort==="balance"?"Balance-mail":"Herinnering")+" versturen aan "+m.naar+"?")) return;
+  if(!test&&!confirm((PC_SOORT_NAAM[m.soort]||"Mail")+" versturen aan "+m.naar+(m.bijlage?" met bijlage "+m.bijlage.naam:" zonder bijlage")+"?")) return;
   m.melding="Versturen…"; m.fout=false; renderPartnerContainers();
   try{
-    const r=await fetch(PC_URL+"/mail",{method:"POST",headers:pcKop(true),body:JSON.stringify({ordernr:Number(k),soort:m.soort,naar:m.naar,taal:m.taal,onderwerp:m.onderwerp,tekst:m.tekst,test:!!test})});
+    const r=await fetch(PC_URL+"/mail",{method:"POST",headers:pcKop(true),body:JSON.stringify({ordernr:Number(k),soort:m.soort,naar:m.naar,taal:m.taal,onderwerp:m.onderwerp,tekst:m.tekst,test:!!test,bijlage:m.bijlage||null})});
     const j=await r.json().catch(()=>({}));
     if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
     if(test){ m.melding="Verstuurd naar "+j.naar+" - kijk in je mail hoe hij eruitziet."; renderPartnerContainers(); return; }
@@ -3960,6 +3974,14 @@ function pcKoppelPaneel(box){
   box.querySelectorAll(".pcTaal").forEach(sel=>sel.addEventListener("change",()=>{ const m=pcMail[sel.dataset.k]; if(m) pcMailOpstellen(sel.dataset.k,m.soort,sel.value); }));
   box.querySelectorAll(".pcStuur").forEach(b=>b.addEventListener("click",()=>pcStuur(b.dataset.k,!!b.dataset.test)));
   box.querySelectorAll(".pcSluit").forEach(b=>b.addEventListener("click",()=>{ delete pcMail[b.dataset.k]; renderPartnerContainers(); }));
+  box.querySelectorAll(".pcBijlage").forEach(inp=>inp.addEventListener("change",()=>{
+    const f=inp.files&&inp.files[0], m=pcMail[inp.dataset.k]; if(!f||!m) return;
+    if(f.size>10*1024*1024){ alert("Deze bijlage is groter dan 10 MB."); inp.value=""; return; }
+    const lezer=new FileReader();
+    lezer.onload=()=>{ m.bijlage={naam:f.name,inhoud:String(lezer.result).replace(/^data:[^,]*,/,"")}; renderPartnerContainers(); };
+    lezer.readAsDataURL(f);
+  }));
+  box.querySelectorAll(".pcBijWeg").forEach(b=>b.addEventListener("click",()=>{ const m=pcMail[b.dataset.k]; if(m){ m.bijlage=null; renderPartnerContainers(); } }));
 }
 /* De teksten van de twee mails. Chantal stuurt de definitieve tekst; tot die
    tijd staat hier een voorstel dat ze zelf kan aanpassen. {dealer},
@@ -3970,10 +3992,11 @@ function tekenPcTeksten(){
   if(box.dataset.getekend) return;
   box.dataset.getekend="1";
   const t=pcStand.tekst;
-  const blok=(soort,taal,titel)=>"<div style='display:grid;gap:5px'><b style='font-size:12.5px'>"+titel+(t[soort][taal].eigen?"":" <span style='font-weight:400;color:var(--muted)'>(voorstel)</span>")+"</b>"+
+  const blok=(soort,taal,titel)=>"<div style='display:grid;gap:5px'><b style='font-size:12.5px'>"+titel+(t[soort][taal].eigen?"":" <span style='font-weight:400;color:var(--muted)'>(standaard)</span>")+"</b>"+
     "<input class='pcT' data-s='"+soort+"' data-t='"+taal+"' data-v='onderwerp' value='"+esc(t[soort][taal].onderwerp)+"' style='padding:6px 8px;font:inherit;font-size:12.5px'>"+
     "<textarea class='pcT' data-s='"+soort+"' data-t='"+taal+"' data-v='tekst' rows='9' style='padding:7px 8px;font:inherit;font-size:12.5px;line-height:1.45'>"+esc(t[soort][taal].tekst)+"</textarea></div>";
   box.innerHTML="<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px'>"+
+    blok("deposit","en","Deposit-mail (Engels)")+blok("deposit","nl","Deposit-mail (Nederlands)")+
     blok("balance","en","Balance-mail (Engels)")+blok("balance","nl","Balance-mail (Nederlands)")+
     blok("herinnering","en","Herinnering (Engels)")+blok("herinnering","nl","Herinnering (Nederlands)")+"</div>"+
     "<div style='margin-top:10px;display:flex;gap:10px;align-items:center'><button class='btn solid sm' id='pcTBewaar' type='button'>Teksten bewaren</button><span id='pcTStatus' style='font-size:12px;color:var(--muted)'></span></div>";

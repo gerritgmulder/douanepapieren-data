@@ -7355,20 +7355,47 @@ const PC_GROET = {
   nl: "Met vriendelijke groet,\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel\nT +31 577 456040",
   en: "Kind regards,\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel, The Netherlands\nT +31 577 456040",
 };
+/* De standaardteksten zijn die van Chantal (25 sep 2026: "Tekst deposit
+   betaling vragen" en "Tekst balance betaling vragen"), netter opgeschreven;
+   de herinnering volgt dezelfde opbouw. Containerdealers betalen in dollars
+   (Gerrit, 25 sep 2026). {bedrag} is dat dollarbedrag, {percentage} het deel
+   van het orderbedrag waar het om gaat. */
+const PC_BANK = {
+  en: "Our bank details\nAccount name: Fonteyn\nAddress: Meervelderweg 52, Uddel, The Netherlands\nIBAN: NL54 INGB 0020 1016 19\nSWIFT/BIC: INGBNL2A\nBank: ING Bank, Friesewal 1, Zwolle, The Netherlands\nReference: order {order}",
+  nl: "Onze bankgegevens\nNaam rekening: Fonteyn\nAdres: Meervelderweg 52, Uddel\nIBAN: NL54 INGB 0020 1016 19\nSWIFT/BIC: INGBNL2A\nBank: ING Bank, Friesewal 1, Zwolle\nOmschrijving: order {order}",
+};
 const PC_TEKST_STANDAARD = {
+  deposit: {
+    en: { onderwerp: "Order confirmation and deposit payment - container {container}",
+          tekst: "Dear {dealer},\n\nThank you for your order! Attached you will find the order confirmation for container {container} (order {order}).\n\nTo start production, we kindly ask you to pay the {percentage}% deposit of {bedrag}.\n\n" + PC_BANK.en + "\n\nOnce you have made the payment, please send us the payment confirmation. We start production right away when we receive it.\n\nWe look forward to working on this order with you." },
+    nl: { onderwerp: "Orderbevestiging en aanbetaling - container {container}",
+          tekst: "Beste {dealer},\n\nHartelijk dank voor uw bestelling! In de bijlage vindt u de orderbevestiging voor container {container} (order {order}).\n\nOm de productie te starten, vragen wij u de aanbetaling van {percentage}% te voldoen: {bedrag}.\n\n" + PC_BANK.nl + "\n\nStuurt u ons na het betalen de betaalbevestiging? Zodra wij die ontvangen, starten wij direct de productie.\n\nWij kijken ernaar uit om deze order samen met u te realiseren." },
+  },
   balance: {
-    en: { onderwerp: "Container {container} is almost ready - balance payment",
-          tekst: "Dear {dealer},\n\nGood news: your container {container} (order {order}) will be ready at the factory around {cargoReady}.\n\nTo keep everything on schedule, we kindly ask you to transfer the balance of {openstaand} before that date, quoting order number {order}. As soon as the balance has arrived, we arrange the shipment to you.\n\nThank you in advance. We are happy to help with any questions." },
-    nl: { onderwerp: "Container {container} is bijna klaar - restbetaling",
-          tekst: "Beste {dealer},\n\nGoed nieuws: uw container {container} (order {order}) is rond {cargoReady} klaar bij de fabriek.\n\nOm alles volgens planning te laten verlopen, vragen wij u de restbetaling van {openstaand} vóór die datum over te maken, onder vermelding van ordernummer {order}. Zodra de restbetaling binnen is, regelen wij de verzending naar u.\n\nAlvast bedankt. Wij helpen u graag bij vragen." },
+    en: { onderwerp: "Balance payment - container {container}",
+          tekst: "Dear {dealer},\n\nGood news: your container {container} (order {order}) is almost ready at the factory, around {cargoReady}. Attached you will find the confirmation.\n\nWe kindly ask you to pay the {percentage}% balance of {bedrag}.\n\n" + PC_BANK.en + "\n\nPlease make the payment right away and send us the payment confirmation within 24 hours. As soon as we receive it, we arrange the next steps for the shipment.\n\nThank you for your quick action." },
+    nl: { onderwerp: "Restbetaling - container {container}",
+          tekst: "Beste {dealer},\n\nGoed nieuws: uw container {container} (order {order}) is bijna klaar bij de fabriek, rond {cargoReady}. In de bijlage vindt u de bevestiging.\n\nWij vragen u vriendelijk de restbetaling van {percentage}% te voldoen: {bedrag}.\n\n" + PC_BANK.nl + "\n\nWilt u direct betalen en ons binnen 24 uur de betaalbevestiging sturen? Zodra wij die ontvangen, regelen wij de volgende stappen voor de verzending.\n\nHartelijk dank voor uw snelle actie." },
   },
   herinnering: {
-    en: { onderwerp: "Reminder: balance payment for container {container}",
-          tekst: "Dear {dealer},\n\nA friendly reminder about the balance of {openstaand} for container {container} (order {order}). Your container is ready at the factory around {cargoReady}.\n\nAs soon as the balance has arrived, we arrange the shipment to you right away. Has the payment just been made? Then thank you very much, and this message has crossed it.\n\nWe are happy to help with any questions." },
-    nl: { onderwerp: "Herinnering: restbetaling container {container}",
-          tekst: "Beste {dealer},\n\nEen vriendelijke herinnering aan de restbetaling van {openstaand} voor container {container} (order {order}). Uw container is rond {cargoReady} klaar bij de fabriek.\n\nZodra de restbetaling binnen is, regelen wij direct de verzending naar u. Heeft u net betaald? Dan hartelijk dank, en dan hebben dit bericht en uw betaling elkaar gekruist.\n\nWij helpen u graag bij vragen." },
+    en: { onderwerp: "Reminder: balance payment - container {container}",
+          tekst: "Dear {dealer},\n\nA friendly reminder about the balance of {bedrag} for container {container} (order {order}). Your container is ready at the factory around {cargoReady}.\n\n" + PC_BANK.en + "\n\nPlease make the payment right away and send us the payment confirmation. As soon as we receive it, we arrange the shipment to you. Has the payment just been made? Then thank you very much, and our messages have crossed.\n\nThank you for your quick action." },
+    nl: { onderwerp: "Herinnering: restbetaling - container {container}",
+          tekst: "Beste {dealer},\n\nEen vriendelijke herinnering aan de restbetaling van {bedrag} voor container {container} (order {order}). Uw container is rond {cargoReady} klaar bij de fabriek.\n\n" + PC_BANK.nl + "\n\nWilt u direct betalen en ons de betaalbevestiging sturen? Zodra wij die ontvangen, regelen wij de verzending naar u. Heeft u net betaald? Dan hartelijk dank, en dan hebben onze berichten elkaar gekruist.\n\nHartelijk dank voor uw snelle actie." },
   },
 };
+const PC_SOORTEN = ["deposit", "balance", "herinnering"];
+const PC_DEPOSIT_PCT = 30;
+/* Dollars: Chantal zet de dealerprijs in Logic4 als dollarprijs gedeeld door
+   AMERIKA_KOERS (Pleasure bij Northwest Swim Spas: 3.704,46 = $4.149). Terug
+   is dus keer die koers. */
+function pcUsd(eur) { return Math.round((Number(eur) || 0) * AMERIKA_KOERS * 100) / 100; }
+function pcDollar(v, taal) {
+  const n = Number(v) || 0;
+  return taal === "nl"
+    ? "$ " + n.toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 function pcDatum(d) { return d ? String(d).slice(0, 10).split("-").reverse().join("-") : ""; }
 function pcPlusMaanden(d, n) {
   const [y, m, dag] = String(d).split("-").map(Number);
@@ -7404,10 +7431,18 @@ function pcToestand(order, rec, vandaag) {
   if (order) {
     uit.betaald = order.betaaldPct >= 99;
     uit.openstaand = Math.max(0, Math.round((order.totaal - order.aanbetaling) * 100) / 100);
+    uit.openstaandUsd = pcUsd(uit.openstaand);
+    uit.totaalUsd = pcUsd(order.totaal);
+    uit.betaaldPct = order.betaaldPct;
   }
   const balance = log.filter(x => x.soort === "balance").slice(-1)[0];
+  const deposit = log.filter(x => x.soort === "deposit").slice(-1)[0];
   uit.balanceVerstuurd = balance ? balance.ts : null;
-  uit.laatsteMail = log.length ? log[log.length - 1].ts : null;
+  uit.depositVerstuurd = deposit ? deposit.ts : null;
+  // De dagelijkse herinnering telt vanaf de laatste balance-mail of herinnering;
+  // een deposit-mail van vandaag hoort daar niet bij.
+  const naBalance = log.filter(x => x.soort === "balance" || x.soort === "herinnering");
+  uit.laatsteMail = naBalance.length ? naBalance[naBalance.length - 1].ts : null;
   if (!rec.akkoord) return uit;
   uit.cargoReady = pcPlusMaanden(rec.akkoord, 2);
   uit.meldVanaf = pcPlusDagen(uit.cargoReady, -7);
@@ -7469,7 +7504,7 @@ async function pcHandle(request, env, url) {
   const vandaag = pcVandaag();
   const teksten = () => {
     const t = JSON.parse(JSON.stringify(PC_TEKST_STANDAARD));
-    for (const soort of ["balance", "herinnering"]) for (const taal of ["nl", "en"]) {
+    for (const soort of PC_SOORTEN) for (const taal of ["nl", "en"]) {
       const eigen = ((data.tekst || {})[soort] || {})[taal];
       if (eigen && eigen.onderwerp) t[soort][taal].onderwerp = eigen.onderwerp;
       if (eigen && eigen.tekst) t[soort][taal].tekst = eigen.tekst;
@@ -7489,7 +7524,7 @@ async function pcHandle(request, env, url) {
       if (t.melding) {
         const o = orders[k];
         meldingen.push({ ordernr: Number(k), soort: t.melding, naam: o.naam, containerNr: o.containerNr, cargoReady: t.cargoReady,
-                         openstaand: t.openstaand, laatsteMail: t.laatsteMail });
+                         openstaand: t.openstaand, openstaandUsd: t.openstaandUsd, laatsteMail: t.laatsteMail });
       }
     }
     meldingen.sort((a, b) => String(a.cargoReady).localeCompare(String(b.cargoReady)));
@@ -7515,7 +7550,7 @@ async function pcHandle(request, env, url) {
   if (p === "/partnercontainer/tekst" && request.method === "POST") {
     let b = {}; try { b = await request.json(); } catch {}
     data.tekst = data.tekst || {};
-    for (const soort of ["balance", "herinnering"]) for (const taal of ["nl", "en"]) {
+    for (const soort of PC_SOORTEN) for (const taal of ["nl", "en"]) {
       const t = ((b.tekst || {})[soort] || {})[taal];
       if (!t) continue;
       data.tekst[soort] = data.tekst[soort] || {};
@@ -7529,26 +7564,38 @@ async function pcHandle(request, env, url) {
     const k = String(Number(b.ordernr) || "");
     const o = orders[k];
     if (!o) return reply(404, { ok: false, error: "deze containerorder staat niet (meer) in de reserveringen" });
-    const soort = b.soort === "herinnering" ? "herinnering" : "balance";
+    const soort = PC_SOORTEN.includes(b.soort) ? b.soort : "balance";
     const rec = data.containers[k] || (data.containers[k] = { log: [] });
     rec.log = rec.log || [];
     const t = pcToestand(o, rec, vandaag);
-    if (!t.cargoReady) return reply(400, { ok: false, error: "vul eerst de datum in waarop je akkoord gaf op de proforma; daaruit volgt cargo ready" });
+    if (!t.cargoReady && soort !== "deposit") return reply(400, { ok: false, error: "vul eerst de datum in waarop je akkoord gaf op de proforma; daaruit volgt cargo ready" });
     const live = await pcOrderLive(env, o.ordernr);
+    const totaalEur = live ? live.totaal : o.totaal;
     if (live) t.openstaand = live.openstaand;
     if (live && live.volledig) return reply(409, { ok: false, error: "deze order is in Logic4 al volledig betaald" });
+    // Deposit: 30% van het orderbedrag. Balance en herinnering: wat er nog open staat.
+    const bedragUsd = soort === "deposit" ? Math.round(pcUsd(totaalEur) * PC_DEPOSIT_PCT) / 100 : pcUsd(t.openstaand);
+    const percentage = soort === "deposit" ? PC_DEPOSIT_PCT
+      : (totaalEur > 0 ? Math.round((t.openstaand / totaalEur) * 100) : 70);
     const ontv = await pcOntvanger(env, o.debtorId);
     const taal = b.taal === "nl" || b.taal === "en" ? b.taal : ontv.taal;
     const sjabloon = teksten()[soort][taal];
     const w = { dealer: ontv.bedrijf || o.naam, container: o.containerNr || o.referentie || ("order " + o.ordernr), order: o.ordernr,
-                cargoReady: new Date(t.cargoReady + "T12:00:00Z").toLocaleDateString(taal === "nl" ? "nl-NL" : "en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }),
-                openstaand: taal === "nl" ? herGeld(t.openstaand)
-                  : "€" + (Number(t.openstaand) || 0).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) };
+                cargoReady: t.cargoReady ? new Date(t.cargoReady + "T12:00:00Z").toLocaleDateString(taal === "nl" ? "nl-NL" : "en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "",
+                bedrag: pcDollar(bedragUsd, taal), openstaand: pcDollar(bedragUsd, taal), percentage };
     const onderwerp = pcVul(b.onderwerp || sjabloon.onderwerp, w);
     const tekst = pcVul(b.tekst || sjabloon.tekst, w);
     const naar = b.test ? wie : String(b.naar || ontv.naar || "").trim().toLowerCase();
     const html = pcMailHtml(tekst, PC_GROET[taal]);
-    if (b.proef) return reply(200, { ok: true, proef: true, naar, cc: ontv.cc, taal, onderwerp, tekst, html, standaardNaar: ontv.naar });
+    if (b.proef) return reply(200, { ok: true, proef: true, naar, cc: ontv.cc, taal, onderwerp, tekst, html, standaardNaar: ontv.naar, bedragUsd });
+    /* Een bijlage (de orderbevestiging van Fonteyn) mag mee. Base64, zoals
+       Resend hem wil; maximaal ongeveer 10 MB. */
+    let bijlage = null;
+    if (b.bijlage && b.bijlage.inhoud) {
+      const inhoud = String(b.bijlage.inhoud).replace(/^data:[^,]*,/, "");
+      if (inhoud.length > 14 * 1024 * 1024) return reply(413, { ok: false, error: "de bijlage is groter dan 10 MB" });
+      bijlage = { filename: String(b.bijlage.naam || "bijlage.pdf").replace(/[\\/"]/g, "").slice(0, 120), content: inhoud };
+    }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar)) return reply(400, { ok: false, error: "geen geldig mailadres voor deze dealer - vul er een in" });
     if (!env.RESEND_API_KEY || !env.MAIL_FROM) return reply(500, { ok: false, error: "mail is niet ingericht in de worker" });
     const adres = (String(env.MAIL_FROM || "").match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM || "");
@@ -7556,14 +7603,15 @@ async function pcHandle(request, env, url) {
     const rr = await fetch("https://api.resend.com/emails", {
       method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({ from: "Fonteyn Outdoor Living Mall <" + adres + ">", to: [naar], cc: cc.length ? cc : undefined,
-                             reply_to: /@/.test(wie) ? [wie] : undefined, subject: onderwerp, html }),
+                             reply_to: /@/.test(wie) ? [wie] : undefined, subject: onderwerp, html,
+                             attachments: bijlage ? [bijlage] : undefined }),
     });
     const antw = await rr.text();
     if (!rr.ok) return reply(502, { ok: false, error: "Resend: HTTP " + rr.status + " " + antw.slice(0, 160) });
     if (!b.test) {
       let id = null; try { id = JSON.parse(antw).id || null; } catch {}
       rec.log.push({ ts: new Date().toISOString(), soort, naar, cc: cc.join(", ") || null, taal, onderwerp: onderwerp.slice(0, 160),
-                     openstaand: t.openstaand, door: wie, id });
+                     bedragUsd, bijlage: bijlage ? bijlage.filename : null, door: wie, id });
       rec.log = rec.log.slice(-200);
       await bewaar();
     }

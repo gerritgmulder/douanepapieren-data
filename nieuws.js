@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-25", bestand: "voorraad.html", soort: "beter",
+      titel: "Partner containers: deposit-mail en bedragen in dollars",
+      wat: "Bij een container staat nu ook een knop voor de deposit-mail (30% van de order). De deposit-mail, de balance-mail en de herinnering gebruiken de teksten van Chantal, met de bankgegevens erin. Bedragen staan in dollars, zoals de dealer betaalt. Je kunt de orderbevestiging als bijlage meesturen."
+    },
+    {
       datum: "2026-09-24", bestand: "amerika.html", soort: "hersteld",
       titel: "Batches met een dubbel factuurnummer worden geboekt",
       wat: "QuickBooks gebruikt soms hetzelfde factuurnummer voor twee klanten (3496 en 3515 in de batch van 29-06). Het scherm kiest nu zelf de juiste order, op bedrag en anders op de naam van de klant. De batch van 29-06 is weer klaar om te boeken."
