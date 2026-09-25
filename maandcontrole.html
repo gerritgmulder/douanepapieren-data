@@ -13,7 +13,7 @@
     if (window.fpToegang && !fpToegang.mag("administratie-proef", ik) && !fpToegang.mag("maandcontrole", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Deze tegel is voor de maandcontrole</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -93,7 +93,7 @@ tr.groen td:first-child{box-shadow:inset 4px 0 0 var(--goed)}tr.oranje td:first-
 
   <div class="kaart">
     <h2>Tussenrekeningen <span class="pil" id="tTel"></span></h2>
-    <p class="lead">Geld dat onderweg is van de ene plek naar de andere: Mollie, bol.com, Shopify, PIN, Amerika, kruisposten, SEPA-batches. Aan het eind van de maand hoort hier niets meer te staan.</p>
+    <p class="lead">Geld dat onderweg is van de ene plek naar de andere: Mollie, bol.com, Shopify, PIN, Amerika, kruisposten, SEPA-batches. Aan het eind van de maand hoort hier alles op nul te staan.</p>
     <div id="tussen"></div>
   </div>
 
@@ -111,13 +111,13 @@ tr.groen td:first-child{box-shadow:inset 4px 0 0 var(--goed)}tr.oranje td:first-
 
   <div class="kaart">
     <h2>Intern (rekening-courant)</h2>
-    <p class="lead">Wat de zusterbedrijven aan elkaar schuldig zijn (Nieland, Mosselweg, Houtzagerij, Fonteyn UK, Icebath, Passion Spas USA). Hoeft niet nul te zijn, maar hoort te kloppen met de andere kant.</p>
+    <p class="lead">Wat de zusterbedrijven aan elkaar schuldig zijn (Nieland, Mosselweg, Houtzagerij, Fonteyn UK, Icebath, Passion Spas USA). Mag een saldo hebben, zolang het klopt met de andere kant.</p>
     <div id="intern"></div>
   </div>
 
   <div class="kaart">
     <h2>Voorraad en btw</h2>
-    <p class="lead">De voorraadaansluiting (Logic4 tegenover wat er echt ligt) staat in de tegel <a href="geldgoederen.html">Geld-goederenbeweging</a>. De btw-aangifte maakt Logic4 zelf; een controle op btw-codes per factuur is hier nog niet gebouwd.</p>
+    <p class="lead">De voorraadaansluiting (Logic4 tegenover wat er echt ligt) staat in de tegel <a href="geldgoederen.html">Geld-goederenbeweging</a>. De btw-aangifte maakt Logic4 zelf; een controle op btw-codes per factuur volgt nog.</p>
   </div>
 </main>
 <div id="venster" class="venster hidden"><div class="in" id="vensterIn"></div></div>
@@ -158,12 +158,12 @@ async function laad(vers){
     for (var i = 0; i < 4; i++){
       var deel = ["tussen","aansluiting","bank","intern"][i];
       var j = await api("/maand/stand?maand=" + maand + "&deel=" + deel + (vers ? "&vers=1" : ""));
-      if (!j.ok) throw new Error(j.error || "ophalen mislukt");
+      if (!j.ok) throw new Error(j.error || "onbekende reden");
       stand[deel] = j; werk = j.werk || werk;
       teken(deel);
     }
     msg($("msg"), "", "");
-  }catch(e){ msg($("msg"), "Ophalen lukte niet: " + esc(e.message), "bad"); }
+  }catch(e){ msg($("msg"), "Ophalen vraagt een nieuwe poging: " + esc(e.message), "bad"); }
   samenvatting();
 }
 function statusVan(r){
@@ -175,7 +175,7 @@ function statusVan(r){
 function rijHtml(r, soort){
   var st = soort === "tussen" ? statusVan(r) : (werk[String(r.code)] && werk[String(r.code)].status === "verklaard" ? "verklaard" : "");
   var w = werk[String(r.code)];
-  var pil = soort !== "tussen" ? "" : st === "groen" ? '<span class="pil">op nul</span>' : st === "oranje" ? '<span class="pil oranje">blijft staan</span>' : st === "verklaard" ? '<span class="pil grijs">verklaard</span>' : '<span class="pil grijs">geen cijfer</span>';
+  var pil = soort !== "tussen" ? "" : st === "groen" ? '<span class="pil">op nul</span>' : st === "oranje" ? '<span class="pil oranje">blijft staan</span>' : st === "verklaard" ? '<span class="pil grijs">verklaard</span>' : '<span class="pil grijs">saldo onbekend</span>';
   return '<tr class="rij ' + st + '" data-code="' + r.code + '"><td><b>' + r.code + '</b> ' + esc(r.naam) + ' ' + pil + (w && w.notitie ? '<div style="font-size:11.5px;color:var(--grijs)">' + esc(w.notitie) + ' <span style="color:#9ca3af">(' + esc(String(w.door||"").split("@")[0]) + ', ' + esc(datumNL(w.ts)) + ')</span></div>' : '') + '</td>' +
     '<td class="n">' + (r.saldoVorige != null ? esc(eur(r.saldoVorige)) : '-') + '</td><td class="n">' + (r.mutatie != null ? esc(eur(r.mutatie)) : '-') + '</td><td class="n"><b>' + (r.saldo != null ? esc(eur(r.saldo)) : '-') + '</b></td></tr>';
 }
@@ -189,8 +189,8 @@ function teken(deel){
     var deb = j.rekeningen[0] || {}, cred = j.rekeningen[1] || {};
     var eerlijk = maand === lopend;
     var vgl = function(gb, open, n, ts, teken){
-      if (gb.saldo == null) return '<span class="pil grijs">geen cijfer</span>';
-      if (open == null) return '<span class="pil grijs">open posten niet bekend</span>';
+      if (gb.saldo == null) return '<span class="pil grijs">saldo onbekend</span>';
+      if (open == null) return '<span class="pil grijs">open posten onbekend</span>';
       var v = Math.round((gb.saldo * teken - open) * 100) / 100;
       return (eerlijk ? (Math.abs(v) < 1 ? '<span class="pil">sluit aan</span>' : '<span class="pil oranje">verschil ' + esc(eur(v)) + '</span>') : '<span class="pil grijs">vergelijking alleen in de lopende maand</span>') +
         '<div style="font-size:11.5px;color:var(--grijs)">open facturen nu: ' + esc(eur(open)) + ' (' + n + ' stuks, stand ' + esc(datumNL(ts)) + ')</div>';
@@ -203,7 +203,7 @@ function teken(deel){
     var rijen = j.rekeningen.slice();
     if (deel === "tussen") rijen.sort(function(a,b){ var o = { oranje: 0, onbekend: 1, verklaard: 2, groen: 3 }; return (o[statusVan(a)] - o[statusVan(b)]) || Math.abs(b.saldo||0) - Math.abs(a.saldo||0); });
     if (deel === "bank" || deel === "intern") rijen = rijen.filter(function(r){ return r.saldo != null; });
-    box.innerHTML = rijen.length ? tabel(rijen, deel) : '<p class="lead">Geen rekeningen met een saldo.</p>';
+    box.innerHTML = rijen.length ? tabel(rijen, deel) : '<p class="lead">0 rekeningen met een saldo.</p>';
     if (deel === "tussen"){ var t = { groen: 0, oranje: 0, verklaard: 0 }; rijen.forEach(function(r){ var s = statusVan(r); if (t[s] != null) t[s]++; }); $("tTel").textContent = t.oranje ? t.oranje + " om naar te kijken" : "alles op nul of verklaard"; $("tTel").className = "pil" + (t.oranje ? " oranje" : ""); }
   }
   box.querySelectorAll("tr.rij").forEach(function(tr){ tr.addEventListener("click", function(){ regels(Number(tr.dataset.code)); }); });
@@ -213,7 +213,7 @@ function samenvatting(){
   var oranje = t.filter(function(r){ return statusVan(r) === "oranje"; });
   var som = oranje.reduce(function(n, r){ return n + Math.abs(r.saldo || 0); }, 0);
   var bank = ((stand.bank && stand.bank.rekeningen) || []).reduce(function(n, r){ return n + (r.saldo || 0); }, 0);
-  $("samen").innerHTML = '<div><b>' + oranje.length + '</b><span>tussenrekeningen die niet op nul staan</span></div>' +
+  $("samen").innerHTML = '<div><b>' + oranje.length + '</b><span>tussenrekeningen die nog op nul moeten</span></div>' +
     '<div><b>' + esc(eur(som)) + '</b><span>samen (absoluut) blijft daar hangen</span></div>' +
     '<div><b>' + esc(eur(bank)) + '</b><span>bank en kas samen, eind ' + esc(maandNaam(maand)) + '</span></div>';
 }
@@ -237,7 +237,7 @@ async function regels(code){
       j.regels.map(function(x){ return '<tr><td style="white-space:nowrap">' + esc(datumNL(x.datum)) + '</td><td>' + esc(x.boeking) + '</td><td style="font-size:11.5px">' + esc(x.omschrijving) + '</td><td style="font-size:11.5px;white-space:nowrap">' + esc(x.factuur || x.debiteur || x.crediteur || "") + '</td><td class="n" style="color:' + (x.bedrag < 0 ? 'var(--rood)' : 'inherit') + '">' + esc(eur(x.bedrag)) + '</td></tr>'; }).join("") +
       '<tr><td colspan="4" style="text-align:right"><b>Som van de maand</b></td><td class="n"><b>' + esc(eur(j.som)) + '</b></td></tr></tbody></table></div>' +
       (j.regels.length >= 2000 ? '<p class="lead">Alleen de eerste 2000 regels.</p>' : '')
-      : '<p class="lead">Geen regels in deze maand op deze rekening.</p>';
+      : '<p class="lead">0 regels in deze maand op deze rekening.</p>';
   }catch(e){ var b2 = $("vRegels"); if (b2) b2.innerHTML = '<p class="lead" style="color:var(--rood)">' + esc(e.message) + '</p>'; }
 }
 function venster(html){ if (!html || typeof html !== "string") { $("venster").classList.add("hidden"); return; } $("vensterIn").innerHTML = html; $("venster").classList.remove("hidden"); }

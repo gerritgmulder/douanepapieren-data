@@ -113,7 +113,7 @@
       ok: false,
       error: "niet-op-telefoon",
       message: "Dit onderdeel haalt zijn gegevens op bij het programma dat op de pc draait. " +
-               "Op de telefoon is dat er niet.",
+               "Open het daarvoor op de pc.",
     }, 503));
   };
 })();

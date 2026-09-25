@@ -74,7 +74,7 @@
        achteraf: Logic4 kan via de API geen crediteur aanmaken (alleen klanten),
        dus dat blijft één handeling in Logic4 zelf. -->
   <div class="melding warn" style="margin-bottom:16px">
-    <b>Hoe het met Logic4 werkt.</b> De crediteur zelf moet je één keer in Logic4 aanmaken - alleen de naam volstaat. Dat is de enige handeling die de koppeling niet kan doen; in de hele Logic4-API bestaat geen manier om een crediteur aan te maken, alleen om een klant aan te maken. Zodra het nummer er is doet dit scherm de rest: adres, contactpersoon, e-mail en telefoon zet het er automatisch bij.
+    <b>Hoe het met Logic4 werkt.</b> De crediteur zelf maak je één keer in Logic4 aan - alleen de naam volstaat. Dat is de enige handeling in Logic4 zelf: de Logic4-API kan klanten aanmaken, een crediteur maak je daar met de hand. Zodra het nummer er is doet dit scherm de rest: adres, contactpersoon, e-mail en telefoon zet het er automatisch bij.
   </div>
 
   <div class="card">
@@ -89,7 +89,7 @@
   <div id="voorstel" class="verborgen">
     <div class="card">
       <h3>De leverancier</h3>
-      <p class="lead" style="margin-bottom:10px">Uit de proforma gehaald. Kijk het na en vul aan wat ontbreekt - dit is wat straks in Logic4 moet komen te staan.</p>
+      <p class="lead" style="margin-bottom:10px">Uit de proforma gehaald. Kijk het na en vul aan wat nog leeg is - dit is wat straks in Logic4 moet komen te staan.</p>
       <div class="velden">
         <div class="breed"><label class="f">Bedrijfsnaam</label><input type="text" id="vNaam"></div>
         <div class="breed"><label class="f">Tweede naam op de proforma (indien anders)</label><input type="text" id="vNaam2"></div>
@@ -109,7 +109,7 @@
 
     <div class="card">
       <h3>Staat hij al in Logic4?</h3>
-      <p class="lead" style="margin-bottom:10px">Eerst kijken of deze leverancier er al is - dan voorkom je een dubbele crediteur. Vind je hem, klik hem aan. Bestaat hij nog niet, maak hem dan in Logic4 aan en vul het nummer hier in.</p>
+      <p class="lead" style="margin-bottom:10px">Eerst kijken of deze leverancier er al is - dan voorkom je een dubbele crediteur. Vind je hem, klik hem aan. Is hij nieuw, maak hem dan in Logic4 aan en vul het nummer hier in.</p>
       <div class="rij">
         <input type="text" id="l4Zoek" placeholder="zoek op bedrijfsnaam" style="max-width:340px">
         <button class="btn" id="l4Knop" type="button">Zoeken in Logic4</button>
@@ -126,7 +126,7 @@
 
     <div class="card">
       <h3>De prijslijst — <span id="regelTel">0</span> artikelen</h3>
-      <p class="lead" style="margin-bottom:10px">Dit wordt de inkoopprijslijst van deze leverancier. Wat niet klopt kun je hier aanpassen; een regel die er niet in hoort haal je met het kruisje weg.</p>
+      <p class="lead" style="margin-bottom:10px">Dit wordt de inkoopprijslijst van deze leverancier. Alles kun je hier aanpassen; een overbodige regel haal je met het kruisje weg.</p>
       <div class="tabelwrap"><table>
         <thead><tr>
           <th>Artikelcode</th><th>Omschrijving</th><th>Maat</th><th class="num">Aantal</th>
@@ -161,7 +161,7 @@
 
   <div class="card">
     <h3>Vastgelegde leveranciers — <span id="lvTel">0</span></h3>
-    <div id="lvLijst"><p class="lead">Nog niets vastgelegd.</p></div>
+    <div id="lvLijst"><p class="lead">Hier komen de vastgelegde leveranciers.</p></div>
   </div>
 </main>
 
@@ -180,7 +180,7 @@ const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").rep
   const mag=window.fpToegang && window.fpToegang.mag("leveranciers", email);
   if(!mag){
     document.body.innerHTML="<main style='padding:40px;text-align:center;font-family:Montserrat,system-ui'>"+
-      "<h1 style='color:#144734'>Geen toegang</h1><p>Deze tegel is voor inkoop en administratie.</p>"+
+      "<h1 style='color:#144734'>Nieuwe leverancier</h1><p>Deze tegel is voor inkoop en administratie.</p>"+
       "<p>Je bent ingelogd als <code>"+esc(email)+"</code>.</p>"+
       "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
     throw new Error("geen toegang");
@@ -388,10 +388,10 @@ async function leesBestand(file){
     $("voorstel").classList.remove("verborgen");
     melding("leesStatus", regels.length?"ok":"warn",
       regels.length
-        ? "Gelezen: "+esc(gelezen.naam||"(naam niet gevonden)")+" met "+regels.length+" artikelregel(s). Kijk het hieronder na."
-        : "De bedrijfsgegevens zijn gelezen, maar er zijn geen artikelregels herkend. Vul ze hieronder met de hand aan.");
+        ? "Gelezen: "+esc(gelezen.naam||"(naam nog invullen)")+" met "+regels.length+" artikelregel(s). Kijk het hieronder na."
+        : "De bedrijfsgegevens zijn gelezen. De artikelregels (0 herkend) vul je hieronder met de hand aan.");
     if(window.fpLog) window.fpLog("proforma-gelezen",(gelezen.naam||file.name)+" - "+regels.length+" regels");
-  }catch(e){ console.error(e); melding("leesStatus","bad","Kon de pdf niet lezen: "+esc(e.message)); }
+  }catch(e){ console.error(e); melding("leesStatus","bad","De pdf lezen vraagt een nieuwe poging: "+esc(e.message)); }
 }
 function vulVoorstel(){
   const z=(id,v)=>{ $(id).value=v||""; };
@@ -457,8 +457,8 @@ $("l4Knop").addEventListener("click",async()=>{
     const j=await r.json();
     if(!r.ok||!j.ok) throw new Error(j.error||("HTTP "+r.status));
     if(!j.treffers.length){
-      $("l4Uit").innerHTML="<div class='melding info'>Geen crediteur gevonden voor “"+esc(q)+"”. "+
-        "Deze leverancier bestaat dus nog niet in Logic4 - maak hem daar aan en vul het nummer hiernaast in.</div>";
+      $("l4Uit").innerHTML="<div class='melding info'>0 crediteuren gevonden voor “"+esc(q)+"”. "+
+        "Deze leverancier is dus nieuw in Logic4 - maak hem daar aan en vul het nummer hiernaast in.</div>";
       return;
     }
     $("l4Uit").innerHTML=j.treffers.map(t=>
@@ -467,7 +467,7 @@ $("l4Knop").addEventListener("click",async()=>{
       $("vCrediteur").value=b.dataset.nr;
       melding("bewaarStatus","ok","Crediteur "+esc(b.dataset.nr)+" gekoppeld.");
     }));
-  }catch(e){ $("l4Uit").innerHTML="<div class='melding bad'>Zoeken faalde: "+esc(e.message)+"</div>"; }
+  }catch(e){ $("l4Uit").innerHTML="<div class='melding bad'>Zoeken vraagt een nieuwe poging: "+esc(e.message)+"</div>"; }
 });
 
 /* ─── Gegevens naar Logic4 schrijven ───────────────────────────────────
@@ -495,7 +495,7 @@ $("naarL4").addEventListener("click",async()=>{
     if(!j.ok) throw new Error(j.error||("HTTP "+r.status));
     melding("l4Schrijf","ok","Klaar. Adres en contactgegevens staan nu bij crediteur "+esc(nr)+" in Logic4.");
     if(window.fpLog) window.fpLog("leverancier-naar-logic4","crediteur "+nr+" - "+$("vNaam").value.trim());
-  }catch(e){ melding("l4Schrijf","bad","Wegschrijven faalde: "+esc(e.message)+" - de crediteur bestaat mogelijk nog niet."); }
+  }catch(e){ melding("l4Schrijf","bad","Wegschrijven vraagt een nieuwe poging: "+esc(e.message)+" - kijk of de crediteur al in Logic4 staat."); }
 });
 
 /* ─── Bewaren ──────────────────────────────────────────────────────── */
@@ -515,7 +515,7 @@ async function bewaarOpslag(){
 $("bewaar").addEventListener("click",async()=>{
   const naam=$("vNaam").value.trim();
   if(!naam) return melding("bewaarStatus","bad","Vul eerst de bedrijfsnaam in.");
-  if(!regels.length) return melding("bewaarStatus","bad","Er staat geen enkele artikelregel in de prijslijst.");
+  if(!regels.length) return melding("bewaarStatus","bad","Zet eerst minstens één artikelregel in de prijslijst.");
   const kaart={
     id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),
     naam, naam2:$("vNaam2").value.trim(), adres:$("vAdres").value.trim(), land:$("vLand").value.trim(),
@@ -540,9 +540,9 @@ $("bewaar").addEventListener("click",async()=>{
     await bewaarOpslag();
     tekenLijst();
     melding("bewaarStatus","ok","Bewaard: "+esc(naam)+" met "+regels.length+" artikelen."+
-      (kaart.crediteur?"":" Vergeet niet de crediteur in Logic4 aan te maken en het nummer hier in te vullen."));
+      (kaart.crediteur?"":" Denk eraan de crediteur in Logic4 aan te maken en het nummer hier in te vullen."));
     if(window.fpLog) window.fpLog("leverancier-vastgelegd",naam+" - "+regels.length+" artikelen");
-  }catch(e){ melding("bewaarStatus","bad","Bewaren faalde: "+esc(e.message)); }
+  }catch(e){ melding("bewaarStatus","bad","Bewaren vraagt een nieuwe poging: "+esc(e.message)); }
 });
 $("opnieuw").addEventListener("click",()=>{
   gelezen=null; regels=[]; $("voorstel").classList.add("verborgen");
@@ -613,7 +613,7 @@ async function keurGoed(id){
     tekenLijst();
     melding("bewaarStatus","ok","Goedgekeurd. De prijslijst staat nu in Prijslijsten, in de map “"+esc(kaart.naam)+"”.");
     if(window.fpLog) window.fpLog("prijslijst-goedgekeurd",kaart.naam);
-  }catch(e){ melding("bewaarStatus","bad","Goedkeuren faalde: "+esc(e.message)); }
+  }catch(e){ melding("bewaarStatus","bad","Goedkeuren vraagt een nieuwe poging: "+esc(e.message)); }
 }
 function tekenWacht(){
   const w=(opslag.leveranciers||[]).filter(x=>x.status==="wacht");
@@ -640,7 +640,7 @@ function tekenLijst(){
   tekenWacht();
   const l=(opslag.leveranciers||[]);
   $("lvTel").textContent=l.length;
-  if(!l.length){ $("lvLijst").innerHTML="<p class='lead'>Nog niets vastgelegd.</p>"; return; }
+  if(!l.length){ $("lvLijst").innerHTML="<p class='lead'>Hier komen de vastgelegde leveranciers.</p>"; return; }
   $("lvLijst").innerHTML="<div class='tabelwrap'><table><thead><tr>"+
     "<th>Leverancier</th><th>Land</th><th>Offerte</th><th class='num'>Artikelen</th>"+
     "<th>Crediteur in Logic4</th><th>Prijslijst</th><th>Vastgelegd</th></tr></thead><tbody>"+

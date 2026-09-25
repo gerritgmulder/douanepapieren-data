@@ -293,8 +293,8 @@ function toonDash(){
 
   var mijn = window.fpTegels ? window.fpTegels.voor(wie, { alleenMobiel: true }) : [];
   if (!mijn.length) {
-    el("tegelblok").innerHTML = '<div class="uitleg">Er staat voor jouw account geen enkele tegel klaar. ' +
-      'Klopt dat niet, geef het dan door aan Gerrit.</div>';
+    el("tegelblok").innerHTML = '<div class="uitleg">Je account heeft nog 0 tegels op de telefoon. ' +
+      'Hoort er een bij, geef het dan door aan Gerrit.</div>';
     return;
   }
 
@@ -338,7 +338,7 @@ function toonDash(){
       e.preventDefault();
       el("wsTekst").textContent = a.dataset.naam + " is gebouwd voor een breed scherm, en een deel " +
         "ervan haalt zijn gegevens op bij het programma dat op de werkplek draait. Openen kan, " +
-        "maar reken erop dat je moet schuiven en dat niet alles werkt.";
+        "maar reken erop dat je moet schuiven en dat een deel pas op de werkplek werkt.";
       el("wsDoor").onclick = function(){ location.href = a.getAttribute("href"); };
       el("waarschuwing").classList.add("aan");
     };
@@ -514,7 +514,7 @@ el("inlogForm").onsubmit = async function(e){
     if (!r.ok || !j || !j.ok || !j.teamkey) {
       toonInlog(r.status === 429
         ? "Te veel pogingen. Probeer het over een kwartier opnieuw."
-        : "Inloggen mislukt. Klopt de gebruikersnaam en het wachtwoord?");
+        : "Inloggen vraagt een nieuwe poging. Kijk de gebruikersnaam en het wachtwoord even na.");
       return;
     }
     bewaar(blijf, {
@@ -528,7 +528,7 @@ el("inlogForm").onsubmit = async function(e){
     el("vWachtwoord").value = "";
     toonDash();
   } catch (err) {
-    toonInlog("Geen verbinding. Staat het internet aan?");
+    toonInlog("Wacht op verbinding. Staat het internet aan?");
   } finally {
     el("knopInlog").disabled = false;
     el("knopInlog").textContent = "Inloggen";
@@ -546,7 +546,7 @@ el("knopUit").onclick = function(){
     document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;' +
       'border-radius:12px;padding:30px;text-align:center;font-family:Montserrat,sans-serif">' +
       '<h1 style="color:#144734;font-size:19px;margin:0 0 10px">Even opnieuw laden</h1>' +
-      '<p style="color:#6b7280;font-size:14px;line-height:1.55">Er ontbreekt een bestand dat bepaalt wie ' +
+      '<p style="color:#6b7280;font-size:14px;line-height:1.55">Er is nog een bestand nodig dat bepaalt wie ' +
       'welke tegel mag zien. Ververs de pagina; blijft dit staan, geef het dan door aan Gerrit.</p></div>';
     return;
   }

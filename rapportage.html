@@ -294,8 +294,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     </div>
     <p style="margin:0 0 14px;font-size:13px;color:var(--muted);">
       Reviews waar het systeem een adviseur vermoedt op basis van de naam in de tekst.
-      Don/Arno kiezen de juiste adviseur en klikken "Toewijzen". Geen match? Selecteer
-      "—" en de review wordt overgeslagen (telt niet mee voor sterren).
+      Don/Arno kiezen de juiste adviseur en klikken "Toewijzen". Is de adviseur onbekend? Selecteer
+      "(overslaan)"; de review telt dan buiten de sterren.
     </p>
     <table class="reviews" id="suggestionsTable">
       <thead>
@@ -338,7 +338,7 @@ const RAPPORTAGE_ALLOWED = new Set([
   if (!RAPPORTAGE_ALLOWED.has(email)) {
     document.body.innerHTML =
       "<main style='padding:40px;text-align:center;'>" +
-      "<h1>Geen toegang</h1>" +
+      "<h1>Rapportage</h1>" +
       "<p>Rapportage is alleen voor Gerrit, Don, Arno, Dolf en Fonteynbot.</p>" +
       "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
     throw new Error("Geen toegang");
@@ -385,7 +385,7 @@ async function logic4(path, body) {
   });
   if (!r.ok) throw new Error(`${path}: HTTP ${r.status}`);
   const j = await r.json();
-  if (!j.ok) throw new Error(`${path}: ${j.data?.Message || j.error || "Onbekende fout"}`);
+  if (!j.ok) throw new Error(`${path}: ${j.data?.Message || j.error || "onbekende reden"}`);
   return j.data;
 }
 
@@ -590,7 +590,7 @@ async function saveTargetsFromUI() {
     renderTargets();
     updateKpiTargetFromState();
   } catch (e) {
-    alert("Opslaan mislukt: " + e.message);
+    alert("Opslaan vraagt een nieuwe poging: " + e.message);
   } finally {
     $("btnSaveTargets").disabled = false;
     $("btnSaveTargets").textContent = "💾 Opslaan";
@@ -642,10 +642,10 @@ async function loadKPIs() {
       fetchOrdersByStatus(STATUS_VOLLEDIG_BETAALD, lastYearStart),
     ]);
   } catch (e) {
-    setKpi("kpiOmzet", "Fout", e.message);
-    setKpi("kpiTarget", "—", "Target nog niet ingesteld");
-    setKpi("kpiAantallen", "Fout", "");
-    setKpi("kpiVorigJaar", "Fout", "");
+    setKpi("kpiOmzet", "Opnieuw laden", e.message);
+    setKpi("kpiTarget", "—", "Target nog in te stellen");
+    setKpi("kpiAantallen", "Opnieuw laden", "");
+    setKpi("kpiVorigJaar", "Opnieuw laden", "");
     console.error(e);
     return;
   }
@@ -796,7 +796,7 @@ async function refreshAdvisors() {
     } else {
       // Demo blijft staan; tag toont expliciet wat we doen
       const tag = document.getElementById("reviewsModeTag");
-      if (tag) tag.textContent = `Demo-data (geen Logic4-endpoint gevonden)`;
+      if (tag) tag.textContent = `Demo-data (adviseurs uit Logic4 nog te koppelen)`;
     }
   } catch (e) {
     console.error("[advisors] laden mislukt:", e);
@@ -999,7 +999,7 @@ function renderReviews() {
           <div class="reason">${escapeHtml(top.reasons.join(" + "))}</div>
         </div>`;
     } else {
-      suggestionCell = `<div class="suggestion" style="color:var(--muted);">— geen naam herkend —</div>`;
+      suggestionCell = `<div class="suggestion" style="color:var(--muted);">- naam nog te kiezen -</div>`;
     }
 
     // Dropdown met alle adviseurs, defaults op de top-suggestie
@@ -1159,13 +1159,13 @@ refreshAdvisors();       // probeert Logic4; bij succes re-rendert met echte lij
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

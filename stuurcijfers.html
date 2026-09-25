@@ -434,7 +434,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 
     <div id="content">
       <div class="empty" id="emptyState">
-        <h3>Nog geen data geladen</h3>
+        <h3>Klaar voor de eerste import</h3>
         <p>Importeer de meest recente Logic4-export (de Excel die je voorheen handmatig bijwerkte) om te beginnen. Daarna kun je elk tabblad bekijken en bewerken.</p>
       </div>
     </div>
@@ -555,7 +555,7 @@ async function boot() {
     await refreshTables();
     showOverview();
   } catch (e) {
-    toast("Helper-server onbereikbaar.", true);
+    toast("Wacht op de helper-server.", true);
     buildSidebar();
     showOverview();
   }
@@ -594,7 +594,7 @@ function setActiveNav(name) {
 async function refreshTables() {
   try {
     const r = await apiFetch("/api/stuurcijfers/tables");
-    if (r.status === 403) { toast("Geen toegang tot stuurcijfers.", true); return; }
+    if (r.status === 403) { toast("Stuurcijfers is voor de directie.", true); return; }
     if (!r.ok) return;
     const j = await r.json();
     const map = Object.fromEntries((j.tables || []).map(t => [t.name, t]));
@@ -622,7 +622,7 @@ async function showOverview() {
   try {
     inputs = await loadInputsForRecalc();
   } catch (e) {
-    el("content").innerHTML = `<div class="empty"><h3>Fout</h3><p>${escapeHtml(e.message)}</p></div>`;
+    el("content").innerHTML = `<div class="empty"><h3>Even opnieuw proberen</h3><p>${escapeHtml(e.message)}</p></div>`;
     return;
   }
 
@@ -631,7 +631,7 @@ async function showOverview() {
   if (!hasGT) {
     el("content").innerHTML = `
       <div class="empty">
-        <h3>Nog geen data geladen</h3>
+        <h3>Klaar voor de eerste import</h3>
         <p>Importeer de meest recente Logic4-export (de Excel die je voorheen handmatig bijwerkte) om te beginnen. Daarna verschijnen hier automatisch de stuurcijfers en wat opvalt.</p>
       </div>`;
     refreshTables();
@@ -677,7 +677,7 @@ async function showOverview() {
         </div>
       ` : `
         <p style="color:var(--muted);font-size:13px;margin:8px 0 0">
-          Geen significante afwijkingen gevonden — de cijfers liggen binnen normale bandbreedtes.
+          Alle cijfers liggen binnen de normale bandbreedtes.
         </p>
       `}
     </div>
@@ -841,8 +841,8 @@ function setSaveStatus(state, msg) {
   elS.querySelector(".label").textContent =
     msg ?? (state === "saved" ? "Opgeslagen" :
             state === "saving" ? "Opslaan…" :
-            state === "dirty" ? "Niet opgeslagen" :
-            state === "error" ? "Fout bij opslaan" : "—");
+            state === "dirty" ? "Nog op te slaan" :
+            state === "error" ? "Opslaan vraagt een nieuwe poging" : "—");
 }
 
 async function saveCurrentTable() {
@@ -857,7 +857,7 @@ async function saveCurrentTable() {
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
-      setSaveStatus("error", "Fout: " + (j.error || r.status));
+      setSaveStatus("error", "Nieuwe poging nodig: " + (j.error || r.status));
       editor.saving = false;
       return;
     }
@@ -876,7 +876,7 @@ async function saveCurrentTable() {
     refreshTables();
   } catch (e) {
     editor.saving = false;
-    setSaveStatus("error", "Fout: " + e.message);
+    setSaveStatus("error", "Nieuwe poging nodig: " + e.message);
   }
 }
 
@@ -1102,12 +1102,12 @@ async function selectTable(name) {
   try {
     const r = await apiFetch(`/api/stuurcijfers/tables/${name}`);
     if (!r.ok) {
-      el("content").innerHTML = `<div class="empty"><h3>Fout</h3><p>Kon tabel niet laden (status ${r.status}).</p></div>`;
+      el("content").innerHTML = `<div class="empty"><h3>Even opnieuw proberen</h3><p>Tabel laden vraagt een nieuwe poging (status ${r.status}).</p></div>`;
       return;
     }
     data = await r.json();
   } catch (e) {
-    el("content").innerHTML = `<div class="empty"><h3>Fout</h3><p>${escapeHtml(e.message)}</p></div>`;
+    el("content").innerHTML = `<div class="empty"><h3>Even opnieuw proberen</h3><p>${escapeHtml(e.message)}</p></div>`;
     return;
   }
 
@@ -1208,7 +1208,7 @@ function openDrillDrawer(meta, rowLabel, colLabel, cellValue) {
   } else if (meta.kind === "compose") {
     drillCompose(meta, cellValue);
   } else {
-    el("drawerBody").innerHTML = `<div class="empty-msg">Voor deze cel is geen drill-down beschikbaar.</div>`;
+    el("drawerBody").innerHTML = `<div class="empty-msg">Voor deze cel is alleen het getal zelf beschikbaar.</div>`;
     el("drawerFoot").textContent = "";
   }
 }
@@ -1292,7 +1292,7 @@ function drillCompose(meta, cellValue) {
   el("drawerSummary").innerHTML = `<div style="font-size:13px;color:var(--muted)">${escapeHtml(meta.description)}</div><div class="total">${formatNL(cellValue)}</div>`;
   const parts = meta.parts || [];
   if (!parts.length) {
-    el("drawerBody").innerHTML = `<div class="empty-msg">Geen onderliggende delen gevonden.</div>`;
+    el("drawerBody").innerHTML = `<div class="empty-msg">0 onderliggende delen gevonden.</div>`;
     el("drawerFoot").textContent = "";
     return;
   }
@@ -1324,7 +1324,7 @@ function renderDrillSummary(meta, totalSigned, count, cellValue) {
 
 function renderDrillRows(columns, rows, valueIdx, sign) {
   if (!rows.length) {
-    el("drawerBody").innerHTML = `<div class="empty-msg">Geen transacties gevonden voor deze filter.</div>`;
+    el("drawerBody").innerHTML = `<div class="empty-msg">0 transacties gevonden voor deze filter.</div>`;
     el("drawerFoot").textContent = "0 transacties";
     return;
   }
@@ -1375,7 +1375,7 @@ el("excelInput").addEventListener("change", async (ev) => {
     const buf = await file.arrayBuffer();
     workbook = XLSX.read(buf, { type: "array" });
   } catch (e) {
-    toast("Kon Excel niet lezen: " + e.message, true);
+    toast("Excel lezen vraagt een nieuwe poging: " + e.message, true);
     return;
   }
 
@@ -1409,7 +1409,7 @@ el("excelInput").addEventListener("change", async (ev) => {
   }
 
   if (errors.length) {
-    toast(`${saved} tabellen opgeslagen, ${errors.length} fout(en).`, true);
+    toast(`${saved} tabellen opgeslagen, ${errors.length} vragen een nieuwe poging.`, true);
     console.error("Stuurcijfers-import errors:", errors);
   } else {
     toast(`${saved} tabellen geïmporteerd, OUT_-tabellen herberekenen…`);
@@ -1421,7 +1421,7 @@ el("excelInput").addEventListener("change", async (ev) => {
     await recalcOutTables();
     toast(`Klaar — ${saved} input-tabellen + OUT_-tabellen bijgewerkt.`);
   } catch (e) {
-    toast("Recalc faalde: " + e.message, true);
+    toast("Herberekenen vraagt een nieuwe poging: " + e.message, true);
   }
 });
 
@@ -1494,13 +1494,13 @@ boot();
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

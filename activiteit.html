@@ -97,7 +97,7 @@
   </div>
   <div id="filterUitleg" class="hidden" style="font-size:12.5px;color:var(--fonteyn-green);background:#f2f8e8;border:1px solid #dbe9c6;border-radius:8px;padding:8px 12px;margin:-2px 0 12px"></div>
 
-  <div id="deny" class="status-msg bad hidden">Geen toegang tot het activiteitenlogboek.</div>
+  <div id="deny" class="status-msg bad hidden">Deze tegel is voor beheer.</div>
 
   <div id="content">
     <div id="kpis" class="kpi-row"></div>
@@ -115,7 +115,7 @@
       <p class="lead" style="font-size:12px;margin:-6px 0 10px">
         Precies wat deze medewerker zelf bovenaan het dashboard ziet: de eigen taken, de
         terugkerende momenten die aan de beurt zijn, en de berichten over de eigen tegels die nog
-        niet zijn weggeklikt. Klik op een naam om het open te vouwen.
+        open staan. Klik op een naam om het open te vouwen.
       </p>
       <div class="controls" style="margin-bottom:12px">
         <label style="font-size:12px;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer">
@@ -274,7 +274,7 @@ function renderApparaten(evs){
   const nieuwsteTekst = (Object.values(per).find(a=>versieGetal(a.versie)===nieuwste)||{}).versie || "";
   const ids=Object.keys(per).sort((a,b)=>per[b].n-per[a].n);
   if(!ids.length){
-    box.innerHTML="<p class='lead' style='font-size:12.5px'>Nog geen computers herkend. Dat verschijnt zodra iemand het dashboard opnieuw opstart.</p>";
+    box.innerHTML="<p class='lead' style='font-size:12.5px'>Computers verschijnen hier zodra iemand het dashboard opnieuw opstart.</p>";
     return;
   }
   /* Een computer die meer dan een halve versie achterloopt krijgt een label.
@@ -284,9 +284,9 @@ function renderApparaten(evs){
     const g=versieGetal(v);
     if(!g || !nieuwste || g>=nieuwste) return "";
     const stappen=Math.round((nieuwste-g)/1000);
-    if(stappen<2) return " <span style='color:var(--muted);font-size:11px'>(nog niet herstart)</span>";
+    if(stappen<2) return " <span style='color:var(--muted);font-size:11px'>(wacht op herstart)</span>";
     return " <span style='background:#fee2e2;color:#b91c1c;padding:1px 6px;border-radius:8px;font-size:11px' "+
-      "title='De nieuwste die hier draait is "+esc(nieuwsteTekst)+". Loopt een computer ver achter, dan lukt bijwerken daar niet vanzelf meer.'>loopt achter</span>";
+      "title='De nieuwste die hier draait is "+esc(nieuwsteTekst)+". Loopt een computer ver achter, dan vraagt bijwerken daar extra aandacht.'>loopt achter</span>";
   }
   box.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr><th>Computer</th><th>Naam geven</th><th>Gebruikt door</th><th>Platform</th><th>App-versie</th><th>Acties</th><th>Laatst gezien</th></tr></thead><tbody>"+
     ids.map(id=>{
@@ -312,7 +312,7 @@ function actionPill(a){
   if(a==="open") return "<span class='pill'>geopend</span>";
   // Iemand klikte/navigeerde naar een tegel waar hij geen rechten voor heeft en
   // kreeg het toegangsscherm. Hij heeft dus niets gezien.
-  if(a==="open-geweigerd") return "<span class='pill' style='background:#fee2e2;color:#b91c1c'>geen toegang</span>";
+  if(a==="open-geweigerd") return "<span class='pill' style='background:#fee2e2;color:#b91c1c'>toegangsscherm</span>";
   return "<span class='pill' style='background:#ffedd5;color:#c2410c'>"+esc(String(a).replace(/-/g," "))+"</span>";
 }
 
@@ -419,7 +419,7 @@ function vulFilters(){
 function actieNaam(a){
   if(a==="login") return "ingelogd";
   if(a==="open") return "tegel geopend";
-  if(a==="open-geweigerd") return "geen toegang";
+  if(a==="open-geweigerd") return "toegangsscherm";
   return String(a).replace(/-/g," ");
 }
 // Wat staat er aan, in gewone taal. Zonder dit is een lege tabel niet te
@@ -468,7 +468,7 @@ function render(){
     return "<tr><td><b>"+esc(u)+"</b></td><td>"+afdelingPill(u)+"</td><td>"+rollen+"</td><td>"+d.login+"</td><td>"+d.open+"</td>"+
       "<td>"+(d.wijz?"<b style='color:#c2410c'>"+d.wijz+"</b>":"0")+"</td><td>"+d.days.size+"</td>"+
       "<td style='font-size:12px'>"+(d.last?new Date(d.last).toLocaleString("nl-NL"):"—")+"</td><td style='font-size:12px'>"+top+"</td></tr>";
-  }).join("")||"<tr><td colspan='9' style='color:var(--muted)'>Nog geen activiteit deze maand.</td></tr>";
+  }).join("")||"<tr><td colspan='9' style='color:var(--muted)'>0 activiteiten deze maand.</td></tr>";
   const sorted=evs.slice().sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
   // Wijzigingen apart — wie heeft wat aangepast
   const wijzRijen=sorted.filter(isWijziging);
@@ -478,12 +478,12 @@ function render(){
     "<td><b>"+esc(e.user)+"</b></td><td>"+afdelingPill(e.user)+"</td><td>"+rolPill(e.rol)+"</td>"+
     "<td>"+actionPill(e.action)+detailCel(e.detail,"#374151")+"</td>"+
     "<td style='font-size:12px'>"+esc(tileName(e.tile))+"</td></tr>"
-  ).join("")||"<tr><td colspan='6' style='color:var(--muted)'>Geen wijzigingen"+geenTreffers+".</td></tr>";
+  ).join("")||"<tr><td colspan='6' style='color:var(--muted)'>0 wijzigingen"+geenTreffers+".</td></tr>";
   // Alle gebeurtenissen (nieuwste eerst)
   document.getElementById("evCount").textContent="("+sorted.length+")";
   document.getElementById("events").innerHTML=sorted.slice(0,1000).map(e=>
     "<tr><td style='font-size:12px;white-space:nowrap'>"+new Date(e.ts).toLocaleString("nl-NL")+"</td><td>"+esc(e.user)+"</td><td>"+afdelingPill(e.user)+"</td><td>"+rolPill(e.rol)+"</td><td>"+actionPill(e.action)+"</td><td>"+esc(tileName(e.tile))+detailCel(e.detail,"var(--muted)"," · ")+"</td><td>"+apparaatTekst(e)+"</td></tr>"
-  ).join("")||"<tr><td colspan='7' style='color:var(--muted)'>Geen gebeurtenissen"+geenTreffers+".</td></tr>";
+  ).join("")||"<tr><td colspan='7' style='color:var(--muted)'>0 gebeurtenissen"+geenTreffers+".</td></tr>";
   koppelDetails();
   renderApparaten(evs);
 }
@@ -570,7 +570,7 @@ function koppelDetails(){
   function regelRitme(r){
     return "<li><b>"+esc2(r.ritme.titel)+"</b> · "+esc2(r.ritme.wat)+
       "<span style='color:var(--muted)'> · "+
-      (r.laatst ? "laatst gedaan op "+esc2(dm(r.laatst)) : "nog nooit gedaan")+"</span></li>";
+      (r.laatst ? "laatst gedaan op "+esc2(dm(r.laatst)) : "voor het eerst aan de beurt")+"</span></li>";
   }
   function regelNieuws(n){
     return "<li><b>"+esc2(n.titel)+"</b> · "+esc2(n.wat)+
@@ -618,24 +618,24 @@ function koppelDetails(){
         bolletje(r.ritmes.length, "#ede9fe", "terugkerend") +
         bolletje(sig.length, "#fef3c7", sig.length===1?"signaal":"signalen") +
         bolletje(r.nieuws.length + r.nieuweTegels.length, "#dcfce7", "ongelezen");
-      if (!merken) merken = "<span style='color:var(--muted);font-size:12px'>niets open</span>";
+      if (!merken) merken = "<span style='color:var(--muted);font-size:12px'>alles bij</span>";
 
       /* Wanneer zijn de berichten voor het laatst weggeklikt? Staat hier
          "nog niet geopend", dan is er sinds deze berichten bestaan niet meer
          ingelogd - dat is op zichzelf al iets om te weten. */
       var gelezen = r.nooitGeopend
-        ? "<span style='color:var(--muted)'>dashboard nog niet geopend sinds de berichten er zijn</span>"
+        ? "<span style='color:var(--muted)'>laatst geopend vóór deze berichten</span>"
         : (r.gezien ? "berichten gelezen op " + esc2(dm(r.gezien))
-                    : "<span style='color:var(--muted)'>berichten nog niet weggeklikt</span>");
+                    : "<span style='color:var(--muted)'>berichten staan nog open</span>");
 
       var body = "";
       if (r.nieuweTegels.length) body += "<h5>Tegels die erbij zijn gekomen</h5><ul>"+r.nieuweTegels.map(regelTegel).join("")+"</ul>";
-      if (r.nieuws.length)       body += "<h5>Berichten die nog niet gelezen zijn</h5><ul>"+r.nieuws.map(regelNieuws).join("")+"</ul>";
+      if (r.nieuws.length)       body += "<h5>Nog te lezen berichten</h5><ul>"+r.nieuws.map(regelNieuws).join("")+"</ul>";
       if (r.taken.length)        body += "<h5>Eigen taken</h5><ul>"+r.taken.map(regelTaak).join("")+"</ul>";
       if (r.ritmes.length)       body += "<h5>Terugkerend, nu aan de beurt</h5><ul>"+r.ritmes.map(regelRitme).join("")+"</ul>";
       if (sig.length)            body += "<h5>Signalen uit Logic4</h5><ul>"+sig.map(regelSignaal).join("")+"</ul>";
-      if (!signalenGehaald)      body += "<p class='mk-noot'>De signalen uit Logic4 staan er nog niet bij. Die haal je met de knop bovenaan op.</p>";
-      if (!body) body = "<p class='mk-noot'>Bij deze medewerker staat er niets open.</p>";
+      if (!signalenGehaald)      body += "<p class='mk-noot'>De signalen uit Logic4 haal je met de knop bovenaan op.</p>";
+      if (!body) body = "<p class='mk-noot'>Bij deze medewerker is alles bij.</p>";
 
       return "<details class='mk'>"+
         "<summary><span class='mk-naam'>"+esc2(voornaam(r.naam))+"</span>"+
@@ -647,12 +647,12 @@ function koppelDetails(){
 
   async function laad(){
     var team = localStorage.getItem("fp.teamkey") || "";
-    if (!team) { doel.innerHTML = "<p class='lead' style='font-size:12.5px'>Geen teamsleutel op deze computer; log opnieuw in.</p>"; return; }
+    if (!team) { doel.innerHTML = "<p class='lead' style='font-size:12.5px'>Log opnieuw in om de teamsleutel op deze computer te zetten.</p>"; return; }
     doel.innerHTML = "<p class='lead' style='font-size:12.5px'>Bezig met ophalen…</p>";
     try {
       rijen = await window.fpTaken.overzicht({ teamKey: team, personen: personen() });
     } catch (e) {
-      doel.innerHTML = "<p class='lead' style='font-size:12.5px'>Ophalen mislukt: "+esc2(e.message||e)+"</p>";
+      doel.innerHTML = "<p class='lead' style='font-size:12.5px'>Ophalen vraagt een nieuwe poging: "+esc2(e.message||e)+"</p>";
       return;
     }
     teken();
@@ -668,7 +668,7 @@ function koppelDetails(){
       body: JSON.stringify({ path: pad, method: methode || "POST", body: body })
     });
     var j = await r.json();
-    if (!r.ok || !j.ok) throw new Error(j.error || "Logic4-aanroep mislukt");
+    if (!r.ok || !j.ok) throw new Error(j.error || "Logic4 vraagt een nieuwe poging");
     return j.data;
   }
 
@@ -685,7 +685,7 @@ function koppelDetails(){
       knop.style.display = "none";
       teken();
     } catch (e) {
-      stand.textContent = "Lukt niet: " + (e.message || e) + ". Dit werkt alleen in de app op de werkplek.";
+      stand.textContent = "Nieuwe poging nodig: " + (e.message || e) + ". Dit werkt in de app op de werkplek.";
       knop.disabled = false;
     }
   });
@@ -782,13 +782,13 @@ function koppelDetails(){
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

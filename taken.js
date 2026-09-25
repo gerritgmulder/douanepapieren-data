@@ -489,9 +489,9 @@
     return (lijst || []).map(function (t) {
       var nr = String(t.week || "").split("-W")[1] || "?";
       return {
-        bron: "taakuitnodiging", titel: "Taak aannemen of weigeren",
+        bron: "taakuitnodiging", titel: "Taak aannemen of afslaan",
         actie: "Van " + String(t.door || "").split("@")[0].replace(/^fonteyn\./, "") +
-               "; zolang je niet antwoordt weet hij niet of je hem doet",
+               "; met jouw antwoord weet hij of je hem doet",
         verwijzing: t.tekst || "",
         detail: "week " + nr,
         bedrag: 0, eenheid: "", datum: (t.deelnemers && t.deelnemers[
@@ -592,7 +592,7 @@
     var titel = eltje("h3", null, "Wat staat er voor je klaar");
     kop.appendChild(titel);
     var telling = eltje("span", "taken-telling",
-      totaal === 0 ? "niets open" : totaal + (totaal === 1 ? " punt" : " punten"));
+      totaal === 0 ? "alles bij" : totaal + (totaal === 1 ? " punt" : " punten"));
     if (totaal === 0) telling.classList.add("leeg");
     kop.appendChild(telling);
     kaart.appendChild(kop);
@@ -609,7 +609,7 @@
         aantal === 1 ? "Nieuw voor jou" : "Nieuw voor jou  ·  " + aantal + " berichten"));
       var weg = eltje("button", "nieuw-weg", "Gelezen");
       weg.type = "button";
-      weg.title = "Wegklikken. Je krijgt ze niet nog een keer.";
+      weg.title = "Wegklikken. Daarna staan ze voor jou op gelezen.";
       weg.addEventListener("click", function () {
         nieuwsWegklikken();
         if (cfg.log) cfg.log("dashboard", "nieuwsberichten gelezen", aantal + " berichten");
@@ -762,7 +762,7 @@
       kopje.appendChild(document.createTextNode(" " + r.ritme.titel));
       mid.appendChild(kopje);
       mid.appendChild(eltje("div", "taak-sub", r.ritme.wat +
-        (r.laatst ? "  ·  laatst gedaan op " + nlDatum(r.laatst) : "  ·  nog niet eerder gedaan")));
+        (r.laatst ? "  ·  laatst gedaan op " + nlDatum(r.laatst) : "  ·  voor het eerst aan de beurt")));
       rij.appendChild(mid);
       if (r.ritme.tegel) {
         var ga = eltje("a", "taak-ga", "Openen");
@@ -816,7 +816,7 @@
 
     if (!lijst.children.length) {
       lijst.appendChild(eltje("div", "taken-leeg",
-        "Er staat niets open. Zodra er iets uit Logic4 komt wat van jou is, verschijnt het hier vanzelf."));
+        "Alles is bij. Zodra er iets uit Logic4 komt wat van jou is, verschijnt het hier vanzelf."));
     }
 
     kaart.appendChild(lijst);

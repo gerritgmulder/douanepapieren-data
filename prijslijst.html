@@ -25,7 +25,7 @@
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
     '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
-    '<div class="gt"><h1>Geen toegang</h1><p>Prijslijst maken is niet beschikbaar voor jouw account.</p>'+
+    '<div class="gt"><h1>Prijslijst maken</h1><p>Deze tegel is voor de afdeling logistiek.</p>'+
     '<p style="font-size:12.5px">Je bent ingelogd als <code>'+(email||"(onbekend)")+'</code>.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
@@ -232,7 +232,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   </div>
   <div class="user">
     <span id="userEmail">—</span>
-    <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-prijslijst (geen leveranciers-PDF nodig)">🎬 Demo</button>
+    <button class="logout hidden" id="demoBtn" type="button" title="Laad een voorbeeld-prijslijst (werkt zonder leveranciers-PDF)">🎬 Demo</button>
     <button class="logout" id="hdr-logout">Uitloggen</button>
   </div>
 </header>
@@ -399,7 +399,7 @@ async function handleFile(file) {
     await processPdf();
   } catch (e) {
     console.error(e);
-    showStatus($("dropStatus"), "Kon PDF niet openen: " + e.message, "error");
+    showStatus($("dropStatus"), "PDF openen vraagt een nieuwe poging: " + e.message, "error");
   }
 }
 
@@ -499,7 +499,7 @@ async function processPdf() {
     }
     diag += "</pre>";
     showStatus($("dropStatus"),
-      `<b>Geen producten herkend</b> in deze PDF (${state.format}-formaat). De heuristiek vond geen rijen die op productrijen leken.<br><br>${diag}Stuur deze diagnostiek door — dan tune ik de parser.`,
+      `<b>0 producten herkend</b> in deze PDF (${state.format}-formaat). Deze opmaak is nog onbekend voor de lezer.<br><br>${diag}Stuur deze diagnostiek door, dan pas ik de lezer aan.`,
       "error");
     return;
   }
@@ -923,7 +923,7 @@ $("generate").addEventListener("click", async () => {
     showStatus($("genStatus"), `✓ ${fname} gedownload.`, "ok");
   } catch (e) {
     console.error(e);
-    showStatus($("genStatus"), "Genereren mislukt: " + e.message, "error");
+    showStatus($("genStatus"), "Genereren vraagt een nieuwe poging: " + e.message, "error");
   } finally {
     btn.disabled = false;
   }
@@ -1244,13 +1244,13 @@ function loadPrijslijstDemo() {
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

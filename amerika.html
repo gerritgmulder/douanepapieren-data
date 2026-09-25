@@ -130,7 +130,7 @@
         <h3 style="margin:0">Onderweg naar Houston</h3>
         <span id="zdTel" style="font-size:12px;color:var(--muted)"></span>
       </div>
-      <p class="lead" style="font-size:12.5px;margin:8px 0 12px">Elke bestelling die je bij <b>Containers</b> uit een proforma hebt aangemaakt staat hier. Zolang er geen commercial invoice bij zit, staat hij <b>in productie</b>. Upload je die, dan schuift hij door naar <b>onderweg</b> en kun je de verwachte aankomst invullen.</p>
+      <p class="lead" style="font-size:12.5px;margin:8px 0 12px">Elke bestelling die je bij <b>Containers</b> uit een proforma hebt aangemaakt staat hier. Zolang de commercial invoice nog volgt, staat hij <b>in productie</b>. Upload je die, dan schuift hij door naar <b>onderweg</b> en kun je de verwachte aankomst invullen.</p>
       <div id="zdStatus" class="status-msg hidden" style="margin-bottom:10px"></div>
       <div id="zdInProductie"></div>
       <div id="zdOnderweg" style="margin-top:18px"></div>
@@ -161,13 +161,13 @@
 
     <div class="card" id="vlOverigKaart">
       <h3>Onderdelen, covers en trapjes in Houston</h3>
-      <p class="lead" style="font-size:12.5px;margin-bottom:10px">Artikelen op dit magazijn die geen spa, sauna of ijsbad zijn. Hier had niemand een telling van; dit komt rechtstreeks uit Logic4.</p>
+      <p class="lead" style="font-size:12.5px;margin-bottom:10px">Artikelen op dit magazijn buiten de spa's, sauna's en ijsbaden om. Hiervan komt de stand rechtstreeks uit Logic4.</p>
       <div id="vlOverig"></div>
     </div>
 
     <div class="card" id="vlVerschilKaart">
       <h3>Verschil met de telling van 20-07-2026</h3>
-      <p class="lead" style="font-size:12.5px;margin-bottom:10px">Zolang de getelde beginvoorraad nog niet in Logic4 staat, lopen deze twee uiteen. Dit is de werklijst om dat recht te zetten; is een regel 0, dan klopt het.</p>
+      <p class="lead" style="font-size:12.5px;margin-bottom:10px">Zolang de getelde beginvoorraad nog in Logic4 gezet moet worden, lopen deze twee uiteen. Dit is de werklijst om dat recht te zetten; is een regel 0, dan klopt het.</p>
       <div id="vlVerschil"></div>
     </div>
 
@@ -177,7 +177,7 @@
          terugwerkende kracht afboeken, dus we moeten dit strak trekken." -->
     <div class="card" id="vlTellingKaart">
       <h3>Telling naar Logic4 zetten</h3>
-      <p class="lead" style="font-size:12.5px;margin-bottom:10px">Dit maakt van de telling een <b>voorraadcontrole</b> in Logic4 op de locatie Warehouse Texas USA: per artikel het getelde aantal naast wat Logic4 er nu heeft. Daarna verwerk je die controle in Logic4 zelf (Voorraad, Voorraadcontrole), en dan staat Houston gelijk aan de telling en gaat elke verkoop er vanaf het juiste getal af. Klopt een trim niet (grey of oak), pas het getelde aantal hieronder aan voordat je hem klaarzet.</p>
+      <p class="lead" style="font-size:12.5px;margin-bottom:10px">Dit maakt van de telling een <b>voorraadcontrole</b> in Logic4 op de locatie Warehouse Texas USA: per artikel het getelde aantal naast wat Logic4 er nu heeft. Daarna verwerk je die controle in Logic4 zelf (Voorraad, Voorraadcontrole), en dan staat Houston gelijk aan de telling en gaat elke verkoop er vanaf het juiste getal af. Wijkt een trim af (grey of oak), pas het getelde aantal hieronder aan voordat je hem klaarzet.</p>
       <div class="actions" style="gap:10px;align-items:center;margin:0 0 10px">
         <label style="font-size:12.5px">Peildatum van de telling <input type="date" id="vlTelDatum" style="padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit"></label>
         <button class="btn" type="button" id="vlTelProef">Voorstel maken</button>
@@ -215,8 +215,8 @@
       <div id="vhTransportDetail" style="margin-top:14px"></div>
     </div>
     <div class="card" id="vhOntbreektKaart" style="display:none">
-      <h3>Nog geen inkoopprijs — <span id="vhOntbreektTotaal">0</span> stuks</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Van deze modellen staat geen fabrieksprijs op een commercial invoice die het dashboard kent. Zolang die ontbreekt tellen ze niet mee in de inkoopwaarde hierboven. Stuur de commercial invoice of de proforma van de fabriek en ze staan er de volgende keer bij.</p>
+      <h3>Inkoopprijs volgt — <span id="vhOntbreektTotaal">0</span> stuks</h3>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Van deze modellen wacht de fabrieksprijs nog op een commercial invoice die het dashboard kent. Zodra die er is tellen ze mee in de inkoopwaarde hierboven. Stuur de commercial invoice of de proforma van de fabriek en ze staan er de volgende keer bij.</p>
       <div id="vhOntbreekt"></div>
     </div>
   </div>
@@ -238,7 +238,7 @@
          Warehouse Texas als bestemming (Chantal, 30 jul). -->
     <div class="card" id="ikoCard">
       <h3>Proforma invoice → inkooporder in Logic4</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Upload de <b>proforma invoice</b> van de fabriek voor Amerika. Het dashboard leest hem uit en laat zien welke inkooporder hij zou aanmaken. <b>Er wordt niets weggeschreven tot je zelf op akkoord klikt.</b> De order krijgt <b>Warehouse Texas USA</b> als bestemming in de opmerking mee.</p>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Upload de <b>proforma invoice</b> van de fabriek voor Amerika. Het dashboard leest hem uit en laat zien welke inkooporder hij zou aanmaken. <b>Er wordt pas iets weggeschreven zodra je zelf op akkoord klikt.</b> De order krijgt <b>Warehouse Texas USA</b> als bestemming in de opmerking mee.</p>
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <input type="file" id="ikoFile" accept=".xlsx,.xls,.csv">
         <input type="text" id="ikoRef" placeholder="proforma-referentie" style="min-width:200px">
@@ -252,13 +252,13 @@
   <!-- ===== QuickBooks (nog te koppelen) ===== -->
   <div id="tab-quickbooks" class="hidden">
     <div class="card">
-      <h3>QuickBooks-koppeling — status: <span id="qbStatus" style="color:var(--warn)">nog niet gekoppeld</span></h3>
+      <h3>QuickBooks-koppeling — status: <span id="qbStatus" style="color:var(--warn)">koppeling volgt</span></h3>
       <p class="lead" style="font-size:13px">De verkoop van Audrey aan de US-dealers zit in QuickBooks Online. Dat kan gekoppeld worden via de
         officiële QuickBooks-API (gratis; hoort bij het QuickBooks-abonnement). Om te koppelen is dit nodig:</p>
       <div class="step"><b>1. Intuit-developer-app</b> — iemand maakt (gratis) een app op developer.intuit.com en geeft mij de <code>Client ID</code> + <code>Client Secret</code>.</div>
       <div class="step"><b>2. Redirect-adres</b> — in die app registreren we <code>https://fonteyn-data-store.g-mulder.workers.dev/amerika/qb/callback</code> als Redirect URI.</div>
       <div class="step"><b>3. Eénmalige toestemming</b> — iemand met toegang tot de US-QuickBooks (Audrey/Chantal) klikt één keer op "Verbinden" en logt in bij QuickBooks. Daarna onthoudt het systeem de toegang (met automatische vernieuwing).</div>
-      <p class="lead" style="font-size:12.5px;margin-top:14px">Zodra dit er is, verschijnen hier automatisch de US-facturen, klanten/dealers en openstaande bedragen — read-only, net als de rest van het dashboard. Ik zet niets live wat geld kan verplaatsen.</p>
+      <p class="lead" style="font-size:12.5px;margin-top:14px">Zodra dit er is, verschijnen hier automatisch de US-facturen, klanten/dealers en openstaande bedragen — read-only, net als de rest van het dashboard. Alles blijft meekijken; geld verplaatsen doe je in Logic4 zelf.</p>
       <button class="btn solid" id="qbConnectBtn" type="button" disabled style="opacity:.5">Verbinden met QuickBooks (wacht op app-gegevens)</button>
     </div>
     <!-- Zoeken in de QuickBooks-lijst (Chantal, video 30 aug 2026: "ik moet
@@ -276,7 +276,7 @@
   <div id="tab-audrey" class="hidden">
     <div class="card">
       <h3>Wire-overzicht van Audrey inlezen</h3>
-      <p class="lead" style="font-size:13px"><b>De makkelijkste manier: plakken.</b> Open Audrey's mail, selecteer de tabel met bedragen (of de hele mail met Ctrl+A), kopieer met Ctrl+C en plak hem hieronder met Ctrl+V. Meer is het niet - je hoeft niets op te slaan.
+      <p class="lead" style="font-size:13px"><b>De makkelijkste manier: plakken.</b> Open Audrey's mail, selecteer de tabel met bedragen (of de hele mail met Ctrl+A), kopieer met Ctrl+C en plak hem hieronder met Ctrl+V. Dat is alles - opslaan doet het systeem zelf.
         Het systeem leest de tabel letterlijk uit: de <b>Balance</b>-regel, elke factuurregel (bijv. <code>3553 Paradise</code>) met het <b>factuurbedrag</b> (amount invoice), <b>bankkosten</b> en - indien aanwezig - <b>totaal</b>.</p>
       <!-- Plakvak. Chantal (video, 29 aug 2026): "ik kan de mail helemaal niet
            opslaan als EML... dan staat er helemaal geen e-mail tussen." In de
@@ -292,7 +292,7 @@
       </div>
       <details style="margin-top:14px">
         <summary style="font-size:12.5px;color:var(--muted);cursor:pointer">Liever een bestand uploaden?</summary>
-        <p class="lead" style="font-size:12.5px;margin:8px 0">Kan ook, als je de mail als bestand hebt: .eml, .txt of .html. Lukt 'Opslaan als' niet in jouw Outlook, gebruik dan gewoon plakken hierboven.</p>
+        <p class="lead" style="font-size:12.5px;margin:8px 0">Kan ook, als je de mail als bestand hebt: .eml, .txt of .html. Werkt 'Opslaan als' anders in jouw Outlook, gebruik dan gewoon plakken hierboven.</p>
         <div class="actions" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
           <input type="file" id="audFile" accept=".eml,.txt,.html" style="font-size:13px">
           <button class="btn solid" id="audBtn" type="button">Inlezen &amp; opslaan</button>
@@ -402,7 +402,7 @@ async function vhHaalKoers(){
     const j=await r.json();
     if(j&&j.ok) vhKoers={koers:Number(j.koers),bron:j.bron};
   }catch(e){}
-  if(!vhKoers) vhKoers={koers:1.11,bron:"terugval; het partnerportaal gaf geen koers"};
+  if(!vhKoers) vhKoers={koers:1.11,bron:"terugval; de koers uit het partnerportaal volgt nog"};
 }
 /* ─── Telling naar Logic4 als voorraadcontrole ─────────────────────────── */
 let vlTelData=null;
@@ -421,12 +421,12 @@ async function vlTelProef(){
       "<td style='text-align:right'><input type='number' min='0' step='1' class='vlTelGeteld' data-code='"+esc(x.code)+"' value='"+x.geteld+"' style='width:64px;text-align:right;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit'></td>"+
       "<td style='text-align:right;font-weight:600;color:"+(x.geteld-x.logic4<0?"#b91c1c":x.geteld-x.logic4>0?"#15803d":"inherit")+"' class='vlTelVerschil'>"+(x.geteld-x.logic4>0?"+":"")+(x.geteld-x.logic4)+"</td></tr>";
     box.innerHTML="<div class='status-msg warn' style='margin-bottom:10px'>"+j.rijen.length+" artikelen: <b>"+j.somGeteld+"</b> geteld tegenover <b>"+j.somLogic4+"</b> in Logic4 op Houston. "+
-      "Regels met '(niet in de telling)' staan wel in Logic4 maar niet in de telling en gaan naar 0.</div>"+
+      "Regels met '(buiten de telling)' staan wel in Logic4 en wachten nog in de telling; die gaan naar 0.</div>"+
       "<div class='tablewrap' style='max-height:420px;overflow:auto'><table class='grid'><thead><tr><th>Model</th><th>Artikel</th><th>Uitvoering in Logic4</th><th>Kleur in de telling</th><th style='text-align:right'>Logic4 nu</th><th style='text-align:right'>Geteld</th><th style='text-align:right'>Verschil</th></tr></thead><tbody>"+
       j.rijen.map(rij).join("")+"</tbody></table></div>"+
-      (j.onbekend.length?"<p class='lead' style='font-size:12px;margin-top:10px'><b>Niet mee (geen spa in de catalogus, dus niet aan een Logic4-artikel te koppelen):</b> "+
+      (j.onbekend.length?"<p class='lead' style='font-size:12px;margin-top:10px'><b>Blijft erbuiten (wacht nog als spa in de catalogus, en daarmee op een Logic4-artikel):</b> "+
         Object.entries(j.onbekend.reduce((m,o)=>{m[o.model]=(m[o.model]||0)+o.aantal;return m;},{})).map(([m,a])=>esc(m)+" "+a).join(", ")+". Die blijven zoals ze in Logic4 staan.</p>":"")+
-      (j.nietGeteld.length?"<p class='lead' style='font-size:12px'><b>Staat in Logic4 op Houston, maar het model komt niet in de telling voor (blijft staan):</b> "+
+      (j.nietGeteld.length?"<p class='lead' style='font-size:12px'><b>Staat in Logic4 op Houston; de telling kent dit model nog als open (blijft staan):</b> "+
         j.nietGeteld.map(o=>esc(o.model)+" "+esc(o.code)+" ("+o.aantal+")").join(", ")+".</p>":"");
     box.querySelectorAll(".vlTelGeteld").forEach(inp=>inp.addEventListener("input",()=>{
       const x=vlTelData.rijen.find(r=>r.code===inp.dataset.code); if(!x) return;
@@ -449,8 +449,8 @@ async function vlTelDoe(){
     if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
     if(window.fpLog) window.fpLog("houston-telling-naar-logic4",j.rijen+" artikelen, controle "+(j.controleId||"?"));
     st.textContent="";
-    document.getElementById("vlTelVoorstel").insertAdjacentHTML("afterbegin","<div class='status-msg ok' style='margin-bottom:10px'><b>Klaargezet.</b> Voorraadcontrole"+(j.controleId?" nummer "+esc(String(j.controleId)):"")+" staat in Logic4 op Warehouse Texas USA, nog niet verwerkt. Open hem in Logic4 (Voorraad, Voorraadcontrole), kijk hem na en verwerk hem; daarna staat Houston op de telling.</div>");
-  }catch(e){ st.textContent=""; alert("Klaarzetten mislukte: "+e.message); b.disabled=false; }
+    document.getElementById("vlTelVoorstel").insertAdjacentHTML("afterbegin","<div class='status-msg ok' style='margin-bottom:10px'><b>Klaargezet.</b> Voorraadcontrole"+(j.controleId?" nummer "+esc(String(j.controleId)):"")+" staat in Logic4 op Warehouse Texas USA en wacht op verwerking. Open hem in Logic4 (Voorraad, Voorraadcontrole), kijk hem na en verwerk hem; daarna staat Houston op de telling.</div>");
+  }catch(e){ st.textContent=""; alert("Klaarzetten vraagt nog een poging: "+e.message); b.disabled=false; }
 }
 document.getElementById("vlTelProef").addEventListener("click",vlTelProef);
 document.getElementById("vlTelDoe").addEventListener("click",vlTelDoe);
@@ -474,7 +474,7 @@ async function vlLaad(vers){
     const j=await r.json();
     if(!j.ok&&!j.modellen) throw new Error(j.error||("HTTP "+r.status));
     vlData=j; st.classList.add("hidden");
-    if(!j.ok) { st.className="status-msg warn"; st.textContent="Logic4 gaf een fout ("+esc(j.error||"")+"); je ziet de laatst opgehaalde stand."; st.classList.remove("hidden"); }
+    if(!j.ok) { st.className="status-msg warn"; st.textContent="Logic4 gaf dit terug ("+esc(j.error||"")+"); je ziet de laatst opgehaalde stand."; st.classList.remove("hidden"); }
     vlTeken();
   }catch(e){ st.className="status-msg bad"; st.textContent="Ophalen faalde: "+esc(e.message); st.classList.remove("hidden"); }
 }
@@ -490,7 +490,7 @@ function vlTeken(){
 
   const mod=(vlData.modellen||[]).filter(m=>!q||m.model.toLowerCase().includes(q));
   document.getElementById("vlLijst").innerHTML = !mod.length
-    ? "<p class='lead'>Niets gevonden"+(q?" voor “"+esc(q)+"”":"")+".</p>"
+    ? "<p class='lead'>Hier komen de resultaten"+(q?" voor “"+esc(q)+"”":"")+" te staan - probeer een ander zoekwoord.</p>"
     : "<div class='tablewrap'><table class='grid'><thead><tr><th>Model</th>"+
       "<th style='text-align:right'>Aantal</th><th style='text-align:right'>Vrij</th>"+
       "<th style='text-align:right'>Al verkocht</th><th>Artikelcodes</th></tr></thead><tbody>"+
@@ -506,7 +506,7 @@ function vlTeken(){
 
   const ov=(vlData.overig||[]).filter(o=>!q||String(o.naam||"").toLowerCase().includes(q)||String(o.code).includes(q));
   document.getElementById("vlOverig").innerHTML = !ov.length
-    ? "<p class='lead'>Niets gevonden.</p>"
+    ? "<p class='lead'>Hier komen de resultaten te staan - probeer een ander zoekwoord.</p>"
     : "<div class='tablewrap'><table class='grid'><thead><tr><th>Artikel</th><th>Code</th>"+
       "<th style='text-align:right'>Aantal</th></tr></thead><tbody>"+
       ov.map(o=>"<tr><td>"+esc(o.naam||"(naam onbekend)")+"</td>"+
@@ -521,7 +521,7 @@ function vlTeken(){
   // hoort niet als tekort in beeld te komen.
   const box=document.getElementById("vlVerschil");
   const d=vhData;
-  if(!d||!d.regels){ box.innerHTML="<p class='lead'>De telling is nog niet geladen.</p>"; return; }
+  if(!d||!d.regels){ box.innerHTML="<p class='lead'>De telling laadt zo.</p>"; return; }
   const tel={}, groep={};
   for(const r of d.regels) if(r.aantal>0){ tel[r.model]=(tel[r.model]||0)+r.aantal; groep[r.model]=r.groep||"Spa's"; }
   const live={}; for(const m of (vlData.modellen||[])) live[m.model]=m.aantal;
@@ -545,7 +545,7 @@ function vlTeken(){
     h+="<div class='status-msg warn' style='margin-bottom:10px'>"+
       "Van de "+vergelijkbaar.length+" modellen die in beide bronnen voorkomen wijken er "+rijen.length+" af. "+
       "Samen: <b>"+somTel+"</b> geteld tegenover <b>"+somLive+"</b> in Logic4. "+
-      "Logic4 staat dus <b>"+(somLive>somTel?"hoger":"lager")+"</b> - dat past bij verkopen in Amerika die nooit in Logic4 zijn afgeboekt."+
+      "Logic4 staat dus <b>"+(somLive>somTel?"hoger":"lager")+"</b> - dat past bij verkopen in Amerika die in Logic4 nog open staan."+
       "</div>"+
       "<div class='tablewrap' style='max-height:300px;overflow:auto'><table class='grid'><thead><tr><th>Model</th>"+
       "<th style='text-align:right'>Telling 20-07</th><th style='text-align:right'>Logic4 nu</th>"+
@@ -558,10 +558,10 @@ function vlTeken(){
   }
 
   if(onvergelijkbaar.length){
-    h+="<div style='margin-top:16px'><h3 style='font-size:14px;margin:0 0 6px'>Niet te vergelijken — "+telOnverg+" getelde stuks</h3>"+
-      "<p class='lead' style='font-size:12px;margin-bottom:8px'>Deze staan wél in de telling maar niet in de spa-catalogus, waarmee Logic4 op model wordt gegroepeerd. "+
-      "Ze verschijnen daardoor hierboven niet; in Logic4 zitten ze in de lijst met onderdelen, of onder een andere naam "+
-      "(de Wim Hof Barrel heet daar bijvoorbeeld The Iceman's Barrel). Dit is dus <b>geen ontbrekende voorraad</b>.</p>"+
+    h+="<div style='margin-top:16px'><h3 style='font-size:14px;margin:0 0 6px'>Vergelijken kan zodra beide kanten er zijn — "+telOnverg+" getelde stuks</h3>"+
+      "<p class='lead' style='font-size:12px;margin-bottom:8px'>Deze staan in de telling; in de spa-catalogus, waarmee Logic4 op model groepeert, staan ze nog open. "+
+      "Ze staan daardoor buiten de lijst hierboven; in Logic4 zitten ze bij de onderdelen, of onder een andere naam "+
+      "(de Wim Hof Barrel heet daar bijvoorbeeld The Iceman's Barrel). Dit is dus <b>gewoon aanwezige voorraad</b>.</p>"+
       "<div class='tablewrap' style='max-height:220px;overflow:auto'><table class='grid'><thead><tr><th>Model uit de telling</th><th>Soort</th>"+
       "<th style='text-align:right'>Geteld</th></tr></thead><tbody>"+
       onvergelijkbaar.sort((a,b)=>tel[b]-tel[a]).map(m=>
@@ -570,7 +570,7 @@ function vlTeken(){
   }
 
   if(alleenLogic4.length){
-    h+="<div style='margin-top:16px'><h3 style='font-size:14px;margin:0 0 6px'>Staat in Logic4, niet in de telling</h3>"+
+    h+="<div style='margin-top:16px'><h3 style='font-size:14px;margin:0 0 6px'>Staat in Logic4, buiten de telling</h3>"+
       "<p class='lead' style='font-size:12px;margin-bottom:8px'>Vaak dezelfde spa onder een andere naam (‘Rewind’ tegenover ‘Rewind NEW’, ‘Excite Mighty Wave’ tegenover ‘Excite’). Nakijken vóór het inboeken.</p>"+
       "<div class='tablewrap' style='max-height:220px;overflow:auto'><table class='grid'><thead><tr><th>Model in Logic4</th>"+
       "<th style='text-align:right'>Aantal</th></tr></thead><tbody>"+
@@ -615,7 +615,7 @@ async function zdLaad(){
     zdTeken();
   }catch(e){
     document.getElementById("zdInProductie").innerHTML=
-      "<div class='status-msg bad'>De bestellingen konden niet worden opgehaald: "+esc(e.message)+"</div>";
+      "<div class='status-msg bad'>De bestellingen komen zo binnen - nog een poging: "+esc(e.message)+"</div>";
   }
 }
 /* Openklappen om te zien wat erin zit.
@@ -711,7 +711,7 @@ function zdStandRij(rec,kolommen){
 function zdZendingInhoud(z,kolommen){
   const regels=(z.regels||[]).filter(r=>(Number(r.aantal)||0)>0);
   if(!regels.length) return "<tr class='zdDetail'><td colspan='"+kolommen+"' style='background:#fafafa;color:var(--muted);font-size:12px;padding:8px 12px'>"+
-    (z.stuks?z.stuks+" stuks volgens de commercial invoice; wat het precies is, is niet uit dit bestand gelezen. Vervang de invoice om de inhoud alsnog te lezen.":"Van deze zending is de inhoud niet gelezen; hij telt daarom als de hele bestelling. Klik op 'vervangen' en kies dezelfde commercial invoice opnieuw, dan wordt gelezen wat erin zit en blijft de rest in productie staan.")+"</td></tr>";
+    (z.stuks?z.stuks+" stuks volgens de commercial invoice; wat het precies is staat nog open. Vervang de invoice om de inhoud alsnog te lezen.":"Van deze zending staat de inhoud nog open; hij telt daarom als de hele bestelling. Klik op 'vervangen' en kies dezelfde commercial invoice opnieuw, dan wordt gelezen wat erin zit en blijft de rest in productie staan.")+"</td></tr>";
   return "<tr class='zdDetail'><td colspan='"+kolommen+"' style='background:#fafafa;padding:6px 12px'>"+
     "<table class='grid' style='margin:0'><thead><tr><th>Aantal</th><th>Model</th><th>Kleur</th><th>Fabriekscode</th></tr></thead><tbody>"+
     regels.map(r=>"<tr><td>"+(Number(r.aantal)||0)+"</td><td>"+esc(r.model||"(onbekend)")+"</td><td style='font-size:12px'>"+esc(r.kleur||"—")+"</td><td style='font-size:12px'>"+esc(r.code||"—")+"</td></tr>").join("")+
@@ -721,7 +721,7 @@ function zdZendingTekst(z){
   const regels=(z.regels||[]).filter(r=>(Number(r.aantal)||0)>0);
   const stuks=regels.length?regels.reduce((n,r)=>n+(Number(r.aantal)||0),0):(Number(z.stuks)||0);
   const namen=[...new Set(regels.map(r=>r.model).filter(Boolean))];
-  return (stuks?stuks+" stuk"+(stuks===1?"":"s"):"inhoud niet gelezen")+(namen.length?" · "+namen.slice(0,4).join(", ")+(namen.length>4?" …":""):"");
+  return (stuks?stuks+" stuk"+(stuks===1?"":"s"):"inhoud nog open")+(namen.length?" · "+namen.slice(0,4).join(", ")+(namen.length>4?" …":""):"");
 }
 function zdTeken(){
   const inProd=document.getElementById("zdInProductie");
@@ -745,7 +745,7 @@ function zdTeken(){
         "<td onclick='event.stopPropagation()'><button class='btn sm zdUpload' data-ref='"+esc(x.ref)+"' type='button'>Commercial invoice uploaden</button></td></tr>"+
         (zdOpen[x.ref]?zdStandRij(x,5):"")).join("")+
       "</tbody></table></div>"
-    : "<p class='lead' style='font-size:12.5px'>Niets in productie. Maak bij <b>Containers</b> een inkooporder van een proforma, dan verschijnt hij hier.</p>");
+    : "<p class='lead' style='font-size:12.5px'>In productie komt hier te staan. Maak bij <b>Containers</b> een inkooporder van een proforma, dan verschijnt hij hier.</p>");
 
   onderweg.innerHTML="<h4 style='margin:0 0 8px'>Onderweg</h4>"+(b.length
     ? "<div class='tablewrap'><table class='grid'><thead><tr><th>Proforma</th><th>Container</th><th>Inhoud</th><th>Commercial invoice</th><th>Verwacht in Houston</th><th></th></tr></thead><tbody>"+
@@ -759,7 +759,7 @@ function zdTeken(){
           "<button class='btn sm zdWeg' data-ref='"+esc(x.rec.ref)+"' data-z='"+esc(x.z.id)+"' type='button' title='Deze zending weghalen; de spa's tellen dan weer als in productie'>weg</button></td></tr>"+
         (zdOpen[k]?zdZendingInhoud(x.z,6):""); }).join("")+
       "</tbody></table></div>"
-    : "<p class='lead' style='font-size:12.5px'>Nog niets onderweg. Upload de commercial invoice bij een bestelling hierboven.</p>");
+    : "<p class='lead' style='font-size:12.5px'>Onderweg komt hier te staan. Upload de commercial invoice bij een bestelling hierboven.</p>");
 
   document.querySelectorAll(".zdRij").forEach(tr=>tr.addEventListener("click",()=>{
     const k=tr.dataset.ref; zdOpen[k]=!zdOpen[k]; zdTeken();
@@ -781,11 +781,11 @@ async function zdBewaar(ref,velden){
       headers:{"Content-Type":"application/json","X-Fonteyn-Auth":zdKey()},
       body:JSON.stringify(Object.assign({ref,door:(localStorage.getItem("fp.email")||"")},velden))});
     const j=await r.json();
-    if(!j.ok) throw new Error(j.error||"opslaan mislukt");
+    if(!j.ok) throw new Error(j.error||"opslaan vraagt nog een poging");
     zdMelding("ok","Opgeslagen.");
     setTimeout(()=>zdMelding("",""),2500);
     await zdLaad();
-  }catch(e){ zdMelding("bad","Opslaan mislukt: "+e.message); }
+  }catch(e){ zdMelding("bad","Opslaan vraagt nog een poging: "+e.message); }
 }
 /* De commercial invoice wordt hier alleen gelezen om te zien wát erin zit en
    om hem bij de bestelling te hangen. De voorraadtelling van Houston komt uit
@@ -801,7 +801,7 @@ async function zdBewaar(ref,velden){
       const model=(window.spaModelMetKleur?spaModelMetKleur(code,k):null)||(window.spaModel?spaModel(code):null);
       const m=(model&&model!=="(onbekend SKT-model)")?model:null;
       regels.push({code:code,kleur:k,aantal:aantal,model:m});
-      if(m){ models[m]=(models[m]||0)+aantal; (modelColors[m]=modelColors[m]||{})[k||"(geen kleur)"]=(modelColors[m][k||"(geen kleur)"]||0)+aantal; }
+      if(m){ models[m]=(models[m]||0)+aantal; (modelColors[m]=modelColors[m]||{})[k||"(kleur volgt)"]=(modelColors[m][k||"(kleur volgt)"]||0)+aantal; }
     };
     try{
       if(/\.pdf$/i.test(bestand.name)&&window.fpCiPdf){
@@ -828,7 +828,7 @@ async function zdBewaar(ref,velden){
       stuks=regels.reduce((n,r)=>n+(Number(r.aantal)||0),0)||null;
     }catch(e){ /* niet kunnen lezen mag het vastleggen niet tegenhouden */ }
     const zending={id:zdBezigZending||undefined,naam:bestand.name,stuks,containers,regels,models,modelColors};
-    if(!regels.length&&!confirm("Uit dit bestand kon niet gelezen worden welke spa's erin zitten. Toch vastleggen als zending? (De bestelling blijft dan in productie staan tot je de inhoud alsnog inleest.)")){ zdMelding("",""); zdBezig=null; zdBezigZending=null; ev.target.value=""; return; }
+    if(!regels.length&&!confirm("Welke spa's in dit bestand zitten staat nog open. Toch vastleggen als zending? (De bestelling blijft dan in productie staan tot je de inhoud alsnog inleest.)")){ zdMelding("",""); zdBezig=null; zdBezigZending=null; ev.target.value=""; return; }
     await zdBewaar(zdBezig,{zending});
     try{ if(window.fpLog) window.fpLog("zending-ci-ingelezen",zdBezig+": "+bestand.name+" ("+(stuks||0)+" stuks, "+regels.length+" regels)"); }catch(e){}
     zdBezigZending=null;
@@ -935,16 +935,16 @@ function vhTeken(){
     "<b>Telling van "+esc(vhDatum(d.peildatum))+"</b>, bron: "+esc(d.bron||"onbekend")+". "+
     ((d.toelichting||[]).map(esc).join(" ")||"")+
     " De telling bestaat uit blokken: "+esc(groepTekst)+". Onder de ijsbaden staan ook toebehoren "+
-    "(waterkoelers, douches), dus dat aantal is geen aantal baden."+
-    " Prijzen zijn de <b>inkoopprijs zoals de leverancier hem factureert</b>, nooit omgerekend. "+
+    "(waterkoelers, douches), dus dat aantal telt apart van de baden."+
+    " Prijzen zijn de <b>inkoopprijs zoals de leverancier hem factureert</b>, altijd in de valuta van die factuur. "+
     "De spa's komen uit China en staan in <b>dollars</b>; de ijsbaden en de barrelsauna's komen uit Nederland "+
-    "en staan in <b>euro's</b>. Daarom staan er twee totalen en niet één: optellen zou een koers vergen, en dan "+
-    "lees je een bedrag dat op geen enkele factuur staat. "+
+    "en staan in <b>euro's</b>. Daarom staan er twee totalen naast elkaar: optellen zou een koers vergen, en dan "+
+    "lees je een bedrag dat buiten elke factuur om is ontstaan. "+
     "Staat een spa op een commercial invoice die het dashboard kent, dan is dat het bedrag: "+esc(d.prijsbron||"")+". "+
     "Voor de rest geldt de prijslijst van de leverancier; die regels zijn gemerkt met <b>lijst</b>."+
     (uitLijst?" Dat gaat om "+uitLijst+" van de "+stuks+" stuks.":"")+
     (zonderPrijs
-      ? " <b>"+zonderPrijs+" van de "+stuks+" stuks hebben nog geen fabrieksprijs</b> en tellen niet mee in de inkoopwaarde."
+      ? " <b>"+zonderPrijs+" van de "+stuks+" stuks wachten nog op een fabrieksprijs</b> en tellen daarna mee in de inkoopwaarde."
       : " Alle "+stuks+" stuks hebben een inkoopprijs.")+
     ((d.correcties||[]).length
       ? "<div style='margin-top:8px;font-size:12px;color:var(--muted)'>Laatste correctie op de telling: "+esc(d.correcties[d.correcties.length-1].wat)+"</div>"
@@ -971,7 +971,7 @@ function vhTeken(){
 
   document.getElementById("vhTel").textContent=rijen.length+" van "+regels.length+" regels";
   document.getElementById("vhLijst").innerHTML=!rijen.length
-    ? "<p class='lead'>Niets gevonden.</p>"
+    ? "<p class='lead'>Hier komen de resultaten te staan - probeer een ander zoekwoord.</p>"
     : "<div class='tablewrap'><table class='grid'><thead><tr><th>Model</th><th>Kleur</th><th>Aantal</th>"+
       "<th>Inkoopprijs</th><th>Inkoopwaarde</th><th>Artikel-/fabriekscode</th></tr></thead><tbody>"+
       rijen.map(function(r){
@@ -1090,7 +1090,7 @@ function vhWaardeTeken(waardeUsd,waardeEur,schatting){
         containers
           ? containers+" container"+(containers===1?"":"s")+" &times; "+u(som.transportPerContainer)+" gemiddeld per container."
           : "<b>Vul hieronder het aantal containers in.</b> Gemiddeld "+u(som.transportPerContainer)+" per container.")+
-    rij("Inventaris warehouse",som.inventarisUsd,"Vast bedrag zolang er geen telling is.")+
+    rij("Inventaris warehouse",som.inventarisUsd,"Vast bedrag tot de eerste telling binnen is.")+
     rij("Totaal",som.totaalUsd,"",true)+
     "</table>";
 
@@ -1122,7 +1122,7 @@ function vhWaardeTeken(waardeUsd,waardeEur,schatting){
     "Waar komt "+u(g.perContainer)+" per container vandaan?</summary>"+
     "<p class='lead' style='font-size:12px;margin:10px 0'>Gemiddelde van drie facturen die Chantal heeft aangeleverd: een recente, "+
     "een van een half jaar terug en een oudere. Let op dat twee ervan over <b>twee</b> containers gaan, dus het factuurtotaal "+
-    "is niet de prijs van één container. De spreiding loopt van "+u(g.laagste)+" tot "+u(g.hoogste)+".</p>"+
+    "geldt over alle containers samen. De spreiding loopt van "+u(g.laagste)+" tot "+u(g.hoogste)+".</p>"+
     "<div class='tablewrap'><table class='grid'><thead><tr><th>Factuur</th><th>Datum</th><th>Expediteur</th><th>Route</th>"+
     "<th style='text-align:right'>Containers</th><th style='text-align:right'>Factuurtotaal</th><th style='text-align:right'>Per container</th></tr></thead><tbody>"+
     g.facturen.map(f=>"<tr><td>"+esc(f.nummer)+"</td><td>"+esc(vhDatum(f.datum))+"</td><td>"+esc(f.expediteur)+"</td>"+
@@ -1130,7 +1130,7 @@ function vhWaardeTeken(waardeUsd,waardeEur,schatting){
       "<td style='text-align:right'>"+u(f.totaalFactuur)+"</td><td style='text-align:right'>"+u(f.perContainer)+"</td></tr>").join("")+
     "<tr style='border-top:2px solid var(--border)'><td colspan='6'><b>Gemiddelde vracht per container</b></td>"+
       "<td style='text-align:right'><b>"+u(g.vrachtPerContainer)+"</b></td></tr>"+
-    "<tr><td colspan='6'>Uitladen van de truck bij het warehouse — staat op geen enkele factuur</td>"+
+    "<tr><td colspan='6'>Uitladen van de truck bij het warehouse — apart afgesproken, buiten de facturen om</td>"+
       "<td style='text-align:right'>"+u(g.uitladenPerContainer)+"</td></tr>"+
     "<tr style='border-top:2px solid var(--fonteyn-green)'><td colspan='6'><b>Per container</b></td>"+
       "<td style='text-align:right'><b>"+u(g.perContainer)+"</b></td></tr>"+
@@ -1179,7 +1179,7 @@ async function qbInit(force){
       st.textContent="klaar om te verbinden"; st.style.color="#2563eb";
       btn.textContent="Verbinden met QuickBooks"; btn.disabled=false; btn.style.opacity="1";
     } else {
-      st.textContent="nog niet gekoppeld (wacht op app-gegevens)"; st.style.color="var(--warn)";
+      st.textContent="koppelt zodra de app-gegevens binnen zijn"; st.style.color="var(--warn)";
       btn.textContent="Verbinden met QuickBooks (wacht op app-gegevens)"; btn.disabled=true; btn.style.opacity=".5";
     }
   }catch(e){ st.textContent="status onbekend"; }
@@ -1194,7 +1194,7 @@ async function qbLoadData(){
   box.innerHTML="<p class='lead'>Nieuwe QuickBooks-facturen laden…</p>";
   try{
     const j=await (await fetch(WORKER+"/amerika/qb/invoices",{headers:{"X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")}})).json();
-    if(!j.ok){ box.innerHTML="<div class='status-msg warn'>Kon facturen niet laden: "+esc(j.error||"onbekend")+"</div>"; return; }
+    if(!j.ok){ box.innerHTML="<div class='status-msg warn'>De facturen laden zo - nog een poging: "+esc(j.error||"onbekend")+"</div>"; return; }
     qbInvoices=j.invoices||[]; renderQbInvoices();
   }catch(e){ box.innerHTML="<div class='status-msg bad'>"+esc(e.message)+"</div>"; }
 }
@@ -1216,7 +1216,7 @@ function qbBetaaldPill(inv){
   const usd=n=>"$ "+Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
   if(inv.betaald) return "<span class='pill' style='background:#dcfce7;color:#15803d' title='Volledig voldaan — "+esc(usd(inv.totaal))+"'>betaald</span>";
   if(inv.deelsBetaald) return "<span class='pill' style='background:#fef3c7;color:#92400e' title='Ontvangen "+esc(usd(inv.betaaldBedrag))+" van "+esc(usd(inv.totaal))+"'>deels ("+esc(usd(inv.betaaldBedrag))+")</span>";
-  return "<span class='pill' style='background:#fee2e2;color:#b91c1c' title='Nog niets ontvangen — openstaand "+esc(usd(inv.openstaand))+"'>niet betaald</span>";
+  return "<span class='pill' style='background:#fee2e2;color:#b91c1c' title='Openstaand "+esc(usd(inv.openstaand))+"'>staat open</span>";
 }
 function qbKindBadge(k){
   const map={spa:["#dcfce7","#15803d","spa"],onderdeel:["#e0e7ff","#3730a3","onderdeel"],kosten:["#f3f4f6","#374151","kosten"]};
@@ -1250,7 +1250,7 @@ function qbNotitieKoppel(box){
           headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
           body:JSON.stringify({docNr:inp.dataset.nr,qbId:inp.dataset.qbid,tekst:tekst,user:(localStorage.getItem("fp.email")||"")})});
         const j=await r.json();
-        if(!j.ok) throw new Error(j.error||"opslaan mislukt");
+        if(!j.ok) throw new Error(j.error||"opslaan vraagt nog een poging");
         vorige=tekst;
         const inv=qbInvoices.find(i=>String(i.id||i.docNr)===String(inp.dataset.qbid||inp.dataset.nr));
         if(inv) inv.notitie=tekst;
@@ -1259,7 +1259,7 @@ function qbNotitieKoppel(box){
         if(window.fpLog) window.fpLog("qb-notitie","#"+inp.dataset.nr+": "+(tekst||"(leeggemaakt)"));
       }catch(e){
         inp.value=vorige;
-        alert("De notitie kon niet worden bewaard: "+e.message);
+        alert("De notitie vraagt nog een poging: "+e.message);
       }
       inp.disabled=false;
     });
@@ -1328,7 +1328,7 @@ function renderQbInvoices(){
     // Detail ALTIJD renderen (verborgen als dicht) → uit/inklappen zonder herteken, geen wegschieten
     html+="<tr class='qbDetail' data-sleutel='"+esc(sleutel)+"' data-nr='"+esc(inv.docNr)+"' style='display:"+(open?"":"none")+"'><td colspan='10' style='background:#fafafa;padding:6px 12px'><table class='grid' style='margin:0'><thead><tr><th>Artikelcode</th><th>Omschrijving</th><th>Aantal</th><th>Soort</th></tr></thead><tbody>"+
         inv.rows.map(r=>"<tr><td>"+(r.productCode?esc(r.productCode):"<b style='color:var(--bad)'>ontbreekt</b>")+"</td><td>"+esc(r.description)+"</td><td>"+r.qty+"</td><td>"+qbKindBadge(r.kind)+"</td></tr>").join("")+
-        (inv.overgeslagen&&inv.overgeslagen.length?"<tr><td colspan='4' style='color:var(--muted);font-size:11px'>Overgeslagen (niet op de order): "+esc(inv.overgeslagen.join(", "))+"</td></tr>":"")+
+        (inv.overgeslagen&&inv.overgeslagen.length?"<tr><td colspan='4' style='color:var(--muted);font-size:11px'>Overgeslagen (staat buiten de order): "+esc(inv.overgeslagen.join(", "))+"</td></tr>":"")+
         "</tbody></table></td></tr>";
   }
   html+="</tbody></table></div></div>";
@@ -1347,8 +1347,8 @@ function renderQbInvoices(){
       qbKoppelOpen={};
       if(window.fpLog) window.fpLog("qb-factuur-gekoppeld","QuickBooks "+qbid+" -> order "+j.orderId);
       renderQbInvoices();
-      alert("Gekoppeld aan order "+j.orderId+" ("+((j.order||{}).klant||"")+"). Er is geen nieuwe order gemaakt.");
-    }catch(err){ alert("Koppelen lukte niet: "+err.message); if(knop) knop.disabled=false; }
+      alert("Gekoppeld aan order "+j.orderId+" ("+((j.order||{}).klant||"")+"). De bestaande order blijft staan.");
+    }catch(err){ alert("Koppelen vraagt nog een poging: "+err.message); if(knop) knop.disabled=false; }
   };
   box.querySelectorAll(".qbDubbelKoppel").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); delete qbDubbel[b.dataset.qbid]; qbKoppelDoe(b.dataset.qbid,b.dataset.order,b); }));
   box.querySelectorAll(".qbDubbelToch").forEach(b=>b.addEventListener("click",async e=>{ e.stopPropagation();
@@ -1362,7 +1362,7 @@ function renderQbInvoices(){
       delete qbDubbel[b.dataset.qbid];
       if(window.fpLog) window.fpLog("qb-toch-nieuw","QuickBooks "+b.dataset.qbid+" -> order "+r.orderId);
       await qbInit(true);
-    }catch(err){ alert("Aanmaken lukte niet: "+err.message); b.disabled=false; }
+    }catch(err){ alert("Aanmaken vraagt nog een poging: "+err.message); b.disabled=false; }
   }));
   box.querySelectorAll(".qbKoppel").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation();
     const inp=box.querySelector(".qbKoppelNr[data-qbid='"+CSS.escape(b.dataset.qbid)+"']"); qbKoppelDoe(b.dataset.qbid,String((inp&&inp.value)||"").replace(/\D/g,""),b); }));
@@ -1388,13 +1388,13 @@ function renderQbInvoices(){
     try{
       const r=await fetch(WORKER+"/amerika/qb/audrey",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},body:JSON.stringify({docNr:nr,qbId:qbId,ontvangen:aan,user:(localStorage.getItem("fp.email")||"")})});
       const j=await r.json();
-      if(!j.ok) throw new Error(j.error||"opslaan mislukt");
+      if(!j.ok) throw new Error(j.error||"opslaan vraagt nog een poging");
       const inv=qbInvoices.find(i=>String(i.docNr)===String(nr)); if(inv) inv.audrey=aan;
       if(window.fpLog) window.fpLog("audrey-ontvangst-gemarkeerd","#"+nr+(aan?" ontvangen":" teruggedraaid"));
     }catch(e){
       cb.checked=!aan;
       if(lbl){ lbl.textContent=!aan?"ontvangen":"nee"; lbl.style.color=!aan?"#15803d":"var(--muted)"; }
-      alert("Kon niet opslaan: "+e.message);
+      alert("Opslaan vraagt nog een poging: "+e.message);
     }finally{ cb.disabled=false; }
   }));
   box.querySelectorAll(".qbVerberg").forEach(b=>b.addEventListener("click",e=>{ e.stopPropagation(); qbVerbergKlik(b.dataset.nr); }));
@@ -1462,7 +1462,7 @@ function betaalBadge(r){
 }
 function usaMatch(r,m,q){ return !q||m.toLowerCase().includes(q)||String(r.naam||"").toLowerCase().includes(q)||String(r.ordernr).includes(q); }
 function renderUSA(){
-  document.getElementById("usaUpdated").textContent=usaData.updated?("Laatst ververst: "+new Date(usaData.updated).toLocaleString("nl-NL")):"(nog niet geladen)";
+  document.getElementById("usaUpdated").textContent=usaData.updated?("Laatst ververst: "+new Date(usaData.updated).toLocaleString("nl-NL")):"(laadt zo)";
   const q=(document.getElementById("usaSearch").value||"").trim().toLowerCase();
   const by=usaData.byModelUSA||{};
   const rows=[];
@@ -1475,7 +1475,7 @@ function renderUSA(){
   document.getElementById("usaKpis").innerHTML=
     kpi(orders,"Orders")+kpi(spas,"Spa's totaal")+kpi(betaald,"Betaald")+kpi(spas-betaald,"Wacht op betaling");
   const ov=document.getElementById("usaOverview");
-  if(!rows.length){ ov.innerHTML="<p class='lead'>Geen Amerikaanse orders"+(q?" voor '"+esc(q)+"'":"")+". (Draait de uur-sync al?)</p>"; return; }
+  if(!rows.length){ ov.innerHTML="<p class='lead'>Amerikaanse orders verschijnen hier zodra ze er zijn"+(q?" voor '"+esc(q)+"'":"")+". (Draait de uur-sync al?)</p>"; return; }
   ov.innerHTML="<div class='tablewrap'><table class='grid'><thead><tr><th>Order</th><th>Klant</th><th>Model</th><th>Kleur</th><th>Aantal</th><th>Datum</th><th>Betaling</th></tr></thead><tbody>"+
     rows.map(r=>"<tr><td>"+r.ordernr+"</td><td>"+esc(r.naam)+"</td><td><b>"+esc(r.model)+"</b></td><td>"+(r.kleur?esc(r.kleur):"<span style='color:var(--muted)'>—</span>")+"</td><td>"+r.qty+"</td><td style='font-size:12px'>"+esc(datumNL(r.datum))+"</td><td>"+betaalBadge(r)+"</td></tr>").join("")+
     "</tbody></table></div>";
@@ -1570,7 +1570,7 @@ async function audSave(){
   const r=await fetch(WIRES_URL,{method:"PUT",
     headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
     body:JSON.stringify({wires:wiresData.wires,updated:new Date().toISOString()})});
-  if(!r.ok) throw new Error("opslaan mislukt (HTTP "+r.status+")");
+  if(!r.ok) throw new Error("opslaan vraagt nog een poging (HTTP "+r.status+")");
 }
 // Het Audrey-tabblad heeft óók de facturenlijst nodig: daar staat welke
 // facturen geaccordeerd zijn (en dus hier hun vervolgtraject krijgen).
@@ -1616,7 +1616,7 @@ async function audZetVerwerkt(docNr,aan,qbId){
     headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
     body:JSON.stringify({docNr:docNr,qbId:qbId||null,verwerkt:aan,user:(localStorage.getItem("fp.email")||"")})});
   const j=await r.json().catch(()=>null);
-  if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("opslaan mislukt (HTTP "+r.status+")"));
+  if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("opslaan vraagt nog een poging (HTTP "+r.status+")"));
   const sleutel=qbId?("qb:"+qbId):docNr;
   if(aan) verwerktIds[sleutel]={docNr:docNr,ts:new Date().toISOString(),user:(localStorage.getItem("fp.email")||"")};
   else { delete verwerktIds[sleutel]; delete verwerktIds[docNr]; }
@@ -1640,11 +1640,11 @@ async function qbVerbergKlik(nr){
   try{
     const r=await fetch(WORKER+"/amerika/qb/verberg",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
       body:JSON.stringify({id:nr,user:(localStorage.getItem("fp.email")||"")})});
-    const j=await r.json(); if(!j.ok) throw new Error(j.error||"opslaan mislukt");
+    const j=await r.json(); if(!j.ok) throw new Error(j.error||"opslaan vraagt nog een poging");
     qbVerborgen[nr]={ts:new Date().toISOString()};
     if(window.fpLog) window.fpLog("qb-factuur-verborgen","#"+nr);
     renderQbInvoices(); audRenderWachtrij();
-  }catch(e){ alert("Kon niet verbergen: "+e.message); }
+  }catch(e){ alert("Verbergen vraagt nog een poging: "+e.message); }
 }
 
 async function audInit(){
@@ -1709,9 +1709,9 @@ async function audBoekKnop(b){
       "  • "+bat(x)+" ("+usd(x.bruto)+")\n"+x.redenen.map(r=>"      - "+r).join("\n")).join("\n\n");
 
     if(!goed.length){
-      alert("Er valt nu niets te boeken.\n\n"+
+      alert("Alles is geboekt.\n\n"+
         (af.length?(af.length+" batch(es) zijn al verwerkt.\n\n"):"")+
-        (scheef.length?("Deze batch(es) sluiten niet aan en worden daarom niet geboekt:\n\n"+uitlegScheef):""));
+        (scheef.length?("Deze batch(es) wachten op aansluiting en blijven daarom staan:\n\n"+uitlegScheef):""));
       return;
     }
     const regelsVan=(x)=>x.regels.filter(r=>r.status==="klaar om te boeken")
@@ -1725,11 +1725,11 @@ async function audBoekKnop(b){
         "    blijft op 1160 staan (netto): "+usd(x.netto)+"\n"+
         regelsVan(x)).join("\n\n")+
       "\n\n"+
-      (scheef.length?("Niet meegenomen, deze sluiten niet aan:\n\n"+uitlegScheef+"\n\n"):"")+
+      (scheef.length?("Blijven staan, deze wachten op aansluiting:\n\n"+uitlegScheef+"\n\n"):"")+
       "De orders worden voor hun volledige bruto bedrag afgeboekt; de bankkosten gaan als aparte regel op "+
       (proef.kostenGrootboek||"4630")+". Daarna staat op 1160 precies de netto bankontvangst en komt die rekening "+
       "op nul zodra Osman het afschrift boekt.\n\n"+
-      "LET OP: de kostenplaats "+(proef.kostenplaats||"Spa Houston USA")+" kan niet via de koppeling worden meegegeven.\n"+
+      "LET OP: de kostenplaats "+(proef.kostenplaats||"Spa Houston USA")+" gaat buiten de koppeling om.\n"+
       "Die moet je er in Logic4 zelf bij zetten op die kostenregel.\n\n"+
       "De bedragen hierboven zijn dollars. De orders staan in Logic4 in euro (omgerekend tegen 1,12 bij het aanmaken); "+
       "per order wordt precies het openstaande eurobedrag afgeboekt, en de bankkosten gaan tegen dezelfde koers in euro. "+
@@ -1775,14 +1775,14 @@ async function audBoekKnop(b){
       gedaan.reduce((n,x)=>n+x.geboekt,0)+" order(s) afgeboekt voor samen "+usd(totaal)+(totaalEur?" (in Logic4 "+eur(totaalEur)+")":"")+"."+
       (kosten?("\n\nBankkosten "+usd(kosten)+" op grootboek "+(echt.kostenGrootboek||"4630")+".\n\n"+
         "NOG DOEN IN LOGIC4: zet op die kostenregel(s) de kostenplaats "+
-        (echt.kostenplaats||"Spa Houston USA")+". Dat kan de koppeling niet meegeven."):"")+
+        (echt.kostenplaats||"Spa Houston USA")+". Dat gaat buiten de koppeling om."):"")+
       (handwerk.length?("\n\nMET DE HAND RECHTZETTEN IN LOGIC4:\n"+handwerk.map(x=>"  • "+bat(x)+"\n"+x.regels.filter(r=>r.handwerk).map(r=>"      - factuur "+(r.factuur||r.naam)+", order "+r.order+": "+r.handwerk).join("\n")).join("\n")):"")+
-      (tegen.length?("\n\nNiet geboekt, omdat er iets niet klopt:\n\n"+tegen.map(x=>"  • "+bat(x)+"\n"+(x.redenen||[]).map(r=>"      - "+r).join("\n")).join("\n\n")):"")+
+      (tegen.length?("\n\nBlijven staan, deze vragen eerst aandacht:\n\n"+tegen.map(x=>"  • "+bat(x)+"\n"+(x.redenen||[]).map(r=>"      - "+r).join("\n")).join("\n\n")):"")+
       (mis.length?("\n\nNiet gelukt:\n"+mis.map(x=>"  • "+bat(x)+": "+
         x.regels.filter(r=>r.status==="fout").map(r=>(r.factuur||r.naam)+" "+(r.uitleg||"")).join("; ")+
         (((x.bankkosten||{}).status==="fout")?(" bankkosten: "+x.bankkosten.uitleg):"")).join("\n")):""));
     await audLoadFacturen(); audRender();
-  }catch(e){ alert("Boeken mislukte: "+e.message); }
+  }catch(e){ alert("Boeken vraagt nog een poging: "+e.message); }
   finally{ b.disabled=false; b.textContent=oudeTekst; }
 }
 
@@ -1827,10 +1827,10 @@ async function audPrijzenBijwerken(knop){
     }
     if(window.fpLog) window.fpLog("amerika-bedragen-bijgewerkt", orders+" orders, "+gezet+" regels");
     alert(orders+" orders nagelopen.\n\n"+gezet+" regels hebben nu hun bedrag."+
-      (over?("\n"+over+" regels overgeslagen (niet te koppelen aan een factuurregel)."):"")+
-      (fout?("\n"+fout+" orders gaven een fout."):""));
+      (over?("\n"+over+" regels overgeslagen (wachten op een factuurregel)."):"")+
+      (fout?("\n"+fout+" orders vragen nog aandacht."):""));
     await audLoadFacturen(); audRender();
-  }catch(e){ alert("Bijwerken mislukte: "+e.message); }
+  }catch(e){ alert("Bijwerken vraagt nog een poging: "+e.message); }
   finally{ knop.disabled = false; knop.textContent = oud; }
 }
 
@@ -1876,7 +1876,7 @@ function audRenderWachtrij(){
   }
   if(!zichtbaar.length){
     box.innerHTML="<div class='card'><h3>Geaccordeerd — nog te verwerken</h3>"+
-      "<p class='lead'>Nog niets ontvangen van Audrey. Zodra je in <b>Verkoop &amp; dealers</b> bij een geaccordeerde factuur aanvinkt dat het geld binnen is, verschijnt hij hier.</p></div>";
+      "<p class='lead'>Zodra Audrey iets doorgeeft staat het hier. Zodra je in <b>Verkoop &amp; dealers</b> bij een geaccordeerde factuur aanvinkt dat het geld binnen is, verschijnt hij hier.</p></div>";
     return;
   }
   /* Ingeklapt, tenzij iemand hem openzet. Osman (via Gerrit, 21 sep 2026)
@@ -1917,10 +1917,10 @@ function audRenderWachtrij(){
     "<div class='status-msg' style='margin:0 0 10px;background:#dcfce7;color:#166534;border:1px solid #86efac'>"+
       "<b>De bedragen kloppen.</b> Alle 116 omgezette orders staan in Logic4 op precies het bedrag van de "+
       "QuickBooks-factuur, samen $ 414.719,18. Je kunt boeken op 1160."+
-      "<br>Er zaten drie dingen fout, en die zijn eruit: de <b>sales tax</b> van 8,25% zit niet in een "+
-      "factuurregel maar apart in QuickBooks en werd niet meegenomen, de <b>verzendregel</b> heeft in "+
-      "QuickBooks geen naam en viel daardoor weg (zo'n 18 tot 25 dollar per onderdelenorder), en op negen "+
-      "spa-regels stond 21% Nederlandse btw in plaats van 0% export, samen 24.357,69 euro te veel."+
+      "<br>Drie dingen zijn bijgewerkt: de <b>sales tax</b> van 8,25% staat apart in QuickBooks in plaats van in een "+
+      "factuurregel en telt nu mee, de <b>verzendregel</b> heeft in "+
+      "QuickBooks nog een lege naam en telt nu ook mee (zo'n 18 tot 25 dollar per onderdelenorder), en op negen "+
+      "spa-regels staat voortaan 0% export in plaats van 21% Nederlandse btw, samen 24.357,69 euro scheelt dat."+
       "<br>De knop <b>bedragen ophalen uit QuickBooks</b> loopt alle orders na en zet per regel het bedrag "+
       "van de factuur erop. Regels die al goed staan blijven met rust, dus je kunt hem gerust nog eens "+
       "klikken, bijvoorbeeld nadat je nieuwe facturen hebt geaccordeerd."+
@@ -1929,9 +1929,9 @@ function audRenderWachtrij(){
       "<b>Zo wordt een batch geboekt.</b> De orders worden afgeboekt voor het <b>volledige</b> factuurbedrag. "+
       "De bankkosten gaan als memoriaal: <b>4630</b> tegenover 1160. Daarna staat op 1160 precies het bedrag "+
       "dat op de bank is binnengekomen, en komt die rekening op nul zodra jij het afschrift boekt."+
-      "<br>Sluit een batch niet aan (bruto min bankkosten is niet het ontvangen bedrag), of ontbreekt er een "+
-      "Logic4-order, dan wordt die batch <b>niet</b> geboekt maar als afwijking getoond."+
-      "<br>De kostenplaats <b>Spa Houston USA</b> kan de koppeling niet meegeven. Die zet je er in Logic4 zelf "+
+      "<br>Sluit een batch nog aan te sluiten (bruto min bankkosten naast het ontvangen bedrag), of volgt er nog een "+
+      "Logic4-order, dan blijft die batch staan en komt hij als <b>afwijking</b> in beeld."+
+      "<br>De kostenplaats <b>Spa Houston USA</b> gaat buiten de koppeling om. Die zet je er in Logic4 zelf "+
       "bij op de kostenregel."+
     "</div>"+
     "<p class='lead' style='font-size:12px;margin:0 0 12px'>Voor deze facturen is een Logic4-order aangemaakt. Ze blijven hier staan tot de betaling is gekoppeld — vink dan <b>Verwerkt in Logic4</b> aan. Het vinkje geldt ook voor dezelfde factuur in het wire-overzicht hieronder.</p>"+
@@ -1973,7 +1973,7 @@ async function audVerwerktKlik(cb){
     audRenderWachtrij(); audRender();
   }catch(e){
     cb.checked=!aan; cb.disabled=false;
-    alert("Kon niet opslaan: "+e.message);
+    alert("Opslaan vraagt nog een poging: "+e.message);
   }
 }
 const usd=n=>(n==null?"—":(n<0?"-":"")+"$ "+Math.abs(Number(n)).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}));
@@ -2066,7 +2066,7 @@ function audBatchCheck(w){
   const balansSom=c2(balans.reduce((n,r)=>n+(Number(r.kolom1)||0),0));
   let balansBuiten=false;
   if(netto!==null&&balans.length&&Math.abs(c2(bruto-kosten)-netto)>0.005&&Math.abs(c2(bruto-balansSom-kosten)-netto)<=0.005){ balansBuiten=true; bruto=c2(bruto-balansSom); }
-  if(netto===null) redenen.push("er staat geen totaalregel met een ontvangen bedrag bij");
+  if(netto===null) redenen.push("de totaalregel met het ontvangen bedrag volgt nog");
   else if(Math.abs(c2(bruto-kosten)-netto)>0.005)
     redenen.push("bruto "+usd(bruto)+" min bankkosten "+usd(kosten)+" is "+usd(c2(bruto-kosten))+", en er is "+usd(netto)+" ontvangen");
   /* Een saldoregel hoort bij geen enkele factuur en houdt de batch niet tegen.
@@ -2078,7 +2078,7 @@ function audBatchCheck(w){
   const saldoAlle=balansBuiten?[]:geld.filter(r=>String(r.soort||"")==="balance"&&!r.orderHand&&!audFactuurVan(r));
   const saldo=saldoAlle.filter(r=>Math.abs(Number(r.kolom1)||0)<=25);
   const saldoGroot=saldoAlle.filter(r=>Math.abs(Number(r.kolom1)||0)>25);
-  if(saldoGroot.length) redenen.push(saldoGroot.map(r=>(r.naam||"Balance")+" van "+usd(r.kolom1)).join(", ")+" hoort bij geen factuur. Dat is ontvangen geld: koppel de regel aan de order waar hij bij hoort (knop koppel aan order)");
+  if(saldoGroot.length) redenen.push(saldoGroot.map(r=>(r.naam||"Balance")+" van "+usd(r.kolom1)).join(", ")+" wacht nog op een factuur. Dat is ontvangen geld: koppel de regel aan de order waar hij bij hoort (knop koppel aan order)");
   const geenNr=geld.filter(r=>!audFactuurVan(r)&&String(r.soort||"")!=="balance"&&!r.orderHand);
   if(geenNr.length) redenen.push(geenNr.length+" regel(s) zonder factuurnummer: "+geenNr.map(r=>r.naam).join(", "));
   const geenOrder=geld.filter(r=>{
@@ -2087,7 +2087,7 @@ function audBatchCheck(w){
     const q=audFactuurInQb(nr,r.kolom1,r.naam);
     return !(q&&q.logic4Order);
   });
-  if(geenOrder.length) redenen.push("nog geen Logic4-order voor "+geenOrder.map(r=>audFactuurVan(r)).join(", "));
+  if(geenOrder.length) redenen.push("Logic4-order volgt nog voor "+geenOrder.map(r=>audFactuurVan(r)).join(", "));
   /* Wat er op 4630 komt is het verschil tussen wat er op de orders gaat en de
      netto ontvangst, precies zoals Osman het beschreef. Zo komt 1160 altijd op
      nul uit, ook met een saldoregel ertussen. */
@@ -2116,8 +2116,45 @@ function audRegelActies(w,r,inQb){
     : "<button type='button' class='audKoppelOpen' data-k='"+esc(k)+"' style='"+knop+"' title='Deze regel boeken op een order die al in Logic4 staat'>koppel aan order</button>";
   h+=r.naarChantal
     ? "<span style='font-size:11px;color:#92400e;margin-left:4px'>bij Chantal sinds "+esc(String(r.naarChantal).slice(0,10).split("-").reverse().join("-"))+"</span>"
-    : "<button type='button' class='audNaarChantal' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"' title='Staat deze regel niet in QuickBooks? Dan komt er een taak bij Chantal om hem via Audrey in QuickBooks te laten zetten.'>naar Chantal</button>";
+    : "<button type='button' class='audNaarChantal' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"' title='Staat deze regel nog buiten QuickBooks? Dan komt er een taak bij Chantal om hem via Audrey in QuickBooks te laten zetten.'>naar Chantal</button>";
   return h+"</div>";
+}
+/* Bij een refund altijd de reden (Dolf, 25 sep 2026). Die komt uit QuickBooks
+   (de terugbetaling of creditnota met hetzelfde nummer) en wordt één keer bij
+   de batch bewaard. Staat er geen reden, dan stuurt "reden vragen" de regel
+   als taak naar Chantal, die het bij Audrey navraagt. */
+let audRefundBezig={};
+function isRefund(r){ return String(r.soort||"")!=="totaal"&&((Number(r.kolom1)||0)<0||/refund|terugbetal/i.test(String(r.naam||""))); }
+function audRefundInfo(w,r){
+  if(!isRefund(r)) return "";
+  const orig=wiresData.wires.find(x=>String(x.id)===String(w.id))||w;
+  const idx=orig.regels.indexOf(r); if(idx<0) return "";
+  const knop="border:1px solid var(--border);background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer;margin:3px 4px 0 0";
+  const rf=r.refund;
+  if(!rf){
+    if(!audRefundBezig[w.id+":"+idx]){ audRefundBezig[w.id+":"+idx]=true; audRefundOphalen(w.id,idx); }
+    return "<div style='font-size:11px;color:var(--muted);margin-top:3px'>Reden van de refund ophalen uit QuickBooks…</div>";
+  }
+  const gevraagd=r.redenGevraagd?"<span style='color:#92400e;margin-left:4px'>reden gevraagd aan Chantal op "+esc(String(r.redenGevraagd).slice(0,10).split("-").reverse().join("-"))+"</span>":"";
+  const vraag=r.redenGevraagd?"":"<button type='button' class='audRedenVraag' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>reden vragen aan Chantal</button>";
+  if(rf.gevonden&&rf.reden){
+    const verschil=Math.abs(Math.abs(Number(r.kolom1)||0)-Math.abs(Number(rf.bedrag)||0))>0.01;
+    return "<div style='font-size:11.5px;margin-top:4px;padding:5px 8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:7px;color:#075985;white-space:normal;max-width:420px'>"+
+      "<b>Reden refund:</b> "+esc(rf.reden)+"<div style='color:var(--muted);font-size:10.5px'>QuickBooks-"+esc(rf.soort)+" "+esc(rf.docNr)+" · "+esc(rf.klant)+" · "+esc(String(rf.datum||"").split("-").reverse().join("-"))+" · "+esc(usd(rf.bedrag))+
+      (verschil?" <span style='color:#b45309'>(de batch noemt "+esc(usd(Math.abs(Number(r.kolom1)||0)))+")</span>":"")+"</div></div>";
+  }
+  return "<div style='font-size:11.5px;margin-top:4px;padding:5px 8px;background:#fff7ed;border:1px solid #fdba74;border-radius:7px;color:#9a3412;white-space:normal;max-width:420px'>"+
+    (rf.gevonden?"De reden staat nog open in QuickBooks, bij "+esc(rf.soort)+" "+esc(rf.docNr)+".":"Deze refund staat nog in te voeren in QuickBooks, dus de reden volgt nog.")+
+    "<div>"+vraag+gevraagd+"</div></div>";
+}
+async function audRefundOphalen(wid,idx){
+  try{
+    const j=await audPost("/amerika/qb/refund-reden",{wireId:wid,index:Number(idx)});
+    const w=wiresData.wires.find(x=>String(x.id)===String(wid)); if(w&&w.regels[idx]) w.regels[idx].refund=j.refund;
+  }catch(e){
+    const w=wiresData.wires.find(x=>String(x.id)===String(wid)); if(w&&w.regels[idx]) w.regels[idx].refund={gevonden:false};
+  }
+  audRender();
 }
 async function audPost(pad,lijf){
   const r=await fetch(WORKER+pad,{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
@@ -2128,14 +2165,14 @@ async function audPost(pad,lijf){
 }
 function audRender(){
   const box=document.getElementById("audList");
-  if(!wiresData.wires.length){ box.innerHTML="<div class='card'><p class='lead'>Nog geen wire-overzichten ingelezen. Upload hierboven Audrey's mail (.eml).</p></div>"; return; }
+  if(!wiresData.wires.length){ box.innerHTML="<div class='card'><p class='lead'>Wire-overzichten komen hier te staan. Upload hierboven Audrey's mail (.eml).</p></div>"; return; }
   const qz=((document.getElementById("audWireZoek")||{}).value||"").trim().toLowerCase();
   const past=r=>!qz||String(r.factuur||"").toLowerCase().includes(qz)||String(r.naam||"").toLowerCase().includes(qz);
   const wires=wiresData.wires.slice()
     .map(w=>qz?Object.assign({},w,{regels:w.regels.filter(past)}):w)
     .filter(w=>w.regels.length)
     .sort((a,b)=>String(b.datum).localeCompare(String(a.datum)));
-  if(qz&&!wires.length){ box.innerHTML="<div class='card'><p class='lead'>Geen wire-regel gevonden voor \u201c"+esc(qz)+"\u201d.</p></div>"; return; }
+  if(qz&&!wires.length){ box.innerHTML="<div class='card'><p class='lead'>Hier komt de wire-regel voor \u201c"+esc(qz)+"\u201d te staan - probeer een ander zoekwoord.</p></div>"; return; }
   box.innerHTML=wires.map(w=>{
     const openN=w.regels.filter(r=>{
       if(r.soort!=="factuur") return false;
@@ -2174,7 +2211,7 @@ function audRender(){
              en wilde opnieuw boeken; het Dashboard zei "al verwerkt". Deze
              knop maakt het geheugen van deze batch leeg, meer niet. */
           (batchGeboekt(w).orders>0||geboektIds["koers:"+w.id]
-            ? "<button class='btn' type='button' data-terug='"+esc(w.id)+"' title='Alleen als de boekingen van deze batch in Logic4 met de hand zijn verwijderd: het Dashboard vergeet dat hij geboekt is, zodat je opnieuw kunt boeken. In Logic4 verandert er niets.'>opnieuw kunnen boeken</button>"
+            ? "<button class='btn' type='button' data-terug='"+esc(w.id)+"' title='Alleen als de boekingen van deze batch in Logic4 met de hand zijn weggehaald: het Dashboard vergeet dat hij geboekt is, zodat je opnieuw kunt boeken. Logic4 blijft zoals hij is.'>opnieuw kunnen boeken</button>"
             : "")+
           "<button class='btn' type='button' data-del='"+esc(w.id)+"'>verwijderen</button>"+
         "</div></div>"+
@@ -2186,15 +2223,15 @@ function audRender(){
             "<b>Sluit aan.</b> Orders afboeken "+esc(usd(ct.opOrders))+", bankkosten "+esc(usd(ct.kosten))+
             " op 4630, blijft op 1160 "+esc(usd(ct.netto))+"."+
             (ct.opOrders!==ct.bruto?("<br>Daarvan gaat "+esc(usd(c2v(ct.bruto-ct.opOrders)))+
-              " niet naar een order (saldoregel); dat zit in de "+esc(usd(ct.kosten))+" op 4630."):"")+
-            (ct.balansBuiten?("<br>De Balance Due van "+esc(usd(ct.balansBuiten))+" is wat de klant nog moet betalen; die zit niet in deze betaling en wordt niet geboekt."):"")+
-            (ct.kostenUitVerschil?("<br>In de mail staan geen bankkosten per factuur. Het verschil tussen gefactureerd en ontvangen ("+esc(usd(ct.kosten))+") zijn de bankkosten van deze batch en gaan op 4630."):"")+
+              " los van een order (saldoregel); dat zit in de "+esc(usd(ct.kosten))+" op 4630."):"")+
+            (ct.balansBuiten?("<br>De Balance Due van "+esc(usd(ct.balansBuiten))+" is wat de klant nog moet betalen; dat staat los van deze betaling en blijft open."):"")+
+            (ct.kostenUitVerschil?("<br>De mail noemt de bankkosten als één bedrag. Het verschil tussen gefactureerd en ontvangen ("+esc(usd(ct.kosten))+") zijn de bankkosten van deze batch en gaan op 4630."):"")+
             (totaalRegel&&totaalRegel.handmatig?"<div style='margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap'><span style='font-size:12px'>Ontvangen bedrag (zelf ingevuld), aanpassen:</span>"+
                 "<input type='text' inputmode='decimal' data-ontvangen-usd='"+esc(w.id)+"' value='"+esc(nlBedrag(totaalRegel.kolom3))+"' style='width:130px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit'>"+
                 "<button class='btn' type='button' data-ontvangen='"+esc(w.id)+"'>bedrag aanpassen</button></div>":"")+
             "</div>"
           : "<div class='status-msg' style='margin:0 0 10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5'>"+
-            "<b>Afwijking, deze batch wordt niet geboekt.</b><ul style='margin:6px 0 0;padding-left:18px'>"+
+            "<b>Afwijking, deze batch blijft staan.</b><ul style='margin:6px 0 0;padding-left:18px'>"+
             ct.redenen.map(r=>"<li>"+esc(r)+"</li>").join("")+"</ul>"+
             /* Osman (14 sep 2026): "kan ik dit niet boeken omdat er geen
                orders zijn gevonden; ligt dit bij Chantal?" Niet meer: het
@@ -2208,7 +2245,7 @@ function audRender(){
               : "")+
             (ct.redenen.some(r=>/geen Logic4-order/i.test(r))
               ? "<div style='margin-top:8px'><button class='btn' type='button' data-orders='"+esc(w.id)+"' title='Voor elke factuur in deze batch zonder Logic4-order de order aanmaken uit QuickBooks, net als bij accorderen'>ontbrekende orders aanmaken</button>"+
-                " <span style='font-size:12px'>Maakt de Logic4-orders aan uit QuickBooks voor de facturen die er nog niet zijn; daarna kun je boeken.</span></div>"
+                " <span style='font-size:12px'>Maakt de Logic4-orders aan uit QuickBooks voor de facturen die nog volgen; daarna kun je boeken.</span></div>"
               : "")+"</div>";
       })()+
       (function(){
@@ -2221,7 +2258,7 @@ function audRender(){
         const eur=v=>"\u20ac "+Number(v||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2});
         if(g.koers) return "<div class='status-msg' style='margin:0 0 10px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe'>"+
           "<b>Koersverschil geboekt.</b> Op 1160 stond "+esc(eur(g.koers.op1160))+", op de bank kwam "+esc(eur(g.koers.ontvangenEur))+
-          (g.koers.bedragEur?"; verschil "+esc(eur(g.koers.bedragEur))+" naar 9075 Koersverschil":"; geen verschil")+" ("+esc(datumNL(g.koers.ts))+").</div>";
+          (g.koers.bedragEur?"; verschil "+esc(eur(g.koers.bedragEur))+" naar 9075 Koersverschil":"; sluit aan")+" ("+esc(datumNL(g.koers.ts))+").</div>";
         return "<div class='status-msg' style='margin:0 0 10px;background:#f8faf5;color:#1f2937;border:1px solid #dbe7cc;display:flex;gap:10px;align-items:center;flex-wrap:wrap'>"+
           "<span><b>Koersverschil.</b> Op 1160 staat nu "+esc(eur(g.op1160))+" (tegen 1,12). Wat kwam er in euro op de bank?</span>"+
           "<input type='text' inputmode='decimal' data-koers-eur='"+esc(w.id)+"' placeholder='bv. 33.850,12' style='width:130px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit'>"+
@@ -2248,7 +2285,7 @@ function audRender(){
         return "<tr"+(isVerwerkt?" style='background:#f0fdf4'":"")+">"+
           "<td><b>"+esc(r.naam)+"</b>"+(inQb&&inQb.geaccordeerd?" <span class='pill' style='background:#dcfce7;color:#15803d;font-size:10px'>Logic4 #"+esc(String(inQb.logic4Order||"?"))+"</span>":"")+
             (inQb&&inQb.notitie?"<div style='font-size:11px;color:var(--muted)' title='Eigen notitie bij deze factuur'>&#9998; "+esc(inQb.notitie)+"</div>":"")+
-            audRegelActies(w,r,inQb)+"</td>"+
+            audRegelActies(w,r,inQb)+audRefundInfo(w,r)+"</td>"+
           /* Geen nummer: dan een vakje om het erbij te zetten (Chantal weet
              vaak wel bij welke factuur "Tatum refund" hoort). */
           /* Het factuurnummer is altijd aan te passen: klik op het potlood en
@@ -2290,7 +2327,7 @@ function audRender(){
     const oudeDatum=w.datum;
     w.datum=inp.value;
     try{ await audSave(); if(window.fpLog) window.fpLog("wire-datum-gewijzigd",oudeDatum+" -> "+inp.value); audRender(); }
-    catch(e){ w.datum=oudeDatum; alert("Kon de datum niet opslaan: "+e.message); }
+    catch(e){ w.datum=oudeDatum; alert("De datum vraagt nog een poging: "+e.message); }
   }));
   box.querySelectorAll(".audVerw").forEach(cb=>cb.addEventListener("change",()=>audVerwerktKlik(cb)));
   box.querySelectorAll(".audVerberg").forEach(b=>b.addEventListener("click",()=>qbVerbergKlik(b.dataset.nr)));
@@ -2310,7 +2347,7 @@ function audRender(){
     if(!confirm("Batch van "+(w&&w.datum||b.dataset.terug)+" opnieuw kunnen boeken?\n\n"+
       "Het Dashboard vergeet dat deze batch geboekt is ("+g.orders+" orders"+(g.koers?", koersverschil":"")+"). "+
       "Doe dit alleen als je de boekingen van deze batch in Logic4 zelf al hebt verwijderd; anders wordt alles twee keer geboekt.\n\n"+
-      "In Logic4 verandert hier niets door.")) return;
+      "Logic4 blijft hierbij zoals hij is.")) return;
     b.disabled=true;
     try{
       const r=await fetch(WORKER+"/amerika/qb/boeking-terugzetten",{method:"POST",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
@@ -2320,7 +2357,7 @@ function audRender(){
       if(window.fpLog) window.fpLog("batch-boeking-teruggezet","batch "+b.dataset.terug+": "+j.verwijderd+" aantekeningen weg");
       await audLoadGeboekt(); audRender();
       alert("Klaar. Deze batch kan nu opnieuw geboekt worden met 'boeken op 1160'.");
-    }catch(e){ alert("Terugzetten lukte niet: "+e.message); b.disabled=false; }
+    }catch(e){ alert("Terugzetten vraagt nog een poging: "+e.message); b.disabled=false; }
   }));
   box.querySelectorAll(".audFactuurPen").forEach(b=>b.addEventListener("click",()=>{ audFactuurWijzig[b.dataset.k]=true; audRender(); const i=box.querySelector(".audRegelFactuur[data-wire='"+CSS.escape(b.dataset.k.split(":")[0])+"'][data-i='"+b.dataset.k.split(":")[1]+"']"); if(i) i.focus(); }));
   box.querySelectorAll(".audKoppelOpen").forEach(b=>b.addEventListener("click",()=>{ audKoppelOpen[b.dataset.k]=true; audRender();
@@ -2334,7 +2371,7 @@ function audRender(){
       if(rg){ if(nr){ rg.orderHand=j.orderId; rg.orderHandKlant=(j.order||{}).klant||""; if(rg.soort==="overig"||rg.soort==="balance") rg.soort="factuur"; } else { delete rg.orderHand; delete rg.orderHandKlant; } }
       if(window.fpLog) window.fpLog("batchregel-order","batch "+wid+" regel "+i+" -> "+(nr||"los"));
       audRender();
-    }catch(err){ alert("Koppelen lukte niet: "+err.message); if(knop) knop.disabled=false; }
+    }catch(err){ alert("Koppelen vraagt nog een poging: "+err.message); if(knop) knop.disabled=false; }
   };
   box.querySelectorAll(".audKoppel").forEach(b=>b.addEventListener("click",()=>{
     const inp=box.querySelector(".audKoppelNr[data-wire='"+CSS.escape(b.dataset.wire)+"'][data-i='"+b.dataset.i+"']");
@@ -2346,15 +2383,25 @@ function audRender(){
     if(e.key==="Enter"){ const nr=inp.value.replace(/\D/g,""); if(nr) koppel(inp.dataset.wire,inp.dataset.i,nr,null); }
   }));
   box.querySelectorAll(".audLos").forEach(b=>b.addEventListener("click",()=>{ if(confirm("Deze regel losmaken van de order?")) koppel(b.dataset.wire,b.dataset.i,null,b); }));
+  box.querySelectorAll(".audRedenVraag").forEach(b=>b.addEventListener("click",async()=>{
+    if(!confirm("Een taak bij Chantal zetten om bij Audrey de reden van deze refund na te vragen?")) return;
+    b.disabled=true;
+    try{
+      await audPost("/amerika/qb/naar-chantal",{wireId:b.dataset.wire,index:Number(b.dataset.i),soort:"reden"});
+      const w=wiresData.wires.find(x=>String(x.id)===b.dataset.wire); const rg=w&&w.regels[Number(b.dataset.i)]; if(rg) rg.redenGevraagd=new Date().toISOString();
+      if(window.fpLog) window.fpLog("refund-reden-gevraagd","batch "+b.dataset.wire+" regel "+b.dataset.i);
+      audRender();
+    }catch(err){ alert("Doorsturen vraagt nog een poging: "+err.message); b.disabled=false; }
+  }));
   box.querySelectorAll(".audNaarChantal").forEach(b=>b.addEventListener("click",async()=>{
-    if(!confirm("Een taak bij Chantal zetten: deze regel staat niet in QuickBooks en moet via Audrey worden toegevoegd?")) return;
+    if(!confirm("Een taak bij Chantal zetten: deze regel staat nog buiten QuickBooks en gaat via Audrey erin?")) return;
     b.disabled=true;
     try{
       await audPost("/amerika/qb/naar-chantal",{wireId:b.dataset.wire,index:Number(b.dataset.i)});
       const w=wiresData.wires.find(x=>String(x.id)===b.dataset.wire); const rg=w&&w.regels[Number(b.dataset.i)]; if(rg) rg.naarChantal=new Date().toISOString();
       if(window.fpLog) window.fpLog("batchregel-naar-chantal","batch "+b.dataset.wire+" regel "+b.dataset.i);
       audRender();
-    }catch(err){ alert("Doorsturen lukte niet: "+err.message); b.disabled=false; }
+    }catch(err){ alert("Doorsturen vraagt nog een poging: "+err.message); b.disabled=false; }
   }));
   box.querySelectorAll(".audRegelFactuur").forEach(inp=>inp.addEventListener("keydown",async(e)=>{
     if(e.key==="Escape"){ delete audFactuurWijzig[inp.dataset.wire+":"+inp.dataset.i]; audRender(); return; }
@@ -2370,7 +2417,7 @@ function audRender(){
       const w=wiresData.wires.find(x=>String(x.id)===inp.dataset.wire); if(w&&w.regels[Number(inp.dataset.i)]){ const rg=w.regels[Number(inp.dataset.i)]; if(nr){ rg.factuur=nr; rg.factuurDoor=(localStorage.getItem("fp.email")||""); if(rg.soort==="overig"||rg.soort==="balance") rg.soort="factuur"; } else { delete rg.factuur; delete rg.factuurDoor; } }
       if(window.fpLog) window.fpLog("batchregel-factuur","batch "+inp.dataset.wire+" regel "+inp.dataset.i+" -> "+nr);
       audRender();
-    }catch(err){ alert("Factuurnummer bewaren mislukte: "+err.message); inp.disabled=false; }
+    }catch(err){ alert("Het factuurnummer vraagt nog een poging: "+err.message); inp.disabled=false; }
   }));
   box.querySelectorAll("[data-ontvangen]").forEach(b=>b.addEventListener("click",async()=>{
     const inp=box.querySelector("[data-ontvangen-usd='"+CSS.escape(b.dataset.ontvangen)+"']");
@@ -2385,7 +2432,7 @@ function audRender(){
       if(window.fpLog) window.fpLog("batch-ontvangen-gezet","batch "+b.dataset.ontvangen+": "+j.bedrag);
       await audLoad(); audRender();
       alert("Vastgelegd als $ "+nlBedrag(j.bedrag)+" ontvangen.");
-    }catch(e){ alert("Vastleggen lukte niet: "+e.message); b.disabled=false; }
+    }catch(e){ alert("Vastleggen vraagt nog een poging: "+e.message); b.disabled=false; }
   }));
   /* Alles in deze batch in één keer aan- of uitvinken (Osman via Gerrit,
      21 sep 2026). Gaat regel voor regel door dezelfde bewaarroute. */
@@ -2395,7 +2442,7 @@ function audRender(){
     const cbs=[...tabel.querySelectorAll("tbody .audVerw")].filter(x=>x.checked!==aan);
     for(const x of cbs){
       try{ await audZetVerwerkt(x.dataset.nr,aan,x.dataset.qbid||null); }
-      catch(e){ alert("Kon niet opslaan bij #"+x.dataset.nr+": "+e.message); break; }
+      catch(e){ alert("Opslaan vraagt nog een poging bij #"+x.dataset.nr+": "+e.message); break; }
     }
     if(window.fpLog) window.fpLog("batch-alles-verwerkt","batch "+cb.dataset.alleVerwerkt+(aan?" alles afgevinkt":" alles teruggedraaid")+" ("+cbs.length+")");
     audRenderWachtrij(); audRender();
@@ -2420,7 +2467,7 @@ function audRender(){
         (mis.length?("\n\nNiet gelukt:\n"+mis.map(x=>"  • factuur "+x.factuur+": "+x.error).join("\n")):"")+
         (ok.length?"\n\nDe batch kan nu worden geboekt met 'boeken op 1160'.":""));
       await qbInit(true).catch(()=>{}); await audLoadFacturen(); audRender();
-    }catch(e){ alert("Orders aanmaken mislukte: "+e.message); b.disabled=false; b.textContent=oud; }
+    }catch(e){ alert("Orders aanmaken vraagt nog een poging: "+e.message); b.disabled=false; b.textContent=oud; }
   }));
   box.querySelectorAll("[data-koers]").forEach(b=>b.addEventListener("click",async()=>{
     const inp=box.querySelector("[data-koers-eur='"+b.dataset.koers+"']");
@@ -2439,12 +2486,12 @@ function audRender(){
       if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
       if(window.fpLog) window.fpLog("koersverschil-geboekt","batch "+b.dataset.koers+" verschil "+j.verschil);
       await audLoadGeboekt(); audRender();
-    }catch(e){ alert("Koersverschil boeken mislukte: "+e.message); b.disabled=false; b.textContent="verschil naar 9075 boeken"; }
+    }catch(e){ alert("Het koersverschil vraagt nog een poging: "+e.message); b.disabled=false; b.textContent="verschil naar 9075 boeken"; }
   }));
   box.querySelectorAll("[data-del]").forEach(b=>b.addEventListener("click",async()=>{
     if(!confirm("Dit wire-overzicht verwijderen? De vinkjes gaan ook weg.")) return;
     wiresData.wires=wiresData.wires.filter(w=>String(w.id)!==b.dataset.del);
-    try{ await audSave(); audRender(); }catch(e){ alert("Kon niet opslaan: "+e.message); }
+    try{ await audSave(); audRender(); }catch(e){ alert("Opslaan vraagt nog een poging: "+e.message); }
   }));
 }
 /* Vangnet voor als de opmaak niet meekomt. Plakt iemand als platte tekst,
@@ -2524,7 +2571,7 @@ function audParseTekst(tekst){
     try{
       let regels=audParse(bron);
       if(!regels.length) regels=audParseTekst(vak.innerText||vak.textContent||"");
-      if(!regels.length) return toon("bad","Geen bedragen gevonden in wat je hebt geplakt. Selecteer de tabel met de factuurregels en plak die - of de hele mail met Ctrl+A.");
+      if(!regels.length) return toon("bad","In wat je plakte staan de bedragen nog open. Selecteer de tabel met de factuurregels en plak die - of de hele mail met Ctrl+A.");
       await audLoad();
       wiresData.wires.push({
         id:(Date.now().toString(36)+Math.random().toString(36).slice(2,7)),
@@ -2539,7 +2586,7 @@ function audParseTekst(tekst){
       const nF=regels.filter(r=>r.soort==="factuur").length;
       toon("ok","Ingelezen: "+regels.length+" regel(s), waarvan "+nF+" factuurregel(s). Vink hieronder aan wat in Logic4 verwerkt is.");
       if(window.fpLog) window.fpLog("audrey-wire-geplakt",nF+" factuurregels");
-    }catch(e){ console.error(e); toon("bad","Kon niet inlezen: "+e.message); }
+    }catch(e){ console.error(e); toon("bad","Inlezen vraagt nog een poging: "+e.message); }
   });
   toonLeeg();
 })();
@@ -2555,7 +2602,7 @@ document.getElementById("audBtn").addEventListener("click",async()=>{
     // Quoted-printable is per definitie 7-bit ASCII, dus gewoon als tekst lezen
     const raw=await file.text();
     const regels=audParse(raw);
-    if(!regels.length) return toon("bad","Geen bedragen-tabel gevonden in dit bestand. Klopt het dat dit Audrey's wire-mail is (opgeslagen als .eml)?");
+    if(!regels.length) return toon("bad","De bedragen-tabel staat in dit bestand nog open. Klopt het dat dit Audrey's wire-mail is (opgeslagen als .eml)?");
     await audLoad();
     const wire={
       id:(Date.now().toString(36)+Math.random().toString(36).slice(2,7)),
@@ -2570,7 +2617,7 @@ document.getElementById("audBtn").addEventListener("click",async()=>{
     const nF=regels.filter(r=>r.soort==="factuur").length;
     toon("ok","Ingelezen: "+regels.length+" regel(s), waarvan "+nF+" factuurregel(s). Vink hieronder aan wat in Logic4 verwerkt is.");
     if(window.fpLog) window.fpLog("audrey-wire-ingelezen",nF+" factuurregels uit "+file.name);
-  }catch(e){ console.error(e); toon("bad","Kon niet inlezen: "+e.message); }
+  }catch(e){ console.error(e); toon("bad","Inlezen vraagt nog een poging: "+e.message); }
 });
 </script>
 <script>
@@ -2640,13 +2687,13 @@ document.getElementById("audBtn").addEventListener("click",async()=>{
     var knop=document.createElement("button"); knop.type="button"; knop.className="fp-upload-btn";
     knop.textContent=inp.multiple?"Bestanden kiezen":"Bestand kiezen";
     var naam=document.createElement("span"); naam.className="fp-upload-naam";
-    naam.textContent="Nog geen bestand gekozen";
+    naam.textContent="Kies een bestand";
     inp.parentNode.insertBefore(wrap,inp);
     wrap.appendChild(knop); wrap.appendChild(inp); wrap.appendChild(naam);
     knop.addEventListener("click",function(){ inp.click(); });
     inp.addEventListener("change",function(){
       var n=inp.files?inp.files.length:0;
-      naam.textContent = n===0 ? "Nog geen bestand gekozen"
+      naam.textContent = n===0 ? "Kies een bestand"
         : (n===1 ? inp.files[0].name : n+" bestanden gekozen");
       naam.classList.toggle("gekozen", n>0);
     });

@@ -75,7 +75,7 @@
   var CATEGORIE_TEKST = {
     terecht: "Terecht open - rekening op termijn",
     garantie: "Garantieorder - hoort op nul te staan",
-    opschonen: "Direct betaald bij verkoop - waarschijnlijk niet gekoppeld",
+    opschonen: "Direct betaald bij verkoop - waarschijnlijk nog te koppelen",
     teveel: "Te veel betaald of creditnota",
     onbekend: "Betaalwijze onbekend",
   };
@@ -149,7 +149,7 @@
   async function bouw() {
     cfg.melden("Openstaande posten ophalen…", 2);
     var open = await cfg.logic4("/v3/Orders/GetOpenPaymentInvoices", {}) || [];
-    if (!open.length) throw new Error("Logic4 gaf geen openstaande posten terug.");
+    if (!open.length) throw new Error("Logic4 gaf 0 openstaande posten terug.");
 
     var kaart = await artikelKaart();
 

@@ -151,7 +151,7 @@
       ritmes = (j && typeof j.ritmes === "object" && j.ritmes) ? j.ritmes : {};
       stand(""); teken(); telBij();
       return zorgVoorRitmetaken();
-    }).catch(function (e) { stand("Lijst niet opgehaald (" + e.message + "). Je ziet de laatst geladen stand.", true); });
+    }).catch(function (e) { stand("Lijst ophalen vraagt een nieuwe poging (" + e.message + "). Je ziet de laatst geladen stand.", true); });
   }
 
   /* Voor elk eigen ritme: staat de taak van deze periode er al? Zo niet, maak
@@ -204,7 +204,7 @@
         return true;
       });
     }).catch(function (e) {
-      stand("Niet opgeslagen: " + e.message + ". Probeer het nog een keer.", true);
+      stand("Opslaan vraagt een nieuwe poging: " + e.message + ". Probeer het nog een keer.", true);
       return false;
     }).then(function (r) { bezig = false; return r; });
   }
@@ -301,7 +301,7 @@
     if (!namen.length) return "";
     return "<div class='tl-deelrij'>" + namen.map(function (n) {
       var s = d[n].status;
-      var woord = s === "ja" ? "doet mee" : (s === "nee" ? "geweigerd" : "nog geen antwoord");
+      var woord = s === "ja" ? "doet mee" : (s === "nee" ? "afgeslagen" : "antwoord volgt");
       return "<span class='tl-deel tl-" + (s === "ja" ? "ja" : s === "nee" ? "nee" : "open") + "'>" +
         esc(n) + " · " + woord + "</span>";
     }).join("") + "</div>";
@@ -352,7 +352,7 @@
                  er geen weg terug. De taak van vandaag blijft staan; alleen de
                  herhaling stopt. */
               (loopt ? "<button class='tl-mini' data-stop='" + esc(t.uitRitme) + "' " +
-                 "title='Deze taak niet meer laten terugkomen'>herhaling stoppen</button>" : "")
+                 "title='De herhaling van deze taak stoppen'>herhaling stoppen</button>" : "")
             : "") + "</div>" +
       "</div></div>";
   }
@@ -378,18 +378,18 @@
 
     if (actief === "uitnodiging") {
       var u = lijstUitnodiging();
-      box.innerHTML = !u.length ? "<p class='tl-leeg'>Geen openstaande uitnodigingen.</p>" :
-        "<p class='tl-uitleg'>Iemand wil deze taak bij jou neerleggen. Neem je hem aan, dan staat hij bij <b>Eigen</b>. Weiger je, dan verdwijnt hij van jouw lijst en ziet de uitnodiger dat je hebt geweigerd.</p>" +
+      box.innerHTML = !u.length ? "<p class='tl-leeg'>Hier komen uitnodigingen van collega's.</p>" :
+        "<p class='tl-uitleg'>Iemand wil deze taak bij jou neerleggen. Neem je hem aan, dan staat hij bij <b>Eigen</b>. Sla je hem af, dan verdwijnt hij van jouw lijst en ziet de uitnodiger dat je hebt afgeslagen.</p>" +
         u.map(function (t) {
           return regel(t, { geenVink: true,
             meta: "uitgenodigd door " + kort(t.door) + " op " + datumNL((t.deelnemers[IKNAAM] || {}).op || t.op) +
                   " · week " + (String(t.week).split("-W")[1] || "?"),
             knoppen: "<div class='tl-knoprij'><button class='tl-knop tl-vol' data-ja='" + esc(t.id) + "'>Aannemen</button>" +
-                     "<button class='tl-knop tl-rood' data-nee='" + esc(t.id) + "'>Weigeren</button></div>" });
+                     "<button class='tl-knop tl-rood' data-nee='" + esc(t.id) + "'>Afslaan</button></div>" });
         }).join("");
     } else if (actief === "afgerond") {
       var af = lijstAfgerond().sort(function (a, b) { return String(b.klaarOp).localeCompare(String(a.klaarOp)); });
-      box.innerHTML = !af.length ? "<p class='tl-leeg'>Nog niets afgevinkt. Wat je afvinkt verdwijnt uit de lijst en komt hier te staan.</p>" :
+      box.innerHTML = !af.length ? "<p class='tl-leeg'>Wat je afvinkt verdwijnt uit de lijst en komt hier te staan.</p>" :
         af.map(function (t) {
           return regel(t, { af: true,
             meta: (t.lijst === "delegeren" ? "Delegeren" : "Eigen taak") + " · week " + (String(t.week).split("-W")[1] || "?") +
@@ -400,8 +400,8 @@
       var rijen = actief === "eigen" ? lijstEigen() : lijstDelegeren();
       box.innerHTML = !rijen.length
         ? "<p class='tl-leeg'>" + (actief === "delegeren"
-            ? "Niets uitstaan bij iemand anders. Zet hierboven een klus neer en vul in voor wie."
-            : "Geen openstaande taken. Zet hierboven neer wat er deze week moet gebeuren.") + "</p>"
+            ? "Hier komen de klussen die je bij iemand anders neerlegt. Zet hierboven een klus neer en vul in voor wie."
+            : "Alles is af. Zet hierboven neer wat er deze week moet gebeuren.") + "</p>"
         : perWeek(rijen);
     }
     koppelRegels(box);
@@ -433,7 +433,7 @@
       b.addEventListener("click", function () {
         var rid = b.dataset.stop, rt = ritmes[rid];
         if (!rt) return;
-        if (!confirm("\u201c" + rt.tekst + "\u201d niet meer laten terugkomen?\n\nDe taak van nu blijft gewoon staan; alleen de herhaling stopt.")) return;
+        if (!confirm("De herhaling van \u201c" + rt.tekst + "\u201d stoppen?\n\nDe taak van nu blijft gewoon staan; alleen de herhaling stopt.")) return;
         b.disabled = true;
         var bewaar = rt;
         schrijf(null, function (rs) { delete rs[rid]; }).then(function (ok) {

@@ -51,19 +51,34 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-25", iedereen: true, soort: "beter",
+      titel: "Vriendelijkere teksten",
+      wat: "De meldingen en uitleg in het Dashboard zijn herschreven: ze zeggen nu wat er klaarstaat, wat er nog komt en wat je kunt doen."
+    },
+    {
+      datum: "2026-09-25", iedereen: true, soort: "beter",
+      titel: "Alles in positieve taal",
+      wat: "Elke melding, knop en uitleg in het dashboard zegt nu wat er wél kan of wat de volgende stap is. Waar eerst stond dat iets mislukte, staat nu bijvoorbeeld dat het nog een poging vraagt, en waar iets ontbrak staat nu wat je invult. Zo weet je meteen wat je kunt doen."
+    },
+    {
       datum: "2026-09-25", bestand: "amerika.html", soort: "beter",
-      titel: "Geen dubbele orders meer uit QuickBooks, en toch kunnen boeken",
-      wat: "Voordat er een order uit QuickBooks wordt gemaakt, kijkt het Dashboard of die klant al een order van ongeveer hetzelfde bedrag in Logic4 heeft, zoals een dealercontainer. Zo ja, dan wordt er niets aangemaakt en zie je een oranje melding met die order: koppel de factuur eraan, of kies bewust toch een nieuwe order. Houdt het boeken een batch tegen omdat een bedrag niet past bij wat er op de order open staat, dan kun je nu toch boeken en het daarna in Logic4 rechtzetten; de melding zegt welke orders dat zijn."
+      titel: "Bij elke refund de reden",
+      wat: "Staat er in een batch een refund, dan zie je nu de reden erbij, rechtstreeks uit QuickBooks, met het nummer, de klant en de datum. Staat de reden daar nog open, dan zet de knop Reden vragen aan Chantal een taak bij Chantal om het bij Audrey na te vragen."
+    },
+    {
+      datum: "2026-09-25", bestand: "amerika.html", soort: "beter",
+      titel: "Elke order uit QuickBooks één keer, en boeken bij een afwijkend bedrag",
+      wat: "Voordat er een order uit QuickBooks wordt gemaakt, kijkt het Dashboard of die klant al een order van ongeveer hetzelfde bedrag in Logic4 heeft, zoals een dealercontainer. Zo ja, dan wacht het Dashboard en zie je een oranje melding met die order: koppel de factuur eraan, of kies bewust toch een nieuwe order. Houdt het boeken een batch tegen omdat een bedrag afwijkt van wat er op de order open staat, dan kun je nu toch boeken en het daarna in Logic4 rechtzetten; de melding zegt welke orders dat zijn."
     },
     {
       datum: "2026-09-25", bestand: "planning.html", soort: "hersteld",
       titel: "Typen na verwijderen werkt weer",
-      wat: "Na het verwijderen van een afspraak of melding kon je in de Planning niets meer intypen tot je de tegel opnieuw opende. De vraag Weet je het zeker? staat nu in de Planning zelf, en daarna kun je gewoon verder typen."
+      wat: "Na het verwijderen van een afspraak of melding typ je in de Planning nu meteen verder, zonder de tegel opnieuw te openen. De vraag Weet je het zeker? staat daarvoor in de Planning zelf."
     },
     {
       datum: "2026-09-25", bestand: "amerika.html", soort: "beter",
       titel: "Batches: koppelen aan een order, naar Chantal sturen, en een Historie",
-      wat: "Een regel zonder order (zoals een terugbetaling of een Balance zonder factuurnummer) koppel je nu met de knop Koppel aan order aan een order die al in Logic4 staat. Staat een regel niet in QuickBooks, dan zet Naar Chantal er een taak voor haar bij. Bij Facturen kun je een factuur aan een bestaande order hangen in plaats van een nieuwe te maken. Geen bankkosten in de mail maar wel minder ontvangen? Dan gaat het verschil als bankkosten op 4630. Wordt een batch bij het boeken tegengehouden, dan staat erbij waarom. Geboekte batches staan onderaan onder Historie."
+      wat: "Een regel zonder order (zoals een terugbetaling of een Balance zonder factuurnummer) koppel je nu met de knop Koppel aan order aan een order die al in Logic4 staat. Moet een regel nog in QuickBooks komen, dan zet Naar Chantal er een taak voor haar bij. Bij Facturen kun je een factuur aan een bestaande order hangen in plaats van een nieuwe te maken. Is er minder ontvangen en staan er in de mail 0 bankkosten? Dan gaat het verschil als bankkosten op 4630. Wordt een batch bij het boeken tegengehouden, dan staat erbij waarom. Geboekte batches staan onderaan onder Historie."
     },
     {
       datum: "2026-09-25", iedereen: true, soort: "beter",
@@ -73,7 +88,7 @@
     {
       datum: "2026-09-25", bestand: "amerika.html", soort: "beter",
       titel: "Amerika-orders op naam van de klant",
-      wat: "Een order uit QuickBooks staat in Logic4 nu met de naam, het adres, de mail en de telefoon van de klant zoals in QuickBooks, en niet meer met die van Passion Spa South. De bestaande orders zijn ook bijgewerkt; de bedragen zijn gebleven zoals ze waren. Bij Ontvangen Audrey staat in de kolom Totaal nu per regel het factuurbedrag min de bankkosten, en Amount invoice heet voortaan Factuurbedrag."
+      wat: "Een order uit QuickBooks staat in Logic4 nu met de naam, het adres, de mail en de telefoon van de klant zoals in QuickBooks, in plaats van die van Passion Spa South. De bestaande orders zijn ook bijgewerkt; de bedragen zijn gebleven zoals ze waren. Bij Ontvangen Audrey staat in de kolom Totaal nu per regel het factuurbedrag min de bankkosten, en Amount invoice heet voortaan Factuurbedrag."
     },
     {
       datum: "2026-09-25", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
@@ -108,7 +123,7 @@
     {
       datum: "2026-09-24", bestand: "voorraad.html", soort: "nieuw",
       titel: "Partner containers: cargo ready en de balance",
-      wat: "Klap een container open onder Partner containers. Daar zet je de proforma van Jazzi en de dag waarop je akkoord gaf; het scherm rekent cargo ready uit (2 maanden later). Een week ervoor krijg je bovenaan een melding om bij de fabriek te checken, met een knop voor de balance-mail aan de dealer. Is de balance daarna nog niet binnen, dan meldt het scherm elke dag dat er een herinnering kan. Elke mail staat met datum bij de container. De teksten van de mails pas je aan onderaan het tabblad."
+      wat: "Klap een container open onder Partner containers. Daar zet je de proforma van Jazzi en de dag waarop je akkoord gaf; het scherm rekent cargo ready uit (2 maanden later). Een week ervoor krijg je bovenaan een melding om bij de fabriek te checken, met een knop voor de balance-mail aan de dealer. Staat de balance daarna nog open, dan meldt het scherm elke dag dat er een herinnering kan. Elke mail staat met datum bij de container. De teksten van de mails pas je aan onderaan het tabblad."
     },
     {
       datum: "2026-09-24", iedereen: true, soort: "beter",
@@ -118,7 +133,7 @@
     {
       datum: "2026-09-24", bestand: "tuinmeubelen.html", soort: "beter",
       titel: "Proforma's van Linhai Taicheng en Mei Ya Xin worden gelezen",
-      wat: "Bij Orderbevestiging inlezen kun je nu ook de proforma's van Linhai Taicheng (parasols) en Mei Ya Xin (loungesets) kiezen. Het scherm haalt per artikel het artikelnummer, de kleur en het aantal eruit. Artikelen die Logic4 nog niet kent staan apart, zodat je ze met Gretha kunt doornemen."
+      wat: "Bij Orderbevestiging inlezen kun je nu ook de proforma's van Linhai Taicheng (parasols) en Mei Ya Xin (loungesets) kiezen. Het scherm haalt per artikel het artikelnummer, de kleur en het aantal eruit. Artikelen die nog nieuw zijn voor Logic4 staan apart, zodat je ze met Gretha kunt doornemen."
     },
     {
       datum: "2026-09-24", bestand: "voorraad.html", soort: "hersteld",
@@ -128,7 +143,7 @@
     {
       datum: "2026-09-23", bestand: "voorraadbepaling.html", soort: "nieuw",
       titel: "Voorraadbepaling",
-      wat: "Een nieuwe tegel die laat zien of wat er bij de fabrieken besteld staat in dezelfde verhouding is als wat er verkocht wordt. Per model: verkocht in de laatste 12 maanden, het aandeel daarvan, wat er besteld staat, en hoeveel er nog bij moeten. Particulier en partner samen; Amerika telt niet mee. Klik een model open voor de inkooporders."
+      wat: "Een nieuwe tegel die laat zien of wat er bij de fabrieken besteld staat in dezelfde verhouding is als wat er verkocht wordt. Per model: verkocht in de laatste 12 maanden, het aandeel daarvan, wat er besteld staat, en hoeveel er nog bij moeten. Particulier en partner samen; Amerika staat hier los van. Klik een model open voor de inkooporders."
     },
     {
       datum: "2026-09-23", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
@@ -144,18 +159,18 @@
     {
       datum: "2026-09-23", bestand: "dealerportaal.html", soort: "nieuw",
       titel: "De restbetaling gaat vanzelf",
-      wat: "Meldt Manon een container binnen, dan krijgt elke partner die op een spa uit die container wacht meteen bericht dat hij klaarstaat, met een betaalknop voor het restbedrag. Na 24 werkuren volgt een herinnering. Is er na 48 werkuren niet betaald, dan komt de spa vrij voor een andere klant en houdt de partner zijn plek voor de volgende aankomst. De klok telt alleen werkdagen, dus een container die vrijdagmiddag binnenkomt geeft een deadline op dinsdag.",
+      wat: "Meldt Manon een container binnen, dan krijgt elke partner die op een spa uit die container wacht meteen bericht dat hij klaarstaat, met een betaalknop voor het restbedrag. Na 24 werkuren volgt een herinnering. Staat de betaling na 48 werkuren nog open, dan komt de spa vrij voor een andere klant en houdt de partner zijn plek voor de volgende aankomst. De klok telt alleen werkdagen, dus een container die vrijdagmiddag binnenkomt geeft een deadline op dinsdag.",
     },
 
     {
       datum: "2026-09-23", bestand: "dealerportaal.html", soort: "nieuw",
       titel: "De adviseur staat in de cc",
-      wat: "Elke mail die het partnerportaal naar een partner stuurt gaat voortaan in cc naar de adviseur die die partner heeft aangemaakt. Belt een dealer over een mail, dan weet de adviseur meteen welke dat is. Bij relaties van voor vandaag staat nog geen adviseur; die mails gaan gewoon door, alleen zonder cc.",
+      wat: "Elke mail die het partnerportaal naar een partner stuurt gaat voortaan in cc naar de adviseur die die partner heeft aangemaakt. Belt een dealer over een mail, dan weet de adviseur meteen welke dat is. Bij relaties van voor vandaag is de adviseur nog leeg; die mails gaan gewoon door, dan zonder cc.",
     },
     {
       datum: "2026-09-23", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
       titel: "Leveranciersinformatie: afspraken eerst, dan pas bestellen",
-      wat: "Per leverancier nu ook de productietijd per inkoopvorm, het startmoment van de productietijd, de boeteclausule, en per artikel de IncoTerms en de levertijd. Bovenaan staat de knop Inkooporder maken; die gaat pas aan als alle afspraken zijn ingevuld, en tot die tijd staat erbij wat er nog ontbreekt. Een nieuwe leverancier begint meteen bij de afspraken."
+      wat: "Per leverancier nu ook de productietijd per inkoopvorm, het startmoment van de productietijd, de boeteclausule, en per artikel de IncoTerms en de levertijd. Bovenaan staat de knop Inkooporder maken; die gaat pas aan als alle afspraken zijn ingevuld, en tot die tijd staat erbij wat er nog in te vullen is. Een nieuwe leverancier begint meteen bij de afspraken."
     },
     {
       datum: "2026-09-23", bestand: "prijslijsten-fabrikanten.html", soort: "nieuw",
@@ -180,7 +195,7 @@
     {
       datum: "2026-09-22", bestand: "amerika.html", soort: "hersteld",
       titel: "Amerika: de lijst Bestellingen op Warehouse Texas is terug",
-      wat: "Het eerste tabblad (Containers) bleef leeg: geen orders, geen aantallen. De lijst laadt nu weer, met de tellers erboven."
+      wat: "Het eerste tabblad (Containers) laadt weer: de orders en de aantallen staan erin, met de tellers erboven."
     },
     {
       datum: "2026-09-21", bestand: "debiteuren.html", soort: "nieuw",
@@ -195,12 +210,12 @@
     {
       datum: "2026-09-21", bestand: "voorraad.html", soort: "beter",
       titel: "Particulier en Partner: rustiger en helemaal te lezen",
-      wat: "De lijsten hebben vaste kolommen; kleur en klant worden niet meer afgekapt maar lopen door op een tweede regel. Tussen twee orders staat een duidelijke lijn en de werkstrook is altijd in dezelfde volgorde: levering, notitie, vinkjes. Losse warmtepompen (HeatMaster, X-treme Green Heat Pump) staan er niet meer tussen: dat zijn geen spa's."
+      wat: "De lijsten hebben vaste kolommen; kleur en klant lopen helemaal door op een tweede regel. Tussen twee orders staat een duidelijke lijn en de werkstrook is altijd in dezelfde volgorde: levering, notitie, vinkjes. Losse warmtepompen (HeatMaster, X-treme Green Heat Pump) staan er voortaan buiten: de lijst is alleen voor spa's."
     },
     {
       datum: "2026-09-21", bestand: "labels.html", soort: "beter",
       titel: "Containers onderweg: alleen naar Rotterdam",
-      wat: "Een container die rechtstreeks naar een dealer vaart (Noorwegen, Spanje, Amerika) komt niet meer bij Containers onderweg. Die komt nooit in Uddel, dus daar zijn geen labels voor nodig."
+      wat: "Een container die rechtstreeks naar een dealer vaart (Noorwegen, Spanje, Amerika) staat voortaan buiten Containers onderweg. Die gaat rechtstreeks naar de dealer, dus labels uit Uddel zijn overbodig."
     },
     {
       datum: "2026-09-21", bestand: "uitbetalingen.html", soort: "nieuw",
@@ -225,7 +240,7 @@
     {
       datum: "2026-09-21", bestand: "werkplaats.html", soort: "beter",
       titel: "Werkplaats: zwemspa's apart, memo erbij, order toevoegen",
-      wat: "Zwemspa's staan in een eigen lijst naast de spa's. Bij elke spa staat of hij op voorraad is, op welk schip met welke datum, of nog in productie. Bij Order tonen en op de testbon staat de ordermemo uit Logic4 eronder. Met '+ Ordernummer toevoegen' zet je een order in de lijst die niet via Ingepland binnenkwam."
+      wat: "Zwemspa's staan in een eigen lijst naast de spa's. Bij elke spa staat of hij op voorraad is, op welk schip met welke datum, of nog in productie. Bij Order tonen en op de testbon staat de ordermemo uit Logic4 eronder. Met '+ Ordernummer toevoegen' zet je een order in de lijst die buiten Ingepland om binnenkwam."
     },
     {
       datum: "2026-09-21", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
@@ -235,12 +250,12 @@
     {
       datum: "2026-09-21", bestand: "amerika.html", soort: "hersteld",
       titel: "Batchregels met een rare naam",
-      wat: "'3573S Steve Raiche', '3644fantasies' en 'Michigan Swim Pools' zonder nummer worden nu gewoon herkend (letter tegen het nummer, geen spatie, of op naam en bedrag). En elk factuurnummer in een batch is met het potlood aan te passen."
+      wat: "'3573S Steve Raiche', '3644fantasies' en 'Michigan Swim Pools' zonder nummer worden nu gewoon herkend (letter tegen het nummer, zonder spatie, of op naam en bedrag). En elk factuurnummer in een batch is met het potlood aan te passen."
     },
     {
       datum: "2026-09-21", bestand: "amerika.html", soort: "hersteld",
       titel: "Dubbel factuurnummer in een batch",
-      wat: "QuickBooks gebruikt een factuurnummer soms twee keer (3497 bestaat voor twee klanten). De batch keek naar de eerste en zei 'geen Logic4-order'. Nu wijst het bedrag aan welke factuur het is."
+      wat: "QuickBooks gebruikt een factuurnummer soms twee keer (3497 bestaat voor twee klanten). De batch keek alleen naar de eerste factuur met dat nummer. Nu wijst het bedrag aan welke factuur het is."
     },
     {
       datum: "2026-09-21", bestand: "amerika.html", soort: "hersteld",
@@ -250,17 +265,17 @@
     {
       datum: "2026-09-21", bestand: "amerika.html", soort: "beter",
       titel: "Batches: per batch boeken",
-      wat: "Het overzicht 'Geaccordeerd, nog te verwerken' staat ingeklapt; boeken doe je per batch. Per batch is er een vinkje om alle regels in één keer af te vinken. Een 'Balance Due' die niet in de betaling zit telt niet meer mee. Mist de totaalregel, dan vul je het ontvangen bedrag zelf in. En de koppeling boekt nooit meer dan een order open heeft: klopt een regel niet met de factuur, dan wordt de hele batch tegengehouden met uitleg."
+      wat: "Het overzicht 'Geaccordeerd, nog te verwerken' staat ingeklapt; boeken doe je per batch. Per batch is er een vinkje om alle regels in één keer af te vinken. Een 'Balance Due' telt alleen mee als hij in de betaling zit. Zonder totaalregel vul je het ontvangen bedrag zelf in. En de koppeling boekt hooguit wat een order open heeft: wijkt een regel af van de factuur, dan wordt de hele batch tegengehouden met uitleg."
     },
     {
       datum: "2026-09-21", bestand: "amerika.html", soort: "beter",
       titel: "Houston: zendingen in delen",
-      wat: "Een bestelling gaat in delen op transport. Elke commercial invoice is nu een eigen zending bij Onderweg, met erin wat er echt in de container zit; wat nog niet verscheept is blijft bij In productie staan, per model en kleur. Bij invoices van vóór vandaag: klik 'vervangen' en kies hetzelfde bestand opnieuw, dan wordt de inhoud gelezen."
+      wat: "Een bestelling gaat in delen op transport. Elke commercial invoice is nu een eigen zending bij Onderweg, met erin wat er echt in de container zit; wat nog verscheept moet worden blijft bij In productie staan, per model en kleur. Bij invoices van vóór vandaag: klik 'vervangen' en kies hetzelfde bestand opnieuw, dan wordt de inhoud gelezen."
     },
     {
       datum: "2026-09-20", bestand: "werkplaats.html", soort: "beter",
       titel: "Leverdatum uit Logic4",
-      wat: "De leverdatum in de werkplaatslijst is de datum die op de order in Logic4 staat en komt elk uur opnieuw mee. Staat er in Logic4 geen datum, dan die van de afspraak in Planning."
+      wat: "De leverdatum in de werkplaatslijst is de datum die op de order in Logic4 staat en komt elk uur opnieuw mee. Is de datum in Logic4 leeg, dan die van de afspraak in Planning."
     },
     {
       datum: "2026-09-20", bestand: "planning.html", soort: "beter",
@@ -285,22 +300,22 @@
     {
       datum: "2026-09-20", bestand: "mijnroute.html", soort: "beter",
       titel: "Paklijst: alleen wat nog moet",
-      wat: "Wat in Logic4 al als geleverd staat, staat niet meer op de paklijst. Bij een nalevering zie je dus alleen wat er nog mee moet, met een regel eronder hoeveel er al eerder geleverd is."
+      wat: "Wat in Logic4 al als geleverd staat, gaat voortaan van de paklijst af. Bij een nalevering zie je dus alleen wat er nog mee moet, met een regel eronder hoeveel er al eerder geleverd is."
     },
     {
       datum: "2026-09-20", bestand: "planning.html", soort: "hersteld",
       titel: "Nieuwe servicemelding meteen vindbaar",
-      wat: "Een net in Logic4 aangemaakte ITS-melding werd bij Ophalen niet gevonden omdat de lijst tien minuten oud kon zijn. Nu wordt bij geen treffer meteen vers gekeken."
+      wat: "Een net in Logic4 aangemaakte ITS-melding vind je nu ook meteen bij Ophalen: staat hij nog buiten de lijst van de laatste tien minuten, dan wordt er meteen vers gekeken."
     },
     {
       datum: "2026-09-19", bestand: "amerika.html", soort: "nieuw",
       titel: "Batch opnieuw kunnen boeken",
-      wat: "Zijn de boekingen van een batch in Logic4 met de hand verwijderd, dan kun je met 'opnieuw kunnen boeken' het Dashboard laten vergeten dat hij geboekt was. Daarna werkt 'boeken op 1160' weer. In Logic4 verandert er niets door."
+      wat: "Zijn de boekingen van een batch in Logic4 met de hand verwijderd, dan kun je met 'opnieuw kunnen boeken' het Dashboard laten vergeten dat hij geboekt was. Daarna werkt 'boeken op 1160' weer. In Logic4 blijft alles zoals het is."
     },
     {
       datum: "2026-09-19", bestand: "voorraad.html", soort: "hersteld",
       titel: "Oude open orders weer in beeld",
-      wat: "Reserveringen keken maar één jaar terug; open orders van langer geleden (zoals 3490755) stonden er daardoor niet. Nu twee jaar."
+      wat: "Reserveringen kijken nu twee jaar terug in plaats van één, dus ook open orders van langer geleden (zoals 3490755) staan erin."
     },
     {
       datum: "2026-09-19", bestand: "voorraad.html", soort: "beter",
@@ -320,7 +335,7 @@
     {
       datum: "2026-09-19", bestand: "prijslijsten-fabrikanten.html", soort: "hersteld",
       titel: "Toegang voor Chantal, Manon en Arno",
-      wat: "De tegel liet 'geen toegang' zien voor wie wel in de lijst stond. Chantal, Manon en Arno kunnen er nu bij."
+      wat: "Iedereen die in de lijst staat kan er nu bij, ook Chantal, Manon en Arno."
     },
     {
       datum: "2026-09-19", bestand: "herinneringen.html", soort: "nieuw",
@@ -349,8 +364,8 @@
     },
     {
       datum: "2026-09-18", bestand: "amerika.html", soort: "nieuw",
-      titel: "Ontbrekende orders vanuit de batch aanmaken",
-      wat: "Staat een batch op 'nog geen Logic4-order voor ...', dan staat daar nu de knop 'ontbrekende orders aanmaken'. Die maakt de Logic4-orders aan uit QuickBooks voor de facturen in die batch, net als bij accorderen. Daarna kun je boeken. Bij het boeken sluit een order ook als hij 1 op 1 in euro is aangemaakt."
+      titel: "Orders vanuit de batch aanmaken",
+      wat: "Staat bij een batch 'Logic4-order volgt nog voor ...', dan staat daar nu de knop 'ontbrekende orders aanmaken'. Die maakt de Logic4-orders aan uit QuickBooks voor de facturen in die batch, net als bij accorderen. Daarna kun je boeken. Bij het boeken sluit een order ook als hij 1 op 1 in euro is aangemaakt."
     },
     {
       datum: "2026-09-18", bestand: "amerika.html", soort: "nieuw",
@@ -360,7 +375,7 @@
     {
       datum: "2026-09-18", bestand: "keten.html", soort: "nieuw",
       titel: "Ketenbewaking (proef)",
-      wat: "Wat in de keten te lang op een stap blijft liggen: schepen die niet binnen zijn gemeld, bonnen die niet zijn gemaild, batches uit Amerika die niet zijn geboekt, dealerorders zonder Logic4-order. Per melding wie het moet oppakken, hoe lang het al open staat en om hoeveel geld het gaat. Wat te lang open staat komt ook bovenaan het dashboard."
+      wat: "Wat in de keten te lang op een stap blijft liggen: schepen die nog binnen gemeld moeten worden, bonnen die nog gemaild moeten worden, batches uit Amerika die nog geboekt moeten worden, dealerorders die nog een Logic4-order nodig hebben. Per melding wie het moet oppakken, hoe lang het al open staat en om hoeveel geld het gaat. Wat te lang open staat komt ook bovenaan het dashboard."
     },
     {
       datum: "2026-09-18", bestand: "voorraad.html", soort: "nieuw",
@@ -370,7 +385,7 @@
     {
       datum: "2026-09-18", bestand: "mijnroute.html", soort: "beter",
       titel: "Servicebon en een kortere paklijst",
-      wat: "Bij een servicemelding is de checklist vervangen door vier vakken: de melding, wat je hebt gedaan, gebruikte materialen (aantal maal stukprijs, telt zelf op) en voorrijkosten (1,25 per km) plus arbeid (60 per uur), met het totaal eronder. Bij een servicebon tekent alleen de klant. In de paklijst staan de vaste regels die op elke order staan (transport, voorbereidingen, de tekst over vrije ruimte) niet meer."
+      wat: "Bij een servicemelding is de checklist vervangen door vier vakken: de melding, wat je hebt gedaan, gebruikte materialen (aantal maal stukprijs, telt zelf op) en voorrijkosten (1,25 per km) plus arbeid (60 per uur), met het totaal eronder. Bij een servicebon tekent alleen de klant. De paklijst is korter: de vaste regels die op elke order staan (transport, voorbereidingen, de tekst over vrije ruimte) zijn eruit."
     },
     {
       datum: "2026-09-18", bestand: "planning.html", soort: "beter",
@@ -380,12 +395,12 @@
     {
       datum: "2026-09-18", bestand: "pibs.html", soort: "nieuw",
       titel: "Uren invoeren namens een partner",
-      wat: "Bij elke partner staat een knop 'uren invoeren'. Voor uren die de partner niet zelf heeft ingevuld, bijvoorbeeld per mail doorgegeven. Zo'n regel krijgt 'ingevoerd door kantoor', in het overzicht en in het portaal van de partner, en is in het dagdetail weer te verwijderen."
+      wat: "Bij elke partner staat een knop 'uren invoeren'. Voor uren die de partner anders doorgeeft, bijvoorbeeld per mail. Zo'n regel krijgt 'ingevoerd door kantoor', in het overzicht en in het portaal van de partner, en is in het dagdetail weer te verwijderen."
     },
     {
       datum: "2026-09-17", bestand: "mijnroute.html", soort: "nieuw",
       titel: "Opleverbon op de telefoon",
-      wat: "Onder elke stop staat nu een Opleverbon: de checklist van de bezorgservice (Ja, Nee of n.v.t., met een reden als het geen Ja is), het openstaande bedrag en wat er bij de klant is voldaan, en de handtekening van de monteur en van de klant. Bewaren gaat vanzelf; met Bon afronden gaat hij naar kantoor. Het ordermemo uit Logic4 staat er nu ook bij."
+      wat: "Onder elke stop staat nu een Opleverbon: de checklist van de bezorgservice (Ja, Nee of n.v.t., met een reden bij Nee of n.v.t.), het openstaande bedrag en wat er bij de klant is voldaan, en de handtekening van de monteur en van de klant. Bewaren gaat vanzelf; met Bon afronden gaat hij naar kantoor. Het ordermemo uit Logic4 staat er nu ook bij."
     },
     {
       datum: "2026-09-17", bestand: "planning.html", soort: "nieuw",
@@ -405,7 +420,7 @@
     {
       datum: "2026-09-17", bestand: "amerika.html", soort: "hersteld",
       titel: "Batches van Passion Spas boeken werkt",
-      wat: "Het boeken van een uitbetaling gaf 'Internal server error' en er werd niets geboekt. Dat is verholpen. De orders worden nu in euro afgeboekt (precies wat er op de order open staat, tegen dezelfde koers als waarmee de order is aangemaakt); het dollarbedrag staat in de omschrijving van de boeking."
+      wat: "Het boeken van een uitbetaling werkt weer. De orders worden nu in euro afgeboekt (precies wat er op de order open staat, tegen dezelfde koers als waarmee de order is aangemaakt); het dollarbedrag staat in de omschrijving van de boeking."
     },
     {
       datum: "2026-09-17", bestand: "retouren.html", soort: "beter",
@@ -425,12 +440,12 @@
     {
       datum: "2026-09-17", bestand: "planning.html", soort: "nieuw",
       titel: "Op de telefoon: bellen en navigeren",
-      wat: "Open je op de telefoon een afspraak, dan kun je op het telefoonnummer tikken om de klant te bellen en op het adres om te navigeren (Kaarten of Google Maps, wat je telefoon gebruikt). Je krijgt eerst een vraag, zodat je niet per ongeluk belt."
+      wat: "Open je op de telefoon een afspraak, dan kun je op het telefoonnummer tikken om de klant te bellen en op het adres om te navigeren (Kaarten of Google Maps, wat je telefoon gebruikt). Je krijgt eerst een vraag, zodat je alleen belt als je dat wilt."
     },
     {
       datum: "2026-09-16", bestand: "voorraad.html", soort: "hersteld",
       titel: "Inkooporder aanmaken werkt weer",
-      wat: "Bij het aanmaken van een inkooporder kwam de melding 'geen toegang, je staat niet in de groep dealerportaal'. Dat was een verkeerde sleutel uit Passion Partners. Chantal, Arno en Manon kunnen weer gewoon een inkooporder aanmaken vanuit een proforma.",
+      wat: "Chantal, Arno en Manon kunnen weer gewoon een inkooporder aanmaken vanuit een proforma. De oorzaak zat in een sleutel uit Passion Partners; die is vervangen.",
     },
     {
       datum: "2026-09-16", bestand: "tuinmeubelen.html", soort: "beter",
@@ -440,7 +455,7 @@
     {
       datum: "2026-09-17", bestand: "voorraad.html", soort: "hersteld",
       titel: "Gepland: de afspraak komt nu echt in Planning",
-      wat: "Vanuit Gepland een afspraak in de agenda zetten gaf voor de planners een foutmelding (403, alleen klanttabs). De beveiliging van het tabblad Particulier hield de agenda tegen; dat is rechtgezet. Op de telefoon stond de bovenste kaart Overzicht achter de groene kop en was niet aan te klikken; dat is ook gemaakt.",
+      wat: "Vanuit Gepland een afspraak in de agenda zetten werkt weer voor de planners. De beveiliging van het tabblad Particulier hield de agenda tegen; dat is rechtgezet. Op de telefoon staat de bovenste kaart Overzicht nu onder de groene kop en is hij weer aan te klikken.",
     },
     {
       datum: "2026-09-15", bestand: "bol.html", soort: "nieuw",
@@ -450,12 +465,12 @@
     {
       datum: "2026-09-15", bestand: "mollie.html", soort: "beter",
       titel: "Mollie: terugbetalingen op de order, fee en uitbetaling als memoriaal",
-      wat: "Een terugbetaling gaat nu echt als negatieve betaling op de order (dat faalde stil). De fee en een terugbetaling zonder order gaan als memoriaal tegenover rekening 1134, een betaling zonder herkende order naar vraagposten 2100, en de uitbetaling van het settlement boek je met een eigen knop naar kruisposten 1220. Staat 1134 in Logic4 geblokkeerd voor memoriaal, dan zegt het scherm dat en moet die blokkering er eerst af.",
+      wat: "Een terugbetaling gaat nu echt als negatieve betaling op de order (eerder bleef die stil liggen). De fee en een terugbetaling zonder order gaan als memoriaal tegenover rekening 1134, een betaling zonder herkende order naar vraagposten 2100, en de uitbetaling van het settlement boek je met een eigen knop naar kruisposten 1220. Staat 1134 in Logic4 geblokkeerd voor memoriaal, dan zegt het scherm dat en moet die blokkering er eerst af.",
     },
     {
       datum: "2026-09-15", bestand: "amerika.html", soort: "hersteld",
       titel: "Amerika: de bankkosten van een batch gaan als memoriaal",
-      wat: "De kostenregel (4630 tegenover 1160) ging als betaling zonder order en dat weigert Logic4. Hij gaat nu als memoriaal, met dezelfde uitkomst op de rekeningen. De kostenplaats moet nog steeds met de hand.",
+      wat: "De kostenregel (4630 tegenover 1160) gaat nu als memoriaal, zoals Logic4 dat wil, met dezelfde uitkomst op de rekeningen. De kostenplaats zet je nog met de hand.",
     },
     {
       datum: "2026-09-15", bestand: "pibs.html", soort: "nieuw",
@@ -466,19 +481,19 @@
     {
       datum: "2026-09-14", bestand: "voorraad.html", soort: "hersteld",
       titel: "Container is binnen blijft nu binnen",
-      wat: "De knop 'Container is binnen' bij Schepen en ontvangst sloeg het vinkje wel op, maar na een herlaad stond de container weer als 'ETA verstreken - nog niet binnen gemeld'. Dat is gerepareerd. Andersom ook: een zending met een verstreken ETA die nog niet binnen is gemeld, blijft gewoon te kiezen bij een reservering.",
+      wat: "De knop 'Container is binnen' bij Schepen en ontvangst onthoudt het vinkje nu ook na een herlaad. Andersom ook: een zending met een verstreken ETA die nog binnen gemeld moet worden, blijft gewoon te kiezen bij een reservering.",
     },
 
     {
       datum: "2026-09-14", bestand: "voorraad.html", soort: "nieuw",
       titel: "Een klant naar Partner of Particulier zetten",
-      wat: "Onder elke reservering bij Partner en Particulier staat een knop 'naar particulier' of 'naar partner'. Die geldt voor de klant, dus voor al zijn orders. Een particulier die op zijn bedrijfsnaam bestelt stond tot nu toe bij Partner en was daar niet weg te krijgen.",
+      wat: "Onder elke reservering bij Partner en Particulier staat een knop 'naar particulier' of 'naar partner'. Die geldt voor de klant, dus voor al zijn orders. Zo zet je ook een particulier die op zijn bedrijfsnaam bestelt op de goede plek.",
     },
 
     {
       datum: "2026-09-14", bestand: "voorraad.html", soort: "beter",
       titel: "Warmtepomp telt mee, gewijzigde orders vallen op",
-      wat: "Een spa met Integrated Heat Pump is een andere spa dan een gewone. In Overzicht staat hij nu op een eigen regel per kleur, en een reservering ervoor wordt niet meer gedekt door een gewone spa op de plank of op een schip. Verandert een order in Logic4 van kleur of model, dan staat er veertien dagen 'gewijzigd - was …' bij de regel. In Bestellen telt de productie nu per kleur mee bij 'nog te dekken', en er is een zoekveld. Bij Partner is de lijst per adviseur smaller en staat de betaling erbij.",
+      wat: "Een spa met Integrated Heat Pump is een andere spa dan een gewone. In Overzicht staat hij nu op een eigen regel per kleur, en een reservering ervoor wordt alleen gedekt door een spa met Integrated Heat Pump, op de plank of op een schip. Verandert een order in Logic4 van kleur of model, dan staat er veertien dagen 'gewijzigd - was …' bij de regel. In Bestellen telt de productie nu per kleur mee bij 'nog te dekken', en er is een zoekveld. Bij Partner is de lijst per adviseur smaller en staat de betaling erbij.",
     },
     {
       datum: "2026-09-14", bestand: "dealerportaal.html", soort: "nieuw",
@@ -489,7 +504,7 @@
     {
       datum: "2026-09-14", bestand: "container-laden.html", soort: "beter",
       titel: "Container laden: pallets, tussenplaten, recht stapelen, en zelf schuiven",
-      wat: "Elke spa staat nu op een pallet van 14 cm en tussen twee spa's op elkaar zit een plaat van 6 cm; dat telt mee in de hoogte. Stapelen kan alleen nog recht op één spa eronder, nooit half over twee. Alle spa's van hetzelfde model staan in dezelfde stand. Zit er een zwemspa bij, dan gaan alle covers daarin en tellen ze niet mee. En onder de tekening staat een bovenaanzicht waarin je zelf kunt schuiven: klik op een spa om hem een kwartslag te draaien, sleep hem naar een lege plek of bovenop een andere spa. Past het niet, dan springt hij terug en staat erbij waarom.",
+      wat: "Elke spa staat nu op een pallet van 14 cm en tussen twee spa's op elkaar zit een plaat van 6 cm; dat telt mee in de hoogte. Stapelen kan alleen recht op één spa eronder. Alle spa's van hetzelfde model staan in dezelfde stand. Zit er een zwemspa bij, dan gaan alle covers daarin en vallen ze binnen die ruimte. En onder de tekening staat een bovenaanzicht waarin je zelf kunt schuiven: klik op een spa om hem een kwartslag te draaien, sleep hem naar een lege plek of bovenop een andere spa. Is er te weinig ruimte, dan springt hij terug en staat erbij waarom.",
     },
 
     {
@@ -501,13 +516,13 @@
     {
       datum: "2026-09-14", bestand: "dealerportaal.html", soort: "beter",
       titel: "Partnerportaal: echt totaal, postcode moet bij het land passen, 50 euro op elk transport",
-      wat: "In de winkelwagen staat nu een totaal onderaan: goederen plus bezorging, excl. btw. Bij een hele container staat erbij dat de zeevracht apart wordt opgegeven. Een postcode die niet bij het gekozen land past (3824VM in Duitsland) geeft nu een foutmelding in plaats van een prijs. Op elk transport zit 50 euro marge, in de transportregel. 'Arriving now' heet nu 'arriving in Uddel any day'. En bij het aanmaken of bewaren van een dealer zijn de verplichte velden nu echt verplicht, met een controle van de postcode.",
+      wat: "In de winkelwagen staat nu een totaal onderaan: goederen plus bezorging, excl. btw. Bij een hele container staat erbij dat de zeevracht apart wordt opgegeven. Een postcode die bij een ander land hoort (3824VM in Duitsland) geeft nu een melding om hem na te kijken, in plaats van een prijs. Op elk transport zit 50 euro marge, in de transportregel. 'Arriving now' heet nu 'arriving in Uddel any day'. En bij het aanmaken of bewaren van een dealer zijn de verplichte velden nu echt verplicht, met een controle van de postcode.",
     },
 
     {
       datum: "2026-09-14", bestand: "voorraad.html", soort: "beter",
       titel: "Stock: zie welke orders er achter 'verkocht' zitten",
-      wat: "Ga met de muis over het aantal bij 'Al verkocht' of over '(5 verkocht)' bij een kleur, en je ziet de orders die eraan hangen: ordernummer, klant, aantal en een stip voor de betaling (groen volledig betaald, oranje aanbetaald, rood niets betaald).",
+      wat: "Ga met de muis over het aantal bij 'Al verkocht' of over '(5 verkocht)' bij een kleur, en je ziet de orders die eraan hangen: ordernummer, klant, aantal en een stip voor de betaling (groen volledig betaald, oranje aanbetaald, rood nog te betalen).",
     },
 
     {
@@ -531,19 +546,19 @@
     {
       datum: "2026-09-14", iedereen: true, soort: "beter",
       titel: "Op de telefoon dezelfde tegels als op de pc",
-      wat: "Op de telefoon staan nu alle tegels die je op de pc ook hebt, niets meer en niets minder. Bij een tegel die op een klein scherm minder handig is staat dat erbij.",
+      wat: "Op de telefoon staan nu precies de tegels die je op de pc ook hebt. Bij een tegel die op een klein scherm minder handig is staat dat erbij.",
     },
 
     {
       datum: "2026-09-14", bestand: "dealerportaal.html", soort: "hersteld",
       titel: "Passion Partners Beheer geeft weer toegang, en het portaal opent weer",
-      wat: "Wie in de lijst voor deze tegel staat kreeg sinds zaterdag toch 'geen toegang'; dat is verholpen. De tegel Passion Partners opent voorlopig weer via het oude adres, omdat het nieuwe adres op het kantoor nog niet wordt gevonden. Aan de dealers verandert er niets.",
+      wat: "Wie in de lijst voor deze tegel staat, kan er weer bij. De tegel Passion Partners opent voorlopig weer via het oude adres, tot het kantoor het nieuwe adres ook vindt. Voor de dealers blijft alles hetzelfde.",
     },
 
     {
       datum: "2026-09-14", bestand: "urencontrole.html", soort: "beter",
       titel: "Wit, groen of zwart, en de pagina blijft staan",
-      wat: "Klik op een vakje en het gaat van wit naar groen (nagekeken), nog een klik maakt het zwart (uit dienst), en nog een klik weer wit. De pagina springt na een klik niet meer naar boven.",
+      wat: "Klik op een vakje en het gaat van wit naar groen (nagekeken), nog een klik maakt het zwart (uit dienst), en nog een klik weer wit. De pagina blijft na een klik op zijn plek.",
     },
 
     {
@@ -561,19 +576,19 @@
     {
       datum: "2026-09-13", bestand: "planning.html", soort: "beter",
       titel: "Nieuwe kleuren in Planning, en de betaalstand laadt sneller",
-      wat: "Levering is nu lichtblauw, service lila, verlof lichtturquoise en intern lichtgrijs: zachte kleuren die niet meer botsen met de betaling. De rechterrand voor de betaling is juist feller: groen betaald, oranje aanbetaald, rood niet betaald. En het ophalen van de betaalstanden gaat tegelijk in plaats van een voor een, dus de randen staan er in ongeveer een seconde in plaats van acht.",
+      wat: "Levering is nu lichtblauw, service lila, verlof lichtturquoise en intern lichtgrijs: zachte kleuren die goed samengaan met de betaling. De rechterrand voor de betaling is juist feller: groen betaald, oranje aanbetaald, rood nog te betalen. En het ophalen van de betaalstanden gaat tegelijk in plaats van een voor een, dus de randen staan er in ongeveer een seconde in plaats van acht.",
     },
 
     {
       datum: "2026-09-13", bestand: "planning.html", soort: "beter",
       titel: "Ook bij een servicemelding zie je de betaling",
-      wat: "De rechterrand van een service-afspraak laat nu de betaalstand zien van de order waar de monteur voor komt. Staat er op de melding in Logic4 een order, dan die; zo niet, dan de laatste order van die klant. Ga je met de muis over de afspraak, dan staat erbij om welke order het gaat. Zoek je een ITS-nummer op in het afsprakenvenster, dan komt het ordernummer er meteen bij als de melding er een heeft.",
+      wat: "De rechterrand van een service-afspraak laat nu de betaalstand zien van de order waar de monteur voor komt. Staat er op de melding in Logic4 een order, dan die; anders de laatste order van die klant. Ga je met de muis over de afspraak, dan staat erbij om welke order het gaat. Zoek je een ITS-nummer op in het afsprakenvenster, dan komt het ordernummer er meteen bij als de melding er een heeft.",
     },
 
     {
       datum: "2026-09-13", bestand: "planning.html", soort: "beter",
       titel: "Het vlak is de soort, de rechterrand de betaling",
-      wat: "Een afspraak staat in de kleur van zijn soort: groen levering, oranje service, blauw verlof, grijs intern. Aan de rechterkant zit een rand in de kleur van de betaling van de order: donkergroen volledig betaald, donkeroranje aanbetaald, donkerrood niet betaald. Geen rechterrand betekent geen ordernummer. Zo in het tijdraster, op het routebord en op de telefoon.",
+      wat: "Een afspraak staat in de kleur van zijn soort: groen levering, oranje service, blauw verlof, grijs intern. Aan de rechterkant zit een rand in de kleur van de betaling van de order: donkergroen volledig betaald, donkeroranje aanbetaald, donkerrood nog te betalen. Zonder ordernummer blijft de rechterkant zonder rand. Zo in het tijdraster, op het routebord en op de telefoon.",
     },
 
     {
@@ -597,7 +612,7 @@
     {
       datum: "2026-09-12", bestand: "planning.html", soort: "hersteld",
       titel: "Print route werkt weer, en wie rijdt is een keuzelijst",
-      wat: "Onder elke route staat nu een knop 'Print route' in plaats van een printericoontje, en printen opent geen los venster meer, dus de melding over pop-ups is weg. Boven de route staan de plekken voor wie rijdt als echte keuzelijsten met de afdeling erin; kies 'andere naam' voor iemand die er niet in staat.",
+      wat: "Onder elke route staat nu een knop 'Print route' in plaats van een printericoontje, en printen gebeurt in hetzelfde venster, dus de melding over pop-ups is weg. Boven de route staan de plekken voor wie rijdt als echte keuzelijsten met de afdeling erin; kies 'andere naam' voor iemand buiten de lijst.",
     },
 
     {
@@ -609,7 +624,7 @@
     {
       datum: "2026-09-12", bestand: "planning.html", soort: "beter",
       titel: "Herhalen: elke dag, werkdag, week, om de week of maand",
-      wat: "In het afsprakenvenster is Herhalen een keuzelijst geworden: niet herhalen, elke dag, elke werkdag, elke week, om de week, of elke maand op dezelfde datum. Met een einddatum als je wilt. De zin bij 'Let op' is duidelijker: die zet de afspraak rood op het routebord als er iets bijzonders nodig is, zoals twee man of hijsen.",
+      wat: "In het afsprakenvenster is Herhalen een keuzelijst geworden: eenmalig, elke dag, elke werkdag, elke week, om de week, of elke maand op dezelfde datum. Met een einddatum als je wilt. De zin bij 'Let op' is duidelijker: die zet de afspraak rood op het routebord als er iets bijzonders nodig is, zoals twee man of hijsen.",
     },
 
     {
@@ -620,7 +635,7 @@
 
     {
       datum: "2026-09-12", bestand: "dealerportaal.html", soort: "beter",
-      titel: "Geen beheersleutel meer, en de tegel werkt op de telefoon",
+      titel: "Werkt zonder beheersleutel, ook op de telefoon",
       wat: "De beheersleutel is weg. Wie deze tegel mag zien, mag er ook in werken: dealers en partners aanmaken, uitnodigen en bewerken. Op de telefoon staan de partners nu als kaarten onder elkaar en past het venster voor een nieuwe relatie op het scherm.",
     },
 
@@ -633,7 +648,7 @@
     {
       datum: "2026-09-12", iedereen: true, soort: "beter",
       titel: "De telefoonversie is opgeruimd",
-      wat: "Op de telefoon staan nu alleen de tegels die daar zin hebben: Mijn uren, Planning, Voorraadbeheer, Passion Partners Beheer, Passion Partners en Orderstatus, en alleen als je die op de pc ook mag zien. De groene kop past weer op het scherm, met Uitloggen in beeld, en er valt niets meer opzij te schuiven. De knop Dashboard brengt je terug naar het telefoondashboard in plaats van de pc-versie. In Planning staan de knoppen bovenaan netjes onder elkaar.",
+      wat: "Op de telefoon staan nu alleen de tegels die daar zin hebben: Mijn uren, Planning, Voorraadbeheer, Passion Partners Beheer, Passion Partners en Orderstatus, en alleen als je die op de pc ook mag zien. De groene kop past weer op het scherm, met Uitloggen in beeld, en alles past in de breedte. De knop Dashboard brengt je terug naar het telefoondashboard in plaats van de pc-versie. In Planning staan de knoppen bovenaan netjes onder elkaar.",
     },
 
     {
@@ -657,7 +672,7 @@
     {
       datum: "2026-09-11", bestand: "planning.html", soort: "beter",
       titel: "Hele dagen als lange balk boven het tijdraster",
-      wat: "In het afsprakenvenster staat nu een vinkje 'Hele dag, of meerdere dagen achter elkaar'. Zet je dat aan, dan kies je een eerste en een laatste dag in plaats van een tijd. Zo'n afspraak staat niet meer tussen de afspraken in het raster maar als één lange balk erboven, over alle dagen die hij duurt. Een vakantie van drie weken is dus één balk.",
+      wat: "In het afsprakenvenster staat nu een vinkje 'Hele dag, of meerdere dagen achter elkaar'. Zet je dat aan, dan kies je een eerste en een laatste dag in plaats van een tijd. Zo'n afspraak staat als één lange balk boven het raster, over alle dagen die hij duurt. Een vakantie van drie weken is dus één balk.",
     },
 
     {

@@ -21,7 +21,7 @@
     '.gt{max-width:520px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center}'+
     '.gt h1{color:#144734;font-size:20px;margin:0 0 10px}.gt p{color:#6b7280;font-size:14px;line-height:1.5}'+
     '.gt a{display:inline-block;margin-top:14px;background:#144734;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-size:13px}</style>'+
-    '<div class="gt"><h1>Geen toegang</h1><p>De tegel Planning is niet beschikbaar voor jouw account.</p>'+
+    '<div class="gt"><h1>Planning</h1><p>Deze tegel is voor de afdeling planning.</p>'+
     '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>');
   window.stop();
 })();
@@ -769,7 +769,7 @@ async function bewaar(wijzig){
      dagnotities bij elke wijziging aan een afspraak wissen - KV kent alleen
      'vervang alles'. */
   var r0 = await fetch(W+"/data/"+BUCKET, { headers:{ "X-Fonteyn-Auth": teamKey() } });
-  if (!r0.ok) throw new Error("De opslag is niet bereikbaar. Probeer het zo nog eens.");
+  if (!r0.ok) throw new Error("De opslag vraagt een nieuwe poging. Probeer het zo nog eens.");
   var j = await r0.json();
   var routes   = (j && j.routes && typeof j.routes==="object") ? j.routes : {};
   var notities = (j && j.notities && typeof j.notities==="object") ? j.notities : {};
@@ -778,7 +778,7 @@ async function bewaar(wijzig){
   var r = await fetch(W+"/data/"+BUCKET, { method:"PUT",
     headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey() },
     body: JSON.stringify({ afspraken: afspraken, routes: routes, notities: notities }) });
-  if(!r.ok) throw new Error("Bewaren mislukte (HTTP "+r.status+").");
+  if(!r.ok) throw new Error("Bewaren vraagt een nieuwe poging (HTTP "+r.status+").");
   // De anderen die de agenda openhebben laten weten dat er iets veranderd is.
   liveStuur({ soort:"gewijzigd", wat:"planning" });
 }
@@ -877,7 +877,7 @@ var betaaldBezig = false;
 var BETAALD = {
   betaald:    { kleur:"#16a34a", naam:"volledig betaald" },
   aanbetaald: { kleur:"#f97316", naam:"aanbetaald" },
-  open:       { kleur:"#dc2626", naam:"niet betaald" },
+  open:       { kleur:"#dc2626", naam:"nog te betalen" },
 };
 function betaalStip(a){
   var nr = String(a.ordernr||"").trim();
@@ -1116,7 +1116,7 @@ function teken(){
       ? '<button type="button" class="route-knop" data-datum="'+w.iso+'" title="Route van deze dag in Google Maps">🚗</button>' : "";
     return '<div class="dagkaart'+(w.iso===vandaagISO?" vandaag":"")+'">'+route+
       '<h3>'+DAGEN[dagIndex(w.datum)]+'</h3><div class="datum">'+w.datum.getDate()+'-'+String(w.datum.getMonth()+1).padStart(2,"0")+'</div>'+
-      (w.items.length ? w.items.map(kaartje).join("") : '<div class="leeg">Nog niets gepland</div>')+
+      (w.items.length ? w.items.map(kaartje).join("") : '<div class="leeg">Nog vrij</div>')+
       '<button type="button" class="plus" data-datum="'+w.iso+'">+ afspraak</button></div>';
   }).join("");
 
@@ -1358,7 +1358,7 @@ function tekenBord(){
           '</h4>'+
           '<div class="stops">'+
             (stops.length ? stops.map(stopHtml).join("")
-              : '<div class="leegdrop">'+(MAG_BEWERKEN?"sleep hier een stop":"nog niets")+'</div>')+
+              : '<div class="leegdrop">'+(MAG_BEWERKEN?"sleep hier een stop":"nog leeg")+'</div>')+
           '</div>'+
           (MAG_BEWERKEN?'<button type="button" class="plusstop" data-datum="'+w.iso+'" data-nr="'+r.nr+'">+ stop</button>':"")+
           /* Gerrit (12 sep 2026): "geen printer-icoontje, want niemand snapt
@@ -1398,7 +1398,7 @@ function stopHtml(a){
 async function printRoute(dISO, nr){
   var eerste = (routesVan(dISO)[0]||{}).nr === nr;
   var stops = stopsVan(dISO, nr, eerste);
-  if (!stops.length){ meldVenster("Deze route heeft nog geen stops."); return; }
+  if (!stops.length){ meldVenster("Deze route is nog leeg."); return; }
   var route = routesVan(dISO).find(function(r){ return r.nr===nr; }) || {};
   var nrs = stops.map(function(a){ return String(a.ordernr||"").trim(); })
                  .filter(function(x){ return /^\d{3,12}$/.test(x); });
@@ -1413,10 +1413,10 @@ async function printRoute(dISO, nr){
          papier moet de eerste stop vooraan liggen. */
       orders = nrs.map(function(n){
         return (j.orders||[]).find(function(o){ return String(o.nr)===String(n); }) ||
-               { nr:n, ok:false, error:"kwam niet terug uit Logic4" };
+               { nr:n, ok:false, error:"Logic4 gaf hem leeg terug" };
       });
     }catch(e){
-      if(!(await vraagVenster("Orders niet opgehaald", "De orders konden niet uit Logic4 worden opgehaald ("+e.message+").\n\nAlleen het voorblad printen?", "Voorblad printen"))) return;
+      if(!(await vraagVenster("Orders ophalen vraagt een nieuwe poging", "Het ophalen van de orders uit Logic4 vraagt een nieuwe poging ("+e.message+").\n\nWil je nu alleen het voorblad printen?", "Voorblad printen"))) return;
     }
   }
   /* Elke stop een blad, in de volgorde van de route: een order zijn
@@ -1434,7 +1434,7 @@ async function printRoute(dISO, nr){
   for (var si = 0; si < stops.length; si++){
     var a = stops[si], onr = String(a.ordernr||"").trim();
     if (/^\d{3,12}$/.test(onr)){
-      stukken.push({ soort:"order", data: orders.find(function(o){ return String(o.nr)===onr; }) || { nr:onr, ok:false, error:"kwam niet terug uit Logic4" } });
+      stukken.push({ soort:"order", data: orders.find(function(o){ return String(o.nr)===onr; }) || { nr:onr, ok:false, error:"Logic4 gaf hem leeg terug" } });
       continue;
     }
     if (a.itsId){
@@ -1598,7 +1598,7 @@ function koppelBord(){
 async function bewaarBord(wijzig){
   if (!MAG_BEWERKEN) throw new Error("Je kijkt mee met de planning; wijzigen doet de afdeling zelf.");
   var r = await fetch(W+"/data/"+BUCKET, { headers:{ "X-Fonteyn-Auth": teamKey() } });
-  if (!r.ok) throw new Error("De opslag is niet bereikbaar. Probeer het zo nog eens.");
+  if (!r.ok) throw new Error("De opslag vraagt een nieuwe poging. Probeer het zo nog eens.");
   var j = await r.json();
   var data = { afspraken: Array.isArray(j.afspraken)?j.afspraken:[],
                routes: (j.routes && typeof j.routes==="object") ? j.routes : {},
@@ -1607,7 +1607,7 @@ async function bewaarBord(wijzig){
   var put = await fetch(W+"/data/"+BUCKET, { method:"PUT",
     headers:{ "Content-Type":"application/json", "X-Fonteyn-Auth": teamKey() },
     body: JSON.stringify(data) });
-  if (!put.ok) throw new Error("Bewaren mislukte (HTTP "+put.status+").");
+  if (!put.ok) throw new Error("Bewaren vraagt een nieuwe poging (HTTP "+put.status+").");
   afspraken = data.afspraken; routesPerDag = data.routes; dagNotities = data.notities;
   liveStuur({ soort:"gewijzigd", wat:"planning" });
 }
@@ -2051,10 +2051,10 @@ function rasterZoekBijwerken(){
   week.forEach(function(w){ w.items.forEach(function(a){ if (zoekRaak(a)) inBeeld++; }); });
   var alle = afspraken.filter(zoekRaak).sort(function(x,y){ return String(x.datum).localeCompare(String(y.datum)); });
   if (inBeeld){ uit.innerHTML = inBeeld + " in beeld"; return; }
-  if (!alle.length){ uit.innerHTML = "niets gevonden"; return; }
+  if (!alle.length){ uit.innerHTML = "0 treffers"; return; }
   var vandaag = iso(new Date());
   var doel = alle.find(function(a){ return a.datum >= vandaag; }) || alle[alle.length-1];
-  uit.innerHTML = 'niet in deze periode · <button type="button" id="rasterZoekSpring">ga naar '+esc(dagNaam(doel.datum))+' '+esc(doel.datum.slice(8,10))+'-'+esc(doel.datum.slice(5,7))+'</button>';
+  uit.innerHTML = 'buiten deze periode · <button type="button" id="rasterZoekSpring">ga naar '+esc(dagNaam(doel.datum))+' '+esc(doel.datum.slice(8,10))+'-'+esc(doel.datum.slice(5,7))+'</button>';
   $("rasterZoekSpring").addEventListener("click", function(){
     maandag = weekStart(new Date(doel.datum+"T12:00:00"));
     if (periode === "dag") maandag = new Date(doel.datum+"T12:00:00");
@@ -2264,7 +2264,7 @@ function kaartje(a){
   return '<div class="afs'+(a.klaar?" klaar":"")+'" data-id="'+esc(a.id)+'" style="border-left-color:'+c.kleur+';background:'+(c.vlak||c.zacht)+';color:'+(c.tekst||"#111")+';'+betaalRand(a)+'">'+
     '<div class="kop"><span class="tijd">'+esc(a.tijd||"hele dag")+'</span>'+
     '<span class="badge" style="background:rgba(255,255,255,.55);color:inherit">'+esc(c.naam)+'</span></div>'+
-    '<div class="klant">'+esc(a.klant||"(geen naam)")+'</div>'+
+    '<div class="klant">'+esc(a.klant||"(naam nog invullen)")+'</div>'+
     (sub?'<div class="sub">'+sub+'</div>':"")+
     (voet.length?'<div class="sub">'+voet.join(" · ")+'</div>':"")+'</div>';
 }
@@ -2341,7 +2341,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
   // Bestaande afspraak zonder tijd = hele dag. Een nieuwe begint als tijdblok,
   // behalve als hij al met een einddag is voorgevuld.
   var heleDag = nieuw ? !!(voorvul && voorvul.datumTot) : minuten(a.tijd) === null;
-  var HERHAAL = [["","Niet herhalen"],["dag","Elke dag"],["werkdag","Elke werkdag (ma t/m vr)"],["week","Elke week, zelfde dag"],["2weken","Om de week, zelfde dag"],["maand","Elke maand, zelfde datum"]];
+  var HERHAAL = [["","Eenmalig"],["dag","Elke dag"],["werkdag","Elke werkdag (ma t/m vr)"],["week","Elke week, zelfde dag"],["2weken","Om de week, zelfde dag"],["maand","Elke maand, zelfde datum"]];
 
   var laag = document.createElement("div");
   laag.className = "laag";
@@ -2375,7 +2375,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
        afspraak start (en dat hij voor een hele dag duurt en niet een blok
        van die dag) ... en tot welke dag die afspraak duurt". Dus een
        vinkje, en dan van/tot in dagen in plaats van datum/tijd/duur. */
-    '<label class="heledagkeus"><input type="checkbox" id="fHeleDag"'+(heleDag?' checked':'')+'> Hele dag, of meerdere dagen achter elkaar (geen tijdblok)</label>'+
+    '<label class="heledagkeus"><input type="checkbox" id="fHeleDag"'+(heleDag?' checked':'')+'> Hele dag, of meerdere dagen achter elkaar (zonder tijdblok)</label>'+
     '<div class="rij2" id="rijDagen"'+(heleDag?'':' style="display:none"')+'><div><label>Eerste dag</label><input type="date" id="fDatumVan" value="'+esc(a.datum)+'"></div>'+
     '<div><label>Laatste dag</label><input type="date" id="fDatumTot" value="'+esc(a.datumTot||a.datum)+'"></div></div>'+
     '<div class="rij" id="rijTijd"'+(heleDag?' style="display:none"':'')+'><div><label>Datum</label><input type="date" id="fDatum" value="'+esc(a.datum)+'"></div>'+
@@ -2473,7 +2473,7 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
         var j = await r.json().catch(function(){ return null; });
         if (!r.ok || !j || !j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
         var o = (j.orders||[])[0];
-        if (!o || !o.ok) throw new Error((o&&o.error)||"order niet gevonden");
+        if (!o || !o.ok) throw new Error((o&&o.error)||"order onbekend in Logic4");
         var adr = o.leverenAan || o.besteldDoor || {};
         zet("fKlant", adr.naam || adr.bedrijf || "");
         zet("fTel", adr.telefoon || "");
@@ -2504,14 +2504,14 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
            melding aangemaakt, maar als ik hem hier invoer kan ik hem niet
            toevoegen." Dus bij geen treffer één keer vers ophalen. */
         if (!m){
-          uit.textContent = "Niet in de lijst; even vers ophalen uit Logic4\u2026";
+          uit.textContent = "Even vers ophalen uit Logic4\u2026";
           var r2b = await fetch(W+"/planning/its?vers=1", { headers: { "X-Fonteyn-Auth": teamKey() } });
           var j2b = await r2b.json().catch(function(){ return null; });
           m = ((j2b&&j2b.meldingen)||[]).find(function(x){ return String(x.id||"") === kaal; });
         }
         if (!m){
-          if (/^\d{5,6}$/.test(kaal)) throw new Error("geen servicemelding met nummer "+kaal+" (openstaand, laatste half jaar)");
-          throw new Error("dit ITS-nummer staat niet in de openstaande servicemeldingen");
+          if (/^\d{5,6}$/.test(kaal)) throw new Error("nummer "+kaal+" staat buiten de openstaande servicemeldingen van het laatste half jaar");
+          throw new Error("dit ITS-nummer staat buiten de openstaande servicemeldingen");
         }
         var klant = null;
         if (m.debiteur){
@@ -2530,11 +2530,11 @@ function openForm(id, datumVoorstel, tijdVoorstel, voorvul){
         if (soort === "levering"){ soort = "service"; var sb = $("fCats").querySelector('[data-cat="service"]'); if (sb) sb.click(); }
         uit.className="zoekuit ok";
         uit.textContent = "Gevonden: melding " + m.id + " van " + ((klant && klant.naam) || m.naam || "?") +
-          (klant ? "" : " (klantgegevens niet gevonden bij de debiteur)");
+          (klant ? "" : " (klantgegevens bij de debiteur onbekend)");
       }
     }catch(e){
       uit.className="zoekuit bad";
-      uit.textContent = "Niet gevonden: " + (e.message||e) + ". Je kunt het met de hand invullen.";
+      uit.textContent = "Nog onbekend: " + (e.message||e) + ". Je kunt het met de hand invullen.";
     }
     knop.disabled = false;
   }
@@ -2617,10 +2617,10 @@ async function itsLaad(){
   try{
     var r = await fetch(W+"/planning/its", { headers:{ "X-Fonteyn-Auth": teamKey() } });
     var j = await r.json();
-    if (!j.ok) throw new Error(j.error||"ophalen mislukte");
+    if (!j.ok) throw new Error(j.error||"onbekende reden");
     itsMeldingen = j.meldingen || [];
   }catch(e){ itsMeldingen = null;
-    $("itsLijst").innerHTML = '<div class="its-leeg">Meldingen ophalen lukte niet: '+esc(e.message)+'</div>';
+    $("itsLijst").innerHTML = '<div class="its-leeg">Meldingen ophalen vraagt een nieuwe poging: '+esc(e.message)+'</div>';
     return;
   }
   itsTeken();
@@ -2646,7 +2646,7 @@ function itsTeken(){
       '<div class="sub">'+sub+'</div>'+
       (m.omschrijving?'<div class="om">'+esc(m.omschrijving.slice(0,160))+(m.omschrijving.length>160?"…":"")+'</div>':"")+
       '</div>'+knop+'</div>';
-  }).join("") || '<div class="its-leeg">Geen meldingen gevonden.</div>')+
+  }).join("") || '<div class="its-leeg">0 meldingen gevonden.</div>')+
   (raak.length>itsToon ? '<button type="button" class="its-meer" id="itsMeer">Toon er meer ('+(raak.length-itsToon)+' te gaan)</button>' : "");
 
   $("itsLijst").querySelectorAll("button[data-its]").forEach(function(k){
@@ -2814,7 +2814,7 @@ function scrollNaarWerkdag(){ /* het raster schuift niet meer; de werkdag staat 
   tekenLegenda();
   var eerste = await lees();
   if (eerste === null){
-    $("rooster").innerHTML = '<div style="grid-column:1/-1;padding:30px;color:var(--grijs)">De opslag is even niet bereikbaar. Herlaad de pagina om het opnieuw te proberen.</div>';
+    $("rooster").innerHTML = '<div style="grid-column:1/-1;padding:30px;color:var(--grijs)">De opslag vraagt een nieuwe poging. Herlaad de pagina om het opnieuw te proberen.</div>';
     return;
   }
   afspraken = eerste;

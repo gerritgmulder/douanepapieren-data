@@ -282,7 +282,7 @@
     if (!beginbalans?.rows?.length || !grootboek?.rows?.length) {
       return {
         columns: ["Omschrijving", "1-1 (€)", "Mutaties (€)", "Nu (€)"],
-        rows: [["⚠ Beginbalans en/of Grootboektransacties nog niet geïmporteerd.", "", "", ""]],
+        rows: [["⚠ Beginbalans en/of Grootboektransacties nog te importeren.", "", "", ""]],
         meta: [[null, null, null, null]]
       };
     }
@@ -418,7 +418,7 @@
     if (!grootboek?.rows?.length) {
       return {
         columns: ["Omschrijving", ...MONTHS, "Totaal"],
-        rows: [["⚠ Grootboektransacties nog niet geïmporteerd.", ...MONTHS.map(() => ""), ""]]
+        rows: [["⚠ Grootboektransacties nog te importeren.", ...MONTHS.map(() => ""), ""]]
       };
     }
 
@@ -558,14 +558,14 @@
     if (!grootboek?.rows?.length) {
       return {
         columns: ["Omschrijving", "—"],
-        rows: [["⚠ Grootboektransacties nog niet geïmporteerd.", ""]]
+        rows: [["⚠ Grootboektransacties nog te importeren.", ""]]
       };
     }
     const gtRubCol = colIdx(grootboek, "Rubriek");
     const gtAgCol  = colIdx(grootboek, "Artikelgroep");
     const gtBedrag = colIdx(grootboek, "Bedrag");
     if (gtAgCol < 0) {
-      return { columns: ["Fout"], rows: [["Kolom 'Artikelgroep' niet gevonden in Grootboektransacties."]] };
+      return { columns: ["Melding"], rows: [["Grootboektransacties heeft nog een kolom 'Artikelgroep' nodig."]] };
     }
     const buckets = bucketSum2(grootboek, gtRubCol, gtAgCol, gtBedrag);
     const groepen = getArtikelgroepen(grootboek, gtAgCol);
@@ -810,8 +810,8 @@
 
   function errorTable(name, e) {
     return {
-      columns: ["Fout"],
-      rows: [[`Kon ${name} niet berekenen: ${e.message}`]]
+      columns: ["Melding"],
+      rows: [[`${name} vraagt een controle: ${e.message}`]]
     };
   }
 

@@ -14,7 +14,7 @@
     if (window.fpToegang && !fpToegang.mag("planning-bewerk", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">De opleverbonnen zijn voor de planning.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Opleverbonnen</h2><p style="color:#6b7280">De opleverbonnen zijn voor de planning.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -155,23 +155,23 @@ async function bonOverzicht(uitGeheugen){
     };
     var lijst = alle.filter(function(b){ return past(b) && inGroep(b); });
     var elders = q ? alle.filter(function(b){ return past(b) && !inGroep(b); }).length : 0;
-    if (!lijst.length){ box.innerHTML = '<p style="color:var(--grijs);font-size:13px">' + (q ? 'Niets gevonden voor "' + esc(q) + '" in deze groep.' + (elders ? ' Wel ' + elders + ' in een andere groep; kies Alles.' : '') : 'Geen bonnen in deze groep.') + '</p>'; return; }
+    if (!lijst.length){ box.innerHTML = '<p style="color:var(--grijs);font-size:13px">' + (q ? '0 treffers voor "' + esc(q) + '" in deze groep.' + (elders ? ' Wel ' + elders + ' in een andere groep; kies Alles.' : '') : 'Deze groep is leeg.') + '</p>'; return; }
     box.innerHTML = '<div style="overflow:auto"><table class="bonlijst"><thead><tr><th>Datum</th><th>Klant</th><th>Order</th><th>Monteur</th><th>Openstaand</th><th>Voldaan</th><th>Nee</th><th>Status</th></tr></thead><tbody>'+
       lijst.map(function(b){
         return '<tr class="rij" data-id="'+esc(b.id)+'"><td style="white-space:nowrap">'+esc(nlD(b.datum))+(b.tijd?' '+esc(b.tijd):'')+'</td><td><b>'+esc(b.klant)+'</b><div style="color:var(--grijs);font-size:11px">'+esc(b.plaats||"")+'</div></td>'+
           '<td>'+esc(b.ordernr||(b.itsId?"ITS "+b.itsId:""))+'</td><td>'+esc(b.monteur||"")+'</td>'+
-          '<td>'+(b.serviceTotaal!=null?'<span title="servicebon: materialen, voorrijkosten en arbeid">service '+bonGeld(b.serviceTotaal)+'</span>':(b.openstaand!=null?bonGeld(b.openstaand):"-"))+'</td><td>'+(b.methode&&b.methode!=="geen"?bonGeld(b.ontvangen)+" "+(b.methode==="contant"?"contant":"bank"):(b.methode==="geen"?"niets":"-"))+'</td>'+
+          '<td>'+(b.serviceTotaal!=null?'<span title="servicebon: materialen, voorrijkosten en arbeid">service '+bonGeld(b.serviceTotaal)+'</span>':(b.openstaand!=null?bonGeld(b.openstaand):"-"))+'</td><td>'+(b.methode&&b.methode!=="geen"?bonGeld(b.ontvangen)+" "+(b.methode==="contant"?"contant":"bank"):(b.methode==="geen"?bonGeld(0):"-"))+'</td>'+
           '<td>'+(b.nee?'<span style="color:#b91c1c;font-weight:700">'+b.nee+'</span>':'')+'</td>'+
           '<td><span class="bonstatus '+esc(b.status)+'">'+esc((window.OPLEVERBON_STATUS||{})[b.status]||b.status)+'</span></td></tr>';
       }).join("")+'</tbody></table></div>' + (elders ? '<p style="color:var(--grijs);font-size:12px;margin:8px 0 0">Nog ' + elders + ' bon' + (elders === 1 ? '' : 'nen') + ' met "' + esc(q) + '" in een andere groep; kies Alles om die ook te zien.</p>' : '');
     box.querySelectorAll("tr.rij").forEach(function(r){ r.addEventListener("click", function(){ bonDetail(r.dataset.id); }); });
-  }catch(e){ box.innerHTML = '<p style="color:var(--rood);font-size:13px">Ophalen mislukte: '+esc(e.message)+'</p>'; }
+  }catch(e){ box.innerHTML = '<p style="color:var(--rood);font-size:13px">Ophalen vraagt een nieuwe poging: '+esc(e.message)+'</p>'; }
 }
 async function bonDetail(id){
   var box = document.getElementById("bonInhoud"); if (!box) return;
   box.innerHTML = '<p style="color:var(--grijs);font-size:13px">Bon ophalen\u2026</p>';
   var bon;
-  try{ bon = (await bonApi("/planning/bon?id="+encodeURIComponent(id))).bon; if (!bon) throw new Error("bon niet gevonden"); }
+  try{ bon = (await bonApi("/planning/bon?id="+encodeURIComponent(id))).bon; if (!bon) throw new Error("deze bon is onbekend"); }
   catch(e){ box.innerHTML = '<p style="color:var(--rood)">'+esc(e.message)+'</p>'; return; }
   var vragen = window.OPLEVERBON_VRAGEN||[], A = window.OPLEVERBON_ANTWOORD||{};
   var bt = bon.betaling||{};
@@ -181,7 +181,7 @@ async function bonDetail(id){
   var voorrij = (Number(sv.km)||0)*KM, arbeid = (Number(sv.uren)||0)*UU;
   var serviceHtml = '<h4>1. Melding</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(sv.melding||"-")+'</p>'+
     '<h4>2. Wat is er gedaan</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(sv.gedaan||"-")+'</p>'+
-    '<h4>3. Materialen</h4><table class="vr">'+((sv.materialen||[]).length ? (sv.materialen||[]).map(function(r){ return '<tr><td style="width:45%">'+esc(r.oms)+'</td><td>'+esc(r.aantal)+' x '+bonGeld(r.prijs)+'</td><td style="text-align:right">'+bonGeld((Number(r.aantal)||0)*(Number(r.prijs)||0))+'</td></tr>'; }).join("") : '<tr><td colspan="3" style="color:var(--grijs)">geen materialen</td></tr>')+'</table>'+
+    '<h4>3. Materialen</h4><table class="vr">'+((sv.materialen||[]).length ? (sv.materialen||[]).map(function(r){ return '<tr><td style="width:45%">'+esc(r.oms)+'</td><td>'+esc(r.aantal)+' x '+bonGeld(r.prijs)+'</td><td style="text-align:right">'+bonGeld((Number(r.aantal)||0)*(Number(r.prijs)||0))+'</td></tr>'; }).join("") : '<tr><td colspan="3" style="color:var(--grijs)">0 materialen</td></tr>')+'</table>'+
     '<h4>4. Voorrijkosten en arbeid</h4><table class="vr">'+
       '<tr><td style="width:45%">Voorrijkosten</td><td>'+esc(sv.km||0)+' km x '+bonGeld(KM)+'</td><td style="text-align:right">'+bonGeld(voorrij)+'</td></tr>'+
       '<tr><td>Arbeid</td><td>'+esc(sv.uren||0)+' uur x '+bonGeld(UU)+'</td><td style="text-align:right">'+bonGeld(arbeid)+'</td></tr>'+
@@ -201,10 +201,10 @@ async function bonDetail(id){
     '<h4>Betaling</h4><table class="vr">'+
       '<tr><td style="width:45%">Orderbedrag</td><td>'+bonGeld(bt.orderbedrag)+'</td></tr><tr><td>Al betaald</td><td>'+bonGeld(bt.reedsBetaald)+'</td></tr>'+
       '<tr><td>Openstaand bij levering</td><td><b>'+(bt.openstaand!=null?bonGeld(bt.openstaand):"onbekend")+'</b></td></tr>'+
-      '<tr><td>Bij de klant voldaan</td><td>'+(bt.methode==="geen"?"niets":bt.methode?bonGeld(bt.bedrag)+" "+(bt.methode==="contant"?"contant, geld bij "+(bt.contantAan||"?"):"per bank"):"-")+'</td></tr></table>'+
+      '<tr><td>Bij de klant voldaan</td><td>'+(bt.methode==="geen"?bonGeld(0):bt.methode?bonGeld(bt.bedrag)+" "+(bt.methode==="contant"?"contant, geld bij "+(bt.contantAan||"?"):"per bank"):"-")+'</td></tr></table>'+
     (bon.opmerking?'<h4>Opmerkingen</h4><p style="font-size:13px;white-space:pre-line;margin:0">'+esc(bon.opmerking)+'</p>':'')+
-    '<h4>Handtekeningen</h4><div class="handt">'+(isService?'':'<div><div style="font-size:11.5px;color:var(--grijs);margin-bottom:3px">Monteur</div>'+(bon.handtekeningMonteur?'<img src="'+bon.handtekeningMonteur+'" alt="handtekening monteur">':'<div class="leeg">nog geen handtekening</div>')+'</div>')+
-    '<div><div style="font-size:11.5px;color:var(--grijs);margin-bottom:3px">Klant'+(bon.klantNaamHandtekening?' ('+esc(bon.klantNaamHandtekening)+')':'')+'</div>'+(bon.handtekeningKlant?'<img src="'+bon.handtekeningKlant+'" alt="handtekening klant">':'<div class="leeg">nog geen handtekening</div>')+'</div></div>'+
+    '<h4>Handtekeningen</h4><div class="handt">'+(isService?'':'<div><div style="font-size:11.5px;color:var(--grijs);margin-bottom:3px">Monteur</div>'+(bon.handtekeningMonteur?'<img src="'+bon.handtekeningMonteur+'" alt="handtekening monteur">':'<div class="leeg">handtekening volgt</div>')+'</div>')+
+    '<div><div style="font-size:11.5px;color:var(--grijs);margin-bottom:3px">Klant'+(bon.klantNaamHandtekening?' ('+esc(bon.klantNaamHandtekening)+')':'')+'</div>'+(bon.handtekeningKlant?'<img src="'+bon.handtekeningKlant+'" alt="handtekening klant">':'<div class="leeg">handtekening volgt</div>')+'</div></div>'+
     '<div class="mailrij"><label style="font-size:12.5px;color:var(--grijs)">Mail naar</label><input type="email" id="bonMail" value="'+esc(bon.klantMail||"")+'" placeholder="mailadres van de klant"></div>'+
     '<div class="knoppen" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'+
       (bon.status==="klaar"?'<button type="button" class="doe" id="bonAkkoord">Akkoord</button>':'')+
@@ -221,7 +221,7 @@ async function bonDetail(id){
     if (!confirm("De opleverbon mailen naar "+naar+"?")) return;
     mk.disabled = true; meld("Versturen\u2026");
     try{ await bonApi("/planning/bon/mail", { id: id, naar: naar, vragen: vragen }); bonDetail(id); }
-    catch(e){ meld("Mailen mislukte: "+e.message, true); mk.disabled = false; }
+    catch(e){ meld("Mailen vraagt een nieuwe poging: "+e.message, true); mk.disabled = false; }
   });
 }
 /* Rechtstreeks naar één bon, bijvoorbeeld vanuit een melding: ?bon=<id> */

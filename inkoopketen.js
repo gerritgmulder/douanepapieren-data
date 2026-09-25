@@ -310,7 +310,7 @@
       r.leverancier = leverancierNaam(bron, f.crediteurId);
       r.crediteurnummer = f.crediteurId;
       r.omschrijving = f.omschrijving;
-      r.teBeoordelen = "geen order gevonden - leveringsplicht handmatig vaststellen";
+      r.teBeoordelen = "factuur staat los van een order - leveringsplicht handmatig vaststellen";
       t[2].push(r);
     });
 
@@ -417,14 +417,14 @@
 
     var meldingen = [];
     if (!bron.inkoopboeken.length)
-      meldingen.push("Geen inkoopdagboek herkend. De inkoopfacturen konden niet worden opgehaald, " +
-                     "dus overzicht 1, 2 en 3 zijn onvolledig.");
+      meldingen.push("Het inkoopdagboek is nog onbekend. De inkoopfacturen volgen zodra dat herkend is; " +
+                     "tot dan zijn overzicht 1, 2 en 3 onvolledig.");
     if (!opties.grootboek1630)
-      meldingen.push("Overzicht 6 is leeg. De Logic4-API geeft bij een boeking geen grootboekrekening " +
-                     "per regel, dus welke boekingen op 1630 staan is er niet uit af te leiden. " +
-                     "Lever een grootboekexport van 1630 aan en dit vult zichzelf.");
+      meldingen.push("Overzicht 6 wacht op een grootboekexport van 1630. De Logic4-API geeft per boeking " +
+                     "het bedrag en de crediteur; welke boekingen op 1630 staan, staat in die export. " +
+                     "Lever hem aan en dit vult zichzelf.");
     if ((bron.facturenZonderOrder || []).length > (bron.facturen || []).length * 0.5)
-      meldingen.push("Meer dan de helft van de inkoopfacturen is niet aan een order te koppelen. " +
+      meldingen.push("Meer dan de helft van de inkoopfacturen staat los van een order. " +
                      "Mogelijk staat het ordernummer bij deze leverancier ergens anders dan in de " +
                      "referentie of de omschrijving.");
 

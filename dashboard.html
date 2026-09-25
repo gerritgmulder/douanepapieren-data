@@ -533,7 +533,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <a href="tuinmeubelen.html" class="tile hidden" id="tileTuinmeubelen">
         <div class="icon">🪑</div>
         <h3>Tuinmeubelen</h3>
-        <p>Containers met tuinmeubelen en sauna's: wat erin zit, de papieren erbij en wat er aan die papieren rammelt. Telt bewust niet mee als spa-voorraad.</p>
+        <p>Containers met tuinmeubelen en sauna's: wat erin zit, de papieren erbij en wat er aan die papieren rammelt. Staat bewust los van de spa-voorraad.</p>
       </a>
 
       <!-- Retouren — Don/Arno/Dolf/Manon + admins. -->
@@ -643,7 +643,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <a href="specsheets.html" class="tile hidden" id="tileSpecsheets">
         <div class="icon">📄</div>
         <h3>Specificatiesheets</h3>
-        <p>Maak en bewerk de specificatiesheets van de spa's — vul de velden in, upload foto's en sla op als PDF. Geen InDesign meer nodig.</p>
+        <p>Maak en bewerk de specificatiesheets van de spa's - vul de velden in, upload foto's en sla op als PDF. Werkt zonder InDesign.</p>
       </a>
 
       <!-- Afbeeldingen op maat — Gretha en Demi + admins. -->
@@ -726,7 +726,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
          wordt getest, daarna verhuist een tegel naar Financiën. -->
     <section class="groep" id="groepAdministratieProef">
       <h3>Administratie (proef)</h3>
-      <p class="groep-lead">In aanbouw. Wat hier staat is te testen, nog niet de werkwijze van de afdeling.</p>
+      <p class="groep-lead">In aanbouw. Wat hier staat is om te testen; de werkwijze van de afdeling volgt later.</p>
       <div class="tiles">
       <a href="bank.html" class="tile hidden" id="tileBank">
         <div class="icon">🏦</div>
@@ -751,7 +751,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <a href="maandcontrole.html" class="tile hidden" id="tileMaandcontrole">
         <div class="icon">🧮</div>
         <h3>Maandcontrole</h3>
-        <p>Per maand: staat elke tussenrekening op nul, sluiten debiteuren en crediteuren aan, wat zijn de banksaldi. Oranje is een lijst met regels, geen zoektocht.</p>
+        <p>Per maand: staat elke tussenrekening op nul, sluiten debiteuren en crediteuren aan, wat zijn de banksaldi. Oranje is meteen een lijst met regels.</p>
       </a>
       </div>
     </section>
@@ -942,7 +942,7 @@ if (!window.fpToegang || !window.fpTegels) {
     "<main style='font-family:Montserrat,sans-serif;max-width:520px;margin:14vh auto;background:#fff;" +
     "border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center'>" +
     "<h1 style='color:#144734;font-size:20px;margin:0 0 10px'>Even herstarten</h1>" +
-    "<p style='color:#6b7280;font-size:14px;line-height:1.5'>Het dashboard mist een bestand dat bepaalt wie " +
+    "<p style='color:#6b7280;font-size:14px;line-height:1.5'>Het dashboard heeft nog een bestand nodig dat bepaalt wie " +
     "welke tegel mag zien. Sluit de app helemaal af en start hem opnieuw; dan wordt het opgehaald.</p>" +
     "<p style='color:#6b7280;font-size:12.5px'>Blijft dit staan, geef het dan door aan Gerrit.</p></main>";
   throw new Error("toegang.js ontbreekt");
@@ -1244,8 +1244,8 @@ function meldOudeApp(huidig) {
   blok.innerHTML =
     '<div style="background:#fff;border:1px solid #fecaca;border-left:5px solid #dc2626;border-radius:12px;padding:16px 18px;margin-bottom:18px">' +
     '<div style="font-weight:700;color:#b91c1c;font-size:14px;margin-bottom:6px">Deze computer draait nog een oude versie van het dashboard (' + huidig.join(".") + ')</div>' +
-    '<div style="font-size:13px;line-height:1.55;color:#374151">Daardoor kan de app soms ineens afsluiten met een foutmelding. ' +
-    'De verbeterde versie staat al voor je klaar - er hoeft niets gedownload of ge\u00efnstalleerd te worden. ' +
+    '<div style="font-size:13px;line-height:1.55;color:#374151">Daardoor kan de app soms ineens afsluiten met een melding. ' +
+    'De verbeterde versie staat al voor je klaar - de knop doet alles, zonder downloaden of installeren. ' +
     'Klik op de knop: het dashboard sluit dan netjes af en werkt zichzelf bij. Start hem daarna gewoon opnieuw.</div>' +
     '<button type="button" id="oudeAppKnop" style="margin-top:12px;background:#dc2626;color:#fff;border:0;border-radius:9px;padding:11px 20px;font:inherit;font-weight:600;cursor:pointer">Nu bijwerken (dashboard sluit even af)</button>' +
     '<div style="font-size:11.5px;color:#6b7280;margin-top:8px">Zie je deze melding na het opnieuw starten nog steeds? Werk dan vijf minuten gewoon door en klik nog een keer - de update wordt op de achtergrond opgehaald.</div></div>';
@@ -1286,7 +1286,7 @@ async function startTakenblok(email) {
           body: { path: pad, method: methode || "POST", body: body }
         });
         const j = await r.json();
-        if (!r.ok || !j.ok) throw new Error(j.error || "Logic4-aanroep mislukt");
+        if (!r.ok || !j.ok) throw new Error(j.error || "Logic4 vraagt een nieuwe poging");
         return j.data;
       },
       log: function (tegel, actie, detail) {
@@ -1412,9 +1412,9 @@ async function startNieuweRelaties(email){
       + '<h3 style="margin:0 0 4px;font-size:15px;color:#92400e">'
       +   items.length + ' nieuw' + (items.length===1?'e':'e') + ' relatie' + (items.length===1?'':'s') + ' in Logic4 om na te kijken</h3>'
       + '<p style="margin:0 0 12px;font-size:12.5px;color:#6b7280;line-height:1.55">'
-      +   'Aangemaakt vanuit Passion Partners Beheer. Logic4 kan het land niet via de koppeling '
-      +   'aannemen, dus die staan nu op Nederland en Particulier. Klopt er iets niet, dan moet de relatie in '
-      +   'Logic4 zelf worden weggehaald; dat kan hier niet.</p>'
+      +   'Aangemaakt vanuit Passion Partners Beheer. Het land en de soort zet je in Logic4 zelf; via de koppeling '
+      +   'staan ze nu op Nederland en Particulier. Wijkt er iets af, dan haal je de relatie in '
+      +   'Logic4 zelf weg.</p>'
       + items.map(it =>
           '<div style="display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid #f3f4f6;flex-wrap:wrap">'
           + '<div style="flex:1;min-width:220px">'
@@ -1654,11 +1654,11 @@ async function pingHelper() {
       hint.innerHTML = '<span class="dot"></span>Helper-server verbonden';
     } else {
       hint.className = "helper-hint bad";
-      hint.innerHTML = '<span class="dot"></span>Helper-server antwoordt met fout';
+      hint.innerHTML = '<span class="dot"></span>Helper-server vraagt aandacht';
     }
   } catch {
     hint.className = "helper-hint bad";
-    hint.innerHTML = '<span class="dot"></span>Helper-server onbereikbaar — draait hij?';
+    hint.innerHTML = '<span class="dot"></span>Wacht op de helper-server - draait hij?';
   }
 }
 
@@ -1735,7 +1735,7 @@ el("loginForm").addEventListener("submit", async (ev) => {
     });
     const j = await r.json();
     if (!r.ok || !j.ok) {
-      el("loginErr").textContent = j.error || "Inloggen mislukt.";
+      el("loginErr").textContent = j.error || "Inloggen vraagt een nieuwe poging.";
       el("loginErr").classList.remove("hidden");
       el("loginBtn").disabled = false;
       el("loginBtn").textContent = "Inloggen";
@@ -1757,7 +1757,7 @@ el("loginForm").addEventListener("submit", async (ev) => {
     el("loginBtn").textContent = "Inloggen";
     showDashboard(j.user?.email || email);
   } catch (e) {
-    el("loginErr").textContent = "Kon helper-server niet bereiken: " + e.message;
+    el("loginErr").textContent = "Wacht op de helper-server: " + e.message;
     el("loginErr").classList.remove("hidden");
     el("loginBtn").disabled = false;
     el("loginBtn").textContent = "Inloggen";

@@ -14,7 +14,7 @@
     if (window.fpToegang && !fpToegang.mag("administratie-proef", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Deze tegel is voor de proefgroep</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -117,7 +117,7 @@ tr.laat td:first-child{box-shadow:inset 4px 0 0 var(--rood)}
       </div>
       <div style="overflow:auto"><table><thead><tr><th><input type="checkbox" id="betAlle" title="alles in beeld"></th><th>Leverancier</th><th>Factuur</th><th>Datum</th><th>Vervalt</th><th class="n">Open</th><th>Status</th></tr></thead><tbody id="betLijst"></tbody></table></div>
       <div class="balk">
-        <b id="betTel">niets gekozen</b>
+        <b id="betTel">0 gekozen</b>
         <label style="font-size:12px">uitvoerdatum <input type="date" id="betDatum" style="font:inherit;font-size:12.5px;padding:5px 8px;border:1px solid var(--rand);border-radius:7px"></label>
         <button class="knop groen" id="betMaak" disabled>Betaalbestand maken</button>
         <span id="betMsg" style="font-size:12.5px"></span>
@@ -172,7 +172,7 @@ async function bewaarGeleerd(){ geleerd.updated = new Date().toISOString(); awai
    op deze computer. */
 var ocrWorker = null;
 async function ocrPagina(page){
-  if (!window.Tesseract){ await new Promise(function(res, rej){ var s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"; s.onload = res; s.onerror = function(){ rej(new Error("tekstherkenning niet te laden")); }; document.head.appendChild(s); }); }
+  if (!window.Tesseract){ await new Promise(function(res, rej){ var s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"; s.onload = res; s.onerror = function(){ rej(new Error("tekstherkenning vraagt een nieuwe poging")); }; document.head.appendChild(s); }); }
   if (!ocrWorker){ ocrWorker = await Tesseract.createWorker("nld+eng"); }
   var vp = page.getViewport({ scale: 2 });
   var c = document.createElement("canvas"); c.width = vp.width; c.height = vp.height;
@@ -303,7 +303,7 @@ async function inlezen(files){
     }catch(e){ fouten.push(file.name + ": " + (e.message || e)); }
   }
   await bewaarWerk();
-  msg($("dropMsg"), n + " factu" + (n===1?"ur":"ren") + " gelezen." + (fouten.length ? " Niet gelezen: " + esc(fouten.join("; ")) : ""), fouten.length ? "bad" : "ok");
+  msg($("dropMsg"), n + " factu" + (n===1?"ur":"ren") + " gelezen." + (fouten.length ? " Vraagt een nieuwe poging: " + esc(fouten.join("; ")) : ""), fouten.length ? "bad" : "ok");
   try{ if (window.fpLog) window.fpLog("inkoopfactuur-ingelezen", n + " bestand(en)"); }catch(e){}
   teken();
 }
@@ -319,7 +319,7 @@ function factHtml(f){
     '<div class="kop"><b>' + esc(f.leverancier || "leverancier onbekend") + '</b>' + (f.nummer ? ' <span>factuur ' + esc(f.nummer) + '</span>' : '') + (f.datum ? ' <span style="color:var(--grijs)">' + esc(datumNL(f.datum)) + '</span>' : '') +
       (f.incl != null ? ' <b style="margin-left:auto">' + esc(geld(f.incl)) + (f.munt === "USD" ? ' (USD)' : '') + '</b>' : '') +
       (klaar ? ' <span class="pil">' + esc(f.geboekt.tekst) + '</span>' : compleet(f) ? ' <span class="pil">klaar om te boeken</span>' : ' <span class="pil oranje">nog aanvullen</span>') + '</div>' +
-    '<div style="font-size:11.5px;color:var(--grijs);margin-top:3px">' + esc(f.bestandsnaam || "") + (f.gelezen && f.gelezen.leverancier ? ' · leverancier herkend op ' + esc(f.gelezen.leverancier) : ' · leverancier niet herkend') + (f.gelezen && f.gelezen.geleerd ? ' · ' + esc(f.gelezen.geleerd) : '') + (f.bestand ? ' · <a href="' + W + '/inkoop/bestand?id=' + encodeURIComponent(f.bestand) + '" target="_blank">bekijk</a>' : '') + '</div>' +
+    '<div style="font-size:11.5px;color:var(--grijs);margin-top:3px">' + esc(f.bestandsnaam || "") + (f.gelezen && f.gelezen.leverancier ? ' · leverancier herkend op ' + esc(f.gelezen.leverancier) : ' · leverancier nog te kiezen') + (f.gelezen && f.gelezen.geleerd ? ' · ' + esc(f.gelezen.geleerd) : '') + (f.bestand ? ' · <a href="' + W + '/inkoop/bestand?id=' + encodeURIComponent(f.bestand) + '" target="_blank">bekijk</a>' : '') + '</div>' +
     (klaar ? '' :
     '<div class="velden">' +
       '<div><label>Leverancier (crediteur in Logic4)</label><select data-veld="crediteurId"><option value="">kies…</option>' + cs.map(function(c){ return '<option value="' + esc(c.id) + '"' + (String(c.id) === String(f.crediteurId||"") ? ' selected' : '') + '>' + esc(c.naam) + '</option>'; }).join("") + '</select></div>' +
@@ -328,7 +328,7 @@ function factHtml(f){
       '<div><label>Vervaldatum</label><input type="date" data-veld="vervaldatum" value="' + esc(f.vervaldatum||"") + '"></div>' +
       '<div><label>Bedrag incl. btw</label><input data-veld="incl" inputmode="decimal" value="' + (f.incl != null ? esc(String(f.incl).replace(".", ",")) : "") + '"></div>' +
       '<div><label>Btw</label><input data-veld="btw" inputmode="decimal" value="' + (f.btw != null ? esc(String(f.btw).replace(".", ",")) : "") + '"></div>' +
-      '<div><label>Inkooporder in Logic4</label>' + (ikos.length ? '<select data-veld="inkooporder"><option value="">geen / onbekend</option>' + ikos.map(function(o){ return '<option value="' + esc(o.id) + '"' + (String(o.id) === String(f.inkooporder||"") ? ' selected' : '') + '>' + esc(o.id) + ' · ' + esc(datumNL(o.datum)) + (o.opmerking ? ' · ' + esc(o.opmerking.slice(0,30)) : '') + '</option>'; }).join("") + '</select>' : '<input data-veld="inkooporder" value="' + esc(f.inkooporder||"") + '" placeholder="nummer, of leeg">') + '</div>' +
+      '<div><label>Inkooporder in Logic4</label>' + (ikos.length ? '<select data-veld="inkooporder"><option value="">los / onbekend</option>' + ikos.map(function(o){ return '<option value="' + esc(o.id) + '"' + (String(o.id) === String(f.inkooporder||"") ? ' selected' : '') + '>' + esc(o.id) + ' · ' + esc(datumNL(o.datum)) + (o.opmerking ? ' · ' + esc(o.opmerking.slice(0,30)) : '') + '</option>'; }).join("") + '</select>' : '<input data-veld="inkooporder" value="' + esc(f.inkooporder||"") + '" placeholder="nummer, of leeg">') + '</div>' +
       '<div><label>Grootboek (voorstel, wordt onthouden)</label><input data-veld="grootboek" value="' + esc(f.grootboek||"") + '" placeholder="bv. 7000"></div>' +
       '<div><label>Kostenplaats</label><input data-veld="kostenplaats" value="' + esc(f.kostenplaats||"") + '" placeholder="bv. Houston"></div>' +
       '<div><label>Omschrijving</label><input data-veld="omschrijving" value="' + esc(f.omschrijving||"") + '"></div>' +
@@ -342,8 +342,8 @@ function teken(){
   $("nFact").textContent = open.length; $("nKlaar").textContent = klaar.length;
   document.querySelectorAll(".tab").forEach(function(b){ b.classList.toggle("aan", b.dataset.tab === tab); });
   $("blokFacturen").classList.toggle("hidden", tab !== "facturen"); $("blokBetalen").classList.toggle("hidden", tab !== "betalen"); $("blokKlaar").classList.toggle("hidden", tab !== "klaar");
-  $("factLijst").innerHTML = open.length ? open.map(factHtml).join("") : '<p class="lead" style="padding:4px 2px">Geen facturen in de werklijst. Sleep er een naar boven.</p>';
-  $("klaarLijst").innerHTML = klaar.length ? klaar.map(factHtml).join("") : '<p class="lead">Nog niets geboekt vanuit hier.</p>';
+  $("factLijst").innerHTML = open.length ? open.map(factHtml).join("") : '<p class="lead" style="padding:4px 2px">De werklijst is leeg. Sleep er een factuur naar boven.</p>';
+  $("klaarLijst").innerHTML = klaar.length ? klaar.map(factHtml).join("") : '<p class="lead">Hier komen de facturen die je vanuit deze tegel boekt.</p>';
   document.querySelectorAll(".fact [data-veld]").forEach(function(el){ el.addEventListener("change", function(){
     var f = werk.facturen[el.closest(".fact").dataset.id]; if (!f) return;
     var v = el.value; var veld = el.dataset.veld;
@@ -363,7 +363,7 @@ async function boek(id, knop){
   knop.disabled = true; if (m) m.textContent = "Bezig…";
   try{
     var j = await api("/inkoop/boeken", { id: id, door: ik });
-    if (!j.ok) throw new Error(j.error || "boeken mislukt");
+    if (!j.ok) throw new Error(j.error || "boeken vraagt een nieuwe poging");
     if (f.crediteurId && (f.grootboek || f.kostenplaats)){ geleerd.crediteuren[String(f.crediteurId)] = { grootboek: f.grootboek || "", kostenplaats: f.kostenplaats || "", ts: new Date().toISOString(), door: ik }; await bewaarGeleerd(); }
     try{ if (window.fpLog) window.fpLog("inkoopfactuur-geboekt", (f.leverancier||"") + " " + (f.nummer||"") + " " + geld(f.incl)); }catch(e){}
     await laad();
@@ -378,7 +378,7 @@ async function laadPosten(vers){
     var j = await api("/bank/openstaand-crediteuren", { vers: !!vers });
     posten = j.posten || []; postenMeta = { updated: j.updated, uitCache: j.uitCache };
     $("betMeta").textContent = posten.length + " open posten" + (postenMeta.updated ? " · stand " + datumNL(postenMeta.updated) : "") + (postenMeta.uitCache ? " (uit de cache)" : "");
-  }catch(e){ $("betMeta").textContent = "Ophalen lukte niet: " + e.message; }
+  }catch(e){ $("betMeta").textContent = "Ophalen vraagt een nieuwe poging: " + e.message; }
   tekenBetalen();
 }
 function betZichtbaar(){
@@ -401,14 +401,14 @@ function tekenBetalen(){
       '<td><b>' + esc(p.CompanyName||"") + '</b></td><td>' + esc(p.Reference||"") + (p.Description ? '<div style="font-size:11px;color:var(--grijs)">' + esc(String(p.Description).slice(0,60)) + '</div>' : '') + '</td>' +
       '<td style="white-space:nowrap">' + esc(datumNL(p.Date)) + '</td><td style="white-space:nowrap;color:' + (laat ? 'var(--rood)' : 'inherit') + '">' + esc(datumNL(p.PayBefore)) + '</td>' +
       '<td class="n">' + esc(geld(p.AmountOpen)) + '</td><td>' + (b ? '<span class="pil blauw">in betaalbestand ' + esc(datumNL(b.ts)) + '</span>' : laat ? '<span class="pil rood">vervallen</span>' : '<span class="pil grijs">open</span>') + '</td></tr>';
-  }).join("") : '<tr><td colspan="7" style="color:var(--grijs);padding:14px 6px">Niets in beeld.</td></tr>';
+  }).join("") : '<tr><td colspan="7" style="color:var(--grijs);padding:14px 6px">0 posten in beeld.</td></tr>';
   $("betLijst").querySelectorAll(".betVink").forEach(function(c){ c.addEventListener("change", function(){ if (c.checked) betKeuze[c.dataset.id] = true; else delete betKeuze[c.dataset.id]; telBet(); }); });
   telBet();
 }
 function telBet(){
   var gekozen = posten.filter(function(p){ return betKeuze[p.Id] && !betaald.posten[String(p.Id)]; });
   var som = gekozen.reduce(function(n,p){ return n + (Number(p.AmountOpen)||0); }, 0);
-  $("betTel").textContent = gekozen.length ? gekozen.length + " post" + (gekozen.length===1?"":"en") + " gekozen · " + geld(som) : "niets gekozen";
+  $("betTel").textContent = gekozen.length ? gekozen.length + " post" + (gekozen.length===1?"":"en") + " gekozen · " + geld(som) : "0 gekozen";
   $("betMaak").disabled = !gekozen.length;
 }
 $("betAlle").addEventListener("change", function(){ betZichtbaar().forEach(function(p){ if (betaald.posten[String(p.Id)]) return; if ($("betAlle").checked) betKeuze[p.Id] = true; else delete betKeuze[p.Id]; }); tekenBetalen(); });
@@ -418,14 +418,14 @@ $("betMaak").addEventListener("click", async function(){
   var gekozen = posten.filter(function(p){ return betKeuze[p.Id] && !betaald.posten[String(p.Id)]; });
   if (!gekozen.length) return;
   var datum = $("betDatum").value || vandaag();
-  if (!confirm("Betaalbestand maken voor " + gekozen.length + " post(en), uitvoerdatum " + datumNL(datum) + "?\n\nHet bestand laad je daarna zelf bij ING in en keur je daar goed; er gaat vanuit hier geen geld weg.")) return;
+  if (!confirm("Betaalbestand maken voor " + gekozen.length + " post(en), uitvoerdatum " + datumNL(datum) + "?\n\nHet bestand laad je daarna zelf bij ING in en keur je daar goed; het geld gaat pas weg na jouw akkoord bij ING.")) return;
   $("betMaak").disabled = true; $("betMsg").textContent = "Bezig…";
   try{
     var j = await api("/inkoop/betaalbestand", { door: ik, uitvoerdatum: datum, posten: gekozen.map(function(p){ return { id: p.Id, crediteurId: p.CreditorId, naam: p.CompanyName, bedrag: p.AmountOpen, ref: p.Reference || "" }; }) });
-    if (!j.ok) throw new Error(j.error || "mislukt");
+    if (!j.ok) throw new Error(j.error || "onbekende reden");
     var blob = new Blob([j.xml], { type: "application/xml" }); var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = j.bestand + ".xml"; document.body.appendChild(a); a.click(); a.remove();
     betKeuze = {};
-    $("betMsg").innerHTML = '<span style="color:#166534">' + j.aantal + ' betalingen, ' + esc(geld(j.totaal)) + '. Het bestand is gedownload; laad het in bij ING.</span>' + (j.zonder && j.zonder.length ? ' <span style="color:var(--rood)">Niet meegenomen (geen IBAN in Logic4): ' + esc(j.zonder.map(function(z){ return z.naam; }).join(", ")) + '</span>' : '');
+    $("betMsg").innerHTML = '<span style="color:#166534">' + j.aantal + ' betalingen, ' + esc(geld(j.totaal)) + '. Het bestand is gedownload; laad het in bij ING.</span>' + (j.zonder && j.zonder.length ? ' <span style="color:var(--rood)">Apart gehouden (IBAN nog invullen in Logic4): ' + esc(j.zonder.map(function(z){ return z.naam; }).join(", ")) + '</span>' : '');
     try{ if (window.fpLog) window.fpLog("betaalbestand-gemaakt", j.bestand + ": " + j.aantal + " posten, " + geld(j.totaal)); }catch(e){}
     betaald = await api("/data/inkoop-betaald").catch(function(){ return betaald; });
     tekenBetalen();
@@ -441,7 +441,7 @@ $("drop").addEventListener("drop", function(e){ var fs = [].slice.call(e.dataTra
 $("betDatum").value = vandaag();
 (async function(){
   for (var i = 0; i < 20 && !teamKey(); i++) await new Promise(function(r){ setTimeout(r, 500); });
-  try { await laad(); } catch(e){ msg($("dropMsg"), "Laden lukte niet: " + esc(e.message), "bad"); }
+  try { await laad(); } catch(e){ msg($("dropMsg"), "Laden vraagt een nieuwe poging: " + esc(e.message), "bad"); }
 })();
 </script>
 <script>

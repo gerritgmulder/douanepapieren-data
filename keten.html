@@ -13,7 +13,7 @@
     if (window.fpToegang && !fpToegang.mag("keten", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is nog een proef.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Deze tegel is voor de ketencontrole</h2><p style="color:#6b7280">Deze tegel is nog een proef.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -86,7 +86,7 @@ td{padding:6px;border-bottom:1px solid #f3f4f6;vertical-align:top}
 <main>
   <div class="kaart">
     <h2>Wat hier staat</h2>
-    <p class="lead">Elke zaak in de keten (inkoop, levering, Amerika, dealers, service) heeft vaste stappen met een termijn. Wat langer op een stap blijft liggen dan de termijn staat hier, met wie het moet oppakken en om hoeveel geld het gaat. Rood is te lang open en komt ook bij Dolf en Gerrit terecht. Alles komt uit wat het Dashboard al weet; niets is met de hand ingevoerd.</p>
+    <p class="lead">Elke zaak in de keten (inkoop, levering, Amerika, dealers, service) heeft vaste stappen met een termijn. Wat langer op een stap blijft liggen dan de termijn staat hier, met wie het moet oppakken en om hoeveel geld het gaat. Rood is te lang open en komt ook bij Dolf en Gerrit terecht. Alles komt automatisch uit wat het Dashboard al weet.</p>
     <div class="kpis" id="kpis"></div>
     <div class="filters" id="filters"></div>
     <div id="lijst"><p class="leeg">Bezig met controleren…</p></div>
@@ -112,7 +112,7 @@ let data = null, filter = "alle";
 async function laad(vers){
   $("lijst").innerHTML = '<p class="leeg">Bezig met controleren…</p>';
   const r = await api("/keten/meldingen" + (vers ? "?vers=1" : ""));
-  if (r.status !== 200 || !r.data || !r.data.ok) { $("lijst").innerHTML = '<p class="leeg" style="color:var(--rood)">Controleren lukte niet: ' + esc((r.data && r.data.error) || ("HTTP " + r.status)) + '</p>'; return; }
+  if (r.status !== 200 || !r.data || !r.data.ok) { $("lijst").innerHTML = '<p class="leeg" style="color:var(--rood)">Controleren vraagt een nieuwe poging: ' + esc((r.data && r.data.error) || ("HTTP " + r.status)) + '</p>'; return; }
   data = r.data; teken();
 }
 function teken(){
@@ -142,7 +142,7 @@ function teken(){
       '<div class="rechts">' + (m.bedrag != null ? '<div class="bedrag">' + geld(m.bedrag, m.valuta) + '</div>' : (m.aantal != null ? '<div class="bedrag">' + m.aantal + " spa's</div>" : '')) +
       '<div class="knoppen"><a class="ga" href="' + esc(m.tegel) + '">Openen</a>' +
         (m.uitgesteld ? '<button class="klein" data-terug="' + esc(m.id) + '">Weer tonen</button>' : '<button class="klein" data-uitstel="' + esc(m.id) + '">Uitstellen</button><button class="klein" data-af="' + esc(m.id) + '">Afgehandeld</button>') + '</div></div>' +
-    '</div>').join("") : '<p class="leeg">Niets blijft liggen in deze groep.</p>';
+    '</div>').join("") : '<p class="leeg">Alles in deze groep loopt op tijd.</p>';
   $("lijst").querySelectorAll("[data-af]").forEach(b => b.addEventListener("click", async () => {
     const n = prompt("Afgehandeld. Wil je er iets bij zetten (mag leeg)?", ""); if (n === null) return;
     await api("/keten/status", { method: "POST", body: JSON.stringify({ id: b.dataset.af, actie: "afgehandeld", notitie: n }) }); laad();

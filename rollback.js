@@ -192,7 +192,7 @@
         if (Math.round(a.toen * 1000) !== 0)
           regels.push({ artikel: a.artikel, omschrijving: a.omschrijving,
                         berekend: a.toen, geteld: null, verschil: a.toen,
-                        reden: "wel in de terugrekening, niet in de telling" });
+                        reden: "alleen in de terugrekening" });
         return;
       }
       var v = a.toen - t.aantal;
@@ -208,7 +208,7 @@
       alleenTelling++;
       regels.push({ artikel: code, omschrijving: "", berekend: null,
                     geteld: geteld[code].aantal, verschil: -geteld[code].aantal,
-                    reden: "wel geteld, niet in de terugrekening" });
+                    reden: "alleen in de telling" });
     });
 
     regels.sort(function (a, b) {
@@ -240,13 +240,13 @@
 
     var meldingen = [];
     if (!(bron.mutaties || []).length)
-      meldingen.push("Er kwamen geen voorraadmutaties terug over deze periode. De terugrekening is dan " +
-                     "gelijk aan de huidige stand, en dat klopt vrijwel zeker niet.");
+      meldingen.push("Over deze periode kwamen 0 voorraadmutaties terug. De terugrekening is dan " +
+                     "gelijk aan de huidige stand; die uitkomst vraagt vrijwel zeker om een controle.");
     if (terug.totaal.perGroep.overig)
-      meldingen.push("Voor " + Math.round(terug.totaal.perGroep.overig) + " stuks is de soort mutatie niet " +
-                     "in te delen bij inkoop, verkoop, magazijn, correctie of derving.");
+      meldingen.push("Voor " + Math.round(terug.totaal.perGroep.overig) + " stuks valt de soort mutatie " +
+                     "buiten inkoop, verkoop, magazijn, correctie en derving.");
     if (!cfg.telling)
-      meldingen.push("Zonder tellijst is er niets om de terugrekening mee te vergelijken. Lever de telling " +
+      meldingen.push("Met een tellijst is de terugrekening te vergelijken. Lever de telling " +
                      "aan met per regel een artikelcode en een aantal.");
 
     return {

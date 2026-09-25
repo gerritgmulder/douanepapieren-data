@@ -13,7 +13,7 @@
     if (window.fpToegang && !fpToegang.mag("administratie-proef", ik) && !fpToegang.mag("debiteuren", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Deze tegel is voor debiteurenbeheer</h2><p style="color:#6b7280">Deze tegel is nog in aanbouw.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -157,7 +157,7 @@ async function laad(vers){
   msg($("msg"), vers ? "Openstaande facturen ophalen uit Logic4…" : "Laden…", "info");
   try{
     data = await api("/debiteuren/open" + (vers ? "?vers=1" : ""));
-    if (!data.ok) throw new Error(data.error || "laden mislukt");
+    if (!data.ok) throw new Error(data.error || "onbekende reden");
     /* Namen van debiteuren die nog niet bekend zijn komen in porties van 25;
        zolang er nog zijn, nog een keer vragen. */
     for (var k = 0; k < 6 && data.nogOnbekend > 0; k++){ var d2 = await api("/debiteuren/open"); if (d2.ok) data = d2; }
@@ -165,7 +165,7 @@ async function laad(vers){
     ["t1","t2","t3","t4"].forEach(function(id, i){ $(id).textContent = data.termijnen[["stap1","stap2","stap3","tussen"][i]]; });
     $("iT1").value = data.termijnen.stap1; $("iT2").value = data.termijnen.stap2; $("iT3").value = data.termijnen.stap3; $("iT4").value = data.termijnen.tussen;
     vulTekst();
-  }catch(e){ msg($("msg"), "Laden lukte niet: " + esc(e.message), "bad"); }
+  }catch(e){ msg($("msg"), "Laden vraagt een nieuwe poging: " + esc(e.message), "bad"); }
   teken();
 }
 function lijstVan(){
@@ -190,7 +190,7 @@ function teken(){
   if (tab === "inst") return;
   var lijst = lijstVan().filter(function(d){ return tab === "nu" ? (d.status === "groen" || d.status === "oranje") : d.status === tab; });
   lijst.sort(function(a,b){ return (a.status === "oranje" ? 0 : 1) - (b.status === "oranje" ? 0 : 1) || b.open - a.open; });
-  $("lijst").innerHTML = lijst.length ? lijst.map(rijHtml).join("") : '<p class="lead" style="padding:4px 2px">' + (tab === "nu" ? "Niets aan de beurt. Alles staat op wachten, afspraak of intern." : "Niets in deze lijst.") + '</p>';
+  $("lijst").innerHTML = lijst.length ? lijst.map(rijHtml).join("") : '<p class="lead" style="padding:4px 2px">' + (tab === "nu" ? "Alles is bij. Iedereen staat op wachten, afspraak of intern." : "Deze lijst is leeg.") + '</p>';
   $("lijst").querySelectorAll("[data-stuur]").forEach(function(b){ b.addEventListener("click", function(){ stuur([b.dataset.stuur], Number(b.dataset.stap), b); }); });
   $("lijst").querySelectorAll("[data-proef]").forEach(function(b){ b.addEventListener("click", function(){ proef(b.dataset.proef, Number(b.dataset.stap)); }); });
   $("lijst").querySelectorAll("[data-afspraak]").forEach(function(b){ b.addEventListener("click", function(){ afspraak(b.dataset.afspraak); }); });
@@ -205,10 +205,10 @@ function rijHtml(d){
   if (d.status === "groen") acties += '<button class="knop groen" data-stuur="' + d.id + '" data-stap="' + d.volgende + '">Stuur ' + esc(STAP[d.volgende]) + ' (' + taalVan(d).toUpperCase() + ')</button><button class="knop" data-proef="' + d.id + '" data-stap="' + d.volgende + '">voorbeeld</button>';
   if (d.status === "oranje" && d.volgende === 4) acties += '<button class="knop" data-besluit="' + d.id + '">Besluit…</button>';
   if (d.status === "oranje" && d.volgende && d.volgende < 4 && d.email) acties += '<button class="knop groen" data-stuur="' + d.id + '" data-stap="' + d.volgende + '">Stuur ' + esc(STAP[d.volgende]) + '</button>';
-  if (d.status === "oranje" && !d.email) acties += '<span class="pil rood">geen mailadres in Logic4</span>';
+  if (d.status === "oranje" && !d.email) acties += '<span class="pil rood">mailadres nog invullen in Logic4</span>';
   if (d.status !== "intern" && d.status !== "afspraak") acties += '<button class="knop" data-afspraak="' + d.id + '">Afspraak…</button>';
   if (d.status === "afspraak") acties += '<button class="knop" data-afspraakweg="' + d.id + '">afspraak weghalen</button>';
-  acties += d.status === "intern" ? '<button class="knop" data-intern="' + d.id + '" data-aan="0">toch gewoon herinneren</button>' : '<button class="knop" data-intern="' + d.id + '" data-aan="1" title="deze klant krijgt nooit een herinnering">intern</button>';
+  acties += d.status === "intern" ? '<button class="knop" data-intern="' + d.id + '" data-aan="0">toch gewoon herinneren</button>' : '<button class="knop" data-intern="' + d.id + '" data-aan="1" title="herinneringen voor deze klant blijven dan uit">intern</button>';
   acties += '<button class="knop" data-facturen="' + d.id + '">facturen</button>';
   return '<div class="rij ' + d.status + '"><div class="naam"><b>' + esc(d.bedrijf || d.naam || ("debiteur " + d.id)) + '</b> ' + pil + '<div>' + esc([d.bedrijf ? d.naam : "", d.plaats, d.iso, "nr " + d.id].filter(Boolean).join(" · ")) + (d.email ? " · " + esc(d.email) : "") + '</div></div>' +
     '<div class="n"><b>' + esc(eur(d.open)) + '</b><div style="font-size:11px;color:var(--grijs)">' + d.facturen + ' factu' + (d.facturen === 1 ? 'ur' : 'ren') + '</div></div>' +
@@ -233,25 +233,25 @@ async function stuur(ids, stap, knop){
       }catch(e){ fouten.push(e.message); }
     }
   }
-  try{ if(window.fpLog) window.fpLog("debiteuren-verstuurd", gelukt + " mails" + (fouten.length ? ", " + fouten.length + " mislukt" : "")); }catch(e){}
+  try{ if(window.fpLog) window.fpLog("debiteuren-verstuurd", gelukt + " mails" + (fouten.length ? ", " + fouten.length + " opnieuw te sturen" : "")); }catch(e){}
   await laad();
-  msg($("msg"), gelukt + " mail" + (gelukt === 1 ? "" : "s") + " verstuurd." + (fouten.length ? " Mislukt: " + esc(fouten.slice(0, 5).join("; ")) : ""), fouten.length ? "bad" : "ok");
+  msg($("msg"), gelukt + " mail" + (gelukt === 1 ? "" : "s") + " verstuurd." + (fouten.length ? " Opnieuw te sturen: " + esc(fouten.slice(0, 5).join("; ")) : ""), fouten.length ? "bad" : "ok");
 }
 async function proef(id, stap){
   var d = data.debiteuren[id];
   try{
     var j = await api("/debiteuren/stuur", { stap: stap, proef: true, debiteuren: [{ id: d.id, email: d.email || ik, taal: taalVan(d) }] });
-    var r = (j.results||[])[0]; if (!r || !r.ok) throw new Error((r && r.error) || "geen voorbeeld");
+    var r = (j.results||[])[0]; if (!r || !r.ok) throw new Error((r && r.error) || "het voorbeeld kwam leeg terug");
     venster('<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px"><b>' + esc(r.onderwerp) + '</b><span style="font-size:12px;color:var(--grijs)">naar ' + esc(r.naar) + '</span></div>' + r.html + '<div style="margin-top:14px;display:flex;gap:8px"><button class="knop" id="vSluit">Sluiten</button><button class="knop" id="vTest">Stuur een test naar mijzelf</button></div>');
-    $("vSluit").addEventListener("click", venster); $("vTest").addEventListener("click", async function(){ $("vTest").disabled = true; try{ await api("/debiteuren/stuur", { stap: stap, test: true, debiteuren: [{ id: d.id, email: ik, taal: taalVan(d) }] }); $("vTest").textContent = "Verstuurd naar " + ik; }catch(e){ $("vTest").textContent = "Mislukt: " + e.message; } });
-  }catch(e){ msg($("msg"), "Voorbeeld lukte niet: " + esc(e.message), "bad"); }
+    $("vSluit").addEventListener("click", venster); $("vTest").addEventListener("click", async function(){ $("vTest").disabled = true; try{ await api("/debiteuren/stuur", { stap: stap, test: true, debiteuren: [{ id: d.id, email: ik, taal: taalVan(d) }] }); $("vTest").textContent = "Verstuurd naar " + ik; }catch(e){ $("vTest").textContent = "Nieuwe poging nodig: " + e.message; } });
+  }catch(e){ msg($("msg"), "Voorbeeld vraagt een nieuwe poging: " + esc(e.message), "bad"); }
 }
 function venster(html){ if (!html || typeof html !== "string") { $("venster").classList.add("hidden"); return; } $("vensterIn").innerHTML = html; $("venster").classList.remove("hidden"); }
 $("venster").addEventListener("click", function(e){ if (e.target === $("venster")) venster(); });
 function afspraak(id){
   var d = data.debiteuren[id];
   var over = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
-  venster('<h2>Afspraak met ' + esc(d.bedrijf || d.naam) + '</h2><p class="lead">Tot deze datum krijgt de klant geen herinnering. Daarna komt hij vanzelf terug in de lijst, oranje, met deze notitie erbij.</p>' +
+  venster('<h2>Afspraak met ' + esc(d.bedrijf || d.naam) + '</h2><p class="lead">Tot deze datum laten we de klant met rust. Daarna komt hij vanzelf terug in de lijst, oranje, met deze notitie erbij.</p>' +
     '<label style="font-size:12px">met rust laten tot<br><input class="veld" id="aTot" type="date" value="' + over + '"></label>' +
     '<label style="font-size:12px;display:block;margin-top:8px">wat is er afgesproken<br><input class="veld" id="aNot" style="width:100%" placeholder="bijv. betaalt na levering, of: in behandeling bij Chantal"></label>' +
     '<div style="margin-top:12px;display:flex;gap:8px"><button class="knop groen" id="aOk">Bewaren</button><button class="knop" id="aNee">Annuleren</button></div>');
@@ -260,7 +260,7 @@ function afspraak(id){
 }
 function besluit(id){
   var d = data.debiteuren[id];
-  venster('<h2>' + esc(d.bedrijf || d.naam) + ': ' + esc(eur(d.open)) + ' na de aanmaning nog open</h2><p class="lead">Dit is geen mail maar een keuze. Incasso loopt buiten het Dashboard; afschrijven doet Osman in Logic4. Na het besluit staat de klant drie maanden bij Afspraken, met het besluit erbij.</p>' +
+  venster('<h2>' + esc(d.bedrijf || d.naam) + ': ' + esc(eur(d.open)) + ' na de aanmaning nog open</h2><p class="lead">Dit is een keuze, zonder mail. Incasso loopt buiten het Dashboard; afschrijven doet Osman in Logic4. Na het besluit staat de klant drie maanden bij Afspraken, met het besluit erbij.</p>' +
     '<select class="keuze" id="bWat"><option value="incasso">naar het incassobureau</option><option value="afschrijven">afschrijven (oninbaar)</option><option value="nog eens bellen">eerst nog eens bellen</option><option value="anders">anders</option></select>' +
     '<label style="font-size:12px;display:block;margin-top:8px">toelichting<br><input class="veld" id="bNot" style="width:100%"></label>' +
     '<div style="margin-top:12px;display:flex;gap:8px"><button class="knop groen" id="bOk">Vastleggen</button><button class="knop" id="bNee">Annuleren</button></div>');
@@ -278,7 +278,7 @@ async function laadLog(){
   try{
     var j = await api("/debiteuren/log");
     $("logLijst").innerHTML = (j.regels||[]).length ? '<div style="overflow:auto"><table><thead><tr><th>Wanneer</th><th>Klant</th><th>Stap</th><th>Naar</th><th class="n">Bedrag</th><th>Door</th></tr></thead><tbody>' +
-      j.regels.map(function(r){ var d = data.debiteuren[String(r.debiteur)]; return '<tr><td style="white-space:nowrap">' + esc(new Date(r.ts).toLocaleString("nl-NL")) + '</td><td>' + esc(d ? (d.bedrijf || d.naam) : ("debiteur " + r.debiteur)) + '</td><td>' + (r.stap === 4 ? 'besluit: ' + esc(r.besluit) + (r.notitie ? ' - ' + esc(r.notitie) : '') : esc(STAP[r.stap] || ("stap " + r.stap)) + (r.taal ? ' (' + r.taal.toUpperCase() + ')' : '')) + '</td><td>' + esc(r.naar || "") + '</td><td class="n">' + (r.bedrag != null ? esc(eur(r.bedrag)) : '') + '</td><td>' + esc(String(r.door||"").split("@")[0]) + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<p class="lead">Nog niets verstuurd.</p>';
+      j.regels.map(function(r){ var d = data.debiteuren[String(r.debiteur)]; return '<tr><td style="white-space:nowrap">' + esc(new Date(r.ts).toLocaleString("nl-NL")) + '</td><td>' + esc(d ? (d.bedrijf || d.naam) : ("debiteur " + r.debiteur)) + '</td><td>' + (r.stap === 4 ? 'besluit: ' + esc(r.besluit) + (r.notitie ? ' - ' + esc(r.notitie) : '') : esc(STAP[r.stap] || ("stap " + r.stap)) + (r.taal ? ' (' + r.taal.toUpperCase() + ')' : '')) + '</td><td>' + esc(r.naar || "") + '</td><td class="n">' + (r.bedrag != null ? esc(eur(r.bedrag)) : '') + '</td><td>' + esc(String(r.door||"").split("@")[0]) + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<p class="lead">Hier komen de verstuurde mails.</p>';
   }catch(e){ $("logLijst").innerHTML = '<p class="lead">' + esc(e.message) + '</p>'; }
 }
 function vulTekst(){
@@ -289,10 +289,10 @@ function vulTekst(){
 $("iStap").addEventListener("change", vulTekst); $("iTaal").addEventListener("change", vulTekst);
 $("iTekstBewaar").addEventListener("click", async function(){
   var b = { tekst: {} }; b.tekst[$("iStap").value] = {}; b.tekst[$("iStap").value][$("iTaal").value] = { onderwerp: $("iOnderwerp").value, aanhef: $("iAanhef").value, tekst: $("iTekst").value, groet: $("iGroet").value };
-  try{ await api("/debiteuren/werk", b); $("iMsg").textContent = "Bewaard."; await laad(); }catch(e){ $("iMsg").textContent = "Mislukt: " + e.message; }
+  try{ await api("/debiteuren/werk", b); $("iMsg").textContent = "Bewaard."; await laad(); }catch(e){ $("iMsg").textContent = "Bewaren vraagt een nieuwe poging: " + e.message; }
 });
 $("iTBewaar").addEventListener("click", async function(){
-  try{ await api("/debiteuren/werk", { termijnen: { stap1: $("iT1").value, stap2: $("iT2").value, stap3: $("iT3").value, tussen: $("iT4").value } }); try{ if(window.fpLog) window.fpLog("debiteuren-termijnen", [$("iT1").value,$("iT2").value,$("iT3").value,$("iT4").value].join("/")); }catch(e){} await laad(); }catch(e){ msg($("msg"), "Bewaren lukte niet: " + esc(e.message), "bad"); }
+  try{ await api("/debiteuren/werk", { termijnen: { stap1: $("iT1").value, stap2: $("iT2").value, stap3: $("iT3").value, tussen: $("iT4").value } }); try{ if(window.fpLog) window.fpLog("debiteuren-termijnen", [$("iT1").value,$("iT2").value,$("iT3").value,$("iT4").value].join("/")); }catch(e){} await laad(); }catch(e){ msg($("msg"), "Bewaren vraagt een nieuwe poging: " + esc(e.message), "bad"); }
 });
 /* De mailserver laat 100 mails per dag door. Daarom per klik hooguit 80,
    de grootste bedragen eerst; de rest staat morgen gewoon weer groen. */

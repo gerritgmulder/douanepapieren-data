@@ -159,7 +159,7 @@
   <h2>Leveranciers en fabrieken</h2>
   <p class="lead">Per leverancier de contactpersoon, de fabriek, hoe en hoe snel er geleverd wordt, en welk artikel van de fabriek welk artikel van ons is. Onder "Prijslijsten en mappen" staan de prijslijsten zelf; een vervangen lijst blijft als versie bewaard.</p>
 
-  <div id="deny" class="status-msg bad hidden">Geen toegang tot de prijslijsten.</div>
+  <div id="deny" class="status-msg bad hidden">Deze tegel is voor het inkoopteam.</div>
 
   <div id="content">
     <div class="weergave">
@@ -216,7 +216,7 @@
             <label>Contactpersoon<input type="text" data-a="contact" placeholder="naam, mail, telefoon"></label>
             <label>Garantie<input type="text" data-a="garantie" placeholder="bv. 2 jaar op de schaal, 1 jaar onderdelen"></label>
           </div>
-          <label>Overige afspraken<textarea data-a="tekst" rows="4" placeholder="Alles wat is afgesproken en niet in de vakjes past: minimumafname, verpakking, wie de vracht regelt, wat er bij schade gebeurt..."></textarea></label>
+          <label>Overige afspraken<textarea data-a="tekst" rows="4" placeholder="Alles wat is afgesproken en buiten de vakjes valt: minimumafname, verpakking, wie de vracht regelt, wat er bij schade gebeurt..."></textarea></label>
           <div class="meta" id="afsprakenStand"></div>
         </div>
       </details>
@@ -340,7 +340,7 @@ async function laad(){
        afspraken:(j.afspraken&&typeof j.afspraken==="object")?j.afspraken:{},
        gewijzigd:j.gewijzigd||null};
   }catch(e){
-    melding("bad","Het overzicht kon niet worden opgehaald: "+e.message+". Ververs de pagina; er is niets gewijzigd.");
+    melding("bad","Het overzicht vraagt een nieuwe poging: "+e.message+". Ververs de pagina; alles staat nog zoals het was.");
     S={mappen:[],bestanden:[],gewijzigd:null};
   }
 }
@@ -348,7 +348,7 @@ async function bewaar(){
   S.gewijzigd=new Date().toISOString();
   S.door=IK;
   const r=await fetch(BUCKET,{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM},body:JSON.stringify(S)});
-  if(!r.ok) throw new Error("opslaan faalde (HTTP "+r.status+")");
+  if(!r.ok) throw new Error("opslaan vraagt een nieuwe poging (HTTP "+r.status+")");
 }
 
 // ─── Mappen ────────────────────────────────────────────────────────
@@ -436,7 +436,7 @@ function rijMap(pad){
   const aantal=onder.bestanden.length;
   return "<tr class='rij-map' data-map='"+esc(pad)+"'>"+
     "<td><div class='naam'><span class='ic'>📁</span><b class='klik openMap'>"+esc(naam)+"</b></div></td>"+
-    "<td class='meta'>"+aantal+" bestand"+(aantal===1?"":"en")+(pad.indexOf("/")<0?(((S.afspraken||{})[pad]&&Object.keys(S.afspraken[pad]).some(k=>k!=="op"&&k!=="door"&&S.afspraken[pad][k]))?" · <span style='color:#15803d'>afspraken vastgelegd</span>":" · <span style='color:#b45309'>nog geen prijsafspraken</span>"):"")+"</td>"+
+    "<td class='meta'>"+aantal+" bestand"+(aantal===1?"":"en")+(pad.indexOf("/")<0?(((S.afspraken||{})[pad]&&Object.keys(S.afspraken[pad]).some(k=>k!=="op"&&k!=="door"&&S.afspraken[pad][k]))?" · <span style='color:#15803d'>afspraken vastgelegd</span>":" · <span style='color:#b45309'>prijsafspraken nog invullen</span>"):"")+"</td>"+
     "<td class='meta'>"+mb(onder.bestanden.reduce((s,b)=>s+(Number(b.bytes)||0),0))+"</td>"+
     "<td class='meta'>—</td>"+
     "<td style='white-space:nowrap'>"+
@@ -489,7 +489,7 @@ function tekenAfspraken(){
   const a=S.afspraken[lev]||{};
   document.getElementById("afsprakenKop").textContent="Prijsafspraken met "+lev;
   const delen=AFSPRAAK_VELDEN.filter(([k])=>a[k]).map(([k,l])=>l+": "+a[k]);
-  document.getElementById("afsprakenSamenvatting").textContent=delen.length?delen.join(" · "):(a.tekst?String(a.tekst).slice(0,120):"nog niets vastgelegd, klik om in te vullen");
+  document.getElementById("afsprakenSamenvatting").textContent=delen.length?delen.join(" · "):(a.tekst?String(a.tekst).slice(0,120):"klik om de afspraken in te vullen");
   box.querySelectorAll("[data-a]").forEach(inp=>{ inp.value=a[inp.dataset.a]||""; });
   document.getElementById("afsprakenStand").textContent=a.op?("Laatst gewijzigd "+datum(a.op)+(a.door?" door "+korteNaam(a.door):"")):"";
 }
@@ -505,7 +505,7 @@ document.querySelectorAll("#afspraken [data-a]").forEach(inp=>inp.addEventListen
       const delen=AFSPRAAK_VELDEN.filter(([k])=>a[k]).map(([k,l])=>l+": "+a[k]);
       document.getElementById("afsprakenSamenvatting").textContent=delen.length?delen.join(" · "):(a.tekst?String(a.tekst).slice(0,120):"");
       try{ if(window.fpLog) window.fpLog("prijsafspraken-gewijzigd",lev+" "+inp.dataset.a); }catch(e){}
-    }catch(e){ document.getElementById("afsprakenStand").textContent="Niet bewaard: "+e.message; }
+    }catch(e){ document.getElementById("afsprakenStand").textContent="Bewaren vraagt een nieuwe poging: "+e.message; }
   },800);
 }));
 
@@ -525,7 +525,7 @@ function teken(){
       String(b.notitie||"").toLowerCase().includes(q)||
       String(b.map||"").toLowerCase().includes(q));
     tb.innerHTML=sorteerBestanden(treffers).map(b=>rijBestand(Object.assign({},b,{map:b.map}))).join("")||
-      "<tr><td colspan='5' style='color:var(--muted)'>Niets gevonden voor '"+esc(q)+"'.</td></tr>";
+      "<tr><td colspan='5' style='color:var(--muted)'>0 treffers voor '"+esc(q)+"'.</td></tr>";
     document.getElementById("kruimels").insertAdjacentHTML("beforeend",
       "<span class='sep'>·</span><span class='meta'>"+treffers.length+" treffer"+(treffers.length===1?"":"s")+" in alle mappen</span>");
   }else{
@@ -599,14 +599,14 @@ async function wisMap(pad){
     if(hier===pad||hier.startsWith(pad+"/")) hier=pad.includes("/")?pad.slice(0,pad.lastIndexOf("/")):"";
     await bewaar();
     melding("ok","Map verwijderd.");
-  }catch(e){ melding("bad","Verwijderen faalde: "+e.message); await laad(); }
+  }catch(e){ melding("bad","Verwijderen vraagt een nieuwe poging: "+e.message); await laad(); }
   teken();
 }
 
 async function hernoemBestand(id){
   const b=vind(id); if(!b) return;
   const nieuw=schoneNaam(await vraagTekst("Nieuwe naam voor dit bestand",b.naam,
-    "Houd de extensie erachter (.pdf, .xlsx), anders weet de computer niet meer waarmee hij het moet openen."));
+    "Houd de extensie erachter (.pdf, .xlsx); daaraan herkent de computer waarmee hij het opent."));
   if(!nieuw||nieuw===b.naam) return;
   b.naam=nieuw;
   try{ await bewaar(); melding("ok","Naam gewijzigd."); }catch(e){ melding("bad",e.message); await laad(); }
@@ -627,7 +627,7 @@ async function verplaats(id){
   const b=vind(id); if(!b) return;
   const keuzes=[{waarde:"",label:"— hoofdmap —"}].concat(
     S.mappen.slice().sort((x,y)=>x.localeCompare(y,"nl")).map(m=>({waarde:m,label:m})));
-  if(keuzes.length===1){ melding("bad","Er zijn nog geen mappen om naartoe te verplaatsen. Maak er eerst een aan."); return; }
+  if(keuzes.length===1){ melding("bad","Maak eerst een map aan; daarna kun je dit bestand verplaatsen."); return; }
   const naar=await vraagKeuze("'"+b.naam+"' verplaatsen naar",keuzes,b.map||"");
   if(naar===null||naar===(b.map||"")) return;
   b.map=naar;
@@ -647,7 +647,7 @@ async function wisBestand(id){
     S.bestanden=S.bestanden.filter(x=>x.id!==id);
     await bewaar();
     melding("ok","Verwijderd.");
-  }catch(e){ melding("bad","Verwijderen faalde: "+e.message); await laad(); }
+  }catch(e){ melding("bad","Verwijderen vraagt een nieuwe poging: "+e.message); await laad(); }
   teken();
 }
 
@@ -683,7 +683,7 @@ async function haalOpen(id,naam,downloaden){
     setTimeout(()=>URL.revokeObjectURL(url),60000);
     melding("",null);
     try{ if(window.fpLog) window.fpLog("prijslijst-geopend",naam); }catch(e){}
-  }catch(e){ melding("bad","Openen faalde: "+e.message); }
+  }catch(e){ melding("bad","Openen vraagt een nieuwe poging: "+e.message); }
 }
 
 // ─── Toevoegen ─────────────────────────────────────────────────────
@@ -732,7 +732,7 @@ zone.addEventListener("drop",async e=>{
   e.preventDefault();
   melding("bezig","Bezig met inlezen…");
   const lijst=await sleepUitpakken(e.dataTransfer);
-  if(!lijst.length){ melding("bad","Hier zat niets in dat ik kan inlezen."); return; }
+  if(!lijst.length){ melding("bad","Deze was leeg. Sleep een bestand of een map met inhoud hierheen."); return; }
   upload(lijst);
 });
 
@@ -840,15 +840,15 @@ async function upload(bestanden){
       await bewaar();
       try{ if(window.fpLog) window.fpLog("prijslijst-toegevoegd",gelukt+" bestand(en) in "+(hier||"hoofdmap")); }catch(e){}
     }catch(e){
-      melding("bad","De bestanden staan er wel, maar het overzicht kon niet worden bijgewerkt: "+e.message);
+      melding("bad","De bestanden staan erin; het overzicht bijwerken vraagt een nieuwe poging: "+e.message);
       await laad(); knoppen.forEach(k=>k.disabled=false); teken(); return;
     }
   }
   // Eén nette afloop: wat erin staat, en wat niet — met de reden erbij.
-  let tekst=gelukt?(gelukt+" bestand"+(gelukt===1?"":"en")+" toegevoegd aan "+(hier||"de hoofdmap")+"."):"Er is niets toegevoegd.";
+  let tekst=gelukt?(gelukt+" bestand"+(gelukt===1?"":"en")+" toegevoegd aan "+(hier||"de hoofdmap")+"."):"0 bestanden toegevoegd.";
   if(overgeslagen.length) tekst+=" Overgeslagen ("+overgeslagen.length+"): "+overgeslagen.slice(0,4).join(", ")+
     (overgeslagen.length>4?" en nog "+(overgeslagen.length-4):"")+". Alleen PDF, Excel en Word passen hier, tot 24 MB per stuk.";
-  if(mislukt.length) tekst+=" Mislukt ("+mislukt.length+"): "+mislukt.slice(0,2).join("; ")+".";
+  if(mislukt.length) tekst+=" Nieuwe poging nodig ("+mislukt.length+"): "+mislukt.slice(0,2).join("; ")+".";
   melding(mislukt.length?"bad":(overgeslagen.length?"bezig":"ok"),tekst);
 
   knoppen.forEach(k=>k.disabled=false);
@@ -872,7 +872,7 @@ document.getElementById("logoutBtn").addEventListener("click",()=>{
    betekent dat de leverancier zo niet levert. */
 const VORMEN=[["magazijn","Magazijn","De fabriek heeft een warehouse in Nederland."],["bezorgd","Bezorgd","De leverancier bezorgt zelf."],["ft40","40ft","Per volle 40-voets container."],["ft20","20ft","Per volle 20-voets container."]];
 const STARTMOMENTEN=["akkoord proforma","aanbetaling","orderbevestiging"];
-const INCOTERMS=[["exw","Ex Works","Geen transportkosten naar de haven in China; havenkosten zijn voor ons."],["fob","FOB (Free On Board)","De fabriek betaalt transport en havenkosten tot en met de haven in China."],["cif","CIF (Cost Insurance & Freight)","De fabriek betaalt alle kosten tot de haven in Rotterdam."],["afhaal","Afhaal magazijn","Wij halen op bij het magazijn van de leverancier."],["fonteyn","Bezorgd bij Fonteyn","De leverancier levert af bij ons."],["klant","Bezorgd bij klant","De leverancier levert rechtstreeks bij de klant af."]];
+const INCOTERMS=[["exw","Ex Works","Transport naar de haven in China en de havenkosten zijn voor ons."],["fob","FOB (Free On Board)","De fabriek betaalt transport en havenkosten tot en met de haven in China."],["cif","CIF (Cost Insurance & Freight)","De fabriek betaalt alle kosten tot de haven in Rotterdam."],["afhaal","Afhaal magazijn","Wij halen op bij het magazijn van de leverancier."],["fonteyn","Bezorgd bij Fonteyn","De leverancier levert af bij ons."],["klant","Bezorgd bij klant","De leverancier levert rechtstreeks bij de klant af."]];
 /* De prijs is de laagste inkoopprijs die we ooit van deze fabrikant kregen
    (Gerrit, 25 sep 2026): uit prijslijsten én facturen, de laagste wint. */
 const ART_VELDEN=[["codeExtern","Artikelcode (extern)","11%"],["naamExtern","Artikel (extern)","16%"],["codeIntern","Artikelcode (intern)","10%"],["naamIntern","Artikel (intern)","16%"],["incoterm","IncoTerms","13%"],["prijs","Laagste inkoopprijs","12%"],["cbm","CBM","7%"],["levertijd","Levertijd","10%"]];
@@ -927,7 +927,7 @@ function artBewaarStraks(lev, wacht){
       const r=await fetch(WORKER+"/data/"+levSleutel(lev),{method:"PUT",headers:{"Content-Type":"application/json","X-Fonteyn-Auth":TEAM},body:JSON.stringify({leverancier:lev,artikelen:artVan(lev),op:new Date().toISOString(),door:IK})});
       if(!r.ok) throw new Error("HTTP "+r.status);
       ovBewaarStraks(lev,0);
-    }catch(e){ const st3=document.getElementById("ovStand"); if(st3) st3.textContent="Artikelen niet bewaard: "+e.message; }
+    }catch(e){ const st3=document.getElementById("ovStand"); if(st3) st3.textContent="Artikelen bewaren vraagt een nieuwe poging: "+e.message; }
   }, wacht==null?800:wacht);
 }
 function artTelling(lev){
@@ -945,7 +945,7 @@ function ontbreekt(lev){
   if(!d.betaling.trim()) mis.push("betalingsvoorwaarden");
   if(!d.magNL) mis.push("magazijn in Nederland (ja of nee)");
   if(d.magNL==="ja") NL_OPTIES.forEach(([k,l])=>{ const o=d.nl[k]||{};
-    if(!o.kan) mis.push(l.toLowerCase()+": kan het of niet");
+    if(!o.kan) mis.push(l.toLowerCase()+": ja of nee");
     else if(o.kan==="ja"&&!String(o.kosten||"").trim()) mis.push("kosten bij "+l.toLowerCase()); });
   if(!VORMEN.some(([k])=>String((d.inkoop[k]||{}).lt||"").trim())) mis.push("productietijd bij minstens één inkoopvorm");
   if(!d.start) mis.push("startmoment productietijd");
@@ -955,7 +955,7 @@ function ontbreekt(lev){
      helemaal is ingevuld. */
   const t=ART[lev]?artTelling(lev):(((S.afspraken||{})[lev]||{}).artStand||{compleet:0,half:0});
   if(!t.compleet) mis.push("minstens één artikel helemaal ingevuld");
-  if(t.half) mis.push(t.half+" artikel"+(t.half===1?"":"en")+" niet helemaal ingevuld");
+  if(t.half) mis.push(t.half+" artikel"+(t.half===1?"":"en")+" half ingevuld");
   return mis;
 }
 function vormenTekst(inkoop){ return VORMEN.filter(([k])=>String((inkoop[k]||{}).lt||"").trim()).map(([k,l])=>"<span class='vorm'>"+esc(l)+" · "+esc(inkoop[k].lt)+"</span>").join(""); }
@@ -977,10 +977,10 @@ function tekenOverzicht(){
     const n=st.n||0;
     return "<div class='ov-lev"+(l===ovGekozen?" aan":"")+"' data-lev=\""+esc(l)+"\"><b>"+esc(levWeergave(l))+"</b>"+
       (sub?"<div class='sub'>"+esc(sub)+"</div>":"")+
-      "<div>"+(mis.length?"<span class='vorm' style='background:#fef3c7;color:#92400e'>afspraken onvolledig</span>":"<span class='vorm'>klaar om te bestellen</span>")+vormenTekst(d.inkoop)+(n?"<span class='vorm' style='background:#f3f4f6;color:#374151'>"+n+" artikel"+(n===1?"":"en")+(st.voorstel?", "+st.voorstel+" voorstel":"")+"</span>":"")+"</div>"+
-      (t.art.length?"<div class='treffer'>"+t.art.slice(0,3).map(r=>esc((r.codeExtern||r.naamExtern||"")+" → "+(r.codeIntern||r.naamIntern||"nog niet gekoppeld"))).join("<br>")+(t.art.length>3?"<br>en nog "+(t.art.length-3):"")+"</div>":"")+
+      "<div>"+(mis.length?"<span class='vorm' style='background:#fef3c7;color:#92400e'>afspraken nog aanvullen</span>":"<span class='vorm'>klaar om te bestellen</span>")+vormenTekst(d.inkoop)+(n?"<span class='vorm' style='background:#f3f4f6;color:#374151'>"+n+" artikel"+(n===1?"":"en")+(st.voorstel?", "+st.voorstel+" voorstel":"")+"</span>":"")+"</div>"+
+      (t.art.length?"<div class='treffer'>"+t.art.slice(0,3).map(r=>esc((r.codeExtern||r.naamExtern||"")+" → "+(r.codeIntern||r.naamIntern||"nog te koppelen"))).join("<br>")+(t.art.length>3?"<br>en nog "+(t.art.length-3):"")+"</div>":"")+
       "</div>";
-  }).join(""):"<div class='ov-lev' style='cursor:default;color:var(--muted)'>Niets gevonden"+(q?" voor '"+esc(q)+"'":"")+".</div>";
+  }).join(""):"<div class='ov-lev' style='cursor:default;color:var(--muted)'>0 treffers"+(q?" voor '"+esc(q)+"'":"")+".</div>";
   document.querySelectorAll("#ovRijen [data-lev]").forEach(x=>x.addEventListener("click",async()=>{ ovGekozen=x.dataset.lev; artZoek=""; artSoort=""; artToon=50; tekenOverzicht(); document.getElementById("ovDetail").innerHTML="<p class='meta'>Artikelen ophalen\u2026</p>"; await laadArtikelen(ovGekozen); tekenLeverancier(); }));
 }
 function veldRij(id, waarde, titel, uitleg, plaats){
@@ -1007,8 +1007,8 @@ function artGefilterd(lev){
 }
 function artRijen(lev){
   const alle=artGefilterd(lev), l=alle.slice(0,artToon);
-  if(!artVan(lev).length) return "<tr class='leeg'><td colspan='9'>Nog geen artikelen. Voeg er een toe met de knop hieronder.</td></tr>";
-  if(!alle.length) return "<tr class='leeg'><td colspan='9'>Geen artikelen gevonden.</td></tr>";
+  if(!artVan(lev).length) return "<tr class='leeg'><td colspan='9'>Voeg het eerste artikel toe met de knop hieronder.</td></tr>";
+  if(!alle.length) return "<tr class='leeg'><td colspan='9'>0 artikelen gevonden.</td></tr>";
   return l.map(({r,i})=>"<tr"+(r.voorstel?" class='voorstel' title=\"Klaargezet uit "+esc(r.bron||"de prijslijst")+(r.prijsSoort?" (prijs: "+esc(r.prijsSoort)+")":"")+"\"":"")+">"+
     ART_VELDEN.map(([k,lab])=>"<td>"+(k==="incoterm"
       ?"<select data-art='"+i+"' data-k='incoterm' style='width:100%;padding:5px 4px;font-size:12px' title='"+esc(lab)+"'><option value=''>kies\u2026</option>"+INCOTERMS.map(([v,n,u])=>"<option value='"+v+"' title=\""+esc(u)+"\""+(r.incoterm===v?" selected":"")+">"+esc(n)+"</option>").join("")+"</select>"
@@ -1041,7 +1041,7 @@ function tekenLeverancier(){
      opgehaald: dan zou een wijziging de echte artikelen overschrijven. */
   if(!ART[lev]){ box.innerHTML="<p class='meta'>Artikelen ophalen\u2026</p>"; laadArtikelen(lev).then(()=>{ if(ovGekozen===lev) tekenLeverancier(); }); return; }
   const d=levLees(lev);
-  box.innerHTML="<div style='display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap'><div style='flex:1;min-width:220px'><h3>"+esc(levWeergave(lev))+"</h3>"+(levWeergave(lev)!==lev?"<div class='meta'>"+esc(lev)+"</div>":"")+"<div class='meta'>"+(d.op?"Laatst gewijzigd "+datum(d.op)+(d.door?" door "+esc(korteNaam(d.door)):""):"Nog niets vastgelegd.")+" · <a class='klik' id='ovNaarMap'>prijslijsten van deze leverancier</a></div></div>"+
+  box.innerHTML="<div style='display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap'><div style='flex:1;min-width:220px'><h3>"+esc(levWeergave(lev))+"</h3>"+(levWeergave(lev)!==lev?"<div class='meta'>"+esc(lev)+"</div>":"")+"<div class='meta'>"+(d.op?"Laatst gewijzigd "+datum(d.op)+(d.door?" door "+esc(korteNaam(d.door)):""):"Klaar om in te vullen.")+" · <a class='klik' id='ovNaarMap'>prijslijsten van deze leverancier</a></div></div>"+
       "<div style='text-align:right'><button class='primary' id='ovIko' type='button' disabled>Inkooporder maken</button><div class='meta' id='ovIkoUitleg' style='max-width:340px;margin-top:4px'></div></div></div>"+
     "<div id='ovIkoPaneel' class='hidden' style='margin-top:12px;border:1px solid var(--border);border-left:4px solid var(--fonteyn-lime);border-radius:10px;padding:12px 14px;background:#fbfdf7'>"+
       "<b style='color:var(--fonteyn-green)'>Inkooporder uit de proforma</b><div class='meta' style='margin:3px 0 8px'>Kies de proforma invoice van "+esc(lev)+" (Excel). Het scherm leest de regels uit en laat een voorstel zien; pas na jouw akkoord komt de inkooporder in Logic4.</div>"+
@@ -1062,13 +1062,13 @@ function tekenLeverancier(){
     "<h4>Inkoopvorm en productietijd</h4><table class='velden'>"+
       VORMEN.map(([k,l,u])=>{ const v=d.inkoop[k]||{};
         return "<tr><td class='w'><input type='text' data-lt='"+k+"' value=\""+esc(v.lt||"")+"\" placeholder='productietijd (LT), bv. 6 weken'></td>"+
-          "<td class='uitleg'><b>Productietijd bij "+esc(l)+"</b>"+esc(u)+" Leeg laten als deze leverancier zo niet levert.</td></tr>"; }).join("")+
+          "<td class='uitleg'><b>Productietijd bij "+esc(l)+"</b>"+esc(u)+" Laat leeg als deze leverancier alleen op een andere manier levert.</td></tr>"; }).join("")+
       "<tr><td class='w'><select data-ov='startmoment' style='width:100%'><option value=''>kies…</option>"+STARTMOMENTEN.map(x=>"<option"+(d.start===x?" selected":"")+">"+esc(x)+"</option>").join("")+"</select></td><td class='uitleg'><b>Startmoment productietijd</b>Vanaf welk moment de productietijd telt.</td></tr>"+
-      "<tr><td class='w'><input type='text' data-ov='boete' value=\""+esc(d.boete)+"\" placeholder='bv. 1% van de orderwaarde per week te laat, maximaal 10%'></td><td class='uitleg'><b>Boeteclausule productietijd</b>Wat de fabriek betaalt als de productietijd niet wordt gehaald.</td></tr>"+
+      "<tr><td class='w'><input type='text' data-ov='boete' value=\""+esc(d.boete)+"\" placeholder='bv. 1% van de orderwaarde per week te laat, maximaal 10%'></td><td class='uitleg'><b>Boeteclausule productietijd</b>Wat de fabriek betaalt als de productietijd wordt overschreden.</td></tr>"+
     "</table>"+
     "<h4>Artikelen</h4>"+
     "<p class='meta' style='margin:0 0 6px'>Links wat de fabriek op de factuur zet, rechts wat het bij ons is. Zo koppelt Reinier bij de betaling de naam van de fabriek aan ons artikel. IncoTerms: "+INCOTERMS.slice(0,3).map(i=>"<b>"+esc(i[1].split(" (")[0])+"</b> "+esc(i[2].charAt(0).toLowerCase()+i[2].slice(1))).join(" ")+"</p>"+
-    (artTelling(lev).voorstel?"<p class='meta' style='margin:0 0 6px;color:#92400e'>Gele regels zijn klaargezet uit de prijslijsten van deze leverancier, met ons artikel erbij waar Logic4 dat weet. Controleer ze en vul aan; een regel die helemaal is ingevuld is geen voorstel meer.</p>":"")+
+    (artTelling(lev).voorstel?"<p class='meta' style='margin:0 0 6px;color:#92400e'>Gele regels zijn klaargezet uit de prijslijsten van deze leverancier, met ons artikel erbij waar Logic4 dat weet. Controleer ze en vul aan; een regel die helemaal is ingevuld wordt een vaste regel.</p>":"")+
     "<div style='display:flex;gap:8px;flex-wrap:wrap;margin:0 0 6px'><input type='text' id='artZoek' placeholder='zoek in de artikelen\u2026' value=\""+esc(artZoek)+"\" style='flex:1;min-width:180px'><select id='artSoort'><option value=''>alle regels</option><option value='voorstel'"+(artSoort==="voorstel"?" selected":"")+">alleen voorstellen</option><option value='eigen'"+(artSoort==="eigen"?" selected":"")+">alleen ingevuld of eigen</option><option value='zonder'"+(artSoort==="zonder"?" selected":"")+">nog zonder artikel van ons</option></select></div>"+
     "<table class='art'><thead><tr>"+ART_VELDEN.map(([k,l,w])=>"<th style='width:"+w+"'>"+esc(l)+"</th>").join("")+"<th style='width:32px'></th></tr></thead><tbody>"+artRijen(lev)+"</tbody></table>"+
     "<div id='artMeer' class='meta' style='margin-top:6px'></div>"+
@@ -1097,7 +1097,7 @@ function tekenLeverancier(){
    knop drukt: de Excel- en pdf-lezer zijn samen een paar megabyte. Aanmaken
    in Logic4 mag alleen wie ook in Voorraadbeheer mag bestellen. */
 let ikoGeladen=false;
-function laadScript(src){ return new Promise((ok,fout)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=()=>fout(new Error("kon "+src+" niet laden")); document.head.appendChild(s); }); }
+function laadScript(src){ return new Promise((ok,fout)=>{ const s=document.createElement("script"); s.src=src; s.onload=ok; s.onerror=()=>fout(new Error(src+" laden vraagt een nieuwe poging")); document.head.appendChild(s); }); }
 async function openInkooporder(lev){
   const p=document.getElementById("ovIkoPaneel"); p.classList.remove("hidden");
   if(!ikoGeladen){
@@ -1142,7 +1142,7 @@ function ovBewaarStraks(lev, wacht){
       const st2=document.getElementById("ovStand"); if(st2) st2.textContent="Bewaard, "+datum(mijn.op)+" door "+korteNaam(IK);
       tekenOverzicht();
       try{ if(window.fpLog) window.fpLog("leveranciersgegevens-gewijzigd",lev); }catch(e){}
-    }catch(e){ const st3=document.getElementById("ovStand"); if(st3) st3.textContent="Niet bewaard: "+e.message; }
+    }catch(e){ const st3=document.getElementById("ovStand"); if(st3) st3.textContent="Bewaren vraagt een nieuwe poging: "+e.message; }
   }, wacht==null?800:wacht);
 }
 function zetWeergave(w){
@@ -1155,7 +1155,7 @@ function zetWeergave(w){
 document.querySelectorAll(".weergave [data-w]").forEach(b=>b.addEventListener("click",()=>zetWeergave(b.dataset.w)));
 document.getElementById("ovZoek").addEventListener("input",tekenOverzicht);
 document.getElementById("ovNieuw").addEventListener("click",async()=>{
-  const naam=schoneNaam(await vraagTekst("Nieuwe leverancier","","De naam van de leverancier of fabriek. Daarna vul je de afspraken in; zolang die niet compleet zijn kan er geen inkooporder worden gemaakt."));
+  const naam=schoneNaam(await vraagTekst("Nieuwe leverancier","","De naam van de leverancier of fabriek. Daarna vul je de afspraken in; zodra die compleet zijn kun je een inkooporder maken."));
   if(!naam) return;
   if(S.mappen.includes(naam)){ ovGekozen=naam; tekenOverzicht(); tekenLeverancier(); return; }
   S.mappen.push(naam);

@@ -13,7 +13,7 @@
     if (window.fpToegang && !fpToegang.mag("herinneringen", ik)) {
       document.addEventListener("DOMContentLoaded", function(){
         document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
-          '<h2 style="color:#144734;margin:0 0 8px">Geen toegang</h2><p style="color:#6b7280">Deze tegel is voor de financiële administratie.</p>' +
+          '<h2 style="color:#144734;margin:0 0 8px">Financiële administratie</h2><p style="color:#6b7280">Deze tegel is voor de financiële administratie.</p>' +
           '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
       });
     }
@@ -90,10 +90,10 @@ td input[type=email]{width:100%;min-width:150px;padding:4px 7px;font-size:12px}
       <div><label>Minimaal openstaand</label><input type="number" id="fBedrag" value="0" min="0" style="width:100px"></div>
       <div><label>Land</label><select id="fLand"><option value="">alle</option></select></div>
       <div><label>Soort</label><select id="fSoort"><option value="">alle</option><option value="zakelijk">zakelijk</option><option value="particulier">particulier</option></select></div>
-      <div><label>Herinnerd</label><select id="fHerinnerd"><option value="">alle</option><option value="nooit">nog nooit</option><option value="30">langer dan 30 dagen geleden</option></select></div>
+      <div><label>Herinnerd</label><select id="fHerinnerd"><option value="">alle</option><option value="nooit">nog zonder herinnering</option><option value="30">langer dan 30 dagen geleden</option></select></div>
       <div style="flex:1 1 200px"><label>Zoeken</label><input type="text" id="fZoek" placeholder="naam, bedrijf, mail, factuurnummer"></div>
       <div><label>&nbsp;</label><button class="stil" id="alles">Alles in beeld aanvinken</button></div>
-      <div><label>&nbsp;</label><button class="stil" id="niets">Niets</button></div>
+      <div><label>&nbsp;</label><button class="stil" id="niets">Alles uitvinken</button></div>
     </div>
     <div id="stand" class="lead"></div>
     <div style="overflow:auto"><table><thead><tr><th style="width:30px"></th><th>Debiteur</th><th>Mailadres</th><th>Land</th><th class="n">Facturen</th><th class="n">Oudste</th><th class="n">Openstaand</th><th>Laatst herinnerd</th></tr></thead><tbody id="lijst"></tbody></table></div>
@@ -127,7 +127,7 @@ let data = null, groepen = [], gekozen = {}, open = {}, mailOverride = {}, uitge
 async function laad(vers){
   $("stand").textContent = "Ophalen uit Logic4…";
   const r = await api("/herinneringen/open" + (vers ? "?vers=1" : ""));
-  if (r.status !== 200 || !r.data || !r.data.ok) { $("stand").innerHTML = '<span style="color:var(--rood)">Ophalen mislukte: ' + esc((r.data && r.data.error) || ("HTTP " + r.status)) + '</span>'; return; }
+  if (r.status !== 200 || !r.data || !r.data.ok) { $("stand").innerHTML = '<span style="color:var(--rood)">Ophalen vraagt een nieuwe poging: ' + esc((r.data && r.data.error) || ("HTTP " + r.status)) + '</span>'; return; }
   data = r.data;
   const per = {};
   for (const f of data.facturen) { const k = String(f.debiteur); (per[k] = per[k] || []).push(f); }
@@ -168,18 +168,18 @@ function teken(){
   $("lijst").innerHTML = lijst.length ? lijst.map(g => {
     const d = g.deb, aan = !!gekozen[g.id];
     const naam = (d.bedrijf ? '<b>' + esc(d.bedrijf) + '</b>' + (d.naam ? ' <span style="color:var(--muted)">' + esc(d.naam) + '</span>' : '') : '<b>' + esc(d.naam || ("debiteur " + g.id)) + '</b>') + '<div style="font-size:11px;color:var(--muted)">' + esc(g.id) + (d.plaats ? ' · ' + esc(d.plaats) : '') + (d.bekend ? '' : ' · <span style="color:#c2410c">gegevens nog ophalen</span>') + '</div>';
-    const laatst = d.laatst ? '<span class="pil ' + (Date.now() - Date.parse(d.laatst.ts) < 30 * 86400000 ? 'groen' : '') + '">' + esc(datumNl(d.laatst.ts)) + '</span><div style="font-size:11px;color:var(--muted)">' + esc(String(d.laatst.door || "").split("@")[0]) + '</div>' : '<span style="color:var(--muted)">nooit</span>';
+    const laatst = d.laatst ? '<span class="pil ' + (Date.now() - Date.parse(d.laatst.ts) < 30 * 86400000 ? 'groen' : '') + '">' + esc(datumNl(d.laatst.ts)) + '</span><div style="font-size:11px;color:var(--muted)">' + esc(String(d.laatst.door || "").split("@")[0]) + '</div>' : '<span style="color:var(--muted)">nog zonder herinnering</span>';
     return '<tr class="deb' + (aan ? ' aan' : '') + '" data-id="' + esc(g.id) + '">' +
       '<td><input type="checkbox" class="kies" data-id="' + esc(g.id) + '"' + (aan ? ' checked' : '') + '></td>' +
       '<td class="klik" data-open="' + esc(g.id) + '">' + (open[g.id] ? '▾ ' : '▸ ') + naam + '</td>' +
-      '<td><input type="email" class="mail" data-id="' + esc(g.id) + '" value="' + esc(mailVan(g)) + '" placeholder="geen mailadres bekend"></td>' +
+      '<td><input type="email" class="mail" data-id="' + esc(g.id) + '" value="' + esc(mailVan(g)) + '" placeholder="mailadres invullen"></td>' +
       '<td>' + esc(d.iso || "") + '</td><td class="n">' + g.facturen.length + '</td>' +
       '<td class="n"><span class="pil ' + (g.oudste > 60 ? 'rood' : g.oudste > 14 ? 'oranje' : '') + '">' + g.oudste + ' d</span></td>' +
       '<td class="n"><b>' + geld(g.totaal) + '</b></td><td>' + laatst + '</td></tr>' +
       (open[g.id] ? '<tr class="fact"><td></td><td colspan="7"><table><thead><tr><th style="width:30px"></th><th>Factuur</th><th>Factuurdatum</th><th>Vervaldatum</th><th class="n">Dagen te laat</th><th class="n">Bedrag</th><th class="n">Betaald</th><th class="n">Openstaand</th></tr></thead><tbody>' +
         g.facturen.map(f => '<tr><td><input type="checkbox" class="factKies" data-deb="' + esc(g.id) + '" data-f="' + esc(f.factuur) + '"' + ((uitgesloten[g.id] || {})[f.factuur] ? '' : ' checked') + '></td><td>' + esc(f.factuur) + '</td><td>' + esc(datumNl(f.factuurdatum)) + '</td><td>' + esc(datumNl(f.vervaldatum)) + '</td><td class="n">' + f.dagen + '</td><td class="n">' + geld(f.bedrag) + '</td><td class="n">' + geld(f.betaald) + '</td><td class="n"><b>' + geld(f.openstaand) + '</b></td></tr>').join("") +
         '</tbody></table></td></tr>' : '');
-  }).join("") : '<tr><td colspan="8" style="color:var(--muted)">Niets in beeld met deze filters.</td></tr>';
+  }).join("") : '<tr><td colspan="8" style="color:var(--muted)">Deze filters laten 0 debiteuren zien.</td></tr>';
   $("lijst").querySelectorAll(".kies").forEach(c => c.addEventListener("change", () => { if (c.checked) gekozen[c.dataset.id] = true; else delete gekozen[c.dataset.id]; telKeuze(); c.closest("tr").classList.toggle("aan", c.checked); }));
   $("lijst").querySelectorAll("[data-open]").forEach(td => td.addEventListener("click", () => { open[td.dataset.open] = !open[td.dataset.open]; teken(); }));
   $("lijst").querySelectorAll(".mail").forEach(i => i.addEventListener("input", () => { mailOverride[i.dataset.id] = i.value.trim(); }));
@@ -201,19 +201,19 @@ $("voorbeeld").addEventListener("click", async () => {
   const ops = opdrachten(); if (!ops.length) { alert("Vink eerst een debiteur aan."); return; }
   const r = await api("/herinneringen/stuur", { method: "POST", body: JSON.stringify({ taal: $("taal").value, proef: true, debiteuren: [ops[0]] }) });
   const x = r.data && r.data.results && r.data.results[0];
-  if (!x || !x.ok) { alert("Voorbeeld maken lukte niet: " + ((x && x.error) || (r.data && r.data.error) || ("HTTP " + r.status))); return; }
+  if (!x || !x.ok) { alert("Voorbeeld maken vraagt een nieuwe poging: " + ((x && x.error) || (r.data && r.data.error) || ("HTTP " + r.status))); return; }
   const laag = document.createElement("div"); laag.className = "laag";
   laag.innerHTML = '<div class="vak"><h2>Voorbeeld</h2><p class="lead">Aan: ' + esc(x.naar) + ' · Onderwerp: ' + esc(x.onderwerp) + ' · Antwoordadres: ' + esc(IK) + '</p><div style="border:1px solid var(--border);border-radius:10px;padding:14px">' + x.html + '</div><p style="text-align:right;margin:12px 0 0"><button class="stil" id="dicht">Sluiten</button></p></div>';
   document.body.appendChild(laag); laag.querySelector("#dicht").addEventListener("click", () => laag.remove()); laag.addEventListener("click", e => { if (e.target === laag) laag.remove(); });
 });
 $("testmail").addEventListener("click", async () => {
   const ops = opdrachten(); if (!ops.length) { alert("Vink eerst een debiteur aan; de mail van de eerste aangevinkte gaat naar jou."); return; }
-  if (!/@/.test(IK)) { alert("Je eigen mailadres is niet bekend."); return; }
+  if (!/@/.test(IK)) { alert("Je eigen mailadres is nog onbekend."); return; }
   $("testmail").disabled = true;
   const r = await api("/herinneringen/stuur", { method: "POST", body: JSON.stringify({ taal: $("taal").value, test: true, debiteuren: [ops[0]] }) });
   $("testmail").disabled = false;
   const x = r.data && r.data.results && r.data.results[0];
-  $("stuurMsg").innerHTML = x && x.ok ? '<span style="color:#166534">Testmail staat in je eigen postvak (' + esc(IK) + ').</span>' : '<span style="color:var(--rood)">Test mislukte: ' + esc((x && x.error) || (r.data && r.data.error) || ("HTTP " + r.status)) + '</span>';
+  $("stuurMsg").innerHTML = x && x.ok ? '<span style="color:#166534">Testmail staat in je eigen postvak (' + esc(IK) + ').</span>' : '<span style="color:var(--rood)">Test vraagt een nieuwe poging: ' + esc((x && x.error) || (r.data && r.data.error) || ("HTTP " + r.status)) + '</span>';
 });
 $("tekst").addEventListener("click", () => {
   const t = data.tekst || data.standaard, laag = document.createElement("div"); laag.className = "laag";
@@ -224,13 +224,13 @@ $("tekst").addEventListener("click", () => {
   laag.querySelector("#bewaar").addEventListener("click", async () => {
     const body = { en: {}, nl: {} }; laag.querySelectorAll("[data-t]").forEach(i => { const [taal, veld] = i.dataset.t.split("."); body[taal][veld] = i.value; });
     const r = await api("/herinneringen/tekst", { method: "POST", body: JSON.stringify(body) });
-    if (r.data && r.data.ok) { data.tekst = r.data.tekst; laag.remove(); } else alert("Bewaren lukte niet: " + ((r.data && r.data.error) || ("HTTP " + r.status)));
+    if (r.data && r.data.ok) { data.tekst = r.data.tekst; laag.remove(); } else alert("Bewaren vraagt een nieuwe poging: " + ((r.data && r.data.error) || ("HTTP " + r.status)));
   });
 });
 $("stuur").addEventListener("click", async () => {
   const ops = opdrachten(); if (!ops.length) return;
   const zonder = ops.filter(o => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(o.email));
-  if (zonder.length) { alert(zonder.length + " gekozen debiteur(en) hebben geen geldig mailadres. Vul dat in of haal het vinkje weg."); return; }
+  if (zonder.length) { alert(zonder.length + " gekozen debiteur(en) hebben nog een geldig mailadres nodig. Vul dat in of haal het vinkje weg."); return; }
   if (!confirm("Er gaan nu " + ops.length + " herinneringen weg in het " + ($("taal").value === "nl" ? "Nederlands" : "Engels") + ", met jouw adres als antwoordadres.\n\nDoorgaan?")) return;
   $("stuur").disabled = true; $("stuurMsg").textContent = "Versturen…";
   let ok = 0, fout = [];
@@ -241,7 +241,7 @@ $("stuur").addEventListener("click", async () => {
     $("stuurMsg").textContent = "Verstuurd: " + ok + " van " + ops.length + "…";
   }
   try { if (window.fpLog) window.fpLog("herinneringen-verstuurd", ok + " herinneringen (" + $("taal").value + ")"); } catch(e){}
-  $("stuurMsg").innerHTML = '<span style="color:#166534">' + ok + ' verstuurd.</span>' + (fout.length ? ' <span style="color:var(--rood)">' + fout.length + ' mislukt: ' + esc(fout.slice(0, 5).join("; ")) + '</span>' : '');
+  $("stuurMsg").innerHTML = '<span style="color:#166534">' + ok + ' verstuurd.</span>' + (fout.length ? ' <span style="color:var(--rood)">' + fout.length + ' opnieuw te sturen: ' + esc(fout.slice(0, 5).join("; ")) + '</span>' : '');
   gekozen = {}; laad(false);
 });
 async function laadLog(){
@@ -249,7 +249,7 @@ async function laadLog(){
   const regels = (r.data && r.data.regels) || [];
   $("log").innerHTML = regels.length ? regels.slice(0, 100).map(x => { const d = (data && data.debiteuren[String(x.debiteur)]) || {};
     return '<tr><td>' + esc(String(x.ts).replace("T", " ").slice(0, 16)) + '</td><td>' + esc(d.bedrijf || d.naam || x.debiteur) + '</td><td>' + esc(x.naar) + '</td><td>' + esc((x.facturen || []).join(", ")) + '</td><td class="n">' + geld(x.bedrag) + '</td><td>' + esc(x.taal) + '</td><td>' + esc(String(x.door || "").split("@")[0]) + '</td></tr>'; }).join("")
-    : '<tr><td colspan="7" style="color:var(--muted)">Nog niets verstuurd vanuit hier.</td></tr>';
+    : '<tr><td colspan="7" style="color:var(--muted)">Hier komen de herinneringen die je vanuit deze tegel verstuurt.</td></tr>';
 }
 (async function(){ for (let i = 0; i < 20 && !localStorage.getItem("fp.teamkey"); i++) await new Promise(r => setTimeout(r, 500)); laad(false); })();
 </script>
