@@ -475,8 +475,8 @@ async function dpMailCheck(env) {
   const from = String(env.MAIL_FROM || "");
   const domein = (from.match(/@([^>\s]+)/) || [])[1] || from.trim();
   const uit = { sleutelAanwezig: !!env.RESEND_API_KEY, afzender: from || null, domein: domein || null };
-  if (!env.RESEND_API_KEY) return { ok: false, ...uit, laatste, uitleg: "RESEND_API_KEY staat niet in de worker" };
-  if (!from) return { ok: false, ...uit, laatste, uitleg: "MAIL_FROM staat niet in de worker" };
+  if (!env.RESEND_API_KEY) return { ok: false, ...uit, laatste, uitleg: "Zet RESEND_API_KEY als worker-secret, dan kan er gemaild worden." };
+  if (!from) return { ok: false, ...uit, laatste, uitleg: "Zet MAIL_FROM als worker-secret, dan weet de mail van wie hij komt." };
   const r = await fetch("https://api.resend.com/domains", {
     headers: { "Authorization": "Bearer " + env.RESEND_API_KEY },
   });
@@ -1389,7 +1389,7 @@ async function handleDieseltoeslag(request, env) {
    maar het wordt gemarkeerd (onzeker), zodat het nagevraagd kan worden bij Van
    Heugten in plaats van dat het jaren onopgemerkt blijft staan. */
 function vrachtKlep(toeslag, basis, viaDoesburg) {
-  if (viaDoesburg || !toeslag) return { bedrag: 0, uitleg: "Geen kleptoeslag" };
+  if (viaDoesburg || !toeslag) return { bedrag: 0, uitleg: "De klep gaat mee zonder toeslag" };
   const w = Number(toeslag.klep);
   const tekst = String(toeslag.klepUitleg || "");
   const bedragUit = (re) => { const m = tekst.match(re); return m ? Number(String(m[1]).replace(",", ".")) : null; };
@@ -1408,11 +1408,11 @@ function vrachtKlep(toeslag, basis, viaDoesburg) {
   const calc = toeslag.klepCalc;
   if (calc !== undefined && calc !== null) {
     const f = Number(calc);
-    if (!isFinite(f) || f <= 0) return { bedrag: 0, uitleg: tekst || "Geen kleptoeslag" };
+    if (!isFinite(f) || f <= 0) return { bedrag: 0, uitleg: tekst || "De klep gaat mee zonder toeslag" };
     if (f >= 1) return { bedrag: Math.round((isFinite(w) && w > 0 ? w : 0) * 100) / 100, uitleg: tekst };
     return { bedrag: metBodem(basis * f), uitleg: tekst, pct: f };
   }
-  if (!isFinite(w) || w <= 0) return { bedrag: 0, uitleg: tekst || "Geen kleptoeslag" };
+  if (!isFinite(w) || w <= 0) return { bedrag: 0, uitleg: tekst || "De klep gaat mee zonder toeslag" };
   if (/vaste\s*toeslag/i.test(tekst)) return { bedrag: Math.round(w * 100) / 100, uitleg: tekst };
   if (w < 1) return { bedrag: metBodem(basis * w), uitleg: tekst, pct: w };
   /* Bij Oostenrijk en Spanje staat er 50 met "Min. 50 / Max. 150" ernaast. Een
@@ -6966,12 +6966,12 @@ async function ketenHandle(request, env, url) {
 const HER_TEKST_STANDAARD = {
   en: { onderwerp: "Payment reminder - Fonteyn Outdoor Living Mall",
         aanhef: "Dear Sir/Madam,",
-        tekst: "Our records indicate that one or more invoices have not been (fully) paid yet. In the overview below, you can see which invoice(s), due dates, and outstanding amounts are involved.\n\nWe kindly request the payment of the outstanding item(s) with reference to the order or invoice number as soon as possible. This will prevent the claim from being transferred to an external collection agency.\n\nWe hope this message has provided you with sufficient information, and we thank you for your cooperation.",
+        tekst: "Our records show one or more invoices still open. The overview below lists the invoice(s), the due dates and the amounts involved.\n\nPlease settle the outstanding item(s) as soon as you can, quoting the order or invoice number. That keeps the matter between the two of us and closes it straight away.\n\nWe trust this gives you what you need, and we thank you for your cooperation.",
         groet: "Kind regards,\nAccounts Receivable Department\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel\nThe Netherlands\nT +31 577 456040",
         kolommen: ["Invoice", "Invoice date", "Due date", "Days overdue", "Amount", "Paid", "Outstanding"], totaal: "Total outstanding" },
   nl: { onderwerp: "Betalingsherinnering - Fonteyn Outdoor Living Mall",
         aanhef: "Geachte heer/mevrouw,",
-        tekst: "Uit onze administratie blijkt dat een of meer facturen nog niet (volledig) zijn betaald. In het overzicht hieronder ziet u om welke factuur/facturen, vervaldata en openstaande bedragen het gaat.\n\nWij verzoeken u vriendelijk het openstaande bedrag zo spoedig mogelijk te voldoen onder vermelding van het order- of factuurnummer. Daarmee voorkomt u dat de vordering wordt overgedragen aan een incassobureau.\n\nWij vertrouwen erop u hiermee voldoende te hebben geïnformeerd en danken u voor uw medewerking.",
+        tekst: "Uit onze administratie blijkt dat een of meer facturen nog openstaan. In het overzicht hieronder ziet u om welke factuur/facturen, vervaldata en bedragen het gaat.\n\nWij verzoeken u vriendelijk het openstaande bedrag zo spoedig mogelijk te voldoen onder vermelding van het order- of factuurnummer. Daarmee houden we het tussen ons tweeën en is het meteen afgerond.\n\nWij vertrouwen erop u hiermee voldoende te hebben geïnformeerd en danken u voor uw medewerking.",
         groet: "Met vriendelijke groet,\nDebiteurenadministratie\nFonteyn Outdoor Living Mall\nMeervelderweg 52\n3888 NK Uddel\nT +31 577 456040",
         kolommen: ["Factuur", "Factuurdatum", "Vervaldatum", "Dagen te laat", "Bedrag", "Betaald", "Openstaand"], totaal: "Totaal openstaand" },
 };
@@ -7122,18 +7122,18 @@ const DEB_INTERN = /lugarde|icebath|ice\s*bath|\bfonteyn\b|passion\s*spas?\s*(so
 const DEB_TEKST_STANDAARD = {
   stap2: {
     en: { onderwerp: "Second payment reminder - Fonteyn Outdoor Living Mall", aanhef: "Dear Sir/Madam,",
-          tekst: "Despite our earlier reminder, the invoice(s) below are still outstanding according to our records.\n\nWe kindly but urgently request payment within 7 days, quoting the invoice number. If payment has been made in the meantime, please disregard this message.\n\nShould there be a reason the invoice cannot be paid, please contact us so we can find a solution together.",
+          tekst: "Following our earlier reminder, the invoice(s) below are still open according to our records.\n\nWe kindly but urgently request payment within 7 days, quoting the invoice number. Has it crossed with your payment? Then consider this message answered.\n\nIs something about this invoice worth discussing? Call or write us and we will find a way together.",
           groet: HER_TEKST_STANDAARD.en.groet, kolommen: HER_TEKST_STANDAARD.en.kolommen, totaal: HER_TEKST_STANDAARD.en.totaal },
     nl: { onderwerp: "Tweede betalingsherinnering - Fonteyn Outdoor Living Mall", aanhef: "Geachte heer/mevrouw,",
-          tekst: "Ondanks onze eerdere herinnering staan onderstaande factuur/facturen volgens onze administratie nog open.\n\nWij verzoeken u dringend het openstaande bedrag binnen 7 dagen te voldoen onder vermelding van het factuurnummer. Heeft u inmiddels betaald, dan kunt u dit bericht als niet verzonden beschouwen.\n\nIs er een reden waarom de factuur niet betaald kan worden, neem dan contact met ons op zodat we samen een oplossing vinden.",
+          tekst: "Na onze eerdere herinnering staan onderstaande factuur/facturen volgens onze administratie nog open.\n\nWij verzoeken u dringend het openstaande bedrag binnen 7 dagen te voldoen onder vermelding van het factuurnummer. Heeft u inmiddels betaald, dan is dit bericht daarmee beantwoord.\n\nSpeelt er iets rond deze factuur? Bel of mail ons, dan vinden we er samen een weg in.",
           groet: HER_TEKST_STANDAARD.nl.groet, kolommen: HER_TEKST_STANDAARD.nl.kolommen, totaal: HER_TEKST_STANDAARD.nl.totaal },
   },
   stap3: {
     en: { onderwerp: "Final notice - Fonteyn Outdoor Living Mall", aanhef: "Dear Sir/Madam,",
-          tekst: "We have reminded you twice about the outstanding invoice(s) below without receiving payment or a response.\n\nThis is our final notice. If the full amount has not been received within 5 days of the date of this message, we will hand the claim over to our collection agency. The additional costs of collection and statutory interest will then be charged to you.\n\nWe would much prefer to resolve this with you directly; please contact us today if you wish to discuss the invoice.",
+          tekst: "This is the third time we write to you about the invoice(s) below, which are still open.\n\nThis is our final notice. Please settle the full amount within 5 days of the date of this message. After that we hand the claim to our collection agency, and the costs of collection plus statutory interest come to your account.\n\nWe would much rather settle this directly with you. Contact us today and we will go through the invoice together.",
           groet: HER_TEKST_STANDAARD.en.groet, kolommen: HER_TEKST_STANDAARD.en.kolommen, totaal: HER_TEKST_STANDAARD.en.totaal },
     nl: { onderwerp: "Aanmaning - Fonteyn Outdoor Living Mall", aanhef: "Geachte heer/mevrouw,",
-          tekst: "Wij hebben u tweemaal herinnerd aan onderstaande openstaande factuur/facturen, zonder betaling of reactie te ontvangen.\n\nDit is onze laatste aanmaning. Is het volledige bedrag niet binnen 5 dagen na dagtekening van dit bericht ontvangen, dan dragen wij de vordering over aan ons incassobureau. De incassokosten en de wettelijke rente komen dan voor uw rekening.\n\nWij lossen dit liever rechtstreeks met u op: neem vandaag nog contact met ons op als u de factuur wilt bespreken.",
+          tekst: "Dit is de derde keer dat wij u schrijven over onderstaande factuur/facturen, die nog openstaan.\n\nDit is onze laatste aanmaning. Voldoet u het volledige bedrag binnen 5 dagen na dagtekening van dit bericht. Daarna dragen wij de vordering over aan ons incassobureau en komen de incassokosten en de wettelijke rente voor uw rekening.\n\nWij lossen het veel liever rechtstreeks met u op. Neem vandaag contact met ons op, dan lopen we de factuur samen door.",
           groet: HER_TEKST_STANDAARD.nl.groet, kolommen: HER_TEKST_STANDAARD.nl.kolommen, totaal: HER_TEKST_STANDAARD.nl.totaal },
   },
 };
@@ -7816,7 +7816,7 @@ async function dpOrderUitleg(env, nr) {
   });
   const j = await r.json().catch(() => null);
   const o = ((j && (j.Records || j)) || [])[0];
-  if (!o) return { ok: false, nr, uitleg: "Deze order bestaat niet in Logic4, of hij is verwijderd." };
+  if (!o) return { ok: false, nr, uitleg: "Logic4 kent dit ordernummer nu als afgehandeld - geannuleerd of opgeruimd." };
 
   const statusId = Number(o.OrderStatus && o.OrderStatus.Id) || null;
   const statusTelt = DP_RESV_STATUSES.includes(statusId);
@@ -9294,7 +9294,7 @@ async function btwControle(nummer) {
   const fout = String(j.userError || "");
   if (fout === "INVALID_INPUT") {
     return { ok: true, nummer: schoon, land, geldig: false, naam: null, adres: null,
-             uitleg: "Dit nummer heeft niet de vorm die " + land + " gebruikt.",
+             uitleg: "Kijk het nummer nog even na - " + land + " gebruikt een andere vorm.",
              opgevraagd: j.requestDate || new Date().toISOString() };
   }
   if (fout && fout !== "VALID" && fout !== "INVALID") {
@@ -12829,7 +12829,7 @@ async function verizonPosities(env, opties) {
   }
   if (demo) {
     const uit = { ok: true, demo: true, opgehaald: new Date().toISOString(), posities: verizonDemo(voertuigen),
-                  uitleg: "Verzonnen posities: de inloggegevens van Verizon staan nog niet ingesteld." };
+                  uitleg: "Verzonnen posities: zet eerst de inloggegevens van Verizon klaar, dan komen de echte binnen." };
     await env.FONTEYN_DATA.put("verizon-posities", JSON.stringify(uit));
     return uit;
   }
@@ -13375,7 +13375,7 @@ async function ewsDoe(env, actie, maakBody, namens) {
 async function ewsRoep(env, actie, body, namens, modus) {
   if (!env.EWS_GEBRUIKER || !env.EWS_WACHTWOORD) {
     return { ok: false, error: "mail-niet-ingesteld",
-             uitleg: "Het serviceaccount is nog niet ingesteld. Zet EWS_GEBRUIKER en EWS_WACHTWOORD als worker-secret." };
+             uitleg: "Zet EWS_GEBRUIKER en EWS_WACHTWOORD als worker-secret, dan kan het serviceaccount aan de slag." };
   }
   if (!namens) return { ok: false, error: "geen-mailbox" };
 
@@ -14246,7 +14246,7 @@ async function urenWieVoor(env, request, ik, body) {
   }
   if (!(await urenCodeKlopt(env, namens, body.code))) {
     console.log("[uren] verkeerde code: " + ik + " probeerde te klokken voor " + namens);
-    return { ok: false, error: "code-klopt-niet", uitleg: "Die code klopt niet." };
+    return { ok: false, error: "code-klopt-niet", uitleg: "Kijk de code nog even na en probeer hem opnieuw." };
   }
   return { ok: true, voor: namens, door: ik };
 }
@@ -15250,7 +15250,7 @@ export default {
       if (!adres) return reply(400, { ok: false, uitleg: "Geef ?adres=dolf@fonteyn.nl mee." });
       if (!env.EWS_GEBRUIKER || !env.EWS_WACHTWOORD) {
         return reply(200, { ok: false, error: "mail-niet-ingesteld",
-          uitleg: "EWS_GEBRUIKER en EWS_WACHTWOORD staan nog niet als worker-secret." });
+          uitleg: "Zet EWS_GEBRUIKER en EWS_WACHTWOORD als worker-secret, dan kan hij verbinden." });
       }
       const proef = modus => '<m:FindItem Traversal="Shallow"><m:ItemShape>' +
         "<t:BaseShape>IdOnly</t:BaseShape></m:ItemShape>" +
@@ -15311,7 +15311,7 @@ export default {
         const lat = Number(b.lat), lon = Number(b.lon);
         if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180)
           return reply(200, { ok: false, error: "geen-locatie",
-                              uitleg: "Er kwam geen bruikbare locatie binnen." });
+                              uitleg: "De locatie kwam er nog leeg uit - probeer het zo nog een keer." });
         const i = (await env.FONTEYN_DATA.get("uren-instellingen", { type: "json" })) || {};
         i.vestiging = { lat, lon, naam: String(b.naam || "de zaak").slice(0, 60),
                         straal: Math.min(Math.max(Number(b.straal) || 300, 50), 5000),
