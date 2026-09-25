@@ -896,7 +896,7 @@ async function runApply() {
     if (j.failed > 0) {
       setStatus("warn", `Klaar — ${j.applied} doorgevoerd, ${j.failed} vragen nog een poging. Hover over de regel voor de melding.`);
     } else {
-      setStatus("ok", `Klaar — alle ${j.applied} wijziging(en) zijn doorgevoerd en vastgelegd in het Activiteitenlogboek.`);
+      setStatus("ok", `Klaar - alle ${j.applied} wijziging(en) zijn doorgevoerd in Logic4.`);
     }
     setProgress(100);
     setTimeout(() => setProgress(null), 800);
