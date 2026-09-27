@@ -14835,7 +14835,7 @@ const EXTERN_VAKKEN = [
   "planning", "planning-paklijst", "reserveringen-live", "spa-catalog", "voorraad-notities", "werkplaats",
   "bank-instellingen", "mollie-uitbetaling-geboekt", "bol-provisie-geboekt", "retouren",
 ];
-const EXTERN_WEG = /amerika|houston|texas|passion spa south|quickbooks|audrey|inkoopprijs|inkoopwaarde|purchase ?price|\bbuyprice\b|costprice/i;
+const EXTERN_WEG = /amerika|american?\b|houston|texas|passion spas? south|\btx\b|\busa?\b|\busd\b|dollar|quickbooks|audrey|inkoopprijs|inkoopwaarde|purchase ?price|\bbuyprice\b|costprice/i;
 
 async function externHandtekening(env, naam) {
   const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(String(env.SHARED_SECRET || "")),
