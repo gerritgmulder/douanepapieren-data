@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-27", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
+      titel: "Leveranciersinformatie voor Don",
+      wat: "Don ziet nu ook de tegel Leveranciersinformatie, met de prijsafspraken en artikelen per leverancier."
+    },
+    {
       datum: "2026-09-27", iedereen: true, soort: "nieuw",
       titel: "Zoeken met Ctrl+F",
       wat: "Op elke tegel opent Ctrl+F (op de Mac Cmd+F) een zoekvak. Wat je zoekt licht geel op; met Enter ga je naar de volgende. Nummers en bedragen vind je ook met of zonder punten ertussen."

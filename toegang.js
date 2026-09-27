@@ -278,9 +278,9 @@
     ],
     // Prijslijsten fabrikanten. Chantal en Arno erbij (Gerrit, 25 aug 2026):
     // zij zetten de partner- en dealerprijzen op en hebben de inkooplijsten
-    // van de fabrieken daarvoor nodig.
+    // van de fabrieken daarvoor nodig. Don erbij (Gerrit, 27 sep 2026).
     "prijslijsten": [
-      "arno", "chantal", "dolf", "fonteynbot", "gerrit", "gretha", "manon",
+      "arno", "chantal", "dolf", "don", "fonteynbot", "gerrit", "gretha", "manon",
     ],
     /* Voorraadbepaling: bestellen in de verhouding van de verkoop. Gerrit
        (23 sep 2026): "een aparte tegel die alleen Chantal, Arno en ik kunnen
