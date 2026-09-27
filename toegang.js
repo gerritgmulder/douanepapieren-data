@@ -79,6 +79,18 @@
      voornamen zoals ze in Logic4 staan. Alfabetisch, zodat je ziet of iemand
      er al in staat zonder de hele regel te lezen. */
   var GROEPEN = {
+    /* EXTERN - iemand van buiten Fonteyn. Wie hier staat krijgt bij het
+       inloggen NIET de teamsleutel maar een eigen sleutel waarmee de worker
+       alleen de gegevens van zijn eigen tegels teruggeeft, zonder Amerika en
+       zonder inkoopprijzen (zie externPoort in de worker). Zet zo iemand
+       nooit in een groep voor Amerika, Leveranciersinformatie, Nieuwe
+       leverancier, Voorraad, Douane, Inkomende goederen, Tuinmeubelen,
+       Container laden, Geld-goederenbeweging of Stuurcijfers.
+       Christiaan: compagnon van Dolf voor de Duitse vestiging (Gerrit,
+       27 sep 2026). */
+    "extern": [
+      "christiaan",
+    ],
     // Activiteitenlogboek
     "activiteit": [
       "dolf", "fonteynbot", "gerrit",
@@ -96,7 +108,7 @@
     /* Afbeeldingen op maat. Gretha en Demi maken het drukwerk en de
        productfoto's; de rest van de groep is de vaste beheerlaag. */
     "afbeeldingen": [
-      "demi", "dolf", "fonteynbot", "gerrit", "gretha",
+      "christiaan", "demi", "dolf", "fonteynbot", "gerrit", "gretha",
     ],
     // Amerika (Houston)
     "amerika": [
@@ -114,10 +126,10 @@
       "dolf", "fonteynbot", "gerrit",
     ],
     "herinneringen": [
-      "dolf", "fonteynbot", "gerrit", "osman", "reinier", "reinier.k", "rico", "rowan",
+      "christiaan", "dolf", "fonteynbot", "gerrit", "osman", "reinier", "reinier.k", "rico", "rowan",
     ],
     "bankkoppeling": [
-      "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
+      "arno", "christiaan", "dolf", "don", "fonteynbot", "gerrit", "osman",
       "reinier", "reinier.k", "rico", "rowan",
     ],
     /* Mijn mail. Bewust smal: wie hier bij komt moet ook door de
@@ -129,7 +141,7 @@
     ],
     // Bol.com koppeling
     "bol": [
-      "don", "fonteynbot", "gerrit", "osman", "reinier.k",
+      "christiaan", "don", "fonteynbot", "gerrit", "osman", "reinier.k",
     ],
     // Container laden
     "containerladen": [
@@ -167,11 +179,11 @@
     ],
     // Transport laden en Prijslijst maken
     "logistiek": [
-      "arno", "dolf", "don", "fonteynbot", "gerrit", "manon",
+      "arno", "christiaan", "dolf", "don", "fonteynbot", "gerrit", "manon",
     ],
     // Mollie
     "mollie": [
-      "dolf", "fonteynbot", "gerrit", "osman", "reinier", "reinier.k",
+      "christiaan", "dolf", "fonteynbot", "gerrit", "osman", "reinier", "reinier.k",
       "rico", "rowan",
     ],
     // Orderstatus
@@ -239,11 +251,13 @@
        geen Logic4-account in deze lijst; zodra hun namen bekend zijn horen ze
        hier bij. */
     "werkplaats": [
-      "arno", "chantal", "dolf", "fonteynbot", "gerrit", "gerwin", "kevin", "manon", "nomi",
+      "arno", "chantal", "christiaan", "dolf", "fonteynbot", "gerrit", "gerwin", "kevin", "manon", "nomi",
     ],
     "planning": [
       "arno", "bart.vdb", "bertjan", "chantal", "dolf", "don",
       "fonteynbot", "gerrit", "gerwin", "kevin", "mike", "tim",
+      // Extern, alleen kijken: Christiaan (Duitse vestiging, 27 sep 2026)
+      "christiaan",
       // Service (alleen kijken)
       "patrick", "hans.vanputten", "thieme", 
       // Plaatsing (alleen kijken)
@@ -306,7 +320,7 @@
     ],
     // Retouren
     "retouren": [
-      "arno", "dolf", "don", "fonteynbot", "gerrit", "manon",
+      "arno", "christiaan", "dolf", "don", "fonteynbot", "gerrit", "manon",
       "nomi",
     ],
     // Specsheets

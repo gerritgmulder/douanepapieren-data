@@ -4534,6 +4534,13 @@ async function handleTeamKey(request, env) {
   const j = await r.json().catch(() => null);
   if (!j || !j.access_token) return reply(401, { ok: false, error: "logic4-login-failed" });
   console.log("[teamkey] uitgegeven aan " + username);
+  /* Iemand van buiten Fonteyn (groep extern in toegang.js) krijgt NIET de
+     teamsleutel, maar een eigen sleutel die alleen bij zijn eigen tegels
+     past. Gerrit (27 sep 2026) over Christiaan, compagnon van Dolf voor de
+     Duitse vestiging: "mag NIETS kunnen zien over Amerika, NIETS aan
+     inkoopprijzen". Geen mailsleutel: die opent de telefoonroute naar Logic4. */
+  if (await toegangMag(env, "extern", username.toLowerCase()))
+    return reply(200, { ok: true, teamkey: await externSleutel(env, username.toLowerCase()), mailsleutel: null, extern: true });
   /* Naast de teamsleutel een persoonlijke sleutel voor de mailtegel. Die
      hoort bij déze naam en bij niemand anders, want de teamsleutel is bij
      iedereen bekend en zou de mailbox van collega's openzetten. Dit gebeurt
@@ -14796,7 +14803,108 @@ export class LiveKamer {
   webSocketError(ws) { this.webSocketClose(ws); }
 }
 
-export default {
+/* ═══════════════════════════════════════════════════════════════════════════
+   DE POORT VOOR EXTERNEN
+   ═══════════════════════════════════════════════════════════════════════════
+   Iedereen met een Logic4-login kreeg tot 27 sep 2026 dezelfde teamsleutel,
+   en met die sleutel is elke route van deze worker open: ook Amerika, de
+   leveranciers en hun inkoopprijzen. Een tegel verbergen is dan alleen een
+   gordijn. Voor iemand van buiten Fonteyn is dat te weinig.
+
+   Wie in de groep extern van toegang.js staat, krijgt daarom bij het
+   inloggen een eigen sleutel: "ext1.<naam>.<handtekening>". Die sleutel komt
+   hier binnen en mag alleen:
+   - de routes in EXTERN_ROUTES (Planning, Opleverbonnen, Werkplaats,
+     Herinneringen, de bankkoppelingen, vertalen, het logboek);
+   - de opslagvakken in EXTERN_VAKKEN;
+   en alles wat terugkomt gaat door externFilter: elk item dat over Amerika
+   gaat (de debiteur Passion Spa South, Houston, Texas, QuickBooks, Audrey,
+   regio US) of over inkoopprijzen valt eruit.
+   Haal je iemand uit de groep extern, dan werkt zijn sleutel binnen tien
+   minuten nergens meer (de toegangslijst wordt zo vaak opnieuw gelezen). */
+/* Alleen kijken (Gerrit: "Hij mag de tegels ... zien"). Daarom alleen
+   leesvragen: GET, en POST alleen bij routes die met POST lezen. Schrijven
+   kan ook om een tweede reden niet: wat hij leest is gefilterd, en zou hij
+   dat terugschrijven, dan verdwijnt voor iedereen wat voor hem verborgen was. */
+const EXTERN_LEES_GET = ["/planning/", "/herinneringen/open", "/herinneringen/log", "/vertaal/talen", "/bank/dagboeken", "/bank/grootboeken"];
+const EXTERN_LEES_POST = ["/bank/debiteuren", "/bank/openstaand",
+                          "/bank/orders", "/bank/factuurorder", "/vertaal", "/log", "/planning/klantinfo"];
+const EXTERN_EXACT = ["/internal/teamkey"];
+const EXTERN_VAKKEN = [
+  "takenlijst", "taken", "taken-ritme", "dashboard-gezien", "dashboard-indeling",
+  "planning", "planning-paklijst", "reserveringen-live", "spa-catalog", "voorraad-notities", "werkplaats",
+  "bank-instellingen", "mollie-uitbetaling-geboekt", "bol-provisie-geboekt", "retouren",
+];
+const EXTERN_WEG = /amerika|houston|texas|passion spa south|quickbooks|audrey|inkoopprijs|inkoopwaarde|purchase ?price|\bbuyprice\b|costprice/i;
+
+async function externHandtekening(env, naam) {
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(String(env.SHARED_SECRET || "")),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", k, new TextEncoder().encode("extern:" + naam));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, "0")).join("").slice(0, 40);
+}
+async function externSleutel(env, naam) {
+  return "ext1." + encodeURIComponent(naam) + "." + await externHandtekening(env, naam);
+}
+function externMagRoute(pad, methode) {
+  if (EXTERN_EXACT.includes(pad)) return true;
+  if (pad.startsWith("/data/")) return methode === "GET" && EXTERN_VAKKEN.includes(decodeURIComponent(pad.slice(6)));
+  const past = (r) => r.endsWith("/") ? pad.startsWith(r) : pad === r;
+  if (methode === "GET") return EXTERN_LEES_GET.some(past);
+  if (methode === "POST") return EXTERN_LEES_POST.some(past);
+  return false;
+}
+/* Alles wat over Amerika of inkoopprijzen gaat eruit, op elke diepte: een
+   item in een lijst valt weg als één van zijn eigen velden erover gaat; een
+   veld met zo'n naam valt weg. */
+function externFilter(x, diepte) {
+  if ((diepte || 0) > 12 || x == null) return x;
+  const raakt = (o) => o && typeof o === "object" && !Array.isArray(o) && Object.entries(o).some(([k, v]) =>
+    (typeof v === "number" && v === AMERIKA_DEBTOR) ||
+    (typeof v === "string" && (EXTERN_WEG.test(v) || String(v).trim() === String(AMERIKA_DEBTOR) || /^(US|USA)$/i.test(String(v).trim()))));
+  if (Array.isArray(x)) return x.filter(v => !raakt(v)).map(v => externFilter(v, (diepte || 0) + 1));
+  if (typeof x === "object") {
+    const uit = {};
+    for (const [k, v] of Object.entries(x)) {
+      if (EXTERN_WEG.test(k) || k === String(AMERIKA_DEBTOR)) continue;
+      if (raakt(v)) continue;
+      uit[k] = externFilter(v, (diepte || 0) + 1);
+    }
+    return uit;
+  }
+  return x;
+}
+async function externPoort(request, env) {
+  const nee = (status, uitleg) => new Response(JSON.stringify({ ok: false, error: "geen-toegang", uitleg }),
+    { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  const sl = request.headers.get("X-Fonteyn-Auth") || "";
+  const [, naamEnc, sig] = sl.split(".");
+  const naam = decodeURIComponent(naamEnc || "").toLowerCase();
+  if (!naam || !sig || sig !== await externHandtekening(env, naam)) return nee(401, "Deze sleutel hoort bij niemand; log opnieuw in.");
+  if (!(await toegangMag(env, "extern", naam))) return nee(401, "Log opnieuw in.");
+  const url = new URL(request.url);
+  /* Het dashboard toetst of een sleutel werkt met een leesvraag op
+     rapportage. Voor een externe sleutel: ja, hij werkt, en er zit niets in. */
+  if (url.pathname === "/data/rapportage" && request.method === "GET")
+    return new Response("{}", { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  if (!externMagRoute(url.pathname, request.method)) {
+    console.log("[extern] " + naam + " tegengehouden op " + request.method + " " + url.pathname);
+    return nee(403, "Dit onderdeel hoort bij een andere tegel.");
+  }
+  const h = new Headers(request.headers);
+  h.set("X-Fonteyn-Auth", env.SHARED_SECRET);
+  h.set("X-Fonteyn-User", naam);
+  const binnen = new Request(request, { headers: h });
+  const r = await FP_WORKER.fetch(binnen, env);
+  const soort = r.headers.get("Content-Type") || "";
+  if (!/json|text\/plain/i.test(soort) && !url.pathname.startsWith("/data/")) return r;
+  const tekst = await r.text();
+  let j; try { j = JSON.parse(tekst); } catch { return new Response(tekst, { status: r.status, headers: r.headers }); }
+  const hdr = new Headers(r.headers); hdr.delete("Content-Length");
+  return new Response(JSON.stringify(externFilter(j)), { status: r.status, headers: hdr });
+}
+
+const FP_WORKER = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
       try {
@@ -14880,6 +14988,12 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders });
     }
+
+    /* Een externe sleutel (Christiaan en anderen uit de groep extern in
+       toegang.js) gaat eerst langs de poort: die laat alleen door wat bij
+       zijn tegels hoort en haalt Amerika uit het antwoord. Zie externPoort. */
+    if ((request.headers.get("X-Fonteyn-Auth") || "").startsWith("ext1."))
+      return externPoort(request, env);
 
     const url = new URL(request.url);
 
@@ -16099,3 +16213,4 @@ export default {
     return reply(405, "Method not allowed");
   },
 };
+export default FP_WORKER;
