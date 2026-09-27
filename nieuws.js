@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-27", bestand: "voorraad.html", soort: "beter",
+      titel: "Voorraadbeheer voor Don",
+      wat: "Don ziet nu ook Voorraadbeheer en kan bestellen, ook de inkooporder vanuit Leveranciersinformatie."
+    },
+    {
       datum: "2026-09-27", bestand: "prijslijsten-fabrikanten.html", soort: "beter",
       titel: "Leveranciersinformatie voor Don",
       wat: "Don ziet nu ook de tegel Leveranciersinformatie, met de prijsafspraken en artikelen per leverancier."
