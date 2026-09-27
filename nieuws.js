@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-27", iedereen: true, soort: "nieuw",
+      titel: "Zoeken met Ctrl+F",
+      wat: "Op elke tegel opent Ctrl+F (op de Mac Cmd+F) een zoekvak. Wat je zoekt licht geel op; met Enter ga je naar de volgende. Nummers en bedragen vind je ook met of zonder punten ertussen."
+    },
+    {
+      datum: "2026-09-27", bestand: "amerika.html", soort: "hersteld",
+      titel: "Grote batches boeken in één keer",
+      wat: "Een batch met veel regels wordt nu helemaal geboekt, ook boven de twintig regels. Bij elke batch staat hoeveel regels er in Logic4 geboekt zijn, en met controleer in Logic4 zie je meteen of alles erin staat; wat ontbreekt boek je met één knop opnieuw."
+    },
+    {
       datum: "2026-09-25", bestand: "retouren.html", soort: "beter",
       titel: "Nieuwe namen voor de redenen",
       wat: "De redenen heten nu Bij de klant, Bij de adviseur, Bij het picken en In het product. Bestaande retouren en het overzicht tellen gewoon door onder de nieuwe naam."

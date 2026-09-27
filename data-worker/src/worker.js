@@ -11598,20 +11598,41 @@ async function qbHandleBoeken(request, env) {
         .map(x => "van " + (x.datum || x.id) + " (ingelezen " + String(x.ts || "").slice(0, 10) + ")");
   }
 
-  /* Een worker mag maar een beperkt aantal uitgaande verzoeken per aanroep
-     doen. Elke afboeking is er één, plus de kostenregel. Daarom hele batches
-     per keer, tot dit aantal regels vol is; een batch wordt nooit gesplitst,
-     want half boeken mag niet. */
-  const MAX_REGELS = 16;   // per regel twee verzoeken: order opvragen en afboeken
+  /* HOEVEEL VERZOEKEN ER IN ÉÉN AANROEP PASSEN
+     ═══════════════════════════════════════════════════════════════════════
+     Een worker mag op het gratis plan vijftig keer naar buiten per aanroep.
+     Hier stond eerst een vaste grens van zestien regels per blokje, maar een
+     batch werd nooit gesplitst, dus een batch van 25 regels ging in één keer.
+     Per regel waren dat drie verzoeken (order opvragen voor de controle,
+     order nog eens opvragen, afboeken): na twaalf regels was de grens op en
+     viel de rest om met "Too many subrequests".
+
+     Osman (26 sep 2026): "12 transacties overgeslagen" bij de batch van
+     29-06, en bij 06-07, 21-07, 10-08 en 21-08 bleef de staart van de batch
+     liggen. Daarom nu:
+     - elke order één keer opvragen; wat er open staat onthouden we (en
+       verminderen we zelf na elke afboeking), dus afboeken kost daarna nog
+       één verzoek per regel;
+     - de verzoeken tellen. Past een batch niet meer in deze aanroep, dan
+       stoppen we vóór die batch, bewaren we wat er al is opgehaald, en zegt
+       het antwoord "volgende": het scherm roept meteen opnieuw aan en gaat
+       daar verder. Het afboeken van één batch gebeurt zo in één aanroep.
+     Bij een proef gaat er niets naar Logic4; die blijft in blokjes van
+     zestien regels, want QuickBooks kost daar ook verzoeken. */
+  const MAX_REGELS = 16;
+  const BUDGET = 44;            // van de vijftig; de rest is marge voor QuickBooks en het token
   const vanaf = Math.max(0, parseInt(body.vanaf, 10) || 0);
   const partij = [];
-  let geteld = 0;
-  for (let i = vanaf; i < lijst.length; i++) {
-    const n = (lijst[i].regels || []).filter(r => QB_GELDSOORTEN.has(String(r.soort || ""))).length + 1;
-    if (partij.length && geteld + n > MAX_REGELS) break;
-    partij.push(lijst[i]); geteld += n;
+  if (echt) for (let i = vanaf; i < lijst.length; i++) partij.push(lijst[i]);
+  else {
+    let geteld = 0;
+    for (let i = vanaf; i < lijst.length; i++) {
+      const n = (lijst[i].regels || []).filter(r => QB_GELDSOORTEN.has(String(r.soort || ""))).length + 1;
+      if (partij.length && geteld + n > MAX_REGELS) break;
+      partij.push(lijst[i]); geteld += n;
+    }
   }
-  const volgende = vanaf + partij.length;
+  let volgende = vanaf + partij.length;
 
   /* Alleen QuickBooks bevragen als er ook echt een regel zonder factuurnummer
      tussen zit. Dat scheelt bij elke andere batch een paar verzoeken, en een
@@ -11624,11 +11645,31 @@ async function qbHandleBoeken(request, env) {
     catch (e) { raad = null; }
   }
 
+  let sub = 2 + (naamloos ? 4 : 0);    // QuickBooks (dubbele nummers, namen) telt mee
   const token = echt ? await l4Token(env) : null;
+  if (echt) sub++;
   let amerikaGb = null;   // grootboeken voor de kostenregel, pas ophalen als het nodig is
   const uit = [];
+  /* Wat er per order open staat, bewaard tussen twee aanroepen van dezelfde
+     batch. Tien minuten geldig: daarna vragen we het opnieuw op. */
+  const voorafOpslag = echt ? ((await env.FONTEYN_DATA.get("qb-vooraf", { type: "json" })) || {}) : {};
+  let voorafGewijzigd = false;
+  const haalOrder = async (id) => {
+    sub++;
+    const or = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+      method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ Id: Number(id), TakeRecords: 1 }),
+    });
+    const oj = await or.json().catch(() => null);
+    const o = Array.isArray(oj) ? oj[0] : (oj && (oj.Orders || oj.Records || [])[0]);
+    const tot = o && o.Totals ? o.Totals : null;
+    if (!(o && Number(o.Id) === Number(id) && tot)) return { fout: "niet op te halen uit Logic4" };
+    return { totaal: Math.round((Number(tot.AmountIncl) || 0) * 100) / 100,
+             open: Math.round(((Number(tot.AmountIncl) || 0) - (Number(tot.Calc_TotalPayed) || 0)) * 100) / 100 };
+  };
 
-  for (const w of partij) {
+  for (let wi = 0; wi < partij.length; wi++) {
+    const w = partij[wi];
     const b = qbBatchLezen(w, perFactuur, geboekt, raad, tweelingen);
     /* Klopt er iets niet, dan gaat er van deze batch niets weg. Dat is de
        kern van wat Osman vraagt. */
@@ -11636,61 +11677,84 @@ async function qbHandleBoeken(request, env) {
     if (!b.teBoeken && b.bankkosten.alGeboekt) { uit.push(b); continue; }
 
     const datum = (w.datum || new Date().toISOString().slice(0, 10)) + "T12:00:00";
+    const teDoen = b.regels.filter(r => r.status === "klaar om te boeken");
+    const kostenNodig = (b.bankkosten.bedrag > 0 && !b.bankkosten.alGeboekt) ? 4 : 0;
+    const wid = String(w.id);
+    let cache = voorafOpslag[wid];
+    if (!cache || Date.now() - Number(cache.ts || 0) > 10 * 60000) { cache = voorafOpslag[wid] = { ts: Date.now(), orders: {} }; voorafGewijzigd = true; }
+    const ontbreekt = [...new Set(teDoen.filter(r => r.bedrag > 0).map(r => String(Number(r.order))))].filter(id => !cache.orders[id]);
+
+    /* Past deze batch niet meer? Dan halen we op wat nog kan, bewaren dat, en
+       gaat de volgende aanroep hier verder. Afboeken begint pas als alles van
+       de batch in één keer past. */
+    if (sub + ontbreekt.length + teDoen.length + kostenNodig > BUDGET) {
+      const ruimte = Math.max(0, BUDGET - sub);
+      const nu = ontbreekt.slice(0, ruimte);
+      await Promise.all(nu.map(async id => { try { cache.orders[id] = await haalOrder(id); } catch (e) { cache.orders[id] = { fout: String(e.message || e) }; } }));
+      if (nu.length) voorafGewijzigd = true;
+      const nogOpen = ontbreekt.length - nu.length;
+      /* Staat er vóór deze batch al iets in deze aanroep, of hebben we net
+         orders opgehaald, dan doet de volgende aanroep de rest. Alleen een
+         batch die zelfs in een lege aanroep niet past (meer dan zo'n veertig
+         regels) boekt in delen. */
+      if (uit.length || nu.length || nogOpen) { volgende = vanaf + wi; break; }
+    }
     /* EERST KIJKEN, DAN BOEKEN.
        ═══════════════════════════════════════════════════════════════════
        Gerrit (21 sep 2026, batch 16-06): factuur 3460 stond in Audrey's mail
        voor 3.193,54 dollar, maar de QuickBooks-factuur en dus de Logic4-order
        (3522237) zijn 2.093,54 dollar, 1.869,29 euro. De koppeling boekte de
-       omgerekende 2.851,38 euro: 982 euro te veel op de order. Daarom nu
-       vooraf per regel het openstaande bedrag van de order ophalen; is de
-       betaling meer dan de order open heeft, dan gaat er van de hele batch
-       niets weg en staat erbij welke regel niet klopt. */
+       omgerekende 2.851,38 euro: 982 euro te veel op de order. Daarom vooraf
+       per regel het openstaande bedrag van de order; is de betaling meer dan
+       de order open heeft, dan gaat er van de hele batch niets weg en staat
+       erbij welke regel niet klopt. Staan er twee regels op dezelfde order
+       (3462 staat drie keer in 29-06), dan tellen ze samen. */
     const vooraf = [];
-    for (const r of b.regels) {
-      if (r.status !== "klaar om te boeken" || !(r.bedrag > 0)) continue;
-      try {
-        const or = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
-          method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-          body: JSON.stringify({ Id: Number(r.order), TakeRecords: 1 }),
-        });
-        const oj = await or.json().catch(() => null);
-        const o = Array.isArray(oj) ? oj[0] : (oj && (oj.Orders || oj.Records || [])[0]);
-        const tot = o && o.Totals ? o.Totals : null;
-        if (!(o && Number(o.Id) === Number(r.order) && tot)) { vooraf.push("order " + r.order + " (factuur " + r.factuur + ") is niet op te halen uit Logic4"); continue; }
-        const totaal = Math.round((Number(tot.AmountIncl) || 0) * 100) / 100;
-        const open = Math.round(((Number(tot.AmountIncl) || 0) - (Number(tot.Calc_TotalPayed) || 0)) * 100) / 100;
-        r.openOpOrder = open; r.totaalOrder = totaal;
-        const eurLaag = Math.round(Number(r.bedrag) / AMERIKA_KOERS * 100) / 100;
-        if (open <= 0)
-          vooraf.push("factuur " + r.factuur + ": order " + r.order + " staat al volledig betaald (" + totaal.toFixed(2) + " euro), er kan niets meer op");
-        else if (eurLaag > open + 0.10) {
-          /* Al eerder geboekt uit een andere batch? Dat zeggen we erbij: bij
-             3606 stond $12.142,20 in de batch van 21-08 én $36.325 (de hele
-             factuur) in die van 17-09 (Gerrit, 25 sep 2026). */
-          const eerder = Object.values(geboekt.ids || {}).filter(x => x && Number(x.orderId) === Number(r.order) && String(x.batch) !== String(w.id));
-          const wiresAl = eerder.length ? ((await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] }).wires || [] : [];
-          const uitleg = eerder.map(x => { const bw = wiresAl.find(y => String(y.id) === String(x.batch)); return qbGeld(x.bedrag) + " uit de batch van " + String((bw && bw.datum) || x.batch).split("-").reverse().join("-"); }).join(" en ");
-          vooraf.push("factuur " + r.factuur + ": de batch noemt " + qbGeld(r.bedrag) + " (" + eurLaag.toFixed(2) + " euro), maar order " + r.order +
-            " heeft nog maar " + open.toFixed(2) + " euro open van " + totaal.toFixed(2) + "." +
-            (uitleg ? " Er is al " + uitleg + " op deze order geboekt; samen is dat meer dan de factuur. Vraag Chantal of Audrey welk bedrag klopt." : " Controleer de factuur in QuickBooks tegenover de mail van Audrey."));
-        }
-      } catch (e) { vooraf.push("order " + r.order + " (factuur " + r.factuur + "): " + String(e.message || e)); }
+    const restOpen = {};
+    for (const r of teDoen) {
+      if (!(r.bedrag > 0)) continue;
+      const id = String(Number(r.order));
+      const c = cache.orders[id];
+      if (!c || c.fout) { vooraf.push("order " + r.order + " (factuur " + r.factuur + ") is niet op te halen uit Logic4"); continue; }
+      if (restOpen[id] === undefined) restOpen[id] = c.open;
+      const open = restOpen[id], totaal = c.totaal;
+      r.openOpOrder = open; r.totaalOrder = totaal;
+      const eurLaag = Math.round(Number(r.bedrag) / AMERIKA_KOERS * 100) / 100;
+      if (open <= 0)
+        vooraf.push("factuur " + r.factuur + ": order " + r.order + " staat al volledig betaald (" + totaal.toFixed(2) + " euro), er kan niets meer op");
+      else if (eurLaag > open + 0.10) {
+        /* Al eerder geboekt uit een andere batch? Dat zeggen we erbij: bij
+           3606 stond $12.142,20 in de batch van 21-08 én $36.325 (de hele
+           factuur) in die van 17-09 (Gerrit, 25 sep 2026). */
+        const eerder = Object.values(geboekt.ids || {}).filter(x => x && Number(x.orderId) === Number(r.order) && String(x.batch) !== wid);
+        const wiresAl = wires.wires || [];
+        const uitleg = eerder.map(x => { const bw = wiresAl.find(y => String(y.id) === String(x.batch)); return qbGeld(x.bedrag) + " uit de batch van " + String((bw && bw.datum) || x.batch).split("-").reverse().join("-"); }).join(" en ");
+        vooraf.push("factuur " + r.factuur + ": de batch noemt " + qbGeld(r.bedrag) + " (" + eurLaag.toFixed(2) + " euro), maar order " + r.order +
+          " heeft nog maar " + open.toFixed(2) + " euro open van " + totaal.toFixed(2) + "." +
+          (uitleg ? " Er is al " + uitleg + " op deze order geboekt; samen is dat meer dan de factuur. Vraag Chantal of Audrey welk bedrag klopt." : " Controleer de factuur in QuickBooks tegenover de mail van Audrey."));
+      }
+      restOpen[id] = Math.round((open - Math.min(open, eurLaag)) * 100) / 100;
     }
     /* Gerrit (25 sep 2026): na de melding moet Osman de batch alsnog kunnen
        boeken en daarna in Logic4 met de hand corrigeren. Met dochBoeken gaat
        hij door; de regels waar het niet klopt krijgen het volle bedrag uit de
        batch (zodat 1160 op de bankontvangst uitkomt) en staan in het antwoord
        als "met de hand corrigeren". */
-    const dochBoeken = Array.isArray(body.dochBoeken) ? body.dochBoeken.map(String).includes(String(w.id)) : !!body.dochBoeken;
+    const dochBoeken = Array.isArray(body.dochBoeken) ? body.dochBoeken.map(String).includes(wid) : !!body.dochBoeken;
     if (vooraf.length && !dochBoeken) {
       b.afwijking = true; b.tochMogelijk = true;
       b.redenen = (b.redenen || []).concat(vooraf.map(x => "Niet geboekt: " + x));
       uit.push(b); continue;
     }
     if (vooraf.length) b.handwerk = vooraf;
+    /* Past het afboeken zelf niet in één aanroep (alleen bij een heel grote
+       batch), dan zoveel als past; de volgende aanroep doet de rest. */
+    const ruimteBoeken = Math.max(1, BUDGET - sub - kostenNodig);
+    let geboektHier = 0, deels = false;
     let stuk = false;
     for (const r of b.regels) {
       if (r.status !== "klaar om te boeken") continue;
+      if (geboektHier >= ruimteBoeken) { deels = true; break; }
       try {
         /* DE BEDRAGEN ZIJN DOLLARS, DE ORDER STAAT IN EURO.
            ═══════════════════════════════════════════════════════════════
@@ -11704,32 +11768,24 @@ async function qbHandleBoeken(request, env) {
            bedrag meer dan tien cent afwijkt van de omgerekende factuur
            gaat de omgerekende factuur, en staat dat in de uitleg. */
         let eur = amerikaNaarEuro(r.bedrag);
-        try {
-          if (r.bedrag < 0) throw new Error("terugbetaling: geen open bedrag nodig");
-          const or = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
-            method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
-            body: JSON.stringify({ Id: Number(r.order), TakeRecords: 1 }),
-          });
-          const oj = await or.json().catch(() => null);
-          const o = Array.isArray(oj) ? oj[0] : (oj && (oj.Orders || oj.Records || [])[0]);
-          const tot = o && o.Totals ? o.Totals : null;
-          if (o && Number(o.Id) === Number(r.order) && tot) {
-            const open = Math.round(((Number(tot.AmountIncl) || 0) - (Number(tot.Calc_TotalPayed) || 0)) * 100) / 100;
-            r.openOpOrder = open;
-            /* Oudere orders zijn 1 op 1 aangemaakt (dollarbedrag als euro,
-               Osman zag order 3521186 met 20.296,70 euro voor factuur
-               3603 van 20.296,70 dollar); nieuwere tegen 1,12. Ligt het
-               openstaande bedrag ergens tussen die twee, dan sluiten we
-               de order: het koersverschil wordt per batch rechtgetrokken. */
-            const onder = Math.round(Number(r.bedrag) / AMERIKA_KOERS * 100) / 100 - 0.10, boven = Number(r.bedrag) + 0.10;
-            if (open > 0 && open >= onder && open <= boven) eur = open;
-            else if (open > 0) r.uitleg = "open op de order: " + open.toFixed(2) + " euro, factuur omgerekend: " + eur.toFixed(2) + " euro";
-            // Nooit meer boeken dan er open staat; de controle hierboven vangt dit al, dit is de grendel.
-            if (open > 0 && eur > open + 0.10 && !dochBoeken) throw new Error("betaling " + eur.toFixed(2) + " is meer dan het open bedrag " + open.toFixed(2) + " op order " + r.order);
-            if ((open <= 0 || eur > open + 0.10) && dochBoeken) r.handwerk = "geboekt: " + eur.toFixed(2) + " euro, open stond " + open.toFixed(2) + " euro; corrigeer dit in Logic4";
-          }
-        } catch (e) { if (/meer dan het open bedrag/.test(String(e.message || e))) throw e; }
+        const c = r.bedrag > 0 ? cache.orders[String(Number(r.order))] : null;
+        if (c && !c.fout) {
+          const open = Math.round(Number(c.open) * 100) / 100;
+          r.openOpOrder = open;
+          /* Oudere orders zijn 1 op 1 aangemaakt (dollarbedrag als euro,
+             Osman zag order 3521186 met 20.296,70 euro voor factuur
+             3603 van 20.296,70 dollar); nieuwere tegen 1,12. Ligt het
+             openstaande bedrag ergens tussen die twee, dan sluiten we
+             de order: het koersverschil wordt per batch rechtgetrokken. */
+          const onder = Math.round(Number(r.bedrag) / AMERIKA_KOERS * 100) / 100 - 0.10, boven = Number(r.bedrag) + 0.10;
+          if (open > 0 && open >= onder && open <= boven) eur = open;
+          else if (open > 0) r.uitleg = "open op de order: " + open.toFixed(2) + " euro, factuur omgerekend: " + eur.toFixed(2) + " euro";
+          // Nooit meer boeken dan er open staat; de controle hierboven vangt dit al, dit is de grendel.
+          if (open > 0 && eur > open + 0.10 && !dochBoeken) throw new Error("betaling " + eur.toFixed(2) + " is meer dan het open bedrag " + open.toFixed(2) + " op order " + r.order);
+          if ((open <= 0 || eur > open + 0.10) && dochBoeken) r.handwerk = "geboekt: " + eur.toFixed(2) + " euro, open stond " + open.toFixed(2) + " euro; corrigeer dit in Logic4";
+        }
         r.bedragEur = eur;
+        sub++;
         const rr = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
           method: "POST",
           headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
@@ -11750,15 +11806,16 @@ async function qbHandleBoeken(request, env) {
           r.status = "fout"; r.uitleg = "HTTP " + rr.status + " - " + tekst.slice(0, 160);
           stuk = true; break;
         }
+        if (c && !c.fout) { c.open = Math.round((Number(c.open) - eur) * 100) / 100; voorafGewijzigd = true; }
         geboekt.ids[r.sleutel] = { orderId: r.order, factuur: r.factuur, bedrag: r.bedrag, bedragEur: eur,
-                                   batch: String(w.id), ts: new Date().toISOString(),
+                                   batch: wid, ts: new Date().toISOString(),
                                    door: String(body.user || "").slice(0, 80) };
         // Meteen vastleggen, nooit pas aan het eind van de lus.
         await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(geboekt));
-        r.status = "geboekt";
+        r.status = "geboekt"; geboektHier++;
       } catch (e) { r.status = "fout"; r.uitleg = String(e.message || e); stuk = true; break; }
     }
-
+    if (deels) { stuk = true; b.deels = true; volgende = vanaf + wi; }
     /* De bankkosten: één negatieve regel op 4630, in hetzelfde dagboek. Pas
        nadat de orders eruit zijn, want anders staat 1160 even scheef.
 
@@ -11821,8 +11878,16 @@ async function qbHandleBoeken(request, env) {
 
     b.geboekt = b.regels.filter(r => r.status === "geboekt").length;
     b.fout = b.regels.filter(r => r.status === "fout").length;
-    b.klaar = !b.fout && (b.bankkosten.status === "geboekt" || b.bankkosten.alGeboekt || !(b.bankkosten.bedrag > 0));
+    b.klaar = !b.fout && !b.deels && (b.bankkosten.status === "geboekt" || b.bankkosten.alGeboekt || !(b.bankkosten.bedrag > 0));
+    if (b.klaar) { delete voorafOpslag[wid]; voorafGewijzigd = true; }
+    /* Een deels geboekte batch komt pas terug als hij af is; de volgende
+       aanroep doet de rest en geeft dan het hele verhaal. */
+    if (b.deels) break;
     uit.push(b);
+  }
+  if (echt && voorafGewijzigd) {
+    for (const k of Object.keys(voorafOpslag)) if (Date.now() - Number((voorafOpslag[k] || {}).ts || 0) > 10 * 60000) delete voorafOpslag[k];
+    await env.FONTEYN_DATA.put("qb-vooraf", JSON.stringify(voorafOpslag));
   }
 
   const som = uit.reduce((n, b) => n + (b.afwijking ? 0 : b.bruto), 0);
@@ -11836,6 +11901,126 @@ async function qbHandleBoeken(request, env) {
     afwijkingen: uit.filter(b => b.afwijking).length,
     tebeoken: qbCent(som),
     batches: uit });
+}
+
+/* POST /amerika/qb/controle { wireId } - staat wat het Dashboard geboekt
+   noemt ook echt in Logic4?
+   ═══════════════════════════════════════════════════════════════════════
+   Osman (26 sep 2026, batch 29-06): het Dashboard zette alle 25 regels op
+   geboekt, maar in dagboek 45 zag hij er maar 13.
+
+   Een bankboekstuk dat nog niet verwerkt is, geeft Logic4 via de API niet
+   terug (GetFinancialBookingsWithMutations op dagboek 45 blijft leeg, gemeten
+   26 sep 2026). Wat wel kan: per order vragen hoeveel er betaald is
+   (Calc_TotalPayed) en dat naast alles leggen wat het Dashboard ooit op die
+   order heeft geboekt, uit alle batches samen. Is er in Logic4 minder betaald
+   dan het Dashboard daar zelf heeft neergezet, dan ontbreekt er iets. Meer
+   mag: Chantal of Osman kan er met de hand iets bij hebben gezet.
+   Eén verzoek per order, en wijzigt niets. */
+async function qbControleData(env, wireId, extraOrders) {
+  const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+  const w = (wires.wires || []).find(x => String(x.id) === wireId);
+  if (!w) return null;
+  const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
+  const alle = Object.entries(geboekt.ids || {}).filter(([k, v]) => v && k.startsWith("batch:") && v.orderId);
+  const hier = alle.filter(([k, v]) => String(v.batch) === wireId)
+    .sort((a, b) => Number(a[0].split(":r")[1]) - Number(b[0].split(":r")[1]));
+  const orders = [...new Set(hier.map(([k, v]) => Number(v.orderId)).concat((extraOrders || []).map(Number).filter(Boolean)))].slice(0, 40);
+  const token = await l4Token(env);
+  const betaald = {};
+  await Promise.all(orders.map(async (id) => {
+    try {
+      const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", {
+        method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify({ Id: id, TakeRecords: 1 }),
+      });
+      const j = await r.json().catch(() => null);
+      const o = Array.isArray(j) ? j[0] : (j && (j.Orders || j.Records || [])[0]);
+      if (o && Number(o.Id) === id && o.Totals)
+        betaald[id] = { totaal: qbCent(Number(o.Totals.AmountIncl) || 0), betaald: qbCent(Number(o.Totals.Calc_TotalPayed) || 0) };
+    } catch {}
+  }));
+  const perOrder = {};
+  for (const [k, v] of alle) {
+    const id = Number(v.orderId);
+    if (!orders.includes(id)) continue;
+    const x = perOrder[id] = perOrder[id] || { dashboard: 0, regels: [] };
+    x.dashboard = qbCent(x.dashboard + (Number(v.bedragEur) || 0));
+    x.regels.push({ sleutel: k, batch: String(v.batch), euro: qbCent(Number(v.bedragEur) || 0), factuur: v.factuur, ts: v.ts });
+  }
+  /* Welke regels ontbreken? Per order het tekort (wat het Dashboard er in
+     totaal op zette min wat Logic4 als betaald ziet), en dan de regels van
+     déze batch zoeken die samen precies dat tekort zijn. Bij 29-06 staat
+     3462 drie keer op order 3522235 en één keer uit 16-06; Logic4 zag daar
+     3.125,01 van 7.142,87, en dat tekort is precies 3.125 + 892,86. Vinden
+     we geen sluitende combinatie, dan blijft het "onduidelijk" en raken we
+     niets aan. */
+  const ontbrekend = new Set(), onduidelijk = new Set();
+  const uitOrders = orders.map(id => {
+    const l = betaald[id] || null, d = perOrder[id] || { dashboard: 0, regels: [] };
+    const tekort = l ? qbCent(Math.max(0, d.dashboard - l.betaald)) : null;
+    if (tekort > 0.02) {
+      const eigen = d.regels.filter(r => r.batch === wireId).slice(0, 12);
+      let beste = null;
+      for (let m = 1; m < (1 << eigen.length); m++) {
+        let som = 0; const set = [];
+        eigen.forEach((r, i) => { if (m & (1 << i)) { som += r.euro; set.push(r.sleutel); } });
+        if (Math.abs(som - tekort) <= 0.03 && (!beste || set.length < beste.length)) beste = set;
+      }
+      if (beste) beste.forEach(k => ontbrekend.add(k)); else eigen.forEach(r => onduidelijk.add(r.sleutel));
+    }
+    return { order: id, logic4Totaal: l ? l.totaal : null, logic4Betaald: l ? l.betaald : null,
+             logic4Open: l ? qbCent(l.totaal - l.betaald) : null, dashboardGeboekt: d.dashboard, tekort, regels: d.regels };
+  });
+  const regels = hier.map(([k, v]) => {
+    const o = uitOrders.find(x => x.order === Number(v.orderId));
+    return { sleutel: k, factuur: v.factuur, order: v.orderId, dollar: v.bedrag, euro: v.bedragEur, ts: v.ts,
+             inLogic4: !o || o.logic4Betaald == null ? null : ontbrekend.has(k) ? false : onduidelijk.has(k) ? null : true };
+  });
+  return { w, geboekt, orders: uitOrders, regels };
+}
+
+async function qbHandleControle(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
+    return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const d = await qbControleData(env, String(body.wireId || ""), body.orders);
+  if (!d) return reply(404, { ok: false, error: "batch niet gevonden" });
+  return reply(200, { ok: true, wireId: d.w.id, datum: d.w.datum, orders: d.orders, regels: d.regels,
+    ontbreekt: d.regels.filter(r => r.inLogic4 === false).length, onbekend: d.regels.filter(r => r.inLogic4 == null).length });
+}
+
+/* POST /amerika/qb/ontbrekend-opnieuw { wireId, bevestigd, user } - de regels die de
+   controle hierboven als ontbrekend aanwijst, weer op "te boeken" zetten.
+   Daarna boekt de gewone knop "boeken op 1160" precies die regels opnieuw.
+   Alleen regels waarvan vaststaat dat ze in Logic4 ontbreken, en alleen als
+   de order nog genoeg open heeft om ze te dragen. Wat er wordt teruggezet,
+   komt in qb-herstel te staan. */
+async function qbHandleOpnieuwBoeken(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET)
+    return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const wireId = String(body.wireId || "");
+  const d = await qbControleData(env, wireId);
+  if (!d) return reply(404, { ok: false, error: "batch niet gevonden" });
+  const weg = d.regels.filter(r => r.inLogic4 === false).filter(r => {
+    const o = d.orders.find(x => x.order === Number(r.order));
+    const zelfdeOrder = d.regels.filter(x => x.inLogic4 === false && Number(x.order) === Number(r.order));
+    const som = zelfdeOrder.reduce((n, x) => n + (Number(x.euro) || 0), 0);
+    return o && o.logic4Open != null && o.logic4Open + 0.10 >= som;
+  });
+  const blijft = d.regels.filter(r => r.inLogic4 === false && !weg.includes(r));
+  if (body.bevestigd === true && weg.length) {
+    const log = (await env.FONTEYN_DATA.get("qb-herstel", { type: "json" })) || { items: [] };
+    for (const r of weg) {
+      log.items.push({ ...d.geboekt.ids[r.sleutel], sleutel: r.sleutel, hersteld: new Date().toISOString(), door: String(body.user || "").slice(0, 80) });
+      delete d.geboekt.ids[r.sleutel];
+    }
+    log.items = log.items.slice(-500);
+    await env.FONTEYN_DATA.put("qb-geboekt", JSON.stringify(d.geboekt));
+    await env.FONTEYN_DATA.put("qb-herstel", JSON.stringify(log));
+  }
+  return reply(200, { ok: true, proef: body.bevestigd !== true, wireId, teruggezet: weg, blijftStaan: blijft });
 }
 
 // POST /amerika/qb/approve { docNrs:[...] } — maak Logic4-orders voor de
@@ -15703,6 +15888,8 @@ export default {
     }
     if (url.pathname === "/amerika/qb/proef-betaling" && request.method === "POST") return qbHandleProefBetaling(request, env);
     if (url.pathname === "/amerika/qb/batch-orders" && request.method === "POST") return qbHandleBatchOrders(request, env);
+    if (url.pathname === "/amerika/qb/controle" && request.method === "POST") return qbHandleControle(request, env);
+    if (url.pathname === "/amerika/qb/ontbrekend-opnieuw" && request.method === "POST") return qbHandleOpnieuwBoeken(request, env);
     if (url.pathname === "/amerika/qb/regel-factuur" && request.method === "POST") return qbHandleRegelFactuur(request, env);
     if (url.pathname === "/amerika/qb/dubbelcheck" && request.method === "GET") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });

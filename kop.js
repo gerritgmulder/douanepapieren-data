@@ -268,6 +268,12 @@
       sl.src = hier.replace(/kop\.js(\?.*)?$/, "slepen.js");
       (doc.head || doc.documentElement).appendChild(sl);
     }
+    /* Ctrl+F / Cmd+F op elke tegel (Osman, 27 sep 2026). */
+    if (hier && !global.__fpZoeken) {
+      var zk = doc.createElement("script");
+      zk.src = hier.replace(/kop\.js(\?.*)?$/, "zoeken.js");
+      (doc.head || doc.documentElement).appendChild(zk);
+    }
   } catch (e) {}
 
   global.fpKop = { vul: vul };

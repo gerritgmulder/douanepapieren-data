@@ -1601,7 +1601,12 @@ function batchGeboekt(w){
   const orders=regels.filter(([k])=>k.startsWith("batch:"));
   const kosten=regels.find(([k])=>k.startsWith("bankkosten:"));
   const koers=geboektIds["koers:"+w.id]||null;
-  const teller=(w.regels||[]).filter(r=>["factuur","overig","balance"].includes(String(r.soort||""))&&(Number(r.bedrag)||0)>0).length;
+  /* Hoeveel regels er geboekt horen te worden: elke factuurregel, en een
+     losse regel of Balance zodra die aan een order hangt. Hier stond een
+     telling op r.bedrag, maar dat veld is bij ingelezen batches leeg; dan
+     was de teller nul en heette elke batch met één geboekte regel "compleet"
+     (Osman, 26 sep 2026: bij 06-07 stonden er 7 van de 21 nog open). */
+  const teller=(w.regels||[]).filter(r=>String(r.soort||"")==="factuur"||(["overig","balance"].includes(String(r.soort||""))&&(r.orderHand||r.order))).length;
   const op1160=Math.round((orders.reduce((n,[,v])=>n+(Number(v.bedragEur)||0),0)+(kosten?(Number(kosten[1].bedragEur)||0):0))*100)/100;
   return { compleet: orders.length>0&&orders.length>=teller&&!!kosten, orders:orders.length, teller, op1160, koers };
 }
@@ -1672,6 +1677,63 @@ async function audInit(){
    en dat ziet niemand meer terug, dus dat gebeurt bewust niet.
 
    De worker doet die controle; hier wordt alleen getoond wat eruit komt. */
+/* CONTROLEREN IN LOGIC4
+   ═══════════════════════════════════════════════════════════════════════
+   Osman (26 sep 2026): bij de batch van 29-06 zei het Dashboard dat alle 25
+   regels geboekt waren, maar in Logic4 stonden er 13. De worker kijkt per
+   order hoeveel Logic4 als betaald ziet en legt dat naast wat het Dashboard
+   er zelf op heeft gezet. Wat ontbreekt staat hier, met één knop om precies
+   die regels opnieuw te boeken. */
+const audControleUit={};
+function audControleHtml(j){
+  const eur=v=>"\u20ac "+Number(v||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2});
+  const mis=(j.regels||[]).filter(r=>r.inLogic4===false), vaag=(j.regels||[]).filter(r=>r.inLogic4==null);
+  if(!mis.length&&!vaag.length)
+    return "<div class='status-msg' style='margin:0 0 10px;background:#dcfce7;color:#166534;border:1px solid #86efac'><b>Nagekeken in Logic4:</b> alle "+(j.regels||[]).length+" geboekte regels staan erin.</div>";
+  return "<div class='status-msg' style='margin:0 0 10px;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5'>"+
+    (mis.length?"<b>In Logic4 ontbreken "+mis.length+" van de "+(j.regels||[]).length+" geboekte regels:</b><ul style='margin:6px 0 0;padding-left:18px'>"+
+      mis.map(r=>"<li>factuur "+esc(r.factuur||"")+" op order "+esc(String(r.order))+": "+esc(usd(r.dollar))+" ("+eur(r.euro)+")</li>").join("")+"</ul>"+
+      "<div style='margin-top:8px'><button class='btn' type='button' data-opnieuw='"+esc(j.wireId)+"'>deze "+mis.length+" regels opnieuw boeken</button></div>":"")+
+    (vaag.length?"<div style='margin-top:8px'>Op deze regels is de order in Logic4 anders betaald dan het Dashboard verwacht; kijk ze in Logic4 na: "+
+      vaag.map(r=>"factuur "+esc(r.factuur||"")+" (order "+esc(String(r.order))+")").join(", ")+"</div>":"")+
+    "</div>";
+}
+async function audControleVraag(wid){
+  const r=await fetch(WORKER+"/amerika/qb/controle",{method:"POST",
+    headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+    body:JSON.stringify({wireId:wid})});
+  const j=await r.json().catch(()=>null);
+  if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+  return j;
+}
+async function audControleer(wid,knop){
+  const oud=knop?knop.textContent:""; if(knop){ knop.disabled=true; knop.textContent="nakijken…"; }
+  try{
+    const j=await audControleVraag(wid);
+    audControleUit[wid]=audControleHtml(j);
+    if(window.fpLog) window.fpLog("batch-gecontroleerd-in-logic4","batch "+wid+": "+j.ontbreekt+" ontbreken");
+  }catch(e){ audControleUit[wid]="<div class='status-msg' style='margin:0 0 10px'>Nakijken vraagt nog een poging: "+esc(e.message)+"</div>"; }
+  if(knop){ knop.disabled=false; knop.textContent=oud; }
+  const vak=document.querySelector("[data-controle-uit='"+CSS.escape(wid)+"']");
+  if(vak) vak.innerHTML=audControleUit[wid]; else audRender();
+  const b=vak&&vak.querySelector("[data-opnieuw]"); if(b) b.addEventListener("click",()=>audOntbrekendOpnieuw(b.dataset.opnieuw,b));
+}
+async function audOntbrekendOpnieuw(wid,knop){
+  if(knop){ knop.disabled=true; knop.textContent="klaarzetten…"; }
+  try{
+    const r=await fetch(WORKER+"/amerika/qb/ontbrekend-opnieuw",{method:"POST",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":(localStorage.getItem("fp.teamkey")||"")},
+      body:JSON.stringify({wireId:wid,bevestigd:true,user:(localStorage.getItem("fp.email")||"")})});
+    const j=await r.json().catch(()=>null);
+    if(!r.ok||!j||!j.ok) throw new Error((j&&j.error)||("HTTP "+r.status));
+    if(window.fpLog) window.fpLog("batch-ontbrekend-opnieuw","batch "+wid+": "+(j.teruggezet||[]).length+" regels klaargezet");
+    audControleUit[wid]="<div class='status-msg' style='margin:0 0 10px'>"+(j.teruggezet||[]).length+" regels staan klaar om opnieuw te boeken"+
+      ((j.blijftStaan||[]).length?"; "+j.blijftStaan.length+" regels passen niet meer op hun order en blijven voor jou om na te kijken":"")+
+      ". Het boeken start nu.</div>";
+    await audLoadGeboekt(); audRender();
+    const b=document.querySelector("[data-boek='"+CSS.escape(wid)+"']"); if(b) audBoekKnop(b);
+  }catch(e){ if(knop){ knop.disabled=false; knop.textContent="opnieuw proberen"; } audControleUit[wid]="<div class='status-msg' style='margin:0 0 10px'>Klaarzetten vraagt nog een poging: "+esc(e.message)+"</div>"; audRender(); }
+}
 async function audBoekKnop(b){
   const id=b.dataset.boek;
   b.disabled=true; const oudeTekst=b.textContent;
@@ -1689,7 +1751,11 @@ async function audBoekKnop(b){
   // Bij "alle batches" komen ze in blokjes binnen; alles achter elkaar plakken.
   async function alles(bevestigd){
     let vanaf=0, batches=[], eerste=null;
+    let rondes=0;
     while(vanaf!=null){
+      /* De worker splitst het werk nu zelf op in aanroepen die passen; bij
+         een grote batch komt dezelfde batch dus een paar keer terug. */
+      if(++rondes>40) throw new Error("het boeken duurt langer dan verwacht; druk nog een keer op de knop, wat al staat blijft staan");
       const j=await vraag(bevestigd,vanaf);
       if(!eerste) eerste=j;
       batches=batches.concat(j.batches||[]);
@@ -1771,14 +1837,23 @@ async function audBoekKnop(b){
     const kosten=gedaan.reduce((n,x)=>n+(((x.bankkosten||{}).status==="geboekt")?x.kosten:0),0);
     const eur=v=>"\u20ac "+Number(v||0).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2});
     if(window.fpLog) window.fpLog("batch-geboekt-op-1160",gedaan.length+" batch(es), "+usd(totaal));
-    alert(gedaan.length+" batch(es) geboekt: "+
+    /* Meteen nakijken of het er in Logic4 ook echt staat. */
+    let nagekeken="";
+    for(const x of gedaan){
+      try{
+        const c=await audControleVraag(String(x.id));
+        audControleUit[x.id]=audControleHtml(c);
+        nagekeken+="\n  • "+bat(x)+": "+(c.ontbreekt?("in Logic4 ontbreken "+c.ontbreekt+" regels, zie het rode vak bij de batch"):"alle regels staan in Logic4");
+      }catch(e){ nagekeken+="\n  • "+bat(x)+": nakijken lukt straks met 'controleer in Logic4'"; }
+    }
+    alert((nagekeken?("Nagekeken in Logic4:"+nagekeken+"\n\n"):"")+gedaan.length+" batch(es) geboekt: "+
       gedaan.reduce((n,x)=>n+x.geboekt,0)+" order(s) afgeboekt voor samen "+usd(totaal)+(totaalEur?" (in Logic4 "+eur(totaalEur)+")":"")+"."+
       (kosten?("\n\nBankkosten "+usd(kosten)+" op grootboek "+(echt.kostenGrootboek||"4630")+".\n\n"+
         "NOG DOEN IN LOGIC4: zet op die kostenregel(s) de kostenplaats "+
         (echt.kostenplaats||"Spa Houston USA")+". Dat gaat buiten de koppeling om."):"")+
       (handwerk.length?("\n\nMET DE HAND RECHTZETTEN IN LOGIC4:\n"+handwerk.map(x=>"  • "+bat(x)+"\n"+x.regels.filter(r=>r.handwerk).map(r=>"      - factuur "+(r.factuur||r.naam)+", order "+r.order+": "+r.handwerk).join("\n")).join("\n")):"")+
       (tegen.length?("\n\nBlijven staan, deze vragen eerst aandacht:\n\n"+tegen.map(x=>"  • "+bat(x)+"\n"+(x.redenen||[]).map(r=>"      - "+r).join("\n")).join("\n\n")):"")+
-      (mis.length?("\n\nNiet gelukt:\n"+mis.map(x=>"  • "+bat(x)+": "+
+      (mis.length?("\n\nVraagt nog een poging:\n"+mis.map(x=>"  • "+bat(x)+": "+
         x.regels.filter(r=>r.status==="fout").map(r=>(r.factuur||r.naam)+" "+(r.uitleg||"")).join("; ")+
         (((x.bankkosten||{}).status==="fout")?(" bankkosten: "+x.bankkosten.uitleg):"")).join("\n")):""));
     await audLoadFacturen(); audRender();
@@ -2201,7 +2276,14 @@ function audRender(){
           "style='border:1px solid var(--border);border-radius:7px;padding:3px 7px;font:inherit;font-size:14px'>"+
           (totaalRegel?" — <span style='color:#15803d'>"+esc(usd(totaalRegel.kolom3))+" ontvangen</span>":"")+"</h3>"+
         "<div style='display:flex;gap:10px;align-items:center'>"+
-          (openN?"<span class='pill' style='background:#fef3c7;color:#92400e'>"+openN+" nog te verwerken</span>":"<span class='pill' style='background:#dcfce7;color:#15803d'>alles verwerkt</span>")+
+          /* Wat er echt geboekt is, niet wat er is afgevinkt. Het vinkje
+             "Verwerkt in Logic4" zette hier "alles verwerkt" neer terwijl de
+             koppeling bij 06-07 na 14 van de 21 regels was gestopt. */
+          (function(){ const g=batchGeboekt(w);
+            if(!g.orders) return "<span class='pill' style='background:#fef3c7;color:#92400e'>nog te boeken</span>";
+            if(g.orders<g.teller) return "<span class='pill' style='background:#fee2e2;color:#991b1b' title='Druk op boeken op 1160, dan gaan de overige regels erbij'>"+g.orders+" van "+g.teller+" geboekt</span>";
+            return "<span class='pill' style='background:#dcfce7;color:#15803d'>geboekt</span>"; })()+
+          (batchGeboekt(w).orders>0?"<button class='btn' type='button' data-controle='"+esc(w.id)+"' title='Leest in Logic4 terug of elke geboekte regel van deze batch er ook echt staat'>controleer in Logic4</button>":"")+
           /* Boeken op 1160. Osman (7 sep 2026): "Graag het totaalbedrag op
              1160 boeken, zodat wij in het bankdagboek ook op 1160 boeken en
              elkaar gaan kruisen." Eerst altijd een proef; pas na akkoord gaat
@@ -2215,6 +2297,7 @@ function audRender(){
             : "")+
           "<button class='btn' type='button' data-del='"+esc(w.id)+"'>verwijderen</button>"+
         "</div></div>"+
+      "<div class='audControle' data-controle-uit='"+esc(w.id)+"'>"+(audControleUit[w.id]||"")+"</div>"+
       (function(){
         // De aansluiting van deze batch, meteen zichtbaar.
         const ct=audBatchCheck(w);
@@ -2342,6 +2425,8 @@ function audRender(){
      orders en 543,40 aan kosten, zodat er 59.682,13 op 1160 overblijft: precies
      wat er op de bank binnenkwam. */
   box.querySelectorAll("[data-boek]").forEach(b=>b.addEventListener("click",()=>audBoekKnop(b)));
+  box.querySelectorAll("[data-controle]").forEach(b=>b.addEventListener("click",()=>audControleer(b.dataset.controle,b)));
+  box.querySelectorAll("[data-opnieuw]").forEach(b=>b.addEventListener("click",()=>audOntbrekendOpnieuw(b.dataset.opnieuw,b)));
   box.querySelectorAll("[data-terug]").forEach(b=>b.addEventListener("click",async()=>{
     const w=wiresData.wires.find(x=>String(x.id)===b.dataset.terug); const g=batchGeboekt(w||{});
     if(!confirm("Batch van "+(w&&w.datum||b.dataset.terug)+" opnieuw kunnen boeken?\n\n"+
