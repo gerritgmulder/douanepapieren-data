@@ -4514,6 +4514,21 @@ async function handleTeamKey(request, env) {
   if (await rateLimited(env, request, "teamkey", 10, 900)) {
     return reply(429, { ok: false, error: "too-many-attempts" });
   }
+  /* Externen (Christiaan) loggen in met hun eigen Dashboard-wachtwoord, niet
+     met Logic4. Zie EXTERNE ACCOUNTS. */
+  {
+    const accs = await externAcc(env);
+    const ea = externVind(accs, username);
+    if (ea) {
+      const goed = ea.actief !== false && await dpVerifyPassword(password, ea.pw) && await toegangMag(env, "extern", ea.gebruiker);
+      if (!goed) return reply(401, { ok: false, error: "login-failed" });
+      ea.laatsteLogin = new Date().toISOString();
+      await env.FONTEYN_DATA.put(EXTERN_ACC, JSON.stringify(accs));
+      console.log("[teamkey] externe sleutel uitgegeven aan " + ea.gebruiker);
+      return reply(200, { ok: true, teamkey: await externSleutel(env, ea.gebruiker), mailsleutel: null,
+                          extern: true, gebruiker: ea.gebruiker, naam: ea.naam || "" });
+    }
+  }
   if (!env.LOGIC4_PUBLICKEY || !env.LOGIC4_SECRETKEY || !env.LOGIC4_COMPANYKEY) {
     return reply(503, { ok: false, error: "logic4-not-configured" });
   }
@@ -14828,7 +14843,7 @@ export class LiveKamer {
    dat terugschrijven, dan verdwijnt voor iedereen wat voor hem verborgen was. */
 const EXTERN_LEES_GET = ["/planning/", "/herinneringen/open", "/herinneringen/log", "/vertaal/talen", "/bank/dagboeken", "/bank/grootboeken"];
 const EXTERN_LEES_POST = ["/bank/debiteuren", "/bank/openstaand",
-                          "/bank/orders", "/bank/factuurorder", "/vertaal", "/log", "/planning/klantinfo"];
+                          "/bank/orders", "/bank/factuurorder", "/vertaal", "/log", "/planning/klantinfo", "/extern/logic4"];
 const EXTERN_EXACT = ["/internal/teamkey"];
 const EXTERN_VAKKEN = [
   "takenlijst", "taken", "taken-ritme", "dashboard-gezien", "dashboard-indeling",
@@ -14836,6 +14851,9 @@ const EXTERN_VAKKEN = [
   "bank-instellingen", "mollie-uitbetaling-geboekt", "bol-provisie-geboekt", "retouren",
 ];
 const EXTERN_WEG = /amerika|american?\b|houston|texas|passion spas? south|\btx\b|\busa?\b|\busd\b|dollar|quickbooks|audrey|inkoopprijs|inkoopwaarde|purchase ?price|\bbuyprice\b|costprice/i;
+
+/* Alleen op veldnamen: inkoop, marge en de leverancier van een regel. */
+const EXTERN_WEG_SLEUTEL = /buy|purchase|cost|inkoop|margin|marge|supplier|creditor|crediteur/i;
 
 async function externHandtekening(env, naam) {
   const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(String(env.SHARED_SECRET || "")),
@@ -14866,7 +14884,7 @@ function externFilter(x, diepte) {
   if (typeof x === "object") {
     const uit = {};
     for (const [k, v] of Object.entries(x)) {
-      if (EXTERN_WEG.test(k) || k === String(AMERIKA_DEBTOR)) continue;
+      if (EXTERN_WEG.test(k) || EXTERN_WEG_SLEUTEL.test(k) || k === String(AMERIKA_DEBTOR)) continue;
       if (raakt(v)) continue;
       uit[k] = externFilter(v, (diepte || 0) + 1);
     }
@@ -14902,6 +14920,160 @@ async function externPoort(request, env) {
   let j; try { j = JSON.parse(tekst); } catch { return new Response(tekst, { status: r.status, headers: r.headers }); }
   const hdr = new Headers(r.headers); hdr.delete("Content-Length");
   return new Response(JSON.stringify(externFilter(j)), { status: r.status, headers: hdr });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   EXTERNE ACCOUNTS - inloggen zonder Logic4
+   ═══════════════════════════════════════════════════════════════════════════
+   Gerrit (28 sep 2026): Christiaan heeft geen Logic4, maak een account dat
+   werkt. Een Logic4-gebruiker aanmaken kan via de API niet, en zou hem ook in
+   Logic4 zelf laten kijken, waar de inkoopprijzen en Amerika wel staan. Dus
+   een eigen inlog, alleen voor het Dashboard:
+
+   - Gerrit of Dolf nodigt uit in de tegel Externe toegang (externen.html):
+     gebruikersnaam (zoals in de groep extern van toegang.js), naam, e-mail.
+   - De externe krijgt een mail en kiest zelf zijn wachtwoord op
+     /extern/wachtwoord. Alleen de hash wordt bewaard (dpHashPassword).
+   - Inloggen gaat via hetzelfde /internal/teamkey als iedereen, in de
+     browser op /m/. Een externe krijgt de beperkte sleutel (externSleutel).
+   - Logic4-gegevens haalt de server voor hem op onder fonteynbot, alleen de
+     leesroutes in EXTERN_L4, en alles gaat door externFilter. */
+const EXTERN_ACC = "extern-accounts";
+const EXTERN_L4 = new Set(["/v3/Orders/GetOrders", "/v3/Orders/GetOrderRows", "/v3/User/GetAllUsers",
+  "/v3/Financial/GetFinancialBooks", "/v3/Financial/GetLedgers", "/v3/Financial/GetPaymentMethods",
+  "/v3/Orders/GetOpenPaymentInvoices"]);
+async function externAcc(env) {
+  const d = (await env.FONTEYN_DATA.get(EXTERN_ACC, { type: "json" })) || {};
+  d.accounts = d.accounts || {};
+  return d;
+}
+function externVind(d, wie) {
+  const w = String(wie || "").trim().toLowerCase();
+  if (!w) return null;
+  return Object.values(d.accounts).find(a => a.gebruiker === w || String(a.email || "").toLowerCase() === w) || null;
+}
+function externOpenbaar(a) {
+  return { gebruiker: a.gebruiker, naam: a.naam || "", email: a.email || "", actief: a.actief !== false,
+           wachtwoordGezet: !!(a.pw && a.pw.hash), uitgenodigd: a.uitgenodigd || null, door: a.door || null,
+           laatsteLogin: a.laatsteLogin || null, uitnodigingTot: (a.uitnodiging && a.uitnodiging.tot) || null };
+}
+async function externIsBeheer(request, env) {
+  if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return false;
+  return toegangMag(env, "externen", String(request.headers.get("X-Fonteyn-User") || "").toLowerCase());
+}
+function externEsc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c])); }
+function externPagina(titel, inhoud) {
+  return new Response("<!doctype html><html lang='nl'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>" +
+    "<title>" + externEsc(titel) + " - Fonteyn Dashboard</title>" +
+    "<style>body{margin:0;font-family:Montserrat,system-ui,Arial,sans-serif;background:#f6f6f8;color:#1f2937}" +
+    ".k{max-width:430px;margin:12vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:30px 28px}" +
+    "h1{color:#144734;font-size:20px;margin:0 0 10px}p{color:#4b5563;line-height:1.55;font-size:14px}" +
+    "label{display:block;font-size:12px;color:#6b7280;margin:14px 0 4px}input{width:100%;box-sizing:border-box;font:inherit;padding:10px 12px;border:1px solid #d1d5db;border-radius:9px}" +
+    "button,a.b{display:inline-block;margin-top:18px;background:#144734;color:#fff;border:0;border-radius:9px;padding:11px 20px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none}" +
+    ".m{margin-top:12px;font-size:13px;color:#b91c1c}</style></head><body><div class='k'>" + inhoud + "</div></body></html>",
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow" } });
+}
+function externMInlog(env, url) { return url.origin + "/m/"; }
+
+async function externHandle(request, env, url) {
+  const p = url.pathname;
+  // ── beheer: lijst, uitnodigen, intrekken ──
+  if (p === "/extern/accounts" && request.method === "GET") {
+    if (!(await externIsBeheer(request, env))) return reply(401, { ok: false });
+    const d = await externAcc(env);
+    return reply(200, { ok: true, accounts: Object.values(d.accounts).map(externOpenbaar) });
+  }
+  if (p === "/extern/uitnodigen" && request.method === "POST") {
+    if (!(await externIsBeheer(request, env))) return reply(401, { ok: false });
+    let b = {}; try { b = await request.json(); } catch {}
+    const gebruiker = String(b.gebruiker || "").trim().toLowerCase();
+    const email = String(b.email || "").trim().toLowerCase();
+    const naam = String(b.naam || "").trim().slice(0, 80);
+    if (!/^[a-z][a-z0-9.\-]{1,39}$/.test(gebruiker)) return reply(400, { ok: false, error: "Kies een gebruikersnaam van letters en cijfers, bijvoorbeeld christiaan." });
+    if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(email)) return reply(400, { ok: false, error: "Vul een geldig e-mailadres in." });
+    if (!(await toegangMag(env, "extern", gebruiker)))
+      return reply(400, { ok: false, error: "Zet " + gebruiker + " eerst in de groep extern in toegang.js; daarmee krijgt hij de beperkte sleutel." });
+    const d = await externAcc(env);
+    const ander = Object.values(d.accounts).find(a => a.gebruiker !== gebruiker && String(a.email || "").toLowerCase() === email);
+    if (ander) return reply(400, { ok: false, error: "Dit e-mailadres hoort al bij " + ander.gebruiker + "." });
+    const a = d.accounts[gebruiker] = Object.assign({}, d.accounts[gebruiker] || {}, { gebruiker, naam, email, actief: true });
+    const t = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+    a.uitnodiging = { t, tot: new Date(Date.now() + 7 * 86400000).toISOString() };
+    a.uitgenodigd = new Date().toISOString(); a.door = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+    await env.FONTEYN_DATA.put(EXTERN_ACC, JSON.stringify(d));
+    const link = url.origin + "/extern/wachtwoord?t=" + t;
+    const r = await dpSendEmail(env, email, "Je toegang tot het Fonteyn Dashboard",
+      "<div style='font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#1f2937'>" +
+      "<h2 style='color:#144734;margin:0 0 12px'>Fonteyn Dashboard</h2>" +
+      "<p>Hi " + externEsc(naam || gebruiker) + ",</p>" +
+      "<p>Je hebt toegang tot het Fonteyn Dashboard. Kies met de knop hieronder je eigen wachtwoord. De link is zeven dagen geldig.</p>" +
+      "<p style='margin:26px 0'><a href='" + link + "' style='background:#144734;color:#fff;text-decoration:none;font-weight:bold;padding:14px 28px;border-radius:10px;display:inline-block'>Wachtwoord kiezen</a></p>" +
+      "<p>Daarna log je in op <a href='" + externMInlog(env, url) + "'>" + externMInlog(env, url) + "</a> met je gebruikersnaam <b>" + externEsc(gebruiker) + "</b> (of je e-mailadres) en je wachtwoord. Dat werkt in elke browser, op de computer en op de telefoon.</p>" +
+      "<p style='color:#6b7280;font-size:12px'>Werkt de knop anders dan verwacht, kopieer dan dit adres in je browser:<br>" + externEsc(link) + "</p></div>");
+    return reply(200, { ok: true, gemaild: !!(r && r.ok), account: externOpenbaar(a) });
+  }
+  if (p === "/extern/intrekken" && request.method === "POST") {
+    if (!(await externIsBeheer(request, env))) return reply(401, { ok: false });
+    let b = {}; try { b = await request.json(); } catch {}
+    const d = await externAcc(env);
+    const a = d.accounts[String(b.gebruiker || "").toLowerCase()];
+    if (!a) return reply(404, { ok: false, error: "onbekend account" });
+    a.actief = b.actief === true;
+    if (!a.actief) delete a.uitnodiging;
+    await env.FONTEYN_DATA.put(EXTERN_ACC, JSON.stringify(d));
+    return reply(200, { ok: true, account: externOpenbaar(a) });
+  }
+  // ── de externe zelf: wachtwoord kiezen ──
+  if (p === "/extern/wachtwoord" && request.method === "GET") {
+    const t = String(url.searchParams.get("t") || "").replace(/[^a-f0-9]/g, "");
+    const d = await externAcc(env);
+    const a = Object.values(d.accounts).find(x => x.uitnodiging && x.uitnodiging.t === t && Date.parse(x.uitnodiging.tot) > Date.now() && x.actief !== false);
+    if (!t || !a) return externPagina("Link verlopen", "<h1>Deze link is verlopen</h1><p>Vraag Gerrit om een nieuwe uitnodiging; die komt dan meteen in je mail.</p>");
+    return externPagina("Wachtwoord kiezen",
+      "<h1>Kies je wachtwoord</h1><p>Hi " + externEsc(a.naam || a.gebruiker) + ", je gebruikersnaam is <b>" + externEsc(a.gebruiker) + "</b>. Kies een wachtwoord van minstens 10 tekens.</p>" +
+      "<label for='w1'>Wachtwoord</label><input id='w1' type='password' autocomplete='new-password'>" +
+      "<label for='w2'>Nog een keer</label><input id='w2' type='password' autocomplete='new-password'>" +
+      "<button id='go'>Opslaan</button><div class='m' id='m'></div>" +
+      "<script>document.getElementById('go').onclick=async function(){var a=document.getElementById('w1').value,b=document.getElementById('w2').value,m=document.getElementById('m');" +
+      "if(a.length<10){m.textContent='Kies minstens 10 tekens.';return;}if(a!==b){m.textContent='De twee wachtwoorden verschillen; typ ze nog een keer.';return;}" +
+      "this.disabled=true;var r=await fetch('/extern/wachtwoord',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({t:" + JSON.stringify(t) + ",wachtwoord:a})});" +
+      "var j=await r.json().catch(function(){return {};});if(r.ok&&j.ok){document.querySelector('.k').innerHTML=\"<h1>Klaar</h1><p>Je wachtwoord staat. Log nu in met je gebruikersnaam <b>" + externEsc(a.gebruiker) + "</b> en je nieuwe wachtwoord.</p><a class='b' href='/m/'>Naar het Dashboard</a>\";}" +
+      "else{m.textContent=j.error||'Opslaan vraagt een nieuwe poging.';this.disabled=false;}};</script>");
+  }
+  if (p === "/extern/wachtwoord" && request.method === "POST") {
+    if (await rateLimited(env, request, "extpw", 10, 900)) return reply(429, { ok: false, error: "Te veel pogingen; probeer het over een kwartier opnieuw." });
+    let b = {}; try { b = await request.json(); } catch {}
+    const t = String(b.t || "").replace(/[^a-f0-9]/g, ""), w = String(b.wachtwoord || "");
+    if (w.length < 10) return reply(400, { ok: false, error: "Kies minstens 10 tekens." });
+    const d = await externAcc(env);
+    const a = Object.values(d.accounts).find(x => x.uitnodiging && x.uitnodiging.t === t && Date.parse(x.uitnodiging.tot) > Date.now() && x.actief !== false);
+    if (!t || !a) return reply(400, { ok: false, error: "Deze link is verlopen; vraag Gerrit om een nieuwe." });
+    a.pw = await dpHashPassword(w);
+    a.wachtwoordGezet = new Date().toISOString();
+    delete a.uitnodiging;
+    await env.FONTEYN_DATA.put(EXTERN_ACC, JSON.stringify(d));
+    return reply(200, { ok: true });
+  }
+  // ── Logic4 lezen namens een externe (alleen via externPoort) ──
+  if (p === "/extern/logic4" && request.method === "POST") {
+    if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+    if (!(await toegangMag(env, "extern", String(request.headers.get("X-Fonteyn-User") || "").toLowerCase()))) return reply(403, { ok: false });
+    let b = {}; try { b = await request.json(); } catch {}
+    const pad = String(b.path || "");
+    if (!EXTERN_L4.has(pad)) return reply(403, { ok: false, error: "alleen-opvragen", uitleg: "Dit onderdeel hoort bij een andere tegel." });
+    const methode = String(b.method || "POST").toUpperCase() === "GET" ? "GET" : "POST";
+    let token = null;
+    try { token = await l4Token(env); } catch (e) { return reply(200, { ok: false, status: 503, error: "logic4-onbereikbaar" }); }
+    const r = await fetch("https://api.logic4server.nl" + pad, {
+      method: methode, headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      ...(methode === "GET" ? {} : { body: JSON.stringify(b.body === undefined ? {} : b.body) }),
+    }).catch(() => null);
+    if (!r) return reply(502, { ok: false, error: "logic4-onbereikbaar" });
+    const tekst = await r.text();
+    let data = null; try { data = JSON.parse(tekst); } catch { data = tekst; }
+    return reply(200, { ok: r.ok, status: r.status, data });   // zelfde vorm als het hulpprogramma
+  }
+  return null;
 }
 
 const FP_WORKER = {
@@ -14996,6 +15168,11 @@ const FP_WORKER = {
       return externPoort(request, env);
 
     const url = new URL(request.url);
+
+    if (url.pathname.startsWith("/extern/")) {
+      const ex = await externHandle(request, env, url);
+      if (ex) return ex;
+    }
 
     // Team-sleutel voor medewerkers (Logic4-login als bewijs)
     if (url.pathname === "/internal/teamkey" && request.method === "POST") {

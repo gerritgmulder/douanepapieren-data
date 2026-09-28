@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-28", bestand: "bol.html", soort: "hersteld",
+      titel: "Bol.com volgt de toegangslijst",
+      wat: "Iedereen die voor de Bol.com-koppeling is aangemeld, komt nu ook echt de tegel in."
+    },
+    {
       datum: "2026-09-28", bestand: "externen.html", soort: "nieuw",
       titel: "Externe toegang",
       wat: "Nodig iemand van buiten Fonteyn uit voor het Dashboard, zonder Logic4. Hij kiest zelf zijn wachtwoord, kan alleen kijken en ziet niets over Amerika of inkoopprijzen."
