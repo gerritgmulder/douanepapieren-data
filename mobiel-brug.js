@@ -78,6 +78,25 @@
        rechten, en laat alleen opvragen toe. Boeken en wijzigen blijft op de
        werkplek. */
     if (p === "/api/logic4-call") {
+      /* Een externe (Christiaan) heeft geen Logic4. De server haalt de
+         gegevens dan voor hem op, alleen wat bij zijn tegels hoort en zonder
+         Amerika en inkoopprijzen (zie EXTERNE ACCOUNTS in de worker). */
+      var team = "";
+      try { team = localStorage.getItem("fp.teamkey") || ""; } catch (e) {}
+      if (team.indexOf("ext1.") === 0) {
+        return echt(WORKER + "/extern/logic4", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Fonteyn-Auth": team },
+          body: (opties && opties.body) || "{}",
+        }).then(function (r) {
+          if (r.status === 401 || r.status === 403) {
+            return r.json().catch(function () { return {}; }).then(function (j) {
+              return antwoord({ ok: false, error: j.error || "niet-beschikbaar", message: j.uitleg || "" }, 503);
+            });
+          }
+          return r;
+        }).catch(function () { return antwoord({ ok: false, error: "geen-verbinding" }, 503); });
+      }
       var sleutel = "";
       try { sleutel = localStorage.getItem("fp.mailkey") || ""; } catch (e) {}
       if (!sleutel) {

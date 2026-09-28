@@ -91,6 +91,10 @@
     "extern": [
       "christiaan",
     ],
+    // Externe toegang: wie externen mag uitnodigen (tegel externen.html).
+    "externen": [
+      "dolf", "fonteynbot", "gerrit",
+    ],
     // Activiteitenlogboek
     "activiteit": [
       "dolf", "fonteynbot", "gerrit",

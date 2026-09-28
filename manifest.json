@@ -1,5 +1,5 @@
 {
-  "version": "0.35.15",
+  "version": "0.35.16",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -243,6 +243,10 @@
     {
       "name": "pibs.html",
       "note": "Partners in Business: uren en meter van de ingehuurde partijen; alleen Dolf en Gerrit"
+    },
+    {
+      "name": "externen.html",
+      "note": "Externe toegang: iemand van buiten Fonteyn uitnodigen met een eigen wachtwoord, zonder Logic4. Groep externen (Dolf, Gerrit, Fonteynbot). Worker: /extern/* (Gerrit, 28 sep 2026)."
     },
     {
       "name": "specsheets.html",

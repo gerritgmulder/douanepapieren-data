@@ -82,6 +82,8 @@
       uit:"Wat in de keten blijft liggen (proef)",                  mobiel:"krap", tile:"tileKeten" },
     { bestand:"pibs.html",           groep:"pibs",             ic:"🧾",  naam:"PIBs",
       uit:"Partners in Business: uren en meter",                  mobiel:"krap", tile:"tilePibs" },
+    { bestand:"externen.html",       groep:"externen",         ic:"🔑",  naam:"Externe toegang",
+      uit:"Iemand van buiten Fonteyn uitnodigen, zonder Logic4",   mobiel:"goed", tile:"tileExternen" },
     { bestand:"personeel.html",      groep:"personeel",        ic:"👥",  naam:"Personeel",
       uit:"Personeelsgegevens",                                    mobiel:"pc", tile:"tilePersoneel" },
     /* Administratie (proef) - staging, alleen de beheerlaag. */

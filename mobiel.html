@@ -175,9 +175,9 @@ main{flex:1;padding:16px;padding-bottom:calc(30px + env(safe-area-inset-bottom))
     <div class="body">
       <form id="inlogForm" autocomplete="on">
         <div id="inlogFout" class="fout" style="display:none"></div>
-        <label>Logic4-gebruikersnaam
+        <label>Gebruikersnaam
           <input type="text" id="vGebruiker" required autocomplete="username"
-                 autocapitalize="off" autocorrect="off" placeholder="bv. fonteyn.don of jij@fonteyn.nl">
+                 autocapitalize="off" autocorrect="off" placeholder="bv. fonteyn.don, of je e-mailadres">
         </label>
         <label>Wachtwoord
           <input type="password" id="vWachtwoord" required autocomplete="current-password">
@@ -520,7 +520,9 @@ el("inlogForm").onsubmit = async function(e){
     bewaar(blijf, {
       "fp.teamkey": j.teamkey,
       "fp.mailkey": j.mailsleutel || null,
-      "fp.email": gebruiker.toLowerCase(),
+      /* Een externe logt in met zijn e-mailadres of gebruikersnaam; de
+         tegels kennen hem op de gebruikersnaam uit toegang.js. */
+      "fp.email": (j.gebruiker || gebruiker).toLowerCase(),
       /* De tegels kijken hierop of iemand is ingelogd. Zonder deze sleutel
          sturen ze door naar het dashboard en zit je in een kringetje. */
       "fp.session": "mobiel-" + Date.now(),

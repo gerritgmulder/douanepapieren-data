@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-28", bestand: "externen.html", soort: "nieuw",
+      titel: "Externe toegang",
+      wat: "Nodig iemand van buiten Fonteyn uit voor het Dashboard, zonder Logic4. Hij kiest zelf zijn wachtwoord, kan alleen kijken en ziet niets over Amerika of inkoopprijzen."
+    },
+    {
       datum: "2026-09-27", bestand: "voorraad.html", soort: "beter",
       titel: "Voorraadbeheer voor Don",
       wat: "Don ziet nu ook Voorraadbeheer en kan bestellen, ook de inkooporder vanuit Leveranciersinformatie."

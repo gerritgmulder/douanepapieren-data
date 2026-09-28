@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("externen", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">Deze tegel is voor wie externen toegang geeft.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Externe toegang - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     EXTERNE TOEGANG (beheer: Dolf, Gerrit en Fonteynbot)
+
+     Gerrit (28 sep 2026): Christiaan, compagnon van Dolf voor de Duitse
+     vestiging, heeft geen Logic4. Hier nodig je zo iemand uit: hij krijgt een
+     mail, kiest zelf zijn wachtwoord, en logt in op /m/ van de worker, in
+     elke browser. Hij hoeft niets te installeren.
+
+     Wat hij ziet bepaalt toegang.js: de groep extern (die geeft hem de
+     beperkte sleutel: alleen kijken, geen Amerika, geen inkoopprijzen) en de
+     groepen van zijn tegels. Zie EXTERNE ACCOUNTS en externPoort in de worker.
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#7ab648; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#f6f6f8; --rood:#b91c1c; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--groen);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1000px;margin:22px auto;padding:0 18px 40px}
+.kaart{background:#fff;border:1px solid var(--border);border-radius:14px;padding:20px 22px;margin-bottom:16px}
+h2{margin:0 0 6px;font-size:17px;color:var(--groen)}
+p.lead{color:var(--muted);line-height:1.6;margin:0 0 12px;font-size:13px}
+label{display:block;font-size:11.5px;color:var(--muted);margin:0 0 3px}
+input{font:inherit;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:#fff;width:100%}
+.rij{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.rij>div{flex:1 1 170px}
+button{font:inherit;cursor:pointer}
+button.go{background:var(--groen);color:#fff;border:0;border-radius:8px;padding:9px 16px;font-weight:600;white-space:nowrap}
+button.stil{background:#fff;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12.5px;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:7px 6px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:8px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-wrap:break-word}
+.pil{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#e5e7eb;color:#374151;white-space:nowrap}
+.pil.aan{background:#dcfce7;color:#166534}.pil.uit{background:#fee2e2;color:var(--rood)}.pil.half{background:#fef3c7;color:#92400e}
+.msg{margin-top:10px;padding:9px 12px;border-radius:8px;font-size:13px}.msg.ok{background:#dcfce7;color:#166534}.msg.bad{background:#fee2e2;color:var(--rood)}
+.hidden{display:none!important}
+code{background:#f3f4f6;padding:1px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>Externe toegang</h1>
+</header>
+<main>
+  <div class="kaart">
+    <h2>Wat dit is</h2>
+    <p class="lead">Hier geef je iemand van buiten Fonteyn toegang tot het Dashboard, zonder Logic4. Hij krijgt een mail, kiest zelf zijn wachtwoord en logt in via <a id="mLink" href="#" target="_blank"></a>, in elke browser. Hij kan alleen kijken, en alles over Amerika en inkoopprijzen blijft voor hem verborgen. Welke tegels hij ziet, staat in de toegangslijst; vraag Claude om iemand daar in te zetten.</p>
+  </div>
+
+  <div class="kaart">
+    <h2>Uitnodigen</h2>
+    <div class="rij">
+      <div><label>Gebruikersnaam (zoals in de toegangslijst)</label><input id="gGebruiker" placeholder="bv. christiaan" autocapitalize="off"></div>
+      <div><label>Naam</label><input id="gNaam" placeholder="bv. Christiaan"></div>
+      <div style="flex:1.4 1 220px"><label>E-mailadres</label><input id="gEmail" type="email" placeholder="naam@bedrijf.de"></div>
+      <div style="flex:0 0 auto"><button class="go" id="gUitnodigen">Uitnodigen</button></div>
+    </div>
+    <div id="gMsg" class="msg hidden"></div>
+  </div>
+
+  <div class="kaart">
+    <h2>Externen</h2>
+    <table><thead><tr><th>Gebruiker</th><th>Naam</th><th>E-mail</th><th>Stand</th><th>Laatst ingelogd</th><th></th></tr></thead>
+      <tbody id="lijst"><tr><td colspan="6" class="lead">Ophalen…</td></tr></tbody></table>
+  </div>
+</main>
+<script>
+const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
+const TEAM=localStorage.getItem("fp.teamkey")||"";
+const IK=(localStorage.getItem("fp.email")||"").toLowerCase();
+const H={"Content-Type":"application/json","X-Fonteyn-Auth":TEAM,"X-Fonteyn-User":IK};
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+function datum(t){ if(!t) return ""; const d=new Date(t); return d.toLocaleDateString("nl-NL",{day:"numeric",month:"short",year:"numeric"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); }
+function msg(soort,tekst){ const m=document.getElementById("gMsg"); m.className="msg "+soort; m.textContent=tekst; }
+document.getElementById("mLink").href=WORKER+"/m/"; document.getElementById("mLink").textContent=WORKER.replace("https://","")+"/m/";
+
+async function laad(){
+  const tb=document.getElementById("lijst");
+  try{
+    const r=await fetch(WORKER+"/extern/accounts",{headers:H}); const j=await r.json();
+    if(!r.ok||!j.ok) throw new Error("HTTP "+r.status);
+    if(!j.accounts.length){ tb.innerHTML="<tr><td colspan='6' class='lead'>Nodig hierboven de eerste externe uit.</td></tr>"; return; }
+    tb.innerHTML=j.accounts.map(a=>{
+      const stand=!a.actief?"<span class='pil uit'>ingetrokken</span>":a.wachtwoordGezet?"<span class='pil aan'>actief</span>":"<span class='pil half'>uitgenodigd, wacht op wachtwoord</span>";
+      const inGroep=window.fpToegang&&fpToegang.mag("extern",a.gebruiker);
+      return "<tr><td><b>"+esc(a.gebruiker)+"</b>"+(inGroep?"":"<div class='lead' style='color:#92400e;margin:0'>hoort nog in de groep extern te komen</div>")+"</td><td>"+esc(a.naam)+"</td><td>"+esc(a.email)+"</td><td>"+stand+"</td><td>"+esc(datum(a.laatsteLogin))+"</td>"+
+        "<td style='white-space:nowrap'><button class='stil' data-opnieuw='"+esc(a.gebruiker)+"'>"+(a.wachtwoordGezet?"nieuw wachtwoord laten kiezen":"opnieuw uitnodigen")+"</button> "+
+        (a.actief?"<button class='stil' data-uit='"+esc(a.gebruiker)+"'>intrekken</button>":"<button class='stil' data-aan='"+esc(a.gebruiker)+"'>weer toelaten</button>")+"</td></tr>";
+    }).join("");
+    const perNaam=Object.fromEntries(j.accounts.map(a=>[a.gebruiker,a]));
+    tb.querySelectorAll("[data-opnieuw]").forEach(b=>b.onclick=()=>{ const a=perNaam[b.dataset.opnieuw]; uitnodigen(a.gebruiker,a.naam,a.email,b); });
+    tb.querySelectorAll("[data-uit],[data-aan]").forEach(b=>b.onclick=async()=>{
+      b.disabled=true; const wie=b.dataset.uit||b.dataset.aan;
+      await fetch(WORKER+"/extern/intrekken",{method:"POST",headers:H,body:JSON.stringify({gebruiker:wie,actief:!!b.dataset.aan})});
+      if(window.fpLog) window.fpLog(b.dataset.uit?"extern-ingetrokken":"extern-toegelaten",wie); laad(); });
+  }catch(e){ tb.innerHTML="<tr><td colspan='6' class='lead'>Ophalen vraagt een nieuwe poging: "+esc(e.message)+"</td></tr>"; }
+}
+async function uitnodigen(gebruiker,naam,email,knop){
+  if(knop) knop.disabled=true;
+  try{
+    const r=await fetch(WORKER+"/extern/uitnodigen",{method:"POST",headers:H,body:JSON.stringify({gebruiker,naam,email})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    msg(j.gemaild?"ok":"bad", j.gemaild?("De uitnodiging is gemaild naar "+email+". De link is zeven dagen geldig."):("Het account staat klaar, maar de mail vraagt nog een poging; druk hieronder op opnieuw uitnodigen."));
+    if(window.fpLog) window.fpLog("extern-uitgenodigd",gebruiker);
+    laad();
+  }catch(e){ msg("bad",e.message); }
+  finally{ if(knop) knop.disabled=false; }
+}
+document.getElementById("gUitnodigen").onclick=function(){
+  const g=document.getElementById("gGebruiker").value.trim().toLowerCase(), n=document.getElementById("gNaam").value.trim(), e=document.getElementById("gEmail").value.trim();
+  if(!g||!e){ msg("bad","Vul de gebruikersnaam en het e-mailadres in."); return; }
+  uitnodigen(g,n,e,this);
+};
+laad();
+</script>
+</body>
+</html>
