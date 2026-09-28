@@ -398,12 +398,15 @@ async function dpCcAdviseur(env, email) {
   try { return dpAdviseurVan(await dpGetAccounts(env), email); } catch (e) { return null; }
 }
 
-async function dpSendEmail(env, to, subject, html, replyTo, cc) {
+async function dpSendEmail(env, to, subject, html, replyTo, cc, vanNaam) {
   if (!env.RESEND_API_KEY || !env.MAIL_FROM) {
     console.log("[dp-mail] niet geconfigureerd (RESEND_API_KEY/MAIL_FROM ontbreekt)");
     return { ok: false, error: "mail-not-configured" };
   }
-  const body = { from: env.MAIL_FROM, to: [String(to).toLowerCase()], subject, html };
+  /* Zelfde adres, andere naam erboven. Een mail aan Audrey over de wire hoort
+     niet van "Passion Partners" te komen; dat is het portaal voor dealers. */
+  const vanAdres = (String(env.MAIL_FROM).match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM);
+  const body = { from: vanNaam ? vanNaam + " <" + vanAdres + ">" : env.MAIL_FROM, to: [String(to).toLowerCase()], subject, html };
   if (replyTo) body.reply_to = [replyTo];
   /* De adviseur in cc. Meerdere adressen mogen, dubbele en het eigen adres
      gaan eruit - Resend weigert een cc die gelijk is aan de ontvanger. */
@@ -11478,6 +11481,135 @@ async function qbHandleRefundReden(request, env) {
   return reply(200, { ok: true, refund: uit });
 }
 
+/* ── Amerika: de wire naar Fonteyn bewaken ─────────────────────────────
+   Gerrit (28 sep 2026): "Stuur een mail naar Audrey en cc aan Chantal zodra
+   er rond de $40.000,- op de rekening bij is gekomen. Begin met tellen zodra
+   dit live gaat. Stuurt ze geen wire binnen 1 week (7 dagen van 24 uur)?
+   Dan moet er een mail verzonden worden aan Audrey en cc naar Chantal dat de
+   wire nog niet binnen is."
+
+   Wat telt als bijgekomen
+     Wat klanten in QuickBooks hebben betaald (Payment en SalesReceipt), min
+     wat er is terugbetaald (RefundReceipt). Het moment is dat waarop het in
+     QuickBooks is gezet (MetaData.CreateTime), niet de datum op de betaling:
+     zo telt alleen geld dat na het aanzetten binnenkwam, en een betaling die
+     Audrey een paar dagen later invoert telt alsnog mee. Wat nog als losse
+     regel bij de bankkoppeling van QuickBooks wacht, is voor ons onzichtbaar
+     tot het is afgehandeld - dat is hoe QuickBooks het naar buiten geeft.
+
+   Wat telt als wire verstuurd
+     Een nieuw overzicht van Audrey in het tabblad Ontvangen Audrey
+     (qb-wires). Dat is nu het enige teken van een wire dat het systeem
+     heeft. Na zo'n overzicht begint de teller weer bij nul, geteld vanaf
+     het eind van de dag die op het overzicht staat.
+
+   Er gaat per ronde hooguit één verzoek en één herinnering uit, en welke al
+   verstuurd is staat in de toestand. Lukt een mail niet, dan probeert het
+   volgende uur hem opnieuw. Er wordt alleen weggeschreven als er iets
+   veranderd is, want KV heeft duizend schrijfacties per dag. */
+const WIRE_DREMPEL = 40000;
+const WIRE_WACHT_MS = 7 * 24 * 3600 * 1000;
+const WIRE_AAN = "audrey@passionspas.com";
+const WIRE_CC = "chantal@fonteyn.nl";
+const WIRE_SLEUTEL = "amerika-wire-bewaking";
+
+const wireDollar = (n) => "$" + (Number(n) || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const wireDag = (iso) => new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/Chicago" });
+// QuickBooks wil een tijd met zone en zonder milliseconden.
+const wireQbTijd = (iso) => new Date(iso).toISOString().replace(/\.\d{3}Z$/, "-00:00");
+
+async function wireTel(env, vanafIso) {
+  const soorten = [["Payment", 1], ["SalesReceipt", 1], ["RefundReceipt", -1]];
+  const per = {}; let totaal = 0;
+  for (const [soort, teken] of soorten) {
+    let som = 0, aantal = 0;
+    for (let start = 1; start < 5000; start += 1000) {
+      const j = await qbQuery(env, "SELECT * FROM " + soort + " WHERE MetaData.CreateTime >= '" + wireQbTijd(vanafIso) +
+                                   "' STARTPOSITION " + start + " MAXRESULTS 1000");
+      const rijen = (j.QueryResponse && j.QueryResponse[soort]) || [];
+      for (const x of rijen) { som += Number(x.TotalAmt) || 0; aantal++; }
+      if (rijen.length < 1000) break;
+    }
+    som = Math.round(som * 100) / 100;
+    per[soort] = { bedrag: som, aantal };
+    totaal += teken * som;
+  }
+  return { totaal: Math.round(totaal * 100) / 100, per };
+}
+
+function wireMail(soort, s) {
+  const kop = "<div style='font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.55;color:#1f2937;max-width:560px'>";
+  const slot = "<p>Chantal is in cc for any questions.</p><p>Thank you!</p></div>";
+  if (soort === "verzoek") return {
+    onderwerp: "Ready for the next wire to Fonteyn",
+    html: kop + "<p>Hi Audrey,</p>" +
+      "<p>Great news: since the last wire, <b>" + wireDollar(s.teller) + "</b> has come in on the Passion Spas account.</p>" +
+      "<p>Could you send this to Fonteyn as a wire? Please add the usual overview with the invoices and the bank costs, " +
+      "so Chantal can process it right away.</p>" + slot,
+  };
+  return {
+    onderwerp: "Looking forward to the wire to Fonteyn",
+    html: kop + "<p>Hi Audrey,</p>" +
+      "<p>On " + wireDag(s.verzoek.op) + " we asked for the next wire to Fonteyn. Since the last wire, <b>" +
+      wireDollar(s.teller) + "</b> has come in on the Passion Spas account.</p>" +
+      "<p>We are looking forward to receiving the wire, together with the overview of the invoices and the bank costs. " +
+      "Could you send it this week and let Chantal know the date?</p>" + slot,
+  };
+}
+
+async function wireRonde(env, opties) {
+  const proef = !!(opties && opties.proef);
+  const nu = new Date();
+  let s = await env.FONTEYN_DATA.get(WIRE_SLEUTEL, { type: "json" });
+  if (!s) {
+    // Eerste keer: hier begint het tellen.
+    s = { start: nu.toISOString(), ijkpunt: nu.toISOString(), wireGezien: nu.toISOString(),
+          teller: 0, verzoek: null, herinnering: null, geschiedenis: [] };
+    if (!proef) await env.FONTEYN_DATA.put(WIRE_SLEUTEL, JSON.stringify(s));
+    return { ok: true, gestart: s.start, toestand: s };
+  }
+  const voor = JSON.stringify({ ...s, bijgewerkt: null });
+
+  // 1. Is er sinds de vorige keer een overzicht van Audrey ingelezen?
+  const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+  const gezien = Date.parse(s.wireGezien || s.start) || 0;
+  const nieuw = (wires.wires || []).filter(w => (Date.parse(w.ts || "") || 0) > gezien)
+    .sort((a, b) => (Date.parse(b.ts) || 0) - (Date.parse(a.ts) || 0))[0];
+  if (nieuw) {
+    s.geschiedenis = [{ wire: String(nieuw.id), datum: nieuw.datum || null, ingelezen: nieuw.ts, teller: s.teller,
+                        verzoek: (s.verzoek && s.verzoek.op) || null, herinnering: (s.herinnering && s.herinnering.op) || null },
+                      ...(s.geschiedenis || [])].slice(0, 20);
+    s.wireGezien = nieuw.ts;
+    const eindDag = nieuw.datum && /^\d{4}-\d{2}-\d{2}$/.test(nieuw.datum) ? nieuw.datum + "T23:59:59Z" : nieuw.ts;
+    // Nooit later dan het moment van inlezen, anders valt wat daarna binnenkomt tussen wal en schip.
+    const tot = Math.min(Date.parse(eindDag) || 0, Date.parse(nieuw.ts) || Date.now());
+    s.ijkpunt = new Date(Math.max(Date.parse(s.start), tot)).toISOString();
+    s.verzoek = null; s.herinnering = null;
+  }
+
+  // 2. Tellen wat er sinds het ijkpunt is bijgekomen.
+  const t = await wireTel(env, s.ijkpunt);
+  s.teller = t.totaal; s.telling = t.per; s.bijgewerkt = nu.toISOString();
+
+  // 3. Verzoek of herinnering?
+  let actie = null;
+  if (!s.verzoek && s.teller >= WIRE_DREMPEL) actie = "verzoek";
+  else if (s.verzoek && !s.herinnering && nu.getTime() - Date.parse(s.verzoek.op) >= WIRE_WACHT_MS) actie = "herinnering";
+  let mail = null;
+  if (actie) {
+    mail = wireMail(actie, s);
+    if (!proef) {
+      const r = await dpSendEmail(env, WIRE_AAN, mail.onderwerp, mail.html, WIRE_CC, WIRE_CC, "Fonteyn");
+      if (r.ok) { s[actie] = { op: nu.toISOString(), bedrag: s.teller }; s.laatsteFout = null; }
+      else s.laatsteFout = { op: nu.toISOString(), actie, reden: r.reden || r.error || ("status " + r.status) };
+    }
+  }
+  if (!proef && JSON.stringify({ ...s, bijgewerkt: null }) !== voor)
+    await env.FONTEYN_DATA.put(WIRE_SLEUTEL, JSON.stringify(s));
+  return { ok: true, proef, actie, verstuurd: !proef && !!actie && !s.laatsteFout, mail: proef ? mail : undefined,
+           toestand: s, nogTeGaan: Math.max(0, Math.round((WIRE_DREMPEL - s.teller) * 100) / 100) };
+}
+
 async function qbHandleNaarChantal(request, env) {
   if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
   let body = {}; try { body = await request.json(); } catch {}
@@ -15086,6 +15218,14 @@ const FP_WORKER = {
         /* De productie draait op een eigen moment (:30) en dan verder niets.
            Zie wrangler.toml: samen met de rest liep hij tegen het plafond van
            uitgaande aanroepen aan en werden de gegevens dagenlang niet ververst. */
+        /* De wire-bewaking van Amerika draait op :15, los van de rest: hij kost
+           QuickBooks-aanroepen en die horen niet af te gaan van het budget van
+           de voorraadronde op het hele uur. */
+        if (String(event && event.cron || "").startsWith("15 ")) {
+          const wr = await wireRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+          console.log("[cron] wire-bewaking: " + JSON.stringify({ ok: wr.ok, actie: wr.actie || null, teller: wr.toestand && wr.toestand.teller, fout: wr.error || null }));
+          return;
+        }
         if (String(event && event.cron || "").startsWith("30 ")) {
           const pr = await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           console.log("[cron] productie (eigen slot): " + JSON.stringify(pr));
@@ -16193,6 +16333,17 @@ const FP_WORKER = {
     if (url.pathname === "/amerika/qb/koppel-regel" && request.method === "POST") return qbHandleKoppelRegel(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     if (url.pathname === "/amerika/qb/koppel-factuur" && request.method === "POST") return qbHandleKoppelFactuur(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     if (url.pathname === "/amerika/qb/refund-reden" && request.method === "POST") return qbHandleRefundReden(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    /* De wire-bewaking: stand opvragen, of een proefronde die laat zien wat hij
+       nu zou doen (welke mail, welk bedrag) zonder te versturen of op te slaan. */
+    if (url.pathname === "/amerika/wire-bewaking" && request.method === "GET") {
+      if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const st = await env.FONTEYN_DATA.get(WIRE_SLEUTEL, { type: "json" });
+      return reply(200, { ok: true, drempel: WIRE_DREMPEL, aan: WIRE_AAN, cc: WIRE_CC, toestand: st || null });
+    }
+    if (url.pathname === "/amerika/wire-bewaking/proef" && request.method === "POST") {
+      if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      return wireRonde(env, { proef: true }).then(r => reply(200, r)).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    }
     if (url.pathname === "/amerika/qb/naar-chantal" && request.method === "POST") return qbHandleNaarChantal(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     if (url.pathname === "/amerika/qb/verberg" && request.method === "POST") return verbergHandler(request, env, "qb-verborgen");
     if (url.pathname === "/voorraad/verberg" && request.method === "POST") return verbergHandler(request, env, "spa-verborgen");
