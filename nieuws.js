@@ -51,6 +51,21 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-29", bestand: "amerika.html", soort: "hersteld",
+      titel: "Eén invoice voor twee orders",
+      wat: "Staan er in één commercial invoice spa's van twee orders (bijvoorbeeld 3361 en 3366), dan verdeelt Voorraad Houston ze over beide orders. Wat nog niet geladen is, blijft in productie staan. Ook invoices met een tabblad per container worden nu gelezen."
+    },
+    {
+      datum: "2026-09-29", groep: "voorraad-beheer", soort: "beter",
+      titel: "Proforma opnieuw uploaden werkt de inkooporder bij",
+      wat: "Upload je een aangepaste proforma met dezelfde referentie, dan zet het Dashboard alleen de spa's die erbij zijn gekomen in de bestaande inkooporder. Ze staan meteen bij in productie."
+    },
+    {
+      datum: "2026-09-29", bestand: "voorraad.html", soort: "beter",
+      titel: "Partner containers: Texas en direct ophalen",
+      wat: "Containerorders van Amerikaanse dealers op Warehouse Texas staan nu ook bij Partner containers, met het label Texas. Met de knop Nu ophalen uit Logic4 staat een order die je net hebt gemaakt er meteen in. Orders met de status omruiling staan bij de particuliere reserveringen."
+    },
+    {
       datum: "2026-09-29", groep: "voorraad-beheer", soort: "beter",
       titel: "Inkooporders in euro tegen de koers van vandaag",
       wat: "Een inkooporder uit een proforma in dollars komt in Logic4 nu in euro, omgerekend met de dollarkoers van de Europese Centrale Bank van die dag. De koers staat in de opmerking van de inkooporder en in de melding na het aanmaken."

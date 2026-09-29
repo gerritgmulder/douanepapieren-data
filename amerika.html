@@ -669,7 +669,55 @@ function zdSchaal(k){
    productie. Een zending zonder regels (oude invoice, alleen een aantal
    stuks) wordt over de bestelling verdeeld op volgorde, zodat het totaal
    wel klopt. */
+/* EÉN INVOICE, MEERDERE ORDERS.
+   ═══════════════════════════════════════════════════════════════════════
+   Chantal (video 26 sep 2026): in één container kan een deel van 3361 én een
+   deel van 3366 zitten; de invoice heette "3361&3366 to Houston invoice for
+   payment". Die hing aan 3361, dus 3361 stond helemaal onderweg en bij 3366
+   stonden alle 28 nog in productie. Nu: noemt de naam van de invoice meer
+   ordernummers, dan worden de spa's verdeeld over al die orders, per model
+   en kleur, eerst over de order waar hij aan hangt en daarna over de andere.
+   Een invoice waarvan de inhoud nog open is, telt dan bij geen enkele order
+   als verscheept; zo blijft alles in productie tot de inhoud er is. */
+function zdOrderNr(ref){ const m=String(ref||"").match(/(\d{4})(?!.*\d{4})/)||String(ref||"").match(/(\d{4})/); return m?m[1]:null; }
+function zdDoelen(rec,z,alle){
+  const naam=String(z.naam||"")+" "+((z.orders||[]).join(" "));
+  const nrs=(naam.match(/\b\d{4}\b/g)||[]);
+  const andere=(alle||[]).filter(x=>x!==rec&&zdOrderNr(x.ref)&&nrs.includes(zdOrderNr(x.ref)));
+  return [rec].concat(andere);
+}
+let zdVerdelingCache=null;
+function zdVerdeel(alle){
+  const stand=new Map();
+  for(const rec of (alle||[])) stand.set(rec,{regels:(rec.artikelen||[]).map(a=>({model:a.model||a.artikelcode||"?",kleur:a.kleur||"",schaal:zdSchaal(a.kleur),besteld:Number(a.aantal)||0,verscheept:0})),losse:0,alsGeheel:false});
+  for(const rec of (alle||[])) for(const z of zdZendingen(rec)){
+    const doelen=zdDoelen(rec,z,alle);
+    const regels=(z.regels||[]).filter(r=>(Number(r.aantal)||0)>0);
+    if(!regels.length&&!(Number(z.stuks)>0)){ if(doelen.length===1&&z.oud) stand.get(rec).alsGeheel=true; continue; }
+    if(!regels.length){ stand.get(rec).losse+=Number(z.stuks)||0; continue; }
+    for(const r of regels){
+      let rest=Number(r.aantal)||0;
+      for(const d of doelen){
+        const bs=stand.get(d).regels;
+        const past=bs.filter(b=>r.model&&b.model===r.model&&b.schaal&&b.schaal===zdSchaal(r.kleur));
+        const pastModel=bs.filter(b=>r.model&&b.model===r.model);
+        for(const b of past.concat(pastModel)){ if(rest<=0) break; const n=Math.min(rest,b.besteld-b.verscheept); if(n>0){ b.verscheept+=n; rest-=n; } }
+        if(rest<=0) break;
+      }
+      if(rest>0) stand.get(rec).losse+=rest;
+    }
+  }
+  return stand;
+}
 function zdStand(rec){
+  const v=(zdVerdelingCache&&zdVerdelingCache.get(rec))||null;
+  if(v){
+    const besteld=v.regels.map(b=>Object.assign({},b)); let losseStuks=v.losse;
+    for(const b of besteld){ if(losseStuks<=0) break; const n=Math.min(losseStuks,b.besteld-b.verscheept); if(n>0){ b.verscheept+=n; losseStuks-=n; } }
+    if(v.alsGeheel) for(const b of besteld) b.verscheept=b.besteld;
+    const tb=besteld.reduce((n,b)=>n+b.besteld,0), tv=besteld.reduce((n,b)=>n+b.verscheept,0);
+    return {regels:besteld,besteld:tb,verscheept:tv,open:Math.max(0,tb-tv),onbekend:!besteld.length};
+  }
   const besteld=(rec.artikelen||[]).map(a=>({model:a.model||a.artikelcode||"?",kleur:a.kleur||"",schaal:zdSchaal(a.kleur),besteld:Number(a.aantal)||0,verscheept:0}));
   let losseStuks=0, alsGeheel=false;
   for(const z of zdZendingen(rec)){
@@ -728,6 +776,7 @@ function zdTeken(){
   const onderweg=document.getElementById("zdOnderweg");
   if(!inProd||!onderweg) return;
   const alle=zdData||[];
+  zdVerdelingCache=zdVerdeel(alle);
   /* In productie: alles wat nog niet volledig verscheept is. Onderweg: elke
      zending apart, ook als de bestelling nog deels in productie is. */
   const a=alle.filter(x=>{ const s=zdStand(x); return s.onbekend ? !zdZendingen(x).length : s.open>0; });
@@ -752,7 +801,8 @@ function zdTeken(){
       b.map(x=>{ const k=x.rec.ref+"#"+x.z.id; return "<tr class='zdRij' data-ref='"+esc(k)+"' style='cursor:pointer'>"+
         "<td>"+(zdOpen[k]?"▾ ":"▸ ")+"<b>"+esc(x.rec.ref)+"</b>"+(x.delen>1?" <span class='pill' style='background:#eef2ff;color:#3730a3;font-size:10px'>deel "+x.deel+" van "+x.delen+"</span>":"")+
           (x.rec.leverancier?"<br><span style='font-size:11px;color:var(--muted)'>"+esc(x.rec.leverancier)+"</span>":"")+"</td>"+
-        "<td style='font-size:12px'>"+esc((x.z.containers||[]).join(", ")||"—")+"</td><td style='font-size:12px'>"+esc(zdZendingTekst(x.z))+"</td>"+
+        "<td style='font-size:12px'>"+esc((x.z.containers||[]).join(", ")||"—")+"</td><td style='font-size:12px'>"+esc(zdZendingTekst(x.z))+
+          (function(){ const d=zdDoelen(x.rec,x.z,alle); return d.length>1?"<br><span style='font-size:11px;color:var(--muted)'>verdeeld over "+esc(d.map(y=>zdOrderNr(y.ref)||y.ref).join(" + "))+"</span>":""; })()+"</td>"+
         "<td style='font-size:12px'>"+esc(x.z.naam||"—")+"<br><span style='color:var(--muted);font-size:11px'>"+esc(datumNL(x.z.ts))+"</span></td>"+
         "<td onclick='event.stopPropagation()'><input type='date' class='zdEta' data-ref='"+esc(x.rec.ref)+"' data-z='"+esc(x.z.id)+"' value='"+esc(x.z.eta||"")+"' style='padding:6px;font:inherit'></td>"+
         "<td onclick='event.stopPropagation()' style='white-space:nowrap'><button class='btn sm zdUpload' data-ref='"+esc(x.rec.ref)+"' data-z='"+esc(x.z.id)+"' type='button'>vervangen</button> "+
@@ -813,13 +863,37 @@ async function zdBewaar(ref,velden){
         containers=wb.SheetNames.filter(n=>/^[A-Z]{4}\d{7}$/i.test(String(n).trim())).map(n=>String(n).trim().toUpperCase());
         /* Jazzi: code in kolom A (SKT888AA ...), kleur in kolom B, aantal in
            kolom F. Zelfde leeswijze als Voorraadbeheer. */
-        const ws=wb.Sheets["COMMERCIAL INVOICE"]||wb.Sheets["CI"]||wb.Sheets[wb.SheetNames[0]];
-        const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false});
-        for(const r of rows){
-          const c0=String((r&&r[0])==null?"":r[0]).split("\n")[0].trim();
-          const m=c0.match(/^((?:SKT|PP)[\w.-]+)/); const qty=Number(r&&r[5]);
-          if(!m||!isFinite(qty)||qty<=0) continue;
-          zet(c0,String((r&&r[1])==null?"":r[1]),qty);
+        /* Eerst het tabblad met de invoice zelf. Staat die er niet, dan de
+           tabbladen per container samen (een "invoice for payment" met een
+           blad per container, zoals 3361&3366), en anders het eerste blad. */
+        const vast=wb.Sheets["COMMERCIAL INVOICE"]||wb.Sheets["CI"];
+        const perContainer=wb.SheetNames.filter(n=>/^[A-Z]{4}\d{7}$/i.test(String(n).trim()));
+        const bladen=vast?[vast]:(perContainer.length?perContainer.map(n=>wb.Sheets[n]):[wb.Sheets[wb.SheetNames[0]]]);
+        for(const ws of bladen){
+          const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:null,blankrows:false});
+          for(const r of rows){
+            const c0=String((r&&r[0])==null?"":r[0]).split("\n")[0].trim();
+            const m=c0.match(/^((?:SKT|PP)[\w.-]+)/); const qty=Number(r&&r[5]);
+            if(!m||!isFinite(qty)||qty<=0) continue;
+            zet(c0,String((r&&r[1])==null?"":r[1]),qty);
+          }
+          /* Andere indeling: zoek de kopregel met een aantal-kolom en een
+             code- of omschrijvingkolom, en lees daaronder. */
+          if(!regels.length){
+            const kop=rows.findIndex(r=>(r||[]).some(c=>/^(qty|quantity|pcs|q'?ty|aantal)\b/i.test(String(c||"").trim()))&&(r||[]).some(c=>/model|item|code|description|goods/i.test(String(c||""))));
+            if(kop>=0){
+              const k=rows[kop].map(c=>String(c||"").trim().toLowerCase());
+              const kq=k.findIndex(c=>/^(qty|quantity|pcs|q'?ty|aantal)\b/.test(c));
+              const kc=k.findIndex(c=>/model|item no|code/.test(c)), kd=k.findIndex(c=>/description|goods|name/.test(c)), kk=k.findIndex(c=>/colou?r/.test(c));
+              for(const r of rows.slice(kop+1)){
+                const qty=Number(r&&r[kq]); if(!isFinite(qty)||qty<=0) continue;
+                const code=String((kc>=0?r[kc]:r[kd])||"").split("\n")[0].trim(); if(!code) continue;
+                const mdl=(window.spaModel?spaModel(code):null);
+                if(!/^(SKT|PP)/i.test(code)&&!(mdl&&mdl!=="(onbekend SKT-model)")) continue;
+                zet(code,String((kk>=0?r[kk]:"")||""),qty);
+              }
+            }
+          }
         }
         if(!regels.length&&window.fpInvPl){
           try{ const j=fpInvPl.lees(wb); (j&&j.regels||[]).forEach(function(r){ const n=Number(r.aantal)||0; if(n>0) zet(String(r.code||r.omschrijving||""),String(r.kleur||""),n); }); }catch(e){}

@@ -850,9 +850,10 @@
   <div id="tab-partnercont" class="hidden">
     <div class="card">
       <h3>Partner containers - rechtstreeks naar de dealer</h3>
-      <p class="lead" style="font-size:12px;margin-bottom:10px">Uitsluitend orders op magazijn <b>Dealer magazijn</b>: containers die rechtstreeks naar de partner gaan, buiten de Fonteyn-voorraad om. Daarom staan ze alleen hier, apart van Overzicht en Reserveringen. Een gewone partnerorder met meerdere spa's telt als partnerorder en staat onder <b>Partner</b>. Klik op het <b>ordernummer</b> voor de volledige inhoud van de container. Het containernummer komt uit <b>Uw referentie</b> in Logic4 (bijvoorbeeld "container 3376").</p>
+      <p class="lead" style="font-size:12px;margin-bottom:10px">Orders op magazijn <b>Dealer magazijn</b>, en containerorders van Amerikaanse dealers op <b>Warehouse Texas</b> (label Texas): containers die rechtstreeks naar de partner gaan, buiten de Fonteyn-voorraad om. Daarom staan ze alleen hier, apart van Overzicht en Reserveringen. Een gewone partnerorder met meerdere spa's telt als partnerorder en staat onder <b>Partner</b>. Klik op het <b>ordernummer</b> voor de volledige inhoud van de container. Het containernummer komt uit <b>Uw referentie</b> in Logic4 (bijvoorbeeld "container 3376").</p>
       <div class="actions" style="gap:10px;align-items:center;margin-top:0">
         <input id="pcSearch" placeholder="zoek op model, klantnaam of ordernummer…" style="min-width:300px;padding:8px">
+        <button class="btn" type="button" id="resvNuOphalen" title="Haalt de orders nu meteen op uit Logic4, zodat een order die je net hebt aangemaakt hier direct staat">Nu ophalen uit Logic4</button>
         <span id="pcCount" style="font-size:12px;color:var(--muted)"></span>
       </div>
       <div id="pcList" style="margin-top:12px"></div>
@@ -2289,6 +2290,26 @@ async function loadReserveringen(){
   renderReserveringen();
   renderSoortTabs();
 }
+/* Nu ophalen. Chantal (video 26 sep 2026): een order die ze in Logic4
+   aanmaakt, stond pas bij de volgende ronde (elk uur) in het Dashboard, en
+   pas dan kon ze er de proforma en documenten bij zetten. Met deze knop
+   haalt de server de reserveringen meteen opnieuw op. */
+async function resvNuOphalen(knop){
+  const oud=knop?knop.textContent:"";
+  if(knop){ knop.disabled=true; knop.textContent="ophalen uit Logic4…"; }
+  try{
+    const r=await fetch("https://fonteyn-data-store.g-mulder.workers.dev/voorraad/reserveringen-verversen",{method:"POST",
+      headers:{"Content-Type":"application/json","X-Fonteyn-Auth":DATA_STORE_AUTH,"X-Fonteyn-User":(localStorage.getItem("fp.email")||"")}});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    await loadReserveringen();
+    if(typeof renderPartnerContainers==="function") renderPartnerContainers();
+    if(knop) knop.textContent="bijgewerkt ✓";
+    try{ if(window.fpLog) window.fpLog("reserveringen-nu-opgehaald",j.vers?"vers":"was net ververst"); }catch(e){}
+  }catch(e){ if(knop) knop.textContent="nog een keer proberen"; console.warn("nu ophalen:",e); }
+  finally{ if(knop){ knop.disabled=false; setTimeout(()=>{ knop.textContent=oud; },4000); } }
+}
+document.addEventListener("click",function(e){ const b=e.target.closest&&e.target.closest("#resvNuOphalen"); if(b) resvNuOphalen(b); });
 function resvTypeBadge(t){
   if(t==="partner") return "<span class='pill s1'>partner</span>";
   if(t==="zakelijk") return "<span class='pill' style='background:#e0e7ff;color:#3730a3'>zakelijk</span>";
@@ -3660,12 +3681,29 @@ function renderAdviseurTabs(){
 // van de container. Het containernummer komt uit 'Uw referentie' in Logic4
 // ("container 3376"); daarmee wordt straks ook de commercial invoice gekoppeld.
 let pcOpen={};
+/* Containerorders van Amerikaanse dealers (magazijn Warehouse Texas) horen
+   er ook bij. Chantal (video 26 sep 2026) zocht order 3522323 van Choice
+   Pool & Spa, "Warehouse Texas, in zijn container", en vond hem hier niet:
+   deze lijst keek alleen naar Nederland. Een Amerikaanse order is een
+   containerorder als de referentie met "Container" begint; het nummer is het
+   getal direct daarachter ("Container  QuickBooks 3688" heeft er nog geen). */
+function pcUsaRegels(){
+  const uit=[];
+  for(const [model,list] of Object.entries(resvData.byModelUSA||{}))
+    for(const r of (list||[])){
+      const ref=String(r.referentie||"");
+      if(!/^\s*container\b/i.test(ref)) continue;
+      const nr=(ref.match(/container\s+(\d{3,5})\b/i)||[])[1]||null;
+      uit.push(Object.assign({model},r,{containerNr:nr,usa:true}));
+    }
+  return uit;
+}
 function pcOrders(){
   const per={};
-  for(const r of resvAlleRegels().filter(x=>x.container)){
+  for(const r of resvAlleRegels().filter(x=>x.container).concat(pcUsaRegels())){
     const k=String(r.ordernr);
     const o=per[k]||(per[k]={ordernr:r.ordernr,naam:r.naam,datum:r.datum,betaald:r.betaald,
-      betaaldPct:r.betaaldPct,containerNr:r.containerNr||null,referentie:r.referentie||null,regels:[],qty:0});
+      betaaldPct:r.betaaldPct,containerNr:r.containerNr||null,referentie:r.referentie||null,regels:[],qty:0,usa:!!r.usa});
     o.regels.push(r); o.qty+=Number(r.qty)||0;
     if(!o.containerNr&&r.containerNr) o.containerNr=r.containerNr;
     if(!o.referentie&&r.referentie) o.referentie=r.referentie;
@@ -3748,7 +3786,7 @@ function renderPartnerContainers(){
       "<td>"+(o.containerNr?("<b>"+esc(o.containerNr)+"</b>")
         :(o.referentie?"<span style='font-size:12px;color:var(--muted)'>"+esc(o.referentie)+"</span>"
                       :"<span style='color:var(--warn);font-size:12px'>nog invullen in Logic4</span>"))+"</td>"+
-      "<td style='white-space:normal'>"+esc(o.naam)+"</td>"+
+      "<td style='white-space:normal'>"+esc(o.naam)+(o.usa?" <span class='pill' style='background:#e0e7ff;color:#3730a3;font-size:10px'>Texas</span>":"")+"</td>"+
       "<td style='font-size:12px'>"+esc(datumNL(o.datum))+"</td>"+
       "<td>"+betaalBadge(o)+"</td>"+
       "<td style='font-size:12px;white-space:normal'>"+(etaInfo.eta

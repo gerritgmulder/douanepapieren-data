@@ -4705,7 +4705,12 @@ async function dpRefreshHalStock(env) {
      4/19 Offerte       - nog geen order
      34 Retour/Omruilen - een terugkomende spa, geen levering die je inplant
    Komt daar een keer discussie over, dan is dit de plek. */
-const DP_RESV_STATUSES = [15, 25, 1, 28, 30, 17, 8, 29, 6, 32, 31, 26, 27];
+/* 34 = omruiling/retour. Chantal (29 sep 2026): "order 3520139 wordt niet
+   herkend door het dashboard, heeft status omruiling/retour in Logic. Deze
+   moet zichtbaar worden bij particulier reserveringen." Een omruiling heeft
+   een spa die nog uitgeleverd moet worden; een echte retour heeft een
+   negatief aantal en valt vanzelf buiten de lijst (open is dan niet > 0). */
+const DP_RESV_STATUSES = [15, 25, 1, 28, 30, 17, 8, 29, 6, 32, 31, 26, 27, 34];
 /* Hoe die statussen heten. GetOrderStatuses van Logic4 geeft ons niets
    bruikbaars terug en op de order zelf blijft OrderStatus.Name leeg, dus deze
    lijst staat hier. Manon vroeg terecht "over welk vinkje heb je het?"; met
@@ -4713,7 +4718,7 @@ const DP_RESV_STATUSES = [15, 25, 1, 28, 30, 17, 8, 29, 6, 32, 31, 26, 27];
 const DP_STATUS_NAMEN = { 15: "wachten op aanbetaling", 25: "30% aanbetaald", 1: "verkooporder",
   28: "gepland, wacht op betaling", 30: "volledig betaald, vrijgeven leveren",
   17: "te factureren", 8: "wordt gepickt", 29: "afhaal", 6: "bestellen",
-  32: "nalevering", 31: "niet op voorraad", 26: "op afroep", 27: "wordt gemonteerd" };
+  32: "nalevering", 31: "niet op voorraad", 26: "op afroep", 27: "wordt gemonteerd", 34: "omruiling/retour" };
 const WH_NAMES = { 19: "Geen", 20: "OUD Kelder", 21: "Fonteyn", 25: "Showroommodel", 26: "Outlet", 27: "Dealer magazijn", 49: "Derving", 50: "Warehouse Texas USA", 51: "Transporteur", 52: "Retouren" };
 const WH_TEXAS = 50, WH_DEALER = 27;
 /* Kleur uit de regelomschrijving. Die is opgebouwd met streepjes:
@@ -5287,6 +5292,38 @@ function koersTekst(k) {
   return "1 EUR = " + String(k.koers).replace(".", ",") + " USD (ECB" + (k.datum ? " " + k.datum.split("-").reverse().join("-") : "") + ")";
 }
 
+/* Eén inkooporder opnieuw in voorraad-productie zetten (zie dpRefreshProductie
+   voor de volledige ronde; die draait om de zes uur). */
+async function prodVernieuwIko(env, token, ikoId, fabriek, ref) {
+  const catalog = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const codeToModel = {}, codeToKleur = {}, codeToUitvoering = {};
+  for (const [model, variants] of Object.entries(catalog.models || {})) for (const v of variants) {
+    codeToModel[v.code] = model;
+    const stukken = String(v.desc || "").split("|").map(x => x.trim());
+    codeToKleur[v.code] = stukken.length > 1 ? stukken[1] : "";
+    codeToUitvoering[v.code] = stukken.length > 2 ? stukken.slice(2).join(" ") : "";
+  }
+  const r = await fetch("https://api.logic4server.nl/v3/BuyOrders/GetBuyOrderRowsByFilter", {
+    method: "POST", headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify({ BuyOrderId: Number(ikoId), TakeRecords: 200 }) });
+  if (!r.ok) return false;
+  const j = await r.json().catch(() => []);
+  const rows = Array.isArray(j) ? j : ((j && j.Records) || []);
+  const prod = (await env.FONTEYN_DATA.get("voorraad-productie", { type: "json" })) || { models: {} };
+  prod.models = prod.models || {};
+  for (const m of Object.keys(prod.models)) prod.models[m] = (prod.models[m] || []).filter(x => Number(x.iko) !== Number(ikoId));
+  for (const x of rows) {
+    const code = String(x.ProductCode || ""), model = codeToModel[code]; if (!model) continue;
+    const qty = Number(x.QtyToDeliver) || Number(x.QtyToOrder) || 0; if (qty <= 0) continue;
+    (prod.models[model] = prod.models[model] || []).push({ iko: Number(ikoId), fabriek, ref: String(ref || "").slice(0, 80) || null,
+      qty, eta: (x.ExpectedDeliveryDate || "").slice(0, 10) || null, code, kleur: codeToKleur[code] || null, uitvoering: codeToUitvoering[code] || null });
+  }
+  for (const m of Object.keys(prod.models)) if (!prod.models[m].length) delete prod.models[m];
+  prod.updated = new Date().toISOString();
+  await env.FONTEYN_DATA.put("voorraad-productie", JSON.stringify(prod));
+  return true;
+}
+
 async function ikoAanmaken(env, body) {
   const crediteurId = Number(body.crediteurId);
   const regels = Array.isArray(body.regels) ? body.regels : [];
@@ -5309,8 +5346,9 @@ async function ikoAanmaken(env, body) {
      dan doen we er zoveel als veilig is en zeggen we hoeveel er nog over
      zijn, in plaats van het te proberen en stuk te gaan. */
   const MAX_REGELS = 20;
-  const restant = regels.length > MAX_REGELS ? regels.slice(MAX_REGELS) : [];
-  const teDoen = regels.slice(0, MAX_REGELS);
+  let restant = regels.length > MAX_REGELS ? regels.slice(MAX_REGELS) : [];
+  let teDoen = regels.slice(0, MAX_REGELS);
+  let alAanwezigLijst = [];
 
   // Dubbel aanmaken voorkomen: dezelfde proforma-referentie mag maar één keer.
   // Zonder dit levert een dubbele klik twee inkooporders op bij de fabriek.
@@ -5373,7 +5411,28 @@ async function ikoAanmaken(env, body) {
     const bestaand = await call("/v3/BuyOrders/GetBuyOrderRowsByFilter", { BuyOrderId: buyOrderId, TakeRecords: 500 });
     const rijen = Array.isArray(bestaand) ? bestaand : ((bestaand && bestaand.Records) || []);
     const alAanwezig = new Set(rijen.map(x => String(x.ProductCode || "")));
-    const dubbelOp = regels.filter(r => alAanwezig.has(String(r.artikelcode)));
+    /* ALLEEN WAT ER NIEUW IS.
+       ═══════════════════════════════════════════════════════════════════
+       Chantal (video 26 sep 2026): Arno en zij zetten na de eerste bestelling
+       nog wat speciale spa's bij, de fabriek past de proforma aan, en dan wil
+       ze diezelfde proforma opnieuw uploaden zodat de bestaande inkooporder
+       wordt bijgewerkt: "dit heb ik al in Logic staan en dit staat er nu op
+       de proforma". Dus per artikel: wat de proforma nu noemt, min wat er al
+       op de inkooporder staat. Alleen het verschil gaat erbij. */
+    if (body.alleenVerschil) {
+      const staat = {};
+      for (const x of rijen) staat[String(x.ProductCode || "")] = (staat[String(x.ProductCode || "")] || 0) + (Number(x.QtyToOrder) || 0);
+      const erbij = [];
+      for (const r of regels) {
+        const code = String(r.artikelcode), wil = Number(r.aantal) || 0, al = staat[code] || 0;
+        const nodig = wil - al;
+        staat[code] = Math.max(0, al - wil);
+        if (nodig > 0) erbij.push(Object.assign({}, r, { aantal: nodig }));
+        else alAanwezigLijst.push({ artikelcode: code, aantal: wil });
+      }
+      teDoen = erbij.slice(0, MAX_REGELS); restant = erbij.slice(MAX_REGELS);
+    }
+    const dubbelOp = body.alleenVerschil ? [] : regels.filter(r => alAanwezig.has(String(r.artikelcode)));
     if (dubbelOp.length && !body.tochDubbeleRegels)
       return { ok: false, dubbeleRegels: dubbelOp.map(r => r.artikelcode),
         error: "Deze artikelen staan al op inkooporder " + buyOrderId + ": " + dubbelOp.map(r => r.artikelcode).join(", ") +
@@ -5429,8 +5488,18 @@ async function ikoAanmaken(env, body) {
     }
     await env.FONTEYN_DATA.put("voorraad-inkooporders", JSON.stringify(reeds));
   }
+  /* Meteen bij "in productie" zetten, zonder te wachten op de ronde van zes
+     uur: van deze ene inkooporder de regels opnieuw lezen en in
+     voorraad-productie vervangen. Chantal: "ik moet hem dan ook zichtbaar
+     krijgen bij overzicht als in productie". */
+  let productieBijgewerkt = false;
+  if (toegevoegd.length) {
+    try { productieBijgewerkt = await prodVernieuwIko(env, token, buyOrderId, body.leverancier || "", (reeds.orders[ref] || {}).remarks || ("Proforma " + (ref || ""))); }
+    catch (e) { console.log("[productie] direct bijwerken: " + String(e.message || e)); }
+  }
   return { ok: mislukt.length === 0 && !restant.length, buyOrderId,
-    toegevoegd: toegevoegd.length, mislukt, aangevuld: !!aanvullenOp,
+    toegevoegd: toegevoegd.length, mislukt, aangevuld: !!aanvullenOp, productieBijgewerkt,
+    alAanwezig: alAanwezigLijst, toegevoegdeRegels: teDoen.filter(r => toegevoegd.includes(r.artikelcode)).map(r => ({ artikelcode: r.artikelcode, model: r.model || null, kleur: r.kleur || null, aantal: r.aantal })),
     koers: koers || null, koersTekst: koers ? koersTekst(koers) : null,
     /* Wat er niet meer bij paste. Het scherm stuurt die in een volgend blok
        met aanvullenOp; komt het van elders, dan is hier te zien wat er mist. */
@@ -7712,7 +7781,17 @@ function pcVandaag() {
 }
 function pcOrdersUitLedger(ledger) {
   const per = {};
-  for (const lijst of Object.values((ledger && ledger.byModel) || {})) {
+  /* Ook de containerorders van Amerikaanse dealers (Warehouse Texas): de
+     referentie begint met "Container", het nummer staat er direct achter.
+     Chantal (26 sep 2026) miste order 3522323 van Choice Pool & Spa. */
+  const usa = [];
+  for (const lijst of Object.values((ledger && ledger.byModelUSA) || {}))
+    for (const r of (lijst || [])) {
+      const ref = String((r && r.referentie) || "");
+      if (!/^\s*container\b/i.test(ref)) continue;
+      usa.push(Object.assign({}, r, { container: true, usa: true, containerNr: (ref.match(/container\s+(\d{3,5})\b/i) || [])[1] || null }));
+    }
+  for (const lijst of Object.values((ledger && ledger.byModel) || {}).concat([usa])) {
     for (const r of (lijst || [])) {
       if (!r || !r.container) continue;
       const k = String(r.ordernr);
@@ -15833,6 +15912,15 @@ const FP_WORKER = {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const body = await request.json().catch(() => ({}));
       return reply(200, await ikoVoorstel(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    /* Reserveringen nu meteen verversen (knop in Voorraadbeheer). Hooguit eens
+       per twee minuten: is hij net ververst, dan komt die stand terug. */
+    if (url.pathname === "/voorraad/reserveringen-verversen" && request.method === "POST") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      const nu = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
+      if (nu.updated && Date.now() - Date.parse(nu.updated) < 2 * 60000) return reply(200, { ok: true, vers: false, updated: nu.updated });
+      const rv = await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+      return reply(200, { ok: rv && rv.ok !== false, vers: true, resultaat: rv, error: rv && rv.error });
     }
     // De dollarkoers die een inkooporder nu zou krijgen (teamsleutel).
     if (url.pathname === "/wisselkoers/usd" && request.method === "GET") {

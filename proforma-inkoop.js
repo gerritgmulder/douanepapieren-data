@@ -334,7 +334,7 @@ async function ikoAanvullen(bestaandeOrder){
   if(s.blokkeert.length){ ikoStatus("bad",s.blokkeert.length+" regel(s) wachten nog op een artikelcode - vul die aan of vink 'Overslaan' aan."); return; }
   if(!s.mee.length){ ikoStatus("bad","Er blijven 0 regels over om toe te voegen."); return; }
   const aantal=s.mee.reduce((n,r)=>n+r.aantal,0);
-  if(!confirm("Aanvullen in inkooporder "+bestaandeOrder+"?\n\n"+s.mee.length+" regels · "+aantal+" spa's worden toegevoegd aan de bestaande inkooporder.\n\nArtikelen die er al op staan worden overgeslagen, dus alles wordt één keer besteld.")) return;
+  if(!confirm("Inkooporder "+bestaandeOrder+" bijwerken met deze proforma?\n\nHet Dashboard legt de proforma naast wat er al in de inkooporder staat en zet alleen de spa's erbij die nieuw zijn of waarvan er nu meer staan. Wat er al in staat, blijft zoals het is.")) return;
   const knop=document.getElementById("ikoAanvullen");
   if(knop){ knop.disabled=true; knop.textContent="Bezig…"; }
   try{
@@ -342,12 +342,15 @@ async function ikoAanvullen(bestaandeOrder){
       headers:{"Content-Type":"application/json","X-DP-Admin":C.adminKey(),"X-Fonteyn-Auth":C.teamKey(),"X-Fonteyn-User":String(C.email||"").toLowerCase()},
       body:JSON.stringify({crediteurId:Number((document.getElementById("ikoCred")||{}).value||0),
         regels:s.mee, referentie:(document.getElementById("ikoRef").value||"").trim(),
-        aanvullenOp:bestaandeOrder, bestemming:C.bestemming,
+        aanvullenOp:bestaandeOrder, alleenVerschil:true, bestemming:C.bestemming, leverancier:(function(){ var e=document.getElementById("ikoCred"), o=e&&e.options&&e.options[e.selectedIndex]; return o?o.textContent:""; })(),
         eta:(document.getElementById("ikoEta").value||null), door:(C.email)})});
     const j=await r.json().catch(()=>({}));
     if(j.dubbeleRegels){ ikoStatus("warn",j.error); if(knop){ knop.disabled=false; knop.textContent="Aanvullen in inkooporder "+bestaandeOrder; } return; }
     if(!j.ok&&!j.buyOrderId) throw new Error(j.error||("HTTP "+r.status));
-    ikoStatus("ok","Inkooporder "+j.buyOrderId+" aangevuld met "+j.toegevoegd+" regel(s)."+
+    const erbij=(j.toegevoegdeRegels||[]).map(x=>x.aantal+"x "+(x.model||x.artikelcode)+(x.kleur?" "+x.kleur:"")).join(", ");
+    ikoStatus("ok",(j.toegevoegd?("Inkooporder "+j.buyOrderId+" bijgewerkt: "+erbij+" erbij."):("Alles van deze proforma stond al in inkooporder "+j.buyOrderId+"."))+
+      ((j.alAanwezig||[]).length?(" "+j.alAanwezig.length+" regel(s) stonden er al in."):"")+
+      (j.productieBijgewerkt?" De nieuwe spa's staan meteen bij 'in productie'.":"")+
       (j.koersTekst?(" De dollarprijzen staan in euro, omgerekend tegen "+j.koersTekst+"."):"")+
       (j.mislukt&&j.mislukt.length?(" "+j.mislukt.length+" regel(s) nog open: "+j.mislukt.map(m=>m.artikelcode+" ("+m.fout+")").join("; ")):""));
     if(knop){ knop.textContent="Aangevuld ✓"; }
@@ -409,13 +412,13 @@ async function ikoAanmaken(){
     if(j&&!j.dubbel) j={ok:!alleMislukt.length,buyOrderId:orderId,toegevoegd:totaalToegevoegd,mislukt:alleMislukt};
     if(j.dubbel){
       // Niet alleen melden dát het al bestaat, maar ook de uitweg aanbieden.
-      ikoStatus("warn",j.error+" Wil je de regels van deze proforma aan die inkooporder toevoegen, gebruik dan de knop hieronder.");
+      ikoStatus("warn",j.error+" Is de proforma aangepast (spa's erbij)? Met de knop hieronder zet het Dashboard alleen wat er nieuw is in die inkooporder.");
       const balk=document.getElementById("ikoTelling");
       if(balk&&!document.getElementById("ikoAanvullen")){
         const b=document.createElement("button");
         b.className="btn solid"; b.id="ikoAanvullen"; b.type="button";
         b.style.marginLeft="8px";
-        b.textContent="Aanvullen in inkooporder "+j.bestaandeOrder;
+        b.textContent="Inkooporder "+j.bestaandeOrder+" bijwerken met deze proforma";
         b.addEventListener("click",function(){ ikoAanvullen(j.bestaandeOrder); });
         balk.parentNode.insertBefore(b,balk);
       }
