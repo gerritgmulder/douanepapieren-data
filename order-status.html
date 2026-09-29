@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fonteyn — Orderstatus</title>
+<script src="toegang.js"></script>
 <script src="taal.js"></script>
 <script src="kop.js"></script>
 <script src="breedte.js"></script>
@@ -718,7 +719,10 @@ async function boot() {
 
   el("userEmail").textContent = email || "—";
 
-  const allowed = ALLOWED_USERS.map(s => s.toLowerCase()).includes(String(email).toLowerCase());
+  /* De groep orderstatus in toegang.js is leidend; de lijst is het vangnet. */
+  const allowed = (window.fpToegang && typeof fpToegang.mag === "function")
+    ? fpToegang.mag("orderstatus", String(email).toLowerCase())
+    : ALLOWED_USERS.map(s => s.toLowerCase()).includes(String(email).toLowerCase());
   if (!allowed) {
     el("accessDenied").classList.remove("hidden");
     return;

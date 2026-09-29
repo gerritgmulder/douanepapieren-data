@@ -91,6 +91,12 @@
     "extern": [
       "christiaan",
     ],
+    /* Maandcontrole los van de rest van Administratie (proef), zodat de
+       accountant alleen deze tegel uit die groep krijgt (Frank Hop,
+       29 sep 2026). Zelfde mensen als administratie-proef, plus de accountant. */
+    "maandcontrole": [
+      "accountant", "dolf", "fonteynbot", "gerrit",
+    ],
     // Externe toegang: wie externen mag uitnodigen (tegel externen.html).
     "externen": [
       "dolf", "fonteynbot", "gerrit",
@@ -102,7 +108,7 @@
     /* Ketenbewaking: proef. Gerrit (18 sep 2026): "eerst in een testomgeving
        voor mij, zodat ik het kan beoordelen (Fonteynbot dus)". */
     "keten": [
-      "dolf", "fonteynbot", "gerrit",
+      "accountant", "dolf", "fonteynbot", "gerrit",
     ],
     /* PIBs, Partners in Business: de uren en de meter van de ingehuurde
        partijen. Alleen Dolf en Gerrit (Gerrit, 15 sep 2026). */
@@ -170,7 +176,7 @@
     ],
     // Geld-goederenbeweging
     "geldgoederen": [
-      "dolf", "fonteynbot", "gerrit", "osman",
+      "accountant", "dolf", "fonteynbot", "gerrit", "osman",
     ],
     // Koeien
     "koeien": [
@@ -192,7 +198,7 @@
     ],
     // Orderstatus
     "orderstatus": [
-      "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
+      "accountant", "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
     ],
     // Douanepapieren en Inkomende goederen
     "papieren": [
@@ -308,7 +314,7 @@
     ],
     // Rapportage
     "rapportage": [
-      "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
+      "accountant", "arno", "dolf", "don", "fonteynbot", "gerrit", "osman",
     ],
     /* Nieuwe leverancier inlezen uit een proforma. Inkoop en administratie:
        Chantal en Arno lezen de proforma's in, Gretha beheert de prijslijsten,
@@ -333,7 +339,7 @@
     ],
     // Stuurcijfers
     "stuurcijfers": [
-      "dolf", "fonteynbot", "osman",
+      "accountant", "dolf", "fonteynbot", "osman",
     ],
     /* Vertalen. Begon bij Chantal voor de dealermails, maar Gerrit
        (19 aug 2026): "Vertalen-tegel mag voor iedereen zichtbaar zijn!"

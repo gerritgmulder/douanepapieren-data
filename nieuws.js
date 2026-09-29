@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-29", bestand: "rapportage.html", soort: "hersteld",
+      titel: "Rapportage, Orderstatus en Stuurcijfers volgen de toegangslijst",
+      wat: "Wie voor deze tegels is aangemeld, komt er nu ook echt in. Eerder hielden ze een eigen lijstje bij, waardoor bijvoorbeeld Osman er niet in kwam."
+    },
+    {
       datum: "2026-09-29", bestand: "amerika.html", soort: "hersteld",
       titel: "Eén invoice voor twee orders",
       wat: "Staan er in één commercial invoice spa's van twee orders (bijvoorbeeld 3361 en 3366), dan verdeelt Voorraad Houston ze over beide orders. Wat nog niet geladen is, blijft in productie staan. Ook invoices met een tabblad per container worden nu gelezen."

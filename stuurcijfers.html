@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Fonteyn Stuurcijfers</title>
+<script src="toegang.js"></script>
 <script src="taal.js"></script>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -545,7 +546,10 @@ async function boot() {
     if (!r.ok) { window.location.href = "dashboard.html"; return; }
     const j = await r.json();
     const email = (j.user?.email || "").toLowerCase();
-    if (!ALLOWED.has(email)) {
+    /* De groep stuurcijfers in toegang.js is leidend; de lijst hierboven is
+       het vangnet als toegang.js niet laadt (accountant erbij, 29 sep 2026). */
+    const mag = (window.fpToegang && typeof fpToegang.mag === "function") ? fpToegang.mag("stuurcijfers", email) : ALLOWED.has(email);
+    if (!mag) {
       sessionStorage.removeItem(UNLOCK_KEY);
       window.location.href = "dashboard.html";
       return;

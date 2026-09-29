@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Fonteyn — Rapportage</title>
+<script src="toegang.js"></script>
 <script src="taal.js"></script>
 <script src="kop.js"></script>
 <script src="breedte.js"></script>
@@ -335,11 +336,13 @@ const RAPPORTAGE_ALLOWED = new Set([
 ]);
 (function accessCheck() {
   const email = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
-  if (!RAPPORTAGE_ALLOWED.has(email)) {
+  /* De groep rapportage in toegang.js is leidend; de lijst is het vangnet. */
+  const mag = (window.fpToegang && typeof fpToegang.mag === "function") ? fpToegang.mag("rapportage", email) : RAPPORTAGE_ALLOWED.has(email);
+  if (!mag) {
     document.body.innerHTML =
       "<main style='padding:40px;text-align:center;'>" +
       "<h1>Rapportage</h1>" +
-      "<p>Rapportage is alleen voor Gerrit, Don, Arno, Dolf en Fonteynbot.</p>" +
+      "<p>Deze tegel is voor wie de rapportage volgt.</p>" +
       "<p><a href='dashboard.html'>← Terug naar dashboard</a></p></main>";
     throw new Error("Geen toegang");
   }
