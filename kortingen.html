@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<script src="toegang.js"></script>
+<script src="taal.js"></script>
+<script src="kop.js"></script>
+<script src="breedte.js"></script>
+<script>
+  (function(){
+    if (!localStorage.getItem("fp.session")) { location.replace("dashboard.html"); return; }
+    var ik = (localStorage.getItem("fp.email")||"").toLowerCase();
+    if (window.fpToegang && !fpToegang.mag("kortingen", ik)) {
+      document.addEventListener("DOMContentLoaded", function(){
+        document.body.innerHTML = '<div style="max-width:420px;margin:14vh auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:34px;text-align:center;font-family:Montserrat,system-ui,sans-serif">' +
+          '<h2 style="color:#144734;margin:0 0 8px">Toegang op aanvraag</h2><p style="color:#6b7280">Deze tegel is voor wie de kortingen volgt.</p>' +
+          '<a href="dashboard.html">&larr; Terug naar het dashboard</a></div>';
+      });
+    }
+  })();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Kortingen - Fonteyn Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- ══════════════════════════════════════════════════════════════════════
+     KORTINGEN
+
+     Wie geeft wanneer op welke producten korting? Frank Hop en zijn collega
+     (accountant, sep 2026): per order, per artikel, per adviseur en per
+     afdeling, en of een korting buiten iemands bevoegdheid valt. In Logic4 zijn
+     de kortingen niet dicht te zetten, dus controle achteraf.
+
+     De cijfers komen per maand van de worker (/kortingen, zie KORTINGEN in
+     worker.js): regelkorting = korting op een orderregel, orderkorting = een
+     losse regel "Korting", compensatie = garantie of compensatie (apart, geen
+     verkoopkorting). Bedragen exclusief btw. Afdeling = de hoofdproductgroep
+     van het artikel in Logic4.
+
+     De grens ("laat oplichten boven") staat voorlopig op één percentage voor
+     iedereen; zodra de officiële kortingsmogelijkheden per persoon of
+     productgroep bekend zijn, komen die ervoor in de plaats.
+     Voorlopig alleen Fonteynbot (Gerrit, 29 sep 2026).
+     ══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{ --groen:#144734; --lime:#7ab648; --ink:#1f2937; --muted:#6b7280; --border:#e5e7eb; --bg:#f6f6f8; --rood:#b91c1c; --oranje:#b45309; }
+*{box-sizing:border-box}
+body{margin:0;font-family:"Montserrat",system-ui,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--groen);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;font-weight:600;flex:1}
+main{max-width:1200px;margin:22px auto;padding:0 18px 40px}
+.kaart{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 20px;margin-bottom:16px}
+h2{margin:0 0 6px;font-size:17px;color:var(--groen)}
+p.lead{color:var(--muted);line-height:1.6;margin:0 0 10px;font-size:13px}
+label{display:block;font-size:11.5px;color:var(--muted);margin:0 0 3px}
+input,select{font:inherit;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:#fff}
+.rij{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+button{font:inherit;cursor:pointer}
+button.go{background:var(--groen);color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:600;white-space:nowrap}
+.kpis{display:flex;gap:10px;flex-wrap:wrap;margin:4px 0 0}
+.kpi{flex:1 1 150px;background:#f9fafb;border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+.kpi b{display:block;font-size:19px;color:var(--groen)}.kpi span{font-size:11px;color:var(--muted)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.tabs button{background:#fff;border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:13px}
+.tabs button.aan{background:var(--groen);border-color:var(--groen);color:#fff;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:13px;table-layout:fixed}
+th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.04em;padding:7px 6px;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer}
+td{padding:8px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top;overflow-wrap:break-word}
+td.n,th.n{text-align:right}
+tr.boven td{background:#fef2f2}
+tr.boven td.pct{color:var(--rood);font-weight:700}
+tr.klik{cursor:pointer}tr.klik:hover td{background:#f9fafb}
+tr.detail td{background:#fafafa;font-size:12px}
+.pil{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:999px;background:#e5e7eb;color:#374151;white-space:nowrap}
+.pil.order{background:#e0e7ff;color:#3730a3}.pil.comp{background:#fef3c7;color:#92400e}
+.msg{margin-top:10px;padding:9px 12px;border-radius:8px;font-size:13px;background:#eef2ff;color:#3730a3}
+.hidden{display:none!important}
+.meta{font-size:11.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <a class="fp-kop-knop" href="dashboard.html">&larr; Dashboard</a>
+  <h1>Kortingen</h1>
+</header>
+<main>
+  <div class="kaart">
+    <h2>Welke korting wordt er gegeven?</h2>
+    <p class="lead">Per maand alle kortingen uit de orders in Logic4: op een orderregel, als losse kortingsregel op de order, en apart de compensaties en garanties. Bedragen zijn exclusief btw. Offertes en geannuleerde orders tellen niet mee.</p>
+    <div class="rij">
+      <div><label>Maand</label><input type="month" id="maand"></div>
+      <div><label>Laat oplichten boven</label><div style="display:flex;align-items:center;gap:6px"><input type="number" id="grens" min="0" max="100" step="1" style="width:80px"> <span class="meta">% korting</span></div></div>
+      <div><label>Adviseur</label><select id="fAdviseur"><option value="">iedereen</option></select></div>
+      <div><label>Afdeling</label><select id="fAfdeling"><option value="">alle afdelingen</option></select></div>
+      <div><label>Klanten</label><select id="fKlant"><option value="">alle klanten</option><option value="p">particulier</option><option value="z">zakelijk en dealers</option></select></div>
+      <div style="flex:1 1 180px"><label>Zoeken</label><input id="fZoek" placeholder="klant, order of artikel" style="width:100%"></div>
+      <div><button class="go" id="vers" type="button" title="Haalt deze maand opnieuw op uit Logic4">Opnieuw ophalen</button></div>
+    </div>
+    <div id="status" class="msg hidden"></div>
+    <div class="kpis" id="kpis"></div>
+  </div>
+  <div class="kaart">
+    <div class="tabs" id="tabs">
+      <button type="button" data-t="adviseur" class="aan">Per adviseur</button>
+      <button type="button" data-t="afdeling">Per afdeling</button>
+      <button type="button" data-t="artikel">Per artikel</button>
+      <button type="button" data-t="order">Per order</button>
+      <button type="button" data-t="compensatie">Compensaties</button>
+    </div>
+    <div id="inhoud"></div>
+  </div>
+</main>
+<script>
+const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
+const H={"X-Fonteyn-Auth":localStorage.getItem("fp.teamkey")||"","X-Fonteyn-User":(localStorage.getItem("fp.email")||"").toLowerCase()};
+let D=null, tab="adviseur", open={}, sort={};
+const $=id=>document.getElementById(id);
+function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+const eur=v=>"€ "+Number(v||0).toLocaleString("nl-NL",{minimumFractionDigits:0,maximumFractionDigits:0});
+const pct=v=>v==null?"":Number(v).toLocaleString("nl-NL",{maximumFractionDigits:1})+"%";
+const datum=d=>d?String(d).split("-").reverse().join("-"):"";
+function grens(){ return Number($("grens").value)||0; }
+try{ $("grens").value=localStorage.getItem("fp.kortingen.grens")||"15"; }catch(e){ $("grens").value="15"; }
+$("maand").value=new Date().toISOString().slice(0,7);
+
+async function laad(vers){
+  $("status").classList.remove("hidden"); $("status").textContent="Kortingen van "+$("maand").value+" ophalen uit Logic4…";
+  try{
+    const r=await fetch(WORKER+"/kortingen?maand="+$("maand").value+(vers?"&vers=1":""),{headers:H});
+    const j=await r.json();
+    if(!r.ok||!j.ok) throw new Error(j.error||("HTTP "+r.status));
+    D=j; $("status").classList.add("hidden");
+    vulFilters(); teken();
+    if(window.fpLog) window.fpLog("kortingen-bekeken",$("maand").value);
+  }catch(e){ $("status").textContent="Ophalen vraagt een nieuwe poging: "+e.message; }
+}
+function vulFilters(){
+  const kies=(id,waarden,alles)=>{ const el=$(id), was=el.value; el.innerHTML="<option value=''>"+alles+"</option>"+[...new Set(waarden)].filter(Boolean).sort((a,b)=>a.localeCompare(b,"nl")).map(v=>"<option"+(v===was?" selected":"")+">"+esc(v)+"</option>").join(""); };
+  kies("fAdviseur",D.regels.map(r=>r.adviseur),"iedereen");
+  kies("fAfdeling",D.regels.map(r=>r.afdeling),"alle afdelingen");
+}
+function gefilterd(lijst){
+  const a=$("fAdviseur").value, f=$("fAfdeling").value, kl=$("fKlant").value, q=$("fZoek").value.trim().toLowerCase();
+  /* Zakelijk: een bedrijfsnaam op de factuur. Een dealer krijgt zijn
+     dealerprijs, en die telt hier als korting op de brutoprijs; daarom
+     apart te bekijken. */
+  const zak=o=>o.zakelijk!=null?o.zakelijk:!!(D.regels.find(r=>r.order===o.order)||{}).zakelijk;
+  return lijst.filter(r=>(!a||r.adviseur===a)&&(!f||r.afdeling===f)&&(!kl||(kl==="z")===zak(r))&&(!q||[r.klant,r.order,r.artikel,r.omschrijving].some(x=>String(x||"").toLowerCase().includes(q))));
+}
+function verkoop(r){ return r.soort!=="compensatie"; }
+function teken(){
+  if(!D) return;
+  const regels=gefilterd(D.regels), orders=gefilterd(D.orders);
+  const korting=regels.filter(verkoop).reduce((n,r)=>n+r.bedrag,0);
+  const comp=regels.filter(r=>!verkoop(r)).reduce((n,r)=>n+r.bedrag,0);
+  const boven=orders.filter(o=>(o.pct||0)>grens()).length;
+  $("kpis").innerHTML=
+    "<div class='kpi'><b>"+eur(korting)+"</b><span>korting gegeven</span></div>"+
+    "<div class='kpi'><b>"+pct(D.omzetBruto?korting/D.omzetBruto*100:0)+"</b><span>van "+eur(D.omzetBruto)+" brutoprijs, hele maand</span></div>"+
+    "<div class='kpi'><b>"+orders.length+"</b><span>orders met korting, van "+D.ordersTotaal+" orders</span></div>"+
+    "<div class='kpi'><b style='color:"+(boven?"var(--rood)":"var(--groen)")+"'>"+boven+"</b><span>orders boven "+grens()+"% korting</span></div>"+
+    "<div class='kpi'><b>"+eur(comp)+"</b><span>compensaties en garanties</span></div>";
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("aan",b.dataset.t===tab));
+  const box=$("inhoud");
+  if(tab==="adviseur"||tab==="afdeling") box.innerHTML=groepTabel(orders,regels,tab);
+  else if(tab==="artikel") box.innerHTML=artikelTabel(regels);
+  else if(tab==="order") box.innerHTML=orderTabel(orders,regels);
+  else box.innerHTML=regelTabel(regels.filter(r=>!verkoop(r)),"Compensaties en garanties: negatieve regels die geen korting heten, zoals Spa Service Garantie. Ze tellen niet mee in de korting.");
+  box.querySelectorAll("tr.klik").forEach(tr=>tr.addEventListener("click",()=>{ open[tr.dataset.k]=!open[tr.dataset.k]; teken(); }));
+  box.querySelectorAll("th[data-s]").forEach(th=>th.addEventListener("click",()=>{ const s=sort[tab]||{}; sort[tab]={k:th.dataset.s,op:s.k===th.dataset.s?-s.op:-1}; teken(); }));
+}
+function sorteer(lijst,standaard){
+  const s=sort[tab]||{k:standaard,op:-1};
+  return lijst.sort((a,b)=>{ const x=a[s.k], y=b[s.k]; return (typeof x==="number"&&typeof y==="number"?x-y:String(x||"").localeCompare(String(y||""),"nl"))*s.op; });
+}
+function groepTabel(orders,regels,veld){
+  const per={};
+  for(const o of orders){ const k=o[veld]||"onbekend"; const g=per[k]||(per[k]={naam:k,orders:0,bruto:0,korting:0,hoogste:0,boven:0});
+    g.orders++; g.bruto+=o.bruto; g.korting+=o.korting; g.hoogste=Math.max(g.hoogste,o.pct||0); if((o.pct||0)>grens()) g.boven++; }
+  if(veld==="afdeling"){ // per afdeling op regelniveau: een order kan meerdere afdelingen hebben
+    for(const k in per) per[k]={naam:k,orders:0,bruto:0,korting:0,hoogste:0,boven:0};
+    const gezien={};
+    for(const r of regels.filter(verkoop)){ const k=r.afdeling||"Overig"; const g=per[k]||(per[k]={naam:k,orders:0,bruto:0,korting:0,hoogste:0,boven:0});
+      g.korting+=r.bedrag; if(r.pct!=null) g.hoogste=Math.max(g.hoogste,r.pct); if((r.pct||0)>grens()) g.boven++;
+      if(!gezien[k+"|"+r.order]){ gezien[k+"|"+r.order]=1; g.orders++; } }
+  }
+  const lijst=sorteer(Object.values(per).map(g=>Object.assign(g,{gem:g.bruto?g.korting/g.bruto*100:null})),"korting");
+  return "<p class='lead'>"+(veld==="adviseur"?"Per adviseur: de orders met korting die hij of zij heeft gemaakt. Gemiddeld = korting gedeeld door de brutoprijs van die orders.":"Per afdeling (hoofdproductgroep in Logic4), op regelniveau: een order met een spa en een tuinset telt bij beide.")+" Klik op een kop om te sorteren.</p>"+
+    "<table><thead><tr><th data-s='naam' style='width:30%'>"+(veld==="adviseur"?"Adviseur":"Afdeling")+"</th><th data-s='orders' class='n'>Orders</th><th data-s='korting' class='n'>Korting</th>"+(veld==="adviseur"?"<th data-s='gem' class='n'>Gemiddeld</th>":"")+"<th data-s='hoogste' class='n'>Hoogste</th><th data-s='boven' class='n'>Boven "+grens()+"%</th></tr></thead><tbody>"+
+    lijst.map(g=>"<tr"+(g.boven?" class='boven'":"")+"><td>"+esc(g.naam)+"</td><td class='n'>"+g.orders+"</td><td class='n'>"+eur(g.korting)+"</td>"+(veld==="adviseur"?"<td class='n'>"+pct(g.gem)+"</td>":"")+"<td class='n pct'>"+pct(g.hoogste)+"</td><td class='n'>"+(g.boven||"")+"</td></tr>").join("")+
+    "</tbody></table>";
+}
+function artikelTabel(regels){
+  const per={};
+  for(const r of regels.filter(x=>x.soort==="regelkorting")){ const k=r.artikel||r.omschrijving; const g=per[k]||(per[k]={artikel:r.artikel,omschrijving:r.omschrijving,keer:0,korting:0,som:0,hoogste:0});
+    g.keer+=r.aantal; g.korting+=r.bedrag; g.som+=r.pct*r.aantal; g.hoogste=Math.max(g.hoogste,r.pct); }
+  const lijst=sorteer(Object.values(per).map(g=>Object.assign(g,{gem:g.keer?g.som/g.keer:null})),"korting").slice(0,200);
+  return "<p class='lead'>Korting op orderregels, per artikel. Losse kortingsregels op de order staan bij Per order.</p>"+
+    "<table><thead><tr><th data-s='artikel' style='width:14%'>Artikel</th><th data-s='omschrijving' style='width:40%'>Omschrijving</th><th data-s='keer' class='n'>Stuks</th><th data-s='korting' class='n'>Korting</th><th data-s='gem' class='n'>Gemiddeld</th><th data-s='hoogste' class='n'>Hoogste</th></tr></thead><tbody>"+
+    lijst.map(g=>"<tr"+(g.hoogste>grens()?" class='boven'":"")+"><td>"+esc(g.artikel)+"</td><td>"+esc(g.omschrijving)+"</td><td class='n'>"+g.keer+"</td><td class='n'>"+eur(g.korting)+"</td><td class='n'>"+pct(g.gem)+"</td><td class='n pct'>"+pct(g.hoogste)+"</td></tr>").join("")+
+    "</tbody></table>";
+}
+function orderTabel(orders,regels){
+  const lijst=sorteer(orders.slice(),"korting");
+  return "<p class='lead'>Elke order met korting. Klik op een order voor de regels. Rood = korting boven "+grens()+"% van de brutoprijs.</p>"+
+    "<table><thead><tr><th data-s='datum' style='width:11%'>Datum</th><th data-s='order' style='width:10%'>Order</th><th data-s='klant' style='width:22%'>Klant</th><th data-s='adviseur' style='width:13%'>Adviseur</th><th data-s='afdeling' style='width:14%'>Afdeling</th><th data-s='bruto' class='n'>Bruto</th><th data-s='korting' class='n'>Korting</th><th data-s='pct' class='n'>%</th></tr></thead><tbody>"+
+    lijst.map(o=>{ const k=String(o.order); return "<tr class='klik"+((o.pct||0)>grens()?" boven":"")+"' data-k='"+k+"'><td>"+esc(datum(o.datum))+"</td><td>"+(open[k]?"▾ ":"▸ ")+esc(o.order)+"</td><td>"+esc(o.klant)+"</td><td>"+esc(o.adviseur)+"</td><td>"+esc(o.afdeling)+"</td><td class='n'>"+eur(o.bruto)+"</td><td class='n'>"+eur(o.korting)+"</td><td class='n pct'>"+pct(o.pct)+"</td></tr>"+
+      (open[k]?"<tr class='detail'><td colspan='8'>"+regels.filter(r=>String(r.order)===k).map(r=>"<div>"+(r.soort==="orderkorting"?"<span class='pil order'>orderkorting</span> ":r.soort==="compensatie"?"<span class='pil comp'>compensatie</span> ":"")+esc(r.aantal)+"x "+esc(r.artikel)+" "+esc(r.omschrijving)+" · "+(r.soort==="regelkorting"?(eur(r.bruto)+" naar "+eur(r.netto)+" · "):"")+"<b>"+eur(r.bedrag)+"</b>"+(r.pct!=null?" ("+pct(r.pct)+")":"")+"</div>").join("")+"<div class='meta' style='margin-top:4px'>Status: "+esc(o.status)+"</div></td></tr>":""); }).join("")+
+    "</tbody></table>";
+}
+function regelTabel(regels,uitleg){
+  const lijst=sorteer(regels.slice(),"bedrag");
+  return "<p class='lead'>"+esc(uitleg)+"</p><table><thead><tr><th data-s='datum' style='width:11%'>Datum</th><th data-s='order' style='width:10%'>Order</th><th data-s='klant' style='width:22%'>Klant</th><th data-s='adviseur' style='width:13%'>Adviseur</th><th data-s='omschrijving' style='width:30%'>Omschrijving</th><th data-s='bedrag' class='n'>Bedrag</th></tr></thead><tbody>"+
+    lijst.map(r=>"<tr><td>"+esc(datum(r.datum))+"</td><td>"+esc(r.order)+"</td><td>"+esc(r.klant)+"</td><td>"+esc(r.adviseur)+"</td><td>"+esc(r.omschrijving)+"</td><td class='n'>"+eur(r.bedrag)+"</td></tr>").join("")+"</tbody></table>";
+}
+$("tabs").addEventListener("click",e=>{ const b=e.target.closest("button[data-t]"); if(b){ tab=b.dataset.t; teken(); } });
+["fAdviseur","fAfdeling","fKlant"].forEach(id=>$(id).addEventListener("change",teken));
+$("fZoek").addEventListener("input",teken);
+$("grens").addEventListener("input",()=>{ try{ localStorage.setItem("fp.kortingen.grens",$("grens").value); }catch(e){} teken(); });
+$("maand").addEventListener("change",()=>laad(false));
+$("vers").addEventListener("click",()=>laad(true));
+laad(false);
+</script>
+</body>
+</html>

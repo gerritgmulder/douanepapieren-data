@@ -3502,7 +3502,12 @@ function toegangLees(src) {
 async function toegangMag(env, groep, wie) {
   const w = String(wie || "").toLowerCase().trim();
   if (!w) return false;
-  if (!toegangCache.groepen || Date.now() - toegangCache.ts > 10 * 60000) {
+  /* Ook opnieuw lezen als de gevraagde groep er nog niet in staat: een net
+     toegevoegde groep (kortingen, 29 sep 2026) werkte anders pas na tien
+     minuten. Hooguit eens per minuut. */
+  if (!toegangCache.groepen || Date.now() - toegangCache.ts > 10 * 60000 ||
+      (!toegangCache.groepen[groep] && Date.now() - (toegangCache.gezocht || 0) > 60000)) {
+    toegangCache.gezocht = Date.now();
     try {
       const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/toegang.js?t=" + Date.now(),
                             { cf: { cacheTtl: 0 } });
@@ -15345,6 +15350,115 @@ async function externHandle(request, env, url) {
   return null;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   KORTINGEN
+   ═══════════════════════════════════════════════════════════════════════════
+   Frank Hop en zijn collega (accountant, sep 2026) willen kunnen zien wie
+   wanneer op welke producten korting geeft, per order, per artikel, per
+   adviseur en per afdeling, en of dat buiten iemands bevoegdheid valt: in
+   Logic4 zijn de kortingen niet dicht te zetten, dus controle achteraf.
+   Gerrit (29 sep 2026): tegel Kortingen, voorlopig alleen voor Fonteynbot.
+
+   Per maand, uit de orders zelf (GetOrders op aanmaakdatum):
+   - regelkorting: een orderregel met DiscountPercent > 0; bedrag =
+     (GrossPrice - NettPrice) x Qty, exclusief btw;
+   - orderkorting: een losse regel "Korting" met een negatieve prijs;
+   - compensatie: een andere negatieve regel (garantie, compensatie); die
+     staat apart, want dat is geen verkoopkorting.
+   Offertes en geannuleerde orders tellen niet mee, Amerika ook niet.
+   Afdeling = de hoofdproductgroep van het artikel in Logic4 (Spa's, Sauna's,
+   ...); een orderkorting krijgt de afdeling van de grootste regel. */
+const KORT_UIT = /^(offerte|offerte gesloten|geannuleerd)$/i;
+async function kortProductGroepen(env, token) {
+  const c = await env.FONTEYN_DATA.get("kortingen-productgroepen", { type: "json" });
+  if (c && c.groepen && Date.now() - Date.parse(c.ts || 0) < 7 * 86400000) return c.groepen;
+  const groepen = {};
+  for (let skip = 0; skip < 5000; skip += 1000) {
+    const r = await fetch("https://api.logic4server.nl/v3/ProductGroups/GetProductGroups", { method: "POST",
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify({ SkipRecords: skip, TakeRecords: 1000 }) });
+    const j = await r.json().catch(() => []);
+    const l = Array.isArray(j) ? j : ((j && j.Records) || []);
+    for (const g of l) groepen[g.Id] = { naam: g.Name || "", ouder: g.ParentProductGroupId || null };
+    if (l.length < 1000) break;
+  }
+  await env.FONTEYN_DATA.put("kortingen-productgroepen", JSON.stringify({ ts: new Date().toISOString(), groepen }));
+  return groepen;
+}
+function kortHoofdgroep(groepen, id) {
+  let g = groepen[id], n = 0;
+  while (g && g.ouder && groepen[g.ouder] && n++ < 10) g = groepen[g.ouder];
+  return g ? g.naam : null;
+}
+async function kortingenMaand(env, maand, vers) {
+  const sleutel = "kortingen:" + maand;
+  if (!vers) { const c = await env.FONTEYN_DATA.get(sleutel, { type: "json" }); if (c && Date.now() - Date.parse(c.ts || 0) < 30 * 60000) return c; }
+  const [y, m] = maand.split("-").map(Number);
+  const van = maand + "-01T00:00:00", einde = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10) + "T23:59:59";
+  const token = await l4Token(env);
+  const orders = [];
+  for (let page = 0; page < 8; page++) {
+    const r = await fetch("https://api.logic4server.nl/v3/Orders/GetOrders", { method: "POST",
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ CreationDateFrom: van, CreationDateTo: einde, TakeRecords: 500, SkipRecords: page * 500 }) });
+    const j = await r.json().catch(() => []);
+    const l = Array.isArray(j) ? j : ((j && j.Orders) || []);
+    orders.push(...l); if (l.length < 500) break;
+  }
+  const medewerkers = await l4Medewerkers(env);
+  const telt = orders.filter(o => !KORT_UIT.test(String((o.OrderStatus && o.OrderStatus.Value) || "").trim()) && Number(o.DebtorId) !== AMERIKA_DEBTOR);
+  // Productgroep van de artikelen die korting kregen (en van de grootste regel per order).
+  const productIds = new Set();
+  for (const o of telt) for (const r of (o.OrderRows || [])) if (r.ProductId && !r.IsAssemblyChild) productIds.add(Number(r.ProductId));
+  const groepVan = {};
+  const pc = (await env.FONTEYN_DATA.get("kortingen-productgroep-per-artikel", { type: "json" })) || {};
+  const nodig = [...productIds].filter(id => pc[id] === undefined).slice(0, 1200);
+  for (let i = 0; i < nodig.length; i += 400) {
+    const r = await fetch("https://api.logic4server.nl/v3/Products/GetProducts", { method: "POST",
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ ProductIds: nodig.slice(i, i + 400), TakeRecords: 400 }) });
+    const j = await r.json().catch(() => []);
+    const l = Array.isArray(j) ? j : ((j && j.Records) || []);
+    for (const p of l) pc[p.ProductId || p.Id] = p.ProductGroupId1 || null;
+    for (const id of nodig.slice(i, i + 400)) if (pc[id] === undefined) pc[id] = null;
+  }
+  if (nodig.length) await env.FONTEYN_DATA.put("kortingen-productgroep-per-artikel", JSON.stringify(pc));
+  const groepen = await kortProductGroepen(env, token);
+  for (const id of productIds) groepVan[id] = pc[id] ? (kortHoofdgroep(groepen, pc[id]) || "Overig") : "Overig";
+  const c2 = v => Math.round((Number(v) || 0) * 100) / 100;
+  const regels = [], perOrder = [];
+  for (const o of telt) {
+    const rows = (o.OrderRows || []).filter(r => !r.IsAssemblyChild);
+    const naam = (o.InvoiceAddress && (o.InvoiceAddress.CompanyName || o.InvoiceAddress.ContactName)) || ("Debiteur " + o.DebtorId);
+    const mw = medewerkers[String(o.UserId)];
+    const adviseur = mw ? (mw.naam + (mw.uitDienst ? " (uit dienst)" : "")) : (o.UserId ? "gebruiker " + o.UserId : "onbekend");
+    const bruto = rows.filter(r => Number(r.GrossPrice) > 0).reduce((n, r) => n + Number(r.GrossPrice) * (Number(r.Qty) || 0), 0);
+    const grootste = rows.slice().sort((a, b) => Number(b.NettPrice) * Number(b.Qty) - Number(a.NettPrice) * Number(a.Qty))[0];
+    const orderAfdeling = grootste && grootste.ProductId ? groepVan[Number(grootste.ProductId)] : "Overig";
+    let korting = 0;
+    for (const r of rows) {
+      const qty = Number(r.Qty) || 0, gross = Number(r.GrossPrice) || 0, nett = Number(r.NettPrice) || 0, pct = Number(r.DiscountPercent) || 0;
+      let soort = null, bedrag = 0;
+      if (nett < 0 && qty > 0) { soort = /korting/i.test(String(r.ProductCode || "") + " " + String(r.Description || "")) ? "orderkorting" : "compensatie"; bedrag = -nett * qty; }
+      else if (pct > 0.005 && gross > 0) { soort = "regelkorting"; bedrag = (gross - nett) * qty; }
+      if (!soort || bedrag <= 0.005) continue;
+      if (soort !== "compensatie") korting += bedrag;
+      regels.push({ order: o.Id, datum: String(o.CreationDate || "").slice(0, 10), klant: naam, zakelijk: !!(o.InvoiceAddress && o.InvoiceAddress.CompanyName),
+        adviseur, status: (o.OrderStatus && o.OrderStatus.Value) || "", soort,
+        artikel: soort === "regelkorting" ? String(r.ProductCode || "") : "", omschrijving: String(r.Description || "").slice(0, 90),
+        afdeling: soort === "regelkorting" && r.ProductId ? groepVan[Number(r.ProductId)] : orderAfdeling,
+        aantal: qty, bruto: c2(gross), netto: c2(nett), pct: soort === "regelkorting" ? c2(pct) : (bruto > 0 ? c2(bedrag / bruto * 100) : null), bedrag: c2(bedrag) });
+    }
+    if (korting > 0) perOrder.push({ order: o.Id, datum: String(o.CreationDate || "").slice(0, 10), klant: naam, adviseur, afdeling: orderAfdeling,
+      zakelijk: !!(o.InvoiceAddress && o.InvoiceAddress.CompanyName),
+      status: (o.OrderStatus && o.OrderStatus.Value) || "", bruto: c2(bruto), korting: c2(korting), pct: bruto > 0 ? c2(korting / bruto * 100) : null });
+  }
+  const uit = { ok: true, maand, ts: new Date().toISOString(), ordersTotaal: telt.length,
+    omzetBruto: c2(telt.reduce((n, o) => n + (o.OrderRows || []).filter(r => !r.IsAssemblyChild && Number(r.GrossPrice) > 0).reduce((m, r) => m + Number(r.GrossPrice) * (Number(r.Qty) || 0), 0), 0)),
+    regels, orders: perOrder };
+  await env.FONTEYN_DATA.put(sleutel, JSON.stringify(uit));
+  return uit;
+}
+
 const FP_WORKER = {
   async scheduled(event, env, ctx) {
     ctx.waitUntil((async () => {
@@ -15921,6 +16035,14 @@ const FP_WORKER = {
       if (nu.updated && Date.now() - Date.parse(nu.updated) < 2 * 60000) return reply(200, { ok: true, vers: false, updated: nu.updated });
       const rv = await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) }));
       return reply(200, { ok: rv && rv.ok !== false, vers: true, resultaat: rv, error: rv && rv.error });
+    }
+    // Kortingen per maand (tegel kortingen.html, groep kortingen).
+    if (url.pathname === "/kortingen" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      if (!(await toegangMag(env, "kortingen", String(request.headers.get("X-Fonteyn-User") || "").toLowerCase()))) return reply(403, { ok: false, error: "Deze tegel is voor wie de kortingen volgt." });
+      const maand = /^\d{4}-\d{2}$/.test(url.searchParams.get("maand") || "") ? url.searchParams.get("maand") : new Date().toISOString().slice(0, 7);
+      try { return reply(200, await kortingenMaand(env, maand, url.searchParams.get("vers") === "1")); }
+      catch (e) { return reply(200, { ok: false, error: String(e.message || e) }); }
     }
     // De dollarkoers die een inkooporder nu zou krijgen (teamsleutel).
     if (url.pathname === "/wisselkoers/usd" && request.method === "GET") {

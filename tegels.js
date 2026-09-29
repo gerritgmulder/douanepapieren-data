@@ -103,6 +103,8 @@
       uit:"Bankafschrift inlezen en boeken",                       mobiel:"pc", tile:"tileBankkoppeling" },
     { bestand:"geldgoederen.html",   groep:"geldgoederen",     ic:"⛓️",  naam:"Geld-goederenbeweging",
       uit:"De financiële keten van inkoop tot omzet",              mobiel:"pc", tile:"tileGeldGoederen" },
+    { bestand:"kortingen.html",      groep:"kortingen",        ic:"🏷️",  naam:"Kortingen",
+      uit:"Korting per order, artikel, adviseur en afdeling",     mobiel:"krap", tile:"tileKortingen" },
     { bestand:"bol.html",            groep:"bol",              ic:"🛒",  naam:"Bol.com koppeling",
       uit:"Bol-orders en boekingen",                               mobiel:"pc", tile:"tileBol" },
     { bestand:"amerika-partners.html", groep:"partners-amerika",  ic:"🇺🇸", naam:"Passion Partners Amerika",

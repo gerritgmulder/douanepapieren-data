@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-29", bestand: "kortingen.html", soort: "nieuw",
+      titel: "Kortingen",
+      wat: "Per maand alle kortingen uit de orders: per adviseur, per afdeling, per artikel en per order. Stel een percentage in, dan licht alles daarboven rood op."
+    },
+    {
       datum: "2026-09-29", bestand: "rapportage.html", soort: "hersteld",
       titel: "Rapportage, Orderstatus en Stuurcijfers volgen de toegangslijst",
       wat: "Wie voor deze tegels is aangemeld, komt er nu ook echt in. Eerder hielden ze een eigen lijstje bij, waardoor bijvoorbeeld Osman er niet in kwam."

@@ -1,5 +1,5 @@
 {
-  "version": "0.35.21",
+  "version": "0.35.22",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -79,6 +79,10 @@
     {
       "name": "geldgoederen.html",
       "note": "Geld-goederenbeweging — de verbandscontrole van accountant Kevin (De Jong & Laan) op live Logic4-data: inkoop → voorraad → verkoop → factuur → bank, plus kostprijs/marge. Per bevinding een eigenaar en een status. Alleen Osman/Gerriette/Dolf/Gerrit/Fonteynbot."
+    },
+    {
+      "name": "kortingen.html",
+      "note": "Kortingen per maand uit de Logic4-orders: per order, artikel, adviseur en afdeling (hoofdproductgroep), met een grens die boven een percentage laat oplichten. Worker: /kortingen. Groep kortingen, voorlopig alleen Fonteynbot (Gerrit, 29 sep 2026)."
     },
     {
       "name": "grootboek.js",
