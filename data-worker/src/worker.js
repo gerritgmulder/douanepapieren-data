@@ -5244,6 +5244,49 @@ async function amerikaZending(env, body) {
   return { ok: true, ref, zending: rec };
 }
 
+/* DE DOLLARKOERS VAN VANDAAG
+   ═══════════════════════════════════════════════════════════════════════════
+   Gerrit (29 sep 2026): een inkooporder die Chantal via het Dashboard maakt,
+   kreeg het dollarbedrag van de proforma als europrijs in Logic4 (inkooporder
+   38025: $2.084 stond er als € 2.084). Vanaf nu wordt elke dollarprijs
+   omgerekend met de meest actuele koers.
+
+   Bron: de referentiekoers van de Europese Centrale Bank, gratis en zonder
+   sleutel, elke werkdag rond 16:00 bijgewerkt. We vragen hem hooguit eens per
+   zes uur op en bewaren hem in KV; is de ECB even onbereikbaar, dan gebruiken
+   we de laatst bekende koers en zeggen we van welke dag die is. */
+async function usdKoers(env) {
+  const opgeslagen = await env.FONTEYN_DATA.get("wisselkoers-usd", { type: "json" });
+  if (opgeslagen && opgeslagen.koers && Date.now() - Date.parse(opgeslagen.opgehaald || 0) < 6 * 3600000) return opgeslagen;
+  try {
+    /* Eerst de ECB zelf; lukt dat niet, dan Frankfurter, dat dezelfde
+       ECB-koers als JSON doorgeeft (ook gratis, zonder sleutel). */
+    let koers = 0, datum = null, bron = "ECB";
+    try {
+      const r = await fetch("https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml", { headers: { "User-Agent": "Mozilla/5.0 (Fonteyn Dashboard)" } });
+      const x = await r.text();
+      koers = Number((x.match(/currency=['"]USD['"]\s+rate=['"]([\d.]+)['"]/) || [])[1]);
+      datum = (x.match(/time=['"](\d{4}-\d{2}-\d{2})['"]/) || [])[1] || null;
+    } catch (e) { console.log("[koers] ECB: " + String(e.message || e)); }
+    if (!(koers > 0.5 && koers < 2)) {
+      const r2 = await fetch("https://api.frankfurter.app/latest?from=EUR&to=USD");
+      const j = await r2.json().catch(() => null);
+      koers = Number(j && j.rates && j.rates.USD); datum = (j && j.date) || null; bron = "ECB via Frankfurter";
+    }
+    if (koers > 0.5 && koers < 2) {
+      const nieuw = { koers, datum, bron, opgehaald: new Date().toISOString() };
+      if (!opgeslagen || opgeslagen.koers !== koers || opgeslagen.datum !== datum || Date.now() - Date.parse(opgeslagen.opgehaald || 0) > 6 * 3600000)
+        await env.FONTEYN_DATA.put("wisselkoers-usd", JSON.stringify(nieuw));
+      return nieuw;
+    }
+  } catch (e) { console.log("[koers] ECB onbereikbaar: " + String(e.message || e)); }
+  if (opgeslagen && opgeslagen.koers) return opgeslagen;
+  throw new Error("de dollarkoers van vandaag komt zo weer binnen; probeer het over een paar minuten opnieuw, dan staan de prijzen meteen goed in euro");
+}
+function koersTekst(k) {
+  return "1 EUR = " + String(k.koers).replace(".", ",") + " USD (ECB" + (k.datum ? " " + k.datum.split("-").reverse().join("-") : "") + ")";
+}
+
 async function ikoAanmaken(env, body) {
   const crediteurId = Number(body.crediteurId);
   const regels = Array.isArray(body.regels) ? body.regels : [];
@@ -5285,6 +5328,18 @@ async function ikoAanmaken(env, body) {
       error: "Voor proforma " + ref + " is al inkooporder " + reeds.orders[ref].buyOrderId + " aangemaakt op " + reeds.orders[ref].ts + "." };
   }
 
+  /* Dollar naar euro. De proforma's van de fabrieken zijn in dollars; Logic4
+     rekent in euro. Een aanvulling op dezelfde inkooporder (de volgende blokken
+     van twintig regels) houdt de koers waarmee de order begon, zodat alle
+     regels van één proforma tegen dezelfde koers staan. */
+  const valuta = String(body.valuta || "USD").toUpperCase();
+  let koers = null;
+  if (valuta === "USD") {
+    const eerderKoers = ref && reeds.orders[ref] && reeds.orders[ref].koers;
+    koers = (aanvullenOp && eerderKoers && eerderKoers.koers) ? eerderKoers : await usdKoers(env);
+  }
+  const naarEuro = (p) => (p == null || !(Number(p) > 0)) ? 0 : (koers ? Math.round(Number(p) / koers.koers * 100) / 100 : Number(p));
+
   const token = await l4Token(env);
   const call = async (pad, payload) => {
     const r = await fetch("https://api.logic4server.nl" + pad, {
@@ -5306,6 +5361,7 @@ async function ikoAanmaken(env, body) {
       CreditorId: crediteurId,
       Remarks: ("Proforma " + (ref || "") + " — via dashboard door " + (body.door || "onbekend") +
         (body.bestemming ? (" — bestemming: " + body.bestemming) : "") +
+        (koers ? (" — dollarprijzen omgerekend: " + koersTekst(koers)) : "") +
         (overgeslagen.length ? (" — NIET meebesteld: " + overgeslagen.join(", ")) : "")).trim().slice(0, 500),
       CreatedAt: new Date().toISOString(),
     });
@@ -5331,7 +5387,7 @@ async function ikoAanmaken(env, body) {
         BuyOrderId: buyOrderId,
         ProductCode: String(r.artikelcode),
         QtyToOrder: Number(r.aantal),
-        Price: r.prijs != null ? Number(r.prijs) : 0,
+        Price: naarEuro(r.prijs),
         Description: String(r.omschrijving || r.model || "").slice(0, 200),
         ExpectedDeliveryDate: body.eta || null,
         // Zonder dit veld telt Logic4 de regel niet mee als iets dat nog
@@ -5355,6 +5411,7 @@ async function ikoAanmaken(env, body) {
        niets op dat scherm. Een aanvulling houdt wat er al stond. */
     reeds.orders[ref] = Object.assign({}, eerder, {
       buyOrderId, ts: new Date().toISOString(), door: body.door || null,
+      koers: (eerder && aanvullenOp && eerder.koers) || koers || null,
       bestemming: body.bestemming || (eerder && eerder.bestemming) || null,
       leverancier: body.leverancier || (eerder && eerder.leverancier) || null,
       artikelen: ((eerder && aanvullenOp ? (eerder.artikelen || []) : []))
@@ -5374,6 +5431,7 @@ async function ikoAanmaken(env, body) {
   }
   return { ok: mislukt.length === 0 && !restant.length, buyOrderId,
     toegevoegd: toegevoegd.length, mislukt, aangevuld: !!aanvullenOp,
+    koers: koers || null, koersTekst: koers ? koersTekst(koers) : null,
     /* Wat er niet meer bij paste. Het scherm stuurt die in een volgend blok
        met aanvullenOp; komt het van elders, dan is hier te zien wat er mist. */
     restant: restant.length,
@@ -15775,6 +15833,12 @@ const FP_WORKER = {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const body = await request.json().catch(() => ({}));
       return reply(200, await ikoVoorstel(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    // De dollarkoers die een inkooporder nu zou krijgen (teamsleutel).
+    if (url.pathname === "/wisselkoers/usd" && request.method === "GET") {
+      if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+      try { const k = await usdKoers(env); return reply(200, { ok: true, ...k, tekst: koersTekst(k) }); }
+      catch (e) { return reply(200, { ok: false, error: String(e.message || e) }); }
     }
     if (url.pathname === "/voorraad/inkooporder/aanmaken" && request.method === "POST") {
       if (!(await voorraadIsBeheer(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep voorraad-beheer (Chantal, Arno, Manon, Dolf)" });

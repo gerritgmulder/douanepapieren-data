@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-09-29", groep: "voorraad-beheer", soort: "beter",
+      titel: "Inkooporders in euro tegen de koers van vandaag",
+      wat: "Een inkooporder uit een proforma in dollars komt in Logic4 nu in euro, omgerekend met de dollarkoers van de Europese Centrale Bank van die dag. De koers staat in de opmerking van de inkooporder en in de melding na het aanmaken."
+    },
+    {
       datum: "2026-09-29", bestand: "planning.html", soort: "beter",
       titel: "Routes met uurlijnen",
       wat: "Op het routebord staan de dagen duidelijker uit elkaar en loopt er bij elk uur een lijn. Elke stop staat op de hoogte van zijn tijd. Sleep je een stop naar een andere plek, dan krijgt hij de tijd waar je hem loslaat."

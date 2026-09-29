@@ -348,6 +348,7 @@ async function ikoAanvullen(bestaandeOrder){
     if(j.dubbeleRegels){ ikoStatus("warn",j.error); if(knop){ knop.disabled=false; knop.textContent="Aanvullen in inkooporder "+bestaandeOrder; } return; }
     if(!j.ok&&!j.buyOrderId) throw new Error(j.error||("HTTP "+r.status));
     ikoStatus("ok","Inkooporder "+j.buyOrderId+" aangevuld met "+j.toegevoegd+" regel(s)."+
+      (j.koersTekst?(" De dollarprijzen staan in euro, omgerekend tegen "+j.koersTekst+"."):"")+
       (j.mislukt&&j.mislukt.length?(" "+j.mislukt.length+" regel(s) nog open: "+j.mislukt.map(m=>m.artikelcode+" ("+m.fout+")").join("; ")):""));
     if(knop){ knop.textContent="Aangevuld ✓"; }
     try{ if(C.log) C.log("inkooporder-aangevuld","order "+j.buyOrderId+", "+j.toegevoegd+" regel(s)"); }catch(e){}
@@ -386,7 +387,7 @@ async function ikoAanmaken(){
        wordt. Vijftien per keer is ruim onder de grens. */
     const BLOK=15;
     const blokken=[]; for(let i=0;i<s.mee.length;i+=BLOK) blokken.push(s.mee.slice(i,i+BLOK));
-    let j=null, orderId=null, totaalToegevoegd=0, alleMislukt=[];
+    let j=null, orderId=null, totaalToegevoegd=0, alleMislukt=[], koersTekst=null;
     for(let b=0;b<blokken.length;b++){
       if(blokken.length>1) knop.textContent="Bezig… blok "+(b+1)+" van "+blokken.length;
       const body={crediteurId:cred,regels:blokken[b],referentie:ref,bestemming:C.bestemming,
@@ -401,6 +402,7 @@ async function ikoAanmaken(){
       if(!j.ok&&!j.buyOrderId) throw new Error((j.error||("HTTP "+r.status))+
         (b>0?(" - de eerste "+totaalToegevoegd+" regel(s) staan wél in inkooporder "+orderId):""));
       orderId=orderId||j.buyOrderId;
+      if(j.koersTekst) koersTekst=j.koersTekst;
       totaalToegevoegd+=Number(j.toegevoegd)||0;
       if(j.mislukt&&j.mislukt.length) alleMislukt=alleMislukt.concat(j.mislukt);
     }
@@ -424,7 +426,8 @@ async function ikoAanmaken(){
       ikoStatus("warn","Inkooporder "+j.buyOrderId+" aangemaakt met "+j.toegevoegd+" regel(s); "+j.mislukt.length+" regel(s) vragen nog aandacht: "+
         j.mislukt.map(m=>m.artikelcode+" ("+m.fout+")").join("; ")+" - vul die handmatig aan in Logic4.");
     }else{
-      ikoStatus("ok","Inkooporder "+j.buyOrderId+" aangemaakt in Logic4 met "+j.toegevoegd+" regel(s).");
+      ikoStatus("ok","Inkooporder "+j.buyOrderId+" aangemaakt in Logic4 met "+j.toegevoegd+" regel(s)."+
+        (koersTekst?(" De dollarprijzen staan in euro, omgerekend tegen "+koersTekst+"."):""));
       knop.textContent="Aangemaakt ✓";
     }
     try{ if(C.log) C.log("inkooporder-aangemaakt","Logic4 inkooporder "+j.buyOrderId+" · "+j.toegevoegd+" regels"+(ref?(" · proforma "+ref):"")); }catch(e){}
