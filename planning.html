@@ -260,8 +260,8 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
      in dit bestand en zouden anders winnen. */
   .bord.bord{flex-direction:column}
   .bord .borddag{flex:0 0 auto}
-  .borddag .routes{flex-direction:column}
-  .routes .route{min-height:0;flex:0 0 auto}
+  .borddag .routes{display:flex;flex-direction:column;gap:5px}
+  .routes .route{min-height:0;flex:0 0 auto;display:flex;flex-direction:column}
 }
 /* De bovenkant op een telefoon. Gerrit (12 sep 2026): "week, dag tot dag,
    dan het pijltje links, vandaag en dan op de volgende regel het pijltje
@@ -357,11 +357,14 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
    is een routekolom een centimeter of twee - smal, maar je ziet de hele week
    in één blik en dat is waar het bord voor is. Wil je één dag groot zien, dan
    is daar de knop Dag voor. */
-.bord{display:flex;gap:8px;padding-bottom:6px;align-items:stretch;width:100%}
-.borddag{background:var(--kaart);border:1px solid var(--rand);border-radius:12px;overflow:hidden;
+/* Dagen duidelijk uit elkaar (Gerrit, 29 sep 2026): meer ruimte ertussen,
+   een stevige rand, en om en om een lichte tint achter de routes. */
+.bord{display:flex;gap:14px;padding-bottom:6px;align-items:stretch;width:100%}
+.borddag{background:var(--kaart);border:2px solid #b9c9bf;border-radius:12px;overflow:hidden;
       flex:1 1 0;min-width:0;display:flex;flex-direction:column}
+.borddag.om{background:#eef3ea}
 .borddag.vandaag{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.25)}
-.borddag > h3{margin:0;padding:8px 10px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;
+.borddag > h3{margin:0;padding:9px 10px;font-size:13px;text-transform:uppercase;letter-spacing:.05em;
       background:var(--groen);color:#fff;display:flex;align-items:center;gap:8px}
 .borddag > h3 .dd{margin-left:auto;font-weight:400;opacity:.85;text-transform:none;letter-spacing:0}
 .dagbalken{padding:5px 6px 0;display:flex;flex-direction:column;gap:3px}
@@ -383,9 +386,24 @@ body.bezig-slepen{cursor:grabbing;user-select:none}
    er "Route 1" voluit boven elke kolom, met de naam van de rijder eronder,
    en heeft elke kolom een vaste minimumhoogte zodat een lege route er ook
    uitziet als een kolom waar iets in moet. */
-.routes{display:flex;gap:5px;padding:6px;align-items:stretch}
-.route{flex:1 1 0;min-width:0;border:1px solid var(--rand);border-radius:9px;background:#fff;
-      display:flex;flex-direction:column;min-height:120px}
+/* De routes van één dag staan in een raster met subgrid: zo zijn de koppen
+   van alle routes op een dag even hoog en lopen de uurlijnen eronder precies
+   gelijk, ook als de ene route drie rijders heeft en de andere één. */
+.routes{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);grid-template-rows:auto auto auto auto;
+      gap:0 5px;padding:6px;align-items:stretch}
+.route{grid-row:span 4;display:grid;grid-template-rows:subgrid;min-width:0;border:1px solid var(--rand);
+      border-radius:9px;background:#fff;min-height:120px}
+/* Uurlijnen. Gerrit (29 sep 2026): "een duidelijk lijntje horizontaal zodat
+   je goed kunt zien waar de uren lopen, bij 10:00 een lijntje en bij 11:00
+   een lijntje". Elke stop staat op de hoogte van zijn tijd. */
+.route .stops.tijdas{position:relative;display:block;padding:0;margin:0 0 4px;flex:none}
+.tijdas .uurlijn{position:absolute;left:0;right:0;border-top:1px solid #cfd9d2;pointer-events:none}
+.tijdas .uurlijn.half{border-top:1px dashed #e7ece8}
+.tijdas .uurlijn span{position:absolute;left:3px;top:-7px;font-size:9px;line-height:12px;color:#7b8a81;background:#fff;padding:0 3px;border-radius:3px}
+.tijdas .stop.optijd{position:absolute;overflow:hidden;z-index:1;margin:0;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.tijdas .leegdrop{position:absolute;left:44px;right:6px;top:calc(50% - 22px);z-index:1;background:#fff;padding:8px 2px}
+.tijdas .sleeplijn{position:absolute;left:0;right:0;border-top:2px solid var(--lime);z-index:2;pointer-events:none;display:none}
+.tijdas .sleeplijn b{position:absolute;right:3px;top:-9px;font-size:9.5px;background:var(--lime);color:#fff;border-radius:4px;padding:0 4px}
 .route.sleepdoel{border-color:var(--lime);box-shadow:0 0 0 2px rgba(139,197,63,.35)}
 .route > h4{margin:0;padding:6px 8px;font-size:11.5px;background:#eef4e8;border-bottom:1px solid var(--rand);
       border-radius:8px 8px 0 0;display:grid;grid-template-columns:1fr auto auto;
@@ -1306,6 +1324,7 @@ function stopsVan(dISO, nr, eerste){
 
 function tekenBord(){
   var week = weekLijst();
+  bordUren(week);
   var vandaagISO = iso(new Date());
   var html = "";
   week.forEach(function(w,i){
@@ -1314,7 +1333,7 @@ function tekenBord(){
        toelichting bij .bord in de stijlen hierboven. */
     var heleDag = heleDagVan(w.iso);
     var totaal = routes.reduce(function(n, r, ri){ return n + stopsVan(w.iso, r.nr, ri===0).length; }, 0);
-    html += '<div class="borddag'+(w.iso===vandaagISO?" vandaag":"")+'" data-datum="'+w.iso+'">'+
+    html += '<div class="borddag'+(w.iso===vandaagISO?" vandaag":"")+(i%2?" om":"")+'" data-datum="'+w.iso+'">'+
       '<h3>'+DAGEN[dagIndex(w.datum)]+'<span class="dd">'+w.datum.getDate()+'-'+String(w.datum.getMonth()+1).padStart(2,"0")+
         (totaal?' &middot; '+totaal+' stop'+(totaal===1?'':'s'):'')+'</span></h3>'+
       (heleDag.length ? '<div class="dagbalken">'+heleDag.map(function(a){
@@ -1356,9 +1375,8 @@ function tekenBord(){
 
             (MAG_BEWERKEN?'<button type="button" class="weg routeWeg" data-datum="'+w.iso+'" data-nr="'+r.nr+'" title="Deze route weghalen">&times;</button>':"")+
           '</h4>'+
-          '<div class="stops">'+
-            (stops.length ? stops.map(stopHtml).join("")
-              : '<div class="leegdrop">'+(MAG_BEWERKEN?"sleep hier een stop":"nog leeg")+'</div>')+
+          '<div class="stops tijdas" style="height:'+(BORD_TOT-BORD_VAN)*BORD_PX+'px">'+
+            tijdasHtml(stops, MAG_BEWERKEN?"sleep hier een stop":"nog leeg")+
           '</div>'+
           (MAG_BEWERKEN?'<button type="button" class="plusstop" data-datum="'+w.iso+'" data-nr="'+r.nr+'">+ stop</button>':"")+
           /* Gerrit (12 sep 2026): "geen printer-icoontje, want niemand snapt
@@ -1378,11 +1396,57 @@ function tekenBord(){
   $("bord").innerHTML = html;
   koppelBord();
 }
-function stopHtml(a){
+/* ── De tijdas van het routebord ─────────────────────────────────────
+   Van 09:00 tot 18:00, en ruimer als er in deze week een stop eerder of later
+   valt. Een uur is BORD_PX pixels hoog; een levering van twee uur is dus een
+   blok van twee uur hoog. */
+var BORD_VAN = 9, BORD_TOT = 18, BORD_PX = 46;
+function bordUren(week){
+  BORD_VAN = UUR_STANDAARD_VAN; BORD_TOT = UUR_STANDAARD_TOT;
+  week.forEach(function(w){ routesVan(w.iso).forEach(function(r, ri){ stopsVan(w.iso, r.nr, ri===0).forEach(function(a){
+    var van = minuten(a.tijd); if (van == null) return;
+    var tot = van + (Number(a.duurMin) || 120);
+    if (van < BORD_VAN*60) BORD_VAN = Math.max(0, Math.floor(van/60));
+    if (tot > BORD_TOT*60) BORD_TOT = Math.min(24, Math.ceil(tot/60));
+  }); }); });
+}
+function tijdasHtml(stops, leegTekst){
+  var h = "";
+  for (var u = BORD_VAN; u <= BORD_TOT; u++){
+    h += '<div class="uurlijn" style="top:'+((u-BORD_VAN)*BORD_PX)+'px"><span>'+String(u).padStart(2,"0")+':00</span></div>';
+    if (u < BORD_TOT) h += '<div class="uurlijn half" style="top:'+((u-BORD_VAN)*BORD_PX+BORD_PX/2)+'px"></div>';
+  }
+  /* Stops die elkaar in de tijd overlappen komen naast elkaar, zoals in een
+     agenda, in plaats van over elkaar heen. */
+  var rij = stops.map(function(a){ var v = minuten(a.tijd); return { a:a, van:v, tot:v + (Number(a.duurMin) || 120) }; })
+                 .sort(function(x,y){ return x.van - y.van; });
+  var groep = [], eind = -1;
+  function sluit(){ var banen = [];
+    groep.forEach(function(x){ var b = banen.findIndex(function(t){ return t <= x.van; }); if (b < 0){ b = banen.length; banen.push(0); } banen[b] = x.tot; x.baan = b; });
+    groep.forEach(function(x){ x.banen = banen.length; }); groep = []; }
+  rij.forEach(function(x){ if (x.van >= eind) sluit(); groep.push(x); eind = Math.max(eind, x.tot); });
+  sluit();
+  h += rij.map(function(x){
+    var top = (x.van - BORD_VAN*60) * BORD_PX / 60, hoog = Math.max(30, (x.tot - x.van) * BORD_PX / 60 - 2);
+    var breed = 100 / x.banen;
+    return stopHtml(x.a, 'top:'+top+'px;height:'+hoog+'px;left:calc('+(x.baan*breed)+'% + 3px);width:calc('+breed+'% - 6px);');
+  }).join("");
+  /* Een lege route laat gewoon de lege uren zien; een tekstje "sleep hier
+     een stop" paste in een smalle kolom alleen letter voor letter. */
+  return h + '<div class="sleeplijn"><b></b></div>';
+}
+/* Waar in de tijd valt een punt op de tijdas? Afgerond op een kwartier. */
+function tijdOpAs(asEl, clientY){
+  var r = asEl.getBoundingClientRect();
+  var min = BORD_VAN*60 + Math.round(((clientY - r.top) / BORD_PX * 60) / 15) * 15;
+  return Math.max(BORD_VAN*60, Math.min(BORD_TOT*60 - 15, min));
+}
+function tijdTekst(min){ return String(Math.floor(min/60)).padStart(2,"0")+":"+String(min%60).padStart(2,"0"); }
+function stopHtml(a, plek){
   var c = cat(a);
   var regel = [a.plaats, a.wat, a.ordernr].filter(Boolean).join(" - ");
-  return '<div class="stop'+(a.klaar?" klaar":"")+(a.letop?" letop":"")+'"'+(MAG_BEWERKEN?' draggable="true"':'')+' data-id="'+esc(a.id)+'"'+
-    ' style="border-left-color:'+c.kleur+';'+(a.letop?'':'background:'+(c.vlak||c.zacht)+';color:'+(c.tekst||"#111")+';')+betaalRand(a)+'" title="'+esc((a.tijd?a.tijd+"  ":"")+(a.klant||"")+(regel?"  -  "+regel:"")+(betaalUitleg(a)?"\n"+betaalUitleg(a):""))+'">'+
+  return '<div class="stop'+(plek?" optijd":"")+(a.klaar?" klaar":"")+(a.letop?" letop":"")+'"'+(MAG_BEWERKEN?' draggable="true"':'')+' data-id="'+esc(a.id)+'"'+
+    ' style="'+(plek||'')+'border-left-color:'+c.kleur+';'+(a.letop?'':'background:'+(c.vlak||c.zacht)+';color:'+(c.tekst||"#111")+';')+betaalRand(a)+'" title="'+esc((a.tijd?a.tijd+"  ":"")+(a.klant||"")+(regel?"  -  "+regel:"")+(betaalUitleg(a)?"\n"+betaalUitleg(a):""))+'">'+
     '<span class="kl">'+(a.tijd?esc(a.tijd)+" ":"")+esc(a.klant||c.naam)+'</span>'+
     (regel?'<span class="rg">'+esc(regel)+'</span>':"")+
     (a.wie?'<span class="rg">\ud83d\udc64 '+esc(a.wie)+'</span>':"")+'</div>';
@@ -1508,19 +1572,36 @@ function koppelBord(){
     el.addEventListener("dragleave", function(){ el.style.borderTop = ""; });
   });
   $("bord").querySelectorAll(".route").forEach(function(r){
-    r.addEventListener("dragover", function(e){ e.preventDefault(); r.classList.add("sleepdoel"); });
+    /* Op de tijdas laat een lijntje zien op welke tijd de stop komt als je
+       loslaat (op het kwartier). */
+    var as = r.querySelector(".tijdas"), lijn = as && as.querySelector(".sleeplijn");
+    function toonLijn(e){
+      if (!as || !lijn) return;
+      var ra = as.getBoundingClientRect();
+      if (e.clientY < ra.top || e.clientY > ra.bottom){ lijn.style.display = "none"; return; }
+      var m = tijdOpAs(as, e.clientY);
+      lijn.style.top = ((m - BORD_VAN*60) * BORD_PX / 60) + "px"; lijn.style.display = "block";
+      lijn.querySelector("b").textContent = tijdTekst(m);
+    }
+    r.addEventListener("dragover", function(e){ e.preventDefault(); r.classList.add("sleepdoel"); toonLijn(e); });
     r.addEventListener("dragleave", function(e){
       if (r.contains(e.relatedTarget)) return;
-      r.classList.remove("sleepdoel"); doelStop = null;
+      r.classList.remove("sleepdoel"); doelStop = null; if (lijn) lijn.style.display = "none";
     });
     r.addEventListener("drop", async function(e){
       e.preventDefault();
       r.classList.remove("sleepdoel");
+      if (lijn) lijn.style.display = "none";
       $("bord").querySelectorAll(".stop").forEach(function(x){ x.style.borderTop = ""; });
+      /* Losgelaten op de tijdas: de stop krijgt de tijd van die plek.
+         Daarbuiten (op de kop van de route) houdt hij zijn eigen tijd. */
+      var nieuweTijd = null;
+      if (as){ var ra = as.getBoundingClientRect();
+        if (e.clientY >= ra.top && e.clientY <= ra.bottom) nieuweTijd = tijdTekst(tijdOpAs(as, e.clientY)); }
       var id = e.dataTransfer.getData("text/plain");
       var voor = doelStop; doelStop = null;
       var a = afspraken.find(function(x){ return x.id===id; });
-      if (!a || voor === id) return;
+      if (!a || (voor === id && !nieuweTijd)) return;
       var nieuweDatum = r.dataset.datum, nieuwNr = Number(r.dataset.nr);
       var el = $("bord").querySelector('.stop[data-id="'+CSS.escape(id)+'"]');
       if (el) el.dataset.gesleept = "1";
@@ -1529,21 +1610,27 @@ function koppelBord(){
          staat nog op tijd en dan springt hij meteen terug. */
       var eerste = routesVan(nieuweDatum)[0].nr === nieuwNr;
       var rij = stopsVan(nieuweDatum, nieuwNr, eerste).filter(function(x){ return x.id !== id; });
-      var plek = voor ? rij.findIndex(function(x){ return x.id === voor; }) : -1;
-      if (plek < 0) rij.push(a); else rij.splice(plek, 0, a);
+      if (nieuweTijd){
+        /* Op tijd: de volgorde van de route volgt de tijden. */
+        rij.push(Object.assign({}, a, { tijd:nieuweTijd }));
+        rij.sort(function(x,y){ return String(x.tijd||"99").localeCompare(String(y.tijd||"99")); });
+      } else {
+        var plek = voor ? rij.findIndex(function(x){ return x.id === voor; }) : -1;
+        if (plek < 0) rij.push(a); else rij.splice(plek, 0, a);
+      }
       var volgorde = {};
       rij.forEach(function(x, i){ volgorde[x.id] = i + 1; });
       try{
         await bewaar(function(lijst){
           return lijst.map(function(x){
             if (x.id === id) return Object.assign({}, x, { datum:nieuweDatum, route:nieuwNr,
-              volg: volgorde[x.id], gewijzigdDoor:ik, gewijzigd:new Date().toISOString() });
+              volg: volgorde[x.id], gewijzigdDoor:ik, gewijzigd:new Date().toISOString() }, nieuweTijd ? { tijd:nieuweTijd } : {});
             if (volgorde[x.id] != null) return Object.assign({}, x, { volg: volgorde[x.id] });
             return x;
           });
         });
         try{ if(window.fpLog) window.fpLog("stop-verplaatst",(a.klant||"")+" -> "+nieuweDatum+" route "+nieuwNr+
-          " (plek "+volgorde[id]+")"); }catch(e){}
+          " (plek "+volgorde[id]+(nieuweTijd?", "+nieuweTijd:"")+")"); }catch(e){}
         teken();
       }catch(err){ meldVenster(err.message); }
     });
