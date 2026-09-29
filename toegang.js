@@ -97,6 +97,12 @@
     "maandcontrole": [
       "accountant", "dolf", "fonteynbot", "gerrit",
     ],
+    /* Kortingen: wie wanneer op welke producten korting geeft. Voorlopig
+       alleen Fonteynbot (Gerrit, 29 sep 2026); de accountant heeft erom
+       gevraagd. */
+    "kortingen": [
+      "fonteynbot",
+    ],
     // Externe toegang: wie externen mag uitnodigen (tegel externen.html).
     "externen": [
       "dolf", "fonteynbot", "gerrit",
