@@ -1,7 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" translate="no">
 <head>
 <meta charset="utf-8">
+<!-- Het portaal vertaalt zichzelf (taalkeuze rechtsboven). De vertaling van
+     de browser zou ook modelnamen vertalen ("Pleasure" werd "Plezier",
+     "Signature" werd "Handtekening"; Gerrit, 2 okt 2026), dus die staat uit. -->
+<meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Passion Partners</title>
@@ -185,8 +189,11 @@
   .vrr .leeg{color:var(--muted);font-size:12.5px;padding:2px 0}
   .vrr .meer{color:var(--muted);font-size:11.5px;padding-top:5px;border-top:1px solid #f1f2f1;cursor:pointer}
   .vrr .meer:hover{color:var(--red)}
-  .stock-card .knoppen{display:flex;gap:8px;flex-wrap:nowrap;margin-top:auto;padding-top:12px}
-  .stock-card .knoppen button{flex:1 1 0;white-space:nowrap}
+  /* Passen de twee knoppen niet naast elkaar (langere tekst in een andere
+     taal), dan gaat de tweede eronder in plaats van buiten het vak
+     (Gerrit, 2 okt 2026). */
+  .stock-card .knoppen{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:12px}
+  .stock-card .knoppen button{flex:1 1 auto;white-space:nowrap;min-width:0}
 
   /* Groen verkoopt. Rood was de merkkleur maar leest als een waarschuwing. */
   button.go{background:var(--green);color:#fff;border:0;border-radius:8px;font:inherit;font-weight:700;cursor:pointer}
