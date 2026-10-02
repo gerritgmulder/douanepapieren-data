@@ -22,6 +22,15 @@
   header .who{font-size:12px;color:var(--muted)}
   header button{background:#fff;color:var(--ink);border:1px solid var(--border);border-radius:6px;padding:6px 13px;font:inherit;font-size:12px;cursor:pointer}
   header button:hover{border-color:var(--red);color:var(--red)}
+  /* De mand valt op. Gerrit (2 okt 2026): "De knop 'Basket' moet ook
+     prominenter zichtbaar zijn met een Passion Spas kleur uit de huisstijl." */
+  header #cartBtn{background:var(--red);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:14px;font-weight:700;
+    display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(200,16,46,.28);transition:background .12s,transform .12s}
+  header #cartBtn.hidden{display:none}
+  header #cartBtn:hover{background:var(--red-dark);color:#fff;transform:translateY(-1px)}
+  header #cartBtn svg{width:18px;height:18px;flex:0 0 auto}
+  header #cartTel{background:#fff;color:var(--red);border-radius:999px;min-width:22px;height:22px;padding:0 6px;
+    display:inline-flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:800}
   /* Op een telefoon paste de kop niet.
      ═══════════════════════════════════════════════════════════════════════
      Gerrit (9 sep 2026): "ik wil dat er niet meer horizontaal gescrolld wordt
@@ -50,7 +59,13 @@
        te rekken. Op een telefoon is een tabel van zes kolommen anders een
        schuifbak waarin je de helft niet ziet. */
     table{width:100%;max-width:100%}
-    table td,table th{white-space:normal;overflow-wrap:anywhere;min-width:0}
+    /* break-word en geen anywhere: met anywhere brak "Delight" in de mand op
+       een telefoon in drie stukken (2 okt 2026). Koppen en knoppen op een regel. */
+    table td,table th{white-space:normal;overflow-wrap:break-word;min-width:0}
+    table th, table td button{white-space:nowrap}
+    /* In de mand op een telefoon: een kruisje in plaats van Remove, dan past de regel. */
+    .cdel .cdelTekst{display:none} .cdel .cdelX{display:inline!important;font-size:16px;line-height:1}
+    #cartOv .cq{width:46px!important}
   }
   main{max-width:1080px;margin:26px auto;padding:0 18px}
   .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin:14px 0}
@@ -240,6 +255,14 @@
   .laag > .card{animation:kaartIn .2s cubic-bezier(.2,.8,.3,1);box-shadow:0 24px 60px rgba(0,0,0,.28);
         max-height:88vh;overflow:auto;margin:0}
   .laag.boven > .card{margin:5vh 0}
+  .laag.stil, .laag.stil > .card{animation:none}
+  /* De mand in twee kolommen op een groot scherm: links wat erin zit, rechts
+     levering en betalen. Gerrit (2 okt 2026): "Basket moet echt een groter
+     venster zijn, want je moet er nu te veel in scrollen." */
+  .cartGrid{display:grid;grid-template-columns:minmax(0,1fr);column-gap:30px}
+  @media (min-width: 900px){ .cartGrid{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)} }
+  .cartGrid tr.weg{opacity:0;transition:opacity .15s}
+  .cdel .cdelX{display:none}
   @keyframes kaartIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
   .laag .vensterkop{display:flex;align-items:flex-start;gap:12px;margin-bottom:4px}
   .laag .vensterkop h2{flex:1;margin:0}
@@ -328,7 +351,7 @@
 <header>
   <img src="https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/passion-logo.png" alt="Passion Spas">
   <h1>Passion Partners</h1>
-  <button class="hidden" id="cartBtn" type="button" title="Your basket">Basket <span id="cartTel">0</span></button>
+  <button class="hidden" id="cartBtn" type="button" title="Your basket"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9h14l-1.4 9.2a2 2 0 0 1-2 1.8H8.4a2 2 0 0 1-2-1.8z"/><path d="M9 9l3-5 3 5"/></svg>Basket <span id="cartTel">0</span></button>
   <span class="who hidden" id="who"></span>
   <button class="hidden" id="pwBtn" type="button">Password</button>
   <button class="hidden" id="logoutBtn" type="button">Log out</button>
@@ -578,7 +601,7 @@ document.addEventListener("click", ()=>{
 function maakVenster(html, opties){
   const o = opties || {};
   const laag = document.createElement("div");
-  laag.className = "laag" + (o.boven ? " boven" : "");
+  laag.className = "laag" + (o.boven ? " boven" : "") + (o.stil ? " stil" : "");
   laag.innerHTML = html;
   document.body.appendChild(laag);
   const sluit = () => { document.removeEventListener("keydown", toets, true); laag.remove(); if (o.opSluiten) o.opSluiten(); };
@@ -1789,14 +1812,16 @@ function openReserve(model){
   /* De kleuren als opties voor het gedeelde keuzelijst-component: een stip
      voor op voorraad of backorder, het aantal rechts, en bij een samengesteld
      artikel eronder wat er in het pakket zit. */
-  const kleurOpties = [{ waarde: "", tekst: "Any colour is fine", stip: "geen" }].concat(
-    variants.map(v => {
+  /* Gerrit (2 okt 2026): "'Any colour is fine' mag weg want dat slaat nergens
+     op." Er staat nu meteen een kleur gekozen: de eerste die op voorraad is. */
+  const kleurOpties = variants.map(v => {
       const op = Number(v.free) > 0;
       const inh = bevatTekst(v);
       return { waarde: v.code, tekst: v.name || v.code, stip: op ? "op" : "back",
                bij: op ? (v.free + " in stock") : "backorder", bijKleur: op ? "op" : "back",
                onder: inh ? ("Includes " + inh) : "" };
-    }));
+    });
+  const eersteKleur = ((variants.find(v => Number(v.free) > 0) || variants[0] || {}).code) || "";
   const kiezer = variants.length ? `
     <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:5px;">Colour / version</label>
     <div id="rsvKies" class="kies" style="margin-bottom:14px;"></div>` : "";
@@ -1805,22 +1830,27 @@ function openReserve(model){
      gaan wisselt de foto; is er voor die kleur nog geen foto geüpload, dan
      blijft de modelfoto staan met een regel eronder. */
   const foto = `
-    <div id="rsvFoto" style="position:relative;height:190px;margin:0 0 14px;border-radius:10px;background:#f3f4f6;overflow:hidden;display:none;">
+    <div id="rsvFoto" style="position:relative;height:clamp(110px,24vh,190px);margin:0 0 14px;border-radius:10px;background:#f3f4f6;overflow:hidden;display:none;">
       <img alt="" style="width:100%;height:100%;object-fit:contain;display:block;transition:opacity .15s;">
       <span style="position:absolute;left:0;right:0;bottom:0;padding:5px 10px;font-size:11.5px;color:#fff;background:rgba(17,24,39,.55);display:none;"></span>
     </div>`;
 
   const html = `
-    <div class="card" style="max-width:470px;width:100%;padding:0;overflow:visible;">
-      <div style="height:6px;background:${esc(kleur)};border-radius:11px 11px 0 0"></div>
-      <div style="padding:20px 22px 22px;">
-        <div class="vensterkop">
+    <div class="card" style="max-width:470px;width:100%;padding:0;max-height:94vh;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="flex:0 0 6px;background:${esc(kleur)};border-radius:11px 11px 0 0"></div>
+      <div style="padding:20px 22px 18px;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;">
+        <div class="vensterkop" style="flex:0 0 auto;">
           <div style="flex:1;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
             <h2 style="font-size:19px;margin:0;">${esc(model)}</h2>
             ${m0.collection?`<span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:${esc(kleur)}">${esc(m0.collection)}</span>`:""}
           </div>
           <button class="sluit" type="button" data-sluit title="Close">&times;</button>
         </div>
+        <!-- Alleen dit middenstuk schuift; kop en knoppen blijven altijd in het
+             venster. Gerrit (2 okt 2026, foto): "Regelmatig vallen deze knoppen
+             van het venster af." De kaart stond op overflow:visible en werd op
+             een laptopscherm hoger dan het scherm. -->
+        <div style="flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 -22px;padding:0 22px;">
         <p class="lead" style="margin:7px 0 18px;">
           ${(Number(m0.vrijNu)>0)
             ? `<span style="color:var(--green);font-weight:700;">${Number(m0.vrijNu)} in stock now.</span> Our sales team confirms the details by e-mail.`
@@ -1842,7 +1872,8 @@ function openReserve(model){
         </div>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Notes (options, delivery, …)</label>
         <textarea id="rsvNote" rows="3" placeholder="Anything we should know?"></textarea>
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
+        </div>
+        <div style="flex:0 0 auto;display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
           <button class="secondary" type="button" data-sluit style="padding:11px 18px;">Cancel</button>
           <button class="go" id="rsvSend" type="button" style="padding:11px 22px;">Add to basket</button>
         </div>
@@ -1851,8 +1882,12 @@ function openReserve(model){
     </div>`;
   const { laag: ov, sluit } = maakVenster(html);
 
-  if (ov.querySelector("#rsvKies")) maakKiezer(ov.querySelector("#rsvKies"), kleurOpties, "", (w) =>
-    toonKleurfoto(ov, model, w, ((variants.find(v => String(v.code) === String(w)) || {}).name || "")));
+  if (ov.querySelector("#rsvKies")) {
+    maakKiezer(ov.querySelector("#rsvKies"), kleurOpties, eersteKleur, (w) =>
+      toonKleurfoto(ov, model, w, ((variants.find(v => String(v.code) === String(w)) || {}).name || "")));
+    ov.querySelector("#rsvKies").dataset.waarde = String(eersteKleur);
+    if (eersteKleur) toonKleurfoto(ov, model, eersteKleur, ((variants.find(v => String(v.code) === String(eersteKleur)) || {}).name || ""));
+  }
   koppelKleurfotos(ov, model, variants);
 
   /* Reserveren legt de spa in de winkelwagen; afrekenen gebeurt daar.
@@ -2489,7 +2524,8 @@ function geld(n){
   const usd = window.displayCurrency === "USD";
   return (usd ? "$ " : "€ ") + Number(n).toLocaleString(usd ? "en-US" : "de-DE", {minimumFractionDigits:2, maximumFractionDigits:2});
 }
-function openCart(){
+function openCart(opties){
+  const oc = opties || {};
   const bestaand = document.getElementById("cartOv"); if (bestaand) bestaand.remove();
   // Volledig betalen mag alleen als élke spa in de wagen nu op voorraad is.
   const spaRegels = cart.filter(r => r.soort === "spa");
@@ -2516,7 +2552,7 @@ function openCart(){
       <td class="n"><input type="number" class="cq" data-i="${i}" value="${Number(r.qty)||1}" min="1" max="99"
           style="width:60px;padding:5px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;text-align:right;"></td>
       <td class="n">${geld(cartRegelPrijs(r) * (Number(r.qty)||1))}</td>
-      <td class="n"><button class="secondary cdel" data-i="${i}" style="padding:4px 9px;font-size:12px;">Remove</button></td>
+      <td class="n"><button class="secondary cdel" data-i="${i}" title="Remove" aria-label="Remove" style="padding:4px 9px;font-size:12px;"><span class="cdelTekst">Remove</span><span class="cdelX">&times;</span></button></td>
     </tr>`).join("");
   /* De kaart past altijd op het scherm: kop en knoppen staan vast, alleen het
      middenstuk schuift. Gerrit (3 sep 2026) over de plandialoog: "dat venster
@@ -2528,13 +2564,15 @@ function openCart(){
      Dat het middenstuk schuift kan sinds de keuzelijsten zweven: die worden
      niet meer afgeknipt door de rand van een schuivend vlak. */
   const html = `
-    <div class="card" style="max-width:620px;width:100%;max-height:92vh;display:flex;flex-direction:column;">
+    <div class="card" style="max-width:1080px;width:100%;max-height:94vh;display:flex;flex-direction:column;">
       <div class="vensterkop" style="flex:0 0 auto;">
         <h2>Your basket</h2>
         <button class="sluit" type="button" data-sluit title="Close">&times;</button>
       </div>
       ${cart.length ? `
-       <div style="flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 -22px;padding:0 22px;">
+       <div class="cartMidden" style="flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 -22px;padding:0 22px;">
+       <div class="cartGrid">
+        <div>
         <div class="prijswrap" style="margin-top:6px;"><table class="prijs">
           <thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Total</th><th></th></tr></thead>
           <tbody>${rijen}</tbody>
@@ -2562,6 +2600,10 @@ function openCart(){
                   The sea freight for a full container depends on the destination; we quote it before you pay anything beyond the deposit.</p>`;
           return h;
         })()}
+        <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Notes (options, delivery, …)</label>
+        <textarea id="cartNote" rows="3" placeholder="Anything we should know?"></textarea>
+        </div>
+        <div>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Delivery</label>
         <div id="cartLever" class="kies"></div>
         <div id="ctrPaneel"></div>
@@ -2573,8 +2615,8 @@ function openCart(){
           <input type="text" inputmode="decimal" placeholder="e.g. 1500" style="width:180px;">
           <div class="lead" style="font-size:12px;margin:4px 0 0;">Parts are always paid in full on top of this amount.</div>
         </div>
-        <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Notes (options, delivery, …)</label>
-        <textarea id="cartNote" rows="2" placeholder="Anything we should know?"></textarea>
+        </div>
+       </div>
        </div>
         <div style="flex:0 0 auto;display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
           <button class="secondary" id="cartLeeg" type="button" style="padding:11px 16px;">Empty basket</button>
@@ -2585,8 +2627,17 @@ function openCart(){
       : `<p class="lead">Your basket is empty. Add spas from the <b>Spas</b> tab and parts from <b>Parts &amp; covers</b>.</p>
          <div style="text-align:right;margin-top:14px;"><button class="secondary" type="button" data-sluit style="padding:11px 18px;">Close</button></div>`}
     </div>`;
-  const { laag: ov, sluit } = maakVenster(html);
+  const { laag: ov, sluit } = maakVenster(html, { stil: !!oc.stil });
   ov.id = "cartOv";
+  /* Iets in de mand veranderen tekent de kaart op zijn plek opnieuw: zonder
+     dat het venster weg- en terugvouwt, op dezelfde hoogte, en met wat er al
+     bij de opmerking stond. Gerrit (2 okt 2026): "Ik wil gewoon dat de regel
+     verdwijnt zonder dat het venster veranderd ofzo." */
+  const herteken = () => {
+    const mid = ov.querySelector(".cartMidden"), nt = ov.querySelector("#cartNote"), eg = ov.querySelector("#cartEigen input");
+    const st = { scroll: mid ? mid.scrollTop : 0, note: nt ? nt.value : "", eigen: eg ? eg.value : "" };
+    sluit(); openCart({ stil: true, st });
+  };
   /* Betaalkeuze als eigen lijst: bij "volledig betalen" hoort uitleg waaróm
      dat mag, en dat past niet in een gewone keuzelijst. */
   /* Staat alles in Uddel, dan betaalt de partner in één keer.
@@ -2640,7 +2691,7 @@ function openCart(){
       /* De bedragen veranderen mee: bij een container vervalt de vracht. De
          kaart opnieuw opbouwen is hier het eerlijkst - anders staat er een
          totaal dat niet meer klopt bij de gekozen levering. */
-      sluit(); openCart();
+      herteken();
     });
     tekenContainer(ov);
     /* Afhalen of bezorgen. Alleen bij levering uit voorraad: een hele
@@ -2651,14 +2702,21 @@ function openCart(){
       vrachtHaalPrijs().then(() => tekenVracht(ov));
   }
   ov.querySelectorAll(".cdel").forEach(b => b.addEventListener("click", () => {
-    cart.splice(Number(b.dataset.i), 1); cartBewaar(); sluit(); openCart();
+    const tr = b.closest("tr"); if (tr) tr.classList.add("weg");
+    cart.splice(Number(b.dataset.i), 1); cartBewaar();
+    setTimeout(herteken, tr ? 150 : 0);
   }));
   ov.querySelectorAll(".cq").forEach(inp => inp.addEventListener("change", () => {
     cart[Number(inp.dataset.i)].qty = Math.max(1, Math.min(99, parseInt(inp.value, 10) || 1));
-    cartBewaar(); sluit(); openCart();
+    cartBewaar(); herteken();
   }));
   const leeg = ov.querySelector("#cartLeeg");
-  if (leeg) leeg.addEventListener("click", () => { cart = []; cartBewaar(); sluit(); openCart(); });
+  if (leeg) leeg.addEventListener("click", () => { cart = []; cartBewaar(); herteken(); });
+  if (oc.st) {
+    const nt = ov.querySelector("#cartNote"); if (nt && oc.st.note) nt.value = oc.st.note;
+    const eg = ov.querySelector("#cartEigen input"); if (eg && oc.st.eigen) eg.value = oc.st.eigen;
+    const mid = ov.querySelector(".cartMidden"); if (mid) mid.scrollTop = oc.st.scroll || 0;
+  }
   const af = ov.querySelector("#cartAf");
   /* Meekijken is kijken. Zonder deze regel loopt een collega tot de laatste
      knop door en krijgt dan "Your message needs another try" - Gerrit liep daar op vast
