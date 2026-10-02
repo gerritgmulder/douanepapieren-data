@@ -432,6 +432,8 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <input type="checkbox" id="show-fathers" checked>
         <span class="swatch father"></span> Vaderlijn
       </label>
+      <span class="legend"><span><span class="swatch father" style="border-top-color:#c62828"></span>L.G. Mr. Cowboy</span>
+        <span><span class="swatch father" style="border-top-color:#1a2f6b"></span>Mr. Outlaw</span></span>
       <span class="zoom-control">
         <span class="zoom-label">Zoom</span>
         <input type="range" id="zoom-slider" min="30" max="200" value="100" step="1">
@@ -1282,12 +1284,16 @@ function drawLines(){
     }
     if(rel.father && showF){
       const fR = rectFor(rel.father);
-      if(fR) drawPath(fR, cR, "father");
+      if(fR) drawPath(fR, cR, "father", VADER_KLEUR[rel.father]);
     }
   }
 }
 
-function drawPath(fromR, toR, type){
+/* Eigen kleur voor de vaderlijn van de dekstieren met veel kalveren,
+   zodat je hun lijnen in één oogopslag uit elkaar houdt. */
+const VADER_KLEUR = { "cowboy": "#c62828", "outlaw": "#1a2f6b" };
+
+function drawPath(fromR, toR, type, kleur){
   let x1, y1, x2, y2, d;
   const horizontal = fromR.right <= toR.left || fromR.left >= toR.right;
   if(fromR.right <= toR.left){
@@ -1329,7 +1335,7 @@ function drawPath(fromR, toR, type){
   const p = document.createElementNS("http://www.w3.org/2000/svg","path");
   p.setAttribute("d", d);
   p.setAttribute("fill","none");
-  p.setAttribute("stroke", type==="mother" ? "var(--v-line)" : "var(--m-line)");
+  p.setAttribute("stroke", kleur || (type==="mother" ? "var(--v-line)" : "var(--m-line)"));
   p.setAttribute("stroke-width","2");
   p.setAttribute("opacity","0.85");
   if(type==="father") p.setAttribute("stroke-dasharray","5 4");

@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-02", bestand: "koeien.html", soort: "beter",
+      titel: "Stamboom: eigen kleur voor Cowboy en Outlaw",
+      wat:   "De vaderlijn van L.G. Mr. Cowboy is nu rood en die van Mr. Outlaw donkerblauw, zodat je hun kalveren in één oogopslag ziet. De uitleg staat bovenaan de stamboom."
+    },
+    {
+      datum: "2026-10-02", bestand: "koeien.html", soort: "beter",
       titel: "Koeien bij Dolf: ouders kiezen en elke koe in de stamboom",
       wat:   "In de tabel staat nu een kolom Ouders: klik erop om moeder en vader te kiezen, ook bij koeien die er al in staan. Een nieuwe koe krijgt in de stamboom meteen een eigen plek bij haar geboortejaar. Angelina staat er weer bij."
     },
