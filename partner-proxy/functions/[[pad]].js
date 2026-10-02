@@ -36,9 +36,13 @@ export async function onRequest({ request }) {
   const bron = new URL(request.url);
   const doel = new URL(bron.pathname + bron.search, WORKER);
 
-  /* Het lege pad hoort bij het portaal. Anders komt een dealer die
-     partner.passionspas.com intikt op een 404 van de worker uit. */
+  /* Het portaal staat op de voordeur. Gerrit (2 okt 2026): "'/dealers' moet
+     weg uit de url, want ze heten 'partners'." Wat niet met /dealers begint
+     krijgt het er hier voor: partner.passionspas.com/welkom?t=... gaat naar
+     /dealers/welkom van de worker, de voordeur naar /dealers. Wat de pagina
+     zelf ophaalt (/dealers/api/...) en oude links in mails blijven werken. */
   if (bron.pathname === "/") doel.pathname = "/dealers";
+  else if (!/^\/dealers(\/|$)/.test(bron.pathname)) doel.pathname = "/dealers" + bron.pathname;
 
   const door = new Request(doel, request);
   door.headers.set("X-Partner-Proxy", "1");        // alleen om in de logs te zien waar het vandaan komt

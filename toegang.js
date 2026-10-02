@@ -173,7 +173,10 @@
        prijslijsten en vroeg zelf of ze haar handleidingen en afbeeldingen in
        het partnerportaal kan zetten. Dat kan nu, in het blok Bibliotheek. */
     "dealerportaal": [
-      "arno", "chantal", "don", "fonteynbot", "gerrit", "gretha",
+      /* Alle spa-adviseurs erbij (Gerrit, 2 okt 2026): wie in aug/sep 2026
+         spa's verkocht volgens Logic4. */
+      "ahmed", "arno", "bert", "chantal", "dali", "don", "edwin", "fonteynbot",
+      "gerrit", "gretha", "luis", "patrick", "yves",
     ],
     /* Passion Partners Amerika: nog een lege tegel, alleen voor Chantal en
        Arno (Gerrit, 14 sep 2026). */
@@ -228,8 +231,9 @@
          keek naar precies dezelfde groep - maar het viel toen wel pas op.
          Chantal erbij op 25 aug 2026 (Gerrit): zij werkt mee aan Passion
          Partners en moet het portaal kunnen zien zoals een dealer het ziet. */
-      "arno", "chantal", "dolf", "fonteynbot", "gerrit", "gretha",
-      "manon",
+      /* Alle spa-adviseurs erbij op 2 okt 2026 (Gerrit). */
+      "ahmed", "arno", "bert", "chantal", "dali", "dolf", "edwin", "fonteynbot",
+      "gerrit", "gretha", "luis", "manon", "patrick", "yves",
     ],
     /* Uren. Stond open voor iedereen, maar Gerrit (19 aug 2026): "Mijn uren
        mag nog verborgen blijven voor iedereen, behalve voor mij zichtbaar."

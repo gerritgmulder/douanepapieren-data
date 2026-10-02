@@ -285,6 +285,14 @@ const DP_SESS_TTL  = 30 * 24 * 3600;     // sessie 30 dagen
    draait in de cron, waar geen verzoek en dus geen url is. DP_PUBLIC_ORIGIN
    staat in wrangler.toml, dus in de praktijk komt hij daar nooit voorbij. */
 const dpOrigin = (env, url) => (env && env.DP_PUBLIC_ORIGIN) || (url && url.origin) || "";
+/* Het adres van het portaal zelf, zoals een partner het in zijn adresbalk ziet.
+   Gerrit (2 okt 2026): "'/dealers' moet weg uit de url, want ze heten
+   'partners'." Op partner.passionspas.com is het portaal de voordeur (de
+   doorgeefpagina in partner-proxy zet /dealers er zelf voor); op workers.dev
+   blijft het /dealers, want daar staat op de voordeur iets anders.
+   Alleen voor wat een partner ziet: het logo in de mail en de webhook van
+   Mollie houden hun gewone pad. */
+const dpPad = (env, url) => (env && env.DP_PUBLIC_ORIGIN) ? env.DP_PUBLIC_ORIGIN.replace(/\/$/, "") : (dpOrigin(env, url) + "/dealers");
 
 /* HUISSTIJL VAN HET PORTAAL - logo, mailopmaak, paginaopmaak
    ═══════════════════════════════════════════════════════════════════════
@@ -328,7 +336,7 @@ function dpMailShell(env, url, binnen) {
     'style="width:230px;max-width:72%;height:auto;display:inline-block;border:0;"></div>' +
     '<div style="padding:28px 30px;color:#1f2937;font-size:15px;line-height:1.65;">' + binnen + '</div>' +
     '<div style="padding:16px 30px 24px;border-top:1px solid #eeeeec;color:#9ca3af;font-size:12px;line-height:1.7;text-align:center;">' +
-    'Passion Partners<br><a href="' + dpOrigin(env, url) + '/dealers" style="color:#c8102e;text-decoration:none;">' + site + '</a>' +
+    'Passion Partners<br><a href="' + dpPad(env, url) + '" style="color:#c8102e;text-decoration:none;">' + site + '</a>' +
     '<br>Questions? Just reply to this email.</div></div></div>';
 }
 
@@ -576,7 +584,7 @@ async function dpHandleLogin(request, env, url) {
   if (!dealer) return generic;
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("dp-login:" + token, JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_LOGIN_TTL });
-  const link = dpOrigin(env, url) + "/dealers/auth?t=" + token;
+  const link = dpPad(env, url) + "/auth?t=" + token;
   await dpSendEmail(env, email, "Your Passion Partners login link",
     dpMailShell(env, url,
       '<p style="margin:0 0 14px;">Hello ' + String(dealer.company || "").replace(/[<>&]/g, "") + ',</p>' +
@@ -620,11 +628,11 @@ function dpAuthPagina(env, url, t, kop, tekst, knop) {
        verstuurt de pagina zichzelf zodra hij openstaat, en zie je hem hooguit
        een fractie van een seconde. De knop blijft staan voor wie JavaScript
        uit heeft - dan is het weer één klik in plaats van een doodlopende weg. */
-    (knop ? ("<form method='POST' id='dr' action='" + dpOrigin(env, url) + "/dealers/auth'>" +
+    (knop ? ("<form method='POST' id='dr' action='" + dpPad(env, url) + "/auth'>" +
       "<input type='hidden' name='t' value='" + t.replace(/[^A-Za-z0-9-]/g, "") + "'>" +
       "<button type='submit' style='background:#c8102e;color:#fff;border:0;font-weight:bold;font-size:15px;padding:14px 30px;border-radius:10px;cursor:pointer;margin-top:12px'>" + knop + "</button></form>" +
       "<script>document.getElementById('dr').submit();<\/script>")
-      : ("<p style='margin:20px 0 0'><a href='" + dpOrigin(env, url) + "/dealers' style='color:#c8102e;font-weight:bold;text-decoration:none'>Back to the portal</a></p>")),
+      : ("<p style='margin:20px 0 0'><a href='" + dpPad(env, url) + "' style='color:#c8102e;font-weight:bold;text-decoration:none'>Back to the portal</a></p>")),
     knop ? 200 : 400);
 }
 
@@ -653,7 +661,7 @@ async function dpHandleAuth(request, env, url) {
   await dpLogPartner(env, { email: login.email, company: login.company }, "login", "inloglink");
   // Token in het URL-FRAGMENT (#s=…), niet als queryparameter: fragmenten
   // verlaten de browser nooit (geen server/proxy-logs, geen referrers).
-  return new Response(null, { status: 302, headers: { "Location": dpOrigin(env, url) + "/dealers#s=" + sess } });
+  return new Response(null, { status: 302, headers: { "Location": dpPad(env, url) + "#s=" + sess } });
 }
 
 // Voorraad-aggregatie per model — NIEUWE definitie (Arno/Chantal, 15 jul):
@@ -1975,7 +1983,7 @@ async function dpHandleReserve(request, env, sess, url) {
                 : (spaAantal ? "30% deposit" : "Payment")));
     const pay = await dpCreateMolliePayment(env, deposit,
       label + " — " + samenvatting + " (" + (sess.company || sess.email) + ")",
-      dpOrigin(env, url) + "/dealers?paid=1",
+      dpPad(env, url) + "?paid=1",
       url.origin + "/dealers/webhook",
       { requestId: entry.id }, currency);
     if (pay.ok) {
@@ -2049,7 +2057,7 @@ async function dpHandleReserve(request, env, sess, url) {
 
   await dpLogPartner(env, sess, "reservering-aangevraagd",
     samenvatting + (checkoutUrl ? " — betaallink " + sym + (entry.deposit != null ? entry.deposit.toFixed(2) : "") : ""));
-  return reply(200, { ok: true, checkoutUrl, deposit: entry.deposit || null, currency,
+  return reply(200, { ok: true, id: entry.id, checkoutUrl, deposit: entry.deposit || null, currency,
                       payFull: !!entry.payFull, testbetaling: !!entry.testbetaling,
                       levering, regels: regels.length });
 }
@@ -2146,7 +2154,7 @@ async function dpHandleMyRequests(env, sess) {
     /* items erbij: sinds de winkelwagen kan één aanvraag meerdere spa's én
        onderdelen bevatten. Zonder deze regel zag een partner alleen de eerste
        regel terug en leek de rest van zijn bestelling verdwenen. */
-    .map(r => ({ ts: r.ts, model: r.model, qty: r.qty, status: r.status,
+    .map(r => ({ id: r.id, ts: r.ts, model: r.model, qty: r.qty, status: r.status,
                  items: Array.isArray(r.items) && r.items.length > 1
                    ? r.items.map(x => ({ qty: x.qty, naam: x.soort === "spa" ? x.model : (x.naam || x.code),
                                          variantName: x.variantName || null })) : null,
@@ -2280,7 +2288,7 @@ async function dpHandleOverzetten(request, env, sess, url) {
         '<p>Your order from the fair has been moved to your own Passion Partners account:</p>' +
         '<p><b>' + esc(wat) + '</b></p>' +
         '<p>You can follow it under <b>My spas</b> after logging in at ' +
-        '<a href="' + dpOrigin(env, url) + '/dealers">' + esc(dpOrigin(env, url).replace(/^https?:\/\//, "")) + '</a>.</p>'),
+        '<a href="' + dpPad(env, url) + '">' + esc(dpOrigin(env, url).replace(/^https?:\/\//, "")) + '</a>.</p>'),
       (accounts.contactEmail || undefined), dpAdviseurVan(accounts, naar));
     mailSent = !!(r && r.ok);
   } catch (e) { /* mail is bijzaak */ }
@@ -2864,7 +2872,7 @@ async function dpAdminReserveFor(request, env, url) {
   const samenvatting = regelsUit.map(r => r.qty + "x " + r.model).join(", ");
   const pay = await dpCreateMolliePayment(env, deposit,
     "30% deposit — " + samenvatting + (entry.company ? " (" + entry.company + ")" : ""),
-    dpOrigin(env, url) + "/dealers?paid=1", url.origin + "/dealers/webhook",
+    dpPad(env, url) + "?paid=1", url.origin + "/dealers/webhook",
     { requestId: entry.id }, currency);
   if (!pay.ok) return reply(502, { ok: false, error: pay.error || "mollie-failed" });
   entry.paymentId = pay.id;
@@ -3039,8 +3047,8 @@ async function dpRestMail(env, item, accounts, soort, url) {
   const rest = dpRestBedrag(item);
   const tot = item.restKlaar ? dpWanneer(item.restKlaar.deadline) : "";
   const knop = (tekst) =>
-    '<p style="margin:26px 0;text-align:center;"><a href="' + dpOrigin(env, url) +
-    '/dealers#rest=' + encodeURIComponent(item.id) + '" style="background:#c8102e;color:#fff;' +
+    '<p style="margin:26px 0;text-align:center;"><a href="' + dpPad(env, url) +
+    '#rest=' + encodeURIComponent(item.id) + '" style="background:#c8102e;color:#fff;' +
     'text-decoration:none;font-weight:bold;font-size:15px;padding:15px 34px;border-radius:10px;' +
     'display:inline-block;">' + tekst + '</a></p>';
 
@@ -3090,11 +3098,11 @@ async function dpRestMail(env, item, accounts, soort, url) {
     /* De vraag na 48 uur. Positief gesteld, ook al gaat het over geld dat nog
        moet komen: zie de regel dat een partner nooit een ontkenning leest. */
     const knopJa =
-      '<a href="' + dpOrigin(env, url) + '/dealers#keuze=' + encodeURIComponent(item.id) + '&antwoord=ja" ' +
+      '<a href="' + dpPad(env, url) + '#keuze=' + encodeURIComponent(item.id) + '&antwoord=ja" ' +
       'style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;font-size:14px;' +
       'padding:13px 26px;border-radius:10px;display:inline-block;margin:0 6px 8px 0;">Yes, move my reservation</a>';
     const knopNee =
-      '<a href="' + dpOrigin(env, url) + '/dealers#keuze=' + encodeURIComponent(item.id) + '&antwoord=nee" ' +
+      '<a href="' + dpPad(env, url) + '#keuze=' + encodeURIComponent(item.id) + '&antwoord=nee" ' +
       'style="background:#ffffff;color:#c8102e;border:2px solid #c8102e;text-decoration:none;font-weight:bold;' +
       'font-size:14px;padding:11px 24px;border-radius:10px;display:inline-block;margin:0 0 8px 0;">Keep this one, I will pay</a>';
     onderwerp = "Your spa is waiting - which way would you like it?";
@@ -3126,8 +3134,8 @@ async function dpRestMail(env, item, accounts, soort, url) {
       '<p>Your reservation is waiting for a deposit, so your spa is back in stock for now.</p>' +
       '<p><b>' + wat + '</b></p>' +
       '<p>Want it after all? One click puts everything back in your basket with the same prices, and you can pay straight away.</p>' +
-      '<p style="margin:26px 0;text-align:center;"><a href="' + dpOrigin(env, url) +
-      '/dealers#opnieuw=' + encodeURIComponent(item.id) + '" style="background:#c8102e;color:#fff;' +
+      '<p style="margin:26px 0;text-align:center;"><a href="' + dpPad(env, url) +
+      '#opnieuw=' + encodeURIComponent(item.id) + '" style="background:#c8102e;color:#fff;' +
       'text-decoration:none;font-weight:bold;font-size:15px;padding:15px 34px;border-radius:10px;' +
       'display:inline-block;">Reserve again</a></p>' +
       '<p style="color:#6b7280;font-size:13px;">Prefer a different model or colour? Reply to this e-mail and your advisor will look at it with you.</p>';
@@ -3169,7 +3177,7 @@ async function dpHandleRestbetaling(request, env, sess, url) {
 
   const pay = await dpCreateMolliePayment(env, bedrag,
     "Restbetaling " + (item.logic4OrderId ? "order " + item.logic4OrderId : "Passion Partners"),
-    dpOrigin(env, url) + "/dealers?restpaid=1", (url ? url.origin : dpOrigin(env, url)) + "/dealers/webhook",
+    dpPad(env, url) + "?restpaid=1", (url ? url.origin : dpOrigin(env, url)) + "/dealers/webhook",
     { requestId: item.id, rest: "1" }, item.currency || "EUR");
   if (!pay.ok) return reply(502, { ok: false, error: pay.error || "mollie-failed" });
   item.restPaymentId = pay.id;
@@ -3781,7 +3789,7 @@ async function dpAdminLoginLink(request, env, url) {
   if (!dealer) return reply(404, { ok: false, error: "geen actieve dealer met dit e-mailadres" });
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("dp-login:" + token, JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_ADMIN_LINK_TTL });
-  return reply(200, { ok: true, link: dpOrigin(env, url) + "/dealers/auth?t=" + token, validDays: DP_ADMIN_LINK_TTL / 86400 });
+  return reply(200, { ok: true, link: dpPad(env, url) + "/auth?t=" + token, validDays: DP_ADMIN_LINK_TTL / 86400 });
 }
 
 // ─── Uitnodigen van een nieuwe dealer of partner ─────────────────────
@@ -3807,7 +3815,7 @@ async function dpAdminUitnodigen(request, env, url) {
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("dp-invite:" + token,
     JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_INVITE_TTL });
-  const link = dpOrigin(env, url) + "/dealers/welkom?t=" + token;
+  const link = dpPad(env, url) + "/welkom?t=" + token;
   const naam = dealer.company ? String(dealer.company) : "partner";
   const sent = await dpSendEmail(env, email, "Welcome to Passion Partners",
     dpMailShell(env, url,
@@ -3818,7 +3826,7 @@ async function dpAdminUitnodigen(request, env, url) {
       '<p style="margin:28px 0;text-align:center;"><a href="' + link + '" ' +
       'style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;font-size:15px;padding:15px 34px;border-radius:10px;display:inline-block;">Activate your account</a></p>' +
       '<p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0;">The link is valid for 7 days and lets you choose ' +
-      'your own password. After that, log in any time at <a href="' + dpOrigin(env, url) + '/dealers" style="color:#c8102e;">' +
+      'your own password. After that, log in any time at <a href="' + dpPad(env, url) + '" style="color:#c8102e;">' +
       dpOrigin(env, url).replace(/^https?:\/\//, "") + '/dealers</a>.</p>'),
     (accounts.contactEmail || undefined), dpAdviseurVan(accounts, email));
   await dpLogPartner(env, { email, company: dealer.company || "" }, "uitnodiging-verstuurd",
@@ -3875,13 +3883,13 @@ async function dpHandleWelkom(request, env, url) {
       "f.textContent='';" +
       "var r=await fetch('/dealers/welkom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({t:" + JSON.stringify(t.replace(/[^A-Za-z0-9-]/g, "")) + ",password:a})});" +
       "var j=await r.json().catch(function(){return{}});" +
-      "if(j.ok){location.href='/dealers#s='+j.session;}" +
+      "if(j.ok){location.href='" + dpPad(env, url) + "#s='+j.session;}" +
       "else{f.textContent=j.error==='wachtwoord-te-kort'?'Use at least 8 characters for your password.':'This link has done its work. Ask us for a fresh invitation.';}" +
       "});</script>"
     : "<h2 style='margin:0 0 10px;font-size:19px;color:#1f2937'>Link expired</h2>" +
       "<p style='color:#555;line-height:1.5'>This invitation link has done its work. " +
       "Ask us for a fresh invitation, or log in with your password if you already chose one.</p>" +
-      "<p style='margin:20px 0 0'><a href='/dealers' style='color:#c8102e;font-weight:bold;text-decoration:none'>Go to the portal</a></p>";
+      "<p style='margin:20px 0 0'><a href='" + dpPad(env, url) + "' style='color:#c8102e;font-weight:bold;text-decoration:none'>Go to the portal</a></p>";
 
   return dpPaginaShell(env, url, "Welcome to Passion Partners", binnen, invite ? 200 : 400);
 }
@@ -5069,6 +5077,7 @@ async function dpRefreshProductie(env) {
         iko: o.Id, fabriek: o.CreditorCompanyName || "", ref: String(o.Remarks || "").trim().slice(0, 80) || null,
         qty, eta: (r.ExpectedDeliveryDate || "").slice(0, 10) || null,
         code, kleur: codeToKleur[code] || null, uitvoering: codeToUitvoering[code] || null,
+        voorOrder: prodVoorOrder(r),
       });
     }
   }
@@ -5192,7 +5201,11 @@ const IKO_MODEL_PER_KLEUR = {
 
 // aliassen: door een mens vastgelegde koppeling "zoals Chantal het typt" →
 // "zoals het model in de catalogus heet". Eén keer kiezen, daarna onthouden.
-function ikoZoekArtikel(catalog, model, kleur, skirt, aliassen) {
+/* De uitvoering van een catalogusartikel: alles na het tweede streepje
+   ("Pleasure Spa | Sterling White with GREY/oak | IntelliSaver"). */
+function ikoUitvoeringVan(desc) { const d = String(desc || "").split("|"); return d.length > 2 ? d.slice(2).join(" ").trim().toLowerCase() : ""; }
+function ikoZoekArtikel(catalog, model, kleur, skirt, aliassen, uitvoering) {
+  const gewenst = String(uitvoering || "").toLowerCase().replace(/\s+/g, "");
   const modellen = catalog.models || {};
   let varianten = modellen[model] || [];
   let viaAndereNaam = null;
@@ -5271,23 +5284,46 @@ function ikoZoekArtikel(catalog, model, kleur, skirt, aliassen) {
     // won de eerste. Drie letters doen nu wél mee.
     const woorden = schoon.split(" ").filter(w => w.length >= 3);
     let beste = null, besteScore = 0;
-    for (const v of varianten) {
+    /* Alleen de uitvoering die gevraagd is: een IntelliSaver-regel kiest uit de
+       IntelliSaver-artikelen, een gewone regel uit de gewone. */
+    const metUit = varianten.filter(v => ikoUitvoeringVan(v.desc).replace(/\s+/g, "").includes(gewenst));
+    const zonderUit = varianten.filter(v => !ikoUitvoeringVan(v.desc));
+    const kandidaten = gewenst ? metUit : (zonderUit.length ? zonderUit : varianten);
+    for (const v of kandidaten) {
       const d = String(v.desc || "").toLowerCase();
-      let score = woorden.filter(w => d.includes(w)).length;
+      const kleurRaak = woorden.filter(w => d.includes(w)).length;
+      /* De kleur moet kloppen. De omkasting alleen is geen treffer: daardoor
+         werd een Soulmate in Espresso een Desert Horizon met dezelfde trim
+         (Chantal, 2 okt 2026). */
+      if (woorden.length && !kleurRaak) continue;
+      let score = kleurRaak;
       // De trim weegt zwaar: hij is juist het onderscheid tussen twee
       // artikelen die verder identiek heten.
       if (trim && d.includes(trim)) score += 3;
       else if (trim && /grey\/oak|oak\/grey/.test(d)) score -= 2;   // de ándere trim
+      /* De uitvoering weegt het zwaarst (Chantal, 2 okt 2026: IntelliSaver
+         werd een gewone spa). Gevraagd en aanwezig: flink erbij. Een gewone
+         regel mag nooit op een IntelliSaver- of andere uitvoering landen. */
       if (score > besteScore) { besteScore = score; beste = v; }
+    }
+    if (gewenst && !beste) {
+      const beschikbaar = varianten.filter(v => ikoUitvoeringVan(v.desc).replace(/\s+/g, "").includes(gewenst))
+        .map(v => String(v.desc || "").split("|").slice(1).join(" |").trim()).slice(0, 6);
+      return { geenKleur: true, geenUitvoering: uitvoering, beschikbaar };
     }
     if (beste && besteScore > 0) return { ...beste, zeker: modelZeker, viaAndereNaam };
   }
   // Is er maar één uitvoering, dan kan het niet mis: die nemen we. Staat er in
   // Logic4 bij die ene uitvoering geen kleur ("Tropic Spas | Bermuda Spa",
   // 100626), dan is er ook niets te controleren (Chantal, 24 sep 2026).
-  if (varianten.length === 1) {
+  if (varianten.length === 1 && (!gewenst || ikoUitvoeringVan(varianten[0].desc).replace(/\s+/g, "").includes(gewenst))) {
     const zonderKleur = String(varianten[0].desc || "").split("|").length <= 2;
-    return { ...varianten[0], zeker: zonderKleur && modelZeker, viaAndereNaam };
+    /* Vraagt de proforma een kleur die in die ene uitvoering nergens staat
+       (Corsica Diamond in BLACK, terwijl Logic4 alleen White kent), dan is het
+       een voorstel om na te kijken en geen zekerheid. */
+    const dEen = String(varianten[0].desc || "").toLowerCase();
+    const kleurOk = !schoon || schoon.split(" ").filter(w => w.length >= 3).some(w => dEen.includes(w));
+    return { ...varianten[0], zeker: zonderKleur && modelZeker && kleurOk, viaAndereNaam };
   }
   // Anders: de gevraagde kleur bestaat niet bij dit model. Vroeger pakten we
   // dan de eerste uitvoering en zetten er 'onzeker' bij — dat leverde een
@@ -5342,10 +5378,13 @@ async function ikoVoorstel(env, body) {
   const uit = [], waarschuwingen = [];
   for (const r of regels) {
     const model = r.model || null;
-    const art = model ? ikoZoekArtikel(catalog, model, r.kleur, r.skirt, aliassen) : null;
+    const art = model ? ikoZoekArtikel(catalog, model, r.kleur, r.skirt, aliassen, r.uitvoering) : null;
     if (!model) waarschuwingen.push("Onbekende fabriekscode: " + (r.code || "?"));
     else if (art && art.meerdere)
       waarschuwingen.push(model + " komt in Logic4 onder meerdere namen voor (" + art.meerdere.join(", ") + ") — kies de juiste handmatig.");
+    else if (art && art.geenUitvoering)
+      waarschuwingen.push(model + " staat op de proforma als " + art.geenUitvoering + ", maar in Logic4 is er in de kleur \"" + (r.kleur || "?") + "\" nog geen " + art.geenUitvoering + "-artikel" +
+        (art.beschikbaar && art.beschikbaar.length ? (" (wél: " + art.beschikbaar.join(", ") + ")") : "") + ". Maak dat artikel in Logic4 aan of kies het handmatig.");
     else if (art && art.geenKleur)
       waarschuwingen.push(model + " bestaat in Logic4 niet in de kleur \"" + (r.kleur || "?") + "\"" +
         (art.beschikbaar && art.beschikbaar.length ? (" — wél in: " + art.beschikbaar.join(", ")) : "") + ".");
@@ -5354,6 +5393,8 @@ async function ikoVoorstel(env, body) {
     else if (!art.zeker) waarschuwingen.push(model + ": kleur \"" + (r.kleur || "") + "\" niet herkend — controleer de artikelcode");
     uit.push({
       code: r.code || null, model, kleur: r.kleur || null, skirt: r.skirt || null,
+      uitvoering: r.uitvoering || null, klantOrder: r.klantOrder ? String(r.klantOrder).replace(/\D/g, "").slice(0, 12) : null,
+      klantNaam: r.klantNaam ? String(r.klantNaam).slice(0, 60) : null,
       aantal: Number(r.aantal) || 0,
       prijs: r.prijs != null ? Number(r.prijs) : null,
       artikelcode: (art && !art.meerdere && !art.geenKleur) ? art.code : null,
@@ -5524,6 +5565,16 @@ function koersTekst(k) {
   return "1 EUR = " + String(k.koers).replace(".", ",") + " USD (ECB" + (k.datum ? " " + k.datum.split("-").reverse().join("-") : "") + ")";
 }
 
+/* Voor welke klantorder is deze inkoopregel besteld? Logic4 vult OrderId als
+   de regel aan een verkooporder hangt; anders staat het in de omschrijving of
+   de opmerking ("voor order 3513920 B..."), zoals het Dashboard het sinds
+   2 okt 2026 meegeeft. */
+function prodVoorOrder(r) {
+  const id = Number(r && r.OrderId) || 0;
+  if (id > 0) return id;
+  const m = String(((r && r.Description) || "") + " " + ((r && r.InternalNote) || "")).match(/voor order\s+(\d{6,9})/i);
+  return m ? Number(m[1]) : null;
+}
 /* Eén inkooporder opnieuw in voorraad-productie zetten (zie dpRefreshProductie
    voor de volledige ronde; die draait om de zes uur). */
 async function prodVernieuwIko(env, token, ikoId, fabriek, ref) {
@@ -5548,12 +5599,131 @@ async function prodVernieuwIko(env, token, ikoId, fabriek, ref) {
     const code = String(x.ProductCode || ""), model = codeToModel[code]; if (!model) continue;
     const qty = Number(x.QtyToDeliver) || Number(x.QtyToOrder) || 0; if (qty <= 0) continue;
     (prod.models[model] = prod.models[model] || []).push({ iko: Number(ikoId), fabriek, ref: String(ref || "").slice(0, 80) || null,
-      qty, eta: (x.ExpectedDeliveryDate || "").slice(0, 10) || null, code, kleur: codeToKleur[code] || null, uitvoering: codeToUitvoering[code] || null });
+      qty, eta: (x.ExpectedDeliveryDate || "").slice(0, 10) || null, code, kleur: codeToKleur[code] || null, uitvoering: codeToUitvoering[code] || null,
+      voorOrder: prodVoorOrder(x) });
   }
   for (const m of Object.keys(prod.models)) if (!prod.models[m].length) delete prod.models[m];
   prod.updated = new Date().toISOString();
   await env.FONTEYN_DATA.put("voorraad-productie", JSON.stringify(prod));
   return true;
+}
+
+/* INKOOPORDER GELIJKZETTEN MET DE PROFORMA
+   ═══════════════════════════════════════════════════════════════════════════
+   Chantal (2 okt 2026), inkooporder 37989 (proforma 3388) en 37984 (3342):
+   de IntelliSaver-spa's stonden er als gewone spa in, alles na regel 64
+   ontbrak, en de spa's die voor een klant besteld zijn hadden geen klant.
+
+   Per artikelcode: wat de proforma vraagt (voorraad plus per klant) naast wat
+   er op de inkooporder staat (QtyToOrder, ook wat al geleverd is). Dan:
+   - een klantregel die er nog niet is, komt erbij als eigen regel, met het
+     ordernummer en de naam, gekoppeld aan de orderregel van die klant;
+   - staat er van een artikel zonder klant meer dan de proforma vraagt, dan
+     gaat het aantal omlaag (nooit onder wat al geleverd is);
+   - staat er minder, dan komt het verschil erbij.
+   Elke aanroep rekent opnieuw vanaf wat er nu in Logic4 staat en doet hooguit
+   een blok wijzigingen; het scherm roept hem aan tot er niets meer over is.
+   Zonder bevestigd: alleen het plan. */
+async function ikoGelijkzetten(env, body) {
+  const buyOrderId = Number(body.buyOrderId) || 0;
+  const regels = (Array.isArray(body.regels) ? body.regels : []).filter(r => r && r.artikelcode && Number(r.aantal) > 0);
+  if (!buyOrderId || !regels.length) return { ok: false, error: "geen inkooporder of regels" };
+  const ref = String(body.referentie || "").trim();
+  const reeds = (await env.FONTEYN_DATA.get("voorraad-inkooporders", { type: "json" })) || { orders: {} };
+  reeds.orders = reeds.orders || {};
+  const rec = ref ? reeds.orders[ref] : null;
+  const token = await l4Token(env);
+  let sub = 1;
+  const call = async (pad, payload, methode) => {
+    sub++;
+    const r = await fetch("https://api.logic4server.nl" + pad, { method: methode || "POST",
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    const tekst = await r.text(); let j = null; try { j = JSON.parse(tekst); } catch (e) {}
+    if (!r.ok) throw new Error(pad + " → HTTP " + r.status + " " + tekst.slice(0, 160));
+    return j;
+  };
+  const rj = await call("/v3/BuyOrders/GetBuyOrderRowsByFilter", { BuyOrderId: buyOrderId, TakeRecords: 500 });
+  const rijen = (Array.isArray(rj) ? rj : ((rj && rj.Records) || [])).map(x => ({
+    id: Number(x.BuyOrderRowId), code: String(x.ProductCode || ""), besteld: Number(x.QtyToOrder) || 0,
+    open: Number(x.QtyToDeliver) || 0, klant: prodVoorOrder(x), desc: String(x.Description || "") }));
+  // Wat de proforma vraagt, per code
+  const wil = {};
+  for (const r of regels) {
+    const c = String(r.artikelcode), w = wil[c] || (wil[c] = { voorraad: 0, klanten: [], voorbeeld: r });
+    if (r.klantOrder) w.klanten.push(r); else w.voorraad += Number(r.aantal) || 0;
+  }
+  const plan = [], handwerk = [];
+  for (const c of new Set([...Object.keys(wil), ...rijen.map(x => x.code)])) {
+    const w = wil[c] || { voorraad: 0, klanten: [], voorbeeld: null };
+    const hier = rijen.filter(x => x.code === c);
+    for (const k of w.klanten) {
+      const al = hier.find(x => x.klant && String(x.klant) === String(k.klantOrder));
+      if (!al) plan.push({ soort: "klant", code: c, aantal: Number(k.aantal), r: k, tekst: k.aantal + "x " + (k.omschrijving || k.model || c) + " voor order " + k.klantOrder + (k.klantNaam ? " " + k.klantNaam : "") });
+    }
+    const zonder = hier.filter(x => !x.klant);
+    const staat = zonder.reduce((n, x) => n + x.besteld, 0);
+    if (staat > w.voorraad) {
+      let teVeel = staat - w.voorraad;
+      for (const x of zonder.slice().sort((a, b) => b.open - a.open)) {
+        if (teVeel <= 0) break;
+        const kan = Math.min(teVeel, x.open);
+        if (kan > 0) { plan.push({ soort: "minder", code: c, rij: x.id, van: x.besteld, naar: x.besteld - kan, tekst: kan + "x minder " + (x.desc || c) + " (" + x.besteld + " naar " + (x.besteld - kan) + ")" }); teVeel -= kan; }
+      }
+      if (teVeel > 0) handwerk.push(teVeel + "x " + c + " staat er te veel op, maar is al geleverd of onderweg; zet dit in Logic4 zelf recht");
+    } else if (staat < w.voorraad && w.voorbeeld) {
+      const v = w.voorbeeld;
+      plan.push({ soort: "erbij", code: c, aantal: w.voorraad - staat, r: Object.assign({}, v, { klantOrder: null, klantNaam: null }), tekst: (w.voorraad - staat) + "x " + (v.omschrijving || v.model || c) + " erbij" });
+    }
+  }
+  const samenvatting = {
+    erbij: plan.filter(x => x.soort === "erbij").reduce((n, x) => n + x.aantal, 0),
+    klant: plan.filter(x => x.soort === "klant").reduce((n, x) => n + x.aantal, 0),
+    minder: plan.filter(x => x.soort === "minder").reduce((n, x) => n + (x.van - x.naar), 0),
+  };
+  if (body.bevestigd !== true) return { ok: true, proef: true, buyOrderId, plan: plan.map(x => ({ soort: x.soort, tekst: x.tekst })), samenvatting, handwerk };
+  // Uitvoeren, zoveel als er in deze aanroep past
+  let koers = (rec && rec.koers) || null;
+  if (!koers) { try { koers = await usdKoers(env); sub++; } catch (e) { koers = null; } }
+  const naarEuro = (p) => (p == null || !(Number(p) > 0)) ? 0 : (koers ? Math.round(Number(p) / koers.koers * 100) / 100 : Number(p));
+  const gedaan = [], mislukt = [];
+  for (const x of plan) {
+    if (sub > 42) break;
+    try {
+      if (x.soort === "minder") {
+        await call("/v3/BuyOrders/UpdateBuyOrderRow", { BuyOrderRowId: x.rij, QtyToOrder: x.naar }, "PATCH");
+      } else {
+        const r = x.r;
+        const klant = x.soort === "klant" ? ("voor order " + r.klantOrder + (r.klantNaam ? " " + r.klantNaam : "")) : "";
+        const regel = { BuyOrderId: buyOrderId, ProductCode: String(r.artikelcode), QtyToOrder: Number(x.aantal), Price: naarEuro(r.prijs),
+          Description: (String(r.omschrijving || r.model || "") + (klant ? " - " + klant : "")).slice(0, 200),
+          ExpectedDeliveryDate: body.eta || null, OrderedOnDateByDistributor: besteldOp() };
+        if (klant) regel.InternalNote = klant.slice(0, 200);
+        let orderRowId = null;
+        if (klant) {
+          try {
+            const oj = await call("/v3/Orders/GetOrders", { Id: Number(r.klantOrder), TakeRecords: 1 });
+            const o = Array.isArray(oj) ? oj[0] : (oj && (oj.Records || oj.Orders || [])[0]);
+            const rij = ((o && o.OrderRows) || []).find(y => String(y.ProductCode) === String(r.artikelcode));
+            if (rij && rij.Id) orderRowId = Number(rij.Id);
+          } catch (e) {}
+        }
+        try { await call("/v3/BuyOrders/AddBuyOrderRow", orderRowId ? Object.assign({}, regel, { OrderRowId: orderRowId }) : regel); }
+        catch (e) { if (!orderRowId) throw e; await call("/v3/BuyOrders/AddBuyOrderRow", regel); }
+      }
+      gedaan.push(x.tekst);
+    } catch (e) { mislukt.push(x.tekst + ": " + String(e.message || e).slice(0, 120)); }
+  }
+  const klaar = gedaan.length + mislukt.length >= plan.length;
+  if (klaar && ref) {
+    const r0 = reeds.orders[ref] || {};
+    reeds.orders[ref] = Object.assign({}, r0, { buyOrderId, gelijkgezet: new Date().toISOString(), door: body.door || r0.door || null,
+      artikelen: regels.map(r => ({ artikelcode: r.artikelcode, model: r.model || null, kleur: r.kleur || null, aantal: Number(r.aantal) || 0,
+        uitvoering: r.uitvoering || null, klantOrder: r.klantOrder || null, klantNaam: r.klantNaam || null })).slice(0, 200) });
+    await env.FONTEYN_DATA.put("voorraad-inkooporders", JSON.stringify(reeds));
+  }
+  let productieBijgewerkt = false;
+  if (klaar && gedaan.length) { try { productieBijgewerkt = await prodVernieuwIko(env, token, buyOrderId, body.leverancier || "", "Proforma " + ref); } catch (e) {} }
+  return { ok: true, buyOrderId, gedaan, mislukt, handwerk, nogTeDoen: Math.max(0, plan.length - gedaan.length - mislukt.length), klaar, samenvatting, productieBijgewerkt };
 }
 
 async function ikoAanmaken(env, body) {
@@ -5664,7 +5834,7 @@ async function ikoAanmaken(env, body) {
       }
       teDoen = erbij.slice(0, MAX_REGELS); restant = erbij.slice(MAX_REGELS);
     }
-    const dubbelOp = body.alleenVerschil ? [] : regels.filter(r => alAanwezig.has(String(r.artikelcode)));
+    const dubbelOp = (body.alleenVerschil || body.vervolgBlok) ? [] : regels.filter(r => alAanwezig.has(String(r.artikelcode)));
     if (dubbelOp.length && !body.tochDubbeleRegels)
       return { ok: false, dubbeleRegels: dubbelOp.map(r => r.artikelcode),
         error: "Deze artikelen staan al op inkooporder " + buyOrderId + ": " + dubbelOp.map(r => r.artikelcode).join(", ") +
@@ -5674,17 +5844,39 @@ async function ikoAanmaken(env, body) {
   const toegevoegd = [], mislukt = [];
   for (const r of teDoen) {
     try {
-      await call("/v3/BuyOrders/AddBuyOrderRow", {
+      /* Een spa die voor een klant besteld is (Chantal, 2 okt 2026: "details
+         zoals ordernummer en naam van de klant"): het ordernummer en de naam
+         gaan in de omschrijving en de opmerking van de regel, en de regel
+         wordt in Logic4 aan de orderregel van die klant gekoppeld. Lukt dat
+         koppelen niet, dan gaat de regel er zonder koppeling in; de tekst
+         staat er dan nog wel. */
+      const klant = r.klantOrder ? ("voor order " + r.klantOrder + (r.klantNaam ? " " + r.klantNaam : "")) : "";
+      const regel = {
         BuyOrderId: buyOrderId,
         ProductCode: String(r.artikelcode),
         QtyToOrder: Number(r.aantal),
         Price: naarEuro(r.prijs),
-        Description: String(r.omschrijving || r.model || "").slice(0, 200),
+        Description: (String(r.omschrijving || r.model || "") + (klant ? " - " + klant : "")).slice(0, 200),
         ExpectedDeliveryDate: body.eta || null,
         // Zonder dit veld telt Logic4 de regel niet mee als iets dat nog
         // binnen moet komen. Zie het blok BESTELD BIJ LEVERANCIER hierboven.
         OrderedOnDateByDistributor: besteldOp(),
-      });
+      };
+      if (klant) regel.InternalNote = klant.slice(0, 200);
+      let orderRowId = null;
+      if (r.klantOrder) {
+        try {
+          const oj = await call("/v3/Orders/GetOrders", { Id: Number(r.klantOrder), TakeRecords: 1 });
+          const o = Array.isArray(oj) ? oj[0] : (oj && (oj.Records || oj.Orders || [])[0]);
+          const rijen = (o && o.OrderRows) || [];
+          const rij = rijen.find(x => String(x.ProductCode) === String(r.artikelcode)) ||
+                      rijen.find(x => r.model && String(x.Description || "").toLowerCase().includes(String(r.model).toLowerCase()));
+          if (rij && rij.Id) orderRowId = Number(rij.Id);
+        } catch (e) { /* de tekst gaat hoe dan ook mee */ }
+      }
+      try { await call("/v3/BuyOrders/AddBuyOrderRow", orderRowId ? Object.assign({}, regel, { OrderRowId: orderRowId }) : regel); }
+      catch (e) { if (!orderRowId) throw e; await call("/v3/BuyOrders/AddBuyOrderRow", regel); r.koppelingVerzocht = "zonder koppeling"; }
+      if (orderRowId) r.orderRowId = orderRowId;
       toegevoegd.push(r.artikelcode);
     } catch (e) { mislukt.push({ artikelcode: r.artikelcode, fout: String(e.message || e) }); }
   }
@@ -5708,7 +5900,8 @@ async function ikoAanmaken(env, body) {
       artikelen: ((eerder && aanvullenOp ? (eerder.artikelen || []) : []))
         .concat(teDoen.filter(r => r && r.artikelcode).map(r => ({
           artikelcode: r.artikelcode, model: r.model || null,
-          kleur: r.kleur || null, aantal: Number(r.aantal) || 0 }))).slice(0, 120),
+          kleur: r.kleur || null, aantal: Number(r.aantal) || 0,
+          uitvoering: r.uitvoering || null, klantOrder: r.klantOrder || null, klantNaam: r.klantNaam || null }))).slice(0, 200),
       regels: (eerder && aanvullenOp ? (Number(eerder.regels) || 0) : 0) + toegevoegd.length });
     // Aanvullingen apart bijhouden: anders is later niet te zien dat er in twee
     // keer is besteld, en juist dát was hier het probleem.
@@ -8640,7 +8833,7 @@ async function dpRefreshReservations(env) {
       // schaal; die bakken staan open voor iedereen (kleur null). De
       // uitvoering kent hij wél - de artikelcode zegt het - en die telt mee.
       .forEach(p => buckets.push({ kind: "productie", eta: p.eta, left: p.qty, iko: p.iko, fabriek: p.fabriek,
-                                   kleur: null, extra: extraSleutel(p.uitvoering) }));
+                                   kleur: null, extra: extraSleutel(p.uitvoering), voorOrder: p.voorOrder || null }));
     for (const r of list) {
       // Containerorders (Dealer magazijn) gaan rechtstreeks naar de dealer en
       // trekken NIET uit de Fonteyn-voorraad — die krijgen 'dealer-direct'.
@@ -8675,9 +8868,14 @@ async function dpRefreshReservations(env) {
          zonder kleur mag overal uit, en verder moet de schaalkleur kloppen. */
       const mijnSchaal = schaalKleur(r.kleur);
       const mijnExtra = extraSleutel(r.extra);
-      for (const b of buckets) {
+      /* Een spa die bij de fabriek voor déze order besteld is (proforma met
+         ordernummer en klantnaam, Chantal 2 okt 2026) gaat eerst naar deze
+         order, en nooit naar een andere. */
+      const eigen = buckets.filter(b => b.voorOrder && Number(b.voorOrder) === Number(r.ordernr));
+      for (const b of eigen.concat(buckets.filter(b => !b.voorOrder))) {
         if (need <= 0) break;
         if (b.left <= 0) continue;
+        if (b.voorOrder && Number(b.voorOrder) === Number(r.ordernr)) { const take = Math.min(need, b.left); b.left -= take; need -= take; landing = b; continue; }
         if (b.kleur && mijnSchaal && b.kleur !== mijnSchaal) continue;
         /* De uitvoering: een schip zegt er niets over, dus daar mag een order
            mét uitvoering niet uit pakken. Bij de productie moet hij gelijk zijn,
@@ -16284,6 +16482,11 @@ const FP_WORKER = {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       try { const k = await usdKoers(env); return reply(200, { ok: true, ...k, tekst: koersTekst(k) }); }
       catch (e) { return reply(200, { ok: false, error: String(e.message || e) }); }
+    }
+    if (url.pathname === "/voorraad/inkooporder/gelijkzetten" && request.method === "POST") {
+      if (!(await voorraadIsBeheer(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep voorraad-beheer" });
+      const body = await request.json().catch(() => ({}));
+      return reply(200, await ikoGelijkzetten(env, body).catch(e => ({ ok: false, error: String(e.message || e) })));
     }
     if (url.pathname === "/voorraad/inkooporder/aanmaken" && request.method === "POST") {
       if (!(await voorraadIsBeheer(request, env))) return reply(401, { ok: false, error: "geen toegang: je staat niet in de groep voorraad-beheer (Chantal, Arno, Manon, Dolf)" });

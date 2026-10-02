@@ -155,7 +155,7 @@
          wachtwoordscherm. Op de bestandsnaam koppelen kan dus niet; de
          controle in tools/tegels-gelijk.mjs gebruikt deze id. */
       tile:"tileStuurcijfers" },
-    { telefoon:true, bestand:"https://partner.passionspas.com/dealers",
+    { telefoon:true, bestand:"https://partner.passionspas.com/",
       groep:"partnerportaal-kijk", ic:"🌐", naam:"Passion Partners",
       uit:"Het portaal zoals een dealer het ziet", mobiel:"pc", tile:"tilePassionPartners", extern:true },
   ];

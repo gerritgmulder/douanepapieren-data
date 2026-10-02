@@ -613,6 +613,7 @@ function maakVenster(html, opties){
 }
 
 const CART_KEY = "pp_cart_v1";
+const BETAAL_KEY = "pp_betaling_v1";   // { id, sinds }: de mand wacht op deze betaling
 /* Uit voorraad of als hele container. Staat naast de wagen en niet erin: het
    is een eigenschap van de zending en niet van een regel. */
 const LEVER_KEY = "pp_lever_v1";
@@ -685,7 +686,10 @@ let showPaidBanner = false;
     showPaidBanner = true;
     u.searchParams.delete("paid");
   }
-  history.replaceState(null, "", u.pathname);
+  /* Op partner.passionspas.com staat het portaal op de voordeur; /dealers
+     hoort niet in de adresbalk (Gerrit, 2 okt 2026). */
+  const pad = location.hostname === "partner.passionspas.com" ? u.pathname.replace(/^\/dealers(\/|$)/, "/") : u.pathname;
+  history.replaceState(null, "", pad);
 })();
 
 async function api(path, opts){
@@ -769,13 +773,7 @@ async function sendLink(){
     // Eerste keer (via inloglink): meteen vragen een wachtwoord te zetten
     $("pwCard").classList.remove("hidden");
   }
-  if (showPaidBanner) {
-    const b = document.createElement("div");
-    b.className = "msg ok";
-    b.style.margin = "14px 0 0";
-    b.textContent = "Thank you - your deposit payment is being processed. We will confirm your reservation by e-mail.";
-    $("appView").insertBefore(b, $("appView").firstChild);
-  }
+  mandNaBetaling();
   loadStock(); loadDocs(); loadMySpas(); loadMyRequests();
 })();
 
@@ -2488,6 +2486,48 @@ function tekenVracht(ov){
    De wagen staat in localStorage, per browser. Sluit iemand het tabblad
    halverwege een bestelling, dan is de lijst er de volgende keer nog. Hij
    wordt pas leeggemaakt als de betaling is gestart. */
+/* Terug van de betaalpagina, of later weer ingelogd: is de aanvraag waar de
+   mand op wachtte betaald, dan gaat de mand leeg en staat er een bedankje.
+   Is hij nog open (terug geklikt, afgebroken), dan blijft alles in de mand.
+   Mollie stuurt soms terug voordat de betaling bij ons binnen is; daarom
+   kijken we na terugkomst nog een paar keer. */
+async function mandNaBetaling(){
+  let wacht = null;
+  try { wacht = JSON.parse(localStorage.getItem(BETAAL_KEY) || "null"); } catch(e){}
+  const melding = (cls, tekst) => {
+    let b = $("betaalMelding");
+    if (!b) { b = document.createElement("div"); b.id = "betaalMelding"; b.style.margin = "14px 0 0"; $("appView").insertBefore(b, $("appView").firstChild); }
+    b.className = "msg " + cls; b.textContent = tekst;
+  };
+  if (!wacht || !wacht.id) {
+    if (showPaidBanner) melding("ok", "Thank you - your deposit payment is being processed. We will confirm your reservation by e-mail.");
+    return;
+  }
+  const pogingen = showPaidBanner ? 6 : 1;
+  for (let i = 0; i < pogingen; i++) {
+    const r = await api("/dealers/api/requests");
+    const lijst = (r.data && (r.data.requests || r.data.items)) || (Array.isArray(r.data) ? r.data : []);
+    const a = (lijst || []).find(x => x && x.id === wacht.id);
+    if (a && a.paymentStatus === "paid") {
+      cart = []; cartBewaar();
+      try { localStorage.removeItem(BETAAL_KEY); } catch(e){}
+      melding("ok", "Thank you - your deposit is in. We will confirm your reservation by e-mail.");
+      return;
+    }
+    if (i + 1 < pogingen) await new Promise(x => setTimeout(x, 2000));
+  }
+  // Na twee dagen wacht de mand nergens meer op; de inhoud blijft gewoon staan.
+  if (Date.now() - (wacht.sinds || 0) > 2 * 86400000) { try { localStorage.removeItem(BETAAL_KEY); } catch(e){} }
+  if (showPaidBanner && cart.length)
+    melding("ok", "Your basket is saved. Open the basket whenever you are ready to pay.");
+}
+/* Met de terugknop van de browser komt de pagina soms uit het geheugen terug,
+   met de mand nog op "redirecting...". Dan de mand opnieuw tekenen. */
+addEventListener("pageshow", (e) => {
+  if (!e.persisted) return;
+  const ov = document.getElementById("cartOv");
+  if (ov) { ov.remove(); openCart(); }
+});
 function cartBewaar(){
   try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch(e){}
   const n = cart.reduce((t, r) => t + (Number(r.qty) || 0), 0);
@@ -2612,7 +2652,10 @@ function openCart(opties){
         <div id="cartPay" class="kies"></div>
         <div id="cartEigen" class="hidden" style="margin-top:8px;">
           <label style="font-size:12px;color:var(--muted);display:block;margin:0 0 5px;">Deposit amount agreed with the customer (incl. VAT)</label>
-          <input type="text" inputmode="decimal" placeholder="e.g. 1500" style="width:180px;">
+          <div style="position:relative;width:180px;">
+            <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:600;pointer-events:none;">${window.myRegion === "US" ? "$" : "\u20ac"}</span>
+            <input type="text" inputmode="decimal" placeholder="e.g. 1,500" style="width:180px;padding-left:28px;">
+          </div>
           <div class="lead" style="font-size:12px;margin:4px 0 0;">Parts are always paid in full on top of this amount.</div>
         </div>
         </div>
@@ -2657,8 +2700,10 @@ function openCart(opties){
     : [{ waarde: "deposit",
          tekst: spaRegels.length ? "30% deposit on the spas" : "Pay in full",
          bij: spaRegels.length ? "parts in full" : "" }];
-  if (!alleOpVoorraad && spaRegels.length)
-    betaalopties.push({ waarde: "full", tekst: "Pay everything in full", bij: "shipped as soon as it arrives" });
+  /* Volledig betalen alleen voor wat er nu in Uddel staat. Gerrit (2 okt
+     2026): "Geen mens gaat volledig betalen bij het bestellen of reserveren
+     van iets wat besteld moet worden." Moet er iets komen, dan is er alleen
+     de aanbetaling. */
   /* De testbetaling alleen aan wie ook écht kan bestellen. Een meekijkende
      collega mag niets wijzigen (de worker weigert elke POST), dus die optie
      aanbieden levert alleen een foutmelding op. */
@@ -2762,7 +2807,11 @@ function openCart(opties){
       m.textContent = "Order received - redirecting you to the secure payment page (" +
         (r.data.testbetaling ? "TEST - 1 cent" : geld(r.data.deposit || 0)) + ")…";
       m.classList.remove("hidden");
-      cart = []; cartBewaar();
+      /* De mand blijft staan tot de betaling echt binnen is. Gerrit (2 okt
+         2026): "Als ik per ongeluk naar de aanbetalingspagina ga en ik wil
+         terug, dan is mijn bestelling weg." Bij terugkomst kijkt
+         mandNaBetaling() of deze aanvraag betaald is; pas dan gaat hij leeg. */
+      try { localStorage.setItem(BETAAL_KEY, JSON.stringify({ id: r.data.id || null, sinds: Date.now() })); } catch(e){}
       setTimeout(() => { location.href = r.data.checkoutUrl; }, 1400);
     } else if (r.status === 200 && r.data && r.data.ok) {
       m.className = "msg ok"; m.textContent = "Order sent - you can follow it under My spas."; m.classList.remove("hidden");

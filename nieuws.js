@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", groep: "dealerportaal", soort: "nieuw",
+      titel: "Passion Partners voor alle spa-adviseurs",
+      wat: "Alle spa-adviseurs zien nu de tegels Passion Partners en Passion Partners Beheer. Het portaal staat op partner.passionspas.com."
+    },
+    {
       datum: "2026-10-02", bestand: "dealerportaal.html", soort: "beter",
       titel: "Passion Partners Beheer vernieuwd",
       wat: "Nieuwe bestellingen verschijnen vanzelf, zonder het Dashboard opnieuw te starten. De aanvragen zonder aanbetaling kun je in één keer selecteren en verwijderen, de knoppen zijn duidelijker, en met 'Nu ophalen uit Logic4' komen nieuwe modellen en kleuren in het portaal (dat gebeurt ook vanzelf, vier keer per dag)."
