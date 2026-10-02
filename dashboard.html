@@ -457,6 +457,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
          verwijderen, dus dat moet met de hand en het liefst snel. -->
     <div id="oudeAppBlok"></div>
     <div id="nieuweRelatiesBlok"></div>
+    <div id="ppInkoopBlok"></div>
     <div id="partnercontainerBlok"></div>
     <div id="takenBlok"></div>
 
@@ -1200,6 +1201,7 @@ function showDashboard(email) {
   startTakenblok(email);
   startNieuweRelaties(email);
   startPartnercontainerMeldingen(email);
+  startPPInkoopMeldingen(email);
   controleerAppVersie();
 }
 
@@ -1373,6 +1375,54 @@ const NIEUWE_REL_VOOR = new Set([
    betaald is dat er een herinnering kan. De melding staat ook bovenaan
    Voorraadbeheer; hier alleen de samenvatting met een knop ernaartoe. Alleen
    voor de groep voorraad-beheer; de worker kijkt dat zelf ook na. */
+/* ── Passion Partners: inkooporder maken ────────────────────────────────
+   Gerrit (2 okt 2026): zodra er in Passion Partners besteld is, krijgen
+   Chantal en Arno bovenaan hun Dashboard een melding dat de inkooporder
+   gemaakt moet worden. Hij blijft staan tot iemand op "inkooporder gemaakt"
+   klikt. */
+async function startPPInkoopMeldingen(email){
+  const lc = String(email||"").toLowerCase();
+  if (!window.fpToegang || !fpToegang.mag("pp-inkoop", lc)) return;
+  const blok = el("ppInkoopBlok");
+  const key = localStorage.getItem("fp.teamkey") || "";
+  if (!key || !blok) return;
+  async function haal(afgehandeld){
+    try {
+      const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/inkoopmeldingen", {
+        method: afgehandeld ? "POST" : "GET",
+        headers: { "Content-Type":"application/json", "X-Fonteyn-Auth": key, "X-Fonteyn-User": lc },
+        body: afgehandeld ? JSON.stringify({ afgehandeld }) : undefined });
+      const j = await r.json();
+      return j && j.ok ? (j.items||[]) : null;
+    } catch(e){ return null; }
+  }
+  function teken(items){
+    if (!items || !items.length) { blok.innerHTML = ""; return; }
+    const nl = (t)=>{ const d=new Date(t); return isNaN(d)?"":d.toLocaleDateString("nl-NL",{day:"numeric",month:"long"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); };
+    blok.innerHTML =
+      '<section style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #144734;border-radius:10px;padding:14px 20px;margin-bottom:22px">'
+      + '<h3 style="margin:0 0 6px;font-size:15px;color:#144734">Passion Partners - ' + items.length + ' bestelling' + (items.length===1?'':'en') + ' om een inkooporder voor te maken</h3>'
+      + items.map(m => '<div style="display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-top:1px solid #f3f4f6;flex-wrap:wrap">'
+          + '<div style="flex:1;min-width:220px;font-size:13px">'
+          +   '<b>' + relEsc(m.dealer || m.email || "") + '</b> &middot; order ' + relEsc(String(m.orderId))
+          +   (m.test ? ' <span style="background:#fef3c7;color:#92400e;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:600">test</span>' : '')
+          +   (m.levering === "container" ? ' <span style="background:#e0e7ff;color:#3730a3;border-radius:999px;padding:1px 7px;font-size:11px;font-weight:600">hele container</span>' : '')
+          +   '<div style="font-size:12.5px;color:#374151;margin-top:2px">' + (m.regels||[]).map(r => relEsc(String(r.qty||1)) + 'x ' + relEsc(r.naam||r.code||"")).join(", ") + '</div>'
+          +   '<div style="font-size:11.5px;color:#6b7280;margin-top:2px">besteld ' + relEsc(nl(m.ts)) + '</div>'
+          + '</div>'
+          + '<button type="button" class="ppInkoopKlaar" data-order="' + relEsc(String(m.orderId)) + '" style="background:#144734;color:#fff;border:0;border-radius:8px;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap">Inkooporder gemaakt</button>'
+          + '</div>').join("")
+      + '<a href="voorraad.html"' + (/fonteyn-dashboard\//.test(navigator.userAgent || "") ? ' target="_blank" rel="noopener"' : '') + ' style="display:inline-block;margin-top:8px;font-size:12.5px;font-weight:600;color:#144734">Naar Voorraadbeheer &rarr;</a>'
+      + '</section>';
+    blok.querySelectorAll(".ppInkoopKlaar").forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true; b.textContent = "bezig…";
+      const nieuw = await haal(b.dataset.order);
+      try { if (window.fpLog) window.fpLog("pp-inkooporder-gemaakt", "order " + b.dataset.order); } catch(e){}
+      teken(nieuw || items.filter(x => String(x.orderId) !== b.dataset.order));
+    }));
+  }
+  teken(await haal(null));
+}
 async function startPartnercontainerMeldingen(email){
   const lc = String(email||"").toLowerCase();
   if (!window.fpToegang || !fpToegang.mag("voorraad-beheer", lc)) return;

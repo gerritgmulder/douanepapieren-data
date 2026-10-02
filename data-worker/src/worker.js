@@ -3274,6 +3274,38 @@ async function dpAdminTestOrder(request, env) {
 // de bijbehorende reserveringsaanvraag bij (koppeling via metadata.requestId
 // die we bij het aanmaken van de betaling meegeven). Altijd 200 antwoorden —
 // anders blijft Mollie eindeloos retryen.
+/* ── Meldingen: inkooporder maken na een bestelling in Passion Partners ──
+   Gerrit (2 okt 2026): "Chantal en Arno krijgen meldingen over het maken van
+   inkooporders zodra er bestellingen in Passion Partners zijn gekomen; die
+   meldingen komen bovenaan in hun Dashboard." Eén melding per bestelling, op
+   het moment dat de order in Logic4 staat (de aanbetaling is binnen). */
+const PP_INKOOP = "pp-inkoopmeldingen";
+async function ppInkoopMelding(env, item, orderId, regels, dealer) {
+  const d = (await env.FONTEYN_DATA.get(PP_INKOOP, { type: "json" })) || { items: [] };
+  d.items = d.items || [];
+  if (d.items.some(x => String(x.orderId) === String(orderId))) return;
+  d.items.push({ id: String(item.id), ts: new Date().toISOString(), orderId,
+    dealer: (dealer && (dealer.company || dealer.name)) || item.company || item.email || "",
+    email: item.targetEmail || item.email || "", levering: item.levering || null, test: !!item.testbetaling,
+    regels: (regels || []).filter(r => r.productCode !== DP_PACKING_CODE).map(r => ({ qty: r.qty, naam: r.description, code: r.productCode || null })),
+    afgehandeld: null, door: null });
+  d.items = d.items.slice(-300);
+  await env.FONTEYN_DATA.put(PP_INKOOP, JSON.stringify(d));
+}
+async function ppInkoopHandle(request, env) {
+  if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+  const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+  if (!(await toegangMag(env, "pp-inkoop", wie))) return reply(403, { ok: false });
+  const d = (await env.FONTEYN_DATA.get(PP_INKOOP, { type: "json" })) || { items: [] };
+  d.items = d.items || [];
+  if (request.method === "POST") {
+    let b = {}; try { b = await request.json(); } catch {}
+    const x = d.items.find(y => String(y.orderId) === String(b.afgehandeld));
+    if (x && !x.afgehandeld) { x.afgehandeld = new Date().toISOString(); x.door = wie; await env.FONTEYN_DATA.put(PP_INKOOP, JSON.stringify(d)); }
+  }
+  return reply(200, { ok: true, items: d.items.filter(x => !x.afgehandeld) });
+}
+
 async function dpHandleMollieWebhook(request, env, url) {
   if (!env.MOLLIE_API_KEY) return reply(200, { ok: true });   // nog niet actief
   let id = "";
@@ -3420,6 +3452,11 @@ async function dpHandleMollieWebhook(request, env, url) {
               });
               if (res.ok) {
                 item.logic4OrderId = res.orderId; delete item.logic4Error;
+                /* Melding voor Chantal en Arno: er is besteld, maak de
+                   inkooporder (Gerrit, 2 okt 2026). Staat bovenaan hun
+                   Dashboard tot iemand op "inkooporder gemaakt" klikt. */
+                try { await ppInkoopMelding(env, item, res.orderId, regels, dealer); }
+                catch (e) { console.log("[pp-inkoop] melding: " + String(e.message || e)); }
                 /* De betaling zélf boeken. Dit ontbrak: bij een partner werd de
                    order alleen op status "30% aanbetaald" gezet, maar het geld
                    stond nergens in Logic4. Bij een particulier gebeurde dat wél
@@ -15990,6 +16027,7 @@ const FP_WORKER = {
     }
     /* De lijst nieuw aangemaakte relaties voor Chantal en Arno. Lezen mag met
        de teamsleutel; afvinken ook, want het is geen gevoelige handeling. */
+    if (url.pathname === "/dealers/inkoopmeldingen" && (request.method === "GET" || request.method === "POST")) return ppInkoopHandle(request, env);
     if (url.pathname === "/dealers/nieuwe-relaties" && request.method === "POST") {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
       const b = await request.json().catch(() => ({}));

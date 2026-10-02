@@ -103,6 +103,11 @@
     "kortingen": [
       "fonteynbot",
     ],
+    /* Passion Partners: melding bovenaan het Dashboard dat er een inkooporder
+       gemaakt moet worden zodra er een bestelling binnen is (Gerrit, 2 okt 2026). */
+    "pp-inkoop": [
+      "arno", "chantal", "dolf", "fonteynbot", "gerrit",
+    ],
     // Externe toegang: wie externen mag uitnodigen (tegel externen.html).
     "externen": [
       "dolf", "fonteynbot", "gerrit",
