@@ -1682,7 +1682,8 @@ function batchGeboekt(w){
      (Osman, 26 sep 2026: bij 06-07 stonden er 7 van de 21 nog open). */
   const teller=(w.regels||[]).filter(r=>String(r.soort||"")==="factuur"||(["overig","balance"].includes(String(r.soort||""))&&(r.orderHand||r.order))).length;
   const op1160=Math.round((orders.reduce((n,[,v])=>n+(Number(v.bedragEur)||0),0)+(kosten?(Number(kosten[1].bedragEur)||0):0))*100)/100;
-  return { compleet: orders.length>0&&orders.length>=teller&&!!kosten, orders:orders.length, teller, op1160, koers };
+  // Sinds 30 sep 2026 maakt het Dashboard geen kostenmemoriaal meer; compleet = alle orders geboekt.
+  return { compleet: orders.length>0&&orders.length>=teller, orders:orders.length, teller, op1160, koers };
 }
 async function audLoadVerwerkt(){
   try{
@@ -1861,16 +1862,12 @@ async function audBoekKnop(b){
       goed.map(x=>
         bat(x)+"\n"+
         "    orders afboeken (bruto): "+usd(x.bruto)+"\n"+
-        "    bankkosten op "+(proef.kostenGrootboek||"4630")+": "+usd(x.kosten)+"\n"+
-        "    blijft op 1160 staan (netto): "+usd(x.netto)+"\n"+
+        "    bankkosten (boek je zelf in het bankboek): "+usd(x.kosten)+"\n"+
         regelsVan(x)).join("\n\n")+
       "\n\n"+
       (scheef.length?("Blijven staan, deze wachten op aansluiting:\n\n"+uitlegScheef+"\n\n"):"")+
-      "De orders worden voor hun volledige bruto bedrag afgeboekt; de bankkosten gaan als aparte regel op "+
-      (proef.kostenGrootboek||"4630")+". Daarna staat op 1160 precies de netto bankontvangst en komt die rekening "+
-      "op nul zodra Osman het afschrift boekt.\n\n"+
-      "LET OP: de kostenplaats "+(proef.kostenplaats||"Spa Houston USA")+" gaat buiten de koppeling om.\n"+
-      "Die moet je er in Logic4 zelf bij zetten op die kostenregel.\n\n"+
+      "De orders worden voor hun volledige bruto bedrag afgeboekt. De bankkosten en de ontvangst op 1160 "+
+      "boek je zelf in het bankboek; het Dashboard maakt daar geen memoriaal meer voor.\n\n"+
       "De bedragen hierboven zijn dollars. De orders staan in Logic4 in euro (omgerekend tegen 1,12 bij het aanmaken); "+
       "per order wordt precies het openstaande eurobedrag afgeboekt, en de bankkosten gaan tegen dezelfde koers in euro. "+
       "In de omschrijving van elke boeking staat het dollarbedrag erbij.\n\n"+
@@ -2076,12 +2073,12 @@ function audRenderWachtrij(){
     "</div>"+
     "<div class='status-msg' style='margin:0 0 12px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d'>"+
       "<b>Zo wordt een batch geboekt.</b> De orders worden afgeboekt voor het <b>volledige</b> factuurbedrag. "+
-      "De bankkosten gaan als memoriaal: <b>4630</b> tegenover 1160. Daarna staat op 1160 precies het bedrag "+
-      "dat op de bank is binnengekomen, en komt die rekening op nul zodra jij het afschrift boekt."+
+      "De bankkosten (4630) en de ontvangst op 1160 boek je zelf in het bankboek; het Dashboard maakt daar "+
+      "sinds 30 september geen memoriaal meer voor."+
       "<br>Sluit een batch nog aan te sluiten (bruto min bankkosten naast het ontvangen bedrag), of volgt er nog een "+
       "Logic4-order, dan blijft die batch staan en komt hij als <b>afwijking</b> in beeld."+
-      "<br>De kostenplaats <b>Spa Houston USA</b> gaat buiten de koppeling om. Die zet je er in Logic4 zelf "+
-      "bij op de kostenregel."+
+      "<br>Komt een batch door de banklimiet in delen binnen, kies dan bij de Balance-regel van de latere batch "+
+      "<b>hoort bij eerdere batch</b>."+
     "</div>"+
     "<p class='lead' style='font-size:12px;margin:0 0 12px'>Voor deze facturen is een Logic4-order aangemaakt. Ze blijven hier staan tot de betaling is gekoppeld — vink dan <b>Verwerkt in Logic4</b> aan. Het vinkje geldt ook voor dezelfde factuur in het wire-overzicht hieronder.</p>"+
     "<div class='tablewrap'><table class='grid'><thead><tr>"+
@@ -2211,7 +2208,11 @@ function audBatchCheck(w){
   /* "Balance Due" is wat de klant nog moet betalen, niet wat er is
      overgemaakt. Sluit de batch zonder die regels wél aan, dan tellen ze niet
      mee (zelfde regel als in de worker). */
-  const balans=geld.filter(r=>String(r.soort||"")==="balance"&&!audFactuurVan(r)&&!r.orderHand);
+  /* Een regel die bij een eerdere batch hoort (Osman, 30 sep 2026: de Balance
+     van 09-07 is het restant van 29-06) boekt hier niets en houdt niets tegen. */
+  const aanvul=geld.filter(r=>r.bijBatch);
+  const aanvulSom=c2(aanvul.reduce((n,r)=>n+(Number(r.kolom1)||0),0));
+  const balans=geld.filter(r=>String(r.soort||"")==="balance"&&!audFactuurVan(r)&&!r.orderHand&&!r.bijBatch);
   const balansSom=c2(balans.reduce((n,r)=>n+(Number(r.kolom1)||0),0));
   let balansBuiten=false;
   if(netto!==null&&balans.length&&Math.abs(c2(bruto-kosten)-netto)>0.005&&Math.abs(c2(bruto-balansSom-kosten)-netto)<=0.005){ balansBuiten=true; bruto=c2(bruto-balansSom); }
@@ -2224,14 +2225,14 @@ function audBatchCheck(w){
   /* Alleen een klein saldo (tot $25) gaat mee met de bankkosten. Een groot
      bedrag is ontvangen geld voor een order en moet gekoppeld worden
      (Gerrit, 25 sep 2026, batch 09-07). */
-  const saldoAlle=balansBuiten?[]:geld.filter(r=>String(r.soort||"")==="balance"&&!r.orderHand&&!audFactuurVan(r));
+  const saldoAlle=balansBuiten?[]:geld.filter(r=>String(r.soort||"")==="balance"&&!r.orderHand&&!r.bijBatch&&!audFactuurVan(r));
   const saldo=saldoAlle.filter(r=>Math.abs(Number(r.kolom1)||0)<=25);
   const saldoGroot=saldoAlle.filter(r=>Math.abs(Number(r.kolom1)||0)>25);
-  if(saldoGroot.length) redenen.push(saldoGroot.map(r=>(r.naam||"Balance")+" van "+usd(r.kolom1)).join(", ")+" wacht nog op een factuur. Dat is ontvangen geld: koppel de regel aan de order waar hij bij hoort (knop koppel aan order)");
-  const geenNr=geld.filter(r=>!audFactuurVan(r)&&String(r.soort||"")!=="balance"&&!r.orderHand);
+  if(saldoGroot.length) redenen.push(saldoGroot.map(r=>(r.naam||"Balance")+" van "+usd(r.kolom1)).join(", ")+" wacht nog op een factuur. Dat is ontvangen geld: koppel de regel aan de order waar hij bij hoort (knop koppel aan order), of is het het restant van een eerdere batch, kies dan 'hoort bij eerdere batch'");
+  const geenNr=geld.filter(r=>!audFactuurVan(r)&&String(r.soort||"")!=="balance"&&!r.orderHand&&!r.bijBatch);
   if(geenNr.length) redenen.push(geenNr.length+" regel(s) zonder factuurnummer: "+geenNr.map(r=>r.naam).join(", "));
   const geenOrder=geld.filter(r=>{
-    if(String(r.soort||"")==="balance"||r.orderHand) return false;
+    if(String(r.soort||"")==="balance"||r.orderHand||r.bijBatch) return false;
     const nr=audFactuurVan(r); if(!nr) return false;
     const q=audFactuurInQb(nr,r.kolom1,r.naam);
     return !(q&&q.logic4Order);
@@ -2240,21 +2241,23 @@ function audBatchCheck(w){
   /* Wat er op 4630 komt is het verschil tussen wat er op de orders gaat en de
      netto ontvangst, precies zoals Osman het beschreef. Zo komt 1160 altijd op
      nul uit, ook met een saldoregel ertussen. */
-  const opOrders=c2(bruto-saldo.reduce((n,r)=>n+(Number(r.kolom1)||0),0));
-  const naar4630=netto!==null&&redenen.length===0?c2(opOrders-netto):kosten;
-  return {bruto:bruto,kosten:naar4630,kostenMail:kosten,opOrders:opOrders,netto:netto,redenen:redenen,klopt:redenen.length===0,balansBuiten:balansBuiten?balansSom:0,kostenUitVerschil:kostenUitVerschil};
+  const opOrders=c2(bruto-saldo.reduce((n,r)=>n+(Number(r.kolom1)||0),0)-aanvulSom);
+  const naar4630=netto!==null&&redenen.length===0?c2(opOrders-c2(netto-aanvulSom)):kosten;
+  return {aanvulSom:aanvulSom,aanvul:aanvul,bruto:bruto,kosten:naar4630,kostenMail:kosten,opOrders:opOrders,netto:netto,redenen:redenen,klopt:redenen.length===0,balansBuiten:balansBuiten?balansSom:0,kostenUitVerschil:kostenUitVerschil};
 }
 /* Een regel zonder order (Gerrit, 25 sep 2026):
    - "koppel aan order": aan een order hangen die al in Logic4 staat, zoals de
      Tatum refund aan 3508050 of een Balance zonder factuurnummer;
    - "naar Chantal": staat de regel niet in QuickBooks, dan komt er een taak
      bij Chantal om ermee terug te gaan naar Audrey. */
-let audKoppelOpen={}, audHistOpen={};
+let audKoppelOpen={}, audHistOpen={}, audBatchKies={};
 function audRegelActies(w,r,inQb){
   if(String(r.soort||"")==="totaal") return "";
   const orig=wiresData.wires.find(x=>String(x.id)===String(w.id))||w;
   const idx=orig.regels.indexOf(r); if(idx<0) return "";
   const k=w.id+":"+idx, knop="border:1px solid var(--border);background:#fff;border-radius:6px;padding:2px 8px;font:inherit;font-size:11px;cursor:pointer;margin:3px 4px 0 0";
+  if(r.bijBatch) return "<div style='font-size:11px;margin-top:3px'><span class='pill' style='background:#e0f2fe;color:#075985;font-size:10px'>restant van batch "+esc(datumNL(r.bijBatchDatum)||r.bijBatchDatum||"")+"</span>"+
+    " <button type='button' class='audBatchLos' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>losmaken</button></div>";
   if(r.orderHand) return "<div style='font-size:11px;margin-top:3px'><span class='pill' style='background:#e0f2fe;color:#075985;font-size:10px'>gekoppeld aan order #"+esc(String(r.orderHand))+(r.orderHandKlant?" · "+esc(r.orderHandKlant):"")+"</span>"+
     " <button type='button' class='audLos' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>losmaken</button></div>";
   if(inQb&&inQb.logic4Order) return "";
@@ -2263,6 +2266,14 @@ function audRegelActies(w,r,inQb){
     ? "<input type='text' inputmode='numeric' class='audKoppelNr' data-wire='"+esc(w.id)+"' data-i='"+idx+"' placeholder='Logic4-ordernummer' style='width:140px;padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:12px;margin-top:3px'>"+
       " <button type='button' class='audKoppel' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>koppelen</button>"
     : "<button type='button' class='audKoppelOpen' data-k='"+esc(k)+"' style='"+knop+"' title='Deze regel boeken op een order die al in Logic4 staat'>koppel aan order</button>";
+  if(String(r.soort||"")==="balance"){
+    const eerder=(wiresData.wires||[]).filter(x=>String(x.id)!==String(w.id)&&String(x.datum||"")<=String(w.datum||"")).sort((a,b)=>String(b.datum||"").localeCompare(String(a.datum||"")));
+    h+=audBatchKies[k]
+      ? "<select class='audBatchSel' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='padding:3px 6px;border:1px solid var(--border);border-radius:6px;font:inherit;font-size:12px;margin-top:3px'>"+
+          eerder.map(x=>"<option value='"+esc(x.id)+"'>batch "+esc(datumNL(x.datum)||x.datum||"")+"</option>").join("")+"</select>"+
+        " <button type='button' class='audBatchKoppel' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"'>koppelen</button>"
+      : (eerder.length?"<button type='button' class='audBatchOpen' data-k='"+esc(k)+"' style='"+knop+"' title='Dit bedrag is het restant van een eerdere batch die door de banklimiet in delen binnenkwam'>hoort bij eerdere batch</button>":"");
+  }
   h+=r.naarChantal
     ? "<span style='font-size:11px;color:#92400e;margin-left:4px'>bij Chantal sinds "+esc(String(r.naarChantal).slice(0,10).split("-").reverse().join("-"))+"</span>"
     : "<button type='button' class='audNaarChantal' data-wire='"+esc(w.id)+"' data-i='"+idx+"' style='"+knop+"' title='Staat deze regel nog buiten QuickBooks? Dan komt er een taak bij Chantal om hem via Audrey in QuickBooks te laten zetten.'>naar Chantal</button>";
@@ -2377,12 +2388,13 @@ function audRender(){
         const ct=audBatchCheck(w);
         return ct.klopt
           ? "<div class='status-msg' style='margin:0 0 10px;background:#dcfce7;color:#166534;border:1px solid #86efac'>"+
-            "<b>Sluit aan.</b> Orders afboeken "+esc(usd(ct.opOrders))+", bankkosten "+esc(usd(ct.kosten))+
-            " op 4630, blijft op 1160 "+esc(usd(ct.netto))+"."+
+            "<b>Sluit aan.</b> Orders afboeken "+esc(usd(ct.opOrders))+". De bankkosten ("+esc(usd(ct.kosten))+
+            ") en de ontvangst ("+esc(usd(c2v(ct.netto-ct.aanvulSom)))+") boek je zelf in het bankboek."+
+            (ct.aanvulSom?("<br>Daarnaast "+esc(usd(ct.aanvulSom))+" als restant van een eerdere batch ("+ct.aanvul.map(r=>esc(datumNL(r.bijBatchDatum)||"eerdere batch")).join(", ")+"); die orders zijn daar al afgeboekt."):"")+
             (ct.opOrders!==ct.bruto?("<br>Daarvan gaat "+esc(usd(c2v(ct.bruto-ct.opOrders)))+
-              " los van een order (saldoregel); dat zit in de "+esc(usd(ct.kosten))+" op 4630."):"")+
+              " los van een order (saldoregel); dat zit in de "+esc(usd(ct.kosten))+" bankkosten."):"")+
             (ct.balansBuiten?("<br>De Balance Due van "+esc(usd(ct.balansBuiten))+" is wat de klant nog moet betalen; dat staat los van deze betaling en blijft open."):"")+
-            (ct.kostenUitVerschil?("<br>De mail noemt de bankkosten als één bedrag. Het verschil tussen gefactureerd en ontvangen ("+esc(usd(ct.kosten))+") zijn de bankkosten van deze batch en gaan op 4630."):"")+
+            (ct.kostenUitVerschil?("<br>De mail noemt de bankkosten als één bedrag. Het verschil tussen gefactureerd en ontvangen ("+esc(usd(ct.kosten))+") zijn de bankkosten van deze batch."):"")+
             (totaalRegel&&totaalRegel.handmatig?"<div style='margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap'><span style='font-size:12px'>Ontvangen bedrag (zelf ingevuld), aanpassen:</span>"+
                 "<input type='text' inputmode='decimal' data-ontvangen-usd='"+esc(w.id)+"' value='"+esc(nlBedrag(totaalRegel.kolom3))+"' style='width:130px;padding:5px 8px;border:1px solid var(--border);border-radius:7px;font:inherit'>"+
                 "<button class='btn' type='button' data-ontvangen='"+esc(w.id)+"'>bedrag aanpassen</button></div>":"")+
@@ -2406,6 +2418,21 @@ function audRender(){
               : "")+"</div>";
       })()+
       (function(){
+        /* Restant dat later binnenkwam, met een andere batch (Osman, 30 sep
+           2026: van 29-06 kwam door de banklimiet maar $26.000 binnen, de rest
+           met 09-07). */
+        const later=[];
+        (wiresData.wires||[]).forEach(x=>(x.regels||[]).forEach(r=>{ if(String(r.bijBatch||"")===String(w.id)) later.push({w:x,r:r}); }));
+        if(!later.length) return "";
+        const som=c2v(later.reduce((n,o)=>n+(Number(o.r.kolom1)||0),0));
+        return "<div class='status-msg' style='margin:0 0 10px;background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe'>"+
+          "<b>Restant later ontvangen.</b> "+later.map(o=>esc(usd(o.r.kolom1))+" kwam binnen met de batch van "+esc(datumNL(o.w.datum)||o.w.datum||"")).join("; ")+"."+
+          " De orders van deze batch zijn hier afgeboekt; het restant boek je in het bankboek bij de latere ontvangst.</div>";
+      })()+
+      (function(){
+        /* Koersverschil: sinds 30 sep 2026 boekt Osman dat zelf in het
+           bankboek ("geen automatische memoriaal boeking meer"). */
+        if(true) return "";
         /* Koersverschil. Osman (18 sep 2026): "1160 hoort hetzelfde te zijn
            als de uitbetaling in euro." Pas als de hele batch op 1160 staat:
            dan vult hij in wat er op de bank kwam, en gaat het verschil naar
@@ -2541,6 +2568,23 @@ function audRender(){
     if(e.key==="Escape"){ delete audKoppelOpen[inp.dataset.wire+":"+inp.dataset.i]; audRender(); }
     if(e.key==="Enter"){ const nr=inp.value.replace(/\D/g,""); if(nr) koppel(inp.dataset.wire,inp.dataset.i,nr,null); }
   }));
+  const koppelBatch=async(wid,i,bij,knop)=>{
+    if(knop){ knop.disabled=true; knop.textContent="bezig…"; }
+    try{
+      const j=await audPost("/amerika/qb/koppel-batch",{wireId:wid,index:Number(i),bijBatch:bij||null});
+      delete audBatchKies[wid+":"+i];
+      const w=wiresData.wires.find(x=>String(x.id)===wid); const rg=w&&w.regels[Number(i)];
+      if(rg){ if(bij){ rg.bijBatch=bij; rg.bijBatchDatum=j.datum||""; delete rg.orderHand; delete rg.orderHandKlant; } else { delete rg.bijBatch; delete rg.bijBatchDatum; } }
+      if(window.fpLog) window.fpLog("batchregel-restant","batch "+wid+" regel "+i+" -> "+(bij?("restant van "+bij):"los"));
+      audRender();
+    }catch(err){ if(knop){ knop.disabled=false; knop.textContent="nog een poging: "+err.message; } }
+  };
+  box.querySelectorAll(".audBatchOpen").forEach(b=>b.addEventListener("click",()=>{ audBatchKies[b.dataset.k]=true; audRender(); }));
+  box.querySelectorAll(".audBatchKoppel").forEach(b=>b.addEventListener("click",()=>{
+    const sel=box.querySelector(".audBatchSel[data-wire='"+CSS.escape(b.dataset.wire)+"'][data-i='"+b.dataset.i+"']");
+    if(sel&&sel.value) koppelBatch(b.dataset.wire,b.dataset.i,sel.value,b);
+  }));
+  box.querySelectorAll(".audBatchLos").forEach(b=>b.addEventListener("click",()=>koppelBatch(b.dataset.wire,b.dataset.i,null,b)));
   box.querySelectorAll(".audLos").forEach(b=>b.addEventListener("click",()=>{ if(confirm("Deze regel losmaken van de order?")) koppel(b.dataset.wire,b.dataset.i,null,b); }));
   box.querySelectorAll(".audRedenVraag").forEach(b=>b.addEventListener("click",async()=>{
     if(!confirm("Een taak bij Chantal zetten om bij Audrey de reden van deze refund na te vragen?")) return;

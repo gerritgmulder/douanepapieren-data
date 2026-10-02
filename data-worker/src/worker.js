@@ -11513,6 +11513,13 @@ async function qbHandlePrijzenBijwerken(request, env) {
    halverwege om, dan kan een tweede poging nooit dubbel boeken. */
 const AMERIKA_DAGBOEK = 45;        // "Bank Passion Spas South TX" = grootboek 1160
 const AMERIKA_LEDGER_1160 = 556;   // het grootboek zelf, voor in de uitleg
+/* Osman (30 sep 2026, "Memoriaal USA"): "We willen graag geen automatische
+   memoriaal boeking meer met passion spa usa boekingen. Ik doe het handmatig
+   in bankboek van passion spa." Het Dashboard boekt sindsdien alleen nog de
+   orders af (AddPayment in dagboek 45). De bankkosten op 4630 en het
+   koersverschil op 9075 zet Osman zelf in het bankboek. Op true zetten brengt
+   het oude gedrag terug. */
+const AMERIKA_MEMORIAAL = false;
 const AMERIKA_KOSTEN_GROOTBOEK = "4630";                // "Bankrente en kosten"
 const AMERIKA_KOSTENPLAATS = "Spa Houston USA (41)";
 const AMERIKA_KOSTENPLAATS_ID = 41;
@@ -11711,8 +11718,14 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
        refund" hoort bij Backyards & Barns, order 3508050, en die staat niet
        als factuur in QuickBooks). Die keuze gaat voor alles. */
     const hand = Number(r.orderHand) || null;
-    if (hand && !al) { rij.order = hand; rij.handGekoppeld = true; }
+    /* Hoort bij een eerdere batch (Osman, 30 sep 2026): op 29-06 kwam door
+       de banklimiet maar $26.000 binnen; de rest, $15.879,29, kwam als
+       "Balance" mee met de batch van 09-07. De orders daarvan zijn met 29-06
+       al afgeboekt, dus deze regel boekt niets en houdt 09-07 niet tegen. */
+    const bij = String(r.bijBatch || "");
+    if (hand && !al && !bij) { rij.order = hand; rij.handGekoppeld = true; }
     if (al) { rij.status = "al geboekt"; rij.order = al.orderId || rij.order; rij.ts = al.ts; }
+    else if (bij) { rij.status = "hoort bij een eerdere batch"; rij.bijBatch = bij; rij.bijBatchDatum = r.bijBatchDatum || ""; rij.order = null; }
     else if (hand) rij.status = rij.bedrag === 0 ? "bedrag is nul of negatief" : "klaar om te boeken";
     else if (!factuur) rij.status = "geen factuurnummer";
     else if (!kandidaten.length) rij.status = "geen Logic4-order";
@@ -11825,7 +11838,10 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
      dan gaat er toch niets weg en zou dit verschil een onzinbedrag zijn - het
      mist immers de orders die er nog niet zijn. Dan blijft het bedrag uit de
      mail staan, want dat is wat er op het scherm hoort. */
-  const kostenBoeken = (netto != null && !redenen.length) ? qbCent(opOrders - netto) : kosten;
+  /* Geld dat bij een eerdere batch hoort, telt hier niet mee voor de orders
+     van deze batch: haal het van de netto ontvangst af. */
+  const aanvulSom = qbCent(uit.filter(r => r.status === "hoort bij een eerdere batch").reduce((n, r) => n + r.bedrag, 0));
+  const kostenBoeken = (netto != null && !redenen.length) ? qbCent(opOrders - qbCent(netto - aanvulSom)) : kosten;
   /* Wijkt dat af van wat Audrey zelf aan kosten noemt, dan is er meer aan de
      hand dan een saldoregel. Het verschil mag precies de saldoregels zijn. */
   const saldoSom = qbCent(saldoRegels.reduce((n, r) => n + r.bedrag, 0));
@@ -11842,7 +11858,9 @@ function qbBatchLezen(wire, perFactuur, geboekt, raad, tweelingen) {
     regels: uit,
     teBoeken: teBoeken.length,
     alGeboekt: alGeboekt.length,
-    klaar: !redenen.length && !teBoeken.length && (kostenAl || !(kostenBoeken > 0)),
+    klaar: !redenen.length && !teBoeken.length && (!AMERIKA_MEMORIAAL || kostenAl || !(kostenBoeken > 0)),
+    memoriaal: AMERIKA_MEMORIAAL,
+    aanvulling: aanvulSom || undefined,
     bankkosten: { bedrag: kostenBoeken, uitDeMail: kosten, saldoregels: saldoSom || undefined,
                   sleutel: kostenSleutel, alGeboekt: kostenAl,
                   grootboek: AMERIKA_KOSTEN_GROOTBOEK, kostenplaats: AMERIKA_KOSTENPLAATS },
@@ -12086,6 +12104,7 @@ async function qbHandleKoersverschil(request, env) {
   if (!w) return reply(404, { ok: false, error: "batch niet gevonden" });
   const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
   geboekt.ids = geboekt.ids || {};
+  if (!AMERIKA_MEMORIAAL) return reply(410, { ok: false, error: "Het koersverschil boekt Osman sinds 30 september zelf in het bankboek; het Dashboard maakt geen memoriaal meer." });
   if (geboekt.ids["koers:" + wireId]) return reply(409, { ok: false, error: "het koersverschil van deze batch is al geboekt (" + String(geboekt.ids["koers:" + wireId].ts || "").slice(0, 10) + ")" });
   /* Wat er op 1160 staat voor deze batch: de afgeboekte orders (debet) min de
      bankkosten (credit), allemaal in euro tegen 1,12. */
@@ -12184,6 +12203,30 @@ async function qbHandleKoppelRegel(request, env) {
   }
   await env.FONTEYN_DATA.put("qb-wires", JSON.stringify(wires));
   return reply(200, { ok: true, orderId: id, order: id ? { klant: r.orderHandKlant } : null });
+}
+/* POST /amerika/qb/koppel-batch { wireId, index, bijBatch|null, user }
+   Een batchregel (meestal een "Balance") aanwijzen als het restant van een
+   eerdere batch. Osman (30 sep 2026): de $15.879,29 van 09-07 is het restant
+   van 29-06, waar door de banklimiet maar $26.000 binnenkwam. */
+async function qbHandleKoppelBatch(request, env) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  let body = {}; try { body = await request.json(); } catch {}
+  const wireId = String(body.wireId || ""), i = Number(body.index), bijId = String(body.bijBatch || "");
+  const wires = (await env.FONTEYN_DATA.get("qb-wires", { type: "json" })) || { wires: [] };
+  const w = (wires.wires || []).find(x => String(x.id) === wireId);
+  if (!w || !Array.isArray(w.regels) || !w.regels[i]) return reply(404, { ok: false, error: "batchregel niet gevonden" });
+  const r = w.regels[i];
+  const geboekt = (await env.FONTEYN_DATA.get("qb-geboekt", { type: "json" })) || { ids: {} };
+  if (((geboekt.ids || {})["batch:" + wireId + ":r" + i])) return reply(409, { ok: false, error: "deze regel is al op een order geboekt; maak dat eerst ongedaan" });
+  if (!bijId) { delete r.bijBatch; delete r.bijBatchDatum; delete r.bijBatchDoor; delete r.bijBatchTs; }
+  else {
+    const doel = (wires.wires || []).find(x => String(x.id) === bijId);
+    if (!doel || bijId === wireId) return reply(404, { ok: false, error: "die batch bestaat niet" });
+    r.bijBatch = bijId; r.bijBatchDatum = doel.datum || ""; r.bijBatchDoor = String(body.user || "").slice(0, 80); r.bijBatchTs = new Date().toISOString();
+    delete r.orderHand; delete r.orderHandKlant; delete r.orderHandDoor; delete r.orderHandTs;
+  }
+  await env.FONTEYN_DATA.put("qb-wires", JSON.stringify(wires));
+  return reply(200, { ok: true, bijBatch: bijId || null, datum: r.bijBatchDatum || null });
 }
 /* POST /amerika/qb/koppel-factuur { qbId, orderId, user }
    Een QuickBooks-factuur aan een order hangen die al in Logic4 staat, in
@@ -12768,7 +12811,8 @@ async function qbHandleBoeken(request, env) {
        hetzelfde als een regel in dagboek 45: 4630 debet, 1160 credit, en per
        batch komt 1160 op nul. Alleen de kostenplaats kan niet mee, want een
        memoriaalregel heeft dat veld niet; die zet Osman er zelf op. */
-    if (!stuk && b.bankkosten.bedrag > 0 && !b.bankkosten.alGeboekt) {
+    if (!AMERIKA_MEMORIAAL && b.bankkosten.bedrag > 0 && !b.bankkosten.alGeboekt) b.bankkosten.status = "zelf in het bankboek";
+    if (AMERIKA_MEMORIAAL && !stuk && b.bankkosten.bedrag > 0 && !b.bankkosten.alGeboekt) {
       try {
         if (!amerikaGb) {
           const g = await bankGrootboeken(env);
@@ -12812,7 +12856,7 @@ async function qbHandleBoeken(request, env) {
 
     b.geboekt = b.regels.filter(r => r.status === "geboekt").length;
     b.fout = b.regels.filter(r => r.status === "fout").length;
-    b.klaar = !b.fout && !b.deels && (b.bankkosten.status === "geboekt" || b.bankkosten.alGeboekt || !(b.bankkosten.bedrag > 0));
+    b.klaar = !b.fout && !b.deels && (!AMERIKA_MEMORIAAL || b.bankkosten.status === "geboekt" || b.bankkosten.alGeboekt || !(b.bankkosten.bedrag > 0));
     if (b.klaar) { delete voorafOpslag[wid]; voorafGewijzigd = true; }
     /* Een deels geboekte batch komt pas terug als hij af is; de volgende
        aanroep doet de rest en geeft dan het hele verhaal. */
@@ -17259,6 +17303,7 @@ const FP_WORKER = {
       return reply(200, { ok: true, docNr: inv.DocNumber, dubbel: await qbMogelijkDubbel(env, inv, await qbDubbelIndex(env), await l4Token(env)) });
     }
     if (url.pathname === "/amerika/qb/koppel-regel" && request.method === "POST") return qbHandleKoppelRegel(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+    if (url.pathname === "/amerika/qb/koppel-batch" && request.method === "POST") return qbHandleKoppelBatch(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     if (url.pathname === "/amerika/qb/koppel-factuur" && request.method === "POST") return qbHandleKoppelFactuur(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     if (url.pathname === "/amerika/qb/refund-reden" && request.method === "POST") return qbHandleRefundReden(request, env).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
     /* De wire-bewaking: stand opvragen, of een proefronde die laat zien wat hij

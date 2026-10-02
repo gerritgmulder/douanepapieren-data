@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", bestand: "amerika.html", soort: "beter",
+      titel: "Batches uit Amerika: geen memoriaal meer, en een restant hoort bij de eerdere batch",
+      wat:   "Het Dashboard boekt bij een batch alleen nog de orders af. De bankkosten en het koersverschil zet Osman zelf in het bankboek, er komt geen memoriaal meer bij. Kwam een batch door de banklimiet in delen binnen, kies dan bij de Balance-regel van de latere batch 'hoort bij eerdere batch'. Dan kan die latere batch gewoon geboekt worden, en bij de eerdere staat dat het restant later binnenkwam."
+    },
+    {
       datum: "2026-10-02", bestand: "koeien.html", soort: "nieuw",
       titel: "Stamboom: waarschuwing voor inteelt",
       wat:   "Een vrouwtje van een jaar of ouder dat in dezelfde wei loopt als haar vader kleurt zacht rood, in de stamboom en in de tabel. Ga er met de muis op staan voor de uitleg. De lijnen zijn dikker en lopen achter de kaarten langs."
