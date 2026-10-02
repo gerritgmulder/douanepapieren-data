@@ -4742,6 +4742,18 @@ async function handleDealerRoutes(request, env, url) {
   if (p === "/dealers/login" && request.method === "POST") return dpHandleLogin(request, env, url);
   if (p === "/dealers/auth" && (request.method === "GET" || request.method === "POST")) return dpHandleAuth(request, env, url);
   if (p === "/dealers/logo.png" && request.method === "GET") return dpLogoResponse();
+  /* De woordenlijsten van het portaal (Gerrit, 2 okt 2026: "Passion Partners
+     zelf moet in verschillende talen kunnen: Engels, Nederlands, Duits,
+     Frans, Italiaans"). Ze staan in de repo onder portaal-talen/ en komen,
+     net als de pagina zelf, vers van GitHub (cache 60 s). */
+  const talenM = p.match(/^\/dealers\/talen\/(nl|de|fr|it)\.json$/);
+  if (talenM && request.method === "GET") {
+    const cb = Math.floor(Date.now() / 60000);
+    const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/portaal-talen/" + talenM[1] + ".json?cb=" + cb,
+      { cf: { cacheTtl: 60, cacheEverything: true } });
+    if (!r.ok) return reply(404, { ok: false });
+    return new Response(await r.text(), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+  }
   if (p === "/dealers/welkom" && (request.method === "GET" || request.method === "POST")) return dpHandleWelkom(request, env, url);
 
   if (p === "/dealers/webhook" && request.method === "POST") return dpHandleMollieWebhook(request, env, url);

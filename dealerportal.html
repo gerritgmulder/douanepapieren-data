@@ -27,6 +27,9 @@
   header #cartBtn{background:var(--red);color:#fff;border:0;border-radius:9px;padding:9px 16px;font-size:14px;font-weight:700;
     display:inline-flex;align-items:center;gap:8px;box-shadow:0 3px 10px rgba(200,16,46,.28);transition:background .12s,transform .12s}
   header #cartBtn.hidden{display:none}
+  header #taalKeuze{width:auto!important;flex:0 0 auto;min-width:0;font:inherit;font-size:12px;font-weight:700;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--ink);cursor:pointer}
+  /* Even niets tonen tot de vertaling er is, anders flitst eerst het Engels. */
+  html.pp-vertalen body{visibility:hidden}
   header #cartBtn:hover{background:var(--red-dark);color:#fff;transform:translateY(-1px)}
   header #cartBtn svg{width:18px;height:18px;flex:0 0 auto}
   header #cartTel{background:#fff;color:var(--red);border-radius:999px;min-width:22px;height:22px;padding:0 6px;
@@ -52,7 +55,7 @@
     header img{height:34px}
     header h1{flex:1 1 auto}
     header .who{flex:1 1 100%;order:2;font-size:11.5px;overflow-wrap:anywhere}
-    header #cartBtn,header #pwBtn,header #logoutBtn{order:3}
+    header #cartBtn,header #pwBtn,header #logoutBtn,header #taalKeuze{order:3}
     header #cartBtn{margin-left:auto}
     /* Dezelfde regel die breedte.js op het Dashboard toepast: een tabel wordt
        nooit breder dan zijn kaart, een cel breekt af in plaats van de tabel op
@@ -351,10 +354,97 @@
 </head>
 <body>
 
+<script>
+/* TALEN - Passion Partners in het Engels, Nederlands, Duits, Frans en Italiaans
+   ═══════════════════════════════════════════════════════════════════════════
+   Gerrit (2 okt 2026): "Passion Partners zelf moet in verschillende talen
+   kunnen: Engels, Nederlands, Duits, Frans, Italiaans."
+
+   Zoals taal.js in het Dashboard: de Engelse tekst blijft in deze pagina
+   staan, en deze laag vervangt hem door de vertaling uit de woordenlijst
+   (portaal-talen/<taal>.json in de repo, via /dealers/talen/<taal>.json).
+   Alleen tekst die letterlijk in de lijst staat of op een sjabloon past wordt
+   vertaald; modelnamen, kleuren, onderdelen en bedragen staan er niet in en
+   blijven dus met zekerheid zoals ze zijn.
+
+   Keuze: wat de partner rechtsboven koos, anders de taal van zijn browser,
+   anders Engels. Een andere taal kiezen laadt de pagina opnieuw. */
+(function () {
+  var TALEN = { en: 1, nl: 1, de: 1, fr: 1, it: 1 };
+  var bewaard = null; try { bewaard = localStorage.getItem("pp_taal"); } catch (e) {}
+  var nav = String(navigator.language || "en").slice(0, 2).toLowerCase();
+  var taal = TALEN[bewaard] ? bewaard : (TALEN[nav] ? nav : "en");
+  window.ppTaal = taal;
+  document.documentElement.lang = taal;
+  document.addEventListener("DOMContentLoaded", function () {
+    var sel = document.getElementById("taalKeuze");
+    if (!sel) return;
+    sel.value = taal;
+    sel.addEventListener("change", function () { try { localStorage.setItem("pp_taal", sel.value); } catch (e) {} location.reload(); });
+  });
+  if (taal === "en") return;
+  document.documentElement.classList.add("pp-vertalen");
+  var toon = function () { document.documentElement.classList.remove("pp-vertalen"); };
+  setTimeout(toon, 1200);
+  var W = {}, SJ = [];
+  function kern(t) { return String(t).replace(/\s+/g, " ").trim(); }
+  function sjablonen(o) {
+    var uit = [];
+    for (var k in o) {
+      if (!Object.prototype.hasOwnProperty.call(o, k)) continue;
+      var namen = [], re = "^" + k.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{(n|bedrag|d)\}/g, function (m, n) {
+        namen.push(n); return n === "n" ? "(\\d[\\d.,]*)" : n === "bedrag" ? "([€$]\\s?[\\d.,]+)" : "(.+?)"; }) + "$";
+      try { uit.push({ re: new RegExp(re), namen: namen, doel: o[k] }); } catch (e) {}
+    }
+    return uit;
+  }
+  function vertaal(s) {
+    var k = kern(s);
+    if (!k || !/[A-Za-z]/.test(k)) return null;
+    var v = Object.prototype.hasOwnProperty.call(W, k) ? W[k] : null;
+    if (v == null) {
+      for (var i = 0; i < SJ.length && v == null; i++) {
+        var m = k.match(SJ[i].re); if (!m) continue;
+        var per = {}; SJ[i].namen.forEach(function (n, j) { (per[n] = per[n] || []).push(m[j + 1]); });
+        var tel = {};
+        v = SJ[i].doel.replace(/\{(n|bedrag|d)\}/g, function (x, n) { tel[n] = (tel[n] || 0) + 1; return (per[n] || [])[tel[n] - 1] || ""; });
+      }
+    }
+    if (v == null || v === k) return null;
+    return String(s).match(/^\s*/)[0] + v + String(s).match(/\s*$/)[0];
+  }
+  var OVERSLAAN = "script,style,code,textarea,.geen-vertaling";
+  function loop(wortel) {
+    var w = document.createTreeWalker(wortel, NodeFilter.SHOW_TEXT, null), n, raak = [];
+    while ((n = w.nextNode())) { var el = n.parentElement; if (el && !el.closest(OVERSLAAN)) raak.push(n); }
+    raak.forEach(function (t) { var u = vertaal(t.nodeValue); if (u != null) t.nodeValue = u; });
+    wortel.querySelectorAll("[placeholder],[title],[aria-label]").forEach(function (e) {
+      if (e.closest(".geen-vertaling")) return;
+      ["placeholder", "title", "aria-label"].forEach(function (a) { var v = e.getAttribute(a); if (v) { var u = vertaal(v); if (u != null) e.setAttribute(a, u); } });
+    });
+  }
+  fetch("/dealers/talen/" + taal + ".json").then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    if (!j) { toon(); return; }
+    W = j.teksten || {}; SJ = sjablonen(j.sjablonen || {});
+    var start = function () {
+      loop(document.body); toon();
+      var gepland = false;
+      new MutationObserver(function () {
+        if (gepland) return; gepland = true;
+        requestAnimationFrame(function () { gepland = false; loop(document.body); });
+      }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+  }).catch(toon);
+})();
+</script>
 <header>
   <img src="https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/passion-logo.png" alt="Passion Spas">
   <h1>Passion Partners</h1>
   <button class="hidden" id="cartBtn" type="button" title="Your basket"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 9h14l-1.4 9.2a2 2 0 0 1-2 1.8H8.4a2 2 0 0 1-2-1.8z"/><path d="M9 9l3-5 3 5"/></svg>Basket <span id="cartTel">0</span></button>
+  <select id="taalKeuze" class="geen-vertaling" aria-label="Language" title="Language">
+    <option value="en">EN</option><option value="nl">NL</option><option value="de">DE</option><option value="fr">FR</option><option value="it">IT</option>
+  </select>
   <span class="who hidden" id="who"></span>
   <button class="hidden" id="pwBtn" type="button">Password</button>
   <button class="hidden" id="logoutBtn" type="button">Log out</button>
@@ -1402,7 +1492,16 @@ function bouwDocIndex(){
 function algemeenVoorModel(model){
   const m = (stockModels||[]).find(x => x.model === model);
   if (m && GEEN_ALG_SPA.has(m.collection)) return [];
-  return algemeneSpaDocs;
+  /* De handleiding bestaat in vijf talen (2 okt 2026): (EN), (NL), (DE),
+     (FR) en (IT) achter de titel. Een partner ziet die in de taal van het
+     portaal, en anders de Engelse. */
+  const taalVan = f => { const t = String(f.title || "").match(/\((EN|NL|DE|FR|IT)\)\s*$/); return t ? t[1].toLowerCase() : null; };
+  const metTaal = algemeneSpaDocs.filter(taalVan);
+  if (!metTaal.length) return algemeneSpaDocs;
+  const nu = window.ppTaal || "en";
+  let keuze = metTaal.filter(f => taalVan(f) === nu);
+  if (!keuze.length) keuze = metTaal.filter(f => taalVan(f) === "en");
+  return algemeneSpaDocs.filter(f => !taalVan(f)).concat(keuze);
 }
 function docsVoorModel(model){
   const pogingen = [String(model||"").replace(/^spa\s+/i, "").trim()];

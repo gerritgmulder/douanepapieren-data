@@ -6,6 +6,7 @@
 <title>Passion Partners Beheer - Fonteyn Dashboard</title>
 <script src="toegang.js"></script>
 <script src="taal.js"></script>
+<script src="taal-beheer.js"></script>
 <script src="kop.js"></script>
 <script src="breedte.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap">
@@ -278,10 +279,10 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
 <main>
   <h2>Passion Partners <span class="live hidden" id="liveTik">live</span></h2>
   <p class="lead">
-    Beheer hier wie er in het <b>partnerportaal</b> kan (magic-link login op e-mailadres),
+    Beheer hier wie er in het <b>partnerportaal</b> kan,
     welke <b>documenten</b> partners zien, en waar contactvragen binnenkomen.
-    Adres van <b>Passion Partners</b> (het publieke portaal): <a id="portalLink" href="https://partner.passionspas.com/" target="_blank" rel="noopener"><code>partner.passionspas.com</code></a>
-    <em>(later: partners.fonteyn.nl)</em>. Partners zien alleen de totale voorraad - klantnamen en inkoopprijzen blijven intern.
+    Adres van <b>Passion Partners</b> (het publieke portaal): <a id="portalLink" href="https://partner.passionspas.com/" target="_blank" rel="noopener"><code>partner.passionspas.com</code></a>.
+    Partners zien alleen de totale voorraad - klantnamen en inkoopprijzen blijven intern.
   </p>
 
   <div id="status" class="status-msg hidden"></div>
@@ -537,6 +538,10 @@ function beheerKoppen(){
            "X-Fonteyn-User": (localStorage.getItem("fp.email") || "").toLowerCase() };
 }
 const $ = (id) => document.getElementById(id);
+/* Engels aan? Voor de paar meldingen met getallen of namen erin die de
+   woordenlijst (taal-beheer.js) niet als vaste zin kan vangen. */
+const ENG = () => !!(window.fpTaal && fpTaal.huidig && fpTaal.huidig() === "en");
+const tl = (nl, en) => ENG() ? en : nl;
 /* ADVISEURS
    ═══════════════════════════════════════════════════════════════════════
    Gerrit (2 okt 2026): bij de leads de adviseur van de dealer, "dan is het
@@ -652,7 +657,8 @@ async function kleurfotosToon(model){
   }));
   lijst.querySelectorAll(".kfWeg").forEach(b => b.addEventListener("click", async () => {
     const code = b.closest("tr").dataset.code;
-    if (!confirm("Foto voor " + code + " weghalen?")) return;
+    if (!await pDialoog({ titel: tl("Foto weghalen?", "Remove photo?"), html: "<p>" + esc(tl("De foto voor " + code + " gaat uit het portaal.", "The photo for " + code + " is removed from the portal.")) + "</p>",
+      bevestig: tl("Weghalen", "Remove"), gevaarlijk: true })) return;
     await fetch(KF_BASE + "/dealers/admin/kleurfoto", { method: "POST",
       headers: { ...beheerKoppen(), "Content-Type": "application/json" },
       body: JSON.stringify({ model, code, verwijder: true }) });
@@ -863,7 +869,9 @@ async function annuleringenNakijken(){
     } else if (!d.gekeken) {
       $("annuUitleg").textContent = "Alle orders lopen nog.";
     } else {
-      $("annuUitleg").textContent = d.gekeken + " nagekeken, " + d.geannuleerd + " geannuleerd" +
+      $("annuUitleg").textContent = ENG()
+        ? d.gekeken + " checked, " + d.geannuleerd + " cancelled" + (d.afgerond ? ", " + d.afgerond + " completed" : "") + (d.wachtrij ? " (" + d.wachtrij + " to go)" : "") + "."
+        : d.gekeken + " nagekeken, " + d.geannuleerd + " geannuleerd" +
         (d.afgerond ? ", " + d.afgerond + " afgerond" : "") +
         (d.wachtrij ? " (nog " + d.wachtrij + " te gaan)" : "") + ".";
       reqData = await kvGet("dealer-requests");
@@ -1724,7 +1732,11 @@ function relatieKaart(index){
         setStatus("ok", "Welkomstmail verstuurd naar "+d.email+".");
         await pDialoog({
           titel: "Klaar - de uitnodiging is onderweg",
-          html: "<p><b>" + esc(d.company || d.email) + "</b> staat erin als "
+          html: ENG()
+            ? "<p><b>" + esc(d.company || d.email) + "</b> has been added as a " + (d.soort === "dealer" ? "dealer" : "partner") + ".</p>"
+              + "<p>An e-mail has just been sent to <b>" + esc(d.email) + "</b>. With it they choose their own password and can log in to Passion Partners straight away. The link is valid for seven days.</p>"
+              + "<p>That's it. If the e-mail doesn't arrive, use the <b>invitation</b> button in the list.</p>"
+            : "<p><b>" + esc(d.company || d.email) + "</b> staat erin als "
               + (d.soort === "dealer" ? "dealer" : "partner") + ".</p>"
               /* Geen 'hij' meer als we het niet weten. Gerrit (7 sep 2026):
                  "Chantal is geen HIJ. Dus je moet dat wel ergens kunnen
@@ -1735,16 +1747,20 @@ function relatieKaart(index){
               + esc(aanhefVan(d.contact.aanhef).vnw) + " direct inloggen op Passion Partners. "
               + "De link is zeven dagen geldig.</p>"
               + "<p>Hiermee ben je klaar. Blijft de mail uit, gebruik dan de knop <b>uitnodiging</b> in de lijst.</p>",
-          bevestig: "Klaar", geenAnnuleren: true });
+          bevestig: tl("Klaar", "Done"), geenAnnuleren: true });
       } catch(e){
         setStatus("bad","Uitnodiging versturen faalde: "+e.message);
         await pDialoog({
-          titel: "Opgeslagen - de mail wacht nog",
-          html: "<p><b>" + esc(d.company || d.email) + "</b> staat erin; de welkomstmail wacht nog:</p>"
+          titel: tl("Opgeslagen - de mail wacht nog", "Saved - the e-mail is still waiting"),
+          html: ENG()
+            ? "<p><b>" + esc(d.company || d.email) + "</b> has been added; the welcome e-mail is still waiting:</p>"
+              + "<p style='color:var(--bad)'>" + esc(e.message) + "</p>"
+              + "<p>Send it with the <b>invitation</b> button in the list. As soon as they open that invitation, they choose a password and can log in.</p>"
+            : "<p><b>" + esc(d.company || d.email) + "</b> staat erin; de welkomstmail wacht nog:</p>"
               + "<p style='color:var(--bad)'>" + esc(e.message) + "</p>"
               + "<p>Stuur hem alsnog met de knop <b>uitnodiging</b> in de lijst. Zodra " + esc(aanhefVan(d.contact.aanhef).vnw) + " "
               + "die uitnodiging opent, kiest " + esc(aanhefVan(d.contact.aanhef).vnw) + " een wachtwoord en kan " + esc(aanhefVan(d.contact.aanhef).vnw) + " inloggen.</p>",
-          bevestig: "Begrepen", geenAnnuleren: true });
+          bevestig: tl("Begrepen", "Got it"), geenAnnuleren: true });
       }
     }
   });
@@ -1963,8 +1979,20 @@ async function welkomStand(actie){
     const j = await r.json();
     if (!r.ok || !j.ok || j.klaarVoorStart == null) throw new Error(j.error || ("HTTP " + r.status));
     const st = $("welkomStand");
-    const d = (n) => n === 1 ? "1 dag" : n + " dagen";
-    if (j.status === "loopt" || j.status === "pauze") {
+    const d = (n) => n === 1 ? tl("1 dag", "1 day") : n + tl(" dagen", " days");
+    if (ENG()) {
+      if (j.status === "loopt" || j.status === "pauze")
+        st.innerHTML = "<b>" + j.verstuurd + "</b> sent, <b>" + j.nogTeGaan + "</b> to go" +
+          (j.status === "pauze" ? " - <b>paused</b>." : ". Today " + j.vandaag + " of " + j.perDag + "; done in about " + d(Math.max(1, j.dagenNog)) + ".") +
+          (j.klaarVoorStart ? " Meanwhile " + j.klaarVoorStart + " new relations are ready; they join when you press the button again." : "");
+      else if (j.status === "klaar")
+        st.innerHTML = "Done: <b>" + j.verstuurd + "</b> relations have received the welcome e-mail." +
+          (j.klaarVoorStart ? " " + j.klaarVoorStart + " new relations are ready for their welcome e-mail." : "");
+      else
+        st.innerHTML = "<b>" + j.klaarVoorStart + "</b> dealers and partners are ready in the portal, waiting for their welcome e-mail. " +
+          "Press the button and they get the regular welcome e-mail, " + j.perDag + " per day (that is the room the e-mail has per day). " +
+          "Done in about " + d(Math.max(1, Math.ceil(j.klaarVoorStart / j.perDag))) + ". Anyone who already chose a password is skipped.";
+    } else if (j.status === "loopt" || j.status === "pauze") {
       st.innerHTML = "<b>" + j.verstuurd + "</b> verstuurd, nog <b>" + j.nogTeGaan + "</b> te gaan" +
         (j.status === "pauze" ? " - <b>gepauzeerd</b>." : ". Vandaag " + j.vandaag + " van " + j.perDag + "; klaar over ongeveer " + d(Math.max(1, j.dagenNog)) + ".") +
         (j.klaarVoorStart ? " Er staan intussen " + j.klaarVoorStart + " nieuwe relaties klaar; die gaan mee als je opnieuw op de knop drukt." : "");
@@ -1977,10 +2005,10 @@ async function welkomStand(actie){
         "Klaar in ongeveer " + d(Math.max(1, Math.ceil(j.klaarVoorStart / j.perDag))) + ". Wie zelf al een wachtwoord koos, slaat hij over.";
     }
     $("welkomStart").classList.toggle("hidden", !(j.klaarVoorStart > 0) || j.status === "pauze");
-    $("welkomStart").textContent = j.status === "loopt" ? "Ook de nieuwe relaties meenemen" : "Iedereen de welkomstmail sturen";
+    $("welkomStart").textContent = j.status === "loopt" ? tl("Ook de nieuwe relaties meenemen", "Include the new relations too") : tl("Iedereen de welkomstmail sturen", "Send everyone the welcome e-mail");
     $("welkomPauze").classList.toggle("hidden", j.status !== "loopt");
     $("welkomHervat").classList.toggle("hidden", j.status !== "pauze");
-    $("welkomMislukt").textContent = (j.mislukt || []).length ? ("Vraagt nog een poging: " + j.mislukt.map(x => x.email).join(", ")) : "";
+    $("welkomMislukt").textContent = (j.mislukt || []).length ? (tl("Vraagt nog een poging: ", "Needs another try: ") + j.mislukt.map(x => x.email).join(", ")) : "";
     return j;
   } catch (e) { $("welkomStand").textContent = "Ophalen vraagt nog een poging: " + e.message; }
 }
@@ -2475,7 +2503,7 @@ function renderReqs(){
       gevaarlijk: true, bevestig: "Terugdraaien",
       html: `<p>Order <b>#${esc(String(r.logic4OrderId))}</b> van <b>${esc(r.company||r.email)}</b>.</p>
         <ul style="margin:8px 0 0;padding-left:18px;line-height:1.7;">
-          <li>De aanbetaling van <b>${sym} ${Number(r.deposit||0).toFixed(2)}</b> wordt tegengeboekt in dagboek Mollie.</li>
+          <li>${ENG() ? "The deposit of <b>" + sym + " " + Number(r.deposit||0).toFixed(2) + "</b> is reversed in the Mollie journal." : "De aanbetaling van <b>" + sym + " " + Number(r.deposit||0).toFixed(2) + "</b> wordt tegengeboekt in dagboek Mollie."}</li>
           <li>De order gaat in Logic4 op <b>Geannuleerd</b>. Verwijderen kan Logic4 niet, en een geboekte order hoort ook niet spoorloos te verdwijnen.</li>
           <li>De voorraad die hiervoor vastzat komt weer vrij.</li>
         </ul>
@@ -2666,7 +2694,7 @@ document.getElementById("terugLos").addEventListener("click", async ()=>{
   const ja = await pDialoog({
     titel: "Order terugdraaien", gevaarlijk: true, bevestig: "Terugdraaien",
     html: `<p>Logic4-order <b>#${esc(nr)}</b>.</p><ul style="margin:8px 0 0;padding-left:18px;line-height:1.7;">`
-      + (bedrag > 0 ? `<li>Er wordt <b>&euro; ${bedrag.toFixed(2)}</b> tegengeboekt in dagboek Mollie.</li>` : `<li>Vul een bedrag in om iets tegen te boeken.</li>`)
+      + (bedrag > 0 ? (ENG() ? `<li><b>&euro; ${bedrag.toFixed(2)}</b> is reversed in the Mollie journal.</li>` : `<li>Er wordt <b>&euro; ${bedrag.toFixed(2)}</b> tegengeboekt in dagboek Mollie.</li>`) : (ENG() ? `<li>Enter an amount to reverse something.</li>` : `<li>Vul een bedrag in om iets tegen te boeken.</li>`))
       + `<li>De order gaat op <b>Geannuleerd</b>.</li></ul>`
       + `<p style="margin-top:10px;color:var(--muted);font-size:12.5px;">Controleer het nummer goed: dit nummer staat op zichzelf.</p>`,
   });

@@ -1,5 +1,5 @@
 {
-  "version": "0.35.35",
+  "version": "0.35.36",
   "description": "Fonteyn Tools — module-manifest. Push deze file + alle genoemde bestanden naar github.com/gerritgmulder/douanepapieren-data (branch main). De Electron-wrapper haalt bij elke start dit manifest op en download elk bestand naar de live-cache. Nieuwe module toevoegen = bestand pushen + regel toevoegen.",
   "files": [
     {
@@ -131,6 +131,10 @@
     {
       "name": "taal.js",
       "note": "Talenknop NL/EN in de kop van elke tegel. De Nederlandse tekst blijft in de HTML staan; deze laag vervangt hem bij het openen door de Engelse uit de woordenlijst. Alleen wat er letterlijk in staat wordt vertaald, dus klant- en modelnamen blijven met zekerheid ongemoeid."
+    },
+    {
+      "name": "taal-beheer.js",
+      "note": "Engelse woordenlijst voor Passion Partners Beheer (dealerportaal.html), aanvulling op taal.js"
     },
     {
       "name": "kop.js",

@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", groep: "dealerportaal", soort: "nieuw",
+      titel: "Passion Partners in vijf talen, Beheer in het Engels",
+      wat: "Passion Partners is er nu in het Engels, Nederlands, Duits, Frans en Italiaans: rechtsboven kiest een partner zijn taal, en de handleiding bij elke spa komt mee in die taal. Passion Partners Beheer is helemaal Engels als je rechtsboven EN aanzet."
+    },
+    {
       datum: "2026-10-02", groep: "dealerportaal", soort: "beter",
       titel: "Passion Partners Beheer: leads en reserveringen bovenaan",
       wat: "Bovenaan Passion Partners Beheer staat nu de knop Nieuwe dealer of partner, met daaronder de leads en de reserveringen. Die staan open en klap je met een klik op de kop in. De lijst met partners staat daaronder en is dicht tot je erop klikt."
