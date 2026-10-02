@@ -2538,6 +2538,18 @@ addEventListener("pageshow", (e) => {
   const ov = document.getElementById("cartOv");
   if (ov) { ov.remove(); openCart(); }
 });
+/* Een bedrag zoals iemand het typt. "1500", "1.500", "1,500", "1500,50",
+   "1.500,50" en "1,500.50" worden allemaal goed gelezen. Tot 2 okt 2026 werd
+   "1,500" gelezen als 1,5 - en het voorbeeld in het veld stond juist zo. */
+function leesBedrag(t){
+  let s = String(t || "").replace(/[^\d,.]/g, "");
+  if (!s) return NaN;
+  if (/^\d{1,3}([.,]\d{3})+$/.test(s)) return Number(s.replace(/[.,]/g, ""));   // alleen duizendtallen
+  const laatste = Math.max(s.lastIndexOf(","), s.lastIndexOf("."));
+  if (laatste < 0) return Number(s);
+  const heel = s.slice(0, laatste).replace(/[.,]/g, ""), rest = s.slice(laatste + 1);
+  return Number(heel + "." + rest);
+}
 function cartBewaar(){
   try { localStorage.setItem(CART_KEY, JSON.stringify(cart)); } catch(e){}
   const n = cart.reduce((t, r) => t + (Number(r.qty) || 0), 0);
@@ -2669,7 +2681,7 @@ function openCart(opties){
           <label style="font-size:12px;color:var(--muted);display:block;margin:0 0 5px;">Deposit amount agreed with the customer (incl. VAT)</label>
           <div style="position:relative;width:180px;">
             <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-weight:600;pointer-events:none;">${window.myRegion === "US" ? "$" : "\u20ac"}</span>
-            <input type="text" inputmode="decimal" placeholder="e.g. 1,500" style="width:180px;padding-left:28px;">
+            <input type="text" inputmode="decimal" placeholder="e.g. 1500" style="width:180px;padding-left:28px;">
           </div>
           <div class="lead" style="font-size:12px;margin:4px 0 0;">Parts are always paid in full on top of this amount.</div>
         </div>
@@ -2795,8 +2807,7 @@ function openCart(opties){
     const eigenInp = ov.querySelector("#cartEigen input");
     /* Gewoon tekstveld: in een getalveld wordt "1500,50" leeg zodra je de
        komma typt, en op de beurs typt iedereen een komma. */
-    const eigenBedrag = keuze === "eigen" && eigenInp
-      ? Number(String(eigenInp.value).replace(/[^\d,.-]/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".")) : null;
+    const eigenBedrag = keuze === "eigen" && eigenInp ? leesBedrag(eigenInp.value) : null;
     if (keuze === "eigen" && !(eigenBedrag > 0)) {
       const m0 = ov.querySelector("#cartMsg");
       m0.className = "msg bad"; m0.textContent = "Fill in the deposit amount first."; m0.classList.remove("hidden");
