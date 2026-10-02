@@ -3897,13 +3897,11 @@ async function dpAdminLoginLink(request, env, url) {
 // pas het instellen van het wachtwoord (POST) verbruikt het token.
 const DP_INVITE_TTL = 7 * 24 * 3600;
 
-async function dpAdminUitnodigen(request, env, url) {
-  let body = {};
-  try { body = await request.json(); } catch {}
-  const email = String(body.email || "").trim().toLowerCase();
-  const accounts = await dpGetAccounts(env);
-  const dealer = dpFindDealer(accounts, email);
-  if (!dealer) return reply(404, { ok: false, error: "geen actieve dealer met dit e-mailadres" });
+/* De welkomstmail zelf: een uitnodiging waarmee de relatie zijn wachtwoord
+   kiest. Gebruikt door de knop in Beheer én door de wachtrij voor de
+   bestaande relaties (zie WELKOMSTMAIL-WACHTRIJ). url mag ontbreken (cron). */
+async function dpWelkomMail(env, url, accounts, dealer, door) {
+  const email = String(dealer.email || "").trim().toLowerCase();
   const token = crypto.randomUUID() + crypto.randomUUID().replace(/-/g, "");
   await env.FONTEYN_DATA.put("dp-invite:" + token,
     JSON.stringify({ email, company: dealer.company || "" }), { expirationTtl: DP_INVITE_TTL });
@@ -3922,9 +3920,92 @@ async function dpAdminUitnodigen(request, env, url) {
       dpPad(env, url).replace(/^https?:\/\//, "") + '</a>.</p>'),
     (accounts.contactEmail || undefined), dpAdviseurVan(accounts, email));
   await dpLogPartner(env, { email, company: dealer.company || "" }, "uitnodiging-verstuurd",
-    sent.ok ? "welkomstmail" : "MAIL FAALDE");
-  return reply(sent.ok ? 200 : 502, { ok: sent.ok, link, validDays: DP_INVITE_TTL / 86400,
-    error: sent.ok ? undefined : (sent.reden || "mail-versturen-faalde (link is wel aangemaakt)") });
+    (sent.ok ? "welkomstmail" : "MAIL FAALDE") + (door ? " (" + door + ")" : ""));
+  return { ok: !!sent.ok, link, reden: sent.ok ? null : (sent.reden || "mail-versturen-faalde") };
+}
+
+async function dpAdminUitnodigen(request, env, url) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const email = String(body.email || "").trim().toLowerCase();
+  const accounts = await dpGetAccounts(env);
+  const dealer = dpFindDealer(accounts, email);
+  if (!dealer) return reply(404, { ok: false, error: "geen actieve dealer met dit e-mailadres" });
+  const r = await dpWelkomMail(env, url, accounts, dealer);
+  return reply(r.ok ? 200 : 502, { ok: r.ok, link: r.link, validDays: DP_INVITE_TTL / 86400,
+    error: r.ok ? undefined : (r.reden + " (link is wel aangemaakt)") });
+}
+
+/* WELKOMSTMAIL-WACHTRIJ
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (2 okt 2026): de bestaande dealers en partners zijn stil in Passion
+   Partners gezet, "en zodra we live gaan wil ik dat de mogelijkheid er is
+   dat alle dealers/partners een welkomstmail ontvangen die ze normaal hadden
+   ontvangen wanneer we ze als nieuwe dealer/partner aanmelden."
+
+   Resend verstuurt er 100 per dag, en die zijn ook nodig voor bestellingen en
+   inloglinks. Daarom gaat de wachtrij met 70 per dag, 8 per uur, in de ronde
+   op :15. Wie intussen zelf een wachtwoord koos of geblokkeerd werd, slaat
+   hij over. Adviseurs (@fonteyn.nl) horen er niet bij. */
+const PP_WACHTRIJ = "pp-uitnodig-wachtrij";
+const PP_PER_DAG = 70, PP_PER_RONDE = 8;
+const ppVandaag = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Amsterdam" });
+function ppKandidaat(d) {
+  return d && d.active !== false && !d.pw && /@/.test(String(d.email || "")) && !/@fonteyn\.nl$/i.test(String(d.email || ""));
+}
+async function ppWachtrijLees(env) {
+  return (await env.FONTEYN_DATA.get(PP_WACHTRIJ, { type: "json" })) || { status: "uit", lijst: [], verstuurd: {}, mislukt: {} };
+}
+function ppWachtrijStand(st, accounts) {
+  const perEmail = new Map((accounts.dealers || []).map(d => [String(d.email || "").toLowerCase(), d]));
+  const open = (st.lijst || []).filter(e => !st.verstuurd[e] && !st.mislukt[e] && ppKandidaat(perEmail.get(e)));
+  const nieuw = (accounts.dealers || []).filter(d => ppKandidaat(d) && !st.verstuurd[String(d.email).toLowerCase()] && !(st.lijst || []).includes(String(d.email).toLowerCase())).length;
+  return { status: st.status, gestart: st.gestart || null, door: st.door || null, perDag: PP_PER_DAG,
+    verstuurd: Object.keys(st.verstuurd || {}).length, mislukt: Object.entries(st.mislukt || {}).map(([e, r]) => ({ email: e, reden: r })),
+    nogTeGaan: open.length, vandaag: st.dag === ppVandaag() ? (st.vandaag || 0) : 0,
+    dagenNog: Math.ceil(open.length / PP_PER_DAG), klaarVoorStart: nieuw };
+}
+async function ppWachtrijHandle(request, env) {
+  const b = await request.json().catch(() => ({}));
+  const accounts = await dpGetAccounts(env);
+  const st = await ppWachtrijLees(env);
+  st.verstuurd = st.verstuurd || {}; st.mislukt = st.mislukt || {}; st.lijst = st.lijst || [];
+  const door = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase().slice(0, 80);
+  if (b.actie === "start") {
+    const erbij = (accounts.dealers || []).filter(d => ppKandidaat(d) && !st.verstuurd[String(d.email).toLowerCase()]).map(d => String(d.email).toLowerCase());
+    st.lijst = [...new Set(st.lijst.concat(erbij))];
+    st.mislukt = {};
+    st.status = "loopt"; st.gestart = st.gestart || new Date().toISOString(); st.door = door;
+    await env.FONTEYN_DATA.put(PP_WACHTRIJ, JSON.stringify(st));
+  } else if (b.actie === "pauze" || b.actie === "hervat") {
+    st.status = b.actie === "pauze" ? "pauze" : "loopt";
+    await env.FONTEYN_DATA.put(PP_WACHTRIJ, JSON.stringify(st));
+  }
+  return reply(200, { ok: true, ...ppWachtrijStand(st, accounts) });
+}
+async function ppWachtrijRonde(env) {
+  const st = await ppWachtrijLees(env);
+  if (st.status !== "loopt") return { ok: true, status: st.status || "uit" };
+  st.verstuurd = st.verstuurd || {}; st.mislukt = st.mislukt || {};
+  const dag = ppVandaag();
+  if (st.dag !== dag) { st.dag = dag; st.vandaag = 0; }
+  const ruimte = Math.max(0, Math.min(PP_PER_DAG - (st.vandaag || 0), PP_PER_RONDE));
+  const accounts = await dpGetAccounts(env);
+  const perEmail = new Map((accounts.dealers || []).map(d => [String(d.email || "").toLowerCase(), d]));
+  const open = (st.lijst || []).filter(e => !st.verstuurd[e] && !st.mislukt[e] && ppKandidaat(perEmail.get(e)));
+  let gedaan = 0;
+  for (const e of open.slice(0, ruimte)) {
+    try {
+      const r = await dpWelkomMail(env, null, accounts, perEmail.get(e), "wachtrij");
+      if (r.ok) { st.verstuurd[e] = new Date().toISOString(); gedaan++; }
+      else st.mislukt[e] = String(r.reden || "mail-versturen-faalde").slice(0, 120);
+    } catch (err) { st.mislukt[e] = String(err.message || err).slice(0, 120); }
+    st.vandaag = (st.vandaag || 0) + 1;
+  }
+  const rest = (st.lijst || []).filter(e => !st.verstuurd[e] && !st.mislukt[e] && ppKandidaat(perEmail.get(e))).length;
+  if (!rest) st.status = "klaar";
+  await env.FONTEYN_DATA.put(PP_WACHTRIJ, JSON.stringify(st));
+  return { ok: true, status: st.status, verstuurd: gedaan, vandaag: st.vandaag, nog: rest };
 }
 
 // GET  /dealers/welkom?t=… → welkomstpagina met wachtwoord-formulier.
@@ -4669,6 +4750,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/afspraken-logic4" && request.method === "POST") return reply(200, await dpAfsprakenNaarLogic4(env, await request.json().catch(() => ({}))).catch(e => ({ ok: false, error: String(e.message || e) })));
     if (p === "/dealers/admin/loginlink" && request.method === "POST") return dpAdminLoginLink(request, env, url);
     if (p === "/dealers/admin/uitnodigen" && request.method === "POST") return dpAdminUitnodigen(request, env, url);
+    if (p === "/dealers/admin/uitnodig-wachtrij" && request.method === "POST") return ppWachtrijHandle(request, env);
     if (p === "/dealers/admin/wachtwoord" && request.method === "POST") return dpAdminSetPassword(request, env);
     if (p === "/dealers/admin/file" && request.method === "PUT") return dpAdminPutFile(request, env, url);
     /* Een portaaldocument ophalen met de beheersleutel. Er was alleen een weg
@@ -15993,6 +16075,9 @@ const FP_WORKER = {
            QuickBooks-aanroepen en die horen niet af te gaan van het budget van
            de voorraadronde op het hele uur. */
         if (String(event && event.cron || "").startsWith("15 ")) {
+          // Eerst de welkomstmails (licht: 8 per ronde), dan de wire-bewaking.
+          const wq = await ppWachtrijRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+          if (wq.status === "loopt" || wq.error) console.log("[cron] welkomstmail-wachtrij: " + JSON.stringify(wq));
           const wr = await wireRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           console.log("[cron] wire-bewaking: " + JSON.stringify({ ok: wr.ok, actie: wr.actie || null, teller: wr.toestand && wr.toestand.teller, fout: wr.error || null }));
           return;

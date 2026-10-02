@@ -268,11 +268,13 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
   <div id="mgmt" class="hidden">
   <div class="card">
     <h3><span class="kopTekst">Partners (<span id="partnerCount">0</span>)</span></h3>
+    <input id="partnerZoek" type="search" placeholder="zoek op naam, e-mail, debiteurnummer of land…" style="width:100%;max-width:420px;margin:0 0 10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">
     <table class="grid partners">
       <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een eigen prijsniveau; die ziet zijn eigen prijslijst, want de andere lijsten laten zien wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Merk</th><th>Afspraken</th><th>Status</th><th></th></tr></thead>
       <tbody id="partnerBody"></tbody>
     </table>
     <div class="row" style="margin-top:12px">
+      <span id="partnerZoekTel" style="font-size:12px;color:var(--muted)"></span>
       <button class="primary" id="nieuweRelatie" type="button">+ Nieuwe dealer of partner</button>
       <span style="font-size:12px;color:var(--muted)">Bestaat de relatie al in Logic4? Dan zoek je hem in de kaart op en koppel je het debiteurnummer.</span>
     </div>
@@ -287,6 +289,21 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
       </select>
       <button class="primary" id="addPartner" type="button">+ Partner toevoegen</button>
     </div>
+  </div>
+
+  <!-- Welkomstmail aan de bestaande relaties. Gerrit (2 okt 2026): de 504
+       bestaande dealers en partners staan stil in het portaal; bij de
+       livegang moet iedereen in één keer de welkomstmail kunnen krijgen. De
+       worker stuurt ze in porties (70 per dag, zie WELKOMSTMAIL-WACHTRIJ). -->
+  <div class="card" id="welkomKaart">
+    <h3>Welkomstmail aan bestaande relaties</h3>
+    <p class="lead" id="welkomStand" style="margin-bottom:10px">Ophalen…</p>
+    <div class="row">
+      <button class="primary hidden" id="welkomStart" type="button">Iedereen de welkomstmail sturen</button>
+      <button class="secondary hidden" id="welkomPauze" type="button">Pauzeren</button>
+      <button class="secondary hidden" id="welkomHervat" type="button">Weer verder</button>
+    </div>
+    <div id="welkomMislukt" class="lead" style="margin-top:8px;font-size:12px"></div>
   </div>
 
   <div class="card">
@@ -1669,11 +1686,20 @@ function relatieKaart(index){
   teken();
 }
 
+function partnerFilter(){
+  const q = String(($("partnerZoek") || {}).value || "").toLowerCase().trim();
+  let n = 0;
+  document.querySelectorAll("#partnerBody > tr").forEach(tr => {
+    const zie = !q || tr.dataset.zoek === undefined || tr.dataset.zoek.includes(q);
+    tr.style.display = zie ? "" : "none"; if (zie) n++;
+  });
+  const tel = $("partnerZoekTel"); if (tel) tel.textContent = q ? n + " gevonden" : "";
+}
 function renderPartners(){
   const list = accounts.dealers || [];
   $("partnerCount").textContent = list.length;
   $("partnerBody").innerHTML = list.map((d,i)=>`
-    <tr>
+    <tr data-zoek="${esc([d.email, d.company, (d.debtorIds||[]).join(" "), d.facturatie && d.facturatie.land, d.facturatie && d.facturatie.plaats, d.soort].join(" ").toLowerCase())}">
       <td data-l="E-mail"><code>${esc(d.email)}</code></td>
       <td data-l="Bedrijf">${esc(d.company||"")}</td>
       <td data-l="Debiteurnr(s)"><input class="debIn" data-i="${i}" value="${esc((d.debtorIds||[]).join(", "))}" style="width:120px;font-size:12px;padding:4px 7px"></td><td data-l="Regio"><select class="regIn" data-i="${i}" style="font-size:12px;padding:4px"><option value="EU"${(d.region||"EU")!=="US"?" selected":""}>EU (&euro;)</option><option value="US"${d.region==="US"?" selected":""}>US ($)</option></select></td>
@@ -1725,6 +1751,7 @@ function renderPartners(){
     menu.addEventListener("click", (ev) => { if (ev.target.closest("button")) setTimeout(() => menu.remove(), 0); });
   }));
   koppelRijVelden();
+  partnerFilter();
 }
 /* Klik ernaast of scrollen sluit het menu. */
 document.addEventListener("click", (e) => { const m = document.querySelector(".actiemenu"); if (m && !m.contains(e.target)) m.remove(); });
@@ -1842,6 +1869,50 @@ function koppelRijVelden(){
 /* De nieuwe weg loopt via de relatiekaart. De oude invoerrij staat er nog wel
    (verborgen) zodat deze functie niet stukloopt op een ontbrekend element. */
 $("nieuweRelatie").addEventListener("click", ()=>relatieKaart(null));
+$("partnerZoek").addEventListener("input", partnerFilter);
+
+/* ── Welkomstmail aan bestaande relaties ── */
+const WQ_URL = "https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/uitnodig-wachtrij";
+async function welkomStand(actie){
+  try {
+    const r = await fetch(WQ_URL, { method: "POST", headers: { "Content-Type": "application/json", ...beheerKoppen() }, body: JSON.stringify({ actie: actie || "stand" }) });
+    const j = await r.json();
+    if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+    const st = $("welkomStand");
+    const d = (n) => n === 1 ? "1 dag" : n + " dagen";
+    if (j.status === "loopt" || j.status === "pauze") {
+      st.innerHTML = "<b>" + j.verstuurd + "</b> verstuurd, nog <b>" + j.nogTeGaan + "</b> te gaan" +
+        (j.status === "pauze" ? " - <b>gepauzeerd</b>." : ". Vandaag " + j.vandaag + " van " + j.perDag + "; klaar over ongeveer " + d(Math.max(1, j.dagenNog)) + ".") +
+        (j.klaarVoorStart ? " Er staan intussen " + j.klaarVoorStart + " nieuwe relaties klaar; die gaan mee als je opnieuw op de knop drukt." : "");
+    } else if (j.status === "klaar") {
+      st.innerHTML = "Klaar: <b>" + j.verstuurd + "</b> relaties hebben de welkomstmail gekregen." +
+        (j.klaarVoorStart ? " Er staan " + j.klaarVoorStart + " nieuwe relaties klaar die nog niets kregen." : "");
+    } else {
+      st.innerHTML = "<b>" + j.klaarVoorStart + "</b> dealers en partners staan klaar in het portaal en hebben nog niets gekregen. " +
+        "Druk je op de knop, dan krijgen ze de gewone welkomstmail, " + j.perDag + " per dag (dat is de ruimte die de mail per dag heeft). " +
+        "Klaar in ongeveer " + d(Math.max(1, Math.ceil(j.klaarVoorStart / j.perDag))) + ". Wie zelf al een wachtwoord koos, slaat hij over.";
+    }
+    $("welkomStart").classList.toggle("hidden", !(j.klaarVoorStart > 0) || j.status === "pauze");
+    $("welkomStart").textContent = j.status === "loopt" ? "Ook de nieuwe relaties meenemen" : "Iedereen de welkomstmail sturen";
+    $("welkomPauze").classList.toggle("hidden", j.status !== "loopt");
+    $("welkomHervat").classList.toggle("hidden", j.status !== "pauze");
+    $("welkomMislukt").textContent = (j.mislukt || []).length ? ("Vraagt nog een poging: " + j.mislukt.map(x => x.email).join(", ")) : "";
+    return j;
+  } catch (e) { $("welkomStand").textContent = "Ophalen vraagt nog een poging: " + e.message; }
+}
+$("welkomStart").addEventListener("click", async () => {
+  const j = await welkomStand();
+  if (!j) return;
+  const ja = await pDialoog({ titel: "Iedereen de welkomstmail sturen?",
+    html: "<p><b>" + j.klaarVoorStart + "</b> dealers en partners krijgen de welkomstmail waarmee ze zelf een wachtwoord kiezen.</p>" +
+          "<p>Dat gaat vanzelf, " + j.perDag + " per dag, tot iedereen hem heeft. Je kunt het onderweg pauzeren.</p>",
+    bevestig: "Versturen" });
+  if (!ja) return;
+  try{ if(window.fpLog) window.fpLog("welkomstmail-wachtrij-gestart", j.klaarVoorStart + " relaties"); }catch(e){}
+  await welkomStand("start");
+});
+$("welkomPauze").addEventListener("click", () => welkomStand("pauze"));
+$("welkomHervat").addEventListener("click", () => welkomStand("hervat"));
 $("addPartner").addEventListener("click", async ()=>{
   const email = $("nEmail").value.trim().toLowerCase();
   if (!email || !email.includes("@")){ setStatus("bad","Vul een geldig e-mailadres in."); return; }
@@ -2559,6 +2630,7 @@ async function init(){
     renderPartners(); renderReqs(); renderPrices(); renderRate(); renderBib();
     laadKoers();
     kleurfotosStart();
+    welkomStand();
     document.getElementById("mgmt").classList.remove("hidden");
     // De mailcontrole hoort bij het beheer en niet bij het inlogscherm.
     document.getElementById("mailCard").classList.remove("hidden");
