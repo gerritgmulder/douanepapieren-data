@@ -195,6 +195,35 @@ button.secondary:hover{border-color:#9ca3af;background:#f9fafb}
 .bulkbalk{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 10px;padding:9px 12px;background:#faf9f7;border:1px solid #efeee9;border-radius:10px;font-size:13px}
 .bulkbalk label{display:inline-flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
 input[type=checkbox]{width:16px;height:16px;accent-color:var(--fonteyn-green);cursor:pointer}
+/* Hoofdknoppen rood met witte letters. Gerrit (2 okt 2026): "die knop met
+   Nieuwe dealer in de kleuren zwart met rode letters is echt heel lelijk."
+   Dat kwam door de merkkleuren hierboven: lime werd antraciet, groen werd rood. */
+button.primary{background:var(--fonteyn-green);color:#fff}
+button.primary:hover{background:var(--fonteyn-green-dark);color:#fff}
+/* Kop met een aantal: "Partners (3)" zonder spaties rond het getal. */
+.card h3 .kopTekst{display:inline}
+/* Acties per partner: Bewerken en een menu, zodat elke rij één regel hoog blijft. */
+td.acties{white-space:nowrap;text-align:right}
+td.acties .rmv{margin:0}
+td.acties .meerD{padding:6px 10px;margin-left:6px}
+.actiemenu{position:fixed;z-index:950;background:#fff;border:1px solid #e5e4df;border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.16);padding:6px;min-width:190px;display:flex;flex-direction:column;gap:2px}
+.actiemenu .rmv{border:0;border-radius:7px;justify-content:flex-start;width:100%;padding:8px 10px;font-size:13px;background:#fff}
+.actiemenu .rmv:hover{background:#f6f5f3}
+.actiemenu .rmv.weg{color:#b91c1c}
+.actiemenu .rmv.weg:hover{background:#fef2f2}
+.actiemenu hr{border:0;border-top:1px solid #efeee9;margin:4px 2px}
+/* Wisselkoers live */
+.koersLive{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:999px;padding:3px 10px;margin-right:8px}
+.koersLive::before{content:"";width:8px;height:8px;border-radius:50%;background:#10b981;animation:puls 2s infinite}
+.koersLive.oud{color:#92400e;background:#fef3c7;border-color:#fde68a}
+.koersLive.oud::before{background:#f59e0b}
+/* Mail nakijken: ingeklapt onderaan, de uitkomst schuift binnen een vak. */
+#mailCard summary{cursor:pointer;font-weight:700;font-size:16px;color:#1f2937;list-style:none;display:flex;align-items:center;gap:10px}
+#mailCard summary::-webkit-details-marker{display:none}
+#mailCard summary::before{content:"";flex:none;width:4px;height:18px;border-radius:2px;background:var(--fonteyn-green)}
+#mailCard summary::after{content:"\25BE";margin-left:auto;color:var(--muted);font-size:13px}
+#mailCard details[open] summary::after{content:"\25B4"}
+#mailUit{max-height:360px;overflow:auto}
 .nieuwlijst{margin:8px 0 0;padding-left:18px;line-height:1.7;font-size:13px}
 .nieuwlijst .tag{display:inline-block;margin-left:6px;font-size:11px;font-weight:600;color:#92400e;background:#fef3c7;border-radius:999px;padding:1px 8px}
 </style>
@@ -221,23 +250,9 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--fonteyn-green);cu
   <div id="status" class="status-msg hidden"></div>
 
 
-  <!-- Werkt de post? Elke uitnodiging, inloglink en aanbetalingsverzoek gaat
-       via Resend de deur uit. Gaat dáár iets mis, dan zegt het scherm bij elke
-       knop nog steeds "verstuurd" en zoek je je rot (Chantal kreeg op 7 sep
-       geen uitnodiging). Deze knop leest wat Resend werkelijk terugstuurde. -->
-  <div class="card hidden" id="mailCard">
-    <h3>E-mail nakijken</h3>
-    <p class="lead" style="margin-bottom:10px">Controleer of de mail eruit kan voordat je een dealer uitnodigt of een aanbetaling verstuurt. Hieronder staan ook de laatste verzendingen met wat Resend erop antwoordde.</p>
-    <div class="row">
-      <button class="primary" id="mailCheckBtn" type="button">Mail nakijken</button>
-      <span id="mailUitleg" class="lead" style="margin:0"></span>
-    </div>
-    <div id="mailUit" style="margin-top:12px"></div>
-  </div>
-
   <div id="mgmt" class="hidden">
   <div class="card">
-    <h3>Partners (<span id="partnerCount">0</span>)</h3>
+    <h3><span class="kopTekst">Partners (<span id="partnerCount">0</span>)</span></h3>
     <table class="grid partners">
       <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een eigen prijsniveau; die ziet zijn eigen prijslijst, want de andere lijsten laten zien wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Merk</th><th>Afspraken</th><th>Status</th><th></th></tr></thead>
       <tbody id="partnerBody"></tbody>
@@ -260,7 +275,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--fonteyn-green);cu
   </div>
 
   <div class="card">
-    <h3>Reserveringen - aanbetaald (<span id="reqCount">0</span>)</h3>
+    <h3><span class="kopTekst">Reserveringen - aanbetaald (<span id="reqCount">0</span>)</span></h3>
     <p class="lead" style="margin-bottom:10px">Partners die <b>daadwerkelijk hebben aanbetaald</b>. Deze zijn <b>automatisch</b> als order in Logic4 gezet en claimen voorraad - hier kijk je alleen mee.</p>
     <table class="grid">
       <thead><tr><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Aanbetaling</th><th>Logic4-order</th><th></th></tr></thead>
@@ -288,7 +303,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--fonteyn-green);cu
   </div>
 
   <div class="card">
-    <h3>Aanvragen zonder aanbetaling - leads (<span id="leadCount">0</span>)</h3>
+    <h3><span class="kopTekst">Aanvragen zonder aanbetaling - leads (<span id="leadCount">0</span>)</span></h3>
     <p class="lead" style="margin-bottom:10px">Partners die een reservering startten en nog op de <b>aanbetaling</b> staan. Dit zijn aanvragen: ze claimen voorraad zodra de aanbetaling binnen is en staan dan in Logic4. Bel na of archiveer ze.
       <label style="margin-left:8px;font-size:12px;color:var(--ink)"><input type="checkbox" id="showArch" style="vertical-align:-1px"> toon gearchiveerd</label></p>
     <div class="bulkbalk">
@@ -315,7 +330,7 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--fonteyn-green);cu
   </div>
 
   <div class="card">
-    <h3>Partnerprijzen per model (<span id="priceCount">0</span>)</h3>
+    <h3><span class="kopTekst">Partnerprijzen per model (<span id="priceCount">0</span>)</span></h3>
     <p class="lead" style="margin-bottom:10px">Nodig voor de automatische <b>30%-aanbetaling</b> bij een reservering (Mollie is actief). Zonder prijs blijft een reservering een aanvraag-per-mail. Modelnaam moet exact overeenkomen met de voorraad (bv. "Renew"). De <b>artikelcode</b> (optioneel) zorgt dat de automatische Logic4-order een echte productregel krijgt in plaats van alleen een omschrijving.</p>
     <table class="grid">
       <thead><tr><th>Model</th><th>Partnerprijs (€, excl. opties)</th><th>30% aanbetaling</th><th>Artikelcode</th><th></th></tr></thead>
@@ -404,6 +419,28 @@ input[type=checkbox]{width:16px;height:16px;accent-color:var(--fonteyn-green);cu
     </div>
   </div>
   </div><!-- /mgmt -->
+  <!-- Werkt de post? Elke uitnodiging, inloglink en aanbetalingsverzoek gaat
+       via Resend de deur uit. Gaat dáár iets mis, dan zegt het scherm bij elke
+       knop nog steeds "verstuurd" en zoek je je rot (Chantal kreeg op 7 sep
+       geen uitnodiging). Deze knop leest wat Resend werkelijk terugstuurde. -->
+  <!-- Onderaan en ingeklapt (Gerrit, 2 okt 2026): "Dat 'E-mail nakijken',
+       wat is dat? Zet het helemaal onderaan, want als ik op Mail nakijken
+       klik opent hij enorm veel mail en dat kan ik niet meer inschuiven."
+       De uitkomst schuift nu binnen een vak, en het blok klapt weer in. -->
+  <div class="card hidden" id="mailCard">
+    <details>
+    <summary>E-mail nakijken</summary>
+    <div style="margin-top:12px">
+    <p class="lead" style="margin-bottom:10px">Controleer of de mail eruit kan voordat je een dealer uitnodigt of een aanbetaling verstuurt. Hieronder staan ook de laatste verzendingen met wat Resend erop antwoordde.</p>
+    <div class="row">
+      <button class="primary" id="mailCheckBtn" type="button">Mail nakijken</button>
+      <span id="mailUitleg" class="lead" style="margin:0"></span>
+    </div>
+    <div id="mailUit" style="margin-top:12px"></div>
+    </div>
+    </details>
+  </div>
+
 </main>
 
 <script>
@@ -626,7 +663,68 @@ async function kvGet(bucket){
   const r = await fetch(DATA_BASE+bucket, { headers:{ ...beheerKoppen() } });
   if (r.status===401 || r.status===403) throw new Error("Toegang op aanvraag: Gerrit zet je in de groep voor Passion Partners Beheer.");
   if (!r.ok) throw new Error("Laden faalde: HTTP "+r.status);
-  return r.json();
+  const data = await r.json();
+  if (SAMENVOEGEN[bucket]) BASIS[bucket] = kloon(data);
+  return data;
+}
+
+/* BEWAREN ZONDER ANDERMANS WERK TE OVERSCHRIJVEN
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (2 okt 2026): zijn testbestelling van een cent stond niet bij de
+   aanbetaalde reserveringen. Hij was betaald en stond in Logic4, maar een
+   Beheer-venster dat al een halfuur openstond bewaarde bij het verwijderen
+   van een paar oude aanvragen zijn eigen kopie van de hele lijst - van vóór
+   die bestelling. Alles wat er sindsdien bij was gekomen was weg.
+
+   Daarom bewaart dit scherm de partners en de aanvragen nooit meer als een
+   oude kopie. Het onthoudt hoe de lijst eruitzag toen hij werd opgehaald
+   (BASIS), haalt bij bewaren eerst de nieuwste versie op en zet daar alleen
+   in wat er in dit venster veranderde: per aanvraag (op id) en per partner
+   (op e-mailadres), en per veld. Wat de worker of een collega intussen
+   schreef - een betaling, een nieuwe aanvraag, een wachtwoord dat een
+   partner zelf koos - blijft staan. */
+const BASIS = {};
+const SAMENVOEGEN = {
+  "dealer-requests": { lijst: "requests", sleutel: r => r && (r.id || (String(r.ts||"") + "|" + String(r.email||""))) },
+  "dealer-accounts": { lijst: "dealers",  sleutel: d => d && String(d.email||"").toLowerCase() },
+};
+function kloon(x){ return x == null ? x : JSON.parse(JSON.stringify(x)); }
+function gelijk(a, b){ return JSON.stringify(a) === JSON.stringify(b); }
+/* Per veld: wat ik veranderde (t.o.v. de basis) wint, de rest komt van de
+   nieuwste versie. */
+function veldMerge(basis, mijn, hun){
+  const uit = Object.assign({}, hun || {});
+  const velden = new Set([...Object.keys(basis || {}), ...Object.keys(mijn || {})]);
+  for (const v of velden) {
+    const b = basis ? basis[v] : undefined, m = mijn ? mijn[v] : undefined;
+    if (!gelijk(m, b)) { if (m === undefined) delete uit[v]; else uit[v] = kloon(m); }
+  }
+  return uit;
+}
+function samenvoegen(bucket, mijn, hun){
+  const cfg = SAMENVOEGEN[bucket], basis = BASIS[bucket] || {};
+  const lijst = cfg.lijst, k = cfg.sleutel;
+  const top = {}, topB = {}, topM = {};
+  for (const [o, d] of [[basis, topB], [mijn, topM]]) for (const v of Object.keys(o || {})) if (v !== lijst) d[v] = o[v];
+  for (const v of Object.keys(hun || {})) if (v !== lijst) top[v] = hun[v];
+  const uit = veldMerge(topB, topM, top);
+  const B = new Map((basis[lijst] || []).map(x => [k(x), x]));
+  const M = new Map((mijn[lijst] || []).map(x => [k(x), x]));
+  const T = (hun && Array.isArray(hun[lijst])) ? hun[lijst] : [];
+  const lijstUit = [], gezien = new Set();
+  for (const t of T) {
+    const sl = k(t); gezien.add(sl);
+    if (B.has(sl) && !M.has(sl)) continue;                 // hier verwijderd
+    if (M.has(sl)) { lijstUit.push(B.has(sl) ? veldMerge(B.get(sl), M.get(sl), t) : veldMerge({}, M.get(sl), t)); }
+    else lijstUit.push(t);                                 // intussen elders bijgekomen
+  }
+  for (const [sl, m] of M) {
+    if (gezien.has(sl)) continue;
+    if (B.has(sl)) continue;                               // elders verwijderd
+    lijstUit.push(m);                                      // hier bijgekomen
+  }
+  uit[lijst] = lijstUit;
+  return uit;
 }
 async function kvPut(bucket, data){
   const r = await fetch(DATA_BASE+bucket, { method:"PUT",
@@ -1385,22 +1483,48 @@ function renderPartners(){
         if(a.betaaltermijn) s.push(esc(a.betaaltermijn));
         return s.join(" &middot; ") || "-";
       })()}</td>
-      <td data-l="Status"><span class="pill ${d.active!==false?"on":"off"}">${d.active!==false?"actief":"uit"}</span>
-          <button class="rmv togAct" data-i="${i}" style="margin-left:6px">${d.active!==false?"blokkeer":"activeer"}</button></td>
-      <td data-l="Acties" class="acties"><button class="rmv kaartD" data-i="${i}" title="Alle gegevens van deze relatie: afspraken, facturatie, verzending en het debiteurnummer" style="font-weight:700">bewerken</button>
-          <button class="rmv invD" data-i="${i}" title="Stuur de welkomstmail: een nette uitnodiging waarmee deze relatie zelf een wachtwoord kiest en meteen ingelogd het portaal in gaat. De link is 7 dagen geldig en kan tegen mailscanners: pas het instellen van het wachtwoord verbruikt hem." style="color:var(--fonteyn-green,#144734);font-weight:700">uitnodiging</button>
-          <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink zonder mail - voor onboarding via WhatsApp of zodra de mail uitblijft. 7 dagen geldig, eenmalig, en sinds 22 aug bestand tegen mailscanners: de link opent eerst een tussenpagina en pas de knop daarop logt in.">inloglink</button>
-          <button class="rmv pwD" data-i="${i}" title="Zet zelf een wachtwoord voor dit account, bijvoorbeeld telefonisch door te geven. Meestal kiest de relatie er zelf een via de uitnodiging.">wachtwoord</button>
-          <button class="rmv weg delD" data-i="${i}">${WEG_ICOON}Verwijderen</button></td>
+      <td data-l="Status"><span class="pill ${d.active!==false?"on":"off"}">${d.active!==false?"actief":"geblokkeerd"}</span></td>
+      <td data-l="Acties" class="acties"><button class="rmv kaartD" data-i="${i}" title="Alle gegevens van deze relatie: afspraken, facturatie, verzending en het debiteurnummer" style="font-weight:700">Bewerken</button><button class="rmv meerD" data-i="${i}" type="button" aria-haspopup="menu" title="Uitnodiging, inloglink, wachtwoord, blokkeren of verwijderen">&#8943;</button>
+        <template class="meerInhoud">
+          <button class="rmv invD" data-i="${i}" title="Stuur de welkomstmail: een nette uitnodiging waarmee deze relatie zelf een wachtwoord kiest en meteen ingelogd het portaal in gaat. De link is 7 dagen geldig en kan tegen mailscanners: pas het instellen van het wachtwoord verbruikt hem." >Uitnodiging sturen</button>
+          <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink zonder mail - voor onboarding via WhatsApp of zodra de mail uitblijft. 7 dagen geldig, eenmalig, en sinds 22 aug bestand tegen mailscanners: de link opent eerst een tussenpagina en pas de knop daarop logt in.">Inloglink maken</button>
+          <button class="rmv pwD" data-i="${i}" title="Zet zelf een wachtwoord voor dit account, bijvoorbeeld telefonisch door te geven. Meestal kiest de relatie er zelf een via de uitnodiging.">Wachtwoord zetten</button>
+          <button class="rmv togAct" data-i="${i}">${d.active!==false?"Blokkeren":"Weer toelaten"}</button>
+          <hr>
+          <button class="rmv weg delD" data-i="${i}">${WEG_ICOON}Verwijderen</button>
+        </template></td>
     </tr>`).join("") || '<tr><td colspan="9" style="color:var(--muted)">Voeg de eerste dealer of partner toe.</td></tr>';
   document.querySelectorAll(".kaartD").forEach(b=>b.addEventListener("click",()=>relatieKaart(Number(b.dataset.i))));
-  document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
+  document.querySelectorAll(".meerD").forEach(b=>b.addEventListener("click",(e)=>{
+    e.stopPropagation();
+    const open = document.querySelector(".actiemenu");
+    const wasDezelfde = open && open.dataset.i === b.dataset.i;
+    if (open) open.remove();
+    if (wasDezelfde) return;
+    const menu = document.createElement("div");
+    menu.className = "actiemenu"; menu.setAttribute("role","menu"); menu.dataset.i = b.dataset.i;
+    menu.appendChild(b.parentElement.querySelector("template.meerInhoud").content.cloneNode(true));
+    document.body.appendChild(menu);
+    const r = b.getBoundingClientRect(), h = menu.offsetHeight, w = menu.offsetWidth;
+    menu.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + "px";
+    menu.style.top = (r.bottom + h + 8 > innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + "px";
+    koppelRijActies(menu);
+    // Een keuze uit het menu sluit het menu; de knop zelf doet daarna zijn werk.
+    menu.addEventListener("click", (ev) => { if (ev.target.closest("button")) setTimeout(() => menu.remove(), 0); });
+  }));
+  koppelRijVelden();
+}
+/* Klik ernaast of scrollen sluit het menu. */
+document.addEventListener("click", (e) => { const m = document.querySelector(".actiemenu"); if (m && !m.contains(e.target)) m.remove(); });
+addEventListener("scroll", () => { const m = document.querySelector(".actiemenu"); if (m) m.remove(); }, true);
+function koppelRijActies(waar){
+  waar.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     d.active = d.active === false ? true : false;
     try{ if(window.fpLog) window.fpLog("partner-"+(d.active?"geactiveerd":"gedeactiveerd"),d.email+(d.company?" ("+d.company+")":"")); }catch(e){}
     await save("dealer-accounts", accounts); renderPartners();
   }));
-  document.querySelectorAll(".delD").forEach(b=>b.addEventListener("click", async ()=>{
+  waar.querySelectorAll(".delD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     if (!await pDialoog({ titel:"Relatie verwijderen?",
       html:"<p><b>"+esc(d.company||d.email)+"</b> wordt uit het portaal gehaald. Inloggen kan daarna opnieuw zodra je hem weer toevoegt; "
@@ -1410,7 +1534,7 @@ function renderPartners(){
     accounts.dealers.splice(Number(b.dataset.i),1);
     await save("dealer-accounts", accounts); renderPartners();
   }));
-  document.querySelectorAll(".invD").forEach(b=>b.addEventListener("click", async ()=>{
+  waar.querySelectorAll(".invD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     if (!await pDialoog({ titel:"Welkomstmail sturen?",
       html:"<p>Er gaat een mail naar <b>"+esc(d.email)+"</b>"+(d.company?" ("+esc(d.company)+")":"")+".</p>"
@@ -1428,7 +1552,7 @@ function renderPartners(){
     } catch(e){ setStatus("bad","Uitnodiging versturen faalde: "+e.message); }
     b.disabled = false; b.textContent = "uitnodiging";
   }));
-  document.querySelectorAll(".lnkD").forEach(b=>b.addEventListener("click", async ()=>{
+  waar.querySelectorAll(".lnkD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     b.disabled = true; b.textContent = "bezig…";
     try {
@@ -1450,7 +1574,7 @@ function renderPartners(){
   // ontvanger klikt. Een wachtwoord kan niet verlopen en niet opgesnoept
   // worden. Het wachtwoord wordt nergens bewaard — de worker slaat alleen
   // een hash op, dus ook hier is het daarna niet meer terug te zien.
-  document.querySelectorAll(".pwD").forEach(b=>b.addEventListener("click", async ()=>{
+  waar.querySelectorAll(".pwD").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     const pw = await vraagWachtwoord(d.email);
     if (pw===null) return;
@@ -1469,6 +1593,9 @@ function renderPartners(){
     } catch(e){ setStatus("bad","Wachtwoord zetten faalde: "+e.message); }
     b.disabled = false; b.textContent = "wachtwoord";
   }));
+}
+/* De invulvakjes en keuzelijsten in de rij zelf: één keer per keer tekenen. */
+function koppelRijVelden(){
   document.querySelectorAll(".debIn").forEach(inp=>inp.addEventListener("change", async ()=>{
     const d = accounts.dealers[Number(inp.dataset.i)];
     d.debtorIds = inp.value.split(",").map(s=>s.trim()).filter(Boolean);
@@ -1796,7 +1923,16 @@ async function laadKoers(){
     const j = await r.json();
     if (r.ok && j.ok && j.automatisch && Number(j.koers) > 0){
       koersLive = Number(j.koers);
-      $("rateAuto").innerHTML = "Vandaag ("+esc(j.datum||"")+"): ECB <b>"+j.ecb+"</b> − 0,03 = koers <b>"+j.koers+"</b>. "
+      /* Live met een groen bolletje en het moment van ophalen (Gerrit, 2 okt
+         2026). De ECB zet de koers op werkdagen rond 16:00; staat de datum
+         meer dan drie dagen terug, dan kleurt het bolletje oranje. */
+      const dagenOud = j.datum ? Math.floor((Date.now() - Date.parse(j.datum + "T16:00:00Z")) / 86400000) : 99;
+      const opgehaald = j.opgehaald ? new Date(j.opgehaald) : null;
+      const tijd = opgehaald ? opgehaald.toLocaleString("nl-NL", { weekday:"short", day:"numeric", month:"short", hour:"2-digit", minute:"2-digit" }) : "";
+      const dag = j.datum ? new Date(j.datum + "T12:00:00").toLocaleDateString("nl-NL", { weekday:"long", day:"numeric", month:"long" }) : "";
+      $("rateAuto").innerHTML = "<span class='koersLive" + (dagenOud > 3 ? " oud" : "") + "'>live</span>"
+        + "<span style='font-size:12px;color:var(--muted)'>ECB-koers van " + esc(dag) + (tijd ? ", opgehaald " + esc(tijd) : "") + "</span><br>"
+        + "ECB <b>"+j.ecb+"</b> − 0,03 = koers <b>"+j.koers+"</b>. "
         + "Voorbeeld: $ 3.349 ÷ "+j.koers+" = € "+Math.round(3349/j.koers)+" (excl. BTW).";
     } else {
       $("rateAuto").innerHTML = "<span style='color:#c8102e'>De noodkoers hieronder geldt nu - de automatische dagkoers komt zo weer langs.</span>";
@@ -2171,7 +2307,22 @@ document.getElementById("terugLos").addEventListener("click", async ()=>{
 });
 
 async function save(bucket, data){
-  try { await kvPut(bucket, data); }
+  try {
+    if (SAMENVOEGEN[bucket]) {
+      const basisVoor = BASIS[bucket];
+      const vers = await fetch(DATA_BASE+bucket, { headers:{ ...beheerKoppen() } }).then(r => r.ok ? r.json() : null).catch(() => null);
+      if (vers && basisVoor) {
+        const samen = samenvoegen(bucket, data, vers);
+        await kvPut(bucket, samen);
+        BASIS[bucket] = kloon(samen);
+        // De lijst op het scherm wordt de samengevoegde lijst.
+        if (bucket === "dealer-accounts") accounts = samen; else reqData = samen;
+        return;
+      }
+    }
+    await kvPut(bucket, data);
+    if (SAMENVOEGEN[bucket]) BASIS[bucket] = kloon(data);
+  }
   catch(e){ setStatus("bad", e.message); throw e; }
 }
 

@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", groep: "dealerportaal", soort: "beter",
+      titel: "Passion Partners Beheer rustiger",
+      wat: "Per partner staan nu Bewerken en een menu met uitnodiging, inloglink, wachtwoord, blokkeren en verwijderen, zodat elke rij één regel hoog is. De wisselkoers laat met een groen bolletje zien dat hij live is. E-mail nakijken staat ingeklapt onderaan. Wat je bewaart, komt netjes bij wat collega's en partners intussen hebben toegevoegd."
+    },
+    {
       datum: "2026-10-02", groep: "dealerportaal", soort: "nieuw",
       titel: "Passion Partners voor alle spa-adviseurs",
       wat: "Alle spa-adviseurs zien nu de tegels Passion Partners en Passion Partners Beheer. Het portaal staat op partner.passionspas.com."

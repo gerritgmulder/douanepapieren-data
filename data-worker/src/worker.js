@@ -1669,7 +1669,7 @@ async function koersVanDaag(env) {
       // Grenzen als vangnet tegen een kapotte of omgedraaide waarde: een
       // EUR/USD buiten dit bereik is geen koers maar een fout.
       if (ecb > 0.7 && ecb < 1.8) {
-        const rec = { datum: vandaag, ecb, koers: Math.round((ecb - 0.03) * 10000) / 10000, bron: "ECB" };
+        const rec = { datum: vandaag, ecb, koers: Math.round((ecb - 0.03) * 10000) / 10000, bron: "ECB", opgehaald: new Date().toISOString() };
         await env.FONTEYN_DATA.put("wisselkoers-vandaag", JSON.stringify(rec));
         return rec;
       }
@@ -16273,7 +16273,7 @@ const FP_WORKER = {
       const auto = await koersVanDaag(env);
       const pd = (await env.FONTEYN_DATA.get("dealer-prices", { type: "json" })) || {};
       return reply(200, { ok: true, koers: await dpRate(env),
-        ecb: auto ? auto.ecb : null, datum: auto ? auto.datum : null,
+        ecb: auto ? auto.ecb : null, datum: auto ? auto.datum : null, opgehaald: auto ? (auto.opgehaald || null) : null,
         automatisch: !!auto, handmatig: Number(pd.meta && pd.meta.rate) || null });
     }
 
