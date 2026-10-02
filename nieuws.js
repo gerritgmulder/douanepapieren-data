@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", bestand: "specsheets.html", soort: "nieuw",
+      titel: "Specificatiesheets: Naar Passion Partners",
+      wat: "Met de knop Naar Passion Partners staat het blad dat je op je scherm hebt meteen bij Downloads van die spa in Passion Partners. Het vervangt het blad dat er al stond, of komt er nieuw bij. De knop werkt vanaf Dashboard-versie 0.21.6; die zet zich klaar zodra je het Dashboard opnieuw start."
+    },
+    {
       datum: "2026-10-02", groep: "dealerportaal", soort: "beter",
       titel: "Afspraken met een partner ook in Logic4",
       wat: "Vul je op de relatiekaart in Passion Partners Beheer een korting, betaaltermijn of andere afspraak in, dan staat die na Bewaren ook in Logic4 bij de klant, in Vrij veld 1. Het portaal rekent er niet mee; het is een notitie."

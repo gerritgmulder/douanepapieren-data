@@ -38,4 +38,7 @@ contextBridge.exposeInMainWorld("fonteynPrint", {
   // i.p.v. naar de printer. Voor het verifiëren van page-size/orientation
   // zonder labels te verspillen.
   printLabelsToPdf: () => ipcRenderer.invoke("fonteyn:print-labels-to-pdf"),
+  // De tegel als pdf terug (sinds app 0.21.6), voor "Naar Passion Partners"
+  // in Specificatiesheets. Oude apps hebben dit niet; de tegel kijkt ernaar.
+  paginaNaarPdf: () => ipcRenderer.invoke("fonteyn:pagina-naar-pdf"),
 });

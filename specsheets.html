@@ -304,6 +304,7 @@
     </div>
     <div class="toolbar">
       <button class="btn solid" id="btnPdf" type="button" style="flex:1;justify-content:center">📄 Opslaan als PDF / printen</button>
+      <button class="btn" id="btnNaarPP" type="button" title="Zet dit blad als pdf bij Downloads van deze spa in Passion Partners" style="justify-content:center">&#8599; Naar Passion Partners</button>
       <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px">zoom
         <input type="range" id="zoom" min="35" max="110" value="70" style="width:80px">
       </label>
@@ -1318,6 +1319,121 @@ function zetZoom(){
 }
 el("zoom").addEventListener("input",zetZoom);
 window.addEventListener("resize",zetZoom);
+
+/* NAAR PASSION PARTNERS
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (2 okt 2026): "Maak de knop Naar Passion Partners in
+   Specificatiesheets." Tot nu toe maakte deze tegel alleen een pdf via het
+   printvenster, en kwam een nieuw blad pas in het partnerportaal als iemand
+   die pdf met de hand in de Bibliotheek zette.
+
+   De knop laat de Dashboard-app (sinds 0.21.6) van deze pagina dezelfde pdf
+   maken als de printknop, en zet die in de Bibliotheek van Passion Partners:
+   over het bestaande blad van dit model heen als dat er al is, anders als
+   nieuw blad. Eerst een venster met wat er gaat gebeuren en in welke map.
+   UK-mappen staan er niet tussen: die toont het portaal niet. */
+const PP_DATA = WORKER + "/data/dealer-docs";
+const ppKoppen = () => ({ "X-Fonteyn-Auth": TEAM(), "X-Fonteyn-User": (localStorage.getItem("fp.email") || "").toLowerCase() });
+const ppNorm = (t) => String(t || "").toLowerCase().replace(/['\u2019`]/g, "").replace(/\bmw\b/g, "mighty wave")
+  .replace(/^(spa|eu the|eu)\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
+const ppSlug = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "blad";
+function ppMappen(docs){
+  const uit = [];
+  for (const c of ((docs && docs.library && docs.library.categories) || []))
+    for (const g of (c.groups || [])) if (!/\bUK\b/.test(String(g.name || ""))) uit.push({ c, g, label: (c.name || "") + " \u203a " + (g.name || "") });
+  return uit;
+}
+/* Het bestaande blad van dit model: zelfde naam, met of zonder "Mighty
+   Wave"/"MW", en geen foto of handleiding. */
+function ppZoekBlad(docs, model){
+  const m = ppNorm(model), kaal = m.replace(/ mighty wave$/, "");
+  const treffers = [];
+  for (const x of ppMappen(docs)) for (const f of (x.g.files || [])) {
+    if (!/\.pdf$/i.test(f.id || "") || /manual|handleid|prijslijst|price list/i.test(f.title || "")) continue;
+    const t = ppNorm(f.title), tk = t.replace(/ mighty wave$/, "");
+    if (t === m || tk === kaal) treffers.push({ map: x, bestand: f });
+  }
+  return treffers.sort((a, b) => (/\bEU\b/.test(b.map.g.name) ? 1 : 0) - (/\bEU\b/.test(a.map.g.name) ? 1 : 0))[0] || null;
+}
+function ppVenster(html){
+  return new Promise((klaar) => {
+    const laag = document.createElement("div");
+    laag.className = "geenPrint";
+    laag.style.cssText = "position:fixed;inset:0;background:rgba(15,20,17,.5);z-index:2000;display:flex;align-items:center;justify-content:center;padding:18px";
+    laag.innerHTML = '<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.28);overflow:hidden;font-size:13.5px;line-height:1.6">' + html + '</div>';
+    document.body.appendChild(laag);
+    const sluit = (w) => { laag.remove(); klaar(w); };
+    laag.addEventListener("click", (e) => { if (e.target === laag) sluit(null); });
+    laag.querySelectorAll("[data-actie]").forEach(b => b.addEventListener("click", () => sluit(b.dataset.actie === "ja" ? (laag.querySelector("#ppMap") || {}).value : null)));
+  });
+}
+el("btnNaarPP").addEventListener("click", async () => {
+  const knop = el("btnNaarPP");
+  const model = String(S.model || "").trim();
+  if (!model) { toon("bad", "Vul eerst de modelnaam in; daaraan koppelt Passion Partners het blad."); return; }
+  if (usAan()) { toon("bad", "Zet de eenheden eerst op Europees. Passion Partners toont de Europese bladen."); return; }
+  if (!(window.fonteynPrint && window.fonteynPrint.paginaNaarPdf)) {
+    toon("info", "Deze knop werkt in de Dashboard-app vanaf versie 0.21.6. Sluit het Dashboard en start het opnieuw, dan zet de nieuwe versie zich klaar.");
+    return;
+  }
+  knop.disabled = true;
+  try {
+    const r = await fetch(PP_DATA + "?t=" + Date.now(), { headers: ppKoppen() });
+    if (r.status === 401 || r.status === 403) { toon("bad", "Voor deze knop heb je toegang tot Passion Partners Beheer nodig. Vraag Gerrit om je daarin te zetten."); return; }
+    if (!r.ok) throw new Error("bibliotheek laden: HTTP " + r.status);
+    const docs = await r.json();
+    const mappen = ppMappen(docs);
+    const bestaand = ppZoekBlad(docs, model);
+    const zelfde = (a, b) => !!a && !!b && String(a.c.key) === String(b.c.key) && a.g.name === b.g.name;
+    const standaard = bestaand ? Math.max(0, mappen.findIndex(x => zelfde(x, bestaand.map)))
+      : Math.max(0, mappen.findIndex(x => /passion spas/i.test(x.g.name) && /\bEU\b/.test(x.g.name)));
+    const keuze = await ppVenster(
+      '<div style="background:#144734;color:#fff;padding:15px 22px;font-weight:700;font-size:16px">Naar Passion Partners</div>' +
+      '<div style="padding:18px 22px">' +
+      '<p style="margin:0 0 10px">Het blad van <b>' + esc(model) + '</b> komt bij Downloads van deze spa in Passion Partners, zoals het nu op je scherm staat.</p>' +
+      (bestaand ? '<p style="margin:0 0 10px">Het vervangt het huidige blad <b>' + esc(bestaand.bestand.title) + '</b> in ' + esc(bestaand.map.label) + '.</p>'
+                : '<p style="margin:0 0 10px">Er staat nog geen blad van dit model; het komt er nieuw bij.</p>') +
+      '<label style="display:block;font-size:12px;color:#6b7280;margin:12px 0 4px">Map</label>' +
+      '<select id="ppMap" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font:inherit">' +
+      mappen.map((x, i) => '<option value="' + i + '"' + (i === standaard ? " selected" : "") + '>' + esc(x.label) + '</option>').join("") + '</select>' +
+      '</div><div style="display:flex;gap:10px;justify-content:flex-end;padding:0 22px 18px">' +
+      '<button class="btn" type="button" data-actie="nee">Annuleren</button>' +
+      '<button class="btn solid" type="button" data-actie="ja">Naar Passion Partners</button></div>');
+    if (keuze == null) return;
+    const doel = mappen[Number(keuze)];
+    toon("info", "De pdf wordt gemaakt…");
+    // Even wachten zodat het venster en de melding weg zijn uit de pagina.
+    await new Promise(x => setTimeout(x, 150));
+    const pdf = await window.fonteynPrint.paginaNaarPdf();
+    if (!pdf || !pdf.ok || !pdf.data) throw new Error((pdf && pdf.error) || "de pdf kwam niet terug");
+    const blob = new Blob([pdf.data], { type: "application/pdf" });
+    const zelfdeMap = bestaand && zelfde(bestaand.map, doel);
+    let id = zelfdeMap ? bestaand.bestand.id
+      : String(doel.c.key || "overig") + "/" + ppSlug(doel.g.name) + "/" + ppSlug(model) + ".pdf";
+    toon("info", "Bezig met versturen naar Passion Partners…");
+    const up = await fetch(WORKER + "/dealers/admin/file?id=" + encodeURIComponent(id), { method: "PUT", headers: ppKoppen(), body: blob });
+    const uj = await up.json().catch(() => ({}));
+    if (!up.ok || !uj.ok) throw new Error(uj.error || ("HTTP " + up.status));
+    // De lijst van de bibliotheek: vers ophalen, alleen deze regel bijwerken.
+    const vers = await (await fetch(PP_DATA + "?t=" + Date.now(), { headers: ppKoppen() })).json();
+    let groep = null;
+    for (const c of ((vers.library && vers.library.categories) || [])) for (const g of (c.groups || []))
+      if (String(c.key) === String(doel.c.key) && g.name === doel.g.name) groep = g;
+    if (!groep) throw new Error("de map " + doel.label + " staat er niet meer");
+    groep.files = groep.files || [];
+    const regel = groep.files.find(f => f.id === id);
+    if (regel) { regel.size = blob.size; regel.bijgewerkt = new Date().toISOString().slice(0, 10); }
+    else groep.files.push({ id, title: model, size: blob.size, bijgewerkt: new Date().toISOString().slice(0, 10) });
+    vers.library.updated = new Date().toISOString();
+    const pu = await fetch(PP_DATA, { method: "PUT", headers: { ...ppKoppen(), "Content-Type": "application/json" }, body: JSON.stringify(vers) });
+    if (!pu.ok) throw new Error("bibliotheek bewaren: HTTP " + pu.status);
+    if (window.fpLog) window.fpLog("specsheet-naar-passion-partners", model + " (" + id + ")");
+    toon("ok", "Staat in Passion Partners: " + model + " bij Downloads (" + doel.g.name + ").");
+  } catch (e) {
+    toon("bad", "Naar Passion Partners vraagt nog een poging: " + (e.message || e));
+  } finally { knop.disabled = false; }
+});
 
 el("btnPdf").addEventListener("click",()=>{
   if(window.fpLog) window.fpLog("specsheet-geexporteerd",S.model||"(zonder naam)");

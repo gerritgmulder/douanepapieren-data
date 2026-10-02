@@ -869,6 +869,29 @@ ipcMain.handle("fonteyn:print-labels-to-pdf", async (event) => {
   }
 });
 
+/* De tegel zelf als pdf, zonder printvenster. Gerrit (2 okt 2026): in
+   Specificatiesheets een knop "Naar Passion Partners" die het blad meteen bij
+   de spa in het partnerportaal zet. Dezelfde pdf als de printknop maakt (de
+   print-opmaak van de tegel, A4 zonder marge), maar als bestand terug naar
+   de tegel in plaats van naar de printer. Alleen voor pagina's van het
+   Dashboard zelf. */
+ipcMain.handle("fonteyn:pagina-naar-pdf", async (event) => {
+  const wc = event.sender;
+  try {
+    const u = wc.getURL();
+    if (!u.startsWith(URL)) return { ok: false, error: "alleen voor tegels van het Dashboard" };
+    const pdf = await wc.printToPDF({
+      printBackground: true,
+      preferCSSPageSize: true,
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+    });
+    return { ok: true, data: pdf, bytes: pdf.length };
+  } catch (e) {
+    console.warn("[pagina-naar-pdf] mislukt:", e.message);
+    return { ok: false, error: e.message };
+  }
+});
+
 app.whenReady().then(async () => {
   /* Hoe lang elke stap duurt, in de console. Zonder die getallen is "de app
      start traag" niet op te lossen: op de ene pc is het de netwerkschijf, op
