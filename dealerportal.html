@@ -1370,7 +1370,11 @@ let algemeneSpaDocs = [];
 function bouwDocIndex(){
   docIndex = {}; algemeenPerMap = {}; algemeneSpaDocs = [];
   for (const c of ((lib&&lib.categories)||[]))
-    for (const g of (c.groups||[]))
+    for (const g of (c.groups||[])) {
+      /* Geen UK-mappen bij Downloads. Gerrit (2 okt 2026): "Die UK specsheets
+         zijn niet nodig en maken het vooral verwarrend voor dealers als ze
+         een specsheet willen inzien." De bestanden blijven in Beheer staan. */
+      if (/\bUK\b/.test(String(g.name || ""))) continue;
       for (const f of (g.files||[])){
         const rij = { ...f, map: g.name, soort: soortVan(f) };
         // Een prijslijst hoort niet bij één model en gaat niet mee.
@@ -1387,6 +1391,7 @@ function bouwDocIndex(){
         if (!gekoppeld || IS_MANUAL.test(f.title||""))
           (algemeenPerMap[g.name] = algemeenPerMap[g.name] || []).push(rij);
       }
+    }
 }
 /* De bestanden bij één model. Staat het model er niet zelf tussen, dan valt
    hij terug op het basismodel: een "Aquatic 1 ECO" heeft geen eigen blad maar
