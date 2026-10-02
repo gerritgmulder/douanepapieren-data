@@ -164,7 +164,7 @@ function parseProforma(wb, bestandsnaam){
   // Een model met twee kleuren staat als twee regels onder elkaar, waarvan de
   // tweede geen modelnaam meer heeft - die staat alleen bij de eerste. Zonder
   // dit viel bij New Normal de helft van de ET-160's weg (11 aug 2026).
-  let vorigeCode=null, vorigeMaat=null;
+  let vorigeCode=null, vorigeMaat=null, vorigeUitvoering=null;
   for(const r of rows.slice(kop+1)){
     const eerste=String((r&&r[kMod])==null?"":r[kMod]).split("\n")[0].trim();
     const aantal=Number(r&&r[kAantal]);
@@ -182,7 +182,9 @@ function parseProforma(wb, bestandsnaam){
          herkend en stilzwijgend overgeslagen - stil, want het is geen fout
          maar gewoon een regel die er niet bij hoort. */
       if(isTotaalRegel(r,aantal,regels)) { vorigeCode=null; continue; }
-      regels.push(vervolgRegel(vorigeCode,vorigeMaat,r,kKleur,kSkirt,kPrijs,aantal));
+      const vr=vervolgRegel(vorigeCode,vorigeMaat,r,kKleur,kSkirt,kPrijs,aantal);
+      vr.uitvoering=vorigeUitvoering;   // zelfde model, zelfde uitvoering; de klant hoort alleen bij zijn eigen regel
+      regels.push(vr);
       continue;
     }
     if(!eerste) continue;                       // o.a. de GRAND TOTAL-regel
@@ -213,6 +215,18 @@ function parseProforma(wb, bestandsnaam){
     const mm=heleCel.match(/(\d{3,4})\s*(?:mm)?\s*[x×*]\s*(\d{3,4})\s*(?:mm)?\s*[x×*]\s*(\d{3,4})/i);
     const maat=mm?(mm[1]+"x"+mm[2]+"x"+mm[3]):null;
     vorigeCode=code; vorigeMaat=maat;
+    /* Wat er onder de code in hetzelfde vakje staat.
+       ═══════════════════════════════════════════════════════════════════
+       Chantal (2 okt 2026), proforma 3388: "SKT888Q / INTELLISAVER" werd een
+       gewone Exhilarate, en "SKT888I-1 / 3513920 – B..." verloor de klant.
+       Die regels onder de code zijn juist de details die de bestelling
+       maken: de uitvoering (IntelliSaver) en, bij een spa die voor een klant
+       besteld is, het ordernummer met de naam erachter. */
+    const onder=heleCel.split("\n").slice(1).map(x=>x.replace(/\u00a0/g," ").trim()).filter(Boolean);
+    const uitvoering=/intelli\s*saver/i.test(heleCel)?"IntelliSaver":null;
+    vorigeUitvoering=uitvoering;
+    let klantOrder=null, klantNaam=null;
+    for(const l of onder){ const k=l.match(/\b(3\d{6})\b\s*(?:[–—-]\s*)?(.*)$/); if(k){ klantOrder=k[1]; klantNaam=(k[2]||"").trim()||null; break; } }
     const kleurTekst=String((r&&r[kKleur])==null?"":r[kKleur]);
     // Kleur kan het model bepalen: SKT888-G2 is een Mallorca Superior, maar in
     // het zwart heet hij Blackpool (Chantal, 4 aug 2026). Daarom niet spaModel
@@ -228,6 +242,7 @@ function parseProforma(wb, bestandsnaam){
       // artikelcode op, terwijl het verschillende artikelen zijn (Chantal).
       skirt:kSkirt>=0?(String((r&&r[kSkirt])==null?"":r[kSkirt]).replace(/\s+/g," ").trim()||null):null,
       afmeting:maat,
+      uitvoering, klantOrder, klantNaam,
       aantal, prijs:(isFinite(prijs)&&prijs>0)?prijs:null,
     });
   }
@@ -280,7 +295,10 @@ function renderIkoVoorstel(v){
     "</div>"+
     "<div class='tablewrap'><table class='grid'><thead><tr><th>Fabriekscode</th><th>Spa</th><th>Kleur</th><th>Omkasting</th><th>Aantal</th><th>Artikelcode Logic4</th><th>Omschrijving</th><th>Overslaan</th></tr></thead><tbody>"+
     (v.regels||[]).map((r,i)=>"<tr data-rij='"+i+"'"+(r.artikelcode?(r.zeker?"":" style='background:#fef3c7'"):" style='background:#fee2e2'")+">"+
-      "<td>"+esc(r.code||"-")+"</td><td><b>"+esc(r.model||"onbekend")+"</b></td><td>"+esc(r.kleur||"-")+"</td>"+
+      "<td>"+esc(r.code||"-")+"</td><td><b>"+esc(r.model||"onbekend")+"</b>"+
+        (r.uitvoering?" <span style='background:#dcfce7;color:#166534;border-radius:999px;padding:1px 6px;font-size:10.5px;font-weight:600'>"+esc(r.uitvoering)+"</span>":"")+
+        (r.klantOrder?"<div style='font-size:11px;color:#3730a3;margin-top:2px'>voor order "+esc(r.klantOrder)+(r.klantNaam?" · "+esc(r.klantNaam):"")+"</div>":"")+
+        "</td><td>"+esc(r.kleur||"-")+"</td>"+
       "<td style='font-size:11.5px'>"+esc(r.skirt||"-")+"</td>"+
       "<td>"+r.aantal+"</td><td>"+esc(r.artikelcode||"- nog te koppelen -")+"</td>"+
       "<td style='font-size:11.5px;color:var(--muted)'>"+esc(r.omschrijving||"")+"</td>"+
@@ -388,7 +406,9 @@ async function ikoAanmaken(){
        Het eerste blok maakt de order aan, elk volgend blok vult hem aan - via
        dezelfde weg die er al was voor een proforma die in twee keer besteld
        wordt. Vijftien per keer is ruim onder de grens. */
-    const BLOK=15;
+    /* Tien per keer: een regel die voor een klant besteld is kost een
+       verzoek extra (de orderregel van die klant opzoeken). */
+    const BLOK=10;
     const blokken=[]; for(let i=0;i<s.mee.length;i+=BLOK) blokken.push(s.mee.slice(i,i+BLOK));
     let j=null, orderId=null, totaalToegevoegd=0, alleMislukt=[], koersTekst=null;
     for(let b=0;b<blokken.length;b++){
@@ -396,7 +416,10 @@ async function ikoAanmaken(){
       const body={crediteurId:cred,regels:blokken[b],referentie:ref,bestemming:C.bestemming,
         overgeslagen:b===0?s.overgeslagen.map(r=>r.aantal+"x "+(r.model||r.code)):[],
         eta:(document.getElementById("ikoEta").value||null),door:(C.email)};
-      if(b>0) body.aanvullenOp=orderId;
+      /* Een volgend blok van dezelfde proforma: dezelfde artikelen mogen
+         erin, want een proforma noemt een artikel soms twee keer (voorraad en
+         voor een klant). Alleen een losse aanvulling achteraf bewaakt dubbel. */
+      if(b>0){ body.aanvullenOp=orderId; body.vervolgBlok=true; }
       const r=await fetch(IKO_AANMAAK_URL,{method:"POST",
         headers:{"Content-Type":"application/json","X-DP-Admin":C.adminKey(),"X-Fonteyn-Auth":C.teamKey(),"X-Fonteyn-User":String(C.email||"").toLowerCase()},
         body:JSON.stringify(body)});

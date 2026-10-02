@@ -613,13 +613,13 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       </a>
 
       <!-- Passion Partners — het publieke portaal zelf, opent in de browser.
-           Tijdelijk weer op het workers.dev-adres: op het kantoor van Fonteyn
-           kent de interne DNS partner.passionspas.com niet (14 sep 2026,
-           NXDOMAIN bij Chantal en Manon). Dealers krijgen in hun mails wel
-           het eigen adres, want buiten het kantoor werkt dat gewoon. Terug
-           naar partner.passionspas.com zodra Marcel het record heeft gezet.
+           Gerrit (2 okt 2026): de tegel opent het eigen adres
+           partner.passionspas.com. Op het kantoor kende de interne DNS dat
+           adres op 14 sep nog niet (NXDOMAIN bij Chantal en Manon); de klik
+           hieronder kijkt daarom eerst of het adres antwoordt en valt anders
+           terug op het workers.dev-adres van hetzelfde portaal.
            target=_blank → Electron vangt dat af en opent de standaardbrowser. -->
-      <a href="https://fonteyn-data-store.g-mulder.workers.dev/dealers" target="_blank" rel="noopener"
+      <a href="https://partner.passionspas.com/dealers" target="_blank" rel="noopener"
          class="tile hidden" id="tilePassionPartners">
         <div class="icon">🌐</div>
         <h3>Passion Partners</h3>
@@ -1183,7 +1183,14 @@ function showDashboard(email) {
     ppTegel.dataset.meekijk = "1";
     ppTegel.addEventListener("click", async (e) => {
       e.preventDefault();
-      const basis = ppTegel.getAttribute("href");
+      /* Antwoordt het eigen adres hier (kantoor-DNS), dan dat; anders het
+         workers.dev-adres. Beide zijn hetzelfde portaal, de sessie geldt op allebei. */
+      let basis = ppTegel.getAttribute("href");
+      try {
+        const ctl = new AbortController(); const klok = setTimeout(() => ctl.abort(), 2500);
+        await fetch("https://partner.passionspas.com/dealers/logo.png", { mode: "no-cors", cache: "no-store", signal: ctl.signal });
+        clearTimeout(klok);
+      } catch (err) { basis = "https://fonteyn-data-store.g-mulder.workers.dev/dealers"; }
       try {
         const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/medewerker-sessie", {
           method: "POST",

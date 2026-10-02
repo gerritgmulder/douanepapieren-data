@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", groep: "partnerportaal-kijk", soort: "beter",
+      titel: "Passion Partners op het eigen adres",
+      wat: "De tegel Passion Partners opent nu partner.passionspas.com, hetzelfde adres dat de partners gebruiken."
+    },
+    {
       datum: "2026-10-02", groep: "pp-inkoop", soort: "nieuw",
       titel: "Melding bij een bestelling in Passion Partners",
       wat: "Bestelt een partner in Passion Partners, dan staat de bestelling bovenaan je Dashboard zodra de aanbetaling binnen is en de order in Logic4 staat. Maak de inkooporder en klik op Inkooporder gemaakt, dan verdwijnt de melding."
