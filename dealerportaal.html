@@ -1886,9 +1886,9 @@ async function welkomStand(actie){
         (j.klaarVoorStart ? " Er staan intussen " + j.klaarVoorStart + " nieuwe relaties klaar; die gaan mee als je opnieuw op de knop drukt." : "");
     } else if (j.status === "klaar") {
       st.innerHTML = "Klaar: <b>" + j.verstuurd + "</b> relaties hebben de welkomstmail gekregen." +
-        (j.klaarVoorStart ? " Er staan " + j.klaarVoorStart + " nieuwe relaties klaar die nog niets kregen." : "");
+        (j.klaarVoorStart ? " Er staan " + j.klaarVoorStart + " nieuwe relaties klaar voor hun welkomstmail." : "");
     } else {
-      st.innerHTML = "<b>" + j.klaarVoorStart + "</b> dealers en partners staan klaar in het portaal en hebben nog niets gekregen. " +
+      st.innerHTML = "<b>" + j.klaarVoorStart + "</b> dealers en partners staan klaar in het portaal en wachten op hun welkomstmail. " +
         "Druk je op de knop, dan krijgen ze de gewone welkomstmail, " + j.perDag + " per dag (dat is de ruimte die de mail per dag heeft). " +
         "Klaar in ongeveer " + d(Math.max(1, Math.ceil(j.klaarVoorStart / j.perDag))) + ". Wie zelf al een wachtwoord koos, slaat hij over.";
     }

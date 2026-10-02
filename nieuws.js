@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", groep: "dealerportaal", soort: "nieuw",
+      titel: "Alle bestaande dealers en partners in Passion Partners",
+      wat: "De bestaande dealers en partners uit Logic4 staan in Passion Partners Beheer, met hun debiteurnummer en adres. Met de knop Iedereen de welkomstmail sturen krijgen ze bij de livegang de gewone welkomstmail, 70 per dag. Boven de lijst staat een zoekvak."
+    },
+    {
       datum: "2026-10-02", bestand: "specsheets.html", soort: "nieuw",
       titel: "Specificatiesheets: Naar Passion Partners",
       wat: "Met de knop Naar Passion Partners staat het blad dat je op je scherm hebt meteen bij Downloads van die spa in Passion Partners. Het vervangt het blad dat er al stond, of komt er nieuw bij. De knop werkt vanaf Dashboard-versie 0.21.6; die zet zich klaar zodra je het Dashboard opnieuw start."
