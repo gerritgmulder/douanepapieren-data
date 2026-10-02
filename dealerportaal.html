@@ -270,7 +270,7 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
     <h3><span class="kopTekst">Partners (<span id="partnerCount">0</span>)</span></h3>
     <input id="partnerZoek" type="search" placeholder="zoek op naam, e-mail, debiteurnummer of land…" style="width:100%;max-width:420px;margin:0 0 10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">
     <table class="grid partners">
-      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een eigen prijsniveau; die ziet zijn eigen prijslijst, want de andere lijsten laten zien wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Merk</th><th>Afspraken</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th>E-mail</th><th>Bedrijf</th><th>Debiteurnr(s) <span style="font-weight:400;text-transform:none">(komma-gescheiden)</span></th><th>Regio/valuta</th><th title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een eigen prijsniveau; die ziet zijn eigen prijslijst, want de andere lijsten laten zien wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt.">Soort <span style="font-weight:400;text-transform:none;cursor:help">&#9432;</span></th><th>Afspraken</th><th>Status</th><th></th></tr></thead>
       <tbody id="partnerBody"></tbody>
     </table>
     <div class="row" style="margin-top:12px">
@@ -297,6 +297,7 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
        worker stuurt ze in porties (70 per dag, zie WELKOMSTMAIL-WACHTRIJ). -->
   <div class="card" id="welkomKaart">
     <h3>Welkomstmail aan bestaande relaties</h3>
+    <div class="waarschuw" style="margin:0 0 10px">Deze knop is alleen voor de dag dat we <b>officieel live gaan met Passion Partners</b>. Tot die tijd blijft hij staan zoals hij staat.</div>
     <p class="lead" id="welkomStand" style="margin-bottom:10px">Ophalen…</p>
     <div class="row">
       <button class="primary hidden" id="welkomStart" type="button">Iedereen de welkomstmail sturen</button>
@@ -1089,7 +1090,10 @@ const BRONNEN = ["Beurs", "Website", "Aanbeveling van een klant", "Bestaande rel
                  "Via een collega-dealer", "Anders"];
 
 function leegRelatie(){
-  return { email:"", company:"", debtorIds:[], region:"EU", soort:"", merk:"", active:true,
+  /* Merk is altijd Passion (Gerrit, 2 okt 2026: "sowieso zijn ze allemaal
+     Passion, dus die keuze mag ook gewoon weg"). Het veld blijft bestaan
+     voor de beeldbank, maar staat vast. */
+  return { email:"", company:"", debtorIds:[], region:"EU", soort:"", merk:"passion", active:true,
     contact:{ aanhef:"", voornaam:"", tussenvoegsel:"", achternaam:"", telefoon:"", mobiel:"", website:"" },
     afspraken:{ kortingPct:"", kortingTekst:"", betaaltermijn:"", notitie:"" },
     facturatie:{ straat:"", huisnummer:"", toevoeging:"", postcode:"", plaats:"", land:"NL",
@@ -1167,7 +1171,6 @@ function relatieKaart(index){
       +     '<b>Dealer</b><span>Eigen prijsafspraken. Ziet alleen zijn eigen prijzen.</span></button>'
       + '</div>'
       + '<div class="velden" style="margin-top:12px">'
-      +   veld("merk","Merk", d.merk, {keuze:["","passion","fonteyn","beide"]})
       +   veld("region","Regio en valuta", d.region, {keuze:["EU","US"],
             label:["EU - het portaal opent in euro's","US - het portaal opent in dollars"]})
       + '</div></div>'
@@ -1629,6 +1632,7 @@ function relatieKaart(index){
       d.adviseur = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
       d.adviseurSinds = new Date().toISOString();
     }
+    d.merk = "passion";
     if (nieuw) accounts.dealers.push(d); else accounts.dealers[index] = d;
     try{ if(window.fpLog) window.fpLog(nieuw?"relatie-toegevoegd":"relatie-gewijzigd", d.email+" ("+d.company+")"); }catch(e){}
     await save("dealer-accounts", accounts);
@@ -1708,12 +1712,6 @@ function renderPartners(){
         <option value="partner"${d.soort==="partner"?" selected":""}>Partner</option>
         <option value="dealer"${d.soort==="dealer"?" selected":""}>Dealer</option>
       </select></td>
-      <td data-l="Merk"><select class="merkIn" data-i="${i}" style="font-size:12px;padding:4px">
-        <option value="">- nog kiezen -</option>
-        <option value="passion"${d.merk==="passion"?" selected":""}>Passion Spas</option>
-        <option value="fonteyn"${d.merk==="fonteyn"?" selected":""}>Fonteyn</option>
-        <option value="beide"${d.merk==="beide"?" selected":""}>Beide</option>
-      </select></td>
       <td data-l="Afspraken" style="font-size:12px;color:var(--muted)">${(()=>{
         const a=d.afspraken||{};
         const s=[];
@@ -1731,7 +1729,7 @@ function renderPartners(){
           <hr>
           <button class="rmv weg delD" data-i="${i}">${WEG_ICOON}Verwijderen</button>
         </template></td>
-    </tr>`).join("") || '<tr><td colspan="9" style="color:var(--muted)">Voeg de eerste dealer of partner toe.</td></tr>';
+    </tr>`).join("") || '<tr><td colspan="8" style="color:var(--muted)">Voeg de eerste dealer of partner toe.</td></tr>';
   document.querySelectorAll(".kaartD").forEach(b=>b.addEventListener("click",()=>relatieKaart(Number(b.dataset.i))));
   document.querySelectorAll(".meerD").forEach(b=>b.addEventListener("click",(e)=>{
     e.stopPropagation();
@@ -1857,14 +1855,6 @@ function koppelRijVelden(){
       ? d.email+" staat nu op Dealer - dit account ziet voortaan alleen zijn eigen prijzen."
       : d.email+" staat nu op Partner \u2014 dit account ziet alle documentatie.");
   }));
-  // Merk bepaalt straks welke mappen deze dealer in de beeldbank ziet: een
-  // Fonteyn-dealer hoort geen Passion Spas-materiaal te krijgen en andersom.
-  document.querySelectorAll(".merkIn").forEach(sel=>sel.addEventListener("change", async ()=>{
-    const d = accounts.dealers[Number(sel.dataset.i)];
-    d.merk = sel.value || null;
-    try{ if(window.fpLog) window.fpLog("partner-merk-gewijzigd",d.email+" → "+(d.merk||"nog te kiezen")); }catch(e){}
-    await save("dealer-accounts", accounts); renderPartners();
-  }));
 }
 /* De nieuwe weg loopt via de relatiekaart. De oude invoerrij staat er nog wel
    (verborgen) zodat deze functie niet stukloopt op een ontbrekend element. */
@@ -1903,10 +1893,15 @@ async function welkomStand(actie){
 $("welkomStart").addEventListener("click", async () => {
   const j = await welkomStand();
   if (!j) return;
-  const ja = await pDialoog({ titel: "Iedereen de welkomstmail sturen?",
-    html: "<p><b>" + j.klaarVoorStart + "</b> dealers en partners krijgen de welkomstmail waarmee ze zelf een wachtwoord kiezen.</p>" +
-          "<p>Dat gaat vanzelf, " + j.perDag + " per dag, tot iedereen hem heeft. Je kunt het onderweg pauzeren.</p>",
-    bevestig: "Versturen" });
+  /* Gerrit (2 okt 2026): "deze knop wordt enkel ingedrukt als we Officieel
+     Live Gaan Met Passion Partners! Maak er een popup van ... 'Zeker
+     weten?'". Een verstuurde mail blijft verstuurd. */
+  const ja = await pDialoog({ titel: "Zeker weten?",
+    html: "<p>Deze knop is alleen voor de <b>officiële livegang van Passion Partners</b>.</p>" +
+          "<p><b>" + j.klaarVoorStart + "</b> dealers en partners krijgen dan de welkomstmail waarmee ze zelf een wachtwoord kiezen. " +
+          "Dat gaat vanzelf, " + j.perDag + " per dag, tot iedereen hem heeft. Pauzeren kan onderweg; een verstuurde mail blijft verstuurd.</p>" +
+          "<p>Gaan we vandaag officieel live?</p>",
+    bevestig: "Ja, we gaan officieel live", annuleer: "Nee, nog even wachten", gevaarlijk: true });
   if (!ja) return;
   try{ if(window.fpLog) window.fpLog("welkomstmail-wachtrij-gestart", j.klaarVoorStart + " relaties"); }catch(e){}
   await welkomStand("start");

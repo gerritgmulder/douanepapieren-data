@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", groep: "dealerportaal", soort: "beter",
+      titel: "Passion Partners Beheer: alles is Passion",
+      wat: "De keuze voor het merk is weg uit Passion Partners Beheer: elke dealer en partner is Passion. De knop voor de welkomstmail aan alle bestaande relaties vraagt eerst of we officieel live gaan."
+    },
+    {
       datum: "2026-10-02", groep: "dealerportaal", soort: "nieuw",
       titel: "Alle bestaande dealers en partners in Passion Partners",
       wat: "De bestaande dealers en partners uit Logic4 staan in Passion Partners Beheer, met hun debiteurnummer en adres. Met de knop Iedereen de welkomstmail sturen krijgen ze bij de livegang de gewone welkomstmail, 70 per dag. Boven de lijst staat een zoekvak."
