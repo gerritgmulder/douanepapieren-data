@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", groep: "dealerportaal", soort: "beter",
+      titel: "Passion Partners Beheer: minder scrollen",
+      wat: "Partners en Partnerprijzen per model staan dicht als je Beheer opent; klik op de kop om ze te openen. De lijst met partners past nu altijd binnen het vak."
+    },
+    {
       datum: "2026-10-02", groep: "dealerportaal", soort: "nieuw",
       titel: "Adviseur bij de leads",
       wat: "In Passion Partners Beheer staat bij elke lead de adviseur van die dealer, en met het vinkje alleen mijn leads zie je wat er voor jou klaarstaat. De adviseur kies je via het menu met de drie puntjes bij een relatie, of op de relatiekaart."
