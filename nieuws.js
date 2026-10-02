@@ -53,7 +53,7 @@
     {
       datum: "2026-10-02", bestand: "koeien.html", soort: "beter",
       titel: "Stamboom: eigen kleur voor Cowboy en Outlaw",
-      wat:   "De vaderlijn van L.G. Mr. Cowboy is nu rood en die van Mr. Outlaw donkerblauw, zodat je hun kalveren in één oogopslag ziet. De uitleg staat bovenaan de stamboom."
+      wat:   "De vaderlijn van L.G. Mr. Cowboy is nu groen en die van Mr. Outlaw donkerblauw, zodat je hun kalveren in één oogopslag ziet. De uitleg staat bovenaan de stamboom."
     },
     {
       datum: "2026-10-02", bestand: "koeien.html", soort: "beter",
