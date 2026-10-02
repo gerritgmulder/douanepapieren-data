@@ -261,6 +261,9 @@
      venster zijn, want je moet er nu te veel in scrollen." */
   .cartGrid{display:grid;grid-template-columns:minmax(0,1fr);column-gap:30px}
   @media (min-width: 900px){ .cartGrid{grid-template-columns:minmax(0,1.1fr) minmax(0,1fr)} }
+  /* Nog ruimer (Gerrit, 2 okt 2026: "Die basket mag nog wel weer breder, of
+     iets meer beeldvullend"): de mand vult het scherm tot 1400 pixels breed. */
+  @media (min-width: 1200px){ .cartGrid{column-gap:44px;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)} }
   .cartGrid tr.weg{opacity:0;transition:opacity .15s}
   .cdel .cdelX{display:none}
   @keyframes kaartIn{from{opacity:0;transform:translateY(10px) scale(.985)}to{opacity:1;transform:none}}
@@ -2604,7 +2607,7 @@ function openCart(opties){
      Dat het middenstuk schuift kan sinds de keuzelijsten zweven: die worden
      niet meer afgeknipt door de rand van een schuivend vlak. */
   const html = `
-    <div class="card" style="max-width:1080px;width:100%;max-height:94vh;display:flex;flex-direction:column;">
+    <div class="card" style="max-width:1400px;width:100%;min-height:min(640px,94vh);max-height:94vh;display:flex;flex-direction:column;">
       <div class="vensterkop" style="flex:0 0 auto;">
         <h2>Your basket</h2>
         <button class="sluit" type="button" data-sluit title="Close">&times;</button>
