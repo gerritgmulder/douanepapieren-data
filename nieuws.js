@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-02", groep: "dealerportaal", soort: "beter",
+      titel: "Passion Partners Beheer: leads en reserveringen bovenaan",
+      wat: "Bovenaan Passion Partners Beheer staat nu de knop Nieuwe dealer of partner, met daaronder de leads en de reserveringen. Die staan open en klap je met een klik op de kop in. De lijst met partners staat daaronder en is dicht tot je erop klikt."
+    },
+    {
+      datum: "2026-10-02", groep: "dealerportaal", soort: "beter",
       titel: "Passion Partners Beheer: minder scrollen",
       wat: "Partners en Partnerprijzen per model staan dicht als je Beheer opent; klik op de kop om ze te openen. De lijst met partners past nu altijd binnen het vak."
     },
