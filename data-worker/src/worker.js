@@ -925,6 +925,62 @@ async function dpHandleSpaPhoto(env, url) {
     "Cache-Control": "public, max-age=86400", "X-Bron": "specsheet" } });
 }
 
+/* AFSPRAKEN VAN EEN PARTNER IN LOGIC4
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (2 okt 2026): de afspraken op de relatiekaart (korting,
+   betaaltermijn, notitie) blijven een notitie - het portaal rekent er niet
+   mee - "maar zorg dan wel dat die notitie ook in Logic4 komt".
+
+   De API van Logic4 kan geen notitie of CRM-activiteit bij een klant
+   aanmaken. Wel de drie vrije velden. Die stonden op 2 okt 2026 bij alle
+   20.000 klanten leeg; Vrij veld 1 is nu "Passion Partners: ...". Een korting
+   gaat dus NIET in het kortingsveld van Logic4, want dat rekent Logic4 wel.
+
+   { email } schrijft de afspraken van die relatie naar elk debiteurnummer.
+   { alle: true } doet het voor iedereen in Passion Partners.
+   { debiteur, proef: true } leest de klant voor en na, voor de controle dat
+   het bijwerken niets anders aan de klant verandert. */
+function dpAfsprakenTekst(d) {
+  const a = (d && d.afspraken) || {};
+  const delen = [];
+  if (a.kortingPct) delen.push(String(a.kortingPct).replace(/%$/, "") + "% korting" + (a.kortingTekst ? " (" + String(a.kortingTekst).trim() + ")" : ""));
+  else if (a.kortingTekst) delen.push(String(a.kortingTekst).trim());
+  if (a.betaaltermijn) delen.push("betaaltermijn " + String(a.betaaltermijn).trim());
+  if (a.notitie) delen.push(String(a.notitie).trim().replace(/\s+/g, " "));
+  return delen.length ? ("Passion Partners: " + delen.join(" - ")).slice(0, 250) : "";
+}
+async function dpAfsprakenNaarLogic4(env, body) {
+  const token = await l4Token(env);
+  const patch = async (id, tekst) => {
+    const r = await fetch("https://api.logic4server.nl/v3/Relations/UpdateCustomer", { method: "PATCH",
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ Id: Number(id), FreeValue1: tekst }) });
+    const t = await r.text();
+    if (!r.ok) throw new Error("UpdateCustomer " + id + " gaf HTTP " + r.status + ": " + t.slice(0, 140));
+    return true;
+  };
+  if (body.proef && body.debiteur) {
+    const lees = async () => { const r = await relL4(env, "/v3/Relations/GetCustomers", { Id: Number(body.debiteur), TakeRecords: 1 }); return Array.isArray(r) ? r[0] : r; };
+    const voor = await lees();
+    await patch(body.debiteur, String(body.tekst || ""));
+    const na = await lees();
+    const anders = Object.keys(Object.assign({}, voor, na)).filter(k => JSON.stringify((voor || {})[k]) !== JSON.stringify((na || {})[k]));
+    return { ok: true, anders, voor: voor && voor.FreeValue1, na: na && na.FreeValue1 };
+  }
+  const accounts = await dpGetAccounts(env);
+  const lijst = (accounts.dealers || []).filter(d => body.alle || String(d.email || "").toLowerCase() === String(body.email || "").toLowerCase());
+  const gedaan = [], mislukt = [];
+  for (const d of lijst) {
+    const tekst = dpAfsprakenTekst(d);
+    for (const id of (d.debtorIds || [])) {
+      if (!/^\d+$/.test(String(id).trim())) continue;
+      try { await patch(String(id).trim(), tekst); gedaan.push({ email: d.email, debiteur: id, tekst }); }
+      catch (e) { mislukt.push({ email: d.email, debiteur: id, fout: String(e.message || e) }); }
+    }
+  }
+  return { ok: !mislukt.length, gedaan, mislukt };
+}
+
 /* De beheerlaag in het portaal: Fonteynbot. Krijgt in de mand elke
    betaalkeuze, zodat elke route te testen is. */
 function dpIsBeheerSessie(sess) {
@@ -1843,7 +1899,8 @@ async function dpHandleReserve(request, env, sess, url) {
      partner kan hem niet kiezen en ook niet meesturen, want dat zou een
      reservering opleveren waar niets voor betaald is. */
   const isFonteyn = /@fonteyn\.nl$/i.test(String(sess.email || ""));
-  const wantsCent = body.payCent === true && isFonteyn;
+  // De cent-betaling is weg (2 okt 2026); een eigen bedrag doet hetzelfde.
+  const wantsCent = false;
 
   const regels = [];                      // wat er straks als orderregels in Logic4 komt
   let teBetalen = 0;                      // som van aanbetalingen/volledige bedragen, incl. BTW
@@ -4609,6 +4666,7 @@ async function handleDealerRoutes(request, env, url) {
   if (p.startsWith("/dealers/admin/")) {
     if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "unauthorized" });
     if (p === "/dealers/admin/mailstatus" && request.method === "GET") return dpAdminMailStatus(env, url);
+    if (p === "/dealers/admin/afspraken-logic4" && request.method === "POST") return reply(200, await dpAfsprakenNaarLogic4(env, await request.json().catch(() => ({}))).catch(e => ({ ok: false, error: String(e.message || e) })));
     if (p === "/dealers/admin/loginlink" && request.method === "POST") return dpAdminLoginLink(request, env, url);
     if (p === "/dealers/admin/uitnodigen" && request.method === "POST") return dpAdminUitnodigen(request, env, url);
     if (p === "/dealers/admin/wachtwoord" && request.method === "POST") return dpAdminSetPassword(request, env);

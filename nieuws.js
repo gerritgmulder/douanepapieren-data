@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", groep: "dealerportaal", soort: "beter",
+      titel: "Afspraken met een partner ook in Logic4",
+      wat: "Vul je op de relatiekaart in Passion Partners Beheer een korting, betaaltermijn of andere afspraak in, dan staat die na Bewaren ook in Logic4 bij de klant, in Vrij veld 1. Het portaal rekent er niet mee; het is een notitie."
+    },
+    {
       datum: "2026-10-02", groep: "dealerportaal", soort: "nieuw",
       titel: "Foto's inslepen in de Bibliotheek",
       wat: "Sleep in Passion Partners Beheer bij Bibliotheek zoveel foto's als je wilt in één keer. Staan het model en de kleur in de bestandsnaam (bijvoorbeeld Delight Sterling White Grey Oak.jpg of het artikelnummer), dan staat de foto meteen bij die kleur, voor alle uitvoeringen. Herkent het scherm een foto nog niet, dan kies je het model en de kleur zelf. Pdf's en andere bestanden gaan in de gekozen map."

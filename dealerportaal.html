@@ -1172,7 +1172,8 @@ function relatieKaart(index){
       + '<div class="blok"><h4>' + (d.soort==="dealer"?"Dealerafspraken":"Inkoopafspraken") + '</h4>'
       + '<p class="uit">' + (d.soort==="dealer"
           ? "Wat is er met deze dealer afgesproken? Bijvoorbeeld tien procent korting op een spa. Wat je hier invult is wat geldt; het portaal legt het vast zodat iedereen hetzelfde weet, en het rekenwerk doe je in Logic4."
-          : "Afwijkende afspraken met deze partner, als die er zijn. Blijft dit leeg, dan gelden de gewone partnerprijzen.") + '</p>'
+          : "Afwijkende afspraken met deze partner, als die er zijn. Blijft dit leeg, dan gelden de gewone partnerprijzen.")
+          + " Bij Bewaren komen deze afspraken in Logic4 bij de klant, in Vrij veld 1. Het portaal rekent er niet mee." + '</p>'
       + '<div class="velden">'
       +   veld("afspraken.kortingPct","Korting in procenten", d.afspraken.kortingPct, {type:"number", plh:"bv. 10"})
       +   veld("afspraken.kortingTekst","Waarop geldt die korting", d.afspraken.kortingTekst, {plh:"bv. alleen op spa's"})
@@ -1615,6 +1616,13 @@ function relatieKaart(index){
     try{ if(window.fpLog) window.fpLog(nieuw?"relatie-toegevoegd":"relatie-gewijzigd", d.email+" ("+d.company+")"); }catch(e){}
     await save("dealer-accounts", accounts);
     laag.remove(); renderPartners();
+    /* De afspraken ook in Logic4, bij de klant in Vrij veld 1 (Gerrit, 2 okt
+       2026: "notitie is prima, maar zorg dan wel dat die notitie ook in
+       Logic4 komt"). Op de achtergrond: het bewaren hierboven is al klaar. */
+    if ((d.debtorIds || []).length) fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/afspraken-logic4", {
+      method: "POST", headers: { "Content-Type": "application/json", ...beheerKoppen() }, body: JSON.stringify({ email: d.email }) })
+      .then(r => r.json()).then(j => { if (j && j.ok && (j.gedaan || []).length && !nieuw) setStatus("ok", "Bewaard. De afspraken staan in Logic4 bij debiteur " + j.gedaan.map(x => x.debiteur).join(", ") + " (Vrij veld 1)."); })
+      .catch(() => {});
     /* Nieuwe relatie? Dan gaat de welkomstmail METEEN de deur uit, zonder er
        eerst iets over te vragen. Hier stond een venster van de browser met
        "meteen de welkomstmail sturen?" - klikte je dat weg, dan gebeurde er

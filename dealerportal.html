@@ -2715,9 +2715,12 @@ function openCart(opties){
        komt (afhalen of bezorgen). Een container is altijd 30% aanbetalen:
        "Een container is nooit meer dan 30% aanbetalen."
      - Spa-adviseurs (een @fonteyn.nl-account) kunnen altijd een eigen bedrag
-       kiezen, plus de testbetaling van een cent.
-     - Fonteynbot krijgt altijd alles: volledig, 30%, een cent en een eigen
-       bedrag, wat er ook in de mand ligt.
+       kiezen.
+     - Fonteynbot ziet wat een partner ziet, plus altijd volledig betalen en
+       een eigen bedrag.
+     De testbetaling van een cent is weg: een eigen bedrag van 1 euro doet
+     hetzelfde (Gerrit, 2 okt 2026: "hoeft niet als er een eigen bedrag
+     gekozen kan worden").
      De worker houdt dezelfde regels aan; dit is wat er te kiezen valt. */
   const uitUddelNu = alleOpVoorraad && levering !== "container";
   const beheer = !!window.isBeheer && !window.meekijken;
@@ -2725,13 +2728,11 @@ function openCart(opties){
   const VOL = { waarde: "full", tekst: "Pay in full", bij: uitUddelNu ? "your spa is ready in Uddel" : "" };
   const AANBET = { waarde: "deposit", tekst: "30% deposit on the spas", bij: "parts in full" };
   const EIGEN = { waarde: "eigen", tekst: "Own deposit amount", bij: "Fonteyn only" };
-  const CENT = { waarde: "cent", tekst: "TEST \u2014 pay 1 cent", bij: "Fonteyn only" };
   let betaalopties;
   if (!spaRegels.length) betaalopties = [{ waarde: "deposit", tekst: "Pay in full", bij: "" }];
-  else if (beheer) betaalopties = uitUddelNu ? [VOL, AANBET] : [AANBET, VOL];
+  else if (beheer) betaalopties = uitUddelNu ? [VOL] : [AANBET, VOL];
   else betaalopties = uitUddelNu ? [VOL] : [AANBET];
   if ((adviseur || beheer) && spaRegels.length) betaalopties.push(EIGEN);
-  if (adviseur || beheer) betaalopties.push(CENT);
   if (cart.length) maakKiezer(ov.querySelector("#cartPay"), betaalopties, betaalopties[0].waarde, (w) => {
     const veld = ov.querySelector("#cartEigen");
     if (!veld) return;
