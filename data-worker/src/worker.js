@@ -2020,10 +2020,33 @@ async function dpHandleReserve(request, env, sess, url) {
       '<li><b>' + r.qty + '&times; ' + esc(r.soort === "spa" ? r.model : r.naam) + '</b>' +
       (r.variantName ? ' (' + esc(r.variantName) + ')' : '') +
       (r.code ? ' <span style="color:#888">' + esc(r.code) + '</span>' : '') + '</li>').join("") + '</ul>' +
-    (entry.deposit ? '<p><b>' + (payFull ? 'Volledig bedrag' : 'Aanbetaling') + ':</b> ' + sym + ' ' + entry.deposit.toFixed(2) + ' — Mollie-link naar dealer gestuurd</p>' : '') +
+    (entry.deposit ? '<p><b>' + (payFull ? 'Volledig bedrag' : 'Aanbetaling') + ':</b> ' + sym + ' ' + entry.deposit.toFixed(2) + ' — de dealer is naar de betaalpagina gestuurd en krijgt de betaallink ook per mail</p>' : '') +
     (note ? '<p style="white-space:pre-wrap;border-left:3px solid #8bc53f;padding-left:12px;">' + esc(note) + '</p>' : '') +
     '<p style="color:#888;font-size:12px;">Ook zichtbaar in de beheertegel Dealerportaal. Reply gaat direct naar de dealer.</p></div>',
     sess.email);
+  /* Bevestiging voor de partner zelf. Tot nu toe kreeg alleen Fonteyn een
+     mail; de partner werd naar Mollie gestuurd en kreeg pas na betalen iets
+     (Gerrit, 2 okt 2026: "Arno heeft de bestelling gedaan en hij heeft de mail
+     niet gekregen en ik wel"). Nu krijgt hij meteen een overzicht, met de
+     betaallink erin voor als hij de betaalpagina heeft weggeklikt. */
+  try {
+    const regelsHtml = '<ul style="padding-left:18px;margin:6px 0 14px;">' + regels.map(r =>
+      '<li><b>' + r.qty + '&times; ' + esc(r.soort === "spa" ? r.model : r.naam) + '</b>' +
+      (r.variantName ? ' (' + esc(r.variantName) + ')' : '') + '</li>').join("") + '</ul>';
+    const betaalKnop = checkoutUrl
+      ? '<p style="margin:22px 0;text-align:center;"><a href="' + checkoutUrl + '" style="background:#c8102e;color:#fff;' +
+        'text-decoration:none;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:10px;display:inline-block;">' +
+        (payFull ? 'Pay now' : 'Pay the deposit') + ' - ' + sym + ' ' + Number(entry.deposit || 0).toFixed(2) + '</a></p>' +
+        '<p style="color:#6b7280;font-size:13px;">Already paid? Then you can ignore this button; you will receive a confirmation as soon as the payment is in.</p>'
+      : '<p>We will get back to you about the payment.</p>';
+    const binnen = '<p>Hi,</p><p>Thank you for your order. This is what we received:</p>' + regelsHtml +
+      (levering === "container" ? '<p><b>Full container</b>, straight from the factory. We quote the sea freight separately.</p>' :
+       entry.vracht && entry.vracht.wijze === "afhalen" ? '<p>You collect it yourself in Uddel.</p>' : '') +
+      betaalKnop + '<p>You can follow your order any time under <b>My spas</b>.</p>';
+    await dpSendEmail(env, sess.email, "We received your order - Passion Partners",
+      dpMailShell(env, url, binnen), accounts.contactEmail || undefined, dpAdviseurVan(accounts, sess.email));
+  } catch (e) { console.log("[dp-mail] bevestiging partner: " + String(e.message || e)); }
+
   await dpLogPartner(env, sess, "reservering-aangevraagd",
     samenvatting + (checkoutUrl ? " — betaallink " + sym + (entry.deposit != null ? entry.deposit.toFixed(2) : "") : ""));
   return reply(200, { ok: true, checkoutUrl, deposit: entry.deposit || null, currency,
@@ -2437,6 +2460,135 @@ const besteldOp = () => new Date().toISOString();
 // /v3/Orders/AddUpdateOrder — vereist minimaal OrderStatus + debiteur.
 // Auth: fonteynbot (LOGIC4_USERNAME/PASSWORD als worker-secrets).
 let _l4tok = null;
+/* ─── Spa-catalogus vanzelf bijwerken uit Logic4 ────────────────────────
+   Gerrit (2 okt 2026): "Regelmatig worden er nieuwe modellen of nieuwe
+   kleuren toegevoegd in Logic4. Die moeten ook worden opgehaald uit Logic4
+   en in Passion Partners getoond worden."
+
+   De catalogus (model → varianten met artikelcode en kleur) werd met de hand
+   gebouwd met tools/build-spa-catalog.mjs. Wie dat vergat te draaien, zag een
+   nieuwe kleur nooit in het portaal. Dit is hetzelfde recept, nu in de worker:
+   vier keer per etmaal vanzelf (eigen cron-slot, zie wrangler.toml) en op de
+   knop in Passion Partners Beheer. Wijzig je hier de herkenning, doe dat dan
+   ook in het script, of draai voortaan alleen nog deze. */
+const CAT_VERVALLEN = 10;
+const CAT_SPA_GROEPEN = new Set([39, 92, 72, 73, 87, 89, 90]);
+const CAT_HANDMATIG = {
+  "Serene 6 Fire Pit": ["100632"], "Turbine 5 Luxury": ["100639"], "Turbine 6 Luxury": ["100640"],
+  "Turbine 7 Luxury": ["100641"], "Turbine 12 Luxury": ["131441"], "Turbine 6 Grand": ["131445"],
+  "Turbine 7 Grand": ["131443"], "Turbine 8 Grand": ["131444"], "Turbine 12 Grand (The Beast)": ["131442"],
+  "Infinity": ["131467"], "Passion HeatMaster 16kW": ["101240"], "Passion HeatMaster 21kW": ["101241"],
+  "Passion Xtreme Green Heat Pump": ["152526"],
+  "Wim Hof's Ice Barrel": ["800063"], "Wim Hof's Ice Barrel XL": ["800031"],
+  "Wim Hof's Ice Revive": ["800004", "800017", "800019", "800021", "800024", "800026"],
+  "Wim Hof's Ice Breeze": ["800028", "800036", "800037", "800047"],
+  "Wim Hof's Ice Faith": ["800003"], "Wim Hof's Ice Elevate": ["101008"],
+};
+const CAT_GEEN_SPA = /cover|filter|kussen|hoes|trap|onderhoud|prijskaart|cabinet|jet\b/i;
+
+async function dpBouwSpaCatalogus(env, { opslaan = true } = {}) {
+  const token = await l4Token(env);
+  // De vaste koppeling artikelcode → model uit Voorraadbeheer (publieke repo).
+  let byCode = {};
+  try {
+    const r = await fetch("https://raw.githubusercontent.com/gerritgmulder/douanepapieren-data/main/voorraad.html");
+    const m = r.ok ? (await r.text()).match(/const SPA_BY_CODE = (\{.*?\});/s) : null;
+    if (m) byCode = JSON.parse(m[1]);
+  } catch (e) {}
+  const handmatig = new Map();
+  for (const [m, cs] of Object.entries(CAT_HANDMATIG)) for (const c of cs) handmatig.set(c, m);
+
+  const catalog = {};
+  const alle = new Map();
+  let gescand = 0, gevonden = 0;
+  for (let page = 0; page < 200; page++) {
+    const r = await fetch("https://api.logic4server.nl/v3/Products/GetProducts", {
+      method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+      body: JSON.stringify({ TakeRecords: 500, SkipRecords: page * 500 }),
+    });
+    if (!r.ok) throw new Error("GetProducts HTTP " + r.status);
+    const j = await r.json();
+    const prods = Array.isArray(j) ? j : (j.Records || j.Products || []);
+    if (!prods.length) break;
+    gescand += prods.length;
+    for (const p of prods) {
+      const code = String(p.ProductCode || "");
+      const naam = p.ProductName1 || p.Description || "";
+      alle.set(code, p);
+      let model = handmatig.get(code) || byCode[code] || null;
+      if (Number(p.StatusId) === CAT_VERVALLEN) continue;
+      const spaGroep = CAT_SPA_GROEPEN.has(Number(p.ProductGroupId1));
+      if (!model && spaGroep && /\b(swimspa|spa)\b[^|]*\|/i.test(naam) && !CAT_GEEN_SPA.test(naam)) {
+        model = naam.split("|")[0].replace(/\bswimspa\b/ig, " ").replace(/\bspa\b/ig, " ").replace(/\s+/g, " ").trim() || null;
+      }
+      if (!model && spaGroep && /ice baths? \|/i.test(naam) && !CAT_GEEN_SPA.test(naam)) {
+        const d = naam.split("|").map(s => s.trim());
+        if (d.length >= 3 && d[1]) model = d[1].replace(/\s+/g, " ").trim();
+      }
+      const delen = naam.split("|").map(s => s.trim());
+      if (spaGroep && delen.length >= 3 && /\b(spas|baths)$/i.test(delen[0]) && delen[1] && !CAT_GEEN_SPA.test(naam)) {
+        const uit = delen[1].replace(/\bswimspa\b/ig, " ").replace(/\bspa\b/ig, " ").replace(/\s+/g, " ").trim();
+        if (uit) model = uit;
+      }
+      if (!model) continue;
+      if (!handmatig.has(code) && /\bECO\b/i.test(naam) && !/ECO/i.test(model)) model += " ECO";
+      gevonden++;
+      (catalog[model] = catalog[model] || []).push({ code, productId: p.Id || p.ProductId || null, desc: naam });
+    }
+    if (prods.length < 500) break;
+  }
+
+  // Wat er in een samengesteld artikel zit, en hoeveel je er nu van kunt maken.
+  for (const vs of Object.values(catalog)) for (const v of vs) {
+    const p = alle.get(v.code);
+    if (!p || !p.IsComposedProduct) continue;
+    v.samengesteld = true;
+    try {
+      const r = await fetch("https://api.logic4server.nl/v3/Products/GetComposedProductComposition", {
+        method: "POST", headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+        body: JSON.stringify(p.ProductId ?? p.Id),
+      });
+      if (!r.ok) continue;
+      const delen = await r.json().catch(() => []);
+      v.bevat = (Array.isArray(delen) ? delen : []).map(d => ({
+        code: String(d.ProductCode || ""), qty: Number(d.Qty) || 1,
+        naam: (alle.get(String(d.ProductCode)) || {}).ProductName1 || "",
+        vrij: Number((alle.get(String(d.ProductCode)) || {}).FreeStock) || 0,
+      }));
+      const uit = v.bevat.filter(d => alle.has(d.code)).map(d => Math.floor((Number(d.vrij) || 0) / Math.max(1, Number(d.qty) || 1)));
+      v.teMaken = uit.length ? Math.max(0, Math.min(...uit)) : 0;
+    } catch (e) {}
+  }
+
+  // Wat is er nieuw ten opzichte van de vorige keer?
+  const oud = (await env.FONTEYN_DATA.get("spa-catalog", { type: "json" })) || {};
+  const oudeModellen = oud.models || {};
+  const oudeCodes = new Set();
+  for (const vs of Object.values(oudeModellen)) for (const v of vs) oudeCodes.add(String(v.code));
+  const nieuweModellen = Object.keys(catalog).filter(m => !oudeModellen[m]).sort();
+  const nieuweKleuren = [];
+  for (const [m, vs] of Object.entries(catalog)) {
+    if (!oudeModellen[m]) continue;
+    for (const v of vs) if (!oudeCodes.has(v.code)) nieuweKleuren.push({ model: m, code: v.code, desc: v.desc });
+  }
+  const verdwenen = Object.keys(oudeModellen).filter(m => !catalog[m]).sort();
+
+  /* Vangnet: geeft Logic4 opeens veel minder terug (storing, een halve
+     pagina), dan niet de goede catalogus overschrijven met een kapotte. */
+  const aantalOud = Object.keys(oudeModellen).length;
+  const aantalNieuw = Object.keys(catalog).length;
+  if (aantalOud && aantalNieuw < aantalOud * 0.8) {
+    return { ok: false, error: "Logic4 gaf veel minder modellen terug dan vorige keer (" + aantalNieuw + " in plaats van " + aantalOud + "); catalogus niet aangepast.", gescand };
+  }
+  const resultaat = { ok: true, updated: new Date().toISOString(), modellen: aantalNieuw, varianten: gevonden, gescand,
+                      nieuweModellen, nieuweKleuren, verdwenen };
+  if (opslaan) {
+    await env.FONTEYN_DATA.put("spa-catalog", JSON.stringify({ updated: resultaat.updated, bron: "worker", models: catalog }));
+    await env.FONTEYN_DATA.put("spa-catalog-ronde", JSON.stringify(resultaat));
+  }
+  return resultaat;
+}
+
 async function l4Token(env) {
   if (_l4tok && Date.now() < _l4tok.exp - 60000) return _l4tok.t;
   const f = new URLSearchParams();
@@ -4459,6 +4611,14 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/testorder" && request.method === "POST") return dpAdminTestOrder(request, env);
     if (p === "/dealers/admin/reserve-for" && request.method === "POST") return dpAdminReserveFor(request, env, url);
     if (p === "/dealers/admin/terugdraaien" && request.method === "POST") return dpAdminTerugdraaien(request, env);
+    if (p === "/dealers/admin/refresh-catalogus" && request.method === "POST") {
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang" });
+      return reply(200, await dpBouwSpaCatalogus(env).catch(e => ({ ok: false, error: String(e.message || e) })));
+    }
+    if (p === "/dealers/admin/catalogus-ronde" && request.method === "GET") {
+      if (!(await dpIsAdmin(request, env))) return reply(401, { ok: false, error: "geen toegang" });
+      return reply(200, { ok: true, ronde: (await env.FONTEYN_DATA.get("spa-catalog-ronde", { type: "json" })) || null });
+    }
     if (p === "/dealers/admin/refresh-stock" && request.method === "POST") return reply(200, await dpRefreshHalStock(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     if (p === "/dealers/admin/refresh-eta" && request.method === "POST") return reply(200, await dpRefreshShipEtas(env).catch(e => ({ ok: false, error: String(e.message || e) })));
     if (p === "/dealers/admin/refresh-reserveringen" && request.method === "POST") return reply(200, await dpRefreshReservations(env).catch(e => ({ ok: false, error: String(e.message || e) })));
@@ -15542,6 +15702,13 @@ const FP_WORKER = {
         if (String(event && event.cron || "").startsWith("15 ")) {
           const wr = await wireRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           console.log("[cron] wire-bewaking: " + JSON.stringify({ ok: wr.ok, actie: wr.actie || null, teller: wr.toestand && wr.toestand.teller, fout: wr.error || null }));
+          return;
+        }
+        /* De spa-catalogus (modellen en kleuren) op :45, vier keer per etmaal,
+           in een eigen slot: hij leest de hele productlijst van Logic4. */
+        if (String(event && event.cron || "").startsWith("45 ")) {
+          const cr = await dpBouwSpaCatalogus(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+          console.log("[cron] spa-catalogus: " + JSON.stringify({ ok: cr.ok, modellen: cr.modellen, nieuweModellen: cr.nieuweModellen, nieuweKleuren: (cr.nieuweKleuren || []).length, fout: cr.error || null }));
           return;
         }
         if (String(event && event.cron || "").startsWith("30 ")) {

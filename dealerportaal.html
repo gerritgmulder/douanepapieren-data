@@ -162,6 +162,42 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
   .naloop b{color:var(--fonteyn-green)}
 </style>
 
+<style id="beheer-opmaak">
+/* Professionelere opmaak van Passion Partners Beheer (Gerrit, 2 okt 2026):
+   rustiger kaarten, duidelijke koppen, tabellen met lucht en knoppen met
+   leesbare tekst in plaats van een los kruisje. */
+body{background:#f6f5f3}
+main{max-width:1200px}
+header{box-shadow:0 2px 12px rgba(0,0,0,.14)}
+h2{font-size:24px;font-weight:700;letter-spacing:-.01em;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.live{font-size:11.5px;font-weight:600;color:#047857;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:999px;padding:3px 10px;letter-spacing:0}
+.live::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;margin-right:6px;vertical-align:1px;animation:puls 2s infinite}
+@keyframes puls{0%,100%{opacity:1}50%{opacity:.35}}
+.card{border:1px solid #ecebe7;border-radius:14px;padding:20px 24px;margin:16px 0;box-shadow:0 1px 2px rgba(0,0,0,.03),0 6px 20px rgba(0,0,0,.04)}
+.card h3{font-size:16px;font-weight:700;color:#1f2937;display:flex;align-items:center;gap:10px;margin:0 0 12px}
+.card h3::before{content:"";flex:none;width:4px;height:18px;border-radius:2px;background:var(--fonteyn-green)}
+table.grid{border:1px solid #efeee9;border-radius:10px;overflow:hidden;border-collapse:separate;border-spacing:0}
+table.grid th{background:#faf9f7;color:#6b7280;padding:10px 12px;border-bottom:1px solid #efeee9}
+table.grid td{padding:10px 12px;border-bottom:1px solid #f3f2ef}
+table.grid tbody tr:hover td{background:#fcfbfa}
+table.grid tbody tr:last-child td{border-bottom:0}
+.rmv{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #d6d5cf;border-radius:8px;color:#374151;font-size:12px;font-weight:600;padding:6px 12px;line-height:1.15;cursor:pointer;transition:background .12s,border-color .12s,color .12s}
+.rmv:hover{border-color:#9ca3af;background:#f9fafb;color:#111827}
+.rmv svg{width:14px;height:14px;flex:none}
+.rmv.weg{color:#b91c1c;border-color:#f0c4c4}
+.rmv.weg:hover{background:#fef2f2;border-color:#b91c1c;color:#991b1b}
+.rmv:disabled{opacity:.45;cursor:not-allowed}
+button.secondary{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #d6d5cf;border-radius:8px;color:#374151;font:inherit;font-size:13px;font-weight:600;padding:8px 14px;cursor:pointer}
+button.secondary:hover{border-color:#9ca3af;background:#f9fafb}
+.pill{padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600}
+.pill.wacht{background:#fef3c7;color:#92400e}
+.pill.archief{background:#f3f4f6;color:#6b7280}
+.bulkbalk{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 10px;padding:9px 12px;background:#faf9f7;border:1px solid #efeee9;border-radius:10px;font-size:13px}
+.bulkbalk label{display:inline-flex;align-items:center;gap:8px;font-weight:600;cursor:pointer}
+input[type=checkbox]{width:16px;height:16px;accent-color:var(--fonteyn-green);cursor:pointer}
+.nieuwlijst{margin:8px 0 0;padding-left:18px;line-height:1.7;font-size:13px}
+.nieuwlijst .tag{display:inline-block;margin-left:6px;font-size:11px;font-weight:600;color:#92400e;background:#fef3c7;border-radius:999px;padding:1px 8px}
+</style>
 </head>
 <body>
 
@@ -174,7 +210,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
 </header>
 
 <main>
-  <h2>Passion Partners</h2>
+  <h2>Passion Partners <span class="live hidden" id="liveTik">live</span></h2>
   <p class="lead">
     Beheer hier wie er in het <b>partnerportaal</b> kan (magic-link login op e-mailadres),
     welke <b>documenten</b> partners zien, en waar contactvragen binnenkomen.
@@ -255,8 +291,13 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
     <h3>Aanvragen zonder aanbetaling - leads (<span id="leadCount">0</span>)</h3>
     <p class="lead" style="margin-bottom:10px">Partners die een reservering startten en nog op de <b>aanbetaling</b> staan. Dit zijn aanvragen: ze claimen voorraad zodra de aanbetaling binnen is en staan dan in Logic4. Bel na of archiveer ze.
       <label style="margin-left:8px;font-size:12px;color:var(--ink)"><input type="checkbox" id="showArch" style="vertical-align:-1px"> toon gearchiveerd</label></p>
+    <div class="bulkbalk">
+      <label><input type="checkbox" id="leadAlles"> Alles selecteren</label>
+      <span id="leadSelTel" style="color:var(--muted)">niets geselecteerd</span>
+      <button class="rmv weg" id="leadWeg" type="button" disabled>Geselecteerde verwijderen</button>
+    </div>
     <table class="grid">
-      <thead><tr><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Notitie</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th style="width:36px"></th><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Notitie</th><th>Status</th><th></th></tr></thead>
       <tbody id="reqBodyLeads"></tbody>
     </table>
   </div>
@@ -286,6 +327,19 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
       <input id="pCode" placeholder="artikelcode (optioneel)" style="min-width:160px">
       <button class="primary" id="addPrice" type="button">+ Prijs opslaan</button>
     </div>
+  </div>
+
+  <!-- Modellen en kleuren uit Logic4 (Gerrit, 2 okt 2026): nieuwe modellen
+       en kleuren moeten vanzelf in Passion Partners komen. De worker haalt de
+       lijst vier keer per dag op; met de knop kan het meteen. -->
+  <div class="card">
+    <h3>Modellen en kleuren uit Logic4</h3>
+    <p class="lead" style="margin-bottom:10px">Nieuwe modellen en kleuren die in Logic4 worden aangemaakt, komen vanzelf in Passion Partners: vier keer per dag haalt het portaal de lijst op. Een <b>nieuwe kleur</b> van een bestaand model staat er dan meteen in. Een <b>nieuw model</b> verschijnt zodra je hierboven bij Partnerprijzen een prijs invult.</p>
+    <div class="row">
+      <button class="primary" id="catNu" type="button">Nu ophalen uit Logic4</button>
+      <span id="catUitleg" class="lead" style="margin:0"></span>
+    </div>
+    <div id="catUit" style="margin-top:10px"></div>
   </div>
 
   <!-- Het blok "Documenten & specsheets" stond hier tot 28 aug 2026. Het nam
@@ -367,6 +421,8 @@ function beheerKoppen(){
            "X-Fonteyn-User": (localStorage.getItem("fp.email") || "").toLowerCase() };
 }
 const $ = (id) => document.getElementById(id);
+/* Prullenbakje voor alle verwijderknoppen: met tekst ernaast in plaats van een los kruisje. */
+const WEG_ICOON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h13M8 5.5V4h4v1.5M5.5 5.5l.8 10.5h7.4l.8-10.5M8.5 9v4.5M11.5 9v4.5"/></svg>';
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 function setStatus(k,m){ const e=$("status"); if(!m){e.classList.add("hidden");return;} e.className="status-msg "+k; e.textContent=m; e.classList.remove("hidden"); }
 
@@ -429,7 +485,7 @@ async function kleurfotosToon(model){
         <td>${esc(kfKleurNaam(v.desc, model))}</td>
         <td style="white-space:nowrap">
           <label class="rmv" style="cursor:pointer">${heeft ? "vervang" : "foto kiezen"}<input type="file" accept=".jpg,.jpeg,.png,.webp" class="kfBestand" data-fp-mooi="1" hidden></label>
-          ${heeft ? `<button class="rmv kfWeg" type="button" title="foto weghalen">\u2715</button>` : ""}
+          ${heeft ? `<button class="rmv weg kfWeg" type="button" title="foto weghalen">${WEG_ICOON}Weghalen</button>` : ""}
         </td></tr>`;
     }).join("") + `</tbody></table>`;
   /* Miniaturen: een <img src> kan de beheerkoppen niet meesturen, dus
@@ -1335,7 +1391,7 @@ function renderPartners(){
           <button class="rmv invD" data-i="${i}" title="Stuur de welkomstmail: een nette uitnodiging waarmee deze relatie zelf een wachtwoord kiest en meteen ingelogd het portaal in gaat. De link is 7 dagen geldig en kan tegen mailscanners: pas het instellen van het wachtwoord verbruikt hem." style="color:var(--fonteyn-green,#144734);font-weight:700">uitnodiging</button>
           <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink zonder mail - voor onboarding via WhatsApp of zodra de mail uitblijft. 7 dagen geldig, eenmalig, en sinds 22 aug bestand tegen mailscanners: de link opent eerst een tussenpagina en pas de knop daarop logt in.">inloglink</button>
           <button class="rmv pwD" data-i="${i}" title="Zet zelf een wachtwoord voor dit account, bijvoorbeeld telefonisch door te geven. Meestal kiest de relatie er zelf een via de uitnodiging.">wachtwoord</button>
-          <button class="rmv delD" data-i="${i}">✕ verwijder</button></td>
+          <button class="rmv weg delD" data-i="${i}">${WEG_ICOON}Verwijderen</button></td>
     </tr>`).join("") || '<tr><td colspan="9" style="color:var(--muted)">Voeg de eerste dealer of partner toe.</td></tr>';
   document.querySelectorAll(".kaartD").forEach(b=>b.addEventListener("click",()=>relatieKaart(Number(b.dataset.i))));
   document.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
@@ -1793,7 +1849,7 @@ function renderPrices(){
       <td>${priceCell}</td>
       <td style="color:var(--muted)">${depCell}</td>
       <td>${code ? esc(code) : '<span style="color:var(--muted)">-</span>'}</td>
-      <td><button class="rmv delPrice" data-m="${esc(model)}">✕</button></td>
+      <td><button class="rmv weg delPrice" data-m="${esc(model)}">${WEG_ICOON}Verwijderen</button></td>
     </tr>`;}).join("") || '<tr><td colspan="5" style="color:var(--muted)">Zet hier de prijzen; tot die er zijn lopen reserveringen per mail.</td></tr>';
   document.querySelectorAll(".delPrice").forEach(b=>b.addEventListener("click", async ()=>{
     try{ if(window.fpLog) window.fpLog("partnerprijs-verwijderd",b.dataset.m); }catch(e){}
@@ -1817,6 +1873,7 @@ document.getElementById("addPrice").addEventListener("click", async ()=>{
 
 let reqData = { requests: [] };
 let showArch = false;
+const leadGekozen = new Set();
 // Een aanvraag is pas een échte reservering als er is aanbetaald (Mollie 'paid').
 function reqPaid(r){ return r.paymentStatus === "paid" || r.status === "paid"; }
 function leadLabel(r){
@@ -1887,7 +1944,7 @@ function renderReqs(){
       <td>${esc(r.qty)}</td>
       <td style="white-space:nowrap">${dep}</td>
       <td>${l4}</td>
-      <td style="white-space:nowrap">${gean}${terug} <button class="rmv reqDel" data-i="${idx}">✕</button></td>
+      <td style="white-space:nowrap">${gean}${terug} <button class="rmv weg reqDel" data-i="${idx}">${WEG_ICOON}Verwijderen</button></td>
     </tr>`;
   }).join("") || '<tr><td colspan="7" style="color:var(--muted)">Nog geen aanbetaalde reserveringen.</td></tr>';
 
@@ -1934,19 +1991,22 @@ function renderReqs(){
     const idx = reqData.requests.indexOf(r);
     const archived = r.status === "done";
     const over = r.overgezetVan ? ` <span class="pill">van ${esc(r.overgezetVan)}</span>` : "";
+    const k = leadSleutel(r);
     return `<tr${archived?' style="opacity:.55"':''}>
+      <td><input type="checkbox" class="leadSel" data-k="${esc(k)}"${leadGekozen.has(k)?" checked":""} aria-label="Selecteer deze aanvraag"></td>
       <td style="white-space:nowrap">${esc(String(r.ts||"").slice(0,16).replace("T"," "))}</td>
       <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span>${over}</td>
       <td>${regelsCel(r)}</td>
       <td>${esc(r.qty)}</td>
       <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(String(r.note||"").slice(0,120))}</td>
-      <td><span class="pill off">${esc(leadLabel(r))}</span></td>
-      <td>
-        <button class="rmv reqArch" data-i="${idx}">${archived?"heropen":"archiveer"}</button>
-        <button class="rmv reqDel" data-i="${idx}">✕</button>
+      <td><span class="pill ${archived?"archief":"wacht"}">${esc(leadLabel(r))}</span></td>
+      <td style="white-space:nowrap">
+        <button class="rmv reqArch" data-i="${idx}">${archived?"Heropenen":"Archiveren"}</button>
+        <button class="rmv weg reqDel" data-i="${idx}">${WEG_ICOON}Verwijderen</button>
       </td>
     </tr>`;
-  }).join("") || '<tr><td colspan="7" style="color:var(--muted)">Geen openstaande leads.</td></tr>';
+  }).join("") || '<tr><td colspan="8" style="color:var(--muted)">Geen openstaande leads.</td></tr>';
+  leadBalkBijwerken(leads);
 
   document.querySelectorAll(".reqArch").forEach(b=>b.addEventListener("click", async ()=>{
     const r = reqData.requests[Number(b.dataset.i)];
@@ -1964,6 +2024,118 @@ function renderReqs(){
   }));
 }
 document.getElementById("showArch").addEventListener("change", (e)=>{ showArch = e.target.checked; renderReqs(); });
+
+/* ── Aanvragen zonder aanbetaling: selecteren en in één keer verwijderen ──
+   Gerrit (2 okt 2026): "die lijst moet volledig te selecteren zijn en daarna
+   direct te verwijderen." De selectie blijft staan als de lijst vanzelf
+   ververst. */
+function leadSleutel(r){ return r.id || (String(r.ts||"") + "|" + String(r.email||"")); }
+function leadBalkBijwerken(zichtbaar){
+  const sleutels = (zichtbaar || []).map(leadSleutel);
+  for (const k of [...leadGekozen]) if (!sleutels.includes(k)) leadGekozen.delete(k);
+  const n = leadGekozen.size;
+  $("leadSelTel").textContent = n ? n + " geselecteerd" : "niets geselecteerd";
+  $("leadWeg").disabled = !n;
+  $("leadWeg").innerHTML = WEG_ICOON + (n ? "Verwijder " + n + (n === 1 ? " aanvraag" : " aanvragen") : "Geselecteerde verwijderen");
+  const alles = $("leadAlles");
+  alles.checked = sleutels.length > 0 && n === sleutels.length;
+  alles.indeterminate = n > 0 && n < sleutels.length;
+  document.querySelectorAll(".leadSel").forEach(c => c.addEventListener("change", () => {
+    if (c.checked) leadGekozen.add(c.dataset.k); else leadGekozen.delete(c.dataset.k);
+    leadBalkBijwerken(zichtbaar);
+  }));
+}
+$("leadAlles").addEventListener("change", (e) => {
+  const zichtbaar = [...document.querySelectorAll(".leadSel")];
+  zichtbaar.forEach(c => { c.checked = e.target.checked; if (e.target.checked) leadGekozen.add(c.dataset.k); else leadGekozen.delete(c.dataset.k); });
+  $("leadSelTel").textContent = leadGekozen.size ? leadGekozen.size + " geselecteerd" : "niets geselecteerd";
+  $("leadWeg").disabled = !leadGekozen.size;
+  $("leadWeg").innerHTML = WEG_ICOON + (leadGekozen.size ? "Verwijder " + leadGekozen.size + (leadGekozen.size === 1 ? " aanvraag" : " aanvragen") : "Geselecteerde verwijderen");
+});
+$("leadWeg").addEventListener("click", async () => {
+  const n = leadGekozen.size;
+  if (!n) return;
+  if (!await pDialoog({ titel: n === 1 ? "Aanvraag verwijderen?" : n + " aanvragen verwijderen?",
+    html: "<p>De geselecteerde aanvragen zonder aanbetaling verdwijnen uit de lijst. Dit is blijvend.</p>",
+    bevestig: "Verwijderen", gevaarlijk: true })) return;
+  // Eerst de nieuwste lijst ophalen, zodat er niets verloren gaat dat net binnenkwam.
+  try { const vers = await kvGet("dealer-requests"); if (vers && Array.isArray(vers.requests)) reqData = vers; } catch(e){}
+  const weg = new Set(leadGekozen);
+  const voor = reqData.requests.length;
+  reqData.requests = reqData.requests.filter(r => reqPaid(r) || !weg.has(leadSleutel(r)));
+  try{ if(window.fpLog) window.fpLog("aanvragen-verwijderd", (voor - reqData.requests.length) + " aanvragen zonder aanbetaling"); }catch(e){}
+  leadGekozen.clear();
+  await save("dealer-requests", reqData); renderReqs();
+  setStatus("ok", (voor - reqData.requests.length) + " aanvraag/aanvragen verwijderd.");
+});
+
+/* ── Realtime ──────────────────────────────────────────────────────────
+   Gerrit (2 okt 2026): "Passion Spas Beheer moet realtime zijn, want ik kan
+   nu niet de bestelling zien zonder het Dashboard opnieuw op te starten."
+   Elke 15 seconden (en zodra je terugkomt in het venster) halen we de
+   bestellingen opnieuw op. Niet terwijl er een kaart of venster open staat
+   of terwijl je in een veld typt: dan zou je werk onder je handen wisselen. */
+let liveBezig = false;
+async function liveVerversen(){
+  if (liveBezig || document.hidden) return;
+  if (document.querySelector(".kaartlaag")) return;
+  const ae = document.activeElement;
+  if (ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && ae.type !== "checkbox") return;
+  liveBezig = true;
+  try {
+    const vers = await kvGet("dealer-requests");
+    if (vers && Array.isArray(vers.requests) && JSON.stringify(vers.requests) !== JSON.stringify(reqData.requests || [])) {
+      reqData = vers; renderReqs();
+    }
+    const tik = $("liveTik");
+    tik.textContent = "live · bijgewerkt " + new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    tik.classList.remove("hidden");
+  } catch(e) {}
+  liveBezig = false;
+}
+function liveStart(){
+  setInterval(liveVerversen, 15000);
+  window.addEventListener("focus", liveVerversen);
+  document.addEventListener("visibilitychange", liveVerversen);
+  liveVerversen();
+}
+
+/* ── Modellen en kleuren uit Logic4 ─────────────────────────────────── */
+const WORKER = "https://fonteyn-data-store.g-mulder.workers.dev";
+function catToon(ronde, vers){
+  const uit = $("catUit"), uitleg = $("catUitleg");
+  if (!ronde) { uitleg.textContent = "Nog niet automatisch opgehaald. Klik op de knop om het nu te doen."; uit.innerHTML = ""; return; }
+  if (!ronde.ok) { uitleg.textContent = ""; uit.innerHTML = '<div class="status-msg bad">' + esc(ronde.error || "Ophalen lukte niet.") + '</div>'; return; }
+  const wanneer = new Date(ronde.updated).toLocaleString("nl-NL", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  uitleg.textContent = (vers ? "Zojuist opgehaald" : "Laatst opgehaald " + wanneer) + " · " + ronde.modellen + " modellen, " + ronde.varianten + " kleuren en uitvoeringen.";
+  const nm = ronde.nieuweModellen || [], nk = ronde.nieuweKleuren || [];
+  if (!nm.length && !nk.length) { uit.innerHTML = '<p class="lead" style="margin:0">Geen nieuwe modellen of kleuren sinds de vorige keer.</p>'; return; }
+  const prijzen = (priceData && priceData.prices) || {};
+  uit.innerHTML =
+    (nm.length ? '<p style="margin:8px 0 0;font-weight:600">Nieuwe modellen</p><ul class="nieuwlijst">' +
+      nm.map(m => '<li>' + esc(m) + (prijzen[m] ? "" : '<span class="tag">nog geen partnerprijs, dus nog niet zichtbaar</span>') + '</li>').join("") + '</ul>' : "") +
+    (nk.length ? '<p style="margin:10px 0 0;font-weight:600">Nieuwe kleuren en uitvoeringen</p><ul class="nieuwlijst">' +
+      nk.slice(0, 40).map(k => '<li><b>' + esc(k.model) + '</b>: ' + esc(String(k.desc || "").split("|").slice(1).join(" · ").trim() || k.code) + ' <span style="color:var(--muted)">' + esc(k.code) + '</span></li>').join("") +
+      (nk.length > 40 ? '<li>en nog ' + (nk.length - 40) + ' meer</li>' : "") + '</ul>' : "");
+}
+async function catLaad(){
+  try {
+    const r = await fetch(WORKER + "/dealers/admin/catalogus-ronde", { headers: beheerKoppen() });
+    const j = await r.json().catch(() => ({}));
+    catToon(j && j.ronde, false);
+  } catch(e) {}
+}
+$("catNu").addEventListener("click", async () => {
+  const knop = $("catNu"); knop.disabled = true; knop.textContent = "Bezig met ophalen…";
+  $("catUitleg").textContent = "Dit duurt ongeveer een halve minuut.";
+  try {
+    const r = await fetch(WORKER + "/dealers/admin/refresh-catalogus", { method: "POST", headers: beheerKoppen() });
+    const j = await r.json().catch(() => ({ ok: false, error: "HTTP " + r.status }));
+    catToon(j, true);
+    try{ if(window.fpLog) window.fpLog("catalogus-opgehaald", j.ok ? (j.modellen + " modellen") : (j.error || "")); }catch(e){}
+  } catch(e) { catToon({ ok: false, error: e.message }, true); }
+  knop.disabled = false; knop.textContent = "Nu ophalen uit Logic4";
+});
 
 /* Terugdraaien op een kaal ordernummer. Zelfde eindpunt, alleen zonder
    aanvraag erachter — dus ook zonder voorraadclaim om vrij te geven. */
@@ -2027,6 +2199,8 @@ async function init(){
     document.getElementById("mgmt").classList.remove("hidden");
     // De mailcontrole hoort bij het beheer en niet bij het inlogscherm.
     document.getElementById("mailCard").classList.remove("hidden");
+    liveStart();
+    catLaad();
   } catch(e){ setStatus("bad", "Laden faalde: "+e.message); }
 }
 

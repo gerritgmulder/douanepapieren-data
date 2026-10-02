@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", bestand: "dealerportaal.html", soort: "beter",
+      titel: "Passion Partners Beheer vernieuwd",
+      wat: "Nieuwe bestellingen verschijnen vanzelf, zonder het Dashboard opnieuw te starten. De aanvragen zonder aanbetaling kun je in één keer selecteren en verwijderen, de knoppen zijn duidelijker, en met 'Nu ophalen uit Logic4' komen nieuwe modellen en kleuren in het portaal (dat gebeurt ook vanzelf, vier keer per dag)."
+    },
+    {
+      datum: "2026-10-02", bestand: "dealerportaal.html", soort: "hersteld",
+      titel: "Vracht en verpakking goed in Logic4",
+      wat: "Een bestelling uit het partnerportaal komt in Logic4 nu met dezelfde verdeling als de partner ziet: de spa tegen de partnerprijs, en vracht en verpakking samen op de regel Freight & packing. De partner krijgt bij het bestellen ook zelf een bevestiging met de betaallink."
+    },
+    {
       datum: "2026-10-02", groep: "partnerportaal-kijk", soort: "beter",
       titel: "Passion Partners op het eigen adres",
       wat: "De tegel Passion Partners opent nu partner.passionspas.com, hetzelfde adres dat de partners gebruiken."
