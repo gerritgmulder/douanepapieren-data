@@ -756,6 +756,7 @@ async function sendLink(){
      wachtwoord te zetten hoort hier ook niet: er is geen dealeraccount om een
      wachtwoord aan te hangen. */
   window.isFonteyn = !!me.data.fonteyn;
+  window.isBeheer = !!me.data.beheer;
   window.meekijken = !!me.data.medewerker;
   if (me.data.medewerker) {
     $("pwBtn").classList.add("hidden");
@@ -2390,6 +2391,7 @@ async function vrachtHaalPrijs(){
   vrachtBezig = false;
 }
 function tekenVracht(ov){
+  const tot = ov.querySelector("#cartTotaal"); if (tot) tot.innerHTML = cartTotaalHtml();
   const doel = ov.querySelector("#vrachtPaneel");
   if (!doel) return;
   const spas = cart.filter(r => r.soort === "spa");
@@ -2567,6 +2569,33 @@ function geld(n){
   const usd = window.displayCurrency === "USD";
   return (usd ? "$ " : "€ ") + Number(n).toLocaleString(usd ? "en-US" : "de-DE", {minimumFractionDigits:2, maximumFractionDigits:2});
 }
+/* Het totaal in de mand. Een eigen functie, zodat het meeloopt zodra de
+   partner bezorgen kiest of de vrachtprijs binnenkomt. Gerrit (2 okt 2026):
+   "ik kies voor bezorging en dat is 165 euro maar ik zie links 'Delivery
+   collect, € 0,00', en dat moet veranderen zodra ik het aanklik." */
+function cartTotaalHtml(){
+          /* Eén totaal onderaan. Gerrit (14 sep 2026): "er komt nergens een
+             totaalbedrag zichtbaar ... geen totaal opgeteld. Maak dat." En bij
+             een container: zeggen dat de zeevracht er nog bij komt en apart
+             wordt opgegeven, want daar stond helemaal niets. */
+          const goederen = cartTotaal();
+          const bezorg = (levering !== "container" && vracht.wijze === "bezorgen" && vrachtUitkomst && vrachtUitkomst.ok) ? Number(vrachtUitkomst.totaal) : 0;
+          const e = (n) => "\u20ac " + Number(n).toLocaleString("de-DE", {minimumFractionDigits:2, maximumFractionDigits:2});
+          let h = `<table class="prijs" style="margin-top:10px;margin-left:auto;width:auto;min-width:260px;"><tbody>
+            <tr><td>Goods</td><td class="n">${e(goederen)}</td></tr>`;
+          if (levering === "container")
+            h += `<tr><td>Sea freight</td><td class="n" style="color:var(--muted);font-weight:400;">quoted separately</td></tr>`;
+          else if (vracht.wijze === "bezorgen")
+            h += `<tr><td>Delivery</td><td class="n">${bezorg ? e(bezorg) : '<span style="color:var(--muted);font-weight:400;">see below</span>'}</td></tr>`;
+          else
+            h += `<tr><td>Delivery</td><td class="n">collect, \u20ac 0,00</td></tr>`;
+          h += `<tr style="border-top:2px solid var(--ink);"><td><b>Total excl. VAT</b></td><td class="n"><b style="font-size:16px;">${e(goederen + bezorg)}${levering === "container" ? " + sea freight" : ""}</b></td></tr>
+            </tbody></table>`;
+          if (levering === "container")
+            h += `<p class="lead" style="margin:6px 0 0;text-align:right;font-size:12px;">Spa prices only, straight from the factory: no warehouse freight surcharge and no packing fee.
+                  The sea freight for a full container depends on the destination; we quote it before you pay anything beyond the deposit.</p>`;
+          return h;
+}
 function openCart(opties){
   const oc = opties || {};
   const bestaand = document.getElementById("cartOv"); if (bestaand) bestaand.remove();
@@ -2620,29 +2649,7 @@ function openCart(opties){
           <thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Total</th><th></th></tr></thead>
           <tbody>${rijen}</tbody>
         </table></div>
-        ${(() => {
-          /* Eén totaal onderaan. Gerrit (14 sep 2026): "er komt nergens een
-             totaalbedrag zichtbaar ... geen totaal opgeteld. Maak dat." En bij
-             een container: zeggen dat de zeevracht er nog bij komt en apart
-             wordt opgegeven, want daar stond helemaal niets. */
-          const goederen = cartTotaal();
-          const bezorg = (levering !== "container" && vracht.wijze === "bezorgen" && vrachtUitkomst && vrachtUitkomst.ok) ? Number(vrachtUitkomst.totaal) : 0;
-          const e = (n) => "\u20ac " + Number(n).toLocaleString("de-DE", {minimumFractionDigits:2, maximumFractionDigits:2});
-          let h = `<table class="prijs" style="margin-top:10px;margin-left:auto;width:auto;min-width:260px;"><tbody>
-            <tr><td>Goods</td><td class="n">${e(goederen)}</td></tr>`;
-          if (levering === "container")
-            h += `<tr><td>Sea freight</td><td class="n" style="color:var(--muted);font-weight:400;">quoted separately</td></tr>`;
-          else if (vracht.wijze === "bezorgen")
-            h += `<tr><td>Delivery</td><td class="n">${bezorg ? e(bezorg) : '<span style="color:var(--muted);font-weight:400;">see below</span>'}</td></tr>`;
-          else
-            h += `<tr><td>Delivery</td><td class="n">collect, \u20ac 0,00</td></tr>`;
-          h += `<tr style="border-top:2px solid var(--ink);"><td><b>Total excl. VAT</b></td><td class="n"><b style="font-size:16px;">${e(goederen + bezorg)}${levering === "container" ? " + sea freight" : ""}</b></td></tr>
-            </tbody></table>`;
-          if (levering === "container")
-            h += `<p class="lead" style="margin:6px 0 0;text-align:right;font-size:12px;">Spa prices only, straight from the factory: no warehouse freight surcharge and no packing fee.
-                  The sea freight for a full container depends on the destination; we quote it before you pay anything beyond the deposit.</p>`;
-          return h;
-        })()}
+        <div id="cartTotaal">${cartTotaalHtml()}</div>
         <label style="font-size:12px;color:var(--muted);display:block;margin:14px 0 5px;">Notes (options, delivery, …)</label>
         <textarea id="cartNote" rows="3" placeholder="Anything we should know?"></textarea>
         </div>
@@ -2698,27 +2705,28 @@ function openCart(opties){
 
      Voor de proefaccounts van Fonteyn blijven de cent en het eigen bedrag wel
      staan, anders is de keten niet te testen. */
-  const betaalopties = alleOpVoorraad
-    ? [{ waarde: "full", tekst: "Pay in full", bij: "your spa is ready in Uddel" }]
-    : [{ waarde: "deposit",
-         tekst: spaRegels.length ? "30% deposit on the spas" : "Pay in full",
-         bij: spaRegels.length ? "parts in full" : "" }];
-  /* Volledig betalen alleen voor wat er nu in Uddel staat. Gerrit (2 okt
-     2026): "Geen mens gaat volledig betalen bij het bestellen of reserveren
-     van iets wat besteld moet worden." Moet er iets komen, dan is er alleen
-     de aanbetaling. */
-  /* De testbetaling alleen aan wie ook écht kan bestellen. Een meekijkende
-     collega mag niets wijzigen (de worker weigert elke POST), dus die optie
-     aanbieden levert alleen een foutmelding op. */
-  /* Eigen aanbetalingsbedrag, alleen voor adviseurs van Passion (een
-     portaalsessie op een @fonteyn.nl-account). Gerrit (14 sep 2026): "Dealers
-     moeten deze optie nooit mogen zien." De worker weigert het bedrag ook van
-     een partner, dus dit is geen sier maar het echte hek staat aan de
-     andere kant. */
-  if (window.isFonteyn && !window.meekijken && spaRegels.length)
-    betaalopties.push({ waarde: "eigen", tekst: "Own deposit amount", bij: "Fonteyn only" });   // proefaccounts
-  if (window.isFonteyn && !window.meekijken)
-    betaalopties.push({ waarde: "cent", tekst: "TEST \u2014 pay 1 cent", bij: "Fonteyn only" });
+  /* WIE MAG HOE BETALEN (Gerrit, 2 okt 2026)
+     - Volledig betalen alleen als alles nu in Uddel staat én het uit Uddel
+       komt (afhalen of bezorgen). Een container is altijd 30% aanbetalen:
+       "Een container is nooit meer dan 30% aanbetalen."
+     - Spa-adviseurs (een @fonteyn.nl-account) kunnen altijd een eigen bedrag
+       kiezen, plus de testbetaling van een cent.
+     - Fonteynbot krijgt altijd alles: volledig, 30%, een cent en een eigen
+       bedrag, wat er ook in de mand ligt.
+     De worker houdt dezelfde regels aan; dit is wat er te kiezen valt. */
+  const uitUddelNu = alleOpVoorraad && levering !== "container";
+  const beheer = !!window.isBeheer && !window.meekijken;
+  const adviseur = !!window.isFonteyn && !window.meekijken;
+  const VOL = { waarde: "full", tekst: "Pay in full", bij: uitUddelNu ? "your spa is ready in Uddel" : "" };
+  const AANBET = { waarde: "deposit", tekst: "30% deposit on the spas", bij: "parts in full" };
+  const EIGEN = { waarde: "eigen", tekst: "Own deposit amount", bij: "Fonteyn only" };
+  const CENT = { waarde: "cent", tekst: "TEST \u2014 pay 1 cent", bij: "Fonteyn only" };
+  let betaalopties;
+  if (!spaRegels.length) betaalopties = [{ waarde: "deposit", tekst: "Pay in full", bij: "" }];
+  else if (beheer) betaalopties = uitUddelNu ? [VOL, AANBET] : [AANBET, VOL];
+  else betaalopties = uitUddelNu ? [VOL] : [AANBET];
+  if ((adviseur || beheer) && spaRegels.length) betaalopties.push(EIGEN);
+  if (adviseur || beheer) betaalopties.push(CENT);
   if (cart.length) maakKiezer(ov.querySelector("#cartPay"), betaalopties, betaalopties[0].waarde, (w) => {
     const veld = ov.querySelector("#cartEigen");
     if (!veld) return;

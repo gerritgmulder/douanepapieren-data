@@ -925,6 +925,12 @@ async function dpHandleSpaPhoto(env, url) {
     "Cache-Control": "public, max-age=86400", "X-Bron": "specsheet" } });
 }
 
+/* De beheerlaag in het portaal: Fonteynbot. Krijgt in de mand elke
+   betaalkeuze, zodat elke route te testen is. */
+function dpIsBeheerSessie(sess) {
+  return String((sess && sess.email) || "").toLowerCase() === "fonteynbot@fonteyn.nl";
+}
+
 function dpKleurfotoSleutel(model, code) {
   return "spafoto:" + String(model).toLowerCase() + ":" + String(code).toLowerCase();
 }
@@ -1927,7 +1933,11 @@ async function dpHandleReserve(request, env, sess, url) {
      De proefaccounts van Fonteyn houden hun keuze, anders is de keten met de
      cent en met een eigen bedrag niet te testen. */
   const moetVolledig = alleOpVoorraad && levering !== "container" && !isFonteyn;
-  let payFull = (wantsFull || moetVolledig) && alleOpVoorraad && levering !== "container";
+  /* Fonteynbot mag alles kiezen, ook volledig betalen voor een container of
+     een spa die nog moet komen (Gerrit, 2 okt 2026). Voor iedereen anders
+     alleen bij voorraad in Uddel en levering uit Uddel. */
+  let payFull = dpIsBeheerSessie(sess) ? wantsFull
+    : (wantsFull || moetVolledig) && alleOpVoorraad && levering !== "container";
   /* Eigen aanbetalingsbedrag. Gerrit (14 sep 2026): "Bij ingelogde adviseurs
      van Passion (de spa-adviseurs + Chantal + Dolf) moet de optie zichtbaar
      zijn om zelf een bedrag als aanbetaling te kiezen. Dealers moeten deze
@@ -4726,6 +4736,8 @@ async function handleDealerRoutes(request, env, url) {
         medewerker: !!sess.medewerker,
         // Alleen mensen van Fonteyn zien de testbetaling van één cent.
         fonteyn: /@fonteyn\.nl$/i.test(String(sess.email || "")),
+        // Fonteynbot krijgt in de mand alle betaalkeuzes (Gerrit, 2 okt 2026).
+        beheer: !sess.medewerker && dpIsBeheerSessie(sess),
         region: (dealer && dealer.region) || "EU" });
     }
     if (p === "/dealers/api/setpassword" && request.method === "POST") return dpHandleSetPassword(request, env, sess);
