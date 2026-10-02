@@ -880,7 +880,7 @@ async function dpHandleSpaPhoto(env, url) {
      portaal er "photo in this colour to follow" bij kan zetten. */
   const code = String(url.searchParams.get("code") || "").trim();
   if (code) {
-    const perKleur = await env.FONTEYN_DATA.get(dpKleurfotoSleutel(model, code), { type: "arrayBuffer" });
+    const perKleur = await dpKleurfotoLees(env, model, code);
     if (perKleur && perKleur.byteLength > 0) {
       return new Response(perKleur, { status: 200, headers: {
         ...corsHeaders, "Content-Type": "image/jpeg",
@@ -929,6 +929,24 @@ function dpKleurfotoSleutel(model, code) {
   return "spafoto:" + String(model).toLowerCase() + ":" + String(code).toLowerCase();
 }
 
+/* FOTO PER KLEUR IN D1
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (2 okt 2026): Gretha gaat van alle spa-modellen en kleuren de
+   foto's in één keer inslepen. Dat zijn er tot 775 (model x kleur), en elke
+   foto in KV is een schrijfactie; KV heeft er 1.000 per dag, gedeeld met de
+   bestellingen en reserveringen. Eén middag foto's zou het portaal dan
+   stilleggen. In D1 zijn het er 100.000 per dag. Foto's die nog in KV staan
+   (van vóór vandaag) blijven gewoon gelezen worden. */
+async function dpKleurfotoLees(env, model, code) {
+  const sleutel = dpKleurfotoSleutel(model, code);
+  try {
+    const rij = await env.ACTIVITEIT.prepare("SELECT data FROM spafoto WHERE sleutel = ?1").bind(sleutel).first();
+    if (rij && rij.data) return rij.data instanceof ArrayBuffer ? rij.data : new Uint8Array(rij.data).buffer;
+  } catch (e) {}
+  const kv = await env.FONTEYN_DATA.get(sleutel, { type: "arrayBuffer" });
+  return kv && kv.byteLength ? kv : null;
+}
+
 /* GET /dealers/admin/kleurfotos?model=X - welke artikelcodes van dit model
    een eigen kleurfoto hebben. */
 async function dpAdminKleurfotos(env, url) {
@@ -936,10 +954,14 @@ async function dpAdminKleurfotos(env, url) {
   if (!model) return reply(400, { ok: false, error: "geen model" });
   const prefix = "spafoto:" + model.toLowerCase() + ":";
   const codes = [];
+  try {
+    const rs = await env.ACTIVITEIT.prepare("SELECT code FROM spafoto WHERE model = ?1").bind(model.toLowerCase()).all();
+    for (const r of (rs.results || [])) codes.push(String(r.code));
+  } catch (e) {}
   let cursor;
   do {
     const lijst = await env.FONTEYN_DATA.list({ prefix, cursor });
-    for (const k of lijst.keys) codes.push(k.name.slice(prefix.length));
+    for (const k of lijst.keys) { const c = k.name.slice(prefix.length); if (!codes.includes(c)) codes.push(c); }
     cursor = lijst.list_complete ? null : lijst.cursor;
   } while (cursor);
   return reply(200, { ok: true, model, codes });
@@ -958,6 +980,7 @@ async function dpAdminKleurfoto(request, env) {
   if (!model || !code) return reply(400, { ok: false, error: "model en code vereist" });
   const sleutel = dpKleurfotoSleutel(model, code);
   if (b.verwijder === true) {
+    try { await env.ACTIVITEIT.prepare("DELETE FROM spafoto WHERE sleutel = ?1").bind(sleutel).run(); } catch (e) {}
     await env.FONTEYN_DATA.delete(sleutel);
     return reply(200, { ok: true, verwijderd: true });
   }
@@ -968,7 +991,9 @@ async function dpAdminKleurfoto(request, env) {
   if (ruw.length > 1200000) return reply(413, { ok: false, error: "foto te groot (max 1 MB)" });
   const bytes = new Uint8Array(ruw.length);
   for (let i = 0; i < ruw.length; i++) bytes[i] = ruw.charCodeAt(i);
-  await env.FONTEYN_DATA.put(sleutel, bytes);
+  await env.ACTIVITEIT.prepare("INSERT OR REPLACE INTO spafoto (sleutel, model, code, data, bytes, ts, door) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+    .bind(sleutel, model.toLowerCase(), code.toLowerCase(), bytes, bytes.length, new Date().toISOString(),
+          String(request.headers.get("X-Fonteyn-User") || "").toLowerCase().slice(0, 80)).run();
   return reply(200, { ok: true, bytes: bytes.length });
 }
 
@@ -4612,7 +4637,7 @@ async function handleDealerRoutes(request, env, url) {
     if (p === "/dealers/admin/kleurfoto" && request.method === "GET") {
       // De miniatuur in Beheer. Een <img> kan geen beheerkoppen meesturen,
       // dus de tegel haalt hem met fetch op en zet hem als blob neer.
-      const bytes = await env.FONTEYN_DATA.get(dpKleurfotoSleutel(url.searchParams.get("model") || "", url.searchParams.get("code") || ""), { type: "arrayBuffer" });
+      const bytes = await dpKleurfotoLees(env, url.searchParams.get("model") || "", url.searchParams.get("code") || "");
       if (!bytes || !bytes.byteLength) return reply(404, { ok: false, error: "geen foto" });
       return new Response(bytes, { status: 200, headers: { ...corsHeaders, "Content-Type": "image/jpeg", "Cache-Control": "no-store" } });
     }

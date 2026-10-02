@@ -224,6 +224,21 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
 #mailCard summary::after{content:"\25BE";margin-left:auto;color:var(--muted);font-size:13px}
 #mailCard details[open] summary::after{content:"\25B4"}
 #mailUit{max-height:360px;overflow:auto}
+.sleepvak{margin-top:14px;border:2px dashed #d6d5cf;border-radius:12px;padding:22px 18px;text-align:center;background:#fcfbfa;cursor:pointer;transition:border-color .12s,background .12s;font-size:13.5px;color:var(--ink)}
+.sleepvak:hover,.sleepvak:focus{border-color:var(--fonteyn-green);outline:none}
+.sleepvak.erboven{border-color:var(--fonteyn-green);background:#fdf2f4}
+.sleepvak-icoon{font-size:26px;color:var(--fonteyn-green);line-height:1;margin-bottom:6px}
+.sleepvak-uit{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.5}
+#sleepLijst{margin-top:10px}
+#sleepLijst .sl-kop{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;margin:6px 0 8px}
+#sleepLijst table{width:100%}
+#sleepLijst td{vertical-align:middle}
+#sleepLijst img{width:72px;height:50px;object-fit:cover;border-radius:6px;background:#f3f4f6;display:block}
+#sleepLijst select{font:inherit;font-size:12.5px;padding:5px 6px;border:1px solid var(--border);border-radius:7px;max-width:100%}
+#sleepLijst .sl-naam{font-size:12px;color:var(--muted);overflow-wrap:break-word}
+#sleepLijst .sl-st{font-size:12px;font-weight:600;white-space:nowrap}
+#sleepLijst .slZet:disabled{opacity:.4;cursor:not-allowed}
+#sleepLijst .sl-st.ok{color:var(--ok)} #sleepLijst .sl-st.wacht{color:var(--warn)} #sleepLijst .sl-st.bezig{color:var(--muted)}
 .nieuwlijst{margin:8px 0 0;padding-left:18px;line-height:1.7;font-size:13px}
 .nieuwlijst .tag{display:inline-block;margin-left:6px;font-size:11px;font-weight:600;color:#92400e;background:#fef3c7;border-radius:999px;padding:1px 8px}
 </style>
@@ -387,6 +402,21 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
       <button class="primary" id="bibUpload" type="button">Naar het portaal zetten</button>
     </div>
     <div id="bibMelding" style="font-size:12.5px;margin-top:9px;color:var(--muted)"></div>
+    <!-- Slepen. Gerrit (2 okt 2026): "de mogelijkheid om foto's er naartoe te
+         slepen zodat Gretha van alle spa-modellen en kleuren direct de foto's
+         kan inslepen en ze er direct in staan." Een foto waarvan de naam het
+         model en de kleur noemt, gaat meteen naar Foto per kleur (die ziet
+         een partner bij het reserveren). Twijfelt het scherm, dan kies je het
+         model en de kleur zelf. Een pdf of ander bestand gaat in de map
+         hierboven, met de bestandsnaam als titel. -->
+    <div id="bibSleep" class="sleepvak" tabindex="0" role="button" aria-label="Sleep foto's of bestanden hierheen of klik om ze te kiezen">
+      <div class="sleepvak-icoon" aria-hidden="true">&#8681;</div>
+      <div><b>Sleep foto's en bestanden hierheen</b> of klik om ze te kiezen. Zoveel als je wilt in één keer.</div>
+      <div class="sleepvak-uit">Een foto met het model en de kleur in de naam (bijvoorbeeld <code>Delight Sterling White Grey Oak.jpg</code> of <code>131400.jpg</code>) staat meteen bij die kleur, voor alle uitvoeringen. Andere bestanden gaan in de map hierboven.</div>
+      <input type="file" id="bibSleepInvoer" multiple accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png,.webp" data-fp-mooi="1" hidden>
+    </div>
+    <label style="display:inline-flex;align-items:center;gap:8px;font-size:12.5px;margin-top:8px;cursor:pointer"><input type="checkbox" id="bibFotoOokBib"> Foto's ook als download in de map hierboven zetten</label>
+    <div id="sleepLijst"></div>
     <div style="margin-top:14px">
       <input id="bibZoek" placeholder="zoek in de bibliotheek…" style="min-width:260px;padding:7px">
       <button id="bibAllesUit" type="button" style="margin-left:8px">Alle mappen openklappen</button>
@@ -574,6 +604,180 @@ function kfVerklein(file, max){
     img.src = URL.createObjectURL(file);
   });
 }
+
+/* ── Slepen in de Bibliotheek ────────────────────────────────────────
+   Foto's: model en kleur uit de bestandsnaam halen en meteen bij die kleur
+   zetten, voor elke uitvoering in die kleur (gewoon, IntelliSaver, ...).
+   Twijfel: de regel wacht met het model en de kleur als keuzelijst. */
+const slNorm = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .replace(/['\u2019]s\b/g, "").replace(/['\u2019\u2122\u00ae]/g, "").replace(/&/g, " and ").replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+const slKort = (t) => slNorm(t).replace(/ /g, "");
+/* De kleur van een variant zonder de uitvoering erachter en zonder het woord
+   'trim', zodat "GREY/oak trim | IntelliSaver" en "GREY/oak trim" dezelfde
+   kleur zijn. */
+function slKleurVan(desc){
+  const d = String(desc || "").split("|").map(x => x.trim());
+  return d.length > 1 ? d[1] : "";
+}
+const slKleurSleutel = (k) => slNorm(k).replace(/\btrim\b/g, "").replace(/\s+/g, " ").trim();
+function slKleuren(model){
+  const groepen = new Map();
+  for (const v of (((kfCatalog && kfCatalog.models) || {})[model] || [])) {
+    const kleur = slKleurVan(v.desc) || "Standaard";
+    const k = slKleurSleutel(kleur);
+    if (!groepen.has(k)) groepen.set(k, { sleutel: k, naam: kleur.replace(/\s*\btrim\b/i, " trim").replace(/\s+/g, " "), codes: [] });
+    groepen.get(k).codes.push(String(v.code));
+  }
+  return [...groepen.values()].sort((a, b) => a.naam.localeCompare(b.naam));
+}
+function slHerken(bestandsnaam){
+  const kaal = String(bestandsnaam).replace(/\.[a-z0-9]+$/i, "");
+  const modellen = Object.keys((kfCatalog && kfCatalog.models) || {});
+  // 1. Een artikelcode in de naam
+  for (const nr of (kaal.match(/\d{6}/g) || [])) {
+    for (const m of modellen) {
+      const v = (kfCatalog.models[m] || []).find(x => String(x.code) === nr);
+      if (v) return { model: m, kleur: slKleurSleutel(slKleurVan(v.desc)), zeker: true };
+    }
+  }
+  // 2. Het model: de langste naam die als hele woorden in de bestandsnaam staat
+  const nf = " " + slNorm(kaal) + " ";
+  let model = null;
+  /* "Iceman's" staat in een bestandsnaam als "Icemans" of als "Iceman":
+     beide schrijfwijzen tellen. */
+  const vormen = (m) => [slNorm(m), slNorm(String(m).replace(/['\u2019]/g, ""))];
+  for (const m of modellen) for (const nm of vormen(m)) { if (nm && nf.includes(" " + nm + " ") && (!model || nm.length > slNorm(model).length)) model = m; }
+  if (!model) {
+    const kf = slKort(kaal);
+    for (const m of modellen) for (const km of vormen(m).map(x => x.replace(/ /g, ""))) { if (km.length >= 5 && kf.includes(km) && (!model || km.length > slKort(model).length)) model = m; }
+  }
+  if (!model) return { model: null, kleur: null, zeker: false };
+  // 3. De kleur: hoofdkleur verplicht, de bies erbij in de goede volgorde
+  const rest = slKort(kaal).replace(slKort(model), "");
+  let beste = null, besteScore = 0, gelijkeStand = false;
+  for (const g of slKleuren(model)) {
+    const [basis, bies] = g.sleutel.split(/ with /);
+    if (!basis || !rest.includes(basis.replace(/ /g, ""))) continue;
+    let score = 10;
+    const woorden = String(bies || "").split(" ").filter(Boolean);
+    if (woorden.length && rest.includes(woorden.join(""))) score += 5;
+    else if (woorden.length && woorden.every(w => rest.includes(w))) score += 2;
+    if (score > besteScore) { beste = g; besteScore = score; gelijkeStand = false; }
+    else if (score === besteScore) gelijkeStand = true;
+  }
+  // Eén kleur bij dit model (een ijsbad, een warmtepomp): dan is het die.
+  if (!beste && slKleuren(model).length === 1) return { model, kleur: slKleuren(model)[0].sleutel, zeker: true };
+  if (!beste) return { model, kleur: null, zeker: false };
+  const zelfdeBasis = slKleuren(model).filter(g => g.sleutel.split(/ with /)[0] === beste.sleutel.split(/ with /)[0]).length;
+  return { model, kleur: beste.sleutel, zeker: !gelijkeStand && (besteScore >= 15 || zelfdeBasis === 1) };
+}
+let slTeller = 0;
+function slRij(r){
+  const modellen = Object.keys((kfCatalog && kfCatalog.models) || {}).sort((a, b) => a.localeCompare(b));
+  const kleuren = r.model ? slKleuren(r.model) : [];
+  const klaar = r.stand === "ok";
+  return `<tr data-sl="${r.id}">
+    <td style="width:84px">${r.voorbeeld ? `<img src="${r.voorbeeld}" alt="">` : '<span style="font-size:22px">&#128196;</span>'}</td>
+    <td><div class="sl-naam">${esc(r.naam)}</div>${r.foto && r.stand === "wacht" ? `
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+        <select class="slModel"${klaar ? " disabled" : ""}><option value="">model kiezen…</option>${modellen.map(m => `<option${m === r.model ? " selected" : ""}>${esc(m)}</option>`).join("")}</select>
+        <select class="slKleur"${klaar || !r.model ? " disabled" : ""}><option value="">kleur kiezen…</option>${kleuren.map(g => `<option value="${esc(g.sleutel)}"${g.sleutel === r.kleur ? " selected" : ""}>${esc(g.naam)}${g.codes.length > 1 ? " (" + g.codes.length + " uitvoeringen)" : ""}</option>`).join("")}</select>
+      </div>` : ""}</td>
+    <td class="sl-st ${r.stand === "ok" ? "ok" : r.stand === "wacht" ? "wacht" : "bezig"}">${esc(r.tekst || "")}</td>
+    <td style="white-space:nowrap;text-align:right">${r.foto && r.stand === "wacht" ? `<button class="primary slZet" type="button" style="padding:6px 12px;font-size:12.5px"${r.model && r.kleur ? "" : " disabled"}>Erbij zetten</button>` : ""}</td>
+  </tr>`;
+}
+const slRegels = [];
+function slTeken(){
+  const wacht = slRegels.filter(r => r.stand === "wacht").length, ok = slRegels.filter(r => r.stand === "ok").length;
+  const bezig = slRegels.filter(r => r.stand === "bezig" || r.stand === "rij").length;
+  $("sleepLijst").innerHTML = slRegels.length ? `<div class="sl-kop"><b>${ok} van ${slRegels.length} staan erin</b>${bezig ? `<span style="color:var(--muted)">${bezig} bezig…</span>` : ""}${wacht ? `<span style="color:var(--warn)">${wacht} wachten op een keuze</span>` : ""}
+    ${slRegels.some(r => r.stand === "ok") && !bezig ? `<button class="rmv" id="slWis" type="button">Lijst leegmaken</button>` : ""}</div>
+    <table class="grid"><tbody>${slRegels.map(slRij).join("")}</tbody></table>` : "";
+  const wis = $("slWis"); if (wis) wis.addEventListener("click", () => { for (let i = slRegels.length - 1; i >= 0; i--) if (slRegels[i].stand === "ok") slRegels.splice(i, 1); slTeken(); });
+  $("sleepLijst").querySelectorAll("tr[data-sl]").forEach(tr => {
+    const r = slRegels.find(x => String(x.id) === tr.dataset.sl); if (!r) return;
+    const mSel = tr.querySelector(".slModel"), kSel = tr.querySelector(".slKleur"), zet = tr.querySelector(".slZet");
+    if (mSel) mSel.addEventListener("change", () => { r.model = mSel.value || null; r.kleur = null; slTeken(); });
+    if (kSel) kSel.addEventListener("change", () => { r.kleur = kSel.value || null; slTeken(); });
+    if (zet) zet.addEventListener("click", () => { r.stand = "rij"; r.tekst = "in de rij"; slTeken(); slVolgende(); });
+  });
+}
+let slBezig = 0;
+async function slVolgende(){
+  while (slBezig < 3) {
+    const r = slRegels.find(x => x.stand === "rij"); if (!r) return;
+    r.stand = "bezig"; r.tekst = "bezig…"; slBezig++; slTeken();
+    slVerwerk(r).finally(() => { slBezig--; slTeken(); slVolgende(); });
+  }
+}
+async function slVerwerk(r){
+  try {
+    if (r.foto) {
+      const groep = slKleuren(r.model).find(g => g.sleutel === r.kleur);
+      if (!groep) { r.stand = "wacht"; r.tekst = "kies model en kleur"; return; }
+      const data = r.data || (r.data = await kfVerklein(r.bestand, 1400));
+      for (const code of groep.codes) {
+        const res = await fetch(KF_BASE + "/dealers/admin/kleurfoto", { method: "POST",
+          headers: { ...beheerKoppen(), "Content-Type": "application/json" }, body: JSON.stringify({ model: r.model, code, data }) });
+        const d = await res.json().catch(() => null);
+        if (!res.ok || !d || !d.ok) throw new Error((d && d.error) || ("HTTP " + res.status));
+        kfLokaal[r.model + "|" + String(code).toLowerCase()] = true;
+      }
+      if ($("bibFotoOokBib").checked) await slNaarBibliotheek(r.bestand, r.model + " - " + groep.naam);
+      r.stand = "ok"; r.tekst = r.model + " · " + groep.naam + (groep.codes.length > 1 ? " (" + groep.codes.length + " uitvoeringen)" : "");
+      try { if (window.fpLog) window.fpLog("kleurfoto-gesleept", r.model + " - " + groep.naam); } catch (e) {}
+      if ($("kfModel") && $("kfModel").value === r.model) kleurfotosToon(r.model);
+    } else {
+      const map = await slNaarBibliotheek(r.bestand, r.naam.replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim());
+      r.stand = "ok"; r.tekst = "in " + map;
+    }
+  } catch (e) { r.stand = "wacht"; r.tekst = "vraagt nog een poging: " + (e.message || e); }
+}
+async function slNaarBibliotheek(bestand, titel){
+  const groepen = bibGroepen(), keuze = groepen[Number($("bibGroep").value)];
+  if (!keuze) throw new Error("kies eerst een map");
+  if (bestand.size > 24 * 1024 * 1024) throw new Error("bestand groter dan 24 MB");
+  const map = String(keuze.cat.key || "overig") + "/" + String(keuze.groep.name || "algemeen").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  let id = map + "/" + bibNaam(titel, bestand.name), n = 2;
+  while (bibGroepen().some(g => (g.groep.files || []).some(f => f.id === id))) id = map + "/" + bibNaam(titel + " " + (n++), bestand.name);
+  const r = await fetch("https://fonteyn-data-store.g-mulder.workers.dev/dealers/admin/file?id=" + encodeURIComponent(id),
+    { method: "PUT", headers: { ...beheerKoppen() }, body: bestand });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.ok) throw new Error(j.error || ("HTTP " + r.status));
+  keuze.groep.files = keuze.groep.files || [];
+  keuze.groep.files.push({ id, title: titel, size: bestand.size });
+  docsData.library.updated = new Date().toISOString();
+  await save("dealer-docs", docsData);
+  renderBib();
+  return keuze.label;
+}
+function slVoegToe(lijst){
+  for (const f of lijst) {
+    const foto = /^image\/(jpeg|png|webp)$/.test(f.type) || /\.(jpe?g|png|webp)$/i.test(f.name);
+    const r = { id: ++slTeller, naam: f.name, bestand: f, foto, stand: "rij", tekst: "in de rij" };
+    if (foto) {
+      r.voorbeeld = URL.createObjectURL(f);
+      const h = slHerken(f.name);
+      r.model = h.model; r.kleur = h.kleur;
+      if (!h.zeker || !h.model || !h.kleur) { r.stand = "wacht"; r.tekst = !h.model ? "kies het model en de kleur" : "kies de kleur"; }
+    }
+    slRegels.push(r);
+  }
+  slTeken(); slVolgende();
+}
+(function slStart(){
+  const vak = $("bibSleep"), invoer = $("bibSleepInvoer"); if (!vak) return;
+  vak.addEventListener("click", () => invoer.click());
+  vak.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); invoer.click(); } });
+  invoer.addEventListener("change", () => { slVoegToe([...(invoer.files || [])]); invoer.value = ""; });
+  vak.addEventListener("dragover", (e) => { e.preventDefault(); vak.classList.add("erboven"); });
+  vak.addEventListener("dragleave", () => vak.classList.remove("erboven"));
+  vak.addEventListener("drop", (e) => { e.preventDefault(); vak.classList.remove("erboven"); slVoegToe([...((e.dataTransfer && e.dataTransfer.files) || [])]); });
+  // Laat je ernaast los, dan opent de browser het bestand en is het scherm weg.
+  window.addEventListener("dragover", (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes("Files")) e.preventDefault(); });
+  window.addEventListener("drop", (e) => { if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) e.preventDefault(); });
+})();
 
 async function annuleringenNakijken(){
   const knop = $("annuBtn"); if (!knop) return;
