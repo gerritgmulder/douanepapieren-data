@@ -3862,7 +3862,7 @@ async function dpAdminUitnodigen(request, env, url) {
       'style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;font-size:15px;padding:15px 34px;border-radius:10px;display:inline-block;">Activate your account</a></p>' +
       '<p style="color:#6b7280;font-size:13px;line-height:1.6;margin:0;">The link is valid for 7 days and lets you choose ' +
       'your own password. After that, log in any time at <a href="' + dpPad(env, url) + '" style="color:#c8102e;">' +
-      dpOrigin(env, url).replace(/^https?:\/\//, "") + '/dealers</a>.</p>'),
+      dpPad(env, url).replace(/^https?:\/\//, "") + '</a>.</p>'),
     (accounts.contactEmail || undefined), dpAdviseurVan(accounts, email));
   await dpLogPartner(env, { email, company: dealer.company || "" }, "uitnodiging-verstuurd",
     sent.ok ? "welkomstmail" : "MAIL FAALDE");
