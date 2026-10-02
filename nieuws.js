@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", bestand: "koeien.html", soort: "nieuw",
+      titel: "Stamboom: waarschuwing voor inteelt",
+      wat:   "Een vrouwtje van een jaar of ouder dat in dezelfde wei loopt als haar vader kleurt zacht rood, in de stamboom en in de tabel. Ga er met de muis op staan voor de uitleg. De lijnen zijn dikker en lopen achter de kaarten langs."
+    },
+    {
       datum: "2026-10-02", bestand: "koeien.html", soort: "beter",
       titel: "Stamboom: eigen kleur voor Cowboy en Outlaw",
       wat:   "De vaderlijn van L.G. Mr. Cowboy is nu groen en die van Mr. Outlaw donkerblauw, zodat je hun kalveren in één oogopslag ziet. De uitleg staat bovenaan de stamboom."

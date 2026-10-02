@@ -198,7 +198,7 @@
   .year-h{grid-row:1;text-align:center;color:var(--muted);font-size:12px;
     text-transform:uppercase;letter-spacing:.5px;font-weight:600;
     align-self:center;padding-bottom:6px;border-bottom:1px solid var(--line)}
-  .stamboom-lines{position:absolute;left:0;top:0;pointer-events:none;z-index:3;overflow:visible}
+  .stamboom-lines{position:absolute;left:0;top:0;pointer-events:none;z-index:1;overflow:visible}
 
   /* Edit-ouders-knop op tree-card */
   .tree-card .tc-edit-parents{position:absolute;top:3px;left:3px;
@@ -253,6 +253,11 @@
   .tree-card.gender-v{border-left-color:var(--v)}
   .tree-card.gender-m{border-left-color:var(--m)}
   .tree-card.deceased{opacity:.5;background:#faf7f0}
+  .tree-card.gevaar{background:#fdeaea;border-color:#efb3b3;box-shadow:0 0 0 2px #f6caca}
+  .tree-card .tc-gevaar{align-self:flex-start;margin-top:2px;font-size:10.5px;font-weight:600;
+    color:#b03a3a;background:#fff;border:1px solid #efb3b3;border-radius:999px;padding:1px 7px}
+  tbody tr.gevaar td{background:#fdeaea}
+  tbody tr.gevaar:hover td{background:#fbdede}
   .tree-card.gone{opacity:.7}
   .tree-card .tc-head{display:flex;align-items:center;gap:6px}
   .tree-card .tc-gender{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;line-height:1.4}
@@ -871,9 +876,10 @@ function renderTable(){
   const rows = state.cows.filter(r=>matches(r,f));
   $empty.classList.toggle("hidden", rows.length!==0);
   $tbody.innerHTML = rows.map(r=>{
-    const rowCls = r.status==="overleden"?"deceased":r.status==="afgemeld"?"gone":"";
+    const gevaar = inteeltGevaar(r);
+    const rowCls = (r.status==="overleden"?"deceased":r.status==="afgemeld"?"gone":"") + (gevaar ? " gevaar" : "");
     return `
-    <tr class="${rowCls}" data-id="${r.id}">
+    <tr class="${rowCls}" data-id="${r.id}"${gevaar ? ` title="${escapeHtml(gevaar)}"` : ""}>
       <td class="editable" data-f="naam"><strong>${escapeHtml(r.naam)}</strong></td>
       <td class="editable tag" data-f="tag">${escapeHtml(r.tag)}</td>
       <td>
@@ -1030,6 +1036,34 @@ function zetDubbeleUitElkaar(){
   return veranderd;
 }
 
+/* Inteeltgevaar: een vrouwtje van een jaar of ouder dat bij Dolf in dezelfde
+   wei loopt als haar eigen vader (die er ook nog is). Geboortedatum mag
+   dd/mm/jjjj, mm/jjjj of alleen jjjj zijn; bij een onvolledige datum rekenen
+   we met het begin van die maand of dat jaar, dus eerder te vroeg dan te laat. */
+function geboorteDatum(geb){
+  const s = String(geb || "").trim();
+  let m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.]((?:19|20)\d\d)$/);
+  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+  m = s.match(/^(\d{1,2})[\/\-.]((?:19|20)\d\d)$/);
+  if (m) return new Date(+m[2], +m[1] - 1, 1);
+  m = s.match(/((?:19|20)\d\d)/);
+  if (m) return new Date(+m[1], 0, 1);
+  return null;
+}
+function inteeltGevaar(c){
+  if (!c || c.geslacht !== "V" || c.status !== "bij-dolf") return null;
+  const geb = geboorteDatum(c.geboorte);
+  if (!geb) return null;
+  const jaarOud = new Date(geb); jaarOud.setFullYear(jaarOud.getFullYear() + 1);
+  if (new Date() < jaarOud) return null;
+  const rel = state.relations.find(r => r.child === c.id);
+  const vader = rel && rel.father && cowById(rel.father);
+  if (!vader || vader.status !== "bij-dolf") return null;
+  const wei = c.locatie || "";
+  if (!wei || wei === "—" || wei !== vader.locatie) return null;
+  return `Let op inteelt: ${c.naam} is ouder dan een jaar en dus vruchtbaar, en loopt in dezelfde wei (${wei}) als haar vader ${vader.naam}. Zet een van beiden apart.`;
+}
+
 /* Add cow */
 const $addbar = document.getElementById("addbar");
 const $aMother = document.getElementById("a-mother");
@@ -1144,6 +1178,8 @@ function renderStamboom(){
     const el = document.createElement("div");
     el.className = "tree-card " + (c.geslacht==="V"?"gender-v":c.geslacht==="M"?"gender-m":"") +
       (c.status==="overleden"?" deceased":c.status==="afgemeld"?" gone":"");
+    const gevaar = inteeltGevaar(c);
+    if (gevaar) el.className += " gevaar";
     el.style.gridColumn = col;
     el.style.gridRow = (row + 1); // +1 because row 1 is header
     el.dataset.id = c.id;
@@ -1160,7 +1196,8 @@ function renderStamboom(){
         tipParts.push("Vader: "  + (f ? f.naam : "(onbekend)"));
       }
     }
-    if (tipParts.length) el.title = tipParts.join(" · ");
+    if (gevaar) tipParts.unshift(gevaar);
+    if (tipParts.length) el.title = tipParts.join("\n");
     const ox = (typeof c.photoOffsetX === "number") ? c.photoOffsetX : 50;
     const oy = (typeof c.photoOffsetY === "number") ? c.photoOffsetY : 50;
     const photoHtml = c.photo
@@ -1176,6 +1213,7 @@ function renderStamboom(){
       <div class="tc-tag" data-f="tag" title="Klik om te bewerken">${escapeHtml(c.tag||"—")}</div>
       <div class="tc-meta" data-f="geboorte" title="Klik om te bewerken">${escapeHtml(c.geboorte||"???")}</div>
       ${c.aangemeld==="nee" ? `<span class="tc-badge reg-nee">aanmelding open</span>`:""}
+      ${gevaar ? `<span class="tc-gevaar">⚠ inteeltgevaar</span>`:""}
       ${c.status==="afgemeld" ? `<span class="tc-status s-afgemeld">afgemeld</span>`
         : c.status==="overleden" ? `<span class="tc-status s-overleden">overleden</span>` : ""}`;
     $grid.appendChild(el);
@@ -1336,9 +1374,9 @@ function drawPath(fromR, toR, type, kleur){
   p.setAttribute("d", d);
   p.setAttribute("fill","none");
   p.setAttribute("stroke", kleur || (type==="mother" ? "var(--v-line)" : "var(--m-line)"));
-  p.setAttribute("stroke-width","2");
-  p.setAttribute("opacity","0.85");
-  if(type==="father") p.setAttribute("stroke-dasharray","5 4");
+  p.setAttribute("stroke-width","3.5");
+  p.setAttribute("opacity","0.9");
+  if(type==="father") p.setAttribute("stroke-dasharray","7 5");
   $svg.appendChild(p);
 }
 
