@@ -121,6 +121,13 @@
   td select{background:transparent;border:1px solid transparent;padding:2px 4px;
     font:inherit;color:inherit;border-radius:4px}
   td select:hover{border-color:var(--line);background:#fff}
+  .ouders-knop{background:transparent;border:1px solid transparent;border-radius:6px;padding:3px 6px;
+    font:inherit;font-size:12.5px;color:inherit;cursor:pointer;text-align:left;line-height:1.35}
+  .ouders-knop:hover{border-color:var(--line);background:#fff}
+  .ouders-knop span{display:block;white-space:nowrap}
+  .ouders-knop .o-m::before{content:"♀ ";color:#c2477a}
+  .ouders-knop .o-v::before{content:"♂ ";color:#3a6ea5}
+  .ouders-knop .o-leeg{color:var(--accent)}
   td .del{background:transparent;border:1px solid var(--line);color:var(--muted);
     border-radius:6px;padding:3px 8px;cursor:pointer;font-size:12px}
   td .del:hover{color:var(--bad);border-color:var(--bad)}
@@ -399,6 +406,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
             <th>Status</th>
             <th>Aangemeld</th>
             <th>Locatie</th>
+            <th>Ouders</th>
             <th>Opmerking</th>
             <th></th>
           </tr>
@@ -846,6 +854,16 @@ function renderStats(){
     <div class="stat"><div class="n" style="color:var(--neutral)">${over}</div><div class="l">Overleden/geslacht</div></div>`;
 }
 
+/* Knop met de ouders van een koe; klik opent het venster "Ouders bewerken". */
+function oudersKnop(id){
+  const rel = state.relations.find(r => r.child === id) || {};
+  const m = rel.mother && cowById(rel.mother), v = rel.father && cowById(rel.father);
+  const tekst = (m || v)
+    ? `<span class="o-m">${escapeHtml(m ? m.naam : "?")}</span><span class="o-v">${escapeHtml(v ? v.naam : "?")}</span>`
+    : `<span class="o-leeg">+ ouders kiezen</span>`;
+  return `<button type="button" class="ouders-knop" data-edit-parents="${escapeHtml(id)}" title="Moeder en vader kiezen">${tekst}</button>`;
+}
+
 function renderTable(){
   const f = currentFilters();
   const rows = state.cows.filter(r=>matches(r,f));
@@ -879,6 +897,7 @@ function renderTable(){
           ${["Privé (6257)","Mosselweg (0750)","—"].map(l=>`<option value="${l}" ${l===r.locatie?"selected":""}>${l}</option>`).join("")}
         </select>
       </td>
+      <td>${oudersKnop(r.id)}</td>
       <td class="editable" data-f="opmerking" style="max-width:360px">${escapeHtml(r.opmerking)}</td>
       <td class="actions"><button class="del" title="Verwijderen">✕</button></td>
     </tr>`;
@@ -913,6 +932,8 @@ function renderCards(){
 
 /* ============ Dashboard interactions ============ */
 $tbody.addEventListener("click",(e)=>{
+  const ouders = e.target.closest(".ouders-knop");
+  if(ouders){ openEditParents(ouders.dataset.editParents); return; }
   const del = e.target.closest("button.del");
   if(del){
     const tr = del.closest("tr"); const id = tr.dataset.id;
@@ -982,6 +1003,31 @@ document.querySelectorAll(".view-toggle button").forEach(b=>{
   });
 });
 
+/* Stamboom-plek: kolom 2 = voor 2021, kolom 3 = 2021, 4 = 2022, enz.
+   Zonder herkenbaar jaar komt de koe in de kolom van dit jaar. */
+function kolomVoorGeboorte(geb){
+  const m = String(geb || "").match(/(19|20)\d\d/);
+  const jaar = m ? +m[0] : new Date().getFullYear();
+  return jaar < 2021 ? 2 : 3 + (jaar - 2021);
+}
+function vrijePlek(col, zonder){
+  const bezet = new Set(state.cows.filter(c => c !== zonder && c.tree && c.tree.col === col).map(c => c.tree.row));
+  let row = 1; while (bezet.has(row)) row++;
+  return { col, row };
+}
+/* Twee koeien op hetzelfde vakje: de laatst toegevoegde schuift naar het
+   eerste vrije vakje in dezelfde kolom. Zo verdwijnt er nooit een kaart. */
+function zetDubbeleUitElkaar(){
+  const gezien = new Set(); let veranderd = false;
+  for (const c of state.cows) {
+    if (!c.tree || !c.tree.col) { c.tree = vrijePlek(kolomVoorGeboorte(c.geboorte), c); veranderd = true; }
+    const k = c.tree.col + "/" + c.tree.row;
+    if (gezien.has(k)) { c.tree = vrijePlek(c.tree.col, c); veranderd = true; }
+    gezien.add(c.tree.col + "/" + c.tree.row);
+  }
+  return veranderd;
+}
+
 /* Add cow */
 const $addbar = document.getElementById("addbar");
 const $aMother = document.getElementById("a-mother");
@@ -1031,8 +1077,8 @@ document.getElementById("a-save").addEventListener("click",()=>{
     aangemeld: document.getElementById("a-reg").value,
     locatie: document.getElementById("a-loc").value,
     opmerking: document.getElementById("a-note").value.trim(),
-    tree: {col:8, row:1},
   };
+  row.tree = vrijePlek(kolomVoorGeboorte(row.geboorte));
   state.cows.push(row);
   // Voeg relations toe als ouders zijn opgegeven. Eén relation per ouder-paar
   // zodat het bestaande model (child + mother + father) bewaard blijft.
@@ -1080,6 +1126,15 @@ const $inner = document.getElementById("stamboom-inner");
 function renderStamboom(){
   // remove old cards (keep year headers)
   [...$grid.querySelectorAll(".tree-card")].forEach(e=>e.remove());
+  // Een kolom per geboortejaar; na 2026 groeit de stamboom vanzelf mee.
+  const kolommen = Math.max(8, ...state.cows.map(c => (c.tree && c.tree.col) || 1));
+  $grid.style.gridTemplateColumns = `repeat(${kolommen}, 195px)`;
+  [...$grid.querySelectorAll(".year-h.extra")].forEach(e=>e.remove());
+  for (let k = 9; k <= kolommen; k++) {
+    const h = document.createElement("div");
+    h.className = "year-h extra"; h.style.gridColumn = k; h.textContent = String(2021 + k - 3);
+    $grid.appendChild(h);
+  }
 
   for(const c of state.cows){
     const row = (c.tree && c.tree.row) ? c.tree.row : 1;
@@ -1510,6 +1565,7 @@ window.addEventListener("resize",()=>{
 // Initial load: eerst state uit KV halen, daarna renderen.
 async function init(){
   await loadStateFromKV();
+  if (zetDubbeleUitElkaar()) saveState();
   render();
 }
 init();

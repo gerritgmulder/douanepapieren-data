@@ -51,6 +51,11 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-02", bestand: "koeien.html", soort: "beter",
+      titel: "Koeien bij Dolf: ouders kiezen en elke koe in de stamboom",
+      wat:   "In de tabel staat nu een kolom Ouders: klik erop om moeder en vader te kiezen, ook bij koeien die er al in staan. Een nieuwe koe krijgt in de stamboom meteen een eigen plek bij haar geboortejaar. Angelina staat er weer bij."
+    },
+    {
       datum: "2026-10-02", groep: "dealerportaal", soort: "nieuw",
       titel: "Passion Partners in vijf talen, Beheer in het Engels",
       wat: "Passion Partners is er nu in het Engels, Nederlands, Duits, Frans en Italiaans: rechtsboven kiest een partner zijn taal, en de handleiding bij elke spa komt mee in die taal. Passion Partners Beheer is helemaal Engels als je rechtsboven EN aanzet."
