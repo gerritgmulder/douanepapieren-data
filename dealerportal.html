@@ -34,6 +34,54 @@
   header #taalKeuze{width:auto!important;flex:0 0 auto;min-width:0;font:inherit;font-size:12px;font-weight:700;padding:6px 8px;border:1px solid var(--border);border-radius:6px;background:#fff;color:var(--ink);cursor:pointer}
   /* Even niets tonen tot de vertaling er is, anders flitst eerst het Engels. */
   html.pp-vertalen body{visibility:hidden}
+  /* ── Passion Code: tabje links en de lade ─────────────────────────── */
+  #pcStulp{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:900;background:var(--red);color:#fff;border:0;
+    border-radius:0 10px 10px 0;padding:16px 9px;font:700 12.5px/1.2 Montserrat,system-ui,sans-serif;cursor:pointer;
+    writing-mode:vertical-rl;rotate:180deg;letter-spacing:.05em;box-shadow:2px 0 12px rgba(0,0,0,.18);display:flex;align-items:center;gap:8px}
+  #pcStulp:hover{background:var(--red-dark)}
+  #pcLade{position:fixed;top:0;left:0;height:100%;width:880px;max-width:96vw;z-index:950;background:#fff;
+    box-shadow:8px 0 30px rgba(0,0,0,.22);transform:translateX(-102%);transition:transform .25s ease;display:flex;flex-direction:column}
+  #pcLade.uit{transform:translateX(0)}
+  #pcKop{background:var(--red);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px;flex:none}
+  #pcKop b{font-size:16px} #pcKop span{font-size:12px;opacity:.85}
+  #pcDicht{margin-left:auto;background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:7px;padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+  #pcTabs{display:flex;gap:6px;padding:10px 16px 0;border-bottom:1px solid var(--border);flex:none;flex-wrap:wrap}
+  .pc-tab{background:transparent;border:0;border-bottom:3px solid transparent;padding:8px 10px;font:700 13px Montserrat,system-ui,sans-serif;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+  .pc-tab.aan{color:var(--ink);border-bottom-color:var(--red)}
+  #pcBinnen{flex:1;min-height:0;display:flex}
+  #pcNav{flex:0 0 220px;border-right:1px solid var(--border);overflow-y:auto;padding:12px 8px}
+  #pcNav button{display:block;width:100%;text-align:left;background:transparent;border:0;border-radius:7px;padding:8px 10px;font:600 12.5px/1.35 Montserrat,system-ui,sans-serif;color:var(--ink);cursor:pointer}
+  #pcNav button:hover{background:#f6f6f8} #pcNav button.aan{background:#fdecef;color:var(--red)}
+  #pcTekst{flex:1;min-width:0;overflow-y:auto;padding:18px 26px 40px;font-size:14px;line-height:1.6}
+  #pcTekst h2{font-size:21px;margin:0 0 12px;color:var(--red)}
+  #pcTekst h3{font-size:15px;margin:20px 0 6px;color:#1d3b4f}
+  #pcTekst p{margin:0 0 10px} #pcTekst ul{margin:0 0 10px;padding-left:20px} #pcTekst li{margin:2px 0}
+  #pcTekst blockquote{margin:0 0 14px;padding:10px 14px;border-left:4px solid var(--red);background:#fafafa}
+  table.pc-kv{border-collapse:collapse;width:100%;margin:6px 0 14px;font-size:13.5px}
+  table.pc-kv th,table.pc-kv td{border:1px solid #d8dbe0;padding:7px 10px;vertical-align:top;text-align:left}
+  table.pc-kv th{width:34%;background:#f3f4f6;font-weight:700}
+  table.pc-kv td ul{margin:4px 0 0}
+  .pc-leg{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
+  .pc-leg span{color:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700}
+  table.pc-mat{border-collapse:collapse;width:100%;font-size:12.5px;margin-bottom:14px}
+  table.pc-mat th,table.pc-mat td{border-bottom:1px solid #eceef1;padding:5px 6px;text-align:center}
+  table.pc-mat th:first-child,table.pc-mat td:first-child{text-align:left}
+  table.pc-mat thead th{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);position:sticky;top:-18px;background:#fff}
+  table.pc-mat tr.pc-motief td{background:#f6f6f8;font-weight:700;text-align:left;padding-top:9px}
+  table.pc-mat td.pc-k{border-left:5px solid}
+  .pc-v{color:#1f7a3f;font-weight:800} .pc-o{color:var(--muted);font-weight:700}
+  .pc-toets{max-width:640px}
+  .pc-vraag{font-size:17px;font-weight:700;margin:6px 0 14px}
+  .pc-antw{display:block;width:100%;text-align:left;background:#fff;border:1.5px solid var(--border);border-radius:10px;padding:12px 14px;margin:0 0 8px;font:inherit;font-size:14px;cursor:pointer}
+  .pc-antw:hover{border-color:var(--red)}
+  .pc-antw.goed{border-color:#1f7a3f;background:#e8f6ec} .pc-antw.fout{border-color:#b91c1c;background:#fdecec}
+  .pc-antw:disabled{cursor:default;opacity:1;color:var(--ink)}
+  .pc-voortgang{height:6px;background:#eee;border-radius:3px;overflow:hidden;margin:4px 0 16px}
+  .pc-voortgang div{height:100%;background:var(--red)}
+  .pc-uitleg{font-size:13px;color:var(--muted);margin:8px 0 14px}
+  .pc-score{font-size:44px;font-weight:800;color:var(--red);margin:10px 0 0}
+  @media (max-width:760px){ #pcBinnen{flex-direction:column} #pcNav{flex:none;display:flex;gap:4px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--border);padding:8px}
+    #pcNav button{white-space:nowrap;width:auto} #pcTekst{padding:14px 16px 30px} }
   header #cartBtn:hover{background:var(--red-dark);color:#fff;transform:translateY(-1px)}
   header #cartBtn svg{width:18px;height:18px;flex:0 0 auto}
   header #cartTel{background:#fff;color:var(--red);border-radius:999px;min-width:22px;height:22px;padding:0 6px;
@@ -855,6 +903,7 @@ async function sendLink(){
   window.isFonteyn = !!me.data.fonteyn;
   window.isBeheer = !!me.data.beheer;
   window.meekijken = !!me.data.medewerker;
+  if (window.isFonteyn || window.meekijken) passionCodeStart();
   if (me.data.medewerker) {
     $("pwBtn").classList.add("hidden");
     if (!document.getElementById("meekijkBalk")) {
@@ -877,6 +926,113 @@ async function sendLink(){
   mandNaBetaling();
   loadStock(); loadDocs(); loadMySpas(); loadMyRequests();
 })();
+
+/* ── PASSION CODE ─────────────────────────────────────────────────────────
+   Gerrit (2 okt 2026): de Passion Spas Code of Conduct, "het formuleboek van
+   Passion Spas", in Passion Partners, met een toets erbij (Test your Passion
+   knowledge!), als tabje aan de linkerkant zoals de takenlijst in het
+   Fonteyn Dashboard.
+
+   De inhoud is interne verkoopkennis voor adviseurs, dus het tabje en de
+   inhoud zijn er alleen voor een Fonteyn-account of wie meekijkt; de worker
+   geeft hem aan niemand anders (/dealers/api/code). In vijf talen, met
+   Engels als terugval. De toets kiest elke keer 20 van de vragen in een
+   andere volgorde; de uitslag komt in het logboek. */
+async function passionCodeStart(){
+  if (document.getElementById("pcStulp")) return;
+  const r = await api("/dealers/api/code?taal=" + encodeURIComponent(window.ppTaal || "en"));
+  if (r.status !== 200 || !r.data || !r.data.secties) return;
+  const C = r.data, U = C.ui || {};
+  const stulp = document.createElement("button");
+  stulp.id = "pcStulp"; stulp.type = "button"; stulp.className = "geen-vertaling";
+  stulp.innerHTML = "&#9733; " + esc(U.tab || "Passion Code");
+  const lade = document.createElement("aside");
+  lade.id = "pcLade"; lade.className = "geen-vertaling"; lade.setAttribute("aria-label", C.titel || "Code of Conduct");
+  lade.innerHTML = `<div id="pcKop"><div><b>${esc(C.titel)}</b><br><span>${esc(C.ondertitel || "")}</span></div>
+      <button id="pcDicht" type="button">${esc(U.sluiten || "Close")}</button></div>
+    <div id="pcTabs"><button class="pc-tab aan" data-t="lezen" type="button">${esc(U.lezen)}</button>
+      <button class="pc-tab" data-t="toets" type="button">${esc(U.toetsen)}</button></div>
+    <div id="pcBinnen"></div>`;
+  document.body.appendChild(stulp); document.body.appendChild(lade);
+  const binnen = lade.querySelector("#pcBinnen");
+  const open = (aan) => lade.classList.toggle("uit", aan);
+  stulp.addEventListener("click", () => open(!lade.classList.contains("uit")));
+  lade.querySelector("#pcDicht").addEventListener("click", () => open(false));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && lade.classList.contains("uit")) open(false); });
+  lade.querySelectorAll(".pc-tab").forEach(t => t.addEventListener("click", () => {
+    lade.querySelectorAll(".pc-tab").forEach(x => x.classList.toggle("aan", x === t));
+    t.dataset.t === "toets" ? toets() : lezen(huidig);
+  }));
+  const KLEUR = { P:"#f05a23", M:"#6b6b6b", S:"#2d5a3d", E:"#b0243a", Sp:"#27235e", F:"#4b10c8" };
+  const KOLOM = ["P","M","S","E","Sp","F"];
+  function heeft(oorsprong, tekst, kol){
+    if (kol === "M") return oorsprong === "M" || (oorsprong === "P" && !/^(Surrounding LED|Beautiful Lines)/.test(tekst));
+    const volg = { P:["P","S","E","Sp","F"], S:["S","E","Sp","F"], E:["E","Sp","F"], Sp:["Sp","F"], F:["F"], M:["M"] }[oorsprong] || [];
+    return volg.includes(kol);
+  }
+  function collectiesHtml(){
+    const K = C.collecties, n = K.namen;
+    let h = `<p>${esc(K.intro)}</p><div class="pc-leg">` + KOLOM.map(k => `<span style="background:${KLEUR[k]}">${esc(n[k])}</span>`).join("") + `</div>`;
+    h += "<ul>" + KOLOM.map(k => `<li><b style="color:${KLEUR[k]}">${esc(n[k])}</b> - ${esc(K.beschrijving[k])}</li>`).join("") + "</ul>";
+    h += `<table class="pc-mat"><thead><tr><th></th>` + KOLOM.map(k => `<th style="color:${KLEUR[k]}">${esc(n[k])}</th>`).join("") + `</tr></thead><tbody>`;
+    for (const m of K.motieven) {
+      h += `<tr class="pc-motief"><td colspan="7">${esc(m.naam)} <span style="font-weight:400;color:var(--muted)">(${esc(U.motief || "motive")}: ${esc(m.motief)})</span></td></tr>`;
+      for (const [o, t] of m.kenmerken) {
+        h += `<tr><td class="pc-k" style="border-left-color:${KLEUR[o]}">${esc(t)}</td>` + KOLOM.map(k => {
+          const optioneel = o === "S" && k === "S" && /Freestyle/i.test(t);
+          return `<td>${heeft(o, t, k) ? (optioneel ? '<span class="pc-o">○</span>' : '<span class="pc-v">✓</span>') : ""}</td>`; }).join("") + `</tr>`;
+      }
+    }
+    return h + "</tbody></table>";
+  }
+  let huidig = C.secties[0].id;
+  function lezen(id){
+    huidig = id;
+    const sec = C.secties.find(x => x.id === id) || C.secties[0];
+    binnen.innerHTML = `<nav id="pcNav">` + C.secties.map(x => `<button type="button" data-id="${esc(x.id)}" class="${x.id === sec.id ? "aan" : ""}">${esc(x.titel)}</button>`).join("") + `</nav>
+      <div id="pcTekst"><h2>${esc(sec.titel)}</h2>${String(sec.html).replace("<!--COLLECTIES-->", collectiesHtml())}</div>`;
+    binnen.querySelectorAll("#pcNav button").forEach(b => b.addEventListener("click", () => lezen(b.dataset.id)));
+  }
+  function schud(a){ a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function toets(){
+    const T = C.toets;
+    const vragen = schud(T.vragen).slice(0, T.aantal || 20).map(v => {
+      const volgorde = schud(v.a.map((x, i) => i));
+      return { v: v.v, a: volgorde.map(i => v.a[i]), goed: volgorde.indexOf(v.goed), uitleg: v.uitleg };
+    });
+    let i = 0, score = 0;
+    const doos = () => { binnen.innerHTML = `<div id="pcTekst"><div class="pc-toets"></div></div>`; return binnen.querySelector(".pc-toets"); };
+    function start(){
+      doos().innerHTML = `<h2>${esc(T.titel)}</h2><p>${esc(T.uitleg)}</p><button class="go" type="button" id="pcBegin" style="padding:12px 22px">${esc(U.start)}</button>`;
+      binnen.querySelector("#pcBegin").addEventListener("click", vraag);
+    }
+    function vraag(){
+      const q = vragen[i], d = doos();
+      d.innerHTML = `<div style="font-size:12px;color:var(--muted)">${esc(U.vraag)} ${i + 1} ${esc(U.van)} ${vragen.length}</div>
+        <div class="pc-voortgang"><div style="width:${Math.round(i / vragen.length * 100)}%"></div></div>
+        <div class="pc-vraag">${esc(q.v)}</div>` + q.a.map((a, k) => `<button class="pc-antw" type="button" data-k="${k}">${esc(a)}</button>`).join("") + `<div id="pcNa"></div>`;
+      d.querySelectorAll(".pc-antw").forEach(b => b.addEventListener("click", () => {
+        const k = Number(b.dataset.k), ok = k === q.goed;
+        if (ok) score++;
+        d.querySelectorAll(".pc-antw").forEach(x => { x.disabled = true; if (Number(x.dataset.k) === q.goed) x.classList.add("goed"); });
+        if (!ok) b.classList.add("fout");
+        const laatste = i === vragen.length - 1;
+        d.querySelector("#pcNa").innerHTML = `<div class="pc-uitleg"><b style="color:${ok ? "#1f7a3f" : "#b91c1c"}">${esc(ok ? U.goed : U.fout)}</b> ${esc(q.uitleg || "")}</div>
+          <button class="go" type="button" id="pcVerder" style="padding:11px 20px">${esc(laatste ? U.uitslag : U.volgende)}</button>`;
+        d.querySelector("#pcVerder").addEventListener("click", () => { i++; laatste ? uitslag() : vraag(); });
+      }));
+    }
+    function uitslag(){
+      const pct = Math.round(score / vragen.length * 100), pro = pct >= 80;
+      doos().innerHTML = `<h2>${esc(U.score)}</h2><div class="pc-score">${score} / ${vragen.length}</div><p style="font-size:16px;margin:4px 0 16px">${pct}% - ${esc(pro ? U.pro : U.bijna)}</p>
+        <button class="go" type="button" id="pcOpnieuw" style="padding:12px 22px">${esc(U.opnieuw)}</button>`;
+      binnen.querySelector("#pcOpnieuw").addEventListener("click", toets);
+      api("/dealers/api/code/toets", { method: "POST", body: JSON.stringify({ goed: score, totaal: vragen.length, taal: window.ppTaal || "en" }) }).catch(() => {});
+    }
+    start();
+  }
+  lezen(huidig);
+}
 
 // ── Wachtwoord instellen / wijzigen ──
 $("pwBtn").addEventListener("click", ()=>{

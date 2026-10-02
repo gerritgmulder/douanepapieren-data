@@ -4876,9 +4876,30 @@ async function handleDealerRoutes(request, env, url) {
        winkelwagen meegestuurd moet worden, maar het verandert niets - het is
        een som. Een collega die meekijkt moet gewoon kunnen zien wat een
        bezorging kost. */
-    const alleenRekenen = p === "/dealers/api/vracht";
+    const alleenRekenen = p === "/dealers/api/vracht" || p === "/dealers/api/code/toets";
     if (sess.medewerker && request.method !== "GET" && !alleenRekenen) {
       return reply(403, { ok: false, error: "meekijken-is-alleen-lezen" });
+    }
+    /* PASSION CODE - de Code of Conduct en de toets (Gerrit, 2 okt 2026).
+       Interne verkoopregels voor adviseurs ("we are the factory", waar de
+       fabriek staat), dus alleen voor een @fonteyn.nl-sessie of iemand die
+       vanuit het Dashboard meekijkt; een partner of dealer krijgt hem niet.
+       De inhoud staat in KV (pp-code-<taal>), niet in de openbare repo. */
+    if (p === "/dealers/api/code" || p === "/dealers/api/code/toets") {
+      const intern = !!sess.medewerker || /@fonteyn\.nl$/i.test(String(sess.email || ""));
+      if (!intern) return reply(403, { ok: false, error: "alleen-fonteyn" });
+      if (p === "/dealers/api/code" && request.method === "GET") {
+        const taal = /^(en|nl|de|fr|it)$/.test(url.searchParams.get("taal") || "") ? url.searchParams.get("taal") : "en";
+        const inhoud = (await env.FONTEYN_DATA.get("pp-code-" + taal)) || (await env.FONTEYN_DATA.get("pp-code-en"));
+        if (!inhoud) return reply(404, { ok: false, error: "nog-geen-inhoud" });
+        return new Response(inhoud, { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "private, max-age=300" } });
+      }
+      if (p === "/dealers/api/code/toets" && request.method === "POST") {
+        const b = await request.json().catch(() => ({}));
+        const goed = Math.max(0, Number(b.goed) || 0), totaal = Math.max(1, Number(b.totaal) || 1);
+        await dpLogPartner(env, sess, "passion-toets", goed + "/" + totaal + " (" + Math.round(goed / totaal * 100) + "%)" + (b.taal ? " " + String(b.taal).slice(0, 2) : ""));
+        return reply(200, { ok: true });
+      }
     }
     if (p === "/dealers/api/me" && request.method === "GET") {
       const accounts = await dpGetAccounts(env);
