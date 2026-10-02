@@ -1700,13 +1700,17 @@ function dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, withSurcharge = tr
   const pack = withSurcharge ? 50 : 0;
   const q = Number(qty) || 1;
   const f = fraction > 0 ? fraction : 0.30;              // 0.30 = aanbetaling, 1.0 = volledig
-  /* spaUnit en packUnit apart: de verpakkingskosten gaan in Logic4 als eigen
-     regel op artikel 7894565 (zie hierboven), dus de order moet ze los kennen.
-     Samen zijn ze exVatUnit — de aanbetaling verandert hier niet door. */
+  /* spaUnit en packUnit apart, precies zoals het partnerportaal ze toont:
+     spaUnit = de partnerprijs uit de lijst, packUnit = "Freight & packing"
+     = de Freight Surcharge Warehouse Uddel plus de $50 verpakking. In Logic4
+     wordt packUnit de regel op artikel 7894565. Eerder zat de toeslag in de
+     spa-regel en stond op de vrachtregel alleen de $50, waardoor de order
+     niet leek op wat de partner zag (Gerrit, 2 okt 2026). Samen zijn ze
+     exVatUnit — het totaal en de aanbetaling veranderen hier niet door. */
   if (isUS) {
     const unit = usd + sur + pack;                       // USD, geen BTW
     const total = unit * q;
-    return { currency: "USD", vatPercent: 0, exVatUnit: unit, spaUnit: usd + sur, packUnit: pack,
+    return { currency: "USD", vatPercent: 0, exVatUnit: unit, spaUnit: usd, packUnit: sur + pack,
              totalExVat: total, totalInclVat: total, deposit: Math.round(total * f * 100) / 100 };
   }
   const r = rate > 0 ? rate : 1.11;
@@ -1714,7 +1718,7 @@ function dpDepositCalc(pEntry, { isUS, qty, rate, vatPercent, withSurcharge = tr
   const totalExVat = exVatUnit * q;
   const vat = Number(vatPercent) || 0;
   const totalInclVat = totalExVat * (1 + vat / 100);
-  return { currency: "EUR", vatPercent: vat, exVatUnit, spaUnit: (usd + sur) / r, packUnit: pack / r,
+  return { currency: "EUR", vatPercent: vat, exVatUnit, spaUnit: usd / r, packUnit: (sur + pack) / r,
            totalExVat, totalInclVat, deposit: Math.round(totalInclVat * f * 100) / 100 };
 }
 
@@ -1857,6 +1861,8 @@ async function dpHandleReserve(request, env, sess, url) {
     regels.push({ soort: "spa", model, qty, code, variantName: naam,
                   zonderVoorkeur: gekozen || undefined,
                   unit: Math.round(c.spaUnit * 100) / 100,
+                  // Freight & packing per stuk; verschilt per model (de toeslag).
+                  fp: Math.round(c.packUnit * 100) / 100,
                   volInclVat: c.totalInclVat });
   }
   if (!regels.length) return reply(400, { ok: false, error: "lege winkelwagen" });
@@ -2681,7 +2687,8 @@ async function dpAdminReserveFor(request, env, url) {
     // is uitgerekend, en niet € 0,00 uit een prijslijst die de partner niet heeft.
     regelsUit.push({ model: r.model, qty: r.qty, variant: r.variant, variantName: r.variantName,
       productCode: r.variant || (pe.code || null), deposit: c.deposit,
-      spaUnit: Math.round(c.spaUnit * 100) / 100 });
+      spaUnit: Math.round(c.spaUnit * 100) / 100,
+      fp: Math.round(c.packUnit * 100) / 100 });
   }
   deposit = Math.round(deposit * 100) / 100;
   const calc = dpDepositCalc(pEntry, { isUS, qty: regels[0].qty, rate, vatPercent });
@@ -3433,7 +3440,30 @@ async function dpHandleMollieWebhook(request, env, url) {
               const spaStuks = (Array.isArray(item.items) && item.items.length)
                 ? item.items.filter(r => r.soort === "spa").reduce((n, r) => n + (Number(r.qty) || 1), 0)
                 : regels.reduce((n, r) => n + (Number(r.qty) || 1), 0);
-              if (Number(item.packUnit) > 0 && spaStuks > 0) {
+              /* Freight & packing per spa-regel, zoals het portaal het toont:
+                 toeslag plus $50. De toeslag verschilt per model, dus spa's met
+                 hetzelfde bedrag komen samen op één regel en een ander bedrag
+                 krijgt een eigen regel. Aanvragen van vóór 2 okt 2026 hebben
+                 per regel nog geen fp: daar zit de toeslag nog in de spa-prijs
+                 en blijft het bij de oude regel met alleen de $50. */
+              const spaBron = (Array.isArray(item.items) && item.items.length)
+                ? item.items.filter(r => r.soort === "spa")
+                : (Array.isArray(item.regels) && item.regels.length) ? item.regels : [];
+              if (spaBron.length && spaBron.every(r => r.fp != null)) {
+                const perBedrag = new Map();
+                for (const r of spaBron) {
+                  const fp = Number(r.fp) || 0;
+                  if (fp <= 0) continue;
+                  const g = perBedrag.get(fp) || { qty: 0, modellen: [] };
+                  g.qty += Number(r.qty) || 1;
+                  if (r.model && !g.modellen.includes(r.model)) g.modellen.push(r.model);
+                  perBedrag.set(fp, g);
+                }
+                for (const [fp, g] of perBedrag) {
+                  regels.push({ productCode: DP_PACKING_CODE, qty: g.qty, nettPrice: fp,
+                                description: "Freight & packing" + (perBedrag.size > 1 && g.modellen.length ? " — " + g.modellen.join(", ") : "") });
+                }
+              } else if (Number(item.packUnit) > 0 && spaStuks > 0) {
                 regels.push({ productCode: DP_PACKING_CODE, qty: spaStuks,
                               nettPrice: item.packUnit, description: "Freight & packing" });
               }
