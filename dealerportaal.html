@@ -338,14 +338,15 @@ td.acties .meerD{padding:6px 10px;margin-left:6px}
   <div class="card">
     <h3><span class="kopTekst">Aanvragen zonder aanbetaling - leads (<span id="leadCount">0</span>)</span></h3>
     <p class="lead" style="margin-bottom:10px">Partners die een reservering startten en nog op de <b>aanbetaling</b> staan. Dit zijn aanvragen: ze claimen voorraad zodra de aanbetaling binnen is en staan dan in Logic4. Bel na of archiveer ze.
-      <label style="margin-left:8px;font-size:12px;color:var(--ink)"><input type="checkbox" id="showArch" style="vertical-align:-1px"> toon gearchiveerd</label></p>
+      <label style="margin-left:8px;font-size:12px;color:var(--ink)"><input type="checkbox" id="showArch" style="vertical-align:-1px"> toon gearchiveerd</label>
+      <label style="margin-left:8px;font-size:12px;color:var(--ink)"><input type="checkbox" id="alleenMijn" style="vertical-align:-1px"> alleen mijn leads</label></p>
     <div class="bulkbalk">
       <label><input type="checkbox" id="leadAlles"> Alles selecteren</label>
       <span id="leadSelTel" style="color:var(--muted)">niets geselecteerd</span>
       <button class="rmv weg" id="leadWeg" type="button" disabled>Geselecteerde verwijderen</button>
     </div>
     <table class="grid">
-      <thead><tr><th style="width:36px"></th><th>Datum</th><th>Partner</th><th>Model</th><th>Aantal</th><th>Notitie</th><th>Status</th><th></th></tr></thead>
+      <thead><tr><th style="width:36px"></th><th>Datum</th><th>Partner</th><th>Adviseur</th><th>Model</th><th>Aantal</th><th>Notitie</th><th>Status</th><th></th></tr></thead>
       <tbody id="reqBodyLeads"></tbody>
     </table>
   </div>
@@ -506,6 +507,28 @@ function beheerKoppen(){
            "X-Fonteyn-User": (localStorage.getItem("fp.email") || "").toLowerCase() };
 }
 const $ = (id) => document.getElementById(id);
+/* ADVISEURS
+   ═══════════════════════════════════════════════════════════════════════
+   Gerrit (2 okt 2026): bij de leads de adviseur van de dealer, "dan is het
+   voor de adviseurs makkelijker om te zien of hij leads heeft staan voor
+   hem". De adviseur staat op het account (wie het aanmaakte, of wie op de
+   relatiekaart is gekozen). Iemand logt in als "arno@fonteyn.nl" of als
+   "fonteyn.arno"; toegang.js weet dat dat dezelfde Arno is. */
+const SPA_ADVISEURS = ["ahmed", "arno", "bert", "chantal", "dali", "edwin", "luis", "patrick", "yves"];
+function adviseurId(login){
+  const l = String(login || "").toLowerCase().trim(); if (!l) return "";
+  const namen = (window.fpToegang && fpToegang.iedereen || []).concat(SPA_ADVISEURS);
+  for (const n of namen) if (window.fpToegang && fpToegang.varianten(n).includes(l)) return n;
+  return l.replace(/@fonteyn\.nl$/, "").replace(/^fonteyn\./, "");
+}
+function adviseurNaam(login){ const id = adviseurId(login); return id ? id.charAt(0).toUpperCase() + id.slice(1).split(/[.@]/)[0] : ""; }
+/* Het adres waar de cc heen gaat: het @fonteyn.nl-adres van die persoon als
+   toegang.js dat kent, anders wat er stond. */
+function adviseurMail(login){
+  const id = adviseurId(login); if (!id) return "";
+  const v = (window.fpToegang ? fpToegang.varianten(id) : []).find(x => /@fonteyn\.nl$/.test(x));
+  return v || String(login || "").toLowerCase().trim();
+}
 /* Prullenbakje voor alle verwijderknoppen: met tekst ernaast in plaats van een los kruisje. */
 const WEG_ICOON = '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5h13M8 5.5V4h4v1.5M5.5 5.5l.8 10.5h7.4l.8-10.5M8.5 9v4.5M11.5 9v4.5"/></svg>';
 function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
@@ -1173,6 +1196,15 @@ function relatieKaart(index){
       + '<div class="velden" style="margin-top:12px">'
       +   veld("region","Regio en valuta", d.region, {keuze:["EU","US"],
             label:["EU - het portaal opent in euro's","US - het portaal opent in dollars"]})
+      +   (() => {
+            /* De adviseur van deze relatie: krijgt elke mail aan hem in cc en
+               ziet zijn leads in Beheer. Bij de bestaande relaties (import
+               2 okt 2026) stond nog niemand. */
+            const huidig = adviseurId(d.adviseur || "");
+            const opties = SPA_ADVISEURS.includes(huidig) || !huidig ? SPA_ADVISEURS : SPA_ADVISEURS.concat([huidig]);
+            return veld("adviseur", "Adviseur", huidig ? adviseurMail(huidig) : "", { keuze: [""].concat(opties.map(adviseurMail)),
+              label: ["- kies de adviseur -"].concat(opties.map(n => n.charAt(0).toUpperCase() + n.slice(1))) });
+          })()
       + '</div></div>'
 
       + '<div class="blok"><h4>Wie is het</h4>'
@@ -1629,7 +1661,7 @@ function relatieKaart(index){
        Alleen bij het aanmaken: wie later iets aan de kaart wijzigt neemt de
        relatie niet over. */
     if (nieuw && !d.adviseur) {
-      d.adviseur = (localStorage.getItem(EMAIL_KEY) || "").toLowerCase();
+      d.adviseur = adviseurMail(localStorage.getItem(EMAIL_KEY) || "");
       d.adviseurSinds = new Date().toISOString();
     }
     d.merk = "passion";
@@ -1703,9 +1735,9 @@ function renderPartners(){
   const list = accounts.dealers || [];
   $("partnerCount").textContent = list.length;
   $("partnerBody").innerHTML = list.map((d,i)=>`
-    <tr data-zoek="${esc([d.email, d.company, (d.debtorIds||[]).join(" "), d.facturatie && d.facturatie.land, d.facturatie && d.facturatie.plaats, d.soort].join(" ").toLowerCase())}">
+    <tr data-zoek="${esc([d.email, d.company, (d.debtorIds||[]).join(" "), d.facturatie && d.facturatie.land, d.facturatie && d.facturatie.plaats, d.soort, adviseurNaam(d.adviseur)].join(" ").toLowerCase())}">
       <td data-l="E-mail"><code>${esc(d.email)}</code></td>
-      <td data-l="Bedrijf">${esc(d.company||"")}</td>
+      <td data-l="Bedrijf">${esc(d.company||"")}${d.adviseur ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">adviseur ${esc(adviseurNaam(d.adviseur))}</div>` : ""}</td>
       <td data-l="Debiteurnr(s)"><input class="debIn" data-i="${i}" value="${esc((d.debtorIds||[]).join(", "))}" style="width:120px;font-size:12px;padding:4px 7px"></td><td data-l="Regio"><select class="regIn" data-i="${i}" style="font-size:12px;padding:4px"><option value="EU"${(d.region||"EU")!=="US"?" selected":""}>EU (&euro;)</option><option value="US"${d.region==="US"?" selected":""}>US ($)</option></select></td>
       <td data-l="Soort"><select class="soortIn" data-i="${i}" title="Partner of dealer? Een partner koopt in tegen de partnerprijs en ziet alle documentatie, inclusief de prijslijsten waarin partnerprijs, dealerprijs en consumentenprijs naast elkaar staan. Een dealer koopt in tegen een eigen prijsniveau; die ziet zijn eigen prijslijst, want de andere lijsten laten zien wat een ander betaalt. Op dit moment zijn het allemaal partners en is de dealerprijs een presentatiemiddel dat niemand betaalt (Arno, 4 aug 2026). Kies dus alleen Dealer als er echt een afwijkend prijsniveau geldt." style="font-size:12px;padding:4px${d.soort?"":";border-color:#c8102e"}">
         <option value=""${!d.soort?" selected":""}>- nog kiezen -</option>
@@ -1725,6 +1757,7 @@ function renderPartners(){
           <button class="rmv invD" data-i="${i}" title="Stuur de welkomstmail: een nette uitnodiging waarmee deze relatie zelf een wachtwoord kiest en meteen ingelogd het portaal in gaat. De link is 7 dagen geldig en kan tegen mailscanners: pas het instellen van het wachtwoord verbruikt hem." >Uitnodiging sturen</button>
           <button class="rmv lnkD" data-i="${i}" title="Genereer een inloglink zonder mail - voor onboarding via WhatsApp of zodra de mail uitblijft. 7 dagen geldig, eenmalig, en sinds 22 aug bestand tegen mailscanners: de link opent eerst een tussenpagina en pas de knop daarop logt in.">Inloglink maken</button>
           <button class="rmv pwD" data-i="${i}" title="Zet zelf een wachtwoord voor dit account, bijvoorbeeld telefonisch door te geven. Meestal kiest de relatie er zelf een via de uitnodiging.">Wachtwoord zetten</button>
+          <button class="rmv advD" data-i="${i}">Adviseur kiezen${d.adviseur ? " (" + esc(adviseurNaam(d.adviseur)) + ")" : ""}</button>
           <button class="rmv togAct" data-i="${i}">${d.active!==false?"Blokkeren":"Weer toelaten"}</button>
           <hr>
           <button class="rmv weg delD" data-i="${i}">${WEG_ICOON}Verwijderen</button>
@@ -1755,6 +1788,25 @@ function renderPartners(){
 document.addEventListener("click", (e) => { const m = document.querySelector(".actiemenu"); if (m && !m.contains(e.target)) m.remove(); });
 addEventListener("scroll", () => { const m = document.querySelector(".actiemenu"); if (m) m.remove(); }, true);
 function koppelRijActies(waar){
+  /* De adviseur los kiezen, zonder de hele relatiekaart. Bij de bestaande
+     relaties (import 2 okt 2026) ontbreken vaak velden die de kaart bij
+     Bewaren verplicht stelt; hier gaat alleen de adviseur mee. */
+  waar.querySelectorAll(".advD").forEach(b=>b.addEventListener("click", async ()=>{
+    const d = accounts.dealers[Number(b.dataset.i)];
+    let gekozen = adviseurMail(d.adviseur || "");
+    const opties = [""].concat(SPA_ADVISEURS.map(adviseurMail));
+    const wacht = pDialoog({ titel: "Adviseur van " + (d.company || d.email),
+      html: "<p>De adviseur krijgt elke mail aan deze relatie in cc en ziet zijn leads in Beheer.</p>" +
+            '<select id="advKies" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font:inherit">' +
+            opties.map(o => '<option value="' + esc(o) + '"' + (o === gekozen ? " selected" : "") + '>' + (o ? esc(adviseurNaam(o)) : "- geen adviseur -") + '</option>').join("") + '</select>',
+      bevestig: "Bewaren" });
+    const sel = document.getElementById("advKies"); if (sel) sel.addEventListener("change", () => { gekozen = sel.value; });
+    if (!await wacht) return;
+    d.adviseur = gekozen || null; d.adviseurSinds = new Date().toISOString();
+    try{ if(window.fpLog) window.fpLog("relatie-adviseur", d.email + " → " + (gekozen || "geen")); }catch(e){}
+    await save("dealer-accounts", accounts); renderPartners();
+    setStatus("ok", (d.company || d.email) + (gekozen ? " heeft nu " + adviseurNaam(gekozen) + " als adviseur." : " heeft nu geen adviseur."));
+  }));
   waar.querySelectorAll(".togAct").forEach(b=>b.addEventListener("click", async ()=>{
     const d = accounts.dealers[Number(b.dataset.i)];
     d.active = d.active === false ? true : false;
@@ -1922,7 +1974,7 @@ $("addPartner").addEventListener("click", async ()=>{
     active: true, addedBy: localStorage.getItem(EMAIL_KEY)||"", addedAt: new Date().toISOString(),
     // Zie de toelichting bij de relatiekaart: de aanmaker is de adviseur en
     // gaat in cc bij elke mail aan deze partner.
-    adviseur: (localStorage.getItem(EMAIL_KEY)||"").toLowerCase(), adviseurSinds: new Date().toISOString(),
+    adviseur: adviseurMail(localStorage.getItem(EMAIL_KEY)||""), adviseurSinds: new Date().toISOString(),
   });
   await save("dealer-accounts", accounts);
   $("nEmail").value=""; $("nCompany").value=""; $("nDebtors").value=""; $("nSoort").value="";
@@ -2300,7 +2352,17 @@ function renderReqs(){
   const all = reqData.requests || [];
   const paid = all.filter(reqPaid);
   const leadsAll = all.filter(r => !reqPaid(r));
-  const leads = leadsAll.filter(r => showArch || r.status !== "done");
+  /* De adviseur van een lead: wie hem overzette, of de adviseur zelf als die
+     voor de beurs bestelde, of anders de adviseur van het partneraccount. */
+  const leadAdviseur = (r) => {
+    if (r.overgezetVan) return r.overgezetVan;
+    if (/@fonteyn\.nl$/i.test(String(r.email || ""))) return r.email;
+    const d = (accounts.dealers || []).find(x => String(x.email || "").toLowerCase() === String(r.email || "").toLowerCase());
+    return (d && (d.adviseur || (/@|^fonteyn\./.test(String(d.addedBy || "")) ? d.addedBy : ""))) || "";
+  };
+  const ik = adviseurId(localStorage.getItem(EMAIL_KEY) || "");
+  const alleenMijn = !!($("alleenMijn") && $("alleenMijn").checked);
+  const leads = leadsAll.filter(r => (showArch || r.status !== "done") && (!alleenMijn || adviseurId(leadAdviseur(r)) === ik));
 
   /* Wat er besteld is. Sinds de winkelwagen kan één aanvraag meerdere spa's
      en onderdelen bevatten; dan is alleen het eerste model tonen misleidend. */
@@ -2410,6 +2472,7 @@ function renderReqs(){
       <td><input type="checkbox" class="leadSel" data-k="${esc(k)}"${leadGekozen.has(k)?" checked":""} aria-label="Selecteer deze aanvraag"></td>
       <td style="white-space:nowrap">${esc(String(r.ts||"").slice(0,16).replace("T"," "))}</td>
       <td>${esc(r.company||"")} <span style="color:var(--muted);font-size:11px">${esc(r.email)}</span>${over}</td>
+      <td>${leadAdviseur(r) ? "<b>" + esc(adviseurNaam(leadAdviseur(r))) + "</b>" : '<span style="color:var(--muted)">-</span>'}</td>
       <td>${regelsCel(r)}</td>
       <td>${esc(r.qty)}</td>
       <td style="max-width:240px;font-size:12px;color:var(--muted)">${esc(String(r.note||"").slice(0,120))}</td>
@@ -2419,7 +2482,7 @@ function renderReqs(){
         <button class="rmv weg reqDel" data-i="${idx}">${WEG_ICOON}Verwijderen</button>
       </td>
     </tr>`;
-  }).join("") || '<tr><td colspan="8" style="color:var(--muted)">Geen openstaande leads.</td></tr>';
+  }).join("") || '<tr><td colspan="9" style="color:var(--muted)">' + (alleenMijn ? "Op jouw naam is alles afgehandeld." : "Geen openstaande leads.") + '</td></tr>';
   leadBalkBijwerken(leads);
 
   document.querySelectorAll(".reqArch").forEach(b=>b.addEventListener("click", async ()=>{
@@ -2438,6 +2501,7 @@ function renderReqs(){
   }));
 }
 document.getElementById("showArch").addEventListener("change", (e)=>{ showArch = e.target.checked; renderReqs(); });
+document.getElementById("alleenMijn").addEventListener("change", ()=> renderReqs());
 
 /* ── Aanvragen zonder aanbetaling: selecteren en in één keer verwijderen ──
    Gerrit (2 okt 2026): "die lijst moet volledig te selecteren zijn en daarna

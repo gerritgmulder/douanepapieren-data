@@ -393,7 +393,10 @@ async function rateLimited(env, request, scope, limit, windowSec) {
    ontbrekende adviseur mag nooit een bericht tegenhouden. */
 function dpAdviseurVan(accounts, email) {
   const d = dpFindDealer(accounts, email);
-  const a = String((d && (d.adviseur || d.addedBy)) || "").trim().toLowerCase();
+  let a = String((d && (d.adviseur || d.addedBy)) || "").trim().toLowerCase();
+  /* Wie inlogt als "fonteyn.arno" staat zo als adviseur; zijn mailadres is
+     arno@fonteyn.nl (2 okt 2026: daardoor ging Arno nergens in cc). */
+  if (/^fonteyn\.[a-z][a-z.-]*$/.test(a)) a = a.slice(8) + "@fonteyn.nl";
   if (!a || !a.includes("@")) return null;
   // Niet in cc bij een mail aan jezelf: een adviseur bestelt ook voor de beurs.
   if (a === String(email || "").trim().toLowerCase()) return null;
