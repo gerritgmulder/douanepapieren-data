@@ -12775,7 +12775,9 @@ async function qbHandleBoeken(request, env) {
             BookingId: AMERIKA_DAGBOEK,
             MatchingLedgerId: 78,
             DateTime: datum,
-            Description: "Batch " + (w.datum || "") + (r.bedrag < 0 ? " - terugbetaling op" : " -") + " QuickBooks-factuur " + r.factuur + " (" + r.bedrag.toFixed(2) + " USD)",
+            /* Ordernummer vooraan (Osman, 2 okt 2026): in het bankboek las hij
+               alleen de QuickBooks-nummers en hield die voor containernummers. */
+            Description: "Order " + Number(r.order) + " - batch " + (w.datum || "") + (r.bedrag < 0 ? " - terugbetaling op" : " -") + " QuickBooks-factuur " + r.factuur + " (" + r.bedrag.toFixed(2) + " USD)",
           }),
         });
         const tekst = await rr.text();
