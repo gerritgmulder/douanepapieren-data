@@ -524,6 +524,11 @@ async function dpGetAccounts(env) {
   return data || { dealers: [], contactEmail: "gerrit@fonteyn.nl" };
 }
 
+/* Fonteynbot als proefpartner (Gerrit, 7 okt 2026: "de fictieve cent"). Geen
+   account in dealer-accounts; de bestellingen komen in Logic4 op proefdebiteur
+   878920659 (Arno BV, waar ook eerdere proeforders op staan). */
+const PP_FICTIEF_DEBITEUR = "878920659";
+const PP_FICTIEF_DEALER = { email: "fonteynbot@fonteyn.nl", company: "Fonteynbot (test)", debtorIds: [PP_FICTIEF_DEBITEUR], region: "EU", active: true, fictief: true };
 function dpFindDealer(accounts, email) {
   const e = String(email || "").trim().toLowerCase();
   if (!e) return null;
@@ -1874,7 +1879,20 @@ async function dpHandleReserve(request, env, sess, url) {
   const partByCode = new Map((partsData.parts || []).map(a => [String(a.code), a]));
 
   const accountsPre = await dpGetAccounts(env);
-  const dealerPre = dpFindDealer(accountsPre, sess.email);
+  /* Bestellen voor een partner (Gerrit, 7 okt 2026): Chantal stelt de
+     container samen in haar eigen omgeving en zet hem bij de partner neer.
+     Prijzen, btw, valuta en de regels voor de aanbetaling zijn dan die van de
+     partner; de bestelling staat op zijn naam en hij krijgt de betaallink. */
+  const voorPartnerEmail = dpIsAdviseur(sess) && body.voorPartner ? String(body.voorPartner).trim().toLowerCase() : "";
+  const partnerGekozen = voorPartnerEmail ? dpFindDealer(accountsPre, voorPartnerEmail) : null;
+  if (voorPartnerEmail && !partnerGekozen) return reply(404, { ok: false, error: "partner-niet-gevonden" });
+  /* Fonteynbot test dit zonder een echte partner lastig te vallen: de
+     bestelling blijft op Fonteynbot staan, met de gekozen partner erbij. */
+  const partnerAcc = sess.fictief ? null : partnerGekozen;
+  const testVoorPartner = sess.fictief && partnerGekozen ? (partnerGekozen.company || partnerGekozen.email) : null;
+  const klant = partnerAcc ? { email: String(partnerAcc.email).toLowerCase(), company: partnerAcc.company || "" }
+                           : { email: sess.email, company: sess.company || "" };
+  const dealerPre = partnerAcc || dpFindDealer(accountsPre, sess.email) || (sess.fictief ? PP_FICTIEF_DEALER : null);
   const isUS = String((dealerPre && dealerPre.region) || "").toUpperCase() === "US";
   const debtorId = dealerPre && (dealerPre.debtorIds || [])[0];
   const rate = await dpRate(env);
@@ -1901,7 +1919,7 @@ async function dpHandleReserve(request, env, sess, url) {
   /* Testbetaling van één cent. Alleen voor mensen van Fonteyn zelf; een echte
      partner kan hem niet kiezen en ook niet meesturen, want dat zou een
      reservering opleveren waar niets voor betaald is. */
-  const isFonteyn = /@fonteyn\.nl$/i.test(String(sess.email || ""));
+  const isFonteyn = /@fonteyn\.nl$/i.test(String(sess.email || "")) && !partnerAcc;
   // De cent-betaling is weg (2 okt 2026); een eigen bedrag doet hetzelfde.
   const wantsCent = false;
 
@@ -1996,7 +2014,7 @@ async function dpHandleReserve(request, env, sess, url) {
   /* Fonteynbot mag alles kiezen, ook volledig betalen voor een container of
      een spa die nog moet komen (Gerrit, 2 okt 2026). Voor iedereen anders
      alleen bij voorraad in Uddel en levering uit Uddel. */
-  let payFull = dpIsBeheerSessie(sess) ? wantsFull
+  let payFull = dpIsBeheerSessie(sess) && !partnerAcc ? wantsFull
     : (wantsFull || moetVolledig) && alleOpVoorraad && levering !== "container";
   /* Eigen aanbetalingsbedrag. Gerrit (14 sep 2026): "Bij ingelogde adviseurs
      van Passion (de spa-adviseurs + Chantal + Dolf) moet de optie zichtbaar
@@ -2030,7 +2048,12 @@ async function dpHandleReserve(request, env, sess, url) {
   if (!Array.isArray(data.requests)) data.requests = [];
   const entry = {
     id: crypto.randomUUID(), ts: new Date().toISOString(),
-    email: sess.email, company: sess.company || "",
+    email: klant.email, company: klant.company,
+    aangemaaktDoor: partnerAcc ? String(sess.email).toLowerCase() : undefined,
+    debtorId: partnerAcc ? ((partnerAcc.debtorIds || [])[0] || undefined) : (sess.fictief ? PP_FICTIEF_DEBITEUR : undefined),
+    fictief: sess.fictief ? true : undefined,
+    testVoorPartner: testVoorPartner || undefined,
+    betaalToken: crypto.randomUUID().replace(/-/g, ""),
     // model/qty blijven bestaan: de beheertegel, de voorraadclaim en de
     // reserveringsledger kijken daarnaar. Ze wijzen naar de eerste spa.
     model: eersteSpa ? eersteSpa.model : (regels[0].naam || regels[0].code),
@@ -2067,7 +2090,13 @@ async function dpHandleReserve(request, env, sess, url) {
   };
 
   let checkoutUrl = null;
-  if (env.MOLLIE_API_KEY && deposit > 0) {
+  if (sess.fictief && deposit > 0) {
+    /* De fictieve cent: geen Mollie. Het portaal toont een knop die de
+       betaling als "betaald" doorgeeft; daarna loopt alles zoals bij echt geld,
+       behalve dat er in Logic4 geen betaling wordt geboekt. */
+    entry.deposit = deposit; entry.paymentId = "fictief_" + entry.id; entry.paymentStatus = "open";
+    checkoutUrl = dpPad(env, url) + "/?fictief=" + entry.id;
+  } else if (env.MOLLIE_API_KEY && deposit > 0) {
     /* Bij een testbetaling blijft de hele berekening staan - bedragen, BTW,
        de order die er straks van komt - en gaat alleen het te betalen bedrag
        naar één cent. Zo test je de hele keten en niet een halve. */
@@ -2077,7 +2106,7 @@ async function dpHandleReserve(request, env, sess, url) {
                 : (eigenAanbetaling != null ? "Deposit"
                 : (spaAantal ? "30% deposit" : "Payment")));
     const pay = await dpCreateMolliePayment(env, deposit,
-      label + " — " + samenvatting + " (" + (sess.company || sess.email) + ")",
+      label + " — " + samenvatting + " (" + (klant.company || klant.email) + ")",
       dpPad(env, url) + "?paid=1",
       url.origin + "/dealers/webhook",
       { requestId: entry.id }, currency);
@@ -2099,10 +2128,12 @@ async function dpHandleReserve(request, env, sess, url) {
   const esc = (x) => String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const sym = currency === "USD" ? "$" : "€";
   await dpSendEmail(env, accounts.contactEmail || "gerrit@fonteyn.nl",
-    "[Partnerportaal] Bestelling: " + samenvatting + " — " + (sess.company || sess.email),
+    "[Partnerportaal] Bestelling: " + samenvatting + " — " + (klant.company || klant.email) + (entry.fictief ? " (FICTIEF)" : ""),
     '<div style="font-family:Arial,sans-serif;">' +
     '<p><b>Nieuwe bestelling via het partnerportaal</b></p>' +
-    '<p><b>Dealer:</b> ' + esc(sess.company || "") + ' &lt;' + esc(sess.email) + '&gt;</p>' +
+    '<p><b>Dealer:</b> ' + esc(klant.company || "") + ' &lt;' + esc(klant.email) + '&gt;</p>' +
+    (partnerAcc ? '<p><b>Aangemaakt door:</b> ' + esc(sess.email) + ' (de partner krijgt de betaallink per mail)</p>' : '') +
+    (entry.fictief ? '<p style="background:#fef3c7;padding:6px 10px"><b>FICTIEF</b> - proefbestelling van Fonteynbot, betaald met de fictieve cent.</p>' : '') +
     (entry.vracht
       ? '<p style="background:#eef5ee;border-left:4px solid #3e7d3f;padding:8px 12px;margin:0 0 12px;">' +
         (entry.vracht.wijze === "afhalen"
@@ -2123,10 +2154,10 @@ async function dpHandleReserve(request, env, sess, url) {
       '<li><b>' + r.qty + '&times; ' + esc(r.soort === "spa" ? r.model : r.naam) + '</b>' +
       (r.variantName ? ' (' + esc(r.variantName) + ')' : '') +
       (r.code ? ' <span style="color:#888">' + esc(r.code) + '</span>' : '') + '</li>').join("") + '</ul>' +
-    (entry.deposit ? '<p><b>' + (payFull ? 'Volledig bedrag' : 'Aanbetaling') + ':</b> ' + sym + ' ' + entry.deposit.toFixed(2) + ' — de dealer is naar de betaalpagina gestuurd en krijgt de betaallink ook per mail</p>' : '') +
+    (entry.deposit ? '<p><b>' + (payFull ? 'Volledig bedrag' : 'Aanbetaling') + ':</b> ' + sym + ' ' + entry.deposit.toFixed(2) + (partnerAcc ? ' — de partner krijgt de betaallink per mail' : ' — de dealer is naar de betaalpagina gestuurd en krijgt de betaallink ook per mail') + '</p>' : '') +
     (note ? '<p style="white-space:pre-wrap;border-left:3px solid #8bc53f;padding-left:12px;">' + esc(note) + '</p>' : '') +
     '<p style="color:#888;font-size:12px;">Ook zichtbaar in de beheertegel Dealerportaal. Reply gaat direct naar de dealer.</p></div>',
-    sess.email);
+    klant.email);
   /* Bevestiging voor de partner zelf. Tot nu toe kreeg alleen Fonteyn een
      mail; de partner werd naar Mollie gestuurd en kreeg pas na betalen iets
      (Gerrit, 2 okt 2026: "Arno heeft de bestelling gedaan en hij heeft de mail
@@ -2136,24 +2167,34 @@ async function dpHandleReserve(request, env, sess, url) {
     const regelsHtml = '<ul style="padding-left:18px;margin:6px 0 14px;">' + regels.map(r =>
       '<li><b>' + r.qty + '&times; ' + esc(r.soort === "spa" ? r.model : r.naam) + '</b>' +
       (r.variantName ? ' (' + esc(r.variantName) + ')' : '') + '</li>').join("") + '</ul>';
-    const betaalKnop = checkoutUrl
-      ? '<p style="margin:22px 0;text-align:center;"><a href="' + checkoutUrl + '" style="background:#c8102e;color:#fff;' +
+    /* De link in de mail verloopt nooit: hij maakt bij het klikken een
+       nieuwe betaling aan. Een Mollie-link zelf is na een tijdje verlopen, en
+       een partner die de mail van Chantal een dag later opent, moet nog
+       gewoon kunnen betalen. */
+    const mailLink = entry.fictief ? checkoutUrl : (checkoutUrl ? dpPad(env, url) + "/betaal/" + entry.id + "?t=" + entry.betaalToken : null);
+    const betaalKnop = mailLink
+      ? '<p style="margin:22px 0;text-align:center;"><a href="' + mailLink + '" style="background:#c8102e;color:#fff;' +
         'text-decoration:none;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:10px;display:inline-block;">' +
         (payFull ? 'Pay now' : 'Pay the deposit') + ' - ' + sym + ' ' + Number(entry.deposit || 0).toFixed(2) + '</a></p>' +
         '<p style="color:#6b7280;font-size:13px;">Already paid? Then you can ignore this button; you will receive a confirmation as soon as the payment is in.</p>'
       : '<p>We will get back to you about the payment.</p>';
-    const binnen = '<p>Hi,</p><p>Thank you for your order. This is what we received:</p>' + regelsHtml +
+    const binnen = (partnerAcc
+        ? '<p>Hi,</p><p>As discussed, we have placed this order for you in Passion Partners:</p>' + regelsHtml
+        : '<p>Hi,</p><p>Thank you for your order. This is what we received:</p>' + regelsHtml) +
       (levering === "container" ? '<p><b>Full container</b>, straight from the factory. We quote the sea freight separately.</p>' :
        entry.vracht && entry.vracht.wijze === "afhalen" ? '<p>You collect it yourself in Uddel.</p>' : '') +
       betaalKnop + '<p>You can follow your order any time under <b>My spas</b>.</p>';
-    await dpSendEmail(env, sess.email, "We received your order - Passion Partners",
-      dpMailShell(env, url, binnen), accounts.contactEmail || undefined, dpAdviseurVan(accounts, sess.email));
+    // Bij een bestelling voor een partner gaat wie hem maakte altijd in cc (Gerrit, 7 okt 2026).
+    const ccLijst = [dpAdviseurVan(accounts, klant.email), partnerAcc ? String(sess.email).toLowerCase() : null].filter(Boolean);
+    await dpSendEmail(env, klant.email, partnerAcc ? "Your order is ready - Passion Partners" : "We received your order - Passion Partners",
+      dpMailShell(env, url, binnen), partnerAcc ? String(sess.email).toLowerCase() : (accounts.contactEmail || undefined), ccLijst.length ? ccLijst : undefined);
   } catch (e) { console.log("[dp-mail] bevestiging partner: " + String(e.message || e)); }
 
   await dpLogPartner(env, sess, "reservering-aangevraagd",
     samenvatting + (checkoutUrl ? " — betaallink " + sym + (entry.deposit != null ? entry.deposit.toFixed(2) : "") : ""));
-  return reply(200, { ok: true, id: entry.id, checkoutUrl, deposit: entry.deposit || null, currency,
-                      payFull: !!entry.payFull, testbetaling: !!entry.testbetaling,
+  return reply(200, { ok: true, id: entry.id, checkoutUrl: partnerAcc ? null : checkoutUrl, testVoorPartner, deposit: entry.deposit || null, currency,
+                      payFull: !!entry.payFull, testbetaling: !!entry.testbetaling, fictief: !!entry.fictief,
+                      naarPartner: partnerAcc ? { email: klant.email, company: klant.company } : null,
                       levering, regels: regels.length });
 }
 
@@ -2211,11 +2252,20 @@ async function dpHandleMedewerkerSessie(request, env) {
   const email = String(body.email || "").trim().toLowerCase();
   if (!email || !email.includes("@")) return reply(400, { ok: false, error: "geen-adres" });
   const sess = dpNewSessionToken();
-  await env.FONTEYN_DATA.put("dp-sess:" + sess, JSON.stringify({
-    email, company: "Fonteyn (meekijken)", medewerker: true, since: new Date().toISOString(),
-  }), { expirationTtl: DP_SESS_TTL });
-  console.log("[dp-medewerker] meekijksessie voor " + email);
-  return reply(200, { ok: true, session: sess, medewerker: true });
+  /* Gerrit (7 okt 2026): "Bij Passion Partners kan ik als Fonteynbot nu niks
+     doen." Fonteynbot krijgt een echte testsessie: bestellen kan, en betalen
+     gaat met de fictieve cent (geen geld, geen Mollie). En wie van Fonteyn een
+     eigen account in het portaal heeft (Chantal, de adviseurs), komt vanuit de
+     tegel in dát account, zodat ze kan bestellen voor een partner. */
+  let inhoud = { email, company: "Fonteyn (meekijken)", medewerker: true, since: new Date().toISOString() };
+  if (email === PP_FICTIEF_DEALER.email) inhoud = { email, company: PP_FICTIEF_DEALER.company, fictief: true, since: inhoud.since };
+  else if (/@fonteyn\.nl$/.test(email)) {
+    const eigen = dpFindDealer(await dpGetAccounts(env).catch(() => ({ dealers: [] })), email);
+    if (eigen) inhoud = { email, company: eigen.company || "", since: inhoud.since, viaTegel: true };
+  }
+  await env.FONTEYN_DATA.put("dp-sess:" + sess, JSON.stringify(inhoud), { expirationTtl: DP_SESS_TTL });
+  console.log("[dp-medewerker] sessie voor " + email + (inhoud.medewerker ? " (meekijken)" : inhoud.fictief ? " (fictief)" : " (eigen account)"));
+  return reply(200, { ok: true, session: sess, medewerker: !!inhoud.medewerker, fictief: !!inhoud.fictief });
 }
 
 // POST /dealers/api/setpassword { password } — dealer stelt (of wijzigt) zijn
@@ -2245,7 +2295,8 @@ async function dpHandleMyRequests(env, sess) {
      na het overzetten voor de adviseur zelf spoorloos. */
   const mine = (Array.isArray(data.requests) ? data.requests : [])
     .filter(r => String(r.email || "").toLowerCase() === ik ||
-                 String(r.overgezetVan || "").toLowerCase() === ik)
+                 String(r.overgezetVan || "").toLowerCase() === ik ||
+                 String(r.aangemaaktDoor || "").toLowerCase() === ik)
     /* items erbij: sinds de winkelwagen kan één aanvraag meerdere spa's én
        onderdelen bevatten. Zonder deze regel zag een partner alleen de eerste
        regel terug en leek de rest van zijn bestelling verdwenen. */
@@ -2262,6 +2313,12 @@ async function dpHandleMyRequests(env, sess) {
                    : (r.model ? [{ soort: "spa", model: r.model, code: r.productCode || null,
                                    variantName: r.variantName || null, qty: Number(r.qty) || 1 }] : null),
                  deposit: r.deposit || null, currency: r.currency || null, paymentStatus: r.paymentStatus || null,
+                 aangemaaktDoor: r.aangemaaktDoor || null, voorPartner: r.aangemaaktDoor ? (r.company || r.email) : null,
+                 fictief: !!r.fictief,
+                 /* Nog niet betaald: een link die altijd werkt (de partner van
+                    een bestelling die Chantal maakte, betaalt hiermee). */
+                 betaalLink: (r.paymentStatus !== "paid" && r.status !== "paid" && r.status !== "done" && r.betaalToken && String(r.email || "").toLowerCase() === ik)
+                   ? "/betaal/" + r.id + "?t=" + r.betaalToken : (r.fictief && r.paymentStatus !== "paid" ? "/?fictief=" + r.id : null),
                  /* Geannuleerd in Logic4 (of teruggedraaid in Beheer). Chantal
                     (9 sep 2026): "de dealer moet dus kunnen zien dat zijn order
                     geannuleerd is." Uit de ledger verdwijnt hij vanzelf, en dan
@@ -2839,6 +2896,8 @@ async function dpCreateLogic4Order(env, opts) {
 // showroom). Dagboek Mollie=42, MatchingLedgerId=78 (vooruitontvangen) — zie
 // de Logic4/Optivaize-afspraken. Zet de order daarna op 30% aanbetaald (25).
 async function dpRegisterPayment(env, orderId, amountEur, mollieId, opts = {}) {
+  // De fictieve cent is geen geld: nooit een betaling in Logic4.
+  if (String(mollieId || "").startsWith("fictief_")) return { ok: true, fictief: true };
   const token = await l4Token(env);
   const pay = await fetch("https://api.logic4server.nl/v3/Orders/AddPayment", {
     method: "POST",
@@ -3269,6 +3328,7 @@ async function dpHandleRestbetaling(request, env, sess, url) {
     uitleg: "This spa has gone to another customer. Your reservation moves to the next arrival - reply to our e-mail and we will tell you when that is." });
   const bedrag = dpRestBedrag(item);
   if (bedrag <= 0) return reply(409, { ok: false, error: "niets-open" });
+  if (item.fictief) return reply(200, { ok: true, bedrag, currency: item.currency || "EUR", fictief: true, checkoutUrl: dpPad(env, url) + "/?fictief=" + item.id + "&rest=1" });
 
   const pay = await dpCreateMolliePayment(env, bedrag,
     "Restbetaling " + (item.logic4OrderId ? "order " + item.logic4OrderId : "Passion Partners"),
@@ -3578,6 +3638,11 @@ async function dpHandleMollieWebhook(request, env, url) {
   });
   const p = await r.json().catch(() => null);
   if (!r.ok || !p) return reply(200, { ok: true });
+  return dpVerwerkBetaling(env, url, p, id);
+}
+/* Wat er gebeurt met een betaling: uit de webhook van Mollie, of uit de
+   fictieve cent van Fonteynbot (p.id begint dan met "fictief_"). */
+async function dpVerwerkBetaling(env, url, p, id) {
   const reqId = p.metadata && p.metadata.requestId;
   const isRest = !!(p.metadata && p.metadata.rest);
   if (reqId && isRest) {
@@ -3607,6 +3672,9 @@ async function dpHandleMollieWebhook(request, env, url) {
     const item = list.find(x => x.id === reqId);
     if (item) {
       const wasBetaald = item.paymentStatus === "paid" || item.status === "paid";
+      /* Een oudere betaallink die verloopt, mag een betaalde bestelling niet
+         terugzetten (de link in de mail maakt bij elke klik een nieuwe). */
+      if (wasBetaald && p.status !== "paid") { console.log("[dp-mollie] " + p.id + " " + p.status + " na betaald, genegeerd"); return reply(200, { ok: true }); }
       item.paymentId = p.id;
       item.paymentStatus = p.status;   // paid / open / failed / expired / canceled
       if (p.status === "paid") item.status = "paid";
@@ -3632,7 +3700,7 @@ async function dpHandleMollieWebhook(request, env, url) {
            Tot nu toe bleef het stil: de spa kwam terug in de voorraad en de
            bestelling werd een regel in Beheer waar iemand achteraan moest
            bellen. Eén keer sturen, ook als Mollie zijn bericht herhaalt. */
-        if (!item.opnieuwGemaild && !item.testbetaling) {
+        if (!item.opnieuwGemaild && !item.testbetaling && !item.betaalToken) {
           item.opnieuwGemaild = new Date().toISOString();
           try { await dpRestMail(env, item, await dpGetAccounts(env), "opnieuw", url); }
           catch (e) { console.log("[rest] herkansing niet verstuurd: " + (e.message || e)); }
@@ -4741,6 +4809,7 @@ async function handleDealerRoutes(request, env, url) {
   if (p === "/dealers" && request.method === "GET") return dpHandlePage(env);
   if (p === "/dealers/login" && request.method === "POST") return dpHandleLogin(request, env, url);
   if (p === "/dealers/auth" && (request.method === "GET" || request.method === "POST")) return dpHandleAuth(request, env, url);
+  if (p.startsWith("/dealers/betaal/") && request.method === "GET") return dpHandleBetaalLink(env, url);
   if (p === "/dealers/logo.png" && request.method === "GET") return dpLogoResponse();
   /* De woordenlijsten van het portaal (Gerrit, 2 okt 2026: "Passion Partners
      zelf moet in verschillende talen kunnen: Engels, Nederlands, Duits,
@@ -4914,6 +4983,8 @@ async function handleDealerRoutes(request, env, url) {
         fonteyn: /@fonteyn\.nl$/i.test(String(sess.email || "")),
         // Fonteynbot krijgt in de mand alle betaalkeuzes (Gerrit, 2 okt 2026).
         beheer: !sess.medewerker && dpIsBeheerSessie(sess),
+        // Fonteynbot betaalt met de fictieve cent (7 okt 2026).
+        fictief: !!sess.fictief,
         region: (dealer && dealer.region) || "EU" });
     }
     if (p === "/dealers/api/setpassword" && request.method === "POST") return dpHandleSetPassword(request, env, sess);
@@ -4940,6 +5011,7 @@ async function handleDealerRoutes(request, env, url) {
        komt op het portaal uit; die vraagt hier een Mollie-link aan. Dezelfde
        functie als bij de aanbetaling, met metadata.rest zodat de webhook de
        twee uit elkaar houdt. */
+    if (p === "/dealers/api/fictief-betalen" && request.method === "POST") return dpHandleFictief(request, env, sess, url);
     if (p === "/dealers/api/restbetaling" && request.method === "POST")
       return dpHandleRestbetaling(request, env, sess, url);
     /* Het antwoord op de keuzevraag na 48 uur: ja of nee. */
@@ -8393,7 +8465,17 @@ const PC_TEKST_STANDAARD = {
           tekst: "Beste {dealer},\n\nEen vriendelijke herinnering aan de restbetaling van {bedrag} voor container {container} (order {order}). Uw container is rond {cargoReady} klaar bij de fabriek.\n\n" + PC_BANK.nl + "\n\nWilt u direct betalen en ons de betaalbevestiging sturen? Zodra wij die ontvangen, regelen wij de verzending naar u. Heeft u net betaald? Dan hartelijk dank, en dan hebben onze berichten elkaar gekruist.\n\nHartelijk dank voor uw snelle actie." },
   },
 };
-const PC_SOORTEN = ["deposit", "balance", "herinnering"];
+/* Twee mails aan Jazzi (de fabriek), altijd Engels en altijd met Chantal in cc
+   (Gerrit, 7 okt 2026): de check of de cargo klaar is, en de order zodra de
+   aanbetaling van de dealer binnen is. {regels} is de inhoud van de order. */
+const PC_JAZZI_TEKST = {
+  jazzi: { onderwerp: "Cargo ready check - container {container} (order {order})",
+           tekst: "Dear Jazzi team,\n\nAccording to our planning, container {container} (our order {order}, for {dealer}) is cargo ready on {cargoReady}.\n\nCould you please confirm that the cargo will be ready on that date? If the date changes, please let us know the new date.\n\nThank you in advance." },
+  "jazzi-order": { onderwerp: "New order - container {container} (order {order})",
+           tekst: "Dear Jazzi team,\n\nPlease find below a new container order (our order {order}, for {dealer}).\n\n{regels}\n\nCould you please send us the proforma invoice for this container?\n\nThank you in advance." },
+};
+for (const [s, v] of Object.entries(PC_JAZZI_TEKST)) PC_TEKST_STANDAARD[s] = { en: v, nl: v };
+const PC_SOORTEN = ["deposit", "balance", "herinnering", "jazzi", "jazzi-order"];
 const PC_DEPOSIT_PCT = 30;
 /* Dollars: Chantal zet de dealerprijs in Logic4 als dollarprijs gedeeld door
    AMERIKA_KOERS (Pleasure bij Northwest Swim Spas: 3.704,46 = $4.149). Terug
@@ -8463,8 +8545,10 @@ function pcToestand(order, rec, vandaag) {
   const naBalance = log.filter(x => x.soort === "balance" || x.soort === "herinnering");
   uit.laatsteMail = naBalance.length ? naBalance[naBalance.length - 1].ts : null;
   if (!rec.akkoord) return uit;
-  uit.cargoReady = pcPlusMaanden(rec.akkoord, 2);
-  uit.meldVanaf = pcPlusDagen(uit.cargoReady, -7);
+  /* Gerrit (7 okt 2026): cargo ready is 8 weken na het akkoord op de
+     proforma, en 5 dagen ervoor komen de mails aan Jazzi en de dealer klaar. */
+  uit.cargoReady = pcPlusDagen(rec.akkoord, 56);
+  uit.meldVanaf = pcPlusDagen(uit.cargoReady, -5);
   if (!order || uit.betaald) return uit;              // geleverd of betaald: klaar
   const laatsteDag = uit.laatsteMail
     ? new Date(uit.laatsteMail).toLocaleString("sv-SE", { timeZone: "Europe/Amsterdam" }).slice(0, 10) : null;
@@ -8487,7 +8571,8 @@ async function pcOrderLive(env, nr) {
     const T = o.Totals || {};
     const totaal = Number(T.AmountIncl) || 0, betaald = Number(T.Calc_TotalPayed) || 0;
     return { totaal, betaald, openstaand: Math.max(0, Math.round((totaal - betaald) * 100) / 100),
-             volledig: !!T.IsPaid || (totaal > 0 && betaald / totaal >= 0.99) };
+             volledig: !!T.IsPaid || (totaal > 0 && betaald / totaal >= 0.99),
+             regels: (o.OrderRows || []).filter(r => Number(r.Qty) > 0).map(r => ({ code: String(r.ProductCode || ""), omschrijving: String(r.Description || ""), aantal: Number(r.Qty) || 0 })) };
   } catch (e) { return null; }
 }
 function pcVul(s, w) { return String(s || "").replace(/\{(\w+)\}/g, (m, k) => (w[k] != null ? String(w[k]) : m)); }
@@ -8587,21 +8672,24 @@ async function pcHandle(request, env, url) {
     const rec = data.containers[k] || (data.containers[k] = { log: [] });
     rec.log = rec.log || [];
     const t = pcToestand(o, rec, vandaag);
-    if (!t.cargoReady && soort !== "deposit") return reply(400, { ok: false, error: "vul eerst de datum in waarop je akkoord gaf op de proforma; daaruit volgt cargo ready" });
+    const naarJazzi = soort === "jazzi" || soort === "jazzi-order";
+    if (!t.cargoReady && soort !== "deposit" && soort !== "jazzi-order") return reply(400, { ok: false, error: "vul eerst de datum in waarop je akkoord gaf op de proforma; daaruit volgt cargo ready" });
     const live = await pcOrderLive(env, o.ordernr);
     const totaalEur = live ? live.totaal : o.totaal;
     if (live) t.openstaand = live.openstaand;
-    if (live && live.volledig) return reply(409, { ok: false, error: "deze order is in Logic4 al volledig betaald" });
+    if (live && live.volledig && !naarJazzi) return reply(409, { ok: false, error: "deze order is in Logic4 al volledig betaald" });
     // Deposit: 30% van het orderbedrag. Balance en herinnering: wat er nog open staat.
     const bedragUsd = soort === "deposit" ? Math.round(pcUsd(totaalEur) * PC_DEPOSIT_PCT) / 100 : pcUsd(t.openstaand);
     const percentage = soort === "deposit" ? PC_DEPOSIT_PCT
       : (totaalEur > 0 ? Math.round((t.openstaand / totaalEur) * 100) : 70);
     const ontv = await pcOntvanger(env, o.debtorId);
-    const taal = b.taal === "nl" || b.taal === "en" ? b.taal : ontv.taal;
+    const taal = naarJazzi ? "en" : (b.taal === "nl" || b.taal === "en" ? b.taal : ontv.taal);
     const sjabloon = teksten()[soort][taal];
     const w = { dealer: ontv.bedrijf || o.naam, container: o.containerNr || o.referentie || ("order " + o.ordernr), order: o.ordernr,
                 cargoReady: t.cargoReady ? new Date(t.cargoReady + "T12:00:00Z").toLocaleDateString(taal === "nl" ? "nl-NL" : "en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "",
-                bedrag: pcDollar(bedragUsd, taal), openstaand: pcDollar(bedragUsd, taal), percentage };
+                bedrag: pcDollar(bedragUsd, taal), openstaand: pcDollar(bedragUsd, taal), percentage,
+                regels: ((live && live.regels) || []).map(r => "- " + r.aantal + " x " + (r.omschrijving || r.code) + (r.code ? " (" + r.code + ")" : "")).join("\n") || "(see the attached order)" };
+    if (naarJazzi) { ontv.naar = data.jazziMail || ""; ontv.cc = BERICHT_CHANTAL; }
     const onderwerp = pcVul(b.onderwerp || sjabloon.onderwerp, w);
     const tekst = pcVul(b.tekst || sjabloon.tekst, w);
     const naar = b.test ? wie : String(b.naar || ontv.naar || "").trim().toLowerCase();
@@ -8618,7 +8706,9 @@ async function pcHandle(request, env, url) {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar)) return reply(400, { ok: false, error: "geen geldig mailadres voor deze dealer - vul er een in" });
     if (!env.RESEND_API_KEY || !env.MAIL_FROM) return reply(500, { ok: false, error: "mail is niet ingericht in de worker" });
     const adres = (String(env.MAIL_FROM || "").match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM || "");
-    const cc = b.test ? [] : [ontv.cc].filter(x => x && x !== naar);
+    // Aan Jazzi gaat Chantal altijd in cc, en wie verstuurt ook (Gerrit, 7 okt 2026).
+    const cc = b.test ? [] : [...new Set((naarJazzi ? [BERICHT_CHANTAL, wie] : [ontv.cc]).filter(x => x && /@/.test(x) && x !== naar))];
+    if (naarJazzi && !b.test) data.jazziMail = naar;
     const rr = await fetch("https://api.resend.com/emails", {
       method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({ from: "Fonteyn Outdoor Living Mall <" + adres + ">", to: [naar], cc: cc.length ? cc : undefined,
@@ -8637,6 +8727,245 @@ async function pcHandle(request, env, url) {
     return reply(200, { ok: true, naar, cc, test: !!b.test, container: { ...rec, ...pcToestand(o, rec, vandaag) } });
   }
   return reply(404, { ok: false });
+}
+
+/* GET /dealers/betaal/<id>?t=<token> - de betaallink in de mail.
+   Maakt bij elke klik een nieuwe Mollie-betaling, zodat hij nooit verloopt. */
+async function dpHandleBetaalLink(env, url) {
+  const id = decodeURIComponent(url.pathname.split("/").pop() || "");
+  const tok = url.searchParams.get("t") || "";
+  const naar = (q) => Response.redirect(dpPad(env, url) + "/" + q, 302);
+  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  const item = (Array.isArray(data.requests) ? data.requests : []).find(x => x.id === id);
+  if (!item || !item.betaalToken || item.betaalToken !== tok) return naar("?betaal=onbekend");
+  if (item.paymentStatus === "paid" || item.status === "paid") return naar("?paid=1");
+  if (item.status === "done" || item.status === "geannuleerd" || item.orderGeannuleerd) return naar("?betaal=vervallen");
+  if (item.fictief) return naar("?fictief=" + item.id);
+  if (!env.MOLLIE_API_KEY || !(Number(item.deposit) > 0)) return naar("?betaal=fout");
+  const pay = await dpCreateMolliePayment(env, Number(item.deposit),
+    (item.payFull ? "Full payment" : "Deposit") + " — " + String(item.model || "Passion Partners") + " (" + (item.company || item.email) + ")",
+    dpPad(env, url) + "?paid=1", url.origin + "/dealers/webhook", { requestId: item.id }, item.currency || "EUR");
+  if (!pay.ok) return naar("?betaal=fout");
+  item.paymentId = pay.id; item.paymentStatus = "open";
+  await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(data));
+  return Response.redirect(pay.checkoutUrl, 302);
+}
+
+/* POST /dealers/api/fictief-betalen { id, rest } - alleen Fonteynbot (de
+   testsessie). Doet alsof Mollie "betaald" meldt; de rest van de keten loopt
+   zoals bij echt geld. In Logic4 komt geen betaling (dpRegisterPayment). */
+async function dpHandleFictief(request, env, sess, url) {
+  if (!sess || !sess.fictief) return reply(403, { ok: false, error: "alleen-fonteynbot" });
+  let b = {}; try { b = await request.json(); } catch {}
+  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  const item = (Array.isArray(data.requests) ? data.requests : []).find(x => x.id === String(b.id || ""));
+  if (!item || !item.fictief || String(item.email || "").toLowerCase() !== String(sess.email || "").toLowerCase()) return reply(404, { ok: false, error: "niet gevonden" });
+  const rest = !!b.rest;
+  const bedrag = rest ? dpRestBedrag(item) : Number(item.deposit) || 0;
+  if (!(bedrag > 0)) return reply(409, { ok: false, error: "niets-open" });
+  if (!rest && (item.paymentStatus === "paid" || item.status === "paid")) return reply(200, { ok: true, alBetaald: true });
+  const pid = "fictief_" + (rest ? "rest_" : "") + item.id + (rest ? "_" + Date.now() : "");
+  await dpVerwerkBetaling(env, url, { id: pid, status: "paid", fictief: true,
+    amount: { value: bedrag.toFixed(2), currency: item.currency || "EUR" },
+    metadata: rest ? { requestId: item.id, rest: "1" } : { requestId: item.id } }, pid);
+  await dpLogPartner(env, sess, "fictieve-betaling", (rest ? "rest " : "aanbetaling ") + bedrag.toFixed(2) + " op " + item.id);
+  return reply(200, { ok: true, bedrag });
+}
+
+/* Containerbestellingen zonder aanbetaling (Gerrit, 7 okt 2026): na 48 uur
+   een herinnering aan de dealer en een bericht aan Chantal dat die weg is; na
+   96 uur een bericht aan Chantal met zijn telefoonnummer om te bellen. Alleen
+   bestellingen vanaf 7 oktober 2026, anders krijgt de oude stapel ineens mail. */
+const PP_HERINNER_VANAF = "2026-10-07";
+async function ppAanbetalingRonde(env, d) {
+  const data = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+  const lijst = Array.isArray(data.requests) ? data.requests : [];
+  let nieuw = 0, gewijzigd = false;
+  const accounts = await dpGetAccounts(env).catch(() => ({ dealers: [] }));
+  for (const r of lijst) {
+    if (r.levering !== "container" || String(r.ts || "") < PP_HERINNER_VANAF) continue;
+    if (r.paymentStatus === "paid" || r.status === "paid" || r.status === "done" || r.status === "geannuleerd" || r.orderGeannuleerd) continue;
+    const uren = (Date.now() - Date.parse(r.ts)) / 3600000;
+    const aan = [...new Set([BERICHT_CHANTAL, String(r.aangemaaktDoor || "").toLowerCase()].filter(x => /@/.test(x)))];
+    const wie = r.company || r.email;
+    const sym = r.currency === "USD" ? "$" : "€";
+    const bedrag = sym + " " + Number(r.deposit || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const inhoud = (Array.isArray(r.items) ? r.items : []).map(x => (x.qty || 1) + "x " + (x.soort === "spa" ? x.model : (x.naam || x.code))).join(", ").slice(0, 160);
+    if (uren >= 48 && !r.herinnering48) {
+      r.herinnering48 = new Date().toISOString(); gewijzigd = true;
+      const link = r.fictief ? dpPad(env, null) + "/?fictief=" + r.id : dpPad(env, null) + "/betaal/" + r.id + "?t=" + r.betaalToken;
+      const binnen = "<p>Hi,</p><p>A friendly reminder about your container order in Passion Partners (" + inhoud.replace(/</g, "&lt;") + ").</p>" +
+        "<p>To start production, we kindly ask you to pay the deposit of <b>" + bedrag + "</b>.</p>" +
+        '<p style="margin:22px 0;text-align:center;"><a href="' + link + '" style="background:#c8102e;color:#fff;text-decoration:none;font-weight:bold;font-size:15px;padding:14px 32px;border-radius:10px;display:inline-block;">Pay the deposit - ' + bedrag + "</a></p>" +
+        "<p>Has the payment just been made? Then thank you very much, and our messages have crossed.</p>";
+      try {
+        await dpSendEmail(env, r.email, "Reminder: deposit for your container order - Passion Partners", dpMailShell(env, null, binnen),
+          BERICHT_CHANTAL, [...new Set([BERICHT_CHANTAL, dpAdviseurVan(accounts, r.email)].filter(Boolean))]);
+        r.herinnering48Ok = true;
+      } catch (e) { r.herinnering48Fout = String(e.message || e).slice(0, 160); }
+      if (berichtErbij(d, { id: "pp-herinnerd:" + r.id, aan, soort: "pp-herinnerd", ref: { requestId: r.id },
+          titel: "Herinnering verstuurd aan " + wie,
+          tekst: "De aanbetaling van " + bedrag + " voor de containerbestelling (" + inhoud + ") stond na 48 uur nog open. " + wie + " heeft een herinnering gekregen, met jou in cc." })) nieuw++;
+    }
+    if (uren >= 96 && !r.bellen96) {
+      r.bellen96 = new Date().toISOString(); gewijzigd = true;
+      let telefoon = "";
+      const dId = r.debtorId || ((dpFindDealer(accounts, r.email) || {}).debtorIds || [])[0];
+      if (dId) try {
+        const c = await relL4(env, "/v3/Relations/GetCustomers", { Id: Number(dId), TakeRecords: 1 });
+        const x = Array.isArray(c) && c[0] ? c[0] : {};
+        telefoon = String(x.MobileNumber || x.TelephoneNumber || x.PhoneNumber || x.Telephone || x.Mobile || "").trim();
+        if (!telefoon) for (const [k, v] of Object.entries(x)) if (/phone|tel|mobile/i.test(k) && v && String(v).trim()) { telefoon = String(v).trim(); break; }
+      } catch (e) {}
+      if (berichtErbij(d, { id: "pp-bellen:" + r.id, aan, soort: "pp-bellen", ref: { requestId: r.id }, telefoon,
+          titel: "Bel " + wie + ": aanbetaling na 96 uur nog open",
+          tekst: "De aanbetaling van " + bedrag + " voor de containerbestelling (" + inhoud + ") staat nog open." + (telefoon ? "" : " Er staat geen telefoonnummer bij deze debiteur in Logic4; zijn mailadres is " + r.email + ".") })) nieuw++;
+    }
+  }
+  if (gewijzigd) {
+    /* Opnieuw lezen en alleen onze velden erop zetten: tussendoor kan de
+       webhook van Mollie een betaling hebben weggeschreven. */
+    const vers = (await env.FONTEYN_DATA.get("dealer-requests", { type: "json" })) || {};
+    const perId = new Map(lijst.map(r => [r.id, r]));
+    for (const v of (Array.isArray(vers.requests) ? vers.requests : [])) {
+      const r = perId.get(v.id); if (!r) continue;
+      for (const k of ["herinnering48", "herinnering48Ok", "herinnering48Fout", "bellen96"]) if (r[k] !== undefined) v[k] = r[k];
+    }
+    await env.FONTEYN_DATA.put("dealer-requests", JSON.stringify(vers));
+  }
+  return nieuw;
+}
+
+/* ═══ Berichten ═══════════════════════════════════════════════════════════
+   Gerrit (7 okt 2026): berichten in iemands eigen Dashboard die iets vragen of
+   klaarzetten, met één knop om het af te handelen. Eén plek voor allemaal:
+     - pc-jazzi    5 dagen voor cargo ready: conceptmail aan Jazzi "is de cargo klaar?"
+     - pc-balance  op hetzelfde moment: de balance-mail aan de dealer
+     - pc-order    aanbetaling binnen op een partnercontainer: de order naar Jazzi
+     - vrijgave    2 dagen na de ETA: "is de container vrijgegeven?" (Manon, Chantal)
+     - pp-herinnerd   48 uur na een containerbestelling zonder aanbetaling: herinnering is verstuurd
+     - pp-bellen      96 uur zonder aanbetaling: bel de dealer (met telefoonnummer)
+   Een bericht heeft een vaste id, zodat een ronde hem nooit twee keer maakt.
+   KV "berichten": { items: [ { id, aan[], soort, titel, tekst, sinds, ref, telefoon,
+   uitgesteldTot, af: { ts, door, actie } } ] }. */
+const BERICHTEN_KEY = "berichten";
+async function berichtenLees(env) {
+  const d = (await env.FONTEYN_DATA.get(BERICHTEN_KEY, { type: "json" })) || { items: [] };
+  d.items = Array.isArray(d.items) ? d.items : [];
+  return d;
+}
+/* Zet een bericht klaar als het er nog niet is (ook niet afgehandeld). */
+function berichtErbij(d, b) {
+  if (d.items.some(x => x.id === b.id)) return false;
+  d.items.push(Object.assign({ sinds: new Date().toISOString() }, b));
+  return true;
+}
+function berichtenOpruimen(d) {
+  const grens = Date.now() - 60 * 86400000;
+  d.items = d.items.filter(x => !x.af || Date.parse(x.af.ts) > grens).slice(-800);
+}
+const BERICHT_CHANTAL = "chantal@fonteyn.nl", BERICHT_MANON = "manon@fonteyn.nl";
+const BERICHT_BEHEER = ["dolf@fonteyn.nl", "gerrit@fonteyn.nl", "fonteynbot@fonteyn.nl"];
+
+async function berichtenHandle(request, env, url) {
+  if (!env.SHARED_SECRET || (request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "Unauthorized" });
+  const wie = String(request.headers.get("X-Fonteyn-User") || "").toLowerCase();
+  if (!wie) return reply(400, { ok: false, error: "wie ben je?" });
+  const d = await berichtenLees(env);
+  const mijn = () => {
+    const nu = new Date().toISOString();
+    return d.items.filter(x => (x.aan || []).map(s => String(s).toLowerCase()).includes(wie))
+      .filter(x => !x.af ? !(x.uitgesteldTot && x.uitgesteldTot > nu) : (Date.now() - Date.parse(x.af.ts) < 3 * 86400000))
+      .sort((a, b) => String(b.sinds).localeCompare(String(a.sinds)));
+  };
+  if (request.method === "GET") return reply(200, { ok: true, items: mijn() });
+  let b = {}; try { b = await request.json(); } catch {}
+  const x = d.items.find(y => y.id === String(b.id || ""));
+  if (!x) return reply(404, { ok: false, error: "bericht niet gevonden" });
+  if (!(x.aan || []).map(s => String(s).toLowerCase()).includes(wie) && !BERICHT_BEHEER.includes(wie)) return reply(403, { ok: false, error: "dit bericht is niet voor jou" });
+  const actie = String(b.actie || "");
+  if (actie === "later") {
+    x.uitgesteldTot = new Date(Date.now() + 86400000).toISOString();
+  } else if (actie === "ja" || actie === "gedaan" || actie === "verstuurd") {
+    x.af = { ts: new Date().toISOString(), door: wie, actie };
+    /* Vrijgave: ja = vastleggen bij het schip, zodat het niet nog eens gevraagd wordt. */
+    if (x.soort === "vrijgave" && actie === "ja" && x.ref && x.ref.schip) {
+      const vg = (await env.FONTEYN_DATA.get("container-vrijgave", { type: "json" })) || {};
+      vg[x.ref.schip] = { op: x.af.ts, door: wie, ref: x.ref.naam || "" };
+      await env.FONTEYN_DATA.put("container-vrijgave", JSON.stringify(vg));
+      // Wie hetzelfde schip nog open heeft staan (de ander van de twee), is dan ook klaar.
+      d.items.filter(y => y.soort === "vrijgave" && !y.af && y.ref && y.ref.schip === x.ref.schip).forEach(y => { y.af = { ts: x.af.ts, door: wie, actie: "ja" }; });
+    }
+  } else if (actie === "nee") {
+    // Nog niet vrijgegeven: morgen opnieuw vragen.
+    x.uitgesteldTot = new Date(Date.now() + 86400000).toISOString();
+    x.nogNiet = (x.nogNiet || 0) + 1;
+  } else return reply(400, { ok: false, error: "onbekende actie" });
+  berichtenOpruimen(d);
+  await env.FONTEYN_DATA.put(BERICHTEN_KEY, JSON.stringify(d));
+  return reply(200, { ok: true, items: mijn() });
+}
+
+/* De ronde: elk uur, na de reserveringen (die leveren de partnercontainers). */
+async function berichtenRonde(env) {
+  const d = await berichtenLees(env);
+  let nieuw = 0;
+  const vandaag = pcVandaag();
+  /* 1. Partnercontainers: 5 dagen voor cargo ready twee concepten voor Chantal,
+        en zodra de aanbetaling binnen is de order naar Jazzi. */
+  try {
+    const pc = (await env.FONTEYN_DATA.get(PC_KEY, { type: "json" })) || { containers: {} };
+    const ledger = (await env.FONTEYN_DATA.get("reserveringen-live", { type: "json" })) || {};
+    const orders = pcOrdersUitLedger(ledger);
+    /* De eerste keer: wat nu al aanbetaald is, ging al naar Jazzi. Die
+       krijgen geen bericht meer, anders komt de hele lopende stapel langs. */
+    if (!Array.isArray(d.pcOrderBasis)) {
+      d.pcOrderBasis = Object.entries(orders).filter(([, o]) => Number(o.betaaldPct) >= 29).map(([k]) => k);
+      nieuw++;
+    }
+    for (const [k, o] of Object.entries(orders)) {
+      const rec = (pc.containers || {})[k] || {};
+      const st = pcToestand(o, rec, vandaag);
+      const naam = o.naam || ("order " + k), cont = o.containerNr ? "container " + o.containerNr : "order " + k;
+      if (st.cargoReady && !st.betaald && vandaag >= pcPlusDagen(st.cargoReady, -5) && vandaag <= pcPlusDagen(st.cargoReady, 10)) {
+        if (berichtErbij(d, { id: "pc-jazzi:" + k + ":" + st.cargoReady, aan: [BERICHT_CHANTAL], soort: "pc-jazzi", ref: { ordernr: Number(k), mailSoort: "jazzi" },
+            titel: "Cargo ready over 5 dagen: " + naam + " (" + cont + ")",
+            tekst: "Cargo ready staat op " + pcDatum(st.cargoReady) + ". De mail aan Jazzi om te checken of de cargo klaar is, staat klaar." })) nieuw++;
+        if (berichtErbij(d, { id: "pc-balance:" + k + ":" + st.cargoReady, aan: [BERICHT_CHANTAL], soort: "pc-balance", ref: { ordernr: Number(k), mailSoort: st.balanceVerstuurd ? "herinnering" : "balance" },
+            titel: "Balance vragen: " + naam + " (" + cont + ")",
+            tekst: "Cargo ready op " + pcDatum(st.cargoReady) + ". Nog open: $ " + Number(st.openstaandUsd || 0).toLocaleString("nl-NL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ". De mail aan de dealer staat klaar." })) nieuw++;
+      }
+      // Aanbetaling binnen (vanaf 29%, Logic4 rondt af) en nog niet naar Jazzi.
+      const jazziAl = (rec.log || []).some(x => x.soort === "jazzi-order");
+      if (!jazziAl && !d.pcOrderBasis.includes(k) && Number(o.betaaldPct) >= 29 && Number(o.betaaldPct) < 99) {
+        if (berichtErbij(d, { id: "pc-order:" + k, aan: [BERICHT_CHANTAL], soort: "pc-order", ref: { ordernr: Number(k), mailSoort: "jazzi-order" },
+            titel: "Aanbetaling binnen: " + naam + " (" + cont + ")",
+            tekst: "Er is " + Math.round(o.betaaldPct) + "% betaald. De mail met de order aan Jazzi staat klaar; kijk hem na en verstuur." })) nieuw++;
+      }
+    }
+  } catch (e) { console.log("[berichten] partnercontainers: " + (e.message || e)); }
+  /* 2. Vrijgave: 2 dagen na de ETA de vraag aan Manon en Chantal. Alleen schepen
+        met een ETA in de laatste 60 dagen, anders komt de hele geschiedenis langs. */
+  try {
+    const sch = (await env.FONTEYN_DATA.get("voorraad-schepen", { type: "json" })) || {};
+    const vg = (await env.FONTEYN_DATA.get("container-vrijgave", { type: "json" })) || {};
+    for (const s of (sch.ships || [])) {
+      const eta = String(s.etaHand || s.eta || (s.track && s.track.eta) || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(eta)) continue;
+      const sid = String(s.ref || s.trackRef || s.file || "").replace(/\s+/g, " ").trim();
+      if (!sid || vg[sid] || s.binnenGemeld) continue;
+      if (vandaag < pcPlusDagen(eta, 2) || pcPlusDagen(eta, 60) < vandaag) continue;
+      const naam = String(s.trackRef || s.ref || s.file || sid).replace(/\s+/g, " ").trim().slice(0, 80);
+      if (berichtErbij(d, { id: "vrijgave:" + sid, aan: [BERICHT_MANON, BERICHT_CHANTAL], soort: "vrijgave", ref: { schip: sid, naam },
+          titel: "Is de container vrijgegeven? " + naam,
+          tekst: "De ETA was " + pcDatum(eta) + ", twee dagen geleden of langer. Heb je de container vrijgegeven?" })) nieuw++;
+    }
+  } catch (e) { console.log("[berichten] vrijgave: " + (e.message || e)); }
+  /* 3. Passion Partners: containerbestellingen zonder aanbetaling. */
+  try { nieuw += await ppAanbetalingRonde(env, d); } catch (e) { console.log("[berichten] passion partners: " + (e.message || e)); }
+  berichtenOpruimen(d);
+  if (nieuw) await env.FONTEYN_DATA.put(BERICHTEN_KEY, JSON.stringify(d));
+  return { ok: true, nieuw };
 }
 
 async function voorraadbepalingHandle(request, env, url) {
@@ -16159,6 +16488,9 @@ const FP_WORKER = {
         if (String(event && event.cron || "").startsWith("15 ")) {
           // Eerst de welkomstmails (licht: 8 per ronde), dan de wire-bewaking.
           const wq = await ppWachtrijRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+          /* De berichten (Chantal, Manon): licht, vooral KV, een enkele mail. */
+          const br = await berichtenRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+          if (br.nieuw || br.error) console.log("[cron] berichten: " + JSON.stringify(br));
           if (wq.status === "loopt" || wq.error) console.log("[cron] welkomstmail-wachtrij: " + JSON.stringify(wq));
           const wr = await wireRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           console.log("[cron] wire-bewaking: " + JSON.stringify({ ok: wr.ok, actie: wr.actie || null, teller: wr.toestand && wr.toestand.teller, fout: wr.error || null }));
@@ -16613,6 +16945,11 @@ const FP_WORKER = {
     if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
     const bak = (await env.FONTEYN_DATA.get("dhl-push", { type: "json" })) || { berichten: [] };
     return reply(200, { ok: true, berichten: bak.berichten.slice(-100).reverse().map(x => { const { ruw, ...rest } = x; return rest; }) });
+  }
+  if (url.pathname === "/berichten" || url.pathname === "/berichten/actie") return berichtenHandle(request, env, url).catch(e => reply(502, { ok: false, error: String(e.message || e) }));
+  if (url.pathname === "/berichten/ronde" && request.method === "POST") {
+    if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false });
+    return reply(200, await berichtenRonde(env).catch(e => ({ ok: false, error: String(e.message || e) })));
   }
   if (url.pathname.startsWith("/partnercontainer/")) {
       if ((request.headers.get("X-Fonteyn-Auth") || "") !== env.SHARED_SECRET) return reply(401, { ok: false, error: "geen teamsleutel" });

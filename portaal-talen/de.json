@@ -195,7 +195,17 @@
   "on the water (date to follow)": "auf See (Datum folgt)",
   "tab and parts from": "und Ersatzteile unter",
   "they are": "sie sind",
-  "your spa is ready in Uddel": "Ihr Spa steht in Uddel bereit"
+  "your spa is ready in Uddel": "Ihr Spa steht in Uddel bereit",
+  "Order for a partner": "Für einen Partner bestellen",
+  "- No, I pay myself -": "- Nein, ich bezahle selbst -",
+  "The order goes to the partner's account and they receive the payment link by e-mail, with you in cc.": "Die Bestellung landet im Konto des Partners und er erhält den Zahlungslink per E-Mail, mit Ihnen in Cc.",
+  "Send to partner": "An Partner senden",
+  "Sent to the partner:": "An den Partner gesendet:",
+  "The order is in their account and they received the payment link by e-mail, with you in cc.": "Die Bestellung ist in seinem Konto und er hat den Zahlungslink per E-Mail erhalten, mit Ihnen in Cc.",
+  "Pay the deposit": "Anzahlung bezahlen",
+  "for": "für",
+  "Pay with the fictitious cent": "Mit dem fiktiven Cent bezahlen",
+  "Order received - on to the fictitious cent…": "Bestellung erhalten - weiter zum fiktiven Cent…"
  },
  "sjablonen": {
   "{n} pcs": "{n} Stk.",

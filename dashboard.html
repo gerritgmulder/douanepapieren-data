@@ -457,6 +457,7 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
          verwijderen, dus dat moet met de hand en het liefst snel. -->
     <div id="oudeAppBlok"></div>
     <div id="nieuweRelatiesBlok"></div>
+    <div id="berichtenBlok"></div>
     <div id="ppInkoopBlok"></div>
     <div id="partnercontainerBlok"></div>
     <div id="takenBlok"></div>
@@ -831,6 +832,14 @@ button:disabled{transform:none!important;box-shadow:none!important;filter:none!i
         <p>Interactief overzicht van Dolfs koeien — status, stamboom en aantekeningen, centraal opgeslagen voor Dolf en Gerrit.</p>
       </a>
       </div>
+    </section>
+    <!-- Archief van de nieuwsberichten (Gerrit, 7 okt 2026): weggeklikt is
+         niet weg; helemaal onderaan, onder alle tegels, staat alles terug. -->
+    <section class="groep hidden" id="nieuwsArchief" style="margin-top:28px">
+      <details style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:12px 18px">
+        <summary style="cursor:pointer;font-weight:600;color:#144734;font-size:14px">Archief: wat er is veranderd in het Dashboard <span id="nieuwsArchiefAantal" style="font-weight:400;color:#6b7280"></span></summary>
+        <div id="nieuwsArchiefLijst" style="margin-top:10px"></div>
+      </details>
     </section>
   </main>
 </div>
@@ -1209,6 +1218,8 @@ function showDashboard(email) {
   startNieuweRelaties(email);
   startPartnercontainerMeldingen(email);
   startPPInkoopMeldingen(email);
+  startBerichten(email);
+  startNieuwsArchief(email);
   controleerAppVersie();
 }
 
@@ -1387,6 +1398,132 @@ const NIEUWE_REL_VOOR = new Set([
    Chantal en Arno bovenaan hun Dashboard een melding dat de inkooporder
    gemaakt moet worden. Hij blijft staan tot iemand op "inkooporder gemaakt"
    klikt. */
+/* ── Berichten ──────────────────────────────────────────────────────────────
+   Wat het Dashboard voor iemand klaarzet, met één knop om het af te handelen
+   (Gerrit, 7 okt 2026): conceptmails aan Jazzi en de dealer rond cargo ready,
+   de order naar Jazzi na de aanbetaling, de vraag of een container is
+   vrijgegeven, en herinneringen en belverzoeken bij Passion Partners. */
+async function startBerichten(email){
+  const lc = String(email||"").toLowerCase();
+  const blok = el("berichtenBlok");
+  const key = localStorage.getItem("fp.teamkey") || "";
+  if (!key || !blok || !lc) return;
+  const W = "https://fonteyn-data-store.g-mulder.workers.dev";
+  const kop = { "Content-Type":"application/json", "X-Fonteyn-Auth": key, "X-Fonteyn-User": lc };
+  const concept = {};          // id -> { naar, onderwerp, tekst, open }
+  let items = [];
+  async function haal(){
+    try { const r = await fetch(W + "/berichten", { headers: kop }); const j = await r.json(); return j && j.ok ? (j.items||[]) : null; }
+    catch(e){ return null; }
+  }
+  async function actie(id, a){
+    const r = await fetch(W + "/berichten/actie", { method:"POST", headers: kop, body: JSON.stringify({ id, actie: a }) });
+    const j = await r.json().catch(()=>null);
+    if (j && j.ok) items = j.items || [];
+    try { if (window.fpLog) window.fpLog("bericht-" + a, id); } catch(e){}
+  }
+  const isMail = (m) => m.ref && m.ref.mailSoort && m.ref.ordernr;
+  async function laadConcept(m){
+    if (concept[m.id]) return;
+    concept[m.id] = { laden: true };
+    try {
+      const r = await fetch(W + "/partnercontainer/mail", { method:"POST", headers: kop,
+        body: JSON.stringify({ ordernr: m.ref.ordernr, soort: m.ref.mailSoort, proef: true }) });
+      const j = await r.json();
+      concept[m.id] = j && j.ok ? { naar: j.naar || "", cc: j.cc || "", onderwerp: j.onderwerp || "", tekst: j.tekst || "" }
+                               : { fout: (j && j.error) || ("HTTP " + r.status) };
+    } catch(e){ concept[m.id] = { fout: String(e.message || e) }; }
+    teken();
+  }
+  const nl = (t)=>{ const d=new Date(t); return isNaN(d)?"":d.toLocaleDateString("nl-NL",{day:"numeric",month:"long"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); };
+  const knop = (cls, tekst, extra) => '<button type="button" class="' + cls + '" ' + (extra||"") + ' style="background:#144734;color:#fff;border:0;border-radius:8px;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap">' + tekst + '</button>';
+  const knop2 = (cls, tekst, extra) => '<button type="button" class="' + cls + '" ' + (extra||"") + ' style="background:#fff;color:#144734;border:1px solid #c7d2cc;border-radius:8px;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap">' + tekst + '</button>';
+  function teken(){
+    const open = items.filter(m => !m.af), af = items.filter(m => m.af);
+    if (!items.length) { blok.innerHTML = ""; return; }
+    blok.innerHTML =
+      '<section style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #c8102e;border-radius:10px;padding:14px 20px;margin-bottom:22px">'
+      + '<h3 style="margin:0 0 6px;font-size:15px;color:#144734">Berichten' + (open.length ? ' - ' + open.length + ' voor jou' : '') + '</h3>'
+      + open.map(m => {
+          const c = concept[m.id];
+          let acties = "", onder = "";
+          if (isMail(m)) {
+            if (!c) laadConcept(m);
+            if (c && c.fout) onder = '<div style="font-size:12px;color:#b91c1c;margin-top:4px">' + relEsc(c.fout) + '</div>';
+            else if (c && !c.laden) {
+              onder = '<div style="font-size:12px;color:#374151;margin-top:4px">Aan: <b>' + relEsc(c.naar || "nog in te vullen") + '</b>' + (c.cc ? ' &middot; cc ' + relEsc(c.cc) : '') + ' &middot; ' + relEsc(c.onderwerp) + '</div>'
+                + (c.open || !c.naar ? '<div style="margin-top:8px;display:grid;gap:6px;max-width:680px">'
+                    + '<input class="brNaar" data-id="' + relEsc(m.id) + '" value="' + relEsc(c.naar) + '" placeholder="mailadres' + (m.ref.mailSoort.indexOf("jazzi")===0 ? ' van Jazzi (eenmalig invullen, daarna onthouden)' : '') + '" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:7px;font:inherit;font-size:13px">'
+                    + '<input class="brOnd" data-id="' + relEsc(m.id) + '" value="' + relEsc(c.onderwerp) + '" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:7px;font:inherit;font-size:13px">'
+                    + '<textarea class="brTekst" data-id="' + relEsc(m.id) + '" rows="9" style="padding:8px;border:1px solid #d1d5db;border-radius:7px;font:inherit;font-size:13px;line-height:1.45">' + relEsc(c.tekst) + '</textarea></div>' : '');
+              acties = knop("brStuur", "Versturen", 'data-id="' + relEsc(m.id) + '"') + (c.open ? "" : knop2("brBekijk", "Mail bekijken", 'data-id="' + relEsc(m.id) + '"'));
+            } else onder = '<div style="font-size:12px;color:#6b7280;margin-top:4px">Mail klaarzetten&hellip;</div>';
+          } else if (m.soort === "vrijgave") {
+            acties = knop("brAct", "Ja, vrijgegeven", 'data-id="' + relEsc(m.id) + '" data-a="ja"') + knop2("brAct", "Nog niet", 'data-id="' + relEsc(m.id) + '" data-a="nee"');
+          } else if (m.soort === "pp-bellen") {
+            if (m.telefoon) onder = '<div style="margin-top:4px;font-size:14px"><a href="tel:' + relEsc(String(m.telefoon).replace(/[^0-9+]/g,"")) + '" style="color:#144734;font-weight:700">' + relEsc(m.telefoon) + '</a></div>';
+            acties = knop("brAct", "Gebeld", 'data-id="' + relEsc(m.id) + '" data-a="gedaan"') + knop2("brAct", "Morgen weer", 'data-id="' + relEsc(m.id) + '" data-a="later"');
+          } else {
+            acties = knop2("brAct", "Gezien", 'data-id="' + relEsc(m.id) + '" data-a="gedaan"');
+          }
+          return '<div style="display:flex;gap:12px;align-items:flex-start;padding:9px 0;border-top:1px solid #f3f4f6;flex-wrap:wrap">'
+            + '<div style="flex:1;min-width:240px;font-size:13px"><b>' + relEsc(m.titel) + '</b>'
+            + '<div style="font-size:12.5px;color:#374151;margin-top:2px">' + relEsc(m.tekst || "") + '</div>' + onder
+            + '<div style="font-size:11.5px;color:#6b7280;margin-top:3px">' + relEsc(nl(m.sinds)) + '</div></div>'
+            + '<div style="display:flex;gap:6px;flex-wrap:wrap">' + acties + '</div></div>';
+        }).join("")
+      + (af.length ? '<details style="margin-top:6px"><summary style="cursor:pointer;font-size:12.5px;color:#6b7280">Afgehandeld (' + af.length + ')</summary>'
+          + af.map(m => '<div style="font-size:12.5px;color:#6b7280;padding:4px 0">' + relEsc(m.titel) + ' &middot; ' + relEsc(nl(m.af.ts)) + '</div>').join("") + '</details>' : '')
+      + '</section>';
+    blok.querySelectorAll(".brBekijk").forEach(b => b.addEventListener("click", () => { const c = concept[b.dataset.id]; if (c) { c.open = true; teken(); } }));
+    blok.querySelectorAll(".brNaar,.brOnd,.brTekst").forEach(i => i.addEventListener("input", () => {
+      const c = concept[i.dataset.id]; if (!c) return;
+      if (i.classList.contains("brNaar")) c.naar = i.value; else if (i.classList.contains("brOnd")) c.onderwerp = i.value; else c.tekst = i.value;
+    }));
+    blok.querySelectorAll(".brAct").forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true; b.textContent = "bezig\u2026";
+      await actie(b.dataset.id, b.dataset.a); teken();
+    }));
+    blok.querySelectorAll(".brStuur").forEach(b => b.addEventListener("click", async () => {
+      const m = items.find(x => x.id === b.dataset.id), c = concept[b.dataset.id];
+      if (!m || !c) return;
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(c.naar||"").trim())) { c.open = true; teken(); return; }
+      b.disabled = true; b.textContent = "versturen\u2026";
+      try {
+        const r = await fetch(W + "/partnercontainer/mail", { method:"POST", headers: kop,
+          body: JSON.stringify({ ordernr: m.ref.ordernr, soort: m.ref.mailSoort, naar: c.naar.trim(), onderwerp: c.onderwerp, tekst: c.tekst }) });
+        const j = await r.json();
+        if (!j || !j.ok) throw new Error((j && j.error) || ("HTTP " + r.status));
+        await actie(m.id, "verstuurd"); teken();
+      } catch(e) { b.disabled = false; b.textContent = "Nog een poging: " + (e.message || e); }
+    }));
+  }
+  const eerst = await haal();
+  if (eerst) { items = eerst; teken(); }
+}
+
+/* ── Archief van het nieuws, onderaan onder alle tegels ─────────────────── */
+function startNieuwsArchief(email){
+  const lc = String(email||"").toLowerCase();
+  const sec = el("nieuwsArchief"), lijst = el("nieuwsArchiefLijst");
+  if (!sec || !lijst || !window.fpNieuws || !fpNieuws.zichtbaar) return;
+  const alle = (fpNieuws.zichtbaar(lc) || []).slice().sort((a, b) => String(b.datum).localeCompare(String(a.datum)));
+  if (!alle.length) return;
+  sec.classList.remove("hidden");
+  el("nieuwsArchiefAantal").textContent = "(" + alle.length + ")";
+  const d = (x)=>{ const p=String(x||"").split("-"); return p.length===3 ? Number(p[2])+" "+["jan","feb","mrt","apr","mei","jun","jul","aug","sep","okt","nov","dec"][Number(p[1])-1]+" "+p[0] : x; };
+  let toon = 25;
+  function teken(){
+    lijst.innerHTML = alle.slice(0, toon).map(n => '<div style="padding:8px 0;border-top:1px solid #f3f4f6;font-size:13px">'
+        + '<div><b>' + relEsc(n.titel || "") + '</b> <span style="color:#6b7280;font-size:12px">&middot; ' + relEsc(d(n.datum)) + '</span></div>'
+        + '<div style="color:#374151;margin-top:2px;line-height:1.45">' + relEsc(n.wat || "") + '</div></div>').join("")
+      + (alle.length > toon ? '<button type="button" id="nieuwsArchiefMeer" style="margin-top:8px;background:#fff;border:1px solid #c7d2cc;color:#144734;border-radius:8px;padding:6px 12px;font:inherit;font-size:12.5px;cursor:pointer">Toon meer</button>' : '');
+    const meer = el("nieuwsArchiefMeer");
+    if (meer) meer.addEventListener("click", () => { toon += 25; teken(); });
+  }
+  teken();
+}
+
 async function startPPInkoopMeldingen(email){
   const lc = String(email||"").toLowerCase();
   if (!window.fpToegang || !fpToegang.mag("pp-inkoop", lc)) return;
@@ -1433,6 +1570,8 @@ async function startPPInkoopMeldingen(email){
 async function startPartnercontainerMeldingen(email){
   const lc = String(email||"").toLowerCase();
   if (!window.fpToegang || !fpToegang.mag("voorraad-beheer", lc)) return;
+  // Partner containers zijn van Chantal (Gerrit, 7 okt 2026).
+  if (!["chantal@fonteyn.nl","fonteyn.chantal","dolf@fonteyn.nl","gerrit@fonteyn.nl","fonteynbot@fonteyn.nl"].includes(lc)) return;
   const key = localStorage.getItem("fp.teamkey") || "";
   const blok = el("partnercontainerBlok");
   if (!key || !blok) return;

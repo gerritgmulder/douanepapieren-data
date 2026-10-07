@@ -592,7 +592,7 @@ function tekenMenu(){
   var ov=overzichtRijen();
   var tekort=ov.filter(function(r){ return r.tekort>0; }).length;
   $("sumOverzicht").textContent = ov.length + " model" + (ov.length===1?"":"len") +
-    (tekort ? " · " + tekort + " met een tekort" : " · alles gedekt");
+    (tekort ? " · ✗ " + tekort + " met een tekort" : " · ✓ alles gedekt");
   var st=stockRijen();
   $("sumStock").textContent = st.reduce(function(n,r){ return n+r.vrij; },0) +
     " vrij in Uddel · " + st.length + " model" + (st.length===1?"":"len");

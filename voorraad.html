@@ -584,10 +584,10 @@
         <input id="ovBestelZoek" placeholder="zoek een spa-model…" style="min-width:240px;padding:8px">
         <span id="ovBestelTel" style="font-size:12px;color:var(--muted)"></span>
       </div>
-      <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <b>In productie</b> is wat er bij de fabriek besteld staat; dat telt mee in Gedekt en gaat dus van het tekort af. Klik een model open om te zien in welke kleur. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
+      <p class="lead" style="font-size:12px;margin-bottom:8px">Per model: actieve reserveringen tegenover wat er nu in NL is + op zee komt. <b>Tekort</b> = wat er ná de bekende schepen nog besteld moet worden. <b>In productie</b> is wat er bij de fabriek besteld staat; dat telt mee en gaat dus van het tekort af. <b>Dekking</b>: <span style="color:#15803d;font-weight:700">✓</span> = alle reserveringen van dit model zijn gedekt door wat er ligt, vaart en gemaakt wordt; <span style="color:#b91c1c;font-weight:700">✗</span> = er moet nog iets bij. Klik een model open om te zien in welke kleur. <span id="ovBacklogUpd" style="color:var(--muted)"></span></p>
       <div id="ovParserWaarschuwing" class="status-msg warn hidden" style="margin:0 0 10px"></div>
       <div class="tablewrap" style="max-height:52vh"><table class="grid">
-        <thead><tr><th>Model</th><th>Actief res.</th><th>Op voorraad (NL)</th><th>Op zee</th><th>In productie</th><th>Gedekt</th><th>Tekort</th></tr></thead>
+        <thead><tr><th>Model</th><th>Actief res.</th><th>Op voorraad (NL)</th><th>Op zee</th><th>In productie</th><th title="✓ = alle reserveringen zijn gedekt door voorraad, schepen en productie; ✗ = er moet nog iets bij">Dekking</th><th>Tekort</th></tr></thead>
         <tbody id="ovBacklog"></tbody>
       </table></div>
     </div>
@@ -1041,6 +1041,10 @@ const BEHEER = new Set([
   "gerrit@fonteyn.nl","fonteyn.gerrit","gerrit",
   "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot",
 ]);
+// Partner containers: alleen Chantal, met de beheerlaag erboven (Gerrit, 7 okt 2026).
+const PC_MAG = new Set(["chantal@fonteyn.nl","fonteyn.chantal","chantal",
+  "dolf@fonteyn.nl","fonteyn.dolf","dolf","gerrit@fonteyn.nl","fonteyn.gerrit","gerrit",
+  "fonteynbot@fonteyn.nl","fonteyn.bot","fonteynbot"]);
 // Mogen in Particulier en Partner wél wijzigen (Chantal, 5 aug).
 const KLANT_WIJZIG = new Set([
   "gerwin@fonteyn.nl","fonteyn.gerwin","gerwin",
@@ -1102,6 +1106,12 @@ let MAG_BEHEREN  = false;   // uploads, schepen, prioriteiten, inkoop naar Logic
     throw new Error("geen toegang");
   }
   MAG_BEHEREN  = BEHEER.has(email);
+  /* Partner containers: alleen Chantal (Gerrit, 7 okt 2026), en de beheerlaag. */
+  if (!PC_MAG.has(email)) {
+    const k=document.querySelector('.tab[data-tab="partnercont"]'); if(k) k.style.display="none";
+    const p=document.getElementById("tab-partnercont"); if(p) p.classList.add("hidden");
+    const b=document.getElementById("pcMeldBalk"); if(b) b.style.display="none";
+  }
   const magKlantWijzigen = KLANT_WIJZIG.has(email);
   MAG_WIJZIGEN = MAG_BEHEREN || magKlantWijzigen;
   // Rol meesturen naar het activiteitenlogboek: zo is bij élke actie te zien
@@ -2077,15 +2087,15 @@ function kleurTabel(r){
       (dik?";font-weight:700":"")+"'>"+waarde+"</td></tr>";
   };
   return "<div class='tablewrap'><table class='grid' style='margin:0'><thead><tr>"+
-    "<th>Kleur</th><th>Gevraagd</th><th>Op voorraad NL</th><th>In productie</th><th>Nog te dekken</th></tr></thead><tbody>"+
+    "<th>Kleur</th><th>Gevraagd</th><th>Op voorraad NL</th><th>In productie</th><th>Dekking</th></tr></thead><tbody>"+
     rijen.map(function(x){
       const open=Math.max(0,x.gevraagd-x.voorraad-x.productie);
       return "<tr><td>"+esc(x.kleur)+"</td><td>"+(x.gevraagd||"-")+"</td>"+
         "<td style='color:#2563eb'>"+(x.voorraad||"-")+"</td>"+
         "<td style='color:"+(x.productie?"#7c3aed":"var(--muted)")+"'>"+(x.productie||"-")+"</td>"+
-        "<td style='color:"+(open?"#b91c1c;font-weight:700":"#15803d")+"'>"+(open||"0")+"</td></tr>";
+        "<td style='font-weight:700;color:"+(open?"#b91c1c":"#15803d")+"' title='"+(open?(open+" nog open in deze kleur"):"gedekt")+"'>"+(open?("✗ <span style='font-weight:400;font-size:12px'>"+open+" open</span>"):"✓")+"</td></tr>";
     }).join("")+
-    regel("samen nog te dekken (na voorraad en productie)",teDekken,null,true)+
+    regel("samen nog open (na voorraad en productie)",teDekken,null,true)+
     (zee?regel("af: op zee, kleur volgt","-"+zee,"#2563eb"):"")+
     regel("blijft over - dit is het tekort",rest,rest>0?"#b91c1c":"#15803d",true)+
     "</tbody></table></div>"+
@@ -2156,7 +2166,13 @@ function renderBacklog(){
       "<td>"+r.actQty+(r.conQty?(" <span style='color:#c2410c;font-size:11px' title='partnercontainers: orders op magazijn Dealer magazijn, rechtstreeks naar de dealer'>+"+r.conQty+" partnercont.</span>"):"")+"</td>"+
       "<td>"+(r.voorraad||"-")+"</td><td>"+(r.zee||"-")+"</td>"+
       "<td style='color:"+(r.prodQty?"#7c3aed":"var(--muted)")+"'>"+(r.prodQty||"-")+"</td>"+
-      "<td style='color:#15803d'>"+r.gedekt+"</td>"+
+      /* Gerrit (7 okt 2026): geen "Gedekt" met een getal, maar een vink of een
+         kruis: zijn de reserveringen gedekt door wat er besteld is, ja of nee. */
+      (r.actQty>0
+        ? (r.tekort>0
+            ? "<td style='color:#b91c1c;font-weight:700;font-size:15px' title='"+r.gedekt+" van "+r.actQty+" reserveringen gedekt; er moeten er nog "+r.tekort+" bij'>✗</td>"
+            : "<td style='color:#15803d;font-weight:700;font-size:15px' title='alle "+r.actQty+" reserveringen zijn gedekt'>✓</td>")
+        : "<td style='color:var(--muted)'>-</td>")+
       "<td style='color:"+(r.tekort>0?"#b91c1c;font-weight:700":"var(--muted)")+"'>"+(r.tekort||"-")+"</td></tr>";
     if(open){
       h+="<tr><td colspan='7' style='background:#fafafa;padding:8px 14px'>"+
@@ -3851,11 +3867,12 @@ function pcKop(json){
 function pcGeld(v){ return v==null?"-":"€ "+Number(v).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
 // Containerdealers betalen in dollars (Gerrit, 25 sep 2026); de worker rekent terug met de vaste koers.
 function pcUsd(v){ return v==null?"-":"$ "+Number(v).toLocaleString("nl-NL",{minimumFractionDigits:2,maximumFractionDigits:2}); }
-const PC_SOORT_NAAM={deposit:"Deposit-mail",balance:"Balance-mail",herinnering:"Herinnering"};
+const PC_SOORT_NAAM={deposit:"Deposit-mail",balance:"Balance-mail",herinnering:"Herinnering","jazzi":"Cargo-check aan Jazzi","jazzi-order":"Order aan Jazzi"};
 function pcDagTijd(ts){ const d=new Date(ts); return isNaN(d)?"":d.toLocaleDateString("nl-NL",{day:"2-digit",month:"2-digit",year:"numeric"})+" "+d.toLocaleTimeString("nl-NL",{hour:"2-digit",minute:"2-digit"}); }
 function pcVan(k){ return (pcStand&&pcStand.containers&&pcStand.containers[String(k)])||{}; }
 async function laadPcStand(){
   if(pcStandBezig||!DATA_STORE_AUTH) return;
+  if(!PC_MAG.has(String(localStorage.getItem("fp.email")||"").toLowerCase())) return;
   pcStandBezig=true;
   try{
     const r=await fetch(PC_URL+"/stand",{headers:pcKop()});
@@ -3921,15 +3938,20 @@ function pcPaneel(o){
   h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>Akkoord gegeven op</b>"+
     "<input type='date' class='pcAkkoord' data-k='"+esc(k)+"' value='"+esc(s.akkoord||"")+"' style='padding:4px 6px;font:inherit;font-size:12.5px'>"+
     (s.cargoReady
-      ? "<span>→ <b>cargo ready "+esc(datumNL(s.cargoReady))+"</b> <span style='color:var(--muted)'>(akkoord + 2 maanden; melding vanaf "+esc(datumNL(s.meldVanaf))+")</span></span>"
-      : "<span style='color:var(--muted)'>vul de datum in waarop je akkoord gaf op de proforma; cargo ready is 2 maanden later</span>")+"</div>";
+      ? "<span>→ <b>cargo ready "+esc(datumNL(s.cargoReady))+"</b> <span style='color:var(--muted)'>(akkoord + 8 weken; op "+esc(datumNL(s.meldVanaf))+" staan de mails aan Jazzi en de dealer klaar in je Berichten)</span></span>"
+      : "<span style='color:var(--muted)'>vul de datum in waarop je akkoord gaf op de proforma; cargo ready is 8 weken later</span>")+"</div>";
   const magDeposit=!s.betaald&&!s.depositVerstuurd&&(Number(s.betaaldPct)||0)<30;
   h+="<div style='display:flex;gap:8px;align-items:center;flex-wrap:wrap'><b>Betaling</b>"+
     (s.betaald ? "<span class='pill' style='background:#dcfce7;color:#15803d'>volledig betaald</span>"
                : "<span>"+(s.betaaldPct!=null?s.betaaldPct+"% betaald · ":"")+"open "+esc(pcUsd(s.openstaandUsd))+" <span style='color:var(--muted)'>van "+esc(pcUsd(s.totaalUsd))+"</span></span>")+
     (magDeposit ? "<button class='btn sm pcOpstellen' type='button' data-k='"+esc(k)+"' data-soort='deposit'>Deposit-mail opstellen</button>" : "")+
-    (!s.betaald&&s.cargoReady ? "<button class='btn sm pcOpstellen' type='button' data-k='"+esc(k)+"' data-soort='"+(s.balanceVerstuurd?"herinnering":"balance")+"'>"+
-                   (s.balanceVerstuurd?"Herinnering opstellen":"Balance-mail opstellen")+"</button>" : "")+"</div>";
+    /* Gerrit (7 okt 2026): zodra de aanbetaling binnen is, twee knoppen die
+       blijven staan tot er 100% betaald is. */
+    (!s.betaald&&(Number(s.betaaldPct)||0)>=29
+      ? "<button class='btn sm pcOpstellen' type='button' data-k='"+esc(k)+"' data-soort='balance'>Balance betaling vragen</button>"+
+        "<button class='btn sm secondary pcOpstellen' type='button' data-k='"+esc(k)+"' data-soort='herinnering'>Herinnering sturen</button>"
+      : (!s.betaald&&s.cargoReady ? "<button class='btn sm pcOpstellen' type='button' data-k='"+esc(k)+"' data-soort='"+(s.balanceVerstuurd?"herinnering":"balance")+"'>"+
+                   (s.balanceVerstuurd?"Herinnering sturen":"Balance betaling vragen")+"</button>" : ""))+"</div>";
   if(m){
     h+="<div style='border:1px solid #e5e7eb;border-radius:9px;padding:10px 12px;background:#fff;display:grid;gap:7px'>";
     if(m.bezig) h+="<div style='color:var(--muted)'>"+esc(m.bezig)+"</div>";
@@ -4036,7 +4058,9 @@ function tekenPcTeksten(){
   box.innerHTML="<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px'>"+
     blok("deposit","en","Deposit-mail (Engels)")+blok("deposit","nl","Deposit-mail (Nederlands)")+
     blok("balance","en","Balance-mail (Engels)")+blok("balance","nl","Balance-mail (Nederlands)")+
-    blok("herinnering","en","Herinnering (Engels)")+blok("herinnering","nl","Herinnering (Nederlands)")+"</div>"+
+    blok("herinnering","en","Herinnering (Engels)")+blok("herinnering","nl","Herinnering (Nederlands)")+
+    (t["jazzi"]?blok("jazzi","en","Cargo-check aan Jazzi (5 dagen voor cargo ready)"):"")+
+    (t["jazzi-order"]?blok("jazzi-order","en","Order aan Jazzi (na de aanbetaling; {regels} = de inhoud van de order)"):"")+"</div>"+
     "<div style='margin-top:10px;display:flex;gap:10px;align-items:center'><button class='btn solid sm' id='pcTBewaar' type='button'>Teksten bewaren</button><span id='pcTStatus' style='font-size:12px;color:var(--muted)'></span></div>";
   document.getElementById("pcTBewaar").addEventListener("click",async()=>{
     const tekst={};

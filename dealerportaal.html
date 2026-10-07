@@ -2425,6 +2425,7 @@ function renderReqs(){
   /* De adviseur van een lead: wie hem overzette, of de adviseur zelf als die
      voor de beurs bestelde, of anders de adviseur van het partneraccount. */
   const leadAdviseur = (r) => {
+    if (r.aangemaaktDoor) return r.aangemaaktDoor;   // Chantal bestelde voor de partner (7 okt 2026)
     if (r.overgezetVan) return r.overgezetVan;
     if (/@fonteyn\.nl$/i.test(String(r.email || ""))) return r.email;
     const d = (accounts.dealers || []).find(x => String(x.email || "").toLowerCase() === String(r.email || "").toLowerCase());
@@ -2536,7 +2537,10 @@ function renderReqs(){
   $("reqBodyLeads").innerHTML = leads.slice().reverse().map((r)=>{
     const idx = reqData.requests.indexOf(r);
     const archived = r.status === "done";
-    const over = r.overgezetVan ? ` <span class="pill">van ${esc(r.overgezetVan)}</span>` : "";
+    const over = (r.overgezetVan ? ` <span class="pill">van ${esc(r.overgezetVan)}</span>` : "") +
+      (r.aangemaaktDoor ? ` <span class="pill" title="${esc(tl("Deze bestelling is voor de partner gemaakt; hij heeft de betaallink per mail","This order was placed for the partner; they received the payment link by e-mail"))}">${esc(tl("gemaakt door","placed by"))} ${esc(r.aangemaaktDoor)}</span>` : "") +
+      (r.fictief ? ` <span class="pill" style="background:#fef3c7;color:#92400e">${esc(tl("fictief","fictitious"))}</span>` : "") +
+      (r.herinnering48 ? ` <span class="pill" title="${esc(String(r.herinnering48).slice(0,16).replace("T"," "))}">${esc(tl("herinnering verstuurd","reminder sent"))}</span>` : "");
     const k = leadSleutel(r);
     return `<tr${archived?' style="opacity:.55"':''}>
       <td><input type="checkbox" class="leadSel" data-k="${esc(k)}"${leadGekozen.has(k)?" checked":""} aria-label="Selecteer deze aanvraag"></td>

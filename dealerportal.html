@@ -835,6 +835,12 @@ let showPaidBanner = false;
     showPaidBanner = true;
     u.searchParams.delete("paid");
   }
+  /* De fictieve cent van Fonteynbot (7 okt 2026): de "betaalpagina" is een
+     venster in het portaal zelf. */
+  if (u.searchParams.get("fictief")) {
+    window.fictiefWacht = { id: u.searchParams.get("fictief"), rest: u.searchParams.get("rest") === "1" };
+    u.searchParams.delete("fictief"); u.searchParams.delete("rest");
+  }
   /* Op partner.passionspas.com staat het portaal op de voordeur; /dealers
      hoort niet in de adresbalk (Gerrit, 2 okt 2026). */
   const pad = location.hostname === "partner.passionspas.com" ? u.pathname.replace(/^\/dealers(\/|$)/, "/") : u.pathname;
@@ -904,7 +910,10 @@ async function sendLink(){
   window.isFonteyn = !!me.data.fonteyn;
   window.isBeheer = !!me.data.beheer;
   window.meekijken = !!me.data.medewerker;
+  window.isFictief = !!me.data.fictief;
   if (window.isFonteyn || window.meekijken) passionCodeStart();
+  if (window.isFictief) fictiefBalk();
+  if (window.fictiefWacht) fictiefVenster(window.fictiefWacht);
   if (me.data.medewerker) {
     $("pwBtn").classList.add("hidden");
     if (!document.getElementById("meekijkBalk")) {
@@ -1787,6 +1796,47 @@ async function restKeuze(id, antwoord){
   } catch (e) { melding("bad", "That needs another try: " + (e.message || e)); }
   loadMyRequests();
 }
+/* ── De fictieve cent (alleen Fonteynbot) ─────────────────────────────────
+   Gerrit (7 okt 2026): "ik wil dat je het echt helemaal testbaar voor me
+   maakt, en ook niet dat ik een cent moet betalen om een order aan te
+   maken". Bestellen gaat zoals bij een partner; op de plek van de betaalpagina
+   staat dit venster. Na "betalen" loopt alles door zoals bij echt geld: de
+   order in Logic4, de mails, de containerflow. Er komt geen betaling in Logic4. */
+function fictiefBalk(){
+  if (document.getElementById("fictiefBalk")) return;
+  const b = document.createElement("div");
+  b.id = "fictiefBalk"; b.className = "geen-vertaling";
+  b.style.cssText = "background:#fef3c7;color:#92400e;border-bottom:1px solid #fcd34d;padding:8px 16px;font-size:13px;text-align:center";
+  b.innerHTML = "<b>Testmodus Fonteynbot</b> - je bestelt zoals een partner en betaalt met de fictieve cent. Er gaat geen geld over.";
+  document.body.insertBefore(b, document.body.firstChild);
+}
+async function fictiefVenster(w){
+  window.fictiefWacht = null;
+  const html = `<div class="geen-vertaling" style="max-width:440px">
+      <h2 style="margin:0 0 6px;">De fictieve cent</h2>
+      <p class="lead" style="margin:0 0 16px;">${w.rest ? "Restbetaling" : "Aanbetaling"} van je proefbestelling. Met deze knop doe je alsof de betaling binnen is; daarna loopt alles verder zoals bij een echte betaling.</p>
+      <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+        <button class="secondary" type="button" data-sluit style="padding:11px 16px;">Later</button>
+        <button class="go" type="button" id="fictiefBetaal" style="padding:11px 22px;">Betaal met de fictieve cent</button>
+      </div>
+      <div id="fictiefMsg" class="msg hidden"></div></div>`;
+  const { laag, sluit } = maakVenster(html, {});
+  const knop = laag.querySelector("#fictiefBetaal");
+  knop.addEventListener("click", async () => {
+    knop.disabled = true; knop.textContent = "Een moment\u2026";
+    const r = await api("/dealers/api/fictief-betalen", { method: "POST", body: JSON.stringify({ id: w.id, rest: !!w.rest }) });
+    const m = laag.querySelector("#fictiefMsg");
+    if (r.status === 200 && r.data && r.data.ok) {
+      m.className = "msg ok"; m.textContent = "Betaald met de fictieve cent. De bestelling loopt nu verder zoals bij echt geld."; m.classList.remove("hidden");
+      try { localStorage.removeItem(BETAAL_KEY); } catch(e){}
+      if (!w.rest) { cart = []; cartBewaar(); }
+      loadMyRequests(); setTimeout(sluit, 2200);
+    } else {
+      m.className = "msg bad"; m.textContent = "Dat vraagt nog een poging: " + ((r.data && r.data.error) || ("HTTP " + r.status)); m.classList.remove("hidden");
+      knop.disabled = false; knop.textContent = "Betaal met de fictieve cent";
+    }
+  });
+}
 /* Een balk bovenin met de uitkomst. Een venster met OK erin blokkeert in de
    app op Windows daarna het typen, dus dat gebruiken we hier niet. */
 function melding(soort, tekst){
@@ -1830,14 +1880,21 @@ async function loadMyRequests(){
       ? ` <button class="go reqJa" type="button" data-id="${esc(x.id)}" style="padding:6px 12px;font-size:12.5px;margin-left:8px;">Move to the next one</button>` +
         ` <button class="secondary reqNee" type="button" data-id="${esc(x.id)}" style="padding:6px 12px;font-size:12.5px;margin-left:6px;">Keep this one</button>`
       : "";
+    /* Nog niet betaald, en de bestelling is van deze partner (bijvoorbeeld
+       door Chantal voor hem klaargezet): de knop om aan te betalen. */
+    const betaal = x.betaalLink
+      ? ` <a class="go" href="${esc(x.fictief ? x.betaalLink : x.betaalLink)}" style="padding:6px 13px;font-size:12.5px;margin-left:8px;text-decoration:none;display:inline-block;border-radius:8px;">${x.fictief ? "<span>Pay with the fictitious cent</span>" : "<span>Pay the deposit</span> <span class=\"geen-vertaling\">" + (x.currency==="USD"?"$":"€") + " " + Number(x.deposit||0).toFixed(2) + "</span>"}</a>`
+      : "";
+    const voorP = x.voorPartner
+      ? `<span class="pill" style="background:#e0f2fe;color:#075985;margin-left:8px;"><span>for</span> <span class="geen-vertaling">${esc(x.voorPartner)}</span></span>` : "";
     const rest = (x.restDeadline && x.restBedrag && !x.restBetaald && !x.restVerlopen && !x.keuzeGevraagd)
       ? ` <button class="go reqRest" type="button" data-id="${esc(x.id)}" style="padding:6px 13px;font-size:12.5px;margin-left:8px;">Complete payment ${x.currency==="USD"?"$":"€"} ${Number(x.restBedrag).toFixed(2)}</button>`
       : "";
     return `<div class="doc"${cls==="uit"?' style="opacity:.62;"':''}>
       <div><b>${x.items && x.items.length
             ? x.items.map(i => i.qty + "\u00d7 " + i.naam).join(", ")
-            : (x.qty + "\u00d7 " + esc(x.model))}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit?` · paid ${x.currency==="USD"?"$":"€"} ${Number(x.deposit).toFixed(2)}`:""}</span>${over}</div>
-      <span style="font-size:13px;white-space:nowrap;${cls==="ok"?"color:#15803d;font-weight:600;":cls==="uit"?"color:#b91c1c;font-weight:600;":cls==="nu"?"color:#b45309;font-weight:600;":"color:var(--muted);"}">${label}${vraag}${rest}${knop}</span>
+            : (x.qty + "\u00d7 " + esc(x.model))}</b> <span style="color:var(--muted);font-size:12px">· ${esc(String(x.ts).slice(0,10))}${x.deposit&&(x.paymentStatus==="paid"||x.status==="paid")?` · paid ${x.currency==="USD"?"$":"€"} ${Number(x.deposit).toFixed(2)}`:""}</span>${over}${voorP}</div>
+      <span style="font-size:13px;white-space:nowrap;${cls==="ok"?"color:#15803d;font-weight:600;":cls==="uit"?"color:#b91c1c;font-weight:600;":cls==="nu"?"color:#b45309;font-weight:600;":"color:var(--muted);"}">${label}${vraag}${rest}${betaal}${knop}</span>
     </div>`;
   }).join("");
   $("myReqList").querySelectorAll(".reqOver").forEach(b => b.addEventListener("click", () => overzetten(b.dataset.id, reqs.find(x => x.id === b.dataset.id))));
@@ -2951,6 +3008,11 @@ function openCart(opties){
         </div>
        </div>
        </div>
+        ${window.isFonteyn && !window.meekijken ? `<div id="cartVoorWie" style="margin-top:14px;">
+          <label style="font-size:12px;color:var(--muted);display:block;margin:0 0 5px;">Order for a partner</label>
+          <select style="width:auto;max-width:100%;"><option value="">- No, I pay myself -</option></select>
+          <div class="lead" style="font-size:12px;margin:4px 0 0;">The order goes to the partner's account and they receive the payment link by e-mail, with you in cc.</div>
+        </div>` : ""}
         <div style="flex:0 0 auto;display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
           <button class="secondary" id="cartLeeg" type="button" style="padding:11px 16px;">Empty basket</button>
           <button class="secondary" type="button" data-sluit style="padding:11px 18px;">Keep shopping</button>
@@ -3055,6 +3117,27 @@ function openCart(opties){
     const mid = ov.querySelector(".cartMidden"); if (mid) mid.scrollTop = oc.st.scroll || 0;
   }
   const af = ov.querySelector("#cartAf");
+  /* Bestellen voor een partner (Gerrit, 7 okt 2026): Chantal stelt de
+     container samen en kiest de partner. De knop heet dan "Send to partner";
+     de betaalkeuze vervalt, want die van de partner geldt (30% bij een container). */
+  const voorWie = ov.querySelector("#cartVoorWie select");
+  if (voorWie) {
+    const zet = () => {
+      const gekozen = !!voorWie.value;
+      if (af) af.textContent = gekozen ? "Send to partner" : "Checkout";
+      const pay = ov.querySelector("#cartPay"), eig = ov.querySelector("#cartEigen");
+      if (pay) pay.style.display = gekozen ? "none" : "";
+      if (eig && gekozen) eig.classList.add("hidden");
+      try { sessionStorage.setItem("pp_voorwie", voorWie.value); } catch(e){}
+    };
+    (window._ppPartners ? Promise.resolve(window._ppPartners) : api("/dealers/api/partners").then(r => (window._ppPartners = (r.data && r.data.partners) || [])))
+      .then(lijst => {
+        voorWie.insertAdjacentHTML("beforeend", lijst.map(x => `<option value="${esc(x.email)}">${esc(x.company || x.email)}${x.region === "US" ? " (US)" : ""}</option>`).join(""));
+        try { const vorig = sessionStorage.getItem("pp_voorwie"); if (vorig && lijst.some(x => x.email === vorig)) voorWie.value = vorig; } catch(e){}
+        zet();
+      });
+    voorWie.addEventListener("change", zet);
+  }
   /* Meekijken is kijken. Zonder deze regel loopt een collega tot de laatste
      knop door en krijgt dan "Your message needs another try" - Gerrit liep daar op vast
      (7 sep 2026). Nu staat het er vooraf, met de reden erbij. */
@@ -3091,19 +3174,28 @@ function openCart(opties){
             vervoerder: (vrachtUitkomst && vrachtUitkomst.ok) ? vrachtUitkomst.vervoerder : null }
         : { wijze: "afhalen" },
       payFull: keuze === "full", payCent: keuze === "cent",
+      voorPartner: voorWie && voorWie.value ? voorWie.value : undefined,
       eigenAanbetaling: eigenBedrag > 0 ? eigenBedrag : undefined }) });
     const m = ov.querySelector("#cartMsg");
-    if (r.status === 200 && r.data && r.data.ok && r.data.checkoutUrl) {
+    if (r.status === 200 && r.data && r.data.ok && r.data.naarPartner) {
       m.className = "msg ok";
-      m.textContent = "Order received - redirecting you to the secure payment page (" +
-        (r.data.testbetaling ? "TEST - 1 cent" : geld(r.data.deposit || 0)) + ")…";
+      m.innerHTML = "<span>Sent to the partner:</span> <b class=\"geen-vertaling\">" + esc(r.data.naarPartner.company || r.data.naarPartner.email) +
+        "</b><br><span>The order is in their account and they received the payment link by e-mail, with you in cc.</span>";
+      m.classList.remove("hidden");
+      try { sessionStorage.removeItem("pp_voorwie"); } catch(e){}
+      cart = []; cartBewaar(); loadMyRequests(); setTimeout(sluit, 3200);
+    } else if (r.status === 200 && r.data && r.data.ok && r.data.checkoutUrl) {
+      m.className = "msg ok";
+      m.textContent = r.data.fictief ? "Order received - on to the fictitious cent\u2026" : ("Order received - redirecting you to the secure payment page (" +
+        (r.data.testbetaling ? "TEST - 1 cent" : geld(r.data.deposit || 0)) + ")…");
       m.classList.remove("hidden");
       /* De mand blijft staan tot de betaling echt binnen is. Gerrit (2 okt
          2026): "Als ik per ongeluk naar de aanbetalingspagina ga en ik wil
          terug, dan is mijn bestelling weg." Bij terugkomst kijkt
          mandNaBetaling() of deze aanvraag betaald is; pas dan gaat hij leeg. */
       try { localStorage.setItem(BETAAL_KEY, JSON.stringify({ id: r.data.id || null, sinds: Date.now() })); } catch(e){}
-      setTimeout(() => { location.href = r.data.checkoutUrl; }, 1400);
+      if (r.data.fictief) { setTimeout(() => fictiefVenster({ id: r.data.id, rest: false }), 700); af.disabled = false; }
+      else setTimeout(() => { location.href = r.data.checkoutUrl; }, 1400);
     } else if (r.status === 200 && r.data && r.data.ok) {
       m.className = "msg ok"; m.textContent = "Order sent - you can follow it under My spas."; m.classList.remove("hidden");
       // Meteen de voorraad opnieuw ophalen: wat deze partner net heeft

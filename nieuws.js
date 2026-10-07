@@ -51,6 +51,21 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-07", iedereen: true, soort: "nieuw",
+      titel: "Archief en Berichten in het Dashboard",
+      wat:   "Helemaal onderaan, onder alle tegels, staat nu een archief met alles wat er in het Dashboard is veranderd, ook wat je al had weggeklikt. En bovenaan staan je Berichten: wat het Dashboard voor je klaarzet, met een knop om het meteen af te handelen."
+    },
+    {
+      datum: "2026-10-07", bestand: "voorraad.html", soort: "beter",
+      titel: "Voorraadbeheer: dekking als vink of kruis",
+      wat:   "In Overzicht staat bij elk model een groene vink als alle reserveringen gedekt zijn door wat er ligt, vaart en gemaakt wordt, en een rood kruis als er nog iets bij moet. Ook per kleur."
+    },
+    {
+      datum: "2026-10-07", groep: "dealerportaal", soort: "nieuw",
+      titel: "Passion Partners: bestellen voor een partner",
+      wat:   "Wie van Fonteyn een eigen account in Passion Partners heeft, komt vanuit de tegel nu in dat account. In de winkelmand kies je bij 'Order for a partner' voor wie de bestelling is. De bestelling komt in zijn account, hij krijgt de betaallink per mail met jou in cc, en hij staat meteen bij de Leads in Beheer. Na 48 uur zonder aanbetaling gaat er vanzelf een herinnering, na 96 uur komt er een bericht met zijn telefoonnummer."
+    },
+    {
       datum: "2026-10-02", bestand: "amerika.html", soort: "beter",
       titel: "Batches uit Amerika: geen memoriaal meer, en een restant hoort bij de eerdere batch",
       wat:   "Het Dashboard boekt bij een batch alleen nog de orders af. De bankkosten en het koersverschil zet Osman zelf in het bankboek, er komt geen memoriaal meer bij. Kwam een batch door de banklimiet in delen binnen, kies dan bij de Balance-regel van de latere batch 'hoort bij eerdere batch'. Dan kan die latere batch gewoon geboekt worden, en bij de eerdere staat dat het restant later binnenkwam."
