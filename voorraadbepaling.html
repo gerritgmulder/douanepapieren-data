@@ -66,16 +66,17 @@ tr.rij{cursor:pointer}tr.rij:hover td{background:#f8faf5}
 </header>
 <main>
   <div class="kaart">
-    <p class="lead">Wat er besteld staat hoort in dezelfde verhouding te zijn als wat er verkocht wordt. Verkoopt de Renew 10%, dan hoort 10% van wat er bij de fabrieken besteld staat een Renew te zijn. Hieronder per model hoeveel er nog bij moeten om die verhouding te halen.</p>
+    <p class="lead">Wat er vrij beschikbaar is hoort in dezelfde verhouding te zijn als wat er verkocht wordt. Verkoopt de Renew 10%, dan hoort 10% van wat er vrij is een Renew te zijn. <b>Vrij</b> = op voorraad in Uddel + op zee + in productie, min wat al gereserveerd is: precies de cijfers uit Voorraadbeheer &gt; Overzicht. Klik een model open voor de hele berekening.</p>
     <div class="kop3" id="kop"></div>
     <p class="lead" id="basis" style="margin-top:8px"></p>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <label style="font-size:12.5px">Nieuwe bestelling: <input type="number" id="nieuw" min="0" step="10" value="0" style="width:80px;padding:4px 6px;font:inherit"> spa's</label>
       <label style="font-size:12.5px"><input type="checkbox" id="alles"> ook modellen tonen die kloppen of te veel hebben</label>
       <button class="knop" id="vers">Opnieuw uit Logic4</button>
       <span id="stand" style="font-size:12px;color:var(--grijs)"></span>
     </div>
   </div>
-  <div class="kaart"><div style="overflow:auto"><table><thead><tr><th>Model</th><th class="n">Verkocht</th><th class="n">Aandeel</th><th class="n">Besteld</th><th class="n verberg-mob">Hoort</th><th>Actie</th></tr></thead><tbody id="lijst"><tr><td colspan="6" class="lead">Ophalen uit Logic4…</td></tr></tbody></table></div></div>
+  <div class="kaart"><div style="overflow:auto"><table><thead><tr><th>Model</th><th class="n">Verkocht</th><th class="n">Aandeel</th><th class="n">Besteld</th><th class="n" title="op voorraad + op zee + in productie - gereserveerd">Vrij</th><th class="n verberg-mob">Hoort</th><th>Advies</th></tr></thead><tbody id="lijst"><tr><td colspan="7" class="lead">Ophalen uit Logic4…</td></tr></tbody></table></div></div>
 </main>
 <script>
 var W = "https://fonteyn-data-store.g-mulder.workers.dev";
@@ -95,23 +96,48 @@ async function laad(vers){
     var j = await r.json(); if (!j.ok) throw new Error(j.error||("HTTP "+r.status));
     data = j; teken();
     $("stand").textContent = "Stand "+new Date(j.ts).toLocaleString("nl-NL");
-  }catch(e){ $("lijst").innerHTML = '<tr><td colspan="6" style="color:#b91c1c">Ophalen vraagt een nieuwe poging: '+esc(e.message)+'</td></tr>'; }
+  }catch(e){ $("lijst").innerHTML = '<tr><td colspan="7" style="color:#b91c1c">Ophalen vraagt een nieuwe poging: '+esc(e.message)+'</td></tr>'; }
 }
 function teken(){
-  var j=data, bij=j.modellen.filter(function(m){ return m.verschil>0; });
-  var nodig=bij.reduce(function(n,m){ return n+m.verschil; },0);
+  var j=data, N=Math.max(0,Number($("nieuw").value)||0);
+  /* De berekening, per model:
+       vrij   = op voorraad NL + op zee + in productie - gereserveerd (Overzicht)
+       hoort  = aandeel in de verkoop x (alles wat vrij is + de nieuwe bestelling)
+       advies = hoort - vrij, en nooit minder dan het tekort uit Overzicht */
+  var totVrij=j.modellen.reduce(function(n,m){ return n+(m.vrij||0); },0);
+  var basisT=totVrij+N;
+  j.modellen.forEach(function(m){
+    m._hoort=(m.aandeel/100)*basisT;
+    m._advies=Math.max(Math.round(m._hoort-(m.vrij||0)), m.tekortOverzicht||0);
+    m._teveel=Math.max(0, Math.round((m.vrij||0)-m._hoort));
+  });
+  j.modellen.sort(function(a,b){ return b._advies-a._advies || b.verkocht-a.verkocht; });
+  var bij=j.modellen.filter(function(m){ return m._advies>0; });
+  var nodig=bij.reduce(function(n,m){ return n+m._advies; },0);
+  var res=j.modellen.reduce(function(n,m){ return n+(m.res||0); },0);
   $("kop").innerHTML = '<div><b>'+nl(j.totaalVerkocht)+'</b><span>spa\'s verkocht in de laatste 12 maanden</span></div>'+
     '<div><b>'+nl(j.totaalBesteld)+'</b><span>spa\'s besteld bij de fabrieken (open inkooporders)</span></div>'+
-    '<div><b>'+bij.length+'</b><span>modellen met te weinig besteld, samen '+nl(nodig)+' spa\'s</span></div>';
-  $("basis").textContent = "Verkoop van "+mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot)+", particulier en partner samen. Amerika blijft buiten deze telling: de verkoop én de "+j.ikosAmerika+" inkooporders voor Houston.";
+    '<div><b>'+nl(totVrij)+'</b><span>spa\'s vrij: voorraad, zee en productie min '+nl(res)+' gereserveerd</span></div>'+
+    '<div><b>'+bij.length+'</b><span>modellen om bij te bestellen, samen '+nl(nodig)+' spa\'s</span></div>';
+  var b=(j.overzicht||{}).bron||{};
+  $("basis").innerHTML = esc("Verkoop van "+mnd(j.periode.vanaf)+" tot en met "+mnd(j.periode.tot)+", particulier en partner samen. Amerika blijft buiten deze telling: de verkoop én de "+j.ikosAmerika+" inkooporders voor Houston.")+
+    '<br>'+esc("Uit Overzicht (Voorraadbeheer), stand: reserveringen "+tijd(b.reserveringen)+", voorraad "+tijd(b.hallen)+", schepen "+tijd(b.schepen)+", productie "+tijd(b.productie)+". Partnercontainers tellen niet mee: die gaan rechtstreeks naar de dealer.")+
+    (N?'<br><b>'+esc("Met een nieuwe bestelling van "+nl(N)+" spa's: per model staat bij Advies hoeveel daarvan het moeten zijn.")+'</b>':'');
   var lijst = $("alles").checked ? j.modellen : bij;
   $("lijst").innerHTML = lijst.length ? lijst.map(function(m){
-    var pil = m.verschil>0 ? '<span class="pil bij">nog '+m.verschil+' bijbestellen</span>' : m.verschil<0 ? '<span class="pil teveel">'+(-m.verschil)+' meer dan de verhouding</span>' : '<span class="pil goed">klopt</span>';
-    return '<tr class="rij" data-m="'+esc(m.model)+'"><td><b>'+esc(m.model)+'</b></td><td class="n">'+nl(m.verkocht)+'</td><td class="n">'+m.aandeel.toLocaleString("nl-NL")+'%</td><td class="n">'+nl(m.besteld)+'</td><td class="n verberg-mob">'+m.hoort.toLocaleString("nl-NL")+'</td><td>'+pil+'</td></tr>'+
-      (open[m.model] ? '<tr><td colspan="6" class="iko">'+(m.ikos.length ? m.ikos.map(function(x){ return 'Inkooporder '+x.iko+' · '+esc(x.fabriek)+' · '+x.qty+' stuks'+(x.eta?' · verwacht '+datumNL(x.eta):'')+(x.ref?' · '+esc(x.ref):''); }).join('<br>') : 'Voor dit model staan nu 0 stuks besteld.')+'</td></tr>' : '');
-  }).join("") : '<tr><td colspan="6" class="lead">Alle modellen zitten op of boven de verhouding.</td></tr>';
+    var pil = m._advies>0 ? '<span class="pil bij">'+m._advies+' bijbestellen</span>' : m._teveel>0 ? '<span class="pil teveel">'+m._teveel+' meer dan de verhouding</span>' : '<span class="pil goed">klopt</span>';
+    var uitleg = '<div style="line-height:1.6">'+
+      '<b>Overzicht:</b> '+nl(m.res)+' gereserveerd · '+nl(m.nl)+' op voorraad NL · '+nl(m.zee)+' op zee · '+nl(m.prod)+' in productie → <b>'+nl(m.vrij)+' vrij</b><br>'+
+      '<b>Verkoop:</b> '+nl(m.verkocht)+' verkocht = '+m.aandeel.toLocaleString("nl-NL")+'% van alles · '+m.aandeel.toLocaleString("nl-NL")+'% van '+nl(basisT)+(N?' (vrij '+nl(totVrij)+' + nieuwe bestelling '+nl(N)+')':' vrij')+' = <b>hoort '+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+'</b><br>'+
+      '<b>Advies:</b> hoort '+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+' - vrij '+nl(m.vrij)+(m.tekortOverzicht?' (en het tekort in Overzicht is '+m.tekortOverzicht+', dat moet er minstens bij)':'')+' → <b>'+(m._advies>0?m._advies+' bijbestellen':(m._teveel>0?m._teveel+' meer dan de verhouding':'klopt'))+'</b></div>'+
+      '<div style="margin-top:6px">'+(m.ikos.length ? m.ikos.map(function(x){ return 'Inkooporder '+x.iko+' · '+esc(x.fabriek)+' · '+x.qty+' stuks'+(x.eta?' · verwacht '+datumNL(x.eta):'')+(x.ref?' · '+esc(x.ref):''); }).join('<br>') : 'Voor dit model staan nu 0 stuks besteld.')+'</div>';
+    return '<tr class="rij" data-m="'+esc(m.model)+'"><td><b>'+(open[m.model]?'▾ ':'▸ ')+esc(m.model)+'</b></td><td class="n">'+nl(m.verkocht)+'</td><td class="n">'+m.aandeel.toLocaleString("nl-NL")+'%</td><td class="n">'+nl(m.besteld)+'</td><td class="n">'+nl(m.vrij)+'</td><td class="n verberg-mob">'+(Math.round(m._hoort*10)/10).toLocaleString("nl-NL")+'</td><td>'+pil+'</td></tr>'+
+      (open[m.model] ? '<tr><td colspan="7" class="iko">'+uitleg+'</td></tr>' : '');
+  }).join("") : '<tr><td colspan="7" class="lead">Alle modellen zitten op of boven de verhouding.</td></tr>';
   document.querySelectorAll("tr.rij").forEach(function(tr){ tr.addEventListener("click", function(){ open[tr.dataset.m]=!open[tr.dataset.m]; teken(); }); });
 }
+function tijd(v){ if(!v) return "onbekend"; var d=new Date(v); return isNaN(d)?String(v):d.toLocaleString("nl-NL",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}); }
+$("nieuw").addEventListener("input", teken);
 $("alles").addEventListener("change", teken);
 $("vers").addEventListener("click", function(){ laad(true); });
 (async function(){ for (var i=0;i<20&&!teamKey();i++) await new Promise(function(r){ setTimeout(r,500); }); laad(false); })();

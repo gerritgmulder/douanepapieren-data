@@ -1818,6 +1818,10 @@ async function loadOverzicht(){
       fetch(PRODUCTIE_URL_OV,{headers:{"X-Fonteyn-Auth":DATA_STORE_AUTH}}).then(r=>r.ok?r.json():{models:{}}).catch(()=>({models:{}}))
     ]);
     ovCodeKleur=bouwCodeKleur(cat);
+    /* Productie voor Houston (Amerika) dekt geen reservering in Nederland
+       (Gerrit, 7 okt 2026): die inkooporders gaan eruit, net als in
+       Voorraadbepaling. Herkend aan de opmerking van de inkooporder. */
+    for(const m of Object.keys((prod&&prod.models)||{})) prod.models[m]=(prod.models[m]||[]).filter(x=>!/texas|houston|\busa\b|amerika|america/i.test(String(x.ref||"")));
     renderOverzicht(resv,hal,ship,prices,prod);
   }catch(e){ document.getElementById("ovKpis").innerHTML="<div class='status-msg bad'>Overzicht laden vraagt een nieuwe poging: "+esc(e.message)+"</div>"; }
 }
@@ -1853,10 +1857,22 @@ function kleurBreakdown(lines){
 function proformaNummers(tekst){
   return [...String(tekst||"").matchAll(/\b(\d{4})\b/g)].map(function(m){ return m[1]; });
 }
+/* Telt een schip nog als "op zee"? (Gerrit, 7 okt 2026.) Niet als hij al
+   binnen is gemeld, niet als het een dealercontainer is (die gaat rechtstreeks
+   naar de dealer en dekt geen reservering van Fonteyn), niet als het alleen
+   documenten zijn, en niet als de ETA al meer dan 30 dagen voorbij is (oude
+   regels uit 2019 en 2021). Op 7 okt telden zo 623 spa's van schepen die al
+   binnen waren nog mee, en leek de dekking veel beter dan hij was. */
+function schipOnderweg(s){
+  if(!s||s.binnenGemeld||s.dealerContainer||s.alleenDocumenten) return false;
+  const eta=String(s.etaHand||s.eta||(s.track&&s.track.eta)||"").slice(0,10);
+  if(/^\d{4}-\d{2}-\d{2}$/.test(eta)){ const grens=new Date(Date.now()-30*86400000).toISOString().slice(0,10); if(eta<grens) return false; }
+  return true;
+}
 // Per proforma en per model: hoeveel er al op een schip staat.
 function proformaZee(ship){
   const uit={};
-  for(const s of ((ship&&ship.ships)||[])){
+  for(const s of ((ship&&ship.ships)||[]).filter(schipOnderweg)){
     const nrs=proformaNummers(s.ref||s.trackRef||s.file);
     for(const [m,q] of Object.entries(s.models||{}))
       for(const nr of nrs){ (uit[nr]=uit[nr]||{})[m]=((uit[nr]||{})[m]||0)+q; }
@@ -1883,7 +1899,7 @@ function renderOverzicht(resv,hal,ship,priceData,prodData){
   const byModel=resv.byModel||{}, halM=hal.models||{}, rate=Number((priceData.meta||{}).rate)||1.11, prices=priceData.prices||{};
   // schepen per model
   const shipByModel={}; let shipTotal=0;
-  for(const s of (ship.ships||[])) for(const [m,q] of Object.entries(s.models||{})){ shipByModel[m]=(shipByModel[m]||0)+q; shipTotal+=q; }
+  for(const s of (ship.ships||[]).filter(schipOnderweg)) for(const [m,q] of Object.entries(s.models||{})){ shipByModel[m]=(shipByModel[m]||0)+q; shipTotal+=q; }
   // aggregaten — containers (dealer-direct) apart van de Fonteyn-vraag
   let actief=0,betaald=0,wacht=0,containers=0,orderwaarde=0, halTotal=0, prodTotal=0;
   // Aantal container-ORDERS erbij, want het getal eronder telt spa's. En het

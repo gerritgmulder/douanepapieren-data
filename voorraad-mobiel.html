@@ -279,7 +279,8 @@ async function laad(){
 function opZee(){
   var uit={}, vandaag=new Date().toISOString().slice(0,10);
   ((data.schepen&&data.schepen.ships)||[]).forEach(function(s){
-    if(s.alleenDocumenten) return;
+    // Binnen gemeld of een dealercontainer: telt niet als op zee (zelfde regel als de pc, 7 okt 2026).
+    if(s.alleenDocumenten||s.binnenGemeld||s.dealerContainer) return;
     if(s.eta && s.eta < vandaag) return;
     var mods=s.models||{};
     for(var m in mods) uit[m]=(uit[m]||0)+(Number(mods[m])||0);

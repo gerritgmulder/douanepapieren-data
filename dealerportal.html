@@ -3127,6 +3127,7 @@ function openCart(opties){
       if (af) af.textContent = gekozen ? "Send to partner" : "Checkout";
       const pay = ov.querySelector("#cartPay"), eig = ov.querySelector("#cartEigen");
       if (pay) pay.style.display = gekozen ? "none" : "";
+      const lbl = pay && pay.previousElementSibling; if (lbl && lbl.tagName === "LABEL") lbl.style.display = gekozen ? "none" : "";
       if (eig && gekozen) eig.classList.add("hidden");
       try { sessionStorage.setItem("pp_voorwie", voorWie.value); } catch(e){}
     };

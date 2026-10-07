@@ -51,6 +51,16 @@
 
   var NIEUWS = [
     {
+      datum: "2026-10-07", bestand: "voorraadbepaling.html", soort: "beter",
+      titel: "Voorraadbepaling rekent met Overzicht",
+      wat:   "Per model zie je nu wat er verkocht is, wat er besteld staat en wat er vrij is: op voorraad, op zee en in productie, min wat al gereserveerd is. Klik een model open voor de hele berekening. Vul bij 'Nieuwe bestelling' in hoeveel spa's je gaat bestellen, dan zie je per model hoeveel het er moeten zijn."
+    },
+    {
+      datum: "2026-10-07", bestand: "voorraad.html", soort: "beter",
+      titel: "Overzicht: op zee en in productie kloppen beter",
+      wat:   "Schepen die al binnen zijn gemeld en containers die rechtstreeks naar een dealer gaan, tellen niet meer als 'op zee'. Productie voor Houston telt niet mee, en een inkoopregel die al geleverd is ook niet. Daardoor zie je bij sommige modellen een tekort dat eerst verborgen bleef."
+    },
+    {
       datum: "2026-10-07", iedereen: true, soort: "nieuw",
       titel: "Archief en Berichten in het Dashboard",
       wat:   "Helemaal onderaan, onder alle tegels, staat nu een archief met alles wat er in het Dashboard is veranderd, ook wat je al had weggeklikt. En bovenaan staan je Berichten: wat het Dashboard voor je klaarzet, met een knop om het meteen af te handelen."
