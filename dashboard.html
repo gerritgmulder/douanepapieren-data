@@ -1453,7 +1453,7 @@ async function startBerichten(email){
             else if (c && !c.laden) {
               onder = '<div style="font-size:12px;color:#374151;margin-top:4px">Aan: <b>' + relEsc(c.naar || "nog in te vullen") + '</b>' + (c.cc ? ' &middot; cc ' + relEsc(c.cc) : '') + ' &middot; ' + relEsc(c.onderwerp) + '</div>'
                 + (c.open || !c.naar ? '<div style="margin-top:8px;display:grid;gap:6px;max-width:680px">'
-                    + '<input class="brNaar" data-id="' + relEsc(m.id) + '" value="' + relEsc(c.naar) + '" placeholder="mailadres' + (m.ref.mailSoort.indexOf("jazzi")===0 ? ' van Jazzi (eenmalig invullen, daarna onthouden)' : '') + '" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:7px;font:inherit;font-size:13px">'
+                    + '<input class="brNaar" data-id="' + relEsc(m.id) + '" value="' + relEsc(c.naar) + '" placeholder="mailadres' + (m.ref.mailSoort.indexOf("jazzi")===0 ? ' (meerdere mag, met komma\'s ertussen)' : '') + '" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:7px;font:inherit;font-size:13px">'
                     + '<input class="brOnd" data-id="' + relEsc(m.id) + '" value="' + relEsc(c.onderwerp) + '" style="padding:6px 8px;border:1px solid #d1d5db;border-radius:7px;font:inherit;font-size:13px">'
                     + '<textarea class="brTekst" data-id="' + relEsc(m.id) + '" rows="9" style="padding:8px;border:1px solid #d1d5db;border-radius:7px;font:inherit;font-size:13px;line-height:1.45">' + relEsc(c.tekst) + '</textarea></div>' : '');
               acties = knop("brStuur", "Versturen", 'data-id="' + relEsc(m.id) + '"') + (c.open ? "" : knop2("brBekijk", "Mail bekijken", 'data-id="' + relEsc(m.id) + '"'));
@@ -1487,7 +1487,9 @@ async function startBerichten(email){
     blok.querySelectorAll(".brStuur").forEach(b => b.addEventListener("click", async () => {
       const m = items.find(x => x.id === b.dataset.id), c = concept[b.dataset.id];
       if (!m || !c) return;
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(c.naar||"").trim())) { c.open = true; teken(); return; }
+      // Meerdere adressen mag (Jazzi: vier tegelijk), met komma's ertussen.
+      const adressen = String(c.naar||"").split(/[,;\s]+/).filter(Boolean);
+      if (!adressen.length || adressen.some(x => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))) { c.open = true; teken(); return; }
       b.disabled = true; b.textContent = "versturen\u2026";
       try {
         const r = await fetch(W + "/partnercontainer/mail", { method:"POST", headers: kop,

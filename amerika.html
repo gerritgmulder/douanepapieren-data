@@ -412,11 +412,11 @@ const WORKER="https://fonteyn-data-store.g-mulder.workers.dev";
    (/amerika/qb/ruw) en kijkt naar de regels en het openstaande saldo. De
    laatste controle blijft op deze computer bewaard. */
 const MF_KEY="fp.amerika.maandfactuur";
-let mfRegels=[], mfNaam="", mfTs=null, mfKlaar=false;
-function mfBewaar(){ try{ localStorage.setItem(MF_KEY, JSON.stringify({regels:mfRegels,naam:mfNaam,ts:mfTs})); }catch(e){} }
+let mfRegels=[], mfNaam="", mfTs=null, mfKlaar=false, mfTotaalDue=null;
+function mfBewaar(){ try{ localStorage.setItem(MF_KEY, JSON.stringify({regels:mfRegels,naam:mfNaam,ts:mfTs,totaalDue:mfTotaalDue})); }catch(e){} }
 function mfInit(){
   if(mfKlaar) return; mfKlaar=true;
-  try{ const o=JSON.parse(localStorage.getItem(MF_KEY)||"null"); if(o&&Array.isArray(o.regels)){ mfRegels=o.regels; mfNaam=o.naam||""; mfTs=o.ts||null; } }catch(e){}
+  try{ const o=JSON.parse(localStorage.getItem(MF_KEY)||"null"); if(o&&Array.isArray(o.regels)){ mfRegels=o.regels; mfNaam=o.naam||""; mfTs=o.ts||null; mfTotaalDue=o.totaalDue||null; } }catch(e){}
   document.getElementById("mfBestand").addEventListener("change", async e=>{
     const f=e.target.files&&e.target.files[0]; if(!f) return;
     const st=document.getElementById("mfStatus"); st.textContent="Lezen…";
@@ -439,23 +439,44 @@ async function mfLeesPdf(file){
     const tc=await (await pdf.getPage(pg)).getTextContent();
     // Tekststukjes op dezelfde hoogte vormen één regel.
     const rijen={};
-    for(const it of tc.items){ const y=Math.round(it.transform[5]/3); (rijen[y]=rijen[y]||[]).push({x:it.transform[4],s:it.str}); }
+    for(const it of tc.items){ const y=Math.round(it.transform[5]/3); (rijen[y]=rijen[y]||[]).push({x:it.transform[4],w:Number(it.width)||0,s:it.str}); }
     Object.keys(rijen).map(Number).sort((a,b)=>b-a).forEach(y=>{
-      const tekst=rijen[y].sort((a,b)=>a.x-b.x).map(x=>x.s).join(" ").replace(/\s+/g," ").trim();
+      /* Stukjes die tegen elkaar aan staan horen bij elkaar: pdf.js knipt
+         "$230.58" soms in "$2" en "30.58". Alleen bij echte ruimte een spatie. */
+      let tekst="", eind=null;
+      for(const x of rijen[y].sort((a,b)=>a.x-b.x)){
+        tekst+=(eind!==null&&x.x-eind>1.5?" ":"")+x.s; eind=x.x+x.w;
+      }
+      tekst=tekst.replace(/\s+/g," ").trim();
       if(tekst) regels.push(tekst);
     });
   }
+  /* Zo ziet Audrey's maandfactuur eruit (augustus 2026): kosten van Houston
+     zelf (telefoon, verzekering, loon, ...), vracht met een factuurnummer
+     ("M28571160 J&P Pool Spa Inv 3620 $2300.00") en vracht met alleen de
+     boekingscode van de vervoerder ("WWE260618W011330"). Alleen "Inv 3620"
+     is een order; "#3423" bij Hot Tub Experts is hun eigen factuur. */
   const uit=[];
+  mfTotaalDue=null;
+  // Alleen bedragen met een dollarteken tellen: "Tax Filing 52 52 1226.42"
+  // zonder $ is Audrey's toelichting en zit niet in haar Total Due.
+  const metDollarIn=regels.some(r=>/\$\s?\d/.test(r));
+  let vorige="";
   for(const r of regels){
-    if(/\b(sub)?total\b|balance due|amount due|^total/i.test(r)) continue;
-    const bedragen=[...r.matchAll(/-?\$?\s?\d{1,3}(?:,\d{3})*\.\d{2}\b/g)].map(m=>m[0]);
-    if(!bedragen.length) continue;
-    // Ordernummer: een los getal van 4 of 5 cijfers dat geen bedrag of datum is; "#3620" of "inv 3620" heeft voorrang.
-    const zonderBedrag=r.replace(/-?\$?\s?\d{1,3}(?:,\d{3})*\.\d{2}\b/g," ").replace(/\b\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\b/g," ");
-    const voorkeur=zonderBedrag.match(/(?:#|inv(?:oice)?\.?\s*#?|order\s*#?|so\s*#?)\s*(\d{4,5})\b/i);
-    const los=zonderBedrag.match(/\b(\d{4,5})\b/);
-    const order=(voorkeur&&voorkeur[1])||(los&&los[1])||"";
-    uit.push({oms:r.slice(0,140), order, bedrag:mfBedrag(bedragen[bedragen.length-1])});
+    const td=r.match(/total due\s*\$?\s*([\d,]+\.\d{2})/i);
+    if(td){ mfTotaalDue=mfBedrag(td[1]); continue; }
+    if(/\b(sub)?total\b|amount due|^tel:|email:|routing|^page:|invoice expense|^instructions|quantity\s+description|ship to|bacor rd|clear canyon|uddell? netherlands/i.test(r)) continue;
+    const metDollar=[...r.matchAll(/-?\$\s?\d[\d,]*\.\d{2}\b/g)].map(m=>m[0]);
+    const kaal=r.match(/(-?\d[\d,]*\.\d{2})\s*$/);
+    const bedragTxt=metDollar.length?metDollar[metDollar.length-1]:(kaal&&!metDollarIn?kaal[1]:null);
+    if(!bedragTxt){ if(!/\d[\d,]*\.\d{2}/.test(r)) vorige=r; continue; }
+    const inv=r.match(/\binv(?:oice)?\.?\s*#?\s*(\d{4,5})\b/i);
+    const code=r.match(/\b(WWE\w{8,}|M\d{7,})\b/);
+    // Staat de omschrijving net een regel hoger dan het bedrag, neem die dan.
+    const oms=(r.replace(/-?\$\s?\d[\d,]*\.\d{2}\s*$/,"").replace(/\s+/g," ").trim()||vorige).slice(0,140);
+    vorige="";
+    uit.push({oms, order: inv?inv[1]:"", bedrag: mfBedrag(bedragTxt),
+      soort: inv?"order":(code&&/^WWE/.test(code[1])?"vracht":"kosten"), code: code?code[1]:""});
   }
   return uit;
 }
@@ -473,7 +494,11 @@ async function mfControleer(){
   for(const r of mfRegels){
     r.opOrder=null; r.betaald=null; r.uitleg="";
     const nr=String(r.order||"").replace(/\D/g,"");
-    if(!nr){ r.uitleg="vul het ordernummer in"; continue; }
+    if(!nr){
+      r.uitleg = r.soort==="vracht" ? "vracht met alleen de code van de vervoerder: vul het QuickBooks-factuurnummer in (vraag Audrey bij welke factuur hij hoort)"
+               : r.soort==="kosten" ? "kosten van Houston zelf, hoort bij geen order" : "vul het ordernummer in";
+      continue;
+    }
     if(nr.length>=7){ r.opOrder=false; r.betaald=false; r.uitleg="dit is een Logic4-nummer; vul het QuickBooks-factuurnummer in"; continue; }
     if(!(r.bedrag>0||r.bedrag<0)){ r.uitleg="vul het bedrag in"; continue; }
     try{
@@ -511,12 +536,23 @@ function mfTeken(){
   const usd=n=>"$ "+Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
   const tot=mfRegels.reduce((n,r)=>n+(Number(r.bedrag)||0),0);
   const nietOp=mfRegels.filter(r=>r.opOrder===false), open=mfRegels.filter(r=>r.betaald===false);
+  const som=(l)=>l.reduce((n,r)=>n+(Number(r.bedrag)||0),0);
+  const kosten=mfRegels.filter(r=>!String(r.order||"").trim()&&r.soort==="kosten");
+  const vrachtZonder=mfRegels.filter(r=>!String(r.order||"").trim()&&r.soort==="vracht");
+  const opOrders=mfRegels.filter(r=>String(r.order||"").trim());
   document.getElementById("mfKop").innerHTML="<b>"+esc(mfNaam||"Maandfactuur")+"</b> · "+mfRegels.length+" regels · samen "+esc(usd(tot))+
+    (mfTotaalDue!=null?(Math.abs(mfTotaalDue-tot)<0.01?" <span style='color:#15803d'>✓ gelijk aan Total Due</span>":" <span style='color:#b91c1c'>✗ Total Due is "+esc(usd(mfTotaalDue))+" (verschil "+esc(usd(mfTotaalDue-tot))+"): er is een regel gemist</span>"):"")+
+    "<div style='margin-top:6px;display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px'>"+
+      "<span><b>Op een order:</b> "+opOrders.length+" regels, "+esc(usd(som(opOrders)))+"</span>"+
+      "<span><b>Vracht zonder factuurnummer:</b> "+vrachtZonder.length+" regels, "+esc(usd(som(vrachtZonder)))+"</span>"+
+      "<span><b>Kosten Houston (geen order):</b> "+kosten.length+" regels, "+esc(usd(som(kosten)))+"</span></div>"+
     (mfTs?(" · gecontroleerd "+esc(new Date(mfTs).toLocaleString("nl-NL"))+
       (nietOp.length?" · <span style='color:#b91c1c'>"+nietOp.length+" niet op de order ("+esc(usd(nietOp.reduce((n,r)=>n+(Number(r.bedrag)||0),0)))+" kost ons geld)</span>":" · <span style='color:#15803d'>alles staat op een order</span>")+
       (open.length?" · <span style='color:#b45309'>"+open.length+" order(s) nog niet betaald</span>":"")):"");
   body.innerHTML=mfRegels.map((r,i)=>"<tr>"+
-    "<td><input class='mfV' data-i='"+i+"' data-v='oms' value='"+esc(r.oms||"")+"' style='width:100%;min-width:0;border:1px solid transparent;padding:3px 4px;font:inherit;font-size:12.5px'></td>"+
+    "<td><input class='mfV' data-i='"+i+"' data-v='oms' value='"+esc(r.oms||"")+"' style='width:100%;min-width:0;border:1px solid transparent;padding:3px 4px;font:inherit;font-size:12.5px'>"+
+      (!String(r.order||"").trim()&&r.soort==="kosten"?"<span class='pill' style='font-size:10px;background:#f3f4f6;color:#6b7280'>kosten Houston</span>":"")+
+      (!String(r.order||"").trim()&&r.soort==="vracht"?"<span class='pill' style='font-size:10px;background:#fef3c7;color:#92400e'>vracht, factuurnummer volgt</span>":"")+"</td>"+
     "<td><input class='mfV' data-i='"+i+"' data-v='order' value='"+esc(r.order||"")+"' style='width:100%;min-width:0;border:1px solid var(--border);border-radius:5px;padding:3px 5px;font:inherit'></td>"+
     "<td><input class='mfV' data-i='"+i+"' data-v='bedrag' value='"+(r.bedrag!=null?esc(Number(r.bedrag).toFixed(2)):"")+"' style='width:100%;min-width:0;text-align:right;border:1px solid var(--border);border-radius:5px;padding:3px 5px;font:inherit'></td>"+
     "<td style='text-align:center'>"+teken(r.opOrder)+"</td><td style='text-align:center'>"+teken(r.betaald)+"</td>"+

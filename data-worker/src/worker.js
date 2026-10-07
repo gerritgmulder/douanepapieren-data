@@ -8482,6 +8482,9 @@ const PC_JAZZI_TEKST = {
 };
 for (const [s, v] of Object.entries(PC_JAZZI_TEKST)) PC_TEKST_STANDAARD[s] = { en: v, nl: v };
 const PC_SOORTEN = ["deposit", "balance", "herinnering", "jazzi", "jazzi-order"];
+/* De containermensen bij Jazzi; de mails gaan altijd naar alle vier tegelijk
+   (Chantal, 7 okt 2026). */
+const PC_JAZZI_MAILS = ["rachel@jazzipool.com", "fanny@jazzipool.com", "catherine@jazzispas.com", "david@jazzipool.com"];
 const PC_DEPOSIT_PCT = 30;
 /* Dollars: Chantal zet de dealerprijs in Logic4 als dollarprijs gedeeld door
    AMERIKA_KOERS (Pleasure bij Northwest Swim Spas: 3.704,46 = $4.149). Terug
@@ -8695,7 +8698,7 @@ async function pcHandle(request, env, url) {
                 cargoReady: t.cargoReady ? new Date(t.cargoReady + "T12:00:00Z").toLocaleDateString(taal === "nl" ? "nl-NL" : "en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }) : "",
                 bedrag: pcDollar(bedragUsd, taal), openstaand: pcDollar(bedragUsd, taal), percentage,
                 regels: ((live && live.regels) || []).map(r => "- " + r.aantal + " x " + (r.omschrijving || r.code) + (r.code ? " (" + r.code + ")" : "")).join("\n") || "(see the attached order)" };
-    if (naarJazzi) { ontv.naar = data.jazziMail || ""; ontv.cc = BERICHT_CHANTAL; }
+    if (naarJazzi) { ontv.naar = data.jazziMail || PC_JAZZI_MAILS.join(", "); ontv.cc = BERICHT_CHANTAL; }
     const onderwerp = pcVul(b.onderwerp || sjabloon.onderwerp, w);
     const tekst = pcVul(b.tekst || sjabloon.tekst, w);
     const naar = b.test ? wie : String(b.naar || ontv.naar || "").trim().toLowerCase();
@@ -8709,15 +8712,18 @@ async function pcHandle(request, env, url) {
       if (inhoud.length > 14 * 1024 * 1024) return reply(413, { ok: false, error: "de bijlage is groter dan 10 MB" });
       bijlage = { filename: String(b.bijlage.naam || "bijlage.pdf").replace(/[\\/"]/g, "").slice(0, 120), content: inhoud };
     }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(naar)) return reply(400, { ok: false, error: "geen geldig mailadres voor deze dealer - vul er een in" });
+    /* Aan Jazzi gaat het naar vier mensen tegelijk; daarom mag "aan" een
+       lijst zijn, gescheiden door komma's. */
+    const naarLijst = [...new Set(naar.split(/[,;\s]+/).map(x => x.trim()).filter(Boolean))];
+    if (!naarLijst.length || naarLijst.some(x => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))) return reply(400, { ok: false, error: "geen geldig mailadres - vul er een in (meerdere mag, met komma's ertussen)" });
     if (!env.RESEND_API_KEY || !env.MAIL_FROM) return reply(500, { ok: false, error: "mail is niet ingericht in de worker" });
     const adres = (String(env.MAIL_FROM || "").match(/<([^>]+)>/) || [])[1] || String(env.MAIL_FROM || "");
     // Aan Jazzi gaat Chantal altijd in cc, en wie verstuurt ook (Gerrit, 7 okt 2026).
-    const cc = b.test ? [] : [...new Set((naarJazzi ? [BERICHT_CHANTAL, wie] : [ontv.cc]).filter(x => x && /@/.test(x) && x !== naar))];
+    const cc = b.test ? [] : [...new Set((naarJazzi ? [BERICHT_CHANTAL, wie] : [ontv.cc]).filter(x => x && /@/.test(x) && !naarLijst.includes(x)))];
     if (naarJazzi && !b.test) data.jazziMail = naar;
     const rr = await fetch("https://api.resend.com/emails", {
       method: "POST", headers: { "Authorization": "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: "Fonteyn Outdoor Living Mall <" + adres + ">", to: [naar], cc: cc.length ? cc : undefined,
+      body: JSON.stringify({ from: "Fonteyn Outdoor Living Mall <" + adres + ">", to: naarLijst, cc: cc.length ? cc : undefined,
                              reply_to: /@/.test(wie) ? [wie] : undefined, subject: onderwerp, html,
                              attachments: bijlage ? [bijlage] : undefined }),
     });
