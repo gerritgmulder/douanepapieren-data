@@ -59,7 +59,10 @@ binding = "AI"
 #   :15 elk uur             : Amerika, de wire-bewaking (teller tot 40.000 dollar,
 #                             mail aan Audrey, herinnering na 7 x 24 uur)
 #   :45 op 5, 11, 17 en 23u : de spa-catalogus (nieuwe modellen en kleuren uit Logic4)
-crons = ["0 * * * *", "30 1,7,13,19 * * *", "15 * * * *", "45 5,11,17,23 * * *"]
+#   :30 en :45 elk uur      : productie (1, 7, 13, 19 UTC) en de spa-catalogus
+#                             (5, 11, 17, 23 UTC); de overige uren de Amerika-
+#                             automaat. Het gratis plan geeft vier schema's.
+crons = ["0 * * * *", "30 * * * *", "15 * * * *", "45 * * * *"]
 
 # De "live kamer" voor samenwerken zoals in Google Documenten: iedereen die
 # een klanttab van Voorraadbeheer open heeft, hangt via een WebSocket aan

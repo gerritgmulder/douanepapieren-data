@@ -52,6 +52,11 @@
   var NIEUWS = [
     {
       datum: "2026-10-07", bestand: "amerika.html", soort: "nieuw",
+      titel: "Amerika loopt vanzelf",
+      wat: "Zodra er op een QuickBooks-factuur iets is betaald, staat de order vanzelf in Logic4 en wordt elke betaling meteen op die order geboekt. Wat het systeem niet zeker weet, staat voor Chantal klaar in Berichten, net als een creditcardbetaling zonder toeslag, een minbedrag op een regel en een prijs onder de bekende prijs. Een regel in het overzicht van Audrey die al vanzelf geboekt is, staat er als 'al automatisch geboekt'."
+    },
+    {
+      datum: "2026-10-07", bestand: "amerika.html", soort: "nieuw",
       titel: "Amerika: de maandfactuur van Audrey controleren",
       wat:   "Nieuw tabblad Maandfactuur. Upload de maandfactuur van Audrey met wat zij in Amerika voor ons betaalde. Per regel zie je met een vink of een kruis of dat bedrag ook op de order staat (dan betaalt de klant het en kost het ons niets), en of die order al betaald is."
     },

@@ -16936,21 +16936,33 @@ const FP_WORKER = {
         }
         /* De spa-catalogus (modellen en kleuren) op :45, vier keer per etmaal,
            in een eigen slot: hij leest de hele productlijst van Logic4. */
-        /* De Amerika-automaat (QuickBooks -> Logic4) op :50, met het hele budget
-           voor zichzelf. */
-        if (String(event && event.cron || "").startsWith("50 ")) {
+        /* De slots :30 en :45 draaien elk uur. Het gratis plan geeft vier
+           cron-schema's per account, en een vijfde (:50) voor de Amerika-
+           automaat werd geweigerd. Dus delen ze het uur:
+             :30  productie om 1, 7, 13 en 19 uur (UTC), de rest van de uren
+                  de Amerika-automaat;
+             :45  de spa-catalogus om 5, 11, 17 en 23 uur, en de automaat
+                  op de uren waar :30 met productie bezig was.
+           Zo draait de automaat elk uur precies één keer, en krijgen productie
+           en de catalogus hun hele budget voor zichzelf. */
+        const cron = String(event && event.cron || "");
+        const PRODUCTIE_UREN = [1, 7, 13, 19], CATALOGUS_UREN = [5, 11, 17, 23];
+        const automaat = async () => {
           const ar = await autoRonde(env).catch(e => ({ ok: false, error: String(e.message || e) }));
           console.log("[cron] amerika-automaat: " + JSON.stringify({ ok: ar.ok, acties: (ar.acties || []).length, berichten: ar.berichten || 0, budget: ar.budget, fout: ar.error || null }));
+        };
+        if (cron.startsWith("45 ")) {
+          if (CATALOGUS_UREN.includes(uur)) {
+            const cr = await dpBouwSpaCatalogus(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+            console.log("[cron] spa-catalogus: " + JSON.stringify({ ok: cr.ok, modellen: cr.modellen, nieuweModellen: cr.nieuweModellen, nieuweKleuren: (cr.nieuweKleuren || []).length, fout: cr.error || null }));
+          } else if (PRODUCTIE_UREN.includes(uur)) await automaat();
           return;
         }
-        if (String(event && event.cron || "").startsWith("45 ")) {
-          const cr = await dpBouwSpaCatalogus(env).catch(e => ({ ok: false, error: String(e.message || e) }));
-          console.log("[cron] spa-catalogus: " + JSON.stringify({ ok: cr.ok, modellen: cr.modellen, nieuweModellen: cr.nieuweModellen, nieuweKleuren: (cr.nieuweKleuren || []).length, fout: cr.error || null }));
-          return;
-        }
-        if (String(event && event.cron || "").startsWith("30 ")) {
-          const pr = await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) }));
-          console.log("[cron] productie (eigen slot): " + JSON.stringify(pr));
+        if (cron.startsWith("30 ")) {
+          if (PRODUCTIE_UREN.includes(uur)) {
+            const pr = await dpRefreshProductie(env).catch(e => ({ ok: false, error: String(e.message || e) }));
+            console.log("[cron] productie (eigen slot): " + JSON.stringify(pr));
+          } else await automaat();
           return;
         }
 
